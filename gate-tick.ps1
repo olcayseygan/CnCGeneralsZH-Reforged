@@ -1,9 +1,10 @@
 <#
 .SYNOPSIS
-  The 60 Hz gate: eight AIs, 2000 objects, a drawn match, and a nonzero exit when p99.9 passes 16.7 ms.
+  The tick gate: eight AIs, 2000 objects, a drawn match, and a nonzero exit when p99.9 passes one logic tick.
 
 .DESCRIPTION
-  The bar is every frame under 16.7 ms however long a match runs, on Twilight Flame with eight Hard
+  The bar is every frame inside one logic tick (1000 / LOGICFRAMES_PER_SECOND ms, the rate read from
+  GameCommon.h) however long a match runs, on Twilight Flame with eight Hard
   AIs, so a mean says nothing here and the number judged is p99.9, logic and picture each on its own
   line. Scenarios/gate60hz.txt holds the match at 2000 objects from minute ten on, which is the most
   it is built for; the plain match stops near 1560.
@@ -20,16 +21,16 @@
   a green gate at 1200 objects would say nothing about 2000.
 
 .EXAMPLE
-  .\gate-60hz.ps1
-    The hour: 216000 logic frames, all of them drawn. A real hour once it holds 60 Hz, about two
-    today, since the run falls behind the clock and never drops a tick.
+  .\gate-tick.ps1
+    The hour of game time, every logic frame of it drawn. A real hour once every frame fits in a
+    tick, longer until then, since the run falls behind the clock and never drops a tick.
 
 .EXAMPLE
-  .\gate-60hz.ps1 -Minutes 17 -Window 2
+  .\gate-tick.ps1 -Minutes 17 -Window 2
     Undrawn up to minute 15, then two drawn minutes. About thirteen minutes of wall clock.
 #>
 param(
-	# game minutes the match runs, 60 logic frames a second
+	# game minutes the match runs, LOGICFRAMES_PER_SECOND logic frames a second
 	[int] $Minutes = 60,
 	# draw only the last this many of them and reach the rest undrawn at full speed; 0 draws all of them
 	[int] $Window = 0,
@@ -51,21 +52,25 @@ param(
 $ErrorActionPreference = "Stop"
 $env:ZH_UNATTENDED = "1"	# no box may wait on a person (EarlyCommandLine.h)
 
-$BudgetMS = 16.7
+# the logic rate, from the engine's own header so this script never carries a copy of it
+$LogicFps = [int][regex]::Match((Get-Content -Raw "$PSScriptRoot\GeneralsMD\Code\GameEngine\Include\Common\GameCommon.h"),
+	'(?m)^\s*LOGICFRAMES_PER_SECOND\s*=\s*(\d+)').Groups[1].Value
+if ($LogicFps -le 0) { throw "no LOGICFRAMES_PER_SECOND in GameCommon.h" }
+$BudgetMS = [Math]::Round(1000.0 / $LogicFps, 1)	# one logic tick, as the log prints it
 $ObjectTarget = 2000		# Scenarios/gate60hz.txt
 $HistogramTopMS = 64		# the log's frame time histogram: past this a percentile reads as the worst frame
 
 $exePath = Join-Path $RunDir $Exe
 if (-not (Test-Path $exePath)) { throw "no $Exe in $RunDir" }
-if ($UserDataDir -eq "") { $UserDataDir = Join-Path $env:TEMP "gate60hz_userdata" }
+if ($UserDataDir -eq "") { $UserDataDir = Join-Path $env:TEMP "gatetick_userdata" }
 New-Item -ItemType Directory -Force $UserDataDir | Out-Null
 $env:ZH_USER_DATA_DIR = (Resolve-Path $UserDataDir).Path
 $optionsFile = Join-Path $env:ZH_USER_DATA_DIR "Options.ini"
 if ($Options -ne "") { Copy-Item $Options $optionsFile }
 elseif (-not (Test-Path $optionsFile)) { Copy-Item "$PSScriptRoot\reforged-look.ini" $optionsFile }
 
-$lastFrame = $Minutes * 60 * 60
-$prefix = "gate60hz_"
+$lastFrame = $Minutes * 60 * $LogicFps
+$prefix = "gatetick_"
 $log = Join-Path $RunDir "${prefix}DebugLogFile.txt"
 if (Test-Path $log) { Remove-Item $log -Force }
 
@@ -77,7 +82,7 @@ $runArgs = @("-win", "-borderless", "-xres", "1920", "-yres", "1080", "-msaa", "
 	"-map", '"Maps\Twilight Flame\Twilight Flame.map"', "-autoskirmish", "8", "-teams", "2", "-aidiff", "hard", "-seed", "3",
 	"-scenario", "gate60hz", "-camera", "2430", "2345",
 	"-maxframes", $lastFrame, "-logPrefix", $prefix) + $ExtraArgs
-if ($Window -gt 0) { $runArgs += @("-jumpToFrame", (($Minutes - $Window) * 60 * 60)) }
+if ($Window -gt 0) { $runArgs += @("-jumpToFrame", (($Minutes - $Window) * 60 * $LogicFps)) }
 
 $proc = Start-Process -FilePath $exePath -ArgumentList $runArgs -WorkingDirectory $RunDir -PassThru
 $null = $proc.Handle		# kept, so ExitCode is still there after the exit
@@ -100,7 +105,7 @@ function Get-LogMatch([string] $pattern)
 }
 
 $time = 'mean ([\d.]+) p50 [\d.]+ p95 [\d.]+ p99 ([\d.]+) p99\.9 ([\d.]+) worst ([\d.]+) ms \(frame (\d+)\)'
-$frame = Get-LogMatch "HEADLESS FRAMETIME: (\d+) frames \| $time \| over 16\.7ms (\d+) \(([\d.]+)%\)"
+$frame = Get-LogMatch "HEADLESS FRAMETIME: (\d+) frames \| $time \| over ([\d.]+)ms (\d+) \(([\d.]+)%\)"	# the first budget is one tick, whatever the rate
 $logic = Get-LogMatch "HEADLESS LOGICTIME: (\d+) ticks \| $time"
 $objects = Get-LogMatch 'HEADLESS OBJECTS: peak (\d+) \(frame (\d+)\) \| mean (\d+)'
 $crc = Get-LogMatch 'HEADLESS CRC: (0x[0-9A-F]+) at frame (\d+)'
@@ -118,9 +123,9 @@ $frameTail = [double] $frame[4].Value
 $logicTail = [double] $logic[4].Value
 $objectPeak = [int] $objects[1].Value
 
-Write-Host ("frame   p99.9 {0} ms | mean {1} p99 {2} worst {3} (frame {4}) | {5} of {6} over 16.7 ms ({7}%)" -f
+Write-Host ("frame   p99.9 {0} ms | mean {1} p99 {2} worst {3} (frame {4}) | {5} of {6} over {7} ms ({8}%)" -f
 	$frame[4].Value, $frame[2].Value, $frame[3].Value, $frame[5].Value, $frame[6].Value,
-	$frame[7].Value, $frame[1].Value, $frame[8].Value)
+	$frame[8].Value, $frame[1].Value, $frame[7].Value, $frame[9].Value)
 if ($frameTail -gt $HistogramTopMS) {
 	Write-Host ("        p99.9 is past the histogram's {0} ms, so it reads as the worst frame; the mean is the number to read" -f $HistogramTopMS)
 }

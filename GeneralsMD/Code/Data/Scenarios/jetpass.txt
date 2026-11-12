@@ -23,8 +23,8 @@
 # 450), Battle Master 234, Crusader 80, Scorpion 170. A first cut broke off on distance alone and the
 # Stealth Fighter, coming back round on the Scorpion, turned away before its nose was on it every pass
 # and never fired (370 of 370); breaking off only with the target in the aim cone fixed it. Closest
-# approach, centre to centre: Raptor 142, MiG 148, Aurora 123, Stealth 111. -maxframes counts the
-# 60 Hz logic frames, so the file's 650 needs 1400.
+# approach, centre to centre: Raptor 142, MiG 148, Aurora 123, Stealth 111. -maxframes counts logic
+# frames, LOGICFRAMES_PER_SECOND a second, so the file's 650 (21.7 s) needs about 23.3 s of them.
 #
 # 2026-11-08: those break-off numbers stopped holding with f4d0e85b, which waited for a spent clip
 # that an empty jet never stayed in the attack to see: 0 BREAK OFF lines, and the Raptor went over

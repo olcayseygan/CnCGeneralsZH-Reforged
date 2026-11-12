@@ -40,8 +40,10 @@
 # the executable, as on Windows, each under its own -logPrefix, and are removed once read.
 #
 # Usage: replay-check.sh --generals <path> | --app <.app> | --package <folder> [--data <dir>] [--seeds "0 1"] [--players 2]
-#          [--aidiff brutal] [--maxframes 24000] [--cells <n>] [--extra "<args>"]
+#          [--aidiff brutal] [--seconds 400 | --maxframes <n>] [--cells <n>] [--extra "<args>"]
 #          [--control] [--extended] [--keep] [--log-lines <regex>]
+#   --seconds         match length in seconds of game time (default 400), turned into logic frames at
+#                     LOGICFRAMES_PER_SECOND from GameCommon.h; --maxframes gives the frames outright
 #   --data            a folder holding zerohour/ (with the base game in zerohour/ZH_Generals, as the
 #                     install has it); default $ZH_DATA_DIR
 #   --cells           playable cells a side of the generated map.  Default: none given, so the
@@ -55,7 +57,7 @@
 #                     seed (SD= in its header) has its last digit changed, so the playback plays a
 #                     different world from the same commands, and every seed must be reported DIVERGED
 #   --extended        the wider backstop, not in ctest: seeds 2 to 5, each at 2 and at 4 players (eight
-#                     matches), at --maxframes (default 24000).  --seeds and --players are ignored
+#                     matches), at --maxframes (default 400 s of game time).  --seeds and --players are ignored
 #   --keep            leave the temporary folder and the logs, and say where
 #   --log-lines <re>  print each live run's log lines matching the extended regex, as "  log: <line>",
 #                     before the log is removed (Tests/run_locomotor_check.sh reads port defect 33's check)
@@ -99,7 +101,11 @@ DATA="${ZH_DATA_DIR:-}"
 SEEDS="0 1"
 PLAYERS=2
 AIDIFF=brutal
-MAXFRAMES=24000		# logic frames, 60 a second: 6 min 40 s of game time
+# The logic rate, read from the engine's own header so this script never carries a copy of it.
+LOGIC_FPS="$(sed -n 's/^[[:space:]]*LOGICFRAMES_PER_SECOND[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/\1/p' \
+	"$(dirname "$0")/../GameEngine/Include/Common/GameCommon.h")"
+[ -n "$LOGIC_FPS" ] || { echo "replay-check: no LOGICFRAMES_PER_SECOND in GameCommon.h" >&2; exit 2; }
+MAXFRAMES=$((400 * LOGIC_FPS))		# 400 s, 6 min 40 s of game time
 CELLS=""
 EXTRA=""
 CONTROL=0
@@ -120,6 +126,7 @@ while [ $# -gt 0 ]; do
 		--players) PLAYERS="$2"; shift 2;;
 		--aidiff) AIDIFF="$2"; shift 2;;
 		--maxframes) MAXFRAMES="$2"; shift 2;;
+		--seconds) MAXFRAMES=$(($2 * LOGIC_FPS)); shift 2;;
 		--cells) CELLS="$2"; shift 2;;
 		--extra) EXTRA="$2"; shift 2;;
 		--control) CONTROL=1; shift;;

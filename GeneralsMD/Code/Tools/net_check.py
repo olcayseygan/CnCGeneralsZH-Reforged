@@ -44,7 +44,10 @@ PRESS_INTERVAL_SECONDS = 0.5
 PRESSES = ("KEY_A CTRL", "KEY_X", "KEY_S", "KEY_X")
 MISMATCH_LINE = "CRC Mismatch"
 CENSUS_LINES = ("HEADLESS LOGICTHREAD OVERLAP", "HEADLESS LOGICTHREAD CENSUS", "HEADLESS LOGICTHREAD WINDOW")
-LOGIC_FPS = 60  # LOGICFRAMES_PER_SECOND: frame numbers here and in the logs count these
+# LOGICFRAMES_PER_SECOND, read from the engine's own header: frame numbers here and in the logs count these
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "GameEngine", "Include", "Common", "GameCommon.h"),
+          encoding="utf-8", errors="replace") as _header:
+    LOGIC_FPS = int(re.search(r"^\s*LOGICFRAMES_PER_SECOND\s*=\s*(\d+)", _header.read(), re.M).group(1))
 PROVE_FRAME = 10 * LOGIC_FPS
 PROVE_SPAWN = "spawn 0 AmericaVehicleHumvee 2 %s"
 QUIT_GRACE_SECONDS = 10.0

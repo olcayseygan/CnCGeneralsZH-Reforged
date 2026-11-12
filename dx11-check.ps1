@@ -67,17 +67,23 @@ Get-Content (Join-Path $PSScriptRoot "reforged-look.ini") | Where-Object { $_ -n
 $tmp = Join-Path $env:TEMP "dx11check"
 if (-not (Test-Path $tmp)) { $null = New-Item -ItemType Directory $tmp }
 
-# f is a logic frame at 60 a second
+# s is the shot's game time in seconds, f its logic frame at LOGICFRAMES_PER_SECOND from GameCommon.h,
+# and $tail the 8/3 s the run goes on past it before it quits
+$logicFps = [int][regex]::Match((Get-Content -Raw "$PSScriptRoot\GeneralsMD\Code\GameEngine\Include\Common\GameCommon.h"),
+	'(?m)^\s*LOGICFRAMES_PER_SECOND\s*=\s*(\d+)').Groups[1].Value
+if ($logicFps -le 0) { throw "no LOGICFRAMES_PER_SECOND in GameCommon.h" }
+$tail = [int][Math]::Round(8 / 3 * $logicFps)
 $cases = @(
-  @{map='Flash Effect';       x='1200'; y='945';  f=800},
-  @{map='Flash Effect';       x='1816'; y='1861'; f=2400},
-  @{map='Flash Effect';       x='1378'; y='1384'; f=4800},
-  @{map='ForgottenForestZH';  x='1620'; y='1470'; f=1200},
-  @{map='ForgottenForestZH';  x='1543'; y='1636'; f=3600},
-  @{map='Golden Oasis';       x='2643'; y='3580'; f=1800},
-  @{map='Alpine Assault';     x='760';  y='920';  f=1400},
-  @{map='Killing Fields';     x='1024'; y='1024'; f=3000}
+  @{map='Flash Effect';       x='1200'; y='945';  s=40/3},
+  @{map='Flash Effect';       x='1816'; y='1861'; s=40},
+  @{map='Flash Effect';       x='1378'; y='1384'; s=80},
+  @{map='ForgottenForestZH';  x='1620'; y='1470'; s=20},
+  @{map='ForgottenForestZH';  x='1543'; y='1636'; s=60},
+  @{map='Golden Oasis';       x='2643'; y='3580'; s=30},
+  @{map='Alpine Assault';     x='760';  y='920';  s=70/3},
+  @{map='Killing Fields';     x='1024'; y='1024'; s=50}
 )
+foreach ($c in $cases) { $c.f = [int][Math]::Round($c.s * $logicFps) }
 
 # -msaa 0 for tree-check.ps1's reason: a multisampled back buffer cannot be read back, the capture
 # falls through to a desktop grab, and whatever window is over the game lands in the .bmp.  The shot
@@ -89,7 +95,7 @@ function Shoot($c, $tag, $switches) {
   Get-ChildItem "$shots\sshot*.bmp" -ErrorAction SilentlyContinue | Remove-Item -Force
   $arguments = @('-win','-xres','1280','-yres','720','-quickstart','-noshellmap','-multiInstance',
     '-msaa','0','-dx11post','off','-map',"`"Maps\$($c.map)\$($c.map).map`"",'-autoskirmish','4','-aidiff','easy',
-    '-seed','5','-maxframes',($c.f+160),'-screenshot',$c.f,'-camera',$c.x,$c.y,
+    '-seed','5','-maxframes',($c.f+$tail),'-screenshot',$c.f,'-camera',$c.x,$c.y,
     '-logPrefix',"dx11chk_$tag`_",'-turbo') + $switches + $Extra
   $process = Start-Process (Join-Path $run $Exe) -ArgumentList $arguments -WorkingDirectory $run -PassThru
   try {

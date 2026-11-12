@@ -32,14 +32,18 @@
 #
 # RULE 9 still holds while this runs: the root is a farm, never the install.
 #
-# Usage: root-readonly-check.sh --generals <path> [--data <dir>] [--maxframes 1200] [--keep]
+# Usage: root-readonly-check.sh --generals <path> [--data <dir>] [--maxframes <n>, default 20 s of game time] [--keep]
 # Exit status: 0 on a pass; 1 otherwise; 77 without game data.
 
 set -u
 
 GENERALS=""
 DATA="${ZH_DATA_DIR:-}"
-MAXFRAMES=1200		# logic frames, 60 a second
+# Logic frames are seconds of game time times the rate the engine's own header names.
+LOGIC_FPS="$(sed -n 's/^[[:space:]]*LOGICFRAMES_PER_SECOND[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/\1/p' \
+	"$(dirname "$0")/../GameEngine/Include/Common/GameCommon.h")"
+[ -n "$LOGIC_FPS" ] || { echo "root-readonly-check: no LOGICFRAMES_PER_SECOND in GameCommon.h" >&2; exit 2; }
+MAXFRAMES=$((20 * LOGIC_FPS))
 KEEP=0
 while [ $# -gt 0 ]; do
 	case "$1" in

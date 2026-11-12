@@ -1,12 +1,12 @@
-# The crowd gate-60hz.ps1 measures: eight AIs on Twilight Flame held at 2000 objects from minute ten
-# on, the working target of 60 Hz however long a match runs. Left alone the same match peaks near 1560
+# The crowd gate-tick.ps1 measures: eight AIs on Twilight Flame held at 2000 objects from minute ten
+# on, the working target of every frame inside one logic tick however long a match runs. Left alone the same match peaks near 1560
 # with a mean of 1240, and money, -teams and a bigger map do not move that, because population caps
 # and the AI's spending stop it first. One unit a frame at most while the world is under the number,
 # the lines taking turns, every seat the same three kinds on its road to the centre of the map.
 #
-#   .\gate-60hz.ps1 -Minutes 17 -Window 2
+#   .\gate-tick.ps1 -Minutes 17 -Window 2
 #
-# The frames are 30 Hz, so 18000 is logic frame 36000.
+# Scenario frames count retail's 30 a second whatever the logic's own rate, so 18000 is minute ten.
 
 18000 topup 0 AmericaInfantryRanger          2000
 18000 topup 0 AmericaInfantryMissileDefender 2000

@@ -17,10 +17,10 @@
 #
 # asan-check.sh: the whole game under AddressSanitizer, in a ZH_SANITIZE=address build
 # (docs/porting/sanitizers.md).  Two runs, and each must exit 0 with no ASan report:
-#   mobstress  headless, the mobstress scenario on Alpine Assault, seed 1, --mob-frames (default 24000): the
+#   mobstress  headless, the mobstress scenario on Alpine Assault, seed 1, --mob-frames (default 400 s): the
 #              simulation, the allocator and its locks, the job threads
 #   skirmish   -offscreen and -noaudio at 1920x1080, the seed-1234 generated skirmish, --skirmish-frames
-#              (default 3600): the same plus the GPU device (Metal on macOS, Vulkan on Linux) and the
+#              (default 60 s): the same plus the GPU device (Metal on macOS, Vulkan on Linux) and the
 #              system frameworks under it
 # Each run ends with the game's reset after the match, where the use-after-free ZH_SANITIZE first found was.
 #
@@ -43,8 +43,12 @@ set -u
 
 GENERALS=""
 DATA="${ZH_DATA_DIR:-}"
-MOB_FRAMES=24000		# logic frames, 60 a second
-SKIRMISH_FRAMES=3600
+# Logic frames are seconds of game time times the rate the engine's own header names.
+LOGIC_FPS="$(sed -n 's/^[[:space:]]*LOGICFRAMES_PER_SECOND[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/\1/p' \
+	"$(dirname "$0")/../GameEngine/Include/Common/GameCommon.h")"
+[ -n "$LOGIC_FPS" ] || { echo "asan-check: no LOGICFRAMES_PER_SECOND in GameCommon.h" >&2; exit 2; }
+MOB_FRAMES=$((400 * LOGIC_FPS))
+SKIRMISH_FRAMES=$((60 * LOGIC_FPS))
 KEEP=0
 while [ $# -gt 0 ]; do
 	case "$1" in

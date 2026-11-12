@@ -15,9 +15,10 @@
 # and big ALPHA puffs (BurningBridgeBeam, SmoulderSmoke) as flat blotches that cost 40 ms of fill.
 #
 # 2026-10-24, 1280x720, RTX 2060 (display on the Intel adapter, ddagrab running): the live count
-# reaches 1,040,000 by logic frame 1600 and holds there with the 1 << 20 ring full and recycling;
-# HEADLESS FRAMETIME mean 4.59 p50 3.75 p95 9.50 p99 12.00 p99.9 15.50 worst 73.24 ms, 0.06% of
-# frames over 16.7 ms, the logic at 60 Hz throughout.
+# reaches 1,040,000 by logic frame 1600 (26.7 s; the logic ran 60 a second then) and holds there
+# with the 1 << 20 ring full and recycling; HEADLESS FRAMETIME mean 4.59 p50 3.75 p95 9.50 p99 12.00
+# p99.9 15.50 worst 73.24 ms, 0.06% of frames over 16.7 ms, the logic keeping its rate throughout.
+# The -maxframes below is that run's 55 s at 60 a second: scale it to the build's own rate.
 #
 #   set ZH_USER_DATA_DIR=D:\zhr-shots\gpu1m\ud
 #   generals.exe -win -borderless -xres 1280 -yres 720 -msaa 0 -quickstart -noshellmap

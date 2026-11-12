@@ -10,7 +10,8 @@
 # (with ParticleBounce on, the GPU rests them on it instead): vertex and sort cost, little fill.
 # particles1m_smoke is the fill-bound half.
 #
-# The count climbs for 600 logic frames after the spawn and holds from about frame 660.
+# The count climbs for 10 s of game time after the spawn and holds from about 11 s in. The
+# -maxframes below is 40 s at 60 logic frames a second: scale it to the build's own rate.
 #
 #   generals.exe -win -xres 1280 -yres 720 -quickstart -noshellmap -multiInstance -noFPSLimit
 #     -msaa 0 -noDynamicLOD -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2

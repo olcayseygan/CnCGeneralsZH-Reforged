@@ -10,8 +10,9 @@
 #     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -maxframes 250
 #     -video 120 240 laserlook_d3d11 -scenario laserlook -logPrefix laserlook_d3d11_
 #
-# Add -d3d9 and change the names for the reference device. The Avenger's beam is on from about
-# logic frame 140 to the end. The beam at 147 to 152 and 207 to 212, where a still is taken (209),
+# Add -d3d9 and change the names for the reference device. The logic frames here, in the command
+# above and below were taken with the logic at 60 a second; scale them to the build's own rate.
+# The Avenger's beam is on from about logic frame 140 to the end. The beam at 147 to 152 and 207 to 212, where a still is taken (209),
 # is the Paladin's gun, fired on logic frames 146 and 206; the Crusaders do not fire before 250.
 # Those frames are the same in every run. A shot that once seemed to come at
 # 199 was a recording that opened 8 frames late (2026-10-19); the VIDEO line now names the frame

@@ -65,7 +65,7 @@
 # as the app ships it, the user data in the work folder, the install hashed before and after
 # (Tools/install-guard.sh), exit 99 if it changed or could not be checked.
 #
-# Usage: net-check.sh --generals <path> [--peer1 <path>] [--data <dir>] [--seed 3] [--frames 6000]
+# Usage: net-check.sh --generals <path> [--peer1 <path>] [--data <dir>] [--seed 3] [--frames <n>, default 100 s of game time]
 #          [--netai 2] [--map "Maps\Golden Oasis\Golden Oasis.map"] [--control] [--corrupt-at <frame>] [--legacy-replay]
 #          [--overshoot-control] [--keep]
 #   --peer1     the executable for the second copy (default: --generals); an x86_64 build runs under
@@ -115,7 +115,11 @@ GENERALS=""
 PEER1=""
 DATA="${ZH_DATA_DIR:-}"
 SEED=3
-FRAMES=6000		# logic frames, 60 a second: 100 s of game time
+# The logic rate, read from the engine's own header so this script never carries a copy of it.
+LOGIC_FPS="$(sed -n 's/^[[:space:]]*LOGICFRAMES_PER_SECOND[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/\1/p' \
+	"$(dirname "$0")/../GameEngine/Include/Common/GameCommon.h")"
+[ -n "$LOGIC_FPS" ] || { echo "net-check: no LOGICFRAMES_PER_SECOND in GameCommon.h" >&2; exit 2; }
+FRAMES=$((100 * LOGIC_FPS))		# 100 s of game time
 NETAI=2
 MAP='Maps\Golden Oasis\Golden Oasis.map'
 CONTROL=0

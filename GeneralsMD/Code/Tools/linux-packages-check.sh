@@ -19,8 +19,8 @@
 #
 #   minimal   the package installed with only what it Depends/Requires (no recommended or weak dependencies),
 #             then cut off the network: E1 (Tools/replay-check.sh --installed) through /usr/bin/zero-hour-reforged,
-#             its launcher and its own overlay discovery, at the pins: seed 0 at 2400 frames, seeds 0 and 1 at
-#             24000.  The game data is mounted read-only (rule 9 as ever: the runs root at a farm of it);
+#             its launcher and its own overlay discovery, at the pins: seed 0 at 40 s of game time, seeds 0
+#             and 1 at 400 s.  The game data is mounted read-only (rule 9 as ever: the runs root at a farm of it);
 #   drawn     the package installed as a player gets it (recommended dependencies on; on Arch, the Vulkan and
 #             X11 optdepends), Xvfb, and Mesa's software Vulkan (lavapipe): one windowed skirmish frame, written
 #             with -screenshot, which must be a picture (many colours), not a blank.
@@ -58,7 +58,13 @@ PKGS="$(cd "$PKGS" && pwd -P)"; DATA="$(cd "$DATA" && pwd -P)"
 file_of() { ls "$PKGS"/$1 2>/dev/null | head -1; }
 DEB="$(file_of 'zero-hour-reforged_*_amd64.deb')"; RPM="$(file_of 'zero-hour-reforged-*.x86_64.rpm')"
 ARCHPKG="$(file_of 'zero-hour-reforged-*-x86_64.pkg.tar.zst')"; APPIMAGE="$(file_of 'zero-hour-reforged-*-x86_64.AppImage')"
-PIN_2400=0x67F86891 PIN_0=0x6404352D PIN_1=0x90B6D230	# E1's pins since the logic went to 60 Hz (measured on Windows x64)
+# E1 runs 40 s and 400 s of game time, in logic frames at the rate the engine's own header names
+LOGIC_FPS="$(sed -n 's/^[[:space:]]*LOGICFRAMES_PER_SECOND[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$CODE/GameEngine/Include/Common/GameCommon.h")"
+[ -n "$LOGIC_FPS" ] || { echo "linux-packages-check: no LOGICFRAMES_PER_SECOND in GameCommon.h" >&2; exit 2; }
+SHORT=$((40 * LOGIC_FPS)) LONG=$((400 * LOGIC_FPS))
+# E1's pins, measured on Windows x64 at a 30 Hz logic tick (frames 1200 and 12000): re-measure whenever
+# LOGICFRAMES_PER_SECOND changes, or every package fails here
+PIN_SHORT=0x87792035 PIN_0=0xAF2D1FDD PIN_1=0x084F009C
 failed=0 pulled=""
 say() { echo "linux-packages-check: $*"; }
 crc() { printf '%s\n' "$1" | sed -n "s/.*seed $2, 2 players: HEADLESS CRC \(0x[0-9A-Fa-f]*\) at frame $3.*/\1/p" | head -1; }	# <E1 output> <seed> <frame>
@@ -115,14 +121,14 @@ RUNNER
 	chmod +x "$T/runner"
 	local target=( --installed /usr/bin/zero-hour-reforged ) e1a e1b
 	[ "$format" = appimage ] && target=( --appimage "$APPIMAGE" )
-	e1a="$(TMPDIR="$T/tmp" REPLAY_CHECK_RUNNER="$T/runner" bash "$CODE/Tools/replay-check.sh" "${target[@]}" --data "$DATA" --seeds 0 --maxframes 2400 2>&1)"
-	e1b="$(TMPDIR="$T/tmp" REPLAY_CHECK_RUNNER="$T/runner" bash "$CODE/Tools/replay-check.sh" "${target[@]}" --data "$DATA" --seeds "0 1" --maxframes 24000 2>&1)"
+	e1a="$(TMPDIR="$T/tmp" REPLAY_CHECK_RUNNER="$T/runner" bash "$CODE/Tools/replay-check.sh" "${target[@]}" --data "$DATA" --seeds 0 --maxframes $SHORT 2>&1)"
+	e1b="$(TMPDIR="$T/tmp" REPLAY_CHECK_RUNNER="$T/runner" bash "$CODE/Tools/replay-check.sh" "${target[@]}" --data "$DATA" --seeds "0 1" --maxframes $LONG 2>&1)"
 	printf '%s\n%s\n' "$e1a" "$e1b" | grep -E "HEADLESS CRC|agree|DIVERGED|no result|INSTALL" | sed 's/^/  /'
-	[ "$(crc "$e1a" 0 2400)" = $PIN_2400 ] && printf '%s' "$e1a" | grep -q "the playback and the second run agree" \
-		|| { say "$label: E1 seed 0 at 2400 is not $PIN_2400 (or did not agree)"; bad=1; }
-	[ "$(crc "$e1b" 0 24000)" = $PIN_0 ] && [ "$(crc "$e1b" 1 24000)" = $PIN_1 ] \
+	[ "$(crc "$e1a" 0 $SHORT)" = $PIN_SHORT ] && printf '%s' "$e1a" | grep -q "the playback and the second run agree" \
+		|| { say "$label: E1 seed 0 at $SHORT is not $PIN_SHORT (or did not agree)"; bad=1; }
+	[ "$(crc "$e1b" 0 $LONG)" = $PIN_0 ] && [ "$(crc "$e1b" 1 $LONG)" = $PIN_1 ] \
 		&& [ "$(printf '%s' "$e1b" | grep -c "the playback and the second run agree")" -eq 2 ] \
-		|| { say "$label: E1 seeds 0 and 1 at 24000 are not $PIN_0 and $PIN_1 (or did not agree)"; bad=1; }
+		|| { say "$label: E1 seeds 0 and 1 at $LONG are not $PIN_0 and $PIN_1 (or did not agree)"; bad=1; }
 	[ $bad -eq 0 ] && say "$label: E1 at the three pins, through the installed launcher (minimal install, offline)"
 	docker rm -f "$name" > /dev/null
 
@@ -139,7 +145,7 @@ RUNNER
 			-e APPIMAGE_EXTRACT_AND_RUN=1 -e TMPDIR="$T/tmp" -e LIBGL_ALWAYS_SOFTWARE=1 -w "$T" "$name" sh -c \
 			"Xvfb :77 -screen 0 1024x768x24 -nolisten tcp > '$T/xvfb.log' 2>&1 & sleep 2; DISPLAY=:77 timeout 900 '$run' -root '$FARM' \
 				-quickstart -noshellmap -multiInstance -noaudio -xres 800 -yres 600 -randommap 0 2 -autoskirmish 2 -aidiff brutal \
-				-seed 0 -observer -maxframes 180 -screenshot 160 > '$T/draw.out' 2> '$T/draw.err'; echo \$? > '$T/draw.status'"
+				-seed 0 -observer -maxframes $((3 * LOGIC_FPS)) -screenshot $((8 * LOGIC_FPS / 3)) > '$T/draw.out' 2> '$T/draw.err'; echo \$? > '$T/draw.status'"
 		shot="$(find "$T/draw-user" -name 'sshot*.bmp' | head -1)"
 		local colours=0
 		[ -n "$shot" ] && colours="$(od -An -v -tu1 -j 54 "$shot" | tr -s ' ' '\n' | sort -u | wc -l)"

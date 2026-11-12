@@ -6,7 +6,8 @@
 #
 #   python net_check.py --copies 2 --frames 700 --tag cw --each "-scenario cheatwitness"
 #
-# Measured 2026-11-09, both logs alike: two "CHEATWITNESS:" lines, frame 180 (the Paladin's order
+# Measured 2026-11-09 with the logic at 60 frames a second (scale the logic frames below to the
+# build's own rate), both logs alike: two "CHEATWITNESS:" lines, frame 180 (the Paladin's order
 # at the Quad Cannon) and frame 300 (the Ranger's click at the Technical). The Technical left the
 # Ranger's sight between logic frames 210 and 240; the clicks at 240 and 270 are inside the second a
 # run-ahead can hold a click made while it was in sight, so they count as seen, and the one at 300

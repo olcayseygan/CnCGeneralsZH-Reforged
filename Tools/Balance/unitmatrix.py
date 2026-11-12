@@ -37,7 +37,10 @@ sys.path.insert(0, str(GENERALS / "Code" / "Tools"))
 import bigfile  # noqa: E402
 import gametext  # noqa: E402
 
-LOGIC_FPS = 60  # LOGICFRAMES_PER_SECOND
+# LOGICFRAMES_PER_SECOND, read from the engine's own header so this script never carries a copy of it
+LOGIC_FPS = int(re.search(r"^\s*LOGICFRAMES_PER_SECOND\s*=\s*(\d+)",
+                          (GENERALS / "Code" / "GameEngine" / "Include" / "Common" / "GameCommon.h").read_text(errors="replace"),
+                          re.M).group(1))
 SORTIE_MSEC = 20000
 SORTIE_FRAMES = SORTIE_MSEC * LOGIC_FPS / 1000.0      # AI_SORTIE_FRAMES
 OVERKILL_TOLERANCE = 0.0001
@@ -707,7 +710,7 @@ def selfcheck():
     assert kill_frames(150.0, clip._replace(opening=15.0)) == 135.0
     assert kill_frames(10.0, gun) == 60.0
     assert kill_frames(480.0, Shots(0.0, 30.0, 0, 0.0, 0.0)) == CANNOT_KILL
-    assert msec_to_frames(2000) == 120 and msec_to_frames(100) == 6 and msec_to_frames(1) == 1
+    assert msec_to_frames(2000) == 2 * LOGIC_FPS and msec_to_frames(100) == LOGIC_FPS // 10 and msec_to_frames(1) == 1
     assert real("75.0.") == 75.0 and real("-2e1x") == -20.0 and percent("50%") == 0.5
     print("unitmatrix selfcheck: ok")
 

@@ -1,7 +1,7 @@
 # Plays the superweapon effects on the hardware so they can be judged without
 # waiting for a real launch, and tuned without waiting for a build. The maths is
 # compiled C# that mirrors ChromaKeyboard.cpp's chromaEffectColor, stepped thirty
-# times a second. The game's logic runs at sixty, but chromaFlicker steps its noise
+# times a second. Whatever rate the game's logic runs at, chromaFlicker steps its noise
 # on retail 30 Hz frames (LOGICFRAMES_PER_RETAIL_FRAME), so what this shows is what
 # the game shows. The first version was plain PowerShell and managed about eight
 # frames a second, which made every effect look like it stuttered.

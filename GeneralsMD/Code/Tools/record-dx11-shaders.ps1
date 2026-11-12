@@ -59,8 +59,10 @@ param(
 	[int[]] $Seeds = @(0, 1, 2),
 	# named skirmish maps played the same way, for the lighting the random maps do not have (night, snow)
 	[string[]] $Maps = @(),
-	# logic frames, 60 a second
-	[int] $Frames = 4800,
+	# seconds of game time each run plays, turned into logic frames at LOGICFRAMES_PER_SECOND from GameCommon.h
+	[int] $Seconds = 80,
+	# the same in logic frames outright; 0 takes it from -Seconds
+	[int] $Frames = 0,
 	[int] $TimeoutMinutes = 30,
 	# leave the shipped file in the farm: a check that a run with it compiles nothing it holds
 	[switch] $KeepShipped,
@@ -74,6 +76,13 @@ $ErrorActionPreference = "Stop"
 $env:ZH_UNATTENDED = "1"	# every game this starts is unattended: no box may wait on a person (EarlyCommandLine.h)
 
 $RunDir = (Resolve-Path $RunDir).Path
+if ($Frames -le 0) {
+	# the logic rate, from the engine's own header so this script never carries a copy of it
+	$logicFps = [int][regex]::Match((Get-Content -Raw (Join-Path $PSScriptRoot "..\GameEngine\Include\Common\GameCommon.h")),
+		'(?m)^\s*LOGICFRAMES_PER_SECOND\s*=\s*(\d+)').Groups[1].Value
+	if ($logicFps -le 0) { throw "no LOGICFRAMES_PER_SECOND in GameCommon.h" }
+	$Frames = $Seconds * $logicFps
+}
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 # windows-ci.ps1's own farm functions, taken from its syntax tree: a farm is never hand-rolled.
 $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot "windows-ci.ps1"), [ref]$null, [ref]$null)

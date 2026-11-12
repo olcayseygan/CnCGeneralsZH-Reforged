@@ -6,7 +6,7 @@
 #     -scenario autoorders -logPrefix autoorders_
 #
 # Read the AUTO GARRISON and AUTO REPAIR lines; each paragraph below says what they should show.
-# Frames in those lines are logic frames, twice the ones here.
+# Frames in those lines are logic frames, LOGICFRAMES_PER_SECOND a second; the ones here count retail's 30.
 #
 # findFirstMatching takes the newest object, so the Bunker the Tank Hunters are sent to is spawned last.
 

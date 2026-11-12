@@ -25,10 +25,13 @@ SCENARIO_DIR = RUN_DIR / "Scenarios"
 OUT_DIR = RUN_DIR / "Balance"
 PARALLEL_RUNS = 5
 TIMEOUT_SECONDS = 600
-# A scenario file counts 30 Hz frames (ScenarioDrill_tick converts them) and its tally lines print
-# them back, but -maxframes counts the logic's own frames, 60 a second
+# A scenario file counts retail's 30 Hz frames (ScenarioDrill_tick converts them) and its tally lines
+# print them back, but -maxframes counts the logic's own frames, LOGICFRAMES_PER_SECOND a second, read
+# from the engine's own header so this script never carries a copy of the rate
 SCENARIO_FPS = 30
-LOGIC_FPS = 60
+LOGIC_FPS = int(re.search(r"^\s*LOGICFRAMES_PER_SECOND\s*=\s*(\d+)",
+                          (Path(__file__).resolve().parents[2] / "GeneralsMD" / "Code" / "GameEngine" / "Include" / "Common"
+                           / "GameCommon.h").read_text(errors="replace"), re.M).group(1))
 MAX_FRAMES = 3600 * LOGIC_FPS // SCENARIO_FPS
 TALLY_FRAME = 3550
 SPAWN_FRAME = 30

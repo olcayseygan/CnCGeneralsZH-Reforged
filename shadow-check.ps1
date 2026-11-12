@@ -21,23 +21,29 @@ $out = Join-Path $env:TEMP "shadowcheck"
 if (-not (Test-Path $out)) { $null = New-Item -ItemType Directory $out }
 
 # The same views tree-check uses, for the same reason: they are the ones with something in them.
-# f is a logic frame at 60 a second.
+# s is the shot's game time in seconds, f its logic frame at LOGICFRAMES_PER_SECOND from GameCommon.h,
+# and $tail the 8/3 s the run goes on past it before it quits.
+$logicFps = [int][regex]::Match((Get-Content -Raw "$PSScriptRoot\GeneralsMD\Code\GameEngine\Include\Common\GameCommon.h"),
+	'(?m)^\s*LOGICFRAMES_PER_SECOND\s*=\s*(\d+)').Groups[1].Value
+if ($logicFps -le 0) { throw "no LOGICFRAMES_PER_SECOND in GameCommon.h" }
+$tail = [int][Math]::Round(8 / 3 * $logicFps)
 $cases = @(
-  @{map='Flash Effect';       x='1200'; y='945';  f=800},
-  @{map='Flash Effect';       x='1816'; y='1861'; f=2400},
-  @{map='Flash Effect';       x='1378'; y='1384'; f=4800},
-  @{map='ForgottenForestZH';  x='1620'; y='1470'; f=1200},
-  @{map='ForgottenForestZH';  x='1543'; y='1636'; f=3600},
-  @{map='Golden Oasis';       x='2643'; y='3580'; f=1800},
-  @{map='Alpine Assault';     x='760';  y='920';  f=1400},
-  @{map='Killing Fields';     x='1024'; y='1024'; f=3000}
+  @{map='Flash Effect';       x='1200'; y='945';  s=40/3},
+  @{map='Flash Effect';       x='1816'; y='1861'; s=40},
+  @{map='Flash Effect';       x='1378'; y='1384'; s=80},
+  @{map='ForgottenForestZH';  x='1620'; y='1470'; s=20},
+  @{map='ForgottenForestZH';  x='1543'; y='1636'; s=60},
+  @{map='Golden Oasis';       x='2643'; y='3580'; s=30},
+  @{map='Alpine Assault';     x='760';  y='920';  s=70/3},
+  @{map='Killing Fields';     x='1024'; y='1024'; s=50}
 )
+foreach ($c in $cases) { $c.f = [int][Math]::Round($c.s * $logicFps) }
 
 function Shoot($case, $tag, $extra) {
   Get-ChildItem "$shots\sshot*.bmp" -ErrorAction SilentlyContinue | Remove-Item -Force
   $arguments = @('-win','-xres','1280','-yres','720','-quickstart','-noshellmap','-multiInstance',
     '-msaa','0','-dx11post','off','-map',"`"Maps\$($case.map)\$($case.map).map`"",
-    '-autoskirmish','4','-aidiff','easy','-seed','5','-maxframes',($case.f+160),
+    '-autoskirmish','4','-aidiff','easy','-seed','5','-maxframes',($case.f+$tail),
     '-screenshot',$case.f,'-camera',$case.x,$case.y,'-logPrefix',"shd_$tag`_",'-turbo')
   if ($extra) { $arguments += $extra }
   $process = Start-Process (Join-Path $run "generals.exe") -ArgumentList $arguments `

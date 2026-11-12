@@ -16,6 +16,7 @@ attacks and every unit on the field is one this script spawned.
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import time
@@ -27,7 +28,10 @@ MAP = r"Maps\Alpine Assault\Alpine Assault.map"
 PORT = 8787
 LOAD_TIMEOUT_SECONDS = 180
 CONNECT_ATTEMPTS = 120
-LOGIC_FRAMES_PER_SECOND = 60
+# LOGICFRAMES_PER_SECOND, read from the engine's own header so this script never carries a copy of it
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "GameEngine", "Include", "Common", "GameCommon.h"),
+          encoding="utf-8", errors="replace") as _header:
+    LOGIC_FRAMES_PER_SECOND = int(re.search(r"^\s*LOGICFRAMES_PER_SECOND\s*=\s*(\d+)", _header.read(), re.M).group(1))
 MATCH_SETTLE_FRAME = 2 * LOGIC_FRAMES_PER_SECOND
 
 CHEAT_BITS = {

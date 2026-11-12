@@ -21,14 +21,19 @@
 # view's measured noise plus about 0.75 of a point, rounded up: a real drawing change still trips it,
 # the run-to-run shimmer does not.  Re-measure and move them if the reference machine changes.
 #
-# Frames in $cases are logic frames at 60 a second.  A reference build from before the logic went
-# to 60 ticks a second counts 30, so pass -BaseFps 30 with one and its shots are taken at the same
-# game time, which is the same picture.
+# Times in $cases are seconds of game time, turned into logic frames at each build's rate: the
+# candidate's is LOGICFRAMES_PER_SECOND read from GameCommon.h.  A reference build whose logic ran
+# at another rate (30 before 2026-10-13, 60 until the tick went back to 30) takes -BaseFps with that
+# rate, and its shots are taken at the same game time, which is the same picture.
 #
 # Exit code is the number of views over the limit.
 param([double]$Limit = 0, [string[]]$Extra = @(), [string[]]$NewEnv = @(), [string]$Base = 'generals_base.exe', [string]$Candidate = 'generals.exe',
-      [int]$BaseFps = 60, [string]$Options = (Join-Path $PSScriptRoot 'reforged-look.ini'))
-$LogicFps = 60	# LOGICFRAMES_PER_SECOND of the candidate build
+      [int]$BaseFps = 0, [string]$Options = (Join-Path $PSScriptRoot 'reforged-look.ini'))
+# LOGICFRAMES_PER_SECOND of the candidate build, from the engine's own header
+$LogicFps = [int][regex]::Match((Get-Content -Raw "$PSScriptRoot\GeneralsMD\Code\GameEngine\Include\Common\GameCommon.h"),
+	'(?m)^\s*LOGICFRAMES_PER_SECOND\s*=\s*(\d+)').Groups[1].Value
+if ($LogicFps -le 0) { throw "no LOGICFRAMES_PER_SECOND in GameCommon.h" }
+if ($BaseFps -le 0) { $BaseFps = $LogicFps }	# 0: the reference build runs at the candidate's rate
 $env:ZH_UNATTENDED = "1"	# every game this starts is unattended: no box may wait on a person (EarlyCommandLine.h)
 
 Add-Type -AssemblyName System.Drawing
@@ -51,16 +56,18 @@ $pace = @()
 if (Select-String -Path $baseExe -Pattern '-turbo' -SimpleMatch -Quiet) { $pace = @('-turbo') }
 else { "$Base predates -turbo: both builds run paced, about 90 seconds a view" }
 
+# s is the shot's game time in seconds (40/3 and 70/3 are frames 400 and 700 at 30 a second)
 $cases = @(
-  @{map='Flash Effect';       x='1200'; y='945';  f=800;  lim=1.6},   # noise 0.77
-  @{map='Flash Effect';       x='1816'; y='1861'; f=2400; lim=2.3},   # noise 1.54
-  @{map='Flash Effect';       x='1378'; y='1384'; f=4800; lim=2.0},   # noise 1.21
-  @{map='ForgottenForestZH';  x='1620'; y='1470'; f=1200; lim=1.2},   # noise 0.37
-  @{map='ForgottenForestZH';  x='1543'; y='1636'; f=3600; lim=1.1},   # noise 0.35
-  @{map='Golden Oasis';       x='2643'; y='3580'; f=1800; lim=2.4},   # noise 1.64
-  @{map='Alpine Assault';     x='760';  y='920';  f=1400; lim=2.7},   # noise 1.93
-  @{map='Killing Fields';     x='1024'; y='1024'; f=3000; lim=1.7}    # noise 0.94
+  @{map='Flash Effect';       x='1200'; y='945';  s=40/3; lim=1.6},   # noise 0.77
+  @{map='Flash Effect';       x='1816'; y='1861'; s=40;   lim=2.3},   # noise 1.54
+  @{map='Flash Effect';       x='1378'; y='1384'; s=80;   lim=2.0},   # noise 1.21
+  @{map='ForgottenForestZH';  x='1620'; y='1470'; s=20;   lim=1.2},   # noise 0.37
+  @{map='ForgottenForestZH';  x='1543'; y='1636'; s=60;   lim=1.1},   # noise 0.35
+  @{map='Golden Oasis';       x='2643'; y='3580'; s=30;   lim=2.4},   # noise 1.64
+  @{map='Alpine Assault';     x='760';  y='920';  s=70/3; lim=2.7},   # noise 1.93
+  @{map='Killing Fields';     x='1024'; y='1024'; s=50;   lim=1.7}    # noise 0.94
 )
+foreach ($c in $cases) { $c.f = [int][Math]::Round($c.s * $LogicFps) }	# the candidate's frame, for tags and the report
 
 # -msaa 0 is not a preference, it is what makes the picture a picture of the game.  The screenshot
 # reads the back buffer, and a multisampled back buffer cannot be read: the capture falls through to
@@ -70,16 +77,16 @@ $cases = @(
 #
 # The shot folder is emptied before every launch for the neighbouring reason: this takes the newest
 # .bmp in it afterwards, and a run that writes none - the reference build needs more than the wait
-# below to reach frame 4800 - would otherwise hand back the previous case's picture and compare two
+# below to reach the 80 s case - would otherwise hand back the previous case's picture and compare two
 # different frames.  Empty, that is a stated failure instead of a number.
 #
 # -dx11post off for the same kind of reason: the post chain runs by default since v1.0.0, and a
 # reference build from before that draws without it, so the bloom would be the difference counted.
 function Shoot($exe, $c, $tag) {
-  # the case's frame at this build's logic rate, and 160 frames (2.7 s) past it to quit on
+  # the case's frame at this build's logic rate, and 8/3 s past it to quit on
   $fps = if ($exe -eq $Base) { $BaseFps } else { $LogicFps }
-  $at = [int]($c.f * $fps / $LogicFps)
-  $end = $at + [int](160 * $fps / $LogicFps)
+  $at = [int][Math]::Round($c.s * $fps)
+  $end = $at + [int][Math]::Round(8 / 3 * $fps)
   Get-ChildItem "$shots\sshot*.bmp" -ErrorAction SilentlyContinue | Remove-Item -Force
   # -showHudOverlay is for a reference exe from before 8b859d61, whose corner readout was off in Release
   # without it; this build draws the info strip by ShowNetBox alone and skips the switch as unknown.

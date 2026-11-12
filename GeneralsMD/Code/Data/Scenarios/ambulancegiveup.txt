@@ -14,8 +14,9 @@
 # at (x,y): cell type ... (CLIFF)", the middle and four points 100 out from it.  If any of them is put
 # down, the Ambulance can reach that ground and the run proves nothing; move the fields.
 #
-# What to read (CLEANUP lines count logic frames, 60 a second; this file and the SCENARIO and TALLY
-# lines count 30 a second, so file frame 750 is logic frame 1500):
+# What to read (CLEANUP lines count logic frames, LOGICFRAMES_PER_SECOND a second; this file and the
+# SCENARIO and TALLY lines count retail's 30 a second, so file frame 750 is 25 s into the match; the
+# CLEANUP frames below were measured at 60 a second):
 #   grep "CLEANUP" <prefix>DebugLogFile.txt
 #     "goes to clean by itself round (2700,3975)" at 121, then exactly one "gave up on a hazard it
 #     cannot reach" at 1463, the eight-scan one (", no progress in time" is the 20 s fallback), and no

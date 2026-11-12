@@ -109,8 +109,9 @@ def layout():
         uattack=(276, 251, 340, 315),           # the under-attack lamp over the glass's top right corner
         money=(924, 272, 1051, 300),            # MoneyUL/LR, in the money tab right of the painted sign
         power=(646, 320, 1304, 330),            # PowerBarUL/LR, in the rail's channel
-        tools=[(579, y, 633, y + 35) for y in (357, 394, 431, 468)],            # options, beacon (last alert), select army, chat
-        # the idle column at the grid's right end: worker, infantry, vehicle, aircraft (Idle<Kind>UL/LR)
+        tools=[(579, y, 633, y + 35) for y in (357, 394, 431, 468)],            # options, beacon (last alert), worker, chat
+        # the selection column at the grid's right end: select army, infantry, vehicle, aircraft (SelectArmy and
+        # Idle<Kind>UL/LR)
         idle=[(1312, y, 1366, y + 35) for y in (357, 394, 431, 468)],
         cells=[(668 + 92 * c, y, 668 + 92 * c + 88, y + 70) for c in range(7) for y in (358, 432)],
         minmax=(1829, 234, 1920, 265),
@@ -1298,6 +1299,23 @@ def icon(kind, cx, cy, build):
         jet = [(cx + x, cy + y) for x, y in half] + [(cx, cy + 11)] + [(cx - x, cy + y) for x, y in reversed(half[1:])]
         canopy = plate(cx - 0.6, cy - 8.5, cx + 0.6, cy - 4.5)
         return [jet], [canopy]
+    if kind == "SelectArmy":
+        # three helmeted troopers inside a selection box's four corners: the front one stands apart from the
+        # two behind by a ring of glass.  No rifle (the idle infantry's) and no ring (the attack signal's)
+        def trooper(x, y, s, g=0.0):
+            helmet = [(x - 3.7 * s - g, y - s + g), (x - 3.3 * s - g, y - 3.9 * s - g / 2), (x - 1.7 * s - g / 2, y - 5.5 * s - g),
+                      (x + 1.7 * s + g / 2, y - 5.5 * s - g), (x + 3.3 * s + g, y - 3.9 * s - g / 2), (x + 3.7 * s + g, y - s + g)]
+            head = octagon(x - 2.4 * s - g, y - 2 * s - g, x + 2.4 * s + g, y + 2.4 * s + g, 1.1 * s + 0.4 * g)
+            body = [(x - 6.6 * s - g, y + 9 * s + g), (x - 6.1 * s - g, y + 5 * s - g / 2), (x - 2.8 * s - g / 2, y + 3.3 * s - g),
+                    (x + 2.8 * s + g / 2, y + 3.3 * s - g), (x + 6.1 * s + g, y + 5 * s - g / 2), (x + 6.6 * s + g, y + 9 * s + g)]
+            return [helmet, head, body]
+
+        def corner(x, y, sx, sy, arm=5.0, w=1.6):
+            return [(x, y), (x + sx * arm, y), (x + sx * arm, y + sy * w), (x + sx * w, y + sy * w), (x + sx * w, y + sy * arm),
+                    (x, y + sy * arm)]
+        marks = [corner(cx + sx * 18.5, cy + sy * 11.5, -sx, -sy) for sx in (-1, 1) for sy in (-1, 1)]
+        back = trooper(cx - 7.5, cy - 2.2, 0.92) + trooper(cx + 7.5, cy - 2.2, 0.92)
+        return back + marks, trooper(cx, cy + 0.6, 1.08, 1.3), trooper(cx, cy + 0.6, 1.08)
     if kind == "Beacon":
         # an exclamation inside a ring: the ring is the plate with its middle cut back out
         ring = [octagon(cx - 9, cy - 9, cx + 9, cy + 9, 5.2)], [octagon(cx - 6.6, cy - 6.6, cx + 6.6, cy + 6.6, 3.8)]
@@ -2308,7 +2326,7 @@ def paint_powers(side_name="America", svg_path=EMBLEM_SVG, frame=None, glow="B")
     promo_window(p, *M[prefix + "GeneralsPowerWindow"][:2], build)
     for state in ("", "H", "I"):                                # the window's close button, 60x50
         button(p, M[prefix + "GenPowerClose" + state], "Close", state, build)
-    for kind in ("Chat", "Options", "Worker", "Beacon", "IdleInfantry", "IdleVehicle", "IdleAircraft"):
+    for kind in ("Chat", "Options", "Worker", "Beacon", "IdleInfantry", "IdleVehicle", "IdleAircraft", "SelectArmy"):
         for state in ("", "H", "P", "I"):
             button(p, M[prefix + kind + state], kind, state, build)
     exp_bar(p, *M[prefix + "ExpBar"][:2], build)
@@ -3947,9 +3965,9 @@ def check_sheet(sheet_img, side_name, glow="B"):
             "TrayCornerTopRight": (TRAY_LEFT, TRAY_TOP), "TrayCornerBottomRight": (TRAY_LEFT, TRAY_FOOT),
             "TrayStepRight": (TRAY_LEFT, TRAY_TOP), "TrayStepDown": (TRAY_LEFT, TRAY_FOOT), "HudCellPlate": HUD_PLATE,
             "TrayTabDown": TRAY_TAB, "TrayTabUp": TRAY_TAB, "HudReadyGlow": READY_GLOW, "HudReadyShimmer": READY_GLOW}
-    for k in ("Infantry", "Vehicle", "Aircraft"):
+    for k in ("IdleInfantry", "IdleVehicle", "IdleAircraft", "SelectArmy"):
         for st in ("", "H", "P", "I"):
-            want["Idle" + k + st] = (54, 35)
+            want[k + st] = (54, 35)
     for st in ("", "H", "I"):
         want["GenPowerClose" + st] = (60, 50)
     want.update(tip_sizes())

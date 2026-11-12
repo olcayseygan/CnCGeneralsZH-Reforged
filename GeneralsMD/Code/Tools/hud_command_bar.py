@@ -2099,11 +2099,12 @@ def command_tab(side_name, kind, state):
 
 # The page arrows (the owner's order of 2026-11-11): when a Ground or Aircraft tab's list runs past a page, the
 # grid's two rightmost cells turn into page buttons, the top one's arrow right (next), the bottom one's left
-# (previous).  A command cell's size, 88x70 at 1080, in the tabs' family (key_piece) so they read as the bar's
+# (previous).  Square, a command cell's height (70x70 at 1080; the owner's order of 2026-11-12), the code
+# narrowing the cell's window to match, in the tabs' family (key_piece) so they read as the bar's
 # controls among the cameos; the arrow is each build's own: America's chevron pair, China's stepped pyramid,
 # the GLA's lopsided wedge, Turkiye's triangle with its inner cut.  The glyph is flat paint, so the left one is
 # the right one's mirror.  The sheets are full, so each piece stands where there was room (PAGE_ARROW_AT).
-PAGE_ARROW = (88, 70)
+PAGE_ARROW = (70, 70)
 PAGE_ARROW_AT = {"TabPageNext": (605, 69), "TabPageNextH": (679, 309), "TabPageNextP": (667, 382), "TabPageNextI": (707, 455),
                  "TabPagePrev": (545, 547), "TabPagePrevH": (731, 655), "TabPagePrevP": (523, 687), "TabPagePrevI": (614, 687)}
 

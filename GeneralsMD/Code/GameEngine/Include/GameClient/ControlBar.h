@@ -505,10 +505,11 @@ Int ControlBar_commandGroup( const class CommandButton *command );
 	* what does not fit goes on in the next row down with room, then in the rows above. */
 Bool ControlBar_commandPlaces( const Int *types, const Int *groups, const Int *pinned, Int count, Int *places );
 
-/** A command tab's pages: 'count' units on a grid of 'cells'.  A list that fits takes every cell and
-	* one page; one that does not gives two cells to the page arrows, so a page holds cells - 2 (a grid
-	* of fewer than three keeps every cell).  ControlBarCommand.cpp. */
-void ControlBar_commandTabPages( Int count, Int cells, Int *perPage, Int *pages );
+/** A command tab's scroll: 'count' units on a grid of 'cells' in columns of 'rows'.  A list that fits
+	* takes every cell and never scrolls; one that does not gives two cells to the arrows when 'arrows'
+	* has room for them (a grid of fewer than three keeps every cell), so 'perView' units show at once.
+	* The list then scrolls a column at a time, from column 0 to 'lastColumn'.  ControlBarCommand.cpp. */
+void ControlBar_commandTabScroll( Int count, Int cells, Int rows, Bool arrows, Int *perView, Int *lastColumn );
 
 /** " (Alt+Z)" for the key the player's command map gives a meta event in a match, empty for none
 	* (ControlBarPopupDescription.cpp). */
@@ -1289,7 +1290,7 @@ public:
 	Bool commandTabCovers( const GameWindow *win ) const;
 	void toggleCommandTab( Int tab );							///< a tab button's press: open it, or close it when it is the one open
 	void closeCommandTab( void );									///< no tab: the bar shows the selection again
-	/// the wheel over the command grid while a unit tab holds more than one page: TRUE when it turned the page
+	/// the wheel over the command grid while a unit tab's list runs past the grid: TRUE when it was the list's (a column a notch)
 	Bool scrollCommandTab( const ICoord2D *mouse, Bool up );
 
 protected:
@@ -1299,12 +1300,13 @@ protected:
 	void layoutCommandTabRow( const IRegion2D &grid, IRegion2D *row, IRegion2D *place );
 	/// the page arrows of a unit tab whose list does not fit (ControlBarCommand.cpp)
 	Bool findCommandTabArrowSlots( Int *next, Int *prev ) const;
-	void commandTabLayout( Int count, Int *perPage, Int *pages, Int *next, Int *prev, Bool *arrows ) const;
+	Int commandTabCells( Int *slots, Int *rows ) const;	///< the grid's cells column by column, left to right, each top down
+	void commandTabLayout( Int count, Int *perView, Int *lastColumn, Int *next, Int *prev, Bool *arrows ) const;
 	void setCommandTabArrow( Int arrow, Int slot );
 	void restoreCommandTabArrows( void );
-	Bool turnCommandTabPage( Int step );
+	Bool turnCommandTabColumn( Int step );
 public:
-	Bool pressCommandTabArrow( GameWindow *win );	///< a click on a page arrow turns the page: TRUE, else FALSE
+	Bool pressCommandTabArrow( GameWindow *win );	///< a click on a page arrow scrolls a column: TRUE, else FALSE
 	Bool isCommandTabArrow( const GameWindow *win ) const;	///< 'win' is a page arrow now
 protected:
 	/// the smoke signal keys on the radar's top edge (ControlBarCommand.cpp), in the scheme's seats;
@@ -1325,11 +1327,12 @@ protected:
 	Int m_commandTabArrowSlot[ 2 ];								///< the cells that are the next and previous arrows now, -1 for none
 	enum { TAB_ARROW_DRAW_STATES = 7 };
 	const Image *m_commandTabArrowSaved[ 2 ][ 3 ][ TAB_ARROW_DRAW_STATES ];	///< what each arrow's cell wore before: enabled, hilite and disabled draw data
+	ICoord2D m_commandTabArrowSize[ 2 ];						///< each arrow's cell's size before it was squared to its height
 	void populateCommandTab( Bool full );					///< a unit tab's page into the grid; full after a context switch, else the states only
 	Bool getCommandGridRect( IRegion2D *rect ) const;	///< the command windows' screen extent
 
 	Int m_commandTab;															///< CommandTab open, COMMAND_TAB_NONE for none
-	Int m_commandTabPage;													///< a unit tab's page
+	Int m_commandTabColumn;												///< a unit tab's first column shown
 	GameWindow *m_commandTabParent;								///< the tabs' code-made parent, checked against the window manager before use
 	GameWindow *m_commandTabButtons[ COMMAND_TAB_COUNT ];
 

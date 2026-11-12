@@ -4637,25 +4637,30 @@ TEST(command_tab_lists_only_the_bars_own_build_buttons)
 }
 
 /*
- * A unit tab's pages on the 14-cell grid: a list that fits takes every cell and has no arrows; one
- * that does not gives the two rightmost cells to the page arrows, so a page holds twelve.
+ * A unit tab's scroll on the 14-cell grid, two rows: a list that fits takes every cell and never
+ * scrolls; one that does not gives the rightmost column to the arrows, so twelve show, and scrolls a
+ * column (two units) a step until the view reaches the list's end.
  */
-TEST(command_tab_pages_give_two_cells_to_the_arrows)
+TEST(command_tab_scrolls_a_column_at_a_time)
 {
-	Int perPage = 0, pages = 0;
-	ControlBar_commandTabPages( 0, 14, &perPage, &pages );
-	CHECK_EQ( perPage, 14 );	CHECK_EQ( pages, 1 );
-	ControlBar_commandTabPages( 14, 14, &perPage, &pages );
-	CHECK_EQ( perPage, 14 );	CHECK_EQ( pages, 1 );
-	ControlBar_commandTabPages( 15, 14, &perPage, &pages );
-	CHECK_EQ( perPage, 12 );	CHECK_EQ( pages, 2 );
-	ControlBar_commandTabPages( 24, 14, &perPage, &pages );
-	CHECK_EQ( perPage, 12 );	CHECK_EQ( pages, 2 );
-	ControlBar_commandTabPages( 25, 14, &perPage, &pages );
-	CHECK_EQ( perPage, 12 );	CHECK_EQ( pages, 3 );
-	/* no room for two arrows and a unit: every cell a unit, the wheel pages */
-	ControlBar_commandTabPages( 5, 2, &perPage, &pages );
-	CHECK_EQ( perPage, 2 );	CHECK_EQ( pages, 3 );
+	Int perView = 0, last = 0;
+	ControlBar_commandTabScroll( 0, 14, 2, TRUE, &perView, &last );
+	CHECK_EQ( perView, 14 );	CHECK_EQ( last, 0 );
+	ControlBar_commandTabScroll( 14, 14, 2, TRUE, &perView, &last );
+	CHECK_EQ( perView, 14 );	CHECK_EQ( last, 0 );
+	/* 15 units: columns 0, 1, 2 show units 1-12, 3-14, 5-15 */
+	ControlBar_commandTabScroll( 15, 14, 2, TRUE, &perView, &last );
+	CHECK_EQ( perView, 12 );	CHECK_EQ( last, 2 );
+	ControlBar_commandTabScroll( 16, 14, 2, TRUE, &perView, &last );
+	CHECK_EQ( perView, 12 );	CHECK_EQ( last, 2 );
+	ControlBar_commandTabScroll( 17, 14, 2, TRUE, &perView, &last );
+	CHECK_EQ( perView, 12 );	CHECK_EQ( last, 3 );
+	/* no arrow seats: every cell a unit, the wheel scrolls */
+	ControlBar_commandTabScroll( 15, 14, 2, FALSE, &perView, &last );
+	CHECK_EQ( perView, 14 );	CHECK_EQ( last, 1 );
+	/* no room for two arrows and a unit */
+	ControlBar_commandTabScroll( 5, 2, 2, TRUE, &perView, &last );
+	CHECK_EQ( perView, 2 );	CHECK_EQ( last, 2 );
 }
 
 /*

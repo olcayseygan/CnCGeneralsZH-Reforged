@@ -16578,19 +16578,19 @@ GUI:CommandTabBuildings
 END
 
 GUI:CommandTabGround
-"Kara birlikleri: fabrikalarının şu an üretebildiği her şey. Fare tekerleği sayfayı çevirir"
+"Kara birlikleri: fabrikalarının şu an üretebildiği her şey. Fare tekerleği listeyi kaydırır"
 END
 
 GUI:CommandTabAircraft
-"Hava araçları: hava alanlarının şu an üretebildiği her şey. Fare tekerleği sayfayı çevirir"
+"Hava araçları: hava alanlarının şu an üretebildiği her şey. Fare tekerleği listeyi kaydırır"
 END
 
 GUI:CommandTabPageNext
-"Sonraki sayfa"
+"Sağa kaydır"
 END
 
 GUI:CommandTabPagePrev
-"Önceki sayfa"
+"Sola kaydır"
 END
 
 GUI:SignalKeyAttack

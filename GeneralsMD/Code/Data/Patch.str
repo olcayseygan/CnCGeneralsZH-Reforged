@@ -1952,19 +1952,19 @@ GUI:CommandTabBuildings
 END
 
 GUI:CommandTabGround
-"Ground units: everything your factories can train now. Mouse wheel turns the page"
+"Ground units: everything your factories can train now. Mouse wheel scrolls the list"
 END
 
 GUI:CommandTabAircraft
-"Aircraft: everything your airfields can build now. Mouse wheel turns the page"
+"Aircraft: everything your airfields can build now. Mouse wheel scrolls the list"
 END
 
 GUI:CommandTabPageNext
-"Next page"
+"Scroll right"
 END
 
 GUI:CommandTabPagePrev
-"Previous page"
+"Scroll left"
 END
 
 GUI:SignalKeyAttack

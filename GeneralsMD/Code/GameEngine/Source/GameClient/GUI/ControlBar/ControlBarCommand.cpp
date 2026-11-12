@@ -1894,7 +1894,7 @@ void ControlBar::toggleCommandTab( Int tab )
 	TheInGameUI->setGUICommand( NULL );
 
 	m_commandTab = ( m_commandTab == tab ) ? COMMAND_TAB_NONE : tab;
-	m_commandTabPage = 0;
+	m_commandTabColumn = 0;
 	markUIDirty();
 }
 
@@ -1915,7 +1915,7 @@ void ControlBar::closeCommandTab( void )
 	if( m_commandTab == COMMAND_TAB_NONE )
 		return;
 	m_commandTab = COMMAND_TAB_NONE;
-	m_commandTabPage = 0;
+	m_commandTabColumn = 0;
 	markUIDirty();
 }
 
@@ -2201,12 +2201,14 @@ void ControlBar::layoutCommandTabRow( const IRegion2D &grid, IRegion2D *row, IRe
 	* reset and every button is set again); otherwise, once a logic tick, only the states, and a page
 	* whose buttons changed under it (a factory built, lost or upgraded) has the UI rebuilt instead. */
 //-------------------------------------------------------------------------------------------------
-void ControlBar_commandTabPages( Int count, Int cells, Int *perPage, Int *pages )
+void ControlBar_commandTabScroll( Int count, Int cells, Int rows, Bool arrows, Int *perView, Int *lastColumn )
 {
 	// a list that fits takes every cell; one that does not gives two to the arrows (a grid of fewer
-	// than three cells has no room for them and only the wheel pages it)
-	*perPage = ( count > cells && cells >= 3 ) ? cells - 2 : cells;
-	*pages = *perPage > 0 ? max( 1, ( count + *perPage - 1 ) / *perPage ) : 1;
+	// than three cells has no room for them and only the wheel scrolls it)
+	*perView = ( arrows && count > cells && cells >= 3 ) ? cells - 2 : cells;
+	// a column a step: the last column is the first whose view reaches the list's end
+	const Int past = count - *perView;
+	*lastColumn = ( past > 0 && rows > 0 ) ? ( past + rows - 1 ) / rows : 0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2253,6 +2255,36 @@ Bool ControlBar::findCommandTabArrowSlots( Int *next, Int *prev ) const
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The grid's cells by where they stand on screen, column by column from the left, each column top
+	* down, into 'slots'; 'rows' is the first column's height.  Returns how many. */
+//-------------------------------------------------------------------------------------------------
+Int ControlBar::commandTabCells( Int *slots, Int *rows ) const
+{
+	ICoord2D pos[ MAX_COMMANDS_PER_SET ];
+	Int cells = 0;
+	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
+	{
+		if( m_commandWindows[ slot ] == NULL )
+			continue;
+		ICoord2D at;
+		m_commandWindows[ slot ]->winGetScreenPosition( &at.x, &at.y );
+		// insertion by (x, y): fourteen cells at most
+		Int i = cells++;
+		for( ; i > 0 && ( pos[ i - 1 ].x > at.x || ( pos[ i - 1 ].x == at.x && pos[ i - 1 ].y > at.y ) ); i-- )
+		{
+			pos[ i ] = pos[ i - 1 ];
+			slots[ i ] = slots[ i - 1 ];
+		}
+		pos[ i ] = at;
+		slots[ i ] = slot;
+	}
+	*rows = 0;
+	while( *rows < cells && pos[ *rows ].x == pos[ 0 ].x )
+		( *rows )++;
+	return cells;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Give the cells that were arrows back to the command bar as it found them: the hilite, pushed,
 	* disabled and selected pictures the arrow took, no data, no text, no tooltip text.  Every
 	* evaluateContextUI starts here, so a tab closing or the list shrinking leaves no arrow behind. */
@@ -2272,6 +2304,7 @@ void ControlBar::restoreCommandTabArrows( void )
 			win->winSetHiliteImage( s, m_commandTabArrowSaved[ a ][ 1 ][ s ] );
 			win->winSetDisabledImage( s, m_commandTabArrowSaved[ a ][ 2 ][ s ] );
 		}
+		win->winSetSize( m_commandTabArrowSize[ a ].x, m_commandTabArrowSize[ a ].y );
 		GadgetButtonSetData( win, NULL );
 		GadgetButtonSetText( win, UnicodeString( u"" ) );
 		win->winSetTooltip( UnicodeString::TheEmptyString );
@@ -2295,6 +2328,9 @@ void ControlBar::setCommandTabArrow( Int a, Int slot )
 			m_commandTabArrowSaved[ a ][ 2 ][ s ] = win->winGetDisabledImage( s );
 		}
 		m_commandTabArrowSlot[ a ] = slot;
+		// a square as tall as the row, from the cell's own top left corner (the art is square too)
+		win->winGetSize( &m_commandTabArrowSize[ a ].x, &m_commandTabArrowSize[ a ].y );
+		win->winSetSize( m_commandTabArrowSize[ a ].y, m_commandTabArrowSize[ a ].y );
 	}
 
 	// what a unit cell left: data, clock, count, repeat, veterancy, border, letter, tints
@@ -2333,24 +2369,16 @@ void ControlBar::setCommandTabArrow( Int a, Int slot )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** A unit tab of 'count' units on this bar: units a page, pages, the arrows' cells and whether they
-	* are up.  A bar whose two rightmost cells are not two different ones gets no arrows and pages by
-	* the wheel alone, every cell a unit. */
+/** A unit tab of 'count' units on this bar: units in view, the last first column, the arrows' cells
+	* and whether they are up.  A bar whose two rightmost cells are not two different ones gets no
+	* arrows and scrolls by the wheel alone, every cell a unit. */
 //-------------------------------------------------------------------------------------------------
-void ControlBar::commandTabLayout( Int count, Int *perPage, Int *pages, Int *next, Int *prev, Bool *arrows ) const
+void ControlBar::commandTabLayout( Int count, Int *perView, Int *lastColumn, Int *next, Int *prev, Bool *arrows ) const
 {
-	Int cells = 0;
-	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
-		if( m_commandWindows[ slot ] )
-			cells++;
-	if( findCommandTabArrowSlots( next, prev ) )
-		ControlBar_commandTabPages( count, cells, perPage, pages );
-	else
-	{
-		*perPage = cells;
-		*pages = cells > 0 ? max( 1, ( count + cells - 1 ) / cells ) : 1;
-	}
-	*arrows = *perPage < cells;
+	Int slots[ MAX_COMMANDS_PER_SET ], rows;
+	const Int cells = commandTabCells( slots, &rows );
+	ControlBar_commandTabScroll( count, cells, rows, findCommandTabArrowSlots( next, prev ), perView, lastColumn );
+	*arrows = *perView < cells;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2361,7 +2389,7 @@ Bool ControlBar::pressCommandTabArrow( GameWindow *win )
 	for( Int a = 0; a < 2; a++ )
 		if( win != NULL && m_commandTabArrowSlot[ a ] >= 0 && m_commandWindows[ m_commandTabArrowSlot[ a ] ] == win )
 		{
-			turnCommandTabPage( a == 0 ? 1 : -1 );
+			turnCommandTabColumn( a == 0 ? 1 : -1 );
 			return TRUE;
 		}
 	return FALSE;
@@ -2376,21 +2404,26 @@ Bool ControlBar::isCommandTabArrow( const GameWindow *win ) const
 }
 
 //-------------------------------------------------------------------------------------------------
-/** One page on (+1) or back (-1), round the ends; FALSE when the list has one page */
+/** One column on (+1) or back (-1), stopping at the ends; FALSE when the list fits and never scrolls
+	* (a scroll at an end is still the list's, so the wheel there does not fall through to the camera) */
 //-------------------------------------------------------------------------------------------------
-Bool ControlBar::turnCommandTabPage( Int step )
+Bool ControlBar::turnCommandTabColumn( Int step )
 {
 	if( m_commandTab != COMMAND_TAB_GROUND && m_commandTab != COMMAND_TAB_AIRCRAFT )
 		return FALSE;
 	std::vector< GroupPanelBuildable > list;
 	gatherCommandTabList( m_commandTab == COMMAND_TAB_AIRCRAFT, list );
-	Int perPage, pages, next, prev;
+	Int perView, lastColumn, next, prev;
 	Bool arrows;
-	commandTabLayout( (Int)list.size(), &perPage, &pages, &next, &prev, &arrows );
-	if( pages <= 1 )
+	commandTabLayout( (Int)list.size(), &perView, &lastColumn, &next, &prev, &arrows );
+	if( lastColumn <= 0 )
 		return FALSE;
-	m_commandTabPage = ( ( m_commandTabPage + step ) % pages + pages ) % pages;
-	markUIDirty();
+	const Int column = max( 0, min( m_commandTabColumn + step, lastColumn ) );
+	if( column != m_commandTabColumn )
+	{
+		m_commandTabColumn = column;
+		markUIDirty();
+	}
 	return TRUE;
 }
 
@@ -2399,22 +2432,19 @@ void ControlBar::populateCommandTab( Bool full )
 	std::vector< GroupPanelBuildable > list;
 	gatherCommandTabList( m_commandTab == COMMAND_TAB_AIRCRAFT, list );
 
-	// the cells, in slot order; when the list does not fit, the two rightmost are the arrows
-	Int slots[ MAX_COMMANDS_PER_SET ];
-	Int cells = 0;
-	for( Int slot = 0; slot < MAX_COMMANDS_PER_SET; slot++ )
-		if( m_commandWindows[ slot ] )
-			slots[ cells++ ] = slot;
+	// the cells column by column; when the list does not fit, the two rightmost are the arrows
+	Int slots[ MAX_COMMANDS_PER_SET ], rows;
+	const Int cells = commandTabCells( slots, &rows );
 	if( cells == 0 )
 		return;
-	Int perPage, pages, nextSlot, prevSlot;
+	Int perView, lastColumn, nextSlot, prevSlot;
 	Bool arrows;
-	commandTabLayout( (Int)list.size(), &perPage, &pages, &nextSlot, &prevSlot, &arrows );
+	commandTabLayout( (Int)list.size(), &perView, &lastColumn, &nextSlot, &prevSlot, &arrows );
 
-	// a list that shrank takes the page back to its last; arrows that appear or go change the cells
-	if( m_commandTabPage >= pages || ( !full && arrows != ( m_commandTabArrowSlot[ 0 ] >= 0 ) ) )
+	// a list that shrank scrolls back to its last column; arrows that appear or go change the cells
+	if( m_commandTabColumn > lastColumn || ( !full && arrows != ( m_commandTabArrowSlot[ 0 ] >= 0 ) ) )
 	{
-		m_commandTabPage = min( m_commandTabPage, pages - 1 );
+		m_commandTabColumn = min( m_commandTabColumn, lastColumn );
 		if( !full )
 		{
 			markUIDirty();
@@ -2435,7 +2465,7 @@ void ControlBar::populateCommandTab( Bool full )
 		if( arrows && ( slot == nextSlot || slot == prevSlot ) )
 			continue;
 		GameWindow *win = m_commandWindows[ slot ];
-		const Int at = m_commandTabPage * perPage + k++;
+		const Int at = m_commandTabColumn * rows + k++;
 		const GroupPanelBuildable *entry = at < (Int)list.size() ? &list[ at ] : NULL;
 
 		if( !full )
@@ -2488,8 +2518,8 @@ Bool ControlBar::scrollCommandTab( const ICoord2D *mouse, Bool up )
 			|| mouse->x < grid.lo.x || mouse->x >= grid.hi.x || mouse->y < grid.lo.y || mouse->y >= grid.hi.y )
 		return FALSE;
 
-	// up is back a page, down the next, round the ends: the arrows' pages
-	return turnCommandTabPage( up ? -1 : 1 );
+	// up is back a column, down the next, as the arrows step
+	return turnCommandTabColumn( up ? -1 : 1 );
 }
 
 //-------------------------------------------------------------------------------------------------

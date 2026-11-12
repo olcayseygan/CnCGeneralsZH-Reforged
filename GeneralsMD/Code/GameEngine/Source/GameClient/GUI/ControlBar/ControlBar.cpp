@@ -1682,7 +1682,7 @@ ControlBar::ControlBar( void )
 
 	m_currContext = CB_CONTEXT_NONE;
 	m_commandTab = COMMAND_TAB_NONE;
-	m_commandTabPage = 0;
+	m_commandTabColumn = 0;
 	m_commandTabParent = NULL;
 	for( i = 0; i < COMMAND_TAB_COUNT; i++ )
 		m_commandTabButtons[ i ] = NULL;
@@ -3508,7 +3508,7 @@ void ControlBar::reset( void )
 	m_rallyPointDrawableID = INVALID_DRAWABLE_ID;
 	m_standInBuilderID = INVALID_DRAWABLE_ID;
 	m_commandTab = COMMAND_TAB_NONE;
-	m_commandTabPage = 0;
+	m_commandTabColumn = 0;
 	// the cells outlive the match: arrow cells get back what they wore before the next one
 	restoreCommandTabArrows();
 
@@ -4328,7 +4328,7 @@ CBCommandStatus ControlBar::processContextSensitiveButtonClick( GameWindow *butt
 	//
 	if( m_commandTab == COMMAND_TAB_GROUND || m_commandTab == COMMAND_TAB_AIRCRAFT )
 	{
-		// a page arrow turns the page on a left click, takes a right one for nothing, and never reaches
+		// a page arrow scrolls a column on a left click, takes a right one for nothing, and never reaches
 		// the queue
 		if( gadgetMessage == GBM_SELECTED ? pressCommandTabArrow( button ) : isCommandTabArrow( button ) )
 			return CBC_COMMAND_USED;

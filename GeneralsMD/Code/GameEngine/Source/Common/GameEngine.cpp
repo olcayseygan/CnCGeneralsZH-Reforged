@@ -1699,11 +1699,36 @@ Int GameEngine_missionFramesPerSecond( Int askedRetailFps, Int matchFps )
 	return ConvertRetailFrames( askedRetailFps );
 }
 
+/* SET_FPS_LIMIT 30, or none, under a voiced cinematic would run its script waits and camera cuts at the
+	 game speed while the speech keeps wall length (MD_CHI02's intro tail: 27.5 s for 34).  The signal is
+	 the script's input hold rather than the letterbox: every stock intro disables input with it, the hold
+	 is ScriptEngine state set on the tick (the letterbox is the display's, set after it, fades, and
+	 -cinema raises it too), and Player.cpp and Drawable.cpp already read it as "a mission cinematic". */
+Int GameEngine_cinematicFramesPerSecond( Int maxFps, Bool cinematic )
+{
+	if (!cinematic || GAME_SPEED_PERCENT == 100 || maxFps < LOGICFRAMES_PER_SECOND)
+		return maxFps;
+	const Int paced = ( maxFps * 100 + GAME_SPEED_PERCENT / 2 ) / GAME_SPEED_PERCENT;
+	return paced > 0 ? paced : 1;
+}
+
+Bool GameEngine_isPacingCinematic( void )
+{
+	return TheGameLogic != NULL && TheGameLogic->isInSinglePlayerGame() && !TheGameLogic->isInReplayGame()
+		&& TheNetwork == NULL && TheScriptEngine != NULL && TheScriptEngine->isInputHeldByScript();
+}
+
+// the rate the pacer runs at this pass
+static Int pacedFramesPerSecond( Int maxFps )
+{
+	return GameEngine_cinematicFramesPerSecond( maxFps, GameEngine_isPacingCinematic() );
+}
+
 Real GameEngine_missionTimeRate( void )
 {
 	if (TheGameLogic == NULL || !TheGameLogic->isInSinglePlayerGame() || TheGameLogic->isInReplayGame())
 		return 1.0f;
-	return (Real)TheGameEngine->getFramesPerSecondLimit() / (Real)LOGICFRAMES_PER_SECOND;
+	return (Real)pacedFramesPerSecond( TheGameEngine->getFramesPerSecondLimit() ) / (Real)LOGICFRAMES_PER_SECOND;
 }
 
 Bool GameEngine_mayStartAnotherCatchupTick( Int ticksSoFar, Int maxTicks, Real elapsedMsInLoop )
@@ -3087,7 +3112,7 @@ void GameEngine::planLogicPass( LogicPassPlan &plan )
 	}
 	else
 	{
-		logicFrameDue = GameEngine_isLogicFrameDue(s_logicAccumMs, elapsedMs, m_maxFPS);
+		logicFrameDue = GameEngine_isLogicFrameDue(s_logicAccumMs, elapsedMs, pacedFramesPerSecond( m_maxFPS ));
 		// Fast mode means exactly one logic frame per call, by its own definition.
 		mayCatchUp = (m_maxFPS > 0);
 	}
@@ -3145,7 +3170,7 @@ Real GameEngine::msUntilNextTickDue( void )
 {
 	if (!s_passPlanned || s_passPlan.fastMode || s_passPlan.networkPaced || m_maxFPS <= 0)
 		return 0.0f;
-	return 1000.0f / m_maxFPS - s_logicAccumMs - (Real)( Clock_Milliseconds() - s_planTimeMs );
+	return 1000.0f / pacedFramesPerSecond( m_maxFPS ) - s_logicAccumMs - (Real)( Clock_Milliseconds() - s_planTimeMs );
 }
 
 Bool GameEngine::isPassPacedByClock( void )
@@ -3291,7 +3316,7 @@ void GameEngine::update( void )
 			// count and the pacer's own accumulator cap stop at LOGIC_CATCHUP_MAX_FRAMES, so a logic
 			// frame that is itself over budget cannot pull the loop into a spiral.
 			Int logicTicksThisPass = 0;
-			const Int maxTicksThisPass = GameEngine_logicCatchupMaxFrames( m_maxFPS );
+			const Int maxTicksThisPass = GameEngine_logicCatchupMaxFrames( pacedFramesPerSecond( m_maxFPS ) );
 			/* Bounded by the clock as well as by the count - see LOGIC_CATCHUP_BUDGET_MS.  Three
 				 25ms ticks back to back with no picture in between is the 113ms freeze; one of them
 				 plus the render is a dropped frame nobody files a bug about. */
@@ -3366,10 +3391,10 @@ void GameEngine::update( void )
 						break;
 				}
 				// Asked last, because it is the one with a side effect: it spends the debt it reports.
-				else if (!GameEngine_isLogicFrameDue(s_logicAccumMs, 0.0f, m_maxFPS))
+				else if (!GameEngine_isLogicFrameDue(s_logicAccumMs, 0.0f, pacedFramesPerSecond( m_maxFPS )))
 					break;
 			}
-			noteLogicTickDue( m_maxFPS, fastMode, networkPaced );
+			noteLogicTickDue( pacedFramesPerSecond( m_maxFPS ), fastMode, networkPaced );
 			// a frame held by a scripted freeze keeps showing its last picture, rather than going back
 			// half a frame every other pass; smooth motion shows it whole too, since the update may have
 			// moved a model (a script's teleport) that the blend and its restore would put back

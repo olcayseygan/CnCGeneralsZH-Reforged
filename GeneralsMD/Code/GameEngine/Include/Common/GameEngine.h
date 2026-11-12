@@ -63,10 +63,24 @@ Int GameEngine_matchFramesPerSecond( Bool turbo );
 	which is the match's speed, turbo mode included. */
 Int GameEngine_missionFramesPerSecond( Int askedRetailFps, Int matchFps );
 
+/** The logic frames a second the pacer runs at.  While a mission's script holds the player's input
+	(DISABLE_INPUT, the bracket round every stock voiced cinematic) a rate of normal speed or more is
+	divided by GAME_SPEED_PERCENT, so the cinematic plays at retail pace against its wall-clock voices
+	(30 is 24 at 125, turbo's 60 is 48); a rate under normal speed is a SET_FPS_LIMIT that
+	GameEngine_missionFramesPerSecond already folded and stays.  The identity outside a cinematic and
+	at 100.  Wall pacing only: nothing in it reaches GameLogic. */
+Int GameEngine_cinematicFramesPerSecond( Int maxFps, Bool cinematic );
+
+/** Whether the pacer takes the cinematic rate this pass: a single-player game that is not a replay,
+	no network, and the mission's script holding input. */
+Bool GameEngine_isPacingCinematic( void );
+
 /** How fast a mission's logic ticks against the wall clock: a cinematic that asked for 23 runs 23 retail
-	frames of game time a second, 23 ticks at GAME_SPEED_PERCENT 100 (0.77) and 18 at 125 (0.6); 2 in
-	turbo mode, 1 everywhere else.  The game speed itself is not in it.  Whatever a cinematic times against its script's frames and draws
-	on the wall clock (the scripted camera, W3D's animation clock) multiplies by this. */
+	frames of game time a second, 23 ticks at GAME_SPEED_PERCENT 100 (0.77) and 18 at 125 (0.6); one at
+	full rate under held input is 24 at 125 (0.8); 2 in turbo mode, 1 everywhere else.  The game speed
+	itself is not in it, so times GAME_SPEED_PERCENT / 100 it is the game's pace against retail.  Whatever
+	a cinematic times against its script's frames and draws on the wall clock (the scripted camera, W3D's
+	animation clock) multiplies by this. */
 Real GameEngine_missionTimeRate( void );
 
 /** R1, smooth motion: the renderer's blend reads how far into the next logic tick the wall clock is

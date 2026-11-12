@@ -12,6 +12,7 @@ found and fixed, EA's own, not port damage.**
 
 - Everything in a match runs 25 percent quicker than in the original: units drive and walk faster, buildings and units come off the line sooner, weapons reload sooner and animations play quicker. A tank that crossed a map in 40 seconds crosses it in 32. The clock on the wall did not change, so a match is simply shorter, and the countdowns on screen (superweapons, timed powers) still count real seconds.
 - Sound, music, menus and the network stay on the real clock; only the world on the map speeds up.
+- Mission cutscenes keep their original pace, so the voices fit the pictures again. The second half of China's second mission intro had its camera cutting away before the lines were spoken, done in 27.5 seconds where the voices need 34. While a cutscene holds the controls the game now runs at the original speed, and the quicker play comes back the moment you get control.
 - Replays and saved games from the previous build will not load, and everyone in a network game needs the same build.
 
 ## The game steps 30 times a second again, and the picture glides

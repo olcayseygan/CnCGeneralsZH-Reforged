@@ -6329,6 +6329,25 @@ TEST(mission_cinematic_runs_at_the_speed_its_script_asks_for)
 	CHECK_EQ( GameEngine_missionFramesPerSecond( RETAIL_LOGICFRAMES_PER_SECOND, turbo ), turbo );
 }
 
+TEST(held_input_cinematic_at_full_rate_paces_at_retail_speed)
+{
+	/* MD_CHI02's intro tail runs at SET_FPS_LIMIT 30 under held input: retail pace, a retail second of
+	   ticks a wall second, which is ConvertRetailFrames of retail's rate; turbo keeps its double.  A rate
+	   a script already slowed is folded once and stays, and nothing moves outside a cinematic or at 100. */
+	const Int normal = LOGICFRAMES_PER_SECOND;
+	const Int turbo = LOGICFRAMES_PER_SECOND * 2;
+	CHECK_EQ( GameEngine_cinematicFramesPerSecond( normal, TRUE ), ConvertRetailFrames( (Int)RETAIL_LOGICFRAMES_PER_SECOND ) );
+	CHECK_EQ( GameEngine_cinematicFramesPerSecond( turbo, TRUE ), ConvertRetailFrames( (Int)RETAIL_LOGICFRAMES_PER_SECOND ) * 2 );
+	const Int slowed = GameEngine_missionFramesPerSecond( 23, normal );
+	CHECK_EQ( GameEngine_cinematicFramesPerSecond( slowed, TRUE ), slowed );
+	CHECK_EQ( GameEngine_cinematicFramesPerSecond( normal, FALSE ), normal );
+	CHECK_EQ( GameEngine_cinematicFramesPerSecond( turbo, FALSE ), turbo );
+	CHECK_EQ( GameEngine_cinematicFramesPerSecond( normal, TRUE ) == normal, GAME_SPEED_PERCENT == 100 );
+	// the pace against retail: ticks a wall second times the game time each tick advances
+	CHECK_NEAR( GameEngine_cinematicFramesPerSecond( normal, TRUE ) * ( (Real)GAME_SPEED_PERCENT / 100.0f ),
+		(Real)normal, 0.5f * (Real)GAME_SPEED_PERCENT / 100.0f );
+}
+
 TEST(match_speed_is_frames_per_second_limit_doubled_by_turbo)
 {
 	/* Every MSG_NEW_GAME a player starts passes this: GameData.ini's normal speed, or -fps for a test,

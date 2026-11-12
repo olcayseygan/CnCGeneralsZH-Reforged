@@ -658,6 +658,23 @@ Int Pathfinder_servePathQueues( PathRequestRing &human, PathRequestRing &compute
 	return started;
 }
 
+/* Past PATHFIND_DEEP_QUEUE waiting, a second of draining at three a frame, every PATHFIND_DEEP_STEP
+	 more lets a frame start one more request (processPathfindQueue) and search perFrame more cells,
+	 up to PATHFIND_DEEP_CELLS times perFrame.  A search that reaches the budget stops there and holds
+	 the head of its line, so this is what drains a backlog of long searches.  A person's request
+	 behind a computer's stopped search gets the most at once, so that search ends within a few
+	 frames instead of up to sixteen.  Depth and line are game state every machine holds alike. */
+enum { PATHFIND_DEEP_QUEUE = 180, PATHFIND_DEEP_STEP = 60, PATHFIND_DEEP_CELLS = 4 };
+inline Int Pathfinder_queueCellBudget( Int perFrame, Int depth, Bool humanWaitsOnComputer )
+{
+	Int budget = perFrame;
+	if( depth > PATHFIND_DEEP_QUEUE )
+		budget += perFrame * ( ( depth - PATHFIND_DEEP_QUEUE ) / PATHFIND_DEEP_STEP );
+	if( humanWaitsOnComputer || budget > perFrame * PATHFIND_DEEP_CELLS )
+		budget = perFrame * PATHFIND_DEEP_CELLS;
+	return budget;
+}
+
 struct TCheckMovementInfo;
 
 /** 
@@ -1450,6 +1467,7 @@ private:
 		 walking up to 2048 slots on every request. Derived from the rings, never saved. */
 	std::vector<bool>	m_isQueuedForPath;
 	Int						m_cumulativeCellsAllocated;
+	Int						m_queueCellBudget;		///< this frame's cells for the queue (Pathfinder_queueCellBudget), set each frame from the queue, never saved
 
 	/* The main cell search's state, kept here rather than on the stack so a search that runs out of
 		 the queue's cells for the frame can stop and carry on from the same cell next frame.  At most

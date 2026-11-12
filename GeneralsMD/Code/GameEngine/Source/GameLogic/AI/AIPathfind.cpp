@@ -5370,6 +5370,7 @@ void Pathfinder::reset( void )
 	// pathfind grid cells have not been classified yet
 	m_isMapReady = false;
 	m_cumulativeCellsAllocated = 0;
+	m_queueCellBudget = PATHFIND_CELLS_PER_FRAME;
 	m_lastSearchRestricted = false;
 
 	debugPathPos.x = 0.0f;
@@ -7728,7 +7729,7 @@ struct Pathfinder::QueueServer
 {
 	Pathfinder *pathfinder;
 	UnsignedInt now;
-	Bool hasBudget( void ) const { return pathfinder->m_cumulativeCellsAllocated < PATHFIND_CELLS_PER_FRAME; }
+	Bool hasBudget( void ) const { return pathfinder->m_cumulativeCellsAllocated < pathfinder->m_queueCellBudget; }
 	Bool serve( PathRequestRing &ring ) { return pathfinder->serveQueuedRequest( ring, now ); }
 };
 
@@ -7861,8 +7862,7 @@ void Pathfinder::processPathfindQueue(void)
 		 the box (a one-frame control moved it to 34.6). Medium likewise, Easy never gets that deep.
 		 Up to twelve a frame cut the wait further and drove worse (blocked 3,814 to 5,402). The
 		 841-unit order is held by the cell budget, not by this, and leaves as it did. */
-	enum { PATHFIND_REQUESTS_PER_FRAME = 3, PATHFIND_DEEP_QUEUE = 180, PATHFIND_DEEP_STEP = 60,
-		PATHFIND_REQUESTS_PER_FRAME_DEEP = 6 };
+	enum { PATHFIND_REQUESTS_PER_FRAME = 3, PATHFIND_REQUESTS_PER_FRAME_DEEP = 6 };
 	Int requestCap = PATHFIND_REQUESTS_PER_FRAME;
 	/* Both lines count towards the depth and share the cap.  With no human player's unit waiting it
 		 is the one queue it always was, in the same order. */
@@ -7872,13 +7872,25 @@ void Pathfinder::processPathfindQueue(void)
 	if (requestCap > PATHFIND_REQUESTS_PER_FRAME_DEEP)
 		requestCap = PATHFIND_REQUESTS_PER_FRAME_DEEP;
 
+	const ObjectID stoppedOwner = (m_search.owner != INVALID_ID && !m_search.done) ? m_search.owner : INVALID_ID;
+	/* Since searches stop on the frame's cells and carry on next frame, the cells are what drains a
+		 backlog, and they stayed at 2500 a frame however deep it got while the request cap above
+		 grew: 60 Rangers ordered behind 240 Red Guards sent across Twilight Flame moved in a mean of
+		 270 frames, 261 with no stopping at all, 81 with nobody ahead of them.  The cells now grow
+		 with the depth the way the cap does, to four times (Pathfinder_queueCellBudget): 240 frames,
+		 and 487.9 to 340.9 with 480 Red Guards across Death Valley.  The cost is about 1.3 ms for
+		 10000 cells: there the order's frame went 6.3-6.8 ms to 7.7-8.5 and p99.9 4.25-4.50 to
+		 4.25-5.50 over three runs each, and no frame's queue took over 3 ms in either build. */
+	const Bool humanWaitsOnComputer = stoppedOwner != INVALID_ID && !m_humanQueue.isEmpty() &&
+		!m_computerQueue.isEmpty() && m_computerQueue.front() == stoppedOwner;
+	m_queueCellBudget = Pathfinder_queueCellBudget( PATHFIND_CELLS_PER_FRAME, depth, humanWaitsOnComputer );
+
 	QueueServer server;
 	server.pathfinder = this;
 	server.now = TheGameLogic->getFrame();
-	const ObjectID stoppedOwner = (m_search.owner != INVALID_ID && !m_search.done) ? m_search.owner : INVALID_ID;
 	const Int pathsFound = Pathfinder_servePathQueues( m_humanQueue, m_computerQueue, stoppedOwner, requestCap, server );
 	if (!m_humanQueue.isEmpty() || !m_computerQueue.isEmpty()) {
-		if (m_cumulativeCellsAllocated >= PATHFIND_CELLS_PER_FRAME)
+		if (m_cumulativeCellsAllocated >= m_queueCellBudget)
 			thePFQCellFrames++;
 		else
 			thePFQCapFrames++;
@@ -8728,7 +8740,8 @@ Path *Pathfinder::continueFindPath( Object *obj, const LocomotorSet& locomotorSe
 		 (this, twice, and the queue's cell budget) all bought it with movement instead. */
 	/* Since the search stops at the queue's cell budget and carries on next frame, this no longer
 		 bounds a frame, so it is no longer the 20000 it was for that.  What is left for it to bound is
-		 how long one request holds the head of the queue - 40000 cells is 16 frames at 2500 a frame -
+		 how long one request holds the head of the queue - 40000 cells is 16 frames at 2500 a frame,
+		 four when the queue is deep (Pathfinder_queueCellBudget) -
 		 and the cell-info pool, so a goal that cannot be reached still ends. */
 	enum { MAX_INTERNAL_CELL_COUNT = 40000 };
 	Bool hitCellCap = false;
@@ -8817,7 +8830,7 @@ Path *Pathfinder::continueFindPath( Object *obj, const LocomotorSet& locomotorSe
 		cellCount += examineNeighboringCells(parentCell, goalCell, locomotorSet, isHuman, centerInCell, radius, startCellNdx, obj, NO_ATTACK);
 
 		if (mayStop && m_openList != NULL &&
-				m_cumulativeCellsAllocated + (cellCount - cellsBefore) >= PATHFIND_CELLS_PER_FRAME) {
+				m_cumulativeCellsAllocated + (cellCount - cellsBefore) >= m_queueCellBudget) {
 			// the frame's cells are spent: keep the lists and carry on from here next frame, charging
 			// this frame for the part it did
 			m_cumulativeCellsAllocated += cellCount - cellsBefore;

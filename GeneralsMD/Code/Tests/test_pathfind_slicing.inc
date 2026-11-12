@@ -352,6 +352,19 @@ TEST(pathfind_queue_shares_one_budget_between_the_lines)
 	CHECK( capTwo.servedInOrder( capOrder, 2 ) );
 }
 
+/* A deep queue gets more cells a frame in steps, to four times; a person waiting on a computer's
+	 stopped search gets the four times at once. */
+TEST(pathfind_queue_cells_grow_with_the_backlog)
+{
+	CHECK_EQ( Pathfinder_queueCellBudget( 2500, 0, FALSE ), 2500 );
+	CHECK_EQ( Pathfinder_queueCellBudget( 2500, PATHFIND_DEEP_QUEUE, FALSE ), 2500 );
+	CHECK_EQ( Pathfinder_queueCellBudget( 2500, PATHFIND_DEEP_QUEUE + PATHFIND_DEEP_STEP - 1, FALSE ), 2500 );
+	CHECK_EQ( Pathfinder_queueCellBudget( 2500, PATHFIND_DEEP_QUEUE + PATHFIND_DEEP_STEP, FALSE ), 5000 );
+	CHECK_EQ( Pathfinder_queueCellBudget( 2500, 300, FALSE ), 7500 );
+	CHECK_EQ( Pathfinder_queueCellBudget( 2500, PATHFIND_QUEUE_LEN, FALSE ), 10000 );
+	CHECK_EQ( Pathfinder_queueCellBudget( 2500, 1, TRUE ), 10000 );
+}
+
 TEST(pathfind_queue_line_holds_one_less_than_its_length)
 {
 	PathRequestRing &r = theComputerLine;

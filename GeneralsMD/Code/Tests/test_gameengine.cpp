@@ -25253,66 +25253,6 @@ TEST(model_batches_leave_the_crc_its_retail_copy)
 	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "art\\w3d\\avnew.w3d" ) ).str(), "ReforgedUSA.big" );
 }
 
-//////////////////////////////////////////////////////////////////////////////
-// General's talents: ranks 6 to 10 and the pair rule
-//////////////////////////////////////////////////////////////////////////////
-
-static Bool loadIniAs( const char *name, INILoadType type )
-{
-	INI ini;
-	try
-	{
-		ini.load( AsciiString( name ), type, NULL );
-		return TRUE;
-	}
-	catch( ... )
-	{
-	}
-	return FALSE;
-}
-
-/* A row's two cards are partners, index ^ 1: owning either closes both, and a science outside the
-	 list is never a talent, whatever it owns. */
-TEST(talent_pair_rule_closes_the_partner_and_ignores_other_sciences)
-{
-	ScienceVec talents;
-	for( Int i = 0; i < TALENT_SCIENCE_COUNT; ++i )
-		talents.push_back( (ScienceType)( 1000 + i ) );
-	const ScienceType outside = (ScienceType)999;
-
-	CHECK_EQ( findTalentIndex( talents, (ScienceType)1004 ), 4 );
-	CHECK_EQ( findTalentIndex( talents, outside ), -1 );
-
-	ScienceVec owned;
-	for( Int i = 0; i < TALENT_SCIENCE_COUNT; ++i )
-		CHECK( isTalentOpen( talents, owned, talents[ i ] ) );
-	CHECK( !isTalentOpen( talents, owned, outside ) );
-
-	owned.push_back( (ScienceType)1003 );		// 7B
-	CHECK( !isTalentOpen( talents, owned, (ScienceType)1003 ) );
-	CHECK( !isTalentOpen( talents, owned, (ScienceType)1002 ) );	// 7A, its partner
-	CHECK( isTalentOpen( talents, owned, (ScienceType)1004 ) );		// 8A, another row
-	CHECK( isTalentOpen( talents, owned, (ScienceType)1005 ) );
-
-	owned.push_back( (ScienceType)1008 );		// 10A
-	CHECK( !isTalentOpen( talents, owned, (ScienceType)1009 ) );
-	CHECK( isTalentOpen( talents, owned, (ScienceType)1000 ) );
-
-	CHECK( isValidTalentScienceCount( 0 ) );
-	CHECK( isValidTalentScienceCount( 10 ) );
-	CHECK( !isValidTalentScienceCount( 9 ) );
-	CHECK( !isValidTalentScienceCount( 11 ) );
-}
-
-static std::string talentSciencesIni( Int count )
-{
-	std::string text;
-	for( Int i = 0; i < count; ++i )
-	{
-		char name[ 64 ];
-		snprintf( name, sizeof( name ), " TEST_Talent%d", i );
-		text += name;
-	}
 #include "Common/RAMFile.h"
 
 namespace {
@@ -25397,55 +25337,133 @@ namespace {
 		}
 		return w3dChunk( 0x702, level );
 	}
+
+	// the mesh a sub-object record names: a MESH with a MESH_HEADER3 naming it <container>.<mesh>
+	std::string meshPrototype( const char *container, const char *mesh, const char *body )
+	{
+		std::string header( 40, '\0' );
+		memcpy( &header[8], mesh, strlen( mesh ) );
+		memcpy( &header[24], container, strlen( container ) );
+		return w3dChunk( 0x000, w3dChunk( 0x01F, header ) + w3dChunk( 0x002, body ) );
+	}
+
+	std::string pivot( const char *name, Int parent, float x )
+	{
+		std::string record( 60, '\0' );
+		memcpy( &record[0], name, strlen( name ) );
+		memcpy( &record[16], &parent, 4 );
+		memcpy( &record[20], &x, 4 );
+		return record;
+	}
+
+	// a HIERARCHY: its header (version, name, pivot count, centre) and its pivots
+	std::string hierarchy( const std::string &pivots, UnsignedInt count, const char *name = "TRTEST" )
+	{
+		std::string header( 36, '\0' );
+		const UnsignedInt version = 0x40001;
+		memcpy( &header[0], &version, 4 );
+		memcpy( &header[4], name, strlen( name ) );
+		memcpy( &header[20], &count, 4 );
+		return w3dChunk( 0x100, w3dChunk( 0x101, header ) + w3dChunk( 0x102, pivots ) );
+	}
 }
 
 /* A Türkiye model is loose (the master, every player has it) and again in ReforgedTurkiye.big with
-	 its LODs.  The batch's copy is drawn only when it changes nothing the logic reads: the bones and
-	 animations byte for byte, the HLOD's names, its top level (the master's only one), and no coarser
-	 level binding a master sub-object name to another bone - findSingleSubObj falls back to those for
-	 muzzle names and searches the coarsest level first.  A moved bone, a renamed HLOD, a rebound
-	 name, no batch, or a retail archive holding the name all leave the loose master.  The INI CRC
-	 reads the master through TheLocalFileSystem, so it is the same whichever copy is drawn. */
+	 its LODs, the full level a high-resolution rebuild.  The batch's copy is drawn only when it changes
+	 nothing the logic reads: the animations byte for byte, the hierarchy too but for WHEEL_[LR]<nn>
+	 pivots hung off the master's, the HLOD's names, every record naming a mesh the file defines, and
+	 every name findSingleSubObj can resolve on the master's bone in every level - it falls back to
+	 sub-objects for muzzle names and searches the coarsest level first.  A name only the copy answers
+	 is a master mesh's <name>_L<digit> or an HD_ mesh.  Mesh counts and MaxScreenSize are free.  A moved
+	 bone, an added pivot that is no wheel, a renamed HLOD, a rebound name in a coarse or the full
+	 level, a copy-only FIREPOINT01, a record to a mesh the copy lacks, no batch, or a retail archive
+	 holding the name all leave the loose master.  The INI CRC reads the master through
+	 TheLocalFileSystem, so it is the same whichever copy is drawn. */
 TEST(reforged_lod_copy_is_drawn_only_when_it_keeps_what_the_logic_reads)
 {
 	CHECK( bootOnce() );
 	const char *const topNames[] = { "TRTEST.HULL", "TRTEST.MUZZLE" };
 	const UnsignedInt topBones[] = { 0, 3 };
+	const char *const hiresNames[] = { "TRTEST.HULL", "TRTEST.HD_HULL", "TRTEST.MUZZLE", "TRTEST.HD_TRACKS" };
+	const UnsignedInt hiresBones[] = { 0, 0, 3, 1 }, hiresReboundBones[] = { 0, 0, 5, 1 };
 	const char *const coarseNames[] = { "TRTEST.HULL_L1", "trtest.muzzle" };
 	const UnsignedInt coarseBones[] = { 0, 3 }, reboundBones[] = { 0, 5 };
+	const char *const firepointNames[] = { "TRTEST.HULL_L1", "TRTEST.FIREPOINT01" };
+	const char *const ghostNames[] = { "TRTEST.HULL_L2", "trtest.muzzle" };
 	const std::string top = hlodLevel( topNames, topBones, 2, 10000.0f );
+	const std::string hires = hlodLevel( hiresNames, hiresBones, 4, 300.0f );
+	const std::string hiresRebound = hlodLevel( hiresNames, hiresReboundBones, 4, 300.0f );
 	const std::string coarse = hlodLevel( coarseNames, coarseBones, 2, 80.0f );
 	const std::string rebound = hlodLevel( coarseNames, reboundBones, 2, 80.0f );
+	const std::string firepoint = hlodLevel( firepointNames, coarseBones, 2, 80.0f );
+	const std::string ghost = hlodLevel( ghostNames, coarseBones, 2, 80.0f );
 
-	const std::string bones = w3dChunk( 0x100, "pivots" ), anim = w3dChunk( 0x280, "turret" );
-	const std::string master = bones + w3dChunk( 0x0, "one mesh" ) + anim
-		+ w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 1 ) + top );
-	const std::string meshes = w3dChunk( 0x0, "mesh lod0" ) + w3dChunk( 0x0, "mesh lod1" );
-	const std::string lods = bones + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 2 ) + coarse + top );
-	const std::string moved = w3dChunk( 0x100, "pivotZ" ) + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 2 ) + coarse + top );
-	const std::string renamed = bones + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST2", "TRTEST", 2 ) + coarse + top );
-	const std::string rebind = bones + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 2 ) + rebound + top );
+	const std::string skeleton = pivot( "ROOTTRANSFORM", -1, 0.0f ) + pivot( "CHASSIS", 0, 1.0f ) + pivot( "TURRET", 1, 2.0f )
+		+ pivot( "BARREL", 2, 3.0f );
+	const std::string bones = hierarchy( skeleton, 4 ), anim = w3dChunk( 0x280, "turret" );
+	const std::string movedBones = hierarchy( pivot( "ROOTTRANSFORM", -1, 0.0f ) + pivot( "CHASSIS", 0, 1.5f )
+		+ pivot( "TURRET", 1, 2.0f ) + pivot( "BARREL", 2, 3.0f ), 4 );
+	const std::string wheelPivots = skeleton + pivot( "WHEEL_L01", 1, 4.0f ) + pivot( "WHEEL_R01", 1, 5.0f );
+	const std::string notWheelBones = hierarchy( skeleton + pivot( "TURRET2", 1, 4.0f ), 5 );
+	const std::string master = bones + meshPrototype( "TRTEST", "HULL", "one mesh" ) + meshPrototype( "TRTEST", "MUZZLE", "flash" )
+		+ anim + w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 1 ) + top );
+	const std::string meshes = meshPrototype( "TRTEST", "HULL", "hull lod0" ) + meshPrototype( "TRTEST", "HD_HULL", "hull detail" )
+		+ meshPrototype( "TRTEST", "MUZZLE", "flash" ) + meshPrototype( "TRTEST", "HD_TRACKS", "tracks" )
+		+ meshPrototype( "TRTEST", "HULL_L1", "hull lod1" ) + meshPrototype( "TRTEST", "FIREPOINT01", "a point" );
+	const std::string lods = bones + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 2 ) + coarse + hires );
+	const std::string moved = movedBones + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 2 ) + coarse + hires );
+	const std::string renamed = bones + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST2", "TRTEST", 2 ) + coarse + hires );
+	const std::string rebind = bones + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 2 ) + rebound + hires );
+	const std::string topRebind = bones + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 2 ) + coarse + hiresRebound );
+	const std::string firepointOn = bones + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 2 ) + firepoint + hires );
+	const std::string ghostOn = bones + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 2 ) + ghost + hires );
+	const std::string notWheeled = notWheelBones + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 2 ) + coarse + hires );
 
-	const char *const loose[] = { "Art/W3D/zhrtest_same.w3d", "Art/W3D/zhrtest_moved.w3d",
+	// Two tree families of their own, a master and a sibling state on each tree: the game keeps the
+	// first tree loaded under a name, so once a file of the family is served plain no copy brings wheels.
+	const std::string plainOf[2] = { hierarchy( skeleton, 4, "TRWHEEL" ), hierarchy( skeleton, 4, "TRLATE" ) };
+	const std::string wheelsOf[2] = { hierarchy( wheelPivots, 6, "TRWHEEL" ), hierarchy( wheelPivots, 6, "TRLATE" ) };
+	std::string familyMaster[2], familyWheeled[2], familyFallback[2];
+	for( Int f = 0; f < 2; ++f )
+	{
+		familyMaster[f] = plainOf[f] + meshPrototype( "TRTEST", "HULL", "one mesh" ) + meshPrototype( "TRTEST", "MUZZLE", "flash" )
+			+ anim + w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 1 ) + top );
+		familyWheeled[f] = wheelsOf[f] + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST", "TRTEST", 2 ) + coarse + hires );
+		familyFallback[f] = wheelsOf[f] + meshes + anim + w3dChunk( 0x700, hlodHeader( "TRTEST2", "TRTEST", 2 ) + coarse + hires );
+	}
+	const std::string &wheeled = familyWheeled[0];
+
+	const Int LOOSE = 14;
+	const char *const loose[LOOSE] = { "Art/W3D/zhrtest_same.w3d", "Art/W3D/zhrtest_moved.w3d",
 		"Art/W3D/zhrtest_unmounted.w3d", "Art/W3D/zhrtest_retail.w3d",
-		"Art/W3D/zhrtest_renamed.w3d", "Art/W3D/zhrtest_rebound.w3d" };
+		"Art/W3D/zhrtest_renamed.w3d", "Art/W3D/zhrtest_rebound.w3d",
+		"Art/W3D/zhrtest_toprebound.w3d", "Art/W3D/zhrtest_firepoint.w3d",
+		"Art/W3D/zhrtest_ghost.w3d", "Art/W3D/zhrtest_wheels.w3d",
+		"Art/W3D/zhrtest_notwheels.w3d", "Art/W3D/zhrtest_wheels_d.w3d",
+		"Art/W3D/zhrtest_late.w3d", "Art/W3D/zhrtest_late_d.w3d" };
+	const std::string *const looseBytes[LOOSE] = { &master, &master, &master, &master, &master, &master, &master, &master,
+		&master, &familyMaster[0], &master, &familyMaster[0], &familyMaster[1], &familyMaster[1] };
 	std::filesystem::create_directories( "Art/W3D" );
-	for( Int i = 0; i < 6; ++i )
+	for( Int i = 0; i < LOOSE; ++i )
 	{
 		FILE *fp = fopen( loose[i], "wb" );
 		CHECK( fp != NULL );
 		if( fp != NULL )
 		{
-			fwrite( master.data(), 1, master.size(), fp );
+			fwrite( looseBytes[i]->data(), 1, looseBytes[i]->size(), fp );
 			fclose( fp );
 		}
 	}
 
 	static const char *const retail[] = { "Art\\W3D\\zhrtest_retail.w3d", NULL };
 	static const char *const batch[] = { "Art\\W3D\\zhrtest_same.w3d", "Art\\W3D\\zhrtest_moved.w3d",
-		"Art\\W3D\\zhrtest_renamed.w3d", "Art\\W3D\\zhrtest_rebound.w3d", NULL };
+		"Art\\W3D\\zhrtest_renamed.w3d", "Art\\W3D\\zhrtest_rebound.w3d",
+		"Art\\W3D\\zhrtest_toprebound.w3d", "Art\\W3D\\zhrtest_firepoint.w3d", "Art\\W3D\\zhrtest_ghost.w3d",
+		"Art\\W3D\\zhrtest_wheels.w3d", "Art\\W3D\\zhrtest_notwheels.w3d", "Art\\W3D\\zhrtest_wheels_d.w3d",
+		"Art\\W3D\\zhrtest_late.w3d", "Art\\W3D\\zhrtest_late_d.w3d", NULL };
 	const std::string retailBytes[] = { lods };
-	const std::string batchBytes[] = { lods, moved, renamed, rebind };
+	const std::string batchBytes[] = { lods, moved, renamed, rebind, topRebind, firepointOn, ghostOn, familyWheeled[0], notWheeled,
+		familyFallback[0], familyWheeled[1], familyFallback[1] };
 	MountOrderFileSystem fs;
 	fs.mountRetail( new ServingArchive( retail, retailBytes ), "W3DZH.big", FALSE );
 	fs.mountReforged( new ServingArchive( batch, batchBytes ), "ReforgedTurkiye.big" );
@@ -25455,13 +25473,24 @@ TEST(reforged_lod_copy_is_drawn_only_when_it_keeps_what_the_logic_reads)
 	TheFileSystem->reset();		// forget any answer a previous run of this test cached
 
 	const Int access = File::READ | File::BINARY;
-	CHECK( readAllAndClose( TheFileSystem->openFile( loose[0], access ) ) == lods );
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[0], access ) ) == lods );		// a bigger full level of its own
 	CHECK( readAllAndClose( TheFileSystem->openFile( loose[0], access ) ) == lods );		// the cached answer
 	CHECK( readAllAndClose( TheFileSystem->openFile( loose[1], access ) ) == master );		// a bone moved
 	CHECK( readAllAndClose( TheFileSystem->openFile( loose[2], access ) ) == master );		// no batch holds it
 	CHECK( readAllAndClose( TheFileSystem->openFile( loose[3], access ) ) == master );		// retail's copy, not a batch
 	CHECK( readAllAndClose( TheFileSystem->openFile( loose[4], access ) ) == master );		// the HLOD renamed
 	CHECK( readAllAndClose( TheFileSystem->openFile( loose[5], access ) ) == master );		// the muzzle on another bone when far
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[6], access ) ) == master );		// the muzzle on another bone when near
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[7], access ) ) == master );		// a FIREPOINT01 only the copy has
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[8], access ) ) == master );		// a record to a mesh it lacks
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[9], access ) ) == wheeled );		// road wheels after the master's pivots
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[10], access ) ) == master );		// an added pivot that is no wheel
+	// the wheeled copy came first; its sibling falls back to the plain tree, and the copy follows it
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[11], access ) ) == familyMaster[0] );
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[9], access ) ) == familyMaster[0] );
+	// the sibling first: the wheeled copy of a tree already served plain is refused from the start
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[13], access ) ) == familyMaster[1] );
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[12], access ) ) == familyMaster[1] );
 
 	// what checksumModels hashes: the master's bytes, though the renderer was handed the batch's
 	CRC masterCRC, hashedCRC, drawnCRC;
@@ -25474,13 +25503,73 @@ TEST(reforged_lod_copy_is_drawn_only_when_it_keeps_what_the_logic_reads)
 
 	TheFileSystem->reset();
 	TheArchiveFileSystem = before;
-	for( Int i = 0; i < 6; ++i )
+	for( Int i = 0; i < LOOSE; ++i )
 		std::filesystem::remove( loose[i] );
 	std::error_code ignored;
 	std::filesystem::remove( "Art/W3D", ignored );		// only when empty: never someone else's folder
 	std::filesystem::remove( "Art", ignored );
 }
 
+//////////////////////////////////////////////////////////////////////////////
+// General's talents: ranks 6 to 10 and the pair rule
+//////////////////////////////////////////////////////////////////////////////
+
+static Bool loadIniAs( const char *name, INILoadType type )
+{
+	INI ini;
+	try
+	{
+		ini.load( AsciiString( name ), type, NULL );
+		return TRUE;
+	}
+	catch( ... )
+	{
+	}
+	return FALSE;
+}
+
+/* A row's two cards are partners, index ^ 1: owning either closes both, and a science outside the
+	 list is never a talent, whatever it owns. */
+TEST(talent_pair_rule_closes_the_partner_and_ignores_other_sciences)
+{
+	ScienceVec talents;
+	for( Int i = 0; i < TALENT_SCIENCE_COUNT; ++i )
+		talents.push_back( (ScienceType)( 1000 + i ) );
+	const ScienceType outside = (ScienceType)999;
+
+	CHECK_EQ( findTalentIndex( talents, (ScienceType)1004 ), 4 );
+	CHECK_EQ( findTalentIndex( talents, outside ), -1 );
+
+	ScienceVec owned;
+	for( Int i = 0; i < TALENT_SCIENCE_COUNT; ++i )
+		CHECK( isTalentOpen( talents, owned, talents[ i ] ) );
+	CHECK( !isTalentOpen( talents, owned, outside ) );
+
+	owned.push_back( (ScienceType)1003 );		// 7B
+	CHECK( !isTalentOpen( talents, owned, (ScienceType)1003 ) );
+	CHECK( !isTalentOpen( talents, owned, (ScienceType)1002 ) );	// 7A, its partner
+	CHECK( isTalentOpen( talents, owned, (ScienceType)1004 ) );		// 8A, another row
+	CHECK( isTalentOpen( talents, owned, (ScienceType)1005 ) );
+
+	owned.push_back( (ScienceType)1008 );		// 10A
+	CHECK( !isTalentOpen( talents, owned, (ScienceType)1009 ) );
+	CHECK( isTalentOpen( talents, owned, (ScienceType)1000 ) );
+
+	CHECK( isValidTalentScienceCount( 0 ) );
+	CHECK( isValidTalentScienceCount( 10 ) );
+	CHECK( !isValidTalentScienceCount( 9 ) );
+	CHECK( !isValidTalentScienceCount( 11 ) );
+}
+
+static std::string talentSciencesIni( Int count )
+{
+	std::string text;
+	for( Int i = 0; i < count; ++i )
+	{
+		char name[ 64 ];
+		snprintf( name, sizeof( name ), " TEST_Talent%d", i );
+		text += name;
+	}
 	return text;
 }
 

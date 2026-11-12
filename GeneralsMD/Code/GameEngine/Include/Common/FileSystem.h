@@ -121,6 +121,9 @@ struct FileInfo {
 	*/
 //===============================
 #include <map>
+#include <set>
+#include <string>
+#include <vector>
 
 class FileSystem : public SubsystemInterface
 {
@@ -163,7 +166,15 @@ protected:
 	/// may be drawn instead.  Asked
 	/// once per model and kept, under m_fileExistLock, until the next init or reset.
 	Bool takesArchivedModel( const Char *filename );
+	/// A copy that adds wheel pivots, refused once some file was served with the plain tree its name
+	/// shares; the caller holds m_fileExistLock.
+	Bool wheelTreeRefused( unsigned key ) const;
 	std::map<unsigned,bool> m_archivedModel;
+	/// HTreeManagerClass::Load_Tree keeps the first tree loaded under a name, so a copy's wheels need
+	/// every file of that name to bring them.  Names some file was served without added wheels (a
+	/// master, or a copy adding none), and the tree names of each accepted copy that adds wheels.
+	std::set<std::string> m_plainTrees;
+	std::map< unsigned, std::vector<std::string> > m_wheelTrees;
 };
 
 extern FileSystem*	TheFileSystem;

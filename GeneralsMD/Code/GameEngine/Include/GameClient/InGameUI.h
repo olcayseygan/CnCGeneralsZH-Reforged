@@ -1576,6 +1576,8 @@ protected:
 	IRegion2D										m_productionListPlace[ PRODUCTION_LIST_CELLS ];
 	Int													m_productionListCells;		///< cells drawn
 	IRegion2D										m_productionListTab;
+	ObjectID										m_hero;										///< the local player's living hero, the sweep's, INVALID_ID for none
+	IRegion2D										m_heroCell;								///< the hero's cell over the queue, empty when not drawn
 	IRegion2D										m_superweaponPlace[ SUPERWEAPON_LIST_CELLS ];
 	ObjectID										m_superweaponJump[ SUPERWEAPON_LIST_CELLS ];	///< the building a click looks at, INVALID_ID for none
 	Int													m_superweaponCells;				///< cells drawn

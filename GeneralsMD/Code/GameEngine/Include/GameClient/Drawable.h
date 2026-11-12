@@ -425,6 +425,7 @@ public:
 
 	inline Object *getObject( void ) { LOGIC_WINDOW_READ( WINDOW_DRAWABLE_OBJECT ); return m_object; }								///< return object ID bound to this drawble
 	inline const Object *getObject( void ) const { LOGIC_WINDOW_READ( WINDOW_DRAWABLE_OBJECT ); return m_object; }		///< return object ID bound to this drawble
+	void healthBarColors( Real healthRatio, Color *color, Color *outlineColor );	///< fill and outline of the health bar at this ratio
 
 	inline DrawableInfo *getDrawableInfo(void) {return &m_drawableInfo;}
 

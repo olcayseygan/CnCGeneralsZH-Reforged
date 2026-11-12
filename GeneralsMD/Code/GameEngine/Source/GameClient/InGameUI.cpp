@@ -179,6 +179,7 @@ enum
 	HUD_TRAY_TAB_JOIN				= 6,		///< its rows lying over the tray's outer edge
 	HUD_TRAY_TAB_TEXT_INSET_X	= 4,	///< the text's room inside the rest of it
 	HUD_TRAY_TAB_TEXT_INSET_Y	= 2,
+	HUD_HERO_BAR_W					= 3,		///< the hero cell's upright health bar, beside the cameo
 	SUPERWEAPON_TRAY_DROP		= 4,		///< between the info strip's foot and the superweapon tray's top
 	HUD_READY_GLOW_PERIOD_MS	= 1400,	///< one breath of a charged superweapon's glow
 	HUD_READY_SHIMMER_RISE	= 85		///< percent of the cameo the shimmer's top edge climbs in a breath
@@ -1643,6 +1644,8 @@ InGameUI::InGameUI()
 	m_productionListMoreText = NULL;
 	m_productionListCells = 0;
 	m_productionListTab = noHudTab();
+	m_hero = INVALID_ID;
+	m_heroCell = noHudTab();
 	m_superweaponCells = 0;
 	m_superweaponTab = noHudTab();
 	m_hudCellPass = 0;
@@ -11457,6 +11460,7 @@ struct ProductionListGather
 	InGameUI::ProductionListSlot *slot;
 	Int *count;
 	Int *total;
+	ObjectID *hero;		///< the first living hero met, for the hero's cell
 };
 
 /** What drawProductionList's last sweep was of. */
@@ -11481,6 +11485,9 @@ static void gatherProductionList( Object *obj, void *userData )
 	if( draw == NULL || draw->hasProductionModule() )
 		appendProducerQueue( obj, g->slot, g->count, g->total );
 	appendStructureUnderConstruction( obj, g->slot, g->count, g->total );
+	// the hero the SELECT_HERO key would pick: a body still on the list while it dies is not one
+	if( *g->hero == INVALID_ID && obj->isKindOf( KINDOF_HERO ) && !obj->isEffectivelyDead() )
+		*g->hero = obj->getID();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -11578,6 +11585,58 @@ void InGameUI_numberBuildPlans( std::vector<BuildPlanNumber>& plans )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The local player's hero in a cell of the queue's own tray, against the screen's left edge over
+	* the queue row whose top is `queueTop`.  It leaves the room the queue's "+N" tab takes whether the
+	* tab is up or not, so the cell never jumps.  Beside the cameo, inside the cell, an upright bar fills
+	* from the foot with the hero's health in the colours of the bar over his head.  Returns the cell,
+	* what a click on it takes (handleHudCellClick), or nothing when there is no living hero. */
+//-------------------------------------------------------------------------------------------------
+static IRegion2D drawHeroCell( const HudCellStyle &style, Int queueTop, ObjectID heroID )
+{
+	Object *hero = TheGameLogic->findObjectByID( heroID );
+	if( hero == NULL || hero->isEffectivelyDead() )
+		return noHudTab();
+	BodyModuleInterface *body = hero->getBodyModule();
+	const Real maxHealth = body != NULL ? body->getMaxHealth() : 0.0f;
+	if( maxHealth <= 0.0f )
+		return noHudTab();
+	const Real ratio = MAX( 0.0f, MIN( 1.0f, body->getHealth() / maxHealth ) );
+
+	const Int tabTop = hudTab( -1, queueTop - style.production.uncoveredH, -1 ).lo.y;
+	const Int barW = stripPixels( HUD_HERO_BAR_W );
+	IRegion2D cell;
+	cell.lo.x = 0;
+	cell.hi.x = style.cellW + barW + style.marginX;
+	cell.hi.y = tabTop - stripPixels( PRODUCTION_LIST_LIFT ) - style.production.footH;
+	cell.lo.y = cell.hi.y - style.cellH;
+	IRegion2D cameo;
+	cameo.lo.x = cell.lo.x + style.marginX;
+	cameo.hi.x = cameo.lo.x + style.cameoW;
+	cameo.lo.y = cell.lo.y + style.marginY;
+	cameo.hi.y = cameo.lo.y + style.cameoH;
+	const Int barX = cameo.hi.x + style.marginX;
+	const Int barH = style.cameoH;
+
+	Color fill = GameMakeColor( 0, 255, 0, 255 ), outline = GameMakeColor( 0, 128, 0, 255 );
+	if( Drawable *draw = hero->getDrawable() )
+		draw->healthBarColors( ratio, &fill, &outline );
+	const Int inside = barH - 2;
+	const Int filled = REAL_TO_INT( inside * ratio );
+
+	TheDisplay->beginBatch2D();
+	drawHudTray( style.production, &cell, 1, 1, 1, 1 );
+	if( const Image *picture = hero->getTemplate()->getButtonImage() )
+		TheDisplay->drawImage( picture, cameo.lo.x, cameo.lo.y, cameo.hi.x, cameo.hi.y );
+	drawHudCellBorder( cameo, hudCellBorder( COMMAND_BUTTON_BORDER_BUILD ) );
+	// the bar over his head stood up: outline, health from the foot, the health lost a dark slot
+	TheDisplay->drawOpenRect( barX, cameo.lo.y, barW, barH, 1, outline );
+	TheDisplay->drawFillRect( barX + 1, cameo.lo.y + 1 + inside - filled, barW - 2, filled, fill );
+	TheDisplay->drawFillRect( barX + 1, cameo.lo.y + 1, barW - 2, inside - filled, GameMakeColor( 10, 10, 10, 190 ) );
+	TheDisplay->endBatch2D();
+	return cell;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Everything the local player has coming, as bare cameos on the left over the
 	* control bar: every producer's queue and every building a dozer or a worker has going up, soonest
 	* to finish at the left, in one row.  Each wears its seconds in the bottom left corner, an "xN" in
@@ -11592,6 +11651,7 @@ void InGameUI::drawProductionList( void )
 	// nothing drawn is nothing to click
 	m_productionListCells = 0;
 	m_productionListTab = noHudTab();
+	m_heroCell = noHudTab();
 	if( !TheGameLogic->isInGame() || TheGameLogic->isInShellGame() )
 		return;
 
@@ -11608,12 +11668,19 @@ void InGameUI::drawProductionList( void )
 	{
 		m_productionListCount = 0;
 		m_productionListTotal = 0;
-		ProductionListGather gather = { m_productionList, &m_productionListCount, &m_productionListTotal };
+		m_hero = INVALID_ID;
+		ProductionListGather gather = { m_productionList, &m_productionListCount, &m_productionListTotal, &m_hero };
 		player->iterateObjects( gatherProductionList, &gather );
 		s_listGather.valid = TRUE;
 		s_listGather.frame = frame;
 		s_listGather.player = player;
 	}
+
+	// one row in a tray hard against the screen's left edge, the powers tray mirrored, its foot
+	// standing just clear of the radar's frame; the hero's cell stands over it, queue or none
+	const HudCellStyle style = hudCellStyle();
+	const Int foot = radarFrameTop() - stripPixels( PRODUCTION_LIST_LIFT ) - style.production.footH;
+	m_heroCell = drawHeroCell( style, foot - style.cellH, m_hero );
 	if( m_productionListCount == 0 )
 		return;
 
@@ -11625,13 +11692,9 @@ void InGameUI::drawProductionList( void )
 	const Bool more = m_productionListTotal > shown;
 	const Int cameos = m_productionListCount;
 
-	// one row in a tray hard against the screen's left edge, the powers tray mirrored, its foot
-	// standing just clear of the radar's frame
-	const HudCellStyle style = hudCellStyle();
 	const Int cameoW = style.cameoW;
 	const Int cameoH = style.cameoH;
 	const Int left = 0;
-	const Int foot = radarFrameTop() - stripPixels( PRODUCTION_LIST_LIFT ) - style.production.footH;
 	IRegion2D place[ PRODUCTION_LIST_CELLS ];
 	for( Int each = 0; each < cameos; each++ )
 	{
@@ -11954,6 +12017,15 @@ Bool InGameUI::handleHudCellClick( const ICoord2D *mouse, Bool cancel )
 	// a "+N" tab stands for no one item
 	if( inside( m_productionListTab ) || inside( m_superweaponTab ) )
 		return TRUE;
+
+	// the hero's cell is the SELECT_HERO key: select him, or the transport he rides, and look at him.
+	// A cancel has nothing to take off
+	if( inside( m_heroCell ) )
+	{
+		if( !cancel )
+			TheMessageStream->appendMessage( GameMessage::MSG_META_SELECT_HERO );
+		return TRUE;
+	}
 
 	if( GroupPanel_click( mouse, cancel ) )
 		return TRUE;

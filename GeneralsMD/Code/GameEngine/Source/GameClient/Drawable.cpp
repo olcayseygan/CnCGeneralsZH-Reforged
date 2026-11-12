@@ -5516,6 +5516,70 @@ static Real reloadBarFraction( const Object *obj )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The colours of this drawable's health bar at `healthRatio`: blue to cyan while disabled, the
+	* owner's colour under HealthBarColors 1, otherwise retail's ramp from green through yellow to red.
+	* The HUD's hero cell asks here too, so its bar reads like the one over the hero's head. */
+//-------------------------------------------------------------------------------------------------
+void Drawable::healthBarColors( Real healthRatio, Color *color, Color *outlineColor )
+{
+	Object *obj = getObject();
+	if( obj != NULL && Drawable_disabledShowsBlueHealthBar( obj->getDisabledFlags() ) )
+	{
+		*color = GameMakeColor( 0, healthRatio * 255.0f, 255, 255 );//blue to cyan
+		*outlineColor = GameMakeColor( 0, healthRatio * 128.0f, 128, 255 );//dark blue to dark cyan
+	}
+	else if( obj != NULL &&
+					 TheGlobalData->m_healthBarColors == 1 &&
+					 obj->getControllingPlayer() != NULL &&
+					 obj->getControllingPlayer()->getPlayerColor() != 0 )
+	{
+		// HealthBarColors 1: the bar wears its owner's colour, the one the minimap and the selection
+		// rings use, and the bar's length alone says how hurt it is.  The outline is the same colour
+		// darkened, so a light player colour still reads against light ground.  Civilians, crates
+		// and anything else with no colour to borrow keep the ramp below.
+		UnsignedByte r, g, b, a;
+		GameGetColorComponents( clientPlayerColor( obj->getControllingPlayer() ), &r, &g, &b, &a );
+
+		*color = GameMakeColor( r, g, b, 255 );				// the stored colour's alpha is not ours to trust
+		*outlineColor = GameDarkenColor( *color, 60 );
+	}
+	else //retail's ramp for every owner: green at full health, through yellow, to red
+	{
+		RGBColor inColor, outColor;
+		inColor.blue = 0; // health bars do not display blue...
+		outColor.blue = 0; // health bars do not display blue...
+
+		if( healthRatio >= 0.5f )
+		{
+			inColor.red = 1.0f - ((healthRatio - 0.5f) / 0.5f);
+			inColor.green = 1.0f;
+		}
+		else
+		{
+			inColor.red = 1.0f;
+			inColor.green = 1.0f - ((0.5f - healthRatio) / 0.5f);
+		}
+
+		outColor.red = inColor.red * 0.5f;
+		outColor.green =inColor.green * 0.5f;
+
+		if( m_conditionState.test( MODELCONDITION_REALLY_DAMAGED ) == TRUE )
+		{//average the above color with red
+			inColor.red = (1.0f + inColor.red) * 0.5f;
+			inColor.green *= 0.5f;
+		}
+		else if ( m_conditionState.test( MODELCONDITION_DAMAGED ) == FALSE )
+		{//average the above color with green
+			inColor.green = (1.0f + inColor.green) * 0.5f;
+			inColor.red *= 0.5f;
+		}
+
+		*color =        GameMakeColor( 255.0 * inColor.red, 255.0 * inColor.green, 255.0 * inColor.blue, 255);
+		*outlineColor = GameMakeColor( 255.0 * outColor.red, 255.0 * outColor.green, 255.0 * outColor.blue, 255);
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 {
 	if (!healthBarRegion)
@@ -5579,75 +5643,8 @@ void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 		// what is our health ratio
 		Real healthRatio = health / maxHealth;
 
-		//
-		// what color will we use for the health bar based on our ratio, this makes it
-		// slowly go from green to red, (or from blue to cyan if disabled)
-		//
-
 		Color color, outlineColor;
-		if( Drawable_disabledShowsBlueHealthBar( obj->getDisabledFlags() ) )
-		{
-			color = GameMakeColor( 0, healthRatio * 255.0f, 255, 255 );//blue to cyan
-			outlineColor = GameMakeColor( 0, healthRatio * 128.0f, 128, 255 );//dark blue to dark cyan
-
-		}
-		else if( TheGlobalData->m_healthBarColors == 1 &&
-						 obj->getControllingPlayer() != NULL &&
-						 obj->getControllingPlayer()->getPlayerColor() != 0 )
-		{
-			// HealthBarColors 1: the bar wears its owner's colour, the one the minimap and the selection
-			// rings use, and the bar's length alone says how hurt it is.  The outline is the same colour
-			// darkened, so a light player colour still reads against light ground.  Civilians, crates
-			// and anything else with no colour to borrow keep the ramp below.
-			UnsignedByte r, g, b, a;
-			GameGetColorComponents( clientPlayerColor( obj->getControllingPlayer() ), &r, &g, &b, &a );
-
-			color = GameMakeColor( r, g, b, 255 );				// the stored colour's alpha is not ours to trust
-			outlineColor = GameDarkenColor( color, 60 );
-		}
-		else //retail's ramp for every owner: green at full health, through yellow, to red
-		{
-
-			RGBColor inColor, outColor;
-			inColor.blue = 0; // health bars do not display blue...
-			outColor.blue = 0; // health bars do not display blue...
-
-			if( healthRatio >= 0.5f )
-			{
-				inColor.red = 1.0f - ((healthRatio - 0.5f) / 0.5f);
-				inColor.green = 1.0f;
-//				color = GameMakeColor       (  255 - ((healthRatio - 0.5f) / 0.5f) * 255, 255, 0, 255 );
-//				outlineColor = GameMakeColor( (255 - ((healthRatio - 0.5f) / 0.5f) * 255) * 0.5, 255 * 0.5, 0, 255 );
-			}
-			else
-			{
-				inColor.red = 1.0f;
-				inColor.green = 1.0f - ((0.5f - healthRatio) / 0.5f);
-//				color = GameMakeColor( 255, 255 - ((0.5f - healthRatio) / 0.5f) * 255, 0, 255 );
-//				outlineColor = GameMakeColor( 255 * 0.5, (255 - ((0.5f - healthRatio) / 0.5f) * 255) * 0.5, 0, 255 );
-			}
-
-			outColor.red = inColor.red * 0.5f;
-			outColor.green =inColor.green * 0.5f;
-
-			if( m_conditionState.test( MODELCONDITION_REALLY_DAMAGED ) == TRUE )
-			{//average the above color with red
-				inColor.red = (1.0f + inColor.red) * 0.5f;
-				inColor.green *= 0.5f;
-			}
-			else if ( m_conditionState.test( MODELCONDITION_DAMAGED ) == FALSE )
-			{//average the above color with green
-				inColor.green = (1.0f + inColor.green) * 0.5f;
-				inColor.red *= 0.5f;
-			}
-
-			color =        GameMakeColor( 255.0 * inColor.red, 255.0 * inColor.green, 255.0 * inColor.blue, 255);
-			outlineColor = GameMakeColor( 255.0 * outColor.red, 255.0 * outColor.green, 255.0 * outColor.blue, 255);
-		
-		
-		}
-
-
+		healthBarColors( healthRatio, &color, &outlineColor );
 
 
 ///		Real scale = 1.3f / TheTacticalView->getZoom();

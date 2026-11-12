@@ -46,8 +46,8 @@
 
 //-------------------------------------------------------------------------------------------------
 W3DTreeDrawModuleData::W3DTreeDrawModuleData() :
-m_framesToMoveInward(1),
-m_framesToMoveOutward(1),
+m_framesToMoveInward(DurationFrames::fromRaw(1)),	// 1 msec: a frame at any speed
+m_framesToMoveOutward(DurationFrames::fromRaw(1)),
 m_darkening(0.0f),
 m_maxOutwardMovement(1.0f)
 {
@@ -67,7 +67,7 @@ m_maxOutwardMovement(1.0f)
 	m_initialAccelPercent = START_ACCEL_PERCENT;
 	m_bounceVelocityPercent = VELOCITY_BOUNCE_PERCENT;
   m_minimumToppleSpeed = MINIMUM_TOPPLE_SPEED;
-	m_sinkFrames = 10*LOGICFRAMES_PER_GAME_SECOND;
+	m_sinkFrames.setRaw( 10000 );
 	m_sinkDistance = 20.0f;
 
 }
@@ -85,8 +85,8 @@ void W3DTreeDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 	{
 		{ "ModelName", INI::parseAsciiString, NULL, offsetof(W3DTreeDrawModuleData, m_modelName) },
 		{ "TextureName", INI::parseAsciiString, NULL, offsetof(W3DTreeDrawModuleData, m_textureName) },
-		{ "MoveOutwardTime", INI::parseDurationUnsignedInt, NULL, offsetof(W3DTreeDrawModuleData, m_framesToMoveOutward) },
-		{ "MoveInwardTime", INI::parseDurationUnsignedInt, NULL, offsetof(W3DTreeDrawModuleData, m_framesToMoveInward) },
+		{ "MoveOutwardTime", SPEED_FIELD( W3DTreeDrawModuleData, m_framesToMoveOutward ) },
+		{ "MoveInwardTime", SPEED_FIELD( W3DTreeDrawModuleData, m_framesToMoveInward ) },
 		{ "MoveOutwardDistanceFactor", INI::parseReal, NULL, offsetof(W3DTreeDrawModuleData, m_maxOutwardMovement) },
 		{ "DarkeningFactor", INI::parseReal, NULL, offsetof(W3DTreeDrawModuleData, m_darkening) },
 
@@ -101,7 +101,7 @@ void W3DTreeDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "BounceVelocityPercent",	INI::parsePercentToReal, NULL, offsetof( W3DTreeDrawModuleData, m_bounceVelocityPercent ) },
     { "MinimumToppleSpeed",	INI::parsePositiveNonZeroReal, NULL, offsetof( W3DTreeDrawModuleData, m_minimumToppleSpeed ) },
     { "SinkDistance",	INI::parsePositiveNonZeroReal, NULL, offsetof( W3DTreeDrawModuleData, m_sinkDistance ) },
-		{ "SinkTime", INI::parseDurationUnsignedInt, NULL, offsetof(W3DTreeDrawModuleData, m_sinkFrames) },
+		{ "SinkTime", SPEED_FIELD( W3DTreeDrawModuleData, m_sinkFrames ) },
 		{ "DoShadow",	INI::parseBool, NULL, offsetof( W3DTreeDrawModuleData, m_doShadow ) },
 		{ 0, 0, 0, 0 }
 	};

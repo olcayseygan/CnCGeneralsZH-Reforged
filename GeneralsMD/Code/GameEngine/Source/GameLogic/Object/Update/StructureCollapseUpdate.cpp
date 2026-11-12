@@ -112,10 +112,10 @@ static void parseOCL( INI* ini, void *instance, void * /*store*/, const void* /*
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "MinCollapseDelay",						INI::parseDurationUnsignedInt,		NULL, offsetof( StructureCollapseUpdateModuleData, m_minCollapseDelay ) },
-		{ "MaxCollapseDelay",						INI::parseDurationUnsignedInt,		NULL, offsetof( StructureCollapseUpdateModuleData, m_maxCollapseDelay ) },
-		{ "MinBurstDelay",							INI::parseDurationUnsignedInt,		NULL, offsetof( StructureCollapseUpdateModuleData, m_minBurstDelay ) },
-		{ "MaxBurstDelay",							INI::parseDurationUnsignedInt,		NULL, offsetof( StructureCollapseUpdateModuleData, m_maxBurstDelay ) },
+		{ "MinCollapseDelay",						SPEED_FIELD( StructureCollapseUpdateModuleData, m_minCollapseDelay ) },
+		{ "MaxCollapseDelay",						SPEED_FIELD( StructureCollapseUpdateModuleData, m_maxCollapseDelay ) },
+		{ "MinBurstDelay",							SPEED_FIELD( StructureCollapseUpdateModuleData, m_minBurstDelay ) },
+		{ "MaxBurstDelay",							SPEED_FIELD( StructureCollapseUpdateModuleData, m_maxBurstDelay ) },
 		{ "CollapseDamping",						INI::parseReal,										NULL, offsetof( StructureCollapseUpdateModuleData, m_collapseDamping ) },
 		{ "MaxShudder",									INI::parseReal,										NULL, offsetof( StructureCollapseUpdateModuleData, m_maxShudder ) },
 		{ "BigBurstFrequency",					INI::parseInt,										NULL, offsetof( StructureCollapseUpdateModuleData, m_bigBurstFrequency ) },

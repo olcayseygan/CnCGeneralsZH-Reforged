@@ -56,7 +56,7 @@ DemoTrapUpdateModuleData::DemoTrapUpdateModuleData()
 	m_detonationWeaponSlot					= PRIMARY_WEAPON;
 	m_proximityModeWeaponSlot				= PRIMARY_WEAPON;
 	m_triggerDetonationRange				= 0.0f;
-	m_scanFrames										= 0;
+	m_scanFrames.setRaw( 0 );
 	m_detonationWeaponTemplate			= NULL;
 	m_detonateWhenKilled						= false;
 }
@@ -74,7 +74,7 @@ DemoTrapUpdateModuleData::DemoTrapUpdateModuleData()
     { "ManualModeWeaponSlot",      INI::parseLookupList,					TheWeaponSlotTypeNamesLookupList, offsetof( DemoTrapUpdateModuleData, m_manualModeWeaponSlot ) },
     { "TriggerDetonationRange",    INI::parseReal,								NULL, offsetof( DemoTrapUpdateModuleData, m_triggerDetonationRange ) },
     { "IgnoreTargetTypes",         KindOfMaskType::parseFromINI,							NULL, offsetof( DemoTrapUpdateModuleData, m_ignoreKindOf ) },
-		{ "ScanRate",									 INI::parseDurationUnsignedInt,	NULL, offsetof( DemoTrapUpdateModuleData, m_scanFrames ) },
+		{ "ScanRate",									 SPEED_FIELD( DemoTrapUpdateModuleData, m_scanFrames ) },
 		{ "AutoDetonationWithFriendsInvolved", INI::parseBool,				NULL, offsetof( DemoTrapUpdateModuleData, m_friendlyDetonation ) },
 		{ "DetonationWeapon",					 INI::parseWeaponTemplate,			NULL, offsetof( DemoTrapUpdateModuleData, m_detonationWeaponTemplate ) },
 		{ "DetonateWhenKilled",				 INI::parseBool,								NULL, offsetof( DemoTrapUpdateModuleData, m_detonateWhenKilled ) },

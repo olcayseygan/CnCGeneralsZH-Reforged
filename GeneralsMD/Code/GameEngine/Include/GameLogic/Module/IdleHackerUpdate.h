@@ -38,7 +38,7 @@ class IdleHackerUpdateModuleData : public UpdateModuleData
 {
 public:
 
-	UnsignedInt m_idleFrames;
+	DurationFrames m_idleFrames;
 	Real m_centerRange;
 
 	IdleHackerUpdateModuleData();

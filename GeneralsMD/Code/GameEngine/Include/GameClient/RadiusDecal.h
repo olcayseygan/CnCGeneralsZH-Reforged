@@ -104,7 +104,7 @@ private:
 	ShadowType		m_shadowType;
 	Real					m_minOpacity;
 	Real					m_maxOpacity;
-	UnsignedInt		m_opacityThrobTime;
+	DurationFrames		m_opacityThrobTime;
 	Color					m_color;
 	Bool					m_onlyVisibleToOwningPlayer;
 

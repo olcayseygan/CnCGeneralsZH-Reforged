@@ -51,7 +51,7 @@ public:
 	Bool m_onlyWhenMovingDown;							///< don't detonate unless moving in downward z dir
 	Real m_destroyAttachedParticlesAtHeight;  ///< HACK, destroy any attached particle system of object when below this height
 	Bool m_snapToGroundOnDeath;							///< snap to the ground when killed
-	UnsignedInt m_initialDelay;							///< Don't explode before this time
+	DurationFrames m_initialDelay;							///< Don't explode before this time
 
 };
 

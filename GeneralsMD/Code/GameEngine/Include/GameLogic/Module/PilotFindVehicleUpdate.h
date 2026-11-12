@@ -46,7 +46,7 @@ class WeaponTemplate;
 class PilotFindVehicleUpdateModuleData : public ModuleData
 {
 public:
-	UnsignedInt			m_scanFrames;
+	DurationFrames			m_scanFrames;
 	Real						m_scanRange;
 	Real						m_minHealth;
 

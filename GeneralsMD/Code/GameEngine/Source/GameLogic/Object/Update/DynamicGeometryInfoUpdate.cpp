@@ -39,7 +39,7 @@
 DynamicGeometryInfoUpdateModuleData::DynamicGeometryInfoUpdateModuleData()
 {
 
-	m_initialDelay = 0;
+	m_initialDelay.setRaw( 0 );
 
 	m_initialHeight = 0;
 	m_initialMajorRadius = 0;
@@ -49,7 +49,7 @@ DynamicGeometryInfoUpdateModuleData::DynamicGeometryInfoUpdateModuleData()
 	m_finalMajorRadius = 0;
 	m_finalMinorRadius = 0;
 
-	m_transitionTime = 1;
+	m_transitionTime.setRaw( 1 );	// 1 msec: a frame at any speed
 	m_reverseAtTransitionTime = FALSE;
 
 }
@@ -62,7 +62,7 @@ DynamicGeometryInfoUpdateModuleData::DynamicGeometryInfoUpdateModuleData()
 	static const FieldParse dataFieldParse[] = 
 	{
 
-		{ "InitialDelay",					INI::parseDurationUnsignedInt,		NULL, offsetof(DynamicGeometryInfoUpdateModuleData, m_initialDelay) },
+		{ "InitialDelay",					SPEED_FIELD( DynamicGeometryInfoUpdateModuleData, m_initialDelay ) },
 
 		{ "InitialHeight",				INI::parseReal,										NULL, offsetof(DynamicGeometryInfoUpdateModuleData, m_initialHeight) },
 		{ "InitialMajorRadius",		INI::parseReal,										NULL, offsetof(DynamicGeometryInfoUpdateModuleData, m_initialMajorRadius) },
@@ -72,7 +72,7 @@ DynamicGeometryInfoUpdateModuleData::DynamicGeometryInfoUpdateModuleData()
 		{ "FinalMajorRadius",			INI::parseReal, NULL, offsetof(DynamicGeometryInfoUpdateModuleData, m_finalMajorRadius) },
 		{ "FinalMinorRadius",			INI::parseReal, NULL, offsetof(DynamicGeometryInfoUpdateModuleData, m_finalMinorRadius) },
 
-		{ "TransitionTime",				INI::parseDurationUnsignedInt,		NULL, offsetof(DynamicGeometryInfoUpdateModuleData, m_transitionTime) },
+		{ "TransitionTime",				SPEED_FIELD( DynamicGeometryInfoUpdateModuleData, m_transitionTime ) },
 		{ "ReverseAtTransitionTime", INI::parseBool,	 NULL, offsetof( DynamicGeometryInfoUpdateModuleData, m_reverseAtTransitionTime ) },
 
 		{ 0, 0, 0, 0 }

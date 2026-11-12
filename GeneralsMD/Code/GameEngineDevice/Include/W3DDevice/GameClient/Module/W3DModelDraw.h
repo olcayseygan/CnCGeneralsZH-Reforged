@@ -300,10 +300,10 @@ public:
 #endif
 	Int																m_defaultState;
 	Int																m_projectileBoneFeedbackEnabledSlots;	///< Hide and show the launch bone geometries according to clip status adjustments.
-	Real															m_initialRecoil;
+	VelocityPerFrame															m_initialRecoil;
 	Real															m_maxRecoil;
-	Real															m_recoilDamping;
-	Real															m_recoilSettle;
+	RetailPerFrameFactor															m_recoilDamping;
+	VelocityPerFrame															m_recoilSettle;
 	StaticGameLODLevel								m_minLODRequired;				///< minumum game LOD level necessary to use this module.
 	ModelConditionFlags								m_ignoreConditionStates;
 	Bool															m_okToChangeModelColor;
@@ -315,8 +315,8 @@ public:
 	Real															m_quadMaxTilt;				///< radians; above zero, the model is drawn flying as a quadcopter (applyQuadAttitude)
 	Real															m_quadTiltGravity;		///< distance per second squared: a horizontal acceleration this size tilts it 45 degrees
 	Real															m_quadTiltDrag;				///< per second: a steady speed tilts it as far as that speed times this as an acceleration
-	Real															m_quadTiltTime;				///< logic frames the speed and the tilt take to follow
-	Real															m_quadYawTime;				///< logic frames the nose takes to come round to the heading
+	DurationFramesReal															m_quadTiltTime;				///< logic frames the speed and the tilt take to follow
+	DurationFramesReal															m_quadYawTime;				///< logic frames the nose takes to come round to the heading
 	Real															m_quadMaxDiveTilt;		///< radians; above zero, a descending quad's nose follows its path down, up to this
 #ifdef CACHE_ATTACH_BONE
 	mutable Bool											m_attachToDrawableBoneOffsetValid;

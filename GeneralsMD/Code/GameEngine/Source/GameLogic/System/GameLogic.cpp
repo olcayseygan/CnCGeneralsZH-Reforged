@@ -5001,7 +5001,7 @@ void GameLogic::watchDisabled( const Object *obj )
 // ------------------------------------------------------------------------------------------------
 void GameLogic::rebuildObjectIndex( void )
 {
-	for( Int turn = 0; turn < LOGICFRAMES_PER_GAME_SECOND; ++turn )
+	for( Int turn = 0; turn < MAX_LOGICFRAMES_PER_GAME_SECOND; ++turn )	// every bucket: the last match may have had more
 		m_secondTurnIDs[ turn ].clear();
 	m_disabledWatch.clear();
 

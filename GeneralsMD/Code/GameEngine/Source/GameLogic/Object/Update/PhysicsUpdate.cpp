@@ -54,9 +54,9 @@
 
 const Real DEFAULT_MASS = 1.0f;
 
-const Real DEFAULT_SHOCK_YAW = ConvertRetailPerFrameRate(0.05f);
-const Real DEFAULT_SHOCK_PITCH = ConvertRetailPerFrameRate(0.025f);
-const Real DEFAULT_SHOCK_ROLL = ConvertRetailPerFrameRate(0.025f);
+#define DEFAULT_SHOCK_YAW_RETAIL 0.05f		// a retail frame's
+#define DEFAULT_SHOCK_PITCH_RETAIL 0.025f
+#define DEFAULT_SHOCK_ROLL_RETAIL 0.025f
 
 // Every friction below, the clamps and m_extraFriction are the share of speed lost per retail (30 Hz)
 // frame; retailFrictionToFrame turns one into the share per frame now, so a second loses the same.
@@ -76,11 +76,11 @@ static Real retailFrictionToFrame(Real f)
 	return 1.0f - ConvertRetailPerFrameFactor(1.0f - f);
 }
 
-const Real STUN_RELIEF_EPSILON = ConvertRetailPerFrameRate(0.5f);
+#define STUN_RELIEF_EPSILON ((Real)(ConvertRetailPerFrameRate(0.5f)))
 
 #include "Common/CRCDebug.h"
 
-const Int MOTIVE_FRAMES = LOGICFRAMES_PER_GAME_SECOND / 3;
+#define MOTIVE_FRAMES ((Int)(LOGICFRAMES_PER_GAME_SECOND / 3))
 
 #define SLEEPY_PHYSICS
 
@@ -127,9 +127,9 @@ PhysicsBehaviorModuleData::PhysicsBehaviorModuleData()
 {
 	m_mass = DEFAULT_MASS;
 	m_shockResistance = 0.0f;
-	m_shockMaxYaw = DEFAULT_SHOCK_YAW;
-	m_shockMaxPitch = DEFAULT_SHOCK_PITCH;
-	m_shockMaxRoll = DEFAULT_SHOCK_ROLL;
+	m_shockMaxYaw.setRaw( DEFAULT_SHOCK_YAW_RETAIL );
+	m_shockMaxPitch.setRaw( DEFAULT_SHOCK_PITCH_RETAIL );
+	m_shockMaxRoll.setRaw( DEFAULT_SHOCK_ROLL_RETAIL );
 	
 	m_forwardFriction = DEFAULT_FORWARD_FRICTION;
 	m_lateralFriction = DEFAULT_LATERAL_FRICTION;
@@ -139,7 +139,7 @@ PhysicsBehaviorModuleData::PhysicsBehaviorModuleData()
 	m_allowBouncing = false;
 	m_allowCollideForce = true;
 	m_killWhenRestingOnGround = false;
-	m_minFallSpeedForDamage = heightToSpeed(40.0f);
+	m_minFallHeightForDamage = 40.0f;
 	m_fallHeightDamageFactor = 1.0f;	// was 10. now is 1.
 	/*
 		thru some bizarre editing mishap, we have been double-apply pitch/roll/yaw rates
@@ -157,12 +157,11 @@ PhysicsBehaviorModuleData::PhysicsBehaviorModuleData()
 }
 
 //-------------------------------------------------------------------------------------------------
-static void parseHeightToSpeed( INI* ini, void * /*instance*/, void *store, const void* /*userData*/ )
+Real PhysicsBehaviorModuleData::getMinFallSpeedForDamage( void ) const
 {
-	// don't bother trying to remember how far we've fallen; instead,
-	// back-calc it from our speed & gravity... v = sqrt(2*g*h)
-	Real height = INI::scanReal(ini->getNextToken());
-	*(Real *)store = heightToSpeed(height);
+	// the speed a fall from MinFallHeightForDamage reaches, at the gravity a tick has in this match;
+	// worked out here and not at load, where it kept the gravity of the speed the INI loaded at
+	return heightToSpeed( m_minFallHeightForDamage );
 } 
 
 //-------------------------------------------------------------------------------------------------
@@ -183,9 +182,9 @@ static void parseFrictionPerSec( INI* ini, void * /*instance*/, void *store, con
 		{ "Mass",								INI::parsePositiveNonZeroReal,		NULL, offsetof( PhysicsBehaviorModuleData, m_mass ) },
 
 		{ "ShockResistance",		INI::parsePositiveNonZeroReal,		NULL, offsetof( PhysicsBehaviorModuleData, m_shockResistance ) },
-		{ "ShockMaxYaw",				INI::parseRetailPerFrameReal,		NULL, offsetof( PhysicsBehaviorModuleData, m_shockMaxYaw ) },
-		{ "ShockMaxPitch",			INI::parseRetailPerFrameReal,		NULL, offsetof( PhysicsBehaviorModuleData, m_shockMaxPitch ) },
-		{ "ShockMaxRoll",				INI::parseRetailPerFrameReal,		NULL, offsetof( PhysicsBehaviorModuleData, m_shockMaxRoll ) },
+		{ "ShockMaxYaw",				SPEED_FIELD( PhysicsBehaviorModuleData, m_shockMaxYaw ) },
+		{ "ShockMaxPitch",			SPEED_FIELD( PhysicsBehaviorModuleData, m_shockMaxPitch ) },
+		{ "ShockMaxRoll",				SPEED_FIELD( PhysicsBehaviorModuleData, m_shockMaxRoll ) },
 
 		{ "ForwardFriction",			parseFrictionPerSec,		NULL, offsetof( PhysicsBehaviorModuleData, m_forwardFriction ) },
 		{ "LateralFriction",			parseFrictionPerSec,		NULL, offsetof( PhysicsBehaviorModuleData, m_lateralFriction ) },
@@ -197,7 +196,7 @@ static void parseFrictionPerSec( INI* ini, void * /*instance*/, void *store, con
 		{ "AllowCollideForce",	INI::parseBool,		NULL, offsetof( PhysicsBehaviorModuleData, m_allowCollideForce ) },
 		{ "KillWhenRestingOnGround", INI::parseBool, NULL, offsetof( PhysicsBehaviorModuleData, m_killWhenRestingOnGround) },
 
-		{ "MinFallHeightForDamage",			parseHeightToSpeed,		NULL, offsetof( PhysicsBehaviorModuleData, m_minFallSpeedForDamage) },
+		{ "MinFallHeightForDamage",			INI::parseReal,		NULL, offsetof( PhysicsBehaviorModuleData, m_minFallHeightForDamage) },
 		{ "FallHeightDamageFactor",			INI::parseReal,		NULL, offsetof( PhysicsBehaviorModuleData, m_fallHeightDamageFactor) },
 		{ "PitchRollYawFactor",			INI::parseReal,		NULL, offsetof( PhysicsBehaviorModuleData, m_pitchRollYawFactor) },
 
@@ -900,12 +899,12 @@ UpdateSleepTime PhysicsBehavior::update()
 		//
 		// don't bother trying to remember how far we've fallen; instead,
 		// we back-calc it from our speed & gravity... v = sqrt(2*g*h).
-		// (note that m_minFallSpeedForDamage is always POSITIVE.)
+		// (note that the min fall speed for damage is always POSITIVE.)
 		//
 		// also note: since projectiles are immune to falling damage, don't
 		// even bother doing this check here.
 		//
-		Real netSpeed = -activeVelZ - d->m_minFallSpeedForDamage;
+		Real netSpeed = -activeVelZ - d->getMinFallSpeedForDamage();
 		
 		if (netSpeed > 0.0f && m_pui == NULL)
 		{

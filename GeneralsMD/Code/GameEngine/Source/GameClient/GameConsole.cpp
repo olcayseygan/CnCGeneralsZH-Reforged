@@ -201,10 +201,11 @@ static AsciiString runCheat( const ConsoleCheat &cheat, AsciiString arguments )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The game speed in percent of retail's pace: one of the player speeds (100, 125, 150, 200), the
-	* nearest, in a skirmish or mission, 10 to 400 logic frames a second in a replay.  "reset" is the
-	* native tick, GAME_SPEED_PERCENT.  It changes how often a logic frame runs and nothing inside one, so
-	* a network game, which runs at the pace the whole room agrees on, is the one place it is refused. */
+/** In a skirmish or mission, the match's game speed in percent of retail's pace (100, 125, 150, 200):
+	* the game time a tick advances, which the match keeps from its first frame, so it is only read here;
+	* the lobby and Options > Interface set the next one.  In a replay, the playback's pace in percent of
+	* the match's, 10 to 400 logic frames a second, which is wall pacing only; "reset" puts the recorded
+	* pace back.  A network game is refused. */
 //-------------------------------------------------------------------------------------------------
 static const Int SPEED_MIN_FPS = 10;
 static const Int SPEED_MAX_FPS = 400;
@@ -218,23 +219,26 @@ static AsciiString runSpeed( AsciiString arguments )
 		return result;
 	}
 
+	if( !TheGameLogic->isInReplayGame() )
+	{
+		if( arguments.isEmpty() )
+			result.format( "speed %d%%", (Int)GAME_SPEED_PERCENT );
+		else
+			result.format( "speed: a match keeps the speed it started at, %d%%; the lobby or Options set the next", (Int)GAME_SPEED_PERCENT );
+		return result;
+	}
+
+	const Int recorded = GameEngine_matchFramesPerSecond();
 	if( !arguments.isEmpty() )
 	{
-		const Int percent = arguments.compareNoCase( "reset" ) == 0 ? PLAYER_GAME_SPEED_PERCENT_DEFAULT : atoi( arguments.str() );
-		Int fps;
-		if( TheGameLogic->isInSkirmishGame() || TheGameLogic->isInSinglePlayerGame() )
-			fps = GameEngine_framesPerSecondForSpeed( ClampPlayerGameSpeedPercent( percent ) );
-		else
-		{
-			// a replay keeps the whole range
-			fps = percent * LOGICFRAMES_PER_SECOND / GAME_SPEED_PERCENT;
-			if( fps < SPEED_MIN_FPS ) fps = SPEED_MIN_FPS;
-			if( fps > SPEED_MAX_FPS ) fps = SPEED_MAX_FPS;
-		}
+		const Int percent = arguments.compareNoCase( "reset" ) == 0 ? 100 : atoi( arguments.str() );
+		Int fps = percent * recorded / 100;
+		if( fps < SPEED_MIN_FPS ) fps = SPEED_MIN_FPS;
+		if( fps > SPEED_MAX_FPS ) fps = SPEED_MAX_FPS;
 		TheGameEngine->setFramesPerSecondLimit( fps );
 	}
 
-	result.format( "speed %d%%", TheGameEngine->getFramesPerSecondLimit() * GAME_SPEED_PERCENT / LOGICFRAMES_PER_SECOND );
+	result.format( "replay pace %d%% at game speed %d%%", TheGameEngine->getFramesPerSecondLimit() * 100 / recorded, (Int)GAME_SPEED_PERCENT );
 	return result;
 }
 

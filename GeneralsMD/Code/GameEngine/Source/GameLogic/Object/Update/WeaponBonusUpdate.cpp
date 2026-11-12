@@ -67,8 +67,8 @@ WeaponBonusUpdateModuleData::WeaponBonusUpdateModuleData()
 {
 	m_requiredAffectKindOf.clear();
 	m_forbiddenAffectKindOf.clear();
-	m_bonusDuration = 0;
-	m_bonusDelay = 0;
+	m_bonusDuration.setRaw( 0 );
+	m_bonusDelay.setRaw( 0 );
 	m_bonusRange = 0;
 	m_bonusConditionType = WEAPONBONUSCONDITION_INVALID;
 }
@@ -81,8 +81,8 @@ void WeaponBonusUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 	{
 		{ "RequiredAffectKindOf",		KindOfMaskType::parseFromINI,		NULL, offsetof( WeaponBonusUpdateModuleData, m_requiredAffectKindOf ) },		
 		{ "ForbiddenAffectKindOf",	KindOfMaskType::parseFromINI,		NULL, offsetof( WeaponBonusUpdateModuleData, m_forbiddenAffectKindOf ) },
-		{ "BonusDuration",					INI::parseDurationUnsignedInt,	NULL, offsetof( WeaponBonusUpdateModuleData, m_bonusDuration ) },
-		{ "BonusDelay",							INI::parseDurationUnsignedInt,	NULL, offsetof( WeaponBonusUpdateModuleData, m_bonusDelay ) },
+		{ "BonusDuration",					SPEED_FIELD( WeaponBonusUpdateModuleData, m_bonusDuration ) },
+		{ "BonusDelay",							SPEED_FIELD( WeaponBonusUpdateModuleData, m_bonusDelay ) },
 		{ "BonusRange",							INI::parseReal,									NULL, offsetof( WeaponBonusUpdateModuleData, m_bonusRange ) },
 		{ "BonusConditionType",			INI::parseIndexList,	TheWeaponBonusNames, offsetof( WeaponBonusUpdateModuleData, m_bonusConditionType ) },
 		{ 0, 0, 0, 0 }

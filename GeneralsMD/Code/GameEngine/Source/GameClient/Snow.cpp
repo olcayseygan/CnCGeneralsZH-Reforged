@@ -96,7 +96,7 @@ void SnowManager::updateIniSettings(void)
 static const Real WEATHER_SWAY = 0.11f;
 static const Real WEATHER_LEAN = 0.16f;
 static const Real WEATHER_SMOKE_DRIFT = 0.125f;
-static const Short WEATHER_BREEZE_PERIOD = LOGICFRAMES_PER_GAME_SECOND * 3;	// in the script breeze's units
+#define WEATHER_BREEZE_PERIOD ((Short)(LOGICFRAMES_PER_GAME_SECOND * 3))	// in the script breeze's units
 static const Short WEATHER_BREEZE_VERSION = 0x2000;	// past any count a map's scripts reach, so trees notice the switch
 static BreezeInfo s_weatherBreeze;
 

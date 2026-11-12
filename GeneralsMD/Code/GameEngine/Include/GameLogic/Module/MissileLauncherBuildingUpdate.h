@@ -46,9 +46,9 @@ class MissileLauncherBuildingUpdateModuleData : public UpdateModuleData
 {
 public:
 	SpecialPowerTemplate *m_specialPowerTemplate;		///< pointer to the special power template
-	UnsignedInt m_doorOpenTime;							///< in frames, time we should take to open the door
-	UnsignedInt m_doorWaitOpenTime;					///< in frames, time we should leave the door open after firing the superweapon
-	UnsignedInt m_doorClosingTime;					///< in frames, time it takes to close the door
+	DurationFrames m_doorOpenTime;							///< in frames, time we should take to open the door
+	DurationFrames m_doorWaitOpenTime;					///< in frames, time we should leave the door open after firing the superweapon
+	DurationFrames m_doorClosingTime;					///< in frames, time it takes to close the door
 
 	const FXList *m_openingFX;
 	const FXList *m_openFX;
@@ -60,9 +60,9 @@ public:
 	MissileLauncherBuildingUpdateModuleData()
 	{
 		m_specialPowerTemplate = NULL;
-		m_doorOpenTime = 0;
-		m_doorWaitOpenTime = 0;
-		m_doorClosingTime = 0;
+		m_doorOpenTime.setRaw( 0 );
+		m_doorWaitOpenTime.setRaw( 0 );
+		m_doorClosingTime.setRaw( 0 );
 
 		m_openingFX = m_openFX = m_waitingToCloseFX = m_closingFX = m_closedFX = NULL;
 	}
@@ -74,9 +74,9 @@ public:
 		static const FieldParse dataFieldParse[] = 
 		{
 			{ "SpecialPowerTemplate",	INI::parseSpecialPowerTemplate,					NULL, offsetof( MissileLauncherBuildingUpdateModuleData, m_specialPowerTemplate ) },
-			{ "DoorOpenTime",					INI::parseDurationUnsignedInt,	NULL, offsetof( MissileLauncherBuildingUpdateModuleData, m_doorOpenTime ) },
-			{ "DoorWaitOpenTime",			INI::parseDurationUnsignedInt,	NULL, offsetof( MissileLauncherBuildingUpdateModuleData, m_doorWaitOpenTime ) },
-			{ "DoorCloseTime",				INI::parseDurationUnsignedInt,	NULL, offsetof( MissileLauncherBuildingUpdateModuleData, m_doorClosingTime ) },
+			{ "DoorOpenTime",					SPEED_FIELD( MissileLauncherBuildingUpdateModuleData, m_doorOpenTime ) },
+			{ "DoorWaitOpenTime",			SPEED_FIELD( MissileLauncherBuildingUpdateModuleData, m_doorWaitOpenTime ) },
+			{ "DoorCloseTime",				SPEED_FIELD( MissileLauncherBuildingUpdateModuleData, m_doorClosingTime ) },
 			{ "DoorOpeningFX",				INI::parseFXList,								NULL, offsetof( MissileLauncherBuildingUpdateModuleData, m_openingFX ) },
 			{ "DoorOpenFX",						INI::parseFXList,								NULL, offsetof( MissileLauncherBuildingUpdateModuleData, m_openFX ) },
 			{ "DoorWaitingToCloseFX",	INI::parseFXList,								NULL, offsetof( MissileLauncherBuildingUpdateModuleData, m_waitingToCloseFX ) },

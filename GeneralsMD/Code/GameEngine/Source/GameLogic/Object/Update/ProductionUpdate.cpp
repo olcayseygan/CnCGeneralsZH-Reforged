@@ -103,10 +103,10 @@ ProductionUpdateModuleData::ProductionUpdateModuleData( void )
 {
 	// someday, might need separate times for each door. but not yet.
 	m_numDoorAnimations = 0;
-	m_doorOpeningTime = 0;
-	m_doorWaitOpenTime = 0;
-	m_doorClosingTime = 0;
-	m_constructionCompleteDuration = 0;
+	m_doorOpeningTime.setRaw( 0 );
+	m_doorWaitOpenTime.setRaw( 0 );
+	m_doorClosingTime.setRaw( 0 );
+	m_constructionCompleteDuration.setRaw( 0 );
 	m_quantityModifiers.clear();
 	// nine, matching the queue strip; objects that must build one at a time still say MaxQueueEntries = 1 in INI
 	m_maxQueueEntries = 9;
@@ -137,10 +137,10 @@ ProductionUpdateModuleData::ProductionUpdateModuleData( void )
 	{
 		{ "MaxQueueEntries",	INI::parseInt, NULL, offsetof( ProductionUpdateModuleData, m_maxQueueEntries ) },
 		{ "NumDoorAnimations",	INI::parseInt, NULL, offsetof( ProductionUpdateModuleData, m_numDoorAnimations ) },
-		{ "DoorOpeningTime", INI::parseDurationUnsignedInt, NULL, offsetof( ProductionUpdateModuleData, m_doorOpeningTime ) },
-		{ "DoorWaitOpenTime", INI::parseDurationUnsignedInt, NULL, offsetof( ProductionUpdateModuleData, m_doorWaitOpenTime ) },
-		{ "DoorCloseTime", INI::parseDurationUnsignedInt, NULL, offsetof( ProductionUpdateModuleData, m_doorClosingTime ) },
-		{ "ConstructionCompleteDuration", INI::parseDurationUnsignedInt, NULL, offsetof( ProductionUpdateModuleData, m_constructionCompleteDuration ) },
+		{ "DoorOpeningTime", SPEED_FIELD( ProductionUpdateModuleData, m_doorOpeningTime ) },
+		{ "DoorWaitOpenTime", SPEED_FIELD( ProductionUpdateModuleData, m_doorWaitOpenTime ) },
+		{ "DoorCloseTime", SPEED_FIELD( ProductionUpdateModuleData, m_doorClosingTime ) },
+		{ "ConstructionCompleteDuration", SPEED_FIELD( ProductionUpdateModuleData, m_constructionCompleteDuration ) },
 		{ "QuantityModifier",	parseAppendQuantityModifier, NULL, offsetof( ProductionUpdateModuleData, m_quantityModifiers ) },
 		{ "DisabledTypesToProcess",	DisabledMaskType::parseFromINI, NULL, offsetof( ProductionUpdateModuleData, m_disabledTypesToProcess ) },
 		{ 0, 0, 0, 0 }

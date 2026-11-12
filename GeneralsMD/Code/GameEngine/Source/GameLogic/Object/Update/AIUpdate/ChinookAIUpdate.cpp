@@ -616,7 +616,7 @@ public:
 					AIUpdateInterface* rappellerAI = rappeller ? rappeller->getAIUpdateInterface() : NULL;
 					if (rappellerAI)
 					{
-						rappellerAI->setDesiredSpeed(d->m_rappelSpeed);
+						rappellerAI->setDesiredSpeed(d->getRappelSpeed());
 						rappellerAI->aiRappelInto(getMachineGoalObject(), *getMachineGoalPosition(), CMD_FROM_AI);
 					}
 
@@ -879,6 +879,14 @@ ChinookAIStateMachine::~ChinookAIStateMachine()
 //-------------------------------------------------------------------------------------------------
 
 //-------------------------------------------------------------------------------------------------
+Real ChinookAIUpdateModuleData::getRappelSpeed() const
+{
+	if( m_rappelSpeed.raw() >= 0.0f )
+		return m_rappelSpeed;
+	return fabs( (Real)TheGlobalData->m_gravity ) * LOGICFRAMES_PER_GAME_SECOND * 0.5f;
+}
+
+//-------------------------------------------------------------------------------------------------
 ChinookAIUpdateModuleData::ChinookAIUpdateModuleData()
 {
 	m_numRopes = 4;
@@ -886,17 +894,17 @@ ChinookAIUpdateModuleData::ChinookAIUpdateModuleData()
 	m_ropeColor.red = 0.9f;
 	m_ropeColor.green = 0.8f;
 	m_ropeColor.blue = 0.7f;
-	m_perRopeDelayMin = 0x7fffffff;
-	m_perRopeDelayMax = 0x7fffffff;
+	m_perRopeDelayMin.setRaw( 0x7fffffff );	// a sentinel: stays 0x7fffffff frames
+	m_perRopeDelayMax.setRaw( 0x7fffffff );
 	m_ropeName = "GenericRope";
 	m_waitForRopesToDrop = true;
 	m_minDropHeight = 30.0f;
 	m_ropeFinalHeight = 0.0f;
-	m_ropeDropSpeed = 1e10f;		// um, fast.
-	m_rappelSpeed = fabs(TheGlobalData->m_gravity) * LOGICFRAMES_PER_GAME_SECOND * 0.5f;
+	m_ropeDropSpeed.setRaw( 2e11f );		// um, fast.  dist/sec: 1e10f a frame at the native speed
+	m_rappelSpeed.setRaw( -1.0f );	// none given: getRappelSpeed derives it from gravity, as this default always did
 	m_ropeWobbleLen = 10.0f;
 	m_ropeWobbleAmp = 1.0f;
-	m_ropeWobbleRate = ConvertRetailPerFrameRate(0.1f);
+	m_ropeWobbleRate.setRaw( 171.88734f );	// deg/sec: ConvertRetailPerFrameRate(0.1f) at the native speed
   m_rotorWashParticleSystem.clear();
 	m_upgradedSupplyBoost = 0;
 }
@@ -908,18 +916,18 @@ ChinookAIUpdateModuleData::ChinookAIUpdateModuleData()
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "RappelSpeed", INI::parseVelocityReal, 0, offsetof(ChinookAIUpdateModuleData, m_rappelSpeed) },
-		{ "RopeDropSpeed", INI::parseVelocityReal, 0, offsetof(ChinookAIUpdateModuleData, m_ropeDropSpeed) },
+		{ "RappelSpeed", SPEED_FIELD( ChinookAIUpdateModuleData, m_rappelSpeed ) },
+		{ "RopeDropSpeed", SPEED_FIELD( ChinookAIUpdateModuleData, m_ropeDropSpeed ) },
 		{ "RopeName", INI::parseAsciiString, 0, offsetof(ChinookAIUpdateModuleData, m_ropeName) },
 		{ "RopeFinalHeight", INI::parseReal, 0, offsetof(ChinookAIUpdateModuleData, m_ropeFinalHeight) },
 		{ "RopeWidth", INI::parseReal, 0, offsetof(ChinookAIUpdateModuleData, m_ropeWidth) },
 		{ "RopeWobbleLen", INI::parseReal, 0, offsetof(ChinookAIUpdateModuleData, m_ropeWobbleLen) },
 		{ "RopeWobbleAmplitude", INI::parseReal, 0, offsetof(ChinookAIUpdateModuleData, m_ropeWobbleAmp) },
-		{ "RopeWobbleRate", INI::parseAngularVelocityReal, 0, offsetof(ChinookAIUpdateModuleData, m_ropeWobbleRate) },
+		{ "RopeWobbleRate", SPEED_FIELD( ChinookAIUpdateModuleData, m_ropeWobbleRate ) },
 		{ "RopeColor", INI::parseRGBColor, 0, offsetof(ChinookAIUpdateModuleData, m_ropeColor) },
 		{ "NumRopes", INI::parseUnsignedInt, 0, offsetof(ChinookAIUpdateModuleData, m_numRopes) },
-		{ "PerRopeDelayMin", INI::parseDurationUnsignedInt, 0, offsetof(ChinookAIUpdateModuleData, m_perRopeDelayMin) },
-		{ "PerRopeDelayMax", INI::parseDurationUnsignedInt, 0, offsetof(ChinookAIUpdateModuleData, m_perRopeDelayMax) },
+		{ "PerRopeDelayMin", SPEED_FIELD( ChinookAIUpdateModuleData, m_perRopeDelayMin ) },
+		{ "PerRopeDelayMax", SPEED_FIELD( ChinookAIUpdateModuleData, m_perRopeDelayMax ) },
 		{ "MinDropHeight", INI::parseReal, 0, offsetof(ChinookAIUpdateModuleData, m_minDropHeight) },
 		{ "WaitForRopesToDrop", INI::parseBool, 0, offsetof(ChinookAIUpdateModuleData, m_waitForRopesToDrop) },
 		{ "RotorWashParticleSystem", INI::parseAsciiString,	NULL, offsetof( ChinookAIUpdateModuleData, m_rotorWashParticleSystem ) },

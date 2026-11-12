@@ -46,7 +46,7 @@ class WeaponTemplate;
 class AutoFindHealingUpdateModuleData : public ModuleData
 {
 public:
-	UnsignedInt			m_scanFrames;
+	DurationFrames			m_scanFrames;
 	Real						m_scanRange;
 	Real						m_neverHeal;
 	Real						m_alwaysHeal;

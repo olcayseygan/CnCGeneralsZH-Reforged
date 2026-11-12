@@ -46,11 +46,11 @@ public:
 	};
 
 	Int								m_slotCapacity;								///< max units that can be inside us
-	Real							m_exitPitchRate;
+	AngularVelocityPerFrame							m_exitPitchRate;
 	AsciiString				m_exitBone;
 	InitialPayload		m_initialPayload;
 	Real							m_healthRegen;
-	UnsignedInt				m_exitDelay;
+	DurationFrames				m_exitDelay;
 	Bool							m_scatterNearbyOnExit;
 	Bool							m_orientLikeContainerOnExit;
 	Bool							m_keepContainerVelocityOnExit;

@@ -55,7 +55,7 @@ public:
 	Real m_initialHealth;
 	
 	Real m_subdualDamageCap;								///< Subdual damage will never accumulate past this
-	UnsignedInt m_subdualDamageHealRate;		///< Every this often, we drop subdual damage...
+	DurationFrames m_subdualDamageHealRate;		///< Every this often, we drop subdual damage...
 	Real m_subdualDamageHealAmount;					///< by this much.
 
 	ActiveBodyModuleData();

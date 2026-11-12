@@ -93,13 +93,13 @@ RailroadBehaviorModuleData::RailroadBehaviorModuleData( void )
 	m_CrashFXTemplateName.clear();
 	
 	m_isLocomotive = FALSE;
-	m_runningGarrisonSpeedMax = ConvertRetailPerFrameRate(1.0f);
-	m_killSpeedMin = ConvertRetailPerFrameRate(1.0f);
-	m_speedMax = ConvertRetailPerFrameRate(4.0f);
-	m_acceleration = ConvertRetailPerFrameFactor(1.01f);
-	m_braking = ConvertRetailPerFrameFactor(0.99f);
-	m_friction = ConvertRetailPerFrameFactor(0.97f);
-	m_waitAtStationTime = LOGICFRAMES_PER_GAME_SECOND * 5;
+	m_runningGarrisonSpeedMax.setRaw( 1.0f );
+	m_killSpeedMin.setRaw( 1.0f );
+	m_speedMax.setRaw( 4.0f );
+	m_acceleration.setRaw( 1.01f );
+	m_braking.setRaw( 0.99f );
+	m_friction.setRaw( 0.97f );
+	m_waitAtStationTime.setRaw( 5000 );
 }  // end RailroadBehaviorModuleData
 
 

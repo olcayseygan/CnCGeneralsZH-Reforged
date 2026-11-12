@@ -52,7 +52,7 @@ public:
 	Int										m_healingAmount;
 	Real									m_startRadius; 
 	Real									m_finalRadius; 
-	Real									m_radiusGrowRate; 
+	RetailPerFrame									m_radiusGrowRate; 
 	KindOfMaskType				m_kindOf;	//Only these types can heal -- defaults to everything.
 	const ParticleSystemTemplate*				m_radiusParticleSystemTmpl;					//Optional particle system meant to apply to entire effect for entire duration.
 
@@ -60,7 +60,7 @@ public:
 	{
 		m_finalRadius = 200.0f;
 		m_startRadius = 0.0f;
-    m_radiusGrowRate = ConvertRetailPerFrameRate(10.0f);
+    m_radiusGrowRate.setRaw( 10.0f );
 		m_radiusParticleSystemTmpl = NULL;
 		SET_ALL_KINDOFMASK_BITS( m_kindOf );
 	}
@@ -73,7 +73,7 @@ public:
 		{
 			{ "StartRadius",						         INI::parseReal,									 NULL, offsetof( GrantStealthBehaviorModuleData, m_startRadius ) },
 			{ "FinalRadius",						         INI::parseReal,									 NULL, offsetof( GrantStealthBehaviorModuleData, m_finalRadius ) },
-			{ "RadiusGrowRate",						       INI::parseRetailPerFrameReal,								 NULL, offsetof( GrantStealthBehaviorModuleData, m_radiusGrowRate ) },
+			{ "RadiusGrowRate",						       SPEED_FIELD( GrantStealthBehaviorModuleData, m_radiusGrowRate ) },
 			{ "KindOf",						    KindOfMaskType::parseFromINI,					       NULL, offsetof( GrantStealthBehaviorModuleData, m_kindOf ) },		
 			{ "RadiusParticleSystemName",				 INI::parseParticleSystemTemplate, NULL, offsetof( GrantStealthBehaviorModuleData, m_radiusParticleSystemTmpl ) },
 			{ 0, 0, 0, 0 }

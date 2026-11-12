@@ -89,7 +89,7 @@ void W3DTruckDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "MidRightMidTireBone", INI::parseAsciiString, NULL, offsetof(W3DTruckDrawModuleData, m_midMidRightTireBoneName) },
 
 		{ "TireRotationMultiplier", INI::parseReal, NULL, offsetof(W3DTruckDrawModuleData, m_rotationSpeedMultiplier) },
-		{ "PowerslideRotationAddition", INI::parseRetailPerFrameReal, NULL, offsetof(W3DTruckDrawModuleData, m_powerslideRotationAddition) },
+		{ "PowerslideRotationAddition", SPEED_FIELD( W3DTruckDrawModuleData, m_powerslideRotationAddition ) },
 		{ "CabBone", INI::parseAsciiString, NULL, offsetof(W3DTruckDrawModuleData, m_cabBoneName) },
 		{ "TrailerBone", INI::parseAsciiString, NULL, offsetof(W3DTruckDrawModuleData, m_trailerBoneName) },
 		{ "CabRotationMultiplier", INI::parseReal, NULL, offsetof(W3DTruckDrawModuleData, m_cabRotationFactor) },

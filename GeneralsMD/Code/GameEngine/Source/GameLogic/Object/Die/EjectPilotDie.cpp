@@ -45,7 +45,7 @@
 EjectPilotDieModuleData::EjectPilotDieModuleData() :
 	m_oclInAir(NULL),
 	m_oclOnGround(NULL),
-	m_invulnerableTime(0)
+	m_invulnerableTime(DurationFrames::fromRaw(0))
 {
 }
 
@@ -59,7 +59,7 @@ void EjectPilotDieModuleData::buildFieldParse(MultiIniFieldParse& p)
 	{
 		{ "AirCreationList",		INI::parseObjectCreationList,		NULL, offsetof( EjectPilotDieModuleData, m_oclInAir ) },
 		{ "GroundCreationList",		INI::parseObjectCreationList,		NULL, offsetof( EjectPilotDieModuleData, m_oclOnGround ) },
-		{	"InvulnerableTime",  INI::parseDurationUnsignedInt, NULL, offsetof(EjectPilotDieModuleData, m_invulnerableTime ) },
+		{	"InvulnerableTime",  SPEED_FIELD( EjectPilotDieModuleData, m_invulnerableTime ) },
 
 		{ 0, 0, 0, 0 }
 	};

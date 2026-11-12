@@ -743,20 +743,6 @@ void INI::parseAngleReal( INI *ini, void * /*instance*/,
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Parse an angular velocity in degrees-per-sec and store the rads-per-frame value of that degree
-	* in a Real */
-//-------------------------------------------------------------------------------------------------
-void INI::parseAngularVelocityReal( INI *ini, void * /*instance*/, 
-																			void *store, const void *userData )
-{
-	const char *token = ini->getNextToken();
-
-	// scan the int and convert to radian and store as a real
-	*(Real *)store = ConvertAngularVelocityInDegreesPerSecToRadsPerFrame(scanReal( token ));
-
-}
-
-//-------------------------------------------------------------------------------------------------
 /** Parse Bool from buffer and assign at location 'store'.  The buffer token must
 	* be in the form of a string "Yes" or "No" (case is ignored) */
 //-------------------------------------------------------------------------------------------------
@@ -1899,79 +1885,65 @@ void INI::parseGameClientRandomVariable( INI* ini, void * /*instance*/, void *st
 }
 
 //-------------------------------------------------------------------------------------------------
-// parse a duration in msec and convert to duration in frames
-void INI::parseDurationReal( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
+// The SpeedScaled fields (GameCommon.h): the number is kept as the INI wrote it, scanned as the old
+// baking parser scanned it, and converted on every read.  A duration was scanned unsigned whatever
+// field it went into, so an Int field keeps the unsigned number's bits as the old store did.
+static void scanSpeedRaw( INI *ini, Real *raw ) { *raw = INI::scanReal( ini->getNextToken() ); }
+static void scanSpeedRaw( INI *ini, Int *raw ) { *raw = INI::scanInt( ini->getNextToken() ); }
+static void scanSpeedRaw( INI *ini, UnsignedInt *raw ) { *raw = INI::scanUnsignedInt( ini->getNextToken() ); }
+static void scanSpeedRaw( INI *ini, Coord3D *raw ) { INI::parseCoord3D( ini, NULL, raw, NULL ); }
+
+template < SpeedKind K, typename T >
+void SpeedScaled< K, T >::parse( INI *ini, void * /*instance*/, void *store, const void * /*userData*/ )
 {
-	Real val = scanReal(ini->getNextToken());
-	*(Real *)store = ConvertDurationFromMsecsToFrames(val);
+	T raw;
+	scanSpeedRaw( ini, &raw );
+	*(SpeedScaled *)store = fromRaw( raw );
 }
 
-//-------------------------------------------------------------------------------------------------
-// parse a duration in msec and convert to duration in integral number of frames, (unsignedint) rounding UP
-void INI::parseDurationUnsignedInt( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
+template <>
+void SpeedScaled< SPEED_DURATION, Int >::parse( INI *ini, void * /*instance*/, void *store, const void * /*userData*/ )
 {
-	UnsignedInt val = scanUnsignedInt(ini->getNextToken());
-	*(UnsignedInt *)store = floatToUnsignedAsMsvc(ceilf(ConvertDurationFromMsecsToFrames((Real)val)));	// S8: as MSVC x64 converts it
+	*(SpeedScaled *)store = fromRaw( (Int)INI::scanUnsignedInt( ini->getNextToken() ) );
 }
 
-// ------------------------------------------------------------------------------------------------
-// parse a duration in msec and convert to duration in integral number of frames, (unsignedshort) rounding UP
-void INI::parseDurationUnsignedShort( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
+// The old parser converted the msec and then narrowed the frames; this keeps the msec, so it has to
+// fit.  Nothing the game ships comes near 65535 msec.
+template <>
+void SpeedScaled< SPEED_DURATION, UnsignedShort >::parse( INI *ini, void * /*instance*/, void *store, const void * /*userData*/ )
 {
-	UnsignedInt val = scanUnsignedInt(ini->getNextToken());
-	*(UnsignedShort *)store = floatToUnsignedShortAsMsvc(ceilf(ConvertDurationFromMsecsToFrames((Real)val)));	// S8
+	const UnsignedInt val = INI::scanUnsignedInt( ini->getNextToken() );
+	if( val > 0xFFFF )
+		throw INI_INVALID_DATA;
+	*(SpeedScaled *)store = fromRaw( (UnsignedShort)val );
 }
 
-//-------------------------------------------------------------------------------------------------
-// parse acceleration in (dist/sec) and convert to (dist/frame)
-void INI::parseVelocityReal( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
-{
-	const char *token = ini->getNextToken();
-	Real val = scanReal(token);
-	*(Real *)store = ConvertVelocityInSecsToFrames(val);
-}
+template class SpeedScaled< SPEED_DURATION, UnsignedInt >;
+template class SpeedScaled< SPEED_DURATION, Int >;
+template class SpeedScaled< SPEED_DURATION, UnsignedShort >;
+template class SpeedScaled< SPEED_DURATION, Real >;
+template class SpeedScaled< SPEED_VELOCITY, Real >;
+template class SpeedScaled< SPEED_ACCELERATION, Real >;
+template class SpeedScaled< SPEED_ANGULAR_VELOCITY, Real >;
+template class SpeedScaled< SPEED_RETAIL_FRAMES, UnsignedInt >;
+template class SpeedScaled< SPEED_RETAIL_FRAMES, Int >;
+template class SpeedScaled< SPEED_RETAIL_FRAMES, Real >;
+template class SpeedScaled< SPEED_RETAIL_FRAME_RATIO, Real >;
+template class SpeedScaled< SPEED_RETAIL_PER_FRAME, Real >;
+template class SpeedScaled< SPEED_RETAIL_PER_FRAME_SQUARED, Real >;
+template class SpeedScaled< SPEED_RETAIL_PER_FRAME_FACTOR, Real >;
+template class SpeedScaled< SPEED_RETAIL_PER_FRAME, Coord3D >;
 
-//-------------------------------------------------------------------------------------------------
-// parse acceleration in (dist/sec^2) and convert to (dist/frame^2)
-void INI::parseAccelerationReal( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
+// a particle system's random ranges, as INI::parseGameClientRandomVariable reads one
+template < SpeedKind K, typename RV >
+void SpeedScaledRandom< K, RV >::parse( INI *ini, void *instance, void *store, const void *userData )
 {
-	const char *token = ini->getNextToken();
-	Real val = scanReal(token);
-	*(Real *)store = ConvertAccelerationInSecsToFrames(val);
+	INI::parseGameClientRandomVariable( ini, instance, &( (SpeedScaledRandom *)store )->raw(), userData );
 }
-
-//-------------------------------------------------------------------------------------------------
-// fields that EA wrote as a count of 30 Hz frames, or as an amount applied every 30 Hz frame; like
-// the msec and per-second parsers above they take the game speed (GAME_SPEED_PERCENT, GameCommon.h)
-void INI::parseRetailFramesUnsignedInt( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
-{
-	*(UnsignedInt *)store = ConvertRetailFrames(scanUnsignedInt(ini->getNextToken()));
-}
-
-void INI::parseRetailFramesInt( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
-{
-	*(Int *)store = ConvertRetailFrames(scanInt(ini->getNextToken()));
-}
-
-void INI::parseRetailFramesReal( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
-{
-	*(Real *)store = ConvertRetailFrames(scanReal(ini->getNextToken()));
-}
-
-void INI::parseRetailFrameRatioReal( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
-{
-	*(Real *)store = ConvertRetailFrameRatio(scanReal(ini->getNextToken()));
-}
-
-void INI::parseRetailPerFrameReal( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
-{
-	*(Real *)store = ConvertRetailPerFrameRate(scanReal(ini->getNextToken()));
-}
-
-void INI::parseRetailPerFrameFactorReal( INI *ini, void * /*instance*/, void *store, const void* /*userData*/ )
-{
-	*(Real *)store = ConvertRetailPerFrameFactor(scanReal(ini->getNextToken()));
-}
+template class SpeedScaledRandom< SPEED_RETAIL_FRAMES, GameClientRandomVariable >;
+template class SpeedScaledRandom< SPEED_RETAIL_BURST_DELAY, GameClientRandomVariable >;
+template class SpeedScaledRandom< SPEED_RETAIL_PER_FRAME, GameClientRandomVariable >;
+template class SpeedScaledRandom< SPEED_RETAIL_PER_FRAME_FACTOR, GameClientRandomVariable >;
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------

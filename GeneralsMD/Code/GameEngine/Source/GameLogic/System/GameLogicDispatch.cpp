@@ -773,7 +773,8 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 			if ( msg->getArgumentCount() >= 3 )
 				rankPoints = msg->getArgument( 2 )->integer;
 			
-			if ( msg->getArgumentCount() >= 4 )
+			// 0 leaves the pace alone (a replay that recorded none)
+			if ( msg->getArgumentCount() >= 4 && msg->getArgument( 3 )->integer != 0 )
 			{
 				Int maxFPS = msg->getArgument( 3 )->integer;
 				if (maxFPS < 1 || maxFPS > 1000)
@@ -791,6 +792,15 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 				 run once more on the freshly seeded stream - a draw a copy with -noshellmap, or a replay
 				 started from the command line, never made.  The recorder writes this same number. */
 			InitRandom( GetGameLogicRandomSeed() );
+
+			/* The game time a tick advances, for the whole match: before the map loads, since the map's
+				 objects read it from their first frame.  A start without the argument (the shell map, -file)
+				 plays the native speed, as does any percent that is not one of the player's. */
+			Int gameSpeedPercent = NATIVE_GAME_SPEED_PERCENT;
+			if ( msg->getArgumentCount() >= 5 && GameSpeed_isAllowed( msg->getArgument( 4 )->integer ) )
+				gameSpeedPercent = msg->getArgument( 4 )->integer;
+			GameSpeed_set( gameSpeedPercent );
+			DEBUG_LOG(("MSG_NEW_GAME: mode %d at game speed %d, %d ticks a game second\n", gameMode, gameSpeedPercent, (Int)LOGICFRAMES_PER_GAME_SECOND));
 
 			// prepare for new game
 			prepareNewGame( gameMode, diff, rankPoints );
@@ -2653,7 +2663,7 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 				smoke->setFiniteSystemLifetime( SIGNAL_HALF_FRAMES );
 				smoke->setLifetimeRange( SIGNAL_HALF_FRAMES, SIGNAL_HALF_FRAMES );
 				// the template's second alpha key is its fade to nothing, timed for a five second puff
-				smoke->m_alphaKey[ 1 ].frame = SIGNAL_HALF_FRAMES;
+				smoke->m_alphaKey[ 1 ].frame.setRaw( ConvertFramesToRetail( SIGNAL_HALF_FRAMES ) );	// the template keeps retail frames
 				smoke->m_alphaKey[ 0 ].var.setRange( SIGNAL_SMOKE_ALPHA_MIN, SIGNAL_SMOKE_ALPHA_MAX );
 				smoke->setSizeMultiplier( SIGNAL_SMOKE_SIZE_SCALE );
 				smoke->setBurstCountMultiplier( SIGNAL_SMOKE_DENSITY_SCALE );

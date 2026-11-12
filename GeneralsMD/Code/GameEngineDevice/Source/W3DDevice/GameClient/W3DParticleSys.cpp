@@ -1753,9 +1753,9 @@ static void updateGroundFields( const std::vector<ParticleSystem *> &systems )
 			state.radius = radius;
 
 			// a puddle the size a particle reaches halfway through its life
-			const Real half = 0.5f * midValue( sys->m_lifetime );
-			const Real rate = midValue( sys->m_sizeRate );
-			const Real damping = midValue( sys->m_sizeRateDamping );
+			const Real half = 0.5f * midValue( sys->m_lifetime.get() );
+			const Real rate = midValue( sys->m_sizeRate.get() );
+			const Real damping = midValue( sys->m_sizeRateDamping.get() );
 			const Real growth = damping < 1.0f ? rate * (1.0f - powf( damping, half )) / (1.0f - damping) : rate * half;
 			state.size = WWMath::Max( midValue( sys->m_startSize ) + growth, 1.0f );
 

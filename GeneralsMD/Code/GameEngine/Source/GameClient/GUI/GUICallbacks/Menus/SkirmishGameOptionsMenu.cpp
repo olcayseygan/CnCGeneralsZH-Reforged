@@ -512,8 +512,8 @@ void reallyDoStart( void )
 
 	// on the game, so the replay's header carries it as a network lobby's does
 	TheSkirmishGameInfo->setGameSpeedPercent( chosenGameSpeedPercent() );
-	const Int maxFPS = GameEngine_matchFramesPerSecond( TheSkirmishGameInfo->getGameSpeedPercent() );
-	DEBUG_LOG(("Game speed %d%%: %d logic frames a second\n", TheSkirmishGameInfo->getGameSpeedPercent(), maxFPS));
+	const Int gameSpeedPercent = TheSkirmishGameInfo->getGameSpeedPercent();
+	DEBUG_LOG(("Game speed %d%%: %d logic frames a second\n", gameSpeedPercent, GameEngine_matchFramesPerSecond()));
 
   TheWritableGlobalData->m_mapName = TheSkirmishGameInfo->getMap();
   TheSkirmishGameInfo->startGame(0);
@@ -533,7 +533,7 @@ void reallyDoStart( void )
 		msg->appendIntegerArgument(GAME_SKIRMISH);
 		msg->appendIntegerArgument(DIFFICULTY_NORMAL);	// not really used; just specified so we can add the game speed last
 		msg->appendIntegerArgument(0);									// not really used; just specified so we can add the game speed last
-		msg->appendIntegerArgument(maxFPS);							// FPS limit
+		GameEngine_appendNewGameRates( msg, gameSpeedPercent );
 	}
 	else
 	{
@@ -552,7 +552,7 @@ void reallyDoStart( void )
 		msg->appendIntegerArgument(GAME_SINGLE_PLAYER);
 		msg->appendIntegerArgument(DIFFICULTY_NORMAL);	// not really used; just specified so we can add the game speed last
 		msg->appendIntegerArgument(0);									// not really used; just specified so we can add the game speed last
-		msg->appendIntegerArgument(maxFPS);							// FPS limit
+		GameEngine_appendNewGameRates( msg, gameSpeedPercent );
 	}
 }
 

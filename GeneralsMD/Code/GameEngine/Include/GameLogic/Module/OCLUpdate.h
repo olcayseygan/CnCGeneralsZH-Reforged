@@ -52,8 +52,8 @@ public:
 
 	const ObjectCreationList *	m_ocl;
 	FactionOCLList							m_factionOCL;
-	UnsignedInt									m_minDelay;
-	UnsignedInt									m_maxDelay;
+	DurationFrames									m_minDelay;
+	DurationFrames									m_maxDelay;
 	Bool												m_isCreateAtEdge;				///< Otherwise, it is created on top of myself
 	Bool												m_isFactionTriggered;		///< Faction has to be present before update will happen
 	

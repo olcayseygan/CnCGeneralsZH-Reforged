@@ -39,7 +39,7 @@
 RadarJamSpecialPowerModuleData::RadarJamSpecialPowerModuleData( void )
 {
 	m_radius = 0.0f;
-	m_durationFrames = 0;
+	m_durationFrames.setRaw( 0 );
 	m_fx = NULL;
 	m_ocl = NULL;
 }
@@ -52,7 +52,7 @@ RadarJamSpecialPowerModuleData::RadarJamSpecialPowerModuleData( void )
 	static const FieldParse dataFieldParse[] =
 	{
 		{ "Radius",		INI::parseReal,									NULL, offsetof( RadarJamSpecialPowerModuleData, m_radius ) },
-		{ "Duration",	INI::parseDurationUnsignedInt,	NULL, offsetof( RadarJamSpecialPowerModuleData, m_durationFrames ) },
+		{ "Duration",	SPEED_FIELD( RadarJamSpecialPowerModuleData, m_durationFrames ) },
 		{ "FX",				INI::parseFXList,								NULL, offsetof( RadarJamSpecialPowerModuleData, m_fx ) },
 		{ "OCL",			INI::parseObjectCreationList,		NULL, offsetof( RadarJamSpecialPowerModuleData, m_ocl ) },
 		{ 0, 0, 0, 0 }

@@ -58,9 +58,9 @@
 PointDefenseLaserUpdateModuleData::PointDefenseLaserUpdateModuleData()
 {
 	m_weaponTemplate		= NULL;
-	m_scanFrames				= 0;
+	m_scanFrames.setRaw( 0 );
 	m_scanRange					= 0.0f;
-	m_velocityFactor		= 0.0f;
+	m_velocityFactor.setRaw( 0.0f );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -73,9 +73,9 @@ PointDefenseLaserUpdateModuleData::PointDefenseLaserUpdateModuleData()
 		{ "WeaponTemplate",				INI::parseWeaponTemplate,				NULL, offsetof( PointDefenseLaserUpdateModuleData, m_weaponTemplate ) },
 		{ "PrimaryTargetTypes",		KindOfMaskType::parseFromINI,								NULL, offsetof( PointDefenseLaserUpdateModuleData, m_primaryTargetKindOf ) },
 		{ "SecondaryTargetTypes",	KindOfMaskType::parseFromINI,								NULL, offsetof( PointDefenseLaserUpdateModuleData, m_secondaryTargetKindOf ) },
-		{ "ScanRate",							INI::parseDurationUnsignedInt,	NULL, offsetof( PointDefenseLaserUpdateModuleData, m_scanFrames ) },
+		{ "ScanRate",							SPEED_FIELD( PointDefenseLaserUpdateModuleData, m_scanFrames ) },
 		{ "ScanRange",						INI::parseReal,									NULL, offsetof( PointDefenseLaserUpdateModuleData, m_scanRange ) },
-		{ "PredictTargetVelocityFactor", INI::parseRetailFrameRatioReal,			NULL, offsetof( PointDefenseLaserUpdateModuleData, m_velocityFactor ) },
+		{ "PredictTargetVelocityFactor", SPEED_FIELD( PointDefenseLaserUpdateModuleData, m_velocityFactor ) },
 		{ "RequiredUpgrade",			INI::parseAsciiString,					NULL, offsetof( PointDefenseLaserUpdateModuleData, m_requiredUpgrade ) },
 		{ 0, 0, 0, 0 }
 	};

@@ -79,7 +79,7 @@ static const Real JET_STEEPEST_DESCENT = 0.27f;	// tan 15 degrees: a jet above i
 static const Real JET_FINAL_DIST = 150.0f;			// the straight final after the circuit's turn in
 // the jet's height servo settles this many frames of travel short of a height target moving away
 // under it, so a target this far ahead holds the jet on a slope (measured: 10 u/s down at 60 u/s)
-static const Real JET_HEIGHT_LAG_FRAMES = LOGICFRAMES_PER_GAME_SECOND * 0.1f;
+#define JET_HEIGHT_LAG_FRAMES ((Real)(LOGICFRAMES_PER_GAME_SECOND * 0.1f))
 
 /**
 	Height above the runway, dist before the point where it meets it, of a straight slope that rounds
@@ -450,11 +450,8 @@ protected:
 private:
 	Int m_checkAirfield;
 
-	enum
-	{
-		// only recheck for new airfields every second or so
-		HOW_OFTEN_TO_CHECK = LOGICFRAMES_PER_GAME_SECOND
-	};
+	// only recheck for new airfields every second or so
+	#define HOW_OFTEN_TO_CHECK ((Int)LOGICFRAMES_PER_GAME_SECOND)
 
 public:
 	JetOrHeliCirclingDeadAirfieldState( StateMachine *machine ) : 
@@ -1984,17 +1981,17 @@ JetAIUpdateModuleData::JetAIUpdateModuleData()
 	m_minHeight = 0.0f;
 	m_parkingOffset = 0.0f;
 	m_sneakyOffsetWhenAttacking = 0.0f;
-	m_takeoffPause = 0;
+	m_takeoffPause.setRaw( 0 );
 	m_attackingLoco = LOCOMOTORSET_NORMAL;
 	m_returningLoco = LOCOMOTORSET_NORMAL;
-	m_attackLocoPersistTime = 0;
-	m_attackersMissPersistTime = 0;
-	m_lockonTime = 0;
+	m_attackLocoPersistTime.setRaw( 0 );
+	m_attackersMissPersistTime.setRaw( 0 );
+	m_lockonTime.setRaw( 0 );
 	m_lockonCursor.clear();
 	m_lockonInitialDist = 100;
-	m_lockonFreq = ConvertRetailPerFrameRate(0.5f);
+	m_lockonFreq.setRaw( 0.5f );
 	m_lockonAngleSpin = 720;
-	m_returnToBaseIdleTime = 0;
+	m_returnToBaseIdleTime.setRaw( 0 );
 	m_kamikazeRange = 0.0f;
 }
 
@@ -2009,22 +2006,22 @@ JetAIUpdateModuleData::JetAIUpdateModuleData()
 		{ "NeedsRunway",									INI::parseBool, NULL, offsetof( JetAIUpdateModuleData, m_needsRunway ) },
 		{ "KeepsParkingSpaceWhenAirborne",INI::parseBool, NULL, offsetof( JetAIUpdateModuleData, m_keepsParkingSpaceWhenAirborne ) },
 		{ "TakeoffDistForMaxLift",				INI::parsePercentToReal, NULL, offsetof( JetAIUpdateModuleData, m_takeoffDistForMaxLift ) },
-		{ "TakeoffPause",									INI::parseDurationUnsignedInt, NULL, offsetof( JetAIUpdateModuleData, m_takeoffPause ) },
+		{ "TakeoffPause",									SPEED_FIELD( JetAIUpdateModuleData, m_takeoffPause ) },
 		{ "MinHeight",										INI::parseReal, NULL, offsetof( JetAIUpdateModuleData, m_minHeight ) },
 		{ "ParkingOffset",								INI::parseReal, NULL, offsetof( JetAIUpdateModuleData, m_parkingOffset ) },
 		{ "SneakyOffsetWhenAttacking",		INI::parseReal, NULL, offsetof( JetAIUpdateModuleData, m_sneakyOffsetWhenAttacking ) },
 		{ "AttackLocomotorType",					INI::parseIndexList, TheLocomotorSetNames, offsetof( JetAIUpdateModuleData, m_attackingLoco ) },
-		{ "AttackLocomotorPersistTime",		INI::parseDurationUnsignedInt, NULL, offsetof( JetAIUpdateModuleData, m_attackLocoPersistTime ) },
-		{ "AttackersMissPersistTime",			INI::parseDurationUnsignedInt, NULL, offsetof( JetAIUpdateModuleData, m_attackersMissPersistTime ) },
+		{ "AttackLocomotorPersistTime",		SPEED_FIELD( JetAIUpdateModuleData, m_attackLocoPersistTime ) },
+		{ "AttackersMissPersistTime",			SPEED_FIELD( JetAIUpdateModuleData, m_attackersMissPersistTime ) },
 		{ "ReturnForAmmoLocomotorType",		INI::parseIndexList, TheLocomotorSetNames, offsetof( JetAIUpdateModuleData, m_returningLoco ) },
-		{ "LockonTime",										INI::parseDurationUnsignedInt, NULL, offsetof( JetAIUpdateModuleData, m_lockonTime ) },
+		{ "LockonTime",										SPEED_FIELD( JetAIUpdateModuleData, m_lockonTime ) },
 		{ "LockonCursor",									INI::parseAsciiString, NULL, offsetof( JetAIUpdateModuleData, m_lockonCursor ) },
 		{ "LockonInitialDist",						INI::parseReal, NULL, offsetof( JetAIUpdateModuleData, m_lockonInitialDist ) },
 		// ticks scale with frames squared over LockonTime, so per frame it halves
-		{ "LockonFreq",										INI::parseRetailPerFrameReal, NULL, offsetof( JetAIUpdateModuleData, m_lockonFreq ) },
+		{ "LockonFreq",										SPEED_FIELD( JetAIUpdateModuleData, m_lockonFreq ) },
 		{ "LockonAngleSpin",							INI::parseAngleReal, NULL, offsetof( JetAIUpdateModuleData, m_lockonAngleSpin ) },
 		{ "LockonBlinky",									INI::parseBool, NULL, offsetof( JetAIUpdateModuleData, m_lockonBlinky ) },
-		{ "ReturnToBaseIdleTime",					INI::parseDurationUnsignedInt, NULL, offsetof( JetAIUpdateModuleData, m_returnToBaseIdleTime ) },
+		{ "ReturnToBaseIdleTime",					SPEED_FIELD( JetAIUpdateModuleData, m_returnToBaseIdleTime ) },
 		{ "KamikazeRange",								INI::parseReal, NULL, offsetof( JetAIUpdateModuleData, m_kamikazeRange ) },
 		{ 0, 0, 0, 0 }
 	};

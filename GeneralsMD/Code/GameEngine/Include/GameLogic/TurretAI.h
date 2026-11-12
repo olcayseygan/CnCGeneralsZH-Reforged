@@ -36,10 +36,11 @@
 #include "Common/GameMemory.h"
 #include "Common/GameCommon.h"
 
-// radians a frame for a turret whose INI names no TurretTurnRate or TurretPitchRate; EA's 0.01 was a
-// retail (30 Hz) frame's, and left as it was every such barrel rose twice as fast at 60 Hz
-const Real DEFAULT_TURN_RATE = ConvertRetailPerFrameRate(0.01f);
-const Real DEFAULT_PITCH_RATE = ConvertRetailPerFrameRate(0.01f);
+// degrees a second for a turret whose INI names no TurretTurnRate or TurretPitchRate; EA's 0.01 was
+// radians a retail (30 Hz) frame, and this is the number that gives what ConvertRetailPerFrameRate
+// made of it at the native speed, bit for bit
+#define DEFAULT_TURN_RATE_DEG_PER_SEC 17.188734f
+#define DEFAULT_PITCH_RATE_DEG_PER_SEC 17.188734f
 
 /** 
  * The TurretAI state IDs.
@@ -221,8 +222,8 @@ class TurretAIData : public MemoryPoolObject
 {
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(TurretAIData, "TurretAIData")		
 public:
-	Real						m_turnRate;
-	Real						m_pitchRate;
+	AngularVelocityPerFrame						m_turnRate;
+	AngularVelocityPerFrame						m_pitchRate;
 	Real						m_naturalTurretAngle;
 	Real						m_yawLimit;							///< how far either side of the natural angle the turret can swing; PI is all the way round
 	Real						m_naturalTurretPitch;
@@ -233,13 +234,13 @@ public:
 	Real						m_groundUnitPitch;			///< dependent on allowspitch. defaults to 0 (horizontal). The lowest pitch allowed when firing at ground units to give the weapon an arc.  jba
 	UnsignedInt			m_turretWeaponSlots;		///< which WeaponSlots are controlled by this turret
 #ifdef INTER_TURRET_DELAY
-	UnsignedInt			m_interTurretDelay;			///< special-case for multiturret battleships
+	DurationFrames			m_interTurretDelay;			///< special-case for multiturret battleships
 #endif
 	Real						m_minIdleScanAngle;			///< max angle the turret can turn while idling
 	Real						m_maxIdleScanAngle;			///< max angle the turret can turn while idling
-	UnsignedInt			m_minIdleScanInterval;	///< min interval between idle scans
-	UnsignedInt			m_maxIdleScanInterval;	///< max interval between idle scans
-	UnsignedInt			m_recenterTime;					///< time to wait before recentering turret
+	DurationFrames			m_minIdleScanInterval;	///< min interval between idle scans
+	DurationFrames			m_maxIdleScanInterval;	///< max interval between idle scans
+	DurationFrames			m_recenterTime;					///< time to wait before recentering turret
 	Bool						m_initiallyDisabled;		///< manually controlled and disabled.
 	Bool						m_firesWhileTurning;    ///< so the firing state does not instantly expire the turning state
 	Bool						m_isAllowsPitch;				///< This type of turret can pitch up and down as well as spin

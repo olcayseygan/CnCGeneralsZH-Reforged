@@ -62,10 +62,10 @@ class StructureCollapseUpdateModuleData : public UpdateModuleData
 {
 public:
 	DieMuxData				m_dieMuxData;
-	Int								m_minCollapseDelay;
-	Int								m_maxCollapseDelay;
-	Int								m_minBurstDelay;
-	Int								m_maxBurstDelay;
+	DurationFramesInt								m_minCollapseDelay;
+	DurationFramesInt								m_maxCollapseDelay;
+	DurationFramesInt								m_minBurstDelay;
+	DurationFramesInt								m_maxBurstDelay;
 	Int								m_bigBurstFrequency;
 	Real							m_collapseDamping;
 	Real							m_maxShudder;
@@ -76,10 +76,10 @@ public:
 
 	StructureCollapseUpdateModuleData()
 	{
-		m_minCollapseDelay = 0;
-		m_maxCollapseDelay = 0;
-		m_minBurstDelay = ConvertRetailFrames( 9999 );
-		m_maxBurstDelay = ConvertRetailFrames( 9999 );
+		m_minCollapseDelay.setRaw( 0 );
+		m_maxCollapseDelay.setRaw( 0 );
+		m_minBurstDelay.setRaw( 333280 );	// msec: ConvertRetailFrames( 9999 ) at the native speed
+		m_maxBurstDelay.setRaw( 333280 );
 		m_maxShudder = 0;
 		m_collapseDamping = 0.0;
 		m_bigBurstFrequency = 0;

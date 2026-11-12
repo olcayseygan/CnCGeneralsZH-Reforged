@@ -67,10 +67,10 @@ TransportContainModuleData::TransportContainModuleData()
   m_armedRidersUpgradeWeaponSet = FALSE;
 	m_resetMoodCheckTimeOnExit = true;
 	m_destroyRidersWhoAreNotFreeToExit = false;
-	m_exitPitchRate = 0.0f;
+	m_exitPitchRate.setRaw( 0.0f );
 	m_initialPayload.count = 0;
 	m_healthRegen = 0.0f;
-	m_exitDelay = 0;
+	m_exitDelay.setRaw( 0 );
 	m_isDelayExitInAir = FALSE;
 
 	//
@@ -110,10 +110,10 @@ void TransportContainModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "ResetMoodCheckTimeOnExit",	INI::parseBool,		NULL, offsetof( TransportContainModuleData, m_resetMoodCheckTimeOnExit ) },
 		{ "DestroyRidersWhoAreNotFreeToExit",	INI::parseBool,		NULL, offsetof( TransportContainModuleData, m_destroyRidersWhoAreNotFreeToExit ) },
 		{ "ExitBone",	INI::parseAsciiString,		NULL, offsetof( TransportContainModuleData, m_exitBone ) },
-		{ "ExitPitchRate",	INI::parseAngularVelocityReal,		NULL, offsetof( TransportContainModuleData, m_exitPitchRate ) },
+		{ "ExitPitchRate",	SPEED_FIELD( TransportContainModuleData, m_exitPitchRate ) },
 		{ "InitialPayload", parseInitialPayload, NULL, 0 },
 		{ "HealthRegen%PerSec", INI::parseReal, NULL, offsetof( TransportContainModuleData, m_healthRegen ) },
-		{ "ExitDelay",	INI::parseDurationUnsignedInt,		NULL, offsetof( TransportContainModuleData, m_exitDelay ) },
+		{ "ExitDelay",	SPEED_FIELD( TransportContainModuleData, m_exitDelay ) },
 		{ "ArmedRidersUpgradeMyWeaponSet",	INI::parseBool,		NULL, offsetof( TransportContainModuleData, m_armedRidersUpgradeWeaponSet ) },
 		{ "DelayExitInAir",	INI::parseBool,		NULL, offsetof( TransportContainModuleData, m_isDelayExitInAir ) },
 	

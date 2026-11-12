@@ -58,7 +58,7 @@ class RiderChangeContainModuleData : public TransportContainModuleData
 public:
 	
 	RiderInfo m_riders[ MAX_RIDERS ];
-	UnsignedInt m_scuttleFrames;
+	DurationFrames m_scuttleFrames;
 	ModelConditionFlagType m_scuttleState;
 
 	RiderChangeContainModuleData();

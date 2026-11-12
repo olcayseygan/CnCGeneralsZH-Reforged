@@ -61,13 +61,13 @@ public:
 	AsciiString m_midRearRightTireBoneName;
 
 	Real				m_rotationSpeedMultiplier;
-	Real				m_powerslideRotationAddition;
+	RetailPerFrame				m_powerslideRotationAddition;
 
 	//Tank data
 	AsciiString m_treadDebrisNameLeft;
 	AsciiString m_treadDebrisNameRight;
 
-	Real m_treadAnimationRate;	///<amount of tread texture to scroll per sec at top speed.  1.0 == full width.
+	VelocityPerFrame m_treadAnimationRate;	///<amount of tread texture to scroll per sec at top speed.  1.0 == full width.
 	Real m_treadPivotSpeedFraction;	///<no longer read: the treads follow the ground. Kept so the INI key parses.
 	Real m_treadDriveSpeedFraction;	///<no longer read either.
 

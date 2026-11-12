@@ -48,23 +48,26 @@ class ChinookAIUpdateModuleData : public SupplyTruckAIUpdateModuleData
 public:
 	AsciiString		m_ropeName;
   AsciiString   m_rotorWashParticleSystem;
-  Real					m_rappelSpeed;
-	Real					m_ropeDropSpeed;
+  VelocityPerFrame					m_rappelSpeed;
+	VelocityPerFrame					m_ropeDropSpeed;
 	Real					m_ropeWidth;
 	Real					m_ropeFinalHeight;
 	Real					m_ropeWobbleLen;
 	Real					m_ropeWobbleAmp;
-	Real					m_ropeWobbleRate;
+	AngularVelocityPerFrame					m_ropeWobbleRate;
 	RGBColor			m_ropeColor;
 	UnsignedInt		m_numRopes;
-	UnsignedInt		m_perRopeDelayMin;
-	UnsignedInt		m_perRopeDelayMax;
+	DurationFrames		m_perRopeDelayMin;
+	DurationFrames		m_perRopeDelayMax;
 	Real					m_minDropHeight;
 	Bool					m_waitForRopesToDrop;
 	Int						m_upgradedSupplyBoost;
 
 	ChinookAIUpdateModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);
+
+	/// RappelSpeed, or with none given half a second of free fall in a frame, from the match's gravity
+	Real getRappelSpeed() const;
 };
 
 //-------------------------------------------------------------------------------------------------

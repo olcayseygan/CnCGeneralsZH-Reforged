@@ -39,13 +39,13 @@
 class LifetimeUpdateModuleData : public UpdateModuleData
 {
 public:
-	UnsignedInt m_minFrames;
-	UnsignedInt m_maxFrames;
+	DurationFrames m_minFrames;
+	DurationFrames m_maxFrames;
 
 	LifetimeUpdateModuleData()
 	{
-		m_minFrames = 0.0f;
-		m_maxFrames = 0.0f;
+		m_minFrames.setRaw( 0.0f );
+		m_maxFrames.setRaw( 0.0f );
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p) 
@@ -53,8 +53,8 @@ public:
     UpdateModuleData::buildFieldParse(p);
 		static const FieldParse dataFieldParse[] = 
 		{
-			{ "MinLifetime",					INI::parseDurationUnsignedInt,		NULL, offsetof( LifetimeUpdateModuleData, m_minFrames ) },
-			{ "MaxLifetime",					INI::parseDurationUnsignedInt,		NULL, offsetof( LifetimeUpdateModuleData, m_maxFrames ) },
+			{ "MinLifetime",					SPEED_FIELD( LifetimeUpdateModuleData, m_minFrames ) },
+			{ "MaxLifetime",					SPEED_FIELD( LifetimeUpdateModuleData, m_maxFrames ) },
 			{ 0, 0, 0, 0 }
 		};
     p.add(dataFieldParse);

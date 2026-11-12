@@ -35,7 +35,7 @@
 #ifndef _SLAVED_UPDATE_H_
 #define _SLAVED_UPDATE_H_
 
-const Int SLAVED_UPDATE_RATE = LOGICFRAMES_PER_GAME_SECOND/4; ///< This is a low priority module that only needs to be called every this many frames
+#define SLAVED_UPDATE_RATE ((Int)(LOGICFRAMES_PER_GAME_SECOND/4)) ///< This is a low priority module that only needs to be called every this many frames
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "Common/INI.h"
@@ -65,10 +65,10 @@ public:
 
 	Real m_repairRatePerSecond;	//How fast I can repair
 	Int m_repairWhenHealthBelowPercentage; //When should I prioritize repairing my master.
-	Int m_minReadyFrames;
-	Int m_maxReadyFrames;
-	Int m_minWeldFrames;
-	Int m_maxWeldFrames; 
+	DurationFramesInt m_minReadyFrames;
+	DurationFramesInt m_maxReadyFrames;
+	DurationFramesInt m_minWeldFrames;
+	DurationFramesInt m_maxWeldFrames; 
 	AsciiString m_weldingSysName;
 	AsciiString m_weldingFXBone;
 
@@ -87,10 +87,10 @@ public:
 		m_repairWhenHealthBelowPercentage = 0;
 		m_repairMinAltitude = 0.0f;
 		m_repairMaxAltitude = 0.0f;
-		m_minWeldFrames = 0;
-		m_maxWeldFrames = 0;
-		m_minReadyFrames = 0;
-		m_maxReadyFrames = 0;
+		m_minWeldFrames.setRaw( 0 );
+		m_maxWeldFrames.setRaw( 0 );
+		m_minReadyFrames.setRaw( 0 );
+		m_maxReadyFrames.setRaw( 0 );
 		m_stayOnSameLayerAsMaster = false;
 	}
 
@@ -111,10 +111,10 @@ public:
 			{ "DistToTargetToGrantRangeBonus", INI::parseInt, NULL, offsetof( SlavedUpdateModuleData, m_distToTargetToGrantRangeBonus ) },
 			{ "RepairRatePerSecond", INI::parseReal, NULL, offsetof( SlavedUpdateModuleData, m_repairRatePerSecond ) },
 			{ "RepairWhenBelowHealth%", INI::parseInt, NULL, offsetof( SlavedUpdateModuleData, m_repairWhenHealthBelowPercentage ) },
-			{ "RepairMinReadyTime", INI::parseDurationUnsignedInt, NULL, offsetof( SlavedUpdateModuleData, m_minReadyFrames ) },
-			{ "RepairMaxReadyTime", INI::parseDurationUnsignedInt, NULL, offsetof( SlavedUpdateModuleData, m_maxReadyFrames ) },
-			{ "RepairMinWeldTime",  INI::parseDurationUnsignedInt, NULL, offsetof( SlavedUpdateModuleData, m_minWeldFrames ) },
-			{ "RepairMaxWeldTime",  INI::parseDurationUnsignedInt, NULL, offsetof( SlavedUpdateModuleData, m_maxWeldFrames ) },
+			{ "RepairMinReadyTime", SPEED_FIELD( SlavedUpdateModuleData, m_minReadyFrames ) },
+			{ "RepairMaxReadyTime", SPEED_FIELD( SlavedUpdateModuleData, m_maxReadyFrames ) },
+			{ "RepairMinWeldTime",  SPEED_FIELD( SlavedUpdateModuleData, m_minWeldFrames ) },
+			{ "RepairMaxWeldTime",  SPEED_FIELD( SlavedUpdateModuleData, m_maxWeldFrames ) },
 			{ "RepairWeldingSys",		INI::parseAsciiString,	NULL, offsetof( SlavedUpdateModuleData, m_weldingSysName ) },
 			{ "RepairWeldingFXBone", INI::parseAsciiString, NULL, offsetof( SlavedUpdateModuleData, m_weldingFXBone ) },
 			{ "StayOnSameLayerAsMaster", INI::parseBool, NULL, offsetof( SlavedUpdateModuleData, m_stayOnSameLayerAsMaster ) },

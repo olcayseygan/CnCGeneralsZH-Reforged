@@ -36,7 +36,7 @@ class JammerUpdateModuleData : public UpdateModuleData
 public:
 
 	Real m_radius;
-	UnsignedInt m_scanFrames;
+	DurationFrames m_scanFrames;
 
 	JammerUpdateModuleData();
 

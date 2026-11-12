@@ -61,13 +61,13 @@ public:
 //  AsciiString           m_howitzerTemplateName;
   RadiusDecalTemplate   m_attackAreaDecalTemplate;
   RadiusDecalTemplate   m_targetingReticleDecalTemplate;
-  UnsignedInt           m_orbitFrames;
-  UnsignedInt           m_howitzerFiringRate;
-  UnsignedInt           m_howitzerFollowLag;
+  DurationFrames           m_orbitFrames;
+  DurationFrames           m_howitzerFiringRate;
+  DurationFrames           m_howitzerFollowLag;
   Real                  m_attackAreaRadius;
   Real                  m_targetingReticleRadius;
   Real                  m_gunshipOrbitRadius;
-  Real                  m_strafingIncrement;
+  RetailPerFrame                  m_strafingIncrement;
   Real                  m_orbitInsertionSlope;
   Real                  m_randomOffsetForHowitzer;
 

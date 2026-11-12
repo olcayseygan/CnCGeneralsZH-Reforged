@@ -20,6 +20,7 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Common/ThingTemplate.h"	// the Debug assert names the template
 #include "Common/Xfer.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/SightUpgrade.h"

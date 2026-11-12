@@ -62,8 +62,8 @@ const Real NO_START_Z = 1e10;
 
 //-------------------------------------------------------------------------------------------------
 ParachuteContainModuleData::ParachuteContainModuleData() : 
-	m_pitchRateMax(0),
-	m_rollRateMax(0),
+	m_pitchRateMax(AngularVelocityPerFrame::fromRaw(0.0f)),
+	m_rollRateMax(AngularVelocityPerFrame::fromRaw(0.0f)),
 	m_lowAltitudeDamping(0.2f),
 	m_paraOpenDist(0.0f),
 	m_freeFallDamagePercent(0.5f),
@@ -78,8 +78,8 @@ void ParachuteContainModuleData::buildFieldParse(MultiIniFieldParse& p)
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "PitchRateMax",	INI::parseAngularVelocityReal,		NULL, offsetof( ParachuteContainModuleData, m_pitchRateMax ) },
-		{ "RollRateMax",	INI::parseAngularVelocityReal,		NULL, offsetof( ParachuteContainModuleData, m_rollRateMax ) },
+		{ "PitchRateMax",	SPEED_FIELD( ParachuteContainModuleData, m_pitchRateMax ) },
+		{ "RollRateMax",	SPEED_FIELD( ParachuteContainModuleData, m_rollRateMax ) },
 		{ "LowAltitudeDamping",	INI::parseReal,		NULL, offsetof( ParachuteContainModuleData, m_lowAltitudeDamping ) },
 		{ "ParachuteOpenDist",	INI::parseReal,		NULL, offsetof( ParachuteContainModuleData, m_paraOpenDist ) },
 		{ "KillWhenLandingInWaterSlop",	INI::parseReal,		NULL, offsetof( ParachuteContainModuleData, m_killWhenLandingInWaterSlop ) },

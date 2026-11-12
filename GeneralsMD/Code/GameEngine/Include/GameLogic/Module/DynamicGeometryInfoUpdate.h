@@ -41,7 +41,7 @@ class DynamicGeometryInfoUpdateModuleData : public ModuleData
 {
 public:
 
-	UnsignedInt m_initialDelay;
+	DurationFrames m_initialDelay;
 
 	Real m_initialHeight;
 	Real m_initialMajorRadius;
@@ -51,7 +51,7 @@ public:
 	Real m_finalMajorRadius;
 	Real m_finalMinorRadius;
 
-	UnsignedInt m_transitionTime;
+	DurationFrames m_transitionTime;
 
 	Bool m_reverseAtTransitionTime;		///< reverse directions once transition time is reached
 

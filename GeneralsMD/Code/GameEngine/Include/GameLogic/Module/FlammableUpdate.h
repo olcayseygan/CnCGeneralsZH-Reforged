@@ -53,15 +53,15 @@ enum FlammabilityStatusType
 class FlammableUpdateModuleData : public UpdateModuleData
 {
 public:
-	UnsignedInt		m_burnedDelay;	///< How long before I am ::Burned.  0 means never
-	UnsignedInt		m_aflameDuration; ///< How long I stay ::Aflame.  Independent of Burned.  
+	DurationFrames		m_burnedDelay;	///< How long before I am ::Burned.  0 means never
+	DurationFrames		m_aflameDuration; ///< How long I stay ::Aflame.  Independent of Burned.  
 	// When aflame wears out is when I check to be normal or burned,  So my model can
 	// change to burned while I am still aflame.
-	UnsignedInt		m_aflameDamageDelay;	///< While ::Aflame, I take damage this often.  If 0, never.
+	DurationFrames		m_aflameDamageDelay;	///< While ::Aflame, I take damage this often.  If 0, never.
 	Int						m_aflameDamageAmount;	///< And this is how much I take.
 	AsciiString		m_burningSoundName;			///< Sound to loop-play while burning (Not an AudioEventRTS here, since that belongs to the module)
 	Real					m_flameDamageLimitData;
-	UnsignedInt		m_flameDamageExpirationDelay;
+	DurationFrames		m_flameDamageExpirationDelay;
 
 	FlammableUpdateModuleData();
 

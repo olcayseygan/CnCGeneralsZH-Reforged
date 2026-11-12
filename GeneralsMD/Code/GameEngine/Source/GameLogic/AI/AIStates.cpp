@@ -988,7 +988,7 @@ StateReturnType AIStateMachine::setTemporaryState( StateID newStateID, Int frame
 			m_temporaryState = NULL;
 			return ret;
 		}
-		enum {FRAME_COUNT_MAX = 60*LOGICFRAMES_PER_GAME_SECOND};
+		const Int FRAME_COUNT_MAX = 60*LOGICFRAMES_PER_GAME_SECOND;
 		// If you need to up this check, ok, but 1 minute seems overly long for a temporary state override.  jba.
 		DEBUG_ASSERTCRASH(frameLimitCoount<=FRAME_COUNT_MAX, ("Unusually long time to set temporary state."));
 		if (frameLimitCoount>FRAME_COUNT_MAX) {
@@ -1342,7 +1342,7 @@ static Bool cannotPossiblyAttackObject( State *thisState, void* userData )
 //----------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------
 
-const UnsignedInt IDLE_COUNTDOWN_DELAY = (LOGICFRAMES_PER_GAME_SECOND * 2);
+#define IDLE_COUNTDOWN_DELAY ((UnsignedInt)((LOGICFRAMES_PER_GAME_SECOND * 2)))
 
 //----------------------------------------------------------------------------------------------
 AIIdleState::AIIdleState( StateMachine *machine, AIIdleState::AIIdleTargetingType shouldLookForTargets ) : 

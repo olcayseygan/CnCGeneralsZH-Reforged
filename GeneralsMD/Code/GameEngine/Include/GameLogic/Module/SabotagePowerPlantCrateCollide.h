@@ -46,11 +46,11 @@ class Thing;
 class SabotagePowerPlantCrateCollideModuleData : public CrateCollideModuleData
 {
 public:
-	UnsignedInt m_powerSabotageFrames;
+	DurationFrames m_powerSabotageFrames;
 
 	SabotagePowerPlantCrateCollideModuleData()
 	{
-		m_powerSabotageFrames = 0;
+		m_powerSabotageFrames.setRaw( 0 );
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p) 
@@ -59,7 +59,7 @@ public:
 
 		static const FieldParse dataFieldParse[] = 
 		{
-			{ "SabotagePowerDuration", INI::parseDurationUnsignedInt, NULL, offsetof( SabotagePowerPlantCrateCollideModuleData, m_powerSabotageFrames ) },
+			{ "SabotagePowerDuration", SPEED_FIELD( SabotagePowerPlantCrateCollideModuleData, m_powerSabotageFrames ) },
 			{ 0, 0, 0, 0 }
 		};
 		p.add( dataFieldParse );

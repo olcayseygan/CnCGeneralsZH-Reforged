@@ -30,6 +30,57 @@
 
 #include "Common/GameCommon.h"
 
+//-------------------------------------------------------------------------------------------------
+// Copied from a constexpr, so constant-initialised: valid before any dynamic initialiser runs.
+static constexpr GameSpeedState NATIVE_GAME_SPEED = GameSpeed_compute( NATIVE_GAME_SPEED_PERCENT );
+GameSpeedState TheGameSpeed = NATIVE_GAME_SPEED;
+
+void GameSpeed_set( Int percent )
+{
+	DEBUG_ASSERTCRASH( GameSpeed_isAllowed( percent ), ( "GameSpeed_set: %d is not an allowed game speed", percent ) );
+	if( !GameSpeed_isAllowed( percent ) )
+		percent = NATIVE_GAME_SPEED_PERCENT;
+	TheGameSpeed = GameSpeed_compute( percent );
+}
+
+#if defined(_DEBUG)
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
+static Bool s_gameSpeedMainStarted = false;
+static Int s_gameSpeedReadsBeforeMain = 0;
+static const void *s_gameSpeedFirstEarlyReader = NULL;	///< where the first of them came from, for the map file
+
+const GameSpeedState &GameSpeed_countedRead()
+{
+	if( !s_gameSpeedMainStarted )
+	{
+		if( s_gameSpeedReadsBeforeMain++ == 0 )
+		{
+#if defined(_MSC_VER)
+			s_gameSpeedFirstEarlyReader = _ReturnAddress();
+#endif
+		}
+	}
+	return TheGameSpeed;
+}
+
+const void *GameSpeed_firstReaderBeforeMain()
+{
+	return s_gameSpeedFirstEarlyReader;
+}
+
+Int GameSpeed_readsBeforeMain()
+{
+	return s_gameSpeedReadsBeforeMain;
+}
+
+void GameSpeed_markMainStarted()
+{
+	s_gameSpeedMainStarted = true;
+}
+#endif
+
 const char *TheVeterancyNames[] = 
 {
 	"REGULAR",

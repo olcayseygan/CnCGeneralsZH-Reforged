@@ -118,12 +118,12 @@ static void parseAngleFX(INI* ini, void *instance, void * /* store */, const voi
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "MinToppleDelay",						INI::parseDurationUnsignedInt,		NULL, offsetof( StructureToppleUpdateModuleData, m_minToppleDelay ) },
-		{ "MaxToppleDelay",						INI::parseDurationUnsignedInt,		NULL, offsetof( StructureToppleUpdateModuleData, m_maxToppleDelay ) },
-		{ "MinToppleBurstDelay",			INI::parseDurationUnsignedInt,		NULL, offsetof( StructureToppleUpdateModuleData, m_minToppleBurstDelay ) },
-		{ "MaxToppleBurstDelay",			INI::parseDurationUnsignedInt,		NULL, offsetof( StructureToppleUpdateModuleData, m_maxToppleBurstDelay ) },
+		{ "MinToppleDelay",						SPEED_FIELD( StructureToppleUpdateModuleData, m_minToppleDelay ) },
+		{ "MaxToppleDelay",						SPEED_FIELD( StructureToppleUpdateModuleData, m_maxToppleDelay ) },
+		{ "MinToppleBurstDelay",			SPEED_FIELD( StructureToppleUpdateModuleData, m_minToppleBurstDelay ) },
+		{ "MaxToppleBurstDelay",			SPEED_FIELD( StructureToppleUpdateModuleData, m_maxToppleBurstDelay ) },
 		{ "StructuralIntegrity",			INI::parseReal,										NULL, offsetof( StructureToppleUpdateModuleData, m_structuralIntegrity ) },
-		{ "StructuralDecay",					INI::parseRetailPerFrameFactorReal,									NULL, offsetof( StructureToppleUpdateModuleData, m_structuralDecay ) },
+		{ "StructuralDecay",					SPEED_FIELD( StructureToppleUpdateModuleData, m_structuralDecay ) },
 		{ "DamageFXTypes",						INI::parseDamageTypeFlags,				NULL, offsetof( StructureToppleUpdateModuleData, m_damageFXTypes ) },
 		{ "TopplingFX",								INI::parseFXList,									NULL, offsetof( StructureToppleUpdateModuleData, m_toppleFXList ) },
 		{ "ToppleDelayFX",						INI::parseFXList,									NULL, offsetof( StructureToppleUpdateModuleData, m_toppleDelayFXList ) },
@@ -211,7 +211,7 @@ void StructureToppleUpdate::onDie( const DamageInfo *damageInfo )
 //-------------------------------------------------------------------------------------------------
 UpdateSleepTime StructureToppleUpdate::update( void )
 {
-	static const Real TOPPLE_ACCELERATION_FACTOR = ConvertRetailPerFrameSquared(0.02f);
+	const Real TOPPLE_ACCELERATION_FACTOR = ConvertRetailPerFrameSquared(0.02f);	// not static: the speed is the match's
 
 	const StructureToppleUpdateModuleData *d = getStructureToppleUpdateModuleData();
 

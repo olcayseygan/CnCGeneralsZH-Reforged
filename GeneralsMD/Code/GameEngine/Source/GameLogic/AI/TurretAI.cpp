@@ -183,8 +183,8 @@ void TurretStateMachine::loadPostProcess( void )
 //----------------------------------------------------------------------------------------------------------
 TurretAIData::TurretAIData()
 {
-	m_turnRate = DEFAULT_TURN_RATE;
-	m_pitchRate = DEFAULT_PITCH_RATE;
+	m_turnRate.setRaw( DEFAULT_TURN_RATE_DEG_PER_SEC );
+	m_pitchRate.setRaw( DEFAULT_PITCH_RATE_DEG_PER_SEC );
 	m_naturalTurretAngle = 0.0f;
 	m_yawLimit = PI;
 	m_naturalTurretPitch = 0.0f;
@@ -204,9 +204,9 @@ TurretAIData::TurretAIData()
 	m_maxIdleScanAngle = 0.0f;
 	m_groundUnitPitch = 0.0f;
 
-	m_minIdleScanInterval = 9999999;
-	m_maxIdleScanInterval = 9999999;
-	m_recenterTime = 2*LOGICFRAMES_PER_GAME_SECOND;
+	m_minIdleScanInterval.setRaw( 499999968 );	// msec: 9999999 frames at the native speed, never
+	m_maxIdleScanInterval.setRaw( 499999968 );
+	m_recenterTime.setRaw( 2000 );
 	m_initiallyDisabled = false;
 	m_firesWhileTurning = FALSE;
 	m_isAllowsPitch = false;
@@ -247,8 +247,8 @@ void TurretAIData::buildFieldParse(MultiIniFieldParse& p)
 {
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "TurretTurnRate",					INI::parseAngularVelocityReal,				NULL, offsetof( TurretAIData, m_turnRate ) },
-		{ "TurretPitchRate",				INI::parseAngularVelocityReal,				NULL, offsetof( TurretAIData, m_pitchRate ) },
+		{ "TurretTurnRate",					SPEED_FIELD( TurretAIData, m_turnRate ) },
+		{ "TurretPitchRate",				SPEED_FIELD( TurretAIData, m_pitchRate ) },
 		{ "NaturalTurretAngle",			INI::parseAngleReal,									NULL, offsetof( TurretAIData, m_naturalTurretAngle ) },
 		{ "TurretYawLimit",					INI::parseAngleReal,									NULL, offsetof( TurretAIData, m_yawLimit ) },
 		{ "NaturalTurretPitch",			INI::parseAngleReal,									NULL, offsetof( TurretAIData, m_naturalTurretPitch ) },
@@ -261,13 +261,13 @@ void TurretAIData::buildFieldParse(MultiIniFieldParse& p)
 		{ "AllowsPitch",						INI::parseBool,												NULL, offsetof( TurretAIData, m_isAllowsPitch ) },
 		{ "AimFromMuzzle",					INI::parseBool,												NULL, offsetof( TurretAIData, m_aimFromMuzzle ) },
 #ifdef INTER_TURRET_DELAY
-		{ "InterTurretDelay",				INI::parseDurationUnsignedInt,				NULL, offsetof( TurretAIData, m_interTurretDelay ) },
+		{ "InterTurretDelay",				SPEED_FIELD( TurretAIData, m_interTurretDelay ) },
 #endif
 		{ "MinIdleScanAngle",				INI::parseAngleReal,									NULL, offsetof( TurretAIData, m_minIdleScanAngle ) },
 		{ "MaxIdleScanAngle",				INI::parseAngleReal,									NULL, offsetof( TurretAIData, m_maxIdleScanAngle ) },
-		{ "MinIdleScanInterval",		INI::parseDurationUnsignedInt,				NULL, offsetof( TurretAIData, m_minIdleScanInterval ) },
-		{ "MaxIdleScanInterval",		INI::parseDurationUnsignedInt,				NULL, offsetof( TurretAIData, m_maxIdleScanInterval ) },
-		{ "RecenterTime",						INI::parseDurationUnsignedInt,				NULL, offsetof( TurretAIData, m_recenterTime ) },
+		{ "MinIdleScanInterval",		SPEED_FIELD( TurretAIData, m_minIdleScanInterval ) },
+		{ "MaxIdleScanInterval",		SPEED_FIELD( TurretAIData, m_maxIdleScanInterval ) },
+		{ "RecenterTime",						SPEED_FIELD( TurretAIData, m_recenterTime ) },
 		{ "InitiallyDisabled",			INI::parseBool,												NULL, offsetof( TurretAIData, m_initiallyDisabled ) },
 		{ "FiresWhileTurning",			INI::parseBool,												NULL, offsetof( TurretAIData, m_firesWhileTurning ) },
 		{ 0, 0, 0, 0 }

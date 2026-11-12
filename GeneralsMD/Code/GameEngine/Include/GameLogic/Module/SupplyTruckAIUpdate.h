@@ -55,7 +55,7 @@ inline Bool supplyDockHasNextBox( Int stockLeft, Int dockerBoxes, Int dockerMax 
 	* every 15 frames where a worker that walks the same gap needs 37 or more (30 Hz frames).  37 is
 	* that shortest walked leg, so the floor only ever catches a worker that did not walk. */
 //-------------------------------------------------------------------------------------------------
-enum { SUPPLY_DOCK_MIN_LEG_FRAMES = ConvertRetailFrames( 37 ) };
+#define SUPPLY_DOCK_MIN_LEG_FRAMES ((Int)(ConvertRetailFrames( 37 )))
 
 inline UnsignedInt supplyDockLegDelay( UnsignedInt dockDelay, UnsignedInt now, UnsignedInt lastActionFrame )
 {
@@ -177,16 +177,16 @@ class SupplyTruckAIUpdateModuleData : public AIUpdateModuleData
 {
 public:
 	Int m_maxBoxesData;
-	UnsignedInt m_centerDelay;
-	UnsignedInt m_warehouseDelay;
+	DurationFrames m_centerDelay;
+	DurationFrames m_warehouseDelay;
 	Real m_warehouseScanDistance;
  	AudioEventRTS m_suppliesDepletedVoice;						///< Sound played when I take the last box.
 
 	SupplyTruckAIUpdateModuleData()
 	{
 		m_maxBoxesData = 0;
-		m_centerDelay = 0;
-		m_warehouseDelay = 0;
+		m_centerDelay.setRaw( 0 );
+		m_warehouseDelay.setRaw( 0 );
 		m_warehouseScanDistance = 100;
 	}
 
@@ -197,8 +197,8 @@ public:
 		static const FieldParse dataFieldParse[] = 
 		{
 			{ "MaxBoxes",					INI::parseInt,		NULL, offsetof( SupplyTruckAIUpdateModuleData, m_maxBoxesData ) },
-			{ "SupplyCenterActionDelay", INI::parseDurationUnsignedInt, NULL, offsetof( SupplyTruckAIUpdateModuleData, m_centerDelay ) },
-			{ "SupplyWarehouseActionDelay", INI::parseDurationUnsignedInt, NULL, offsetof( SupplyTruckAIUpdateModuleData, m_warehouseDelay ) },
+			{ "SupplyCenterActionDelay", SPEED_FIELD( SupplyTruckAIUpdateModuleData, m_centerDelay ) },
+			{ "SupplyWarehouseActionDelay", SPEED_FIELD( SupplyTruckAIUpdateModuleData, m_warehouseDelay ) },
 			{ "SupplyWarehouseScanDistance", INI::parseReal, NULL, offsetof( SupplyTruckAIUpdateModuleData, m_warehouseScanDistance ) },
  			{ "SuppliesDepletedVoice", INI::parseAudioEventRTS, NULL, offsetof( SupplyTruckAIUpdateModuleData, m_suppliesDepletedVoice) },
 			{ 0, 0, 0, 0 }

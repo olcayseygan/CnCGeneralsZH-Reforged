@@ -72,7 +72,7 @@ public:
 
 
 	Real				m_rotationSpeedMultiplier;
-	Real				m_powerslideRotationAddition;
+	RetailPerFrame				m_powerslideRotationAddition;
 
 	W3DTruckDrawModuleData();
 	~W3DTruckDrawModuleData();

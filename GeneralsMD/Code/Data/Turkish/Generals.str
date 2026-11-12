@@ -15862,7 +15862,7 @@ GUI:GameSpeedMissions
 END
 
 TOOLTIP:GameSpeedMissions
-"Kampanya ve General Meydan Okuması görevleri ne kadar hızlı oynansın. 1.0x orijinal oyun; süren bir görev de hemen bu hıza geçer. Çatışmanın hızı lobide seçilir."
+"Kampanya ve General Meydan Okuması görevleri ne kadar hızlı oynansın. 1.0x orijinal oyun. Hız görev başlarken belirlenir, değişiklik bir sonraki görevde geçerli olur. Çatışmanın hızı lobide seçilir."
 END
 
 GUI:CantBuildTooCloseToEnemy

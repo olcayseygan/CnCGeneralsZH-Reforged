@@ -46,7 +46,7 @@
 TechBuildingBehaviorModuleData::TechBuildingBehaviorModuleData( void )
 {
 	m_pulseFX = NULL;
-	m_pulseFXRate = 0;
+	m_pulseFXRate.setRaw( 0 );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -58,7 +58,7 @@ TechBuildingBehaviorModuleData::TechBuildingBehaviorModuleData( void )
 	static const FieldParse dataFieldParse[] = 
 	{
 		{ "PulseFX",								INI::parseFXList,								NULL,	offsetof( TechBuildingBehaviorModuleData, m_pulseFX ) },
-		{ "PulseFXRate",						INI::parseDurationUnsignedInt,	NULL,	offsetof( TechBuildingBehaviorModuleData, m_pulseFXRate ) },
+		{ "PulseFXRate",						SPEED_FIELD( TechBuildingBehaviorModuleData, m_pulseFXRate ) },
 		{ 0, 0, 0, 0 }
 	};
 

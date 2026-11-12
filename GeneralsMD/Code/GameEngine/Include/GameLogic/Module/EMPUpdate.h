@@ -42,9 +42,9 @@
 class EMPUpdateModuleData : public UpdateModuleData
 {
 public:
-	UnsignedInt m_lifeFrames;	
-	UnsignedInt m_startFadeFrame;
-	UnsignedInt m_disabledDuration;
+	DurationFrames m_lifeFrames;	
+	DurationFrames m_startFadeFrame;
+	DurationFrames m_disabledDuration;
 	Real				m_startScale; ///< how big I start drawing
 	Real				m_targetScaleMin; ///< how big I change to by the time I'm done
 	Real				m_targetScaleMax; ///< how big I change to by the time I'm done
@@ -62,15 +62,15 @@ public:
 
 	EMPUpdateModuleData()
 	{
-		m_lifeFrames = 1;
-		m_startFadeFrame = 0;
+		m_lifeFrames.setRaw( 1 );	// 1 msec: one frame at any speed
+		m_startFadeFrame.setRaw( 0 );
 		m_startScale = 1.0f; 
 		m_targetScaleMax = 1.0f;
 		m_targetScaleMin = 1.0f;
 		m_startColor.setFromInt(0xffffffff);
 		m_endColor.setFromInt  (0x00000000);
 		//m_spinRateMax = 0.0f;
-		m_disabledDuration = 0;
+		m_disabledDuration.setRaw( 0 );
 		m_disableFXParticleSystem = NULL;
 		m_sparksPerCubicFoot = 0.001f;
 		m_effectRadius = 200;
@@ -86,10 +86,10 @@ public:
     UpdateModuleData::buildFieldParse(p);
 		static const FieldParse dataFieldParse[] = 
 		{
-			{ "Lifetime",	INI::parseDurationUnsignedInt,		NULL, offsetof( EMPUpdateModuleData, m_lifeFrames ) },
-			{ "StartFadeTime",	INI::parseDurationUnsignedInt,		NULL, offsetof( EMPUpdateModuleData, m_startFadeFrame ) },
+			{ "Lifetime",	SPEED_FIELD( EMPUpdateModuleData, m_lifeFrames ) },
+			{ "StartFadeTime",	SPEED_FIELD( EMPUpdateModuleData, m_startFadeFrame ) },
 			{ "StartScale",	INI::parseReal,										NULL, offsetof( EMPUpdateModuleData, m_startScale ) },
-			{ "DisabledDuration",	INI::parseDurationUnsignedInt,	NULL, offsetof( EMPUpdateModuleData, m_disabledDuration ) },
+			{ "DisabledDuration",	SPEED_FIELD( EMPUpdateModuleData, m_disabledDuration ) },
 			//{ "SpinRateMax",	INI::parseReal,										NULL, offsetof( EMPUpdateModuleData, m_spinRateMax ) },
 			{ "TargetScaleMax",	INI::parseReal,										NULL, offsetof( EMPUpdateModuleData, m_targetScaleMax ) },
 			{ "TargetScaleMin",	INI::parseReal,										NULL, offsetof( EMPUpdateModuleData, m_targetScaleMin ) },
@@ -158,16 +158,16 @@ protected:
 class LeafletDropBehaviorModuleData : public UpdateModuleData
 {
 public:
-	UnsignedInt m_delayFrames;	
-	UnsignedInt m_disabledDuration;
+	DurationFrames m_delayFrames;	
+	DurationFrames m_disabledDuration;
   Real m_radius;
 	const ParticleSystemTemplate *m_leafletFXParticleSystem;
 
 
 	LeafletDropBehaviorModuleData()
 	{
-		m_delayFrames = 1;
-		m_disabledDuration = 0;
+		m_delayFrames.setRaw( 1 );	// 1 msec: one frame at any speed
+		m_disabledDuration.setRaw( 0 );
     m_radius = 60.0f;
     m_leafletFXParticleSystem = NULL;
 	}
@@ -177,8 +177,8 @@ public:
     UpdateModuleData::buildFieldParse(p);
 		static const FieldParse dataFieldParse[] = 
 		{
-			{ "Delay",	        INI::parseDurationUnsignedInt,	NULL, offsetof( LeafletDropBehaviorModuleData, m_delayFrames ) },
-			{ "DisabledDuration",	INI::parseDurationUnsignedInt,	NULL, offsetof( LeafletDropBehaviorModuleData, m_disabledDuration ) },
+			{ "Delay",	        SPEED_FIELD( LeafletDropBehaviorModuleData, m_delayFrames ) },
+			{ "DisabledDuration",	SPEED_FIELD( LeafletDropBehaviorModuleData, m_disabledDuration ) },
       { "AffectRadius",     INI::parseReal,                 NULL, offsetof( LeafletDropBehaviorModuleData, m_radius ) },
       { "LeafletFXParticleSystem", INI::parseParticleSystemTemplate,  NULL, offsetof( LeafletDropBehaviorModuleData, m_leafletFXParticleSystem ) },
 

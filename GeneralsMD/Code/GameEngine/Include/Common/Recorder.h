@@ -144,7 +144,7 @@ public:
 	};
 	PlaybackCursor getPlaybackCursor( void );
 	Bool hasPlaybackLeft( void ) { return m_mode == RECORDERMODETYPE_PLAYBACK && m_file != NULL; }	///< FALSE once the last command is read
-	void resumePlayback( AsciiString filename, const PlaybackCursor &cursor );
+	Bool resumePlayback( AsciiString filename, const PlaybackCursor &cursor );	///< FALSE when the replay will not open again
 	Int getPlaybackFramesPerSecond( void );						///< the logic rate the game was played at, 0 when it was not recorded
 	void stopPlayback();															///< Stops playback.  Its fine to call this even if not playing back a file.
 #if defined _DEBUG || defined _INTERNAL
@@ -178,12 +178,13 @@ public:
 		Bool playerDiscons[MAX_SLOTS];
 		AsciiString gameOptions;
 		Int localPlayerIndex;
+		Int gameSpeedPercent;			///< "GS=", the match's game speed; 0 when the replay wrote none
 	};
 	Bool readReplayHeader( ReplayHeader& header );
 
-	static AsciiString replayLogicRateField();							///< "HZ=<logic rate>;", appended to the recorded slot list
+	static AsciiString replayLogicRateField( Int gameSpeedPercent );	///< "HZ=<logic rate>;GS=<game speed>;", appended to the recorded slot list
 	static Int takeReplayLogicRate( AsciiString& options );		///< cuts that field off the options and returns its rate, 60 when absent
-	static Int takeReplayGameSpeed( AsciiString& options );		///< cuts "GS=<percent>;" off the options and returns it, 100 when absent; take it before the rate
+	static Int takeReplayGameSpeed( AsciiString& options );		///< cuts "GS=<percent>;" off the options and returns it, 0 when absent; take it before the rate
 
 	RecorderModeType getMode();												///< Returns the current operating mode.
 	void initControls();															///< Show or Hide the Replay controls
@@ -205,7 +206,7 @@ public:
 
 	void stopRecording();															///< Stop recording and close m_file.
 protected:
-	void startRecording(GameDifficulty diff, Int originalGameMode, Int rankPoints, Int maxFPS);					///< Start recording to m_file.
+	void startRecording(GameDifficulty diff, Int originalGameMode, Int rankPoints, Int maxFPS, Int gameSpeedPercent);					///< Start recording to m_file.
 	void writeToFile(GameMessage *msg);								///< Write this GameMessage to m_file.
 	void archiveReplay(const AsciiString& fileName);	///< Copy the given replay to the archive directory under a timestamped name.
 
@@ -214,7 +215,7 @@ protected:
 
 	AsciiString readAsciiString();										///< Read the next string from m_file using ascii characters.
 	UnicodeString readUnicodeString();								///< Read the next string from m_file using unicode characters.
-	Bool openPlayback(AsciiString filename, Int &difficulty, Int &rankPoints, Int &maxFPS);	///< Open a replay and read up to its first command.
+	Bool openPlayback(AsciiString filename, Int &difficulty, Int &rankPoints, Int &maxFPS, Int &gameSpeedPercent);	///< Open a replay and read up to its first command.
 	void readNextFrame();															///< Read the next frame number to execute a command on.
 	void appendNextCommand();													///< Read the next GameMessage and append it to TheCommandList.
 	void writeArgument(GameMessageArgumentDataType type, const GameMessageArgumentType arg);

@@ -48,7 +48,7 @@ public:
 	static void buildFieldParse( MultiIniFieldParse &p );
 
 	const FXList*		m_pulseFX;										///< FXList to play when bldg is owned is updated
-	UnsignedInt			m_pulseFXRate;								///< how frequently to play it
+	DurationFrames			m_pulseFXRate;								///< how frequently to play it
 
 };
 

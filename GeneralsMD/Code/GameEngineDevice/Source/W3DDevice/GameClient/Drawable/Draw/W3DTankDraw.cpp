@@ -63,7 +63,7 @@ class Matrix3D;
 W3DTankDrawModuleData::W3DTankDrawModuleData() :
 	m_treadDebrisNameLeft("TrackDebrisDirtLeft"),
 	m_treadDebrisNameRight("TrackDebrisDirtRight"),
-	m_treadAnimationRate(0.0f),
+	m_treadAnimationRate(VelocityPerFrame::fromRaw(0.0f)),
 	m_treadPivotSpeedFraction(0.6f),
 	m_treadDriveSpeedFraction(0.3f)
 {
@@ -83,7 +83,7 @@ void W3DTankDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 	{
 		{ "TreadDebrisLeft", INI::parseAsciiString, NULL, offsetof(W3DTankDrawModuleData, m_treadDebrisNameLeft) },
 		{ "TreadDebrisRight", INI::parseAsciiString, NULL, offsetof(W3DTankDrawModuleData, m_treadDebrisNameRight) },
-		{ "TreadAnimationRate", INI::parseVelocityReal, NULL, offsetof(W3DTankDrawModuleData, m_treadAnimationRate) },
+		{ "TreadAnimationRate", SPEED_FIELD( W3DTankDrawModuleData, m_treadAnimationRate ) },
 		{ "TreadPivotSpeedFraction", INI::parseReal, NULL, offsetof(W3DTankDrawModuleData, m_treadPivotSpeedFraction) },
 		{ "TreadDriveSpeedFraction", INI::parseReal, NULL, offsetof(W3DTankDrawModuleData, m_treadDriveSpeedFraction) },
 		{ 0, 0, 0, 0 }

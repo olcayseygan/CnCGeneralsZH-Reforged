@@ -1275,6 +1275,18 @@ static void runDirectorScout( int &argc, char **argv, int capacity )
 Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
                       LPSTR lpCmdLine, Int nCmdShow )
 {
+	GameSpeed_markMainStarted();
+#if defined(_DEBUG) || defined(_INTERNAL)
+	/* -initspeed <percent>: the process starts at that game speed instead of the native one.  A match
+		 played at that speed then shows, by its CRC against a native start, whether anything built before
+		 the match kept the numbers of the speed it was built at.  Never in a shipping build, which always
+		 starts native. */
+	{
+		char initSpeed[ 16 ];
+		if( findEarlyCommandLineValue( L"-initspeed", initSpeed, sizeof( initSpeed ) ) )
+			GameSpeed_set( ClampPlayerGameSpeedPercent( atoi( initSpeed ) ) );
+	}
+#endif
 	checkProtection();
 
 	// The x64 C runtime answers log, exp, pow and the trig functions from an FMA3 routine on a CPU
@@ -1481,6 +1493,8 @@ Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 		// start the log
 		DEBUG_INIT(DEBUG_FLAGS_DEFAULT);
+		DEBUG_ASSERTCRASH( GameSpeed_readsBeforeMain() == 0, ( "%d reads of the game speed before main: a dynamic initialiser caches it, the first from %p (exe base %p, the map file names it)",
+			GameSpeed_readsBeforeMain(), GameSpeed_firstReaderBeforeMain(), (void *)GetModuleHandle( NULL ) ) );
 		initMemoryManager();
 		pinToLargestL3();
 

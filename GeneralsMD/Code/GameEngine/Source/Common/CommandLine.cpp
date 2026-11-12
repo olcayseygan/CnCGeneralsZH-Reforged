@@ -1508,9 +1508,10 @@ Int parseIgnoreStackTrace(char *args[], int num)
 }
 #endif
 
-/* -fps <n> is the game speed itself: the rate the logic tick is paced at, for tests; a player gets
-	 one of the game speeds, which scale this too.  MSG_NEW_GAME only honours 1..1000.  n is in retail 30 Hz
-	 frames, so -fps 30 is still normal speed and every script that passes it keeps its meaning. */
+/* -fps <n> is the rate the logic tick is paced at, ticks a wall second, for tests; the game speeds do
+	 not touch it, they scale the game time of a tick.  MSG_NEW_GAME only honours 1..1000.  n is in
+	 retail 30 Hz frames, so -fps 30 is still normal speed and every script that passes it keeps its
+	 meaning. */
 
 Int parseFPSLimit(char *args[], int num)
 {
@@ -2459,9 +2460,10 @@ Int parseSupplyPileLimit(char *args[], int num)
 }
 
 /* -gamespeed <percent>: the skirmish lobby's game speed for an -autoskirmish run, in percent of retail's
-	 pace and taken to the nearest of PLAYER_GAME_SPEED_PERCENTS (100, 125, 150, 200).  Wall pacing only;
-	 a -netgame run always plays the native tick.  Not -turbo, which fast-forwards a drawing run as fast
-	 as it goes. */
+	 pace and taken to the nearest of PLAYER_GAME_SPEED_PERCENTS (100, 125, 150, 200).  The game time
+	 each tick advances: the match still ticks LOGICFRAMES_PER_SECOND times a second, its CRC differs per
+	 speed, and the replay carries the speed (GS=).  A -netgame run always plays the native speed.  Not
+	 -turbo, which fast-forwards a drawing run as fast as it goes. */
 Int parseGameSpeed(char *args[], int num)
 {
 	if (TheWritableGlobalData && num > 1)

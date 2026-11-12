@@ -1819,7 +1819,7 @@ void ConnectionManager::parseUserList(const GameInfo *game)
 		return;
 
 	// every machine reads the same game options, so every machine starts the room at the same speed
-	m_frameMetrics.setMatchFps(GameEngine_matchFramesPerSecond(PLAYER_GAME_SPEED_PERCENT_DEFAULT));
+	m_frameMetrics.setMatchFps(GameEngine_matchFramesPerSecond());
 
 	Int i;
 	Int numUsers = 0;

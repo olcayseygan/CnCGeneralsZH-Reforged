@@ -45,11 +45,11 @@
 class CheckpointUpdateModuleData : public UpdateModuleData
 {
 public:
-	UnsignedInt m_enemyScanDelayTime;
+	DurationFrames m_enemyScanDelayTime;
 
 	CheckpointUpdateModuleData()
 	{
-		m_enemyScanDelayTime = LOGICFRAMES_PER_GAME_SECOND;
+		m_enemyScanDelayTime.setRaw( 1000 );	// a second
 	}
 
 	static void buildFieldParse(MultiIniFieldParse& p) 
@@ -57,7 +57,7 @@ public:
     UpdateModuleData::buildFieldParse(p);
 		static const FieldParse dataFieldParse[] = 
 		{
-			{ "ScanDelayTime",		INI::parseDurationUnsignedInt,		NULL, offsetof( CheckpointUpdateModuleData, m_enemyScanDelayTime ) },
+			{ "ScanDelayTime",		SPEED_FIELD( CheckpointUpdateModuleData, m_enemyScanDelayTime ) },
 			{ 0, 0, 0, 0 }
 		};
     p.add(dataFieldParse);

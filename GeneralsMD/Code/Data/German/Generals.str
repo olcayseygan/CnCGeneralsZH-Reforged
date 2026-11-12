@@ -14918,7 +14918,7 @@ GUI:GameSpeedMissions
 END
 
 TOOLTIP:GameSpeedMissions
-"Wie schnell Kampagnen- und Generalsherausforderungs-Missionen laufen. 1.0x ist das Originalspiel, auch eine laufende Mission wechselt sofort. Das Gefecht wählt sein Tempo in der Lobby."
+"Wie schnell Kampagnen- und Generalsherausforderungs-Missionen laufen. 1.0x ist das Originalspiel. Das Tempo wird beim Missionsstart festgelegt, eine Änderung gilt ab der nächsten Mission. Das Gefecht wählt sein Tempo in der Lobby."
 END
 
 GUI:CantBuildTooCloseToEnemy

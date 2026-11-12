@@ -304,6 +304,7 @@ static void restartMissionMenu()
 	Int rankPointsStartedWith = TheGameLogic->getRankPointsToAddAtGameStart();// must write down before reset
 	GameDifficulty diff = TheScriptEngine->getGlobalDifficulty();
 	Int fps = TheGameEngine->getFramesPerSecondLimit();
+	const Int gameSpeedPercent = GAME_SPEED_PERCENT;	// the restart plays the speed this match had
 
 	TheGameLogic->clearGameData(FALSE);
 	TheGameEngine->setQuitting(FALSE);
@@ -321,6 +322,7 @@ static void restartMissionMenu()
 		msg->appendIntegerArgument(diff);
 		msg->appendIntegerArgument(rankPointsStartedWith);
 		msg->appendIntegerArgument(fps);
+		msg->appendIntegerArgument(gameSpeedPercent);
 		DEBUG_LOG(("Restarting game mode %d, Diff=%d, RankPoints=%d\n", gameMode, 
 																																		TheScriptEngine->getGlobalDifficulty(), 
 																																		rankPointsStartedWith)

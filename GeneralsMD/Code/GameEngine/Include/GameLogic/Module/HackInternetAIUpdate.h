@@ -132,10 +132,10 @@ enum
 class HackInternetAIUpdateModuleData : public AIUpdateModuleData
 {
 public:
-	UnsignedInt		m_unpackTime;
-	UnsignedInt		m_packTime;				
-	UnsignedInt		m_cashUpdateDelay;
-	UnsignedInt		m_cashUpdateDelayFast;
+	DurationFrames		m_unpackTime;
+	DurationFrames		m_packTime;				
+	DurationFrames		m_cashUpdateDelay;
+	DurationFrames		m_cashUpdateDelayFast;
 	UnsignedInt		m_regularCashAmount;
 	UnsignedInt		m_veteranCashAmount;
 	UnsignedInt		m_eliteCashAmount;
@@ -145,10 +145,10 @@ public:
 
 	HackInternetAIUpdateModuleData()
 	{
-		m_unpackTime = 0;
-		m_packTime = 0;
-		m_cashUpdateDelay = 0;
-		m_cashUpdateDelayFast = 0;
+		m_unpackTime.setRaw( 0 );
+		m_packTime.setRaw( 0 );
+		m_cashUpdateDelay.setRaw( 0 );
+		m_cashUpdateDelayFast.setRaw( 0 );
 		m_regularCashAmount = 0;
 		m_veteranCashAmount = 0;
 		m_eliteCashAmount = 0;
@@ -163,11 +163,11 @@ public:
 
 		static const FieldParse dataFieldParse[] = 
 		{
-			{ "UnpackTime",					INI::parseDurationUnsignedInt,	NULL, offsetof( HackInternetAIUpdateModuleData, m_unpackTime ) },
-			{ "PackTime",						INI::parseDurationUnsignedInt,	NULL, offsetof( HackInternetAIUpdateModuleData, m_packTime ) },
+			{ "UnpackTime",					SPEED_FIELD( HackInternetAIUpdateModuleData, m_unpackTime ) },
+			{ "PackTime",						SPEED_FIELD( HackInternetAIUpdateModuleData, m_packTime ) },
 			{ "PackUnpackVariationFactor", INI::parseReal,					NULL, offsetof( HackInternetAIUpdateModuleData, m_packUnpackVariationFactor ) },
-			{ "CashUpdateDelay",		INI::parseDurationUnsignedInt,	NULL, offsetof( HackInternetAIUpdateModuleData, m_cashUpdateDelay ) },
-			{ "CashUpdateDelayFast",INI::parseDurationUnsignedInt,	NULL, offsetof( HackInternetAIUpdateModuleData, m_cashUpdateDelayFast ) },
+			{ "CashUpdateDelay",		SPEED_FIELD( HackInternetAIUpdateModuleData, m_cashUpdateDelay ) },
+			{ "CashUpdateDelayFast",SPEED_FIELD( HackInternetAIUpdateModuleData, m_cashUpdateDelayFast ) },
 			{ "RegularCashAmount",	INI::parseUnsignedInt,	NULL, offsetof( HackInternetAIUpdateModuleData, m_regularCashAmount ) },
 			{ "VeteranCashAmount",	INI::parseUnsignedInt,	NULL, offsetof( HackInternetAIUpdateModuleData, m_veteranCashAmount ) },
 			{ "EliteCashAmount",		INI::parseUnsignedInt,	NULL, offsetof( HackInternetAIUpdateModuleData, m_eliteCashAmount ) },

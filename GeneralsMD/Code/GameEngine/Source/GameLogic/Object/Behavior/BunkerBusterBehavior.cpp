@@ -61,7 +61,7 @@ BunkerBusterBehaviorModuleData::BunkerBusterBehaviorModuleData( void )
 	m_upgradeRequired = NULL;
 	m_detonationFX = NULL;
   m_crashThroughBunkerFX = NULL;
-  m_crashThroughBunkerFXFrequency = ConvertRetailFrames(4u);
+  m_crashThroughBunkerFXFrequency.setRaw( 133 );	// msec: ConvertRetailFrames(4u) at the native speed
   
   m_seismicEffectRadius = 140.0f;
   m_seismicEffectMagnitude = 6.0f;
@@ -82,7 +82,7 @@ BunkerBusterBehaviorModuleData::BunkerBusterBehaviorModuleData( void )
 		{ "UpgradeRequired",	              INI::parseAsciiString,	        NULL, offsetof( BunkerBusterBehaviorModuleData, m_upgradeRequired ) },
 		{ "DetonationFX",			              INI::parseFXList,				        NULL, offsetof( BunkerBusterBehaviorModuleData, m_detonationFX ) },
 		{ "CrashThroughBunkerFX",			      INI::parseFXList,				        NULL, offsetof( BunkerBusterBehaviorModuleData, m_crashThroughBunkerFX ) },
-		{ "CrashThroughBunkerFXFrequency",	INI::parseDurationUnsignedInt,	NULL, offsetof( BunkerBusterBehaviorModuleData, m_crashThroughBunkerFXFrequency ) },
+		{ "CrashThroughBunkerFXFrequency",	SPEED_FIELD( BunkerBusterBehaviorModuleData, m_crashThroughBunkerFXFrequency ) },
 		{ "SeismicEffectRadius",			      INI::parseReal,				          NULL, offsetof( BunkerBusterBehaviorModuleData, m_seismicEffectRadius ) },
 		{ "SeismicEffectMagnitude",	        INI::parseReal,	                NULL, offsetof( BunkerBusterBehaviorModuleData, m_seismicEffectMagnitude ) },
     { "ShockwaveWeaponTemplate",        INI::parseWeaponTemplate,       NULL, offsetof( BunkerBusterBehaviorModuleData, m_shockwaveWeaponTemplate ) },

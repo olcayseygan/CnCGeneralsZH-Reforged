@@ -41,9 +41,9 @@
 SpyVisionSpecialPowerModuleData::SpyVisionSpecialPowerModuleData( void )
 {
 
-	m_baseDurationInFrames = 0;
-	m_bonusDurationPerCapturedInFrames = 0;
-	m_maxDurationInFrames = 0;
+	m_baseDurationInFrames.setRaw( 0 );
+	m_bonusDurationPerCapturedInFrames.setRaw( 0 );
+	m_maxDurationInFrames.setRaw( 0 );
 
 }
 
@@ -55,9 +55,9 @@ void SpyVisionSpecialPowerModuleData::buildFieldParse( MultiIniFieldParse &p )
 	
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "BaseDuration",								INI::parseDurationUnsignedInt,	NULL,   offsetof( SpyVisionSpecialPowerModuleData, m_baseDurationInFrames ) },
-		{ "BonusDurationPerCaptured",		INI::parseDurationUnsignedInt,	NULL,   offsetof( SpyVisionSpecialPowerModuleData, m_bonusDurationPerCapturedInFrames ) },
-		{ "MaxDuration",								INI::parseDurationUnsignedInt,	NULL,   offsetof( SpyVisionSpecialPowerModuleData, m_maxDurationInFrames ) },
+		{ "BaseDuration",								SPEED_FIELD( SpyVisionSpecialPowerModuleData, m_baseDurationInFrames ) },
+		{ "BonusDurationPerCaptured",		SPEED_FIELD( SpyVisionSpecialPowerModuleData, m_bonusDurationPerCapturedInFrames ) },
+		{ "MaxDuration",								SPEED_FIELD( SpyVisionSpecialPowerModuleData, m_maxDurationInFrames ) },
 		{ 0, 0, 0, 0 }
 	};
 	p.add( dataFieldParse );

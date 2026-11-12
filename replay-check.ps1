@@ -44,6 +44,9 @@ param(
 	[int] $MapCells = 0,
 	# a generator style (twilight), the last word of -randommap; empty is the plain generator
 	[string] $Style = "",
+	# the match's game speed in percent of retail's pace (100, 125, 150, 200), -gamespeed on the recording;
+	# the playback takes it from the replay's GS= field. 0 leaves the native speed
+	[int] $GameSpeed = 0,
 	# where the game is
 	[string] $RunDir = "$PSScriptRoot\GeneralsMD\Run",
 	[string] $Exe = "generals.exe",
@@ -133,6 +136,7 @@ foreach ($seed in $Seeds)
 	$mapArgs = @("-randommap", $seed, $Players)
 	if ($MapCells -gt 0) { $mapArgs += $MapCells }
 	if ($Style) { $mapArgs += $Style }
+	if ($GameSpeed -gt 0) { $mapArgs += @("-gamespeed", $GameSpeed) }
 	$live = Invoke-Run ($mapArgs + @("-autoskirmish", $Players, "-aidiff", $Difficulty,
 											 "-seed", $seed, "-observer")) "det$($seed)_live"
 	if ($null -eq $live) { Write-Host "no result from the live run"; $failures++; continue }

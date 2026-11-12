@@ -39,7 +39,7 @@
 JammerUpdateModuleData::JammerUpdateModuleData()
 {
 	m_radius = 0.0f;
-	m_scanFrames = LOGICFRAMES_PER_GAME_SECOND / 6;
+	m_scanFrames.setRaw( 150 );	// msec: LOGICFRAMES_PER_GAME_SECOND / 6 at the native speed
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -50,7 +50,7 @@ JammerUpdateModuleData::JammerUpdateModuleData()
 	static const FieldParse dataFieldParse[] =
 	{
 		{ "Radius",		INI::parseReal,									NULL, offsetof( JammerUpdateModuleData, m_radius ) },
-		{ "ScanRate",	INI::parseDurationUnsignedInt,	NULL, offsetof( JammerUpdateModuleData, m_scanFrames ) },
+		{ "ScanRate",	SPEED_FIELD( JammerUpdateModuleData, m_scanFrames ) },
 		{ 0, 0, 0, 0 }
 	};
 	p.add( dataFieldParse );

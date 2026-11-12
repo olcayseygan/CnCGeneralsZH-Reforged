@@ -59,14 +59,14 @@ static const Real STRAIGHT_DOWN_SLOW_FACTOR = 0.5f;
 NeutronMissileUpdateModuleData::NeutronMissileUpdateModuleData()
 {
 	m_initialDist = 0.0f;
-	m_maxTurnRate = 999.0f;
+	m_maxTurnRate.setRaw( 1144770.0f );	// deg/sec: about 999 radians a frame, no limit
 	m_forwardDamping = 0;
 	m_relativeSpeed = 1.0f;
 	m_targetFromDirectlyAbove = 0.0f;
 	m_ignitionFX = NULL;
 	m_launchFX = NULL;
 	m_specialAccelFactor = 1.0f;
-	m_specialSpeedTime = 0;
+	m_specialSpeedTime.setRaw( 0 );
 	m_specialSpeedHeight = 0.0f;
 	m_specialJitterDistance = 0.0f;
 	m_deliveryDecalRadius = 0;
@@ -80,12 +80,12 @@ void NeutronMissileUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 	static const FieldParse dataFieldParse[] = 
 	{
 		{ "DistanceToTravelBeforeTurning",	INI::parseReal,		NULL, offsetof( NeutronMissileUpdateModuleData, m_initialDist ) },
-		{ "MaxTurnRate",			INI::parseAngularVelocityReal,		NULL, offsetof( NeutronMissileUpdateModuleData, m_maxTurnRate ) },
+		{ "MaxTurnRate",			SPEED_FIELD( NeutronMissileUpdateModuleData, m_maxTurnRate ) },
 		{ "ForwardDamping",		INI::parseReal,		NULL, offsetof( NeutronMissileUpdateModuleData, m_forwardDamping ) },
 		{ "RelativeSpeed",		INI::parseReal,		NULL, offsetof( NeutronMissileUpdateModuleData, m_relativeSpeed ) },
 		{ "TargetFromDirectlyAbove",		INI::parseReal,		NULL, offsetof( NeutronMissileUpdateModuleData, m_targetFromDirectlyAbove ) },
 		{ "LaunchFX",					INI::parseFXList,		NULL, offsetof( NeutronMissileUpdateModuleData, m_launchFX ) },
-		{ "SpecialSpeedTime",	INI::parseDurationUnsignedInt,		NULL, offsetof( NeutronMissileUpdateModuleData, m_specialSpeedTime ) },
+		{ "SpecialSpeedTime",	SPEED_FIELD( NeutronMissileUpdateModuleData, m_specialSpeedTime ) },
 		{ "SpecialSpeedHeight",	INI::parseReal,		NULL, offsetof( NeutronMissileUpdateModuleData, m_specialSpeedHeight ) },
 		{ "SpecialAccelFactor",	INI::parseReal,		NULL, offsetof( NeutronMissileUpdateModuleData, m_specialAccelFactor ) },
 		{ "SpecialJitterDistance",	INI::parseReal,		NULL, offsetof( NeutronMissileUpdateModuleData, m_specialJitterDistance ) },

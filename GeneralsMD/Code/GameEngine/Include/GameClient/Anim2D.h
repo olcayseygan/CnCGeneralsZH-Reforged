@@ -111,7 +111,7 @@ protected:
 	AsciiString			m_name;										///< name of this 2D animation
 	const Image**		m_images;											///< array of image pointers that make up this animation
 	UnsignedShort		m_numFrames;						///< total number of frames in this animation
-	UnsignedShort		m_framesBetweenUpdates;	///< frames between frame updates
+	DurationFramesShort		m_framesBetweenUpdates;	///< frames between frame updates
 	Anim2DMode			m_animMode;								///< the animation mode
 	Bool						m_randomizeStartFrame;						///< randomize animation instance start frames
 

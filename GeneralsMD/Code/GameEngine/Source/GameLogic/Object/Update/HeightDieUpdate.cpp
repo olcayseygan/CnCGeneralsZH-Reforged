@@ -58,7 +58,7 @@ HeightDieUpdateModuleData::HeightDieUpdateModuleData( void )
 	m_onlyWhenMovingDown = FALSE;
 	m_destroyAttachedParticlesAtHeight = -1.0f;
 	m_snapToGroundOnDeath = FALSE;
-	m_initialDelay = 0;
+	m_initialDelay.setRaw( 0 );
 
 }  // end HeightDieUpdateModuleData
 
@@ -76,7 +76,7 @@ void HeightDieUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "OnlyWhenMovingDown", INI::parseBool, NULL, offsetof( HeightDieUpdateModuleData, m_onlyWhenMovingDown ) },
 		{ "DestroyAttachedParticlesAtHeight", INI::parseReal, NULL, offsetof( HeightDieUpdateModuleData, m_destroyAttachedParticlesAtHeight ) },
 		{ "SnapToGroundOnDeath", INI::parseBool, NULL, offsetof( HeightDieUpdateModuleData, m_snapToGroundOnDeath ) },
-		{ "InitialDelay", INI::parseDurationUnsignedInt, NULL, offsetof( HeightDieUpdateModuleData, m_initialDelay ) },
+		{ "InitialDelay", SPEED_FIELD( HeightDieUpdateModuleData, m_initialDelay ) },
 		{ 0, 0, 0, 0 }
 
 	};

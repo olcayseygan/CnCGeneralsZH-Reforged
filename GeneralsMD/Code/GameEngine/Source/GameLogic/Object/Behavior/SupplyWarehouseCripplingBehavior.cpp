@@ -39,8 +39,8 @@
 //-------------------------------------------------------------------------------------------------
 SupplyWarehouseCripplingBehaviorModuleData::SupplyWarehouseCripplingBehaviorModuleData()
 {
-	m_selfHealSupression = 0; ///< Time since last damage until I can start to heal
-	m_selfHealDelay = 0;			///< Once I am okay to heal, how often to do so
+	m_selfHealSupression.setRaw( 0 ); ///< Time since last damage until I can start to heal
+	m_selfHealDelay.setRaw( 0 );			///< Once I am okay to heal, how often to do so
 	m_selfHealAmount = 0;							///< And how much
 }
 
@@ -50,8 +50,8 @@ SupplyWarehouseCripplingBehaviorModuleData::SupplyWarehouseCripplingBehaviorModu
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "SelfHealSupression",	INI::parseDurationUnsignedInt,	NULL, offsetof(SupplyWarehouseCripplingBehaviorModuleData, m_selfHealSupression) },
-		{ "SelfHealDelay",			INI::parseDurationUnsignedInt,	NULL, offsetof(SupplyWarehouseCripplingBehaviorModuleData, m_selfHealDelay) },
+		{ "SelfHealSupression",	SPEED_FIELD( SupplyWarehouseCripplingBehaviorModuleData, m_selfHealSupression ) },
+		{ "SelfHealDelay",			SPEED_FIELD( SupplyWarehouseCripplingBehaviorModuleData, m_selfHealDelay ) },
 		{ "SelfHealAmount",			INI::parseReal,									NULL, offsetof(SupplyWarehouseCripplingBehaviorModuleData, m_selfHealAmount) },
 		{ 0, 0, 0, 0 }
 	};

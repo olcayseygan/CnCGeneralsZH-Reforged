@@ -65,7 +65,7 @@
 //-------------------------------------------------------------------------------------------------
 CommandButtonHuntUpdateModuleData::CommandButtonHuntUpdateModuleData()
 {
-	m_scanFrames				= LOGICFRAMES_PER_GAME_SECOND;
+	m_scanFrames.setRaw( 1000 );
 	m_scanRange					= 9999.0f;
 }
 
@@ -76,7 +76,7 @@ CommandButtonHuntUpdateModuleData::CommandButtonHuntUpdateModuleData()
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "ScanRate",							INI::parseDurationUnsignedInt,	NULL, offsetof( CommandButtonHuntUpdateModuleData, m_scanFrames ) },
+		{ "ScanRate",							SPEED_FIELD( CommandButtonHuntUpdateModuleData, m_scanFrames ) },
 		{ "ScanRange",						INI::parseReal,									NULL, offsetof( CommandButtonHuntUpdateModuleData, m_scanRange ) },
 		{ 0, 0, 0, 0 }
 	};

@@ -54,9 +54,9 @@ class PhysicsBehaviorModuleData : public UpdateModuleData
 public:
 	Real	m_mass;
 	Real	m_shockResistance;
-	Real	m_shockMaxYaw;
-	Real	m_shockMaxPitch;
-	Real	m_shockMaxRoll;
+	RetailPerFrame	m_shockMaxYaw;
+	RetailPerFrame	m_shockMaxPitch;
+	RetailPerFrame	m_shockMaxRoll;
 	Real	m_forwardFriction;
 	Real	m_lateralFriction;
 	Real	m_ZFriction;
@@ -65,7 +65,7 @@ public:
 	Bool	m_killWhenRestingOnGround;	// when airborne==false and vel==0, kill it.
 	Bool	m_allowBouncing;
 	Bool	m_allowCollideForce;
-	Real	m_minFallSpeedForDamage;
+	Real	m_minFallHeightForDamage;	// as the INI wrote it; the speed it takes is worked out from the match's gravity (getMinFallSpeedForDamage)
 	Real	m_fallHeightDamageFactor;
 	Real	m_pitchRollYawFactor;
   
@@ -74,6 +74,7 @@ public:
 
 	PhysicsBehaviorModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);
+	Real getMinFallSpeedForDamage( void ) const;	///< v = sqrt(2gh) of m_minFallHeightForDamage at this match's gravity
 };
 
 //-------------------------------------------------------------------------------------------------

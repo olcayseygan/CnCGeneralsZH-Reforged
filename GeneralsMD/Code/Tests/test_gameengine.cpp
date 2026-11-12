@@ -4032,12 +4032,15 @@ static void closedFormSetup( ParticleSystemInfo *system, ParticleInfo *info,
 														 ParticleSystemInfo::ParticleShaderType shader, UnsignedInt lifetime )
 {
 	system->m_shaderType = shader;
-	system->m_driftVelocity.set( 0.25f, -0.5f, 0.125f );
-	system->m_gravity = -0.05f;
+	// the template's numbers are as an INI wrote them; both sides below read them converted
+	Coord3D drift;
+	drift.set( 0.25f, -0.5f, 0.125f );
+	system->m_driftVelocity.setRaw( drift );
+	system->m_gravity.setRaw( -0.05f );
 	for( Int i = 0; i < MAX_KEYFRAMES; ++i )
 	{
-		system->m_alphaKey[ i ].frame = 0;
-		system->m_colorKey[ i ].frame = 0;
+		system->m_alphaKey[ i ].frame.setRaw( 0 );
+		system->m_colorKey[ i ].frame.setRaw( 0 );
 		system->m_colorKey[ i ].color.red = system->m_colorKey[ i ].color.green = system->m_colorKey[ i ].color.blue = 0.0f;
 		info->m_alphaKey[ i ].value = 0.0f;
 	}
@@ -4059,12 +4062,12 @@ static void closedFormColorKey( ParticleSystemInfo *system, Int key, Real red, R
 	system->m_colorKey[ key ].color.red = red;
 	system->m_colorKey[ key ].color.green = green;
 	system->m_colorKey[ key ].color.blue = blue;
-	system->m_colorKey[ key ].frame = frame;
+	system->m_colorKey[ key ].frame.setRaw( ConvertFramesToRetail( frame ) );	// the key falls on this frame at the match's speed
 }
 
 static void closedFormAlphaKey( ParticleSystemInfo *system, ParticleInfo *info, Int key, Real value, UnsignedInt frame )
 {
-	system->m_alphaKey[ key ].frame = frame;
+	system->m_alphaKey[ key ].frame.setRaw( ConvertFramesToRetail( frame ) );
 	info->m_alphaKey[ key ].value = value;
 }
 
@@ -6303,23 +6306,22 @@ TEST(controlbar_seconds_round_up_and_never_reach_zero_early)
 	CHECK_EQ( ControlBar_secondsFromFrames( 1.0f ), 1 );
 }
 
-TEST(player_game_speeds_are_wall_pacing_of_the_native_tick)
+TEST(player_game_speeds_set_the_game_time_of_one_tick)
 {
-	/* The four player speeds, in percent of retail's pace, are ticks a wall second of the same tick:
-	   the native one is LOGICFRAMES_PER_SECOND, the rest scale it.  Anything else lands on the nearest. */
-	CHECK_EQ( (Int)PLAYER_GAME_SPEED_PERCENT_DEFAULT, (Int)GAME_SPEED_PERCENT );
-	CHECK_EQ( GameEngine_framesPerSecondForSpeed( PLAYER_GAME_SPEED_PERCENT_DEFAULT ), (Int)LOGICFRAMES_PER_SECOND );
+	/* The four player speeds, in percent of retail's pace, are the game time each of the same
+	   LOGICFRAMES_PER_SECOND ticks advances: GameSpeed_set takes one, and a game second is that many
+	   fewer ticks.  The native one is the default.  Anything else lands on the nearest. */
+	CHECK_EQ( (Int)PLAYER_GAME_SPEED_PERCENT_DEFAULT, (Int)NATIVE_GAME_SPEED_PERCENT );
 	for( Int i = 0; i < PLAYER_GAME_SPEED_COUNT; ++i )
 	{
 		const Int percent = PLAYER_GAME_SPEED_PERCENTS[ i ];
 		CHECK_EQ( ClampPlayerGameSpeedPercent( percent ), percent );
-		const Int fps = GameEngine_framesPerSecondForSpeed( percent );
-		// the pace against retail: ticks a wall second times the game time a tick advances
-		CHECK_NEAR( fps * (Real)GAME_SPEED_PERCENT / (Real)LOGICFRAMES_PER_SECOND, (Real)percent,
-			0.5f * (Real)GAME_SPEED_PERCENT / (Real)LOGICFRAMES_PER_SECOND );
-		if( i > 0 )
-			CHECK( fps > GameEngine_framesPerSecondForSpeed( PLAYER_GAME_SPEED_PERCENTS[ i - 1 ] ) );
+		GameSpeed_set( percent );
+		CHECK_EQ( LOGICFRAMES_PER_GAME_SECOND * percent, LOGICFRAMES_PER_SECOND * 100 );
+		// a retail second of game time takes fewer ticks the faster the speed
+		CHECK_EQ( ConvertRetailFrames( (Int)RETAIL_LOGICFRAMES_PER_SECOND ), (Int)LOGICFRAMES_PER_GAME_SECOND );
 	}
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
 	CHECK_EQ( ClampPlayerGameSpeedPercent( 10 ), PLAYER_GAME_SPEED_PERCENTS[ 0 ] );
 	CHECK_EQ( ClampPlayerGameSpeedPercent( 1000 ), PLAYER_GAME_SPEED_PERCENTS[ PLAYER_GAME_SPEED_COUNT - 1 ] );
 	CHECK_EQ( ClampPlayerGameSpeedPercent( 140 ), 150 );
@@ -6329,52 +6331,59 @@ TEST(player_game_speeds_are_wall_pacing_of_the_native_tick)
 TEST(mission_cinematic_runs_at_the_speed_its_script_asks_for)
 {
 	/* CHI01's opening asks for 23 of retail's 30 and for 0 when it hands the game back; USA06 hands it
-	   back with 30.  Below 30 is the cinematic's pace at any game speed; the rest is the match's speed. */
-	const Int slowest = GameEngine_framesPerSecondForSpeed( PLAYER_GAME_SPEED_PERCENTS[ 0 ] );
-	const Int fastest = GameEngine_framesPerSecondForSpeed( PLAYER_GAME_SPEED_PERCENTS[ PLAYER_GAME_SPEED_COUNT - 1 ] );
-	CHECK_EQ( GameEngine_missionFramesPerSecond( 23, slowest ), ConvertRetailFrames( 23 ) );
-	CHECK_EQ( GameEngine_missionFramesPerSecond( 23, fastest ), ConvertRetailFrames( 23 ) );
-	CHECK_EQ( GameEngine_missionFramesPerSecond( 0, slowest ), slowest );
-	CHECK_EQ( GameEngine_missionFramesPerSecond( 0, fastest ), fastest );
-	CHECK_EQ( GameEngine_missionFramesPerSecond( RETAIL_LOGICFRAMES_PER_SECOND, fastest ), fastest );
+	   back with 30.  Below 30 is the cinematic's pace at the mission's game speed, a retail pace in wall
+	   time; the rest is the match's ticks a second, the same at every speed. */
+	const Int match = LOGICFRAMES_PER_SECOND;
+	for( Int i = 0; i < PLAYER_GAME_SPEED_COUNT; ++i )
+	{
+		GameSpeed_set( PLAYER_GAME_SPEED_PERCENTS[ i ] );
+		CHECK_EQ( GameEngine_missionFramesPerSecond( 23, match ), ConvertRetailFrames( 23 ) );
+		CHECK_EQ( GameEngine_missionFramesPerSecond( 0, match ), match );
+		CHECK_EQ( GameEngine_missionFramesPerSecond( RETAIL_LOGICFRAMES_PER_SECOND, match ), match );
+	}
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
 }
 
 TEST(held_input_cinematic_at_full_rate_paces_at_retail_speed)
 {
 	/* MD_CHI02's intro tail runs at SET_FPS_LIMIT 30 under held input: retail pace, a retail second of
-	   ticks a wall second, which is ConvertRetailFrames of retail's rate, from every player speed.  A
-	   rate a script already slowed is folded once and stays, and nothing moves outside a cinematic. */
-	const Int retailPace = ConvertRetailFrames( (Int)RETAIL_LOGICFRAMES_PER_SECOND );
-	CHECK_EQ( GameEngine_framesPerSecondForSpeed( 100 ), retailPace );
+	   ticks a wall second, which is ConvertRetailFrames of retail's rate at the mission's game speed (30 at
+	   100, 20 at 150, 15 at 200).  A rate a script already slowed is folded once and stays, and nothing
+	   moves outside a cinematic. */
 	for( Int i = 0; i < PLAYER_GAME_SPEED_COUNT; ++i )
 	{
-		const Int fps = GameEngine_framesPerSecondForSpeed( PLAYER_GAME_SPEED_PERCENTS[ i ] );
-		CHECK_EQ( GameEngine_cinematicFramesPerSecond( fps, TRUE ), fps < retailPace ? fps : retailPace );
-		CHECK_EQ( GameEngine_cinematicFramesPerSecond( fps, FALSE ), fps );
+		GameSpeed_set( PLAYER_GAME_SPEED_PERCENTS[ i ] );
+		const Int retailPace = ConvertRetailFrames( (Int)RETAIL_LOGICFRAMES_PER_SECOND );
+		CHECK_EQ( GameEngine_framesPerSecondForSpeed( 100 ), retailPace );
+		CHECK_EQ( GameEngine_cinematicFramesPerSecond( LOGICFRAMES_PER_SECOND, TRUE ), retailPace );
+		CHECK_EQ( GameEngine_cinematicFramesPerSecond( LOGICFRAMES_PER_SECOND, FALSE ), (Int)LOGICFRAMES_PER_SECOND );
+		const Int slowed = GameEngine_missionFramesPerSecond( 23, LOGICFRAMES_PER_SECOND );
+		CHECK_EQ( GameEngine_cinematicFramesPerSecond( slowed, TRUE ), slowed );
+		// the pace against retail: ticks a wall second times the game time each tick advances
+		CHECK_NEAR( GameEngine_cinematicFramesPerSecond( LOGICFRAMES_PER_SECOND, TRUE ) * ( (Real)GAME_SPEED_PERCENT / 100.0f ),
+			(Real)RETAIL_LOGICFRAMES_PER_SECOND * LOGICFRAMES_PER_RETAIL_FRAME, 0.5f * (Real)GAME_SPEED_PERCENT / 100.0f );
 	}
-	const Int slowed = GameEngine_missionFramesPerSecond( 23, LOGICFRAMES_PER_SECOND );
-	CHECK_EQ( GameEngine_cinematicFramesPerSecond( slowed, TRUE ), slowed );
-	// the pace against retail: ticks a wall second times the game time each tick advances
-	CHECK_NEAR( GameEngine_cinematicFramesPerSecond( LOGICFRAMES_PER_SECOND, TRUE ) * ( (Real)GAME_SPEED_PERCENT / 100.0f ),
-		(Real)RETAIL_LOGICFRAMES_PER_SECOND * LOGICFRAMES_PER_RETAIL_FRAME, 0.5f * (Real)GAME_SPEED_PERCENT / 100.0f );
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
 }
 
-TEST(match_speed_is_frames_per_second_limit_scaled_by_game_speed)
+TEST(match_pace_is_frames_per_second_limit_at_every_game_speed)
 {
-	/* Every MSG_NEW_GAME a player starts passes this: GameData.ini's native tick, or -fps for a test,
-	   scaled by the game speed, inside the 1..1000 MSG_NEW_GAME takes.  Network games pass the default. */
+	/* Every MSG_NEW_GAME a player starts passes this and its game speed after it: GameData.ini's native
+	   tick, or -fps for a test, inside the 1..1000 MSG_NEW_GAME takes, the same at every speed. */
 	GlobalData *saved = TheWritableGlobalData;
 	TheWritableGlobalData = NEW GlobalData;
 
 	TheWritableGlobalData->m_framesPerSecondLimit = LOGICFRAMES_PER_SECOND;
-	CHECK_EQ( GameEngine_matchFramesPerSecond( PLAYER_GAME_SPEED_PERCENT_DEFAULT ), LOGICFRAMES_PER_SECOND );
 	for( Int i = 0; i < PLAYER_GAME_SPEED_COUNT; ++i )
-		CHECK_EQ( GameEngine_matchFramesPerSecond( PLAYER_GAME_SPEED_PERCENTS[ i ] ),
-			GameEngine_framesPerSecondForSpeed( PLAYER_GAME_SPEED_PERCENTS[ i ] ) );
+	{
+		GameSpeed_set( PLAYER_GAME_SPEED_PERCENTS[ i ] );
+		CHECK_EQ( GameEngine_matchFramesPerSecond(), (Int)LOGICFRAMES_PER_SECOND );
+	}
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
 	TheWritableGlobalData->m_framesPerSecondLimit = 0;	// no FramesPerSecondLimit at all
-	CHECK_EQ( GameEngine_matchFramesPerSecond( PLAYER_GAME_SPEED_PERCENT_DEFAULT ), LOGICFRAMES_PER_SECOND );
-	TheWritableGlobalData->m_framesPerSecondLimit = 800;
-	CHECK_EQ( GameEngine_matchFramesPerSecond( 200 ), 1000 );
+	CHECK_EQ( GameEngine_matchFramesPerSecond(), (Int)LOGICFRAMES_PER_SECOND );
+	TheWritableGlobalData->m_framesPerSecondLimit = 2000;
+	CHECK_EQ( GameEngine_matchFramesPerSecond(), 1000 );
 
 	SkirmishGameInfo game;
 	game.init();
@@ -24573,6 +24582,33 @@ TEST(unsigned_text_parses_as_windows_32_bit_strtoul)
 
 #include "Common/GameState.h"
 
+// The ticks a game second a save's frame counts are in name its game speed, which the load sets before
+// anything of the match is read; a number no speed of this build ticks is refused.
+TEST(save_field_names_the_game_speed_it_was_played_at)
+{
+	SaveGameInfo info;
+	info.version = 6;
+	for( Int i = 0; i < PLAYER_GAME_SPEED_COUNT; ++i )
+	{
+		const Int percent = PLAYER_GAME_SPEED_PERCENTS[ i ];
+		info.logicFramesPerSecond = LOGICFRAMES_PER_SECOND * 100 / percent;
+		CHECK_EQ( info.gameSpeedPercent(), percent );
+		CHECK( info.isLoadable() );
+	}
+	if( LOGICFRAMES_PER_SECOND == 30 )
+	{
+		CHECK_EQ( GameState_speedForTicksPerGameSecond( 30 ), 100 );
+		CHECK_EQ( GameState_speedForTicksPerGameSecond( 24 ), 125 );
+		CHECK_EQ( GameState_speedForTicksPerGameSecond( 20 ), 150 );		// every save the f3b894bd build wrote
+		CHECK_EQ( GameState_speedForTicksPerGameSecond( 15 ), 200 );
+	}
+	info.logicFramesPerSecond = 18;
+	CHECK_EQ( info.gameSpeedPercent(), 0 );
+	CHECK( !info.isLoadable() );
+	info.logicFramesPerSecond = 60;		// a version 5 save's, read as 60
+	CHECK( !info.isLoadable() );
+}
+
 // A save from before block version 5, or counted at another logic rate than this build's, is refused,
 // except a mission save (the GameState and campaign blocks only, no frame counts), which carries a
 // campaign over from any earlier build, another rate or retail.
@@ -24688,6 +24724,184 @@ TEST(retail_helpers_carry_the_game_speed_and_are_the_identity_at_100)
 	CHECK_NEAR( ConvertDurationFromMsecsToFrames( (Real)MSEC_PER_SECOND ), LOGICFRAMES_PER_GAME_SECOND_REAL, 0.001f );
 	CHECK_EQ( GAME_SECONDS_PER_LOGICFRAME_REAL == SECONDS_PER_LOGICFRAME_REAL, atHundred );
 	CHECK_EQ( GAME_MSEC_PER_LOGICFRAME_REAL == MSEC_PER_LOGICFRAME_REAL, atHundred );
+}
+
+/* The speed is TheGameSpeed's now, set per match.  The old build had it as constants: GAME_SPEED_PERCENT
+	 150 at 30 Hz, LOGICFRAMES_PER_GAME_SECOND 20, and every value below folded by the compiler from those.
+	 Native has to be those numbers bit for bit, or no replay of the old build plays back. */
+static Bool sameBits( Real a, Real b ) { return memcmp( &a, &b, sizeof( Real ) ) == 0; }
+
+TEST(game_speed_native_is_the_old_constants_bit_for_bit)
+{
+	CHECK_EQ( (Int)LOGICFRAMES_PER_SECOND, 30 );		// the old build these numbers are pinned to
+	CHECK_EQ( (Int)NATIVE_GAME_SPEED_PERCENT, 150 );
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
+	CHECK_EQ( GAME_SPEED_PERCENT, 150 );
+	CHECK_EQ( LOGICFRAMES_PER_GAME_SECOND, 20 );
+	CHECK_EQ( GAME_FACTOR_EXPONENT_EIGHTHS, 12 );
+	const Real OLD_SECONDS = 1.0f / (Real)20;
+	CHECK( sameBits( LOGICFRAMES_PER_GAME_SECOND_REAL, (Real)20 ) );
+	CHECK( sameBits( GAME_SECONDS_PER_LOGICFRAME_REAL, OLD_SECONDS ) );
+	CHECK( sameBits( GAME_MSEC_PER_LOGICFRAME_REAL, ( (Real)1000 ) / ( (Real)20 ) ) );
+	CHECK( sameBits( TheGameSpeed.ticksPerGameMsec, ( (Real)20 ) / ( (Real)1000 ) ) );
+	CHECK( sameBits( TheGameSpeed.gameSecondsPerTickSqr, OLD_SECONDS * OLD_SECONDS ) );
+	const Real RADS_PER_DEGREE = PI / 180.0f;
+	CHECK( sameBits( TheGameSpeed.radsPerTickPerDegPerSec, OLD_SECONDS * RADS_PER_DEGREE ) );
+	CHECK( sameBits( TheGameSpeed.retailFrameRatio, (Real)100 / (Real)150 ) );
+	CHECK( sameBits( TheGameSpeed.perFrameRate, (Real)150 / (Real)100 ) );
+	CHECK( sameBits( TheGameSpeed.perFrameSquared, (Real)( 150 * 150 ) / (Real)10000 ) );
+
+	// worked out at run time from a percent the compiler cannot see, the same bits
+	volatile Int percent = 150;
+	const GameSpeedState runtime = GameSpeed_compute( percent );
+	CHECK( memcmp( &runtime, &TheGameSpeed, sizeof( GameSpeedState ) ) == 0 );
+}
+
+// The old parsers, as they stood at f3b894bd with the constants of that build written in.
+static UnsignedInt oldDurationUnsignedInt( UnsignedInt msec ) { return floatToUnsignedAsMsvc( ceilf( (Real)msec * ( ( (Real)20 ) / ( (Real)1000 ) ) ) ); }
+static Real oldDurationReal( Real msec ) { return msec * ( ( (Real)20 ) / ( (Real)1000 ) ); }
+static Real oldVelocity( Real perSec ) { return perSec * ( 1.0f / (Real)20 ); }
+static Real oldAcceleration( Real perSec2 ) { const Real s = 1.0f / (Real)20; return perSec2 * ( s * s ); }
+static Real oldAngular( Real degPerSec ) { const Real RADS_PER_DEGREE = PI / 180.0f; return degPerSec * ( ( 1.0f / (Real)20 ) * RADS_PER_DEGREE ); }
+static Int oldRetailFramesInt( Int frames )
+{
+	const Int64 n = (Int64)frames * 100;
+	const Int scaled = (Int)( ( n >= 0 ? n + 75 : n - 75 ) / 150 );
+	return scaled != 0 ? scaled : ( frames > 0 ? 1 : frames < 0 ? -1 : 0 );
+}
+static Real oldRetailFramesReal( Real frames )
+{
+	const Real scaled = frames * ( (Real)100 / (Real)150 );
+	const Real least = frames < 1.0f ? frames : 1.0f;
+	return scaled < least ? least : scaled;
+}
+static Real oldPerFrame( Real x ) { return x * ( (Real)150 / (Real)100 ); }
+static Real oldFactor( Real factor )
+{
+	const Real f = factor > 0.0f ? factor : 0.0f;
+	Real result = f;		// 12 eighths: one whole power, then the half
+	Real root = sqrtf( f );
+	result *= root;
+	root = sqrtf( root );
+	root = sqrtf( root );
+	return result;
+}
+
+TEST(speed_scaled_reads_at_native_equal_what_the_old_parsers_stored)
+{
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
+	// whole msec and counts across the range the data uses, and some awkward Reals
+	const UnsignedInt counts[] = { 0, 1, 2, 3, 33, 34, 49, 50, 51, 66, 67, 100, 133, 150, 250, 333, 500, 999, 1000, 1001,
+		1500, 2500, 3333, 4999, 5000, 7777, 10000, 16640, 30000, 60000, 65535, 100000, 333280, 499999968, 0x7ffffffe };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( counts ); ++i )
+	{
+		const UnsignedInt c = counts[ i ];
+		CHECK_EQ( (UnsignedInt)DurationFrames::fromRaw( c ), oldDurationUnsignedInt( c ) );
+		CHECK_EQ( (Int)DurationFramesInt::fromRaw( (Int)c ), (Int)oldDurationUnsignedInt( c ) );
+		if( c <= 0xFFFF )
+			CHECK_EQ( (UnsignedShort)DurationFramesShort::fromRaw( (UnsignedShort)c ), floatToUnsignedShortAsMsvc( ceilf( (Real)c * ( ( (Real)20 ) / ( (Real)1000 ) ) ) ) );
+		if( c < 0x40000000 )
+		{
+			CHECK_EQ( (Int)RetailFramesInt::fromRaw( (Int)c ), oldRetailFramesInt( (Int)c ) );
+			CHECK_EQ( (Int)RetailFramesInt::fromRaw( -(Int)c ), oldRetailFramesInt( -(Int)c ) );
+			CHECK_EQ( (UnsignedInt)RetailFrames::fromRaw( c ), (UnsignedInt)oldRetailFramesInt( (Int)c ) );
+		}
+	}
+	const Real reals[] = { 0.0f, 0.001f, 0.01f, 0.1f, 0.25f, 0.3f, 0.5f, 0.6f, 0.92f, 0.99f, 1.0f, 1.01f, 1.5f, 2.0f, 3.3f,
+		10.0f, 17.188734f, 30.0f, 32.0f, 64.0f, 133.0f, 171.88734f, 333.3f, 1000.0f, 12345.678f, -1.0f, -64.0f, -399.99997f };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( reals ); ++i )
+	{
+		const Real r = reals[ i ];
+		CHECK( sameBits( DurationFramesReal::fromRaw( r ), oldDurationReal( r ) ) );
+		CHECK( sameBits( VelocityPerFrame::fromRaw( r ), oldVelocity( r ) ) );
+		CHECK( sameBits( AccelerationPerFrame::fromRaw( r ), oldAcceleration( r ) ) );
+		CHECK( sameBits( AngularVelocityPerFrame::fromRaw( r ), oldAngular( r ) ) );
+		CHECK( sameBits( RetailFramesReal::fromRaw( r ), oldRetailFramesReal( r ) ) );
+		CHECK( sameBits( RetailFrameRatio::fromRaw( r ), r * ( (Real)100 / (Real)150 ) ) );
+		CHECK( sameBits( RetailPerFrame::fromRaw( r ), oldPerFrame( r ) ) );
+		CHECK( sameBits( RetailPerFrameSquared::fromRaw( r ), r * ( (Real)( 150 * 150 ) / (Real)10000 ) ) );
+		CHECK( sameBits( RetailPerFrameFactor::fromRaw( r ), oldFactor( r ) ) );
+	}
+
+	// a default written as a raw number reproduces the frame value the old ctor wrote
+	CHECK_EQ( (UnsignedInt)DurationFrames::fromRaw( 133 ), (UnsignedInt)oldRetailFramesInt( 4 ) );		// BunkerBuster
+	CHECK_EQ( (UnsignedInt)DurationFrames::fromRaw( 16640 ), (UnsignedInt)oldRetailFramesInt( 500 ) );	// Particle Uplink double click
+	CHECK_EQ( (UnsignedInt)DurationFrames::fromRaw( 499999968 ), 9999999u );		// TurretAI's idle scan
+	CHECK_EQ( (UnsignedInt)DurationFrames::fromRaw( UINT_MAX ), UINT_MAX );			// a "never" stays one
+	CHECK_EQ( (UnsignedInt)DurationFrames::fromRaw( 0x7fffffff ), 0x7fffffffu );
+	CHECK( sameBits( AngularVelocityPerFrame::fromRaw( 17.188734f ), oldPerFrame( 0.01f ) ) );	// TurretAI.h's DEFAULT_TURN_RATE_DEG_PER_SEC
+	CHECK( sameBits( AccelerationPerFrame::fromRaw( -399.99997f ), -1.0f ) );
+	CHECK( sameBits( VelocityPerFrame::fromRaw( 19999980.0f ), 999999.0f ) );
+	CHECK( sameBits( VelocityPerFrame::fromRaw( 0.19999999f ), 0.01f ) );
+	CHECK( sameBits( DurationFramesReal::fromRaw( 50.0f ), 1.0f ) );
+}
+
+/* An old save kept the converted value; setConverted turns it back into a raw that reads as the same
+	 value at the speed the save loads at, every kind, at every speed. */
+TEST(speed_scaled_set_converted_reads_back_what_the_old_save_held)
+{
+	const Real reals[] = { 0.0f, 0.01f, 0.25f, 0.6f, 0.95f, 0.99f, 1.0f, 1.5f, 3.3f, 17.188734f, 30.0f, 1000.0f };
+	for( Int s = 0; s < PLAYER_GAME_SPEED_COUNT; ++s )
+	{
+		GameSpeed_set( PLAYER_GAME_SPEED_PERCENTS[ s ] );
+		for( Int i = 0; i < (Int)ARRAY_SIZE( reals ); ++i )
+		{
+			const Real r = reals[ i ];
+			RetailPerFrame rate;	rate.setConverted( RetailPerFrame::fromRaw( r ) );
+			CHECK( sameBits( rate, RetailPerFrame::fromRaw( r ) ) );
+			RetailPerFrameFactor factor;	factor.setConverted( RetailPerFrameFactor::fromRaw( r ) );
+			CHECK( sameBits( factor, RetailPerFrameFactor::fromRaw( r ) ) );
+			RetailPerFrameSquared squared;	squared.setConverted( RetailPerFrameSquared::fromRaw( r ) );
+			CHECK( sameBits( squared, RetailPerFrameSquared::fromRaw( r ) ) );
+			AngularVelocityPerFrame turn;	turn.setConverted( AngularVelocityPerFrame::fromRaw( r ) );
+			CHECK( sameBits( turn, AngularVelocityPerFrame::fromRaw( r ) ) );
+		}
+		for( UnsignedInt c = 0; c < 2000; c += 37 )
+		{
+			DurationFrames d;	d.setConverted( DurationFrames::fromRaw( c * 7 ) );
+			CHECK_EQ( (UnsignedInt)d, (UnsignedInt)DurationFrames::fromRaw( c * 7 ) );
+			RetailFrames f;	f.setConverted( RetailFrames::fromRaw( c ) );
+			CHECK_EQ( (UnsignedInt)f, (UnsignedInt)RetailFrames::fromRaw( c ) );
+		}
+		DurationFrames never;	never.setConverted( UINT_MAX );
+		CHECK_EQ( (UnsignedInt)never, UINT_MAX );
+	}
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
+}
+
+TEST(game_speed_set_to_200_and_back_reads_what_it_read)
+{
+	CHECK( GameSpeed_isAllowed( 100 ) && GameSpeed_isAllowed( 125 ) && GameSpeed_isAllowed( 150 ) && GameSpeed_isAllowed( 200 ) );
+	CHECK( !GameSpeed_isAllowed( 175 ) && !GameSpeed_isAllowed( 50 ) && !GameSpeed_isAllowed( 0 ) );
+
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
+	const GameSpeedState before = TheGameSpeed;
+	const DurationFrames reload = DurationFrames::fromRaw( 2500 );
+	const VelocityPerFrame speed = VelocityPerFrame::fromRaw( 30.0f );
+	const RetailPerFrameFactor damping = RetailPerFrameFactor::fromRaw( 0.97f );
+	const RetailFrames count = RetailFrames::fromRaw( 37 );
+	const UnsignedInt reloadAt150 = reload;
+	const Real speedAt150 = speed, dampingAt150 = damping;
+	const UnsignedInt countAt150 = count;
+
+	GameSpeed_set( 200 );
+	CHECK_EQ( LOGICFRAMES_PER_GAME_SECOND, 15 );
+	CHECK_EQ( GAME_FACTOR_EXPONENT_EIGHTHS, 16 );
+	CHECK( sameBits( ConvertRetailPerFrameRate( 1.0f ), 2.0f ) );
+	CHECK( sameBits( ConvertRetailPerFrameSquared( 1.0f ), 4.0f ) );
+	CHECK( sameBits( ConvertRetailPerFrameFactor( 0.97f ), 0.97f * 0.97f ) );
+	CHECK_EQ( (UnsignedInt)reload, 38u );		// 2.5 s of 15 ticks, ceil( 2500 * 0.015 ) is 38
+	CHECK_EQ( (UnsignedInt)count, 19u );			// 37 retail frames at twice retail's pace, rounded half up
+	CHECK( (Real)speed != speedAt150 );
+
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
+	CHECK( memcmp( &before, &TheGameSpeed, sizeof( GameSpeedState ) ) == 0 );
+	CHECK_EQ( (UnsignedInt)reload, reloadAt150 );
+	CHECK( sameBits( speed, speedAt150 ) );
+	CHECK( sameBits( damping, dampingAt150 ) );
+	CHECK_EQ( (UnsignedInt)count, countAt150 );
+	CHECK_EQ( reloadAt150, 50u );
+	CHECK_EQ( countAt150, 25u );
 }
 
 #include "test_minimap_input.inc"
@@ -24909,9 +25123,9 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 	/* A replay's slot list as startRecording writes it, the logic rate last: readReplayHeader takes the
 		 rate off and hands the parser the string as it was, so the replay is not refused as bad options. */
 	AsciiString recorded = picked;
-	recorded.concat( RecorderClass::replayLogicRateField() );
+	recorded.concat( RecorderClass::replayLogicRateField( 200 ) );
 	CHECK( !ParseAsciiStringToGameInfo( &guest, recorded ) );		// the parser alone refuses the key
-	CHECK_EQ( RecorderClass::takeReplayGameSpeed( recorded ), (Int)GAME_SPEED_PERCENT );	// no field at 100 is 100
+	CHECK_EQ( RecorderClass::takeReplayGameSpeed( recorded ), 200 );	// the match's speed, written at every speed
 	CHECK_EQ( RecorderClass::takeReplayLogicRate( recorded ), (Int)LOGICFRAMES_PER_SECOND );
 	CHECK_STR( recorded.str(), picked.str() );
 	CHECK( ParseAsciiStringToGameInfo( &guest, recorded ) );
@@ -24923,6 +25137,10 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 	AsciiString noField = picked;
 	CHECK_EQ( RecorderClass::takeReplayLogicRate( noField ), 60 );
 	CHECK_STR( noField.str(), picked.str() );
+	CHECK_EQ( RecorderClass::takeReplayGameSpeed( noField ), 0 );	// none written: readReplayHeader refuses it
+	AsciiString atNative = picked;
+	atNative.concat( RecorderClass::replayLogicRateField( NATIVE_GAME_SPEED_PERCENT ) );
+	CHECK_EQ( RecorderClass::takeReplayGameSpeed( atNative ), (Int)NATIVE_GAME_SPEED_PERCENT );
 
 	// the host's answer to a guest's request
 	GameSlot *asker = host.getSlot( 0 );

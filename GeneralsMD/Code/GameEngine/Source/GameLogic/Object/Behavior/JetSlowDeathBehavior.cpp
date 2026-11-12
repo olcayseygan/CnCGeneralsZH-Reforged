@@ -66,20 +66,20 @@ JetSlowDeathBehaviorModuleData::JetSlowDeathBehaviorModuleData( void )
 	m_fxInitialDeath = NULL;
 	m_oclInitialDeath = NULL;
 
-	m_delaySecondaryFromInitialDeath = 0;
+	m_delaySecondaryFromInitialDeath.setRaw( 0 );
 	m_fxSecondary = NULL;
 	m_oclSecondary = NULL;
 
 	m_fxHitGround = NULL;
 	m_oclHitGround = NULL;
 
-	m_delayFinalBlowUpFromHitGround = 0;
+	m_delayFinalBlowUpFromHitGround.setRaw( 0 );
 	m_fxFinalBlowUp = NULL;
 	m_oclFinalBlowUp = NULL;
 
-	m_rollRate = 0.0f;
+	m_rollRate.setRaw( 0.0f );
 	m_rollRateDelta = 1.0f;
-	m_pitchRate = 0.0f;
+	m_pitchRate.setRaw( 0.0f );
 	m_fallHowFast = 0.0f;
 	m_momentumGlide = 1.0f;
 
@@ -100,23 +100,23 @@ JetSlowDeathBehaviorModuleData::JetSlowDeathBehaviorModuleData( void )
 		{ "FXInitialDeath",	INI::parseFXList, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_fxInitialDeath ) },
 		{ "OCLInitialDeath", INI::parseObjectCreationList, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_oclInitialDeath ) },
 
-		{ "DelaySecondaryFromInitialDeath",	INI::parseDurationUnsignedInt, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_delaySecondaryFromInitialDeath ) },
+		{ "DelaySecondaryFromInitialDeath",	SPEED_FIELD( JetSlowDeathBehaviorModuleData, m_delaySecondaryFromInitialDeath ) },
 		{ "FXSecondary",	INI::parseFXList, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_fxSecondary ) },
 		{ "OCLSecondary", INI::parseObjectCreationList, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_oclSecondary ) },
 
 		{ "FXHitGround", INI::parseFXList, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_fxHitGround ) },
 		{ "OCLHitGround", INI::parseObjectCreationList, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_oclHitGround ) },
 
-		{ "DelayFinalBlowUpFromHitGround", INI::parseDurationUnsignedInt, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_delayFinalBlowUpFromHitGround ) },
+		{ "DelayFinalBlowUpFromHitGround", SPEED_FIELD( JetSlowDeathBehaviorModuleData, m_delayFinalBlowUpFromHitGround ) },
 		{ "FXFinalBlowUp", INI::parseFXList, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_fxFinalBlowUp ) },
 		{ "OCLFinalBlowUp", INI::parseObjectCreationList, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_oclFinalBlowUp ) },
 
 		{ "DeathLoopSound", INI::parseAudioEventRTS, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_deathLoopSound ) },
 
 // @todo srj -- RollRate and RollRateDelta and PitchRate should use parseAngularVelocityReal
-		{ "RollRate",	INI::parseRetailPerFrameReal, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_rollRate ) },
+		{ "RollRate",	SPEED_FIELD( JetSlowDeathBehaviorModuleData, m_rollRate ) },
 		{ "RollRateDelta", INI::parsePercentToReal, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_rollRateDelta ) },
-		{ "PitchRate", INI::parseRetailPerFrameReal, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_pitchRate ) },
+		{ "PitchRate", SPEED_FIELD( JetSlowDeathBehaviorModuleData, m_pitchRate ) },
 		{ "FallHowFast", INI::parsePercentToReal, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_fallHowFast ) },
 		{ "DeathMomentumGlide", INI::parseReal, NULL, offsetof( JetSlowDeathBehaviorModuleData, m_momentumGlide ) },
 

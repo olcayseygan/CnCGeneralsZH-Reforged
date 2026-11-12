@@ -68,7 +68,7 @@ void POWTruckAIUpdateModuleData::buildFieldParse( MultiIniFieldParse &p )
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "BoredTime",					INI::parseDurationUnsignedInt,	NULL, offsetof( POWTruckAIUpdateModuleData, m_boredTimeInFrames ) },
+		{ "BoredTime",					SPEED_FIELD( POWTruckAIUpdateModuleData, m_boredTimeInFrames ) },
 		{ "AtPrisonDistance",		INI::parseReal,		NULL,		offsetof( POWTruckAIUpdateModuleData, m_hangAroundPrisonDistance ) },
 		{ 0, 0, 0, 0 }
 	};
@@ -379,7 +379,7 @@ void POWTruckAIUpdate::updateWaiting( void )
 
 }  // updateWaiting
 
-static const UnsignedInt FIND_DELAY = LOGICFRAMES_PER_GAME_SECOND * 1;
+#define FIND_DELAY ((UnsignedInt)(LOGICFRAMES_PER_GAME_SECOND * 1))
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 void POWTruckAIUpdate::updateFindTarget( void )

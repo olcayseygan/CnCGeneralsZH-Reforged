@@ -49,9 +49,9 @@ class MissileAIUpdateModuleData : public AIUpdateModuleData
 {
 public:
 	Bool						m_tryToFollowTarget;	///< if true, attack object, not pos
-	UnsignedInt			m_fuelLifetime;				///< num frames till missile runs out of motive power (0 == inf)
-	UnsignedInt			m_ignitionDelay;			///< delay in frames from when missile is 'fired', to when it starts moving		15
-	Real						m_initialVel;			
+	DurationFrames			m_fuelLifetime;				///< num frames till missile runs out of motive power (0 == inf)
+	DurationFrames			m_ignitionDelay;			///< delay in frames from when missile is 'fired', to when it starts moving		15
+	VelocityPerFrame						m_initialVel;			
 	Real						m_initialDist;
 	Real						m_diveDistance;				///< inside the lock distance, the missile keeps EA's flight over the cruise curve (Locomotor::setDiveDistance)
 	const FXList*		m_ignitionFX;					///< FXList to do when missile 'ignites'
@@ -65,7 +65,7 @@ public:
 
 	Real						m_lockDistance;				///< If I get this close to my target, guaranteed hit.
 	Bool						m_detonateCallsKill;			///< if true, kill() will be called, instead of KILL_SELF state, which calls destroy.
-  Int             m_killSelfDelay;      ///< If I have detonated and entered the KILL-SELF state, how ling do I wait before I Kill/destroy self?
+  DurationFramesInt             m_killSelfDelay;      ///< If I have detonated and entered the KILL-SELF state, how ling do I wait before I Kill/destroy self?
 	MissileAIUpdateModuleData();
 
 	static void buildFieldParse(MultiIniFieldParse& p);

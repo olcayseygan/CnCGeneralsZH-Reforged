@@ -49,7 +49,7 @@
 // ------------------------------------------------------------------------------------------------
 SupplyCenterDockUpdateModuleData::SupplyCenterDockUpdateModuleData( void )
 {
-	m_grantTemporaryStealthFrames = 0;
+	m_grantTemporaryStealthFrames.setRaw( 0 );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -61,7 +61,7 @@ SupplyCenterDockUpdateModuleData::SupplyCenterDockUpdateModuleData( void )
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "GrantTemporaryStealth",		INI::parseDurationUnsignedInt,  NULL, offsetof( SupplyCenterDockUpdateModuleData, m_grantTemporaryStealthFrames ) },
+		{ "GrantTemporaryStealth",		SPEED_FIELD( SupplyCenterDockUpdateModuleData, m_grantTemporaryStealthFrames ) },
 		{ 0, 0, 0, 0 }
 	};
 

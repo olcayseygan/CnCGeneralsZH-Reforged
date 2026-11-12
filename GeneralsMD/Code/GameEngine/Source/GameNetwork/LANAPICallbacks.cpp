@@ -327,7 +327,7 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 	msg->appendIntegerArgument( GAME_LAN );
 	msg->appendIntegerArgument( DIFFICULTY_NORMAL );	// not used; there so the speed can go last
 	msg->appendIntegerArgument( 0 );
-	msg->appendIntegerArgument( GameEngine_matchFramesPerSecond( PLAYER_GAME_SPEED_PERCENT_DEFAULT ) );
+	GameEngine_appendNewGameRates( msg, NATIVE_GAME_SPEED_PERCENT );	// every network game plays the native speed
 
 	InitRandom( seed );
 
@@ -425,7 +425,7 @@ void LANAPI::OnGameStart( void )
 		msg->appendIntegerArgument(GAME_LAN);
 		msg->appendIntegerArgument(DIFFICULTY_NORMAL);	// not used; there so the speed can go last
 		msg->appendIntegerArgument(0);
-		msg->appendIntegerArgument(GameEngine_matchFramesPerSecond(PLAYER_GAME_SPEED_PERCENT_DEFAULT));
+		GameEngine_appendNewGameRates( msg, NATIVE_GAME_SPEED_PERCENT );	// every network game plays the native speed
 
 		TheWritableGlobalData->m_useFpsLimit = false;
 

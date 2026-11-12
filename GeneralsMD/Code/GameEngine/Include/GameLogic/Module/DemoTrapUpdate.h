@@ -50,7 +50,7 @@ public:
 	WeaponSlotType  m_detonationWeaponSlot;
 	WeaponSlotType  m_proximityModeWeaponSlot;
 	Real						m_triggerDetonationRange;
-	UnsignedInt			m_scanFrames;
+	DurationFrames			m_scanFrames;
 	Bool						m_defaultsToProximityMode;
 	Bool						m_friendlyDetonation;
 	Bool						m_detonateWhenKilled;

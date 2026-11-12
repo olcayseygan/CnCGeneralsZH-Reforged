@@ -55,8 +55,8 @@ public:
 	Bool									m_initiallyActive;
 	Bool									m_singleBurst;
 	Int										m_healingAmount;
-	UnsignedInt						m_healingDelay;
-	UnsignedInt						m_startHealingDelay;	///< how long since our last damage till autoheal starts.
+	DurationFrames						m_healingDelay;
+	DurationFrames						m_startHealingDelay;	///< how long since our last damage till autoheal starts.
 	Real									m_radius; //If non-zero, then it becomes a area effect.
 	Bool									m_affectsWholePlayer; ///< I have more than a range, I try to affect everything the player owns
 	Bool									m_skipSelfForHealing; ///< Don't heal myself.
@@ -70,8 +70,8 @@ public:
 		m_initiallyActive = false;
 		m_singleBurst = FALSE;
 		m_healingAmount = 0;
-		m_healingDelay = UINT_MAX;
-		m_startHealingDelay = 0;
+		m_healingDelay.setRaw( UINT_MAX );
+		m_startHealingDelay.setRaw( 0 );
 		m_radius = 0.0f;
 		m_radiusParticleSystemTmpl = NULL;
 		m_unitHealPulseParticleSystemTmpl = NULL;
@@ -88,13 +88,13 @@ public:
 			{ "StartsActive",	INI::parseBool, NULL, offsetof( AutoHealBehaviorModuleData, m_initiallyActive ) },
 			{ "SingleBurst",	INI::parseBool, NULL, offsetof( AutoHealBehaviorModuleData, m_singleBurst ) },
 			{ "HealingAmount",		INI::parseInt,												NULL, offsetof( AutoHealBehaviorModuleData, m_healingAmount ) },
-			{ "HealingDelay",			INI::parseDurationUnsignedInt,				NULL, offsetof( AutoHealBehaviorModuleData, m_healingDelay ) },
+			{ "HealingDelay",			SPEED_FIELD( AutoHealBehaviorModuleData, m_healingDelay ) },
 			{ "Radius",						INI::parseReal,												NULL, offsetof( AutoHealBehaviorModuleData, m_radius ) },
 			{ "KindOf",						KindOfMaskType::parseFromINI,											NULL, offsetof( AutoHealBehaviorModuleData, m_kindOf ) },		
 			{ "ForbiddenKindOf",	KindOfMaskType::parseFromINI,											NULL, offsetof( AutoHealBehaviorModuleData, m_forbiddenKindOf ) },
 			{ "RadiusParticleSystemName",					INI::parseParticleSystemTemplate,	NULL, offsetof( AutoHealBehaviorModuleData, m_radiusParticleSystemTmpl ) },
 			{ "UnitHealPulseParticleSystemName",	INI::parseParticleSystemTemplate,	NULL, offsetof( AutoHealBehaviorModuleData, m_unitHealPulseParticleSystemTmpl ) },
-			{ "StartHealingDelay",			INI::parseDurationUnsignedInt,				NULL, offsetof( AutoHealBehaviorModuleData, m_startHealingDelay ) },
+			{ "StartHealingDelay",			SPEED_FIELD( AutoHealBehaviorModuleData, m_startHealingDelay ) },
 			{ "AffectsWholePlayer",			INI::parseBool,												NULL, offsetof( AutoHealBehaviorModuleData, m_affectsWholePlayer ) },
 			{ "SkipSelfForHealing",			INI::parseBool,												NULL, offsetof( AutoHealBehaviorModuleData, m_skipSelfForHealing ) },
 			{ 0, 0, 0, 0 }

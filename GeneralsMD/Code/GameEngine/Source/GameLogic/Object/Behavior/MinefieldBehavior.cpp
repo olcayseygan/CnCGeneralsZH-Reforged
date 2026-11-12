@@ -63,8 +63,8 @@ MinefieldBehaviorModuleData::MinefieldBehaviorModuleData()
 	m_stopsRegenAfterCreatorDies = true;
 	m_regenerates = false;
 	m_workersDetonate = false;
-	m_creatorDeathCheckRate = LOGICFRAMES_PER_GAME_SECOND;
-	m_scootFromStartingPointTime = 0;
+	m_creatorDeathCheckRate.setRaw( 1000 );
+	m_scootFromStartingPointTime.setRaw( 0 );
 	m_repeatDetonateMoveThresh = 1.0f;
 	m_numVirtualMines = 1;
 	m_healthPercentToDrainPerSecond = 0.0f;
@@ -85,8 +85,8 @@ MinefieldBehaviorModuleData::MinefieldBehaviorModuleData()
 		{ "StopsRegenAfterCreatorDies", INI::parseBool, NULL, offsetof( MinefieldBehaviorModuleData, m_stopsRegenAfterCreatorDies ) },
 		{ "Regenerates", INI::parseBool, NULL, offsetof( MinefieldBehaviorModuleData, m_regenerates ) },
 		{ "WorkersDetonate", INI::parseBool, NULL, offsetof( MinefieldBehaviorModuleData, m_workersDetonate ) },
-		{ "CreatorDeathCheckRate", INI::parseDurationUnsignedInt, NULL, offsetof( MinefieldBehaviorModuleData, m_creatorDeathCheckRate ) },
-		{ "ScootFromStartingPointTime", INI::parseDurationUnsignedInt, NULL, offsetof( MinefieldBehaviorModuleData, m_scootFromStartingPointTime ) },
+		{ "CreatorDeathCheckRate", SPEED_FIELD( MinefieldBehaviorModuleData, m_creatorDeathCheckRate ) },
+		{ "ScootFromStartingPointTime", SPEED_FIELD( MinefieldBehaviorModuleData, m_scootFromStartingPointTime ) },
 		{ "NumVirtualMines", INI::parseUnsignedInt, NULL, offsetof( MinefieldBehaviorModuleData, m_numVirtualMines ) },
 		{ "RepeatDetonateMoveThresh", INI::parseReal, NULL, offsetof( MinefieldBehaviorModuleData, m_repeatDetonateMoveThresh ) },
 		{ "DegenPercentPerSecondAfterCreatorDies", INI::parsePercentToReal,	NULL, offsetof( MinefieldBehaviorModuleData, m_healthPercentToDrainPerSecond ) },

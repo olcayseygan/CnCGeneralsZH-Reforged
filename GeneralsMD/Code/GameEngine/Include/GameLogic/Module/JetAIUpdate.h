@@ -59,18 +59,18 @@ public:
 	Real										m_sneakyOffsetWhenAttacking;			///< our sneaky offset when attacking (or zero)
 	Bool										m_keepsParkingSpaceWhenAirborne;	///< if t, keeps its parking space reservation even when airborne
 	Bool										m_needsRunway;										///< if t, needs runways to takeoff/land
-	UnsignedInt							m_takeoffPause;										///< pre-takeoff pause
+	DurationFrames							m_takeoffPause;										///< pre-takeoff pause
 	LocomotorSetType				m_attackingLoco;									///< custom attacking loco
 	LocomotorSetType				m_returningLoco;									///< custom return-for-ammo loco
-	UnsignedInt							m_attackLocoPersistTime;					///< if we have a custom attack loco, it persists for this long after attack is done
-	UnsignedInt							m_attackersMissPersistTime;				///< how long after our attack we continue immunity
-	UnsignedInt							m_lockonTime;											///< time it takes for someone to lock-on to us.
+	DurationFrames							m_attackLocoPersistTime;					///< if we have a custom attack loco, it persists for this long after attack is done
+	DurationFrames							m_attackersMissPersistTime;				///< how long after our attack we continue immunity
+	DurationFrames							m_lockonTime;											///< time it takes for someone to lock-on to us.
 	AsciiString							m_lockonCursor;										///< template used for lockon.
 	Real										m_lockonInitialDist;							///< how far away the lockon cursor starts.
-	Real										m_lockonFreq;											
+	RetailPerFrame										m_lockonFreq;											
 	Real										m_lockonAngleSpin;								///< how many times to spin around it
 	Real										m_lockonBlinky;								
-	UnsignedInt							m_returnToBaseIdleTime;						///< if we're idle for this long, return to base
+	DurationFrames							m_returnToBaseIdleTime;						///< if we're idle for this long, return to base
 	Real										m_kamikazeRange;									///< if nonzero, its one shot is itself, and with its target gone it takes the dearest enemy this near where it was sent
 
 	JetAIUpdateModuleData();

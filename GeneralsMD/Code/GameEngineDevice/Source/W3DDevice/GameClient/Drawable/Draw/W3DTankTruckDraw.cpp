@@ -56,7 +56,7 @@
 W3DTankTruckDrawModuleData::W3DTankTruckDrawModuleData():
 	m_treadDebrisNameLeft("TrackDebrisDirtLeft"),
 	m_treadDebrisNameRight("TrackDebrisDirtRight"),
-	m_treadAnimationRate(0.0f),
+	m_treadAnimationRate(VelocityPerFrame::fromRaw(0.0f)),
 	m_treadPivotSpeedFraction(0.6f),
 	m_treadDriveSpeedFraction(0.3f)
 {
@@ -86,10 +86,10 @@ void W3DTankTruckDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "MidLeftRearTireBone", INI::parseAsciiString, NULL, offsetof(W3DTankTruckDrawModuleData, m_midRearLeftTireBoneName) },
 		{ "MidRightRearTireBone", INI::parseAsciiString, NULL, offsetof(W3DTankTruckDrawModuleData, m_midRearRightTireBoneName) },
 		{ "TireRotationMultiplier", INI::parseReal, NULL, offsetof(W3DTankTruckDrawModuleData, m_rotationSpeedMultiplier) },
-		{ "PowerslideRotationAddition", INI::parseRetailPerFrameReal, NULL, offsetof(W3DTankTruckDrawModuleData, m_powerslideRotationAddition) },
+		{ "PowerslideRotationAddition", SPEED_FIELD( W3DTankTruckDrawModuleData, m_powerslideRotationAddition ) },
 		{ "TreadDebrisLeft", INI::parseAsciiString, NULL, offsetof(W3DTankTruckDrawModuleData, m_treadDebrisNameLeft) },
 		{ "TreadDebrisRight", INI::parseAsciiString, NULL, offsetof(W3DTankTruckDrawModuleData, m_treadDebrisNameRight) },
-		{ "TreadAnimationRate", INI::parseVelocityReal, NULL, offsetof(W3DTankTruckDrawModuleData, m_treadAnimationRate) },
+		{ "TreadAnimationRate", SPEED_FIELD( W3DTankTruckDrawModuleData, m_treadAnimationRate ) },
 		{ "TreadPivotSpeedFraction", INI::parseReal, NULL, offsetof(W3DTankTruckDrawModuleData, m_treadPivotSpeedFraction) },
 		{ "TreadDriveSpeedFraction", INI::parseReal, NULL, offsetof(W3DTankTruckDrawModuleData, m_treadDriveSpeedFraction) },
 		{ 0, 0, 0, 0 }

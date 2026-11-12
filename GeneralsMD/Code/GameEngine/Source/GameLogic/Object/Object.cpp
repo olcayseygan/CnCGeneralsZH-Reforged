@@ -2126,7 +2126,7 @@ Bool Object::isUnknownTo( Int playerIndex ) const
 //-------------------------------------------------------------------------------------------------
 // A shot out of the fog gives its shooter away: the victim's side sees a small circle round the
 // attacker for a moment, enough to see what hit it and not the ground around it.
-static const UnsignedInt FOG_ATTACKER_REVEAL_FRAMES = LOGICFRAMES_PER_GAME_SECOND * 5 / 2;
+#define FOG_ATTACKER_REVEAL_FRAMES ((UnsignedInt)(LOGICFRAMES_PER_GAME_SECOND * 5 / 2))
 static const Real FOG_ATTACKER_REVEAL_MARGIN = 15.0f;	///< past the attacker's own footprint, about a shroud cell and a half
 
 static void Object_revealAttackerInFog( const Object *victim, ObjectID attackerID )

@@ -598,11 +598,11 @@ protected:
 
 	enum {ATTACK_RETRY_COUNT=5};
 	enum {ATTACK_CLOSE_ENOUGH_CELLS=8};
-	enum {ATTACK_MOVE_SCAN_RATE=LOGICFRAMES_PER_GAME_SECOND/3};						///< frames between target scans (the idle mood clock is seconds apart)
+	#define ATTACK_MOVE_SCAN_RATE ((Int)(LOGICFRAMES_PER_GAME_SECOND/3))						///< frames between target scans (the idle mood clock is seconds apart)
 	enum {ATTACK_MOVE_LEASH_CELLS=12};					///< how far a victim may pull us off the attack move
-	enum {ATTACK_MOVE_DUD_ENGAGE_FRAMES=LOGICFRAMES_PER_GAME_SECOND/2};		///< a fight shorter than this, with the victim still alive, never started
-	enum {ATTACK_MOVE_REACQUIRE_DELAY=LOGICFRAMES_PER_GAME_SECOND};			///< frames of pure movement after a dud fight or a broken leash
-	enum {ATTACK_MOVE_RETALIATE_FRAMES=LOGICFRAMES_PER_GAME_SECOND};			///< how recently we must have been hit to turn on whoever hit us
+	#define ATTACK_MOVE_DUD_ENGAGE_FRAMES ((Int)(LOGICFRAMES_PER_GAME_SECOND/2))		///< a fight shorter than this, with the victim still alive, never started
+	#define ATTACK_MOVE_REACQUIRE_DELAY ((Int)(LOGICFRAMES_PER_GAME_SECOND))			///< frames of pure movement after a dud fight or a broken leash
+	#define ATTACK_MOVE_RETALIATE_FRAMES ((Int)(LOGICFRAMES_PER_GAME_SECOND))			///< how recently we must have been hit to turn on whoever hit us
 
 	void startEngaging( Object *victim, Bool allowChase );	///< stop here and hand the victim to the attack sub-machine
 	void stopEngaging( void );									///< the fight is over; put back what startEngaging changed
@@ -1309,7 +1309,7 @@ protected:
 private:
 	StateMachine* m_huntMachine;					///< state sub-machine for hunt behavior
 	UnsignedInt m_nextEnemyScanTime;			///< time of last enemy scan
-	enum { ENEMY_SCAN_RATE = LOGICFRAMES_PER_GAME_SECOND };
+	#define ENEMY_SCAN_RATE ((Int)(LOGICFRAMES_PER_GAME_SECOND))
 };
 
 //-----------------------------------------------------------------------------------------------------------
@@ -1340,7 +1340,7 @@ protected:
 private:
 	StateMachine *m_attackMachine;					///< state sub-machine for attack behavior
 	UnsignedInt m_nextEnemyScanTime;			///< time of last enemy scan
-	enum { ENEMY_SCAN_RATE = LOGICFRAMES_PER_GAME_SECOND };
+	#define ENEMY_SCAN_RATE ((Int)(LOGICFRAMES_PER_GAME_SECOND))
 };
 
 //-----------------------------------------------------------------------------------------------------------

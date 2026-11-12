@@ -16642,7 +16642,7 @@ GUI:GameSpeedMissions
 END
 
 TOOLTIP:GameSpeedMissions
-"La vitesse des missions de la campagne et du Défi Generals. 1.0x est le jeu d'origine, et une mission déjà en cours change de rythme aussitôt. L'escarmouche choisit sa vitesse dans le salon."
+"La vitesse des missions de la campagne et du Défi Generals. 1.0x est le jeu d'origine. La vitesse est fixée au début d'une mission, un changement vaut pour la suivante. L'escarmouche choisit sa vitesse dans le salon."
 END
 
 GUI:CantBuildTooCloseToEnemy

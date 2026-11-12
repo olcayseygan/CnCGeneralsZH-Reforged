@@ -403,7 +403,7 @@ struct AITargetRating
 	ObjectID m_id;		///< the last tie, so every machine picks the same one
 };
 
-const Int AI_QUICK_KILL_FRAMES = 10 * LOGICFRAMES_PER_GAME_SECOND;
+#define AI_QUICK_KILL_FRAMES ((Int)(10 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** 2 for whoever just shot us, and while something is shooting us for an armed enemy already in
 	* reach that we kill within AI_QUICK_KILL_FRAMES; 1 for any other enemy that can shoot us; 0 for
@@ -582,7 +582,7 @@ inline Bool aiQueueKindFull( Int finished, Int busy ) { return finished > 0 && b
 inline Bool aiAirfieldsFull( Int finished, Int parkingFull, Bool wanted ) { return finished > 0 && parkingFull >= finished && wanted; }
 
 /** How long a buy refused for parking keeps the computer wanting another airfield. */
-static const UnsignedInt AI_PARKING_WANT_FRAMES = 15 * LOGICFRAMES_PER_GAME_SECOND;
+#define AI_PARKING_WANT_FRAMES ((UnsignedInt)(15 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** One unfinished building the computer placed, as its base builder last saw it. */
 struct AISiteWatch
@@ -807,7 +807,7 @@ enum AIPurchaseKind
 };
 
 /** The first minutes of a match, while economy and power outrank the army. */
-const UnsignedInt AI_PURCHASE_EARLY_FRAMES = 6 * 60 * LOGICFRAMES_PER_GAME_SECOND;
+#define AI_PURCHASE_EARLY_FRAMES ((UnsignedInt)(6 * 60 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** How much a purchase of this kind matters next to the others; the higher wins the money.  Early in a
 	* match income and power come before the army, which is how a Hard AI kept attacking with two
@@ -866,7 +866,7 @@ static const Int AI_SHARE_MIN = 500;
 Int aiPersonaShareAmount( Int bank, Int target, Int cap );
 
 /** May a bot say something now: never twice inside AI_CHAT_GAP_FRAMES, the first line any time. */
-static const UnsignedInt AI_CHAT_GAP_FRAMES = 150 * LOGICFRAMES_PER_GAME_SECOND;
+#define AI_CHAT_GAP_FRAMES ((UnsignedInt)(150 * LOGICFRAMES_PER_GAME_SECOND))
 Bool aiPersonaChatAllowed( UnsignedInt now, UnsignedInt lastChat );
 
 /** What a player asks of his allies: his base is under attack, by aircraft, he is short of money, or
@@ -890,8 +890,8 @@ struct AITeamRequest
 };
 
 /** How long a call for help stands, and a personality keeps to an ally's attack after he posted it. */
-static const UnsignedInt AI_COOP_HELP_FRAMES = 15 * LOGICFRAMES_PER_GAME_SECOND;
-static const UnsignedInt AI_COOP_JOIN_FRAMES = 120 * LOGICFRAMES_PER_GAME_SECOND;
+#define AI_COOP_HELP_FRAMES ((UnsignedInt)(15 * LOGICFRAMES_PER_GAME_SECOND))
+#define AI_COOP_JOIN_FRAMES ((UnsignedInt)(120 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** Post a request from this player to every computer ally of his (allied both ways). */
 void aiPostTeamRequest( Player *from, AITeamRequestKind kind, Int enemy, const Coord3D *pos );
@@ -950,15 +950,15 @@ struct AIPurchaseQueue
 	void bought( Int key ) { if( key == m_key ) m_key = NONE; }
 };
 
-const UnsignedInt AI_PURCHASE_STALE_FRAMES = 20 * LOGICFRAMES_PER_GAME_SECOND;
-const UnsignedInt AI_PURCHASE_HOLD_FRAMES = 40 * LOGICFRAMES_PER_GAME_SECOND;
+#define AI_PURCHASE_STALE_FRAMES ((UnsignedInt)(20 * LOGICFRAMES_PER_GAME_SECOND))
+#define AI_PURCHASE_HOLD_FRAMES ((UnsignedInt)(40 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** How long a stretch of income is measured over before the rate is taken again. */
-const UnsignedInt AI_INCOME_WINDOW_FRAMES = 30 * LOGICFRAMES_PER_GAME_SECOND;
+#define AI_INCOME_WINDOW_FRAMES ((UnsignedInt)(30 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** The falling-behind income bonus (AIPlayer::stepIncomeBonus): how often it is weighed again, how far
 	* it moves at one weighing, and its ceiling over the rung's IncomePercent, in percentage points. */
-const UnsignedInt AI_INCOME_BONUS_FRAMES = 30 * LOGICFRAMES_PER_GAME_SECOND;
+#define AI_INCOME_BONUS_FRAMES ((UnsignedInt)(30 * LOGICFRAMES_PER_GAME_SECOND))
 const Int AI_INCOME_BONUS_STEP = 25;
 const Int AI_INCOME_BONUS_MAX = 150;
 
@@ -1055,7 +1055,7 @@ public:
 	Real m_teamSeconds;					// Try to build a team every N seconds.
 	Int m_resourcesWealthy;		// How many resources to be wealthy.
 	Int m_resourcesPoor;			// How few resources to be poor.
-	UnsignedInt m_forceIdleFramesCount;	// How many frames does a unit need to be Idle before it can begin looking for enemies?
+	DurationFrames m_forceIdleFramesCount;	// How many frames does a unit need to be Idle before it can begin looking for enemies?
 	Real m_structuresWealthyMod; // Factor to multiply m_structurFrames by if we are wealthy.
 	Real m_teamWealthyMod;		// Factor to multiply m_teamFrames by if we are wealthy.
 	Real m_structuresPoorMod; // Factor to multiply m_structureFrames by if we are poor.
@@ -1065,9 +1065,9 @@ public:
 	Real m_guardOuterModifierAI;	// Multiply the AI unit's vision by this much == guard outer circle.
 	Real m_guardInnerModifierHuman;	// Multiply the human unit's vision by this much == guard inner circle
 	Real m_guardOuterModifierHuman;	// Multiply the human unit's vision by this much == guard outer circle
-	UnsignedInt m_guardChaseUnitFrames;		// Number of frames for which a unit should 
-	UnsignedInt m_guardEnemyScanRate;		// rate to scan for enemies while guarding
-	UnsignedInt m_guardEnemyReturnScanRate;		// rate to scan for enemies while guarding but returning
+	DurationFrames m_guardChaseUnitFrames;		// Number of frames for which a unit should 
+	DurationFrames m_guardEnemyScanRate;		// rate to scan for enemies while guarding
+	DurationFrames m_guardEnemyReturnScanRate;		// rate to scan for enemies while guarding but returning
 
 	Real m_wallHeight;				// Height of special wall units can walk on top of.
 

@@ -1463,7 +1463,7 @@ GUI:GameSpeedMissions
 END
 
 TOOLTIP:GameSpeedMissions
-"How fast campaign and Generals' Challenge missions run. 1.0x is the original game, and a mission already under way changes pace at once. A skirmish picks its own speed in the lobby."
+"How fast campaign and Generals' Challenge missions run. 1.0x is the original game. The speed is set as a mission starts, so a change takes effect from the next one. A skirmish picks its own speed in the lobby."
 END
 
 // the Options combo's rows (OptionsCatalog, OPTION_ENUM); the skirmish combo builds the same text in code

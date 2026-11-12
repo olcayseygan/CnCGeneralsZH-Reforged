@@ -79,19 +79,19 @@ StealthUpdateModuleData::StealthUpdateModuleData()
 		m_disguiseFX = NULL;
     m_disguiseRevealFX = NULL;
     //
-    m_stealthDelay		= UINT_MAX;
+    m_stealthDelay.setRaw( UINT_MAX );	// a sentinel: stays UINT_MAX frames
     m_stealthLevel		= 0;
-    m_stealthSpeed		= 0.0f;
+    m_stealthSpeed.setRaw( 0.0f );
     m_friendlyOpacityMin = 0.5f;
     m_friendlyOpacityMax = 1.0f;
-    m_pulseFrames = LOGICFRAMES_PER_GAME_SECOND;
+    m_pulseFrames.setRaw( 1000 );
     m_teamDisguised		= false;
     m_revealDistanceFromTarget = 0.0f;
     m_orderIdleEnemiesToAttackMeUponReveal = false;
     m_innateStealth   = true;
-    m_disguiseTransitionFrames = 0;
-    m_disguiseRevealTransitionFrames = 0;
-    m_blackMarketCheckFrames = 0;
+    m_disguiseTransitionFrames.setRaw( 0 );
+    m_disguiseRevealTransitionFrames.setRaw( 0 );
+    m_blackMarketCheckFrames.setRaw( 0 );
     m_enemyDetectionEvaEvent = EVA_Invalid;
     m_ownDetectionEvaEvent = EVA_Invalid;
     m_grantedBySpecialPower = FALSE;
@@ -106,27 +106,27 @@ void StealthUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "StealthDelay",									INI::parseDurationUnsignedInt,	NULL, offsetof( StealthUpdateModuleData, m_stealthDelay ) },
-		{ "MoveThresholdSpeed",						INI::parseVelocityReal,					NULL, offsetof( StealthUpdateModuleData, m_stealthSpeed ) },
+		{ "StealthDelay",									SPEED_FIELD( StealthUpdateModuleData, m_stealthDelay ) },
+		{ "MoveThresholdSpeed",						SPEED_FIELD( StealthUpdateModuleData, m_stealthSpeed ) },
 		{ "StealthForbiddenConditions",		INI::parseBitString32,					TheStealthLevelNames, offsetof( StealthUpdateModuleData, m_stealthLevel) }, 
 		{ "HintDetectableConditions",	  	ObjectStatusMaskType::parseFromINI,	NULL, offsetof( StealthUpdateModuleData, m_hintDetectableStates) },
 		{ "RequiredStatus",								ObjectStatusMaskType::parseFromINI,	NULL, offsetof( StealthUpdateModuleData, m_requiredStatus ) },
 		{ "ForbiddenStatus",							ObjectStatusMaskType::parseFromINI,	NULL, offsetof( StealthUpdateModuleData, m_forbiddenStatus ) },
 		{ "FriendlyOpacityMin",						INI::parsePercentToReal,				NULL, offsetof( StealthUpdateModuleData, m_friendlyOpacityMin ) },
 		{ "FriendlyOpacityMax",						INI::parsePercentToReal,				NULL, offsetof( StealthUpdateModuleData, m_friendlyOpacityMax ) },
-		{ "PulseFrequency",								INI::parseDurationUnsignedInt,	NULL, offsetof( StealthUpdateModuleData, m_pulseFrames ) },
+		{ "PulseFrequency",								SPEED_FIELD( StealthUpdateModuleData, m_pulseFrames ) },
 		{ "DisguisesAsTeam",							INI::parseBool,									NULL, offsetof( StealthUpdateModuleData, m_teamDisguised ) },
 		{ "RevealDistanceFromTarget",			INI::parseReal,									NULL, offsetof( StealthUpdateModuleData, m_revealDistanceFromTarget ) },
 		{ "OrderIdleEnemiesToAttackMeUponReveal", INI::parseBool,					NULL, offsetof( StealthUpdateModuleData, m_orderIdleEnemiesToAttackMeUponReveal ) },
 		{ "DisguiseFX",										INI::parseFXList,								NULL, offsetof( StealthUpdateModuleData, m_disguiseFX ) },
 		{ "DisguiseRevealFX",							INI::parseFXList,								NULL, offsetof( StealthUpdateModuleData, m_disguiseRevealFX ) },
-		{ "DisguiseTransitionTime",				INI::parseDurationUnsignedInt,  NULL, offsetof( StealthUpdateModuleData, m_disguiseTransitionFrames ) },
-		{ "DisguiseRevealTransitionTime",	INI::parseDurationUnsignedInt,  NULL, offsetof( StealthUpdateModuleData, m_disguiseRevealTransitionFrames ) },
+		{ "DisguiseTransitionTime",				SPEED_FIELD( StealthUpdateModuleData, m_disguiseTransitionFrames ) },
+		{ "DisguiseRevealTransitionTime",	SPEED_FIELD( StealthUpdateModuleData, m_disguiseRevealTransitionFrames ) },
 		{ "InnateStealth",								INI::parseBool,									NULL, offsetof( StealthUpdateModuleData, m_innateStealth ) },
 		{ "UseRiderStealth",							INI::parseBool,									NULL, offsetof( StealthUpdateModuleData, m_useRiderStealth ) },
     { "EnemyDetectionEvaEvent",				Eva::parseEvaMessageFromIni,  	NULL, offsetof( StealthUpdateModuleData, m_enemyDetectionEvaEvent ) },
     { "OwnDetectionEvaEvent",		  		Eva::parseEvaMessageFromIni,  	NULL, offsetof( StealthUpdateModuleData, m_ownDetectionEvaEvent ) },
-		{ "BlackMarketCheckDelay",				INI::parseDurationUnsignedInt,  NULL, offsetof( StealthUpdateModuleData, m_blackMarketCheckFrames ) },
+		{ "BlackMarketCheckDelay",				SPEED_FIELD( StealthUpdateModuleData, m_blackMarketCheckFrames ) },
     { "GrantedBySpecialPower",        INI::parseBool,                 NULL, offsetof( StealthUpdateModuleData, m_grantedBySpecialPower ) },
 
 		{ 0, 0, 0, 0 }

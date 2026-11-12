@@ -50,8 +50,8 @@
 //-------------------------------------------------------------------------------------------------
 PoisonedBehaviorModuleData::PoisonedBehaviorModuleData()
 {
-	m_poisonDamageIntervalData = 0; // How often I retake poison damage dealt me
-	m_poisonDurationData = 0;				// And how long after the last poison dose I am poisoned
+	m_poisonDamageIntervalData.setRaw( 0 ); // How often I retake poison damage dealt me
+	m_poisonDurationData.setRaw( 0 );				// And how long after the last poison dose I am poisoned
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -60,8 +60,8 @@ PoisonedBehaviorModuleData::PoisonedBehaviorModuleData()
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "PoisonDamageInterval", INI::parseDurationUnsignedInt, NULL, offsetof(PoisonedBehaviorModuleData, m_poisonDamageIntervalData) },
-		{ "PoisonDuration", INI::parseDurationUnsignedInt, NULL, offsetof(PoisonedBehaviorModuleData, m_poisonDurationData) },
+		{ "PoisonDamageInterval", SPEED_FIELD( PoisonedBehaviorModuleData, m_poisonDamageIntervalData ) },
+		{ "PoisonDuration", SPEED_FIELD( PoisonedBehaviorModuleData, m_poisonDurationData ) },
 		{ 0, 0, 0, 0 }
 	};
 

@@ -76,7 +76,7 @@ class AutoDepositUpdateModuleData : public UpdateModuleData
 {
 public:
 
-	UnsignedInt m_depositFrame;
+	DurationFrames m_depositFrame;
 	Int m_depositAmount;
 	Int m_initialCaptureBonus;
 	Bool m_isActualMoney;
@@ -84,7 +84,7 @@ public:
 
 	AutoDepositUpdateModuleData()
 	{
-		m_depositFrame = 0;
+		m_depositFrame.setRaw( 0 );
 		m_depositAmount = 0;
 		m_initialCaptureBonus = 0;
 		m_isActualMoney = TRUE;
@@ -96,7 +96,7 @@ public:
     UpdateModuleData::buildFieldParse(p);
 		static const FieldParse dataFieldParse[] = 
 		{
-			{ "DepositTiming",					INI::parseDurationUnsignedInt,		NULL, offsetof( AutoDepositUpdateModuleData, m_depositFrame ) },
+			{ "DepositTiming",					SPEED_FIELD( AutoDepositUpdateModuleData, m_depositFrame ) },
 			{ "DepositAmount",					INI::parseInt,		NULL, offsetof( AutoDepositUpdateModuleData, m_depositAmount ) },
 			{ "InitialCaptureBonus",		INI::parseInt,		NULL, offsetof( AutoDepositUpdateModuleData, m_initialCaptureBonus ) },
 			{ "ActualMoney",						INI::parseBool,		NULL, offsetof( AutoDepositUpdateModuleData, m_isActualMoney ) },

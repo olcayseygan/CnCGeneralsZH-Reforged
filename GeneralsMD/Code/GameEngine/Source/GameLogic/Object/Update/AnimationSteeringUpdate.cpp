@@ -42,7 +42,7 @@
 //-------------------------------------------------------------------------------------------------
 AnimationSteeringUpdateModuleData::AnimationSteeringUpdateModuleData( void )
 {
-	m_transitionFrames = 0;
+	m_transitionFrames.setRaw( 0 );
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

@@ -50,11 +50,8 @@
 //#pragma MESSAGE("************************************** WARNING, optimization disabled for debugging purposes")
 #endif
 
-enum
-{
-	GROUND_CHECK_DELAY = ConvertRetailFrames(10),		///< Check for colliding with the ground only after this long, to prevent hitting on the way up
-	EMPTY_HULK_CHECK_DELAY = ConvertRetailFrames(15) ///< Check for empty hulk every this often instead of every frame
-};
+#define GROUND_CHECK_DELAY ((Int)ConvertRetailFrames(10))		///< Check for colliding with the ground only after this long, to prevent hitting on the way up
+#define EMPTY_HULK_CHECK_DELAY ((Int)ConvertRetailFrames(15)) ///< Check for empty hulk every this often instead of every frame
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -71,9 +68,9 @@ BattleBusSlowDeathBehaviorModuleData::BattleBusSlowDeathBehaviorModuleData( void
 	m_fxHitGround = NULL;
 	m_oclHitGround = NULL;
 
-	m_throwForce = ConvertRetailPerFrameRate(1.0f);
+	m_throwForce.setRaw( 1.0f );
 	m_percentDamageToPassengers = 0.0f;
-	m_emptyHulkDestructionDelay = 0;
+	m_emptyHulkDestructionDelay.setRaw( 0 );
 
 }  // end BattleBusSlowDeathBehaviorModuleData
 
@@ -92,9 +89,9 @@ BattleBusSlowDeathBehaviorModuleData::BattleBusSlowDeathBehaviorModuleData( void
 		{ "FXHitGround",	INI::parseFXList,	NULL, offsetof( BattleBusSlowDeathBehaviorModuleData, m_fxHitGround ) },
 		{ "OCLHitGround", INI::parseObjectCreationList, NULL, offsetof( BattleBusSlowDeathBehaviorModuleData, m_oclHitGround ) },
 
-		{ "ThrowForce", INI::parseRetailPerFrameReal, NULL, offsetof( BattleBusSlowDeathBehaviorModuleData, m_throwForce ) },
+		{ "ThrowForce", SPEED_FIELD( BattleBusSlowDeathBehaviorModuleData, m_throwForce ) },
 		{ "PercentDamageToPassengers", INI::parsePercentToReal, NULL, offsetof( BattleBusSlowDeathBehaviorModuleData, m_percentDamageToPassengers ) },
-		{ "EmptyHulkDestructionDelay", INI::parseDurationUnsignedInt, NULL, offsetof( BattleBusSlowDeathBehaviorModuleData, m_emptyHulkDestructionDelay ) },
+		{ "EmptyHulkDestructionDelay", SPEED_FIELD( BattleBusSlowDeathBehaviorModuleData, m_emptyHulkDestructionDelay ) },
 
 		{ 0, 0, 0, 0 }
 

@@ -104,7 +104,7 @@ void boot()
 	TheNameKeyGenerator = NEW NameKeyGenerator;
 	TheNameKeyGenerator->init();
 	TheWritableGlobalData = NEW GlobalData;
-	TheWritableGlobalData->m_gravity = ConvertAccelerationInSecsToFrames( -64.0f );	// GameData.ini's
+	TheWritableGlobalData->m_gravity.setRaw( -64.0f );	// GameData.ini's
 }
 
 // The engine as it is now: nothing on the client pass, the step at the top of each logic frame.

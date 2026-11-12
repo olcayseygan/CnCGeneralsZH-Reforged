@@ -48,16 +48,16 @@ public:
 
 	Bool						m_needsUpgrade;
 	Bool						m_selfPowered;
-	UnsignedInt			m_selfPoweredDuration;
-	UnsignedInt			m_selfPoweredInterval;
+	DurationFrames			m_selfPoweredDuration;
+	DurationFrames			m_selfPoweredInterval;
 	KindOfMaskType	m_spyOnKindof;
 
 	SpyVisionUpdateModuleData()
 	{
 		m_needsUpgrade = FALSE;
 		m_selfPowered = FALSE;
-		m_selfPoweredDuration = 0;
-		m_selfPoweredInterval = 0;
+		m_selfPoweredDuration.setRaw( 0 );
+		m_selfPoweredInterval.setRaw( 0 );
 		m_spyOnKindof = KINDOFMASK_NONE;
 		m_spyOnKindof.flip();
 	}
@@ -68,8 +68,8 @@ public:
 		{
 			{ "NeedsUpgrade",					INI::parseBool,									NULL, offsetof( SpyVisionUpdateModuleData, m_needsUpgrade ) },
 			{ "SelfPowered",					INI::parseBool,									NULL, offsetof( SpyVisionUpdateModuleData, m_selfPowered ) },
-			{ "SelfPoweredDuration",	INI::parseDurationUnsignedInt,	NULL, offsetof( SpyVisionUpdateModuleData, m_selfPoweredDuration ) },
-			{ "SelfPoweredInterval",	INI::parseDurationUnsignedInt,	NULL, offsetof( SpyVisionUpdateModuleData, m_selfPoweredInterval ) },
+			{ "SelfPoweredDuration",	SPEED_FIELD( SpyVisionUpdateModuleData, m_selfPoweredDuration ) },
+			{ "SelfPoweredInterval",	SPEED_FIELD( SpyVisionUpdateModuleData, m_selfPoweredInterval ) },
 			{ "SpyOnKindof",					KindOfMaskType::parseFromINI,		NULL, offsetof( SpyVisionUpdateModuleData, m_spyOnKindof ) },
 			{ 0, 0, 0, 0 }
 		};

@@ -67,7 +67,7 @@
 // ------------------------------------------------------------------------------------------------
 RiderChangeContainModuleData::RiderChangeContainModuleData()
 {
-	m_scuttleFrames = 0;
+	m_scuttleFrames.setRaw( 0 );
 	m_scuttleState = MODELCONDITION_TOPPLED;
 }
 
@@ -114,7 +114,7 @@ void RiderChangeContainModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "Rider6",					parseRiderInfo,					NULL, offsetof( RiderChangeContainModuleData, m_riders[5] ) },
 		{ "Rider7",					parseRiderInfo,					NULL, offsetof( RiderChangeContainModuleData, m_riders[6] ) },
 		{ "Rider8",					parseRiderInfo,					NULL, offsetof( RiderChangeContainModuleData, m_riders[7] ) },
-    { "ScuttleDelay",   INI::parseDurationUnsignedInt,	NULL, offsetof( RiderChangeContainModuleData, m_scuttleFrames ) },
+    { "ScuttleDelay",   SPEED_FIELD( RiderChangeContainModuleData, m_scuttleFrames ) },
     { "ScuttleStatus",  INI::parseIndexList,		ModelConditionFlags::getBitNames(), offsetof( RiderChangeContainModuleData, m_scuttleState ) },
 		{ 0, 0, 0, 0 }
 	};

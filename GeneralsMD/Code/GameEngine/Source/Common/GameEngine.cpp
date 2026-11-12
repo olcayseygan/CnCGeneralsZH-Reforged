@@ -835,19 +835,21 @@ static void startAutoSkirmish( Int numPlayersWanted )
 	TheWritableGlobalData->m_shellMapOn = FALSE;
 	TheWritableGlobalData->m_playIntro = FALSE;
 
-	/* The speed reallyDoStart() passes for the lobby's game speed, -fps included.  -noFPSLimit
-		 deliberately does not appear here - it uncaps the renderer, not the simulation. */
-	const Int maxFPS = GameEngine_matchFramesPerSecond( TheSkirmishGameInfo->getGameSpeedPercent() );
+	/* The rates reallyDoStart() passes: -fps for the ticks a second, the lobby's game speed (-gamespeed)
+		 for the game time of a tick.  -noFPSLimit deliberately does not appear here - it uncaps the
+		 renderer, not the simulation. */
+	const Int maxFPS = GameEngine_matchFramesPerSecond();
 
 	InitRandom( seed );
 	GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_NEW_GAME );
 	msg->appendIntegerArgument( GAME_SKIRMISH );
 	msg->appendIntegerArgument( DIFFICULTY_NORMAL );
 	msg->appendIntegerArgument( 0 );
-	msg->appendIntegerArgument( maxFPS );
+	GameEngine_appendNewGameRates( msg, TheSkirmishGameInfo->getGameSpeedPercent() );
 
-	DEBUG_LOG(("-autoskirmish: %d slots on '%s', seed %d, starting cash %u, up to %d fps, %s%s%s\n",
+	DEBUG_LOG(("-autoskirmish: %d slots on '%s', seed %d, starting cash %u, %d fps at game speed %d, %s%s%s\n",
 		numPlayers, mapName.str(), seed, TheSkirmishGameInfo->getStartingCash().countMoney(), maxFPS,
+		TheSkirmishGameInfo->getGameSpeedPercent(),
 		observing ? "every slot AI, watching from the free camera" : "slot 0 is the local player",
 		takeover ? ", seats driverless" : "",
 		fixedStartPositions ? ", start positions fixed to slot order" : ""));
@@ -1690,14 +1692,21 @@ Int GameEngine_framesPerSecondForSpeed( Int percent )
 
 /* MSG_NEW_GAME refuses anything outside 1..1000 and falls back to m_framesPerSecondLimit
 	 unclamped, so the answer stays inside that.  A FramesPerSecondLimit below retail's 15, or none at
-	 all, is the native tick.  An asked speed that is not one of the player's is taken to the nearest. */
-Int GameEngine_matchFramesPerSecond( Int speedPercent )
+	 all, is the native tick.  The game speed does not enter it: every speed ticks this often and the
+	 speed scales the game time of a tick instead. */
+Int GameEngine_matchFramesPerSecond( void )
 {
 	Int fps = TheGlobalData->m_framesPerSecondLimit;
 	if (fps < ConvertRetailFramesWall( 15 ))
 		fps = LOGICFRAMES_PER_SECOND;
-	fps = scaleFramesPerSecondBySpeed( fps, ClampPlayerGameSpeedPercent( speedPercent ) );
 	return fps > 1000 ? 1000 : fps;
+}
+
+void GameEngine_appendNewGameRates( GameMessage *msg, Int gameSpeedPercent )
+{
+	DEBUG_ASSERTCRASH( msg->getArgumentCount() == 3, ("MSG_NEW_GAME's rates go after its mode, difficulty and rank points") );
+	msg->appendIntegerArgument( GameEngine_matchFramesPerSecond() );
+	msg->appendIntegerArgument( ClampPlayerGameSpeedPercent( gameSpeedPercent ) );
 }
 
 Int GameEngine_missionFramesPerSecond( Int askedRetailFps, Int matchFps )

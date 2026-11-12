@@ -246,7 +246,7 @@ private:
 static Int frameToShowObstacles;
 
 
-static UnsignedInt ZONE_UPDATE_FREQUENCY = 10 * LOGICFRAMES_PER_GAME_SECOND;
+#define ZONE_UPDATE_FREQUENCY ((UnsignedInt)(10 * LOGICFRAMES_PER_GAME_SECOND))
 
 //-----------------------------------------------------------------------------------
 PathNode::PathNode() :

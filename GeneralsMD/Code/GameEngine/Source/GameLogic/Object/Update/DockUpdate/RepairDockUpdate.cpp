@@ -41,7 +41,7 @@
 RepairDockUpdateModuleData::RepairDockUpdateModuleData( void )
 {
 
-	m_framesForFullHeal = 1.0f;  // 1 frame, instant heal by default (keeps away from divide by 0's)
+	m_framesForFullHeal.setRaw( 50.0f );  // msec: 1 frame at the native speed, instant heal by default (keeps away from divide by 0's)
 
 }  // end RepairDockUpdateModuleData
 
@@ -54,7 +54,7 @@ RepairDockUpdateModuleData::RepairDockUpdateModuleData( void )
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "TimeForFullHeal", INI::parseDurationReal, NULL, offsetof( RepairDockUpdateModuleData, m_framesForFullHeal ) },
+		{ "TimeForFullHeal", SPEED_FIELD( RepairDockUpdateModuleData, m_framesForFullHeal ) },
 		{ 0, 0, 0, 0 }
 	};
 

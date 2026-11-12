@@ -44,16 +44,16 @@
 //-------------------------------------------------------------------------------------------------
 FlammableUpdateModuleData::FlammableUpdateModuleData()
 {
-	m_burnedDelay = 0;
-	m_aflameDuration = 0;
-	m_aflameDamageDelay = 0;
+	m_burnedDelay.setRaw( 0 );
+	m_aflameDuration.setRaw( 0 );
+	m_aflameDamageDelay.setRaw( 0 );
 	m_aflameDamageAmount = 0;
 	// Enabled By Sadullah Nader
 	// Initialization needed
 	m_burningSoundName.clear();
 	//
 	m_flameDamageLimitData = 20.0f;
-	m_flameDamageExpirationDelay = LOGICFRAMES_PER_GAME_SECOND * 2;
+	m_flameDamageExpirationDelay.setRaw( 2000 );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -63,13 +63,13 @@ FlammableUpdateModuleData::FlammableUpdateModuleData()
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "BurnedDelay",						INI::parseDurationUnsignedInt,	NULL, offsetof( FlammableUpdateModuleData, m_burnedDelay ) },
-		{ "AflameDuration",					INI::parseDurationUnsignedInt,	NULL, offsetof( FlammableUpdateModuleData, m_aflameDuration ) },
-		{ "AflameDamageDelay",			INI::parseDurationUnsignedInt,	NULL, offsetof( FlammableUpdateModuleData, m_aflameDamageDelay ) },
+		{ "BurnedDelay",						SPEED_FIELD( FlammableUpdateModuleData, m_burnedDelay ) },
+		{ "AflameDuration",					SPEED_FIELD( FlammableUpdateModuleData, m_aflameDuration ) },
+		{ "AflameDamageDelay",			SPEED_FIELD( FlammableUpdateModuleData, m_aflameDamageDelay ) },
 		{ "AflameDamageAmount",			INI::parseInt,									NULL, offsetof( FlammableUpdateModuleData, m_aflameDamageAmount ) },
 		{ "BurningSoundName",				INI::parseAsciiString,					NULL,	offsetof( FlammableUpdateModuleData, m_burningSoundName) },
 		{ "FlameDamageLimit",				INI::parseReal,									NULL,	offsetof( FlammableUpdateModuleData, m_flameDamageLimitData ) },
-		{ "FlameDamageExpiration",	INI::parseDurationUnsignedInt,	NULL,	offsetof( FlammableUpdateModuleData, m_flameDamageExpirationDelay ) },
+		{ "FlameDamageExpiration",	SPEED_FIELD( FlammableUpdateModuleData, m_flameDamageExpirationDelay ) },
 		{ 0, 0, 0, 0 }
 	};
   p.add(dataFieldParse);

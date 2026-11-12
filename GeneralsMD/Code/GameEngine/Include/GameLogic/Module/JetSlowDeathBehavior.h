@@ -58,20 +58,20 @@ public:
 	const FXList *m_fxInitialDeath;								///< FXList for initial death
 	const ObjectCreationList *m_oclInitialDeath;	///< OCL for initial death
 
-	UnsignedInt m_delaySecondaryFromInitialDeath;	///< delay (in frames) from initial death, to the secondary event
+	DurationFrames m_delaySecondaryFromInitialDeath;	///< delay (in frames) from initial death, to the secondary event
 	const FXList *m_fxSecondary;									///< FXList for secondary event
 	const ObjectCreationList *m_oclSecondary;			///< OCL for secondary event
 
 	const FXList *m_fxHitGround;									///< FXList for hit ground
 	const ObjectCreationList *m_oclHitGround;			///< OCL for hit ground
 	
-	UnsignedInt m_delayFinalBlowUpFromHitGround;	///< delay (in frames) from hit ground, to final explosion
+	DurationFrames m_delayFinalBlowUpFromHitGround;	///< delay (in frames) from hit ground, to final explosion
 	const FXList *m_fxFinalBlowUp;								///< FxList for final blow up
 	const ObjectCreationList *m_oclFinalBlowUp;		///< OCL for final blow up
 
-	Real m_rollRate;															///< our initial roll rate
+	RetailPerFrame m_rollRate;															///< our initial roll rate
 	Real m_rollRateDelta;													///< how our roll rate changes over time
-	Real m_pitchRate;															///< spin speed on another axis after hitting the ground
+	RetailPerFrame m_pitchRate;															///< spin speed on another axis after hitting the ground
 	Real m_fallHowFast;														///< a fraction of gravity we use to modify the jet locmotor lift
 	Real m_momentumGlide;													///< how much longer a fast plane's wings hold it up (DeathMomentum on)
 

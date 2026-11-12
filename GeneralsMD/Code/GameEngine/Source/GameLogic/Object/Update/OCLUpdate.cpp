@@ -80,8 +80,8 @@ void parseFactionObjectCreationList( INI *ini, void *instance, void *store, cons
 //-------------------------------------------------------------------------------------------------
 OCLUpdateModuleData::OCLUpdateModuleData()
 {
-	m_minDelay = 0;
-	m_maxDelay = 0;
+	m_minDelay.setRaw( 0 );
+	m_maxDelay.setRaw( 0 );
 	m_ocl = NULL;
 	m_factionOCL.clear();
 	m_isCreateAtEdge = FALSE;
@@ -97,8 +97,8 @@ OCLUpdateModuleData::OCLUpdateModuleData()
 	{
 		{ "OCL",					INI::parseObjectCreationList,		NULL, offsetof( OCLUpdateModuleData, m_ocl ) },
 		{ "FactionOCL",		parseFactionObjectCreationList,	NULL, offsetof( OCLUpdateModuleData, m_factionOCL ) },
-		{ "MinDelay",			INI::parseDurationUnsignedInt,	NULL, offsetof( OCLUpdateModuleData, m_minDelay ) },
-		{ "MaxDelay",			INI::parseDurationUnsignedInt,	NULL, offsetof( OCLUpdateModuleData, m_maxDelay ) },
+		{ "MinDelay",			SPEED_FIELD( OCLUpdateModuleData, m_minDelay ) },
+		{ "MaxDelay",			SPEED_FIELD( OCLUpdateModuleData, m_maxDelay ) },
 		{ "CreateAtEdge",	INI::parseBool,									NULL, offsetof( OCLUpdateModuleData, m_isCreateAtEdge ) },
 		{ "FactionTriggered",	INI::parseBool,							NULL, offsetof( OCLUpdateModuleData, m_isFactionTriggered ) },
 		{ 0, 0, 0, 0 }

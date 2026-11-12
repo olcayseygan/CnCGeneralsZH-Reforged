@@ -335,9 +335,9 @@ public:
   inline Int getSupplyPileLimit( void ) const;
   void setSupplyPileLimit( Int players );
 
-  // Game speed in percent of retail's pace, one of PLAYER_GAME_SPEED_PERCENTS: wall pacing only, every
-  // tick the same game time.  Only the skirmish lobby sets another value than the default; it is not in
-  // the options string, and reaches the engine and the replay as MSG_NEW_GAME's frame rate.
+  // Game speed in percent of retail's pace, one of PLAYER_GAME_SPEED_PERCENTS: the game time each tick
+  // advances.  Only the skirmish lobby sets another value than the default; it is not in the options
+  // string, and reaches the engine as MSG_NEW_GAME's game speed and the replay as its GS= field.
   Int getGameSpeedPercent( void ) const { return m_gameSpeedPercent; }
   void setGameSpeedPercent( Int percent ) { m_gameSpeedPercent = ClampPlayerGameSpeedPercent( percent ); }
 

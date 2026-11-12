@@ -47,14 +47,14 @@
 //-------------------------------------------------------------------------------------------------
 DynamicShroudClearingRangeUpdateModuleData::DynamicShroudClearingRangeUpdateModuleData()
 {
-	m_shrinkDelay = 0;
-	m_shrinkTime = 0;
-	m_growDelay = 0;
-	m_growTime = 0;
+	m_shrinkDelay.setRaw( 0 );
+	m_shrinkTime.setRaw( 0 );
+	m_growDelay.setRaw( 0 );
+	m_growTime.setRaw( 0 );
 
 	m_finalVision = 0.0f;
-	m_changeInterval = 0;
-	m_growInterval = 0;
+	m_changeInterval.setRaw( 0 );
+	m_growInterval.setRaw( 0 );
 	m_doSpySatFX = FALSE;
 }
 
@@ -65,12 +65,12 @@ DynamicShroudClearingRangeUpdateModuleData::DynamicShroudClearingRangeUpdateModu
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "ChangeInterval",			INI::parseDurationUnsignedInt,	NULL, offsetof( DynamicShroudClearingRangeUpdateModuleData, m_changeInterval ) },
-		{ "GrowInterval",			INI::parseDurationUnsignedInt,	NULL, offsetof( DynamicShroudClearingRangeUpdateModuleData, m_growInterval ) },
-		{ "ShrinkDelay",				INI::parseDurationUnsignedInt,	NULL, offsetof( DynamicShroudClearingRangeUpdateModuleData, m_shrinkDelay ) },
-		{ "ShrinkTime",					INI::parseDurationUnsignedInt,	NULL, offsetof( DynamicShroudClearingRangeUpdateModuleData, m_shrinkTime ) },
-		{ "GrowDelay",					INI::parseDurationUnsignedInt,	NULL, offsetof( DynamicShroudClearingRangeUpdateModuleData, m_growDelay ) },
-		{ "GrowTime",						INI::parseDurationUnsignedInt,	NULL, offsetof( DynamicShroudClearingRangeUpdateModuleData, m_growTime ) },
+		{ "ChangeInterval",			SPEED_FIELD( DynamicShroudClearingRangeUpdateModuleData, m_changeInterval ) },
+		{ "GrowInterval",			SPEED_FIELD( DynamicShroudClearingRangeUpdateModuleData, m_growInterval ) },
+		{ "ShrinkDelay",				SPEED_FIELD( DynamicShroudClearingRangeUpdateModuleData, m_shrinkDelay ) },
+		{ "ShrinkTime",					SPEED_FIELD( DynamicShroudClearingRangeUpdateModuleData, m_shrinkTime ) },
+		{ "GrowDelay",					SPEED_FIELD( DynamicShroudClearingRangeUpdateModuleData, m_growDelay ) },
+		{ "GrowTime",						SPEED_FIELD( DynamicShroudClearingRangeUpdateModuleData, m_growTime ) },
 		{ "FinalVision",				INI::parseReal,									NULL, offsetof( DynamicShroudClearingRangeUpdateModuleData, m_finalVision ) },
 		{ "GridDecalTemplate", RadiusDecalTemplate::parseRadiusDecalTemplate, NULL, offsetof( DynamicShroudClearingRangeUpdateModuleData, m_gridDecalTemplate ) },
 		{ 0, 0, 0, 0 }

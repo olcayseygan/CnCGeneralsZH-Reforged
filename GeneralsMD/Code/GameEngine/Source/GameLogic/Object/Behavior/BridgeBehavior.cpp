@@ -61,8 +61,8 @@
 BridgeBehaviorModuleData::BridgeBehaviorModuleData( void )
 {
 
-	m_lateralScaffoldSpeed = ConvertRetailPerFrameRate(1.0f);
-	m_verticalScaffoldSpeed = ConvertRetailPerFrameRate(1.0f);
+	m_lateralScaffoldSpeed.setRaw( 30.0f );	// per second: ConvertRetailPerFrameRate(1.0f) at the native speed
+	m_verticalScaffoldSpeed.setRaw( 30.0f );
 
 }  // end BridgeBehaviorModuleData
 
@@ -87,8 +87,8 @@ BridgeBehaviorModuleData::~BridgeBehaviorModuleData( void )
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "LateralScaffoldSpeed",			INI::parseVelocityReal, NULL, offsetof( BridgeBehaviorModuleData, m_lateralScaffoldSpeed ) },
-		{ "VerticalScaffoldSpeed",		INI::parseVelocityReal, NULL, offsetof( BridgeBehaviorModuleData, m_verticalScaffoldSpeed ) },
+		{ "LateralScaffoldSpeed",			SPEED_FIELD( BridgeBehaviorModuleData, m_lateralScaffoldSpeed ) },
+		{ "VerticalScaffoldSpeed",		SPEED_FIELD( BridgeBehaviorModuleData, m_verticalScaffoldSpeed ) },
 		{ "BridgeDieFX",		parseFX,		NULL,			offsetof( BridgeBehaviorModuleData, m_fx ) },
 		{ "BridgeDieOCL",		parseOCL,		NULL,			offsetof( BridgeBehaviorModuleData, m_ocl ) },
 		{ 0, 0, 0, 0 }
@@ -117,7 +117,7 @@ static void parseTimeAndLocationInfo( INI *ini, void *instance,
 	}  // end if
 
 	// delay value
-	ini->parseDurationUnsignedInt( ini, instance, &timeAndLocationInfo->delay, NULL );
+	DurationFrames::parse( ini, instance, &timeAndLocationInfo->delay, NULL );
 
 	// get optional bone label
 	token = ini->getNextTokenOrNull( ini->getSepsColon() );

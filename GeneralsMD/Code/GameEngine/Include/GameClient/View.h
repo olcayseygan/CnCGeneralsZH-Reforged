@@ -35,6 +35,7 @@
 #define _VIEW_H_
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
+#include "Common/GameCommon.h"
 #include "Common/GameType.h"
 #include "Common/Snapshot.h"
 #include "Lib/BaseType.h"
@@ -76,8 +77,8 @@ enum PickType
 struct ScreenDistortionInfo
 {
 	Real m_radius;
-	UnsignedInt m_pullFrames;
-	UnsignedInt m_waveFrames;
+	DurationFrames m_pullFrames;
+	DurationFrames m_waveFrames;
 	Real m_pullStrength;
 	Real m_waveStrength;
 	Real m_waveWidth;

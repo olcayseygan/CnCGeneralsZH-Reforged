@@ -642,9 +642,9 @@ struct ScenarioArrival
 };
 
 /// how long a unit on its way has to stand still before it counts as having stopped
-static const Int SCENARIO_STALL_FRAMES = LOGICFRAMES_PER_GAME_SECOND;
+#define SCENARIO_STALL_FRAMES ((Int)(LOGICFRAMES_PER_GAME_SECOND))
 /// less than this from one frame to the next is standing still
-static const Real SCENARIO_STILL_DISTANCE = ConvertRetailPerFrameRate( 0.05f );
+#define SCENARIO_STILL_DISTANCE ((Real)(ConvertRetailPerFrameRate( 0.05f )))
 
 /// how far a unit has to have gone from where it stood before it counts as having obeyed the order
 static const Real SCENARIO_DEPARTED_DISTANCE = 20.0f;
@@ -1296,7 +1296,7 @@ struct StatueTrack
 	Bool counted;
 	Bool seen;
 };
-static const Int STATUE_FRAMES = 3 * LOGICFRAMES_PER_GAME_SECOND;
+#define STATUE_FRAMES ((Int)(3 * LOGICFRAMES_PER_GAME_SECOND))
 static const Int STATUE_DETAIL_LINES = 40;
 static std::map<ObjectID, StatueTrack> theStatueTracks;
 static Int theStatueStops = 0;

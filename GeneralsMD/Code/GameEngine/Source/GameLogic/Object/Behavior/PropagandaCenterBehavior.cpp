@@ -62,7 +62,7 @@ PropagandaCenterBehaviorModuleData::PropagandaCenterBehaviorModuleData( void )
 	static const FieldParse dataFieldParse[] = 
 	{
 		
-		{	"BrainwashDuration", INI::parseDurationUnsignedInt, NULL, offsetof( PropagandaCenterBehaviorModuleData, m_brainwashDuration ) },
+		{	"BrainwashDuration", SPEED_FIELD( PropagandaCenterBehaviorModuleData, m_brainwashDuration ) },
 		{ 0, 0, 0, 0 }
 
 	};

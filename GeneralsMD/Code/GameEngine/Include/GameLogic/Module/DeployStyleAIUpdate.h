@@ -49,8 +49,8 @@ enum DeployStateTypes
 class DeployStyleAIUpdateModuleData : public AIUpdateModuleData
 {
 public:
-	UnsignedInt			m_unpackTime;
-	UnsignedInt			m_packTime;		
+	DurationFrames			m_unpackTime;
+	DurationFrames			m_packTime;		
 	Bool						m_resetTurretBeforePacking;	
 	Bool						m_turretsFunctionOnlyWhenDeployed;
 	Bool						m_turretsMustCenterBeforePacking;
@@ -58,8 +58,8 @@ public:
 
 	DeployStyleAIUpdateModuleData()
 	{
-		m_unpackTime = 0;
-		m_packTime = 0;
+		m_unpackTime.setRaw( 0 );
+		m_packTime.setRaw( 0 );
 		m_resetTurretBeforePacking = false;
 		m_turretsFunctionOnlyWhenDeployed = false;
 		// Added By Sadullah Nader
@@ -75,8 +75,8 @@ public:
 
 		static const FieldParse dataFieldParse[] = 
 		{
-			{ "UnpackTime",					INI::parseDurationUnsignedInt,	NULL, offsetof( DeployStyleAIUpdateModuleData, m_unpackTime ) },
-			{ "PackTime",						INI::parseDurationUnsignedInt,	NULL, offsetof( DeployStyleAIUpdateModuleData, m_packTime ) },
+			{ "UnpackTime",					SPEED_FIELD( DeployStyleAIUpdateModuleData, m_unpackTime ) },
+			{ "PackTime",						SPEED_FIELD( DeployStyleAIUpdateModuleData, m_packTime ) },
 			{ "ResetTurretBeforePacking", INI::parseBool,						NULL, offsetof( DeployStyleAIUpdateModuleData, m_resetTurretBeforePacking ) },
 			{ "TurretsFunctionOnlyWhenDeployed", INI::parseBool,		NULL, offsetof( DeployStyleAIUpdateModuleData, m_turretsFunctionOnlyWhenDeployed ) },
 			{ "TurretsMustCenterBeforePacking", INI::parseBool,			NULL, offsetof( DeployStyleAIUpdateModuleData, m_turretsMustCenterBeforePacking ) },

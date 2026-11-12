@@ -87,10 +87,10 @@ class StructureToppleUpdateModuleData : public UpdateModuleData
 {
 public:
 	DieMuxData m_dieMuxData;
-	Int m_minToppleDelay;
-	Int m_maxToppleDelay;
+	DurationFramesInt m_minToppleDelay;
+	DurationFramesInt m_maxToppleDelay;
 	Real m_structuralIntegrity;
-	Real m_structuralDecay;
+	RetailPerFrameFactor m_structuralDecay;
 	DamageTypeFlags m_damageFXTypes;		///< flags used to play or not play the effects
 	FXList *m_toppleStartFXList;
 	FXList *m_toppleDelayFXList;
@@ -98,8 +98,8 @@ public:
 	FXList *m_toppleDoneFXList;
 	FXList *m_crushingFXList;
 	AsciiString	m_crushingWeaponName;
-	Int m_minToppleBurstDelay;
-	Int m_maxToppleBurstDelay;
+	DurationFramesInt m_minToppleBurstDelay;
+	DurationFramesInt m_maxToppleBurstDelay;
 	OCLVec m_ocls[ST_PHASE_COUNT];
 	UnsignedInt m_oclCount[ST_PHASE_COUNT];
 	FXBoneInfoVector fxbones;			///< Bone names and attached particle systems.
@@ -108,12 +108,12 @@ public:
 
 	StructureToppleUpdateModuleData()
 	{
-		m_minToppleDelay = 0;
-		m_maxToppleDelay = 0;
-		m_minToppleBurstDelay = 0;
-		m_maxToppleBurstDelay = 0;
+		m_minToppleDelay.setRaw( 0 );
+		m_maxToppleDelay.setRaw( 0 );
+		m_minToppleBurstDelay.setRaw( 0 );
+		m_maxToppleBurstDelay.setRaw( 0 );
 		m_structuralIntegrity = 0.1f;
-		m_structuralDecay = 0.0f;
+		m_structuralDecay.setRaw( 0.0f );
 		m_damageFXTypes = DAMAGE_TYPE_FLAGS_NONE;
 		m_damageFXTypes.flip();
 		m_toppleStartFXList = NULL;

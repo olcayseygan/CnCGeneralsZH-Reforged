@@ -33,6 +33,7 @@
 #define _AUDIOSETTINGS_H_
 
 #include "Common/AsciiString.h"
+#include "Common/GameCommon.h"
 
 #include <vector>
 
@@ -155,8 +156,8 @@ struct AudioSettings
 	AsciiString m_ambienceBedDesert;
 	AsciiString m_ambienceBedField;
 
-	Int m_drawableAmbientFrames;
-	Int m_fadeAudioFrames;
+	DurationFramesInt m_drawableAmbientFrames;
+	DurationFramesInt m_fadeAudioFrames;
 	UnsignedInt m_maxCacheSize;
 
 	Real m_minVolume;		// At volumes less than this, the sample will be culled.

@@ -170,14 +170,14 @@ private:
 	AsciiString				m_name;								///< name
 	UnsignedInt				m_id;									///< unique identifier
 	SpecialPowerType	m_type;								///< enum allowing for fast type checking for ability processing.
-	UnsignedInt				m_reloadTime;					///< (frames) after using special power, how long it takes to use again
+	DurationFrames				m_reloadTime;					///< (frames) after using special power, how long it takes to use again
 	ScienceType				m_requiredScience;		///< science required (if any) to actually execute this power
 	AudioEventRTS			m_initiateSound;			///< sound to play when initiated
 	AudioEventRTS			m_initiateAtLocationSound;		///< sound to play at target location (if any)
 	AcademyClassificationType m_academyClassificationType; ///< A value used by the academy to evaluate advice based on what players do.
-	UnsignedInt				m_detectionTime;			///< (frames) after using infiltration power (defection, etc.), 
+	DurationFrames				m_detectionTime;			///< (frames) after using infiltration power (defection, etc.), 
 																					///< how long it takes for ex comrades to realize it on their own
-	UnsignedInt				m_viewObjectDuration;	///< Lifetime of a looking object we slap down so you can watch the effect
+	DurationFrames				m_viewObjectDuration;	///< Lifetime of a looking object we slap down so you can watch the effect
 	Real							m_viewObjectRange;		///< And how far that object can see.
 	Real							m_radiusCursorRadius;	///< size of radius cursor, if any
 public:

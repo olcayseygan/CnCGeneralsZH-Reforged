@@ -42,7 +42,7 @@
 RadarUpdateModuleData::RadarUpdateModuleData( void )
 {
 
-	m_radarExtendTime = 0.0f;
+	m_radarExtendTime.setRaw( 0.0f );
 
 }  // end RadarUpdateModuleData
 

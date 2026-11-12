@@ -43,14 +43,14 @@
 class DynamicShroudClearingRangeUpdateModuleData : public UpdateModuleData
 {
 public:
-	UnsignedInt m_shrinkDelay;	///< wait until
-	UnsignedInt m_shrinkTime;		///< then shrink this fast
-	UnsignedInt m_growDelay;    ///< wait until
-	UnsignedInt m_growTime;     ///< then grow this fast
+	DurationFrames m_shrinkDelay;	///< wait until
+	DurationFrames m_shrinkTime;		///< then shrink this fast
+	DurationFrames m_growDelay;    ///< wait until
+	DurationFrames m_growTime;     ///< then grow this fast
 
 	Real m_finalVision;										///< Then change to this
-	UnsignedInt m_changeInterval;			///< And update my Object every this long
-	UnsignedInt m_growInterval;				///< Update evey this long while growing
+	DurationFrames m_changeInterval;			///< And update my Object every this long
+	DurationFrames m_growInterval;				///< Update evey this long while growing
 	Bool m_doSpySatFX;										///< Do I do the pseudo-wireframe decal and blip effects?
 	RadiusDecalTemplate m_gridDecalTemplate;///< For the pseudo-wireframe decal effect
 

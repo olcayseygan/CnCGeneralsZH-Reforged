@@ -360,8 +360,8 @@ W3DLaserDrawModuleData::W3DLaserDrawModuleData()
 	m_innerBeamWidth = 0.0f;         //The total width of beam
 	m_outerBeamWidth = 1.0f;         //The total width of beam
   m_numBeams = 1;                 //Number of overlapping cylinders that make the beam. 1 beam will just use inner data.
-  m_maxIntensityFrames = 0;				//Laser stays at max intensity for specified time in ms.
-  m_fadeFrames = 0;               //Laser will fade and delete.
+  m_maxIntensityFrames.setRaw( 0 );				//Laser stays at max intensity for specified time in ms.
+  m_fadeFrames.setRaw( 0 );               //Laser will fade and delete.
 	m_scrollRate = 0.0f;
 	m_tile = false;
 	m_segments = 1;
@@ -389,8 +389,8 @@ void W3DLaserDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "OuterBeamWidth",				INI::parseReal,									NULL, offsetof( W3DLaserDrawModuleData, m_outerBeamWidth ) },
 		{ "InnerColor",						INI::parseColorInt,							NULL, offsetof( W3DLaserDrawModuleData, m_innerColor ) },
 		{ "OuterColor",						INI::parseColorInt,							NULL, offsetof( W3DLaserDrawModuleData, m_outerColor ) },
-		{ "MaxIntensityLifetime",	INI::parseDurationUnsignedInt,	NULL, offsetof( W3DLaserDrawModuleData, m_maxIntensityFrames ) },
-		{ "FadeLifetime",					INI::parseDurationUnsignedInt,	NULL, offsetof( W3DLaserDrawModuleData, m_fadeFrames ) },
+		{ "MaxIntensityLifetime",	SPEED_FIELD( W3DLaserDrawModuleData, m_maxIntensityFrames ) },
+		{ "FadeLifetime",					SPEED_FIELD( W3DLaserDrawModuleData, m_fadeFrames ) },
 		{ "Texture",							INI::parseAsciiString,					NULL, offsetof( W3DLaserDrawModuleData, m_textureName ) },
 		{ "ScrollRate",						INI::parseReal,									NULL, offsetof( W3DLaserDrawModuleData, m_scrollRate ) },
 		{ "Tile",									INI::parseBool,									NULL, offsetof( W3DLaserDrawModuleData, m_tile ) },

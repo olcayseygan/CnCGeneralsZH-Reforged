@@ -1614,7 +1614,7 @@ protected:
 	Int													m_rackTextRoom[ RACK_TEXT_COUNT ];
 
 	Coord2D											m_superweaponPosition;
-	Real												m_superweaponFlashDuration;
+	DurationFramesReal												m_superweaponFlashDuration;
 	
 	// superweapon timer font info
 	AsciiString									m_superweaponNormalFont;
@@ -1630,7 +1630,7 @@ protected:
 
 	NamedTimerMap								m_namedTimers;
 	Coord2D											m_namedTimerPosition;
-	Real												m_namedTimerFlashDuration;
+	DurationFramesReal												m_namedTimerFlashDuration;
 	Int													m_namedTimerLastFlashFrame;
 	Color												m_namedTimerFlashColor;
 	Bool												m_namedTimerUsedFlashColor;
@@ -1684,7 +1684,7 @@ protected:
 	Bool												m_militaryCaptionBold;
 
 	Bool												m_militaryCaptionRandomizeTyping;
-	Int													m_militaryCaptionSpeed;
+	RetailFramesInt													m_militaryCaptionSpeed;
 
 	RadiusDecalTemplate					m_radiusCursors[RADIUSCURSOR_COUNT];
 	RadiusDecal									m_curRadiusCursor;
@@ -1695,9 +1695,9 @@ protected:
 	FloatingTextList						m_floatingTextList;				///< Our list of floating text
 	// the three INI values are still parsed so InGameUI.ini loads, and no longer read: the money pop
 	// keeps its own wall-clock timing (drawFloatingText)
-	UnsignedInt									m_floatingTextTimeOut;									///< Ini value of our floating text timeout
-	Real												m_floatingTextMoveUpSpeed;							///< INI value of our Move up speed
-	Real												m_floatingTextMoveVanishRate;					///< INI value of our move vanish rate
+	DurationFrames									m_floatingTextTimeOut;									///< Ini value of our floating text timeout
+	VelocityPerFrame												m_floatingTextMoveUpSpeed;							///< INI value of our Move up speed
+	VelocityPerFrame												m_floatingTextMoveVanishRate;					///< INI value of our move vanish rate
 
 	PopupMessageData *					m_popupMessageData;
 	Color												m_popupMessageColor;

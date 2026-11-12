@@ -508,7 +508,7 @@ private:
 	Real m_primaryDamageRadius;							///< primary damage radius range
 	Real m_secondaryDamage;									///< secondary damage amount
 	Real m_secondaryDamageRadius;						///< secondary damage radius range	
-	Real m_shockWaveAmount;									///( How much shockwave generated 
+	RetailPerFrame m_shockWaveAmount;									///( How much shockwave generated 
 	Real m_shockWaveRadius;									///( How far shockwave effect affects objects
 	Real m_shockWaveTaperOff;								///( How much shockwave is left at the tip of the shockwave radius
 	Real m_attackRange;											///< max distance the weapon can deal damage
@@ -524,10 +524,10 @@ private:
 	std::vector<Coord2D> m_scatterTargets;	///< instead of pure randomness, this is the list of places I will randomly choose from to attack
 	DamageType m_damageType;								///< damage type enum
 	DeathType m_deathType;									///< death type enum
-	Real m_weaponSpeed;											///< speed of damage travel, in dist/frame
-	Real m_minWeaponSpeed;									///< speed of damage travel, in dist/frame
+	VelocityPerFrame m_weaponSpeed;											///< speed of damage travel, in dist/frame
+	VelocityPerFrame m_minWeaponSpeed;									///< speed of damage travel, in dist/frame
 	Bool m_isScaleWeaponSpeed;							///< Scale from min to normal based on range (for lobbers)
-	UnsignedInt m_ballisticFlightFrames;		///< nonzero: the shell flies a parabola and lands this many frames after launch, at any range
+	DurationFrames m_ballisticFlightFrames;		///< nonzero: the shell flies a parabola and lands this many frames after launch, at any range
 	Real m_ballisticPeakHeight;							///< how far that parabola rises over the line from muzzle to target, at mid flight
 	Real m_weaponRecoil;										///< amt of recoil caused to firer, in rads
 	Real m_minTargetPitch;									///< min pitch from source->victim allowable in order to target
@@ -543,7 +543,7 @@ private:
 	const FXList* m_fireFXs[LEVEL_COUNT];															///< weapon is fired fx
 	const FXList* m_projectileDetonateFXs[LEVEL_COUNT];								///< if we have a projectile, fx for projectile blowing up
 	AudioEventRTS m_fireSound;							///< weapon is fired sound
-	UnsignedInt m_fireSoundLoopTime;				///< if nonzero, num frames for looping of fire sound
+	DurationFrames m_fireSoundLoopTime;				///< if nonzero, num frames for looping of fire sound
 	WeaponBonusSet* m_extraBonus;						///< optional extra per-weapon bonus
 	Int m_clipSize;													///< number of 'shots' in a clip
 	Int m_clipReloadTime;										///< when 'clip' is empty, how long it takes to reload (retail frames; the getter converts)
@@ -551,8 +551,8 @@ private:
 	Int m_maxDelayBetweenShots;							///< max time allowed between firing single shots (retail frames; the getters convert)
 	Int m_continuousFireOneShotsNeeded;			///< How many consecutive shots will give my owner the ContinuousFire Property
 	Int m_continuousFireTwoShotsNeeded;			///< How many consecutive shots will give my owner the ContinuousFireTwo Property
-	UnsignedInt m_continuousFireCoastFrames;///< How long after we should have shot should we start to wind down from Continuous fire mode
- 	UnsignedInt m_autoReloadWhenIdleFrames;	///< How long we have to wait after our last shot to force a reload
+	DurationFrames m_continuousFireCoastFrames;///< How long after we should have shot should we start to wind down from Continuous fire mode
+ 	DurationFrames m_autoReloadWhenIdleFrames;	///< How long we have to wait after our last shot to force a reload
 	Int m_shotsPerBarrel;										///< If non zero, don't cycle through your launch points every shot, mod the shot by this to get even chucks of firing
 	Int m_antiMask;													///< what we can target
 	Int m_affectsMask;											///< what we can affect
@@ -560,7 +560,7 @@ private:
 	Bool m_damageDealtAtSelfPosition;				///< if T, weapon damage is done at source's position, not victim's pos. (useful for suicide weapons.)
 	WeaponReloadType m_reloadType;					///< does the weapon auto-reload a clip when empty?
 	WeaponPrefireType m_prefireType;				///< The way this weapon handles its prefire delay
-	UnsignedInt m_historicBonusTime;				///< if 'count' instances of this weapon do damage within 'time' and 'radius' from each other, fire the historic bonus weapon
+	DurationFrames m_historicBonusTime;				///< if 'count' instances of this weapon do damage within 'time' and 'radius' from each other, fire the historic bonus weapon
 	Real m_historicBonusRadius;							///< see above
 	Int m_historicBonusCount;								///< see above
 	const WeaponTemplate* m_historicBonusWeapon;	///< see above
@@ -569,11 +569,11 @@ private:
 	Bool m_isShowsAmmoPips;									///< shows ammo pips
 	Bool m_allowAttackGarrisonedBldgs;			///< allow attacks on garrisoned bldgs, even if estimated damage would be zero
 	Bool m_playFXWhenStealthed;					///< Ignores rule about not playing FX when stealthed
-	Int m_preAttackDelay;										///< doesn't attack until preAttack delay is finish (triggering detonation, aiming a snipe shot, etc.)
+	DurationFramesInt m_preAttackDelay;										///< doesn't attack until preAttack delay is finish (triggering detonation, aiming a snipe shot, etc.)
 	Real m_continueAttackRange;							///< if nonzero: when you destroy something, look for a similar obj controlled by same player to attack (used mainly for mine-clearing)
 	Real m_infantryInaccuracyDist;					///< When this weapon is used against infantry, it can randomly miss by as much as this distance.
 	ObjectStatusTypes m_damageStatusType;		///< If our damage is Status damage, the status we apply
-	UnsignedInt m_suspendFXDelay;						///< The fx can be suspended for any delay, in frames, then they will execute as normal
+	DurationFrames m_suspendFXDelay;						///< The fx can be suspended for any delay, in frames, then they will execute as normal
 	Bool m_dieOnDetonate;
 
 	mutable HistoricWeaponDamageList m_historicDamage;

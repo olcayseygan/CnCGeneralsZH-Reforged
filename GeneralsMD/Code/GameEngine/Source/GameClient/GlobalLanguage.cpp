@@ -75,7 +75,7 @@ static const FieldParse TheGlobalLanguageDataFieldParseTable[] =
 	{ "UnicodeFontName",									INI::parseAsciiString,NULL,									offsetof( GlobalLanguage, m_unicodeFontName ) },
 	//{	"UnicodeFontFileName",							INI::parseAsciiString,NULL,									offsetof( GlobalLanguage, m_unicodeFontFileName ) },
 	{ "LocalFontFile",										GlobalLanguage::parseFontFileName,					NULL,			0},
-	{ "MilitaryCaptionSpeed",						INI::parseRetailFramesInt,				NULL,		offsetof( GlobalLanguage, m_militaryCaptionSpeed ) },
+	{ "MilitaryCaptionSpeed",						SPEED_FIELD( GlobalLanguage, m_militaryCaptionSpeed ) },
 	{ "UseHardWordWrap",						INI::parseBool,					NULL,		offsetof( GlobalLanguage, m_useHardWrap) },
 	{ "ResolutionFontAdjustment",						INI::parseReal,					NULL,		offsetof( GlobalLanguage, m_resolutionFontSizeAdjustment) },
 	
@@ -149,7 +149,7 @@ GlobalLanguage::GlobalLanguage()
 	//Initializations missing and needed
 	m_unicodeFontFileName.clear();
 	m_unicodeFontName.clear();
-	m_militaryCaptionSpeed = 0;
+	m_militaryCaptionSpeed.setRaw( 0 );
 	m_useHardWrap = FALSE;
 	m_resolutionFontSizeAdjustment = 0.7f;
 	m_militaryCaptionDelayMS = 750;

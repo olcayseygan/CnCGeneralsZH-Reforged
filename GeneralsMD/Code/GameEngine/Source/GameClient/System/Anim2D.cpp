@@ -59,7 +59,7 @@ Anim2DTemplate::Anim2DTemplate( AsciiString name )
 	m_name = name;
 	m_images = NULL;
 	m_numFrames = NUM_FRAMES_INVALID;
-	m_framesBetweenUpdates = 0;
+	m_framesBetweenUpdates.setRaw( 0 );
 	m_animMode = ANIM_2D_LOOP;
 	m_randomizeStartFrame = FALSE;
 	m_nextTemplate = NULL;
@@ -87,7 +87,7 @@ const FieldParse Anim2DTemplate::s_anim2DFieldParseTable[] =
 	{ "Image",								Anim2DTemplate::parseImage,					NULL,							0 },
 	{ "ImageSequence",				Anim2DTemplate::parseImageSequence, NULL,							0 },
 	{ "AnimationMode",				INI::parseIndexList,								Anim2DModeNames,	offsetof( Anim2DTemplate, m_animMode ) },
-	{ "AnimationDelay",				INI::parseDurationUnsignedShort,		NULL,							offsetof( Anim2DTemplate, m_framesBetweenUpdates ) },
+	{ "AnimationDelay",				SPEED_FIELD( Anim2DTemplate, m_framesBetweenUpdates ) },
 	{ "RandomizeStartFrame",	INI::parseBool,											NULL,							offsetof( Anim2DTemplate, m_randomizeStartFrame ) },
 	{ NULL,										NULL,																NULL,							0 }
 

@@ -74,8 +74,8 @@ public:
 
 	KindOfMaskType						m_requiredAffectKindOf;						///< Must be set on target
 	KindOfMaskType						m_forbiddenAffectKindOf;	///< Must be clear on target
-	UnsignedInt								m_bonusDuration;					///< How long a hit lasts on target
-	UnsignedInt								m_bonusDelay;							///< How often to pulse
+	DurationFrames								m_bonusDuration;					///< How long a hit lasts on target
+	DurationFrames								m_bonusDelay;							///< How often to pulse
 	Real											m_bonusRange;							///< How far to affect
 	WeaponBonusConditionType	m_bonusConditionType;			///< Status to give
 

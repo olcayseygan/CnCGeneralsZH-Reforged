@@ -72,10 +72,10 @@ public:
 	// !!!
 	Int m_maxBoxesData;
 	Real m_repairHealthPercentPerSecond;	///< how many health points per second the dozer repairs at
-	Real m_boredTime;											///< after this many frames, a dozer will try to find something to do on its own
+	DurationFramesReal m_boredTime;											///< after this many frames, a dozer will try to find something to do on its own
 	Real m_boredRange;										///< range the dozers try to auto repair when they're bored
-	UnsignedInt m_centerDelay;
-	UnsignedInt m_warehouseDelay;
+	DurationFrames m_centerDelay;
+	DurationFrames m_warehouseDelay;
 	Real m_warehouseScanDistance;
  	AudioEventRTS m_suppliesDepletedVoice;						///< Sound played when I take the last box.
 	Int m_upgradedSupplyBoost;
@@ -84,10 +84,10 @@ public:
 	{
 		m_maxBoxesData = 0;
 		m_repairHealthPercentPerSecond = 0.0f;
-		m_boredTime = 0.0f;
+		m_boredTime.setRaw( 0.0f );
 		m_boredRange = 0.0f;
-		m_centerDelay = 0;
-		m_warehouseDelay = 0;
+		m_centerDelay.setRaw( 0 );
+		m_warehouseDelay.setRaw( 0 );
 		m_warehouseScanDistance = 100;
 		m_upgradedSupplyBoost = 0;
 	}
@@ -100,10 +100,10 @@ public:
 		{
 			{ "MaxBoxes",					INI::parseInt,		NULL, offsetof( WorkerAIUpdateModuleData, m_maxBoxesData ) },
 			{ "RepairHealthPercentPerSecond",	INI::parsePercentToReal,	NULL, offsetof( WorkerAIUpdateModuleData, m_repairHealthPercentPerSecond ) },
-			{ "BoredTime",										INI::parseDurationReal,		NULL, offsetof( WorkerAIUpdateModuleData, m_boredTime ) },
+			{ "BoredTime",										SPEED_FIELD( WorkerAIUpdateModuleData, m_boredTime ) },
 			{ "BoredRange",										INI::parseReal,						NULL, offsetof( WorkerAIUpdateModuleData, m_boredRange ) },
-			{ "SupplyCenterActionDelay", INI::parseDurationUnsignedInt, NULL, offsetof( WorkerAIUpdateModuleData, m_centerDelay ) },
-			{ "SupplyWarehouseActionDelay", INI::parseDurationUnsignedInt, NULL, offsetof( WorkerAIUpdateModuleData, m_warehouseDelay ) },
+			{ "SupplyCenterActionDelay", SPEED_FIELD( WorkerAIUpdateModuleData, m_centerDelay ) },
+			{ "SupplyWarehouseActionDelay", SPEED_FIELD( WorkerAIUpdateModuleData, m_warehouseDelay ) },
 			{ "SupplyWarehouseScanDistance", INI::parseReal, NULL, offsetof( WorkerAIUpdateModuleData, m_warehouseScanDistance ) },
  			{ "SuppliesDepletedVoice", INI::parseAudioEventRTS, NULL, offsetof( WorkerAIUpdateModuleData, m_suppliesDepletedVoice) },
  			{ "UpgradedSupplyBoost", INI::parseInt, NULL, offsetof( WorkerAIUpdateModuleData, m_upgradedSupplyBoost) },

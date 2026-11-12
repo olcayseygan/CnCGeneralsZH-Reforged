@@ -42,7 +42,7 @@ class Thing;
 class StealthDetectorUpdateModuleData : public UpdateModuleData
 {
 public:
-	UnsignedInt											m_updateRate;
+	DurationFrames											m_updateRate;
 	Real														m_detectionRange;
 	Bool														m_initiallyDisabled;
 	AudioEventRTS										m_pingSound;
@@ -59,7 +59,7 @@ public:
 
 	StealthDetectorUpdateModuleData()
 	{
-		m_updateRate = 1;
+		m_updateRate.setRaw( 1 );	// 1 msec: one frame at any speed
 		m_detectionRange = 0.0f;
 		m_initiallyDisabled = false;
 		m_IRBeaconParticleSysTmpl = NULL;

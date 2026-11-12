@@ -55,11 +55,11 @@ public:
   UnsignedInt						m_volleySize;
   Real									m_volleyArcAngle;
 	Real									m_volleyVelocityFactor;
-  UnsignedInt						m_framesBetweenVolleys;
+  DurationFrames						m_framesBetweenVolleys;
 	UnsignedInt						m_numberOfVolleys;
-  UnsignedInt						m_reloadFrames;
-	UnsignedInt						m_missileDecoyFrames;
-	UnsignedInt						m_countermeasureReactionFrames;
+  DurationFrames						m_reloadFrames;
+	DurationFrames						m_missileDecoyFrames;
+	DurationFrames						m_countermeasureReactionFrames;
 	Bool									m_mustReloadAtAirfield;
 	Bool									m_startsActive;					///< fitted from birth: no upgrade, and no decoy on the ground where no flare can fly
 
@@ -68,12 +68,12 @@ public:
 		m_startsActive					= FALSE;
     m_volleySize            = 0;
 		m_volleyArcAngle				= 0.0f;
-    m_framesBetweenVolleys  = 0;
+    m_framesBetweenVolleys.setRaw( 0 );
 		m_numberOfVolleys       = 0;
-    m_reloadFrames          = 0;
+    m_reloadFrames.setRaw( 0 );
     m_evasionRate           = 0.0f;
 		m_mustReloadAtAirfield	= FALSE;
-		m_missileDecoyFrames		= 0;
+		m_missileDecoyFrames.setRaw( 0 );
 		m_volleyVelocityFactor  = 1.0f;
 	}
 
@@ -86,13 +86,13 @@ public:
 			{ "VolleySize",							INI::parseUnsignedInt,					NULL, offsetof( CountermeasuresBehaviorModuleData, m_volleySize ) },
 			{ "VolleyArcAngle",					INI::parseAngleReal,						NULL, offsetof( CountermeasuresBehaviorModuleData, m_volleyArcAngle ) },
 			{ "VolleyVelocityFactor",		INI::parseReal,						NULL, offsetof( CountermeasuresBehaviorModuleData, m_volleyVelocityFactor ) },
-			{ "DelayBetweenVolleys",		INI::parseDurationUnsignedInt,  NULL, offsetof( CountermeasuresBehaviorModuleData, m_framesBetweenVolleys ) },
+			{ "DelayBetweenVolleys",		SPEED_FIELD( CountermeasuresBehaviorModuleData, m_framesBetweenVolleys ) },
 			{ "NumberOfVolleys",				INI::parseUnsignedInt,					NULL, offsetof( CountermeasuresBehaviorModuleData, m_numberOfVolleys ) },
-			{ "ReloadTime",							INI::parseDurationUnsignedInt,  NULL, offsetof( CountermeasuresBehaviorModuleData, m_reloadFrames ) },
+			{ "ReloadTime",							SPEED_FIELD( CountermeasuresBehaviorModuleData, m_reloadFrames ) },
 			{ "EvasionRate",						INI::parsePercentToReal,				NULL, offsetof( CountermeasuresBehaviorModuleData, m_evasionRate ) },
 			{ "MustReloadAtAirfield",		INI::parseBool,									NULL, offsetof( CountermeasuresBehaviorModuleData, m_mustReloadAtAirfield ) },
-			{ "MissileDecoyDelay",			INI::parseDurationUnsignedInt,	NULL, offsetof( CountermeasuresBehaviorModuleData, m_missileDecoyFrames ) },
-			{ "ReactionLaunchLatency",	INI::parseDurationUnsignedInt,	NULL, offsetof( CountermeasuresBehaviorModuleData, m_countermeasureReactionFrames ) },
+			{ "MissileDecoyDelay",			SPEED_FIELD( CountermeasuresBehaviorModuleData, m_missileDecoyFrames ) },
+			{ "ReactionLaunchLatency",	SPEED_FIELD( CountermeasuresBehaviorModuleData, m_countermeasureReactionFrames ) },
 			{ "StartsActive",						INI::parseBool,									NULL, offsetof( CountermeasuresBehaviorModuleData, m_startsActive ) },
 			{ 0, 0, 0, 0 }
 		};

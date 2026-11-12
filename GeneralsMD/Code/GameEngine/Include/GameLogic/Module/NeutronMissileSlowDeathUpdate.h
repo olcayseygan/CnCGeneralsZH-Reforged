@@ -59,14 +59,14 @@ enum NeutronBlast
 struct BlastInfo
 {
   Bool enabled;					///< this blast is enabled
-	Real delay;						///< delay after death to start the regular blast
-	Real scorchDelay;			///< delay after death to start a scorch blast 
+	DurationFramesReal delay;						///< delay after death to start the regular blast
+	DurationFramesReal scorchDelay;			///< delay after death to start a scorch blast
 	Real innerRadius;			///< inner radius of damage
 	Real outerRadius;			///< outer radius of damage
 	Real maxDamage;				///< max amount
 	Real minDamage;				///< any object in the outerradius will always have at least this much damage done
-	Real toppleSpeed;			///< speed to topple things at
-	Real pushForceMag;		///< magnitude of the physics force to push objects
+	RetailPerFrame toppleSpeed;			///< speed to topple things at
+	RetailPerFrame pushForceMag;		///< magnitude of the physics force to push objects
 };
 
 // ------------------------------------------------------------------------------------------------
@@ -83,7 +83,7 @@ public:
 	BlastInfo m_blastInfo[ MAX_NEUTRON_BLASTS ];		///< blast information
 	Real m_scorchSize;															///< size of scorch mark
 	const FXList *m_fxList;													///< the actual fx list that creates all the visuals.
-	Real m_blastFrontSpeed;													///< dist/frame a blast's ring travels out from the centre, 0 hits the whole radius at once
+	VelocityPerFrame m_blastFrontSpeed;													///< dist/frame a blast's ring travels out from the centre, 0 hits the whole radius at once
 
 };
 

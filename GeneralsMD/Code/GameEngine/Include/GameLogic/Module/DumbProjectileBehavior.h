@@ -60,7 +60,7 @@ public:
 	Real m_firstPercentIndent;	///< The first point will be this percent along the target line
 	Real m_secondPercentIndent;	///< And the second, this.
 	Bool m_straightWhenClear;		///< Fly the straight line instead when no terrain rises into it (direct-fire shells)
-	UnsignedInt m_maxLifespan;
+	DurationFrames m_maxLifespan;
 	Bool m_tumbleRandomly;
 	Bool m_orientToFlightPath;
 	Bool m_detonateCallsKill;
@@ -68,7 +68,7 @@ public:
 	KindOfMaskType	m_garrisonHitKillKindof;			///< the kind(s) of units that can be collided with
 	KindOfMaskType	m_garrisonHitKillKindofNot;		///< the kind(s) of units that CANNOT be collided with
 	const FXList*		m_garrisonHitKillFX;
-	Real m_flightPathAdjustDistPerFrame;
+	VelocityPerFrame m_flightPathAdjustDistPerFrame;
 
 
 	DumbProjectileBehaviorModuleData();

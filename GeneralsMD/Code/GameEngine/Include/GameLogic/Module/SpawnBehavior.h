@@ -35,7 +35,7 @@
 #ifndef _SPAWN_BEHAVIOR_H_
 #define _SPAWN_BEHAVIOR_H_
 
-const Int SPAWN_UPDATE_RATE = LOGICFRAMES_PER_GAME_SECOND/2; ///< This is a low priority module that only needs to be called every this many frames
+#define SPAWN_UPDATE_RATE ((Int)(LOGICFRAMES_PER_GAME_SECOND/2)) ///< This is a low priority module that only needs to be called every this many frames
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "Common/INI.h"
@@ -54,7 +54,7 @@ class SpawnBehaviorModuleData : public BehaviorModuleData
 public:
 	Int m_spawnNumberData;								///< How many spawn I maintain
 	Int m_spawnStartNumberData;				  	///< How many spawn I start with
-	Int m_spawnReplaceDelayData;					///< After this many frames, I can replace one
+	DurationFramesInt m_spawnReplaceDelayData;					///< After this many frames, I can replace one
 	Int m_initialBurst;						        ///< How many should I make immediately, ignoring the delay?
 	Bool m_isOneShotData;									///< Do I just spawn once and go dormant?
 	Bool m_canReclaimOrphans;							///< Can I reclaim orphans for purposes of spawning
@@ -69,7 +69,7 @@ public:
 	SpawnBehaviorModuleData()
 	{
 		m_spawnNumberData = 0;
-		m_spawnReplaceDelayData = 0;
+		m_spawnReplaceDelayData.setRaw( 0 );
 		//Added By Sadullah Nader
 		//Initialization(s) inserted
 		m_spawnStartNumberData = 0;
@@ -90,7 +90,7 @@ public:
 		static const FieldParse dataFieldParse[] = 
 		{
 			{ "SpawnNumber",							INI::parseInt,										NULL, offsetof( SpawnBehaviorModuleData, m_spawnNumberData ) },
-			{ "SpawnReplaceDelay",				INI::parseDurationUnsignedInt,		NULL, offsetof( SpawnBehaviorModuleData, m_spawnReplaceDelayData ) },
+			{ "SpawnReplaceDelay",				SPEED_FIELD( SpawnBehaviorModuleData, m_spawnReplaceDelayData ) },
 			{ "OneShot",									INI::parseBool,										NULL, offsetof( SpawnBehaviorModuleData, m_isOneShotData ) },
 			{ "CanReclaimOrphans",				INI::parseBool,										NULL,	offsetof( SpawnBehaviorModuleData, m_canReclaimOrphans ) },
 			{ "AggregateHealth",  				INI::parseBool,										NULL, offsetof( SpawnBehaviorModuleData, m_aggregateHealth ) },		

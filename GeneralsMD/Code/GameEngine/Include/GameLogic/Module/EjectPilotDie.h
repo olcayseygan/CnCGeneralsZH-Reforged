@@ -46,7 +46,7 @@ class EjectPilotDieModuleData : public DieModuleData
 public:
 	const ObjectCreationList* m_oclInAir;
 	const ObjectCreationList* m_oclOnGround;
-	UnsignedInt m_invulnerableTime;
+	DurationFrames m_invulnerableTime;
 
 	EjectPilotDieModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);

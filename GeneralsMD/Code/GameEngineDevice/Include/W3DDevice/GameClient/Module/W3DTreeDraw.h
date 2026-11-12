@@ -44,8 +44,8 @@ public:
 	AsciiString m_modelName;
 	AsciiString m_textureName;
 	// Push aside parameters. [5/29/2003]
-	UnsignedInt	m_framesToMoveOutward;
-	UnsignedInt	m_framesToMoveInward;
+	DurationFrames	m_framesToMoveOutward;
+	DurationFrames	m_framesToMoveInward;
 	Real				m_maxOutwardMovement;
 	Real				m_darkening;
 
@@ -59,7 +59,7 @@ public:
   Real m_minimumToppleSpeed;
 	Bool m_killWhenToppled;
 	Bool m_doTopple;
-	UnsignedInt m_sinkFrames; // How long it takes to sink after toppling. [7/11/2003]
+	DurationFrames m_sinkFrames; // How long it takes to sink after toppling. [7/11/2003]
 	Real m_sinkDistance;		// How far it sinks.
 
 	Bool m_doShadow;

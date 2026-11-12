@@ -53,10 +53,10 @@ class BattlePlanUpdateModuleData : public ModuleData
 public:
 	SpecialPowerTemplate *m_specialPowerTemplate;
 
-  UnsignedInt m_bombardmentPlanAnimationFrames;
-  UnsignedInt m_holdTheLinePlanAnimationFrames;
-  UnsignedInt m_searchAndDestroyPlanAnimationFrames;
-	UnsignedInt m_transitionIdleFrames;
+  DurationFrames m_bombardmentPlanAnimationFrames;
+  DurationFrames m_holdTheLinePlanAnimationFrames;
+  DurationFrames m_searchAndDestroyPlanAnimationFrames;
+	DurationFrames m_transitionIdleFrames;
 
 	AsciiString	m_bombardmentUnpackName;
 	AsciiString	m_bombardmentPackName;
@@ -72,7 +72,7 @@ public:
 	AsciiString m_holdTheLineMessageLabel;
 	AsciiString m_holdTheLineAnnouncementName;
 
-	UnsignedInt m_battlePlanParalyzeFrames;
+	DurationFrames m_battlePlanParalyzeFrames;
 	KindOfMaskType m_validMemberKindOf;
 	KindOfMaskType m_invalidMemberKindOf;
 

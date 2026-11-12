@@ -46,8 +46,8 @@ enum
 {
 	KILL_XP_DAMAGER_SLOTS = 4,														///< attackers a victim remembers
 	KILL_XP_KILLING_BLOW_PERCENT = 25,										///< the killing blow's fixed cut
-	KILL_XP_WINDOW_FRAMES = 10 * LOGICFRAMES_PER_GAME_SECOND,	///< damage older than this earns nothing
 };
+#define KILL_XP_WINDOW_FRAMES ((Int)(10 * LOGICFRAMES_PER_GAME_SECOND))	///< damage older than this earns nothing
 
 struct KillXPDamager
 {

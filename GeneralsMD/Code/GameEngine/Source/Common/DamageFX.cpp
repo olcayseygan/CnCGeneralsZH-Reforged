@@ -246,8 +246,8 @@ static void parseCommonStuff(
 	DamageType damageFirst, damageLast;
 	parseCommonStuff(ini, names, vetFirst, vetLast, damageFirst, damageLast);
 
-	UnsignedInt t;
-	INI::parseDurationUnsignedInt(ini, NULL, &t, NULL);
+	DurationFrames t;
+	DurationFrames::parse(ini, NULL, &t, NULL);
 
 	for (Int dt = damageFirst; dt <= damageLast; ++dt)
 	{

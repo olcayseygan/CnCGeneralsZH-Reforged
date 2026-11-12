@@ -55,7 +55,7 @@ FirestormDynamicGeometryInfoUpdateModuleData::FirestormDynamicGeometryInfoUpdate
 	m_fxList = NULL;
 	m_particleOffsetZ = 0.0f;
 	m_scorchSize = 0.0f;
-	m_delayBetweenDamageFrames = 0.0f;
+	m_delayBetweenDamageFrames.setRaw( 0.0f );
 	m_damageAmount = 0.0f;
 	m_maxHeightForDamage = 20.0f;
 
@@ -68,7 +68,7 @@ FirestormDynamicGeometryInfoUpdateModuleData::FirestormDynamicGeometryInfoUpdate
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "DelayBetweenDamageFrames", INI::parseDurationReal, NULL, offsetof( FirestormDynamicGeometryInfoUpdateModuleData, m_delayBetweenDamageFrames ) },
+		{ "DelayBetweenDamageFrames", SPEED_FIELD( FirestormDynamicGeometryInfoUpdateModuleData, m_delayBetweenDamageFrames ) },
 		{ "DamageAmount", INI::parseReal, NULL, offsetof( FirestormDynamicGeometryInfoUpdateModuleData, m_damageAmount ) },
 		{ "MaxHeightForDamage", INI::parseReal, NULL, offsetof( FirestormDynamicGeometryInfoUpdateModuleData, m_maxHeightForDamage ) },
 		{ "ParticleSystem1", INI::parseParticleSystemTemplate, NULL, offsetof( FirestormDynamicGeometryInfoUpdateModuleData, m_particleSystem[ 0 ] ) },

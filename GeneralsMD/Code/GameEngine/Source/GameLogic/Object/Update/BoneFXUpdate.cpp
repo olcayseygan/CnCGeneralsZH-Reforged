@@ -143,22 +143,20 @@ static void parseFXLocInfo( INI *ini, void *instance, BoneLocInfo *locInfo )
 //-------------------------------------------------------------------------------------------------
 /** Parse a random delay.  This is a number pair, where the numbers are a min and max time in miliseconds. */
 //-------------------------------------------------------------------------------------------------
-static void parseGameClientRandomDelay( INI *ini, void *instance, GameClientRandomVariable *delay)
+static void parseGameClientRandomDelay( INI *ini, void * /*instance*/, SpeedScaledRandom< SPEED_DURATION, GameClientRandomVariable > *delay)
 {
-	Real min, max;
-	INI::parseDurationReal(ini, instance, &min, NULL);
-	INI::parseDurationReal(ini, instance, &max, NULL);
+	const Real min = INI::scanReal( ini->getNextToken() );
+	const Real max = INI::scanReal( ini->getNextToken() );
 
-	delay->setRange(min, max, GameClientRandomVariable::DistributionType::UNIFORM);
+	delay->raw().setRange(min, max, GameClientRandomVariable::DistributionType::UNIFORM);
 }
 
-static void parseGameLogicRandomDelay( INI *ini, void *instance, GameLogicRandomVariable *delay)
+static void parseGameLogicRandomDelay( INI *ini, void * /*instance*/, SpeedScaledRandom< SPEED_DURATION, GameLogicRandomVariable > *delay)
 {
-	Real min, max;
-	INI::parseDurationReal(ini, instance, &min, NULL);
-	INI::parseDurationReal(ini, instance, &max, NULL);
+	const Real min = INI::scanReal( ini->getNextToken() );
+	const Real max = INI::scanReal( ini->getNextToken() );
 
-	delay->setRange(min, max, GameLogicRandomVariable::DistributionType::UNIFORM);
+	delay->raw().setRange(min, max, GameLogicRandomVariable::DistributionType::UNIFORM);
 }
 
 //-------------------------------------------------------------------------------------------------

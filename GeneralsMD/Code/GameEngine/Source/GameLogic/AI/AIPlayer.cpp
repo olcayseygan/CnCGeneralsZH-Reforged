@@ -261,11 +261,11 @@ static const Int EXPANSION_OPENING_CHECK_SECONDS = 15;
 
 /** How often the scout is looked at.  It only ever gets an order when it has arrived, so this is a
 	* check, not a repath. */
-static const Int SCOUT_CHECK_RATE = 2 * LOGICFRAMES_PER_GAME_SECOND;
+#define SCOUT_CHECK_RATE ((Int)(2 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** How often the AI looks for something to capture.  It only ever gets an order when it is idle, so
 	* this is a check, not a re-path. */
-static const Int CAPTURE_CHECK_RATE = 5 * LOGICFRAMES_PER_GAME_SECOND;
+#define CAPTURE_CHECK_RATE ((Int)(5 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** A capture further than this from the capturer goes by helicopter when one is waiting, and the
 	* helicopter puts it down this far short of the building. */
@@ -274,7 +274,7 @@ static const Real FERRY_DROP_STANDOFF = 60.0f;
 
 /** How often the AI looks for a vehicle to take.  Same rhythm as the capture check, and the target
 	* has to be in sight, so a faster clock would only re-order what is already walking. */
-static const Int HIJACK_CHECK_RATE = 5 * LOGICFRAMES_PER_GAME_SECOND;
+#define HIJACK_CHECK_RATE ((Int)(5 * LOGICFRAMES_PER_GAME_SECOND))
 
 #ifdef DEBUG_LOGGING
 /** Milliseconds between two performance counter readings.  Used by the per-job AI profile below and
@@ -1477,7 +1477,7 @@ enum { GROUND_FLOOD_NONE, GROUND_FLOOD_BASE, GROUND_FLOOD_THREATS };
 	* first served in player order, the same on every machine. */
 static const Int GROUND_FLOOD_CELLS_PER_FRAME = 100000;
 /** How often a player looks whether the enemy addresses its threat field was flooded from have moved. */
-static const Int GROUND_THREAT_POLL_FRAMES = LOGICFRAMES_PER_GAME_SECOND;
+#define GROUND_THREAT_POLL_FRAMES ((Int)(LOGICFRAMES_PER_GAME_SECOND))
 static UnsignedInt theGroundBudgetFrame = 0;		///< the frame the budget is for, plus one; 0 for none
 static Int theGroundBudget = 0;
 
@@ -2626,7 +2626,7 @@ void AIPlayer::onUnitProduced( Object *factory, Object *unit )
 	* Coming back is deliberate.  The same three shots were at a cluster he kept rebuilding, worth
 	* 6859, then 7300, then 8900 - a target that grows back past the fade is one worth hitting
 	* again, and the fade recovering the whole way is what allows it. */
-enum { SUPERWEAPON_REAIM_FRAMES = 600 * LOGICFRAMES_PER_GAME_SECOND };
+#define SUPERWEAPON_REAIM_FRAMES ((Int)(600 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** What a strike's blast holds, by plain price, for the AI SUPERWEAPON line only: buildings against
 	* units, and the dearest building. */
@@ -3646,7 +3646,7 @@ static Bool templateDetectsStealth( const ThingTemplate *tmpl )
 
 // ponytail: an aircraft that empties its clip flies home to rearm; a flat twenty seconds stands in
 // for the trip, until a measured sortie replaces it
-static const Real AI_SORTIE_FRAMES = 20.0f * LOGICFRAMES_PER_GAME_SECOND;
+#define AI_SORTIE_FRAMES ((Real)(20.0f * LOGICFRAMES_PER_GAME_SECOND))
 
 //-------------------------------------------------------------------------------------------------
 /** How one weapon works on one target, as the numbers aiFramesToKill needs.  FALSE when the weapon
@@ -3859,8 +3859,8 @@ static void addToArmy( std::vector<AIVisibleEnemy> *army, const Object *obj )
 /** How often the ledger of seen enemies is brought up to date, and how long a unit nobody has seen is
 	* still believed in.  Three minutes is long enough for an army that walked back into the fog to be
 	* remembered when it walks out again, and short enough that one the AI never saw die is let go. */
-static const Int LEDGER_RATE = 2 * LOGICFRAMES_PER_GAME_SECOND;
-static const UnsignedInt LEDGER_FORGET_FRAMES = 180 * LOGICFRAMES_PER_GAME_SECOND;
+#define LEDGER_RATE ((Int)(2 * LOGICFRAMES_PER_GAME_SECOND))
+#define LEDGER_FORGET_FRAMES ((UnsignedInt)(180 * LOGICFRAMES_PER_GAME_SECOND))
 
 //-------------------------------------------------------------------------------------------------
 /** Write down every enemy unit in sight, and cross off the ones it has looked for and not found.  Only
@@ -6847,22 +6847,22 @@ Bool AIPlayer::buildExpansionDefense( void )
 //----------------------------------------------------------------------------------------------------------
 /** How often the economy is looked at.  No timer: the frame and the player's slot decide it, so there
 	* is nothing to save and every machine lands on the same frame. */
-static const Int ECONOMY_CHECK_RATE = 10 * LOGICFRAMES_PER_GAME_SECOND;
+#define ECONOMY_CHECK_RATE ((Int)(10 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** doEconomy, doSpending and answerArmy all run on the ten-second rate, and in the player's own slot
 	* they fell on one frame together, with the team pass beside them: 8 to 10 ms of one player late in a
 	* match, a dropped picture every ten seconds.  Each takes its own third of the slot instead, in the
 	* order they ran in: spending one step after the economy, the answer two. */
-static const Int ECONOMY_SLOT_STEP = ECONOMY_CHECK_RATE / ( 3 * MAX_PLAYER_COUNT );
+#define ECONOMY_SLOT_STEP ((Int)(ECONOMY_CHECK_RATE / ( 3 * MAX_PLAYER_COUNT )))
 
 /** How often the power is looked at, and the margin that counts as thin.  Five seconds because a
 	* plant takes about that long to matter and an outage costs the whole base; the reserve is about
 	* what one more building will draw, so the plant is ordered before the building that needs it. */
-static const Int POWER_CHECK_RATE = 5 * LOGICFRAMES_PER_GAME_SECOND;
+#define POWER_CHECK_RATE ((Int)(5 * LOGICFRAMES_PER_GAME_SECOND))
 static const Int POWER_RESERVE = 5;
 
 /** How often a Hard AI looks at whether it can put up a superweapon. */
-static const Int SUPERWEAPON_CHECK_RATE = 5 * LOGICFRAMES_PER_GAME_SECOND;
+#define SUPERWEAPON_CHECK_RATE ((Int)(5 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** How far behind the base a new power plant goes, in base radii, measured away from the enemy. */
 static const Real POWER_SETBACK = 0.75f;
@@ -6895,7 +6895,7 @@ static const Int APPROACH_MAX_WAYPOINTS = 64;
 static const Real INFLUENCE_CELL_SIZE = 60.0f;
 
 /** A unit that kited this recently is left in its fight by the retreat. */
-static const UnsignedInt KITE_KEEPS_FIGHT_FRAMES = 5 * LOGICFRAMES_PER_GAME_SECOND;
+#define KITE_KEEPS_FIGHT_FRAMES ((UnsignedInt)(5 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** One of the rung's times in logic frames, never less than one. */
 static Int rungFrames( Real seconds )
@@ -8167,7 +8167,7 @@ void AIPlayer::doPower( void )
 
 //----------------------------------------------------------------------------------------------------------
 /** How often a base away from home is looked at, founded or grown by one building. */
-static const Int SECOND_BASE_CHECK_RATE = 20 * LOGICFRAMES_PER_GAME_SECOND;
+#define SECOND_BASE_CHECK_RATE ((Int)(20 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** How far from its factory a base away from home reaches: its power, guns and dock stand inside this. */
 static const Real SECOND_BASE_RADIUS = 450.0f;
@@ -9038,8 +9038,8 @@ static Bool planNamesSuperweapon( Player *player )
 
 /** Easy's and Medium's first superweapon when the scripts cannot build it: America's scripts ask for
 	* the uplink at escalation 180 and 100, a point every ten seconds. */
-static const UnsignedInt SCRIPTLESS_SUPERWEAPON_FRAMES[ AISKILL_COUNT ] =
-	{ 1800 * LOGICFRAMES_PER_GAME_SECOND, 1000 * LOGICFRAMES_PER_GAME_SECOND, 0 };
+static const UnsignedInt SCRIPTLESS_SUPERWEAPON_SECONDS[ AISKILL_COUNT ] = { 1800, 1000, 0 };
+#define SCRIPTLESS_SUPERWEAPON_FRAMES( skill ) ((UnsignedInt)( SCRIPTLESS_SUPERWEAPON_SECONDS[ skill ] * LOGICFRAMES_PER_GAME_SECOND ))
 
 void AIPlayer::doSuperweapons( void )
 {
@@ -9047,7 +9047,7 @@ void AIPlayer::doSuperweapons( void )
 	if( (TheGameLogic->getFrame() + phase) % SUPERWEAPON_CHECK_RATE != 0 )
 		return;
 	if( !getSkillProfile()->m_economyBuildings &&
-			( TheGameLogic->getFrame() < SCRIPTLESS_SUPERWEAPON_FRAMES[ m_skillLevel ] || planNamesSuperweapon( m_player ) ) )
+			( TheGameLogic->getFrame() < SCRIPTLESS_SUPERWEAPON_FRAMES( m_skillLevel ) || planNamesSuperweapon( m_player ) ) )
 		return;
 	if( !m_player->getCanBuildBase() || !m_baseCenterSet || !m_player->getEnergy()->hasSufficientPower() )
 		return;		// a dark base's superweapon clock is stopped anyway; the money goes to the plant
@@ -9392,7 +9392,7 @@ static void collectObjects( Object *obj, void *userData )
 	* off the moment it is ready and the science behind it is bought, at the target the scripts' own
 	* "fire at most cost" would pick. */
 //----------------------------------------------------------------------------------------------------------
-static const Int SPECIAL_POWER_CHECK_RATE = 2 * LOGICFRAMES_PER_GAME_SECOND;
+#define SPECIAL_POWER_CHECK_RATE ((Int)(2 * LOGICFRAMES_PER_GAME_SECOND))
 
 void AIPlayer::doReadySpecialPowers( void )
 {
@@ -9850,14 +9850,14 @@ Bool AIPlayer::forwardHoldPoint( const AsciiString &approach, Int pathSuffix, co
 static const Real WAVE_POWER = 6000.0f;
 
 /** The longest a parked team waits for the rest of its wave. */
-static const UnsignedInt WAVE_MAX_HOLD_FRAMES = 90 * LOGICFRAMES_PER_GAME_SECOND;
+#define WAVE_MAX_HOLD_FRAMES ((UnsignedInt)(90 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** How often the parked teams are looked at. */
-static const Int WAVE_CHECK_RATE = 2 * LOGICFRAMES_PER_GAME_SECOND;
+#define WAVE_CHECK_RATE ((Int)(2 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** The longest a ready wave waits for riders to fill a gunship: a walk across the base, or a Red
 	* Guard or two out of the barracks. */
-static const UnsignedInt BOARD_WAIT_FRAMES = 20 * LOGICFRAMES_PER_GAME_SECOND;
+#define BOARD_WAIT_FRAMES ((UnsignedInt)(20 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** A wave this strong is two, and the share of its power that takes the second road. */
 static const Real FLANK_WAVE_POWER = 2.0f * WAVE_POWER;
@@ -10421,9 +10421,9 @@ void AIPlayer::defendHome( void )
 /** How often the army is looked at for a part of the enemy's nothing answers, how big a part has to be
 	* before a factory is turned over to it, what counts as an answer money for money, and what the bank
 	* keeps back for the team plan. */
-static const Int ANSWER_RATE = 10 * LOGICFRAMES_PER_GAME_SECOND;
+#define ANSWER_RATE ((Int)(10 * LOGICFRAMES_PER_GAME_SECOND))
 /** The last third of the player's slot, as ECONOMY_SLOT_STEP splits the economy's, but off this rate. */
-static const Int ANSWER_SLOT_OFFSET = 2 * ( ANSWER_RATE / ( 3 * MAX_PLAYER_COUNT ) );
+#define ANSWER_SLOT_OFFSET ((Int)(2 * ( ANSWER_RATE / ( 3 * MAX_PLAYER_COUNT ) )))
 static const Real ANSWER_MIN_GAP = 1500.0f;
 static const Real ANSWER_SCORE = 0.6f;
 static const Int ANSWER_RESERVE = 1000;
@@ -11649,9 +11649,9 @@ Int AIPlayer::trainDoctrine( Int budget )
 	* against the unit to count as his answer, and how much of his army that answer has to be before the
 	* unit is dropped; how good the unit has to be against his army to be picked; how big a fist goes,
 	* and what the bank keeps back for the team plan. */
-static const Int MASS_RATE = 5 * LOGICFRAMES_PER_GAME_SECOND;
+#define MASS_RATE ((Int)(5 * LOGICFRAMES_PER_GAME_SECOND))
 static const Real MASS_MIN_ENEMY = 2000.0f;
-static const UnsignedInt MASS_REPICK_FRAMES = 60 * LOGICFRAMES_PER_GAME_SECOND;
+#define MASS_REPICK_FRAMES ((UnsignedInt)(60 * LOGICFRAMES_PER_GAME_SECOND))
 static const Real MASS_COUNTERED = 0.7f;
 static const Real MASS_DROP_SHARE = 0.3f;
 static const Real MASS_PICK_SHARE = 0.2f;
@@ -11659,8 +11659,8 @@ static const Real MASS_MIN_EFFICIENCY = 0.55f;
 static const Real MASS_FIST_POWER = 6000.0f;
 static const Real MASS_FIST_MAX_POWER = 18000.0f;
 static const Int MASS_FIST_MAX_UNITS = 14;
-static const UnsignedInt MASS_HOLD_FRAMES = 120 * LOGICFRAMES_PER_GAME_SECOND;
-static const UnsignedInt MASS_MAX_HOLD_FRAMES = 180 * LOGICFRAMES_PER_GAME_SECOND;
+#define MASS_HOLD_FRAMES ((UnsignedInt)(120 * LOGICFRAMES_PER_GAME_SECOND))
+#define MASS_MAX_HOLD_FRAMES ((UnsignedInt)(180 * LOGICFRAMES_PER_GAME_SECOND))
 static const Int MASS_RESERVE = 1500;
 
 /** This factory has a button for that unit. */
@@ -12212,7 +12212,7 @@ static const Real ALLY_ARMY_SHARE[ AISKILL_COUNT ] = { 0.5f, 0.75f, 1.0f };
 
 /** How often the guards at home are sent hunting once the enemy is finished.  Not every wave tick: a
 	* guard whose script puts it straight back on guard would be sent again every two seconds. */
-static const Int GUARD_HUNT_RATE = 30 * LOGICFRAMES_PER_GAME_SECOND;
+#define GUARD_HUNT_RATE ((Int)(30 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** As far as AIHuntState looks for a victim. */
 static const Real HUNT_REACH = 9999.9f;
@@ -13845,17 +13845,17 @@ void AIPlayer::sendWaveThroughTunnels( AIGroup *wave, const Coord3D *center, Way
 	* has seen shoot, fly home and load again while the wave is under way.  They never gather, and the
 	* supply Chinooks are never taken for it. */
 //----------------------------------------------------------------------------------------------------------
-static const Int SHUTTLE_CHECK_RATE = LOGICFRAMES_PER_GAME_SECOND;
+#define SHUTTLE_CHECK_RATE ((Int)(LOGICFRAMES_PER_GAME_SECOND))
 
 /** How long after a wave leaves its stragglers and the units that come out behind it are flown after it. */
-static const UnsignedInt SHUTTLE_WINDOW_FRAMES = 120 * LOGICFRAMES_PER_GAME_SECOND;
+#define SHUTTLE_WINDOW_FRAMES ((UnsignedInt)(120 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** The longest a Chinook waits at home for the units it called aboard, and the shortest. */
-static const UnsignedInt SHUTTLE_LOAD_FRAMES = 30 * LOGICFRAMES_PER_GAME_SECOND;
-static const UnsignedInt SHUTTLE_LOAD_MIN_FRAMES = 5 * LOGICFRAMES_PER_GAME_SECOND;
+#define SHUTTLE_LOAD_FRAMES ((UnsignedInt)(30 * LOGICFRAMES_PER_GAME_SECOND))
+#define SHUTTLE_LOAD_MIN_FRAMES ((UnsignedInt)(5 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** A leg that takes longer than this has stuck somewhere, and its order is given again. */
-static const UnsignedInt SHUTTLE_LEG_FRAMES = 90 * LOGICFRAMES_PER_GAME_SECOND;
+#define SHUTTLE_LEG_FRAMES ((UnsignedInt)(90 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** How far along the wave's road its units are put down when nothing the AI has seen shoots there:
 	* past the middle, short of the end, which is the enemy's base. */
@@ -13870,7 +13870,7 @@ static const Real SHUTTLE_MIN_FLIGHT = 600.0f;
 /** ChinookLocomotor's Speed, and what a round trip costs besides the flying: lifting off, landing,
 	* the boarding and the unloading. */
 static const Real CHINOOK_CRUISE_SPEED = 150.0f;
-static const UnsignedInt SHUTTLE_TURNAROUND_FRAMES = 40 * LOGICFRAMES_PER_GAME_SECOND;
+#define SHUTTLE_TURNAROUND_FRAMES ((UnsignedInt)(40 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** A straight flight from a point to (x, y) crosses no cell the influence map says the enemy's known
 	* guns reach.  Below Hard every flight is quiet: their map is drawn when a unit comes under fire. */
@@ -14379,7 +14379,7 @@ void AIPlayer::doShuttles( void )
 	* hang behind the wave out of every known gun's reach, and two raiders that bomb the enemy's
 	* buildings from whichever side his anti-air does not cover. */
 //----------------------------------------------------------------------------------------------------------
-static const Int HELIX_CHECK_RATE = LOGICFRAMES_PER_GAME_SECOND;
+#define HELIX_CHECK_RATE ((Int)(LOGICFRAMES_PER_GAME_SECOND))
 
 /** The Helix upgrades by what they do, matched on the name: the Nuke and Infantry generals carry their
 	* own copies, Nuke_Upgrade_HelixNukeBomb and Upgrade_Infa_ChinaHelixBattleBunker. */
@@ -14392,8 +14392,8 @@ static const Int MAX_HEALERS = 3;
 static const Int HEALER_THIRD_ARMY = 30;		///< fighting units before a third healer is bought
 static const Int MAX_RAIDERS = 2;
 static const Real HEALER_PATIENT_HEALTH = 0.9f;	///< a unit below this share of its health is worth hovering over
-static const UnsignedInt HEALER_HIT_FRAMES = 3 * LOGICFRAMES_PER_GAME_SECOND;	///< a healer hit this recently pulls back
-static const UnsignedInt HEALER_REPORT_FRAMES = 60 * LOGICFRAMES_PER_GAME_SECOND;
+#define HEALER_HIT_FRAMES ((UnsignedInt)(3 * LOGICFRAMES_PER_GAME_SECOND))	///< a healer hit this recently pulls back
+#define HEALER_REPORT_FRAMES ((UnsignedInt)(60 * LOGICFRAMES_PER_GAME_SECOND))
 /** The reach of a Helix's propaganda tower, ChinaHelixPropagandaTower's Radius in retail ChinaAir.ini.
 	* A unit inside two towers heals as fast as inside one (Object::attemptHealingFromSoleBenefactor),
 	* so a healer keeps its spot this far from every other healer's. */
@@ -14419,8 +14419,8 @@ static const Real RAID_LOOKAHEAD = 600.0f;
 /** Nothing heals a Helix at home but a healer passing over it, so the bar to leave is low. */
 static const Real RAID_DEPART_HEALTH = 0.7f;
 static const Real RAID_ABORT_HEALTH = 0.5f;
-static const UnsignedInt RAID_RUN_FRAMES = 30 * LOGICFRAMES_PER_GAME_SECOND;
-static const UnsignedInt RAID_LEG_FRAMES = 90 * LOGICFRAMES_PER_GAME_SECOND;
+#define RAID_RUN_FRAMES ((UnsignedInt)(30 * LOGICFRAMES_PER_GAME_SECOND))
+#define RAID_LEG_FRAMES ((UnsignedInt)(90 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** How far round a healer looks for clear ground when the way home is covered. */
 static const Real REAR_SEARCH_REACH = 900.0f;
@@ -14588,7 +14588,7 @@ void AIPlayer::readKnownGuns( std::vector<AIKnownGun> *guns ) const
 //----------------------------------------------------------------------------------------------------------
 /** How often each rung looks at its aircraft's strikes: an Easy jet is half way into a Stinger Site's
 	* reach before it turns. */
-static const UnsignedInt AIR_STEER_RATE[ AISKILL_COUNT ] = { 2 * LOGICFRAMES_PER_GAME_SECOND, LOGICFRAMES_PER_GAME_SECOND, LOGICFRAMES_PER_GAME_SECOND / 2 };
+#define AIR_STEER_RATE( skill ) ((UnsignedInt)( (skill) == 0 ? 2 * LOGICFRAMES_PER_GAME_SECOND : (skill) == 1 ? LOGICFRAMES_PER_GAME_SECOND : LOGICFRAMES_PER_GAME_SECOND / 2 ))
 /** A helicopter's goal this near the base centre is the way home steerAircraft sent it on. */
 static const Real AIR_HOME_SLACK = 300.0f;
 
@@ -14680,7 +14680,7 @@ static Object *pickAirTarget( Object *aircraft, const std::vector<Object *> &kno
 void AIPlayer::steerAircraft( void )
 {
 	const UnsignedInt now = TheGameLogic->getFrame();
-	const UnsignedInt rate = AIR_STEER_RATE[ m_skillLevel ];
+	const UnsignedInt rate = AIR_STEER_RATE( m_skillLevel );
 	if( !m_baseCenterSet || (now + computeUpdatePhase( m_player->getPlayerIndex(), rate )) % rate != 0 )
 		return;
 
@@ -15390,12 +15390,12 @@ void AIPlayer::doHelixes( void )
 	*
 	* Split out with plain values so the rules are testable without a running game. */
 //----------------------------------------------------------------------------------------------------------
-static const Int AMBULANCE_CHECK_RATE = LOGICFRAMES_PER_GAME_SECOND;
+#define AMBULANCE_CHECK_RATE ((Int)(LOGICFRAMES_PER_GAME_SECOND))
 static const Int AMBULANCE_FIRST_ARMY = 8;
 static const Int AMBULANCE_SECOND_ARMY = 20;
 static const Real AMBULANCE_PATIENT_HEALTH = 0.5f;
 static const Real AMBULANCE_CALL_REACH = 900.0f;
-static const UnsignedInt AMBULANCE_PATIENT_QUIET = 2 * LOGICFRAMES_PER_GAME_SECOND;
+#define AMBULANCE_PATIENT_QUIET ((UnsignedInt)(2 * LOGICFRAMES_PER_GAME_SECOND))
 static const Real AMBULANCE_BEHIND = 300.0f;
 static const Real AMBULANCE_HAZARD_REACH = 1500.0f;
 /** The cleanup ability's MaxMoveDistanceFromLocation in retail AmericaVehicle.ini. */
@@ -15407,7 +15407,7 @@ static const Real AMBULANCE_REORDER_DISTANCE = 100.0f;
 	* where its own base stood that close to known enemy guns: no ground was clear, and on 32 such matches
 	* the Hard USA pulled back 312 times against 116, at full health and unhit for minutes, cycling between
 	* its wait spot and its base.  On Twilight Flame the share reaches the cap. */
-static const UnsignedInt AMBULANCE_HIT_FRAMES[ AISKILL_COUNT ] = { 4 * LOGICFRAMES_PER_GAME_SECOND, 6 * LOGICFRAMES_PER_GAME_SECOND, 8 * LOGICFRAMES_PER_GAME_SECOND };
+#define AMBULANCE_HIT_FRAMES( skill ) ((UnsignedInt)( ( 4 + 2 * (skill) ) * LOGICFRAMES_PER_GAME_SECOND ))	///< 4, 6 and 8 seconds
 static const Real AMBULANCE_MARGIN_SHARE[ AISKILL_COUNT ] = { 0.04f, 0.06f, 0.08f };
 static const Real AMBULANCE_MARGIN_MIN[ AISKILL_COUNT ] = { 40.0f, 60.0f, 80.0f };
 static const Real AMBULANCE_MARGIN_MAX[ AISKILL_COUNT ] = { 120.0f, 160.0f, 200.0f };
@@ -15416,7 +15416,7 @@ static const Real AMBULANCE_MARGIN_MAX[ AISKILL_COUNT ] = { 120.0f, 160.0f, 200.
 static const Real AMBULANCE_WAIT_SLACK = 0.5f;
 static const Real AMBULANCE_PULLBACK = 400.0f;
 static const Real AMBULANCE_REPAIR_HEALTH = 0.5f;
-static const UnsignedInt AMBULANCE_REBUY_FRAMES = 90 * LOGICFRAMES_PER_GAME_SECOND;
+#define AMBULANCE_REBUY_FRAMES ((UnsignedInt)(90 * LOGICFRAMES_PER_GAME_SECOND))
 /** Medium keeps one at a time, waits twice as long to replace it and buys half as many in a match.
 	* Each lost one was bought again on Hard every 90 seconds: eight came out of two USA seats in one
 	* 16-minute match (ambA4_700), and a player counted dozens over a long game. */
@@ -15452,7 +15452,7 @@ Real AIAmbulance_gunMargin( Real baseDistance, Int skill )
 	* reaches deepest it stands, below zero when inside it. */
 Bool AIAmbulance_pullsBack( UnsignedInt now, UnsignedInt lastHit, Real clear, Real margin, Int skill )
 {
-	return clear < margin || (lastHit != 0 && now - lastHit < AMBULANCE_HIT_FRAMES[ skill ]);
+	return clear < margin || (lastHit != 0 && now - lastHit < AMBULANCE_HIT_FRAMES( skill ));
 }
 
 /** Whether a pull-back moves it to ground clear by spotClear from where it stands clear by hereClear.
@@ -15889,7 +15889,7 @@ static const Real RETREAT_ENGAGEMENT_RADIUS = 300.0f;
 /** How long a unit sent home from a lost fight is left to walk there before a fight it walks into
 	* may pull it out again.  Pulled out on the same pass that sent it home, a team that gave up stood
 	* through a second full hold beside the fight it had given up on. */
-static const UnsignedInt RETREAT_HOME_WALK_FRAMES = 30 * LOGICFRAMES_PER_GAME_SECOND;
+#define RETREAT_HOME_WALK_FRAMES ((UnsignedInt)(30 * LOGICFRAMES_PER_GAME_SECOND))
 
 static Real groundAttackRange( const Object *obj );
 
@@ -16499,15 +16499,15 @@ Real AIPlayer::fightRatio( const Coord3D *centre, Bool countHolders, Real *enemy
 /** How long a team that fell back holds before it may go back, at the least and at the most; and how
 	* well the fight it left has to read before it does, which is even.  Breaking off is decided at the
 	* rung's own ratio, well under even, so a team does not turn round on the same reading it ran from. */
-static const UnsignedInt FALLBACK_MIN_HOLD_FRAMES = 5 * LOGICFRAMES_PER_GAME_SECOND;
-static const UnsignedInt FALLBACK_MAX_HOLD_FRAMES = 30 * LOGICFRAMES_PER_GAME_SECOND;
+#define FALLBACK_MIN_HOLD_FRAMES ((UnsignedInt)(5 * LOGICFRAMES_PER_GAME_SECOND))
+#define FALLBACK_MAX_HOLD_FRAMES ((UnsignedInt)(30 * LOGICFRAMES_PER_GAME_SECOND))
 static const Real FALLBACK_RESUME_RATIO = 1.0f;
 /** A holder doFallback has not let go of this long after it left the fight is one it no longer sees. */
-static const UnsignedInt FALLBACK_STALE_FRAMES = FALLBACK_MAX_HOLD_FRAMES + 10 * LOGICFRAMES_PER_GAME_SECOND;
+#define FALLBACK_STALE_FRAMES ((UnsignedInt)(FALLBACK_MAX_HOLD_FRAMES + 10 * LOGICFRAMES_PER_GAME_SECOND))
 /** How long the holders wait for every one of them to stop before the fight they left gets a say. */
-static const UnsignedInt FALLBACK_ARRIVE_MAX_FRAMES = 10 * LOGICFRAMES_PER_GAME_SECOND;
+#define FALLBACK_ARRIVE_MAX_FRAMES ((UnsignedInt)(10 * LOGICFRAMES_PER_GAME_SECOND))
 /** How long one that left a gun's ground holds when no retreat is looking at it. */
-static const UnsignedInt FIRE_HOLD_FRAMES = 10 * LOGICFRAMES_PER_GAME_SECOND;
+#define FIRE_HOLD_FRAMES ((UnsignedInt)(10 * LOGICFRAMES_PER_GAME_SECOND))
 
 //----------------------------------------------------------------------------------------------------------
 /** The members of this team holding at a safe spot after a lost fight.  Once they have stopped, they go
@@ -16613,7 +16613,7 @@ Bool AIPlayer::doFallback( Team *team )
 	* object's ID, so there is no timer to save and every machine does it on the same frame.  Ten retail
 	* frames rounded as rungFrames rounds Hard's FireLookSeconds of 0.33, so the two clocks stay one
 	* (sameLook) at every game speed: a third of 20 ticks truncates to 6 where the look rounds to 7. */
-static const Int TACTICS_RATE = ConvertRetailFrames( 10 );
+#define TACTICS_RATE ((Int)(ConvertRetailFrames( 10 )))
 
 /** Kiting.  A unit steps back from something it outranges once that thing is inside its own reach
 	* plus this much, and stops where the enemy's gun is this far short of it. */
@@ -16625,28 +16625,28 @@ static const Real KITE_WORTHY_SHARE = 0.5f;
 /** ... and, when that something can move, only with at least this much more range than it. */
 static const Real KITE_MOBILE_RANGE_RATIO = 1.5f;
 /** The longest a step lasts before it goes back to shooting, whether it got there or not. */
-static const UnsignedInt TACTICAL_STEP_MAX_FRAMES = 2 * LOGICFRAMES_PER_GAME_SECOND;
+#define TACTICAL_STEP_MAX_FRAMES ((UnsignedInt)(2 * LOGICFRAMES_PER_GAME_SECOND))
 /** A kite is a hop, not a walk: every frame on the move is a frame not shooting.  It gets the turn and
 	* the drive to its spot, and never more than this. */
-static const UnsignedInt KITE_STEP_MAX_FRAMES = 3 * LOGICFRAMES_PER_GAME_SECOND;
-static const UnsignedInt KITE_TURN_FRAMES = LOGICFRAMES_PER_GAME_SECOND;
+#define KITE_STEP_MAX_FRAMES ((UnsignedInt)(3 * LOGICFRAMES_PER_GAME_SECOND))
+#define KITE_TURN_FRAMES ((UnsignedInt)(LOGICFRAMES_PER_GAME_SECOND))
 
 /** The high ground.  Worth a climb when it is this much higher than where the unit stands, which is
 	* thirty more units of range; looked for this far round the unit, and not again for a while. */
 static const Real CLIMB_MIN_GAIN = 10.0f;
 static const Real CLIMB_SEARCH_RADIUS = 110.0f;
-static const UnsignedInt CLIMB_INTERVAL_FRAMES = 6 * LOGICFRAMES_PER_GAME_SECOND;
+#define CLIMB_INTERVAL_FRAMES ((UnsignedInt)(6 * LOGICFRAMES_PER_GAME_SECOND))
 
 /** A unit this hurt, standing where what can shoot it outweighs what is on its side, is spent for
 	* nothing if it stays. */
 static const Real HURT_HEALTH_SHARE = 0.35f;
 
 /** Rows for units not looked at for this long are dropped: dead, garrisoned, or gone home. */
-static const UnsignedInt TACTICAL_ROW_EXPIRY_FRAMES = 10 * LOGICFRAMES_PER_GAME_SECOND;
+#define TACTICAL_ROW_EXPIRY_FRAMES ((UnsignedInt)(10 * LOGICFRAMES_PER_GAME_SECOND))
 /** A unit the retreat sent home is not turned round by a kite. */
-static const UnsignedInt LEAVE_ALONE_FRAMES = 10 * LOGICFRAMES_PER_GAME_SECOND;
+#define LEAVE_ALONE_FRAMES ((UnsignedInt)(10 * LOGICFRAMES_PER_GAME_SECOND))
 /** ... and gets its mood back when it stops walking, or this long after that at the latest. */
-static const UnsignedInt WALK_HOME_MAX_FRAMES = 30 * LOGICFRAMES_PER_GAME_SECOND;
+#define WALK_HOME_MAX_FRAMES ((UnsignedInt)(30 * LOGICFRAMES_PER_GAME_SECOND))
 
 static void collectObject( Object *obj, void *userData )
 {
@@ -16751,7 +16751,7 @@ void AIPlayer::keepSiegeBehind( void )
 	* unit its walk is looked at; and how far outside a reach a held unit waits.  The wait is more than the
 	* quickest ground unit covers between two looks: at 45 an idle unit that picked the defence as its next
 	* target was past the edge before the next look, and the Air Force lost more of those than before. */
-static const Int EDGE_RATE = LOGICFRAMES_PER_GAME_SECOND;
+#define EDGE_RATE ((Int)(LOGICFRAMES_PER_GAME_SECOND))
 static const Real EDGE_ODDS[ AISKILL_COUNT ] = { 0.0f, 1.0f, 1.25f };
 static const Real EDGE_LOOKAHEAD = 120.0f;
 static const Real EDGE_WAIT = 90.0f;
@@ -16769,7 +16769,7 @@ static const Real RESUME_GOAL_SLACK = 30.0f;
 	* within this of its spot is left to walk. */
 static const Real SHELL_WALK = 200.0f;
 static const Real SHELL_INSET = 10.0f;
-static const Real SHELL_MAX_FRAMES = 60.0f * LOGICFRAMES_PER_GAME_SECOND;
+#define SHELL_MAX_FRAMES ((Real)(60.0f * LOGICFRAMES_PER_GAME_SECOND))
 static const Real SHELL_SPOT_SLACK = 60.0f;
 
 /** Whether a known defence other than the one at skip covers a spot. */
@@ -17857,7 +17857,7 @@ void AIPlayer::dodgeStrike( void )
 
 //----------------------------------------------------------------------------------------------------------
 /** How often the loaded helicopters are looked at, and how far back from the fight they may land. */
-static const Int TRANSPORT_CHECK_RATE = LOGICFRAMES_PER_GAME_SECOND / 2;
+#define TRANSPORT_CHECK_RATE ((Int)(LOGICFRAMES_PER_GAME_SECOND / 2))
 static const Int DROP_BACKOFF_CELLS = 8;
 
 struct LoadedTransports
@@ -18343,9 +18343,9 @@ void AIPlayer::tacticsFor( Object *obj )
 /** How long a unit sent at a gun takes another hit on the odds that keep it going, which are lower than the
 	* odds that sent it.  Reading each hit afresh had it turn round halfway across, every time what covered the
 	* gun changed by one tank. */
-static const UnsignedInt FIRE_COMMIT_FRAMES = 20 * LOGICFRAMES_PER_GAME_SECOND;
+#define FIRE_COMMIT_FRAMES ((UnsignedInt)(20 * LOGICFRAMES_PER_GAME_SECOND))
 /** The longest a unit counts as being on that errand: it has gone off on some other order by then. */
-static const UnsignedInt FIRE_ANSWER_MAX_FRAMES = 60 * LOGICFRAMES_PER_GAME_SECOND;
+#define FIRE_ANSWER_MAX_FRAMES ((UnsignedInt)(60 * LOGICFRAMES_PER_GAME_SECOND))
 /** How far under a rung's odds one on its way to a gun has to read before it breaks off (aiFireOddsNow). */
 static const Real FIRE_RETURN_MARGIN = 1.25f;
 
@@ -18863,7 +18863,7 @@ void AIPlayer::queueSupportUnit( const ThingTemplate *tTemplate, const char *wha
 /** How often the start-position picture is brought up to date.  doScouting is called every frame and
 	* then sits behind its own timer for up to a rung's scouting interval, which would be far too slow
 	* to notice a scout arriving somewhere. */
-static const Int START_INTEL_RATE = LOGICFRAMES_PER_GAME_SECOND;
+#define START_INTEL_RATE ((Int)(LOGICFRAMES_PER_GAME_SECOND))
 
 //----------------------------------------------------------------------------------------------------------
 /** The three numbers the odds are made of: enemies still in the game, positions known to hold one,
@@ -20077,7 +20077,7 @@ const AIDifficultyProfile *AIPlayer::getSkillProfile( void ) const
 /** A Rusher's one big attack, by rung: Easy the latest.  If it has not gone two minutes after, it
 	* never will, and the Rusher plays on as an Attacker. */
 static const Int RUSH_SECONDS[ AISKILL_COUNT ] = { 270, 225, 180 };
-static const UnsignedInt RUSH_GIVE_UP_FRAMES = 120 * LOGICFRAMES_PER_GAME_SECOND;
+#define RUSH_GIVE_UP_FRAMES ((UnsignedInt)(120 * LOGICFRAMES_PER_GAME_SECOND))
 
 UnsignedInt AIPlayer::rushFrame( void ) const
 {
@@ -20495,7 +20495,7 @@ void AIPlayer::defendAlly( void )
 	* passes at a time, Easy the least. */
 //-------------------------------------------------------------------------------------------------
 static const Int SHARE_CAP[ AISKILL_COUNT ] = { 1000, 2000, 3000 };
-static const UnsignedInt SHARE_EVERY_FRAMES = 60 * LOGICFRAMES_PER_GAME_SECOND;
+#define SHARE_EVERY_FRAMES ((UnsignedInt)(60 * LOGICFRAMES_PER_GAME_SECOND))
 
 void AIPlayer::shareSurplusWithAllies( Int bank, Int target )
 {
@@ -20546,7 +20546,7 @@ void AIPlayer::shareSurplusWithAllies( Int bank, Int target )
 static const Real COOP_ENEMY_REACH = 1000.0f;
 /** A computer player short of this much, three minutes in, asks its allies for money. */
 static const Int COOP_POOR_BANK = 300;
-static const UnsignedInt COOP_POOR_AFTER_FRAMES = 180 * LOGICFRAMES_PER_GAME_SECOND;
+#define COOP_POOR_AFTER_FRAMES ((UnsignedInt)(180 * LOGICFRAMES_PER_GAME_SECOND))
 
 void aiPostTeamRequest( Player *from, AITeamRequestKind kind, Int enemy, const Coord3D *pos )
 {

@@ -441,7 +441,7 @@ private:
 		 The list is newest first and only ever grows at its head, so the order a stamp counts objects
 		 in is the list's turned round.  Kept by registerObject and watchDisabled, rebuilt from the list
 		 after a reset or a load (m_objIndexStale), when IDs are taken from the save. */
-	std::vector<ObjectID> m_secondTurnIDs[ LOGICFRAMES_PER_GAME_SECOND ];	///< by ID % LOGICFRAMES_PER_GAME_SECOND, oldest first; the dead go on that ID's next turn
+	std::vector<ObjectID> m_secondTurnIDs[ MAX_LOGICFRAMES_PER_GAME_SECOND ];	///< by ID % LOGICFRAMES_PER_GAME_SECOND, oldest first; the dead go on that ID's next turn; sized for the slowest speed
 	std::vector<ObjectID> m_disabledWatch;		///< every object seen disabled or given a disable since; repeats allowed
 	std::vector<UnsignedInt> m_listStamp;			///< by ID: when it joined the list; the list runs in falling stamp order
 	UnsignedInt m_nextListStamp = 0;

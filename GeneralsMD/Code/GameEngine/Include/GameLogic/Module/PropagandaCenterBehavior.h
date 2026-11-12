@@ -51,7 +51,7 @@ public:
 
 	static void buildFieldParse( MultiIniFieldParse &p );
 
-	UnsignedInt m_brainwashDuration;			///< how long (in frames) it takes to become brainwashed
+	DurationFrames m_brainwashDuration;			///< how long (in frames) it takes to become brainwashed
 
 };
 

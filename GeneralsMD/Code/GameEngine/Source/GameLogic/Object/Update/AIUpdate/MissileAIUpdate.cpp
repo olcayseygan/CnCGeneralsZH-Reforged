@@ -77,9 +77,9 @@ static Real turnEaseDistance(const MissileAIUpdateModuleData* d)
 MissileAIUpdateModuleData::MissileAIUpdateModuleData()
 {
 	m_tryToFollowTarget = true;
-	m_fuelLifetime = 0;
-	m_ignitionDelay = 0;
-	m_initialVel = 0;
+	m_fuelLifetime.setRaw( 0 );
+	m_ignitionDelay.setRaw( 0 );
+	m_initialVel.setRaw( 0 );
 	m_initialDist = 0.0f;
 	m_diveDistance = 0.0f;
 	m_ignitionFX = NULL;
@@ -90,7 +90,7 @@ MissileAIUpdateModuleData::MissileAIUpdateModuleData()
 	m_lockDistance = 75.0f;	
 	m_distanceScatterWhenJammed = 75.0f;
     m_detonateCallsKill = FALSE;
-    m_killSelfDelay   = ConvertRetailFrames(3); // just long enough for the contrail to catch up to me
+    m_killSelfDelay.setRaw( 100 );	// msec, ConvertRetailFrames(3) at the native speed: // just long enough for the contrail to catch up to me
 }
 
 //-----------------------------------------------------------------------------
@@ -101,9 +101,9 @@ void MissileAIUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 	static const FieldParse dataFieldParse[] = 
 	{
 		{ "TryToFollowTarget",			INI::parseBool,		NULL, offsetof( MissileAIUpdateModuleData, m_tryToFollowTarget ) },
-		{ "FuelLifetime",						INI::parseDurationUnsignedInt,		NULL, offsetof( MissileAIUpdateModuleData, m_fuelLifetime ) },
-		{ "IgnitionDelay",					INI::parseDurationUnsignedInt,		NULL, offsetof( MissileAIUpdateModuleData, m_ignitionDelay ) },
-		{ "InitialVelocity",				INI::parseVelocityReal,		NULL, offsetof( MissileAIUpdateModuleData, m_initialVel) },
+		{ "FuelLifetime",						SPEED_FIELD( MissileAIUpdateModuleData, m_fuelLifetime ) },
+		{ "IgnitionDelay",					SPEED_FIELD( MissileAIUpdateModuleData, m_ignitionDelay ) },
+		{ "InitialVelocity",				SPEED_FIELD( MissileAIUpdateModuleData, m_initialVel ) },
 		{ "DistanceToTravelBeforeTurning",	INI::parseReal,		NULL, offsetof( MissileAIUpdateModuleData, m_initialDist ) },
 		{ "DistanceToTargetBeforeDiving",		INI::parseReal,		NULL, offsetof( MissileAIUpdateModuleData, m_diveDistance ) },
 		{ "DistanceToTargetForLock",INI::parseReal,		NULL, offsetof( MissileAIUpdateModuleData, m_lockDistance ) },
@@ -117,7 +117,7 @@ void MissileAIUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "GarrisonHitKillCount", INI::parseUnsignedInt, NULL, offsetof( MissileAIUpdateModuleData, m_garrisonHitKillCount ) },
 		{ "GarrisonHitKillFX", INI::parseFXList, NULL, offsetof( MissileAIUpdateModuleData, m_garrisonHitKillFX ) },
     { "DetonateCallsKill", INI::parseBool,   NULL, offsetof( MissileAIUpdateModuleData, m_detonateCallsKill ) },
-    { "KillSelfDelay",     INI::parseDurationUnsignedInt, NULL, offsetof( MissileAIUpdateModuleData, m_killSelfDelay ) },
+    { "KillSelfDelay",     SPEED_FIELD( MissileAIUpdateModuleData, m_killSelfDelay ) },
     { 0, 0, 0, 0 }
 	};
 

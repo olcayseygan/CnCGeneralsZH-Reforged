@@ -46,7 +46,7 @@
 HealContainModuleData::HealContainModuleData( void )
 {
 
-	m_framesForFullHeal = 0;
+	m_framesForFullHeal.setRaw( 0 );
 
 }  // end HealContainModuleData
 
@@ -59,7 +59,7 @@ HealContainModuleData::HealContainModuleData( void )
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "TimeForFullHeal", INI::parseDurationUnsignedInt, NULL, offsetof( HealContainModuleData, m_framesForFullHeal ) },
+		{ "TimeForFullHeal", SPEED_FIELD( HealContainModuleData, m_framesForFullHeal ) },
 		{ 0, 0, 0, 0 }
 	};
 

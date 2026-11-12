@@ -1445,8 +1445,8 @@ static AsciiString buildGameInfoAsciiString( const GameInfo *game, const AsciiSt
 	concatOptionUnlessZero(optionsString, "IS", game->getIncomeSharing());
 	concatOptionUnlessZero(optionsString, "TR", game->getTechRespawn());
 	concatOptionUnlessZero(optionsString, "PL", game->getSupplyPileLimit());
-	// the game speed is not in the string: a network game always plays the native tick, and a skirmish's
-	// speed reaches its replay as MSG_NEW_GAME's frame rate.  Turbo's "TB" key is no longer written
+	// the game speed is not in the string: a network game always plays the native speed, and a skirmish's
+	// reaches its replay as the header's GS= field.  Turbo's "TB" key is no longer written
 
 	//add player info for each slot
 	optionsString.concat(slotListID);

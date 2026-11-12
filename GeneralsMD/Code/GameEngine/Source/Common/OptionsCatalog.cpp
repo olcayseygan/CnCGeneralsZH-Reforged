@@ -100,8 +100,8 @@ OPTION_BOOL_ACCESSORS( m_dynamicMusic )
 OPTION_BOOL_ACCESSORS( m_legacySound )
 OPTION_BOOL_ACCESSORS( m_muteInBackground )
 // The missions' game speed, in percent of retail; Options.ini and the combo hold the index.  The
-// catalog loads before there is a game; the menu's Accept during a mission changes its pace on the
-// spot, which only the pacing reads.
+// catalog loads before there is a game.  It is the game time a tick advances, fixed when a mission
+// starts, so the menu's Accept during a mission takes effect from the next one.
 // a literal in the header because optionsmenu_layout.py's selfcheck reads it from there
 static_assert( MISSION_GAME_SPEED_COUNT == PLAYER_GAME_SPEED_COUNT, "the missions' combo offers every player game speed" );
 static Int get_missionGameSpeed( void )
@@ -117,8 +117,6 @@ static void set_missionGameSpeed( Int level )
 	if( level < 0 || level >= MISSION_GAME_SPEED_COUNT )
 		level = 0;
 	TheWritableGlobalData->m_missionGameSpeedPercent = PLAYER_GAME_SPEED_PERCENTS[ level ];
-	if (TheGameLogic && TheGameLogic->isInSinglePlayerGame())
-		TheGameEngine->setFramesPerSecondLimit( GameEngine_matchFramesPerSecond( PLAYER_GAME_SPEED_PERCENTS[ level ] ) );
 }
 OPTION_BOOL_ACCESSORS( m_formationDrag )
 OPTION_BOOL_ACCESSORS( m_buildWithoutWorker )
@@ -368,10 +366,10 @@ const OptionDef TheOptionCatalog[] =
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_startAtMaxZoom, set_m_startAtMaxZoom },
 
-	// Game speed for the campaign and the generals' challenge: 1.0x, 1.25x, 1.5x or 2.0x, more or
-	// fewer logic frames a wall second, each the same at every speed.  The skirmish lobby has its own
-	// combo and a multiplayer match always plays at 1.5x, so this one never touches either.  On
-	// Options > Interface.
+	// Game speed for the campaign and the generals' challenge: 1.0x, 1.25x, 1.5x or 2.0x, the game
+	// time each of the same 30 ticks a second advances, set when a mission starts.  The skirmish lobby
+	// has its own combo and a multiplayer match always plays at 1.5x, so this one never touches either.
+	// On Options > Interface.
 	{ "MissionGameSpeed",					OPT_WND( "ComboGameSpeedMissions" ), "GUI:GameSpeedMissions",
 		OPTION_ENUM, APPLY_LIVE, 0, MISSION_GAME_SPEED_COUNT - 1,
 		get_missionGameSpeed, set_missionGameSpeed },

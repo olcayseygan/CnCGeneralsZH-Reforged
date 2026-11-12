@@ -112,22 +112,17 @@ static void replayWriteWideString(const WideChar *s)
 	 the slot list as "HZ=<frames a second>;", so the header's layout stays as it was.  The options parser
 	 refuses a key it does not know, so readReplayHeader cuts the field off (takeReplayLogicRate) before
 	 anything parses the string.  A replay without the field was recorded before it existed, when the
-	 logic ran 60 frames a second.  The game speed (GAME_SPEED_PERCENT) rides the same way as
-	 "GS=<percent>;" after it, written only when it is not 100, so a replay at 100 keeps the bytes it
-	 always had and one without the field is 100. */
+	 logic ran 60 frames a second.  The match's game speed rides the same way as "GS=<percent>;" after
+	 it, always written since the speed is chosen per match; playback sets it before the map loads.  A
+	 replay without the field is from the builds that wrote none at 100 and played one fixed speed, and
+	 is refused: nothing in it says what a tick was worth. */
 static const Int REPLAY_LOGIC_RATE_WITHOUT_FIELD = 60;
-static const Int REPLAY_GAME_SPEED_WITHOUT_FIELD = 100;
+static const Int REPLAY_GAME_SPEED_WITHOUT_FIELD = 0;
 
-AsciiString RecorderClass::replayLogicRateField()
+AsciiString RecorderClass::replayLogicRateField( Int gameSpeedPercent )
 {
 	AsciiString field;
-	field.format("HZ=%d;", (Int)LOGICFRAMES_PER_SECOND);
-	if (GAME_SPEED_PERCENT != 100)
-	{
-		AsciiString speed;
-		speed.format("GS=%d;", (Int)GAME_SPEED_PERCENT);
-		field.concat(speed);
-	}
+	field.format("HZ=%d;GS=%d;", (Int)LOGICFRAMES_PER_SECOND, gameSpeedPercent);
 	return field;
 }
 
@@ -564,8 +559,12 @@ void RecorderClass::updateRecord()
 			Int maxFPS = 0;
 			if (msg->getArgumentCount() >= 4)
 				maxFPS = msg->getArgument(3)->integer;
+			// as GameLogicDispatch reads it, which may not have run yet
+			Int gameSpeedPercent = NATIVE_GAME_SPEED_PERCENT;
+			if (msg->getArgumentCount() >= 5 && GameSpeed_isAllowed(msg->getArgument(4)->integer))
+				gameSpeedPercent = msg->getArgument(4)->integer;
 
-			startRecording(diff, m_originalGameMode, rankPoints, maxFPS);
+			startRecording(diff, m_originalGameMode, rankPoints, maxFPS, gameSpeedPercent);
 		} else if (msg->getType() == GameMessage::MSG_CLEAR_GAME_DATA) {
 			if (m_file != NULL) {
 				lastFrame = -1;
@@ -590,7 +589,7 @@ void RecorderClass::updateRecord()
  * Start a new file for recording. This will always overwrite the "LastReplay.rep" file with the new one.
  * So don't call this unless you really mean it.
  */
-void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, Int rankPoints, Int maxFPS) {
+void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, Int rankPoints, Int maxFPS, Int gameSpeedPercent) {
 	DEBUG_ASSERTCRASH(m_file == NULL, ("Starting to record game while game is in progress."));
 
 	reset();
@@ -711,8 +710,9 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 		  theSlotList = GameInfoToReplayString(&m_gameInfo);
     }
 	}
-	// the logic rate the game is recorded at, last in the slot list; readReplayHeader refuses another
-	theSlotList.concat(replayLogicRateField());
+	// the logic rate and game speed the game is recorded at, last in the slot list; readReplayHeader
+	// refuses another rate and plays the speed back
+	theSlotList.concat(replayLogicRateField(gameSpeedPercent));
 	logGameStart(theSlotList);
 	DEBUG_LOG(("RecorderClass::startRecording - theSlotList = %s\n", theSlotList.str()));
 
@@ -964,10 +964,11 @@ Bool RecorderClass::readReplayHeader(ReplayHeader& header)
 	header.gameOptions = readAsciiString();
 	const Int recordedSpeed = takeReplayGameSpeed(header.gameOptions);
 	const Int recordedRate = takeReplayLogicRate(header.gameOptions);
-	if (recordedRate != LOGICFRAMES_PER_SECOND || recordedSpeed != GAME_SPEED_PERCENT)
+	header.gameSpeedPercent = recordedSpeed;
+	if (recordedRate != LOGICFRAMES_PER_SECOND || !GameSpeed_isAllowed(recordedSpeed))
 	{
-		DEBUG_LOG(("RecorderClass::readReplayHeader - replay was recorded at %d logic frames a second and game speed %d, this build runs %d at %d.\n",
-			recordedRate, recordedSpeed, (Int)LOGICFRAMES_PER_SECOND, (Int)GAME_SPEED_PERCENT));
+		DEBUG_LOG(("RecorderClass::readReplayHeader - replay was recorded at %d logic frames a second and game speed %d (0: none written), this build runs %d and plays 100, 125, 150 or 200.\n",
+			recordedRate, recordedSpeed, (Int)LOGICFRAMES_PER_SECOND));
 		fclose(m_file);
 		m_file = NULL;
 		return FALSE;
@@ -1196,7 +1197,8 @@ Bool RecorderClass::playbackFile(AsciiString filename)
 	Int difficulty = 0;
 	Int rankPoints = 0;
 	Int maxFPS = 0;
-	if (!openPlayback(filename, difficulty, rankPoints, maxFPS))
+	Int gameSpeedPercent = NATIVE_GAME_SPEED_PERCENT;
+	if (!openPlayback(filename, difficulty, rankPoints, maxFPS, gameSpeedPercent))
 		return FALSE;
 
 	if (replayMayLackFirstCRC( m_originalGameMode ))
@@ -1214,8 +1216,8 @@ Bool RecorderClass::playbackFile(AsciiString filename)
 		msg->appendIntegerArgument(GAME_REPLAY);
 		msg->appendIntegerArgument(difficulty);
 		msg->appendIntegerArgument(rankPoints);
-		if( maxFPS != 0 )
-			msg->appendIntegerArgument(maxFPS);
+		msg->appendIntegerArgument(maxFPS);					// 0, none recorded, leaves the pace alone
+		msg->appendIntegerArgument(gameSpeedPercent);	// the match's own game speed
 		InitRandom( m_gameInfo.getSeed() );
 	}
 
@@ -1235,12 +1237,17 @@ RecorderClass::PlaybackCursor RecorderClass::getPlaybackCursor( void )
  * Pick a replay up again where getPlaybackCursor left it, once an engine reset has closed it.  The
  * header is read the same way playbackFile reads it, for the players the new game is built from.
  */
-void RecorderClass::resumePlayback(AsciiString filename, const PlaybackCursor &cursor)
+Bool RecorderClass::resumePlayback(AsciiString filename, const PlaybackCursor &cursor)
 {
 	Int difficulty = 0;
 	Int rankPoints = 0;
 	Int maxFPS = 0;
-	openPlayback(filename, difficulty, rankPoints, maxFPS);
+	Int gameSpeedPercent = NATIVE_GAME_SPEED_PERCENT;
+	if (!openPlayback(filename, difficulty, rankPoints, maxFPS, gameSpeedPercent))
+		return FALSE;
+	// no new game message comes: the speed is set here, between matches (the checkpoint's own header
+	// sets it again as its load starts)
+	GameSpeed_set(gameSpeedPercent);
 	// the checkpoint names its own map, and no new game will come along to use this one up
 	TheWritableGlobalData->m_pendingFile.clear();
 	// the load starts a game, and a replay's random sides and start positions are drawn off this
@@ -1249,13 +1256,14 @@ void RecorderClass::resumePlayback(AsciiString filename, const PlaybackCursor &c
 	fseek(m_file, cursor.filePosition, SEEK_SET);
 	m_nextFrame = cursor.nextFrame;
 	*m_crcInfo = cursor.crcInfo;
+	return TRUE;
 }
 
 /**
  * Open a replay and read everything in front of its first command: the header, the difficulty, the
  * original game mode, the rank points and the frame rate the game was played at.
  */
-Bool RecorderClass::openPlayback(AsciiString filename, Int &difficulty, Int &rankPoints, Int &maxFPS)
+Bool RecorderClass::openPlayback(AsciiString filename, Int &difficulty, Int &rankPoints, Int &maxFPS, Int &gameSpeedPercent)
 {
 	m_mode = RECORDERMODETYPE_PLAYBACK;
 
@@ -1268,6 +1276,7 @@ Bool RecorderClass::openPlayback(AsciiString filename, Int &difficulty, Int &ran
 		return FALSE;
 	}
 	m_playbackFrameDuration = header.frameDuration;
+	gameSpeedPercent = header.gameSpeedPercent;
 #ifdef DEBUG_LOGGING
 
 	Bool versionStringDiff = header.versionString != TheVersion->getUnicodeVersion();

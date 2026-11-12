@@ -52,7 +52,7 @@ class BridgeInfo;
 // ------------------------------------------------------------------------------------------------
 struct TimeAndLocationInfo
 {
-	UnsignedInt delay;			///< how long to wait to execute this
+	DurationFrames delay;			///< how long to wait to execute this
 	AsciiString boneName;		///< which bone to execute at
 };
 // ------------------------------------------------------------------------------------------------
@@ -103,8 +103,8 @@ public:
 
 	static void buildFieldParse( MultiIniFieldParse &p );
 
-	Real m_lateralScaffoldSpeed;
-	Real m_verticalScaffoldSpeed;
+	VelocityPerFrame m_lateralScaffoldSpeed;
+	VelocityPerFrame m_verticalScaffoldSpeed;
 	BridgeFXList m_fx;							///< list of FX lists to execute
 	BridgeOCLList m_ocl;						///< list of OCL to execute
 

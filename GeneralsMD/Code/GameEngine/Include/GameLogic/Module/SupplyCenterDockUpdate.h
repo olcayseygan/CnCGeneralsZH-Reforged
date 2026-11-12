@@ -45,7 +45,7 @@ public:
   SupplyCenterDockUpdateModuleData( void );
 	static void buildFieldParse(MultiIniFieldParse& p);
 
-	UnsignedInt m_grantTemporaryStealthFrames;
+	DurationFrames m_grantTemporaryStealthFrames;
 };
 
 // ------------------------------------------------------------------------------------------------

@@ -66,7 +66,7 @@ public:
 	Int m_numberOfExitPaths;				///< Will alternate through ExitStart/End paths as we exit people.
 	Real m_damagePercentageToUnits;
 	Bool m_isBurnedDeathToUnits;		///< Turn off the hardcoded burn death when killing guys in transport
-	UnsignedInt m_doorOpenTime;
+	DurationFrames m_doorOpenTime;
 	KindOfMaskType m_allowInsideKindOf;			///< objects must have at least one of these kind of bits set to be contained by us
 	KindOfMaskType m_forbidInsideKindOf;		///< objects must have NONE of these kind of bits set to be contained by us
 	Bool m_weaponBonusPassedToPassengers;		///< Do our passengers get to use our weapon bonuses?

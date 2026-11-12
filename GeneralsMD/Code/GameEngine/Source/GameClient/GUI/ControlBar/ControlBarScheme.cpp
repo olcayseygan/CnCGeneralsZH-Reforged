@@ -273,7 +273,7 @@ ControlBarSchemeAnimation::ControlBarSchemeAnimation( void )
 	// Added by Sadullah Nader
 	// Initializations missing and needed
 	
-	m_animDuration = 0;
+	m_animDuration.setRaw( 0 );
 	m_finalPos.x = m_finalPos.y = 0;
 
 	// End Add
@@ -1076,7 +1076,7 @@ void ControlBarSchemeManager::parseAnimatingPart(INI *ini, void *instance, void*
 		{
 			{ "Name",						INI::parseAsciiString,		NULL, offsetof( ControlBarSchemeAnimation, m_name ) },
       { "Animation",			INI::parseLookupList,			AnimTypeNames, offsetof( ControlBarSchemeAnimation, m_animType ) },
-			{ "Duration",				INI::parseDurationUnsignedInt,			NULL, offsetof( ControlBarSchemeAnimation, m_animDuration ) },
+			{ "Duration",				SPEED_FIELD( ControlBarSchemeAnimation, m_animDuration ) },
 			{ "FinalPos",				INI::parseICoord2D,			NULL, offsetof( ControlBarSchemeAnimation, m_finalPos ) },
 			{ "ImagePart",			ControlBarSchemeManager::parseAnimatingPartImage,	NULL, NULL },
 			{ NULL,							NULL,											NULL, 0 }  // keep this last

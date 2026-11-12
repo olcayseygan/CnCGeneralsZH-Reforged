@@ -181,7 +181,7 @@ static const FieldParse TheAIFieldParseTable[] =
 	{ "TeamSeconds",						INI::parseReal,NULL,		offsetof( TAiData, m_teamSeconds ) },
 	{ "Wealthy",								INI::parseInt,NULL,			offsetof( TAiData, m_resourcesWealthy ) },
 	{ "Poor",										INI::parseInt,NULL,		  offsetof( TAiData, m_resourcesPoor ) },
-	{ "ForceIdleMSEC",					INI::parseDurationUnsignedInt,NULL,offsetof( TAiData, m_forceIdleFramesCount )	},
+	{ "ForceIdleMSEC",					SPEED_FIELD( TAiData, m_forceIdleFramesCount )	},
 	{ "StructuresWealthyRate",	INI::parseReal,NULL,		offsetof( TAiData, m_structuresWealthyMod ) },
 	{ "TeamsWealthyRate",				INI::parseReal,NULL,		offsetof( TAiData, m_teamWealthyMod ) },
 	{ "StructuresPoorRate",			INI::parseReal,NULL,		offsetof( TAiData, m_structuresPoorMod ) },
@@ -191,9 +191,9 @@ static const FieldParse TheAIFieldParseTable[] =
 	{ "GuardOuterModifierAI",		INI::parseReal,NULL,		offsetof( TAiData, m_guardOuterModifierAI ) },
 	{ "GuardInnerModifierHuman",INI::parseReal,NULL,		offsetof( TAiData, m_guardInnerModifierHuman ) },
 	{ "GuardOuterModifierHuman",INI::parseReal,NULL,		offsetof( TAiData, m_guardOuterModifierHuman ) },
-	{ "GuardChaseUnitsDuration",				INI::parseDurationUnsignedInt,NULL,		offsetof( TAiData, m_guardChaseUnitFrames ) },
-	{ "GuardEnemyScanRate",				INI::parseDurationUnsignedInt,NULL,		offsetof( TAiData, m_guardEnemyScanRate ) },
-	{ "GuardEnemyReturnScanRate",				INI::parseDurationUnsignedInt,NULL,		offsetof( TAiData, m_guardEnemyReturnScanRate ) },
+	{ "GuardChaseUnitsDuration",				SPEED_FIELD( TAiData, m_guardChaseUnitFrames ) },
+	{ "GuardEnemyScanRate",				SPEED_FIELD( TAiData, m_guardEnemyScanRate ) },
+	{ "GuardEnemyReturnScanRate",				SPEED_FIELD( TAiData, m_guardEnemyReturnScanRate ) },
 	{ "SkirmishGroupFudgeDistance",	INI::parseReal,NULL,		offsetof( TAiData, m_skirmishGroupFudgeValue ) },
 
 	{ "RepulsedDistance",				INI::parseReal,NULL,		offsetof( TAiData, m_repulsedDistance ) },
@@ -876,7 +876,7 @@ Bool aiTargetBeats( const AITargetRating &a, const AITargetRating &b )
 // AIStates.cpp; the attack move's retaliation window, which is protected on its state
 extern Bool AIAttackMove_shouldRetaliate( UnsignedInt lastDamageFrame, UnsignedInt now, Int windowFrames,
 																					Bool alreadyFightingTheAttacker, Bool canAttackTheAttacker );
-static const Int AI_SHOT_ME_FRAMES = LOGICFRAMES_PER_GAME_SECOND;
+#define AI_SHOT_ME_FRAMES ((Int)(LOGICFRAMES_PER_GAME_SECOND))
 
 /** The search this thread runs as a logic job, or NULL on the logic thread (AI::ScanJob). The two lazy
 	* tables below and a template's first name-key ask are filled only on the logic thread: a job that
@@ -3147,7 +3147,7 @@ m_structureSeconds(0),
 m_teamSeconds(0), 
 m_resourcesWealthy(0), 
 m_resourcesPoor(0), 
-m_forceIdleFramesCount(1),
+m_forceIdleFramesCount(DurationFrames::fromRaw(1)),	// 1 msec: a frame at any speed
 m_structuresWealthyMod(1.0f),	// divisor: never default to 0
 m_teamPoorMod(1.0f),			// divisor: never default to 0
 m_teamResourcesToBuild(0),
@@ -3155,9 +3155,9 @@ m_guardInnerModifierAI(0),
 m_guardOuterModifierAI(0),
 m_guardInnerModifierHuman(0),
 m_guardOuterModifierHuman(0),
-m_guardChaseUnitFrames(0),
-m_guardEnemyScanRate(LOGICFRAMES_PER_GAME_SECOND/2),
-m_guardEnemyReturnScanRate(LOGICFRAMES_PER_GAME_SECOND),
+m_guardChaseUnitFrames(DurationFrames::fromRaw(0)),
+m_guardEnemyScanRate(DurationFrames::fromRaw(500)),
+m_guardEnemyReturnScanRate(DurationFrames::fromRaw(1000)),
 m_wallHeight(0),
 m_alertRangeModifier(0),
 m_aggressiveRangeModifier(0),
@@ -3201,7 +3201,9 @@ void TAiData::crc( Xfer *xfer )
 	xfer->xferReal( &m_teamSeconds );
 	xfer->xferInt( &m_resourcesWealthy );
 	xfer->xferInt( &m_resourcesPoor );
-	xfer->xferUnsignedInt( &m_forceIdleFramesCount );
+	// the frame counts the match runs on, as this CRC always took them, not the INI's msec
+	UnsignedInt frames = m_forceIdleFramesCount;
+	xfer->xferUnsignedInt( &frames );
 	xfer->xferReal( &m_structuresWealthyMod );
 	xfer->xferReal( &m_teamWealthyMod );
 	xfer->xferReal( &m_structuresPoorMod );
@@ -3211,9 +3213,12 @@ void TAiData::crc( Xfer *xfer )
 	xfer->xferReal( &m_guardOuterModifierAI );
 	xfer->xferReal( &m_guardInnerModifierHuman );
 	xfer->xferReal( &m_guardOuterModifierHuman );
-	xfer->xferUnsignedInt( &m_guardChaseUnitFrames );
-	xfer->xferUnsignedInt( &m_guardEnemyScanRate );
-	xfer->xferUnsignedInt( &m_guardEnemyReturnScanRate );
+	frames = m_guardChaseUnitFrames;
+	xfer->xferUnsignedInt( &frames );
+	frames = m_guardEnemyScanRate;
+	xfer->xferUnsignedInt( &frames );
+	frames = m_guardEnemyReturnScanRate;
+	xfer->xferUnsignedInt( &frames );
 	xfer->xferReal( &m_alertRangeModifier );
 	xfer->xferReal( &m_aggressiveRangeModifier );
 	xfer->xferReal( &m_attackPriorityDistanceModifier );

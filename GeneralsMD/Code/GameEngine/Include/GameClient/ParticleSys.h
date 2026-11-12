@@ -89,8 +89,14 @@ struct Keyframe
 struct RGBColorKeyframe
 {
 	RGBColor color;
-	UnsignedInt frame;
+	RetailFrames frame;		///< a count of retail frames, as the INI wrote it
 };
+
+// a particle system's random ranges, kept as the INI wrote them (GameCommon.h)
+typedef SpeedScaledRandom< SPEED_RETAIL_FRAMES, GameClientRandomVariable > ParticleRandomFrames;
+typedef SpeedScaledRandom< SPEED_RETAIL_BURST_DELAY, GameClientRandomVariable > ParticleRandomBurstDelay;
+typedef SpeedScaledRandom< SPEED_RETAIL_PER_FRAME, GameClientRandomVariable > ParticleRandomPerFrame;
+typedef SpeedScaledRandom< SPEED_RETAIL_PER_FRAME_FACTOR, GameClientRandomVariable > ParticleRandomFactor;
 
 enum ParticlePriorityType : Int
 {
@@ -413,18 +419,18 @@ public:
 	AsciiString m_particleTypeName;							///< if PARTICLE, texture filename, if DRAWABLE, Drawable name
 
 	GameClientRandomVariable m_angleZ;										///< initial angle around Z axis
-	GameClientRandomVariable m_angularRateZ;							///< initial angle around Z axis
-	GameClientRandomVariable m_angularDamping;						///< angular velocity damping coefficient
+	ParticleRandomPerFrame m_angularRateZ;							///< initial angle around Z axis
+	ParticleRandomFactor m_angularDamping;						///< angular velocity damping coefficient
 
-	GameClientRandomVariable m_velDamping;								///< velocity damping factor
+	ParticleRandomFactor m_velDamping;								///< velocity damping factor
 
-	GameClientRandomVariable m_lifetime;									///< lifetime of emitted particles
-	UnsignedInt m_systemLifetime;								///< lifetime of the particle system
+	ParticleRandomFrames m_lifetime;									///< lifetime of emitted particles
+	RetailFrames m_systemLifetime;								///< lifetime of the particle system
 
 	GameClientRandomVariable m_startSize;									///< initial size of emitted particles
 	GameClientRandomVariable m_startSizeRate;							///< change in start size of emitted particles
-	GameClientRandomVariable m_sizeRate;									///< rate of change of size
-	GameClientRandomVariable m_sizeRateDamping;						///< damping of size change
+	ParticleRandomPerFrame m_sizeRate;									///< rate of change of size
+	ParticleRandomFactor m_sizeRateDamping;						///< damping of size change
 
 
 	UnsignedInt m_volumeParticleDepth;								///< how many layers deep to draw the particle, if >1
@@ -432,7 +438,7 @@ public:
 	struct RandomKeyframe
 	{
 		GameClientRandomVariable var;												///< the range of values at this keyframe
-		UnsignedInt frame;												///< the frame number
+		RetailFrames frame;												///< the frame number
 	};
 
 
@@ -443,22 +449,22 @@ public:
 
 	void tintAllColors( Color tintColor );
 	
-	GameClientRandomVariable m_colorScale;								///< color coefficient
+	ParticleRandomPerFrame m_colorScale;								///< color coefficient
 
-	GameClientRandomVariable m_burstDelay;								///< time between particle emissions
+	ParticleRandomBurstDelay m_burstDelay;								///< time between particle emissions
 	GameClientRandomVariable m_burstCount;								///< number of particles emitted per burst
 
-	GameClientRandomVariable m_initialDelay;							///< delay before particles begin emitting
+	ParticleRandomFrames m_initialDelay;							///< delay before particles begin emitting
 
-	Coord3D m_driftVelocity;										///< additional velocity added to all particles
-	Real m_gravity;															///< gravity acceleration (global Z) for particles in this system
+	SpeedScaled< SPEED_RETAIL_PER_FRAME, Coord3D > m_driftVelocity;										///< additional velocity added to all particles
+	RetailPerFrameSquared m_gravity;															///< gravity acceleration (global Z) for particles in this system
 
 	// Terrain collision.  Retail particles fall straight through the ground; sparks, debris and
 	// smoke all vanish into the hillside instead of hitting it.  Off by default, so every
 	// existing particle system keeps its shipped behaviour until its INI opts in.
 	Bool m_groundCollision;												///< if true, particles bounce off the terrain instead of passing through
 	Real m_groundBounce;													///< fraction of the velocity into the ground that comes back out (0 = dead stop, 1 = elastic)
-	Real m_groundFriction;												///< fraction of the velocity along the ground kept per contact (1 = frictionless slide)
+	RetailPerFrameFactor m_groundFriction;												///< fraction of the velocity along the ground kept per contact (1 = frictionless slide)
 
 	AsciiString m_slaveSystemName;							///< if non-empty, create a system whose particles track this system's
 	Coord3D m_slavePosOffset;										///< positional offset of slave particles relative to master's
@@ -479,29 +485,29 @@ public:
 	{
 		struct
 		{
-			GameClientRandomVariable x;												///< initial speed of particle along X axis
-			GameClientRandomVariable y;												///< initial speed of particle along Y axis
-			GameClientRandomVariable z;												///< initial speed of particle along Z axis
+			ParticleRandomPerFrame x;												///< initial speed of particle along X axis
+			ParticleRandomPerFrame y;												///< initial speed of particle along Y axis
+			ParticleRandomPerFrame z;												///< initial speed of particle along Z axis
 		}
 		ortho;
 
 		struct
 		{
-			GameClientRandomVariable speed;										///< initial speed of particle along random radial direction
+			ParticleRandomPerFrame speed;										///< initial speed of particle along random radial direction
 		}
 		spherical, hemispherical;
 
 		struct
 		{
-			GameClientRandomVariable radial;									///< initial speed of particle in the disk
-			GameClientRandomVariable normal;									///< initial speed of particle perpendicular to disk
+			ParticleRandomPerFrame radial;									///< initial speed of particle in the disk
+			ParticleRandomPerFrame normal;									///< initial speed of particle perpendicular to disk
 		}
 		cylindrical;
 
 		struct
 		{
-			GameClientRandomVariable speed;										///< speed outward from emission volume
-			GameClientRandomVariable otherSpeed;							///< speed along "other" axis, such as cylinder length
+			ParticleRandomPerFrame speed;										///< speed outward from emission volume
+			ParticleRandomPerFrame otherSpeed;							///< speed along "other" axis, such as cylinder length
 		}
 		outward;
 	}
@@ -566,8 +572,8 @@ public:
 	WindMotion m_windMotion;				///< motion of the wind angle updating
 	Real m_windAngle;								///< angle of the "wind" associated with this system
 	Real m_windAngleChange;					///< current how fast the angle changes (higher=faster change)
-	Real m_windAngleChangeMin;			///< min for angle change
-	Real m_windAngleChangeMax;			///< max for angle change
+	RetailPerFrame m_windAngleChangeMin;			///< min for angle change
+	RetailPerFrame m_windAngleChangeMax;			///< max for angle change
 	Real m_windMotionStartAngle;						///< (for ping pong) angle 1 of the ping pong
 	Real m_windMotionStartAngleMin;					///< (for ping pong) min angle for angle 1
 	Real m_windMotionStartAngleMax;					///< (for ping pong) max angle for angle 1
@@ -607,8 +613,8 @@ public:
 
 	/** Force terrain collision on for a system whose INI never asked for it ("-particlebounce").
 		* ParticleSystemInfo is a protected base, so the manager needs a way in. */
-	void forceGroundCollision( Real bounce, Real friction )
-	{ m_groundCollision = TRUE; m_groundBounce = bounce; m_groundFriction = friction; }
+	void forceGroundCollision( Real bounce, Real retailFriction )
+	{ m_groundCollision = TRUE; m_groundBounce = bounce; m_groundFriction.setRaw( retailFriction ); }
 
 	/** Make this system's smoke last longer and read thicker ("-smoke").  Same reason as above:
 		* ParticleSystemInfo is a protected base, so the manager needs a way in. */
@@ -618,7 +624,7 @@ public:
 	void emitNothing( void )
 	{
 		m_burstCount.setRange( 0.0f, 0.0f );
-		m_systemLifetime = 1;
+		m_systemLifetime.setRaw( 1 );
 		m_slaveSystemName.clear();
 		m_attachedSystemName.clear();
 	}
@@ -723,7 +729,7 @@ public:
 	void rotateLocalTransformZ( Real z );				///< rotate local transform matrix
   void setSkipParentXfrm(Bool enable) { m_skipParentXfrm = enable; } ///<disable transforming particle system with parent matrix.
 		
-	const Coord3D *getDriftVelocity( void ) { return &m_driftVelocity; }	///< get the drift velocity of the system
+	Coord3D getDriftVelocity( void ) const { return m_driftVelocity; }	///< get the drift velocity of the system
 	Coord3D getDriftWithWeather( void ) const;	///< that, plus the Weather option's wind on what it leans
 	Bool isGroundCollision( void ) const { return m_groundCollision; }		///< do this system's particles hit the terrain?
 	Real getGroundBounce( void ) const { return m_groundBounce; }				///< restitution against the terrain

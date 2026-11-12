@@ -53,13 +53,13 @@ enum ParticleSystemID : int;
 class ParticleUplinkCannonUpdateModuleData : public ModuleData
 {
 public:
-	UnsignedInt			m_beginChargeFrames;
-	UnsignedInt			m_raiseAntennaFrames;
-	UnsignedInt			m_readyDelayFrames;
-	UnsignedInt			m_widthGrowFrames;
-	UnsignedInt			m_beamTravelFrames;
-	UnsignedInt			m_totalFiringFrames;
-	UnsignedInt			m_framesBetweenLaunchFXRefresh;
+	DurationFrames			m_beginChargeFrames;
+	DurationFrames			m_raiseAntennaFrames;
+	DurationFrames			m_readyDelayFrames;
+	DurationFrames			m_widthGrowFrames;
+	DurationFrames			m_beamTravelFrames;
+	DurationFrames			m_totalFiringFrames;
+	DurationFrames			m_framesBetweenLaunchFXRefresh;
 
 	AsciiString			m_outerEffectBaseBoneName;
 	UnsignedInt			m_outerEffectNumBones;
@@ -106,7 +106,7 @@ public:
 
   Real					m_manualDrivingSpeed;
   Real					m_manualFastDrivingSpeed;
-  UnsignedInt		m_doubleClickToFastDriveDelay;
+  DurationFrames		m_doubleClickToFastDriveDelay;
 
 	ParticleUplinkCannonUpdateModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);

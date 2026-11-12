@@ -64,7 +64,7 @@ FireOCLAfterWeaponCooldownUpdateModuleData::FireOCLAfterWeaponCooldownUpdateModu
 	m_weaponSlot						= PRIMARY_WEAPON; 
 	m_minShotsRequired			= 1;
 	m_oclLifetimePerSecond	= 1000;
-	m_oclMaxFrames					= 1000;
+	m_oclMaxFrames.setRaw( 50000 );	// msec: 1000 frames at the native speed
 	m_ocl										= NULL;
 }
 
@@ -78,7 +78,7 @@ void FireOCLAfterWeaponCooldownUpdateModuleData::buildFieldParse(MultiIniFieldPa
 		{ "OCL",									INI::parseObjectCreationList,		NULL, offsetof( FireOCLAfterWeaponCooldownUpdateModuleData, m_ocl ) },
 		{ "MinShotsToCreateOCL",  INI::parseUnsignedInt,					NULL, offsetof( FireOCLAfterWeaponCooldownUpdateModuleData, m_minShotsRequired ) },
 		{ "OCLLifetimePerSecond",	INI::parseUnsignedInt,					NULL, offsetof( FireOCLAfterWeaponCooldownUpdateModuleData, m_oclLifetimePerSecond ) },
-		{ "OCLLifetimeMaxCap",		INI::parseDurationUnsignedInt,	NULL, offsetof( FireOCLAfterWeaponCooldownUpdateModuleData, m_oclMaxFrames ) },
+		{ "OCLLifetimeMaxCap",		SPEED_FIELD( FireOCLAfterWeaponCooldownUpdateModuleData, m_oclMaxFrames ) },
 		{ 0, 0, 0, 0 }
 	};
   p.add(dataFieldParse);

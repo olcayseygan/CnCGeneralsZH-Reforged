@@ -55,7 +55,7 @@
 //-------------------------------------------------------------------------------------------------
 AutoFindHealingUpdateModuleData::AutoFindHealingUpdateModuleData()
 {
-	m_scanFrames				= 0;
+	m_scanFrames.setRaw( 0 );
 	m_scanRange					= 0.0f;
 	m_neverHeal					= 0.95f;
 	m_alwaysHeal				= 0.25f;
@@ -68,7 +68,7 @@ AutoFindHealingUpdateModuleData::AutoFindHealingUpdateModuleData()
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "ScanRate",							INI::parseDurationUnsignedInt,	NULL, offsetof( AutoFindHealingUpdateModuleData, m_scanFrames ) },
+		{ "ScanRate",							SPEED_FIELD( AutoFindHealingUpdateModuleData, m_scanFrames ) },
 		{ "ScanRange",						INI::parseReal,									NULL, offsetof( AutoFindHealingUpdateModuleData, m_scanRange ) },
 		{ "NeverHeal",						INI::parseReal,									NULL, offsetof( AutoFindHealingUpdateModuleData, m_neverHeal ) },
 		{ "AlwaysHeal",						INI::parseReal,									NULL, offsetof( AutoFindHealingUpdateModuleData, m_alwaysHeal ) },

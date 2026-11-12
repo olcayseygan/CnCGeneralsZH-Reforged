@@ -77,8 +77,8 @@ Bool PartitionFilterFlammable::allow(Object *objOther)
 //-------------------------------------------------------------------------------------------------
 FireSpreadUpdateModuleData::FireSpreadUpdateModuleData()
 {
-	m_minSpreadTryDelayData = 0;
-	m_maxSpreadTryDelayData = 0;
+	m_minSpreadTryDelayData.setRaw( 0 );
+	m_maxSpreadTryDelayData.setRaw( 0 );
 	m_oclEmbers = NULL;
 	m_spreadTryRange = 0;
 }
@@ -91,8 +91,8 @@ FireSpreadUpdateModuleData::FireSpreadUpdateModuleData()
 	static const FieldParse dataFieldParse[] = 
 	{
 		{ "OCLEmbers",				INI::parseObjectCreationList,		NULL, offsetof( FireSpreadUpdateModuleData, m_oclEmbers ) },
-		{ "MinSpreadDelay",		INI::parseDurationUnsignedInt,	NULL, offsetof( FireSpreadUpdateModuleData, m_minSpreadTryDelayData ) },
-		{ "MaxSpreadDelay",		INI::parseDurationUnsignedInt,	NULL, offsetof( FireSpreadUpdateModuleData, m_maxSpreadTryDelayData ) },
+		{ "MinSpreadDelay",		SPEED_FIELD( FireSpreadUpdateModuleData, m_minSpreadTryDelayData ) },
+		{ "MaxSpreadDelay",		SPEED_FIELD( FireSpreadUpdateModuleData, m_maxSpreadTryDelayData ) },
 		{ "SpreadTryRange",		INI::parseReal,									NULL, offsetof( FireSpreadUpdateModuleData, m_spreadTryRange ) },
 		{ 0, 0, 0, 0 }
 	};

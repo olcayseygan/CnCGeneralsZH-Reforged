@@ -42,8 +42,8 @@
 
 //-------------------------------------------------------------------------------------------------
 BeaconClientUpdateModuleData::BeaconClientUpdateModuleData() :
-	m_framesBetweenRadarPulses(ConvertRetailFrames(30u)),
-	m_radarPulseDuration(ConvertRetailFrames(15u))
+	m_framesBetweenRadarPulses(DurationFrames::fromRaw(1000)),	// msec: ConvertRetailFrames(30u) at the native speed
+	m_radarPulseDuration(DurationFrames::fromRaw(500))				// and ConvertRetailFrames(15u)
 {
 }
 
@@ -59,8 +59,8 @@ void BeaconClientUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "RadarPulseFrequency",	INI::parseDurationUnsignedInt, NULL, offsetof(BeaconClientUpdateModuleData, m_framesBetweenRadarPulses) },
-		{ "RadarPulseDuration",		INI::parseDurationUnsignedInt, NULL, offsetof(BeaconClientUpdateModuleData, m_radarPulseDuration) },
+		{ "RadarPulseFrequency",	SPEED_FIELD( BeaconClientUpdateModuleData, m_framesBetweenRadarPulses ) },
+		{ "RadarPulseDuration",		SPEED_FIELD( BeaconClientUpdateModuleData, m_radarPulseDuration ) },
 		{ 0, 0, 0, 0 }
 	};
   p.add(dataFieldParse);

@@ -53,16 +53,24 @@
 /** The above in logic frames, at a given game speed: 3 at the retail 30fps, 6 at 60. */
 Int GameEngine_logicCatchupMaxFrames( Int logicFps );
 
-/** Logic ticks a wall second for a player game speed in percent of retail's pace (GameCommon.h's
-	PLAYER_GAME_SPEED_PERCENTS): LOGICFRAMES_PER_SECOND * percent / GAME_SPEED_PERCENT, rounded, so
-	20, 25, 30 and 40 at 30 Hz and 150.  Wall pacing only; every tick simulates the same game time. */
+/** Logic ticks a wall second that make the match run percent of retail's pace at the match's own game
+	speed: LOGICFRAMES_PER_SECOND * percent / GAME_SPEED_PERCENT, rounded, never under 1.  A match always
+	ticks LOGICFRAMES_PER_SECOND; this is for slowing a cinematic to retail's pace (percent 100: 20 at
+	150, 30 at 100, 15 at 200). */
 Int GameEngine_framesPerSecondForSpeed( Int percent );
 
-/** The logic frames a second a match starts at: FramesPerSecondLimit (the native tick, or what -fps
-	asked for) scaled by the game speed in percent, PLAYER_GAME_SPEED_PERCENT_DEFAULT leaving it as it
-	is.  Every network game passes the default.  Every start that sends MSG_NEW_GAME passes this, so a
-	replay plays back at the speed its match had. */
-Int GameEngine_matchFramesPerSecond( Int speedPercent );
+/** The logic frames a second every match ticks at: FramesPerSecondLimit (the native tick, or what -fps
+	asked for), whatever its game speed.  The speed is how much game time a tick advances, and it goes to
+	the match on its own (GameEngine_appendNewGameRates). */
+Int GameEngine_matchFramesPerSecond( void );
+
+/** MSG_NEW_GAME's last two arguments, after its mode, difficulty and rank points: the frames a second
+	(GameEngine_matchFramesPerSecond) and the game speed in percent, which GameLogicDispatch hands to
+	GameSpeed_set before the map loads.  A start that appends neither plays the native speed; every
+	network game passes NATIVE_GAME_SPEED_PERCENT, a skirmish its lobby's speed, a mission
+	MissionGameSpeed. */
+class GameMessage;
+void GameEngine_appendNewGameRates( GameMessage *msg, Int gameSpeedPercent );
 
 /** The logic frames a second a mission runs at after its script's SET_FPS_LIMIT.  EA's cinematics ask
 	for 20 to 28 of retail's 30 and time their voices against that; 0 or 30 and up ask for the game back,
@@ -83,12 +91,11 @@ Bool GameEngine_isPacingCinematic( void );
 
 /** How fast a mission's, a skirmish's or a replay's logic ticks against the native wall rate: the pacer's
 	rate over LOGICFRAMES_PER_SECOND, and 1 after a pass that ran a tick a pass (fast-forward, a seek,
-	-turbo, -headless), which keeps the wall clock.  At GAME_SPEED_PERCENT 150 a cinematic under held input runs 20 ticks
-	(0.667), one that asked for 23 runs 15 (0.5), a game played at 125 percent 25 (0.833), at 200 percent
-	40 (1.333), a replay at its recorded rate times its speed keys; 1 in a network game.  The game speed itself is not in it, so times
-	GAME_SPEED_PERCENT / 100 it is the game's pace against retail.  Whatever a cinematic times against its
-	script's frames and draws on the wall clock (the scripted camera, W3D's animation clock) multiplies by
-	this. */
+	-turbo, -headless), which keeps the wall clock.  At game speed 150 a cinematic under held input runs 20
+	ticks (0.667), one that asked for 23 runs 15 (0.5), a replay its recorded rate times its speed keys,
+	every other match 1, at any game speed.  The game speed itself is not in it, so times GAME_SPEED_PERCENT
+	/ 100 it is the game's pace against retail.  Whatever a cinematic times against its script's frames
+	and draws on the wall clock (the scripted camera, W3D's animation clock) multiplies by this. */
 Real GameEngine_missionTimeRate( void );
 
 /** R1, smooth motion: the renderer's blend reads how far into the next logic tick the wall clock is

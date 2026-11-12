@@ -1412,12 +1412,12 @@ const FieldParse InGameUI::s_fieldParseTable[] =
 	{ "MilitaryCaptionBold",						INI::parseBool,					NULL,		offsetof( InGameUI, m_militaryCaptionBold ) },
 
 	{ "MilitaryCaptionRandomizeTyping",	INI::parseBool,					NULL,		offsetof( InGameUI, m_militaryCaptionRandomizeTyping ) },
-	{ "MilitaryCaptionSpeed",						INI::parseRetailFramesInt,					NULL,		offsetof( InGameUI, m_militaryCaptionSpeed ) },
+	{ "MilitaryCaptionSpeed",						SPEED_FIELD( InGameUI, m_militaryCaptionSpeed ) },
 
 	{ "MilitaryCaptionPosition",				INI::parseICoord2D,			NULL,		offsetof( InGameUI, m_militaryCaptionPosition ) },
 
 	{ "SuperweaponCountdownPosition",					INI::parseCoord2D,			NULL,		offsetof( InGameUI, m_superweaponPosition ) },
-	{ "SuperweaponCountdownFlashDuration",		INI::parseDurationReal,	NULL,		offsetof( InGameUI, m_superweaponFlashDuration ) },
+	{ "SuperweaponCountdownFlashDuration",		SPEED_FIELD( InGameUI, m_superweaponFlashDuration ) },
 	{ "SuperweaponCountdownFlashColor",				INI::parseColorInt,			NULL,		offsetof( InGameUI, m_superweaponFlashColor ) },
 
 	{ "SuperweaponCountdownNormalFont",				INI::parseAsciiString,	NULL,		offsetof( InGameUI, m_superweaponNormalFont ) },
@@ -1429,7 +1429,7 @@ const FieldParse InGameUI::s_fieldParseTable[] =
 	{ "SuperweaponCountdownReadyBold",				INI::parseBool,					NULL,		offsetof( InGameUI, m_superweaponReadyBold ) },
 
 	{ "NamedTimerCountdownPosition",					INI::parseCoord2D,			NULL,		offsetof( InGameUI, m_namedTimerPosition ) },
-	{ "NamedTimerCountdownFlashDuration",			INI::parseDurationReal,	NULL,		offsetof( InGameUI, m_namedTimerFlashDuration ) },
+	{ "NamedTimerCountdownFlashDuration",			SPEED_FIELD( InGameUI, m_namedTimerFlashDuration ) },
 	{ "NamedTimerCountdownFlashColor",				INI::parseColorInt,			NULL,		offsetof( InGameUI, m_namedTimerFlashColor ) },
 
 	{ "NamedTimerCountdownNormalFont",				INI::parseAsciiString,	NULL,		offsetof( InGameUI, m_namedTimerNormalFont ) },
@@ -1442,9 +1442,9 @@ const FieldParse InGameUI::s_fieldParseTable[] =
 	{ "NamedTimerCountdownReadyBold",					INI::parseBool,					NULL,		offsetof( InGameUI, m_namedTimerReadyBold ) },
 	{ "NamedTimerCountdownReadyColor",				INI::parseColorInt,			NULL,		offsetof( InGameUI, m_namedTimerReadyColor ) },
 
-	{ "FloatingTextTimeOut",									INI::parseDurationUnsignedInt,		NULL,		offsetof( InGameUI, m_floatingTextTimeOut ) },
-	{ "FloatingTextMoveUpSpeed",							INI::parseVelocityReal,	NULL,		offsetof( InGameUI, m_floatingTextMoveUpSpeed ) },
-	{ "FloatingTextVanishRate",								INI::parseVelocityReal,	NULL,		offsetof( InGameUI, m_floatingTextMoveVanishRate ) },
+	{ "FloatingTextTimeOut",									SPEED_FIELD( InGameUI, m_floatingTextTimeOut ) },
+	{ "FloatingTextMoveUpSpeed",							SPEED_FIELD( InGameUI, m_floatingTextMoveUpSpeed ) },
+	{ "FloatingTextVanishRate",								SPEED_FIELD( InGameUI, m_floatingTextMoveVanishRate ) },
 
 	{ "PopupMessageColor",								INI::parseColorInt,					NULL,		offsetof( InGameUI, m_popupMessageColor ) },
 	
@@ -1574,7 +1574,7 @@ InGameUI::InGameUI()
 	m_militaryCaptionBold = FALSE;
 
 	m_militaryCaptionRandomizeTyping = FALSE;
-	m_militaryCaptionSpeed = ConvertRetailFrames( 1 );
+	m_militaryCaptionSpeed.setRaw( 1 );
 	m_popupMessageColor = GameMakeColor(255,255,255,255);
 
 	m_tooltipsDisabledUntil = 0;
@@ -1663,7 +1663,7 @@ InGameUI::InGameUI()
 
 	m_superweaponPosition.x = 0.7f;
 	m_superweaponPosition.y = 0.7f;
-	m_superweaponFlashDuration = 1.0f;
+	m_superweaponFlashDuration.setRaw( 50.0f );	// msec: 1.0f frames at the native speed
 	m_superweaponNormalFont = "Arial";
 	m_superweaponNormalPointSize = 10;
 	m_superweaponNormalBold = FALSE;
@@ -1678,7 +1678,7 @@ InGameUI::InGameUI()
 
 	m_namedTimerPosition.x = 0.05f;
 	m_namedTimerPosition.y = 0.7f;
-	m_namedTimerFlashDuration = 1.0f;
+	m_namedTimerFlashDuration.setRaw( 50.0f );	// msec: 1.0f frames at the native speed
 	m_namedTimerNormalFont = "Arial";
 	m_namedTimerNormalPointSize = 10;
 	m_namedTimerNormalBold = FALSE;
@@ -1694,9 +1694,9 @@ InGameUI::InGameUI()
 	m_namedTimerUsedFlashColor = TRUE; // so next one is false
 	m_showNamedTimers = TRUE;
 
-	m_floatingTextTimeOut = 0;
-	m_floatingTextMoveUpSpeed = 1.0f;
-	m_floatingTextMoveVanishRate = 0.1f;
+	m_floatingTextTimeOut.setRaw( 0 );
+	m_floatingTextMoveUpSpeed.setRaw( 20.0f );		// per second: 1.0f a frame at the native speed
+	m_floatingTextMoveVanishRate.setRaw( 2.0f );	// and 0.1f
 
 	m_drawableCaptionFont = "Arial";
 	m_drawableCaptionPointSize = 10;
@@ -2430,7 +2430,7 @@ static void rewindReplay( UnsignedInt target )
 
 	// a failed load has cleared the match and said so; nothing is left to seek in or look at
 	if( !TheGameState->loadCheckpoint( checkpoint.path,
-		[ & ]() { TheRecorder->resumePlayback( replayFile, checkpoint.cursor ); } ) )
+		[ & ]() { return TheRecorder->resumePlayback( replayFile, checkpoint.cursor ); } ) )
 	{
 		TheReplaySeekFrame = 0;
 		TheWritableGlobalData->m_TiVOFastMode = FALSE;
@@ -9752,9 +9752,9 @@ static const char *const SIGNAL_MARK_TEXTURES[ SIGNAL_KIND_COUNT ] =
 enum
 {
 	SIGNAL_MARK_SIZE						= 160,	///< across, in world units: 90 read as a coin from the default camera
-	SIGNAL_MARK_OPACITY					= 230,	///< out of 255, so the ground under it still shows a little
-	SIGNAL_MARK_FADE_OUT_FRAMES	= LOGICFRAMES_PER_GAME_SECOND * 2	///< the smoke's last steps, over which the mark fades
+	SIGNAL_MARK_OPACITY					= 230	///< out of 255, so the ground under it still shows a little
 };
+#define SIGNAL_MARK_FADE_OUT_FRAMES ((Int)(LOGICFRAMES_PER_GAME_SECOND * 2))	///< the smoke's last steps, over which the mark fades
 
 //-------------------------------------------------------------------------------------------------
 /** The mark a signal lays on the ground: crossed swords, a shield or an eye in a ring, in `color`,

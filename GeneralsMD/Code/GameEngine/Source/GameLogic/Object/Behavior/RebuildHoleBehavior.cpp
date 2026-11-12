@@ -53,7 +53,7 @@
 RebuildHoleBehaviorModuleData::RebuildHoleBehaviorModuleData( void )
 {
 
-	m_workerRespawnDelay = 0.0f;
+	m_workerRespawnDelay.setRaw( 0.0f );
 	m_holeHealthRegenPercentPerSecond = 0.1f;
 
 }  // end RebuildHoleBehaviorModuleData
@@ -68,7 +68,7 @@ RebuildHoleBehaviorModuleData::RebuildHoleBehaviorModuleData( void )
 	static const FieldParse dataFieldParse[] = 
 	{
 	  { "WorkerObjectName", INI::parseAsciiString, NULL, offsetof( RebuildHoleBehaviorModuleData, m_workerTemplateName ) },
-		{ "WorkerRespawnDelay", INI::parseDurationReal,	NULL, offsetof( RebuildHoleBehaviorModuleData, m_workerRespawnDelay ) },
+		{ "WorkerRespawnDelay", SPEED_FIELD( RebuildHoleBehaviorModuleData, m_workerRespawnDelay ) },
 		{ "HoleHealthRegen%PerSecond", INI::parsePercentToReal, NULL, offsetof( RebuildHoleBehaviorModuleData, m_holeHealthRegenPercentPerSecond ) },
 		{ 0, 0, 0, 0 }
 	};

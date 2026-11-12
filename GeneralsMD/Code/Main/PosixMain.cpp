@@ -437,6 +437,15 @@ static Bool takeOneCopyLock( void )
 //=============================================================================
 int main( int argc, char *argv[] )
 {
+	GameSpeed_markMainStarted();
+#if defined(_DEBUG) || defined(_INTERNAL)
+	{
+		// -initspeed <percent>: start at that game speed instead of the native one (WinMain.cpp has why)
+		char initSpeed[ 16 ];
+		if( findEarlyCommandLineValue( L"-initspeed", initSpeed, sizeof( initSpeed ) ) )
+			GameSpeed_set( ClampPlayerGameSpeedPercent( atoi( initSpeed ) ) );
+	}
+#endif
 	// Before anything else, and before another thread exists: a crash from here on leaves
 	// ReleaseCrashInfo.txt, as WinMain's _set_se_translator and SetUnhandledExceptionFilter make it on Windows.
 	installCrashHandlers();
@@ -555,6 +564,7 @@ int main( int argc, char *argv[] )
 
 		// start the log
 		DEBUG_INIT(DEBUG_FLAGS_DEFAULT);
+		DEBUG_ASSERTCRASH( GameSpeed_readsBeforeMain() == 0, ( "%d reads of the game speed before main: a dynamic initialiser caches it", GameSpeed_readsBeforeMain() ) );
 		initMemoryManager();
 
 		// Set up version info

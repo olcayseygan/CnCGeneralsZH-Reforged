@@ -238,9 +238,9 @@ static const INI::RealRange PARTITION_CELL_SIZE_RANGE = { 20.0f, 400.0f };
 	{ "UnitReallyDamagedThreshold",	INI::parseReal,				NULL,			offsetof( GlobalData, m_unitReallyDamagedThresh ) },
 	{ "GroundStiffness",					INI::parseReal,				NULL,				offsetof( GlobalData, m_groundStiffness ) },
 	{ "StructureStiffness",					INI::parseReal,				NULL,				offsetof( GlobalData, m_structureStiffness ) },
-	{ "Gravity",									INI::parseAccelerationReal,				NULL,				offsetof( GlobalData, m_gravity ) },
+	{ "Gravity",									SPEED_FIELD( GlobalData, m_gravity ) },
 	{ "StealthFriendlyOpacity",		INI::parsePercentToReal,				NULL,				offsetof( GlobalData, m_stealthFriendlyOpacity ) },
-	{ "DefaultOcclusionDelay",				INI::parseDurationUnsignedInt,				NULL,			offsetof( GlobalData, m_defaultOcclusionDelay ) },
+	{ "DefaultOcclusionDelay",				SPEED_FIELD( GlobalData, m_defaultOcclusionDelay ) },
 	
 	{ "PartitionCellSize",				INI::parseRealInRange,				&PARTITION_CELL_SIZE_RANGE,			offsetof( GlobalData, m_partitionCellSize ) },
 
@@ -251,7 +251,7 @@ static const INI::RealRange PARTITION_CELL_SIZE_RANGE = { 20.0f, 400.0f };
 	{ "AmmoPipScreenOffset",						INI::parseCoord2D,				NULL,			offsetof( GlobalData, m_ammoPipScreenOffset ) },
 	{ "ContainerPipScreenOffset",				INI::parseCoord2D,				NULL,			offsetof( GlobalData, m_containerPipScreenOffset ) },
 
-	{ "HistoricDamageLimit",				INI::parseDurationUnsignedInt,				NULL,			offsetof( GlobalData, m_historicDamageLimit ) },
+	{ "HistoricDamageLimit",				SPEED_FIELD( GlobalData, m_historicDamageLimit ) },
 
 	{ "MaxTerrainTracks",					INI::parseInt,				NULL,			offsetof( GlobalData, m_maxTerrainTracks ) },
 	{ "TimeOfDay",								INI::parseIndexList,	TimeOfDayNames,			offsetof( GlobalData, m_timeOfDay ) },
@@ -502,7 +502,7 @@ static const INI::RealRange PARTITION_CELL_SIZE_RANGE = { 20.0f, 400.0f };
 	{ "MaxShakeRange",							INI::parseReal,				NULL,			offsetof( GlobalData, m_maxShakeRange) },
 	{ "SellPercentage",							INI::parsePercentToReal,	NULL,			offsetof( GlobalData, m_sellPercentage ) },
 	{ "BaseRegenHealthPercentPerSecond", INI::parsePercentToReal, NULL,	offsetof( GlobalData, m_baseRegenHealthPercentPerSecond ) },
-	{ "BaseRegenDelay",							INI::parseDurationUnsignedInt, NULL,offsetof( GlobalData, m_baseRegenDelay ) },
+	{ "BaseRegenDelay",							SPEED_FIELD( GlobalData, m_baseRegenDelay ) },
 
 #ifdef ALLOW_SURRENDER
 	{ "PrisonBountyMultiplier",			INI::parseReal,				NULL,			offsetof( GlobalData, m_prisonBountyMultiplier ) },
@@ -530,7 +530,7 @@ static const INI::RealRange PARTITION_CELL_SIZE_RANGE = { 20.0f, 400.0f };
 	{ "PowerBarBase",												INI::parseInt,							NULL,	offsetof( GlobalData, m_powerBarBase) },
 	{ "PowerBarIntervals",									INI::parseReal,							NULL,	offsetof( GlobalData, m_powerBarIntervals) },
 	{ "PowerBarYellowRange",								INI::parseInt,							NULL,	offsetof( GlobalData, m_powerBarYellowRange) },
-	{ "UnlookPersistDuration",							INI::parseDurationUnsignedInt, NULL, offsetof( GlobalData, m_unlookPersistDuration) },
+	{ "UnlookPersistDuration",							SPEED_FIELD( GlobalData, m_unlookPersistDuration ) },
 
 	{ "NetworkFPSHistoryLength", INI::parseInt, NULL, offsetof(GlobalData, m_networkFPSHistoryLength) },
 	{ "NetworkLatencyHistoryLength", INI::parseInt, NULL, offsetof(GlobalData, m_networkLatencyHistoryLength) },
@@ -887,7 +887,7 @@ GlobalData::GlobalData()
 	m_drawSkyBox = FALSE;
 	m_skyBoxScale = 4.5f;
 
-	m_historicDamageLimit = 0;
+	m_historicDamageLimit.setRaw( 0 );
 	m_maxTerrainTracks = 0;
 
 	m_levelGainAnimationDisplayTimeInSeconds = 0.0f;
@@ -1056,9 +1056,9 @@ GlobalData::GlobalData()
 	m_unitReallyDamagedThresh = 0.1f;
 	m_groundStiffness = 0.5f;
 	m_structureStiffness = 0.5f;
-	m_gravity = -1.0f;
+	m_gravity.setRaw( -399.99997f );	// dist/sec^2: -1.0f a frame^2 at the native speed
 	m_stealthFriendlyOpacity = 0.5f;
-	m_defaultOcclusionDelay = LOGICFRAMES_PER_GAME_SECOND * 3;	//default to 3 seconds
+	m_defaultOcclusionDelay.setRaw( 3000 );	//default to 3 seconds
 
 	m_preloadEverything = FALSE;
 	m_preloadReport = FALSE;
@@ -1107,7 +1107,7 @@ GlobalData::GlobalData()
 
 	m_sellPercentage = 1.0f;
 	m_baseRegenHealthPercentPerSecond = 0.0f;
-	m_baseRegenDelay = 0;
+	m_baseRegenDelay.setRaw( 0 );
 
 #ifdef ALLOW_SURRENDER
 	m_prisonBountyMultiplier = 1.0f;
@@ -1150,7 +1150,7 @@ GlobalData::GlobalData()
 
 	// By default, show all asserts.
 
-	m_unlookPersistDuration		= ConvertRetailFrames(30);
+	m_unlookPersistDuration.setRaw( 1000 );	// a second
 
 	//-----------------------------------------------------------------------------------------------
 

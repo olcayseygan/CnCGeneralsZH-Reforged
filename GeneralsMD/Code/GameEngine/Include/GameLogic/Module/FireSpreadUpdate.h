@@ -42,8 +42,8 @@ class FireSpreadUpdateModuleData : public UpdateModuleData
 {
 public:
 	const ObjectCreationList *m_oclEmbers;
-	UnsignedInt m_minSpreadTryDelayData;
-	UnsignedInt m_maxSpreadTryDelayData;
+	DurationFrames m_minSpreadTryDelayData;
+	DurationFrames m_maxSpreadTryDelayData;
 	Real m_spreadTryRange;
 
 	FireSpreadUpdateModuleData();

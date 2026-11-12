@@ -120,11 +120,11 @@ public:
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 
-const Int DEFAULT_UPDATE_RATE = LOGICFRAMES_PER_GAME_SECOND;
+#define DEFAULT_UPDATE_RATE_MSEC 1000
 
 //-------------------------------------------------------------------------------------------------
 HordeUpdateModuleData::HordeUpdateModuleData() :
-	m_updateRate(DEFAULT_UPDATE_RATE),
+	m_updateRate(DurationFrames::fromRaw(DEFAULT_UPDATE_RATE_MSEC)),
   m_minCount(0),
   m_minDist(0.0f),
 	m_rubOffRadius(20.0f),
@@ -142,7 +142,7 @@ HordeUpdateModuleData::HordeUpdateModuleData() :
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "UpdateRate", INI::parseDurationUnsignedInt, NULL, offsetof(HordeUpdateModuleData, m_updateRate) },
+		{ "UpdateRate", SPEED_FIELD( HordeUpdateModuleData, m_updateRate ) },
 		{ "KindOf", KindOfMaskType::parseFromINI, NULL, offsetof(HordeUpdateModuleData, m_kindof) },
 		{ "Count", INI::parseInt, NULL, offsetof(HordeUpdateModuleData, m_minCount) },
 		{ "Radius", INI::parseReal, NULL, offsetof(HordeUpdateModuleData, m_minDist) },

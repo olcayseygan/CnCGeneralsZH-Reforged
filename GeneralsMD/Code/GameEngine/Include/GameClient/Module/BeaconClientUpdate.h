@@ -43,8 +43,8 @@ class ParticleSystem;
 class BeaconClientUpdateModuleData : public ClientUpdateModuleData
 {
 public:
-	UnsignedInt m_framesBetweenRadarPulses;
-	UnsignedInt m_radarPulseDuration;
+	DurationFrames m_framesBetweenRadarPulses;
+	DurationFrames m_radarPulseDuration;
 
 	BeaconClientUpdateModuleData();
 	~BeaconClientUpdateModuleData();

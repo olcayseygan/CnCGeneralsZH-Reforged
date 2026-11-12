@@ -259,7 +259,7 @@ public:
 		m_formationSize(1),
 		m_formationSpacing(25.0f),
 		m_errorRadius(0.0f),
-		m_delayDeliveryFramesMax(0),
+		m_delayDeliveryFramesMax(DurationFrames::fromRaw(0)),
 		m_convergenceFactor( 0.0f )
 	{
 		//Note: m_data is constructed with default values.
@@ -549,7 +549,7 @@ public:
 			{ "FormationSpacing",					INI::parseReal,									NULL, offsetof( DeliverPayloadNugget, m_formationSpacing) },
 			{ "WeaponConvergenceFactor",	INI::parseReal,									NULL, offsetof( DeliverPayloadNugget, m_convergenceFactor ) },
 			{ "WeaponErrorRadius",				INI::parseReal,									NULL, offsetof( DeliverPayloadNugget, m_errorRadius ) },
-			{ "DelayDeliveryMax",					INI::parseDurationUnsignedInt,	NULL, offsetof( DeliverPayloadNugget, m_delayDeliveryFramesMax ) },
+			{ "DelayDeliveryMax",					SPEED_FIELD( DeliverPayloadNugget, m_delayDeliveryFramesMax ) },
 
 			//Payload information (it's all created now and stored inside)
 			{ "Payload",									parsePayload,									NULL, 0 },
@@ -587,7 +587,7 @@ private:
 	Real									m_formationSpacing;
 	Real									m_convergenceFactor;
 	Real									m_errorRadius;
-	UnsignedInt						m_delayDeliveryFramesMax;
+	DurationFrames						m_delayDeliveryFramesMax;
 	UnsignedInt						m_formationSize;
 	Bool									m_startAtPreferredHeight;
 	Bool									m_startAtMaxSpeed;
@@ -624,9 +624,9 @@ class ApplyRandomForceNugget : public ObjectCreationNugget
 public:
 
 	ApplyRandomForceNugget() : 
-		m_spinRate(0.0f),
-		m_minMag(0.0f),
-		m_maxMag(0.0f),
+		m_spinRate(AngularVelocityPerFrame::fromRaw(0.0f)),
+		m_minMag(RetailPerFrame::fromRaw(0.0f)),
+		m_maxMag(RetailPerFrame::fromRaw(0.0f)),
 		m_minPitch(0.0f),
 		m_maxPitch(0.0f)
 	{
@@ -675,9 +675,9 @@ public:
 	{
 		static const FieldParse myFieldParse[] =
 		{
-			{ "SpinRate",					INI::parseAngularVelocityReal,	NULL, offsetof(ApplyRandomForceNugget, m_spinRate) },
-			{ "MinForceMagnitude",	INI::parseRetailPerFrameReal,	NULL, offsetof(ApplyRandomForceNugget, m_minMag) },
-			{ "MaxForceMagnitude",	INI::parseRetailPerFrameReal,	NULL, offsetof(ApplyRandomForceNugget, m_maxMag) },
+			{ "SpinRate",					SPEED_FIELD( ApplyRandomForceNugget, m_spinRate ) },
+			{ "MinForceMagnitude",	SPEED_FIELD( ApplyRandomForceNugget, m_minMag ) },
+			{ "MaxForceMagnitude",	SPEED_FIELD( ApplyRandomForceNugget, m_maxMag ) },
 			{ "MinForcePitch",	INI::parseAngleReal,	NULL, offsetof(ApplyRandomForceNugget, m_minPitch) },
 			{ "MaxForcePitch",	INI::parseAngleReal,	NULL, offsetof(ApplyRandomForceNugget, m_maxPitch) },
 			{ 0, 0, 0, 0 }
@@ -691,8 +691,8 @@ public:
 protected:
 
 private:
-	Real											m_spinRate;
-	Real											m_minMag, m_maxMag;
+	AngularVelocityPerFrame											m_spinRate;
+	RetailPerFrame											m_minMag, m_maxMag;
 	Real											m_minPitch, m_maxPitch;
 };  
 EMPTY_DTOR(ApplyRandomForceNugget)
@@ -749,11 +749,11 @@ public:
 		m_extraBounciness(0),
 		m_extraFriction(0),
 		m_disposition(ON_GROUND_ALIGNED),
-		m_dispositionIntensity(0.0f),
-		m_spinRate(-1.0f),
-		m_yawRate(-1.0f),
-		m_rollRate(-1.0f),
-		m_pitchRate(-1.0f),
+		m_dispositionIntensity(RetailPerFrame::fromRaw(0.0f)),
+		m_spinRate(AngularVelocityPerFrame::fromRaw(-1.0f)),
+		m_yawRate(AngularVelocityPerFrame::fromRaw(-1.0f)),
+		m_rollRate(AngularVelocityPerFrame::fromRaw(-1.0f)),
+		m_pitchRate(AngularVelocityPerFrame::fromRaw(-1.0f)),
 		m_nameAreObjects(true),
 		m_okToChangeModelColor(false),
 		m_minLODRequired(STATIC_GAME_LOD_LOW),
@@ -761,7 +761,7 @@ public:
 		m_inheritsVeterancy(false),
     m_diesOnBadLand(FALSE),
 		m_skipIfSignificantlyAirborne(false),
-		m_invulnerableTime(0),
+		m_invulnerableTime(DurationFrames::fromRaw(0)),
 		m_containInsideSourceObject(FALSE),
     m_minHealth(1.0f),
 		m_maxHealth(1.0f),
@@ -772,16 +772,16 @@ public:
 		m_maxDistanceFormation(0.0f),
 		m_fadeIn(false),
 		m_fadeOut(false),
-		m_fadeFrames(0),
+		m_fadeFrames(DurationFrames::fromRaw(0)),
 		m_fadeSoundName(AsciiString::TheEmptyString), // Added By Sadullah Nader
 		m_particleSysName(AsciiString::TheEmptyString), // Added By Sadullah Nader
 		m_putInContainer(AsciiString::TheEmptyString), // Added By Sadullah Nader
-		m_minMag(0.0f),
-		m_maxMag(0.0f),
+		m_minMag(RetailPerFrame::fromRaw(0.0f)),
+		m_maxMag(RetailPerFrame::fromRaw(0.0f)),
 		m_minPitch(0.0f),
 		m_maxPitch(0.0f),
-		m_minFrames(0),
-		m_maxFrames(0),
+		m_minFrames(DurationFrames::fromRaw(0)),
+		m_maxFrames(DurationFrames::fromRaw(0)),
 		m_shadowType(SHADOW_NONE),
 		m_fxFinal(NULL),
 		m_preserveLayer(true),
@@ -867,24 +867,24 @@ public:
 			{ "ExtraFriction",				parseFrictionPerSec,						NULL, offsetof( GenericObjectCreationNugget, m_extraFriction ) },
 			{ "Offset",						INI::parseCoord3D,				NULL, offsetof( GenericObjectCreationNugget, m_offset ) },
 			{ "Disposition",			INI::parseBitString32,			DebrisDispositionNames, offsetof( GenericObjectCreationNugget, m_disposition ) },
-			{ "DispositionIntensity",	INI::parseRetailPerFrameReal,	NULL,	offsetof( GenericObjectCreationNugget, m_dispositionIntensity ) },
-			{ "SpinRate",					INI::parseAngularVelocityReal,	NULL, offsetof(GenericObjectCreationNugget, m_spinRate) },
-			{ "YawRate",					INI::parseAngularVelocityReal,	NULL, offsetof(GenericObjectCreationNugget, m_yawRate) },
-			{ "RollRate",					INI::parseAngularVelocityReal,	NULL, offsetof(GenericObjectCreationNugget, m_rollRate) },
-			{ "PitchRate",				INI::parseAngularVelocityReal,	NULL, offsetof(GenericObjectCreationNugget, m_pitchRate) },
-			{ "MinForceMagnitude",	INI::parseRetailPerFrameReal,	NULL, offsetof(GenericObjectCreationNugget, m_minMag) },
-			{ "MaxForceMagnitude",	INI::parseRetailPerFrameReal,	NULL, offsetof(GenericObjectCreationNugget, m_maxMag) },
+			{ "DispositionIntensity",	SPEED_FIELD( GenericObjectCreationNugget, m_dispositionIntensity ) },
+			{ "SpinRate",					SPEED_FIELD( GenericObjectCreationNugget, m_spinRate ) },
+			{ "YawRate",					SPEED_FIELD( GenericObjectCreationNugget, m_yawRate ) },
+			{ "RollRate",					SPEED_FIELD( GenericObjectCreationNugget, m_rollRate ) },
+			{ "PitchRate",				SPEED_FIELD( GenericObjectCreationNugget, m_pitchRate ) },
+			{ "MinForceMagnitude",	SPEED_FIELD( GenericObjectCreationNugget, m_minMag ) },
+			{ "MaxForceMagnitude",	SPEED_FIELD( GenericObjectCreationNugget, m_maxMag ) },
 			{ "MinForcePitch",	INI::parseAngleReal,	NULL, offsetof(GenericObjectCreationNugget, m_minPitch) },
 			{ "MaxForcePitch",	INI::parseAngleReal,	NULL, offsetof(GenericObjectCreationNugget, m_maxPitch) },
-			{ "MinLifetime",					INI::parseDurationUnsignedInt,		NULL, offsetof( GenericObjectCreationNugget, m_minFrames ) },
-			{ "MaxLifetime",					INI::parseDurationUnsignedInt,		NULL, offsetof( GenericObjectCreationNugget, m_maxFrames ) },
+			{ "MinLifetime",					SPEED_FIELD( GenericObjectCreationNugget, m_minFrames ) },
+			{ "MaxLifetime",					SPEED_FIELD( GenericObjectCreationNugget, m_maxFrames ) },
 			{ "SpreadFormation",			INI::parseBool,	NULL, offsetof(GenericObjectCreationNugget, m_spreadFormation) },
 			{ "MinDistanceAFormation",	INI::parseReal, NULL, offsetof(GenericObjectCreationNugget, m_minDistanceAFormation) },
 			{ "MinDistanceBFormation",	INI::parseReal, NULL, offsetof(GenericObjectCreationNugget, m_minDistanceBFormation) },
 			{ "MaxDistanceFormation",	INI::parseReal, NULL, offsetof(GenericObjectCreationNugget, m_maxDistanceFormation) },
 			{ "FadeIn",			INI::parseBool,	NULL, offsetof(GenericObjectCreationNugget, m_fadeIn) },
 			{ "FadeOut",			INI::parseBool,	NULL, offsetof(GenericObjectCreationNugget, m_fadeOut) },
-			{ "FadeTime",	INI::parseDurationUnsignedInt,	NULL, offsetof(GenericObjectCreationNugget, m_fadeFrames) },
+			{ "FadeTime",	SPEED_FIELD( GenericObjectCreationNugget, m_fadeFrames ) },
 			{ "FadeSound", INI::parseAsciiString, NULL, offsetof( GenericObjectCreationNugget, m_fadeSoundName) },
 			{ "PreserveLayer", INI::parseBool, NULL, offsetof( GenericObjectCreationNugget, m_preserveLayer) },
 			{ "DiesOnBadLand",	INI::parseBool, NULL, offsetof(GenericObjectCreationNugget, m_diesOnBadLand) },
@@ -902,7 +902,7 @@ public:
 			{ "ObjectCount",				INI::parseInt,  NULL, offsetof(GenericObjectCreationNugget, m_objectCount) },
 			{ "InheritsVeterancy",	INI::parseBool, NULL, offsetof(GenericObjectCreationNugget, m_inheritsVeterancy) },
 			{ "SkipIfSignificantlyAirborne", INI::parseBool, NULL, offsetof(GenericObjectCreationNugget, m_skipIfSignificantlyAirborne) },
-			{ "InvulnerableTime",		INI::parseDurationUnsignedInt, NULL, offsetof(GenericObjectCreationNugget, m_invulnerableTime) },
+			{ "InvulnerableTime",		SPEED_FIELD( GenericObjectCreationNugget, m_invulnerableTime ) },
 			{ "MinHealth",					INI::parsePercentToReal, NULL, offsetof(GenericObjectCreationNugget, m_minHealth) },
 			{ "MaxHealth",					INI::parsePercentToReal, NULL, offsetof(GenericObjectCreationNugget, m_maxHealth) },
 			{ "RequiresLivePlayer",	INI::parseBool, NULL, offsetof(GenericObjectCreationNugget, m_requiresLivePlayer) },
@@ -1510,20 +1510,20 @@ private:
 	Real											m_extraFriction;
 	Coord3D										m_offset;
 	DebrisDisposition					m_disposition;
-	Real											m_dispositionIntensity;
-	Real											m_spinRate;
-	Real											m_yawRate;
-	Real											m_rollRate;
-	Real											m_pitchRate;
-	Real											m_minMag, m_maxMag;
+	RetailPerFrame											m_dispositionIntensity;
+	AngularVelocityPerFrame											m_spinRate;
+	AngularVelocityPerFrame											m_yawRate;
+	AngularVelocityPerFrame											m_rollRate;
+	AngularVelocityPerFrame											m_pitchRate;
+	RetailPerFrame											m_minMag, m_maxMag;
 	Real											m_minPitch, m_maxPitch;
-	UnsignedInt								m_minFrames, m_maxFrames;
+	DurationFrames								m_minFrames, m_maxFrames;
 	ShadowType								m_shadowType;
 	StaticGameLODLevel				m_minLODRequired;
-	UnsignedInt								m_invulnerableTime;
+	DurationFrames								m_invulnerableTime;
 	Real											m_minHealth;
 	Real											m_maxHealth;
-	UnsignedInt								m_fadeFrames;
+	DurationFrames								m_fadeFrames;
 	AsciiString								m_fadeSoundName;
 	Real											m_minDistanceAFormation;
 	Real											m_minDistanceBFormation;

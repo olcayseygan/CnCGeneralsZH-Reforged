@@ -47,7 +47,7 @@ MatchHistory::MatchHistory( void )
 void MatchHistory::reset( void )
 {
 	m_sampleCount = 0;
-	m_interval = FIRST_INTERVAL;
+	m_intervalDoublings = 0;	// no speed read here: the global's constructor runs before main
 	for( Int player = 0; player < MAX_PLAYER_COUNT; player++ )
 	{
 		m_sampled[ player ] = FALSE;
@@ -99,8 +99,8 @@ void MatchHistory::sample( UnsignedInt frame )
 			memcpy( m_values[ index ], m_values[ index * 2 ], sizeof( m_values[ index ] ) );
 		}
 		m_sampleCount = MAX_SAMPLES / 2;
-		m_interval *= 2;
-		if( frame % m_interval != 0 )
+		++m_intervalDoublings;
+		if( frame % interval() != 0 )
 			return;
 	}
 
@@ -128,7 +128,7 @@ void MatchHistory::sample( UnsignedInt frame )
 //-------------------------------------------------------------------------------------------------
 void MatchHistory::update( UnsignedInt frame )
 {
-	if( frame % m_interval == 0 )
+	if( frame % interval() == 0 )
 		sample( frame );
 
 	for( Int index = 0; index < ThePlayerList->getPlayerCount() && index < MAX_PLAYER_COUNT; index++ )

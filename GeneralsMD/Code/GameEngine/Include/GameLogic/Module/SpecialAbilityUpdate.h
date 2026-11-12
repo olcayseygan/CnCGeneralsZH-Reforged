@@ -86,13 +86,13 @@ public:
 	Int										m_effectValue;
 	Int										m_awardXPForTriggering;
 	Int										m_skillPointsForTriggering;
-	UnsignedInt						m_preparationFrames;
-	UnsignedInt						m_persistentPrepFrames;
-	UnsignedInt						m_effectDuration;
+	DurationFrames						m_preparationFrames;
+	DurationFrames						m_persistentPrepFrames;
+	DurationFrames						m_effectDuration;
 	UnsignedInt						m_maxSpecialObjects;
-	UnsignedInt						m_packTime;
-	UnsignedInt						m_unpackTime;
-	UnsignedInt						m_preTriggerUnstealthFrames;
+	DurationFrames						m_packTime;
+	DurationFrames						m_unpackTime;
+	DurationFrames						m_preTriggerUnstealthFrames;
 	Bool									m_skipPackingWithNoTarget;
 	Bool									m_specialObjectsPersistent;
 	Bool									m_uniqueSpecialObjectTargets;
@@ -117,12 +117,12 @@ public:
 		m_specialPowerTemplate = NULL;
 		m_startAbilityRange = SPECIAL_ABILITY_HUGE_DISTANCE;
 		m_abilityAbortRange = SPECIAL_ABILITY_HUGE_DISTANCE;
-		m_preparationFrames = 0;
-		m_persistentPrepFrames = 0;
-		m_packTime = 0;
-		m_unpackTime = 0;
+		m_preparationFrames.setRaw( 0 );
+		m_persistentPrepFrames.setRaw( 0 );
+		m_packTime.setRaw( 0 );
+		m_unpackTime.setRaw( 0 );
 		m_packUnpackVariationFactor = 0.0f;
-		m_effectDuration = 0;
+		m_effectDuration.setRaw( 0 );
 		m_maxSpecialObjects = 1;
 		m_effectValue = 1;
 		m_specialObjectsPersistent = FALSE;
@@ -139,7 +139,7 @@ public:
 		m_awardXPForTriggering = 0;
 		m_skillPointsForTriggering = -1;
 		m_approachRequiresLOS = TRUE;
-		m_preTriggerUnstealthFrames = 0;
+		m_preTriggerUnstealthFrames.setRaw( 0 );
     m_needToFaceTarget = TRUE;
     m_persistenceRequiresRecharge = FALSE;
 	}
@@ -154,11 +154,11 @@ public:
 			{ "SpecialPowerTemplate",				INI::parseSpecialPowerTemplate,		NULL, offsetof( SpecialAbilityUpdateModuleData, m_specialPowerTemplate ) },
 			{ "StartAbilityRange",					INI::parseReal,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_startAbilityRange ) },
 			{ "AbilityAbortRange",					INI::parseReal,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_abilityAbortRange ) },
-			{ "PreparationTime",						INI::parseDurationUnsignedInt,		NULL, offsetof( SpecialAbilityUpdateModuleData, m_preparationFrames ) },
-			{ "PersistentPrepTime",					INI::parseDurationUnsignedInt,		NULL, offsetof( SpecialAbilityUpdateModuleData, m_persistentPrepFrames ) },
-			{ "PackTime",										INI::parseDurationUnsignedInt,		NULL, offsetof( SpecialAbilityUpdateModuleData, m_packTime ) },
-			{ "UnpackTime",									INI::parseDurationUnsignedInt,		NULL, offsetof( SpecialAbilityUpdateModuleData, m_unpackTime ) },
-			{ "PreTriggerUnstealthTime",	  INI::parseDurationUnsignedInt,		NULL, offsetof( SpecialAbilityUpdateModuleData, m_preTriggerUnstealthFrames ) },
+			{ "PreparationTime",						SPEED_FIELD( SpecialAbilityUpdateModuleData, m_preparationFrames ) },
+			{ "PersistentPrepTime",					SPEED_FIELD( SpecialAbilityUpdateModuleData, m_persistentPrepFrames ) },
+			{ "PackTime",										SPEED_FIELD( SpecialAbilityUpdateModuleData, m_packTime ) },
+			{ "UnpackTime",									SPEED_FIELD( SpecialAbilityUpdateModuleData, m_unpackTime ) },
+			{ "PreTriggerUnstealthTime",	  SPEED_FIELD( SpecialAbilityUpdateModuleData, m_preTriggerUnstealthFrames ) },
 			{ "SkipPackingWithNoTarget",		INI::parseBool,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_skipPackingWithNoTarget ) },
 			{ "PackUnpackVariationFactor",	INI::parseReal,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_packUnpackVariationFactor ) },
  
@@ -167,7 +167,7 @@ public:
 			{ "SpecialObjectAttachToBone",	INI::parseAsciiString,						NULL, offsetof( SpecialAbilityUpdateModuleData, m_specialObjectAttachToBoneName ) },
 			{ "MaxSpecialObjects",					INI::parseUnsignedInt,						NULL, offsetof( SpecialAbilityUpdateModuleData, m_maxSpecialObjects ) },
 			{ "SpecialObjectsPersistent",		INI::parseBool,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_specialObjectsPersistent ) },
-			{ "EffectDuration",							INI::parseDurationUnsignedInt,		NULL, offsetof( SpecialAbilityUpdateModuleData, m_effectDuration ) },
+			{ "EffectDuration",							SPEED_FIELD( SpecialAbilityUpdateModuleData, m_effectDuration ) },
 			{ "EffectValue",								INI::parseInt,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_effectValue ) },
 			{ "UniqueSpecialObjectTargets", INI::parseBool,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_uniqueSpecialObjectTargets ) },
 			{ "SpecialObjectsPersistWhenOwnerDies", INI::parseBool,						NULL, offsetof( SpecialAbilityUpdateModuleData, m_specialObjectsPersistWhenOwnerDies ) },

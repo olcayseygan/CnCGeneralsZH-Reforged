@@ -112,7 +112,7 @@ const UnsignedInt MOB_CATCH_UP_CRISIS_DIVISOR = 3;
 	 alive.  An Angry Mob is a nexus and ten members, so a match with several of them per player is
 	 hundreds of objects paying that for nothing.  Sleeping is what the `@todo srj use SLEEPY_UPDATE
 	 here` at the top of update() has been asking for. */
-const Int MOB_MEMBER_UPDATE_RATE = ConvertRetailFrames( 16 );	// also the tick of CatchUpCrisisBailTime, a count of these updates
+#define MOB_MEMBER_UPDATE_RATE ((Int)(ConvertRetailFrames( 16 )))	// also the tick of CatchUpCrisisBailTime, a count of these updates
 
 /* m_framesToWait was the counter that got ticked to sixteen.  It now carries the one-time stagger
 	 the constructor drew, and this once it has been spent. */
@@ -121,7 +121,7 @@ const Int MOB_MEMBER_STAGGER_SPENT = -1;
 // How often a member told to follow a new order looks again for its nexus to start walking: the
 // nexus' path search can take a few frames, and a member waiting the whole update rate for it
 // starts half a second behind the mob.
-const Int MOB_FOLLOW_ORDER_POLL = ConvertRetailFrames( 2 );
+#define MOB_FOLLOW_ORDER_POLL ((Int)(ConvertRetailFrames( 2 )))
 
 /* The point 'ahead' further along the path than the point on it nearest to 'from', and which way the
 	 path runs at each of the two.  FALSE when there is no leg to walk.  This is what the formation

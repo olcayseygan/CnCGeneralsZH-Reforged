@@ -76,14 +76,14 @@ public:
 	Real					m_landingDeckHeightOffset;
 	Int						m_numRows;
 	Int						m_numCols;
-	UnsignedInt		m_cleanupFrames;
-	UnsignedInt		m_humanFollowFrames;
-	UnsignedInt		m_replacementFrames;
-	UnsignedInt		m_dockAnimationFrames;
-	UnsignedInt		m_launchWaveFrames;
-	UnsignedInt   m_launchRampFrames;
-	UnsignedInt   m_lowerRampFrames;
-	UnsignedInt		m_catapultFireFrames;
+	DurationFrames		m_cleanupFrames;
+	DurationFrames		m_humanFollowFrames;
+	DurationFrames		m_replacementFrames;
+	DurationFrames		m_dockAnimationFrames;
+	DurationFrames		m_launchWaveFrames;
+	DurationFrames   m_launchRampFrames;
+	DurationFrames   m_lowerRampFrames;
+	DurationFrames		m_catapultFireFrames;
 
 	FlightDeckBehaviorModuleData();
 	static void buildFieldParse( MultiIniFieldParse& p );

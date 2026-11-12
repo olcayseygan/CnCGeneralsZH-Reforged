@@ -80,7 +80,7 @@ OpenContainModuleData::OpenContainModuleData( void )
 	m_numberOfExitPaths = 1;
 	m_damagePercentageToUnits = 0;
 	m_isBurnedDeathToUnits = TRUE;
-	m_doorOpenTime = 1;
+	m_doorOpenTime.setRaw( 1 );	// 1 msec: a frame at any speed
 	m_allowInsideKindOf.clear(); m_allowInsideKindOf.flip();		// everything is allowed
 	m_forbidInsideKindOf.clear();	// nothing is forbidden
 	m_weaponBonusPassedToPassengers = FALSE;
@@ -107,7 +107,7 @@ OpenContainModuleData::OpenContainModuleData( void )
 		{ "PassengersAllowedToFire",	INI::parseBool, NULL, offsetof( OpenContainModuleData, m_passengersAllowedToFire ) },
 		{ "PassengersInTurret",				INI::parseBool, NULL, offsetof( OpenContainModuleData, m_passengersInTurret ) },
 		{ "NumberOfExitPaths",				INI::parseInt, NULL, offsetof( OpenContainModuleData, m_numberOfExitPaths ) },
-		{ "DoorOpenTime",							INI::parseDurationUnsignedInt, NULL, offsetof( OpenContainModuleData, m_doorOpenTime ) },
+		{ "DoorOpenTime",							SPEED_FIELD( OpenContainModuleData, m_doorOpenTime ) },
  		{ "WeaponBonusPassedToPassengers", INI::parseBool,	NULL, offsetof( OpenContainModuleData, m_weaponBonusPassedToPassengers ) },
  		{ "AllowAlliesInside",				INI::parseBool,	NULL, offsetof( OpenContainModuleData, m_allowAlliesInside ) },
  		{ "AllowEnemiesInside",				INI::parseBool,	NULL, offsetof( OpenContainModuleData, m_allowEnemiesInside ) },

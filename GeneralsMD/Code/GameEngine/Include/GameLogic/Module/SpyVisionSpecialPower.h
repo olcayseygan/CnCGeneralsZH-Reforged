@@ -49,9 +49,9 @@ public:
 
 	static void buildFieldParse( MultiIniFieldParse& p );
 
-	UnsignedInt m_baseDurationInFrames;		///< duration of the demoralization (in frames)
-	UnsignedInt m_bonusDurationPerCapturedInFrames;	///< additional duration added for each prisoner we have
-	UnsignedInt m_maxDurationInFrames;		///< no matter how many prisoners we have, this is max
+	DurationFrames m_baseDurationInFrames;		///< duration of the demoralization (in frames)
+	DurationFrames m_bonusDurationPerCapturedInFrames;	///< additional duration added for each prisoner we have
+	DurationFrames m_maxDurationInFrames;		///< no matter how many prisoners we have, this is max
 
 };
 

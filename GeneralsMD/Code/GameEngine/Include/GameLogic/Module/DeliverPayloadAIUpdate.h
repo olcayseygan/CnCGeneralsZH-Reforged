@@ -198,10 +198,10 @@ enum
 class DeliverPayloadAIUpdateModuleData : public AIUpdateModuleData
 {
 public:
-	UnsignedInt		m_doorDelay;
+	DurationFrames		m_doorDelay;
 	Real					m_maxDistanceToTarget;				///< How far away from target I can unload, plus how far after target I need to turn around at
 	Int						m_maxNumberAttempts;					///< How many times I can re-approach
-	UnsignedInt		m_dropDelay;									///< How long to wait after entering Deliver state (to allow for doors opening)
+	DurationFrames		m_dropDelay;									///< How long to wait after entering Deliver state (to allow for doors opening)
 	Coord3D				m_dropOffset;									///< where to disgorge the guys, relative to me
 	Coord3D				m_dropVariance;								///< variance in dropping position among guys that I am dropping
 	AsciiString		m_putInContainerName;
@@ -210,10 +210,10 @@ public:
 
 	DeliverPayloadAIUpdateModuleData()
 	{
-		m_doorDelay = 0;
+		m_doorDelay.setRaw( 0 );
 		m_maxDistanceToTarget = 0.0f;
 		m_maxNumberAttempts = 0;
-		m_dropDelay = 0;
+		m_dropDelay.setRaw( 0 );
 		m_dropOffset.zero();
 		m_dropVariance.zero();
 		m_deliveryDecalRadius = 0;
@@ -235,11 +235,11 @@ public:
 			//DO NOT ADD DATA HERE UNLESS YOU ARE SUPPORTING SCRIPTED TEAM REINFORCEMENT DELIVERY
 			//THESE DATA VALUES ARE SPECIFIED ONLY BY FACTIONUNIT.INI
 			//***********************************************************************************
-			{ "DoorDelay",								INI::parseDurationUnsignedInt,	NULL, offsetof( DeliverPayloadAIUpdateModuleData, m_doorDelay ) },
+			{ "DoorDelay",								SPEED_FIELD( DeliverPayloadAIUpdateModuleData, m_doorDelay ) },
 			{ "PutInContainer",						INI::parseAsciiString,					NULL, offsetof( DeliverPayloadAIUpdateModuleData, m_putInContainerName ) },
 			{ "DeliveryDistance",					INI::parseReal,									NULL, offsetof( DeliverPayloadAIUpdateModuleData, m_maxDistanceToTarget ) },
 			{ "MaxAttempts",							INI::parseInt,									NULL, offsetof( DeliverPayloadAIUpdateModuleData, m_maxNumberAttempts ) },
-			{ "DropDelay",								INI::parseDurationUnsignedInt,	NULL, offsetof( DeliverPayloadAIUpdateModuleData, m_dropDelay ) },
+			{ "DropDelay",								SPEED_FIELD( DeliverPayloadAIUpdateModuleData, m_dropDelay ) },
 			{ "DropOffset",								INI::parseCoord3D,							NULL, offsetof( DeliverPayloadAIUpdateModuleData, m_dropOffset ) },
 			{ "DropVariance",							INI::parseCoord3D,							NULL, offsetof( DeliverPayloadAIUpdateModuleData, m_dropVariance ) },
 			{ "DeliveryDecal",						RadiusDecalTemplate::parseRadiusDecalTemplate,	NULL, offsetof( DeliverPayloadAIUpdateModuleData, m_deliveryDecalTemplate ) },
@@ -269,7 +269,7 @@ public:
 	Int										m_maxAttempts;
 	Coord3D								m_dropOffset;
 	Coord3D								m_dropVariance;
-	UnsignedInt						m_dropDelay;
+	DurationFrames						m_dropDelay;
 	Bool									m_fireWeapon;
 	Bool									m_selfDestructObject;
 	Int										m_visibleNumBones;						///< The number of visible bones to process.
@@ -279,7 +279,7 @@ public:
 	Int										m_visibleItemsDroppedPerInterval;
 	Bool									m_inheritTransportVelocity;
 	Bool									m_isParachuteDirectly;		///< Instead of parachuting to below the point of exit, go ahead and bunch up on the target
-	Real									m_exitPitchRate;
+	AngularVelocityPerFrame									m_exitPitchRate;
 	const FXList					*m_strafeFX;
 	Real									m_strafeLength;
 	const WeaponTemplate	*m_visiblePayloadWeaponTemplate;
@@ -293,7 +293,7 @@ public:
 		m_maxAttempts = 1;
 		m_dropOffset.zero();
 		m_dropVariance.zero();
-		m_dropDelay = 0;
+		m_dropDelay.setRaw( 0 );
 		m_fireWeapon = false;
 		m_visibleNumBones = 0;
 		m_diveStartDistance = 0.0f;
@@ -302,7 +302,7 @@ public:
 		m_visibleItemsDroppedPerInterval = 0;
 		m_inheritTransportVelocity = false;
 		m_isParachuteDirectly = FALSE;
-		m_exitPitchRate = 0.0f;
+		m_exitPitchRate.setRaw( 0.0f );
 		m_strafeFX = NULL;
 		m_strafeLength = 0.0f;
 		m_visiblePayloadWeaponTemplate = NULL;

@@ -49,7 +49,7 @@
 PowerPlantUpdateModuleData::PowerPlantUpdateModuleData( void )
 {
 
-	m_rodsExtendTime = 0;
+	m_rodsExtendTime.setRaw( 0 );
 
 }  // end PowerPlantUpdateModuleData
 

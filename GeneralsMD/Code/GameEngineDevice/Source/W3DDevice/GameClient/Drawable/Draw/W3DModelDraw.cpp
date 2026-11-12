@@ -1075,8 +1075,8 @@ W3DModelDrawModuleData::W3DModelDrawModuleData() :
 	m_quadMaxTilt(0.0f),
 	m_quadTiltGravity(400.0f),
 	m_quadTiltDrag(1.0f),
-	m_quadTiltTime(ConvertDurationFromMsecsToFrames(120.0f)),
-	m_quadYawTime(ConvertDurationFromMsecsToFrames(300.0f)),
+	m_quadTiltTime(DurationFramesReal::fromRaw(120.0f)),
+	m_quadYawTime(DurationFramesReal::fromRaw(300.0f)),
 	m_quadMaxDiveTilt(0.0f),
 #ifdef CACHE_ATTACH_BONE
 	m_attachToDrawableBoneOffsetValid(false),
@@ -1087,13 +1087,13 @@ W3DModelDrawModuleData::W3DModelDrawModuleData() :
 	const Real MAX_SHIFT = 3.0f;			
 	const Real INITIAL_RECOIL_RATE = 2.0f;	
 	const Real RECOIL_DAMPING = 0.4f;	
-	const Real SETTLE_RATE = 0.065f;		
+	const Real SETTLE_RATE_PER_SEC = 1.9499999f;		// ConvertRetailPerFrameRate( 0.065f ) a frame at the native speed
 
 	m_projectileBoneFeedbackEnabledSlots = 0;
-	m_initialRecoil = ConvertRetailPerFrameRate(INITIAL_RECOIL_RATE);
+	m_initialRecoil.setRaw( INITIAL_RECOIL_RATE * (Real)RETAIL_LOGICFRAMES_PER_SECOND );	// per second: 60, ConvertRetailPerFrameRate's 3.0f at the native speed
 	m_maxRecoil = MAX_SHIFT;
-	m_recoilDamping = ConvertRetailPerFrameFactor(RECOIL_DAMPING);
-	m_recoilSettle = ConvertRetailPerFrameRate(SETTLE_RATE);
+	m_recoilDamping.setRaw( RECOIL_DAMPING );
+	m_recoilSettle.setRaw( SETTLE_RATE_PER_SEC );
 
 
   m_receivesDynamicLights = TRUE;
@@ -1267,10 +1267,10 @@ void W3DModelDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "InitialRecoilSpeed",	INI::parseVelocityReal, NULL, offsetof(W3DModelDrawModuleData, m_initialRecoil) },
+		{ "InitialRecoilSpeed",	SPEED_FIELD( W3DModelDrawModuleData, m_initialRecoil ) },
 		{ "MaxRecoilDistance",	INI::parseReal, NULL, offsetof(W3DModelDrawModuleData, m_maxRecoil) },
-		{ "RecoilDamping",	INI::parseRetailPerFrameFactorReal, NULL, offsetof(W3DModelDrawModuleData, m_recoilDamping) },
-		{ "RecoilSettleSpeed",	INI::parseVelocityReal, NULL, offsetof(W3DModelDrawModuleData, m_recoilSettle) },
+		{ "RecoilDamping",	SPEED_FIELD( W3DModelDrawModuleData, m_recoilDamping ) },
+		{ "RecoilSettleSpeed",	SPEED_FIELD( W3DModelDrawModuleData, m_recoilSettle ) },
 		{ "OkToChangeModelColor",	INI::parseBool, NULL, offsetof(W3DModelDrawModuleData, m_okToChangeModelColor) },
 		{ "AnimationsRequirePower",	INI::parseBool, NULL, offsetof(W3DModelDrawModuleData, m_animationsRequirePower) },
 		{ "StabilizedTurretPitch",	INI::parseBool, NULL, offsetof(W3DModelDrawModuleData, m_stabilizedTurretPitch) },
@@ -1280,8 +1280,8 @@ void W3DModelDrawModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "QuadMaxTilt",	INI::parseAngleReal, NULL, offsetof(W3DModelDrawModuleData, m_quadMaxTilt) },
 		{ "QuadTiltGravity",	INI::parseReal, NULL, offsetof(W3DModelDrawModuleData, m_quadTiltGravity) },
 		{ "QuadTiltDrag",	INI::parseReal, NULL, offsetof(W3DModelDrawModuleData, m_quadTiltDrag) },
-		{ "QuadTiltTime",	INI::parseDurationReal, NULL, offsetof(W3DModelDrawModuleData, m_quadTiltTime) },
-		{ "QuadYawTime",	INI::parseDurationReal, NULL, offsetof(W3DModelDrawModuleData, m_quadYawTime) },
+		{ "QuadTiltTime",	SPEED_FIELD( W3DModelDrawModuleData, m_quadTiltTime ) },
+		{ "QuadYawTime",	SPEED_FIELD( W3DModelDrawModuleData, m_quadYawTime ) },
 		{ "QuadMaxDiveTilt",	INI::parseAngleReal, NULL, offsetof(W3DModelDrawModuleData, m_quadMaxDiveTilt) },
 		{ "ParticlesAttachedToAnimatedBones",	INI::parseBool, NULL, offsetof(W3DModelDrawModuleData, m_particlesAttachedToAnimatedBones) },
 		{ "MinLODRequired",		INI::parseStaticGameLODLevel,	NULL,	offsetof(W3DModelDrawModuleData, m_minLODRequired) },

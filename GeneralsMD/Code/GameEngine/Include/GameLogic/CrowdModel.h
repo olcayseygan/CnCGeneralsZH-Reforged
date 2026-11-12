@@ -61,8 +61,6 @@ enum
 	/// samples are one cell apart until the route is longer than this, then they stretch
 	CROWD_MAX_SAMPLES			= 160,
 
-	/// a lane taken to get round somebody is held this long, so it cannot flap side to side
-	CROWD_HOLD_FRAMES			= 3 * LOGICFRAMES_PER_GAME_SECOND / 2,
 
 	/* How many samples either side of a bridge lose their band as well, so the approach funnels in.
 		 Six cells and not four: a unit that is still a lane wide of the centre when the band shuts is
@@ -82,6 +80,8 @@ enum
 		 keeps its shape from the field to the door. */
 	CROWD_MAX_LANES				= 5
 };
+/// a lane taken to get round somebody is held this long, so it cannot flap side to side
+#define CROWD_HOLD_FRAMES ((Int)(3 * LOGICFRAMES_PER_GAME_SECOND / 2))
 
 /** How many lanes to lay across `span` of drivable ground, `spacing` apart: what the ground holds,
 		capped at CROWD_MAX_LANES, and never more lanes than there are bodies to put in them

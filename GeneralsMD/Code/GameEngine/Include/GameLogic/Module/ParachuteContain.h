@@ -39,8 +39,8 @@
 class ParachuteContainModuleData : public OpenContainModuleData
 {
 public:
-	Real m_pitchRateMax;
-	Real m_rollRateMax;
+	AngularVelocityPerFrame m_pitchRateMax;
+	AngularVelocityPerFrame m_rollRateMax;
 	Real m_lowAltitudeDamping;
 	Real m_paraOpenDist;		///< deploy the parachute when we have traveled this far
 	Real m_freeFallDamagePercent;

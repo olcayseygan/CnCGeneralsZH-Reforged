@@ -85,7 +85,7 @@ PropagandaTowerBehaviorModuleData::PropagandaTowerBehaviorModuleData( void )
 {
 
 	m_scanRadius = 1.0f;
-	m_scanDelayInFrames = ConvertRetailFrames(100u);
+	m_scanDelayInFrames.setRaw( 3333 );	// msec: ConvertRetailFrames(100u) at the native speed
 	m_autoHealPercentPerSecond = 0.01f;
 	m_upgradedAutoHealPercentPerSecond = 0.02f;
 	m_pulseFX = NULL;
@@ -104,7 +104,7 @@ PropagandaTowerBehaviorModuleData::PropagandaTowerBehaviorModuleData( void )
 	static const FieldParse dataFieldParse[] = 
 	{
 		{ "Radius",									INI::parseReal,									NULL,	offsetof( PropagandaTowerBehaviorModuleData, m_scanRadius ) },
-		{ "DelayBetweenUpdates",		INI::parseDurationUnsignedInt,	NULL,	offsetof( PropagandaTowerBehaviorModuleData, m_scanDelayInFrames ) },
+		{ "DelayBetweenUpdates",		SPEED_FIELD( PropagandaTowerBehaviorModuleData, m_scanDelayInFrames ) },
 		{ "HealPercentEachSecond",	INI::parsePercentToReal,				NULL,	offsetof( PropagandaTowerBehaviorModuleData, m_autoHealPercentPerSecond ) },
 		{ "UpgradedHealPercentEachSecond",	INI::parsePercentToReal,NULL,	offsetof( PropagandaTowerBehaviorModuleData, m_upgradedAutoHealPercentPerSecond ) },
 		{ "PulseFX",								INI::parseFXList,								NULL,	offsetof( PropagandaTowerBehaviorModuleData, m_pulseFX ) },

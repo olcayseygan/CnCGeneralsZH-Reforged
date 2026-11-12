@@ -51,8 +51,8 @@ enum { UNLOAD_ALL = -1 };
 RailedTransportDockUpdateModuleData::RailedTransportDockUpdateModuleData( void )
 {
 
-	m_pullInsideDurationInFrames = 0;
-	m_pushOutsideDurationInFrames = 0;
+	m_pullInsideDurationInFrames.setRaw( 0 );
+	m_pushOutsideDurationInFrames.setRaw( 0 );
 	m_toleranceDistance = 50.0f;
 }  // end RailedTransportDockUpdateModuleData
 
@@ -65,8 +65,8 @@ RailedTransportDockUpdateModuleData::RailedTransportDockUpdateModuleData( void )
 	static const FieldParse dataFieldParse[] = 
 	{
 
-		{ "PullInsideDuration", INI::parseDurationUnsignedInt, NULL, offsetof( RailedTransportDockUpdateModuleData, m_pullInsideDurationInFrames ) },	
-		{ "PushOutsideDuration",INI::parseDurationUnsignedInt, NULL, offsetof( RailedTransportDockUpdateModuleData, m_pushOutsideDurationInFrames ) },
+		{ "PullInsideDuration", SPEED_FIELD( RailedTransportDockUpdateModuleData, m_pullInsideDurationInFrames ) },	
+		{ "PushOutsideDuration",SPEED_FIELD( RailedTransportDockUpdateModuleData, m_pushOutsideDurationInFrames ) },
 		{ "ToleranceDistance",  INI::parseReal,								 NULL, offsetof( RailedTransportDockUpdateModuleData, m_toleranceDistance ) },
 		{ 0, 0, 0, 0 }
 

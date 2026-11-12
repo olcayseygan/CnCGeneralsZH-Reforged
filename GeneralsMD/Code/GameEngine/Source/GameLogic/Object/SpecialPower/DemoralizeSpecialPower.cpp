@@ -67,9 +67,9 @@ void DemoralizeSpecialPowerModuleData::buildFieldParse( MultiIniFieldParse &p )
 		{ "BaseRange",									INI::parseReal,			NULL,			offsetof( DemoralizeSpecialPowerModuleData, m_baseRange ) },
 		{ "BonusRangePerCaptured",			INI::parseReal,			NULL,			offsetof( DemoralizeSpecialPowerModuleData, m_bonusRangePerCaptured ) },
 		{ "MaxRange",										INI::parseReal,			NULL,			offsetof( DemoralizeSpecialPowerModuleData, m_maxRange ) },
-		{ "BaseDuration",								INI::parseDurationUnsignedInt,	NULL,   offsetof( DemoralizeSpecialPowerModuleData, m_baseDurationInFrames ) },
-		{ "BonusDurationPerCaptured",		INI::parseDurationUnsignedInt,	NULL,   offsetof( DemoralizeSpecialPowerModuleData, m_bonusDurationPerCapturedInFrames ) },
-		{ "MaxDuration",								INI::parseDurationUnsignedInt,	NULL,   offsetof( DemoralizeSpecialPowerModuleData, m_maxDurationInFrames ) },
+		{ "BaseDuration",								SPEED_FIELD( DemoralizeSpecialPowerModuleData, m_baseDurationInFrames ) },
+		{ "BonusDurationPerCaptured",		SPEED_FIELD( DemoralizeSpecialPowerModuleData, m_bonusDurationPerCapturedInFrames ) },
+		{ "MaxDuration",								SPEED_FIELD( DemoralizeSpecialPowerModuleData, m_maxDurationInFrames ) },
 		{ "FXList",											INI::parseFXList,								NULL,		offsetof( DemoralizeSpecialPowerModuleData, m_fxList ) },
 		{ 0, 0, 0, 0 }
 	};

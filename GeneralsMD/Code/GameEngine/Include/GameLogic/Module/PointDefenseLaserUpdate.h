@@ -50,9 +50,9 @@ public:
 	WeaponTemplate	*m_weaponTemplate;
 	KindOfMaskType	m_primaryTargetKindOf;
 	KindOfMaskType  m_secondaryTargetKindOf;
-	UnsignedInt			m_scanFrames;
+	DurationFrames			m_scanFrames;
 	Real						m_scanRange;
-	Real						m_velocityFactor;
+	RetailFrameRatio						m_velocityFactor;
 	AsciiString			m_requiredUpgrade;	///< idle until the owner has it
 
 	PointDefenseLaserUpdateModuleData();

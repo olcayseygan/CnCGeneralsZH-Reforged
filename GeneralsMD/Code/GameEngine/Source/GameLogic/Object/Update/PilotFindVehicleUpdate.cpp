@@ -55,7 +55,7 @@
 //-------------------------------------------------------------------------------------------------
 PilotFindVehicleUpdateModuleData::PilotFindVehicleUpdateModuleData()
 {
-	m_scanFrames				= 0;
+	m_scanFrames.setRaw( 0 );
 	m_scanRange					= 0.0f;
 	m_minHealth					= 0.5f;
 }
@@ -67,7 +67,7 @@ PilotFindVehicleUpdateModuleData::PilotFindVehicleUpdateModuleData()
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "ScanRate",							INI::parseDurationUnsignedInt,	NULL, offsetof( PilotFindVehicleUpdateModuleData, m_scanFrames ) },
+		{ "ScanRate",							SPEED_FIELD( PilotFindVehicleUpdateModuleData, m_scanFrames ) },
 		{ "ScanRange",						INI::parseReal,									NULL, offsetof( PilotFindVehicleUpdateModuleData, m_scanRange ) },
 		{ "MinHealth",						INI::parseReal,									NULL, offsetof( PilotFindVehicleUpdateModuleData, m_minHealth ) },
 		{ 0, 0, 0, 0 }

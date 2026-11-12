@@ -120,8 +120,8 @@ class EvaCheckInfo : public MemoryPoolObject
 
 public:
 	EvaMessage									m_message;
-	UnsignedInt									m_framesBetweenChecks;
-	UnsignedInt									m_framesToExpire;
+	DurationFrames									m_framesBetweenChecks;
+	DurationFrames									m_framesToExpire;
 	UnsignedInt									m_priority;	// higher priority is more important, and will be played in preference to lower preference
 	std::vector<EvaSideSounds>	m_evaSideSounds;
 	

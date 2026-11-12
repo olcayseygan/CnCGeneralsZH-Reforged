@@ -227,9 +227,10 @@ inline void particleGpuSystemEntryBuild( const ParticleSystemInfo &system, Parti
 {
 	memset( entry, 0, sizeof( *entry ) );
 
-	entry->m_drift[ 0 ] = system.m_driftVelocity.x;
-	entry->m_drift[ 1 ] = system.m_driftVelocity.y;
-	entry->m_drift[ 2 ] = system.m_driftVelocity.z;
+	const Coord3D drift = system.m_driftVelocity;
+	entry->m_drift[ 0 ] = drift.x;
+	entry->m_drift[ 1 ] = drift.y;
+	entry->m_drift[ 2 ] = drift.z;
 	entry->m_gravity = system.m_gravity;
 	entry->m_color[ 0 ] = system.m_colorKey[ 0 ].color.red;
 	entry->m_color[ 1 ] = system.m_colorKey[ 0 ].color.green;

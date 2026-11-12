@@ -64,17 +64,17 @@ WaveGuideUpdateModuleData::WaveGuideUpdateModuleData( void )
 	m_bridgeParticle = NULL;
 	m_bridgeParticleAngleFudge = 0.0f;
 	m_randomSplashSoundFrequency = 0;
-	m_waveDelay = 0.0f;
+	m_waveDelay.setRaw( 0.0f );
 	//
 	m_ySize = 0.0f;
 	m_linearWaveSpacing = 0.0f;
 	m_waveBendMagnitude = 0.0f;
-	m_waterVelocity = 0.0f;
+	m_waterVelocity.setRaw( 0.0f );
 	m_preferredHeight = 0.0f;
 	m_shorelineEffectDistance = 0.0f;
 	m_damageRadius = 0.0f;
 	m_damageAmount = 0.0f;
-	m_toppleForce = 0.0f;
+	m_toppleForce.setRaw( 0.0f );
 
 }  // end WaveGuideUpdateModuleData
 
@@ -88,16 +88,16 @@ WaveGuideUpdateModuleData::WaveGuideUpdateModuleData( void )
 	static const FieldParse dataFieldParse[] = 
 	{
 
-		{ "WaveDelay", INI::parseDurationReal, NULL, offsetof( WaveGuideUpdateModuleData, m_waveDelay ) },	
+		{ "WaveDelay", SPEED_FIELD( WaveGuideUpdateModuleData, m_waveDelay ) },	
 		{ "YSize", INI::parseReal, NULL, offsetof( WaveGuideUpdateModuleData, m_ySize ) },
 		{ "LinearWaveSpacing", INI::parseReal, NULL, offsetof( WaveGuideUpdateModuleData, m_linearWaveSpacing ) },
 		{ "WaveBendMagnitude", INI::parseReal, NULL, offsetof( WaveGuideUpdateModuleData, m_waveBendMagnitude ) },
-		{ "WaterVelocity", INI::parseVelocityReal, NULL, offsetof( WaveGuideUpdateModuleData, m_waterVelocity ) },
+		{ "WaterVelocity", SPEED_FIELD( WaveGuideUpdateModuleData, m_waterVelocity ) },
 		{ "PreferredHeight", INI::parseReal, NULL, offsetof( WaveGuideUpdateModuleData, m_preferredHeight ) },
 		{ "ShorelineEffectDistance", INI::parseReal, NULL, offsetof( WaveGuideUpdateModuleData, m_shorelineEffectDistance ) },
 		{ "DamageRadius", INI::parseReal, NULL, offsetof( WaveGuideUpdateModuleData, m_damageRadius ) },
 		{ "DamageAmount", INI::parseReal, NULL, offsetof( WaveGuideUpdateModuleData, m_damageAmount ) },
-		{ "ToppleForce", INI::parseRetailPerFrameReal, NULL, offsetof( WaveGuideUpdateModuleData, m_toppleForce ) },
+		{ "ToppleForce", SPEED_FIELD( WaveGuideUpdateModuleData, m_toppleForce ) },
 		{ "RandomSplashSound", INI::parseAudioEventRTS, NULL, offsetof( WaveGuideUpdateModuleData, m_randomSplashSound ) },
 		{ "RandomSplashSoundFrequency", INI::parseInt, NULL, offsetof( WaveGuideUpdateModuleData, m_randomSplashSoundFrequency ) },
 		{ "BridgeParticle",	INI::parseParticleSystemTemplate, NULL, offsetof( WaveGuideUpdateModuleData, m_bridgeParticle ) },

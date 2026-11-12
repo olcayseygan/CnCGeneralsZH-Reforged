@@ -65,8 +65,8 @@ public:
 	Real m_scrollRate;
 	Bool m_tile;
   UnsignedInt m_numBeams;
-  UnsignedInt m_maxIntensityFrames;
-  UnsignedInt m_fadeFrames;
+  DurationFrames m_maxIntensityFrames;
+  DurationFrames m_fadeFrames;
 	AsciiString m_textureName;
 	UnsignedInt m_segments;
 	Real m_arcHeight;

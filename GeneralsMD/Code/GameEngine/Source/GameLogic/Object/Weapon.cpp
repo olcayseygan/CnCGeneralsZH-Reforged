@@ -232,7 +232,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "PrimaryDamageRadius",			INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_primaryDamageRadius) },		
 	{ "SecondaryDamage",					INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_secondaryDamage) },		
 	{ "SecondaryDamageRadius",		INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_secondaryDamageRadius) },		
-	{ "ShockWaveAmount",					INI::parseRetailPerFrameReal,									NULL,							offsetof(WeaponTemplate, m_shockWaveAmount) },		
+	{ "ShockWaveAmount",					SPEED_FIELD( WeaponTemplate, m_shockWaveAmount ) },		
 	{ "ShockWaveRadius",					INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_shockWaveRadius) },		
 	{ "ShockWaveTaperOff",				INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_shockWaveTaperOff) },		
 	{ "AttackRange",							INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_attackRange) },		
@@ -249,10 +249,10 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "DamageType",								DamageTypeFlags::parseSingleBitFromINI,	NULL,							offsetof(WeaponTemplate, m_damageType) },		
 	{ "DamageStatusType",					ObjectStatusMaskType::parseSingleBitFromINI,	NULL,				offsetof(WeaponTemplate, m_damageStatusType) },		
 	{ "DeathType",								INI::parseIndexList,										TheDeathNames,		offsetof(WeaponTemplate, m_deathType) },		
-	{ "WeaponSpeed",							INI::parseVelocityReal,									NULL,							offsetof(WeaponTemplate, m_weaponSpeed) },		
-	{ "MinWeaponSpeed",						INI::parseVelocityReal,									NULL,							offsetof(WeaponTemplate, m_minWeaponSpeed) },		
+	{ "WeaponSpeed",							SPEED_FIELD( WeaponTemplate, m_weaponSpeed ) },		
+	{ "MinWeaponSpeed",						SPEED_FIELD( WeaponTemplate, m_minWeaponSpeed ) },		
 	{ "ScaleWeaponSpeed",					INI::parseBool,													NULL,							offsetof(WeaponTemplate, m_isScaleWeaponSpeed) },
-	{ "BallisticFlightTime",			INI::parseDurationUnsignedInt,					NULL,							offsetof(WeaponTemplate, m_ballisticFlightFrames) },
+	{ "BallisticFlightTime",			SPEED_FIELD( WeaponTemplate, m_ballisticFlightFrames ) },
 	{ "BallisticPeakHeight",			INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_ballisticPeakHeight) },
 	{ "WeaponRecoil",							INI::parseAngleReal,										NULL,							offsetof(WeaponTemplate, m_weaponRecoil) },		
 	{ "MinTargetPitch",						INI::parseAngleReal,										NULL,							offsetof(WeaponTemplate, m_minTargetPitch) },		
@@ -260,7 +260,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "RadiusDamageAngle",				INI::parseAngleReal,										NULL,							offsetof(WeaponTemplate, m_radiusDamageAngle) },		
 	{ "ProjectileObject",					INI::parseAsciiString,									NULL,							offsetof(WeaponTemplate, m_projectileName) },		
 	{ "FireSound",								INI::parseAudioEventRTS,								NULL,							offsetof(WeaponTemplate, m_fireSound) },		
-	{ "FireSoundLoopTime",				INI::parseDurationUnsignedInt,					NULL,							offsetof(WeaponTemplate, m_fireSoundLoopTime) },		
+	{ "FireSoundLoopTime",				SPEED_FIELD( WeaponTemplate, m_fireSoundLoopTime ) },		
 	{ "FireFX",											parseAllVetLevelsFXList,							NULL,							offsetof(WeaponTemplate, m_fireFXs) },		
 	{ "ProjectileDetonationFX",			parseAllVetLevelsFXList,							NULL,							offsetof(WeaponTemplate, m_projectileDetonateFXs) },		
 	{ "FireOCL",										parseAllVetLevelsAsciiString,					NULL,							offsetof(WeaponTemplate, m_fireOCLNames) },		
@@ -274,8 +274,8 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "ClipSize",									INI::parseInt,													NULL,							offsetof(WeaponTemplate, m_clipSize) },		
 	{ "ContinuousFireOne",				INI::parseInt,													NULL,							offsetof(WeaponTemplate, m_continuousFireOneShotsNeeded) },		
 	{ "ContinuousFireTwo",				INI::parseInt,													NULL,							offsetof(WeaponTemplate, m_continuousFireTwoShotsNeeded) },		
-	{ "ContinuousFireCoast",			INI::parseDurationUnsignedInt,					NULL,							offsetof(WeaponTemplate, m_continuousFireCoastFrames) },		
- 	{ "AutoReloadWhenIdle",				INI::parseDurationUnsignedInt,					NULL,							offsetof(WeaponTemplate, m_autoReloadWhenIdleFrames) },		
+	{ "ContinuousFireCoast",			SPEED_FIELD( WeaponTemplate, m_continuousFireCoastFrames ) },		
+ 	{ "AutoReloadWhenIdle",				SPEED_FIELD( WeaponTemplate, m_autoReloadWhenIdleFrames ) },		
 	{ "ClipReloadTime",						WeaponTemplate::parseRetailDuration,		NULL,							offsetof(WeaponTemplate, m_clipReloadTime) },
 	{ "DelayBetweenShots",				WeaponTemplate::parseShotDelay,					NULL,							0 },
 	{ "ShotsPerBarrel",						INI::parseInt,													NULL,							offsetof(WeaponTemplate, m_shotsPerBarrel) },
@@ -295,7 +295,7 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "LaserName",								parseLaserName,													NULL,						offsetof(WeaponTemplate, m_laserName) },
 	{ "LaserBoneName",						INI::parseAsciiString,									NULL,							offsetof(WeaponTemplate, m_laserBoneName) },
 	{ "WeaponBonus",							WeaponTemplate::parseWeaponBonusSet,		NULL,							0 },		
-	{ "HistoricBonusTime",				INI::parseDurationUnsignedInt,					NULL,							offsetof(WeaponTemplate, m_historicBonusTime) },		
+	{ "HistoricBonusTime",				SPEED_FIELD( WeaponTemplate, m_historicBonusTime ) },		
 	{ "HistoricBonusRadius",			INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_historicBonusRadius) },		
 	{ "HistoricBonusCount",				INI::parseInt,													NULL,							offsetof(WeaponTemplate, m_historicBonusCount) },		
 	{ "HistoricBonusWeapon",			INI::parseWeaponTemplate,								NULL,							offsetof(WeaponTemplate, m_historicBonusWeapon) },		
@@ -305,10 +305,10 @@ const FieldParse WeaponTemplate::TheWeaponTemplateFieldParseTable[] =
 	{ "ShowsAmmoPips",						INI::parseBool,													NULL,							offsetof(WeaponTemplate, m_isShowsAmmoPips) },
 	{ "AllowAttackGarrisonedBldgs", INI::parseBool,												NULL,							offsetof(WeaponTemplate, m_allowAttackGarrisonedBldgs) },
 	{ "PlayFXWhenStealthed",			INI::parseBool,													NULL,							offsetof(WeaponTemplate, m_playFXWhenStealthed) },
-	{ "PreAttackDelay",						INI::parseDurationUnsignedInt,					NULL,							offsetof( WeaponTemplate, m_preAttackDelay ) },
+	{ "PreAttackDelay",						SPEED_FIELD( WeaponTemplate, m_preAttackDelay ) },
 	{ "PreAttackType",						INI::parseIndexList,										TheWeaponPrefireNames, offsetof(WeaponTemplate, m_prefireType) },		
 	{ "ContinueAttackRange",			INI::parseReal,													NULL,							offsetof(WeaponTemplate, m_continueAttackRange) },
-	{ "SuspendFXDelay",						INI::parseDurationUnsignedInt,					NULL,							offsetof(WeaponTemplate, m_suspendFXDelay) },		
+	{ "SuspendFXDelay",						SPEED_FIELD( WeaponTemplate, m_suspendFXDelay ) },		
 	{ "MissileCallsOnDie",			INI::parseBool,													NULL,							offsetof(WeaponTemplate, m_dieOnDetonate) },
 	{ NULL,												NULL,																		NULL,							0 }  // keep this last
 
@@ -337,15 +337,15 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(NULL)
 	m_radarBlindHitUpgradeChance		= 1.0f;
 	m_seeksMostValuable							= FALSE;
 	m_scatterTargetScalar						= 0.0f;
-	m_shockWaveAmount								= 0.0f;
+	m_shockWaveAmount.setRaw( 0.0f );
 	m_shockWaveRadius								= 0.0f;
 	m_shockWaveTaperOff							= 0.0f;
 	m_damageType										= DAMAGE_EXPLOSION;
 	m_deathType											= DEATH_NORMAL;
-	m_weaponSpeed										= 999999.0f;	// effectively instant
-	m_minWeaponSpeed								= 999999.0f;	// effectively instant
+	m_weaponSpeed.setRaw( 19999980.0f );	// effectively instant
+	m_minWeaponSpeed.setRaw( 19999980.0f );	// effectively instant: dist/sec, 999999.0f a frame at the native speed
 	m_isScaleWeaponSpeed						= FALSE;
-	m_ballisticFlightFrames					= 0;
+	m_ballisticFlightFrames.setRaw( 0 );
 	m_ballisticPeakHeight						= 0.0f;
 	m_weaponRecoil									= 0.0f;		// no recoil
 	m_minTargetPitch								= -PI;
@@ -372,19 +372,19 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(NULL)
 	m_clipSize											= 0;
 	m_continuousFireOneShotsNeeded	= INT_MAX;
 	m_continuousFireTwoShotsNeeded	= INT_MAX;
-	m_continuousFireCoastFrames			= 0;
- 	m_autoReloadWhenIdleFrames			= 0;
+	m_continuousFireCoastFrames.setRaw( 0 );
+ 	m_autoReloadWhenIdleFrames.setRaw( 0 );
 	m_clipReloadTime								= 0;
 	m_minDelayBetweenShots					= 0;
 	m_maxDelayBetweenShots					= 0;
-	m_fireSoundLoopTime							= 0;
+	m_fireSoundLoopTime.setRaw( 0 );
 	m_extraBonus										= NULL;
 	m_shotsPerBarrel								= 1;
 	m_antiMask											= WEAPON_ANTI_GROUND;	// but not air or projectile.
 	m_projectileStreamName.clear();
 	m_laserName.clear();
 	m_laserBoneName.clear();
-	m_historicBonusTime							= 0;
+	m_historicBonusTime.setRaw( 0 );
 	m_historicBonusCount						= 0;
 	m_historicBonusRadius						= 0;
 	m_historicBonusWeapon						= NULL;
@@ -393,11 +393,11 @@ WeaponTemplate::WeaponTemplate() : m_nextTemplate(NULL)
 	m_isShowsAmmoPips								= FALSE;
 	m_allowAttackGarrisonedBldgs		= FALSE;
 	m_playFXWhenStealthed						= FALSE;
-	m_preAttackDelay								= 0;
+	m_preAttackDelay.setRaw( 0 );
 	m_continueAttackRange						= 0.0f;
 	m_infantryInaccuracyDist				= 0.0f;
 	m_damageStatusType							= OBJECT_STATUS_NONE;
-	m_suspendFXDelay								= 0;
+	m_suspendFXDelay.setRaw( 0 );
 	m_dieOnDetonate						= FALSE;
 	m_historicDamageTriggerId	= 0;
 }

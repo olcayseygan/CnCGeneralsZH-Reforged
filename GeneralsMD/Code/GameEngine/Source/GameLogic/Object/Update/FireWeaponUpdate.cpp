@@ -47,8 +47,8 @@
 FireWeaponUpdateModuleData::FireWeaponUpdateModuleData()
 {
 	m_weaponTemplate = NULL;
-  m_initialDelayFrames = 0;
-	m_exclusiveWeaponDelay = 0;
+  m_initialDelayFrames.setRaw( 0 );
+	m_exclusiveWeaponDelay.setRaw( 0 );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -59,8 +59,8 @@ FireWeaponUpdateModuleData::FireWeaponUpdateModuleData()
 	static const FieldParse dataFieldParse[] = 
 	{
 		{ "Weapon",								INI::parseWeaponTemplate,	      NULL, offsetof( FireWeaponUpdateModuleData, m_weaponTemplate ) },
-		{ "InitialDelay",					INI::parseDurationUnsignedInt,	NULL, offsetof( FireWeaponUpdateModuleData, m_initialDelayFrames ) },
-		{ "ExclusiveWeaponDelay",	INI::parseDurationUnsignedInt,	NULL, offsetof( FireWeaponUpdateModuleData, m_exclusiveWeaponDelay ) },
+		{ "InitialDelay",					SPEED_FIELD( FireWeaponUpdateModuleData, m_initialDelayFrames ) },
+		{ "ExclusiveWeaponDelay",	SPEED_FIELD( FireWeaponUpdateModuleData, m_exclusiveWeaponDelay ) },
 		{ 0, 0, 0, 0 }
 	};
   p.add(dataFieldParse);

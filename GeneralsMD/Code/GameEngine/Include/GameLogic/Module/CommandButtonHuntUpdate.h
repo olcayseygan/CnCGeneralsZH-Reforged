@@ -46,7 +46,7 @@ class WeaponTemplate;
 class CommandButtonHuntUpdateModuleData : public ModuleData
 {
 public:
-	UnsignedInt			m_scanFrames;
+	DurationFrames			m_scanFrames;
 	Real						m_scanRange;
 
 	CommandButtonHuntUpdateModuleData();

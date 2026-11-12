@@ -1593,7 +1593,7 @@ DozerAIUpdateModuleData::DozerAIUpdateModuleData( void )
 {
 
 	m_repairHealthPercentPerSecond = 0.0f;
-	m_boredTime = 0.0f;
+	m_boredTime.setRaw( 0.0f );
 	m_boredRange = 0.0f;
 
 }  // end DozerAIUpdateModuleData
@@ -1606,7 +1606,7 @@ void DozerAIUpdateModuleData::buildFieldParse( MultiIniFieldParse& p)
 	static const FieldParse dataFieldParse[] = 
 	{
 		{ "RepairHealthPercentPerSecond",	INI::parsePercentToReal,	NULL, offsetof( DozerAIUpdateModuleData, m_repairHealthPercentPerSecond ) },
-		{ "BoredTime",										INI::parseDurationReal,		NULL, offsetof( DozerAIUpdateModuleData, m_boredTime ) },
+		{ "BoredTime",										SPEED_FIELD( DozerAIUpdateModuleData, m_boredTime ) },
 		{ "BoredRange",										INI::parseReal,						NULL, offsetof( DozerAIUpdateModuleData, m_boredRange ) },
 		{ 0, 0, 0, 0 }
 	};

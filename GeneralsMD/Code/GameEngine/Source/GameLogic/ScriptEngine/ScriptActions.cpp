@@ -7190,7 +7190,7 @@ void ScriptActions::executeAction( ScriptAction *pAction )
 				// always did.  Wall pacing only, on the main thread after the tick.
 				if (TheGameLogic->isInSinglePlayerGame() && !TheGameLogic->isInReplayGame())
 				{
-					TheGameEngine->setFramesPerSecondLimit( GameEngine_missionFramesPerSecond( asked, GameEngine_matchFramesPerSecond( TheGlobalData->m_missionGameSpeedPercent ) ) );
+					TheGameEngine->setFramesPerSecondLimit( GameEngine_missionFramesPerSecond( asked, GameEngine_matchFramesPerSecond() ) );
 					return;
 				}
 				if (!TheGameLogic->isInShellGame())

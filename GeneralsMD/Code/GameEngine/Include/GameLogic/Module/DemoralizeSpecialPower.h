@@ -54,9 +54,9 @@ public:
 	Real m_baseRange;											///< base range for this special power
 	Real m_bonusRangePerCaptured;					///< additional range we get for each prisoner
 	Real m_maxRange;											///< no matter how many prisoners we have, this is max
-	UnsignedInt m_baseDurationInFrames;		///< duration of the demoralization (in frames)
-	UnsignedInt m_bonusDurationPerCapturedInFrames;	///< additional duration added for each prisoner we have
-	UnsignedInt m_maxDurationInFrames;		///< no matter how many prisoners we have, this is max
+	DurationFrames m_baseDurationInFrames;		///< duration of the demoralization (in frames)
+	DurationFrames m_bonusDurationPerCapturedInFrames;	///< additional duration added for each prisoner we have
+	DurationFrames m_maxDurationInFrames;		///< no matter how many prisoners we have, this is max
 	const FXList *m_fxList;								///< fx list to play
 
 };

@@ -64,8 +64,8 @@ struct BoneLocInfo
 struct BaseBoneListInfo
 {
 	BoneLocInfo locInfo;
-	GameClientRandomVariable gameClientDelay;
-	GameLogicRandomVariable gameLogicDelay;
+	SpeedScaledRandom< SPEED_DURATION, GameClientRandomVariable > gameClientDelay;	///< msec as the INI wrote them
+	SpeedScaledRandom< SPEED_DURATION, GameLogicRandomVariable > gameLogicDelay;
 	Bool onlyOnce;
 };
 

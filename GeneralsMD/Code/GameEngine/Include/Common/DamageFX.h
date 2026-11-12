@@ -109,7 +109,7 @@ private:
 		Real									m_amountForMajorFX;				///< if damage done is >= this, use major fx
 		ConstFXListPtr				m_majorDamageFXList;			///< fx to make 
 		ConstFXListPtr				m_minorDamageFXList;			///< fx to make 
-		UnsignedInt						m_damageFXThrottleTime;
+		DurationFrames				m_damageFXThrottleTime;
 
 		DFX()
 		{
@@ -121,7 +121,7 @@ private:
 			m_amountForMajorFX = 0.0f;
 			m_majorDamageFXList = NULL;
 			m_minorDamageFXList = NULL;
-			m_damageFXThrottleTime = 0;
+			m_damageFXThrottleTime.setRaw( 0 );
 		}
 	};
 

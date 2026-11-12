@@ -86,9 +86,9 @@ public:
 	{
 		MAX_SAMPLES = 360,				///< 30 minutes at the first rate; then every other sample goes and the rate halves
 		MAX_EVENTS = 512,
-		MAX_BUILDS = 200,					///< per player: every structure, and the first of each unit type
-		FIRST_INTERVAL = 5 * LOGICFRAMES_PER_GAME_SECOND
+		MAX_BUILDS = 200					///< per player: every structure, and the first of each unit type
 	};
+	#define MATCH_HISTORY_FIRST_INTERVAL ((Int)(5 * LOGICFRAMES_PER_GAME_SECOND))
 
 	MatchHistory( void );
 
@@ -113,7 +113,8 @@ private:
 	Int m_values[ MAX_SAMPLES ][ MAX_PLAYER_COUNT ][ MATCH_SERIES_COUNT ];
 	UnsignedInt m_sampleFrame[ MAX_SAMPLES ];
 	Int m_sampleCount;
-	UnsignedInt m_interval;
+	UnsignedInt m_intervalDoublings;	///< samples are MATCH_HISTORY_FIRST_INTERVAL frames apart, doubled this many times
+	UnsignedInt interval( void ) const { return (UnsignedInt)MATCH_HISTORY_FIRST_INTERVAL << m_intervalDoublings; }
 	Bool m_sampled[ MAX_PLAYER_COUNT ];
 	Int m_rank[ MAX_PLAYER_COUNT ];
 	std::vector< MatchEvent > m_events;

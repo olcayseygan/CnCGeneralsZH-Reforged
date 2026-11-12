@@ -67,8 +67,8 @@ FlightDeckBehaviorModuleData::FlightDeckBehaviorModuleData()
 	m_numCols = 0;
 	m_approachHeight = 0.0f;
 	m_landingDeckHeightOffset = 0.0f;
-	m_dockAnimationFrames = 0;
-	m_catapultFireFrames = 0;
+	m_dockAnimationFrames.setRaw( 0 );
+	m_catapultFireFrames.setRaw( 0 );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -115,15 +115,15 @@ void FlightDeckBehaviorModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "ApproachHeight",					INI::parseReal,										NULL, offsetof( FlightDeckBehaviorModuleData, m_approachHeight ) },
 		{ "LandingDeckHeightOffset",INI::parseReal,										NULL, offsetof( FlightDeckBehaviorModuleData, m_landingDeckHeightOffset ) },
 		{ "HealAmountPerSecond",		INI::parseReal,										NULL, offsetof( FlightDeckBehaviorModuleData, m_healAmount ) },
-		{ "ParkingCleanupPeriod",		INI::parseDurationUnsignedInt,		NULL, offsetof( FlightDeckBehaviorModuleData, m_cleanupFrames ) },
-		{ "HumanFollowPeriod",			INI::parseDurationUnsignedInt,		NULL, offsetof( FlightDeckBehaviorModuleData, m_humanFollowFrames ) },
+		{ "ParkingCleanupPeriod",		SPEED_FIELD( FlightDeckBehaviorModuleData, m_cleanupFrames ) },
+		{ "HumanFollowPeriod",			SPEED_FIELD( FlightDeckBehaviorModuleData, m_humanFollowFrames ) },
 		{ "PayloadTemplate",				INI::parseAsciiString,				  	NULL, offsetof( FlightDeckBehaviorModuleData, m_thingTemplateName ) },
-		{ "ReplacementDelay",				INI::parseDurationUnsignedInt, 		NULL, offsetof( FlightDeckBehaviorModuleData, m_replacementFrames ) },
-		{ "DockAnimationDelay",			INI::parseDurationUnsignedInt,		NULL, offsetof( FlightDeckBehaviorModuleData, m_dockAnimationFrames ) },
-		{ "LaunchWaveDelay",				INI::parseDurationUnsignedInt,		NULL, offsetof( FlightDeckBehaviorModuleData, m_launchWaveFrames ) },
-		{ "LaunchRampDelay",				INI::parseDurationUnsignedInt,		NULL, offsetof( FlightDeckBehaviorModuleData, m_launchRampFrames ) },
-		{ "LowerRampDelay",					INI::parseDurationUnsignedInt,		NULL, offsetof( FlightDeckBehaviorModuleData, m_lowerRampFrames ) },
-		{ "CatapultFireDelay",			INI::parseDurationUnsignedInt,		NULL, offsetof( FlightDeckBehaviorModuleData, m_catapultFireFrames ) },
+		{ "ReplacementDelay",				SPEED_FIELD( FlightDeckBehaviorModuleData, m_replacementFrames ) },
+		{ "DockAnimationDelay",			SPEED_FIELD( FlightDeckBehaviorModuleData, m_dockAnimationFrames ) },
+		{ "LaunchWaveDelay",				SPEED_FIELD( FlightDeckBehaviorModuleData, m_launchWaveFrames ) },
+		{ "LaunchRampDelay",				SPEED_FIELD( FlightDeckBehaviorModuleData, m_launchRampFrames ) },
+		{ "LowerRampDelay",					SPEED_FIELD( FlightDeckBehaviorModuleData, m_lowerRampFrames ) },
+		{ "CatapultFireDelay",			SPEED_FIELD( FlightDeckBehaviorModuleData, m_catapultFireFrames ) },
 
 		{ 0, 0, 0, 0 }
 	};
@@ -981,7 +981,7 @@ Bool FlightDeckBehavior::calcBestParkingAssignment( ObjectID id, Coord3D *pos, I
 
 //-------------------------------------------------------------------------------------------------
 // don't really need to autoheal every frame....
-const Int HEAL_RATE_FRAMES = LOGICFRAMES_PER_GAME_SECOND / 5;
+#define HEAL_RATE_FRAMES ((Int)(LOGICFRAMES_PER_GAME_SECOND / 5))
 
 //-------------------------------------------------------------------------------------------------
 void FlightDeckBehavior::resetWakeFrame()

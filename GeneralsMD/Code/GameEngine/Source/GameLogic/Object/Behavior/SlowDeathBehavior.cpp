@@ -69,26 +69,26 @@ const Real END_MIDPOINT_RATIO = 0.65f;
 //-------------------------------------------------------------------------------------------------
 SlowDeathBehaviorModuleData::SlowDeathBehaviorModuleData()
 {
-	m_sinkRate = 0;
+	m_sinkRate.setRaw( 0 );
 	m_probabilityModifier = 10;
 	m_modifierBonusPerOverkillPercent = 0;
-	m_sinkDelay = 0;
-	m_sinkDelayVariance = 0;
-	m_destructionDelay = 0;
-	m_destructionDelayVariance = 0;
+	m_sinkDelay.setRaw( 0 );
+	m_sinkDelayVariance.setRaw( 0 );
+	m_destructionDelay.setRaw( 0 );
+	m_destructionDelayVariance.setRaw( 0 );
 	m_destructionAltitude = -10;
 	m_maskOfLoadedEffects = 0; //assume no ocl, fx, or weapons.
-	m_flingForce = 0;
-	m_flingForceVariance = 0;
+	m_flingForce.setRaw( 0 );
+	m_flingForceVariance.setRaw( 0 );
 	m_flingPitch = 0;
 	m_flingPitchVariance = 0;
 	m_deathMomentum = TRUE;
 	m_momentumMinSpeed = 0.25f;
-	m_momentumTossSpeed = ConvertVelocityInSecsToFrames(32.0f);	// a second in the air at full strength
+	m_momentumTossSpeed.setRaw( 32.0f );	// a second in the air at full strength
 	m_momentumImpulseReach = 0.35f;
-	m_momentumPushSpeed = ConvertVelocityInSecsToFrames(20.0f);
-	m_momentumTreadPushSpeed = ConvertVelocityInSecsToFrames(10.0f);
-	m_momentumTreadSlideTime = 3 * LOGICFRAMES_PER_GAME_SECOND;
+	m_momentumPushSpeed.setRaw( 20.0f );
+	m_momentumTreadPushSpeed.setRaw( 10.0f );
+	m_momentumTreadSlideTime.setRaw( 3000 );
 	m_momentumTreadSlideLength = 1.25f;
 	// redundant.
 	//m_fx.clear();
@@ -145,28 +145,28 @@ static void parseWeapon( INI* ini, void *instance, void * /*store*/, const void*
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "SinkRate",													INI::parseVelocityReal,						NULL, offsetof( SlowDeathBehaviorModuleData, m_sinkRate ) },
+		{ "SinkRate",													SPEED_FIELD( SlowDeathBehaviorModuleData, m_sinkRate ) },
 		{ "ProbabilityModifier",							INI::parseInt,										NULL, offsetof( SlowDeathBehaviorModuleData, m_probabilityModifier ) },
 		{ "ModifierBonusPerOverkillPercent",	INI::parsePercentToReal,					NULL, offsetof( SlowDeathBehaviorModuleData, m_modifierBonusPerOverkillPercent ) },
-		{ "SinkDelay",												INI::parseDurationUnsignedInt,		NULL, offsetof( SlowDeathBehaviorModuleData, m_sinkDelay ) },
-		{ "SinkDelayVariance",								INI::parseDurationUnsignedInt,		NULL, offsetof( SlowDeathBehaviorModuleData, m_sinkDelayVariance ) },
-		{ "DestructionDelay",									INI::parseDurationUnsignedInt,		NULL, offsetof( SlowDeathBehaviorModuleData, m_destructionDelay ) },
-		{ "DestructionDelayVariance",					INI::parseDurationUnsignedInt,		NULL, offsetof( SlowDeathBehaviorModuleData, m_destructionDelayVariance ) },
+		{ "SinkDelay",												SPEED_FIELD( SlowDeathBehaviorModuleData, m_sinkDelay ) },
+		{ "SinkDelayVariance",								SPEED_FIELD( SlowDeathBehaviorModuleData, m_sinkDelayVariance ) },
+		{ "DestructionDelay",									SPEED_FIELD( SlowDeathBehaviorModuleData, m_destructionDelay ) },
+		{ "DestructionDelayVariance",					SPEED_FIELD( SlowDeathBehaviorModuleData, m_destructionDelayVariance ) },
 		{ "DestructionAltitude",							INI::parseReal,										NULL, offsetof( SlowDeathBehaviorModuleData, m_destructionAltitude ) },
 		{ "FX",																parseFX,													NULL, 0 },
 		{ "OCL",															parseOCL,													NULL, 0 },
 		{ "Weapon",														parseWeapon,											NULL, 0 },
-		{ "FlingForce",												INI::parseRetailPerFrameReal,			NULL, offsetof( SlowDeathBehaviorModuleData, m_flingForce) },
-		{ "FlingForceVariance",								INI::parseRetailPerFrameReal,									NULL, offsetof( SlowDeathBehaviorModuleData, m_flingForceVariance) },
+		{ "FlingForce",												SPEED_FIELD( SlowDeathBehaviorModuleData, m_flingForce ) },
+		{ "FlingForceVariance",								SPEED_FIELD( SlowDeathBehaviorModuleData, m_flingForceVariance ) },
 		{ "FlingPitch",												INI::parseAngleReal,							NULL, offsetof( SlowDeathBehaviorModuleData, m_flingPitch) },
 		{ "FlingPitchVariance",								INI::parseAngleReal,							NULL, offsetof( SlowDeathBehaviorModuleData, m_flingPitchVariance) },
 		{ "DeathMomentum",										INI::parseBool,										NULL, offsetof( SlowDeathBehaviorModuleData, m_deathMomentum) },
 		{ "DeathMomentumMinSpeed",						INI::parsePercentToReal,					NULL, offsetof( SlowDeathBehaviorModuleData, m_momentumMinSpeed) },
-		{ "DeathMomentumTossSpeed",						INI::parseVelocityReal,						NULL, offsetof( SlowDeathBehaviorModuleData, m_momentumTossSpeed) },
+		{ "DeathMomentumTossSpeed",						SPEED_FIELD( SlowDeathBehaviorModuleData, m_momentumTossSpeed ) },
 		{ "DeathMomentumImpulseReach",				INI::parsePercentToReal,					NULL, offsetof( SlowDeathBehaviorModuleData, m_momentumImpulseReach) },
-		{ "DeathMomentumPushSpeed",						INI::parseVelocityReal,						NULL, offsetof( SlowDeathBehaviorModuleData, m_momentumPushSpeed) },
-		{ "DeathMomentumTreadPushSpeed",			INI::parseVelocityReal,						NULL, offsetof( SlowDeathBehaviorModuleData, m_momentumTreadPushSpeed) },
-		{ "DeathMomentumTreadSlideTime",			INI::parseDurationUnsignedInt,		NULL, offsetof( SlowDeathBehaviorModuleData, m_momentumTreadSlideTime) },
+		{ "DeathMomentumPushSpeed",						SPEED_FIELD( SlowDeathBehaviorModuleData, m_momentumPushSpeed ) },
+		{ "DeathMomentumTreadPushSpeed",			SPEED_FIELD( SlowDeathBehaviorModuleData, m_momentumTreadPushSpeed ) },
+		{ "DeathMomentumTreadSlideTime",			SPEED_FIELD( SlowDeathBehaviorModuleData, m_momentumTreadSlideTime ) },
 		{ "DeathMomentumTreadSlideLength",		INI::parsePercentToReal,					NULL, offsetof( SlowDeathBehaviorModuleData, m_momentumTreadSlideLength) },
 		{ 0, 0, 0, 0 }
 	};
@@ -268,12 +268,12 @@ static Real bodyReachBelow(const Object* obj)
 
 const Real MOMENTUM_AIRBORNE_HEIGHT = 0.5f;																	///< above this a wreck is in the air: its slide waits, physics flies it
 const Real MOMENTUM_LIFTOFF_HEIGHT = 0.05f;																	///< above this a slow car's low hop has left the ground
-const UnsignedInt MOMENTUM_LANDING_GRACE = 3 * LOGICFRAMES_PER_GAME_SECOND;			///< on top of the slide and the hop, the most it may hold the destruction back
+#define MOMENTUM_LANDING_GRACE ((UnsignedInt)(3 * LOGICFRAMES_PER_GAME_SECOND))			///< on top of the slide and the hop, the most it may hold the destruction back
 const Real MOMENTUM_BOUNCINESS = -0.4f;																			///< off the ground's stiffness: it lands heavily, two short bounces
 // Tuned as 0.92 a frame at twice the retail rate, so 0.92 squared a retail frame; physics friction is
 // converted the same way (retailFrictionToFrame). sqrtf of a correctly rounded square gives the
 // float back exactly, so at twice the rate this is still exactly 0.92f.
-const Real MOMENTUM_FRICTION_KEEP = ConvertRetailPerFrameFactor(0.92f * 0.92f);	///< share of the speed set on it that ground friction leaves to move on each frame
+#define MOMENTUM_FRICTION_KEEP ((Real)(ConvertRetailPerFrameFactor(0.92f * 0.92f)))	///< share of the speed set on it that ground friction leaves to move on each frame
 
 //-------------------------------------------------------------------------------------------------
 /** True if some OCL of the module, in any phase, throws the dying body itself (the Technical's

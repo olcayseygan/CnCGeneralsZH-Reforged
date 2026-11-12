@@ -57,7 +57,7 @@ public:
 	AsciiString m_upgradeRequired;///< Upgrade required to kill garrisoned units
 	const FXList *m_detonationFX;						///< FXList to play upon detonation 
   const FXList *m_crashThroughBunkerFX;  ///< FXList to play as the bomb goes smashing through the bunker
-  UnsignedInt m_crashThroughBunkerFXFrequency;  ///< How often to play the above FX
+  DurationFrames m_crashThroughBunkerFXFrequency;  ///< How often to play the above FX
 
   Real m_seismicEffectRadius;
   Real m_seismicEffectMagnitude;

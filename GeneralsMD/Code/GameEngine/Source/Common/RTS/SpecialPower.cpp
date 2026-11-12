@@ -48,7 +48,7 @@
 // GLOBAL /////////////////////////////////////////////////////////////////////////////////////////
 SpecialPowerStore *TheSpecialPowerStore = NULL;
 
-#define DEFAULT_DEFECTION_DETECTION_PROTECTION_TIME_LIMIT (LOGICFRAMES_PER_GAME_SECOND * 10)
+#define DEFAULT_DEFECTION_DETECTION_PROTECTION_TIME_LIMIT_MSEC (10 * MSEC_PER_SECOND)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -230,15 +230,15 @@ Real SpecialPowerTemplate::getRadiusCursorRadius( const Player *player ) const
 /* static */ const FieldParse SpecialPowerTemplate::m_specialPowerFieldParse[] =
 {
 	
-	{ "ReloadTime",								INI::parseDurationUnsignedInt,		NULL,	offsetof( SpecialPowerTemplate, m_reloadTime ) },
+	{ "ReloadTime",								SPEED_FIELD( SpecialPowerTemplate, m_reloadTime ) },
 	{ "RequiredScience",					INI::parseScience,								NULL, offsetof( SpecialPowerTemplate, m_requiredScience ) },
 	{ "InitiateSound",						INI::parseAudioEventRTS,					NULL,	offsetof( SpecialPowerTemplate, m_initiateSound ) },
 	{ "InitiateAtLocationSound",	INI::parseAudioEventRTS,					NULL,	offsetof( SpecialPowerTemplate, m_initiateAtLocationSound ) },
 	{ "PublicTimer",							INI::parseBool,										NULL, offsetof( SpecialPowerTemplate, m_publicTimer ) },
 	{ "Enum",											INI::parseIndexList,							SpecialPowerMaskType::getBitNames(), offsetof( SpecialPowerTemplate, m_type ) },
-	{ "DetectionTime",						INI::parseDurationUnsignedInt,		NULL,	offsetof( SpecialPowerTemplate, m_detectionTime ) },
+	{ "DetectionTime",						SPEED_FIELD( SpecialPowerTemplate, m_detectionTime ) },
 	{ "SharedSyncedTimer",				INI::parseBool,										NULL, offsetof( SpecialPowerTemplate, m_sharedNSync ) },
-	{ "ViewObjectDuration",				INI::parseDurationUnsignedInt,		NULL,	offsetof( SpecialPowerTemplate, m_viewObjectDuration ) },
+	{ "ViewObjectDuration",				SPEED_FIELD( SpecialPowerTemplate, m_viewObjectDuration ) },
 	{ "ViewObjectRange",					INI::parseReal,										NULL,	offsetof( SpecialPowerTemplate, m_viewObjectRange ) },
 	{ "RadiusCursorRadius",				INI::parseReal,										NULL,	offsetof( SpecialPowerTemplate, m_radiusCursorRadius ) },
 	{ "UpgradeRadiusCursorRadius",	parseUpgradeRadiusCursorRadius,		NULL,	offsetof( SpecialPowerTemplate, m_upgradeRadiusCursorRadius ) },
@@ -255,12 +255,12 @@ SpecialPowerTemplate::SpecialPowerTemplate()
 {
 	m_id = 0;
 	m_type = SPECIAL_INVALID;
-	m_reloadTime = 0;
+	m_reloadTime.setRaw( 0 );
 	m_requiredScience = SCIENCE_INVALID;
 	m_publicTimer = FALSE;
-	m_detectionTime = DEFAULT_DEFECTION_DETECTION_PROTECTION_TIME_LIMIT;
+	m_detectionTime.setRaw( DEFAULT_DEFECTION_DETECTION_PROTECTION_TIME_LIMIT_MSEC );
 	m_sharedNSync = FALSE;
-	m_viewObjectDuration = 0;
+	m_viewObjectDuration.setRaw( 0 );
 	m_viewObjectRange = 0;
 	m_radiusCursorRadius = 0;
 	m_shortcutPower = FALSE;

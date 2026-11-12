@@ -138,7 +138,7 @@ ActiveBodyModuleData::ActiveBodyModuleData()
 	m_maxHealth = 0;
 	m_initialHealth = 0;
 	m_subdualDamageCap = 0;
-	m_subdualDamageHealRate = 0;
+	m_subdualDamageHealRate.setRaw( 0 );
 	m_subdualDamageHealAmount = 0;
 }
 
@@ -154,7 +154,7 @@ void ActiveBodyModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "InitialHealth",				INI::parseReal,						NULL,		offsetof( ActiveBodyModuleData, m_initialHealth ) },
 
 		{ "SubdualDamageCap",					INI::parseReal,									NULL,		offsetof( ActiveBodyModuleData, m_subdualDamageCap ) },
-		{ "SubdualDamageHealRate",		INI::parseDurationUnsignedInt,	NULL,		offsetof( ActiveBodyModuleData, m_subdualDamageHealRate ) },
+		{ "SubdualDamageHealRate",		SPEED_FIELD( ActiveBodyModuleData, m_subdualDamageHealRate ) },
 		{ "SubdualDamageHealAmount",	INI::parseReal,									NULL,		offsetof( ActiveBodyModuleData, m_subdualDamageHealAmount ) },
 		{ 0, 0, 0, 0 }
 	};

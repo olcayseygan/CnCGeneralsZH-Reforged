@@ -63,16 +63,16 @@ public:
 			{ "SmallMetalBounceSound",			INI::parseAudioEventRTS,	NULL,	offsetof( RailroadBehaviorModuleData, m_smallMetalImpactDefaultSound) },
 			{ "MeatyBounceSound",			INI::parseAudioEventRTS,	NULL,	offsetof( RailroadBehaviorModuleData, m_meatyImpactDefaultSound) },
 			// speeds are distance per frame, and the three multipliers below are applied to the speed every frame
-			{ "RunningGarrisonSpeedMax",			INI::parseRetailPerFrameReal,	NULL,	offsetof( RailroadBehaviorModuleData, m_runningGarrisonSpeedMax) },
-			{ "KillSpeedMin",			INI::parseRetailPerFrameReal,	NULL,	offsetof( RailroadBehaviorModuleData, m_killSpeedMin) },
-			{ "SpeedMax",			INI::parseRetailPerFrameReal,	NULL,	offsetof( RailroadBehaviorModuleData, m_speedMax) },
-			{ "Acceleration",			INI::parseRetailPerFrameFactorReal,	NULL,	offsetof( RailroadBehaviorModuleData, m_acceleration) },
-			{ "Braking",			INI::parseRetailPerFrameFactorReal,	NULL,	offsetof( RailroadBehaviorModuleData, m_braking) },
-			{ "WaitAtStationTime",			INI::parseDurationUnsignedInt,	NULL,	offsetof( RailroadBehaviorModuleData, m_waitAtStationTime) },
+			{ "RunningGarrisonSpeedMax",			SPEED_FIELD( RailroadBehaviorModuleData, m_runningGarrisonSpeedMax ) },
+			{ "KillSpeedMin",			SPEED_FIELD( RailroadBehaviorModuleData, m_killSpeedMin ) },
+			{ "SpeedMax",			SPEED_FIELD( RailroadBehaviorModuleData, m_speedMax ) },
+			{ "Acceleration",			SPEED_FIELD( RailroadBehaviorModuleData, m_acceleration ) },
+			{ "Braking",			SPEED_FIELD( RailroadBehaviorModuleData, m_braking ) },
+			{ "WaitAtStationTime",			SPEED_FIELD( RailroadBehaviorModuleData, m_waitAtStationTime ) },
 			{ "RunningSound",			INI::parseAudioEventRTS,	NULL,	offsetof( RailroadBehaviorModuleData, m_runningSound) },
 			{ "ClicketyClackSound",			INI::parseAudioEventRTS,	NULL,	offsetof( RailroadBehaviorModuleData, m_clicketyClackSound) },
 			{ "WhistleSound",			INI::parseAudioEventRTS,	NULL,	offsetof( RailroadBehaviorModuleData, m_whistleSound) },
-			{ "Friction",			INI::parseRetailPerFrameFactorReal,	NULL,	offsetof( RailroadBehaviorModuleData, m_friction) },
+			{ "Friction",			SPEED_FIELD( RailroadBehaviorModuleData, m_friction ) },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -85,13 +85,13 @@ public:
 	AsciiString m_CrashFXTemplateName;
 
 	Bool m_isLocomotive;
-	Real m_runningGarrisonSpeedMax;
-	Real m_killSpeedMin;
-	Real m_speedMax;
-	Real m_acceleration;
-	Real m_braking;
-	Real m_friction;
-	UnsignedInt m_waitAtStationTime;
+	RetailPerFrame m_runningGarrisonSpeedMax;
+	RetailPerFrame m_killSpeedMin;
+	RetailPerFrame m_speedMax;
+	RetailPerFrameFactor m_acceleration;
+	RetailPerFrameFactor m_braking;
+	RetailPerFrameFactor m_friction;
+	DurationFrames m_waitAtStationTime;
 	AudioEventRTS			m_runningSound;
 	AudioEventRTS			m_clicketyClackSound;
 	AudioEventRTS				m_bigMetalImpactDefaultSound;		

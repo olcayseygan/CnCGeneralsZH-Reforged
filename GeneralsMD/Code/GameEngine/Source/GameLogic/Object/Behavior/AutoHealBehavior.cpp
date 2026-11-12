@@ -291,7 +291,7 @@ UpdateSleepTime AutoHealBehavior::update( void )
 			}
 		}  // end for obj
 
-		return UPDATE_SLEEP( d->m_singleBurst ? UPDATE_SLEEP_FOREVER : d->m_healingDelay );
+		return UPDATE_SLEEP( d->m_singleBurst ? (UnsignedInt)UPDATE_SLEEP_FOREVER : (UnsignedInt)d->m_healingDelay );
 	}
 }
  

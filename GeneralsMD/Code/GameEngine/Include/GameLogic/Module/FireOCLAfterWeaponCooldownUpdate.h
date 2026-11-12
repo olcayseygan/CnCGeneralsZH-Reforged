@@ -47,7 +47,7 @@ public:
 	WeaponSlotType			m_weaponSlot;
 	UnsignedInt					m_minShotsRequired;
 	UnsignedInt					m_oclLifetimePerSecond;
-	UnsignedInt					m_oclMaxFrames;
+	DurationFrames					m_oclMaxFrames;
 
 	FireOCLAfterWeaponCooldownUpdateModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);

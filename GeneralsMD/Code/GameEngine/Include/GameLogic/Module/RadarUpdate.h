@@ -51,14 +51,14 @@ public:
 		static const FieldParse dataFieldParse[] = 
 		{
 
-			{ "RadarExtendTime", INI::parseDurationReal, NULL, offsetof( RadarUpdateModuleData, m_radarExtendTime ) },
+			{ "RadarExtendTime", SPEED_FIELD( RadarUpdateModuleData, m_radarExtendTime ) },
 			{ 0, 0, 0, 0 }
 		};
     p.add(dataFieldParse);
 
 	}
 
-  Real m_radarExtendTime;  ///< in frames, time it takes the radar tower to build
+  DurationFramesReal m_radarExtendTime;  ///< in frames, time it takes the radar tower to build
 
 };
 

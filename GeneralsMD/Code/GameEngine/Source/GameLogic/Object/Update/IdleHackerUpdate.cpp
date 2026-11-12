@@ -39,7 +39,7 @@
 //-------------------------------------------------------------------------------------------------
 IdleHackerUpdateModuleData::IdleHackerUpdateModuleData()
 {
-	m_idleFrames = 10 * LOGICFRAMES_PER_GAME_SECOND;
+	m_idleFrames.setRaw( 10000 );
 	m_centerRange = 150.0f;
 }
 
@@ -50,7 +50,7 @@ IdleHackerUpdateModuleData::IdleHackerUpdateModuleData()
 
 	static const FieldParse dataFieldParse[] =
 	{
-		{ "IdleTime",			INI::parseDurationUnsignedInt,	NULL, offsetof( IdleHackerUpdateModuleData, m_idleFrames ) },
+		{ "IdleTime",			SPEED_FIELD( IdleHackerUpdateModuleData, m_idleFrames ) },
 		{ "CenterRange",	INI::parseReal,									NULL, offsetof( IdleHackerUpdateModuleData, m_centerRange ) },
 		{ 0, 0, 0, 0 }
 	};

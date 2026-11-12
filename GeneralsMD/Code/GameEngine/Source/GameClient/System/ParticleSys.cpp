@@ -89,41 +89,11 @@ static UnsignedInt particleTimerFrames( Real value )
 	 of them a second.  So each is converted as it is read: a frame count doubled, an amount added every
 	 frame halved, gravity quartered, a factor multiplied in every frame square-rooted.  A burst comes
 	 BurstDelay + 1 frames after the last one, so the delay doubles plus one: BurstDelay 0, a burst
-	 every retail frame, becomes one every second frame and the particles a second stay what they were. */
-static void scaleRandomVariable( void *store, Real (*convert)( Real ) )
-{
-	GameClientRandomVariable *var = (GameClientRandomVariable *)store;
-	var->setRange( convert( var->getMinimumValue() ), convert( var->getMaximumValue() ), var->getDistributionType() );
-}
-
-static Real retailBurstDelay( Real delay )
-{
-	return ConvertRetailFrames( delay ) + (Real)(LOGICFRAMES_PER_RETAIL_FRAME - 1);
-}
-
-static void parseRetailFramesRandom( INI *ini, void *instance, void *store, const void *userData )
-{
-	INI::parseGameClientRandomVariable( ini, instance, store, userData );
-	scaleRandomVariable( store, ConvertRetailFrames );
-}
-
-static void parseRetailBurstDelayRandom( INI *ini, void *instance, void *store, const void *userData )
-{
-	INI::parseGameClientRandomVariable( ini, instance, store, userData );
-	scaleRandomVariable( store, retailBurstDelay );
-}
-
-static void parseRetailPerFrameRandom( INI *ini, void *instance, void *store, const void *userData )
-{
-	INI::parseGameClientRandomVariable( ini, instance, store, userData );
-	scaleRandomVariable( store, ConvertRetailPerFrameRate );
-}
-
-static void parseRetailPerFrameFactorRandom( INI *ini, void *instance, void *store, const void *userData )
-{
-	INI::parseGameClientRandomVariable( ini, instance, store, userData );
-	scaleRandomVariable( store, ConvertRetailPerFrameFactor );
-}
+	 every retail frame, becomes one every second frame and the particles a second stay what they were.
+	 The template keeps the numbers as written (SpeedScaled, SpeedScaledRandom) and the speed of the
+	 match converts them on every read. */
+/// the wind's first angle change a retail frame, before a system draws its own from WindAngleChangeMin/Max
+static const Real WIND_ANGLE_CHANGE_RETAIL = 0.15f;
 
 /// "FlipbookGrid": frames a side, kept as its log2 because the point group's frame tables are indexed
 /// that way.  1 is a plain card; anything but a power of two up to 16 stops the load.
@@ -136,21 +106,6 @@ static void parseFlipbookGrid( INI *ini, void * /*instance*/, void *store, const
 	if ((1u << log2) != side)
 		throw INI_INVALID_DATA;
 	*(UnsignedByte *)store = log2;
-}
-
-static void parseRetailPerFrameSquaredReal( INI *ini, void *instance, void *store, const void *userData )
-{
-	INI::parseReal( ini, instance, store, userData );
-	*(Real *)store = ConvertRetailPerFrameSquared( *(Real *)store );
-}
-
-static void parseRetailPerFrameCoord3D( INI *ini, void *instance, void *store, const void *userData )
-{
-	INI::parseCoord3D( ini, instance, store, userData );
-	Coord3D *v = (Coord3D *)store;
-	v->x = ConvertRetailPerFrameRate( v->x );
-	v->y = ConvertRetailPerFrameRate( v->y );
-	v->z = ConvertRetailPerFrameRate( v->z );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -208,14 +163,15 @@ void ParticleInfo::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer method
 	* Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: the colour keys' frames in retail frames, as the template's INI wrote them */
 // ------------------------------------------------------------------------------------------------
 void ParticleInfo::xfer( Xfer *xfer )
 {
 	Int i;
 
 	// version
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -268,7 +224,9 @@ void ParticleInfo::xfer( Xfer *xfer )
 	{
 
 		xfer->xferRGBColor( &m_colorKey[ i ].color );
-		xfer->xferUnsignedInt( &m_colorKey[ i ].frame );
+		xfer->xferUnsignedInt( m_colorKey[ i ].frame.rawData() );
+		if( xfer->getXferMode() == XFER_LOAD && version < 2 )
+			m_colorKey[ i ].frame.setConverted( m_colorKey[ i ].frame.raw() );	// 1 wrote the frames converted
 
 	}  // end for, i
 
@@ -1138,23 +1096,23 @@ ParticleSystemInfo::ParticleSystemInfo()
 	
 	//Added By Sadullah Nader
 	//Initializations inserted
-	m_driftVelocity.zero();
-	m_gravity = 0.0f;
+	m_driftVelocity.setRaw( Coord3D() );
+	m_gravity.setRaw( 0.0f );
 	m_groundCollision = FALSE;	// retail behaviour: particles pass through the terrain
 	m_groundBounce = 0.35f;			// only consulted once an INI sets GroundCollision = Yes
-	m_groundFriction = ConvertRetailPerFrameFactor( 0.6f );	// as GroundFriction is parsed
+	m_groundFriction.setRaw( 0.6f );	// as GroundFriction is parsed
 	m_isEmissionVolumeHollow = FALSE;
 	m_isOneShot = FALSE;
 	m_slavePosOffset.zero();
-	m_systemLifetime = 0;
+	m_systemLifetime.setRaw( 0 );
 	
 	//
 	// some default values for the wind motion values
 	m_windMotion = WIND_MOTION_NOT_USED;
 	m_windAngle = 0.0f;
-	m_windAngleChange = ConvertRetailPerFrameRate( 0.15f );  // higher is ping pong faster
-	m_windAngleChangeMin = ConvertRetailPerFrameRate( 0.15f );
-	m_windAngleChangeMax = ConvertRetailPerFrameRate( 0.45f );
+	m_windAngleChange = ConvertRetailPerFrameRate( WIND_ANGLE_CHANGE_RETAIL );  // higher is ping pong faster
+	m_windAngleChangeMin.setRaw( 0.15f );
+	m_windAngleChangeMax.setRaw( 0.45f );
 	m_windMotionStartAngleMin = 0.0f;
 	m_windMotionStartAngleMax = PI / 4.0f;
 	m_windMotionStartAngle = m_windMotionStartAngleMin;
@@ -1204,7 +1162,9 @@ void ParticleSystemInfo::xfer( Xfer *xfer )
 
 	// version 
 	// 2: ground collision (m_groundCollision / m_groundBounce / m_groundFriction)
-	XferVersion currentVersion = 2;
+	// 3: durations, rates and factors as the template's INI wrote them, where 2 had them converted at
+	//    the one game speed there was; an older one is turned back at the speed the save loads at
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1241,7 +1201,7 @@ void ParticleSystemInfo::xfer( Xfer *xfer )
 	xfer->xferUser( &m_lifetime, sizeof( GameClientRandomVariable ) );
 
 	// system lifetime
-	xfer->xferUnsignedInt( &m_systemLifetime );
+	xfer->xferUnsignedInt( m_systemLifetime.rawData() );
 
 	// start size
 	xfer->xferUser( &m_startSize, sizeof( GameClientRandomVariable ) );
@@ -1260,7 +1220,7 @@ void ParticleSystemInfo::xfer( Xfer *xfer )
 	{
 
 		xfer->xferUser( &m_alphaKey[ i ].var, sizeof( GameClientRandomVariable ) );
-		xfer->xferUnsignedInt( &m_alphaKey[ i ].frame );
+		xfer->xferUnsignedInt( m_alphaKey[ i ].frame.rawData() );
 
 	}  // end for, i
 
@@ -1269,7 +1229,7 @@ void ParticleSystemInfo::xfer( Xfer *xfer )
 	{
 
 		xfer->xferRGBColor( &m_colorKey[ i ].color );
-		xfer->xferUnsignedInt( &m_colorKey[ i ].frame );
+		xfer->xferUnsignedInt( m_colorKey[ i ].frame.rawData() );
 
 	}  // end for, i
 
@@ -1286,10 +1246,10 @@ void ParticleSystemInfo::xfer( Xfer *xfer )
 	xfer->xferUser( &m_initialDelay, sizeof( GameClientRandomVariable ) );
 	
 	// drift velocity
-	xfer->xferCoord3D( &m_driftVelocity );
+	xfer->xferCoord3D( m_driftVelocity.rawData() );
 	
 	// gravity
-	xfer->xferReal( &m_gravity );
+	xfer->xferReal( m_gravity.rawData() );
 		
 	// slave system name
 	xfer->xferAsciiString( &m_slaveSystemName );
@@ -1399,10 +1359,10 @@ void ParticleSystemInfo::xfer( Xfer *xfer )
 	xfer->xferReal( &m_windAngleChange );
 
 	// wind angle change min
-	xfer->xferReal( &m_windAngleChangeMin );
+	xfer->xferReal( m_windAngleChangeMin.rawData() );
 
 	// wind angle change max
-	xfer->xferReal( &m_windAngleChangeMax );
+	xfer->xferReal( m_windAngleChangeMax.rawData() );
 
 	// wind motion start angle
 	xfer->xferReal( &m_windMotionStartAngle );
@@ -1430,7 +1390,56 @@ void ParticleSystemInfo::xfer( Xfer *xfer )
 	{
 		xfer->xferBool( &m_groundCollision );
 		xfer->xferReal( &m_groundBounce );
-		xfer->xferReal( &m_groundFriction );
+		xfer->xferReal( m_groundFriction.rawData() );
+	}
+
+	// what was read above into the raw numbers was the converted value; the save's speed is set
+	if( xfer->getXferMode() == XFER_LOAD && version < 3 )
+	{
+		m_angularRateZ.setConverted( m_angularRateZ.raw() );
+		m_angularDamping.setConverted( m_angularDamping.raw() );
+		m_velDamping.setConverted( m_velDamping.raw() );
+		m_lifetime.setConverted( m_lifetime.raw() );
+		m_systemLifetime.setConverted( m_systemLifetime.raw() );
+		m_sizeRate.setConverted( m_sizeRate.raw() );
+		m_sizeRateDamping.setConverted( m_sizeRateDamping.raw() );
+		for( i = 0; i < MAX_KEYFRAMES; ++i )
+		{
+			m_alphaKey[ i ].frame.setConverted( m_alphaKey[ i ].frame.raw() );
+			m_colorKey[ i ].frame.setConverted( m_colorKey[ i ].frame.raw() );
+		}
+		{
+			// a live system's range was saved in colour units, the template's /255
+			GameClientRandomVariable colorScale = m_colorScale.raw();
+			colorScale.setRange( colorScale.getMinimumValue() * 255.0f, colorScale.getMaximumValue() * 255.0f, colorScale.getDistributionType() );
+			m_colorScale.setConverted( colorScale );
+		}
+		m_burstDelay.setConverted( m_burstDelay.raw() );
+		m_initialDelay.setConverted( m_initialDelay.raw() );
+		m_driftVelocity.setConverted( m_driftVelocity.raw() );
+		m_gravity.setConverted( m_gravity.raw() );
+		switch( m_emissionVelocityType )
+		{
+			case ORTHO:
+				m_emissionVelocity.ortho.x.setConverted( m_emissionVelocity.ortho.x.raw() );
+				m_emissionVelocity.ortho.y.setConverted( m_emissionVelocity.ortho.y.raw() );
+				m_emissionVelocity.ortho.z.setConverted( m_emissionVelocity.ortho.z.raw() );
+				break;
+			case SPHERICAL: m_emissionVelocity.spherical.speed.setConverted( m_emissionVelocity.spherical.speed.raw() ); break;
+			case HEMISPHERICAL: m_emissionVelocity.hemispherical.speed.setConverted( m_emissionVelocity.hemispherical.speed.raw() ); break;
+			case CYLINDRICAL:
+				m_emissionVelocity.cylindrical.radial.setConverted( m_emissionVelocity.cylindrical.radial.raw() );
+				m_emissionVelocity.cylindrical.normal.setConverted( m_emissionVelocity.cylindrical.normal.raw() );
+				break;
+			case OUTWARD:
+				m_emissionVelocity.outward.speed.setConverted( m_emissionVelocity.outward.speed.raw() );
+				m_emissionVelocity.outward.otherSpeed.setConverted( m_emissionVelocity.outward.otherSpeed.raw() );
+				break;
+		}
+		m_windAngleChangeMin.setConverted( m_windAngleChangeMin.raw() );
+		m_windAngleChangeMax.setConverted( m_windAngleChangeMax.raw() );
+		if( version >= 2 )
+			m_groundFriction.setConverted( m_groundFriction.raw() );
 	}
 
 }  // end xfer
@@ -1520,10 +1529,8 @@ ParticleSystem::ParticleSystem( const ParticleSystemTemplate *sysTemplate,
 	for( i=0; i<MAX_KEYFRAMES; i++ )
 		m_colorKey[i] = sysTemplate->m_colorKey[i];
 
-	/// @todo It is confusing to do this conversion here...
-	Real low = sysTemplate->m_colorScale.getMinimumValue();
-	Real hi = sysTemplate->m_colorScale.getMaximumValue();
-	m_colorScale.setRange( low / 255.0f, hi / 255.0f );
+	// as the template wrote it: generateParticleInfo converts it and takes it to colour units (/255)
+	m_colorScale = sysTemplate->m_colorScale;
 
 	m_burstDelay = sysTemplate->m_burstDelay;
 	m_burstDelayLeft = 0;
@@ -1565,7 +1572,8 @@ ParticleSystem::ParticleSystem( const ParticleSystemTemplate *sysTemplate,
 	m_isParticleUpTowardsEmitter = sysTemplate->m_isParticleUpTowardsEmitter;
 
 	m_windMotion = sysTemplate->m_windMotion;
-	m_windAngleChange = sysTemplate->m_windAngleChange;
+	// the starting rate per frame at this match's speed; the template's was worked out when it loaded
+	m_windAngleChange = ConvertRetailPerFrameRate( WIND_ANGLE_CHANGE_RETAIL );
 	m_windAngleChangeMin = sysTemplate->m_windAngleChangeMin;
 	m_windAngleChangeMax = sysTemplate->m_windAngleChangeMax;
 	m_windMotionStartAngleMin = sysTemplate->m_windMotionStartAngleMin;
@@ -2361,7 +2369,10 @@ const ParticleInfo *ParticleSystem::generateParticleInfo( Int particleNum, Int p
 	info.m_color.blue = m_color.blue.getValue();
 */
 
-	info.m_colorScale = m_colorScale.getValue();
+	// converted, then into colour units as EA's copy of the template did (setRange's default, UNIFORM)
+	GameClientRandomVariable colorScale = m_colorScale.get();
+	colorScale.setRange( colorScale.getMinimumValue() / 255.0f, colorScale.getMaximumValue() / 255.0f );
+	info.m_colorScale = colorScale.getValue();
 #ifdef ALLOW_TEMPORARIES
 	Vector3 pos = m_transform * Vector3(0, 0, 0);
 #else
@@ -3311,12 +3322,14 @@ ParticleInfo ParticleSystem::mergeRelatedParticleSystems( ParticleSystem *master
 																							masterParticleSystem->m_startSize.getMaximumValue() * slaveParticleSystem->m_startSize.getMaximumValue(),
 																							masterParticleSystem->m_startSize.getDistributionType());
 	
-		slaveParticleSystem->m_sizeRate.setRange(masterParticleSystem->m_sizeRate.getMinimumValue() * slaveParticleSystem->m_sizeRate.getMinimumValue(),
-																							masterParticleSystem->m_sizeRate.getMaximumValue() * slaveParticleSystem->m_sizeRate.getMaximumValue(),
+		// kept raw: one side's raw times the other's converted rate converts to the product of the two
+		slaveParticleSystem->m_sizeRate.raw().setRange(masterParticleSystem->m_sizeRate.raw().getMinimumValue() * slaveParticleSystem->m_sizeRate.getMinimumValue(),
+																							masterParticleSystem->m_sizeRate.raw().getMaximumValue() * slaveParticleSystem->m_sizeRate.getMaximumValue(),
 																							masterParticleSystem->m_sizeRate.getDistributionType());
 
-		slaveParticleSystem->m_sizeRateDamping.setRange(masterParticleSystem->m_sizeRateDamping.getMinimumValue() * slaveParticleSystem->m_sizeRateDamping.getMinimumValue(),
-																							masterParticleSystem->m_sizeRateDamping.getMaximumValue() * slaveParticleSystem->m_sizeRateDamping.getMaximumValue(),
+		// and a product of two factors is the factor of the product
+		slaveParticleSystem->m_sizeRateDamping.raw().setRange(masterParticleSystem->m_sizeRateDamping.raw().getMinimumValue() * slaveParticleSystem->m_sizeRateDamping.raw().getMinimumValue(),
+																							masterParticleSystem->m_sizeRateDamping.raw().getMaximumValue() * slaveParticleSystem->m_sizeRateDamping.raw().getMaximumValue(),
 																							masterParticleSystem->m_sizeRateDamping.getDistributionType());
 		
 //		slaveParticleSystem->m_burstCount.setRange(masterParticleSystem->m_burstCount.getMinimumValue() / 2, 
@@ -3332,7 +3345,10 @@ ParticleInfo ParticleSystem::mergeRelatedParticleSystems( ParticleSystem *master
 // ------------------------------------------------------------------------------------------------
 void ParticleSystem::setLifetimeRange( Real min, Real max )
 {
-	m_lifetime.setRange( min, max );
+	// frames in; kept as the retail frames that convert back to exactly these frames where any do
+	GameClientRandomVariable frames = m_lifetime.raw();
+	frames.setRange( min, max );
+	m_lifetime.setConverted( frames );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -3577,15 +3593,15 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	{ "VolumeParticleDepth",		INI::parseUnsignedInt,		NULL,		offsetof( ParticleSystemTemplate, m_volumeParticleDepth ) },
 	{ "ParticleName",						INI::parseAsciiString,		NULL,		offsetof( ParticleSystemTemplate, m_particleTypeName ) },
 	{ "AngleZ",									INI::parseGameClientRandomVariable,	NULL,		offsetof( ParticleSystemTemplate, m_angleZ ) },
-	{ "AngularRateZ",						parseRetailPerFrameRandom,	NULL,		offsetof( ParticleSystemTemplate, m_angularRateZ ) },
-	{ "AngularDamping",					parseRetailPerFrameFactorRandom,	NULL,		offsetof( ParticleSystemTemplate, m_angularDamping ) },
+	{ "AngularRateZ",						SPEED_FIELD( ParticleSystemTemplate, m_angularRateZ ) },
+	{ "AngularDamping",					SPEED_FIELD( ParticleSystemTemplate, m_angularDamping ) },
 
-	{ "VelocityDamping",				parseRetailPerFrameFactorRandom,	NULL,		offsetof( ParticleSystemTemplate, m_velDamping ) },
-	{ "Gravity",								parseRetailPerFrameSquaredReal,								NULL,		offsetof( ParticleSystemTemplate, m_gravity ) },
+	{ "VelocityDamping",				SPEED_FIELD( ParticleSystemTemplate, m_velDamping ) },
+	{ "Gravity",								SPEED_FIELD( ParticleSystemTemplate, m_gravity ) },
 	{ "GroundCollision",						INI::parseBool,																NULL,		offsetof( ParticleSystemTemplate, m_groundCollision ) },
 	{ "GroundBounce",							INI::parseReal,																NULL,		offsetof( ParticleSystemTemplate, m_groundBounce ) },
 	// applied on every frame a particle comes down on the ground, which for one at rest is every frame
-	{ "GroundFriction",						INI::parseRetailPerFrameFactorReal,						NULL,		offsetof( ParticleSystemTemplate, m_groundFriction ) },
+	{ "GroundFriction",						SPEED_FIELD( ParticleSystemTemplate, m_groundFriction ) },
 	{ "SlaveSystem",						INI::parseAsciiString,												NULL,		offsetof( ParticleSystemTemplate, m_slaveSystemName ) },
 	{ "SlavePosOffset",					INI::parseCoord3D,														NULL,		offsetof( ParticleSystemTemplate, m_slavePosOffset ) },
 	{ "PerParticleAttachedSystem",		INI::parseAsciiString,								NULL,		offsetof( ParticleSystemTemplate, m_attachedSystemName ) },
@@ -3596,14 +3612,14 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	{ "FlipbookRate",								INI::parseReal,												NULL,		offsetof( ParticleSystemTemplate, m_flipbookRate ) },
 	{ "FlipbookRandomStart",				INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_flipbookRandomStart ) },
 
-	{ "Lifetime",								parseRetailFramesRandom,	NULL,		offsetof( ParticleSystemTemplate, m_lifetime ) },
-	{ "SystemLifetime",					INI::parseRetailFramesUnsignedInt,						NULL,		offsetof( ParticleSystemTemplate, m_systemLifetime ) },
+	{ "Lifetime",								SPEED_FIELD( ParticleSystemTemplate, m_lifetime ) },
+	{ "SystemLifetime",					SPEED_FIELD( ParticleSystemTemplate, m_systemLifetime ) },
 
 	{ "Size",										INI::parseGameClientRandomVariable,	NULL,		offsetof( ParticleSystemTemplate, m_startSize ) },
 	// per particle emitted, not per frame
 	{ "StartSizeRate",					INI::parseGameClientRandomVariable,	NULL,		offsetof( ParticleSystemTemplate, m_startSizeRate ) },
-	{ "SizeRate",								parseRetailPerFrameRandom,	NULL,		offsetof( ParticleSystemTemplate, m_sizeRate ) },
-	{ "SizeRateDamping",				parseRetailPerFrameFactorRandom,	NULL,		offsetof( ParticleSystemTemplate, m_sizeRateDamping ) },
+	{ "SizeRate",								SPEED_FIELD( ParticleSystemTemplate, m_sizeRate ) },
+	{ "SizeRateDamping",				SPEED_FIELD( ParticleSystemTemplate, m_sizeRateDamping ) },
 
 	{ "Alpha1",									ParticleSystemTemplate::parseRandomKeyframe,	NULL,		offsetof( ParticleSystemTemplate, m_alphaKey[0] ) },
 	{ "Alpha2",									ParticleSystemTemplate::parseRandomKeyframe,	NULL,		offsetof( ParticleSystemTemplate, m_alphaKey[1] ) },
@@ -3624,27 +3640,27 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	{ "Color8",									ParticleSystemTemplate::parseRGBColorKeyframe,NULL,		offsetof( ParticleSystemTemplate, m_colorKey[7] ) },
 
 //	{ "COLOR",									ParticleSystemTemplate::parseRandomRGBColor,	NULL,		offsetof( ParticleSystemTemplate, m_color ) },
-	{ "ColorScale",							parseRetailPerFrameRandom,	NULL,		offsetof( ParticleSystemTemplate, m_colorScale ) },
+	{ "ColorScale",							SPEED_FIELD( ParticleSystemTemplate, m_colorScale ) },
 
-	{ "BurstDelay",							parseRetailBurstDelayRandom,	NULL,		offsetof( ParticleSystemTemplate, m_burstDelay ) },
+	{ "BurstDelay",							SPEED_FIELD( ParticleSystemTemplate, m_burstDelay ) },
 	{ "BurstCount",							INI::parseGameClientRandomVariable,	NULL,		offsetof( ParticleSystemTemplate, m_burstCount ) },
 
-	{ "InitialDelay",						parseRetailFramesRandom,	NULL,		offsetof( ParticleSystemTemplate, m_initialDelay ) },
+	{ "InitialDelay",						SPEED_FIELD( ParticleSystemTemplate, m_initialDelay ) },
 
-	{ "DriftVelocity",					parseRetailPerFrameCoord3D,										NULL,		offsetof( ParticleSystemTemplate, m_driftVelocity ) },
+	{ "DriftVelocity",					SPEED_FIELD( ParticleSystemTemplate, m_driftVelocity ) },
 	{ "VelocityType",						INI::parseIndexList,													EmissionVelocityTypeNames,		offsetof( ParticleSystemTemplate, m_emissionVelocityType ) },
-	{ "VelOrthoX",							parseRetailPerFrameRandom,	NULL,		offsetof( ParticleSystemTemplate, m_emissionVelocity.ortho.x ) },
-	{ "VelOrthoY",							parseRetailPerFrameRandom,	NULL,		offsetof( ParticleSystemTemplate, m_emissionVelocity.ortho.y ) },
-	{ "VelOrthoZ",							parseRetailPerFrameRandom,	NULL,		offsetof( ParticleSystemTemplate, m_emissionVelocity.ortho.z ) },
+	{ "VelOrthoX",							SPEED_FIELD( ParticleSystemTemplate, m_emissionVelocity.ortho.x ) },
+	{ "VelOrthoY",							SPEED_FIELD( ParticleSystemTemplate, m_emissionVelocity.ortho.y ) },
+	{ "VelOrthoZ",							SPEED_FIELD( ParticleSystemTemplate, m_emissionVelocity.ortho.z ) },
 
-	{ "VelSpherical",						parseRetailPerFrameRandom,	NULL,		offsetof( ParticleSystemTemplate, m_emissionVelocity.spherical.speed ) },
-	{ "VelHemispherical",				parseRetailPerFrameRandom,	NULL,		offsetof( ParticleSystemTemplate, m_emissionVelocity.hemispherical.speed ) },
+	{ "VelSpherical",						SPEED_FIELD( ParticleSystemTemplate, m_emissionVelocity.spherical.speed ) },
+	{ "VelHemispherical",				SPEED_FIELD( ParticleSystemTemplate, m_emissionVelocity.hemispherical.speed ) },
 
-	{ "VelCylindricalRadial",		parseRetailPerFrameRandom,	NULL,		offsetof( ParticleSystemTemplate, m_emissionVelocity.cylindrical.radial ) },
-	{ "VelCylindricalNormal",		parseRetailPerFrameRandom,	NULL,		offsetof( ParticleSystemTemplate, m_emissionVelocity.cylindrical.normal ) },
+	{ "VelCylindricalRadial",		SPEED_FIELD( ParticleSystemTemplate, m_emissionVelocity.cylindrical.radial ) },
+	{ "VelCylindricalNormal",		SPEED_FIELD( ParticleSystemTemplate, m_emissionVelocity.cylindrical.normal ) },
 
-	{ "VelOutward",							parseRetailPerFrameRandom,	NULL,		offsetof( ParticleSystemTemplate, m_emissionVelocity.outward.speed ) },
-	{ "VelOutwardOther",				parseRetailPerFrameRandom,	NULL,		offsetof( ParticleSystemTemplate, m_emissionVelocity.outward.otherSpeed ) },
+	{ "VelOutward",							SPEED_FIELD( ParticleSystemTemplate, m_emissionVelocity.outward.speed ) },
+	{ "VelOutwardOther",				SPEED_FIELD( ParticleSystemTemplate, m_emissionVelocity.outward.otherSpeed ) },
 
 	{ "VolumeType",							INI::parseIndexList,													EmissionVolumeTypeNames,		offsetof( ParticleSystemTemplate, m_emissionVolumeType ) },
 	{ "VolLineStart",						INI::parseCoord3D,														NULL,		offsetof( ParticleSystemTemplate, m_emissionVolume.line.start ) },
@@ -3664,8 +3680,8 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 
 	{ "WindMotion",					INI::parseIndexList, WindMotionNames, offsetof( ParticleSystemTemplate, m_windMotion ) },
 
-	{ "WindAngleChangeMin", INI::parseRetailPerFrameReal, NULL, offsetof( ParticleSystemTemplate, m_windAngleChangeMin ) },
-	{ "WindAngleChangeMax", INI::parseRetailPerFrameReal, NULL, offsetof( ParticleSystemTemplate, m_windAngleChangeMax ) },
+	{ "WindAngleChangeMin", SPEED_FIELD( ParticleSystemTemplate, m_windAngleChangeMin ) },
+	{ "WindAngleChangeMax", SPEED_FIELD( ParticleSystemTemplate, m_windAngleChangeMax ) },
 
 	{ "WindPingPongStartAngleMin",			INI::parseReal, NULL, offsetof( ParticleSystemTemplate, m_windMotionStartAngleMin ) },
 	{ "WindPingPongStartAngleMax",			INI::parseReal, NULL, offsetof( ParticleSystemTemplate, m_windMotionStartAngleMax ) },
@@ -3688,7 +3704,7 @@ void ParticleSystemTemplate::parseRandomKeyframe( INI* ini, void *instance,
 
 	Real low = ini->scanReal(ini->getNextToken());
 	Real high = ini->scanReal(ini->getNextToken());
-	key->frame = ConvertRetailFrames(ini->scanUnsignedInt(ini->getNextToken()));
+	key->frame.setRaw( ini->scanUnsignedInt(ini->getNextToken()) );
 
 	// set the range of the random variable
 	key->var.setRange( low, high );
@@ -3704,7 +3720,7 @@ void ParticleSystemTemplate::parseRGBColorKeyframe( INI* ini, void *instance,
 	RGBColorKeyframe *key = static_cast<RGBColorKeyframe *>(store);
 
 	INI::parseRGBColor( ini, instance, &key->color, NULL );
-	INI::parseRetailFramesUnsignedInt( ini, instance, &key->frame, NULL );
+	RetailFrames::parse( ini, instance, &key->frame, NULL );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -3793,12 +3809,15 @@ void ParticleSystemTemplate::forceSmokeBoost( const SmokeBoost &boost )
 	// alone - AREA_EFFECT carries its own field-particle ceiling and CRITICAL is the superweapons.
 	const ParticlePriorityType PRIORITY_FLOOR = SEMI_CONSTANT;
 
-	m_lifetime.setRange( m_lifetime.getMinimumValue() * boost.m_lifetimeScale,
-											 m_lifetime.getMaximumValue() * boost.m_lifetimeScale,
-											 m_lifetime.getDistributionType() );
+	// scaled as frames at the speed the templates load at and kept as the retail numbers that give them
+	GameClientRandomVariable lifetime = m_lifetime.get();
+	lifetime.setRange( lifetime.getMinimumValue() * boost.m_lifetimeScale,
+										 lifetime.getMaximumValue() * boost.m_lifetimeScale,
+										 lifetime.getDistributionType() );
+	m_lifetime.setConverted( lifetime );
 
 	// zero means the emitter never stops on its own, and scaling that is still never
-	m_systemLifetime = (UnsignedInt)(m_systemLifetime * boost.m_lifetimeScale);
+	m_systemLifetime.setConverted( (UnsignedInt)(m_systemLifetime * boost.m_lifetimeScale) );
 
 	m_startSize.setRange( m_startSize.getMinimumValue() * boost.m_sizeScale,
 												m_startSize.getMaximumValue() * boost.m_sizeScale,
@@ -3806,19 +3825,21 @@ void ParticleSystemTemplate::forceSmokeBoost( const SmokeBoost &boost )
 
 	// Growth is per frame.  Left alone against a longer life the cloud would swell far past the
 	// width the art asked for; slowed by the same factor it reaches the same width, later.
-	m_sizeRate.setRange( m_sizeRate.getMinimumValue() / boost.m_lifetimeScale,
-											 m_sizeRate.getMaximumValue() / boost.m_lifetimeScale,
-											 m_sizeRate.getDistributionType() );
+	GameClientRandomVariable sizeRate = m_sizeRate.get();
+	sizeRate.setRange( sizeRate.getMinimumValue() / boost.m_lifetimeScale,
+										 sizeRate.getMaximumValue() / boost.m_lifetimeScale,
+										 sizeRate.getDistributionType() );
+	m_sizeRate.setConverted( sizeRate );
 
 	for( Int keyframe = 0; keyframe < MAX_KEYFRAMES; ++keyframe )
 	{
 		// Keyframe times are frame numbers counted from the particle's birth, so a particle that
 		// lives twice as long against the shipped times spends the extra life at its last key -
 		// which for smoke is fully transparent.  The extra life would be invisible.
-		m_alphaKey[ keyframe ].frame =
-			(UnsignedInt)(m_alphaKey[ keyframe ].frame * boost.m_lifetimeScale);
-		m_colorKey[ keyframe ].frame =
-			(UnsignedInt)(m_colorKey[ keyframe ].frame * boost.m_lifetimeScale);
+		m_alphaKey[ keyframe ].frame.setConverted(
+			(UnsignedInt)(m_alphaKey[ keyframe ].frame * boost.m_lifetimeScale) );
+		m_colorKey[ keyframe ].frame.setConverted(
+			(UnsignedInt)(m_colorKey[ keyframe ].frame * boost.m_lifetimeScale) );
 
 		Real low = m_alphaKey[ keyframe ].var.getMinimumValue() * boost.m_alphaScale;
 		Real high = m_alphaKey[ keyframe ].var.getMaximumValue() * boost.m_alphaScale;
@@ -3938,7 +3959,7 @@ void ParticleSystemManager::init( void )
 	if( TheGlobalData && TheGlobalData->m_particleGroundBounce )
 	{
 		for( TemplateMap::iterator it = m_templateMap.begin(); it != m_templateMap.end(); ++it )
-			it->second->forceGroundCollision( 0.35f, ConvertRetailPerFrameFactor( 0.6f ) );
+			it->second->forceGroundCollision( 0.35f, 0.6f );
 		DEBUG_LOG(("-particlebounce: terrain collision forced on for %d particle systems\n",
 							(Int)m_templateMap.size()));
 	}

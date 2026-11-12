@@ -75,16 +75,16 @@ HelicopterSlowDeathBehaviorModuleData::HelicopterSlowDeathBehaviorModuleData( vo
 	m_finalRubbleObject.clear();
 	//
 
-	m_spiralOrbitTurnRate = 0.0f;
-	m_spiralOrbitForwardSpeed = 0.0f;
-	m_spiralOrbitForwardSpeedDamping = 1.0f;  // no damping
-	m_minSelfSpin = 0.0f;
-	m_maxSelfSpin = 0.0f;
-	m_selfSpinUpdateDelay = 0.0f;
+	m_spiralOrbitTurnRate.setRaw( 0.0f );
+	m_spiralOrbitForwardSpeed.setRaw( 0.0f );
+	m_spiralOrbitForwardSpeedDamping.setRaw( 1.0f );  // no damping
+	m_minSelfSpin.setRaw( 0.0f );
+	m_maxSelfSpin.setRaw( 0.0f );
+	m_selfSpinUpdateDelay.setRaw( 0.0f );
 	m_selfSpinUpdateAmount = 0.0f;
 	m_fallHowFast = 0.0f;
-	m_minBladeFlyOffDelay = 0.0;
-	m_maxBladeFlyOffDelay = 0.0;
+	m_minBladeFlyOffDelay.setRaw( 0.0f );
+	m_maxBladeFlyOffDelay.setRaw( 0.0f );
 
 	m_attachParticleSystem = NULL;
 	m_attachParticleLoc.x = 0.0f;
@@ -97,8 +97,8 @@ HelicopterSlowDeathBehaviorModuleData::HelicopterSlowDeathBehaviorModuleData( vo
 	m_oclHitGround = NULL;
 	m_fxFinalBlowUp = NULL;
 	m_oclFinalBlowUp = NULL;
-	m_delayFromGroundToFinalDeath = 0;
-	m_maxBraking = 99999.0f;
+	m_delayFromGroundToFinalDeath.setRaw( 0 );
+	m_maxBraking.setRaw( 39999596.0f );	// dist/sec^2: 99999.0f a frame^2 at the native speed
 	m_momentumDriftShare = 0.6f;
 
 }  // end HelicopterSlowDeathBehaviorModuleData
@@ -111,16 +111,16 @@ HelicopterSlowDeathBehaviorModuleData::HelicopterSlowDeathBehaviorModuleData( vo
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "SpiralOrbitTurnRate",	INI::parseAngularVelocityReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_spiralOrbitTurnRate ) },
-		{ "SpiralOrbitForwardSpeed", INI::parseVelocityReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_spiralOrbitForwardSpeed ) },
-		{ "SpiralOrbitForwardSpeedDamping", INI::parseRetailPerFrameFactorReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_spiralOrbitForwardSpeedDamping ) },
-		{ "MinSelfSpin", INI::parseAngularVelocityReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_minSelfSpin ) },
-		{ "MaxSelfSpin", INI::parseAngularVelocityReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_maxSelfSpin ) },
-		{ "SelfSpinUpdateDelay", INI::parseDurationReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_selfSpinUpdateDelay ) },
+		{ "SpiralOrbitTurnRate",	SPEED_FIELD( HelicopterSlowDeathBehaviorModuleData, m_spiralOrbitTurnRate ) },
+		{ "SpiralOrbitForwardSpeed", SPEED_FIELD( HelicopterSlowDeathBehaviorModuleData, m_spiralOrbitForwardSpeed ) },
+		{ "SpiralOrbitForwardSpeedDamping", SPEED_FIELD( HelicopterSlowDeathBehaviorModuleData, m_spiralOrbitForwardSpeedDamping ) },
+		{ "MinSelfSpin", SPEED_FIELD( HelicopterSlowDeathBehaviorModuleData, m_minSelfSpin ) },
+		{ "MaxSelfSpin", SPEED_FIELD( HelicopterSlowDeathBehaviorModuleData, m_maxSelfSpin ) },
+		{ "SelfSpinUpdateDelay", SPEED_FIELD( HelicopterSlowDeathBehaviorModuleData, m_selfSpinUpdateDelay ) },
 		{ "SelfSpinUpdateAmount", INI::parseAngleReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_selfSpinUpdateAmount ) },
 		{ "FallHowFast", INI::parsePercentToReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_fallHowFast ) },
-		{ "MinBladeFlyOffDelay", INI::parseDurationReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_minBladeFlyOffDelay ) },
-		{ "MaxBladeFlyOffDelay", INI::parseDurationReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_maxBladeFlyOffDelay ) },
+		{ "MinBladeFlyOffDelay", SPEED_FIELD( HelicopterSlowDeathBehaviorModuleData, m_minBladeFlyOffDelay ) },
+		{ "MaxBladeFlyOffDelay", SPEED_FIELD( HelicopterSlowDeathBehaviorModuleData, m_maxBladeFlyOffDelay ) },
 		{ "AttachParticle", INI::parseParticleSystemTemplate, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_attachParticleSystem ) },
 		{ "AttachParticleBone", INI::parseAsciiString, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_attachParticleBone ) },
 		{ "AttachParticleLoc", INI::parseCoord3D, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_attachParticleLoc ) },
@@ -133,10 +133,10 @@ HelicopterSlowDeathBehaviorModuleData::HelicopterSlowDeathBehaviorModuleData( vo
 		{ "OCLHitGround", INI::parseObjectCreationList, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_oclHitGround ) },
 		{ "FXFinalBlowUp", INI::parseFXList, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_fxFinalBlowUp ) },
 		{ "OCLFinalBlowUp", INI::parseObjectCreationList, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_oclFinalBlowUp ) },
-		{ "DelayFromGroundToFinalDeath", INI::parseDurationReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_delayFromGroundToFinalDeath ) },
+		{ "DelayFromGroundToFinalDeath", SPEED_FIELD( HelicopterSlowDeathBehaviorModuleData, m_delayFromGroundToFinalDeath ) },
 		{ "FinalRubbleObject", INI::parseAsciiString, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_finalRubbleObject ) },
 		{ "SoundDeathLoop", INI::parseAudioEventRTS, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_deathSound) },
-		{ "MaxBraking", INI::parseAccelerationReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_maxBraking) },
+		{ "MaxBraking", SPEED_FIELD( HelicopterSlowDeathBehaviorModuleData, m_maxBraking ) },
 		{ "DeathMomentumDriftShare", INI::parsePercentToReal, NULL, offsetof( HelicopterSlowDeathBehaviorModuleData, m_momentumDriftShare) },
 
 		{ 0, 0, 0, 0 }

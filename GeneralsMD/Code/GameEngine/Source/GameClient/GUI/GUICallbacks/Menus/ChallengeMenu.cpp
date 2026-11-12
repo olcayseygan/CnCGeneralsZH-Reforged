@@ -732,7 +732,7 @@ WindowMsgHandledType ChallengeMenuSystem( GameWindow *window, UnsignedInt msg, W
         
         // Added so that, even though a ChallengeGame is really a SkirmishGame in SinglePlayerGame's clothing,
         // GameEngine will still apply the default "FRAME CAP" as it does during "Solo Missions."
-        msg->appendIntegerArgument(GameEngine_matchFramesPerSecond(TheGlobalData->m_missionGameSpeedPercent));	// FPS limit
+        GameEngine_appendNewGameRates( msg, TheGlobalData->m_missionGameSpeedPercent );	// FPS limit and the missions' game speed
 				
 				InitRandom(0);
 			}

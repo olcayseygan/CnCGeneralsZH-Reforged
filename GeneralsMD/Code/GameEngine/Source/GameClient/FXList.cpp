@@ -182,7 +182,7 @@ public:
 	{
 		m_tracerName.set("GenericTracer");
     m_boneName.clear();
-    m_speed = 0.0f; // means "use passed-in speed"
+    m_speed.setRaw( 0.0f ); // means "use passed-in speed"
     m_decayAt = 1.0f;
 		m_length = 10.0f;
 		m_width = 1.0f;
@@ -249,7 +249,7 @@ public:
 		{
 			{ "TracerName",			INI::parseAsciiString,			NULL, offsetof( TracerFXNugget, m_tracerName ) },
 			{ "BoneName",				INI::parseAsciiString,			NULL, offsetof( TracerFXNugget, m_boneName ) },
-      { "Speed",          INI::parseVelocityReal,     NULL, offsetof( TracerFXNugget, m_speed ) },
+      { "Speed",          SPEED_FIELD( TracerFXNugget, m_speed ) },
       { "DecayAt",        INI::parseReal,             NULL, offsetof( TracerFXNugget, m_decayAt ) },
       { "Length",					INI::parseReal,             NULL, offsetof( TracerFXNugget, m_length ) },
       { "Width",					INI::parseReal,             NULL, offsetof( TracerFXNugget, m_width ) },
@@ -266,7 +266,7 @@ public:
 private:
 	AsciiString			m_tracerName;
   AsciiString     m_boneName;
-  Real            m_speed;
+  VelocityPerFrame            m_speed;
   Real            m_decayAt;
 	Real						m_length;
 	Real						m_width;
@@ -340,7 +340,7 @@ class LightPulseFXNugget : public FXNugget
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(LightPulseFXNugget, "LightPulseFXNugget")		
 public:
 
-	LightPulseFXNugget() : m_radius(0), m_increaseFrames(0), m_decreaseFrames(0), m_boundingCirclePct(0)
+	LightPulseFXNugget() : m_radius(0), m_increaseFrames(DurationFrames::fromRaw(0)), m_decreaseFrames(DurationFrames::fromRaw(0)), m_boundingCirclePct(0)
 	{
 		m_color.red = m_color.green = m_color.blue = 0;
 	}
@@ -381,8 +381,8 @@ public:
 			{ "Color",						INI::parseRGBColor,								NULL, offsetof( LightPulseFXNugget, m_color ) },
 			{ "Radius",						INI::parseReal,										NULL, offsetof( LightPulseFXNugget, m_radius ) },
 			{ "RadiusAsPercentOfObjectSize",		INI::parsePercentToReal,	NULL, offsetof( LightPulseFXNugget, m_boundingCirclePct ) },
-			{ "IncreaseTime",			INI::parseDurationUnsignedInt,	NULL, offsetof( LightPulseFXNugget, m_increaseFrames ) },
-			{ "DecreaseTime",			INI::parseDurationUnsignedInt,	NULL, offsetof( LightPulseFXNugget, m_decreaseFrames ) },
+			{ "IncreaseTime",			SPEED_FIELD( LightPulseFXNugget, m_increaseFrames ) },
+			{ "DecreaseTime",			SPEED_FIELD( LightPulseFXNugget, m_decreaseFrames ) },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -395,8 +395,8 @@ private:
 	RGBColor			m_color;
 	Real					m_radius;
 	Real					m_boundingCirclePct;
-	UnsignedInt		m_increaseFrames;
-	UnsignedInt		m_decreaseFrames;
+	DurationFrames		m_increaseFrames;
+	DurationFrames		m_decreaseFrames;
 };  
 EMPTY_DTOR(LightPulseFXNugget)
 
@@ -482,8 +482,8 @@ public:
 	ScreenDistortionFXNugget()
 	{
 		m_info.m_radius = 0.0f;
-		m_info.m_pullFrames = 0;
-		m_info.m_waveFrames = 0;
+		m_info.m_pullFrames.setRaw( 0 );
+		m_info.m_waveFrames.setRaw( 0 );
 		m_info.m_pullStrength = 0.0f;
 		m_info.m_waveStrength = 0.0f;
 		m_info.m_waveWidth = 0.0f;
@@ -500,8 +500,8 @@ public:
 		static const FieldParse myFieldParse[] =
 		{
 			{ "Radius",					INI::parseReal,									NULL, offsetof( ScreenDistortionFXNugget, m_info.m_radius ) },
-			{ "PullTime",				INI::parseDurationUnsignedInt,	NULL, offsetof( ScreenDistortionFXNugget, m_info.m_pullFrames ) },
-			{ "WaveTime",				INI::parseDurationUnsignedInt,	NULL, offsetof( ScreenDistortionFXNugget, m_info.m_waveFrames ) },
+			{ "PullTime",				SPEED_FIELD( ScreenDistortionFXNugget, m_info.m_pullFrames ) },
+			{ "WaveTime",				SPEED_FIELD( ScreenDistortionFXNugget, m_info.m_waveFrames ) },
 			{ "PullStrength",		INI::parsePercentToReal,				NULL, offsetof( ScreenDistortionFXNugget, m_info.m_pullStrength ) },
 			{ "WaveStrength",		INI::parsePercentToReal,				NULL, offsetof( ScreenDistortionFXNugget, m_info.m_waveStrength ) },
 			{ "WaveWidth",			INI::parsePercentToReal,				NULL, offsetof( ScreenDistortionFXNugget, m_info.m_waveWidth ) },

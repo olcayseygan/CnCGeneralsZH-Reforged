@@ -66,7 +66,7 @@ void StealthDetectorUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "DetectionRate",							INI::parseDurationUnsignedInt,			NULL, offsetof( StealthDetectorUpdateModuleData, m_updateRate ) },
+		{ "DetectionRate",							SPEED_FIELD( StealthDetectorUpdateModuleData, m_updateRate ) },
 		{ "DetectionRange",							INI::parseReal,											NULL, offsetof( StealthDetectorUpdateModuleData, m_detectionRange ) },
 		{ "InitiallyDisabled",					INI::parseBool,											NULL, offsetof( StealthDetectorUpdateModuleData, m_initiallyDisabled ) },
 		{ "PingSound",									INI::parseAudioEventRTS,						NULL, offsetof( StealthDetectorUpdateModuleData, m_pingSound ) },

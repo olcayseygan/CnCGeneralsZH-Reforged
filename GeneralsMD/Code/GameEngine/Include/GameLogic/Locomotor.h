@@ -152,21 +152,21 @@ private:
 	*/
 	AsciiString								m_name;
 	LocomotorSurfaceTypeMask	m_surfaces;							///< flags indicating the kinds of surfaces we can use
-	Real											m_maxSpeed;							///< max speed
-	Real											m_maxSpeedDamaged;			///< max speed when "damaged"
-	Real											m_minSpeed;							///< we should never brake past this
-	Real											m_maxTurnRate;					///< max rate at which we can turn, in rads/frame
-	Real											m_maxTurnRateDamaged;		///< max turn rate when "damaged"
-	Real											m_acceleration;					///< max acceleration
-	Real											m_accelerationDamaged;	///< max acceleration when damaged
-	Real											m_lift;									///< max lifting acceleration (flying objects only)
-	Real											m_liftDamaged;					///< max lift when damaged
-	Real											m_braking;							///< max braking (deceleration)
-	Real											m_minTurnSpeed;					///< we must be going >= this speed in order to turn
+	VelocityPerFrame											m_maxSpeed;							///< max speed
+	VelocityPerFrame											m_maxSpeedDamaged;			///< max speed when "damaged"
+	VelocityPerFrame											m_minSpeed;							///< we should never brake past this
+	AngularVelocityPerFrame											m_maxTurnRate;					///< max rate at which we can turn, in rads/frame
+	AngularVelocityPerFrame											m_maxTurnRateDamaged;		///< max turn rate when "damaged"
+	AccelerationPerFrame											m_acceleration;					///< max acceleration
+	AccelerationPerFrame											m_accelerationDamaged;	///< max acceleration when damaged
+	AccelerationPerFrame											m_lift;									///< max lifting acceleration (flying objects only)
+	AccelerationPerFrame											m_liftDamaged;					///< max lift when damaged
+	AccelerationPerFrame											m_braking;							///< max braking (deceleration)
+	VelocityPerFrame											m_minTurnSpeed;					///< we must be going >= this speed in order to turn
 	Real											m_preferredHeight;			///< our preferred height (if flying)
 	Real											m_preferredHeightDamping;		///< how aggressively to adjust to preferred height: 1.0 = very much so, 0.1 = gradually, etc
 	Real											m_circlingRadius;				///< for flying things, the radius at which they circle their "maintain" destination. (pos = cw, neg = ccw, 0 = smallest possible)
-	Real											m_speedLimitZ;					///< try to avoid going up or down at more than this speed, if possible
+	VelocityPerFrame											m_speedLimitZ;					///< try to avoid going up or down at more than this speed, if possible
 	Real											m_extra2DFriction;			///< extra 2dfriction to apply (via Physics)
 	Real											m_maxThrustAngle;				///< THRUST locos only: how much we deflect our thrust angle
 	LocomotorBehaviorZ				m_behaviorZ;						///< z-axis behavior
@@ -175,7 +175,7 @@ private:
 
 	Real											m_accelPitchLimit;			///< Maximum amount we will pitch up  under acceleration (including recoil.)
 	Real											m_decelPitchLimit;			///< Maximum amount we will pitch down under deceleration (including recoil.)
-	Real											m_bounceKick;						///< How much simulating rough terrain "bounces" a wheel up.
+	AngularVelocityPerFrame											m_bounceKick;						///< How much simulating rough terrain "bounces" a wheel up.
 	Real											m_pitchStiffness;				///< How stiff the springs are forward & back.
 	Real											m_rollStiffness;				///< How stiff the springs are side to side.
 	Real											m_pitchDamping;					///< How good the shock absorbers are.
@@ -195,7 +195,7 @@ private:
 	
 	Real											m_closeEnoughDist;			///< How close we have to approach the end of a path before stopping
 	Bool											m_isCloseEnoughDist3D;	///< And is that calculation 3D, for very rare cases that need to move straight down.
-	Real											m_ultraAccurateSlideIntoPlaceFactor;			///< how much we can fudge turning when ultra-accurate
+	DurationFramesReal											m_ultraAccurateSlideIntoPlaceFactor;			///< how much we can fudge turning when ultra-accurate
 
 	Bool											m_locomotorWorksWhenDead;	///< should locomotor continue working even when object is "dead"?
 	Bool											m_allowMotiveForceWhileAirborne;	///< can we apply motive when airborne?

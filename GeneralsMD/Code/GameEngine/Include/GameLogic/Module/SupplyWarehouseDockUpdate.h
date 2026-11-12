@@ -57,7 +57,7 @@ public:
 	// to fight over: whoever mined it out first had the game, and the second half of every match
 	// was played on the income two players could no longer earn.  Now it is ground worth holding.
 	//
-	UnsignedInt m_regenDelay;			///< frames a box takes with nothing built near it, 0 = never refills
+	DurationFrames m_regenDelay;			///< frames a box takes with nothing built near it, 0 = never refills
 	Real m_regenRadius;						///< how close a cash building has to be to count
 	Int m_regenMaxBoxes;					///< ceiling, -1 for whatever it started with
 };

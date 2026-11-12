@@ -53,7 +53,7 @@ RadiusDecalTemplate::RadiusDecalTemplate() :
 	m_shadowType(SHADOW_ALPHA_DECAL), 
 	m_minOpacity(1.0f),
 	m_maxOpacity(1.0f),
-	m_opacityThrobTime(LOGICFRAMES_PER_GAME_SECOND),
+	m_opacityThrobTime(DurationFrames::fromRaw(1000)),	// a second
 	m_color(0),
 	m_onlyVisibleToOwningPlayer(true),
 	m_name(AsciiString::TheEmptyString)  // Added By Sadullah Nader for Init purposes
@@ -128,7 +128,8 @@ void RadiusDecalTemplate::createRadiusDecal(const Coord3D& pos, Real radius, con
 void RadiusDecalTemplate::xferRadiusDecalTemplate( Xfer *xfer )
 {
   // version
-  XferVersion currentVersion = 1;
+	// 2: the throb time in msec as the INI wrote it; 1 had it in frames at the one game speed there was
+  XferVersion currentVersion = 2;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
 
@@ -136,7 +137,9 @@ void RadiusDecalTemplate::xferRadiusDecalTemplate( Xfer *xfer )
 	xfer->xferUser(&m_shadowType, sizeof(m_shadowType));	
 	xfer->xferReal(&m_minOpacity);
   xfer->xferReal(&m_maxOpacity);
-	xfer->xferUnsignedInt(&m_opacityThrobTime);
+	xfer->xferUnsignedInt(m_opacityThrobTime.rawData());
+	if( xfer->getXferMode() == XFER_LOAD && version < 2 )
+		m_opacityThrobTime.setConverted( m_opacityThrobTime.raw() );
 	xfer->xferColor(&m_color);
 	xfer->xferBool(&m_onlyVisibleToOwningPlayer);
 }
@@ -154,7 +157,7 @@ static void parseRetiredField( INI *, void *, void *, const void * )
 		{ "Style",											INI::parseBitString32,				TheShadowNames,		offsetof( RadiusDecalTemplate, m_shadowType ) },
 		{ "OpacityMin",									INI::parsePercentToReal,			NULL,							offsetof( RadiusDecalTemplate, m_minOpacity ) },
 		{ "OpacityMax",									INI::parsePercentToReal,			NULL,							offsetof( RadiusDecalTemplate, m_maxOpacity) },
-		{ "OpacityThrobTime",						INI::parseDurationUnsignedInt,NULL,							offsetof( RadiusDecalTemplate, m_opacityThrobTime ) },
+		{ "OpacityThrobTime",						SPEED_FIELD( RadiusDecalTemplate, m_opacityThrobTime ) },
 		{ "Color",											INI::parseColorInt,						NULL,							offsetof( RadiusDecalTemplate, m_color ) },
 		{ "OnlyVisibleToOwningPlayer",	INI::parseBool,								NULL,							offsetof( RadiusDecalTemplate, m_onlyVisibleToOwningPlayer ) },
 		// the retired aura rings' fields; data written for them may still name them, and an unknown field throws

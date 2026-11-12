@@ -46,7 +46,7 @@ class QueueProductionExitUpdateModuleData : public UpdateModuleData
 public:
 	Coord3D m_unitCreatePoint;
 	Coord3D m_naturalRallyPoint;
-	UnsignedInt m_exitDelayData;
+	DurationFrames m_exitDelayData;
 	Bool m_allowAirborneCreationData;
 	UnsignedInt m_initialBurst; 
 
@@ -54,7 +54,7 @@ public:
 	{
 		m_unitCreatePoint.zero();
 		m_naturalRallyPoint.zero();
-		m_exitDelayData = 0;
+		m_exitDelayData.setRaw( 0 );
 		m_allowAirborneCreationData = FALSE;
 		m_initialBurst = 0;
 	}
@@ -73,7 +73,7 @@ public:
 		{
 			{ "UnitCreatePoint",				INI::parseCoord3D,							NULL, offsetof( QueueProductionExitUpdateModuleData, m_unitCreatePoint ) },
 			{ "NaturalRallyPoint",			INI::parseCoord3D,							NULL, offsetof( QueueProductionExitUpdateModuleData, m_naturalRallyPoint ) },
-			{ "ExitDelay",							INI::parseDurationUnsignedInt,	NULL, offsetof( QueueProductionExitUpdateModuleData, m_exitDelayData ) },
+			{ "ExitDelay",							SPEED_FIELD( QueueProductionExitUpdateModuleData, m_exitDelayData ) },
 			{ "AllowAirborneCreation",	INI::parseBool,									NULL, offsetof( QueueProductionExitUpdateModuleData, m_allowAirborneCreationData ) },
 			{ "InitialBurst",						INI::parseUnsignedInt,					NULL, offsetof( QueueProductionExitUpdateModuleData, m_initialBurst ) },
 			{ 0, 0, 0, 0 }

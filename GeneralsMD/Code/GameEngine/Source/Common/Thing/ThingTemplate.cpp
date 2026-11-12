@@ -248,7 +248,7 @@ const FieldParse ThingTemplate::s_objectFieldParseTable[] =
 	{ "ShadowOffsetX",				INI::parseReal,						NULL,	offsetof( ThingTemplate, m_shadowOffsetX ) },
 	{ "ShadowOffsetY",				INI::parseReal,						NULL,	offsetof( ThingTemplate, m_shadowOffsetY ) },
 	{ "ShadowTexture",				INI::parseAsciiString,		NULL,	offsetof( ThingTemplate, m_shadowTextureName ) },
-	{ "OcclusionDelay",					INI::parseDurationUnsignedInt,		NULL, offsetof( ThingTemplate, m_occlusionDelay ) },
+	{ "OcclusionDelay",					SPEED_FIELD( ThingTemplate, m_occlusionDelay ) },
 	{ "AddModule",						ThingTemplate::parseAddModule,			NULL, 0 },
 	{ "RemoveModule",					ThingTemplate::parseRemoveModule,		NULL, 0 },
 	{ "ReplaceModule",				ThingTemplate::parseReplaceModule,	NULL, 0 },

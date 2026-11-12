@@ -60,7 +60,7 @@
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-const Int DEFAULT_MAX_LIFESPAN = 10 * LOGICFRAMES_PER_GAME_SECOND;
+#define DEFAULT_MAX_LIFESPAN_MSEC 10000
 
 // A StraightWhenClear shell whose barrel is raised steeper than this slope is being lobbed, and takes
 // the barrel's arc on open ground too. It is the barrel against level ground, or against the line to
@@ -73,7 +73,7 @@ const Real STRAIGHT_SHOT_MAX_BARREL_SLOPE = 0.1405f;
 
 //-----------------------------------------------------------------------------
 DumbProjectileBehaviorModuleData::DumbProjectileBehaviorModuleData() : 
-	m_maxLifespan(DEFAULT_MAX_LIFESPAN),
+	m_maxLifespan(DurationFrames::fromRaw(DEFAULT_MAX_LIFESPAN_MSEC)),
 	m_detonateCallsKill(FALSE),
 	m_orientToFlightPath(TRUE),
 	m_tumbleRandomly(FALSE),
@@ -86,7 +86,7 @@ DumbProjectileBehaviorModuleData::DumbProjectileBehaviorModuleData() :
 	m_straightWhenClear(FALSE),
 	m_garrisonHitKillCount(0),
 	m_garrisonHitKillFX(NULL),
-	m_flightPathAdjustDistPerFrame(0.0f)
+	m_flightPathAdjustDistPerFrame(VelocityPerFrame::fromRaw(0.0f))
 {
 }
 
@@ -97,7 +97,7 @@ void DumbProjectileBehaviorModuleData::buildFieldParse(MultiIniFieldParse& p)
 
 	static const FieldParse dataFieldParse[] = 
 	{
-		{ "MaxLifespan", INI::parseDurationUnsignedInt, NULL, offsetof( DumbProjectileBehaviorModuleData, m_maxLifespan ) },
+		{ "MaxLifespan", SPEED_FIELD( DumbProjectileBehaviorModuleData, m_maxLifespan ) },
 		{ "TumbleRandomly", INI::parseBool, NULL, offsetof( DumbProjectileBehaviorModuleData, m_tumbleRandomly ) },
 		{ "DetonateCallsKill", INI::parseBool, NULL, offsetof( DumbProjectileBehaviorModuleData, m_detonateCallsKill ) },
 		{ "OrientToFlightPath", INI::parseBool, NULL, offsetof( DumbProjectileBehaviorModuleData, m_orientToFlightPath ) },
@@ -115,7 +115,7 @@ void DumbProjectileBehaviorModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "GarrisonHitKillCount", INI::parseUnsignedInt, NULL, offsetof( DumbProjectileBehaviorModuleData, m_garrisonHitKillCount ) },
 		{ "GarrisonHitKillFX", INI::parseFXList, NULL, offsetof( DumbProjectileBehaviorModuleData, m_garrisonHitKillFX ) },
 
-		{ "FlightPathAdjustDistPerSecond", INI::parseVelocityReal, NULL, offsetof( DumbProjectileBehaviorModuleData, m_flightPathAdjustDistPerFrame ) },
+		{ "FlightPathAdjustDistPerSecond", SPEED_FIELD( DumbProjectileBehaviorModuleData, m_flightPathAdjustDistPerFrame ) },
 
 
 		{ 0, 0, 0, 0 }

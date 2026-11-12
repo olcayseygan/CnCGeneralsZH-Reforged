@@ -68,11 +68,11 @@ const FieldParse* DeliverPayloadData::getFieldParse()
 		{ "MaxAttempts",										INI::parseInt,								NULL, offsetof( DeliverPayloadData, m_maxAttempts) },
 
 		//Drop information
-		{ "DropDelay",											INI::parseDurationUnsignedInt,NULL, offsetof( DeliverPayloadData, m_dropDelay ) },
+		{ "DropDelay",											SPEED_FIELD( DeliverPayloadData, m_dropDelay ) },
 		{ "DropOffset",											INI::parseCoord3D,						NULL, offsetof( DeliverPayloadData, m_dropOffset ) },
 		{ "DropVariance",										INI::parseCoord3D,						NULL, offsetof( DeliverPayloadData, m_dropVariance ) },
 		{ "InheritTransportVelocity",				INI::parseBool,								NULL, offsetof( DeliverPayloadData, m_inheritTransportVelocity ) },
-		{ "ExitPitchRate",									INI::parseAngularVelocityReal,NULL, offsetof( DeliverPayloadData, m_exitPitchRate ) },
+		{ "ExitPitchRate",									SPEED_FIELD( DeliverPayloadData, m_exitPitchRate ) },
 		{ "ParachuteDirectly",							INI::parseBool,								NULL, offsetof( DeliverPayloadData, m_isParachuteDirectly) },
 
 		//Visible payload information (payload assumed to be show visibly and it's created only when dropped)
@@ -422,12 +422,14 @@ void DeliverPayloadAIUpdate::crc( Xfer *xfer )
 	* Version Info:
 	* 1: Initial version 
 	* 5: Whoops version.  preOpenDistance just wasn't saved.
+	* 6: the drop delay in msec and the exit pitch rate in degrees a second, as the INI wrote them; 5 had
+	*    them in frames at the one game speed there was, turned back at the speed the save loads at
 */
 // ------------------------------------------------------------------------------------------------
 void DeliverPayloadAIUpdate::xfer( Xfer *xfer )
 {
   // version
-  const XferVersion currentVersion = 5;
+  const XferVersion currentVersion = 6;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
  
@@ -450,7 +452,9 @@ void DeliverPayloadAIUpdate::xfer( Xfer *xfer )
 	xfer->xferInt(&data.m_maxAttempts);
 	xfer->xferCoord3D(&data.m_dropOffset);
 	xfer->xferCoord3D(&data.m_dropVariance);
-	xfer->xferUnsignedInt(&data.m_dropDelay);
+	xfer->xferUnsignedInt(data.m_dropDelay.rawData());	// msec as the INI wrote it
+	if( xfer->getXferMode() == XFER_LOAD && version < 6 )
+		data.m_dropDelay.setConverted( data.m_dropDelay.raw() );
 	xfer->xferBool(&data.m_fireWeapon);
 	xfer->xferBool(&data.m_selfDestructObject);
 	xfer->xferInt(&data.m_visibleNumBones);						
@@ -460,7 +464,9 @@ void DeliverPayloadAIUpdate::xfer( Xfer *xfer )
 	xfer->xferInt(&data.m_visibleItemsDroppedPerInterval);
 	xfer->xferBool(&data.m_inheritTransportVelocity);
 	xfer->xferBool(&data.m_isParachuteDirectly);		
-	xfer->xferReal(&data.m_exitPitchRate);
+	xfer->xferReal(data.m_exitPitchRate.rawData());
+	if( xfer->getXferMode() == XFER_LOAD && version < 6 )
+		data.m_exitPitchRate.setConverted( data.m_exitPitchRate.raw() );
 	// const FXList					*m_strafeFX;
 	xfer->xferReal(&data.m_strafeLength);
 	AsciiString weaponTemplateName;

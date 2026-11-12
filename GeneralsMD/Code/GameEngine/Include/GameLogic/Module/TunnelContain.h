@@ -48,13 +48,13 @@ class TunnelContainModuleData : public OpenContainModuleData
 {
 public:
 
-	Real m_framesForFullHeal;			///< time (in frames) something becomes fully healed
+	DurationFramesReal m_framesForFullHeal;			///< time (in frames) something becomes fully healed
 
 	TunnelContainModuleData()
 	{
 
 		// by default, takes no time to heal ppl
-		m_framesForFullHeal = 1.0f;
+		m_framesForFullHeal.setRaw( 50.0f );	// msec: 1.0f frames at the native speed
 
 		//
 		// by default we say that transports can have infantry inside them, this will be totally
@@ -70,7 +70,7 @@ public:
 
 		static const FieldParse dataFieldParse[] = 
 		{
-			{ "TimeForFullHeal", INI::parseDurationReal, NULL, offsetof( TunnelContainModuleData, m_framesForFullHeal ) },
+			{ "TimeForFullHeal", SPEED_FIELD( TunnelContainModuleData, m_framesForFullHeal ) },
 			{ 0, 0, 0, 0 }
 		};
     p.add(dataFieldParse);

@@ -114,16 +114,21 @@ public:
 	UnicodeString description;				// user description for save game file
 	SaveFileType saveFileType;				// type of save file we're dealing with
 	AsciiString missionMapName;				// used for mission saves
-	Int framesPerSecond;							// game speed the match was playing at, 0 in saves older than that
+	Int framesPerSecond;							// ticks a wall second the match was paced at when saved, 0 in saves older than that; a load takes the match pace instead
 	Int version;											// GameState block version the file was written with, read with the header
-	Int logicFramesPerSecond;					// ticks per game second the file's frame counts are in (LOGICFRAMES_PER_GAME_SECOND, the logic rate at game speed 100); this build's until a header is read
+	Int logicFramesPerSecond;					// ticks per game second the file's frame counts are in (LOGICFRAMES_PER_GAME_SECOND): the logic rate and the game speed in one; this build's until a header is read
 
 	/// FALSE for a save written by the original game, by a build older than block version 5, or at
-	/// another logic rate than this build's, unless it is a mission save: that one holds no frame
-	/// counts and loads.
+	/// ticks a game second no game speed of this build's runs, unless it is a mission save: that one
+	/// holds no frame counts and loads.
 	Bool isLoadable( void ) const;
+	/// the game speed the frame counts are at (GameState_speedForTicksPerGameSecond), 0 for none of ours
+	Int gameSpeedPercent( void ) const;
 
 };
+
+/// the game speed whose ticks a game second these are (30, 24, 20, 15 at 30 Hz), 0 for none of ours
+Int GameState_speedForTicksPerGameSecond( Int ticksPerGameSecond );
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
@@ -190,7 +195,7 @@ public:
 	/// the world goes back in, which is where the recorder picks its file up again.
 	/// Each says FALSE when it failed: no file from a save, and from a load a match already cleared.
 	Bool saveCheckpoint( AsciiString filepath );
-	Bool loadCheckpoint( AsciiString filepath, const std::function< void( void ) > &afterReset );
+	Bool loadCheckpoint( AsciiString filepath, const std::function< Bool( void ) > &afterReset );	///< afterReset FALSE stops the load as a failed one
 	SaveGameInfo *getSaveGameInfo( void ) { return &m_gameInfo; }
 
 	// snapshot interaction

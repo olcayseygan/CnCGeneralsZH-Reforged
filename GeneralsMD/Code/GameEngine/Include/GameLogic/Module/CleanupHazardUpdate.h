@@ -47,7 +47,7 @@ class CleanupHazardUpdateModuleData : public ModuleData
 {
 public:
 	WeaponSlotType	m_weaponSlot;
-	UnsignedInt			m_scanFrames;
+	DurationFrames			m_scanFrames;
 	Real						m_scanRange;
 
 	CleanupHazardUpdateModuleData();

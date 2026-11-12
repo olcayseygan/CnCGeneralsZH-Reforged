@@ -74,10 +74,10 @@
 BattlePlanUpdateModuleData::BattlePlanUpdateModuleData()
 {
 	m_specialPowerTemplate								= NULL;
-	m_bombardmentPlanAnimationFrames			= 0;
-	m_holdTheLinePlanAnimationFrames			= 0;
-	m_searchAndDestroyPlanAnimationFrames = 0;
-	m_battlePlanParalyzeFrames						= 0;
+	m_bombardmentPlanAnimationFrames.setRaw( 0 );
+	m_holdTheLinePlanAnimationFrames.setRaw( 0 );
+	m_searchAndDestroyPlanAnimationFrames.setRaw( 0 );
+	m_battlePlanParalyzeFrames.setRaw( 0 );
 
 	
 	m_holdTheLineArmorDamageScalar				= 1.0f;
@@ -98,10 +98,10 @@ BattlePlanUpdateModuleData::BattlePlanUpdateModuleData()
 	{
 		{ "SpecialPowerTemplate",									INI::parseSpecialPowerTemplate,	NULL, offsetof( BattlePlanUpdateModuleData, m_specialPowerTemplate ) },
 
-    { "BombardmentPlanAnimationTime",					INI::parseDurationUnsignedInt,  NULL, offsetof( BattlePlanUpdateModuleData, m_bombardmentPlanAnimationFrames ) },
-    { "HoldTheLinePlanAnimationTime",					INI::parseDurationUnsignedInt,  NULL, offsetof( BattlePlanUpdateModuleData, m_holdTheLinePlanAnimationFrames ) },
-    { "SearchAndDestroyPlanAnimationTime",		INI::parseDurationUnsignedInt,  NULL, offsetof( BattlePlanUpdateModuleData, m_searchAndDestroyPlanAnimationFrames ) },
-		{ "TransitionIdleTime",										INI::parseDurationUnsignedInt,  NULL, offsetof( BattlePlanUpdateModuleData, m_transitionIdleFrames ) },
+    { "BombardmentPlanAnimationTime",					SPEED_FIELD( BattlePlanUpdateModuleData, m_bombardmentPlanAnimationFrames ) },
+    { "HoldTheLinePlanAnimationTime",					SPEED_FIELD( BattlePlanUpdateModuleData, m_holdTheLinePlanAnimationFrames ) },
+    { "SearchAndDestroyPlanAnimationTime",		SPEED_FIELD( BattlePlanUpdateModuleData, m_searchAndDestroyPlanAnimationFrames ) },
+		{ "TransitionIdleTime",										SPEED_FIELD( BattlePlanUpdateModuleData, m_transitionIdleFrames ) },
 
 		{ "BombardmentPlanUnpackSoundName",				INI::parseAsciiString,					NULL, offsetof( BattlePlanUpdateModuleData, m_bombardmentUnpackName ) },
 		{ "BombardmentPlanPackSoundName",					INI::parseAsciiString,					NULL, offsetof( BattlePlanUpdateModuleData, m_bombardmentPackName ) },
@@ -119,7 +119,7 @@ BattlePlanUpdateModuleData::BattlePlanUpdateModuleData()
 
 		{ "ValidMemberKindOf",										KindOfMaskType::parseFromINI,								NULL, offsetof( BattlePlanUpdateModuleData, m_validMemberKindOf ) },
 		{ "InvalidMemberKindOf",									KindOfMaskType::parseFromINI,								NULL, offsetof( BattlePlanUpdateModuleData, m_invalidMemberKindOf ) },
-		{ "BattlePlanChangeParalyzeTime",					INI::parseDurationUnsignedInt,  NULL, offsetof( BattlePlanUpdateModuleData, m_battlePlanParalyzeFrames ) },
+		{ "BattlePlanChangeParalyzeTime",					SPEED_FIELD( BattlePlanUpdateModuleData, m_battlePlanParalyzeFrames ) },
 		{ "HoldTheLinePlanArmorDamageScalar",			INI::parseReal,									NULL, offsetof( BattlePlanUpdateModuleData, m_holdTheLineArmorDamageScalar ) },
 		{ "SearchAndDestroyPlanSightRangeScalar",	INI::parseReal,									NULL, offsetof( BattlePlanUpdateModuleData, m_searchAndDestroySightRangeScalar ) },
 

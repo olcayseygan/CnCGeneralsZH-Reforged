@@ -4661,6 +4661,22 @@ TEST(command_tab_scrolls_a_column_at_a_time)
 	/* no room for two arrows and a unit */
 	ControlBar_commandTabScroll( 5, 2, 2, TRUE, &perView, &last );
 	CHECK_EQ( perView, 2 );	CHECK_EQ( last, 2 );
+
+	/* a step stops at the ends, and the arrow with nowhere to go is greyed out */
+	Bool back = TRUE, on = FALSE;
+	CHECK_EQ( ControlBar_commandTabStep( 0, 0, 2, &back, &on ), 0 );
+	CHECK( !back );	CHECK( on );
+	CHECK_EQ( ControlBar_commandTabStep( 0, -1, 2, &back, &on ), 0 );
+	CHECK( !back );	CHECK( on );
+	CHECK_EQ( ControlBar_commandTabStep( 0, 1, 2, &back, &on ), 1 );
+	CHECK( back );	CHECK( on );
+	CHECK_EQ( ControlBar_commandTabStep( 1, 1, 2, &back, &on ), 2 );
+	CHECK( back );	CHECK( !on );
+	CHECK_EQ( ControlBar_commandTabStep( 2, 1, 2, &back, &on ), 2 );
+	CHECK( back );	CHECK( !on );
+	/* a list that shrank under the view comes back to its last column */
+	CHECK_EQ( ControlBar_commandTabStep( 3, 0, 1, &back, &on ), 1 );
+	CHECK( back );	CHECK( !on );
 }
 
 /*

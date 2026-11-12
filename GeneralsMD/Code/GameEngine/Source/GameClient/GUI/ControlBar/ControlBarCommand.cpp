@@ -2211,6 +2211,14 @@ void ControlBar_commandTabScroll( Int count, Int cells, Int rows, Bool arrows, I
 	*lastColumn = ( past > 0 && rows > 0 ) ? ( past + rows - 1 ) / rows : 0;
 }
 
+Int ControlBar_commandTabStep( Int column, Int step, Int lastColumn, Bool *back, Bool *on )
+{
+	const Int to = max( 0, min( column + step, lastColumn ) );
+	*back = to > 0;
+	*on = to < lastColumn;
+	return to;
+}
+
 //-------------------------------------------------------------------------------------------------
 /** The open unit tab's list, in gathering order */
 //-------------------------------------------------------------------------------------------------
@@ -2305,6 +2313,8 @@ void ControlBar::restoreCommandTabArrows( void )
 			win->winSetDisabledImage( s, m_commandTabArrowSaved[ a ][ 2 ][ s ] );
 		}
 		win->winSetSize( m_commandTabArrowSize[ a ].x, m_commandTabArrowSize[ a ].y );
+		win->winEnable( TRUE );	// an end's arrow was greyed out; the cell comes back as the bar left it
+		win->winClearStatus( WIN_STATUS_ALWAYS_COLOR );
 		GadgetButtonSetData( win, NULL );
 		GadgetButtonSetText( win, UnicodeString( u"" ) );
 		win->winSetTooltip( UnicodeString::TheEmptyString );
@@ -2341,8 +2351,12 @@ void ControlBar::setCommandTabArrow( Int a, Int slot )
 	GadgetButtonDrawOverlayImage( win, NULL );
 	GadgetButtonSetBorder( win, GAME_COLOR_UNDEFINED, FALSE );
 	GadgetButtonEnableCheckLike( win, FALSE, FALSE );
-	win->winClearStatus( WIN_STATUS_SHORTCUT_BUTTON | WIN_STATUS_NOT_READY | WIN_STATUS_ALWAYS_COLOR
+	win->winClearStatus( WIN_STATUS_SHORTCUT_BUTTON | WIN_STATUS_NOT_READY
 		| WIN_STATUS_CANCEL_WHEN_DISABLED | WIN_STATUS_FLASHING );
+	// greyed out at an end as EA's always-colour cells are, the picture at 144/255: the grayscale
+	// draw a disabled command cell gets otherwise blackens the key's clear corners and leaves the
+	// white glyph white
+	win->winSetStatus( WIN_STATUS_ALWAYS_COLOR );
 	win->winSetTooltipFunc( NULL );
 
 	const Image *const *art = m_controlBarSchemeManager ? m_controlBarSchemeManager->getCommandTabPageImages( a ) : NULL;
@@ -2418,7 +2432,8 @@ Bool ControlBar::turnCommandTabColumn( Int step )
 	commandTabLayout( (Int)list.size(), &perView, &lastColumn, &next, &prev, &arrows );
 	if( lastColumn <= 0 )
 		return FALSE;
-	const Int column = max( 0, min( m_commandTabColumn + step, lastColumn ) );
+	Bool back, on;
+	const Int column = ControlBar_commandTabStep( m_commandTabColumn, step, lastColumn, &back, &on );
 	if( column != m_commandTabColumn )
 	{
 		m_commandTabColumn = column;
@@ -2456,6 +2471,16 @@ void ControlBar::populateCommandTab( Bool full )
 	{
 		setCommandTabArrow( 0, nextSlot );
 		setCommandTabArrow( 1, prevSlot );
+	}
+
+	// an arrow with nowhere to go is greyed out and takes no click; every pass, so a list that grows
+	// or shrinks under a still view (a factory built or lost) lights or greys them too
+	if( arrows && m_commandTabArrowSlot[ 0 ] >= 0 && m_commandTabArrowSlot[ 1 ] >= 0 )
+	{
+		Bool back, on;
+		ControlBar_commandTabStep( m_commandTabColumn, 0, lastColumn, &back, &on );
+		m_commandWindows[ m_commandTabArrowSlot[ 0 ] ]->winEnable( on );
+		m_commandWindows[ m_commandTabArrowSlot[ 1 ] ]->winEnable( back );
 	}
 
 	Int k = 0;

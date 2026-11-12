@@ -511,6 +511,10 @@ Bool ControlBar_commandPlaces( const Int *types, const Int *groups, const Int *p
 	* The list then scrolls a column at a time, from column 0 to 'lastColumn'.  ControlBarCommand.cpp. */
 void ControlBar_commandTabScroll( Int count, Int cells, Int rows, Bool arrows, Int *perView, Int *lastColumn );
 
+/** 'step' columns on from 'column', held to 0..'lastColumn'; 'back' and 'on' say whether the left and
+	* right arrows still have somewhere to go from there (each is greyed out where it has not). */
+Int ControlBar_commandTabStep( Int column, Int step, Int lastColumn, Bool *back, Bool *on );
+
 /** " (Alt+Z)" for the key the player's command map gives a meta event in a match, empty for none
 	* (ControlBarPopupDescription.cpp). */
 UnicodeString ControlBar_metaKeySuffix( Int meta );

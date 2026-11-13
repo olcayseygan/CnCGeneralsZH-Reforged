@@ -77,6 +77,7 @@ public:
 	Real						m_hoverSpacing;							///< the clip's shots start this far apart, side by side across the line of fire
 	DurationFrames	m_hoverPlaceInterval;				///< above zero, the shots are set down this far apart in time and rise with the last
 	std::vector<Coord3D> m_hoverSpots;					///< where each shot of the clip is set down, in the launcher's frame (X its facing, Y its left, Z over the ground)
+	std::vector<Coord3D> m_hoverAirSpots;				///< where each shot rises to, in the launcher's frame, Z over the ground it stood on; none, HoverHeight straight up
 	Real						m_hoverGrowFrom;						///< above zero, the shot is drawn this much of its size on the ground and grows to full size as it rises
 
 
@@ -131,6 +132,7 @@ private:
 	Int										m_flightPathSegments;			///< number of segments in the flightpath (in case we must regen it)
 	Int										m_currentFlightPathStep;	///< Our current index in the flight path vector.  Quicker than popping off.
 	Coord3D								m_hoverBase;							///< where a hovering shot stands on the ground before it rises
+	Coord3D								m_hoverTop;								///< and where it rises to and holds
 	UnsignedInt						m_hoverStartFrame;				///< the frame it began to rise
 	UnsignedInt						m_hoverEndFrame;					///< the frame it leaves the hover for its path; zero once it has, or for no hover
 	WeaponBonusConditionFlags		m_extraBonusFlags;

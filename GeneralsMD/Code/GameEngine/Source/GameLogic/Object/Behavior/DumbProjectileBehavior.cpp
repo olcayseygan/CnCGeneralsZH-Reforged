@@ -161,6 +161,7 @@ void DumbProjectileBehaviorModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "HoverSpacing",						INI::parseReal,						NULL, offsetof( DumbProjectileBehaviorModuleData, m_hoverSpacing ) },
 		{ "HoverPlaceInterval",			SPEED_FIELD( DumbProjectileBehaviorModuleData, m_hoverPlaceInterval ) },
 		{ "HoverSpot",							parseHoverSpot,						NULL, offsetof( DumbProjectileBehaviorModuleData, m_hoverSpots ) },
+		{ "HoverAirSpot",						parseHoverSpot,						NULL, offsetof( DumbProjectileBehaviorModuleData, m_hoverAirSpots ) },
 		{ "HoverGrowFrom",					INI::parseReal,						NULL, offsetof( DumbProjectileBehaviorModuleData, m_hoverGrowFrom ) },
 
 
@@ -191,6 +192,7 @@ DumbProjectileBehavior::DumbProjectileBehavior( Thing *thing, const ModuleData* 
 	m_currentFlightPathStep = 0;
 	m_extraBonusFlags = 0;
 	m_hoverBase.zero();
+	m_hoverTop.zero();
 	m_hoverStartFrame = 0;
 	m_hoverEndFrame = 0;
 
@@ -437,14 +439,14 @@ void DumbProjectileBehavior::projectileLaunchAtObjectOrPosition(
 
 		Coord3D offset;
 		Real overGround = 0.0f;
+		Vector3 facing = launcher->getTransformMatrix()->Get_X_Vector();
+		Real facingLength = sqrtf( sqr( facing.X ) + sqr( facing.Y ) );
+		Coord3D forward;
+		forward.set( 1.0f, 0.0f, 0.0f );
+		if( facingLength > 0.0f )
+			forward.set( facing.X / facingLength, facing.Y / facingLength, 0.0f );
 		if( shot < (Int)d->m_hoverSpots.size() )
 		{
-			Vector3 facing = launcher->getTransformMatrix()->Get_X_Vector();
-			Real facingLength = sqrtf( sqr( facing.X ) + sqr( facing.Y ) );
-			Coord3D forward;
-			forward.set( 1.0f, 0.0f, 0.0f );
-			if( facingLength > 0.0f )
-				forward.set( facing.X / facingLength, facing.Y / facingLength, 0.0f );
 			const Coord3D &spot = d->m_hoverSpots[ shot ];
 			offset.set( spot.x * forward.x - spot.y * forward.y, spot.x * forward.y + spot.y * forward.x, 0.0f );
 			overGround = spot.z;
@@ -466,6 +468,18 @@ void DumbProjectileBehavior::projectileLaunchAtObjectOrPosition(
 		m_hoverBase.x += offset.x;
 		m_hoverBase.y += offset.y;
 		m_hoverBase.z = TheTerrainLogic->getGroundHeight( m_hoverBase.x, m_hoverBase.y ) + overGround;
+		// where it rises to: HoverHeight straight up, or its HoverAirSpot, in the launcher's frame and
+		// over the ground it stood on, so a clip set down close round him spreads out on the way up
+		// (the Maroon Beret's Kargu grow to full size as they rise and clipped into each other)
+		m_hoverTop = m_hoverBase;
+		m_hoverTop.z += d->m_hoverHeight;
+		if( shot < (Int)d->m_hoverAirSpots.size() )
+		{
+			const Coord3D &air = d->m_hoverAirSpots[ shot ];
+			m_hoverTop.x = launcher->getPosition()->x + air.x * forward.x - air.y * forward.y;
+			m_hoverTop.y = launcher->getPosition()->y + air.x * forward.y + air.y * forward.x;
+			m_hoverTop.z = m_hoverBase.z - overGround + air.z;
+		}
 		projectile->setPosition( &m_hoverBase );
 		projectile->setOrientation( launcher->getOrientation() );
 		if( d->m_hoverGrowFrom > 0.0f )
@@ -882,7 +896,9 @@ UpdateSleepTime DumbProjectileBehavior::update()
 			UnsignedInt riseFrames = max( (UnsignedInt)d->m_hoverTime / 2, 1u );
 			Real risen = now < m_hoverStartFrame ? 0.0f : min( 1.0f, (Real)( now - m_hoverStartFrame ) / (Real)riseFrames );
 			Coord3D pos = m_hoverBase;
-			pos.z += risen * d->m_hoverHeight;
+			pos.x += risen * ( m_hoverTop.x - m_hoverBase.x );
+			pos.y += risen * ( m_hoverTop.y - m_hoverBase.y );
+			pos.z += risen * ( m_hoverTop.z - m_hoverBase.z );
 			getObject()->setPosition( &pos );
 			// held, not falling: gravity left to pile up pulls one standing a little over the ground
 			// (a HoverSpot's Z) through it within a few frames, and the landing set it off
@@ -1064,7 +1080,8 @@ void DumbProjectileBehavior::xfer( Xfer *xfer )
 	// version 4 adds the barrel's slope at launch, which a lobbed shell's path starts along
 	// version 5 adds the shot's point on its victim, which a shell following the victim keeps to
 	// version 6 adds the hover (HoverTime): where it stands, when it rose and when it leaves
-	XferVersion currentVersion = 6;
+	// version 7 adds where it rises to (HoverAirSpot); before it, HoverHeight straight up
+	XferVersion currentVersion = 7;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1135,6 +1152,14 @@ void DumbProjectileBehavior::xfer( Xfer *xfer )
 		xfer->xferCoord3D( &m_hoverBase );
 		xfer->xferUnsignedInt( &m_hoverStartFrame );
 		xfer->xferUnsignedInt( &m_hoverEndFrame );
+	}
+
+	if( version >= 7 )
+		xfer->xferCoord3D( &m_hoverTop );
+	else if( xfer->getXferMode() == XFER_LOAD )
+	{
+		m_hoverTop = m_hoverBase;
+		m_hoverTop.z += getDumbProjectileBehaviorModuleData()->m_hoverHeight;
 	}
 
 	// the path itself is a vector of points that is not saved; rebuild it from the start, end and

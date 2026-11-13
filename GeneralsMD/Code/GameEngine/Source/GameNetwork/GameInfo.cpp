@@ -1564,6 +1564,13 @@ Bool ApplyHandicapRequest( GameInfo *game, GameSlot *slot, Int handicap )
 	return TRUE;
 }
 
+void GameInfoDropSkins( GameInfo *game )
+{
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+		if (GameSlot *slot = game->getSlot(i))
+			slot->setSkins(0);
+}
+
 Bool ApplySkinRequest( GameInfo *game, GameSlot *slot, UnsignedInt64 skins )
 {
 	if (skins == slot->getSkins() || !slot->isHuman())

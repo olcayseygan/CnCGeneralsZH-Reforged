@@ -455,6 +455,8 @@ Bool ApplyHandicapRequest( GameInfo *game, GameSlot *slot, Int handicap );
 // string never carries it.  "Skins=K1.2.3" is an online guest's request, undone like the handicap's
 // when the options string would no longer fit.
 Bool ApplySkinRequest( GameInfo *game, GameSlot *slot, UnsignedInt64 skins );
+/// every seat without skins: a LAN string is parsed by the same parser, and skins are online only
+void GameInfoDropSkins( GameInfo *game );
 
 //
 // Three things every lobby - skirmish, LAN and online - has to agree on about a slot state, kept

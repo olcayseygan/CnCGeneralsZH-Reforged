@@ -25279,6 +25279,12 @@ TEST(skin_loadout_rides_the_slot_entry_and_an_old_string_reads_as_none)
 	CHECK( guest.getSlot( 0 )->getSkins() == oneAndThree );
 	CHECK_EQ( guest.getSlot( 0 )->getHandicap(), (Int)HANDICAP_FULL );
 	CHECK( guest.getSlot( 1 )->getSkins() == 0 );
+	// a LAN guest reads the same string with the same parser, then ParseGameOptionsString drops every skin
+	GameInfoDropSkins( &guest );
+	for( Int i = 0; i < MAX_SLOTS; ++i )
+		CHECK( guest.getSlot( i )->getSkins() == 0 );
+	CHECK_EQ( guest.getSlot( 0 )->getHandicap(), (Int)HANDICAP_FULL );		// and nothing else
+	CHECK( ParseAsciiStringToGameInfo( &guest, skinned ) );
 
 	// beside a handicap, both come back
 	slot->setHandicap( 50 );

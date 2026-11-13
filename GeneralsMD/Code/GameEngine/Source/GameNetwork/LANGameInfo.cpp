@@ -291,6 +291,7 @@ Bool ParseGameOptionsString(LANGameInfo *game, AsciiString options)
 
 	if (ParseAsciiStringToGameInfo(game, options))
 	{
+		GameInfoDropSkins(game);	// skins are online only: a LAN host's ",K" field is read and thrown away
 		Int newLocalSlotNum = (game->isInGame()) ? game->getLocalSlotNum() : -1;
 		Bool isInGame = newLocalSlotNum >= 0;
 		if (!TheLAN->AmIHost() && isInGame)

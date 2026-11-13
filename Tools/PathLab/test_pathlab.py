@@ -880,6 +880,16 @@ class RunTests(unittest.TestCase):
                 self.assertTrue(grid.passable(*pathlab.cell_of(*unit.pos)))
                 self.assertLess(math.dist(unit.pos, home), 100.0)
 
+    @unittest.skipUnless(os.path.isfile(os.path.join(maploader.game_dir_of(None), maploader.MAPS_ARCHIVE)),
+                         "no MapsZH.big in the install")
+    def test_gamemap_route_replaces_the_starts(self):
+        route = pathlab.parse_route("120,160,190,160")
+        self.assertEqual(route, (pathlab.cell_pos(120, 160, True), pathlab.cell_pos(190, 160, True)))
+        _, units, orders = pathlab.scenario_setup("choke", "Tournament Urban", 0, [pathlab.STANDIN_TANK] * 4,
+                                                  "column", route)
+        self.assertEqual(orders[0][1], route[1])
+        self.assertTrue(all(math.dist(unit.pos, route[0]) < 100.0 for unit in units))
+
     def test_a_sweep_names_one_of_the_game_constants(self):
         self.assertEqual(pathlab.parse_sweep("PF_TRAFFIC_NUM=0,4"), ("PF_TRAFFIC_NUM", [0, 4]))
         with self.assertRaises(SystemExit):

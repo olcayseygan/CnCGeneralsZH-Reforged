@@ -3946,11 +3946,20 @@ def spawn_around(grid: Grid, kinds: Sequence[UnitKind], centre: Point, first_id:
                        first_id)
 
 
-def build_game_scenario(grid: Grid, name: str, kinds: Sequence[UnitKind], scenario: str
+def parse_route(text: str) -> tuple[Point, Point] | None:
+    """--route AX,AY,BX,BY in cells: the two ends a --gamemap scenario uses instead of the starts."""
+    if not text:
+        return None
+    ax, ay, bx, by = (int(v) for v in text.split(","))
+    return cell_pos(ax, ay, True), cell_pos(bx, by, True)
+
+
+def build_game_scenario(grid: Grid, name: str, kinds: Sequence[UnitKind], scenario: str,
+                        route: tuple[Point, Point] | None = None
                         ) -> tuple[list[Unit], list[tuple[list[Unit], Point]]]:
-    """On a retail map: `column` takes the group from player 1's start to player 2's; `cross` sends
-       half of it each way between the two."""
-    first, second = loaded_game_map(name).starts[:2]
+    """On a retail map: `column` takes the group from player 1's start to player 2's (or from one end
+       of `route` to the other); `cross` sends half of it each way between the two."""
+    first, second = route or loaded_game_map(name).starts[:2]
     if scenario == "cross":
         one = spawn_around(grid, kinds[:len(kinds) // 2], first)
         two = spawn_around(grid, kinds[len(one):], second, first_id=len(one))
@@ -3959,13 +3968,14 @@ def build_game_scenario(grid: Grid, name: str, kinds: Sequence[UnitKind], scenar
     return units, [(units, second)]
 
 
-def scenario_setup(map_kind: str, game_map: str, seed: int, kinds: Sequence[UnitKind], scenario: str
+def scenario_setup(map_kind: str, game_map: str, seed: int, kinds: Sequence[UnitKind], scenario: str,
+                   route: tuple[Point, Point] | None = None
                    ) -> tuple[Grid, list[Unit], list[tuple[list[Unit], Point]]]:
     """The grid, the units and their orders: a retail map when `game_map` names one (the seed then
        changes nothing), else a generated `map_kind`."""
     if game_map:
         grid = game_map_grid(game_map)
-        return grid, *build_game_scenario(grid, game_map, kinds, scenario)
+        return grid, *build_game_scenario(grid, game_map, kinds, scenario, route)
     grid = make_map(map_kind, seed=seed)
     return grid, *build_scenario(grid, kinds, scenario)
 
@@ -4048,12 +4058,12 @@ class Measurement:
 
 
 def measure(map_kind: str, kinds: Sequence[UnitKind], seeds: int, scenario: str, first_seed: int = 0,
-            game_map: str = "") -> Measurement:
+            game_map: str = "", route: tuple[Point, Point] | None = None) -> Measurement:
     """The scenario's orders played out, averaged over `seeds` maps.  `stuck` stays a count of units
        still short of their goal when the clock ran out."""
     total = Measurement()
     for seed in range(first_seed, first_seed + seeds):
-        grid, units, orders = scenario_setup(map_kind, game_map, seed, kinds, scenario)
+        grid, units, orders = scenario_setup(map_kind, game_map, seed, kinds, scenario, route)
         sim = Simulation(grid, units)
         for group, goal in orders:
             stats = sim.group_move(group, goal)
@@ -4228,14 +4238,16 @@ def run_headless(args: argparse.Namespace) -> None:
     for label, ladder in setting_rows(args.proposed, args.ttc):
         if not args.sweep:
             with overriding(**ladder):
-                print_row(label, measure(args.map, kinds, args.headless, args.scenario, game_map=args.gamemap))
+                print_row(label, measure(args.map, kinds, args.headless, args.scenario, game_map=args.gamemap,
+                                         route=parse_route(args.route)))
             continue
         name, values = parse_sweep(args.sweep)
         prefix = f"{label} " if ladder else ""
         for value in values:
             with overriding(**ladder, **{name: value}):
                 print_row(f"{prefix}{name}={value:g}",
-                          measure(args.map, kinds, args.headless, args.scenario, game_map=args.gamemap))
+                          measure(args.map, kinds, args.headless, args.scenario, game_map=args.gamemap,
+                                  route=parse_route(args.route)))
 
 
 def group_kinds(args: argparse.Namespace) -> list[UnitKind]:
@@ -4285,7 +4297,8 @@ def run_window(args: argparse.Namespace) -> None:
             for unit in sim.units:
                 unit.is_selected = True
             return grid, sim
-        grid, units, orders = scenario_setup(args.map, args.gamemap, seed, kinds, args.scenario)
+        grid, units, orders = scenario_setup(args.map, args.gamemap, seed, kinds, args.scenario,
+                                             parse_route(args.route))
         sim = Simulation(grid, units)
         for group, goal in orders:
             sim.group_move(group, goal)
@@ -4433,6 +4446,8 @@ def main() -> None:
                         help="a retail map from the install instead of --map, e.g. \"Tournament Desert\": "
                              "the group starts at player 1's start and is ordered to player 2's "
                              "(cross: half of it each way)")
+    parser.add_argument("--route", default="", metavar="AX,AY,BX,BY",
+                        help="with --gamemap: the two ends in cells instead of the first two starts")
     parser.add_argument("--scenario", choices=SCENARIOS, default="column")
     parser.add_argument("--scale", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=7)

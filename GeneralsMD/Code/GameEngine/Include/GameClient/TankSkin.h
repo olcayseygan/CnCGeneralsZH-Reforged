@@ -13,6 +13,8 @@
 #include "Lib/BaseType.h"
 #include "Common/AsciiString.h"
 
+class Object;
+
 /// A loadout: bit n set for skin id n.
 // ponytail: ids 1 to 63 fit; a 64th skin needs a list in its place, in the slot field as well.
 typedef UnsignedInt64 SkinLoadout;
@@ -40,6 +42,12 @@ SkinLoadout TankSkin_localLoadout( void );
 	* the neutral player and -1.  An index rather than a Player, so the render's overlap window can ask
 	* with Drawable::getObjectForDraw's copy and touch nothing the tick is changing. */
 SkinLoadout TankSkin_ofPlayer( Int playerIndex );
+
+/** The player whose skins this machine sees on obj: its controller, or for a disguised unit (the Bomb
+	* Truck) the player it is disguised as when the local player is no ally of the controller, the rule
+	* StealthUpdate::changeVisualDisguise colours it by.  -1 with no object or controller.  Reads the
+	* logic: call it outside the render's overlap window, as the sync point's ObjectForDraw walk does. */
+Int TankSkin_seenPlayerIndex( const Object *obj );
 
 /// forget every table entry, for a test that loads its own
 void TankSkin_clearTable( void );

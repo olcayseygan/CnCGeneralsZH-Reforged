@@ -1801,19 +1801,16 @@ const ModelConditionInfo* W3DModelDrawModuleData::findBestInfo(const ModelCondit
 //-------------------------------------------------------------------------------------------------
 
 //-------------------------------------------------------------------------------------------------
-/** The skin id the drawable's owner's lobby seat wears on this model, 0 for none.  Inside the
-	render's overlap window the object may be changing or going away beside it, so the owner comes
-	from the copy taken at the sync point there. */
+/** The skin id this model wears for this machine, 0 for none: the owner's lobby seat's, or a disguised
+	unit's apparent owner's (TankSkin_seenPlayerIndex).  Inside the render's overlap window the object
+	may be changing or going away beside it, so the player comes from the copy taken at the sync point. */
 //-------------------------------------------------------------------------------------------------
 static Int ownerSkin( const Drawable *draw, const AsciiString &modelName )
 {
 	if (TheGameInfo == NULL)
 		return 0;		// a mission: nobody wears a skin, so no owner to look up
-	Int playerIndex = -1;
-	if (LogicThread::isInsideWindow())
-		playerIndex = draw->getObjectForDraw().playerIndex;
-	else if (const Object *obj = draw->getObject())
-		playerIndex = obj->getControllingPlayer() ? obj->getControllingPlayer()->getPlayerIndex() : -1;
+	const Int playerIndex = LogicThread::isInsideWindow() ? draw->getObjectForDraw().skinPlayerIndex
+		: TankSkin_seenPlayerIndex(draw->getObject());
 	return TankSkin_forModel(TankSkin_ofPlayer(playerIndex), modelName.str());
 }
 

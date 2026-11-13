@@ -7,7 +7,10 @@
 #include "GameClient/TankSkin.h"
 
 #include "Common/INI.h"
+#include "Common/Player.h"
 #include "Common/PlayerList.h"
+#include "GameLogic/Module/StealthUpdate.h"
+#include "GameLogic/Object.h"
 #include "GameNetwork/GameInfo.h"
 
 #include <atomic>
@@ -181,6 +184,21 @@ SkinLoadout TankSkin_setLocalLoadout( const char *ids )
 SkinLoadout TankSkin_localLoadout( void )
 {
 	return theLocalLoadout;
+}
+
+Int TankSkin_seenPlayerIndex( const Object *obj )
+{
+	const Player *owner = obj ? obj->getControllingPlayer() : NULL;
+	if( owner == NULL )
+		return -1;
+	// a fake Crusader in stock paint among an enemy's gold ones would give the truck away, and so would
+	// the reverse: a non-ally sees the disguise's owner's skins, as he sees its colour
+	const StealthUpdate *stealth = obj->getStealth();
+	const Player *local = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+	if( stealth && stealth->isDisguised() && local
+		&& owner->getRelationship( local->getDefaultTeam() ) != ALLIES && local->isPlayerActive() )
+		return stealth->getDisguisedPlayerIndex();
+	return owner->getPlayerIndex();
 }
 
 SkinLoadout TankSkin_ofPlayer( Int playerIndex )

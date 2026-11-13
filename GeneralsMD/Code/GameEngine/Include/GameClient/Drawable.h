@@ -538,6 +538,7 @@ public:
 		Bool					empDisabled;				///< DISABLED_EMP
 		Bool					outage;							///< a structure underpowered, script underpowered or hacked
 		Int						playerIndex;				///< the controlling player's
+		Int						skinPlayerIndex;		///< whose skins this machine sees on it, TankSkin_seenPlayerIndex
 		Color					playerColor;				///< clientPlayerColor of the controlling player
 		UnsignedInt		safeOcclusionFrame;
 		PathfindLayerEnum	layer;

@@ -661,6 +661,7 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 	m_objectForDraw.empDisabled = FALSE;
 	m_objectForDraw.outage = FALSE;
 	m_objectForDraw.playerIndex = 0;
+	m_objectForDraw.skinPlayerIndex = -1;
 	m_objectForDraw.playerColor = 0;
 	m_objectForDraw.safeOcclusionFrame = 0;
 	m_objectForDraw.layer = LAYER_GROUND;

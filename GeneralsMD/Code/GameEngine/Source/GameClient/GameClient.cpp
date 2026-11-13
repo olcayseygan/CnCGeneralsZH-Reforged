@@ -87,6 +87,7 @@
 #include "GameClient/Snow.h"
 #include "GameClient/TerrainVisual.h"
 #include "GameLogic/TerrainLogic.h"
+#include "GameClient/TankSkin.h"
 #include "GameClient/View.h"
 #include "GameClient/VideoPlayer.h"
 #include "GameClient/WindowXlat.h"
@@ -972,6 +973,7 @@ void GameClient::update( void )
 					|| object->isDisabledByType( DISABLED_HACKED ) );
 			const Player *player = object->getControllingPlayer();
 			forDraw.playerIndex = player->getPlayerIndex();
+			forDraw.skinPlayerIndex = TankSkin_seenPlayerIndex( object );
 			forDraw.playerColor = clientPlayerColor( player );
 			forDraw.safeOcclusionFrame = object->getSafeOcclusionFrame();
 			forDraw.layer = object->getLayer();

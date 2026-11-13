@@ -25324,16 +25324,17 @@ TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 	CHECK( loadIni( ZH_CODE_DIR "/Data/INI/SkinsReforged.ini" ) );
 
 	const SkinLoadout all = ( (SkinLoadout)1 << 1 ) | ( (SkinLoadout)1 << 2 ) | ( (SkinLoadout)1 << 3 );
-	static const char *const crusader[] = { "AVLeopard", "AVLeopard_D", "AVLaserTnk", "avlasertnk_d" };
-	static const char *const battlemaster[] = { "NVBtMstr", "NVBtMstr_D", "NVBtMstrNG", "nvbtmstrng_d" };
-	static const char *const scorpion[] = { "UVLiteTank", "UVLITETANK_D" };
+	static const char *const crusader[] = { "AVLeopard", "AVLeopard_D", "AVLaserTnk", "avlasertnk_d", "AVLaserTnk_D1" };
+	static const char *const battlemaster[] = { "NVBtMstr", "NVBtMstr_D", "NVBtMstrNG", "nvbtmstrng_d", "NVBtMstr_D1", "NVBtMstr_D2", "NVBtMstr_D3" };
+	static const char *const scorpion[] = { "UVLiteTank", "UVLITETANK_D", "UVLiteTank_D1", "UVScorpion_m" };
 	for( Int i = 0; i < (Int)ARRAY_SIZE( crusader ); ++i )
 		CHECK_EQ( TankSkin_forModel( all, crusader[i] ), 1 );
 	for( Int i = 0; i < (Int)ARRAY_SIZE( battlemaster ); ++i )
 		CHECK_EQ( TankSkin_forModel( all, battlemaster[i] ), 2 );
 	for( Int i = 0; i < (Int)ARRAY_SIZE( scorpion ); ++i )
 		CHECK_EQ( TankSkin_forModel( all, scorpion[i] ), 3 );
-	static const char *const plain[] = { "AVLeopard_D1", "NVBtMstr_D1", "UVLiteTank_D1", "AVPaladin", "NVOverlord", "" };
+	// AVLeopard_D1 is DeadCrusaderHulk, which crushed vehicles of every kind leave
+	static const char *const plain[] = { "AVLeopard_D1", "AVLeopard_D2", "UVLiteTank_D2", "AVPaladin", "NVOverlord", "" };
 	for( Int i = 0; i < (Int)ARRAY_SIZE( plain ); ++i )
 		CHECK_EQ( TankSkin_forModel( all, plain[i] ), 0 );
 	CHECK_EQ( TankSkin_forModel( (SkinLoadout)1 << 2, "AVLeopard" ), 0 );	// owns the Battlemaster's only
@@ -25345,6 +25346,9 @@ TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 	CHECK_STR( TankSkin_replacementSheet( 1, "avleopard.tga" ), "Skin1KC_avleopard.tga" );
 	CHECK_STR( TankSkin_replacementSheet( 2, "NVBtMstr_D.tga" ), "Skin1KC_NVBtMstr_D.tga" );
 	CHECK_STR( TankSkin_replacementSheet( 3, "UVScorpion_m_R.tga" ), "Skin1K_UVScorpion_m_R.tga" );
+	CHECK_STR( TankSkin_replacementSheet( 1, "avleopard_d1_R.tga" ), "Skin1K_avleopard_d1_R.tga" );		// the wrecks
+	CHECK_STR( TankSkin_replacementSheet( 2, "NVBtMstr_D1.tga" ), "Skin1KC_NVBtMstr_D1.tga" );
+	CHECK_STR( TankSkin_replacementSheet( 3, "UVLiteTank_D1_R.tga" ), "Skin1K_UVLiteTank_D1_R.tga" );
 	CHECK( TankSkin_replacementSheet( 1, "ZHCA_AVCrusPlate.tga" ) == NULL );
 	CHECK( TankSkin_replacementSheet( 1, "NVTreads.tga" ) == NULL );
 	CHECK( TankSkin_replacementSheet( 2, "AVCrusader_R.tga" ) == NULL );
@@ -25379,6 +25383,7 @@ TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 	remove( TEST_INI );
 
 	CHECK( TankSkin_ofPlayer( -1 ) == 0 );
+	CHECK_EQ( TankSkin_seenPlayerIndex( NULL ), -1 );
 	TankSkin_setLocalLoadout( "" );
 	TankSkin_clearTable();
 }

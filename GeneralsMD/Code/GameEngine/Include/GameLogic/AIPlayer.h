@@ -449,6 +449,7 @@ protected:
 	void doSpending(void);
 	Int bankTarget(void);																	///< what the bank keeps, from the income measured last
 	void buyUpgradesForArmy(Bool overTarget);								///< the player upgrade the standing army gets the most out of
+	void buyUnitUpgrades(Bool overTarget);									///< a side on another side's scripts: the upgrade a unit buys on its own bar
 	void addProductionForQueues(void);											///< another factory of each kind whose every factory has stayed busy
 	void trainSurplus(Int budget);												///< a unit from each idle factory, within budget
 	void trainFavoured(void);															///< a personality's favoured units, below the bank target as well
@@ -648,6 +649,7 @@ protected:
 	std::vector< std::pair<const ThingTemplate *, Object *> > *m_factoryAnswers;
 	void sendForSpotters( TeamInQueue *team, const Object *gun );	///< a gun that fires past its own sight came out for this team: train its spotters
 	Bool replaceSpotter( void );				///< a team in the field has a gun that fires past its own sight and no spotter left: train it one
+	void askForTrainer( const ThingTemplate *unit );	///< no building of ours trains this unit: put up the plan's one that does
 	void queueUnits( void );						///< Check the team build list, & queue up units at any idle factories.
 	void checkForSupplyCenter( BuildListInfo *info, Object *bldg);
  	void queueSupplyTruck(void);

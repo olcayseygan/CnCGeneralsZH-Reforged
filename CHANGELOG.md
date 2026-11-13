@@ -28,7 +28,7 @@ found and fixed, EA's own, not port damage.**
 - You can see what you bought. A SARP Altay carries the machine gun station on its turret and its bursts come from that gun, a Kirpi with the Field Repair Kit has tool chests and a crane on its roof, and every Siper raises a radar mast once it is dug in.
 - Turkiye's eight new upgrades have buttons of their own. They used to borrow EA's pictures, so MPT-76 Rifles showed a tank shell and the SARP station a Gattling gun.
 - Replays of games with Turkiye recorded before this version play out differently now. The guns fire faster after a spotted kill, reach further by a Siper and shoot shells, so the battle the replay remembers is not the one it replays.
-- The computer plays it. In a 30-match Hard batch against America, China and the GLA, both seat orders, Turkiye bought every new upgrade but Export Contracts, built a Grand Bazaar in all 30 and trained the Alpagu Operator, whom it never built before. It won 11, lost 13 and drew 6: 5-3-2 against America, 3-4-3 against China, 3-6-1 against the GLA.
+- The computer plays it. A first 30-match Hard batch had Turkiye buying every new upgrade but Export Contracts and leaving SARP and the Field Repair Kit to a button America's scripts almost never pressed. It now buys all three itself, trains a spotter for every two guns that wander off without one, replaces a team's dead spotter, and puts up a Barracks when it has nowhere to train them. In 24 Hard matches against America, China and the GLA, both seat orders, it bought Export Contracts in 11, SARP on 21 Altays and the kit on 42 Kirpis, and won 12, lost 10 and drew 2: 5-2-1 against America, 3-5-0 against China, 4-3-1 against the GLA.
 
 ## The game plays half as fast again
 

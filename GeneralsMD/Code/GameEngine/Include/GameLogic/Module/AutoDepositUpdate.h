@@ -62,6 +62,7 @@
 //-----------------------------------------------------------------------------
 class Player;
 class Thing;
+class UpgradeTemplate;
 void parseUpgradePair( INI *ini, void *instance, void *store, const void *userData );
 struct upgradePair
 {
@@ -122,6 +123,8 @@ public:
 
 	void awardInitialCaptureBonus( Player *player );	// Test and award the initial capture bonus
 	virtual UpdateSleepTime update( void );
+	/// what this building pays more a game second once its player owns the upgrade; 0 when the upgrade is none of its boosts
+	Real getUpgradeBoostPerGameSecond( const UpgradeTemplate *upgrade ) const;
 
 protected:
 

@@ -70,6 +70,7 @@
 #include "GameLogic/Module/ActiveBody.h"	// ... and the health behind it
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/Module/AutoDepositUpdate.h"	// what an income upgrade adds, for the upgrade buyer
 #include "GameLogic/Module/DozerAIUpdate.h"
 #include "GameLogic/Module/UpdateModule.h"
 #include "GameLogic/ScriptEngine.h"
@@ -3202,16 +3203,23 @@ static const ThingTemplate *ownTemplate( const Player *player, const ThingTempla
 /** The side's spotter (AISideInfo m_spotter) for a team the scripts send at the enemy that names no
 	* spotter of its own, else NULL: a gun kept at home has the base's sight. */
 // ------------------------------------------------------------------------------------------------
-static const ThingTemplate *missingSpotterFor( const Player *player, const TeamPrototype *proto )
+static const ThingTemplate *sideSpotter( const Player *player )
 {
 	const AISideInfo *sideInfo = TheAI->getAiData()->findSideInfo( player );
 	if( sideInfo == NULL || sideInfo->m_spotter.isEmpty() )
 		return NULL;		// a side that never fires blind
+	return TheThingFactory->findTemplate( sideInfo->m_spotter );
+}
+
+static const ThingTemplate *missingSpotterFor( const Player *player, const TeamPrototype *proto )
+{
+	const ThingTemplate *spotter = sideSpotter( player );
+	if( spotter == NULL )
+		return NULL;
 	const TeamTemplateInfo *info = proto->getTemplateInfo();
 	if( info->m_isBaseDefense || info->m_isPerimeterDefense || !aiTeamAttacks( info ) )
 		return NULL;
 
-	const ThingTemplate *spotter = TheThingFactory->findTemplate( sideInfo->m_spotter );
 	for( Int i = 0; i < info->m_numUnitsInfo; ++i )
 	{
 		const ThingTemplate *unit = TheThingFactory->findTemplate( info->m_unitsInfo[ i ].unitThingName, FALSE );
@@ -3248,12 +3256,14 @@ void AIPlayer::sendForSpotters( TeamInQueue *team, const Object *gun )
 		// a computer player holds canBuildUnits off between team orders, and the barracks check reads it
 		const Bool canBuildUnits = m_player->getCanBuildUnits();
 		m_player->setCanBuildUnits( TRUE );
-		if( findFactory( spotter, TRUE ) == NULL )
+		const Bool trained = findFactory( spotter, TRUE ) != NULL;
+		m_player->setCanBuildUnits( canBuildUnits );
+		if( !trained )
 		{
 			why = "no barracks to train its spotters";
+			askForTrainer( spotter );
 			spotter = NULL;
 		}
-		m_player->setCanBuildUnits( canBuildUnits );
 	}
 	if( spotter )
 	{
@@ -3424,11 +3434,15 @@ Bool AIPlayer::isAGoodIdeaToBuildTeam( TeamPrototype *proto )
 	return true;
 }
 
+static const Int GUNS_PER_STRAY_SPOTTER = 2;
+
 // ------------------------------------------------------------------------------------------------
 /** A spotter killed in the field was never replaced: the team's guns kept walking with nobody to see
 	* for them.  An attack team that still has a gun firing past its own sight and none of the side's
 	* spotter left on its list trains one as a reinforcement, which joins it where it stands.  One order at
-	* a time, and not for a team still being built, whose spotters sendForSpotters has in hand. */
+	* a time, and not for a team still being built, whose spotters sendForSpotters has in hand.  The default
+	* team's guns get one spotter for every GUNS_PER_STRAY_SPOTTER, and a side with no building to train
+	* one asks for it (askForTrainer). */
 Bool AIPlayer::replaceSpotter( void )
 {
 	if( !runsOwnAI() || getSkillProfile()->m_artillerySpotters <= 0 )
@@ -3465,7 +3479,10 @@ Bool AIPlayer::replaceSpotter( void )
 			Object *factory = findFactory( spotter, TRUE );
 			m_player->setCanBuildUnits( canBuildUnits );
 			if( factory == NULL )
+			{
+				askForTrainer( spotter );
 				return false;
+			}
 
 			WorkOrder *order = newInstance(WorkOrder);
 			order->m_thing = spotter;
@@ -3487,7 +3504,69 @@ Bool AIPlayer::replaceSpotter( void )
 			return true;
 		}
 	}
+
+	// Guns trained off the scripts' teams (the doctrine's signature Firtinas, a defence's, the surplus)
+	// stand on the default team and leave with the next wave as strays (addHomeStrays), and nothing sent
+	// for their eyes: a Hard Turkiye against GLA fielded twenty Firtinas and no spotter, its barracks
+	// standing.  One spotter for every GUNS_PER_STRAY_SPOTTER of them is trained onto the default team,
+	// and leaves with them the same way.  Not a reinforcement order, so the team builder carries on.
+	const ThingTemplate *spotter = sideSpotter( m_player );
+	if( spotter == NULL )
+		return false;
+	Int guns = 0;
+	Int eyes = 0;
+	for( DLINK_ITERATOR<Object> m = m_player->getDefaultTeam()->iterate_TeamMemberList(); !m.done(); m.advance() )
+	{
+		const Object *obj = m.cur();
+		if( obj->isEffectivelyDead() || obj->isKindOf( KINDOF_STRUCTURE ) )
+			continue;
+		if( obj->getTemplate()->isEquivalentTo( spotter ) )
+			++eyes;
+		else if( obj->getTemplate()->acquiresBeyondVision() )
+			++guns;
+	}
+	if( guns == 0 || eyes * GUNS_PER_STRAY_SPOTTER >= guns )
+		return false;
+	const Bool canBuildUnits = m_player->getCanBuildUnits();
+	m_player->setCanBuildUnits( TRUE );
+	Object *factory = findFactory( spotter, TRUE );
+	if( factory == NULL )
+		askForTrainer( spotter );
+	else if( factory->getProductionUpdateInterface()->countUnitTypeInQueue( spotter ) == 0 &&
+			buyUnit( factory->getProductionUpdateInterface(), spotter, AIBUY_ARMY ) )
+		DEBUG_LOG(("AI ARTILLERY frame %d player %d trains a spotter for the %d guns of its default team, %d spotters there\n",
+			TheGameLogic->getFrame(), m_player->getPlayerIndex(), guns, eyes));
+	m_player->setCanBuildUnits( canBuildUnits );
 	return false;
+}
+
+// ------------------------------------------------------------------------------------------------
+/** Nothing of ours trains this unit: the plan's entry for a building that does goes up, unless it is
+	* standing, going up or asked for already.  America's scripts put up Turkiye's barracks only when a
+	* team of theirs wants infantry: in 7 of 18 Hard matches it had none all game, and in four of them
+	* every gun it fielded went without a spotter (sendForSpotters said "no barracks", replaceSpotter
+	* said nothing). */
+// ------------------------------------------------------------------------------------------------
+void AIPlayer::askForTrainer( const ThingTemplate *unit )
+{
+	for( BuildListInfo *info = m_player->getBuildList(); info; info = info->getNext() )
+	{
+		const ThingTemplate *plan = TheThingFactory->findTemplate( info->getTemplateName() );
+		const CommandSet *commandSet = plan ? TheCommandStore->findCommandSet( ownTemplate( m_player, plan )->friend_getCommandSetString() ) : NULL;
+		for( Int i = 0; commandSet && i < MAX_COMMANDS_PER_SET; ++i )
+		{
+			const CommandButton *button = commandSet->getCommandButton( i );
+			if( button == NULL || button->getCommandType() != GUI_COMMAND_UNIT_BUILD || button->getThingTemplate() == NULL ||
+					!ownTemplate( m_player, button->getThingTemplate() )->isEquivalentTo( unit ) )
+				continue;
+			if( info->isPriorityBuild() || TheGameLogic->findObjectByID( info->getObjectID() ) != NULL )
+				return;
+			DEBUG_LOG(("AI ARTILLERY frame %d player %d asks for the plan's '%s' to train '%s', %d in the bank\n", TheGameLogic->getFrame(),
+				m_player->getPlayerIndex(), info->getTemplateName().str(), unit->getName().str(), m_player->getMoney()->countMoney()));
+			buildSpecificAIBuilding( info->getTemplateName() );
+			return;
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -10818,6 +10897,7 @@ void AIPlayer::doSpending( void )
 	const Int target = bankTarget();
 	const Bool overTarget = bank > target;
 	buyUpgradesForArmy( overTarget );
+	buyUnitUpgrades( overTarget );
 	if( !overTarget )
 	{
 		trainDoctrine( -1 );
@@ -10856,6 +10936,9 @@ void AIPlayer::doSpending( void )
 	* at the building with the shortest queue that offers it, through the purchase queue like everything
 	* else. */
 //----------------------------------------------------------------------------------------------------------
+/** The payback an income upgrade is weighed over, in game seconds: Export Contracts on one Supply Center
+	* and one Kapalicarsi adds 12.5 a second, 3,750 over this, 2.5 times its 1,500. */
+static const Real AI_INCOME_UPGRADE_SECONDS = 300.0f;
 static const Real PERSONA_UPGRADE_LIKED = 2.0f;
 static const Real PERSONA_UPGRADE_DISLIKED = 0.5f;
 /** What lifts an upgrade most of whose worth is the personality's own kind over that kind's units in the
@@ -10972,6 +11055,14 @@ void AIPlayer::buyUpgradesForArmy( Bool overTarget )
 		const Object *obj = *o;
 		if( obj->isEffectivelyDead() || obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
 			continue;
+		// An upgrade that raises what a building pays changes no module of it, so affectedByUpgrade never
+		// saw it: Turkiye put up a Kapalicarsi in eleven of thirty Hard matches and bought Export Contracts
+		// (a Supply Center 20 to 30 every 2 s, the Kapalicarsi 20 to 35) in none.  It is worth what it
+		// adds over AI_INCOME_UPGRADE_SECONDS of game time.
+		static const NameKeyType autoDepositKey = NAMEKEY( "AutoDepositUpdate" );
+		const AutoDepositUpdate *deposit = obj->isKindOf( KINDOF_STRUCTURE ) ? (const AutoDepositUpdate *)obj->findUpdateModule( autoDepositKey ) : NULL;
+		for( size_t u = 0; deposit && u < upgrades.size(); ++u )
+			covered[ u ] += deposit->getUpgradeBoostPerGameSecond( upgrades[ u ] ) * AI_INCOME_UPGRADE_SECONDS;
 		const ThingTemplate *tmpl = obj->getTemplate();
 		const Bool fights = !obj->isKindOf( KINDOF_STRUCTURE ) && tmpl->canPossiblyHaveAnyWeapon();
 		Real fit = 1.0f;
@@ -11022,6 +11113,59 @@ void AIPlayer::buyUpgradesForArmy( Bool overTarget )
 			cost[ pick ], covered[ pick ], covered[ pick ] / INT_TO_REAL( cost[ pick ] ),
 			overTarget ? 0.5f * profile->m_upgradePayoff : profile->m_upgradePayoff, m_player->getMoney()->countMoney(), bankTarget(),
 			(Int)army.size()));
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** The upgrades a unit buys on its own bar (Turkiye's SARP on the Altay, its Field Repair Kit on the Kirpi),
+	* for a side that runs another side's scripts: nobody presses those buttons.  Their modules used to
+	* answer America's Battle Drone too, which America's scripts were meant to press for them, but those
+	* press it only on their infantry counter team: none of 8 Altays and 3 Kirpis sampled in eight Hard
+	* matches had either.  A unit is worth its own price to its upgrade, so one is bought when the unit
+	* costs the rung's m_upgradePayoff times the upgrade, half that past the bank target (aiPickUpgrade, the
+	* player upgrades' rule): one a pass, on the first unit in the player's list with one to take, through
+	* the purchase queue. */
+//----------------------------------------------------------------------------------------------------------
+void AIPlayer::buyUnitUpgrades( Bool overTarget )
+{
+	if( !TheThingFactory->sideBorrowsTemplates( m_player->getSide() ) )
+		return;		// a side that runs its own scripts presses its own buttons
+	const AIDifficultyProfile *profile = getSkillProfile();
+	if( INT_TO_REAL( TheGameLogic->getFrame() ) < profile->m_upgradeStartSeconds * LOGICFRAMES_PER_GAME_SECOND )
+		return;
+
+	std::vector<Object *> owned;
+	m_player->iterateObjects( collectOwned, &owned );
+	for( std::vector<Object *>::const_iterator o = owned.begin(); o != owned.end(); ++o )
+	{
+		Object *obj = *o;
+		if( obj->isEffectivelyDead() || obj->isKindOf( KINDOF_STRUCTURE ) || obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+			continue;
+		ProductionUpdateInterface *pu = obj->getProductionUpdateInterface();
+		const CommandSet *commandSet = pu && pu->getProductionCount() == 0 ? TheCommandStore->findCommandSet( obj->getCommandSetString() ) : NULL;
+		for( Int i = 0; commandSet && i < MAX_COMMANDS_PER_SET; ++i )
+		{
+			const CommandButton *button = commandSet->getCommandButton( i );
+			const UpgradeTemplate *upgrade = button ? button->getUpgradeTemplate() : NULL;
+			if( upgrade == NULL || button->getCommandType() != GUI_COMMAND_OBJECT_UPGRADE || upgrade->getUpgradeType() != UPGRADE_TYPE_OBJECT ||
+					obj->hasUpgrade( upgrade ) || !obj->affectedByUpgrade( upgrade ) )
+				continue;
+			Bool sciences = TRUE;
+			for( size_t s = 0; s < button->getScienceVec().size(); ++s )
+				if( !m_player->hasScience( button->getScienceVec()[ s ] ) )
+					sciences = FALSE;
+			if( !sciences )
+				continue;
+			const Real worth = INT_TO_REAL( obj->getTemplate()->calcCostToBuild( m_player ) );
+			const Int cost = upgrade->calcCostToBuild( m_player );
+			if( aiPickUpgrade( &worth, &cost, 1, profile->m_upgradePayoff, overTarget ) < 0 )
+				continue;
+			if( buyUpgrade( pu, upgrade ) )
+				DEBUG_LOG(("AI UPGRADE frame %d player %d queues '%s' on its '%s' %d for %d, %d in the bank\n", TheGameLogic->getFrame(),
+					m_player->getPlayerIndex(), upgrade->getUpgradeName().str(), obj->getTemplate()->getName().str(), obj->getID(),
+					cost, m_player->getMoney()->countMoney()));
+			return;		// bought, or the queue saves for it
+		}
+	}
 }
 
 //----------------------------------------------------------------------------------------------------------

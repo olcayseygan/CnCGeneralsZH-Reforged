@@ -54,6 +54,8 @@ public:
 	
 	Real m_punchThroughScalar;	///< If non-zero, length modifier when we used to have a target object and now don't
 
+	Coord3D m_startBoneOffset;	///< where the beam starts in the parent bone's axes, zero being the bone itself
+
 	LaserUpdateModuleData();
 	static void buildFieldParse(MultiIniFieldParse& p);
 

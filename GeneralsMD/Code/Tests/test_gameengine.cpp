@@ -26198,3 +26198,38 @@ TEST(rank_reforged_ini_appends_ranks_six_to_ten)
 	TheScienceStore = savedSciences;
 	remove( TEST_INI );
 }
+
+/** The Maroon Beret's designator ends on the face of the target he sees, where its dot shows, not
+	 in the middle of the hull: a Crusader's box (15 by 10) turned any way, and a round building. */
+TEST(a_designator_ends_on_the_face_of_the_target_it_sees)
+{
+	const GeometryInfo box( GEOMETRY_BOX, FALSE, 10.0f, 15.0f, 10.0f );
+	Coord3D center, east, north, edge;
+	center.set( 100.0f, 100.0f, 5.0f );
+	east.set( 1.0f, 0.0f, 0.0f );
+	north.set( 0.0f, 1.0f, 0.0f );
+
+	Coord3D beret;
+	beret.set( 400.0f, 100.0f, 0.0f );		// dead ahead of a tank facing east: the front, 15 out
+	box.getFootprintEdgeToward( center, east, beret, 1.0f, edge );
+	CHECK_NEAR( edge.x, 116.0f, 0.001f );
+	CHECK_NEAR( edge.y, 100.0f, 0.001f );
+	CHECK_NEAR( edge.z, 5.0f, 0.001f );
+	box.getFootprintEdgeToward( center, north, beret, 0.0f, edge );		// the same tank facing north: its side, 10 out
+	CHECK_NEAR( edge.x, 110.0f, 0.001f );
+
+	beret.set( 400.0f, 400.0f, 0.0f );		// off the corner at 45 degrees: the side is met first
+	box.getFootprintEdgeToward( center, east, beret, 0.0f, edge );
+	CHECK_NEAR( edge.x, 110.0f, 0.001f );
+	CHECK_NEAR( edge.y, 110.0f, 0.001f );
+
+	const GeometryInfo round( GEOMETRY_CYLINDER, FALSE, 30.0f, 40.0f, 40.0f );
+	round.getFootprintEdgeToward( center, east, beret, 0.0f, edge );
+	CHECK_NEAR( edge.x - 100.0f, 40.0f * 0.70710678f, 0.001f );
+
+	beret.set( 105.0f, 100.0f, 0.0f );		// standing inside the footprint: never past him
+	box.getFootprintEdgeToward( center, east, beret, 1.0f, edge );
+	CHECK_NEAR( edge.x, 105.0f, 0.001f );
+	box.getFootprintEdgeToward( center, east, center, 1.0f, edge );		// on the middle: the middle
+	CHECK_NEAR( edge.x, 100.0f, 0.001f );
+}

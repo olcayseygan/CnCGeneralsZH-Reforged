@@ -57,6 +57,7 @@
 LaserUpdateModuleData::LaserUpdateModuleData()
 {
 	m_punchThroughScalar = 0.0f;
+	m_startBoneOffset.zero();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -69,6 +70,7 @@ LaserUpdateModuleData::LaserUpdateModuleData()
 		{ "MuzzleParticleSystem",		INI::parseAsciiString,	NULL, offsetof( LaserUpdateModuleData, m_particleSystemName ) },
 		{ "TargetParticleSystem",		INI::parseAsciiString,  NULL, offsetof( LaserUpdateModuleData, m_targetParticleSystemName ) },
 		{ "PunchThroughScalar",			INI::parseReal,					NULL, offsetof( LaserUpdateModuleData, m_punchThroughScalar ) },
+		{ "StartBoneOffset",				INI::parseCoord3D,			NULL, offsetof( LaserUpdateModuleData, m_startBoneOffset ) },
 		{ 0, 0, 0, 0 }
 	};
 	p.add(dataFieldParse);
@@ -145,9 +147,14 @@ void LaserUpdate::updateStartPos( const Drawable *parentDrawable )
 
 		
 
-		m_startPos.x = startPosMatrix.Get_X_Translation();
-		m_startPos.y = startPosMatrix.Get_Y_Translation();
-		m_startPos.z = startPosMatrix.Get_Z_Translation();
+		// StartBoneOffset is in the bone's own axes: a muzzle bone that sits out past the barrel's end
+		// has the beam start back at the muzzle
+		const Coord3D &offset = getLaserUpdateModuleData()->m_startBoneOffset;
+		Vector3 start;
+		Matrix3D::Transform_Vector( startPosMatrix, Vector3( offset.x, offset.y, offset.z ), &start );
+		m_startPos.x = start.X;
+		m_startPos.y = start.Y;
+		m_startPos.z = start.Z;
 	}
 	else
 	{
@@ -329,8 +336,10 @@ void LaserUpdate::initLaser( const Object *parent, const Object *target, const C
 	}
 
 	// Create special particle systems
-	//PLEASE NOTE You cannot check an ID for NULL.  This should be a check against INVALID_PARTICLE_SYSTEM_ID.  Can't change it on the last day without a bug though.
-	if( !m_particleSystemID )
+	// Each system is made once. EA asked only after the muzzle one, so a beam with a target effect and
+	// no muzzle flare (the Maroon Beret's designator, re-aimed every frame) made a new target system on
+	// every call and lost the old one, which went on burning where it was left until the game ended.
+	if( m_particleSystemID == INVALID_PARTICLE_SYSTEM_ID || m_targetParticleSystemID == INVALID_PARTICLE_SYSTEM_ID )
 	{
 		const Player *localPlayer = ThePlayerList->getLocalPlayer();
 
@@ -339,7 +348,7 @@ void LaserUpdate::initLaser( const Object *parent, const Object *target, const C
 		{
 
 			//If we don't have a particle system for the lense flare (muzzle flare), create it.
-			if( data->m_particleSystemName.isNotEmpty() )
+			if( m_particleSystemID == INVALID_PARTICLE_SYSTEM_ID && data->m_particleSystemName.isNotEmpty() )
 			{
 				const ParticleSystemTemplate *tmp = TheParticleSystemManager->findTemplate( data->m_particleSystemName );
 				if( tmp )
@@ -353,7 +362,7 @@ void LaserUpdate::initLaser( const Object *parent, const Object *target, const C
 			}
 
 			//If we don't have a particle system for the target effect, create it.
-			if( data->m_targetParticleSystemName.isNotEmpty() )
+			if( m_targetParticleSystemID == INVALID_PARTICLE_SYSTEM_ID && data->m_targetParticleSystemName.isNotEmpty() )
 			{
 				const ParticleSystemTemplate *tmp = TheParticleSystemManager->findTemplate( data->m_targetParticleSystemName );
 				if( tmp )

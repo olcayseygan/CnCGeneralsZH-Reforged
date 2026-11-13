@@ -961,8 +961,11 @@ void SpecialAbilityUpdate::aimUnpackLaser()
   if( !update )
     return;
 
-  Coord3D endPos;
-  target->getGeometryInfo().getCenterPosition( *target->getPosition(), endPos );
+  // at the middle's height, on the face of the target he sees and a unit out from it: at the middle
+  // itself the end and its dot were inside the hull, which hid them
+  Coord3D center, endPos;
+  target->getGeometryInfo().getCenterPosition( *target->getPosition(), center );
+  target->getGeometryInfo().getFootprintEdgeToward( center, *target->getUnitDirectionVector2D(), *getObject()->getPosition(), 1.0f, endPos );
   update->initLaser( getObject(), NULL, getObject()->getPosition(), &endPos, getSpecialAbilityUpdateModuleData()->m_specialObjectAttachToBoneName );
 }
 

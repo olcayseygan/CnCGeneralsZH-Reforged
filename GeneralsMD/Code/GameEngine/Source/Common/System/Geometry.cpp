@@ -356,6 +356,39 @@ void GeometryInfo::clipPointToFootprint(const Coord3D& geomCenter, Coord3D& ptTo
 }
 
 //=============================================================================
+// A box is left through whichever side the line meets first: along its facing it reaches the major
+// radius over the line's share of that axis, across it the minor one; a sphere or cylinder at its
+// radius. The Maroon Beret's designator ends here, on the face he sees, where its dot is not
+// swallowed by the hull the way it was at the middle of the target.
+void GeometryInfo::getFootprintEdgeToward(const Coord3D& geomCenter, const Coord3D& facing, const Coord3D& toward, Real beyond, Coord3D& edge) const
+{
+	edge = geomCenter;
+	Real dx = toward.x - geomCenter.x;
+	Real dy = toward.y - geomCenter.y;
+	const Real len = sqrt(sqr(dx) + sqr(dy));
+	if (len <= 0.0f)
+		return;
+	dx /= len;
+	dy /= len;
+
+	Real reach = m_majorRadius;
+	if (m_type == GEOMETRY_BOX)
+	{
+		const Real along = fabs(dx * facing.x + dy * facing.y);
+		const Real across = fabs(dy * facing.x - dx * facing.y);
+		if (along * m_minorRadius >= across * m_majorRadius)
+			reach = along > 0.0f ? m_majorRadius / along : 0.0f;
+		else
+			reach = m_minorRadius / across;
+	}
+	reach += beyond;
+	if (reach > len)
+		reach = len;
+	edge.x += dx * reach;
+	edge.y += dy * reach;
+}
+
+//=============================================================================
 inline Bool isWithin(Real a, Real b, Real c) { return a<=b && b<=c; }
 
 //=============================================================================

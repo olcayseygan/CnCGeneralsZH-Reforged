@@ -191,6 +191,10 @@ public:
 
 	void clipPointToFootprint(const Coord3D& geomCenter, Coord3D& ptToClip) const;
 
+	/// where a line from geomCenter toward 'toward' leaves the footprint turned to 'facing' (a unit 2D
+	/// direction), carried 'beyond' further and never past 'toward'; z stays geomCenter's
+	void getFootprintEdgeToward(const Coord3D& geomCenter, const Coord3D& facing, const Coord3D& toward, Real beyond, Coord3D& edge) const;
+
 	Bool isPointInFootprint(const Coord3D& geomCenter, const Coord3D& pt) const;
 
 	// given an object with this geom, SET how far above the object's canonical position its max z should extend.

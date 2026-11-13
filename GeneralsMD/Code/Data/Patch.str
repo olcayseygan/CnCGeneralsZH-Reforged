@@ -3127,7 +3127,7 @@ CONTROLBAR:TurkiyeBeretDesignate
 END
 
 CONTROLBAR:ToolTipTurkiyeBeretDesignate
-"Holds a laser on a vehicle or building for 4 seconds, then a strike drone flies in over him and dives on it. He cannot hide while he lases, and moving him calls it off. \n Recharge: 1:00"
+"Holds a thin targeting laser on a vehicle or building. After 4 seconds a Kargu drone comes in and dives on it, and he keeps the laser on until it hits. He cannot hide while he lases, and moving him in the first 4 seconds calls it off. \n Recharge: 1:00"
 END
 
 CONTROLBAR:TurkiyeBeretKarguSwarm
@@ -3135,7 +3135,7 @@ CONTROLBAR:TurkiyeBeretKarguSwarm
 END
 
 CONTROLBAR:ToolTipTurkiyeBeretKarguSwarm
-"Sets three Kargu kamikaze drones down beside him. They lift off together and dive one after another on a spot 75 to 350 away. \n Recharge: 0:45"
+"Sets three Kargu kamikaze drones down on his left, in front and on his right. They lift off together and dive one after another on a spot 75 to 350 away. \n Recharge: 0:45"
 END
 
 OBJECT:TurkiyeVehicleSupplyTruck

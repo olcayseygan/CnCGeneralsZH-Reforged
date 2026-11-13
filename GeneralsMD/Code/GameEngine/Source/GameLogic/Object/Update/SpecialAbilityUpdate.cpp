@@ -89,6 +89,7 @@ SpecialAbilityUpdate::SpecialAbilityUpdate( Thing *thing, const ModuleData* modu
   m_locationCount = 0;
   m_specialObjectEntries = 0;
   m_unpackLaserID = INVALID_ID;
+  m_triggerShotID = INVALID_ID;
   m_noTargetCommand = false;
   m_packingState = STATE_NONE;
   m_facingInitiated = false;
@@ -346,6 +347,27 @@ UpdateSleepTime SpecialAbilityUpdate::update( void )
     return calcSleepTime();
   }
 
+  // The TriggerWeapon's shot is in the air and the UnpackLaser stays on its target, the aim and the
+  // lost camouflage with it, until the shot lands (startHoldingForTriggerShot). An order or death
+  // ended it above. A shot with no beam up (a persistent ability's) is not held for.
+  if( m_triggerShotID != INVALID_ID && m_unpackLaserID == INVALID_ID )
+    m_triggerShotID = INVALID_ID;
+  if( m_triggerShotID != INVALID_ID )
+  {
+    Object *shot = TheGameLogic->findObjectByID( m_triggerShotID );
+    if( shot == NULL || shot->isEffectivelyDead() )
+    {
+      m_triggerShotID = INVALID_ID;
+      finishAbility();
+      return calcSleepTime();
+    }
+    getObject()->setModelConditionState( MODELCONDITION_UNPACKING );
+    aimUnpackLaser();
+    StealthUpdate* stealth = getObject()->getStealth();
+    if( stealth )
+      stealth->markAsDetected();
+    return calcSleepTime();
+  }
 
 
   //DETERMINE OUR PHASE! BRAIN LOGIC
@@ -381,10 +403,14 @@ UpdateSleepTime SpecialAbilityUpdate::update( void )
       else
       {
         endPreparation();
-        if( needToPack() )
+        if( startHoldingForTriggerShot() )
         {
-          //STEP 5 -- PACK 
-          //Note: If we actually do pack, then cleanup will be handled in 
+          //VARIATION -- the beam stays on the target until the shot lands (top of this function)
+        }
+        else if( needToPack() )
+        {
+          //STEP 5 -- PACK
+          //Note: If we actually do pack, then cleanup will be handled in
           //handlePackingProcess(), near the top of this function.
           startPacking(true);
         }
@@ -461,7 +487,11 @@ UpdateSleepTime SpecialAbilityUpdate::update( void )
         else
           endPreparation();
 
-        if( needToPack() )
+        if( startHoldingForTriggerShot() )
+        {
+          //VARIATION -- the beam stays on the target until the shot lands (top of this function)
+        }
+        else if( needToPack() )
         {
           //STEP 5 -- PACK 
           //Note: If we actually do pack, then cleanup will be handled in 
@@ -511,6 +541,8 @@ Bool SpecialAbilityUpdate::initiateIntentToDoSpecialPower( const SpecialPowerTem
   m_facingComplete = false;
   m_withinStartAbilityRange = false;
   m_captureFlashPhase = 0.0f;   // a restarted capture starts its flash over, not part way up the ramp
+  killUnpackLaser();
+  m_triggerShotID = INVALID_ID;
 
 //  getObject()->getControllingPlayer()->getAcademyStats()->recordSpecialPowerUsed( specialPowerTemplate );
 
@@ -656,6 +688,7 @@ void SpecialAbilityUpdate::onExit( Bool cleanup )
   TheAudio->removeAudioEvent( m_prepSoundLoop.getPlayingHandle() );
   endPreparation();
   killUnpackLaser();
+  m_triggerShotID = INVALID_ID;
 
   if( !data->m_specialObjectsPersistent || cleanup && !data->m_specialObjectsPersistWhenOwnerDies )
   {
@@ -706,7 +739,9 @@ Bool SpecialAbilityUpdate::handlePackingProcessing()
           getObject()->setOrientation( getObject()->getOrientation() + PI );
         }
         m_packingState = STATE_UNPACKED;
-        killUnpackLaser();
+        // a TriggerWeapon's beam stays on into the shot's flight (startHoldingForTriggerShot)
+        if( !data->m_triggerWeapon )
+          killUnpackLaser();
       }
       else if( m_packingState == STATE_PACKING )
       {
@@ -904,6 +939,26 @@ void SpecialAbilityUpdate::aimUnpackLaser()
   Coord3D endPos;
   target->getGeometryInfo().getCenterPosition( *target->getPosition(), endPos );
   update->initLaser( getObject(), NULL, getObject()->getPosition(), &endPos, getSpecialAbilityUpdateModuleData()->m_specialObjectAttachToBoneName );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Right after the trigger: with the UnpackLaser still up and the TriggerWeapon's shot in the air,
+	* the ability stays on, standing still with the beam on the target, until the shot lands (the top
+	* of update). Without either, the ability finishes as it always did. */
+//-------------------------------------------------------------------------------------------------
+Bool SpecialAbilityUpdate::startHoldingForTriggerShot()
+{
+  if( m_triggerShotID == INVALID_ID )
+    return FALSE;
+  if( m_unpackLaserID == INVALID_ID || TheGameLogic->findObjectByID( m_triggerShotID ) == NULL )
+  {
+    m_triggerShotID = INVALID_ID;
+    return FALSE;
+  }
+  AIUpdateInterface *ai = getObject()->getAIUpdateInterface();
+  if( ai )
+    ai->aiBusy( CMD_FROM_AI );
+  return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1407,8 +1462,9 @@ void SpecialAbilityUpdate::triggerAbilityEffect()
   if( data->m_triggerWeapon )
   {
     Object *target = TheGameLogic->findObjectByID( m_targetID );
+    m_triggerShotID = INVALID_ID;
     if( target )
-      TheWeaponStore->createAndFireTempWeapon( data->m_triggerWeapon, object, target );
+      TheWeaponStore->createAndFireTempWeapon( data->m_triggerWeapon, object, target, &m_triggerShotID );
     else if( m_targetPos.x || m_targetPos.y || m_targetPos.z )
       TheWeaponStore->createAndFireTempWeapon( data->m_triggerWeapon, object, &m_targetPos );
   }
@@ -2129,7 +2185,8 @@ void SpecialAbilityUpdate::xfer( Xfer *xfer )
 
 	// version
 	// 2: the UnpackLaser beam's ID
-	XferVersion currentVersion = 2;
+	// 3: the TriggerWeapon shot the beam is held on for
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -2183,6 +2240,8 @@ void SpecialAbilityUpdate::xfer( Xfer *xfer )
 
 	if( version >= 2 )
 		xfer->xferObjectID( &m_unpackLaserID );
+	if( version >= 3 )
+		xfer->xferObjectID( &m_triggerShotID );
 
 }  // end xfer
 

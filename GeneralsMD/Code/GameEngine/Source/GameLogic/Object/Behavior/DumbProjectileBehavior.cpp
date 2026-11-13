@@ -92,7 +92,8 @@ DumbProjectileBehaviorModuleData::DumbProjectileBehaviorModuleData() :
 	m_hoverHeight(0.0f),
 	m_hoverTime(DurationFrames::fromRaw(0)),
 	m_hoverStagger(DurationFrames::fromRaw(0)),
-	m_hoverSpacing(0.0f)
+	m_hoverSpacing(0.0f),
+	m_hoverPlaceInterval(DurationFrames::fromRaw(0))
 {
 }
 
@@ -129,6 +130,7 @@ void DumbProjectileBehaviorModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "HoverTime",							SPEED_FIELD( DumbProjectileBehaviorModuleData, m_hoverTime ) },
 		{ "HoverStagger",						SPEED_FIELD( DumbProjectileBehaviorModuleData, m_hoverStagger ) },
 		{ "HoverSpacing",						INI::parseReal,						NULL, offsetof( DumbProjectileBehaviorModuleData, m_hoverSpacing ) },
+		{ "HoverPlaceInterval",			SPEED_FIELD( DumbProjectileBehaviorModuleData, m_hoverPlaceInterval ) },
 
 
 		{ 0, 0, 0, 0 }
@@ -385,10 +387,13 @@ void DumbProjectileBehavior::projectileLaunchAtObjectOrPosition(
 
 	Weapon::positionProjectileForLaunch(projectile, launcher, wslot, specificBarrelToUse);
 
-	// HoverTime: the clip's shots stand side by side on the ground beside the launcher, rise together
-	// and hold, and each leaves for its target HoverStagger after the one before (the Maroon Beret's
-	// Kargu). Which shot of the clip this is comes from the ammo still in it, counted down after the
-	// shot leaves (Weapon::privateFireWeapon).
+	// HoverTime: the clip's shots stand on the ground beside the launcher, rise together and hold, and
+	// each leaves for its target HoverStagger after the one before (the Maroon Beret's Kargu). Which
+	// shot of the clip this is comes from the ammo still in it, counted down after the shot leaves
+	// (Weapon::privateFireWeapon). With a HoverPlaceInterval the shots are set down one at a time
+	// round the launcher, left, front and right of the line to the target at HoverSpacing, that
+	// interval apart (the weapon's DelayBetweenShots), each waiting on the ground for the last before
+	// all of them rise; without one they stand side by side, HoverSpacing apart.
 	m_hoverEndFrame = 0;
 	if( d->m_hoverTime > 0 && launcher && victimPos )
 	{
@@ -398,22 +403,43 @@ void DumbProjectileBehavior::projectileLaunchAtObjectOrPosition(
 		if( shot < 0 || shot >= clip )
 			shot = 0;
 
-		Coord3D across;
-		across.set( -( victimPos->y - launcher->getPosition()->y ), victimPos->x - launcher->getPosition()->x, 0.0f );
-		Real acrossLength = sqrtf( sqr( across.x ) + sqr( across.y ) );
-		if( acrossLength > 0.0f )
-			across.scale( 1.0f / acrossLength );
-		Real offset = ( shot + 1 ) * d->m_hoverSpacing;	// the launcher's own spot left clear
+		Coord3D forward;
+		forward.set( victimPos->x - launcher->getPosition()->x, victimPos->y - launcher->getPosition()->y, 0.0f );
+		Real forwardLength = sqrtf( sqr( forward.x ) + sqr( forward.y ) );
+		if( forwardLength > 0.0f )
+			forward.scale( 1.0f / forwardLength );
+		Coord3D across;	// to the launcher's left
+		across.set( -forward.y, forward.x, 0.0f );
+
+		Coord3D offset;
+		UnsignedInt groundFrames = 0;
+		if( d->m_hoverPlaceInterval > 0 )
+		{
+			// from the left (-1) through the front (0) to the right (+1)
+			Real side = clip > 1 ? 2.0f * shot / ( clip - 1 ) - 1.0f : 0.0f;
+			offset.set( -side * across.x + ( 1.0f - fabs( side ) ) * forward.x,
+									-side * across.y + ( 1.0f - fabs( side ) ) * forward.y, 0.0f );
+			Real offsetLength = sqrtf( sqr( offset.x ) + sqr( offset.y ) );
+			if( offsetLength > 0.0f )
+				offset.scale( d->m_hoverSpacing / offsetLength );
+			groundFrames = ( max( clip, 1 ) - 1 - shot ) * (UnsignedInt)d->m_hoverPlaceInterval;
+		}
+		else
+		{
+			// the launcher's own spot left clear
+			offset.set( across.x, across.y, 0.0f );
+			offset.scale( ( shot + 1 ) * d->m_hoverSpacing );
+		}
 
 		m_hoverBase = *launcher->getPosition();
-		m_hoverBase.x += offset * across.x;
-		m_hoverBase.y += offset * across.y;
+		m_hoverBase.x += offset.x;
+		m_hoverBase.y += offset.y;
 		m_hoverBase.z = TheTerrainLogic->getGroundHeight( m_hoverBase.x, m_hoverBase.y );
 		projectile->setPosition( &m_hoverBase );
 
 		UnsignedInt now = TheGameLogic->getFrame();
-		UnsignedInt hoverFrames = d->m_hoverTime + shot * (UnsignedInt)d->m_hoverStagger;
-		m_hoverStartFrame = now;
+		UnsignedInt hoverFrames = groundFrames + d->m_hoverTime + shot * (UnsignedInt)d->m_hoverStagger;
+		m_hoverStartFrame = now + groundFrames;
 		m_hoverEndFrame = now + max( hoverFrames, 1u );
 		m_lifespanFrame += hoverFrames;
 	}
@@ -820,7 +846,7 @@ UpdateSleepTime DumbProjectileBehavior::update()
 		{
 			// rising over the first half of HoverTime, then holding
 			UnsignedInt riseFrames = max( (UnsignedInt)d->m_hoverTime / 2, 1u );
-			Real risen = min( 1.0f, (Real)( now - m_hoverStartFrame ) / (Real)riseFrames );
+			Real risen = now < m_hoverStartFrame ? 0.0f : min( 1.0f, (Real)( now - m_hoverStartFrame ) / (Real)riseFrames );
 			Coord3D pos = m_hoverBase;
 			pos.z += risen * d->m_hoverHeight;
 			getObject()->setPosition( &pos );

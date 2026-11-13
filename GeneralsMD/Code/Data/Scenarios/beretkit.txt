@@ -1,10 +1,10 @@
 # The Maroon Beret's two calls land on what they were sent at.
 #
 # Kargu Swarm (the button's MSG_DO_WEAPON_AT_LOCATION, weaponat on the tertiary slot) at a
-# Battlemaster 300 away: a 1.5 s kneel, three drones up together, diving half a second apart.
-# Designate Target (the button's MSG_DO_SPECIAL_POWER_AT_OBJECT, as shiftpower sends it) on a
-# Crusader 250 away the other way: 4 s lasing with the carbine up, then the strike drone's dive,
-# 250 armour-piercing. The power's minute runs
+# Battlemaster 300 away: three drones set down round him one by one, up together, diving a second
+# apart. Designate Target (the button's MSG_DO_SPECIAL_POWER_AT_OBJECT, as shiftpower sends it) on a
+# Crusader 250 away the other way: 4 s lasing with the carbine up, then the Kargu base's dive drone
+# with the beam held on until it lands, 250 armour-piercing. The power's minute runs
 # from the moment he is made, as every unit power's clock does: a game minute is 1200 ticks at 1.5x,
 # and a file frame is two thirds of a tick there, so it is called at 1900. Each target is out of the carbine's 140, so only the call
 # touches it, and neither tank reaches him. A tally before each call, one in the middle and one
@@ -16,12 +16,12 @@
 #     -scenario beretkit -logPrefix beretkit_
 #
 # Measured 2026-11-13: the Battlemaster 400, 400 at 100, 130 at 500 (three drones of 90); the
-# Crusader 480 at 1898, 480 at 1960 while he lases, 230 at 2200. A temporary log had the three Kargu
-# launched on ticks 74, 76 and 78 at 12, 24 and 36 beside him, leave the hover on 98, 130 and 162 and
-# go off on 163, 194 and 225; the beam from his muzzle 10.5 over the ground (the charge-setting
-# kneel held it at 3.9) to the Crusader's middle from tick 1269 to 1349 (80 ticks, 4 s), and the
-# strike drone start 220 over the Crusader and 350 back on 1349 and hit it on 1420.
-# HEADLESS CRC 0x65D89EC4 at 1800.
+# Crusader 480 at 1898, 480 at 1960 while he lases, 230 at 2200. A temporary log (2026-11-13, round
+# 4) had the three Kargu set down on ticks 60, 72 and 84 at (1015,1000), (1000,985) and (985,1000),
+# his left, front and right facing the target to the south, all three rise on 84 and leave the
+# hover on 108, 138 and 168; the beam on from tick 1269, the Kargu base's dive drone let go at
+# (955,999,212), 140 over the Crusader and 300 back, on 1349, and the beam held on it until the
+# drone was gone on 1409. HEADLESS CRC 0x845E62BB at 1800.
 
 30    spawn       0  TurkiyeInfantryMaroonBeret  1  1000 1000
 30    spawn       1  AmericaTankCrusader         1  1250 1000

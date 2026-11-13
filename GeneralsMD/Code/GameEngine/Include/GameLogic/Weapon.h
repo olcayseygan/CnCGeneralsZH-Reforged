@@ -885,7 +885,7 @@ public:
 	void deleteWeaponLater( Weapon *weapon ) { m_weaponsToDelete.push_back( weapon ); }
 
 	void createAndFireTempWeapon(const WeaponTemplate* w, const Object *source, const Coord3D* pos);
-	void createAndFireTempWeapon(const WeaponTemplate* w, const Object *source, Object *target);
+	void createAndFireTempWeapon(const WeaponTemplate* w, const Object *source, Object *target, ObjectID* projectileID = NULL);
 	
 	void handleProjectileDetonation( const WeaponTemplate* w, const Object *source, const Coord3D* pos, WeaponBonusConditionFlags extraBonusFlags, Bool inflictDamage = TRUE );
 	

@@ -75,6 +75,7 @@ public:
 	DurationFrames	m_hoverTime;								///< over the first half of this, holds for the rest, then flies its path
 	DurationFrames	m_hoverStagger;							///< and holds this much longer for each shot of the clip already fired
 	Real						m_hoverSpacing;							///< the clip's shots start this far apart, side by side across the line of fire
+	DurationFrames	m_hoverPlaceInterval;				///< above zero, the shots are set down left, front and right of the launcher this far apart in time and rise with the last
 
 
 	DumbProjectileBehaviorModuleData();

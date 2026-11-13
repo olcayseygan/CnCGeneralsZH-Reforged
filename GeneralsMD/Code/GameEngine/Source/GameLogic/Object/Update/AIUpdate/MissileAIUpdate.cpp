@@ -91,6 +91,8 @@ MissileAIUpdateModuleData::MissileAIUpdateModuleData()
 	m_distanceScatterWhenJammed = 75.0f;
     m_detonateCallsKill = FALSE;
     m_killSelfDelay.setRaw( 100 );	// msec, ConvertRetailFrames(3) at the native speed: // just long enough for the contrail to catch up to me
+	m_startHeightAboveTarget = 0.0f;
+	m_startDistanceBack = 0.0f;
 }
 
 //-----------------------------------------------------------------------------
@@ -118,6 +120,8 @@ void MissileAIUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "GarrisonHitKillFX", INI::parseFXList, NULL, offsetof( MissileAIUpdateModuleData, m_garrisonHitKillFX ) },
     { "DetonateCallsKill", INI::parseBool,   NULL, offsetof( MissileAIUpdateModuleData, m_detonateCallsKill ) },
     { "KillSelfDelay",     SPEED_FIELD( MissileAIUpdateModuleData, m_killSelfDelay ) },
+		{ "StartHeightAboveTarget",	INI::parseReal,		NULL, offsetof( MissileAIUpdateModuleData, m_startHeightAboveTarget ) },
+		{ "StartDistanceBack",			INI::parseReal,		NULL, offsetof( MissileAIUpdateModuleData, m_startDistanceBack ) },
     { 0, 0, 0, 0 }
 	};
 
@@ -235,6 +239,32 @@ void MissileAIUpdate::projectileLaunchAtObjectOrPosition(
 	m_extraBonusFlags = launcher ? launcher->getWeaponBonusCondition() : 0;
 
 	Weapon::positionProjectileForLaunch(getObject(), launcher, wslot, specificBarrelToUse);
+
+	// StartHeightAboveTarget: let go high over the target, StartDistanceBack toward the launcher and
+	// heading level at it, the way the Kargu base's drone lets its dive go (the Maroon Beret's strike
+	// drone, which is that dive). The launch velocity below runs along the heading set here.
+	const MissileAIUpdateModuleData* d = getMissileAIUpdateModuleData();
+	if( d->m_startHeightAboveTarget > 0.0f && victimPos )
+	{
+		Vector3 heading( 1.0f, 0.0f, 0.0f );
+		Coord3D start = *victimPos;
+		if( launcher )
+		{
+			Real backX = launcher->getPosition()->x - victimPos->x;
+			Real backY = launcher->getPosition()->y - victimPos->y;
+			Real backLength = sqrtf( sqr( backX ) + sqr( backY ) );
+			if( backLength > 0.0f )
+			{
+				start.x += backX * d->m_startDistanceBack / backLength;
+				start.y += backY * d->m_startDistanceBack / backLength;
+				heading.Set( -backX / backLength, -backY / backLength, 0.0f );
+			}
+		}
+		start.z = victimPos->z + d->m_startHeightAboveTarget;
+		Matrix3D startMtx;
+		startMtx.buildTransformMatrix( Vector3( start.x, start.y, start.z ), heading );
+		getObject()->setTransformMatrix( &startMtx );
+	}
 
 	projectileFireAtObjectOrPosition( victim, victimPos, detWeap, exhaustSysOverride );
 

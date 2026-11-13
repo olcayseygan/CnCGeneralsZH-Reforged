@@ -265,6 +265,7 @@ protected:
 	void killSpecialObjects();
 	void killUnpackLaser();
 	void aimUnpackLaser();
+	Bool startHoldingForTriggerShot();
 
 	Bool handlePackingProcessing();
 	void startPacking(Bool success);
@@ -313,6 +314,7 @@ private:
 	Int														m_locationCount;
 	std::list<ObjectID>						m_specialObjectIDList; //The list of special objects
 	ObjectID											m_unpackLaserID;	///< the UnpackLaser beam while it is up
+	ObjectID											m_triggerShotID;	///< the TriggerWeapon's projectile, held on with the beam until it lands
 	UnsignedInt										m_specialObjectEntries;				 //The size of the list of member Objects
 	Real													m_captureFlashPhase;    ///< used to track the accellerating flash of the capture FX
 	PackingState									m_packingState;

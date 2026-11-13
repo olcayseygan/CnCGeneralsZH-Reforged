@@ -84,6 +84,7 @@ StealthUpdateModuleData::StealthUpdateModuleData()
     m_stealthSpeed.setRaw( 0.0f );
     m_friendlyOpacityMin = 0.5f;
     m_friendlyOpacityMax = 1.0f;
+    m_pulseToFriendlyOpacityMax = FALSE;
     m_pulseFrames.setRaw( 1000 );
     m_teamDisguised		= false;
     m_revealDistanceFromTarget = 0.0f;
@@ -114,6 +115,7 @@ void StealthUpdateModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "ForbiddenStatus",							ObjectStatusMaskType::parseFromINI,	NULL, offsetof( StealthUpdateModuleData, m_forbiddenStatus ) },
 		{ "FriendlyOpacityMin",						INI::parsePercentToReal,				NULL, offsetof( StealthUpdateModuleData, m_friendlyOpacityMin ) },
 		{ "FriendlyOpacityMax",						INI::parsePercentToReal,				NULL, offsetof( StealthUpdateModuleData, m_friendlyOpacityMax ) },
+		{ "PulseToFriendlyOpacityMax",		INI::parseBool,									NULL, offsetof( StealthUpdateModuleData, m_pulseToFriendlyOpacityMax ) },
 		{ "PulseFrequency",								SPEED_FIELD( StealthUpdateModuleData, m_pulseFrames ) },
 		{ "DisguisesAsTeam",							INI::parseBool,									NULL, offsetof( StealthUpdateModuleData, m_teamDisguised ) },
 		{ "RevealDistanceFromTarget",			INI::parseReal,									NULL, offsetof( StealthUpdateModuleData, m_revealDistanceFromTarget ) },
@@ -709,8 +711,15 @@ UpdateSleepTime StealthUpdate::update( void )
 		}
 		else
 		{
-			draw->setEffectiveOpacity( 0.5f + ( Sin( m_pulsePhase ) * 0.5f ) );
-			// between one half and full opacity
+			// The friendly pulse runs from FriendlyOpacityMin up to full paint, every 0.7 s at 1.5x.
+			// EA parsed FriendlyOpacityMax and never read it, and retail data sets it (the Pathfinder
+			// and the Stealth General's sniper, 30% to 80%), so honouring it everywhere would change
+			// them. PulseToFriendlyOpacityMax opts in: the pulse stops at the max, and a unit with a
+			// narrow range (the Maroon Beret, 50% to 60%) holds a steady glass look.
+			Real pulse = 0.5f + ( Sin( m_pulsePhase ) * 0.5f );
+			if( data->m_pulseToFriendlyOpacityMax && data->m_friendlyOpacityMin < 1.0f )
+				pulse *= ( data->m_friendlyOpacityMax - data->m_friendlyOpacityMin ) / ( 1.0f - data->m_friendlyOpacityMin );
+			draw->setEffectiveOpacity( pulse );
 			m_pulsePhase += m_pulsePhaseRate;
 		}
 	}

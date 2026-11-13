@@ -86,7 +86,8 @@ public:
 	FXList				*m_disguiseFX;
 	VelocityPerFrame					m_stealthSpeed;
 	Real					m_friendlyOpacityMin;
-	Real					m_friendlyOpacityMax;
+	Real					m_friendlyOpacityMax;			///< read only with m_pulseToFriendlyOpacityMax: retail's pulse always ran up to 1
+	Bool					m_pulseToFriendlyOpacityMax;	///< PulseToFriendlyOpacityMax: the friendly pulse stops at the max, not at full paint
 	Real					m_revealDistanceFromTarget;
 	DurationFrames		m_disguiseTransitionFrames;
 	DurationFrames		m_disguiseRevealTransitionFrames;

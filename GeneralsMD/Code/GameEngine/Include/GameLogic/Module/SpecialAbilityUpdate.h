@@ -81,6 +81,8 @@ public:
 	AsciiString						m_specialObjectAttachToBoneName;
 	AsciiString						m_unpackLaserName;				///< a laser object held from SpecialObjectAttachToBone onto the target while unpacking
 	const WeaponTemplate*	m_triggerWeapon;					///< fired at the target on the trigger, in place of the power type's own effect
+	const WeaponTemplate*	m_unpackFlybyWeapon;			///< fired when the unpacking starts, at a point UnpackFlybyRun past the unit on the line to the target: its projectile is the aircraft the TriggerWeapon is let go from
+	Real									m_unpackFlybyRun;
 	const SpecialPowerTemplate*	m_specialPowerTemplate;		///< pointer to the special power template
 	Real									m_startAbilityRange;
 	Real									m_abilityAbortRange;
@@ -119,6 +121,8 @@ public:
 	{
 		m_specialPowerTemplate = NULL;
 		m_triggerWeapon = NULL;
+		m_unpackFlybyWeapon = NULL;
+		m_unpackFlybyRun = 0.0f;
 		m_startAbilityRange = SPECIAL_ABILITY_HUGE_DISTANCE;
 		m_abilityAbortRange = SPECIAL_ABILITY_HUGE_DISTANCE;
 		m_preparationFrames.setRaw( 0 );
@@ -194,6 +198,8 @@ public:
       { "PersistenceRequiresRecharge",INI::parseBool,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_persistenceRequiresRecharge ) },
 			{ "UnpackLaser",								INI::parseAsciiString,						NULL, offsetof( SpecialAbilityUpdateModuleData, m_unpackLaserName ) },
 			{ "TriggerWeapon",							INI::parseWeaponTemplate,					NULL, offsetof( SpecialAbilityUpdateModuleData, m_triggerWeapon ) },
+			{ "UnpackFlybyWeapon",					INI::parseWeaponTemplate,					NULL, offsetof( SpecialAbilityUpdateModuleData, m_unpackFlybyWeapon ) },
+			{ "UnpackFlybyRun",							INI::parseReal,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_unpackFlybyRun ) },
 			{ 0, 0, 0, 0 }
 		};
     p.add(dataFieldParse);
@@ -315,6 +321,7 @@ private:
 	std::list<ObjectID>						m_specialObjectIDList; //The list of special objects
 	ObjectID											m_unpackLaserID;	///< the UnpackLaser beam while it is up
 	ObjectID											m_triggerShotID;	///< the TriggerWeapon's projectile, held on with the beam until it lands
+	ObjectID											m_flybyID;				///< the UnpackFlybyWeapon's projectile, the aircraft the TriggerWeapon leaves from
 	UnsignedInt										m_specialObjectEntries;				 //The size of the list of member Objects
 	Real													m_captureFlashPhase;    ///< used to track the accellerating flash of the capture FX
 	PackingState									m_packingState;

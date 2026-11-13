@@ -17697,7 +17697,7 @@ CONTROLBAR:TurkiyeBeretDesignate
 END
 
 CONTROLBAR:ToolTipTurkiyeBeretDesignate
-"Araca ya da binaya ince bir hedefleme lazeri tutar. 4 saniye sonra bir Kargu gelip hedefe dalar, o çakılana kadar lazeri bırakmaz. Lazer tutarken saklanamaz, ilk 4 saniyede yerinden oynatırsan iş iptal olur. \n Geri Sayım: 1:00"
+"Araca ya da binaya ince bir hedefleme lazeri tutar. Üstünden geçen bir TB2 4 saniye sonra bir Kemankeş bırakır, süzülüp hedefe dalar; o çakılana kadar lazeri bırakmaz. Lazer tutarken saklanamaz, ilk 4 saniyede yerinden oynatırsan iş iptal olur. \n Geri Sayım: 1:00"
 END
 
 CONTROLBAR:TurkiyeBeretKarguSwarm
@@ -17705,7 +17705,7 @@ CONTROLBAR:TurkiyeBeretKarguSwarm
 END
 
 CONTROLBAR:ToolTipTurkiyeBeretKarguSwarm
-"Soluna, önüne ve sağına birer kamikaze Kargu koyar. Üçü birden havalanır, sonra sırayla 75 ile 350 arası bir noktaya dalarlar. \n Geri Sayım: 0:45"
+"Diz çöker, sırtındaki üç kamikaze Kargu'yu tek tek indirip soluna, önüne ve sağına koyar. Üçü birden havalanır, sonra sırayla 75 ile 350 arası bir noktaya dalarlar. \n Geri Sayım: 0:45"
 END
 
 OBJECT:TurkiyeVehicleSupplyTruck

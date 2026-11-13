@@ -66,8 +66,6 @@ public:
 	Real						m_lockDistance;				///< If I get this close to my target, guaranteed hit.
 	Bool						m_detonateCallsKill;			///< if true, kill() will be called, instead of KILL_SELF state, which calls destroy.
   DurationFramesInt             m_killSelfDelay;      ///< If I have detonated and entered the KILL-SELF state, how ling do I wait before I Kill/destroy self?
-	Real						m_startHeightAboveTarget;	///< above zero, the missile is let go this high over its target instead of at the launcher
-	Real						m_startDistanceBack;			///< and this far back from it toward the launcher, heading for it
 	MissileAIUpdateModuleData();
 
 	static void buildFieldParse(MultiIniFieldParse& p);

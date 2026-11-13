@@ -1714,13 +1714,13 @@ void WeaponStore::handleProjectileDetonation(const WeaponTemplate* wt, const Obj
 }
 
 //-------------------------------------------------------------------------------------------------
-void WeaponStore::createAndFireTempWeapon(const WeaponTemplate* wt, const Object *source, const Coord3D* pos)
+void WeaponStore::createAndFireTempWeapon(const WeaponTemplate* wt, const Object *source, const Coord3D* pos, ObjectID* projectileID)
 {
 	if (wt == NULL)
 		return;
 	Weapon* w = TheWeaponStore->allocateNewWeapon(wt, PRIMARY_WEAPON);
 	w->loadAmmoNow(source);
-	w->fireWeapon(source, pos);
+	w->fireWeapon(source, pos, projectileID);
 	w->deleteInstance();
 }
 

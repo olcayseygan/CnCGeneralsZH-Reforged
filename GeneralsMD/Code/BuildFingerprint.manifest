@@ -279,6 +279,7 @@ Data/Art/Textures/ZHCA_TRKBaseD.tga
 Data/Art/Textures/ZHCA_TRKapali.tga
 Data/Art/Textures/ZHCA_TRKargu.tga
 Data/Art/Textures/ZHCA_TRKarguD.tga
+Data/Art/Textures/ZHCA_TRKemankes.tga
 Data/Art/Textures/ZHCA_TRKirpi.tga
 Data/Art/Textures/ZHCA_TRKirpiD.tga
 Data/Art/Textures/ZHCA_TRKizilelma.tga
@@ -374,9 +375,13 @@ Data/Art/W3D/TRBER_IDTA.W3D
 Data/Art/W3D/TRBER_IDTB.W3D
 Data/Art/W3D/TRBER_IIDA.W3D
 Data/Art/W3D/TRBER_IIDB.W3D
+Data/Art/W3D/TRBER_IKGA.W3D
+Data/Art/W3D/TRBER_IKGU.W3D
 Data/Art/W3D/TRBER_IRNA.W3D
 Data/Art/W3D/TRBER_ISTA.W3D
 Data/Art/W3D/TRBER_ISTAHIT.W3D
+Data/Art/W3D/TRBER_KGA.W3D
+Data/Art/W3D/TRBER_KGU.W3D
 Data/Art/W3D/TRBER_PFL.W3D
 Data/Art/W3D/TRBER_PHG.W3D
 Data/Art/W3D/TRBER_POP.W3D
@@ -451,6 +456,7 @@ Data/Art/W3D/TRKBASE_DR4.W3D
 Data/Art/W3D/TRKBASE_E.W3D
 Data/Art/W3D/TRKBASE_R.W3D
 Data/Art/W3D/TRKBASE_SC.W3D
+Data/Art/W3D/TRKEMANKES.W3D
 Data/Art/W3D/TRKIRPI.W3D
 Data/Art/W3D/TRKIRPI_D.W3D
 Data/Art/W3D/TRKIRPI_D1.W3D

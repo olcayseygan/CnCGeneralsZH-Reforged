@@ -93,8 +93,18 @@ DumbProjectileBehaviorModuleData::DumbProjectileBehaviorModuleData() :
 	m_hoverTime(DurationFrames::fromRaw(0)),
 	m_hoverStagger(DurationFrames::fromRaw(0)),
 	m_hoverSpacing(0.0f),
-	m_hoverPlaceInterval(DurationFrames::fromRaw(0))
+	m_hoverPlaceInterval(DurationFrames::fromRaw(0)),
+	m_hoverGrowFrom(0.0f)
 {
+}
+
+//-----------------------------------------------------------------------------
+// HoverSpot = X:<facing> Y:<left> Z:<over the ground>, one line a shot of the clip
+static void parseHoverSpot( INI *ini, void * /*instance*/, void *store, const void * /*userData*/ )
+{
+	Coord3D spot;
+	INI::parseCoord3D( ini, NULL, &spot, NULL );
+	((std::vector<Coord3D> *)store)->push_back( spot );
 }
 
 //-----------------------------------------------------------------------------
@@ -131,6 +141,8 @@ void DumbProjectileBehaviorModuleData::buildFieldParse(MultiIniFieldParse& p)
 		{ "HoverStagger",						SPEED_FIELD( DumbProjectileBehaviorModuleData, m_hoverStagger ) },
 		{ "HoverSpacing",						INI::parseReal,						NULL, offsetof( DumbProjectileBehaviorModuleData, m_hoverSpacing ) },
 		{ "HoverPlaceInterval",			SPEED_FIELD( DumbProjectileBehaviorModuleData, m_hoverPlaceInterval ) },
+		{ "HoverSpot",							parseHoverSpot,						NULL, offsetof( DumbProjectileBehaviorModuleData, m_hoverSpots ) },
+		{ "HoverGrowFrom",					INI::parseReal,						NULL, offsetof( DumbProjectileBehaviorModuleData, m_hoverGrowFrom ) },
 
 
 		{ 0, 0, 0, 0 }
@@ -390,10 +402,11 @@ void DumbProjectileBehavior::projectileLaunchAtObjectOrPosition(
 	// HoverTime: the clip's shots stand on the ground beside the launcher, rise together and hold, and
 	// each leaves for its target HoverStagger after the one before (the Maroon Beret's Kargu). Which
 	// shot of the clip this is comes from the ammo still in it, counted down after the shot leaves
-	// (Weapon::privateFireWeapon). With a HoverPlaceInterval the shots are set down one at a time
-	// round the launcher, left, front and right of the line to the target at HoverSpacing, that
-	// interval apart (the weapon's DelayBetweenShots), each waiting on the ground for the last before
-	// all of them rise; without one they stand side by side, HoverSpacing apart.
+	// (Weapon::privateFireWeapon). With a HoverSpot for the shot it is set down there, in the
+	// launcher's frame and facing as it faces, where the hands of his animation leave it (the Maroon
+	// Beret's place cycle, one shot a touch-down); HoverPlaceInterval, the weapon's DelayBetweenShots,
+	// keeps each on the ground until the last is down and all of them rise. Without spots they stand
+	// side by side, HoverSpacing apart, on the launcher's left.
 	m_hoverEndFrame = 0;
 	if( d->m_hoverTime > 0 && launcher && victimPos )
 	{
@@ -403,39 +416,41 @@ void DumbProjectileBehavior::projectileLaunchAtObjectOrPosition(
 		if( shot < 0 || shot >= clip )
 			shot = 0;
 
-		Coord3D forward;
-		forward.set( victimPos->x - launcher->getPosition()->x, victimPos->y - launcher->getPosition()->y, 0.0f );
-		Real forwardLength = sqrtf( sqr( forward.x ) + sqr( forward.y ) );
-		if( forwardLength > 0.0f )
-			forward.scale( 1.0f / forwardLength );
-		Coord3D across;	// to the launcher's left
-		across.set( -forward.y, forward.x, 0.0f );
-
 		Coord3D offset;
-		UnsignedInt groundFrames = 0;
-		if( d->m_hoverPlaceInterval > 0 )
+		Real overGround = 0.0f;
+		if( shot < (Int)d->m_hoverSpots.size() )
 		{
-			// from the left (-1) through the front (0) to the right (+1)
-			Real side = clip > 1 ? 2.0f * shot / ( clip - 1 ) - 1.0f : 0.0f;
-			offset.set( -side * across.x + ( 1.0f - fabs( side ) ) * forward.x,
-									-side * across.y + ( 1.0f - fabs( side ) ) * forward.y, 0.0f );
-			Real offsetLength = sqrtf( sqr( offset.x ) + sqr( offset.y ) );
-			if( offsetLength > 0.0f )
-				offset.scale( d->m_hoverSpacing / offsetLength );
-			groundFrames = ( max( clip, 1 ) - 1 - shot ) * (UnsignedInt)d->m_hoverPlaceInterval;
+			Vector3 facing = launcher->getTransformMatrix()->Get_X_Vector();
+			Real facingLength = sqrtf( sqr( facing.X ) + sqr( facing.Y ) );
+			Coord3D forward;
+			forward.set( 1.0f, 0.0f, 0.0f );
+			if( facingLength > 0.0f )
+				forward.set( facing.X / facingLength, facing.Y / facingLength, 0.0f );
+			const Coord3D &spot = d->m_hoverSpots[ shot ];
+			offset.set( spot.x * forward.x - spot.y * forward.y, spot.x * forward.y + spot.y * forward.x, 0.0f );
+			overGround = spot.z;
 		}
 		else
 		{
-			// the launcher's own spot left clear
+			// the launcher's own spot left clear, on the left of the line to the target
+			Coord3D across;
+			across.set( -( victimPos->y - launcher->getPosition()->y ), victimPos->x - launcher->getPosition()->x, 0.0f );
+			Real acrossLength = sqrtf( sqr( across.x ) + sqr( across.y ) );
+			if( acrossLength > 0.0f )
+				across.scale( 1.0f / acrossLength );
 			offset.set( across.x, across.y, 0.0f );
 			offset.scale( ( shot + 1 ) * d->m_hoverSpacing );
 		}
+		UnsignedInt groundFrames = ( max( clip, 1 ) - 1 - shot ) * (UnsignedInt)d->m_hoverPlaceInterval;
 
 		m_hoverBase = *launcher->getPosition();
 		m_hoverBase.x += offset.x;
 		m_hoverBase.y += offset.y;
-		m_hoverBase.z = TheTerrainLogic->getGroundHeight( m_hoverBase.x, m_hoverBase.y );
+		m_hoverBase.z = TheTerrainLogic->getGroundHeight( m_hoverBase.x, m_hoverBase.y ) + overGround;
 		projectile->setPosition( &m_hoverBase );
+		projectile->setOrientation( launcher->getOrientation() );
+		if( d->m_hoverGrowFrom > 0.0f && projectile->getDrawable() )
+			projectile->getDrawable()->setInstanceScale( d->m_hoverGrowFrom * projectile->getTemplate()->getAssetScale() );
 
 		UnsignedInt now = TheGameLogic->getFrame();
 		UnsignedInt hoverFrames = groundFrames + d->m_hoverTime + shot * (UnsignedInt)d->m_hoverStagger;
@@ -850,11 +865,20 @@ UpdateSleepTime DumbProjectileBehavior::update()
 			Coord3D pos = m_hoverBase;
 			pos.z += risen * d->m_hoverHeight;
 			getObject()->setPosition( &pos );
+			// held, not falling: gravity left to pile up pulls one standing a little over the ground
+			// (a HoverSpot's Z) through it within a few frames, and the landing set it off
+			if( getObject()->getPhysics() )
+				getObject()->getPhysics()->scrubVelocityZ( 0.0f );
+			// picture only: drawn at the size the hands held it on the ground, full size once up
+			if( d->m_hoverGrowFrom > 0.0f && getObject()->getDrawable() )
+				getObject()->getDrawable()->setInstanceScale( ( d->m_hoverGrowFrom + risen * ( 1.0f - d->m_hoverGrowFrom ) ) * getObject()->getTemplate()->getAssetScale() );
 			return UPDATE_SLEEP_NONE;
 		}
 
 		// off the hover onto the path, from where it holds to where its target stands now
 		m_hoverEndFrame = 0;
+		if( d->m_hoverGrowFrom > 0.0f && getObject()->getDrawable() )
+			getObject()->getDrawable()->setInstanceScale( getObject()->getTemplate()->getAssetScale() );
 		m_flightPathStart = *getObject()->getPosition();
 		Object* victim = TheGameLogic->findObjectByID( m_victimID );
 		if( victim )

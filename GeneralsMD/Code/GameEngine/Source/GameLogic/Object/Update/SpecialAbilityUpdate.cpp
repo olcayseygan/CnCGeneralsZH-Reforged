@@ -55,6 +55,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
+#include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Weapon.h"
 #include "GameLogic/ExperienceTracker.h"
 
@@ -90,6 +91,7 @@ SpecialAbilityUpdate::SpecialAbilityUpdate( Thing *thing, const ModuleData* modu
   m_specialObjectEntries = 0;
   m_unpackLaserID = INVALID_ID;
   m_triggerShotID = INVALID_ID;
+  m_flybyID = INVALID_ID;
   m_noTargetCommand = false;
   m_packingState = STATE_NONE;
   m_facingInitiated = false;
@@ -914,6 +916,29 @@ void SpecialAbilityUpdate::startUnpacking()
     m_unpackLaserID = laser->getID();
     aimUnpackLaser();
   }
+
+  // UnpackFlybyWeapon: an aircraft that crosses the unit on the line to the target while it unpacks,
+  // the projectile of a shot at a point UnpackFlybyRun past the unit on that line (its own start is
+  // its DumbProjectileBehavior's StartDistanceBack behind that point). The TriggerWeapon leaves
+  // from it (the Maroon Beret's TB2 dropping its Kemankes).
+  m_flybyID = INVALID_ID;
+  if( target && data->m_unpackFlybyWeapon )
+  {
+    const Coord3D *from = getObject()->getPosition();
+    Real dx = target->getPosition()->x - from->x;
+    Real dy = target->getPosition()->y - from->y;
+    Real length = sqrtf( sqr( dx ) + sqr( dy ) );
+    if( length > 0.0f )
+    {
+      Region3D extent;
+      TheTerrainLogic->getExtent( &extent );
+      Coord3D end;
+      end.x = clamp( extent.lo.x + 1.0f, from->x + dx * data->m_unpackFlybyRun / length, extent.hi.x - 1.0f );
+      end.y = clamp( extent.lo.y + 1.0f, from->y + dy * data->m_unpackFlybyRun / length, extent.hi.y - 1.0f );
+      end.z = from->z;	// its height is taken over the unit's ground, not over a far hill or valley
+      TheWeaponStore->createAndFireTempWeapon( data->m_unpackFlybyWeapon, getObject(), &end, &m_flybyID );
+    }
+  }
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1462,11 +1487,25 @@ void SpecialAbilityUpdate::triggerAbilityEffect()
   if( data->m_triggerWeapon )
   {
     Object *target = TheGameLogic->findObjectByID( m_targetID );
+    // from the UnpackFlybyWeapon's aircraft while it is still in the air, else from the unit
+    Object *flyby = TheGameLogic->findObjectByID( m_flybyID );
+    const Object *source = ( flyby && !flyby->isEffectivelyDead() ) ? flyby : object;
     m_triggerShotID = INVALID_ID;
     if( target )
-      TheWeaponStore->createAndFireTempWeapon( data->m_triggerWeapon, object, target, &m_triggerShotID );
+      TheWeaponStore->createAndFireTempWeapon( data->m_triggerWeapon, source, target, &m_triggerShotID );
     else if( m_targetPos.x || m_targetPos.y || m_targetPos.z )
-      TheWeaponStore->createAndFireTempWeapon( data->m_triggerWeapon, object, &m_targetPos );
+      TheWeaponStore->createAndFireTempWeapon( data->m_triggerWeapon, source, &m_targetPos );
+    // the aircraft flies its path by position, and the fall its physics piled up meanwhile (the
+    // launch hands the launcher's velocity on) threw the munition at the ground under it
+    // and the kill is the unit's even if the aircraft is gone by the time it lands
+    Object *shot = TheGameLogic->findObjectByID( m_triggerShotID );
+    if( shot && source != object )
+    {
+      if( shot->getPhysics() )
+        shot->getPhysics()->scrubVelocityZ( 0.0f );
+      shot->setProducer( object );
+    }
+    m_flybyID = INVALID_ID;
   }
   else switch( spTemplate->getSpecialPowerType() )
   {
@@ -2186,7 +2225,8 @@ void SpecialAbilityUpdate::xfer( Xfer *xfer )
 	// version
 	// 2: the UnpackLaser beam's ID
 	// 3: the TriggerWeapon shot the beam is held on for
-	XferVersion currentVersion = 3;
+	// 4: the UnpackFlybyWeapon's aircraft
+	XferVersion currentVersion = 4;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -2242,6 +2282,8 @@ void SpecialAbilityUpdate::xfer( Xfer *xfer )
 		xfer->xferObjectID( &m_unpackLaserID );
 	if( version >= 3 )
 		xfer->xferObjectID( &m_triggerShotID );
+	if( version >= 4 )
+		xfer->xferObjectID( &m_flybyID );
 
 }  // end xfer
 

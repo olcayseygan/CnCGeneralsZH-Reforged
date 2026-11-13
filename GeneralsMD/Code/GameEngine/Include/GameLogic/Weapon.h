@@ -884,7 +884,7 @@ public:
 	// frees a Weapon at the end of this logic frame, for one that may still be firing on the stack
 	void deleteWeaponLater( Weapon *weapon ) { m_weaponsToDelete.push_back( weapon ); }
 
-	void createAndFireTempWeapon(const WeaponTemplate* w, const Object *source, const Coord3D* pos);
+	void createAndFireTempWeapon(const WeaponTemplate* w, const Object *source, const Coord3D* pos, ObjectID* projectileID = NULL);
 	void createAndFireTempWeapon(const WeaponTemplate* w, const Object *source, Object *target, ObjectID* projectileID = NULL);
 	
 	void handleProjectileDetonation( const WeaponTemplate* w, const Object *source, const Coord3D* pos, WeaponBonusConditionFlags extraBonusFlags, Bool inflictDamage = TRUE );

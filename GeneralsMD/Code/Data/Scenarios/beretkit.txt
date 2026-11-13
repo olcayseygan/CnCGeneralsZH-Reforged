@@ -3,8 +3,8 @@
 # Kargu Swarm (the button's MSG_DO_WEAPON_AT_LOCATION, weaponat on the tertiary slot) at a
 # Battlemaster 300 away: three drones set down round him one by one, up together, diving a second
 # apart. Designate Target (the button's MSG_DO_SPECIAL_POWER_AT_OBJECT, as shiftpower sends it) on a
-# Crusader 250 away the other way: 4 s lasing with the carbine up, then the Kargu base's dive drone
-# with the beam held on until it lands, 250 armour-piercing. The power's minute runs
+# Crusader 250 away the other way: 4 s lasing with the carbine up while a TB2 crosses over him, then
+# the Kemankes it drops, with the beam held on until it lands, 250 armour-piercing. The power's minute runs
 # from the moment he is made, as every unit power's clock does: a game minute is 1200 ticks at 1.5x,
 # and a file frame is two thirds of a tick there, so it is called at 1900. Each target is out of the carbine's 140, so only the call
 # touches it, and neither tank reaches him. A tally before each call, one in the middle and one
@@ -15,13 +15,16 @@
 #     -side 0 FactionTurkiye -side 1 FactionAmerica -seed 1 -maxframes 1800
 #     -scenario beretkit -logPrefix beretkit_
 #
-# Measured 2026-11-13: the Battlemaster 400, 400 at 100, 130 at 500 (three drones of 90); the
-# Crusader 480 at 1898, 480 at 1960 while he lases, 230 at 2200. A temporary log (2026-11-13, round
-# 4) had the three Kargu set down on ticks 60, 72 and 84 at (1015,1000), (1000,985) and (985,1000),
-# his left, front and right facing the target to the south, all three rise on 84 and leave the
-# hover on 108, 138 and 168; the beam on from tick 1269, the Kargu base's dive drone let go at
-# (955,999,212), 140 over the Crusader and 300 back, on 1349, and the beam held on it until the
-# drone was gone on 1409. HEADLESS CRC 0x845E62BB at 1800.
+# Measured 2026-11-13 (round 5): the Battlemaster 400, 400 at 100, 130 at 500 (three drones of 90);
+# the Crusader 480 at 1898, 480 at 1960 while he lases, 230 at 2200. A temporary log had the three
+# Kargu set down on ticks 72, 92 and 112 at (1004,998), (1000,995) and (995,998), his left, front and
+# right in his own frame facing the target to the south, all three rise on 112, leave the hover on
+# 136, 166 and 196 and land on 202, 232 and 262; the TB2 starting at (400,1000,162) on tick 1269,
+# over him at (990,1000,144) on 1349 when it let the Kemankes go, the Kemankes on the Crusader on
+# 1409 and the beam off on 1412, the TB2 down out of sight at (1978,1000) on 1481. The ground under
+# him stands 62, 30 over the Crusader's. Before the fixes of that day the first two Kargu fell
+# through the ground while they waited (only 90 landed) and the Kemankes hit the hill under the TB2.
+# HEADLESS CRC 0xD9DCD613 at 1800.
 
 30    spawn       0  TurkiyeInfantryMaroonBeret  1  1000 1000
 30    spawn       1  AmericaTankCrusader         1  1250 1000

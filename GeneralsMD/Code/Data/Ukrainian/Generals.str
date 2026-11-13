@@ -17994,7 +17994,7 @@ CONTROLBAR:ConstructTurkiyeInfantryMaroonBeret
 END
 
 CONTROLBAR:ToolTipTurkiyeInfantryMaroonBeret
-"Спецпризначенець. Замаскований, бачить на 350 для артилерії, підсвічує ціль лазером для удару TB2 і випускає дрони Kargu з рюкзака."
+"Спецпризначенець. Замаскований, бачить на 350 для артилерії, підсвічує ціль лазером для удару дрона і випускає дрони Kargu з рюкзака."
 END
 
 OBJECT:TurkiyeVehicleSupplyTruck

@@ -43,6 +43,7 @@
 class DamageInfo;
 class SpecialPowerTemplate;
 class SpecialPowerModule;
+class WeaponTemplate;
 class FXList;
 enum SpecialPowerType : Int;
 
@@ -78,6 +79,8 @@ class SpecialAbilityUpdateModuleData : public UpdateModuleData
 public:
 	AsciiString						m_specialObjectName;
 	AsciiString						m_specialObjectAttachToBoneName;
+	AsciiString						m_unpackLaserName;				///< a laser object held from SpecialObjectAttachToBone onto the target while unpacking
+	const WeaponTemplate*	m_triggerWeapon;					///< fired at the target on the trigger, in place of the power type's own effect
 	const SpecialPowerTemplate*	m_specialPowerTemplate;		///< pointer to the special power template
 	Real									m_startAbilityRange;
 	Real									m_abilityAbortRange;
@@ -115,6 +118,7 @@ public:
 	SpecialAbilityUpdateModuleData()
 	{
 		m_specialPowerTemplate = NULL;
+		m_triggerWeapon = NULL;
 		m_startAbilityRange = SPECIAL_ABILITY_HUGE_DISTANCE;
 		m_abilityAbortRange = SPECIAL_ABILITY_HUGE_DISTANCE;
 		m_preparationFrames.setRaw( 0 );
@@ -188,6 +192,8 @@ public:
 			{ "ApproachRequiresLOS",				INI::parseBool,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_approachRequiresLOS ) },
       { "NeedToFaceTarget",           INI::parseBool,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_needToFaceTarget ) },
       { "PersistenceRequiresRecharge",INI::parseBool,										NULL, offsetof( SpecialAbilityUpdateModuleData, m_persistenceRequiresRecharge ) },
+			{ "UnpackLaser",								INI::parseAsciiString,						NULL, offsetof( SpecialAbilityUpdateModuleData, m_unpackLaserName ) },
+			{ "TriggerWeapon",							INI::parseWeaponTemplate,					NULL, offsetof( SpecialAbilityUpdateModuleData, m_triggerWeapon ) },
 			{ 0, 0, 0, 0 }
 		};
     p.add(dataFieldParse);
@@ -257,6 +263,7 @@ protected:
 
 	Object* createSpecialObject();
 	void killSpecialObjects();
+	void killUnpackLaser();
 
 	Bool handlePackingProcessing();
 	void startPacking(Bool success);
@@ -304,6 +311,7 @@ private:
 	Coord3D												m_targetPos;
 	Int														m_locationCount;
 	std::list<ObjectID>						m_specialObjectIDList; //The list of special objects
+	ObjectID											m_unpackLaserID;	///< the UnpackLaser beam while it is up
 	UnsignedInt										m_specialObjectEntries;				 //The size of the list of member Objects
 	Real													m_captureFlashPhase;    ///< used to track the accellerating flash of the capture FX
 	PackingState									m_packingState;

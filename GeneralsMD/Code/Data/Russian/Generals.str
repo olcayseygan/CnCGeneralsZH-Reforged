@@ -17994,7 +17994,7 @@ CONTROLBAR:ConstructTurkiyeInfantryMaroonBeret
 END
 
 CONTROLBAR:ToolTipTurkiyeInfantryMaroonBeret
-"Спецназ. Маскируется, видит на 350 для артиллерии, подсвечивает цель лазером для удара TB2 и выпускает дроны Kargu из рюкзака."
+"Спецназ. Маскируется, видит на 350 для артиллерии, подсвечивает цель лазером для удара дрона и выпускает дроны Kargu из рюкзака."
 END
 
 OBJECT:TurkiyeVehicleSupplyTruck

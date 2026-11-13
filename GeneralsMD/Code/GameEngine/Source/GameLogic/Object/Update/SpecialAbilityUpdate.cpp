@@ -88,6 +88,7 @@ SpecialAbilityUpdate::SpecialAbilityUpdate( Thing *thing, const ModuleData* modu
   m_targetPos.zero();
   m_locationCount = 0;
   m_specialObjectEntries = 0;
+  m_unpackLaserID = INVALID_ID;
   m_noTargetCommand = false;
   m_packingState = STATE_NONE;
   m_facingInitiated = false;
@@ -654,6 +655,7 @@ void SpecialAbilityUpdate::onExit( Bool cleanup )
 
   TheAudio->removeAudioEvent( m_prepSoundLoop.getPlayingHandle() );
   endPreparation();
+  killUnpackLaser();
 
   if( !data->m_specialObjectsPersistent || cleanup && !data->m_specialObjectsPersistWhenOwnerDies )
   {
@@ -701,6 +703,7 @@ Bool SpecialAbilityUpdate::handlePackingProcessing()
           getObject()->setOrientation( getObject()->getOrientation() + PI );
         }
         m_packingState = STATE_UNPACKED;
+        killUnpackLaser();
       }
       else if( m_packingState == STATE_PACKING )
       {
@@ -859,6 +862,38 @@ void SpecialAbilityUpdate::startUnpacking()
   AIUpdateInterface *ai = getObject()->getAIUpdateInterface();
   if (ai)
     ai->aiBusy(CMD_FROM_AI);
+
+  // UnpackLaser: a beam from the attach bone onto the target for as long as the unpacking lasts (the
+  // Maroon Beret lasing a target). The beam's LaserUpdate follows both ends on the client; logic only
+  // makes the object and takes it away again.
+  Object *target = TheGameLogic->findObjectByID( m_targetID );
+  const ThingTemplate *laserTemplate = data->m_unpackLaserName.isEmpty() ? NULL : TheThingFactory->findTemplate( data->m_unpackLaserName );
+  if( target && laserTemplate )
+  {
+    killUnpackLaser();
+    Object *laser = TheThingFactory->newObject( laserTemplate, getObject()->getTeam() );
+    laser->setPosition( getObject()->getPosition() );
+    m_unpackLaserID = laser->getID();
+
+    static NameKeyType key_LaserUpdate = NAMEKEY( "LaserUpdate" );
+    Drawable *laserDraw = laser->getDrawable();
+    LaserUpdate *update = laserDraw ? (LaserUpdate*)laserDraw->findClientUpdateModule( key_LaserUpdate ) : NULL;
+    // no end point: given one, the beam stays on it, and given none it follows the target's drawable
+    // the way it follows the bone at the start
+    if( update )
+      update->initLaser( getObject(), target, getObject()->getPosition(), NULL, data->m_specialObjectAttachToBoneName );
+  }
+}
+
+//-------------------------------------------------------------------------------------------------
+void SpecialAbilityUpdate::killUnpackLaser()
+{
+  if( m_unpackLaserID == INVALID_ID )
+    return;
+  Object *laser = TheGameLogic->findObjectByID( m_unpackLaserID );
+  if( laser )
+    TheGameLogic->destroyObject( laser );
+  m_unpackLaserID = INVALID_ID;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1346,7 +1381,17 @@ void SpecialAbilityUpdate::triggerAbilityEffect()
 
   Bool okToLoseStealth = TRUE;
 
-  switch( spTemplate->getSpecialPowerType() )
+  // TriggerWeapon: the effect is one shot of it at the target, whatever the power type would have
+  // done (the Maroon Beret's Designate Target is a timed charge that plants nothing)
+  if( data->m_triggerWeapon )
+  {
+    Object *target = TheGameLogic->findObjectByID( m_targetID );
+    if( target )
+      TheWeaponStore->createAndFireTempWeapon( data->m_triggerWeapon, object, target );
+    else if( m_targetPos.x || m_targetPos.y || m_targetPos.z )
+      TheWeaponStore->createAndFireTempWeapon( data->m_triggerWeapon, object, &m_targetPos );
+  }
+  else switch( spTemplate->getSpecialPowerType() )
   {
     case SPECIAL_MISSILE_DEFENDER_LASER_GUIDED_MISSILES:
     {
@@ -2062,7 +2107,8 @@ void SpecialAbilityUpdate::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	// 2: the UnpackLaser beam's ID
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -2113,6 +2159,9 @@ void SpecialAbilityUpdate::xfer( Xfer *xfer )
 
   // capture flash phase
   xfer->xferReal( &m_captureFlashPhase );
+
+	if( version >= 2 )
+		xfer->xferObjectID( &m_unpackLaserID );
 
 }  // end xfer
 

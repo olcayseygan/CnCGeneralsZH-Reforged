@@ -69,6 +69,12 @@ public:
 	KindOfMaskType	m_garrisonHitKillKindofNot;		///< the kind(s) of units that CANNOT be collided with
 	const FXList*		m_garrisonHitKillFX;
 	VelocityPerFrame m_flightPathAdjustDistPerFrame;
+	Real						m_startHeightAboveTarget;		///< above zero, the flight starts this high over the target instead of at the launcher
+	Real						m_startDistanceBack;				///< and this far back from it toward the launcher
+	Real						m_hoverHeight;							///< with a HoverTime, the shot first rises this high beside the launcher
+	DurationFrames	m_hoverTime;								///< over the first half of this, holds for the rest, then flies its path
+	DurationFrames	m_hoverStagger;							///< and holds this much longer for each shot of the clip already fired
+	Real						m_hoverSpacing;							///< the clip's shots start this far apart, side by side across the line of fire
 
 
 	DumbProjectileBehaviorModuleData();
@@ -121,6 +127,9 @@ private:
 	Real									m_launchSlope;						///< rise over run of the barrel at launch, negative for a lowered barrel
 	Int										m_flightPathSegments;			///< number of segments in the flightpath (in case we must regen it)
 	Int										m_currentFlightPathStep;	///< Our current index in the flight path vector.  Quicker than popping off.
+	Coord3D								m_hoverBase;							///< where a hovering shot stands on the ground before it rises
+	UnsignedInt						m_hoverStartFrame;				///< the frame it began to rise
+	UnsignedInt						m_hoverEndFrame;					///< the frame it leaves the hover for its path; zero once it has, or for no hover
 	WeaponBonusConditionFlags		m_extraBonusFlags;
   
   Bool                  m_hasDetonated;           ///< 

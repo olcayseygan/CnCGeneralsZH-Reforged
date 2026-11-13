@@ -3119,7 +3119,7 @@ CONTROLBAR:ConstructTurkiyeInfantryMaroonBeret
 END
 
 CONTROLBAR:ToolTipTurkiyeInfantryMaroonBeret
-"Special forces. Camouflaged, sees 350 for the artillery, lases targets for a TB2 strike and sends Kargu drones from his pack."
+"Special forces. Camouflaged, sees 350 for the artillery, lases targets for a strike drone and sends Kargu drones from his pack."
 END
 
 CONTROLBAR:TurkiyeBeretDesignate
@@ -3127,7 +3127,7 @@ CONTROLBAR:TurkiyeBeretDesignate
 END
 
 CONTROLBAR:ToolTipTurkiyeBeretDesignate
-"Holds a laser on a vehicle or building for 4 seconds, then a TB2 puts a MAM-L on it. He cannot hide while he lases, and moving him calls it off. \n Recharge: 1:00"
+"Holds a laser on a vehicle or building for 4 seconds, then a strike drone dives on it from high above. He cannot hide while he lases, and moving him calls it off. \n Recharge: 1:00"
 END
 
 CONTROLBAR:TurkiyeBeretKarguSwarm
@@ -3135,7 +3135,7 @@ CONTROLBAR:TurkiyeBeretKarguSwarm
 END
 
 CONTROLBAR:ToolTipTurkiyeBeretKarguSwarm
-"Sends three Kargu kamikaze drones from his pack at a spot 75 to 350 away. \n Recharge: 0:45"
+"Sets three Kargu kamikaze drones down beside him. They lift off together and dive one after another on a spot 75 to 350 away. \n Recharge: 0:45"
 END
 
 OBJECT:TurkiyeVehicleSupplyTruck

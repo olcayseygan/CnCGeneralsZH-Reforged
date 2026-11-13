@@ -22,6 +22,7 @@
 #include "GameNetwork/Online/OnlineConnection.h"
 #include "GameNetwork/Online/OnlineSession.h"
 #include "GameNetwork/GameInfo.h"
+#include "GameClient/TankSkin.h"
 
 #include <chrono>
 #include <stdio.h>
@@ -753,7 +754,9 @@ TEST(online_adapter_login_waits_for_the_relay)
 	CHECK( rig.peer->isConnecting() );
 	CHECK( !rig.peer->isConnected() );
 
-	rig.feed( "{\"t\":\"auth.ok\",\"id\":7,\"nick\":\"Tank\",\"token\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"ticket\":\"00112233445566778899aabbccddeeff\"}" );
+	TankSkin_setLocalLoadout( "2" );		// an earlier account's, which the new sign-in replaces
+	rig.feed( "{\"t\":\"auth.ok\",\"id\":7,\"nick\":\"Tank\",\"token\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"ticket\":\"00112233445566778899aabbccddeeff\",\"skins\":[1,3]}" );
+	CHECK( TankSkin_localLoadout() == ( ( (SkinLoadout)1 << 1 ) | ( (SkinLoadout)1 << 3 ) ) );		// the account's skins, for its own seat
 	BuddyResponse b;
 	CHECK( rig.buddy->getResponse( b ) );
 	CHECK_EQ( (int)b.buddyResponseType, (int)BuddyResponse::BUDDYRESPONSE_LOGIN );
@@ -1105,7 +1108,7 @@ TEST(online_adapter_quick_match)
 	CHECK_STR( rig.sentType( 1 ).c_str(), "qm.widen" );
 	// side -25 is a Random pool (America and Turkiye): this binary has no template store, so a pool is the
 	// one kind of side that reaches the seat unchanged here
-	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"q1\",\"seed\":77,\"mapIdx\":1,\"nicks\":[\"Tank\",\"Kim\"],\"ids\":[7,9],\"vips\":[167772163,167772162],\"sides\":[-25,-1],\"colors\":[3,-1]}" );
+	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"q1\",\"seed\":77,\"mapIdx\":1,\"nicks\":[\"Tank\",\"Kim\"],\"ids\":[7,9],\"vips\":[167772163,167772162],\"sides\":[-25,-1],\"colors\":[3,-1],\"skins\":[\"K1.3\",\"\"]}" );
 
 	std::vector<PeerResponse> r = rig.peerResponses();
 	CHECK_EQ( r.size(), (size_t)3 );
@@ -1125,6 +1128,8 @@ TEST(online_adapter_quick_match)
 		CHECK_EQ( r[2].qmStatus.side[0], -25 );
 		CHECK_EQ( r[2].qmStatus.color[1], -1 );
 		CHECK_EQ( r[2].qmStatus.nat[0], 1 );
+		CHECK( r[2].qmStatus.skins[0] == ( ( (SkinLoadout)1 << 1 ) | ( (SkinLoadout)1 << 3 ) ) );		// each seat as its account wears them
+		CHECK( r[2].qmStatus.skins[1] == 0 );
 	}
 	CHECK_STR( OnlineSession::get().matchId.c_str(), "q1" );
 }

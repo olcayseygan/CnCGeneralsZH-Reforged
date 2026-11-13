@@ -29,6 +29,7 @@
 #include "Common/PlayerTemplate.h"
 #include "Common/UserPreferences.h"
 #include "Common/version.h"
+#include "GameClient/TankSkin.h"
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GameSpy/ThreadUtils.h"
 #include "GameNetwork/Online/OnlineSession.h"
@@ -145,6 +146,7 @@ void OnlineSession::forgetAccount()
 	token.clear();
 	memset( ticket, 0, sizeof(ticket) );
 	vip = 0;
+	TankSkin_setLocalLoadout( "" );		// the next account brings its own
 	pendingAuth.clear();
 	hasPendingAuth = FALSE;
 	authWaiting = FALSE;
@@ -511,8 +513,10 @@ void OnlineSession::matched( const OnlineMessage &m )
 	r.qmStatus.mapIdx = (Int)m.getInt( "mapIdx" );
 	const std::vector<std::string> nicks = m.getStrings( "nicks" );
 	const std::vector<long long> v = m.getInts( "vips" ), sides = m.getInts( "sides" ), colors = m.getInts( "colors" );
+	const std::vector<std::string> skins = m.getStrings( "skins" );		// each seat's "K1.3", as its account wears them
 	for (size_t i = 0; i < nicks.size() && i < (size_t)MAX_SLOTS; ++i)
 	{
+		r.qmStatus.skins[i] = i < skins.size() ? TankSkin_fromSlotField( skins[i].c_str() ) : 0;
 		r.stagingRoomPlayerNames[i] = nicks[i];
 		r.qmStatus.IP[i] = i < v.size() ? (UnsignedInt)v[i] : 0;		// host order, as GameSpy's matchbot sent it
 		r.qmStatus.side[i] = i < sides.size() ? seatSide( sides[i] ) : -1;
@@ -568,6 +572,12 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		if (!hexTicket( m.getString( "ticket" ), ticket ))
 			DEBUG_LOG(("online: auth.ok carries no usable relay ticket\n"));
 		noteCard( m );
+		// the skins the account wears, fresh from the site on every sign-in; none is no key
+		std::string skins;
+		const std::vector<long long> ids = m.getInts( "skins" );
+		for (size_t i = 0; i < ids.size(); ++i)
+			skins += std::to_string( ids[i] ) + " ";
+		TankSkin_setLocalLoadout( skins.c_str() );
 
 		if (buddy)
 		{

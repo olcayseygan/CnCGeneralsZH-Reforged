@@ -360,6 +360,7 @@ public:
 			Int side[MAX_SLOTS]; // when matched
 			Int color[MAX_SLOTS]; // when matched
 			Int nat[MAX_SLOTS];
+			UnsignedInt64 skins[MAX_SLOTS]; // when matched: each seat's SkinLoadout (TankSkin.h)
 		} qmStatus;
 	};
 };

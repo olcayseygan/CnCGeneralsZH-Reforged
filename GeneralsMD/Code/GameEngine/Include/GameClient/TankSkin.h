@@ -29,9 +29,10 @@ AsciiString TankSkin_slotField( SkinLoadout loadout );
 /// back from "K1.2.3"; NULL, empty, anything else and ids past TANK_SKIN_MAX_ID read as nothing
 SkinLoadout TankSkin_fromSlotField( const char *field );
 
-/** The one way in for this player's own loadout, the ids his zerohour.gg account owns and picked
-	* ("1 2 3", any of space, comma or dot between).  Ids the table lacks are dropped, and so is a second
-	* skin for a unit already dressed.  Returns what it kept. */
+/** The one way in for this player's own loadout, the ids his zerohour.gg account wears, which the
+	* online server sends in auth.ok ("1 2 3", any of space, comma or dot between).  Ids past
+	* TANK_SKIN_MAX_ID are dropped, and so is a second skin for a unit already dressed; an id the table
+	* lacks is kept and dresses nothing.  Safe from the online session's thread.  Returns what it kept. */
 SkinLoadout TankSkin_setLocalLoadout( const char *ids );
 SkinLoadout TankSkin_localLoadout( void );
 

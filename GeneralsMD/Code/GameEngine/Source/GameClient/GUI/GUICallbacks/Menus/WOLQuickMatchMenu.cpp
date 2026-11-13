@@ -1572,6 +1572,7 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 									slot->setPlayerTemplate(resp.qmStatus.side[i]);
 									//slot->setProfileID(0);
 									slot->setNATBehavior((FirewallHelperClass::FirewallBehaviorType)resp.qmStatus.nat[i]);
+									slot->setSkins(resp.qmStatus.skins[i]);	// the server's word for every seat, its own included
 									slot->setLocale("");
 									slot->setTeamNumber( i/numPlayersPerTeam );
 									if (i==0)

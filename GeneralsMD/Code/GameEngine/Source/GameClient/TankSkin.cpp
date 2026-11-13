@@ -10,6 +10,7 @@
 #include "Common/PlayerList.h"
 #include "GameNetwork/GameInfo.h"
 
+#include <atomic>
 #include <vector>
 
 namespace
@@ -31,7 +32,7 @@ namespace
 	};
 
 	std::vector<SkinDef> theSkins;
-	SkinLoadout theLocalLoadout = 0;
+	std::atomic<SkinLoadout> theLocalLoadout( 0 );		// set by the online session's thread, read by the lobby
 
 	const SkinDef *findSkin( Int id )
 	{
@@ -146,7 +147,7 @@ SkinLoadout TankSkin_fromSlotField( const char *field )
 
 SkinLoadout TankSkin_setLocalLoadout( const char *ids )
 {
-	theLocalLoadout = 0;
+	SkinLoadout kept = 0;
 	std::vector<AsciiString> unitsDressed;
 	const char *p = ids ? ids : "";
 	while( *p )
@@ -159,18 +160,22 @@ SkinLoadout TankSkin_setLocalLoadout( const char *ids )
 			continue;
 		}
 		p = end;
-		const SkinDef *skin = ( id >= 1 && id <= TANK_SKIN_MAX_ID ) ? findSkin( (Int)id ) : NULL;
-		if( skin == NULL )
+		if( id < 1 || id > TANK_SKIN_MAX_ID )
 			continue;
-		Bool dressed = FALSE;
-		for( size_t u = 0; u < unitsDressed.size(); ++u )
-			dressed |= ( unitsDressed[u].compareNoCase( skin->unit ) == 0 );
-		if( dressed )
-			continue;
-		unitsDressed.push_back( skin->unit );
-		theLocalLoadout |= bit( (Int)id );
+		// a skin this build's table lacks rides along and dresses nothing here
+		if( const SkinDef *skin = findSkin( (Int)id ) )
+		{
+			Bool dressed = FALSE;
+			for( size_t u = 0; u < unitsDressed.size(); ++u )
+				dressed |= ( unitsDressed[u].compareNoCase( skin->unit ) == 0 );
+			if( dressed )
+				continue;
+			unitsDressed.push_back( skin->unit );
+		}
+		kept |= bit( (Int)id );
 	}
-	return theLocalLoadout;
+	theLocalLoadout.store( kept );
+	return kept;
 }
 
 SkinLoadout TankSkin_localLoadout( void )

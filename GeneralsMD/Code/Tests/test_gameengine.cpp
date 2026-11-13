@@ -25316,7 +25316,7 @@ TEST(skin_loadout_rides_the_slot_entry_and_an_old_string_reads_as_none)
 /* SkinsReforged.ini as it ships: ids 1, 2 and 3 are the 1K gold Crusader, Battlemaster and Scorpion
 	 (the ids zerohour.gg uses), each on its generals' models and the damaged states, case ignored, and
 	 on nothing else.  Each pairs the rebuilt sheets and retail's with their gold copies, never a house
-	 colour sheet.  A loadout keeps one skin a unit and drops ids the table lacks. */
+	 colour sheet.  A loadout keeps one skin a unit and drops ids past 63. */
 TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 {
 	CHECK( bootOnce() );
@@ -25353,6 +25353,7 @@ TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 	CHECK( TankSkin_setLocalLoadout( "1 2 3" ) == all );
 	CHECK( TankSkin_localLoadout() == all );
 	CHECK( TankSkin_setLocalLoadout( "3,99.1" ) == ( ( (SkinLoadout)1 << 1 ) | ( (SkinLoadout)1 << 3 ) ) );
+	CHECK( TankSkin_setLocalLoadout( "9 1" ) == ( ( (SkinLoadout)1 << 9 ) | ( (SkinLoadout)1 << 1 ) ) );	// a newer build's skin rides along
 	CHECK( TankSkin_setLocalLoadout( "" ) == 0 );
 	CHECK( TankSkin_setLocalLoadout( NULL ) == 0 );
 

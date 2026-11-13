@@ -232,6 +232,13 @@ PROPOSED_TTC: dict[str, object] = {
 # turned without moving, or any unit whose turn reverses last tick's, is not coming about.
 LADDER_DITHER_FIX: bool = False
 PROPOSED_DITHER: dict[str, object] = {"LADDER_DITHER_FIX": True}
+# crowdPlanLane (AIGroup.cpp:1910-1932) lays a lane's first leg from the member's spot to the first
+# corner, and when the member cannot see that corner it closes to trunk[0] first: the spot of the
+# member nearest the group's middle.  Half a group behind a building drives sideways, or back, to
+# that one tank before it sets off.  On, a corner the member cannot see from its spot is skipped
+# and the lane starts at the first one it can; a member that sees none searches its own path.
+CROWD_LANE_FROM_SPOT: bool = False
+PROPOSED_FROM_SPOT: dict[str, object] = {"CROWD_LANE_FROM_SPOT": True}
 
 # Locomotion: Locomotor.cpp's EA drives for treads, wheels and legs, and PhysicsUpdate.cpp under them
 TREADS, FOUR_WHEELS, MOTORCYCLE, TWO_LEGS = "TREADS", "FOUR_WHEELS", "MOTORCYCLE", "TWO_LEGS"
@@ -2471,6 +2478,8 @@ class Simulation:
                 out.append(p)
                 prev, prev_corner, placed = p, k, True
                 break
+            if not placed and prev_corner < 0 and CROWD_LANE_FROM_SPOT:
+                continue                # not seen from my spot: try the next corner, never trunk[0]
             if not placed and (prev_corner == k - 1 or pf.is_line_passable(unit, prev, a, blocked=False,
                                                                             allow_pinched=True)):
                 out.extend((a, c))
@@ -4239,9 +4248,11 @@ def measure_searches(map_kind: str, seeds: int, pairs: int) -> None:
           f"{cells / max(searched, 1):>7.0f} {ground[6][0]:>4}/{ground[6][1]:<4} {ground[2][0]:>4}/{ground[2][1]:<4}")
 
 
-def setting_rows(proposed: bool, ttc: bool, dither: bool = False) -> list[tuple[str, dict[str, object]]]:
+def setting_rows(proposed: bool, ttc: bool, dither: bool = False,
+                 spot: bool = False) -> list[tuple[str, dict[str, object]]]:
     """The game, then the proposed ladder, TTC steering and both, as the flags ask; with `dither`
-       each of them again with the dither fix."""
+       each of them again with the dither fix, then with `spot` every row so far again with lanes
+       starting from the member's spot."""
     rows: list[tuple[str, dict[str, object]]] = [("game", {})]
     if proposed:
         rows.append(("proposed", PROPOSED_LADDER))
@@ -4251,6 +4262,8 @@ def setting_rows(proposed: bool, ttc: bool, dither: bool = False) -> list[tuple[
         rows.append(("proposed+ttc", {**PROPOSED_LADDER, **PROPOSED_TTC}))
     if dither:
         rows += [(f"{label}+dither", {**settings, **PROPOSED_DITHER}) for label, settings in rows]
+    if spot:
+        rows += [(f"{label}+spot", {**settings, **PROPOSED_FROM_SPOT}) for label, settings in rows]
     return rows
 
 
@@ -4263,7 +4276,7 @@ def run_headless(args: argparse.Namespace) -> None:
     print(f"map {args.gamemap or args.map}  scenario {args.scenario}  units {describe_group(kinds)}  seeds {args.headless}  "
           f"{LOGICFRAMES_PER_SECOND} Hz at {GAME_SPEED_PERCENT}%")
     print_head()
-    for label, ladder in setting_rows(args.proposed, args.ttc, args.dither):
+    for label, ladder in setting_rows(args.proposed, args.ttc, args.dither, args.spot):
         if not args.sweep:
             with overriding(**ladder):
                 print_row(label, measure(args.map, kinds, args.headless, args.scenario, game_map=args.gamemap,
@@ -4493,11 +4506,14 @@ def main() -> None:
                              "another row headless (and one with --proposed), the only behaviour in the window")
     parser.add_argument("--dither", action="store_true",
                         help="PROPOSED_DITHER, the ladder seeing a turn on the spot: every row again with it")
+    parser.add_argument("--spot", action="store_true",
+                        help="PROPOSED_FROM_SPOT, a lane starting from the member's own spot instead of "
+                             "closing to the middle member first: every row again with it")
     args = parser.parse_args()
     if args.headless:
         run_headless(args)
         return
-    _, settings = setting_rows(args.proposed, args.ttc, args.dither)[-1]
+    _, settings = setting_rows(args.proposed, args.ttc, args.dither, args.spot)[-1]
     with overriding(**settings):
         run_window(args)
 

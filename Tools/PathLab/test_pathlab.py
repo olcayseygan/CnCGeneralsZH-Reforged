@@ -335,6 +335,20 @@ class GroupTests(unittest.TestCase):
         self.assertTrue(all(u.moving and u.waiting_for_path for u in units))
         self.assertTrue(any(u.planned for u in units))
 
+    def test_a_lane_from_behind_a_wall_closes_to_the_trunk_start_unless_from_spot(self):
+        grid = walled(40)
+        for x in range(10, 15):
+            for y in range(3, 16):
+                grid.block(x, y)
+        unit = Unit(50.0, 100.0, id=1)          # the wall hides the first corner, not the second
+        sim = Simulation(grid, [unit])
+        trunk = [(60.0, 250.0), (250.0, 250.0), (150.0, 330.0), (150.0, 350.0)]
+        self.assertEqual(sim.plan_lane(unit, trunk, 0.0, trunk[-1]), trunk)
+        with pathlab.overriding(CROWD_LANE_FROM_SPOT=True):
+            self.assertEqual(sim.plan_lane(unit, trunk, 0.0, trunk[-1]), trunk[2:])
+            unit.x, unit.y = 125.0, 20.0        # sees no corner at all: no lane, its own path
+            self.assertIsNone(sim.plan_lane(unit, trunk, 0.0, trunk[-1]))
+
 
 class BlockingTests(unittest.TestCase):
     def pair(self):

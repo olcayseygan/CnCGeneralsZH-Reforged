@@ -15,6 +15,7 @@ are the stand-in tank and the numbers are not baseline.json's.
     python bench.py --proposed              # the stuck ladder's PROPOSED_LADDER values
     python bench.py --ttc                   # PROPOSED_TTC, steering by time to collision; mixes with --proposed
     python bench.py --dither                # PROPOSED_DITHER, the ladder seeing a turn on the spot; mixes with both
+    python bench.py --spot                  # PROPOSED_FROM_SPOT, a lane starting from the member's spot; mixes with all
 
 `overlap` counts pair-ticks where two bodies overlap and `depth` is their mean overlap in world units.
 """
@@ -143,12 +144,13 @@ def parse_seeds(text: str) -> tuple[int, ...]:
 worker_model: ModuleType | None = None
 
 
-def start_worker(module_path: Path, proposed: bool, ttc: bool, dither: bool) -> None:
+def start_worker(module_path: Path, proposed: bool, ttc: bool, dither: bool, spot: bool) -> None:
     global worker_model
     worker_model = load_model(module_path)
     settings = {**(worker_model.PROPOSED_LADDER if proposed else {}),
                 **(worker_model.PROPOSED_TTC if ttc else {}),
-                **(worker_model.PROPOSED_DITHER if dither else {})}
+                **(worker_model.PROPOSED_DITHER if dither else {}),
+                **(worker_model.PROPOSED_FROM_SPOT if spot else {})}
     for name, value in settings.items():
         setattr(worker_model, name, value)
 
@@ -206,6 +208,9 @@ def main() -> None:
     parser.add_argument("--dither", action="store_true",
                         help="play with the model's PROPOSED_DITHER: a turn on the spot or back and forth "
                              "is not progress to the stuck ladder")
+    parser.add_argument("--spot", action="store_true",
+                        help="play with the model's PROPOSED_FROM_SPOT: a lane starts from the member's own "
+                             "spot instead of closing to the middle member first")
     args = parser.parse_args()
 
     model = load_model(args.module)
@@ -215,7 +220,7 @@ def main() -> None:
 
     began = time.perf_counter()
     print(f"ladder {'proposed' if args.proposed else 'game'}  steering {'ttc' if args.ttc else 'game'}  "
-          f"dither {'fixed' if args.dither else 'game'}  seeds {','.join(map(str, seeds))}")
+          f"dither {'fixed' if args.dither else 'game'}  lanes {'spot' if args.spot else 'game'}  seeds {','.join(map(str, seeds))}")
     print(f"{'case':<20} {'frames':>6} {'free':>6} {'ratio':>6} {'blocked':>7} {'stuck':>5} "
           f"{'cells':>8} {'repath':>6} {'churn':>6} {'rungs 1/2/3':>12} {'overlap':>7} {'depth':>5}")
     suite = [(map_kind, scenario, str(unit_count), seeds) for map_kind in map_kinds
@@ -224,7 +229,7 @@ def main() -> None:
         suite += [(map_kind, scenario, group, seeds) for map_kind, scenario, group in MIXED_CASES]
     cases: list[CaseResult] = []
     with ProcessPoolExecutor(max_workers=args.jobs, initializer=start_worker,
-                             initargs=(args.module.resolve(), args.proposed, args.ttc, args.dither)) as pool:
+                             initargs=(args.module.resolve(), args.proposed, args.ttc, args.dither, args.spot)) as pool:
         for case in pool.map(run_case_in_worker, suite):
             cases.append(case)
             print_case(case)
@@ -235,7 +240,8 @@ def main() -> None:
                   "cases": [asdict(case) for case in cases], "totals": totals,
                   "ladder": "proposed" if args.proposed else "game",
                   "steering": "ttc" if args.ttc else "game",
-                  "dither": "fixed" if args.dither else "game"}
+                  "dither": "fixed" if args.dither else "game",
+                  "lanes": "spot" if args.spot else "game"}
         args.json.write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
 
 

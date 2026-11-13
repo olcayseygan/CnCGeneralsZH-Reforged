@@ -19,6 +19,7 @@ time to collision (--ttc), both off by default.
     python pathlab.py --headless 4 --sweep PF_TRAFFIC_NUM=0,4,8
     python pathlab.py --headless 8 --map edges --pairs 8 --units 0
     python pathlab.py --headless 4 --map choke --units 12 --proposed --ttc
+    python pathlab.py --headless 1 --gamemap "Tournament Desert" --group crusader:8,ranger:8 --scenario cross
 
 Controls
     left click          order the selection to a point (a player's move: floodGroupGoals)
@@ -3882,10 +3883,15 @@ def destroy_path(unit: Unit) -> None:
 # Scenarios and measurement
 # ---------------------------------------------------------------------------------------------
 
-def spawn_block(grid: Grid, kinds: Sequence[UnitKind], cx: int, cy: int, first_id: int = 0) -> list[Unit]:
-    """Rows of five, spaced so the widest body in the group clears its neighbours."""
+def spawn_stride(kinds: Sequence[UnitKind]) -> int:
+    """Cells between spawn slots, so the widest body in the group clears its neighbours."""
     widest = max((kind.radius for kind in kinds), default=TANK_RADIUS)
-    stride = max(SPAWN_STRIDE_CELLS, math.ceil(2.0 * widest / CELL))
+    return max(SPAWN_STRIDE_CELLS, math.ceil(2.0 * widest / CELL))
+
+
+def spawn_block(grid: Grid, kinds: Sequence[UnitKind], cx: int, cy: int, first_id: int = 0) -> list[Unit]:
+    """Rows of five from (cx, cy), spawn_stride apart."""
+    stride = spawn_stride(kinds)
     units: list[Unit] = []
     row = cy
     while len(units) < len(kinds) and row < grid.height:
@@ -3912,6 +3918,56 @@ def build_scenario(grid: Grid, kinds: Sequence[UnitKind], scenario: str
                               (bottom, ((far_x + 0.5) * CELL, (GOAL_INSET_Y + 0.5) * CELL))]
     units = spawn_block(grid, kinds, *SPAWN_CELL)
     return units, [(units, ((far_x + 0.5) * CELL, (grid.height - GOAL_INSET_Y + 0.5) * CELL))]
+
+
+@functools.cache
+def loaded_game_map(name: str) -> "maploader.LoadedMap":
+    """A retail map read from the install once (maploader.load_map)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import maploader
+    return maploader.load_map(name)
+
+
+def game_map_grid(name: str) -> Grid:
+    """The retail map's grid, with the engine's own pinched flags rather than pathlab's guess."""
+    loaded = loaded_game_map(name)
+    grid = Grid(loaded.width, loaded.height)
+    grid.kind[:] = loaded.kind
+    grid._pinched = bytearray(loaded.pinched)
+    return grid
+
+
+def spawn_around(grid: Grid, kinds: Sequence[UnitKind], centre: Point, first_id: int = 0) -> list[Unit]:
+    """spawn_block centred on a world point, a player's start."""
+    stride = spawn_stride(kinds)
+    rows = -(-len(kinds) // SPAWN_ROW_WIDTH)
+    cx, cy = cell_of(*centre)
+    return spawn_block(grid, kinds, cx - (SPAWN_ROW_WIDTH - 1) * stride // 2, cy - (rows - 1) * stride // 2,
+                       first_id)
+
+
+def build_game_scenario(grid: Grid, name: str, kinds: Sequence[UnitKind], scenario: str
+                        ) -> tuple[list[Unit], list[tuple[list[Unit], Point]]]:
+    """On a retail map: `column` takes the group from player 1's start to player 2's; `cross` sends
+       half of it each way between the two."""
+    first, second = loaded_game_map(name).starts[:2]
+    if scenario == "cross":
+        one = spawn_around(grid, kinds[:len(kinds) // 2], first)
+        two = spawn_around(grid, kinds[len(one):], second, first_id=len(one))
+        return one + two, [(one, second), (two, first)]
+    units = spawn_around(grid, kinds, first)
+    return units, [(units, second)]
+
+
+def scenario_setup(map_kind: str, game_map: str, seed: int, kinds: Sequence[UnitKind], scenario: str
+                   ) -> tuple[Grid, list[Unit], list[tuple[list[Unit], Point]]]:
+    """The grid, the units and their orders: a retail map when `game_map` names one (the seed then
+       changes nothing), else a generated `map_kind`."""
+    if game_map:
+        grid = game_map_grid(game_map)
+        return grid, *build_game_scenario(grid, game_map, kinds, scenario)
+    grid = make_map(map_kind, seed=seed)
+    return grid, *build_scenario(grid, kinds, scenario)
 
 
 def unit_kind(data: "unitdata.UnitData") -> UnitKind:
@@ -3991,13 +4047,13 @@ class Measurement:
     trunk: float = 0.0
 
 
-def measure(map_kind: str, kinds: Sequence[UnitKind], seeds: int, scenario: str, first_seed: int = 0) -> Measurement:
+def measure(map_kind: str, kinds: Sequence[UnitKind], seeds: int, scenario: str, first_seed: int = 0,
+            game_map: str = "") -> Measurement:
     """The scenario's orders played out, averaged over `seeds` maps.  `stuck` stays a count of units
        still short of their goal when the clock ran out."""
     total = Measurement()
     for seed in range(first_seed, first_seed + seeds):
-        grid = make_map(map_kind, seed=seed)
-        units, orders = build_scenario(grid, kinds, scenario)
+        grid, units, orders = scenario_setup(map_kind, game_map, seed, kinds, scenario)
         sim = Simulation(grid, units)
         for group, goal in orders:
             stats = sim.group_move(group, goal)
@@ -4166,20 +4222,20 @@ def run_headless(args: argparse.Namespace) -> None:
         if not args.units and not args.group:
             return
     kinds = group_kinds(args)
-    print(f"map {args.map}  scenario {args.scenario}  units {describe_group(kinds)}  seeds {args.headless}  "
+    print(f"map {args.gamemap or args.map}  scenario {args.scenario}  units {describe_group(kinds)}  seeds {args.headless}  "
           f"{LOGICFRAMES_PER_SECOND} Hz at {GAME_SPEED_PERCENT}%")
     print_head()
     for label, ladder in setting_rows(args.proposed, args.ttc):
         if not args.sweep:
             with overriding(**ladder):
-                print_row(label, measure(args.map, kinds, args.headless, args.scenario))
+                print_row(label, measure(args.map, kinds, args.headless, args.scenario, game_map=args.gamemap))
             continue
         name, values = parse_sweep(args.sweep)
         prefix = f"{label} " if ladder else ""
         for value in values:
             with overriding(**ladder, **{name: value}):
                 print_row(f"{prefix}{name}={value:g}",
-                          measure(args.map, kinds, args.headless, args.scenario))
+                          measure(args.map, kinds, args.headless, args.scenario, game_map=args.gamemap))
 
 
 def group_kinds(args: argparse.Namespace) -> list[UnitKind]:
@@ -4199,6 +4255,10 @@ PINCHED_COL = (34, 36, 42)
 UNIT_COL = (120, 190, 255)
 UNIT_SEL = (255, 214, 110)
 INFANTRY_COL = (150, 220, 140)
+KIND_COLOURS: dict[str, tuple[int, int, int]] = {
+    "crusader": (120, 190, 255), "humvee": (90, 230, 230), "overlord": (240, 110, 100),
+    "battlemaster": (240, 160, 110), "technical": (235, 200, 90), "scorpion": (200, 150, 80),
+    "ranger": (150, 220, 140)}
 PATH_COL = (90, 220, 160)
 TRUNK_COL = (70, 90, 140)
 RAY_OK = (60, 200, 120)
@@ -4215,10 +4275,23 @@ def run_window(args: argparse.Namespace) -> None:
 
     seed = args.seed
     kinds = group_kinds(args)
-    grid = make_map(args.map, seed=seed)
-    sim = Simulation(grid, spawn_block(grid, kinds, *SPAWN_CELL))
-    for unit in sim.units:
-        unit.is_selected = True
+
+    def new_sim(seed: int) -> tuple[Grid, Simulation]:
+        """A generated map waits for a click with everyone selected; a retail map (--gamemap) plays
+           the scenario's orders at once and selects no one."""
+        if not args.gamemap:
+            grid = make_map(args.map, seed=seed)
+            sim = Simulation(grid, spawn_block(grid, kinds, *SPAWN_CELL))
+            for unit in sim.units:
+                unit.is_selected = True
+            return grid, sim
+        grid, units, orders = scenario_setup(args.map, args.gamemap, seed, kinds, args.scenario)
+        sim = Simulation(grid, units)
+        for group, goal in orders:
+            sim.group_move(group, goal)
+        return grid, sim
+
+    grid, sim = new_sim(seed)
     scale = args.scale
     pygame.init()
     screen = pygame.display.set_mode((int(grid.width * CELL * scale), int(grid.height * CELL * scale) + HUD_HEIGHT))
@@ -4256,10 +4329,7 @@ def run_window(args: argparse.Namespace) -> None:
                         paused = not paused
                     elif event.key == pygame.K_n:
                         seed = random.randrange(SEED_RANGE)
-                        grid = make_map(args.map, seed=seed)
-                        sim = Simulation(grid, spawn_block(grid, kinds, *SPAWN_CELL))
-                        for unit in sim.units:
-                            unit.is_selected = True
+                        grid, sim = new_sim(seed)
                     elif event.key == pygame.K_TAB and last_goal:
                         order(last_goal)
                 if event.type == pygame.MOUSEBUTTONDOWN:
@@ -4322,8 +4392,16 @@ def run_window(args: argparse.Namespace) -> None:
                         pygame.draw.lines(screen, PATH_COL, False, pts, 1)
             for unit in sim.units:
                 centre = to_screen(unit.x, unit.y)
-                colour = UNIT_SEL if unit.is_selected else (INFANTRY_COL if unit.is_infantry else UNIT_COL)
-                pygame.draw.circle(screen, colour, centre, int(unit.radius * scale))
+                colour = UNIT_SEL if unit.is_selected else KIND_COLOURS.get(
+                    unit.kind.name, INFANTRY_COL if unit.is_infantry else UNIT_COL)
+                if unit.kind.geometry == "BOX":         # the footprint the collision test uses
+                    major, minor = unit.kind.half_extents
+                    dx, dy = unit.dir
+                    pygame.draw.polygon(screen, colour, [
+                        to_screen(unit.x + a * dx - b * dy, unit.y + a * dy + b * dx)
+                        for a, b in ((major, minor), (major, -minor), (-major, -minor), (-major, minor))])
+                else:
+                    pygame.draw.circle(screen, colour, centre, max(2, int(unit.kind.major_radius * scale)))
                 tip = to_screen(unit.x + unit.dir[0] * unit.radius, unit.y + unit.dir[1] * unit.radius)
                 pygame.draw.line(screen, BG, centre, tip, 2)
                 if unit.blocked_frames:
@@ -4351,6 +4429,10 @@ def main() -> None:
     parser.add_argument("--group", default="",
                         help="a mix instead of --units, NAME:COUNT,... e.g. crusader:8,humvee:4,overlord:2; "
                              "the names are unitdata.UNIT_OBJECTS'")
+    parser.add_argument("--gamemap", default="", metavar="NAME",
+                        help="a retail map from the install instead of --map, e.g. \"Tournament Desert\": "
+                             "the group starts at player 1's start and is ordered to player 2's "
+                             "(cross: half of it each way)")
     parser.add_argument("--scenario", choices=SCENARIOS, default="column")
     parser.add_argument("--scale", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=7)

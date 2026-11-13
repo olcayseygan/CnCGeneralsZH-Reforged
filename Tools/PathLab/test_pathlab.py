@@ -7,9 +7,11 @@ the formula in AIPathfind.cpp; the rest are the parts of the group order and the
 picture cannot argue with."""
 
 import math
+import os
 import unittest
 from dataclasses import replace
 
+import maploader
 import pathlab
 import unitdata
 from pathlab import (CELL, COST_DIAGONAL, COST_ORTHOGONAL, OBSTACLE, Grid, Path, Pathfinder,
@@ -864,6 +866,19 @@ class RunTests(unittest.TestCase):
         result = pathlab.measure("choke", [pathlab.STANDIN_TANK] * 4, 1, "column")
         self.assertEqual(result.stuck, 0)
         self.assertLess(result.frames, pathlab.MEASURE_MAX_FRAMES)
+
+    @unittest.skipUnless(os.path.isfile(os.path.join(maploader.game_dir_of(None), maploader.MAPS_ARCHIVE)),
+                         "no MapsZH.big in the install")
+    def test_gamemap_cross_starts_each_half_at_a_start_bound_for_the_other(self):
+        kinds = [pathlab.STANDIN_TANK] * 6
+        grid, units, orders = pathlab.scenario_setup("choke", "Tournament Desert", 0, kinds, "cross")
+        first, second = pathlab.loaded_game_map("Tournament Desert").starts[:2]
+        self.assertEqual(len(units), 6)
+        self.assertEqual([goal for _, goal in orders], [second, first])
+        for (group, goal), home in zip(orders, (first, second)):
+            for unit in group:
+                self.assertTrue(grid.passable(*pathlab.cell_of(*unit.pos)))
+                self.assertLess(math.dist(unit.pos, home), 100.0)
 
     def test_a_sweep_names_one_of_the_game_constants(self):
         self.assertEqual(pathlab.parse_sweep("PF_TRAFFIC_NUM=0,4"), ("PF_TRAFFIC_NUM", [0, 4]))

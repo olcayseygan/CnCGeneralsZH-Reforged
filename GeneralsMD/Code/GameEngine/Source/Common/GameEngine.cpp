@@ -115,6 +115,7 @@
 #include "GameClient/ChromaKeyboard.h"
 #include "GameClient/CinemaDirector.h"
 #include "GameClient/Display.h"
+#include "GameClient/TankSkin.h"
 #include "GameClient/FXList.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/HotKey.h"
@@ -768,6 +769,7 @@ static void startAutoSkirmish( Int numPlayersWanted )
 		{
 			slot.setState( SLOT_PLAYER, localName );
 			slot.setName( localName );
+			slot.setSkin( TankSkin_localPick() );
 		}
 		else if (takeover && (TheGlobalData->m_autoSkirmishTakeoverSlot < 0 || TheGlobalData->m_autoSkirmishTakeoverSlot == i))
 		{

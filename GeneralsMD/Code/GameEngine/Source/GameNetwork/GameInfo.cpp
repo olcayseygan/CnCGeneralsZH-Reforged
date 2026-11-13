@@ -42,6 +42,7 @@
 #include "GameClient/ChallengeGenerals.h"
 #include "GameClient/GameText.h"
 #include "GameClient/MapUtil.h"
+#include "GameClient/TankSkin.h"
 #include "GameLogic/AI.h"
 #include "Common/MultiplayerSettings.h"
 #include "Common/PlayerTemplate.h"
@@ -227,6 +228,7 @@ void GameSlot::reset()
 	m_teamNumber = -1;
 	m_aiPersonality = AIPERSONA_NORMAL;
 	m_handicap = HANDICAP_FULL;
+	m_skin = TANK_SKIN_NONE;
 	m_NATBehavior = FirewallHelperClass::FIREWALL_TYPE_SIMPLE;
 	m_lastFrameInGame = 0;
 	m_disconnected = FALSE;
@@ -470,6 +472,7 @@ void GameSlot::setState( SlotState state, UnicodeString name, UnsignedInt IP )
 		m_teamNumber = -1;
 		m_aiPersonality = AIPERSONA_NORMAL;
 		m_handicap = HANDICAP_FULL;
+		m_skin = TANK_SKIN_NONE;
 
 		if (state == SLOT_OPEN && TheGameSpyGame && TheGameSpyGame->getConstSlot(0) == this)
 		{
@@ -1458,6 +1461,11 @@ static AsciiString buildGameInfoAsciiString( const GameInfo *game, const AsciiSt
 		AsciiString str;
 		if (slot && slot->isHuman())
 		{
+			// a skin needs the handicap before it, at full health too
+			AsciiString tail = HandicapSlotField(slot->getHandicap());
+			if (slot->getSkin() != TANK_SKIN_NONE)
+				tail.format(",%d,%d", slot->getHandicap(), slot->getSkin());
+
 			AsciiString tmp;  //all this data goes after name
 			tmp.format( ",%X,%d,%c%c,%d,%s,%d,%d,%d%s:",
 				slot->getIP(), slot->getPort(),
@@ -1466,7 +1474,7 @@ static AsciiString buildGameInfoAsciiString( const GameInfo *game, const AsciiSt
 				slot->getColor(), PlayerTemplateSlotField(slot->getPlayerTemplate()).str(),
 				slot->getStartPos(), slot->getTeamNumber(),
 				slot->getNATBehavior(),
-				HandicapSlotField(slot->getHandicap()).str() );
+				tail.str() );
 
 			str.format( "H%s%s", playerNames[i].str(), tmp.str() );
 		}
@@ -1550,6 +1558,28 @@ Bool ApplyHandicapRequest( GameInfo *game, GameSlot *slot, Int handicap )
 	// a pick that pushes the options string past the packet would empty it for everyone
 	if (GameInfoToAsciiString(game).isEmpty())
 		slot->setHandicap(was);
+	return TRUE;
+}
+
+Int SkinFromSlotField( const char *field )
+{
+	if (field == NULL)
+		return TANK_SKIN_NONE;
+	const Int skin = atoi(field);
+	return (skin > TANK_SKIN_NONE && skin < TANK_SKIN_COUNT) ? skin : TANK_SKIN_NONE;
+}
+
+Bool ApplySkinRequest( GameInfo *game, GameSlot *slot, Int skin )
+{
+	if (skin < TANK_SKIN_NONE || skin >= TANK_SKIN_COUNT || skin == slot->getSkin() || !slot->isHuman())
+	{
+		DEBUG_LOG(("Rejecting invalid skin %d\n", skin));
+		return FALSE;
+	}
+	const Int was = slot->getSkin();
+	slot->setSkin(skin);
+	if (GameInfoToAsciiString(game).isEmpty())
+		slot->setSkin(was);
 	return TRUE;
 }
 
@@ -1881,6 +1911,9 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
 
 							//Read the optional handicap
 							newSlot[i].setHandicap(HandicapFromSlotField(strtok_r(NULL,",",&slotPos)));
+
+							//Read the optional tank skin; drawing only, the logic never reads it
+							newSlot[i].setSkin(SkinFromSlotField(strtok_r(NULL,",",&slotPos)));
 						}// case 'H':
 						break;
 						case 'C':
@@ -2087,7 +2120,7 @@ void SkirmishGameInfo::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void SkirmishGameInfo::xfer( Xfer *xfer )
 {
-	const XferVersion currentVersion = 13;	// 5 adds m_peaceTime, 6 m_unitLimit, 7 m_proRules, 8 m_incomeSharing, 9 m_techRespawn, 10 m_supplyPileLimit, 11 each slot's AI personality, 12 each slot's handicap, 13 a 64-bit preorder mask
+	const XferVersion currentVersion = 14;	// 5 adds m_peaceTime, 6 m_unitLimit, 7 m_proRules, 8 m_incomeSharing, 9 m_techRespawn, 10 m_supplyPileLimit, 11 each slot's AI personality, 12 each slot's handicap, 13 a 64-bit preorder mask, 14 each slot's tank skin
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -2177,6 +2210,12 @@ void SkirmishGameInfo::xfer( Xfer *xfer )
 		else
 			handicap = HANDICAP_FULL;
 
+		Int skin = m_slot[slot]->getSkin();
+		if (version >= 14)
+			xfer->xferInt(&skin);
+		else
+			skin = TANK_SKIN_NONE;
+
 		if( xfer->getXferMode() == XFER_LOAD ) {
 			m_slot[slot]->setState((SlotState)state, name);
 			if (isAccepted) m_slot[slot]->setAccept();
@@ -2192,6 +2231,7 @@ void SkirmishGameInfo::xfer( Xfer *xfer )
 			m_slot[slot]->setPlayerTemplate(playerTemplate);
 			m_slot[slot]->setAIPersonality(persona);
 			m_slot[slot]->setHandicap(handicap);
+			m_slot[slot]->setSkin((skin > TANK_SKIN_NONE && skin < TANK_SKIN_COUNT) ? skin : TANK_SKIN_NONE);
 		}
 	}
 

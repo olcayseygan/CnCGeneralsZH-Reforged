@@ -8,6 +8,10 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Gold tanks for 1K
+
+- A celebration gift, free for everyone: tick 1K Gold Tank Skins on Options > Interface and your Crusaders, Battlemasters and Scorpions roll out in gold, the Laser General's Crusader and the Nuke General's Battlemaster included, damaged or not. Everyone in the match sees your tanks that way, in skirmish, LAN and online rooms and in the replay afterwards, while your team colour stays on the trim. Looks only: the tanks fight exactly as before, and a player without the skin still joins your game. The gold is painted over the rebuilt tank models, so it shows with Detailed Models on. The pick goes into the room as you join or open it, so a change waits for the next game, and Quick Match does not carry it yet.
+
 ## The game plays half as fast again
 
 - Everything in a match runs 50 percent quicker than in the original: units drive and walk faster, buildings and units come off the line sooner, weapons reload sooner and animations play quicker. A tank that crossed a map in 40 seconds crosses it in about 27. The clock on the wall did not change, so a match is simply shorter, and the countdowns on screen (superweapons, timed powers) still count real seconds.

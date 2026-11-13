@@ -25199,6 +25199,144 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 	TheWritableGlobalData = savedData;
 }
 
+#include "GameClient/TankSkin.h"
+
+/* A human seat's tank skin is one more field after the handicap, which is then written at full
+	 health too, and only when the seat has a skin: a string without one stays byte for byte what it
+	 was, an older build stops at the handicap, and a string from before the field reads as no skin.
+	 An AI seat never carries one. */
+TEST(tank_skin_rides_the_slot_entry_and_an_old_string_reads_as_none)
+{
+	CHECK( bootOnce() );
+
+	CHECK_EQ( SkinFromSlotField( NULL ), (Int)TANK_SKIN_NONE );
+	CHECK_EQ( SkinFromSlotField( "1" ), (Int)TANK_SKIN_1K );
+	static const char *const refused[] = { "", "0", "2", "-1", "x" };
+	for( Int r = 0; r < (Int)ARRAY_SIZE( refused ); ++r )
+		CHECK_EQ( SkinFromSlotField( refused[r] ), (Int)TANK_SKIN_NONE );
+
+	UnicodeString playerName;
+	playerName.translate( AsciiString( "Player" ) );
+
+	GameSlot seat;
+	CHECK_EQ( seat.getSkin(), (Int)TANK_SKIN_NONE );
+	seat.setState( SLOT_PLAYER, playerName );
+	seat.setSkin( TANK_SKIN_1K );
+	GameSlot copy = seat;
+	CHECK_EQ( copy.getSkin(), (Int)TANK_SKIN_1K );
+	seat.setState( SLOT_PLAYER, playerName );		// a seat taken again starts plain
+	CHECK_EQ( seat.getSkin(), (Int)TANK_SKIN_NONE );
+
+	GlobalData *savedData = TheWritableGlobalData;
+	TheWritableGlobalData = NEW GlobalData;
+	GameState *savedState = TheGameState;
+	TheGameState = NEW GameState;
+	MultiplayerSettings *savedSettings = TheMultiplayerSettings;
+	TheMultiplayerSettings = NEW MultiplayerSettings;
+	PlayerTemplateStore *savedStore = ThePlayerTemplateStore;
+	ThePlayerTemplateStore = NEW PlayerTemplateStore;
+	ThePlayerTemplateStore->init();
+
+	const AsciiString mapPath( "Save\\test\\test.map" );
+	SkirmishGameInfo host;
+	host.init();
+	AsciiString mapInSaves = TheGameState->getSaveDirectory();
+	mapInSaves.concat( "test.map" );
+	host.setMap( mapInSaves );
+	host.setSeed( 7 );
+	GameSlot *slot = host.getSlot( 0 );
+	slot->setState( SLOT_PLAYER, playerName, 0xC0A80164u );
+	slot->setPort( 8088 );
+	slot->setPlayerTemplate( PLAYERTEMPLATE_RANDOM );
+	slot->setAccept();
+	slot->setMapAvailability( TRUE );
+	for( Int i = 1; i < MAX_SLOTS; ++i )
+	{
+		host.getSlot( i )->setState( SLOT_MED_AI );
+		host.getSlot( i )->setPlayerTemplate( PLAYERTEMPLATE_RANDOM );
+	}
+
+	const AsciiString untouched = GameInfoOptionsString( &host, mapPath, 0 );
+	AsciiString humanEntry;
+	humanEntry.format( "HPlayer,C0A80164,8088,TT,-1,-1,-1,-1,%d:", (Int)slot->getNATBehavior() );
+	CHECK( strstr( untouched.str(), humanEntry.str() ) != NULL );
+
+	// at full health the handicap is written so the skin lands in its own field
+	slot->setSkin( TANK_SKIN_1K );
+	host.getSlot( 1 )->setSkin( TANK_SKIN_1K );		// an AI seat's is never written
+	const AsciiString skinned = GameInfoOptionsString( &host, mapPath, 0 );
+	humanEntry.format( "HPlayer,C0A80164,8088,TT,-1,-1,-1,-1,%d,100,1:CM,-1,-1,-1,-1:", (Int)slot->getNATBehavior() );
+	CHECK( strstr( skinned.str(), humanEntry.str() ) != NULL );
+
+	SkirmishGameInfo guest;
+	guest.init();
+	CHECK( ParseAsciiStringToGameInfo( &guest, skinned ) );
+	CHECK_EQ( guest.getSlot( 0 )->getSkin(), (Int)TANK_SKIN_1K );
+	CHECK_EQ( guest.getSlot( 0 )->getHandicap(), (Int)HANDICAP_FULL );
+	CHECK_EQ( guest.getSlot( 1 )->getSkin(), (Int)TANK_SKIN_NONE );
+
+	// beside a handicap, both come back
+	slot->setHandicap( 50 );
+	const AsciiString both = GameInfoOptionsString( &host, mapPath, 0 );
+	humanEntry.format( "HPlayer,C0A80164,8088,TT,-1,-1,-1,-1,%d,50,1:", (Int)slot->getNATBehavior() );
+	CHECK( strstr( both.str(), humanEntry.str() ) != NULL );
+	CHECK( ParseAsciiStringToGameInfo( &guest, both ) );
+	CHECK_EQ( guest.getSlot( 0 )->getSkin(), (Int)TANK_SKIN_1K );
+	CHECK_EQ( guest.getSlot( 0 )->getHandicap(), 50 );
+
+	// a string from before the field
+	CHECK( ParseAsciiStringToGameInfo( &guest, untouched ) );
+	for( Int i = 0; i < MAX_SLOTS; ++i )
+		CHECK_EQ( guest.getSlot( i )->getSkin(), (Int)TANK_SKIN_NONE );
+
+	// the host's answer to a guest's "Skin=<n>"
+	slot->setSkin( TANK_SKIN_NONE );
+	CHECK( ApplySkinRequest( &host, slot, TANK_SKIN_1K ) );
+	CHECK_EQ( slot->getSkin(), (Int)TANK_SKIN_1K );
+	CHECK( !ApplySkinRequest( &host, slot, TANK_SKIN_1K ) );	// nothing changed, nothing to send round
+	CHECK( !ApplySkinRequest( &host, slot, TANK_SKIN_COUNT ) );
+	CHECK( !ApplySkinRequest( &host, host.getSlot( 2 ), TANK_SKIN_1K ) );	// an AI seat
+	CHECK( ApplySkinRequest( &host, slot, TANK_SKIN_NONE ) );
+	CHECK_EQ( slot->getSkin(), (Int)TANK_SKIN_NONE );
+
+	delete ThePlayerTemplateStore;
+	ThePlayerTemplateStore = savedStore;
+	delete TheMultiplayerSettings;
+	TheMultiplayerSettings = savedSettings;
+	delete TheGameState;
+	TheGameState = savedState;
+	delete TheWritableGlobalData;
+	TheWritableGlobalData = savedData;
+}
+
+/* The 1K skin dresses the Crusader, the Battlemaster and the Scorpion, their generals' own models and
+	 the damaged states, case ignored, and nothing else: not the wrecks, not another tank. */
+TEST(tank_skin_1k_dresses_the_three_tanks_and_nothing_else)
+{
+	static const char *const dressed[] = { "AVLeopard", "AVLeopard_D", "AVLaserTnk", "AVLaserTnk_D", "NVBtMstr",
+		"NVBtMstr_D", "NVBtMstrNG", "nvbtmstrng_d", "UVLiteTank", "UVLITETANK_D" };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( dressed ); ++i )
+	{
+		const char *prefix = TankSkin_texturePrefix( TANK_SKIN_1K, dressed[i] );
+		CHECK( prefix != NULL && strcmp( prefix, "Skin1K_" ) == 0 );
+	}
+	static const char *const plain[] = { "AVLeopard_D1", "NVBtMstr_D1", "UVLiteTank_D1", "AVPaladin", "NVOverlord", "" };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( plain ); ++i )
+		CHECK( TankSkin_texturePrefix( TANK_SKIN_1K, plain[i] ) == NULL );
+	CHECK( TankSkin_texturePrefix( TANK_SKIN_NONE, "AVLeopard" ) == NULL );
+	CHECK( TankSkin_texturePrefix( TANK_SKIN_COUNT, "AVLeopard" ) == NULL );
+	CHECK( TankSkin_texturePrefix( TANK_SKIN_1K, NULL ) == NULL );
+	CHECK_EQ( TankSkin_ofPlayer( -1 ), (Int)TANK_SKIN_NONE );
+
+	GlobalData *savedData = TheWritableGlobalData;
+	TheWritableGlobalData = NEW GlobalData;
+	CHECK_EQ( TankSkin_localPick(), (Int)TANK_SKIN_NONE );		// a new row starts off
+	TheWritableGlobalData->m_tankSkin1K = TRUE;
+	CHECK_EQ( TankSkin_localPick(), (Int)TANK_SKIN_1K );
+	delete TheWritableGlobalData;
+	TheWritableGlobalData = savedData;
+}
+
 /* NickSenseless on v4.0.0: everybody who joined his online room showed in it for a split second and
 	 left.  A joiner builds its copy of the room from the game list (WOLLobbyMenu's PEER_ADD), round-trips
 	 it through the options string (markAsStagingRoomJoiner) and stays only when seat 0's name is among

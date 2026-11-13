@@ -156,6 +156,9 @@ public:
 	void setHandicap( Int handicap ) { m_handicap = handicap; }	///< percent of max health this seat's units have, see IsValidHandicap
 	Int getHandicap( void ) const { return m_handicap; }
 
+	void setSkin( Int skin ) { m_skin = skin; }	///< a TankSkin this seat's tanks are drawn in; drawing only, the logic never reads it
+	Int getSkin( void ) const { return m_skin; }
+
 	inline void setName( UnicodeString name ) { m_name = name; }
 	inline UnicodeString getName( void ) const { return m_name; }
 
@@ -207,6 +210,7 @@ protected:
 	Int m_teamNumber;																	///< alliance, -1 for none
 	Int m_aiPersonality;															///< AIPersonality of an AI seat, AIPERSONA_NORMAL otherwise
 	Int m_handicap;																		///< percent of max health this seat's units have, HANDICAP_FULL for none
+	Int m_skin;																				///< TankSkin of a human seat, TANK_SKIN_NONE for none
 	Int m_origColor;																			///< color, or -1 for random
 	Int m_origStartPos;																		///< start position, or -1 for random
 	Int m_origPlayerTemplate;															///< PlayerTemplate
@@ -444,6 +448,13 @@ Int HandicapFromSlotField( const char *field );
 // which it does for a pick that does not fit in the options string as well: the guest's box has to
 // come back to what the host kept.
 Bool ApplyHandicapRequest( GameInfo *game, GameSlot *slot, Int handicap );
+
+// A human seat's tank skin rides after the handicap, which is then written even at full health, and
+// only when the seat has one: an older build stops reading at the handicap, and an older string reads
+// as no skin.  Absent, or a skin this build does not know, is none.  "Skin=<n>" is a guest's request,
+// and like the handicap's it is undone when the options string would no longer fit.
+Int SkinFromSlotField( const char *field );
+Bool ApplySkinRequest( GameInfo *game, GameSlot *slot, Int skin );
 
 //
 // Three things every lobby - skirmish, LAN and online - has to agree on about a slot state, kept

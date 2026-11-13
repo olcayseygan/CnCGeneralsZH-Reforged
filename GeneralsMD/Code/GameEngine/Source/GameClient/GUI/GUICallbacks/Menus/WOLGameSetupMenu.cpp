@@ -43,6 +43,7 @@
 #include "Common/CustomMatchPreferences.h"
 #include "GameClient/AnimateWindowManager.h"
 #include "GameClient/InGameUI.h"
+#include "GameClient/TankSkin.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/Gadget.h"
@@ -1836,6 +1837,7 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 		CustomMatchPreferences customPref;
 		hostSlot->setColor( customPref.getPreferredColor() );
 		hostSlot->setPlayerTemplate( customPref.getPreferredFaction() );
+		hostSlot->setSkin( TankSkin_localPick() );
 		hostSlot->setNATBehavior((FirewallHelperClass::FirewallBehaviorType)natPref.getFirewallBehavior());
 		hostSlot->setPingString(TheGameSpyInfo->getPingString());
 		const AsciiString hostMap = onlineScriptMap( customPref.getPreferredMap() );
@@ -1912,6 +1914,12 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 		options.format("NAT=%d", natPref.getFirewallBehavior());
 		req.options = options.str();
 		TheGameSpyPeerMessageQueue->addRequest(req);
+		if (TankSkin_localPick() != TANK_SKIN_NONE)
+		{
+			options.format("Skin=%d", TankSkin_localPick());
+			req.options = options.str();
+			TheGameSpyPeerMessageQueue->addRequest(req);
+		}
 		options.format("Ping=%s", TheGameSpyInfo->getPingString().str());
 		req.options = options.str();
 		TheGameSpyPeerMessageQueue->addRequest(req);
@@ -2888,6 +2896,10 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 									{
 										DEBUG_LOG(("Rejecting invalid IP %d\n", uVal));
 									}
+								}
+								else if (key == "Skin")
+								{
+									change = ApplySkinRequest(game, slot, val);	// drawing only, nobody has to accept again
 								}
 								else if (key == "NAT")
 								{

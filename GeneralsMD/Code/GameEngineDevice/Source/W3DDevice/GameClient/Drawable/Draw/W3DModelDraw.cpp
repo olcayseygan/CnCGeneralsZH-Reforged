@@ -53,6 +53,7 @@
 #include "GameClient/ObserverCamera.h"
 #include "GameClient/PlayerColorScheme.h"
 #include "GameClient/Shadow.h"
+#include "GameClient/TankSkin.h"
 #include "GameLogic/GameLogic.h"		// for real-time frame
 #include "GameLogic/GhostObject.h"
 #include "GameLogic/PartitionManager.h"
@@ -1799,6 +1800,21 @@ const ModelConditionInfo* W3DModelDrawModuleData::findBestInfo(const ModelCondit
 //-------------------------------------------------------------------------------------------------
 
 //-------------------------------------------------------------------------------------------------
+/** The skin prefix the drawable's owner's lobby seat asks for on this model, NULL for none.  Inside
+	the render's overlap window the object may be changing or going away beside it, so the owner comes
+	from the copy taken at the sync point there. */
+//-------------------------------------------------------------------------------------------------
+static const char *ownerSkinPrefix( const Drawable *draw, const AsciiString &modelName )
+{
+	Int playerIndex = -1;
+	if (LogicThread::isInsideWindow())
+		playerIndex = draw->getObjectForDraw().playerIndex;
+	else if (const Object *obj = draw->getObject())
+		playerIndex = obj->getControllingPlayer() ? obj->getControllingPlayer()->getPlayerIndex() : -1;
+	return TankSkin_texturePrefix(TankSkin_ofPlayer(playerIndex), modelName.str());
+}
+
+//-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawModule(thing, moduleData)
 {
@@ -1812,6 +1828,7 @@ W3DModelDraw::W3DModelDraw(Thing *thing, const ModuleData* moduleData) : DrawMod
 	m_curState = NULL;
 	forgetProjectileShown();
 	m_hexColor = 0;
+	m_skinPrefix = NULL;
 	m_renderObject = NULL;
 	m_shadow = NULL;
 	m_contactShadow = NULL;
@@ -3929,9 +3946,11 @@ void W3DModelDraw::setModelState(const ModelConditionInfo* newState)
 		{
 			const W3DModelDrawModuleData* data = getW3DModelDrawModuleData();
 			Bool swapsTexture = !data->m_replaceTextureOld.isEmpty();
+			// the owner's cosmetic skin; an owner change comes back through replaceIndicatorColor
+			m_skinPrefix = ownerSkinPrefix(draw, newState->m_modelName);
 			LOGIC_CENSUS( CENSUS_ASSET_LOAD );
 			m_renderObject = W3DDisplay::m_assetManager->Create_Render_Obj(newState->m_modelName.str(), draw->getScale(), m_hexColor,
-				swapsTexture ? data->m_replaceTextureOld.str() : NULL, swapsTexture ? data->m_replaceTextureNew.str() : NULL);
+				swapsTexture ? data->m_replaceTextureOld.str() : NULL, swapsTexture ? data->m_replaceTextureNew.str() : NULL, m_skinPrefix);
 			DEBUG_ASSERTCRASH(m_renderObject, ("*** ASSET ERROR: Model %s not found!\n",newState->m_modelName.str()));
 		}
 
@@ -4126,9 +4145,11 @@ void W3DModelDraw::replaceIndicatorColor(Color color)
 		return;
 
 	if (getRenderObject())
-	{	
+	{
 		Int newColor = (color == 0) ? 0 : (color | 0xFF000000);
-		if (newColor != m_hexColor)
+		// a new owner of the same colour (a relationship colour scheme) can still bring another skin
+		const char *skin = m_curState ? ownerSkinPrefix(getDrawable(), m_curState->m_modelName) : m_skinPrefix;
+		if (newColor != m_hexColor || skin != m_skinPrefix)
 		{
 			m_hexColor = newColor;
 

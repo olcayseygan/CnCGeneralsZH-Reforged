@@ -45,6 +45,7 @@
 #include "GameClient/LanguageFilter.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/MessageBox.h"
+#include "GameClient/TankSkin.h"
 #include "GameLogic/GameLogic.h"
 #include "GameNetwork/FileTransfer.h"
 #include "GameNetwork/LANAPICallbacks.h"
@@ -614,6 +615,10 @@ void LANAPI::OnGameOptions( UnsignedInt playerIP, Int playerSlot, AsciiString op
 						shouldUnaccept = true;
 					}
 				}
+				else if (key == "Skin")
+				{
+					change = ApplySkinRequest(m_currentGame, slot, val);	// drawing only, nobody has to accept again
+				}
 				else if (key == "NAT")
 				{
 					if ((val >= FirewallHelperClass::FIREWALL_TYPE_SIMPLE) &&
@@ -699,6 +704,11 @@ void LANAPI::OnGameJoin( ReturnType ret, LANGameInfo *theGame )
 		RequestGameOptions(options, true);
 		options.format("Color=%d", pref.getPreferredColor());
 		RequestGameOptions(options, true);
+		if (TankSkin_localPick() != TANK_SKIN_NONE)
+		{
+			options.format("Skin=%d", TankSkin_localPick());
+			RequestGameOptions(options, true);
+		}
 #if TELL_COMPUTER_IDENTITY_IN_LAN_LOBBY
 		options.format("User=%s", m_userName.str());
 		RequestGameOptions( options, true );

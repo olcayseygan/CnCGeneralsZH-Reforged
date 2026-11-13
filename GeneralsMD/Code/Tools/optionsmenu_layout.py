@@ -203,6 +203,7 @@ NEW_CONTROLS = [
     (CHECK,  "CheckAircraftAltitudeLine", "GUI:AircraftAltitudeLine"),
     (CHECK,  "CheckNetBox",            "GUI:NetBox"),
     (CHECK,  "CheckEmptyBuildingPips", "GUI:EmptyBuildingPips"),
+    (CHECK,  "CheckTankSkin1K",        "GUI:TankSkin1K"),
     (CHECK,  "CheckZoomToCursor",      "GUI:ZoomToCursor"),
     (CHECK,  "CheckIsometricCamera",   "GUI:IsometricCamera"),
     (CHECK,  "CheckCameraShake",       "GUI:CameraShake"),
@@ -497,7 +498,8 @@ GROUP_LAYOUT = [
             setting("LabelPlayerColors", "ComboBoxPlayerColors"),
             ("check", "CheckOrderLines"),
             ("check", "CheckAircraftAltitudeLine"),
-            ("check", "CheckEmptyBuildingPips")]),
+            ("check", "CheckEmptyBuildingPips"),
+            ("check", "CheckTankSkin1K")]),
         # after the battlefield: a combo row is taller than the box it replaced, and the first column
         # ran past the page with it there
         ("GUI:OptionsGroupSpeed", [

@@ -1403,6 +1403,7 @@ GameEngine/Include/GameClient/ShellMenuScheme.h
 GameEngine/Include/GameClient/Smudge.h
 GameEngine/Include/GameClient/Snow.h
 GameEngine/Include/GameClient/Statistics.h
+GameEngine/Include/GameClient/TankSkin.h
 GameEngine/Include/GameClient/TerrainRoads.h
 GameEngine/Include/GameClient/TerrainVisual.h
 GameEngine/Include/GameClient/UIStyle.h
@@ -2080,6 +2081,7 @@ GameEngine/Source/GameClient/System/Image.cpp
 GameEngine/Source/GameClient/System/ParticleSys.cpp
 GameEngine/Source/GameClient/System/RayEffect.cpp
 GameEngine/Source/GameClient/System/Smudge.cpp
+GameEngine/Source/GameClient/TankSkin.cpp
 GameEngine/Source/GameClient/Terrain/TerrainRoads.cpp
 GameEngine/Source/GameClient/Terrain/TerrainVisual.cpp
 GameEngine/Source/GameClient/VideoPlayer.cpp

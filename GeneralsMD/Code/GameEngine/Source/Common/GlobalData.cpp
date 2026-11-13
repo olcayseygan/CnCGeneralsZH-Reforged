@@ -1259,6 +1259,7 @@ GlobalData::GlobalData()
 	m_showNetBox = FALSE;
 	m_minimapSize = 100;
 	m_showEmptyBuildingPips = TRUE;
+	m_tankSkin1K = FALSE;
 	m_workersReturnToSupply = TRUE;
 	m_archiveReplays = TRUE;
 

@@ -124,6 +124,7 @@ Data/Art/Textures/TRDef_Rubble.tga
 Data/Art/Textures/TRDef_Sand.tga
 Data/Art/Textures/TRDef_SandD.tga
 Data/Art/Textures/TRDef_Scorch.tga
+Data/Art/Textures/TRFirtinaShell.tga
 Data/Art/Textures/TRFirtina_Wreck.tga
 Data/Art/Textures/TRGasPlt_Clad.tga
 Data/Art/Textures/TRGasPlt_CladD.tga
@@ -428,6 +429,7 @@ Data/Art/W3D/TRFIRTINA_D1.W3D
 Data/Art/W3D/TRFIRTINA_D2.W3D
 Data/Art/W3D/TRFIRTINA_D3.W3D
 Data/Art/W3D/TRFIRTINA_D4.W3D
+Data/Art/W3D/TRFIRTINA_SHL.W3D
 Data/Art/W3D/TRGOKBEY.W3D
 Data/Art/W3D/TRGOKBEY_D.W3D
 Data/Art/W3D/TRGOKBEY_D1.W3D

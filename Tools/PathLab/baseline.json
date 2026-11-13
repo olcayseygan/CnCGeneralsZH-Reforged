@@ -7,580 +7,652 @@
  "cases": [
   {
    "name": "choke/column/8",
-   "frames": 1995,
-   "free_flow": 1296,
-   "ratio": 1.5393518518518519,
-   "blocked": 740,
+   "frames": 1782,
+   "free_flow": 1024,
+   "ratio": 1.740234375,
+   "blocked": 600,
    "stuck": 0,
-   "cells": 2284,
-   "repaths": 7,
-   "churn": 180,
+   "cells": 1450,
+   "repaths": 3,
+   "churn": 193,
    "rungs": [
-    10,
+    7,
     2,
     0
    ],
-   "overlap": 3081,
-   "overlap_depth": 2.2068244804647517
+   "overlap": 1562,
+   "overlap_depth": 7.453029609372276
   },
   {
    "name": "choke/column/16",
-   "frames": 2231,
-   "free_flow": 1297,
-   "ratio": 1.7201233616037008,
-   "blocked": 2458,
+   "frames": 2093,
+   "free_flow": 1042,
+   "ratio": 2.008637236084453,
+   "blocked": 1753,
    "stuck": 0,
-   "cells": 3073,
-   "repaths": 28,
-   "churn": 1012,
+   "cells": 3360,
+   "repaths": 13,
+   "churn": 509,
    "rungs": [
-    31,
-    8,
+    20,
+    5,
     0
    ],
-   "overlap": 9089,
-   "overlap_depth": 2.3630418519898257
+   "overlap": 3637,
+   "overlap_depth": 7.238898012190257
   },
   {
    "name": "choke/column/32",
-   "frames": 2943,
-   "free_flow": 1283,
-   "ratio": 2.293842556508184,
-   "blocked": 6919,
+   "frames": 3778,
+   "free_flow": 1074,
+   "ratio": 3.5176908752327747,
+   "blocked": 9654,
    "stuck": 0,
-   "cells": 13371,
-   "repaths": 77,
-   "churn": 3820,
+   "cells": 24898,
+   "repaths": 71,
+   "churn": 3597,
    "rungs": [
-    91,
-    11,
+    129,
+    21,
     0
    ],
-   "overlap": 34435,
-   "overlap_depth": 2.354459242291352
+   "overlap": 31069,
+   "overlap_depth": 6.918852922164601
   },
   {
    "name": "choke/cross/8",
-   "frames": 1897,
-   "free_flow": 1286,
-   "ratio": 1.4751166407465008,
-   "blocked": 423,
+   "frames": 1868,
+   "free_flow": 1035,
+   "ratio": 1.8048309178743962,
+   "blocked": 490,
    "stuck": 0,
-   "cells": 1218,
+   "cells": 1023,
    "repaths": 1,
-   "churn": 140,
+   "churn": 183,
    "rungs": [
     4,
     2,
     0
    ],
-   "overlap": 2527,
-   "overlap_depth": 1.8618871218198754
+   "overlap": 1747,
+   "overlap_depth": 5.9143134572079425
   },
   {
    "name": "choke/cross/16",
-   "frames": 2623,
-   "free_flow": 1322,
-   "ratio": 1.9841149773071105,
-   "blocked": 1631,
+   "frames": 3105,
+   "free_flow": 1030,
+   "ratio": 3.0145631067961167,
+   "blocked": 2846,
    "stuck": 0,
-   "cells": 3963,
-   "repaths": 20,
-   "churn": 459,
+   "cells": 4788,
+   "repaths": 17,
+   "churn": 1157,
    "rungs": [
-    28,
-    6,
+    32,
+    11,
     0
    ],
-   "overlap": 9852,
-   "overlap_depth": 1.9524928217390602
+   "overlap": 9233,
+   "overlap_depth": 7.70848625806748
   },
   {
    "name": "choke/cross/32",
-   "frames": 3318,
-   "free_flow": 1346,
-   "ratio": 2.4650817236255573,
-   "blocked": 9462,
+   "frames": 2938,
+   "free_flow": 1099,
+   "ratio": 2.6733393994540493,
+   "blocked": 9428,
    "stuck": 0,
-   "cells": 13703,
-   "repaths": 85,
-   "churn": 2707,
+   "cells": 18557,
+   "repaths": 76,
+   "churn": 1982,
    "rungs": [
-    145,
-    23,
+    136,
+    16,
     0
    ],
-   "overlap": 31921,
-   "overlap_depth": 2.26761091228231
+   "overlap": 18805,
+   "overlap_depth": 6.8749245593023085
   },
   {
    "name": "open/column/8",
-   "frames": 1751,
-   "free_flow": 1312,
-   "ratio": 1.3346036585365855,
-   "blocked": 613,
+   "frames": 1481,
+   "free_flow": 1034,
+   "ratio": 1.432301740812379,
+   "blocked": 342,
    "stuck": 0,
-   "cells": 1245,
-   "repaths": 10,
-   "churn": 166,
+   "cells": 885,
+   "repaths": 2,
+   "churn": 170,
    "rungs": [
-    7,
-    1,
+    3,
+    2,
     0
    ],
-   "overlap": 1942,
-   "overlap_depth": 2.3216725489903545
+   "overlap": 1103,
+   "overlap_depth": 7.134748526480575
   },
   {
    "name": "open/column/16",
    "frames": 2150,
-   "free_flow": 1301,
-   "ratio": 1.6525749423520368,
-   "blocked": 1518,
+   "free_flow": 1102,
+   "ratio": 1.9509981851179674,
+   "blocked": 2252,
    "stuck": 0,
-   "cells": 2034,
-   "repaths": 24,
-   "churn": 830,
+   "cells": 4110,
+   "repaths": 12,
+   "churn": 954,
    "rungs": [
     27,
-    4,
+    6,
     0
    ],
-   "overlap": 8101,
-   "overlap_depth": 2.5035047431822757
+   "overlap": 7786,
+   "overlap_depth": 7.5605237201489555
   },
   {
    "name": "open/column/32",
-   "frames": 2767,
-   "free_flow": 1299,
-   "ratio": 2.130100076982294,
-   "blocked": 7195,
-   "stuck": 2,
-   "cells": 8906,
-   "repaths": 66,
-   "churn": 3302,
+   "frames": 2839,
+   "free_flow": 1071,
+   "ratio": 2.6507936507936507,
+   "blocked": 6969,
+   "stuck": 0,
+   "cells": 18050,
+   "repaths": 59,
+   "churn": 5161,
    "rungs": [
-    88,
-    14,
+    96,
+    12,
     0
    ],
-   "overlap": 30375,
-   "overlap_depth": 2.609215557384329
+   "overlap": 20060,
+   "overlap_depth": 7.520477380431571
   },
   {
    "name": "open/cross/8",
-   "frames": 1764,
-   "free_flow": 1337,
-   "ratio": 1.3193717277486912,
-   "blocked": 560,
+   "frames": 1707,
+   "free_flow": 1096,
+   "ratio": 1.5574817518248176,
+   "blocked": 285,
    "stuck": 0,
-   "cells": 1244,
-   "repaths": 7,
-   "churn": 234,
+   "cells": 1682,
+   "repaths": 4,
+   "churn": 38,
    "rungs": [
-    8,
-    3,
+    4,
+    1,
     0
    ],
-   "overlap": 1435,
-   "overlap_depth": 2.617354852738811
+   "overlap": 854,
+   "overlap_depth": 7.015950594207613
   },
   {
    "name": "open/cross/16",
-   "frames": 2532,
-   "free_flow": 1335,
-   "ratio": 1.8966292134831462,
-   "blocked": 1707,
+   "frames": 2212,
+   "free_flow": 1065,
+   "ratio": 2.0769953051643193,
+   "blocked": 1738,
    "stuck": 0,
-   "cells": 3433,
-   "repaths": 25,
-   "churn": 1215,
+   "cells": 1918,
+   "repaths": 11,
+   "churn": 498,
    "rungs": [
-    28,
-    6,
-    0
-   ],
-   "overlap": 7801,
-   "overlap_depth": 2.6634709296638635
-  },
-  {
-   "name": "open/cross/32",
-   "frames": 2885,
-   "free_flow": 1388,
-   "ratio": 2.0785302593659942,
-   "blocked": 4636,
-   "stuck": 0,
-   "cells": 7912,
-   "repaths": 39,
-   "churn": 2871,
-   "rungs": [
-    63,
-    16,
-    0
-   ],
-   "overlap": 31085,
-   "overlap_depth": 2.3478232677402135
-  },
-  {
-   "name": "twogaps/column/8",
-   "frames": 1844,
-   "free_flow": 1302,
-   "ratio": 1.4162826420890937,
-   "blocked": 610,
-   "stuck": 0,
-   "cells": 1042,
-   "repaths": 8,
-   "churn": 330,
-   "rungs": [
-    10,
-    2,
-    0
-   ],
-   "overlap": 2814,
-   "overlap_depth": 2.0296185750832803
-  },
-  {
-   "name": "twogaps/column/16",
-   "frames": 2092,
-   "free_flow": 1302,
-   "ratio": 1.6067588325652842,
-   "blocked": 1962,
-   "stuck": 0,
-   "cells": 2178,
-   "repaths": 14,
-   "churn": 1260,
-   "rungs": [
-    24,
-    6,
-    0
-   ],
-   "overlap": 7446,
-   "overlap_depth": 2.4960707277327914
-  },
-  {
-   "name": "twogaps/column/32",
-   "frames": 3444,
-   "free_flow": 1262,
-   "ratio": 2.729001584786054,
-   "blocked": 12814,
-   "stuck": 0,
-   "cells": 27608,
-   "repaths": 166,
-   "churn": 2548,
-   "rungs": [
-    202,
-    26,
-    0
-   ],
-   "overlap": 45586,
-   "overlap_depth": 2.1365213805362604
-  },
-  {
-   "name": "twogaps/cross/8",
-   "frames": 1726,
-   "free_flow": 1284,
-   "ratio": 1.3442367601246106,
-   "blocked": 196,
-   "stuck": 0,
-   "cells": 2294,
-   "repaths": 10,
-   "churn": 186,
-   "rungs": [
-    0,
-    0,
-    0
-   ],
-   "overlap": 1588,
-   "overlap_depth": 2.3240061822464675
-  },
-  {
-   "name": "twogaps/cross/16",
-   "frames": 2180,
-   "free_flow": 1302,
-   "ratio": 1.674347158218126,
-   "blocked": 1326,
-   "stuck": 0,
-   "cells": 2488,
-   "repaths": 10,
-   "churn": 784,
-   "rungs": [
-    18,
-    6,
-    0
-   ],
-   "overlap": 5200,
-   "overlap_depth": 1.7911100883234559
-  },
-  {
-   "name": "twogaps/cross/32",
-   "frames": 3134,
-   "free_flow": 1326,
-   "ratio": 2.363499245852187,
-   "blocked": 10200,
-   "stuck": 0,
-   "cells": 22052,
-   "repaths": 110,
-   "churn": 3658,
-   "rungs": [
-    146,
-    20,
-    0
-   ],
-   "overlap": 30988,
-   "overlap_depth": 2.7943768348752136
-  },
-  {
-   "name": "maze/column/8",
-   "frames": 4602,
-   "free_flow": 3566,
-   "ratio": 1.290521592821088,
-   "blocked": 1053,
-   "stuck": 0,
-   "cells": 48063,
-   "repaths": 22,
-   "churn": 345,
-   "rungs": [
-    17,
-    3,
-    0
-   ],
-   "overlap": 3945,
-   "overlap_depth": 1.9196908186416113
-  },
-  {
-   "name": "maze/column/16",
-   "frames": 5145,
-   "free_flow": 3655,
-   "ratio": 1.4076607387140903,
-   "blocked": 4393,
-   "stuck": 0,
-   "cells": 85120,
-   "repaths": 47,
-   "churn": 1343,
-   "rungs": [
-    52,
-    7,
-    0
-   ],
-   "overlap": 11325,
-   "overlap_depth": 2.6873416002742117
-  },
-  {
-   "name": "maze/column/32",
-   "frames": 6000,
-   "free_flow": 3696,
-   "ratio": 1.6233766233766234,
-   "blocked": 12767,
-   "stuck": 5,
-   "cells": 547910,
-   "repaths": 159,
-   "churn": 2656,
-   "rungs": [
-    143,
-    16,
-    0
-   ],
-   "overlap": 44713,
-   "overlap_depth": 1.862249382321391
-  },
-  {
-   "name": "maze/cross/8",
-   "frames": 3899,
-   "free_flow": 3621,
-   "ratio": 1.0767743717205192,
-   "blocked": 719,
-   "stuck": 0,
-   "cells": 27261,
-   "repaths": 6,
-   "churn": 189,
-   "rungs": [
-    8,
+    23,
     4,
     0
    ],
-   "overlap": 2276,
-   "overlap_depth": 1.6591766055060122
+   "overlap": 4470,
+   "overlap_depth": 7.236599150058535
   },
   {
-   "name": "maze/cross/16",
-   "frames": 5042,
-   "free_flow": 3567,
-   "ratio": 1.4135127558172134,
-   "blocked": 2395,
-   "stuck": 1,
-   "cells": 67072,
-   "repaths": 36,
-   "churn": 267,
+   "name": "open/cross/32",
+   "frames": 2802,
+   "free_flow": 1093,
+   "ratio": 2.563586459286368,
+   "blocked": 4594,
+   "stuck": 0,
+   "cells": 12355,
+   "repaths": 43,
+   "churn": 2837,
    "rungs": [
-    30,
-    6,
+    54,
+    13,
     0
    ],
-   "overlap": 16942,
-   "overlap_depth": 1.8823655763702187
+   "overlap": 15755,
+   "overlap_depth": 7.206621778860169
   },
   {
-   "name": "maze/cross/32",
-   "frames": 5089,
-   "free_flow": 3665,
-   "ratio": 1.3885402455661664,
-   "blocked": 7957,
+   "name": "twogaps/column/8",
+   "frames": 1528,
+   "free_flow": 998,
+   "ratio": 1.531062124248497,
+   "blocked": 458,
    "stuck": 0,
-   "cells": 201395,
-   "repaths": 113,
-   "churn": 968,
+   "cells": 3842,
+   "repaths": 10,
+   "churn": 0,
    "rungs": [
-    96,
+    8,
+    0,
+    0
+   ],
+   "overlap": 842,
+   "overlap_depth": 7.114835257917387
+  },
+  {
+   "name": "twogaps/column/16",
+   "frames": 2232,
+   "free_flow": 1010,
+   "ratio": 2.20990099009901,
+   "blocked": 2596,
+   "stuck": 0,
+   "cells": 4648,
+   "repaths": 16,
+   "churn": 456,
+   "rungs": [
+    38,
     8,
     0
    ],
-   "overlap": 34243,
-   "overlap_depth": 2.119305787852068
+   "overlap": 6528,
+   "overlap_depth": 6.247328075120667
+  },
+  {
+   "name": "twogaps/column/32",
+   "frames": 3372,
+   "free_flow": 1000,
+   "ratio": 3.372,
+   "blocked": 12072,
+   "stuck": 0,
+   "cells": 40288,
+   "repaths": 88,
+   "churn": 4614,
+   "rungs": [
+    166,
+    20,
+    0
+   ],
+   "overlap": 31244,
+   "overlap_depth": 7.3045197624800675
+  },
+  {
+   "name": "twogaps/cross/8",
+   "frames": 1638,
+   "free_flow": 990,
+   "ratio": 1.6545454545454545,
+   "blocked": 172,
+   "stuck": 0,
+   "cells": 556,
+   "repaths": 2,
+   "churn": 0,
+   "rungs": [
+    2,
+    0,
+    0
+   ],
+   "overlap": 792,
+   "overlap_depth": 6.431250663249039
+  },
+  {
+   "name": "twogaps/cross/16",
+   "frames": 2156,
+   "free_flow": 1094,
+   "ratio": 1.9707495429616089,
+   "blocked": 2304,
+   "stuck": 0,
+   "cells": 2204,
+   "repaths": 20,
+   "churn": 536,
+   "rungs": [
+    38,
+    2,
+    0
+   ],
+   "overlap": 4546,
+   "overlap_depth": 6.385547384238374
+  },
+  {
+   "name": "twogaps/cross/32",
+   "frames": 3574,
+   "free_flow": 1094,
+   "ratio": 3.26691042047532,
+   "blocked": 13092,
+   "stuck": 0,
+   "cells": 34408,
+   "repaths": 126,
+   "churn": 3522,
+   "rungs": [
+    196,
+    26,
+    0
+   ],
+   "overlap": 27330,
+   "overlap_depth": 8.892355315329118
+  },
+  {
+   "name": "maze/column/8",
+   "frames": 3890,
+   "free_flow": 3116,
+   "ratio": 1.248395378690629,
+   "blocked": 1053,
+   "stuck": 0,
+   "cells": 41711,
+   "repaths": 18,
+   "churn": 116,
+   "rungs": [
+    5,
+    1,
+    0
+   ],
+   "overlap": 2262,
+   "overlap_depth": 6.53114998773137
+  },
+  {
+   "name": "maze/column/16",
+   "frames": 4806,
+   "free_flow": 3226,
+   "ratio": 1.489770613763174,
+   "blocked": 3674,
+   "stuck": 0,
+   "cells": 134301,
+   "repaths": 61,
+   "churn": 1160,
+   "rungs": [
+    37,
+    5,
+    0
+   ],
+   "overlap": 9686,
+   "overlap_depth": 6.644924475554371
+  },
+  {
+   "name": "maze/column/32",
+   "frames": 5919,
+   "free_flow": 3279,
+   "ratio": 1.8051235132662398,
+   "blocked": 15536,
+   "stuck": 5,
+   "cells": 854358,
+   "repaths": 323,
+   "churn": 3796,
+   "rungs": [
+    162,
+    15,
+    0
+   ],
+   "overlap": 27021,
+   "overlap_depth": 6.8699011781497425
+  },
+  {
+   "name": "maze/cross/8",
+   "frames": 3513,
+   "free_flow": 3131,
+   "ratio": 1.122005748961993,
+   "blocked": 291,
+   "stuck": 0,
+   "cells": 31118,
+   "repaths": 12,
+   "churn": 0,
+   "rungs": [
+    0,
+    0,
+    0
+   ],
+   "overlap": 1723,
+   "overlap_depth": 6.342110261646713
+  },
+  {
+   "name": "maze/cross/16",
+   "frames": 3743,
+   "free_flow": 3112,
+   "ratio": 1.2027634961439588,
+   "blocked": 1887,
+   "stuck": 0,
+   "cells": 60659,
+   "repaths": 36,
+   "churn": 223,
+   "rungs": [
+    12,
+    1,
+    0
+   ],
+   "overlap": 4936,
+   "overlap_depth": 6.286453406217454
+  },
+  {
+   "name": "maze/cross/32",
+   "frames": 4939,
+   "free_flow": 3233,
+   "ratio": 1.527683266316115,
+   "blocked": 8775,
+   "stuck": 0,
+   "cells": 250511,
+   "repaths": 157,
+   "churn": 1212,
+   "rungs": [
+    77,
+    12,
+    0
+   ],
+   "overlap": 26091,
+   "overlap_depth": 6.578404557107541
   },
   {
    "name": "edges/column/8",
-   "frames": 3180,
-   "free_flow": 2364,
-   "ratio": 1.3451776649746192,
-   "blocked": 631,
+   "frames": 2898,
+   "free_flow": 2088,
+   "ratio": 1.3879310344827587,
+   "blocked": 537,
    "stuck": 0,
-   "cells": 11771,
-   "repaths": 6,
-   "churn": 391,
+   "cells": 10262,
+   "repaths": 2,
+   "churn": 295,
    "rungs": [
     6,
     3,
     0
    ],
-   "overlap": 3252,
-   "overlap_depth": 2.449977680692206
+   "overlap": 1328,
+   "overlap_depth": 6.095463197506361
   },
   {
    "name": "edges/column/16",
-   "frames": 3543,
-   "free_flow": 2393,
-   "ratio": 1.4805683242791474,
-   "blocked": 2156,
+   "frames": 4189,
+   "free_flow": 2025,
+   "ratio": 2.068641975308642,
+   "blocked": 2344,
    "stuck": 0,
-   "cells": 18511,
-   "repaths": 30,
-   "churn": 1172,
+   "cells": 20725,
+   "repaths": 18,
+   "churn": 1973,
    "rungs": [
-    34,
-    5,
+    27,
+    13,
     0
    ],
-   "overlap": 8223,
-   "overlap_depth": 2.7674831703535117
+   "overlap": 7302,
+   "overlap_depth": 7.516819822075971
   },
   {
    "name": "edges/column/32",
-   "frames": 4046,
-   "free_flow": 2515,
-   "ratio": 1.6087475149105368,
-   "blocked": 8944,
+   "frames": 4495,
+   "free_flow": 2052,
+   "ratio": 2.1905458089668617,
+   "blocked": 8913,
    "stuck": 0,
-   "cells": 83717,
-   "repaths": 100,
-   "churn": 1726,
+   "cells": 65501,
+   "repaths": 73,
+   "churn": 6449,
    "rungs": [
-    135,
-    15,
+    117,
+    19,
     0
    ],
-   "overlap": 32222,
-   "overlap_depth": 2.3261000004456642
+   "overlap": 18630,
+   "overlap_depth": 7.413206324451897
   },
   {
    "name": "edges/cross/8",
-   "frames": 3114,
-   "free_flow": 2686,
-   "ratio": 1.1593447505584513,
-   "blocked": 198,
+   "frames": 2956,
+   "free_flow": 2368,
+   "ratio": 1.2483108108108107,
+   "blocked": 258,
    "stuck": 0,
-   "cells": 45485,
-   "repaths": 3,
-   "churn": 63,
+   "cells": 43811,
+   "repaths": 2,
+   "churn": 113,
    "rungs": [
-    1,
-    1,
+    3,
+    2,
     0
    ],
-   "overlap": 2246,
-   "overlap_depth": 2.2374291889514377
+   "overlap": 1604,
+   "overlap_depth": 6.33462750754563
   },
   {
    "name": "edges/cross/16",
-   "frames": 3859,
-   "free_flow": 2797,
-   "ratio": 1.3796925277082588,
-   "blocked": 1396,
+   "frames": 3703,
+   "free_flow": 2441,
+   "ratio": 1.5170012290045063,
+   "blocked": 1917,
    "stuck": 0,
-   "cells": 79948,
-   "repaths": 18,
-   "churn": 676,
+   "cells": 70649,
+   "repaths": 11,
+   "churn": 553,
    "rungs": [
-    21,
+    22,
     5,
     0
    ],
-   "overlap": 10422,
-   "overlap_depth": 2.084829689567139
+   "overlap": 6798,
+   "overlap_depth": 6.673612968489345
   },
   {
    "name": "edges/cross/32",
-   "frames": 4208,
-   "free_flow": 2789,
-   "ratio": 1.508784510577268,
-   "blocked": 5847,
+   "frames": 4271,
+   "free_flow": 2478,
+   "ratio": 1.7235673930589184,
+   "blocked": 7199,
    "stuck": 0,
-   "cells": 174567,
-   "repaths": 49,
-   "churn": 2629,
+   "cells": 140686,
+   "repaths": 41,
+   "churn": 2981,
    "rungs": [
-    87,
-    14,
+    81,
+    13,
     0
    ],
-   "overlap": 28770,
-   "overlap_depth": 2.211618675858238
+   "overlap": 19877,
+   "overlap_depth": 6.703009309636451
+  },
+  {
+   "name": "open/column/crusader:8,humvee:4,overlord:2",
+   "frames": 1853,
+   "free_flow": 1450,
+   "ratio": 1.2779310344827586,
+   "blocked": 851,
+   "stuck": 0,
+   "cells": 2117,
+   "repaths": 4,
+   "churn": 611,
+   "rungs": [
+    10,
+    4,
+    0
+   ],
+   "overlap": 2917,
+   "overlap_depth": 6.106122680045093
+  },
+  {
+   "name": "twogaps/cross/scorpion:6,technical:4,battlemaster:4,humvee:2",
+   "frames": 1738,
+   "free_flow": 1110,
+   "ratio": 1.5657657657657658,
+   "blocked": 1262,
+   "stuck": 0,
+   "cells": 1708,
+   "repaths": 12,
+   "churn": 350,
+   "rungs": [
+    22,
+    6,
+    0
+   ],
+   "overlap": 2060,
+   "overlap_depth": 6.3445257806639495
+  },
+  {
+   "name": "choke/column/ranger:16",
+   "frames": 1955,
+   "free_flow": 1909,
+   "ratio": 1.0240963855421688,
+   "blocked": 0,
+   "stuck": 0,
+   "cells": 2302,
+   "repaths": 0,
+   "churn": 0,
+   "rungs": [
+    0,
+    0,
+    0
+   ],
+   "overlap": 7956,
+   "overlap_depth": 2.5821205524464323
+  },
+  {
+   "name": "open/cross/ranger:8,crusader:8",
+   "frames": 4210,
+   "free_flow": 1988,
+   "ratio": 2.1177062374245472,
+   "blocked": 489,
+   "stuck": 1,
+   "cells": 3242,
+   "repaths": 4,
+   "churn": 35,
+   "rungs": [
+    5,
+    1,
+    0
+   ],
+   "overlap": 12149,
+   "overlap_depth": 5.402025814618673
   }
  ],
  "totals": {
-  "ratio_geometric_mean": 1.6133267221194243,
-  "stuck": 8,
-  "blocked": 113426,
-  "cells": 1510868,
+  "ratio_geometric_mean": 1.8290322833598949,
+  "stuck": 6,
+  "blocked": 126631,
+  "cells": 1912683,
   "worst": [
    [
-    "twogaps/column/32",
-    2.729001584786054
+    "choke/column/32",
+    3.5176908752327747
    ],
    [
-    "choke/cross/32",
-    2.4650817236255573
+    "twogaps/column/32",
+    3.372
    ],
    [
     "twogaps/cross/32",
-    2.363499245852187
+    3.26691042047532
    ],
    [
-    "choke/column/32",
-    2.293842556508184
+    "choke/cross/16",
+    3.0145631067961167
    ],
    [
-    "open/column/32",
-    2.130100076982294
+    "choke/cross/32",
+    2.6733393994540493
    ]
   ],
-  "churn": 38127,
+  "churn": 46274,
   "rungs": [
-   1560,
-   243,
+   1569,
+   251,
    0
   ],
-  "overlap": 463845,
-  "overlap_depth": 2.2725213340249826
+  "overlap": 339703,
+  "overlap_depth": 6.978483347040434
  },
  "ladder": "game",
  "steering": "game"

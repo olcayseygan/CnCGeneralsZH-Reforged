@@ -5,13 +5,16 @@ Everything here is a port of what main runs today, read from GameEngine/Source/G
 of AIPathfind.cpp with its flow charge (wall hug, traffic, crossing claims), its turn charge and its
 9/4 estimate; Path::optimize; the group order of AIGroup::groupMoveToPosition (floodGroupGoals,
 the vehicle trunk and its lanes); and the following and blocking of AIUpdate.cpp (blockedBy, the
-blocked speed cap, crowdSteer, the stuck ladder).  Each piece names the C++ function it came from.
-Where the sandbox has to stand in for something it does not have (a locomotor, terrain heights,
-infantry, a resumable search) the comment says so.  The only switches the game lacks are the
-proposed stuck ladder (--proposed) and steering by time to collision (--ttc), both off by default.
+blocked speed cap, crowdSteer, the stuck ladder).  The units are the game's own, read from the
+install at run time by unitdata.py, and drive Locomotor.cpp's treads, wheels and legs under
+PhysicsUpdate.cpp's friction.  Each piece names the C++ function it came from.  Where the sandbox has
+to stand in for something it does not have (terrain heights, a resumable search) the comment says
+so.  The only switches the game lacks are the proposed stuck ladder (--proposed) and steering by
+time to collision (--ttc), both off by default.
 
     python pathlab.py                              # window: click to order, right drag to select
     python pathlab.py --headless 4 --map choke --units 12
+    python pathlab.py --headless 4 --map open --group crusader:8,humvee:4,overlord:2
     python pathlab.py --headless 4 --scenario cross --map open --units 16
     python pathlab.py --headless 4 --sweep PF_TRAFFIC_NUM=0,4,8
     python pathlab.py --headless 8 --map edges --pairs 8 --units 0
@@ -30,9 +33,11 @@ Controls
 """
 
 import argparse
+import functools
 import heapq
 import itertools
 import math
+import os
 import random
 import sys
 from collections.abc import Iterator, Sequence
@@ -51,6 +56,13 @@ LOGICFRAMES_PER_RETAIL_FRAME: int = 1
 GAME_SPEED_PERCENT: int = 150
 LOGICFRAMES_PER_GAME_SECOND: int = LOGICFRAMES_PER_SECOND * 100 // GAME_SPEED_PERCENT
 PER_FRAME_RATE: float = GAME_SPEED_PERCENT / (100.0 * LOGICFRAMES_PER_RETAIL_FRAME)
+RETAIL_FRAME_RATIO: float = 100.0 * LOGICFRAMES_PER_RETAIL_FRAME / GAME_SPEED_PERCENT
+
+
+def retail_frames_real(frames: float) -> float:
+    """ConvertRetailFrames(Real): scaled by the ratio, never under one tick for a count of one or more."""
+    wall = frames * LOGICFRAMES_PER_RETAIL_FRAME
+    return max(frames * RETAIL_FRAME_RATIO, min(wall, 1.0))
 
 
 def retail_frames(frames: int) -> int:
@@ -134,6 +146,8 @@ FAST_AS_POSSIBLE: float = 999999.0
 HEAD_ON_DOT: float = -0.5
 HEAD_ON_PASS_FRAMES: int = retail_frames(8)
 BUMP_RECOVERY: float = per_frame_factor(1.05)
+MARCHING_SOLDIER_COS: float = 0.5           # blockedBy: a soldier this close to our heading is no block
+MARCHING_SOLDIER_CRAWL: float = 0.33        # processCollision: a vehicle behind him keeps this share
 CROWD_AIR: float = 4.0
 CROWD_SEP_STEP: float = 1.5
 CROWD_PASS_CLEAR: float = 6.0
@@ -204,16 +218,120 @@ PROPOSED_TTC: dict[str, object] = {
     "CONTACT_SPEED_CAP": False,
 }
 
-# The unit.  A Crusader-sized tank, the only body the sandbox has; its locomotor numbers are a
-# stand-in (30 world units a game second, 90 degrees a game second), not read from the INI.
+# Locomotion: Locomotor.cpp's EA drives for treads, wheels and legs, and PhysicsUpdate.cpp under them
+TREADS, FOUR_WHEELS, MOTORCYCLE, TWO_LEGS = "TREADS", "FOUR_WHEELS", "MOTORCYCLE", "TWO_LEGS"
+GROUND_DRIVE: frozenset[str] = frozenset((TREADS, FOUR_WHEELS, MOTORCYCLE))     # isGroundDrive
+GROUND_TURN_RATE_FACTOR: float = 1.5        # getMaxTurnRate, Locomotor.cpp:1017
+GROUND_MIN_TURN_RATE: float = math.radians(100.0) / LOGICFRAMES_PER_GAME_SECOND
+TURN_NONE, TURN_POSITIVE, TURN_NEGATIVE = 0, 1, -1
+ON_TARGET: float = 0.1                      # rotateObjAroundLocoPivot and the legs: rounding noise
+TREAD_SLOW_ANGLE: float = math.pi / 4.0     # moveTowardsPositionTreads' QUAETERPI
+TREAD_PIVOT_ANGLE: float = math.pi * 0.75
+SLOW_DOWN_SPEED_DIVISOR: float = 1.5        # slowDownDist = (actualSpeed/1.5) * slowDownTime
+TREAD_NEAR_GOAL: float = 2.0 * CELL
+TREAD_NEAR_ANGLE_COEFF: float = 0.05
+TREAD_NEAR_SPEED_FACTOR: float = per_frame_factor(0.6)
+BRAKING_FACTOR_LATCHED: float = 1.1
+MAX_BRAKING_FACTOR: float = 5.0
+BRAKING_HALF_SHARE: float = 0.75            # slowDownDist past this share of the way: half braking
+WHEEL_TURN_SPEED_SHARE: float = 0.25        # MinTurnSpeed raised to a quarter of top speed
+WHEEL_SMALL_TURN: float = math.pi / 20.0
+WHEEL_PROBE_TURN: float = math.pi / 12.0
+WHEEL_PROBE_FRAMES: int = LOGICFRAMES_PER_GAME_SECOND // 2
+WHEEL_PROBE_SWING_SHARE: float = 0.25
+WHEEL_REACTION_FRAMES: float = RETAIL_FRAME_RATIO       # ConvertRetailFrameRatio(1.0f)
+WHEEL_THREE_POINT_RADII: float = 5.0
+DONUT_DISTANCE: float = 4.0 * CELL
+DONUT_FRAMES: int = int(2.5 * LOGICFRAMES_PER_GAME_SECOND)
+INFANTRY_YAW_EASE_FRAMES: float = retail_frames_real(2.0)
+INFANTRY_STOP_FRAMES: float = retail_frames_real(3.0)
+BRAKING_SLIDE_MIN: float = CELL / LOGICFRAMES_PER_GAME_SECOND  # locoUpdate_moveTowardsPosition's MIN_VEL
+MOTIVE_FRAMES: int = LOGICFRAMES_PER_GAME_SECOND // 3          # PhysicsUpdate.cpp:83
+VELOCITY_ZERO: float = per_frame_rate(0.001)
+MIN_FRICTION: float = 0.01
+MAX_FRICTION: float = 0.99
+
+# The stand-in tank the tests drive and the run falls back to with no install: the old cut-down
+# model's numbers (30 world units and 90 degrees a game second, a stop in 0.8 s), none of them EA's.
 TANK_RADIUS: float = 11.0
 TANK_SPEED: float = 30.0 / LOGICFRAMES_PER_GAME_SECOND          # per tick
 TANK_TURN: float = math.radians(90.0) / LOGICFRAMES_PER_GAME_SECOND
-VEHICLE_STOP_SECONDS: float = 0.8           # Locomotor.cpp
-TREAD_TURN_SPEED_FLOOR: float = 0.25
-TREAD_PIVOT_SHARE: float = 0.5
-TREAD_PIVOT_COS: float = -0.17
-VEHICLE_BEND_COS: float = 0.985
+TANK_ACCELERATION: float = TANK_SPEED / (0.8 * LOGICFRAMES_PER_GAME_SECOND)
+DEFAULT_GROUP_KIND: str = "crusader"
+
+
+@dataclass(frozen=True)
+class UnitKind:
+    """One unit's locomotor, footprint and friction in ticks: speeds per tick, turns in radians a
+       tick, accelerations per tick squared, frictions as the INI's share per retail frame."""
+    name: str
+    appearance: str
+    infantry: bool
+    major_radius: float
+    radius: float                           # the bounding circle
+    speed: float
+    speed_damaged: float
+    turn_rate: float                        # the template's, before getMaxTurnRate's ground scale
+    turn_rate_damaged: float
+    acceleration: float
+    acceleration_damaged: float
+    braking: float
+    min_speed: float = 0.0
+    min_turn_speed: float = FAST_AS_POSSIBLE
+    turn_pivot_offset: float = 0.0
+    can_move_backwards: bool = False
+    forward_friction: float = 0.15
+    lateral_friction: float = 0.15
+    extra_friction: float = 0.0
+    close_enough: float = PATHFIND_CLOSE_ENOUGH
+    geometry: str = "CYLINDER"
+    minor_radius: float = 0.0
+
+    @property
+    def half_extents(self) -> Point:
+        """The rectangle the partition's collision test uses: a box's own, a circle's bounding square
+           (xy_collideTest_Rect_Circle sets its minor radius to its major)."""
+        if self.geometry == "BOX":
+            return self.major_radius, self.minor_radius
+        return self.major_radius, self.major_radius
+
+    def max_speed(self, damaged: bool) -> float:
+        """getMaxSpeedForCondition."""
+        return self.speed_damaged if damaged else self.speed
+
+    def max_turn_rate(self, damaged: bool) -> float:
+        """getMaxTurnRate with the object: a ground drive turns half as fast again, a healthy one no
+           slower than 100 degrees a second, one scale for both rates."""
+        turn = self.turn_rate_damaged if damaged else self.turn_rate
+        if self.appearance in GROUND_DRIVE:
+            scale = GROUND_TURN_RATE_FACTOR
+            if 0.0 < self.turn_rate and self.turn_rate * scale < GROUND_MIN_TURN_RATE:
+                scale = GROUND_MIN_TURN_RATE / self.turn_rate
+            turn *= scale
+        return turn
+
+    def max_acceleration(self, damaged: bool) -> float:
+        return self.acceleration_damaged if damaged else self.acceleration
+
+    @property
+    def forward_friction_per_tick(self) -> float:
+        """PhysicsBehavior::getForwardFriction: clamped, then retailFrictionToFrame."""
+        return friction_per_tick(self.forward_friction + self.extra_friction)
+
+    @property
+    def lateral_friction_per_tick(self) -> float:
+        return friction_per_tick(self.lateral_friction + self.extra_friction)
+
+
+def friction_per_tick(share_per_retail_frame: float) -> float:
+    clamped = min(max(share_per_retail_frame, MIN_FRICTION), MAX_FRICTION)
+    return 1.0 - per_frame_factor(1.0 - clamped)
+
+
+STANDIN_TANK: UnitKind = UnitKind(
+    name="standin", appearance=TREADS, infantry=False, major_radius=TANK_RADIUS, radius=TANK_RADIUS,
+    speed=TANK_SPEED, speed_damaged=TANK_SPEED, turn_rate=TANK_TURN, turn_rate_damaged=TANK_TURN,
+    acceleration=TANK_ACCELERATION, acceleration_damaged=TANK_ACCELERATION, braking=TANK_ACCELERATION)
 
 # Map and measurement
 MAP_WIDTH_CELLS: int = 96
@@ -1049,14 +1167,29 @@ class Unit:
     x: float
     y: float
     id: int
-    radius: float = TANK_RADIUS
+    kind: UnitKind = STANDIN_TANK
+    damaged: bool = False                   # body at MovementPenaltyDamageState (REALLYDAMAGED) or worse
     facing: float = 0.0
-    max_speed: float = TANK_SPEED
-    turn_rate: float = TANK_TURN
     vx: float = 0.0
     vy: float = 0.0
-    speed: float = 0.0
     is_selected: bool = False
+    radius: float = field(init=False)
+    max_speed: float = field(init=False)
+    turn_rate: float = field(init=False)
+    # the locomotor's flags and the physics module's state
+    ax: float = 0.0                         # PhysicsBehavior::m_accel, forces over the mass
+    ay: float = 0.0
+    motive_until: int = 0                   # m_motiveForceExpires
+    is_braking: bool = False                # Locomotor IS_BRAKING
+    braking_factor: float = 1.0
+    braking_status: bool = False            # OBJECT_STATUS_BRAKING: physics leaves x and y alone
+    moving_backwards: bool = False
+    three_point_turn: bool = False
+    donut_until: int = 0
+    yaw_rate: float = 0.0
+    side_step_x: float = 0.0                # processCollision's m_sideStep, a soldier against a hull
+    side_step_y: float = 0.0
+    side_step_seen: bool = False
     # orders and paths
     moving: bool = False                    # in a move state (locomotor goal on path)
     goal: Point | None = None               # the state machine's goal position
@@ -1123,6 +1256,9 @@ class Unit:
     rays: list[tuple[float, float, float, float, bool]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
+        self.radius = self.kind.radius
+        self.max_speed = self.kind.max_speed(self.damaged)
+        self.turn_rate = self.kind.max_turn_rate(self.damaged)
         self.cell_radius, self.center = radius_and_center(self.radius)
         self.last_progress = (self.x, self.y)
         self.pos_cell: Cell | None = None
@@ -1146,6 +1282,14 @@ class Unit:
     @property
     def is_moving(self) -> bool:
         return self.moving
+
+    @property
+    def is_infantry(self) -> bool:
+        return self.kind.infantry
+
+    @property
+    def acceleration(self) -> float:
+        return self.kind.max_acceleration(self.damaged)
 
     @property
     def on_path(self) -> bool:
@@ -1182,6 +1326,7 @@ class Pathfinder:
     def __init__(self, grid: Grid) -> None:
         self.grid = grid
         self.occ = Occupancy()
+        self.infantry: set[int] = set()
         self.frame = 0
         self.traffic = bytearray(grid.width * grid.height)
         self.traffic_cells: list[int] = []
@@ -1212,6 +1357,8 @@ class Pathfinder:
         new = unit_cell(unit.x, unit.y, unit.center)
         if new == unit.pos_cell:
             return
+        if unit.is_infantry:
+            self.infantry.add(unit.id)
         w = self.grid.width
         if unit.pos_cell is not None:
             for i, j in self.footprint(*unit.pos_cell, unit.cell_radius, unit.center):
@@ -1273,6 +1420,8 @@ class Pathfinder:
                     check = transient
                 if flags == UNIT_PRESENT_FIXED:
                     check = True
+                if check and unit.is_infantry and pos_unit in self.infantry:
+                    continue        # AIPathfind.cpp:6695, INFANTRY_MOVES_THROUGH_INFANTRY
                 if check and pos_unit not in allies:
                     allies.add(pos_unit)
                     info.ally_fixed += 1
@@ -2158,6 +2307,8 @@ class Simulation:
         self.stats = OrderStats()
         self.overlap_ticks = 0
         self.overlap_depth = 0.0
+        self.widest_radius = max((unit.radius for unit in units), default=TANK_RADIUS)
+        self.fastest_speed = max((unit.max_speed for unit in units), default=TANK_SPEED)
         for unit in units:
             self.pf.update_pos(unit)
             self.pf.update_goal(unit, unit.pos)       # parked where it stands
@@ -2359,10 +2510,12 @@ class Simulation:
         goals = self.flood_group_goals(click, ordered)
         trunk: list[Point] = []
         if lane_offsets:
-            trunk_unit = min(ordered, key=lambda m: (m.x - cx) ** 2 + (m.y - cy) ** 2)
+            vehicles = [m for m in ordered if not m.is_infantry]
+            trunk_start = (min(vehicles, key=lambda m: (m.x - cx) ** 2 + (m.y - cy) ** 2).pos
+                           if vehicles else (cx, cy))
             for aim in (click, goals[0]):
                 for diameter in range(CROWD_TRUNK_DIAMETER, 1, -2):
-                    path = pf.find_ground_path(trunk_unit.pos, aim, diameter)
+                    path = pf.find_ground_path(trunk_start, aim, diameter)
                     if path is not None:
                         trunk = path.points
                         stats.trunk_diameter = diameter
@@ -2371,7 +2524,7 @@ class Simulation:
                     break
         stats.trunk = trunk
         for m, dest in zip(ordered, goals):
-            if trunk and m.id in lane_offsets:
+            if trunk and m.id in lane_offsets and not m.is_infantry:     # a foot soldier walks through the crowd
                 lane = self.plan_lane(m, trunk, lane_offsets[m.id], dest)
                 if lane is not None:
                     m.planned = lane
@@ -2390,6 +2543,7 @@ class Simulation:
         unit.gave_up = False
         unit.move_away_from = None
         unit.resume_goal = None
+        unit.donut_until = self.frame + DONUT_FRAMES            # Locomotor::startMove
         self.request_path(unit)
 
     def request_path(self, unit: Unit) -> None:
@@ -2470,6 +2624,8 @@ class Simulation:
                     asked.append(p)
         for uid in asked:
             other = self.by_id[uid]
+            if unit.is_infantry and other.is_infantry:
+                continue        # AIPathfind.cpp:12614: infantry walks through infantry
             if not other.is_moving:
                 self.move_away(other, unit)
 
@@ -2488,6 +2644,7 @@ class Simulation:
         unit.waiting_for_path = False
         unit.move_away_from = other.id
         unit.path_timestamp = self.frame
+        unit.donut_until = self.frame + DONUT_FRAMES
         self.pf.update_goal(unit, path.last)
 
     # ---- one frame --------------------------------------------------------------------------
@@ -2501,8 +2658,7 @@ class Simulation:
             self.move_state(unit)
             self.do_locomotor(unit)
         for unit in self.units:
-            unit.x += unit.vx
-            unit.y += unit.vy
+            self.physics_update(unit)
             pf.update_pos(unit)
             if unit.arrived and unit.moving:
                 unit.churn += 1
@@ -2515,7 +2671,7 @@ class Simulation:
            crowdRepath asked for one."""
         if not unit.moving or unit.path is None:
             return
-        if unit.dist_to_goal < PATHFIND_CLOSE_ENOUGH:
+        if unit.dist_to_goal < unit.kind.close_enough:
             last = unit.path.last
             if math.hypot(unit.x - last[0], unit.y - last[1]) <= 4 * CELL:
                 self.arrive(unit)
@@ -2535,7 +2691,6 @@ class Simulation:
         unit.repath_pending = False
         destroy_path(unit)
         unit.moving = False
-        unit.vx = unit.vy = unit.speed = 0.0
         unit.move_away_from = None
         unit.resume_goal = None
         if resume is not None:
@@ -2557,12 +2712,19 @@ class Simulation:
         self.update_progress(unit)
         self.stuck_rescue(unit)
         unit.is_blocked = False
+        side_step = unit.side_step_seen
+        side_away = (unit.side_step_x, unit.side_step_y)
+        unit.side_step_seen = False
+        unit.side_step_x = unit.side_step_y = 0.0
         blocked = unit.blocked_frames > 0
+        if unit.moving and unit.path is None:
+            return              # waiting for its path: the locomotor is not called and physics coasts
         if not unit.on_path:
-            unit.vx = unit.vy = unit.speed = 0.0
+            self.maintain_position(unit)
+            unit.repath_asked = False
             unit.cur_max_blocked_speed = FAST_AS_POSSIBLE
             return
-        goal_pos, dist, bend_dist, bend_cos = self.point_on_path(unit)
+        goal_pos, dist, _, _ = self.point_on_path(unit)
         unit.dist_to_goal = dist
         unit.loco_goal = goal_pos
         speed = unit.max_speed
@@ -2586,7 +2748,9 @@ class Simulation:
             goal_pos, speed = self.crowd_steer(unit, goal_pos, speed)
             if CROWD_TTC_STEER:
                 goal_pos, speed = self.ttc_steer(unit, goal_pos, speed, dist)
-        self.locomote(unit, goal_pos, speed, dist, bend_dist, bend_cos)
+        if side_step:
+            goal_pos = side_step_goal(unit, goal_pos, side_away)
+        blocked = self.locomote(unit, goal_pos, speed, dist, blocked)
         if not blocked and unit.blocked_frames > 1 and not unit.repath_asked:
             unit.blocked_frames = 1
         unit.repath_asked = False
@@ -2672,31 +2836,225 @@ class Simulation:
             dist = off_by
         return pos_on, dist, bend_dist, bend_cos
 
-    def locomote(self, unit: Unit, goal: Point, speed: float, dist: float, bend_dist: float,
-                 bend_cos: float) -> None:
-        """Locomotor::moveTowardsPosition for treads, cut down: turn at TurnRate (a pivot at half of
-           it past 100 degrees), speed scaled by the heading error with the 0.25 floor, the bend and
-           stop caps from the braking a 0.8 s stop implies, then a straight step.  No yaw easing, no
-           acceleration curve, no reversing: the sandbox has no physics module to take them from."""
-        gx, gy = goal[0] - unit.x, goal[1] - unit.y
-        gd = math.hypot(gx, gy)
-        err = normalize_angle(math.atan2(gy, gx) - unit.facing) if gd > 0.1 else 0.0
-        cos_err = math.cos(err)
-        rate = unit.turn_rate * (TREAD_PIVOT_SHARE if cos_err < TREAD_PIVOT_COS else 1.0)
-        unit.facing = normalize_angle(unit.facing + max(-rate, min(rate, err)))
-        decel = unit.max_speed / (VEHICLE_STOP_SECONDS * LOGICFRAMES_PER_GAME_SECOND)
-        cap = speed * (TREAD_TURN_SPEED_FLOOR + (1.0 - TREAD_TURN_SPEED_FLOOR) * max(cos_err, 0.0))
-        if cos_err < TREAD_PIVOT_COS:
-            cap = 0.0
-        if bend_dist > 0.0 and bend_cos < VEHICLE_BEND_COS:
-            bend_speed = unit.max_speed * (TREAD_TURN_SPEED_FLOOR + (1 - TREAD_TURN_SPEED_FLOOR) * max(bend_cos, 0.0))
-            cap = min(cap, math.sqrt(bend_speed * bend_speed + 2.0 * decel * bend_dist))
-        cap = min(cap, math.sqrt(2.0 * decel * max(dist, 0.0)))
-        unit.speed = min(cap, unit.speed + decel) if cap > unit.speed else cap
-        # nothing in the physics stops a ground unit at a cell edge: it goes where it steers, and the
-        # route is what keeps it off the rock
-        unit.vx = math.cos(unit.facing) * unit.speed
-        unit.vy = math.sin(unit.facing) * unit.speed
+    # ---- the locomotor and the physics under it ---------------------------------------------
+    def apply_motive(self, unit: Unit, accel_x: float, accel_y: float) -> None:
+        """PhysicsBehavior::applyMotiveForce, over the mass, which every caller multiplied in: taken
+           whole, and the body counts as driven for MOTIVE_FRAMES (no forward friction)."""
+        unit.ax += accel_x
+        unit.ay += accel_y
+        unit.motive_until = self.frame + MOTIVE_FRAMES
+
+    def drive_along_heading(self, unit: Unit, speed_delta: float, acceleration: float) -> None:
+        """The drives' "maintain goal speed": the force asked, never more than the speed it closes."""
+        if speed_delta == 0.0:
+            return
+        if abs(acceleration) > abs(speed_delta):
+            acceleration = speed_delta
+        dx, dy = unit.dir
+        self.apply_motive(unit, acceleration * dx, acceleration * dy)
+
+    def locomote(self, unit: Unit, goal: Point, speed: float, dist: float, blocked: bool) -> bool:
+        """Locomotor::locoUpdate_moveTowardsPosition (Locomotor.cpp:1249) for a ground unit: the
+           braking latch off at a distance, the blocked scrub and turn, the drive its Appearance
+           names, then the braking slide onto the goal (1443-1486).  Returns the blocked flag back."""
+        kind = unit.kind
+        desired = min(speed, unit.max_speed)
+        if dist > CELL and dist > (unit.max_speed / kind.braking) * unit.max_speed / 2.0:
+            unit.is_braking = False
+            unit.braking_factor = 1.0
+        dx, dy = goal[0] - unit.x, goal[1] - unit.y
+        straight = math.hypot(dx, dy)
+        if straight > dist:
+            if straight > 2.0 * dist:
+                unit.is_braking = True
+            dist = straight
+        self.apply_motive(unit, 0.0, 0.0)
+        if blocked and desired > math.hypot(unit.vx, unit.vy):
+            blocked = False
+        if blocked:
+            scrub_velocity(unit, desired)
+            return rotate_around_pivot(unit, goal, unit.turn_rate)[0] != TURN_NONE
+        was_braking = unit.braking_status
+        if kind.appearance == TWO_LEGS:
+            self.move_legs(unit, goal, dist, desired)
+        elif kind.appearance in (FOUR_WHEELS, MOTORCYCLE):
+            self.move_wheels(unit, goal, dist, desired)
+        else:
+            self.move_treads(unit, goal, dist, desired)
+        unit.braking_status = unit.is_braking
+        if kind.appearance in GROUND_DRIVE:
+            was_braking = unit.is_braking
+        if was_braking and straight > 0.001:
+            slide = abs(retail_forward_speed(unit) if kind.appearance in GROUND_DRIVE else forward_speed(unit))
+            slide = min(max(slide, BRAKING_SLIDE_MIN), straight)
+            unit.x += dx / straight * slide
+            unit.y += dy / straight * slide
+        return False
+
+    def move_treads(self, unit: Unit, goal: Point, dist: float, desired: float) -> None:
+        """Locomotor::moveTowardsPositionTreads (Locomotor.cpp:1497)."""
+        braking = unit.kind.braking
+        _, rel = rotate_around_pivot(unit, goal, unit.turn_rate)
+        angle_coeff = min(abs(rel) / TREAD_SLOW_ANGLE, 1.0)
+        roll_coeff = min(abs(rel) / TREAD_PIVOT_ANGLE, 1.0)
+        goal_speed = (1.0 - roll_coeff) * desired
+        actual = retail_forward_speed(unit)
+        slow_down_dist = (actual / SLOW_DOWN_SPEED_DIVISOR) * (actual / braking)
+        if ((unit.x - goal[0]) ** 2 + (unit.y - goal[1]) ** 2 < TREAD_NEAR_GOAL ** 2
+                and angle_coeff > TREAD_NEAR_ANGLE_COEFF):
+            goal_speed = actual * TREAD_NEAR_SPEED_FACTOR
+        if dist < slow_down_dist and not unit.is_braking:
+            unit.is_braking = True
+            unit.braking_factor = BRAKING_FACTOR_LATCHED
+        if dist > CELL and dist > 2.0 * slow_down_dist:
+            unit.is_braking = False
+        if unit.is_braking:
+            factor = (slow_down_dist / dist) ** 2 if dist > 0.0 else MAX_BRAKING_FACTOR
+            unit.braking_factor = min(factor, MAX_BRAKING_FACTOR)
+            goal_speed = braked_speed(actual, braking, slow_down_dist, dist)
+        delta = goal_speed - actual
+        self.drive_along_heading(unit, delta, unit.acceleration if delta > 0.0 else -unit.braking_factor * braking)
+
+    def move_wheels(self, unit: Unit, goal: Point, dist: float, desired: float) -> None:
+        """Locomotor::moveTowardsPositionWheels (Locomotor.cpp:1633): turns only while moving, at
+           MinTurnSpeed through a bend, backs up to a goal behind from rest, and stops to turn on the
+           spot where the arc it would drive runs onto rock."""
+        kind = unit.kind
+        braking = kind.braking
+        max_turn = unit.turn_rate
+        turn_speed = max(kind.min_turn_speed, unit.max_speed * WHEEL_TURN_SPEED_SHARE)
+        desired_angle = math.atan2(goal[1] - unit.y, goal[0] - unit.x)
+        rel = normalize_angle(desired_angle - unit.facing)
+        backwards = three_point = False
+        actual = retail_forward_speed(unit)
+        if actual == 0.0:
+            unit.moving_backwards = False
+            if kind.can_move_backwards and abs(rel) > math.pi / 2:
+                unit.moving_backwards = True
+                unit.three_point_turn = dist > WHEEL_THREE_POINT_RADII * kind.major_radius
+        if unit.moving_backwards:
+            if abs(rel) < math.pi / 2:
+                unit.moving_backwards = False
+            else:
+                backwards = True
+                unit.three_point_turn = dist > WHEEL_THREE_POINT_RADII * kind.major_radius
+                three_point = unit.three_point_turn
+                if not three_point:
+                    desired_angle = normalize_angle(desired_angle - math.pi)
+                    rel = normalize_angle(desired_angle - unit.facing)
+        if abs(rel) > WHEEL_SMALL_TURN and desired > turn_speed:
+            desired = turn_speed
+        goal_speed = desired
+        if backwards:
+            actual = -actual
+        slow_down_dist = ((actual / SLOW_DOWN_SPEED_DIVISOR) * (actual / braking + WHEEL_REACTION_FRAMES)
+                          + actual * WHEEL_REACTION_FRAMES)
+        effective_slow_down_dist = max(slow_down_dist, CELL)
+        if abs(rel) > WHEEL_PROBE_TURN:
+            mean_speed = (goal_speed + actual) / 2.0
+            distance = WHEEL_PROBE_FRAMES * mean_speed
+            swing = WHEEL_PROBE_FRAMES * min(mean_speed / turn_speed, 1.0) * max_turn * WHEEL_PROBE_SWING_SHARE
+            heading = unit.facing - swing if rel < 0.0 else unit.facing + swing
+            off_x, off_y = math.cos(heading) * distance, math.sin(heading) * distance
+            if (not self.grid.passable_world(unit.x + off_x / 2.0, unit.y + off_y / 2.0)
+                    or not self.grid.passable_world(unit.x + off_x, unit.y + off_y)):
+                rotate_around_pivot(unit, goal, max_turn)
+                self.apply_motive(unit, 0.0, 0.0)
+                return
+        if dist < effective_slow_down_dist and not unit.is_braking:
+            unit.is_braking = True
+            unit.braking_factor = BRAKING_FACTOR_LATCHED
+        if dist > CELL and dist > 2.0 * slow_down_dist:
+            unit.is_braking = False
+        if dist > DONUT_DISTANCE:
+            unit.donut_until = self.frame + DONUT_FRAMES
+        elif unit.donut_until < self.frame:
+            unit.is_braking = True
+        if unit.is_braking:
+            unit.braking_factor = 1.0
+            goal_speed = braked_speed(actual, braking, slow_down_dist, dist)
+        turn_amount = min(abs(actual / turn_speed), 1.0) * max_turn
+        if backwards and not three_point:
+            rotate_around_pivot(unit, (2.0 * unit.x - goal[0], 2.0 * unit.y - goal[1]), turn_amount)
+        else:
+            rotate_around_pivot(unit, goal, turn_amount)
+        if backwards:
+            delta = actual - goal_speed
+            acceleration = -unit.acceleration if delta < 0.0 else unit.braking_factor * braking
+        else:
+            delta = goal_speed - actual
+            acceleration = unit.acceleration if delta > 0.0 else -unit.braking_factor * braking
+        self.drive_along_heading(unit, delta, acceleration)
+
+    def move_legs(self, unit: Unit, goal: Point, dist: float, desired: float) -> None:
+        """Locomotor::moveTowardsPositionLegs (Locomotor.cpp:2465): the turn eased over
+           INFANTRY_YAW_EASE_FRAMES with the walk carried round the nose, the speed the cosine of what
+           is left to turn, and never faster than a stop at the route's end allows.  No braking latch:
+           only locoUpdate's own sets it.  WanderWidthFactor is not ported; none of the units has one."""
+        kind = unit.kind
+        actual = forward_speed(unit)
+        rel = normalize_angle(math.atan2(goal[1] - unit.y, goal[0] - unit.x) - unit.facing)
+        if abs(goal[0] - unit.x) < ON_TARGET and abs(goal[1] - unit.y) < ON_TARGET:
+            rel = 0.0
+        turn_rate = unit.turn_rate
+        self.turn_vehicle(unit, ease_yaw(unit, rel, turn_rate, turn_rate / INFANTRY_YAW_EASE_FRAMES))
+        goal_speed = max(desired * math.cos(rel), 0.0)
+        stop_decel = legs_stop_decel(unit)
+        goal_speed = min(goal_speed, math.sqrt(2.0 * stop_decel * max(dist, 0.0)))
+        goal_speed = max(goal_speed, kind.min_speed)
+        delta = goal_speed - actual
+        self.drive_along_heading(unit, delta, unit.acceleration if delta > 0.0 else -stop_decel)
+
+    def turn_vehicle(self, unit: Unit, yaw: float) -> None:
+        """Locomotor::turnVehicle (Locomotor.cpp:1943): the speed along the nose turns with it."""
+        if yaw == 0.0:
+            return
+        forward = forward_speed(unit)
+        before_x, before_y = unit.dir
+        turn_around_pivot(unit, yaw)
+        after_x, after_y = unit.dir
+        self.apply_motive(unit, forward * (after_x - before_x), forward * (after_y - before_y))
+
+    def maintain_position(self, unit: Unit) -> None:
+        """locoUpdate_maintainCurrentPosition (Locomotor.cpp:3731): the latch and the slide off; a
+           vehicle still driven stops dead (maintainCurrentPositionOther), a soldier brakes (brakeLegs)."""
+        unit.is_braking = False
+        unit.braking_status = False
+        unit.donut_until = self.frame + DONUT_FRAMES
+        driven = unit.motive_until > self.frame
+        if unit.kind.appearance == TWO_LEGS:
+            unit.yaw_rate = 0.0
+            if driven:
+                scrub_velocity(unit, max(math.hypot(unit.vx, unit.vy) - legs_stop_decel(unit), 0.0))
+        elif driven:
+            scrub_velocity(unit, 0.0)
+
+    def physics_update(self, unit: Unit) -> None:
+        """PhysicsBehavior::update (PhysicsUpdate.cpp:648) on flat ground: friction takes the sideways
+           part of the velocity off, and the forward part too once nothing drives the body; the forces
+           go into the velocity, a crumb of it is zero, and the position moves unless the locomotor
+           slid it itself.  Velocity is not turned with the hull: a tread or a tyre skids."""
+        if unit.vx or unit.vy:
+            dx, dy = unit.dir
+            lateral = unit.vx * -dy + unit.vy * dx
+            lateral_share = unit.kind.lateral_friction_per_tick
+            unit.ax -= lateral_share * lateral * -dy
+            unit.ay -= lateral_share * lateral * dx
+            if unit.motive_until <= self.frame:
+                forward = unit.vx * dx + unit.vy * dy
+                forward_share = unit.kind.forward_friction_per_tick
+                unit.ax -= forward_share * forward * dx
+                unit.ay -= forward_share * forward * dy
+        unit.vx += unit.ax
+        unit.vy += unit.ay
+        if abs(unit.vx) < VELOCITY_ZERO:
+            unit.vx = 0.0
+        if abs(unit.vy) < VELOCITY_ZERO:
+            unit.vy = 0.0
+        if not unit.braking_status:
+            unit.x += unit.vx
+            unit.y += unit.vy
+        unit.ax = unit.ay = 0.0
 
     # ---- the stuck ladder -------------------------------------------------------------------
     def update_progress(self, unit: Unit) -> None:
@@ -2862,7 +3220,10 @@ class Simulation:
         return other.id < unit.id
 
     def crowd_steer(self, unit: Unit, goal_pos: Point, speed: float) -> tuple[Point, float]:
-        """AIUpdateInterface::crowdSteer, vehicles only (no infantry in the sandbox)."""
+        """AIUpdateInterface::crowdSteer (AIUpdate.cpp:3205).  A foot soldier reads nobody and rides
+           the centre of his band, so every traffic rule stands down for him; a vehicle's scan skips
+           infantry, which it drives through."""
+        foot = unit.is_infantry
         if unit.path is None:
             return goal_pos, speed
         if not unit.has_pending_crowd_lat and not unit.crowd_lat_valid:
@@ -2894,7 +3255,7 @@ class Simulation:
         pressing = unit.no_progress > STUCK_PRESS_FRAMES
         scan_range = CELL * 4.0 + my_r
         look_ahead = CELL * CROWD_LOOKAHEAD_CELLS + my_r
-        scan_now = pressing or unit.crowd_scan is None or (now + unit.id) % CROWD_SCAN_FRAMES == 0
+        scan_now = foot or pressing or unit.crowd_scan is None or (now + unit.id) % CROWD_SCAN_FRAMES == 0
         tx, ty = here.tx, here.ty
         blocker: Unit | None = None
         blocker_fwd = blocker_gap = blocker_speed = 0.0
@@ -2910,8 +3271,8 @@ class Simulation:
             near: list[tuple[float, float]] = []
             pack_lo = pack_hi = 0.0
             pack_any = False
-            for o in self.units:
-                if o is unit:
+            for o in () if foot else self.units:
+                if o is unit or o.is_infantry:
                     continue
                 dx, dy = o.x - unit.x, o.y - unit.y
                 dist = math.hypot(dx, dy)
@@ -2994,8 +3355,8 @@ class Simulation:
         if blocker is not None:
             blocker_moving = blocker.is_moving and math.hypot(blocker.vx, blocker.vy) > per_frame_rate(0.05)
             blocker_speed = max(blocker.vx * tx + blocker.vy * ty, 0.0)
-        lat = unit.crowd_lat
-        if now >= unit.crowd_hold_frame and unit.crowd_lane_of > 1 and unit.crowd_lane_space > 0.001:
+        lat = 0.0 if foot else unit.crowd_lat
+        if not foot and now >= unit.crowd_hold_frame and unit.crowd_lane_of > 1 and unit.crowd_lane_space > 0.001:
             span = here.left + here.right
             want = lane_count(span, unit.crowd_lane_space, unit.crowd_lane_of)
             if unit.crowd_fit <= 0 or want < unit.crowd_fit:
@@ -3118,10 +3479,10 @@ class Simulation:
         dir_x, dir_y = aim_x / aim_dist, aim_y / aim_dist
         want_vx, want_vy = dir_x * speed, dir_y * speed
         my_r = unit.radius
-        reach = my_r + TANK_RADIUS + TTC_AIR + TTC_HORIZON_FRAMES * (speed + TANK_SPEED)
+        reach = my_r + self.widest_radius + TTC_AIR + TTC_HORIZON_FRAMES * (speed + self.fastest_speed)
         push_x = push_y = 0.0
         for other in self.units:
-            if other is unit:
+            if other is unit or (unit.is_infantry and other.is_infantry):
                 continue
             to_x, to_y = other.x - unit.x, other.y - unit.y
             if abs(to_x) > reach or abs(to_y) > reach:
@@ -3189,13 +3550,15 @@ class Simulation:
 
     # ---- collisions -------------------------------------------------------------------------
     def collide(self) -> None:
-        """PhysicsBehavior::onCollide -> processCollision for every overlapping pair, both ways.
-           processCollision returns FALSE for every unit-on-unit case a tank has, so no force is
-           applied: bodies may overlap, and the only answer to a collision is the speed cap."""
+        """PhysicsBehavior::onCollide -> processCollision for every touching pair, both ways, touching
+           by the partition's own test (PartitionManager.cpp: two circles, else xy_collideTest_Rect_Rect).
+           processCollision returns FALSE for every unit-on-unit case here, so no force is applied:
+           bodies may overlap, and the only answer to a collision is the speed cap.  The overlap
+           counted for the bench is the bounding circles' depth over touching pairs."""
         units = self.units
         for a, b in itertools.combinations(units, 2):
             distance = math.hypot(b.x - a.x, b.y - a.y)
-            if distance > a.radius + b.radius:
+            if distance > a.radius + b.radius or not bodies_touch(a, b):
                 continue
             if distance < a.radius + b.radius:
                 self.overlap_ticks += 1
@@ -3204,16 +3567,35 @@ class Simulation:
             self.process_collision(b, a)
 
     def process_collision(self, unit: Unit, other: Unit) -> None:
-        """AIUpdateInterface::processCollision for a moving unit."""
+        """AIUpdateInterface::processCollision for a moving unit (AIUpdate.cpp:1880).  A soldier against
+           a vehicle only notes which way is out; a vehicle held up by a soldier on the march creeps at
+           a third of its speed, and tells one standing or crossing to step aside."""
         if unit.ignore_collisions_until > self.frame or not unit.is_moving:
             return
+        if unit.is_infantry and not other.is_infantry:
+            ax, ay = unit.x - other.x, unit.y - other.y
+            length = math.hypot(ax, ay)
+            if length > SIDE_STEP_MIN:
+                unit.side_step_x += ax / length
+                unit.side_step_y += ay / length
+                unit.side_step_seen = True
+                return
         if not self.blocked_by(unit, other):
             return
         unit.is_blocked = True
         if other.is_moving and other.waiting_for_path:
             return
+        marching_soldier = (not unit.is_infantry and other.is_infantry and other.is_moving
+                            and other.no_progress < STUCK_PRESS_FRAMES)
         if CONTACT_SPEED_CAP:
-            unit.cur_max_blocked_speed = min(unit.cur_max_blocked_speed, self.max_blocked_speed(unit, other))
+            allowed = self.max_blocked_speed(unit, other)
+            if marching_soldier:
+                allowed = max(allowed, unit.max_speed * MARCHING_SOLDIER_CRAWL)
+            unit.cur_max_blocked_speed = min(unit.cur_max_blocked_speed, allowed)
+        if other.move_away_from != unit.id and other.is_infantry and not unit.is_infantry:
+            if not marching_soldier:
+                self.move_away(other, unit)
+            return
         if unit.blocked_frames == 0:
             unit.blocked_frames = 1
         if self.need_to_rotate(unit):
@@ -3232,17 +3614,24 @@ class Simulation:
                 self.move_away(unit, other)
 
     def blocked_by(self, unit: Unit, other: Unit) -> bool:
-        """AIUpdateInterface::blockedBy for two vehicles."""
+        """AIUpdateInterface::blockedBy (AIUpdate.cpp:1670): infantry never blocks infantry, and a
+           soldier marching our way does not block a vehicle."""
         if unit.goal is not None and unit.goal_cell is not None and unit.goal_cell[0] > 0 and unit.goal_cell[1] > 0:
             if abs(unit.goal[0] - unit.x) < CELL and abs(unit.goal[1] - unit.y) < CELL:
                 return False
+        if unit.moving_backwards:
+            return False
         other_moving = other.on_path
         dx, dy = unit.x - other.x, unit.y - other.y
         dsq = dx * dx + dy * dy
-        if dsq < CELL * CELL * 0.0001:
-            return self.higher_priority(unit, other)
         (ux, uy), (ox, oy) = unit.dir, other.dir
         dot = ux * ox + uy * oy
+        if not unit.is_infantry and other.is_infantry and other_moving and dot > MARCHING_SOLDIER_COS:
+            return False
+        if unit.is_infantry and other.is_infantry:
+            return False
+        if dsq < CELL * CELL * 0.0001:
+            return self.higher_priority(unit, other)
         if unit.blocked_frames > LOGICFRAMES_PER_GAME_SECOND and dot <= 0.0:
             return False
         if other_moving and dot <= HEAD_ON_DOT:
@@ -3272,7 +3661,9 @@ class Simulation:
         return True
 
     def higher_priority(self, unit: Unit, other: Unit) -> bool:
-        """AIUpdateInterface::hasHigherPathPriority between two vehicles: the one in front."""
+        """AIUpdateInterface::hasHigherPathPriority: a vehicle over a soldier, then the one in front."""
+        if unit.is_infantry != other.is_infantry:
+            return other.is_infantry
         (ux, uy), (ox, oy) = unit.dir, other.dir
         if ux * ox + uy * oy <= 0:
             return unit.id < other.id
@@ -3325,6 +3716,139 @@ def steer_check(frm: Point, to: Point) -> Point:
     return frm[0] + dx * max_dist / d, frm[1] + dy * max_dist / d
 
 
+def corners_inside(a: Unit, b: Unit) -> bool:
+    """testRotatedPointsAgainstRect over rectToFourPoints: is a corner of a's rectangle inside b's."""
+    a_major, a_minor = a.kind.half_extents
+    b_major, b_minor = b.kind.half_extents
+    ax, ay = a.dir
+    bx, by = b.dir
+    for along, across in ((-a_major, a_minor), (a_major, a_minor), (-a_major, -a_minor), (a_major, -a_minor)):
+        px = a.x + along * ax - across * ay - b.x
+        py = a.y + along * ay + across * ax - b.y
+        if abs(px * bx + py * by) <= b_major and abs(-px * by + py * bx) <= b_minor:
+            return True
+    return False
+
+
+def bodies_touch(a: Unit, b: Unit) -> bool:
+    """The partition's xy collision test: circle on circle when neither is a box, else a corner of
+       either rectangle inside the other (a circle as its bounding square)."""
+    if a.kind.geometry != "BOX" and b.kind.geometry != "BOX":
+        return math.hypot(b.x - a.x, b.y - a.y) <= a.kind.major_radius + b.kind.major_radius
+    return corners_inside(a, b) or corners_inside(b, a)
+
+
+def forward_speed(unit: Unit) -> float:
+    """PhysicsBehavior::getForwardSpeed2D: the velocity along the nose."""
+    dx, dy = unit.dir
+    return unit.vx * dx + unit.vy * dy
+
+
+def retail_forward_speed(unit: Unit) -> float:
+    """calcRetailForwardSpeed (PhysicsUpdate.h:172), EA's measure the tread and wheel drives keep:
+       0.707 of the true speed at 45 degrees, so they settle up to 1.41 times Speed off the axes."""
+    dx, dy = unit.dir
+    along_x, along_y = unit.vx * dx, unit.vy * dy
+    speed = math.sqrt(along_x * along_x + along_y * along_y)
+    return speed if along_x + along_y >= 0.0 else -speed
+
+
+def scrub_velocity(unit: Unit, desired: float) -> None:
+    """PhysicsBehavior::scrubVelocity2D: no faster than `desired`, a crumb of it stops."""
+    if desired < VELOCITY_ZERO:
+        unit.vx = unit.vy = 0.0
+        return
+    current = math.hypot(unit.vx, unit.vy)
+    if desired > current:
+        return
+    unit.vx *= desired / current
+    unit.vy *= desired / current
+
+
+def turn_around_pivot(unit: Unit, amount: float) -> None:
+    """Locomotor::turnObjAroundLocoPivot (Locomotor.cpp:3484): about the point TurnPivotOffset
+       bounding radii along the nose, which moves the body; about its centre while braking."""
+    offset = 0.0 if unit.is_braking else unit.kind.turn_pivot_offset
+    if offset != 0.0:
+        reach = offset * unit.radius
+        dx, dy = unit.dir
+        pivot_x, pivot_y = unit.x + dx * reach, unit.y + dy * reach
+        unit.facing = normalize_angle(unit.facing + amount)
+        dx, dy = unit.dir
+        unit.x, unit.y = pivot_x - dx * reach, pivot_y - dy * reach
+        return
+    unit.facing = normalize_angle(unit.facing + amount)
+
+
+def rotate_around_pivot(unit: Unit, goal: Point, max_turn: float) -> tuple[int, float]:
+    """Locomotor::rotateObjAroundLocoPivot (Locomotor.cpp:3404): onto the goal, at most max_turn,
+       instantly.  Returns which way it was still turning and the angle it was off."""
+    offset = 0.0 if unit.is_braking else unit.kind.turn_pivot_offset
+    from_x, from_y = unit.x, unit.y
+    if offset != 0.0:
+        dx, dy = unit.dir
+        from_x, from_y = unit.x + dx * offset * unit.radius, unit.y + dy * offset * unit.radius
+        if abs(goal[0] - from_x) < ON_TARGET and abs(goal[1] - from_y) < ON_TARGET:
+            return TURN_NONE, 0.0
+    rel = normalize_angle(math.atan2(goal[1] - from_y, goal[0] - from_x) - unit.facing)
+    amount, turn = rel, TURN_NONE
+    if rel > max_turn:
+        amount, turn = max_turn, TURN_POSITIVE
+    elif rel < -max_turn:
+        amount, turn = -max_turn, TURN_NEGATIVE
+    turn_around_pivot(unit, amount)
+    return turn, rel
+
+
+def ease_yaw(unit: Unit, error: float, max_rate: float, yaw_accel: float) -> float:
+    """Locomotor::easeYaw (Locomotor.cpp:3091): as fast as max_rate allows and still wind down onto
+       the heading, the rate changing by yaw_accel a tick at most."""
+    rate = min(math.sqrt(2.0 * yaw_accel * abs(error)), max_rate, abs(error))
+    want = -rate if error < 0.0 else rate
+    unit.yaw_rate += max(-yaw_accel, min(yaw_accel, want - unit.yaw_rate))
+    return unit.yaw_rate
+
+
+def legs_stop_decel(unit: Unit) -> float:
+    """Locomotor::getLegsStopDecel: Braking, or whatever stops him from top speed in INFANTRY_STOP_FRAMES."""
+    return max(unit.max_speed / INFANTRY_STOP_FRAMES, unit.kind.braking)
+
+
+def braked_speed(actual: float, braking: float, slow_down_dist: float, dist: float) -> float:
+    """The tread and wheel drives under IS_BRAKING: a full step of Braking off when the stop runs
+       past the goal, half a step inside the last quarter, else hold the speed."""
+    if slow_down_dist > dist:
+        return max(actual - braking, 0.0)
+    if slow_down_dist > dist * BRAKING_HALF_SHARE:
+        return max(actual - braking / 2.0, 0.0)
+    return actual
+
+
+SIDE_STEP_MIN: float = 0.01
+SIDE_STEP_DEAD_SHARE: float = 0.1
+SIDE_STEP_OUT_SHARE: float = 0.5
+
+
+def side_step_goal(unit: Unit, goal: Point, away: Point) -> Point:
+    """doLocomotor's side step (AIUpdate.cpp:4380-4414): a soldier touching a vehicle walks along
+       its side, never into it, and half a step out from it."""
+    length = math.hypot(*away)
+    gx, gy = goal[0] - unit.x, goal[1] - unit.y
+    dist = math.hypot(gx, gy)
+    if length <= SIDE_STEP_MIN or dist <= SIDE_STEP_MIN:
+        return goal
+    nx, ny = away[0] / length, away[1] / length
+    into = gx * nx + gy * ny
+    if into < 0.0:
+        gx, gy = gx - into * nx, gy - into * ny
+        along = math.hypot(gx, gy)
+        if along < SIDE_STEP_DEAD_SHARE * dist:
+            side = 1.0 if unit.id & 1 else -1.0
+            gx, gy, along = -ny * side, nx * side, 1.0
+        goal = (unit.x + gx * dist / along, unit.y + gy * dist / along)
+    return goal[0] + nx * dist * SIDE_STEP_OUT_SHARE, goal[1] + ny * dist * SIDE_STEP_OUT_SHARE
+
+
 def clear_crowd_lane(unit: Unit) -> None:
     """crowdClearLanes."""
     unit.has_pending_crowd_lat = False
@@ -3358,31 +3882,98 @@ def destroy_path(unit: Unit) -> None:
 # Scenarios and measurement
 # ---------------------------------------------------------------------------------------------
 
-def spawn_block(grid: Grid, count: int, cx: int, cy: int, first_id: int = 0) -> list[Unit]:
+def spawn_block(grid: Grid, kinds: Sequence[UnitKind], cx: int, cy: int, first_id: int = 0) -> list[Unit]:
+    """Rows of five, spaced so the widest body in the group clears its neighbours."""
+    widest = max((kind.radius for kind in kinds), default=TANK_RADIUS)
+    stride = max(SPAWN_STRIDE_CELLS, math.ceil(2.0 * widest / CELL))
     units: list[Unit] = []
     row = cy
-    while len(units) < count and row < grid.height:
-        for column in range(min(count - len(units), SPAWN_ROW_WIDTH)):
-            cell_x = cx + column * SPAWN_STRIDE_CELLS
+    while len(units) < len(kinds) and row < grid.height:
+        for column in range(min(len(kinds) - len(units), SPAWN_ROW_WIDTH)):
+            cell_x = cx + column * stride
             if grid.passable(cell_x, row) and not grid.pinched[row * grid.width + cell_x]:
-                units.append(Unit(*cell_pos(cell_x, row, False), id=first_id + len(units) + 1))
-        row += SPAWN_STRIDE_CELLS
+                units.append(Unit(*cell_pos(cell_x, row, False), id=first_id + len(units) + 1,
+                                  kind=kinds[len(units)]))
+        row += stride
     return units
 
 
-def build_scenario(grid: Grid, unit_count: int, scenario: str
+def build_scenario(grid: Grid, kinds: Sequence[UnitKind], scenario: str
                    ) -> tuple[list[Unit], list[tuple[list[Unit], Point]]]:
     """`column` is one group across the map; `cross` two groups to each other's corner, which is
-       the case the crossing claims are for."""
+       the case the crossing claims are for.  The group is a list of unit kinds."""
     far_x = grid.width - GOAL_INSET_X
     if scenario == "cross":
-        top = spawn_block(grid, unit_count // 2, *CROSS_SPAWN_TOP)
-        bottom = spawn_block(grid, unit_count - len(top), CROSS_SPAWN_TOP[0],
+        half = len(kinds) // 2
+        top = spawn_block(grid, kinds[:half], *CROSS_SPAWN_TOP)
+        bottom = spawn_block(grid, kinds[len(top):], CROSS_SPAWN_TOP[0],
                              grid.height - CROSS_SPAWN_BOTTOM_INSET, first_id=len(top))
         return top + bottom, [(top, ((far_x + 0.5) * CELL, (grid.height - GOAL_INSET_Y + 0.5) * CELL)),
                               (bottom, ((far_x + 0.5) * CELL, (GOAL_INSET_Y + 0.5) * CELL))]
-    units = spawn_block(grid, unit_count, *SPAWN_CELL)
+    units = spawn_block(grid, kinds, *SPAWN_CELL)
     return units, [(units, ((far_x + 0.5) * CELL, (grid.height - GOAL_INSET_Y + 0.5) * CELL))]
+
+
+def unit_kind(data: "unitdata.UnitData") -> UnitKind:
+    """The INI's values per game second, in ticks: SPEED_FIELD's velocity, acceleration and angular
+       velocity conversions (GameCommon.h), SpeedScale on both speeds (getMaxSpeedForCondition)."""
+    loco = data.locomotor
+    per_tick = 1.0 / LOGICFRAMES_PER_GAME_SECOND
+    per_tick_squared = per_tick * per_tick
+    radians_per_tick = math.pi / 180.0 * per_tick
+    return UnitKind(
+        name=data.key, appearance=loco.appearance, infantry=data.infantry,
+        major_radius=data.major_radius, radius=data.bounding_radius,
+        speed=loco.speed * per_tick * data.speed_scale,
+        speed_damaged=loco.speed_damaged * per_tick * data.speed_scale,
+        turn_rate=loco.turn_rate * radians_per_tick, turn_rate_damaged=loco.turn_rate_damaged * radians_per_tick,
+        acceleration=loco.acceleration * per_tick_squared,
+        acceleration_damaged=loco.acceleration_damaged * per_tick_squared,
+        braking=loco.braking * per_tick_squared, min_speed=loco.min_speed * per_tick,
+        min_turn_speed=loco.min_turn_speed * per_tick, turn_pivot_offset=loco.turn_pivot_offset,
+        can_move_backwards=loco.can_move_backwards, forward_friction=data.forward_friction,
+        lateral_friction=data.lateral_friction, extra_friction=loco.extra_2d_friction,
+        close_enough=loco.close_enough_dist, geometry=data.geometry, minor_radius=data.minor_radius)
+
+
+@functools.cache
+def game_kinds() -> dict[str, UnitKind]:
+    """Every unit unitdata knows, read once from the install; empty when there is none."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import unitdata
+    try:
+        return {key: unit_kind(data) for key, data in unitdata.load_units().items()}
+    except unitdata.InstallMissing as missing:
+        print(f"pathlab: {missing}; the stand-in tank drives instead", file=sys.stderr)
+        return {}
+
+
+def default_kind() -> UnitKind:
+    """--units' tank: the Crusader, the stand-in's speed with its real body; the stand-in itself
+       with no install."""
+    return game_kinds().get(DEFAULT_GROUP_KIND, STANDIN_TANK)
+
+
+def parse_group(spec: str, kinds: dict[str, UnitKind]) -> list[UnitKind]:
+    """NAME:COUNT,... into one list, the kinds spread through it in proportion so every row of the
+       spawn and both halves of `cross` get a share of each."""
+    entries: list[tuple[float, int, UnitKind]] = []
+    for order, part in enumerate(p for p in spec.split(",") if p):
+        name, _, count = part.partition(":")
+        name = name.strip().lower()
+        if name not in kinds:
+            known = ", ".join(kinds) or "none: no install found"
+            raise SystemExit(f"--group: {name!r} is not a unit PathLab can read ({known})")
+        number = int(count) if count else 1
+        entries += [((k + 0.5) / number, order, kinds[name]) for k in range(number)]
+    return [kind for _, _, kind in sorted(entries, key=lambda e: (e[0], e[1]))]
+
+
+def describe_group(kinds: Sequence[UnitKind]) -> str:
+    counts: dict[str, int] = {}
+    for kind in kinds:
+        counts[kind.name] = counts.get(kind.name, 0) + 1
+    return ",".join(f"{name}:{count}" for name, count in counts.items())
 
 
 @dataclass
@@ -3400,13 +3991,13 @@ class Measurement:
     trunk: float = 0.0
 
 
-def measure(map_kind: str, unit_count: int, seeds: int, scenario: str, first_seed: int = 0) -> Measurement:
+def measure(map_kind: str, kinds: Sequence[UnitKind], seeds: int, scenario: str, first_seed: int = 0) -> Measurement:
     """The scenario's orders played out, averaged over `seeds` maps.  `stuck` stays a count of units
        still short of their goal when the clock ran out."""
     total = Measurement()
     for seed in range(first_seed, first_seed + seeds):
         grid = make_map(map_kind, seed=seed)
-        units, orders = build_scenario(grid, unit_count, scenario)
+        units, orders = build_scenario(grid, kinds, scenario)
         sim = Simulation(grid, units)
         for group, goal in orders:
             stats = sim.group_move(group, goal)
@@ -3572,22 +4163,30 @@ def setting_rows(proposed: bool, ttc: bool) -> list[tuple[str, dict[str, object]
 def run_headless(args: argparse.Namespace) -> None:
     if args.pairs:
         measure_searches(args.map, args.headless, args.pairs)
-        if not args.units:
+        if not args.units and not args.group:
             return
-    print(f"map {args.map}  scenario {args.scenario}  units {args.units}  seeds {args.headless}  "
+    kinds = group_kinds(args)
+    print(f"map {args.map}  scenario {args.scenario}  units {describe_group(kinds)}  seeds {args.headless}  "
           f"{LOGICFRAMES_PER_SECOND} Hz at {GAME_SPEED_PERCENT}%")
     print_head()
     for label, ladder in setting_rows(args.proposed, args.ttc):
         if not args.sweep:
             with overriding(**ladder):
-                print_row(label, measure(args.map, args.units, args.headless, args.scenario))
+                print_row(label, measure(args.map, kinds, args.headless, args.scenario))
             continue
         name, values = parse_sweep(args.sweep)
         prefix = f"{label} " if ladder else ""
         for value in values:
             with overriding(**ladder, **{name: value}):
                 print_row(f"{prefix}{name}={value:g}",
-                          measure(args.map, args.units, args.headless, args.scenario))
+                          measure(args.map, kinds, args.headless, args.scenario))
+
+
+def group_kinds(args: argparse.Namespace) -> list[UnitKind]:
+    """--group's mix, else --units of the default tank."""
+    if args.group:
+        return parse_group(args.group, game_kinds())
+    return [default_kind()] * args.units
 
 
 # ---------------------------------------------------------------------------------------------
@@ -3599,6 +4198,7 @@ OBSTACLE_COL = (88, 76, 64)
 PINCHED_COL = (34, 36, 42)
 UNIT_COL = (120, 190, 255)
 UNIT_SEL = (255, 214, 110)
+INFANTRY_COL = (150, 220, 140)
 PATH_COL = (90, 220, 160)
 TRUNK_COL = (70, 90, 140)
 RAY_OK = (60, 200, 120)
@@ -3614,8 +4214,9 @@ def run_window(args: argparse.Namespace) -> None:
     import pygame
 
     seed = args.seed
+    kinds = group_kinds(args)
     grid = make_map(args.map, seed=seed)
-    sim = Simulation(grid, spawn_block(grid, args.units, *SPAWN_CELL))
+    sim = Simulation(grid, spawn_block(grid, kinds, *SPAWN_CELL))
     for unit in sim.units:
         unit.is_selected = True
     scale = args.scale
@@ -3656,7 +4257,7 @@ def run_window(args: argparse.Namespace) -> None:
                     elif event.key == pygame.K_n:
                         seed = random.randrange(SEED_RANGE)
                         grid = make_map(args.map, seed=seed)
-                        sim = Simulation(grid, spawn_block(grid, args.units, *SPAWN_CELL))
+                        sim = Simulation(grid, spawn_block(grid, kinds, *SPAWN_CELL))
                         for unit in sim.units:
                             unit.is_selected = True
                     elif event.key == pygame.K_TAB and last_goal:
@@ -3721,7 +4322,8 @@ def run_window(args: argparse.Namespace) -> None:
                         pygame.draw.lines(screen, PATH_COL, False, pts, 1)
             for unit in sim.units:
                 centre = to_screen(unit.x, unit.y)
-                pygame.draw.circle(screen, UNIT_SEL if unit.is_selected else UNIT_COL, centre, int(unit.radius * scale))
+                colour = UNIT_SEL if unit.is_selected else (INFANTRY_COL if unit.is_infantry else UNIT_COL)
+                pygame.draw.circle(screen, colour, centre, int(unit.radius * scale))
                 tip = to_screen(unit.x + unit.dir[0] * unit.radius, unit.y + unit.dir[1] * unit.radius)
                 pygame.draw.line(screen, BG, centre, tip, 2)
                 if unit.blocked_frames:
@@ -3744,7 +4346,11 @@ def run_window(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--map", choices=MAP_KINDS, default="choke")
-    parser.add_argument("--units", type=int, default=8)
+    parser.add_argument("--units", type=int, default=8,
+                        help=f"a group of this many {DEFAULT_GROUP_KIND}s, read from the install")
+    parser.add_argument("--group", default="",
+                        help="a mix instead of --units, NAME:COUNT,... e.g. crusader:8,humvee:4,overlord:2; "
+                             "the names are unitdata.UNIT_OBJECTS'")
     parser.add_argument("--scenario", choices=SCENARIOS, default="column")
     parser.add_argument("--scale", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=7)

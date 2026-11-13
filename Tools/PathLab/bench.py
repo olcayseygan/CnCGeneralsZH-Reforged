@@ -1,9 +1,11 @@
 """
 bench - one fixed, deterministic score for PathLab's movement model.
 
-Every map kind and scenario at a few group sizes, each over the same seeds.  A case's free-flow
+Every map kind and scenario at a few group sizes of the default tank (a Crusader read from the
+install), each over the same seeds, then MIXED_CASES: mixed groups and infantry.  A case's free-flow
 bound is the slowest member walking to its own assigned goal alone on the map, so the ratio of the
-group's frames to it is what the crowd cost.  Same input, same numbers.
+group's frames to it is what the crowd cost.  Same input, same numbers; with no install the units
+are the stand-in tank and the numbers are not baseline.json's.
 
     python bench.py                         # the full suite, about two minutes
     python bench.py --quick                 # a subset, under twenty seconds
@@ -32,6 +34,13 @@ DEFAULT_MODULE: Path = Path(__file__).with_name("pathlab.py")
 LOADED_MODULE_NAME: str = "pathlab_under_bench"
 
 FULL_GROUP_SIZES: tuple[int, ...] = (8, 16, 32)
+# after the map x scenario x size grid of the default tank: mixed groups and infantry, NAME:COUNT,...
+MIXED_CASES: tuple[tuple[str, str, str], ...] = (
+    ("open", "column", "crusader:8,humvee:4,overlord:2"),
+    ("twogaps", "cross", "scorpion:6,technical:4,battlemaster:4,humvee:2"),
+    ("choke", "column", "ranger:16"),
+    ("open", "cross", "ranger:8,crusader:8"),
+)
 FULL_SEEDS: tuple[int, ...] = (0, 1)
 QUICK_MAP_KINDS: tuple[str, ...] = ("choke", "twogaps")
 QUICK_GROUP_SIZES: tuple[int, ...] = (8, 16)
@@ -75,26 +84,34 @@ def run_until_settled(model: ModuleType, simulation: object) -> int:
     return frames
 
 
-def solo_frames(model: ModuleType, grid: object, unit_id: int, start: tuple[float, float],
+def solo_frames(model: ModuleType, grid: object, unit_id: int, kind: object, start: tuple[float, float],
                 goal: tuple[float, float]) -> int:
-    walker = model.Unit(*start, id=unit_id)
+    walker = model.Unit(*start, id=unit_id, kind=kind)
     simulation = model.Simulation(grid, [walker])
     simulation.move_to(walker, goal)
     return run_until_settled(model, simulation)
 
 
-def run_case(model: ModuleType, map_kind: str, scenario: str, unit_count: int,
+def group_of(model: ModuleType, group: str) -> list[object]:
+    """A bare count is that many of the model's default tank, else a NAME:COUNT,... mix."""
+    if group.isdigit():
+        return [model.default_kind()] * int(group)
+    return model.parse_group(group, model.game_kinds())
+
+
+def run_case(model: ModuleType, map_kind: str, scenario: str, group: str,
              seeds: tuple[int, ...]) -> CaseResult:
     frames = free_flow = blocked = stuck = cells = repaths = churn = overlap = 0
     overlap_depth = 0.0
     rungs = [0, 0, 0]
+    kinds = group_of(model, group)
     for seed in seeds:
         grid = model.make_map(map_kind, seed=seed)
-        units, orders = model.build_scenario(grid, unit_count, scenario)
-        starts = {unit.id: unit.pos for unit in units}
+        units, orders = model.build_scenario(grid, kinds, scenario)
+        starts = {unit.id: (unit.kind, unit.pos) for unit in units}
         simulation = model.Simulation(grid, units)
-        for group, click in orders:
-            simulation.group_move(group, click)
+        for members, click in orders:
+            simulation.group_move(members, click)
         goals = {unit.id: unit.goal for unit in units}
         frames += run_until_settled(model, simulation)
         blocked += sum(unit.blocked_total for unit in units)
@@ -106,9 +123,9 @@ def run_case(model: ModuleType, map_kind: str, scenario: str, unit_count: int,
         overlap_depth += simulation.overlap_depth
         for unit in units:
             rungs = [total + fired for total, fired in zip(rungs, unit.rungs_fired)]
-        free_flow += max((solo_frames(model, grid, unit_id, starts[unit_id], goal)
+        free_flow += max((solo_frames(model, grid, unit_id, *starts[unit_id], goal)
                           for unit_id, goal in goals.items() if goal is not None), default=0)
-    return CaseResult(name=f"{map_kind}/{scenario}/{unit_count}", frames=frames, free_flow=free_flow,
+    return CaseResult(name=f"{map_kind}/{scenario}/{group}", frames=frames, free_flow=free_flow,
                       ratio=frames / max(free_flow, 1), blocked=blocked, stuck=stuck, cells=cells,
                       repaths=repaths, churn=churn, rungs=rungs, overlap=overlap,
                       overlap_depth=overlap_depth / max(overlap, 1))
@@ -134,7 +151,7 @@ def start_worker(module_path: Path, proposed: bool, ttc: bool) -> None:
         setattr(worker_model, name, value)
 
 
-def run_case_in_worker(case: tuple[str, str, int, tuple[int, ...]]) -> CaseResult:
+def run_case_in_worker(case: tuple[str, str, str, tuple[int, ...]]) -> CaseResult:
     return run_case(worker_model, *case)
 
 
@@ -196,8 +213,10 @@ def main() -> None:
           f"seeds {','.join(map(str, seeds))}")
     print(f"{'case':<20} {'frames':>6} {'free':>6} {'ratio':>6} {'blocked':>7} {'stuck':>5} "
           f"{'cells':>8} {'repath':>6} {'churn':>6} {'rungs 1/2/3':>12} {'overlap':>7} {'depth':>5}")
-    suite = [(map_kind, scenario, unit_count, seeds) for map_kind in map_kinds
+    suite = [(map_kind, scenario, str(unit_count), seeds) for map_kind in map_kinds
              for scenario in model.SCENARIOS for unit_count in group_sizes]
+    if not args.quick:
+        suite += [(map_kind, scenario, group, seeds) for map_kind, scenario, group in MIXED_CASES]
     cases: list[CaseResult] = []
     with ProcessPoolExecutor(max_workers=args.jobs, initializer=start_worker,
                              initargs=(args.module.resolve(), args.proposed, args.ttc)) as pool:

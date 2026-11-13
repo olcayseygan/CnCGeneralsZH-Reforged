@@ -8,8 +8,10 @@ picture cannot argue with."""
 
 import math
 import unittest
+from dataclasses import replace
 
 import pathlab
+import unitdata
 from pathlab import (CELL, COST_DIAGONAL, COST_ORTHOGONAL, OBSTACLE, Grid, Path, Pathfinder,
                      SearchCell, Simulation, Unit, cell_of, cell_pos, cost_to_goal, crossing_cost,
                      lane_corner, lane_count, make_map, retail_frames, stuck_rung, traffic_cost,
@@ -323,7 +325,7 @@ class GroupTests(unittest.TestCase):
 
     def test_a_group_order_lays_a_trunk_and_lanes(self):
         grid = make_map("open", seed=3)
-        units, orders = pathlab.build_scenario(grid, 6, "column")
+        units, orders = pathlab.build_scenario(grid, [pathlab.STANDIN_TANK] * 6, "column")
         sim = Simulation(grid, units)
         stats = sim.group_move(*orders[0])
         self.assertIn(stats.trunk_diameter, (6, 4, 2))
@@ -518,9 +520,348 @@ class CrowdTests(unittest.TestCase):
         self.assertAlmostEqual(pathlab.release_cap(0.2, 1.0, 0.25), 0.4)
 
 
+def kind(**changes) -> pathlab.UnitKind:
+    """A synthetic unit: the stand-in tank with these fields changed; nothing in it is EA's."""
+    return replace(pathlab.STANDIN_TANK, **changes)
+
+
+QUICK = dict(acceleration=50.0, acceleration_damaged=50.0)      # reaches any speed in one tick
+
+
+def driver(unit_kind: pathlab.UnitKind = pathlab.STANDIN_TANK, facing: float = 0.0) -> tuple[Simulation, Unit]:
+    unit = Unit(200.5, 200.5, id=1, kind=unit_kind, facing=facing)
+    return Simulation(walled(40), [unit]), unit
+
+
+def toward(unit: Unit, angle: float, dist: float) -> tuple[float, float]:
+    return unit.x + math.cos(angle) * dist, unit.y + math.sin(angle) * dist
+
+
+class LocomotorTests(unittest.TestCase):
+    """Locomotor.cpp's tread, wheel and leg drives and PhysicsUpdate.cpp's friction, one rule each."""
+
+    def test_a_ground_drive_turns_half_as_fast_again_and_no_slower_than_100_degrees(self):
+        per_tick = 1.0 / pathlab.LOGICFRAMES_PER_GAME_SECOND
+        fast = kind(turn_rate=math.radians(90.0) * per_tick, turn_rate_damaged=math.radians(45.0) * per_tick)
+        self.assertAlmostEqual(fast.max_turn_rate(False), math.radians(135.0) * per_tick)
+        self.assertAlmostEqual(fast.max_turn_rate(True), math.radians(67.5) * per_tick)
+        slow = kind(turn_rate=math.radians(60.0) * per_tick, turn_rate_damaged=math.radians(30.0) * per_tick)
+        self.assertAlmostEqual(slow.max_turn_rate(False), math.radians(100.0) * per_tick)
+        self.assertAlmostEqual(slow.max_turn_rate(True), math.radians(50.0) * per_tick)
+        legs = kind(appearance=pathlab.TWO_LEGS, turn_rate=math.radians(60.0) * per_tick)
+        self.assertAlmostEqual(legs.max_turn_rate(False), math.radians(60.0) * per_tick)
+
+    def test_damaged_values_change_speed_turn_and_acceleration(self):
+        hurt = kind(speed_damaged=0.5, acceleration_damaged=0.01)
+        whole, broken = Unit(0, 0, id=1, kind=hurt), Unit(0, 0, id=2, kind=hurt, damaged=True)
+        self.assertEqual((whole.max_speed, broken.max_speed), (hurt.speed, 0.5))
+        self.assertEqual((whole.acceleration, broken.acceleration), (hurt.acceleration, 0.01))
+
+    def test_treads_pivot_on_the_spot_for_a_goal_behind(self):
+        sim, unit = driver(kind(**QUICK))
+        sim.move_treads(unit, toward(unit, math.pi, 100.0), 100.0, unit.max_speed)
+        self.assertAlmostEqual(abs(unit.facing), unit.turn_rate)
+        self.assertEqual((unit.ax, unit.ay), (0.0, 0.0))        # (1 - rollCoeff) is 0 past 135 degrees
+
+    def test_treads_roll_through_a_turn_slower_the_tighter_it_is(self):
+        sim, unit = driver(kind(**QUICK))
+        sim.move_treads(unit, toward(unit, math.pi / 4, 100.0), 100.0, unit.max_speed)
+        self.assertAlmostEqual(math.hypot(unit.ax, unit.ay), unit.max_speed * (1.0 - 1.0 / 3.0))
+        self.assertAlmostEqual(math.atan2(unit.ay, unit.ax), unit.facing)
+
+    def test_treads_read_retail_speed_so_a_diagonal_runs_fast(self):
+        sim, unit = driver(facing=math.pi / 4)
+        unit.vx = unit.vy = 1.0
+        self.assertAlmostEqual(pathlab.retail_forward_speed(unit), 1.0)
+        self.assertAlmostEqual(pathlab.forward_speed(unit), math.sqrt(2.0))
+
+    def test_the_braking_latch_slides_onto_the_goal_and_physics_leaves_it(self):
+        sim, unit = driver()
+        unit.vx = unit.max_speed
+        goal = (unit.x + 0.4, unit.y)
+        sim.locomote(unit, goal, unit.max_speed, 0.4, False)
+        self.assertTrue(unit.is_braking)
+        self.assertTrue(unit.braking_status)
+        self.assertAlmostEqual(unit.x, goal[0])                  # the slide is capped at what is left
+        sim.physics_update(unit)
+        self.assertAlmostEqual(unit.x, goal[0])
+
+    def test_the_latch_lets_go_far_from_the_goal(self):
+        sim, unit = driver()
+        unit.is_braking = True
+        sim.locomote(unit, toward(unit, 0.0, 200.0), unit.max_speed, 200.0, False)
+        self.assertFalse(unit.is_braking)
+
+    def test_wheels_turn_only_while_moving(self):
+        wheels = kind(appearance=pathlab.FOUR_WHEELS, min_turn_speed=0.5, **QUICK)
+        sim, unit = driver(wheels)
+        sim.move_wheels(unit, toward(unit, math.radians(30.0), 200.0), 200.0, unit.max_speed)
+        self.assertEqual(unit.facing, 0.0)
+        self.assertGreater(unit.ax, 0.0)
+        sim, unit = driver(wheels)
+        unit.vx = 0.25                                           # half the turn speed
+        sim.move_wheels(unit, toward(unit, math.radians(30.0), 200.0), 200.0, unit.max_speed)
+        self.assertAlmostEqual(unit.facing, 0.5 * unit.turn_rate)
+
+    def test_wheels_hold_to_the_turn_speed_through_a_bend(self):
+        sim, unit = driver(kind(appearance=pathlab.FOUR_WHEELS, min_turn_speed=0.5, **QUICK))
+        sim.move_wheels(unit, toward(unit, math.radians(20.0), 200.0), 200.0, unit.max_speed)
+        self.assertAlmostEqual(unit.ax, max(0.5, unit.max_speed * pathlab.WHEEL_TURN_SPEED_SHARE))
+
+    def test_wheels_back_up_to_a_goal_close_behind_and_turn_three_points_for_a_far_one(self):
+        backer = kind(appearance=pathlab.FOUR_WHEELS, min_turn_speed=0.5, can_move_backwards=True,
+                      major_radius=10.0, **QUICK)
+        sim, unit = driver(backer)
+        sim.move_wheels(unit, toward(unit, math.pi, 30.0), 30.0, unit.max_speed)
+        self.assertTrue(unit.moving_backwards)
+        self.assertFalse(unit.three_point_turn)
+        self.assertLess(unit.ax, 0.0)
+        sim, unit = driver(backer)
+        sim.move_wheels(unit, toward(unit, math.pi, 300.0), 300.0, unit.max_speed)
+        self.assertTrue(unit.three_point_turn)
+        sim, unit = driver(replace(backer, can_move_backwards=False))
+        sim.move_wheels(unit, toward(unit, math.pi, 30.0), 30.0, unit.max_speed)
+        self.assertFalse(unit.moving_backwards)
+
+    def test_wheels_stop_to_turn_where_the_arc_runs_onto_rock(self):
+        sim, unit = driver(kind(appearance=pathlab.FOUR_WHEELS, min_turn_speed=0.5, **QUICK))
+        for row in range(40):
+            sim.grid.block(21, row)                              # a wall just ahead, x 210 to 220
+        unit.vx = unit.max_speed
+        sim.move_wheels(unit, toward(unit, math.radians(60.0), 200.0), 200.0, unit.max_speed)
+        self.assertAlmostEqual(unit.facing, unit.turn_rate)      # the whole rate, not the speed's share
+        self.assertEqual((unit.ax, unit.ay), (0.0, 0.0))
+
+    def test_the_turn_pivot_moves_the_body(self):
+        sim, unit = driver(kind(turn_pivot_offset=-0.5))
+        x, y = unit.pos
+        pathlab.turn_around_pivot(unit, math.pi / 2)
+        reach = -0.5 * unit.radius
+        self.assertAlmostEqual(unit.x, x + reach)
+        self.assertAlmostEqual(unit.y, y - reach)
+
+    def test_legs_ease_into_the_turn(self):
+        legs = kind(appearance=pathlab.TWO_LEGS, infantry=True, turn_rate=0.3, turn_rate_damaged=0.3)
+        sim, unit = driver(legs)
+        goal = toward(unit, math.pi * 0.9, 200.0)
+        yaw_accel = unit.turn_rate / pathlab.INFANTRY_YAW_EASE_FRAMES
+        rates = []
+        for _ in range(3):
+            sim.move_legs(unit, goal, 200.0, unit.max_speed)
+            rates.append(unit.yaw_rate)
+        self.assertAlmostEqual(rates[0], yaw_accel)
+        self.assertAlmostEqual(rates[1], min(2 * yaw_accel, unit.turn_rate))
+        self.assertAlmostEqual(rates[2], unit.turn_rate)
+
+    def test_legs_walk_at_the_cosine_of_what_is_left_to_turn(self):
+        legs = kind(appearance=pathlab.TWO_LEGS, infantry=True, turn_rate=0.0, turn_rate_damaged=0.0, **QUICK)
+        sim, unit = driver(legs)
+        sim.move_legs(unit, toward(unit, math.radians(60.0), 200.0), 200.0, unit.max_speed)
+        self.assertAlmostEqual(unit.ax, unit.max_speed * 0.5)
+        sim, unit = driver(legs)
+        sim.move_legs(unit, toward(unit, math.radians(100.0), 200.0), 200.0, unit.max_speed)
+        self.assertEqual(unit.ax, 0.0)
+
+    def test_legs_slow_for_the_stop_at_the_end(self):
+        legs = kind(appearance=pathlab.TWO_LEGS, infantry=True, **QUICK)
+        sim, unit = driver(legs)
+        sim.move_legs(unit, toward(unit, 0.0, 0.2), 0.2, unit.max_speed)
+        stop = max(unit.max_speed / pathlab.INFANTRY_STOP_FRAMES, legs.braking)
+        self.assertAlmostEqual(unit.ax, math.sqrt(2.0 * stop * 0.2))
+
+    def test_legs_carry_the_walk_round_with_the_nose_where_a_tread_skids(self):
+        yaw = 0.1
+        sim, soldier = driver(kind(appearance=pathlab.TWO_LEGS, infantry=True))
+        soldier.vx = 1.0
+        sim.turn_vehicle(soldier, yaw)
+        sim.physics_update(soldier)
+        sim, tank = driver()
+        tank.vx = 1.0
+        tank.motive_until = sim.frame + pathlab.MOTIVE_FRAMES
+        pathlab.turn_around_pivot(tank, yaw)
+        sim.physics_update(tank)
+        self.assertAlmostEqual(pathlab.forward_speed(soldier), 1.0)
+        self.assertLess(pathlab.forward_speed(tank), 1.0)
+        sideways = [abs(-u.vx * u.dir[1] + u.vy * u.dir[0]) for u in (soldier, tank)]
+        self.assertLess(sideways[0], sideways[1] / 3.0)
+
+    def test_friction_skids_a_tread_off_its_old_line(self):
+        sim, unit = driver(facing=math.pi / 2)
+        unit.vx = 1.0
+        unit.motive_until = sim.frame + pathlab.MOTIVE_FRAMES
+        x = unit.x
+        sim.physics_update(unit)
+        share = 1.0 - (1.0 - 0.15) ** 1.5
+        self.assertAlmostEqual(unit.vx, 1.0 - share)
+        self.assertAlmostEqual(unit.x, x + 1.0 - share)
+        unit.vx, unit.vy, unit.facing = 0.0, 1.0, math.pi / 2
+        sim.physics_update(unit)
+        self.assertEqual(unit.vy, 1.0)                           # driven: no forward friction
+        sim.pf.frame += pathlab.MOTIVE_FRAMES
+        sim.physics_update(unit)
+        self.assertAlmostEqual(unit.vy, 1.0 - share)
+
+    def test_a_crumb_of_velocity_is_zero(self):
+        sim, unit = driver()
+        unit.vx = pathlab.VELOCITY_ZERO * 0.5
+        unit.motive_until = sim.frame + 1
+        sim.physics_update(unit)
+        self.assertEqual(unit.vx, 0.0)
+
+    def test_a_blocked_unit_scrubs_its_speed_and_only_turns(self):
+        sim, unit = driver()
+        unit.vx = unit.max_speed
+        blocked = sim.locomote(unit, toward(unit, math.pi / 2, 200.0), 0.5, 200.0, True)
+        self.assertTrue(blocked)
+        self.assertAlmostEqual(unit.vx, 0.5)
+        self.assertAlmostEqual(unit.facing, unit.turn_rate)
+        self.assertFalse(sim.locomote(unit, toward(unit, 0.0, 200.0), unit.max_speed, 200.0, True))
+
+    def test_a_parked_vehicle_stops_and_a_soldier_brakes(self):
+        sim, unit = driver()
+        unit.vx, unit.motive_until = 1.0, sim.frame + 1
+        sim.maintain_position(unit)
+        self.assertEqual(unit.vx, 0.0)
+        legs = kind(appearance=pathlab.TWO_LEGS, infantry=True)
+        sim, soldier = driver(legs)
+        soldier.vx, soldier.motive_until = 1.0, sim.frame + 1
+        sim.maintain_position(soldier)
+        self.assertAlmostEqual(soldier.vx, 1.0 - pathlab.legs_stop_decel(soldier))
+
+    def test_boxes_touch_by_their_corners_not_their_circles(self):
+        box = kind(geometry="BOX", major_radius=15.0, minor_radius=5.0, radius=math.hypot(15.0, 5.0))
+        a = Unit(100.0, 100.0, id=1, kind=box)
+        b = Unit(100.0, 120.0, id=2, kind=box)                   # side by side, 10 apart
+        self.assertLess(math.hypot(b.x - a.x, b.y - a.y), a.radius + b.radius)
+        self.assertFalse(pathlab.bodies_touch(a, b))
+        b.y = 109.0
+        self.assertTrue(pathlab.bodies_touch(a, b))
+
+
+class InfantryTests(unittest.TestCase):
+    """What the game does for foot soldiers: through each other, no lane, round a hull."""
+
+    def soldiers(self) -> tuple[Simulation, Unit, Unit]:
+        legs = kind(appearance=pathlab.TWO_LEGS, infantry=True, radius=5.0, major_radius=5.0)
+        a = Unit(100.5, 100.5, id=1, kind=legs)
+        b = Unit(108.5, 100.5, id=2, kind=legs)
+        sim = Simulation(walled(40), [a, b])
+        for u in (a, b):
+            u.moving, u.goal = True, (350.5, 100.5)
+            u.path = Path([u.pos, u.goal], [0, 1])
+        return sim, a, b
+
+    def test_infantry_never_blocks_infantry(self):
+        sim, a, b = self.soldiers()
+        self.assertFalse(sim.blocked_by(a, b))
+        b.moving, b.path = False, None
+        self.assertFalse(sim.blocked_by(a, b))
+
+    def test_a_soldier_marching_our_way_does_not_block_a_vehicle(self):
+        sim, soldier, _ = self.soldiers()
+        tank = Unit(90.5, 100.5, id=3)
+        tank.moving, tank.goal = True, (350.5, 100.5)
+        tank.path = Path([tank.pos, tank.goal], [0, 1])
+        sim = Simulation(walled(40), [tank, soldier])
+        self.assertFalse(sim.blocked_by(tank, soldier))
+        soldier.facing = math.pi / 2
+        self.assertTrue(sim.blocked_by(tank, soldier))
+        self.assertTrue(sim.higher_priority(tank, soldier))
+
+    def test_a_soldier_against_a_hull_steps_along_it(self):
+        sim, soldier, _ = self.soldiers()
+        tank = Unit(110.5, 100.5, id=3)
+        sim.process_collision(soldier, tank)
+        self.assertTrue(soldier.side_step_seen)
+        self.assertFalse(soldier.is_blocked)
+        goal = pathlab.side_step_goal(soldier, (200.5, 100.5), (soldier.side_step_x, soldier.side_step_y))
+        self.assertLess(goal[0], soldier.x)                      # out from the hull, never into it
+
+    def test_a_soldier_walks_the_middle_of_his_band_and_reads_nobody(self):
+        sim, a, b = self.soldiers()
+        a.pending_crowd_lat, a.has_pending_crowd_lat = 30.0, True
+        sim.crowd_steer(a, a.goal, a.max_speed)
+        self.assertEqual(a.crowd_scan["near"], [])
+        self.assertLessEqual(abs(a.crowd_lat - 30.0), a.max_speed)  # heading for 0 at the lane rate
+        self.assertLess(a.crowd_lat, 30.0)
+
+    def test_the_search_walks_infantry_through_parked_infantry(self):
+        legs = kind(appearance=pathlab.TWO_LEGS, infantry=True, radius=5.0, major_radius=5.0)
+        parked = Unit(*cell_pos(10, 10, False), id=2, kind=legs)
+        sim = Simulation(walled(30), [parked])
+        soldier = Unit(0, 0, id=1, kind=legs)
+        sim.pf.update_pos(soldier)
+        self.assertEqual(sim.pf.check_for_movement(soldier, 10, 10, False).ally_fixed, 0)
+        self.assertEqual(sim.pf.check_for_movement(Unit(0, 0, id=3), 10, 10, False).ally_fixed, 1)
+
+    def test_a_group_lays_no_lane_for_a_soldier(self):
+        grid = make_map("open", seed=3)
+        legs = kind(appearance=pathlab.TWO_LEGS, infantry=True, radius=5.0, major_radius=5.0)
+        units, orders = pathlab.build_scenario(grid, [pathlab.STANDIN_TANK, legs] * 3, "column")
+        sim = Simulation(grid, units)
+        sim.group_move(*orders[0])
+        self.assertTrue(all(not u.planned for u in units if u.is_infantry))
+        self.assertTrue(any(u.planned for u in units if not u.is_infantry))
+
+
+class UnitDataTests(unittest.TestCase):
+    """The loader on synthetic INI blocks, and on the install when there is one."""
+
+    def test_a_later_locomotor_block_patches_only_its_fields(self):
+        base = unitdata.patch_locomotor(unitdata.LocomotorData("Test"), [
+            ("Speed = 40", None), ("TurnRate = 90", None), ("Appearance = TREADS", None)])
+        patched = unitdata.patch_locomotor(base, [("Speed = 50", None), ("CanMoveBackwards = Yes", None)])
+        self.assertEqual((patched.speed, patched.turn_rate, patched.appearance, patched.can_move_backwards),
+                         (50.0, 90.0, "TREADS", True))
+        valid = patched.validated()
+        self.assertEqual((valid.speed_damaged, valid.turn_rate_damaged), (50.0, 90.0))
+
+    def test_an_object_names_its_locomotor_footprint_and_friction_wherever_they_nest(self):
+        fields: dict = {}
+        unitdata.patch_object(fields, [
+            ("KindOf = SELECTABLE VEHICLE", None), ("Geometry = BOX", None),
+            ("GeometryMajorRadius = 12.0", None), ("GeometryMinorRadius = 5.0", None),
+            ("Behavior = AIUpdateInterface ModuleTag_01", [("Locomotor = SET_NORMAL TestLocomotor", None)]),
+            ("Behavior = PhysicsBehavior ModuleTag_02", [("LateralFriction = 6", None)]),
+        ], True)
+        self.assertEqual(fields, {"infantry": False, "geometry": "BOX", "major_radius": 12.0,
+                                  "minor_radius": 5.0, "locomotor": "testlocomotor", "lateral_friction": 0.2})
+        unit = unitdata.UnitData("test", "Test", unitdata.LocomotorData("TestLocomotor"), False, "BOX", 3.0, 4.0)
+        self.assertEqual(unit.bounding_radius, 5.0)
+
+    def test_the_ini_values_become_ticks(self):
+        loco = unitdata.LocomotorData("Test", appearance="TREADS", speed=40.0, turn_rate=180.0,
+                                      acceleration=800.0, braking=400.0).validated()
+        unit = pathlab.unit_kind(unitdata.UnitData("test", "Test", loco, False, "CYLINDER", 6.0))
+        per_tick = pathlab.LOGICFRAMES_PER_GAME_SECOND
+        self.assertAlmostEqual(unit.speed, 40.0 / per_tick)
+        self.assertAlmostEqual(unit.turn_rate, math.pi / per_tick)
+        self.assertAlmostEqual(unit.acceleration, 800.0 / per_tick ** 2)
+        self.assertAlmostEqual(unit.braking, 400.0 / per_tick ** 2)
+        self.assertEqual(unit.radius, 6.0)
+
+    def test_a_group_spec_spreads_its_kinds_through_the_list(self):
+        a, b = kind(name="a"), kind(name="b")
+        group = pathlab.parse_group("a:4,b:2", {"a": a, "b": b})
+        self.assertEqual([k.name for k in group], ["a", "b", "a", "a", "b", "a"])
+        with self.assertRaises(SystemExit):
+            pathlab.parse_group("c:1", {"a": a})
+
+    @unittest.skipUnless(unitdata.install_present(), "no game install under RUN_DIR")
+    def test_the_install_has_the_seven_units(self):
+        units = unitdata.load_units()
+        self.assertEqual(set(units), set(unitdata.UNIT_OBJECTS))
+        for unit in units.values():
+            self.assertGreater(unit.locomotor.speed, 0.0)
+            self.assertGreater(unit.bounding_radius, 0.0)
+            self.assertEqual(unit.infantry, unit.locomotor.appearance == pathlab.TWO_LEGS)
+        self.assertIn(units["humvee"].locomotor.appearance, (pathlab.FOUR_WHEELS, pathlab.MOTORCYCLE))
+        self.assertEqual(units["crusader"].locomotor.appearance, pathlab.TREADS)
+
+
 class RunTests(unittest.TestCase):
     def test_a_small_column_crosses_the_choke(self):
-        result = pathlab.measure("choke", 4, 1, "column")
+        result = pathlab.measure("choke", [pathlab.STANDIN_TANK] * 4, 1, "column")
         self.assertEqual(result.stuck, 0)
         self.assertLess(result.frames, pathlab.MEASURE_MAX_FRAMES)
 

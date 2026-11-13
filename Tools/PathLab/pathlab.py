@@ -200,7 +200,8 @@ CROWD_TTC_STEER: bool = False           # doLocomotor would call ttcSteer right 
 CONTACT_SPEED_CAP: bool = True          # processCollision writes m_curMaxBlockedSpeed
 TTC_HORIZON_FRAMES: float = 3.0 * LOGICFRAMES_PER_GAME_SECOND
 TTC_NEAR_FRAMES: float = 0.5 * LOGICFRAMES_PER_GAME_SECOND     # the push falls off as a square past this
-TTC_STRENGTH: float = 0.75              # the push at contact, in shares of the unit's top speed
+TTC_STRENGTH: float = 0.25              # the push at contact, in shares of the unit's top speed; the stand-in
+                                        # tank's 0.75 bent real treads and wheels into a crawl
 TTC_AIR: float = 2.0                    # added to the radius sum between two moving units
 TTC_PARKED_SLACK: float = 4.0           # overlap allowed against a parked unit before it pushes
 TTC_SLOT_REACH: float = CELL            # a parked unit this far past contact from my goal never pushes
@@ -214,10 +215,23 @@ TTC_BEND_TRIES: tuple[float, ...] = (1.0, 0.5, 0.0)     # shares of the bend tri
 TTC_MIN_AIM: float = 0.01               # an aim point closer than this is not steered
 TTC_EPSILON: float = 1e-6
 TTC_EPSILON_FINE: float = 1e-9
+# crowdSteer lets a unit go within a cell of its corridor's end (AIUpdate.cpp:3266) and takes it back
+# when the nearest sample flips.  Under the braking slide that is a two-tick cycle a few units short of
+# the slot with a turn every tick, so updateProgress counts it as coming about and the ladder never
+# fires.  The contact cap's spacing hides it; without the cap it strands units.  On, the release holds
+# until destroyPath (AIUpdate.cpp:2600) clears the corridor.
+CROWD_END_LATCH: bool = False
 PROPOSED_TTC: dict[str, object] = {
     "CROWD_TTC_STEER": True,
     "CONTACT_SPEED_CAP": False,
+    "CROWD_END_LATCH": True,
 }
+# A soldier pinned between two parked hulls stands still while the side steps swing his nose, and a
+# hull caught in a two-tick cycle swings back and forth.  updateProgress (AIUpdate.cpp:2848-2862)
+# counts either as coming about, so no_progress never climbs and no rung fires.  On, a soldier who
+# turned without moving, or any unit whose turn reverses last tick's, is not coming about.
+LADDER_DITHER_FIX: bool = False
+PROPOSED_DITHER: dict[str, object] = {"LADDER_DITHER_FIX": True}
 
 # Locomotion: Locomotor.cpp's EA drives for treads, wheels and legs, and PhysicsUpdate.cpp under them
 TREADS, FOUR_WHEELS, MOTORCYCLE, TWO_LEGS = "TREADS", "FOUR_WHEELS", "MOTORCYCLE", "TWO_LEGS"
@@ -1217,6 +1231,7 @@ class Unit:
     # the stuck ladder (updateProgress, stuckRescue)
     last_progress: Point = (0.0, 0.0)
     last_progress_angle: float = 0.0
+    last_turn: float = 0.0                  # LADDER_DITHER_FIX: last tick's signed turn
     no_progress: int = 0
     rescue_stage: int = 0
     rescue_until: int = 0
@@ -1232,6 +1247,7 @@ class Unit:
     crowd_side: int = 1
     crowd_sample: int = 0
     corridor: CrowdCorridor | None = None
+    crowd_released: bool = False            # CROWD_END_LATCH: let go within a cell of the corridor's end
     crowd_lane_idx: int = 0
     crowd_lane_of: int = 0
     crowd_lane_space: float = 0.0
@@ -3062,7 +3078,10 @@ class Simulation:
         """AIUpdateInterface::updateProgress: under a fifth of the asked speed and not coming about
            is a frame of no progress.  The dither counter is a count only in the C++ and is left out."""
         moved = math.hypot(unit.x - unit.last_progress[0], unit.y - unit.last_progress[1])
-        turned = abs(normalize_angle(unit.facing - unit.last_progress_angle))
+        turn = normalize_angle(unit.facing - unit.last_progress_angle)
+        turned = abs(turn)
+        reversed_turn = turn * unit.last_turn < 0.0
+        unit.last_turn = turn
         unit.last_progress = unit.pos
         unit.last_progress_angle = unit.facing
         if unit.path is None or unit.waiting_for_path or not unit.on_path:
@@ -3078,6 +3097,8 @@ class Simulation:
             gl = math.hypot(gx, gy)
             dx, dy = unit.dir
             coming_about = ((dx * gx + dy * gy) / gl) < 0.87 if gl > 0.01 else True
+        if LADDER_DITHER_FIX and (reversed_turn or (unit.is_infantry and moved < TTC_EPSILON)):
+            coming_about = False
         if moved < asked * 0.2 and not coming_about:
             unit.no_progress += 1
             unit.progress_frames = 0
@@ -3243,7 +3264,10 @@ class Simulation:
         unit.crowd_sample = i
         here = corr.samples[i]
         my_r = unit.radius
+        if CROWD_END_LATCH and unit.crowd_released:
+            return goal_pos, speed
         if corr.length() - here.along < CELL:
+            unit.crowd_released = True      # read only under CROWD_END_LATCH
             return goal_pos, speed
         if not unit.crowd_lat_valid:
             unit.crowd_lat = unit.pending_crowd_lat if unit.has_pending_crowd_lat else corr.lat_of(i, unit.x, unit.y)
@@ -3863,6 +3887,7 @@ def destroy_path(unit: Unit) -> None:
     unit.path = None
     unit.waiting_for_path = False
     unit.corridor = None
+    unit.crowd_released = False
     unit.crowd_lat_valid = False
     unit.crowd_sample = 0
     unit.crowd_fit = 0
@@ -4214,8 +4239,9 @@ def measure_searches(map_kind: str, seeds: int, pairs: int) -> None:
           f"{cells / max(searched, 1):>7.0f} {ground[6][0]:>4}/{ground[6][1]:<4} {ground[2][0]:>4}/{ground[2][1]:<4}")
 
 
-def setting_rows(proposed: bool, ttc: bool) -> list[tuple[str, dict[str, object]]]:
-    """The game, then the proposed ladder, TTC steering and both, as the flags ask."""
+def setting_rows(proposed: bool, ttc: bool, dither: bool = False) -> list[tuple[str, dict[str, object]]]:
+    """The game, then the proposed ladder, TTC steering and both, as the flags ask; with `dither`
+       each of them again with the dither fix."""
     rows: list[tuple[str, dict[str, object]]] = [("game", {})]
     if proposed:
         rows.append(("proposed", PROPOSED_LADDER))
@@ -4223,6 +4249,8 @@ def setting_rows(proposed: bool, ttc: bool) -> list[tuple[str, dict[str, object]
         rows.append(("ttc", PROPOSED_TTC))
     if proposed and ttc:
         rows.append(("proposed+ttc", {**PROPOSED_LADDER, **PROPOSED_TTC}))
+    if dither:
+        rows += [(f"{label}+dither", {**settings, **PROPOSED_DITHER}) for label, settings in rows]
     return rows
 
 
@@ -4235,7 +4263,7 @@ def run_headless(args: argparse.Namespace) -> None:
     print(f"map {args.gamemap or args.map}  scenario {args.scenario}  units {describe_group(kinds)}  seeds {args.headless}  "
           f"{LOGICFRAMES_PER_SECOND} Hz at {GAME_SPEED_PERCENT}%")
     print_head()
-    for label, ladder in setting_rows(args.proposed, args.ttc):
+    for label, ladder in setting_rows(args.proposed, args.ttc, args.dither):
         if not args.sweep:
             with overriding(**ladder):
                 print_row(label, measure(args.map, kinds, args.headless, args.scenario, game_map=args.gamemap,
@@ -4463,11 +4491,13 @@ def main() -> None:
     parser.add_argument("--ttc", action="store_true",
                         help="PROPOSED_TTC, steering by time to collision without the contact speed cap: "
                              "another row headless (and one with --proposed), the only behaviour in the window")
+    parser.add_argument("--dither", action="store_true",
+                        help="PROPOSED_DITHER, the ladder seeing a turn on the spot: every row again with it")
     args = parser.parse_args()
     if args.headless:
         run_headless(args)
         return
-    _, settings = setting_rows(args.proposed, args.ttc)[-1]
+    _, settings = setting_rows(args.proposed, args.ttc, args.dither)[-1]
     with overriding(**settings):
         run_window(args)
 

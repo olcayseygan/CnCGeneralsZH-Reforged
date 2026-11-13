@@ -503,6 +503,56 @@ class TtcTests(unittest.TestCase):
         self.assertEqual(seen[0][3], 0.0)
         self.assertEqual(seen[1][3], pathlab.FAST_AS_POSSIBLE)
 
+    def test_the_end_latch_keeps_crowd_steer_let_go(self):
+        """Inside the last cell crowdSteer lets go; stepping back out takes the unit back into its
+           lane unless the latch holds the release until the path is destroyed."""
+        aims = []
+        for latch in (False, True):
+            with pathlab.overriding(CROWD_END_LATCH=latch):
+                unit = self.mover(299.0, 200.0, 1, (300.0, 200.0))
+                unit.path = Path([(100.0, 200.0), (300.0, 200.0)], [0, 1])
+                unit.has_pending_crowd_lat, unit.pending_crowd_lat = True, 10.0
+                sim = Simulation(walled(40), [unit])
+                goal = (300.0, 200.0)
+                self.assertEqual(sim.crowd_steer(unit, goal, 1.0)[0], goal)
+                self.assertTrue(unit.crowd_released)
+                unit.x = 200.0
+                aims.append(sim.crowd_steer(unit, goal, 1.0)[0])
+                pathlab.destroy_path(unit)
+                self.assertFalse(unit.crowd_released)
+        self.assertNotEqual(aims[0], (300.0, 200.0))
+        self.assertEqual(aims[1], (300.0, 200.0))
+
+
+class DitherTests(unittest.TestCase):
+    """LADDER_DITHER_FIX: a turn on the spot, or back and forth, is not coming about."""
+
+    def climbs(self, infantry: bool, swings: tuple[float, ...], step: float) -> int:
+        unit = Unit(100.0, 100.0, id=1, kind=pathlab.default_kind() if not infantry else
+                    pathlab.UnitKind(name="soldier", appearance=pathlab.TWO_LEGS, infantry=True,
+                                     major_radius=7.0, radius=7.0, speed=1.0, speed_damaged=1.0,
+                                     turn_rate=1.0, turn_rate_damaged=1.0, acceleration=1.0,
+                                     acceleration_damaged=1.0, braking=1.0))
+        unit.moving, unit.goal = True, (400.0, 100.0)
+        unit.path = Path([unit.pos, unit.goal], [0, 1])
+        unit.loco_goal = unit.goal
+        sim = Simulation(walled(40), [unit])
+        for tick in range(30):
+            unit.facing = swings[tick % len(swings)]
+            unit.x += step
+            sim.update_progress(unit)
+        return unit.no_progress
+
+    def test_the_game_counts_a_swing_as_progress(self):
+        self.assertEqual(self.climbs(False, (1.5, -1.5), 0.0), 0)
+        self.assertEqual(self.climbs(True, (1.0, 1.6, 2.2), 0.0), 0)
+
+    def test_the_fix_sees_the_wedge(self):
+        with pathlab.overriding(LADDER_DITHER_FIX=True):
+            self.assertGreater(self.climbs(False, (1.5, -1.5), 0.0), 20)          # back and forth
+            self.assertGreater(self.climbs(True, (1.0, 1.6, 2.2), 0.0), 20)        # a soldier on the spot
+            self.assertEqual(self.climbs(False, (0.0, 0.6, 1.2, 1.8, 2.4), 0.0), 0)  # a hull coming about
+
 
 class CrowdTests(unittest.TestCase):
     def test_the_band_measures_the_ground_either_side(self):

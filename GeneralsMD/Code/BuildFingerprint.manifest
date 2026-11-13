@@ -215,6 +215,7 @@ Data/Art/Textures/TRSupCtr_Win.tga
 Data/Art/Textures/TRSupCtr_WinD.tga
 Data/Art/Textures/TRSupply_Beam.tga
 Data/Art/Textures/TRSupply_Wreck.tga
+Data/Art/Textures/TRUpgrades.tga
 Data/Art/Textures/TRWarFac_Annex.tga
 Data/Art/Textures/TRWarFac_AnnexD.tga
 Data/Art/Textures/TRWarFac_AnnexE.tga
@@ -839,6 +840,7 @@ Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyeTalents.ini
 Data/INI/MappedImages/HandCreated/ReforgedLobbySpot.ini
 Data/INI/MappedImages/HandCreated/ReforgedReconHud.ini
 Data/INI/MappedImages/HandCreated/TRCameos.ini
+Data/INI/MappedImages/HandCreated/TRUpgrades.ini
 Data/INI/ModernWater.ini
 Data/INI/Mouse.ini
 Data/INI/MultiplayerReforged.ini

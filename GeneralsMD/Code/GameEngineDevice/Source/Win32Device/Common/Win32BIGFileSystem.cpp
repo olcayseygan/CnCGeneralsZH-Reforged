@@ -420,11 +420,11 @@ Bool Win32BIGFileSystem::loadBigFilesFromDirectory(AsciiString dir, AsciiString 
 			continue;
 		}
 		if (isReforgedArchive(*it)) {
-			// Classic draws retail and leaves all of them shut; Detailed Models off leaves the batches
-			// shut and HD Textures off the base art.  The rest wait for the end of init, which mounts them
-			// over everything retail.  None of them reaches the INI CRC either way, so which a player has
-			// decides only what he sees.
-			const Bool wanted = !theClassicGraphics && (ArchiveFileSystem::isReforgedBaseArt(*it) ? theHDTextures : theDetailedModels);
+			// Classic draws retail and leaves all of them shut but the skins' sheets; Detailed Models off
+			// leaves the batches shut and HD Textures off the base art.  The rest wait for the end of init,
+			// which mounts them over everything retail.  None of them reaches the INI CRC either way, so
+			// which a player has decides only what he sees.
+			const Bool wanted = ArchiveFileSystem::reforgedArchiveWanted(*it, theClassicGraphics, theHDTextures, theDetailedModels);
 			if (wanted && std::find(m_reforgedArt.begin(), m_reforgedArt.end(), *it) == m_reforgedArt.end()) {
 				m_reforgedArt.push_back(*it);
 			}

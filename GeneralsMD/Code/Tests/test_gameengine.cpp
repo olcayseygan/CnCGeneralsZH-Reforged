@@ -25586,6 +25586,22 @@ TEST(reforged_archives_mount_base_art_first_then_batches_by_name)
 	CHECK( !ArchiveFileSystem::isReforgedBaseArt( AsciiString( "ReforgedNeutralA.big" ) ) );
 }
 
+/* Classic Graphics shuts every Reforged archive, HD Textures off the base art and Detailed Models off the
+	 model batches.  ReforgedSkins.big holds only the online skins' sheets, a Classic and a Reforged copy
+	 each, and no model, so every combination mounts it: the Classic gold would never load otherwise. */
+TEST(reforged_archives_wanted_by_options_and_the_skins_always)
+{
+	for( Int i = 0; i < 8; ++i )
+	{
+		const Bool classic = ( i & 1 ) != 0, hd = ( i & 2 ) != 0, detailed = ( i & 4 ) != 0;
+		CHECK( ArchiveFileSystem::reforgedArchiveWanted( AsciiString( "ReforgedSkins.big" ), classic, hd, detailed ) );
+		CHECK( ArchiveFileSystem::reforgedArchiveWanted( AsciiString( "C:\\Run\\reforgedskins.BIG" ), classic, hd, detailed ) );
+		CHECK_EQ( ArchiveFileSystem::reforgedArchiveWanted( AsciiString( "ReforgedTextures.big" ), classic, hd, detailed ), !classic && hd );
+		CHECK_EQ( ArchiveFileSystem::reforgedArchiveWanted( AsciiString( "ReforgedUSA.big" ), classic, hd, detailed ), !classic && detailed );
+		CHECK_EQ( ArchiveFileSystem::reforgedArchiveWanted( AsciiString( "ReforgedSkinsExtra.big" ), classic, hd, detailed ), !classic && detailed );
+	}
+}
+
 namespace {
 	// an archive that lists names and opens nothing: all mountOverRetail reads is the listing
 	class ListingOnlyArchive : public ArchiveFile

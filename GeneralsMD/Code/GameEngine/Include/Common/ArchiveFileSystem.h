@@ -191,6 +191,10 @@ class ArchiveFileSystem : public SubsystemInterface
 	/// One of those three; any other Reforged*.big is a batch of rebuilt models, which Detailed Models
 	/// in Options can leave out.
 	static Bool		isReforgedBaseArt(const AsciiString& path);
+	/// Whether this Reforged*.big mounts under these Options: Classic Graphics shuts them all, HD Textures
+	/// off the base art and Detailed Models off the batches, except ReforgedSkins.big, the online skins'
+	/// sheets for both looks, which every setting mounts.
+	static Bool		reforgedArchiveWanted(const AsciiString& path, Bool classicGraphics, Bool hdTextures, Bool detailedModels);
 
 protected:
 	virtual void					loadIntoDirectoryTree(const ArchiveFile *archiveFile, const AsciiString& archiveFilename, Bool overwrite = FALSE );	///< load the archive file's header information and apply it to the global archive directory tree.

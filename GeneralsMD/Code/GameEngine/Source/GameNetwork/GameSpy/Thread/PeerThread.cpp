@@ -1876,6 +1876,7 @@ void PeerThreadClass::handleQMMatch(PEER peer, Int mapIndex, Int seed,
 		resp.qmStatus.status = QM_MATCHED;
 		for (i=0; i<MAX_SLOTS; ++i)
 		{
+			resp.qmStatus.skins[i] = 0;		// EA's matchbot knows no skins (TankSkin.h)
 			if (playerName[i])
 			{
 				resp.stagingRoomPlayerNames[i] = playerName[i];

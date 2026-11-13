@@ -166,6 +166,16 @@ Bool ArchiveFileSystem::isReforgedBaseArt(const AsciiString& path)
 	return reforgedMountRank(path) < reforgedMountRank(AsciiString::TheEmptyString);
 }
 
+Bool ArchiveFileSystem::reforgedArchiveWanted(const AsciiString& path, Bool classicGraphics, Bool hdTextures, Bool detailedModels)
+{
+	// the online skins' sheets: no model and no retail name, a Classic and a Reforged copy of each, so
+	// every look wants them and a sheet the models do not ask for is never read
+	if (strcasecmp(archiveBaseName(path), "ReforgedSkins.big") == 0) {
+		return TRUE;
+	}
+	return !classicGraphics && (isReforgedBaseArt(path) ? hdTextures : detailedModels);
+}
+
 void ArchiveFileSystem::mountOverRetail(ArchiveFile *archiveFile, const AsciiString& archiveFilename)
 {
 	FilenameList models;

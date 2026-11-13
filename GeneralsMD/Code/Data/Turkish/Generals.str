@@ -17697,7 +17697,7 @@ CONTROLBAR:TurkiyeBeretDesignate
 END
 
 CONTROLBAR:ToolTipTurkiyeBeretDesignate
-"Araca ya da binaya 4 saniye lazer tutar, sonra yukarıdan bir İHA dalıp tepesine çakılır. Lazer tutarken saklanamaz, yerinden oynatırsan iş iptal olur. \n Geri Sayım: 1:00"
+"Araca ya da binaya 4 saniye lazer tutar, sonra başının üstünden bir İHA gelip hedefe dalar. Lazer tutarken saklanamaz, yerinden oynatırsan iş iptal olur. \n Geri Sayım: 1:00"
 END
 
 CONTROLBAR:TurkiyeBeretKarguSwarm

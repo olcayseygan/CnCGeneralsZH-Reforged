@@ -690,6 +690,9 @@ Bool SpecialAbilityUpdate::handlePackingProcessing()
   const SpecialAbilityUpdateModuleData* data = getSpecialAbilityUpdateModuleData();
   if( m_animFrames > 0 )
   {
+    if( m_packingState == STATE_UNPACKING )
+      aimUnpackLaser();
+
     m_animFrames--;
     if( m_animFrames == 0 )
     {
@@ -864,8 +867,8 @@ void SpecialAbilityUpdate::startUnpacking()
     ai->aiBusy(CMD_FROM_AI);
 
   // UnpackLaser: a beam from the attach bone onto the target for as long as the unpacking lasts (the
-  // Maroon Beret lasing a target). The beam's LaserUpdate follows both ends on the client; logic only
-  // makes the object and takes it away again.
+  // Maroon Beret lasing a target). Logic makes the object and takes it away again; aimUnpackLaser
+  // points it every frame of the unpacking.
   Object *target = TheGameLogic->findObjectByID( m_targetID );
   const ThingTemplate *laserTemplate = data->m_unpackLaserName.isEmpty() ? NULL : TheThingFactory->findTemplate( data->m_unpackLaserName );
   if( target && laserTemplate )
@@ -874,15 +877,33 @@ void SpecialAbilityUpdate::startUnpacking()
     Object *laser = TheThingFactory->newObject( laserTemplate, getObject()->getTeam() );
     laser->setPosition( getObject()->getPosition() );
     m_unpackLaserID = laser->getID();
-
-    static NameKeyType key_LaserUpdate = NAMEKEY( "LaserUpdate" );
-    Drawable *laserDraw = laser->getDrawable();
-    LaserUpdate *update = laserDraw ? (LaserUpdate*)laserDraw->findClientUpdateModule( key_LaserUpdate ) : NULL;
-    // no end point: given one, the beam stays on it, and given none it follows the target's drawable
-    // the way it follows the bone at the start
-    if( update )
-      update->initLaser( getObject(), target, getObject()->getPosition(), NULL, data->m_specialObjectAttachToBoneName );
+    aimUnpackLaser();
   }
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The beam's far end on the middle of the target, the way the Missile Defender's laser is aimed
+	* every frame of its preparation (continuePreparation). Left to follow the target by itself, the
+	* beam's LaserUpdate ends it at the target's feet, and a beam from a rifle a few feet up to a tank's
+	* ground point runs along the ground, in and out of every rise between. The near end follows the
+	* attach bone on the client. Only the beam's client update is touched. */
+//-------------------------------------------------------------------------------------------------
+void SpecialAbilityUpdate::aimUnpackLaser()
+{
+  Object *laser = TheGameLogic->findObjectByID( m_unpackLaserID );
+  Object *target = TheGameLogic->findObjectByID( m_targetID );
+  Drawable *laserDraw = laser ? laser->getDrawable() : NULL;
+  if( !laserDraw || !target )
+    return;
+
+  static NameKeyType key_LaserUpdate = NAMEKEY( "LaserUpdate" );
+  LaserUpdate *update = (LaserUpdate*)laserDraw->findClientUpdateModule( key_LaserUpdate );
+  if( !update )
+    return;
+
+  Coord3D endPos;
+  target->getGeometryInfo().getCenterPosition( *target->getPosition(), endPos );
+  update->initLaser( getObject(), NULL, getObject()->getPosition(), &endPos, getSpecialAbilityUpdateModuleData()->m_specialObjectAttachToBoneName );
 }
 
 //-------------------------------------------------------------------------------------------------

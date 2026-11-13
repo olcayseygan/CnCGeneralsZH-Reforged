@@ -264,6 +264,7 @@ protected:
 	Object* createSpecialObject();
 	void killSpecialObjects();
 	void killUnpackLaser();
+	void aimUnpackLaser();
 
 	Bool handlePackingProcessing();
 	void startPacking(Bool success);

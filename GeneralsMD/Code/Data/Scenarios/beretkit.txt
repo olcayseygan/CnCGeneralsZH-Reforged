@@ -3,7 +3,7 @@
 # Kargu Swarm (the button's MSG_DO_WEAPON_AT_LOCATION, weaponat on the tertiary slot) at a
 # Battlemaster 300 away: a 1.5 s kneel, three drones up together, diving half a second apart.
 # Designate Target (the button's MSG_DO_SPECIAL_POWER_AT_OBJECT, as shiftpower sends it) on a
-# Crusader 250 away the other way: 4 s on one knee lasing, then the strike drone's dive from 450 up,
+# Crusader 250 away the other way: 4 s lasing with the carbine up, then the strike drone's dive,
 # 250 armour-piercing. The power's minute runs
 # from the moment he is made, as every unit power's clock does: a game minute is 1200 ticks at 1.5x,
 # and a file frame is two thirds of a tick there, so it is called at 1900. Each target is out of the carbine's 140, so only the call
@@ -17,9 +17,11 @@
 #
 # Measured 2026-11-13: the Battlemaster 400, 400 at 100, 130 at 500 (three drones of 90); the
 # Crusader 480 at 1898, 480 at 1960 while he lases, 230 at 2200. A temporary log had the three Kargu
-# launched on ticks 74, 76 and 78 at 12, 24 and 36 beside him, leave the hover on 98, 110 and 122 and
-# go off on 150, 162 and 174; the laser up from tick 1269 to 1349 (80 ticks, 4 s), and the strike
-# drone start at 450 over the Crusader on 1349 and hit it on 1382. HEADLESS CRC 0x076C7B50 at 1800.
+# launched on ticks 74, 76 and 78 at 12, 24 and 36 beside him, leave the hover on 98, 130 and 162 and
+# go off on 163, 194 and 225; the beam from his muzzle 10.5 over the ground (the charge-setting
+# kneel held it at 3.9) to the Crusader's middle from tick 1269 to 1349 (80 ticks, 4 s), and the
+# strike drone start 220 over the Crusader and 350 back on 1349 and hit it on 1420.
+# HEADLESS CRC 0x65D89EC4 at 1800.
 
 30    spawn       0  TurkiyeInfantryMaroonBeret  1  1000 1000
 30    spawn       1  AmericaTankCrusader         1  1250 1000

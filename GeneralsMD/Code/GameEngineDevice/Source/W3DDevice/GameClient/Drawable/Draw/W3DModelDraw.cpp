@@ -260,6 +260,7 @@ enum ACBits
 	MAINTAIN_FRAME_ACROSS_STATES2,
 	MAINTAIN_FRAME_ACROSS_STATES3,
 	MAINTAIN_FRAME_ACROSS_STATES4,
+	PREATTACK_RESTARTS,
 };
 
 static const char *ACBitsNames[] =
@@ -274,7 +275,8 @@ static const char *ACBitsNames[] =
 	"MAINTAIN_FRAME_ACROSS_STATES2",
 	"MAINTAIN_FRAME_ACROSS_STATES3",
 	"MAINTAIN_FRAME_ACROSS_STATES4",
-	
+	"PREATTACK_RESTARTS",
+
 	NULL
 };
 
@@ -2943,11 +2945,16 @@ void W3DModelDraw::applyQuadAttitude(Matrix3D& mtx)
 	const Real pitch = m_quad.leanX * c + m_quad.leanY * s;		// toward the nose: nose down
 	const Real roll = m_quad.leanY * c - m_quad.leanX * s;		// toward the left side: left side down
 	const Vector3 at = mtx.Get_Translation();
+	// a uniform scale the drawable carries in (its instance matrix: the Beret's Kargu, drawn at the
+	// size of the one in his hands while it stands on the ground) survives the new attitude
+	const Real scale = mtx.Get_X_Vector().Length();
 	mtx.Make_Identity();
 	mtx.Set_Translation(at);
 	mtx.Rotate_Z(m_quad.yaw);
 	mtx.Rotate_Y(pitch);
 	mtx.Rotate_X(-roll);
+	if (fabs(scale - 1.0f) > 0.001f)
+		mtx.Scale(scale);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -3866,10 +3873,15 @@ void W3DModelDraw::setModelState(const ModelConditionInfo* newState)
 			// he's already got one, you see
 			return;
 		} 
-		// check for allow-to-finish implicit transitions
+		// check for allow-to-finish implicit transitions; a PREATTACK_RESTARTS animation also plays out
+		// before a transition from it (the Beret's last placing finishes before he stands up through
+		// KGU), and a state with no transition from it (walking, dying) still cuts it off
 		else if (newState != m_curState &&
-							newState->m_allowToFinishKey != NAMEKEY_INVALID &&
-							newState->m_allowToFinishKey == m_curState->m_transitionKey &&
+							((newState->m_allowToFinishKey != NAMEKEY_INVALID &&
+								newState->m_allowToFinishKey == m_curState->m_transitionKey) ||
+							 (testFlagBit(m_curState->m_flags, PREATTACK_RESTARTS) &&
+								m_curState->m_transitionKey != NAMEKEY_INVALID && newState->m_transitionKey != NAMEKEY_INVALID &&
+								findTransitionForSig(buildTransitionSig(m_curState->m_transitionKey, newState->m_transitionKey)) != NULL)) &&
 							m_renderObject &&
 							!isAnimationComplete(m_renderObject))
 		{
@@ -4810,6 +4822,16 @@ void W3DModelDraw::setAnimationLoopDuration(UnsignedInt numFrames)
 	// guesses from the first animation of each, as setAnimationCompletionTime always did.
 	UnsignedInt curFrames = numFrames;
 	m_nextStateAnimLoopDuration = NO_NEXT_DURATION;
+
+	// PREATTACK_RESTARTS: an animation that runs on past the preattack, through the shots, is started
+	// over at its own speed when the preattack begins instead of squeezed into it, so it keeps time
+	// with the shots (the Maroon Beret's Kargu placing: 3.7 s of three placings, one a shot, played
+	// whole inside the 1.4 s to the first one, and then held on its last frame)
+	if (m_curState != NULL && testFlagBit(m_curState->m_flags, PREATTACK_RESTARTS) && m_nextState == NULL)
+	{
+		adjustAnimation(m_curState, -1.0);
+		return;
+	}
 	if (m_curState != NULL && m_curState->m_transitionSig != NO_TRANSITION && m_curState->m_animations.size() > 0 &&
 			m_nextState != NULL && m_nextState->m_transitionSig == NO_TRANSITION && m_nextState->m_animations.size() > 0)
 	{

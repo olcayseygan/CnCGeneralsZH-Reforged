@@ -108,6 +108,25 @@ static void parseHoverSpot( INI *ini, void * /*instance*/, void *store, const vo
 }
 
 //-----------------------------------------------------------------------------
+// HoverGrowFrom's size, written to the picture only, as the drawable's instance matrix. Not its
+// instance scale: a render object made while that is off one is a scaled copy of the model, which
+// the draw then scaled again, and the Kargu came out a fifth of its size and pale.
+static void setHoverDrawScale( Object *obj, Real scale )
+{
+	Drawable *draw = obj->getDrawable();
+	if( draw == NULL )
+		return;
+	if( scale == 1.0f )
+	{
+		draw->setInstanceMatrix( NULL );
+		return;
+	}
+	Matrix3D instance( true );
+	instance.Scale( scale );
+	draw->setInstanceMatrix( &instance );
+}
+
+//-----------------------------------------------------------------------------
 void DumbProjectileBehaviorModuleData::buildFieldParse(MultiIniFieldParse& p)
 {
   UpdateModuleData::buildFieldParse(p);
@@ -449,8 +468,8 @@ void DumbProjectileBehavior::projectileLaunchAtObjectOrPosition(
 		m_hoverBase.z = TheTerrainLogic->getGroundHeight( m_hoverBase.x, m_hoverBase.y ) + overGround;
 		projectile->setPosition( &m_hoverBase );
 		projectile->setOrientation( launcher->getOrientation() );
-		if( d->m_hoverGrowFrom > 0.0f && projectile->getDrawable() )
-			projectile->getDrawable()->setInstanceScale( d->m_hoverGrowFrom * projectile->getTemplate()->getAssetScale() );
+		if( d->m_hoverGrowFrom > 0.0f )
+			setHoverDrawScale( projectile, d->m_hoverGrowFrom );
 
 		UnsignedInt now = TheGameLogic->getFrame();
 		UnsignedInt hoverFrames = groundFrames + d->m_hoverTime + shot * (UnsignedInt)d->m_hoverStagger;
@@ -870,15 +889,15 @@ UpdateSleepTime DumbProjectileBehavior::update()
 			if( getObject()->getPhysics() )
 				getObject()->getPhysics()->scrubVelocityZ( 0.0f );
 			// picture only: drawn at the size the hands held it on the ground, full size once up
-			if( d->m_hoverGrowFrom > 0.0f && getObject()->getDrawable() )
-				getObject()->getDrawable()->setInstanceScale( ( d->m_hoverGrowFrom + risen * ( 1.0f - d->m_hoverGrowFrom ) ) * getObject()->getTemplate()->getAssetScale() );
+			if( d->m_hoverGrowFrom > 0.0f )
+				setHoverDrawScale( getObject(), d->m_hoverGrowFrom + risen * ( 1.0f - d->m_hoverGrowFrom ) );
 			return UPDATE_SLEEP_NONE;
 		}
 
 		// off the hover onto the path, from where it holds to where its target stands now
 		m_hoverEndFrame = 0;
-		if( d->m_hoverGrowFrom > 0.0f && getObject()->getDrawable() )
-			getObject()->getDrawable()->setInstanceScale( getObject()->getTemplate()->getAssetScale() );
+		if( d->m_hoverGrowFrom > 0.0f )
+			setHoverDrawScale( getObject(), 1.0f );
 		m_flightPathStart = *getObject()->getPosition();
 		Object* victim = TheGameLogic->findObjectByID( m_victimID );
 		if( victim )

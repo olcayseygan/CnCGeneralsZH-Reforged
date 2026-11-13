@@ -150,7 +150,6 @@ OPTION_BOOL_ACCESSORS( m_aircraftAltitudeLine )
 OPTION_BOOL_ACCESSORS( m_showNetBox )
 OPTION_INT_ACCESSORS( m_minimapSize )
 OPTION_BOOL_ACCESSORS( m_showEmptyBuildingPips )
-OPTION_BOOL_ACCESSORS( m_tankSkin1K )
 OPTION_BOOL_ACCESSORS( m_useShadowVolumesForSkins )
 OPTION_BOOL_ACCESSORS( m_shadowsForProjectiles )
 OPTION_BOOL_ACCESSORS( m_shadowsForProps )
@@ -637,13 +636,6 @@ const OptionDef TheOptionCatalog[] =
 	{ "EmptyBuildingPips",				OPT_WND( "CheckEmptyBuildingPips" ), "GUI:EmptyBuildingPips",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_showEmptyBuildingPips, set_m_showEmptyBuildingPips },
-
-	// The gold 1K skin on this player's Crusaders, Battlemasters and Scorpions, a gift to everyone.  It
-	// goes into the player's lobby seat as the lobby is set up, so everybody in the match sees it, and
-	// a change waits for the next lobby.  Drawing only: the logic and the checksums never see it.
-	{ "TankSkin1K",								OPT_WND( "CheckTankSkin1K" ), "GUI:TankSkin1K",
-		OPTION_BOOL, APPLY_NEXT_MAP, 0, 1,
-		get_m_tankSkin1K, set_m_tankSkin1K },
 
 	// Which language the words are in.  English is the string table the game shipped with, and every
 	// other entry is a translation laid over it, so a line the translation lacks stays English.  The

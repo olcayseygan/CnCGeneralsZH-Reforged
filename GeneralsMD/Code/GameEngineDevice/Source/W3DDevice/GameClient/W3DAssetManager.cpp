@@ -74,6 +74,7 @@
 #include "Common/GlobalData.h"
 #include "Common/GameCommon.h"
 #include "Common/FileSystem.h"
+#include "GameClient/TankSkin.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -407,19 +408,19 @@ static Bool skinSheetExists(const char *sheet)
 }
 
 //---------------------------------------------------------------------
-/** Every rebuilt sheet (<name>_R) robj draws that has a "<skinPrefix><sheet>" texture on disk is
-	swapped for it, on robj's own meshes.  Only the rebuilt models' sheets: the skins are painted over
-	their layout, and a retail model's sheet of another layout must never take one.  The house colour
-	sheets (ZHC*) stay, so the team colour still shows, and a sheet with no skin texture beside it stays
-	too: a missing file, or the archive shut under Classic Graphics, costs the look, never the model. */
-void W3DAssetManager::applySkin(RenderObjClass *robj, const char *skinPrefix)
+/** Every sheet robj draws that skin `skin` pairs with a replacement (SkinsReforged.ini) is swapped
+	for it, on robj's own meshes, when the replacement is on disk.  The table pairs both the rebuilt
+	models' sheets and retail's, each with a sheet painted on its own layout, and the house colour
+	sheets (ZHC*) never take one, so the team colour still shows.  A missing replacement, or its
+	archive shut under Classic Graphics, costs the look, never the model. */
+void W3DAssetManager::applySkin(RenderObjClass *robj, Int skin)
 {
 	if (robj->Class_ID() == RenderObjClass::CLASSID_HLOD)
 	{
 		for (Int i = 0; i < robj->Get_Num_Sub_Objects(); i++)
 		{
 			RenderObjClass *sub_obj = robj->Get_Sub_Object(i);
-			applySkin(sub_obj, skinPrefix);
+			applySkin(sub_obj, skin);
 			REF_PTR_RELEASE(sub_obj);
 		}
 		return;
@@ -439,16 +440,10 @@ void W3DAssetManager::applySkin(RenderObjClass *robj, const char *skinPrefix)
 		TextureClass *oldTex = material->Peek_Texture(i);
 		REF_PTR_RELEASE(material);	// the mesh keeps its own reference to oldTex
 		const char *sheet = oldTex ? oldTex->Get_Texture_Name() : NULL;
-		if (sheet == NULL || strncasecmp(sheet, "ZHC", 3) == 0 || strncasecmp(sheet, skinPrefix, strlen(skinPrefix)) == 0)
+		if (sheet == NULL || strncasecmp(sheet, "ZHC", 3) == 0)
 			continue;
-		const char *dot = strrchr(sheet, '.');
-		const size_t stem = dot ? (size_t)(dot - sheet) : strlen(sheet);
-		if (stem < 2 || strncasecmp(sheet + stem - 2, "_R", 2) != 0)
-			continue;
-
-		char skinSheet[MAX_PATH];
-		snprintf(skinSheet, ARRAY_SIZE(skinSheet), "%s%s", skinPrefix, sheet);
-		if (!skinSheetExists(skinSheet))
+		const char *skinSheet = TankSkin_replacementSheet(skin, sheet);
+		if (skinSheet == NULL || !skinSheetExists(skinSheet))
 			continue;
 		TextureClass *newTex = Get_Texture(skinSheet);
 		newTex->Get_Filter() = oldTex->Get_Filter();	// the sheet's clamp and mip settings from the model, not the defaults
@@ -835,7 +830,7 @@ RenderObjClass * W3DAssetManager::Create_Render_Obj(
 	const int color,
 	const char *oldTexture,
 	const char *newTexture,
-	const char *skinPrefix
+	Int skin
 )
 {
 	#ifdef DUMP_PERF_STATS
@@ -852,7 +847,7 @@ RenderObjClass * W3DAssetManager::Create_Render_Obj(
 	Bool reallyscale = (WWMath::Fabs(scale - ident_scale) > scale_epsilon);
 	Bool reallycolor = (color & 0xFFFFFF) != 0;	//black is not a valid color and assumes no custom coloring.
 	Bool reallytexture = (oldTexture != NULL && newTexture != NULL);
-	Bool reallyskin = (skinPrefix != NULL && *skinPrefix != 0);
+	Bool reallyskin = (skin != 0);
 
 	// base case, no scale or color
 	if (!reallyscale && !reallycolor && !reallytexture && !reallyskin)
@@ -872,7 +867,7 @@ RenderObjClass * W3DAssetManager::Create_Render_Obj(
 		// the skin's own prototype, beside the plain one of the same colour; nothing else is in the name
 		char plain[MUNGED_NAME_SIZE];
 		strlcpy(plain, newname, ARRAY_SIZE(plain));
-		snprintf(newname, MUNGED_NAME_SIZE, "#%s%s", skinPrefix, plain);	// '#' first, as WW3D skips a munged name
+		snprintf(newname, MUNGED_NAME_SIZE, "#K%d%s", skin, plain);	// '#' first, as WW3D skips a munged name
 	}
 
 	// see if we got a cached version
@@ -993,7 +988,7 @@ RenderObjClass * W3DAssetManager::Create_Render_Obj(
 		}
 
 		if (reallyskin)
-			applySkin(rendobj, skinPrefix);
+			applySkin(rendobj, skin);
 
 		if (reallycolor)
 			Recolor_Asset(rendobj,color);

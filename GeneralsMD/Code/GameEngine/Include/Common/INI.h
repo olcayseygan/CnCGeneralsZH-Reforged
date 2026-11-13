@@ -234,6 +234,7 @@ public:
 	static void parseInGameUIDefinition( INI *ini );
 	static void parseControlBarSchemeDefinition( INI *ini );
 	static void parseShellMenuSchemeDefinition( INI *ini );
+	static void parseSkinDefinition( INI *ini );		///< SkinsReforged.ini, TankSkin.cpp
 	static void parseCampaignDefinition( INI *ini );
 	static void parseAudioSettingsDefinition( INI *ini );
 	static void parseMiscAudio( INI *ini );

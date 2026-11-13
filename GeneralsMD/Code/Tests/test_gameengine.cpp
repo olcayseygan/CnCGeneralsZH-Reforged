@@ -25201,31 +25201,36 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 
 #include "GameClient/TankSkin.h"
 
-/* A human seat's tank skin is one more field after the handicap, which is then written at full
-	 health too, and only when the seat has a skin: a string without one stays byte for byte what it
-	 was, an older build stops at the handicap, and a string from before the field reads as no skin.
-	 An AI seat never carries one. */
-TEST(tank_skin_rides_the_slot_entry_and_an_old_string_reads_as_none)
+/* A human seat's skin loadout is one more field after the handicap, ",K1.3", the handicap then
+	 written at full health too, and only when the seat has skins: a string without one stays byte for
+	 byte what it was, an older build stops at the handicap, and a string from before the field reads
+	 as none.  An AI seat never carries one. */
+TEST(skin_loadout_rides_the_slot_entry_and_an_old_string_reads_as_none)
 {
 	CHECK( bootOnce() );
 
-	CHECK_EQ( SkinFromSlotField( NULL ), (Int)TANK_SKIN_NONE );
-	CHECK_EQ( SkinFromSlotField( "1" ), (Int)TANK_SKIN_1K );
-	static const char *const refused[] = { "", "0", "2", "-1", "x" };
+	const SkinLoadout oneAndThree = ( (SkinLoadout)1 << 1 ) | ( (SkinLoadout)1 << 3 );
+	CHECK_STR( TankSkin_slotField( 0 ).str(), "" );
+	CHECK_STR( TankSkin_slotField( oneAndThree ).str(), ",K1.3" );
+	CHECK_STR( TankSkin_slotField( (SkinLoadout)1 << TANK_SKIN_MAX_ID ).str(), ",K63" );
+	CHECK( TankSkin_fromSlotField( "K1.3" ) == oneAndThree );
+	CHECK( TankSkin_fromSlotField( "K63" ) == (SkinLoadout)1 << TANK_SKIN_MAX_ID );
+	static const char *const refused[] = { "", "K", "K0", "K64", "K1..3", "K1.", "K1,3", "x", "100", "k1" };
 	for( Int r = 0; r < (Int)ARRAY_SIZE( refused ); ++r )
-		CHECK_EQ( SkinFromSlotField( refused[r] ), (Int)TANK_SKIN_NONE );
+		CHECK( TankSkin_fromSlotField( refused[r] ) == 0 );
+	CHECK( TankSkin_fromSlotField( NULL ) == 0 );
 
 	UnicodeString playerName;
 	playerName.translate( AsciiString( "Player" ) );
 
 	GameSlot seat;
-	CHECK_EQ( seat.getSkin(), (Int)TANK_SKIN_NONE );
+	CHECK( seat.getSkins() == 0 );
 	seat.setState( SLOT_PLAYER, playerName );
-	seat.setSkin( TANK_SKIN_1K );
+	seat.setSkins( oneAndThree );
 	GameSlot copy = seat;
-	CHECK_EQ( copy.getSkin(), (Int)TANK_SKIN_1K );
+	CHECK( copy.getSkins() == oneAndThree );
 	seat.setState( SLOT_PLAYER, playerName );		// a seat taken again starts plain
-	CHECK_EQ( seat.getSkin(), (Int)TANK_SKIN_NONE );
+	CHECK( seat.getSkins() == 0 );
 
 	GlobalData *savedData = TheWritableGlobalData;
 	TheWritableGlobalData = NEW GlobalData;
@@ -25261,43 +25266,42 @@ TEST(tank_skin_rides_the_slot_entry_and_an_old_string_reads_as_none)
 	humanEntry.format( "HPlayer,C0A80164,8088,TT,-1,-1,-1,-1,%d:", (Int)slot->getNATBehavior() );
 	CHECK( strstr( untouched.str(), humanEntry.str() ) != NULL );
 
-	// at full health the handicap is written so the skin lands in its own field
-	slot->setSkin( TANK_SKIN_1K );
-	host.getSlot( 1 )->setSkin( TANK_SKIN_1K );		// an AI seat's is never written
+	// at full health the handicap is written so the loadout lands in its own field
+	slot->setSkins( oneAndThree );
+	host.getSlot( 1 )->setSkins( oneAndThree );		// an AI seat's is never written
 	const AsciiString skinned = GameInfoOptionsString( &host, mapPath, 0 );
-	humanEntry.format( "HPlayer,C0A80164,8088,TT,-1,-1,-1,-1,%d,100,1:CM,-1,-1,-1,-1:", (Int)slot->getNATBehavior() );
+	humanEntry.format( "HPlayer,C0A80164,8088,TT,-1,-1,-1,-1,%d,100,K1.3:CM,-1,-1,-1,-1:", (Int)slot->getNATBehavior() );
 	CHECK( strstr( skinned.str(), humanEntry.str() ) != NULL );
 
 	SkirmishGameInfo guest;
 	guest.init();
 	CHECK( ParseAsciiStringToGameInfo( &guest, skinned ) );
-	CHECK_EQ( guest.getSlot( 0 )->getSkin(), (Int)TANK_SKIN_1K );
+	CHECK( guest.getSlot( 0 )->getSkins() == oneAndThree );
 	CHECK_EQ( guest.getSlot( 0 )->getHandicap(), (Int)HANDICAP_FULL );
-	CHECK_EQ( guest.getSlot( 1 )->getSkin(), (Int)TANK_SKIN_NONE );
+	CHECK( guest.getSlot( 1 )->getSkins() == 0 );
 
 	// beside a handicap, both come back
 	slot->setHandicap( 50 );
 	const AsciiString both = GameInfoOptionsString( &host, mapPath, 0 );
-	humanEntry.format( "HPlayer,C0A80164,8088,TT,-1,-1,-1,-1,%d,50,1:", (Int)slot->getNATBehavior() );
+	humanEntry.format( "HPlayer,C0A80164,8088,TT,-1,-1,-1,-1,%d,50,K1.3:", (Int)slot->getNATBehavior() );
 	CHECK( strstr( both.str(), humanEntry.str() ) != NULL );
 	CHECK( ParseAsciiStringToGameInfo( &guest, both ) );
-	CHECK_EQ( guest.getSlot( 0 )->getSkin(), (Int)TANK_SKIN_1K );
+	CHECK( guest.getSlot( 0 )->getSkins() == oneAndThree );
 	CHECK_EQ( guest.getSlot( 0 )->getHandicap(), 50 );
 
 	// a string from before the field
 	CHECK( ParseAsciiStringToGameInfo( &guest, untouched ) );
 	for( Int i = 0; i < MAX_SLOTS; ++i )
-		CHECK_EQ( guest.getSlot( i )->getSkin(), (Int)TANK_SKIN_NONE );
+		CHECK( guest.getSlot( i )->getSkins() == 0 );
 
-	// the host's answer to a guest's "Skin=<n>"
-	slot->setSkin( TANK_SKIN_NONE );
-	CHECK( ApplySkinRequest( &host, slot, TANK_SKIN_1K ) );
-	CHECK_EQ( slot->getSkin(), (Int)TANK_SKIN_1K );
-	CHECK( !ApplySkinRequest( &host, slot, TANK_SKIN_1K ) );	// nothing changed, nothing to send round
-	CHECK( !ApplySkinRequest( &host, slot, TANK_SKIN_COUNT ) );
-	CHECK( !ApplySkinRequest( &host, host.getSlot( 2 ), TANK_SKIN_1K ) );	// an AI seat
-	CHECK( ApplySkinRequest( &host, slot, TANK_SKIN_NONE ) );
-	CHECK_EQ( slot->getSkin(), (Int)TANK_SKIN_NONE );
+	// the online host's answer to a guest's "Skins=K1.3"
+	slot->setSkins( 0 );
+	CHECK( ApplySkinRequest( &host, slot, TankSkin_fromSlotField( "K1.3" ) ) );
+	CHECK( slot->getSkins() == oneAndThree );
+	CHECK( !ApplySkinRequest( &host, slot, oneAndThree ) );	// nothing changed, nothing to send round
+	CHECK( !ApplySkinRequest( &host, host.getSlot( 2 ), oneAndThree ) );	// an AI seat
+	CHECK( ApplySkinRequest( &host, slot, 0 ) );
+	CHECK( slot->getSkins() == 0 );
 
 	delete ThePlayerTemplateStore;
 	ThePlayerTemplateStore = savedStore;
@@ -25309,32 +25313,73 @@ TEST(tank_skin_rides_the_slot_entry_and_an_old_string_reads_as_none)
 	TheWritableGlobalData = savedData;
 }
 
-/* The 1K skin dresses the Crusader, the Battlemaster and the Scorpion, their generals' own models and
-	 the damaged states, case ignored, and nothing else: not the wrecks, not another tank. */
-TEST(tank_skin_1k_dresses_the_three_tanks_and_nothing_else)
+/* SkinsReforged.ini as it ships: ids 1, 2 and 3 are the 1K gold Crusader, Battlemaster and Scorpion
+	 (the ids zerohour.gg uses), each on its generals' models and the damaged states, case ignored, and
+	 on nothing else.  Each pairs the rebuilt sheets and retail's with their gold copies, never a house
+	 colour sheet.  A loadout keeps one skin a unit and drops ids the table lacks. */
+TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 {
-	static const char *const dressed[] = { "AVLeopard", "AVLeopard_D", "AVLaserTnk", "AVLaserTnk_D", "NVBtMstr",
-		"NVBtMstr_D", "NVBtMstrNG", "nvbtmstrng_d", "UVLiteTank", "UVLITETANK_D" };
-	for( Int i = 0; i < (Int)ARRAY_SIZE( dressed ); ++i )
-	{
-		const char *prefix = TankSkin_texturePrefix( TANK_SKIN_1K, dressed[i] );
-		CHECK( prefix != NULL && strcmp( prefix, "Skin1K_" ) == 0 );
-	}
+	CHECK( bootOnce() );
+	TankSkin_clearTable();
+	CHECK( loadIni( ZH_CODE_DIR "/Data/INI/SkinsReforged.ini" ) );
+
+	const SkinLoadout all = ( (SkinLoadout)1 << 1 ) | ( (SkinLoadout)1 << 2 ) | ( (SkinLoadout)1 << 3 );
+	static const char *const crusader[] = { "AVLeopard", "AVLeopard_D", "AVLaserTnk", "avlasertnk_d" };
+	static const char *const battlemaster[] = { "NVBtMstr", "NVBtMstr_D", "NVBtMstrNG", "nvbtmstrng_d" };
+	static const char *const scorpion[] = { "UVLiteTank", "UVLITETANK_D" };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( crusader ); ++i )
+		CHECK_EQ( TankSkin_forModel( all, crusader[i] ), 1 );
+	for( Int i = 0; i < (Int)ARRAY_SIZE( battlemaster ); ++i )
+		CHECK_EQ( TankSkin_forModel( all, battlemaster[i] ), 2 );
+	for( Int i = 0; i < (Int)ARRAY_SIZE( scorpion ); ++i )
+		CHECK_EQ( TankSkin_forModel( all, scorpion[i] ), 3 );
 	static const char *const plain[] = { "AVLeopard_D1", "NVBtMstr_D1", "UVLiteTank_D1", "AVPaladin", "NVOverlord", "" };
 	for( Int i = 0; i < (Int)ARRAY_SIZE( plain ); ++i )
-		CHECK( TankSkin_texturePrefix( TANK_SKIN_1K, plain[i] ) == NULL );
-	CHECK( TankSkin_texturePrefix( TANK_SKIN_NONE, "AVLeopard" ) == NULL );
-	CHECK( TankSkin_texturePrefix( TANK_SKIN_COUNT, "AVLeopard" ) == NULL );
-	CHECK( TankSkin_texturePrefix( TANK_SKIN_1K, NULL ) == NULL );
-	CHECK_EQ( TankSkin_ofPlayer( -1 ), (Int)TANK_SKIN_NONE );
+		CHECK_EQ( TankSkin_forModel( all, plain[i] ), 0 );
+	CHECK_EQ( TankSkin_forModel( (SkinLoadout)1 << 2, "AVLeopard" ), 0 );	// owns the Battlemaster's only
+	CHECK_EQ( TankSkin_forModel( (SkinLoadout)1 << 9, "AVLeopard" ), 0 );	// a newer build's skin
+	CHECK_EQ( TankSkin_forModel( all, NULL ), 0 );
 
-	GlobalData *savedData = TheWritableGlobalData;
-	TheWritableGlobalData = NEW GlobalData;
-	CHECK_EQ( TankSkin_localPick(), (Int)TANK_SKIN_NONE );		// a new row starts off
-	TheWritableGlobalData->m_tankSkin1K = TRUE;
-	CHECK_EQ( TankSkin_localPick(), (Int)TANK_SKIN_1K );
-	delete TheWritableGlobalData;
-	TheWritableGlobalData = savedData;
+	CHECK_STR( TankSkin_replacementSheet( 1, "AVCrusader_R.tga" ), "Skin1K_AVCrusader_R.tga" );
+	CHECK_STR( TankSkin_replacementSheet( 1, "avleopard_r.dds" ), "Skin1K_avleopard_R.tga" );
+	CHECK_STR( TankSkin_replacementSheet( 1, "avleopard.tga" ), "Skin1KC_avleopard.tga" );
+	CHECK_STR( TankSkin_replacementSheet( 2, "NVBtMstr_D.tga" ), "Skin1KC_NVBtMstr_D.tga" );
+	CHECK_STR( TankSkin_replacementSheet( 3, "UVScorpion_m_R.tga" ), "Skin1K_UVScorpion_m_R.tga" );
+	CHECK( TankSkin_replacementSheet( 1, "ZHCA_AVCrusPlate.tga" ) == NULL );
+	CHECK( TankSkin_replacementSheet( 1, "NVTreads.tga" ) == NULL );
+	CHECK( TankSkin_replacementSheet( 2, "AVCrusader_R.tga" ) == NULL );
+	CHECK( TankSkin_replacementSheet( 9, "AVCrusader_R.tga" ) == NULL );
+
+	CHECK( TankSkin_setLocalLoadout( "1 2 3" ) == all );
+	CHECK( TankSkin_localLoadout() == all );
+	CHECK( TankSkin_setLocalLoadout( "3,99.1" ) == ( ( (SkinLoadout)1 << 1 ) | ( (SkinLoadout)1 << 3 ) ) );
+	CHECK( TankSkin_setLocalLoadout( "" ) == 0 );
+	CHECK( TankSkin_setLocalLoadout( NULL ) == 0 );
+
+	// a second Crusader skin: whichever the loadout names first is the one it keeps
+	writeFile( TEST_INI,
+		"Skin 4\r\n"
+		"  Unit    = Crusader\r\n"
+		"  Model   = AVLeopard\r\n"
+		"  Texture = AVCrusader_R.tga Skin4_AVCrusader_R.tga\r\n"
+		"End\r\n" );
+	CHECK( loadIni( TEST_INI ) );
+	CHECK( TankSkin_setLocalLoadout( "1 4" ) == (SkinLoadout)1 << 1 );
+	CHECK( TankSkin_setLocalLoadout( "4 1 2" ) == ( ( (SkinLoadout)1 << 4 ) | ( (SkinLoadout)1 << 2 ) ) );
+
+	// a skin with an odd texture pair, or no unit, stops the file
+	writeFile( TEST_INI,
+		"Skin 5\r\n"
+		"  Unit    = Paladin\r\n"
+		"  Model   = AVPaladin\r\n"
+		"  Texture = AVPaladin_R.tga\r\n"
+		"End\r\n" );
+	CHECK( loadIni( TEST_INI ) == FALSE );
+	remove( TEST_INI );
+
+	CHECK( TankSkin_ofPlayer( -1 ) == 0 );
+	TankSkin_setLocalLoadout( "" );
+	TankSkin_clearTable();
 }
 
 /* NickSenseless on v4.0.0: everybody who joined his online room showed in it for a split second and

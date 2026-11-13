@@ -10,7 +10,7 @@ found and fixed, EA's own, not port damage.**
 
 ## Gold tanks for 1K
 
-- A celebration gift, free for everyone: tick 1K Gold Tank Skins on Options > Interface and your Crusaders, Battlemasters and Scorpions roll out in gold, the Laser General's Crusader and the Nuke General's Battlemaster included, damaged or not. Everyone in the match sees your tanks that way, in skirmish, LAN and online rooms and in the replay afterwards, while your team colour stays on the trim. Looks only: the tanks fight exactly as before, and a player without the skin still joins your game. The gold is painted over the rebuilt tank models, so it shows with Detailed Models on. The pick goes into the room as you join or open it, so a change waits for the next game, and Quick Match does not carry it yet.
+- The game can draw skins your zerohour.gg account owns. The first three are 1K gold: the Crusader, the Battlemaster and the Scorpion, every general's version included, damaged or not. You pick one skin per unit on the site, and in an online room everyone in the match sees your tanks in gold, the replay too, with your team colour still on the trim. Looks only: the tanks fight exactly as before, and a player whose game lacks the gold sheets just sees the normal tank. LAN and skirmish games never show a skin. Not live yet: the account side that hands the game your skins is still being built, and Quick Match does not carry them.
 
 ## The game plays half as fast again
 

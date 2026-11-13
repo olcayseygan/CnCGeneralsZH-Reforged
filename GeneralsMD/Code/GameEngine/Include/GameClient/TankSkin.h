@@ -1,6 +1,9 @@
-// Cosmetic tank skins.  A player's pick rides his lobby seat (GameSlot::getSkin, the slot string's
-// last field) and every machine in the match draws his tanks in it.  Drawing only: no logic decision,
-// no INI checksum and no model checksum reads any of it, so a seat with a skin plays the same game.
+// Cosmetic unit skins, an online player's account entitlement.  Each skin has a fixed small id, the
+// one zerohour.gg uses, and dresses one unit's models (Data\INI\SkinsReforged.ini, outside the INI
+// checksum).  A player's loadout is a set of ids, at most one a unit, fed in by TankSkin_setLocalLoadout;
+// in an online room it rides his seat (GameSlot::getSkins, a ",K1.2.3" field in the slot string) and
+// every machine in the match, and the replay, draws his units in it.  Drawing only: no logic decision,
+// no INI checksum and no model checksum reads any of it.
 // Distributed under the repository's GPL-3.0 terms; see LICENSE.md.
 #pragma once
 
@@ -8,25 +11,36 @@
 #define __TANKSKIN_H__
 
 #include "Lib/BaseType.h"
+#include "Common/AsciiString.h"
 
-/// The values travel in slot strings, replays and saves, so only append.
-enum TankSkin
-{
-	TANK_SKIN_NONE,
-	TANK_SKIN_1K,		///< gold "1K": Crusader, Battlemaster, Scorpion and their generals' copies
-	TANK_SKIN_COUNT
-};
+/// A loadout: bit n set for skin id n.
+// ponytail: ids 1 to 63 fit; a 64th skin needs a list in its place, in the slot field as well.
+typedef UnsignedInt64 SkinLoadout;
+enum { TANK_SKIN_MAX_ID = 63 };
 
-/** The prefix a skin's sheets carry, "Skin1K_" before the model's own sheet name, or NULL when this
-	* skin does not dress this model (case ignored).  A sheet missing on disk is simply not swapped. */
-const char *TankSkin_texturePrefix( Int skin, const char *modelName );
+/// the skin id in this loadout that dresses this model (case ignored), 0 for none
+Int TankSkin_forModel( SkinLoadout loadout, const char *modelName );
 
-/** the skin the seat behind this player index picked; none outside a lobby game, for an AI seat, for
-	* the neutral player and for -1.  An index rather than a Player, so the render's overlap window can
-	* ask with Drawable::getObjectForDraw's copy and touch nothing the tick is changing. */
-Int TankSkin_ofPlayer( Int playerIndex );
+/// the sheet skin `id` draws in place of `sheet` (extension and case ignored), NULL for none
+const char *TankSkin_replacementSheet( Int id, const char *sheet );
 
-/// what this machine's options give its own seat ("TankSkin1K")
-Int TankSkin_localPick( void );
+/// ",K1.2.3" for a loadout, nothing for an empty one; the dots keep it short for the LAN packet
+AsciiString TankSkin_slotField( SkinLoadout loadout );
+/// back from "K1.2.3"; NULL, empty, anything else and ids past TANK_SKIN_MAX_ID read as nothing
+SkinLoadout TankSkin_fromSlotField( const char *field );
+
+/** The one way in for this player's own loadout, the ids his zerohour.gg account owns and picked
+	* ("1 2 3", any of space, comma or dot between).  Ids the table lacks are dropped, and so is a second
+	* skin for a unit already dressed.  Returns what it kept. */
+SkinLoadout TankSkin_setLocalLoadout( const char *ids );
+SkinLoadout TankSkin_localLoadout( void );
+
+/** The loadout the seat behind this player index wore; none outside a lobby game, for an AI seat,
+	* the neutral player and -1.  An index rather than a Player, so the render's overlap window can ask
+	* with Drawable::getObjectForDraw's copy and touch nothing the tick is changing. */
+SkinLoadout TankSkin_ofPlayer( Int playerIndex );
+
+/// forget every table entry, for a test that loads its own
+void TankSkin_clearTable( void );
 
 #endif

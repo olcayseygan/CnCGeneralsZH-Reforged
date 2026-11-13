@@ -15629,14 +15629,6 @@ TOOLTIP:EmptyBuildingPips
 "İçinde kimse olmayan binanın üstündeki boş yuva sırası, örneğin Tünel Ağının üstündeki on yuva. Kapalıyken bina yuvalarını yalnızca içinde biri varken gösterir."
 END
 
-GUI:TankSkin1K
-"1K Altın Tank Kaplamaları"
-END
-
-TOOLTIP:TankSkin1K
-"1K kutlama hediyesi: Crusader, Battlemaster ve Scorpion tankların altın renginde sahaya çıkar, maçtaki herkes de onları öyle görür. Yalnızca görünüş, tanklar aynı savaşır. Bir sonraki oyundan itibaren geçerli olur."
-END
-
 GUI:ArchiveReplays
 "Tekrarları Arşivle"
 END

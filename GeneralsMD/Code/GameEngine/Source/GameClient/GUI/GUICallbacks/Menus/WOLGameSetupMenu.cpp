@@ -1837,7 +1837,7 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 		CustomMatchPreferences customPref;
 		hostSlot->setColor( customPref.getPreferredColor() );
 		hostSlot->setPlayerTemplate( customPref.getPreferredFaction() );
-		hostSlot->setSkin( TankSkin_localPick() );
+		hostSlot->setSkins( TankSkin_localLoadout() );
 		hostSlot->setNATBehavior((FirewallHelperClass::FirewallBehaviorType)natPref.getFirewallBehavior());
 		hostSlot->setPingString(TheGameSpyInfo->getPingString());
 		const AsciiString hostMap = onlineScriptMap( customPref.getPreferredMap() );
@@ -1914,9 +1914,10 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 		options.format("NAT=%d", natPref.getFirewallBehavior());
 		req.options = options.str();
 		TheGameSpyPeerMessageQueue->addRequest(req);
-		if (TankSkin_localPick() != TANK_SKIN_NONE)
+		if (TankSkin_localLoadout() != 0)
 		{
-			options.format("Skin=%d", TankSkin_localPick());
+			// the field without its leading comma: "Skins=K1.2.3"
+			options.format("Skins=%s", TankSkin_slotField(TankSkin_localLoadout()).str() + 1);
 			req.options = options.str();
 			TheGameSpyPeerMessageQueue->addRequest(req);
 		}
@@ -2897,9 +2898,9 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 										DEBUG_LOG(("Rejecting invalid IP %d\n", uVal));
 									}
 								}
-								else if (key == "Skin")
+								else if (key == "Skins")
 								{
-									change = ApplySkinRequest(game, slot, val);	// drawing only, nobody has to accept again
+									change = ApplySkinRequest(game, slot, TankSkin_fromSlotField(options.str()+1));	// drawing only, nobody has to accept again
 								}
 								else if (key == "NAT")
 								{

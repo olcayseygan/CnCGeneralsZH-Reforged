@@ -40,7 +40,6 @@
 #include "GameClient/WindowLayout.h"
 #include "GameClient/Gadget.h"
 #include "GameClient/Shell.h"
-#include "GameClient/TankSkin.h"
 #include "GameClient/KeyDefs.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GadgetListBox.h"
@@ -1128,7 +1127,6 @@ void LanGameOptionsMenuInit( WindowLayout *layout, void *userData )
 		LANPreferences pref;
 		slot->setColor( pref.getPreferredColor() );
 		slot->setPlayerTemplate( pref.getPreferredFaction() );
-		slot->setSkin( TankSkin_localPick() );
 		slot->setNATBehavior(FirewallHelperClass::FIREWALL_TYPE_SIMPLE);
 		game->setMap( pref.getPreferredMap() );
     game->setStartingCash( pref.getStartingCash() );

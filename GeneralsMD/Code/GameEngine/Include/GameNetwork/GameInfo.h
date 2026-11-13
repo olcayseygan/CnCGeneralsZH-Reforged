@@ -156,8 +156,8 @@ public:
 	void setHandicap( Int handicap ) { m_handicap = handicap; }	///< percent of max health this seat's units have, see IsValidHandicap
 	Int getHandicap( void ) const { return m_handicap; }
 
-	void setSkin( Int skin ) { m_skin = skin; }	///< a TankSkin this seat's tanks are drawn in; drawing only, the logic never reads it
-	Int getSkin( void ) const { return m_skin; }
+	void setSkins( UnsignedInt64 skins ) { m_skins = skins; }	///< the SkinLoadout this seat's units are drawn in; drawing only, the logic never reads it
+	UnsignedInt64 getSkins( void ) const { return m_skins; }
 
 	inline void setName( UnicodeString name ) { m_name = name; }
 	inline UnicodeString getName( void ) const { return m_name; }
@@ -210,7 +210,7 @@ protected:
 	Int m_teamNumber;																	///< alliance, -1 for none
 	Int m_aiPersonality;															///< AIPersonality of an AI seat, AIPERSONA_NORMAL otherwise
 	Int m_handicap;																		///< percent of max health this seat's units have, HANDICAP_FULL for none
-	Int m_skin;																				///< TankSkin of a human seat, TANK_SKIN_NONE for none
+	UnsignedInt64 m_skins;														///< SkinLoadout of an online human seat, 0 for none (TankSkin.h)
 	Int m_origColor;																			///< color, or -1 for random
 	Int m_origStartPos;																		///< start position, or -1 for random
 	Int m_origPlayerTemplate;															///< PlayerTemplate
@@ -449,12 +449,12 @@ Int HandicapFromSlotField( const char *field );
 // come back to what the host kept.
 Bool ApplyHandicapRequest( GameInfo *game, GameSlot *slot, Int handicap );
 
-// A human seat's tank skin rides after the handicap, which is then written even at full health, and
-// only when the seat has one: an older build stops reading at the handicap, and an older string reads
-// as no skin.  Absent, or a skin this build does not know, is none.  "Skin=<n>" is a guest's request,
-// and like the handicap's it is undone when the options string would no longer fit.
-Int SkinFromSlotField( const char *field );
-Bool ApplySkinRequest( GameInfo *game, GameSlot *slot, Int skin );
+// A human seat's skin loadout (TankSkin.h) rides after the handicap as ",K1.2.3", the handicap then
+// written at full health too, and only when the seat has skins: an older build stops reading at the
+// handicap, and an older string reads as none.  Only an online room sets one, so a LAN or skirmish
+// string never carries it.  "Skins=K1.2.3" is an online guest's request, undone like the handicap's
+// when the options string would no longer fit.
+Bool ApplySkinRequest( GameInfo *game, GameSlot *slot, UnsignedInt64 skins );
 
 //
 // Three things every lobby - skirmish, LAN and online - has to agree on about a slot state, kept

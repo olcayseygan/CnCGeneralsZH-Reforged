@@ -84,9 +84,9 @@ public:
 	void Report_Used_Font3DDatas( void );
 	void Report_Used_FontChars (void);
 
-	/// skinPrefix: every sheet the model draws that has a "<skinPrefix><sheet>" texture on disk is drawn with that one instead (TankSkin.h)
-	virtual RenderObjClass * Create_Render_Obj(const char * name,float scale, const int color, const char *oldTexure=NULL, const char *newTexture=NULL, const char *skinPrefix=NULL);
-	void applySkin(RenderObjClass *robj, const char *skinPrefix);
+	/// skin: a TankSkin id; every sheet it pairs with a replacement on disk is drawn with that one instead
+	virtual RenderObjClass * Create_Render_Obj(const char * name,float scale, const int color, const char *oldTexure=NULL, const char *newTexture=NULL, Int skin=0);
+	void applySkin(RenderObjClass *robj, Int skin);
 	///Swaps the specified textures in the render object prototype.
 	int replacePrototypeTexture(RenderObjClass *robj, const char * oldname, const char * newname);
 

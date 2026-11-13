@@ -46,7 +46,6 @@
 #include "GameLogic/GameLogic.h"
 #include "GameClient/AnimateWindowManager.h"
 #include "GameClient/CampaignManager.h"
-#include "GameClient/TankSkin.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/Gadget.h"
 #include "GameClient/Shell.h"
@@ -1614,8 +1613,6 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 	TheSkirmishGameInfo->setSlot(1, gSlot);
 
 	ParseAsciiStringToGameInfo(TheSkirmishGameInfo, prefs.getSlotList());
-	// after the saved list, which carries whatever skin the last skirmish had
-	TheSkirmishGameInfo->getSlot(0)->setSkin(TankSkin_localPick());
 	// -seed repeats a match set up here too, as it does -autoskirmish's (GameEngine.cpp): the same match from the
 	// same choices
 	TheSkirmishGameInfo->setSeed((TheGlobalData->m_fixedSeed >= 0) ? TheGlobalData->m_fixedSeed : Clock_Milliseconds_Coarse());

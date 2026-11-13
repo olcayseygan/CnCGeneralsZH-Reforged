@@ -537,7 +537,7 @@ private:
 	const ModelConditionInfo*			m_nextState;
 	UnsignedInt										m_nextStateAnimLoopDuration;			
 	Int														m_hexColor;
-	const char*										m_skinPrefix;											///< the owner's tank skin the render object was made with (TankSkin.h), NULL for none
+	Int														m_skin;														///< the owner's skin id the render object was made with (TankSkin.h), 0 for none
 	Int														m_whichAnimInCurState;						///< the index of the currently playing anim in cur state (if any)
 	WeaponRecoilInfoVec						m_weaponRecoilInfoVec[WEAPONSLOT_COUNT];
 	Real													m_drawnTurretPitch[MAX_TURRETS];		///< the pitch handleClientTurretPositioning gave each turret's pitch bone this frame

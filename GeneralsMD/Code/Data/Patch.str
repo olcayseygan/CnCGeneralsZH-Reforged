@@ -907,14 +907,6 @@ TOOLTIP:EmptyBuildingPips
 "The row of empty slots over a building with nobody inside, like the ten over a Tunnel Network. Off, a building shows its slots only while someone is in it."
 END
 
-GUI:TankSkin1K
-"1K Gold Tank Skins"
-END
-
-TOOLTIP:TankSkin1K
-"A 1K celebration gift: your Crusaders, Battlemasters and Scorpions roll out in gold, and everyone in the match sees them that way. Looks only, the tanks fight the same. Takes effect from the next game."
-END
-
 GUI:ArchiveReplays
 "Archive Replays"
 END

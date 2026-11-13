@@ -115,7 +115,6 @@
 #include "GameClient/ChromaKeyboard.h"
 #include "GameClient/CinemaDirector.h"
 #include "GameClient/Display.h"
-#include "GameClient/TankSkin.h"
 #include "GameClient/FXList.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/HotKey.h"
@@ -769,7 +768,6 @@ static void startAutoSkirmish( Int numPlayersWanted )
 		{
 			slot.setState( SLOT_PLAYER, localName );
 			slot.setName( localName );
-			slot.setSkin( TankSkin_localPick() );
 		}
 		else if (takeover && (TheGlobalData->m_autoSkirmishTakeoverSlot < 0 || TheGlobalData->m_autoSkirmishTakeoverSlot == i))
 		{
@@ -1304,6 +1302,8 @@ void GameEngine::init( int argc, char *argv[] )
 			 before the client and the logic (LOGIC-THREAD.md phase 2, M2).  A button names objects,
 			 upgrades and special powers, so after them; the INI CRC takes the files at the end. */
 		initSubsystem(TheCommandStore,"TheCommandStore", MSGNEW("GameEngineSubsystem") CommandStore, NULL);
+		// Online players' unit skins (TankSkin.h): drawing only, so outside the INI checksum
+		ini.load( AsciiString( "Data\\INI\\SkinsReforged.ini" ), INI_LOAD_OVERWRITE, NULL );
 		initSubsystem(TheGameClient,"TheGameClient", createGameClient(), NULL);
 
 

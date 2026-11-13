@@ -136,6 +136,7 @@ static const BlockParse theTypeTable[] =
 	{ "Rank",								INI::parseRankDefinition },
 	{ "SpecialPower",				INI::parseSpecialPowerDefinition },
 	{ "ShellMenuScheme",		INI::parseShellMenuSchemeDefinition },
+	{ "Skin",								INI::parseSkinDefinition },
 	{ "Terrain",						INI::parseTerrainDefinition },
 	{ "Upgrade",						INI::parseUpgradeDefinition },
 	{ "Video",							INI::parseVideoDefinition },

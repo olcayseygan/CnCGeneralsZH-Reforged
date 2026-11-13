@@ -52,4 +52,9 @@ Int TankSkin_seenPlayerIndex( const Object *obj );
 /// forget every table entry, for a test that loads its own
 void TankSkin_clearTable( void );
 
+/** Skin `id` as the Skins screen lists it: the unit it dresses (the loadout's one-a-unit key), and the
+	* string table labels of that unit and of the skin (UnitLabel and Label, empty when the INI gives
+	* none).  FALSE for an id the table lacks. */
+Bool TankSkin_describe( Int id, AsciiString &unit, AsciiString &unitLabel, AsciiString &label );
+
 #endif

@@ -56,6 +56,7 @@
 #include "GameClient/GadgetCheckBox.h"
 #include "GameClient/MessageBox.h"
 #include "GameClient/GameWindowTransitions.h"
+#include "GameClient/GUICallbacks.h"
 
 #include "GameNetwork/FirewallHelper.h"
 #include "GameNetwork/GameSpyOverlay.h"
@@ -104,6 +105,7 @@ static GameWindow *buttonBuddies = NULL;
 static GameWindow *buttonLadder = NULL;
 static GameWindow *buttonMyInfo = NULL;
 static GameWindow *buttonbuttonOptions = NULL;
+static GameWindow *buttonSkins = NULL;		///< -online, made here: the layout has no slot for it
 static WindowLayout *welcomeLayout = NULL;
 static GameWindow *listboxInfo = NULL;
 
@@ -199,6 +201,11 @@ static void shutdownComplete( WindowLayout *layout )
 {
 
 	isShuttingDown = FALSE;
+
+	// made again by the next init: a push hides this layout and the pop that follows runs init again
+	if (buttonSkins)
+		TheWindowManager->winDestroy( buttonSkins );
+	buttonSkins = NULL;
 
 	// hide the layout
 	layout->hide( TRUE );
@@ -591,6 +598,16 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 		// Buddies here: that slot becomes Ladder
 		if (buttonBuddies)
 			GadgetButtonSetText(buttonBuddies, TheGameText->fetch("GUI:OnlineLadderButton"));		// capitals, as the hub's other buttons
+		// the account's skins, picked here since the site's own picker went; the button column is full,
+		// so it sits left of Back on the panel's foot, as the ladder's Next does
+		if (buttonBack && !buttonSkins)
+		{
+			const Real sx = TheDisplay->getWidth() / 800.0f, sy = TheDisplay->getHeight() / 600.0f;
+			buttonSkins = WOLMakeButtonLike(parentWOLWelcome, buttonBack, (Int)(380 * sx), (Int)(520 * sy),
+				(Int)(552 * sx) - (Int)(380 * sx), (Int)(556 * sy) - (Int)(520 * sy), "GUI:OnlineSkinsButton");
+			if (buttonSkins)
+				buttonSkins->winBringToTop();
+		}
 		OnlineRequestStats(TheGameSpyInfo->getLocalName());
 		// the win percentages arrive after the screen drew (WOLWelcomeMenuUpdate); until then, none
 		s_winStats.clear();
@@ -1010,6 +1027,10 @@ WindowMsgHandledType WOLWelcomeMenuSystem( GameWindow *window, UnsignedInt msg,
 				else if (controlID == buttonBuddiesID && OnlineIsEnabled())
 				{
 					TheShell->push(AsciiString("Menus/WOLLadderScreen.wnd"));
+				}
+				else if (control == buttonSkins && buttonSkins)
+				{
+					WOLSkinsScreenOpen();
 				}
 				else if (controlID == buttonBuddiesID)
 				{

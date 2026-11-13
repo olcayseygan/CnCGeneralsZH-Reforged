@@ -192,6 +192,11 @@ struct OnlineSession
 	Int armiesState;				///< OnlineLadderState
 	OnlineMessage armies;
 
+	// the account's skins: what it owns (bit n for id n); what it wears is TankSkin_localLoadout
+	UnsignedInt64 skinsOwned;
+	Int skinsState;				///< OnlineSkinsState of the last skins.get or skins.set
+	std::string skinsError;	///< the last skins.err's code
+
 	// a Quick Match between qm.matched and its game.start
 	OnlineMessage reveal;
 	Bool revealing;
@@ -210,6 +215,7 @@ struct OnlineSession
 	void resolveHostLeft();
 	void noteCard( const OnlineMessage &m );			///< a line's rating, tier, games and ping under its nick
 	void matched( const OnlineMessage &m );			///< qm.matched as QM_MATCHED
+	void noteSkins( const OnlineMessage &m );		///< auth.ok's or skins.ok's owned[] and skins[]
 
 private:
 	OnlineSession();

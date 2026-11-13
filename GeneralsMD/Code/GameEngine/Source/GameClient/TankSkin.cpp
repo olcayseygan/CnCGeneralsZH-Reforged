@@ -22,6 +22,8 @@ namespace
 	{
 		Int id;
 		AsciiString unit;									///< one skin a unit in a loadout
+		AsciiString unitLabel;						///< the unit's name in the string table, for the Skins screen
+		AsciiString label;								///< the skin's own name there
 		std::vector<AsciiString> models;		///< the models it dresses, damaged states included
 		std::vector<AsciiString> sheets;		///< pairs: the model's sheet, the one drawn in its place
 	};
@@ -29,6 +31,8 @@ namespace
 	const FieldParse theSkinFieldParse[] =
 	{
 		{ "Unit",			INI::parseAsciiString,							NULL, offsetof( SkinDef, unit ) },
+		{ "UnitLabel",	INI::parseAsciiString,						NULL, offsetof( SkinDef, unitLabel ) },
+		{ "Label",		INI::parseAsciiString,							NULL, offsetof( SkinDef, label ) },
 		{ "Model",		INI::parseAsciiStringVectorAppend,	NULL, offsetof( SkinDef, models ) },
 		{ "Texture",	INI::parseAsciiStringVectorAppend,	NULL, offsetof( SkinDef, sheets ) },
 		{ NULL,				NULL,																NULL, 0 }
@@ -85,6 +89,17 @@ void INI::parseSkinDefinition( INI *ini )
 void TankSkin_clearTable( void )
 {
 	theSkins.clear();
+}
+
+Bool TankSkin_describe( Int id, AsciiString &unit, AsciiString &unitLabel, AsciiString &label )
+{
+	const SkinDef *skin = findSkin( id );
+	if( skin == NULL )
+		return FALSE;
+	unit = skin->unit;
+	unitLabel = skin->unitLabel;
+	label = skin->label;
+	return TRUE;
 }
 
 Int TankSkin_forModel( SkinLoadout loadout, const char *modelName )

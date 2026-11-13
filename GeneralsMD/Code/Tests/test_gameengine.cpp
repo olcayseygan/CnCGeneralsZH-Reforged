@@ -25362,6 +25362,16 @@ TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 	CHECK( TankSkin_replacementSheet( 2, "AVCrusader_R.tga" ) == NULL );
 	CHECK( TankSkin_replacementSheet( 9, "AVCrusader_R.tga" ) == NULL );
 
+	// the Skins screen's rows: each unit by its own name, the skin by the string table's
+	AsciiString unit, unitLabel, label;
+	CHECK( TankSkin_describe( 2, unit, unitLabel, label ) );
+	CHECK_STR( unit.str(), "Battlemaster" );
+	CHECK_STR( unitLabel.str(), "OBJECT:BattleMaster" );
+	CHECK_STR( label.str(), "SKIN:Gold1K" );
+	CHECK( TankSkin_describe( 3, unit, unitLabel, label ) && unitLabel == "OBJECT:Scorpion" );
+	CHECK( TankSkin_describe( 1, unit, unitLabel, label ) && unitLabel == "OBJECT:Crusader" );
+	CHECK( !TankSkin_describe( 9, unit, unitLabel, label ) );
+
 	CHECK( TankSkin_setLocalLoadout( "1 2 3" ) == all );
 	CHECK( TankSkin_localLoadout() == all );
 	CHECK( TankSkin_setLocalLoadout( "3,99.1" ) == ( ( (SkinLoadout)1 << 1 ) | ( (SkinLoadout)1 << 3 ) ) );

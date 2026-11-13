@@ -147,6 +147,9 @@ void OnlineSession::forgetAccount()
 	memset( ticket, 0, sizeof(ticket) );
 	vip = 0;
 	TankSkin_setLocalLoadout( "" );		// the next account brings its own
+	skinsOwned = 0;
+	skinsState = ONLINE_SKINS_READY;
+	skinsError.clear();
 	pendingAuth.clear();
 	hasPendingAuth = FALSE;
 	authWaiting = FALSE;
@@ -526,6 +529,20 @@ void OnlineSession::matched( const OnlineMessage &m )
 	peerResponse( r );
 }
 
+void OnlineSession::noteSkins( const OnlineMessage &m )
+{
+	std::string wear;
+	const std::vector<long long> worn = m.getInts( "skins" ), owned = m.getInts( "owned" );
+	for (size_t i = 0; i < worn.size(); ++i)
+		wear += std::to_string( worn[i] ) + " ";
+	skinsOwned = TankSkin_setLocalLoadout( wear.c_str() );		// a skin worn is owned, whatever owned[] says
+	for (size_t i = 0; i < owned.size(); ++i)
+		if (owned[i] >= 1 && owned[i] <= TANK_SKIN_MAX_ID)
+			skinsOwned |= (SkinLoadout)1 << owned[i];
+	skinsState = ONLINE_SKINS_READY;
+	skinsError.clear();
+}
+
 void OnlineSession::dispatch( const OnlineMessage &m )
 {
 	const std::string t = m.type();
@@ -572,12 +589,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		if (!hexTicket( m.getString( "ticket" ), ticket ))
 			DEBUG_LOG(("online: auth.ok carries no usable relay ticket\n"));
 		noteCard( m );
-		// the skins the account wears, fresh from the site on every sign-in; none is no key
-		std::string skins;
-		const std::vector<long long> ids = m.getInts( "skins" );
-		for (size_t i = 0; i < ids.size(); ++i)
-			skins += std::to_string( ids[i] ) + " ";
-		TankSkin_setLocalLoadout( skins.c_str() );
+		noteSkins( m );		// fresh from the site on every sign-in; none is no key
 
 		if (buddy)
 		{
@@ -664,6 +676,12 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		else if (what == "armies")
 		{
 			armiesState = ONLINE_LADDER_FAILED;
+		}
+		else if (what == "skins.get" || what == "skins.set")
+		{
+			// a server from before skins.set answers unknown
+			skinsState = ONLINE_SKINS_FAILED;
+			skinsError = "unavailable";
 		}
 	}
 	else if (t == "room")
@@ -898,6 +916,15 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 	{
 		ladder = m;
 		ladderState = ONLINE_LADDER_READY;
+	}
+	else if (t == "skins.ok" && authed)
+	{
+		noteSkins( m );
+	}
+	else if (t == "skins.err")
+	{
+		skinsState = ONLINE_SKINS_FAILED;
+		skinsError = m.getString( "code", "unknown" );
 	}
 	else if (t == "armies")
 	{
@@ -1291,6 +1318,46 @@ Bool OnlineGetRelayEndpoint( AsciiString &host, UnsignedShort &port )
 UnsignedInt OnlineGetRelayVip( void )
 {
 	return OnlineSession::get().vip;
+}
+
+static void askSkins( const OnlineMessage &m )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (!s.authed)
+	{
+		s.skinsState = ONLINE_SKINS_FAILED;
+		s.skinsError = "signedout";
+		return;
+	}
+	s.skinsState = ONLINE_SKINS_WAITING;
+	s.skinsError.clear();
+	s.send( m );
+}
+
+void OnlineRequestSkins( void )
+{
+	OnlineMessage m;
+	m.setString( "t", "skins.get" );
+	askSkins( m );
+}
+
+void OnlineSaveSkins( UnsignedInt64 wear )
+{
+	std::vector<long long> ids;
+	for (Int id = 1; id <= TANK_SKIN_MAX_ID; ++id)
+		if (wear & ((SkinLoadout)1 << id))
+			ids.push_back( id );
+	OnlineMessage m;
+	m.setString( "t", "skins.set" ).setInts( "skins", ids );
+	askSkins( m );
+}
+
+OnlineSkinsState OnlineGetSkins( UnsignedInt64 &owned, AsciiString &error )
+{
+	const OnlineSession &s = OnlineSession::get();
+	owned = s.authed ? s.skinsOwned : 0;
+	error = s.authed ? s.skinsError.c_str() : "signedout";
+	return s.authed ? (OnlineSkinsState)s.skinsState : ONLINE_SKINS_FAILED;
 }
 
 AsciiString OnlineGetSessionToken( void )

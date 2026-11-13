@@ -4312,6 +4312,54 @@ GUI:OnlineLadderButton
 "LADDER"
 END
 
+GUI:OnlineSkinsButton
+"SKINS"
+END
+
+GUI:OnlineSkinsDefault
+"DEFAULT"
+END
+
+GUI:OnlineSkinsSave
+"SAVE"
+END
+
+GUI:OnlineSkinsWaiting
+"Asking zerohour.gg..."
+END
+
+GUI:OnlineSkinsHint
+"Pick one look per unit and press Save. Greyed-out skins unlock with a code redeemed at zerohour.gg."
+END
+
+GUI:OnlineSkinsNone
+"Your account owns no skins yet. Redeem a code at zerohour.gg, then open this screen again."
+END
+
+GUI:OnlineSkinsSaved
+"Saved. Your next game, custom or Quick Match, shows these skins."
+END
+
+GUI:OnlineSkinsSignedOut
+"You are not signed in. Sign in online to pick your skins."
+END
+
+GUI:OnlineSkinsThrottled
+"Too many saves in a minute. Wait a little and press Save again."
+END
+
+GUI:OnlineSkinsUnavailable
+"zerohour.gg did not answer. Your skins stay as they were; try again in a moment."
+END
+
+GUI:OnlineSkinsRefused
+"zerohour.gg refused that pick, so your skins stay as they were. Open this screen again to see what your account holds."
+END
+
+SKIN:Gold1K
+"1K GOLD"
+END
+
 GUI:OnlineLadderRank
 "#"
 END

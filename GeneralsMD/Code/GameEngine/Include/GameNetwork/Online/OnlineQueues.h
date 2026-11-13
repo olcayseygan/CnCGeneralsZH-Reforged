@@ -215,6 +215,22 @@ struct OnlineMatchReveal
 };
 Bool OnlineGetMatchReveal( OnlineMatchReveal &out );
 
+/* The account's skins.  OnlineGetSkins gives what it owns as a SkinLoadout (bit n for skin id n; what it
+	 wears is TankSkin_localLoadout), from auth.ok and every skins.ok, and the state of the last ask:
+	 OnlineRequestSkins (skins.get, for a code redeemed on the site while signed in) or OnlineSaveSkins
+	 (skins.set, the whole loadout, 0 for Default everywhere).  Their skins.ok sets the local loadout too, so
+	 the next room or Quick Match seats it; a skins.err changes neither, and error is its code (not_owned,
+	 two_for_unit, throttled, unknown, unavailable).  Not signed in: FAILED with "signedout", nothing sent. */
+enum OnlineSkinsState
+{
+	ONLINE_SKINS_READY,
+	ONLINE_SKINS_WAITING,
+	ONLINE_SKINS_FAILED,
+};
+void OnlineRequestSkins( void );
+void OnlineSaveSkins( UnsignedInt64 wear );
+OnlineSkinsState OnlineGetSkins( UnsignedInt64 &owned, AsciiString &error );
+
 /* The server's verdict on the match the last game.start or qm.matched named: rated (delta, rating) or
 	 unrated (reason).  FALSE until it arrives. */
 Bool OnlineGetMatchResult( Bool &rated, Real &delta, Real &rating, AsciiString &reason );

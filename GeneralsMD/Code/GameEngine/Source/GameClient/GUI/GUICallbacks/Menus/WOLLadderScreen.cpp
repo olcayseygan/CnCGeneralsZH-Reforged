@@ -43,6 +43,7 @@
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/Display.h"
 #include "GameClient/Image.h"
+#include "GameClient/TankSkin.h"
 #include "GameClient/UIStyle.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/Online/OnlineQueues.h"
@@ -72,7 +73,7 @@ static GameWindow *headerRule = NULL;
 static Int s_ladderOffset = 0;
 static Int s_ladderShown = -1;			///< the OnlineLadderState last drawn, -1 to draw again
 
-static GameWindow *makeButtonLike( GameWindow *model, Int x, Int y, Int w, Int h, const char *label )
+GameWindow *WOLMakeButtonLike( GameWindow *parent, GameWindow *model, Int x, Int y, Int w, Int h, const char *label )
 {
 	WinInstanceData inst;
 	inst.init();
@@ -90,7 +91,7 @@ static GameWindow *makeButtonLike( GameWindow *model, Int x, Int y, Int w, Int h
 		inst.m_disabledText = look->m_disabledText;
 		inst.m_hiliteText = look->m_hiliteText;
 	}
-	GameWindow *button = TheWindowManager->gogoGadgetPushButton( parentWindow,
+	GameWindow *button = TheWindowManager->gogoGadgetPushButton( parent,
 		WIN_STATUS_ENABLED | (look ? WIN_STATUS_IMAGE : 0), x, y, w, h, &inst,
 		model ? model->winGetFont() : NULL, look == NULL );
 	if (button)
@@ -168,18 +169,17 @@ static void retailListLook( GameWindow *list )
 	setLook( thumb, LOOK_HILITE, 1, "ScrollBarThumbHiliteSelected", white, green );
 }
 
-static void createLadderGadgets( void )
-{
-	if (!parentWindow || !windowLadder)
-		return;
+// the hub's 800x600 authoring grid, in pixels
+#define LADDER_X( v ) ((Int)((v) * (TheDisplay->getWidth() / 800.0f)))
+#define LADDER_Y( v ) ((Int)((v) * (TheDisplay->getHeight() / 600.0f)))
 
-	/* The hub's frame (WOLWelcomeMenu.wnd, authored at 800x600): MainMenuRuler over the whole screen
-		 where this layout fills it with flat navy, the GadgetParent panel at 41,41 to 759,560, a "Generals"
-		 20 title in its top band with a rule under it at y 80, and its buttons in "Generals" 15 at the
-		 panel's foot (Back at 560,520 to 732,556).  This layout's own Back is in Times New Roman. */
-	const Real sx = TheDisplay->getWidth() / 800.0f, sy = TheDisplay->getHeight() / 600.0f;
-	#define LADDER_X( v ) ((Int)((v) * sx))
-	#define LADDER_Y( v ) ((Int)((v) * sy))
+/* The hub's frame (WOLWelcomeMenu.wnd, authored at 800x600): MainMenuRuler over the whole screen
+	 where this layout fills it with flat navy, the GadgetParent panel at 41,41 to 759,560, a "Generals"
+	 20 title in its top band with a rule under it at y 80, and its buttons in "Generals" 15 at the
+	 panel's foot (Back at 560,520 to 732,556).  This layout's own Back is in Times New Roman.  Both pages
+	 of this layout, the ladder and the skins, stand in it. */
+static void createFrame( const char *title )
+{
 	parentWindow->winSetStatus( WIN_STATUS_IMAGE );
 	parentWindow->winSetEnabledImage( 0, TheMappedImageCollection->findImageByName( "MainMenuRuler" ) );
 	parentWindow->winSetEnabledColor( 0, GameMakeColor( 2, 2, 2, 255 ) );
@@ -215,18 +215,25 @@ static void createLadderGadgets( void )
 		titleText->winSetEnabledTextColors( GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
 		titleText->winSetEnabledColor( 0, GameMakeColor( 2, 2, 2, 0 ) );
 		titleText->winSetEnabledBorderColor( 0, GameMakeColor( 0, 0, 0, 0 ) );
-		GadgetStaticTextSetText( titleText, TheGameText->fetch( "GUI:OnlineLadderButton" ) );
+		GadgetStaticTextSetText( titleText, TheGameText->fetch( title ) );
 	}
 
-	const Int bw = LADDER_X( 732 ) - LADDER_X( 560 ), bh = LADDER_Y( 556 ) - LADDER_Y( 520 );
-	const Int bx = LADDER_X( 560 ), by = LADDER_Y( 520 );
 	if (buttonBack)
 	{
-		buttonBack->winSetPosition( bx, by );
-		buttonBack->winSetSize( bw, bh );
+		buttonBack->winSetPosition( LADDER_X( 560 ), LADDER_Y( 520 ) );
+		buttonBack->winSetSize( LADDER_X( 732 ) - LADDER_X( 560 ), LADDER_Y( 556 ) - LADDER_Y( 520 ) );
 		buttonBack->winSetFont( UIStyle::titleFont( 15 ) );
 		buttonBack->winBringToTop();
 	}
+}
+
+static void createLadderGadgets( void )
+{
+	if (!parentWindow || !windowLadder)
+		return;
+	createFrame( "GUI:OnlineLadderButton" );
+	const Int bw = LADDER_X( 732 ) - LADDER_X( 560 ), bh = LADDER_Y( 556 ) - LADDER_Y( 520 );
+	const Int bx = LADDER_X( 560 ), by = LADDER_Y( 520 );
 
 	// the list fills the panel between the rule and the button row
 	const Int gap = LADDER_Y( 8 );
@@ -234,8 +241,6 @@ static void createLadderGadgets( void )
 	const Int width = LADDER_X( 744 ) - left;
 	const Int top = LADDER_Y( 81 ) + gap;
 	const Int height = by - gap - top;
-	#undef LADDER_X
-	#undef LADDER_Y
 
 	WinInstanceData inst;
 	inst.init();
@@ -256,8 +261,8 @@ static void createLadderGadgets( void )
 
 	// Previous and Next on the Back button's row, to its left
 	const Int buttonGap = UIStyle::px( 16.0f );
-	buttonNext = makeButtonLike( buttonBack, bx - bw - buttonGap, by, bw, bh, "GUI:OnlineLadderNext" );
-	buttonPrev = makeButtonLike( buttonBack, bx - 2 * (bw + buttonGap), by, bw, bh, "GUI:OnlineLadderPrev" );
+	buttonNext = WOLMakeButtonLike( parentWindow, buttonBack, bx - bw - buttonGap, by, bw, bh, "GUI:OnlineLadderNext" );
+	buttonPrev = WOLMakeButtonLike( parentWindow, buttonBack, bx - 2 * (bw + buttonGap), by, bw, bh, "GUI:OnlineLadderPrev" );
 }
 
 static void destroyLadderGadgets( void )
@@ -348,6 +353,262 @@ static void requestLadderPage( Int offset )
 	drawLadder();
 }
 
+//-------------------------------------------------------------------------------------------------
+// The skins page, the hub's SKINS button (WOLSkinsScreenOpen): one row per unit SkinsReforged.ini
+// dresses, its name then Default and every skin for it, the account's pick pushed in.  A skin the
+// account does not own stays on its row, disabled.  Save sends the whole loadout; once the site took
+// it the next room and Quick Match seat it (OnlineSaveSkins).  The same layout as the ladder, so the
+// same frame: no layout of its own to ship.
+//-------------------------------------------------------------------------------------------------
+struct SkinChoice
+{
+	GameWindow *button;
+	Int id;									///< 0 for Default
+};
+struct SkinRow
+{
+	AsciiString unit;
+	GameWindow *label;
+	std::vector<SkinChoice> choices;
+	Int pick;
+};
+static Bool s_skinsPage = FALSE;
+static std::vector<SkinRow> s_skinRows;
+static GameWindow *skinsStatus = NULL;
+static GameWindow *buttonSave = NULL;
+static Int s_skinsState = -1;					///< OnlineSkinsState last drawn
+static UnsignedInt64 s_skinsOwnedShown = 0;
+static Bool s_skinsDirty = TRUE;				///< draw again even with the state unchanged
+static Bool s_skinsSaved = FALSE;			///< the last READY answers this page's Save
+
+void WOLSkinsScreenOpen( void )
+{
+	s_skinsPage = TRUE;
+	TheShell->push( AsciiString( "Menus/WOLLadderScreen.wnd" ) );
+}
+
+static GameWindow *makeLine( Int x, Int y, Int w, Int h, GameFont *font, Color color )
+{
+	WinInstanceData inst;
+	inst.init();
+	BitSet( inst.m_style, GWS_STATIC_TEXT );
+	TextData data;
+	memset( &data, 0, sizeof(data) );
+	data.centeredVertically = TRUE;
+	GameWindow *line = TheWindowManager->gogoGadgetStaticText( parentWindow, WIN_STATUS_ENABLED | WIN_STATUS_NO_INPUT,
+		x, y, w, h, &inst, &data, font, FALSE );
+	if (line)
+	{
+		line->winSetEnabledTextColors( color, GameMakeColor( 0, 0, 0, 255 ) );
+		line->winSetEnabledColor( 0, GameMakeColor( 2, 2, 2, 0 ) );
+		line->winSetEnabledBorderColor( 0, GameMakeColor( 0, 0, 0, 0 ) );
+	}
+	return line;
+}
+
+/* The row's pick pushed in and green (ACTIVE, the open tab's colour), the rest up and white. */
+static void markPicks( void )
+{
+	for (size_t r = 0; r < s_skinRows.size(); ++r)
+		for (size_t c = 0; c < s_skinRows[r].choices.size(); ++c)
+		{
+			GameWindow *b = s_skinRows[r].choices[c].button;
+			if (!b)
+				continue;
+			const Bool on = s_skinRows[r].choices[c].id == s_skinRows[r].pick;
+			GadgetCheckLikeButtonSetVisualCheck( b, on );
+			b->winSetEnabledTextColors( on ? UIStyle::ACTIVE : UIStyle::INK, GameMakeColor( 0, 0, 0, 255 ) );
+		}
+}
+
+/* Each row's pick from what the account wears. */
+static void picksFromLoadout( void )
+{
+	const SkinLoadout wear = TankSkin_localLoadout();
+	for (size_t r = 0; r < s_skinRows.size(); ++r)
+	{
+		s_skinRows[r].pick = 0;
+		for (size_t c = 0; c < s_skinRows[r].choices.size(); ++c)
+			if (s_skinRows[r].choices[c].id && (wear & ((SkinLoadout)1 << s_skinRows[r].choices[c].id)))
+				s_skinRows[r].pick = s_skinRows[r].choices[c].id;
+	}
+	markPicks();
+}
+
+static void createSkinsGadgets( void )
+{
+	if (!parentWindow || !windowLadder)
+		return;
+	createFrame( "GUI:OnlineSkinsButton" );
+	windowLadder->winSetTooltip( UnicodeString::TheEmptyString );
+
+	// rows in id order, a unit's skins on the row of its first
+	for (Int id = 1; id <= TANK_SKIN_MAX_ID; ++id)
+	{
+		AsciiString unit, unitLabel, label;
+		if (!TankSkin_describe( id, unit, unitLabel, label ))
+			continue;
+		size_t r = 0;
+		while (r < s_skinRows.size() && s_skinRows[r].unit.compareNoCase( unit ) != 0)
+			++r;
+		if (r == s_skinRows.size())
+		{
+			SkinRow row;
+			row.unit = unit;
+			row.label = NULL;
+			row.pick = 0;
+			SkinChoice none = { NULL, 0 };
+			row.choices.push_back( none );
+			s_skinRows.push_back( row );
+		}
+		SkinChoice choice = { NULL, id };
+		s_skinRows[r].choices.push_back( choice );
+		if (s_skinRows[r].label == NULL)
+		{
+			// ponytail: one row of 44 a unit; past about nine units the rows reach the button row and want a list
+			const Int y = LADDER_Y( 100 + 44 * (Int)r );
+			s_skinRows[r].label = makeLine( LADDER_X( 64 ), y, LADDER_X( 240 ) - LADDER_X( 64 ), LADDER_Y( 36 ),
+				UIStyle::font( UIStyle::TEXT_STRONG ), UIStyle::INK );
+			UnicodeString name;
+			if (unitLabel.isEmpty())
+				name.translate( unit );
+			else
+				name = TheGameText->fetch( unitLabel );
+			if (s_skinRows[r].label)
+				GadgetStaticTextSetText( s_skinRows[r].label, name );
+		}
+	}
+
+	// the choices, Default first, each the hub's button (176 wide, 8 apart); ponytail: three fit a row
+	for (size_t r = 0; r < s_skinRows.size(); ++r)
+	{
+		const Int y = LADDER_Y( 100 + 44 * (Int)r );
+		for (size_t c = 0; c < s_skinRows[r].choices.size(); ++c)
+		{
+			const Int x0 = 248 + 184 * (Int)c;
+			AsciiString unit, unitLabel, label = "GUI:OnlineSkinsDefault";
+			if (s_skinRows[r].choices[c].id)
+				TankSkin_describe( s_skinRows[r].choices[c].id, unit, unitLabel, label );
+			GameWindow *b = WOLMakeButtonLike( parentWindow, buttonBack, LADDER_X( x0 ), y,
+				LADDER_X( x0 + 176 ) - LADDER_X( x0 ), LADDER_Y( 36 ), label.isEmpty() ? "GUI:OnlineSkinsDefault" : label.str() );
+			if (b)
+			{
+				b->winSetFont( UIStyle::titleFont( 15 ) );
+				GadgetButtonEnableCheckLike( b, TRUE, FALSE );
+			}
+			s_skinRows[r].choices[c].button = b;
+		}
+	}
+
+	skinsStatus = makeLine( LADDER_X( 64 ), LADDER_Y( 100 + 44 * (Int)s_skinRows.size() + 8 ),
+		LADDER_X( 744 ) - LADDER_X( 64 ), LADDER_Y( 28 ), UIStyle::font( UIStyle::TEXT_BODY ), UIStyle::MUTED );
+
+	const Int bw = LADDER_X( 732 ) - LADDER_X( 560 ), bh = LADDER_Y( 556 ) - LADDER_Y( 520 );
+	buttonSave = WOLMakeButtonLike( parentWindow, buttonBack, LADDER_X( 560 ) - bw - UIStyle::px( 16.0f ), LADDER_Y( 520 ),
+		bw, bh, "GUI:OnlineSkinsSave" );
+	if (buttonSave)
+		buttonSave->winSetFont( UIStyle::titleFont( 15 ) );
+
+	s_skinsState = -1;
+	s_skinsDirty = TRUE;
+	s_skinsSaved = FALSE;
+	picksFromLoadout();
+	OnlineRequestSkins();		// a code redeemed on the site since the sign-in
+}
+
+static void destroySkinsGadgets( void )
+{
+	for (size_t r = 0; r < s_skinRows.size(); ++r)
+	{
+		if (s_skinRows[r].label)
+			TheWindowManager->winDestroy( s_skinRows[r].label );
+		for (size_t c = 0; c < s_skinRows[r].choices.size(); ++c)
+			if (s_skinRows[r].choices[c].button)
+				TheWindowManager->winDestroy( s_skinRows[r].choices[c].button );
+	}
+	s_skinRows.clear();
+	GameWindow *made[] = { skinsStatus, buttonSave, titleText, headerRule };
+	for (size_t i = 0; i < sizeof(made) / sizeof(made[0]); ++i)
+		if (made[i])
+			TheWindowManager->winDestroy( made[i] );
+	skinsStatus = buttonSave = titleText = headerRule = NULL;
+}
+
+static void drawSkins( void )
+{
+	UnsignedInt64 owned = 0;
+	AsciiString error;
+	const OnlineSkinsState state = OnlineGetSkins( owned, error );
+	if (!s_skinsDirty && (Int)state == s_skinsState && owned == s_skinsOwnedShown)
+		return;
+	if (state == ONLINE_SKINS_READY && s_skinsState == (Int)ONLINE_SKINS_WAITING)
+		picksFromLoadout();		// an answer arrived: what the site holds now, after a save or a fresh read
+	s_skinsState = (Int)state;
+	s_skinsOwnedShown = owned;
+	s_skinsDirty = FALSE;
+	DEBUG_LOG(( "ONLINE SKINS state=%d error=%s owned=%s worn=%s rows=%d\n", (Int)state, error.str(),
+		TankSkin_slotField( owned ).str(), TankSkin_slotField( TankSkin_localLoadout() ).str(), (Int)s_skinRows.size() ));
+
+	for (size_t r = 0; r < s_skinRows.size(); ++r)
+		for (size_t c = 0; c < s_skinRows[r].choices.size(); ++c)
+		{
+			const Int id = s_skinRows[r].choices[c].id;
+			if (s_skinRows[r].choices[c].button)
+				s_skinRows[r].choices[c].button->winEnable( id == 0 || (owned & ((SkinLoadout)1 << id)) != 0 );
+		}
+	if (buttonSave)
+		buttonSave->winEnable( state != ONLINE_SKINS_WAITING && owned != 0 );
+
+	const char *line;
+	if (state == ONLINE_SKINS_WAITING)
+		line = "GUI:OnlineSkinsWaiting";
+	else if (state == ONLINE_SKINS_READY)
+		line = s_skinsSaved ? "GUI:OnlineSkinsSaved" : owned == 0 ? "GUI:OnlineSkinsNone" : "GUI:OnlineSkinsHint";
+	else if (error == "signedout")
+		line = "GUI:OnlineSkinsSignedOut";
+	else if (error == "throttled")
+		line = "GUI:OnlineSkinsThrottled";
+	else if (error == "unavailable")
+		line = "GUI:OnlineSkinsUnavailable";
+	else
+		line = "GUI:OnlineSkinsRefused";		// not_owned, two_for_unit, unknown: the site's view changed under us
+	if (skinsStatus)
+	{
+		const Bool bad = state == ONLINE_SKINS_FAILED || (state == ONLINE_SKINS_READY && owned == 0);
+		skinsStatus->winSetEnabledTextColors( bad ? UIStyle::INK : s_skinsSaved && state == ONLINE_SKINS_READY ? UIStyle::ACTIVE : UIStyle::MUTED,
+			GameMakeColor( 0, 0, 0, 255 ) );
+		GadgetStaticTextSetText( skinsStatus, TheGameText->fetch( line ) );
+	}
+}
+
+/* A choice clicked: that row's pick.  FALSE when the control is none of them. */
+static Bool pickSkin( GameWindow *control )
+{
+	for (size_t r = 0; r < s_skinRows.size(); ++r)
+		for (size_t c = 0; c < s_skinRows[r].choices.size(); ++c)
+			if (s_skinRows[r].choices[c].button == control)
+			{
+				s_skinRows[r].pick = s_skinRows[r].choices[c].id;
+				markPicks();		// the click flipped the button itself; this puts every row right again
+				s_skinsSaved = FALSE;
+				s_skinsDirty = TRUE;
+				drawSkins();
+				return TRUE;
+			}
+	return FALSE;
+}
+
+static void saveSkins( void )
+{
+	SkinLoadout wear = 0;
+	for (size_t r = 0; r < s_skinRows.size(); ++r)
+		if (s_skinRows[r].pick)
+			wear |= (SkinLoadout)1 << s_skinRows[r].pick;
+	s_skinsSaved = TRUE;
+	OnlineSaveSkins( wear );
+	drawSkins();
+}
+
 
 //-------------------------------------------------------------------------------------------------
 /** Initialize the single player menu */
@@ -369,7 +630,12 @@ void WOLLadderScreenInit( WindowLayout *layout, void *userData )
 //	PopulateReplayFileListbox(listboxReplayFiles);
 
 	//TheWebBrowser->createBrowserWindow("Westwood", windowLadder);
-	if (OnlineIsEnabled())
+	if (OnlineIsEnabled() && s_skinsPage)
+	{
+		createSkinsGadgets();
+		drawSkins();
+	}
+	else if (OnlineIsEnabled())
 	{
 		createLadderGadgets();
 		requestLadderPage( 0 );
@@ -394,6 +660,8 @@ void WOLLadderScreenShutdown( WindowLayout *layout, void *userData )
 {
 
 	destroyLadderGadgets();
+	destroySkinsGadgets();
+	s_skinsPage = FALSE;		// the hub's LADDER opens the ladder again
 	if (TheWebBrowser != NULL && !OnlineIsEnabled())
 	{
 		TheWebBrowser->closeBrowserWindow(windowLadder);
@@ -415,7 +683,10 @@ void WOLLadderScreenUpdate( WindowLayout *layout, void *userData )
 	if (OnlineIsEnabled())
 	{
 		OnlineUpdate();		// the lines this screen waits on, whatever lies under it on the shell stack
-		drawLadder();
+		if (s_skinsPage)
+			drawSkins();
+		else
+			drawLadder();
 	}
 }  // end ReplayMenuUpdate
 
@@ -527,6 +798,14 @@ WindowMsgHandledType WOLLadderScreenSystem( GameWindow *window, UnsignedInt msg,
 			else if( control == buttonNext )
 			{
 				requestLadderPage( s_ladderOffset + LADDER_PAGE );
+			}
+			else if( control == buttonSave )
+			{
+				saveSkins();
+			}
+			else
+			{
+				pickSkin( control );
 			}
 
 			break;

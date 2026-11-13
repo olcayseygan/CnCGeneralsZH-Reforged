@@ -179,6 +179,10 @@ extern void WOLLadderScreenUpdate( WindowLayout *layout, void *userData );
 extern void WOLLadderScreenShutdown( WindowLayout *layout, void *userData );
 extern WindowMsgHandledType WOLLadderScreenSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
 extern WindowMsgHandledType WOLLadderScreenInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
+/// -online: the same layout as the account's skins page, from the hub's SKINS button
+extern void WOLSkinsScreenOpen( void );
+/// a push button in model's look (a layout button's art, colours and font) on parent, labelled from the string table
+extern GameWindow *WOLMakeButtonLike( GameWindow *parent, GameWindow *model, Int x, Int y, Int w, Int h, const char *label );
 
 //  WOL Login Menu ---------------------------------------------------------------------------------
 extern void WOLLoginMenuInit( WindowLayout *layout, void *userData );

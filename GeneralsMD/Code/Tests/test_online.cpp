@@ -1293,6 +1293,65 @@ TEST(online_adapter_ping_ratings_stats_and_ladder)
 	CHECK_NEAR( rating, 18.5f, 0.001f );
 }
 
+/* The Skins screen's lines: auth.ok's owned[], skins.set carrying the whole loadout, skins.ok seating the
+	 pick for the next room at once, skins.err and an old server's refusal leaving it as it was. */
+TEST(online_adapter_skins_owned_saved_and_refused)
+{
+	AdapterRig rig;
+	const SkinLoadout one = (SkinLoadout)1 << 1, two = (SkinLoadout)1 << 2, three = (SkinLoadout)1 << 3;
+	SkinLoadout owned = 1;
+	AsciiString error;
+	CHECK_EQ( (int)OnlineGetSkins( owned, error ), (int)ONLINE_SKINS_FAILED );		// signed out: nothing to pick
+	CHECK_STR( error.str(), "signedout" );
+	CHECK( owned == 0 );
+	OnlineSaveSkins( two );
+	CHECK( rig.sent.empty() );
+
+	rig.feed( "{\"t\":\"auth.ok\",\"id\":7,\"nick\":\"Tank\",\"token\":\"t\",\"ticket\":\"00112233445566778899aabbccddeeff\",\"skins\":[1],\"owned\":[1,2,3,64]}" );
+	CHECK_EQ( (int)OnlineGetSkins( owned, error ), (int)ONLINE_SKINS_READY );
+	CHECK( owned == ( one | two | three ) );		// 64 is past any loadout
+	CHECK( TankSkin_localLoadout() == one );
+
+	rig.sent.clear();
+	OnlineSaveSkins( two | three );
+	CHECK_STR( rig.sentType( 0 ).c_str(), "skins.set" );
+	std::vector<long long> want;
+	want.push_back( 2 );
+	want.push_back( 3 );
+	CHECK( rig.sent.size() == 1 && rig.sent[0].getInts( "skins" ) == want );
+	CHECK_EQ( (int)OnlineGetSkins( owned, error ), (int)ONLINE_SKINS_WAITING );
+	CHECK( TankSkin_localLoadout() == one );		// nothing changes before the site said yes
+	rig.feed( "{\"t\":\"skins.ok\",\"owned\":[1,2,3,5],\"skins\":[2,3]}" );
+	CHECK_EQ( (int)OnlineGetSkins( owned, error ), (int)ONLINE_SKINS_READY );
+	CHECK( owned == ( one | two | three | ( (SkinLoadout)1 << 5 ) ) );
+	CHECK( TankSkin_localLoadout() == ( two | three ) );		// the next room's seat
+
+	// Default everywhere is an empty list; a refusal keeps the loadout and says why
+	rig.sent.clear();
+	OnlineSaveSkins( 0 );
+	CHECK( rig.sent.size() == 1 && rig.sent[0].find( "skins" ) && rig.sent[0].getInts( "skins" ).empty() );
+	rig.feed( "{\"t\":\"skins.err\",\"code\":\"throttled\"}" );
+	CHECK_EQ( (int)OnlineGetSkins( owned, error ), (int)ONLINE_SKINS_FAILED );
+	CHECK_STR( error.str(), "throttled" );
+	CHECK( TankSkin_localLoadout() == ( two | three ) );
+
+	// skins.get, and a server from before it
+	rig.sent.clear();
+	OnlineRequestSkins();
+	CHECK_STR( rig.sentType( 0 ).c_str(), "skins.get" );
+	CHECK_EQ( (int)OnlineGetSkins( owned, error ), (int)ONLINE_SKINS_WAITING );
+	rig.feed( "{\"t\":\"error\",\"for\":\"skins.get\",\"code\":\"unknown\"}" );
+	CHECK_EQ( (int)OnlineGetSkins( owned, error ), (int)ONLINE_SKINS_FAILED );
+	CHECK_STR( error.str(), "unavailable" );
+
+	// signing out forgets both
+	OnlineSession::get().disconnect();
+	CHECK_EQ( (int)OnlineGetSkins( owned, error ), (int)ONLINE_SKINS_FAILED );
+	CHECK( owned == 0 && TankSkin_localLoadout() == 0 );
+	rig.feed( "{\"t\":\"skins.ok\",\"owned\":[1],\"skins\":[1]}" );		// a late answer for the account that left
+	CHECK( TankSkin_localLoadout() == 0 );
+}
+
 /* proto 2 on login, the room snapshot's cards, nicks in any case, Stop ending a reveal at once. */
 TEST(online_adapter_proto2_room_cards_and_case)
 {

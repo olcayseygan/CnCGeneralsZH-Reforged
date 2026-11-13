@@ -18572,6 +18572,54 @@ GUI:OnlineLadderButton
 "LİG"
 END
 
+GUI:OnlineSkinsButton
+"SKİNLER"
+END
+
+GUI:OnlineSkinsDefault
+"VARSAYILAN"
+END
+
+GUI:OnlineSkinsSave
+"KAYDET"
+END
+
+GUI:OnlineSkinsWaiting
+"zerohour.gg'ye soruluyor..."
+END
+
+GUI:OnlineSkinsHint
+"Her birim için bir görünüm seç, Kaydet'e bas. Gri skinler zerohour.gg'de kullanılan bir kodla açılır."
+END
+
+GUI:OnlineSkinsNone
+"Hesabında henüz skin yok. zerohour.gg'de bir kod kullan, sonra bu ekranı yeniden aç."
+END
+
+GUI:OnlineSkinsSaved
+"Kaydedildi. Bir sonraki oyununda (özel oyun ya da Hızlı Maç) bu skinler görünür."
+END
+
+GUI:OnlineSkinsSignedOut
+"Giriş yapmadın. Skinlerini seçmek için çevrim içi giriş yap."
+END
+
+GUI:OnlineSkinsThrottled
+"Bir dakikada çok fazla kayıt. Biraz bekle, sonra yeniden Kaydet'e bas."
+END
+
+GUI:OnlineSkinsUnavailable
+"zerohour.gg cevap vermedi. Skinlerin olduğu gibi kaldı; birazdan yeniden dene."
+END
+
+GUI:OnlineSkinsRefused
+"zerohour.gg bu seçimi kabul etmedi, skinlerin olduğu gibi kaldı. Hesabında ne olduğunu görmek için bu ekranı yeniden aç."
+END
+
+SKIN:Gold1K
+"1K ALTIN"
+END
+
 GUI:OnlineLadderRank
 "#"
 END

@@ -218,6 +218,7 @@ static const INI::RealRange PARTITION_CELL_SIZE_RANGE = { 20.0f, 400.0f };
 	{ "BuildPlacementOpacity",		INI::parseReal,				NULL,			offsetof( GlobalData, m_buildPlacementOpacity ) },
 	{ "BuildPlacementShadows",		INI::parseBool,				NULL,			offsetof( GlobalData, m_buildPlacementShadows ) },
 	{ "ZoomToCursor",							INI::parseBool,				NULL,			offsetof( GlobalData, m_zoomToCursor ) },
+	{ "MacTrackpadPan", INI::parseBool, NULL, offsetof( GlobalData, m_macTrackpadPan ) },
 	{ "IsometricCamera",					INI::parseBool,				NULL,			offsetof( GlobalData, m_isometricCamera ) },
 	{ "FormationDrag",						INI::parseBool,				NULL,			offsetof( GlobalData, m_formationDrag ) },
 	{ "ChromaLighting",						INI::parseBool,				NULL,			offsetof( GlobalData, m_chromaLighting ) },
@@ -1227,6 +1228,7 @@ GlobalData::GlobalData()
 	m_edgeScrollInWindowedMode = FALSE;
 	m_snapCameraRotateTo45 = FALSE;
 	m_zoomToCursor = FALSE;		// the wheel zooms on the middle of the screen, as 1.04 did, until ticked
+	m_macTrackpadPan = TRUE;		// native precise scrolling moves the map; pinch supplies trackpad zoom
 	m_zoomSpeed = 100;				// a notch moves the camera the 60 units it always did
 	m_isometricCamera = FALSE;
 	m_cameraShake = TRUE;

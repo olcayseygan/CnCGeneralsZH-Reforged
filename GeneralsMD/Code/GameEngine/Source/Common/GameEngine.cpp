@@ -195,6 +195,7 @@ void DeepCRCSanityCheck::reset(void)
 //-------------------------------------------------------------------------------------------------
 /// The GameEngine singleton instance
 GameEngine *TheGameEngine = NULL;
+void (*TheClientInputAfterMessagesHook)( void ) = NULL;
 
 //-------------------------------------------------------------------------------------------------
 SubsystemInterfaceList* TheSubsystemList = NULL;
@@ -3074,6 +3075,8 @@ Bool GameEngine::planOverlappedTick( void )
 #endif
 
 	TheMessageStream->propagateMessages();
+	if (TheClientInputAfterMessagesHook)
+		TheClientInputAfterMessagesHook();
 	// Alt-F4's instant quit clears the game from inside the message stream, the network with it
 	if (!TheGameLogic->isInGame())
 		return FALSE;
@@ -3185,8 +3188,11 @@ void GameEngine::update( void )
 					&& Clock_Milliseconds() - s_planTimeMs > 1000u / TheNetwork->getFrameRate())
 				s_passPlanned = FALSE;
 			// planOverlappedTick ran these two in front of the draw on a pass that may overlap
-			if (!s_passPlanned)
+			if (!s_passPlanned) {
 				TheMessageStream->propagateMessages();
+				if (TheClientInputAfterMessagesHook)
+					TheClientInputAfterMessagesHook();
+			}
 
 #ifdef ZH_ONLINE
 			OnlineBridge_Tick();
@@ -3307,6 +3313,8 @@ void GameEngine::update( void )
 						 side effects: it sends and receives, spends a frame of the network clock, and
 						 puts the next frame's commands on the list. */
 					TheMessageStream->propagateMessages();
+					if (TheClientInputAfterMessagesHook)
+						TheClientInputAfterMessagesHook();
 					TheNetwork->UPDATE();
 					if (!TheNetwork->isFrameDataReady())
 						break;

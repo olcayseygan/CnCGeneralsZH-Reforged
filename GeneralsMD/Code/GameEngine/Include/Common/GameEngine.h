@@ -53,6 +53,10 @@
 /** The above in logic frames, at a given game speed: 3 at the retail 30fps, 6 at 60. */
 Int GameEngine_logicCatchupMaxFrames( Int logicFps );
 
+// Optional local device input applied after keyboard/mouse messages and UI translators.
+// It is never invoked while the logic overlap window is running; native devices leave it null.
+extern void (*TheClientInputAfterMessagesHook)( void );
+
 /** The logic frames a second a match starts at: FramesPerSecondLimit (normal speed, or what -fps
 	asked for), twice that with turbo mode on.  Every start that sends MSG_NEW_GAME passes this, so a
 	replay plays back at the speed its match had. */

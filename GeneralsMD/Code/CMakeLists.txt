@@ -11,6 +11,9 @@ if(CMAKE_HOST_APPLE AND "${CMAKE_OSX_DEPLOYMENT_TARGET}" STREQUAL "")
 endif()
 
 project(GeneralsMD CXX C)
+if(APPLE)
+  enable_language(OBJCXX)
+endif()
 
 # Which operating system this build is for.  MSVC used to answer that question too, because for
 # twenty years there was only one answer, and this file used the two interchangeably from its first
@@ -1970,6 +1973,11 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(sdlinput PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
   set_target_properties(sdlinput PROPERTIES CXX_STANDARD 17)
   target_link_libraries(sdlinput PUBLIC gameengine SDL3::SDL3-static)
+  if(APPLE)
+    target_sources(sdlinput PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/SdlDevice/GameClient/SdlMacGesture.mm)
+    set_target_properties(sdlinput PROPERTIES OBJCXX_STANDARD 17 OBJCXX_STANDARD_REQUIRED YES)
+    target_link_libraries(sdlinput PRIVATE "-framework AppKit")
+  endif()
 
   file(GLOB_RECURSE SDLDEVICE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/SdlDevice/*.cpp)
   list(FILTER SDLDEVICE_SOURCES EXCLUDE REGEX "/SdlDevice/GameClient/")

@@ -3,7 +3,7 @@
 EA opened the source of Generals and Zero Hour, the game that is still on sale and still runs on
 Steam. This build is that source with the bugs the game shipped with fixed and everything below added.
 
-**129 changes. ~580 engine source files ported. 14 automated test suites. Around 60 original bugs
+**130 changes. ~580 engine source files ported. 14 automated test suites. Around 60 original bugs
 found and fixed, EA's own, not port damage.**
 
 ---
@@ -11,6 +11,17 @@ found and fixed, EA's own, not port damage.**
 ## Gold tanks for 1K
 
 - The game can draw skins your zerohour.gg account owns. The first three are 1K gold: the Crusader, the Battlemaster and the Scorpion, every general's version but the Laser General's Crusader, damaged or not. You pick one skin per unit inside the game: sign in online and press Skins in the online menu, where each unit shows Default and every skin it has, the ones your account does not own greyed out, and Save puts your pick on your account. In an online room everyone in the match sees your tanks in gold, the replay too, with your team colour still on the trim. Classic Graphics has a gold set of its own, painted on the classic tanks, so the skins show whichever look you play. Looks only: the tanks fight exactly as before, and a player whose game lacks the gold sheets just sees the normal tank. Quick Match carries both players' skins too. A saved pick counts from your very next room or Quick Match, with no sign-in between, and a code you redeem on zerohour.gg while the game is open shows up the next time you open Skins. LAN and skirmish games never show a skin.
+
+## Turkiye gets a game plan
+
+- Turkiye used to sit idle for the first minutes: its artillery hit nothing until a spotter, the guns, a screen and a radar all stood together, and keeping the eye alive took all your attention. Now there is one obvious road. Open with Mehmetcik Riflemen, a Spotter Team and a Cobra raid; in the middle game dig a Siper in front of a spotted Firtina line; late, put a Bayraktar over the target and bring the Akinci and the Kargu base.
+- The Mehmetcik's rifle does 8 a round instead of 5, so the first squad out of your Barracks wins its fight with the other side's first squad. The Barracks' new MPT-76 Rifles take it to 11 and the reach from 120 to 150.
+- The Spotter Team costs 300 instead of 700 and trains in 6 seconds instead of 10. Losing one is a setback now, not the end of your artillery.
+- The Siper is your forward radar post: rockets and shells keep their lock 400 around it, and the rank 3 Forward Radar card (it opened the Mobile Radar before) stretches that to 600. The Mobile Radar is gone from the Factory.
+- The Bayraktar is a full eye on its own. It carries a radar circle of 450 wherever it flies, so a Bayraktar over the target is all a Firtina line needs.
+- Three radars doing one job became three jobs. The Radar Tower is the base's long radar and the home of Target Classification, and costs 600 instead of 800 with a power draw of 2 instead of 3. The Koral lost its radar and is the electronic warfare truck, blinding drones and spotters and breaking missile locks, for 1400 instead of 1600. The Grand Bazaar is the economy building and sells Export Contracts: every Supply Center then pays 30 every 2 seconds instead of 20, every Grand Bazaar 35.
+- Turkiye's upgrades went from 16 to 21, and from five borrowed from other sides to two. New: MPT-76 Rifles and the CBRN Kit (Turkiye's own chemical suits) at the Barracks, a Self-Protection Suite of flares and armour for the Bayraktar, Akinci and Kizilelma at the Airfield, Fortification (every base building and Hisar a quarter tougher) at the Headquarters, Export Contracts at the Grand Bazaar and Domestic Warheads, 3000, at the Operations Center: a quarter more damage from the artillery, the Altay's gun, the Alpagu, Sungur and Kizilelma missiles, the Bayraktar's munitions and the Akinci's bomb. Two are bought on a single vehicle, the way America buys a drone: a SARP machine gun station on an Altay's turret for infantry, and a Field Repair Kit on a Kirpi that mends vehicles within 150 at 10 a second.
+- The computer plays it. In a 30-match Hard batch against America, China and the GLA, both seat orders, Turkiye bought every new upgrade but Export Contracts, built a Grand Bazaar in all 30 and trained the Alpagu Operator, whom it never built before. It won 11, lost 13 and drew 6: 5-3-2 against America, 3-4-3 against China, 3-6-1 against the GLA.
 
 ## The game plays half as fast again
 

@@ -3059,7 +3059,7 @@ CONTROLBAR:ConstructTurkiyeInfantryMehmetcik
 END
 
 CONTROLBAR:ToolTipTurkiyeInfantryMehmetcik
-"Line infantry. Clears and holds buildings."
+"Line infantry and the opening move: with a Spotter Team and a Cobra or two they win the first minutes. Clears and holds buildings."
 END
 
 OBJECT:TurkiyeInfantryEngineer
@@ -3107,7 +3107,7 @@ CONTROLBAR:ConstructTurkiyeInfantrySpotter
 END
 
 CONTROLBAR:ToolTipTurkiyeInfantrySpotter
-"Sees 500 and barely fights. It cannot hide, so keep it out of reach. Put it on a hill and the artillery behind it can shoot."
+"Sees 500 and barely fights. Cheap: losing one costs little, so bring two. Put it on a hill and the artillery behind it can shoot."
 END
 
 OBJECT:TurkiyeInfantryMaroonBeret
@@ -3207,7 +3207,7 @@ CONTROLBAR:ConstructTurkiyeVehicleFirtina
 END
 
 CONTROLBAR:ToolTipTurkiyeVehicleFirtina
-"Fires a heavy shell with a wide blast out to 600 and sees 100: it needs a spotter, a UAV or a radar tower to aim."
+"The mid-game gun. Fires a heavy shell with a wide blast out to 600 and sees 100: it needs a Spotter Team or a Bayraktar to aim, and a Siper or a radar near the target to hit."
 END
 
 OBJECT:TurkiyeVehicleSakarya
@@ -3231,7 +3231,7 @@ CONTROLBAR:ConstructTurkiyeTankKoral
 END
 
 CONTROLBAR:ToolTipTurkiyeTankKoral
-"Electronic warfare vehicle; its beam shuts enemy buildings down from 400."
+"Electronic warfare vehicle: enemy drones and spotters within 400 go blind, guided missiles lose their lock, and its beam shuts enemy buildings down from 400."
 END
 
 OBJECT:TurkiyeVehicleBayraktar
@@ -3243,7 +3243,7 @@ CONTROLBAR:ConstructTurkiyeVehicleBayraktar
 END
 
 CONTROLBAR:ToolTipTurkiyeVehicleBayraktar
-"Hovers where it is sent and sees 550, the artillery's best eye. Light munitions."
+"Hovers where it is sent, sees 550 and carries its own radar circle of 450: on its own it is all the artillery needs to aim and hit. Light munitions."
 END
 
 OBJECT:TurkiyeVehicleGokbey
@@ -3291,7 +3291,7 @@ CONTROLBAR:ConstructTurkiyeRadarTower
 END
 
 CONTROLBAR:ToolTipTurkiyeRadarTower
-"Fixed eye: sees 500 for the artillery. Draws power. A target."
+"The base's long radar: sees 500 and keeps radar lock 1000 around it. Researches Target Classification and opens the Alpagu Operator. Draws power."
 END
 
 OBJECT:TurkiyeSiper
@@ -3303,7 +3303,7 @@ CONTROLBAR:ConstructTurkiyeSiper
 END
 
 CONTROLBAR:ToolTipTurkiyeSiper
-"Trench bunker for five infantry, dug wherever the engineers stand. Mehmetcik in it hold off infantry, Sungur gunners hold off tanks."
+"Trench bunker for five infantry, dug wherever the engineers stand, and the forward radar post: radar lock 400 around it. Dig one in front of the Firtina line. Mehmetcik in it hold off infantry, Sungur gunners hold off tanks."
 END
 
 OBJECT:TurkiyeLandMine
@@ -3439,7 +3439,7 @@ SCIENCE:TurkiyeEarlyWarning
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceEarlyWarning
-"Every Turkiye radar reaches a quarter further: Headquarters, Radar Tower, Koral, Akinci and Mobile Radar."
+"Every Turkiye radar reaches a quarter further: Headquarters, Radar Tower, Siper, Bayraktar and Akinci."
 END
 
 UPGRADE:TurkiyeEarlyWarning
@@ -3467,11 +3467,11 @@ GUI:HudReconSiha
 END
 
 SCIENCE:TurkiyeMobileRadar
-"Mobile Radar"
+"Forward Radar"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceMobileRadar
-"The Factory builds the Mobile Radar, a radar truck that covers 900 around it while it stands still."
+"Every Siper's radar circle reaches half as far again, 400 to 600."
 END
 
 OBJECT:TurkiyeVehicleMobileRadar
@@ -3618,6 +3618,106 @@ CONTROLBAR:ToolTipUpgradeTurkiyeSiperReinforced
 "Concrete and overhead cover: every Siper takes half as much again before it falls."
 END
 
+UPGRADE:TurkiyeMpt76
+"MPT-76 Rifles"
+END
+
+CONTROLBAR:UpgradeTurkiyeMpt76
+"MPT-76 &Rifles"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeMpt76
+"Mehmetcik Riflemen carry the 7.62 MPT-76: 11 damage a round instead of 8, and 150 range instead of 120."
+END
+
+UPGRADE:TurkiyeCbrn
+"CBRN Kit"
+END
+
+CONTROLBAR:UpgradeTurkiyeCbrn
+"CBR&N Kit"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeCbrn
+"Protective suits and masks for Mehmetcik, Sungur, Alpagu, Spotter Teams and the Maroon Beret: they shrug off toxins, radiation and anthrax."
+END
+
+UPGRADE:TurkiyeSelfProtection
+"Self-Protection Suite"
+END
+
+CONTROLBAR:UpgradeTurkiyeSelfProtection
+"Self-&Protection Suite"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeSelfProtection
+"Bayraktar, Akinci and Kizilelma carry flares and extra armour. Flares pull away three missiles in ten."
+END
+
+UPGRADE:TurkiyeFortification
+"Fortification"
+END
+
+CONTROLBAR:UpgradeTurkiyeFortification
+"&Fortification"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeFortification
+"Every base building and Hisar Battery takes a quarter more damage before it falls."
+END
+
+UPGRADE:TurkiyeExportContracts
+"Export Contracts"
+END
+
+CONTROLBAR:UpgradeTurkiyeExportContracts
+"&Export Contracts"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeExportContracts
+"Foreign buyers for the factories' output. Every Supply Center pays 30 every 2 seconds instead of 20, every Grand Bazaar 35."
+END
+
+UPGRADE:TurkiyeWarheads
+"Domestic Warheads"
+END
+
+CONTROLBAR:UpgradeTurkiyeWarheads
+"Domestic &Warheads"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeWarheads
+"Turkish-made warheads: a quarter more damage from the Firtina, Sakarya, Altay gun, Alpagu and Sungur missiles, the Bayraktar's munitions, the Akinci's bomb and the Kizilelma's missiles."
+END
+
+UPGRADE:TurkiyeAltaySarp
+"SARP Weapon Station"
+END
+
+CONTROLBAR:UpgradeTurkiyeAltaySarp
+"SA&RP Weapon Station"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeAltaySarp
+"This Altay gets a remote 12.7 mm machine gun on its turret for infantry. The main gun keeps the vehicles."
+END
+
+UPGRADE:TurkiyeKirpiRepairKit
+"Field Repair Kit"
+END
+
+CONTROLBAR:UpgradeTurkiyeKirpiRepairKit
+"Field &Repair Kit"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeKirpiRepairKit
+"This Kirpi carries a repair crew: vehicles within 150 of it regain 10 health a second."
+END
+
+UPGRADE:TurkiyeForwardRadar
+"Forward Radar"
+END
+
 UPGRADE:TurkiyeThermal
 "Thermal Sights"
 END
@@ -3723,7 +3823,7 @@ CONTROLBAR:ConstructTurkiyeKapalicarsi
 END
 
 CONTROLBAR:ToolTipTurkiyeKapalicarsi
-"Turkiye's black market. Pays 20 every 2 seconds and sells Countermeasures for the Bayraktar, the Akinci and the Kizilelma, and Worker Shoes for the engineers. \n \n Requires: Factory"
+"Turkiye's market and its economy building. Pays 20 every 2 seconds and sells Export Contracts, which raise every Supply Center's and Grand Bazaar's income. \n \n Requires: Factory"
 END
 
 CONTROLBAR:ToolTipTurkiyeKarguBase

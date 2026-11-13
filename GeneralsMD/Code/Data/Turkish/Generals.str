@@ -17629,7 +17629,7 @@ CONTROLBAR:ConstructTurkiyeInfantryMehmetcik
 END
 
 CONTROLBAR:ToolTipTurkiyeInfantryMehmetcik
-"Hat piyadesi. Binaya girer, bina temizler."
+"Hat piyadesi ve açılış hamlesi: bir gözcü timi ve bir iki Cobra ile ilk dakikaları kazanır. Binaya girer, bina temizler."
 END
 
 OBJECT:TurkiyeInfantryEngineer
@@ -17677,7 +17677,7 @@ CONTROLBAR:ConstructTurkiyeInfantrySpotter
 END
 
 CONTROLBAR:ToolTipTurkiyeInfantrySpotter
-"500 görür, neredeyse hiç savaşmaz. Gizlenemez, menzil dışında tutun. Tepeye çıkınca arkadaki topçunun gözü olur."
+"500 görür, neredeyse hiç savaşmaz. Ucuzdur: birini kaybetmek az şey götürür, iki tane getirin. Tepeye çıkınca arkadaki topçunun gözü olur."
 END
 
 OBJECT:TurkiyeInfantryMaroonBeret
@@ -17777,7 +17777,7 @@ CONTROLBAR:ConstructTurkiyeVehicleFirtina
 END
 
 CONTROLBAR:ToolTipTurkiyeVehicleFirtina
-"Geniş etkili ağır mermiyi 600'e atar, 100 görür: nişan için gözcü, İHA ya da radar kulesi ister."
+"Orta oyunun topu. Geniş etkili ağır mermiyi 600'e atar, 100 görür: nişan için gözcü timi ya da Bayraktar, isabet için hedefin yakınında Siper ya da radar ister."
 END
 
 OBJECT:TurkiyeVehicleSakarya
@@ -17801,7 +17801,7 @@ CONTROLBAR:ConstructTurkiyeTankKoral
 END
 
 CONTROLBAR:ToolTipTurkiyeTankKoral
-"Elektronik harp aracı; ışını düşman binasını 400 menzilden susturur."
+"Elektronik harp aracı: 400 içindeki düşman İHA'ları ve gözcüleri kör olur, güdümlü füzeler kilidini kaybeder, ışını düşman binasını 400 menzilden susturur."
 END
 
 OBJECT:TurkiyeVehicleBayraktar
@@ -17813,7 +17813,7 @@ CONTROLBAR:ConstructTurkiyeVehicleBayraktar
 END
 
 CONTROLBAR:ToolTipTurkiyeVehicleBayraktar
-"Gönderildiği yerde durur ve 550 görür, topçunun en iyi gözü. Hafif mühimmat."
+"Gönderildiği yerde durur, 550 görür ve 450'lik kendi radar çemberini taşır: topçunun nişan alıp vurması için tek başına yeter. Hafif mühimmat."
 END
 
 OBJECT:TurkiyeVehicleGokbey
@@ -17861,7 +17861,7 @@ CONTROLBAR:ConstructTurkiyeRadarTower
 END
 
 CONTROLBAR:ToolTipTurkiyeRadarTower
-"Sabit göz: topçu için 500 görür. Elektrik çeker. Bir hedeftir."
+"Üssün uzun menzilli radarı: 500 görür, çevresinde 1000'e kadar radar kilidi tutar. Hedef Sınıflandırma araştırır, Alpagu operatörünü açar. Elektrik çeker."
 END
 
 OBJECT:TurkiyeSiper
@@ -17873,7 +17873,7 @@ CONTROLBAR:ConstructTurkiyeSiper
 END
 
 CONTROLBAR:ToolTipTurkiyeSiper
-"Beş piyadelik siper, istihkam takımı nerede durursa orada kazılır. İçindeki Mehmetçik piyadeyi, Sungur nişancısı tankı durdurur."
+"Beş piyadelik siper, istihkam takımı nerede durursa orada kazılır; ileri radar mevziidir, çevresinde 400 radar kilidi tutar. Fırtına hattının önüne kazın. İçindeki Mehmetçik piyadeyi, Sungur nişancısı tankı durdurur."
 END
 
 OBJECT:TurkiyeLandMine
@@ -18009,7 +18009,7 @@ SCIENCE:TurkiyeEarlyWarning
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceEarlyWarning
-"Türkiye'nin bütün radarları dörtte bir daha uzağa erişir: Karargah, Radar Kulesi, Koral, Akıncı ve Mobil Radar."
+"Türkiye'nin bütün radarları dörtte bir daha uzağa erişir: Karargah, Radar Kulesi, Siper, Bayraktar ve Akıncı."
 END
 
 UPGRADE:TurkiyeEarlyWarning
@@ -18037,11 +18037,11 @@ GUI:HudReconSiha
 END
 
 SCIENCE:TurkiyeMobileRadar
-"Mobil Radar"
+"İleri Radar"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceMobileRadar
-"Fabrika Mobil Radar üretir: dururken çevresinde 900'ü kapsayan bir radar kamyonu."
+"Her Siper'in radar çemberi yarısı kadar daha uzağa erişir, 400'den 600'e."
 END
 
 OBJECT:TurkiyeVehicleMobileRadar
@@ -18188,6 +18188,106 @@ CONTROLBAR:ToolTipUpgradeTurkiyeSiperReinforced
 "Beton ve üst örtü: her Siper yıkılmadan önce yarısı kadar daha fazla dayanır."
 END
 
+UPGRADE:TurkiyeMpt76
+"MPT-76 Tüfekleri"
+END
+
+CONTROLBAR:UpgradeTurkiyeMpt76
+"MPT-76 &Tüfekleri"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeMpt76
+"Mehmetçikler 7.62'lik MPT-76 taşır: mermi başına 8 yerine 11 hasar, 120 yerine 150 menzil."
+END
+
+UPGRADE:TurkiyeCbrn
+"KBRN Teçhizatı"
+END
+
+CONTROLBAR:UpgradeTurkiyeCbrn
+"&KBRN Teçhizatı"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeCbrn
+"Mehmetçik, Sungur, Alpagu, gözcü timi ve Bordo Bereli için koruyucu elbise ve maske: zehre, radyasyona ve şarbona dayanırlar."
+END
+
+UPGRADE:TurkiyeSelfProtection
+"Öz Koruma Sistemi"
+END
+
+CONTROLBAR:UpgradeTurkiyeSelfProtection
+"Öz &Koruma Sistemi"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeSelfProtection
+"Bayraktar, Akıncı ve Kızılelma işaret fişeği ve ek zırh taşır. Fişekler on füzeden üçünü saptırır."
+END
+
+UPGRADE:TurkiyeFortification
+"Tahkimat"
+END
+
+CONTROLBAR:UpgradeTurkiyeFortification
+"&Tahkimat"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeFortification
+"Bütün üs binaları ve Hisar bataryaları yıkılmadan önce dörtte bir daha fazla hasar kaldırır."
+END
+
+UPGRADE:TurkiyeExportContracts
+"İhracat Sözleşmeleri"
+END
+
+CONTROLBAR:UpgradeTurkiyeExportContracts
+"İ&hracat Sözleşmeleri"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeExportContracts
+"Fabrikaların ürününe yabancı alıcı. Her İkmal Merkezi 2 saniyede 20 yerine 30, her Kapalıçarşı 35 öder."
+END
+
+UPGRADE:TurkiyeWarheads
+"Yerli Harp Başlığı"
+END
+
+CONTROLBAR:UpgradeTurkiyeWarheads
+"Yerli &Harp Başlığı"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeWarheads
+"Yerli harp başlıkları: Fırtına, Sakarya, Altay topu, Alpagu ve Sungur füzeleri, Bayraktar mühimmatı, Akıncı bombası ve Kızılelma füzeleri dörtte bir daha fazla hasar verir."
+END
+
+UPGRADE:TurkiyeAltaySarp
+"SARP Silah İstasyonu"
+END
+
+CONTROLBAR:UpgradeTurkiyeAltaySarp
+"SA&RP Silah İstasyonu"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeAltaySarp
+"Bu Altay'ın kulesine piyade için uzaktan kumandalı 12.7 mm makineli tüfek takılır. Ana top araçlara kalır."
+END
+
+UPGRADE:TurkiyeKirpiRepairKit
+"Sahra Tamir Seti"
+END
+
+CONTROLBAR:UpgradeTurkiyeKirpiRepairKit
+"Sahra &Tamir Seti"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeKirpiRepairKit
+"Bu Kirpi bir tamir ekibi taşır: 150 içindeki araçlar saniyede 10 can kazanır."
+END
+
+UPGRADE:TurkiyeForwardRadar
+"İleri Radar"
+END
+
 UPGRADE:TurkiyeThermal
 "Termal Görüş"
 END
@@ -18293,7 +18393,7 @@ CONTROLBAR:ConstructTurkiyeKapalicarsi
 END
 
 CONTROLBAR:ToolTipTurkiyeKapalicarsi
-"Türkiye'nin karaborsası. Her 2 saniyede 20 öder; Bayraktar, Akıncı ve Kızılelma için Karşı Tedbirler, istihkam takımı için İşçi Ayakkabıları satar. \n \n Gereken: Fabrika"
+"Türkiye'nin çarşısı ve ekonomi binası. Her 2 saniyede 20 öder; her İkmal Merkezi'nin ve Kapalıçarşı'nın gelirini artıran İhracat Sözleşmeleri'ni satar. \n \n Gereken: Fabrika"
 END
 
 CONTROLBAR:ToolTipTurkiyeKarguBase

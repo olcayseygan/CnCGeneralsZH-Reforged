@@ -25314,8 +25314,8 @@ TEST(skin_loadout_rides_the_slot_entry_and_an_old_string_reads_as_none)
 }
 
 /* SkinsReforged.ini as it ships: ids 1, 2 and 3 are the 1K gold Crusader, Battlemaster and Scorpion
-	 (the ids zerohour.gg uses), each on its generals' models and the damaged states, case ignored, and
-	 on nothing else.  Each pairs the rebuilt sheets and retail's with their gold copies, never a house
+	 (the ids zerohour.gg uses), each on its generals' models (the Laser General's Crusader left out),
+	 the damaged states and the wrecks that are its alone, case ignored, and on nothing else.  Each pairs the rebuilt sheets and retail's with their gold copies, never a house
 	 colour sheet.  A loadout keeps one skin a unit and drops ids past 63. */
 TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 {
@@ -25324,7 +25324,7 @@ TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 	CHECK( loadIni( ZH_CODE_DIR "/Data/INI/SkinsReforged.ini" ) );
 
 	const SkinLoadout all = ( (SkinLoadout)1 << 1 ) | ( (SkinLoadout)1 << 2 ) | ( (SkinLoadout)1 << 3 );
-	static const char *const crusader[] = { "AVLeopard", "AVLeopard_D", "AVLaserTnk", "avlasertnk_d", "AVLaserTnk_D1" };
+	static const char *const crusader[] = { "AVLeopard", "avleopard_d" };
 	static const char *const battlemaster[] = { "NVBtMstr", "NVBtMstr_D", "NVBtMstrNG", "nvbtmstrng_d", "NVBtMstr_D1", "NVBtMstr_D2", "NVBtMstr_D3" };
 	static const char *const scorpion[] = { "UVLiteTank", "UVLITETANK_D", "UVLiteTank_D1", "UVScorpion_m" };
 	for( Int i = 0; i < (Int)ARRAY_SIZE( crusader ); ++i )
@@ -25333,8 +25333,10 @@ TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 		CHECK_EQ( TankSkin_forModel( all, battlemaster[i] ), 2 );
 	for( Int i = 0; i < (Int)ARRAY_SIZE( scorpion ); ++i )
 		CHECK_EQ( TankSkin_forModel( all, scorpion[i] ), 3 );
-	// AVLeopard_D1 is DeadCrusaderHulk, which crushed vehicles of every kind leave
-	static const char *const plain[] = { "AVLeopard_D1", "AVLeopard_D2", "UVLiteTank_D2", "AVPaladin", "NVOverlord", "" };
+	// AVLeopard_D1 is DeadCrusaderHulk, which crushed vehicles of every kind leave; the Laser General's
+	// Crusader keeps its own paint, the owner's call
+	static const char *const plain[] = { "AVLeopard_D1", "AVLeopard_D2", "AVLaserTnk", "AVLaserTnk_D", "AVLaserTnk_D1",
+		"UVLiteTank_D2", "AVPaladin", "NVOverlord", "" };
 	for( Int i = 0; i < (Int)ARRAY_SIZE( plain ); ++i )
 		CHECK_EQ( TankSkin_forModel( all, plain[i] ), 0 );
 	CHECK_EQ( TankSkin_forModel( (SkinLoadout)1 << 2, "AVLeopard" ), 0 );	// owns the Battlemaster's only
@@ -25342,12 +25344,12 @@ TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 	CHECK_EQ( TankSkin_forModel( all, NULL ), 0 );
 
 	CHECK_STR( TankSkin_replacementSheet( 1, "AVCrusader_R.tga" ), "Skin1K_AVCrusader_R.tga" );
-	CHECK_STR( TankSkin_replacementSheet( 1, "avleopard_r.dds" ), "Skin1K_avleopard_R.tga" );
+	CHECK_STR( TankSkin_replacementSheet( 1, "avcrusaderd_r.dds" ), "Skin1K_AVCrusaderD_R.tga" );
+	CHECK( TankSkin_replacementSheet( 1, "avleopard_R.tga" ) == NULL );		// the Laser Crusader's rebuilt sheet
 	CHECK_STR( TankSkin_replacementSheet( 1, "avleopard.tga" ), "Skin1KC_avleopard.tga" );
 	CHECK_STR( TankSkin_replacementSheet( 2, "NVBtMstr_D.tga" ), "Skin1KC_NVBtMstr_D.tga" );
 	CHECK_STR( TankSkin_replacementSheet( 3, "UVScorpion_m_R.tga" ), "Skin1K_UVScorpion_m_R.tga" );
-	CHECK_STR( TankSkin_replacementSheet( 1, "avleopard_d1_R.tga" ), "Skin1K_avleopard_d1_R.tga" );		// the wrecks
-	CHECK_STR( TankSkin_replacementSheet( 2, "NVBtMstr_D1.tga" ), "Skin1KC_NVBtMstr_D1.tga" );
+	CHECK_STR( TankSkin_replacementSheet( 2, "NVBtMstr_D1.tga" ), "Skin1KC_NVBtMstr_D1.tga" );		// the wrecks
 	CHECK_STR( TankSkin_replacementSheet( 3, "UVLiteTank_D1_R.tga" ), "Skin1K_UVLiteTank_D1_R.tga" );
 	CHECK( TankSkin_replacementSheet( 1, "ZHCA_AVCrusPlate.tga" ) == NULL );
 	CHECK( TankSkin_replacementSheet( 1, "NVTreads.tga" ) == NULL );

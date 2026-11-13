@@ -10,7 +10,7 @@ found and fixed, EA's own, not port damage.**
 
 ## Gold tanks for 1K
 
-- The game can draw skins your zerohour.gg account owns. The first three are 1K gold: the Crusader, the Battlemaster and the Scorpion, every general's version included, damaged or not. You pick one skin per unit on the site, and in an online room everyone in the match sees your tanks in gold, the replay too, with your team colour still on the trim. Classic Graphics has a gold set of its own, painted on the classic tanks, so the skins show whichever look you play. Looks only: the tanks fight exactly as before, and a player whose game lacks the gold sheets just sees the normal tank. Quick Match carries both players' skins too. The game reads your skins as you sign in online, so a change on the site counts from your next sign-in. LAN and skirmish games never show a skin.
+- The game can draw skins your zerohour.gg account owns. The first three are 1K gold: the Crusader, the Battlemaster and the Scorpion, every general's version but the Laser General's Crusader, damaged or not. You pick one skin per unit on the site, and in an online room everyone in the match sees your tanks in gold, the replay too, with your team colour still on the trim. Classic Graphics has a gold set of its own, painted on the classic tanks, so the skins show whichever look you play. Looks only: the tanks fight exactly as before, and a player whose game lacks the gold sheets just sees the normal tank. Quick Match carries both players' skins too. The game reads your skins as you sign in online, so a change on the site counts from your next sign-in. LAN and skirmish games never show a skin.
 
 ## The game plays half as fast again
 

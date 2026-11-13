@@ -406,9 +406,13 @@ static GameWindow *makeLine( Int x, Int y, Int w, Int h, GameFont *font, Color c
 	return line;
 }
 
-/* The row's pick pushed in and green (ACTIVE, the open tab's colour), the rest up and white. */
+/* The row's pick wears the button's own hover art (Buttons-HiLite, the layouts' green edge) and green
+	 words (ACTIVE, the open tab's colour) for good; the rest the plain art and white.  Not a check-like
+	 button: the Back button's art has no pushed-in picture for a checked one, and it drew nothing. */
 static void markPicks( void )
 {
+	WinInstanceData *look = buttonBack ? buttonBack->winGetInstanceData() : NULL;
+	static const Int ends[] = { 0, 5, 6 };		// left, middle, right
 	for (size_t r = 0; r < s_skinRows.size(); ++r)
 		for (size_t c = 0; c < s_skinRows[r].choices.size(); ++c)
 		{
@@ -416,7 +420,8 @@ static void markPicks( void )
 			if (!b)
 				continue;
 			const Bool on = s_skinRows[r].choices[c].id == s_skinRows[r].pick;
-			GadgetCheckLikeButtonSetVisualCheck( b, on );
+			for (Int i = 0; look && i < (Int)ARRAY_SIZE( ends ); ++i)
+				b->winSetEnabledImage( ends[i], on ? look->m_hiliteDrawData[ends[i]].image : look->m_enabledDrawData[ends[i]].image );
 			b->winSetEnabledTextColors( on ? UIStyle::ACTIVE : UIStyle::INK, GameMakeColor( 0, 0, 0, 255 ) );
 		}
 }
@@ -492,10 +497,7 @@ static void createSkinsGadgets( void )
 			GameWindow *b = WOLMakeButtonLike( parentWindow, buttonBack, LADDER_X( x0 ), y,
 				LADDER_X( x0 + 176 ) - LADDER_X( x0 ), LADDER_Y( 36 ), label.isEmpty() ? "GUI:OnlineSkinsDefault" : label.str() );
 			if (b)
-			{
 				b->winSetFont( UIStyle::titleFont( 15 ) );
-				GadgetButtonEnableCheckLike( b, TRUE, FALSE );
-			}
 			s_skinRows[r].choices[c].button = b;
 		}
 	}
@@ -589,7 +591,7 @@ static Bool pickSkin( GameWindow *control )
 			if (s_skinRows[r].choices[c].button == control)
 			{
 				s_skinRows[r].pick = s_skinRows[r].choices[c].id;
-				markPicks();		// the click flipped the button itself; this puts every row right again
+				markPicks();
 				s_skinsSaved = FALSE;
 				s_skinsDirty = TRUE;
 				drawSkins();

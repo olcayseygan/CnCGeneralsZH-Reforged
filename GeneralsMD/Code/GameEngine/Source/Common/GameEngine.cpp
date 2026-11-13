@@ -1582,7 +1582,11 @@ void GameEngine::init( int argc, char *argv[] )
 		if (!TheRecorder->playbackFile( thePendingReplayFile ))
 		{
 			DEBUG_LOG(("-replay: '%s' could not be played back\n", thePendingReplayFile.str()));
-			TheWritableGlobalData->m_shellMapOn = TRUE;
+			// nobody is at the keyboard of a headless run: the main menu would be a process that never ends
+			if (TheGlobalData->m_headless)
+				TheGameEngine->setQuitting( TRUE );
+			else
+				TheWritableGlobalData->m_shellMapOn = TRUE;
 		}
 		thePendingReplayFile.clear();
 	}

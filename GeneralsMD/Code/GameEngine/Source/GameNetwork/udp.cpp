@@ -42,6 +42,11 @@
 #define closesocket close
 #endif
 
+#if defined(__APPLE__)
+#include <ifaddrs.h>
+#include <net/if.h>
+#endif
+
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -321,6 +326,35 @@ Int UDP::Write(const unsigned char *msg,UnsignedInt len,UnsignedInt IP,UnsignedS
   to.sin_family=AF_INET;
 
   ClearStatus();
+#if defined(__APPLE__)
+  if (IP == INADDR_BROADCAST && myIP != INADDR_ANY) {
+    // Darwin can replace even a bound source address for limited broadcasts.
+    // Carry the selected LAN interface/address on this datagram only; normal
+    // unicast routing, VPN handling and every other platform are unchanged.
+    struct ifaddrs *interfaces = NULL;
+    struct in_pktinfo info = {};
+    info.ipi_spec_dst.s_addr = htonl(myIP);
+    if (getifaddrs(&interfaces) == 0) {
+      for (struct ifaddrs *at = interfaces; at; at = at->ifa_next)
+        if (at->ifa_addr && at->ifa_addr->sa_family == AF_INET &&
+            ((struct sockaddr_in *)at->ifa_addr)->sin_addr.s_addr == info.ipi_spec_dst.s_addr) {
+          info.ipi_ifindex = if_nametoindex(at->ifa_name); break;
+        }
+      freeifaddrs(interfaces);
+    }
+    if (!info.ipi_ifindex) { m_lastError = EADDRNOTAVAIL; return -1; }
+    struct iovec part = {(void *)msg, len};
+    union { struct cmsghdr alignment; char bytes[CMSG_SPACE(sizeof(info))]; } control = {};
+    struct msghdr header = {};
+    header.msg_name = &to; header.msg_namelen = sizeof(to);
+    header.msg_iov = &part; header.msg_iovlen = 1;
+    header.msg_control = control.bytes; header.msg_controllen = sizeof(control.bytes);
+    struct cmsghdr *c = CMSG_FIRSTHDR(&header);
+    c->cmsg_level = IPPROTO_IP; c->cmsg_type = IP_PKTINFO; c->cmsg_len = CMSG_LEN(sizeof(info));
+    memcpy(CMSG_DATA(c), &info, sizeof(info));
+    retval = (Int)sendmsg(fd, &header, 0);
+  } else
+#endif
   retval=sendto(fd,(const char *)msg,len,0,(struct sockaddr *)&to,sizeof(to));
   #ifdef _WINDOWS
   if (retval==SOCKET_ERROR)

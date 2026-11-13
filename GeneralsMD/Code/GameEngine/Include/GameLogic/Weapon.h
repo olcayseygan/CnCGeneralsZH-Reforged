@@ -207,8 +207,10 @@ enum WeaponBonusConditionType : Int
 	WEAPONBONUSCONDITION_FRENZY_ONE,
 	WEAPONBONUSCONDITION_FRENZY_TWO,
 	WEAPONBONUSCONDITION_FRENZY_THREE,
+	WEAPONBONUSCONDITION_MARK_AND_RAIN,		///< Turkiye's guns, a few seconds after a kill an eye saw (MarkAndRainBehavior)
+	WEAPONBONUSCONDITION_FORWARD_POST,		///< Turkiye's guns, standing by a Siper (PropagandaTowerBehavior BonusCondition)
 
-	WEAPONBONUSCONDITION_COUNT
+	WEAPONBONUSCONDITION_COUNT	// at most 32: WeaponBonusConditionFlags is an UnsignedInt
 };
 #ifdef DEFINE_WEAPONBONUSCONDITION_NAMES
 static const char *TheWeaponBonusNames[] = 
@@ -245,6 +247,8 @@ static const char *TheWeaponBonusNames[] =
 	"FRENZY_ONE",
 	"FRENZY_TWO",
 	"FRENZY_THREE",
+	"MARK_AND_RAIN",
+	"FORWARD_POST",
 
 	NULL
 };

@@ -100,6 +100,7 @@
 #include "GameLogic/Module/SubdualDamageHelper.h"
 #include "GameLogic/Module/SupplyWarehouseDockUpdate.h"
 #include "GameLogic/Module/TempWeaponBonusHelper.h"
+#include "GameLogic/Module/MarkAndRainBehavior.h"
 #include "GameLogic/Module/ToppleUpdate.h"
 #include "GameLogic/Module/UpdateModule.h"
 #include "GameLogic/Module/UpgradeModule.h"
@@ -5343,6 +5344,9 @@ void Object::onDie( DamageInfo *damageInfo )
 			if (die)
 				die->onDie(damageInfo);
 		}
+
+		// Turkiye's guns: a kill an eye saw starts a burst on the guns that reach it
+		MarkAndRainBehavior::onDeath( this );
 	}
 
 	// When objects die we remove from the radar as they're really not interesting anymore

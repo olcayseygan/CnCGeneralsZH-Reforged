@@ -17665,7 +17665,7 @@ CONTROLBAR:ConstructTurkiyeInfantryAlpagu
 END
 
 CONTROLBAR:ToolTipTurkiyeInfantryAlpagu
-"Diz çöker, kamikaze İHA'yı yere koyar ve 350'ye kadar uçurur; İHA piyadenin ve hafif aracın üstüne düşer. Kendisi 200 görür, ötesindeki hedefi gözcü ya da radar kulesi bulmalıdır. Tanka ve binaya karşı zayıf."
+"Diz çöker, kamikaze İHA'yı yere koyar ve 350'ye kadar uçurur; İHA piyadenin ve hafif aracın üstüne düşer. Kendisi 200 görür, ötesindeki hedefi gözcü ya da radar kulesi bulmalıdır. Tanka ve binaya karşı zayıf. Gözlerinin gördüğü bir düşman menzilinde ölünce 6 saniye boyunca İHA'yı bir buçuk kat hızlı atar. Siperin yanında menzili onda bir uzar."
 END
 
 OBJECT:TurkiyeInfantrySpotter
@@ -17777,7 +17777,7 @@ CONTROLBAR:ConstructTurkiyeVehicleFirtina
 END
 
 CONTROLBAR:ToolTipTurkiyeVehicleFirtina
-"Orta oyunun topu. Geniş etkili ağır mermiyi 600'e atar, 100 görür: nişan için gözcü timi ya da Bayraktar, isabet için hedefin yakınında Siper ya da radar ister."
+"Orta oyunun topu. Geniş etkili ağır mermiyi 600'e atar, 100 görür: nişan için gözcü timi ya da Bayraktar, isabet için hedefin yakınında Siper ya da radar ister. Gözlerinin gördüğü bir düşman menzilinde ölünce 6 saniye boyunca bir buçuk kat hızlı ve tam isabetle atar. Siperin yanında menzili onda bir uzar."
 END
 
 OBJECT:TurkiyeVehicleSakarya
@@ -17789,7 +17789,7 @@ CONTROLBAR:ConstructTurkiyeVehicleSakarya
 END
 
 CONTROLBAR:ToolTipTurkiyeVehicleSakarya
-"500 menzile geniş bir alana altılı salvo atar, sonra 12 saniye dolar. Gözcü ister."
+"500 menzile geniş bir alana altılı salvo atar, sonra 14 saniye dolar. Gözcü ister. Gözlerinin gördüğü bir düşman menzilinde ölünce 6 saniye boyunca bir buçuk kat hızlı dolar ve tam isabet eder. Siperin yanında menzili onda bir uzar."
 END
 
 OBJECT:TurkiyeTankKoral
@@ -17873,7 +17873,7 @@ CONTROLBAR:ConstructTurkiyeSiper
 END
 
 CONTROLBAR:ToolTipTurkiyeSiper
-"Beş piyadelik siper, istihkam takımı nerede durursa orada kazılır; ileri radar mevziidir, çevresinde 400 radar kilidi tutar. Fırtına hattının önüne kazın. İçindeki Mehmetçik piyadeyi, Sungur nişancısı tankı durdurur."
+"Beş piyadelik siper, istihkam takımı nerede durursa orada kazılır; ileri radar mevziidir, çevresinde 400 radar kilidi tutar. Fırtına hattının önüne kazın. İçindeki Mehmetçik piyadeyi, Sungur nişancısı tankı durdurur. 400 içindeki Fırtına, Sakarya ve Alpagu onda bir daha uzağa atar."
 END
 
 OBJECT:TurkiyeLandMine

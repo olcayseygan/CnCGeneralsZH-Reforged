@@ -1105,8 +1105,12 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 		 RadarBlindHitUpgradeChance once the player has RadarBlindHitUpgrade.  The rest come down on the
 		 ground beside the target, past its edge and the blast, so they miss.  The radars, the upgrade and
 		 the roll are all logic state and the logic stream. */
+	// A gun in its mark-and-rain burst (MarkAndRainBehavior) is guided by the eye that saw the kill:
+	// no radar-blind miss and no scatter against infantry.  A logic flag, as the radars are.
+	const Bool guided = sourceObj && sourceObj->testWeaponBonusCondition( WEAPONBONUSCONDITION_MARK_AND_RAIN );
+	const Real infantryInaccuracyDist = guided ? 0.0f : m_infantryInaccuracyDist;
 	Bool radarMiss = FALSE;
-	if( m_radarBlindHitChance < 1.0f && !isProjectileDetonation && sourceObj &&
+	if( m_radarBlindHitChance < 1.0f && !isProjectileDetonation && sourceObj && !guided &&
 			!RadarCoverageBehavior::isCovered( sourceObj->getControllingPlayer(), victimPos ) )
 	{
 		Real hitChance = m_radarBlindHitChance;
@@ -1115,7 +1119,7 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 			hitChance = m_radarBlindHitUpgradeChance;
 		radarMiss = GameLogicRandomValueReal( 0.0f, 1.0f ) >= hitChance;
 	}
-	if( radarMiss || m_scatterRadius > 0.0f || m_infantryInaccuracyDist > 0.0f && victimObj && victimObj->isKindOf( KINDOF_INFANTRY ) )
+	if( radarMiss || m_scatterRadius > 0.0f || infantryInaccuracyDist > 0.0f && victimObj && victimObj->isKindOf( KINDOF_INFANTRY ) )
 	{
 		// This weapon scatters, so clear the victimObj, as we are no longer shooting it directly,
 		// and find a random point within the radius to shoot at as victimPos
@@ -1138,11 +1142,11 @@ UnsignedInt WeaponTemplate::fireWeaponTemplate
 			{
 				victimObj->getGeometryInfo().getCenterPosition(*victimObj->getPosition(), projectileDestination);
 			}
-			if( m_infantryInaccuracyDist > 0.0f && victimObj->isKindOf( KINDOF_INFANTRY ) )
+			if( infantryInaccuracyDist > 0.0f && victimObj->isKindOf( KINDOF_INFANTRY ) )
 			{
 				//If we are firing a weapon that is considered inaccurate against infantry, then add it to
 				//the scatter radius!
-				scatterRadius += m_infantryInaccuracyDist;
+				scatterRadius += infantryInaccuracyDist;
 			}
 			targetLayer = victimObj->getLayer();
 		}

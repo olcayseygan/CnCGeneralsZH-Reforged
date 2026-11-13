@@ -1550,6 +1550,7 @@ GameEngine/Include/GameLogic/Module/LaserUpdate.h
 GameEngine/Include/GameLogic/Module/LifetimeUpdate.h
 GameEngine/Include/GameLogic/Module/LockWeaponCreate.h
 GameEngine/Include/GameLogic/Module/LocomotorSetUpgrade.h
+GameEngine/Include/GameLogic/Module/MarkAndRainBehavior.h
 GameEngine/Include/GameLogic/Module/MaxHealthUpgrade.h
 GameEngine/Include/GameLogic/Module/MinefieldBehavior.h
 GameEngine/Include/GameLogic/Module/MissileAIUpdate.h
@@ -2133,6 +2134,7 @@ GameEngine/Source/GameLogic/Object/Behavior/GenerateMinefieldBehavior.cpp
 GameEngine/Source/GameLogic/Object/Behavior/GrantStealthBehavior.cpp
 GameEngine/Source/GameLogic/Object/Behavior/InstantDeathBehavior.cpp
 GameEngine/Source/GameLogic/Object/Behavior/JetSlowDeathBehavior.cpp
+GameEngine/Source/GameLogic/Object/Behavior/MarkAndRainBehavior.cpp
 GameEngine/Source/GameLogic/Object/Behavior/MinefieldBehavior.cpp
 GameEngine/Source/GameLogic/Object/Behavior/NeutonBlastBehavior.cpp
 GameEngine/Source/GameLogic/Object/Behavior/OverchargeBehavior.cpp

@@ -42,6 +42,7 @@
 class ObjectTracker;
 class FXList;
 class UpgradeTemplate;
+enum WeaponBonusConditionType : int;
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
@@ -62,6 +63,7 @@ public:
 	Real m_upgradedAutoHealPercentPerSecond;		///< Different percent to use for healing if upgraded too
 	const FXList *m_upgradedPulseFX;						///< FXList to play for pulse when upgraded
 	Bool m_affectsSelf;													///< Allow effect to affect ourselves
+	WeaponBonusConditionType m_bonusCondition;	///< what it gives, ENTHUSIASTIC unless BonusCondition names another (Turkiye's Siper: FORWARD_POST)
 
 };
 

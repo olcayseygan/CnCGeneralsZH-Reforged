@@ -3095,7 +3095,7 @@ CONTROLBAR:ConstructTurkiyeInfantryAlpagu
 END
 
 CONTROLBAR:ToolTipTurkiyeInfantryAlpagu
-"Kneels, sets a kamikaze drone down and flies it out to 350, where it drops onto infantry and light vehicles. He sees only 200: past that, a spotter or a radar tower has to find the target. Weak against tanks and buildings."
+"Kneels, sets a kamikaze drone down and flies it out to 350, where it drops onto infantry and light vehicles. He sees only 200: past that, a spotter or a radar tower has to find the target. Weak against tanks and buildings. When an enemy your eyes see dies within his reach, he launches half again as fast for 6 seconds. Next to a Siper he reaches a tenth further."
 END
 
 OBJECT:TurkiyeInfantrySpotter
@@ -3207,7 +3207,7 @@ CONTROLBAR:ConstructTurkiyeVehicleFirtina
 END
 
 CONTROLBAR:ToolTipTurkiyeVehicleFirtina
-"The mid-game gun. Fires a heavy shell with a wide blast out to 600 and sees 100: it needs a Spotter Team or a Bayraktar to aim, and a Siper or a radar near the target to hit."
+"The mid-game gun. Fires a heavy shell with a wide blast out to 600 and sees 100: it needs a Spotter Team or a Bayraktar to aim, and a Siper or a radar near the target to hit. When an enemy your eyes see dies within its reach, it fires half again as fast, dead on target, for 6 seconds. Next to a Siper it reaches a tenth further."
 END
 
 OBJECT:TurkiyeVehicleSakarya
@@ -3219,7 +3219,7 @@ CONTROLBAR:ConstructTurkiyeVehicleSakarya
 END
 
 CONTROLBAR:ToolTipTurkiyeVehicleSakarya
-"Fires a six-rocket salvo over a wide area out to 500, then reloads for 12 seconds. Needs a spotter."
+"Fires a six-rocket salvo over a wide area out to 500, then reloads for 14 seconds. Needs a spotter. When an enemy your eyes see dies within its reach, it reloads half again as fast and lands dead on target for 6 seconds. Next to a Siper it reaches a tenth further."
 END
 
 OBJECT:TurkiyeTankKoral
@@ -3303,7 +3303,7 @@ CONTROLBAR:ConstructTurkiyeSiper
 END
 
 CONTROLBAR:ToolTipTurkiyeSiper
-"Trench bunker for five infantry, dug wherever the engineers stand, and the forward radar post: radar lock 400 around it. Dig one in front of the Firtina line. Mehmetcik in it hold off infantry, Sungur gunners hold off tanks."
+"Trench bunker for five infantry, dug wherever the engineers stand, and the forward radar post: radar lock 400 around it. Dig one in front of the Firtina line. Mehmetcik in it hold off infantry, Sungur gunners hold off tanks. Firtina, Sakarya and Alpagu within 400 of it reach a tenth further."
 END
 
 OBJECT:TurkiyeLandMine

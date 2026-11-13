@@ -31,6 +31,8 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"
+#define DEFINE_WEAPONBONUSCONDITION_NAMES	// TheWeaponBonusNames, for BonusCondition
+#include "GameLogic/Weapon.h"
 #include "Common/GameState.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
@@ -92,6 +94,7 @@ PropagandaTowerBehaviorModuleData::PropagandaTowerBehaviorModuleData( void )
 	m_upgradeRequired = NULL;
 	m_upgradedPulseFX = NULL;
 	m_affectsSelf = FALSE;
+	m_bonusCondition = WEAPONBONUSCONDITION_ENTHUSIASTIC;
 
 }  // end PropagandaTowerBehaviorModuleData
 
@@ -111,6 +114,7 @@ PropagandaTowerBehaviorModuleData::PropagandaTowerBehaviorModuleData( void )
 		{ "UpgradeRequired",				INI::parseAsciiString,					NULL, offsetof( PropagandaTowerBehaviorModuleData, m_upgradeRequired ) },
 		{ "UpgradedPulseFX",				INI::parseFXList,								NULL, offsetof( PropagandaTowerBehaviorModuleData, m_upgradedPulseFX ) },
 		{ "AffectsSelf",						INI::parseBool,									NULL, offsetof( PropagandaTowerBehaviorModuleData, m_affectsSelf ) },
+		{ "BonusCondition",					INI::parseIndexList,						TheWeaponBonusNames, offsetof( PropagandaTowerBehaviorModuleData, m_bonusCondition ) },
 		{ 0, 0, 0, 0 }
 	};
 
@@ -309,8 +313,8 @@ void PropagandaTowerBehavior::effectLogic( Object *obj, Bool giving,
 	{
 		if ( obj->hasAnyDamageWeapon() == TRUE )
 		{
-			if( obj->testWeaponBonusCondition( WEAPONBONUSCONDITION_ENTHUSIASTIC ) == FALSE )
-				obj->setWeaponBonusCondition( WEAPONBONUSCONDITION_ENTHUSIASTIC );
+			if( obj->testWeaponBonusCondition( modData->m_bonusCondition ) == FALSE )
+				obj->setWeaponBonusCondition( modData->m_bonusCondition );
 
 
 			if (effectUpgraded)
@@ -340,7 +344,9 @@ void PropagandaTowerBehavior::effectLogic( Object *obj, Bool giving,
 	// and cannot change healing senders until the previous one expires (its scandelay)
 
 //		obj->attemptHealing(amount, getObject()); // the regular way to give healing... 
-			obj->attemptHealingFromSoleBenefactor( amount, getObject(), modData->m_scanDelayInFrames );//the non-stacking way
+			// a tower that heals nothing (the Siper) must not claim the sole-benefactor slot from one that does
+			if( amount > 0.0f )
+				obj->attemptHealingFromSoleBenefactor( amount, getObject(), modData->m_scanDelayInFrames );//the non-stacking way
 
 		}  // end if
 
@@ -349,7 +355,7 @@ void PropagandaTowerBehavior::effectLogic( Object *obj, Bool giving,
 	{
 
 		// taking effect away
-		obj->clearWeaponBonusCondition( WEAPONBONUSCONDITION_ENTHUSIASTIC );
+		obj->clearWeaponBonusCondition( modData->m_bonusCondition );
 		obj->clearWeaponBonusCondition( WEAPONBONUSCONDITION_SUBLIMINAL );
 
 	}	  // end else

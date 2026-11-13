@@ -199,6 +199,7 @@ static int GetSystemMetrics( int which )
 #include "GameClient/Drawable.h"
 #include "Common/BuildAssistant.h"
 #include "GameLogic/Object.h"
+#define DEFINE_WEAPONBONUSCONDITION_NAMES	// TheWeaponBonusNames, for weapon_bonus_names_*
 #include "GameLogic/Weapon.h"
 #include "GameLogic/ObjectCreationList.h"
 #include "GameClient/CommandXlat.h"
@@ -26232,4 +26233,17 @@ TEST(a_designator_ends_on_the_face_of_the_target_it_sees)
 	CHECK_NEAR( edge.x, 105.0f, 0.001f );
 	box.getFootprintEdgeToward( center, east, center, 1.0f, edge );		// on the middle: the middle
 	CHECK_NEAR( edge.x, 100.0f, 0.001f );
+}
+
+/** Turkiye's two weapon bonuses resolve by the names the INI writes (WeaponBonus = MARK_AND_RAIN ...,
+	 BonusCondition = FORWARD_POST), the name table ends where the enum does, and the enum still fits the
+	 32-bit WeaponBonusConditionFlags. */
+TEST(weapon_bonus_names_resolve_mark_and_rain_and_forward_post)
+{
+	static_assert( WEAPONBONUSCONDITION_COUNT <= 32, "WeaponBonusConditionFlags is an UnsignedInt" );
+	CHECK( WEAPONBONUSCONDITION_COUNT <= 32 );
+	CHECK( TheWeaponBonusNames[ WEAPONBONUSCONDITION_COUNT ] == NULL );
+	CHECK_EQ( INI::scanIndexList( "MARK_AND_RAIN", TheWeaponBonusNames ), (Int)WEAPONBONUSCONDITION_MARK_AND_RAIN );
+	CHECK_EQ( INI::scanIndexList( "FORWARD_POST", TheWeaponBonusNames ), (Int)WEAPONBONUSCONDITION_FORWARD_POST );
+	CHECK_EQ( INI::scanIndexList( "ENTHUSIASTIC", TheWeaponBonusNames ), (Int)WEAPONBONUSCONDITION_ENTHUSIASTIC );
 }

@@ -86,6 +86,7 @@
 #include "GameLogic/Module/PoisonedBehavior.h"
 #include "GameLogic/Module/RebuildHoleBehavior.h"
 #include "GameLogic/Module/RadarCoverageBehavior.h"
+#include "GameLogic/Module/MarkAndRainBehavior.h"
 #include "GameLogic/Module/SupplyWarehouseCripplingBehavior.h"
 #include "GameLogic/Module/TechBuildingBehavior.h"
 #include "GameLogic/Module/MinefieldBehavior.h"
@@ -374,6 +375,7 @@ void ModuleFactory::init( void )
 	addModule( PoisonedBehavior );
 	addModule( RebuildHoleBehavior );
 	addModule( RadarCoverageBehavior );
+	addModule( MarkAndRainBehavior );
 	addModule( SupplyWarehouseCripplingBehavior );
 	addModule( TechBuildingBehavior );
 	addModule( MinefieldBehavior );

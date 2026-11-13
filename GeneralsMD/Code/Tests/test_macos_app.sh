@@ -71,6 +71,7 @@ check '[ "$(key CFBundleShortVersionString)" = "$version" ] && [ "$(key LSMinimu
 	"and this build's version ($version) and its deployment target ($minos) as the minimum macOS"
 check '[ "$(key NSHighResolutionCapable)" = true ] && [ "$(key LSApplicationCategoryType)" = public.app-category.strategy-games ] && [ "$(key CFBundleIconFile)" = AppIcon ]' \
 	"high resolution, the strategy games category, and the icon"
+check '[ "$(key LSSupportsGameMode)" = true ]' "the bundle declares Game Mode support"
 head_commit="$(git -C "$(dirname "$SCRIPT")/.." rev-parse --short=10 HEAD 2>/dev/null || echo unknown)"
 check '[ "$(key ZHReforgedCommit | sed "s/-dirty\$//")" = "$head_commit" ] && key ZHReforgedBuildDate | grep -Eq "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\$"' \
 	"which build: the source commit ($head_commit) and the build time, in UTC"

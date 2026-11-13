@@ -28,6 +28,10 @@
 #include "GameLogic/GameLogic.h"
 #include "SdlDevice/Common/SdlDisplays.h"
 #include "SdlDevice/Common/SdlGameEngine.h"
+#include "SdlDevice/Common/SdlWindowPolicy.h"
+#if defined(__APPLE__)
+#include "SdlDevice/Common/SdlMacPresentation.h"
+#endif
 #include "SdlDevice/Common/SdlMessageBox.h"
 #include "SdlDevice/GameClient/SdlInput.h"
 #include "SdlDevice/GameClient/SdlMouse.h"
@@ -80,6 +84,19 @@ static Bool canPostQuitMessage( void )
 extern RenderWindow ApplicationHWnd;
 extern Bool ApplicationIsBorderless;
 
+// Native macOS fullscreen changes Spaces asynchronously. W3D resets its render
+// device immediately after these hooks, so finish the window transition first.
+static void syncWindow( SDL_Window *window )
+{
+#if defined(__APPLE__)
+	if (!SDL_SyncWindow( window ))
+		DEBUG_LOG(( "SdlGameEngine: window transition: %s\n", SDL_GetError() ));
+	SdlMacPresentation_updatePresentation( window );
+#else
+	(void)window;
+#endif
+}
+
 /** W3DDisplay's applyWindowFrame, for SDL's window: WinMain's rules, a frame and a caption for a plain
 	* window and none for the two that own the screen. */
 static void dressWindow( Int mode )
@@ -90,9 +107,11 @@ static void dressWindow( Int mode )
 	if (mode == WINDOW_MODE_FULLSCREEN)
 	{
 		SDL_SetWindowFullscreen( window, true );
+		syncWindow( window );
 		return;
 	}
 	SDL_SetWindowFullscreen( window, false );
+	syncWindow( window );
 	SDL_SetWindowBordered( window, mode == WINDOW_MODE_WINDOWED );
 }
 
@@ -119,6 +138,7 @@ static void sizeWindow( Int mode, Int width, Int height, const MonitorRect &scre
 		y += ((int)lround( (screen.bottom - screen.top) / density ) - pointsHeight) / 2;
 	}
 	SDL_SetWindowPosition( window, x, y );
+	syncWindow( window );
 
 	int pixelWidth = 0, pixelHeight = 0;
 	SDL_GetWindowSizeInPixels( window, &pixelWidth, &pixelHeight );
@@ -175,17 +195,12 @@ void SdlGameEngine::createWindow( void )
 	if (m_request.headless)
 		return;		// no SDL video at all: a headless run must work with no display
 
+	SdlWindowPolicy_configure();
 	if (m_request.offscreen)
 	{
 		startOffscreen();
 		return;
 	}
-
-	// Fullscreen as the game has it on Windows: the display is the game's.  macOS would otherwise put the
-	// window in a fullscreen Space, whose menu bar and Dock slide in when the pointer reaches the top or
-	// bottom edge - where the game scrolls the view.  SDL reads this once, when its video starts.
-	if (!m_request.windowed)
-		SDL_SetHint( SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES, "0" );
 
 	if (!SDL_Init( SDL_INIT_VIDEO ))
 	{
@@ -195,6 +210,7 @@ void SdlGameEngine::createWindow( void )
 		return;
 	}
 	m_sdlVideoStarted = TRUE;
+	SdlWindowPolicy_updateScreenSaver( 0 );
 	ThePlatformDisplays = &TheSdlDisplays;		// Monitors.h answers from SDL's displays from here on
 
 	/* The window's drawable in pixels, not points.  The game's sizes are pixels (SdlDisplays.h), and without
@@ -226,6 +242,8 @@ void SdlGameEngine::createWindow( void )
 		RELEASE_CRASH( why );
 		return;
 	}
+	syncWindow( m_window );
+	SdlWindowPolicy_updateScreenSaver( SDL_GetWindowFlags( m_window ) );
 #ifdef ZH_WINDOW_ICON
 	// a Linux executable carries no icon, so the window brings its own for the taskbar and alt-tab;
 	// GNOME on Wayland ignores it and takes zero-hour-reforged.desktop's, by the app id (PosixMain.cpp)
@@ -292,11 +310,15 @@ void SdlGameEngine::startOffscreen( void )
 		}
 	}
 	m_sdlVideoStarted = TRUE;
+	SdlWindowPolicy_updateScreenSaver( 0 );
 	DEBUG_LOG(( "SdlGameEngine: offscreen, no window; SDL video driver %s (%s)\n", SDL_GetCurrentVideoDriver(), driver ));
 }
 
 void SdlGameEngine_releaseWindow( void )
 {
+#if defined(__APPLE__)
+	SdlMacPresentation_updatePresentation( NULL );
+#endif
 	if (s_pendingWindow != NULL)
 	{
 		if (s_titledWindow == s_pendingWindow)
@@ -368,6 +390,10 @@ void SdlGameEngine::serviceWindowsOS( void )
 				break;
 		}
 	}
+	SdlWindowPolicy_updateScreenSaver( m_window != NULL ? SDL_GetWindowFlags( m_window ) : 0 );
+#if defined(__APPLE__)
+	SdlMacPresentation_updatePresentation( m_window );
+#endif
 }
 
 // Win32GameEngine's factories, the same W3D classes (decision 8); the radar too: W3DRadar, and

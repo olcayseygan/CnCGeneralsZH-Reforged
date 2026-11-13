@@ -186,6 +186,7 @@ cat > "$C/Info.plist" <<PLIST_EOF
 	<key>CFBundleVersion</key>			<string>$version</string>
 	<key>LSApplicationCategoryType</key>		<string>public.app-category.strategy-games</string>
 	<key>LSMinimumSystemVersion</key>		<string>$minos</string>
+	<key>LSSupportsGameMode</key>			<true/>
 	<key>NSHighResolutionCapable</key>		<true/>
 	<key>ZHReforgedBuildDate</key>			<string>$built</string>
 	<key>ZHReforgedCommit</key>			<string>$commit</string>

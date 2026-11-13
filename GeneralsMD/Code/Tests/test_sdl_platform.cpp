@@ -33,11 +33,13 @@
 #include "SdlDevice/Common/SdlDisplays.h"
 #include "SdlDevice/Common/SdlMessageBox.h"
 #include "SdlDevice/Common/SdlPanel.h"
+#include "SdlDevice/Common/SdlWindowPolicy.h"
 
 #include <SDL3/SDL.h>
 
 #include <math.h>
 #include <string.h>
+#include <string>
 
 namespace {
 
@@ -314,4 +316,73 @@ TEST(message_box_hook_is_set_only_while_there_is_an_owner)
 	setSdlMessageBoxOwner(NULL);
 	CHECK(TheMessageBoxHook == NULL);
 	SDL_DestroyWindow(window);
+}
+
+TEST(macos_fullscreen_defaults_preserve_environment_and_explicit_choices)
+{
+	SDL_ResetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES);
+	SDL_ResetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY);
+	const char *spaces = SDL_GetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES);
+	const char *menu = SDL_GetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY);
+	const bool hadSpaces = spaces != NULL, hadMenu = menu != NULL;
+	const std::string previousSpaces = spaces != NULL ? spaces : "";
+	const std::string previousMenu = menu != NULL ? menu : "";
+	SdlWindowPolicy_configure();
+#if defined(__APPLE__)
+	CHECK_STR(SDL_GetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES), hadSpaces ? previousSpaces.c_str() : "1");
+	CHECK_STR(SDL_GetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY), hadMenu ? previousMenu.c_str() : "0");
+#else
+	CHECK(hadSpaces || SDL_GetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES) == NULL);
+	CHECK(hadMenu || SDL_GetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY) == NULL);
+	if (hadSpaces) CHECK_STR(SDL_GetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES), previousSpaces.c_str());
+	if (hadMenu) CHECK_STR(SDL_GetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY), previousMenu.c_str());
+#endif
+	SDL_Environment *environment = SDL_GetEnvironment();
+	CHECK(SDL_SetEnvironmentVariable(environment, SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES, "0", true));
+	CHECK(SDL_SetEnvironmentVariable(environment, SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY, "1", true));
+	SdlWindowPolicy_configure();
+	CHECK_STR(SDL_GetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES), "0");
+	CHECK_STR(SDL_GetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY), "1");
+	if (hadSpaces) SDL_SetEnvironmentVariable(environment, SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES, previousSpaces.c_str(), true);
+	else SDL_UnsetEnvironmentVariable(environment, SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES);
+	if (hadMenu) SDL_SetEnvironmentVariable(environment, SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY, previousMenu.c_str(), true);
+	else SDL_UnsetEnvironmentVariable(environment, SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY);
+
+	SDL_SetHintWithPriority(SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES, "0", SDL_HINT_OVERRIDE);
+	SDL_SetHintWithPriority(SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY, "1", SDL_HINT_OVERRIDE);
+	SdlWindowPolicy_configure();
+	CHECK_STR(SDL_GetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES), "0");
+	CHECK_STR(SDL_GetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY), "1");
+	SDL_ResetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES);
+	SDL_ResetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_MENU_VISIBILITY);
+}
+
+TEST(macos_display_sleep_tracks_visibility_focus_and_user_preference)
+{
+	CHECK(start_offscreen_video());
+	const bool previouslyEnabled = SDL_ScreenSaverEnabled();
+	SDL_SetHintWithPriority(SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "0", SDL_HINT_OVERRIDE);
+#if defined(__APPLE__)
+	SdlWindowPolicy_updateScreenSaver(SDL_WINDOW_INPUT_FOCUS);
+	CHECK(!SDL_ScreenSaverEnabled());
+	const SDL_WindowFlags inactive[] = {0, SDL_WINDOW_HIDDEN, SDL_WINDOW_MINIMIZED, SDL_WINDOW_OCCLUDED};
+	for (unsigned int index = 0; index < sizeof(inactive) / sizeof(inactive[0]); ++index) {
+		SdlWindowPolicy_updateScreenSaver(index == 0 ? 0 : SDL_WINDOW_INPUT_FOCUS | inactive[index]);
+		CHECK(SDL_ScreenSaverEnabled());
+		SdlWindowPolicy_updateScreenSaver(SDL_WINDOW_INPUT_FOCUS);
+		CHECK(!SDL_ScreenSaverEnabled());
+	}
+	SDL_SetHintWithPriority(SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1", SDL_HINT_OVERRIDE);
+	SdlWindowPolicy_updateScreenSaver(SDL_WINDOW_INPUT_FOCUS);
+	CHECK(SDL_ScreenSaverEnabled());
+#else
+	SDL_EnableScreenSaver();
+	SdlWindowPolicy_updateScreenSaver(SDL_WINDOW_INPUT_FOCUS);
+	CHECK(SDL_ScreenSaverEnabled());
+	SDL_DisableScreenSaver();
+	SdlWindowPolicy_updateScreenSaver(0);
+	CHECK(!SDL_ScreenSaverEnabled());
+#endif
+	SDL_ResetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER);
+	if (previouslyEnabled) SDL_EnableScreenSaver(); else SDL_DisableScreenSaver();
 }

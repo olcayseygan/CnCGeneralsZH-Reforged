@@ -253,6 +253,10 @@ public:
 	inline INILoadType getLoadType( void ) const { return m_loadType; }
 	inline UnsignedInt getLineNum( void ) const { return m_lineNum; }
 
+	/// Only these block names (NULL-terminated, kept by the caller) are parsed from now on; any other is
+	/// read past and logged. For a file of the player's own that stays out of the INI CRC (Hotkeys.ini).
+	inline void restrictBlocks( const char *const *names ) { m_onlyBlocks = names; }
+
 	/** A map.ini is written by a map maker, often against objects this game does not have, and one
 		field this game does not know used to end the match before it started. Set, an unknown field
 		name is logged and its line skipped instead of throwing. */
@@ -428,6 +432,7 @@ protected:
 	const char *m_blockEndToken;							///< token to represent end of data block
 	Bool m_endOfFile;													///< TRUE when we've hit EOF
 	Bool m_skipUnknownFields;									///< log and skip an unknown field instead of throwing
+	const char *const *m_onlyBlocks;					///< restrictBlocks: the only blocks parsed, NULL for all
 	Bool m_missingReference;									///< a patch named a special power or OCL that does not exist
 #if defined(_DEBUG) || defined(_INTERNAL)
 	char m_curBlockStart[ INI_MAX_CHARS_PER_LINE+1 ];	///< first line of cur block

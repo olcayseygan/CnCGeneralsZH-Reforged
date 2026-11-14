@@ -204,6 +204,7 @@ INI::INI( void )
 	m_blockEndToken			= "END";
 	m_endOfFile					= FALSE;
 	m_skipUnknownFields	= FALSE;
+	m_onlyBlocks				= NULL;
 	m_missingReference	= FALSE;
 	m_buffer[0]					= 0;
 #if defined(_DEBUG) || defined(_INTERNAL)
@@ -351,6 +352,17 @@ static Bool isMapINIBlock(const char* token)
 }
 
 //-------------------------------------------------------------------------------------------------
+static Bool isListedBlock(const char *const *names, const char* token)
+{
+	for (; *names; ++names)
+	{
+		if (strcmp(*names, token) == 0)
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
 static INIBlockParse findBlockParse(const char* token)
 {
 	for (const BlockParse* parse = theTypeTable; parse->token; ++parse)
@@ -418,7 +430,8 @@ void INI::load( AsciiString filename, INILoadType loadType, Xfer *pXfer )
 			if( token )
 			{
 				INIBlockParse parse = findBlockParse(token);
-				if (parse && m_loadType == INI_LOAD_CREATE_OVERRIDES && !isMapINIBlock(token))
+				if (parse && ((m_loadType == INI_LOAD_CREATE_OVERRIDES && !isMapINIBlock(token))
+						|| (m_onlyBlocks != NULL && !isListedBlock(m_onlyBlocks, token))))
 				{
 					/* Read past it and go on with the file.  Nothing parses it, so its End is found by
 						 counting: an End closes, a line with no '=' opens a sub-block (Mission, SideSounds,
@@ -426,7 +439,7 @@ void INI::load( AsciiString filename, INILoadType loadType, Xfer *pXfer )
 						 machine, so is what follows.
 						 ponytail: a field written without its '=' counts as an opening and the skip runs
 						 on past the block; a real parse of each refused type if a map ever needs it. */
-					DEBUG_LOG(("[LINE: %d - FILE: '%s'] a map's rules file may not hold a '%s' block, skipped\n",
+					DEBUG_LOG(("[LINE: %d - FILE: '%s'] this file may not hold a '%s' block, skipped\n",
 										 getLineNum(), getFilename().str(), token));
 					Int depth = 1;
 					while( depth > 0 && m_endOfFile == FALSE )

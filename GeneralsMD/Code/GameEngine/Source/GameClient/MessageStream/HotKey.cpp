@@ -704,7 +704,15 @@ void HotKeyManager::loadPlayerKeys( void )
 	hotkeys.concat( "Hotkeys.ini" );
 	if( !TheFileSystem->doesFileExist( hotkeys.str() ) )
 		return;
+	// The file is the player's own and outside the INI CRC, so it may hold the four blocks
+	// Hotkeys_format writes and nothing else: through the whole table it could redefine an Object or
+	// GameData on one machine and split the match.
+	static const char *const HOTKEY_BLOCKS[] =
+	{
+		"CommandMap", "CommandButtonHotKey", "FixedOrderKeys", "CommandBarGrid", NULL
+	};
 	INI ini;
+	ini.restrictBlocks( HOTKEY_BLOCKS );
 	try
 	{
 		ini.load( hotkeys, INI_LOAD_MULTIFILE, NULL );

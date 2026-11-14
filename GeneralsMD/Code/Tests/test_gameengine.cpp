@@ -2234,6 +2234,42 @@ static const char HOTKEYS_FROM_LAUNCHER[] =
 	"  Key = M\r\n"
 	"End\r\n";
 
+/* Hotkeys.ini stays out of the INI CRC, so the game reads only its key blocks out of it
+	 (HotKeyManager::loadPlayerKeys). A Weapon block in such a file is read past: it would have thrown
+	 (MULTIFILE refuses a new weapon name) or, for a name that exists, edited the weapon on one machine. */
+TEST(hotkeys_file_restricted_load_skips_every_other_block)
+{
+	CHECK( bootOnce() );
+	if( TheWeaponStore == NULL )
+		TheWeaponStore = NEW WeaponStore;
+
+	writeFile( TEST_INI,
+		"Weapon HotkeysRestrictProbeGun\r\n"
+		"  PrimaryDamage = 45.0\r\n"
+		"End\r\n"
+		"CommandBarGrid\r\n"
+		"  Enabled = Yes\r\n"
+		"End\r\n" );
+	static const char *const ONLY[] = { "CommandBarGrid", NULL };
+	HotKeyManager::setCommandBarGrid( FALSE );
+	Bool threw = FALSE;
+	try
+	{
+		INI ini;
+		ini.restrictBlocks( ONLY );
+		ini.load( AsciiString( TEST_INI ), INI_LOAD_MULTIFILE, NULL );
+	}
+	catch( ... )
+	{
+		threw = TRUE;
+	}
+	CHECK( !threw );
+	CHECK( TheWeaponStore->findWeaponTemplate( "HotkeysRestrictProbeGun" ) == NULL );
+	CHECK( HotKeyManager::commandBarGrid() );
+	HotKeyManager::setCommandBarGrid( FALSE );
+	remove( TEST_INI );
+}
+
 TEST(hotkeys_file_reads_the_launchers_rows_and_leaves_its_defaults_out)
 {
 	const std::vector< HotkeyCommandRow > rows = Hotkeys_commandRows( HOTKEYS_COMMAND_MAP );

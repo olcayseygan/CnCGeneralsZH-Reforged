@@ -215,23 +215,6 @@ inline float SmoothMotion_Lerp(float from, float to, float alpha)
 	return from + (to - from) * alpha;
 }
 
-/// A light pulse's first tick: how much of the tick it takes to come up from nothing.  A pulse that
-/// grows takes the whole tick (its growth starts from nothing anyway); one at full strength from its
-/// birth comes up over the tick if it lasts five ticks or more, faster the shorter it lives, so a
-/// flash of two or three ticks still shows at its brightest; one lasting a tick does not fade in (0).
-inline float SmoothMotion_LightBirthSpan(unsigned increaseFrames, unsigned decayFrames)
-{
-	if (increaseFrames > 0 || decayFrames == 0 || decayFrames >= 5) return 1.0f;
-	return (float)(decayFrames - 1) / 4.0f;
-}
-
-/// `alpha` run `1 / span` times as fast and held at 1: the share of a birth fade a picture shows.
-inline float SmoothMotion_Hurry(float alpha, float span)
-{
-	if (span <= 0.0f || alpha >= span) return 1.0f;
-	return alpha / span;
-}
-
 /// A bone the draw module set by hand on a tick (Control_Bone): a turret's turn, a gun's pitch, a
 /// barrel's recoil.  The model's transform glides between ticks; these are kept the same way, so a
 /// turret does not swing a whole tick at once with the hull gliding under it.

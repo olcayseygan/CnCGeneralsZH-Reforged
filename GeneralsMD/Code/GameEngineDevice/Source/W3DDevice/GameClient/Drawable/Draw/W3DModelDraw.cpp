@@ -3338,7 +3338,14 @@ void W3DModelDraw::handleClientRecoil()
 				//DEBUG_ASSERTLOG(recoils[i].m_shift==0.0f,("adjust bone %d by %f\n",recoils[i].m_recoilBone,recoils[i].m_shift));
 
 				if (m_renderObject)
-					controlUnsmoothedBone( barrels[i].m_recoilBone, gunXfrm );	// the recoil steps every pass, not every tick
+				{
+					// a kick steps every pass, not every tick, so it is set as the pass has it; a barrel at
+					// rest holds only its pitch (the tick's), which glides with the turret
+					if (recoils[i].m_state != WeaponRecoilInfo::IDLE || recoils[i].m_shift != 0.0f)
+						controlUnsmoothedBone( barrels[i].m_recoilBone, gunXfrm );
+					else
+						controlSmoothBone( barrels[i].m_recoilBone, gunXfrm );
+				}
 			}
 			else
 			{

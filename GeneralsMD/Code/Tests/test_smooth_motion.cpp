@@ -155,6 +155,32 @@ TEST(smooth_motion_light_strength_between_ticks)
 	CHECK_NEAR(SmoothMotion_Lerp(0.0f, 1.0f / 3.0f, 0.5f), 1.0f / 6.0f, EPS);
 }
 
+/* A pulse at full strength from its birth comes up from nothing over the tick that brings it rather
+	 than lighting a wreck and the ground on the tick: over the whole tick if it lives five ticks or
+	 more, faster the shorter it lives, not at all if it lives one; one that grows already starts from
+	 nothing and takes its growth as it was. */
+TEST(smooth_motion_light_pulse_comes_up_over_its_first_tick)
+{
+	CHECK_EQ(SmoothMotion_LightBirthSpan(0, 30), 1.0f);
+	CHECK_EQ(SmoothMotion_LightBirthSpan(0, 5), 1.0f);
+	CHECK_NEAR(SmoothMotion_LightBirthSpan(0, 3), 0.5f, EPS);
+	CHECK_NEAR(SmoothMotion_LightBirthSpan(0, 2), 0.25f, EPS);
+	CHECK_EQ(SmoothMotion_LightBirthSpan(0, 1), 0.0f);
+	CHECK_EQ(SmoothMotion_LightBirthSpan(0, 0), 1.0f);		// never decays: the whole tick
+	CHECK_EQ(SmoothMotion_LightBirthSpan(4, 3), 1.0f);		// grows: its own ramp
+
+	CHECK_NEAR(SmoothMotion_Hurry(0.25f, 1.0f), 0.25f, EPS);
+	CHECK_NEAR(SmoothMotion_Hurry(0.25f, 0.5f), 0.5f, EPS);
+	CHECK_EQ(SmoothMotion_Hurry(0.75f, 0.5f), 1.0f);
+	CHECK_EQ(SmoothMotion_Hurry(1.0f, 1.0f), 1.0f);
+	CHECK_EQ(SmoothMotion_Hurry(0.1f, 0.0f), 1.0f);
+	// a three-tick flash (1 at birth, 2/3 after its first step) reaches the step's strength half way
+	// into the tick, and a picture a quarter in shows half of it
+	const float to = 2.0f / 3.0f;
+	CHECK_NEAR(SmoothMotion_Lerp(0.0f, to, SmoothMotion_Hurry(0.25f, SmoothMotion_LightBirthSpan(0, 3))), to * 0.5f, EPS);
+	CHECK_EQ(SmoothMotion_Lerp(0.0f, to, SmoothMotion_Hurry(0.5f, SmoothMotion_LightBirthSpan(0, 3))), to);
+}
+
 TEST(smooth_motion_the_same_transform_blends_to_itself)
 {
 	Matrix3D out;

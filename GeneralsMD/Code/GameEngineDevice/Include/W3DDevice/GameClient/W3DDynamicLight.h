@@ -74,7 +74,10 @@ protected:
 	Real		m_fadeFrom;
 	Real		m_fadeTo;
 	Bool		m_fadeStepped;
+	Bool		m_fadeBirth;		///< the tick of the first step: the pulse comes up from nothing
+	Real		m_fadeBirthSpan;	///< how much of that tick it takes (SmoothMotion_LightBirthSpan)
 	void applyFade(Real factor);
+	Real fadeAlpha(void) const;
 
 
 public:

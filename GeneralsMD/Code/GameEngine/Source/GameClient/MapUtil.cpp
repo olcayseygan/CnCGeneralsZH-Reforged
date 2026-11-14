@@ -529,6 +529,25 @@ void MapCache::updateCache( void )
 	{
 		loadStandardMaps();
 		m_doLoadStandardMapCacheINI = FALSE;
+
+		// An official map's CRC is the shipped cache's number, which knows nothing of a loose map.ini or
+		// solo.ini beside it in the install, and the loose file beats the archive. Two machines, one with
+		// such a file, agreed on the map and split at frame 0. Fold the rules in when one lies on disk;
+		// an install without loose rules keeps the shipped numbers exactly.
+		for (MapCache::iterator it = begin(); it != end(); ++it)
+		{
+			if (!it->second.m_isOfficial)
+				continue;
+			for (Int i = 0; i < MAP_RULES_FILE_COUNT; ++i)
+			{
+				if (TheLocalFileSystem->doesFileExist( mapRulesPath( it->first, i ).str() ))
+				{
+					it->second.m_CRC = calcCRC( getMapDir(), it->first );
+					DEBUG_LOG(("MapCache::updateCache - %s has loose map rules, CRC %X\n", it->first.str(), it->second.m_CRC));
+					break;
+				}
+			}
+		}
 	}
 #if defined(_DEBUG) || defined(_INTERNAL)
 	if (TheLocalFileSystem->doesFileExist(getMapDir().str()))

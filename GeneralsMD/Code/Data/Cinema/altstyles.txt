@@ -1,0 +1,6 @@
+# The altitude line drafts over Scenarios/altstyles.txt. The line is interface, so hud on.
+# Heading 0 looks north: the oasis water top right, the bank bottom left.
+
+0     hud     on
+# 0.85 put the jets off the top of the frame with only their feet showing; 1.3 holds them.
+1     cut     3080 1000 1.3 0 0

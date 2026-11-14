@@ -1,0 +1,43 @@
+# The four -altlinestyle drafts of the aircraft altitude line, one frame each (2026-11-14). Golden Oasis
+# at the oasis: the water runs as a band from 2750,1300 down to 3400,700 (a headless spawn grid said
+# WATER there), land on its south-west side. Helicopters and jets of both seats cross it at shot time,
+# some feet on the bank, some on the water; Crusaders drive along the bank under them.
+#
+#   generals.exe -win -borderless -xres 1920 -yres 1080 -msaa 0 -quickstart -noshellmap -multiInstance
+#     -observer -map "Maps\Golden Oasis\Golden Oasis.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -turbo
+#     -scenario altstyles -cinema altstyles -screenshot 600 -maxframes 760 -altlinestyle <0..3>
+#
+# Frames count 30 a second. Everything is parked out of frame, then sent across it so it is mid-move
+# on frame 600.
+
+# traffic on the bank
+30    spawn      0  AmericaTankCrusader           3  2800 820 35
+450   move       0  AmericaTankCrusader              3060 900
+
+# helicopters: feet on land
+30    spawn      0  AmericaVehicleComanche        2  2850 860 60
+40    move       0  AmericaVehicleComanche           2850 860
+560   move       0  AmericaVehicleComanche           3060 920
+
+# helicopters: feet on water
+30    spawn      1  AmericaVehicleChinook         1  3330 1060
+40    move       1  AmericaVehicleChinook            3330 1060
+540   move       1  AmericaVehicleChinook            3170 1010
+30    spawn      1  ChinaVehicleHelix             1  2980 1120
+40    move       1  ChinaVehicleHelix                2980 1120
+550   move       1  ChinaVehicleHelix                3130 1060
+
+# jets crossing west to east. 2026-11-02 measured 125 frames from a ground spawn 540 west to the
+# frame's middle; at 150% game speed that is about 83, and 125 overshot the frame here
+517   spawn      0  AmericaJetRaptor              1  2540 960
+517   spawn      0  AmericaJetRaptor              1  2400 1010
+518   move       0  AmericaJetRaptor                 3900 980
+517   spawn      1  ChinaJetMIG                   1  2470 1080
+518   move       1  ChinaJetMIG                      3900 1080
+
+600   tally      0  AmericaVehicleComanche
+600   tally      0  AmericaJetRaptor
+600   tally      1  ChinaJetMIG
+600   tally      1  ChinaVehicleHelix
+600   tally      1  AmericaVehicleChinook

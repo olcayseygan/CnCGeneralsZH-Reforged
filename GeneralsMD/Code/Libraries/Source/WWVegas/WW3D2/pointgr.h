@@ -259,60 +259,12 @@ public:
 		const Vector4 result=view*world;
 		const Vector3 point(result.X,result.Y,result.Z);
 		const Vector3 *corners=_QuadVertexLocationOrientationTable[orientation];
-		Vector3 locations[4];
-		for (int k=0;k<4;++k)
-			locations[k]=point + corners[k] * size;
-		Write_Card(quad,locations,color,glow,frame_log2,frame,mirror);
-	}
-
-	/// An axis card's corners, in the frame UV tables' corner order (top left, bottom left, bottom
-	/// right, top right): a square of side size, the middle of its top edge at top and its length
-	/// running from there along axis, turned about the axis to face to_camera (from top towards the
-	/// eye).  Seen straight down its axis it has no face to turn and takes any side.  Pure.
-	static inline void		Axis_Card_Corners(Vector3 corners[4], const Vector3 &top, const Vector3 &axis,
-										const Vector3 &to_camera, float size)
-	{
-		Vector3 along=axis;
-		along.Normalize();
-		Vector3 across;
-		Vector3::Cross_Product(along,to_camera,&across);
-		if (across.Length2() <= 1.0e-12f * to_camera.Length2())
-			Vector3::Cross_Product(along,along.X*along.X < 0.81f ? Vector3(1.0f,0.0f,0.0f) : Vector3(0.0f,1.0f,0.0f),&across);
-		across.Normalize();
-		along*=size;
-		across*=0.5f*size;
-		corners[0]=top + across;
-		corners[1]=top + along + across;
-		corners[2]=top + along - across;
-		corners[3]=top - across;
-	}
-
-	/// Write_Billboard for a particle of an IsAlongEmitterAxis system: the card stands along axis (a
-	/// world direction, the emitter's +X) from the particle, turned about it to face the camera, so a
-	/// thin jet along a barrel reads from every side.  Any thread, as Write_Billboard.
-	static inline void		Write_Axis_Card(VertexFormatXYZNDUV2 *quad, const Matrix4x4 &view,
-										const Vector3 &world, const Vector3 &axis, float size, unsigned color,
-										const Vector3 &glow, unsigned frame_log2=0, unsigned frame=0, bool mirror=false)
-	{
-		const Vector4 root=view*world;
-		const Vector4 ahead=view*(world + axis);
-		const Vector3 top(root.X,root.Y,root.Z);
-		Vector3 locations[4];
-		// the eye is the view space origin
-		Axis_Card_Corners(locations,top,Vector3(ahead.X-root.X,ahead.Y-root.Y,ahead.Z-root.Z),-top,size);
-		Write_Card(quad,locations,color,glow,frame_log2,frame,mirror);
-	}
-
-private:
-	static inline void		Write_Card(VertexFormatXYZNDUV2 *quad, const Vector3 locations[4], unsigned color,
-										const Vector3 &glow, unsigned frame_log2, unsigned frame, bool mirror)
-	{
 		const Vector2 *uv=_QuadVertexUVFrameTable[frame_log2] + frame*4;
 		// corner 0 is the cell's left edge and corner 2 its right, so u becomes left + right - u
 		const float mirror_sum=uv[0].X + uv[2].X;
 		for (int k=0;k<4;++k)
 		{
-			const Vector3 &location=locations[k];
+			const Vector3 location=point + corners[k] * size;
 			quad[k].x=location.X;
 			quad[k].y=location.Y;
 			quad[k].z=location.Z;

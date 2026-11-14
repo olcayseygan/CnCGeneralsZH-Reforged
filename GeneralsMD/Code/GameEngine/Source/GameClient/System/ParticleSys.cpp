@@ -3633,7 +3633,6 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	{ "ExplosionDebrisTrail",				INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_explosionDebrisTrail ) },
 	{ "FireLook",										INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_fireLook ) },
 	{ "Emissive",										INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_emissive ) },
-	{ "IsAlongEmitterAxis",					INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_alongEmitterAxis ) },
 	{ "FlipbookGrid",								parseFlipbookGrid,										NULL,		offsetof( ParticleSystemTemplate, m_flipbookGridLog2 ) },
 	{ "FlipbookRate",								INI::parseReal,												NULL,		offsetof( ParticleSystemTemplate, m_flipbookRate ) },
 	{ "FlipbookRandomStart",				INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_flipbookRandomStart ) },
@@ -3814,7 +3813,6 @@ ParticleSystemTemplate::ParticleSystemTemplate( const AsciiString &name ) :
 	m_explosionDebrisTrail = FALSE;
 	m_fireLook = FALSE;
 	m_emissive = FALSE;
-	m_alongEmitterAxis = FALSE;
 	m_flipbookGridLog2 = 0;
 	m_flipbookRate = 0.0f;
 	m_flipbookRandomStart = FALSE;
@@ -3905,8 +3903,7 @@ Bool ParticleSystemTemplate::isGpuEligible( void ) const
 		&& ( m_shaderType == ALPHA || m_shaderType == ADDITIVE )
 		&& !m_fireLook
 		&& m_flipbookGridLog2 == 0
-		&& !m_isParticleUpTowardsEmitter
-		&& !m_alongEmitterAxis;
+		&& !m_isParticleUpTowardsEmitter;
 }
 
 // ------------------------------------------------------------------------------------------------

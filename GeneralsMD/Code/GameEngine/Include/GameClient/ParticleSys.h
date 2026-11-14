@@ -679,14 +679,6 @@ public:
 		* neither shades itself nor darkens the ground under it.  Drawing only. */
 	Bool isEmissive( void ) const { return m_emissive; }
 
-	/** "IsAlongEmitterAxis = Yes": each particle is a card standing along the system's +X (with
-		* OrientToObject the FX bone's, a barrel), the middle of the image's top edge on the particle
-		* and its length running from there along the axis, turned about it to face the camera: a jet
-		* that reads from the side and barrels-on alike.  Size is the card's side, as a billboard's.
-		* Sorted billboards only (not ALPHA_TEST), and drawn as a plain billboard under Classic.
-		* Drawing only. */
-	Bool isAlongEmitterAxis( void ) const { return m_alongEmitterAxis; }
-
 	UnsignedInt getFlipbookGridLog2( void ) const { return m_flipbookGridLog2; }
 	Real getFlipbookRate( void ) const { return m_flipbookRate; }
 
@@ -724,7 +716,6 @@ protected:
 	Bool											m_explosionDebrisTrail;						///< switched off with the DebrisTrails option (client only)
 	Bool											m_fireLook;												///< drawn with the Direct3D 11 fire look (client only)
 	Bool											m_emissive;												///< alpha blended but takes no light and casts no smoke shadow (client only)
-	Bool											m_alongEmitterAxis;								///< cards stand along the emitter's +X, turned to the camera (client only)
 	UnsignedByte							m_flipbookGridLog2;								///< log2 of the flipbook's frames a side, 0 for a plain card (client only)
 	Real											m_flipbookRate;										///< flipbook frames a second, looping; 0 plays once over the life (client only)
 	Bool											m_flipbookRandomStart;						///< each particle starts on a random flipbook frame (client only)
@@ -850,8 +841,6 @@ public:
 	static void forgetAllInSunMap( void ) { if( ++s_sunMapStamp == 0 ) s_sunMapStamp = 1; }
 
 	Bool shouldBillboard( void ) { return !m_isGroundAligned; }
-	/// The system's +X in the world, the axis an IsAlongEmitterAxis card stands along.
-	Vector3 getEmitterAxis( void ) const { return m_transform.Get_X_Vector(); }
 
 	ParticleShaderType getShaderType( void ) { return m_shaderType; }
 

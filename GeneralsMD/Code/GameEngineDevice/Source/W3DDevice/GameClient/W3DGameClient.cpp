@@ -235,7 +235,7 @@ void W3DGameClient::burnGround(const Coord3D *pos, Real radius)
 {
 	const Coord3D at = *pos;
 	LOGIC_AFTER_TICK( [=]() { burnGround( &at, radius ); } );
-	if (!BaseHeightMapRenderObjClass::burntGroundOn() || TheTerrainRenderObject == NULL || !GroundMarks::burnsGround(radius))
+	if (!BaseHeightMapRenderObjClass::burntGroundOn() || TheTerrainRenderObject == NULL)
 		return;
 
 	// any higher is a blast in the air or on a roof, and nothing of it lands
@@ -246,6 +246,10 @@ void W3DGameClient::burnGround(const Coord3D *pos, Real radius)
 	if (!TheTerrainRenderObject->addBurn(Vector3(pos->x, pos->y, pos->z), radius))
 		return;
 
+	// a shell's patch only smoulders; a bomb's or a missile's burns
+	const Real FLAMES_FROM_RADIUS = 15.0f;
+	if (radius < FLAMES_FROM_RADIUS)
+		return;
 	const ParticleSystemTemplate *flame = TheParticleSystemManager->findTemplate("FireSmallContinuous");
 	if (flame == NULL)
 		return;

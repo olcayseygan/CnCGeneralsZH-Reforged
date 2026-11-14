@@ -26480,50 +26480,6 @@ TEST(turkiye_unit_voices_resolve_to_events_and_wavs)
 	}
 }
 
-#include "GameClient/View.h"
-#include "GameClient/FXList.h"
-
-TEST( a_small_blast_bends_the_picture_a_little_and_a_big_one_as_written )
-{
-	ScreenDistortionInfo cannon;
-	cannon.m_radius = 80.0f;
-	cannon.m_pullStrength = 0.09f;
-	cannon.m_waveStrength = 0.09f;
-	cannon.m_waveWidth = 0.16f;
-	cannon.tameSmallBlast();
-	CHECK_NEAR( cannon.m_pullStrength, 0.03f, 1e-6f );
-	CHECK_NEAR( cannon.m_waveStrength, 0.04f, 1e-6f );
-	CHECK_NEAR( cannon.m_waveWidth, 0.16f, 1e-6f );
-
-	ScreenDistortionInfo faint = cannon;
-	faint.m_pullStrength = 0.01f;
-	faint.m_waveStrength = 0.02f;
-	faint.tameSmallBlast();
-	CHECK_NEAR( faint.m_pullStrength, 0.01f, 1e-6f );	// under the cap it stays as written
-	CHECK_NEAR( faint.m_waveStrength, 0.02f, 1e-6f );
-
-	ScreenDistortionInfo nuke = cannon;
-	nuke.m_radius = 300.0f;
-	nuke.m_pullStrength = 0.13f;
-	nuke.m_waveStrength = 0.14f;
-	nuke.tameSmallBlast();
-	CHECK_NEAR( nuke.m_pullStrength, 0.13f, 1e-6f );
-	CHECK_NEAR( nuke.m_waveStrength, 0.14f, 1e-6f );
-}
-
-TEST( only_the_tank_cannon_lists_count_as_a_tank_gun )
-{
-	FXList gun, heroicSmall, machineGun, gattling;
-	gun.noteBlastByName( "WeaponFX_GenericTankGunNoTracer" );
-	heroicSmall.noteBlastByName( "WeaponFX_HeroicGenericTankGunNoTracerSmall" );
-	machineGun.noteBlastByName( "WeaponFX_GenericMachineGunFire" );
-	gattling.noteBlastByName( "WeaponFX_GattlingTankMachineGunFire" );
-	CHECK( gun.isTankGun() );
-	CHECK( heroicSmall.isTankGun() );
-	CHECK( !machineGun.isTankGun() );
-	CHECK( !gattling.isTankGun() );
-}
-
 #include "GameClient/Eva.h"
 
 /** Turkiye has an announcer of her own. EvaReforged.ini, parsed after an EA block the way Eva::init

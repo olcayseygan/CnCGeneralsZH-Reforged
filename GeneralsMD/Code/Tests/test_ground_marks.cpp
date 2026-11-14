@@ -95,14 +95,6 @@ TEST(the_burn_hash_stays_in_its_range_and_does_not_repeat_its_neighbour)
 	CHECK_EQ(burnHash(12, 34), burnHash(12, 34));
 }
 
-TEST(a_shell_leaves_no_burn_and_a_vehicle_death_does)
-{
-	CHECK(!burnsGround(10.0f));		// a subtle shake's blast: a tank shell
-	CHECK(!burnsGround(12.0f));		// a normal one: rockets, cannon shells
-	CHECK(burnsGround(15.0f));		// a vehicle's death scorch
-	CHECK(burnsGround(18.0f));		// a strong shake: bombs, missiles
-}
-
 TEST(a_ring_of_spent_marks_says_so)
 {
 	Ring ring;

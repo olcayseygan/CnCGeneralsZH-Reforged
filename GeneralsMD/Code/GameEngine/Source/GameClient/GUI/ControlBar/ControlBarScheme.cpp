@@ -1818,7 +1818,8 @@ void ControlBarSchemeManager::setControlBarSchemeByPlayerTemplate( const PlayerT
 	}
 	else
 		m_currentScheme = findControlBarScheme("Default");
-	m_currentScheme->init();
+	if (m_currentScheme)
+		m_currentScheme->init();
 }
 //-----------------------------------------------------------------------------
 void ControlBarSchemeManager::setControlBarSchemeByPlayer(Player *p)
@@ -1843,6 +1844,15 @@ void ControlBarSchemeManager::setControlBarSchemeByPlayer(Player *p)
 	// scheme for it (findSchemeForSide), and the multiplier below is the screen's
 	// the neutral and civilian players are of no country, and wear America's
 	m_currentScheme = findSchemeForFaction( side );
+	// none for the side, its country or America (the Boss challenge map's side found none): EA's Default,
+	// and with not even that the bar keeps no scheme rather than the game reading a NULL one
+	if( m_currentScheme == NULL )
+		m_currentScheme = findControlBarScheme( "Default" );
+	if( m_currentScheme == NULL )
+	{
+		DEBUG_LOG(("setControlBarSchemeByPlayer found no scheme for side %s, not even Default\n", side.str()));
+		return;
+	}
 	DEBUG_LOG(("setControlBarSchemeByPlayer gave side %s the scheme of %s\n", side.str(), m_currentScheme->m_side.str()));
 	m_multiplyer.x = TheDisplay->getWidth() / (Real)m_currentScheme->m_ScreenCreationRes.x;
 	m_multiplyer.y = TheDisplay->getHeight() / (Real)m_currentScheme->m_ScreenCreationRes.y;

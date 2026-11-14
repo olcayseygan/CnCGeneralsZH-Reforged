@@ -26728,30 +26728,19 @@ static Bool readWavFormat( const std::string &path, Int &channels, Int &rate, In
 	return FALSE;
 }
 
-/** Every Turkiye unit speaks in its own voice. Each Voice field in TurkiyeReforged.ini that names a
-	 Turkiye event finds it in VoiceReforged.ini through the game's own parser, every wav those events
-	 name is in Data/Audio/Sounds in EA's speech format (22050 Hz mono 16-bit PCM), and no wav there is
-	 left unnamed. 98 events over 20 units, 291 lines: a unit that lost its voice, an event renamed on
-	 one side only or a file left out of the folder all fail here. */
-TEST(turkiye_unit_voices_resolve_to_events_and_wavs)
+/* The Turkiye events a data file names in fields starting with `key`, as written in the file. */
+static std::set<std::string> turkiyeEventsNamed( const char *file, const char *key )
 {
-	CHECK( bootOnce() );
-
-	AudioManager *savedAudio = TheAudio;
-	if( savedAudio == NULL )
-		TheAudio = NEW NullAudioManager;
-
-	CHECK( loadIni( ZH_CODE_DIR "/Data/INI/VoiceReforged.ini" ) );
-
-	std::ifstream units( std::string( ZH_CODE_DIR ) + "/Data/INI/TurkiyeReforged.ini" );
-	CHECK( units.good() );
+	std::ifstream data( std::string( ZH_CODE_DIR ) + file );
+	CHECK( data.good() );
 	std::set<std::string> named;
 	std::string line;
-	while( std::getline( units, line ) )
+	const size_t keyLength = strlen( key );
+	while( std::getline( data, line ) )
 	{
-		size_t key = line.find_first_not_of( " \t" );
+		size_t start = line.find_first_not_of( " \t" );
 		size_t equals = line.find( '=' );
-		if( key == std::string::npos || equals == std::string::npos || line.compare( key, 5, "Voice" ) != 0 )
+		if( start == std::string::npos || equals == std::string::npos || line.compare( start, keyLength, key ) != 0 )
 			continue;
 		size_t value = line.find_first_not_of( " \t", equals + 1 );
 		if( value == std::string::npos )
@@ -26760,10 +26749,15 @@ TEST(turkiye_unit_voices_resolve_to_events_and_wavs)
 		if( event.compare( 0, 7, "Turkiye" ) == 0 )
 			named.insert( event );
 	}
-	CHECK_EQ( (Int)named.size(), 98 );
+	return named;
+}
 
-	const std::string sounds = std::string( ZH_CODE_DIR ) + "/Data/Audio/Sounds/";
-	std::set<std::string> heard;
+/* Every event in `named` parsed and every wav it names is in `sounds` at `rate`, mono 16-bit PCM;
+	 the wavs go into `heard`, and the count of new ones is returned. */
+static Int checkTurkiyeEventWavs( const std::set<std::string> &named, const std::string &sounds, Int wantRate,
+	std::set<std::string> &heard )
+{
+	Int added = 0;
 	for( std::set<std::string>::const_iterator it = named.begin(); it != named.end(); ++it )
 	{
 		const AudioEventInfo *info = TheAudio->findAudioEventInfo( AsciiString( it->c_str() ) );
@@ -26778,17 +26772,49 @@ TEST(turkiye_unit_voices_resolve_to_events_and_wavs)
 			const std::string name = info->m_sounds[ i ].str();
 			if( !heard.insert( name ).second )
 				continue;
+			++added;
 			Int channels = 0, rate = 0, bits = 0;
 			const Bool read = readWavFormat( sounds + name + ".wav", channels, rate, bits );
-			if( !read || channels != 1 || rate != 22050 || bits != 16 )
+			if( !read || channels != 1 || rate != wantRate || bits != 16 )
 				printf( "  %s.wav: %s, %d ch, %d Hz, %d bit\n", name.c_str(), read ? "read" : "missing", channels, rate, bits );
 			CHECK( read );
 			CHECK_EQ( channels, 1 );
-			CHECK_EQ( rate, 22050 );
+			CHECK_EQ( rate, wantRate );
 			CHECK_EQ( bits, 16 );
 		}
 	}
-	CHECK_EQ( (Int)heard.size(), 291 );
+	return added;
+}
+
+/** Every Turkiye unit speaks in its own voice, and the Mehmetcik fires his own rifle. Each Voice
+	 field in TurkiyeReforged.ini and each FireSound in TurkiyeWeaponReforged.ini that names a Turkiye
+	 event finds it in VoiceReforged.ini through the game's own parser, every wav those events name is
+	 in Data/Audio/Sounds (voices in EA's speech format, 22050 Hz mono 16-bit PCM; weapons at EA's
+	 weapon rate, 44100 Hz mono 16-bit), and no wav there is left unnamed. 98 voice events over 20
+	 units, 291 lines; 2 weapon events, 8 shots. A unit that lost its voice or its gun, an event
+	 renamed on one side only or a file left out of the folder all fail here. */
+TEST(turkiye_unit_voices_resolve_to_events_and_wavs)
+{
+	CHECK( bootOnce() );
+
+	AudioManager *savedAudio = TheAudio;
+	if( savedAudio == NULL )
+		TheAudio = NEW NullAudioManager;
+
+	CHECK( loadIni( ZH_CODE_DIR "/Data/INI/VoiceReforged.ini" ) );
+
+	const std::set<std::string> voices = turkiyeEventsNamed( "/Data/INI/TurkiyeReforged.ini", "Voice" );
+	CHECK_EQ( (Int)voices.size(), 98 );
+	const std::set<std::string> weapons = turkiyeEventsNamed( "/Data/INI/TurkiyeWeaponReforged.ini", "FireSound" );
+	CHECK( weapons.count( "TurkiyeMehmetcikWeapon" ) == 1 );
+	CHECK( weapons.count( "TurkiyeMehmetcikWeaponMpt" ) == 1 );
+	CHECK_EQ( (Int)weapons.size(), 2 );
+
+	const std::string sounds = std::string( ZH_CODE_DIR ) + "/Data/Audio/Sounds/";
+	std::set<std::string> heard;
+	CHECK_EQ( checkTurkiyeEventWavs( voices, sounds, 22050, heard ), 291 );
+	CHECK_EQ( checkTurkiyeEventWavs( weapons, sounds, 44100, heard ), 8 );
+	CHECK_EQ( (Int)heard.size(), 299 );
 
 	Int onDisk = 0;
 	for( const std::filesystem::directory_entry &entry : std::filesystem::directory_iterator( sounds ) )
@@ -26799,7 +26825,7 @@ TEST(turkiye_unit_voices_resolve_to_events_and_wavs)
 		if( heard.count( entry.path().stem().string() ) == 0 )
 			printf( "  %s is in the folder and named by no event\n", entry.path().filename().string().c_str() );
 	}
-	CHECK_EQ( onDisk, 291 );
+	CHECK_EQ( onDisk, 299 );
 
 	if( savedAudio == NULL )
 	{

@@ -581,6 +581,7 @@ public:
 	Bool m_teamGlow;								///< "TeamGlow": bright house colour glows (Direct3D 11, client only)
 	Bool m_waterFoam;								///< "WaterFoam": foam, shore band and the sun's shadow on water (Direct3D 11, client only)
 	Bool m_groundMarks;							///< "GroundMarks": craters, stains and longer treads that fade over minutes (Direct3D 11, client only)
+	Bool m_burntGround;							///< "BurntGround": a blast's scorch smoulders, black ash with glowing cracks and a few small flames, then cools (Direct3D 11, client only)
 	Bool m_firelight;								///< "Firelight": flames light the ground, walls and units around them (Direct3D 11, client only)
 	Bool m_heatHaze;								///< "HeatHaze", "-heathaze": the air over fire, beams and exhausts shimmers (Direct3D 11, client only)
 	Bool m_hemiAmbient;							///< "HemiAmbient": models take the ambient from the sky above and the ground below (Direct3D 11, client only)

@@ -49,6 +49,52 @@ TEST(a_mark_on_a_like_one_renews_it_and_takes_no_slot)
 	CHECK_EQ(ring.newest(1).born, 50u);
 }
 
+TEST(a_burnt_patch_glows_cools_and_then_loses_its_ash)
+{
+	CHECK_EQ(burnHeat(0), 1.0f);
+	CHECK_EQ(burnHeat(BURN_HOT_FRAMES), 1.0f);
+	CHECK_NEAR(burnHeat(BURN_HOT_FRAMES + BURN_COOL_FRAMES / 2), 0.25f, 0.001f);
+	CHECK_EQ(burnHeat(BURN_HOT_FRAMES + BURN_COOL_FRAMES), 0.0f);
+	// the ash stays whole while anything glows, and is gone when the patch's life is
+	CHECK_EQ(burnAsh(BURN_HOT_FRAMES + BURN_COOL_FRAMES), 1.0f);
+	CHECK(burnAsh(BURN_LIFE_FRAMES - 1) > 0.0f);
+	CHECK_EQ(burnAsh(BURN_LIFE_FRAMES), 0.0f);
+}
+
+TEST(a_cooling_patch_keeps_a_faint_glow_after_it_has_gone_red)
+{
+	CHECK_EQ(burnGlow(BURN_HOT_FRAMES), 1.0f);
+	// half way through the cooling the colour is a quarter hot, the glow still over half
+	const unsigned int half = BURN_HOT_FRAMES + BURN_COOL_FRAMES / 2;
+	CHECK(burnGlow(half) > 0.5f);
+	CHECK(burnGlow(half) > 2.0f * burnHeat(half));
+	// never brighter as it ages, and out when the cooling ends
+	for (unsigned int a = BURN_HOT_FRAMES; a < BURN_HOT_FRAMES + BURN_COOL_FRAMES; a += 7)
+		CHECK(burnGlow(a + 7) <= burnGlow(a) + 1e-6f);
+	CHECK_EQ(burnGlow(BURN_HOT_FRAMES + BURN_COOL_FRAMES), 0.0f);
+}
+
+TEST(a_blast_on_a_hot_patch_heats_it_again_and_makes_no_new_one)
+{
+	BurnRing ring;
+	CHECK(ring.add(100.0f, 100.0f, 20.0f, 0, 1));
+	CHECK(!ring.add(103.0f, 98.0f, 22.0f, 0, 90));
+	CHECK_EQ(ring.newest(0).born, 90u);
+	CHECK_EQ(ring.held(), 1);
+	CHECK(ring.add(400.0f, 100.0f, 20.0f, 0, 95));
+	CHECK_EQ(ring.held(), 2);
+}
+
+TEST(the_burn_hash_stays_in_its_range_and_does_not_repeat_its_neighbour)
+{
+	for (int i = -50; i < 50; ++i) {
+		const float h = burnHash(i, 7);
+		CHECK(h >= 0.0f && h < 1.0f);
+	}
+	CHECK(burnHash(3, 4) != burnHash(4, 3));
+	CHECK_EQ(burnHash(12, 34), burnHash(12, 34));
+}
+
 TEST(a_ring_of_spent_marks_says_so)
 {
 	Ring ring;

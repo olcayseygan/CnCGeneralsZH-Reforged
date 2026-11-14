@@ -74,6 +74,57 @@
 extern void disableUVAnimations(RenderObjClass *robj);	// W3DGhostObject.cpp
 
 //-------------------------------------------------------------------------------------------------
+// Burnt Ground's small flames.  A system whose lifetime simply runs out stops emitting, and the flame
+// it drew was mostly its newest particles, so it went from full size to nothing in two frames.  Each
+// is kept here instead: over its last BURN_FLAME_DIE_FRAMES the new particles come out smaller and
+// dimmer, then the system is told to finish, and what is left fades on its own.  Ids, not pointers:
+// a map's reset frees every system and hands the ids out again, so reset() empties the list.
+//-------------------------------------------------------------------------------------------------
+namespace {
+	enum { MAX_BURN_FLAMES = 96, BURN_FLAME_DIE_FRAMES = 3 * LOGICFRAMES_PER_SECOND / 2 };
+	struct BurnFlame
+	{
+		ParticleSystemID id;
+		UnsignedInt end;					///< logic frame the system is told to finish
+		Real size;								///< its size multiplier while it burns full
+		RGBColor color[MAX_KEYFRAMES];	///< its colour keys as made
+	};
+	BurnFlame s_burnFlames[MAX_BURN_FLAMES];
+	Int s_numBurnFlames = 0;
+
+	void updateBurnFlames()
+	{
+		if (s_numBurnFlames == 0 || TheParticleSystemManager == NULL || TheGameLogic == NULL)
+			return;
+		const UnsignedInt now = TheGameLogic->getFrame();
+		for (Int i = 0; i < s_numBurnFlames; )
+		{
+			BurnFlame &f = s_burnFlames[i];
+			ParticleSystem *sys = TheParticleSystemManager->findParticleSystem(f.id);
+			if (sys != NULL && now >= f.end)
+				sys->destroy();
+			if (sys == NULL || now >= f.end)
+			{
+				f = s_burnFlames[--s_numBurnFlames];
+				continue;
+			}
+			if (now + BURN_FLAME_DIE_FRAMES > f.end)
+			{
+				const Real left = (Real)(f.end - now) / (Real)BURN_FLAME_DIE_FRAMES;
+				sys->setSizeMultiplier(f.size * (0.25f + 0.75f * left));
+				for (Int key = 0; key < MAX_KEYFRAMES; ++key)
+				{
+					sys->m_colorKey[key].color.red = f.color[key].red * left;
+					sys->m_colorKey[key].color.green = f.color[key].green * left;
+					sys->m_colorKey[key].color.blue = f.color[key].blue * left;
+				}
+			}
+			++i;
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 W3DGameClient::W3DGameClient()
 {
@@ -106,6 +157,7 @@ void W3DGameClient::update( void )
 
 	// before the base, whose draw opens the window the tick runs beside
 	StructureCollapse::update();
+	updateBurnFlames();
 
 	// call base
 	GameClient::update();
@@ -120,6 +172,7 @@ void W3DGameClient::reset( void )
 {
 
 	StructureCollapse::clear();
+	s_numBurnFlames = 0;	// the particle systems go with the map, and their ids are handed out again
 
 	// call base class
 	GameClient::reset();
@@ -169,6 +222,73 @@ void W3DGameClient::addGroundMark(const Coord3D *pos, Real radius, Int type)
 	LOGIC_AFTER_TICK( [=]() { addGroundMark( &at, radius, type ); } );
 	if (TheTerrainRenderObject)
 		TheTerrainRenderObject->addGroundMark(Vector3(pos->x, pos->y, pos->z), radius, type);
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The Burnt Ground option: a blast came down here and its scorch smoulders.  The terrain draws the
+	* ash and the glowing cracks; a new patch big enough also gets a few small flames, EA's
+	* FireSmallContinuous, each going out on its own time.  Where they stand and how long they burn come
+	* from the spot, not the client's random stream, so the rest of a run's effects play as they would
+	* with the option off.  Nothing here reaches logic. */
+//-------------------------------------------------------------------------------------------------
+void W3DGameClient::burnGround(const Coord3D *pos, Real radius)
+{
+	const Coord3D at = *pos;
+	LOGIC_AFTER_TICK( [=]() { burnGround( &at, radius ); } );
+	if (!BaseHeightMapRenderObjClass::burntGroundOn() || TheTerrainRenderObject == NULL)
+		return;
+
+	// any higher is a blast in the air or on a roof, and nothing of it lands
+	const Real MAX_HEIGHT_OVER_GROUND = 15.0f;
+	if (pos->z - TheTerrainLogic->getGroundHeight(pos->x, pos->y) > MAX_HEIGHT_OVER_GROUND)
+		return;
+	// a blast on a patch still hot heats it again and lights nothing more
+	if (!TheTerrainRenderObject->addBurn(Vector3(pos->x, pos->y, pos->z), radius))
+		return;
+
+	// a shell's patch only smoulders; a bomb's or a missile's burns
+	const Real FLAMES_FROM_RADIUS = 15.0f;
+	if (radius < FLAMES_FROM_RADIUS)
+		return;
+	const ParticleSystemTemplate *flame = TheParticleSystemManager->findTemplate("FireSmallContinuous");
+	if (flame == NULL)
+		return;
+	const Int MAX_FLAMES = 5;
+	const Int count = min(1 + REAL_TO_INT(radius / 15.0f), MAX_FLAMES);
+	const Real spread = 0.55f * min(radius, 80.0f);
+	const Int seedX = REAL_TO_INT(pos->x), seedY = REAL_TO_INT(pos->y);
+	for (Int k = 0; k < count; ++k)
+	{
+		const Real angle = 2.0f * PI * GroundMarks::burnHash(seedX + 31 * k, seedY);
+		const Real reach = spread * (Real)sqrt(GroundMarks::burnHash(seedY - 17 * k, seedX));
+		const Real life = GroundMarks::burnHash(seedX ^ (k + 1), seedY + 7 * k);
+		Coord3D spot;
+		spot.x = pos->x + reach * (Real)cos(angle);
+		spot.y = pos->y + reach * (Real)sin(angle);
+		if (TheTerrainLogic->isUnderwater(spot.x, spot.y))
+			continue;
+		spot.z = TheTerrainLogic->getGroundHeight(spot.x, spot.y);
+		ParticleSystem *sys = TheParticleSystemManager->createParticleSystem(flame);
+		if (sys == NULL)
+			continue;
+		sys->setPosition(&spot);
+		const Real size = 0.7f + 0.6f * life;
+		sys->setSizeMultiplier(size);
+		// 5 to 15 seconds: the flames go out one by one while the cracks are still bright, dying down over
+		// the last one and a half; with no room on the list a flame keeps the plain lifetime
+		const UnsignedInt frames = (UnsignedInt)((5.0f + 10.0f * life) * LOGICFRAMES_PER_SECOND);
+		if (s_numBurnFlames < MAX_BURN_FLAMES)
+		{
+			BurnFlame &f = s_burnFlames[s_numBurnFlames++];
+			f.id = sys->getSystemID();
+			f.end = TheGameLogic->getFrame() + frames;
+			f.size = size;
+			for (Int key = 0; key < MAX_KEYFRAMES; ++key)
+				f.color[key] = sys->m_colorKey[key].color;
+		}
+		else
+			sys->setFiniteSystemLifetime(frames);
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -833,6 +833,7 @@ GlobalData::GlobalData()
 	m_teamGlow = FALSE;
 	m_waterFoam = FALSE;
 	m_groundMarks = FALSE;
+	m_burntGround = FALSE;
 	m_firelight = FALSE;
 	m_heatHaze = FALSE;
 	m_hemiAmbient = FALSE;

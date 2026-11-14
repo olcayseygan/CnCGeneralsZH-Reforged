@@ -62,7 +62,7 @@ $run = Join-Path $PSScriptRoot "GeneralsMD\Run"
 $shots = Join-Path $env:TEMP "dx11check_userdata"
 $env:ZH_USER_DATA_DIR = $shots
 $null = New-Item -ItemType Directory -Force $shots
-Get-Content (Join-Path $PSScriptRoot "reforged-look.ini") | Where-Object { $_ -notmatch '^(WaterFoam|TeamGlow|CloudStyle) ' } |
+Get-Content (Join-Path $PSScriptRoot "reforged-look.ini") | Where-Object { $_ -notmatch '^(WaterFoam|TeamGlow|CloudStyle|BurntGround) ' } |
   Set-Content (Join-Path $shots "Options.ini")
 $tmp = Join-Path $env:TEMP "dx11check"
 if (-not (Test-Path $tmp)) { $null = New-Item -ItemType Directory $tmp }

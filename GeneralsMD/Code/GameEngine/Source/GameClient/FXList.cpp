@@ -540,6 +540,9 @@ public:
 				scorch = GameClientRandomValue( SCORCH_1, SCORCH_4 );
 			}
 			TheGameClient->addScorch(primary, m_radius, (Scorches)scorch);
+			// Burnt Ground: the scorch smoulders a while before it is the cold scar
+			if (TheGlobalData->m_burntGround)
+				TheGameClient->burnGround(primary, m_radius);
 
 			// Battle Marks: a nuke, a MOAB or a Daisy Cutter burns a ring round its scorch and cracks the
 			// ground under it, out of the same texture, so no new art.
@@ -985,7 +988,7 @@ void FXList::noteBlastByName(const char *name)
 //-------------------------------------------------------------------------------------------------
 void FXList::leaveBlastMark(const Coord3D *at) const
 {
-	if (m_markRadius <= 0.0f || !TheGlobalData->m_groundMarks)
+	if (m_markRadius <= 0.0f || !(TheGlobalData->m_groundMarks || TheGlobalData->m_burntGround))
 		return;
 	// any higher is a blast in the air or on a roof, and nothing of it lands
 	const Real MAX_HEIGHT_OVER_GROUND = 15.0f;
@@ -993,7 +996,11 @@ void FXList::leaveBlastMark(const Coord3D *at) const
 		return;
 	// which burn by where it fell, not the client's random stream: a run with the option on plays
 	// every other client-random effect as a run with it off does
-	TheGameClient->addGroundMark(at, m_markRadius, SCORCH_1 + ((REAL_TO_INT(at->x) ^ REAL_TO_INT(at->y)) & 3));
+	if (TheGlobalData->m_groundMarks)
+		TheGameClient->addGroundMark(at, m_markRadius, SCORCH_1 + ((REAL_TO_INT(at->x) ^ REAL_TO_INT(at->y)) & 3));
+	// Burnt Ground: a blast by name smoulders too, where the list leaves no scorch of its own
+	if (TheGlobalData->m_burntGround)
+		TheGameClient->burnGround(at, m_markRadius);
 }
 
 //-------------------------------------------------------------------------------------------------

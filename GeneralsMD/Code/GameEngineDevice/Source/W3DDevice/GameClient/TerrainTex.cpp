@@ -1124,11 +1124,12 @@ void CloudMapTerrainTextureClass::restore(void)
 /** Constructor. Calls parent constructor to load the .tga texture. */
 //=============================================================================
 /// @todo - get "EXScorch01.tga" from not hard coded location.
-ScorchTextureClass::ScorchTextureClass(MipCountType mipLevelCount) :
-	TextureClass("EXScorch01.tga","EXScorch01.tga", mipLevelCount )
+ScorchTextureClass::ScorchTextureClass(MipCountType mipLevelCount, Int look) :
+	TextureClass("EXScorch01.tga","EXScorch01.tga", mipLevelCount ),
 // Hack to disable texture reduction.
 //	TextureClass("EXScorch01.tga","EXScorch01.tga", mipLevelCount,WW3D_FORMAT_UNKNOWN,true,false)
-{ 
+	m_look(look)
+{
 }
 
 //=============================================================================
@@ -1161,6 +1162,31 @@ void ScorchTextureClass::Apply(unsigned int stage)
 	DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
 	DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
 	// Now setup the texture pipeline.
+
+	DX8Wrapper::Set_DX8_Texture_Stage_State( 1, D3DTSS_COLOROP,   D3DTOP_DISABLE );
+	DX8Wrapper::Set_DX8_Texture_Stage_State( 1, D3DTSS_ALPHAOP,   D3DTOP_DISABLE );
+	DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_TEXCOORDINDEX, 0 );
+
+	// The Burnt Ground patches keep the blend their shader set: alpha for the ash, additive for the glow.
+	if (m_look == LOOK_ASH) {
+		// the stain cell's alpha is a soft 0.4 at its middle: doubled, the ash reads black
+		DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_COLORARG1, D3DTA_TEXTURE );
+		DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_COLORARG2, D3DTA_DIFFUSE );
+		DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_COLOROP,   D3DTOP_MODULATE );
+		DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE );
+		DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE );
+		DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_ALPHAOP,   D3DTOP_MODULATE2X );
+		return;
+	}
+	if (m_look == LOOK_EMBER) {
+		// the cracks cell is black with the cracks in its alpha: the alpha times the vertex's heat colour
+		DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_COLORARG1, D3DTA_TEXTURE | D3DTA_ALPHAREPLICATE );
+		DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_COLORARG2, D3DTA_DIFFUSE );
+		DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_COLOROP,   D3DTOP_MODULATE );
+		DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE );
+		DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_ALPHAOP,   D3DTOP_SELECTARG1 );
+		return;
+	}
 
 	DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_COLORARG1, D3DTA_TEXTURE );
 	DX8Wrapper::Set_DX8_Texture_Stage_State( 0, D3DTSS_COLORARG2, D3DTA_DIFFUSE );

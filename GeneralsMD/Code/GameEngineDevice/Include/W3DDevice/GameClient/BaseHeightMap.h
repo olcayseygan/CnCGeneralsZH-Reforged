@@ -197,6 +197,11 @@ public:
 	void addGroundMark(const Vector3 &location, Real radius, Int type);
 	/// The option, and a picture that draws it: Direct3D 11 and not Classic.
 	static Bool groundMarksOn(void);
+	/// The Burnt Ground option: a smouldering patch over a blast's scorch.  True when it took a slot of
+	/// its own rather than heating one already there, which is when the caller lights its flames.
+	Bool addBurn(const Vector3 &location, Real radius);
+	/// The option, and a picture that draws it: Direct3D 11 and not Classic.
+	static Bool burntGroundOn(void);
 	/// Everything added so far came with the map and is not to be thrown away to make room.
 	void markScorchesStatic(void);
 	void addTree(DrawableID id, Coord3D location, Real scale, Real angle,
@@ -323,6 +328,11 @@ protected:
 	GroundMarks::Ring m_groundMarks;	///< drawn from the same buffers as the scorches, newest first and in at most half of them
 	UnsignedInt m_groundMarksBuilt;		///< logic frame they last went into the buffers
 	Bool m_groundMarksPending;				///< one was added since
+
+	GroundMarks::BurnRing m_burns;		///< Burnt Ground's patches, built into a dynamic buffer every frame one lives
+	TextureClass *m_burnAshTexture;		///< the scorch art again, its stain cell blended black
+	TextureClass *m_burnEmberTexture;	///< and its cracks cell taken as a mask for an additive glow
+	void drawBurns(void);	///< Draws the patches over the scorches.
 
 	void updateGroundMarks(void);	 ///<Decide whether this frame rebuilds the buffers for the marks.
 	void updateScorches(void);	 ///<Update m_vertexScorch and m_indexScorch so all scorches will be drawn.

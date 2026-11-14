@@ -162,25 +162,6 @@ void FXObjectView::take( const Object *obj )
 /** By the hull's area against a Crusader's 15 by 10, the hull FX_GenericTankDeathExplosion was drawn
 	* on: an Overlord or a nuke cannon plays about half again as big, a Humvee four fifths, a bike or a
 	* drone the floor.  The square root, since the blast's size is a length and the hull's an area. */
-/*static*/ const Real FXList::DEATH_LIGHT_BRIGHTEST = 0.45f;
-
-/*static*/ RGBColor FXList::deathLightColor(const RGBColor &color)
-{
-	RGBColor held = color;
-	Real brightest = color.red > color.green ? color.red : color.green;
-	if (color.blue > brightest)
-		brightest = color.blue;
-	if (brightest > DEATH_LIGHT_BRIGHTEST)
-	{
-		const Real scale = DEATH_LIGHT_BRIGHTEST / brightest;
-		held.red *= scale;
-		held.green *= scale;
-		held.blue *= scale;
-	}
-	return held;
-}
-
-//-------------------------------------------------------------------------------------------------
 /*static*/ Real FXList::deathBlastScale(const Coord2D &footprint)
 {
 	const Real REFERENCE_AREA = 15.0f * 10.0f;
@@ -485,13 +466,6 @@ public:
 			if (m_boundingCirclePct > 0)
 				radius = (primary->boundingCircleRadius * m_boundingCirclePct);
 
-			// the Reforged look holds a dying ground vehicle's light to a warm glow (FXList::deathLightColor)
-			if (primary->dyingGroundVehicle && !TheGlobalData->m_classicGraphics)
-			{
-				const RGBColor held = FXList::deathLightColor(m_color);
-				TheDisplay->createLightPulse(&primary->position, &held, 1, radius, m_increaseFrames, m_decreaseFrames);
-				return;
-			}
 			TheDisplay->createLightPulse(&primary->position, &m_color, 1, radius, m_increaseFrames, m_decreaseFrames);
 		}
 		else

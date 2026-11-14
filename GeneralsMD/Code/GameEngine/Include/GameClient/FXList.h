@@ -206,12 +206,6 @@ public:
 	/// How much bigger than a Crusader's a dying vehicle's blast plays, from its hull's half length and half width.
 	static Real deathBlastScale(const Coord2D &footprint);
 
-	/// The light a dying ground vehicle's lists put on the ground (their LightPulse), held to a warm
-	/// glow in the Reforged look: its brightest channel at most DEATH_LIGHT_BRIGHTEST, its hue kept.
-	/// At EA's 255,150,70 the sunlit hull and sand under it washed out to a cream disc about 150 wide.
-	static RGBColor deathLightColor(const RGBColor &color);
-	static const Real DEATH_LIGHT_BRIGHTEST;
-
 	/// inline convenience method to avoid having to check for null.
 	inline static void doFXPos(const FXList* fx, const Coord3D *primary, const Matrix3D* primaryMtx = NULL, const Real primarySpeed = 0.0f, const Coord3D *secondary = NULL, const Real overrideRadius = 0.0f)
 	{

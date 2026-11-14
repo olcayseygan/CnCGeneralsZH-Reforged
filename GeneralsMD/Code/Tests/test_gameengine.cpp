@@ -1661,73 +1661,44 @@ TEST(particle_born_riding_a_parent_is_drawn_with_it)
 	CHECK_EQ( still.x, sparkNow.pos.x ); CHECK_EQ( still.z, sparkNow.pos.z );
 }
 
-/* A newborn fades in over the tick that brings it (age 1 is its first drawn update), so a burst grows
-	 in rather than appearing on the tick; a short life fades faster, so a flash living two to four
-	 ticks still shows at full strength inside its first tick; a later tick, a never-dying particle and
-	 the tick's end (smooth motion off) are untouched. */
-TEST(particle_newborn_fades_in_and_short_flashes_still_show)
+/* A newborn fades in over the tick that brings it: its first drawn update starts unseen in the way
+	 its shader means unseen, so a picture a quarter into that tick shows a quarter of it and the tick's
+	 end shows it whole, bit for bit. */
+TEST(particle_newborn_fades_in_over_its_first_tick)
 {
-	// a long life: the whole first tick
-	CHECK_NEAR( Particle::newbornVisibility( 1, 30, 0.25f ), 0.25f, 0.0001f );
-	CHECK_NEAR( Particle::newbornVisibility( 1, 30, 0.75f ), 0.75f, 0.0001f );
-	CHECK_EQ( Particle::newbornVisibility( 1, 30, 1.0f ), 1.0f );
-	CHECK_EQ( Particle::newbornVisibility( 0, 30, 0.5f ), 0.0f );		// before its first update
-	CHECK_EQ( Particle::newbornVisibility( 2, 30, 0.1f ), 1.0f );
-	CHECK_EQ( Particle::newbornVisibility( 9, 30, 0.1f ), 1.0f );
-	CHECK_EQ( Particle::newbornVisibility( 0, 0, 0.1f ), 1.0f );		// never dies, never aged
-	// short lives: a quarter of a tick for two ticks, half for three, three quarters for four
-	CHECK_NEAR( Particle::newbornVisibility( 1, 2, 0.125f ), 0.5f, 0.0001f );
-	CHECK_EQ( Particle::newbornVisibility( 1, 2, 0.25f ), 1.0f );
-	CHECK_EQ( Particle::newbornVisibility( 1, 3, 0.5f ), 1.0f );
-	CHECK_NEAR( Particle::newbornVisibility( 1, 3, 0.25f ), 0.5f, 0.0001f );
-	CHECK_EQ( Particle::newbornVisibility( 1, 4, 0.75f ), 1.0f );
-	CHECK_NEAR( Particle::newbornVisibility( 1, 5, 0.5f ), 0.5f, 0.0001f );
-	CHECK_EQ( Particle::newbornVisibility( 1, 1, 0.1f ), 1.0f );
-	// most of the tick a two- or three-tick flash shows whole, where a full-tick fade hid it
-	Real shown = 0.0f;
-	for (Int i = 1; i <= 4; ++i)
-		shown += Particle::newbornVisibility( 1, 3, (Real)i / 4.0f );
-	CHECK( shown >= 3.5f - 0.0001f );
+	ParticleDrawState born, aged, from, out;
+	memset( &born, 0, sizeof( born ) );
+	born.pos.x = 7.0f; born.size = 3.0f; born.alpha = 0.8f;
+	born.color.red = 1.0f; born.color.green = 0.6f; born.color.blue = 0.2f;
+	aged = born;
+	aged.pos.x = 9.0f; aged.size = 4.0f;
 
-	// the fade in each shader's own terms
-	ParticleDrawState s;
-	memset( &s, 0, sizeof( s ) );
-	s.alpha = 0.8f; s.color.red = 1.0f; s.color.green = 0.6f; s.color.blue = 0.2f;
-	ParticleDrawState a = s;
-	Particle::fadeBy( &a, ParticleSystemInfo::ALPHA, 0.25f );
-	CHECK_NEAR( a.alpha, 0.2f, 0.0001f ); CHECK_EQ( a.color.red, 1.0f );
-	a = s;
-	Particle::fadeBy( &a, ParticleSystemInfo::ALPHA_TEST, 0.5f );
-	CHECK_NEAR( a.alpha, 0.4f, 0.0001f );
-	a = s;
-	Particle::fadeBy( &a, ParticleSystemInfo::ADDITIVE, 0.5f );
-	CHECK_NEAR( a.color.red, 0.5f, 0.0001f ); CHECK_NEAR( a.color.green, 0.3f, 0.0001f ); CHECK_EQ( a.alpha, 0.8f );
-	a = s;
-	Particle::fadeBy( &a, ParticleSystemInfo::MULTIPLY, 0.5f );
-	CHECK_NEAR( a.color.blue, 0.6f, 0.0001f ); CHECK_NEAR( a.color.red, 1.0f, 0.0001f );
-	a = s;
-	Particle::fadeBy( &a, ParticleSystemInfo::MULTIPLY, 0.0f );
-	CHECK_EQ( a.color.blue, 1.0f );		// white multiplies by nothing
-}
+	from = born;
+	Particle::fadeInFrom( &from, ParticleSystemInfo::ALPHA );
+	CHECK_EQ( from.alpha, 0.0f );
+	CHECK_EQ( from.color.red, 1.0f );			// colour kept: an alpha blended card only grows opaque
+	CHECK_EQ( from.pos.x, 7.0f ); CHECK_EQ( from.size, 3.0f );	// where and how big it was born
+	Particle::tickBlend( from, aged, 0.25f, &out );
+	CHECK_NEAR( out.alpha, 0.2f, 0.0001f );
+	CHECK_NEAR( out.pos.x, 7.5f, 0.0001f );
+	Particle::tickBlend( from, aged, 1.0f, &out );
+	CHECK_MEM( &out, &aged, sizeof( out ) );
 
-/* A dying ground vehicle's light pulse is held to a warm glow: EA's 255,150,70 keeps its hue at a
-	 brightest channel of 0.45, and a light already that dim is left alone. */
-TEST(death_light_keeps_its_hue_under_the_cap)
-{
-	RGBColor ea;
-	ea.red = 1.0f; ea.green = 150.0f / 255.0f; ea.blue = 70.0f / 255.0f;
-	const RGBColor held = FXList::deathLightColor( ea );
-	CHECK_NEAR( held.red, FXList::DEATH_LIGHT_BRIGHTEST, 0.0001f );
-	CHECK_NEAR( held.green / held.red, ea.green / ea.red, 0.0001f );
-	CHECK_NEAR( held.blue / held.red, ea.blue / ea.red, 0.0001f );
-	RGBColor blue;
-	blue.red = 0.1f; blue.green = 0.2f; blue.blue = 0.9f;
-	const RGBColor bheld = FXList::deathLightColor( blue );
-	CHECK_NEAR( bheld.blue, FXList::DEATH_LIGHT_BRIGHTEST, 0.0001f );
-	RGBColor dim;
-	dim.red = 0.3f; dim.green = 0.2f; dim.blue = 0.1f;
-	const RGBColor dheld = FXList::deathLightColor( dim );
-	CHECK_EQ( dheld.red, 0.3f ); CHECK_EQ( dheld.green, 0.2f ); CHECK_EQ( dheld.blue, 0.1f );
+	from = born;
+	Particle::fadeInFrom( &from, ParticleSystemInfo::ADDITIVE );
+	CHECK_EQ( from.color.red, 0.0f ); CHECK_EQ( from.color.green, 0.0f ); CHECK_EQ( from.color.blue, 0.0f );
+	Particle::tickBlend( from, aged, 0.5f, &out );
+	CHECK_NEAR( out.color.red, 0.5f, 0.0001f ); CHECK_NEAR( out.color.green, 0.3f, 0.0001f );
+
+	from = born;
+	Particle::fadeInFrom( &from, ParticleSystemInfo::MULTIPLY );
+	CHECK_EQ( from.color.blue, 1.0f );		// white multiplies by nothing
+	Particle::tickBlend( from, aged, 0.5f, &out );
+	CHECK_NEAR( out.color.blue, 0.6f, 0.0001f );
+
+	from = born;
+	Particle::fadeInFrom( &from, ParticleSystemInfo::ALPHA_TEST );
+	CHECK_EQ( from.alpha, 0.0f );
 }
 
 /* The alpha blended crossfade's two alphas: the frame under keeps the pair's coverage near the

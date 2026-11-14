@@ -843,7 +843,7 @@ void W3DWaypointBuffer::takeSelectionRings( void )
 		}
 		if( obj->isContained() || draw->isDrawableEffectivelyHidden() )
 			continue;
-		// a building wears its outline; an aircraft in the air has the altitude line's ring under it
+		// a building wears its outline; an aircraft in the air has the altitude line's diamond under it
 		if( obj->isKindOf( KINDOF_STRUCTURE ) || obj->isAirborneTarget() )
 			continue;
 		if( std::find( m_selectedNexus.begin(), m_selectedNexus.end(), obj->getProducerID() ) != m_selectedNexus.end() )

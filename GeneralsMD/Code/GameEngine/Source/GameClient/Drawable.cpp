@@ -3924,9 +3924,9 @@ void Drawable::drawAltitudeLine( void )
 		startY = topScreen.y + dy * ( trim / length );
 	}
 
-	// The owner's colour on the line, the ring and the disc inside it, so whose plane is over this
-	// spot reads from the ground as well as from the sky. Civilians and anything without a colour
-	// borrow the old white.
+	// The owner's colour on the line and the diamond at its foot, so whose plane is over this spot
+	// reads from the ground as well as from the sky. Civilians and anything without a colour borrow
+	// the old white.
 	UnsignedByte ownerR = 255, ownerG = 255, ownerB = 255;
 	const Player *owner = obj->getControllingPlayer();
 	if( owner != NULL && owner->getPlayerColor() != 0 )
@@ -3935,93 +3935,25 @@ void Drawable::drawAltitudeLine( void )
 		GameGetColorComponents( clientPlayerColor( owner ), &ownerR, &ownerG, &ownerB, &a );
 	}
 
-	//
-	// One pixel of the owner's colour inside three of near black, so it holds on snow and sand alike.
-	// Faint where it leaves the plane, firm where it meets the ground: the foot is the answer, the
-	// top is only where the question came from.
-	//
-	const Int SEGMENTS = 8;
+	// One even pixel of the owner's colour inside three of faint black, so it holds on snow and sand
+	// alike without weighing on the picture.
 	if( lineLength > 2.0f )
 	{
-		const Real sx = ( bottomScreen.x - startX ) / SEGMENTS, sy = ( bottomScreen.y - startY ) / SEGMENTS;
-		for( Int pass = 0; pass < 2; ++pass )
-		{
-			for( Int i = 0; i < SEGMENTS; ++i )
-			{
-				const Int step = i + 1;
-				const Color color = pass == 0
-					? GameMakeColor( 0, 0, 0, (UnsignedByte)( 20 + ( 120 - 20 ) * step / SEGMENTS ) )
-					: GameMakeColor( ownerR, ownerG, ownerB, (UnsignedByte)( 50 + ( 220 - 50 ) * step / SEGMENTS ) );
-				TheDisplay->drawLine( REAL_TO_INT( startX + sx * i ), REAL_TO_INT( startY + sy * i ),
-															REAL_TO_INT( startX + sx * step ), REAL_TO_INT( startY + sy * step ),
-															pass == 0 ? 3.0f : 1.0f, color );
-			}
-		}
+		TheDisplay->drawLine( REAL_TO_INT( startX ), REAL_TO_INT( startY ), bottomScreen.x, bottomScreen.y, 3.0f, GameMakeColor( 0, 0, 0, 80 ) );
+		TheDisplay->drawLine( REAL_TO_INT( startX ), REAL_TO_INT( startY ), bottomScreen.x, bottomScreen.y, 1.0f, GameMakeColor( ownerR, ownerG, ownerB, 150 ) );
 	}
 
-	//
-	// A ring lying on the ground at the foot. It is flat on the terrain, so the camera squashes it to
-	// an ellipse exactly as it does the ground: a faint disc of the owner's colour, then a two pixel
-	// ring of it inside a dark one a pixel wider on each side.
-	//
+	// A small diamond at the foot, a pixel of dark round it, flat on the screen whatever the camera.
 	if( !bottomOn )
 		return;
-
-	const Real ringRadius = MAX( 6.0f, MIN( 18.0f, obj->getGeometryInfo().getMajorRadius() * 0.6f ) );
-	const Int RING_POINTS = 20;
-	ICoord2D ring[ RING_POINTS ];
-	Bool ringOn[ RING_POINTS ];
-	Bool allOn = TRUE;
-	for( Int i = 0; i < RING_POINTS; ++i )
-	{
-		const Real angle = 2.0f * PI * i / RING_POINTS;
-		Coord3D p = bottom;
-		p.x += ringRadius * Cos( angle );
-		p.y += ringRadius * Sin( angle );
-		ringOn[ i ] = TheTacticalView->worldToScreen( &p, &ring[ i ] );
-		allOn = allOn && ringOn[ i ];
-	}
-
-	// the disc, one screen row at a time across the ellipse; it is convex, so each row is one span
-	if( allOn )
-	{
-		Int minY = ring[ 0 ].y, maxY = ring[ 0 ].y;
-		for( Int i = 1; i < RING_POINTS; ++i )
-		{
-			minY = MIN( minY, ring[ i ].y );
-			maxY = MAX( maxY, ring[ i ].y );
-		}
-		const Color discColor = GameMakeColor( ownerR, ownerG, ownerB, 45 );
-		for( Int y = minY; y <= maxY; ++y )
-		{
-			const Real rowY = y + 0.5f;
-			Real left = 1e9f, right = -1e9f;
-			for( Int i = 0; i < RING_POINTS; ++i )
-			{
-				const ICoord2D &a = ring[ i ];
-				const ICoord2D &b = ring[ ( i + 1 ) % RING_POINTS ];
-				if( a.y == b.y || rowY < MIN( a.y, b.y ) || rowY > MAX( a.y, b.y ) )
-					continue;
-				const Real x = a.x + ( rowY - a.y ) * ( b.x - a.x ) / (Real)( b.y - a.y );
-				left = MIN( left, x );
-				right = MAX( right, x );
-			}
-			if( right > left )
-				TheDisplay->drawFillRect( REAL_TO_INT( left ), y, REAL_TO_INT( right - left ), 1, discColor );
-		}
-	}
-
-	// a foot at the screen's edge keeps the part of its ring still on the screen
 	for( Int pass = 0; pass < 2; ++pass )
 	{
-		const Real width = pass == 0 ? 4.0f : 2.0f;
-		const Color color = pass == 0 ? GameMakeColor( 0, 0, 0, 150 ) : GameMakeColor( ownerR, ownerG, ownerB, 230 );
-		for( Int i = 0; i < RING_POINTS; ++i )
+		const Int h = pass == 0 ? 4 : 3;
+		const Color color = pass == 0 ? GameMakeColor( 0, 0, 0, 200 ) : GameMakeColor( ownerR, ownerG, ownerB, 255 );
+		for( Int dy = -h; dy <= h; ++dy )
 		{
-			const Int j = ( i + 1 ) % RING_POINTS;
-			if( !ringOn[ i ] || !ringOn[ j ] )
-				continue;
-			TheDisplay->drawLine( ring[ i ].x, ring[ i ].y, ring[ j ].x, ring[ j ].y, width, color );
+			const Int w = h - ( dy < 0 ? -dy : dy );
+			TheDisplay->drawFillRect( bottomScreen.x - w, bottomScreen.y + dy, 2 * w + 1, 1, color );
 		}
 	}
 }

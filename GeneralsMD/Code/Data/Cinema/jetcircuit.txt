@@ -1,0 +1,27 @@
+# The landing circuit after 2df28845 and f8df2e6b, over Scenarios/jetcircuit.txt on Golden Oasis.
+# Heading 15 over the American airfield (2520,3370): both runways run across the frame, landings
+# come in from the right (high x) and roll left, takeoffs roll right. The King Raptor comes
+# home from the west (the approach that used to go round twice) while the Raptor takes off from its
+# runway; the Stealth Fighter comes from the north onto the other runway; the Aurora takes off while
+# the Raptor flies its circuit and lands. A slow drift and a few degrees of turn keep it alive.
+#
+#   generals.exe -win -borderless -xres 1920 -yres 1080 -msaa 0 -quickstart -noshellmap -observer
+#     -multiInstance -map "Maps\Golden Oasis\Golden Oasis.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -scenario jetcircuit -cinema jetcircuit
+#     -video 780 2400 jetcircuit -wav 780 2400 jetcircuit -maxframes 2430
+#
+# Times are wall seconds (logic frame / 30).
+
+# 2700 3380 at 2.2 put the airfield and the circuit in the top third and empty scrub in the bottom
+# half (the airfield 40% down). Here y grows up the frame: 2750 3290 at 1.8 pushed the airfield to 20%
+# down. At 1.8 the frame is about 860 wide, its middle on the aim's x, and 1% of its height is about
+# 4.5 of y near the field. 2720 3420 at 1.8 had the airfield 38% down at the left edge, the circuit's
+# far turn (x 2990) 87% across, and the Strategy Center cut off. The aim's x is the frame's middle
+# column; at 2.0 the frame is about 890 wide and 1% of its height about 6.7 of y. 2700 3470 at 2.0
+# put the runways 60% down with the Strategy Center still on the left edge.
+1.0   cut     2670 3450 2.1 15 -6
+9.0   cut     2670 3450 2.1 15 -6
+26.0  move    2645 3445 34
+26.0  orbit   -6 34
+60.0  move    2670 3455 20
+60.0  orbit   5 20

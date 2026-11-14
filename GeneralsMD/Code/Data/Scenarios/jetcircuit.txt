@@ -1,0 +1,59 @@
+# Jets coming home to one American airfield on Golden Oasis, for the film of the landing circuit
+# after 2df28845 (one circuit, no second loop after the turn in) and f8df2e6b (a landing jet books
+# the runway only on its final, so a takeoff waits less). Four jets of four templates, so each can
+# be ordered on its own, fill the airfield's four spaces: two are spawned over the field at the start
+# and land to park, two come back from 900 out (one from the west, the approach that used to go
+# round twice, one from the north), and the parked two are sent off while the others fly their
+# circuits, then come back and land too. Crusaders drive the lane south of the field throughout.
+#
+#   generals.exe -win -borderless -xres 1920 -yres 1080 -msaa 0 -quickstart -noshellmap -observer
+#     -multiInstance -map "Maps\Golden Oasis\Golden Oasis.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7
+#     -scenario jetcircuit -cinema jetcircuit -video <first> <last> jetcircuit -wav <first> <last> jetcircuit
+#     -maxframes <last + 30>
+#
+# Frames count 30 a game second; at game speed 150 that is 45 to a wall second, so file 1380 is
+# logic frame 920, 30.7 s on the clock. Object ids on seed 7 (for -tracemove): Raptor 511, Aurora
+# 512, King Raptor 519, Stealth Fighter 520.
+
+# the base
+30    spawn      0  AmericaAirfield              1   2520 3370
+30    spawn      0  AmericaStrategyCenter        1   2320 3370
+30    spawn      0  AmericaPowerPlant            1   1950 3380
+30    spawn      0  AmericaPowerPlant            1   2192 3537
+30    spawn      0  AmericaPatriotBattery        1   2760 3240
+30    spawn      0  AmericaPatriotBattery        1   2760 3520
+
+# the two that park first: spawned over the field, idle, home in about ten seconds
+30    spawn      0  AmericaJetRaptor             1   2400 3150
+30    spawn      0  AmericaJetAurora             1   2650 3150
+
+# the King Raptor goes 900 west and comes back from the west
+900   spawn      0  AirF_AmericaJetRaptor        1   1800 3370
+901   move       0  AirF_AmericaJetRaptor            1620 3330
+
+# the Stealth Fighter goes 900 north and comes back from the north
+1050  spawn      0  AmericaJetStealthFighter     1   2520 2650
+1051  move       0  AmericaJetStealthFighter         2560 2470
+
+# takeoffs while the others are on their circuits. The Raptor rolls on runway 1 while the King Raptor
+# flies its circuit for that same runway. The Aurora waits for the Stealth Fighter to park: ordered at
+# 1680, it rolled head-on into the Stealth Fighter's final on runway 2 and the Stealth Fighter held
+# with a 300 degree loop at the turn in.
+1380  move       0  AmericaJetRaptor                 3300 2900
+2115  move       0  AmericaJetAurora                 3250 3800
+
+# traffic on the lane south of the field
+30    spawn      0  AmericaTankCrusader          3   2100 3470 45
+30    spawn      0  AmericaVehicleHumvee         2   2150 3500 45
+600   move       0  AmericaTankCrusader              2950 3480
+600   move       0  AmericaVehicleHumvee             2950 3510
+1500  move       0  AmericaTankCrusader              2050 3470
+1500  move       0  AmericaVehicleHumvee             2050 3500
+2400  move       0  AmericaTankCrusader              2950 3480
+2400  move       0  AmericaVehicleHumvee             2950 3510
+3150  move       0  AmericaTankCrusader              2050 3470
+3150  move       0  AmericaVehicleHumvee             2050 3500
+
+3600  tally      0  AmericaJet*
+3600  tally      0  AirF_AmericaJet*

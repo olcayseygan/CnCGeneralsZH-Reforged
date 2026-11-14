@@ -438,6 +438,15 @@ UnsignedInt Particle::getFlipbookFrame( void ) const
 }
 
 // ------------------------------------------------------------------------------------------------
+UnsignedInt Particle::getFlipbookBlend( UnsignedInt *next, Real *fraction ) const
+{
+	const ParticleSystemTemplate *flipbook = m_system->getTemplate();
+	return flipbookBlendAt( 1u << ( 2 * flipbook->getFlipbookGridLog2() ), flipbook->getFlipbookVariants(), m_flipbookVariant,
+		m_flipbookStart, m_lifetime - m_lifetimeLeft, m_lifetime, flipbook->getFlipbookRate(), GAME_SECONDS_PER_LOGICFRAME_REAL,
+		next, fraction );
+}
+
+// ------------------------------------------------------------------------------------------------
 /*static*/ UnsignedInt Particle::flipbookRunLength( UnsignedInt frames, UnsignedInt variants )
 {
 	return ( variants > 1 && variants <= frames ) ? frames / variants : frames;
@@ -450,18 +459,48 @@ UnsignedInt Particle::getFlipbookFrame( void ) const
 /*static*/ UnsignedInt Particle::flipbookFrameAt( UnsignedInt frames, UnsignedInt variants, UnsignedInt variant, UnsignedInt start,
 	UnsignedInt age, UnsignedInt lifetime, Real rate, Real secondsPerLogicFrame )
 {
+	UnsignedInt next;
+	Real fraction;
+	return flipbookBlendAt( frames, variants, variant, start, age, lifetime, rate, secondsPerLogicFrame, &next, &fraction );
+}
+
+// ------------------------------------------------------------------------------------------------
+/** The frame is the casts flipbookFrameAt always made, in the same order; the fraction is what those
+	* casts threw away. */
+// ------------------------------------------------------------------------------------------------
+/*static*/ UnsignedInt Particle::flipbookBlendAt( UnsignedInt frames, UnsignedInt variants, UnsignedInt variant, UnsignedInt start,
+	UnsignedInt age, UnsignedInt lifetime, Real rate, Real secondsPerLogicFrame, UnsignedInt *next, Real *fraction )
+{
 	const UnsignedInt run = flipbookRunLength( frames, variants );
 	const UnsignedInt base = ( variant < frames / run ? variant : 0 ) * run;
 	if (start >= run)
 		start = run - 1;
+	*fraction = 0.0f;
 	if (run == 1 || lifetime == 0)
+	{
+		*next = base + start;
 		return base + start;
+	}
 
 	if (rate > 0.0f)
-		return base + ( start + (UnsignedInt)( age * rate * secondsPerLogicFrame ) ) % run;
+	{
+		const Real played = age * rate * secondsPerLogicFrame;
+		const UnsignedInt whole = (UnsignedInt)played;
+		*fraction = played - (Real)whole;
+		*next = base + ( start + whole + 1 ) % run;
+		return base + ( start + whole ) % run;
+	}
 
-	const UnsignedInt frame = start + (UnsignedInt)( (Real)age / (Real)lifetime * (Real)( run - start ) );
-	return base + ( frame < run ? frame : run - 1 );
+	const Real played = (Real)age / (Real)lifetime * (Real)( run - start );
+	const UnsignedInt frame = start + (UnsignedInt)played;
+	if (frame >= run - 1)
+	{
+		*next = base + run - 1;
+		return base + run - 1;
+	}
+	*fraction = played - (Real)(UnsignedInt)played;
+	*next = base + frame + 1;
+	return base + frame;
 }
 
 // ------------------------------------------------------------------------------------------------

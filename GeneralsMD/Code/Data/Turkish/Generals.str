@@ -18348,6 +18348,46 @@ CONTROLBAR:TooltipTurkiyeRapidDeployment
 "Gökbey İndirmesi \n Geri Sayım: 3:00"
 END
 
+SCIENCE:TurkiyeAllyAid
+"Müttefik Desteği"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceAllyAid
+"Şu an üretebileceğin askerleri ve araçları seç, parasını öde, kargo uçakları getirsin. Bir müttefiği gösterirsen onun olarak iner. Bir uçak sekiz asker ya da iki araç taşır, uçak başına 500 fazladan, en çok dört uçak; vurulan uçağın yükü gider. \n \n Kullanıldığı yer: Karargah"
+END
+
+CONTROLBAR:TurkiyeAllyAid
+"&Müttefik Desteği"
+END
+
+CONTROLBAR:TooltipTurkiyeAllyAid
+"Müttefik Desteği \n Geri Sayım: 4:00"
+END
+
+GUI:AirliftTitle
+"Hava İkmali"
+END
+
+GUI:AirliftFor
+"%ls için"
+END
+
+GUI:AirliftPlanes
+"Uçak: %d / %d   Ücret: $%d"
+END
+
+GUI:AirliftTotal
+"Toplam: $%d"
+END
+
+GUI:AirliftOK
+"Tamam"
+END
+
+GUI:AirliftCancel
+"İptal"
+END
+
 SCIENCE:TurkiyeCommandoRaid
 "Komando Baskını"
 END

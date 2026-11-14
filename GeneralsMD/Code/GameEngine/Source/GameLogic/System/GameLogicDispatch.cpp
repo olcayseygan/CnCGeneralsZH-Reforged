@@ -130,6 +130,7 @@ static void considerBuilderProc( Object *obj, void *userData )
 	considerBuilder( obj, (BuilderPick *)userData );
 }
 #include "GameLogic/Module/BodyModule.h"
+#include "GameLogic/Module/OCLSpecialPower.h"
 #include "GameLogic/Module/OpenContain.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
@@ -2163,6 +2164,66 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 			break;
 
 		}  // end GameMessage::MSG_QUEUE_UNIT_FOR_GROUP
+
+		//---------------------------------------------------------------------------------------------
+		// An airlift power's load (fork): (Int special power ID, Location, ObjectID source, then Int
+		// template ID, Int count pairs) from its panel.  The arguments came over the network, so their
+		// shape is checked; the power checks the rest from logic state again, the science, the
+		// countdown, the factories and the money, as any other fire of a power does
+		// (OCLSpecialPower::doAirliftOrder).
+		case GameMessage::MSG_DO_AIRLIFT_ORDER:
+		{
+			const Int argCount = msg->getArgumentCount();
+			if( thisPlayer == NULL || argCount < 5 || ( argCount - 3 ) % 2 != 0 || argCount > 3 + 2 * 32
+					|| msg->getArgumentDataType( 0 ) != ARGUMENTDATATYPE_INTEGER
+					|| msg->getArgumentDataType( 1 ) != ARGUMENTDATATYPE_LOCATION
+					|| msg->getArgumentDataType( 2 ) != ARGUMENTDATATYPE_OBJECTID )
+				break;
+
+			const SpecialPowerTemplate *power = TheSpecialPowerStore->findSpecialPowerTemplateByID( msg->getArgument( 0 )->integer );
+			const Coord3D target = msg->getArgument( 1 )->location;
+			Object *source = TheGameLogic->findObjectByID( msg->getArgument( 2 )->objectID );
+			if( power == NULL || source == NULL || source->isEffectivelyDead() || source->getControllingPlayer() != thisPlayer )
+				break;
+			if( power->getRequiredScience() != SCIENCE_INVALID && !thisPlayer->hasScience( power->getRequiredScience() ) )
+				break;
+			OCLSpecialPower *airlift = OCLSpecialPower::findAirlift( source, power );
+			if( airlift == NULL || !TheActionManager->canDoSpecialPowerAtLocation( source, &target, CMD_FROM_PLAYER, power, NULL, 0 ) )
+			{
+				DEBUG_LOG(( "AIRLIFT: frame %u player %d order refused: no airlift, not ready, or no drop at (%.0f,%.0f)\n",
+										getFrame(), thisPlayer->getPlayerIndex(), target.x, target.y ));
+				break;
+			}
+
+			// one line a unit type, in the panel's order; a type named twice adds up
+			OCLSpecialPower::AirliftOrder order;
+			Bool shaped = TRUE;
+			for( Int a = 3; a + 1 < argCount && shaped; a += 2 )
+			{
+				shaped = msg->getArgumentDataType( a ) == ARGUMENTDATATYPE_INTEGER && msg->getArgumentDataType( a + 1 ) == ARGUMENTDATATYPE_INTEGER;
+				const ThingTemplate *thing = shaped ? TheThingFactory->findByTemplateID( msg->getArgument( a )->integer ) : NULL;
+				const Int count = shaped ? msg->getArgument( a + 1 )->integer : 0;
+				shaped = thing != NULL && count > 0 && count <= 1000;
+				if( !shaped )
+					break;
+				OCLSpecialPower::AirliftOrder::iterator same = order.begin();
+				while( same != order.end() && same->thing != thing )
+					++same;
+				if( same != order.end() )
+					same->count = min( same->count + count, 1000 );
+				else
+				{
+					OCLSpecialPower::AirliftLine line;
+					line.thing = thing;
+					line.count = count;
+					order.push_back( line );
+				}
+			}
+			if( shaped )
+				airlift->doAirliftOrder( &target, order );
+			break;
+
+		}  // end GameMessage::MSG_DO_AIRLIFT_ORDER
 
 		//-------------------------------------------------------------------------------------------------
 		case GameMessage::MSG_CANCEL_UNIT_CREATE:

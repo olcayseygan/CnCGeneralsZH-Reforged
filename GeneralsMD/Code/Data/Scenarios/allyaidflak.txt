@@ -1,0 +1,31 @@
+# Ally Aid flown over anti-air: the 2v2 of allyaid.txt, with eight Avengers of a Chinese seat on
+# the route. The flight leaves the map edge nearest Turkiye's start, (0,3188) on Twilight Flame, for
+# the American start at 1733,4455, and the Avengers stand at 1250,4100, short of the spot. The order
+# is 2 Altay, 2 Kirpi and 16 Mehmetcik, 32 slots, four planes, 7440 for the units and 2000 for the
+# planes. On seed 1 the two vehicle planes are shot down before their doors open: the "drops .. for
+# player" lines name only the sixteen soldiers, no Altay or Kirpi stands on any side at the end, and
+# the money stays at 560, since a downed plane's load is gone and nothing is paid back.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 4 -teams 2 -takeover
+#     -side 0 FactionTurkiye -side 1 FactionAmerica -side 2 FactionChina -side 3 FactionChina
+#     -seed 1 -maxframes 1800 -scenario allyaidflak -logPrefix allyaidflak_
+
+10    spawn      0  TurkiyePowerPlant               2   start0:-260:40    90
+10    spawn      0  TurkiyeBarracks                 1   start0:260:60
+10    spawn      0  TurkiyeWarFactory               1   start0:0:-320
+10    spawn      2  AmericaTankAvenger              8   1250 4100         40
+20    purchase   0  SCIENCE_TurkiyeAllyAid
+
+60    airlift    0  TurkiyeCommandCenter            start1:0:250  TurkiyeTankAltay:2,TurkiyeVehicleKirpi:2,TurkiyeInfantryMehmetcik:16
+
+100   tally      0  TurkiyeJetCargoPlane            4
+300   tally      0  TurkiyeJetCargoPlane
+520   tally      0  TurkiyeJetCargoPlane
+1700  tally      2  AmericaTankAvenger
+1700  tally      1  TurkiyeTankAltay                0
+1700  tally      1  TurkiyeVehicleKirpi             0
+1700  tally      1  TurkiyeInfantryMehmetcik        16
+1700  tally      0  TurkiyeTankAltay                0
+1700  tally      0  TurkiyeVehicleKirpi             0
+1700  tally      0  TurkiyeInfantryMehmetcik        0

@@ -876,6 +876,9 @@ Data/Patch.str
 Data/Russian/Generals.str
 Data/Scenarios/airbelow.txt
 Data/Scenarios/airbelowfar.txt
+Data/Scenarios/allyaid.txt
+Data/Scenarios/allyaidflak.txt
+Data/Scenarios/allyaidsolo.txt
 Data/Scenarios/alpagudive.txt
 Data/Scenarios/alphaaurora.txt
 Data/Scenarios/altstyles.txt

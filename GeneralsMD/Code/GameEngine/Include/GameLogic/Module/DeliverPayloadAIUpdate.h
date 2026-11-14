@@ -367,6 +367,10 @@ public:
 	void friend_setFreeToExit(Bool f) { m_freeToExit = f; }
 	void friend_setAcceptingCommands(Bool f) { m_acceptingCommands = f; }
 
+	/// an airlift's (OCLSpecialPower::doAirliftOrder): each item leaves the plane as this player's, -1 keeps the plane's owner
+	void setPayloadRecipient( Int playerIndex ) { m_payloadRecipient = playerIndex; }
+	Int getPayloadRecipient() const { return m_payloadRecipient; }
+
 protected:
 
 	virtual AIStateMachine* makeStateMachine();
@@ -381,6 +385,7 @@ protected:
 	Real													m_previousDistanceSqr;
 	Bool													m_freeToExit;
 	Bool													m_acceptingCommands;
+	Int														m_payloadRecipient;						///< player index the items go to as they drop, -1 for none
 
 	enum DiveState	// Stored in save file as int, don't renumber!  jba.
 	{

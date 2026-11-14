@@ -1,0 +1,32 @@
+# Ally Aid in a 2v2 on Twilight Flame: Turkiye in seat 0, its American ally in seat 1, two Chinese
+# seats across the map. Turkiye gets a barracks, a war factory and power, buys the science at frame 20
+# and orders at frame 60 on the ally's start: 2 Altay, 2 Kirpi and 8 Mehmetcik, which is 2 x 4 + 2 x 4
+# + 8 x 1 = 24 slots, three planes of 8. Read the AIRLIFT lines: the order's cost (5520 for the units
+# and 1500 for three planes), the money before and after, three "plane .. carries" lines and one
+# "drops .. for player" line a unit, all naming the American seat's player. Before it, at frame 50,
+# two orders that must be refused: nine Altay (36 slots, five planes) and a Sakarya, which is not on
+# the power's list. After it, at frame 70, a second order on the countdown, refused too. The tallies
+# at the end count the dropped units on seat 1's side and none on seat 0's.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 4 -teams 2 -takeover
+#     -side 0 FactionTurkiye -side 1 FactionAmerica -side 2 FactionChina -side 3 FactionChina
+#     -seed 1 -maxframes 1800 -scenario allyaid -logPrefix allyaid_
+
+10    spawn      0  TurkiyePowerPlant               2   start0:-260:40    90
+10    spawn      0  TurkiyeBarracks                 1   start0:260:60
+10    spawn      0  TurkiyeWarFactory               1   start0:0:-320
+20    purchase   0  SCIENCE_TurkiyeAllyAid
+
+50    airlift    0  TurkiyeCommandCenter            start1:0:250  TurkiyeTankAltay:9
+50    airlift    0  TurkiyeCommandCenter            start1:0:250  TurkiyeVehicleSakarya:1
+60    airlift    0  TurkiyeCommandCenter            start1:0:250  TurkiyeTankAltay:2,TurkiyeVehicleKirpi:2,TurkiyeInfantryMehmetcik:8
+70    airlift    0  TurkiyeCommandCenter            start1:0:250  TurkiyeInfantryMehmetcik:1
+
+100   tally      0  TurkiyeJetCargoPlane
+1700  tally      1  TurkiyeTankAltay                2
+1700  tally      1  TurkiyeVehicleKirpi             2
+1700  tally      1  TurkiyeInfantryMehmetcik        8
+1700  tally      0  TurkiyeTankAltay                0
+1700  tally      0  TurkiyeVehicleKirpi             0
+1700  tally      0  TurkiyeInfantryMehmetcik        0

@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2025-2026 by Olcay Seygan for Zero Hour Reforged; see the git history.
 
 ////////////////////////////////////////////////////////////////////////////////
 //																																						//
@@ -38,6 +39,8 @@
 
 // FORWARD REFERENCES /////////////////////////////////////////////////////////////////////////////
 class ObjectCreationList;
+class Player;
+class ThingTemplate;
 
 enum OCLCreateLocType
 {
@@ -72,9 +75,23 @@ public:
 	OCLCreateLocType					m_createLoc;
 	Bool											m_isOCLAdjustPositionToPassable; ///< Adjust target to nearest Passable cell
 
-	//We need to know what the final product is going to be for script placement calculations 
+	//We need to know what the final product is going to be for script placement calculations
 	//for construction sites like the sneak attack.
 	AsciiString				m_referenceThingName;
+
+	// An airlift (fork): with AirliftPlaneSlots above 0 the power is fired with a load the player picked
+	// (MSG_DO_AIRLIFT_ORDER, OCLSpecialPower::doAirliftOrder), not on its own.  The OCL is one plane
+	// with no payload; a flight of them carries the load, paid for at the units' price and a fee a plane
+	std::vector<AsciiString>	m_airliftUnits;					///< AirliftUnit: what the order may hold, in the order the panel lists it
+	Int												m_airliftPlaneSlots;		///< what one plane holds
+	Int												m_airliftInfantrySlots;	///< what a soldier takes of it
+	Int												m_airliftVehicleSlots;	///< what anything else takes
+	Int												m_airliftMaxPlanes;			///< the most planes one order may need
+	Int												m_airliftFeePerPlane;
+	Real											m_airliftAllyRadius;		///< an ally's unit or building this near the spot takes the load
+	Real											m_airliftSpacing;				///< how far apart the planes fly
+	AsciiString								m_airliftInfantryChute;
+	AsciiString								m_airliftVehicleChute;
 
 	OCLSpecialPowerModuleData( void );
 	static void buildFieldParse(MultiIniFieldParse& p);
@@ -100,6 +117,43 @@ public:
 
 	//If the special power launches a construction site, we need to know the final product for placement purposes.
 	virtual const ThingTemplate* getReferenceThingTemplate() const;
+
+	// ---- airlift (fork) --------------------------------------------------------------------------
+	// The panel (GameClient) and the order's handler (GameLogic) ask the same questions here, so what
+	// the panel greys and what the logic refuses cannot drift apart.
+
+	struct AirliftLine
+	{
+		const ThingTemplate *thing;
+		Int count;
+	};
+	typedef std::vector< AirliftLine > AirliftOrder;
+
+	enum AirliftCheck
+	{
+		AIRLIFT_OK,
+		AIRLIFT_EMPTY,							///< nothing ordered
+		AIRLIFT_NOT_BUILDABLE,			///< not on the power's list, or the player could not build it now: factory, prerequisite or cap
+		AIRLIFT_TOO_MANY_PLANES,
+		AIRLIFT_NO_MONEY
+	};
+
+	/// the airlift module on `obj` for this power, or NULL
+	static OCLSpecialPower *findAirlift( Object *obj, const SpecialPowerTemplate *power );
+
+	Bool isAirlift() const { return getOCLSpecialPowerModuleData()->m_airliftPlaneSlots > 0; }
+	const OCLSpecialPowerModuleData *getAirliftData() const { return getOCLSpecialPowerModuleData(); }
+	Int airliftSlotsOf( const ThingTemplate *thing ) const;
+	/// a working factory of the player's offers it and `count` more stay under its cap
+	Bool canAirlift( Player *player, const ThingTemplate *thing, Int count ) const;
+	/// planes, cost and what refuses the order; loads (may be NULL) gets each plane's units
+	AirliftCheck checkAirlift( Player *player, const AirliftOrder &order, Int *planes, Int *cost,
+														 std::vector< std::vector< const ThingTemplate * > > *loads ) const;
+	/// the ally who gets a load dropped at `loc`: the owner of the nearest unit or building of a player
+	/// allied both ways within AirliftAllyRadius, or the caster with none
+	Player *findAirliftRecipient( const Coord3D *loc ) const;
+	/// pay, start the countdown and send the planes; FALSE and nothing done when refused
+	Bool doAirliftOrder( const Coord3D *loc, const AirliftOrder &order );
 
 protected:
 

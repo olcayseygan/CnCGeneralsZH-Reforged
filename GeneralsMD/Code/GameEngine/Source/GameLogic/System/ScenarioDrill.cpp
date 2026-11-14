@@ -44,6 +44,7 @@
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BehaviorModule.h"
 #include "GameLogic/Module/CreateModule.h"
+#include "GameLogic/Module/OCLSpecialPower.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
@@ -269,6 +270,8 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_TOPUP;
 	else if (token == "handover")
 		*action = SCENARIO_ACTION_HANDOVER;
+	else if (token == "airlift")
+		*action = SCENARIO_ACTION_AIRLIFT;
 	else
 		return FALSE;
 
@@ -381,6 +384,7 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_ARRIVE:			return SCENARIO_TOKENS_ARRIVE;
 		case SCENARIO_ACTION_TOPUP:				return SCENARIO_TOKENS_MOVE;
 		case SCENARIO_ACTION_HANDOVER:		return SCENARIO_TOKENS_ATTACK;
+		case SCENARIO_ACTION_AIRLIFT:			return SCENARIO_TOKENS_ATTACK;
 	}
 	return SCENARIO_TOKENS_STOP;
 }
@@ -511,6 +515,18 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 				return SCENARIO_PARSE_MISSING_ARGS;
 			if (!parseWholeNumber( tokens[ next ], &action->targetSlot ))
 				return SCENARIO_PARSE_BAD_SLOT;
+			break;
+		}
+
+		case SCENARIO_ACTION_AIRLIFT:
+		{
+			Int next = SCENARIO_ORDER_POSITION_TOKEN;
+			const ScenarioParseResult position = parseScenarioPosition( tokens, count, &next, action );
+			if (position != SCENARIO_PARSE_OK)
+				return position;
+			if (next >= count)
+				return SCENARIO_PARSE_MISSING_ARGS;
+			action->name = tokens[ next ];	// the load, read when it runs
 			break;
 		}
 
@@ -2108,6 +2124,7 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 		case SCENARIO_ACTION_REACHPROOF:
 		case SCENARIO_ACTION_TOPUP:
 		case SCENARIO_ACTION_HANDOVER:
+		case SCENARIO_ACTION_AIRLIFT:
 			ordered = FALSE;		// handled before the group is built
 			break;
 	}
@@ -2230,6 +2247,58 @@ static Bool executeGiveMoney( const ScenarioAction &action, Player *player )
 	return TRUE;
 }
 
+/** The airlift panel's OK: one MSG_DO_AIRLIFT_ORDER for the airlift power the seat's first matching
+	  building carries, handed to the dispatcher as that seat's, so the order's own checks (science,
+	  countdown, factories, money) decide.  The load is <template>:<count> pairs split by commas. */
+static Bool executeAirlift( const ScenarioAction &action, Player *player, const Coord3D &point )
+{
+	Object *building = findFirstMatching( player, action.selector );
+	const SpecialPowerTemplate *power = NULL;
+	for( BehaviorModule **m = building ? building->getBehaviorModules() : NULL; m && *m && power == NULL; ++m )
+	{
+		SpecialPowerModuleInterface *sp = (*m)->getSpecialPower();
+		if (sp && OCLSpecialPower::findAirlift( building, sp->getSpecialPowerTemplate() ))
+			power = sp->getSpecialPowerTemplate();
+	}
+	if (power == NULL)
+	{
+		DEBUG_LOG(("SCENARIO: frame %d airlift: slot %d has no '%s' with an airlift power\n",
+							 action.frame, action.slot, action.selector.str()));
+		return FALSE;
+	}
+
+	GameMessage *msg = newInstance( GameMessage )( GameMessage::MSG_DO_AIRLIFT_ORDER );
+	msg->friend_setPlayerIndex( player->getPlayerIndex() );
+	msg->appendIntegerArgument( power->getID() );
+	msg->appendLocationArgument( point );
+	msg->appendObjectIDArgument( building->getID() );
+	Bool shaped = TRUE;
+	const char *at = action.name.str();
+	while (*at && shaped)
+	{
+		char name[ 128 ];
+		Int count = 0;
+		Int used = 0;
+		shaped = sscanf( at, "%127[^:]:%d%n", name, &count, &used ) == 2;
+		const ThingTemplate *thing = shaped ? TheThingFactory->findTemplate( AsciiString( name ) ) : NULL;
+		shaped = thing != NULL;
+		if (!shaped)
+			break;
+		msg->appendIntegerArgument( thing->getTemplateID() );
+		msg->appendIntegerArgument( count );
+		at += used;
+		if (*at == ',')
+			++at;
+	}
+	if (shaped)
+		TheGameLogic->logicMessageDispatcher( msg, NULL );
+	msg->deleteInstance();
+
+	DEBUG_LOG(("SCENARIO: frame %d airlift slot %d '%s' at (%.0f,%.0f) load '%s'%s\n", action.frame, action.slot,
+						 action.selector.str(), point.x, point.y, action.name.str(), shaped ? "" : ": unreadable"));
+	return shaped;
+}
+
 /** A building changing hands with nothing in between: setTeam, the call a capture, a hijack, a
 	  defeated player's tech buildings and a script's change of owner all end in, so the owner change
 	  runs Object::onCapture and every module's onCapture as a capture would.  Each upgrade module's
@@ -2347,6 +2416,9 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 
 	if (action.action == SCENARIO_ACTION_HANDOVER)
 		return executeHandover( action, player, position );
+
+	if (action.action == SCENARIO_ACTION_AIRLIFT)
+		return executeAirlift( action, player, position );
 
 	if (action.action == SCENARIO_ACTION_CONSTRUCT || action.action == SCENARIO_ACTION_SHIFTCONSTRUCT)
 		return executeConstruct( action, player, position );

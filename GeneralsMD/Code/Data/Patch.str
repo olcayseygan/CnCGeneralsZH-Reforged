@@ -3778,6 +3778,46 @@ CONTROLBAR:TooltipTurkiyeRapidDeployment
 "Gokbey Landing \n Recharge: 3:00"
 END
 
+SCIENCE:TurkiyeAllyAid
+"Ally Aid"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceAllyAid
+"Pick soldiers and vehicles you could build right now, pay for them and cargo planes fly them in. Point at an ally and they land as his. A plane carries eight soldiers or two vehicles for 500 more, four planes at most, and a plane shot down loses its load. \n \n Deploy from: Headquarters"
+END
+
+CONTROLBAR:TurkiyeAllyAid
+"&Ally Aid"
+END
+
+CONTROLBAR:TooltipTurkiyeAllyAid
+"Ally Aid \n Recharge: 4:00"
+END
+
+GUI:AirliftTitle
+"Airlift"
+END
+
+GUI:AirliftFor
+"for %ls"
+END
+
+GUI:AirliftPlanes
+"Planes: %d of %d   Fee: $%d"
+END
+
+GUI:AirliftTotal
+"Total: $%d"
+END
+
+GUI:AirliftOK
+"OK"
+END
+
+GUI:AirliftCancel
+"Cancel"
+END
+
 SCIENCE:TurkiyeCommandoRaid
 "Commando Raid"
 END

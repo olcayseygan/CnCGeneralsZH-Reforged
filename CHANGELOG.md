@@ -8,6 +8,13 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Ally Aid: fly your teammate an army
+
+- Turkiye has a new rank 3 general's power, Ally Aid, in the promotion window beside Gokbey Landing, on the Headquarters and on the powers tray. Aim it at the ground and a small panel opens where you clicked. Pick how many of each soldier and vehicle you want and press OK; the panel adds up the planes and the bill as you go. Cargo planes take off together from your edge of the map and drop the lot under parachutes, Altay tanks included.
+- You pay the units' own price and 500 a plane, and the money goes when you press OK. A plane carries eight soldiers or two vehicles, one order flies four planes at most, and a unit you could not build right now, for want of its factory or a prerequisite, is greyed out, so the power skips nothing in your tech tree.
+- Aim at or near an ally's units or buildings and everything lands as his, in his colour and under his orders. Anywhere else, or in a game with no ally, it lands for you. Four minutes pass between drops, which keeps a player from pouring his whole economy into a teammate.
+- The planes can be shot down, and a plane lost on the way takes its whole load with it, with nothing paid back. In a test with eight Avengers under the route, both vehicle planes of a four-plane order went down with their two Altays and two Kirpis, and only the sixteen soldiers landed.
+
 ## Gold tanks for 1K
 
 - The game can draw skins your zerohour.gg account owns. The first three are 1K gold: the Crusader, the Battlemaster and the Scorpion, every general's version but the Laser General's Crusader, damaged or not. You pick one skin per unit inside the game: sign in online and press Skins in the online menu, where each unit shows Default and every skin it has, the ones your account does not own greyed out, and Save puts your pick on your account. In an online room everyone in the match sees your tanks in gold, the replay too, with your team colour still on the trim. Classic Graphics has a gold set of its own, painted on the classic tanks, so the skins show whichever look you play. Looks only: the tanks fight exactly as before, and a player whose game lacks the gold sheets just sees the normal tank. Quick Match carries both players' skins too. A saved pick counts from your very next room or Quick Match, with no sign-in between, and a code you redeem on zerohour.gg while the game is open shows up the next time you open Skins. LAN and skirmish games never show a skin.

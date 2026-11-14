@@ -1,0 +1,23 @@
+# Ally Aid with no ally: a 1v1 on Twilight Flame, Turkiye against America. The order is aimed at
+# the enemy's own start, and the load lands for the caster: the AIRLIFT line names seat 0's player as
+# the one it is for and there is no "drops .. for player" line, since nothing changes hands. 1 Kirpi
+# and 4 Mehmetcik are 8 slots, one plane: 650 + 960 for the units and 500 for the plane. Aimed at
+# start0:500:500 instead, by Turkiye's own base, two of the four soldiers (all four when they flew in
+# a plane of their own) vanished with their chutes as they came down near 1007,3719; why is not known.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionTurkiye -side 1 FactionAmerica -seed 1 -maxframes 1800 -scenario allyaidsolo
+#     -logPrefix allyaidsolo_
+
+10    spawn      0  TurkiyePowerPlant               2   start0:-260:40    90
+10    spawn      0  TurkiyeBarracks                 1   start0:260:60
+10    spawn      0  TurkiyeWarFactory               1   start0:0:-320
+20    purchase   0  SCIENCE_TurkiyeAllyAid
+
+60    airlift    0  TurkiyeCommandCenter            start1:0:250  TurkiyeVehicleKirpi:1,TurkiyeInfantryMehmetcik:4
+
+1700  tally      0  TurkiyeVehicleKirpi             1
+1700  tally      0  TurkiyeInfantryMehmetcik        4
+1700  tally      1  TurkiyeVehicleKirpi             0
+1700  tally      1  TurkiyeInfantryMehmetcik        0

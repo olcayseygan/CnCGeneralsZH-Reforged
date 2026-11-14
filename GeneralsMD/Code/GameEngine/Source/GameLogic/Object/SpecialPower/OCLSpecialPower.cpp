@@ -31,15 +31,22 @@
 // USER INCLUDES //////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Common/BuildAssistant.h"
+#include "Common/NameKeyGenerator.h"
 #include "Common/Player.h"
 #include "Common/RandomValue.h"
 #include "Common/SpecialPower.h"
+#include "Common/Team.h"
 #include "Common/ThingFactory.h"
+#include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
+#include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/ObjectCreationList.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/TerrainLogic.h"
+#include "GameLogic/Module/ContainModule.h"
+#include "GameLogic/Module/DeliverPayloadAIUpdate.h"
 #include "GameLogic/Module/OCLSpecialPower.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -77,6 +84,13 @@ OCLSpecialPowerModuleData::OCLSpecialPowerModuleData( void )
 	m_upgradeOCL.clear();
 	m_createLoc = CREATE_AT_EDGE_NEAR_SOURCE;
 	m_isOCLAdjustPositionToPassable = FALSE;
+	m_airliftPlaneSlots = 0;
+	m_airliftInfantrySlots = 1;
+	m_airliftVehicleSlots = 4;
+	m_airliftMaxPlanes = 4;
+	m_airliftFeePerPlane = 0;
+	m_airliftAllyRadius = 200.0f;
+	m_airliftSpacing = 60.0f;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -113,6 +127,16 @@ static void parseOCLUpgradePair( INI* ini, void * /*instance*/, void *store, con
 		{ "CreateLocation", INI::parseIndexList, TheOCLCreateLocTypeNames, offsetof( OCLSpecialPowerModuleData, m_createLoc ) },
 		{ "ReferenceObject", INI::parseAsciiString, NULL, offsetof( OCLSpecialPowerModuleData, m_referenceThingName ) },
 		{ "OCLAdjustPositionToPassable", INI::parseBool, NULL, offsetof( OCLSpecialPowerModuleData, m_isOCLAdjustPositionToPassable ) },
+		{ "AirliftUnit", INI::parseAsciiStringVectorAppend, NULL, offsetof( OCLSpecialPowerModuleData, m_airliftUnits ) },
+		{ "AirliftPlaneSlots", INI::parseInt, NULL, offsetof( OCLSpecialPowerModuleData, m_airliftPlaneSlots ) },
+		{ "AirliftInfantrySlots", INI::parseInt, NULL, offsetof( OCLSpecialPowerModuleData, m_airliftInfantrySlots ) },
+		{ "AirliftVehicleSlots", INI::parseInt, NULL, offsetof( OCLSpecialPowerModuleData, m_airliftVehicleSlots ) },
+		{ "AirliftMaxPlanes", INI::parseInt, NULL, offsetof( OCLSpecialPowerModuleData, m_airliftMaxPlanes ) },
+		{ "AirliftFeePerPlane", INI::parseInt, NULL, offsetof( OCLSpecialPowerModuleData, m_airliftFeePerPlane ) },
+		{ "AirliftAllyRadius", INI::parseReal, NULL, offsetof( OCLSpecialPowerModuleData, m_airliftAllyRadius ) },
+		{ "AirliftSpacing", INI::parseReal, NULL, offsetof( OCLSpecialPowerModuleData, m_airliftSpacing ) },
+		{ "AirliftInfantryChute", INI::parseAsciiString, NULL, offsetof( OCLSpecialPowerModuleData, m_airliftInfantryChute ) },
+		{ "AirliftVehicleChute", INI::parseAsciiString, NULL, offsetof( OCLSpecialPowerModuleData, m_airliftVehicleChute ) },
 		{ 0, 0, 0, 0 }
 	};
 	p.add(dataFieldParse);
@@ -160,6 +184,14 @@ void OCLSpecialPower::doSpecialPowerAtLocation( const Coord3D *loc, Real angle, 
 	// sanity
 	if( loc == NULL )
 		return;
+
+	// an airlift flies only with a load the player picked (doAirliftOrder); a script's or the AI's
+	// plain fire would send empty planes and start the countdown for nothing
+	if( isAirlift() )
+	{
+		DEBUG_LOG(( "AIRLIFT: frame %u %s fired with no order, nothing sent\n", TheGameLogic->getFrame(), getPowerName().str() ));
+		return;
+	}
 
 	// get the module data
 	const OCLSpecialPowerModuleData *modData = getOCLSpecialPowerModuleData();
@@ -237,7 +269,7 @@ void OCLSpecialPower::doSpecialPowerAtObject( Object *obj, UnsignedInt commandOp
 // ------------------------------------------------------------------------------------------------
 void OCLSpecialPower::doSpecialPower( UnsignedInt commandOptions )
 {
-	if (isRefused())
+	if (isRefused() || isAirlift())
 		return;
 
 	Coord3D creationCoord;
@@ -248,6 +280,284 @@ void OCLSpecialPower::doSpecialPower( UnsignedInt commandOptions )
 
 	const ObjectCreationList* ocl = findOCL();
 	ObjectCreationList::create( ocl, getObject(), &creationCoord, &creationCoord, false );
+}
+
+// ------------------------------------------------------------------------------------------------
+// Airlift (fork): Turkiye's Ally Aid, and any power that sets AirliftPlaneSlots.  The player picks the
+// load in a panel (GameClient/AirliftPanel.cpp), the order comes as MSG_DO_AIRLIFT_ORDER and is
+// checked again here from logic state alone.  The planes are the OCL's, one each, flown in a line
+// abreast from the map edge nearest the caster; the load is made for the caster, since a transport
+// takes only its owner's units, and DeliverPayloadAIUpdate hands each chute to the recipient as it
+// leaves the plane.  A plane shot down takes its load with it (TransportContain destroys riders who
+// cannot get out), and nothing is refunded.
+// ------------------------------------------------------------------------------------------------
+OCLSpecialPower *OCLSpecialPower::findAirlift( Object *obj, const SpecialPowerTemplate *power )
+{
+	if( obj == NULL || power == NULL )
+		return NULL;
+
+	static const NameKeyType key_OCLSpecialPower = NAMEKEY( "OCLSpecialPower" );
+	for( BehaviorModule **m = obj->getBehaviorModules(); *m; ++m )
+	{
+		if( (*m)->getModuleNameKey() != key_OCLSpecialPower )
+			continue;
+		OCLSpecialPower *sp = (OCLSpecialPower *)( *m );
+		if( sp->isAirlift() && sp->getSpecialPowerTemplate() == power )
+			return sp;
+	}
+	return NULL;
+}
+
+// ------------------------------------------------------------------------------------------------
+Int OCLSpecialPower::airliftSlotsOf( const ThingTemplate *thing ) const
+{
+	const OCLSpecialPowerModuleData *d = getOCLSpecialPowerModuleData();
+	const Int slots = thing->isKindOf( KINDOF_INFANTRY ) ? d->m_airliftInfantrySlots : d->m_airliftVehicleSlots;
+	return max( 1, min( slots, d->m_airliftPlaneSlots ) );
+}
+
+// ------------------------------------------------------------------------------------------------
+struct AirliftFactorySearch
+{
+	const ThingTemplate *thing;
+	Bool found;
+};
+
+/// a finished, working factory whose bar offers the button; a full queue, no parking or too little
+/// money for one more do not matter to a plane
+static void findAirliftFactory( Object *obj, void *userData )
+{
+	AirliftFactorySearch *s = (AirliftFactorySearch *)userData;
+	if( s->found || obj->isEffectivelyDead() || obj->getProductionUpdateInterface() == NULL )
+		return;
+
+	const CanMakeType can = TheBuildAssistant->canMakeUnit( obj, s->thing );
+	if( can != CANMAKE_OK && can != CANMAKE_NO_MONEY && can != CANMAKE_QUEUE_FULL && can != CANMAKE_PARKING_PLACES_FULL )
+		return;
+	if( TheBuildAssistant->offersPlayerBuildButton( obj, s->thing ) )
+		s->found = TRUE;
+}
+
+Bool OCLSpecialPower::canAirlift( Player *player, const ThingTemplate *thing, Int count ) const
+{
+	if( player == NULL || thing == NULL || count <= 0 )
+		return FALSE;
+
+	const std::vector< AsciiString > &units = getOCLSpecialPowerModuleData()->m_airliftUnits;
+	Bool listed = FALSE;
+	for( std::vector< AsciiString >::const_iterator it = units.begin(); it != units.end() && !listed; ++it )
+		listed = ( thing->getName() == *it );
+	if( !listed || !player->canBuildMoreOfType( thing, count ) )
+		return FALSE;
+
+	AirliftFactorySearch search;
+	search.thing = thing;
+	search.found = FALSE;
+	player->iterateObjects( findAirliftFactory, &search );
+	return search.found;
+}
+
+// ------------------------------------------------------------------------------------------------
+OCLSpecialPower::AirliftCheck OCLSpecialPower::checkAirlift( Player *player, const AirliftOrder &order, Int *planes, Int *cost,
+																														 std::vector< std::vector< const ThingTemplate * > > *loads ) const
+{
+	const OCLSpecialPowerModuleData *d = getOCLSpecialPowerModuleData();
+	*planes = 0;
+	*cost = 0;
+	if( loads )
+		loads->clear();
+
+	// what it costs, and whether it fits at all before anything is packed
+	Int slots = 0;
+	for( AirliftOrder::const_iterator it = order.begin(); it != order.end(); ++it )
+	{
+		if( it->thing == NULL || it->count <= 0 )
+			return AIRLIFT_EMPTY;
+		if( !canAirlift( player, it->thing, it->count ) )
+			return AIRLIFT_NOT_BUILDABLE;
+		slots += airliftSlotsOf( it->thing ) * it->count;
+		if( slots > d->m_airliftPlaneSlots * d->m_airliftMaxPlanes )
+			return AIRLIFT_TOO_MANY_PLANES;
+		*cost += it->thing->calcCostToBuild( player ) * it->count;
+	}
+	if( slots == 0 )
+		return AIRLIFT_EMPTY;
+
+	// first fit, the vehicles first so the soldiers fill the room they leave, in the order's own order
+	std::vector< Int > room;
+	std::vector< std::vector< const ThingTemplate * > > packed;
+	for( Int pass = 0; pass < 2; ++pass )
+	{
+		for( AirliftOrder::const_iterator it = order.begin(); it != order.end(); ++it )
+		{
+			if( it->thing->isKindOf( KINDOF_INFANTRY ) != ( pass == 1 ) )
+				continue;
+			const Int each = airliftSlotsOf( it->thing );
+			for( Int n = 0; n < it->count; ++n )
+			{
+				size_t plane = 0;
+				while( plane < room.size() && room[ plane ] < each )
+					++plane;
+				if( plane == room.size() )
+				{
+					room.push_back( d->m_airliftPlaneSlots );
+					packed.push_back( std::vector< const ThingTemplate * >() );
+				}
+				room[ plane ] -= each;
+				packed[ plane ].push_back( it->thing );
+			}
+		}
+	}
+
+	*planes = (Int)room.size();
+	if( *planes > d->m_airliftMaxPlanes )
+		return AIRLIFT_TOO_MANY_PLANES;
+	*cost += *planes * d->m_airliftFeePerPlane;
+	if( loads )
+		loads->swap( packed );
+	if( (Int)player->getMoney()->countMoney() < *cost )
+		return AIRLIFT_NO_MONEY;
+	return AIRLIFT_OK;
+}
+
+// ------------------------------------------------------------------------------------------------
+Player *OCLSpecialPower::findAirliftRecipient( const Coord3D *loc ) const
+{
+	Player *caster = getObject()->getControllingPlayer();
+	PartitionFilterAlive alive;
+	PartitionFilter *filters[] = { &alive, NULL };
+	SimpleObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( loc, getOCLSpecialPowerModuleData()->m_airliftAllyRadius,
+																																					 FROM_BOUNDINGSPHERE_2D, filters, ITER_SORTED_NEAR_TO_FAR );
+	MemoryPoolObjectHolder hold( iter );
+	for( Object *other = iter->first(); other; other = iter->next() )
+	{
+		Player *owner = other->getControllingPlayer();
+		if( owner == NULL || owner == caster || !owner->isPlayableSide() || !owner->isPlayerActive() )
+			continue;
+		if( caster->getRelationship( owner->getDefaultTeam() ) != ALLIES || owner->getRelationship( caster->getDefaultTeam() ) != ALLIES )
+			continue;
+		return owner;
+	}
+	return caster;
+}
+
+// ------------------------------------------------------------------------------------------------
+Bool OCLSpecialPower::doAirliftOrder( const Coord3D *loc, const AirliftOrder &order )
+{
+	const OCLSpecialPowerModuleData *d = getOCLSpecialPowerModuleData();
+	Object *me = getObject();
+	Player *player = me->getControllingPlayer();
+	if( !isAirlift() || isRefused() || me->isDisabled() || loc == NULL || player == NULL )
+		return FALSE;
+
+	Int planes = 0, cost = 0;
+	std::vector< std::vector< const ThingTemplate * > > loads;
+	const AirliftCheck check = checkAirlift( player, order, &planes, &cost, &loads );
+	if( check != AIRLIFT_OK )
+	{
+		static const char *const WHY[] = { "ok", "nothing ordered", "a unit not on the list or not buildable now", "too many planes", "too little money" };
+		DEBUG_LOG(( "AIRLIFT: frame %u player %d order refused: %s, %d planes, cost %d, money %u\n", TheGameLogic->getFrame(),
+								player->getPlayerIndex(), WHY[ check ], planes, cost, player->getMoney()->countMoney() ));
+		return FALSE;
+	}
+
+	Coord3D spot = *loc;
+	if( d->m_isOCLAdjustPositionToPassable )
+	{
+		FindPositionOptions fpOptions;
+		fpOptions.flags = FPF_CLEAR_CELLS_ONLY;
+		fpOptions.maxRadius = MAX_ADJUST_RADIUS;
+		if( !ThePartitionManager->findPositionAround( loc, &fpOptions, &spot ) )
+			spot = *loc;
+	}
+
+	Player *recipient = findAirliftRecipient( loc );
+	const UnsignedInt before = player->getMoney()->countMoney();
+	player->getMoney()->withdraw( (UnsignedInt)cost );
+
+	// the base call starts the countdown, the sounds and the radar event
+	SpecialPowerModule::doSpecialPowerAtLocation( &spot, INVALID_ANGLE, 0 );
+
+	DEBUG_LOG(( "AIRLIFT: frame %u player %d sends %d planes to (%.0f,%.0f) for player %d, cost %d (fee %d), money %u -> %u\n",
+							TheGameLogic->getFrame(), player->getPlayerIndex(), planes, spot.x, spot.y, recipient->getPlayerIndex(),
+							cost, planes * d->m_airliftFeePerPlane, before, player->getMoney()->countMoney() ));
+
+	// in a line abreast, square to the line from the edge to the spot: 0, then one each side, then two
+	const ObjectCreationList *ocl = findOCL();
+	const Coord3D edge = TheTerrainLogic->findClosestEdgePoint( me->getPosition() );
+	Real dx = spot.x - edge.x, dy = spot.y - edge.y;
+	Real length = sqrt( dx * dx + dy * dy );
+	if( length < 1.0f )
+	{
+		dx = 1.0f;
+		dy = 0.0f;
+		length = 1.0f;
+	}
+	const Real acrossX = -dy / length, acrossY = dx / length;
+	const ThingTemplate *infantryChute = TheThingFactory->findTemplate( d->m_airliftInfantryChute );
+	const ThingTemplate *vehicleChute = TheThingFactory->findTemplate( d->m_airliftVehicleChute );
+	Team *team = player->getDefaultTeam();
+	static const NameKeyType key_DeliverPayloadAIUpdate = NAMEKEY( "DeliverPayloadAIUpdate" );
+
+	for( Int i = 0; i < planes; ++i )
+	{
+		const Real side = (Real)( ( i + 1 ) / 2 ) * ( ( i % 2 ) ? 1.0f : -1.0f ) * d->m_airliftSpacing;
+		Coord3D start = edge, target = spot;
+		start.x += acrossX * side;
+		start.y += acrossY * side;
+		target.x += acrossX * side;
+		target.y += acrossY * side;
+
+		Object *plane = ObjectCreationList::create( ocl, me, &start, &target, INVALID_ANGLE );
+		ContainModuleInterface *hold = plane ? plane->getContain() : NULL;
+		if( hold == NULL )
+		{
+			DEBUG_LOG(( "AIRLIFT: plane %d was not made, its load is lost\n", i ));
+			continue;
+		}
+		DeliverPayloadAIUpdate *ai = (DeliverPayloadAIUpdate *)plane->findUpdateModule( key_DeliverPayloadAIUpdate );
+		if( ai && recipient != player )
+			ai->setPayloadRecipient( recipient->getPlayerIndex() );
+
+		Int carried = 0;
+		for( std::vector< const ThingTemplate * >::const_iterator it = loads[ i ].begin(); it != loads[ i ].end(); ++it )
+		{
+			Object *unit = TheThingFactory->newObject( *it, team );
+			unit->setPosition( plane->getPosition() );
+			unit->setProducer( plane );
+			Object *payload = unit;
+
+			const ThingTemplate *chuteTmpl = (*it)->isKindOf( KINDOF_INFANTRY ) ? infantryChute : vehicleChute;
+			if( chuteTmpl )
+			{
+				Object *chute = TheThingFactory->newObject( chuteTmpl, team );
+				chute->setPosition( plane->getPosition() );
+				chute->setProducer( plane );
+				if( chute->getContain() && chute->getContain()->isValidContainerFor( unit, true ) )
+				{
+					chute->getContain()->addToContain( unit );
+					payload = chute;
+				}
+				else
+					TheGameLogic->destroyObject( chute );
+			}
+
+			if( hold->isValidContainerFor( payload, true ) )
+			{
+				hold->addToContain( payload );
+				++carried;
+			}
+			else
+			{
+				DEBUG_LOG(( "AIRLIFT: plane %u cannot carry '%s'\n", plane->getID(), (*it)->getName().str() ));
+				if( payload != unit )
+					TheGameLogic->destroyObject( payload );
+				TheGameLogic->destroyObject( unit );
+			}
+		}
+		DEBUG_LOG(( "AIRLIFT: plane %d id %u carries %d units\n", i, plane->getID(), carried ));
+	}
+	return TRUE;
 }
 
 // ------------------------------------------------------------------------------------------------

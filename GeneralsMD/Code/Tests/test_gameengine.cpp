@@ -1766,53 +1766,6 @@ TEST(particle_newborn_fades_in_and_short_flashes_still_show)
 	CHECK_EQ( a.color.blue, 1.0f );		// white multiplies by nothing
 }
 
-/* An explosion's light pulse, told by the pulse alone, reaches 1.8 times as far, glows 1.35 times as
-	 hot up to a brightest channel of 1 with its hue kept, and fades 1.3 times as long; muzzle flashes,
-	 small arms, white flash-bangs and coloured glows are left as they are. */
-TEST(explosion_light_reaches_wider_and_hotter)
-{
-	RGBColor shell; shell.red = 1.0f; shell.green = 150.0f / 255.0f; shell.blue = 70.0f / 255.0f;
-	RGBColor muzzle; muzzle.red = 1.0f; muzzle.green = 1.0f; muzzle.blue = 128.0f / 255.0f;
-	RGBColor white; white.red = white.green = white.blue = 1.0f;
-	RGBColor neutron; neutron.red = 110.0f / 255.0f; neutron.green = 130.0f / 255.0f; neutron.blue = 1.0f;
-	RGBColor building; building.red = 200.0f / 255.0f; building.green = 98.0f / 255.0f; building.blue = 35.0f / 255.0f;
-
-	CHECK( FXList::isExplosionLight( shell, 85.0f ) );				// a tank shell, a tank's death
-	CHECK( FXList::isExplosionLight( building, 200.0f ) );			// a large building's death
-	CHECK( FXList::isExplosionLight( shell, 70.0f ) );
-	CHECK( !FXList::isExplosionLight( shell, 30.0f ) );				// napalm's small glow
-	CHECK( !FXList::isExplosionLight( muzzle, 35.0f ) );			// a tank gun's flash
-	CHECK( !FXList::isExplosionLight( muzzle, 85.0f ) );			// yellow-white is no blast's
-	CHECK( !FXList::isExplosionLight( white, 100.0f ) );			// flash-bang, garrison hits
-	CHECK( !FXList::isExplosionLight( neutron, 85.0f ) );
-
-	RGBColor c = shell;
-	Real radius = 85.0f;
-	UnsignedInt decrease = 40;
-	CHECK( FXList::boostExplosionLight( &c, &radius, &decrease ) );
-	CHECK_NEAR( radius, 153.0f, 0.001f );
-	CHECK_EQ( decrease, 52u );
-	CHECK_NEAR( c.red, 1.0f, 0.0001f );								// already full: held at 1
-	CHECK_NEAR( c.green / c.red, shell.green / shell.red, 0.0001f );	// the hue kept
-	CHECK_NEAR( c.blue / c.red, shell.blue / shell.red, 0.0001f );
-
-	RGBColor b = building;
-	radius = 200.0f;
-	decrease = 80;
-	CHECK( FXList::boostExplosionLight( &b, &radius, &decrease ) );
-	CHECK_NEAR( b.red, 1.0f, 0.0001f );								// a dimmer one brightens to full
-	CHECK( b.green > building.green );
-	CHECK_NEAR( b.green / b.red, building.green / building.red, 0.0001f );
-	CHECK_NEAR( radius, 360.0f, 0.001f );
-	CHECK_EQ( decrease, 104u );
-
-	RGBColor m = muzzle;
-	radius = 35.0f;
-	decrease = 50;
-	CHECK( !FXList::boostExplosionLight( &m, &radius, &decrease ) );
-	CHECK_EQ( radius, 35.0f ); CHECK_EQ( decrease, 50u ); CHECK_EQ( m.blue, muzzle.blue );
-}
-
 /* A dying ground vehicle's light pulse is held to a warm glow: EA's 255,150,70 keeps its hue at a
 	 brightest channel of 0.45, and a light already that dim is left alone. */
 TEST(death_light_keeps_its_hue_under_the_cap)

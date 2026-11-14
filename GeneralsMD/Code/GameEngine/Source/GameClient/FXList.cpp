@@ -163,37 +163,6 @@ void FXObjectView::take( const Object *obj )
 	* on: an Overlord or a nuke cannon plays about half again as big, a Humvee four fifths, a bike or a
 	* drone the floor.  The square root, since the blast's size is a length and the hull's an area. */
 /*static*/ const Real FXList::DEATH_LIGHT_BRIGHTEST = 0.45f;
-/*static*/ const Real FXList::EXPLOSION_LIGHT_MIN_RADIUS = 70.0f;
-/*static*/ const Real FXList::EXPLOSION_LIGHT_REACH = 1.8f;
-/*static*/ const Real FXList::EXPLOSION_LIGHT_GAIN = 1.35f;
-/*static*/ const Real FXList::EXPLOSION_LIGHT_LINGER = 1.3f;
-
-/*static*/ Bool FXList::isExplosionLight(const RGBColor &color, Real radius)
-{
-	return radius >= EXPLOSION_LIGHT_MIN_RADIUS && color.red >= 0.75f
-		&& color.green <= 0.85f * color.red && color.blue <= 0.4f * color.red;
-}
-
-/*static*/ Bool FXList::boostExplosionLight(RGBColor *color, Real *radius, UnsignedInt *decreaseFrames)
-{
-	if (!isExplosionLight(*color, *radius))
-		return FALSE;
-	*radius *= EXPLOSION_LIGHT_REACH;
-	*decreaseFrames = (UnsignedInt)((Real)*decreaseFrames * EXPLOSION_LIGHT_LINGER + 0.5f);
-	color->red *= EXPLOSION_LIGHT_GAIN;
-	color->green *= EXPLOSION_LIGHT_GAIN;
-	color->blue *= EXPLOSION_LIGHT_GAIN;
-	// up to white's brightest channel and no further, the hue kept
-	const Real brightest = color->red > color->green ? (color->red > color->blue ? color->red : color->blue)
-		: (color->green > color->blue ? color->green : color->blue);
-	if (brightest > 1.0f)
-	{
-		color->red /= brightest;
-		color->green /= brightest;
-		color->blue /= brightest;
-	}
-	return TRUE;
-}
 
 /*static*/ RGBColor FXList::deathLightColor(const RGBColor &color)
 {
@@ -516,16 +485,11 @@ public:
 			if (m_boundingCirclePct > 0)
 				radius = (primary->boundingCircleRadius * m_boundingCirclePct);
 
-			if (!TheGlobalData->m_classicGraphics)
+			// the Reforged look holds a dying ground vehicle's light to a warm glow (FXList::deathLightColor)
+			if (primary->dyingGroundVehicle && !TheGlobalData->m_classicGraphics)
 			{
-				// the Reforged look: an explosion lights wider, hotter and longer (FXList::boostExplosionLight),
-				// and a dying ground vehicle's light is held to a warm glow (FXList::deathLightColor)
-				RGBColor color = m_color;
-				UnsignedInt decrease = m_decreaseFrames;
-				FXList::boostExplosionLight(&color, &radius, &decrease);
-				if (primary->dyingGroundVehicle)
-					color = FXList::deathLightColor(color);
-				TheDisplay->createLightPulse(&primary->position, &color, 1, radius, m_increaseFrames, decrease);
+				const RGBColor held = FXList::deathLightColor(m_color);
+				TheDisplay->createLightPulse(&primary->position, &held, 1, radius, m_increaseFrames, m_decreaseFrames);
 				return;
 			}
 			TheDisplay->createLightPulse(&primary->position, &m_color, 1, radius, m_increaseFrames, m_decreaseFrames);
@@ -540,15 +504,6 @@ public:
 	{
 		if (primary)
 		{
-			if (!TheGlobalData->m_classicGraphics)
-			{
-				RGBColor color = m_color;
-				Real radius = m_radius;
-				UnsignedInt decrease = m_decreaseFrames;
-				FXList::boostExplosionLight(&color, &radius, &decrease);
-				TheDisplay->createLightPulse(primary, &color, 1, radius, m_increaseFrames, decrease);
-				return;
-			}
 			TheDisplay->createLightPulse(primary, &m_color, 1, m_radius, m_increaseFrames, m_decreaseFrames);
 		}
 		else

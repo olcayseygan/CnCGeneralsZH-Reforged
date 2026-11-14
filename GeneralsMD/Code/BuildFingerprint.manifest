@@ -5324,7 +5324,6 @@ Tools/matchbot/wnet/tcp.cpp
 Tools/matchbot/wnet/tcp.h
 Tools/matchbot/wnet/udp.cpp
 Tools/matchbot/wnet/udp.h
-Tools/muzzle_flipbook.py
 Tools/net-check.sh
 Tools/net_check.py
 Tools/online-libs.ps1

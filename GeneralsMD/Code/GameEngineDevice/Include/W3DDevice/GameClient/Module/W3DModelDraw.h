@@ -506,6 +506,7 @@ private:
 		RecoilState			m_state;											///< what state this gun is in
 		Real						m_shift;											///< how far the gun barrel has recoiled
 		Real						m_recoilRate;									///< how fast the gun barrel is recoiling
+		Bool						m_flashMeshOff;								///< the last shot's flash mesh stays hidden (a tank cannon under the Reforged look)
 
 		WeaponRecoilInfo()
 		{
@@ -517,6 +518,7 @@ private:
 			m_state = IDLE;
 			m_shift = 0.0f;
 			m_recoilRate = 0.0f;
+			m_flashMeshOff = false;
 		}
 	}; 
 

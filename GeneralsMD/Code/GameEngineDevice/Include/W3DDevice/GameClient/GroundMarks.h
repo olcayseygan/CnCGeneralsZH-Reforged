@@ -136,6 +136,16 @@ enum {
 
 typedef RingOf<BURN_CAPACITY> BurnRing;
 
+/// The smallest blast that burns the ground, and the same one that lights flames on it.  A tank shell
+/// or a rocket (radius 10 to 12) used to leave a glowing patch too, and a fight round one Overlord
+/// paved the ground under its barrels with orange ash; a vehicle's death (15) and a bomb still burn.
+static const float BURN_FROM_RADIUS = 15.0f;
+
+inline bool burnsGround(float radius)
+{
+	return radius >= BURN_FROM_RADIUS;
+}
+
 /// How hot a patch's cracks are at an age in logic frames, 1 to 0, cooling fast at first.
 inline float burnHeat(unsigned int age)
 {

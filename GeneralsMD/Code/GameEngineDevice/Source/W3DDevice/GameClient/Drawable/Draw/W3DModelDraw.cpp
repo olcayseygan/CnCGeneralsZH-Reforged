@@ -3288,7 +3288,7 @@ void W3DModelDraw::handleClientRecoil()
 		{
 			if (barrels[i].m_muzzleFlashBone != 0)
 			{
-				Bool hidden = recoils[i].m_state != WeaponRecoilInfo::RECOIL_START;
+				Bool hidden = recoils[i].m_state != WeaponRecoilInfo::RECOIL_START || recoils[i].m_flashMeshOff;
 				//DEBUG_LOG(("adjust muzzleflash %08lx for Draw %08lx state %s to %d at frame %d\n",subObjToHide,this,m_curState->m_description.str(),hidden?1:0,TheGameLogic->getFrame()));
 				barrels[i].setMuzzleFlashHidden(m_renderObject, hidden);
 			}
@@ -4804,7 +4804,11 @@ Bool W3DModelDraw::handleWeaponFireFX(WeaponSlotType wslot, Int specificBarrelTo
 		WeaponRecoilInfo& recoil = m_weaponRecoilInfoVec[wslot][specificBarrelToUse];
 		recoil.m_state = WeaponRecoilInfo::RECOIL_START;
 		recoil.m_recoilRate = getW3DModelDrawModuleData()->m_initialRecoil;
-		if (info.m_muzzleFlashBone != 0)
+		// A tank cannon's flame is the Reforged look's particle jet (its FXList's bigger flame and flare),
+		// and EA's flash mesh, a fat yellow card on the TURRETFX bone, covered it for the first frames.
+		// Machine guns, infantry and everything else keep their mesh, and Classic keeps every one.
+		recoil.m_flashMeshOff = fxl != NULL && fxl->isTankGun() && !TheGlobalData->m_classicGraphics;
+		if (info.m_muzzleFlashBone != 0 && !recoil.m_flashMeshOff)
 			info.setMuzzleFlashHidden(m_renderObject, false);
 	}
 

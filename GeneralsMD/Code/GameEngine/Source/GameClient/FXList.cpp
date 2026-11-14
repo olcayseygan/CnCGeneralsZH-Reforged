@@ -1045,7 +1045,7 @@ static const FieldParse TheFXListFieldParse[] =
 };
 
 //-------------------------------------------------------------------------------------------------
-FXList::FXList() : m_markRadius(0.0f), m_splashRadius(0.0f)
+FXList::FXList() : m_markRadius(0.0f), m_splashRadius(0.0f), m_tankGun(FALSE)
 {
 }
 
@@ -1066,6 +1066,7 @@ void FXList::clear()
 	m_nuggets.clear();
 	m_markRadius = 0.0f;
 	m_splashRadius = 0.0f;
+	m_tankGun = FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1098,6 +1099,8 @@ void FXList::noteBlastByName(const char *name)
 	}
 	m_markRadius = burns && !scorches ? radius : 0.0f;
 	m_splashRadius = isBlast || scorches ? radius : 0.0f;
+	// Every tank cannon fires one of EA's four TankGunNoTracer lists (W3DModelDraw hides its flash mesh)
+	m_tankGun = strstr(name, "TankGunNoTracer") != NULL;
 }
 
 //-------------------------------------------------------------------------------------------------

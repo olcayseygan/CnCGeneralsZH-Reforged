@@ -4538,6 +4538,8 @@ void W3DView::addScreenDistortion( const Coord3D *epicenter, const ScreenDistort
 	added.m_epicenter = *epicenter;
 	added.m_startFrame = now;
 	added.m_info = info;
+	if (!TheGlobalData->m_classicGraphics)
+		added.m_info.tameSmallBlast();
 }
 
 static const Real MAX_DISTORTION_SCREEN_RADIUS = 0.35f;	///< fraction of the screen's height

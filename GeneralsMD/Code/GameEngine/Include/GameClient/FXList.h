@@ -180,13 +180,18 @@ public:
 		m_nuggets.swap(that.m_nuggets);
 		std::swap(m_markRadius, that.m_markRadius);
 		std::swap(m_splashRadius, that.m_splashRadius);
+		std::swap(m_tankGun, that.m_tankGun);
 	}
 
 	/// Battle Marks and Water Splashes: told the list's name once it is parsed, decides whether it is a blast on the ground.
+	/// It also notes whether the list is a tank cannon's firing.
 	void noteBlastByName(const char *name);
 
 	/// How wide this list splashes in water under Water Splashes, 0 for not at all.
 	Real getSplashRadius() const { return m_splashRadius; }
+
+	/// A tank cannon's firing (EA's four TankGunNoTracer lists), whose flame the Reforged look draws as particles.
+	Bool isTankGun() const { return m_tankGun; }
 
 	/// The ground dust a vehicle's death blast throws up off a terrain tile (TerrainType's name and
 	/// TerrainClass): one of the four ReforgedDeathDust systems, dirt when nothing says otherwise.
@@ -243,6 +248,7 @@ private:
 	FXNuggetList m_nuggets;
 	Real m_markRadius;	///< the burn this list leaves on the ground under Battle Marks, 0 for none
 	Real m_splashRadius;	///< how wide it splashes in water under Water Splashes, 0 for not at all
+	Bool m_tankGun;				///< a tank cannon's firing, by name
 
 };  
 

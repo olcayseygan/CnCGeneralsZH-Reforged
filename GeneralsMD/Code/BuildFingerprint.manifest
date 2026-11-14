@@ -2834,7 +2834,6 @@ GameEngineDevice/Include/W3DDevice/Common/W3DModuleFactory.h
 GameEngineDevice/Include/W3DDevice/Common/W3DRadar.h
 GameEngineDevice/Include/W3DDevice/Common/W3DThingFactory.h
 GameEngineDevice/Include/W3DDevice/GameClient/BaseHeightMap.h
-GameEngineDevice/Include/W3DDevice/GameClient/DebrisChunks.h
 GameEngineDevice/Include/W3DDevice/GameClient/FireLights.h
 GameEngineDevice/Include/W3DDevice/GameClient/FlatHeightMap.h
 GameEngineDevice/Include/W3DDevice/GameClient/GpuParticles.h

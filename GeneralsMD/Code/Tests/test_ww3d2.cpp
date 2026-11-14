@@ -35,7 +35,6 @@
 #include "hlod.h"
 #include "../GameEngineDevice/Include/W3DDevice/GameClient/SunShadowCasterCull.h"
 #include "../GameEngineDevice/Include/W3DDevice/GameClient/TankWheelSpin.h"
-#include "../GameEngineDevice/Include/W3DDevice/GameClient/DebrisChunks.h"
 
 /*
  * W3DMPO_GLUE gives every pooled class an operator new that routes through
@@ -187,65 +186,6 @@ TEST(fullscreen_fit_keeps_the_pictures_shape_with_bars)
 	CHECK_EQ(fit.x, 0); CHECK_EQ(fit.y, 0); CHECK_EQ(fit.width, 1920); CHECK_EQ(fit.height, 1200);
 	fit = Fullscreen_Fit(1920, 1080, 1280, 720, true);
 	CHECK_EQ(fit.width, 1920); CHECK_EQ(fit.height, 1080);
-}
-
-/*=========================================================================
-   DebrisChunks - a dying vehicle's dark chunks, thinned on the drawing side
-  =========================================================================*/
-
-/* The chunks are EA's generic tank pieces and the fork's scrap, by model name and in any case; a
-   unit's own pieces, building rubble and civilian wreckage are not. */
-TEST(debris_chunks_are_the_generic_tank_pieces_only)
-{
-	CHECK(DebrisIsTankChunk("GXMammoth_D01"));
-	CHECK(DebrisIsTankChunk("GXMammoth_D12"));
-	CHECK(DebrisIsTankChunk("gxmammoth_d07"));
-	CHECK(DebrisIsTankChunk("AVScrap2"));
-	CHECK(DebrisIsTankChunk("AVSCRAP5"));
-	CHECK(!DebrisIsTankChunk("NVOvrlrd_D2"));		// an Overlord's turret
-	CHECK(!DebrisIsTankChunk("AVLeopard_D2"));
-	CHECK(!DebrisIsTankChunk("ABPwrPlant_D01"));	// building rubble
-	CHECK(!DebrisIsTankChunk("CVTanker_d03"));
-	CHECK(!DebrisIsTankChunk("GXMammoth"));			// the hulk's family name alone is not a chunk
-	CHECK(!DebrisIsTankChunk(""));
-	CHECK(!DebrisIsTankChunk(NULL));
-}
-
-/* Of one death's chunks the first two drawn are kept; another death on the same frame elsewhere has
-   its own two, the same place a frame later is another death, and the picks come out the same every
-   time the chunks come in the same order. */
-TEST(debris_chunks_two_drawn_per_death)
-{
-	DebrisChunkBudget budget;
-	CHECK(budget.admit(100, 500.0f, 500.0f));
-	CHECK(budget.admit(100, 510.0f, 495.0f));
-	CHECK(!budget.admit(100, 520.0f, 505.0f));
-	CHECK(!budget.admit(100, 490.0f, 520.0f));
-	CHECK(budget.admit(100, 900.0f, 500.0f));		// a second tank across the field
-	CHECK(budget.admit(100, 905.0f, 500.0f));
-	CHECK(!budget.admit(100, 902.0f, 498.0f));
-	CHECK(budget.admit(101, 500.0f, 500.0f));		// the next frame's death
-	// the same sequence again gives the same picks
-	DebrisChunkBudget again;
-	const float xs[] = { 0.0f, 3.0f, 6.0f, 9.0f, 12.0f };
-	int shown = 0;
-	for (int i = 0; i < 5; ++i)
-		shown += again.admit(7, xs[i], 0.0f) ? 1 : 0;
-	CHECK_EQ(shown, 2);
-	// more deaths than it remembers: it forgets the oldest and never overruns
-	DebrisChunkBudget many;
-	for (int d = 0; d < 3 * DEBRIS_CHUNK_GROUPS; ++d)
-		CHECK(many.admit(200, d * 1000.0f, 0.0f));
-}
-
-/* A drawn chunk is whole for a second and a half and gone at two. */
-TEST(debris_chunk_fades_by_two_seconds)
-{
-	CHECK_EQ(DebrisChunkOpacity(0.0f), 1.0f);
-	CHECK_EQ(DebrisChunkOpacity(1.5f), 1.0f);
-	CHECK_NEAR(DebrisChunkOpacity(1.75f), 0.5f, 0.0001f);
-	CHECK_EQ(DebrisChunkOpacity(2.0f), 0.0f);
-	CHECK_EQ(DebrisChunkOpacity(9.0f), 0.0f);
 }
 
 /*=========================================================================

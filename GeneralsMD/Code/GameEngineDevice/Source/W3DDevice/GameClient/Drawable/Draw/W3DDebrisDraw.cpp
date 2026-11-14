@@ -44,8 +44,6 @@
 #include "WW3D2/hlod.h"
 #include "WW3D2/rendobj.h"
 #include "W3DDevice/GameClient/Module/W3DDebrisDraw.h"
-#include "W3DDevice/GameClient/DebrisChunks.h"
-#include "GameClient/GameClient.h"
 #include "W3DDevice/GameClient/W3DAssetManager.h"
 #include "W3DDevice/GameClient/W3DDisplay.h"
 #include "W3DDevice/GameClient/W3DScene.h"
@@ -60,8 +58,6 @@ W3DDebrisDraw::W3DDebrisDraw(Thing *thing, const ModuleData* moduleData) : DrawM
 		m_anims[i] = NULL;
 	m_fxFinal = NULL;
 	m_state = INITIAL;
-	m_chunkLook = CHUNK_NOT_ONE;
-	m_chunkFirstFrame = 0;
 	m_frames = 0;
 	m_shadow = NULL;
 	m_finalStop = false;
@@ -100,46 +96,7 @@ void W3DDebrisDraw::setShadowsEnabled(Bool enable)
 void W3DDebrisDraw::setFullyObscuredByShroud(Bool fullyObscured)
 {
 	if (m_shadow)
-		m_shadow->enableShadowInvisible(fullyObscured || m_chunkLook == CHUNK_HIDDEN);
-}
-
-//-------------------------------------------------------------------------------------------------
-/** The Reforged look: a dying vehicle's dark chunks scattered all over the field.  Of the chunks one
-	death throws (DebrisIsTankChunk) only DEBRIS_CHUNKS_SHOWN are drawn, picked in the order they are
-	first drawn, and those fade out two seconds on (DebrisChunkOpacity); the rest are never drawn.  The
-	objects themselves fly, land and expire in the logic exactly as before: only the picture of them
-	changes, through the render object's hidden flag and the drawable's opacity, which nothing in the
-	logic reads.  Under Classic every chunk draws as EA's did. */
-static DebrisChunkBudget s_chunkBudget;
-
-void W3DDebrisDraw::updateChunkLook()
-{
-	if (m_chunkLook == CHUNK_NOT_ONE || m_renderObject == NULL)
-		return;
-	const UnsignedInt now = TheGameClient->getFrame();
-	if (m_chunkLook == CHUNK_UNDECIDED)
-	{
-		if (TheGlobalData->m_classicGraphics)
-		{
-			m_chunkLook = CHUNK_NOT_ONE;
-			return;
-		}
-		const Coord3D *pos = getDrawable()->getPosition();
-		m_chunkFirstFrame = now;
-		m_chunkLook = s_chunkBudget.admit( now, pos->x, pos->y ) ? CHUNK_SHOWN : CHUNK_HIDDEN;
-	}
-	Real opacity = 0.0f;
-	if (m_chunkLook == CHUNK_SHOWN)
-		opacity = DebrisChunkOpacity( (Real)( now - m_chunkFirstFrame ) / (Real)LOGICFRAMES_PER_SECOND );
-	if (opacity <= 0.0f)
-	{
-		m_chunkLook = CHUNK_HIDDEN;
-		m_renderObject->Set_Hidden( 1 );
-		if (m_shadow)
-			m_shadow->enableShadowInvisible( TRUE );
-		return;
-	}
-	getDrawable()->setDrawableOpacity( opacity );
+		m_shadow->enableShadowInvisible(fullyObscured);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -187,8 +144,6 @@ void W3DDebrisDraw::setModelName(AsciiString name, Color color, ShadowType t)
 		// save the model name and color
 		m_modelName = name;
 		m_modelColor = color;
-		if (DebrisIsTankChunk( name.str() ))
-			m_chunkLook = CHUNK_UNDECIDED;
 
 	}
 }
@@ -260,7 +215,6 @@ void W3DDebrisDraw::doDrawModule(const Matrix3D* transformMtx)
 {
 	if (m_renderObject)
 	{
-		updateChunkLook();
 
 		Matrix3D scaledTransform;
 		if (getDrawable()->getInstanceScale() != 1.0f)
@@ -296,9 +250,7 @@ void W3DDebrisDraw::doDrawModule(const Matrix3D* transformMtx)
 			RenderObjClass::AnimMode m = TheAnimModes[m_state];
 			if (m_state == FINAL)
 			{
-				// a chunk that is not drawn lands without its puff
-				if (m_chunkLook != CHUNK_HIDDEN)
-					FXList::doFXPos(m_fxFinal, getDrawable()->getPosition(), getDrawable()->getTransformMatrix(), 0, NULL, 0.0f);
+				FXList::doFXPos(m_fxFinal, getDrawable()->getPosition(), getDrawable()->getTransformMatrix(), 0, NULL, 0.0f);
 				if (m_finalStop)
 					m = RenderObjClass::ANIM_MODE_MANUAL;
 			}

@@ -240,10 +240,11 @@ static const char EVALUATE_PROGRAM[] =
 	"    }\n"
 	// a newborn is updated on its birth frame, so k is one there; the picture lags a fraction of an
 	// update the way the models' smooth motion does, and inside the birth frame's tick it runs from
-	// the birth (k 0) and fades in, as Particle::fadeInFrom has the CPU's newborns do.  With smooth
-	// motion off Smooth is one and k never falls under one.
+	// the birth (k 0) and fades in, as Particle::newbornVisibility has the CPU's newborns do, faster
+	// for a life under five ticks.  With smooth motion off Smooth is one and k never falls under one.
 	"    float k = max(float(Now - spawn.Birth) + Smooth, 0.0);\n"
-	"    float born = saturate(k);\n"
+	"    float span = (spawn.Lifetime == 0.0 || spawn.Lifetime >= 5.0) ? 1.0 : (spawn.Lifetime - 1.0) / 4.0;\n"
+	"    float born = (span <= 0.0) ? 1.0 : saturate(k / span);\n"
 	"\n"
 	// particleClosedFormEvaluate
 	"    float power, sum, nested;\n"

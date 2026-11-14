@@ -391,17 +391,18 @@ Particle::Particle( ParticleSystem *system, const ParticleInfo *info )
 
 	m_colorScale = info->m_colorScale;
 
-	// Its first drawn update starts where it was born, unseen, and is held through that update (which
-	// comes in the pass it is born in: every emission is followed by its system's particles), so a
-	// burst of new cards fades in over the tick that brings it rather than appearing on the tick.
-	// One born riding a moving particle starts as far back as its parent's last update moved it, so
-	// the two are drawn together between ticks.
+	// Its first drawn update starts where it was born (getDrawState fades it in over that update,
+	// newbornVisibility).  One born riding a moving particle starts as far back as its parent's last
+	// update moved it, held through its own first update (which comes in the pass it is born in:
+	// every emission is followed by its system's particles), so the two are drawn together.
 	keepDrawFrom();
-	fadeInFrom( &m_drawFrom, system->getShaderType() );
-	m_drawFromHeld = TRUE;
+	m_drawFromHeld = FALSE;
 	const Particle *parent = system->getControlParticle();
 	if (parent)
+	{
 		m_drawFrom.pos = drawFromRidingParent( m_pos, parent->m_drawFrom.pos, parent->m_pos );
+		m_drawFromHeld = TRUE;
+	}
 
 	m_inSystemList = m_inOverallList = FALSE;
 	m_systemPrev = m_systemNext = m_overallPrev = m_overallNext = NULL;
@@ -469,20 +470,37 @@ void Particle::keepDrawFrom( void )
 }
 
 // ------------------------------------------------------------------------------------------------
-/*static*/ void Particle::fadeInFrom( ParticleDrawState *state, Int shaderType )
+/*static*/ void Particle::fadeBy( ParticleDrawState *state, Int shaderType, Real visibility )
 {
 	switch (shaderType)
 	{
 		case ParticleSystemInfo::ADDITIVE:
-			state->color.red = state->color.green = state->color.blue = 0.0f;
+			state->color.red *= visibility;
+			state->color.green *= visibility;
+			state->color.blue *= visibility;
 			break;
 		case ParticleSystemInfo::MULTIPLY:
-			state->color.red = state->color.green = state->color.blue = 1.0f;
+			state->color.red = 1.0f - ( 1.0f - state->color.red ) * visibility;
+			state->color.green = 1.0f - ( 1.0f - state->color.green ) * visibility;
+			state->color.blue = 1.0f - ( 1.0f - state->color.blue ) * visibility;
 			break;
 		default:
-			state->alpha = 0.0f;
+			state->alpha *= visibility;
 			break;
 	}
+}
+
+// ------------------------------------------------------------------------------------------------
+/*static*/ Real Particle::newbornVisibility( UnsignedInt age, UnsignedInt lifetime, Real tickFraction )
+{
+	if (lifetime == 0 || age > 1)
+		return 1.0f;
+	const Real span = lifetime >= NEWBORN_FADE_LIFETIME ? 1.0f
+		: (Real)( lifetime - 1 ) / (Real)( NEWBORN_FADE_LIFETIME - 1 );
+	if (span <= 0.0f)
+		return 1.0f;
+	const Real drawn = flipbookDrawAge( age, tickFraction );
+	return drawn >= span ? 1.0f : drawn / span;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -505,6 +523,9 @@ void Particle::getDrawState( Real tickFraction, ParticleDrawState *out ) const
 	now.alpha = m_alpha;
 	now.color = m_color;
 	tickBlend( m_drawFrom, now, tickFraction, out );
+	const Real visibility = newbornVisibility( m_lifetime - m_lifetimeLeft, m_lifetime, tickFraction );
+	if (visibility < 1.0f)
+		fadeBy( out, m_system->getShaderType(), visibility );
 }
 
 // ------------------------------------------------------------------------------------------------

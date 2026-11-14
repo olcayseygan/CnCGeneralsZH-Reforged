@@ -273,10 +273,16 @@ public:
 		* moved the parent, so between ticks the two are drawn together and the trail's newest point
 		* sits on the spark instead of a tick ahead of it.  Pure. */
 	static Coord3D drawFromRidingParent( const Coord3D &birth, const Coord3D &parentFrom, const Coord3D &parentNow );
-	/** A newborn's first drawn update starts unseen: an additive card black, a multiplying one white,
-		* any other with no alpha, so it fades in over the tick that brings it.  shaderType is a
-		* ParticleSystemInfo::ParticleShaderType.  Pure. */
-	static void fadeInFrom( ParticleDrawState *state, Int shaderType );
+	/** How much of a newborn a picture shows, 0 to 1: it fades in over the tick that brings it, so a
+		* burst grows in rather than appearing on the tick.  A short life fades faster, so a flash of
+		* a tick or two still shows: lifetime - 1 quarters of a tick for a life under
+		* NEWBORN_FADE_LIFETIME ticks, nothing for a life of 1 (drawn never) or 0 (forever).  1 on
+		* every later tick and at a tick fraction of 1.  Pure. */
+	static Real newbornVisibility( UnsignedInt age, UnsignedInt lifetime, Real tickFraction );
+	enum { NEWBORN_FADE_LIFETIME = 5 };
+	/// Shows visibility of a state the way its shader means seen: an additive card's light, a
+	/// multiplying one's darkening, any other's alpha.  shaderType is a ParticleShaderType.  Pure.
+	static void fadeBy( ParticleDrawState *state, Int shaderType, Real visibility );
 
 	/// IsParticleUpTowardsEmitter's turn for a particle this far east and north of its emitter;
 	/// eaOnTheAxis (the Classic look) keeps EA's quarter turn off on the east-west axis.
@@ -323,7 +329,7 @@ protected:
 	UnsignedByte			m_flipbookVariant;										///< the run of frames it plays (FlipbookVariants); drawing only, never saved
 	Bool							m_flipbookMirrored;										///< drawn flipped left to right (FlipbookMirror); drawing only, never saved
 	ParticleDrawState	m_drawFrom;														///< the state the last update started from (tickBlend); drawing only, never saved
-	Bool							m_drawFromHeld;												///< a newborn: its first update keeps m_drawFrom (fadeInFrom, drawFromRidingParent)
+	Bool							m_drawFromHeld;												///< born riding a particle: its first update keeps m_drawFrom (drawFromRidingParent)
 
 	void keepDrawFrom( void );																///< m_drawFrom = the particle as it stands
 public:

@@ -1604,6 +1604,8 @@ WindowMsgHandledType LanGameOptionsMenuSystem( GameWindow *window, UnsignedInt m
 						if (controlID == buttonMapStartPositionID[i])
 						{
 							LANGameInfo *game = TheLAN->GetMyGame();
+							if (!game)
+								break;	// the room is already gone: a click that landed as it closed
 							Int playerIdxInPos = -1;
 							for (Int j=0; j<MAX_SLOTS; ++j)
 							{
@@ -1655,6 +1657,8 @@ WindowMsgHandledType LanGameOptionsMenuSystem( GameWindow *window, UnsignedInt m
 				if (controlID == buttonMapStartPositionID[i])
 				{
 					LANGameInfo *game = TheLAN->GetMyGame();
+					if (!game)
+						break;	// the room is already gone
 					Int playerIdxInPos = -1;
 					for (Int j=0; j<MAX_SLOTS; ++j)
 					{

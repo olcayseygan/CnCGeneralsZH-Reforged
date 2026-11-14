@@ -120,6 +120,18 @@ public:
 
   const MultiplayerStartingMoneyList & getStartingMoneyList() const { return m_startingMoneyList; }
 
+  /// A saved StartingCash read back: the amount when the list offers it, else the default. Options.ini
+  /// is the player's to edit, and "-10000" came back through strtoul as 4294957296, a choice no box has.
+  Money getListedStartingMoney( UnsignedInt amount ) const
+  {
+    for ( MultiplayerStartingMoneyList::const_iterator it = m_startingMoneyList.begin(); it != m_startingMoneyList.end(); ++it )
+    {
+      if ( it->countMoney() == amount )
+        return *it;
+    }
+    return getDefaultStartingMoney();
+  }
+
   void addStartingMoneyChoice( const Money & money, Bool isDefault );
     
 private:

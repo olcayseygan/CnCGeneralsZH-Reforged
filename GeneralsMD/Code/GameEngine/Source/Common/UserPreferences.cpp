@@ -733,11 +733,8 @@ Money CustomMatchPreferences::getStartingCash(void) const
   {
     return TheMultiplayerSettings->getDefaultStartingMoney();
   }
-  
-  Money money;
-  money.deposit( strtoulAsWindows( it->second.str() ), FALSE  );
-  
-  return money;
+
+  return TheMultiplayerSettings->getListedStartingMoney( strtoulAsWindows( it->second.str() ) );
 }
 
 void CustomMatchPreferences::setStartingCash( const Money & startingCash )

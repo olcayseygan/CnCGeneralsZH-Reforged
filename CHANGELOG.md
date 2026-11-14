@@ -2419,6 +2419,7 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
 - Crash reports from a 64-bit game give the full address of a bad memory access. They gave the bottom half of it, which pointed nowhere.
 - A game folder missing the loading screen's window file stops with a box saying the game files are incomplete and asking to verify or reinstall them, where it used to crash with nothing to go on.
 - A LAN match on an official map with a loose map.ini or solo.ini beside it on one machine no longer starts and splits at the first frame. That file changes the map's rules, and the map's checksum now counts it, so the room tells the two machines apart before the match.
+- A starting cash in your settings that the lobby does not offer (one player had -10000, which the game read as 4,294,957,296) opens the lobby on the default amount.
 
 ## Units take corners wide, and drive round a jam instead of into it
 

@@ -256,10 +256,7 @@ Money LANPreferences::getStartingCash(void) const
     return TheMultiplayerSettings->getDefaultStartingMoney();
   }
 
-  Money money;
-  money.deposit( strtoulAsWindows( it->second.str() ), FALSE  );
-
-  return money;
+  return TheMultiplayerSettings->getListedStartingMoney( strtoulAsWindows( it->second.str() ) );
 }
 
 void LANPreferences::setStartingCash( const Money & startingCash )

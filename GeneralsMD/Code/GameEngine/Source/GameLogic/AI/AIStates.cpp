@@ -2320,14 +2320,16 @@ void AIMoveAndTightenState::crc( Xfer *xfer )
 void AIMoveAndTightenState::xfer( Xfer *xfer )
 {
   // version
-  XferVersion currentVersion = 1;
+  XferVersion currentVersion = 2;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
- 
+
  // extend base class
 	AIInternalMoveToState::xfer(xfer);
 	xfer->xferInt(&m_okToRepathTimes);
 	xfer->xferBool(&m_checkForPath);
+	if (version >= 2)
+		xfer->xferReal(&m_stuckDist);
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------
@@ -2345,6 +2347,7 @@ StateReturnType AIMoveAndTightenState::onEnter()
 	Object *obj = getMachineOwner();
 	AIUpdateInterface *ai = obj->getAI();
 	m_okToRepathTimes = 1;
+	m_stuckDist = 0.0f;
 	m_checkForPath = true;
 	TheAI->pathfinder()->removeGoal(obj);
 	m_goalPosition = *getMachineGoalPosition();
@@ -2373,6 +2376,19 @@ Bool AIMoveAndTightenState::computePath()
 	Object *obj = getMachineOwner();
 	AIUpdateInterface *ai = obj->getAI();
 	if (ai->isBlockedAndStuck()) {
+		/* A player's gather used to end on the second hold-up wherever it happened, so a unit behind
+			 a parked stranger stood half the map short.  Each hold-up nearer the point than the last by
+			 a cell earns another route; one no nearer means it is as tight as it gets.  The distance
+			 only falls, so this ends.  The computer's gathers keep the single repath. */
+		if (ai->getLastCommandSource() == CMD_FROM_PLAYER)
+		{
+			const Real dx = obj->getPosition()->x - m_goalPosition.x;
+			const Real dy = obj->getPosition()->y - m_goalPosition.y;
+			const Real dist = (Real)sqrt( dx * dx + dy * dy );
+			if (m_stuckDist > 0.0f && dist < m_stuckDist - PATHFIND_CELL_SIZE_F && m_okToRepathTimes < 1)
+				m_okToRepathTimes = 1;
+			m_stuckDist = dist;
+		}
 		if (m_okToRepathTimes>0) {
 			m_okToRepathTimes--;
 			m_waitingForPath = true;
@@ -3661,6 +3677,8 @@ AIAttackMoveToState::AIAttackMoveToState( StateMachine *machine ) : AIMoveToStat
 	m_isMoveTo = false;
 	m_frameToSleepUntil = 0;
 	m_retryCount = ATTACK_RETRY_COUNT;
+	m_retryDist = 0.0f;
+	m_commandSrc = CMD_FROM_AI;
 	m_engageOrigin.zero();
 	m_victimID = INVALID_ID;
 	m_engageStartFrame = 0;
@@ -3703,7 +3721,7 @@ void AIAttackMoveToState::crc( Xfer *xfer )
 void AIAttackMoveToState::xfer( Xfer *xfer )
 {
   // version
-  XferVersion currentVersion = 6;
+  XferVersion currentVersion = 7;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
 
@@ -3737,6 +3755,11 @@ void AIAttackMoveToState::xfer( Xfer *xfer )
 	if (version>=6) {
 		xfer->xferUnsignedInt(&m_frameToApproachOn);
 	}
+	if (version>=7) {
+		xfer->xferReal(&m_retryDist);
+		// update branches on it (a player's order retries to the end), so a load must not invent it
+		xfer->xferUser(&m_commandSrc, sizeof(m_commandSrc));
+	}
 	xfer->xferSnapshot(m_attackMoveMachine);
 }  // end xfer
 
@@ -3768,6 +3791,7 @@ StateReturnType AIAttackMoveToState::onEnter()
 	m_attackMoveMachine->setState( AI_IDLE );	
 	m_commandSrc = ai->getLastCommandSource();
 	m_retryCount = ATTACK_RETRY_COUNT;
+	m_retryDist = 0.0f;
 	m_frameToSleepUntil = 0;
 
 	m_isEngaging = FALSE;
@@ -4275,6 +4299,31 @@ StateReturnType AIAttackMoveToState::update()
 	}
 
 	StateReturnType ret = AIMoveToState::update();
+	if (ret != STATE_CONTINUE && m_commandSrc == CMD_FROM_PLAYER) {
+		/* A player's attack move ends where the player pointed, not up to eight cells off it after five
+			 tries three seconds apart.  It ends at once when the unit drove a full route to its own spot
+			 by the goal (success on a route that was not the closest-path fallback).  A fallback route that ran out short is
+			 tried again a second later, and keeps being tried while each try stops a cell nearer; five
+			 tries in a row that gain nothing mean the goal cannot be reached from here.  A failure, the
+			 pathfinder coming back with nothing, gets the same five tries: a unit shoved inside a
+			 building's footprint or boxed in by a crowd for a moment is not a goal that cannot be had. */
+		if (ret == STATE_SUCCESS && !ai->getRetryPath())
+			return ret;
+		const Real dx = owner->getPosition()->x - m_pathGoalPosition.x;
+		const Real dy = owner->getPosition()->y - m_pathGoalPosition.y;
+		const Real dist = (Real)sqrt( dx * dx + dy * dy );
+		if (dist < PATHFIND_CELL_SIZE_F * 2.0f)
+			return ret;
+		if (m_retryDist > 0.0f && dist < m_retryDist - PATHFIND_CELL_SIZE_F)
+			m_retryCount = ATTACK_RETRY_COUNT;		// still closing in: the order is being carried out
+		m_retryDist = dist;
+		if (m_retryCount < 1)
+			return ret;
+		m_retryCount--;
+		// we can still shoot while we wait, just not move
+		m_frameToSleepUntil = TheGameLogic->getFrame() + LOGICFRAMES_PER_GAME_SECOND;
+		return STATE_CONTINUE;
+	}
 	if (ret != STATE_CONTINUE) {
 		if (m_retryCount<1) return ret;
 		/* check for close enough. */

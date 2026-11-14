@@ -362,6 +362,7 @@ AIUpdateInterface::AIUpdateInterface( Thing *thing, const ModuleData* moduleData
 	m_sideStepSeen = FALSE;
 	m_lastProgressPos.zero();
 	m_lastProgressAngle = 0.0f;
+	m_lastProgressTurn = 0.0f;
 	m_ditherFrom.zero();
 	m_ditherFrame = 0;
 	m_ditherTravel = 0.0f;
@@ -599,9 +600,15 @@ void AIUpdateInterface::doPathfind( PathfindServicesInterface *pathfinder )
 					getPath()->getLastNode()->getLayer());
 			}
 			//CRCDEBUG_LOG(("AIUpdateInterface::doPathfind() - m_isAttackPath = TRUE after computeAttackPath\n"));
-			m_isAttackPath = TRUE; 
+			m_isAttackPath = TRUE;
 			return;
 		}
+		/* A contact weapon's search (computeAttackPath plain-paths to the victim) that ran out of the
+			 queue's cells for this frame comes back FALSE with the search held.  Falling through asked
+			 for a plain path to an adjusted spot instead and threw the held search away; stay an attack
+			 path and let the queue resume it next frame. */
+		if (m_waitingForPath)
+			return;
 		//CRCDEBUG_LOG(("AIUpdateInterface::doPathfind() - m_isAttackPath = FALSE after computeAttackPath()\n"));
 		m_isAttackPath = FALSE;
 		if (victim) {
@@ -2761,10 +2768,13 @@ void AIUpdateInterface::updateProgress( void )
 	const Real dx = myPos->x - m_lastProgressPos.x;
 	const Real dy = myPos->y - m_lastProgressPos.y;
 	const Real moved = (Real)sqrt( dx * dx + dy * dy );
-	const Real turned = (Real)fabs( normalizeAngle( facing - m_lastProgressAngle ) );
+	const Real turn = normalizeAngle( facing - m_lastProgressAngle );
+	const Real turned = (Real)fabs( turn );
+	const Bool reversedTurn = turn * m_lastProgressTurn < 0.0f;
 
 	m_lastProgressPos = *myPos;
 	m_lastProgressAngle = facing;
+	m_lastProgressTurn = turn;
 
 	/* Not trying to go anywhere: nothing to be stuck at.
 
@@ -2815,6 +2825,15 @@ void AIUpdateInterface::updateProgress( void )
 		else
 			comingAbout = TRUE;
 	}
+	/* The soldier trap: a Ranger wedged between parked hulls narrower than his body swings his nose
+		 to and fro on the spot, and every swing passed the test above, so the ladder never fired and he
+		 stood there for the rest of the match (Tournament Desert).  A turn that reverses last frame's is
+		 a swing, not coming about, and a soldier turns on the spot in a frame or two, so one turning
+		 without moving is not coming about either.  PathLab --dither, source 6187fe7c.  Soldiers only:
+		 a hull weaving in its lane reverses its turn all the time, and on tanks the rule moved
+		 nothing measurable (squad30, six seeds), so it is left where the trap is. */
+	if (self->isKindOf( KINDOF_INFANTRY ) && (reversedTurn || moved < ConvertRetailPerFrameRate(0.01f)))
+		comingAbout = FALSE;
 
 	if (moved < asked * 0.2f && !comingAbout)
 	{
@@ -7962,12 +7981,13 @@ void AIUpdateInterface::crc( Xfer *x )
 	* 19: the radius a player's guard order set
 	* 20: the aggressive stance
 	* 21: the player's orders held until the exit path is done
-	* 22: the auto garrison search */
+	* 22: the auto garrison search
+	* 23: the stuck ladder's state, the closest-path retry flag and the compact group goal */
 // ------------------------------------------------------------------------------------------------
 void AIUpdateInterface::xfer( Xfer *xfer )
 {
   // version
-  const XferVersion currentVersion = 22;
+  const XferVersion currentVersion = 23;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
  
@@ -8322,6 +8342,30 @@ void AIUpdateInterface::xfer( Xfer *xfer )
 		xfer->xferBool(&m_isSeekingGarrison);
 		xfer->xferCoord3D(&m_garrisonSearchCenter);
 		xfer->xferSTLObjectIDVector(&m_garrisonSearchTried);
+	}
+
+	if (version >= 23)
+	{
+		// the stuck ladder: a save mid-episode resumes on the same rung and the same counts.  The
+		// head-on and side-step pair is written by the collisions after doLocomotor and read by the
+		// next one, so it crosses the frame a save is taken on too.
+		xfer->xferInt(&m_noProgress);
+		xfer->xferInt(&m_headOnFrames);
+		xfer->xferBool(&m_headOnSeen);
+		xfer->xferCoord2D(&m_sideStep);
+		xfer->xferBool(&m_sideStepSeen);
+		xfer->xferCoord3D(&m_lastProgressPos);
+		xfer->xferReal(&m_lastProgressAngle);
+		xfer->xferReal(&m_lastProgressTurn);
+		xfer->xferCoord3D(&m_ditherFrom);
+		xfer->xferUnsignedInt(&m_ditherFrame);
+		xfer->xferReal(&m_ditherTravel);
+		xfer->xferInt(&m_rescueStage);
+		xfer->xferCoord3D(&m_rescueTo);
+		xfer->xferUnsignedInt(&m_rescueUntil);
+		xfer->xferUnsignedInt(&m_rescueCool);
+		xfer->xferBool(&m_retryPath);
+		xfer->xferBool(&m_compactGoal);
 	}
 
 }  // end xfer

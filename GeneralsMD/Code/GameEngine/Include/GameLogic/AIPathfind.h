@@ -1271,7 +1271,8 @@ public:
 
 	static void classifyMapCell( Int x, Int y, PathfindCell *cell);					///< Classify the given map cell
 	Int clearCellForDiameter( Bool crusher, Int cellX, Int cellY, PathfindLayerEnum layer, Int pathDiameter );		///< Return true if given position is a valid movement location
-	void getRadiusAndCenter(const Object *obj, Int &iRadius, Bool &center);
+	/// forGoal: the footprint a unit reserves where it stops (a soldier of an all-infantry order: his own cell), not the body it moves with
+	void getRadiusAndCenter(const Object *obj, Int &iRadius, Bool &center, Bool forGoal = FALSE);
 
 protected:
 	virtual Path *internalFindPath( Object *obj, const LocomotorSet& locomotorSet, const Coord3D *from, const Coord3D *to);	///< Find a short, valid path between given locations
@@ -1463,7 +1464,9 @@ private:
 	Int						m_numWallPieces;
 	Real					m_wallHeight;
 
+	enum { MOVE_ALLIES_MAX_DEPTH = 2 };
 	Int						m_moveAlliesDepth;
+	ObjectID			m_moveAlliesObjects[MOVE_ALLIES_MAX_DEPTH];	///< unit of each active moveAllies call, by depth
 
 
 	// Pathfind queue, in two lines: human players' units are answered first (Pathfinder_servePathQueues)

@@ -574,6 +574,9 @@ public:
 
 	virtual Bool processCollision(PhysicsBehavior *physics, Object *other); ///< Returns true if the physics collide should apply the force.  Normally not.  jba.
 	ObjectID getIgnoredObstacleID( void ) const;
+	/// a soldier last ordered in a group with no vehicle stops on one cell (Pathfinder::getRadiusAndCenter)
+	Bool isCompactGoal( void ) const { return m_compactGoal; }
+	void setCompactGoal( Bool compact ) { m_compactGoal = compact; }
 
 	// "Waypoint Mode" -----------------------------------------------------------------------------------
 	const Waypoint *getCompletedWaypoint(void) const {return m_completedWaypoint;}
@@ -908,6 +911,7 @@ private:
 	ObjectID		m_ignoreObstacleID;					///< ignore this obstacle when pathfinding
 	Real				m_pathExtraDistance;				///< If we are following a waypoint path, there will be extra distance beyond the current path.
 	ICoord2D		m_pathfindGoalCell;					///< Cell we are moving towards.
+	Bool				m_compactGoal = FALSE;				///< set by Pathfinder::floodGroupGoals; saved since AIUpdateInterface xfer 23
 	ICoord2D		m_pathfindCurCell;					///< Cell we are currently occupying.
 	Int					m_blockedFrames;						///< Number of frames we've been blocked.
 	Real				m_curMaxBlockedSpeed;				///< Max speed we can have and not run into blocking things.
@@ -973,6 +977,7 @@ private:
 	Bool				m_sideStepSeen;							///< and whether he touched any.
 	Coord3D			m_lastProgressPos;					///< where we were last frame, which is how the above is counted.
 	Real				m_lastProgressAngle;				///< and which way we were pointing, because coming about is progress too.
+	Real				m_lastProgressTurn;					///< last frame's signed turn: a swing that reverses it is not coming about.
 	/* Dithering: driving a long way and getting nowhere, which the frame by frame test above cannot
 			see because the unit is moving on every one of those frames. */
 	Coord3D			m_ditherFrom;								///< where the current window opened.

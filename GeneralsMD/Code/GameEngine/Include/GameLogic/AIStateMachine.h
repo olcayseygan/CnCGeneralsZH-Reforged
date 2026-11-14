@@ -405,22 +405,25 @@ class AIMoveAndTightenState : public AIInternalMoveToState
 {
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(AIMoveAndTightenState, "AIMoveAndTightenState")		
 public:
-	AIMoveAndTightenState( StateMachine *machine ) : AIInternalMoveToState( machine, "AIMoveAndTightenState" ) 
+	AIMoveAndTightenState( StateMachine *machine ) : AIInternalMoveToState( machine, "AIMoveAndTightenState" )
 	{
 		m_checkForPath = false;
 		m_okToRepathTimes = 0;
+		m_stuckDist = 0.0f;
 	}
-	AIMoveAndTightenState( StateMachine *machine, const char *name ) : AIInternalMoveToState( machine, name ) 
+	AIMoveAndTightenState( StateMachine *machine, const char *name ) : AIInternalMoveToState( machine, name )
 	{
 		m_checkForPath = false;
 		m_okToRepathTimes = 0;
+		m_stuckDist = 0.0f;
 	}
 	virtual StateReturnType onEnter();
 	virtual StateReturnType update();
 protected:
 	virtual Bool computePath();												///< compute the path
-	Int m_okToRepathTimes; 
+	Int m_okToRepathTimes;
 	Bool m_checkForPath;
+	Real m_stuckDist;			///< distance to the goal the last time a player's tighten was held up (0 = not yet)
 protected:
 	// snapshot interface
 	virtual void crc( Xfer *xfer );
@@ -616,6 +619,7 @@ protected:
 	StateMachine *m_attackMoveMachine;
 	UnsignedInt		m_frameToSleepUntil;
 	Int						m_retryCount;
+	Real					m_retryDist;					///< how far off the goal a player's order last stopped short (0 = not yet)
 	Coord3D				m_engageOrigin;				///< where we stood when we picked the current victim
 	ObjectID			m_victimID;						///< who we picked
 	UnsignedInt		m_engageStartFrame;		///< when we picked it

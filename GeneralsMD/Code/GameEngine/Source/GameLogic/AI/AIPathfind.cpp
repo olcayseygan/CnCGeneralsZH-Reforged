@@ -5367,6 +5367,9 @@ void Pathfinder::reset( void )
 	m_isTunneling = false;
 
 	m_moveAlliesDepth = 0;
+	for (i=0; i<MOVE_ALLIES_MAX_DEPTH; i++) {
+		m_moveAlliesObjects[i] = INVALID_ID;
+	}
 
 	// pathfind grid cells have not been classified yet
 	m_isMapReady = false;
@@ -6748,7 +6751,7 @@ void Pathfinder::snapPosition(Object *obj, Coord3D *pos)
 {
 	Int iRadius;
 	Bool center;
-	getRadiusAndCenter(obj, iRadius, center);
+	getRadiusAndCenter(obj, iRadius, center, TRUE);
 	ICoord2D cell;
 	Coord3D adjustDest = *pos;
 	if (!center) {
@@ -6767,7 +6770,7 @@ void Pathfinder::snapClosestGoalPosition(Object *obj, Coord3D *pos)
 {
 	Int iRadius;
 	Bool center;
-	getRadiusAndCenter(obj, iRadius, center);
+	getRadiusAndCenter(obj, iRadius, center, TRUE);
 	ICoord2D cell;
 	Coord3D adjustDest = *pos;
 	if (!center) {
@@ -6830,7 +6833,7 @@ Bool Pathfinder::goalPosition(Object *obj, Coord3D *pos)
 	Bool center;
 	AIUpdateInterface *ai = obj->getAIUpdateInterface();
 	if (!ai) return false; // only consider ai objects.
-	getRadiusAndCenter(obj, iRadius, center);
+	getRadiusAndCenter(obj, iRadius, center, TRUE);
 	ICoord2D cell = *ai->getPathfindGoalCell();
 	pos->zero();
 	if (cell.x<0 || cell.y<0) return false;
@@ -7015,7 +7018,7 @@ Bool Pathfinder::adjustDestination(Object *obj, const LocomotorSet& locomotorSet
 	}
 	Int iRadius;
 	Bool center;
-	getRadiusAndCenter(obj, iRadius, center);
+	getRadiusAndCenter(obj, iRadius, center, TRUE);
 	ICoord2D cell;
 	Coord3D cellDest = *dest;
 	if (!center) {
@@ -7239,7 +7242,7 @@ Int Pathfinder::floodGroupGoalsFrom(const Coord3D *origin, PathfindLayerEnum lay
 				Object *member = candidates[c].obj;
 				Int iRadius;
 				Bool center;
-				getRadiusAndCenter( member, iRadius, center );
+				getRadiusAndCenter( member, iRadius, center, TRUE );
 				Coord3D goal = *origin;
 				if (!checkForAdjust( member, member->getAIUpdateInterface()->getLocomotorSet(), isHuman,
 						cell.x, cell.y, layer, iRadius, center, &goal, NULL ))
@@ -7307,6 +7310,22 @@ void Pathfinder::floodGroupGoals(const Coord3D *dest, const std::vector<Object *
 	const Real CENTRE_SHARES[] = { 0.5f, 0.25f };	// of the first pile's shortfall, tried in order
 
 	const PathfindLayerEnum layer = TheTerrainLogic->getLayerForDestination( dest );
+
+	// soldiers of an order with no vehicle in it stop a cell apart (getRadiusAndCenter)
+	Bool hasVehicle = false;
+	for (size_t k = 0; k < members.size(); k++) {
+		if (!members[k]->isKindOf(KINDOF_INFANTRY))
+			hasVehicle = true;
+	}
+	for (size_t k = 0; k < members.size(); k++) {
+		AIUpdateInterface *ai = members[k]->getAIUpdateInterface();
+		const Bool compact = !hasVehicle;
+		if (ai && members[k]->isKindOf(KINDOF_INFANTRY) && (ai->isCompactGoal() ? TRUE : FALSE) != compact) {
+			removeGoal( members[k] );		// cleared on the footprint it was reserved with
+			ai->setCompactGoal( !hasVehicle );
+		}
+	}
+
 	std::vector<bool> isPlaced;
 	const Int placedCount = floodGroupGoalsFrom( dest, layer, members, goals, isPlaced );
 
@@ -7392,7 +7411,7 @@ Bool Pathfinder::adjustTargetDestination(const Object *obj, const Object *target
 	PathProfile pfProfile( PF_ADJUST );
 	Int iRadius;
 	Bool center;
-	getRadiusAndCenter(obj, iRadius, center);
+	getRadiusAndCenter(obj, iRadius, center, TRUE);
 	ICoord2D cell;
 	Coord3D adjustDest = *dest;
 	if (!center) {
@@ -7475,7 +7494,7 @@ Bool Pathfinder::adjustToPossibleDestination(Object *obj, const LocomotorSet& lo
 	PathProfile pfProfile( PF_ADJUST );
 	Int radius;
 	Bool center;
-	getRadiusAndCenter(obj, radius, center);
+	getRadiusAndCenter(obj, radius, center, TRUE);
 	ICoord2D goalCellNdx;
 	Coord3D adjustDest = *dest;
 	if (!center) {
@@ -8586,6 +8605,10 @@ Path *Pathfinder::internalFindPath( Object *obj, const LocomotorSet& locomotorSe
 	if (obj) {
 		getRadiusAndCenter(obj, radius, centerInCell);
 	}
+	// the goal is found and checked with the footprint the unit reserves there, the search with its body
+	Bool goalCenter;
+	Int goalRadius;
+	getRadiusAndCenter(obj, goalRadius, goalCenter, TRUE);
 	beginFlowSearch(obj);
 
 	Bool isHuman = true;
@@ -8607,7 +8630,7 @@ Path *Pathfinder::internalFindPath( Object *obj, const LocomotorSet& locomotorSe
 	Coord3D clipFrom = *from;
 	clip(&clipFrom, &adjustTo);
 
-	if (!centerInCell) {
+	if (!goalCenter) {
 		adjustTo.x += PATHFIND_CELL_SIZE_F/2;
 		adjustTo.y += PATHFIND_CELL_SIZE_F/2;
 	}
@@ -8620,11 +8643,11 @@ Path *Pathfinder::internalFindPath( Object *obj, const LocomotorSet& locomotorSe
 	if (goalCell == NULL) {
 		return NULL;
 	}
-	
+
 	ICoord2D cell;
 	worldToCell( to, &cell );
 
-	if (!checkDestination(obj, cell.x, cell.y, destinationLayer, radius, centerInCell)) {
+	if (!checkDestination(obj, cell.x, cell.y, destinationLayer, goalRadius, goalCenter)) {
 		return NULL;
 	}
 	// determine start cell
@@ -10641,10 +10664,10 @@ Bool Pathfinder::pathDestination( 	Object *obj, const LocomotorSet& locomotorSet
 	}
 	Bool center;
 	Int radius;
-	getRadiusAndCenter(obj, radius, center);
+	getRadiusAndCenter(obj, radius, center, TRUE);
 
 	// determine start cell
-	ICoord2D startCellNdx; 
+	ICoord2D startCellNdx;
 	worldToCell(dest, &startCellNdx);
 	PathfindCell *parentCell = getCell( layer, startCellNdx.x, startCellNdx.y );
 	if (parentCell == NULL)
@@ -10876,7 +10899,7 @@ void Pathfinder::tightenPath(Object *obj, const LocomotorSet& locomotorSet, Coor
 {
 	TightenPathStruct info;
 
-	getRadiusAndCenter(obj, info.radius, info.center);
+	getRadiusAndCenter(obj, info.radius, info.center, TRUE);
 	info.layer = TheTerrainLogic->getLayerForDestination(from);
 	info.obj = obj;
 	info.locomotorSet = &locomotorSet;
@@ -11134,10 +11157,14 @@ Path *Pathfinder::findClosestPath( Object *obj, const LocomotorSet& locomotorSet
 	Bool centerInCell;
 	Int radius;
 	getRadiusAndCenter(obj, radius, centerInCell);
+	// where it may stop is checked with the footprint it reserves there, the search with its body
+	Bool goalCenter;
+	Int goalRadius;
+	getRadiusAndCenter(obj, goalRadius, goalCenter, TRUE);
 
 	Coord3D adjustTo = *rawTo;
 	Coord3D *to = &adjustTo;
-	if (!centerInCell) {
+	if (!goalCenter) {
 		adjustTo.x += PATHFIND_CELL_SIZE_F/2;
 		adjustTo.y += PATHFIND_CELL_SIZE_F/2;
 	}
@@ -11270,7 +11297,7 @@ Path *Pathfinder::findClosestPath( Object *obj, const LocomotorSet& locomotorSet
 			// success - found a path to the goal
 			if (!goalOnObstacle) {
 				// See if the goal is a valid destination.  If not, accept closest cell.
-				if (closesetCell!=NULL && !canPathThroughUnits && !checkDestination(obj, parentCell->getXIndex(), parentCell->getYIndex(), parentCell->getLayer(), radius, centerInCell)) {
+				if (closesetCell!=NULL && !canPathThroughUnits && !checkDestination(obj, parentCell->getXIndex(), parentCell->getYIndex(), parentCell->getLayer(), goalRadius, goalCenter)) {
 					foundGoal = true;
 					// Continue processing the open list to find a possibly closer cell. jba. [8/25/2003]
 					continue;
@@ -11308,7 +11335,7 @@ Path *Pathfinder::findClosestPath( Object *obj, const LocomotorSet& locomotorSet
 		}	
 		// put parent cell onto closed list - its evaluation is finished
 		m_closedList = parentCell->putOnClosedList( m_closedList );
-		if (!m_isTunneling && checkDestination(obj, parentCell->getXIndex(), parentCell->getYIndex(), parentCell->getLayer(), radius, centerInCell)) {
+		if (!m_isTunneling && checkDestination(obj, parentCell->getXIndex(), parentCell->getYIndex(), parentCell->getLayer(), goalRadius, goalCenter)) {
 			if (!startedStuck || validMovementPosition( isCrusher, locomotorSet.getValidSurfaces(), parentCell )) {
 				dx = IABS(goalCell->getXIndex()-parentCell->getXIndex());
 				dy = IABS(goalCell->getYIndex()-parentCell->getYIndex());
@@ -11436,8 +11463,18 @@ Path *Pathfinder::buildActualPath( const Object *obj, LocomotorSurfaceTypeMask a
 
 	Path *path = newInstance(Path);
 
+	// a compact soldier's goal is one cell (getRadiusAndCenter), so the cell before a pinched goal is
+	// often a squad mate's: step back only onto one he may stop on, or he takes it and the mate's path fails
+	Int goalRadius;
+	Bool goalCenter;
+	getRadiusAndCenter(obj, goalRadius, goalCenter, TRUE);
+	const Bool soldierGoal = goalCenter && !center;
 	if (goalCell->getPinched() && goalCell->getParentCell() && !goalCell->getParentCell()->getPinched()) {
-		goalCell = goalCell->getParentCell();
+		PathfindCell *parent = goalCell->getParentCell();
+		if (!soldierGoal ||
+				checkDestination(obj, parent->getXIndex(), parent->getYIndex(), parent->getLayer(), goalRadius, goalCenter)) {
+			goalCell = parent;
+		}
 	}
 
 	if (!prependCells(path, fromPos, goalCell, center)) {
@@ -11446,6 +11483,13 @@ Path *Pathfinder::buildActualPath( const Object *obj, LocomotorSurfaceTypeMask a
 			TheGameLogic->getFrame(), obj ? obj->getTemplate()->getName().str() : "?", obj ? (Int)obj->getID() : 0));
 		path->deleteInstance();
 		return NULL;
+	}
+	// the route ends where the unit reserves its goal: for a compact soldier the middle of his cell,
+	// not the corner his 2x2 body walks the cells by
+	if (soldierGoal && path->getLastNode()) {
+		Coord3D goalPos;
+		adjustCoordToCell(goalCell->getXIndex(), goalCell->getYIndex(), TRUE, goalPos, goalCell->getLayer());
+		path->getLastNode()->setPosition(&goalPos);
 	}
 
 	// cleanup the path by checking line of sight
@@ -12241,10 +12285,18 @@ void Pathfinder::changeBridgeState( PathfindLayerEnum layer, Bool repaired)
 	}
 }
 
-void Pathfinder::getRadiusAndCenter(const Object *obj, Int &iRadius, Bool &center)
+void Pathfinder::getRadiusAndCenter(const Object *obj, Int &iRadius, Bool &center, Bool forGoal)
 {
 	enum {MAX_RADIUS = 2};
-	if (!obj) 
+	/* A soldier's 7-unit body goes up to two cells below, so a squad stopped on a 2x2 goal each, 20
+		 apart, twice what their bodies need.  A soldier last ordered in a group with no vehicle
+		 (floodGroupGoals) reserves only the cell he stands in the middle of, and the squad settles a
+		 cell apart.  What he moves with is unchanged: the search, its unit window, his position cells
+		 and moveAllies still see the 2x2 body.  In a mixed group soldiers keep the 2x2: one-cell goals
+		 there let tanks and soldiers stop half a cell into each other, and squad30's Crusaders came
+		 in 20-30% later. */
+	if (!obj || (forGoal && obj->isKindOf(KINDOF_INFANTRY) && obj->getAIUpdateInterface() &&
+			obj->getAIUpdateInterface()->isCompactGoal()))
 	{
 		center = true;
 		iRadius = 0;
@@ -12317,7 +12369,7 @@ void Pathfinder::updateGoal( Object *obj, const Coord3D *newGoalPos, PathfindLay
 	Bool centerInCell;
 	Int radius;
 	ICoord2D newCell;
-	getRadiusAndCenter(obj, radius, centerInCell);
+	getRadiusAndCenter(obj, radius, centerInCell, TRUE);
 	Int numCellsAbove = radius;
 	if (centerInCell) numCellsAbove++;
 	if (centerInCell) {
@@ -12448,7 +12500,9 @@ void Pathfinder::removeGoal( Object *obj)
 	Bool centerInCell;
 	Int radius;
 	ICoord2D newCell;
-	getRadiusAndCenter(obj, radius, centerInCell);
+	/* the 2x2 a soldier's goal had before his last order, or the one cell after: one cell more each
+		 way covers both, and only his own reservation is cleared */
+	getRadiusAndCenter(obj, radius, centerInCell, TRUE);
 	if (radius==0) {
 		radius++;
 	}
@@ -12678,7 +12732,8 @@ if (g_UT_startTiming) return false;
 		if (!path->getBlockedByAlly()) return FALSE; // Only move units if it is required.
 	}
 	LatchRestore<Int> recursiveDepth(m_moveAlliesDepth, m_moveAlliesDepth+1);	
-	if (m_moveAlliesDepth > 2) return false;
+	if (m_moveAlliesDepth > MOVE_ALLIES_MAX_DEPTH) return false;
+	m_moveAlliesObjects[m_moveAlliesDepth - 1] = obj->getID();
 
 	Bool centerInCell;
 	Int radius;
@@ -12745,6 +12800,19 @@ if (g_UT_startTiming) return false;
 			if( otherObj->testStatus( OBJECT_STATUS_IS_USING_ABILITY ) || otherObj->getAI()->isBusy() )
 			{
 				continue; // Packing or unpacking objects for example
+			}
+
+			/* Upstream #3332: a unit whose own moveAllies call is still running further out is walking
+				 the path this order would destroy, and its caller in AIUpdate goes on using that path. */
+			Bool isOuterCaller = false;
+			for (Int k = 0; k < m_moveAlliesDepth - 1; ++k) {
+				if (m_moveAlliesObjects[k] == *it) {
+					isOuterCaller = true;
+					break;
+				}
+			}
+			if (isOuterCaller) {
+				continue;
 			}
 
 			//DEBUG_LOG(("Moving ally\n"));

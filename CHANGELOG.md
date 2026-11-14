@@ -8,6 +8,16 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Soldiers close ranks, and orders reach the spot
+
+- Soldiers you order together with no vehicle among them now settle about a cell apart round the click. Each one used to keep a square of ground twice the size of his body, so a squad stood spread out with the nearest mate 19 away; now it is under 10. In a test column the last Missile Defender came in three seconds sooner. Put a tank or a truck in the group and its soldiers keep the old spacing, so the vehicles are not held up behind them.
+- An attack move, or an order that pulls a group in tight on a point, keeps trying while each try brings the unit closer. It used to give up after a few tries as much as three tank lengths short of where you pointed. The computer's orders keep the old rule.
+- A soldier wedged between parked vehicles could swing his nose left and right on the spot for the rest of the match, and the game counted the swinging as getting somewhere. It no longer does, so he is freed like any other stuck unit.
+- A unit that has to reach its target to hit it no longer loses its way there when the game is busy finding routes for many units at once.
+- A unit shoved aside by a friendly one could drive on along a route that had already been thrown away. That is fixed, after the same fix in TheSuperHackers' version of this source.
+- After a saved game is loaded, the computer's attack moves behave as the computer's again, and a unit halfway through being freed from a jam carries on where it was.
+- A replay recorded before this change will not play back.
+
 ## Water maps run like dry ones
 
 - On Tournament Island, Bombardment Beach and every other map with a lot of sea, a fast PC fell from about 240 frames a second to 70 or 80. Two things this build added to water were paying for it on every frame. The reflection of the units and buildings in the water was drawn again each time the picture was, 240 times a second on a fast card, for a soft darkening that moves no faster than the game does. It is now drawn at most 30 times a second, and between those it stays fixed to the water, so it does not swim while you scroll and a jump across the map draws it fresh at once. And on any map with water the sun's shadows were being drawn for every tank and building in a wide box round the view, seen or not, because the water's reflection might show one. Now only the ones that can throw a shadow into the view or into its reflection are drawn. The water looks the way it did. Modern water keeps drawing its reflection every frame.

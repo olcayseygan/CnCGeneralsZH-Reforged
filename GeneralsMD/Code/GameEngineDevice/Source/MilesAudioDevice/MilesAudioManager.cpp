@@ -3384,7 +3384,8 @@ void MilesAudioManager::trackVelocity( PlayingAudio *playing, const Coord3D *pos
 
 	if (playing->m_tracked)
 	{
-		const Real perSecond = MSEC_PER_SECOND / m_clockElapsedMs;
+		// per game second, not per wall second: the doppler and the Aurora's boom hear the same unit alike at every game speed
+		const Real perSecond = AudioMixPolicy::perGameSecond(m_clockElapsedMs, GAME_SPEED_PERCENT);
 		playing->m_velocity.x += 0.5f * ((pos->x - playing->m_lastPosition.x) * perSecond - playing->m_velocity.x);
 		playing->m_velocity.y += 0.5f * ((pos->y - playing->m_lastPosition.y) * perSecond - playing->m_velocity.y);
 		playing->m_velocity.z += 0.5f * ((pos->z - playing->m_lastPosition.z) * perSecond - playing->m_velocity.z);

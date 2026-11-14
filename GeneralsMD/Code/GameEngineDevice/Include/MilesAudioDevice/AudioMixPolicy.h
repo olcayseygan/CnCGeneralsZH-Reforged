@@ -49,4 +49,13 @@ inline float coalescedGain(int merged, float step, float ceiling)
 	return gain < ceiling ? gain : ceiling;
 }
 
+/// What a distance moved over logicMs of the audio clock (wall-rate ticks) is multiplied by to give units
+/// a game second, the unit SpeedOfSound, DopplerFastSpeed and every locomotor speed are written in.  A
+/// tick carries gameSpeedPercent / 100 of a wall tick's game time, so the same unit covers twice the
+/// ground a wall second at 200 as at 100; per wall second its doppler bent twice as far.
+inline float perGameSecond(float logicMs, int gameSpeedPercent)
+{
+	return 1000.0f * 100.0f / (logicMs * (float)gameSpeedPercent);
+}
+
 }	// namespace AudioMixPolicy

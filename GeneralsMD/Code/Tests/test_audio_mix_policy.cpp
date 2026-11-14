@@ -23,3 +23,14 @@ TEST(a_folded_shot_grows_a_step_each_and_stops_at_the_ceiling)
 	CHECK_NEAR(coalescedGain(2, 0.12f, 1.5f), 1.24f, 1e-6f);
 	CHECK_NEAR(coalescedGain(19, 0.12f, 1.5f), 1.5f, 1e-6f);
 }
+
+TEST(a_unit_is_heard_at_its_own_speed_whatever_the_game_speed)
+{
+	// a Raptor at 175 units a game second, two 30 Hz ticks: it covers percent / 100 of that a wall second
+	const int percents[] = { 100, 125, 150, 200 };
+	const float logicMs = 2.0f * 1000.0f / 30.0f;
+	for (int i = 0; i < 4; ++i) {
+		const float moved = 175.0f * (float)percents[i] / 100.0f * logicMs / 1000.0f;
+		CHECK_NEAR(moved * perGameSecond(logicMs, percents[i]), 175.0f, 1e-3f);
+	}
+}

@@ -100,6 +100,14 @@ static const Int TheSpeakerTypesCount = sizeof(TheSpeakerTypes) / sizeof(TheSpea
 
 static void parseSpeakerType( INI *ini, void *instance, void *store, const void *userData );
 
+// msec into logic frames at the wall rate, rounded up.  TimeToFadeAudio is a length the player hears,
+// counted on the audio clock's 30 ticks a wall second; read as game time it shrank with the game
+// speed, and at 2.0x every fade and music crossfade was cut to half its length.
+static void parseWallDurationInt( INI *ini, void * /*instance*/, void *store, const void * /*userData*/ )
+{
+	*(Int *)store = (Int)ceilf( (Real)INI::scanUnsignedInt( ini->getNextToken() ) * LOGICFRAMES_PER_MSEC_REAL );
+}
+
 // Field Parse table for Audio Settings ///////////////////////////////////////////////////////////
 static const FieldParse audioSettingsFieldParseTable[] =
 {
@@ -153,7 +161,7 @@ static const FieldParse audioSettingsFieldParseTable[] =
 	{ "GlobalMinRange",				INI::parseInt,											NULL,							offsetof( AudioSettings, m_globalMinRange) },
 	{ "GlobalMaxRange",				INI::parseInt,											NULL,							offsetof( AudioSettings, m_globalMaxRange) },
 	{ "TimeBetweenDrawableSounds", SPEED_FIELD( AudioSettings, m_drawableAmbientFrames ) },
-	{ "TimeToFadeAudio",			SPEED_FIELD( AudioSettings, m_fadeAudioFrames ) },
+	{ "TimeToFadeAudio",			parseWallDurationInt,								NULL,							offsetof( AudioSettings, m_fadeAudioFrames) },
 	{ "AudioFootprintInBytes",INI::parseUnsignedInt,							NULL,							offsetof( AudioSettings, m_maxCacheSize) },
 	{ "Relative2DVolume",			INI::parsePercentToReal,						NULL,							offsetof( AudioSettings, m_relative2DVolume ) },
 	{ "DefaultSoundVolume",		INI::parsePercentToReal,						NULL,							offsetof( AudioSettings, m_defaultSoundVolume) },

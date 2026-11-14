@@ -157,7 +157,7 @@ struct AudioSettings
 	AsciiString m_ambienceBedField;
 
 	DurationFramesInt m_drawableAmbientFrames;
-	DurationFramesInt m_fadeAudioFrames;
+	Int m_fadeAudioFrames;		///< TimeToFadeAudio in wall-rate logic frames (LOGICFRAMES_PER_SECOND): a fade is heard, so the game speed has no part in it
 	UnsignedInt m_maxCacheSize;
 
 	Real m_minVolume;		// At volumes less than this, the sample will be culled.

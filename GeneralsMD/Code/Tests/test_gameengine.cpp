@@ -1515,6 +1515,88 @@ TEST(flipbook_blend_fades_into_the_next_frame_of_its_own_run)
 			}
 }
 
+/* Between two ticks the crossfade runs on the picture's clock: the age lags one update and gains the
+	 tick's fraction, so a flipbook that steps a whole frame each tick (fraction 0 at every tick) fades
+	 across every picture between them, and one stepping more than a frame a tick fades frame to frame
+	 by where the picture falls, never by a stale tick. */
+TEST(flipbook_blend_moves_between_logic_ticks)
+{
+	const Real SPF = 0.05f;
+	UnsignedInt next = 0;
+	Real f = 0.0f;
+
+	CHECK_EQ( Particle::flipbookDrawAge( 0, 0.5f ), 0.0f );
+	CHECK_EQ( Particle::flipbookDrawAge( 10, 1.0f ), 10.0f );		// smooth motion off: the tick's own age
+	CHECK_NEAR( Particle::flipbookDrawAge( 10, 0.25f ), 9.25f, 0.0001f );
+	CHECK_EQ( Particle::flipbookDrawAge( 10, 7.0f ), 10.0f );
+	CHECK_EQ( Particle::flipbookDrawAge( 10, -1.0f ), 9.0f );
+	// the age runs on without a jump across the tick: the end of one is the start of the next
+	CHECK_EQ( Particle::flipbookDrawAge( 11, 0.0f ), Particle::flipbookDrawAge( 10, 1.0f ) );
+
+	// 20 frames a second at 0.05 s a tick is one frame a tick: at the tick itself fraction 0, three
+	// pictures between ticks a quarter, a half and three quarters of the way
+	CHECK_EQ( Particle::flipbookBlendAt( 64, 1, 0, 0, Particle::flipbookDrawAge( 8, 1.0f ), 100, 20.0f, SPF, &next, &f ), 8u );
+	CHECK_NEAR( f, 0.0f, 0.0001f );
+	const Real quarters[] = { 0.25f, 0.5f, 0.75f };
+	for (Int q = 0; q < 3; ++q)
+	{
+		CHECK_EQ( Particle::flipbookBlendAt( 64, 1, 0, 0, Particle::flipbookDrawAge( 9, quarters[ q ] ), 100, 20.0f, SPF, &next, &f ), 8u );
+		CHECK_EQ( next, 9u );
+		CHECK_NEAR( f, quarters[ q ], 0.0001f );
+	}
+	// 50 frames a second is 2.5 a tick: the tick at age 3 alone would show 5 and then 7, the pictures
+	// between fade 5 into 6 and 6 into 7 on the way
+	CHECK_EQ( Particle::flipbookBlendAt( 64, 1, 0, 0, Particle::flipbookDrawAge( 3, 0.2f ), 100, 50.0f, SPF, &next, &f ), 5u );
+	CHECK_EQ( next, 6u );
+	CHECK_NEAR( f, 0.5f, 0.0002f );
+	CHECK_EQ( Particle::flipbookBlendAt( 64, 1, 0, 0, Particle::flipbookDrawAge( 3, 0.6f ), 100, 50.0f, SPF, &next, &f ), 6u );
+	CHECK_EQ( next, 7u );
+	CHECK_NEAR( f, 0.5f, 0.0002f );
+	CHECK_EQ( Particle::flipbookBlendAt( 64, 1, 0, 0, Particle::flipbookDrawAge( 3, 1.0f ), 100, 50.0f, SPF, &next, &f ), 7u );
+	CHECK_EQ( next, 8u );
+	CHECK_NEAR( f, 0.5f, 0.0002f );
+	// played once over the life the same: 100 frames of life through a run of 16, picture half a tick on
+	CHECK_EQ( Particle::flipbookBlendAt( 64, 4, 1, 0, Particle::flipbookDrawAge( 51, 0.5f ), 100, 0.0f, SPF, &next, &f ), 24u );
+	CHECK_EQ( next, 25u );
+	CHECK_NEAR( f, 0.08f, 0.0002f );
+}
+
+/* The alpha blended crossfade's two alphas: the frame under keeps the pair's coverage near the
+	 particle's own (within a tenth at full alpha half way, where two plain shares lose a quarter), it
+	 falls steadily to nothing as the next frame comes up, and the ends are one card each. */
+TEST(flipbook_crossfade_alphas_keep_the_coverage)
+{
+	Real under = -1.0f, over = -1.0f;
+	Particle::flipbookCrossfadeAlphas( 0.8f, 0.0f, &under, &over );
+	CHECK_NEAR( under, 0.8f, 0.0001f ); CHECK_EQ( over, 0.0f );
+	Particle::flipbookCrossfadeAlphas( 0.8f, 1.0f, &under, &over );
+	CHECK_EQ( under, 0.0f ); CHECK_NEAR( over, 0.8f, 0.0001f );
+	Particle::flipbookCrossfadeAlphas( 1.7f, 0.0f, &under, &over );
+	CHECK_EQ( under, 1.0f );
+	Particle::flipbookCrossfadeAlphas( -0.3f, 0.5f, &under, &over );
+	CHECK_EQ( under, 0.0f ); CHECK_EQ( over, 0.0f );
+
+	Particle::flipbookCrossfadeAlphas( 1.0f, 0.5f, &under, &over );
+	const Real covered = 1.0f - ( 1.0f - under ) * ( 1.0f - over );
+	CHECK( covered >= 0.9f - 0.0001f && covered <= 1.0f );
+	CHECK( 1.0f - 0.5f * 0.5f < 0.9f );		// what two plain shares would cover
+
+	const Real alphas[] = { 0.2f, 0.6f, 1.0f };
+	for (Int a = 0; a < 3; ++a)
+	{
+		Real last = 2.0f;
+		for (Int i = 0; i <= 20; ++i)
+		{
+			Particle::flipbookCrossfadeAlphas( alphas[ a ], (Real)i / 20.0f, &under, &over );
+			CHECK( under <= last + 0.00001f );
+			CHECK( under >= 0.0f && under <= 1.0f && over >= 0.0f && over <= 1.0f );
+			const Real pair = 1.0f - ( 1.0f - under ) * ( 1.0f - over );
+			CHECK( pair >= 0.88f * alphas[ a ] - 0.0001f && pair <= alphas[ a ] + 0.0001f );
+			last = under;
+		}
+	}
+}
+
 /* IsParticleUpTowardsEmitter: a ground-aligned card turned by the angle has its top edge along
 	 (sin, cos) (pointgr.cpp's QUADS_SIZE_ORIENT turns clockwise), and that edge has to face the
 	 emitter on every heading.  EA's acos turned the exact east-west axis a quarter off; the Classic

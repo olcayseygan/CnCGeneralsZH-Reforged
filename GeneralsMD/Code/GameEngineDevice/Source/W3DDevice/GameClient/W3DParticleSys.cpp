@@ -768,6 +768,9 @@ struct BillboardFillJob
 	/// it after the sun's shadow and the smoke's own shade, which dimmed a fire seen through the far
 	/// side of a plume when it was in the colour.  Direct3D 9 shades nothing and keeps it baked.
 	Bool																			glowAfterShade;
+	/// how far this picture is into the logic tick (TheSmoothMotionAlpha): a crossfading flipbook
+	/// plays on the picture's clock, not the tick's
+	Real																			tickFraction;
 };
 
 /// systems a pool thread claims at once; a system is a few hundred particles, so one claim a system
@@ -838,21 +841,28 @@ static void fillBillboards( Int index, void *context )
 		UnsignedInt frame = 0, nextFrame = 0;
 		Real fraction = 0.0f;
 		if (flipbookLog2)
-			frame = fill.blend ? p->getFlipbookBlend( &nextFrame, &fraction ) : p->getFlipbookFrame();
+			frame = fill.blend ? p->getFlipbookBlend( job->tickFraction, &nextFrame, &fraction ) : p->getFlipbookFrame();
 		const Vector3 world( pos->x, pos->y, pos->z );
 		const Bool mirrored = p->isFlipbookMirrored() != FALSE;
 		Int cards = 1;
-		if (fill.blend && fraction > 0.0f && nextFrame != frame)
+		// Two cards only while the range keeps one quad for every particle still to come, so a system
+		// past 256 particles loses its crossfades one particle at a time from the end of its list.
+		if (fill.blend && fraction > 0.0f && nextFrame != frame
+				&& quads + 2 + ( fill.capacity - drawn - 1 ) <= fill.reserved)
 		{
-			// a crossfade at one depth: this frame takes 1 - fraction of the particle, the next the rest,
-			// as an alpha blended card takes a share of its alpha and an additive one of its light
-			Real r = red, g = green, b = blue, a = alpha;
-			stealthFadeParticle( shaderType, 1.0f - fraction, r, g, b, a );
-			writeParticleCard( fill, job->view, quad, world, psize, orientation, DX8Wrapper::Convert_Color_Clamp( Vector4( r, g, b, a ) ),
+			// a crossfade at one depth, this frame drawn first and the next over it: an additive card
+			// takes its share of the light, an alpha blended pair the alphas that keep its coverage
+			Real r = red, g = green, b = blue, under = alpha, over = alpha;
+			if (shaderType == ParticleSystemInfo::ALPHA)
+				Particle::flipbookCrossfadeAlphas( alpha, fraction, &under, &over );
+			else
+				stealthFadeParticle( shaderType, 1.0f - fraction, r, g, b, under );
+			writeParticleCard( fill, job->view, quad, world, psize, orientation, DX8Wrapper::Convert_Color_Clamp( Vector4( r, g, b, under ) ),
 				glow, flipbookLog2, frame, mirrored );
-			r = red; g = green; b = blue; a = alpha;
-			stealthFadeParticle( shaderType, fraction, r, g, b, a );
-			writeParticleCard( fill, job->view, quad + 4, world, psize, orientation, DX8Wrapper::Convert_Color_Clamp( Vector4( r, g, b, a ) ),
+			r = red; g = green; b = blue;
+			if (shaderType != ParticleSystemInfo::ALPHA)
+				stealthFadeParticle( shaderType, fraction, r, g, b, over );
+			writeParticleCard( fill, job->view, quad + 4, world, psize, orientation, DX8Wrapper::Convert_Color_Clamp( Vector4( r, g, b, over ) ),
 				glow, flipbookLog2, nextFrame, mirrored );
 			cards = 2;
 		}
@@ -2576,15 +2586,17 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		fill.hardEdge = sys->isAttachedToMine();
 		fill.alongAxis = sys->getTemplate()->isAlongEmitterAxis() && !TheGlobalData->m_classicGraphics;
 		fill.axis = sys->getEmitterAxis();
-		// A flipbook crossfades each particle's frame into the next (two cards a particle) outside
-		// Classic, for alpha blended and additive systems that fit twice in the 512 quads a range holds.
-		// ponytail: a flipbook system with more than 256 particles on screen steps frames as before
+		// A flipbook of an alpha blended or additive system crossfades each particle's frame into the
+		// next (two cards a particle) outside Classic.  The range holds 512 quads, so a system of more
+		// than 256 particles has room for only some crossfades; the fill gives them out in list order.
+		// ponytail: past 256 particles the later ones step frames, a range per system would lift it
 		fill.blend = sys->getTemplate()->getFlipbookGridLog2() != 0 && !TheGlobalData->m_classicGraphics
-			&& ( sys->getShaderType() == ParticleSystemInfo::ALPHA || sys->getShaderType() == ParticleSystemInfo::ADDITIVE )
-			&& fill.capacity * 2 <= (Int)MAX_POINTS_PER_GROUP;
+			&& ( sys->getShaderType() == ParticleSystemInfo::ALPHA || sys->getShaderType() == ParticleSystemInfo::ADDITIVE );
+		fill.reserved = fill.blend && fill.capacity * 2 > (Int)MAX_POINTS_PER_GROUP ? (Int)MAX_POINTS_PER_GROUP
+			: fill.capacity * ( fill.blend ? 2 : 1 );
 		fill.quads = 0;
 		fill.texture =W3DDisplay::m_assetManager->Get_Texture( sys->getParticleTypeName().str() );
-		PointGroupClass::Reserve_Sorted_Billboards( fill.blend ? fill.capacity * 2 : fill.capacity, &fill.range );
+		PointGroupClass::Reserve_Sorted_Billboards( fill.reserved, &fill.range );
 		m_billboardFills.push_back( fill );
 	}
 
@@ -2649,6 +2661,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		fillJob.lightCount = gatherSmokeLights( fillJob.lights, bbox );
 	}
 	fillJob.glowAfterShade = Direct3D11_Present_Is_Enabled();
+	fillJob.tickFraction = TheSmoothMotionActive ? TheSmoothMotionAlpha : 1.0f;
 #if defined(__linux__)
 	fillJob.glowAfterShade = fillJob.glowAfterShade
 		|| SunShadow::OwnsSceneShadows(DX8Wrapper::_Get_D3D_Device());

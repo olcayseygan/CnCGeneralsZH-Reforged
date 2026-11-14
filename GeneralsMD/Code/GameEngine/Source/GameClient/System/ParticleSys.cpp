@@ -438,12 +438,34 @@ UnsignedInt Particle::getFlipbookFrame( void ) const
 }
 
 // ------------------------------------------------------------------------------------------------
-UnsignedInt Particle::getFlipbookBlend( UnsignedInt *next, Real *fraction ) const
+UnsignedInt Particle::getFlipbookBlend( Real tickFraction, UnsignedInt *next, Real *fraction ) const
 {
 	const ParticleSystemTemplate *flipbook = m_system->getTemplate();
 	return flipbookBlendAt( 1u << ( 2 * flipbook->getFlipbookGridLog2() ), flipbook->getFlipbookVariants(), m_flipbookVariant,
-		m_flipbookStart, m_lifetime - m_lifetimeLeft, m_lifetime, flipbook->getFlipbookRate(), GAME_SECONDS_PER_LOGICFRAME_REAL,
-		next, fraction );
+		m_flipbookStart, flipbookDrawAge( m_lifetime - m_lifetimeLeft, tickFraction ), m_lifetime, flipbook->getFlipbookRate(),
+		GAME_SECONDS_PER_LOGICFRAME_REAL, next, fraction );
+}
+
+// ------------------------------------------------------------------------------------------------
+/*static*/ Real Particle::flipbookDrawAge( UnsignedInt age, Real tickFraction )
+{
+	if (tickFraction < 0.0f)
+		tickFraction = 0.0f;
+	else if (tickFraction > 1.0f)
+		tickFraction = 1.0f;
+	return age > 0 ? (Real)( age - 1 ) + tickFraction : 0.0f;
+}
+
+// ------------------------------------------------------------------------------------------------
+/*static*/ void Particle::flipbookCrossfadeAlphas( Real alpha, Real fraction, Real *under, Real *over )
+{
+	const Real UNDER_RAISE = 0.75f;
+	if (alpha < 0.0f)
+		alpha = 0.0f;
+	else if (alpha > 1.0f)
+		alpha = 1.0f;
+	*over = alpha * fraction;
+	*under = alpha * ( 1.0f - fraction ) / ( 1.0f - UNDER_RAISE * alpha * fraction );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -461,7 +483,7 @@ UnsignedInt Particle::getFlipbookBlend( UnsignedInt *next, Real *fraction ) cons
 {
 	UnsignedInt next;
 	Real fraction;
-	return flipbookBlendAt( frames, variants, variant, start, age, lifetime, rate, secondsPerLogicFrame, &next, &fraction );
+	return flipbookBlendAt( frames, variants, variant, start, (Real)age, lifetime, rate, secondsPerLogicFrame, &next, &fraction );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -469,7 +491,7 @@ UnsignedInt Particle::getFlipbookBlend( UnsignedInt *next, Real *fraction ) cons
 	* casts threw away. */
 // ------------------------------------------------------------------------------------------------
 /*static*/ UnsignedInt Particle::flipbookBlendAt( UnsignedInt frames, UnsignedInt variants, UnsignedInt variant, UnsignedInt start,
-	UnsignedInt age, UnsignedInt lifetime, Real rate, Real secondsPerLogicFrame, UnsignedInt *next, Real *fraction )
+	Real age, UnsignedInt lifetime, Real rate, Real secondsPerLogicFrame, UnsignedInt *next, Real *fraction )
 {
 	const UnsignedInt run = flipbookRunLength( frames, variants );
 	const UnsignedInt base = ( variant < frames / run ? variant : 0 ) * run;

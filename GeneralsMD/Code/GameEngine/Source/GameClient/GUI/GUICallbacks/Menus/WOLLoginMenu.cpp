@@ -836,15 +836,40 @@ static void checkLogin( void )
 	}
 }
 
+/// Sign In as a click on it, while it takes one: Enter in either field, and the automatic sign-ins
+static void pressLogin( void )
+{
+	if (buttonPushed || !parentWOLLogin || !buttonLogin || !BitTest( buttonLogin->winGetStatus(), WIN_STATUS_ENABLED )
+		|| buttonLogin->winIsHidden())
+		return;
+	TheWindowManager->winSendSystemMsg( parentWOLLogin, GBM_SELECTED, (WindowMsgData)buttonLogin, buttonLoginID );
+}
+
 /* -onlineuser/-onlinepass: fill the fields and press Login as a player would, once per process; a refusal
-	 leaves the screen to a person.  No password logs in with the token a remembered login saved. */
+	 leaves the screen to a person.  No password logs in with the token a remembered login saved.  Without
+	 them, Keep me signed in does the same on the first visit after a start: the login came back ticked
+	 with its token saved, so the player is signed in without pressing anything.  Back on this screen
+	 later in the same run (signed out, or another account wanted) it waits for a press. */
 static void onlineAutoLogin( void )
 {
 	static Bool s_done = FALSE;
-	if (s_done || !OnlineIsEnabled() || OnlineGetStatus() != ONLINE_WELCOMED || TheGlobalData->m_onlineUser.isEmpty() || loginAttemptTime
-		|| !comboBoxEmail || !textEntryPassword || !parentWOLLogin || !buttonLogin)
+	if (s_done || !OnlineIsEnabled() || OnlineGetStatus() != ONLINE_WELCOMED || loginAttemptTime
+		|| !comboBoxEmail || !textEntryPassword || !parentWOLLogin || !buttonLogin
+		|| !BitTest( buttonLogin->winGetStatus(), WIN_STATUS_ENABLED ))		// the welcome wakes it a pass later
 		return;
 	s_done = TRUE;
+
+	if (TheGlobalData->m_onlineUser.isEmpty())
+	{
+		AsciiString email;
+		email.translate( GadgetComboBoxGetText( comboBoxEmail ) );
+		if (!checkBoxRememberPassword || !GadgetCheckBoxIsChecked( checkBoxRememberPassword ) || email.isEmpty()
+			|| !GadgetTextEntryGetText( textEntryPassword ).isEmpty() || OnlineGetSavedToken( email ).isEmpty())
+			return;
+		DEBUG_LOG(("ONLINE AUTOLOGIN kept\n"));
+		pressLogin();
+		return;
+	}
 
 	UnicodeString text;
 	text.translate( TheGlobalData->m_onlineUser );
@@ -855,7 +880,7 @@ static void onlineAutoLogin( void )
 		GadgetCheckBoxSetChecked( checkBoxRememberPassword, TRUE );
 
 	DEBUG_LOG(("ONLINE AUTOLOGIN login\n"));
-	TheWindowManager->winSendSystemMsg( parentWOLLogin, GBM_SELECTED, (WindowMsgData)buttonLogin, buttonLoginID );
+	pressLogin();
 }
 
 /* -online's status line under the fields and the help text in the panel's right half, made in code: the
@@ -931,6 +956,20 @@ static void onlineSavedLoginHint( void )
 	const Bool saved = email.isNotEmpty() && GadgetTextEntryGetText( textEntryPassword ).isEmpty()
 		&& OnlineGetSavedToken( email ).isNotEmpty();
 	onlineStatus( saved ? TheGameText->fetch( "GUI:OnlineLoginSavedToken" ) : UnicodeString::TheEmptyString );
+}
+
+/* The box for a login the screen keeps nothing of.  EA unticked it, so under -online, where the email is
+	 typed rather than picked, every letter of it took back a tick given first and the login was never
+	 kept.  -online leaves it as the player set it, and ticks it for a login whose token is saved under
+	 another spelling (tokens are kept lower case, the screen's own list as typed). */
+static void onlineRememberUnsaved( const AsciiString &email )
+{
+	if (!checkBoxRememberPassword)
+		return;
+	if (!OnlineIsEnabled())
+		GadgetCheckBoxSetChecked( checkBoxRememberPassword, FALSE );
+	else if (email.isNotEmpty() && OnlineGetSavedToken( email ).isNotEmpty())
+		GadgetCheckBoxSetChecked( checkBoxRememberPassword, TRUE );
 }
 
 /// Create Account and Forgot Password: the site's page in the player's browser.  A test server's copies
@@ -1228,6 +1267,11 @@ void WOLLoginMenuUpdate( WindowLayout * layout, void *userData)
 
 					GameSpyMiscPreferences miscPref;
 					TheGameSpyInfo->setMaxMessagesPerUpdate(miscPref.getMaxMessagesPerUpdate());
+
+					// the kept login goes to disk at sign-in too, not only when the screen closes, so a run that
+					// ends on the way out still finds it next time
+					if (loginPref)
+						loginPref->write();
 
 					if (OnlineIsEnabled())
 					{
@@ -1550,7 +1594,7 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 					}
 					else
 					{
-						GadgetCheckBoxSetChecked(checkBoxRememberPassword, false);						
+						onlineRememberUnsaved( email );
 						GadgetTextEntrySetText(textEntryMonth, UnicodeString::TheEmptyString);
 						GadgetTextEntrySetText(textEntryDay, UnicodeString::TheEmptyString);
 						GadgetTextEntrySetText(textEntryYear, UnicodeString::TheEmptyString);
@@ -1580,6 +1624,13 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 					break;
 				GameWindow *control = (GameWindow *)mData1;
 				Int controlID = control->winGetWindowId();
+
+				// Enter in the email field signs in; the letters typed already filled the rest
+				if (controlID == comboBoxEmailID && mData2 == 1)
+				{
+					pressLogin();
+					break;
+				}
 
 				if (controlID == comboBoxEmailID)
 				{
@@ -1622,7 +1673,7 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 					}
 					else
 					{
-						GadgetCheckBoxSetChecked(checkBoxRememberPassword, false);						
+						onlineRememberUnsaved( email );
 						GadgetTextEntrySetText(textEntryMonth, UnicodeString::TheEmptyString);
 						GadgetTextEntrySetText(textEntryDay, UnicodeString::TheEmptyString);
 						GadgetTextEntrySetText(textEntryYear, UnicodeString::TheEmptyString);
@@ -1837,7 +1888,10 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 							}
 							else
 							{
+								// unticked forgets this login, and the next start no longer opens on it
 								loginPref->forgetLogin(email);
+								if ((*loginPref)["lastEmail"] == email)
+									loginPref->erase("lastEmail");
 							}
 							if (OnlineIsEnabled())
 							{
@@ -1993,6 +2047,9 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 	
 		case GEM_EDIT_DONE:
 			{
+				// Enter in the password field signs in
+				if ((GameWindow *)mData1 == textEntryPassword)
+					pressLogin();
 				break;
 			}
 			/*

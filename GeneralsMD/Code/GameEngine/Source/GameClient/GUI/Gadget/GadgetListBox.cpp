@@ -691,7 +691,12 @@ WindowMsgHandledType GadgetListBoxInput( GameWindow *window, UnsignedInt msg,
 				case KEY_TAB:
 
 					if( BitTest( mData2, KEY_STATE_DOWN ) )
-						TheWindowManager->winNextTab(window);
+					{
+						if( mData1 == KEY_TAB && BitTest( mData2, KEY_STATE_SHIFT ) )	// Shift+Tab goes back
+							TheWindowManager->winPrevTab(window);
+						else
+							TheWindowManager->winNextTab(window);
+					}
 					break;
 
 				// --------------------------------------------------------------------

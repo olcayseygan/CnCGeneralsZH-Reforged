@@ -26491,3 +26491,36 @@ TEST(turkiye_announcer_speaks_every_event_america_does)
 		TheAudio = NULL;
 	}
 }
+
+// The online login registers email, nick, password, birth date, keep-signed-in, Sign In, Create Account,
+// Forgot Password, Back, and hides the nick and the birth date; Tab landed on the hidden nick box.
+static Bool tabStopShown( Int window ) { return window != 2 && window != 4 && window != 5 && window != 6; }
+
+TEST(tab_order_skips_what_the_screen_hides_both_ways)
+{
+	std::list<Int> tabs;
+	for( Int window = 1; window <= 10; ++window )
+		tabs.push_back( window );		// 1 email, 2 nick, 3 password, 4-6 birth date, 7 keep signed in, 8 Sign In, 9-10
+
+	CHECK_EQ( *findTabStop( tabs.begin(), tabs.end(), 1, tabStopShown ), 3 );
+	CHECK_EQ( *findTabStop( tabs.begin(), tabs.end(), 3, tabStopShown ), 7 );
+	CHECK_EQ( *findTabStop( tabs.begin(), tabs.end(), 7, tabStopShown ), 8 );
+	CHECK_EQ( *findTabStop( tabs.begin(), tabs.end(), 10, tabStopShown ), 1 );		// round to the top
+
+	// Shift+Tab walks the list backwards
+	CHECK_EQ( *findTabStop( tabs.rbegin(), tabs.rend(), 7, tabStopShown ), 3 );
+	CHECK_EQ( *findTabStop( tabs.rbegin(), tabs.rend(), 3, tabStopShown ), 1 );
+	CHECK_EQ( *findTabStop( tabs.rbegin(), tabs.rend(), 1, tabStopShown ), 10 );
+
+	// focus on a window outside the list starts from the first shown one; a hidden one in it moves on
+	CHECK_EQ( *findTabStop( tabs.begin(), tabs.end(), 99, tabStopShown ), 1 );
+	CHECK_EQ( *findTabStop( tabs.begin(), tabs.end(), 2, tabStopShown ), 3 );
+
+	// one shown window keeps the focus, none shown gives nothing
+	std::list<Int> lone;
+	lone.push_back( 2 );
+	lone.push_back( 3 );
+	CHECK_EQ( *findTabStop( lone.begin(), lone.end(), 3, tabStopShown ), 3 );
+	lone.pop_back();
+	CHECK( findTabStop( lone.begin(), lone.end(), 2, tabStopShown ) == lone.end() );
+}

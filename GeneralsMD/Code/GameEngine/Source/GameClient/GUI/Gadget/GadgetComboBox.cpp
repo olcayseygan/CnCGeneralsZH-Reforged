@@ -198,7 +198,12 @@ WindowMsgHandledType GadgetComboBoxInput( GameWindow *window, UnsignedInt msg,
 				case KEY_TAB:
 
 					if( BitTest( mData2, KEY_STATE_DOWN ) )
-						TheWindowManager->winNextTab(window);
+					{
+						if( mData1 == KEY_TAB && BitTest( mData2, KEY_STATE_SHIFT ) )	// Shift+Tab goes back
+							TheWindowManager->winPrevTab(window);
+						else
+							TheWindowManager->winNextTab(window);
+					}
 					break;
 
 				// --------------------------------------------------------------------
@@ -467,10 +472,11 @@ WindowMsgHandledType GadgetComboBoxSystem( GameWindow *window, UnsignedInt msg,
 			if ((GameWindow *)mData1 == comboData->editBox)
 			{
 				HideListBox(window);
-				TheWindowManager->winSendSystemMsg( window->winGetOwner(), 
+				// mData2 1: Enter in the edit box, where a pick from the list sends 0
+				TheWindowManager->winSendSystemMsg( window->winGetOwner(),
 																		GCM_SELECTED,
-																		(WindowMsgData)window, 
-																		0 );
+																		(WindowMsgData)window,
+																		1 );
 			}
 			break;
 		}

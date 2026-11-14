@@ -229,10 +229,11 @@ WindowMsgHandledType GadgetTextEntryInput( GameWindow *window, UnsignedInt msg,
 						parent = window->winGetParent();
 						if(parent && !BitTest(parent->winGetStyle(), GWS_COMBO_BOX))
 							parent = NULL;
-						if(parent)
-							TheWindowManager->winNextTab(parent);
+						GameWindow *from = parent ? parent : window;
+						if( mData1 == KEY_TAB && BitTest( mData2, KEY_STATE_SHIFT ) )	// Shift+Tab goes back
+							TheWindowManager->winPrevTab(from);
 						else
-							TheWindowManager->winNextTab(window);
+							TheWindowManager->winNextTab(from);
 					}
 					
 					break;

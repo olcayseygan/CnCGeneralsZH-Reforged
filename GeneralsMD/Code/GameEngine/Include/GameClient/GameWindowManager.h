@@ -36,6 +36,7 @@
 #define __GAMEWINDOWMANAGER_H_
 
 
+#include <algorithm>
 #include "Common/STLTypedefs.h"
 #include "Common/SubsystemInterface.h"
 #include "GameClient/WindowLayout.h"
@@ -53,6 +54,27 @@ class GameWindow;
 enum { MAX_LAYOUT_FUNC_LEN = 256 };
 
 typedef std::list <GameWindow *> GameWindowList;
+
+/** The tab stop after current in [first, last), wrapping round, skipping what usable refuses; current
+	* itself comes last, and a current not in the list starts from the top.  last when nothing is usable.
+	* Reverse iterators give the stop before.  A layout registers windows it hides for a mode (the online
+	* login hides the nick and birth date), and focus used to land on them. */
+template <class Iter, class T, class Usable>
+Iter findTabStop( Iter first, Iter last, T current, Usable usable )
+{
+	Iter start = std::find( first, last, current );
+	if( start != last )
+		++start;
+	else
+		start = first;
+	for( Iter it = start; it != last; ++it )
+		if( usable( *it ) )
+			return it;
+	for( Iter it = first; it != start; ++it )
+		if( usable( *it ) )
+			return it;
+	return last;
+}
 
 class WindowLayoutInfo
 {

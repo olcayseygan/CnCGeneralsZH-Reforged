@@ -560,7 +560,7 @@ void DumpExceptionInfo( unsigned int u, EXCEPTION_POINTERS* e_info )
 	** The following are set for access violation only
 	*/
 	int access_read_write=-1;
-	unsigned long access_address = 0;
+	ULONG_PTR access_address = 0;	// unsigned long is 32 bits on Win64 and cut every x64 address in half
 	AsciiString msg; 
 
 // DOUBLE_DEBUG does a DEBUG_LOG, and concats to g_LastErrorDump.  jba.
@@ -599,11 +599,11 @@ void DumpExceptionInfo( unsigned int u, EXCEPTION_POINTERS* e_info )
 	{
 		if ( access_read_write )
 		{
-			DOUBLE_DEBUG( ("Access address:%08X was written to.\n", access_address));
+			DOUBLE_DEBUG( ("Access address:%016llX was written to.\n", (unsigned long long)access_address));
 		}
 		else
 		{
-			DOUBLE_DEBUG( ("Access address:%08X was read from.\n", access_address));
+			DOUBLE_DEBUG( ("Access address:%016llX was read from.\n", (unsigned long long)access_address));
 		}
 	}
 

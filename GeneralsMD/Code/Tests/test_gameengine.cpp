@@ -167,7 +167,6 @@ static int GetSystemMetrics( int which )
 #include "Common/GameEngine.h"
 #include "GameClient/ParticleSys.h"
 #include "GameClient/FXList.h"
-#include "Common/TerrainTypes.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/GroupPanel.h"
 #include "GameClient/Display.h"
@@ -1405,98 +1404,6 @@ TEST(water_splashes_take_blasts_by_name_and_every_list_that_scorches)
 	CHECK_NEAR( TheFXListStore->findFXList( "SplashTest_ShellDetonation" )->getSplashRadius(), 10.0f, 0.01f );
 	CHECK_NEAR( TheFXListStore->findFXList( "SplashTest_Muzzle" )->getSplashRadius(), 0.0f, 0.01f );
 	CHECK_NEAR( TheFXListStore->findFXList( "SplashTest_Nuke" )->getSplashRadius(), 120.0f, 0.01f );
-}
-
-/* A dying vehicle's dust goes by the tile's name, the word nearest its front, snow anywhere winning;
-	 Terrain.ini's classes are WorldBuilder folders (a grass under MOUNTAIN_RUGGED, a cliff under
-	 Desert_1), so a class decides only a tile its name says nothing of. */
-TEST(death_dust_goes_by_the_tiles_name_then_its_class)
-{
-	CHECK_STR( FXList::deathDustForTerrain( "SnowType1", TERRAIN_FLAT_SNOW ), "ReforgedDeathDustSnow" );
-	CHECK_STR( FXList::deathDustForTerrain( "CliffMediumType6snow", TERRAIN_RUGGED_MOUNTAIN ), "ReforgedDeathDustSnow" );
-	CHECK_STR( FXList::deathDustForTerrain( "GrassMediumType23", TERRAIN_RUGGED_SNOW ), "ReforgedDeathDustGrass" );
-	CHECK_STR( FXList::deathDustForTerrain( "GrassSandTransitionType1", TERRAIN_TRANSITION ), "ReforgedDeathDustGrass" );
-	CHECK_STR( FXList::deathDustForTerrain( "SandMediumType5grassy", TERRAIN_ACCENT_SAND ), "ReforgedDeathDustSand" );
-	CHECK_STR( FXList::deathDustForTerrain( "desertA", TERRAIN_DRY_DESERT ), "ReforgedDeathDustSand" );
-	CHECK_STR( FXList::deathDustForTerrain( "CropsType1", TERRAIN_RESIDENTIAL ), "ReforgedDeathDustGrass" );
-	CHECK_STR( FXList::deathDustForTerrain( "DirtType1", TERRAIN_ACCENT_GRASS ), "ReforgedDeathDustDirt" );
-	CHECK_STR( FXList::deathDustForTerrain( "CliffLargeType3", TERRAIN_DESERT_1 ), "ReforgedDeathDustSand" );
-	CHECK_STR( FXList::deathDustForTerrain( "RocksType3", TERRAIN_RUGGED_MOUNTAIN ), "ReforgedDeathDustDirt" );
-	CHECK_STR( FXList::deathDustForTerrain( "ConcreteType1", TERRAIN_CONCRETE ), "ReforgedDeathDustDirt" );
-	CHECK_STR( FXList::deathDustForTerrain( "", TERRAIN_NONE ), "ReforgedDeathDustDirt" );
-	CHECK_STR( FXList::deathDustForTerrain( NULL, TERRAIN_SNOW_2 ), "ReforgedDeathDustSnow" );
-}
-
-/* A flipbook's frame: at one variant the whole atlas as before (once over the life from the start,
-	 or looping at the rate), and with FlipbookVariants the same inside the particle's own run. */
-TEST(flipbook_frame_plays_inside_the_particles_variant)
-{
-	const Real SPF = 0.05f;
-	// one variant, EA's atlas whole: once over the life, from a random start, looping at a rate
-	CHECK_EQ( Particle::flipbookFrameAt( 64, 1, 0, 0, 50, 100, 0.0f, SPF ), 32u );
-	CHECK_EQ( Particle::flipbookFrameAt( 64, 1, 0, 0, 100, 100, 0.0f, SPF ), 63u );
-	CHECK_EQ( Particle::flipbookFrameAt( 64, 1, 0, 10, 50, 100, 0.0f, SPF ), 37u );
-	CHECK_EQ( Particle::flipbookFrameAt( 64, 1, 0, 0, 30, 100, 20.0f, SPF ), 30u );
-	CHECK_EQ( Particle::flipbookFrameAt( 64, 1, 0, 0, 70, 100, 20.0f, SPF ), 6u );
-	CHECK_EQ( Particle::flipbookFrameAt( 1, 1, 0, 0, 70, 100, 20.0f, SPF ), 0u );
-
-	// four runs of 16 in an 8 by 8: each plays and loops inside its own run
-	CHECK_EQ( Particle::flipbookFrameAt( 64, 4, 2, 0, 50, 100, 0.0f, SPF ), 40u );
-	CHECK_EQ( Particle::flipbookFrameAt( 64, 4, 2, 0, 100, 100, 0.0f, SPF ), 47u );
-	CHECK_EQ( Particle::flipbookFrameAt( 64, 4, 3, 0, 70, 100, 20.0f, SPF ), 54u );
-	CHECK_EQ( Particle::flipbookFrameAt( 64, 4, 1, 5, 30, 100, 20.0f, SPF ), 19u );
-	CHECK_EQ( Particle::flipbookFrameAt( 64, 4, 2, 5, 70, 0, 20.0f, SPF ), 37u );
-
-	// three runs of 21 leave frame 63 unshown; nonsense counts and picks fall back, never overrun
-	CHECK_EQ( Particle::flipbookFrameAt( 64, 3, 2, 0, 100, 100, 0.0f, SPF ), 62u );
-	CHECK_EQ( Particle::flipbookRunLength( 64, 0 ), 64u );
-	CHECK_EQ( Particle::flipbookRunLength( 64, 100 ), 64u );
-	CHECK_EQ( Particle::flipbookRunLength( 256, 16 ), 16u );
-	CHECK_EQ( Particle::flipbookFrameAt( 64, 4, 5, 0, 0, 100, 0.0f, SPF ), 0u );
-	CHECK_EQ( Particle::flipbookFrameAt( 64, 4, 0, 40, 0, 100, 0.0f, SPF ), 15u );
-}
-
-/* IsParticleUpTowardsEmitter: a ground-aligned card turned by the angle has its top edge along
-	 (sin, cos) (pointgr.cpp's QUADS_SIZE_ORIENT turns clockwise), and that edge has to face the
-	 emitter on every heading.  EA's acos turned the exact east-west axis a quarter off; the Classic
-	 look keeps that, the Reforged one does not. */
-TEST(particle_up_towards_emitter_faces_the_emitter_on_every_heading)
-{
-	for (Int i = 0; i < 32; ++i)
-	{
-		const Real heading = 2.0f * PI * (Real)i / 32.0f;
-		const Real x = 0.3f * cosf( heading ), y = 0.3f * sinf( heading );
-		const Real angle = Particle::angleTowardsEmitter( x, y, FALSE );
-		CHECK( angle >= 0.0f && angle <= 2.0f * PI + 0.0001f );
-		CHECK_NEAR( sinf( angle ), -x / 0.3f, 0.0001f );
-		CHECK_NEAR( cosf( angle ), -y / 0.3f, 0.0001f );
-	}
-	// the axis: Reforged right, Classic EA's quarter turn; a zero offset a half turn in both
-	CHECK_NEAR( Particle::angleTowardsEmitter( 0.3f, 0.0f, FALSE ), 1.5f * PI, 0.0001f );
-	CHECK_NEAR( Particle::angleTowardsEmitter( -0.3f, 0.0f, FALSE ), 0.5f * PI, 0.0001f );
-	CHECK_NEAR( Particle::angleTowardsEmitter( 0.3f, 0.0f, TRUE ), 2.0f * PI, 0.0001f );
-	CHECK_NEAR( Particle::angleTowardsEmitter( -0.3f, 0.0f, TRUE ), PI, 0.0001f );
-	CHECK_NEAR( Particle::angleTowardsEmitter( 0.0f, 0.0f, FALSE ), PI, 0.0001f );
-	CHECK_NEAR( Particle::angleTowardsEmitter( 0.0f, 0.0f, TRUE ), PI, 0.0001f );
-	// off the axis Classic and Reforged agree: north of the emitter a half turn, south none
-	CHECK_NEAR( Particle::angleTowardsEmitter( 0.0f, 0.3f, TRUE ), PI, 0.0001f );
-	CHECK_NEAR( Particle::angleTowardsEmitter( 0.0f, -0.3f, TRUE ), 0.0f, 0.0001f );
-	CHECK_NEAR( Particle::angleTowardsEmitter( 0.3f, 0.006f, TRUE ), Particle::angleTowardsEmitter( 0.3f, 0.006f, FALSE ), 0.0f );
-}
-
-/* A dying vehicle's blast is a Crusader's at a Crusader's 15 by 10 hull and goes with the square root
-	 of the hull's area, between 0.6 and 1.5. */
-TEST(death_blast_scale_follows_the_hulls_area)
-{
-	Coord2D crusader = { 15.0f, 10.0f }, overlord = { 26.0f, 13.0f }, humvee = { 14.0f, 7.0f };
-	Coord2D bike = { 11.0f, 2.5f }, nukeCannon = { 32.0f, 10.0f }, none = { 0.0f, 0.0f }, huge = { 60.0f, 30.0f };
-	CHECK_NEAR( FXList::deathBlastScale( crusader ), 1.0f, 0.001f );
-	CHECK_NEAR( FXList::deathBlastScale( overlord ), 1.5f, 0.001f );
-	CHECK_NEAR( FXList::deathBlastScale( humvee ), 0.808f, 0.001f );
-	CHECK_NEAR( FXList::deathBlastScale( nukeCannon ), 1.461f, 0.001f );
-	CHECK_NEAR( FXList::deathBlastScale( bike ), 0.6f, 0.001f );
-	CHECK_NEAR( FXList::deathBlastScale( none ), 0.6f, 0.001f );
-	CHECK_NEAR( FXList::deathBlastScale( huge ), 1.5f, 0.001f );
 }
 
 /* Data\INI\FXListReforged.ini is the fork's own explosion light: 89 of EA's FXLists, each repeated

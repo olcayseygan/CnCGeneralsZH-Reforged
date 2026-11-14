@@ -263,6 +263,7 @@ enum
 
 
 //todo move this somewhere more useful.
+static Real angleBetween(const Coord2D *vecA, const Coord2D *vecB);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Particle ///////////////////////////////////////////////////////////////////////////////////////
@@ -333,9 +334,6 @@ Particle::Particle( ParticleSystem *system, const ParticleInfo *info )
 	m_windRandomness = info->m_windRandomness;	
 	m_particleUpTowardsEmitter = info->m_particleUpTowardsEmitter;
 	m_emitterPos = info->m_emitterPos;
-	// turned from birth, so nothing ever draws it at the template's AngleZ
-	if (m_particleUpTowardsEmitter)
-		m_angleZ = angleTowardsEmitter( m_pos.x - m_emitterPos.x, m_pos.y - m_emitterPos.y, TheGlobalData->m_classicGraphics );
 
 	
 	m_angularRateZ = info->m_angularRateZ;
@@ -350,22 +348,10 @@ Particle::Particle( ParticleSystem *system, const ParticleInfo *info )
 
 	// Drawn only when the system's template is a flipbook that asks for it, so every other system
 	// leaves the client's random stream as it was.
-	// Variants and the mirror draw in that order, before and after the start, each only when asked for.
 	const ParticleSystemTemplate *flipbook = system->getTemplate();
 	m_flipbookStart = 0;
-	m_flipbookVariant = 0;
-	m_flipbookMirrored = FALSE;
-	if (flipbook->getFlipbookGridLog2() != 0)
-	{
-		const UnsignedInt frames = 1u << ( 2 * flipbook->getFlipbookGridLog2() );
-		const UnsignedInt run = flipbookRunLength( frames, flipbook->getFlipbookVariants() );
-		if (run < frames)
-			m_flipbookVariant = (UnsignedByte)GameClientRandomValue( 0, (Int)( frames / run ) - 1 );
-		if (flipbook->isFlipbookRandomStart())
-			m_flipbookStart = (UnsignedByte)GameClientRandomValue( 0, (Int)run - 1 );
-		if (flipbook->isFlipbookMirror())
-			m_flipbookMirrored = GameClientRandomValue( 0, 1 ) != 0;
-	}
+	if (flipbook->getFlipbookGridLog2() != 0 && flipbook->isFlipbookRandomStart())
+		m_flipbookStart = (UnsignedByte)GameClientRandomValue( 0, ( 1 << ( 2 * flipbook->getFlipbookGridLog2() ) ) - 1 );
 
 	m_size = info->m_size;
 	m_sizeRate = info->m_sizeRate;
@@ -433,35 +419,16 @@ Particle::~Particle()
 UnsignedInt Particle::getFlipbookFrame( void ) const
 {
 	const ParticleSystemTemplate *flipbook = m_system->getTemplate();
-	return flipbookFrameAt( 1u << ( 2 * flipbook->getFlipbookGridLog2() ), flipbook->getFlipbookVariants(), m_flipbookVariant,
-		m_flipbookStart, m_lifetime - m_lifetimeLeft, m_lifetime, flipbook->getFlipbookRate(), GAME_SECONDS_PER_LOGICFRAME_REAL );
-}
+	const UnsignedInt frames = 1u << ( 2 * flipbook->getFlipbookGridLog2() );
+	if (frames == 1 || m_lifetime == 0)
+		return m_flipbookStart;
 
-// ------------------------------------------------------------------------------------------------
-/*static*/ UnsignedInt Particle::flipbookRunLength( UnsignedInt frames, UnsignedInt variants )
-{
-	return ( variants > 1 && variants <= frames ) ? frames / variants : frames;
-}
+	const UnsignedInt age = m_lifetime - m_lifetimeLeft;
+	if (flipbook->getFlipbookRate() > 0.0f)
+		return ( m_flipbookStart + (UnsignedInt)( age * flipbook->getFlipbookRate() * GAME_SECONDS_PER_LOGICFRAME_REAL ) ) % frames;
 
-// ------------------------------------------------------------------------------------------------
-/** At one variant it is the whole atlas as before, the same casts in the same order, so a template
-	* without FlipbookVariants shows the frames it showed. */
-// ------------------------------------------------------------------------------------------------
-/*static*/ UnsignedInt Particle::flipbookFrameAt( UnsignedInt frames, UnsignedInt variants, UnsignedInt variant, UnsignedInt start,
-	UnsignedInt age, UnsignedInt lifetime, Real rate, Real secondsPerLogicFrame )
-{
-	const UnsignedInt run = flipbookRunLength( frames, variants );
-	const UnsignedInt base = ( variant < frames / run ? variant : 0 ) * run;
-	if (start >= run)
-		start = run - 1;
-	if (run == 1 || lifetime == 0)
-		return base + start;
-
-	if (rate > 0.0f)
-		return base + ( start + (UnsignedInt)( age * rate * secondsPerLogicFrame ) ) % run;
-
-	const UnsignedInt frame = start + (UnsignedInt)( (Real)age / (Real)lifetime * (Real)( run - start ) );
-	return base + ( frame < run ? frame : run - 1 );
+	const UnsignedInt frame = m_flipbookStart + (UnsignedInt)( (Real)age / (Real)m_lifetime * (Real)( frames - m_flipbookStart ) );
+	return frame < frames ? frame : frames - 1;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -722,8 +689,16 @@ Bool Particle::update( const ParticleUpdateContext &context )
 	m_angleZ += m_angularRateZ;
 	m_angularRateZ *= m_angularDamping;
 
-	if (m_particleUpTowardsEmitter)
-		m_angleZ = angleTowardsEmitter( m_pos.x - m_emitterPos.x, m_pos.y - m_emitterPos.y, TheGlobalData->m_classicGraphics );
+	if (m_particleUpTowardsEmitter) {
+		// adjust the up position back towards the particle
+		static const Coord2D upVec = { 0.0f, 1.0f };
+		Coord2D emitterDir;
+		emitterDir.x = m_pos.x - m_emitterPos.x;
+		emitterDir.y = m_pos.y - m_emitterPos.y;
+		m_angleZ = (angleBetween(&upVec, &emitterDir) + PI);
+
+
+	}
 
 	// update size
 	m_size += m_sizeRate;
@@ -3636,8 +3611,6 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	{ "FlipbookGrid",								parseFlipbookGrid,										NULL,		offsetof( ParticleSystemTemplate, m_flipbookGridLog2 ) },
 	{ "FlipbookRate",								INI::parseReal,												NULL,		offsetof( ParticleSystemTemplate, m_flipbookRate ) },
 	{ "FlipbookRandomStart",				INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_flipbookRandomStart ) },
-	{ "FlipbookVariants",						INI::parseUnsignedByte,								NULL,		offsetof( ParticleSystemTemplate, m_flipbookVariants ) },
-	{ "FlipbookMirror",							INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_flipbookMirror ) },
 
 	{ "Lifetime",								SPEED_FIELD( ParticleSystemTemplate, m_lifetime ) },
 	{ "SystemLifetime",					SPEED_FIELD( ParticleSystemTemplate, m_systemLifetime ) },
@@ -3816,8 +3789,6 @@ ParticleSystemTemplate::ParticleSystemTemplate( const AsciiString &name ) :
 	m_flipbookGridLog2 = 0;
 	m_flipbookRate = 0.0f;
 	m_flipbookRandomStart = FALSE;
-	m_flipbookVariants = 1;
-	m_flipbookMirror = FALSE;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -4743,18 +4714,39 @@ void ParticleSystemDebugDisplay( DebugDisplayInterface *dd, void *, FILE *fp )
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
-/** EA's angle from north to the particle's offset, signed by its east side, plus a half turn; a
-	* ground-aligned card turned by it (pointgr.cpp, QUADS_SIZE_ORIENT: clockwise, its top edge along
-	* (sin, cos)) has its top facing the emitter.  The same answer EA's acos gave everywhere but on
-	* the east-west axis, where its dot product of nought returned a half turn for east and nought for
-	* west, so a card born exactly level with its emitter faced a quarter turn off; and a zero offset
-	* is a half turn, as it was.  eaOnTheAxis keeps that quarter turn for the Classic look, whose
-	* point-born waves (TrainWreckSplashWave, the carrier wakes) EA drew with it. */
-/*static*/ Real Particle::angleTowardsEmitter( Real fromEmitterX, Real fromEmitterY, Bool eaOnTheAxis )
+static Real angleBetween(const Coord2D *vecA, const Coord2D *vecB)
 {
-	if (eaOnTheAxis && fromEmitterY == 0.0f && fromEmitterX != 0.0f)
-		return fromEmitterX > 0.0f ? 2.0f * PI : PI;
-	const Real north = fromEmitterX > 0.0f ? (Real)atan2( fromEmitterX, fromEmitterY ) : -(Real)atan2( (Real)fabs( fromEmitterX ), fromEmitterY );
-	return north + PI;
+	if (!vecA || !vecB) {
+		return 0.0f;
+	}
+
+	// Each length was a square root, and the guard above computed both of them and then threw
+	// them away so the two lines below could compute them again.
+	const Real lengthA = vecA->length();
+	const Real lengthB = vecB->length();
+
+	if (lengthA == 0.0f || lengthB == 0.0f) {
+		return 0.0f;
+	}
+
+	Real dotProduct = (vecA->x * vecB->x + vecA->y * vecB->y);
+	Real cosTheta = dotProduct / (lengthA * lengthB);
+
+	// If the dot product is 0.0, then they are orthogonal
+	if (dotProduct == 0.0f) {
+		if (vecB->x > 0) {
+			return PI;
+		}
+
+		return 0.0f;
+	}
+
+	Real theta = ACos( cosTheta );
+
+	if (vecB->x > 0) {
+		return theta;
+	}
+	
+	return -theta;
 }
 

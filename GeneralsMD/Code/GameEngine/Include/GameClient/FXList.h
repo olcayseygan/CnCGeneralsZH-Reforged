@@ -67,10 +67,6 @@ struct FXObjectView
 	Bool						alwaysClear;
 	/// for the bones an FX reads; a drawable the tick destroyed is deleted only after the tick's FX ran
 	const Drawable	*drawable;
-	/// a vehicle on the ground, not an aircraft, already dead: its blasts take the hull's size and kick up dust
-	Bool						dyingGroundVehicle;
-	/// what a particle system the FX plays multiplies its size by, 0 or 1 for as the data says; the list sets it
-	Real						blastScale;
 
 	void take( const Object *obj );
 };
@@ -187,13 +183,6 @@ public:
 
 	/// How wide this list splashes in water under Water Splashes, 0 for not at all.
 	Real getSplashRadius() const { return m_splashRadius; }
-
-	/// The ground dust a vehicle's death blast throws up off a terrain tile (TerrainType's name and
-	/// TerrainClass): one of the four ReforgedDeathDust systems, dirt when nothing says otherwise.
-	static const char *deathDustForTerrain(const char *terrainName, Int terrainClass);
-
-	/// How much bigger than a Crusader's a dying vehicle's blast plays, from its hull's half length and half width.
-	static Real deathBlastScale(const Coord2D &footprint);
 
 	/// inline convenience method to avoid having to check for null.
 	inline static void doFXPos(const FXList* fx, const Coord3D *primary, const Matrix3D* primaryMtx = NULL, const Real primarySpeed = 0.0f, const Coord3D *secondary = NULL, const Real overrideRadius = 0.0f)

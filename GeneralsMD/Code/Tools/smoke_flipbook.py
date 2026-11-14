@@ -81,8 +81,7 @@ FIRE = dict(
     flame_noise=0.9, flame_noise_scale=6.0, flame_noise_speed=0.06, flame_edge=0.15, flame_gate=0.04,
     flame_density=1500.0,
     kelvin_low=800.0, kelvin_span=3400.0, kelvin_shape=1.4,
-    ortho=4.0, aim_z=1.7, growth=0.55,
-    retime=1.35)		# frame i shows sim frame (i / n) ** 1.35 of the run: the soot turn comes a quarter later
+    ortho=4.0, aim_z=1.7, growth=0.55)
 
 # A steady fire.  The first 45 sim frames, the fire still finding its height, are skipped; the 80
 # after loop, the last 16 crossfaded into the first.  Fuel flows from a thin skin round its lumps
@@ -142,96 +141,10 @@ LOOKS = {
     "flame": dict(FLAME, name="ReforgedFlame.dds", tumble=(0.9, 1.6, 0.7),
                   emitters=((-0.42, 0.0, 0.22, 0.2, 1, 10000), (0.0, 0.08, 0.18, 0.24, 1, 10000),
                             (0.4, -0.06, 0.22, 0.19, 1, 10000), (0.18, -0.2, 0.3, 0.15, 1, 10000))),
-    # A gun's flame jet: a lump that flies 2.6 m along +x in two frames while it blows lays a thin
-    # column of fuel, and a bigger lump at its end the ball of flame at the tip; the column burns,
-    # tears into ragged tongues and goes out in sixteen frames.  4 by 4, 1024 square; turned so the
-    # root is at the top edge's middle, the side a ground-aligned card turned up towards its
-    # emitter puts on the muzzle.
-    "jet": dict(FIRE, name="ReforgedMuzzleJet.dds", grid=4, root_up=True, base=0.93, headroom=0.04,
-                res=256, frame_end=24, first=4, time_scale=0.5,
-                emitters=((-1.9, 0.0, 3.0, 0.11, 1, 3), (0.75, 0.0, 3.0, 0.12, 2, 3)), sweep=(2.6, 0.0, 0.0),
-                subframes=12, surface=0.1, lump=0.3, noise_scale=0.2,
-                tumble=(0.6, 1.2, 0.4),
-                velocity_coord=(14.0, 0.0, 0.0), velocity_normal=0.3, velocity_random=0.8,
-                fuel=4.0, temperature=2.0, heat_buoyancy=0.2, vorticity=0.8, burning_rate=0.5,
-                flame_smoke=0.3, flame_vorticity=5.0, soot_scale=300.0,
-                ortho=4.6, aim_z=3.0),
     # One narrow tongue of it, for a small fire: a burning tree, a crate, a wreck's last flame.
     "flameb": dict(FLAME, name="ReforgedFlameB.dds", tumble=(1.4, 0.5, 1.1), ortho=3.0, aim_z=1.3,
                    emitters=((0.0, 0.0, 0.2, 0.22, 1, 10000), (0.12, 0.1, 0.3, 0.14, 1, 10000))),
-    # The nuke's mushroom, in three cards the INI stacks, all seen at the RTS camera's 37 degrees and
-    # played once.  The cap: a ball of hot fuel and soot let go above the ground, so its buoyancy
-    # rolls it into a ring that turns over itself while it rises, hot and glowing underneath at
-    # first, cooling along the fireball's arc to grey-brown soot with the glow going out under it.
-    # Cropped round its centre like the fireball, so it sits in the middle of its card and grows.
-    "nukecap": dict(FIRE, name="ReforgedNukeCap.dds", nuke=True, tilt=37.0, floor=True,
-                    frame_end=70, first=6, time_scale=0.8, growth=0.5,
-                    emitters=((0.0, 0.0, 0.6, 0.4, 1, 4), (0.12, -0.1, 0.75, 0.3, 1, 3)),
-                    surface=0.2, fuel=3.0, temperature=2.0, heat_buoyancy=1.5, vorticity=0.15,
-                    velocity_normal=0.3, velocity_up=5.0, velocity_random=0.4, lump=0.3,
-                    burning_rate=0.25, flame_smoke=3.0, flame_vorticity=0.6, soot_scale=900.0,
-                    tumble=(0.5, 1.3, 0.9), ortho=6.5, aim_z=3.0),
-    # The stem: a dirty updraft fed for good from the ground, fire at its foot and soot above, torn at
-    # its edges; framed by its smoke, not its glow, in one square for the whole run with its foot at
-    # STEM_BASE, so it stands on the blast and its top runs up into the cap.
-    "nukestem": dict(FIRE, name="ReforgedNukeStem.dds", nuke=True, tilt=37.0, floor=True, fixed=True,
-                     by_light=False, base=0.95, headroom=0.0, frame_end=88, first=24, time_scale=1.0,
-                     res=150,		# the column fills the domain's height: at 200 a frame took 90 s to bake
-                     emitters=((0.0, 0.0, 0.25, 0.35, 1, 10000), (0.22, 0.15, 0.3, 0.22, 1, 10000),
-                               (-0.22, -0.1, 0.3, 0.25, 1, 10000)),
-                     surface=0.2, density=0.5, fuel=1.8, temperature=2.5, heat_buoyancy=3.0,
-                     velocity_normal=0.3, velocity_up=2.0, velocity_random=0.8, vorticity=0.5,
-                     burning_rate=0.6, flame_smoke=1.0, flame_vorticity=3.0, soot_scale=600.0,
-                     lump=0.35, noise_scale=0.25, tumble=(0.8, 1.4, 0.6), ortho=7.0, aim_z=3.0),
-    # A flame spike bursting up from the blast and tearing: the muzzle jet stood on end, its root at
-    # the card's foot.  4 by 4.
-    "nukejet": dict(FIRE, name="ReforgedNukeJet.dds", nuke=True, grid=4, fixed=True, base=0.93,
-                    headroom=0.04, tilt=37.0, res=256, frame_end=24, first=5, time_scale=0.5,
-                    emitters=((0.0, 0.0, 0.3, 0.11, 1, 3), (0.0, 0.0, 2.95, 0.13, 2, 3)), sweep=(0.0, 0.0, 2.6),
-                    subframes=12, surface=0.1, lump=0.3, noise_scale=0.2, tumble=(0.6, 1.2, 0.4),
-                    velocity_normal=0.3, velocity_random=0.8, fuel=4.0, temperature=2.0,
-                    heat_buoyancy=0.6, vorticity=0.8, burning_rate=0.5, flame_smoke=0.3,
-                    flame_vorticity=5.0, soot_scale=300.0, ortho=4.6, aim_z=1.8),
 }
-STEM_BASE = LOOKS["nukestem"]["base"]
-
-# Variant atlases, for FlipbookVariants = 4: four runs of VARIANT_FRAMES back to back, each its own
-# sim, so a field of particles that each pick one at birth never shows one silhouette twice.  A run
-# is every fourth sim frame of the look's own span.  The sims differ by their emitters, the parent's
-# lumps turned about the vertical and some mirrored, and by the tumble of the lump texture, so each
-# is a different shape and not a re-timing of one.
-VARIANTS = 4
-VARIANT_FRAMES = FRAMES // VARIANTS
-
-
-def turned(emitters, degrees, mirror=False):
-    """An emitter set turned about the vertical axis, mirrored first if asked."""
-    c, s = math.cos(math.radians(degrees)), math.sin(math.radians(degrees))
-    return tuple((x * c - (-y if mirror else y) * s, x * s + (-y if mirror else y) * c, z, r, a, b)
-                 for x, y, z, r, a, b in emitters)
-
-
-def variant_looks(parent, name, plan):
-    """The parts and the whole of one variant atlas: plan is (emitters, tumble) per run."""
-    parts = {}
-    for k, (emitters, tumble) in enumerate(plan):
-        parts["%s%d" % (parent, k)] = dict(LOOKS[parent], name=None, frames=VARIANT_FRAMES, step=4,
-                                           emitters=emitters, tumble=tumble)
-    parts[parent + "v"] = dict(LOOKS[parent], name=name, parts=tuple(sorted(parts)))
-    return parts
-
-
-LOOKS.update(variant_looks("puff", "ReforgedSmokePuffV.dds", (
-    (PUFF_A, (1.1, 2.3, 0.7)), (PUFF_B, (2.4, 0.6, 1.8)),
-    (turned(PUFF_A, 130, True), (0.4, 1.7, 2.9)), (turned(PUFF_B, 240), (3.0, 1.0, 0.3)))))
-LOOKS.update(variant_looks("fire", "ReforgedFireballV.dds", (
-    (LOOKS["fire"]["emitters"], (2.1, 0.5, 1.4)), (LOOKS["fireb"]["emitters"], (0.9, 2.6, 0.4)),
-    (turned(LOOKS["fire"]["emitters"], 150, True), (1.6, 1.9, 2.8)),
-    (turned(LOOKS["fireb"]["emitters"], 260), (0.3, 1.1, 2.2)))))
-LOOKS.update(variant_looks("dust", "ReforgedDustV.dds", (
-    (LOOKS["dust"]["emitters"], (0.6, 1.8, 1.3)), (turned(LOOKS["dust"]["emitters"], 95), (2.0, 0.3, 0.9)),
-    (turned(LOOKS["dust"]["emitters"], 190, True), (1.3, 2.5, 0.2)),
-    (turned(LOOKS["dust"]["emitters"], 280, True), (0.2, 0.8, 2.7)))))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -310,13 +223,6 @@ def blender_render(look, work):
     for x, y, z, radius, first, last in p["emitters"]:
         bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=4, radius=radius, location=(x, y, z))
         emitter = bpy.context.object
-        if p.get("sweep") and not emitters:
-            # a jet: the first lump flies sweep metres while it blows, laying a column of fuel
-            # (initial velocity alone left the gas sitting on the emitter)
-            bpy.context.preferences.edit.keyframe_new_interpolation_type = "LINEAR"
-            emitter.keyframe_insert("location", frame=first)
-            emitter.location = (x + p["sweep"][0], y + p["sweep"][1], z + p["sweep"][2])
-            emitter.keyframe_insert("location", frame=last)
         emitters.append(emitter)
         displace = emitter.modifiers.new("Lumps", "DISPLACE")
         displace.texture = clouds
@@ -342,11 +248,11 @@ def blender_render(look, work):
         fs.use_initial_velocity = True
         fs.velocity_normal = p["velocity_normal"]
         fs.velocity_random = p["velocity_random"]
-        fs.velocity_coord = p.get("velocity_coord", (0.0, 0.0, p["velocity_up"]))
+        fs.velocity_coord = (0.0, 0.0, p["velocity_up"])
         fs.use_texture = True
         fs.noise_texture = clouds
         fs.texture_size = 1.4
-        fs.subframes = p.get("subframes", 2)
+        fs.subframes = 2
         keys = [(first - 1, False), (first, True), (last, True), (last + 1, False)]
         if p["pulse"]:
             # on for a pulse, off for half one: the plume rises as separate puffs
@@ -488,7 +394,7 @@ def blender_render(look, work):
     cam_data.ortho_scale = p["ortho"]
     cam = bpy.data.objects.new("Cam", cam_data)
     scene.collection.objects.link(cam)
-    tilt = math_radians(p.get("tilt", 20.0))		# the nuke looks: the RTS camera's own 37
+    tilt = math_radians(20.0)
     cam.location = (0.0, -12.0 * math_cos(tilt), p["aim_z"] + 12.0 * math_sin(tilt))
     cam.rotation_euler = (math_pi / 2 - tilt, 0.0, 0.0)
     cam_data.clip_end = 40.0
@@ -517,7 +423,7 @@ def blender_render(look, work):
     scene.render.image_settings.color_mode = "RGBA"
     scene.render.image_settings.color_depth = "16"
     os.makedirs(os.path.join(root, "frames"), exist_ok=True)
-    count = frame_count(p) + (LOOP_BLEND if p["loop"] else 0)
+    count = (FRAMES + (LOOP_BLEND if p["loop"] else 0))
     pick = os.environ.get("SMOKE_PICK")
     for index in ([int(v) for v in pick.split(",")] if pick else range(count)):
         frame = p["first"] + index * p["step"]
@@ -590,90 +496,6 @@ def tone_map(frames):
     alpha = np.clip(frames[..., 3:], 0.0, 1.0)
     alpha = np.maximum(alpha, np.clip(rgb.max(axis=-1, keepdims=True) * 1.4, 0.0, 1.0) ** FIRE_EDGE)
     return np.concatenate((np.minimum(rgb, alpha), alpha), axis=-1)
-
-
-# The stylize grade: the owner found the filmed fire out of the game's spirit ("fazla gerçekçi"), so
-# every fire card goes through EA's own look after the tone curve.  EA's fireball cards
-# (EXFireball01-04 in the retail bigs) are a flat fill: their texels' 10th, 50th and 90th
-# percentile colours are an orange (0.6, 0.35, 0.0), a gold (0.8, 0.6, 0.22; hue 38, saturation 0.73,
-# value 0.8) and a cream (0.84, 0.72, 0.55), 70% of them in the gold, little fine detail inside, a
-# hard ragged edge.  So the flame (not the grey soot) is painted in those three: its value, smoothed
-# by a 3x3 median and a wide blur so no fine detail inside survives, and set against the frame's own
-# flame (its 60th percentile), picks the band, mostly the gold.  Set against the frame, a dimming
-# flame stays gold until it is gone, so the soot takes over late, as EA's do.  A first grade of five
-# bands up a ramp to pale yellow was too bright, dark red inside and blotchy up close.
-STYLE_LOW = (0.76, 0.40, 0.05)		# the shadow band: EA's 10th percentile read brown on a flame's
-									# tongues, so a brighter orange of the same hue
-STYLE_MID = (0.82, 0.58, 0.18)		# the fill, EA's median a touch richer: most of every flame
-STYLE_HIGH = (0.85, 0.71, 0.50)		# the highlight, EA's 90th; blue 0.5, never white
-									# (EA's own three exactly came out a shade paler than EA: 0.71 to 0.81)
-STYLE_BANDS = (0.55, 1.1, 0.07)		# value / the frame's flame (its 60th percentile) for the low and
-									# the high band, blend half width
-STYLE_SHADE = (0.86, 0.14)			# the fill times a + b * the smoothed value: one band, not one flat card
-STYLE_BLUR = 3						# box blur radius, twice, on the value that picks the band (256 cells)
-STYLE_EDGE = (0.15, 0.45)			# flame coverage smoothstep: a hard ragged rim
-STYLE_SOOT_EDGE = (0.08, 0.5)		# soot coverage: its thin fringe trimmed, less soot area
-
-
-def median3(image):
-    """A 3x3 median of an (h, w, c) image, its edge repeated."""
-    import numpy as np
-    h, w = image.shape[:2]
-    padded = np.pad(image, ((1, 1), (1, 1), (0, 0)), mode="edge")
-    return np.median(np.stack([padded[y:y + h, x:x + w] for y in range(3) for x in range(3)]), axis=0)
-
-
-def box_blur(image, radius):
-    """An (h, w, c) image blurred by a box of 2 radius + 1, twice (close to a Gaussian), edge repeated."""
-    import numpy as np
-    for _ in range(2):
-        for axis in (0, 1):
-            pad = [(0, 0)] * image.ndim
-            pad[axis] = (radius + 1, radius)
-            total = np.cumsum(np.pad(image, pad, mode="edge"), axis=axis)
-            n = image.shape[axis]
-            image = (np.take(total, np.arange(2 * radius + 1, 2 * radius + 1 + n), axis=axis)
-                     - np.take(total, np.arange(n), axis=axis)) / (2 * radius + 1)
-    return image
-
-
-def smoothstep(e0, e1, x):
-    import numpy as np
-    t = np.clip((x - e0) / (e1 - e0), 0.0, 1.0)
-    return t * t * (3.0 - 2.0 * t)
-
-
-def stylize(frames):
-    """Display-space premultiplied fire (n, h, w, 4) painted in EA's flat fireball colours (STYLE_*)."""
-    import numpy as np
-    out = np.empty_like(frames)
-    low, mid, high = (np.array(c, np.float32) for c in (STYLE_LOW, STYLE_MID, STYLE_HIGH))
-    t1, t2, soft = STYLE_BANDS
-    for i, frame in enumerate(frames):
-        alpha = frame[..., 3:]
-        straight = np.where(alpha > 1e-3, frame[..., :3] / np.maximum(alpha, 1e-3), 0.0)
-        smooth_ = median3(np.concatenate((straight, alpha), axis=-1))
-        straight, alpha = smooth_[..., :3], smooth_[..., 3:]
-        value = straight.max(axis=-1, keepdims=True)
-        chroma = 1.0 - straight.min(axis=-1, keepdims=True) / np.maximum(value, 1e-3)
-        # 0 soot, 1 flame: coloured and bright.  By colour alone the soot the flame lights orange went
-        # gold too, and a cooled fireball turned into a muddy brown cloud.
-        flame = smoothstep(0.35, 0.65, chroma) * smoothstep(0.12, 0.3, value)		# a deep red still burns
-        # the value that picks the band: alpha-weighted and blurred, so the rim does not darken it
-        blurred = box_blur(np.concatenate((value * alpha, alpha), axis=-1), STYLE_BLUR)
-        shade = blurred[..., :1] / np.maximum(blurred[..., 1:], 1e-3)
-        lit = (flame[..., 0] > 0.5) & (alpha[..., 0] > 0.3)
-        reference = np.clip(np.percentile(shade[..., 0][lit], 60) if lit.any() else 1.0, 0.5, 1.0)
-        shade = shade / reference
-        w_high = smoothstep(t2 - soft, t2 + soft, shade)
-        w_low = 1.0 - smoothstep(t1 - soft, t1 + soft, shade)
-        paint = mid * (1.0 - w_high - w_low) + high * w_high + low * w_low
-        paint = paint * (STYLE_SHADE[0] + STYLE_SHADE[1] * np.clip(shade, 0.0, 1.2))		# broad brush shading
-        colour = np.clip(straight * (1.0 - flame) + paint * flame, 0.0, 1.0)		# the soot keeps its own grey
-        cover = (alpha * smoothstep(*STYLE_SOOT_EDGE, alpha) * (1.0 - flame)
-                 + smoothstep(*STYLE_EDGE, alpha) * flame)
-        out[i] = np.concatenate((colour * cover, cover), axis=-1)
-    return out
 
 
 # The flame's brightness, the 90th percentile of its lit texels, a frame should show at each share of
@@ -778,11 +600,7 @@ def crop_frames(frames, cell, growth, loop, base=None, headroom=MARGIN, by_light
         sides = np.maximum(sides, height / (base - headroom))
         cy = np.full(len(frames), boxes[:, 1].max()) - sides * (base - 0.5)
     elif base is not None:
-        # room above the foot for the whole cloud: two of the dust variants rose past the square
-        # their width gave them and were cut flat along the top
-        foot = smooth(boxes[:, 1])
-        sides = np.maximum(sides, np.maximum.accumulate(foot - boxes[:, 0]) / (base - MARGIN))
-        cy = foot - sides * (base - 0.5)
+        cy = smooth(boxes[:, 1]) - sides * (base - 0.5)
     out = np.zeros((len(frames), cell, cell, 4), np.float32)
     pad = int(sides.max())
     padded = np.pad(frames, ((0, 0), (pad, pad), (pad, pad), (0, 0)))
@@ -827,20 +645,13 @@ def crop_fixed(frames, cell, crop):
     return resize(frames[:, top:top + int(side), left:left + int(side)], cell)
 
 
-def frame_count(p):
-    """A look's frames: GRID by GRID, its own grid's (the muzzle jet is 4 by 4), or a variant run's
-    VARIANT_FRAMES."""
-    return p.get("frames") or p.get("grid", GRID) ** 2
-
-
 def sheet(frames):
-    """(n * n, cell, cell, c) to one (n cell, n cell, c) image, row by row from the top left."""
+    """(64, cell, cell, c) to one (8 cell, 8 cell, c) image, row by row from the top left."""
     import numpy as np
     cell = frames.shape[1]
-    grid = int(round(len(frames) ** 0.5))
-    image = np.zeros((grid * cell, grid * cell, frames.shape[-1]), np.float32)
+    image = np.zeros((GRID * cell, GRID * cell, frames.shape[-1]), np.float32)
     for index, frame in enumerate(frames):
-        row, column = divmod(index, grid)
+        row, column = divmod(index, GRID)
         image[row * cell:(row + 1) * cell, column * cell:(column + 1) * cell] = frame
     return image
 
@@ -967,34 +778,18 @@ def dds(image, cell):
 
 
 def build(frames, p):
-    """Rendered premultiplied frames to the 64 (or the look's grid's) premultiplied frames that go
-    in the atlas."""
-    import numpy as np
+    """Rendered premultiplied frames to the 64 premultiplied frames that go in the atlas."""
     cell = p.get("cell", CELL)
-    count = frame_count(p)
     if p["loop"]:
         frames = crossfade_loop(frames)
-    elif p.get("retime", 1.0) != 1.0:
-        # more of the run on the burning, less on the soot: EA's fireballs turn to smoke late
-        at = np.linspace(0.0, 1.0, count) ** p["retime"]
-        frames = frames[np.round(at * (min(len(frames), count) - 1)).astype(int)]
-    # A jet is simulated along +x, its root on the left: turned so the root is the foot, framed like
-    # a standing fire (one square, foot near the bottom), then flipped so the root is at the top.
-    if p.get("root_up"):
-        frames = np.ascontiguousarray(np.rot90(frames, 1, axes=(1, 2)))
-    fixed = p["loop"] or p.get("root_up", False) or p.get("fixed", False)
     if p["crop"]:
-        frames = crop_fixed(frames[:count], cell, p["crop"])
+        frames = crop_fixed(frames[:FRAMES], cell, p["crop"])
     else:
-        frames = crop_frames(frames[:count], cell, p["growth"], fixed, p.get("base"),
-                             p.get("headroom", MARGIN), p.get("by_light", p["kind"] == "fire" and fixed))
-    if p.get("root_up"):
-        frames = np.ascontiguousarray(frames[:, ::-1])
-    if p["kind"] == "fire" and p.get("stylize", True):
-        frames = stylize(frames)
+        frames = crop_frames(frames[:FRAMES], cell, p["growth"], p["loop"], p.get("base"),
+                             p.get("headroom", MARGIN), p["kind"] == "fire" and p["loop"])
     frames *= window(cell, p["crop"] is not None)[None, :, :, None]
     if p["kind"] == "fire":
-        return frames		# tone mapped on load, then stylized
+        return frames		# tone mapped on load; the flame's colour is the sim's, not graded
     if not p["loop"]:
         frames = hold_density(frames, p["hold"])
     return grade(frames, p["gamma"])
@@ -1076,10 +871,11 @@ def sprite(frame, px, tint, flip):
 
 
 def paste(image, s, cx, cy):
-    h, w = s.shape[:2]
-    x0, y0 = cx - w // 2, cy - h // 2
+    size = image.shape[0]
+    px = s.shape[0]
+    x0, y0 = cx - px // 2, cy - px // 2
     sx0, sy0 = max(0, -x0), max(0, -y0)
-    x1, y1 = min(image.shape[1], x0 + w), min(image.shape[0], y0 + h)
+    x1, y1 = min(size, x0 + px), min(image.shape[1], y0 + px)
     if x1 <= max(x0, 0) or y1 <= max(y0, 0):
         return
     s = s[sy0:sy0 + y1 - max(y0, 0), sx0:sx0 + x1 - max(x0, 0)]
@@ -1177,40 +973,6 @@ def wreck_fire(frames, size=720, seconds=6.0, fps=30, scale=1.0, seed=7):
     return np.clip(out, 0.0, 1.0)
 
 
-def gun_shots(frames, unit=10.0, size=11.0, life=5, pitch=37.5):
-    """The jet as a ground-aligned card turned towards its emitter draws it, at four barrel headings
-    (rows) over its life (columns): a quad 2 size a side lying flat at the muzzle, its top edge on the
-    muzzle and the rest down the barrel's line, seen from a camera pitch degrees above the ground, so
-    the run along the view is shortened.  unit is pixels a game unit; about 4 is the default camera."""
-    import numpy as np
-    from PIL import Image
-    side = int(2 * size * unit)
-    panel = int(side * 2.4)
-    squash = math.sin(math.radians(pitch))
-    rows = []
-    for heading in (0.0, 40.0, 90.0, 155.0):
-        row = []
-        for step in range(life):
-            image = battlefield(panel)
-            frame = frames[min(len(frames) - 1, int(step / life * len(frames)))]
-            card = np.stack([np.asarray(Image.fromarray(frame[..., k]).resize((side, side), Image.LANCZOS)) for k in range(4)], -1)
-            # flat on the ground, root (the top edge) at the card's centre-top: turn it about that point
-            pad = np.zeros((2 * side, 2 * side, 4), np.float32)
-            pad[side:, side // 2:side // 2 + side] = card		# the root at the pad's centre
-            turned = np.stack([np.asarray(Image.fromarray(pad[..., k]).rotate(heading, Image.BILINEAR)) for k in range(4)], -1)
-            seen = np.stack([np.asarray(Image.fromarray(turned[..., k]).resize((2 * side, max(1, int(2 * side * squash))), Image.BILINEAR)) for k in range(4)], -1)
-            cx, cy = panel // 2, panel // 2
-            # the barrel: a dark bar from the hull's centre to the muzzle, against the jet's heading
-            dx, dy = math.sin(math.radians(heading)), math.cos(math.radians(heading)) * squash
-            for t in np.linspace(0.0, 1.0, 200):
-                x, y = int(cx - dx * t * 0.6 * side), int(cy - dy * t * 0.6 * side)
-                image[max(y - 2, 0):y + 3, max(x - 2, 0):x + 3] = 0.06
-            paste(image, seen, cx, cy)
-            row.append(image)
-        rows.append(np.concatenate(row, axis=1))
-    return np.clip(np.concatenate(rows, axis=0), 0.0, 1.0)
-
-
 def seam(frames):
     """A loop's seam, the mean texel change from the last frame to the first, against the mean and
     the largest change between neighbours inside it."""
@@ -1231,18 +993,12 @@ def previews(look, frames, p, folder):
         save_png(os.path.join(folder, look + "-sheet-game-scale.png"), over(small, dark_small))
         big = resize(frames, 512)
         encode(os.path.join(folder, look + "-loop.mp4"), over(big, battlefield(512)), 30)
-        if p.get("root_up"):
-            save_png(os.path.join(folder, look + "-shots.png"), gun_shots(frames))
-            save_png(os.path.join(folder, look + "-shots-game-scale.png"), gun_shots(frames, unit=4.0))
-            return
         if p["loop"]:
             clip = wreck_fire(frames)
             save_png(os.path.join(folder, look + "-wreck.png"), clip[len(clip) // 3])
             encode(os.path.join(folder, look + "-wreck.mp4"), clip, 30, loops=1)
             encode(os.path.join(folder, look + "-wreck-game-scale.mp4"), wreck_fire(frames, scale=0.35), 30, loops=1)
             return
-        if p.get("nuke") or p.get("parts"):
-            return		# the cap over the stem is judged together (nuke_composite); variants by their sheet
         encode(os.path.join(folder, look + "-blasts.mp4"), blasts(frames), 30, loops=2)
         encode(os.path.join(folder, look + "-blasts-game-scale.mp4"), blasts(frames, scale=0.35, seed=4), 30, loops=2)
         return
@@ -1255,58 +1011,20 @@ def previews(look, frames, p, folder):
     big = resize(frames, 512)
     big[..., :3] *= tint
     encode(os.path.join(folder, look + "-loop.mp4"), over(big, battlefield(512)), 20)
-    if p.get("parts"):
-        return		# a particle field would cross from one variant's run into the next
     encode(os.path.join(folder, look + "-particles.mp4"), particle_field(frames, p["loop"]), 30, loops=2)
     encode(os.path.join(folder, look + "-particles-game-scale.mp4"), particle_field(frames, p["loop"], scale=0.35, count=8), 30, loops=2)
 
 
-def nuke_composite(built, folder, size=360, seconds=4.0, fps=30):
-    """The mushroom as the game would stack it, at about the default camera's scale: the stem card
-    standing on the ground, the cap card on its top rising a little, two flame jets bursting at the
-    foot if they were built, each played once over the clip.  An mp4 and a strip of four moments."""
-    import numpy as np
-    stem, cap, jet = built["nukestem"], built["nukecap"], built.get("nukejet")
-    total = int(seconds * fps)
-    ground = int(size * 0.88)
-    clip = np.zeros((total, size, size, 3), np.float32)
-    for t in range(total):
-        u = t / total
-        image = battlefield(size)
-        s = sprite(stem[min(len(stem) - 1, int(u * len(stem)))], int(size * 0.62), 1.0, False)
-        paste(image, s, size // 2, ground - int(s.shape[0] * (STEM_BASE - 0.5)))
-        top = ground - int(s.shape[0] * (STEM_BASE - 0.05))		# the stem's top, the cap's seat
-        if jet is not None and u < 0.4:
-            for dx, flip in ((-0.06, False), (0.05, True)):
-                j = sprite(jet[min(len(jet) - 1, int(u / 0.4 * len(jet)))], int(size * 0.4), 1.0, flip)
-                paste(image, j, int(size * (0.5 + dx)), ground - int(j.shape[0] * 0.43))
-        c = sprite(cap[min(len(cap) - 1, int(u * len(cap)))], int(size * (0.5 + 0.15 * u)), 1.0, False)
-        paste(image, c, size // 2, top - int(size * 0.06 * u))
-        clip[t] = image
-    clip = np.clip(clip, 0.0, 1.0)
-    encode(os.path.join(folder, "nuke-composite-game-scale.mp4"), clip, fps, loops=1)
-    save_png(os.path.join(folder, "nuke-composite-game-scale.png"),
-             np.concatenate([clip[int(k * (total - 1) / 3)] for k in range(4)], axis=1))
-
-
 def pack(work, folder=None, only=()):
-    import numpy as np
-    built = {}
     for look, p in LOOKS.items():
-        if (only and look not in only) or not p["name"]:
-            continue		# a variant's run goes into its atlas, never alone
-        runs = []
-        for part in p.get("parts", (look,)):
-            q = LOOKS[part]
-            source = os.path.join(work, part, "frames")
-            needed = frame_count(q) + (LOOP_BLEND if q["loop"] else 0)
-            if not os.path.isdir(source) or len(os.listdir(source)) < needed:
-                print("skipped %s: %s does not hold %d frames" % (look, source, needed))
-                break
-            runs.append(build(load_sequence(source, q["kind"] == "fire", q.get("key")), q))
-        if len(runs) < len(p.get("parts", (look,))):
+        if only and look not in only:
             continue
-        frames = np.concatenate(runs)
+        source = os.path.join(work, look, "frames")
+        needed = FRAMES + (LOOP_BLEND if p["loop"] else 0)
+        if not os.path.isdir(source) or len(os.listdir(source)) < needed:
+            print("skipped %s: %s does not hold %d frames" % (look, source, needed))
+            continue
+        frames = build(load_sequence(source, p["kind"] == "fire", p.get("key")), p)
         path = os.path.normpath(os.path.join(TEXTURES, p["name"]))
         with open(path, "wb") as out:
             out.write(dds(atlas(frames), frames.shape[1]))
@@ -1316,9 +1034,6 @@ def pack(work, folder=None, only=()):
         if folder:
             os.makedirs(folder, exist_ok=True)
             previews(look, frames, p, folder)
-        built[look] = frames
-    if folder and "nukecap" in built and "nukestem" in built:
-        nuke_composite(built, folder)
 
 
 def selfcheck():
@@ -1362,28 +1077,6 @@ def selfcheck():
     assert last <= largest + 1e-9
     last, mean, largest = seam(np.linspace(0.0, 1.0, FRAMES)[:, None, None, None] * np.ones((1, 2, 2, 4)))
     assert last > 10 * largest		# a ramp is no loop: its seam is the whole climb back
-    # The blur keeps a flat field flat and an impulse's total; the grade paints a steady flame EA's
-    # gold and leaves grey soot grey.
-    flat = np.full((9, 9, 1), 0.5, np.float32)
-    assert np.allclose(box_blur(flat, 2), 0.5)
-    spike = np.zeros((21, 21, 1), np.float32)
-    spike[10, 10] = 1.0
-    assert abs(box_blur(spike, 2).sum() - 1.0) < 1e-4
-    card = np.zeros((1, 16, 16, 4), np.float32)
-    card[0, :, :8] = (0.9, 0.5, 0.1, 1.0)		# flame
-    card[0, :, 8:] = (0.3, 0.3, 0.3, 1.0)		# soot
-    graded = stylize(card)[0]
-    r, g, b = graded[8, 2, :3]
-    assert min(STYLE_MID[0], STYLE_HIGH[0]) - 0.1 < r < 0.9 and r > g > b and np.allclose(graded[8, 13, :3], 0.3, atol=0.01)
-    # Variants: an emitter turned a quarter about the vertical, and mirrored; four whole runs an atlas.
-    (x, y, z, r, a, b), = turned(((1.0, 0.0, 2.0, 0.5, 1, 4),), 90)
-    assert abs(x) < 1e-9 and abs(y - 1.0) < 1e-9 and (z, r, a, b) == (2.0, 0.5, 1, 4)
-    assert abs(turned(((0.0, 1.0, 0.0, 1.0, 1, 1),), 0, True)[0][1] + 1.0) < 1e-9
-    for look, p in LOOKS.items():
-        if p.get("parts"):
-            assert sum(frame_count(LOOKS[part]) for part in p["parts"]) == FRAMES, look
-            assert all(LOOKS[part]["first"] + (VARIANT_FRAMES - 1) * LOOKS[part]["step"] <= LOOKS[part]["frame_end"]
-                       for part in p["parts"]), look
     # Holding density: a thinning puff's last frame comes back denser, its colour untouched.
     fading = np.zeros((FRAMES, 16, 16, 4), np.float32)
     fading[..., 3] = np.linspace(0.9, 0.1, FRAMES)[:, None, None]

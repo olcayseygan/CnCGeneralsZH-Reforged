@@ -42,7 +42,6 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/RandomValue.h"
-#include "Common/TerrainTypes.h"
 #include "Common/ThingTemplate.h"
 #include "Common/ThingFactory.h"
 
@@ -54,7 +53,6 @@
 #include "GameClient/Drawable.h"
 #include "GameClient/ObserverCamera.h"
 #include "GameClient/ParticleSys.h"
-#include "GameClient/TerrainVisual.h"
 #include "GameLogic/PartitionManager.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -103,116 +101,6 @@ void FXObjectView::take( const Object *obj )
 	footprint.y = geom.getGeomType() == GEOMETRY_BOX ? geom.getMinorRadius() : geom.getMajorRadius();
 	alwaysClear = obj->isKindOf(KINDOF_ALWAYS_VISIBLE) || obj->friend_getPartitionData() == NULL;
 	drawable = obj->getDrawable();
-	dyingGroundVehicle = obj->isEffectivelyDead() && obj->isKindOf(KINDOF_VEHICLE) && !obj->isKindOf(KINDOF_AIRCRAFT);
-	blastScale = 1.0f;
-}
-
-//-------------------------------------------------------------------------------------------------
-/** The tile's name says what it is painted with, the word nearest its front where it names two
-	* (SandMediumType5grassy is sand, GrassSandTransitionType1 grass), and snow anywhere in it wins.
-	* Its class is only the WorldBuilder folder it is kept in, which files grasses under
-	* MOUNTAIN_RUGGED and cliffs under Desert_1, so the class decides only the tiles named for no
-	* ground (cliffs, rocks, roads, cobbles, wood): a desert's rock throws sand, a snowfield's snow. */
-/*static*/ const char *FXList::deathDustForTerrain(const char *terrainName, Int terrainClass)
-{
-	static const char *const DIRT = "ReforgedDeathDustDirt";
-	static const char *const GRASS = "ReforgedDeathDustGrass";
-	static const char *const SNOW = "ReforgedDeathDustSnow";
-	static const char *const SAND = "ReforgedDeathDustSand";
-
-	char lower[64];
-	size_t n = 0;
-	for (; terrainName && terrainName[n] && n < sizeof(lower) - 1; ++n)
-		lower[n] = (char)tolower((unsigned char)terrainName[n]);
-	lower[n] = 0;
-
-	if (strstr(lower, "snow"))
-		return SNOW;
-	static const struct { const char *word; const char *dust; } words[] =
-	{
-		{ "grass", GRASS }, { "crops", GRASS }, { "sand", SAND }, { "desert", SAND }, { "dirt", DIRT },
-	};
-	const char *dust = NULL;
-	const char *first = NULL;
-	for (size_t i = 0; i < ARRAY_SIZE(words); ++i)
-	{
-		const char *at = strstr(lower, words[i].word);
-		if (at && (first == NULL || at < first))
-		{
-			first = at;
-			dust = words[i].dust;
-		}
-	}
-	if (dust)
-		return dust;
-
-	switch (terrainClass)
-	{
-		case TERRAIN_SNOW_1: case TERRAIN_SNOW_2: case TERRAIN_SNOW_3: case TERRAIN_RUGGED_SNOW: case TERRAIN_FLAT_SNOW:
-			return SNOW;
-		case TERRAIN_DESERT_1: case TERRAIN_DESERT_2: case TERRAIN_DESERT_3: case TERRAIN_LIVE_DESERT: case TERRAIN_DRY_DESERT:
-		case TERRAIN_SAND: case TERRAIN_ACCENT_SAND: case TERRAIN_TROPICAL_BEACH:
-			return SAND;
-		default:
-			return DIRT;
-	}
-}
-
-//-------------------------------------------------------------------------------------------------
-/** By the hull's area against a Crusader's 15 by 10, the hull FX_GenericTankDeathExplosion was drawn
-	* on: an Overlord or a nuke cannon plays about half again as big, a Humvee four fifths, a bike or a
-	* drone the floor.  The square root, since the blast's size is a length and the hull's an area. */
-/*static*/ Real FXList::deathBlastScale(const Coord2D &footprint)
-{
-	const Real REFERENCE_AREA = 15.0f * 10.0f;
-	const Real MIN_SCALE = 0.6f;
-	const Real MAX_SCALE = 1.5f;
-	const Real area = footprint.x * footprint.y;
-	const Real scale = area > 0.0f ? (Real)sqrt(area / REFERENCE_AREA) : MIN_SCALE;
-	return scale < MIN_SCALE ? MIN_SCALE : (scale > MAX_SCALE ? MAX_SCALE : scale);
-}
-
-//-------------------------------------------------------------------------------------------------
-/** A vehicle's death blast throws up the ground round its hull: snow off snow, grass off grass, sand
-	* off sand, dirt off the rest, by the tile under it.  The cloud covers the hull, turned to its
-	* heading, and grows with the blast.  The tile is the drawn map's and the system the client's, so
-	* nothing of it reaches the logic. */
-static void kickDeathDust(const FXObjectView &primary)
-{
-	// a death that plays two blasts on the one frame (a Humvee's die and slow death lists) throws one cloud
-	static ObjectID s_lastId = INVALID_ID;
-	static UnsignedInt s_lastFrame = 0;
-	const UnsignedInt frame = TheGameLogic->getFrame();
-	if (primary.id == s_lastId && frame == s_lastFrame)
-		return;
-	s_lastId = primary.id;
-	s_lastFrame = frame;
-
-	const Coord3D &at = primary.position;
-	// higher is a wreck in the air or on a bridge, and in water Water Splashes has it
-	const Real MAX_HEIGHT_OVER_GROUND = 15.0f;
-	const Real ground = TheTerrainLogic->getGroundHeight(at.x, at.y);
-	if (at.z - ground > MAX_HEIGHT_OVER_GROUND || TheTerrainLogic->isUnderwater(at.x, at.y))
-		return;
-
-	TerrainType *tile = TheTerrainVisual ? TheTerrainVisual->getTerrainTile(at.x, at.y) : NULL;
-	const AsciiString tileName = tile ? tile->getName() : AsciiString::TheEmptyString;
-	const char *name = FXList::deathDustForTerrain(tileName.str(), tile ? tile->getClass() : TERRAIN_NONE);
-	const ParticleSystemTemplate *tmp = TheParticleSystemManager->findTemplate(name);
-	ParticleSystem *sys = tmp ? TheParticleSystemManager->createParticleSystem(tmp) : NULL;
-	if (sys == NULL)
-		return;
-
-	Coord3D halfSize;
-	halfSize.x = primary.footprint.x;
-	halfSize.y = primary.footprint.y;
-	halfSize.z = 0.0f;
-	sys->setEmissionVolumeBox(halfSize);
-	sys->rotateLocalTransformZ(primary.transform.Get_Z_Rotation());
-	sys->setSizeMultiplier(primary.blastScale);
-	Coord3D pos = at;
-	pos.z = ground;
-	sys->setPosition(&pos);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -780,7 +668,7 @@ public:
 			else
 				// if we have an object, then adjust the offset and direction by the object's transformation
 				// matrix, so that (say) an offset of +10 in the z axis "follows" the orientation of the object.
-				reallyDoFX(&primary->position, &primary->transform, primary->id, 0.0f, &primary->footprint, primary->blastScale);
+				reallyDoFX(&primary->position, &primary->transform, primary->id, 0.0f, &primary->footprint);
 		}
 		else
 		{
@@ -818,7 +706,7 @@ public:
 
 protected:
 
-	void reallyDoFX(const Coord3D *primary, const Matrix3D* mtx, ObjectID thingToAttachTo, Real overrideRadius, const Coord2D *footprint = NULL, Real sizeScale = 1.0f ) const
+	void reallyDoFX(const Coord3D *primary, const Matrix3D* mtx, ObjectID thingToAttachTo, Real overrideRadius, const Coord2D *footprint = NULL ) const
 	{
 		Coord3D offset = m_offset;
 		if (mtx)
@@ -879,9 +767,6 @@ protected:
 						if (!m_orientToObject)
 							sys->rotateLocalTransformZ(mtx->Get_Z_Rotation());
 					}
-					// a dying vehicle's blast, as big as its hull (FXList::deathBlastScale)
-					if (sizeScale != 1.0f)
-						sys->setSizeMultiplier(sizeScale);
 
 					// an endless system meant to ride an object, played at a bare position, has nothing
 					// to end it and would stay all match; EA ends it with its object, so drop it here
@@ -1220,25 +1105,12 @@ void FXList::doFXObjNow(const FXObjectView* primary, const FXObjectView* seconda
 			return;	//the primary object is fogged, shrouded or unseen stealth so don't bother with the effect.
 	}
 
-	// The Reforged look: a blast (the lists Water Splashes takes, by name or by their scorch) played
-	// on a vehicle that has died on the ground plays as big as its hull and throws the ground up.
-	FXObjectView scaled;
-	const Bool deathBlast = primary && primary->dyingGroundVehicle && m_splashRadius > 0.0f && !TheGlobalData->m_classicGraphics;
-	if (deathBlast)
-	{
-		scaled = *primary;
-		scaled.blastScale = deathBlastScale(primary->footprint);
-		primary = &scaled;
-	}
-
 	for (FXNuggetList::const_iterator it = m_nuggets.begin(); it != m_nuggets.end(); ++it)
 	{
 
 		// HERE THE PRIMARY IS THE GUY RECEIVING THE FX, AND SECONDARY MIGHT BE THE GUY DEALING IT
 		(*it)->doFXObj(primary, secondary);
 	}
-	if (deathBlast)
-		kickDeathDust(*primary);
 	if (primary)
 	{
 		leaveBlastMark(&primary->position);

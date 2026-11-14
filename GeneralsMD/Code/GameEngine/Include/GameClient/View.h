@@ -83,20 +83,17 @@ struct ScreenDistortionInfo
 	Real m_waveStrength;
 	Real m_waveWidth;
 
-	/** The Reforged look's hold on a small blast.  Under SMALL_RADIUS a nuke's strengths bent a disc
-		* a hundred pixels across by a tenth of its own size: the pull shrank the middle like a lens and
-		* the ring's crest was its rim, a see-through golden ball over the Nuke Cannon's shell and the
-		* reactor's meltdown.  Held to a few percent it is a ripple.  The big blasts keep theirs. */
-	void tameSmallBlast()
+	/** The Reforged look's hold on the Nuke Cannon's shell (FXList::tamesScreenDistortion picks the
+		* lists).  Its 9% at radius 80 bent a disc a hundred pixels across by a tenth of its own size: the
+		* pull shrank the middle like a lens and the ring's crest was its rim, a see-through golden ball
+		* over the blast.  Held to a few percent it is a ripple.  Every other blast keeps its numbers. */
+	void tameNukeCannonBlast()
 	{
-		const Real SMALL_RADIUS = 120.0f;
-		const Real SMALL_PULL = 0.03f, SMALL_WAVE = 0.04f;
-		if (m_radius >= SMALL_RADIUS)
-			return;
-		if (m_pullStrength > SMALL_PULL)
-			m_pullStrength = SMALL_PULL;
-		if (m_waveStrength > SMALL_WAVE)
-			m_waveStrength = SMALL_WAVE;
+		const Real HELD_PULL = 0.015f, HELD_WAVE = 0.03f;
+		if (m_pullStrength > HELD_PULL)
+			m_pullStrength = HELD_PULL;
+		if (m_waveStrength > HELD_WAVE)
+			m_waveStrength = HELD_WAVE;
 	}
 };
 

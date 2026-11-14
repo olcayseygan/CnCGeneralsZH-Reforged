@@ -3285,24 +3285,12 @@ void W3DDisplay::createLightPulse( const Coord3D *pos, const RGBColor *color,
 	if (innerRadius+attenuationWidth<2.0*PATHFIND_CELL_SIZE_F + 1.0f) {
 		return; // it basically won't make any visual difference.  jba.
 	}
-	// The Reforged look holds a pulse's brightest channel to PULSE_PEAK.  The fork's FX lists put
-	// full-strength pulses on every tank death (255,150,70 at radius 85), and the light came in as
-	// ambient as well as diffuse, so a sunlit hull and the sand round it went past white in every
-	// channel for the pulse's first half second: a cream disc some 300 pixels wide over the wreck.
-	// Held here, the ground still goes orange and the hull warm.  Classic keeps EA's pulses as they
-	// were (it loads none of the fork's).
-	const Real PULSE_PEAK = 0.4f;
-	Vector3 light( color->red, color->green, color->blue );
-	const Real peak = WWMath::Max( light.X, WWMath::Max( light.Y, light.Z ) );
-	if (!TheGlobalData->m_classicGraphics && peak > PULSE_PEAK)
-		light *= PULSE_PEAK / peak;
-
 	W3DDynamicLight * theDynamicLight = m_3DScene->getADynamicLight();
 	// turn it on.
 	theDynamicLight->setEnabled(true);
 
-	theDynamicLight->Set_Ambient( light );
-	theDynamicLight->Set_Diffuse( light );
+	theDynamicLight->Set_Ambient( Vector3( color->red, color->green, color->blue ) );
+	theDynamicLight->Set_Diffuse( Vector3( color->red, color->green, color->blue) );
 	theDynamicLight->Set_Position(Vector3(pos->x, pos->y, pos->z));
 	theDynamicLight->Set_Far_Attenuation_Range(innerRadius, innerRadius + attenuationWidth);
 	theDynamicLight->setFrameFade(increaseFrameTime, decayFrameTime);

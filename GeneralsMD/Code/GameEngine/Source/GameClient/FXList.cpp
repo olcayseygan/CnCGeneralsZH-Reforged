@@ -591,7 +591,7 @@ class ScreenDistortionFXNugget : public FXNugget
 	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE(ScreenDistortionFXNugget, "ScreenDistortionFXNugget")
 public:
 
-	ScreenDistortionFXNugget()
+	ScreenDistortionFXNugget() : m_tamed(FALSE)
 	{
 		m_info.m_radius = 0.0f;
 		m_info.m_pullFrames.setRaw( 0 );
@@ -603,9 +603,15 @@ public:
 
 	virtual void doFXPos(const Coord3D *primary, const Matrix3D* /*primaryMtx*/, const Real /*primarySpeed*/, const Coord3D * /*secondary*/, const Real /*overrideRadius*/ ) const
 	{
-		if (TheTacticalView)
-			TheTacticalView->addScreenDistortion(primary, m_info);
+		if (TheTacticalView == NULL)
+			return;
+		ScreenDistortionInfo info = m_info;
+		if (m_tamed && !TheGlobalData->m_classicGraphics)
+			info.tameNukeCannonBlast();
+		TheTacticalView->addScreenDistortion(primary, info);
 	}
+
+	virtual void tameScreenDistortion() { m_tamed = TRUE; }
 
 	static void parse(INI *ini, void *instance, void* /*store*/, const void* /*userData*/)
 	{
@@ -627,6 +633,7 @@ public:
 
 private:
 	ScreenDistortionInfo m_info;
+	Bool m_tamed;		///< its list is the Nuke Cannon's shell or the meltdown (FXList::tamesScreenDistortion)
 };
 EMPTY_DTOR(ScreenDistortionFXNugget)
 
@@ -1091,8 +1098,11 @@ void FXList::noteBlastByName(const char *name)
 
 	Real radius = 10.0f;
 	Bool scorches = FALSE;
+	const Bool tames = tamesScreenDistortion(name);
 	for (FXNuggetList::const_iterator it = m_nuggets.begin(); it != m_nuggets.end(); ++it)
 	{
+		if (tames)
+			(*it)->tameScreenDistortion();
 		const Real asked = (*it)->blastMarkRadius();
 		scorches = scorches || asked < 0.0f;
 		radius = max(radius, (Real)fabs(asked));
@@ -1101,6 +1111,17 @@ void FXList::noteBlastByName(const char *name)
 	m_splashRadius = isBlast || scorches ? radius : 0.0f;
 	// Every tank cannon fires one of EA's four TankGunNoTracer lists (W3DModelDraw hides its flash mesh)
 	m_tankGun = strstr(name, "TankGunNoTracer") != NULL;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** WeaponFX_NukeCannon and its Nuke General copy carry the only small strong bend (radius 80, 9%);
+	* FX_ChinaPowerPlantDeath carries none today and is named so a bend given to it later is held as
+	* well.  The Scud Launcher's, the toxin Scuds' and the bomb truck's kicks keep theirs. */
+//-------------------------------------------------------------------------------------------------
+Bool FXList::tamesScreenDistortion(const char *name)
+{
+	return strcasecmp(name, "WeaponFX_NukeCannon") == 0 || strcasecmp(name, "Nuke_WeaponFX_NukeCannon") == 0
+		|| strcasecmp(name, "FX_ChinaPowerPlantDeath") == 0;
 }
 
 //-------------------------------------------------------------------------------------------------

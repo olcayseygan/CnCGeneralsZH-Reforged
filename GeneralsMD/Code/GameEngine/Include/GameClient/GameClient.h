@@ -142,7 +142,6 @@ public:
 
 	virtual void addScorch(const Coord3D *pos, Real radius, Scorches type) = 0;
 	virtual void addGroundMark(const Coord3D *pos, Real radius, Int type) {}	///< the Battle Marks option: a burn that fades, nothing logic reads
-	virtual void burnGround(const Coord3D *pos, Real radius) {}		///< the Burnt Ground option: a blast's scorch smoulders a while, nothing logic reads
 	virtual void structureFell(const Coord3D *pos, Real radius) {}							///< a building is down: what the client alone does about it
 	virtual void splashInWater(const Coord3D *pos, Real radius) {}							///< the Water Splashes option: a blast or a body came down here, nothing logic reads
 	virtual void structureCollapsing(Drawable *draw, Real height) {}	///< the Collapse option: this drawable's model as it stands is the building's last, nothing logic reads

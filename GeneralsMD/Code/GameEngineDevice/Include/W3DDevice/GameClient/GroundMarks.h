@@ -56,16 +56,13 @@ inline float strength(unsigned int age)
 	return 1.0f - (float)(age - HOLD_FRAMES) / (float)FADE_FRAMES;
 }
 
-template <int N>
-class RingOf {
+class Ring {
 public:
-	enum { SLOTS = N };
-
-	RingOf() { clear(); }
+	Ring() { clear(); }
 
 	void clear()
 	{
-		for (int i = 0; i < N; ++i)
+		for (int i = 0; i < CAPACITY; ++i)
 			m_marks[i].radius = 0.0f;
 		m_next = 0;
 		m_held = 0;
@@ -74,16 +71,16 @@ public:
 	bool empty() const { return m_held == 0; }
 
 	/// A mark on top of a like one renews it, or a gun firing at one spot would stack up to a black disc
-	/// and eat the ring.  Burns count as one kind.  True when it took a slot of its own.
-	bool add(float x, float y, float radius, int type, unsigned int now)
+	/// and eat the ring.  Burns count as one kind.
+	void add(float x, float y, float radius, int type, unsigned int now)
 	{
 		const float limit = radius / 2.0f;
-		for (int i = 0; i < N; ++i) {
+		for (int i = 0; i < CAPACITY; ++i) {
 			Mark &m = m_marks[i];
 			if (m.radius > 0.0f && within(m.x - x, limit) && within(m.y - y, limit) && within(m.radius - radius, limit)
 					&& (m.type == type || (m.type < BURN_KINDS && type < BURN_KINDS))) {
 				m.born = now;
-				return false;
+				return;
 			}
 		}
 		Mark &m = m_marks[m_next];
@@ -92,17 +89,13 @@ public:
 		m.radius = radius;
 		m.type = type;
 		m.born = now;
-		m_next = (m_next + 1) % N;
-		if (m_held < N)
+		m_next = (m_next + 1) % CAPACITY;
+		if (m_held < CAPACITY)
 			++m_held;
-		return true;
 	}
 
-	/// How many slots have been written since the last clear, at most N.
-	int held() const { return m_held; }
-
 	/// The i'th newest slot, which may be empty or spent.
-	const Mark &newest(int i) const { return m_marks[(m_next + N - 1 - i) % N]; }
+	const Mark &newest(int i) const { return m_marks[(m_next + CAPACITY - 1 - i) % CAPACITY]; }
 
 	bool anyLeft(unsigned int now) const
 	{
@@ -115,75 +108,9 @@ public:
 private:
 	static bool within(float difference, float limit) { return difference < limit && -difference < limit; }
 
-	Mark m_marks[N];
+	Mark m_marks[CAPACITY];
 	int m_next;
 	int m_held;
 };
-
-typedef RingOf<CAPACITY> Ring;
-
-// The Burnt Ground option: a blast's scorch smoulders.  Black ash under it, its cracks glowing and
-// cooling from yellow to a dull red, then the ash goes and EA's scorch is the cold scar left.  A
-// fresh blast on a hot patch heats it again (the ring's renew).  The flames are particle systems the
-// client makes once, when a patch takes a slot of its own.
-enum {
-	BURN_CAPACITY = 48,
-	BURN_HOT_FRAMES = 3 * LOGICFRAMES_PER_SECOND,				///< the cracks glow full this long
-	BURN_COOL_FRAMES = 35 * LOGICFRAMES_PER_SECOND,			///< and are cold this long after that
-	BURN_ASH_FADE_FRAMES = 25 * LOGICFRAMES_PER_SECOND,	///< then the ash goes over this long
-	BURN_LIFE_FRAMES = BURN_HOT_FRAMES + BURN_COOL_FRAMES + BURN_ASH_FADE_FRAMES
-};
-
-typedef RingOf<BURN_CAPACITY> BurnRing;
-
-/// How hot a patch's cracks are at an age in logic frames, 1 to 0, cooling fast at first.
-inline float burnHeat(unsigned int age)
-{
-	if (age <= BURN_HOT_FRAMES)
-		return 1.0f;
-	if (age >= BURN_HOT_FRAMES + BURN_COOL_FRAMES)
-		return 0.0f;
-	const float left = 1.0f - (float)(age - BURN_HOT_FRAMES) / (float)BURN_COOL_FRAMES;
-	return left * left;
-}
-
-/// How bright the cracks are, as against how hot (the colour): a cooling patch reddens fast but keeps a
-/// faint glow, which dies over the last quarter of the cooling.  Taken from the heat alone, the cracks were
-/// dull red flecks nobody saw from 16 s on.
-inline float burnGlow(unsigned int age)
-{
-	if (age <= BURN_HOT_FRAMES)
-		return 1.0f;
-	if (age >= BURN_HOT_FRAMES + BURN_COOL_FRAMES)
-		return 0.0f;
-	const float x = (float)(age - BURN_HOT_FRAMES) / (float)BURN_COOL_FRAMES;
-	const float left = 1.0f - x;
-	const float GLOW_FLOOR = 0.4f, FADE_FROM = 0.75f;
-	if (x <= FADE_FROM)
-		return GLOW_FLOOR + (1.0f - GLOW_FLOOR) * left * left;
-	const float atFade = GLOW_FLOOR + (1.0f - GLOW_FLOOR) * (1.0f - FADE_FROM) * (1.0f - FADE_FROM);
-	return atFade * left / (1.0f - FADE_FROM);
-}
-
-/// How much of a patch's ash is left, 1 while it smoulders and down to 0 after.
-inline float burnAsh(unsigned int age)
-{
-	if (age <= BURN_HOT_FRAMES + BURN_COOL_FRAMES)
-		return 1.0f;
-	if (age >= BURN_LIFE_FRAMES)
-		return 0.0f;
-	return 1.0f - (float)(age - BURN_HOT_FRAMES - BURN_COOL_FRAMES) / (float)BURN_ASH_FADE_FRAMES;
-}
-
-/// A number in [0,1) from two integers, for what the client picks per patch or per vertex without
-/// drawing on any random stream: the same spot gets the same answer on every run.
-inline float burnHash(int a, int b)
-{
-	unsigned int h = (unsigned int)a * 73856093u ^ (unsigned int)b * 19349663u;
-	h ^= h >> 13;
-	h *= 0x5bd1e995u;
-	h ^= h >> 15;
-	return (float)(h & 0xFFFFu) / 65536.0f;
-}
 
 }	// namespace GroundMarks

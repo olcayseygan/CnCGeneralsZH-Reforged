@@ -21599,7 +21599,7 @@ TEST(no_options_file_is_the_classic_game_with_every_added_row_off)
 		"DynamicMusic", "FormationDrag", "BuildWithoutWorker", "ChromaLighting", "TextureFilter", "Bloom", "MSAA",
 		"VSync", "WaterStyle", "CloudStyle", "LightingStyle", "OrderLines", "ShowNetBox", "UseShadowVolumesForSkins",
 		"ShadowsForProjectiles", "ShadowsForProps", "ShadowsForParticles", "VolumetricSmokeShadows", "SmokeFireLighting",
-		"DebrisTrails", "MapLight", "TeamGlow", "WaterFoam", "GroundMarks", "BurntGround", "Firelight", "HemiAmbient", "AmbientOcclusion",
+		"DebrisTrails", "MapLight", "TeamGlow", "WaterFoam", "GroundMarks", "Firelight", "HemiAmbient", "AmbientOcclusion",
 		"Weather", "WaterSplashes", "Atmosphere", "StructureCollapse", "InternalHdr", "Smoke", "ParticleBounce",
 		"HeatHaze", NULL
 	};

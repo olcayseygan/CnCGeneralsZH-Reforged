@@ -93,7 +93,6 @@ public:
 		
 	virtual void addScorch(const Coord3D *pos, Real radius, Scorches type);
 	virtual void addGroundMark(const Coord3D *pos, Real radius, Int type);
-	virtual void burnGround(const Coord3D *pos, Real radius);
 	virtual void structureFell(const Coord3D *pos, Real radius);
 	virtual void splashInWater(const Coord3D *pos, Real radius);
 	virtual void structureCollapsing(Drawable *draw, Real height);

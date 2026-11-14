@@ -187,187 +187,18 @@ void BaseHeightMapRenderObjClass::drawScorches(void)
 
 	updateGroundMarks();
 	updateScorches();
-	if (m_curNumScorchIndices != 0) {
-		DX8Wrapper::Set_Index_Buffer(m_indexScorch,0);
-		DX8Wrapper::Set_Vertex_Buffer(m_vertexScorch);
-		DX8Wrapper::Set_Shader(ShaderClass::_PresetAlphaShader);
-
-		DX8Wrapper::Set_Texture(0,m_scorchTexture);
-		if (Is_Hidden() == 0) {
-			DX8Wrapper::Draw_Triangles(	0,m_curNumScorchIndices/3, 0,	m_curNumScorchVertices);
-		}
-	}
-	drawBurns();
-}
-
-//=============================================================================
-// BaseHeightMapRenderObjClass::drawBurns
-//=============================================================================
-/** The Burnt Ground patches, over the scorches and under the shroud pass.  Rebuilt every frame one
-	* lives, since the cracks flicker: a few thousand vertices at most, into the shared dynamic buffer,
-	* drawn twice from it.  First the ash, the stain cell blended black, then the cracks cell's alpha
-	* times a heat colour, added.  Ages run on the logic clock, so a paused game holds its embers; the
-	* flicker runs on W3D's, as the lasers' does. */
-//=============================================================================
-void BaseHeightMapRenderObjClass::drawBurns(void)
-{
-	if (m_burns.empty() || Is_Hidden() != 0) {
+	if (m_curNumScorchIndices == 0) {
 		return;
 	}
-	const UnsignedInt now = TheGameLogic->getFrame();
-	if (!burntGroundOn()) {
-		m_burns.clear();
-		return;
-	}
-	// made with the first patch, so a game with the option off loads and holds nothing more than before
-	if (m_burnAshTexture == NULL) {
-		m_burnAshTexture = NEW ScorchTextureClass(MIP_LEVELS_3, ScorchTextureClass::LOOK_ASH);
-		m_burnEmberTexture = NEW ScorchTextureClass(MIP_LEVELS_3, ScorchTextureClass::LOOK_EMBER);
-		applyScorchTextureLOD();
-	}
-
-	// A nuke's patch would be a few hundred vertices on its own; past this the cracks are too big to read.
-	const Real MAX_BURN_RADIUS = 80.0f;
-	// Under a terrain cell's reach the glow hangs on where the grid falls and the art's neighbouring cells
-	// show at the edge; a smaller blast smoulders at this size.
-	const Real MIN_BURN_RADIUS = 10.0f;
-	// Each pass's share: both passes go out in one lock, and the index count and the vertex numbers are 16
-	// bits.  An r 80 patch is 18 by 18, 324 vertices and 1734 indices, so these cap at 49 and 18 of them.
-	const Int MAX_BURN_VERTICES = 16000;
-	const Int MAX_BURN_INDICES = 32000;
-	const Int border = m_map->getBorderSizeInline();
-
-	struct Span { Int minX, minY, maxX, maxY; };
-	Span spans[GroundMarks::BURN_CAPACITY];
-	Int numVertex = 0;
-	Int numIndex = 0;
-	Bool anyAlive = FALSE;
-	for (Int b = 0; b < m_burns.held(); ++b) {
-		const GroundMarks::Mark &burn = m_burns.newest(b);
-		Span &s = spans[b];
-		s.minX = s.maxX = 0;
-		if (burn.radius <= 0.0f || now - burn.born >= (UnsignedInt)GroundMarks::BURN_LIFE_FRAMES) {
-			continue;
-		}
-		anyAlive = TRUE;
-		const Real radius = WWMath::Clamp(burn.radius, MIN_BURN_RADIUS, MAX_BURN_RADIUS);
-		s.minX = max(REAL_TO_INT_FLOOR((burn.x - radius)/MAP_XY_FACTOR), -border);
-		s.minY = max(REAL_TO_INT_FLOOR((burn.y - radius)/MAP_XY_FACTOR), -border);
-		s.maxX = min(REAL_TO_INT_CEIL((burn.x + radius)/MAP_XY_FACTOR) + 1, m_map->getXExtent() - border);
-		s.maxY = min(REAL_TO_INT_CEIL((burn.y + radius)/MAP_XY_FACTOR) + 1, m_map->getYExtent() - border);
-		const Int vx = s.maxX - s.minX, vy = s.maxY - s.minY;
-		if (vx < 2 || vy < 2 || numVertex + vx*vy > MAX_BURN_VERTICES || numIndex + 6*(vx-1)*(vy-1) > MAX_BURN_INDICES) {
-			s.minX = s.maxX = 0;
-			continue;
-		}
-		numVertex += vx*vy;
-		numIndex += 6*(vx-1)*(vy-1);
-	}
-	if (!anyAlive) {
-		m_burns.clear();
-		return;
-	}
-	if (numIndex == 0) {
-		return;
-	}
-
-	// DynamicVBAccessClass hands out one format only; both passes come out of one lock, ash then glow
-	DynamicVBAccessClass vbAccess(BUFFER_TYPE_DYNAMIC_DX8, DX8_FVF_XYZNDUV2, 2*numVertex);
-	DynamicIBAccessClass ibAccess(BUFFER_TYPE_DYNAMIC_DX8, 2*numIndex);
-	{
-		DynamicVBAccessClass::WriteLockClass vbLock(&vbAccess);
-		DynamicIBAccessClass::WriteLockClass ibLock(&ibAccess);
-		VertexFormatXYZNDUV2 *ash = vbLock.Get_Formatted_Vertex_Array();
-		UnsignedShort *ib = ibLock.Get_Index_Array();
-		if (ash == NULL || ib == NULL) {
-			return;
-		}
-		VertexFormatXYZNDUV2 *glow = ash + numVertex;
-		UnsignedShort *ibGlow = ib + numIndex;
-		const Real cellsAcross = (Real)(SCORCH_PER_ROW + 1);
-		const Real stainU = (GroundMarks::STAIN % SCORCH_PER_ROW) * 1.5f, stainV = (GroundMarks::STAIN / SCORCH_PER_ROW) * 1.5f;
-		const Real cracksU = (GroundMarks::CRACKS % SCORCH_PER_ROW) * 1.5f, cracksV = (GroundMarks::CRACKS / SCORCH_PER_ROW) * 1.5f;
-		// over the scorch, which floats MAP_HEIGHT_SCALE/10 up
-		const Real lift = MAP_HEIGHT_SCALE/5;
-		const Real seconds = (Real)WW3D::Get_Sync_Time() * 0.001f;
-		Int vertex = 0;
-		for (Int b = 0; b < m_burns.held(); ++b) {
-			const Span &s = spans[b];
-			if (s.maxX == s.minX) {
-				continue;
-			}
-			const GroundMarks::Mark &burn = m_burns.newest(b);
-			const UnsignedInt age = now - burn.born;
-			const Real heat = GroundMarks::burnHeat(age);
-			const Real glowAmount = GroundMarks::burnGlow(age);
-			const Real ashAlpha = 255.0f * GroundMarks::burnAsh(age);
-			const Real radius = WWMath::Clamp(burn.radius, MIN_BURN_RADIUS, MAX_BURN_RADIUS);
-			// each patch turns its cracks its own way, or every blast would wear the same pattern
-			const Real turn = 2.0f * PI * GroundMarks::burnHash(REAL_TO_INT(burn.x), REAL_TO_INT(burn.y));
-			const Real c = (Real)cos(turn), sn = (Real)sin(turn);
-			// cooling goes from yellow orange to a dull red
-			const Real green = 0.12f + 0.5f*heat, blue = 0.03f + 0.17f*heat*heat;
-			const Int start = vertex;
-			for (Int j = s.minY; j < s.maxY; ++j) {
-				for (Int i = s.minX; i < s.maxX; ++i) {
-					const Real X = i*MAP_XY_FACTOR, Y = j*MAP_XY_FACTOR;
-					const Real Z = lift + (Real)getClipHeight(i + border, j + border)*MAP_HEIGHT_SCALE;
-					const Real dx = (X - burn.x)/(2*radius), dy = (Y - burn.y)/(2*radius);
-					ash->x = glow->x = X;
-					ash->y = glow->y = Y;
-					ash->z = glow->z = Z;
-					ash->nx = glow->nx = 0.0f;
-					ash->ny = glow->ny = 0.0f;
-					ash->nz = glow->nz = 1.0f;
-					ash->diffuse = (UnsignedInt)REAL_TO_INT(ashAlpha) << 24;
-					ash->u1 = ash->u2 = (stainU + 0.5f + dx) / cellsAcross;
-					ash->v1 = ash->v2 = (stainV + 0.5f + dy) / cellsAcross;
-
-					// hotter at the middle, and every point of the grid breathes on its own beat
-					const Real d2 = 4.0f*(dx*dx + dy*dy);
-					const Real middle = d2 < 1.0f ? 1.0f - d2 : 0.0f;
-					const Real h = GroundMarks::burnHash(i, j);
-					const Real beat = 0.55f + 0.25f*(Real)sin(seconds*(2.3f + 3.1f*h) + 6.2832f*h)
-						+ 0.2f*(Real)sin(seconds*(7.0f + 5.0f*h) + 17.0f*h);
-					// the heat sets the colour above, the glow how bright; 300 lets the middle reach full red
-					const Real e = min(255.0f, 300.0f * glowAmount * middle * beat);
-					glow->diffuse = 0xFF000000 | ((UnsignedInt)REAL_TO_INT(e) << 16)
-						| ((UnsignedInt)REAL_TO_INT(e*green) << 8) | (UnsignedInt)REAL_TO_INT(e*blue);
-					// a turned corner of the grid reaches 1.41 of a cell out; at 0.7 it stays short of the
-					// stain and burn cells beside the cracks
-					glow->u1 = glow->u2 = (cracksU + 0.5f + 0.7f*(c*dx - sn*dy)) / cellsAcross;
-					glow->v1 = glow->v2 = (cracksV + 0.5f + 0.7f*(sn*dx + c*dy)) / cellsAcross;
-					++ash;
-					++glow;
-					++vertex;
-				}
-			}
-			const Int row = s.maxX - s.minX;
-			for (Int j = 0; j < s.maxY - s.minY - 1; ++j) {
-				for (Int i = 0; i < row - 1; ++i) {
-					const Int v = start + j*row + i;
-					const Bool flip = m_map->getFlipState(i + s.minX + border, j + s.minY + border);
-					const UnsignedShort quad[6] = {
-						(UnsignedShort)(flip ? v+1 : v), (UnsignedShort)(flip ? v+row : v+1+row), (UnsignedShort)(flip ? v : v+row),
-						(UnsignedShort)(flip ? v+1 : v), (UnsignedShort)(flip ? v+1+row : v+1), (UnsignedShort)(flip ? v+row : v+1+row) };
-					for (Int k = 0; k < 6; ++k) {
-						*ib++ = quad[k];
-						*ibGlow++ = (UnsignedShort)(quad[k] + numVertex);
-					}
-				}
-			}
-		}
-	}
-
-	DX8Wrapper::Set_Material(m_vertexMaterialClass);
-	DX8Wrapper::Set_Index_Buffer(ibAccess, 0);
-	DX8Wrapper::Set_Vertex_Buffer(vbAccess);
+	DX8Wrapper::Set_Index_Buffer(m_indexScorch,0);
+	DX8Wrapper::Set_Vertex_Buffer(m_vertexScorch);
 	DX8Wrapper::Set_Shader(ShaderClass::_PresetAlphaShader);
-	DX8Wrapper::Set_Texture(0, m_burnAshTexture);
-	DX8Wrapper::Draw_Triangles(0, numIndex/3, 0, numVertex);
-	DX8Wrapper::Set_Shader(ShaderClass::_PresetAdditiveSpriteShader);
-	DX8Wrapper::Set_Texture(0, m_burnEmberTexture);
-	DX8Wrapper::Draw_Triangles(numIndex, numIndex/3, numVertex, numVertex);}
+
+	DX8Wrapper::Set_Texture(0,m_scorchTexture);
+	if (Is_Hidden() == 0) {
+		DX8Wrapper::Draw_Triangles(	0,m_curNumScorchIndices/3, 0,	m_curNumScorchVertices);
+	}
+}
 #endif
 
 
@@ -494,8 +325,6 @@ BaseHeightMapRenderObjClass::BaseHeightMapRenderObjClass(void)
 	m_vertexScorch = NULL;
 	m_indexScorch = NULL;
 	m_scorchTexture = NULL;
-	m_burnAshTexture = NULL;
-	m_burnEmberTexture = NULL;
 	m_currentTextureLOD = 0;
 	clearAllScorches();
 #endif
@@ -537,10 +366,6 @@ void BaseHeightMapRenderObjClass::applyScorchTextureLOD(void)
 #ifdef DO_SCORCH
 	if (m_scorchTexture && m_scorchTexture->Peek_D3D_Texture())
 		m_scorchTexture->Peek_D3D_Texture()->SetLOD((UnsignedInt)m_currentTextureLOD);
-	if (m_burnAshTexture && m_burnAshTexture->Peek_D3D_Texture())
-		m_burnAshTexture->Peek_D3D_Texture()->SetLOD((UnsignedInt)m_currentTextureLOD);
-	if (m_burnEmberTexture && m_burnEmberTexture->Peek_D3D_Texture())
-		m_burnEmberTexture->Peek_D3D_Texture()->SetLOD((UnsignedInt)m_currentTextureLOD);
 #endif
 }
 
@@ -1771,8 +1596,6 @@ void BaseHeightMapRenderObjClass::freeScorchBuffers(void)
 	REF_PTR_RELEASE(m_vertexScorch);
 	REF_PTR_RELEASE(m_indexScorch);
 	REF_PTR_RELEASE(m_scorchTexture);
-	REF_PTR_RELEASE(m_burnAshTexture);
-	REF_PTR_RELEASE(m_burnEmberTexture);
 }
 
 //=============================================================================
@@ -1994,7 +1817,6 @@ void BaseHeightMapRenderObjClass::clearAllScorches(void)
 	m_groundMarks.clear();
 	m_groundMarksBuilt=0;
 	m_groundMarksPending=FALSE;
-	m_burns.clear();
 #endif
 }
 
@@ -2017,26 +1839,6 @@ void BaseHeightMapRenderObjClass::addGroundMark(const Vector3 &location, Real ra
 		m_groundMarksPending = TRUE;
 	}
 #endif
-}
-
-//=============================================================================
-// BaseHeightMapRenderObjClass::burntGroundOn
-//=============================================================================
-Bool BaseHeightMapRenderObjClass::burntGroundOn(void)
-{
-	return TheGlobalData->m_burntGround && !TheGlobalData->m_classicGraphics && Direct3D11_Present_Is_Enabled();
-}
-
-//=============================================================================
-// BaseHeightMapRenderObjClass::addBurn
-//=============================================================================
-Bool BaseHeightMapRenderObjClass::addBurn(const Vector3 &location, Real radius)
-{
-#ifdef DO_SCORCH
-	if (burntGroundOn() && !TheTerrainLogic->isUnderwater(location.X, location.Y))
-		return m_burns.add(location.X, location.Y, radius, 0, TheGameLogic->getFrame()) ? TRUE : FALSE;
-#endif
-	return FALSE;
 }
 
 #ifdef DO_SCORCH

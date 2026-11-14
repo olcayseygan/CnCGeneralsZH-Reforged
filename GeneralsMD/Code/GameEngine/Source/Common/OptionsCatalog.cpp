@@ -163,7 +163,6 @@ OPTION_BOOL_ACCESSORS( m_mapLight )
 OPTION_BOOL_ACCESSORS( m_teamGlow )
 OPTION_BOOL_ACCESSORS( m_waterFoam )
 OPTION_BOOL_ACCESSORS( m_groundMarks )
-OPTION_BOOL_ACCESSORS( m_burntGround )
 OPTION_BOOL_ACCESSORS( m_firelight )
 OPTION_BOOL_ACCESSORS( m_hemiAmbient )
 OPTION_BOOL_ACCESSORS( m_ambientOcclusion )
@@ -726,13 +725,6 @@ const OptionDef TheOptionCatalog[] =
 	{ "GroundMarks",							OPT_WND( "CheckGroundMarks" ), "GUI:GroundMarks",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_groundMarks, set_m_groundMarks },
-
-	// A blast's scorch smoulders for a minute: black ash, cracks that glow and cool, a few small flames.
-	// The terrain draw asks every frame, a blast when it lands.  Off under Classic graphics and -d3d9.
-	// No control yet, Options.ini only; reforged-look.ini turns it on for the drawing harnesses.
-	{ "BurntGround",							"", "",
-		OPTION_BOOL, APPLY_LIVE, 0, 1,
-		get_m_burntGround, set_m_burntGround },
 
 	// Burning buildings, wrecks and blasts as flickering point lights on the ground, walls and units.
 	// The particle draw asks every frame.  Off under Classic graphics and -d3d9, which light nothing

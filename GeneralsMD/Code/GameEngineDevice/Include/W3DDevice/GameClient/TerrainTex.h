@@ -117,15 +117,9 @@ class ScorchTextureClass : public TextureClass
 protected:
 		virtual void Apply(unsigned int stage);
 
-		Int m_look;
-
 public:
-		/// How the stage combines the art with the vertex colour.  The Burnt Ground patches draw the same
-		/// art twice more: blended black by its alpha, and its alpha as a mask for an additive glow.
-		enum { LOOK_SCORCH, LOOK_ASH, LOOK_EMBER };
-
 		// Create texture.
-		ScorchTextureClass( MipCountType mipLevelCount = MIP_LEVELS_3, Int look = LOOK_SCORCH );
+		ScorchTextureClass( MipCountType mipLevelCount = MIP_LEVELS_3 );
 
 		// just use default destructor. ~ScorchTextureClass(void);
 };

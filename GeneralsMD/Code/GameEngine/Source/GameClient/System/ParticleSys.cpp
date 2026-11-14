@@ -355,16 +355,29 @@ Particle::Particle( ParticleSystem *system, const ParticleInfo *info )
 	m_flipbookStart = 0;
 	m_flipbookVariant = 0;
 	m_flipbookMirrored = FALSE;
+	m_flipbookAgeOffset = 0;
 	if (flipbook->getFlipbookGridLog2() != 0)
 	{
 		const UnsignedInt frames = 1u << ( 2 * flipbook->getFlipbookGridLog2() );
 		const UnsignedInt run = flipbookRunLength( frames, flipbook->getFlipbookVariants() );
-		if (run < frames)
-			m_flipbookVariant = (UnsignedByte)GameClientRandomValue( 0, (Int)( frames / run ) - 1 );
-		if (flipbook->isFlipbookRandomStart())
-			m_flipbookStart = (UnsignedByte)GameClientRandomValue( 0, (Int)run - 1 );
-		if (flipbook->isFlipbookMirror())
-			m_flipbookMirrored = GameClientRandomValue( 0, 1 ) != 0;
+		if (flipbook->isFlipbookShared() && !TheGlobalData->m_classicGraphics)
+		{
+			// FlipbookShared: the system's one pick, and a looping one plays on the system's clock, so
+			// every flame of a fire shows the same frame and the fire plays one film
+			UnsignedInt clockStart;
+			system->getSharedFlipbook( frames, run, &m_flipbookVariant, &m_flipbookStart, &m_flipbookMirrored, &clockStart );
+			if (flipbook->getFlipbookRate() > 0.0f)
+				m_flipbookAgeOffset = flipbookSharedAgeOffset( ParticleSystemManager::getParticleFrame(), clockStart );
+		}
+		else
+		{
+			if (run < frames)
+				m_flipbookVariant = (UnsignedByte)GameClientRandomValue( 0, (Int)( frames / run ) - 1 );
+			if (flipbook->isFlipbookRandomStart())
+				m_flipbookStart = (UnsignedByte)GameClientRandomValue( 0, (Int)run - 1 );
+			if (flipbook->isFlipbookMirror())
+				m_flipbookMirrored = GameClientRandomValue( 0, 1 ) != 0;
+		}
 	}
 
 	m_size = info->m_size;
@@ -447,7 +460,34 @@ UnsignedInt Particle::getFlipbookFrame( void ) const
 {
 	const ParticleSystemTemplate *flipbook = m_system->getTemplate();
 	return flipbookFrameAt( 1u << ( 2 * flipbook->getFlipbookGridLog2() ), flipbook->getFlipbookVariants(), m_flipbookVariant,
-		m_flipbookStart, m_lifetime - m_lifetimeLeft, m_lifetime, flipbook->getFlipbookRate(), GAME_SECONDS_PER_LOGICFRAME_REAL );
+		m_flipbookStart, m_lifetime - m_lifetimeLeft + m_flipbookAgeOffset, m_lifetime, flipbook->getFlipbookRate(), GAME_SECONDS_PER_LOGICFRAME_REAL );
+}
+
+// ------------------------------------------------------------------------------------------------
+void ParticleSystem::getSharedFlipbook( UnsignedInt frames, UnsignedInt run, UnsignedByte *variant, UnsignedByte *start,
+	Bool *mirror, UnsignedInt *clockStart )
+{
+	if (!m_flipbookSharedDrawn)
+	{
+		m_flipbookSharedDrawn = TRUE;
+		if (run < frames)
+			m_flipbookSharedVariant = (UnsignedByte)GameClientRandomValue( 0, (Int)( frames / run ) - 1 );
+		if (m_template->isFlipbookRandomStart())
+			m_flipbookSharedStart = (UnsignedByte)GameClientRandomValue( 0, (Int)run - 1 );
+		if (m_template->isFlipbookMirror())
+			m_flipbookSharedMirror = GameClientRandomValue( 0, 1 ) != 0;
+		m_flipbookSharedClock = ParticleSystemManager::getParticleFrame();
+	}
+	*variant = m_flipbookSharedVariant;
+	*start = m_flipbookSharedStart;
+	*mirror = m_flipbookSharedMirror;
+	*clockStart = m_flipbookSharedClock;
+}
+
+// ------------------------------------------------------------------------------------------------
+/*static*/ UnsignedInt Particle::flipbookSharedAgeOffset( UnsignedInt birthFrame, UnsignedInt clockStart )
+{
+	return birthFrame > clockStart ? birthFrame - clockStart : 0;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -455,7 +495,7 @@ UnsignedInt Particle::getFlipbookBlend( Real tickFraction, UnsignedInt *next, Re
 {
 	const ParticleSystemTemplate *flipbook = m_system->getTemplate();
 	return flipbookBlendAt( 1u << ( 2 * flipbook->getFlipbookGridLog2() ), flipbook->getFlipbookVariants(), m_flipbookVariant,
-		m_flipbookStart, flipbookDrawAge( m_lifetime - m_lifetimeLeft, tickFraction ), m_lifetime, flipbook->getFlipbookRate(),
+		m_flipbookStart, flipbookDrawAge( m_lifetime - m_lifetimeLeft + m_flipbookAgeOffset, tickFraction ), m_lifetime, flipbook->getFlipbookRate(),
 		GAME_SECONDS_PER_LOGICFRAME_REAL, next, fraction );
 }
 
@@ -1812,6 +1852,11 @@ ParticleSystem::ParticleSystem( const ParticleSystemTemplate *sysTemplate,
 	m_controlParticle = NULL;
 	m_groundShadow = NULL;
 	m_inSunMapStamp = 0;
+	m_flipbookSharedDrawn = FALSE;
+	m_flipbookSharedVariant = 0;
+	m_flipbookSharedStart = 0;
+	m_flipbookSharedMirror = FALSE;
+	m_flipbookSharedClock = 0;
 
 	m_gpuEligible = TheParticleSystemManager->acceptsGpuParticles() && sysTemplate->isGpuEligible();
 	m_gpuSpawnTotal = 0;
@@ -3822,6 +3867,7 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	{ "FlipbookRandomStart",				INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_flipbookRandomStart ) },
 	{ "FlipbookVariants",						INI::parseUnsignedByte,								NULL,		offsetof( ParticleSystemTemplate, m_flipbookVariants ) },
 	{ "FlipbookMirror",							INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_flipbookMirror ) },
+	{ "FlipbookShared",							INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_flipbookShared ) },
 
 	{ "Lifetime",								SPEED_FIELD( ParticleSystemTemplate, m_lifetime ) },
 	{ "SystemLifetime",					SPEED_FIELD( ParticleSystemTemplate, m_systemLifetime ) },
@@ -4003,6 +4049,7 @@ ParticleSystemTemplate::ParticleSystemTemplate( const AsciiString &name ) :
 	m_flipbookRandomStart = FALSE;
 	m_flipbookVariants = 1;
 	m_flipbookMirror = FALSE;
+	m_flipbookShared = FALSE;
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -1515,6 +1515,37 @@ TEST(flipbook_blend_fades_into_the_next_frame_of_its_own_run)
 			}
 }
 
+/* FlipbookShared: the cards of one fire play one film.  A card born seven updates after the system's
+	 first has its age started seven updates into the system's clock, so at any moment both show the
+	 same frame and the same fade into the next, where each card's own random start showed a different
+	 shape every moment; and a particle born before the clock (never) or on it starts at nothing. */
+TEST(flipbook_shared_cards_of_one_fire_play_one_film)
+{
+	const Real SPF = 0.05f;
+	CHECK_EQ( Particle::flipbookSharedAgeOffset( 100, 100 ), 0u );
+	CHECK_EQ( Particle::flipbookSharedAgeOffset( 107, 100 ), 7u );
+	CHECK_EQ( Particle::flipbookSharedAgeOffset( 90, 100 ), 0u );
+
+	// the first card born on update 100, the second on 107, the system's start frame 13 of a 64-frame
+	// loop at 20 frames a second; both seen on every update from 107 to 160, between ticks too
+	for (UnsignedInt now = 107; now <= 160; ++now)
+	{
+		const UnsignedInt ageA = now - 100 + 1 + Particle::flipbookSharedAgeOffset( 100, 100 );
+		const UnsignedInt ageB = now - 107 + 1 + Particle::flipbookSharedAgeOffset( 107, 100 );
+		CHECK_EQ( ageA, ageB );
+		for (Int q = 1; q <= 4; ++q)
+		{
+			UnsignedInt nextA, nextB;
+			Real fA, fB;
+			const UnsignedInt frameA = Particle::flipbookBlendAt( 64, 1, 0, 13, Particle::flipbookDrawAge( ageA, q / 4.0f ), 15, 20.0f, SPF, &nextA, &fA );
+			const UnsignedInt frameB = Particle::flipbookBlendAt( 64, 1, 0, 13, Particle::flipbookDrawAge( ageB, q / 4.0f ), 12, 20.0f, SPF, &nextB, &fB );
+			CHECK_EQ( frameA, frameB );
+			CHECK_EQ( nextA, nextB );
+			CHECK_EQ( fA, fB );
+		}
+	}
+}
+
 /* Between two ticks the crossfade runs on the picture's clock: the age lags one update and gains the
 	 tick's fraction, so a flipbook that steps a whole frame each tick (fraction 0 at every tick) fades
 	 across every picture between them, and one stepping more than a frame a tick fades frame to frame

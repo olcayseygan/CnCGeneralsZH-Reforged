@@ -45,6 +45,7 @@
 
 #include <math.h>
 #include <string.h>
+#include <vector>
 
 /// This render pass's blend (W3DDisplay.cpp): whether it is on (a display faster than the logic, or a
 /// -recordfps picture, and not headless), and how
@@ -237,6 +238,91 @@ inline int SmoothMotion_BlendBones(const SmoothMotionBone *prev, int prevCount, 
 	}
 	return written;
 }
+
+/// A model's hand-set bones over its last two ticks.  Each list is tagged with the render object its
+/// bones were set on: a bone index means nothing on another model, and a pooled HLod can come back at
+/// the same address, so the owner forgets everything when its render object goes as well.
+struct SmoothMotionBoneTrack
+{
+	std::vector<SmoothMotionBone> Pending;	///< this tick's controls, as the draw module sets them
+	std::vector<SmoothMotionBone> Cur;
+	std::vector<SmoothMotionBone> Prev;
+	std::vector<SmoothMotionBone> Shown;	///< the blends the picture set, which restore puts back
+	const void *PendingModel;
+	const void *CurModel;
+	const void *PrevModel;
+
+	SmoothMotionBoneTrack() : PendingModel(0), CurModel(0), PrevModel(0) {}
+
+	void forget()
+	{
+		Pending.clear(); Cur.clear(); Prev.clear(); Shown.clear();
+		PendingModel = CurModel = PrevModel = 0;
+	}
+
+	/// A bone the tick set on `model`, the latest call for a bone winning.
+	void set(const void *model, int bone, const Matrix3D &transform)
+	{
+		if (PendingModel != model) { Pending.clear(); PendingModel = model; }
+		for (size_t i = 0; i < Pending.size(); ++i) {
+			if (Pending[i].Bone == bone) { Pending[i].Transform = transform; return; }
+		}
+		SmoothMotionBone kept;
+		kept.Bone = bone;
+		kept.Transform = transform;
+		Pending.push_back(kept);
+	}
+
+	/// A bone set on every pass (a recoil): out of the blend, so what the pass set is what shows.
+	void unsmoothed(int bone)
+	{
+		for (size_t i = 0; i < Pending.size(); ++i) {
+			if (Pending[i].Bone == bone) { Pending.erase(Pending.begin() + i); break; }
+		}
+		for (size_t i = 0; i < Cur.size(); ++i) {
+			if (Cur[i].Bone == bone) { Cur.erase(Cur.begin() + i); break; }
+		}
+	}
+
+	/// On the first pass after a tick: this tick's controls become the current ones.
+	void capture(const void *model)
+	{
+		Prev.swap(Cur);
+		PrevModel = CurModel;
+		Cur.swap(Pending);
+		CurModel = PendingModel;
+		Pending.clear();
+		PendingModel = model;
+	}
+
+	/// Into Shown, the bones to set `alpha` of the way between the ticks on `model`, which has `bones`
+	/// bones; the count.  Nothing unless both ticks' bones were set on this very model, and never an
+	/// index outside 1 to bones - 1.
+	int blend(const void *model, int bones, float alpha)
+	{
+		Shown.clear();
+		if (Cur.empty() || model == 0 || CurModel != model || PrevModel != model) return 0;
+		Shown.resize(Cur.size());
+		const int n = SmoothMotion_BlendBones(Prev.empty() ? 0 : &Prev[0], (int)Prev.size(), &Cur[0], (int)Cur.size(), alpha, &Shown[0]);
+		int kept = 0;
+		for (int i = 0; i < n; ++i) {
+			if (Shown[i].Bone > 0 && Shown[i].Bone < bones) Shown[kept++] = Shown[i];
+		}
+		Shown.resize((size_t)kept);
+		return kept;
+	}
+
+	/// The tick's own control of a bone that was shown blended, to put back after the picture; NULL when
+	/// it is not this model's or no longer held.
+	const Matrix3D *tickControl(const void *model, int bone) const
+	{
+		if (model == 0 || CurModel != model) return 0;
+		for (size_t i = 0; i < Cur.size(); ++i) {
+			if (Cur[i].Bone == bone) return &Cur[i].Transform;
+		}
+		return 0;
+	}
+};
 
 /// One render object's last two logic transforms, and whether a blend is on it now.
 struct SmoothMotionTrack

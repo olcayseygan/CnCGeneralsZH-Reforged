@@ -80,6 +80,53 @@ TEST(smooth_motion_hand_set_bones_glide_between_ticks)
 	CHECK_EQ(SmoothMotion_BlendBones(NULL, 0, cur, 4, 0.5f, out), 0);
 }
 
+/* The bone track only blends bones both ticks set on the very model being drawn: a new model (a pooled
+	 HLod back at an old address included, which the owner forgets everything for) waits a tick, an index
+	 past the model's bones is never set, and a bone a pass sets itself (a recoil) is out of the blend,
+	 so a barrel that is also its pitch bone shows the kick as set. */
+TEST(smooth_motion_bone_track_stays_on_its_model)
+{
+	int modelA = 0, modelB = 0;
+	SmoothMotionBoneTrack track;
+	track.set(&modelA, 3, at(0, 0, 0, 0.0f));
+	track.set(&modelA, 3, at(0, 0, 0, 5.0f));		// the latest call for a bone wins
+	track.capture(&modelA);
+	CHECK_EQ(track.blend(&modelA, 10, 0.5f), 0);	// one tick only: nothing to blend from
+	track.set(&modelA, 3, at(0, 0, 0, 45.0f));
+	track.set(&modelA, 12, at(0, 0, 0, 10.0f));		// an index past the model's ten bones
+	track.capture(&modelA);
+	track.Prev.push_back(track.Prev[0]);
+	track.Prev.back().Bone = 12;
+	CHECK_EQ(track.blend(&modelA, 10, 0.5f), 1);
+	CHECK_EQ(track.Shown[0].Bone, 3);
+	CHECK_NEAR(heading_degrees(track.Shown[0].Transform), 25.0f, 0.01f);
+	CHECK(track.tickControl(&modelA, 3) != NULL);
+	CHECK_NEAR(heading_degrees(*track.tickControl(&modelA, 3)), 45.0f, 0.01f);
+	CHECK(track.tickControl(&modelB, 3) == NULL);
+	CHECK_EQ(track.blend(&modelB, 10, 0.5f), 0);	// another model at draw time
+
+	// the model replaced: forgotten, then the new one waits a whole tick before anything blends
+	track.forget();
+	track.set(&modelA, 3, at(0, 0, 0, 90.0f));		// a pooled object back at the same address
+	track.capture(&modelA);
+	CHECK_EQ(track.blend(&modelA, 10, 0.5f), 0);
+	// bones set on another model in the pending tick are dropped, not mixed in
+	track.set(&modelB, 4, at(0, 0, 0, 0.0f));
+	track.capture(&modelA);
+	CHECK_EQ(track.blend(&modelA, 10, 0.5f), 0);
+
+	// a recoil bone set every pass is taken out of the blend
+	SmoothMotionBoneTrack gun;
+	gun.set(&modelA, 6, at(0, 0, 0, 0.0f));
+	gun.capture(&modelA);
+	gun.set(&modelA, 6, at(0, 0, 0, 20.0f));
+	gun.capture(&modelA);
+	CHECK_EQ(gun.blend(&modelA, 10, 0.5f), 1);
+	gun.unsmoothed(6);
+	CHECK_EQ(gun.blend(&modelA, 10, 0.5f), 0);
+	CHECK(gun.tickControl(&modelA, 6) == NULL);
+}
+
 TEST(smooth_motion_the_same_transform_blends_to_itself)
 {
 	Matrix3D out;

@@ -9,13 +9,16 @@
 // the squad's health in the power bar's colours along the cell's foot.  A squad whose units shot or
 // were hit in the last few seconds has its picture blink red inside the rim, a translucent fill.
 //
-// On the right, while a squad picked by its number is still the selection, a tray between the
-// superweapons and the general's powers: the powers tray's own stepped body at 1.2 (four buttons a
-// row, flush right, a short last row stepping in at the foot) holding one build button for every
-// unit any of the player's factories offers, whose units come out into that squad.  Over it a long
-// ledge (<S>ProBuildLedge) ending in a point on the left, the point being the fold button
-// (<S>ProBuildFold, folded <S>ProBuildUnfold); the ledge's right end carries the squad's keycap and
-// "xN".  Folded, the ledge alone stays.  A piece the sheet does not have yet is drawn as a flat fill.
+// On the right, while a squad picked by its number is still the selection and has no building in
+// it, a tray between the superweapons and the general's powers: the powers tray's own stepped body
+// at 1.2 (four buttons a row, flush right, a short last row stepping in at the foot) holding one
+// build button for every unit any of the player's factories offers, whose units come out into that
+// squad and into the selection while the squad is still it.  Over it a ledge (<S>ProBuildLedge) as
+// wide as the body, its point hanging off the body's left side with the fold button on it
+// (<S>ProBuildFold, in <S>ProBuildUnfold); the ledge's right end carries the squad's keycap and "xN".
+// Ledge and body are a drawer that starts in, with only the point left at the screen's edge as a
+// notch; a click on it slides the drawer out on the wall clock, a second one back in.  A piece the
+// sheet does not have yet is drawn as a flat fill.
 //
 // Thread: LOGIC-THREAD.md.  Everything here that reads the logic runs at the render's sync point:
 // GroupPanel_draw from InGameUI::postDraw, which W3DInGameUI::recordDraw runs before the overlap
@@ -66,6 +69,7 @@
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "Lib/Clock.h"
 
+#include <algorithm>
 #include <string.h>
 #include <vector>
 
@@ -109,6 +113,8 @@ namespace
 	const Real LEDGE_KEY_Y		= 11.0f;
 	const Real LEDGE_COUNT_X	= 31.0f;	///< "xN" left-aligned from here, R-local, centred on LEDGE_COUNT_Y
 	const Real LEDGE_COUNT_Y	= 20.0f;
+	/// the tray's slide out from the edge or back, on the wall clock
+	const UnsignedInt SLIDE_MS	= 220;
 
 	const Real PRODUCTION_ROOM	= 39.0f;	///< the production list's row over the radar, at 800x600 (InGameUI.cpp)
 	const Real PRODUCTION_LIFT	= 2.0f;
@@ -182,6 +188,7 @@ namespace
 		Real health, maxHealth;
 		Int coming;									///< Player::countGroupReinforcements
 		Bool fighting;							///< a member fired or was hit inside COMBAT_WINDOW
+		Bool structure;							///< a building is in it: no build tray for it
 		IRegion2D box;							///< the row, set by the draw, taken by a click
 	};
 
@@ -200,10 +207,15 @@ namespace
 	Int s_chosenSquad = -1;				///< the squad a number key picked, -1 once the selection left it
 	UnsignedInt s_chosenFrame = 0;
 	Int s_shownSquad = -1;				///< the squad the tray is up for
-	Bool s_trayOpen = TRUE;				///< folded by the point; the match remembers it
+	Bool s_trayOpen = FALSE;			///< out or in, the notch's toggle; the match remembers it
+	Real s_slide = 0.0f;					///< 0 in against the edge, 1 out, on its way between
+	UnsignedInt s_slideMs = 0;		///< the wall clock at the last step of the slide
 	Bool s_ledgeShown = FALSE;
 	IRegion2D s_ledgeBox;					///< the whole ledge, point included
-	IRegion2D s_foldBox;					///< the point
+	IRegion2D s_foldBox;					///< the point, the notch left showing at the edge when the tray is in
+
+	Int s_seenSquad = -1;					///< the squad s_seenMembers belongs to
+	std::vector< ObjectID > s_seenMembers;	///< its members at the last draw, so a newcomer stands out
 
 	GameWindow *s_panel = NULL;
 	GameWindow *s_buttons[ MAX_BUTTONS ];
@@ -554,6 +566,7 @@ static void gatherSquads( Player *player )
 		row.maxHealth = 0.0f;
 		row.coming = 0;
 		row.fighting = FALSE;
+		row.structure = FALSE;
 		row.box.lo.x = row.box.lo.y = row.box.hi.x = row.box.hi.y = 0;
 
 		types.clear();
@@ -561,8 +574,12 @@ static void gatherSquads( Player *player )
 		for( VecObjectID::const_iterator it = ids.begin(); it != ids.end(); ++it )
 		{
 			const Object *obj = TheGameLogic->findObjectByID( *it );
+			if( obj == NULL || obj->isEffectivelyDead() )
+				continue;
+			if( obj->isKindOf( KINDOF_STRUCTURE ) )
+				row.structure = TRUE;
 			// one on its way from the factory is the row's "+N", not one of its members yet
-			if( obj == NULL || obj->isEffectivelyDead() || obj->getReinforcementSquad() >= 0 )
+			if( obj->getReinforcementSquad() >= 0 )
 				continue;
 
 			row.members++;
@@ -853,11 +870,19 @@ static void hideTrayWindows( void )
 		s_panel->winHide( TRUE );
 }
 
+/// the tray gone from the screen: the next one slides out from the edge, if it is to be out
+static void trayGone( void )
+{
+	s_ledgeShown = FALSE;
+	s_slide = 0.0f;
+	s_slideMs = Clock_Milliseconds();
+	hideTrayWindows();
+}
+
 static void hidePanel( void )
 {
 	s_shownSquad = -1;
-	s_ledgeShown = FALSE;
-	hideTrayWindows();
+	trayGone();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -885,6 +910,76 @@ static Bool chosenSquadSelected( Player *player )
 			return FALSE;
 	}
 	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A building in the chosen squad, or in the selection: a squad a key made a moment ago is not in
+	* the logic yet, and its units are the selection.  Such a squad gets no tray. */
+//-------------------------------------------------------------------------------------------------
+static Bool chosenHasStructure( void )
+{
+	for( Int r = 0; r < s_rowCount; r++ )
+		if( s_rows[ r ].squad == s_chosenSquad && s_rows[ r ].structure )
+			return TRUE;
+
+	const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+	for( DrawableListCIt it = selected->begin(); it != selected->end(); ++it )
+	{
+		const Object *obj = (*it)->getObject();
+		if( obj != NULL && obj->isKindOf( KINDOF_STRUCTURE ) )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A unit from the tray joins its squad as it leaves the factory.  While that squad is the selection
+	* (the tray is up for it), the newcomer is added to the selection the way a shift-click adds one,
+	* the drawable selected here and the logic told by a group message.  A squad the player has left
+	* is not touched.  Only a member the last draw did not have counts, so one the player took out of
+	* the selection stays out. */
+//-------------------------------------------------------------------------------------------------
+static void selectArrivals( Player *player )
+{
+	const Squad *squad = isValidHotkeySquadIndex( s_shownSquad ) ? player->getHotkeySquad( s_shownSquad ) : NULL;
+	if( squad == NULL )
+	{
+		s_seenSquad = -1;
+		s_seenMembers.clear();
+		return;
+	}
+
+	const Bool fresh = s_seenSquad != s_shownSquad;
+	std::vector< ObjectID > members;
+	GameMessage *add = NULL;
+	const VecObjectID &ids = squad->getObjectIDs();
+	for( VecObjectID::const_iterator it = ids.begin(); it != ids.end(); ++it )
+	{
+		const Bool seen = fresh || std::find( s_seenMembers.begin(), s_seenMembers.end(), *it ) != s_seenMembers.end();
+		Object *obj = seen ? NULL : TheGameLogic->findObjectByID( *it );
+		if( obj != NULL && obj->getReinforcementSquad() == s_shownSquad && !obj->isEffectivelyDead() )
+		{
+			// no drawable yet: looked at again on the next draw
+			Drawable *draw = obj->getDrawable();
+			if( draw == NULL )
+				continue;
+			const Int most = TheInGameUI->getMaxSelectCount();
+			if( !draw->isSelected() && obj->isSelectable() && !obj->isContained()
+					&& ( most <= 0 || TheInGameUI->getSelectCount() < most ) )
+			{
+				TheInGameUI->selectDrawable( draw );
+				if( add == NULL )
+				{
+					add = TheMessageStream->appendMessage( GameMessage::MSG_CREATE_SELECTED_GROUP_NO_SOUND );
+					add->appendBooleanArgument( FALSE );	// added to the group, not a new one
+				}
+				add->appendObjectIDArgument( obj->getID() );
+			}
+		}
+		members.push_back( *it );
+	}
+	s_seenMembers.swap( members );
+	s_seenSquad = s_shownSquad;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1073,31 +1168,33 @@ static void drawList( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The ledge over the tray (mockup A2, tray C's ledge), a 3-slice flush with the screen's edge: L holds
-	* the point, where the fold button's face sits, the run stretches, and R's well carries the squad's
-	* keycap and "xN". */
+/** The ledge over the tray (mockup A2, tray C's ledge), a 3-slice from `left` to `right`: L holds the
+	* point, where the fold button's face sits, the run stretches, and R's well carries the squad's
+	* keycap and "xN".  L is the notch: the whole of it toggles the tray, and it is what stays at the
+	* screen's edge when the tray is in. */
 //-------------------------------------------------------------------------------------------------
-static void drawLedge( Int top, const SquadRow *row )
+static void drawLedge( Int top, Int left, Int right, const SquadRow *row )
 {
 	const Pieces &p = pieces();
-	const Int right = (Int)TheDisplay->getWidth();
 	const Int height = pieceH( p.ledgeT, LEDGE_H );
-	const Int length = px( LEDGE_LENGTH );
 	const Int leftW = pieceW( p.ledgeL, LEDGE_L_W );
 	const Int rightW = pieceW( p.ledgeR, LEDGE_R_W );
 	const Int foldSize = pieceW( s_trayOpen ? p.fold[ STATE_UP ] : p.unfold[ STATE_UP ], FOLD_W );
 
-	s_ledgeBox.lo.x = right - length;
+	s_ledgeBox.lo.x = left;
 	s_ledgeBox.hi.x = right;
 	s_ledgeBox.lo.y = top;
 	s_ledgeBox.hi.y = top + height;
-	s_foldBox.lo.x = s_ledgeBox.lo.x + px( FOLD_X );
-	s_foldBox.lo.y = top + px( FOLD_Y );
-	s_foldBox.hi.x = s_foldBox.lo.x + foldSize;
-	s_foldBox.hi.y = s_foldBox.lo.y + foldSize;
+	s_foldBox = s_ledgeBox;
+	s_foldBox.hi.x = left + leftW;
 	s_ledgeShown = TRUE;
+	IRegion2D face;
+	face.lo.x = left + px( FOLD_X );
+	face.lo.y = top + px( FOLD_Y );
+	face.hi.x = face.lo.x + foldSize;
+	face.hi.y = face.lo.y + foldSize;
 
-	// the point's state: lit under the pointer, pushed while the left button holds it
+	// the point's state: lit under the pointer anywhere on the notch, pushed while the left button holds it
 	const MouseIO *mouse = TheMouse->getMouseStatus();
 	const Bool over = mouse->pos.x >= s_foldBox.lo.x && mouse->pos.x < s_foldBox.hi.x
 		&& mouse->pos.y >= s_foldBox.lo.y && mouse->pos.y < s_foldBox.hi.y;
@@ -1122,13 +1219,13 @@ static void drawLedge( Int top, const SquadRow *row )
 		drawWell( well );
 	}
 	if( button != NULL )
-		drawPiece( button, s_foldBox.lo.x, s_foldBox.lo.y, s_foldBox.hi.x, s_foldBox.hi.y );
+		drawPiece( button, face.lo.x, face.lo.y, face.hi.x, face.hi.y );
 	else
 	{
 		// a chevron on the point: right to fold the tray toward the edge, left to bring it out
-		TheDisplay->drawFillRect( s_foldBox.lo.x, s_foldBox.lo.y, foldSize, foldSize, FOLD_FACE );
-		TheDisplay->drawOpenRect( s_foldBox.lo.x, s_foldBox.lo.y, foldSize, foldSize, 1.0f, KEYLINE );
-		const Int cx = ( s_foldBox.lo.x + s_foldBox.hi.x ) / 2, cy = ( s_foldBox.lo.y + s_foldBox.hi.y ) / 2;
+		TheDisplay->drawFillRect( face.lo.x, face.lo.y, foldSize, foldSize, FOLD_FACE );
+		TheDisplay->drawOpenRect( face.lo.x, face.lo.y, foldSize, foldSize, 1.0f, KEYLINE );
+		const Int cx = ( face.lo.x + face.hi.x ) / 2, cy = ( face.lo.y + face.hi.y ) / 2;
 		const Int half = max( foldSize / 6, 2 );
 		const Int tip = s_trayOpen ? cx + half : cx - half, back = s_trayOpen ? cx - half : cx + half;
 		TheDisplay->drawLine( back, cy - 2 * half, tip, cy, 2.0f, FOLD_GLYPH );
@@ -1157,14 +1254,19 @@ static void drawLedge( Int top, const SquadRow *row )
 
 //-------------------------------------------------------------------------------------------------
 /** The tray (mockup A2): the powers tray's stepped body at 1.2 under the ledge, four buttons a row
-	* flush right, a short last row stepping in at the foot; folded, the ledge alone. */
+	* flush right, a short last row stepping in at the foot.  The ledge runs the body's width with its
+	* point hanging off the body's left side, and the two slide as one drawer: in, only the point is
+	* left at the screen's edge, the notch; a click on it slides the drawer out over SLIDE_MS, and a
+	* second click slides it back.
+	* ponytail: the slide steps where the sync point runs, so a picture drawn again beside the tick
+	* holds the last step; move the windows inside the window too if a fast screen shows it stepping. */
 //-------------------------------------------------------------------------------------------------
 static void drawTray( Int top )
 {
 	s_ledgeShown = FALSE;
 	if( !isValidHotkeySquadIndex( s_shownSquad ) || s_buildables.empty() )
 	{
-		hideTrayWindows();
+		trayGone();
 		return;
 	}
 
@@ -1173,12 +1275,6 @@ static void drawTray( Int top )
 		if( s_rows[ r ].squad == s_shownSquad )
 			row = &s_rows[ r ];
 
-	if( !s_trayOpen )
-	{
-		hideTrayWindows();
-		drawLedge( top, row );
-		return;
-	}
 	GameWindow *panel = panelWindow();
 	if( panel == NULL )
 		return;
@@ -1204,7 +1300,6 @@ static void drawTray( Int top )
 		body = pieced;
 	}
 
-	const Int right = (Int)TheDisplay->getWidth();
 	const Int shown = min( (Int)s_buildables.size(), (Int)MAX_BUTTONS );
 	const Int floor = rightTrayFloor();
 	const Int bodyTop = top + px( LEDGE_BODY_Y );	// the body's top edge, under the ledge's foot
@@ -1235,6 +1330,16 @@ static void drawTray( Int top )
 		scale *= 0.92f;
 	const Int bodyBottom = measure();
 
+	// the slide, eased at both ends; in, the drawer stands off the screen but for its point
+	const UnsignedInt now = Clock_Milliseconds();
+	const Real step = (Real)( now - s_slideMs ) / SLIDE_MS;
+	s_slideMs = now;
+	s_slide = s_trayOpen ? min( s_slide + step, 1.0f ) : max( s_slide - step, 0.0f );
+	const Real eased = s_slide * s_slide * ( 3.0f - 2.0f * s_slide );
+	const Int pointW = pieceW( p.ledgeL, LEDGE_L_W );
+	const Int ledgeLength = max( px( LEDGE_LENGTH ), pointW + columns * cellW + body.openW );
+	const Int right = (Int)TheDisplay->getWidth() + REAL_TO_INT( ( ledgeLength - pointW ) * ( 1.0f - eased ) + 0.5f );
+
 	// cells in the tray's order (place counted in from the edge); a row reads left to right, flush right
 	IRegion2D cells[ MAX_BUTTONS ];
 	Int cellOf[ MAX_BUTTONS ];
@@ -1250,6 +1355,14 @@ static void drawTray( Int top )
 		cells[ each ].hi.y = cells[ each ].lo.y + cellH;
 	}
 
+	// all the way in, the body is past the edge: only the notch is drawn and nothing takes a click
+	if( s_slide <= 0.0f )
+	{
+		hideTrayWindows();
+		drawLedge( top, right - ledgeLength, right, row );
+		return;
+	}
+
 	TheDisplay->beginBatch2D();
 	if( body.cell != NULL )
 		drawStepTray( body, cells, shown, columns, -1, -1 );
@@ -1260,7 +1373,7 @@ static void drawTray( Int top )
 	}
 	TheDisplay->endBatch2D();
 	// the ledge over the body's top edge
-	drawLedge( top, row );
+	drawLedge( top, right - ledgeLength, right, row );
 
 	// the parent covers the body, so a click between the buttons stays off the ground
 	// ponytail: the notch the short row leaves blocks the ground too; a second parent if anyone clicks there
@@ -1312,7 +1425,7 @@ void GroupPanel_draw( Int rightTop )
 	{
 		s_chosenSquad = -1;
 		s_gathered = FALSE;
-		s_trayOpen = TRUE;		// a new match starts with the tray out
+		s_trayOpen = FALSE;		// a new match starts with the tray in, its notch alone at the edge
 		hidePanel();
 		return;
 	}
@@ -1339,10 +1452,11 @@ void GroupPanel_draw( Int rightTop )
 	}
 
 	// the tray closes for good once the selection leaves the squad, so a box round the same units
-	// does not open it again
-	s_shownSquad = chosenSquadSelected( player ) ? s_chosenSquad : -1;
-	if( s_shownSquad < 0 )
+	// does not open it again; a squad with a building in it keeps its pick but gets no tray
+	if( !chosenSquadSelected( player ) )
 		s_chosenSquad = -1;
+	s_shownSquad = isValidHotkeySquadIndex( s_chosenSquad ) && !chosenHasStructure() ? s_chosenSquad : -1;
+	selectArrivals( player );
 
 	drawList();
 	drawTray( rightTop );
@@ -1356,7 +1470,7 @@ Bool GroupPanel_click( const ICoord2D *mouse, Bool cancel )
 		return mouse->x >= box.lo.x && mouse->x < box.hi.x && mouse->y >= box.lo.y && mouse->y < box.hi.y;
 	};
 
-	// the ledge's point folds the tray away or brings it out; the rest of the ledge is only steel
+	// the ledge's point, the notch, slides the tray out or back in; the rest of the ledge is only steel
 	if( s_ledgeShown && inside( s_ledgeBox ) )
 	{
 		if( inside( s_foldBox ) && ( !cancel || TheKeyboard->isCtrl() ) )

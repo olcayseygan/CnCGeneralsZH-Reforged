@@ -52,6 +52,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <algorithm>
+#include <string>
 #include <vector>
 
 #ifdef _INTERNAL
@@ -151,6 +152,30 @@ static Bool isReforgedArchive(const AsciiString &path)
 	return strncasecmp(name, REFORGED_ARCHIVE_PREFIX, sizeof(REFORGED_ARCHIVE_PREFIX) - 1) == 0;
 }
 
+// The base game's copy of a Zero Hour archive, lying beside the exe: X.big where XZH.big is there
+// too. A merged Deluxe or repack folder, or a stray copy, puts them side by side, and the plain pass
+// is first-wins alphabetically, so INI.big beat INIZH.big and the game stopped on the base game's
+// GameData.ini ("UserDataLeafName", 32 v4.0.0 reports). Such an archive goes in after the Zero Hour
+// ones without overwrite, as the base game's folder does. Music.big is Zero Hour's own name too, and a
+// correct install has no other pair, so nothing changes for it.
+static std::vector<AsciiString> theBaseGameTwins;
+
+static Bool isBaseGameTwin(const AsciiString &path)
+{
+	const char *name = strrchr(path.str(), '\\');
+	name = (name != NULL) ? name + 1 : path.str();
+	const size_t length = strlen(name);
+	if (length < 4 || strcasecmp(name + length - 4, ".big") != 0 || strcasecmp(name, "Music.big") == 0) {
+		return FALSE;
+	}
+	if (length >= 6 && strncasecmp(name + length - 6, "ZH", 2) == 0) {
+		return FALSE;
+	}
+	std::string twin(path.str(), path.getLength() - 4);
+	twin += "ZH.big";
+	return TheLocalFileSystem->doesFileExist(twin.c_str());
+}
+
 void Win32BIGFileSystem::init() {
 	DEBUG_ASSERTCRASH(TheLocalFileSystem != NULL, ("TheLocalFileSystem must be initialized before TheArchiveFileSystem."));
 	if (TheLocalFileSystem == NULL) {
@@ -177,6 +202,16 @@ void Win32BIGFileSystem::init() {
 	// Data\INI\... before PatchINI.big is even looked at and the 1.04 patch content is
 	// unreachable.  Re-load the patch archives with overwrite so they win, like retail.
 	loadBigFilesFromDirectory("", "Patch*.big", TRUE, FALSE);
+
+	// The base game's twins of Zero Hour archives that sat beside the exe, under Zero Hour's (isBaseGameTwin).
+	for (size_t i = 0; i < theBaseGameTwins.size(); ++i) {
+		ArchiveFile *twin = openArchiveFile(theBaseGameTwins[i].str());
+		if (twin != NULL) {
+			loadIntoDirectoryTree(twin, theBaseGameTwins[i], FALSE);
+			m_archiveFileMap[theBaseGameTwins[i]] = twin;
+		}
+	}
+	theBaseGameTwins.clear();
 
     // Zero Hour is not standalone: the base game's bigs carry most of the art, the sound effects
     // and the music.  A retail install registers the key below and Steam registers nothing, so a
@@ -429,6 +464,15 @@ Bool Win32BIGFileSystem::loadBigFilesFromDirectory(AsciiString dir, AsciiString 
 				m_reforgedArt.push_back(*it);
 			}
 			DEBUG_LOG(("Win32BIGFileSystem::loadBigFilesFromDirectory - %s %s.\n", (*it).str(), wanted ? "goes in after the retail archives" : "left out (Classic Graphics, Detailed Models or HD Textures off)"));
+			it++;
+			continue;
+		}
+
+		if (dir.isEmpty() && isBaseGameTwin(*it)) {
+			if (std::find(theBaseGameTwins.begin(), theBaseGameTwins.end(), *it) == theBaseGameTwins.end()) {
+				DEBUG_LOG(("Win32BIGFileSystem::loadBigFilesFromDirectory - %s is the base game's, goes in after Zero Hour's.\n", (*it).str()));
+				theBaseGameTwins.push_back(*it);
+			}
 			it++;
 			continue;
 		}

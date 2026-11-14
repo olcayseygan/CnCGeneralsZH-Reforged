@@ -2409,6 +2409,7 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
 - Changing the resolution in Options during an online match no longer crashes the game a moment later. Rebuilding the menus for the new size also logged you out of the online service, under a match that was still reading the room's settings every frame. A resolution change keeps you signed in now.
 - A model that loads while the game has no graphics card to ask, because the picture is being rebuilt or the card was just refused, no longer crashes the game when one of its textures is a bump map. The game asked the missing card what it could do; it goes on without the bump now, as a card that cannot do bumps always has.
 - When the game stops at start with "Please make sure you have DirectX 8.1", the crash report it sends now says why: every graphics card it found, which one refused and the error Windows gave. The box itself is EA's and blames DirectX 8.1 whatever went wrong; until now the report said no more than the box did.
+- A Zero Hour folder with the original Generals files copied in beside it (a merged Deluxe or repack folder, or one stray file) starts again. The game read the old game's settings over Zero Hour's and stopped at once with "Error parsing INI file 'Data\INI\GameData.ini'", 32 times in the 4.0.0 reports. The old game's files beside Zero Hour's now go in under them, the way they do from their own folder; a normal install is untouched.
 
 ## Units take corners wide, and drive round a jam instead of into it
 

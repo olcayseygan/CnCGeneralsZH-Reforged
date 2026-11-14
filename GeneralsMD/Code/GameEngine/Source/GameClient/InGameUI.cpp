@@ -107,6 +107,7 @@
 #include "GameClient/Shadow.h"
 #include "GameClient/GlobalLanguage.h"
 #include "GameClient/GroupPanel.h"
+#include "GameClient/AirliftPanel.h"
 #include "GameClient/UIStyle.h"
 
 #include "GameNetwork/NetworkInterface.h"
@@ -8440,6 +8441,9 @@ void InGameUI::postDraw( void )
 	// a player's squad list on the left, and the picked squad's build tray where a watcher's rack hangs
 	GroupPanel_draw( rackPlateTop );
 
+	// an airlift power's load being picked, over everything else at its spot
+	AirliftPanel_draw();
+
 	// draw named timers
 	if (TheGameLogic->getFrame() > 0 && m_showNamedTimers)
 	{
@@ -12013,6 +12017,10 @@ Bool InGameUI::handleHudCellClick( const ICoord2D *mouse, Bool cancel )
 	{
 		return mouse->x >= box.lo.x && mouse->x < box.hi.x && mouse->y >= box.lo.y && mouse->y < box.hi.y;
 	};
+
+	// the airlift panel lies over everything else
+	if( AirliftPanel_click( mouse, cancel ) )
+		return TRUE;
 
 	// a "+N" tab stands for no one item
 	if( inside( m_productionListTab ) || inside( m_superweaponTab ) )

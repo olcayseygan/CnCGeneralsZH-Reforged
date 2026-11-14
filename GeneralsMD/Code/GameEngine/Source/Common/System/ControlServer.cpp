@@ -38,6 +38,7 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/NameKeyGenerator.h"
+#include "GameClient/AirliftPanel.h"
 #include "GameClient/Display.h"
 #include "GameClient/GadgetListBox.h"
 #include "GameClient/GameWindowManager.h"
@@ -781,6 +782,37 @@ static void handleCommand( const AsciiString &command )
 		 retail's; Ctrl+A is the beacon there).  Posted twice because one press takes the screen and the
 		 second, with nothing new left on it, takes the whole map.  Not a shell list's row: no window is
 		 named "all". */
+	/* airliftopen <x> <y> opens the airlift panel of the local player's first airlift power (Ally Aid)
+		 aimed at that world point, as the power's click on the ground does; airliftpanel says what the
+		 panel shows and where the centre of each of its buttons is on screen, for click.  Both are the
+		 client's own, so a picture can be taken of the panel; only OK reaches the logic, as a message. */
+	if (strncmp( command.str(), "airliftopen ", 12 ) == 0)
+	{
+		Coord3D at;
+		at.zero();
+		if (sscanf( command.str() + 12, "%f %f", &at.x, &at.y ) != 2 || TheTerrainLogic == NULL)
+		{
+			replyError( "airliftopen <x> <y>" );
+			return;
+		}
+		at.z = TheTerrainLogic->getGroundHeight( at.x, at.y );
+		if (AirliftPanel_openForLocalPlayer( &at ))
+			replyOk( "\"airlift\":\"open\"" );
+		else
+			replyError( "the local player has no airlift power" );
+		return;
+	}
+
+	if (command == "airliftpanel")
+	{
+		char members[ 3072 ];
+		AirliftPanel_describe( members, sizeof( members ) );
+		char reply[ 3200 ];
+		snprintf( reply, sizeof( reply ), "{\"ok\":true,%s}", members );
+		sendText( reply );
+		return;
+	}
+
 	if (command == "select all")
 	{
 		for (Int press = 0; press < 2; ++press)

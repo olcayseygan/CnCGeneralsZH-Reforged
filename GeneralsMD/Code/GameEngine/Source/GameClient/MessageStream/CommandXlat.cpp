@@ -57,6 +57,7 @@
 #include "Common/GameLOD.h"
 
 #include "GameClient/InGameUI.h"
+#include "GameClient/AirliftPanel.h"
 #include "GameClient/CommandXlat.h"
 #include "GameClient/DebugDisplay.h"
 #include "GameClient/Drawable.h"
@@ -84,6 +85,7 @@
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/GhostObject.h"
 #include "GameLogic/Weapon.h"
+#include "GameLogic/Module/OCLSpecialPower.h"
 #include "GameLogic/Module/SpawnBehavior.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
 
@@ -1273,6 +1275,16 @@ GameMessage::Type CommandTranslator::issueSpecialPowerCommand( const CommandButt
 	{
 		//LOCATION BASED SPECIAL
 		msgType = GameMessage::MSG_DO_SPECIAL_POWER_AT_LOCATION;
+
+		// an airlift power fires with a load: the click opens its panel at the spot, and the panel's OK
+		// sends the order (AirliftPanel.cpp)
+		Object *sourceObj = sourceDraw ? sourceDraw->getObject() : NULL;
+		if( commandType == DO_COMMAND && sourceObj && OCLSpecialPower::findAirlift( sourceObj, command->getSpecialPowerTemplate() ) )
+		{
+			AirliftPanel_open( sourceObj, command->getSpecialPowerTemplate(), pos );
+			return msgType;
+		}
+
 		if( commandType == DO_COMMAND )
 		{
 			GameMessage *msg;

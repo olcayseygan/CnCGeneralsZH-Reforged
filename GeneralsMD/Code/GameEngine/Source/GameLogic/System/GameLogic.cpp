@@ -7237,7 +7237,18 @@ void GameLogic::loadPostProcess( void )
 			Object *owner = findObjectByID( it->first );
 			if( owner == NULL )
 				throw SC_INVALID_DATA;
-			UpdateModulePtr u = (UpdateModulePtr)( owner->getBehaviorModules()[ it->second ]->getUpdate() );
+			// The index is the save's: one from another build, or a broken file, can name a module this
+			// object does not have, or one with no update. Refuse the save rather than read past the list.
+			BehaviorModule **modules = owner->getBehaviorModules();
+			Int moduleCount = 0;
+			while( modules[ moduleCount ] )
+				++moduleCount;
+			if( it->second < 0 || it->second >= moduleCount )
+				throw SC_INVALID_DATA;
+			UpdateModulePtr u = (UpdateModulePtr)( modules[ it->second ]->getUpdate() );
+			// and the same module twice would leave a second heap entry pointing at it after it dies
+			if( u == NULL || u->friend_getSleepySlot() != -1 )
+				throw SC_INVALID_DATA;
 			appendSleepyUpdate( u );
 		}
 		m_loadedSleepyOrder.clear();

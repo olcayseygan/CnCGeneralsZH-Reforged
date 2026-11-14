@@ -2415,6 +2415,7 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
 - The score screen no longer crashes when its window file is an older or modded copy without every panel ours has; what is missing stays missing.
 - A side whose general's powers bar file is missing from the install plays without that bar instead of crashing as the match starts.
 - A crash in the graphics layer when Windows refused the game a buffer to write into is fixed; the picture went on, the game did not.
+- A save from another version of the game, or a damaged one, is refused with the load error instead of crashing the game.
 - A damaged game archive is left out with a line in the log instead of closing the game without a report. One broken INIZH.big claimed 503 million files, and reading them overran the game's memory.
 - Crash reports from a 64-bit game give the full address of a bad memory access. They gave the bottom half of it, which pointed nowhere.
 - A game folder missing the loading screen's window file stops with a box saying the game files are incomplete and asking to verify or reinstall them, where it used to crash with nothing to go on.

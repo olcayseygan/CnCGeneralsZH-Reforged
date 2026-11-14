@@ -340,8 +340,13 @@ Team *TeamFactory::createInactiveTeam(const AsciiString& name)
 {
 	TeamPrototype *tp = findTeamPrototype(name);
 	if (!tp)
-		throw ERROR_BAD_ARG;
-	
+	{
+		// A map script naming a team its map does not define. The throw ended the program mid-match; every
+		// script caller already answers NULL ("Team not found"), and the AI only names prototypes it holds.
+		DEBUG_LOG(("TeamFactory::createInactiveTeam - no team '%s' on this map, frame %d\n", name.str(), TheGameLogic ? TheGameLogic->getFrame() : 0));
+		return NULL;
+	}
+
 	Team *t = NULL;
 	if (tp->getIsSingleton())
 	{
@@ -373,7 +378,8 @@ Team *TeamFactory::createTeam(const AsciiString& name)
 {
 	Team *t = NULL;
 	t = createInactiveTeam(name);
-	t->setActive();
+	if (t)
+		t->setActive();
 	return t;
 }
 

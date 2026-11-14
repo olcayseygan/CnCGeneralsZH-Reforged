@@ -117,7 +117,8 @@ public:
 		{
 			return(&m_teams[team]);
 		}
-		DEBUG_CRASH(("Out of range.")); 
+		DEBUG_CRASH(("Out of range."));
+		DEBUG_LOG(("TeamsInfoRec::getTeamInfo - team %d of %d, out of range\n", team, m_numTeams));
 		throw ERROR_BAD_ARG;
 		return NULL;
 	}	
@@ -246,7 +247,8 @@ inline SidesInfo * SidesList::getSideInfo(Int side)
 	{
 		return(&m_sides[side]);
 	}
-	DEBUG_CRASH(("Out of range.")); 
+	DEBUG_CRASH(("Out of range."));
+	DEBUG_LOG(("SidesList::getSideInfo - side %d of %d, out of range\n", side, m_numSides));
 	throw ERROR_BAD_ARG;
 	return NULL;
 }	
@@ -257,7 +259,8 @@ inline SidesInfo * SidesList::getSkirmishSideInfo(Int side)
 	{
 		return(&m_skirmishSides[side]);
 	}
-	DEBUG_CRASH(("Out of range.")); 
+	DEBUG_CRASH(("Out of range."));
+	DEBUG_LOG(("SidesList::getSkirmishSideInfo - side %d of %d, out of range\n", side, m_numSkirmishSides));
 	throw ERROR_BAD_ARG;
 	return NULL;
 }	

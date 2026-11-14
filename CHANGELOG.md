@@ -2425,6 +2425,7 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
 - A map script that sends a unit with no engine along a waypoint path no longer crashes the game; one repack's main menu map did that eight times in the 4.0.0 reports. The unit stays where it is.
 - The Boss general's challenge map no longer crashes as the command bar is drawn: a side with no bar of its own gets the game's default one.
 - A rare crash while a unit worked out its route is stopped. The unit asks for a route again instead; the line it leaves in the log is how the real cause will be found.
+- A map script naming a team the map does not have no longer crashes the match; the order does nothing, as a missing unit's always has.
 
 ## Units take corners wide, and drive round a jam instead of into it
 

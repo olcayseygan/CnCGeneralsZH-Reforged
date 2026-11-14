@@ -324,7 +324,12 @@ ThingTemplate *ThingFactory::findTemplateInternal( const AsciiString& name, Bool
 Object *ThingFactory::newObject( const ThingTemplate *tmplate, Team *team, ObjectStatusMaskType statusBits, const Object *producer )
 {
 	if (tmplate == NULL)
+	{
+		// the caller looked a name up that the data lacks; who it was is on the stack, the team here
+		DEBUG_LOG(("ThingFactory::newObject - no template, team '%s', producer %d\n",
+			team ? team->getName().str() : "-", producer ? (Int)producer->getID() : 0));
 		throw ERROR_BAD_ARG;
+	}
 
 	const std::vector<AsciiString>& asv = tmplate->getBuildVariations();
 	if (!asv.empty())

@@ -1087,8 +1087,9 @@ Bool Particle::update( const ParticleUpdateContext &context )
 
 	DEBUG_ASSERTCRASH( m_lifetimeLeft, ( "A particle has an infinite lifetime..." ));
 
-	// if we've gone totally invisible, destroy ourselves
-	if (isInvisible( context ))
+	// if we've gone totally invisible, destroy ourselves - unless it is a carrier (retiredWhenInvisible)
+	if (isInvisible( context )
+			&& retiredWhenInvisible( m_systemUnderControl != NULL, m_size, TheGlobalData->m_classicGraphics ))
 		return false;
 	return true;
 }

@@ -706,8 +706,9 @@ void refreshSampleOutput(Sample *sample)
 	float ratio = 1.0f;
 	if (sample->baseRate != 0) {
 		ratio = (float)sample->rate / (float)sample->baseRate * doppler;
-		if (ratio < MIN_FREQ_RATIO) ratio = MIN_FREQ_RATIO;
-		if (ratio > MAX_FREQ_RATIO) ratio = MAX_FREQ_RATIO;
+		// written so a NaN fails the first test, as in miles_xaudio2.cpp
+		if (!(ratio >= MIN_FREQ_RATIO)) ratio = MIN_FREQ_RATIO;
+		if (!(ratio <= MAX_FREQ_RATIO)) ratio = MAX_FREQ_RATIO;
 	}
 
 	std::lock_guard<std::mutex> mixGuard(g_engine.mixLock);

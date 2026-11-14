@@ -738,8 +738,9 @@ void refreshSampleOutput(Sample *sample)
 	}
 	if (sample->baseRate != 0) {
 		float ratio = (float)sample->rate / (float)sample->baseRate * doppler;
-		if (ratio < XAUDIO2_MIN_FREQ_RATIO) ratio = XAUDIO2_MIN_FREQ_RATIO;
-		if (ratio > 4.0f) ratio = 4.0f;
+		// written so a NaN fails the first test: SetFrequencyRatio takes one and the mixer thread faults
+		if (!(ratio >= XAUDIO2_MIN_FREQ_RATIO)) ratio = XAUDIO2_MIN_FREQ_RATIO;
+		if (!(ratio <= 4.0f)) ratio = 4.0f;
 		sample->voice->SetFrequencyRatio(ratio);
 	}
 }

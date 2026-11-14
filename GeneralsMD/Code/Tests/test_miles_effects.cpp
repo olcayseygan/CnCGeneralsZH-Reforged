@@ -257,6 +257,25 @@ TEST(a_dry_sample_takes_no_doppler)
 	CHECK_NEAR(frequency(capture, 0.05, 0.25), 440.0, 440.0 * 0.02);
 }
 
+TEST(a_nan_position_or_velocity_takes_no_doppler)
+{
+	// A NaN ratio reached XAudio2's SetFrequencyRatio once and its mixer thread faulted on it.
+	const float nan = NAN;
+	CHECK_EQ(AIL_ex_doppler_ratio(-500.0f, 0.0f, 0.0f, nan, 0.0f, 0.0f, 1700.0f), 1.0f);
+	CHECK_EQ(AIL_ex_doppler_ratio(nan, 0.0f, 0.0f, 425.0f, 0.0f, 0.0f, 1700.0f), 1.0f);
+	CHECK_EQ(AIL_ex_doppler_ratio(-500.0f, 0.0f, 0.0f, 425.0f, 0.0f, 0.0f, nan), 1.0f);
+	CHECK_EQ(AIL_ex_doppler_ratio(-INFINITY, 0.0f, 0.0f, 425.0f, 0.0f, 0.0f, 1700.0f), 1.0f);
+	// and the sound it is on still plays at its own pitch
+	startAudio();
+	AIL_ex_set_3D_air(1700.0f);
+	std::vector<unsigned char> tone = makeTone(440.0, 500);
+	std::vector<H3DSAMPLE> lost(1, place(tone, -500.0f, nan, 1.0f));
+	const Capture capture = listen(lost, 0.6);
+	AIL_ex_set_3D_air(0.0f);
+
+	CHECK_NEAR(frequency(capture, 0.05, 0.25), 440.0, 440.0 * 0.02);
+}
+
 TEST(a_loud_mix_never_reaches_full_scale)
 {
 	startAudio();

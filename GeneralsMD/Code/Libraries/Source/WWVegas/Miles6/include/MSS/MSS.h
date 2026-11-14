@@ -379,13 +379,17 @@ static inline F32 AIL_ex_one_pole_coefficient(F32 cutoff, F32 rate)
 
 /* The pitch ratio of a source moving at (vx, vy, vz), (dx, dy, dz) from the listener.  The listener
    counts as standing still: it is the camera, and a scroll would bend every sound on the map at once.
-   The speed towards the listener is held to half the speed of sound either way, a ratio of 2/3 to 2. */
+   The speed towards the listener is held to half the speed of sound either way, a ratio of 2/3 to 2.
+   A NaN anywhere (a position or velocity gone bad) is no doppler: every comparison with a NaN is false,
+   so a clamp written as `x > limit` lets it straight through, and XAudio2's mixer faulted on one. */
 static inline F32 AIL_ex_doppler_ratio(F32 dx, F32 dy, F32 dz, F32 vx, F32 vy, F32 vz, F32 speed_of_sound)
 {
 	const F32 distance = sqrtf(dx * dx + dy * dy + dz * dz);
-	if (speed_of_sound <= 0.0f || distance < 0.0001f)
+	if (!(speed_of_sound > 0.0f) || !(distance >= 0.0001f))
 		return 1.0f;
 	F32 approach = -(vx * dx + vy * dy + vz * dz) / distance;
+	if (approach != approach)
+		return 1.0f;
 	const F32 limit = 0.5f * speed_of_sound;
 	if (approach > limit) approach = limit;
 	if (approach < -limit) approach = -limit;

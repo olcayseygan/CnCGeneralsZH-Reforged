@@ -383,6 +383,7 @@ found and fixed, EA's own, not port damage.**
 - Headphones mode, under Options, Audio, Output. Each ear gets its own delay, level and muffling from where a sound is, so a gun to your left is on your left and one behind you is dull. The same page offers 5.1 and 7.1 surround on Windows, and a list of output devices.
 - Mute in Background is an option now and works on Linux and macOS too. Turn it off and the game keeps playing when you click another window.
 - Unplug your headset mid-match, switch Windows to another output or start with no sound device at all, and the game picks up the new device or waits for one, instead of going silent or dying. This may also be the cause of the crashes inside xaudio2_9.dll in our crash reports.
+- One rare audio crash is closed. A broken pitch value could reach Windows' sound mixer and take the game down; the game now catches it first and plays that sound at its normal pitch.
 - A Turkiye rank perk that detects stealth now behaves like a detector: the radar pings the spot, the discovery sound plays and EVA says so.
 - Clicking through your army no longer stacks a dozen replies on top of each other. A unit that just answered stays quiet for a second and a half, a new reply waits until the last has had four tenths of a second, and no more than two talk at once.
 - macOS and Linux hear the same, and so does the sound the game records for a video, in step with the picture frame for frame.

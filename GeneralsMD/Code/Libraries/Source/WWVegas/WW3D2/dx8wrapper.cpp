@@ -223,8 +223,8 @@ void DX8Wrapper::_Draw_DX8_Primitive_UP(D3DPRIMITIVETYPE type, unsigned primitiv
 // D3D9 has no CopyRects.  Which call replaces it depends on where the two surfaces live,
 // so this asks them: a default-pool pair stretches, a system-memory source updates, and
 // anything else goes through D3DX, which is the only one of the three that can cross a
-// managed pool.  The branch order is d3d8to9's (d3d8to9_device.cpp:447), because that is
-// the routing the game's own copies have been taking.
+// managed pool or read a scratch one.  The branch order is d3d8to9's (d3d8to9_device.cpp:447),
+// because that is the routing the game's own copies have been taking.
 void DX8Wrapper::_Copy_DX8_Rects(
 	IDirect3DSurface9* pSourceSurface,
 	const RenderRect* pSourceRectsArray,
@@ -270,7 +270,8 @@ void DX8Wrapper::_Copy_DX8_Rects(
 		}
 
 		RenderResult hr;
-		if (source_desc.Pool==D3DPOOL_MANAGED || destination_desc.Pool!=D3DPOOL_DEFAULT) {
+		if (source_desc.Pool==D3DPOOL_MANAGED || source_desc.Pool==D3DPOOL_SCRATCH
+			|| destination_desc.Pool!=D3DPOOL_DEFAULT) {
 			hr=D3DXLoadSurfaceFromSurface(pDestinationSurface,NULL,&destination_rect,
 				pSourceSurface,NULL,&source_rect,D3DX_FILTER_NONE,0);
 			if (Render_Succeeded(hr)) {
@@ -3802,7 +3803,24 @@ IDirect3DSurface9 * DX8Wrapper::_Create_DX8_Surface(unsigned int width, unsigned
 
 	// D3D9 replaced CreateImageSurface with CreateOffscreenPlainSurface, which names the
 	// pool the D3D8 call always used implicitly.
-	DX8CALL(CreateOffscreenPlainSurface(width, height, WW3DFormat_To_D3DFormat(format), D3DPOOL_SYSTEMMEM, &surface, NULL));
+	const D3DFORMAT d3d_format = WW3DFormat_To_D3DFormat(format);
+	RenderResult hr = _Get_D3D_Device()->CreateOffscreenPlainSurface(width, height, d3d_format,
+		D3DPOOL_SYSTEMMEM, &surface, NULL);
+	number_of_DX8_calls++;
+
+	// A system-memory surface has to be in a format the device supports, and D3D8's image surface
+	// never had to be: D3D9 on 12 (Windows on ARM's Adreno) refuses A4R4G4B4 there, which every line
+	// of text is built in.  The scratch pool takes any format, and nothing reads these surfaces but
+	// the CPU and _Copy_DX8_Rects, which sends a scratch source through D3DX.
+	if (Render_Failed(hr)) {
+		surface = NULL;
+		hr = _Get_D3D_Device()->CreateOffscreenPlainSurface(width, height, d3d_format,
+			D3DPOOL_SCRATCH, &surface, NULL);
+		number_of_DX8_calls++;
+		if (Render_Failed(hr)) {
+			surface = NULL;
+		}
+	}
 
 	return surface;
 }

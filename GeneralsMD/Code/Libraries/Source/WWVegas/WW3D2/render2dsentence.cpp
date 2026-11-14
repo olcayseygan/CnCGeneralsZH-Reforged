@@ -401,6 +401,14 @@ Render2DSentenceClass::Build_Textures (void)
 		SurfaceClass *curr_surface = surface_info.Surface;
 
 		//
+		//	A surface the device refused holds no text and has no size to make a texture of
+		//
+		if (curr_surface->Peek_D3D_Surface () == NULL) {
+			REF_PTR_RELEASE (curr_surface);
+			continue;
+		}
+
+		//
 		//	Get the dimensions of the surface
 		//
 		SurfaceClass::SurfaceDescription desc;
@@ -1393,6 +1401,11 @@ FontCharsClass::Get_Char_Spacing (WideChar ch)
 void
 FontCharsClass::Blit_Char (WideChar ch, uint16 *dest_ptr, int dest_stride, int x, int y)
 {
+	//	the sentence's surface was refused and locked to nothing: the letter is missing, not the game
+	if (dest_ptr == NULL) {
+		return;
+	}
+
 	const FontCharsClassCharDataStruct	* data = Get_Char_Data( ch );
 	if ( data != NULL && data->Width != 0 ) {
 

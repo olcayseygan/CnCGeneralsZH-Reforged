@@ -255,17 +255,23 @@ void SurfaceClass::Get_Description(SurfaceDescription &surface_desc)
 {
 	D3DSURFACE_DESC d3d_desc;
 	memset(&d3d_desc,0, sizeof(D3DSURFACE_DESC));
-	DX8_ErrorCode(D3DSurface->GetDesc(&d3d_desc));
+	if (D3DSurface != NULL) {
+		DX8_ErrorCode(D3DSurface->GetDesc(&d3d_desc));
+	}
 	surface_desc.Format = D3DFormat_To_WW3DFormat(d3d_desc.Format);
 	surface_desc.Height = d3d_desc.Height;
 	surface_desc.Width = d3d_desc.Width;
 }
 
+//	A surface the device would not make (_Create_DX8_Surface) locks to NULL with a pitch of 0 and
+//	unlocks to nothing, so a caller that checks the pointer loses its picture and not the game.
 void * SurfaceClass::Lock(int * pitch)
 {
-	D3DLOCKED_RECT lock_rect;	
+	D3DLOCKED_RECT lock_rect;
 	memset(&lock_rect,0, sizeof(D3DLOCKED_RECT));
-	DX8_ErrorCode(D3DSurface->LockRect(&lock_rect, 0, 0));
+	if (D3DSurface != NULL) {
+		DX8_ErrorCode(D3DSurface->LockRect(&lock_rect, 0, 0));
+	}
 	*pitch = lock_rect.Pitch;
 	return (void *)lock_rect.pBits;
 }
@@ -279,13 +285,18 @@ void * SurfaceClass::Lock_Rect(int * pitch, int left, int top, int right, int bo
 	rect.top=top;
 	rect.right=right;
 	rect.bottom=bottom;
-	DX8_ErrorCode(D3DSurface->LockRect(&lock_rect, &rect, 0));
+	if (D3DSurface != NULL) {
+		DX8_ErrorCode(D3DSurface->LockRect(&lock_rect, &rect, 0));
+	}
 	*pitch = lock_rect.Pitch;
 	return (void *)lock_rect.pBits;
 }
 
 void SurfaceClass::Unlock(void)
 {
+	if (D3DSurface == NULL) {
+		return;
+	}
 	DX8_ErrorCode(D3DSurface->UnlockRect());
 	Direct3D11_Mark_Surface_Dirty(D3DSurface);
 }

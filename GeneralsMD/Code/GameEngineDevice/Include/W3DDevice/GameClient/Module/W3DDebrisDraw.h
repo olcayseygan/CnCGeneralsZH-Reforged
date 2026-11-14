@@ -97,6 +97,13 @@ private:
 	Bool											m_finalStop;
 	Shadow*										m_shadow;													///< Updates/Renders shadows of this object
 
+	/// The Reforged look's thinning of a vehicle's dark chunks (DebrisChunks.h): not one, undecided,
+	/// drawn and fading, or not drawn.  Drawing only, never saved, nothing the logic reads.
+	enum ChunkLook { CHUNK_NOT_ONE, CHUNK_UNDECIDED, CHUNK_SHOWN, CHUNK_HIDDEN };
+	Int												m_chunkLook;
+	UnsignedInt								m_chunkFirstFrame;								///< the client frame it was first drawn on
+	void updateChunkLook();
+
 };
 
 #endif // __W3D_DEBRIS_DRAW_H_

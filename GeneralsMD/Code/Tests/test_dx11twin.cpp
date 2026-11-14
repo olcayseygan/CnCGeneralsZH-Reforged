@@ -118,6 +118,35 @@ TEST(dx11twin_a_whole_buffer_write_lands_on_both_sides)
 	delete twin;
 }
 
+// A D3D9 lock that failed hands the twin no memory. The write still reaches the D3D11 buffer, and End
+// used to copy the mirror into the null pointer on the way.
+TEST(dx11twin_a_failed_d3d9_lock_still_uploads_the_write)
+{
+	DX11DeviceClass device;
+	device.Request_Debug_Layer();
+	CHECK(device.Create_Offscreen());
+
+	DX11BufferTwinClass * twin =
+		DX11Twin_Create_Vertex_Buffer(device.Get_Device(), device.Get_Context(), BUFFER_BYTES, false);
+	CHECK(twin != NULL);
+
+	DX11BufferLockClass lock;
+	unsigned char * write = (unsigned char *)lock.Begin(twin, NULL, 0, 0, 0);
+	CHECK(write != NULL);
+	for (unsigned i = 0; i < BUFFER_BYTES; ++i) {
+		write[i] = (unsigned char)(i ^ 0x5A);
+	}
+	lock.End();
+
+	unsigned char d3d11_memory[BUFFER_BYTES];
+	CHECK(read_back(device, twin->Buffer(), d3d11_memory, BUFFER_BYTES));
+	for (unsigned i = 0; i < BUFFER_BYTES; ++i) {
+		CHECK_EQ(d3d11_memory[i], (unsigned char)(i ^ 0x5A));
+	}
+
+	delete twin;
+}
+
 // The dynamic buffers, which are refilled hundreds of times a frame and are the reason the upload
 // has two shapes.  A partial UpdateSubresource cannot rename the buffer, so it waits for every draw
 // still reading it; mapping with D3D9's own DISCARD and NOOVERWRITE does not.  What has to hold is

@@ -209,6 +209,7 @@ IndexBufferClass::WriteLockClass::WriteLockClass(IndexBufferClass* index_buffer_
 			break;
 		}
 		DX8_Assert();
+		indices=NULL;	// a failed Lock need not write it, and the D3D11 twin's End copies into it
 		DX8_ErrorCode(static_cast<DX8IndexBufferClass*>(index_buffer)->Get_DX8_Index_Buffer()->Lock(
 			0,
 			index_buffer->Get_Index_Count()*sizeof(WORD),
@@ -271,6 +272,7 @@ IndexBufferClass::AppendLockClass::AppendLockClass(IndexBufferClass* index_buffe
 			indices=static_cast<DX8IndexBufferClass*>(index_buffer)->Get_Scratch_Indices()+start_index;
 			break;
 		}
+		indices=NULL;	// as above
 		DX8_ErrorCode(static_cast<DX8IndexBufferClass*>(index_buffer)->index_buffer->Lock(
 			start_index*sizeof(unsigned short),
 			index_range*sizeof(unsigned short),

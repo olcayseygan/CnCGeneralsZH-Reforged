@@ -185,7 +185,9 @@ void DX11BufferLockClass::End()
 		return;
 	}
 
-	if (CopyToD3D9) {
+	// A D3D9 lock that failed (a lost device, a buffer the driver refused) hands no memory: the D3D11
+	// twin still takes the write, the D3D9 copy goes without it.
+	if (CopyToD3D9 && D3D9Memory != NULL) {
 		memcpy(D3D9Memory, Twin->Mirror() + ByteOffset, ByteCount);
 	}
 	Twin->Upload(ByteOffset, ByteCount, Discard);

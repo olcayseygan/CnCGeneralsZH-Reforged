@@ -1515,18 +1515,6 @@ TEST(flipbook_blend_fades_into_the_next_frame_of_its_own_run)
 			}
 }
 
-/* An invisible particle is retired, as EA's always were, except in the Reforged look a carrier: a
-	 particle of no size steering a PerParticleAttachedSystem, which is invisible on purpose and used to
-	 die on its first update, taking its system (a nuke plume) with it before that laid a card. */
-TEST(invisible_carrier_lives_out_its_lifetime)
-{
-	CHECK( !Particle::retiredWhenInvisible( TRUE, 0.0f, FALSE ) );		// the carrier
-	CHECK( Particle::retiredWhenInvisible( TRUE, 0.0f, TRUE ) );		// Classic: EA's rule
-	CHECK( Particle::retiredWhenInvisible( TRUE, 3.0f, FALSE ) );		// a faded spark steering a trail still goes
-	CHECK( Particle::retiredWhenInvisible( FALSE, 0.0f, FALSE ) );		// an anchor steering nothing goes
-	CHECK( Particle::retiredWhenInvisible( FALSE, 5.0f, FALSE ) );
-}
-
 /* SlaveEmitsOnItsOwn: a system with no master always emits for itself; a slave is fed by its master,
 	 one particle for each of the master's, unless its template says it emits on its own, and under
 	 Classic it is fed as EA's slaves are whatever its template says. */

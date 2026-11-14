@@ -245,13 +245,6 @@ public:
 		* share of the next one the clock has run (TheSmoothMotionAlpha, 1 with smooth motion off), as the
 		* models and the GPU particles lag.  An integer age at a fraction of 1, never below 0.  Pure. */
 	static Real flipbookDrawAge( UnsignedInt age, Real tickFraction );
-	/** Whether a particle that has gone invisible (EA's rule, isInvisible) is retired.  It always was,
-		* so a carrier - a particle of no size and no alpha that only drags a PerParticleAttachedSystem
-		* about - died on its first update and took its system with it before that emitted a card.  In
-		* the Reforged look a particle of no size steering a system lives out its lifetime; one with any
-		* size, and every particle under Classic, goes as EA's did.  Pure. */
-	static Bool retiredWhenInvisible( Bool steersSystem, Real size, Bool classicGraphics )
-	{ return !( steersSystem && size <= 0.0f && !classicGraphics ); }
 	/** The alphas an alpha blended crossfade draws its two cards at: the frame under, drawn first, and
 		* the next over it.  Two cards at a(1-f) and af cover a(1 - af(1-f)) together, a quarter thin
 		* at full alpha half way and pulsing at the flipbook's rate, so the one under is raised to

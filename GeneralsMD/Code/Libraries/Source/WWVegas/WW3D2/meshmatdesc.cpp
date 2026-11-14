@@ -929,7 +929,7 @@ void MeshMatDescClass::Configure_Material(VertexMaterialClass * mtl,int pass,boo
 
 bool MeshMatDescClass::Do_Mappers_Need_Normals(void)
 {
-	if (DX8Wrapper::Is_Initted() && DX8Wrapper::Get_Current_Caps()->Support_NPatches() && WW3D::Get_NPatches_Level()>1) return true;
+	if (DX8Wrapper::Has_Current_Caps() && DX8Wrapper::Get_Current_Caps()->Support_NPatches() && WW3D::Get_NPatches_Level()>1) return true;
 
 	for (int pass=0; pass<PassCount; pass++) {
 		/*

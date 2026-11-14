@@ -2407,6 +2407,7 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
 - A unit that leaves the factory already a veteran with Chemical Suits on no longer crashes the game. The suits went on before the unit had a body on screen to mark; such a unit now goes without the ground marking under it.
 - The game starts on Windows on ARM laptops with a Qualcomm Snapdragon X. In 4.0.0 it died on the loading screen the moment it built the command bar, because the graphics driver there refuses the kind of scratch picture every line of text is lettered into first, and the game never checked. It asks for one the driver accepts now, and if a driver refuses that too, the text goes missing instead of the game.
 - Changing the resolution in Options during an online match no longer crashes the game a moment later. Rebuilding the menus for the new size also logged you out of the online service, under a match that was still reading the room's settings every frame. A resolution change keeps you signed in now.
+- A model that loads while the game has no graphics card to ask, because the picture is being rebuilt or the card was just refused, no longer crashes the game when one of its textures is a bump map. The game asked the missing card what it could do; it goes on without the bump now, as a card that cannot do bumps always has.
 
 ## Units take corners wide, and drive round a jam instead of into it
 

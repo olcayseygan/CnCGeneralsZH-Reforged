@@ -854,6 +854,9 @@ public:
 	static void Set_Requested_Monitor(const char * device);
 
 	static const DX8Caps*	Get_Current_Caps() { WWASSERT(CurrentCaps); return CurrentCaps; }
+	// Caps exist only while a device does: initted with no device yet, or after one was refused or
+	// released, Get_Current_Caps is NULL.
+	static bool				Has_Current_Caps() { return CurrentCaps != NULL; }
 
 #if defined(_WIN32)	// the registry: Windows only
 	static bool Registry_Save_Render_Device( const char * sub_key );

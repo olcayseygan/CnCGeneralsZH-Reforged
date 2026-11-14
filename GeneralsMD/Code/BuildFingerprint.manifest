@@ -9,7 +9,10 @@ Data/Art/Textures/ReforgedBarChinaRight.tga
 Data/Art/Textures/ReforgedBarGLACenter.tga
 Data/Art/Textures/ReforgedBarGLALeft.tga
 Data/Art/Textures/ReforgedBarGLARight.tga
+Data/Art/Textures/ReforgedDust.dds
 Data/Art/Textures/ReforgedFactionTurkiye.tga
+Data/Art/Textures/ReforgedFireball.dds
+Data/Art/Textures/ReforgedFireballB.dds
 Data/Art/Textures/ReforgedForceAttack.tga
 Data/Art/Textures/ReforgedGuardCentre.tga
 Data/Art/Textures/ReforgedGuardRing.tga
@@ -52,6 +55,9 @@ Data/Art/Textures/ReforgedReconHud.tga
 Data/Art/Textures/ReforgedSignalAttack.tga
 Data/Art/Textures/ReforgedSignalDefend.tga
 Data/Art/Textures/ReforgedSignalLook.tga
+Data/Art/Textures/ReforgedSmokePuff.dds
+Data/Art/Textures/ReforgedSmokePuffB.dds
+Data/Art/Textures/ReforgedSmokeWisp.dds
 Data/Art/Textures/TRA400M_Prop.tga
 Data/Art/Textures/TRAirfld_Apron.tga
 Data/Art/Textures/TRAirfld_Conc.tga
@@ -4987,6 +4993,7 @@ Tools/relay/test.js
 Tools/replay-check.sh
 Tools/root-readonly-check.sh
 Tools/signal_marks.py
+Tools/smoke_flipbook.py
 Tools/stage-overlay.sh
 Tools/sun-shadow-check.py
 Tools/syntax_sweep.py

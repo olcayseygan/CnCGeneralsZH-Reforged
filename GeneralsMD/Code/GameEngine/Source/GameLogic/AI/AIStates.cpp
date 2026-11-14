@@ -4561,7 +4561,8 @@ void AIFollowWaypointPathState::computeGoal(Bool useGroupOffsets)
 
 	if (!extent.isInRegionNoZ(&m_goalPosition)) {
 		setAdjustsDestination(false); // moving off the map.
-		ai->getCurLocomotor()->setAllowInvalidPosition(true); // allow it to move off the map.
+		if (ai->getCurLocomotor())	// a unit with no locomotor a map script sends along a path
+			ai->getCurLocomotor()->setAllowInvalidPosition(true); // allow it to move off the map.
 		m_appendGoalPosition = true; // Moving off the map.
 	}
 }
@@ -4944,7 +4945,10 @@ StateReturnType AIFollowWaypointPathExactState::onEnter()
 	StateReturnType ret = AIInternalMoveToState::onEnter();
 	ai->setPathFromWaypoint(currentWaypoint, &groupOffset);	
 	m_lastWaypoint = currentWaypoint;
-	ai->getCurLocomotor()->setAllowInvalidPosition(true); // allow it to move off the map.
+	// A map script can run TEAM_FOLLOW_WAYPOINTS_EXACT on a unit with no locomotor (a repack's shell map
+	// did, eight v4.0.0 reports); the move below goes nowhere for it, as every other state's does.
+	if (ai->getCurLocomotor())
+		ai->getCurLocomotor()->setAllowInvalidPosition(true); // allow it to move off the map.
 
 	//Kris: October 4, 2002 -- Commented out by guidance of John A.
 	//			Artist couldn't load his map, and turned out that it was because
@@ -4968,7 +4972,8 @@ void AIFollowWaypointPathExactState::onExit( StateExitType status )
 	if (ai) {
 		ai->setCompletedWaypoint(m_lastWaypoint);			
 		ai->setCanPathThroughUnits(false);
-		ai->getCurLocomotor()->setAllowInvalidPosition(false); // turn off allow it to move off the map.
+		if (ai->getCurLocomotor())
+			ai->getCurLocomotor()->setAllowInvalidPosition(false); // turn off allow it to move off the map.
 	}
 }
 

@@ -2422,6 +2422,7 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
 - A LAN match on an official map with a loose map.ini or solo.ini beside it on one machine no longer starts and splits at the first frame. That file changes the map's rules, and the map's checksum now counts it, so the room tells the two machines apart before the match.
 - A starting cash in your settings that the lobby does not offer (one player had -10000, which the game read as 4,294,957,296) opens the lobby on the default amount.
 - Your Hotkeys.ini can change keys and nothing else. The game read it as a full settings file, so a line in it could rewrite a unit or the game's rules on your machine alone and split a network match; it now reads only the key blocks the launcher and the Options menu write.
+- A map script that sends a unit with no engine along a waypoint path no longer crashes the game; one repack's main menu map did that eight times in the 4.0.0 reports. The unit stays where it is.
 - The Boss general's challenge map no longer crashes as the command bar is drawn: a side with no bar of its own gets the game's default one.
 
 ## Units take corners wide, and drive round a jam instead of into it

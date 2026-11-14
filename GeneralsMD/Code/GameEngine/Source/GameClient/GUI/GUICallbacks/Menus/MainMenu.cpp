@@ -332,11 +332,27 @@ static Bool generalsCampaignInstalled( const char *campaign )
 	return first && TheFileSystem->doesFileExist( first->m_mapName.str() );
 }
 
-// A side button's next panel: the pick panel when the side has both campaigns, else the mission
-// panel for Zero Hour's as before.
-static void showCampaignOrMissionMenu( const char *pickGroup, const char *missionGroup )
+// A mod's own MainMenu.wnd is retail's layout: no mission panel, no pick panel.
+static Bool missionPanelPresent( void )
 {
-	if( campaignPickShown )
+	if( !buttonMissionBack || !missionFrame[0] || !missionFrame[1] )
+		return FALSE;
+	for( Int i = 0; i < MISSION_BUTTONS; ++i )
+		if( !buttonMission[i] )
+			return FALSE;
+	return TRUE;
+}
+
+// A side button's next panel: the pick panel when the side has both campaigns, else the mission
+// panel for Zero Hour's as before; on a layout without them, retail's difficulty panel.
+static void showCampaignOrMissionMenu( const char *pickGroup, const char *missionGroup, const char *difficultyGroup )
+{
+	if( !missionPanelPresent() )
+	{
+		campaignPickShown = FALSE;
+		TheTransitionHandler->setGroup( difficultyGroup );
+	}
+	else if( campaignPickShown && dropDownWindows[DROPDOWN_CAMPAIGN] )
 		TheTransitionHandler->setGroup( pickGroup );
 	else
 		showMissionMenu( missionGroup );
@@ -726,8 +742,10 @@ void MainMenuInit( WindowLayout *layout, void *userData )
 	dropDownWindows[DROPDOWN_CAMPAIGN] = TheWindowManager->winGetWindowFromId( parentMainMenu, TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:MapBorder6") ) );
 	// i is used after the loop; VC6 for-scope let it escape.
 	Int i;
+	// a mod's MainMenu.wnd has retail's MapBorder..MapBorder4 and none of ours
 	for(i = 1; i < DROPDOWN_COUNT; ++i)
-		dropDownWindows[i]->winHide(TRUE);
+		if( dropDownWindows[i] )
+			dropDownWindows[i]->winHide(TRUE);
 
 	initialHide();
 
@@ -1788,7 +1806,7 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				if(win)
 					win->winHide(TRUE);
 				TheTransitionHandler->reverse("MainMenuSinglePlayerMenuBackUS");
-				showCampaignOrMissionMenu("MainMenuCampaignMenuUS", "MainMenuMissionMenuUS");
+				showCampaignOrMissionMenu("MainMenuCampaignMenuUS", "MainMenuMissionMenuUS", "MainMenuDifficultyMenuUS");
 				campaignSelected = TRUE;
 				logoIsShown = FALSE;
 				showLogo = FALSE;
@@ -1817,7 +1835,7 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				if(win)
 					win->winHide(TRUE);				
 				TheTransitionHandler->reverse("MainMenuSinglePlayerMenuBackGLA");
-				showCampaignOrMissionMenu("MainMenuCampaignMenuGLA", "MainMenuMissionMenuGLA");
+				showCampaignOrMissionMenu("MainMenuCampaignMenuGLA", "MainMenuMissionMenuGLA", "MainMenuDifficultyMenuGLA");
 				campaignSelected = TRUE;
 				logoIsShown = FALSE;
 				showLogo = FALSE;
@@ -1846,7 +1864,7 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				if(win)
 					win->winHide(TRUE);				
 				TheTransitionHandler->reverse("MainMenuSinglePlayerMenuBackChina");
-				showCampaignOrMissionMenu("MainMenuCampaignMenuChina", "MainMenuMissionMenuChina");
+				showCampaignOrMissionMenu("MainMenuCampaignMenuChina", "MainMenuMissionMenuChina", "MainMenuDifficultyMenuChina");
 				campaignSelected = TRUE;
 				logoIsShown = FALSE;
 				showLogo = FALSE;
@@ -1881,7 +1899,7 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 
 				checkCDBeforeCampaign(DIFFICULTY_HARD);
 			}
-			else if(controlID == buttonDiffBackID && (showSide == SHOW_USA || showSide == SHOW_GLA || showSide == SHOW_CHINA))
+			else if(controlID == buttonDiffBackID && (showSide == SHOW_USA || showSide == SHOW_GLA || showSide == SHOW_CHINA) && missionPanelPresent())
 			{
 				// a campaign's difficulty panel came from its mission panel, so Back goes there
 				if(dontAllowTransitions)

@@ -2429,6 +2429,8 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
 - Start in Skirmish on a map the game cannot find (a random map too big for it, say) shows its "cannot find map" box and stays in the room, where it used to crash right after the box.
 - Clicking a start position in a LAN room as the room closes no longer crashes the game.
 - The score screen no longer crashes when its window file is an older or modded copy without every panel ours has; what is missing stays missing.
+- A mod that brings its own main menu no longer crashes the game the moment the menu opens, or when Options opens over it. Our menu has two panels the original never had, the campaign picker and the mission list, and a mod's menu is the original's; two Russian players on 4.0.0 crashed there with a mod's menu. Such a menu opens, and a side's campaign goes straight to the difficulty choice as it did in 2003.
+- The "Technical Difficulties" box says what stopped the game, above where the report went. A modded INI file that refuses to load is named there with its line, so the player can see it is their file, where the box used to say only that a serious error had happened.
 - A side whose general's powers bar file is missing from the install plays without that bar instead of crashing as the match starts.
 - A crash in the graphics layer when Windows refused the game a buffer to write into is fixed; the picture went on, the game did not.
 - A save from another version of the game, or a damaged one, is refused with the load error instead of crashing the game.

@@ -1050,9 +1050,14 @@ void ReleaseCrash(const char *reason)
 
 // crash error message changed again 8/22/03 M Lorenzen... made this message box modal to the system so it will appear on top of any task-modal windows, splash-screen, etc.
 // The 2003 text sent the player to forums at generals.ea.com that no longer exist, and never said
-// that a report had just been written or where. Name the file instead.
-	char buff[ 2 * _MAX_PATH ];
-	_snprintf(buff, ARRAY_SIZE(buff), "You have encountered a serious error and the game has to close.\n\nA crash report was written to:\n%s\n\nPlease include that file when you report the problem.", curbuf);
+// that a report had just been written or where. Name the file instead, and the reason: a modded INI
+// file that stops the game at startup is named there, file and line, and is the player's to fix.
+	char buff[ 4096 ];
+	Int reasonLength = reason ? (Int)strlen(reason) : 0;
+	while( reasonLength > 0 && (reason[reasonLength - 1] == '\n' || reason[reasonLength - 1] == '\r') )
+		--reasonLength;	// an INI reason ends in a newline
+	_snprintf(buff, ARRAY_SIZE(buff), "You have encountered a serious error and the game has to close.\n\n%.*s%sA crash report was written to:\n%s\n\nPlease include that file when you report the problem.",
+		reasonLength, reasonLength ? reason : "", reasonLength ? "\n\n" : "", curbuf);
 	buff[ARRAY_SIZE(buff) - 1] = 0;
 	::MessageBox(NULL, buff, "Technical Difficulties...", MB_OK|MB_SYSTEMMODAL|MB_ICONERROR);
 

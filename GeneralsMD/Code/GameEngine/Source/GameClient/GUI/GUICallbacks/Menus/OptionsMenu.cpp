@@ -421,7 +421,8 @@ static void hideMainMenuColumns( void )
 	for( Int i = 0; i < MAIN_MENU_COLUMN_COUNT; ++i )
 	{
 		GameWindow *column = TheWindowManager->winGetWindowFromId( mainMenu, TheNameKeyGenerator->nameToKey( TheMainMenuColumnNames[ i ] ) );
-		if( column->winIsHidden() )
+		// a mod's MainMenu.wnd is retail's: no MapBorder5 or MapBorder6
+		if( !column || column->winIsHidden() )
 			continue;
 		column->winHide( TRUE );
 		mainMenuColumnHidden[ i ] = TRUE;
@@ -434,7 +435,11 @@ static void showMainMenuColumns( void )
 	for( Int i = 0; i < MAIN_MENU_COLUMN_COUNT; ++i )
 	{
 		if( mainMenu != NULL && mainMenuColumnHidden[ i ] )
-			TheWindowManager->winGetWindowFromId( mainMenu, TheNameKeyGenerator->nameToKey( TheMainMenuColumnNames[ i ] ) )->winHide( FALSE );
+		{
+			GameWindow *column = TheWindowManager->winGetWindowFromId( mainMenu, TheNameKeyGenerator->nameToKey( TheMainMenuColumnNames[ i ] ) );
+			if( column )
+				column->winHide( FALSE );
+		}
 		mainMenuColumnHidden[ i ] = FALSE;
 	}
 }

@@ -6151,6 +6151,13 @@ void ControlBar::initSpecialPowershortcutBar( Player *player)
 	AsciiString layoutName, tempName, windowName, parentName;
 	layoutName = pt->getSpecialPowerShortcutWinName();
 	m_specialPowerLayout = TheWindowManager->winCreateLayout(layoutName);
+	if (m_specialPowerLayout == NULL)
+	{
+		// the side's GenPowersShortcutBar<side>.wnd is not in this install: no shortcut bar, no crash
+		DEBUG_LOG(("ControlBar::initSpecialPowershortcutBar - no layout '%s', the powers shortcut bar stays empty\n", layoutName.str()));
+		m_currentlyUsedSpecialPowersButtons = 0;
+		return;
+	}
 	m_specialPowerLayout->hide(TRUE);
 
 	tempName = layoutName;

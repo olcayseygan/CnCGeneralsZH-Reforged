@@ -777,6 +777,14 @@ struct BillboardFillJob
 /// would spend more on the interlocked claim than the work is worth
 static const Int BILLBOARD_FILLS_PER_CLAIM = 4;
 
+/** How far this picture is into the logic tick, the share of its last update a particle is drawn at
+	* (Particle::tickBlend): TheSmoothMotionAlpha, and 1, the particle as its tick left it, with smooth
+	* motion off and under Classic. */
+static Real drawTickFraction( void )
+{
+	return TheSmoothMotionActive && !TheGlobalData->m_classicGraphics ? TheSmoothMotionAlpha : 1.0f;
+}
+
 /** One card of a sorted billboard particle: screen facing, or along the emitter's axis. */
 static inline void writeParticleCard( const W3DParticleSystemManager::BillboardFill &fill, const Matrix4x4 &view,
 	VertexFormatXYZNDUV2 *quad, const Vector3 &world, Real size, uint8 orientation, unsigned packed,
@@ -2398,6 +2406,7 @@ struct SunMapWalkJob
 {
 	SunMapWalk *															walks;
 	W3DParticleSystemManager::SunMapCaster *	casters;
+	Real																			tickFraction;	///< drawTickFraction: the casters sit where the picture draws them
 };
 
 /// systems a pool thread claims at once; most smoke systems are a handful of particles
@@ -2415,13 +2424,15 @@ static void walkSunMapCasters( Int index, void *context )
 	Int kept = 0;
 	for (Particle *p = walk.system->getFirstParticle(); p && kept < walk.capacity; p = p->m_systemNext)
 	{
-		const Real opticalDepth = particleSunMapOpticalDepth( p->getAlpha() * walk.fade, walk.layers );
+		ParticleDrawState shown;
+		p->getDrawState( job->tickFraction, &shown );
+		const Real opticalDepth = particleSunMapOpticalDepth( shown.alpha * walk.fade, walk.layers );
 		if (opticalDepth <= 0.0f)
 			continue;
-		const Real radius = p->getSize() * 0.5f;		// the billboard's size is its full width
+		const Real radius = shown.size * 0.5f;		// the billboard's size is its full width
 		if (radius <= 0.0f)
 			continue;
-		const Coord3D *pos = p->getPosition();
+		const Coord3D *pos = &shown.pos;
 		out[ kept ].x = pos->x;
 		out[ kept ].y = pos->y;
 		out[ kept ].z = pos->z;
@@ -2440,7 +2451,9 @@ static void walkSunMapCasters( Int index, void *context )
 const std::vector<W3DParticleSystemManager::SunMapCaster> &W3DParticleSystemManager::getSunMapCasters( void )
 {
 	refreshFrameView();
-	if (m_sunMapCastersValid)
+	// walked again for every picture between two ticks, so the smoke's shadow moves with the smoke
+	const Real tickFraction = drawTickFraction();
+	if (m_sunMapCastersValid && m_sunMapCastersFraction == tickFraction)
 		return m_sunMapCasters;
 
 	s_sunMapWalks.clear();
@@ -2469,6 +2482,7 @@ const std::vector<W3DParticleSystemManager::SunMapCaster> &W3DParticleSystemMana
 	SunMapWalkJob job;
 	job.walks = s_sunMapWalks.empty() ? NULL : &s_sunMapWalks[ 0 ];
 	job.casters = m_sunMapCasters.empty() ? NULL : &m_sunMapCasters[ 0 ];
+	job.tickFraction = tickFraction;
 	JobSystem::parallel_for( (Int)s_sunMapWalks.size(), SUN_MAP_WALKS_PER_CLAIM, walkSunMapCasters, &job );
 
 	size_t kept = 0;
@@ -2483,6 +2497,7 @@ const std::vector<W3DParticleSystemManager::SunMapCaster> &W3DParticleSystemMana
 	m_sunMapCasters.resize( kept );
 
 	m_sunMapCastersValid = TRUE;
+	m_sunMapCastersFraction = tickFraction;
 	return m_sunMapCasters;
 }
 
@@ -2665,8 +2680,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		fillJob.lightCount = gatherSmokeLights( fillJob.lights, bbox );
 	}
 	fillJob.glowAfterShade = Direct3D11_Present_Is_Enabled();
-	// Classic draws every particle as its tick left it
-	fillJob.tickFraction = TheSmoothMotionActive && !TheGlobalData->m_classicGraphics ? TheSmoothMotionAlpha : 1.0f;
+	fillJob.tickFraction = drawTickFraction();
 #if defined(__linux__)
 	fillJob.glowAfterShade = fillJob.glowAfterShade
 		|| SunShadow::OwnsSceneShadows(DX8Wrapper::_Get_D3D_Device());
@@ -2777,8 +2791,11 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		//set-up all the per-particle
 		for (Particle *p = sys->getFirstParticle(); p; p = p->m_systemNext)
 		{
-			pos = p->getPosition();
-			psize = p->getSize();
+			// part way through its last update, as the sorted billboards are (fillBillboards)
+			ParticleDrawState shown;
+			p->getDrawState( fillJob.tickFraction, &shown );
+			pos = &shown.pos;
+			psize = shown.size;
 
 			//Cull particle to edges of screen and terrain.
 			if (WWMath::Fabs(pos->x - bcX) > (beX + psize))
@@ -2803,18 +2820,18 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 			if (flipbookLog2)
 				frameArray[count] = (uint8)p->getFlipbookFrame();
 
-			color = p->getColor();
+			color = &shown.color;
 			RGBAArray[count].X = color->red;
 			RGBAArray[count].Y = color->green;
 			RGBAArray[count].Z = color->blue;
-			RGBAArray[count].W = p->getAlpha();
+			RGBAArray[count].W = shown.alpha;
 			if (lightCount > 0)
 				lightSmoke( pos, RGBAArray[count].W, lights, lightCount, RGBAArray[count].X, RGBAArray[count].Y, RGBAArray[count].Z );
 			if (fade < 1.0f)
 				stealthFadeParticle( sys->getShaderType(), fade, RGBAArray[count].X, RGBAArray[count].Y, RGBAArray[count].Z, RGBAArray[count].W );
 
-			angleArray[count] = floatToByteAsMsvc( p->getAngle() * 255.0f / (2.0f * PI) );
-			
+			angleArray[count] = floatToByteAsMsvc( shown.angle * 255.0f / (2.0f * PI) );
+
 			if (++count == MAX_POINTS_PER_GROUP)
 			{
 #ifdef DEBUG_LOGGING

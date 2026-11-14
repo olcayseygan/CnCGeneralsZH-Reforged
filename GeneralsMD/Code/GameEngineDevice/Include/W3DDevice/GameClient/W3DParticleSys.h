@@ -167,6 +167,7 @@ private:
 	std::vector<SunMapCaster>	m_sunMapCasters;
 	Bool											m_frameViewValid;
 	Bool											m_sunMapCastersValid;
+	Real											m_sunMapCastersFraction;	///< the tick fraction the casters were walked at
 	UnsignedInt								m_frameViewLogicFrame;
 	UnsignedInt								m_frameViewFrame;
 	UnsignedInt								m_frameViewParticles;

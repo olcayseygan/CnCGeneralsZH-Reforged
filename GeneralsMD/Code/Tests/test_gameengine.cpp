@@ -1626,6 +1626,41 @@ TEST(particle_tick_blend_draws_part_way_through_the_update)
 	CHECK_NEAR( out.angle, 0.0f, 0.0001f );
 }
 
+/* A trail point born on a moving spark (a PerParticleAttachedSystem) starts its first drawn update
+	 where the spark's last update started, so between ticks it is drawn on the spark and leaves it by
+	 its own velocity only; born at the spark's tick position it led the spark by up to a tick of the
+	 spark's flight. */
+TEST(particle_born_riding_a_parent_is_drawn_with_it)
+{
+	ParticleDrawState sparkFrom, sparkNow, childFrom, childNow, spark, child;
+	memset( &sparkFrom, 0, sizeof( sparkFrom ) );
+	sparkFrom.size = sparkFrom.alpha = 1.0f;
+	sparkNow = sparkFrom;
+	sparkFrom.pos.x = 100.0f; sparkFrom.pos.y = 50.0f; sparkFrom.pos.z = 20.0f;
+	sparkNow.pos.x = 112.0f; sparkNow.pos.y = 47.0f; sparkNow.pos.z = 24.0f;		// 12 units a tick, rising
+
+	const Coord3D from = Particle::drawFromRidingParent( sparkNow.pos, sparkFrom.pos, sparkNow.pos );
+	CHECK_EQ( from.x, 100.0f ); CHECK_EQ( from.y, 50.0f ); CHECK_EQ( from.z, 20.0f );
+
+	// the child born at the spark's tick position and aged once by a slow drift
+	childFrom = sparkNow;
+	childFrom.pos = from;
+	childNow = sparkNow;
+	childNow.pos.x += 0.5f; childNow.pos.z += 0.25f;
+	for (Int i = 0; i <= 4; ++i)
+	{
+		const Real t = (Real)i / 4.0f;
+		Particle::tickBlend( sparkFrom, sparkNow, t, &spark );
+		Particle::tickBlend( childFrom, childNow, t, &child );
+		CHECK_NEAR( child.pos.x - spark.pos.x, 0.5f * t, 0.0001f );
+		CHECK_NEAR( child.pos.y - spark.pos.y, 0.0f, 0.0001f );
+		CHECK_NEAR( child.pos.z - spark.pos.z, 0.25f * t, 0.0001f );
+	}
+	// a parent that did not move leaves the birth as it is
+	const Coord3D still = Particle::drawFromRidingParent( sparkNow.pos, sparkNow.pos, sparkNow.pos );
+	CHECK_EQ( still.x, sparkNow.pos.x ); CHECK_EQ( still.z, sparkNow.pos.z );
+}
+
 /* The alpha blended crossfade's two alphas: the frame under keeps the pair's coverage near the
 	 particle's own (within a tenth at full alpha half way, where two plain shares lose a quarter), it
 	 falls steadily to nothing as the next frame comes up, and the ends are one card each. */

@@ -30,6 +30,8 @@
 #include "quat.h"
 #include "render2dsentence.h"
 #include "fullscreenfit.h"
+#include "pointgr.h"
+#include <math.h>
 #include "hlod.h"
 #include "../GameEngineDevice/Include/W3DDevice/GameClient/SunShadowCasterCull.h"
 #include "../GameEngineDevice/Include/W3DDevice/GameClient/TankWheelSpin.h"
@@ -184,6 +186,77 @@ TEST(fullscreen_fit_keeps_the_pictures_shape_with_bars)
 	CHECK_EQ(fit.x, 0); CHECK_EQ(fit.y, 0); CHECK_EQ(fit.width, 1920); CHECK_EQ(fit.height, 1200);
 	fit = Fullscreen_Fit(1920, 1080, 1280, 720, true);
 	CHECK_EQ(fit.width, 1920); CHECK_EQ(fit.height, 1080);
+}
+
+/*=========================================================================
+   pointgr - the axis card an IsAlongEmitterAxis particle draws
+  =========================================================================*/
+
+/* On every heading and from any camera: the top edge's middle on the particle, the length along the
+   axis, the side across it and square to the eye, so the face turns to the camera as far as an axis
+   card can.  Seen straight down the axis, and with the eye on the particle, still a whole square. */
+TEST(axis_card_stands_along_its_axis_and_faces_the_camera)
+{
+	const float size = 10.0f;
+	const Vector3 top(5.0f, -3.0f, 12.0f);
+	for (int h = 0; h < 8; ++h)
+	{
+		const float a = (float)h * 0.785398f;
+		const Vector3 axis(3.0f * cosf(a), 3.0f * sinf(a), 0.0f);	/* not unit: the card normalizes it */
+		const Vector3 eyes[4] = {
+			Vector3(0.0f, 0.0f, 1.0f), Vector3(cosf(a), sinf(a), 0.3f),
+			Vector3(-sinf(a), cosf(a), 0.6f), Vector3(cosf(a), sinf(a), 0.0f) };
+		for (int e = 0; e < 4; ++e)
+		{
+			Vector3 c[4];
+			PointGroupClass::Axis_Card_Corners(c, top, axis, eyes[e], size);
+			const Vector3 mid = (c[0] + c[3]) * 0.5f;
+			CHECK_NEAR(mid.X, top.X, 0.0001f); CHECK_NEAR(mid.Y, top.Y, 0.0001f); CHECK_NEAR(mid.Z, top.Z, 0.0001f);
+			const Vector3 length = c[1] - c[0], across = c[0] - c[3];
+			CHECK_NEAR(length.X, size * cosf(a), 0.0001f);
+			CHECK_NEAR(length.Y, size * sinf(a), 0.0001f);
+			CHECK_NEAR(length.Z, 0.0f, 0.0001f);
+			CHECK_NEAR(across.Length(), size, 0.0001f);
+			CHECK_NEAR(Vector3::Dot_Product(across, axis), 0.0f, 0.0001f);
+			const Vector3 bottom = c[2] - c[1];
+			CHECK_NEAR(bottom.X, -across.X, 0.0001f); CHECK_NEAR(bottom.Y, -across.Y, 0.0001f); CHECK_NEAR(bottom.Z, -across.Z, 0.0001f);
+			if (e < 3)
+			{
+				/* the face's normal is the eye's direction once the part along the axis is taken out */
+				CHECK_NEAR(Vector3::Dot_Product(across, eyes[e]), 0.0f, 0.0001f);
+				Vector3 normal;
+				Vector3::Cross_Product(length, across, &normal);
+				normal.Normalize();
+				const Vector3 unit_axis(cosf(a), sinf(a), 0.0f);
+				const Vector3 side = eyes[e] - unit_axis * Vector3::Dot_Product(eyes[e], unit_axis);
+				CHECK_NEAR(fabsf(Vector3::Dot_Product(normal, side)), side.Length(), 0.0001f);
+			}
+		}
+	}
+	/* the eye on the particle: still a square, no NaN */
+	Vector3 c[4];
+	PointGroupClass::Axis_Card_Corners(c, top, Vector3(0.0f, 0.0f, 1.0f), Vector3(0.0f, 0.0f, 0.0f), size);
+	CHECK_NEAR((c[0] - c[3]).Length(), size, 0.0001f);
+	CHECK_NEAR((c[1] - c[0]).Z, size, 0.0001f);
+}
+
+/* In view space (eye at the origin, looking down -Z, X right, Y up) the image is upright and not
+   mirrored: an axis pointing down the screen puts the top left corner (u 0, v 0) up and left, and
+   one pointing right turns the picture a quarter left, so its left edge goes down. */
+TEST(axis_card_keeps_the_image_upright_and_unmirrored)
+{
+	const Vector3 top(0.0f, 0.0f, -50.0f);
+	Vector3 c[4];
+	PointGroupClass::Axis_Card_Corners(c, top, Vector3(0.0f, -1.0f, 0.0f), -top, 4.0f);
+	CHECK_NEAR(c[0].X, -2.0f, 0.0001f); CHECK_NEAR(c[0].Y, 0.0f, 0.0001f);
+	CHECK_NEAR(c[1].X, -2.0f, 0.0001f); CHECK_NEAR(c[1].Y, -4.0f, 0.0001f);
+	CHECK_NEAR(c[2].X, 2.0f, 0.0001f); CHECK_NEAR(c[2].Y, -4.0f, 0.0001f);
+	CHECK_NEAR(c[3].X, 2.0f, 0.0001f); CHECK_NEAR(c[3].Y, 0.0f, 0.0001f);
+	PointGroupClass::Axis_Card_Corners(c, top, Vector3(1.0f, 0.0f, 0.0f), -top, 4.0f);
+	CHECK_NEAR(c[0].X, 0.0f, 0.0001f); CHECK_NEAR(c[0].Y, -2.0f, 0.0001f);
+	CHECK_NEAR(c[1].X, 4.0f, 0.0001f); CHECK_NEAR(c[1].Y, -2.0f, 0.0001f);
+	for (int k = 0; k < 4; ++k)
+		CHECK_NEAR(c[k].Z, -50.0f, 0.0001f);
 }
 
 /*=========================================================================

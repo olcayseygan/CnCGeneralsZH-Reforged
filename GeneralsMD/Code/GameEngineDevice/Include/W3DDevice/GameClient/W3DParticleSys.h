@@ -116,6 +116,8 @@ public:
 		Bool																		glow;							///< written by the job: the fire's glow is in the normals, not the colour
 		Bool																		fire;							///< the template's FireLook: each particle's age and seed go in v2
 		Bool																		hardEdge;					///< ParticleSystem::isAttachedToMine: no soft particle fade (Insert_Sorted_Billboards)
+		Bool																		alongAxis;				///< IsAlongEmitterAxis outside Classic: cards stand along axis (Write_Axis_Card)
+		Vector3																	axis;							///< the system's +X, taken on the render thread
 	};
 
 	/// One particle the sun's smoke map can take, as the last particle update left it.

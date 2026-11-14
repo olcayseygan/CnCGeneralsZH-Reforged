@@ -824,8 +824,12 @@ static void fillBillboards( Int index, void *context )
 		const unsigned packed = DX8Wrapper::Convert_Color_Clamp( Vector4( red, green, blue, alpha ) );
 		// The orientation table's index wraps, as it did on Windows (Platform/MsvcFloatCasts.h).
 		const uint8 orientation = floatToByteAsMsvc( p->getAngle() * 255.0f / (2.0f * PI) );
-		PointGroupClass::Write_Billboard( quad, job->view, Vector3( pos->x, pos->y, pos->z ), psize,
-			orientation, packed, glow, flipbookLog2, flipbookLog2 ? p->getFlipbookFrame() : 0, p->isFlipbookMirrored() != FALSE );
+		if (fill.alongAxis)
+			PointGroupClass::Write_Axis_Card( quad, job->view, Vector3( pos->x, pos->y, pos->z ), fill.axis, psize,
+				packed, glow, flipbookLog2, flipbookLog2 ? p->getFlipbookFrame() : 0, p->isFlipbookMirrored() != FALSE );
+		else
+			PointGroupClass::Write_Billboard( quad, job->view, Vector3( pos->x, pos->y, pos->z ), psize,
+				orientation, packed, glow, flipbookLog2, flipbookLog2 ? p->getFlipbookFrame() : 0, p->isFlipbookMirrored() != FALSE );
 		if (fill.fire)
 		{
 			// FIRE_LOOK_SAMPLING's packing: a whole number below 256, the seed times eight plus the
@@ -2539,6 +2543,8 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		fill.glow = FALSE;
 		fill.fire = sys->getTemplate()->isFireLook();
 		fill.hardEdge = sys->isAttachedToMine();
+		fill.alongAxis = sys->getTemplate()->isAlongEmitterAxis() && !TheGlobalData->m_classicGraphics;
+		fill.axis = sys->getEmitterAxis();
 		fill.texture =W3DDisplay::m_assetManager->Get_Texture( sys->getParticleTypeName().str() );
 		PointGroupClass::Reserve_Sorted_Billboards( fill.capacity, &fill.range );
 		m_billboardFills.push_back( fill );

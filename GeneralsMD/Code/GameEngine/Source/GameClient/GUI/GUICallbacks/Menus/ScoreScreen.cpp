@@ -385,13 +385,14 @@ void ScoreScreenInit( WindowLayout *layout, void *userData )
 		{
 			overidePlayerDisplayName = TRUE;
 			initSinglePlayer();
-			buttonSaveReplay->winHide(TRUE);
+			if (buttonSaveReplay)
+				buttonSaveReplay->winHide(TRUE);
 		}
 	}
 
 	// challenge maps have no replay (design and technical issues)
 	Bool isChallengeCampaign = TheCampaignManager->getCurrentCampaign() ? TheCampaignManager->getCurrentCampaign()->isChallengeCampaign() : FALSE;
-	if (isChallengeCampaign)
+	if (isChallengeCampaign && buttonSaveReplay)
 	{
 		buttonSaveReplay->winEnable(FALSE);
 		buttonSaveReplay->winHide(TRUE);
@@ -2076,13 +2077,25 @@ static void hideScoreTable( void )
 		"ScoreScreen.wnd:CameoSuppliesCollected", "ScoreScreen.wnd:Line",
 		"ScoreScreen.wnd:ListboxWarschoolAdvice", "ScoreScreen.wnd:StaticTextWarSchool"
 	};
+	// Every lookup may come back NULL: a ScoreScreen.wnd from another install (a mod, an old copy in
+	// Window) lacks windows ours has, and the table is only hidden here, so a missing one costs nothing.
 	for( Int each = 0; each < ARRAY_SIZE( tableWindows ); ++each )
-		TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( tableWindows[ each ] ) )->winHide( TRUE );
+	{
+		GameWindow *win = TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( tableWindows[ each ] ) );
+		if( win )
+			win->winHide( TRUE );
+	}
 	// the rows' frame and the table's header box, which EA left unnamed; and the backdrop's own
 	// darkening, which the panel replaces
-	gadgetParent->winHide( TRUE );
-	TheWindowManager->winGetWindowFromId( backdrop, TheNameKeyGenerator->nameToKey( "ScoreScreen.wnd:" ) )->winHide( TRUE );
-	backdrop->winSetEnabledColor( 0, GameMakeColor( 0, 0, 0, 0 ) );
+	if( gadgetParent )
+		gadgetParent->winHide( TRUE );
+	if( backdrop )
+	{
+		GameWindow *darkening = TheWindowManager->winGetWindowFromId( backdrop, TheNameKeyGenerator->nameToKey( "ScoreScreen.wnd:" ) );
+		if( darkening )
+			darkening->winHide( TRUE );
+		backdrop->winSetEnabledColor( 0, GameMakeColor( 0, 0, 0, 0 ) );
+	}
 
 	// and its rows, one a slot
 	static const char *const rowWindows[] =

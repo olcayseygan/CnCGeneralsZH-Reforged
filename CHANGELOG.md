@@ -2412,6 +2412,7 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
 - A Zero Hour folder with the original Generals files copied in beside it (a merged Deluxe or repack folder, or one stray file) starts again. The game read the old game's settings over Zero Hour's and stopped at once with "Error parsing INI file 'Data\INI\GameData.ini'", 32 times in the 4.0.0 reports. The old game's files beside Zero Hour's now go in under them, the way they do from their own folder; a normal install is untouched.
 - Start in Skirmish on a map the game cannot find (a random map too big for it, say) shows its "cannot find map" box and stays in the room, where it used to crash right after the box.
 - Clicking a start position in a LAN room as the room closes no longer crashes the game.
+- The score screen no longer crashes when its window file is an older or modded copy without every panel ours has; what is missing stays missing.
 
 ## Units take corners wide, and drive round a jam instead of into it
 

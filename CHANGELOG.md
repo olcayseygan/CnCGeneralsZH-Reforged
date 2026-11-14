@@ -2417,6 +2417,7 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
 - A crash in the graphics layer when Windows refused the game a buffer to write into is fixed; the picture went on, the game did not.
 - A damaged game archive is left out with a line in the log instead of closing the game without a report. One broken INIZH.big claimed 503 million files, and reading them overran the game's memory.
 - Crash reports from a 64-bit game give the full address of a bad memory access. They gave the bottom half of it, which pointed nowhere.
+- A game folder missing the loading screen's window file stops with a box saying the game files are incomplete and asking to verify or reinstall them, where it used to crash with nothing to go on.
 
 ## Units take corners wide, and drive round a jam instead of into it
 

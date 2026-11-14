@@ -2077,6 +2077,14 @@ void ShellGameLoadScreen::init( GameInfo *game )
 	// create the layout of the load screen
 	m_loadScreen = TheWindowManager->winCreateFromScript( AsciiString( "Menus/ShellGameLoadScreen.wnd" ) );
 	DEBUG_ASSERTCRASH(m_loadScreen, ("Can't initialize the ShellGame loadscreen"));
+	if( m_loadScreen == NULL )
+	{
+		// The game's own window files could not be read: a damaged or partial install, never a bug to
+		// chase in the code. The crash report says so instead of a NULL window.
+		RELEASE_CRASH(("The game's files are incomplete: Window\\Menus\\ShellGameLoadScreen.wnd could not be loaded. "
+			"Verify the game files or install the game again."));
+		return;
+	}
 	m_loadScreen->winHide(FALSE);
 	m_loadScreen->winBringToTop();
 

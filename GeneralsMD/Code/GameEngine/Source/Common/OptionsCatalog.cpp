@@ -162,6 +162,7 @@ OPTION_BOOL_ACCESSORS( m_explosionDebrisTrails )
 OPTION_BOOL_ACCESSORS( m_mapLight )
 OPTION_BOOL_ACCESSORS( m_teamGlow )
 OPTION_BOOL_ACCESSORS( m_waterFoam )
+OPTION_BOOL_ACCESSORS( m_groundFoliage )
 OPTION_BOOL_ACCESSORS( m_groundMarks )
 OPTION_BOOL_ACCESSORS( m_firelight )
 OPTION_BOOL_ACCESSORS( m_hemiAmbient )
@@ -719,6 +720,14 @@ const OptionDef TheOptionCatalog[] =
 	{ "WaterFoam",								OPT_WND( "CheckWaterFoam" ), "GUI:WaterFoam",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_waterFoam, set_m_waterFoam },
+
+	// Grass tufts on grass ground, swaying in the map's breeze; the tree pass draws them every frame
+	// and reads this as it does.  Client only.  Off under Classic graphics; under -d3d9 it stays set
+	// and draws nothing.  No control yet, so an Options.ini line ("GroundFoliage = yes") is the only
+	// way in.
+	{ "GroundFoliage",						"", "",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_groundFoliage, set_m_groundFoliage },
 
 	// Craters and a building's stain on the terrain, fading over minutes, and darker treads.  The
 	// scorch buffer asks every draw.  Off under Classic graphics and -d3d9.  On Options > Effects.

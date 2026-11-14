@@ -10,6 +10,7 @@ Data/Art/Textures/ReforgedBarGLACenter.tga
 Data/Art/Textures/ReforgedBarGLALeft.tga
 Data/Art/Textures/ReforgedBarGLARight.tga
 Data/Art/Textures/ReforgedFactionTurkiye.tga
+Data/Art/Textures/ReforgedFoliage.tga
 Data/Art/Textures/ReforgedForceAttack.tga
 Data/Art/Textures/ReforgedGuardCentre.tga
 Data/Art/Textures/ReforgedGuardRing.tga
@@ -2820,6 +2821,7 @@ GameEngineDevice/Include/W3DDevice/Common/W3DThingFactory.h
 GameEngineDevice/Include/W3DDevice/GameClient/BaseHeightMap.h
 GameEngineDevice/Include/W3DDevice/GameClient/FireLights.h
 GameEngineDevice/Include/W3DDevice/GameClient/FlatHeightMap.h
+GameEngineDevice/Include/W3DDevice/GameClient/FoliagePlacement.h
 GameEngineDevice/Include/W3DDevice/GameClient/GpuParticles.h
 GameEngineDevice/Include/W3DDevice/GameClient/GroundMarks.h
 GameEngineDevice/Include/W3DDevice/GameClient/HeightMap.h
@@ -2869,6 +2871,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/W3DGameFont.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DGameWindow.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DGameWindowManager.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DGranny.h
+GameEngineDevice/Include/W3DDevice/GameClient/W3DGrassBuffer.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DInGameUI.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DMirror.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DMouse.h
@@ -3060,6 +3063,7 @@ GameEngineDevice/Source/W3DDevice/GameClient/W3DDynamicLight.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DFileSystem.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DGameClient.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DGranny.cpp
+GameEngineDevice/Source/W3DDevice/GameClient/W3DGrassBuffer.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DInGameUI.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DMouse.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DParticleSys.cpp
@@ -4285,6 +4289,7 @@ Tests/test_ffvertexd3d9.cpp
 Tests/test_fingerprint_manifest.sh
 Tests/test_fire_lights.cpp
 Tests/test_first_launch_chooser.sh
+Tests/test_foliage_placement.cpp
 Tests/test_fontchars.cpp
 Tests/test_fpucontrol.cpp
 Tests/test_game_results.inc
@@ -5175,6 +5180,7 @@ Tools/ffprogram-values-check.sh
 Tools/fingerprint-check.sh
 Tools/fingerprint-manifest.sh
 Tools/fingerprint/build_fingerprint.cpp
+Tools/foliage_atlas.py
 Tools/gametext.py
 Tools/gdi-font-metrics-header.py
 Tools/gdi-font-metrics.ps1

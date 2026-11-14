@@ -106,6 +106,7 @@ class WorldHeightMap : public RefCountClass,
 	friend class AlphaTerrainTextureClass;
 	friend class W3DCustomEdging;
 	friend class AlphaEdgeTextureClass;
+	friend class W3DGrassBuffer;	// reads the tile and blend tables once a map, for the grass's density
 
 #define NO_EVAL_TILING_MODES
 

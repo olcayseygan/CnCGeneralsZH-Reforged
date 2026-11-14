@@ -3247,7 +3247,10 @@ bool DX11BackendClass::Shadow_Receiving() const
 	if (PixelProgram != ENGINE_SHADER_NONE && !EngineShader_Paints_Ground(PixelProgram)) {
 		return false;
 	}
-	if (VertexProgram != ENGINE_SHADER_NONE && PixelProgram == ENGINE_SHADER_NONE) {
+	// The grass is the exception: its tufts stand under the trees and the buildings, and the
+	// receiving half finds the sun from SV_Position alone, which the grass program writes like any other.
+	if (VertexProgram != ENGINE_SHADER_NONE && VertexProgram != ENGINE_SHADER_GRASS
+		&& PixelProgram == ENGINE_SHADER_NONE) {
 		return false;
 	}
 	if ((VertexFormat & D3DFVF_XYZRHW) != 0) {

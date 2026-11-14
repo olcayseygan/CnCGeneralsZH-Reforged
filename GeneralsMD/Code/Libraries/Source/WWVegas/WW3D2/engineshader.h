@@ -78,7 +78,11 @@ enum EngineShaderProgram
 	// (the Water Foam option).  Same D3D9 bytecode, a second name; after the table's last shipped program
 	// so the shader case sweep and its reference set stay as they were.
 	ENGINE_SHADER_WATER_TRAPEZOID_FOAM,
-	ENGINE_SHADER_WATER_RIVER_FOAM
+	ENGINE_SHADER_WATER_RIVER_FOAM,
+	// The ground foliage (the GroundFoliage option): Trees.vso's bytecode registered a second time as
+	// "shaders\\grass.vso", so D3D9 runs the tree shader unchanged and D3D11 gets the tree program
+	// plus a shrink with distance from the camera's focus.
+	ENGINE_SHADER_GRASS
 };
 
 // The name the engine loaded the shader under: a path for the ones that ship as files

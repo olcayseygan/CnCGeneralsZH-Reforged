@@ -51,6 +51,7 @@
 #define MAX_ENABLED_DYNAMIC_LIGHTS 32
 typedef UnsignedByte HeightSampleType;	//type of data to store in heightmap
 class W3DTreeBuffer;
+class W3DGrassBuffer;
 class W3DBibBuffer;
 class W3DRoadBuffer;
 class W3DBridgeBuffer;
@@ -401,6 +402,7 @@ protected:
 	TextureClass *m_destAlphaTexture;	///< Texture holding destination alpha LUT for water depth.
 
 	W3DTreeBuffer *m_treeBuffer; ///< Class for drawing trees and other alpha objects.
+	W3DGrassBuffer *m_grassBuffer; ///< The GroundFoliage option's grass, drawn after the trees.
 	W3DPropBuffer *m_propBuffer; ///< Class for drawing trees and other alpha objects.
 	W3DBibBuffer *m_bibBuffer; ///< Class for drawing trees and other alpha objects.
 	W3DWaypointBuffer *m_waypointBuffer; ///< Draws waypoints.

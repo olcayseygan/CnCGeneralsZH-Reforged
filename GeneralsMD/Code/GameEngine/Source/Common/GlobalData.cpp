@@ -833,6 +833,7 @@ GlobalData::GlobalData()
 	m_mapLight = FALSE;
 	m_teamGlow = FALSE;
 	m_waterFoam = FALSE;
+	m_groundFoliage = FALSE;
 	m_groundMarks = FALSE;
 	m_firelight = FALSE;
 	m_heatHaze = FALSE;
@@ -1674,6 +1675,7 @@ void GlobalData::parseGameDataDefinition( INI* ini )
 	{
 		TheWritableGlobalData->m_shadowMap = FALSE;
 		TheWritableGlobalData->m_volumetricSmokeShadows = FALSE;
+		TheWritableGlobalData->m_groundFoliage = FALSE;
 		TheWritableGlobalData->m_lightingStyle = LIGHTING_STYLE_CLASSIC;
 		TheWritableGlobalData->m_direct3D11PostChain = "off";
 	}

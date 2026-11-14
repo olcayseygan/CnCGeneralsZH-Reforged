@@ -8,6 +8,10 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Grass that moves with the wind
+
+- Grassland used to be a flat painted texture under the tanks. With Ground Foliage on, tufts of grass, dry straw and a few wild flowers stand on the grass ground of a map and bend with the same breeze that sways the trees, a gust rolling across the field rather than every blade nodding at once. They keep off roads, cliffs, water and the ground under buildings, a base built in a match clears its own patch, and they grow in from the edge of the view instead of popping up. The art is the fork's own, painted from scratch. It is off by default and has no box in Options yet: put `GroundFoliage = yes` in your Options.ini to try it. It draws on Direct3D 11 and in the Mac and Linux builds; Direct3D 9 (`-d3d9`) and Classic Graphics show no grass. Looks only; units walk through it, and replays and network games play the same with it on or off.
+
 ## Smoother light on hills and cliffs
 
 - On Direct3D 11 with the HD textures, the sun now lights the ground pixel by pixel from a smoothed copy of the map's heights. Before, the light ran in straight lines across each tile and you could see the grid of triangles on every slope. Hills and cliffs now shade in one soft sweep, and roads on them take the same light. Bridges, the lower terrain detail, Direct3D 9 and Classic Graphics keep the old light. Looks only; nothing in the match changes.

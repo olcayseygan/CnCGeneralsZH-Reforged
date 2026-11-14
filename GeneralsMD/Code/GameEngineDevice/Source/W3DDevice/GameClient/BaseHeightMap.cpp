@@ -75,6 +75,7 @@
 #include "W3DDevice/GameClient/W3DBibBuffer.h"
 #include "W3DDevice/GameClient/W3DPropBuffer.h"
 #include "W3DDevice/GameClient/W3DTreeBuffer.h"
+#include "W3DDevice/GameClient/W3DGrassBuffer.h"
 #include "W3DDevice/GameClient/W3DRoadBuffer.h"
 #include "W3DDevice/GameClient/W3DBridgeBuffer.h"
 #include "W3DDevice/GameClient/W3DWaypointBuffer.h"
@@ -218,6 +219,10 @@ BaseHeightMapRenderObjClass::~BaseHeightMapRenderObjClass(void)
 		delete m_treeBuffer;
  		m_treeBuffer = NULL;
 	}
+	if (m_grassBuffer) {
+		delete m_grassBuffer;
+		m_grassBuffer = NULL;
+	}
 	if (m_propBuffer) {
 		delete m_propBuffer;
  		m_propBuffer = NULL;
@@ -306,7 +311,9 @@ BaseHeightMapRenderObjClass::BaseHeightMapRenderObjClass(void)
 
 	m_treeBuffer = NEW W3DTreeBuffer;
 
-	m_propBuffer = NULL; 
+	m_grassBuffer = NEW W3DGrassBuffer(this);
+
+	m_propBuffer = NULL;
 
 	m_propBuffer = NEW W3DPropBuffer;
 
@@ -416,8 +423,12 @@ void BaseHeightMapRenderObjClass::adjustTerrainLOD(Int adj)
 	}
 
 	if (newROBJ) {
+		// the grass's grid goes across before initHeightData, which then finds this map classified:
+		// a fresh one would bring grass back under the match's buildings, or, beside a tick, none
+		if (newROBJ != this && newROBJ->m_grassBuffer && m_grassBuffer)
+			newROBJ->m_grassBuffer->takeGrid(*m_grassBuffer);
 		// apply the heightmap to the terrain render object
-		newROBJ->initHeightData( m_map->getDrawWidth(), 
+		newROBJ->initHeightData( m_map->getDrawWidth(),
 																					 m_map->getDrawHeight(),
 																					 m_map,
 																					 NULL);
@@ -440,6 +451,9 @@ void BaseHeightMapRenderObjClass::ReleaseResources(void)
 {
 	if (m_treeBuffer) {
 		m_treeBuffer->freeTreeBuffers();
+	}
+	if (m_grassBuffer) {
+		m_grassBuffer->freeGrassBuffers();	// made again by the next draw
 	}
 	if (m_bibBuffer) {
 		m_bibBuffer->freeBibBuffers();
@@ -689,6 +703,9 @@ void BaseHeightMapRenderObjClass::reset(void)
 	}
 	if (m_propBuffer) {
 		m_propBuffer->clearAllProps();
+	}
+	if (m_grassBuffer) {
+		m_grassBuffer->clear();
 	}
 	clearAllScorches();
 #ifdef TEST_CUSTOM_EDGING
@@ -1511,6 +1528,9 @@ Int BaseHeightMapRenderObjClass::initHeightData(Int x, Int y, WorldHeightMap *pM
 	// flattening cells the drawn map takes only after it
 	if (pMap && !LogicThread::isInsideWindow())
 		s_logicHeights.copyFrom(pMap);
+	// the grass's grid, once a map: it reads the water off TheTerrainLogic, which only a load may do
+	if (m_grassBuffer && pMap && !LogicThread::isInsideWindow())
+		m_grassBuffer->classify(pMap);
 	m_staticDiffuseStale = true;
 	m_terrainContentVersion++;
 
@@ -2158,6 +2178,9 @@ void BaseHeightMapRenderObjClass::removeTreesAndPropsForConstruction(const Coord
 	if (m_propBuffer) {
 		m_propBuffer->removePropsForConstruction(pos, geom, angle);
 	}
+	if (m_grassBuffer) {
+		m_grassBuffer->clearFootprint(pos, geom, angle);
+	}
 }
 
 //=============================================================================
@@ -2205,6 +2228,9 @@ void BaseHeightMapRenderObjClass::removeAllTrees()
 void BaseHeightMapRenderObjClass::stepTrees(void)
 {
 	m_treeBuffer->stepTrees();
+	if (m_grassBuffer) {
+		m_grassBuffer->takeBreezeForDraw();
+	}
 }
 
 void BaseHeightMapRenderObjClass::takeWaypointsForRender(void)
@@ -3083,12 +3109,17 @@ void BaseHeightMapRenderObjClass::renderTrees(CameraClass * camera)
 	if (m_map==NULL) return;
 	if (Scene==NULL) return;
 	if (m_treeBuffer) {
+		// the trees' flag that the terrain drew this pass; drawTrees takes it down
+		const Bool terrainPass = m_treeBuffer->needToDraw();
 		Matrix3D tm(Transform);
 		DX8Wrapper::Set_Transform(D3DTS_WORLD,tm);
 		DX8Wrapper::Set_Material(m_vertexMaterialClass);
 		RTS3DScene *pMyScene = (RTS3DScene *)Scene;
 		RefRenderObjListIterator pDynamicLightsIterator(pMyScene->getDynamicLights());
 		m_treeBuffer->drawTrees(camera, &pDynamicLightsIterator);
+		if (m_grassBuffer && terrainPass) {
+			m_grassBuffer->drawGrass(camera, m_terrainContentVersion, tm);
+		}
 	}
 }
 
@@ -3124,6 +3155,9 @@ void BaseHeightMapRenderObjClass::xfer( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void BaseHeightMapRenderObjClass::loadPostProcess( void )
 {
-	// empty. jba [8/11/2003]	
+	// the grass under every building a save holds: built ones never went through the map's objects
+	if (m_grassBuffer) {
+		m_grassBuffer->clearStructures();
+	}
 }  // end loadPostProcess
 

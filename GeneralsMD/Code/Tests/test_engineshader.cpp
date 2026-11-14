@@ -72,6 +72,38 @@ TEST(engineshader_names_a_shader_by_its_file_whatever_case_the_path_is_in)
 	CHECK(EngineShader_From_File("shaders\\fterrain0.pso") == ENGINE_SHADER_FLAT_TERRAIN_BASE);
 	CHECK(EngineShader_From_File("shaders\\roadnoise2.pso") == ENGINE_SHADER_ROAD_NOISE_2);
 	CHECK(EngineShader_From_File("shaders\\monochrome.pso") == ENGINE_SHADER_MONOCHROME);
+	CHECK(EngineShader_From_File("shaders\\grass.vso") == ENGINE_SHADER_GRASS);
+	CHECK(EngineShader_From_File("SHADERS/GRASS.VSO") == ENGINE_SHADER_GRASS);
+}
+
+// The grass is Trees.vso registered under a second name: the same shear by height above the root,
+// the same shroud and output, and on top of it a fold down to the root past c19.w from the focus in
+// c19.xy, across a band one over c20.x wide.  The tree text must not gain the fold.
+TEST(engineshader_grass_keeps_the_tree_sway_and_folds_down_past_the_radius)
+{
+	std::string grass;
+	std::string trees;
+	CHECK(EngineShader_Vertex_Program(ENGINE_SHADER_GRASS, grass));
+	CHECK(EngineShader_Vertex_Program(ENGINE_SHADER_TREES, trees));
+	CHECK(contains(grass, "height * c[8 + sway_type].xyz + input.Position"));
+	CHECK(contains(grass, "dot(swayed, c[4])"));
+	CHECK(contains(grass, "((float4(input.Position, 1.0) + c[32]) * c[33]).xy"));
+	CHECK(contains(grass,
+		"float grown = saturate((c[19].w - distance(input.Position.xy, c[19].xy)) * c[20].x);"));
+	CHECK(contains(grass,
+		"swayed.xyz = lerp(float3(input.Position.xy, input.Sway.z), swayed.xyz, grown);"));
+	// The fold lands between the sway and the transform, or it would fold the unswayed tuft.
+	CHECK(grass.find("float4 swayed") < grass.find("float grown"));
+	CHECK(grass.find("swayed.xyz = lerp") < grass.find("dot(swayed, c[4])"));
+	CHECK(!contains(trees, "c[19]"));
+	CHECK(!contains(trees, "c[20]"));
+
+	// ffvertex's output structure, as the tree program writes it.
+	const size_t output = grass.find("struct Output");
+	CHECK(output != std::string::npos);
+	CHECK(grass.find("float Fog : FOG;", output) != std::string::npos);
+	CHECK(!EngineShader_Pixel_Program(ENGINE_SHADER_GRASS, plain_pipeline(), grass));
+	CHECK(!EngineShader_Paints_Ground(ENGINE_SHADER_GRASS));
 }
 
 // Every program the table names has to write something, or a draw that binds it is refused with a
@@ -390,6 +422,10 @@ TEST(engineshader_writes_programs_the_compiler_accepts)
 	std::string trees;
 	CHECK(EngineShader_Vertex_Program(ENGINE_SHADER_TREES, trees));
 	CHECK(compiles(compile, trees, EngineShader_Name(ENGINE_SHADER_TREES), VERTEX_PROFILE));
+
+	std::string grass;
+	CHECK(EngineShader_Vertex_Program(ENGINE_SHADER_GRASS, grass));
+	CHECK(compiles(compile, grass, EngineShader_Name(ENGINE_SHADER_GRASS), VERTEX_PROFILE));
 
 	PixelPipelineDescription pipeline = plain_pipeline();
 	pipeline.FogEnabled = true;

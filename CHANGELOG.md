@@ -2415,6 +2415,7 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
 - The score screen no longer crashes when its window file is an older or modded copy without every panel ours has; what is missing stays missing.
 - A side whose general's powers bar file is missing from the install plays without that bar instead of crashing as the match starts.
 - A crash in the graphics layer when Windows refused the game a buffer to write into is fixed; the picture went on, the game did not.
+- A damaged game archive is left out with a line in the log instead of closing the game without a report. One broken INIZH.big claimed 503 million files, and reading them overran the game's memory.
 
 ## Units take corners wide, and drive round a jam instead of into it
 

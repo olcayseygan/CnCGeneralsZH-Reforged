@@ -350,6 +350,18 @@ ArchiveFile * Win32BIGFileSystem::openArchiveFile(const Char *filename) {
 	numLittleFiles = ntohl(numLittleFiles);
 
 	DEBUG_LOG(("Win32BIGFileSystem::openArchiveFile - %d are contained in archive\n", numLittleFiles));
+
+	// A directory entry is at least nine bytes (offset, size, a one-letter name's terminator). A
+	// count that cannot fit is a broken download: one INIZH.big claimed 503382016 files, and the
+	// listing below then read garbage names past its buffer until the stack guard killed the game.
+	const Int fileSize = fp->size();
+	if (numLittleFiles < 0 || fileSize < 0x10 || numLittleFiles > (fileSize - 0x10) / 9) {
+		DEBUG_LOG(("Win32BIGFileSystem::openArchiveFile - %s is damaged: %d files claimed in %d bytes, left out\n",
+			filename, numLittleFiles, fileSize));
+		delete archiveFile;
+		fp->close();
+		return NULL;
+	}
 //	for (Int i = 0; i < 2; ++i) {
 //		t = buffer[i];
 //		buffer[i] = buffer[(4-i)-1];
@@ -378,7 +390,14 @@ ArchiveFile * Win32BIGFileSystem::openArchiveFile(const Char *filename) {
 		Int pathIndex = -1;
 		do {
 			++pathIndex;
-			fp->read(buffer + pathIndex, 1);
+			if (pathIndex >= _MAX_PATH - 1 || fp->read(buffer + pathIndex, 1) != 1) {
+				// a name longer than any path, or the file ending inside one: the same broken download
+				DEBUG_LOG(("Win32BIGFileSystem::openArchiveFile - %s is damaged at entry %d, left out\n", filename, i));
+				delete fileInfo;
+				delete archiveFile;
+				fp->close();
+				return NULL;
+			}
 		} while (buffer[pathIndex] != 0);
 
 		Int filenameIndex = pathIndex;

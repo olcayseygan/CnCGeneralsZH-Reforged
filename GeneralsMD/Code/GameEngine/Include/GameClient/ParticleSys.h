@@ -255,10 +255,6 @@ public:
 	/// flipbookBlendAt for this particle at its age between ticks (flipbookDrawAge), so the crossfade
 	/// moves on every picture and not only when the logic ticks.
 	UnsignedInt getFlipbookBlend( Real tickFraction, UnsignedInt *next, Real *fraction ) const;
-	/** FlipbookShared: how many particle updates a particle born on update birthFrame starts into its
-		* system's flipbook clock, which started on clockStart, so that its age plus this is the system's
-		* age and every particle of the system shows the same frame at the same moment.  Pure. */
-	static UnsignedInt flipbookSharedAgeOffset( UnsignedInt birthFrame, UnsignedInt clockStart );
 	/// How many frames one run of the atlas holds: frames over variants, the whole atlas for 0 or 1 or too many.
 	static UnsignedInt flipbookRunLength( UnsignedInt frames, UnsignedInt variants );
 
@@ -332,7 +328,6 @@ protected:
 	UnsignedByte			m_flipbookStart;											///< the flipbook cell it starts on inside its run; drawing only, never saved
 	UnsignedByte			m_flipbookVariant;										///< the run of frames it plays (FlipbookVariants); drawing only, never saved
 	Bool							m_flipbookMirrored;										///< drawn flipped left to right (FlipbookMirror); drawing only, never saved
-	UnsignedInt				m_flipbookAgeOffset;									///< FlipbookShared: its system's flipbook age at its birth; drawing only, never saved
 	ParticleDrawState	m_drawFrom;														///< the state the last update started from (tickBlend); drawing only, never saved
 	Bool							m_drawFromHeld;												///< born riding a particle: its first update keeps m_drawFrom (drawFromRidingParent)
 
@@ -762,11 +757,6 @@ public:
 	Bool isFlipbookRandomStart( void ) const { return m_flipbookRandomStart; }
 	UnsignedInt getFlipbookVariants( void ) const { return m_flipbookVariants; }
 	Bool isFlipbookMirror( void ) const { return m_flipbookMirror; }
-	/** "FlipbookShared = Yes": the system draws its variant, start and mirror once, and every particle
-		* takes them; a looping flipbook (FlipbookRate above 0) plays on the system's clock rather than
-		* each particle's age, so the overlapping cards of one fire all show the same frame and the fire
-		* plays one film instead of a new random shape every moment.  Not under Classic.  Drawing only. */
-	Bool isFlipbookShared( void ) const { return m_flipbookShared; }
 
 	// This function was made const because of update modules' module data being all const.
 	ParticleSystem *createSlaveSystem( Bool createSlaves = TRUE ) const ;					///< if returns non-NULL, it is a slave system for use
@@ -800,7 +790,6 @@ protected:
 	Bool											m_flipbookRandomStart;						///< each particle starts on a random flipbook frame (client only)
 	UnsignedByte							m_flipbookVariants;								///< equal runs of frames, each particle playing one, 1 for the whole atlas (client only)
 	Bool											m_flipbookMirror;									///< about half the particles drawn flipped left to right (client only)
-	Bool											m_flipbookShared;									///< one pick and one clock for the whole system (client only)
 
 	// This has to be mutable because of the delayed initialization thing in createSlaveSystem
 	mutable const ParticleSystemTemplate *m_slaveTemplate;		///< if non-NULL, use this to create a slave system
@@ -869,11 +858,6 @@ public:
 	void updateWindMotion( void );							///< update wind motion
 
 	void setControlParticle( Particle *p );			///< set control particle
-	/// FlipbookShared: the variant, start and mirror every particle of this system takes, drawn from the
-	/// client's stream at its first particle's birth with the draws a particle would make, and the
-	/// particle update its flipbook clock started on.  frames and run as the particle has them.
-	void getSharedFlipbook( UnsignedInt frames, UnsignedInt run, UnsignedByte *variant, UnsignedByte *start, Bool *mirror,
-		UnsignedInt *clockStart );
 
 	void start( void );													///< (re)start a stopped particle system
 	void stop( void );													///< stop a particle system from emitting
@@ -1097,12 +1081,6 @@ protected:
 
 	const ParticleSystemTemplate *	m_template;						///< the template this system was constructed from
 	Particle *											m_controlParticle;		///< if non-NULL, this system is controlled by this particle
-	// FlipbookShared (getSharedFlipbook): drawn at the first particle's birth; drawing only, never saved
-	Bool														m_flipbookSharedDrawn;
-	UnsignedByte										m_flipbookSharedVariant;
-	UnsignedByte										m_flipbookSharedStart;
-	Bool														m_flipbookSharedMirror;
-	UnsignedInt											m_flipbookSharedClock;	///< the particle update (getParticleFrame) the system's flipbook clock started on
 
 	Bool							m_isLocalIdentity;										///< if true, the matrix can be ignored
 	Bool							m_isIdentity;													///< if true, the matrix can be ignored

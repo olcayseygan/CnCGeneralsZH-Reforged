@@ -51,6 +51,7 @@
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameClient/Drawable.h"
+#include "GameClient/ObserverCamera.h"
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
 #include "W3DDevice/GameClient/W3DWater.h"
 #include "W3DDevice/GameClient/HeightMap.h"
@@ -128,7 +129,8 @@ extern bool PosixWaterGpuAvailable(IDirect3DDevice9 *device);
 #define WATER_REFLECTION_AREA_MARGIN 0.05f	//slack around the water's screen area, so filtering at its edge reads inside it
 #define WATER_REFLECTION_STRENGTH 0.55f	//how far a reflected object darkens the water under it
 #define WATER_REFLECTION_SKY_COLOR Vector3(1.0f,1.0f,1.0f)	//white, so where nothing stands the water keeps its own colour
-
+#define WATER_REFLECTION_HZ 30	//most times a second Classic map water's mirror is drawn again
+#define WATER_REFLECTION_JUMP 50.0f	//a camera moved further than this since the mirror draws it again at once
 #define SEA_BUMP_SCALE		(0.06f)		//scales the du/dv offsets stored in bump map (~ amount to perturb)
 #define BUMP_SIZE (50.f)
 #define REFLECTION_FACTOR 0.1f
@@ -1196,6 +1198,7 @@ void WaterRenderObjClass::synchronizeWaterStyle(void)
 	// Classic clears the mirror to white; Modern clears it transparent. Bypass the
 	// stationary-camera reuse once, so neither style samples the other's background.
 	m_reflectionReused = TRUE;
+	m_reflectionViewKept = FALSE;
 	// Keep wave time, capture/pause clock, gameplay levels and water-grid motion intact.
 #endif
 }
@@ -1232,6 +1235,7 @@ void WaterRenderObjClass::ensureMapReflectionTarget(void)
 	REF_PTR_RELEASE(m_pReflectionTexture);
 	m_pReflectionTexture=replacement;
 	m_reflectionReused=TRUE; // a newly allocated target must be rendered even at a stationary camera
+	m_reflectionViewKept=FALSE;
 }
 
 void WaterRenderObjClass::setupModernWaterShader(Bool river, Bool heightCorrection, Bool waveCage)
@@ -2272,6 +2276,7 @@ void WaterRenderObjClass::ReAcquireResources(void)
 	{
 		m_reflectionTargetRequestSize = WATER_REFLECTION_SIZE;
 		m_pReflectionTexture = DX8Wrapper::Create_Render_Target (WATER_REFLECTION_SIZE, WATER_REFLECTION_SIZE);
+		m_reflectionViewKept = FALSE;	// a new target holds nothing yet
 	}
 
 	if (m_waterTrackSystem)
@@ -2855,6 +2860,43 @@ void WaterRenderObjClass::synchronizeWaterReflection(void)
 #endif
 
 //-------------------------------------------------------------------------------------------------
+/** Whether the kept mirror texture holds all the water this camera shows between shownMin and
+	* shownMax (its screen, -1 to 1).  Each corner of that rectangle goes down its ray to the water
+	* plane and back up through the view and projection the texture was drawn with; the four land in
+	* a convex quad, which is inside the texture's area when they all are.  A corner over the horizon
+	* says no. */
+//-------------------------------------------------------------------------------------------------
+Bool WaterRenderObjClass::keptReflectionCovers(CameraClass *cam, const Vector2 &shownMin, const Vector2 &shownMax, Real level) const
+{
+	const Vector3 eye = cam->Get_Position();
+	const float *view = (const float *)&m_reflectionView;
+	const float *projection = (const float *)&m_reflectionProjection;
+	for (Int corner = 0; corner < 4; ++corner)
+	{
+		Vector3 through;
+		cam->Un_Project(through, Vector2((corner & 1) ? shownMax.X : shownMin.X, (corner & 2) ? shownMax.Y : shownMin.Y));
+		const Vector3 ray = through - eye;
+		if (ray.Z > -0.0001f || eye.Z <= level)
+			return FALSE;
+		const Vector3 water = eye + ray * ((level - eye.Z) / ray.Z);
+		// row vectors, D3D's order: world, then view, then projection
+		const float point[4] = { water.X, water.Y, water.Z, 1.0f };
+		float camera[4], clip[4];
+		for (Int column = 0; column < 4; ++column)
+			camera[column] = point[0]*view[column] + point[1]*view[4+column] + point[2]*view[8+column] + point[3]*view[12+column];
+		for (Int column = 0; column < 4; ++column)
+			clip[column] = camera[0]*projection[column] + camera[1]*projection[4+column] + camera[2]*projection[8+column] + camera[3]*projection[12+column];
+		if (clip[3] <= 0.0f)
+			return FALSE;
+		const Real x = clip[0] / clip[3];
+		const Real y = clip[1] / clip[3];
+		if (x < m_reflectionAreaMin.X || x > m_reflectionAreaMax.X || y < m_reflectionAreaMin.Y || y > m_reflectionAreaMax.Y)
+			return FALSE;
+	}
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Our water may use effects that require run-time rendered textures.  These
 	*	textures need to be updated before we start rendering to the main screen
 	* render target because D3D doesn't multiple render targets. */
@@ -2881,26 +2923,18 @@ void WaterRenderObjClass::updateRenderTargetTextures(CameraClass *cam)
 		if (m_useModernWater && !WaterScreenReflection::UsesMirror(m_waterReflectionMode)) return;
 		ensureMapReflectionTarget();
 	}
+	m_reflectionFresh = FALSE;
 	if (!m_pReflectionTexture) return;
 
-	// A camera that has not moved looks at the same water from the same place, so a reflection one
-	// frame old lines up with it exactly and only what moved in it is a frame late.  Such a frame
-	// keeps the last texture, and the one after it draws a new one.
-	const Bool cameraMoved = memcmp(&cam->Get_Transform(), &m_reflectionCameraTransform, sizeof(Matrix3D)) != 0;
-	if (!cameraMoved && !m_reflectionReused)
-	{
-		m_reflectionReused = TRUE;
-		return;
-	}
-	m_reflectionReused = FALSE;
-	m_reflectionCameraTransform = cam->Get_Transform();
-
 	// One mirror a frame, so the first water area in view decides the plane.  A map whose visible
-	// water sits at two different heights reflects the second one at the first one's level.  The
-	// mirror only covers the part of the screen the water is drawn on: whatever stands outside that
-	// part of its frustum can never show in the water, and is culled before it costs a draw.
+	// water sits at two different heights reflects the second one at the first one's level, and says
+	// so to the shadow pass (m_reflectionLevelsDiffer).  The mirror only covers the part of the screen
+	// the water is drawn on: whatever stands outside that part of its frustum can never show in the
+	// water, and is culled before it costs a draw.
 	Bool waterInView = FALSE;
 	Bool waterBehindCamera = FALSE;
+	Real level = m_reflectionLevel;
+	m_reflectionLevelsDiffer = FALSE;
 	Vector2 areaMin(1.0f, 1.0f);
 	Vector2 areaMax(-1.0f, -1.0f);
 #if ZH_MODERN_WATER
@@ -2922,7 +2956,9 @@ void WaterRenderObjClass::updateRenderTargetTextures(CameraClass *cam)
 			continue;
 
 		if (!waterInView)
-			m_reflectionLevel = pTrig->getPoint(0)->z;
+			level = pTrig->getPoint(0)->z;
+		else if (pTrig->getPoint(0)->z != level)
+			m_reflectionLevelsDiffer = TRUE;
 		waterInView = TRUE;
 
 		for (Int pointIndex = 0; pointIndex < pTrig->getNumPoints(); ++pointIndex)
@@ -2944,18 +2980,61 @@ void WaterRenderObjClass::updateRenderTargetTextures(CameraClass *cam)
 	if (!waterInView)
 		return;
 
+	// Classic's texture reaches a little past the screen, so a kept one still has the strip a
+	// scrolling camera brings in (below).  Modern's shader reads the area as part of the screen.
+	const Real limit = getMirrorAreaLimit();
 	if (waterBehindCamera)
 	{	//a corner the camera cannot project says nothing about where the rest lands
-		areaMin.Set(-1.0f, -1.0f);
-		areaMax.Set(1.0f, 1.0f);
+		areaMin.Set(-limit, -limit);
+		areaMax.Set(limit, limit);
 	}
 
-	m_reflectionAreaMin.Set(max(areaMin.X - WATER_REFLECTION_AREA_MARGIN, -1.0f), max(areaMin.Y - WATER_REFLECTION_AREA_MARGIN, -1.0f));
-	m_reflectionAreaMax.Set(min(areaMax.X + WATER_REFLECTION_AREA_MARGIN, 1.0f), min(areaMax.Y + WATER_REFLECTION_AREA_MARGIN, 1.0f));
-	if (m_reflectionAreaMin.X >= m_reflectionAreaMax.X || m_reflectionAreaMin.Y >= m_reflectionAreaMax.Y)
+	const Vector2 drawMin(max(areaMin.X - WATER_REFLECTION_AREA_MARGIN, -limit), max(areaMin.Y - WATER_REFLECTION_AREA_MARGIN, -limit));
+	const Vector2 drawMax(min(areaMax.X + WATER_REFLECTION_AREA_MARGIN, limit), min(areaMax.Y + WATER_REFLECTION_AREA_MARGIN, limit));
+	if (drawMin.X >= drawMax.X || drawMin.Y >= drawMax.Y)
 		return;	//every corner is off one side of the screen
 
+	// A camera that has not moved looks at the same water from the same place, so a reflection one
+	// frame old lines up with it exactly and only what moved in it is a frame late.  Such a frame
+	// keeps the last texture, and the one after it draws a new one.
+	const Bool cameraMoved = memcmp(&cam->Get_Transform(), &m_reflectionCameraTransform, sizeof(Matrix3D)) != 0;
+	if (!cameraMoved && !m_reflectionReused)
+	{
+		m_reflectionReused = TRUE;
+		return;
+	}
+
+	// Classic's mirror is a second draw of the scene, and the frame it was costing was the gap between
+	// a water map and a dry one.  Its overlay looks the texture up through the view it was drawn with
+	// (drawReflection), so a texture kept while the camera moves still lands on the right water and
+	// only its content is late: drawn at most WATER_REFLECTION_HZ times a second, the rate retail drew
+	// the whole game at.  It is drawn at once when the water on screen now is not all inside what the
+	// kept one was drawn for, or lies at another level, or the camera jumped.  -directorrecord's panes
+	// each draw through a camera of their own and a film's pictures are not on the wall clock, so
+	// neither keeps one.
+	if (!m_useModernWater && m_reflectionViewKept && TheObserverCamera.getDrawnPaneCount() <= 1
+		&& !GameEngine_isVideoFrame())
+	{
+		const long long perSecond = Clock_Ticks_Per_Second();
+		const long long now = Clock_Ticks();
+		const Bool due = perSecond <= 0 || (now - m_reflectionDrawnTicks) * WATER_REFLECTION_HZ >= perSecond;
+		const Bool jumped = (cam->Get_Transform().Get_Translation()
+			- m_reflectionCameraTransform.Get_Translation()).Length2() > WATER_REFLECTION_JUMP * WATER_REFLECTION_JUMP;
+		const Vector2 shownMin(max(areaMin.X, -1.0f), max(areaMin.Y, -1.0f));
+		const Vector2 shownMax(min(areaMax.X, 1.0f), min(areaMax.Y, 1.0f));
+		if (!due && !jumped && level == m_reflectionLevel && keptReflectionCovers(cam, shownMin, shownMax, level))
+			return;
+	}
+	m_reflectionReused = FALSE;
+	m_reflectionCameraTransform = cam->Get_Transform();
+	m_reflectionLevel = level;
+	m_reflectionAreaMin = drawMin;
+	m_reflectionAreaMax = drawMax;
+
 	renderMirror(cam, m_reflectionLevel);
+	m_reflectionDrawnTicks = Clock_Ticks();
+	m_reflectionFresh = TRUE;
+	m_reflectionViewKept = FALSE;	// until this frame's water draw takes the view it was drawn for
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -5187,6 +5266,25 @@ void WaterRenderObjClass::drawReflection(Int triangleCount, Int vertexCount)
 	// camera space -> clip space -> 0..1 texture space, divided by w in the projected stage
 	D3DXMATRIX projection;
 	DX8Wrapper::_Get_DX8_Transform(D3DTS_PROJECTION, *(Matrix4x4*)&projection);
+	// A texture kept from an earlier frame was drawn for that frame's view, so the lookup goes from
+	// this camera's space back to the world and through the view and projection it was drawn with.
+	// The water plane's points land where they did then, which is all the overlay needs.
+	if (m_reflectionFresh)
+	{
+		DX8Wrapper::_Get_DX8_Transform(D3DTS_VIEW, m_reflectionView);
+		m_reflectionProjection = *(Matrix4x4*)&projection;
+		m_reflectionViewKept = TRUE;
+		m_reflectionFresh = FALSE;	// a later water area this frame takes the same view back out
+	}
+	else if (m_reflectionViewKept)
+	{
+		Matrix4x4 view;
+		DX8Wrapper::_Get_DX8_Transform(D3DTS_VIEW, view);
+		D3DXMATRIX cameraToWorld;
+		float det;
+		D3DXMatrixInverse(&cameraToWorld, &det, (D3DXMATRIX*)&view);
+		projection = cameraToWorld * *(D3DXMATRIX*)&m_reflectionView * *(D3DXMATRIX*)&m_reflectionProjection;
+	}
 	D3DXMATRIX clipToTexture;
 	memset(&clipToTexture, 0, sizeof(D3DXMATRIX));
 	clipToTexture._11 = 0.5f;

@@ -8,6 +8,10 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Water maps run like dry ones
+
+- On Tournament Island, Bombardment Beach and every other map with a lot of sea, a fast PC fell from about 240 frames a second to 70 or 80. Two things this build added to water were paying for it on every frame. The reflection of the units and buildings in the water was drawn again each time the picture was, 240 times a second on a fast card, for a soft darkening that moves no faster than the game does. It is now drawn at most 30 times a second, and between those it stays fixed to the water, so it does not swim while you scroll and a jump across the map draws it fresh at once. And on any map with water the sun's shadows were being drawn for every tank and building in a wide box round the view, seen or not, because the water's reflection might show one. Now only the ones that can throw a shadow into the view or into its reflection are drawn. The water looks the way it did. Modern water keeps drawing its reflection every frame.
+
 ## Grass that moves with the wind
 
 - Grassland used to be a flat painted texture under the tanks. With Ground Foliage on, tufts of grass, dry straw and a few wild flowers stand on the grass ground of a map and bend with the same breeze that sways the trees, a gust rolling across the field rather than every blade nodding at once. They keep off roads, cliffs, water and the ground under buildings, a base built in a match clears its own patch, and they grow in from the edge of the view instead of popping up. The art is the fork's own, painted from scratch. It is off by default and has no box in Options yet: put `GroundFoliage = yes` in your Options.ini to try it. It draws on Direct3D 11 and in the Mac and Linux builds; Direct3D 9 (`-d3d9`) and Classic Graphics show no grass. Looks only; units walk through it, and replays and network games play the same with it on or off.

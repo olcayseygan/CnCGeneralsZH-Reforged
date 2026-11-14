@@ -35,6 +35,7 @@
 
 #include "always.h"
 #include "rendobj.h"
+#include "matrix4.h"
 #include "w3d_file.h"
 #include "dx8vertexbuffer.h"			 
 #include "dx8indexbuffer.h"
@@ -145,6 +146,18 @@ public:
 	TextureClass *getSkyTexture(void) const { return m_settings[m_tod].skyTexture; }	///< the time of day's sky, as WaterSet names it
 	Bool hasModernVesselFoam(UnsignedInt objectID) const; ///< replacement was submitted for this hull in the current render frame
 	Bool isModernFullMirror() const;
+	/// the height of the plane the mirror reflects in: map water's the first water area in view decided.
+	/// FALSE when map water in view stands at more than one height, so the next mirror's plane is not known.
+	Bool getMirrorLevel(Real *level) const
+	{
+		if (m_waterType != WATER_TYPE_0_TRANSLUCENT) { *level = m_level; return TRUE; }
+		*level = m_reflectionLevel;
+		return !m_reflectionLevelsDiffer;
+	}
+	/// how far past the screen's edge, -1 to 1, the mirror's view may reach: Classic map water's a little,
+	/// so a texture kept while the camera scrolls still holds the strip coming in
+	static constexpr Real CLASSIC_MIRROR_AREA_LIMIT = 1.15f;
+	Real getMirrorAreaLimit() const { return (m_waterType == WATER_TYPE_0_TRANSLUCENT && !m_useModernWater) ? CLASSIC_MIRROR_AREA_LIMIT : 1.0f; }
 	Bool isModernWaterMirrorForOwner(UnsignedInt objectID) const; ///< owner's surface foam must not reflect back into the same water plane
 
 protected:
@@ -200,6 +213,13 @@ protected:
 	Vector2 m_reflectionAreaMax;	///<upper right of the same area
 	Matrix3D m_reflectionCameraTransform;	///<where the camera stood when the reflection texture was last rendered
 	Bool m_reflectionReused;	///<the frame before this one kept the previous reflection texture
+	long long m_reflectionDrawnTicks = 0;	///<Clock_Ticks when Classic map water's mirror was last drawn
+	Bool m_reflectionFresh = FALSE;	///<the mirror was drawn this frame, so its draw takes this frame's view
+	Bool m_reflectionViewKept = FALSE;	///<m_reflectionView and m_reflectionProjection hold a drawn mirror's
+	Matrix4x4 m_reflectionView;	///<the device's view on the frame the mirror was drawn
+	Matrix4x4 m_reflectionProjection;	///<and its projection
+	Bool m_reflectionLevelsDiffer = FALSE;	///<the map water in view this frame stands at more than one height
+	Bool keptReflectionCovers(CameraClass *cam, const Vector2 &shownMin, const Vector2 &shownMax, Real level) const;
 	RenderObjClass	*m_skyBox;		///<box around level
 	WaterTracksRenderSystem *m_waterTrackSystem;	///<object responsible for rendering water wakes
 

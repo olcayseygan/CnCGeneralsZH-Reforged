@@ -104,6 +104,48 @@ TEST(sun_box_past_its_cap_keeps_the_ground_at_the_cameras_feet)
 }
 
 /*=========================================================================
+   SunShadowCasterCull - a caster only a water mirror sees stays in the map
+  =========================================================================*/
+
+static FrustumClass leaningView()
+{
+	/* one side leans: inside where 0.8 y + 0.6 z <= 0, so the higher a point the further back it must
+	   stand; the other three sides hold everything */
+	FrustumClass view;
+	view.Planes[1] = PlaneClass(Vector3(0.0f, 0.8f, 0.6f), 0.0f);
+	for (int side = 2; side <= 4; ++side)
+		view.Planes[side] = PlaneClass(Vector3(1.0f, 0.0f, 0.0f), 1.0e6f);
+	return view;
+}
+
+TEST(sun_caster_cull_keeps_a_caster_the_mirror_sees)
+{
+	const FrustumClass view = leaningView();
+	const SphereClass caster(Vector3(0.0f, 50.0f, 100.0f), 1.0f);
+	SunShadowCasterCull cull = { view, Vector3(0.0f, 0.0f, 1.0f), 0.0f, 0.0f, 0.0f, 0.0f, true, NULL };
+	/* the frame does not reach it: 0.8 * 50 + 0.6 * 101 is far outside */
+	CHECK(!cull.Visible(caster));
+	/* turned over in water at zero the side leans the other way and the caster stands inside it */
+	const FrustumClass mirrored = SunShadowMirroredFrustum(view, 0.0f);
+	cull.Mirror = &mirrored;
+	CHECK(cull.Visible(caster));
+}
+
+TEST(sun_caster_cull_mirror_turns_over_at_the_water_level)
+{
+	const FrustumClass view = leaningView();
+	const SphereClass caster(Vector3(0.0f, 50.0f, 60.0f), 1.0f);
+	/* its reflection in water at zero lies at z -61: 40 - 36.6 is just outside */
+	const FrustumClass atZero = SunShadowMirroredFrustum(view, 0.0f);
+	const SunShadowCasterCull zero = { view, Vector3(0.0f, 0.0f, 1.0f), 0.0f, 0.0f, 0.0f, 0.0f, true, &atZero };
+	CHECK(!zero.Visible(caster));
+	/* in water at -10 it lies at z -81, inside */
+	const FrustumClass lower = SunShadowMirroredFrustum(view, -10.0f);
+	const SunShadowCasterCull below = { view, Vector3(0.0f, 0.0f, 1.0f), 0.0f, 0.0f, 0.0f, 0.0f, true, &lower };
+	CHECK(below.Visible(caster));
+}
+
+/*=========================================================================
    TankWheelAngle - a road wheel rolls over its own side's ground
   =========================================================================*/
 

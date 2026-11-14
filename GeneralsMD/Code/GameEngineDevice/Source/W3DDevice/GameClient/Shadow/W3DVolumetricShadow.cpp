@@ -4090,9 +4090,10 @@ static void endSmokeMap( const Vector3 &focus )
 /** Whether a water mirror will read the map this pass fills.  WaterRenderObjClass::renderMirror
 		draws the reflected scene before the next frame's depth pass, through that frame's camera,
 		while the map still holds this frame's casters, and the legacy frame buffer mirror draws one
-		inside this frame through a reflected camera.  Neither is a frustum known here, so a map that
-		can reflect at all keeps every caster in the box.  Translucent water mirrors only through its
-		water areas; the grid mesh never does. */
+		inside this frame through a reflected camera.  Both cameras are this one turned over in a level
+		water plane (getMirrorLevel), so the caller culls to this frustum and its mirror image together;
+		the next frame's camera is a frame away, which the caster pad covers as it does for the main
+		view.  Translucent water mirrors only through its water areas; the grid mesh never does. */
 static Bool waterMirrorReadsTheMap()
 {
 #if defined(__linux__)
@@ -4512,12 +4513,30 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 		 is up to 0.71 away.  1.5 and 2 cover those with room.  Receivers sit no lower than the
 		 lowest ground on the map: anything under it is seen through the ground, which is drawn and
 		 writes depth in front of it.  A sun at the horizon sweeps forever, so then nothing is left
-		 out, and nothing is while a water mirror can read this map through a camera other than this
-		 one. */
+		 out.  While a water mirror can read this map, a caster that reaches either this frame or its
+		 mirror image goes in. */
 	const FrustumClass &seen = sceneCamera.Get_Frustum();
 	const Real filterReach = (widest * 1.5f + 2.0f) * texelWidth;
-	const Bool cullToFrame = toSun.Z > 0.01f && !waterMirrorReadsTheMap();
-	const SunShadowCasterCull casterCull={seen,toSun,lowestReceiver,SHADOW_MAP_CASTER_PAD,filterReach,SHADOW_MAP_OVERLAY_REACH,cullToFrame};
+	// map water in view at two heights leaves the next mirror's plane open, and then nothing is left out
+	Real mirrorLevel = 0.0f;
+	const Bool mirrorReads = toSun.Z > 0.01f && waterMirrorReadsTheMap();
+	const Bool cullToFrame = toSun.Z > 0.01f && (!mirrorReads || TheWaterRenderObj->getMirrorLevel(&mirrorLevel));
+	// the mirror's view may reach past this one's sides, so the view turned over is first widened as far
+	FrustumClass mirrorSeen = seen;
+	if (mirrorReads)
+	{
+		Vector2 planeMin, planeMax;
+		Real sceneNear, sceneFar;
+		sceneCamera.Get_View_Plane(planeMin, planeMax);
+		sceneCamera.Get_Clip_Planes(sceneNear, sceneFar);
+		const Vector2 centre = (planeMin + planeMax) * 0.5f;
+		const Vector2 half = (planeMax - planeMin) * (0.5f * TheWaterRenderObj->getMirrorAreaLimit());
+		FrustumClass widened;
+		widened.Init(sceneCamera.Get_Transform(), centre - half, centre + half, -sceneNear, -sceneFar);
+		mirrorSeen = SunShadowMirroredFrustum(widened, mirrorLevel);
+	}
+	const SunShadowCasterCull casterCull={seen,toSun,lowestReceiver,SHADOW_MAP_CASTER_PAD,filterReach,SHADOW_MAP_OVERLAY_REACH,cullToFrame,
+		mirrorReads ? &mirrorSeen : NULL};
 
 #if defined(__linux__)
 	W3DVolumetricShadow *firstCaster = TheGlobalData->m_useShadowVolumes ? m_shadowList : NULL;

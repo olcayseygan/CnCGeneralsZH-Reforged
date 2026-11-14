@@ -45,11 +45,31 @@ inline float SunBoxMiddle( float lo, float hi, float halfWidth )
 	return WWMath::Clamp( 0.0f, lo + halfWidth, hi - halfWidth );
 }
 
+/** The view mirrored in a level water plane at height level.  A camera reflected in the water sees a
+		point exactly when the unreflected one sees the point's reflection, so the mirror's frustum is the
+		frame's own with every plane turned over: N.p = D becomes (Nx, Ny, -Nz).p = D - 2 level Nz, the
+		inside staying inside.  Hand it the view as wide as the mirror's view plane may reach: Classic
+		map water's runs a little past the screen (WaterRenderObjClass::getMirrorAreaLimit), and within
+		that the water's part of the screen only narrows it.  Only the four sides are turned, the ones
+		the caster test reads. */
+inline FrustumClass SunShadowMirroredFrustum( const FrustumClass &view, float level )
+{
+	FrustumClass mirrored = view;
+	for (int side = 1; side <= 4; ++side)
+	{
+		PlaneClass &plane = mirrored.Planes[ side ];
+		plane.D -= 2.0f * level * plane.N.Z;
+		plane.N.Z = -plane.N.Z;
+	}
+	return mirrored;
+}
+
 struct SunShadowCasterCull {
     const FrustumClass &View;
     Vector3 ToSun;
     float LowestReceiver, CasterPad, FilterReach, OverlayReach;
     bool Enabled;
+    const FrustumClass *Mirror;	// a water mirror's view that reads the same map, or null
 
     bool Visible(const SphereClass &bound) const {
         if (!Enabled) return true;
@@ -57,7 +77,10 @@ struct SunShadowCasterCull {
         const float radius=casterRadius+FilterReach;
         const float sweep=WWMath::Max((bound.Center.Z-LowestReceiver+radius)/ToSun.Z,0.0f);
         const float overlaySweep=WWMath::Max((bound.Center.Z-WWMath::Min(LowestReceiver,0.0f)+radius)/ToSun.Z,0.0f);
-        return SunShadowReachesTheFrame(View,bound.Center+ToSun*casterRadius,
-            bound.Center-ToSun*sweep,bound.Center-ToSun*overlaySweep,radius,OverlayReach);
+        const Vector3 upwind=bound.Center+ToSun*casterRadius;
+        const Vector3 downwind=bound.Center-ToSun*sweep;
+        const Vector3 overlayDownwind=bound.Center-ToSun*overlaySweep;
+        return SunShadowReachesTheFrame(View,upwind,downwind,overlayDownwind,radius,OverlayReach)
+            || (Mirror && SunShadowReachesTheFrame(*Mirror,upwind,downwind,overlayDownwind,radius,OverlayReach));
     }
 };

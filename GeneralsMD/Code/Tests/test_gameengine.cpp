@@ -22519,40 +22519,6 @@ TEST(a_group_is_never_more_than_five_lanes_wide)
 	CHECK_EQ( Crowd_laneCount( -50.0f, body, 4 ), 1 );
 }
 
-TEST(a_lane_goes_round_the_outside_of_a_turn_parallel_to_the_route)
-{
-	Coord3D a, c, b;
-	a.set( 0.0f, 0.0f, 0.0f );
-	c.set( 100.0f, 0.0f, 0.0f );
-	Coord2D shift;
-
-	// straight on: the lane is the plain left normal, no stretch
-	b.set( 200.0f, 0.0f, 0.0f );
-	CHECK( Crowd_laneCorner( a, c, b, 10.0f, &shift ) );
-	CHECK_NEAR( shift.x, 0.0f, 0.001f );
-	CHECK_NEAR( shift.y, 10.0f, 0.001f );
-
-	// a right-angle turn to the right: the left lane is the outside one, and its corner sits out on
-	// the diagonal, ten from both legs - the red line of the owner's drawing, not the tip of the wall
-	b.set( 100.0f, -100.0f, 0.0f );
-	CHECK( Crowd_laneCorner( a, c, b, 10.0f, &shift ) );
-	CHECK_NEAR( shift.x, 10.0f, 0.001f );
-	CHECK_NEAR( shift.y, 10.0f, 0.001f );
-
-	// the right lane of the same turn is the inside one, pulled in off the tip by the same ten
-	CHECK( Crowd_laneCorner( a, c, b, -10.0f, &shift ) );
-	CHECK_NEAR( shift.x, -10.0f, 0.001f );
-	CHECK_NEAR( shift.y, -10.0f, 0.001f );
-
-	// a hairpin stretches the offset no further than twice
-	b.set( 0.0f, -1.0f, 0.0f );
-	CHECK( Crowd_laneCorner( a, c, b, 10.0f, &shift ) );
-	CHECK( shift.length() <= 20.001f );
-
-	// a leg of no length has no direction to be beside
-	CHECK( !Crowd_laneCorner( a, a, b, 10.0f, &shift ) );
-}
-
 TEST(a_turn_costs_what_the_hull_takes_to_swing_it)
 {
 	// chassis is the cost of one radian: a hull that drives 40 units while turning one radian

@@ -1242,7 +1242,8 @@ public:
 		Coord3D *dest, const Coord3D *groupDest=NULL);
 
 	// Gives each ground member its own reserved goal, spreading outward from dest with the soonest
-	// arrivals nearest it. goals[k] belongs to members[k]; a member never placed keeps dest itself.
+	// arrivals nearest it, then once more from past dest so the pile sits on it rather than short of it.
+	// goals[k] belongs to members[k]; a member never placed keeps the point its flood started from.
 	void floodGroupGoals(const Coord3D *dest, const std::vector<Object *>& members, std::vector<Coord3D>& goals);
 
 	// Adjusts the destination to a spot near dest for landing that is not occupied by other units.
@@ -1290,6 +1291,8 @@ protected:
 																Bool crusher, Int &cellCount);
 	Bool checkForAdjust(Object *, const LocomotorSet& locomotorSet, Bool isHuman, Int cellX, Int cellY, 
 		PathfindLayerEnum layer, Int iRadius, Bool center,Coord3D *dest, const Coord3D *groupDest) ;
+	Int floodGroupGoalsFrom(const Coord3D *origin, PathfindLayerEnum layer, const std::vector<Object *>& members,
+		std::vector<Coord3D>& goals, std::vector<bool>& isPlaced);	///< one flood of floodGroupGoals, out of origin's cell on layer; how many it placed
 	Bool checkForLanding(Int cellX, Int cellY, 
 		PathfindLayerEnum layer, Int iRadius, Bool center,Coord3D *dest) ;
 	Bool checkForTarget(const Object *obj, 	Int cellX, Int cellY, const Weapon *weapon,

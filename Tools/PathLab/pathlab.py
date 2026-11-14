@@ -132,6 +132,12 @@ PATHFIND_DEEP_CELLS: int = 4
 MIN_REPATH_TIME: int = 10 * LOGICFRAMES_PER_RETAIL_FRAME     # AIStateMachine.h
 
 # Group order (AIGroup.cpp, CrowdModel.h)
+# The group's trunk from the middle member and each vehicle's lane laid along it (crowdPlanLane).
+# Off, every member searches its own route and keeps its place across the road as its crowdSteer
+# band, which is what a bridge order already did (AIGroup.cpp:2457).  A lane is a copy of the middle
+# member's route, so a member on the flank first drove sideways to it, then round the rock the
+# middle member had to pass: 46% of the sideways travel off each member's line to the click.
+CROWD_GROUP_TRUNK: bool = False
 CROWD_TRUNK_DIAMETER: int = 6
 CROWD_PLAN_STEPS: int = 4
 CROWD_MAX_LANES: int = 5
@@ -141,6 +147,10 @@ MIN_FLOOD_CELLS: int = 400                  # floodGroupGoals
 FLOOD_CELLS_PER_MEMBER: int = 32
 MAX_MEMBERS_TRIED_PER_CELL: int = 8
 MIN_MEMBER_SPEED: float = 1.0
+PAST_CLICK_ALLOWANCE: float = CELL          # floodGroupGoals: how far past the click a member may still stop
+FLOOD_CENTRE_ON_CLICK: bool = True          # floodGroupGoals floods again from past the click, see there
+FLOOD_CENTRE_SHARES: tuple[float, ...] = (0.5, 0.25)    # of the first pile's shortfall, tried in order;
+                                            # the whole of it centred better and blocked 15% more
 
 # Following and blocking (AIUpdate.cpp:1666-1867)
 FAST_AS_POSSIBLE: float = 999999.0
@@ -2343,28 +2353,67 @@ class Simulation:
 
     # ---- orders -----------------------------------------------------------------------------
     def flood_group_goals(self, dest: Point, members: Sequence[Unit]) -> list[Point]:
-        """Pathfinder::floodGroupGoals: a flood out of the clicked cell; members queue by straight
+        """Pathfinder::floodGroupGoals.  With FLOOD_CENTRE_ON_CLICK a group of two or more is flooded
+           twice: the first pass piles up on the approach side, since nobody stops past the click, and
+           the second floods from the click pushed on by FLOOD_CENTRE_SHARES of how far the first
+           pile's middle fell short of it, so the pile moves onto the click (half way by default) and
+           still nobody stops past the point the flood starts from, so nobody drives through the
+           ones who got there first.  The push falls back to the next share, then to none, when the
+           straight cell line from the click to it crosses ground nobody stands on, or when the point
+           is off the map, so the pile never jumps a cliff or a wall.  A second flood that places
+           fewer members than the first is thrown away and the first pile reserved again."""
+        goals, placed = self.flood_from(dest, members)
+        if not FLOOD_CENTRE_ON_CLICK or len(members) < 2:
+            return goals
+        mx = sum(g[0] for g in goals) / len(goals)
+        my = sum(g[1] for g in goals) / len(goals)
+        start = cell_of(*dest)
+        for share in FLOOD_CENTRE_SHARES:
+            origin = (dest[0] + (dest[0] - mx) * share, dest[1] + (dest[1] - my) * share)
+            end = cell_of(*origin)
+            if not self.grid.in_bounds(*end):
+                continue
+            if end == start:
+                return goals
+            if not all(self.grid.passable(*cell) for _, cell in line_cells(*start, *end)):
+                continue
+            for m in members:
+                self.pf.remove_goal(m)
+            centred, centred_placed = self.flood_from(origin, members)
+            if sum(centred_placed) >= sum(placed):
+                return centred
+            for m in members:
+                self.pf.remove_goal(m)
+            for m, goal, was_placed in zip(members, goals, placed):
+                if was_placed:
+                    self.pf.update_goal(m, goal)
+            return goals
+        return goals
+
+    def flood_from(self, dest: Point, members: Sequence[Unit]) -> tuple[list[Point], list[bool]]:
+        """One flood of floodGroupGoals: a flood out of the clicked cell; members queue by straight
            time to the click and each cell goes to whichever of the first eight would reach it
-           soonest, never to one it would reach only past the click."""
+           soonest, never to one it would reach only past the click.  Returns the goals and which
+           members were handed a cell."""
         pf, grid = self.pf, self.grid
         goals = [dest] * len(members)
+        placed = [False] * len(members)
         if not members:
-            return goals
+            return goals, placed
         start = cell_of(*dest)
         if not grid.in_bounds(*start):
-            return goals
+            return goals, placed
         arrivals = []
         for k, m in enumerate(members):
             ax, ay = m.x - dest[0], m.y - dest[1]
             length = math.hypot(ax, ay)
             speed = max(m.max_speed, MIN_MEMBER_SPEED)
-            if length > CELL:
+            if length > PAST_CLICK_ALLOWANCE:
                 ax, ay = ax / length, ay / length
             arrivals.append([length / speed, k, m, speed, ax, ay, length])
         arrivals.sort(key=lambda a: (a[0], a[1]))
         opened = {start}
         wave = [start]
-        placed = [False] * len(members)
         unplaced = len(members)
         limit = MIN_FLOOD_CELLS + FLOOD_CELLS_PER_MEMBER * len(members)
         head = 0
@@ -2380,7 +2429,7 @@ class Simulation:
                         break
                     if placed[k]:
                         continue
-                    if length > CELL and -(ox * ax + oy * ay) > CELL:
+                    if length > PAST_CLICK_ALLOWANCE and -(ox * ax + oy * ay) > PAST_CLICK_ALLOWANCE:
                         continue
                     candidates.append((math.hypot(m.x - wx, m.y - wy) / speed, k, m))
                 candidates.sort(key=lambda c: (c[0], c[1]))
@@ -2405,7 +2454,7 @@ class Simulation:
                         opened.add(nxt)
                         wave.append(nxt)
             head += 1
-        return goals
+        return goals, placed
 
     def check_for_adjust(self, unit: Unit, cx: int, cy: int, dest: Point) -> Point | None:
         """Pathfinder::checkForAdjust without a group destination."""
@@ -2535,7 +2584,7 @@ class Simulation:
                 lane_offsets[m.id] = (lane - (lanes - 1) * 0.5) * spacing
         goals = self.flood_group_goals(click, ordered)
         trunk: list[Point] = []
-        if lane_offsets:
+        if lane_offsets and CROWD_GROUP_TRUNK:
             vehicles = [m for m in ordered if not m.is_infantry]
             trunk_start = (min(vehicles, key=lambda m: (m.x - cx) ** 2 + (m.y - cy) ** 2).pos
                            if vehicles else (cx, cy))

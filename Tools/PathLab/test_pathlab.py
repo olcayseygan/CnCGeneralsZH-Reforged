@@ -325,11 +325,36 @@ class GroupTests(unittest.TestCase):
         self.assertEqual(min(range(6), key=lambda k: math.hypot(goals[k][0] - click[0], goals[k][1] - click[1])),
                          nearest)
 
-    def test_a_group_order_lays_a_trunk_and_lanes(self):
+    def test_the_centred_flood_puts_the_pile_on_the_click_and_never_over_a_wall(self):
+        units = [Unit(*cell_pos(3 + 3 * (k % 3), 3 + 3 * (k // 3), False), id=k + 1) for k in range(9)]
+        click = cell_pos(25, 25, True)
+
+        def pile(grid: Grid, centre: bool) -> list[tuple[float, float]]:
+            with pathlab.overriding(FLOOD_CENTRE_ON_CLICK=centre):
+                return Simulation(grid, units).flood_group_goals(click, units)
+
+        def shortfall(goals: list[tuple[float, float]]) -> float:
+            return math.hypot(sum(g[0] for g in goals) / len(goals) - click[0],
+                              sum(g[1] for g in goals) / len(goals) - click[1])
+
+        game = shortfall(pile(walled(40), False))
+        self.assertGreater(game, 2 * CELL)                  # the game piles short of the click
+        with pathlab.overriding(FLOOD_CENTRE_SHARES=(1.0,)):
+            self.assertLess(shortfall(pile(walled(40), True)), CELL / 2)
+        self.assertLess(shortfall(pile(walled(40), True)), 0.6 * game)     # the default goes half way
+        grid = walled(40)
+        for y in range(1, 39):
+            grid.block(27, y)                   # a wall two cells past the click
+        self.assertTrue(all(cell_of(*g)[0] < 27 for g in pile(grid, True)))
+
+    def test_a_group_order_lays_a_trunk_and_lanes_only_with_the_trunk_on(self):
         grid = make_map("open", seed=3)
         units, orders = pathlab.build_scenario(grid, [pathlab.STANDIN_TANK] * 6, "column")
         sim = Simulation(grid, units)
-        stats = sim.group_move(*orders[0])
+        self.assertEqual(sim.group_move(*orders[0]).trunk, [])
+        self.assertFalse(any(u.planned for u in units))
+        with pathlab.overriding(CROWD_GROUP_TRUNK=True):
+            stats = sim.group_move(*orders[0])
         self.assertIn(stats.trunk_diameter, (6, 4, 2))
         self.assertGreater(stats.lanes, 1)
         self.assertTrue(all(u.moving and u.waiting_for_path for u in units))
@@ -865,7 +890,8 @@ class InfantryTests(unittest.TestCase):
         legs = kind(appearance=pathlab.TWO_LEGS, infantry=True, radius=5.0, major_radius=5.0)
         units, orders = pathlab.build_scenario(grid, [pathlab.STANDIN_TANK, legs] * 3, "column")
         sim = Simulation(grid, units)
-        sim.group_move(*orders[0])
+        with pathlab.overriding(CROWD_GROUP_TRUNK=True):
+            sim.group_move(*orders[0])
         self.assertTrue(all(not u.planned for u in units if u.is_infantry))
         self.assertTrue(any(u.planned for u in units if not u.is_infantry))
 

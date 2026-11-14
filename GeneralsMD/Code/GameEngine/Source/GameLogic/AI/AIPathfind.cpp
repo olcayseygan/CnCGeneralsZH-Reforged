@@ -7143,8 +7143,12 @@ static Bool floodMemberArrivesFirst( const FloodMember& a, const FloodMember& b 
  * Every goal is reserved as it is handed out, so the move state's own adjustDestination finds the cell
  * already its own and keeps it. A member still without a goal when the flood runs dry keeps the click
  * and gets the spiral there, as before.
+ *
+ * This is one flood, out of origin's cell on layer; floodGroupGoals below says where origin is.
+ * isPlaced[k] says whether members[k] was handed a cell, and the count of those is returned.
  */
-void Pathfinder::floodGroupGoals(const Coord3D *dest, const std::vector<Object *>& members, std::vector<Coord3D>& goals)
+Int Pathfinder::floodGroupGoalsFrom(const Coord3D *origin, PathfindLayerEnum layer, const std::vector<Object *>& members,
+	std::vector<Coord3D>& goals, std::vector<bool>& isPlaced)
 {
 	PathProfile pfProfile( PF_ADJUST );
 	enum { MIN_FLOOD_CELLS = 400, FLOOD_CELLS_PER_MEMBER = 32 };
@@ -7155,15 +7159,15 @@ void Pathfinder::floodGroupGoals(const Coord3D *dest, const std::vector<Object *
 	const Real MIN_MEMBER_SPEED = 1.0f;			// a member with no speed yet still queues, behind everybody
 
 	const Int memberCount = (Int)members.size();
-	goals.assign( memberCount, *dest );
+	goals.assign( memberCount, *origin );
+	isPlaced.assign( memberCount, false );
 	if (memberCount == 0)
-		return;		// a selection with nothing on the ground, all aircraft
+		return 0;		// a selection with nothing on the ground, all aircraft
 
-	const PathfindLayerEnum layer = TheTerrainLogic->getLayerForDestination( dest );
 	ICoord2D start;
-	worldToCell( dest, &start );
+	worldToCell( origin, &start );
 	if (getCell( layer, start.x, start.y ) == NULL)
-		return;
+		return 0;
 
 	const Player *owner = members[0]->getControllingPlayer();
 	const Bool isHuman = !(owner && owner->getPlayerType() == PLAYER_COMPUTER);
@@ -7175,8 +7179,8 @@ void Pathfinder::floodGroupGoals(const Coord3D *dest, const std::vector<Object *
 		arrival.obj = members[k];
 		arrival.index = k;
 		arrival.speed = MAX( members[k]->getAIUpdateInterface()->getCurLocomotorSpeed(), MIN_MEMBER_SPEED );
-		arrival.approachX = members[k]->getPosition()->x - dest->x;
-		arrival.approachY = members[k]->getPosition()->y - dest->y;
+		arrival.approachX = members[k]->getPosition()->x - origin->x;
+		arrival.approachY = members[k]->getPosition()->y - origin->y;
 		arrival.approachLength = sqrt( arrival.approachX*arrival.approachX + arrival.approachY*arrival.approachY );
 		arrival.arrival = arrival.approachLength / arrival.speed;
 		if (arrival.approachLength > PAST_CLICK_ALLOWANCE)
@@ -7190,7 +7194,6 @@ void Pathfinder::floodGroupGoals(const Coord3D *dest, const std::vector<Object *
 	const Int extentWidth = m_extent.hi.x - m_extent.lo.x + 1;
 	const Int extentHeight = m_extent.hi.y - m_extent.lo.y + 1;
 	std::vector<bool> isOpened( extentWidth * extentHeight, false );
-	std::vector<bool> isPlaced( memberCount, false );
 	std::vector<FloodMember> candidates;
 	std::vector<ICoord2D> wave;
 	wave.push_back( start );
@@ -7209,8 +7212,8 @@ void Pathfinder::floodGroupGoals(const Coord3D *dest, const std::vector<Object *
 		{
 			const Real cellX = ((Real)cell.x + 0.5f) * PATHFIND_CELL_SIZE_F;
 			const Real cellY = ((Real)cell.y + 0.5f) * PATHFIND_CELL_SIZE_F;
-			const Real offsetX = cellX - dest->x;
-			const Real offsetY = cellY - dest->y;
+			const Real offsetX = cellX - origin->x;
+			const Real offsetY = cellY - origin->y;
 
 			candidates.clear();
 			for (Int a = 0; a < memberCount && (Int)candidates.size() < MAX_MEMBERS_TRIED_PER_CELL; a++)
@@ -7237,13 +7240,13 @@ void Pathfinder::floodGroupGoals(const Coord3D *dest, const std::vector<Object *
 				Int iRadius;
 				Bool center;
 				getRadiusAndCenter( member, iRadius, center );
-				Coord3D goal = *dest;
+				Coord3D goal = *origin;
 				if (!checkForAdjust( member, member->getAIUpdateInterface()->getLocomotorSet(), isHuman,
 						cell.x, cell.y, layer, iRadius, center, &goal, NULL ))
 					continue;
 
 				if (memberCount == 1 && head == 0)
-					goal = *dest;		// a lone unit stands where it was clicked, as adjustDestination lets it
+					goal = *origin;		// a lone unit stands where it was clicked, as adjustDestination lets it
 				updateGoal( member, &goal, layer );
 				goals[candidates[c].index] = goal;
 				isPlaced[candidates[c].index] = true;
@@ -7273,6 +7276,94 @@ void Pathfinder::floodGroupGoals(const Coord3D *dest, const std::vector<Object *
 				wave.push_back( next );
 			}
 		}
+	}
+	return memberCount - unplacedCount;
+}
+
+/** iterateCellsAlongLine: nonzero, and the walk stops, on the first cell nobody could stand on. */
+static Int floodLineStandableCallback(Pathfinder* pathfinder, PathfindCell* from, PathfindCell* to, Int to_x, Int to_y, void* userData)
+{
+	const PathfindCell::CellType type = to->getType();
+	return (type == PathfindCell::CELL_CLEAR || type == PathfindCell::CELL_RUBBLE) ? 0 : 1;
+}
+
+/**
+ * Hand a whole group its goals, centred on the click.
+ *
+ * One flood out of the clicked cell lets nobody stop past the click, so a group arriving from one side
+ * piles up short of it: 27 to 33 units short in PathLab, and from the camera the group is going
+ * somewhere other than where it was sent. So a group of two or more is flooded a second time, from the
+ * click pushed on by half of how far the first pile's middle fell short of it. Nobody stops past that
+ * point either, so nobody drives through the ones who got there first, and the pile sits on the click.
+ *
+ * The push falls back to a quarter, then to none, when the straight cell line from the click to the
+ * new start crosses a cell nobody can stand on, so the pile never jumps a cliff or a wall, and when the
+ * new start is off the map or off the clicked deck. A second flood that hands out fewer cells than the
+ * first is thrown away and the first pile kept. The whole shortfall centred a little better and
+ * blocked 15% more.
+ */
+void Pathfinder::floodGroupGoals(const Coord3D *dest, const std::vector<Object *>& members, std::vector<Coord3D>& goals)
+{
+	const Real CENTRE_SHARES[] = { 0.5f, 0.25f };	// of the first pile's shortfall, tried in order
+
+	const PathfindLayerEnum layer = TheTerrainLogic->getLayerForDestination( dest );
+	std::vector<bool> isPlaced;
+	const Int placedCount = floodGroupGoalsFrom( dest, layer, members, goals, isPlaced );
+
+	const Int memberCount = (Int)members.size();
+	if (memberCount < 2)
+		return;
+
+	Real meanX = 0.0f, meanY = 0.0f;
+	for (Int k = 0; k < memberCount; k++)
+	{
+		meanX += goals[k].x;
+		meanY += goals[k].y;
+	}
+	meanX /= (Real)memberCount;
+	meanY /= (Real)memberCount;
+
+	ICoord2D start;
+	worldToCell( dest, &start );
+	for (Int s = 0; s < (Int)(sizeof(CENTRE_SHARES) / sizeof(CENTRE_SHARES[0])); s++)
+	{
+		Coord3D origin = *dest;
+		origin.x += (dest->x - meanX) * CENTRE_SHARES[s];
+		origin.y += (dest->y - meanY) * CENTRE_SHARES[s];
+		ICoord2D end;
+		if (worldToCell( &origin, &end ))
+			continue;		// off the map
+		if (end.x == start.x && end.y == start.y)
+			return;		// the first pile is already round the click
+
+		/* On a deck the start has to be on the deck too: getCell answers the ground for a cell past
+			 the deck's edge, and a flood on the bridge's layer from there is a flood of the riverbank. */
+		if (layer != LAYER_GROUND && m_layers[layer].getCell( end.x, end.y ) == NULL)
+			continue;
+		if (iterateCellsAlongLine( start, end, layer, floodLineStandableCallback, NULL ) != 0)
+			continue;
+
+		origin.z = TheTerrainLogic->getLayerHeight( origin.x, origin.y, layer );
+		for (Int k = 0; k < memberCount; k++)
+			removeGoal( members[k] );
+		std::vector<Coord3D> centred;
+		std::vector<bool> isCentredPlaced;
+		if (floodGroupGoalsFrom( &origin, layer, members, centred, isCentredPlaced ) >= placedCount)
+		{
+			goals.swap( centred );
+			return;
+		}
+
+		/* The new start is in a pocket, or the flood ran out of cells before everybody had one: a
+			 member it left out would drive to the start itself. The first pile stands, reserved again. */
+		for (Int k = 0; k < memberCount; k++)
+			removeGoal( members[k] );
+		for (Int k = 0; k < memberCount; k++)
+		{
+			if (isPlaced[k])
+				updateGoal( members[k], &goals[k], layer );
+		}
+		return;
 	}
 }
 

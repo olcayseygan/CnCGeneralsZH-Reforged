@@ -88,22 +88,6 @@ enum
 		(`members` of 0 means the caller counts them itself). */
 extern Int Crowd_laneCount( Real span, Real spacing, Int members );
 
-/// one corner of a route, and the deck it is on
-struct CrowdRoutePoint
-{
-	Coord3D						pos;
-	PathfindLayerEnum	layer;
-};
-typedef std::vector<CrowdRoutePoint> CrowdRoute;
-
-/// the optimized corners of `path`, first to last
-extern void Crowd_routeFromPath( Path *path, CrowdRoute *out );
-
-/** Where a lane `offset` left of a route turns at the corner `c` between `a` and `b`: along the
-		bisector of the two legs' left normals, as far as keeps both legs `offset` away, and never
-		more than twice `offset` however sharp the turn.  FALSE for a leg of no length. */
-extern Bool Crowd_laneCorner( const Coord3D& a, const Coord3D& c, const Coord3D& b, Real offset, Coord2D *shift );
-
 /**
  * A route, sampled, with the width of the drivable ground either side of every sample.
  *

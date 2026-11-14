@@ -69,54 +69,6 @@ static Real crowdExtent( const Object *obj, const LocomotorSet& locomotorSet, Pa
 }
 
 //-------------------------------------------------------------------------------------------------
-void Crowd_routeFromPath( Path *path, CrowdRoute *out )
-{
-	out->clear();
-	for (const PathNode *n = path->getFirstNode(); n; n = n->getNextOptimized())
-	{
-		CrowdRoutePoint p;
-		p.pos = *n->getPosition();
-		p.layer = n->getLayer();
-		out->push_back( p );
-	}
-}
-
-static const Real CROWD_LANE_MIN_COS = 0.5f;		///< a hairpin stretches a corner's offset no more than twice
-
-//-------------------------------------------------------------------------------------------------
-Bool Crowd_laneCorner( const Coord3D& a, const Coord3D& c, const Coord3D& b, Real offset, Coord2D *shift )
-{
-	Coord2D in, onward;
-	in.x = c.x - a.x;				in.y = c.y - a.y;
-	onward.x = b.x - c.x;		onward.y = b.y - c.y;
-	if (in.length() < 0.01f || onward.length() < 0.01f)
-		return FALSE;
-	in.normalize();
-	onward.normalize();
-
-	Coord2D miter;
-	miter.x = -in.y - onward.y;
-	miter.y = in.x + onward.x;
-	Real stretch = 1.0f;
-	if (miter.length() < 0.01f)
-	{
-		// the route doubles straight back: the lane keeps the side it was on
-		miter.x = -in.y;
-		miter.y = in.x;
-	}
-	else
-	{
-		miter.normalize();
-		const Real cosHalf = miter.x * -in.y + miter.y * in.x;
-		stretch = 1.0f / ((cosHalf > CROWD_LANE_MIN_COS) ? cosHalf : CROWD_LANE_MIN_COS);
-	}
-	const Real reach = offset * stretch;
-	shift->x = miter.x * reach;
-	shift->y = miter.y * reach;
-	return TRUE;
-}
-
-//-------------------------------------------------------------------------------------------------
 Bool CrowdCorridor::build( const Object *obj, const LocomotorSet& locomotorSet, Path *path )
 {
 	m_samples.clear();

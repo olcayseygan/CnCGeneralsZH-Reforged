@@ -26249,3 +26249,114 @@ TEST(weapon_bonus_names_resolve_mark_and_rain_and_forward_post)
 	CHECK_EQ( INI::scanIndexList( "FORWARD_POST", TheWeaponBonusNames ), (Int)WEAPONBONUSCONDITION_FORWARD_POST );
 	CHECK_EQ( INI::scanIndexList( "ENTHUSIASTIC", TheWeaponBonusNames ), (Int)WEAPONBONUSCONDITION_ENTHUSIASTIC );
 }
+
+#include <set>
+#include "Common/AudioEventInfo.h"
+
+/* A wav's format chunk, read the way any player's mixer would: RIFF, WAVE, then chunks until "fmt ". */
+static Bool readWavFormat( const std::string &path, Int &channels, Int &rate, Int &bits )
+{
+	std::ifstream wav( path.c_str(), std::ios::binary );
+	unsigned char head[ 12 ];
+	if( !wav.read( (char *)head, 12 ) || memcmp( head, "RIFF", 4 ) != 0 || memcmp( head + 8, "WAVE", 4 ) != 0 )
+		return FALSE;
+	unsigned char chunk[ 8 ];
+	while( wav.read( (char *)chunk, 8 ) )
+	{
+		UnsignedInt size = chunk[ 4 ] | ( chunk[ 5 ] << 8 ) | ( chunk[ 6 ] << 16 ) | ( (UnsignedInt)chunk[ 7 ] << 24 );
+		if( memcmp( chunk, "fmt ", 4 ) == 0 )
+		{
+			unsigned char fmt[ 16 ];
+			if( size < 16 || !wav.read( (char *)fmt, 16 ) )
+				return FALSE;
+			if( ( fmt[ 0 ] | ( fmt[ 1 ] << 8 ) ) != 1 )		// PCM
+				return FALSE;
+			channels = fmt[ 2 ] | ( fmt[ 3 ] << 8 );
+			rate = fmt[ 4 ] | ( fmt[ 5 ] << 8 ) | ( fmt[ 6 ] << 16 ) | ( fmt[ 7 ] << 24 );
+			bits = fmt[ 14 ] | ( fmt[ 15 ] << 8 );
+			return TRUE;
+		}
+		wav.seekg( size + ( size & 1 ), std::ios::cur );
+	}
+	return FALSE;
+}
+
+/** Every Turkiye unit speaks in its own voice. Each Voice field in TurkiyeReforged.ini that names a
+	 Turkiye event finds it in VoiceReforged.ini through the game's own parser, every wav those events
+	 name is in Data/Audio/Sounds in EA's speech format (22050 Hz mono 16-bit PCM), and no wav there is
+	 left unnamed. 98 events over 20 units, 291 lines: a unit that lost its voice, an event renamed on
+	 one side only or a file left out of the folder all fail here. */
+TEST(turkiye_unit_voices_resolve_to_events_and_wavs)
+{
+	CHECK( bootOnce() );
+
+	AudioManager *savedAudio = TheAudio;
+	if( savedAudio == NULL )
+		TheAudio = NEW NullAudioManager;
+
+	CHECK( loadIni( ZH_CODE_DIR "/Data/INI/VoiceReforged.ini" ) );
+
+	std::ifstream units( std::string( ZH_CODE_DIR ) + "/Data/INI/TurkiyeReforged.ini" );
+	CHECK( units.good() );
+	std::set<std::string> named;
+	std::string line;
+	while( std::getline( units, line ) )
+	{
+		size_t key = line.find_first_not_of( " \t" );
+		size_t equals = line.find( '=' );
+		if( key == std::string::npos || equals == std::string::npos || line.compare( key, 5, "Voice" ) != 0 )
+			continue;
+		size_t value = line.find_first_not_of( " \t", equals + 1 );
+		if( value == std::string::npos )
+			continue;
+		std::string event = line.substr( value, line.find_first_of( " \t\r;", value ) - value );
+		if( event.compare( 0, 7, "Turkiye" ) == 0 )
+			named.insert( event );
+	}
+	CHECK_EQ( (Int)named.size(), 98 );
+
+	const std::string sounds = std::string( ZH_CODE_DIR ) + "/Data/Audio/Sounds/";
+	std::set<std::string> heard;
+	for( std::set<std::string>::const_iterator it = named.begin(); it != named.end(); ++it )
+	{
+		const AudioEventInfo *info = TheAudio->findAudioEventInfo( AsciiString( it->c_str() ) );
+		if( info == NULL )
+			printf( "  no AudioEvent %s in VoiceReforged.ini\n", it->c_str() );
+		CHECK( info != NULL );
+		if( info == NULL )
+			continue;
+		CHECK( !info->m_sounds.empty() );
+		for( size_t i = 0; i < info->m_sounds.size(); ++i )
+		{
+			const std::string name = info->m_sounds[ i ].str();
+			if( !heard.insert( name ).second )
+				continue;
+			Int channels = 0, rate = 0, bits = 0;
+			const Bool read = readWavFormat( sounds + name + ".wav", channels, rate, bits );
+			if( !read || channels != 1 || rate != 22050 || bits != 16 )
+				printf( "  %s.wav: %s, %d ch, %d Hz, %d bit\n", name.c_str(), read ? "read" : "missing", channels, rate, bits );
+			CHECK( read );
+			CHECK_EQ( channels, 1 );
+			CHECK_EQ( rate, 22050 );
+			CHECK_EQ( bits, 16 );
+		}
+	}
+	CHECK_EQ( (Int)heard.size(), 291 );
+
+	Int onDisk = 0;
+	for( const std::filesystem::directory_entry &entry : std::filesystem::directory_iterator( sounds ) )
+	{
+		if( entry.path().extension() != ".wav" )
+			continue;
+		++onDisk;
+		if( heard.count( entry.path().stem().string() ) == 0 )
+			printf( "  %s is in the folder and named by no event\n", entry.path().filename().string().c_str() );
+	}
+	CHECK_EQ( onDisk, 291 );
+
+	if( savedAudio == NULL )
+	{
+		delete TheAudio;
+		TheAudio = NULL;
+	}
+}

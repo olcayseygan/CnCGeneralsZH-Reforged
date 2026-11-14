@@ -269,6 +269,9 @@ void AudioManager::init()
 	// the original Generals campaigns' briefings and mission dialogue, which Zero Hour's files left out
 	ini.load( AsciiString( "Data\\INI\\SpeechReforged.ini" ), INI_LOAD_OVERWRITE, NULL );
 
+	// the fork's own unit voices, every Turkiye unit's; their wavs are loose under Data\Audio\Sounds
+	ini.load( AsciiString( "Data\\INI\\VoiceReforged.ini" ), INI_LOAD_OVERWRITE, NULL );
+
 	// do the miscellaneous sound files last so that we find the audioeventrts associated with the events.
 	ini.load( AsciiString( "Data\\INI\\MiscAudio.ini" ), INI_LOAD_OVERWRITE, NULL);
 	

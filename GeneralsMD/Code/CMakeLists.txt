@@ -1867,6 +1867,11 @@ add_custom_command(TARGET generals POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory
           ${CMAKE_CURRENT_SOURCE_DIR}/Data/Cursors
           ${CMAKE_CURRENT_SOURCE_DIR}/../Run/Data/Cursors
+  # The Turkiye units' voices, the wavs VoiceReforged.ini names.  The audio cache opens them loose
+  # from Data/Audio/Sounds, where EA's own sit inside the audio archives; audio is in no checksum.
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          ${CMAKE_CURRENT_SOURCE_DIR}/Data/Audio
+          ${CMAKE_CURRENT_SOURCE_DIR}/../Run/Data/Audio
   # The skirmish AI's scripts with the USA Hard opening rewritten by Tools/ScbTool/opening.py.  The
   # file is in the multiplayer checksum (GlobalData.cpp), so it ships with the exe like the INIs.
   COMMAND ${CMAKE_COMMAND} -E copy_directory

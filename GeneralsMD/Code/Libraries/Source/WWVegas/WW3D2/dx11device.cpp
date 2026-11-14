@@ -161,7 +161,14 @@ bool DX11DeviceClass::Create_Device(bool with_swap_chain, HWND window, unsigned 
 	waitable_chain.Flags |= DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
 	const DXGI_SWAP_CHAIN_DESC * chain_choices[] = { &waitable_chain, &flip_chain, &swap_chain };
 	const unsigned chain_choice_count = sizeof(chain_choices)/sizeof(chain_choices[0]);
-	const unsigned chain_start = (with_swap_chain && tearing_supported()) ? 0u : chain_choice_count - 1;
+	// ZH_DX11_SWAP=blt takes the blt chain even where tearing is supported.  It exists because a stuck
+	// driver can hang every flip-model Present while the blt model still presents, as it did on
+	// 2026-11-14, and a run that has to show a picture through that needs a way round it.  Unset, or
+	// anything else, the flip chains are tried first as above.
+	const char * swap_requested = getenv("ZH_DX11_SWAP");
+	const bool blt_requested = swap_requested != NULL && _stricmp(swap_requested, "blt") == 0;
+	const unsigned chain_start = (with_swap_chain && !blt_requested && tearing_supported())
+		? 0u : chain_choice_count - 1;
 
 	// Hardware first, WARP second.  WARP draws the same picture on a machine with no D3D11 driver,
 	// which is what makes the device creatable on a build agent as well as on this one.

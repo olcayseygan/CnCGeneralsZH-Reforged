@@ -42,6 +42,44 @@ static float heading_degrees(const Matrix3D &m)
 	return atan2f(m[1][0], m[0][0]) * 180.0f / 3.14159265358979f;
 }
 
+/* The bones a draw module sets by hand (a turret's turn, a gun's pitch, a barrel's recoil, a road
+	 wheel) glide between ticks with the hull: each one the tick moved is blended from last tick's
+	 control; one the last tick did not set, one that did not move, one that swung past the snap limit
+	 and every bone at a whole tick on are left at the tick's control. */
+TEST(smooth_motion_hand_set_bones_glide_between_ticks)
+{
+	SmoothMotionBone prev[3], cur[4], out[4];
+	prev[0].Bone = 5; prev[0].Transform = at(0, 0, 0, 0.0f);			// turret
+	prev[1].Bone = 9; prev[1].Transform = at(0, 0, 0);					// barrel, at rest
+	prev[2].Bone = 2; prev[2].Transform = at(0, 0, 0, 10.0f);			// a wheel that did not turn
+	cur[0].Bone = 9; cur[0].Transform = at(-1.2f, 0, 0);				// the barrel kicks back 1.2
+	cur[1].Bone = 5; cur[1].Transform = at(0, 0, 0, 40.0f);				// the turret turns 40 degrees
+	cur[2].Bone = 2; cur[2].Transform = at(0, 0, 0, 10.0f);
+	cur[3].Bone = 7; cur[3].Transform = at(0, 0, 0, 25.0f);				// a bone last tick did not set
+
+	const int n = SmoothMotion_BlendBones(prev, 3, cur, 4, 0.25f, out);
+	CHECK_EQ(n, 2);
+	CHECK_EQ(out[0].Bone, 9);
+	CHECK_NEAR(out[0].Transform.Get_Translation().X, -0.3f, EPS);
+	CHECK_EQ(out[1].Bone, 5);
+	CHECK_NEAR(heading_degrees(out[1].Transform), 10.0f, 0.01f);
+
+	// the ends: a whole tick on sets nothing (the tick's own controls stand); a hair past the start is
+	// the last tick's, so the blend runs on from where the picture before the tick left the bone
+	CHECK_EQ(SmoothMotion_BlendBones(prev, 3, cur, 4, 1.0f, out), 0);
+	CHECK_EQ(SmoothMotion_BlendBones(prev, 3, cur, 4, 2.0f, out), 0);
+	SmoothMotion_BlendBones(prev, 3, cur, 4, 0.0001f, out);
+	CHECK_NEAR(heading_degrees(out[1].Transform), 0.004f, 0.01f);
+	CHECK_NEAR(out[0].Transform.Get_Translation().X, 0.0f, 0.001f);
+
+	// a turret that swung past the snap limit in one tick is shown where the tick put it
+	SmoothMotionBone swung = cur[1];
+	swung.Transform = at(0, 0, 0, 150.0f);
+	CHECK_EQ(SmoothMotion_BlendBones(prev, 3, &swung, 1, 0.5f, out), 0);
+	// no last tick at all
+	CHECK_EQ(SmoothMotion_BlendBones(NULL, 0, cur, 4, 0.5f, out), 0);
+}
+
 TEST(smooth_motion_the_same_transform_blends_to_itself)
 {
 	Matrix3D out;

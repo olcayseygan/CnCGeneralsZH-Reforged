@@ -205,6 +205,39 @@ inline SmoothMotionSnap SmoothMotion_Blend(const Matrix3D &prev, const Matrix3D 
 	return snap;
 }
 
+/// A bone the draw module set by hand on a tick (Control_Bone): a turret's turn, a gun's pitch, a
+/// barrel's recoil.  The model's transform glides between ticks; these are kept the same way, so a
+/// turret does not swing a whole tick at once with the hull gliding under it.
+struct SmoothMotionBone
+{
+	int Bone;
+	Matrix3D Transform;
+};
+
+/// The bones of `cur` that differ from the same bone in `prev`, each `alpha` of the way from prev's
+/// control to cur's, into `out` (room for curCount); the count written.  A bone prev did not control,
+/// one that did not move, and one that moved or turned past the snap limits in a tick are left at cur
+/// and not written.  At alpha 1 or more nothing is written.
+inline int SmoothMotion_BlendBones(const SmoothMotionBone *prev, int prevCount, const SmoothMotionBone *cur, int curCount,
+	float alpha, SmoothMotionBone *out)
+{
+	if (alpha >= 1.0f) return 0;
+	int written = 0;
+	for (int i = 0; i < curCount; ++i) {
+		const SmoothMotionBone *from = 0;
+		for (int j = 0; j < prevCount && from == 0; ++j) {
+			if (prev[j].Bone == cur[i].Bone) from = &prev[j];
+		}
+		if (from == 0 || memcmp(&from->Transform, &cur[i].Transform, sizeof(Matrix3D)) == 0) continue;
+		Matrix3D shown;
+		if (SmoothMotion_Blend(from->Transform, cur[i].Transform, alpha, shown) != SMOOTH_BLENDED) continue;
+		out[written].Bone = cur[i].Bone;
+		out[written].Transform = shown;
+		++written;
+	}
+	return written;
+}
+
 /// One render object's last two logic transforms, and whether a blend is on it now.
 struct SmoothMotionTrack
 {

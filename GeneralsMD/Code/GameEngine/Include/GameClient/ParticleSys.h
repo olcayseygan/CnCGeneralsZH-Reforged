@@ -767,6 +767,13 @@ public:
 		* each particle's age, so the overlapping cards of one fire all show the same frame and the fire
 		* plays one film instead of a new random shape every moment.  Not under Classic.  Drawing only. */
 	Bool isFlipbookShared( void ) const { return m_flipbookShared; }
+	/** "SlaveEmitsOnItsOwn = Yes", on a template a master names as its SlaveSystem: the one slave system
+		* the master makes is not fed a particle for each of the master's particles.  It emits by its own
+		* BurstDelay, BurstCount and volume at its master's place, following it (the master's attachment
+		* and transform), and goes when the master goes, so a smoke column can carry one steady fire
+		* rather than one now and then.  Its own slave and PerParticleAttachedSystem work as for any
+		* system.  Not under Classic, where it is fed as EA's slaves are.  Drawing only. */
+	Bool isSlaveEmittingOnItsOwn( void ) const { return m_slaveEmitsOnItsOwn; }
 
 	// This function was made const because of update modules' module data being all const.
 	ParticleSystem *createSlaveSystem( Bool createSlaves = TRUE ) const ;					///< if returns non-NULL, it is a slave system for use
@@ -801,6 +808,7 @@ protected:
 	UnsignedByte							m_flipbookVariants;								///< equal runs of frames, each particle playing one, 1 for the whole atlas (client only)
 	Bool											m_flipbookMirror;									///< about half the particles drawn flipped left to right (client only)
 	Bool											m_flipbookShared;									///< one pick and one clock for the whole system (client only)
+	Bool											m_slaveEmitsOnItsOwn;							///< as a slave, emits for itself at the master's place (client only)
 
 	// This has to be mutable because of the delayed initialization thing in createSlaveSystem
 	mutable const ParticleSystemTemplate *m_slaveTemplate;		///< if non-NULL, use this to create a slave system
@@ -869,6 +877,12 @@ public:
 	void updateWindMotion( void );							///< update wind motion
 
 	void setControlParticle( Particle *p );			///< set control particle
+	/// Whether this system emits for itself: any system with no master, and a slave whose template says
+	/// SlaveEmitsOnItsOwn outside Classic (slaveEmits).  Otherwise its master feeds it.
+	Bool emitsOnItsOwn( void ) const;
+	/// emitsOnItsOwn's rule, from the system's facts.  Pure.
+	static Bool slaveEmits( Bool hasMaster, Bool slaveEmitsOnItsOwn, Bool classicGraphics )
+	{ return !hasMaster || ( slaveEmitsOnItsOwn && !classicGraphics ); }
 	/// FlipbookShared: the variant, start and mirror every particle of this system takes, drawn from the
 	/// client's stream at its first particle's birth with the draws a particle would make, and the
 	/// particle update its flipbook clock started on.  frames and run as the particle has them.

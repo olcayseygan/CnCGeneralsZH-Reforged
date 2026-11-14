@@ -239,11 +239,8 @@ static const char EVALUATE_PROGRAM[] =
 	"        return;\n"
 	"    }\n"
 	// a newborn is updated on its birth frame, so k is one there; the picture lags a fraction of an
-	// update the way the models' smooth motion does, and inside the birth frame's tick it runs from
-	// the birth (k 0) and fades in, as Particle::fadeInFrom has the CPU's newborns do.  With smooth
-	// motion off Smooth is one and k never falls under one.
-	"    float k = max(float(Now - spawn.Birth) + Smooth, 0.0);\n"
-	"    float born = saturate(k);\n"
+	// update the way the models' smooth motion does
+	"    float k = max(float(Now - spawn.Birth) + Smooth, 1.0);\n"
 	"\n"
 	// particleClosedFormEvaluate
 	"    float power, sum, nested;\n"
@@ -301,9 +298,9 @@ static const char EVALUATE_PROGRAM[] =
 	"\n"
 	// stealthFadeParticle, then the vertex colour's clamp (Convert_Color_Clamp)
 	"    if (shader == ADDITIVE)\n"
-	"        colour *= fade * born;\n"
+	"        colour *= fade;\n"
 	"    else\n"
-	"        alpha *= fade * born;\n"
+	"        alpha *= fade;\n"
 	"    colour = saturate(colour);\n"
 	"    alpha = saturate(alpha);\n"
 	"    particle.Position = position;\n"

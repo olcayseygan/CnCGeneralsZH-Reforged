@@ -391,17 +391,17 @@ Particle::Particle( ParticleSystem *system, const ParticleInfo *info )
 
 	m_colorScale = info->m_colorScale;
 
-	// Its first drawn update starts where it was born, unseen, and is held through that update (which
-	// comes in the pass it is born in: every emission is followed by its system's particles), so a
-	// burst of new cards fades in over the tick that brings it rather than appearing on the tick.
-	// One born riding a moving particle starts as far back as its parent's last update moved it, so
-	// the two are drawn together between ticks.
+	// a picture before the first update draws the particle where it was born; one born riding a
+	// moving particle starts as far back as its parent's last update moved it, held through its own
+	// first update, so the two are drawn together between ticks
 	keepDrawFrom();
-	fadeInFrom( &m_drawFrom, system->getShaderType() );
-	m_drawFromHeld = TRUE;
+	m_drawFromHeld = FALSE;
 	const Particle *parent = system->getControlParticle();
 	if (parent)
+	{
 		m_drawFrom.pos = drawFromRidingParent( m_pos, parent->m_drawFrom.pos, parent->m_pos );
+		m_drawFromHeld = TRUE;
+	}
 
 	m_inSystemList = m_inOverallList = FALSE;
 	m_systemPrev = m_systemNext = m_overallPrev = m_overallNext = NULL;
@@ -466,23 +466,6 @@ void Particle::keepDrawFrom( void )
 	m_drawFrom.angle = m_angleZ;
 	m_drawFrom.alpha = m_alpha;
 	m_drawFrom.color = m_color;
-}
-
-// ------------------------------------------------------------------------------------------------
-/*static*/ void Particle::fadeInFrom( ParticleDrawState *state, Int shaderType )
-{
-	switch (shaderType)
-	{
-		case ParticleSystemInfo::ADDITIVE:
-			state->color.red = state->color.green = state->color.blue = 0.0f;
-			break;
-		case ParticleSystemInfo::MULTIPLY:
-			state->color.red = state->color.green = state->color.blue = 1.0f;
-			break;
-		default:
-			state->alpha = 0.0f;
-			break;
-	}
 }
 
 // ------------------------------------------------------------------------------------------------

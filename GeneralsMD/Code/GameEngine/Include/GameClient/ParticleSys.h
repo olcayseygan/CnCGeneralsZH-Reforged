@@ -174,6 +174,16 @@ protected:
 
 struct ParticleUpdateContext;
 
+/// What a particle is drawn with: where, how big, how turned, how see-through and what colour.
+struct ParticleDrawState
+{
+	Coord3D		pos;
+	Real			size;
+	Real			angle;
+	Real			alpha;
+	RGBColor	color;
+};
+
 /**
  * An individual particle created by a ParticleSystem.
  * NOTE: Particles cannot exist without a parent particle system.
@@ -248,6 +258,17 @@ public:
 	/// How many frames one run of the atlas holds: frames over variants, the whole atlas for 0 or 1 or too many.
 	static UnsignedInt flipbookRunLength( UnsignedInt frames, UnsignedInt variants );
 
+	/** A picture between two logic ticks draws the particle part way through its last update: from
+		* is the state that update started from, to the one it ended on, and tickFraction how far into
+		* the tick the picture is (TheSmoothMotionAlpha).  1 or more is to itself, bit for bit, so smooth
+		* motion off draws what it always drew; 0 or less is from.  The angle turns the short way round.
+		* Everything the update did (velocity, drift, wind, gravity, damping, the ground bounce, the
+		* size rate and its damping, the alpha and colour keys) is in the two ends, so nothing is
+		* extrapolated.  Pure. */
+	static void tickBlend( const ParticleDrawState &from, const ParticleDrawState &to, Real tickFraction, ParticleDrawState *out );
+	/// tickBlend from the state the last update started from (the birth state before the first one).
+	void getDrawState( Real tickFraction, ParticleDrawState *out ) const;
+
 	/// IsParticleUpTowardsEmitter's turn for a particle this far east and north of its emitter;
 	/// eaOnTheAxis (the Classic look) keeps EA's quarter turn off on the east-west axis.
 	static Real angleTowardsEmitter( Real fromEmitterX, Real fromEmitterY, Bool eaOnTheAxis );
@@ -292,6 +313,9 @@ protected:
 	UnsignedByte			m_flipbookStart;											///< the flipbook cell it starts on inside its run; drawing only, never saved
 	UnsignedByte			m_flipbookVariant;										///< the run of frames it plays (FlipbookVariants); drawing only, never saved
 	Bool							m_flipbookMirrored;										///< drawn flipped left to right (FlipbookMirror); drawing only, never saved
+	ParticleDrawState	m_drawFrom;														///< the state the last update started from (tickBlend); drawing only, never saved
+
+	void keepDrawFrom( void );																///< m_drawFrom = the particle as it stands
 public:
 	Bool							m_inSystemList;
 	Bool							m_inOverallList;

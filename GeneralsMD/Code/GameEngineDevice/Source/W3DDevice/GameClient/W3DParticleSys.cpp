@@ -806,8 +806,12 @@ static void fillBillboards( Int index, void *context )
 
 	for (Particle *p = fill.system->getFirstParticle(); p; p = p->m_systemNext)
 	{
-		const Coord3D *pos = p->getPosition();
-		const Real psize = p->getSize();
+		// the particle part way through its last update, as far as this picture is into the tick
+		// (the whole way at a tick fraction of 1: smooth motion off, or Classic)
+		ParticleDrawState shown;
+		p->getDrawState( job->tickFraction, &shown );
+		const Coord3D *pos = &shown.pos;
+		const Real psize = shown.size;
 
 		//Cull particle to edges of screen and terrain.
 		if (WWMath::Fabs(pos->x - job->centerX) > (job->extentX + psize))
@@ -819,12 +823,12 @@ static void fillBillboards( Int index, void *context )
 		if (WWMath::Fabs(pos->z - job->centerZ) > (job->extentZ + psize))
 			continue;
 
-		const RGBColor *color = p->getColor();
+		const RGBColor *color = &shown.color;
 		Real red = color->red, green = color->green, blue = color->blue;
 		Vector3 glow( 0.0f, 0.0f, 0.0f );
 		if (lightCount > 0)
 		{
-			lightSmoke( pos, p->getAlpha(), lights, lightCount, red, green, blue );
+			lightSmoke( pos, shown.alpha, lights, lightCount, red, green, blue );
 			if (job->glowAfterShade)
 			{
 				glow.Set( red - color->red, green - color->green, blue - color->blue );
@@ -833,11 +837,11 @@ static void fillBillboards( Int index, void *context )
 				blue = color->blue;
 			}
 		}
-		Real alpha = p->getAlpha();
+		Real alpha = shown.alpha;
 		if (fill.fade < 1.0f)
 			stealthFadeParticle( shaderType, fill.fade, red, green, blue, alpha );
 		// The orientation table's index wraps, as it did on Windows (Platform/MsvcFloatCasts.h).
-		const uint8 orientation = floatToByteAsMsvc( p->getAngle() * 255.0f / (2.0f * PI) );
+		const uint8 orientation = floatToByteAsMsvc( shown.angle * 255.0f / (2.0f * PI) );
 		UnsignedInt frame = 0, nextFrame = 0;
 		Real fraction = 0.0f;
 		if (flipbookLog2)
@@ -2661,7 +2665,8 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		fillJob.lightCount = gatherSmokeLights( fillJob.lights, bbox );
 	}
 	fillJob.glowAfterShade = Direct3D11_Present_Is_Enabled();
-	fillJob.tickFraction = TheSmoothMotionActive ? TheSmoothMotionAlpha : 1.0f;
+	// Classic draws every particle as its tick left it
+	fillJob.tickFraction = TheSmoothMotionActive && !TheGlobalData->m_classicGraphics ? TheSmoothMotionAlpha : 1.0f;
 #if defined(__linux__)
 	fillJob.glowAfterShade = fillJob.glowAfterShade
 		|| SunShadow::OwnsSceneShadows(DX8Wrapper::_Get_D3D_Device());

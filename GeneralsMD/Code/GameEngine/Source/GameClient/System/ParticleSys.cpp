@@ -391,6 +391,9 @@ Particle::Particle( ParticleSystem *system, const ParticleInfo *info )
 
 	m_colorScale = info->m_colorScale;
 
+	// a picture before the first update draws the particle where it was born
+	keepDrawFrom();
+
 	m_inSystemList = m_inOverallList = FALSE;
 	m_systemPrev = m_systemNext = m_overallPrev = m_overallNext = NULL;
 
@@ -444,6 +447,59 @@ UnsignedInt Particle::getFlipbookBlend( Real tickFraction, UnsignedInt *next, Re
 	return flipbookBlendAt( 1u << ( 2 * flipbook->getFlipbookGridLog2() ), flipbook->getFlipbookVariants(), m_flipbookVariant,
 		m_flipbookStart, flipbookDrawAge( m_lifetime - m_lifetimeLeft, tickFraction ), m_lifetime, flipbook->getFlipbookRate(),
 		GAME_SECONDS_PER_LOGICFRAME_REAL, next, fraction );
+}
+
+// ------------------------------------------------------------------------------------------------
+void Particle::keepDrawFrom( void )
+{
+	m_drawFrom.pos = m_pos;
+	m_drawFrom.size = m_size;
+	m_drawFrom.angle = m_angleZ;
+	m_drawFrom.alpha = m_alpha;
+	m_drawFrom.color = m_color;
+}
+
+// ------------------------------------------------------------------------------------------------
+void Particle::getDrawState( Real tickFraction, ParticleDrawState *out ) const
+{
+	ParticleDrawState now;
+	now.pos = m_pos;
+	now.size = m_size;
+	now.angle = m_angleZ;
+	now.alpha = m_alpha;
+	now.color = m_color;
+	tickBlend( m_drawFrom, now, tickFraction, out );
+}
+
+// ------------------------------------------------------------------------------------------------
+/*static*/ void Particle::tickBlend( const ParticleDrawState &from, const ParticleDrawState &to, Real tickFraction,
+	ParticleDrawState *out )
+{
+	if (tickFraction >= 1.0f)
+	{
+		*out = to;
+		return;
+	}
+	if (tickFraction <= 0.0f)
+	{
+		*out = from;
+		return;
+	}
+	const Real t = tickFraction;
+	out->pos.x = from.pos.x + ( to.pos.x - from.pos.x ) * t;
+	out->pos.y = from.pos.y + ( to.pos.y - from.pos.y ) * t;
+	out->pos.z = from.pos.z + ( to.pos.z - from.pos.z ) * t;
+	out->size = from.size + ( to.size - from.size ) * t;
+	out->alpha = from.alpha + ( to.alpha - from.alpha ) * t;
+	out->color.red = from.color.red + ( to.color.red - from.color.red ) * t;
+	out->color.green = from.color.green + ( to.color.green - from.color.green ) * t;
+	out->color.blue = from.color.blue + ( to.color.blue - from.color.blue ) * t;
+	Real turn = to.angle - from.angle;
+	while (turn > PI)
+		turn -= 2.0f * PI;
+	while (turn < -PI)
+		turn += 2.0f * PI;
+	out->angle = from.angle + turn * t;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -741,6 +797,9 @@ Bool particleGroundBounce( Coord3D *pos, Coord3D *vel, Real groundZ,
 // ------------------------------------------------------------------------------------------------
 Bool Particle::update( const ParticleUpdateContext &context )
 {
+	keepDrawFrom();
+
+
 	// gravity goes into the acceleration, which is zero here, so the sum is exactly the gravity
 	if (context.gravity != 0.0f)
 		m_accel.z += context.gravity;
@@ -1142,6 +1201,8 @@ void Particle::loadPostProcess( void )
 
 	// call base class post process
 	ParticleInfo::loadPostProcess();
+
+	keepDrawFrom();
 
 	// tidy up the m_systemUnderControl pointer
 	if( m_systemUnderControlID != INVALID_PARTICLE_SYSTEM_ID )

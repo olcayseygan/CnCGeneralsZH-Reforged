@@ -1561,6 +1561,71 @@ TEST(flipbook_blend_moves_between_logic_ticks)
 	CHECK_NEAR( f, 0.08f, 0.0002f );
 }
 
+/* A picture between two ticks draws a particle part way through its last update.  At a fraction of 1
+	 (smooth motion off, Classic) it is the particle bit for bit; the end of one tick is the start of
+	 the next, so nothing jumps; a newborn, whose last update started from its birth, is never drawn
+	 behind where it was born; the angle turns the short way across a whole turn. */
+TEST(particle_tick_blend_draws_part_way_through_the_update)
+{
+	ParticleDrawState s[ 3 ];
+	for (Int i = 0; i < 3; ++i)
+	{
+		const Real k = (Real)i;
+		s[ i ].pos.x = 10.0f + 3.0f * k; s[ i ].pos.y = 0.0f - 2.0f * k * k;	/* not -0, which memcmp tells from 0 */ s[ i ].pos.z = 5.0f + 0.7f * k;
+		s[ i ].size = 4.0f + 1.5f * k;
+		s[ i ].angle = 0.3f * k;
+		s[ i ].alpha = 1.0f - 0.25f * k;
+		s[ i ].color.red = 1.0f - 0.1f * k; s[ i ].color.green = 0.8f - 0.2f * k; s[ i ].color.blue = 0.5f;
+	}
+	ParticleDrawState out, in;
+
+	// the ends: 1 and past it is the particle as it stands, 0 and below where the update began
+	Particle::tickBlend( s[ 0 ], s[ 1 ], 1.0f, &out );
+	CHECK_MEM( &out, &s[ 1 ], sizeof( out ) );
+	Particle::tickBlend( s[ 0 ], s[ 1 ], 3.0f, &out );
+	CHECK_MEM( &out, &s[ 1 ], sizeof( out ) );
+	Particle::tickBlend( s[ 0 ], s[ 1 ], 0.0f, &out );
+	CHECK_MEM( &out, &s[ 0 ], sizeof( out ) );
+	Particle::tickBlend( s[ 0 ], s[ 1 ], -0.5f, &out );
+	CHECK_MEM( &out, &s[ 0 ], sizeof( out ) );
+
+	// a quarter of the way
+	Particle::tickBlend( s[ 1 ], s[ 2 ], 0.25f, &out );
+	CHECK_NEAR( out.pos.x, 13.75f, 0.0001f ); CHECK_NEAR( out.pos.y, -3.5f, 0.0001f ); CHECK_NEAR( out.pos.z, 5.875f, 0.0001f );
+	CHECK_NEAR( out.size, 5.875f, 0.0001f ); CHECK_NEAR( out.angle, 0.375f, 0.0001f );
+	CHECK_NEAR( out.alpha, 0.6875f, 0.0001f );
+	CHECK_NEAR( out.color.red, 0.875f, 0.0001f ); CHECK_NEAR( out.color.green, 0.55f, 0.0001f ); CHECK_NEAR( out.color.blue, 0.5f, 0.0001f );
+
+	// across a tick: the last picture of one and the first of the next agree, and every picture of
+	// a tick lies between its two ends
+	Particle::tickBlend( s[ 0 ], s[ 1 ], 1.0f, &out );
+	Particle::tickBlend( s[ 1 ], s[ 2 ], 0.0f, &in );
+	CHECK_MEM( &out, &in, sizeof( out ) );
+	for (Int i = 0; i <= 10; ++i)
+	{
+		Particle::tickBlend( s[ 1 ], s[ 2 ], (Real)i / 10.0f, &out );
+		CHECK( out.pos.x >= s[ 1 ].pos.x && out.pos.x <= s[ 2 ].pos.x );
+		CHECK( out.size >= s[ 1 ].size && out.size <= s[ 2 ].size );
+		CHECK( out.alpha <= s[ 1 ].alpha && out.alpha >= s[ 2 ].alpha );
+	}
+
+	// a newborn: before its first update both ends are its birth; after it, the pictures run from the
+	// birth forward and never back past it
+	Particle::tickBlend( s[ 0 ], s[ 0 ], 0.4f, &out );
+	CHECK_MEM( &out, &s[ 0 ], sizeof( out ) );
+	Particle::tickBlend( s[ 0 ], s[ 1 ], 0.01f, &out );
+	CHECK( out.pos.x >= s[ 0 ].pos.x && out.size >= s[ 0 ].size );
+
+	// the angle the short way: from just under a whole turn to just over none is a small turn on
+	ParticleDrawState a = s[ 0 ], b = s[ 0 ];
+	a.angle = 2.0f * PI - 0.1f;
+	b.angle = 0.1f;
+	Particle::tickBlend( a, b, 0.5f, &out );
+	CHECK_NEAR( out.angle, 2.0f * PI, 0.0001f );
+	Particle::tickBlend( b, a, 0.5f, &out );
+	CHECK_NEAR( out.angle, 0.0f, 0.0001f );
+}
+
 /* The alpha blended crossfade's two alphas: the frame under keeps the pair's coverage near the
 	 particle's own (within a tenth at full alpha half way, where two plain shares lose a quarter), it
 	 falls steadily to nothing as the next frame comes up, and the ends are one card each. */

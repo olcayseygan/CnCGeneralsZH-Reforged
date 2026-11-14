@@ -230,21 +230,9 @@ public:
 		* its own run; a run played once holds its last frame with fraction 0, and so does a still card.
 		* Pure. */
 	static UnsignedInt flipbookBlendAt( UnsignedInt frames, UnsignedInt variants, UnsignedInt variant, UnsignedInt start,
-		Real age, UnsignedInt lifetime, Real rate, Real secondsPerLogicFrame, UnsignedInt *next, Real *fraction );
-	/** A particle's age as a picture between two logic frames shows it: one update behind, plus the
-		* share of the next one the clock has run (TheSmoothMotionAlpha, 1 with smooth motion off), as the
-		* models and the GPU particles lag.  An integer age at a fraction of 1, never below 0.  Pure. */
-	static Real flipbookDrawAge( UnsignedInt age, Real tickFraction );
-	/** The alphas an alpha blended crossfade draws its two cards at: the frame under, drawn first, and
-		* the next over it.  Two cards at a(1-f) and af cover a(1 - af(1-f)) together, a quarter thin
-		* at full alpha half way and pulsing at the flipbook's rate, so the one under is raised to
-		* a(1-f) / (1 - k af).  At k = 1 the pair covers a exactly; k = 0.75 keeps the one under fading
-		* to nothing as f reaches 1, so the step to the next frame does not pop.  The ends are (a, 0)
-		* and (0, a).  Alpha is clamped to 0..1 first.  Pure. */
-	static void flipbookCrossfadeAlphas( Real alpha, Real fraction, Real *under, Real *over );
-	/// flipbookBlendAt for this particle at its age between ticks (flipbookDrawAge), so the crossfade
-	/// moves on every picture and not only when the logic ticks.
-	UnsignedInt getFlipbookBlend( Real tickFraction, UnsignedInt *next, Real *fraction ) const;
+		UnsignedInt age, UnsignedInt lifetime, Real rate, Real secondsPerLogicFrame, UnsignedInt *next, Real *fraction );
+	/// getFlipbookFrame with flipbookBlendAt's next frame and fraction.
+	UnsignedInt getFlipbookBlend( UnsignedInt *next, Real *fraction ) const;
 	/// How many frames one run of the atlas holds: frames over variants, the whole atlas for 0 or 1 or too many.
 	static UnsignedInt flipbookRunLength( UnsignedInt frames, UnsignedInt variants );
 

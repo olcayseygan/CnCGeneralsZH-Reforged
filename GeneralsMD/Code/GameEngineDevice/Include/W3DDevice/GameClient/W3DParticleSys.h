@@ -119,7 +119,6 @@ public:
 		Bool																		alongAxis;				///< IsAlongEmitterAxis outside Classic: cards stand along axis (Write_Axis_Card)
 		Vector3																	axis;							///< the system's +X, taken on the render thread
 		Bool																		blend;						///< a flipbook drawn as a crossfade of two frames, two quads a particle
-		Int																			reserved;					///< quads reserved: capacity, twice it for a crossfading flipbook, at most MAX_POINTS_PER_GROUP
 		Int																			quads;						///< written by the job: quads written, drawn particles plus their crossfades
 	};
 

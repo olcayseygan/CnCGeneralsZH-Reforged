@@ -1365,8 +1365,8 @@ protected:
 		Bool center, Int pathDiameter );	///< Work backwards from goal cell to construct final path
 	Path *buildHierachicalPath( const Coord3D *fromPos, PathfindCell *goalCell);	///< Work backwards from goal cell to construct final path
 
-	void  prependCells( Path *path, const Coord3D *fromPos, 
-																	PathfindCell *goalCell, Bool center ); ///< Add pathfind cells to a path.
+	Bool  prependCells( Path *path, const Coord3D *fromPos,
+																	PathfindCell *goalCell, Bool center ); ///< Add pathfind cells to a path; FALSE when the cells' parent chain is broken or gives no node.
 
 	void debugShowSearch( Bool pathFound );				///< Show all cells touched in the last search
 	static LocomotorSurfaceTypeMask validLocomotorSurfacesForCellType(PathfindCell::CellType t);

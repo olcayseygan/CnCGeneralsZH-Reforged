@@ -11349,13 +11349,19 @@ Path *Pathfinder::buildActualPath( const Object *obj, LocomotorSurfaceTypeMask a
 		goalCell = goalCell->getParentCell();
 	}
 
-	prependCells(path, fromPos, goalCell, center);
+	if (!prependCells(path, fromPos, goalCell, center)) {
+		// no path rather than a broken one: the unit's move fails and asks again
+		DEBUG_LOG(("Pathfinder::buildActualPath - frame %d unit '%s' (%d): the search's cells lost their chain, no path\n",
+			TheGameLogic->getFrame(), obj ? obj->getTemplate()->getName().str() : "?", obj ? (Int)obj->getID() : 0));
+		path->deleteInstance();
+		return NULL;
+	}
 
 	// cleanup the path by checking line of sight
 	path->optimize(obj, acceptableSurfaces, blocked);
 
 #if defined _DEBUG || defined _INTERNAL
-	if (TheGlobalData->m_debugAI==AI_DEBUG_PATHS) 
+	if (TheGlobalData->m_debugAI==AI_DEBUG_PATHS)
 	{
 		extern void addIcon(const Coord3D *pos, Real width, Int numFramesDuration, RGBColor color);
  		RGBColor color;
@@ -11390,7 +11396,7 @@ Path *Pathfinder::buildActualPath( const Object *obj, LocomotorSurfaceTypeMask a
 /**
  * Work backwards from goal cell to construct final path.
  */
-void Pathfinder::prependCells( Path *path, const Coord3D *fromPos, 
+Bool Pathfinder::prependCells( Path *path, const Coord3D *fromPos,
 																	PathfindCell *goalCell, Bool center )
 {
 	// traverse path cells in REVERSE order, creating path in desired order
@@ -11436,18 +11442,27 @@ void Pathfinder::prependCells( Path *path, const Coord3D *fromPos,
 		}
 		prevCell = cell;
 	}
-	m_zoneManager.setPassable(cell->getXIndex(), cell->getYIndex(), true);
-	if (goalCellNull) {
-		// Very short path.
-		adjustCoordToCell(cell->getXIndex(), cell->getYIndex(), center, pos, cell->getLayer());
-		path->prependNode( &pos, cell->getLayer() );
+	// The walk stops on a cell with no parent, and getParentCell answers NULL for a cell whose info
+	// is gone as well: v4.0.0 reports then faulted in getXIndex just below. Every cell the search
+	// touched should still hold its info here, so which search released one is still open (TODO).
+	const Bool complete = cell->hasInfo();
+	if (complete) {
+		m_zoneManager.setPassable(cell->getXIndex(), cell->getYIndex(), true);
+		if (goalCellNull) {
+			// Very short path.
+			adjustCoordToCell(cell->getXIndex(), cell->getYIndex(), center, pos, cell->getLayer());
+			path->prependNode( &pos, cell->getLayer() );
+		}
+	}
+	if (path->getFirstNode() == NULL) {
+		return FALSE;
 	}
 	// put actual start position as first node on the path, so it begins right at the unit's feet
 	if (fromPos->x != path->getFirstNode()->getPosition()->x || fromPos->y != path->getFirstNode()->getPosition()->y) {
 		path->prependNode( fromPos, cell->getLayer() );
 	}
-
-}			 
+	return complete;
+}
 
 void Pathfinder::setDebugPath(Path *newDebugpath) 
 {

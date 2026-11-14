@@ -360,6 +360,12 @@ DX11BackendClass::DX11BackendClass()
 	memset(HeadlightGain, 0, sizeof(HeadlightGain));
 	memset(BlastLights, 0, sizeof(BlastLights));
 	BlastLightCount = 0;
+	TerrainRelight = false;
+	memset(TerrainLight, 0, sizeof(TerrainLight));
+	TerrainHeights = NULL;
+	TerrainHeightsView = NULL;
+	TerrainHeightsWidth = 0;
+	TerrainHeightsHeight = 0;
 	SoftParticles = false;
 	SoftParticlesAllowed = true;
 	SceneDepthCopy = NULL;
@@ -618,6 +624,7 @@ void DX11BackendClass::Shutdown()
 	ShadowMapSize = 0;
 	ShadowMapBound = false;
 	Release_Smoke_Map();
+	Release_Terrain_Heights();
 	Release_Shadow_Casters();
 	Release_Scene_Depth();
 	Release_Depth_Resolve();
@@ -1872,6 +1879,92 @@ bool DX11BackendClass::Smoke_Glow() const
 		&& (VertexFormat & D3DFVF_NORMAL) != 0 && (VertexFormat & D3DFVF_XYZRHW) == 0;
 }
 
+void DX11BackendClass::Set_Terrain_Relight(bool on)
+{
+	if (TerrainRelight != on) {
+		TerrainRelight = on;
+		PipelineChanged = true;
+		ConstantsChanged = true;
+	}
+}
+
+void DX11BackendClass::Set_Terrain_Light(const float * block)
+{
+	// Upload_Pixel_Constants copies the numbers over these four fields in one piece.
+	static_assert(offsetof(PixelConstantBlock, ShadowFromClip) - offsetof(PixelConstantBlock, NormalLightDirection)
+		== sizeof(float) * TERRAIN_LIGHT_FLOATS, "the terrain light no longer covers NormalLightDirection to TerrainSunDirection");
+	if (block != NULL && memcmp(TerrainLight, block, sizeof(TerrainLight)) != 0) {
+		memcpy(TerrainLight, block, sizeof(TerrainLight));
+		ConstantsChanged = true;
+	}
+}
+
+/** The whole map's heights as one byte a texel, read with Load.  Made again when the map's size
+		changes, written in place otherwise: a foundation flattening its footprint sends the whole map,
+		about a megabyte on the largest. */
+bool DX11BackendClass::Set_Terrain_Heights(const unsigned char * heights, unsigned width, unsigned height)
+{
+	if (Device == NULL || heights == NULL || width == 0 || height == 0) {
+		return false;
+	}
+	if (TerrainHeights != NULL && width == TerrainHeightsWidth && height == TerrainHeightsHeight) {
+		Device->Get_Context()->UpdateSubresource(TerrainHeights, 0, NULL, heights, width, 0);
+		return true;
+	}
+	Release_Terrain_Heights();
+	D3D11_TEXTURE2D_DESC description;
+	memset(&description, 0, sizeof(description));
+	description.Width = width;
+	description.Height = height;
+	description.MipLevels = 1;
+	description.ArraySize = 1;
+	description.Format = DXGI_FORMAT_R8_UNORM;
+	description.SampleDesc.Count = 1;
+	description.Usage = D3D11_USAGE_DEFAULT;
+	description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	D3D11_SUBRESOURCE_DATA initial;
+	memset(&initial, 0, sizeof(initial));
+	initial.pSysMem = heights;
+	initial.SysMemPitch = width;
+	if (FAILED(Device->Get_Device()->CreateTexture2D(&description, &initial, &TerrainHeights))) {
+		TerrainHeights = NULL;
+		return false;
+	}
+	if (FAILED(Device->Get_Device()->CreateShaderResourceView(TerrainHeights, NULL, &TerrainHeightsView))) {
+		TerrainHeightsView = NULL;
+		Release_Terrain_Heights();
+		return false;
+	}
+	TerrainHeightsWidth = width;
+	TerrainHeightsHeight = height;
+	PipelineChanged = true;
+	return true;
+}
+
+void DX11BackendClass::Release_Terrain_Heights()
+{
+	if (TerrainHeightsView != NULL) {
+		TerrainHeightsView->Release();
+		TerrainHeightsView = NULL;
+	}
+	if (TerrainHeights != NULL) {
+		TerrainHeights->Release();
+		TerrainHeights = NULL;
+	}
+	TerrainHeightsWidth = 0;
+	TerrainHeightsHeight = 0;
+	PipelineChanged = true;
+}
+
+/** Whether this draw adds the ground's sun.  A world draw only: not into the sun's map, where only
+		depth goes, not pre-transformed and not in camera space, which WorldFromClip would not take back
+		to where the heights are. */
+bool DX11BackendClass::Terrain_Relight() const
+{
+	return TerrainRelight && TerrainHeightsView != NULL && !ShadowMapBound
+		&& (VertexFormat & D3DFVF_XYZRHW) == 0 && !Camera_Space_Draw();
+}
+
 void DX11BackendClass::Set_Soft_Particles(bool soft)
 {
 	if (SoftParticles != soft) {
@@ -3105,6 +3198,7 @@ bool DX11BackendClass::Build_Combiner_Description(CombinerDescription & descript
 	description.PixelPipeline.AlphaFunction = RenderStates.Get_Render_State(D3DRS_ALPHAFUNC);
 	description.PixelPipeline.FogEnabled = RenderStates.Get_Render_State(D3DRS_FOGENABLE) != FALSE;
 	description.PixelPipeline.AlphaToCoverage = Alpha_To_Coverage();
+	description.PixelPipeline.TerrainRelight = Terrain_Relight();
 	description.SpecularAdd = RenderStates.Get_Render_State(D3DRS_SPECULARENABLE) != FALSE;
 
 	description.StageCount = 0;
@@ -3701,7 +3795,8 @@ void DX11BackendClass::Upload_Pixel_Constants()
 	// does a program that reads the scene's depth (the foam water).
 	const unsigned effect = Draw_Effect();
 	const bool reads_depth = EngineShader_Reads_Scene_Depth(PixelProgram);
-	if (ShadowReceiving || effect != DRAW_EFFECT_NONE || reads_depth) {
+	const bool relight = Terrain_Relight();
+	if (ShadowReceiving || effect != DRAW_EFFECT_NONE || reads_depth || relight) {
 		if (!ShadowFromClipValid
 			|| memcmp(ShadowFromClipView, world_to_camera, sizeof(View)) != 0
 			|| memcmp(ShadowFromClipProjection, Projection, sizeof(Projection)) != 0) {
@@ -3724,6 +3819,15 @@ void DX11BackendClass::Upload_Pixel_Constants()
 			? 1.0f / static_cast<float>(ViewportHeight) : 0.0f;
 		memcpy(pixel_block.WorldFromClip, WorldFromClip, sizeof(pixel_block.WorldFromClip));
 		memcpy(pixel_block.DrawEffectParameters, DrawEffectNumbers, sizeof(DrawEffectNumbers));
+	}
+	// The ground's sun (TERRAIN_RELIGHT_SAMPLING) in the normal mapped fields nothing else reads.
+	if (relight) {
+		pixel_block.ShadowViewport[0] = (ViewportWidth > 0)
+			? 1.0f / static_cast<float>(ViewportWidth) : 0.0f;
+		pixel_block.ShadowViewport[1] = (ViewportHeight > 0)
+			? 1.0f / static_cast<float>(ViewportHeight) : 0.0f;
+		memcpy(pixel_block.WorldFromClip, WorldFromClip, sizeof(pixel_block.WorldFromClip));
+		memcpy(&pixel_block.NormalLightDirection[0][0], TerrainLight, sizeof(TerrainLight));
 	}
 
 	if (ShadowReceiving) {
@@ -4108,6 +4212,15 @@ void DX11BackendClass::Bind_State_Objects()
 		if (!known || colour != Bound.SceneColour) {
 			context->PSSetShaderResources(DX11_BACKEND_TEXTURE_STAGES + 4, 1, &colour);
 			Bound.SceneColour = colour;
+		}
+	}
+
+	// The map's heights at t4 for the ground's sun, read with Load.
+	if (Terrain_Relight()) {
+		ID3D11ShaderResourceView * const heights = TerrainHeightsView;
+		if (!known || heights != Bound.TerrainHeights) {
+			context->PSSetShaderResources(DX11_BACKEND_TEXTURE_STAGES, 1, &heights);
+			Bound.TerrainHeights = heights;
 		}
 	}
 }

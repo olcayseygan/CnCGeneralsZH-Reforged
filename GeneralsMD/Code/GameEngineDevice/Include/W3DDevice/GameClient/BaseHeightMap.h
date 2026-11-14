@@ -190,8 +190,10 @@ public:
 	void applyScorchTextureLOD(void);	///<re-apply that level to the scorch texture (it is rebuilt on a device reset)
 	void updateMacroTexture(AsciiString textureName);
 	void doTextures(Bool flag) {m_disableTextures = !flag;};
-	/// Update the diffuse value from static light info for one vertex.
-	void doTheLight(VERTEX_FORMAT *vb, Vector3*light, Vector3*normal, RefRenderObjListIterator *pLightsIterator, UnsignedByte alpha);
+	/// Update the diffuse value from static light info for one vertex.  With sunPerPixel the global
+	/// lights and the fade under water are left out: the ground's program adds them per pixel
+	/// (HeightMapRenderObjClass::prepareSunPerPixel).
+	void doTheLight(VERTEX_FORMAT *vb, Vector3*light, Vector3*normal, RefRenderObjListIterator *pLightsIterator, UnsignedByte alpha, Bool sunPerPixel = FALSE);
 	void addScorch(Vector3 location, Real radius, Scorches type);
 	/// The Battle Marks option: a burn that fades, on the ring's fixed cap.  Nothing without the option.
 	void addGroundMark(const Vector3 &location, Real radius, Int type);
@@ -252,7 +254,10 @@ public:
 	void setTimeOfDay( TimeOfDay tod );
 	void loadRoadsAndBridges(W3DTerrainLogic *pTerrainLogic, Bool saveGame); ///< Load the roads from the map objects.
 	void worldBuilderUpdateBridgeTowers( W3DAssetManager *assetManager, SimpleSceneClass *scene );							///< for the editor updating of bridge tower visuals
-	Int  getStaticDiffuse(Int x, Int y); ///< Gets the diffuse terrain lighting value for a point on the mesh.
+	Int  getStaticDiffuse(Int x, Int y, Bool sunPerPixel = FALSE); ///< Gets the diffuse terrain lighting value for a point on the mesh; sunPerPixel as doTheLight.
+	/// Whether the ground's tiles hold the light without the sun (HeightMapRenderObjClass): what sits
+	/// on the ground and is drawn under Direct3D11_Set_Terrain_Relight asks getStaticDiffuse the same.
+	virtual Bool sunPerPixelBaked(void) const { return FALSE; }
 
 	virtual Int	getNumExtraBlendTiles(Bool visible) { return 0;}
 	Int getNumShoreLineTiles(Bool visible)	{ return visible?m_numVisibleShoreLineTiles:m_numShoreLineTiles;}
@@ -379,8 +384,10 @@ protected:
 	struct StaticDiffuseCell
 	{
 		Int diffuse;
+		Int sunlessDiffuse;				///< the same without the global lights (doTheLight's sunPerPixel)
 		UnsignedShort generation;	///< 0 is never valid
-		UnsignedByte heights[5];	///< centre, left, right, below, above
+		UnsignedShort sunlessGeneration;	///< sunlessDiffuse's, the same way
+		UnsignedByte heights[5];	///< centre, left, right, below, above; the key of both answers
 	};
 	std::vector<StaticDiffuseCell> m_staticDiffuseCells;
 	std::vector<UnsignedInt> m_staticDiffuseInputs;

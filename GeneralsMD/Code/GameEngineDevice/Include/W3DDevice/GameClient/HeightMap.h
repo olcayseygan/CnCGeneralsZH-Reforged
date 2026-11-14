@@ -153,6 +153,21 @@ protected:
 	DynamicLightPass m_lastRelight;	///< compared with memcmp, so only ever written by memset and memcpy
 	Bool m_lastRelightValid;	///< false once anything has rewritten the vertex buffers since that relight
 
+	/** The map's sun per pixel on Direct3D 11 (TERRAIN_RELIGHT_SAMPLING): the tiles and the 3-way tiles
+		bake the light without the global lights, and their programs add those from a smooth normal off
+		the heights.  Decided at each whole rebuild (sunPerPixelWanted), so the tiles and the draws never
+		disagree for more than the frame that notices; off under -d3d9, -headless and Classic, which keep
+		EA's per-vertex light. */
+	Bool m_sunPerPixel;
+	WorldHeightMap *m_sunHeightsMap;	///< map, and its content version, the heights texture last took
+	Int m_sunHeightsVersion;
+	static Bool sunPerPixelWanted(void);
+	void setSunPerPixel(Bool on);	///< the tiles' light from the next rebuild on; the 3-way tiles and roads follow
+	Bool prepareSunPerPixel(void);	///< heights and light up for this frame; whether the draws add the sun
+public:
+	virtual Bool sunPerPixelBaked(void) const { return m_sunPerPixel; }
+protected:
+
 	UnsignedInt doTheDynamicLight(VERTEX_FORMAT *vb, VERTEX_FORMAT *vbMirror, Vector3*light, Vector3*normal, const DynamicLightInputs lights[], const Int lightsHere[], Int numHere);
 	//
 	// Gets the index that corresponds to the data.  For example, if the columns are shifted by 3,

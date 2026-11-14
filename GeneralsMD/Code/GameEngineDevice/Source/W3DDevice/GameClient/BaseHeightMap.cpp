@@ -727,7 +727,7 @@ static lights into account as well.  It is possible to just use the normal in th
 vertex and let D3D do the lighting, but it is slower to render, and can only 
 handle 4 lights at this point. */
 //=============================================================================
-void BaseHeightMapRenderObjClass::doTheLight(VERTEX_FORMAT *vb, Vector3*light, Vector3*normal, RefRenderObjListIterator *pLightsIterator, UnsignedByte alpha)
+void BaseHeightMapRenderObjClass::doTheLight(VERTEX_FORMAT *vb, Vector3*light, Vector3*normal, RefRenderObjListIterator *pLightsIterator, UnsignedByte alpha, Bool sunPerPixel)
 {
 #ifdef USE_NORMALS
 	vb->nx = normal->X;
@@ -798,9 +798,13 @@ void BaseHeightMapRenderObjClass::doTheLight(VERTEX_FORMAT *vb, Vector3*light, V
 
 		}
 	} 
-	// Add in global diffuse value.
+	// Add in global diffuse value.  Not under the sun per pixel, whose program adds it from a smooth
+	// normal (TERRAIN_RELIGHT_SAMPLING) and then clamps and fades the sum the way the lines below do.
+	// The fade then comes after everything the tiles hold, so a dynamic light the CPU relight adds
+	// to them (doTheDynamicLight, when the lights are not per pixel) is faded under water too, where
+	// the vertex path added it to a faded colour.  Accepted: it is light under water either way.
 	const RGBColor *terrainDiffuse;
-	for (Int lightIndex=0; lightIndex < TheGlobalData->m_numGlobalLights; lightIndex++)
+	for (Int lightIndex=0; !sunPerPixel && lightIndex < TheGlobalData->m_numGlobalLights; lightIndex++)
 	{
 		shade = Vector3::Dot_Product(light[lightIndex], *normal); 
 		if (shade > 1.0) shade = 1.0;
@@ -818,7 +822,7 @@ void BaseHeightMapRenderObjClass::doTheLight(VERTEX_FORMAT *vb, Vector3*light, V
 	if (shadeB > 1.0) shadeB = 1.0;
 	if(shadeB < 0.0f) shadeB = 0.0f;
 
-	if (m_useDepthFade && vb->z <= TheGlobalData->m_waterPositionZ)
+	if (!sunPerPixel && m_useDepthFade && vb->z <= TheGlobalData->m_waterPositionZ)
 	{	//height is below water level
 		//reduce lighting values based on light fall off as it travels through water.
 		float depthScale = (1.4f - vb->z)/TheGlobalData->m_waterPositionZ;
@@ -2129,8 +2133,8 @@ void BaseHeightMapRenderObjClass::addScorch(Vector3 location, Real radius, Scorc
 //=============================================================================
 /** Gets the static diffuse color value for a terrain vertex.*/
 //=============================================================================
-Int BaseHeightMapRenderObjClass::getStaticDiffuse(Int x, Int y)
-{	
+Int BaseHeightMapRenderObjClass::getStaticDiffuse(Int x, Int y, Bool sunPerPixel)
+{
 
 	if (x<0) x = 0;
 	if (y<0) y = 0;
@@ -2165,8 +2169,15 @@ Int BaseHeightMapRenderObjClass::getStaticDiffuse(Int x, Int y)
 			m_staticDiffuseCells.size() != (size_t)m_map->getXExtent()*m_map->getYExtent())
 		refreshStaticDiffuseInputs();
 	StaticDiffuseCell &cell = m_staticDiffuseCells[y*m_map->getXExtent() + x];
-	if (cell.generation == m_staticDiffuseGeneration && memcmp(cell.heights, heights, sizeof(heights)) == 0)
-		return cell.diffuse;
+	// Each cell holds both answers, the whole light and the one without the sun, under the same heights.
+	const Bool sameHeights = memcmp(cell.heights, heights, sizeof(heights)) == 0;
+	if (sameHeights)
+	{
+		if (!sunPerPixel && cell.generation == m_staticDiffuseGeneration)
+			return cell.diffuse;
+		if (sunPerPixel && cell.sunlessGeneration == m_staticDiffuseGeneration)
+			return cell.sunlessDiffuse;
+	}
 
 	Vector3 lightRay[MAX_GLOBAL_LIGHTS];
 	const Coord3D *lightPos;
@@ -2198,13 +2209,26 @@ Int BaseHeightMapRenderObjClass::getStaticDiffuse(Int x, Int y)
 		// Stack iterator: this runs per vertex of every extra-blend tile each frame,
 		// and a heap one cost two allocator critical sections per call.
 		RefRenderObjListIterator it(pMyScene->getLightList());
-		doTheLight(&vertex, lightRay, &normalAtTexel, &it, 1.0f);
+		doTheLight(&vertex, lightRay, &normalAtTexel, &it, 1.0f, sunPerPixel);
 	} else {
-		doTheLight(&vertex, lightRay, &normalAtTexel, NULL, 1.0f);
+		doTheLight(&vertex, lightRay, &normalAtTexel, NULL, 1.0f, sunPerPixel);
 	}
-	cell.diffuse = vertex.diffuse;
-	cell.generation = m_staticDiffuseGeneration;
-	memcpy(cell.heights, heights, sizeof(heights));
+	if (!sameHeights)
+	{	// new heights retire the other answer too
+		memcpy(cell.heights, heights, sizeof(heights));
+		cell.generation = 0;
+		cell.sunlessGeneration = 0;
+	}
+	if (sunPerPixel)
+	{
+		cell.sunlessDiffuse = vertex.diffuse;
+		cell.sunlessGeneration = m_staticDiffuseGeneration;
+	}
+	else
+	{
+		cell.diffuse = vertex.diffuse;
+		cell.generation = m_staticDiffuseGeneration;
+	}
 	return vertex.diffuse;
 }
 

@@ -563,9 +563,14 @@ static void write_monochrome(std::string & hlsl)
 // matters is the one at the top, and it applies at every step, not only the last: a chain that
 // overflows in the middle and comes back down is a different colour with the clamps than without them.
 static void write_multiply_chain(std::string & hlsl, const EngineShaderEntry & entry,
-	bool volumetric)
+	bool volumetric, bool relight)
 {
-	write_pixel_preamble(hlsl, volumetric);
+	// The sun per pixel needs WorldFromClip, which only the Direct3D 11 text declares.
+	relight = relight && volumetric;
+	write_pixel_preamble(hlsl, volumetric, relight ? TERRAIN_RELIGHT_SAMPLING : NULL);
+	if (relight) {
+		hlsl += TERRAIN_RELIGHT_APPLY;
+	}
 
 	hlsl += "    float4 current = saturate(";
 	hlsl += entry.Opening;
@@ -1638,7 +1643,7 @@ static bool write_engine_pixel_program(EngineShaderProgram program,
 
 	const EngineShaderEntry * entry = entry_for(program);
 	if (entry != NULL && entry->Opening != NULL) {
-		write_multiply_chain(hlsl, *entry, volumetric);
+		write_multiply_chain(hlsl, *entry, volumetric, pipeline.TerrainRelight);
 	}
 	else if (program == ENGINE_SHADER_WATER_TRAPEZOID || program == ENGINE_SHADER_WATER_CLASSIC_TRAPEZOID) {
 		write_trapezoid_water(hlsl);

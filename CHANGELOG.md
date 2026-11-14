@@ -8,6 +8,10 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Smoother light on hills and cliffs
+
+- On Direct3D 11 with the HD textures, the sun now lights the ground pixel by pixel from a smoothed copy of the map's heights. Before, the light ran in straight lines across each tile and you could see the grid of triangles on every slope. Hills and cliffs now shade in one soft sweep, and roads on them take the same light. Bridges, the lower terrain detail, Direct3D 9 and Classic Graphics keep the old light. Looks only; nothing in the match changes.
+
 ## Ally Aid: fly your teammate an army
 
 - Turkiye has a new rank 3 general's power, Ally Aid, in the promotion window beside Gokbey Landing, on the Headquarters and on the powers tray. Aim it at the ground and a small panel opens where you clicked. Pick how many of each soldier and vehicle you want and press OK; the panel adds up the planes and the bill as you go. Cargo planes take off together from your edge of the map and drop the lot under parachutes, Altay tanks included.

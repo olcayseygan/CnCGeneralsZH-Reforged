@@ -1026,6 +1026,19 @@ Int parseNoChroma(char *args[], int num)
 	return 1;
 }
 
+/* -vertexTerrainSun: the ground keeps EA's sun in its vertex colour on Direct3D 11, as -d3d9 and
+	 Classic do, in place of the sun per pixel from the heights' smooth normal
+	 (HeightMapRenderObjClass::sunPerPixelWanted).  One exe then shoots the before and the after of the
+	 same frame.  Drawing only. */
+Int parseVertexTerrainSun(char *args[], int num)
+{
+	if (TheWritableGlobalData)
+	{
+		TheWritableGlobalData->m_vertexTerrainSun = TRUE;
+	}
+	return 1;
+}
+
 Int parseShadowMapReport(char *args[], int num)
 {
 	if (TheWritableGlobalData)
@@ -2849,6 +2862,7 @@ static CommandLineParam params[] =
 	{ "-noDynamicLOD", parseNoDynamicLOD },
 	{ "-nochroma", parseNoChroma },
 	{ "-shadowmapreport", parseShadowMapReport },
+	{ "-vertexTerrainSun", parseVertexTerrainSun },
 	{ "-shadowmapoldcasters", parseShadowMapOldCasters },
 	{ "-shadowmapboth", parseShadowMapBoth },
 	{ "-noparticleshadows", parseNoParticleShadows },

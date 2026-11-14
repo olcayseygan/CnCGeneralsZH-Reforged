@@ -141,6 +141,20 @@ void Direct3D11_Set_Blast_Lights(const float * lights, unsigned count);
 // False under -d3d9, -headless and the Classic graphics setting.
 bool Direct3D11_Lights_Per_Pixel();
 
+// The ground's sun per pixel (TERRAIN_RELIGHT_SAMPLING in ffshader.h).  The draws between an on and
+// an off are the terrain's, whose vertex colour holds what the map's sun leaves; their programs add
+// the sun from the heights' smooth normal.  The light is DIRECT3D11_TERRAIN_LIGHT_FLOATS: four rays
+// (xyz; the fourth's x is one when the light fades under water), four terrain diffuse colours (rgb),
+// then the light count, one over the cell size, the border in samples and one byte step's height,
+// then the fade per channel and the water's height.  The heights are the whole map's, a byte a
+// sample, row after row; false when there is no texture to hold them.  A Direct3D 9 run does none.
+#define DIRECT3D11_TERRAIN_LIGHT_FLOATS 40
+void Direct3D11_Set_Terrain_Relight(bool on);
+void Direct3D11_Set_Terrain_Light(const float * light);
+bool Direct3D11_Set_Terrain_Heights(const unsigned char * heights, unsigned width, unsigned height);
+// False until heights went up, and again after the device was made anew.
+bool Direct3D11_Holds_Terrain_Heights();
+
 // The draws that follow are sorted particle billboards, which fade where they meet the scene's
 // depth.  The sorting pool sets it around the billboards' runs.
 void Direct3D11_Set_Soft_Particles(bool soft);

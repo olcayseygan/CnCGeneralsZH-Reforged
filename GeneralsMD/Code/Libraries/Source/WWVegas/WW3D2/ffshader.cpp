@@ -255,6 +255,8 @@ bool CombinerShader_Generate(const CombinerDescription & description, CombinerSh
 		// The fire look's coordinates come out of the Direct3D 11 vertex half, which SDL does not run.
 		supported.FireLook = FIRE_LOOK_NONE;
 		if (supported.DrawEffect != DRAW_EFFECT_CLOAK_SHADOW) supported.DrawEffect = DRAW_EFFECT_NONE;
+		// SDL has no heights at t4; its ground keeps the vertex light.
+		supported.PixelPipeline.TerrainRelight = false;
 		return generate_combiners(supported, target, hlsl, true)
 			&& SDL3_Shader_Retarget(hlsl, false);
 	}
@@ -273,6 +275,8 @@ static bool generate_combiners(const CombinerDescription & description,
 		? description.DrawEffect : DRAW_EFFECT_NONE;
 	// The fire look reads no constant, but the vertex half that feeds it is the D3D11 one's.
 	const unsigned fire = volumetric ? description.FireLook : FIRE_LOOK_NONE;
+	// The ground's sun per pixel, which needs WorldFromClip and the heights whether or not a shadow lands.
+	const bool relight = volumetric && description.PixelPipeline.TerrainRelight;
 	volumetric = volumetric && description.ShadowReceiving;
 	if (description.StageCount == 0 || description.StageCount > MAXIMUM_COMBINER_STAGES) {
 		return false;
@@ -387,7 +391,7 @@ static bool generate_combiners(const CombinerDescription & description,
 		// ones and the terrain's sun, so a program that reads them has to declare those too, unused:
 		// without them a shadow matrix lands where the first light's direction is.  A soft particle's
 		// field closes the block, so a program that fades declares all of it.
-		if (description.ShadowReceiving || soft || effect != DRAW_EFFECT_NONE) {
+		if (description.ShadowReceiving || soft || effect != DRAW_EFFECT_NONE || relight) {
 			char line[256];
 			snprintf(line, sizeof(line),
 				"    float4 NormalLightDirection[%u];\n"
@@ -408,7 +412,7 @@ static bool generate_combiners(const CombinerDescription & description,
 				"    float4 Sky;\n"
 				"    float4 SkyUp;\n";
 		}
-		if (volumetric || soft || effect != DRAW_EFFECT_NONE) {
+		if (volumetric || soft || effect != DRAW_EFFECT_NONE || relight) {
 			hlsl += VOLUMETRIC_CONSTANTS;
 		}
 		if (effect != DRAW_EFFECT_NONE) {
@@ -431,6 +435,9 @@ static bool generate_combiners(const CombinerDescription & description,
 		}
 		if (fire != FIRE_LOOK_NONE) {
 			hlsl += FIRE_LOOK_SAMPLING;
+		}
+		if (relight) {
+			hlsl += TERRAIN_RELIGHT_SAMPLING;
 		}
 	}
 	else {
@@ -477,6 +484,9 @@ static bool generate_combiners(const CombinerDescription & description,
 	hlsl +=
 		"{\n"
 		"    float4 texel;\n";
+	if (relight) {
+		hlsl += TERRAIN_RELIGHT_APPLY;
+	}
 	hlsl += "    float4 current = input.Diffuse;\n";
 	if (fire != FIRE_LOOK_NONE) {
 		hlsl += FIRE_LOOK_BEND;
@@ -593,11 +603,12 @@ bool CombinerShader_Append_Pixel_Pipeline(const PixelPipelineDescription & pipel
 std::string CombinerShader_Pipeline_Key(const PixelPipelineDescription & pipeline)
 {
 	char field[32];
-	snprintf(field, sizeof(field), ":A%u,%lu,F%u%s",
+	snprintf(field, sizeof(field), ":A%u,%lu,F%u%s%s",
 		pipeline.AlphaTestEnabled ? 1u : 0u,
 		pipeline.AlphaTestEnabled ? pipeline.AlphaFunction : 0ul,
 		pipeline.FogEnabled ? 1u : 0u,
-		alpha_to_coverage(pipeline) ? ",C" : "");
+		alpha_to_coverage(pipeline) ? ",C" : "",
+		pipeline.TerrainRelight ? ",T" : "");
 	return field;
 }
 

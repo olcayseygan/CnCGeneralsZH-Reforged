@@ -347,12 +347,15 @@ void RoadSegment::updateSegLighting(void)
 {
 	Int i;
 	Int borderSizeInLine=TheTerrainRenderObject->getMap()->getBorderSizeInline();
+	// Without the sun when the ground under the road takes it per pixel: drawRoads is drawn under
+	// Direct3D11_Set_Terrain_Relight then, so a road on a slope lights as the ground beside it does.
+	const Bool sunPerPixel = TheTerrainRenderObject->sunPerPixelBaked();
 	for (i=0; i<m_numVertex; i++) {
 		Int x = m_vb[i].x/MAP_XY_FACTOR+0.5;
 		Int y = m_vb[i].y/MAP_XY_FACTOR+0.5;
 		x += borderSizeInLine;
 		y += borderSizeInLine;
-		m_vb[i].diffuse = (255<<24)|TheTerrainRenderObject->getStaticDiffuse(x, y);
+		m_vb[i].diffuse = (255<<24)|TheTerrainRenderObject->getStaticDiffuse(x, y, sunPerPixel);
 	}
 }
 

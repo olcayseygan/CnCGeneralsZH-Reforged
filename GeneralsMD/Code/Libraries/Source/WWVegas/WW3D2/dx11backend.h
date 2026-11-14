@@ -119,6 +119,16 @@ public:
 		return static_cast<unsigned>(HeldPixelConstants.BlastLightParameters[0]);
 	}
 
+	// The draws that follow are the ground, whose vertex colour holds what the map's sun leaves; their
+	// programs add the sun per pixel from the heights at t4 (TERRAIN_RELIGHT_SAMPLING).  The terrain
+	// sets it around its own draws.  Set_Terrain_Light takes DIRECT3D11_TERRAIN_LIGHT_FLOATS, laid out
+	// as PixelConstantBlock's NormalLightDirection to TerrainSunDirection; Set_Terrain_Heights the
+	// whole map's byte heights, one row after another.
+	void Set_Terrain_Relight(bool on);
+	void Set_Terrain_Light(const float * block);
+	bool Set_Terrain_Heights(const unsigned char * heights, unsigned width, unsigned height);
+	bool Holds_Terrain_Heights() const { return TerrainHeightsView != NULL; }
+
 	// The draws that follow are sorted particle billboards, which fade where they meet the scene's
 	// depth (SOFT_PARTICLE_SAMPLING).  Only the sorting pool sets it, around the billboards' runs.
 	void Set_Soft_Particles(bool soft);
@@ -540,10 +550,11 @@ private:
 	};
 
 	// A program that receives no shadow declares the first three fields and nothing else, which a
-	// larger buffer serves.  The four after AlphaReference, and Sky and SkyUp, belonged to the normal
-	// maps taken out on 2026-10-06; nothing reads them and nothing writes them, but the generated
-	// programs still declare them, and every field behind them is found by its offset.  They stay
-	// until the generators and the cached programs move together.
+	// larger buffer serves.  The four after AlphaReference belonged to the normal maps taken out on
+	// 2026-10-06; since the ground's sun went per pixel they carry its light (Set_Terrain_Light,
+	// TERRAIN_RELIGHT_SAMPLING), written only for a draw that adds it.  Sky and SkyUp are still unread
+	// padding.  The generated programs declare all of them, and every field behind them is found by
+	// its offset, so none can move until the generators and the cached programs move together.
 	struct PixelConstantBlock
 	{
 		float TextureFactor[4];
@@ -803,6 +814,16 @@ private:
 	// Set_Blast_Lights' slots and how many are lit.
 	float BlastLights[BLAST_LIGHT_SLOTS][BLAST_LIGHT_FLOATS];
 	unsigned BlastLightCount;
+	// Set_Terrain_Relight, Set_Terrain_Light's numbers and Set_Terrain_Heights' texture, and whether
+	// the current draw adds the sun (a world draw, not into the sun's map).
+	bool TerrainRelight;
+	float TerrainLight[TERRAIN_LIGHT_FLOATS];
+	ID3D11Texture2D * TerrainHeights;
+	ID3D11ShaderResourceView * TerrainHeightsView;
+	unsigned TerrainHeightsWidth;
+	unsigned TerrainHeightsHeight;
+	bool Terrain_Relight() const;
+	void Release_Terrain_Heights();
 	// Set_Soft_Particles, and which fade the current draw takes (a SOFT_PARTICLE_* value).
 	bool SoftParticles;
 	bool SoftParticlesAllowed;
@@ -1135,6 +1156,8 @@ private:
 		ID3D11ShaderResourceView * SceneDepth;
 		// The scene's colour copy at t8, for the cloak.
 		ID3D11ShaderResourceView * SceneColour;
+		// The map's heights at t4, for the ground's sun.
+		ID3D11ShaderResourceView * TerrainHeights;
 		ID3D11InputLayout * Layout;
 		ID3D11Buffer * VertexBuffer;
 		UINT VertexStride;

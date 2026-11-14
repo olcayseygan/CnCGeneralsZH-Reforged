@@ -80,6 +80,11 @@ struct PixelPipelineDescription
 	// sharpened about the reference to about a pixel's width, so a cut edge covers its samples
 	// across one pixel and a mipmap's faded alpha above the reference still covers them all.
 	bool AlphaToCoverage = false;
+
+	// D3D11 only: the ground's vertex colour holds what the sun leaves (DX11BackendClass::
+	// Set_Terrain_Relight), and the program adds the map's sun from the heights' own smooth normal
+	// before anything reads the colour (TERRAIN_RELIGHT_SAMPLING).  Key suffix ",T".
+	bool TerrainRelight = false;
 };
 
 struct CombinerDescription
@@ -462,6 +467,86 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 	"    return light * (held / max(peak, 1e-4));\n" \
 	"}\n" \
 	"\n"
+
+// The map's sun on the ground per pixel, Direct3D 11 only.  The heightmap is a ten unit grid of byte
+// heights, two triangles a cell, and doTheLight lit it per vertex: across a 128 pixel HD tile the
+// light ran in straight lines from corner to corner and every cell showed its diagonal.  Under this
+// the tiles bake only what the sun leaves (the ambient and the map's own point lights,
+// BaseHeightMapRenderObjClass::doTheLight with sunPerPixel), and the pixel adds the global lights
+// from a normal taken off the heights themselves: the whole map's heights at t4, one texel a sample,
+// read as a Catmull-Rom patch over the sixteen samples round the pixel.  Its slope at a sample is
+// the central difference doTheLight's normal is made of, so a pixel on a vertex lights as the
+// vertex did, and between them the light bends without a crease.  Nothing is invented: the relief is
+// the map's.  The sun's sum, the clamp and the light lost under water are doTheLight's, in its
+// order.  The pixel comes back to the world through WorldFromClip as the headlights' does.  The
+// unread normal mapped fields carry the numbers (DX11BackendClass::Set_Terrain_Light):
+// NormalLightDirection[i] the ray of global light i and NormalLightDiffuse[i] its terrain diffuse,
+// NormalLightDirection[3].x one when the light fades under water, NormalMapParameters the light
+// count, one over the cell size, the map's border in samples and the height of one byte step,
+// TerrainSunDirection the fade per channel and the water's height.
+#define TERRAIN_LIGHT_FLOATS 40
+#define TERRAIN_RELIGHT_SAMPLING \
+	"Texture2D<float> TerrainHeights : register(t4);\n" \
+	"\n" \
+	"float4 terrain_heights_row(int2 at, int2 last)\n" \
+	"{\n" \
+	"    int y = clamp(at.y, 0, last.y);\n" \
+	"    return float4(TerrainHeights.Load(int3(clamp(at.x, 0, last.x), y, 0)),\n" \
+	"                  TerrainHeights.Load(int3(clamp(at.x + 1, 0, last.x), y, 0)),\n" \
+	"                  TerrainHeights.Load(int3(clamp(at.x + 2, 0, last.x), y, 0)),\n" \
+	"                  TerrainHeights.Load(int3(clamp(at.x + 3, 0, last.x), y, 0))) * 255.0;\n" \
+	"}\n" \
+	"\n" \
+	"float3 terrain_relight(float4 position, float3 base)\n" \
+	"{\n" \
+	"    float2 ndc = float2(position.x * ShadowViewport.x * 2.0 - 1.0,\n" \
+	"                        1.0 - position.y * ShadowViewport.y * 2.0);\n" \
+	"    float4 world = mul(float4(ndc, position.z, 1.0), WorldFromClip);\n" \
+	"    world.xyz /= world.w;\n" \
+	"    uint width, height;\n" \
+	"    TerrainHeights.GetDimensions(width, height);\n" \
+	"    int2 last = int2(width, height) - 1;\n" \
+	"    float2 grid = world.xy * NormalMapParameters.y + NormalMapParameters.z;\n" \
+	"    float2 cell = floor(grid);\n" \
+	"    float2 t = grid - cell;\n" \
+	"    int2 corner = int2(cell) - 1;\n" \
+	"    float2 t2 = t * t;\n" \
+	"    float2 t3 = t2 * t;\n" \
+	"    float4 weight_x = float4(-0.5 * t3.x + t2.x - 0.5 * t.x, 1.5 * t3.x - 2.5 * t2.x + 1.0,\n" \
+	"                             -1.5 * t3.x + 2.0 * t2.x + 0.5 * t.x, 0.5 * t3.x - 0.5 * t2.x);\n" \
+	"    float4 weight_y = float4(-0.5 * t3.y + t2.y - 0.5 * t.y, 1.5 * t3.y - 2.5 * t2.y + 1.0,\n" \
+	"                             -1.5 * t3.y + 2.0 * t2.y + 0.5 * t.y, 0.5 * t3.y - 0.5 * t2.y);\n" \
+	"    float4 slope_weight_x = float4(-1.5 * t2.x + 2.0 * t.x - 0.5, 4.5 * t2.x - 5.0 * t.x,\n" \
+	"                                   -4.5 * t2.x + 4.0 * t.x + 0.5, 1.5 * t2.x - t.x);\n" \
+	"    float4 slope_weight_y = float4(-1.5 * t2.y + 2.0 * t.y - 0.5, 4.5 * t2.y - 5.0 * t.y,\n" \
+	"                                   -4.5 * t2.y + 4.0 * t.y + 0.5, 1.5 * t2.y - t.y);\n" \
+	"    float slope_x = 0.0;\n" \
+	"    float slope_y = 0.0;\n" \
+	"    [unroll] for (int row = 0; row < 4; ++row) {\n" \
+	"        float4 heights = terrain_heights_row(corner + int2(0, row), last);\n" \
+	"        slope_x += weight_y[row] * dot(slope_weight_x, heights);\n" \
+	"        slope_y += slope_weight_y[row] * dot(weight_x, heights);\n" \
+	"    }\n" \
+	"    float rise = NormalMapParameters.w * NormalMapParameters.y;\n" \
+	"    float3 normal = normalize(float3(-slope_x * rise, -slope_y * rise, 1.0));\n" \
+	"    float3 light = base;\n" \
+	"    int count = (int)NormalMapParameters.x;\n" \
+	"    [unroll] for (int i = 0; i < 3; ++i) {\n" \
+	"        if (i < count) {\n" \
+	"            light += saturate(dot(NormalLightDirection[i].xyz, normal)) * NormalLightDiffuse[i].rgb;\n" \
+	"        }\n" \
+	"    }\n" \
+	"    light = saturate(light);\n" \
+	"    if (NormalLightDirection[3].x > 0.5 && world.z <= TerrainSunDirection.w) {\n" \
+	"        float depth_scale = (1.4 - world.z) / TerrainSunDirection.w;\n" \
+	"        light *= 1.0 - depth_scale * (1.0 - TerrainSunDirection.rgb);\n" \
+	"    }\n" \
+	"    return saturate(light);\n" \
+	"}\n" \
+	"\n"
+// The colour every later line reads, put back with the sun in it, first thing in main.
+#define TERRAIN_RELIGHT_APPLY \
+	"    input.Diffuse.rgb = terrain_relight(input.Position, input.Diffuse.rgb);\n"
 
 // A particle sprite fading out where it meets what is drawn behind it.  The scene's depth is a copy
 // taken after the opaque world was drawn (DX11BackendClass::Soft_Particle_Depth), read texel for

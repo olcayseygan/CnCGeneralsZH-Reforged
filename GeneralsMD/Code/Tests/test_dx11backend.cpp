@@ -2001,6 +2001,91 @@ TEST(dx11backend_the_modern_water_programs_compile_at_shader_model_5)
 	backend.Shutdown();
 }
 
+// The ground's sun per pixel (TERRAIN_RELIGHT_SAMPLING): the three transcribed terrain programs and a
+// fixed-function 3-way tile program with it on put the sun into the vertex colour before anything
+// reads it, carry ",T" in the key, compile at the profile the backend uses and are taken by the
+// device; the same descriptions with it off are the programs they were.  SDL3 never takes it.
+TEST(dx11backend_the_terrain_sun_per_pixel_programs_compile)
+{
+	DX11DeviceClass device;
+	CHECK(device.Create_Offscreen());
+	DX11BackendClass backend;
+	CHECK(backend.Initialise(&device));
+
+	PixelPipelineDescription pipeline;
+	memset(&pipeline, 0, sizeof(pipeline));
+	pipeline.FogEnabled = true;
+	const std::string plain_key = CombinerShader_Pipeline_Key(pipeline);
+	PixelPipelineDescription relit = pipeline;
+	relit.TerrainRelight = true;
+	CHECK(CombinerShader_Pipeline_Key(relit) == plain_key + ",T");
+
+	std::vector<std::string> sources;
+	for (const EngineShaderProgram ground : { ENGINE_SHADER_TERRAIN, ENGINE_SHADER_TERRAIN_NOISE,
+			ENGINE_SHADER_TERRAIN_NOISE_2, ENGINE_SHADER_ROAD_NOISE_2 }) {
+		std::string before;
+		std::string after;
+		CHECK(EngineShader_Pixel_Program(ground, pipeline, before));
+		CHECK(EngineShader_Pixel_Program(ground, relit, after));
+		CHECK(before.find("terrain_relight") == std::string::npos);
+		const size_t applied = after.find("input.Diffuse.rgb = terrain_relight(");
+		CHECK(applied != std::string::npos);
+		CHECK(applied < after.find("float4 current"));
+		sources.push_back(after);
+	}
+
+	CombinerDescription tile;
+	memset(&tile, 0, sizeof(tile));
+	tile.StageCount = 1;
+	tile.Stages[0].ColourOperation = D3DTOP_MODULATE;
+	tile.Stages[0].ColourArgument1 = D3DTA_TEXTURE;
+	tile.Stages[0].ColourArgument2 = D3DTA_DIFFUSE;
+	tile.Stages[0].AlphaOperation = D3DTOP_MODULATE;
+	tile.Stages[0].AlphaArgument1 = D3DTA_TEXTURE;
+	tile.Stages[0].AlphaArgument2 = D3DTA_DIFFUSE;
+	tile.Stages[0].TextureBound = true;
+	tile.ShadowReceiving = true;
+	tile.PixelPipeline = relit;
+	std::string fixed;
+	CHECK(CombinerShader_Generate(tile, COMBINER_SHADER_TARGET_D3D11, fixed));
+	const size_t applied = fixed.find("input.Diffuse.rgb = terrain_relight(");
+	CHECK(applied != std::string::npos);
+	CHECK(applied < fixed.find("float4 current = input.Diffuse;"));
+	sources.push_back(fixed);
+	std::string sdl;
+	CHECK(CombinerShader_Generate(tile, COMBINER_SHADER_TARGET_SDL3_GPU, sdl));
+	CHECK(sdl.find("terrain_relight") == std::string::npos);
+	tile.ShadowReceiving = false;	// no sun's map: the sun per pixel still declares what it reads
+	CHECK(CombinerShader_Generate(tile, COMBINER_SHADER_TARGET_D3D11, fixed));
+	sources.push_back(fixed);
+
+	for (const std::string & source : sources) {
+		std::vector<unsigned char> code;
+		const bool compiled = backend.Compile_Program(source, "terrain sun", "ps_4_0", code);
+		if (!compiled) {
+			printf("  %s\n", backend.First_Compiler_Error());
+		}
+		CHECK(compiled);
+		if (!compiled) {
+			continue;
+		}
+		ID3D11PixelShader * made = NULL;
+		CHECK(SUCCEEDED(device.Get_Device()->CreatePixelShader(&code[0], code.size(), NULL, &made)));
+		if (made != NULL) {
+			made->Release();
+		}
+	}
+
+	// The heights go up as one byte a sample and are written in place at the same size.
+	const unsigned char heights[12] = { 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110 };
+	CHECK(!backend.Holds_Terrain_Heights());
+	CHECK(backend.Set_Terrain_Heights(heights, 4, 3));
+	CHECK(backend.Holds_Terrain_Heights());
+	CHECK(backend.Set_Terrain_Heights(heights, 4, 3));
+	backend.Shutdown();
+	CHECK(!backend.Holds_Terrain_Heights());
+}
+
 // The block the Modern water's two stages read, built from W3DWater's registers and the draw's
 // camera.  A camera standing at (10, 20, 30) has to come back out of the inverted view, the
 // registers land in their fields, a river draw drops the hulls, and the foam atlas is read only

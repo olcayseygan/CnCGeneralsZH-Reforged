@@ -67,6 +67,10 @@ void Direct3D11_Atmosphere_Sky() {}
 void Direct3D11_Set_Headlights(const float *, unsigned, const float [3]) {}
 void Direct3D11_Set_Blast_Lights(const float *, unsigned) {}
 bool Direct3D11_Lights_Per_Pixel() { return false; }
+void Direct3D11_Set_Terrain_Relight(bool) {}
+void Direct3D11_Set_Terrain_Light(const float *) {}
+bool Direct3D11_Set_Terrain_Heights(const unsigned char *, unsigned, unsigned) { return false; }
+bool Direct3D11_Holds_Terrain_Heights() { return false; }
 void Direct3D11_Set_Soft_Particles(bool) {}
 void Direct3D11_Take_Scene_Depth() {}
 void Direct3D11_Allow_Soft_Particles(bool) {}

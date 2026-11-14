@@ -377,7 +377,7 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, char *data, Int
 				vb->v1=V[0];
 				vb->u2=UA[0];
 				vb->v2=VA[0];
-				doTheLight(vb, lightRay, &normalAtTexel, pLightsIterator, alpha[0]);
+				doTheLight(vb, lightRay, &normalAtTexel, pLightsIterator, alpha[0], m_sunPerPixel);
 				vb++;
 
 				//top-right sample
@@ -399,7 +399,7 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, char *data, Int
 				vb->v1=V[1];
 				vb->u2=UA[1];
 				vb->v2=VA[1];
-				doTheLight(vb, lightRay, &normalAtTexel, pLightsIterator, alpha[1]);
+				doTheLight(vb, lightRay, &normalAtTexel, pLightsIterator, alpha[1], m_sunPerPixel);
 				vb++;
 
 				//bottom-right sample
@@ -425,7 +425,7 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, char *data, Int
 				vb->v1=V[2];
 				vb->u2=UA[2];
 				vb->v2=VA[2];
-				doTheLight(vb, lightRay, &normalAtTexel, pLightsIterator, alpha[2]);
+				doTheLight(vb, lightRay, &normalAtTexel, pLightsIterator, alpha[2], m_sunPerPixel);
 				vb++;
 
 				//bottom-left sample
@@ -456,7 +456,7 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, char *data, Int
 				vb->v1=V[3];
 				vb->u2=UA[3];
 				vb->v2=VA[3];
-				doTheLight(vb, lightRay, &normalAtTexel, pLightsIterator, alpha[3]);
+				doTheLight(vb, lightRay, &normalAtTexel, pLightsIterator, alpha[3], m_sunPerPixel);
 				vb++;
 
 				VERTEX_FORMAT *pCurVertices = vb-4;
@@ -923,9 +923,118 @@ m_numVBTilesY(0),
 m_numVertexBufferTiles(0),
 m_numBlockColumnsInLastVB(0),
 m_numBlockRowsInLastVB(0),
-m_lastRelightValid(false)
+m_lastRelightValid(false),
+m_sunPerPixel(FALSE),
+m_sunHeightsMap(NULL),
+m_sunHeightsVersion(0)
 {
 	TheHeightMap = this;
+}
+
+/** A device that would not hold the heights turns the sun per pixel off for the run: the tiles
+		then take the whole light again at the next rebuild. */
+static Bool s_sunPerPixelRefused = FALSE;
+
+//=============================================================================
+// HeightMapRenderObjClass::sunPerPixelWanted
+//=============================================================================
+/** The Direct3D 11 frame, not Classic, not -vertexTerrainSun.  Read at every whole rebuild and checked
+every frame.  Only this object, the full terrain detail, ever asks: the lower details
+(FlatHeightMapRenderObjClass and its W3DTerrainBackground tiles) keep EA's sun in the vertex
+colour, and so do the bridges, which are models lit by their own normals over ground they do not
+lie on. */
+//=============================================================================
+Bool HeightMapRenderObjClass::sunPerPixelWanted(void)
+{
+	return !s_sunPerPixelRefused && TheGlobalData != NULL && !TheGlobalData->m_headless
+		&& !TheGlobalData->m_classicGraphics && !TheGlobalData->m_vertexTerrainSun
+		&& Direct3D11_Present_Is_Enabled();
+}
+
+//=============================================================================
+// HeightMapRenderObjClass::setSunPerPixel
+//=============================================================================
+/** Called before a whole rebuild.  A change moves the content version, which the 3-way tiles key on,
+and relights the roads, whose vertices take the same light as the tiles under them. */
+//=============================================================================
+void HeightMapRenderObjClass::setSunPerPixel(Bool on)
+{
+	if (m_sunPerPixel == on) {
+		return;
+	}
+	m_sunPerPixel = on;
+	m_terrainContentVersion++;
+#ifdef DO_ROADS
+	if (m_roadBuffer) {
+		m_roadBuffer->updateLighting();
+	}
+#endif
+}
+
+//=============================================================================
+// HeightMapRenderObjClass::prepareSunPerPixel
+//=============================================================================
+/** Hands the frame's heights and global lights to the ground's programs, and says whether the draws
+that follow are to add the sun.  A frame whose wish no longer matches what the tiles were lit for
+asks for a whole rebuild and draws the tiles as they are. */
+//=============================================================================
+Bool HeightMapRenderObjClass::prepareSunPerPixel(void)
+{
+	if (m_map == NULL) {
+		return FALSE;
+	}
+	const Bool wanted = sunPerPixelWanted();
+	if (wanted != m_sunPerPixel) {
+		m_needFullUpdate = true;
+		return FALSE;
+	}
+	if (!m_sunPerPixel) {
+		return FALSE;
+	}
+	if (m_sunHeightsMap != m_map || m_sunHeightsVersion != m_terrainContentVersion
+			|| !Direct3D11_Holds_Terrain_Heights()) {
+		if (!Direct3D11_Set_Terrain_Heights(m_map->getDataPtr(), (unsigned)m_map->getXExtent(),
+				(unsigned)m_map->getYExtent())) {
+			DEBUG_LOG(("TERRAIN SUN PER PIXEL: no texture for %dx%d heights, back to the vertex light\n",
+				m_map->getXExtent(), m_map->getYExtent()));
+			s_sunPerPixelRefused = TRUE;
+			m_needFullUpdate = true;
+			return FALSE;
+		}
+		m_sunHeightsMap = m_map;
+		m_sunHeightsVersion = m_terrainContentVersion;
+	}
+
+	// doTheLight's inputs in its own terms: the ray it dots with the normal is minus the light's
+	// position, not normalised.
+	Real light[DIRECT3D11_TERRAIN_LIGHT_FLOATS];
+	memset(light, 0, sizeof(light));
+	Int count = TheGlobalData->m_numGlobalLights;
+	if (count > MAX_GLOBAL_LIGHTS)
+		count = MAX_GLOBAL_LIGHTS;
+	if (count > 3)
+		count = 3;
+	for (Int i = 0; i < count; i++) {
+		const Coord3D &pos = TheGlobalData->m_terrainLightPos[i];
+		light[i*4 + 0] = -pos.x;
+		light[i*4 + 1] = -pos.y;
+		light[i*4 + 2] = -pos.z;
+		const RGBColor &diffuse = TheGlobalData->m_terrainDiffuse[i];
+		light[16 + i*4 + 0] = diffuse.red;
+		light[16 + i*4 + 1] = diffuse.green;
+		light[16 + i*4 + 2] = diffuse.blue;
+	}
+	light[12] = m_useDepthFade ? 1.0f : 0.0f;
+	light[32] = (Real)count;
+	light[33] = 1.0f / MAP_XY_FACTOR;
+	light[34] = (Real)m_map->getBorderSizeInline();
+	light[35] = MAP_HEIGHT_SCALE;
+	light[36] = m_depthFade.X;
+	light[37] = m_depthFade.Y;
+	light[38] = m_depthFade.Z;
+	light[39] = TheGlobalData->m_waterPositionZ;
+	Direct3D11_Set_Terrain_Light(light);
+	return TRUE;
 }
 
 
@@ -1177,6 +1286,7 @@ Int HeightMapRenderObjClass::initHeightData(Int x, Int y, WorldHeightMap *pMap, 
 		//go with a preset material for now.
 	}
 
+	setSunPerPixel(sunPerPixelWanted());
 	updateBlock(0,0,x-1,y-1,pMap,pLightsIterator);
 
 	return 0;
@@ -1544,6 +1654,8 @@ void HeightMapRenderObjClass::updateCenter(CameraClass *camera , RefRenderObjLis
 			 by a building foundation asks for it (W3DTerrainVisual::setRawMapHeight).  Logged with
 			 its cost so a stutter report can be tied to it instead of guessed at. */
 		const UnsignedInt fullUpdateStart = Clock_Milliseconds();
+		// A whole rebuild is where the tiles may change which light they hold.
+		setSunPerPixel(sunPerPixelWanted());
 		updateBlock(0, 0, m_x-1, m_y-1, m_map, pLightsIterator);
 		DEBUG_LOG(("TERRAIN FULL UPDATE: %d ms at frame %d\n",
 							 (Int)(Clock_Milliseconds() - fullUpdateStart),
@@ -1809,6 +1921,10 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 
 	DX8Wrapper::Set_Light_Environment(rinfo.light_environment);
 
+	// The tiles hold the light without the sun when this is on; the ground's two draws below, the
+	// base pass and the 3-way tiles, add it per pixel and nothing else does.
+	const Bool sunPerPixel = prepareSunPerPixel();
+
 	// Force shaders to update.
 	m_stageTwoTexture->restore();
 	DX8Wrapper::Set_Texture(0,NULL);
@@ -1912,6 +2028,8 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	}
 
 	Int pass;
+	if (sunPerPixel)
+		Direct3D11_Set_Terrain_Relight(true);
 	for (pass=0; pass<devicePasses && drawGround; pass++) {	//Classic water leaves the ground out, see the shorelines below
 #ifdef TIMING_TESTS
 #endif
@@ -1965,6 +2083,9 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 			}
 	}		
 
+	if (sunPerPixel)
+		Direct3D11_Set_Terrain_Relight(false);
+
 	if (!doMultiPassWireFrame)
 	{
 		if (pass)	//shader was applied at least once?
@@ -1983,7 +2104,14 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 		{
 			//Do additional pass over any tiles that have 3 textures blended together.
 			if (TheGlobalData->m_use3WayTerrainBlends)
+			{
+				// Their vertices are lit as the tiles' are (getStaticDiffuse with the same switch).
+				if (sunPerPixel)
+					Direct3D11_Set_Terrain_Relight(true);
 				renderExtraBlendTiles();
+				if (sunPerPixel)
+					Direct3D11_Set_Terrain_Relight(false);
+			}
 		}
 
 		Int yCoordMin = m_map->getDrawOrgY();
@@ -2009,8 +2137,15 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 			if (Scene) {
 				RTS3DScene *pMyScene = (RTS3DScene *)Scene;
 				RefRenderObjListIterator pDynamicLightsIterator(pMyScene->getDynamicLights());
+				// The roads lie on the ground and were lit without the sun with it (updateSegLighting).
+				// The bridges below are not: models with their own normals, over ground they do not
+				// lie on, so they keep the sun in their vertices.
+				if (sunPerPixel)
+					Direct3D11_Set_Terrain_Relight(true);
 				m_roadBuffer->drawRoads(&rinfo.Camera, doCloud?m_stageTwoTexture:NULL, TheGlobalData->m_useLightMap?m_stageThreeTexture:NULL,
 					m_disableTextures,xCoordMin-m_map->getBorderSizeInline(), xCoordMax-m_map->getBorderSizeInline(), yCoordMin-m_map->getBorderSizeInline(), yCoordMax-m_map->getBorderSizeInline(), &pDynamicLightsIterator);
+				if (sunPerPixel)
+					Direct3D11_Set_Terrain_Relight(false);
 			}
 		}
 	#endif
@@ -2231,7 +2366,7 @@ void HeightMapRenderObjClass::renderExtraBlendTiles(void)
 				vb->nx=0;
 				vb->ny=0;
 				vb->nz=0;
-				vb->diffuse=(alpha[0]<<24)|(getStaticDiffuse(x,y) & 0x00ffffff);
+				vb->diffuse=(alpha[0]<<24)|(getStaticDiffuse(x,y,m_sunPerPixel) & 0x00ffffff);
 				vb->u1=U[0];
 				vb->v1=V[0];
 				vb->u2=0;
@@ -2244,7 +2379,7 @@ void HeightMapRenderObjClass::renderExtraBlendTiles(void)
 				vb->nx=0;
 				vb->ny=0;
 				vb->nz=0;
-				vb->diffuse=(alpha[1]<<24)|(getStaticDiffuse(x+1,y) & 0x00ffffff);
+				vb->diffuse=(alpha[1]<<24)|(getStaticDiffuse(x+1,y,m_sunPerPixel) & 0x00ffffff);
 				vb->u1=U[1];
 				vb->v1=V[1];
 				vb->u2=0;
@@ -2257,7 +2392,7 @@ void HeightMapRenderObjClass::renderExtraBlendTiles(void)
 				vb->nx=0;
 				vb->ny=0;
 				vb->nz=0;
-				vb->diffuse=(alpha[2]<<24)|(getStaticDiffuse(x+1,y+1) & 0x00ffffff);
+				vb->diffuse=(alpha[2]<<24)|(getStaticDiffuse(x+1,y+1,m_sunPerPixel) & 0x00ffffff);
 				vb->u1=U[2];
 				vb->v1=V[2];
 				vb->u2=0;
@@ -2270,7 +2405,7 @@ void HeightMapRenderObjClass::renderExtraBlendTiles(void)
 				vb->nx=0;
 				vb->ny=0;
 				vb->nz=0;
-				vb->diffuse=(alpha[3]<<24)|(getStaticDiffuse(x,y+1) & 0x00ffffff);
+				vb->diffuse=(alpha[3]<<24)|(getStaticDiffuse(x,y+1,m_sunPerPixel) & 0x00ffffff);
 				vb->u1=U[3];
 				vb->v1=V[3];
 				vb->u2=0;

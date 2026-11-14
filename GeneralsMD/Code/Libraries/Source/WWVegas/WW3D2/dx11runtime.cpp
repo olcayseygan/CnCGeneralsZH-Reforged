@@ -626,6 +626,32 @@ bool Direct3D11_Lights_Per_Pixel()
 	return Active && Backend.Lights_Per_Pixel();
 }
 
+static_assert(DIRECT3D11_TERRAIN_LIGHT_FLOATS == TERRAIN_LIGHT_FLOATS, "the terrain's light and the backend's differ in size");
+
+void Direct3D11_Set_Terrain_Relight(bool on)
+{
+	if (Active) {
+		Backend.Set_Terrain_Relight(on);
+	}
+}
+
+void Direct3D11_Set_Terrain_Light(const float * light)
+{
+	if (Active) {
+		Backend.Set_Terrain_Light(light);
+	}
+}
+
+bool Direct3D11_Set_Terrain_Heights(const unsigned char * heights, unsigned width, unsigned height)
+{
+	return Active && Backend.Set_Terrain_Heights(heights, width, height);
+}
+
+bool Direct3D11_Holds_Terrain_Heights()
+{
+	return Active && Backend.Holds_Terrain_Heights();
+}
+
 void Direct3D11_Set_Soft_Particles(bool soft)
 {
 	if (Active) {

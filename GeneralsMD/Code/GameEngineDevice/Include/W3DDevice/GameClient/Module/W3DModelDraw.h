@@ -481,7 +481,6 @@ protected:
 	void handleClientTurretPositioning();
 	void handleClientRecoil();
 	void controlSmoothBone(Int bone, const Matrix3D &transform);		///< Capture_Bone and Control_Bone, kept for R1
-	void controlUnsmoothedBone(Int bone, const Matrix3D &transform);	///< Capture_Bone and Control_Bone, and the bone out of R1's blend
 	void recalcBonesForClientParticleSystems();
 	void stopClientParticleSystems();
 	void doHideShowSubObjs(const std::vector<ModelConditionInfo::HideShowSubObjInfo>* vec);
@@ -575,10 +574,13 @@ private:
 	Bool													m_pauseAnimation;
 	Int														m_animationMode;
 	SmoothMotionTrack							m_smoothMotion;										///< R1: the render object's last two logic transforms
-	// R1 for the bones the module sets once a tick by hand (turret turn, gun pitch, road wheels): the
-	// last two ticks' controls, tagged with the model they were set on, and the blends a picture set,
-	// which restore puts back to the tick's.  Drawing only, never saved, nothing the logic reads.
-	SmoothMotionBoneTrack					m_smoothBones;
+	// R1 for the bones the module sets by hand (turret turn, gun pitch, recoil): this tick's controls as
+	// doDrawModule sets them, the last two ticks' as the capture keeps them, and the blends a picture
+	// set, which restore puts back to the tick's.  Drawing only, never saved, nothing the logic reads.
+	std::vector<SmoothMotionBone>	m_smoothBonesPending;
+	std::vector<SmoothMotionBone>	m_smoothBonesCur;
+	std::vector<SmoothMotionBone>	m_smoothBonesPrev;
+	std::vector<SmoothMotionBone>	m_smoothBonesShown;
 	struct ProjectileShown
 	{
 		const ModelConditionInfo*		state;							///< NULL: nothing applied since the last hide/show from elsewhere

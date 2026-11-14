@@ -1515,19 +1515,6 @@ TEST(flipbook_blend_fades_into_the_next_frame_of_its_own_run)
 			}
 }
 
-/* SlaveEmitsOnItsOwn: a system with no master always emits for itself; a slave is fed by its master,
-	 one particle for each of the master's, unless its template says it emits on its own, and under
-	 Classic it is fed as EA's slaves are whatever its template says. */
-TEST(slave_emits_on_its_own_only_when_its_template_says_so)
-{
-	CHECK( ParticleSystem::slaveEmits( FALSE, FALSE, FALSE ) );
-	CHECK( ParticleSystem::slaveEmits( FALSE, TRUE, TRUE ) );
-	CHECK( !ParticleSystem::slaveEmits( TRUE, FALSE, FALSE ) );
-	CHECK( ParticleSystem::slaveEmits( TRUE, TRUE, FALSE ) );
-	CHECK( !ParticleSystem::slaveEmits( TRUE, TRUE, TRUE ) );
-	CHECK( !ParticleSystem::slaveEmits( TRUE, FALSE, TRUE ) );
-}
-
 /* FlipbookShared: the cards of one fire play one film.  A card born seven updates after the system's
 	 first has its age started seven updates into the system's clock, so at any moment both show the
 	 same frame and the same fade into the next, where each card's own random start showed a different

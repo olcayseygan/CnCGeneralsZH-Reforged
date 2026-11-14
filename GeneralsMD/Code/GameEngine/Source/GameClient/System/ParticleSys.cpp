@@ -464,12 +464,6 @@ UnsignedInt Particle::getFlipbookFrame( void ) const
 }
 
 // ------------------------------------------------------------------------------------------------
-Bool ParticleSystem::emitsOnItsOwn( void ) const
-{
-	return slaveEmits( m_masterSystem != NULL, m_template->isSlaveEmittingOnItsOwn(), TheGlobalData->m_classicGraphics );
-}
-
-// ------------------------------------------------------------------------------------------------
 void ParticleSystem::getSharedFlipbook( UnsignedInt frames, UnsignedInt run, UnsignedByte *variant, UnsignedByte *start,
 	Bool *mirror, UnsignedInt *clockStart )
 {
@@ -2739,17 +2733,7 @@ Bool ParticleSystem::updateEmission( Int localPlayerIndex, Bool *keepSystem )
 		}
 	}
 
-	// SlaveEmitsOnItsOwn: a slave that emits for itself does so where its master stands, following
-	// it.  The master updates before its slave (it made it, so it is earlier in the list), so its
-	// transform is this update's.
-	if (parentXfrm == NULL && m_masterSystem != NULL && emitsOnItsOwn())
-	{
-		parentXfrm = &m_masterSystem->m_transform;
-		m_lastPos = m_pos;
-		m_pos.x = parentXfrm->Get_X_Translation();
-		m_pos.y = parentXfrm->Get_Y_Translation();
-		m_pos.z = parentXfrm->Get_Z_Translation();
-	}
+
 
 	if (parentXfrm)
 	{
@@ -2811,8 +2795,7 @@ Bool ParticleSystem::updateEmission( Int localPlayerIndex, Bool *keepSystem )
 	{
 		if (m_isForever || (m_isForever == false && m_systemLifetimeLeft > 0))
 		{
-			if (!isShrouded && m_isStopped == false && emitsOnItsOwn()
-					&& (m_masterSystem == NULL || m_masterSystem->m_isStopped == false))
+			if (!isShrouded && m_isStopped == false && m_masterSystem == NULL)
 			{
 				if (m_burstDelayLeft == 0)
 				{
@@ -2850,8 +2833,8 @@ Bool ParticleSystem::updateEmission( Int localPlayerIndex, Bool *keepSystem )
 								}
 							}
 
-							// create a slave particle, if necessary (a slave that emits on its own is not fed)
-							if (m_slaveSystem && !m_slaveSystem->emitsOnItsOwn())
+							// create a slave particle, if necessary
+							if (m_slaveSystem)
 							{
 								// the merge below draws a fresh master particle, so the place has to be read first
 								const Coord3D rootPos = info->m_pos;
@@ -3885,7 +3868,6 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	{ "FlipbookVariants",						INI::parseUnsignedByte,								NULL,		offsetof( ParticleSystemTemplate, m_flipbookVariants ) },
 	{ "FlipbookMirror",							INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_flipbookMirror ) },
 	{ "FlipbookShared",							INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_flipbookShared ) },
-	{ "SlaveEmitsOnItsOwn",					INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_slaveEmitsOnItsOwn ) },
 
 	{ "Lifetime",								SPEED_FIELD( ParticleSystemTemplate, m_lifetime ) },
 	{ "SystemLifetime",					SPEED_FIELD( ParticleSystemTemplate, m_systemLifetime ) },
@@ -4068,7 +4050,6 @@ ParticleSystemTemplate::ParticleSystemTemplate( const AsciiString &name ) :
 	m_flipbookVariants = 1;
 	m_flipbookMirror = FALSE;
 	m_flipbookShared = FALSE;
-	m_slaveEmitsOnItsOwn = FALSE;
 }
 
 // ------------------------------------------------------------------------------------------------

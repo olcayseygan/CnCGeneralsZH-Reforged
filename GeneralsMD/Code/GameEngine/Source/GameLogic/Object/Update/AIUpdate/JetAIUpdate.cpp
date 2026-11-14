@@ -1142,10 +1142,13 @@ private:
 		// A jet that will still be more than JET_HIGH_AT_TURN_IN above the glide when it gets to the turn
 		// in, coming down a glide's worth on the way, flies the circuit further out by a glide's worth
 		// of distance for that height, so the final it turns onto is one it can make. Raptors turning in
-		// 81, 75 and 69 high crossed the threshold 23, 11 and 11 high and went round again.
+		// 81, 75 and 69 high crossed the threshold 23, 11 and 11 high and went round again. A jet already
+		// out past the turn in comes down nothing on the way to it, since it turns in from where it is:
+		// an Aurora 140 past it, 99 high, was credited 25 of that, turned in and crossed the threshold
+		// 13 high on every landing.
 		Real turnInHeight = JetRunway_slopeHeight(PI * radius + turnIn, BIGNUM, JET_GLIDE_SLOPE, JET_FLARE_DIST) + JET_HIGH_AT_TURN_IN;
 		Real toTurnIn = sqrt(sqr(touch.x - ux * turnIn - uy * side - pos->x) + sqr(touch.y - uy * turnIn + ux * side - pos->y));
-		Real heightAtTurnIn = height - JET_GLIDE_SLOPE * toTurnIn;
+		Real heightAtTurnIn = (along > -turnIn) ? height - JET_GLIDE_SLOPE * toTurnIn : height;
 		Real turnOut = turnIn;
 		if (heightAtTurnIn > turnInHeight)
 		{
@@ -1205,11 +1208,13 @@ private:
 		}
 		else
 		{
-			// the circuit
+			// The circuit. Its glide is measured as if the final started at turnIn: a circuit run further
+			// out is room to come down, and a glide over the longer way held a high jet level all the way
+			// out, so it turned in as high as it came.
 			goal.x = touch.x - ux * turnOut - uy * side;
 			goal.y = touch.y - uy * turnOut + ux * side;
 			Real toTurn = sqrt(sqr(goal.x - pos->x) + sqr(goal.y - pos->y));
-			glide = JetRunway_slopeHeight(toTurn + PI * radius + turnOut - lead, BIGNUM, JET_GLIDE_SLOPE, JET_FLARE_DIST);
+			glide = JetRunway_slopeHeight(toTurn + PI * radius + turnIn - lead, BIGNUM, JET_GLIDE_SLOPE, JET_FLARE_DIST);
 		}
 
 		// never climb back up to the glide, and come down to it no steeper than JET_STEEPEST_DESCENT

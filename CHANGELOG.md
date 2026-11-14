@@ -2406,6 +2406,7 @@ The whole HUD is on the hardware. Four colours carry it, and they mean the same 
 - An install folder carrying an older skirmish room screen, one without the match record panel, no longer crashes the game on the way into Skirmish. The room opens without the record and plays as before.
 - A unit that leaves the factory already a veteran with Chemical Suits on no longer crashes the game. The suits went on before the unit had a body on screen to mark; such a unit now goes without the ground marking under it.
 - The game starts on Windows on ARM laptops with a Qualcomm Snapdragon X. In 4.0.0 it died on the loading screen the moment it built the command bar, because the graphics driver there refuses the kind of scratch picture every line of text is lettered into first, and the game never checked. It asks for one the driver accepts now, and if a driver refuses that too, the text goes missing instead of the game.
+- Changing the resolution in Options during an online match no longer crashes the game a moment later. Rebuilding the menus for the new size also logged you out of the online service, under a match that was still reading the room's settings every frame. A resolution change keeps you signed in now.
 
 ## Units take corners wide, and drive round a jam instead of into it
 

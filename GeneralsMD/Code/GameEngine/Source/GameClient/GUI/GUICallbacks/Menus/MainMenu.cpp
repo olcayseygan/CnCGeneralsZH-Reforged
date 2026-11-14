@@ -1202,6 +1202,23 @@ static Bool startWorldBuilder( const char *exe )
 }
 
 //-------------------------------------------------------------------------------------------------
+// The main menu's destroy tears GameSpy, ghttp and the DNS check down, which is right when the
+// shell goes for good. The options menu rebuilds the shell after a resolution change, and in an
+// online match that destroy came a frame later and took the session out from under the match
+// (TheGameInfo NULL in GameLogic::update). The rebuild names the live main menu here first, and
+// its destroy keeps everything up. ponytail: ghttp's reference from this menu is never returned
+// after that, so ghttp stays started until the process ends.
+//-------------------------------------------------------------------------------------------------
+static GameWindow *mainMenuKeptOnline = NULL;
+
+void MainMenuKeepOnlineThroughRebuild( void )
+{
+	mainMenuKeptOnline = ( mainMenuID != NAMEKEY_INVALID )
+		? TheWindowManager->winGetWindowFromId( NULL, mainMenuID )
+		: NULL;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Main menu window system callback */
 //-------------------------------------------------------------------------------------------------
 WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg, 
@@ -1223,6 +1240,14 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 		//---------------------------------------------------------------------------------------------
 		case GWM_DESTROY:
 		{
+			// Thrown away by a resolution change in a match, not left: the online session, its relay
+			// and the game info the running match reads every frame stay up.
+			if( window != NULL && window == mainMenuKeptOnline )
+			{
+				mainMenuKeptOnline = NULL;
+				DEBUG_LOG(("MainMenuSystem(GWM_DESTROY) - shell rebuilt in a match, GameSpy kept\n"));
+				break;
+			}
 			ghttpCleanup();
 			DEBUG_LOG(("Tearing down GameSpy from MainMenuSystem(GWM_DESTROY)\n"));
 			TearDownGameSpy();

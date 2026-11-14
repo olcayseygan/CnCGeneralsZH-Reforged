@@ -230,6 +230,7 @@ DisplaySettings oldDispSettings, newDispSettings;
 Bool dispChanged = FALSE;
 extern Int timer;
 extern void DoResolutionDialog();
+extern void MainMenuKeepOnlineThroughRebuild();
 
 //
 // Set by saveOptions when the resolution really changed, acted on by applyPendingShellRebuild once
@@ -2016,6 +2017,10 @@ static void applyPendingShellRebuild( void )
 		return;
 	pendingShellRebuild = FALSE;
 
+	const Bool inMatch = TheGameLogic->isInGame() && !TheGameLogic->isInShellGame();
+	if( inMatch )
+		MainMenuKeepOnlineThroughRebuild();	// the main menu's destroy would end an online match
+
 	delete TheShell;
 	TheShell = NULL;
 
@@ -2031,7 +2036,7 @@ static void applyPendingShellRebuild( void )
 	// greyed out in-game at all.  The command bar has just been built from its layouts and comes up
 	// hidden, so it is put back.
 	//
-	if( TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() )
+	if( inMatch )
 	{
 		//
 		// A Shell is born active - the constructor says so, because a shell that is being built is

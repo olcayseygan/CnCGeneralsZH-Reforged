@@ -62,7 +62,10 @@ const Real BIGNUM = 99999.0f;
 	circuit first, at its corner speed: out along the side of the runway two turn radii off the centre
 	line, round onto a JET_FINAL_DIST final, and in, slowing to MinSpeed over the threshold. Its
 	height follows the same glide measured along the circuit, so it comes down through the turns, and
-	a jet above the glide comes down to it no steeper than JET_STEEPEST_DESCENT.
+	a jet above the glide comes down to it no steeper than JET_STEEPEST_DESCENT; one that would reach
+	the turn in more than JET_HIGH_AT_TURN_IN above it flies the circuit further out, up to
+	JET_MAX_EXTRA_CIRCUIT. Once it starts the turn in it stays on the final, turning towards the
+	runway, and only gives it up past the threshold too high to land.
 */
 static const Real JET_LIFTOFF_SHARE = 0.55f;
 static const Real JET_ROTATE_SHARE = 0.25f;
@@ -77,6 +80,8 @@ static const Real JET_LINE_UP_ROOM = 3.0f;			// otherwise it needs this many tim
 static const Real JET_HIGH_ON_FINAL = 20.0f;		// more than this above the glide, it flies the circuit instead of diving
 static const Real JET_STEEPEST_DESCENT = 0.27f;	// tan 15 degrees: a jet above its glide comes down to it no steeper
 static const Real JET_FINAL_DIST = 150.0f;			// the straight final after the circuit's turn in
+static const Real JET_HIGH_AT_TURN_IN = 10.0f;		// more than this above the glide at the turn in, the circuit runs further out
+static const Real JET_MAX_EXTRA_CIRCUIT = 300.0f;	// a high jet flies the circuit at most this much further out
 // the jet's height servo settles this many frames of travel short of a height target moving away
 // under it, so a target this far ahead holds the jet on a slope (measured: 10 u/s down at 60 u/s)
 #define JET_HEIGHT_LAG_FRAMES ((Real)(LOGICFRAMES_PER_GAME_SECOND * 0.1f))
@@ -872,6 +877,7 @@ public:
 
 		jetAI->friend_setTakeoffInProgress(!m_landing);
 		jetAI->friend_setLandingInProgress(m_landing);
+		jetAI->friend_setOnFinal(false);
 		jetAI->friend_setAllowAirLoco(true);
 		jetAI->chooseLocomotorSet(LOCOMOTORSET_NORMAL);
 		Locomotor* loco = jetAI->getCurLocomotor();
@@ -1119,14 +1125,52 @@ private:
 			(fabs(across) <= JET_LINE_UP_SLACK || -along >= JET_LINE_UP_ROOM * fabs(across));
 		Bool rollingOut = along >= 0.0f && height <= JET_GO_AROUND_HEIGHT;
 
+		// The circuit runs out along the side of the runway the jet is heading for, two radii off the
+		// centre line, to where the turn in starts.
+		Real sideways = across + 2.0f * radius * Sin(offLine);
+		Real side = (sideways >= 0.0f) ? 2.0f * radius : -2.0f * radius;
+
+		// A jet that will still be more than JET_HIGH_AT_TURN_IN above the glide when it gets to the turn
+		// in, coming down a glide's worth on the way, flies the circuit further out by a glide's worth
+		// of distance for that height, so the final it turns onto is one it can make. Raptors turning in
+		// 81, 75 and 69 high crossed the threshold 23, 11 and 11 high and went round again.
+		Real turnInHeight = JetRunway_slopeHeight(PI * radius + turnIn, BIGNUM, JET_GLIDE_SLOPE, JET_FLARE_DIST) + JET_HIGH_AT_TURN_IN;
+		Real toTurnIn = sqrt(sqr(touch.x - ux * turnIn - uy * side - pos->x) + sqr(touch.y - uy * turnIn + ux * side - pos->y));
+		Real heightAtTurnIn = height - JET_GLIDE_SLOPE * toTurnIn;
+		Real turnOut = turnIn;
+		if (heightAtTurnIn > turnInHeight)
+		{
+			Real extra = (heightAtTurnIn - turnInHeight) / JET_GLIDE_SLOPE;
+			turnOut += (extra < JET_MAX_EXTRA_CIRCUIT) ? extra : JET_MAX_EXTRA_CIRCUIT;
+		}
+
+		// Once the turn in has started it is flown to the end: coming round from out there carried the
+		// jet back inside turnIn before it was lined up, and it went off round the circuit a second time.
+		// Only past the threshold too high to roll out does it give the final up and go round.
+		Bool onFinal = jetAI->friend_isOnFinal();
+		if (along >= 0.0f && !rollingOut)
+			onFinal = FALSE;
+		else if (linedUp || along <= -turnOut)
+			onFinal = TRUE;
+		jetAI->friend_setOnFinal(onFinal);
+
 		Coord3D goal;
 		Real wantSpeed = circuitSpeed;
-		if (linedUp || rollingOut || along <= -turnIn)
+		if (onFinal || rollingOut)
 		{
 			// on the final, or far enough out to come round onto it: steer for a point ahead on the centre line
 			Real ahead = along + calcLookAhead(jet, loco);
 			goal.x = touch.x + ux * ahead;
 			goal.y = touch.y + uy * ahead;
+			if (fabs(offLine) >= PI / 2.0f)
+			{
+				// Heading away, that point is nearly straight behind, and which way the jet came round
+				// was a coin toss: the wrong way took it back inside the turn in and round the circuit
+				// again. Two radii past the centre line, the turn goes towards the runway.
+				Real farSide = (across >= 0.0f) ? -2.0f * radius : 2.0f * radius;
+				goal.x -= uy * farSide;
+				goal.y += ux * farSide;
+			}
 
 			if (along >= 0.0f)
 			{
@@ -1144,14 +1188,11 @@ private:
 		}
 		else
 		{
-			// the circuit: out along the side of the runway the jet is heading for, two radii off the
-			// centre line, to where the turn in starts
-			Real sideways = across + 2.0f * radius * Sin(offLine);
-			Real side = (sideways >= 0.0f) ? 2.0f * radius : -2.0f * radius;
-			goal.x = touch.x - ux * turnIn - uy * side;
-			goal.y = touch.y - uy * turnIn + ux * side;
+			// the circuit
+			goal.x = touch.x - ux * turnOut - uy * side;
+			goal.y = touch.y - uy * turnOut + ux * side;
 			Real toTurn = sqrt(sqr(goal.x - pos->x) + sqr(goal.y - pos->y));
-			glide = JetRunway_slopeHeight(toTurn + PI * radius + turnIn - lead, BIGNUM, JET_GLIDE_SLOPE, JET_FLARE_DIST);
+			glide = JetRunway_slopeHeight(toTurn + PI * radius + turnOut - lead, BIGNUM, JET_GLIDE_SLOPE, JET_FLARE_DIST);
 		}
 
 		// never climb back up to the glide, and come down to it no steeper than JET_STEEPEST_DESCENT
@@ -1191,6 +1232,7 @@ public:
 
 		jetAI->friend_setTakeoffInProgress(false);
 		jetAI->friend_setLandingInProgress(false);
+		jetAI->friend_setOnFinal(false);
 		jetAI->friend_enableAfterburners(false);
 
 		// Paranoia checks - sometimes onExit is called when we are 

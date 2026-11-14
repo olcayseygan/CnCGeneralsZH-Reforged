@@ -127,6 +127,8 @@ public:
 	void friend_setTaxiInProgress(Bool v) { setFlag(TAXI_IN_PROGRESS, v); }
 	void friend_setUseSpecialReturnLoco(Bool v) { setFlag(USE_SPECIAL_RETURN_LOCO, v); }
 	void friend_setAllowCircling(Bool v) { setFlag(ALLOW_CIRCLING, v); }
+	Bool friend_isOnFinal() const { return getFlag(ON_FINAL); }
+	void friend_setOnFinal(Bool v) { setFlag(ON_FINAL, v); }
 	const Coord3D& friend_getLandingPosForHelipadStuff() const { return m_landingPosForHelipadStuff; }
 	void friend_enableAfterburners(Bool v);
 	void friend_setAllowAirLoco(Bool a);
@@ -174,7 +176,8 @@ private:
 		ALLOW_CIRCLING,
 		ALLOW_INTERRUPT_AND_RESUME_OF_CUR_STATE_FOR_RELOAD,
 		TAXI_IN_PROGRESS,
-		HAD_AIRFIELD			///< it has belonged to an airfield at some point, so it was not placed on the map without one
+		HAD_AIRFIELD,			///< it has belonged to an airfield at some point, so it was not placed on the map without one
+		ON_FINAL					///< landing, it has started its turn in or lined up, and stays on the final unless it goes round
 	};
 
 	Coord3D									m_producerLocation;		///< remember this, so that if our producer dies, we have a place to circle aimlessly

@@ -10,9 +10,11 @@ Data/Art/Textures/ReforgedBarGLACenter.tga
 Data/Art/Textures/ReforgedBarGLALeft.tga
 Data/Art/Textures/ReforgedBarGLARight.tga
 Data/Art/Textures/ReforgedDust.dds
+Data/Art/Textures/ReforgedDustV.dds
 Data/Art/Textures/ReforgedFactionTurkiye.tga
 Data/Art/Textures/ReforgedFireball.dds
 Data/Art/Textures/ReforgedFireballB.dds
+Data/Art/Textures/ReforgedFireballV.dds
 Data/Art/Textures/ReforgedFlame.dds
 Data/Art/Textures/ReforgedFlameB.dds
 Data/Art/Textures/ReforgedForceAttack.tga
@@ -51,6 +53,10 @@ Data/Art/Textures/ReforgedHudTurkiyeTalents.dds
 Data/Art/Textures/ReforgedLaserPink.tga
 Data/Art/Textures/ReforgedLobbySpot.tga
 Data/Art/Textures/ReforgedMuzzleFlash.dds
+Data/Art/Textures/ReforgedMuzzleJet.dds
+Data/Art/Textures/ReforgedNukeCap.dds
+Data/Art/Textures/ReforgedNukeJet.dds
+Data/Art/Textures/ReforgedNukeStem.dds
 Data/Art/Textures/ReforgedRadarContact.tga
 Data/Art/Textures/ReforgedRadarRing.tga
 Data/Art/Textures/ReforgedReconArea.tga
@@ -60,6 +66,7 @@ Data/Art/Textures/ReforgedSignalDefend.tga
 Data/Art/Textures/ReforgedSignalLook.tga
 Data/Art/Textures/ReforgedSmokePuff.dds
 Data/Art/Textures/ReforgedSmokePuffB.dds
+Data/Art/Textures/ReforgedSmokePuffV.dds
 Data/Art/Textures/ReforgedSmokeWisp.dds
 Data/Art/Textures/TRA400M_Prop.tga
 Data/Art/Textures/TRAirfld_Apron.tga

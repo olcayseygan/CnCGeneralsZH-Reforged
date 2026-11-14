@@ -123,9 +123,6 @@ public:
 	/// How wide a burn this nugget's blast asks for under Battle Marks: 0 has no say, below 0 scorches the ground itself, as wide as the value's size.
 	virtual Real blastMarkRadius() const { return 0.0f; }
 
-	/// Told once at parse that its list is one whose screen bend the Reforged look holds down (FXList::tamesScreenDistortion).
-	virtual void tameScreenDistortion() { }
-
 private:
 
 };
@@ -195,9 +192,6 @@ public:
 
 	/// A tank cannon's firing (EA's four TankGunNoTracer lists), whose flame the Reforged look draws as particles.
 	Bool isTankGun() const { return m_tankGun; }
-
-	/// The lists whose ScreenDistortion the Reforged look holds to a ripple: the Nuke Cannon's shell and the reactor's meltdown.
-	static Bool tamesScreenDistortion(const char *name);
 
 	/// The ground dust a vehicle's death blast throws up off a terrain tile (TerrainType's name and
 	/// TerrainClass): one of the four ReforgedDeathDust systems, dirt when nothing says otherwise.

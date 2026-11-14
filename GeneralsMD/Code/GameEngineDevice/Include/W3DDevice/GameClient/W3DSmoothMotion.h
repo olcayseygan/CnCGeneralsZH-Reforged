@@ -206,6 +206,15 @@ inline SmoothMotionSnap SmoothMotion_Blend(const Matrix3D &prev, const Matrix3D 
 	return snap;
 }
 
+/// A value the tick steps (a light pulse's strength), shown `alpha` of the way from the last tick's:
+/// `to` itself, bit for bit, at 1 or more, `from` at 0 or less.
+inline float SmoothMotion_Lerp(float from, float to, float alpha)
+{
+	if (alpha >= 1.0f) return to;
+	if (alpha <= 0.0f) return from;
+	return from + (to - from) * alpha;
+}
+
 /// A bone the draw module set by hand on a tick (Control_Bone): a turret's turn, a gun's pitch, a
 /// barrel's recoil.  The model's transform glides between ticks; these are kept the same way, so a
 /// turret does not swing a whole tick at once with the hull gliding under it.

@@ -268,11 +268,6 @@ public:
 	static void tickBlend( const ParticleDrawState &from, const ParticleDrawState &to, Real tickFraction, ParticleDrawState *out );
 	/// tickBlend from the state the last update started from (the birth state before the first one).
 	void getDrawState( Real tickFraction, ParticleDrawState *out ) const;
-	/** Where a particle born on a moving particle (a PerParticleAttachedSystem's trail behind a spark)
-		* starts its first drawn update: its birth, put back by as far as the parent's own last update
-		* moved the parent, so between ticks the two are drawn together and the trail's newest point
-		* sits on the spark instead of a tick ahead of it.  Pure. */
-	static Coord3D drawFromRidingParent( const Coord3D &birth, const Coord3D &parentFrom, const Coord3D &parentNow );
 
 	/// IsParticleUpTowardsEmitter's turn for a particle this far east and north of its emitter;
 	/// eaOnTheAxis (the Classic look) keeps EA's quarter turn off on the east-west axis.
@@ -319,7 +314,6 @@ protected:
 	UnsignedByte			m_flipbookVariant;										///< the run of frames it plays (FlipbookVariants); drawing only, never saved
 	Bool							m_flipbookMirrored;										///< drawn flipped left to right (FlipbookMirror); drawing only, never saved
 	ParticleDrawState	m_drawFrom;														///< the state the last update started from (tickBlend); drawing only, never saved
-	Bool							m_drawFromHeld;												///< born riding a particle: the first update keeps m_drawFrom (drawFromRidingParent)
 
 	void keepDrawFrom( void );																///< m_drawFrom = the particle as it stands
 public:
@@ -924,7 +918,6 @@ public:
 
 	/// called when the particle this system is controlled by dies
 	void detachControlParticle( Particle *p ) { m_controlParticle = NULL; }
-	const Particle *getControlParticle( void ) const { return m_controlParticle; }	///< the particle this system rides, or NULL
 
 	/// called to merge two systems info. If slaveNeedsFullPromotion is true, then the slave needs to be aware of how many particles
 	/// to generate as well.

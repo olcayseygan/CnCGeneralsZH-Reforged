@@ -391,17 +391,8 @@ Particle::Particle( ParticleSystem *system, const ParticleInfo *info )
 
 	m_colorScale = info->m_colorScale;
 
-	// a picture before the first update draws the particle where it was born; one born riding a
-	// moving particle starts as far back as its parent's last update moved it, held through its own
-	// first update, so the two are drawn together between ticks
+	// a picture before the first update draws the particle where it was born
 	keepDrawFrom();
-	m_drawFromHeld = FALSE;
-	const Particle *parent = system->getControlParticle();
-	if (parent)
-	{
-		m_drawFrom.pos = drawFromRidingParent( m_pos, parent->m_drawFrom.pos, parent->m_pos );
-		m_drawFromHeld = TRUE;
-	}
 
 	m_inSystemList = m_inOverallList = FALSE;
 	m_systemPrev = m_systemNext = m_overallPrev = m_overallNext = NULL;
@@ -466,16 +457,6 @@ void Particle::keepDrawFrom( void )
 	m_drawFrom.angle = m_angleZ;
 	m_drawFrom.alpha = m_alpha;
 	m_drawFrom.color = m_color;
-}
-
-// ------------------------------------------------------------------------------------------------
-/*static*/ Coord3D Particle::drawFromRidingParent( const Coord3D &birth, const Coord3D &parentFrom, const Coord3D &parentNow )
-{
-	Coord3D from;
-	from.x = birth.x + ( parentFrom.x - parentNow.x );
-	from.y = birth.y + ( parentFrom.y - parentNow.y );
-	from.z = birth.z + ( parentFrom.z - parentNow.z );
-	return from;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -816,10 +797,7 @@ Bool particleGroundBounce( Coord3D *pos, Coord3D *vel, Real groundZ,
 // ------------------------------------------------------------------------------------------------
 Bool Particle::update( const ParticleUpdateContext &context )
 {
-	if (m_drawFromHeld)
-		m_drawFromHeld = FALSE;
-	else
-		keepDrawFrom();
+	keepDrawFrom();
 
 
 	// gravity goes into the acceleration, which is zero here, so the sum is exactly the gravity
@@ -1225,7 +1203,6 @@ void Particle::loadPostProcess( void )
 	ParticleInfo::loadPostProcess();
 
 	keepDrawFrom();
-	m_drawFromHeld = FALSE;
 
 	// tidy up the m_systemUnderControl pointer
 	if( m_systemUnderControlID != INVALID_PARTICLE_SYSTEM_ID )

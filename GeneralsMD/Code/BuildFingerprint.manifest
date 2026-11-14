@@ -5199,7 +5199,6 @@ Tools/gentrigtables.py
 Tools/guard_marker.py
 Tools/hud_command_bar.py
 Tools/include_case_check.py
-Tools/ini_shadow_check.py
 Tools/install-guard.sh
 Tools/license-headers.py
 Tools/linux-check.sh

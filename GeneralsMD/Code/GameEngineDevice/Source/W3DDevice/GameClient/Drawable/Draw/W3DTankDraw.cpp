@@ -435,6 +435,7 @@ void W3DTankDraw::doDrawModule(const Matrix3D* transformMtx)
 	// road wheels roll over the ground their side's tread covered, at their own radius
 	if (m_hasWheels)
 	{
+		RenderObjClass *robj = getRenderObject();
 		Real halfTrack = obj->getGeometryInfo().getMinorRadius();
 		Matrix3D wheelXfrm(1);
 		for (Int i=0; i<2*WHEELS_PER_SIDE; i++)
@@ -445,7 +446,8 @@ void W3DTankDraw::doDrawModule(const Matrix3D* transformMtx)
 			wheel.m_angle = TankWheelAngle(wheel.m_angle, forward, turn, halfTrack, i < WHEELS_PER_SIDE, wheel.m_radius);
 			wheelXfrm.Make_Identity();
 			wheelXfrm.Rotate_Y(wheel.m_angle);
-			controlSmoothBone(wheel.m_bone, wheelXfrm);	// kept for R1, so the wheels roll between ticks
+			robj->Capture_Bone(wheel.m_bone);
+			robj->Control_Bone(wheel.m_bone, wheelXfrm);
 		}
 	}
 

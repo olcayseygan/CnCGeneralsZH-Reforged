@@ -3199,7 +3199,10 @@ void W3DModelDraw::handleClientTurretPositioning()
 				Matrix3D turretXfrm(1);
 				turretXfrm.Rotate_Z(turretAngle);
 				if (m_renderObject)
-					controlSmoothBone( tur.m_turretAngleBone, turretXfrm );
+				{
+					m_renderObject->Capture_Bone( tur.m_turretAngleBone );
+					m_renderObject->Control_Bone( tur.m_turretAngleBone, turretXfrm );	
+				}
 			}
 
 			// do turret pitch, if any.  The pitch the fork's data gave a stabilized gun is the logic's aim:
@@ -3226,7 +3229,10 @@ void W3DModelDraw::handleClientTurretPositioning()
 				Matrix3D turretPitchXfrm(1);
 				turretPitchXfrm.Rotate_Y(-turretPitch);
 				if (m_renderObject)
-					controlSmoothBone( tur.m_turretPitchBone, turretPitchXfrm );
+				{
+					m_renderObject->Capture_Bone( tur.m_turretPitchBone );
+					m_renderObject->Control_Bone( tur.m_turretPitchBone, turretPitchXfrm );	
+				}
 			}
 		}
 	} // next tslot
@@ -3338,7 +3344,10 @@ void W3DModelDraw::handleClientRecoil()
 				//DEBUG_ASSERTLOG(recoils[i].m_shift==0.0f,("adjust bone %d by %f\n",recoils[i].m_recoilBone,recoils[i].m_shift));
 
 				if (m_renderObject)
-					controlSmoothBone( barrels[i].m_recoilBone, gunXfrm );
+				{
+					m_renderObject->Capture_Bone( barrels[i].m_recoilBone );
+					m_renderObject->Control_Bone( barrels[i].m_recoilBone, gunXfrm );
+				}
 			}
 			else
 			{
@@ -4651,32 +4660,6 @@ void W3DModelDraw::smoothMotionCapture(UnsignedInt clientFrame, Bool marked)
 		return;
 	m_smoothMotion.capture(m_renderObject->Get_Transform(), m_renderObject, m_renderObject->Is_Hidden() != 0, clientFrame,
 		marked != FALSE);
-	// the hand-set bones move on with it: this tick's become the current ones
-	m_smoothBonesPrev.swap(m_smoothBonesCur);
-	m_smoothBonesCur.swap(m_smoothBonesPending);
-	m_smoothBonesPending.clear();
-}
-
-//-------------------------------------------------------------------------------------------------
-/** A bone this module sets by hand, set as it always was and kept as this tick's control of it, the
-	latest call for a bone winning (a Crusader's barrel is its pitch bone and its recoil bone), for R1 to
-	blend from the last tick's (W3DSmoothMotion.h, SmoothMotion_BlendBones). */
-void W3DModelDraw::controlSmoothBone(Int bone, const Matrix3D &transform)
-{
-	m_renderObject->Capture_Bone( bone );
-	m_renderObject->Control_Bone( bone, transform );
-	for (size_t i = 0; i < m_smoothBonesPending.size(); ++i)
-	{
-		if (m_smoothBonesPending[i].Bone == bone)
-		{
-			m_smoothBonesPending[i].Transform = transform;
-			return;
-		}
-	}
-	SmoothMotionBone kept;
-	kept.Bone = bone;
-	kept.Transform = transform;
-	m_smoothBonesPending.push_back(kept);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -4686,18 +4669,6 @@ void W3DModelDraw::smoothMotionApply(Real alpha)
 {
 	if (m_renderObject == NULL || m_smoothMotion.Model != m_renderObject || m_smoothMotion.Snap != SMOOTH_BLENDED)
 		return;
-	// The turret's turn, the gun's pitch and the recoil glide with the hull, a parked tank's too.  The
-	// Reforged look only; at a whole tick on nothing is set.
-	m_smoothBonesShown.clear();
-	if (!TheGlobalData->m_classicGraphics && alpha < 1.0f && !m_smoothBonesCur.empty())
-	{
-		m_smoothBonesShown.resize(m_smoothBonesCur.size());
-		const Int shown = SmoothMotion_BlendBones(m_smoothBonesPrev.empty() ? NULL : &m_smoothBonesPrev[0], (Int)m_smoothBonesPrev.size(),
-			&m_smoothBonesCur[0], (Int)m_smoothBonesCur.size(), alpha, &m_smoothBonesShown[0]);
-		m_smoothBonesShown.resize((size_t)shown);
-		for (size_t i = 0; i < m_smoothBonesShown.size(); ++i)
-			m_renderObject->Control_Bone(m_smoothBonesShown[i].Bone, m_smoothBonesShown[i].Transform);
-	}
 	// an unmoved model already holds its one transform: shown as blended, nothing set
 	if (m_smoothMotion.Still)
 	{
@@ -4719,18 +4690,6 @@ void W3DModelDraw::smoothMotionApply(Real alpha)
 	from the render object (ParticleUplinkCannonUpdate's bones) see exactly what they did before. */
 void W3DModelDraw::smoothMotionRestore()
 {
-	// the blended bones go back to the tick's controls, exactly as doDrawModule set them
-	if (!m_smoothBonesShown.empty())
-	{
-		if (m_renderObject != NULL && m_smoothMotion.Model == m_renderObject)
-		{
-			for (size_t i = 0; i < m_smoothBonesShown.size(); ++i)
-				for (size_t j = 0; j < m_smoothBonesCur.size(); ++j)
-					if (m_smoothBonesCur[j].Bone == m_smoothBonesShown[i].Bone)
-						m_renderObject->Control_Bone(m_smoothBonesCur[j].Bone, m_smoothBonesCur[j].Transform);
-		}
-		m_smoothBonesShown.clear();
-	}
 	if (!m_smoothMotion.Applied)
 		return;
 	m_smoothMotion.Applied = false;

@@ -65,7 +65,9 @@ const Real BIGNUM = 99999.0f;
 	a jet above the glide comes down to it no steeper than JET_STEEPEST_DESCENT; one that would reach
 	the turn in more than JET_HIGH_AT_TURN_IN above it flies the circuit further out, up to
 	JET_MAX_EXTRA_CIRCUIT. Once it starts the turn in it stays on the final, turning towards the
-	runway, and only gives it up past the threshold too high to land.
+	runway, and only gives it up past the threshold too high to land. An airfield's runway is
+	reserved as the jet turns onto the final, not before the circuit; while another jet has it, the
+	landing jet holds round the turn in, or goes round from a short final.
 */
 static const Real JET_LIFTOFF_SHARE = 0.55f;
 static const Real JET_ROTATE_SHARE = 0.25f;
@@ -380,7 +382,13 @@ public:
 			DEBUG_ASSERTCRASH(m_landing, ("hmm, this should never happen for taking-off things"));
 			return STATE_FAILURE;
 		}
-		
+
+		// An airfield's runway is the landing jet's only once it turns onto the final (flyLanding):
+		// held from here, the whole circuit kept the jets behind it on the ground. A carrier keeps
+		// EA's order, the deck reserved before the approach.
+		if (m_landing && !jet->testStatus( OBJECT_STATUS_DECK_HEIGHT_OFFSET ))
+			return STATE_SUCCESS;
+
 		if (pp->reserveRunway(jet->getID(), m_landing))
 		{
 			return STATE_SUCCESS;
@@ -910,8 +918,9 @@ public:
 			return STATE_FAILURE;
 		}
 		
-		// only check this for landing; we might have already given up the reservation to the guy behind us for takeoff
-		if (m_landing)
+		// only check this for landing; we might have already given up the reservation to the guy behind us for takeoff.
+		// An airfield's runway is reserved later, on the final (flyLanding); a carrier's deck here, as EA had it
+		if (m_landing && jet->testStatus( OBJECT_STATUS_DECK_HEIGHT_OFFSET ))
 		{
 			if (!pp->reserveRunway(jet->getID(), m_landing))
 			{
@@ -1146,17 +1155,25 @@ private:
 
 		// Once the turn in has started it is flown to the end: coming round from out there carried the
 		// jet back inside turnIn before it was lined up, and it went off round the circuit a second time.
-		// Only past the threshold too high to roll out does it give the final up and go round.
+		// Only past the threshold too high to roll out does it give the final up and go round. An
+		// airfield's runway is the jet's from the moment it turns onto the final until it has rolled out;
+		// with another jet on it, this one flies the circuit, holding round the turn in, and asks again.
 		Bool onFinal = jetAI->friend_isOnFinal();
 		if (along >= 0.0f && !rollingOut)
+		{
+			if (onFinal && !deck)
+				pp->releaseRunway(jet->getID());
 			onFinal = FALSE;
-		else if (linedUp || along <= -turnOut)
-			onFinal = TRUE;
+		}
+		else if (!onFinal && (linedUp || rollingOut || along <= -turnOut))
+		{
+			onFinal = deck || pp->reserveRunway(jet->getID(), TRUE);
+		}
 		jetAI->friend_setOnFinal(onFinal);
 
 		Coord3D goal;
 		Real wantSpeed = circuitSpeed;
-		if (onFinal || rollingOut)
+		if (onFinal)
 		{
 			// on the final, or far enough out to come round onto it: steer for a point ahead on the centre line
 			Real ahead = along + calcLookAhead(jet, loco);

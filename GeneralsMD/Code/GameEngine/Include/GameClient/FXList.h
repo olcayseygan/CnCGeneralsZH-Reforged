@@ -212,6 +212,23 @@ public:
 	static RGBColor deathLightColor(const RGBColor &color);
 	static const Real DEATH_LIGHT_BRIGHTEST;
 
+	/// Which light pulses are an explosion's, by the pulse alone (the lists are in the checksum, and a
+	/// name says less than the light does): a warm colour (red at least 0.75, green at most 0.85 of it,
+	/// blue at most 0.4 of it) over at least EXPLOSION_LIGHT_MIN_RADIUS.  That takes every shell, missile,
+	/// bomb, air strike, Scud, bomb truck, tank, vehicle and building death and the nukes, and leaves the
+	/// muzzle flashes and small arms (35 or less), the white flash-bang and garrison flashes, the blue and
+	/// green ones and the small napalm and goo glows (30).
+	static Bool isExplosionLight(const RGBColor &color, Real radius);
+	/// The Reforged look's explosion light, wide and hot so the ground and buildings far round a blast
+	/// read lit: EXPLOSION_LIGHT_REACH times the reach, EXPLOSION_LIGHT_GAIN times the colour (up to a
+	/// brightest channel of 1, the hue kept) and EXPLOSION_LIGHT_LINGER times the fade.  FALSE, and
+	/// nothing changed, for a pulse that is not an explosion's (isExplosionLight).
+	static Bool boostExplosionLight(RGBColor *color, Real *radius, UnsignedInt *decreaseFrames);
+	static const Real EXPLOSION_LIGHT_MIN_RADIUS;
+	static const Real EXPLOSION_LIGHT_REACH;
+	static const Real EXPLOSION_LIGHT_GAIN;
+	static const Real EXPLOSION_LIGHT_LINGER;
+
 	/// inline convenience method to avoid having to check for null.
 	inline static void doFXPos(const FXList* fx, const Coord3D *primary, const Matrix3D* primaryMtx = NULL, const Real primarySpeed = 0.0f, const Coord3D *secondary = NULL, const Real overrideRadius = 0.0f)
 	{

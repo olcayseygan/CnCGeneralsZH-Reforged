@@ -82,6 +82,7 @@
 #include "missingtexture.h"
 #include "thread.h"
 #include <stdio.h>
+#include <stdarg.h>
 #include "d3dx9runtime.h"
 #include "ffprobe.h"
 #include "ffshadercache.h"
@@ -486,6 +487,35 @@ void Non_Fatal_Log_DX8_ErrorCode(unsigned res,const char * file,int line)
 	WWDEBUG_SAY(("DX8 Error: %s, File: %s, Line: %d\n",Get_D3D_Error_String(res),file,line));
 }
 
+// Why no device came up.  WW3D2 is built without RELEASE_DEBUG_LOGGING, so WWDEBUG_SAY says nothing
+// in a shipping build; each refusal on the way to a device is kept here, and W3DDisplay::init writes
+// them into the log before it gives up with ERROR_INVALID_D3D.
+static char DeviceFailures[1024] = "";
+
+static void Note_Device_Failure(const char * format, ...)
+{
+	char line[256];
+	va_list args;
+	va_start(args, format);
+	vsnprintf(line, sizeof(line), format, args);
+	va_end(args);
+
+	const size_t used = strlen(DeviceFailures);
+	if (used + 8 < sizeof(DeviceFailures)) {
+		snprintf(DeviceFailures + used, sizeof(DeviceFailures) - used, "%s%s", used ? "; " : "", line);
+	}
+}
+
+const char * DX8Wrapper::Get_Device_Failures(void)
+{
+	return DeviceFailures;
+}
+
+static const char * Render_Device_Name(int device)
+{
+	return (device >= 0 && device < _RenderDeviceNameTable.Count()) ? (const char *)_RenderDeviceNameTable[device] : "?";
+}
+
 
 
 bool DX8Wrapper::Init(void * hwnd, bool lite)
@@ -549,10 +579,16 @@ bool DX8Wrapper::Init(void * hwnd, bool lite)
 #if defined(_WIN32)
 		D3D9Lib = LoadLibrary("D3D9.DLL");
 
-		if (D3D9Lib == NULL) return false;	// Return false at this point if init failed
+		if (D3D9Lib == NULL) {
+			Note_Device_Failure("d3d9.dll did not load (error %lu)", (unsigned long)GetLastError());
+			return false;	// Return false at this point if init failed
+		}
 
 		Direct3DCreate9Ptr = (Direct3DCreate9Type) GetProcAddress(D3D9Lib, "Direct3DCreate9");
-		if (Direct3DCreate9Ptr == NULL) return false;
+		if (Direct3DCreate9Ptr == NULL) {
+			Note_Device_Failure("d3d9.dll has no Direct3DCreate9");
+			return false;
+		}
 #endif
 
 		/*
@@ -565,6 +601,7 @@ bool DX8Wrapper::Init(void * hwnd, bool lite)
 		D3DInterface = Direct3DCreate9(D3D_SDK_VERSION);	// the device is linked in (posixd3d9): nothing to load
 #endif
 		if (D3DInterface == NULL) {
+			Note_Device_Failure("Direct3DCreate9 returned no interface");
 			return(false);
 		}
 		IsInitted = true;
@@ -818,37 +855,22 @@ bool DX8Wrapper::Create_Device(void)
 	WWASSERT(D3DDevice==NULL);	// for now, once you've created a device, you're stuck with it!
 
 	D3DCAPS9 caps;
-	if 
-	(
-		Render_Failed
-		(
-			D3DInterface->GetDeviceCaps
-			(
-				CurRenderDevice,
-				WW3D_DEVTYPE,
-				&caps
-			)
-		)
-	)
+	RenderResult caps_hr = D3DInterface->GetDeviceCaps(CurRenderDevice, WW3D_DEVTYPE, &caps);
+	if (Render_Failed(caps_hr))
 	{
+		Note_Device_Failure("adapter %d '%s': GetDeviceCaps %s (0x%08X)", CurRenderDevice,
+			Render_Device_Name(CurRenderDevice), Get_D3D_Error_String(caps_hr), (unsigned)caps_hr);
 		return false;
 	}
 
 	memset(&CurrentAdapterIdentifier,0, sizeof(D3DADAPTER_IDENTIFIER9));
-	
-	if
-	(
-		Render_Failed
-		( 
-			D3DInterface->GetAdapterIdentifier
-			(
-				CurRenderDevice,
-				NO_ADAPTER_IDENTIFIER_FLAGS,
-				&CurrentAdapterIdentifier
-			)
-			)	
-	) 
+
+	RenderResult id_hr = D3DInterface->GetAdapterIdentifier(CurRenderDevice, NO_ADAPTER_IDENTIFIER_FLAGS,
+		&CurrentAdapterIdentifier);
+	if (Render_Failed(id_hr))
 	{
+		Note_Device_Failure("adapter %d '%s': GetAdapterIdentifier %s (0x%08X)", CurRenderDevice,
+			Render_Device_Name(CurRenderDevice), Get_D3D_Error_String(id_hr), (unsigned)id_hr);
 		return false;
 	}
 
@@ -905,8 +927,14 @@ bool DX8Wrapper::Create_Device(void)
 		);
 	}
 
-	if (Render_Failed(hr)) 
+	if (Render_Failed(hr))
 	{
+		Note_Device_Failure("adapter %d '%s': CreateDevice %s (0x%08X), %ux%u back buffer format %d depth %d behaviour 0x%X",
+			CurRenderDevice, CurrentAdapterIdentifier.Description, Get_D3D_Error_String(hr), (unsigned)hr,
+			_PresentParameters.BackBufferWidth, _PresentParameters.BackBufferHeight,
+			(int)_PresentParameters.BackBufferFormat, (int)_PresentParameters.AutoDepthStencilFormat,
+			(unsigned)Vertex_Processing_Behavior);
+
 		// The device selection may fail because the device lied that it supports 32 bit zbuffer with 16 bit
 		// display. This happens at least on Voodoo2.
 
@@ -928,8 +956,10 @@ bool DX8Wrapper::Create_Device(void)
 				&D3DDevice 
 			);
 
-			if (Render_Failed(hr)) 
+			if (Render_Failed(hr))
 			{
+				Note_Device_Failure("adapter %d: CreateDevice with a 16-bit depth %s (0x%08X)", CurRenderDevice,
+					Get_D3D_Error_String(hr), (unsigned)hr);
 				return false;
 			}
         }
@@ -953,6 +983,8 @@ bool DX8Wrapper::Create_Device(void)
 		 folder.  Refusing the device here gives the player the Direct3D failure message instead. */
 	IDirect3DTexture9 * missing = MissingTexture::_Get_Missing_Texture();
 	if (missing == NULL) {
+		Note_Device_Failure("adapter %d '%s': the device made no texture", CurRenderDevice,
+			CurrentAdapterIdentifier.Description);
 		Release_Device();
 		return false;
 	}
@@ -1252,6 +1284,10 @@ void DX8Wrapper::Enumerate_Devices()
 		D3DADAPTER_IDENTIFIER9 id;
 		memset(&id,0, sizeof(D3DADAPTER_IDENTIFIER9));
 		RenderResult res = D3DInterface->GetAdapterIdentifier(adapter_index,NO_ADAPTER_IDENTIFIER_FLAGS,&id);
+		if (res != D3D_OK) {
+			Note_Device_Failure("adapter %d: GetAdapterIdentifier %s (0x%08X), left out", adapter_index,
+				Get_D3D_Error_String(res), (unsigned)res);
+		}
 
 		if (res == D3D_OK) {
 
@@ -1325,6 +1361,9 @@ void DX8Wrapper::Enumerate_Devices()
 
 			// IML: If the device has one or more valid resolutions add it to the device list.
 			// NOTE: Testing has shown that there are drivers with zero resolutions.
+			if (desc.Enumerate_Resolutions().Count() == 0) {
+				Note_Device_Failure("adapter %d '%s' lists no display mode, left out", adapter_index, id.Description);
+			}
 			if (desc.Enumerate_Resolutions().Count() > 0) {
 
 				/*
@@ -1593,6 +1632,8 @@ bool DX8Wrapper::Set_Render_Device(int dev, int width, int height, int bits, int
 		case D3DFMT_P8: BitDepth=8; break;
 		default:
 			// Unknown backbuffer format probably means the device can't do windowed
+			Note_Device_Failure("adapter %d '%s': desktop format %d is none the game draws in", CurRenderDevice,
+				Render_Device_Name(CurRenderDevice), (int)desktop_mode.Format);
 			return false;
 		}
 

@@ -1115,7 +1115,10 @@ void W3DDisplay::init( void )
 		SortingRendererClass::SetMinVertexBufferSize(1);
 	}
 	if (WW3D::Init( ApplicationHWnd ) != WW3D_ERROR_OK)
+	{
+		DEBUG_LOG(("W3DDisplay::init - Direct3D did not start: %s\n", DX8Wrapper::Get_Device_Failures()));
 		throw ERROR_INVALID_D3D;	//failed to initialize.  User probably doesn't have DX 8.1
+	}
 
 	// The sorting pool's depth pass and batch copy split across the job pool.  WW3D2 cannot see it,
 	// so it is handed over here; parallel_for runs inline when the pool has no workers.
@@ -1224,6 +1227,11 @@ void W3DDisplay::init( void )
 																 getWindowed(), 
 																 true ) != WW3D_ERROR_OK ) 
 		{
+			// WW3D2 logs nothing in a shipping build, so this line is all a crash report has to go on.
+			DEBUG_LOG(("W3DDisplay::init - no render device at %dx%d: %u adapters, %d usable; %s\n",
+								 getWidth(), getHeight(),
+								 DX8Wrapper::_Get_D3D() ? DX8Wrapper::_Get_D3D()->GetAdapterCount() : 0u,
+								 WW3D::Get_Render_Device_Count(), DX8Wrapper::Get_Device_Failures()));
 
 			WW3D::Shutdown();
 			WWMath::Shutdown();

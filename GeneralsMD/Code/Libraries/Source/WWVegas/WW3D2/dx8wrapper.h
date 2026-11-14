@@ -857,6 +857,8 @@ public:
 	// Caps exist only while a device does: initted with no device yet, or after one was refused or
 	// released, Get_Current_Caps is NULL.
 	static bool				Has_Current_Caps() { return CurrentCaps != NULL; }
+	// Every refusal met on the way to a device since the start, "; " between them; empty when none.
+	static const char *	Get_Device_Failures(void);
 
 #if defined(_WIN32)	// the registry: Windows only
 	static bool Registry_Save_Render_Device( const char * sub_key );

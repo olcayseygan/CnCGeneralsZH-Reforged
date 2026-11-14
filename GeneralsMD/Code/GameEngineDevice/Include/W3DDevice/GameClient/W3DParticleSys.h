@@ -118,8 +118,6 @@ public:
 		Bool																		hardEdge;					///< ParticleSystem::isAttachedToMine: no soft particle fade (Insert_Sorted_Billboards)
 		Bool																		alongAxis;				///< IsAlongEmitterAxis outside Classic: cards stand along axis (Write_Axis_Card)
 		Vector3																	axis;							///< the system's +X, taken on the render thread
-		Bool																		blend;						///< a flipbook drawn as a crossfade of two frames, two quads a particle
-		Int																			quads;						///< written by the job: quads written, drawn particles plus their crossfades
 	};
 
 	/// One particle the sun's smoke map can take, as the last particle update left it.

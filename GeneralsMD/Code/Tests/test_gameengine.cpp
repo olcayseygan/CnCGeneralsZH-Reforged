@@ -1456,65 +1456,6 @@ TEST(flipbook_frame_plays_inside_the_particles_variant)
 	CHECK_EQ( Particle::flipbookFrameAt( 64, 4, 0, 40, 0, 100, 0.0f, SPF ), 15u );
 }
 
-/* The crossfade's frame pair: the next frame stays inside the particle's own run, a loop wraps to the
-	 run's start, a run played once holds its last frame with nothing to fade to, and the frame itself is
-	 flipbookFrameAt's on every age. */
-TEST(flipbook_blend_fades_into_the_next_frame_of_its_own_run)
-{
-	const Real SPF = 0.05f;
-	UnsignedInt next = 999;
-	Real f = -1.0f;
-
-	// once over the life: 51 of 100 frames lived through 64 is frame 32 and 0.64 of the way to 33
-	CHECK_EQ( Particle::flipbookBlendAt( 64, 1, 0, 0, 51, 100, 0.0f, SPF, &next, &f ), 32u );
-	CHECK_EQ( next, 33u );
-	CHECK_NEAR( f, 0.64f, 0.0001f );
-	// variant 2 of four runs of 16: 14.4 frames in is 46 fading to 47, never into run 3's 48
-	CHECK_EQ( Particle::flipbookBlendAt( 64, 4, 2, 0, 90, 100, 0.0f, SPF, &next, &f ), 46u );
-	CHECK_EQ( next, 47u );
-	CHECK_NEAR( f, 0.4f, 0.0001f );
-	// its last frame holds: 15.84 frames in is past the last, so 47 with nothing to fade to
-	CHECK_EQ( Particle::flipbookBlendAt( 64, 4, 2, 0, 99, 100, 0.0f, SPF, &next, &f ), 47u );
-	CHECK_EQ( next, 47u );
-	CHECK_EQ( f, 0.0f );
-
-	// looping at a rate: variant 1 (frames 16 to 31) half way through its last frame fades to its first
-	CHECK_EQ( Particle::flipbookBlendAt( 64, 4, 1, 0, 31, 100, 10.0f, SPF, &next, &f ), 31u );
-	CHECK_EQ( next, 16u );
-	CHECK_NEAR( f, 0.5f, 0.0001f );
-	// from a random start of 5 in variant 3: 10.5 frames on is 63 fading to 48
-	CHECK_EQ( Particle::flipbookBlendAt( 64, 4, 3, 5, 21, 100, 10.0f, SPF, &next, &f ), 63u );
-	CHECK_EQ( next, 48u );
-	CHECK_NEAR( f, 0.5f, 0.0001f );
-	// the nuke jets' rate of 4 on a 4 by 4: 0.2 of a frame a logic frame, 1.4 frames at age 7
-	CHECK_EQ( Particle::flipbookBlendAt( 16, 1, 0, 0, 7, 100, 4.0f, SPF, &next, &f ), 1u );
-	CHECK_EQ( next, 2u );
-	CHECK_NEAR( f, 0.4f, 0.0001f );
-
-	// a still card and a particle that never dies fade nothing
-	CHECK_EQ( Particle::flipbookBlendAt( 1, 1, 0, 0, 70, 100, 20.0f, SPF, &next, &f ), 0u );
-	CHECK_EQ( next, 0u );
-	CHECK_EQ( f, 0.0f );
-	CHECK_EQ( Particle::flipbookBlendAt( 64, 4, 2, 5, 70, 0, 20.0f, SPF, &next, &f ), 37u );
-	CHECK_EQ( next, 37u );
-	CHECK_EQ( f, 0.0f );
-
-	// every age of a few shapes: the same frame as flipbookFrameAt, the next in the same run
-	const UnsignedInt variants[] = { 1, 4, 3 };
-	const Real rates[] = { 0.0f, 4.0f, 20.0f };
-	for (Int v = 0; v < 3; ++v)
-		for (Int r = 0; r < 3; ++r)
-			for (UnsignedInt age = 0; age <= 120; ++age)
-			{
-				const UnsignedInt run = Particle::flipbookRunLength( 64, variants[ v ] );
-				const UnsignedInt frame = Particle::flipbookBlendAt( 64, variants[ v ], 1, 3, age, 100, rates[ r ], SPF, &next, &f );
-				CHECK_EQ( frame, Particle::flipbookFrameAt( 64, variants[ v ], 1, 3, age, 100, rates[ r ], SPF ) );
-				CHECK( f >= 0.0f && f < 1.0f );
-				CHECK( next / run == frame / run );
-				CHECK( next == frame || next == ( frame / run ) * run + ( frame % run + 1 ) % run );
-			}
-}
-
 /* IsParticleUpTowardsEmitter: a ground-aligned card turned by the angle has its top edge along
 	 (sin, cos) (pointgr.cpp's QUADS_SIZE_ORIENT turns clockwise), and that edge has to face the
 	 emitter on every heading.  EA's acos turned the exact east-west axis a quarter off; the Classic

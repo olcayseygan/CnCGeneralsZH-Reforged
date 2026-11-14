@@ -225,14 +225,6 @@ public:
 		* once over the life).  Pure, so the tests can hold it. */
 	static UnsignedInt flipbookFrameAt( UnsignedInt frames, UnsignedInt variants, UnsignedInt variant, UnsignedInt start,
 		UnsignedInt age, UnsignedInt lifetime, Real rate, Real secondsPerLogicFrame );
-	/** flipbookFrameAt's frame, plus the frame after it in the same run and how far the particle has
-		* come towards it, 0 up to 1, for drawing a crossfade of the two.  A loop wraps to the start of
-		* its own run; a run played once holds its last frame with fraction 0, and so does a still card.
-		* Pure. */
-	static UnsignedInt flipbookBlendAt( UnsignedInt frames, UnsignedInt variants, UnsignedInt variant, UnsignedInt start,
-		UnsignedInt age, UnsignedInt lifetime, Real rate, Real secondsPerLogicFrame, UnsignedInt *next, Real *fraction );
-	/// getFlipbookFrame with flipbookBlendAt's next frame and fraction.
-	UnsignedInt getFlipbookBlend( UnsignedInt *next, Real *fraction ) const;
 	/// How many frames one run of the atlas holds: frames over variants, the whole atlas for 0 or 1 or too many.
 	static UnsignedInt flipbookRunLength( UnsignedInt frames, UnsignedInt variants );
 

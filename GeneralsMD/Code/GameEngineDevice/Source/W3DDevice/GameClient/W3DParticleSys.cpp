@@ -774,17 +774,6 @@ struct BillboardFillJob
 /// would spend more on the interlocked claim than the work is worth
 static const Int BILLBOARD_FILLS_PER_CLAIM = 4;
 
-/** One card of a sorted billboard particle: screen facing, or along the emitter's axis. */
-static inline void writeParticleCard( const W3DParticleSystemManager::BillboardFill &fill, const Matrix4x4 &view,
-	VertexFormatXYZNDUV2 *quad, const Vector3 &world, Real size, uint8 orientation, unsigned packed,
-	const Vector3 &glow, UnsignedInt flipbookLog2, UnsignedInt frame, Bool mirrored )
-{
-	if (fill.alongAxis)
-		PointGroupClass::Write_Axis_Card( quad, view, world, fill.axis, size, packed, glow, flipbookLog2, frame, mirrored != FALSE );
-	else
-		PointGroupClass::Write_Billboard( quad, view, world, size, orientation, packed, glow, flipbookLog2, frame, mirrored != FALSE );
-}
-
 /** One sorted billboard system's quads, written into the range reserved for it.  Reads the system's
 	* particles and writes only that range and that fill's counts: no allocation, no device calls,
 	* nothing another job touches.  The cull and the 512-a-system cut are the ones the serial loop
@@ -795,7 +784,6 @@ static void fillBillboards( Int index, void *context )
 	W3DParticleSystemManager::BillboardFill &fill = job->fills[ index ];
 	VertexFormatXYZNDUV2 *quad = fill.range.Vertices;
 	Int drawn = 0;
-	Int quads = 0;
 	SmokeLight lights[ SMOKE_LIGHTS_PER_SYSTEM ];
 	const Int lightCount = pickSmokeLights( fill.system, job->lights, job->lightCount, lights );
 	const ParticleSystemInfo::ParticleShaderType shaderType = fill.system->getShaderType();
@@ -833,32 +821,15 @@ static void fillBillboards( Int index, void *context )
 		Real alpha = p->getAlpha();
 		if (fill.fade < 1.0f)
 			stealthFadeParticle( shaderType, fill.fade, red, green, blue, alpha );
+		const unsigned packed = DX8Wrapper::Convert_Color_Clamp( Vector4( red, green, blue, alpha ) );
 		// The orientation table's index wraps, as it did on Windows (Platform/MsvcFloatCasts.h).
 		const uint8 orientation = floatToByteAsMsvc( p->getAngle() * 255.0f / (2.0f * PI) );
-		UnsignedInt frame = 0, nextFrame = 0;
-		Real fraction = 0.0f;
-		if (flipbookLog2)
-			frame = fill.blend ? p->getFlipbookBlend( &nextFrame, &fraction ) : p->getFlipbookFrame();
-		const Vector3 world( pos->x, pos->y, pos->z );
-		const Bool mirrored = p->isFlipbookMirrored() != FALSE;
-		Int cards = 1;
-		if (fill.blend && fraction > 0.0f && nextFrame != frame)
-		{
-			// a crossfade at one depth: this frame takes 1 - fraction of the particle, the next the rest,
-			// as an alpha blended card takes a share of its alpha and an additive one of its light
-			Real r = red, g = green, b = blue, a = alpha;
-			stealthFadeParticle( shaderType, 1.0f - fraction, r, g, b, a );
-			writeParticleCard( fill, job->view, quad, world, psize, orientation, DX8Wrapper::Convert_Color_Clamp( Vector4( r, g, b, a ) ),
-				glow, flipbookLog2, frame, mirrored );
-			r = red; g = green; b = blue; a = alpha;
-			stealthFadeParticle( shaderType, fraction, r, g, b, a );
-			writeParticleCard( fill, job->view, quad + 4, world, psize, orientation, DX8Wrapper::Convert_Color_Clamp( Vector4( r, g, b, a ) ),
-				glow, flipbookLog2, nextFrame, mirrored );
-			cards = 2;
-		}
+		if (fill.alongAxis)
+			PointGroupClass::Write_Axis_Card( quad, job->view, Vector3( pos->x, pos->y, pos->z ), fill.axis, psize,
+				packed, glow, flipbookLog2, flipbookLog2 ? p->getFlipbookFrame() : 0, p->isFlipbookMirrored() != FALSE );
 		else
-			writeParticleCard( fill, job->view, quad, world, psize, orientation, DX8Wrapper::Convert_Color_Clamp( Vector4( red, green, blue, alpha ) ),
-				glow, flipbookLog2, frame, mirrored );
+			PointGroupClass::Write_Billboard( quad, job->view, Vector3( pos->x, pos->y, pos->z ), psize,
+				orientation, packed, glow, flipbookLog2, flipbookLog2 ? p->getFlipbookFrame() : 0, p->isFlipbookMirrored() != FALSE );
 		if (fill.fire)
 		{
 			// FIRE_LOOK_SAMPLING's packing: a whole number below 256, the seed times eight plus the
@@ -868,11 +839,10 @@ static void fillBillboards( Int index, void *context )
 			// systems), which stays young.
 			const Real age = p->m_lifetime ? 1.0f - (Real)p->getLifetimeLeft() / (Real)p->m_lifetime : 0.0f;
 			const Real fireAgeSeed = (Real)( ( ( ( p->getPersonality() * 97u ) & 31u ) << 3 ) | flipbookLog2 ) + 0.01f + 0.98f * age;
-			for (Int k = 0; k < 4 * cards; ++k)
+			for (Int k = 0; k < 4; ++k)
 				quad[ k ].v2 = fireAgeSeed;
 		}
-		quad += 4 * cards;
-		quads += cards;
+		quad += 4;
 
 		if (++drawn == fill.capacity)
 		{
@@ -882,7 +852,6 @@ static void fillBillboards( Int index, void *context )
 	}
 
 	fill.drawn = drawn;
-	fill.quads = quads;
 	fill.glow = job->glowAfterShade && lightCount > 0;
 }
 
@@ -2576,15 +2545,8 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		fill.hardEdge = sys->isAttachedToMine();
 		fill.alongAxis = sys->getTemplate()->isAlongEmitterAxis() && !TheGlobalData->m_classicGraphics;
 		fill.axis = sys->getEmitterAxis();
-		// A flipbook crossfades each particle's frame into the next (two cards a particle) outside
-		// Classic, for alpha blended and additive systems that fit twice in the 512 quads a range holds.
-		// ponytail: a flipbook system with more than 256 particles on screen steps frames as before
-		fill.blend = sys->getTemplate()->getFlipbookGridLog2() != 0 && !TheGlobalData->m_classicGraphics
-			&& ( sys->getShaderType() == ParticleSystemInfo::ALPHA || sys->getShaderType() == ParticleSystemInfo::ADDITIVE )
-			&& fill.capacity * 2 <= (Int)MAX_POINTS_PER_GROUP;
-		fill.quads = 0;
 		fill.texture =W3DDisplay::m_assetManager->Get_Texture( sys->getParticleTypeName().str() );
-		PointGroupClass::Reserve_Sorted_Billboards( fill.blend ? fill.capacity * 2 : fill.capacity, &fill.range );
+		PointGroupClass::Reserve_Sorted_Billboards( fill.capacity, &fill.range );
 		m_billboardFills.push_back( fill );
 	}
 
@@ -2680,7 +2642,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		if (nextFill < m_billboardFills.size() && m_billboardFills[ nextFill ].system == sys)
 		{
 			BillboardFill &fill = m_billboardFills[ nextFill++ ];
-			PointGroupClass::Insert_Sorted_Billboards( &fill.range, fill.quads, fill.texture, fill.shader, fill.glow != FALSE, fill.fire != FALSE,
+			PointGroupClass::Insert_Sorted_Billboards( &fill.range, fill.drawn, fill.texture, fill.shader, fill.glow != FALSE, fill.fire != FALSE,
 				sys->getTemplate()->isEmissive() != FALSE, fill.hardEdge != FALSE );
 			fill.texture->Release_Ref();	// the draw state took its own reference
 			m_fieldParticleCount += fill.fieldIncrement * fill.drawn;

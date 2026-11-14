@@ -78,7 +78,20 @@ public:
 	SimpleVecClass(int size = 0);
 	virtual ~SimpleVecClass(void);
 
-	T & operator[](int index)					{ assert(index < VectorMax); return(Vector[index]); } 
+	// A copy owns a buffer of its own. EA left these to the compiler, whose memberwise copy shared
+	// the pointer, and both copies deleted it: a copied SegmentedLineClass (the order lines' pool)
+	// freed its source's points the first time either was given new ones.
+	SimpleVecClass(const SimpleVecClass<T> & that) : Vector(NULL), VectorMax(0) { *this = that; }
+	SimpleVecClass<T> & operator = (const SimpleVecClass<T> & that)
+	{
+		if (this != &that) {
+			Resize(that.VectorMax);
+			if (VectorMax > 0) memcpy(Vector,that.Vector,VectorMax * sizeof(T));
+		}
+		return *this;
+	}
+
+	T & operator[](int index)					{ assert(index < VectorMax); return(Vector[index]); }
 	T const & operator[](int index) const	{ assert(index < VectorMax); return(Vector[index]); }
 
 	int				Length(void) const		{ return VectorMax; }

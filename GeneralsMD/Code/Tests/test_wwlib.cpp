@@ -991,6 +991,28 @@ TEST(simplevec_basics)
 		CHECK_NEAR(v[i], 0.0f, 1e-6f);
 }
 
+/* A copy gets its own buffer. The compiler's copy shared the pointer, so the order lines' pool
+   (copies of one SegmentedLineClass) freed its source's points twice: v4.0.0's commonest crash. */
+TEST(simplevec_copy_owns_its_buffer)
+{
+	SimpleDynVecClass<int> a;
+	for (int i = 0; i < 5; ++i)
+		a.Add(i);
+
+	SimpleDynVecClass<int> b(a);
+	CHECK_EQ(b.Count(), 5);
+	CHECK(&b[0] != &a[0]);
+	b.Delete_All();		/* shrinks: frees b's buffer, must leave a's */
+	b.Add(7);
+	CHECK_EQ(a[4], 4);
+
+	SimpleDynVecClass<int> c;
+	c = a;
+	CHECK_EQ(c.Count(), 5);
+	CHECK(&c[0] != &a[0]);
+	CHECK_EQ(c[3], 3);
+}
+
 namespace
 {
 	/* Minimal concrete HashableClass - the table stores the key by pointer,

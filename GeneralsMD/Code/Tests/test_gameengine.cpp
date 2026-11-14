@@ -26841,3 +26841,108 @@ TEST( only_the_tank_cannon_lists_count_as_a_tank_gun )
 	CHECK( !machineGun.isTankGun() );
 	CHECK( !gattling.isTankGun() );
 }
+
+#include "GameClient/Eva.h"
+
+/** Turkiye has an announcer of her own. EvaReforged.ini, parsed after an EA block the way Eva::init
+	 reads it after Eva.ini, adds a Turkiye side to the event and keeps EA's side and priority; every
+	 event with a Turkiye side names one DialogEvent from VoiceReforged.ini, a speech stream whose wav
+	 is in Data/Audio/Speech in EA's speech format, and no wav there is left unnamed. 36 events, the
+	 ones America has a real line for: an event dropped from the file, a line renamed on one side only
+	 or a wav missing from the folder fail here, and so does a parser that drops a block for a name
+	 already defined, which is what EA's did. */
+TEST(turkiye_announcer_speaks_every_event_america_does)
+{
+	CHECK( bootOnce() );
+
+	AudioManager *savedAudio = TheAudio;
+	if( savedAudio == NULL )
+		TheAudio = NEW NullAudioManager;
+	Eva *savedEva = TheEva;
+	TheEva = NEW Eva;
+
+	writeFile( TEST_INI,
+		"EvaEvent LowPower\r\n"
+		"  Priority = 2\r\n"
+		"  SideSounds\r\n"
+		"    Side = America\r\n"
+		"    Sounds = EvaUSA_LowPower\r\n"
+		"  End\r\n"
+		"End\r\n" );
+	CHECK( loadIni( TEST_INI ) );
+	remove( TEST_INI );
+	CHECK( loadIni( ZH_CODE_DIR "/Data/INI/VoiceReforged.ini" ) );
+	CHECK( loadIni( ZH_CODE_DIR "/Data/INI/EvaReforged.ini" ) );
+
+	const EvaCheckInfo *lowPower = TheEva->getEvaCheckInfo( AsciiString( "LowPower" ) );
+	CHECK( lowPower != NULL );
+	if( lowPower != NULL )
+	{
+		CHECK_EQ( (Int)lowPower->m_priority, 2 );
+		CHECK_EQ( (Int)lowPower->m_evaSideSounds.size(), 2 );
+		if( lowPower->m_evaSideSounds.size() == 2 )
+		{
+			CHECK( lowPower->m_evaSideSounds[ 0 ].m_side == "America" );
+			CHECK( lowPower->m_evaSideSounds[ 1 ].m_side == "Turkiye" );
+		}
+	}
+
+	const std::string speech = std::string( ZH_CODE_DIR ) + "/Data/Audio/Speech/";
+	std::set<std::string> heard;
+	Int events = 0;
+	for( Int m = EVA_FIRST; m < EVA_COUNT; ++m )
+	{
+		const EvaCheckInfo *check = TheEva->getEvaCheckInfo( Eva::messageToName( (EvaMessage)m ) );
+		if( check == NULL )
+			continue;
+		for( size_t s = 0; s < check->m_evaSideSounds.size(); ++s )
+		{
+			const EvaSideSounds &side = check->m_evaSideSounds[ s ];
+			if( side.m_side != "Turkiye" )
+				continue;
+			++events;
+			CHECK_EQ( (Int)side.m_soundNames.size(), 1 );
+			for( size_t n = 0; n < side.m_soundNames.size(); ++n )
+			{
+				const AudioEventInfo *info = TheAudio->findAudioEventInfo( side.m_soundNames[ n ] );
+				if( info == NULL )
+					printf( "  %s names %s, which VoiceReforged.ini lacks\n", Eva::messageToName( (EvaMessage)m ).str(), side.m_soundNames[ n ].str() );
+				CHECK( info != NULL );
+				if( info == NULL )
+					continue;
+				CHECK( info->m_soundType == AT_Streaming );
+				const std::string file = info->m_filename.str();
+				CHECK( heard.insert( file ).second );
+				Int channels = 0, rate = 0, bits = 0;
+				const Bool read = readWavFormat( speech + file, channels, rate, bits );
+				if( !read || channels != 1 || rate != 22050 || bits != 16 )
+					printf( "  %s: %s, %d ch, %d Hz, %d bit\n", file.c_str(), read ? "read" : "missing", channels, rate, bits );
+				CHECK( read );
+				CHECK_EQ( channels, 1 );
+				CHECK_EQ( rate, 22050 );
+				CHECK_EQ( bits, 16 );
+			}
+		}
+	}
+	CHECK_EQ( events, 36 );
+	CHECK_EQ( (Int)heard.size(), 36 );
+
+	Int onDisk = 0;
+	for( const std::filesystem::directory_entry &entry : std::filesystem::directory_iterator( speech ) )
+	{
+		if( entry.path().extension() != ".wav" )
+			continue;
+		++onDisk;
+		if( heard.count( entry.path().filename().string() ) == 0 )
+			printf( "  %s is in the folder and named by no event\n", entry.path().filename().string().c_str() );
+	}
+	CHECK_EQ( onDisk, 36 );
+
+	delete TheEva;
+	TheEva = savedEva;
+	if( savedAudio == NULL )
+	{
+		delete TheAudio;
+		TheAudio = NULL;
+	}
+}

@@ -174,11 +174,9 @@ void INI::parseEvaEvent( INI* ini )
 	const char* c = ini->getNextToken();
 	name.set( c );	
 	
+	// A name already defined is parsed into the event that holds it, so a later file adds a side
+	// (EvaReforged.ini gives Turkiye its own SideSounds) and keeps every field it does not name.
 	EvaCheckInfo *check = TheEva->newEvaCheckInfo( name );
-	if (!check) {
-		// could be null because it already exists.
-		return;
-	}
 
 	// parse the ini definition
 	ini->initFromINI( check, check->getFieldParse() );
@@ -274,6 +272,9 @@ void Eva::init()
 	// parse the INI here, etc.
 	INI ini;
 	ini.load( AsciiString( "Data\\INI\\Eva.ini" ), INI_LOAD_OVERWRITE, NULL);
+
+	// the fork's own announcers, Turkiye's: a side added to EA's events; not in any checksum
+	ini.load( AsciiString( "Data\\INI\\EvaReforged.ini" ), INI_LOAD_OVERWRITE, NULL);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -367,11 +368,12 @@ EvaCheckInfo *Eva::newEvaCheckInfo(AsciiString name)
 {
 	EvaMessage mesg = nameToMessage(name);
 
-	// Only return a new one if there isn't an existing one.
+	// Only make a new one if there isn't an existing one; an existing one is handed back to be
+	// parsed into (INI::parseEvaEvent).
 	EvaCheckInfoPtrVecIt it;
 	for (it = m_allCheckInfos.begin(); it != m_allCheckInfos.end(); ++it) {
 		if (*it && (*it)->m_message == mesg)
-			return NULL;
+			return *it;
 	}
 
 	EvaCheckInfo *checkInfo = newInstance(EvaCheckInfo);

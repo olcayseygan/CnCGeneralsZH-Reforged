@@ -69,13 +69,6 @@ protected:
 	/// On_Frame_Update is driven once per RENDER frame.
 	UnsignedInt m_lastFadeFrame;
 
-	/// the fade's strength after the last tick's step and the one before it, which a picture between
-	/// ticks shows part way through (the Reforged look, on the smooth motion clock)
-	Real		m_fadeFrom;
-	Real		m_fadeTo;
-	Bool		m_fadeStepped;
-	void applyFade(Real factor);
-
 
 public:
 	W3DDynamicLight();

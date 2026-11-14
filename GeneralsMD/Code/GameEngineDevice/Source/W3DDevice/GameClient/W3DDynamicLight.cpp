@@ -29,8 +29,6 @@
 #include <stdlib.h>
 
 #include "W3DDevice/GameClient/W3DDynamicLight.h"
-#include "W3DDevice/GameClient/W3DSmoothMotion.h"
-#include "Common/GlobalData.h"
 #include "GameClient/GameClient.h"		// for the logic-frame gate in On_Frame_Update
 
 W3DDynamicLight::W3DDynamicLight(void):
@@ -40,8 +38,6 @@ LightClass(LightClass::POINT)
 	m_priorEnable = false;
 	m_enabled = true;
 	m_lastFadeFrame = 0xffffffff;	// so the first On_Frame_Update always steps
-	m_fadeFrom = m_fadeTo = 1.0f;
-	m_fadeStepped = false;
 
 }
 
@@ -62,11 +58,6 @@ void W3DDynamicLight::On_Frame_Update(void)
 	//
 	UnsignedInt now = TheGameClient ? TheGameClient->getFrame() : 0;
 	if (now == m_lastFadeFrame) {
-		// Between ticks the Reforged look shows the strength part way from the last tick's, on the
-		// picture's clock as the models glide (W3DSmoothMotion.h); a whole tick on it is the tick's own.
-		if (m_fadeStepped && TheSmoothMotionActive && !TheGlobalData->m_classicGraphics && TheSmoothMotionAlpha < 1.0f) {
-			applyFade(SmoothMotion_Lerp(m_fadeFrom, m_fadeTo, TheSmoothMotionAlpha));
-		}
 		return;
 	}
 	m_lastFadeFrame = now;
@@ -87,17 +78,6 @@ void W3DDynamicLight::On_Frame_Update(void)
 		}
 		factor = m_curDecayFrameCount/(Real)m_decayFrameCount;
 	}
-	m_fadeFrom = m_fadeTo;
-	m_fadeTo = factor;
-	m_fadeStepped = true;
-	// the tick's own strength, unless this picture is part way into the tick
-	if (TheSmoothMotionActive && !TheGlobalData->m_classicGraphics && TheSmoothMotionAlpha < 1.0f)
-		factor = SmoothMotion_Lerp(m_fadeFrom, m_fadeTo, TheSmoothMotionAlpha);
-	applyFade(factor);
-}
-
-void W3DDynamicLight::applyFade(Real factor)
-{
 	if (m_decayRange) {
 		this->FarAttenEnd = factor*m_targetRange;
 		if (FarAttenEnd < FarAttenStart) {
@@ -119,8 +99,4 @@ void W3DDynamicLight::setFrameFade(UnsignedInt frameIncreaseTime, UnsignedInt de
 	m_targetAmbient = Ambient;
 	m_targetDiffuse = Diffuse;
 	m_targetRange = FarAttenEnd;
-	// the strength it is set at now, which the first tick's step fades from: none for a pulse that grows
-	m_fadeTo = frameIncreaseTime > 0 ? 0.0f : 1.0f;
-	m_fadeFrom = m_fadeTo;
-	m_fadeStepped = false;
 }

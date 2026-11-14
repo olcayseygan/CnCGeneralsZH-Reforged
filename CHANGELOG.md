@@ -60,7 +60,7 @@ found and fixed, EA's own, not port damage.**
 ## The game steps 30 times a second again, and the picture glides
 
 - The game's simulation is back at 30 steps a second, as in the original Generals. It ran at 60 from version 3.0.0. On its own this step leaves game speed, unit speeds and every timing as they were (the faster play above is a separate setting); only the work behind them is lighter, which leaves more room in big late-game battles and on slower machines.
-- Smooth Motion keeps the picture from showing it. It draws units between their last two positions, so movement glides at your screen's full refresh, a 60 Hz screen included, and it is on unless you switch it off in Options. A tank's turret, the lift of its gun, the kick of its barrel and its road wheels glide with the hull now; they used to swing a whole step at once while the hull slid smoothly under them. The light a shot or a blast throws on the ground and on the wrecks around it rises and fades smoothly too, where it brightened and dimmed in steps.
+- Smooth Motion keeps the picture from showing it. It draws units between their last two positions, so movement glides at your screen's full refresh, a 60 Hz screen included, and it is on unless you switch it off in Options. A tank's turret, the lift of its gun, the kick of its barrel and its road wheels glide with the hull now; they used to swing a whole step at once while the hull slid smoothly under them.
 - Replays and saved games from earlier versions will not load, and everyone in a network game needs the same build.
 
 ## Your whole production from three tabs

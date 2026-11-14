@@ -127,34 +127,6 @@ TEST(smooth_motion_bone_track_stays_on_its_model)
 	CHECK(gun.tickControl(&modelA, 6) == NULL);
 }
 
-/* A light pulse's strength steps once a tick; a picture between ticks shows it part way from the last
-	 tick's.  The tick itself (alpha 1, smooth motion off) is the tick's value bit for bit, and the end
-	 of one tick is the start of the next, so a decay runs down without steps. */
-TEST(smooth_motion_light_strength_between_ticks)
-{
-	CHECK_EQ(SmoothMotion_Lerp(0.8f, 0.6f, 1.0f), 0.6f);
-	CHECK_EQ(SmoothMotion_Lerp(0.8f, 0.6f, 1.5f), 0.6f);
-	CHECK_EQ(SmoothMotion_Lerp(0.8f, 0.6f, 0.0f), 0.8f);
-	CHECK_EQ(SmoothMotion_Lerp(0.8f, 0.6f, -1.0f), 0.8f);
-	CHECK_NEAR(SmoothMotion_Lerp(0.8f, 0.6f, 0.25f), 0.75f, EPS);
-	// a pulse decaying over 5 ticks: 5/5 at its birth, 4/5 after the first step, ...
-	float last = 1.0f;
-	for (int tick = 1; tick <= 4; ++tick)
-	{
-		const float from = (5.0f - (float)(tick - 1)) / 5.0f, to = (5.0f - (float)tick) / 5.0f;
-		CHECK_EQ(SmoothMotion_Lerp(from, to, 0.0f), last);		// continues from the last picture of the tick before
-		for (int q = 1; q <= 4; ++q)
-		{
-			const float shown = SmoothMotion_Lerp(from, to, (float)q / 4.0f);
-			CHECK(shown <= last + EPS && shown >= to - EPS);
-			last = shown;
-		}
-		CHECK_EQ(last, to);
-	}
-	// a growing pulse starts from nothing
-	CHECK_NEAR(SmoothMotion_Lerp(0.0f, 1.0f / 3.0f, 0.5f), 1.0f / 6.0f, EPS);
-}
-
 TEST(smooth_motion_the_same_transform_blends_to_itself)
 {
 	Matrix3D out;

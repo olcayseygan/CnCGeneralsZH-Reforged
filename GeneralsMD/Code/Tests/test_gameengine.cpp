@@ -1661,6 +1661,46 @@ TEST(particle_born_riding_a_parent_is_drawn_with_it)
 	CHECK_EQ( still.x, sparkNow.pos.x ); CHECK_EQ( still.z, sparkNow.pos.z );
 }
 
+/* A newborn fades in over the tick that brings it: its first drawn update starts unseen in the way
+	 its shader means unseen, so a picture a quarter into that tick shows a quarter of it and the tick's
+	 end shows it whole, bit for bit. */
+TEST(particle_newborn_fades_in_over_its_first_tick)
+{
+	ParticleDrawState born, aged, from, out;
+	memset( &born, 0, sizeof( born ) );
+	born.pos.x = 7.0f; born.size = 3.0f; born.alpha = 0.8f;
+	born.color.red = 1.0f; born.color.green = 0.6f; born.color.blue = 0.2f;
+	aged = born;
+	aged.pos.x = 9.0f; aged.size = 4.0f;
+
+	from = born;
+	Particle::fadeInFrom( &from, ParticleSystemInfo::ALPHA );
+	CHECK_EQ( from.alpha, 0.0f );
+	CHECK_EQ( from.color.red, 1.0f );			// colour kept: an alpha blended card only grows opaque
+	CHECK_EQ( from.pos.x, 7.0f ); CHECK_EQ( from.size, 3.0f );	// where and how big it was born
+	Particle::tickBlend( from, aged, 0.25f, &out );
+	CHECK_NEAR( out.alpha, 0.2f, 0.0001f );
+	CHECK_NEAR( out.pos.x, 7.5f, 0.0001f );
+	Particle::tickBlend( from, aged, 1.0f, &out );
+	CHECK_MEM( &out, &aged, sizeof( out ) );
+
+	from = born;
+	Particle::fadeInFrom( &from, ParticleSystemInfo::ADDITIVE );
+	CHECK_EQ( from.color.red, 0.0f ); CHECK_EQ( from.color.green, 0.0f ); CHECK_EQ( from.color.blue, 0.0f );
+	Particle::tickBlend( from, aged, 0.5f, &out );
+	CHECK_NEAR( out.color.red, 0.5f, 0.0001f ); CHECK_NEAR( out.color.green, 0.3f, 0.0001f );
+
+	from = born;
+	Particle::fadeInFrom( &from, ParticleSystemInfo::MULTIPLY );
+	CHECK_EQ( from.color.blue, 1.0f );		// white multiplies by nothing
+	Particle::tickBlend( from, aged, 0.5f, &out );
+	CHECK_NEAR( out.color.blue, 0.6f, 0.0001f );
+
+	from = born;
+	Particle::fadeInFrom( &from, ParticleSystemInfo::ALPHA_TEST );
+	CHECK_EQ( from.alpha, 0.0f );
+}
+
 /* The alpha blended crossfade's two alphas: the frame under keeps the pair's coverage near the
 	 particle's own (within a tenth at full alpha half way, where two plain shares lose a quarter), it
 	 falls steadily to nothing as the next frame comes up, and the ends are one card each. */

@@ -13,6 +13,8 @@ Data/Art/Textures/ReforgedDust.dds
 Data/Art/Textures/ReforgedFactionTurkiye.tga
 Data/Art/Textures/ReforgedFireball.dds
 Data/Art/Textures/ReforgedFireballB.dds
+Data/Art/Textures/ReforgedFlame.dds
+Data/Art/Textures/ReforgedFlameB.dds
 Data/Art/Textures/ReforgedForceAttack.tga
 Data/Art/Textures/ReforgedGuardCentre.tga
 Data/Art/Textures/ReforgedGuardRing.tga
@@ -48,6 +50,7 @@ Data/Art/Textures/ReforgedHudTurkiyeTabSolo.dds
 Data/Art/Textures/ReforgedHudTurkiyeTalents.dds
 Data/Art/Textures/ReforgedLaserPink.tga
 Data/Art/Textures/ReforgedLobbySpot.tga
+Data/Art/Textures/ReforgedMuzzleFlash.dds
 Data/Art/Textures/ReforgedRadarContact.tga
 Data/Art/Textures/ReforgedRadarRing.tga
 Data/Art/Textures/ReforgedReconArea.tga
@@ -615,6 +618,7 @@ Data/Art/W3D/TRWARFAC_DR.W3D
 Data/Art/W3D/TRWARFAC_E.W3D
 Data/Art/W3D/TRWARFAC_R.W3D
 Data/Art/W3D/TRWARFAC_SC.W3D
+Data/Cinema/altstyles.txt
 Data/Cinema/aurorablast.txt
 Data/Cinema/aurorafog.txt
 Data/Cinema/blastcheck.txt
@@ -874,6 +878,7 @@ Data/Scenarios/airbelow.txt
 Data/Scenarios/airbelowfar.txt
 Data/Scenarios/alpagudive.txt
 Data/Scenarios/alphaaurora.txt
+Data/Scenarios/altstyles.txt
 Data/Scenarios/ambulanceclean.txt
 Data/Scenarios/ambulancegiveup.txt
 Data/Scenarios/ambulanceguard.txt
@@ -4975,6 +4980,7 @@ Tools/matchbot/wnet/tcp.cpp
 Tools/matchbot/wnet/tcp.h
 Tools/matchbot/wnet/udp.cpp
 Tools/matchbot/wnet/udp.h
+Tools/muzzle_flipbook.py
 Tools/net-check.sh
 Tools/net_check.py
 Tools/online-libs.ps1

@@ -65,16 +65,35 @@ SMOKE = dict(
     density_scale=110.0, density_power=1.2, albedo=0.55, ortho=7.5, aim_z=3.0,
     growth=1.0, hold=0.85, gamma=1.25, base=None)		# growth 1: every frame fills its cell; the INI grows it
 
+# v3: a 200 grid doubled by Mantaflow's wavelet noise (upres) tears the flame front into tongues
+# where a plain 256 or 320 grid kept the emitters' round lobes; harder burst and flame vorticity;
+# the flame itself opaque (flame_density) and torn by noise in the shader; the first three sim
+# frames, the emitters' own lumpy shapes, skipped.
 FIRE = dict(
-    kind="fire", res=256, samples=128, step=1, loop=False, crop=None, floor=False,
-    frame_end=72, first=2, pulse=0, time_scale=0.6,
+    kind="fire", res=200, samples=128, step=1, loop=False, crop=None, floor=False,
+    upres=2, upres_strength=2.0, upres_size=2.0,
+    frame_end=70, first=5, pulse=0, time_scale=0.6,
     density=0.0, temperature=2.0, fuel=3.0, density_buoyancy=0.0, heat_buoyancy=1.6,
-    vorticity=0.6, velocity_normal=4.2, velocity_up=0.6, velocity_random=3.0,
+    vorticity=0.9, velocity_normal=5.5, velocity_up=0.6, velocity_random=4.5,
     dissolve=0, lump=0.55, noise_scale=0.3,
-    burning_rate=0.45, flame_smoke=1.8, flame_vorticity=2.5, flame_ignition=1.25, flame_max_temp=2.5,
+    burning_rate=0.5, flame_smoke=1.8, flame_vorticity=5.0, flame_ignition=1.25, flame_max_temp=2.5,
     soot_scale=1500.0, flame_strength=300.0, flame_power=4.5,
+    flame_noise=0.9, flame_noise_scale=6.0, flame_noise_speed=0.06, flame_edge=0.15, flame_gate=0.04,
+    flame_density=1500.0,
     kelvin_low=800.0, kelvin_span=3400.0, kelvin_shape=1.4,
     ortho=4.0, aim_z=1.7, growth=0.55)
+
+# A steady fire.  The first 45 sim frames, the fire still finding its height, are skipped; the 80
+# after loop, the last 16 crossfaded into the first.  Fuel flows from a thin skin round its lumps
+# (surface): from the default 0.6 the base was one wide white slab.  The soot dissolves, so it
+# stays a thin wisp and the domain small.  Exposed to one steady key, not the fireball's cooling
+# arc, and cropped to one square for the whole loop with the fire's foot near the card's bottom,
+# so the card stands on what burns.
+FLAME = dict(FIRE, loop=True, first=45, frame_end=126, floor=True, surface=0.2, dissolve=25,
+             time_scale=0.8, fuel=1.6, temperature=1.6, heat_buoyancy=3.0, vorticity=0.6,
+             velocity_normal=0.4, velocity_up=1.5, velocity_random=1.3, lump=0.35, noise_scale=0.25,
+             burning_rate=0.85, flame_smoke=0.4, flame_vorticity=4.0, soot_scale=250.0,
+             key=1.0, ortho=4.5, aim_z=1.8, base=0.92, headroom=0.12)		# headroom: the soot's wisps
 
 LOOKS = {
     # The first 29 frames are skipped: straight out of the emitters the lobes are smooth, dense balls
@@ -117,6 +136,14 @@ LOOKS = {
                             (0.48, -0.15, 1.2, 0.25, 2, 5), (-0.1, -0.35, 1.3, 0.22, 2, 6),
                             (0.25, 0.3, 1.55, 0.22, 3, 7), (-0.3, 0.2, 1.6, 0.18, 4, 7),
                             (0.55, 0.25, 0.85, 0.17, 1, 3))),
+    # A fire that keeps burning in place, a wreck's or a building's: fuel welling up for good from a
+    # few lumps on the ground, licking up in tongues that tear off and go out, a thin soot above.
+    "flame": dict(FLAME, name="ReforgedFlame.dds", tumble=(0.9, 1.6, 0.7),
+                  emitters=((-0.42, 0.0, 0.22, 0.2, 1, 10000), (0.0, 0.08, 0.18, 0.24, 1, 10000),
+                            (0.4, -0.06, 0.22, 0.19, 1, 10000), (0.18, -0.2, 0.3, 0.15, 1, 10000))),
+    # One narrow tongue of it, for a small fire: a burning tree, a crate, a wreck's last flame.
+    "flameb": dict(FLAME, name="ReforgedFlameB.dds", tumble=(1.4, 0.5, 1.1), ortho=3.0, aim_z=1.3,
+                   emitters=((0.0, 0.0, 0.2, 0.22, 1, 10000), (0.12, 0.1, 0.3, 0.14, 1, 10000))),
 }
 
 
@@ -130,6 +157,9 @@ def blender_render(look, work):
     p = dict(LOOKS[look])
     p["res"] = int(os.environ.get("SMOKE_RES", p["res"]))
     p["samples"] = int(os.environ.get("SMOKE_SAMPLES", p["samples"]))
+    for pair in filter(None, os.environ.get("SMOKE_SET", "").split(",")):		# key=number, for probes
+        key, value = pair.split("=")
+        p[key] = float(value)
     fire = p["kind"] == "fire"
     root = os.path.abspath(os.path.join(work, look))
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -158,7 +188,15 @@ def blender_render(look, work):
     ds.dissolve_speed = max(1, p["dissolve"])
     ds.use_adaptive_domain = True		# solves only round the smoke, so the base grid can be fine
     ds.adapt_margin = 12		# a fast burst outran 6 cells and was cut flat on the grid's faces
-    ds.use_noise = False		# Mantaflow's wavelet noise crinkles the edges like paper; base res is better
+    # Mantaflow's wavelet noise crinkles smoke's edges like paper, so smoke's base res is better.  The
+    # fire's flame field is near 1 inside and drops to 0 within two voxels, round lobes as smooth as
+    # the emitters; there the crinkle is what tears the front into tongues.
+    ds.use_noise = p.get("upres", 0) > 0
+    if ds.use_noise:
+        ds.noise_scale = int(p["upres"])
+        ds.noise_strength = p["upres_strength"]
+        ds.noise_pos_scale = p["upres_size"]
+        ds.noise_time_anim = 0.3
     if fire:
         ds.burning_rate = p["burning_rate"]
         ds.flame_smoke = p["flame_smoke"]
@@ -199,7 +237,7 @@ def blender_render(look, work):
         fs.flow_behavior = "INFLOW"
         fs.flow_source = "MESH"
         fs.volume_density = 1.0
-        fs.surface_distance = 0.6
+        fs.surface_distance = p.get("surface", 0.6)
         fs.density = p["density"]
         fs.temperature = p["temperature"]
         if fire:
@@ -270,10 +308,41 @@ def blender_render(look, work):
         # black body from 800 K where the flame field is faint to 4200 K at its hottest, the field
         # shaped so most of it sits low (orange, red) and only the core runs hot, its strength
         # rising steeply with the field, so the core, past the tone curve, bleaches to white.
-        links.new(math("MULTIPLY", density, p["soot_scale"]), volume.inputs["Density"])
         volume.inputs["Color"].default_value = (0.14, 0.13, 0.12, 1.0)
         volume.inputs["Absorption Color"].default_value = (0.0, 0.0, 0.0, 1.0)
-        flame = math("SUBTRACT", attribute("flame"), 0.01, clamp=True)
+        # The sim's flame field sits near 1 through the whole young fireball, so it drew as one flat
+        # glowing lump.  A 4D noise shifts it, flame only, the soot untouched: the skin breaks into
+        # hot licks and darker folds, and at the rim the field's isosurfaces are torn.  W moves
+        # with the frame, so the licks flicker instead of sliding through a fixed pattern.
+        coords = nodes.new("ShaderNodeTexCoord")
+        stretch = nodes.new("ShaderNodeMapping")
+        stretch.inputs["Scale"].default_value = (1.0, 1.0, 0.6)		# taller than wide: licks, not grain
+        links.new(coords.outputs["Object"], stretch.inputs["Vector"])
+        noise = nodes.new("ShaderNodeTexNoise")
+        noise.noise_dimensions = "4D"
+        noise.inputs["Scale"].default_value = p["flame_noise_scale"]
+        noise.inputs["Detail"].default_value = 8.0
+        noise.inputs["Roughness"].default_value = 0.62
+        noise.inputs["Distortion"].default_value = 0.6
+        links.new(stretch.outputs["Vector"], noise.inputs["Vector"])
+        # Added, not multiplied: a fixed shift tears the thin rim and leaves the deep field whole.
+        # It fades out where the field falls under flame_gate, or it lit flame in empty air; above
+        # that, in the sim's faint halo, it raises tongues out past the field's soft edge.
+        raw = attribute("flame")
+        shift = nodes.new("ShaderNodeMath")
+        shift.operation = "MULTIPLY_ADD"
+        links.new(noise.outputs["Fac"], shift.inputs[0])
+        shift.inputs[1].default_value = 2.0 * p["flame_noise"]
+        shift.inputs[2].default_value = -p["flame_noise"]
+        gate = math("MULTIPLY", raw, 1.0 / p["flame_gate"], clamp=True)
+        torn = math("ADD", raw, math("MULTIPLY", shift.outputs[0], gate))
+        flame = math("SUBTRACT", torn, 0.01, clamp=True)
+        # A hard floor on the torn field, so the flame's body ends in a cut, not a faint fringe.
+        edge = nodes.new("ShaderNodeMapRange")
+        edge.interpolation_type = "SMOOTHSTEP"
+        links.new(flame, edge.inputs["Value"])
+        edge.inputs["From Min"].default_value = p["flame_edge"]
+        edge.inputs["From Max"].default_value = p["flame_edge"] * 1.6
         shaped = math("POWER", flame, p["kelvin_shape"])
         kelvin = nodes.new("ShaderNodeMath")
         kelvin.operation = "MULTIPLY_ADD"
@@ -283,7 +352,13 @@ def blender_render(look, work):
         body = nodes.new("ShaderNodeBlackbody")
         links.new(kelvin.outputs[0], body.inputs["Temperature"])
         links.new(body.outputs["Color"], volume.inputs["Emission Color"])
-        links.new(math("MULTIPLY", math("POWER", flame, p["flame_power"]), p["flame_strength"]), volume.inputs["Emission Strength"])
+        strength = math("MULTIPLY", math("POWER", flame, p["flame_power"]), p["flame_strength"])
+        links.new(math("MULTIPLY", strength, edge.outputs["Result"]), volume.inputs["Emission Strength"])
+        # The flame is opaque too, as a sooty flame is: light summed through a transparent glow
+        # fades at the rim along a shrinking chord, a soft limb however hard the field's edge; an
+        # opaque flame shows its outer skin, cut sharp, and hides its hottest core behind it.
+        body_density = math("MULTIPLY", math("MULTIPLY", flame, edge.outputs["Result"]), p["flame_density"])
+        links.new(math("ADD", math("MULTIPLY", density, p["soot_scale"]), body_density), volume.inputs["Density"])
     else:
         # Dense and dark: low albedo, so the side away from the sun falls into its own shadow
         # instead of glowing with scattered light, which is what made v1 cotton wool.
@@ -292,6 +367,10 @@ def blender_render(look, work):
         volume.inputs["Color"].default_value = (p["albedo"],) * 3 + (1.0,)
         volume.inputs["Absorption Color"].default_value = (0.0, 0.0, 0.0, 1.0)
         volume.inputs["Anisotropy"].default_value = 0.3
+    # Linear interpolation of the grid drew its voxels as vertical streaks and stair steps through
+    # a steep emission curve; cubic smooths the field, the noise above puts the detail back.
+    if fire:
+        material.cycles.volume_interpolation = "CUBIC"
     domain.data.materials.append(material)
 
     world = bpy.data.worlds.new("Sky")
@@ -329,7 +408,7 @@ def blender_render(look, work):
         device.use = device.type != "CPU"
     scene.cycles.device = "GPU"
     scene.cycles.samples = p["samples"]
-    scene.cycles.use_denoising = True
+    scene.cycles.use_denoising = not fire		# the denoiser smeared fire's fine tongues into streaks
     scene.cycles.volume_bounces = 1
     scene.cycles.volume_step_rate = 0.5
     scene.cycles.volume_max_steps = 2048
@@ -349,6 +428,8 @@ def blender_render(look, work):
     for index in ([int(v) for v in pick.split(",")] if pick else range(count)):
         frame = p["first"] + index * p["step"]
         scene.frame_set(frame)
+        if fire:
+            noise.inputs["W"].default_value = frame * p["flame_noise_speed"]
         scene.render.filepath = os.path.join(root, "frames", "%04d.%s" % (index, "exr" if fire else "png"))
         bpy.ops.render.render(write_still=True)
 
@@ -385,6 +466,8 @@ def read_exr(path):
 FIRE_EXPOSURE = 1.0		# tone curve: 1 / the brightness at 1 - 1/e
 FIRE_SATURATION = 1.35	# linear sRGB greys out a black body's orange
 FIRE_FILM = 0.6			# share of a flame's colour taken from FIRE_RAMP
+FIRE_EDGE = 1.6			# the flame's coverage is its brightness to this power: a dim rim covers less,
+						# so a tongue ends in a cut, not a red halo
 # What film makes of a fire by brightness, linear: soot red, deep red, orange, yellow, white.  A bare
 # black body of 4000 K comes out peach, which read as the pale clay of v3.3.0.
 FIRE_RAMP = ((0.0, (0.02, 0.002, 0.0)), (0.25, (0.35, 0.03, 0.005)), (0.5, (0.85, 0.22, 0.02)),
@@ -411,7 +494,7 @@ def tone_map(frames):
     rgb = rgb * (1.0 - weight) + film * weight
     rgb = np.where(rgb <= 0.0031308, rgb * 12.92, 1.055 * np.power(np.maximum(rgb, 0.0031308), 1.0 / 2.4) - 0.055)
     alpha = np.clip(frames[..., 3:], 0.0, 1.0)
-    alpha = np.maximum(alpha, np.clip(rgb.max(axis=-1, keepdims=True) * 1.4, 0.0, 1.0))
+    alpha = np.maximum(alpha, np.clip(rgb.max(axis=-1, keepdims=True) * 1.4, 0.0, 1.0) ** FIRE_EDGE)
     return np.concatenate((np.minimum(rgb, alpha), alpha), axis=-1)
 
 
@@ -441,13 +524,25 @@ def expose_burn(frames):
     return frames
 
 
-def load_sequence(folder, fire=False):
+def expose_steady(frames, key):
+    """frames (n, h, w, 4) linear premultiplied fire that burns steadily, all scaled by one factor so
+    their median flame brightness is key: the flicker stays the sim's own."""
+    import numpy as np
+    lit = frames[..., :3].max(axis=-1)
+    level = np.median([np.percentile(l[l > 0.02], 90) for l in lit if (l > 0.02).any()])
+    frames = frames.copy()
+    frames[..., :3] *= key / max(level, 1e-4)
+    return frames
+
+
+def load_sequence(folder, fire=False, key=None):
     """Premultiplied frames: smoke from straight-alpha PNGs, fire from linear EXRs, exposed along the
-    burn and tone mapped."""
+    burn (or to one steady key) and tone mapped."""
     import numpy as np
     names = sorted(n for n in os.listdir(folder) if n.endswith(".exr" if fire else ".png"))
     if fire:
-        return tone_map(expose_burn(np.stack([read_exr(os.path.join(folder, n)) for n in names])))
+        frames = np.stack([read_exr(os.path.join(folder, n)) for n in names])
+        return tone_map(expose_steady(frames, key) if key else expose_burn(frames))
     frames = np.stack([read_png16(os.path.join(folder, n)) for n in names])
     frames[..., :3] *= frames[..., 3:]
     return frames
@@ -470,15 +565,18 @@ def smooth(values, width=9):
     return np.convolve(padded, kernel, mode="valid")
 
 
-def crop_frames(frames, cell, growth, loop, base=None):
+def crop_frames(frames, cell, growth, loop, base=None, headroom=MARGIN, by_light=False):
     """Each frame cropped to a square round its content and filtered to cell.  The square follows
     the content's smoothed centre; its size is the largest extent times (extent / largest) ** growth,
     so growth 0 keeps the sim's own expansion in one square and 1 fits every frame to its cell,
     leaving growth to the INI's Size keys.  A looping look takes one square for all frames, or the seam would jump.  base,
     a share of the cell from its top, puts the content's foot there instead of centring it: a card
-    stands on its particle's place, and ground dust centred on it sank half into the ground."""
+    stands on its particle's place, and ground dust centred on it sank half into the ground.  A
+    looping look with a base leaves headroom, a share of the cell, above its tallest content.
+    by_light frames what glows, not what covers: a steady fire's soot column is metres tall, and
+    framed by it the flame filled a third of its cell."""
     import numpy as np
-    solid = frames[..., 3] > THRESHOLD
+    solid = frames[..., :3].max(axis=-1) > 0.2 if by_light else frames[..., 3] > THRESHOLD
     boxes = []
     for mask in solid:
         ys, xs = np.nonzero(mask)
@@ -496,7 +594,12 @@ def crop_frames(frames, cell, growth, loop, base=None):
         extent = np.maximum.accumulate(smooth(extent))		# never shrinks: it thins, it does not pull in
     largest = extent.max()
     sides = largest * (extent / largest) ** growth / (1.0 - 2.0 * MARGIN)
-    if base is not None:
+    if base is not None and loop:
+        # one foot for the whole loop, the deepest, and room above the tallest tongue
+        height = boxes[:, 1].max() - boxes[:, 0].min()
+        sides = np.maximum(sides, height / (base - headroom))
+        cy = np.full(len(frames), boxes[:, 1].max()) - sides * (base - 0.5)
+    elif base is not None:
         cy = smooth(boxes[:, 1]) - sides * (base - 0.5)
     out = np.zeros((len(frames), cell, cell, 4), np.float32)
     pad = int(sides.max())
@@ -682,7 +785,8 @@ def build(frames, p):
     if p["crop"]:
         frames = crop_fixed(frames[:FRAMES], cell, p["crop"])
     else:
-        frames = crop_frames(frames[:FRAMES], cell, p["growth"], p["loop"], p.get("base"))
+        frames = crop_frames(frames[:FRAMES], cell, p["growth"], p["loop"], p.get("base"),
+                             p.get("headroom", MARGIN), p["kind"] == "fire" and p["loop"])
     frames *= window(cell, p["crop"] is not None)[None, :, :, None]
     if p["kind"] == "fire":
         return frames		# tone mapped on load; the flame's colour is the sim's, not graded
@@ -843,6 +947,40 @@ def blasts(frames, size=720, seconds=4.0, fps=30, scale=1.0, seed=3):
     return np.clip(out, 0.0, 1.0)
 
 
+def wreck_fire(frames, size=720, seconds=6.0, fps=30, scale=1.0, seed=7):
+    """A looping flame flipbook as a burning wreck would carry it: a dark hulk on the ground and four
+    cards of different size, tint, start frame and mirror standing on it, their feet on its deck."""
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    image = battlefield(size)
+    y, x = np.mgrid[0:size, 0:size] / float(size)
+    cx, cy = 0.5, 0.72
+    hull = (np.abs(x - cx) < 0.2 * scale) & (np.abs(y - cy) < 0.055 * scale)
+    turret = (np.abs(x - cx + 0.03 * scale) < 0.08 * scale) & (np.abs(y - cy + 0.08 * scale) < 0.035 * scale)
+    image[hull | turret] = (0.05, 0.045, 0.04)
+    cards = [dict(dx=dx * scale, dy=dy * scale, px=int(size * scale * s), tint=np.array(t, np.float32),
+                  start=int(rng.integers(0, FRAMES)), flip=k % 2)
+             for k, (dx, dy, s, t) in enumerate(((-0.1, -0.03, 0.42, (1.0, 0.95, 0.9)), (0.06, -0.09, 0.5, (1.0, 1.0, 1.0)),
+                                                 (0.14, -0.02, 0.32, (0.95, 0.85, 0.8)), (-0.02, 0.0, 0.36, (0.9, 0.85, 0.85))))]
+    out = np.zeros((int(seconds * fps), size, size, 3), np.float32)
+    for t in range(len(out)):
+        frame = image.copy()
+        for c in cards:
+            s = sprite(frames[(c["start"] + t) % FRAMES], c["px"], c["tint"], c["flip"])
+            # the card's foot (0.9 of its height, the look's base) on the deck
+            paste(frame, s, int(size * (cx + c["dx"])), int(size * (cy + c["dy"]) - c["px"] * 0.4))
+        out[t] = frame
+    return np.clip(out, 0.0, 1.0)
+
+
+def seam(frames):
+    """A loop's seam, the mean texel change from the last frame to the first, against the mean and
+    the largest change between neighbours inside it."""
+    import numpy as np
+    steps = [np.abs(frames[(i + 1) % len(frames)] - frames[i]).mean() for i in range(len(frames))]
+    return steps[-1], float(np.mean(steps[:-1])), float(np.max(steps[:-1]))
+
+
 def previews(look, frames, p, folder):
     import numpy as np
     fire = p["kind"] == "fire"
@@ -855,6 +993,12 @@ def previews(look, frames, p, folder):
         save_png(os.path.join(folder, look + "-sheet-game-scale.png"), over(small, dark_small))
         big = resize(frames, 512)
         encode(os.path.join(folder, look + "-loop.mp4"), over(big, battlefield(512)), 30)
+        if p["loop"]:
+            clip = wreck_fire(frames)
+            save_png(os.path.join(folder, look + "-wreck.png"), clip[len(clip) // 3])
+            encode(os.path.join(folder, look + "-wreck.mp4"), clip, 30, loops=1)
+            encode(os.path.join(folder, look + "-wreck-game-scale.mp4"), wreck_fire(frames, scale=0.35), 30, loops=1)
+            return
         encode(os.path.join(folder, look + "-blasts.mp4"), blasts(frames), 30, loops=2)
         encode(os.path.join(folder, look + "-blasts-game-scale.mp4"), blasts(frames, scale=0.35, seed=4), 30, loops=2)
         return
@@ -880,11 +1024,13 @@ def pack(work, folder=None, only=()):
         if not os.path.isdir(source) or len(os.listdir(source)) < needed:
             print("skipped %s: %s does not hold %d frames" % (look, source, needed))
             continue
-        frames = build(load_sequence(source, p["kind"] == "fire"), p)
+        frames = build(load_sequence(source, p["kind"] == "fire", p.get("key")), p)
         path = os.path.normpath(os.path.join(TEXTURES, p["name"]))
         with open(path, "wb") as out:
             out.write(dds(atlas(frames), frames.shape[1]))
         print(path, os.path.getsize(path))
+        if p["loop"]:
+            print("  seam %.4f, steps inside the loop: mean %.4f, largest %.4f" % seam(frames))
         if folder:
             os.makedirs(folder, exist_ok=True)
             previews(look, frames, p, folder)
@@ -922,6 +1068,15 @@ def selfcheck():
     burn[8:, ..., 0] = 0.05
     exposed = expose_burn(burn)
     assert abs(exposed[0, 0, 0, 0] - FIRE_KEY[0][1]) < 0.3 and exposed[-1, 0, 0, 0] <= 0.1 + 1e-6
+    # A steady fire: one factor for all frames, so the brighter frame stays brighter.
+    steady = expose_steady(burn[:8] * np.linspace(1.0, 2.0, 8)[:, None, None, None], 1.0)
+    assert steady[0, 0, 0, 0] < steady[-1, 0, 0, 0] and 0.5 < steady[4, 0, 0, 0] < 1.5
+    # The seam: a loop whose last frame steps back to the first as gently as any other step.
+    ring = np.sin(np.linspace(0, 2 * np.pi, FRAMES, endpoint=False))[:, None, None, None] * np.ones((1, 2, 2, 4))
+    last, mean, largest = seam(ring)
+    assert last <= largest + 1e-9
+    last, mean, largest = seam(np.linspace(0.0, 1.0, FRAMES)[:, None, None, None] * np.ones((1, 2, 2, 4)))
+    assert last > 10 * largest		# a ramp is no loop: its seam is the whole climb back
     # Holding density: a thinning puff's last frame comes back denser, its colour untouched.
     fading = np.zeros((FRAMES, 16, 16, 4), np.float32)
     fading[..., 3] = np.linspace(0.9, 0.1, FRAMES)[:, None, None]

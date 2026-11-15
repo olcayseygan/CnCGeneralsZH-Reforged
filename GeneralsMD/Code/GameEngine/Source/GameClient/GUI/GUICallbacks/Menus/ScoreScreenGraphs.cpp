@@ -782,11 +782,11 @@ static void prepareStandings( void )
 		}
 		else
 			subtitle.translate( AsciiString( format.c_str() ) );
-		subtitle.concat( SCORE_DOT );
+		subtitle.concat( UIStyle::HEADER_JOINER );
 	}
 	subtitle.concat( clockText( matchEndFrame() ) );
 	freeText( s_subtitle );
-	s_subtitle = newText( subtitle, s_body );
+	s_subtitle = newText( subtitle, UIStyle::subtitleFont() );
 
 	// the verdict over the map: the local player's own, or who won for anyone watching
 	const Player *local = ThePlayerList->getLocalPlayer();
@@ -2012,14 +2012,10 @@ static void drawPanel( GameWindow *window, WinInstanceData *instData )
 	// on the layout's ruler frame, the staging room's panel, its title's place and its header line
 	UIStyle::panel( ox, oy, width, height, UIStyle::PANEL );
 
-	Int titleWidth, titleHeight, markWidth, markHeight;
-	s_title->getSize( &titleWidth, &titleHeight );
+	Int markWidth, markHeight;
 	s_wordmark[ 0 ]->getSize( &markWidth, &markHeight );
 	const Int titleMiddle = oy + ly( UIStyle::ROOM_TITLE_MIDDLE );
-	const Int titleX = ox + lx( UIStyle::ROOM_TITLE_LEFT );
-	s_title->draw( titleX, titleMiddle - titleHeight / 2, UIStyle::INK, UIStyle::SHADOW );
-	if( s_subtitle )
-		s_subtitle->draw( titleX + titleWidth + UIStyle::px( 16.0f ), titleMiddle - s_body->height / 2, UIStyle::MUTED, UIStyle::SHADOW );
+	UIStyle::header( s_title, s_subtitle, ox + lx( UIStyle::ROOM_TITLE_LEFT ), titleMiddle );
 	UIStyle::wordmark( s_wordmark, ox + width - lx( UIStyle::ROOM_INSET ), titleMiddle - markHeight / 2 );
 	UIStyle::rule( ox, oy + s_ruleY, width );
 

@@ -234,6 +234,27 @@ void wordmark( DisplayString *words[ 2 ], Int right, Int y )
 	words[ 1 ]->draw( right - second, y, WORDMARK_BLUE, SHADOW );
 }
 
+const WideChar HEADER_JOINER[] = { u' ', 0x00B7, u' ', 0 };
+
+GameFont *subtitleFont( void )
+{
+	return readableFont( TEXT_BODY );
+}
+
+Int headerGap( void )
+{
+	return px( 16.0f );
+}
+
+void header( DisplayString *title, DisplayString *subtitle, Int x, Int middle )
+{
+	Int titleWidth, titleHeight;
+	title->getSize( &titleWidth, &titleHeight );
+	title->draw( x, middle - titleHeight / 2, INK, SHADOW );
+	if( subtitle && subtitle->getTextLength() > 0 )
+		subtitle->draw( x + titleWidth + headerGap(), middle - subtitle->getFont()->height / 2, MUTED, SHADOW );
+}
+
 /** towupper in the C locale leaves every letter past ASCII as it is ("ORDU SEç"), so Latin-1's,
 	* Latin Extended-A's and Cyrillic's case pairs are mapped here, and Turkish's two i's by the language. */
 static WideChar capital( WideChar letter, Bool turkish )

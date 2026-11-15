@@ -123,6 +123,13 @@ namespace UIStyle
 	Int stripeWidth( void );
 	/// "Zero Hour Reforged" with its right edge at right; words are "Zero Hour" and " Reforged"
 	void wordmark( DisplayString *words[ 2 ], Int right, Int y );
+	/// a code screen's header line, the load board's and the score screen's alike: the title (the
+	/// "Generals" face, capitals) from x, the subtitle in subtitleFont and MUTED headerGap after it,
+	/// both centred on middle, the subtitle's parts joined by HEADER_JOINER
+	void header( DisplayString *title, DisplayString *subtitle, Int x, Int middle );
+	GameFont *subtitleFont( void );
+	Int headerGap( void );
+	extern const WideChar HEADER_JOINER[];	///< " · "
 	/// a screen's title in capitals, as the layouts letter theirs
 	UnicodeString capitals( const UnicodeString &words );
 	/// a name in capitals whatever the language, so a map's English name keeps its plain I in Turkish

@@ -210,7 +210,8 @@ void LoadScreen::update( Int percent )
 static const Real BOARD_WIDTH = 1920.0f;
 static const Real BOARD_HEIGHT = 1080.0f;
 static const UnsignedInt BOARD_TIP_MILLISECONDS = 8000;
-/// a middle dot between spaces, spelled out: the source is read in the machine's code page
+/// a middle dot between spaces, spelled out (the source is read in the machine's code page), between a
+/// computer seat's level and personality; the header joins its parts with UIStyle::HEADER_JOINER
 static const WideChar BOARD_SEPARATOR[] = { ' ', ' ', ' ', 0x00B7, ' ', ' ', ' ', 0 };
 /// the same dot between a one-line card's name and general
 static const WideChar BOARD_LINE_SEPARATOR[] = { ' ', 0x00B7, ' ', 0 };
@@ -670,10 +671,10 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 		makeup.translate( AsciiString( format.c_str() ) );
 	if( !makeup.isEmpty() )
 	{
-		subtitle.concat( BOARD_SEPARATOR );
+		subtitle.concat( UIStyle::HEADER_JOINER );
 		subtitle.concat( makeup );
 	}
-	subtitle.concat( BOARD_SEPARATOR );
+	subtitle.concat( UIStyle::HEADER_JOINER );
 	subtitle.concat( cashText( game ) );
 	prepare( UIStyle::nameCapitals( mapName ), subtitle, TRUE );
 
@@ -1048,7 +1049,7 @@ void LoadScreenBoard::prepare( const UnicodeString &titleInCapitals, const Unico
 	GameFont *wordmarkFont = UIStyle::font( UIStyle::TEXT_STRONG, TRUE );
 	GameFont *tipFont = UIStyle::readableFont( UIStyle::TEXT_BODY );
 	GameFont *titleFont = UIStyle::titleFont( UIStyle::TEXT_TITLE );
-	GameFont *subtitleFont = UIStyle::readableFont( UIStyle::TEXT_BODY );
+	GameFont *subtitleFont = UIStyle::subtitleFont();
 	m_title = text( titleInCapitals, titleFont );
 	m_subtitle = text( subtitle, subtitleFont );
 	m_wordmark[ 0 ] = text( UnicodeString( u"Zero Hour" ), wordmarkFont );
@@ -1056,10 +1057,10 @@ void LoadScreenBoard::prepare( const UnicodeString &titleInCapitals, const Unico
 
 	const Int left = m_left + scaled( UIStyle::ROOM_INSET );
 	const Int right = m_left + scaled( UIStyle::ROOM_PANEL_RIGHT + UIStyle::ROOM_PANEL_LEFT - UIStyle::ROOM_INSET );
-	const Int between = scaled( 32 );
+	const Int between = UIStyle::headerGap();
 	Int room = right - ( m_left + scaled( UIStyle::ROOM_TITLE_LEFT ) );
 	if( !m_mission )
-		room -= stringWidth( m_wordmark[ 0 ] ) + stringWidth( m_wordmark[ 1 ] ) + between;
+		room -= stringWidth( m_wordmark[ 0 ] ) + stringWidth( m_wordmark[ 1 ] ) + scaled( 32 );
 	if( stringWidth( m_title ) + between + stringWidth( m_subtitle ) > room )
 	{
 		const Int titleRoom = max( room - between - min( stringWidth( m_subtitle ), room * 2 / 5 ), room / 2 );
@@ -1339,12 +1340,9 @@ void LoadScreenBoard::draw( void )
 	}
 
 	// the header: the title where the lobby's stands, what kind of game after it, the wordmark across
+	// (the score screen's header, drawn by the same call)
 	const Int titleMiddle = m_top + scaled( UIStyle::ROOM_TITLE_MIDDLE );
-	const Int titleLeft = m_left + scaled( UIStyle::ROOM_TITLE_LEFT );
-	const Int titleY = titleMiddle - stringHeight( m_title ) / 2;
-	m_title->draw( titleLeft, titleY, UIStyle::INK, UIStyle::SHADOW );
-	m_subtitle->draw( titleLeft + stringWidth( m_title ) + scaled( 32 ), titleY + stringHeight( m_title ) - stringHeight( m_subtitle ),
-		UIStyle::MUTED, UIStyle::SHADOW );
+	UIStyle::header( m_title, m_subtitle, m_left + scaled( UIStyle::ROOM_TITLE_LEFT ), titleMiddle );
 	// a mission's picture is the game's own logo art, and the wordmark never stands beside EA's logo
 	if( !m_mission )
 		UIStyle::wordmark( m_wordmark, right, titleMiddle - stringHeight( m_wordmark[ 0 ] ) / 2 );
@@ -1908,10 +1906,10 @@ void SinglePlayerLoadScreen::update( Int percent )
 		if( !mission->m_locationNameLabel.isEmpty() )
 		{
 			title = TheGameText->fetch( mission->m_locationNameLabel );
-			subtitle.concat( BOARD_SEPARATOR );
+			subtitle.concat( UIStyle::HEADER_JOINER );
 			subtitle.concat( number );
 		}
-		subtitle.concat( BOARD_SEPARATOR );
+		subtitle.concat( UIStyle::HEADER_JOINER );
 		subtitle.concat( TheGameText->fetch( difficultyLabels[ TheCampaignManager->getGameDifficulty() ] ) );
 		m_board = NEW LoadScreenBoard;
 		m_board->createMission( m_loadScreen, title, subtitle, m_unicodeObjectiveLines, MAX_OBJECTIVE_LINES );

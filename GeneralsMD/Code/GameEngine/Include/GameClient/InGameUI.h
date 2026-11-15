@@ -1178,8 +1178,8 @@ public:  // ********************************************************************
 
   // mouse over information	
 	virtual DrawableID getMousedOverDrawableID( void ) const;	///< Get drawble ID of drawable under cursor
-	/// the Red Alert style layout is on and `pixel` is on its steel (sidebar, strip, card or a shown
-	/// upgrade cell), where the world under it is not to be picked; always FALSE under Classic
+	/// the Red Alert style layout is on and `pixel` is on its steel (sidebar, strip or card), where the
+	/// world under it is not to be picked; always FALSE under Classic
 	Bool isOverSidebarHud( const ICoord2D &pixel ) const;
 	
 	/// Set the ingame flag as to if we have the Quit menu up or not

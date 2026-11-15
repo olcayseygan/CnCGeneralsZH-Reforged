@@ -341,8 +341,7 @@ enum
 	HUD_SIDEBAR_CAMEOS = HUD_SIDEBAR_CAMEO_COLUMNS * HUD_SIDEBAR_CAMEO_ROWS,
 	HUD_SIDEBAR_PICKER_CHIPS = 4,			///< factories 1..4 beside "Tümü", each chip its building's icon and number
 	HUD_STRIP_BUTTONS = 14,						///< ButtonCommand01..14, the selection's commands
-	HUD_UNIT_ROW_CELLS = 7,						///< the card's flat row on the strip: a multi-selection's types, or a factory's queue (ButtonQueue01..07)
-	HUD_UPGRADE_CELLS = 5,						///< a single unit's upgrade cameos, a column above the card (MAX_RIGHT_HUD_UPGRADE_CAMEOS)
+	HUD_TRAY_CELLS = 6,								///< the card's tray: a single unit's upgrades, a multi-selection's types, or a factory's queue (ButtonQueue01..06)
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -359,8 +358,8 @@ enum
 	* every cell is zero: the Classic bar places its own panels, anchored to `area`.
 	*
 	* Row-major arrays: cameos[ row * HUD_SIDEBAR_CAMEO_COLUMNS + column ].  The card is welded to the
-	* strip (card.hi.y == strip.lo.y, card.lo.x == area.lo.x); its unit row stands on the strip, left to
-	* right, and the upgrade column climbs from the card's top at its left edge. */
+	* strip (card.hi.y == strip.lo.y, card.lo.x == area.lo.x): a medallion at its left (the portrait, the
+	* rank under it) and beside it a lower label plate (the name, the health groove, the tray). */
 //-------------------------------------------------------------------------------------------------
 struct HudLayoutRects
 {
@@ -394,11 +393,16 @@ struct HudLayoutRects
 	IRegion2D stripClock;							///< 96x48, right edge 4 short of the strip's (1500,1024 at 1920)
 	IRegion2D stripSpare;							///< the strip between the last button and the clock, 8 clear of both (904..1492 at 1920): idle, SelectArmy, PlaceBeacon
 
-	// the selection card rising from the strip's top edge at area's left: 0,884 464x132
+	// the selection card rising from the strip's top edge at area's left: 0,896 470x120 (its bounds)
 	IRegion2D card;
-	IRegion2D portrait;								///< 8,890 448x64: the picture 80x64, the name and rank beside it, the health bar along its foot
-	IRegion2D unitRow[ HUD_UNIT_ROW_CELLS ];	///< 60x56 at x 8 + 64i, y 960, standing on the strip (to 452)
-	IRegion2D upgradeColumn[ HUD_UPGRADE_CELLS ];	///< 48x40 at x 0, from y 840 climbing 44 a cell (cell 4 at 664), over the card
+	IRegion2D medallion;							///< 0,896 136x120: the portrait's frame, full height
+	IRegion2D portrait;								///< 8,904 116x90: the selection's picture
+	IRegion2D rankRect;								///< 10,998 112x14: the rank's chevrons, centred
+	IRegion2D labelPlate;							///< 136,932 334x84: the plate beside the medallion, lower than it
+	IRegion2D nameText;								///< 146,935 274x18: the name, bold, left-aligned
+	IRegion2D healthBar;							///< 146,956 316x6: the health groove, its fill a pixel inside
+	IRegion2D tray;										///< 140,966 326x50: the tiles' well
+	IRegion2D trayCells[ HUD_TRAY_CELLS ];	///< 50x42 at x 146 + 53i, y 970; a button 2 inside (46x38)
 
 	// leaning on the sidebar's left edge
 	IRegion2D powersWindow;						///< the general's powers window: 1400,64 192x240

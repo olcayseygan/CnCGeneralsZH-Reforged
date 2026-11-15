@@ -904,60 +904,20 @@ static void drawSidebarBackground( void )
 			drawSteelPanel( grow( r.stripButtons[ each ], px( 2 ) ), well, TRUE );
 	}
 
-	// the selection card, rising from the strip's top edge as one piece with it: raised steel with the
-	// portrait's glass and the unit row's wells sunk into it, the row standing on the strip
+	// the selection card, standing on the strip at the area's left (the owner's V1): the side's Card
+	// plate, or raised steel with the medallion raised on it, the label's plate, the health groove sunk
+	// and the tray's floor with a well under each of its tiles
 	if( card != NULL )
 		TheDisplay->drawImage( card, r.card.lo.x, r.card.lo.y, r.card.hi.x, r.card.hi.y );
 	else
 	{
-		drawSteelPanel( r.card, rim, FALSE );
-		drawSteelPanel( r.portrait, well, TRUE );
-		for( Int each = 0; each < HUD_UNIT_ROW_CELLS; each++ )
-			drawSteelPanel( r.unitRow[ each ], well, TRUE );
-	}
-
-	// the single unit's upgrades stacked over the card at the area's left, as many cells as the bar
-	// shows (UnitUpgrade1..5 fill from the first; a window state, no logic read): a cell each, a join
-	// under each down to the next cell or the card, a cap over the top one.  None shown, nothing drawn
-	static NameKeyType upgradeIDs[ HUD_UPGRADE_CELLS ] = { NAMEKEY_INVALID };
-	if( upgradeIDs[ 0 ] == NAMEKEY_INVALID )
-	{
-		for( Int each = 0; each < HUD_UPGRADE_CELLS; each++ )
-		{
-			AsciiString name;
-			name.format( "ControlBar.wnd:UnitUpgrade%d", each + 1 );
-			upgradeIDs[ each ] = TheNameKeyGenerator->nameToKey( name );
-		}
-	}
-	Int upgrades = 0;
-	for( Int each = 0; each < HUD_UPGRADE_CELLS; each++ )
-	{
-		GameWindow *cell = TheWindowManager->winGetWindowFromId( NULL, upgradeIDs[ each ] );
-		Bool shown = cell != NULL;
-		for( GameWindow *up = cell; up != NULL && shown; up = up->winGetParent() )
-			shown = !up->winIsHidden();
-		if( shown )
-			upgrades++;
-	}
-	const Image *upgradeCell = Sidebar_image( "UpgradeCell" );
-	const Image *upgradeJoin = Sidebar_image( "UpgradeJoin" );
-	const Image *upgradeCap = Sidebar_image( "UpgradeCap" );
-	for( Int each = 0; each < upgrades; each++ )
-	{
-		const IRegion2D &c = r.upgradeColumn[ each ];
-		if( upgradeCell != NULL )
-			TheDisplay->drawImage( upgradeCell, c.lo.x, c.lo.y, c.hi.x, c.hi.y );
-		else
-			drawSteelPanel( c, well, TRUE );
-		// the join fills the gap down to the cell under it, the first one onto the card's top
-		const Int below = each == 0 ? r.card.lo.y : r.upgradeColumn[ each - 1 ].lo.y;
-		if( upgradeJoin != NULL && below > c.hi.y )
-			TheDisplay->drawImage( upgradeJoin, c.lo.x, c.hi.y, c.hi.x, below );
-	}
-	if( upgrades > 0 && upgradeCap != NULL )
-	{
-		const IRegion2D &top = r.upgradeColumn[ upgrades - 1 ];
-		TheDisplay->drawImage( upgradeCap, top.lo.x, top.lo.y - px( 8 ), top.hi.x, top.lo.y );
+		drawSteelPanel( r.card, steel, FALSE );
+		drawSteelPanel( r.medallion, rim, FALSE );
+		drawSteelPanel( r.labelPlate, rim, FALSE );
+		drawSteelPanel( r.healthBar, glass, TRUE );
+		drawSteelPanel( r.tray, well, TRUE );
+		for( Int each = 0; each < (Int)( sizeof( r.trayCells ) / sizeof( r.trayCells[ 0 ] ) ); each++ )
+			drawSteelPanel( r.trayCells[ each ], glass, TRUE );
 	}
 
 	// the power rail sunk into the sidebar, the radar in a raised rim round its box, the box a well,

@@ -208,12 +208,16 @@ void HudLayoutForScreen( Int screenWidth, Int screenHeight, Int layout, Int hudW
 
 	// the selection card
 	// welded to the strip: its foot is the strip's top, its left the area's
-	m.areaBottom( &out->card, 0, 884, 464, 132 );
-	m.areaBottom( &out->portrait, 8, 890, 448, 64 );
-	for( Int i = 0; i < HUD_UNIT_ROW_CELLS; ++i )
-		m.areaBottom( &out->unitRow[ i ], 8.0f + 64.0f * i, 960, 60, 56 );
-	for( Int i = 0; i < HUD_UPGRADE_CELLS; ++i )
-		m.areaBottom( &out->upgradeColumn[ i ], 0, 840.0f - 44.0f * i, 48, 40 );
+	m.areaBottom( &out->card, 0, 896, 470, 120 );
+	m.areaBottom( &out->medallion, 0, 896, 136, 120 );
+	m.areaBottom( &out->portrait, 8, 904, 116, 90 );
+	m.areaBottom( &out->rankRect, 10, 998, 112, 14 );
+	m.areaBottom( &out->labelPlate, 136, 932, 334, 84 );
+	m.areaBottom( &out->nameText, 146, 935, 274, 18 );
+	m.areaBottom( &out->healthBar, 146, 956, 316, 6 );
+	m.areaBottom( &out->tray, 140, 966, 326, 50 );
+	for( Int i = 0; i < HUD_TRAY_CELLS; ++i )
+		m.areaBottom( &out->trayCells[ i ], 146.0f + 53.0f * i, 970, 50, 42 );
 
 	// against the sidebar's left edge
 	setRegion( &out->powersWindow, m.lx( 1400 ), m.ty( 64 ), m.lx( 1592 ), m.ty( 304 ) );

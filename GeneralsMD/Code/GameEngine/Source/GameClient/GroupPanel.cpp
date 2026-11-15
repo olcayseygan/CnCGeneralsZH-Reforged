@@ -431,13 +431,12 @@ static Int radarFrameTop( void )
 	static NameKeyType radarKey = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:LeftHUD" );
 	const Int barTop = controlBarTop( ControlBar::CB_PANEL_LEFT );
 	// in the sidebar layout the radar is up in the sidebar; what stands on the world's bottom left is
-	// the selection card and the upgrade column over it (InGameUI's radarFrameTop has a branch too)
+	// the selection card (InGameUI's radarFrameTop has a branch too)
 	if( TheControlBar->isSidebarLayout() )
 	{
 		HudLayoutRects r;
 		HudLayoutForScreen( (Int)TheDisplay->getWidth(), (Int)TheDisplay->getHeight(), HUD_LAYOUT_SIDEBAR, TheGlobalData->m_hudWidth, &r );
-		// a single unit's upgrades stack over the card at the left edge: the top of that column
-		return barTop < (Int)TheDisplay->getHeight() ? r.upgradeColumn[ HUD_UPGRADE_CELLS - 1 ].lo.y : barTop;
+		return barTop < (Int)TheDisplay->getHeight() ? r.card.lo.y : barTop;
 	}
 	const Image *const *frame = TheControlBar->getControlBarSchemeManager()->getRadarFrame();
 	GameWindow *radar = TheWindowManager->winGetWindowFromId( NULL, radarKey );
@@ -1080,7 +1079,7 @@ static void drawList( void )
 	const Int screenH = (Int)TheDisplay->getHeight();
 	const Int top = REAL_TO_INT( screenH * LIST_TOP_SHARE );
 	// in the sidebar layout the radar is in the sidebar and no production row hangs over the bar: the
-	// list stands on the upgrade column over the selection card (radarFrameTop's sidebar branch)
+	// list stands on the selection card (radarFrameTop's sidebar branch)
 	const Int bottom = TheControlBar->isSidebarLayout()
 		? radarFrameTop() - px( LIST_CLEARANCE )
 		: radarFrameTop() - stripPixels( PRODUCTION_LIFT ) - stripPixels( PRODUCTION_ROOM )

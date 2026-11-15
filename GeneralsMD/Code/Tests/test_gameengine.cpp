@@ -20034,21 +20034,32 @@ TEST(hud_layout_rects_tile_the_screen)
 	CHECK_EQ( r.stripClock.lo.x, 1500 );
 	CHECK_EQ( r.stripSpare.lo.x, 904 );
 	CHECK_EQ( r.card.lo.x, 0 );
-	CHECK_EQ( r.card.lo.y, 884 );
-	CHECK_EQ( r.card.hi.x, 464 );
+	CHECK_EQ( r.card.lo.y, 896 );
+	CHECK_EQ( r.card.hi.x, 470 );
 	CHECK_EQ( r.card.hi.y, 1016 );
+	CHECK_EQ( r.medallion.hi.x, 136 );
 	CHECK_EQ( r.portrait.lo.x, 8 );
-	CHECK_EQ( r.portrait.lo.y, 890 );
-	CHECK_EQ( r.portrait.width(), 448 );
-	CHECK_EQ( r.portrait.height(), 64 );
-	CHECK_EQ( r.unitRow[ 0 ].lo.x, 8 );
-	CHECK_EQ( r.unitRow[ 0 ].lo.y, 960 );
-	CHECK_EQ( r.unitRow[ 0 ].width(), 60 );
-	CHECK_EQ( r.unitRow[ HUD_UNIT_ROW_CELLS - 1 ].hi.x, 452 );
-	CHECK_EQ( r.unitRow[ HUD_UNIT_ROW_CELLS - 1 ].hi.y, 1016 );
-	CHECK_EQ( r.upgradeColumn[ 0 ].lo.x, 0 );
-	CHECK_EQ( r.upgradeColumn[ 0 ].hi.y, 880 );
-	CHECK_EQ( r.upgradeColumn[ HUD_UPGRADE_CELLS - 1 ].lo.y, 664 );
+	CHECK_EQ( r.portrait.lo.y, 904 );
+	CHECK_EQ( r.portrait.hi.x, 124 );
+	CHECK_EQ( r.portrait.hi.y, 994 );
+	CHECK_EQ( r.rankRect.lo.y, 998 );
+	CHECK_EQ( r.rankRect.hi.y, 1012 );
+	CHECK_EQ( r.labelPlate.lo.x, 136 );
+	CHECK_EQ( r.labelPlate.lo.y, 932 );
+	CHECK_EQ( r.nameText.lo.x, 146 );
+	CHECK_EQ( r.nameText.lo.y, 935 );
+	CHECK_EQ( r.nameText.hi.y, 953 );
+	CHECK_EQ( r.healthBar.lo.y, 956 );
+	CHECK_EQ( r.healthBar.hi.x, 462 );
+	CHECK_EQ( r.healthBar.hi.y, 962 );
+	CHECK_EQ( r.tray.lo.x, 140 );
+	CHECK_EQ( r.tray.lo.y, 966 );
+	CHECK_EQ( r.trayCells[ 0 ].lo.x, 146 );
+	CHECK_EQ( r.trayCells[ 0 ].lo.y, 970 );
+	CHECK_EQ( r.trayCells[ 0 ].width(), 50 );
+	CHECK_EQ( r.trayCells[ 0 ].height(), 42 );
+	CHECK_EQ( r.trayCells[ HUD_TRAY_CELLS - 1 ].lo.x, 411 );
+	CHECK_EQ( r.trayCells[ HUD_TRAY_CELLS - 1 ].hi.y, 1012 );
 	CHECK_EQ( r.powersWindow.lo.x, 1400 );
 	CHECK_EQ( r.superweaponRow.hi.x, 1600 );
 	CHECK_EQ( r.superweaponRow.hi.x, r.sidebar.lo.x );
@@ -20144,31 +20155,29 @@ TEST(hud_layout_rects_tile_the_screen)
 			CHECK( r.stripSpare.lo.x >= r.stripButtons[ HUD_STRIP_BUTTONS - 1 ].hi.x );
 			CHECK( r.stripSpare.hi.x <= r.stripClock.lo.x );
 
-			// the card welded to the strip, its unit row standing on it, the upgrade column on the card
-			const IRegion2D *card[ HUD_UNIT_ROW_CELLS + 1 ];
-			n = 0;
-			card[ n++ ] = &r.portrait;
-			for( Int i = 0; i < HUD_UNIT_ROW_CELLS; ++i )
-				card[ n++ ] = &r.unitRow[ i ];
-			checkHudCells( card, n, r.card );
+			// the card welded to the strip: the medallion and the label plate side by side in it, the
+			// portrait and the rank in the medallion, the name, the groove and the tray on the plate, the
+			// tray's cells in the tray
+			const IRegion2D *card[] = { &r.medallion, &r.labelPlate };
+			checkHudCells( card, 2, r.card );
 			CHECK_EQ( r.card.hi.y, r.strip.lo.y );
 			CHECK_EQ( r.card.lo.x, r.area.lo.x );
-			for( Int i = 0; i < HUD_UNIT_ROW_CELLS; ++i )
-				CHECK_EQ( r.unitRow[ i ].hi.y, r.strip.lo.y );
-			const IRegion2D *column[ HUD_UPGRADE_CELLS ];
-			for( Int i = 0; i < HUD_UPGRADE_CELLS; ++i )
+			CHECK_EQ( r.medallion.lo.x, r.card.lo.x );
+			CHECK_EQ( r.medallion.hi.x, r.labelPlate.lo.x );
+			CHECK_EQ( r.medallion.hi.y, r.strip.lo.y );
+			CHECK_EQ( r.labelPlate.hi.y, r.strip.lo.y );
+			CHECK( r.labelPlate.lo.y > r.medallion.lo.y );		// the plate stands lower
+			const IRegion2D *medallion[] = { &r.portrait, &r.rankRect };
+			checkHudCells( medallion, 2, r.medallion );
+			const IRegion2D *plate[] = { &r.nameText, &r.healthBar, &r.tray };
+			checkHudCells( plate, 3, r.labelPlate );
+			const IRegion2D *tray[ HUD_TRAY_CELLS ];
+			for( Int i = 0; i < HUD_TRAY_CELLS; ++i )
 			{
-				column[ i ] = &r.upgradeColumn[ i ];
-				CHECK_EQ( r.upgradeColumn[ i ].lo.x, r.card.lo.x );
-				CHECK( r.upgradeColumn[ i ].hi.y <= r.card.lo.y );
-				CHECK( i == 0 || r.upgradeColumn[ i ].hi.y <= r.upgradeColumn[ i - 1 ].lo.y );
-				CHECK( hudRegionInside( r.upgradeColumn[ i ], r.play ) );
-				CHECK( !hudRegionsOverlap( r.upgradeColumn[ i ], r.superweaponRow ) );
-				CHECK( !hudRegionsOverlap( r.upgradeColumn[ i ], r.powersWindow ) );
+				tray[ i ] = &r.trayCells[ i ];
+				CHECK( i == 0 || r.trayCells[ i ].lo.x >= r.trayCells[ i - 1 ].hi.x );
 			}
-			IRegion2D columnBox = r.upgradeColumn[ HUD_UPGRADE_CELLS - 1 ];
-			columnBox.hi = r.upgradeColumn[ 0 ].hi;
-			checkHudCells( column, HUD_UPGRADE_CELLS, columnBox );
+			checkHudCells( tray, HUD_TRAY_CELLS, r.tray );
 
 			// the world-side pieces stand in the open world and clear of each other
 			CHECK( hudRegionInside( r.card, r.play ) );

@@ -4616,10 +4616,9 @@ static Int controlBarTop( void )
 static Int radarFrameTop( void )
 {
 	// the Red Alert style radar is up in the sidebar: what stood on the radar's frame on the left
-	// stands on the top of the unit's upgrade column over the selection card instead (every caller
-	// stands at the left edge, where the column is; held there with the column empty, so nothing jumps)
+	// stands on the selection card instead (every caller stands at the left edge, where the card is)
 	if( sidebarLayoutOn() )
-		return hudRects().upgradeColumn[ HUD_UPGRADE_CELLS - 1 ].lo.y;
+		return hudRects().card.lo.y;
 
 	static NameKeyType radarKey = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:LeftHUD" );
 	const Image *const *frame = TheControlBar->getControlBarSchemeManager()->getRadarFrame();
@@ -6967,22 +6966,7 @@ Bool InGameUI::isOverSidebarHud( const ICoord2D &pixel ) const
 	{
 		return pixel.x >= box.lo.x && pixel.x < box.hi.x && pixel.y >= box.lo.y && pixel.y < box.hi.y;
 	};
-	if( inside( r.sidebar ) || inside( r.strip ) || inside( r.card ) )
-		return TRUE;
-	// the upgrade column only where a cell is up (ControlBar.wnd:UnitUpgrade1..5, a window state)
-	for( Int each = 0; each < HUD_UPGRADE_CELLS; each++ )
-	{
-		if( !inside( r.upgradeColumn[ each ] ) )
-			continue;
-		AsciiString name;
-		name.format( "ControlBar.wnd:UnitUpgrade%d", each + 1 );
-		GameWindow *cell = TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( name ) );
-		Bool shown = cell != NULL;
-		for( GameWindow *up = cell; up != NULL && shown; up = up->winGetParent() )
-			shown = !up->winIsHidden();
-		return shown;
-	}
-	return FALSE;
+	return inside( r.sidebar ) || inside( r.strip ) || inside( r.card );
 }
 
 void InGameUI::createMouseoverHint( const GameMessage *msg )

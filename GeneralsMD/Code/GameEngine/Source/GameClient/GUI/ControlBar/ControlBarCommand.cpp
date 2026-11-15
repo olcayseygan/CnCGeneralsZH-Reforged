@@ -69,6 +69,8 @@
 #include "GameClient/GameText.h"
 #include "GameClient/Display.h"
 
+extern void SidebarCard_setQueueProgress( Real progress );	// ControlBarSidebarLayout.cpp
+
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -924,14 +926,32 @@ void ControlBar::populateBuildQueue( Object *producer )
 void ControlBar::updateBuildQueue( Object *obj, ProductionUpdateInterface *pu )
 {
 	GameWindow *queue = m_contextParent[ CP_BUILD_QUEUE ];
-	const Bool busy = pu && pu->firstProduction() != NULL;
+	Bool busy = pu && pu->firstProduction() != NULL;
+
+	// the sidebar's tray holds one thing: a production building's queue, while it has one, before its
+	// upgrades (hidden each pass, as the portrait shows them again); a unit's upgrades before its queue
+	if( busy && m_sidebarLayout )
+	{
+		const Bool building = obj != NULL && obj->isKindOf( KINDOF_STRUCTURE );
+		for( Int i = 0; i < MAX_RIGHT_HUD_UPGRADE_CAMEOS; i++ )
+		{
+			GameWindow *upgrade = m_rightHUDUpgradeCameos[ i ];
+			if( upgrade == NULL || upgrade->winIsHidden() )
+				continue;
+			if( building )
+				upgrade->winHide( TRUE );
+			else
+				busy = FALSE;
+		}
+	}
+
 	if( !busy )
 	{
 		if( queue->winIsHidden() == FALSE )
 		{
+			// the portrait back, and under the sidebar the building's upgrades back in the tray
 			queue->winHide( TRUE );
-			if( !m_sidebarLayout )
-				setPortraitByObject( obj );
+			setPortraitByObject( obj );
 		}
 		return;
 	}
@@ -949,9 +969,12 @@ void ControlBar::updateBuildQueue( Object *obj, ProductionUpdateInterface *pu )
 	else if( pu->getProductionCount() != m_displayedQueueCount )
 		populateBuildQueue( obj );
 
-	// the sidebar's row tile is small: a strong dark wipe, as on its cameos, where the scheme's is faint
-	const Color wipe = m_sidebarLayout ? GameMakeColor( 0, 0, 0, 190 ) : m_buildUpClockColor;
-	GadgetButtonDrawInverseClock( m_queueData[ 0 ].control, pu->firstProduction()->getPercentComplete(), wipe );
+	// the sidebar's tray tile shows the head's progress as a bar at its foot (drawn by the card), the
+	// Classic queue its scheme's clock
+	if( m_sidebarLayout )
+		SidebarCard_setQueueProgress( pu->firstProduction()->getPercentComplete() / 100.0f );
+	else
+		GadgetButtonDrawInverseClock( m_queueData[ 0 ].control, pu->firstProduction()->getPercentComplete(), m_buildUpClockColor );
 
 }  // end updateBuildQueue
 

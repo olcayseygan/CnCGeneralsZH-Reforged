@@ -32,7 +32,7 @@ ObjectID Sidebar_placementBuilder( void );
 enum SidebarTab
 {
 	SIDEBAR_TAB_BUILDINGS,		///< Bina: what the builders put up, less base defences
-	SIDEBAR_TAB_DEFENSE,			///< Savunma: KINDOF_FS_BASE_DEFENSE structures
+	SIDEBAR_TAB_DEFENSE,			///< Savunma: KINDOF_FS_BASE_DEFENSE structures, then every research the player's buildings offer
 	SIDEBAR_TAB_INFANTRY,			///< Piyade: KINDOF_INFANTRY units
 	SIDEBAR_TAB_VEHICLES,			///< Araç: every other unit, aircraft included
 

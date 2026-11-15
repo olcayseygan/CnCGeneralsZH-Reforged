@@ -28,6 +28,7 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/ThingTemplate.h"
+#include "Common/Upgrade.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/Display.h"
 #include "GameClient/DisplayString.h"
@@ -103,6 +104,8 @@ namespace
 	std::vector< Buildable > s_all;			///< scratch for the gather
 	std::vector< Int > s_count;					///< per s_list entry: units queued over every factory
 	std::vector< Int > s_clock;					///< per s_list entry: the furthest head of a queue, -1 for none
+	std::vector< ObjectID > s_producer;		///< per s_list entry: a research's building to queue it at, else INVALID_ID
+	std::vector< ObjectID > s_researcher;	///< per s_list entry: the building a research is under way at, else INVALID_ID
 	Bool s_listed = FALSE;
 	Bool s_dirty = TRUE;
 	UnsignedInt s_listFrame = 0;
@@ -781,10 +784,46 @@ static void cancelNewest( const ThingTemplate *thing )
 }
 
 //-------------------------------------------------------------------------------------------------
+static Bool isResearch( const Buildable &entry );
+
 static void clickCameo( const CommandButton *command, Bool right )
 {
+	if( ThePlayerList->getLocalPlayer() == NULL )
+		return;
+
+	// a research cell: queued at the building that offers it, cancelled at the one researching it,
+	// both named on the message so no selection is needed (the logic checks the building is the
+	// player's, can make and can afford it)
+	const UpgradeTemplate *upgrade = command->getUpgradeTemplate();
+	if( upgrade != NULL && ( command->getCommandType() == GUI_COMMAND_PLAYER_UPGRADE || command->getCommandType() == GUI_COMMAND_OBJECT_UPGRADE ) )
+	{
+		for( size_t at = 0; at < s_list.size(); at++ )
+		{
+			if( s_list[ at ].button != command || !isResearch( s_list[ at ] ) )
+				continue;
+			const ObjectID building = right ? s_researcher[ at ] : s_producer[ at ];
+			if( building == INVALID_ID )
+				return;
+			GameMessage *msg;
+			if( right )
+			{
+				msg = TheMessageStream->appendMessage( GameMessage::MSG_CANCEL_UPGRADE );
+				msg->appendIntegerArgument( upgrade->getUpgradeNameKey() );
+				msg->appendObjectIDArgument( building );
+			}
+			else
+			{
+				msg = TheMessageStream->appendMessage( GameMessage::MSG_QUEUE_UPGRADE );
+				msg->appendObjectIDArgument( building );
+				msg->appendIntegerArgument( upgrade->getUpgradeNameKey() );
+			}
+			return;
+		}
+		return;
+	}
+
 	const ThingTemplate *thing = command->getThingTemplate();
-	if( thing == NULL || ThePlayerList->getLocalPlayer() == NULL )
+	if( thing == NULL )
 		return;
 
 	if( command->getCommandType() == GUI_COMMAND_UNIT_BUILD )
@@ -1178,6 +1217,68 @@ static Bool structureTab( Int tab )
 	return tab == SIDEBAR_TAB_BUILDINGS || tab == SIDEBAR_TAB_DEFENSE;
 }
 
+//-------------------------------------------------------------------------------------------------
+/** Savunma's research: every upgrade button on the command set of a finished structure of the
+	* player's, one cell an upgrade.  A player upgrade the player has finished is left out, and so is
+	* an object upgrade no building still lacks.  The cell keeps the building with the best availability
+	* (the bar's own reading), and a click researches it there. */
+//-------------------------------------------------------------------------------------------------
+struct UpgradeSearch
+{
+	Player *player;
+	std::vector< Buildable > *list;
+	std::vector< ObjectID > *producers;
+};
+
+static void gatherUpgrades( Object *obj, void *userData )
+{
+	UpgradeSearch *s = (UpgradeSearch *)userData;
+	if( obj->isEffectivelyDead() || !obj->isKindOf( KINDOF_STRUCTURE ) || obj->getProductionUpdateInterface() == NULL
+			|| obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || obj->testStatus( OBJECT_STATUS_SOLD ) )
+		return;
+	const CommandSet *set = TheControlBar->findCommandSet( obj->getCommandSetString() );
+	if( set == NULL )
+		return;
+	for( Int i = 0; i < MAX_COMMANDS_PER_SET; i++ )
+	{
+		const CommandButton *button = set->getCommandButton( i );
+		if( button == NULL || BitTest( button->getOptions(), SCRIPT_ONLY ) || !TheControlBar->hasCommandWindow( i ) )
+			continue;
+		const Bool playerUpgrade = button->getCommandType() == GUI_COMMAND_PLAYER_UPGRADE;
+		if( !playerUpgrade && button->getCommandType() != GUI_COMMAND_OBJECT_UPGRADE )
+			continue;
+		const UpgradeTemplate *upgrade = button->getUpgradeTemplate();
+		if( upgrade == NULL )
+			continue;
+		if( playerUpgrade ? s->player->hasUpgradeComplete( upgrade ) : ( obj->hasUpgrade( upgrade ) || !obj->affectedByUpgrade( upgrade ) ) )
+			continue;
+		const CommandAvailability now = TheControlBar->getButtonAvailability( button, obj );
+		if( now == COMMAND_HIDDEN )
+			continue;
+
+		size_t at = 0;
+		while( at < s->list->size() && ( (*s->list)[ at ].thing != NULL || (*s->list)[ at ].button->getUpgradeTemplate() != upgrade ) )
+			at++;
+		if( at < s->list->size() )
+		{
+			if( ControlBar::commandAvailabilityRank( now ) > ControlBar::commandAvailabilityRank( (*s->list)[ at ].best ) )
+			{
+				(*s->list)[ at ].best = now;
+				(*s->producers)[ at ] = obj->getID();
+			}
+			continue;
+		}
+		const Buildable added = { NULL, button, now };
+		s->list->push_back( added );
+		s->producers->push_back( obj->getID() );
+	}
+}
+
+static Bool isResearch( const Buildable &entry )
+{
+	return entry.thing == NULL && entry.button != NULL && entry.button->getUpgradeTemplate() != NULL;
+}
+
 static void fillList( Player *player )
 {
 	const Bool structures = structureTab( s_tab );
@@ -1195,8 +1296,17 @@ static void fillList( Player *player )
 		if( pick )
 			s_list.push_back( s_all[ i ] );
 	}
+	s_producer.assign( s_list.size(), INVALID_ID );
+
+	// Savunma also carries every research the player's buildings offer, after the defences
+	if( s_tab == SIDEBAR_TAB_DEFENSE )
+	{
+		UpgradeSearch search = { player, &s_list, &s_producer };
+		player->iterateObjects( gatherUpgrades, &search );
+	}
 	s_count.assign( s_list.size(), 0 );
 	s_clock.assign( s_list.size(), -1 );
+	s_researcher.assign( s_list.size(), INVALID_ID );
 
 	if( s_tab != s_loggedTab || (Int)s_list.size() != s_loggedCount )
 	{
@@ -1315,10 +1425,27 @@ static void gatherProgress( Object *obj, void *userData )
 	const ProductionEntry *head = pu->firstProduction();
 	for( const ProductionEntry *p = head; p; p = pu->nextProduction( p ) )
 	{
+		// a research under way: its cell's clock (a full scrim while it waits in the queue) and the
+		// building to cancel it at
+		if( p->getProductionType() == PRODUCTION_UPGRADE && p->getProductionUpgrade() != NULL )
+		{
+			for( size_t at = 0; at < s_list.size(); at++ )
+			{
+				if( !isResearch( s_list[ at ] ) || s_list[ at ].button->getUpgradeTemplate() != p->getProductionUpgrade() )
+					continue;
+				s_count[ at ]++;
+				s_clock[ at ] = max( s_clock[ at ], p == head ? REAL_TO_INT( p->getPercentComplete() ) : 0 );
+				s_researcher[ at ] = obj->getID();
+				break;
+			}
+			continue;
+		}
 		if( p->getProductionType() != PRODUCTION_UNIT || p->getProductionObject() == NULL )
 			continue;
 		for( size_t at = 0; at < s_list.size(); at++ )
 		{
+			if( s_list[ at ].thing == NULL )
+				continue;
 			if( s_list[ at ].thing != p->getProductionObject() && !s_list[ at ].thing->isEquivalentTo( p->getProductionObject() ) )
 				continue;
 			s_count[ at ]++;
@@ -1409,7 +1536,11 @@ void Sidebar_update( void )
 			player->iterateObjects( findFactory, &search );
 		}
 		else
+		{
 			player->iterateObjects( findBuilderChip, &s_factories );	// and on Bina and Savunma the builders
+			if( s_tab == SIDEBAR_TAB_DEFENSE )
+				player->iterateObjects( gatherProgress, NULL );					// the research under way
+		}
 
 		// sorted by ObjectID, the pick back to Tümü once its producer is gone or off the chips
 		std::sort( s_factories.begin(), s_factories.end() );
@@ -1465,7 +1596,8 @@ void Sidebar_update( void )
 			GadgetButtonSetEnabledImage( win, entry.button->getButtonImage() );
 			GadgetButtonSetData( win, (void *)entry.button );
 		}
-		GroupPanel_showAvailability( win, picked != NULL ? pickedAvailability( picked, entry.thing ) : entry.best );
+		// a research cell keeps its own building's reading: the picked builder has no research
+		GroupPanel_showAvailability( win, picked != NULL && !isResearch( entry ) ? pickedAvailability( picked, entry.thing ) : entry.best );
 
 		// a greyed cameo with units queued still takes the right click that cancels them
 		win->winClearStatus( WIN_STATUS_CANCEL_WHEN_DISABLED );
@@ -1475,7 +1607,7 @@ void Sidebar_update( void )
 			GadgetButtonDrawInverseClock( win, s_clock[ at ], CLOCK_COLOR );
 		else
 			GadgetButtonClearClock( win );
-		GadgetButtonSetCount( win, s_count[ at ] );
+		GadgetButtonSetCount( win, isResearch( entry ) ? 0 : s_count[ at ] );
 		win->winHide( FALSE );
 	}
 

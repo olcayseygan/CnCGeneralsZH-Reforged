@@ -207,9 +207,9 @@ void ControlBar::updateMultiSelectStrip( void )
 	setPortraitByObject( NULL );
 
 	//
-	// The sidebar's card keeps its portrait over the row: the focused type's, with how many of it are
-	// selected, and still no upgrades.  Its row holds nine types; a selection of more shows the first
-	// nine and the focus keys still reach the rest
+	// The sidebar's card keeps its portrait in the medallion: the focused type's, with how many of it
+	// are selected, and still no upgrades.  Its tray holds six types; a selection of more shows the
+	// first six and the focus keys still reach the rest
 	//
 	const Bool sidebar = isSidebarLayout();
 	if( sidebar )
@@ -228,7 +228,7 @@ void ControlBar::updateMultiSelectStrip( void )
 		if( win == NULL )
 			continue;
 
-		if( (Int)i < m_multiSelectGroupCount && ( !sidebar || (Int)i < HUD_UNIT_ROW_CELLS ) )
+		if( (Int)i < m_multiSelectGroupCount && ( !sidebar || (Int)i < HUD_TRAY_CELLS ) )
 		{
 			const ThingTemplate *type = m_multiSelectGroupTemplate[ i ];
 			win->winHide( FALSE );
@@ -259,8 +259,21 @@ static void portraitBarTooltip( GameWindow *window, WinInstanceData *instData, U
 	* release, so nothing can go stale.  Everything else goes on to the wall the .wnd gave the HUD,
 	* which lets go of that world press. */
 //-------------------------------------------------------------------------------------------------
-static WindowMsgHandledType portraitBarInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )
+WindowMsgHandledType ControlBar_portraitBarInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )
 {
+	// the sidebar's card is its bounds: the world shows above the label plate, beside the medallion's
+	// top, and a click there is the world's
+	if( TheControlBar->isSidebarLayout() && msg >= GWM_LEFT_DOWN && msg <= GWM_RIGHT_DRAG )
+	{
+		HudLayoutRects hud;
+		TheControlBar->getHudLayoutRects( &hud );
+		const Int x = LOLONGTOSHORT( mData1 ), y = HILONGTOSHORT( mData1 );
+		const Bool onMedallion = x >= hud.medallion.lo.x && x < hud.medallion.hi.x && y >= hud.medallion.lo.y && y < hud.medallion.hi.y;
+		const Bool onPlate = x >= hud.labelPlate.lo.x && x < hud.labelPlate.hi.x && y >= hud.labelPlate.lo.y && y < hud.labelPlate.hi.y;
+		if( !onMedallion && !onPlate )
+			return MSG_IGNORED;
+	}
+
 	// the click's own position, which the window manager packed into mData1: the cursor's
 	// (TheMouse's status) is not the click's when one is posted without moving it (the control
 	// socket's click, a replayed input), and a tile under the cursor rather than the click was
@@ -368,8 +381,8 @@ void ControlBar::layoutMultiSelectTiles( Int count )
 	Int cellW = hudSize.x / n;
 	Int cellH = hudSize.y / n;
 
-	// The sidebar's card has a flat row standing on the strip under the portrait (HudLayoutRects::unitRow):
-	// tile i is cell i, left to right, the types past its nine are not shown (updateMultiSelectStrip)
+	// The sidebar's card has a tray on its label plate (HudLayoutRects::trayCells): tile i is cell i,
+	// left to right, the types past its six are not shown (updateMultiSelectStrip)
 	HudLayoutRects hud;
 	ICoord2D hudAt = { 0, 0 };
 	const Bool sidebar = isSidebarLayout();
@@ -377,12 +390,12 @@ void ControlBar::layoutMultiSelectTiles( Int count )
 	{
 		getHudLayoutRects( &hud );
 		m_rightHUDWindow->winGetScreenPosition( &hudAt.x, &hudAt.y );
-		cellW = hud.unitRow[ 0 ].width();
-		cellH = hud.unitRow[ 0 ].height();
+		cellW = hud.trayCells[ 0 ].width();
+		cellH = hud.trayCells[ 0 ].height();
 	}
 
 	// the tiles' clicks reach the HUD itself, see portraitBarInput
-	m_rightHUDWindow->winSetInputFunc( portraitBarInput );
+	m_rightHUDWindow->winSetInputFunc( ControlBar_portraitBarInput );
 
 	for( Int i = 0; i < count; i++ )
 	{
@@ -404,8 +417,8 @@ void ControlBar::layoutMultiSelectTiles( Int count )
 			continue;
 		if( sidebar )
 		{
-			// in the art's well: 2 in on the left, top and right, standing on the strip's lip
-			const IRegion2D cell = SidebarWellInset( hud.unitRow[ MIN( i, (Int)HUD_UNIT_ROW_CELLS - 1 ) ], hud.scale, 2, 0 );
+			// in the art's well, 2 in from every edge
+			const IRegion2D cell = SidebarWellInset( hud.trayCells[ MIN( i, (Int)HUD_TRAY_CELLS - 1 ) ], hud.scale, 2, 2 );
 			tile->winSetPosition( cell.lo.x - hudAt.x, cell.lo.y - hudAt.y );
 			tile->winSetSize( cell.width(), cell.height() );
 			continue;

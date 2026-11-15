@@ -1401,12 +1401,6 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 				cardAt.x = min( max( at.x, hud.area.lo.x ), hud.sidebar.lo.x - gap - size.x );
 				// over the selection card when the pointer is on it or on the strip under it
 				cardAt.y = ( at.x < hud.card.hi.x ? hud.card.lo.y : hud.strip.lo.y ) - gap - cardHeight;
-				// an upgrade cameo in the column over the card: beside the column, level with the cameo
-				if( at.x < hud.card.hi.x && at.y < hud.card.lo.y )
-				{
-					cardAt.x = hud.upgradeColumn[ 0 ].hi.x + gap;
-					cardAt.y = at.y;
-				}
 			}
 			cardAt.x = max( cardAt.x, hud.area.lo.x );
 		}

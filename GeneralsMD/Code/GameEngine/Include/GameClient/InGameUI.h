@@ -493,7 +493,7 @@ public:  // ********************************************************************
 	struct OrderHint
 	{
 		OrderHint( void ) : kind( ORDER_HINT_MOVE ), owner( INVALID_ID ), bornMs( 0 ), step( 0 ), icon( NULL ),
-			onObject( FALSE ), target( INVALID_ID ), fromTarget( INVALID_ID ), mark( ORDER_MARK_NONE ), clicked( FALSE ), members( 1 ) {}
+			onObject( FALSE ), target( INVALID_ID ), fromTarget( INVALID_ID ), mark( ORDER_MARK_NONE ), clicked( FALSE ) {}
 
 		Coord3D from;						///< where the unit is now
 		Coord3D to;							///< where it is going
@@ -507,13 +507,12 @@ public:  // ********************************************************************
 		ObjectID fromTarget;		///< the unit or building 'from' was the end of, on a shift list's later legs
 		OrderHintMark mark;			///< what stands on 'to'
 		Bool clicked;						///< 'to' is a point the player clicked (applyCommandedPoints), every member's the same
-		Int members;						///< units bunched into this line (bunchOrderHints)
 	};
 	const std::vector<OrderHint>& getOrderHints( void ) const { return m_drawnOrderHints; }
-	/// A drawn line's end wears its ring only where it means "a place you clicked": a target, a click,
-	/// or a lone unit's own end (an order from a script has no click).  Several units' own ends that
-	/// happen to bunch somewhere else end bare
-	static Bool orderHintShowsMark( const OrderHint& hint ) { return hint.mark != ORDER_MARK_NONE && ( hint.onObject || hint.clicked || hint.members <= 1 ); }
+	/// A drawn line's end wears its ring only where it means "a place you clicked": a target, or an
+	/// end on a click.  A unit's own stopping place, alone or bunched with others', ends bare: a lone
+	/// unit whose click was forgotten put small rings off every click of a big group's queue
+	static Bool orderHintShowsMark( const OrderHint& hint ) { return hint.mark != ORDER_MARK_NONE && ( hint.onObject || hint.clicked ); }
 
 	// One ring a unit on the ground where the local player's last move-type order really sends it,
 	// read off the unit once logic has run the order (the flood's cell, the formation station, the
@@ -569,7 +568,7 @@ public:  // ********************************************************************
 		Coord3D at;
 		UnsignedInt bornMs;			///< given then; kept a moment while logic has not drawn its leg yet
 		UnsignedInt dueFrame;		///< logic has run the order once its frame is past this; no leg to pair with before
-		Bool matched;						///< a leg ended on it this frame
+		Bool matched;						///< a leg paired with it this frame
 	};
 	void rememberQueuedClicks( OrderHintKind kind, const Coord3D& at );	///< HintSpy: a ground order went on the end of the selection's lists
 	void predictOrderHints( OrderHintKind kind, const Coord3D *to, ObjectID target );	///< HintSpy: the selection was just given this order

@@ -5555,7 +5555,6 @@ void InGameUI::bunchOrderHints( void )
 
 			// running averages, so the bunch is compared against its middle rather than its first unit
 			const Real share = 1.0f / (Real)( ++memberCounts[ i ] );
-			bunch.members = memberCounts[ i ];
 			bunch.from.x += ( hint->from.x - bunch.from.x ) * share;
 			bunch.from.y += ( hint->from.y - bunch.from.y ) * share;
 			bunch.from.z += ( hint->from.z - bunch.from.z ) * share;
@@ -6242,6 +6241,8 @@ void InGameUI::applyCommandedPoints( void )
 	const Real REACH = 100.0f;		// bunchOrderHints' radius: a flood of stopping places round one click
 	// a settled unit's path end may be replanned a cell or two off its first one; further is a new order
 	const Real SETTLED_SLACK = 3.0f * PATHFIND_CELL_SIZE_F;
+	// a queued leg is paired with its click by order, so the reach only guards against a stray pairing
+	const Real QUEUED_REACH = 3.0f * REACH;
 	// a queued click waits this long for its leg before it is called finished or orphaned: queued
 	// orders are not drawn before logic runs them, a few frames of run-ahead in a network game
 	const UnsignedInt QUEUED_CLICK_GRACE_MS = 2000;
@@ -6345,16 +6346,19 @@ void InGameUI::applyCommandedPoints( void )
 			if( m_queuedClicks[ q ].owner == owner && frame > m_queuedClicks[ q ].dueFrame )
 				m_pairClicks.push_back( q );
 		size_t g = m_pairLegs.size(), n = m_pairClicks.size();
+		// A pair that does not fit (another colour, or a far member of a big group spread further than
+		// QUEUED_REACH round its point) is left unsnapped and the rest still pair: stopping there left
+		// every older click unpaired, dropped a moment later, and the unit's later legs had nothing to
+		// end on once its first leg was done. A click with a leg to pair with is still owed
 		while( g > 0 && n > 0 )
 		{
 			--g;
 			--n;
 			QueuedClick& click = m_queuedClicks[ m_pairClicks[ n ] ];
 			const OrderHint& leg = m_orderHints[ m_pairLegs[ g ] ];
-			if( orderKindColor( leg.kind ) != orderKindColor( click.kind ) || apartSq( leg.to, click.at ) >= REACH * REACH )
-				break;
-			snapLeg( m_pairLegs[ g ], click.at );
 			click.matched = TRUE;
+			if( orderKindColor( leg.kind ) == orderKindColor( click.kind ) && apartSq( leg.to, click.at ) < QUEUED_REACH * QUEUED_REACH )
+				snapLeg( m_pairLegs[ g ], click.at );
 		}
 	}
 
@@ -6366,7 +6370,7 @@ void InGameUI::applyCommandedPoints( void )
 		else
 			++c;
 	}
-	// A click logic has run and no leg ended on this frame is done with: its leg finished, logic
+	// A click logic has run and no leg paired with this frame is done with: its leg finished, logic
 	// refused the order, or the unit is gone from the selection. Given a moment first
 	for( size_t q = 0; q < m_queuedClicks.size(); )
 	{

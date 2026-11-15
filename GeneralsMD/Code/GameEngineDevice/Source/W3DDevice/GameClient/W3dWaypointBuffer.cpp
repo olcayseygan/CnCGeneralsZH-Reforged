@@ -1440,22 +1440,25 @@ void W3DWaypointBuffer::recordOrderMark( const Vector3& at, Real radius, const V
 }
 
 // The click marker and the destination dots on water (W3DInGameUI paints them on land): the same
-// shapes and timing as W3DInGameUI's MARKER_* and ORDER_DOT_* constants, drawn as order lines.
+// shapes and timing as W3DInGameUI's MARKER_* and ORDER_DOT_* constants, drawn as order lines. A
+// ribbon's width takes in its rims (rimTexture: colour in the middle half), so it is the land band
+// plus a rim either side, or the water marks came out a third as bold with no dark edge
 static const Real WATER_MARK_MIN_ZOOM = 0.6f;
 static const Real WATER_MARK_MAX_ZOOM = 2.5f;
 static const Real WATER_MARK_LIFT = 0.35f;
-static const Real WATER_DOT_RADIUS = 0.7f;
-static const Real WATER_DOT_WIDTH = 1.0f;
+static const Real WATER_LAND_RIM = 0.4f;							///< W3DInGameUI's MARKER_RIM, ORDER_DOT_RIM
+static const Real WATER_DOT_RADIUS = 0.75f;						///< with a ribbon twice as wide, a disc of the land dot's 1.1 and its rim
+static const Real WATER_DOT_WIDTH = 2.0f * WATER_DOT_RADIUS;
 static const Real WATER_MARKER_START_RADIUS = 14.0f;
 static const Real WATER_MARKER_END_RADIUS = 3.2f;
 static const Real WATER_MARKER_CLOSE_MS = 320.0f;
 static const Real WATER_MARKER_IN_MS = 50.0f;
 static const Real WATER_MARKER_FADE_MS = 260.0f;
-static const Real WATER_MARKER_WIDTH = 0.95f;
+static const Real WATER_MARKER_WIDTH = 0.95f + 2.0f * WATER_LAND_RIM;
 static const Real WATER_MARKER_ARROW_GAP = 0.7f;
 static const Real WATER_MARKER_ARROW_ARM = 2.6f;
 static const Real WATER_MARKER_ARROW_SPREAD = 0.62f;
-static const Real WATER_MARKER_DOT_RADIUS = 0.6f;
+static const Real WATER_MARKER_DOT_RADIUS = 0.8f;					///< a ribbon twice this wide closes it to a disc the land centre dot's size with its rim
 
 /** The order marks that stand on water, read at the sync point. Painted in the terrain pass they lay
 		under the water and took its tint; here they go on the sorted list after it, clean. They are
@@ -1518,7 +1521,7 @@ void W3DWaypointBuffer::takeWaterMarks( void )
 			}
 		}
 		if( close >= 1.0f )
-			recordOrderMark( at, WATER_MARKER_DOT_RADIUS * scale, color, width, fade );
+			recordOrderMark( at, WATER_MARKER_DOT_RADIUS * scale, color, 2.0f * WATER_MARKER_DOT_RADIUS * scale, fade );		// closed to a disc
 	}
 }
 

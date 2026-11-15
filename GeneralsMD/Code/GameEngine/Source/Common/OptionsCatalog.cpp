@@ -145,6 +145,7 @@ OPTION_INT_ACCESSORS( m_healthBarMode )
 OPTION_INT_ACCESSORS( m_healthBarColors )
 OPTION_INT_ACCESSORS( m_hudLayout )
 OPTION_INT_ACCESSORS( m_hudWidth )
+OPTION_INT_ACCESSORS( m_hotkeyScheme )
 OPTION_INT_ACCESSORS( m_playerColorScheme )
 OPTION_INT_ACCESSORS( m_textLanguage )
 OPTION_BOOL_ACCESSORS( m_showOrderLines )
@@ -605,6 +606,12 @@ const OptionDef TheOptionCatalog[] =
 	{ "HudWidth",									OPT_WND( "ComboBoxHudWidth" ), "GUI:HudWidth",
 		OPTION_ENUM, APPLY_SHELL_REBUILD, 0, HUD_WIDTH_COUNT - 1,
 		get_m_hudWidth, set_m_hudWidth },
+
+	// Which keyboard: 0 Classic, today's keys, 1 Red Alert, Red Alert 2's defaults fitted to this game
+	// in its own HotkeysRedAlert.ini (docs/plans/HOTKEY-SCHEME-RA.md).  Live: Accept reloads the keys.
+	{ "HotkeyScheme",							OPT_WND( "ComboBoxHotkeyScheme" ), "GUI:HotkeyScheme",
+		OPTION_ENUM, APPLY_LIVE, 0, HOTKEY_SCHEME_COUNT - 1,
+		get_m_hotkeyScheme, set_m_hotkeyScheme },
 
 	// Whose colour a player is drawn in.  Purely local: the match still agrees on the lobby's
 	// colours and this only changes what this screen puts on top of them, so two people in the same

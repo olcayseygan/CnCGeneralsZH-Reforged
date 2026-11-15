@@ -17173,6 +17173,42 @@ GUI:HotkeysCommandHOLD_POSITION
 "Yerini koru"
 END
 
+GUI:HotkeyScheme
+"Kısayol Düzeni"
+END
+
+GUI:HotkeyScheme0
+"Klasik"
+END
+
+GUI:HotkeyScheme1
+"Red Alert"
+END
+
+TOOLTIP:HotkeyScheme
+"Klasik, oyunun kendi tuşlarını kullanır. Red Alert, Red Alert 2'nin tuşlarını bu oyuna uyduğu yerde alır: yapım sekmeleri için Q W E R, konuşlanmak için D, satmak için L, onarmak için K, ara noktalar için basılı Z. Her düzen Kısayollar sayfasındaki değişikliklerini ayrı tutar."
+END
+
+GUI:HotkeysEditingScheme
+"%s tuşlarını düzenliyorsun."
+END
+
+GUI:HotkeysCommandDEPLOY
+"Konuşlan"
+END
+
+GUI:HotkeysCommandSELL_MODE
+"Satış modu"
+END
+
+GUI:HotkeysCommandREPAIR_MODE
+"Onarım modu"
+END
+
+GUI:HotkeysCommandBEGIN_WAYPOINTS_KEY
+"Ara nokta modu (basılı tut)"
+END
+
 // Maç yükleme ekranı (LoadScreen.cpp içindeki LoadScreenBoard)
 GUI:LoadModeSkirmish
 "Çatışma"

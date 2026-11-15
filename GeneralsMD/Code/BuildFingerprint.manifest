@@ -1739,6 +1739,7 @@ GameEngine/Include/GameClient/GroupPanel.h
 GameEngine/Include/GameClient/HeaderTemplate.h
 GameEngine/Include/GameClient/HintSpy.h
 GameEngine/Include/GameClient/HotKey.h
+GameEngine/Include/GameClient/HotkeyScheme.h
 GameEngine/Include/GameClient/IMEManager.h
 GameEngine/Include/GameClient/IMEManagerPosix.h
 GameEngine/Include/GameClient/Image.h
@@ -2440,6 +2441,7 @@ GameEngine/Source/GameClient/MessageStream/CommandXlat.cpp
 GameEngine/Source/GameClient/MessageStream/GUICommandTranslator.cpp
 GameEngine/Source/GameClient/MessageStream/HintSpy.cpp
 GameEngine/Source/GameClient/MessageStream/HotKey.cpp
+GameEngine/Source/GameClient/MessageStream/HotkeyScheme.cpp
 GameEngine/Source/GameClient/MessageStream/LookAtXlat.cpp
 GameEngine/Source/GameClient/MessageStream/MetaEvent.cpp
 GameEngine/Source/GameClient/MessageStream/PlaceEventTranslator.cpp
@@ -4327,6 +4329,8 @@ Tests/test_hazard_cloud_bake.cpp
 Tests/test_hazard_cloud_policy.cpp
 Tests/test_hazard_cloud_shared.cpp
 Tests/test_hostile_map.inc
+Tests/test_hotkey_scheme.inc
+Tests/test_hotkey_scheme_map.inc
 Tests/test_install_guard.sh
 Tests/test_install_root.cpp
 Tests/test_install_textures.cpp

@@ -17425,6 +17425,42 @@ GUI:HotkeysCommandHOLD_POSITION
 "Tenir la position"
 END
 
+GUI:HotkeyScheme
+"Jeu de raccourcis"
+END
+
+GUI:HotkeyScheme0
+"Classique"
+END
+
+GUI:HotkeyScheme1
+"Red Alert"
+END
+
+TOOLTIP:HotkeyScheme
+"Classique garde les touches du jeu. Red Alert reprend les touches de Red Alert 2 là où elles conviennent à ce jeu : Q W E R pour les onglets de construction, D pour déployer, L pour vendre, K pour réparer, Z maintenu pour les points de passage. Chaque jeu garde ses propres modifications dans la page Raccourcis."
+END
+
+GUI:HotkeysEditingScheme
+"Modification des touches %s."
+END
+
+GUI:HotkeysCommandDEPLOY
+"Déployer"
+END
+
+GUI:HotkeysCommandSELL_MODE
+"Mode vente"
+END
+
+GUI:HotkeysCommandREPAIR_MODE
+"Mode réparation"
+END
+
+GUI:HotkeysCommandBEGIN_WAYPOINTS_KEY
+"Points de passage (maintenir)"
+END
+
 GUI:HotkeysCommandTOGGLE_COMMAND_TAB_DEFENSE
 "Quatrième onglet de la barre latérale"
 END

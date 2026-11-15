@@ -15605,6 +15605,42 @@ GUI:HotkeysCommandHOLD_POSITION
 "Position halten"
 END
 
+GUI:HotkeyScheme
+"Tastenbelegung"
+END
+
+GUI:HotkeyScheme0
+"Klassisch"
+END
+
+GUI:HotkeyScheme1
+"Red Alert"
+END
+
+TOOLTIP:HotkeyScheme
+"Klassisch behält die Tasten des Spiels. Red Alert übernimmt die Tasten von Red Alert 2, wo sie zu diesem Spiel passen: Q W E R für die Bau-Reiter, D zum Entfalten, L zum Verkaufen, K zum Reparieren, Z gehalten für Wegpunkte. Jede Belegung behält ihre eigenen Änderungen auf der Seite Hotkeys."
+END
+
+GUI:HotkeysEditingScheme
+"Du bearbeitest die Belegung %s."
+END
+
+GUI:HotkeysCommandDEPLOY
+"Entfalten"
+END
+
+GUI:HotkeysCommandSELL_MODE
+"Verkaufsmodus"
+END
+
+GUI:HotkeysCommandREPAIR_MODE
+"Reparaturmodus"
+END
+
+GUI:HotkeysCommandBEGIN_WAYPOINTS_KEY
+"Wegpunktmodus (halten)"
+END
+
 GUI:HotkeysCommandTOGGLE_COMMAND_TAB_DEFENSE
 "Vierter Reiter der Seitenleiste"
 END

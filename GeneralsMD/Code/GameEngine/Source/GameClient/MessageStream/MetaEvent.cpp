@@ -51,6 +51,7 @@
 #include "GameClient/DebugDisplay.h"	// for AudioDebugDisplay
 #include "GameClient/GameText.h"
 #include "GameClient/HotKey.h"
+#include "GameClient/HotkeyScheme.h"
 #include "GameClient/MetaEvent.h"
 
 #include "GameLogic/GameLogic.h" // for TheGameLogic->getFrame()
@@ -217,6 +218,10 @@ static const LookupListRec GameMessageMetaTypeNames[] =
 	{ "SIGNAL_DEFEND",														GameMessage::MSG_META_SIGNAL_DEFEND },
 	{ "SIGNAL_ATTENTION",													GameMessage::MSG_META_SIGNAL_ATTENTION },
 	{ "REQUEST_MONEY",														GameMessage::MSG_META_REQUEST_MONEY },
+	{ "SELL_MODE",																GameMessage::MSG_META_SELL_MODE },
+	{ "REPAIR_MODE",															GameMessage::MSG_META_REPAIR_MODE },
+	{ "BEGIN_WAYPOINTS_KEY",											GameMessage::MSG_META_BEGIN_WAYPOINTS_KEY },
+	{ "END_WAYPOINTS_KEY",												GameMessage::MSG_META_END_WAYPOINTS_KEY },
 	{ "OPTIONS",																	GameMessage::MSG_META_OPTIONS },
 	{ "TOGGLE_LOWER_DETAILS",											GameMessage::MSG_META_TOGGLE_LOWER_DETAILS },
 	{ "TOGGLE_CONTROL_BAR",												GameMessage::MSG_META_TOGGLE_CONTROL_BAR },
@@ -469,7 +474,8 @@ static const char * findGameMessageNameByType(GameMessage::Type type)
 	* and a slot the player deliberately bound to shift is compared as-is.  The Force Attack hold is
 	* the same: shift on top of it queues the circle, so pressing shift must neither end the hold nor
 	* stop it from starting.  So are the camera's rotate keys: shift held over them flips the 45 degree
-	* steps (InGameUI::update), and a key let go with shift down still has to end the turn. */
+	* steps (InGameUI::update), and a key let go with shift down still has to end the turn.  The
+	* waypoint key (Z under Red Alert) is a hold like Force Attack's: shift queues the points. */
 //-------------------------------------------------------------------------------------------------
 static Bool metaIgnoresShift(const MetaMapRec *map)
 {
@@ -479,7 +485,18 @@ static Bool metaIgnoresShift(const MetaMapRec *map)
 															 map->m_meta == GameMessage::MSG_META_END_FORCEATTACK;
 	const Bool cameraRotate = map->m_meta >= GameMessage::MSG_META_BEGIN_CAMERA_ROTATE_LEFT &&
 														map->m_meta <= GameMessage::MSG_META_END_CAMERA_ROTATE_RIGHT;
-	return ( slot || forceAttackHold || cameraRotate ) && (map->m_modState & SHIFT) == 0;
+	const Bool waypointKey = map->m_meta == GameMessage::MSG_META_BEGIN_WAYPOINTS_KEY ||
+													 map->m_meta == GameMessage::MSG_META_END_WAYPOINTS_KEY;
+	return ( slot || forceAttackHold || cameraRotate || waypointKey ) && (map->m_modState & SHIFT) == 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The waypoint key's release ends the mode whatever modifiers are down by then: Z held, then Ctrl
+	* pressed for a force-fire click, still has to let go of waypoint mode when Z comes up. */
+//-------------------------------------------------------------------------------------------------
+static Bool metaUpIgnoresModifiers( const MetaMapRec *map )
+{
+	return map->m_meta == GameMessage::MSG_META_END_WAYPOINTS_KEY && map->m_transition == UP;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -574,7 +591,17 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
 			}
 		}
 
-    for (const MetaMapRec *map = TheMetaMap->getFirstMetaMapRec(); map; map = map->m_next)
+		// P pauses and resumes a replay ahead of every record: the Red Alert keys give P to select all,
+		// and nobody selects anything in a replay
+		const Bool replayPause = !isModifierKey && key == MK_P && newModState == NONE &&
+			TheGameLogic->isInReplayGame() && ( keyState & KEY_STATE_DOWN ) && !( keyState & KEY_STATE_AUTOREPEAT );
+		if( replayPause )
+		{
+			TheMessageStream->appendMessage( GameMessage::MSG_META_TOGGLE_PAUSE );
+			disp = DESTROY_MESSAGE;
+		}
+
+    for (const MetaMapRec *map = TheMetaMap->getFirstMetaMapRec(); map && !replayPause; map = map->m_next)
 		{
 			DEBUG_ASSERTCRASH(map->m_meta > GameMessage::MSG_BEGIN_META_MESSAGES &&
 				map->m_meta < GameMessage::MSG_END_META_MESSAGES, ("hmm, expected only meta-msgs here"));
@@ -630,7 +657,7 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
 			if (
 						!barKey &&
 						map->m_key == key &&
-						map->m_modState == cmpModState &&
+						( map->m_modState == cmpModState || ( metaUpIgnoresModifiers( map ) && ( keyState & KEY_STATE_UP ) ) ) &&
 						(
 							(map->m_transition == UP && (keyState & KEY_STATE_UP)) ||
 							(map->m_transition == DOWN && (keyState & KEY_STATE_DOWN)) //||
@@ -690,18 +717,13 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
 			disp = DESTROY_MESSAGE;
 		}
 
-		// A replay's strip on the keyboard, unless CommandMap.ini gave the key to something else: P
-		// pauses and resumes, minus and plus step through the speed buttons.  Nobody gives orders in
-		// a replay, so the keys are free there.
+		// The rest of a replay's strip on the keyboard, unless CommandMap.ini gave the key to something
+		// else: minus and plus step through the speed buttons (P is above the records).  Nobody gives
+		// orders in a replay, so the keys are free there.
 		if( disp == KEEP_MESSAGE && newModState == NONE && TheGameLogic->isInReplayGame() &&
 				( keyState & KEY_STATE_DOWN ) && !( keyState & KEY_STATE_AUTOREPEAT ) )
 		{
-			if( key == MK_P )
-			{
-				TheMessageStream->appendMessage( GameMessage::MSG_META_TOGGLE_PAUSE );
-				disp = DESTROY_MESSAGE;
-			}
-			else if( key == MK_MINUS || key == MK_KPMINUS )
+			if( key == MK_MINUS || key == MK_KPMINUS )
 			{
 				ReplayControlStepSpeed( -1 );
 				disp = DESTROY_MESSAGE;
@@ -951,6 +973,79 @@ void MetaMap::keepArrowsForCamera()
 		rec->m_modState = DEFAULTS[ each ].mods;
 		rec->m_usableIn = COMMANDUSABLE_GAME;
 		rec->m_category = CATEGORY_INTERFACE;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A name's value in a lookup table, or -1. */
+static Int schemeLookup( const LookupListRec *list, const char *name )
+{
+	for( ; list->name != NULL; ++list )
+		if( strcasecmp( list->name, name ) == 0 )
+			return list->value;
+	return -1;
+}
+
+//-------------------------------------------------------------------------------------------------
+void MetaMap::applyScheme( Int scheme )
+{
+	Int count = 0;
+	const HotkeySchemeKey *keys = HotkeyScheme_keys( scheme, &count );
+	if( keys == NULL || count <= 0 )
+		return;
+
+	// every row's chord on its command, a BEGIN_ row's END_ on the same key's release; a row with no
+	// key takes the command off the keyboard
+	std::vector< const MetaMapRec * > placed;
+	for( Int each = 0; each < count; ++each )
+	{
+		const HotkeySchemeKey &row = keys[ each ];
+		const Bool unbind = row.key[ 0 ] == '\0';
+		const Int key = unbind ? (Int)MK_NONE : schemeLookup( KeyNames, row.key );
+		const Int mods = schemeLookup( ModifierNames, row.modifiers );
+		GameMessage::Type metas[ 2 ] = { findGameMessageMetaType( row.command ), GameMessage::MSG_INVALID };
+		if( key < 0 || mods < 0 || metas[ 0 ] == GameMessage::MSG_INVALID )
+		{
+			DEBUG_CRASH(( "HOTKEYS: scheme %d row %s has a key or modifier no table knows\n", scheme, row.command ));
+			continue;
+		}
+		if( strncmp( row.command, "BEGIN_", 6 ) == 0 )
+		{
+			AsciiString end( "END_" );
+			end.concat( row.command + 6 );
+			metas[ 1 ] = findGameMessageMetaType( end.str() );
+		}
+		for( Int half = 0; half < 2; ++half )
+		{
+			if( metas[ half ] == GameMessage::MSG_INVALID )
+				continue;
+			MetaMapRec *rec = getMetaMapRec( metas[ half ] );
+			rec->m_key = (MappableKeyType)key;
+			rec->m_modState = (MappableKeyModState)mods;
+			rec->m_transition = half == 0 ? DOWN : UP;
+			rec->m_usableIn = unbind ? COMMANDUSABLE_NONE : (CommandUsableInType)( rec->m_usableIn | COMMANDUSABLE_GAME );
+			placed.push_back( rec );
+		}
+	}
+
+	// then whatever else sat on one of those chords comes off it, or one key would do two things
+	for( MetaMapRec *map = m_metaMaps; map; map = map->m_next )
+	{
+		if( map->m_key == MK_NONE )
+			continue;
+		Bool mine = FALSE, clash = FALSE;
+		for( size_t at = 0; at < placed.size(); ++at )
+		{
+			const MetaMapRec *p = placed[ at ];
+			mine = mine || p == map;
+			clash = clash || ( p->m_usableIn != COMMANDUSABLE_NONE && p->m_key == map->m_key &&
+				p->m_modState == map->m_modState && p->m_transition == map->m_transition );
+		}
+		if( mine || !clash )
+			continue;
+		DEBUG_LOG(( "HOTKEYS: %s gives its key to scheme %d\n", findGameMessageNameByType( map->m_meta ), scheme ));
+		map->m_key = MK_NONE;
+		map->m_usableIn = COMMANDUSABLE_NONE;
 	}
 }
 

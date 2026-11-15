@@ -657,6 +657,9 @@ static void pressRepair( void )
 		enterCursorMode( SIDEBAR_CURSOR_REPAIR );
 }
 
+void Sidebar_pressSell( void ) { pressSell(); }
+void Sidebar_pressRepair( void ) { pressRepair(); }
+
 Bool Sidebar_translate( const GameMessage *msg )
 {
 	const GameMessage::Type type = msg->getType();

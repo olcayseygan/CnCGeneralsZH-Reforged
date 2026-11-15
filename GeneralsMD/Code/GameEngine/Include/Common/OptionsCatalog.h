@@ -181,6 +181,11 @@ enum { HUD_LAYOUT_CLASSIC, HUD_LAYOUT_SIDEBAR, HUD_LAYOUT_COUNT };
 // Strings: GUI:HudWidth, GUI:HudWidth0..2, TOOLTIP:HudWidth.
 enum { HUD_WIDTH_FULL, HUD_WIDTH_21_9, HUD_WIDTH_16_9, HUD_WIDTH_COUNT };
 
+// The keyboard scheme ("HotkeyScheme", GlobalData m_hotkeyScheme): 0 Classic, today's keys, the default;
+// 1 Red Alert, Red Alert 2's defaults fitted to this game, kept in its own HotkeysRedAlert.ini
+// (docs/plans/HOTKEY-SCHEME-RA.md).  The table is GameClient/HotkeyScheme.h.
+enum { HOTKEY_SCHEME_CLASSIC, HOTKEY_SCHEME_RED_ALERT, HOTKEY_SCHEME_COUNT };
+
 // The picture cap: off, 240, 144, 120 or 60 pictures a second.  Options.ini stores the level.
 enum { FRAME_RATE_LIMIT_COUNT = 5 };
 

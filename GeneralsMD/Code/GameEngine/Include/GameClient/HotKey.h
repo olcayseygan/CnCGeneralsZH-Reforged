@@ -130,9 +130,11 @@ public:
 		* grid's letter (commandBarGridKey) comes before the fixed and label letters. */
 	static WideChar playerButtonKey( const AsciiString& button, WideChar labelKey, Int commandType,
 		Int barSlot = -1, Int upgradeRank = -1 );
-	/// playerButtonKey over `keys` (lower case button name to letter, 0 for none) in place of the file's
+	/** playerButtonKey over `keys` (lower case button name to letter, 0 for none) in place of the file's,
+		* under keyboard scheme `scheme` (HOTKEY_SCHEME_*, -1 the scheme in force).  Under Red Alert a
+		* label's letter the player did not choose also gives way when the scheme's table binds it bare. */
 	static WideChar buttonKeyIn( const AsciiString& button, WideChar labelKey, Int commandType,
-		const std::map< std::string, WideChar >& keys, Int barSlot = -1, Int upgradeRank = -1 );
+		const std::map< std::string, WideChar >& keys, Int barSlot = -1, Int upgradeRank = -1, Int scheme = -1 );
 	/** The grid's letter for command bar window slot barSlot: column barSlot / 2, row barSlot % 2,
 		* Q W E R T Y U I O along the top and A S D F G H J K L along the bottom.  The k-th upgrade
 		* (upgradeRank k) takes X C V B N instead, a sixth or later its slot's letter.  0 past the grid. */
@@ -157,13 +159,15 @@ public:
 	/// CommandBarGrid in Hotkeys.ini: every command bar button keyed by its window slot
 	static Bool commandBarGrid( void );
 	static void setCommandBarGrid( Bool grid );
-	static WideChar fixedKey( const AsciiString& button, Int commandType );	///< the bar's fixed letter, or 0
+	/// the bar's fixed letter under `scheme` (-1 the scheme in force), or 0; Red Alert's Sell is L
+	static WideChar fixedKey( const AsciiString& button, Int commandType, Int scheme = -1 );
 	/// FixedOrderKeys in Hotkeys.ini: FALSE gives the orders their labels' letters, as shipped
 	static Bool fixedOrderKeys( void );
 	static void setFixedOrderKeys( Bool fixed );
 
-	/// Hotkeys.ini out of the user data folder: the button letters afresh, its CommandMap blocks over
-	/// the records the MetaMap holds.  A block that will not parse ends the file there.
+	/// The scheme in force (MetaMap::applyScheme) over the records, then its file out of the user data
+	/// folder (HotkeyScheme_fileName: Hotkeys.ini, HotkeysRedAlert.ini): the button letters afresh, its
+	/// CommandMap blocks over the records the MetaMap holds.  A block that will not parse ends the file there.
 	static void loadPlayerKeys( void );
 	/// Every key as the engine started with them, from the language's CommandMap.ini and Hotkeys.ini
 	/// again, so a file the options menu has just written counts from the next key press.

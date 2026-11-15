@@ -2596,6 +2596,42 @@ GUI:HotkeysCommandHOLD_POSITION
 "Hold position"
 END
 
+GUI:HotkeyScheme
+"Hotkey Scheme"
+END
+
+GUI:HotkeyScheme0
+"Classic"
+END
+
+GUI:HotkeyScheme1
+"Red Alert"
+END
+
+TOOLTIP:HotkeyScheme
+"Classic keeps the game's own keys. Red Alert takes Red Alert 2's keys where they fit this game: Q W E R for the build tabs, D to deploy, L to sell, K to repair, Z held for waypoints. Each scheme keeps its own changes on the Hotkeys page."
+END
+
+GUI:HotkeysEditingScheme
+"Editing the %s keys."
+END
+
+GUI:HotkeysCommandDEPLOY
+"Deploy"
+END
+
+GUI:HotkeysCommandSELL_MODE
+"Sell mode"
+END
+
+GUI:HotkeysCommandREPAIR_MODE
+"Repair mode"
+END
+
+GUI:HotkeysCommandBEGIN_WAYPOINTS_KEY
+"Waypoint mode (hold)"
+END
+
 // The match load screen (LoadScreenBoard in LoadScreen.cpp)
 GUI:LoadModeSkirmish
 "Skirmish"

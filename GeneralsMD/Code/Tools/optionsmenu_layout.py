@@ -252,6 +252,8 @@ NEW_CONTROLS = [
     (COMBO,  "ComboBoxHudLayout",      None),
     (LABEL,  "LabelHudWidth",          "GUI:HudWidth"),
     (COMBO,  "ComboBoxHudWidth",       None),
+    (LABEL,  "LabelHotkeyScheme",      "GUI:HotkeyScheme"),
+    (COMBO,  "ComboBoxHotkeyScheme",   None),
     (LABEL,  "LabelMenuTransitionSpeed", "GUI:MenuTransitionSpeed"),
     (SLIDER, "SliderMenuTransitionSpeed", None),
     (LABEL,  "LabelMinimapSize",       "GUI:MinimapSize"),
@@ -498,6 +500,7 @@ GROUP_LAYOUT = [
         ("GUI:OptionsGroupHud", [
             setting("LabelHudLayout", "ComboBoxHudLayout"),
             setting("LabelHudWidth", "ComboBoxHudWidth"),
+            setting("LabelHotkeyScheme", "ComboBoxHotkeyScheme"),
             ("check", "CheckNetBox"),
             setting("LabelMinimapSize", "SliderMinimapSize", "ValueMinimapSize")]),
         ("GUI:OptionsGroupBattlefield", [

@@ -97,6 +97,11 @@ Int Sidebar_cursorMode( void );		///< SidebarCursorMode
 /** Turn the mode off; TRUE when one was on (Esc takes it back before opening the menu). */
 Bool Sidebar_cancelCursorMode( void );
 
+/** Sat's and Onar's press from a key (MSG_META_SELL_MODE, MSG_META_REPAIR_MODE), in any layout: the
+	* sell cursor, or the selection sold, or the mode off; the repair cursor on or off. */
+void Sidebar_pressSell( void );
+void Sidebar_pressRepair( void );
+
 class GameMessage;
 /** GUICommandTranslator's first look at every message: TRUE when the mode used it (destroy it).  The
 	* left button is the mode's while it is on; the right release ends it (Sidebar_takeRightRelease). */

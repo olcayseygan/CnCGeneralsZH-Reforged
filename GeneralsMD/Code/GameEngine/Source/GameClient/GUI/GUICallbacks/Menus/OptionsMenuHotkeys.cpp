@@ -22,18 +22,24 @@
 // The options menu's Hotkeys page: what the launcher's Hotkeys page does, inside the game.  Every
 // command on the left with its chord, and on the right the command bar of one building or unit,
 // picked by general and object, with each button's letter.  A double click, Enter or Change waits for
-// the key; Esc lets go.  Nothing is written until Accept, which writes Hotkeys.ini in the user data
-// folder in the launcher's own format (Hotkeys_format in HotKey.cpp) and reads every key again, so a
-// key changed from Esc > Options in a match counts from the next press.  The bars are found the way
+// the key; Esc lets go.  The page edits the keyboard scheme the HotkeyScheme combo shows, Classic in
+// Hotkeys.ini, Red Alert in HotkeysRedAlert.ini (HotkeyScheme_fileName); picking the other scheme
+// puts this one's edits aside and shows the other's.  Nothing is written until Accept, which writes
+// each scheme's file that changed, in the user data folder in the launcher's own format
+// (Hotkeys_format in HotKey.cpp), and reads every key again, so a key changed from Esc > Options in a
+// match counts from the next press.  The bars are found the way
 // the launcher finds them (hotkeys.js, loadHotbars): from each playable general's starting building
 // and unit through every build button, in the engine's own templates instead of the INI text.
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file in the GameEngine
 #include "zhio.h"
 
+#include <utility>
+
 #include "Common/FileSystem.h"
 #include "Common/file.h"
 #include "Common/GlobalData.h"
+#include "Common/OptionsCatalog.h"
 #include "Common/PlayerTemplate.h"
 #include "Common/Registry.h"
 #include "Common/ThingFactory.h"
@@ -46,6 +52,7 @@
 #include "GameClient/GameText.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/HotKey.h"
+#include "GameClient/HotkeyScheme.h"
 #include "GameClient/KeyDefs.h"
 #include "GameClient/MetaEvent.h"
 #include "GameClient/UIStyle.h"
@@ -90,13 +97,28 @@ GameWindow *s_note = NULL;
 GameWindow *s_change = NULL;
 GameWindow *s_clear = NULL;
 GameWindow *s_default = NULL;
+GameWindow *s_schemeCombo = NULL;	///< the catalog's HotkeyScheme combo, on another page; the page follows it
 
+// the shown scheme's keys
 std::vector< HotkeyCommandRow > s_rows;
 HotkeysFile s_file;
-std::string s_fileText;		///< Hotkeys.ini as the page opened, to write only what changed
+std::string s_fileText;		///< the scheme's file as the page opened, to write only what changed
 std::map< std::string, HotkeyBinding > s_launcherCommands;
 std::map< std::string, std::string > s_launcherButtons;
 std::vector< BarFaction > s_factions;
+
+/// A scheme's keys while the other is shown; the shown one's slot holds nothing until it is put aside.
+struct SchemeKeys
+{
+	std::vector< HotkeyCommandRow > rows;
+	HotkeysFile file;
+	std::string fileText;
+	std::map< std::string, HotkeyBinding > launcherCommands;
+	std::map< std::string, std::string > launcherButtons;
+};
+SchemeKeys s_stash[ HOTKEY_SCHEME_COUNT ];
+Int s_scheme = HOTKEY_SCHEME_CLASSIC;			///< the scheme shown, HOTKEY_SCHEME_*
+Int s_openScheme = HOTKEY_SCHEME_CLASSIC;	///< the scheme in force when the page opened
 
 Int s_active = 0;					///< the list touched last: 0 the commands, 1 the bar
 Int s_commandRow = -1;		///< index into s_rows
@@ -124,11 +146,37 @@ std::string readText( const char *path )
 	return text;
 }
 
-AsciiString hotkeysPath( void )
+AsciiString hotkeysPath( Int scheme )
 {
 	AsciiString path = TheGlobalData->getPath_UserData();
-	path.concat( "Hotkeys.ini" );
+	path.concat( HotkeyScheme_fileName( scheme ) );
 	return path;
+}
+
+/// The shown keys and scheme's stash change places.
+void swapShown( Int scheme )
+{
+	SchemeKeys& stash = s_stash[ scheme ];
+	s_rows.swap( stash.rows );
+	std::swap( s_file, stash.file );
+	s_fileText.swap( stash.fileText );
+	s_launcherCommands.swap( stash.launcherCommands );
+	s_launcherButtons.swap( stash.launcherButtons );
+}
+
+/// A scheme's rows and file into the shown keys: Classic's with Hotkeys.ini's launcher part, Red
+/// Alert's rows with its defaults in place of the game's own.
+void loadShown( Int scheme, const std::string& commandMapText )
+{
+	s_rows = Hotkeys_commandRows( commandMapText );
+	if( scheme != HOTKEY_SCHEME_CLASSIC )
+		HotkeyScheme_applyToRows( s_rows, scheme );
+	const AsciiString path = hotkeysPath( scheme );
+	s_fileText = TheFileSystem->doesFileExist( path.str() ) ? readText( path.str() ) : std::string();
+	s_file = Hotkeys_parse( s_fileText, s_rows );
+	s_launcherCommands.clear();
+	s_launcherButtons.clear();
+	Hotkeys_launcherKeys( s_file.launcherPart, &s_launcherCommands, &s_launcherButtons );
 }
 
 /// What a command answers to in a match with the keys on the page: the player's, else the launcher's
@@ -223,7 +271,7 @@ UnicodeString buttonKeyText( const BarObject *object, Int slot, const std::map< 
 		types[ each ] = object->slots[ each ] ? object->slots[ each ]->getCommandType() : GUI_COMMAND_NONE;
 	HotKeyManager::commandBarUpgradeRanks( types, BAR_SLOTS, ranks );
 	const WideChar letter = HotKeyManager::buttonKeyIn( button->getName(),
-		TheGameText->fetchEnglishHotKey( button->getTextLabel() ), button->getCommandType(), keys, slot, ranks[ slot ] );
+		TheGameText->fetchEnglishHotKey( button->getTextLabel() ), button->getCommandType(), keys, slot, ranks[ slot ], s_scheme );
 	return letterText( letter );
 }
 
@@ -358,12 +406,11 @@ std::vector< UnicodeString > sameChord( const HotkeyCommandRow& row )
 	return others;
 }
 
-/// A bare letter one of the bar's fixed orders owns (stop on S excepted, being the same order).
+/// A bare letter one of the shown scheme's fixed bar orders owns (stop on S excepted, being the same order).
 Bool onFixedKey( const HotkeyCommandRow& row, const HotkeyBinding& binding )
 {
-	static const char FIXED[] = "ASGYVNCH";
 	return binding.modifiers == "NONE" && binding.key.size() == 5 && binding.key.compare( 0, 4, "KEY_" ) == 0
-		&& strchr( FIXED, binding.key[ 4 ] ) != NULL && !( row.id == "STOP" && binding.key == "KEY_S" );
+		&& strchr( HotkeyScheme_fixedLetters( s_scheme ), binding.key[ 4 ] ) != NULL && !( row.id == "STOP" && binding.key == "KEY_S" );
 }
 
 UnicodeString joined( const std::vector< UnicodeString >& names )
@@ -525,7 +572,7 @@ void updateNote( void )
 	}
 	else if( s_active == 1 && s_button )
 	{
-		const WideChar fixed = HotKeyManager::fixedKey( s_button->getName(), s_button->getCommandType() );
+		const WideChar fixed = HotKeyManager::fixedKey( s_button->getName(), s_button->getCommandType(), s_scheme );
 		const std::string name = s_button->getName().str();
 		changed = s_file.buttons.count( name ) != 0;
 		canChange = TRUE;
@@ -557,7 +604,17 @@ void updateNote( void )
 			note.concat( line );
 		}
 	}
-	GadgetStaticTextSetText( s_note, note );
+	// which scheme's keys these are comes first, the combo that picks it being on another page
+	AsciiString schemeLabel;
+	schemeLabel.format( "GUI:HotkeyScheme%d", s_scheme );
+	UnicodeString shown;
+	shown.format( TheGameText->fetch( "GUI:HotkeysEditingScheme" ), TheGameText->fetch( schemeLabel ).str() );
+	if( !note.isEmpty() )
+	{
+		shown.concat( u" " );
+		shown.concat( note );
+	}
+	GadgetStaticTextSetText( s_note, shown );
 	s_change->winEnable( canChange );
 	s_clear->winEnable( canChange );
 	s_default->winEnable( changed );
@@ -568,6 +625,19 @@ void refresh( void )
 	fillCommands();
 	fillButtons();
 	updateNote();
+}
+
+/// The other scheme's keys on the page, this one's edits put aside until Accept or Back.
+void showScheme( Int scheme )
+{
+	swapShown( s_scheme );
+	s_scheme = scheme;
+	swapShown( s_scheme );
+	s_active = 0;
+	s_commandRow = -1;
+	s_button = NULL;
+	s_capture = CAPTURE_NONE;
+	refresh();
 }
 
 void startCapture( void )
@@ -636,15 +706,23 @@ void OptionsHotkeysInit( void )
 	s_change = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "OptionsMenu.wnd:ButtonHotkeyChange" ) );
 	s_clear = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "OptionsMenu.wnd:ButtonHotkeyClear" ) );
 	s_default = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "OptionsMenu.wnd:ButtonHotkeyDefault" ) );
+	s_schemeCombo = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "OptionsMenu.wnd:ComboBoxHotkeyScheme" ) );
 
 	AsciiString commandMap;
 	commandMap.format( "Data\\%s\\CommandMap.ini", GetRegistryLanguage().str() );
-	s_rows = Hotkeys_commandRows( readText( commandMap.str() ) );
-	s_fileText = TheFileSystem->doesFileExist( hotkeysPath().str() ) ? readText( hotkeysPath().str() ) : std::string();
-	s_file = Hotkeys_parse( s_fileText, s_rows );
-	s_launcherCommands.clear();
-	s_launcherButtons.clear();
-	Hotkeys_launcherKeys( s_file.launcherPart, &s_launcherCommands, &s_launcherButtons );
+	const std::string commandMapText = readText( commandMap.str() );
+	for( Int scheme = 0; scheme < HOTKEY_SCHEME_COUNT; scheme++ )
+	{
+		loadShown( scheme, commandMapText );
+		swapShown( scheme );
+	}
+	// the combo's choice, which fillCatalogWidgets has just shown
+	s_openScheme = TheGlobalData->m_hotkeyScheme;
+	Int scheme = s_openScheme;
+	if( s_schemeCombo )
+		GadgetComboBoxGetSelectedPos( s_schemeCombo, &scheme );
+	s_scheme = scheme >= 0 && scheme < HOTKEY_SCHEME_COUNT ? scheme : HOTKEY_SCHEME_CLASSIC;
+	swapShown( s_scheme );
 	s_active = 0;
 	s_commandRow = -1;
 	s_button = NULL;
@@ -666,6 +744,16 @@ Bool OptionsHotkeysSystem( UnsignedInt msg, GameWindow *control, WindowMsgData r
 {
 	if( s_commandList == NULL || s_filling )
 		return FALSE;
+	// the scheme combo is the catalog's, so the menu goes on with it after the page follows
+	if( control != NULL && control == s_schemeCombo )
+	{
+		Int scheme = -1;
+		if( msg == GCM_SELECTED )
+			GadgetComboBoxGetSelectedPos( s_schemeCombo, &scheme );
+		if( scheme >= 0 && scheme < HOTKEY_SCHEME_COUNT && scheme != s_scheme )
+			showScheme( scheme );
+		return FALSE;
+	}
 	const Bool ours = control == s_commandList || control == s_buttonList || control == s_factionCombo
 		|| control == s_objectCombo || control == s_change || control == s_clear || control == s_default;
 	if( !ours )
@@ -804,25 +892,32 @@ void OptionsHotkeysSave( void )
 {
 	if( s_commandList == NULL )
 		return;
-	const std::string text = Hotkeys_format( s_file, s_rows );
-	// a page looked at and left alone writes nothing, so a file never written stays unwritten
-	if( text == Hotkeys_format( Hotkeys_parse( s_fileText, s_rows ), s_rows ) )
-	{
-		s_commandList = NULL;
-		return;
-	}
-	FILE *file = zh_fopen( hotkeysPath().str(), "wb" );
-	if( file == NULL )
-	{
-		DEBUG_LOG(( "HOTKEYS: %s could not be written\n", hotkeysPath().str() ));
-		s_commandList = NULL;
-		return;
-	}
-	fwrite( text.data(), 1, text.size(), file );
-	fclose( file );
-	DEBUG_LOG(( "HOTKEYS: wrote %s from the options menu\n", hotkeysPath().str() ));
 	s_commandList = NULL;
-	HotKeyManager::reloadKeys();
+	// every scheme into the stash, the shown one included
+	swapShown( s_scheme );
+	Bool wrote = FALSE;
+	for( Int scheme = 0; scheme < HOTKEY_SCHEME_COUNT; scheme++ )
+	{
+		const SchemeKeys& keys = s_stash[ scheme ];
+		const std::string text = Hotkeys_format( keys.file, keys.rows );
+		// a page looked at and left alone writes nothing, so a file never written stays unwritten
+		if( text == Hotkeys_format( Hotkeys_parse( keys.fileText, keys.rows ), keys.rows ) )
+			continue;
+		const AsciiString path = hotkeysPath( scheme );
+		FILE *file = zh_fopen( path.str(), "wb" );
+		if( file == NULL )
+		{
+			DEBUG_LOG(( "HOTKEYS: %s could not be written\n", path.str() ));
+			continue;
+		}
+		fwrite( text.data(), 1, text.size(), file );
+		fclose( file );
+		DEBUG_LOG(( "HOTKEYS: wrote %s from the options menu\n", path.str() ));
+		wrote = TRUE;
+	}
+	// saveOptions has put the combo's scheme in force by now
+	if( wrote || TheGlobalData->m_hotkeyScheme != s_openScheme )
+		HotKeyManager::reloadKeys();
 }
 
 //-------------------------------------------------------------------------------------------------

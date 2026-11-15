@@ -17022,7 +17022,7 @@ GUI:HudLayout1
 END
 
 TOOLTIP:HudLayout
-"Классическое расположение оставляет командную панель внизу. Стиль Red Alert переносит строительство и обучение в боковую панель справа, а команды выбранных юнитов — в полосу внизу."
+"Классическое расположение оставляет командную панель внизу. Стиль Red Alert переносит строительство и обучение в боковую панель справа, а команды выбранных юнитов ставит в полосу внизу."
 END
 
 GUI:HudWidth
@@ -17423,6 +17423,42 @@ END
 
 GUI:HotkeysCommandHOLD_POSITION
 "Удерживать позицию"
+END
+
+GUI:HotkeyScheme
+"Раскладка клавиш"
+END
+
+GUI:HotkeyScheme0
+"Классическая"
+END
+
+GUI:HotkeyScheme1
+"Red Alert"
+END
+
+TOOLTIP:HotkeyScheme
+"Классическая оставляет клавиши игры. Red Alert берёт клавиши Red Alert 2 там, где они подходят этой игре: Q W E R для вкладок строительства, D развернуть, L продать, K ремонт, зажатая Z для путевых точек. Каждая раскладка хранит свои изменения на странице «Клавиши»."
+END
+
+GUI:HotkeysEditingScheme
+"Изменяются клавиши: %s."
+END
+
+GUI:HotkeysCommandDEPLOY
+"Развернуть"
+END
+
+GUI:HotkeysCommandSELL_MODE
+"Режим продажи"
+END
+
+GUI:HotkeysCommandREPAIR_MODE
+"Режим ремонта"
+END
+
+GUI:HotkeysCommandBEGIN_WAYPOINTS_KEY
+"Путевые точки (удерживать)"
 END
 
 GUI:HotkeysCommandTOGGLE_COMMAND_TAB_DEFENSE

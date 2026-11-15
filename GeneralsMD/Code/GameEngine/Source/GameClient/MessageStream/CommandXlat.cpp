@@ -72,6 +72,7 @@
 #include "GameClient/Shell.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/ControlBarSidebar.h"
+#include "GameClient/HotkeyScheme.h"
 #include "GameClient/SelectionInfo.h"
 #include "GameClient/SelectionXlat.h"
 
@@ -3596,10 +3597,20 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 
 		//-----------------------------------------------------------------------------------------
 		case GameMessage::MSG_META_DEPLOY:
-			#ifdef _DEBUG
-			DEBUG_ASSERTCRASH(FALSE, ("unimplemented meta command MSG_META_DEPLOY !"));
-			#endif
-			/// @todo srj implement me
+			// the selection's first own command on the bar, pressed as its key would (HotkeyScheme.h)
+			HotkeyScheme_pressDeploy();
+			disp = DESTROY_MESSAGE;
+			break;
+
+		//-----------------------------------------------------------------------------------------
+		// the sidebar's sell and repair cursors from a key, in every layout (Red Alert's L and K)
+		case GameMessage::MSG_META_SELL_MODE:
+			Sidebar_pressSell();
+			disp = DESTROY_MESSAGE;
+			break;
+
+		case GameMessage::MSG_META_REPAIR_MODE:
+			Sidebar_pressRepair();
 			disp = DESTROY_MESSAGE;
 			break;
 
@@ -4260,6 +4271,7 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 
 		//-----------------------------------------------------------------------------------------
 		case GameMessage::MSG_META_BEGIN_WAYPOINTS:
+		case GameMessage::MSG_META_BEGIN_WAYPOINTS_KEY:	// Z held under Red Alert; Alt and Z share the one flag
 //			DEBUG_ASSERTCRASH( !TheInGameUI->isInWaypointMode(), ("Setting m_waypointMode but it's already set!") );
 			TheInGameUI->setWaypointMode( true );
 			DEBUG_LOG(( "HOTKEYS: waypoint mode on\n" ));	// a rebound hold reads back from the log
@@ -4277,6 +4289,7 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 
 		//-----------------------------------------------------------------------------------------
 		case GameMessage::MSG_META_END_WAYPOINTS:
+		case GameMessage::MSG_META_END_WAYPOINTS_KEY:
 //			DEBUG_ASSERTCRASH( TheInGameUI->isInWaypointMode(), ("Clearing m_waypointMode but it's already clear!") );
 			TheInGameUI->setWaypointMode( false );
 			DEBUG_LOG(( "HOTKEYS: waypoint mode off\n" ));

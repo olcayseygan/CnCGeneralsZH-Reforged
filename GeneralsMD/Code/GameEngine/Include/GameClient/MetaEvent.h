@@ -390,6 +390,10 @@ public:
 		* puts the fork's commands no language file knows (the minimap's colours, F11) on their default
 		* key where that key is free. */
 	void keepArrowsForCamera();
+	/** The keyboard scheme's defaults over the records (HotkeyScheme.h): every table row's chord on its
+		* command, a BEGIN_ row's END_ on the key's release, then any other record on one of those chords
+		* freed.  Classic leaves the records as they are.  Before Hotkeys.ini, so a player's key stands. */
+	void applyScheme( Int scheme );
 
 
 	const MetaMapRec *getFirstMetaMapRec() const { return m_metaMaps; }

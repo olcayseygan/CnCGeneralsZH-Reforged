@@ -498,6 +498,10 @@ public:
 		MSG_META_SIGNAL_DEFEND,											///< smoke for the allies: defend here (fork)
 		MSG_META_SIGNAL_ATTENTION,									///< smoke for the allies: look here (fork)
 		MSG_META_REQUEST_MONEY,											///< ask the allies for money: the computer's team board and a chat line (fork)
+		MSG_META_SELL_MODE,													///< enter the sidebar's sell cursor (Red Alert scheme, fork)
+		MSG_META_REPAIR_MODE,												///< enter the sidebar's repair cursor (Red Alert scheme, fork)
+		MSG_META_BEGIN_WAYPOINTS_KEY,								///< second waypoint-mode key held, Z under Red Alert (fork)
+		MSG_META_END_WAYPOINTS_KEY,									///< that key let go (fork)
 
 		MSG_END_META_MESSAGES,											///< Marker to delineate "meta" messages
 

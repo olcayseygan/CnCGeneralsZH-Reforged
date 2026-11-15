@@ -380,11 +380,11 @@ struct HudLayoutRects
 	IRegion2D sellButton;							///< 1608,368 74x36 "Sat" (phase 2)
 	IRegion2D repairButton;						///< 1690,368 74x36 "Onar" (phase 2, or hidden)
 	IRegion2D generalButton;					///< 1772,368 140x36 (ButtonGeneral)
-	IRegion2D tabs[ HUD_SIDEBAR_TABS ];	///< y 420 h 36 w 66 at x 1624 / 1698 / 1772 / 1846
+	IRegion2D tabs[ HUD_SIDEBAR_TABS ];	///< y 420 h 36, x 1624 / 1697 / 1770 / 1843, w 70 / 70 / 70 / 69 (to 1912, 3 apart)
 	IRegion2D powerRail;							///< 1604,420 16x652, the vertical power bar (to H - 8)
-	IRegion2D pickerAll;							///< 1624,464 50x28 "Tümü", a chip's size
-	IRegion2D pickerChips[ HUD_SIDEBAR_PICKER_CHIPS ];	///< y 464 h 28 w 50 from x 1677, pitch 53 (to 1886)
-	IRegion2D cameos[ HUD_SIDEBAR_CAMEOS ];	///< x 1624 / 1772 w 140 h 86, y 496 + 90.8 a row
+	IRegion2D pickerAll;							///< 1624,459 50x28 "Tümü", a chip's size, 3 under the tabs
+	IRegion2D pickerChips[ HUD_SIDEBAR_PICKER_CHIPS ];	///< y 459 h 28 w 50 from x 1677, pitch 53 (to 1886)
+	IRegion2D cameos[ HUD_SIDEBAR_CAMEOS ];	///< x 1624 / 1772 w 140 h 86, y 491 + 90.8 a row
 	IRegion2D arrowUp;								///< 1624,1044 140x28, bottom-anchored
 	IRegion2D arrowDown;							///< 1772,1044 140x28, bottom-anchored
 

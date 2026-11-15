@@ -180,17 +180,21 @@ void HudLayoutForScreen( Int screenWidth, Int screenHeight, Int layout, Int hudW
 	m.sidebarTop( &out->sellButton, 1608, 368, 74, 36 );
 	m.sidebarTop( &out->repairButton, 1690, 368, 74, 36 );
 	m.sidebarTop( &out->generalButton, 1772, 368, 140, 36 );
+	// the four tabs fill 1624..1912 3 apart, the odd pixel off the last: 70, 70, 70, 69
+	static const Real TAB_X[ HUD_SIDEBAR_TABS ] = { 1624, 1697, 1770, 1843 };
+	static const Real TAB_W[ HUD_SIDEBAR_TABS ] = { 70, 70, 70, 69 };
 	for( Int i = 0; i < HUD_SIDEBAR_TABS; ++i )
-		m.sidebarTop( &out->tabs[ i ], 1624.0f + 74.0f * i, 420, 66, 36 );
+		m.sidebarTop( &out->tabs[ i ], TAB_X[ i ], 420, TAB_W[ i ], 36 );
 	setRegion( &out->powerRail, m.sx( 1604 ), m.ty( 420 ), m.sx( 1620 ), m.by( 1072 ) );
-	// "All" and the four chips, one size, packed from the left 3 apart (pitch 53, to 1886)
-	m.sidebarTop( &out->pickerAll, 1624, 464, 50, 28 );
+	// "All" and the four chips, one size, packed from the left 3 apart (pitch 53, to 1886), 3 under
+	// the tabs; the cameo grid 4 under them, as before
+	m.sidebarTop( &out->pickerAll, 1624, 459, 50, 28 );
 	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; ++i )
-		m.sidebarTop( &out->pickerChips[ i ], 1677.0f + 53.0f * i, 464, 50, 28 );
+		m.sidebarTop( &out->pickerChips[ i ], 1677.0f + 53.0f * i, 459, 50, 28 );
 	for( Int row = 0; row < HUD_SIDEBAR_CAMEO_ROWS; ++row )
 		for( Int col = 0; col < HUD_SIDEBAR_CAMEO_COLUMNS; ++col )
 			m.sidebarTop( &out->cameos[ row * HUD_SIDEBAR_CAMEO_COLUMNS + col ],
-										1624.0f + 148.0f * col, 496.0f + 90.8f * row, 140, 86 );
+										1624.0f + 148.0f * col, 491.0f + 90.8f * row, 140, 86 );
 	m.sidebarBottom( &out->arrowUp, 1624, 1044, 140, 28 );
 	m.sidebarBottom( &out->arrowDown, 1772, 1044, 140, 28 );
 

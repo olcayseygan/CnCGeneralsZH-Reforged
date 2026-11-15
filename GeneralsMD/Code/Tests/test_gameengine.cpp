@@ -20004,11 +20004,15 @@ TEST(hud_layout_rects_tile_the_screen)
 	CHECK_EQ( r.radar.lo.x, 1608 );
 	CHECK_EQ( r.radar.lo.y, 56 );
 	CHECK_EQ( r.radar.width(), 304 );
-	CHECK_EQ( r.tabs[ 3 ].lo.x, 1846 );
+	CHECK_EQ( r.tabs[ 0 ].lo.x, 1624 );
+	CHECK_EQ( r.tabs[ 0 ].width(), 70 );
+	CHECK_EQ( r.tabs[ 1 ].lo.x - r.tabs[ 0 ].hi.x, 3 );
+	CHECK_EQ( r.tabs[ 3 ].lo.x, 1843 );
+	CHECK_EQ( r.tabs[ 3 ].hi.x, 1912 );
 	CHECK_EQ( r.tabs[ 3 ].lo.y, 420 );
 	CHECK_EQ( r.cameos[ 1 ].lo.x, 1772 );
-	CHECK_EQ( r.cameos[ 1 ].lo.y, 496 );
-	CHECK_EQ( r.cameos[ 11 ].lo.y, 950 );		// 496 + 5 * 90.8
+	CHECK_EQ( r.cameos[ 1 ].lo.y, 491 );
+	CHECK_EQ( r.cameos[ 11 ].lo.y, 945 );		// 491 + 5 * 90.8
 	CHECK_EQ( r.arrowDown.lo.y, 1044 );
 	CHECK_EQ( r.pickerAll.lo.x, 1624 );
 	CHECK_EQ( r.pickerAll.width(), 50 );
@@ -20020,7 +20024,9 @@ TEST(hud_layout_rects_tile_the_screen)
 	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].hi.x, 1886 );
 	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; ++i )
 		CHECK_EQ( r.pickerChips[ i ].width(), r.pickerAll.width() );
-	CHECK_EQ( r.pickerChips[ 0 ].lo.y, 464 );
+	CHECK_EQ( r.pickerChips[ 0 ].lo.y, 459 );
+	CHECK_EQ( r.pickerAll.lo.y - r.tabs[ 0 ].hi.y, 3 );
+	CHECK_EQ( r.cameos[ 0 ].lo.y - r.pickerAll.hi.y, 4 );
 	CHECK_EQ( r.pickerChips[ 0 ].height(), 28 );
 	CHECK_EQ( r.powerRail.hi.y, 1072 );
 	CHECK_EQ( r.stripButtons[ 13 ].lo.x, 840 );

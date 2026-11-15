@@ -7203,7 +7203,8 @@ Int Pathfinder::floodGroupGoalsFrom(const Coord3D *origin, PathfindLayerEnum lay
 	isOpened[ (start.x - m_extent.lo.x) + (start.y - m_extent.lo.y) * extentWidth ] = true;
 
 	Int unplacedCount = memberCount;
-	const Int cellLimit = MIN_FLOOD_CELLS + FLOOD_CELLS_PER_MEMBER * memberCount;
+	// a mixed group's soldiers flood out through the vehicles' block before they find a cell of their own
+	const Int cellLimit = MIN_FLOOD_CELLS + FLOOD_CELLS_PER_MEMBER * memberCount + (m_floodBlockArrival.empty() ? 0 : m_floodBlockCells);
 
 	for (Int head = 0; head < (Int)wave.size() && head < cellLimit && unplacedCount > 0; head++)
 	{
@@ -7224,7 +7225,8 @@ Int Pathfinder::floodGroupGoalsFrom(const Coord3D *origin, PathfindLayerEnum lay
 				if (isPlaced[arrivals[a].index])
 					continue;
 				FloodMember candidate = arrivals[a];
-				if (candidate.approachLength > PAST_CLICK_ALLOWANCE)
+				// a mixed group's soldiers may stand past the click: floodSoldierBlocked keeps them off parked vehicles
+				if (candidate.approachLength > PAST_CLICK_ALLOWANCE && m_floodBlockArrival.empty())
 				{
 					const Real depthPastClick = -(offsetX*candidate.approachX + offsetY*candidate.approachY);
 					if (depthPastClick > PAST_CLICK_ALLOWANCE)
@@ -7233,6 +7235,8 @@ Int Pathfinder::floodGroupGoalsFrom(const Coord3D *origin, PathfindLayerEnum lay
 				const Real dx = candidate.obj->getPosition()->x - cellX;
 				const Real dy = candidate.obj->getPosition()->y - cellY;
 				candidate.arrival = sqrt( dx*dx + dy*dy ) / candidate.speed;
+				if (floodSoldierBlocked( candidate.obj, cell.x, cell.y ))
+					continue;		// a mixed group's soldier, on the vehicles' block or in their way
 				candidates.push_back( candidate );
 			}
 			std::sort( candidates.begin(), candidates.end(), floodMemberArrivesFirst );
@@ -7307,14 +7311,17 @@ static Int floodLineStandableCallback(Pathfinder* pathfinder, PathfindCell* from
  */
 void Pathfinder::floodGroupGoals(const Coord3D *dest, const std::vector<Object *>& members, std::vector<Coord3D>& goals)
 {
-	const Real CENTRE_SHARES[] = { 0.5f, 0.25f };	// of the first pile's shortfall, tried in order
-
 	const PathfindLayerEnum layer = TheTerrainLogic->getLayerForDestination( dest );
 
-	// soldiers of an order with no vehicle in it stop a cell apart (getRadiusAndCenter)
+	/* Soldiers stop a cell apart (getRadiusAndCenter).  In a group with vehicles the vehicles' block
+		 is laid first exactly as it always was, every soldier holding his 2x2 in it, and only then are
+		 the soldiers moved onto one cell each round that block (floodMixedSoldiers). */
 	Bool hasVehicle = false;
+	Bool hasSoldier = false;
 	for (size_t k = 0; k < members.size(); k++) {
-		if (!members[k]->isKindOf(KINDOF_INFANTRY))
+		if (members[k]->isKindOf(KINDOF_INFANTRY))
+			hasSoldier = true;
+		else
 			hasVehicle = true;
 	}
 	for (size_t k = 0; k < members.size(); k++) {
@@ -7322,11 +7329,27 @@ void Pathfinder::floodGroupGoals(const Coord3D *dest, const std::vector<Object *
 		const Bool compact = !hasVehicle;
 		if (ai && members[k]->isKindOf(KINDOF_INFANTRY) && (ai->isCompactGoal() ? TRUE : FALSE) != compact) {
 			removeGoal( members[k] );		// cleared on the footprint it was reserved with
-			ai->setCompactGoal( !hasVehicle );
+			ai->setCompactGoal( compact );
 		}
 	}
 
 	std::vector<bool> isPlaced;
+	Coord3D pileOrigin = *dest;
+	floodGroupPile( dest, layer, members, goals, isPlaced, &pileOrigin );
+	if (hasVehicle && hasSoldier)
+		floodMixedSoldiers( &pileOrigin, layer, members, goals, isPlaced );
+}
+
+/**
+ * floodGroupGoals' flood out of the click and, for a group of two or more, the second one pushed on to
+ * centre the pile on it.  isPlaced and pileOrigin come back for the flood that stood.
+ */
+void Pathfinder::floodGroupPile(const Coord3D *dest, PathfindLayerEnum layer, const std::vector<Object *>& members,
+	std::vector<Coord3D>& goals, std::vector<bool>& isPlaced, Coord3D *pileOrigin)
+{
+	const Real CENTRE_SHARES[] = { 0.5f, 0.25f };	// of the first pile's shortfall, tried in order
+
+	*pileOrigin = *dest;
 	const Int placedCount = floodGroupGoalsFrom( dest, layer, members, goals, isPlaced );
 
 	const Int memberCount = (Int)members.size();
@@ -7370,6 +7393,8 @@ void Pathfinder::floodGroupGoals(const Coord3D *dest, const std::vector<Object *
 		if (floodGroupGoalsFrom( &origin, layer, members, centred, isCentredPlaced ) >= placedCount)
 		{
 			goals.swap( centred );
+			isPlaced.swap( isCentredPlaced );
+			*pileOrigin = origin;
 			return;
 		}
 
@@ -7384,6 +7409,152 @@ void Pathfinder::floodGroupGoals(const Coord3D *dest, const std::vector<Object *
 		}
 		return;
 	}
+}
+
+/* Logic frames for a member to cover a distance at its locomotor's top speed: a unit standing still
+	 when the order comes has no current speed yet, and floodGroupGoalsFrom's ordering speed is that. */
+static Real floodTravelFrames( const Object *obj, Real distance )
+{
+	const AIUpdateInterface *ai = obj->getAIUpdateInterface();
+	const Locomotor *loco = ai ? ai->getCurLocomotor() : NULL;
+	Real speed = loco ? loco->getMaxSpeedForCondition( obj->getBodyModule()->getDamageState() ) : 0.0f;
+	if (speed < 0.01f)
+		speed = 0.01f;
+	return distance / speed;
+}
+
+/**
+ * A mixed group's soldiers onto one cell each.  The vehicles keep the goals the pile gave them.  The
+ * soldiers give up their 2x2 and flood again from the pile's origin, never on a vehicle's goal or the
+ * cell round it, and never on a cell their own walk reaches through a vehicle already parked there
+ * (floodSoldierBlocked); past the click is allowed, since that walk test is what keeps them from
+ * driving through anybody.  One-cell goals in the old flood let a soldier into the gaps between parked
+ * tanks, and a squad arriving after the tanks shouldered them aside to get there: squad30's Crusaders
+ * came in 24% later.  Keeping soldiers off the last stretch of each vehicle's way in as well cost
+ * massmove's Rangers 16% and won nothing.  If the flood leaves any soldier out, every soldier goes back
+ * to the 2x2 the pile gave him.  Arrivals are distance over top speed (floodTravelFrames), the same on every machine.
+ */
+void Pathfinder::floodMixedSoldiers(const Coord3D *origin, PathfindLayerEnum layer, const std::vector<Object *>& members,
+	std::vector<Coord3D>& goals, const std::vector<bool>& isPlaced)
+{
+	const Int w = m_extent.hi.x - m_extent.lo.x + 1;
+	const Int h = m_extent.hi.y - m_extent.lo.y + 1;
+	m_floodBlockArrival.assign( w*h, FLT_MAX );
+
+	std::vector<Object *> soldiers;
+	std::vector<Int> soldierIndex;
+	for (size_t k = 0; k < members.size(); k++)
+	{
+		Object *member = members[k];
+		AIUpdateInterface *ai = member->getAIUpdateInterface();
+		if (ai == NULL)
+			continue;
+		if (member->isKindOf(KINDOF_INFANTRY))
+		{
+			soldiers.push_back( member );
+			soldierIndex.push_back( (Int)k );
+			continue;
+		}
+		if (!isPlaced[k])
+			continue;
+		const ICoord2D goalCell = *ai->getPathfindGoalCell();
+		if (goalCell.x < 0 || goalCell.y < 0)
+			continue;
+		const Real dx = member->getPosition()->x - goals[k].x;
+		const Real dy = member->getPosition()->y - goals[k].y;
+		const Real length = sqrt( dx*dx + dy*dy );
+		const Real arrival = floodTravelFrames( member, length );
+		Int radius;
+		Bool center;
+		getRadiusAndCenter( member, radius, center, TRUE );
+		const Int above = center ? radius+1 : radius;
+		for (Int i = goalCell.x-radius-1; i <= goalCell.x+above; i++)
+			for (Int j = goalCell.y-radius-1; j <= goalCell.y+above; j++)
+				if (i >= m_extent.lo.x && j >= m_extent.lo.y && i <= m_extent.hi.x && j <= m_extent.hi.y) {
+					Real &cellArrival = m_floodBlockArrival[ (i - m_extent.lo.x) + (j - m_extent.lo.y)*w ];
+					if (arrival < cellArrival)
+						cellArrival = arrival;
+				}
+	}
+
+	m_floodBlockCells = 0;
+	for (Int c = 0; c < w*h; c++)
+	{
+		if (m_floodBlockArrival[c] < FLT_MAX)
+			m_floodBlockCells++;
+	}
+	for (size_t s = 0; s < soldiers.size(); s++)
+	{
+		removeGoal( soldiers[s] );
+		soldiers[s]->getAIUpdateInterface()->setCompactGoal( TRUE );
+	}
+	std::vector<Coord3D> soldierGoals;
+	std::vector<bool> soldierPlaced;
+	floodGroupGoalsFrom( origin, layer, soldiers, soldierGoals, soldierPlaced );
+	m_floodBlockArrival.clear();
+
+	Bool allPlaced = true;
+	for (size_t s = 0; s < soldiers.size(); s++)
+	{
+		if (!soldierPlaced[s])
+			allPlaced = false;
+	}
+	if (allPlaced)
+	{
+		for (size_t s = 0; s < soldiers.size(); s++)
+			goals[soldierIndex[s]] = soldierGoals[s];
+		return;
+	}
+	/* Somebody was left out.  His old 2x2 was free during this flood and may now hold a placed
+		 soldier's cell, so giving it back to him would leave two goals on one cell, which a loaded game
+		 re-reserves in another order.  Undo the whole soldier flood: every soldier back on the 2x2 the
+		 pile gave him, which overlapped nothing. */
+	for (size_t s = 0; s < soldiers.size(); s++)
+		removeGoal( soldiers[s] );
+	for (size_t s = 0; s < soldiers.size(); s++)
+	{
+		const Int k = soldierIndex[s];
+		soldiers[s]->getAIUpdateInterface()->setCompactGoal( FALSE );
+		if (isPlaced[k])
+			updateGoal( soldiers[s], &goals[k], layer );
+	}
+}
+
+/**
+ * floodMixedSoldiers' test for a soldier's candidate cell: on a vehicle's goal or the cell round it,
+ * or reached by a straight walk whose last stretch crosses a vehicle that has parked by then (the
+ * stretch beside the soldier himself excepted, since he may be standing in it).
+ */
+Bool Pathfinder::floodSoldierBlocked(const Object *soldier, Int cellX, Int cellY) const
+{
+	if (m_floodBlockArrival.empty() || !soldier->isKindOf(KINDOF_INFANTRY))
+		return false;
+	const Real WALK_CHECKED = 15.0f * PATHFIND_CELL_SIZE_F;
+	const Real STEP = PATHFIND_CELL_SIZE_F * 0.5f;
+	const Real NEAR_SELF = 2.0f * PATHFIND_CELL_SIZE_F;
+	const Int w = m_extent.hi.x - m_extent.lo.x + 1;
+	const Int h = m_extent.hi.y - m_extent.lo.y + 1;
+	Int i = cellX - m_extent.lo.x;
+	Int j = cellY - m_extent.lo.y;
+	if (i < 0 || j < 0 || i >= w || j >= h)
+		return false;
+	if (m_floodBlockArrival[ i + j*w ] < FLT_MAX)
+		return true;
+	const Real x0 = ((Real)cellX + 0.5f) * PATHFIND_CELL_SIZE_F;
+	const Real y0 = ((Real)cellY + 0.5f) * PATHFIND_CELL_SIZE_F;
+	const Real dx = soldier->getPosition()->x - x0;
+	const Real dy = soldier->getPosition()->y - y0;
+	const Real length = sqrt( dx*dx + dy*dy );
+	const Real soldierArrival = floodTravelFrames( soldier, length );
+	const Real reach = MIN( WALK_CHECKED, length - NEAR_SELF );
+	for (Real d = STEP; d <= reach; d += STEP)
+	{
+		i = REAL_TO_INT_FLOOR( (x0 + dx*d/length) / PATHFIND_CELL_SIZE_F ) - m_extent.lo.x;
+		j = REAL_TO_INT_FLOOR( (y0 + dy*d/length) / PATHFIND_CELL_SIZE_F ) - m_extent.lo.y;
+		if (i >= 0 && j >= 0 && i < w && j < h && m_floodBlockArrival[ i + j*w ] < soldierArrival)
+			return true;
+	}
+	return false;
 }
 
 Bool Pathfinder::checkForTarget(const Object *obj, 	Int cellX, Int cellY, const Weapon *weapon,

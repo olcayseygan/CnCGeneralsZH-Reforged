@@ -1294,6 +1294,11 @@ protected:
 		PathfindLayerEnum layer, Int iRadius, Bool center,Coord3D *dest, const Coord3D *groupDest) ;
 	Int floodGroupGoalsFrom(const Coord3D *origin, PathfindLayerEnum layer, const std::vector<Object *>& members,
 		std::vector<Coord3D>& goals, std::vector<bool>& isPlaced);	///< one flood of floodGroupGoals, out of origin's cell on layer; how many it placed
+	void floodGroupPile(const Coord3D *dest, PathfindLayerEnum layer, const std::vector<Object *>& members,
+		std::vector<Coord3D>& goals, std::vector<bool>& isPlaced, Coord3D *pileOrigin);	///< floodGroupGoals' flood and its re-centring
+	void floodMixedSoldiers(const Coord3D *origin, PathfindLayerEnum layer, const std::vector<Object *>& members,
+		std::vector<Coord3D>& goals, const std::vector<bool>& isPlaced);	///< a mixed group's soldiers onto one cell each, round the vehicles' block
+	Bool floodSoldierBlocked(const Object *soldier, Int cellX, Int cellY) const;	///< floodMixedSoldiers: a cell in the vehicles' block, on a lane before its vehicle, or reached through a parked one
 	Bool checkForLanding(Int cellX, Int cellY, 
 		PathfindLayerEnum layer, Int iRadius, Bool center,Coord3D *dest) ;
 	Bool checkForTarget(const Object *obj, 	Int cellX, Int cellY, const Weapon *weapon,
@@ -1467,6 +1472,9 @@ private:
 	enum { MOVE_ALLIES_MAX_DEPTH = 2 };
 	Int						m_moveAlliesDepth;
 	ObjectID			m_moveAlliesObjects[MOVE_ALLIES_MAX_DEPTH];	///< unit of each active moveAllies call, by depth
+
+	std::vector<Real>	m_floodBlockArrival;	///< floodMixedSoldiers, by extent index: soonest arrival of a vehicle whose goal (one cell round) covers the cell, FLT_MAX for none; empty outside it
+	Int								m_floodBlockCells;		///< how many cells it marks: the soldiers' flood looks that many further
 
 
 	// Pathfind queue, in two lines: human players' units are answered first (Pathfinder_servePathQueues)

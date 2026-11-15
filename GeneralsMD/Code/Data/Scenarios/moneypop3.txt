@@ -1,0 +1,24 @@
+# Who sees whose money pop: seat 0 is the human, seat 1 his ally, seat 2 the enemy, each with a supply
+# center and trucks working the same piles beside seat 1's start, in one camera view. Seat 0's pops
+# are gold, seat 1's in seat 1's colour, seat 2's never shown. -control's status proves seat 2 is paid
+# all the same. The center spots are the Scud Storm spots UI-MAP lists as accepted on this map.
+#
+#   generals.exe -win -xres 1920 -yres 1080 -msaa 0 -quickstart -noshellmap -multiInstance
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 3 -team 0 0 -team 1 0 -team 2 1
+#     -side 0 FactionChina -side 1 FactionChina -side 2 FactionChina -takeover -seed 11
+#     -scenario moneypop3 -cinema moneypop3 -video 900 1260 moneypop3 -control 8791
+#   (ZH_DX11_SWAP=blt in the environment on this machine; -control keeps the match past -maxframes,
+#   so the launcher stops it by its process id)
+
+1     spawn       0  ChinaSupplyCenter         1  start1:-320:-320
+1     spawn       1  ChinaSupplyCenter         1  start1:320:-320
+1     spawn       2  ChinaSupplyCenter         1  start1:-480:160
+1     spawn       0  SupplyPile                1  start1:-60:-520
+1     spawn       0  SupplyPile                1  start1:120:-520
+1     spawn       0  SupplyPile                1  start1:-260:20
+10    spawn       0  ChinaVehicleSupplyTruck   5  start1:-150:-420  40
+10    spawn       1  ChinaVehicleSupplyTruck   4  start1:200:-420  40
+10    spawn       2  ChinaVehicleSupplyTruck   4  start1:-380:-40  40
+20    dock        0  ChinaVehicleSupplyTruck   0  SupplyPile
+20    dock        1  ChinaVehicleSupplyTruck   0  SupplyPile
+20    dock        2  ChinaVehicleSupplyTruck   0  SupplyPile

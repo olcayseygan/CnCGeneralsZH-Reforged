@@ -1,0 +1,8 @@
+# Scenarios/moneypop3.txt on Twilight Flame: seat 0's supply center (1413,3885), the ally's
+# (2053,3885), the enemy's (1253,4365) and the piles between them, interface on for the money
+# readout. Screen up is -y here, and at zoom 1 the view above the bar is only about 640 by 270, so
+# the list pulls back to hold all three. No shots: -video takes every frame, which is what the
+# readout's count needs.
+
+0.5   hud     on
+0.5   cut     1650 4040 2.2 0 0

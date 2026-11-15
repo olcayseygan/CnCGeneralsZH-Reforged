@@ -10,6 +10,7 @@ unconditioned ArmorSet and body MaxHealth, frames to kill both ways. The page di
 can weigh them by price; the AI's aiMatchupScore is the same ratio on a log scale.
 
     python unitmatrix.py --out <page.html>
+    python unitmatrix.py --json <matrix.json>     # the website's: English and Turkish, seconds on the clock
     python unitmatrix.py --selfcheck
 
 The game data comes from Run beside the source; ZHR_RUN_DIR points it at another Run, as siege.py does.
@@ -37,10 +38,13 @@ sys.path.insert(0, str(GENERALS / "Code" / "Tools"))
 import bigfile  # noqa: E402
 import gametext  # noqa: E402
 
-# LOGICFRAMES_PER_SECOND, read from the engine's own header so this script never carries a copy of it
-LOGIC_FPS = int(re.search(r"^\s*LOGICFRAMES_PER_SECOND\s*=\s*(\d+)",
-                          (GENERALS / "Code" / "GameEngine" / "Include" / "Common" / "GameCommon.h").read_text(errors="replace"),
-                          re.M).group(1))
+# LOGICFRAMES_PER_SECOND and the native game speed, read from the engine's own header so this script
+# never carries a copy of them
+GAME_COMMON = (GENERALS / "Code" / "GameEngine" / "Include" / "Common" / "GameCommon.h").read_text(errors="replace")
+LOGIC_FPS = int(re.search(r"^\s*LOGICFRAMES_PER_SECOND\s*=\s*(\d+)", GAME_COMMON, re.M).group(1))
+GAME_SPEED_PERCENT = int(re.search(r"^\s*#define\s+NATIVE_GAME_SPEED_PERCENT\s+(\d+)", GAME_COMMON, re.M).group(1))
+# GameSpeed_compute: the ticks a game second (an INI second) takes; every network game plays this speed
+LOGICFRAMES_PER_GAME_SECOND = LOGIC_FPS * 100 // GAME_SPEED_PERCENT
 SORTIE_MSEC = 20000
 SORTIE_FRAMES = SORTIE_MSEC * LOGIC_FPS / 1000.0      # AI_SORTIE_FRAMES
 OVERKILL_TOLERANCE = 0.0001
@@ -99,6 +103,15 @@ def msec_to_frames(msec):
     return math.ceil(f32(f32(msec) * FRAMES_PER_MSEC))
 
 
+def ticks_per_game_second(ticks):
+    """Read the next GameData's durations at this many frames a game second. The page is written at
+    LOGIC_FPS (retail speed, so its seconds are the INI's); the JSON at LOGICFRAMES_PER_GAME_SECOND,
+    the frames the game itself converts to (GameSpeedState::ticksPerGameMsec, AI_SORTIE_FRAMES)."""
+    global FRAMES_PER_MSEC, SORTIE_FRAMES
+    FRAMES_PER_MSEC = f32(f32(ticks) / f32(1000.0))
+    SORTIE_FRAMES = SORTIE_MSEC * ticks / 1000.0
+
+
 # ---- files -----------------------------------------------------------------------------------------
 
 class GameFiles:
@@ -111,7 +124,11 @@ class GameFiles:
 
     def _index(self, big, overwrite):
         with open(big, "rb") as f:
-            for path, offset, size in bigfile._read_index(f):
+            try:
+                index = list(bigfile._read_index(f))
+            except ValueError:
+                return              # Win32BIGFileSystem::openArchiveFile leaves a *.big without BIGF out
+            for path, offset, size in index:
                 path = path.replace("\\", "/")
                 if overwrite or path.lower() not in self.members:
                     self.members[path.lower()] = (path, big, offset, size)
@@ -658,10 +675,12 @@ def build(files):
     # the carrier's Raptor costs nothing, so "the same money" has no answer for it
     kept = [index for index, row in enumerate(fights) if any(row) and candidates[index].cost > 0]
 
+    def label(index):
+        return (candidates[index].display or fighters[index].display).lower()
+
     def describe(index):
         thing = candidates[index]
-        label = (thing.display or fighters[index].display).lower()
-        return {"id": thing.name, "name": names.get(label, thing.name), "side": owner[thing.name.lower()]}
+        return {"id": thing.name, "name": names.get(label(index), thing.name), "side": owner[thing.name.lower()]}
 
     def unit(index):
         fighter = fighters[index]
@@ -697,7 +716,7 @@ def build(files):
         "sortieMsec": SORTIE_MSEC,
         "sides": sides,
         "factions": factions,
-    }, {"skipped": data.skipped, "unread": unread}
+    }, {"skipped": data.skipped, "unread": unread, "labels": [label(index) for index in kept], "names": names}
 
 
 def selfcheck():
@@ -711,19 +730,58 @@ def selfcheck():
     assert kill_frames(10.0, gun) == 60.0
     assert kill_frames(480.0, Shots(0.0, 30.0, 0, 0.0, 0.0)) == CANNOT_KILL
     assert msec_to_frames(2000) == 2 * LOGIC_FPS and msec_to_frames(100) == LOGIC_FPS // 10 and msec_to_frames(1) == 1
+    ticks_per_game_second(LOGICFRAMES_PER_GAME_SECOND)
+    assert msec_to_frames(1000) == LOGICFRAMES_PER_GAME_SECOND and SORTIE_FRAMES == 20 * LOGICFRAMES_PER_GAME_SECOND
+    ticks_per_game_second(LOGIC_FPS)
+    assert msec_to_frames(1000) == LOGIC_FPS
     assert real("75.0.") == 75.0 and real("-2e1x") == -20.0 and percent("50%") == 0.5
     print("unitmatrix selfcheck: ok")
 
 
-def write_page(out):
-    started = time.time()
+def game_files():
     files = GameFiles()
     if files.read("Data/INI/Weapon.ini") is None or not files.list_dir("Data/INI/Object"):
         sys.exit("unitmatrix: no game data in %s. Put a Zero Hour install's *.big there (INIZH.big carries "
                  "the INIs, EnglishZH.big the names) or point ZHR_RUN_DIR at a Run that has them." % RUN_DIR)
     if files.read("Data/English/generals.csf") is None:
         sys.exit("unitmatrix: %s has no EnglishZH.big, which carries the unit names." % RUN_DIR)
+    return files
 
+
+def write_json(out, files):
+    """The website's matrix: names in English and Turkish, kill[a][t] in the seconds a player's clock
+    shows. Durations are read at the native game speed, as the game reads them, and every clock the
+    game draws (the HUD, the score screen, the replay bar) is frames over LOGICFRAMES_PER_SECOND."""
+    ticks_per_game_second(LOGICFRAMES_PER_GAME_SECOND)
+    page, report = build(files)
+    ticks_per_game_second(LOGIC_FPS)
+    english = report["names"]
+    # GameTextManager with Turkish chosen: its Generals.str, the English for what it leaves out
+    turkish = {label.lower(): text for label, text in gametext.parse_str(CODE_DATA / "Turkish" / "Generals.str")}
+
+    def names(label, fallback):
+        en = english.get(label, fallback)
+        return en, turkish.get(label, en)
+
+    units = []
+    for unit, label in zip(page["units"], report["labels"]):
+        en, tr = names(label, unit["id"])
+        kind = next(kind for kind in ("AIRCRAFT", "INFANTRY", "VEHICLE") if kind in unit["kinds"]).lower()
+        units.append({"id": unit["id"], "en": en, "tr": tr, "side": unit["side"], "cost": int(unit["cost"]),
+                      "health": int(unit["health"]), "kind": kind})
+    sides = []
+    for side in sorted(page["sides"], key=lambda side: page["sides"][side]["order"]):
+        en, tr = names("side:" + side.lower(), side)
+        sides.append({"id": side, "faction": page["sides"][side]["faction"], "en": en, "tr": tr,
+                      "main": page["sides"][side]["main"]})
+    kill = [[round(attack["frames"] / LOGIC_FPS, 2) if attack else None for attack in row] for row in page["attacks"]]
+    out.write_text(json.dumps({"units": units, "sides": sides, "kill": kill}, ensure_ascii=False, separators=(",", ":")),
+                   encoding="utf-8", newline="\n")
+    print("%d units, %d sides, %s, %d bytes" % (len(units), len(sides), out, out.stat().st_size))
+
+
+def write_page(out, files):
+    started = time.time()
     page, report = build(files)
     out.write_text(TEMPLATE.replace("__UNIT_DATA__", json.dumps(page, ensure_ascii=False)), encoding="utf-8", newline="\n")
     print("%d units over %d sides, %d without a weapon that kills, %d patch blocks skipped, %s in %.1f s"
@@ -736,14 +794,19 @@ def write_page(out):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     parser.add_argument("--out", type=Path, help="where to write the HTML page")
+    parser.add_argument("--json", type=Path, help="where to write the website's bilingual JSON")
     parser.add_argument("--selfcheck", action="store_true", help="check the frames-to-kill arithmetic and stop")
     args = parser.parse_args()
     if args.selfcheck:
         selfcheck()
         return
-    if args.out is None:
-        parser.error("--out is required")
-    write_page(args.out)
+    if args.out is None and args.json is None:
+        parser.error("--out or --json is required")
+    files = game_files()
+    if args.out:
+        write_page(args.out, files)
+    if args.json:
+        write_json(args.json, files)
 
 
 TEMPLATE = r'''<!doctype html>

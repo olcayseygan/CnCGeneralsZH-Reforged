@@ -5175,37 +5175,102 @@ static Real colorHue( UnsignedInt rgb, Real *saturation )
 	return ( hue < 0.0f ) ? hue + 360.0f : hue;
 }
 
+static Real hueApart( Real a, Real b )
+{
+	const Real apart = (Real)fabs( a - b );
+	return MIN( apart, 360.0f - apart );
+}
+
+// Move, attack, attack move, guard, everything else: each kind's colour and the one it steps to when
+// it sits on the seat's own hue (orderKindPalette).  Hues in degrees:
+//   green 131 -> chartreuse 93, a lime that still reads green: 27 off a green seat, 42 off the gold
+//     and 87 off the cyan
+//   red 3 -> pink-red 333: 27 off a red seat, still red enough to read as an attack
+//   orange 29 -> magenta 313
+//   gold 51 -> pale yellow-white, apart by being nearly white
+//   cyan 180 -> periwinkle 254: 74 off a cyan seat and 36 off the Reforged blue (218), the colour
+//     the player holding the mouse always has, which a sky blue would have matched.  The cyan sits
+//     at 180 for the same blue: at 196 it was 22 off it
+static const UnsignedInt TheOrderColors[ 5 ]			= { 0x0040E85C, 0x00FF3A2E, 0x00FF8A1C, 0x00FFDC46, 0x003CE6E6 };
+static const UnsignedInt TheOrderAlternates[ 5 ]	= { 0x008CF03C, 0x00FF2E8C, 0x00FF4AD8, 0x00FFF5C8, 0x009A7CFF };
+
+/** The five colours a seat's orders wear.  A kind steps aside when its hue is within 25 degrees of
+	* the seat's and it is the kind nearest the seat, or within 15: an orange seat (0xFF8219, hue 27)
+	* moves the attack move (2 off) and leaves the attack (24 off) red, where stepping both aside put a
+	* pink-red beside the magenta.  An alternate is taken only where it lands 25 or more off the seat and
+	* 40 or more off every other colour in use; otherwise the kind keeps its own.  Grey and white take
+	* part in none of it. */
+static void orderKindPalette( UnsignedInt seat, UnsignedInt out[ 5 ] )
+{
+	const Real SATURATED = 0.35f;
+	const Real NEAR_HUE = 25.0f;
+	const Real CLOSE_HUE = 15.0f;
+	const Real KEEP_APART = 40.0f;
+	for( Int i = 0; i < 5; ++i )
+		out[ i ] = TheOrderColors[ i ];
+	Real seatSaturation;
+	const Real seatHue = colorHue( seat, &seatSaturation );
+	if( seatSaturation < SATURATED )
+		return;
+
+	Real apart[ 5 ];
+	Int order[ 5 ];
+	for( Int i = 0; i < 5; ++i )
+	{
+		Real saturation;
+		const Real hue = colorHue( TheOrderColors[ i ], &saturation );
+		apart[ i ] = ( saturation >= SATURATED ) ? hueApart( hue, seatHue ) : 360.0f;
+		order[ i ] = i;
+	}
+	std::sort( order, order + 5, [&]( Int a, Int b ) { return apart[ a ] < apart[ b ]; } );
+
+	for( Int n = 0; n < 5; ++n )
+	{
+		const Int k = order[ n ];
+		if( apart[ k ] >= NEAR_HUE )
+			break;
+		if( n > 0 && apart[ k ] >= CLOSE_HUE )
+			continue;
+		Real altSaturation;
+		const Real altHue = colorHue( TheOrderAlternates[ k ], &altSaturation );
+		Bool fits = altSaturation < SATURATED || hueApart( altHue, seatHue ) >= NEAR_HUE;
+		for( Int j = 0; j < 5 && fits && altSaturation >= SATURATED; ++j )
+		{
+			Real saturation;
+			const Real hue = colorHue( out[ j ], &saturation );
+			if( j != k && saturation >= SATURATED && hueApart( altHue, hue ) < KEEP_APART )
+				fits = FALSE;
+		}
+		if( fits )
+			out[ k ] = TheOrderAlternates[ k ];
+	}
+}
+
 UnsignedInt InGameUI::orderKindColor( OrderHintKind kind, UnsignedInt seat )
 {
-	// Each kind's colour and the one it steps to when the seat's own colour is within 25 degrees of
-	// hue of it, so an orange player's attack move does not read as his own selection rings. 25, not
-	// 30: a red seat (hue 0) is 29 from the attack move's orange and would change two kinds at once.
-	// The alternates keep 30 degrees or more off the kinds they could meet
-	//   green 131 -> teal 159 (39 off a green seat, 36 off the cyan)
-	//   red 3 -> pink-red 333 (27 off a red seat, still red enough to read as an attack)
-	//   orange 29 -> magenta 313
-	//   gold 51 -> pale yellow-white, apart by being nearly white
-	//   cyan 195 -> sky blue 216 (31 off a cyan seat)
-	UnsignedInt color, alternate;
+	// worked out once a seat colour, the local player's being the only one asked for in a match
+	static UnsignedInt cachedSeat = 0xFFFFFFFF;
+	static UnsignedInt cached[ 5 ];
+	if( seat != cachedSeat )
+	{
+		orderKindPalette( seat, cached );
+		cachedSeat = seat;
+		Real saturation;
+		const Real hue = colorHue( seat, &saturation );
+		DEBUG_LOG(( "ORDERCOLOR seat %06X hue %.0f saturation %.2f: move %06X attack %06X attack move %06X guard %06X other %06X\n",
+			seat, hue, saturation, cached[ 0 ], cached[ 1 ], cached[ 2 ], cached[ 3 ], cached[ 4 ] ));
+	}
 	switch( kind )
 	{
 		case ORDER_HINT_MOVE:
-		case ORDER_HINT_WAYPOINT:				color = 0x0040E85C; alternate = 0x002EEBA8; break;
+		case ORDER_HINT_WAYPOINT:				return cached[ 0 ];
 		case ORDER_HINT_ATTACK:
 		case ORDER_HINT_FORCE_ATTACK:
-		case ORDER_HINT_ATTACK_GROUND:	color = 0x00FF3A2E; alternate = 0x00FF2E8C; break;
-		case ORDER_HINT_ATTACK_MOVE:		color = 0x00FF8A1C; alternate = 0x00FF4AD8; break;
-		case ORDER_HINT_GUARD:					color = 0x00FFDC46; alternate = 0x00FFF5C8; break;
-		default:												color = 0x0040D0FF; alternate = 0x005A9CFF; break;
+		case ORDER_HINT_ATTACK_GROUND:	return cached[ 1 ];
+		case ORDER_HINT_ATTACK_MOVE:		return cached[ 2 ];
+		case ORDER_HINT_GUARD:					return cached[ 3 ];
+		default:												return cached[ 4 ];
 	}
-	const Real SATURATED = 0.35f;		// a grey or white seat clashes with nothing
-	const Real NEAR_HUE = 25.0f;
-	Real seatSaturation, colorSaturation;
-	const Real seatHue = colorHue( seat, &seatSaturation );
-	const Real hue = colorHue( color, &colorSaturation );
-	Real apart = (Real)fabs( seatHue - hue );
-	apart = MIN( apart, 360.0f - apart );
-	return ( seatSaturation >= SATURATED && colorSaturation >= SATURATED && apart < NEAR_HUE ) ? alternate : color;
 }
 
 //-------------------------------------------------------------------------------------------------

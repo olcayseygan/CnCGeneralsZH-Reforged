@@ -21454,13 +21454,17 @@ TEST(an_order_kind_wears_one_of_five_colours)
 			CHECK_NE( five[ i ], five[ j ] );
 	}
 
-	// an orange seat's attack move steps to magenta, the rest stay; a blue seat keeps every default,
-	// and a red seat changes only the attack, not the attack move 29 degrees off it as well
-	CHECK_EQ( InGameUI::orderKindColor( InGameUI::ORDER_HINT_ATTACK_MOVE, 0x00FF8C00 ), 0x00FF4AD8u );
-	CHECK_EQ( InGameUI::orderKindColor( InGameUI::ORDER_HINT_MOVE, 0x00FF8C00 ), InGameUI::orderKindColor( InGameUI::ORDER_HINT_MOVE, 0 ) );
+	// The Reforged orange seat (0xFF8219, hue 27): its attack move steps to magenta, and the attack (24
+	// off) and the guard (21 off) keep theirs, so no pink-red stands beside the magenta. The Reforged
+	// blue, the local player's own, keeps every default; a red seat changes only the attack, not the
+	// attack move 29 degrees off it as well
 	const InGameUI::OrderHintKind kinds[ 5 ] = { InGameUI::ORDER_HINT_MOVE, InGameUI::ORDER_HINT_ATTACK, InGameUI::ORDER_HINT_ATTACK_MOVE, InGameUI::ORDER_HINT_GUARD, InGameUI::ORDER_HINT_ENTER };
+	CHECK_EQ( InGameUI::orderKindColor( InGameUI::ORDER_HINT_ATTACK_MOVE, 0x00FF8219 ), 0x00FF4AD8u );
 	for( Int i = 0; i < 5; ++i )
-		CHECK_EQ( InGameUI::orderKindColor( kinds[ i ], 0x002A31FF ), InGameUI::orderKindColor( kinds[ i ], 0 ) );
+		if( kinds[ i ] != InGameUI::ORDER_HINT_ATTACK_MOVE )
+			CHECK_EQ( InGameUI::orderKindColor( kinds[ i ], 0x00FF8219 ), InGameUI::orderKindColor( kinds[ i ], 0 ) );
+	for( Int i = 0; i < 5; ++i )
+		CHECK_EQ( InGameUI::orderKindColor( kinds[ i ], 0x004C8CFF ), InGameUI::orderKindColor( kinds[ i ], 0 ) );
 	CHECK_NE( InGameUI::orderKindColor( InGameUI::ORDER_HINT_ATTACK, 0x00FF0000 ), InGameUI::orderKindColor( InGameUI::ORDER_HINT_ATTACK, 0 ) );
 	CHECK_EQ( InGameUI::orderKindColor( InGameUI::ORDER_HINT_ATTACK_MOVE, 0x00FF0000 ), InGameUI::orderKindColor( InGameUI::ORDER_HINT_ATTACK_MOVE, 0 ) );
 	// a white seat clashes with nothing

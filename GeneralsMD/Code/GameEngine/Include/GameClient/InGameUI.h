@@ -1214,6 +1214,10 @@ public:  // ********************************************************************
 	// Floating Test Methods
 	/// the text it added, for a caller that wants to hold it longer; NULL while icons are not drawn
 	virtual FloatingTextData *addFloatingText(const UnicodeString& text,const Coord3D * pos, Color color);
+	/** Cash that landed on owner's purse (amount > 0) or left it (amount < 0), floating at pos.  Every
+		* money figure goes through here, which decides who sees it: the owner and his allies, and an
+		* observer or replay viewer, never an enemy.  Client only; logic may call it mid-tick. */
+	void addMoneyText( Int amount, const Coord3D *pos, const Player *owner );
 	/// a smoke signal's mark laid on the ground in the sender's colour, there until its smoke is gone
 	void addSignalMark( SignalKind kind, const Coord3D &pos, Color color, ParticleSystemID smoke );
 	/// a signal button pressed: the next left click on the ground or the radar drops that signal there

@@ -3867,6 +3867,7 @@ void InGameUI::update( void )
 	{
 		moneyWin->winHide(TRUE);
 		powerWin->winHide(TRUE);
+		m_moneyShownPlayer = NULL;
 	}
 	
 	// Update the floating Text;
@@ -3875,7 +3876,6 @@ void InGameUI::update( void )
 	// update the control bar
 	TheControlBar->update();
 
-		m_moneyShownPlayer = NULL;
 	updateIdleUnitButtons();
 
 	// update any random window layout that so requests
@@ -4080,6 +4080,7 @@ void InGameUI::reset( void )
 	clearFloatingText();
 	clearWorldAnimations();
 	resetIdleWorker();
+	m_moneyShownPlayer = NULL;		// the next match's purse shows at once, not counted to from this one's
 
 	m_waypointMode			= false;
 	m_forceAttackMode		= false;
@@ -4090,7 +4091,6 @@ void InGameUI::reset( void )
 	m_guardArmedMode		= GUARDMODE_GUARD_WITHOUT_PURSUIT;
 	m_guardRadiusScale	= 1.0f;
 	m_moveArmed					= false;
-	m_moneyShownPlayer = NULL;		// the next match's purse shows at once, not counted to from this one's
 	m_orderKeyKeptByShift	= false;
 	m_preferSelection		= false;
 	m_isAttackCircling	= FALSE;
@@ -10348,16 +10348,6 @@ FloatingTextData *InGameUI::addFloatingText(const UnicodeString& text,const Coor
 	}
 }
 
-/** Each signal's mark on the ground, by SignalKind: Art/Textures/<name>.tga, drawn by
-	* Tools/signal_marks.py, white where the sender's colour goes. */
-static const char *const SIGNAL_MARK_TEXTURES[ SIGNAL_KIND_COUNT ] =
-{
-	"ReforgedSignalAttack", "ReforgedSignalDefend", "ReforgedSignalLook"
-};
-
-enum
-{
-	SIGNAL_MARK_SIZE						= 160,	///< across, in world units: 90 read as a coin from the default camera
 //-------------------------------------------------------------------------------------------------
 /** The money figure.  Who sees it is the scoreboard's rule: your own purse and your allies', and
 	* everybody's for an observer, a defeated player or a replay.  An enemy's income never shows, so
@@ -10388,6 +10378,16 @@ void InGameUI::addMoneyText( Int amount, const Coord3D *pos, const Player *owner
 	addFloatingText( text, pos, color );
 }
 
+/** Each signal's mark on the ground, by SignalKind: Art/Textures/<name>.tga, drawn by
+	* Tools/signal_marks.py, white where the sender's colour goes. */
+static const char *const SIGNAL_MARK_TEXTURES[ SIGNAL_KIND_COUNT ] =
+{
+	"ReforgedSignalAttack", "ReforgedSignalDefend", "ReforgedSignalLook"
+};
+
+enum
+{
+	SIGNAL_MARK_SIZE						= 160,	///< across, in world units: 90 read as a coin from the default camera
 	SIGNAL_MARK_OPACITY					= 230	///< out of 255, so the ground under it still shows a little
 };
 #define SIGNAL_MARK_FADE_OUT_FRAMES ((Int)(LOGICFRAMES_PER_GAME_SECOND * 2))	///< the smoke's last steps, over which the mark fades

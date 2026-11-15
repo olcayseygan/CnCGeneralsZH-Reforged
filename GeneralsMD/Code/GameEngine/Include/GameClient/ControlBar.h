@@ -1258,6 +1258,7 @@ protected:
 	enum { POWER_TRAY_FOOT_Y = 790 };							///< at 1080, where the tray stands: the top of the general's tab
 	void powerTrayMetrics( const Image *const *tray, ICoord2D *origin, ICoord2D *cell,
 												 Int *left, Int *top, Int *foot, Int *bottom );	///< see arrangeSpecialPowerShortcutGrid
+	void arrangePowersWing( void );								///< the sidebar's: the powers flush on its left edge, level with the radar
 
 	void fitRadarToMap( Bool fromLayout );				///< the radar window, its frame and its blocker take the map's shape; see layoutPanels
 	Real m_radarFitWidth, m_radarFitHeight;				///< the map extent fitRadarToMap last fitted to
@@ -1388,6 +1389,7 @@ protected:
 	void hideForSidebar( GameWindow *window );		///< hide a window the sidebar has no place for, remembered for Classic
 	void restoreClassicWindows( void );						///< what hideForSidebar and layoutSidebar changed, put back
 	void updateSelectionCardReadout( void );			///< the card's name, rank and health, copied for its draw (ControlBar::update)
+	void arrangeStripByRole( void );							///< the strip's buttons by role: own left, Attack Stop Guard right, the container's before them
 	Bool m_sidebarLayout;													///< see isSidebarLayout
 	std::vector< GameWindow * > m_sidebarHidden;	///< windows layoutSidebar hid that were showing
 	Bool m_sidebarBlockSaved;											///< the strip blocker's enabled state below was saved
@@ -1459,7 +1461,7 @@ public:
 		Int edgeLeft, edgeTop, edgeBottom;
 		Int stepRight, stepBelow;
 		Int edgeRight;		///< the outer edge, only where the tray stops short of the screen's edge (the sidebar, a HudWidth area)
-		Bool down;				///< rows go down from the first (the sidebar's, level with the radar): stepRight then shortens the bottom edge and stepBelow stands at the left edge's top
+		Bool wing;				///< the sidebar's powers wing: edgeRight is the joint against the sidebar, edgeTop the column's cap, edgeBottom its foot, the Sidebar_image pieces drawn
 	};
 protected:
 	TraySlot m_traySlot[ MAX_SPECIAL_POWER_SHORTCUTS ];

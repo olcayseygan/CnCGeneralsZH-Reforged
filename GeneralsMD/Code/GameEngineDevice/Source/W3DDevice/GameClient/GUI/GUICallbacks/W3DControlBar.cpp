@@ -41,6 +41,7 @@
 #include "GameClient/ControlBar.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/ControlBarScheme.h"
+#include "GameClient/ControlBarSidebar.h"
 #include "GameClient/Image.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/VideoPlayer.h"
@@ -576,11 +577,16 @@ void W3DPowerDrawV( GameWindow *window, WinInstanceData *instData )
 	else if( consumption > production - delta )
 		fill = GameMakeColor( 232, 190, 40, 255 );
 
+	// the side's sidebar plate has the rail's channel sunk in it; without the plate the rail gets a
+	// dark well of its own
 	const Int bottom = pos.y + size.y;
-	TheDisplay->drawFillRect( pos.x, pos.y, size.x, size.y, GameMakeColor( 6, 8, 10, 220 ) );
+	const Bool channel = Sidebar_image( "Plate" ) != NULL;
+	if( !channel )
+		TheDisplay->drawFillRect( pos.x, pos.y, size.x, size.y, GameMakeColor( 6, 8, 10, 220 ) );
+	const Int inset = channel ? 0 : 1;
 	const Int bar = heightFor( (Real)production );
 	if( bar > 0 )
-		TheDisplay->drawFillRect( pos.x + 1, bottom - bar, size.x - 2, bar, fill );
+		TheDisplay->drawFillRect( pos.x + inset, bottom - bar, size.x - 2 * inset, bar, fill );
 
 	// log(1) is 0, but one unit used still shows, as W3DPowerDraw's needle does
 	if( consumption > 0 )
@@ -834,8 +840,9 @@ static void drawSteelPanel( const IRegion2D &r, Color face, Bool sunk )
 	* as panels, a well under each command slot, the selection card, the power rail and the radar box
 	* sunk in rims (the side's radar frame over that where its scheme names one), the cameo grid
 	* in the general's powers tray's cells and edges, its open side on the sidebar's right edge as the
-	* powers tray's is on the screen's.  Only scheme pieces the bar already has; phase 3 brings the
-	* plates.  The windows on it draw after. */
+	* powers tray's is on the screen's.  That is the stand-in: a side whose sheet has the sidebar's
+	* Plate, Strip and Card wears those instead, each on its rect, and the plate brings the radar's
+	* glass, the rail's channel and the production floor with it.  The windows on it draw after. */
 //-------------------------------------------------------------------------------------------------
 static void drawSidebarBackground( void )
 {
@@ -857,31 +864,55 @@ static void drawSidebarBackground( void )
 		return g;
 	};
 
+	// the side's own plates where its sheet has them (hud_command_bar.py --sidebar, lane C's
+	// Sidebar_image), each standing on its rect; the flat steel below is the stand-in for a missing one
+	const Image *plate = Sidebar_image( "Plate" );
+	const Image *strip = Sidebar_image( "Strip" );
+	const Image *card = Sidebar_image( "Card" );
+
 	TheDisplay->beginBatch2D();
-	drawSteelPanel( r.sidebar, steel, FALSE );
+	if( plate != NULL )
+		TheDisplay->drawImage( plate, r.sidebar.lo.x, r.sidebar.lo.y, r.sidebar.hi.x, r.sidebar.hi.y );
+	else
+		drawSteelPanel( r.sidebar, steel, FALSE );
 
 	// the strip: steel under a rail along its top edge, and a sunk well for each of the fourteen
-	// command slots, so a selection's buttons sit in fixed places whichever of them it has
-	drawSteelPanel( r.strip, steel, FALSE );
-	IRegion2D rail = r.strip;
-	rail.hi.y = rail.lo.y + px( 4 );
-	drawSteelPanel( rail, rim, FALSE );
-	TheDisplay->drawFillRect( rail.lo.x, rail.hi.y, rail.hi.x - rail.lo.x, 1, glass );
-	for( Int each = 0; each < HUD_STRIP_BUTTONS; each++ )
-		drawSteelPanel( grow( r.stripButtons[ each ], px( 2 ) ), well, TRUE );
+	// command slots, so a selection's buttons sit in fixed places whichever of them it has.  The
+	// strip plate has the wells, the idle seats, the clock's glass and the plaque in it
+	if( strip != NULL )
+		TheDisplay->drawImage( strip, r.strip.lo.x, r.strip.lo.y, r.strip.hi.x, r.strip.hi.y );
+	else
+	{
+		drawSteelPanel( r.strip, steel, FALSE );
+		IRegion2D rail = r.strip;
+		rail.hi.y = rail.lo.y + px( 4 );
+		drawSteelPanel( rail, rim, FALSE );
+		TheDisplay->drawFillRect( rail.lo.x, rail.hi.y, rail.hi.x - rail.lo.x, 1, glass );
+		for( Int each = 0; each < HUD_STRIP_BUTTONS; each++ )
+			drawSteelPanel( grow( r.stripButtons[ each ], px( 2 ) ), well, TRUE );
+	}
 
 	// the selection card: a raised rim round a sunk well, the rim showing past the tiles on it
-	drawSteelPanel( grow( r.card, px( 4 ) ), rim, FALSE );
-	drawSteelPanel( r.card, well, TRUE );
+	if( card != NULL )
+		TheDisplay->drawImage( card, r.card.lo.x, r.card.lo.y, r.card.hi.x, r.card.hi.y );
+	else
+	{
+		drawSteelPanel( grow( r.card, px( 4 ) ), rim, FALSE );
+		drawSteelPanel( r.card, well, TRUE );
+	}
 
-	// the power rail sunk into the sidebar; W3DPowerDrawV fills the inside
-	drawSteelPanel( grow( r.powerRail, px( 2 ) ), well, TRUE );
+	// the power rail sunk into the sidebar, the radar in a raised rim round its box, the box a well,
+	// so the bands a map narrower than the box leaves are part of the frame: the plate has the rail's
+	// channel and the radar's glass and rim in it.  W3DPowerDrawV fills the rail
+	if( plate == NULL )
+	{
+		drawSteelPanel( grow( r.powerRail, px( 2 ) ), well, TRUE );
+		drawSteelPanel( grow( r.radar, px( 4 ) ), rim, FALSE );
+		drawSteelPanel( r.radar, well, TRUE );
+	}
 
-	// the radar: a raised rim round its box, the box a well, so the bands a map narrower than the
-	// box leaves are part of the frame; the map's own window sunk into it with dark glass under it,
-	// which is all that shows while the player has no radar
-	drawSteelPanel( grow( r.radar, px( 4 ) ), rim, FALSE );
-	drawSteelPanel( r.radar, well, TRUE );
+	// the map's own window sunk into it with dark glass under it, which is all that shows while the
+	// player has no radar
 	static NameKeyType radarID = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:LeftHUD" );
 	GameWindow *radar = TheWindowManager->winGetWindowFromId( NULL, radarID );
 	if( radar != NULL && !radar->winIsHidden() )
@@ -892,6 +923,13 @@ static void drawSidebarBackground( void )
 		map.hi.x += map.lo.x;
 		map.hi.y += map.lo.y;
 		drawSteelPanel( grow( map, 1 ), glass, TRUE );
+	}
+
+	// the cameos: the plate's production floor holds them, and each cameo window wears its own well
+	if( plate != NULL )
+	{
+		TheDisplay->endBatch2D();
+		return;
 	}
 
 	// each cameo's cell takes half the gap to its neighbours, so the cells tile the grid

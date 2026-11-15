@@ -69,6 +69,7 @@
 #include "GameClient/CommandXlat.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/ControlBarScheme.h"
+#include "GameClient/ControlBarSidebar.h"
 #include "GameClient/MetaEvent.h"
 #include "GameClient/DisplayStringManager.h"
 #include "GameClient/Diplomacy.h"
@@ -9113,17 +9114,16 @@ void InGameUI::postDraw( void )
 			{
 				//
 				// The Red Alert style layout writes them as named rows (the wireframe's bottom right): from
-				// superweaponRow up, superweaponRowPitch apart, the right edge on the sidebar's left.  Per
-				// row the power's cameo, its name (EA's own "GUI:<power>" countdown label), the time left
-				// or "Ready" at the right end and a thin bar of the charge under them; teal for your own
-				// and your allies', red for an enemy's.  Past SIDEBAR_SUPERWEAPON_ROWS a "+N" tab sticks
-				// up from the top row.  A click on a row looks at your own building, as a cell's does.
+				// superweaponRow up, superweaponRowPitch apart, the right edge on the sidebar's left.  Each
+				// row is the side's SuperweaponOwn or SuperweaponEnemy plate (288x28 at 1080, the sidebar
+				// art): the power's cameo in its icon well, its name (EA's own "GUI:<power>" countdown
+				// label) and the time left or "Ready" in its glass, the charge filling its groove in the
+				// owner's colour.  Without the plate a flat one with the same seats stands in, teal for your
+				// own and your allies', red for an enemy's.  Past SIDEBAR_SUPERWEAPON_ROWS a "+N" tab
+				// sticks up from the top row.  A click on a row looks at your own building, as a cell's does.
 				//
 				const Bool more = (Int)listed.size() > SIDEBAR_SUPERWEAPON_ROWS;
 				const Int rows = more ? SIDEBAR_SUPERWEAPON_ROWS : (Int)listed.size();
-				const Real k = rects.scale;
-				const Int pad = MAX( 1, REAL_TO_INT_CEIL( 4 * k ) );
-				const Int barH = MAX( 2, REAL_TO_INT( 3 * k ) );
 				const Int edge = rects.sidebar.lo.x;
 				for( Int each = 0; each < rows; each++ )
 				{
@@ -9137,37 +9137,73 @@ void InGameUI::postDraw( void )
 				m_superweaponCells = rows;
 				m_superweaponTab = more ? hudTab( 1, edge, m_superweaponPlace[ rows - 1 ].lo.y, -1 ) : noHudTab();
 
+				// a seat on the plate, in its 288x28 art pixels, on screen
+				auto seat = []( const IRegion2D &row, Int x0, Int y0, Int x1, Int y1 )
+				{
+					const Real sx = row.width() / 288.0f, sy = row.height() / 28.0f;
+					IRegion2D at;
+					at.lo.x = row.lo.x + REAL_TO_INT_FLOOR( x0 * sx + 0.5f );
+					at.lo.y = row.lo.y + REAL_TO_INT_FLOOR( y0 * sy + 0.5f );
+					at.hi.x = row.lo.x + REAL_TO_INT_FLOOR( x1 * sx + 0.5f );
+					at.hi.y = row.lo.y + REAL_TO_INT_FLOOR( y1 * sy + 0.5f );
+					return at;
+				};
+				auto iconWell = [ & ]( const IRegion2D &row ) { return seat( row, 4, 3, 30, 25 ); };
+				auto textGlass = [ & ]( const IRegion2D &row ) { return seat( row, 34, 3, 270, 17 ); };
+				auto groove = [ & ]( const IRegion2D &row ) { return seat( row, 34, 19, 270, 24 ); };
+
+				const Image *ownPlate = Sidebar_image( "SuperweaponOwn" );
+				const Image *enemyPlate = Sidebar_image( "SuperweaponEnemy" );
 				const Color teal = GameMakeColor( 40, 190, 160, 255 );
 				const Color red = GameMakeColor( 214, 72, 52, 255 );
-				auto iconBox = [ pad ]( const IRegion2D &row )
-				{
-					IRegion2D icon;
-					icon.lo.x = row.lo.x + pad;
-					icon.lo.y = row.lo.y + pad;
-					icon.hi.y = row.hi.y - pad;
-					icon.hi.x = icon.lo.x + ( icon.hi.y - icon.lo.y ) * 4 / 3;
-					return icon;
-				};
 				TheDisplay->beginBatch2D();
 				for( Int each = 0; each < rows; each++ )
 				{
 					const ListedSuperweapon &line = listed[ each ];
 					const IRegion2D &row = m_superweaponPlace[ each ];
-					const IRegion2D icon = iconBox( row );
-					const Color tint = line.enemy ? red : teal;
-					TheDisplay->drawFillRect( row.lo.x, row.lo.y, row.width(), row.height(), GameMakeColor( 6, 9, 11, 200 ) );
-					TheDisplay->drawOpenRect( row.lo.x, row.lo.y, row.width(), row.height(), 1, tint );
+					const IRegion2D icon = iconWell( row );
+					const IRegion2D glass = textGlass( row );
+					const IRegion2D charge = groove( row );
+					const Image *plate = line.enemy ? enemyPlate : ownPlate;
+					if( plate != NULL )
+						TheDisplay->drawImage( plate, row.lo.x, row.lo.y, row.hi.x, row.hi.y );
+					else
+					{
+						const Color tint = line.enemy ? red : teal;
+						TheDisplay->drawFillRect( row.lo.x, row.lo.y, row.width(), row.height(), GameMakeColor( 6, 9, 11, 200 ) );
+						TheDisplay->drawOpenRect( row.lo.x, row.lo.y, row.width(), row.height(), 1, tint );
+						TheDisplay->drawOpenRect( icon.lo.x - 1, icon.lo.y - 1, icon.width() + 2, icon.height() + 2, 1, tint );
+						TheDisplay->drawFillRect( glass.lo.x, glass.lo.y, glass.width(), glass.height(), GameMakeColor( 0, 0, 0, 120 ) );
+						TheDisplay->drawFillRect( charge.lo.x, charge.lo.y, charge.width(), charge.height(), GameMakeColor( 0, 0, 0, 170 ) );
+					}
 					if( line.cameo != NULL )
-						TheDisplay->drawImage( line.cameo, icon.lo.x, icon.lo.y, icon.hi.x, icon.hi.y );
-					TheDisplay->drawOpenRect( icon.lo.x - 1, icon.lo.y - 1, icon.width() + 2, icon.height() + 2, 1, tint );
-					// the charge under the words, full once it is ready
-					const Int barX = icon.hi.x + pad;
-					const Int barW = row.hi.x - pad - barX;
-					const Int barY = row.hi.y - pad - barH;
-					TheDisplay->drawFillRect( barX, barY, barW, barH, GameMakeColor( 0, 0, 0, 170 ) );
-					TheDisplay->drawFillRect( barX, barY, barW * ( line.ready ? 100 : line.percent ) / 100, barH, tint );
+						TheDisplay->drawImage( line.cameo, icon.lo.x + 1, icon.lo.y + 1, icon.hi.x - 1, icon.hi.y - 1 );
+					// the charge fills the groove in its owner's colour, all of it once it is ready
+					TheDisplay->drawFillRect( charge.lo.x, charge.lo.y, charge.width() * ( line.ready ? 100 : line.percent ) / 100,
+																		charge.height(), line.owner );
 				}
 				TheDisplay->endBatch2D();
+
+				// the name and the clock in the glass: the largest of the superweapon font's sizes whose
+				// line fits it, found once for a glass height
+				const Int glassH = textGlass( m_superweaponPlace[ 0 ] ).height();
+				static Int s_fitGlass = -1;
+				static Int s_fitPoint = 4;
+				if( s_fitGlass != glassH )
+				{
+					s_fitGlass = glassH;
+					s_fitPoint = 4;
+					for( Int point = m_superweaponNormalPointSize; point > 4; point-- )
+					{
+						const GameFont *font = TheFontLibrary->getFont( m_superweaponNormalFont,
+							TheGlobalLanguageData->adjustFontSize( point ), m_superweaponNormalBold );
+						if( font != NULL && font->height <= glassH )
+						{
+							s_fitPoint = point;
+							break;
+						}
+					}
+				}
 
 				const UnicodeString readyText = TheGameText->fetch( "GUI:SidebarSuperweaponReady" );
 				const Color drop = GameMakeColor( 0, 0, 0, 255 );
@@ -9175,7 +9211,7 @@ void InGameUI::postDraw( void )
 				{
 					const ListedSuperweapon &line = listed[ each ];
 					const IRegion2D &row = m_superweaponPlace[ each ];
-					const IRegion2D icon = iconBox( row );
+					const IRegion2D glass = textGlass( row );
 					AsciiString label;
 					label.format( "GUI:%s", line.power.str() );
 					UnicodeString time;
@@ -9183,25 +9219,27 @@ void InGameUI::postDraw( void )
 						time = readyText;
 					else
 						time.format( u"%d:%2.2d", line.seconds / 60, line.seconds % 60 );
+					line.info->setFont( m_superweaponNormalFont, s_fitPoint, m_superweaponNormalBold );
 					line.info->setText( TheGameText->fetch( label ), time );
 
 					DisplayString *name = line.info->getNameString();
 					DisplayString *clock = line.info->getTimeString();
-					const Int textX = icon.hi.x + pad;
-					const Int textRight = row.hi.x - pad;
-					const Int barY = row.hi.y - pad - barH;
-					const Int textY = MAX( row.lo.y + 1, barY - 1 - name->getFont()->height );
-					const Int clockX = textRight - clock->getWidth();
+					const Int gap = MAX( 2, glass.height() / 3 );
+					const Int textY = glass.lo.y + ( glass.height() - name->getFont()->height ) / 2;
+					const Int clockX = glass.hi.x - gap - clock->getWidth();
 					const Color ink = line.enemy ? GameMakeColor( 250, 186, 172, 255 ) : GameMakeColor( 176, 240, 222, 255 );
 					clock->draw( clockX, textY, line.ready ? GameMakeColor( 255, 255, 255, 255 ) : ink, drop );
-					// a long name gives way to the time
+					// the name gives way to the time.  The text's quads are clipped only when they are
+					// built, which is when the text or its place changes, so the room is held steady: a
+					// quarter of the glass for the clock, more only when the clock itself is wider
+					const Int clockRoom = MAX( clock->getWidth(), glass.width() / 4 );
 					IRegion2D room;
-					room.lo.x = textX;
-					room.lo.y = row.lo.y;
-					room.hi.x = clockX - pad;
-					room.hi.y = row.hi.y;
+					room.lo.x = glass.lo.x + gap;
+					room.lo.y = glass.lo.y;
+					room.hi.x = glass.hi.x - gap - clockRoom - gap;
+					room.hi.y = glass.hi.y;
 					name->setClipRegion( &room );
-					name->draw( textX, textY, ink, drop );
+					name->draw( room.lo.x, textY, ink, drop );
 				}
 				if( more )
 				{

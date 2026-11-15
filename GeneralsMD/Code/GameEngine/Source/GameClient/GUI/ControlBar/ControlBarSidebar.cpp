@@ -110,6 +110,67 @@ namespace
 	Player *s_iconPlayer = NULL;
 	DisplayString *s_keyText[ SIDEBAR_TAB_COUNT ];	///< each tab's key letter, set in Sidebar_update
 	UnicodeString s_keyShown[ SIDEBAR_TAB_COUNT ];
+	IRegion2D s_cells[ HUD_SIDEBAR_CAMEOS ];				///< the cameo cells on screen, the wells drawn under them
+
+	/// the tabs' pieces, <Prefix>SidebarTab<Kind>{,H,P,I}: bezel and glyph baked in
+	const char *const TAB_KINDS[ SIDEBAR_TAB_COUNT ] = { "Buildings", "Defenses", "Infantry", "Vehicles" };
+	const Color KEY_LETTER_LIT	= GameMakeColor( 18, 22, 28, 255 );		///< the key letter on a lit tab piece
+	const Color KEY_LETTER_GLOW	= GameMakeColor( 255, 236, 190, 110 );
+	const Real CAMEO_INSET		= 3.0f;		///< the cameo inside its well, at 1080
+
+	/// Sidebar_image's finds for the side they were made for, misses included
+	struct SidebarPiece
+	{
+		AsciiString piece;
+		const Image *image;
+	};
+	AsciiString s_imageSide;
+	std::vector< SidebarPiece > s_images;
+}
+
+//-------------------------------------------------------------------------------------------------
+const Image *Sidebar_image( const char *piece )
+{
+	Player *player = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+	if( piece == NULL || player == NULL || TheMappedImageCollection == NULL )
+		return NULL;
+	const AsciiString side = player->getSide();
+	if( side != s_imageSide )
+	{
+		s_imageSide = side;
+		s_images.clear();
+	}
+	for( size_t i = 0; i < s_images.size(); i++ )
+		if( s_images[ i ].piece.compare( piece ) == 0 )
+			return s_images[ i ].image;
+
+	const Bool gla = side.startsWith( "GLA" );
+	const char *prefix = side.startsWith( "China" ) || side.startsWith( "Boss" ) ? "ChinaPro"
+		: gla ? "GLAPro" : side.startsWith( "Turkiye" ) ? "TurkiyePro" : "AmericaPro";
+	AsciiString name;
+	name.format( "%sSidebar%s", prefix, piece );
+	const Image *image = TheMappedImageCollection->findImageByName( name );
+	// the bar's other GLA pieces are spelled "Gla" (GlaProTray)
+	if( image == NULL && gla )
+	{
+		name.format( "GlaProSidebar%s", piece );
+		image = TheMappedImageCollection->findImageByName( name );
+	}
+	SidebarPiece found;
+	found.piece = piece;
+	found.image = image;
+	s_images.push_back( found );
+	return image;
+}
+
+/// `base` in the state a button is drawn in (I disabled, P pushed or lit, H hovered), the plain piece
+/// when the side has no picture for that state, NULL when it has neither
+static const Image *statePiece( const char *base, Bool enabled, Bool pushed, Bool hover )
+{
+	AsciiString piece;
+	piece.format( "%s%s", base, !enabled ? "I" : pushed ? "P" : hover ? "H" : "" );
+	const Image *image = Sidebar_image( piece.str() );
+	return image != NULL ? image : Sidebar_image( base );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -145,24 +206,29 @@ static GameWindow *barParent( void )
 	return TheWindowManager->winGetWindowFromId( NULL, parentKey );
 }
 
-static void drawNothing( GameWindow *window, WinInstanceData *instData )
-{
-}
-
 static void buildTooltip( GameWindow *window, WinInstanceData *instData, UnsignedInt mouse )
 {
 	TheControlBar->showBuildTooltipLayout( window );
 }
 
-/// the plain button with a chevron on it, lit while there is somewhere to go
+/// the side's arrow piece; without one the plain button with a chevron on it, lit while there is
+/// somewhere to go
 static void drawArrow( GameWindow *window, WinInstanceData *instData )
 {
-	if( s_buttonDraw != NULL )
-		s_buttonDraw( window, instData );
-
 	ICoord2D at, size;
 	window->winGetScreenPosition( &at.x, &at.y );
 	window->winGetSize( &size.x, &size.y );
+	const Bool enabled = BitTest( window->winGetStatus(), WIN_STATUS_ENABLED );
+	const Image *art = statePiece( window == s_arrowUp ? "ArrowUp" : "ArrowDown", enabled,
+		BitTest( instData->getState(), WIN_STATE_SELECTED ), BitTest( instData->getState(), WIN_STATE_HILITED ) );
+	if( art != NULL )
+	{
+		TheDisplay->drawImage( art, at.x, at.y, at.x + size.x, at.y + size.y );
+		return;
+	}
+
+	if( s_buttonDraw != NULL )
+		s_buttonDraw( window, instData );
 	const Int half = max( size.y / 5, 2 );
 	const Int cx = at.x + size.x / 2, cy = at.y + size.y / 2;
 	const Bool up = window == s_arrowUp;
@@ -188,6 +254,22 @@ static void drawTab( GameWindow *window, WinInstanceData *instData )
 
 	const Bool open = t == s_tab;
 	const Bool hover = BitTest( instData->getState(), WIN_STATE_HILITED );
+	const Bool keyed = s_keyText[ t ] != NULL && !s_keyShown[ t ].isEmpty();
+
+	// the side's baked tab: bezel and glyph in the piece, P the open tab's lit look; the key on top,
+	// dark on the lit piece
+	AsciiString base;
+	base.format( "Tab%s", TAB_KINDS[ t ] );
+	const Image *art = statePiece( base.str(), BitTest( window->winGetStatus(), WIN_STATUS_ENABLED ), open, hover );
+	if( art != NULL )
+	{
+		TheDisplay->drawImage( art, at.x, at.y, at.x + size.x, at.y + size.y );
+		if( keyed )
+			s_keyText[ t ]->draw( at.x + 3, at.y + 1, open ? KEY_LETTER_LIT : KEY_LETTER, open ? KEY_LETTER_GLOW : TAB_TEXT_EDGE );
+		return;
+	}
+
+	// the stand-in until the side has its pieces
 	const Color face = open ? TAB_STEEL_OPEN : hover ? TAB_STEEL_HOVER : TAB_STEEL;
 	const Color lit = open ? TAB_BEVEL_DARK : TAB_BEVEL_LIGHT;
 	const Color shade = open ? TAB_BEVEL_LIGHT : TAB_BEVEL_DARK;
@@ -200,7 +282,11 @@ static void drawTab( GameWindow *window, WinInstanceData *instData )
 	// pressed in, the face's contents sit a pixel down and right
 	const Int push = open ? 1 : 0;
 	// the icon centred in the face, as large as fits with its own shape kept
-	const Image *icon = s_tabIcon[ t ];
+	AsciiString glyph;
+	glyph.format( "TabIcon%s", TAB_KINDS[ t ] );
+	const Image *icon = Sidebar_image( glyph.str() );
+	if( icon == NULL )
+		icon = s_tabIcon[ t ];
 	const Int roomW = size.x - 2 * ( 1 + ICON_INSET ), roomH = size.y - 2 * ( 1 + ICON_INSET );
 	if( icon != NULL && icon->getImageWidth() > 0 && icon->getImageHeight() > 0 && roomW > 0 && roomH > 0 )
 	{
@@ -210,8 +296,18 @@ static void drawTab( GameWindow *window, WinInstanceData *instData )
 		const Int x = at.x + ( size.x - w ) / 2 + push, y = at.y + ( size.y - h ) / 2 + push;
 		TheDisplay->drawImage( icon, x, y, x + w, y + h, open ? 0xFFFFFFFF : TAB_ICON_DIM );
 	}
-	if( s_keyText[ t ] != NULL && !s_keyShown[ t ].isEmpty() )
+	if( keyed )
 		s_keyText[ t ]->draw( at.x + 3 + push, at.y + 1 + push, KEY_LETTER, TAB_TEXT_EDGE );
+}
+
+/// the box: the side's cameo well under every cell, the cameos inside them
+static void drawBox( GameWindow *window, WinInstanceData *instData )
+{
+	const Image *well = Sidebar_image( "CameoWell" );
+	if( well == NULL )
+		return;
+	for( Int i = 0; i < HUD_SIDEBAR_CAMEOS; i++ )
+		TheDisplay->drawImage( well, s_cells[ i ].lo.x, s_cells[ i ].lo.y, s_cells[ i ].hi.x, s_cells[ i ].hi.y );
 }
 
 /// the letter of the key `meta` is on, without its modifiers ("Q" for Ctrl+Q); empty when it has none
@@ -411,7 +507,7 @@ static Bool makeWindows( GameWindow *parent )
 	if( s_box == NULL )
 		return FALSE;
 	s_box->winSetWindowId( boxId() );
-	s_box->winSetDrawFunc( drawNothing );
+	s_box->winSetDrawFunc( drawBox );
 	s_box->winSetInputFunc( boxInput );
 
 	for( Int t = 0; t < SIDEBAR_TAB_COUNT; t++ )
@@ -495,7 +591,17 @@ void Sidebar_layout( const HudLayoutRects &rects )
 	for( Int t = 0; t < SIDEBAR_TAB_COUNT; t++ )
 		place( s_tabs[ t ], rects.tabs[ t ], box.lo );
 	for( Int i = 0; i < HUD_SIDEBAR_CAMEOS; i++ )
-		place( s_cameos[ i ], rects.cameos[ i ], box.lo );
+	{
+		// the cell is the well; the cameo sits 3 px inside it at 1080
+		const Int inset = max( REAL_TO_INT( CAMEO_INSET * rects.scale + 0.5f ), 1 );
+		s_cells[ i ] = rects.cameos[ i ];
+		IRegion2D cameo = rects.cameos[ i ];
+		cameo.lo.x += inset;
+		cameo.lo.y += inset;
+		cameo.hi.x -= inset;
+		cameo.hi.y -= inset;
+		place( s_cameos[ i ], cameo, box.lo );
+	}
 	place( s_arrowUp, rects.arrowUp, box.lo );
 	place( s_arrowDown, rects.arrowDown, box.lo );
 

@@ -14,6 +14,14 @@
 #include "Lib/BaseType.h"
 #include "GameClient/Display.h"
 
+class Image;
+
+/** The sidebar art for the local player's side: the MappedImage `<Prefix>Sidebar<piece>`, Prefix
+	* AmericaPro, ChinaPro (Boss too), GLAPro or TurkiyePro, AmericaPro for a side it does not know; NULL
+	* when that side has no such piece.  Looked up once a piece and side, then kept.  `piece` is the name after
+	* "Sidebar": "TabBuildingsH", "CameoWell", "Plate". */
+const Image *Sidebar_image( const char *piece );
+
 /** The tabs, left to right, keyed Q W E R; GUI:SidebarTab0..3 name them. */
 enum SidebarTab
 {

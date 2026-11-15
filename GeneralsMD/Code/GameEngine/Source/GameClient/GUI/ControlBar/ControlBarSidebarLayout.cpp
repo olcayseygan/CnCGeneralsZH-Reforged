@@ -20,6 +20,8 @@
 #include "GameClient/DisplayString.h"
 #include "GameClient/DisplayStringManager.h"
 #include "GameClient/Drawable.h"
+#include "GameClient/Gadget.h"
+#include "GameClient/GadgetPushButton.h"
 #include "GameClient/GameFont.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
@@ -270,11 +272,222 @@ void ControlBar::hideForSidebar( GameWindow *window )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Where a command stands on the strip: the generic group (Attack Move, Stop, Guard and its kinds) at
+	* the right end in that order, a container's slots (exit, evacuate) just before them, and everything
+	* else, the unit's own, from the left. */
+//-------------------------------------------------------------------------------------------------
+enum StripRole { STRIP_OWN, STRIP_CONTAINER, STRIP_ATTACK_MOVE, STRIP_STOP, STRIP_GUARD };
+
+static StripRole stripRole( const CommandButton *command )
+{
+	if( command == NULL )
+		return STRIP_OWN;
+	switch( command->getCommandType() )
+	{
+		case GUI_COMMAND_ATTACK_MOVE:									return STRIP_ATTACK_MOVE;
+		case GUI_COMMAND_STOP:												return STRIP_STOP;
+		case GUI_COMMAND_GUARD:
+		case GUI_COMMAND_GUARD_WITHOUT_PURSUIT:
+		case GUI_COMMAND_GUARD_FLYING_UNITS_ONLY:			return STRIP_GUARD;
+		case GUI_COMMAND_EXIT_CONTAINER:
+		case GUI_COMMAND_EVACUATE:										return STRIP_CONTAINER;
+		default:																			return STRIP_OWN;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The strip's fourteen cells by role instead of by ControlBar.wnd's slot: the Classic grid's slots
+	* left gaps all along it.  The unit's own commands from the left in their command set order, the
+	* generic group packed against the right end, the container's slots right-aligned just left of it,
+	* the hidden windows in the cells left over.  Only where each window stands changes: the slot, and
+	* with it the key a button answers to and the letter it shows, is the window's.  Run after every
+	* layout and context switch, and every frame (a transport's or a garrison's slots come and go
+	* without one); placeWindowAt does nothing for a window already in its cell. */
+//-------------------------------------------------------------------------------------------------
+void ControlBar::arrangeStripByRole( void )
+{
+	if( !m_sidebarLayout )
+		return;
+	HudLayoutRects hud;
+	getHudLayoutRects( &hud );
+
+	enum { CELLS = HUD_STRIP_BUTTONS };
+	Int own[ CELLS ], container[ CELLS ], generic[ CELLS ], hidden[ CELLS ];
+	Int owns = 0, containers = 0, generics = 0, hiddens = 0;
+	for( Int i = 0; i < CELLS && i < MAX_COMMANDS_PER_SET; i++ )
+	{
+		GameWindow *win = m_commandWindows[ i ];
+		if( win == NULL )
+			continue;
+		if( win->winIsHidden() )
+		{
+			hidden[ hiddens++ ] = i;
+			continue;
+		}
+		const StripRole role = stripRole( (const CommandButton *)GadgetButtonGetData( win ) );
+		if( role == STRIP_OWN )
+			own[ owns++ ] = i;
+		else if( role == STRIP_CONTAINER )
+			container[ containers++ ] = i;
+		else
+		{
+			// Attack Move, Stop, Guard: kept in that order whatever the command set's
+			Int at = generics++;
+			while( at > 0 && stripRole( (const CommandButton *)GadgetButtonGetData( m_commandWindows[ generic[ at - 1 ] ] ) ) > role )
+			{
+				generic[ at ] = generic[ at - 1 ];
+				at--;
+			}
+			generic[ at ] = i;
+		}
+	}
+
+	Int cellOf[ CELLS ];
+	Bool taken[ CELLS ];
+	for( Int c = 0; c < CELLS; c++ )
+	{
+		cellOf[ c ] = -1;
+		taken[ c ] = FALSE;
+	}
+	for( Int n = 0; n < owns; n++ )
+		cellOf[ own[ n ] ] = n;
+	for( Int n = 0; n < generics; n++ )
+		cellOf[ generic[ n ] ] = CELLS - generics + n;
+	for( Int n = 0; n < containers; n++ )
+		cellOf[ container[ n ] ] = CELLS - generics - containers + n;
+	for( Int c = 0; c < CELLS; c++ )
+		if( cellOf[ c ] >= 0 )
+			taken[ cellOf[ c ] ] = TRUE;
+	Int spare = 0;
+	for( Int n = 0; n < hiddens; n++ )
+	{
+		while( spare < CELLS && taken[ spare ] )
+			spare++;
+		if( spare < CELLS )
+		{
+			cellOf[ hidden[ n ] ] = spare;
+			taken[ spare ] = TRUE;
+		}
+	}
+
+	for( Int i = 0; i < CELLS && i < MAX_COMMANDS_PER_SET; i++ )
+		if( m_commandWindows[ i ] != NULL && cellOf[ i ] >= 0 )
+			placeWindowAt( m_commandWindows[ i ], hud.stripButtons[ cellOf[ i ] ] );
+}
+
+//-------------------------------------------------------------------------------------------------
+// The sidebar's own keys: the side's <Prefix>Sidebar<Key> art (the HUD artist's sheet, Sidebar_image)
+// on the bar's Options, Diplomacy and General buttons, each in its four states, and the scheme's Classic
+// images put back for the Classic bar.  A scheme set since (a defeat into the observer's) has given the
+// button its own images already, so a key is only put back while it still wears the sidebar's.
+//-------------------------------------------------------------------------------------------------
+enum { SIDEBAR_KEY_MENU, SIDEBAR_KEY_DIPLOMACY, SIDEBAR_KEY_GENERAL, SIDEBAR_KEY_COUNT };
+static const char *const s_keyPiece[ SIDEBAR_KEY_COUNT ] = { "KeyMenu", "KeyDiplomacy", "KeyGeneral" };
+static const char *const s_keyWindow[ SIDEBAR_KEY_COUNT ] = { "ButtonOptions", "PopupCommunicator", "ButtonGeneral" };
+enum { KEY_ENABLED, KEY_HILITE, KEY_PUSHED, KEY_DISABLED, KEY_STATES };
+static const Image *s_keyClassic[ SIDEBAR_KEY_COUNT ][ KEY_STATES ];
+static const Image *s_keyWorn[ SIDEBAR_KEY_COUNT ];		///< the sidebar art a key was given, NULL while it wears its own
+static const Image *s_keyWornLit[ SIDEBAR_KEY_COUNT ];	///< and its lit state, which the General key flashes to (getStarImage)
+
+/// one key's four states, "" "H" "P" "I"; FALSE when the sheet has no such key
+static Bool sidebarKeyImages( const char *piece, const Image **out )
+{
+	out[ KEY_ENABLED ] = Sidebar_image( piece );
+	if( out[ KEY_ENABLED ] == NULL )
+		return FALSE;
+	AsciiString name;
+	name.format( "%sH", piece );
+	out[ KEY_HILITE ] = Sidebar_image( name.str() );
+	if( out[ KEY_HILITE ] == NULL )
+		out[ KEY_HILITE ] = out[ KEY_ENABLED ];
+	name.format( "%sP", piece );
+	out[ KEY_PUSHED ] = Sidebar_image( name.str() );
+	if( out[ KEY_PUSHED ] == NULL )
+		out[ KEY_PUSHED ] = out[ KEY_HILITE ];
+	name.format( "%sI", piece );
+	out[ KEY_DISABLED ] = Sidebar_image( name.str() );
+	if( out[ KEY_DISABLED ] == NULL )
+		out[ KEY_DISABLED ] = out[ KEY_ENABLED ];
+	return TRUE;
+}
+
+/// TRUE when the key now wears the sidebar's art
+static Bool wearSidebarKey( Int key )
+{
+	GameWindow *win = barWindow( s_keyWindow[ key ] );
+	const Image *art[ KEY_STATES ];
+	if( win == NULL || !sidebarKeyImages( s_keyPiece[ key ], art ) )
+		return FALSE;
+	const Image *now = GadgetButtonGetEnabledImage( win );
+	if( now != art[ KEY_ENABLED ] && now != art[ KEY_HILITE ] )
+	{
+		s_keyClassic[ key ][ KEY_ENABLED ] = GadgetButtonGetEnabledImage( win );
+		s_keyClassic[ key ][ KEY_HILITE ] = GadgetButtonGetHiliteImage( win );
+		s_keyClassic[ key ][ KEY_PUSHED ] = GadgetButtonGetHiliteSelectedImage( win );
+		s_keyClassic[ key ][ KEY_DISABLED ] = GadgetButtonGetDisabledImage( win );
+	}
+	GadgetButtonSetEnabledImage( win, art[ KEY_ENABLED ] );
+	GadgetButtonSetHiliteImage( win, art[ KEY_HILITE ] );
+	GadgetButtonSetHiliteSelectedImage( win, art[ KEY_PUSHED ] );
+	GadgetButtonSetDisabledImage( win, art[ KEY_DISABLED ] );
+	s_keyWorn[ key ] = art[ KEY_ENABLED ];
+	s_keyWornLit[ key ] = art[ KEY_HILITE ];
+	return TRUE;
+}
+
+static void restoreClassicKeys( void )
+{
+	for( Int key = 0; key < SIDEBAR_KEY_COUNT; key++ )
+	{
+		GameWindow *win = s_keyWorn[ key ] ? barWindow( s_keyWindow[ key ] ) : NULL;
+		const Image *now = win != NULL ? GadgetButtonGetEnabledImage( win ) : NULL;
+		if( win != NULL && ( now == s_keyWorn[ key ] || now == s_keyWornLit[ key ] ) )
+		{
+			GadgetButtonSetEnabledImage( win, s_keyClassic[ key ][ KEY_ENABLED ] );
+			GadgetButtonSetHiliteImage( win, s_keyClassic[ key ][ KEY_HILITE ] );
+			GadgetButtonSetHiliteSelectedImage( win, s_keyClassic[ key ][ KEY_PUSHED ] );
+			GadgetButtonSetDisabledImage( win, s_keyClassic[ key ][ KEY_DISABLED ] );
+		}
+		s_keyWorn[ key ] = NULL;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+// The money readout left-aligned after the "$" the sidebar's plate paints in the money glass (x 1700 at
+// 1920, the digits from 1712).  The scheme's alignment comes back for the Classic bar unless a scheme
+// set since gave its own: the saved one is kept with the side it was read under.
+//-------------------------------------------------------------------------------------------------
+static Bool s_moneySaved = FALSE;
+static Bool s_moneyCentered = FALSE;
+static Int s_moneyLeftMargin = 0;
+static AsciiString s_moneySide;
+
+static TextData *moneyText( GameWindow *money )
+{
+	if( money == NULL || !BitTest( money->winGetStyle(), GWS_STATIC_TEXT ) )
+		return NULL;
+	return (TextData *)money->winGetUserData();
+}
+
+//-------------------------------------------------------------------------------------------------
 void ControlBar::restoreClassicWindows( void )
 {
 	for( size_t i = 0; i < m_sidebarHidden.size(); i++ )
 		m_sidebarHidden[ i ]->winHide( FALSE );
 	m_sidebarHidden.clear();
+
+	restoreClassicKeys();
+	if( s_moneySaved )
+	{
+		TextData *text = moneyText( barWindow( "MoneyDisplay" ) );
+		if( text != NULL && m_controlBarSchemeManager != NULL
+				&& m_controlBarSchemeManager->getCurrentSide().compare( s_moneySide.str() ) == 0 )
+		{
+			text->centered = s_moneyCentered;
+			text->leftMargin = s_moneyLeftMargin;
+		}
+		s_moneySaved = FALSE;
+	}
 
 	if( m_sidebarBlockSaved )
 	{
@@ -347,10 +560,30 @@ void ControlBar::layoutSidebar( void )
 	m_panelRect[ CB_PANEL_CENTER ] = hud.strip;
 	m_panelRect[ CB_PANEL_RIGHT ] = hud.strip;
 
-	// the sidebar's top
+	// the sidebar's top: its own keys where the sheet has them
 	placeWindowAt( barWindow( "ButtonOptions" ), hud.menuButton );
-	placeWindowAt( barWindow( "MoneyDisplay" ), hud.money );
 	placeWindowAt( barWindow( "PopupCommunicator" ), hud.diplomacyButton );
+	wearSidebarKey( SIDEBAR_KEY_MENU );
+	wearSidebarKey( SIDEBAR_KEY_DIPLOMACY );
+
+	// the digits left-aligned from x 1712 at 1920, after the plate's painted "$" at 1700
+	GameWindow *money = barWindow( "MoneyDisplay" );
+	IRegion2D moneyAt = hud.money;
+	moneyAt.lo.x = MIN( hud.sidebar.lo.x + REAL_TO_INT( ( 1712 - 1600 ) * hud.scale + 0.5f ), hud.money.hi.x - 1 );
+	placeWindowAt( money, moneyAt );
+	TextData *moneyData = moneyText( money );
+	if( moneyData != NULL )
+	{
+		if( !s_moneySaved )
+		{
+			s_moneyCentered = moneyData->centered;
+			s_moneyLeftMargin = moneyData->leftMargin;
+			s_moneySide = m_controlBarSchemeManager ? m_controlBarSchemeManager->getCurrentSide() : AsciiString::TheEmptyString;
+			s_moneySaved = TRUE;
+		}
+		moneyData->centered = FALSE;
+		moneyData->leftMargin = 0;
+	}
 	placeWindowAt( barWindow( "LeftHUD" ), hud.radar );
 	if( m_radarAttackGlowWindow != NULL )
 	{
@@ -364,9 +597,14 @@ void ControlBar::layoutSidebar( void )
 		lamp.hi.y = hud.radar.lo.y + size.y;
 		placeWindowAt( m_radarAttackGlowWindow, lamp );
 	}
-	// Sat and Onar come with phase 2; until then the General button takes their row as well
+	//
+	// Sat and Onar come with phase 2.  With the sheet's General key (painted 140 wide) the button keeps
+	// its own seat and the plate's empty Sat and Onar seats stand beside it; without it the scheme's
+	// button takes the whole row, as it did before the sheet
+	//
 	IRegion2D generalRow = hud.generalButton;
-	generalRow.lo.x = MIN( hud.sellButton.lo.x, hud.generalButton.lo.x );
+	if( !wearSidebarKey( SIDEBAR_KEY_GENERAL ) )
+		generalRow.lo.x = MIN( hud.sellButton.lo.x, hud.generalButton.lo.x );
 	placeWindowAt( barWindow( "ButtonGeneral" ), generalRow );
 
 	// the power bar stood on end down the sidebar's left edge (W3DPowerDrawV, lane D)
@@ -402,6 +640,7 @@ void ControlBar::layoutSidebar( void )
 	placeWindowAt( m_contextParent[ CP_COMMAND ], hud.strip );
 	for( Int i = 0; i < HUD_STRIP_BUTTONS && i < MAX_COMMANDS_PER_SET; i++ )
 		placeWindowAt( m_commandWindows[ i ], hud.stripButtons[ i ] );
+	arrangeStripByRole();
 
 	// the panes that stand in for the commands go over the strip's buttons
 	IRegion2D buttons = hud.strip;

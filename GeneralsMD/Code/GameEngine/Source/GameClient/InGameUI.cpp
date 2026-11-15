@@ -10339,7 +10339,7 @@ FloatingTextData *InGameUI::addFloatingText(const UnicodeString& text,const Coor
 		newFTD->m_text = text;
 		// the caption face at the caption size, a unit's name's lettering, as retail's line was
 		newFTD->m_dString->setFont( TheFontLibrary->getFont( m_drawableCaptionFont,
-			TheGlobalLanguageData->adjustFontSize( m_drawableCaptionPointSize ), m_drawableCaptionBold ) );
+			TheGlobalLanguageData->adjustFontSize( m_drawableCaptionPointSize ), FALSE ) );	// retail's regular weight
 		newFTD->m_dString->setText(text);
 		newFTD->m_bornMs = Clock_Milliseconds();
 
@@ -10362,8 +10362,8 @@ enum
 /** The money figure.  Who sees it is the scoreboard's rule: your own purse and your allies', and
 	* everybody's for an observer, a defeated player or a replay.  An enemy's income never shows, so
 	* the old per-caller stealth checks have nothing left to hide: a stealthed hacker or a cloaked
-	* killer is only ever seen by his own side.  Yours is the HUD's gold, an ally's is his colour so a
-	* team game says whose truck that was, and money taken is red whoever lost it. */
+	* killer is only ever seen by his own side.  Money made is in its owner's colour, as retail's was,
+	* so a team game says whose truck that was, and money taken is red whoever lost it. */
 //-------------------------------------------------------------------------------------------------
 void InGameUI::addMoneyText( Int amount, const Coord3D *pos, const Player *owner )
 {
@@ -10379,11 +10379,9 @@ void InGameUI::addMoneyText( Int amount, const Coord3D *pos, const Player *owner
 	if( owner != local && local->isPlayerActive() && local->getRelationship( owner->getDefaultTeam() ) != ALLIES )
 		return;
 
-	const Color HUD_GOLD = GameMakeColor( 242, 194, 48, 255 );		// BRAND.md's gold, #f2c230
+	// a gain in the owner's colour, as retail drew it, lifted only where it is too dark to read
 	const Color LOSS_RED = GameMakeColor( 255, 48, 48, 255 );			// the red the truce is written in
-	Color color = LOSS_RED;
-	if( amount > 0 )
-		color = owner == local ? HUD_GOLD : UIStyle::readable( clientPlayerColor( owner ) );
+	const Color color = amount > 0 ? UIStyle::readable( clientPlayerColor( owner ) ) : LOSS_RED;
 
 	UnicodeString text;
 	text.format( TheGameText->fetch( amount > 0 ? "GUI:AddCash" : "GUI:LoseCash" ), amount > 0 ? amount : -amount );
@@ -12760,8 +12758,9 @@ void InGameUI::drawFloatingText( void )
 			UnsignedByte r, g, b, a;
 			GameGetColorComponents( ftd->m_color, &r, &g, &b, &a );
 			const Color fill = GameMakeColor( r, g, b, alpha );
-			// one drop shadow, as retail's, a little softer than the figure so it reads as shade
-			const Color shade = GameMakeColor( 0, 0, 0, alpha * 3 / 4 );
+			// one drop shadow, as retail's: solid black a screen pixel down and right (two from 4K up), or a
+			// light grey or olive seat's figure is lost on rails, gravel and sand; 2/5 black read as none
+			const Color shade = GameMakeColor( 0, 0, 0, alpha );
 			const Int k = Drawable_pipPixel( TheUIScale() );
 
 			Int width, height;

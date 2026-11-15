@@ -1,0 +1,12 @@
+# Scenarios/moneypop3.txt on Twilight Flame, played in real time: the same frame as moneypop3.txt
+# with stills round the ally's deposit (paid between logic frames 1039 and 1058 with seed 11), seat
+# 0's (1058 to 1111) and the enemy's (1111 to 1131). 37.0 s holds own and ally pops; 37.4 and 38.0 s
+# fall after the enemy's deposit. Few shots, so the "Screen Captured" lines stay in the top rows the
+# map edge already costs.
+
+0.5   hud     on
+0.5   cut     1650 4040 2.2 0 0
+36.6  shot
+37.0  shot
+37.4  shot
+38.0  shot

@@ -1679,11 +1679,13 @@ protected:
 		RACK_TEXT_VALUE_HEAD, RACK_TEXT_PLACE, RACK_TEXT_NAME = RACK_TEXT_PLACE + RACK_ROWS,
 		RACK_TEXT_VALUE = RACK_TEXT_NAME + RACK_ROWS, RACK_TEXT_UNITS = RACK_TEXT_VALUE + RACK_ROWS,
 		RACK_TEXT_STATE = RACK_TEXT_UNITS + RACK_ROWS * RACK_ARMY_UNITS, RACK_TEXT_STATE_NAME, RACK_TEXT_STATE_TAIL, RACK_TEXT_NEXT,
+		RACK_TEXT_PLATE_NAME, RACK_TEXT_PLATE_WORD,
 		RACK_TEXT_COUNT
 	};
 	void drawSpectatorRack( Int plateTop );	///< plateTop: the watch drawer's plate, 8 under the superweapon tray's foot
-	/// the status well under the lever: what the camera does, and the next step or the hovered control's use
-	void drawRackStatus( Int left, Int top, Int right, const UnicodeString &hover );
+	/// the status well under the mode cells: what the camera does, and the next step or the hovered
+	/// control's use; well FALSE when the drawer's own piece already has the well painted in
+	void drawRackStatus( Int left, Int top, Int right, const UnicodeString &hover, Bool well );
 	/// a player's own screen on the camera, the fog left as the watcher set it; the mode before is kept
 	void takePlayerCamera( Int playerIndex );
 	/// the player let go of: nobody followed, the camera the watcher had before

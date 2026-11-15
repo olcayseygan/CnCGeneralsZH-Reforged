@@ -1562,7 +1562,7 @@ GUI:HudCamNextFree
 END
 
 GUI:HudCamNextFreeFollowed
-"Click the name to return to %ls"
+"Click to return: %ls"
 END
 
 // also the Director stop's explanation under the pointer

@@ -16202,7 +16202,7 @@ GUI:HudCamNextFree
 END
 
 GUI:HudCamNextFreeFollowed
-"Ekranına dönmek için adına tıkla: %ls"
+"Dönmek için tıkla: %ls"
 END
 
 GUI:HudCamNextDirector

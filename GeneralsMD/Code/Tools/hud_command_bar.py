@@ -3317,7 +3317,7 @@ OBS_NAME, OBS_MONEY = (334, 912, 698, 946), (700, 912, 820, 946)        # Static
 OBS_LABELS = [(334 + 122 * i, 948, 454 + 122 * i, 998) for i in range(4)]   # Buildings, Units, Units Lost, Units Killed
 OBS_NUMBERS = [(334, 1000, 454, 1034), (454, 1000, 574, 1034), (578, 1000, 698, 1034), (700, 1000, 820, 1034)]
 OBS_PANEL_BLOCKS = [(394, 879, 833, 1080), (332, 740, 394, 1080)]   # Observer8x6's BlockObserverInfo, the column's
-OBS_PIECES_SIZE, OBS_SPEC_SIZE = (512, 512), (1024, 256)
+OBS_PIECES_SIZE, OBS_SPEC_SIZE = (512, 512), (1024, 512)
 
 
 def to_bar(r):
@@ -3634,9 +3634,22 @@ RACK_GREY, RACK_WHITE, RACK_LIT, RACK_GOLD = (138, 148, 159), (240, 244, 246), (
 RACK_LABEL = (24, 9, 180, 23)
 DRAWER_W, DRAWER_TOP = 276, 12
 DRAWER_CAMEOS = [(22 + 39 * i, 3, 58 + 39 * i, 27) for i in range(6)]   # all six clear of the standings' edge
-# the follow tab: its size, and where its body starts in it by state (the rest tucks under the drawer)
-RACK_TAB = (40, 26)
-RACK_TAB_OUT = {"": 22, "H": 15, "On": 2}
+# the follow tab: its size, and where its body starts in it by state (the rest tucks under the drawer); the code
+# stands it at X - 40 and draws the tinted eye at its body's start + RACK_EYE_IN_TAB
+RACK_TAB = (52, 26)
+RACK_TAB_OUT = {"": 14, "H": 8, "On": 0}
+RACK_EYE, RACK_EYE_IN_TAB = (16, 10), (7, 8)
+# Round 22 (2026-11-15, the owner's yes): the rack in the bar's steel, machined 45 degree cuts.  The camera drawer
+# is RackTop over RackCamera (plate to 112, its skirt to 118) and the standings stand at its 112.  In it, from the
+# rack's top left: three mode cells (Free, Director, Player), two toggles (fog, armies) with a lamp strip, the
+# labels' strip under them for the code's text, and the status well for two lines of it.
+RACK_CAM_PLATE = 112
+RACK_MODE_AT = [(16 + 52 * i, 30, 68 + 52 * i, 62) for i in range(3)]
+RACK_TOGGLE_AT = [(186, 30, 232, 62), (246, 30, 292, 62)]
+RACK_STATUS = (16, 76, 292, 106)
+RACK_CAP_WELL = (20, 7, 182, 25)                # the cap's label well; the tally stands in its right end at 160, 9
+RACK_POWER_GREEN = (66, 236, 20)                # a toggle's lamp when on, the power bar's fill
+CAM_PLATE = (300, 34)                           # the player camera's plate, top centre
 
 
 def rack_reference(rows=2, body=12):
@@ -3734,20 +3747,223 @@ def rocker(on, state):
     return lit(w, h, draw)
 
 
+# ---------------------------------------------------------------------------------------------- round 22's rack
+
+def glyph_mask(w, h, draw, ss=4):
+    """A flat mark drawn by draw(d, s) at ss times and box filtered to w x h (an L mask)."""
+    m = Image.new("L", (w * ss, h * ss), 0)
+    draw(ImageDraw.Draw(m), ss)
+    return m.resize((w, h), Image.BOX)
+
+
+def glyph_free(cx, cy):
+    """The free camera: four arrows out of the middle."""
+    def draw(d, s):
+        t = 1.1
+        d.rectangle(((cx - 6) * s, (cy - t) * s, (cx + 6) * s, (cy + t) * s), fill=255)
+        d.rectangle(((cx - t) * s, (cy - 6) * s, (cx + t) * s, (cy + 6) * s), fill=255)
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            tip, base = (cx + dx * 10, cy + dy * 10), (cx + dx * 5.5, cy + dy * 5.5)
+            px, py = -dy * 4, dx * 4
+            d.polygon([(tip[0] * s, tip[1] * s), ((base[0] + px) * s, (base[1] + py) * s), ((base[0] - px) * s, (base[1] - py) * s)],
+                      fill=255)
+    return draw
+
+
+def glyph_director(cx, cy):
+    """The director: a film camera side on, two reels on top, the lens to the right."""
+    def draw(d, s):
+        d.rounded_rectangle(((cx - 9) * s, (cy - 1) * s, (cx + 3) * s, (cy + 7) * s), radius=1 * s, fill=255)
+        for rx in (cx - 5.5, cx + 0.5):
+            d.ellipse(((rx - 3.2) * s, (cy - 8.5) * s, (rx + 3.2) * s, (cy - 2.1) * s), fill=255)
+            d.ellipse(((rx - 1) * s, (cy - 6.3) * s, (rx + 1) * s, (cy - 4.3) * s), fill=0)
+        d.polygon([((cx + 3) * s, (cy + 1.5) * s), ((cx + 10) * s, (cy - 1.5) * s), ((cx + 10) * s, (cy + 8) * s),
+                   ((cx + 3) * s, (cy + 5) * s)], fill=255)
+    return draw
+
+
+def glyph_eye(cx, cy, rx=9.0, ry=5.6, t=1.5, pupil=2.6, glint=False):
+    """The player's eye: an almond outline and a pupil."""
+    def almond(r_x, r_y):
+        top = [(cx + r_x * np.cos(a), cy - r_y * np.sin(a) ** 0.9) for a in np.linspace(np.pi, 0, 24)]
+        return top + [(cx + r_x * np.cos(a), cy + r_y * np.sin(a) ** 0.9) for a in np.linspace(0, np.pi, 24)]
+
+    def draw(d, s):
+        d.polygon([(x * s, y * s) for x, y in almond(rx, ry)], fill=255)
+        d.polygon([(x * s, y * s) for x, y in almond(rx - t * 1.6, ry - t)], fill=0)
+        d.ellipse(((cx - pupil) * s, (cy - pupil) * s, (cx + pupil) * s, (cy + pupil) * s), fill=255)
+        if glint:
+            d.ellipse(((cx - 1.6) * s, (cy - 1.6) * s, (cx - 0.4) * s, (cy - 0.4) * s), fill=0)
+    return draw
+
+
+def glyph_fog(cx, cy):
+    """The fog: three drifting bands."""
+    def draw(d, s):
+        for x0, x1, dy in ((-8, 5, -4.5), (-5, 8, 0), (-8, 6, 4.5)):
+            d.rounded_rectangle(((cx + x0) * s, (cy + dy - 1.1) * s, (cx + x1) * s, (cy + dy + 1.1) * s), radius=1.1 * s, fill=255)
+    return draw
+
+
+def glyph_armies(cx, cy):
+    """The armies: the drawer's cameo cells, three by two."""
+    def draw(d, s):
+        for i in range(3):
+            for j in range(2):
+                x0, y0 = cx - 8.5 + i * 6, cy - 4.5 + j * 5
+                d.rectangle((x0 * s, y0 * s, (x0 + 5) * s, (y0 + 4) * s), fill=255)
+    return draw
+
+
+def rack_cap(p):
+    """A drawer's cap: a ledge ending in the bar's arrow point toward the field, the label's glass well, a seam,
+    45 degree vents and two octagon studs at its right."""
+    p.tiers([[(1, 15.5), (13, 3.5), (RACK_W + 20, 3.5), (RACK_W + 20, 27), (13, 27)]], (False,) * 4, 8.0, 11.0, 3.6, 1.8, 2.0)
+    p.sink([shape("machined", *RACK_CAP_WELL, 3)], 4, 1.6)
+    p.inlay([plate(196, 25, RACK_W + 20, 25.6)], INKM, 0.3)
+    vents(p, 200, 262, 9, 20, 6)
+    p.stud(274, 15, 2.6)
+    p.stud(294, 15, 2.6)
+
+
+def rack_shell(p, plate_foot, floor_top, floor_foot):
+    """A drawer's shell and lip under the cap, the bottom left corner cut, and its recessed floor."""
+    p.tiers([[(8, 24), (RACK_W + 20, 24), (RACK_W + 20, plate_foot), (18, plate_foot), (8, plate_foot - 10)]], (False,) * 4)
+    p.recess([plate(14, floor_top, RACK_W + 20, floor_foot, bl=("cut", 5))], (False,) * 4, 3.0, 2.0)
+
+
+def camera_reference():
+    """The camera drawer whole: the cap, then one recessed floor with the mode cells' and the toggles' sockets,
+    hairlines parting the groups, the labels' strip and the status well."""
+    def draw(p):
+        rack_shell(p, RACK_CAM_PLATE, RACK_TOP + 1, RACK_CAM_PLATE - 5)
+        rack_cap(p)
+        p.sink([shape("machined", 13, 27.5, 175, 64.5, 4)], 1.6, 0.8, DARK)
+        for x0, y0, x1, y1 in RACK_TOGGLE_AT:
+            p.sink([shape("machined", x0 - 2.5, y0 - 2.5, x1 + 2.5, y1 + 2.5, 4)], 1.6, 0.8, DARK)
+        p.sink([shape("machined", *RACK_STATUS, 4)], 5, 2.0)
+        for x in (180, 239):
+            p.inlay([plate(x - 0.3, 34, x + 0.3, 72)], INKM, 0.4)
+    return lit(RACK_W, RACK_CAM_PLATE + 6, draw, shadow=True)
+
+
+def standings_reference(rows=2):
+    """The standings whole: the cap, the head with the stat keys' wells and the column heads' rule, rows of one
+    well each, and the foot."""
+    H = RACK_TOP + RACK_HEAD + rows * RACK_PITCH + RACK_FOOT
+
+    def draw(p):
+        rack_shell(p, H - 6, RACK_TOP + 1, H - RACK_FOOT + 1)
+        rack_cap(p)
+        for x0, y0, x1, y1 in RACK_STAT_AT:
+            p.sink([shape("machined", x0 + 1.5, RACK_TOP + y0, x1 - 1.5, RACK_TOP + y1, 3)], 3, 1.2)
+        r = RACK_HEAD_AT["rule"]
+        p.inlay([plate(r[0], RACK_TOP + r[1], r[2], RACK_TOP + r[3])], INKM, 0.4)
+        for k in range(rows):
+            y0 = RACK_TOP + RACK_HEAD + k * RACK_PITCH
+            r = RACK_ROW["well"]
+            p.sink([shape("machined", r[0], r[1] + y0, r[2], r[3] + y0, 3)], 4, 1.6)
+    return lit(RACK_W, H, draw, shadow=True), H
+
+
+def rack_cell(w, h, state, glyph=None, lamp=None):
+    """A command button cell: near-black shell, bevelled lip (bright under the pointer), a sunk glass face, the
+    glyph laid flat: grey, gold under the pointer, white in the stat keys' lit rim and underline when on.  lamp
+    (True or False) adds the toggle's strip, lit in the power bar's green when True."""
+    def draw(p):
+        p.tiers([shape("machined", 1, 1, w - 1, h - 1, 5)], (False,) * 4, 3.0, 4.0 if state == "On" else 5.0, 1.6, 1.2, 1.6,
+                BRIGHT if state == "H" else None)
+        p.sink([shape("machined", 5, 5, w - 5, h - 5, 3)], 2.6 if state == "On" else 1.6, 1.0)
+        if lamp is not None:
+            p.sink([plate(11, h - 10, w - 11, h - 7)], 0.8, 0.4, DARK)
+    img = lit(w, h, draw)
+    if glyph:
+        colour = {"": RACK_GREY, "H": RACK_GOLD, "On": RACK_WHITE}[state]
+        img.paste(Image.new("RGBA", (w, h), colour + (255,)), (0, 0), glyph_mask(w, h, glyph))
+    d = ImageDraw.Draw(img)
+    if state == "On":
+        d.rectangle((5, 5, w - 6, h - 6), outline=RACK_LIT + (255,))
+        d.rectangle((10, h - 9, w - 11, h - 8), fill=RACK_LIT + (255,))
+    if lamp:
+        d.rectangle((11, h - 10, w - 12, h - 8), fill=RACK_POWER_GREEN + (255,))
+        d.line((11, h - 10, w - 12, h - 10), fill=(190, 255, 150, 255))
+    return img
+
+
+def mode_cell(i, state):
+    """A camera mode's cell, 52x32: Free, Director or Player."""
+    glyph = (glyph_free, glyph_director, glyph_eye)[i](26, 15.5)
+    return rack_cell(52, 32, state, glyph)
+
+
+def toggle_cell(kind, on, state):
+    """The fog's or the armies' toggle, 46x32, its lamp strip lit when on."""
+    return rack_cell(46, 32, state, (glyph_fog if kind == "Fog" else glyph_armies)(23, 12.5), lamp=on)
+
+
+def tally_piece(on):
+    """The red on-air lamp, 14x14; dim when the camera is not on a player."""
+    def draw(p):
+        lens(p, 7, 7, 3.2, ACCENT2)
+    img = lit(14, 14, draw)
+    if not on:
+        a = np.asarray(img, np.float32)
+        a[..., :3] *= 0.32
+        img = Image.fromarray(a.astype(np.uint8), "RGBA")
+    return img
+
+
 def index_tab(state):
-    """A follow tab out of a row's left end, tucked under the drawer: short, longer when hovered, pulled
-    right out with its lamp on air when that player is followed.  The code lights the lens in his colour."""
+    """A follow tab out of a row's left end, tucked under the drawer: out further when hovered, all the way when
+    that player is followed, with a lit rim round its eye socket and a red dot.  The code draws the eye
+    (RackEye, RackEyeOn) in the socket, tinted the player's colour."""
     w, h = RACK_TAB
     x0 = RACK_TAB_OUT[state]
 
     def draw(p):
-        b = "scavenged"
-        p.tiers([plate(x0, 1, w + 10, h - 1, tl=("cut", 6), bl=("notch", 2))], (False,) * 4, 3.0, 5.0, 1.8, 1.2, 1.8,
+        p.tiers([plate(x0, 1, w + 12, h - 1, tl=("cut", 6), bl=("cut", 6))], (False,) * 4, 3.0, 5.0, 1.8, 1.2, 1.8,
                 BRIGHT if state == "H" else None)
-        p.sink([shape(b, x0 + 4, 7, x0 + 9, h - 7, 1.5)], 1.5, 0.6)
+        p.sink([shape("machined", x0 + 5, 6, x0 + 25, 20, 2)], 2.0, 0.8)
         if state == "On":
-            lens(p, x0 + 16, h / 2, 2.8, ACCENT2)
-    return lit(w, h, draw)
+            lens(p, x0 + 31, 13, 2.2, ACCENT2)
+    img = lit(w, h, draw)
+    if state == "On":
+        ImageDraw.Draw(img).rectangle((x0 + 5, 6, x0 + 24, 19), outline=RACK_LIT + (255,))
+    return img
+
+
+def eye_piece(on):
+    """The follow eye, white for the code to tint in the player's colour: 70% grey idle, white with a glint on."""
+    w, h = RACK_EYE
+    v = 255 if on else 178
+    img = Image.new("RGBA", (w, h), (v, v, v, 0))
+    img.putalpha(glyph_mask(w, h, glyph_eye(w / 2, h / 2, 7.4, 4.4, 1.3, 2.1, glint=on)))
+    return img
+
+
+def cam_plate():
+    """The player camera's plate, top centre, 300x34: bar steel, the eye's socket at 8..40 (the code draws
+    RackEyeOn there, tinted), the glass floor at 46..268 for the name and PLAYER CAMERA, a lit tally at 277, 14."""
+    w, h = CAM_PLATE
+
+    def draw(p):
+        p.tiers([shape("machined", 0, 0, w, h, 8)], (False,) * 4, 3.0, 6.0, 3.2, 1.6, 2.0)
+        p.sink([shape("machined", 8, 5, 40, 29, 3)], 3.0, 1.2)
+        p.sink([shape("machined", 46, 5, 268, 29, 3)], 4.0, 1.6)
+        p.stud(284, 9, 2.0)
+    img = lit(w, h, draw)
+    img.alpha_composite(tally_piece(True), (277, 14))
+    return img
+
+
+def cam_plate_trim():
+    """White trim over the plate, for the code to tint the player's colour: under the socket and the name well."""
+    w, h = CAM_PLATE
+    img = Image.new("RGBA", (w, h), (255, 255, 255, 0))
+    d = ImageDraw.Draw(img)
+    d.rectangle((50, 30, 264, 31), fill=(255, 255, 255, 255))
+    d.rectangle((12, 30, 36, 31), fill=(255, 255, 255, 255))
+    return img
 
 
 def stat_glyph(stat, cx, cy):
@@ -3794,13 +4010,20 @@ def stat_key(ref, stat, state):
 
 
 def rack_pieces():
-    ref, H = rack_reference()
+    """Round 22's rack (the bar's steel) and, until InGameUI draws round 22, the retired round 20 pieces: the
+    watch drawer's stretched body, the tab's lens, the lever and the rockers."""
+    old, _ = rack_reference()
+    stand, H = standings_reference()
+    cam = camera_reference()
     rows_at = RACK_TOP + RACK_HEAD
     body_at = rows_at + 2 * RACK_PITCH
     drawer, DH = drawer_reference()
-    out = {"RackTop": ref.crop((0, 0, RACK_W, RACK_TOP)), "RackHead": ref.crop((0, RACK_TOP, RACK_W, rows_at)),
-           "RackRow": ref.crop((0, rows_at, RACK_W, rows_at + RACK_PITCH)), "RackBody": ref.crop((0, body_at + 4, RACK_W, body_at + 8)),
-           "RackBottom": ref.crop((0, H - RACK_FOOT, RACK_W, H)),
+    out = {"RackTop": stand.crop((0, 0, RACK_W, RACK_TOP)), "RackHead": stand.crop((0, RACK_TOP, RACK_W, rows_at)),
+           "RackRow": stand.crop((0, rows_at, RACK_W, rows_at + RACK_PITCH)), "RackBottom": stand.crop((0, H - RACK_FOOT, RACK_W, H)),
+           "RackCamera": cam.crop((0, RACK_TOP, RACK_W, RACK_CAM_PLATE + 6)),
+           "RackBody": old.crop((0, body_at + 4, RACK_W, body_at + 8)),
+           "RackTallyOff": tally_piece(False), "RackEye": eye_piece(False), "RackEyeOn": eye_piece(True),
+           "CamPlate": cam_plate(), "CamPlateTrim": cam_plate_trim(),
            "DrawerTop": drawer.crop((0, 0, DRAWER_W, DRAWER_TOP)),
            "DrawerRow": drawer.crop((0, DRAWER_TOP, DRAWER_W, DRAWER_TOP + RACK_PITCH)),
            "DrawerBottom": drawer.crop((0, DH - RACK_FOOT, DRAWER_W, DH)), "RackLens": white_lens(5, 12),
@@ -3811,15 +4034,19 @@ def rack_pieces():
     for on in (False, True):
         for st in ("", "H"):
             out["RackRocker%s%s" % ("On" if on else "Off", st)] = rocker(on, st)
+    for i, pos in enumerate(("Free", "Director", "Player")):
+        for st in ("", "H", "On"):
+            out["RackMode%s%s" % (pos, st)] = mode_cell(i, st)
+    for kind in ("Fog", "Armies"):
+        for on in (False, True):
+            for st in ("", "H"):
+                out["Rack%s%s%s" % (kind, "On" if on else "Off", st)] = toggle_cell(kind, on, st)
     for i, key in enumerate(RACK_STAT_KEYS):
         for st in ("", "H", "On"):
-            out["RackStat%s%s" % (key, st)] = stat_key(ref, i, st)
+            out["RackStat%s%s" % (key, st)] = stat_key(stand, i, st)
     for st in ("", "H", "On"):
         out["RackTab" + st] = index_tab(st)
-
-    def tally_piece(p):
-        lens(p, 7, 7, 3.2, ACCENT2)
-    out["RackTally"] = lit(14, 14, tally_piece)
+    out["RackTally"] = tally_piece(True)
     return out
 
 
@@ -3827,7 +4054,7 @@ RACK_TILES = ("RackRow", "RackBody", "DrawerRow")
 
 
 def paint_rack():
-    """ReforgedHudObsSpec, 1024x256: every rack piece where ReforgedHudObsSpec.ini maps it.  A slice the
+    """ReforgedHudObsSpec, 1024x512: every rack piece where ReforgedHudObsSpec.ini maps it.  A slice the
     code repeats has to meet itself: its first and last rows cover the same texels."""
     pieces = rack_pieces()
     M = read_mapped("Obs", "Spec")

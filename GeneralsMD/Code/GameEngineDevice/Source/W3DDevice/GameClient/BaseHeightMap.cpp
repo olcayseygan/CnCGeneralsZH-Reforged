@@ -1738,9 +1738,6 @@ Int BaseHeightMapRenderObjClass::initHeightData(Int x, Int y, WorldHeightMap *pM
 	// flattening cells the drawn map takes only after it
 	if (pMap && !LogicThread::isInsideWindow())
 		s_logicHeights.copyFrom(pMap);
-	// the grass's grid, once a map: it reads the water off TheTerrainLogic, which only a load may do
-	if (m_grassBuffer && pMap && !LogicThread::isInsideWindow())
-		m_grassBuffer->classify(pMap);
 	m_staticDiffuseStale = true;
 	m_terrainContentVersion++;
 
@@ -2455,6 +2452,10 @@ void BaseHeightMapRenderObjClass::stepTrees(void)
 	m_treeBuffer->stepTrees();
 	if (m_grassBuffer) {
 		m_grassBuffer->takeBreezeForDraw();
+		// the foliage's grid, once a map and only with the option on: it reads the water off
+		// TheTerrainLogic and the structures off TheGameLogic, which a sync point outside the window may
+		if (!LogicThread::isInsideWindow())
+			m_grassBuffer->classifyIfWanted(m_map);
 	}
 }
 

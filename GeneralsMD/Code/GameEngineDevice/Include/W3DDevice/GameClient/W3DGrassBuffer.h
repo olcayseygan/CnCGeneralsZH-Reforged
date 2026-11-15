@@ -18,12 +18,12 @@
 // Modified 2026 by Olcay Seygan for Zero Hour Reforged; see the git history.
 
 // FILE: W3DGrassBuffer.h
-// The GroundFoliage option: grass tufts on grass ground, swaying in the breeze.  The client's alone.
-// The map's cells are classified once at load into a density grid this object owns
-// (FoliagePlacement.h); chunks of 16 by 16 cells near the tactical view's focus are baked into a
-// small pool of vertex buffers on demand and drawn after the trees with Trees.vso's own layout, the
-// shader registered for Direct3D 11 as "shaders\\grass.vso".  Nothing in GameEngine includes this and
-// nothing here writes logic: logic never knows the grass is there.
+// The GroundFoliage option: grass tufts and shrubs swaying in the breeze, twigs and pebbles lying on
+// the ground, stones on bare ground and boulders on cliffs.  The client's alone.  The map's cells are
+// classified once at load into a grid this object owns (FoliagePlacement.h); chunks of 16 by 16 cells
+// near the tactical view's focus are baked into a small pool of buffers on demand and drawn after the
+// trees with Trees.vso's own layout, the shader registered for Direct3D 11 as "shaders\\grass.vso".
+// Nothing in GameEngine includes this and nothing here writes logic: logic never knows it is there.
 
 #pragma once
 
@@ -44,6 +44,7 @@ class CameraClass;
 class TextureClass;
 class GeometryInfo;
 class Matrix3D;
+class Vector3;
 
 class W3DGrassBuffer
 {
@@ -55,12 +56,19 @@ public:
 	static Bool available(void);
 	/// available(), and the option on.
 	static Bool wanted(void);
+	/// wanted(), on ground this terrain object draws subdivided: getDrawnHeight is the ground drawn
+	/// only there.  The lower terrain detail and -noTerrainSubdivide draw none.
+	Bool drawable(void) const;
 	/// The other terrain object's grid, for a terrain detail change mid-match: the buildings it
 	/// cleared stay clear, and nothing has to read logic beside a tick.
 	void takeGrid(const W3DGrassBuffer &from);
 
+	/// At the render's sync point, outside the logic window: the grid for the drawn map, built the
+	/// first time the option is on and the ground is subdivided (at a load, or when the option is
+	/// switched on mid-match), with every structure standing by then cleared.  Nothing otherwise.
+	void classifyIfWanted(WorldHeightMap *map);
 	/// Classify a map's cells, roads and placed structures.  Nothing for the map already classified,
-	/// so a device reset re-entering initHeightData keeps the grid.
+	/// so a device reset keeps the grid.
 	void classify(WorldHeightMap *map);
 	/// Forget the map: the next classify builds the grid again.
 	void clear(void);
@@ -80,33 +88,42 @@ private:
 	enum {
 		CHUNK_CELLS = 16,
 		MAX_SLOTS = 48,
-		MAX_CHUNK_TUFTS = CHUNK_CELLS * CHUNK_CELLS * 3,	///< FoliagePlacement::MAX_TUFTS_PER_CELL
-		MAX_CHUNK_VERTICES = MAX_CHUNK_TUFTS * 8,
-		MAX_CHUNK_INDICES = MAX_CHUNK_TUFTS * 12,
+		MAX_CHUNK_VERTICES = 16384,	///< a chunk stops taking pieces here; a full grass chunk is 6144
+		MAX_CHUNK_INDICES = 32768,
+		BUFFER_STEP = 2048,					///< a slot's buffers grow in these
 		BUILDS_PER_FRAME = 2,
-		MAX_DRAWN_TUFTS = 25000
+		MAX_DRAWN_THIN = 25000			///< cards (tufts, twigs, pebbles) drawn in a frame at most
 	};
 
+	/** One chunk's pieces, in its own buffers: first the ones that never thin (shrubs, rocks), then the
+		cards in rank order.  ends[i] is where piece i stops, indices in the low half, vertices in the high. */
 	struct Slot
 	{
 		DX8VertexBufferClass *vb;
+		DX8IndexBufferClass *ib;
+		Int vbCapacity;
+		Int ibCapacity;
 		Int key;							///< chunk index, -1 while free
-		Int tufts;
+		Int fixedPieces;
+		Int thinPieces;
+		std::vector<UnsignedInt> ends;
 		UnsignedInt lastUsed;	///< m_drawFrame it was last drawn on
 		Bool dirty;
 	};
 
-	struct ChunkTuft
+	struct ChunkPiece
 	{
 		UnsignedInt rank;
 		Short x, y;
-		Short k;
+		UnsignedByte piece;		///< FoliagePlacement::Piece
+		UnsignedByte k;				///< a tuft's slot
+		Bool thins;
 	};
 
 	BaseHeightMapRenderObjClass *m_terrain;
 	const WorldHeightMap *m_classifiedMap;	///< compared, never dereferenced
-	Bool m_anyGrass;												///< a desert map draws nothing and builds nothing
-	std::vector<UnsignedByte> m_density;		///< a byte a cell, whole map, border included
+	Bool m_anyFoliage;											///< a map with nothing to draw builds nothing
+	std::vector<UnsignedByte> m_cells;			///< FoliagePlacement::CELL_BYTES a cell, whole map, border included
 	Int m_width;
 	Int m_height;
 	Int m_border;
@@ -114,8 +131,10 @@ private:
 	Int m_chunksY;
 
 	Slot m_slots[MAX_SLOTS];
-	std::vector<ChunkTuft> m_scratch;
-	DX8IndexBufferClass *m_indices;
+	std::vector<ChunkPiece> m_scratch;
+	std::vector<VertexFormatXYZNDUV1> m_vertices;	///< a chunk baked here, then copied into its slot
+	std::vector<UnsignedShort> m_indices;
+	Real m_rockCorners[8][12][3];						///< FoliagePlacement::rockCorners, ROCK_VARIANTS of them
 	IDirect3DVertexShader9 *m_vertexShader;
 	IDirect3DVertexDeclaration9 *m_vertexDeclaration;
 	Bool m_deviceFailed;		///< the shader would not load; tried again after a device reset
@@ -135,7 +154,17 @@ private:
 	void dirtyCells(Int loX, Int loY, Int hiX, Int hiY);
 	void dirtyAll(void);
 	void buildChunk(Slot &slot, Int key);
+	Bool uploadChunk(Slot &slot);
 	void clearRoadsAndMapStructures(void);
+	void flagNeighbours(void);
+	void logCounts(void);
+	// one piece into m_vertices / m_indices; FALSE when the chunk is full
+	Bool addCards(Real x, Real y, Real yaw, Int planes, Real height, Real halfWidth, Real sink,
+		Int atlasCell, Bool mirror, Real sway, UnsignedInt top, UnsignedInt root, Real canopyHalf = 0.0f);
+	Bool addFlat(Real x, Real y, Real yaw, Real half, Int atlasCell, UnsignedInt colour);
+	void releaseSlot(Slot &slot);	///< its buffers gone, the slot free
+	Bool addRock(Real x, Real y, Real yaw, Real radius, Real stretch, Int variant, Int atlasCell,
+		Bool detailed, Real sink, const Vector3 &tint);
 };
 
 #endif  // end __W3DGRASS_BUFFER_H_

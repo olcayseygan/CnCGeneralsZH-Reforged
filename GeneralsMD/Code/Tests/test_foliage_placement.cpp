@@ -58,7 +58,7 @@ TEST(foliage_placement_depends_on_the_cell_alone)
 				const Tuft a = placeTuft(x, y, k), b = placeTuft(x, y, k);
 				CHECK(a.fx == b.fx && a.fy == b.fy && a.yaw == b.yaw && a.rank == b.rank && a.atlasCell == b.atlasCell);
 				CHECK(a.fx > 0.0f && a.fx < 1.0f && a.fy > 0.0f && a.fy < 1.0f);
-				CHECK(a.atlasCell >= 0 && a.atlasCell < ATLAS_COLUMNS * ATLAS_ROWS);
+				CHECK(a.atlasCell >= 0 && a.atlasCell < ATLAS_SHRUB_LEAFY);	// a tuft is one of the grass cells
 				CHECK(a.scale >= 0.75f && a.scale <= 1.25f);
 				const Tuft n = placeTuft(x + 1, y, k);
 				if (n.fx != a.fx || n.fy != a.fy)
@@ -136,7 +136,7 @@ TEST(foliage_turned_footprint_clears_the_cells_whose_centres_it_covers)
 	for (size_t a = 0; a < sizeof(angles) / sizeof(angles[0]); ++a)
 	{
 		std::vector<unsigned char> cells(40 * 40, 255);
-		Grid g = { &cells[0], 40, 40, 10.0f, -30.0f, -30.0f };
+		Grid g = { &cells[0], 40, 40, 10.0f, -30.0f, -30.0f, 1 };
 		const float cx = 101.0f, cy = 88.0f, hx = 47.0f, hy = 22.0f;	// no centre on an edge unturned
 		Range range;
 		const int cleared = clearBox(g, cx, cy, hx, hy, angles[a], &range);
@@ -162,7 +162,7 @@ TEST(foliage_turned_footprint_clears_the_cells_whose_centres_it_covers)
 TEST(foliage_road_clears_a_capsule)
 {
 	std::vector<unsigned char> cells(30 * 30, 200);
-	Grid g = { &cells[0], 30, 30, 10.0f, 0.0f, 0.0f };
+	Grid g = { &cells[0], 30, 30, 10.0f, 0.0f, 0.0f, 1 };
 	clearCapsule(g, 50.0f, 50.0f, 250.0f, 50.0f, 15.0f);
 	CHECK_EQ((int)cells[5 * 30 + 15], 0);		// on the line
 	CHECK_EQ((int)cells[6 * 30 + 15], 0);		// 15 off it, on the radius
@@ -194,4 +194,174 @@ TEST(foliage_sway_type_is_one_of_the_ten_and_walks_with_the_wind)
 	CHECK_EQ(swayType(25.0f, 0.0f, 1.0f, 0.0f, 200.0f), 2);
 	CHECK_EQ(swayType(45.0f, 0.0f, 1.0f, 0.0f, 200.0f), 3);
 	CHECK_EQ(swayType(-5.0f, 0.0f, 1.0f, 0.0f, 200.0f), 10);
+}
+
+namespace {
+
+int countPiece(Piece piece, const unsigned char cell[CELL_BYTES])
+{
+	int n = 0;
+	for (int y = 0; y < 100; ++y)
+		for (int x = 0; x < 100; ++x)
+			n += piecePresent(x, y, piece, cell) ? 1 : 0;
+	return n;
+}
+
+}
+
+TEST(foliage_boulders_rest_at_cliff_feet_and_never_on_the_face)
+{
+	const unsigned char open[CELL_BYTES] = { 255, 255, 255, 0 };
+	const unsigned char cliff[CELL_BYTES] = { 0, 0, 0, CF_CLIFF };
+	const unsigned char ledge[CELL_BYTES] = { 0, 0, 0, CF_CLIFF | CF_LEDGE };
+	const unsigned char foot[CELL_BYTES] = { 0, 0, 0, CF_CLIFF_FOOT };
+	const unsigned char grassyFoot[CELL_BYTES] = { 255, 0, 90, CF_CLIFF_FOOT };
+	const unsigned char bare[CELL_BYTES] = { 0, 0, 0, 0 };
+	CHECK_EQ(countPiece(PIECE_BOULDER, open), 0);
+	CHECK_EQ(countPiece(PIECE_BOULDER, cliff), 0);
+	CHECK_EQ(countPiece(PIECE_BOULDER, ledge), 0);
+	const int boulders = countPiece(PIECE_BOULDER, foot);
+	CHECK(boulders > 350 && boulders < 900);	// 6% of 10000, in clusters
+	// clustered: the boulders of a 3 by 3 block all fall in the blocks that hold some
+	int inQuietBlocks = 0;
+	for (int y = 0; y < 100; ++y)
+		for (int x = 0; x < 100; ++x)
+			if (!boulderBlock(x, y) && piecePresent(x, y, PIECE_BOULDER, foot))
+				++inQuietBlocks;
+	CHECK_EQ(inQuietBlocks, 0);
+	CHECK_EQ(countPiece(PIECE_STONE, cliff), 0);		// a steep face holds nothing
+	CHECK(countPiece(PIECE_STONE, ledge) > 150);		// a gentle one the odd small stone
+	CHECK_EQ(countPiece(PIECE_PEBBLES, cliff), 0);
+	CHECK_EQ(countPiece(PIECE_SHRUB, cliff), 0);
+	CHECK_EQ(countPiece(PIECE_SHRUB, foot), 0);			// nothing grows on bare rock
+	CHECK(countPiece(PIECE_SHRUB, grassyFoot) > countPiece(PIECE_SHRUB, open));
+	CHECK_EQ(countPiece(PIECE_STONE, bare), 0);
+	CHECK(countPiece(PIECE_STONE, foot) > 2500);
+	CHECK(countPiece(PIECE_STONE, foot) > countPiece(PIECE_STONE, open) * 5);	// few on open ground
+	for (int p = 0; p < PIECE_KINDS; ++p)
+		if (p != PIECE_TUFT)
+			CHECK_EQ(countPiece((Piece)p, bare), 0);
+}
+
+TEST(foliage_shrubs_gather_where_grass_meets_bare_ground)
+{
+	const unsigned char field[CELL_BYTES] = { 255, 0, 90, 0 };
+	const unsigned char edge[CELL_BYTES] = { 255, 0, 90, CF_EDGE };
+	const int inField = countPiece(PIECE_SHRUB, field), atEdge = countPiece(PIECE_SHRUB, edge);
+	CHECK(inField > 550 && inField < 1100);	// 8%
+	CHECK(atEdge > inField * 3);
+	CHECK(countPiece(PIECE_TWIGS, edge) > countPiece(PIECE_TWIGS, field));
+	CHECK(countPiece(PIECE_TWIGS, edge) < 250);	// 1.8%: a few, not a carpet
+	CHECK_EQ(countPiece(PIECE_PEBBLES, field), 0);	// no gravel on the lawn
+	// a green field's bushes are green, even at its edge; dirt and sand get the dry scrub
+	const unsigned char dirtyGrass[CELL_BYTES] = { 180, 110, 90, CF_EDGE };
+	const unsigned char desertEdge[CELL_BYTES] = { 0, 90, 0, CF_EDGE };
+	const unsigned char desert[CELL_BYTES] = { 0, 90, 0, 0 };
+	const unsigned char rock[CELL_BYTES] = { 0, 255, 0, CF_EDGE };
+	int scrubGreen = 0, scrubDry = 0;
+	for (int y = 0; y < 40; ++y)
+		for (int x = 0; x < 40; ++x)
+		{
+			scrubGreen += shrubCell(x, y, edge) == ATLAS_SHRUB_SCRUB ? 1 : 0;
+			scrubDry += shrubCell(x, y, dirtyGrass) == ATLAS_SHRUB_SCRUB ? 1 : 0;
+		}
+	CHECK(scrubGreen < 1600 / 10);
+	CHECK(scrubDry > 1600 / 2);
+	CHECK(countPiece(PIECE_SHRUB, desertEdge) > countPiece(PIECE_SHRUB, desert));
+	CHECK(countPiece(PIECE_SHRUB, desert) > 0);
+	CHECK_EQ(countPiece(PIECE_SHRUB, rock), 0);	// bare rock grows nothing
+	for (int y = 0; y < 30; ++y)
+		for (int x = 0; x < 30; ++x)
+		{
+			const int c = shrubCell(x, y, edge);
+			CHECK(c == ATLAS_SHRUB_LEAFY || c == ATLAS_SHRUB_SCRUB || c == ATLAS_SHRUB_BERRY);
+		}
+	CHECK(pieceThins(PIECE_TUFT) && pieceThins(PIECE_TWIGS) && pieceThins(PIECE_PEBBLES));
+	CHECK(!pieceThins(PIECE_SHRUB) && !pieceThins(PIECE_STONE) && !pieceThins(PIECE_BOULDER));
+}
+
+TEST(foliage_bare_ground_and_rock_follow_the_class)
+{
+	CHECK_EQ((int)bareByName("SwissRockyPath", BARE_NONE), (int)BARE_ROCKY);
+	CHECK_EQ((int)bareByName("TEEuropeMud", BARE_NONE), (int)BARE_DIRT);
+	CHECK_EQ((int)bareByName("AlpineSnow01", BARE_NONE), (int)BARE_SNOW);
+	CHECK_EQ((int)bareByName("Whatever", BARE_DIRT), (int)BARE_DIRT);
+	CHECK((int)stoneDensity(BARE_ROCKY) > (int)stoneDensity(BARE_DIRT));
+	CHECK((int)stoneDensity(BARE_DIRT) > (int)stoneDensity(BARE_SNOW));
+	CHECK_EQ((int)stoneDensity(BARE_PAVED), 0);
+	CHECK_EQ((int)stoneDensity(BARE_NONE), 0);
+	CHECK((int)twigDensity(255, BARE_NONE) > 0);
+	CHECK((int)twigDensity(0, BARE_DIRT) > 0);
+	CHECK_EQ((int)twigDensity(0, BARE_DESERT), 0);
+	CHECK_EQ((int)rockOf(BARE_DESERT, "TDesert1"), (int)ROCK_SANDSTONE);
+	CHECK_EQ((int)rockOf(BARE_ROCKY, "SwissCliff"), (int)ROCK_GRANITE);
+	CHECK_EQ((int)rockOf(BARE_ROCKY, "LavaRock"), (int)ROCK_BASALT);
+	CHECK_EQ(rockCell(ROCK_GRANITE), (int)ATLAS_GRANITE);
+	CHECK_EQ(rockCell(ROCK_SANDSTONE), (int)ATLAS_SANDSTONE);
+	CHECK_EQ(rockCell(ROCK_BASALT), (int)ATLAS_BASALT);
+}
+
+TEST(foliage_rock_mesh_is_closed_and_low)
+{
+	const int (*faces)[3] = rockFaces();
+	// every edge of a closed mesh is shared by exactly two faces: 30 of them
+	int edges[ROCK_CORNERS][ROCK_CORNERS] = { { 0 } };
+	for (int f = 0; f < ROCK_FACES; ++f)
+		for (int e = 0; e < 3; ++e)
+		{
+			const int a = faces[f][e], b = faces[f][(e + 1) % 3];
+			CHECK(a >= 0 && a < ROCK_CORNERS && b >= 0 && b < ROCK_CORNERS && a != b);
+			++edges[a < b ? a : b][a < b ? b : a];
+		}
+	int distinct = 0;
+	for (int a = 0; a < ROCK_CORNERS; ++a)
+		for (int b = a + 1; b < ROCK_CORNERS; ++b)
+			if (edges[a][b])
+			{
+				CHECK_EQ(edges[a][b], 2);
+				++distinct;
+			}
+	CHECK_EQ(distinct, 30);
+	for (int v = 0; v < ROCK_VARIANTS; ++v)
+	{
+		float c[ROCK_CORNERS][3], d[ROCK_CORNERS][3];
+		rockCorners(v, c);
+		rockCorners(v, d);
+		bool differs = false;
+		float other[ROCK_CORNERS][3];
+		rockCorners(v + 1, other);
+		for (int i = 0; i < ROCK_CORNERS; ++i)
+		{
+			const float r = sqrtf(c[i][0] * c[i][0] + c[i][1] * c[i][1]);
+			CHECK(r <= ROCK_MAX_RADIUS + 0.001f);
+			CHECK(c[i][2] <= (ROCK_MAX_RADIUS + 0.001f) * ROCK_FLATTEN
+				&& c[i][2] >= -(ROCK_MAX_RADIUS + 0.001f) * ROCK_FLATTEN * ROCK_BELOW);
+			CHECK(c[i][0] == d[i][0] && c[i][1] == d[i][1] && c[i][2] == d[i][2]);	// a fixed hash
+			differs = differs || other[i][0] != c[i][0];
+		}
+		CHECK(differs);
+		// a detailed rock's edge splits at one point whichever face asks: no crack
+		for (int f = 0; f < ROCK_FACES; ++f)
+			for (int e = 0; e < 3; ++e)
+			{
+				const int a = faces[f][e], b = faces[f][(e + 1) % 3];
+				float ab[3], ba[3];
+				rockMidpoint(v, a, b, c, ab);
+				rockMidpoint(v, b, a, c, ba);
+				CHECK(ab[0] == ba[0] && ab[1] == ba[1] && ab[2] == ba[2]);
+				const float m = sqrtf(ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2]);
+				CHECK(m < ROCK_MAX_RADIUS * 1.3f);
+			}
+	}
+}
+
+TEST(foliage_clear_zeroes_every_byte_of_a_cell)
+{
+	std::vector<unsigned char> cells(10 * 10 * CELL_BYTES, 0);
+	cells[(5 * 10 + 5) * CELL_BYTES + BYTE_FLAGS] = CF_CLIFF;		// a boulder cell with no grass
+	cells[(5 * 10 + 6) * CELL_BYTES + BYTE_STONES] = 90;
+	Grid g = { &cells[0], 10, 10, 10.0f, 0.0f, 0.0f, CELL_BYTES };
+	CHECK_EQ(clearCapsule(g, 60.0f, 55.0f, 60.0f, 55.0f, 6.0f), 2);
+	for (size_t i = 0; i < cells.size(); ++i)
+		CHECK_EQ((int)cells[i], 0);
 }

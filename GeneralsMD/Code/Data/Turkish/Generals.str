@@ -18373,11 +18373,15 @@ GUI:AirliftFor
 END
 
 GUI:AirliftPlanes
-"Uçak: %d / %d   Ücret: $%d"
+"Uçak: %d / %d"
+END
+
+GUI:AirliftFee
+"Ücret: %ls"
 END
 
 GUI:AirliftTotal
-"Toplam: $%d"
+"Toplam: %ls"
 END
 
 GUI:AirliftOK
@@ -18386,6 +18390,22 @@ END
 
 GUI:AirliftCancel
 "İptal"
+END
+
+GUI:AirliftHint
+"Bir eklemek için tıkla ya da tekeri yukarı çevir, bir çıkarmak için sağ tıkla ya da aşağı çevir. Shift: beş."
+END
+
+GUI:AirliftPlanesFull
+"Uçaklarda yer kalmadı"
+END
+
+GUI:AirliftAtLimit
+"Bundan alabileceğin kadar var"
+END
+
+GUI:AirliftNoFactory
+"Bunu üreten bir fabrika gerekli"
 END
 
 SCIENCE:TurkiyeCommandoRaid

@@ -292,6 +292,15 @@ static UnicodeString groupThousands( const UnicodeString& text )
 	return out;
 }
 
+UnicodeString HudMoney_format( Int amount )
+{
+	UnicodeString text;
+	text.format( TheGameText->fetch( "GUI:ControlBarMoneyDisplay" ), amount );
+	if( TheControlBar && TheControlBar->getControlBarSchemeManager()->isMoneyGrouped() )
+		text = groupThousands( text );
+	return text;
+}
+
 static HudCellStyle hudCellStyle( void )
 {
 	const AsciiString side = ThePlayerList->getLocalPlayer()->getSide();
@@ -3059,6 +3068,14 @@ Bool InGameUI::handleSpectatorRackWheel( const ICoord2D *mouse, Real notches )
 	return TRUE;
 }
 
+/// under the cells' pass stamp, as a click on the panel is (handleHudCellClick)
+Bool InGameUI::handleAirliftWheel( const ICoord2D *mouse, Real notches )
+{
+	if( m_hudCellDrawnPass + 1 != m_hudCellPass )
+		return FALSE;
+	return AirliftPanel_wheel( mouse, notches > 0.0f );
+}
+
 //-------------------------------------------------------------------------------------------------
 /** The command grid's first keys while the rack is up, Q W E R T Y A as shipped, pick the stat
 	* keys' stats in their order.  A watcher has no commands to press; anything past the last stat is left to
@@ -3836,6 +3853,8 @@ void InGameUI::reset( void )
 	CinemaDirector_forgetHudHidden();
 	clearSignalMarks();
 	RadarContactMarks_reset();
+	// a load half picked does not outlive its match
+	AirliftPanel_close();
 	m_armedSignal = SIGNAL_KIND_COUNT;
 	m_dozerCheckFrame = 0;
 	for( Int index = 0; index < MAX_PLAYER_COUNT; index++ )

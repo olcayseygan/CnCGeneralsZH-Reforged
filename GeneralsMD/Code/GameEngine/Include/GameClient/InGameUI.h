@@ -1155,6 +1155,9 @@ public:  // ********************************************************************
 	Bool handleSpectatorRackClick( const ICoord2D *mouse, Bool act );
 	/// The wheel over the rack: TRUE when the rack is under it; over the standings' head it steps the stat
 	Bool handleSpectatorRackWheel( const ICoord2D *mouse, Real notches );
+	/// The wheel over the airlift panel, drawn on the last pass: TRUE when the panel is under it; over a
+	/// unit's cell it moves the count
+	Bool handleAirliftWheel( const ICoord2D *mouse, Real notches );
 	/// a command bar key while watching: TRUE when it picked a stat, Q W E R T Y A as shipped
 	Bool pickSpectatorStat( Int commandSlot );
 	/// a raw Q W E R T Y A press or release while watching: TRUE when the rack's stat keys took it
@@ -1845,5 +1848,9 @@ extern Bool HudReadout_fits( DisplayString *text, const IRegion2D &cell );
 	* given (a sheet piece), a solid one otherwise. */
 extern void HudReadout_draw( DisplayString *text, const IRegion2D &cell, HudReadoutCorner corner, Color textColor,
 														 const Image *plate = NULL );
+
+/** An amount of money written as the bar's money readout writes the purse: GUI:ControlBarMoneyDisplay,
+	* "$ 10,000", grouped where the scheme groups it. */
+extern UnicodeString HudMoney_format( Int amount );
 
 #endif // _IN_GAME_UI_H_

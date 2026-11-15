@@ -174,6 +174,10 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 		//
 		case GameMessage::MSG_RAW_MOUSE_WHEEL:
 		{
+			// over the airlift panel it picks a unit's count and never zooms; a window under the pointer,
+			// the menus and the chat among them, took the wheel before it got here
+			if( TheInGameUI->handleAirliftWheel( &msg->getArgument( 0 )->pixel, msg->getArgument( 1 )->real ) )
+				return DESTROY_MESSAGE;
 			// over the spectator's rack the wheel turns the stat dial and never zooms
 			if( TheInGameUI->handleSpectatorRackWheel( &msg->getArgument( 0 )->pixel, msg->getArgument( 1 )->real ) )
 				return DESTROY_MESSAGE;

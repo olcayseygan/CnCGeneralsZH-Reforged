@@ -3803,11 +3803,15 @@ GUI:AirliftFor
 END
 
 GUI:AirliftPlanes
-"Planes: %d of %d   Fee: $%d"
+"Planes: %d of %d"
+END
+
+GUI:AirliftFee
+"Fee: %ls"
 END
 
 GUI:AirliftTotal
-"Total: $%d"
+"Total: %ls"
 END
 
 GUI:AirliftOK
@@ -3816,6 +3820,22 @@ END
 
 GUI:AirliftCancel
 "Cancel"
+END
+
+GUI:AirliftHint
+"Click or roll the wheel up to add one, right click or roll down to take one off. Shift: five."
+END
+
+GUI:AirliftPlanesFull
+"No room left on the planes"
+END
+
+GUI:AirliftAtLimit
+"You already have as many as you can"
+END
+
+GUI:AirliftNoFactory
+"Needs a factory that builds it"
 END
 
 SCIENCE:TurkiyeCommandoRaid

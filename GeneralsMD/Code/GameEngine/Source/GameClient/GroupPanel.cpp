@@ -804,12 +804,15 @@ struct FreeSlots
 {
 	const ThingTemplate *thing;
 	UnsignedInt free;
+	ObjectID factory;		///< only this one's queue, or every factory's when INVALID_ID
 };
 
 /// the room left in the queues of the factories that can take `thing` now
 static void countFreeSlots( Object *obj, void *userData )
 {
 	FreeSlots *slots = (FreeSlots *)userData;
+	if( slots->factory != INVALID_ID && obj->getID() != slots->factory )
+		return;
 	if( !isWorkingFactory( obj ) )
 		return;
 	const CommandSet *set = TheControlBar->findCommandSet( obj->getCommandSetString() );
@@ -837,12 +840,13 @@ static void countFreeSlots( Object *obj, void *userData )
 //-------------------------------------------------------------------------------------------------
 /** A click on a build button: as many MSG_QUEUE_UNIT_FOR_GROUP as the factory buttons' shift and
 	* ctrl ask for, cut to what the bank pays for and the queues hold, so a ctrl+shift click does not
-	* send a hundred orders the logic would refuse.  The logic picks the factory for each. */
+	* send a hundred orders the logic would refuse.  The logic picks the factory for each, unless the
+	* sidebar's picker named one. */
 //-------------------------------------------------------------------------------------------------
-void GroupPanel_queueUnit( const ThingTemplate *thing, Int squad )
+void GroupPanel_queueUnit( const ThingTemplate *thing, Int squad, ObjectID factory )
 {
 	Player *player = ThePlayerList->getLocalPlayer();
-	FreeSlots slots = { thing, 0 };
+	FreeSlots slots = { thing, 0, factory };
 	player->iterateObjects( countFreeSlots, &slots );
 
 	Int wanted = min( getBuildBatchCount(), (Int)slots.free );
@@ -855,6 +859,8 @@ void GroupPanel_queueUnit( const ThingTemplate *thing, Int squad )
 		GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_QUEUE_UNIT_FOR_GROUP );
 		msg->appendIntegerArgument( thing->getTemplateID() );
 		msg->appendIntegerArgument( squad );
+		if( factory != INVALID_ID )
+			msg->appendObjectIDArgument( factory );
 	}
 }
 

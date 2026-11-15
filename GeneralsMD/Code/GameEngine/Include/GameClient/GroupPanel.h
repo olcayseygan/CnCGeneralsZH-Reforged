@@ -69,7 +69,8 @@ void GroupPanel_showAvailability( GameWindow *button, CommandAvailability availa
 
 /** A click on a build button for `thing`: as many MSG_QUEUE_UNIT_FOR_GROUP as shift and ctrl ask for,
 	* cut to the bank and the free queue slots.  `squad` 0-9 sends the units to that hotkey squad, -1
-	* to no squad. */
-void GroupPanel_queueUnit( const ThingTemplate *thing, Int squad );
+	* to no squad.  `factory`, when given, is the one factory that is to build them (the sidebar's
+	* factory picker): only its queue counts, and it rides on each message as a third argument. */
+void GroupPanel_queueUnit( const ThingTemplate *thing, Int squad, ObjectID factory = INVALID_ID );
 
 #endif // __GROUPPANEL_H__

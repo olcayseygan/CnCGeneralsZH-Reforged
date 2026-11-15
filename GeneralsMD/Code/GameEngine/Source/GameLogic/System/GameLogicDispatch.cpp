@@ -2137,12 +2137,17 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 		// and the unit joins that hotkey squad when it comes out.  A squad with nobody in it takes
 		// nothing.  Squad -1 is the command bar's unit tabs: no squad, the unit comes out to the
 		// factory's rally point as any other, and the factory with the shortest queue takes it.
+		// An optional third argument, ObjectID factory, is the sidebar's factory picker: squad -1 only,
+		// the sender's own factory, and it must take the unit now (Player::factoryTakesGroupUnit) or the
+		// order is dropped, with no fallback to another factory.  Two arguments play as they always did.
 		// The arguments came over the network, so their shape is checked.
 		case GameMessage::MSG_QUEUE_UNIT_FOR_GROUP:
 		{
-			if( thisPlayer == NULL || msg->getArgumentCount() < 2
+			const Int argCount = msg->getArgumentCount();
+			if( thisPlayer == NULL || argCount < 2 || argCount > 3
 					|| msg->getArgumentDataType( 0 ) != ARGUMENTDATATYPE_INTEGER
-					|| msg->getArgumentDataType( 1 ) != ARGUMENTDATATYPE_INTEGER )
+					|| msg->getArgumentDataType( 1 ) != ARGUMENTDATATYPE_INTEGER
+					|| ( argCount == 3 && msg->getArgumentDataType( 2 ) != ARGUMENTDATATYPE_OBJECTID ) )
 				break;
 
 			const ThingTemplate *whatToCreate = TheThingFactory->findByTemplateID( msg->getArgument( 0 )->integer );
@@ -2151,13 +2156,25 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 					|| ( squad != -1 && !isValidHotkeySquadIndex( squad ) ) )
 				break;
 
-			Coord3D centre;
-			if( squad != -1 && !thisPlayer->getHotkeySquadCentroid( squad, &centre ) )
-				break;
+			Object *factory = NULL;
+			if( argCount == 3 )
+			{
+				if( squad != -1 )
+					break;
+				factory = TheGameLogic->findObjectByID( msg->getArgument( 2 )->objectID );
+				if( !thisPlayer->factoryTakesGroupUnit( factory, whatToCreate ) )
+					break;
+			}
+			else
+			{
+				Coord3D centre;
+				if( squad != -1 && !thisPlayer->getHotkeySquadCentroid( squad, &centre ) )
+					break;
 
-			Object *factory = thisPlayer->findFactoryForGroupUnit( whatToCreate, squad != -1 ? &centre : NULL );
-			if( factory == NULL )
-				break;
+				factory = thisPlayer->findFactoryForGroupUnit( whatToCreate, squad != -1 ? &centre : NULL );
+				if( factory == NULL )
+					break;
+			}
 
 			ProductionUpdateInterface *pu = factory->getProductionUpdateInterface();
 			pu->queueCreateUnit( whatToCreate, pu->requestUniqueUnitID(), squad );

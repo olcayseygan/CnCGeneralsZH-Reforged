@@ -4854,23 +4854,28 @@ struct GroupFactorySearch
 	Real bestDistSqr;
 };
 
-static void findGroupFactory( Object *obj, void *userData )
+Bool Player::factoryTakesGroupUnit( Object *obj, const ThingTemplate *unit ) const
 {
-	GroupFactorySearch *s = (GroupFactorySearch *)userData;
-	if( obj->getControllingPlayer() != s->owner || obj->isEffectivelyDead() )
-		return;
+	if( obj == NULL || unit == NULL || obj->getControllingPlayer() != this || obj->isEffectivelyDead() )
+		return FALSE;
 
 	// canMakeUnit is the build button's own test: prerequisites, the unit cap, money, a finished and
 	// powered factory, a free queue slot and parking
-	ProductionUpdateInterface *pu = obj->getProductionUpdateInterface();
-	if( pu == NULL || TheBuildAssistant->canMakeUnit( obj, s->unit ) != CANMAKE_OK )
-		return;
+	if( obj->getProductionUpdateInterface() == NULL || TheBuildAssistant->canMakeUnit( obj, unit ) != CANMAKE_OK )
+		return FALSE;
 	// and the factory's bar offers the player the button: a mission's script-only build, or one an
 	// upgrade still locks, is refused here as the bar hides or greys it
-	if( !TheBuildAssistant->offersPlayerBuildButton( obj, s->unit ) )
+	return TheBuildAssistant->offersPlayerBuildButton( obj, unit );
+}
+
+static void findGroupFactory( Object *obj, void *userData )
+{
+	GroupFactorySearch *s = (GroupFactorySearch *)userData;
+	if( !s->owner->factoryTakesGroupUnit( obj, s->unit ) )
 		return;
 
 	// with no squad there is no centre, and the shortest queue with the lowest ObjectID wins
+	ProductionUpdateInterface *pu = obj->getProductionUpdateInterface();
 	const UnsignedInt queue = pu->getProductionCount();
 	const Real dx = s->centre ? obj->getPosition()->x - s->centre->x : 0.0f;
 	const Real dy = s->centre ? obj->getPosition()->y - s->centre->y : 0.0f;

@@ -126,6 +126,15 @@ namespace
 	};
 	AsciiString s_imageSide;
 	std::vector< SidebarPiece > s_images;
+
+	// the factory picker under the tabs, on the unit tabs only: "Tümü", then one chip a factory
+	const Real CHIP_POINTS			= 9.0f;		///< the chips' text, at 1080
+	const Color CHIP_TEXT				= GameMakeColor( 255, 255, 255, 255 );
+	ObjectID s_pick[ SIDEBAR_TAB_COUNT ];		///< each tab's picked factory, INVALID_ID for Tümü
+	std::vector< ObjectID > s_factories;		///< the shown unit tab's factories, by ObjectID up, all of them
+	GameWindow *s_chipAll = NULL;
+	GameWindow *s_chips[ HUD_SIDEBAR_PICKER_CHIPS ];
+	DisplayString *s_chipText[ HUD_SIDEBAR_PICKER_CHIPS + 1 ];	///< [0] "Tümü", then the chips' numbers
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -238,6 +247,19 @@ static void drawArrow( GameWindow *window, WinInstanceData *instData )
 	TheDisplay->drawLine( cx, tip, cx + 2 * half, back, 2.0f, c );
 }
 
+/// the stand-in body of a tab or a chip: steel with a 1 px bevel, raised, or pressed in and lit
+static void drawSteel( const ICoord2D &at, const ICoord2D &size, Bool lit, Bool hover )
+{
+	const Color face = lit ? TAB_STEEL_OPEN : hover ? TAB_STEEL_HOVER : TAB_STEEL;
+	const Color light = lit ? TAB_BEVEL_DARK : TAB_BEVEL_LIGHT;
+	const Color shade = lit ? TAB_BEVEL_LIGHT : TAB_BEVEL_DARK;
+	TheDisplay->drawFillRect( at.x, at.y, size.x, size.y, face );
+	TheDisplay->drawFillRect( at.x, at.y, size.x, 1, light );
+	TheDisplay->drawFillRect( at.x, at.y + 1, 1, size.y - 1, light );
+	TheDisplay->drawFillRect( at.x + 1, at.y + size.y - 1, size.x - 1, 1, shade );
+	TheDisplay->drawFillRect( at.x + size.x - 1, at.y + 1, 1, size.y - 2, shade );
+}
+
 /// a tab, all drawn here: a steel body with a 1 px bevel, raised when closed and pressed in and lit
 /// when open, its icon in the middle and the key it answers to in the top left corner; the name is in
 /// the tooltip
@@ -270,14 +292,7 @@ static void drawTab( GameWindow *window, WinInstanceData *instData )
 	}
 
 	// the stand-in until the side has its pieces
-	const Color face = open ? TAB_STEEL_OPEN : hover ? TAB_STEEL_HOVER : TAB_STEEL;
-	const Color lit = open ? TAB_BEVEL_DARK : TAB_BEVEL_LIGHT;
-	const Color shade = open ? TAB_BEVEL_LIGHT : TAB_BEVEL_DARK;
-	TheDisplay->drawFillRect( at.x, at.y, size.x, size.y, face );
-	TheDisplay->drawFillRect( at.x, at.y, size.x, 1, lit );
-	TheDisplay->drawFillRect( at.x, at.y + 1, 1, size.y - 1, lit );
-	TheDisplay->drawFillRect( at.x + 1, at.y + size.y - 1, size.x - 1, 1, shade );
-	TheDisplay->drawFillRect( at.x + size.x - 1, at.y + 1, 1, size.y - 2, shade );
+	drawSteel( at, size, open, hover );
 
 	// pressed in, the face's contents sit a pixel down and right
 	const Int push = open ? 1 : 0;
@@ -298,6 +313,44 @@ static void drawTab( GameWindow *window, WinInstanceData *instData )
 	}
 	if( keyed )
 		s_keyText[ t ]->draw( at.x + 3 + push, at.y + 1 + push, KEY_LETTER, TAB_TEXT_EDGE );
+}
+
+/// a picker chip: the side's Chip (ChipWide for Tümü), P on the current pick, else the steel stand-in;
+/// its text in the middle, dark on the lit piece
+static void drawChip( GameWindow *window, WinInstanceData *instData )
+{
+	Int index = -1;
+	if( window != s_chipAll )
+	{
+		for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; i++ )
+			if( s_chips[ i ] == window )
+				index = i;
+		if( index < 0 )
+			return;
+	}
+	const ObjectID id = index < 0 || index >= (Int)s_factories.size() ? INVALID_ID : s_factories[ index ];
+	const Bool lit = s_pick[ s_tab ] == id;
+	const Bool hover = BitTest( instData->getState(), WIN_STATE_HILITED );
+
+	ICoord2D at, size;
+	window->winGetScreenPosition( &at.x, &at.y );
+	window->winGetSize( &size.x, &size.y );
+	if( size.x < 3 || size.y < 3 )
+		return;
+	const Image *art = statePiece( index < 0 ? "ChipWide" : "Chip", TRUE, lit, hover );
+	if( art != NULL )
+		TheDisplay->drawImage( art, at.x, at.y, at.x + size.x, at.y + size.y );
+	else
+		drawSteel( at, size, lit, hover );
+
+	DisplayString *text = s_chipText[ index + 1 ];
+	if( text == NULL )
+		return;
+	Int w = 0, h = 0;
+	text->getSize( &w, &h );
+	const Int push = lit && art == NULL ? 1 : 0;
+	text->draw( at.x + ( size.x - w ) / 2 + push, at.y + ( size.y - h ) / 2 + push,
+		lit && art != NULL ? KEY_LETTER_LIT : CHIP_TEXT, lit && art != NULL ? KEY_LETTER_GLOW : TAB_TEXT_EDGE );
 }
 
 /// the box: the side's cameo well under every cell, the cameos inside them
@@ -435,7 +488,7 @@ static void clickCameo( const CommandButton *command, Bool right )
 		if( right )
 			cancelNewest( thing );
 		else
-			GroupPanel_queueUnit( thing, -1 );
+			GroupPanel_queueUnit( thing, -1, s_pick[ s_tab ] );
 	}
 	else if( command->getCommandType() == GUI_COMMAND_DOZER_CONSTRUCT && !right )
 	{
@@ -456,6 +509,19 @@ static WindowMsgHandledType boxSystem( GameWindow *window, UnsignedInt msg, Wind
 		{
 			if( msg == GBM_SELECTED )
 				Sidebar_selectTab( t );
+			return MSG_HANDLED;
+		}
+	if( control == s_chipAll )
+	{
+		if( msg == GBM_SELECTED )
+			s_pick[ s_tab ] = INVALID_ID;
+		return MSG_HANDLED;
+	}
+	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; i++ )
+		if( control == s_chips[ i ] )
+		{
+			if( msg == GBM_SELECTED && i < (Int)s_factories.size() )
+				s_pick[ s_tab ] = s_factories[ i ];
 			return MSG_HANDLED;
 		}
 	if( control == s_arrowUp || control == s_arrowDown )
@@ -533,6 +599,21 @@ static Bool makeWindows( GameWindow *parent )
 		GadgetButtonSetBorder( button, TheControlBar->getBuildBorderColor() );
 	}
 
+	GameWindow **chips[ HUD_SIDEBAR_PICKER_CHIPS + 1 ] = { &s_chipAll };
+	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; i++ )
+		chips[ i + 1 ] = &s_chips[ i ];
+	for( Int c = 0; c <= HUD_SIDEBAR_PICKER_CHIPS; c++ )
+	{
+		*chips[ c ] = makeButton( WIN_STATUS_HIDDEN );
+		if( *chips[ c ] != NULL )
+			(*chips[ c ])->winSetDrawFunc( drawChip );
+		if( s_chipText[ c ] == NULL )
+			s_chipText[ c ] = TheDisplayStringManager->newDisplayString();
+	}
+	// a bar made again is most often a new match, whose ObjectIDs mean other buildings
+	for( Int t = 0; t < SIDEBAR_TAB_COUNT; t++ )
+		s_pick[ t ] = INVALID_ID;
+
 	s_arrowUp = makeButton( 0 );
 	s_arrowDown = makeButton( 0 );
 	GameWindow *arrows[] = { s_arrowUp, s_arrowDown };
@@ -584,6 +665,9 @@ void Sidebar_layout( const HudLayoutRects &rects )
 		grow( rects.cameos[ i ] );
 	grow( rects.arrowUp );
 	grow( rects.arrowDown );
+	grow( rects.pickerAll );
+	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; i++ )
+		grow( rects.pickerChips[ i ] );
 
 	ICoord2D origin;
 	parent->winGetScreenPosition( &origin.x, &origin.y );
@@ -604,6 +688,23 @@ void Sidebar_layout( const HudLayoutRects &rects )
 	}
 	place( s_arrowUp, rects.arrowUp, box.lo );
 	place( s_arrowDown, rects.arrowDown, box.lo );
+	place( s_chipAll, rects.pickerAll, box.lo );
+	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; i++ )
+		place( s_chips[ i ], rects.pickerChips[ i ], box.lo );
+
+	GameFont *chipFont = TheFontLibrary->getFont( "Arial", max( REAL_TO_INT( CHIP_POINTS * rects.scale ), 6 ), TRUE );
+	for( Int c = 0; c <= HUD_SIDEBAR_PICKER_CHIPS; c++ )
+	{
+		if( s_chipText[ c ] == NULL || chipFont == NULL )
+			continue;
+		s_chipText[ c ]->setFont( chipFont );
+		UnicodeString text;
+		if( c == 0 )
+			text = TheGameText->fetch( "GUI:SidebarAll" );
+		else
+			text.format( u"%d", c );
+		s_chipText[ c ]->setText( text );
+	}
 
 	GameFont *keyFont = TheFontLibrary->getFont( "Arial", max( REAL_TO_INT( KEY_POINTS * rects.scale ), 6 ), TRUE );
 	for( Int t = 0; t < SIDEBAR_TAB_COUNT; t++ )
@@ -687,6 +788,50 @@ static void fillList( Player *player )
 
 /// one factory's queue into s_count and s_clock: every queued unit of a listed type counts, the head
 /// alone carries progress
+/// how the picked factory's own bar has `thing`: its button's availability, restricted when it has none
+static CommandAvailability pickedAvailability( Object *factory, const ThingTemplate *thing )
+{
+	const CommandSet *set = TheControlBar->findCommandSet( factory->getCommandSetString() );
+	for( Int i = 0; set != NULL && i < MAX_COMMANDS_PER_SET; i++ )
+	{
+		const CommandButton *button = set->getCommandButton( i );
+		if( button != NULL && button->getCommandType() == GUI_COMMAND_UNIT_BUILD && button->getThingTemplate() == thing )
+			return TheControlBar->getButtonAvailability( button, factory );
+	}
+	return COMMAND_RESTRICTED;
+}
+
+struct FactorySearch
+{
+	Bool infantry;										///< the Piyade tab's factories, else Araç's
+	std::vector< ObjectID > *found;
+};
+
+/// a finished factory of the player's whose bar offers a unit of the tab's kind
+static void findFactory( Object *obj, void *userData )
+{
+	FactorySearch *s = (FactorySearch *)userData;
+	// the command center's dozers stay with Tümü: the chips are the barracks, the war factories and
+	// the airfields
+	if( obj->isEffectivelyDead() || obj->getProductionUpdateInterface() == NULL || obj->isKindOf( KINDOF_COMMANDCENTER )
+			|| obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || obj->testStatus( OBJECT_STATUS_SOLD ) )
+		return;
+	const CommandSet *set = TheControlBar->findCommandSet( obj->getCommandSetString() );
+	if( set == NULL )
+		return;
+	for( Int i = 0; i < MAX_COMMANDS_PER_SET; i++ )
+	{
+		const CommandButton *button = set->getCommandButton( i );
+		if( button == NULL || button->getThingTemplate() == NULL
+				|| !GroupPanel_isPlayerBuildButton( button->getCommandType(), button->getOptions(), TheControlBar->hasCommandWindow( i ) )
+				|| button->getThingTemplate()->isKindOf( KINDOF_INFANTRY ) != s->infantry
+				|| TheControlBar->getButtonAvailability( button, obj ) == COMMAND_HIDDEN )
+			continue;
+		s->found->push_back( obj->getID() );
+		return;
+	}
+}
+
 static void gatherProgress( Object *obj, void *userData )
 {
 	ProductionUpdateInterface *pu = obj->getProductionUpdateInterface();
@@ -764,8 +909,19 @@ void Sidebar_update( void )
 	if( s_dirty || !s_listed || s_listFrame != frame || s_listPlayer != player )
 	{
 		fillList( player );
+		s_factories.clear();
 		if( !structureTab( s_tab ) )
+		{
 			player->iterateObjects( gatherProgress, NULL );
+
+			// the picker's factories, and the pick back to Tümü once its factory is gone or off the chips
+			FactorySearch search = { s_tab == SIDEBAR_TAB_INFANTRY, &s_factories };
+			player->iterateObjects( findFactory, &search );
+			std::sort( s_factories.begin(), s_factories.end() );
+			const size_t chips = min( s_factories.size(), (size_t)HUD_SIDEBAR_PICKER_CHIPS );
+			if( std::find( s_factories.begin(), s_factories.begin() + chips, s_pick[ s_tab ] ) == s_factories.begin() + chips )
+				s_pick[ s_tab ] = INVALID_ID;
+		}
 		s_listed = TRUE;
 		s_dirty = FALSE;
 		s_listFrame = frame;
@@ -774,6 +930,8 @@ void Sidebar_update( void )
 
 	const Int count = (Int)s_list.size();
 	s_row = Sidebar_scroll( count, HUD_SIDEBAR_CAMEO_COLUMNS, HUD_SIDEBAR_CAMEO_ROWS, s_row );
+	// with a factory picked the cameos read that factory's bar, so what it cannot build is greyed
+	Object *picked = structureTab( s_tab ) || s_pick[ s_tab ] == INVALID_ID ? NULL : TheGameLogic->findObjectByID( s_pick[ s_tab ] );
 	for( Int i = 0; i < HUD_SIDEBAR_CAMEOS; i++ )
 	{
 		GameWindow *win = s_cameos[ i ];
@@ -793,7 +951,7 @@ void Sidebar_update( void )
 			GadgetButtonSetEnabledImage( win, entry.button->getButtonImage() );
 			GadgetButtonSetData( win, (void *)entry.button );
 		}
-		GroupPanel_showAvailability( win, entry.best );
+		GroupPanel_showAvailability( win, picked != NULL ? pickedAvailability( picked, entry.thing ) : entry.best );
 
 		// a greyed cameo with units queued still takes the right click that cancels them
 		win->winClearStatus( WIN_STATUS_CANCEL_WHEN_DISABLED );
@@ -811,4 +969,12 @@ void Sidebar_update( void )
 		s_arrowUp->winEnable( s_row > 0 );
 	if( s_arrowDown != NULL )
 		s_arrowDown->winEnable( s_row < Sidebar_scroll( count, HUD_SIDEBAR_CAMEO_COLUMNS, HUD_SIDEBAR_CAMEO_ROWS, count ) );
+
+	// the picker on the unit tabs only: Tümü, and a chip a factory, the first five by ObjectID
+	const Bool picker = !structureTab( s_tab );
+	if( s_chipAll != NULL )
+		s_chipAll->winHide( !picker );
+	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; i++ )
+		if( s_chips[ i ] != NULL )
+			s_chips[ i ]->winHide( !picker || i >= (Int)s_factories.size() );
 }

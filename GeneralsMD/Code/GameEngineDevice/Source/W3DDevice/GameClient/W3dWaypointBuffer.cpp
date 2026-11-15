@@ -62,6 +62,7 @@
 #include <texture.h>
 
 #include "Common/GlobalData.h"
+#include "Lib/Clock.h"
 #include "GameLogic/AIPathfind.h"		// Path/PathNode, to draw a plain move order's route
 #include "Common/RandomValue.h"
 #include "Common/ThingFactory.h"
@@ -442,14 +443,16 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 	// ending in a small ring of the same colour, on the ground or on any unit or building it is aimed
 	// at: the larger ring on the last bit of ground, the smaller on a target and on every point of a
 	// shift list short of the last. The hints are rebuilt off the units every frame, so a ring on a
-	// target follows it. The line stops at the rings either end rather than running through them
+	// target follows it. The line stops at the rings either end rather than running through them. A
+	// ring means a place the player clicked (InGameUI::orderHintShowsMark): several units' own ends
+	// bunched somewhere else end bare
 	{
 		const Real markScale = MAX( 1.0f, m_ringWidthScale );		// zoomed out the marks keep their size on the screen
-		auto markRadius = [&]( InGameUI::OrderHintMark mark ) -> Real
+		auto markRadius = [&]( const InGameUI::OrderHint& hint ) -> Real
 		{
-			if( mark == InGameUI::ORDER_MARK_NONE )
+			if( !InGameUI::orderHintShowsMark( hint ) )
 				return 0.0f;
-			return ( mark == InGameUI::ORDER_MARK_FLAG ? ORDER_END_RADIUS : ORDER_JOINT_RADIUS ) * markScale + 0.5f * ORDER_MARK_WIDTH * m_ringWidthScale;
+			return ( hint.mark == InGameUI::ORDER_MARK_FLAG ? ORDER_END_RADIUS : ORDER_JOINT_RADIUS ) * markScale + 0.5f * ORDER_MARK_WIDTH * m_ringWidthScale;
 		};
 		const std::vector<InGameUI::OrderHint>& hints = TheInGameUI->getOrderHints();
 		for( std::vector<InGameUI::OrderHint>::const_iterator it = hints.begin(); it != hints.end(); ++it )
@@ -484,12 +487,12 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 							break;
 						if( back->mark != InGameUI::ORDER_MARK_NONE )
 						{
-							startCut = markRadius( back->mark );
+							startCut = markRadius( *back );
 							break;
 						}
 					}
 				}
-				const Real endCut = markRadius( it->mark );
+				const Real endCut = markRadius( *it );
 				const Real dx = points[ 1 ].X - points[ 0 ].X, dy = points[ 1 ].Y - points[ 0 ].Y;
 				const Real flat = (Real)sqrt( dx * dx + dy * dy );
 				if( flat > startCut + endCut + 0.5f )
@@ -502,13 +505,18 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 				}
 			}
 
+			if( !InGameUI::orderHintShowsMark( *it ) )
+				continue;
 			Vector3 mark = points[ 1 ];
 			mark.Z += ORDER_MARK_LIFT;
-			recordOrderMark( mark, ( it->mark == InGameUI::ORDER_MARK_FLAG ? ORDER_END_RADIUS : ORDER_JOINT_RADIUS ) * markScale, color );
+			recordOrderMark( mark, ( it->mark == InGameUI::ORDER_MARK_FLAG ? ORDER_END_RADIUS : ORDER_JOINT_RADIUS ) * markScale, color,
+											 ORDER_MARK_WIDTH * m_ringWidthScale, 1.0f );
 		}
 		// the lines stay queued: the rally and placement pucks below would flush them into the
 		// terrain pass, under the buildings (see queueLine)
 	}
+
+	takeWaterMarks();
 
 	// The outline round each selected building (InGameUI::updateStructureOutlines decides which): the
 	// units' thin glowing line in its owner's colour, round its footprint with sharp corners
@@ -1412,12 +1420,14 @@ void W3DWaypointBuffer::recordStructureOutline( const Object *obj )
 /** The small ring on an order line's point, flat at the point's height: it is drawn over everything
 		like the line, so a slope under it costs nothing. Closed halfway along its first stretch, as
 		recordRingLoop closes a selection ring, so the two caps meet flush. */
-void W3DWaypointBuffer::recordOrderMark( const Vector3& at, Real radius, const Vector3& color )
+void W3DWaypointBuffer::recordOrderMark( const Vector3& at, Real radius, const Vector3& color, Real width, Real opacity )
 {
+	// a point every two units round a large one, so the click marker's opening ring shows no facets
+	const Int samples = MAX( (Int)ORDER_MARK_SAMPLES, (Int)ceil( 2.0f * PI * radius / 2.0f ) );
 	m_ringPoints.clear();
-	for( Int k = 0; k < ORDER_MARK_SAMPLES; ++k )
+	for( Int k = 0; k < samples; ++k )
 	{
-		const Real a = 2.0f * PI * k / ORDER_MARK_SAMPLES;
+		const Real a = 2.0f * PI * k / samples;
 		m_ringPoints.push_back( Vector3( at.X + radius * (Real)Cos( a ), at.Y + radius * (Real)Sin( a ), at.Z ) );
 	}
 	const Vector3 mid = ( m_ringPoints[ 0 ] + m_ringPoints[ 1 ] ) * 0.5f;
@@ -1426,7 +1436,90 @@ void W3DWaypointBuffer::recordOrderMark( const Vector3& at, Real radius, const V
 	m_cleanPoints.insert( m_cleanPoints.end(), m_ringPoints.begin() + 1, m_ringPoints.end() );
 	m_cleanPoints.push_back( m_ringPoints[ 0 ] );
 	m_cleanPoints.push_back( mid );
-	recordRingPieces( DRAW_ORDER_LINE, color, ORDER_MARK_WIDTH * m_ringWidthScale, 1.0f, 0.0f );
+	recordRingPieces( DRAW_ORDER_LINE, color, width, opacity, 0.0f );
+}
+
+// The click marker and the destination dots on water (W3DInGameUI paints them on land): the same
+// shapes and timing as W3DInGameUI's MARKER_* and ORDER_DOT_* constants, drawn as order lines.
+static const Real WATER_MARK_MIN_ZOOM = 0.6f;
+static const Real WATER_MARK_MAX_ZOOM = 2.5f;
+static const Real WATER_MARK_LIFT = 0.35f;
+static const Real WATER_DOT_RADIUS = 0.7f;
+static const Real WATER_DOT_WIDTH = 1.0f;
+static const Real WATER_MARKER_START_RADIUS = 14.0f;
+static const Real WATER_MARKER_END_RADIUS = 3.2f;
+static const Real WATER_MARKER_CLOSE_MS = 320.0f;
+static const Real WATER_MARKER_IN_MS = 50.0f;
+static const Real WATER_MARKER_FADE_MS = 260.0f;
+static const Real WATER_MARKER_WIDTH = 0.95f;
+static const Real WATER_MARKER_ARROW_GAP = 0.7f;
+static const Real WATER_MARKER_ARROW_ARM = 2.6f;
+static const Real WATER_MARKER_ARROW_SPREAD = 0.62f;
+static const Real WATER_MARKER_DOT_RADIUS = 0.6f;
+
+/** The order marks that stand on water, read at the sync point. Painted in the terrain pass they lay
+		under the water and took its tint; here they go on the sorted list after it, clean. They are
+		taken when the picture is, so the marker's closing steps with the sync point on water; on land
+		it is smooth. */
+void W3DWaypointBuffer::takeWaterMarks( void )
+{
+	if( CinemaDirector_hidesHud() )
+		return;
+	const UnsignedInt now = Clock_Milliseconds();
+	const Real scale = MAX( WATER_MARK_MIN_ZOOM, MIN( WATER_MARK_MAX_ZOOM, m_ringWidthScale ) );
+	auto colorOf = []( InGameUI::OrderHintKind kind )
+	{
+		const UnsignedInt rgb = InGameUI::orderKindColor( kind );
+		return Vector3( ( ( rgb >> 16 ) & 0xFF ) / 255.0f, ( ( rgb >> 8 ) & 0xFF ) / 255.0f, ( rgb & 0xFF ) / 255.0f );
+	};
+
+	// each unit's destination dot
+	const std::vector<InGameUI::OrderRing>& rings = TheInGameUI->getOrderRings();
+	for( std::vector<InGameUI::OrderRing>::const_iterator ring = rings.begin(); ring != rings.end(); ++ring )
+	{
+		const UnsignedInt age = now - ring->bornMs;
+		Real waterZ;
+		if( ring->bornMs == 0 || age >= (UnsignedInt)InGameUI::ORDER_RING_MS || !InGameUI::isOrderMarkOnWater( ring->at.x, ring->at.y, &waterZ ) )
+			continue;
+		const Vector3 at( ring->at.x, ring->at.y, MAX( ring->at.z, waterZ ) + WATER_MARK_LIFT );
+		recordOrderMark( at, WATER_DOT_RADIUS * scale, colorOf( ring->kind ), WATER_DOT_WIDTH * scale, 1.0f - (Real)age / (Real)InGameUI::ORDER_RING_MS );
+	}
+
+	// the click marker; Classic has EA's ring
+	if( TheGlobalData->m_classicGraphics )
+		return;
+	for( Int i = 0; i < InGameUI::MAX_MOVE_HINTS; ++i )
+	{
+		const InGameUI::MoveHintStruct& hint = TheInGameUI->getMoveHint( i );
+		Real waterZ;
+		if( hint.bornMs == 0 || now - hint.bornMs >= (UnsignedInt)InGameUI::MOVE_MARKER_MS || !InGameUI::isOrderMarkOnWater( hint.pos.x, hint.pos.y, &waterZ ) )
+			continue;
+		const Real age = (Real)( now - hint.bornMs );
+		const Real fade = MIN( 1.0f, age / WATER_MARKER_IN_MS ) * MIN( 1.0f, ( (Real)InGameUI::MOVE_MARKER_MS - age ) / WATER_MARKER_FADE_MS );
+		const Vector3 color = colorOf( hint.kind );
+		const Vector3 at( hint.pos.x, hint.pos.y, MAX( hint.pos.z, waterZ ) + WATER_MARK_LIFT );
+		const Real close = MIN( 1.0f, age / WATER_MARKER_CLOSE_MS );
+		const Real left = 1.0f - close;
+		const Real radius = ( WATER_MARKER_END_RADIUS + ( WATER_MARKER_START_RADIUS - WATER_MARKER_END_RADIUS ) * left * left * left ) * scale;
+		const Real width = WATER_MARKER_WIDTH * scale;
+		recordOrderMark( at, radius, color, width, fade );
+		for( Int k = 0; k < 4; ++k )
+		{
+			const Real spoke = 0.25f * PI + 0.5f * PI * (Real)k;
+			const Real tip = radius + WATER_MARKER_ARROW_GAP * scale + 0.5f * width;
+			const Vector3 tipAt( at.X + tip * (Real)cos( spoke ), at.Y + tip * (Real)sin( spoke ), at.Z );
+			for( Int side = -1; side <= 1; side += 2 )
+			{
+				const Real arm = spoke + side * WATER_MARKER_ARROW_SPREAD;
+				Vector3 points[ 2 ];
+				points[ 0 ] = tipAt;
+				points[ 1 ].Set( tipAt.X + WATER_MARKER_ARROW_ARM * scale * (Real)cos( arm ), tipAt.Y + WATER_MARKER_ARROW_ARM * scale * (Real)sin( arm ), at.Z );
+				recordRing( DRAW_ORDER_LINE, 2, points, color, width, fade );
+			}
+		}
+		if( close >= 1.0f )
+			recordOrderMark( at, WATER_MARKER_DOT_RADIUS * scale, color, width, fade );
+	}
 }
 
 

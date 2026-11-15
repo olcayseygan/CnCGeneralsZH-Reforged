@@ -5145,6 +5145,16 @@ InGameUI::OrderHintMark InGameUI::markForOrderHint( OrderHintKind kind, Bool onO
 	* the way, holding, and doing something to a thing.  Picked to stay apart from each other and from
 	* the seat colours' pure hues once a dark rim is round them, on grass, sand and snow alike. */
 //-------------------------------------------------------------------------------------------------
+Bool InGameUI::isOrderMarkOnWater( Real x, Real y, Real *waterZ )
+{
+	Real z = 0.0f;
+	if( !TheTerrainLogic->isUnderwater( x, y, &z ) || z <= TheTerrainLogic->getGroundHeight( x, y ) )
+		return FALSE;
+	if( waterZ )
+		*waterZ = z;
+	return TRUE;
+}
+
 UnsignedInt InGameUI::orderKindColor( OrderHintKind kind )
 {
 	switch( kind )
@@ -5540,8 +5550,12 @@ void InGameUI::bunchOrderHints( void )
 			if( toX * toX + toY * toY > bunchRadiusSqr )
 				continue;
 
+			// the bunch's end is a click only while every member's is that same click
+			bunch.clicked = bunch.clicked && hint->clicked && toX * toX + toY * toY < 1.0f;
+
 			// running averages, so the bunch is compared against its middle rather than its first unit
 			const Real share = 1.0f / (Real)( ++memberCounts[ i ] );
+			bunch.members = memberCounts[ i ];
 			bunch.from.x += ( hint->from.x - bunch.from.x ) * share;
 			bunch.from.y += ( hint->from.y - bunch.from.y ) * share;
 			bunch.from.z += ( hint->from.z - bunch.from.z ) * share;
@@ -6245,6 +6259,7 @@ void InGameUI::applyCommandedPoints( void )
 	auto snapLeg = [this]( size_t leg, const Coord3D& at )
 	{
 		m_orderHints[ leg ].to = at;
+		m_orderHints[ leg ].clicked = TRUE;
 		if( leg + 1 < m_orderHints.size() && m_orderHints[ leg + 1 ].owner == m_orderHints[ leg ].owner && m_orderHints[ leg + 1 ].fromTarget == INVALID_ID )
 			m_orderHints[ leg + 1 ].from = at;
 	};

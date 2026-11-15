@@ -1181,6 +1181,10 @@ void W3DInGameUI::takeOrderRings( void )
 	{
 		if( ring->bornMs == 0 || now - ring->bornMs >= (UnsignedInt)ORDER_RING_MS )
 			continue;
+		// paint in the terrain pass lies under the water, which tinted it; that dot goes after the water
+		// (W3DWaypointBuffer::takeWaterMarks)
+		if( isOrderMarkOnWater( ring->at.x, ring->at.y, NULL ) )
+			continue;
 
 		m_orderRingColors.push_back( orderKindColor( ring->kind ) );
 		m_orderRingBornMs.push_back( ring->bornMs );
@@ -1215,15 +1219,13 @@ void W3DInGameUI::takeOrderRings( void )
 		mark.bornMs = hint.bornMs;
 		mark.slopeX = mark.slopeY = 0.0f;
 		const Real x = hint.pos.x, y = hint.pos.y;
-		Real ground = TheTerrainLogic->getGroundHeight( x, y );
-		Real waterZ;
-		const Bool water = TheTerrainLogic->isUnderwater( x, y, &waterZ ) && waterZ > ground;
-		if( water )
-			ground = waterZ;
+		if( isOrderMarkOnWater( x, y, NULL ) )
+			continue;		// after the water, on the sorted list (W3DWaypointBuffer::takeWaterMarks)
+		const Real ground = TheTerrainLogic->getGroundHeight( x, y );
 		// a point well over the ground is a bridge's deck: flat there
 		const Bool deck = hint.pos.z > ground + 2.0f;
 		mark.at.Set( x, y, deck ? hint.pos.z : ground );
-		if( !deck && !water )
+		if( !deck )
 		{
 			const Real SLOPE_STEP = 4.0f;
 			mark.slopeX = ( TheTerrainLogic->getGroundHeight( x + SLOPE_STEP, y ) - TheTerrainLogic->getGroundHeight( x - SLOPE_STEP, y ) ) / ( 2.0f * SLOPE_STEP );

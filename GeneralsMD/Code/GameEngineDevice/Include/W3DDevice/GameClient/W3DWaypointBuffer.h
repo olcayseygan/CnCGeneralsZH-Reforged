@@ -120,7 +120,8 @@ private:
 	void recordRingLine( Int count, const Vector3 *points, const Vector3& color, Real alpha = 1.0f, Bool withGlow = TRUE, Bool withLine = TRUE );
 	void addSelectionCircle( const Coord3D& pos, Real radius, PathfindLayerEnum layer, const Vector3& color, Real pulse );
 	void recordStructureOutline( const Object *obj );	///< a selected building's line round its footprint
-	void recordOrderMark( const Vector3& at, Real radius, const Vector3& color );	///< the small ring on an order line's end or joint
+	void recordOrderMark( const Vector3& at, Real radius, const Vector3& color, Real width, Real opacity );	///< a ring of order line round a point: an end or joint, or a mark on water
+	void takeWaterMarks( void );											///< the click marker and destination dots on water, after the water
 	TextureClass *rimTexture( void );									///< the ribbon's colour between two dark rims, made on first use
 	TextureClass *m_rimTexture;
 	std::vector<Vector3> m_pulsePoints;

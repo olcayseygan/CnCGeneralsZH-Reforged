@@ -90,7 +90,7 @@ protected:
 		* it moves every picture, and the ground under a ring a few units across is near enough flat */
 	struct OrderMarker
 	{
-		Vector3 at;									///< the point, on the ground, the water or a bridge's deck
+		Vector3 at;									///< the point, on the ground or a bridge's deck; one on water is W3DWaypointBuffer's
 		Real slopeX, slopeY;				///< the ground's rise per unit along x and y round it
 		UnsignedInt rgb;						///< InGameUI::orderKindColor
 		UnsignedInt bornMs;

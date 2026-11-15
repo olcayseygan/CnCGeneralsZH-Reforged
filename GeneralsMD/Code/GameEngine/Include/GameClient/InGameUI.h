@@ -493,7 +493,7 @@ public:  // ********************************************************************
 	struct OrderHint
 	{
 		OrderHint( void ) : kind( ORDER_HINT_MOVE ), owner( INVALID_ID ), bornMs( 0 ), step( 0 ), icon( NULL ),
-			onObject( FALSE ), target( INVALID_ID ), fromTarget( INVALID_ID ), mark( ORDER_MARK_NONE ) {}
+			onObject( FALSE ), target( INVALID_ID ), fromTarget( INVALID_ID ), mark( ORDER_MARK_NONE ), clicked( FALSE ), members( 1 ) {}
 
 		Coord3D from;						///< where the unit is now
 		Coord3D to;							///< where it is going
@@ -506,8 +506,14 @@ public:  // ********************************************************************
 		ObjectID target;				///< that unit or building, INVALID_ID on ground
 		ObjectID fromTarget;		///< the unit or building 'from' was the end of, on a shift list's later legs
 		OrderHintMark mark;			///< what stands on 'to'
+		Bool clicked;						///< 'to' is a point the player clicked (applyCommandedPoints), every member's the same
+		Int members;						///< units bunched into this line (bunchOrderHints)
 	};
 	const std::vector<OrderHint>& getOrderHints( void ) const { return m_drawnOrderHints; }
+	/// A drawn line's end wears its ring only where it means "a place you clicked": a target, a click,
+	/// or a lone unit's own end (an order from a script has no click).  Several units' own ends that
+	/// happen to bunch somewhere else end bare
+	static Bool orderHintShowsMark( const OrderHint& hint ) { return hint.mark != ORDER_MARK_NONE && ( hint.onObject || hint.clicked || hint.members <= 1 ); }
 
 	// One ring a unit on the ground where the local player's last move-type order really sends it,
 	// read off the unit once logic has run the order (the flood's cell, the formation station, the
@@ -1430,8 +1436,9 @@ protected:
 	AsciiString									m_currentlyPlayingMovie;											///< Used to push updates to TheScriptEngine
 	DrawableList								m_selectedDrawables;													///< A list of all selected drawables.
 
+public:
 	// Where each order landed: EA's move ring under Classic graphics, the order's coloured marker
-	// otherwise (W3DInGameUI::drawMoveHints, drawOrderRings)
+	// otherwise (W3DInGameUI::drawMoveHints and drawOrderRings on the ground, W3DWaypointBuffer on water)
 	enum { MAX_MOVE_HINTS = 256, MOVE_MARKER_MS = 750 };
 	struct MoveHintStruct
 	{
@@ -1440,6 +1447,11 @@ protected:
 		UnsignedInt bornMs;			///< and the picture's clock then, for the coloured marker
 		OrderHintKind kind;
 	};
+	const MoveHintStruct& getMoveHint( Int i ) const { return m_moveHint[ i ]; }
+	/// An order mark at (x, y) stands on water: the terrain pass paints it under the water, so the
+	/// waypoint buffer draws it on the sorted list after the water instead.  The water's surface in 'waterZ'
+	static Bool isOrderMarkOnWater( Real x, Real y, Real *waterZ );
+protected:
 	MoveHintStruct							m_moveHint[ MAX_MOVE_HINTS ];
 	Int													m_nextMoveHint;
 	DrawableList								m_selectedLocalDrawables;											///< A list of all selected drawables owned by the local player

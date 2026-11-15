@@ -248,6 +248,10 @@ NEW_CONTROLS = [
     (CHECK,  "CheckBuildWithoutWorker", "GUI:BuildWithoutWorker"),
     (LABEL,  "LabelHealthBarColors",   "GUI:HealthBarColors"),
     (COMBO,  "ComboBoxHealthBarColors", None),
+    (LABEL,  "LabelHudLayout",         "GUI:HudLayout"),
+    (COMBO,  "ComboBoxHudLayout",      None),
+    (LABEL,  "LabelHudWidth",          "GUI:HudWidth"),
+    (COMBO,  "ComboBoxHudWidth",       None),
     (LABEL,  "LabelMenuTransitionSpeed", "GUI:MenuTransitionSpeed"),
     (SLIDER, "SliderMenuTransitionSpeed", None),
     (LABEL,  "LabelMinimapSize",       "GUI:MinimapSize"),
@@ -381,7 +385,10 @@ GROUP_LAYOUT = [
             ("check", "CheckDetailedModels"),
             ("check", "CheckHDTextures"),
             # the Screen column is full with the monitor and the resolution note
-            setting("LabelFrameRateLimit", "ComboBoxFrameRateLimit")])]),
+            setting("LabelFrameRateLimit", "ComboBoxFrameRateLimit")]),
+        # from Interface, whose first column ran past the page once HUD took Layout and HUD Width
+        ("GUI:OptionsGroupMenus", [
+            setting("LabelMenuTransitionSpeed", "SliderMenuTransitionSpeed", "ValueMenuTransitionSpeed")])]),
 
     ("PageGraphics", [
         # the particle limit went to Effects' Particles group to make room for the quality slider
@@ -487,10 +494,10 @@ GROUP_LAYOUT = [
 
     ("PageInterface", [
         ("GUI:OptionsGroupHud", [
+            setting("LabelHudLayout", "ComboBoxHudLayout"),
+            setting("LabelHudWidth", "ComboBoxHudWidth"),
             ("check", "CheckNetBox"),
             setting("LabelMinimapSize", "SliderMinimapSize", "ValueMinimapSize")]),
-        ("GUI:OptionsGroupMenus", [
-            setting("LabelMenuTransitionSpeed", "SliderMenuTransitionSpeed", "ValueMenuTransitionSpeed")]),
         ("GUI:OptionsGroupBattlefield", [
             setting("LabelHealthBars", "ComboBoxHealthBars"),
             setting("LabelHealthBarColors", "ComboBoxHealthBarColors"),
@@ -974,16 +981,22 @@ def read_strings():
 
 
 def enum_count(name):
-    """The value of an enum constant like WINDOW_MODE_COUNT, out of whichever header declares it."""
+    """The value of an enum constant like WINDOW_MODE_COUNT, out of whichever header declares it:
+    WINDOW_MODE_COUNT = 3, or the last of a list with no values, enum { HUD_LAYOUT_CLASSIC, ..., HUD_LAYOUT_COUNT }."""
     pattern = re.compile(r"\b%s\s*=\s*(\d+)" % re.escape(name))
+    listed = re.compile(r"\benum\s*\{([^{}=]*?)\b%s\s*[,}]" % re.escape(name))
     for root, _dirs, files in os.walk(INCLUDE):
         for filename in files:
             if not filename.endswith(".h"):
                 continue
             with open(os.path.join(root, filename), "rb") as fp:
-                match = pattern.search(fp.read().decode("latin-1"))
+                text = fp.read().decode("latin-1")
+            match = pattern.search(text)
             if match:
                 return int(match.group(1))
+            match = listed.search(text)
+            if match:
+                return len([entry for entry in match.group(1).split(",") if entry.strip()])
     return None
 
 

@@ -143,6 +143,8 @@ OPTION_BOOL_ACCESSORS( m_hdTextures )
 OPTION_INT_ACCESSORS( m_lightingStyle )
 OPTION_INT_ACCESSORS( m_healthBarMode )
 OPTION_INT_ACCESSORS( m_healthBarColors )
+OPTION_INT_ACCESSORS( m_hudLayout )
+OPTION_INT_ACCESSORS( m_hudWidth )
 OPTION_INT_ACCESSORS( m_playerColorScheme )
 OPTION_INT_ACCESSORS( m_textLanguage )
 OPTION_BOOL_ACCESSORS( m_showOrderLines )
@@ -590,8 +592,19 @@ const OptionDef TheOptionCatalog[] =
 		OPTION_ENUM, APPLY_LIVE, 0, HEALTH_BAR_COLORS_COUNT - 1,
 		get_m_healthBarColors, set_m_healthBarColors },
 
-	// MenuLayout (stretch or fit), HudScale and InterfaceStyle used to sit here.  Every menu is
-	// fitted now, and there is one interface at one size.
+	// Where the in-game interface sits: 0 Classic, the bar along the bottom, 1 the Red Alert style
+	// sidebar down the right with a command strip under the world (docs/plans/HUD-SIDEBAR-LAYOUT.md).
+	// Read as the bar is laid out, so Accept builds the shell and the bar again, in a match too.
+	// Every menu is fitted; MenuLayout, HudScale and the old InterfaceStyle are gone for good.
+	{ "HudLayout",								OPT_WND( "ComboBoxHudLayout" ), "GUI:HudLayout",
+		OPTION_ENUM, APPLY_SHELL_REBUILD, 0, HUD_LAYOUT_COUNT - 1,
+		get_m_hudLayout, set_m_hudLayout },
+
+	// How wide the interface may spread, for either layout: the whole screen, or a centred 21:9 or
+	// 16:9 area on a screen wider than that, the world still drawn edge to edge (HudAreaForScreen).
+	{ "HudWidth",									OPT_WND( "ComboBoxHudWidth" ), "GUI:HudWidth",
+		OPTION_ENUM, APPLY_SHELL_REBUILD, 0, HUD_WIDTH_COUNT - 1,
+		get_m_hudWidth, set_m_hudWidth },
 
 	// Whose colour a player is drawn in.  Purely local: the match still agrees on the lobby's
 	// colours and this only changes what this screen puts on top of them, so two people in the same

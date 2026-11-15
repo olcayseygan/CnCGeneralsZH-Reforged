@@ -38,6 +38,7 @@
 #include "Common/Upgrade.h"
 #include "GameClient/GameText.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/Display.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/GadgetPushButton.h"
@@ -203,6 +204,19 @@ void ControlBar::updateMultiSelectStrip( void )
 	//
 	setPortraitByObject( NULL );
 
+	//
+	// The sidebar's card keeps its portrait beside the grid: the focused type's, with how many of it
+	// are selected, and still no upgrades.  Its grid holds fourteen types; a selection of more shows
+	// the first fourteen and the focus keys still reach the rest
+	//
+	const Bool sidebar = isSidebarLayout();
+	if( sidebar )
+	{
+		const ThingTemplate *focused = m_multiSelectGroupTemplate[ m_multiSelectFocus ];
+		setPortraitByImage( focused->getSelectedPortraitImage() ? focused->getSelectedPortraitImage() : focused->getButtonImage() );
+		GadgetButtonSetCount( m_rightHUDCameoWindow, m_multiSelectGroupSize[ m_multiSelectFocus ] );
+	}
+
 	// one cell per selected type with its count; the focused type is the lit one, the rest
 	// wear the darkened overlay state.  A cell is drawn from the portrait art, as large as the
 	// well itself for a one-type selection; the button cameo stretched to that size is a blur
@@ -212,7 +226,7 @@ void ControlBar::updateMultiSelectStrip( void )
 		if( win == NULL )
 			continue;
 
-		if( (Int)i < m_multiSelectGroupCount )
+		if( (Int)i < m_multiSelectGroupCount && ( !sidebar || (Int)i < HUD_CARD_GRID_CELLS ) )
 		{
 			const ThingTemplate *type = m_multiSelectGroupTemplate[ i ];
 			win->winHide( FALSE );
@@ -351,6 +365,19 @@ void ControlBar::layoutMultiSelectTiles( Int count )
 	Int cellW = hudSize.x / n;
 	Int cellH = hudSize.y / n;
 
+	// The sidebar's card has a grid of its own beside the portrait (HudLayoutRects::gridCells, 7x2):
+	// tile i is cell i, the types past the grid's fourteen are not shown (updateMultiSelectStrip)
+	HudLayoutRects hud;
+	ICoord2D hudAt = { 0, 0 };
+	const Bool sidebar = isSidebarLayout();
+	if( sidebar )
+	{
+		getHudLayoutRects( &hud );
+		m_rightHUDWindow->winGetScreenPosition( &hudAt.x, &hudAt.y );
+		cellW = hud.gridCells[ 0 ].width();
+		cellH = hud.gridCells[ 0 ].height();
+	}
+
 	// the tiles' clicks reach the HUD itself, see portraitBarInput
 	m_rightHUDWindow->winSetInputFunc( portraitBarInput );
 
@@ -372,6 +399,13 @@ void ControlBar::layoutMultiSelectTiles( Int count )
 		GameWindow *tile = m_multiSelectTiles[ i ];
 		if( tile == NULL )
 			continue;
+		if( sidebar )
+		{
+			const IRegion2D &cell = hud.gridCells[ MIN( i, (Int)HUD_CARD_GRID_CELLS - 1 ) ];
+			tile->winSetPosition( cell.lo.x - hudAt.x, cell.lo.y - hudAt.y );
+			tile->winSetSize( cell.width(), cell.height() );
+			continue;
+		}
 		Int col = i % n;
 		Int row = i / n;
 		tile->winSetPosition( col * cellW + 1, row * cellH + 1 );

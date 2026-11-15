@@ -488,5 +488,12 @@ private:
 /// art's texels are 1080 pixels), the edges and the centre stretched between them.  FALSE, and nothing
 /// drawn, when the art lacks the two corners that size it
 Bool ControlBarDrawNinePieceBox( const Image *const *pieces, const IRegion2D& box, Real scale );
+/// the scheme on screen's radar frame (RadarFrameImage) round the radar window where it stands; FALSE,
+/// and nothing drawn, when the scheme names none
+Bool ControlBarDrawRadarFrame( void );
+/// the scheme on screen's powers tray (PowerTrayImage) as one box: its cell piece under each of `cells`,
+/// its top, foot and left edges and the two left corners outside `box`, no right edge (the tray's
+/// screen side).  FALSE, and nothing drawn, without the pieces
+Bool ControlBarDrawPowerTrayBox( const IRegion2D *cells, Int count, const IRegion2D &box );
 
 #endif // __CONTROL_BAR_SCHEME_H_

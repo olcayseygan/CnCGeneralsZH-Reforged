@@ -40,7 +40,9 @@
 #include "GameClient/GroupPanel.h"
 
 #include "Common/GameCommon.h"
+#include "Common/GlobalData.h"
 #include "Common/MessageStream.h"
+#include "Common/OptionsCatalog.h"
 #include "Common/NameKeyGenerator.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
@@ -213,6 +215,7 @@ namespace
 	Bool s_ledgeShown = FALSE;
 	IRegion2D s_ledgeBox;					///< the whole ledge, point included
 	IRegion2D s_foldBox;					///< the point, the notch left showing at the edge when the tray is in
+	Int s_trayEdge = 0;						///< trayRightEdge at the last draw: the drawer is cut there
 
 	Int s_seenSquad = -1;					///< the squad s_seenMembers belongs to
 	std::vector< ObjectID > s_seenMembers;	///< its members at the last draw, so a newcomer stands out
@@ -427,6 +430,14 @@ static Int radarFrameTop( void )
 {
 	static NameKeyType radarKey = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:LeftHUD" );
 	const Int barTop = controlBarTop( ControlBar::CB_PANEL_LEFT );
+	// in the sidebar layout the radar is up in the sidebar; what stands on the world's bottom left is
+	// the selection card (InGameUI's radarFrameTop has the same branch)
+	if( TheControlBar->isSidebarLayout() )
+	{
+		HudLayoutRects r;
+		HudLayoutForScreen( (Int)TheDisplay->getWidth(), (Int)TheDisplay->getHeight(), HUD_LAYOUT_SIDEBAR, TheGlobalData->m_hudWidth, &r );
+		return barTop < (Int)TheDisplay->getHeight() ? r.card.lo.y : barTop;
+	}
 	const Image *const *frame = TheControlBar->getControlBarSchemeManager()->getRadarFrame();
 	GameWindow *radar = TheWindowManager->winGetWindowFromId( NULL, radarKey );
 	if( radar == NULL || radar->winIsHidden() || barTop >= (Int)TheDisplay->getHeight() )
@@ -460,8 +471,10 @@ static Int rightTrayFloor( void )
 		floor = min( floor, at.y - stripPixels( FLOOR_GAP ) );
 	};
 
+	// in the sidebar layout the general's button is up in the sidebar, not on the world's right edge
 	static NameKeyType generalKey = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ButtonGeneral" );
-	standOn( TheWindowManager->winGetWindowFromId( NULL, generalKey ) );
+	if( !TheControlBar->isSidebarLayout() )
+		standOn( TheWindowManager->winGetWindowFromId( NULL, generalKey ) );
 
 	// the shortcut layout is the player template's; its slot windows are found by name once a layout
 	static AsciiString keyedLayout;
@@ -490,6 +503,23 @@ static Int rightTrayFloor( void )
 	for( Int i = 0; i < slotCount; i++ )
 		standOn( TheWindowManager->winGetWindowFromId( bar, slotKeys[ i ] ) );
 	return floor;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The edge the build tray stands on: the HUD area's right (HudWidth), or in the Red Alert style
+	* layout the open world's, left of the sidebar.  Nothing of the drawer shows past it. */
+//-------------------------------------------------------------------------------------------------
+static void hudRects( HudLayoutRects *r )
+{
+	HudLayoutForScreen( (Int)TheDisplay->getWidth(), (Int)TheDisplay->getHeight(),
+		TheControlBar->isSidebarLayout() ? HUD_LAYOUT_SIDEBAR : HUD_LAYOUT_CLASSIC, TheGlobalData->m_hudWidth, r );
+}
+
+static Int trayRightEdge( void )
+{
+	HudLayoutRects r;
+	hudRects( &r );
+	return r.play.hi.x;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -660,6 +690,40 @@ static Bool isWorkingFactory( Object *obj )
 		&& !obj->testStatus( OBJECT_STATUS_SOLD ) && obj->getProductionUpdateInterface() != NULL;
 }
 
+/// `obj`'s slot `button` into the list: the best availability where the type is already listed
+static void addBuildable( std::vector< Buildable > *list, Object *obj, const CommandButton *button )
+{
+	const ThingTemplate *thing = button->getThingTemplate();
+	if( thing == NULL )
+		return;
+	const CommandAvailability now = TheControlBar->getButtonAvailability( button, obj );
+	if( now == COMMAND_HIDDEN )
+		return;
+
+	size_t at = 0;
+	while( at < list->size() && (*list)[ at ].thing != thing )
+		at++;
+	if( at < list->size() )
+	{
+		if( ControlBar::commandAvailabilityRank( now ) > ControlBar::commandAvailabilityRank( (*list)[ at ].best ) )
+			(*list)[ at ].best = now;
+		return;
+	}
+
+	// another side's copy of a unit already listed (a captured factory, a general's twin): one
+	// entry, the player's own side's when either is.  A click queues the entry's template, so the
+	// logic only ever picks a factory that builds that one.
+	at = 0;
+	while( at < list->size() && !GroupPanel_isSameBuild( (*list)[ at ].button, button ) )
+		at++;
+	const Buildable added = { thing, button, now };
+	if( at == list->size() )
+		list->push_back( added );
+	else if( GroupPanel_isOwnSide( thing, obj->getControllingPlayer() )
+			&& !GroupPanel_isOwnSide( (*list)[ at ].thing, obj->getControllingPlayer() ) )
+		(*list)[ at ] = added;
+}
+
 static void gatherBuildable( Object *obj, void *userData )
 {
 	std::vector< Buildable > *list = (std::vector< Buildable > *)userData;
@@ -672,37 +736,8 @@ static void gatherBuildable( Object *obj, void *userData )
 	for( Int i = 0; i < MAX_COMMANDS_PER_SET; i++ )
 	{
 		const CommandButton *button = set->getCommandButton( i );
-		if( !GroupPanel_isPlayerBuildSlot( button, i ) )
-			continue;
-		const ThingTemplate *thing = button->getThingTemplate();
-		if( thing == NULL )
-			continue;
-		const CommandAvailability now = TheControlBar->getButtonAvailability( button, obj );
-		if( now == COMMAND_HIDDEN )
-			continue;
-
-		size_t at = 0;
-		while( at < list->size() && (*list)[ at ].thing != thing )
-			at++;
-		if( at < list->size() )
-		{
-			if( ControlBar::commandAvailabilityRank( now ) > ControlBar::commandAvailabilityRank( (*list)[ at ].best ) )
-				(*list)[ at ].best = now;
-			continue;
-		}
-
-		// another side's copy of a unit already listed (a captured factory, a general's twin): one
-		// entry, the player's own side's when either is.  A click queues the entry's template, so the
-		// logic only ever picks a factory that builds that one.
-		at = 0;
-		while( at < list->size() && !GroupPanel_isSameBuild( (*list)[ at ].button, button ) )
-			at++;
-		const Buildable added = { thing, button, now };
-		if( at == list->size() )
-			list->push_back( added );
-		else if( GroupPanel_isOwnSide( thing, obj->getControllingPlayer() )
-				&& !GroupPanel_isOwnSide( (*list)[ at ].thing, obj->getControllingPlayer() ) )
-			(*list)[ at ] = added;
+		if( GroupPanel_isPlayerBuildSlot( button, i ) )
+			addBuildable( list, obj, button );
 	}
 }
 
@@ -711,6 +746,33 @@ void GroupPanel_gatherBuildable( Player *player, std::vector< GroupPanelBuildabl
 	out.clear();
 	if( player != NULL )
 		player->iterateObjects( gatherBuildable, &out );
+}
+
+/// a live builder's structure buttons, as populateCommand shows them on its bar
+static void gatherConstructible( Object *obj, void *userData )
+{
+	std::vector< Buildable > *list = (std::vector< Buildable > *)userData;
+	if( obj->isEffectivelyDead() || !obj->isKindOf( KINDOF_DOZER )
+			|| obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || obj->testStatus( OBJECT_STATUS_SOLD ) )
+		return;
+	const CommandSet *set = TheControlBar->findCommandSet( obj->getCommandSetString() );
+	if( set == NULL )
+		return;
+
+	for( Int i = 0; i < MAX_COMMANDS_PER_SET; i++ )
+	{
+		const CommandButton *button = set->getCommandButton( i );
+		if( button != NULL && button->getCommandType() == GUI_COMMAND_DOZER_CONSTRUCT
+				&& !BitTest( button->getOptions(), SCRIPT_ONLY ) && TheControlBar->hasCommandWindow( i ) )
+			addBuildable( list, obj, button );
+	}
+}
+
+void GroupPanel_gatherConstructible( Player *player, std::vector< GroupPanelBuildable > &out )
+{
+	out.clear();
+	if( player != NULL )
+		player->iterateObjects( gatherConstructible, &out );
 }
 
 /// the command bar's own reading of an availability (ControlBar::updateContextCommand)
@@ -838,7 +900,10 @@ static GameWindow *panelWindow( void )
 	if( panelAlive() )
 		return s_panel;
 
-	s_panel = TheWindowManager->winCreate( NULL, WIN_STATUS_ENABLED | WIN_STATUS_HIDDEN, 0, 0, 1, 1, panelSystem );
+	// ABOVE, as the bar's command tab row: the sidebar layout's ControlBarParent covers the whole
+	// screen, and a bar made again after the tray (Options' Accept, a resize) would otherwise stand in
+	// front of it and take its clicks
+	s_panel = TheWindowManager->winCreate( NULL, WIN_STATUS_ENABLED | WIN_STATUS_HIDDEN | WIN_STATUS_ABOVE, 0, 0, 1, 1, panelSystem );
 	if( s_panel == NULL )
 		return NULL;
 	s_panel->winSetWindowId( panelId() );
@@ -1007,8 +1072,12 @@ static void drawList( void )
 	const Pieces &p = pieces();
 	const Int screenH = (Int)TheDisplay->getHeight();
 	const Int top = REAL_TO_INT( screenH * LIST_TOP_SHARE );
-	const Int bottom = radarFrameTop() - stripPixels( PRODUCTION_LIFT ) - stripPixels( PRODUCTION_ROOM )
-										 - px( PRODUCTION_TAB_H ) - px( LIST_CLEARANCE );
+	// in the sidebar layout the radar is in the sidebar and no production row hangs over the bar: the
+	// list stands on the selection card
+	const Int bottom = TheControlBar->isSidebarLayout()
+		? controlBarTop( ControlBar::CB_PANEL_LEFT ) - px( LIST_CLEARANCE )
+		: radarFrameTop() - stripPixels( PRODUCTION_LIFT ) - stripPixels( PRODUCTION_ROOM )
+			- px( PRODUCTION_TAB_H ) - px( LIST_CLEARANCE );
 	const Int room = max( bottom - top, 1 );
 
 	// the production tray's pieces (InGameUI.cpp hudCellStyle) laid going down, as the superweapons'
@@ -1182,7 +1251,7 @@ static void drawLedge( Int top, Int left, Int right, const SquadRow *row )
 	const Int foldSize = pieceW( s_trayOpen ? p.fold[ STATE_UP ] : p.unfold[ STATE_UP ], FOLD_W );
 
 	s_ledgeBox.lo.x = left;
-	s_ledgeBox.hi.x = right;
+	s_ledgeBox.hi.x = min( right, s_trayEdge );
 	s_ledgeBox.lo.y = top;
 	s_ledgeBox.hi.y = top + height;
 	s_foldBox = s_ledgeBox;
@@ -1233,8 +1302,9 @@ static void drawLedge( Int top, Int left, Int right, const SquadRow *row )
 	}
 	TheDisplay->endBatch2D();
 
-	// R's well: the squad's key, pressed (the tray is always the chosen squad's), and its size
-	if( row == NULL )
+	// R's well: the squad's key, pressed (the tray is always the chosen squad's), and its size; not
+	// while the well is past the edge, where the clip does not reach the strings
+	if( row == NULL || right > s_trayEdge )
 		return;
 	IRegion2D key;
 	key.lo.x = runHi + px( LEDGE_KEY_X );
@@ -1301,7 +1371,15 @@ static void drawTray( Int top )
 	}
 
 	const Int shown = min( (Int)s_buildables.size(), (Int)MAX_BUTTONS );
-	const Int floor = rightTrayFloor();
+	Int floor = rightTrayFloor();
+	if( TheControlBar->isSidebarLayout() )
+	{
+		// the superweapon timers climb from the world's bottom right there
+		// ponytail: kept over the lowest row only; InGameUI's row count would lift it over a stack of them
+		HudLayoutRects r;
+		hudRects( &r );
+		floor = min( floor, r.superweaponRow.lo.y - stripPixels( FLOOR_GAP ) );
+	}
 	const Int bodyTop = top + px( LEDGE_BODY_Y );	// the body's top edge, under the ledge's foot
 
 	Int barW = 0, barH = 0;
@@ -1338,7 +1416,12 @@ static void drawTray( Int top )
 	const Real eased = s_slide * s_slide * ( 3.0f - 2.0f * s_slide );
 	const Int pointW = pieceW( p.ledgeL, LEDGE_L_W );
 	const Int ledgeLength = max( px( LEDGE_LENGTH ), pointW + columns * cellW + body.openW );
-	const Int right = (Int)TheDisplay->getWidth() + REAL_TO_INT( ( ledgeLength - pointW ) * ( 1.0f - eased ) + 0.5f );
+	s_trayEdge = trayRightEdge();
+	const Int right = s_trayEdge + REAL_TO_INT( ( ledgeLength - pointW ) * ( 1.0f - eased ) + 0.5f );
+
+	// what stands past the edge is cut: off the screen in the full-width Classic bar, but over the
+	// sidebar or the world beside a narrowed HUD area otherwise
+	IRegion2D clip = { { 0, 0 }, { s_trayEdge, (Int)TheDisplay->getHeight() } };
 
 	// cells in the tray's order (place counted in from the edge); a row reads left to right, flush right
 	IRegion2D cells[ MAX_BUTTONS ];
@@ -1359,10 +1442,15 @@ static void drawTray( Int top )
 	if( s_slide <= 0.0f )
 	{
 		hideTrayWindows();
+		TheDisplay->setClipRegion( &clip );
+		TheDisplay->enableClipping( TRUE );
 		drawLedge( top, right - ledgeLength, right, row );
+		TheDisplay->enableClipping( FALSE );
 		return;
 	}
 
+	TheDisplay->setClipRegion( &clip );
+	TheDisplay->enableClipping( TRUE );
 	TheDisplay->beginBatch2D();
 	if( body.cell != NULL )
 		drawStepTray( body, cells, shown, columns, -1, -1 );
@@ -1374,12 +1462,20 @@ static void drawTray( Int top )
 	TheDisplay->endBatch2D();
 	// the ledge over the body's top edge
 	drawLedge( top, right - ledgeLength, right, row );
+	TheDisplay->enableClipping( FALSE );
 
-	// the parent covers the body, so a click between the buttons stays off the ground
+	// the parent covers the body, so a click between the buttons stays off the ground; cut at the edge
+	// with the drawing, so a sliding drawer takes no click meant for the sidebar
 	// ponytail: the notch the short row leaves blocks the ground too; a second parent if anyone clicks there
 	const Int bodyLeft = right - columns * cellW - body.openW;
+	const Int bodyRight = min( right, s_trayEdge );
+	if( bodyRight <= bodyLeft )
+	{
+		hideTrayWindows();
+		return;
+	}
 	panel->winSetPosition( bodyLeft, bodyTop );
-	panel->winSetSize( right - bodyLeft, bodyBottom - bodyTop );
+	panel->winSetSize( bodyRight - bodyLeft, bodyBottom - bodyTop );
 
 	// a button inside its cell as the mockup has it, no bigger than the bar's own
 	Int buttonW = cellW - 2 * px( BUTTON_INSET_X, scale / TRAY_SCALE );
@@ -1394,14 +1490,16 @@ static void drawTray( Int top )
 		GameWindow *button = s_buttons[ i ];
 		if( button == NULL )
 			continue;
-		if( i >= shown )
+		// a button is a window the clip does not cut: one crossing an edge inside the screen waits until
+		// the slide brings it clear; off the screen's own edge it slides out as before
+		const IRegion2D &cell = cells[ cellOf[ i < shown ? i : 0 ] ];
+		if( i >= shown || ( cell.hi.x > s_trayEdge && s_trayEdge < (Int)TheDisplay->getWidth() ) )
 		{
 			button->winHide( TRUE );
 			continue;
 		}
 
 		const Buildable &entry = s_buildables[ i ];
-		const IRegion2D &cell = cells[ cellOf[ i ] ];
 		button->winSetPosition( ( cell.lo.x + cell.hi.x - buttonW ) / 2 - bodyLeft, ( cell.lo.y + cell.hi.y - buttonH ) / 2 - bodyTop );
 		button->winSetSize( buttonW, buttonH );
 		if( GadgetButtonGetData( button ) != (void *)entry.button )
@@ -1457,6 +1555,15 @@ void GroupPanel_draw( Int rightTop )
 		s_chosenSquad = -1;
 	s_shownSquad = isValidHotkeySquadIndex( s_chosenSquad ) && !chosenHasStructure() ? s_chosenSquad : -1;
 	selectArrivals( player );
+
+	// the sidebar layout has no rack plate over the world's right edge to hang from: the tray starts
+	// level with the general's powers window, against the sidebar
+	if( TheControlBar->isSidebarLayout() )
+	{
+		HudLayoutRects r;
+		hudRects( &r );
+		rightTop = r.powersWindow.lo.y;
+	}
 
 	drawList();
 	drawTray( rightTop );

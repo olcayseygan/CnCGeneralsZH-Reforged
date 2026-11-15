@@ -203,6 +203,7 @@ static const LookupListRec GameMessageMetaTypeNames[] =
 	{ "TOGGLE_COMMAND_TAB_BUILDINGS",						GameMessage::MSG_META_TOGGLE_COMMAND_TAB_BUILDINGS },
 	{ "TOGGLE_COMMAND_TAB_GROUND",							GameMessage::MSG_META_TOGGLE_COMMAND_TAB_GROUND },
 	{ "TOGGLE_COMMAND_TAB_AIRCRAFT",						GameMessage::MSG_META_TOGGLE_COMMAND_TAB_AIRCRAFT },
+	{ "TOGGLE_COMMAND_TAB_DEFENSE",							GameMessage::MSG_META_TOGGLE_COMMAND_TAB_DEFENSE },
 	{ "DEPLOY",																		GameMessage::MSG_META_DEPLOY },
 	{ "CREATE_FORMATION",													GameMessage::MSG_META_CREATE_FORMATION },
 	{ "FOLLOW",																		GameMessage::MSG_META_FOLLOW },
@@ -934,6 +935,8 @@ void MetaMap::keepArrowsForCamera()
 		{ GameMessage::MSG_META_TOGGLE_COMMAND_TAB_BUILDINGS, MK_Q, CTRL },
 		{ GameMessage::MSG_META_TOGGLE_COMMAND_TAB_GROUND, MK_W, CTRL },
 		{ GameMessage::MSG_META_TOGGLE_COMMAND_TAB_AIRCRAFT, MK_E, CTRL },
+		// and the sidebar's fourth tab, R beside them
+		{ GameMessage::MSG_META_TOGGLE_COMMAND_TAB_DEFENSE, MK_R, CTRL },
 	};
 	for( size_t each = 0; each < sizeof( DEFAULTS ) / sizeof( DEFAULTS[ 0 ] ); ++each )
 	{

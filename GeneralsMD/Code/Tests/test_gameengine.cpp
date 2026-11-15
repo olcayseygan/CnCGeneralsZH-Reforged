@@ -168,6 +168,7 @@ static int GetSystemMetrics( int which )
 #include "GameClient/ParticleSys.h"
 #include "GameClient/FXList.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarSidebar.h"
 #include "GameClient/GroupPanel.h"
 #include "GameClient/Display.h"
 #include "GameLogic/AI.h"
@@ -11225,6 +11226,46 @@ TEST(frame_rate_limit_round_trips_through_options_ini)
 	TheWritableGlobalData = saved;
 }
 
+/** The interface's layout and width: Classic and the whole screen with no line, so a key-less file
+	 is the Classic game, and both rebuild the shell on Accept since the bar reads them as it is laid out. */
+TEST(hud_layout_and_width_round_trip_through_options_ini)
+{
+	const OptionDef *layout = findOptionDef( "HudLayout" );
+	const OptionDef *width = findOptionDef( "HudWidth" );
+	CHECK( layout != NULL );
+	CHECK( width != NULL );
+	CHECK_EQ( (Int)layout->kind, (Int)OPTION_ENUM );
+	CHECK_EQ( (Int)layout->apply, (Int)APPLY_SHELL_REBUILD );
+	CHECK_EQ( layout->hi, HUD_LAYOUT_COUNT - 1 );
+	CHECK_EQ( (Int)width->kind, (Int)OPTION_ENUM );
+	CHECK_EQ( (Int)width->apply, (Int)APPLY_SHELL_REBUILD );
+	CHECK_EQ( width->hi, HUD_WIDTH_COUNT - 1 );
+
+	GlobalData *saved = TheWritableGlobalData;
+	TheWritableGlobalData = NEW GlobalData;
+
+	CHECK_EQ( TheGlobalData->m_hudLayout, (Int)HUD_LAYOUT_CLASSIC );
+	CHECK_EQ( TheGlobalData->m_hudWidth, (Int)HUD_WIDTH_FULL );
+	CHECK_EQ( optionDefaultValue( *layout ), (Int)HUD_LAYOUT_CLASSIC );
+	CHECK_EQ( optionDefaultValue( *width ), (Int)HUD_WIDTH_FULL );
+
+	UserPreferences pref;
+	pref[ AsciiString( "HudLayout" ) ] = AsciiString( "1" );
+	pref[ AsciiString( "HudWidth" ) ] = AsciiString( "2" );
+	loadOptionsFromPreferences( pref );
+	CHECK_EQ( TheGlobalData->m_hudLayout, (Int)HUD_LAYOUT_SIDEBAR );
+	CHECK_EQ( TheGlobalData->m_hudWidth, (Int)HUD_WIDTH_16_9 );
+
+	pref[ AsciiString( "HudLayout" ) ] = AsciiString( "7" );
+	pref[ AsciiString( "HudWidth" ) ] = AsciiString( "9" );
+	loadOptionsFromPreferences( pref );
+	CHECK_EQ( TheGlobalData->m_hudLayout, HUD_LAYOUT_COUNT - 1 );
+	CHECK_EQ( TheGlobalData->m_hudWidth, HUD_WIDTH_COUNT - 1 );
+
+	delete TheWritableGlobalData;
+	TheWritableGlobalData = saved;
+}
+
 TEST(player_color_scheme_round_trips_through_options_ini)
 {
 	const OptionDef *def = findOptionDef( "PlayerColors" );
@@ -20084,6 +20125,26 @@ TEST(hud_layout_rects_tile_the_screen)
 			CHECK( r.superweaponRowPitch >= r.superweaponRow.height() );
 		}
 	}
+}
+
+TEST(sidebar_scroll_keeps_the_window_full)
+{
+	/* The sidebar's cameos scroll two to a row in a window of six rows: the first row shown never goes
+		 above the top, and never so far down that the window shows empty rows a shorter scroll would
+		 have filled. */
+	const Int cols = HUD_SIDEBAR_CAMEO_COLUMNS, rows = HUD_SIDEBAR_CAMEO_ROWS;
+	CHECK_EQ( Sidebar_scroll( 0, cols, rows, 3 ), 0 );
+	CHECK_EQ( Sidebar_scroll( 5, cols, rows, 2 ), 0 );			// fits: no scrolling
+	CHECK_EQ( Sidebar_scroll( 12, cols, rows, 1 ), 0 );			// exactly the window
+	CHECK_EQ( Sidebar_scroll( 13, cols, rows, 5 ), 1 );			// seven rows, the odd cell alone on the last
+	CHECK_EQ( Sidebar_scroll( 13, cols, rows, 1 ), 1 );
+	CHECK_EQ( Sidebar_scroll( 13, cols, rows, -2 ), 0 );
+	CHECK_EQ( Sidebar_scroll( 23, cols, rows, 6 ), 6 );			// twelve rows
+	CHECK_EQ( Sidebar_scroll( 24, cols, rows, 7 ), 6 );
+	CHECK_EQ( Sidebar_scroll( 24, cols, rows, 0x7fff ), 6 );
+	CHECK_EQ( Sidebar_scroll( 24, cols, rows, 3 ), 3 );
+	CHECK_EQ( Sidebar_scroll( 24, 0, rows, 3 ), 0 );				// no grid
+	CHECK_EQ( Sidebar_scroll( 24, cols, 0, 3 ), 0 );
 }
 
 TEST(a_plate_covers_the_windows_its_panel_is_responsible_for)

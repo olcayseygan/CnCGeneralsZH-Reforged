@@ -15189,6 +15189,70 @@ TOOLTIP:HealthBarColors
 "Grün bei voller Gesundheit über Gelb bis Rot, oder jeder Balken in der Farbe seines Besitzers, damit du siehst, wem er gehört. Lahmgelegte Einheiten bleiben blau."
 END
 
+GUI:HudLayout
+"Anordnung"
+END
+
+GUI:HudLayout0
+"Klassisch"
+END
+
+GUI:HudLayout1
+"Red-Alert-Stil"
+END
+
+TOOLTIP:HudLayout
+"Klassisch lässt die Befehlsleiste unten. Der Red-Alert-Stil legt Bau und Ausbildung in eine Seitenleiste rechts und die Befehle der gewählten Einheiten in eine Leiste unten."
+END
+
+GUI:HudWidth
+"Breite der Oberfläche"
+END
+
+GUI:HudWidth0
+"Ganzer Bildschirm"
+END
+
+GUI:HudWidth1
+"21:9"
+END
+
+GUI:HudWidth2
+"16:9"
+END
+
+TOOLTIP:HudWidth
+"Auf einem breiteren Bildschirm als die Wahl rückt die Oberfläche in einen mittigen Bereich in diesem Format, damit die Leiste vor dir bleibt. Das Schlachtfeld füllt weiter den ganzen Bildschirm."
+END
+
+GUI:SidebarTab0
+"Gebäude"
+END
+
+GUI:SidebarTab1
+"Verteidigung"
+END
+
+GUI:SidebarTab2
+"Infanterie"
+END
+
+GUI:SidebarTab3
+"Fahrzeuge"
+END
+
+GUI:SidebarAll
+"Alle"
+END
+
+GUI:SidebarSell
+"Verkaufen"
+END
+
+GUI:SidebarRepair
+"Reparieren"
+END
+
 GUI:MenuTransitionSpeed
 "Menütempo"
 END
@@ -15535,6 +15599,10 @@ END
 
 GUI:HotkeysCommandHOLD_POSITION
 "Position halten"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_DEFENSE
+"Vierter Reiter der Seitenleiste"
 END
 
 GUI:MoneyTransferTitle

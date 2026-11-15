@@ -16989,6 +16989,70 @@ TOOLTIP:HealthBarColors
 "Vert en pleine santé, puis jaune jusqu'au rouge, ou chaque barre à la couleur de son propriétaire pour voir à qui elle appartient. Les unités neutralisées restent en bleu."
 END
 
+GUI:HudLayout
+"Disposition"
+END
+
+GUI:HudLayout0
+"Classique"
+END
+
+GUI:HudLayout1
+"Style Red Alert"
+END
+
+TOOLTIP:HudLayout
+"Classique garde la barre de commande en bas. Style Red Alert place la construction et l'entraînement dans une barre latérale à droite et les ordres des unités sélectionnées dans une bande en bas."
+END
+
+GUI:HudWidth
+"Largeur de l'interface"
+END
+
+GUI:HudWidth0
+"Plein écran"
+END
+
+GUI:HudWidth1
+"21:9"
+END
+
+GUI:HudWidth2
+"16:9"
+END
+
+TOOLTIP:HudWidth
+"Sur un écran plus large que ce choix, l'interface se resserre dans une zone centrée de ce format, pour garder la barre devant vous. Le champ de bataille occupe toujours tout l'écran."
+END
+
+GUI:SidebarTab0
+"Bâtiments"
+END
+
+GUI:SidebarTab1
+"Défenses"
+END
+
+GUI:SidebarTab2
+"Infanterie"
+END
+
+GUI:SidebarTab3
+"Véhicules"
+END
+
+GUI:SidebarAll
+"Tout"
+END
+
+GUI:SidebarSell
+"Vendre"
+END
+
+GUI:SidebarRepair
+"Réparer"
+END
+
 GUI:MenuTransitionSpeed
 "Vitesse des transitions de menu"
 END
@@ -17355,6 +17419,10 @@ END
 
 GUI:HotkeysCommandHOLD_POSITION
 "Tenir la position"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_DEFENSE
+"Quatrième onglet de la barre latérale"
 END
 
 GUI:LoadModeSkirmish

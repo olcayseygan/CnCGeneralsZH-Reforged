@@ -2324,6 +2324,7 @@ GameEngine/Source/GameClient/GUI/ControlBar/ControlBarOCLTimer.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarObserver.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarScheme.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarSidebar.cpp
+GameEngine/Source/GameClient/GUI/ControlBar/ControlBarSidebarLayout.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarStructureInventory.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarUnderConstruction.cpp
 GameEngine/Source/GameClient/GUI/DisconnectMenu/DisconnectMenu.cpp
@@ -4319,8 +4320,8 @@ Tests/test_install_root.cpp
 Tests/test_install_textures.cpp
 Tests/test_lan_broadcast.cpp
 Tests/test_linux_portable.sh
-Tests/test_macos_app.sh
 Tests/test_load_screen.inc
+Tests/test_macos_app.sh
 Tests/test_main.cpp
 Tests/test_map_ini_rollback.inc
 Tests/test_miles_effects.cpp

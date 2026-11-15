@@ -16729,6 +16729,70 @@ TOOLTIP:HealthBarColors
 "Tam canda yeşil, sarıdan geçip kırmızıya, ya da kimin olduğu görünsün diye her çubuk sahibinin renginde. Devre dışı birimler mavi kalır."
 END
 
+GUI:HudLayout
+"Arayüz Düzeni"
+END
+
+GUI:HudLayout0
+"Klasik"
+END
+
+GUI:HudLayout1
+"Red Alert Tarzı"
+END
+
+TOOLTIP:HudLayout
+"Klasik, komuta çubuğunu altta tutar. Red Alert tarzı bina ve birim üretimini sağdaki yan panele taşır, seçili birimlerin komutlarını alttaki şeride koyar."
+END
+
+GUI:HudWidth
+"Arayüz Genişliği"
+END
+
+GUI:HudWidth0
+"Tam Ekran"
+END
+
+GUI:HudWidth1
+"21:9"
+END
+
+GUI:HudWidth2
+"16:9"
+END
+
+TOOLTIP:HudWidth
+"Ekran seçilenden genişse arayüz o oranda ortalanmış bir alana toplanır, çubuk gözünün önünde kalır. Savaş alanı yine bütün ekranı kaplar."
+END
+
+GUI:SidebarTab0
+"Bina"
+END
+
+GUI:SidebarTab1
+"Savunma"
+END
+
+GUI:SidebarTab2
+"Piyade"
+END
+
+GUI:SidebarTab3
+"Araç"
+END
+
+GUI:SidebarAll
+"Tümü"
+END
+
+GUI:SidebarSell
+"Sat"
+END
+
+GUI:SidebarRepair
+"Onar"
+END
+
 GUI:MenuTransitionSpeed
 "Menü Geçiş Hızı"
 END
@@ -17039,6 +17103,10 @@ END
 
 GUI:HotkeysCommandTOGGLE_COMMAND_TAB_AIRCRAFT
 "Hava araçları sekmesi"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_DEFENSE
+"Yan Panel 4. Sekme"
 END
 
 GUI:HotkeysCommandSIGNAL_ATTACK

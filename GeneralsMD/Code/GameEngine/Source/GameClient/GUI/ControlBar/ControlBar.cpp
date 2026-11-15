@@ -75,8 +75,10 @@
 #include "GameLogic/ScriptEngine.h"
 
 #include "GameClient/AnimateWindowManager.h"
+#include "Common/OptionsCatalog.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/ControlBarScheme.h"
+#include "GameClient/ControlBarSidebar.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/Display.h"
 #include "GameClient/DisplayStringManager.h"
@@ -1715,6 +1717,9 @@ ControlBar::ControlBar( void )
 		m_panelRect[ i ].hi.x = m_panelRect[ i ].hi.y = 0;
 	}
 	m_panelOrigin.x = m_panelOrigin.y = 0;
+	m_sidebarLayout = FALSE;
+	m_sidebarBlockSaved = FALSE;
+	m_sidebarBlockEnabled = FALSE;
 	for( i = 0; i < MAX_COMMANDS_PER_SET; i++ )
 	{
 		m_commandWindows[ i ] = NULL;
@@ -1896,11 +1901,31 @@ static const Real thePanelAnchorDesignX[ ControlBar::CB_PANEL_COUNT ] = { 0.0f, 
 static const Real HUD_ART_ASPECT = 1920.0f / 1080.0f;		///< what ControlBar Pro was painted at
 static const Real theHudSeamDesignX[ ControlBar::CB_PANEL_COUNT - 1 ] = { 182.0f, 616.0f };	///< drawPainting's seams
 
+/// the HudWidth area (HudAreaForScreen) of a screen this size: the pieces anchor to its edges, not the screen's
+static IRegion2D controlBarArea( Real dispW, Real dispH )
+{
+	return HudAreaForScreen( REAL_TO_INT( dispW ), REAL_TO_INT( dispH ),
+		TheGlobalData ? TheGlobalData->m_hudWidth : (Int)HUD_WIDTH_FULL );
+}
+
+/// controlBarArea for the display that is up, an empty region without one
+static IRegion2D displayHudArea( void )
+{
+	if( TheDisplay == NULL )
+	{
+		IRegion2D none = { { 0, 0 }, { 0, 0 } };
+		return none;
+	}
+	return controlBarArea( (Real)TheDisplay->getWidth(), (Real)TheDisplay->getHeight() );
+}
+
 void ControlBarHudPieceTransform( Int panel, Real dispW, Real dispH, Real *sx, Real *sy, Real *originX )
 {
 	*sy = dispH / CONTROL_BAR_DESIGN_H;
 	*sx = *sy * HUD_ART_ASPECT * CONTROL_BAR_DESIGN_H / CONTROL_BAR_DESIGN_W;
-	*originX = dispW * thePanelAnchorFraction[ panel ] - thePanelAnchorDesignX[ panel ] * *sx;
+	// the anchor lands on that fraction of the HudWidth area, the whole screen at Full
+	const IRegion2D area = controlBarArea( dispW, dispH );
+	*originX = area.lo.x + area.width() * thePanelAnchorFraction[ panel ] - thePanelAnchorDesignX[ panel ] * *sx;
 }
 
 /// the piece of ControlBar Pro's bar a window whose middle is at this design x belongs to
@@ -2013,10 +2038,18 @@ void ControlBarLayoutUniform( GameWindow *root, Real anchorFracX, Real anchorFra
 	//
 	// The anchor is a point that does not move: the same fraction of the screen and of the design
 	// space.  (1,1) keeps the bottom right corner where it was however wide the screen is, which is
-	// what a bar hanging off the right edge above the command bar wants.
+	// what a bar hanging off the right edge above the command bar wants.  The fraction is of the world
+	// the interface leaves open (HudLayoutRects::play): the HudWidth area under Classic, left of the
+	// sidebar and above the strip under the sidebar.
 	//
-	const Real originX = dispW * anchorFracX - CONTROL_BAR_DESIGN_W * anchorFracX * sx;
-	const Real originY = dispH * anchorFracY - CONTROL_BAR_DESIGN_H * anchorFracY * sy;
+	HudLayoutRects hud;
+	if( TheControlBar != NULL )
+		TheControlBar->getHudLayoutRects( &hud );
+	else
+		HudLayoutForScreen( REAL_TO_INT( dispW ), REAL_TO_INT( dispH ), HUD_LAYOUT_CLASSIC,
+			TheGlobalData ? TheGlobalData->m_hudWidth : (Int)HUD_WIDTH_FULL, &hud );
+	const Real originX = hud.play.lo.x + hud.play.width() * anchorFracX - CONTROL_BAR_DESIGN_W * anchorFracX * sx;
+	const Real originY = hud.play.lo.y + hud.play.height() * anchorFracY - CONTROL_BAR_DESIGN_H * anchorFracY * sy;
 
 	ICoord2D rootOrigin;
 	root->winGetScreenPosition( &rootOrigin.x, &rootOrigin.y );
@@ -2067,13 +2100,15 @@ Bool ControlBarPanelDesignToScreen( Int panel, const IRegion2D *design,
 	// The screen has three edges the bar touches and each belongs to one panel: the left panel owns
 	// the left edge, the right panel the right, and all three stand on the bottom.  The centre
 	// panel's own left and right are interior - at 4:3 they are where it meets the other two - so
-	// they are left where the arithmetic put them.
+	// they are left where the arithmetic put them.  Under a HudWidth narrower than the screen the left
+	// and right edges are the area's (HudAreaForScreen).
 	//
+	const IRegion2D area = controlBarArea( dispW, dispH );
 	if( panel == ControlBar::CB_PANEL_LEFT && design->lo.x <= CONTROL_BAR_EDGE_SNAP )
-		rectOut->lo.x = 0;
+		rectOut->lo.x = area.lo.x;
 	if( panel == ControlBar::CB_PANEL_RIGHT &&
 			design->hi.x >= REAL_TO_INT( CONTROL_BAR_DESIGN_W ) - CONTROL_BAR_EDGE_SNAP )
-		rectOut->hi.x = displayWidth;
+		rectOut->hi.x = area.hi.x;
 	if( design->hi.y >= REAL_TO_INT( CONTROL_BAR_DESIGN_H ) - CONTROL_BAR_EDGE_SNAP )
 		rectOut->hi.y = displayHeight;
 
@@ -2358,6 +2393,10 @@ Bool ControlBar::holdsRaisedRadarPoint( const GameWindow *window, Int x, Int y )
 //-------------------------------------------------------------------------------------------------
 Bool ControlBar::letsClickThrough( GameWindow *window, Int x, Int y )
 {
+	// the sidebar's blockers are its plates, rectangles to the pixel: nothing over them is the world's
+	if( m_sidebarLayout )
+		return FALSE;
+
 	GameWindow *frame = window->winGetParent();
 	if( frame == NULL || m_controlBarSchemeManager == NULL || TheDisplay == NULL )
 		return FALSE;
@@ -2628,13 +2667,18 @@ void ControlBar_logPlacement( const char *tag, Int frame )
 			tip->hide( TRUE );
 	}
 
+	// the layout the bar stands in, and the sidebar's rectangle under it (0,0 0x0 under Classic)
+	HudLayoutRects hud;
+	TheControlBar->getHudLayoutRects( &hud );
+
 	// what the bar shows against what is selected: an empty selection showing a command set is a
 	// builder standing in, which only Reforged has
-	DEBUG_LOG(("UIDRILL: frame %d %s top %d money %d origin (%d,%d) marker (%d,%d) live (%d,%d) tip (%d,%d %dx%d) screen %dx%d selected %d context %d\n",
+	DEBUG_LOG(("UIDRILL: frame %d %s top %d money %d origin (%d,%d) marker (%d,%d) live (%d,%d) tip (%d,%d %dx%d) screen %dx%d selected %d context %d layout %d sidebar (%d,%d %dx%d)\n",
 		frame, tag, top, money, origin->x, origin->y, markX, markY, liveX, liveY,
 		tipX, tipY, tipW, tipH,
 		TheDisplay->getWidth(), TheDisplay->getHeight(),
-		TheInGameUI ? TheInGameUI->getSelectCount() : -1, (Int)TheControlBar->getCurrentContext()));
+		TheInGameUI ? TheInGameUI->getSelectCount() : -1, (Int)TheControlBar->getCurrentContext(),
+		hud.layout, hud.sidebar.lo.x, hud.sidebar.lo.y, hud.sidebar.width(), hud.sidebar.height()));
 }
 
 void ControlBar::forEachPlacedWindow( Int *topOut, Int *moneyOut )
@@ -2659,6 +2703,12 @@ void ControlBar::layoutPanels( void )
 
 	// what the .wnd loader already multiplied every x coordinate by, so we can divide it back out
 	const Real loadScaleX = dispW / CONTROL_BAR_DESIGN_W;
+
+	// The sidebar does not slide (ShowControlBar): a slide still running from the Classic bar is put
+	// at its rest now, before the frame's position is read, or it would go on moving the frame the
+	// sidebar is about to stand at the screen's top
+	if( wantsSidebarLayout() && m_animateWindowManager != NULL )
+		m_animateWindowManager->reset();
 
 	Int p;
 	for( p = 0; p < CB_PANEL_COUNT; p++ )
@@ -2709,7 +2759,32 @@ void ControlBar::layoutPanels( void )
 		placeInPanel( child, panelForWindow( shortWindowName( child ), designCenterX ),
 									barOrigin.x, barOrigin.y, 0, parentTop );	}
 
-	fitRadarToMap( TRUE );
+	// the general's powers tray is placed again by the next update's arrangement, against this layout
+	m_trayLaidOutMask = TRAY_NOT_LAID_OUT;
+	m_trayFramePlaced = FALSE;
+
+	//
+	// The sidebar always comes after the Classic pass above, never instead of it: the pass reads every
+	// window's authored rectangle out of theControlBarPlacement and writes it back there, and
+	// layoutSidebar moves windows only through placeWindowAt, which keeps that record true.  So a seat
+	// that drops to the Classic bar mid-match (a defeat, the observer's scheme) gets the Classic
+	// rectangles back from this same pass, not from the sidebar's.
+	//
+	const Bool sidebar = wantsSidebarLayout();
+	if( sidebar != m_sidebarLayout )
+		markUIDirty();
+	m_sidebarLayout = sidebar;
+	if( sidebar )
+		layoutSidebar();
+	else
+	{
+		restoreClassicWindows();
+		Sidebar_hide();
+		fitRadarToMap( TRUE );
+	}
+
+	// the stages put the frame back here (setDefaultControlBarConfig), so it is wherever this layout left it
+	parent->winGetPosition( &m_defaultControlBarPosition.x, &m_defaultControlBarPosition.y );
 
 }  // end layoutPanels
 
@@ -2820,6 +2895,29 @@ void ControlBar::fitRadarToMap( Bool fromLayout )
 		box[ i ].hi.x += origin.x;
 		box[ i ].lo.y += origin.y;
 		box[ i ].hi.y += origin.y;
+	}
+
+	//
+	// The sidebar's radar box is a fixed well at every Minimap Size: the window takes the map's shape
+	// inside it, centred, so Radar::findDrawPositions finds nothing to letterbox.  The blocker is the
+	// sidebar's and stays; the under-attack lamp keeps the box's top right corner.
+	//
+	if( m_sidebarLayout )
+	{
+		enum { RADAR_BEZEL = 1 };	// W3DLeftHUDDraw paints the radar a pixel inside the window
+		const IRegion2D &square = box[ RADAR_FIT_RADAR ];
+		const Int boxW = square.width() - 2 * RADAR_BEZEL;
+		const Int boxH = square.height() - 2 * RADAR_BEZEL;
+		const Real aspect = m_radarFitWidth / m_radarFitHeight;
+		const Int insideW = MAX( 1, MIN( boxW, REAL_TO_INT( boxH * aspect + 0.5f ) ) );
+		const Int insideH = MAX( 1, MIN( boxH, REAL_TO_INT( boxW / aspect + 0.5f ) ) );
+		IRegion2D fit;
+		fit.lo.x = square.lo.x + ( boxW - insideW ) / 2;
+		fit.lo.y = square.lo.y + ( boxH - insideH ) / 2;
+		fit.hi.x = fit.lo.x + insideW + 2 * RADAR_BEZEL;
+		fit.hi.y = fit.lo.y + insideH + 2 * RADAR_BEZEL;
+		placeWindowAt( windows[ RADAR_FIT_RADAR ], fit );
+		return;
 	}
 
 	// a scheme without a frame keeps the square well, Minimap Size aside
@@ -2953,8 +3051,10 @@ void ControlBar::fitSquareRadar( GameWindow *const *windows, const IRegion2D *bo
 
 	// the picture's bottom left corner stays on the box's, far enough in that the frame stays on screen
 	enum { RADAR_BEZEL = 1 };	// W3DLeftHUDDraw paints the radar a pixel inside the window
+	// the left edge the frame keeps to is the HudWidth area's, the screen's at Full
+	const Int areaLeft = displayHudArea().lo.x;
 	IRegion2D fit;
-	fit.lo.x = pieces ? square.lo.x : MAX( square.lo.x, edge );
+	fit.lo.x = pieces ? square.lo.x : MAX( square.lo.x, areaLeft + edge );
 	fit.hi.y = pieces ? square.hi.y : MIN( square.hi.y, displayHeight - edge );
 
 	// The window takes the map's own shape, so no black bands: the height grows by the percent, the
@@ -3007,7 +3107,7 @@ void ControlBar::fitSquareRadar( GameWindow *const *windows, const IRegion2D *bo
 		well.lo.y = MIN( fit.lo.y, square.lo.y );
 		well.hi.x = MAX( fit.hi.x, square.hi.x );
 		well.hi.y = MAX( fit.hi.y, square.hi.y );
-		frame.lo.x = 0;
+		frame.lo.x = areaLeft;
 		frame.lo.y = well.lo.y - m_controlBarSchemeManager->getGrownRadarLedge();
 		frame.hi.x = well.hi.x + lip;
 		frame.hi.y = displayHeight;
@@ -3092,7 +3192,7 @@ Bool ControlBar::getGrownRadarFrame( IRegion2D *outer, IRegion2D *inner, Bool *l
 		inner->lo.y = MIN( inner->lo.y, box.lo.y + origin.y );
 		inner->hi.x = MAX( inner->hi.x, box.hi.x + origin.x );
 		inner->hi.y = MAX( inner->hi.y, box.hi.y + origin.y );
-		outer->lo.x = 0;
+		outer->lo.x = displayHudArea().lo.x;	// the screen's left edge, the HudWidth area's when narrower
 		outer->lo.y = inner->lo.y - m_controlBarSchemeManager->getGrownRadarLedge();
 		outer->hi.x = inner->hi.x + m_controlBarSchemeManager->getGrownRadarRight();
 		outer->hi.y = TheDisplay ? TheDisplay->getHeight() : inner->hi.y;
@@ -3142,6 +3242,11 @@ void ControlBar::shutdownWindows( void )
 	// the next layout's fitRadarToMap places the radar again
 	m_radarRaised = FALSE;
 	m_radarSquareGrown = FALSE;
+
+	// the windows come back from ControlBar.wnd as the Classic bar has them; the next layout decides
+	m_sidebarLayout = FALSE;
+	m_sidebarHidden.clear();
+	m_sidebarBlockSaved = FALSE;
 
 	if( m_scienceLayout )
 	{
@@ -3628,6 +3733,11 @@ void ControlBar::update( void )
 			clearSpecialPowerShortcutRow();
 	}
 
+	// the seat may have lost or won the sidebar since the last layout (a defeat, the match starting
+	// after the scheme was set); a scheme change usually lays the bar out again, this catches the rest
+	if( wantsSidebarLayout() != m_sidebarLayout )
+		layoutPanels();
+
 	// the scheme lays the bar out before the map is loaded, so the radar takes the map's shape here
 	// and its size here when Minimap Size moved
 	const Region3D *radarExtent = TheRadar->getMapExtent();
@@ -3734,7 +3844,10 @@ void ControlBar::update( void )
 
 		return;
 	}
-		
+
+	// the sidebar's cameos, their clocks and counts: every client frame, as the bar's own buttons
+	if( m_sidebarLayout )
+		Sidebar_update();
 
 	const Bool flashTick = logicTick && (logicNow % ConvertRetailFramesWall( 10U ) == 0);
 
@@ -3803,7 +3916,8 @@ void ControlBar::update( void )
 	// nothing selected and nothing standing in: a builder that is made or bought later, or the
 	// option switched on, gets the bar, which no selection event would announce either
 	//
-	else if( logicTick && ( logicNow % LOGICFRAMES_PER_SECOND ) == 0
+	// (the sidebar has no stand-in: its cameos build without one)
+	else if( logicTick && ( logicNow % LOGICFRAMES_PER_SECOND ) == 0 && !m_sidebarLayout
 					 && ( buildingsTab || ( TheInGameUI->getSelectCount() == 0 && m_commandTab == COMMAND_TAB_NONE ) )
 					 && m_currentSelectedDrawable == NULL && findStandInBuilder( FALSE ) )
 	{
@@ -4066,7 +4180,8 @@ void ControlBar::evaluateContextUI( void )
 	// the builder it is already showing.
 	//
 	// a unit tab: every unit the player's factories offer, in pages over the grid
-	if( ( m_commandTab == COMMAND_TAB_GROUND || m_commandTab == COMMAND_TAB_AIRCRAFT ) && !m_isObserverCommandBar )
+	if( ( m_commandTab == COMMAND_TAB_GROUND || m_commandTab == COMMAND_TAB_AIRCRAFT ) && !m_isObserverCommandBar
+			&& !m_sidebarLayout )
 	{
 		m_standInBuilderID = INVALID_DRAWABLE_ID;
 		m_contextParent[ CP_COMMAND ]->winHide( FALSE );
@@ -4076,9 +4191,11 @@ void ControlBar::evaluateContextUI( void )
 
 	// the buildings tab is the stand-in builder's bar, whatever is selected and whatever
 	// BuildWithoutWorker says: the tab is the player asking for it
-	if( ( TheInGameUI->getSelectCount() == 0 || m_commandTab == COMMAND_TAB_BUILDINGS ) && !m_isObserverCommandBar )
+	// The sidebar's cameos build without a stand-in, so there an empty selection is an empty strip
+	if( ( TheInGameUI->getSelectCount() == 0 || ( m_commandTab == COMMAND_TAB_BUILDINGS && !m_sidebarLayout ) )
+			&& !m_isObserverCommandBar )
 	{
-		Drawable *builder = findStandInBuilder( FALSE );
+		Drawable *builder = m_sidebarLayout ? NULL : findStandInBuilder( FALSE );
 		m_standInBuilderID = builder ? builder->getID() : INVALID_DRAWABLE_ID;
 		if( builder )
 			switchToContext( CB_CONTEXT_COMMAND, builder );
@@ -5925,6 +6042,8 @@ void ControlBar::togglePurchaseScience( void )
 
 void ControlBar::toggleControlBarStage( void )
 {
+	if( m_sidebarLayout )
+		return;
 	if(m_currentControlBarStage == CONTROL_BAR_STAGE_DEFAULT )
 		switchControlBarStage(CONTROL_BAR_STAGE_LOW);
 	else
@@ -5936,6 +6055,10 @@ void ControlBar::switchControlBarStage( ControlBarStages stage )
 {
 	if(stage < CONTROL_BAR_STAGE_DEFAULT || stage >= MAX_CONTROL_BAR_STAGES)
 		return;
+	// the sidebar does not minimise: its panels are drawn from HudLayoutRects and would stand still
+	// while the windows on them dropped away (toggleControlBarStage, restoreStageAfterScheme)
+	if( stage == CONTROL_BAR_STAGE_LOW && m_sidebarLayout )
+		stage = CONTROL_BAR_STAGE_DEFAULT;
 	// Retail returned here during playback, so a replay never laid its observer bar out: the command
 	// grid and the portrait plate stayed up, empty, over the battlefield.  A replay is watched like
 	// any observer seat, and the spectator page's replay strip stands where the grid was.
@@ -6220,6 +6343,32 @@ void ControlBar::initSpecialPowershortcutBar( Player *player)
 	* edges, corners and step on whichever of its sides the tray's outline runs (TraySlot).  A slot
 	* draws only inside its own window, so the slots together are the outline and nothing overlaps. */
 //-------------------------------------------------------------------------------------------------
+/** How thick the edge closing the powers tray's outer side is: none on the screen's edge, where the
+	* tray was drawn open, the left edge's thickness where it stops short of it (the sidebar's left
+	* edge, a HudWidth area narrower than the screen). */
+static Int powerTrayClosingEdge( const HudLayoutRects &hud, Int left )
+{
+	return hud.play.hi.x < hud.screen.hi.x ? left : 0;
+}
+
+/// the mirror of one of the tray's pieces, "<side>ProTray<piece>" as InGameUI's trays name it; until a
+/// sheet draws it the unmirrored piece stands in
+static const Image *mirroredPowerTrayPiece( const char *piece, const Image *standIn )
+{
+	const AsciiString side = TheControlBar->getControlBarSchemeManager()->getCurrentSide();
+	const char *prefix = "America";
+	if( side.startsWith( "China" ) || side.startsWith( "Boss" ) )
+		prefix = "China";
+	else if( side.startsWith( "GLA" ) )
+		prefix = "Gla";
+	else if( side.startsWith( "Turkiye" ) )
+		prefix = "Turkiye";
+	AsciiString name;
+	name.format( "%sProTray%s", prefix, piece );
+	const Image *image = TheMappedImageCollection ? TheMappedImageCollection->findImageByName( name ) : NULL;
+	return image != NULL ? image : standIn;
+}
+
 static void drawPowerTraySlot( GameWindow *window, WinInstanceData *instData )
 {
 	const ControlBar::TraySlot *slot = (const ControlBar::TraySlot *)window->winGetUserData();
@@ -6231,24 +6380,28 @@ static void drawPowerTraySlot( GameWindow *window, WinInstanceData *instData )
 	window->winGetScreenPosition( &x, &y );
 	const Int x0 = x + slot->cell.lo.x, y0 = y + slot->cell.lo.y;
 	const Int x1 = x + slot->cell.hi.x, y1 = y + slot->cell.hi.y;
-	const Int l = slot->edgeLeft, t = slot->edgeTop, b = slot->edgeBottom;
-	struct Piece { Int image, lx, ly, hx, hy; Bool wanted; };
+	const Int l = slot->edgeLeft, t = slot->edgeTop, b = slot->edgeBottom, r = slot->edgeRight;
+	struct Piece { const Image *image; Int lx, ly, hx, hy; Bool wanted; };
 	const Piece pieces[] =
 	{
-		{ ControlBarScheme::TRAY_CELL, x0, y0, x1, y1, TRUE },
-		{ ControlBarScheme::TRAY_EDGE_TOP, x0, y0 - t, x1 - slot->stepRight, y0, t > 0 },
-		{ ControlBarScheme::TRAY_EDGE_LEFT, x0 - l, y0, x0, y1 - slot->stepBelow, l > 0 },
-		{ ControlBarScheme::TRAY_STEP, x0 - l, y1 - slot->stepBelow, x0, y1, slot->stepBelow > 0 },
-		{ ControlBarScheme::TRAY_CORNER_TL, x0 - l, y0 - t, x0, y0, l > 0 && t > 0 },
-		{ ControlBarScheme::TRAY_EDGE_BOTTOM, x0, y1, x1, y1 + b, b > 0 },
-		{ ControlBarScheme::TRAY_CORNER_BL, x0 - l, y1, x0, y1 + b, l > 0 && b > 0 },
+		{ tray[ ControlBarScheme::TRAY_CELL ], x0, y0, x1, y1, TRUE },
+		{ tray[ ControlBarScheme::TRAY_EDGE_TOP ], x0, y0 - t, x1 - slot->stepRight, y0, t > 0 },
+		{ tray[ ControlBarScheme::TRAY_EDGE_LEFT ], x0 - l, y0, x0, y1 - slot->stepBelow, l > 0 },
+		{ tray[ ControlBarScheme::TRAY_STEP ], x0 - l, y1 - slot->stepBelow, x0, y1, slot->stepBelow > 0 },
+		{ tray[ ControlBarScheme::TRAY_CORNER_TL ], x0 - l, y0 - t, x0, y0, l > 0 && t > 0 },
+		{ tray[ ControlBarScheme::TRAY_EDGE_BOTTOM ], x0, y1, x1, y1 + b, b > 0 },
+		{ tray[ ControlBarScheme::TRAY_CORNER_BL ], x0 - l, y1, x0, y1 + b, l > 0 && b > 0 },
+		// the outer side, closed only short of the screen's edge
+		{ r > 0 ? mirroredPowerTrayPiece( "EdgeRight", tray[ ControlBarScheme::TRAY_EDGE_LEFT ] ) : NULL, x1, y0, x1 + r, y1, r > 0 },
+		{ r > 0 && t > 0 ? mirroredPowerTrayPiece( "CornerTopRight", tray[ ControlBarScheme::TRAY_CORNER_TL ] ) : NULL, x1, y0 - t, x1 + r, y0, r > 0 && t > 0 },
+		{ r > 0 && b > 0 ? mirroredPowerTrayPiece( "CornerBottomRight", tray[ ControlBarScheme::TRAY_CORNER_BL ] ) : NULL, x1, y1, x1 + r, y1 + b, r > 0 && b > 0 },
 	};
 	for( Int i = 0; i < (Int)( sizeof( pieces ) / sizeof( pieces[ 0 ] ) ); i++ )
 	{
 		// a piece the art leaves out leaves the battlefield showing there
 		const Piece &p = pieces[ i ];
-		if( p.wanted && tray[ p.image ] )
-			TheDisplay->drawImage( tray[ p.image ], p.lx, p.ly, p.hx, p.hy );
+		if( p.wanted && p.image )
+			TheDisplay->drawImage( p.image, p.lx, p.ly, p.hx, p.hy );
 	}
 }
 
@@ -6284,10 +6437,17 @@ void ControlBar::arrangeSpecialPowerShortcutGrid( void )
 	ICoord2D origin, cell;
 	Int left, top, foot, bottom;
 	powerTrayMetrics( tray, &origin, &cell, &left, &top, &foot, &bottom );
+	// the world's right edge: the HudWidth area's under Classic, the sidebar's left edge under the sidebar.
+	// Short of the screen's edge the tray is closed there by an edge of its own, and the cells stand
+	// that much further in
+	HudLayoutRects hud;
+	getHudLayoutRects( &hud );
+	const Int closing = powerTrayClosingEdge( hud, left );
+	const Int right = hud.play.hi.x - closing;
 	if( !m_trayFramePlaced )
 	{
 		m_specialPowerShortcutParent->winSetPosition( origin.x, origin.y );
-		m_specialPowerShortcutParent->winSetSize( TheDisplay->getWidth() - origin.x, bottom - origin.y );
+		m_specialPowerShortcutParent->winSetSize( hud.play.hi.x - origin.x, bottom - origin.y );
 		m_trayFramePlaced = TRUE;
 	}
 
@@ -6305,7 +6465,6 @@ void ControlBar::arrangeSpecialPowerShortcutGrid( void )
 	for( Int r = 0; r <= rows; r++ )
 		rowLength[ r ] = r < rows ? MIN( cols, count - r * cols ) : 0;
 
-	const Int right = TheDisplay->getWidth();
 	for( Int i = 0; i < count; i++ )
 	{
 		GameWindow *slotWin = m_specialPowerShortcutButtonParents[ shown[ i ] ];
@@ -6322,10 +6481,12 @@ void ControlBar::arrangeSpecialPowerShortcutGrid( void )
 		slot.stepRight = !covered && place > 0 && place - 1 < rowLength[ row + 1 ] ? left : 0;
 		// and this, the short row's innermost cell, stands on a longer row
 		slot.stepBelow = innermost && row > 0 && place + 1 < rowLength[ row - 1 ] ? top : 0;
+		// the outermost column carries the closing edge, every row of it
+		slot.edgeRight = place == 0 ? closing : 0;
 
 		IRegion2D screen;
-		screen.hi.x = right - place * cell.x;
-		screen.lo.x = screen.hi.x - cell.x - slot.edgeLeft;
+		screen.hi.x = right - place * cell.x + slot.edgeRight;
+		screen.lo.x = screen.hi.x - slot.edgeRight - cell.x - slot.edgeLeft;
 		screen.hi.y = bottom - foot - row * cell.y + slot.edgeBottom;
 		screen.lo.y = screen.hi.y - slot.edgeBottom - cell.y - slot.edgeTop;
 		slot.cell.lo.x = slot.edgeLeft;
@@ -6392,7 +6553,9 @@ void ControlBar::powerTrayMetrics( const Image *const *tray, ICoord2D *origin, I
 	const Int cols = SPECIAL_POWER_SHORTCUT_COLS;
 	const Int rows = ( MAX_SPECIAL_POWER_SHORTCUTS + cols - 1 ) / cols;
 	*bottom = TheDisplay->getHeight() - REAL_TO_INT( ( 1080 - POWER_TRAY_FOOT_Y ) * k );
-	origin->x = TheDisplay->getWidth() - cols * cell->x - *left;
+	HudLayoutRects hud;
+	getHudLayoutRects( &hud );
+	origin->x = hud.play.hi.x - powerTrayClosingEdge( hud, *left ) - cols * cell->x - *left;
 	origin->y = *bottom - *foot - rows * cell->y - *top;
 }
 

@@ -71,6 +71,7 @@
 #include "GameClient/ObserverCamera.h"
 #include "GameClient/Shell.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarSidebar.h"
 #include "GameClient/SelectionInfo.h"
 #include "GameClient/SelectionXlat.h"
 
@@ -3906,11 +3907,18 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 			break;
 
 		// the bar's command tabs, as a click on the tab: open it, or close it when it is the one open.
-		// A tab the bar cannot show closes again on its next update (updateCommandTabButtons)
+		// A tab the bar cannot show closes again on its next update (updateCommandTabButtons).  In the
+		// Red Alert style layout the four keys pick the sidebar's tabs by place, left to right as the
+		// keys Q W E R lie: Buildings, Ground, Aircraft, Defence open Bina, Savunma, Piyade, Araç
 		case GameMessage::MSG_META_TOGGLE_COMMAND_TAB_BUILDINGS:
 		case GameMessage::MSG_META_TOGGLE_COMMAND_TAB_GROUND:
 		case GameMessage::MSG_META_TOGGLE_COMMAND_TAB_AIRCRAFT:
-			if( TheControlBar )
+		case GameMessage::MSG_META_TOGGLE_COMMAND_TAB_DEFENSE:
+			if( TheControlBar && TheControlBar->isSidebarLayout() )
+				Sidebar_selectTab( t == GameMessage::MSG_META_TOGGLE_COMMAND_TAB_BUILDINGS ? SIDEBAR_TAB_BUILDINGS
+					: t == GameMessage::MSG_META_TOGGLE_COMMAND_TAB_GROUND ? SIDEBAR_TAB_DEFENSE
+					: t == GameMessage::MSG_META_TOGGLE_COMMAND_TAB_AIRCRAFT ? SIDEBAR_TAB_INFANTRY : SIDEBAR_TAB_VEHICLES );
+			else if( TheControlBar && t != GameMessage::MSG_META_TOGGLE_COMMAND_TAB_DEFENSE )
 				TheControlBar->toggleCommandTab( ControlBar::COMMAND_TAB_BUILDINGS + ( t - GameMessage::MSG_META_TOGGLE_COMMAND_TAB_BUILDINGS ) );
 			disp = DESTROY_MESSAGE;
 			break;

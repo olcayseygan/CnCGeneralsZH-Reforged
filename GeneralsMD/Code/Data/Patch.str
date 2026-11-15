@@ -2130,6 +2130,70 @@ TOOLTIP:HealthBarColors
 "Green at full health through yellow to red, or every bar in its owner's color so you see whose it is. Disabled units stay blue."
 END
 
+GUI:HudLayout
+"Layout"
+END
+
+GUI:HudLayout0
+"Classic"
+END
+
+GUI:HudLayout1
+"Red Alert Style"
+END
+
+TOOLTIP:HudLayout
+"Classic keeps the command bar along the bottom. Red Alert Style moves building and training into a sidebar down the right and puts the selected units' commands in a strip along the bottom."
+END
+
+GUI:HudWidth
+"HUD Width"
+END
+
+GUI:HudWidth0
+"Full Screen"
+END
+
+GUI:HudWidth1
+"21:9"
+END
+
+GUI:HudWidth2
+"16:9"
+END
+
+TOOLTIP:HudWidth
+"On a screen wider than the choice, the interface is pulled into a centered area of that shape, so the bar stays in front of you. The battlefield still fills the whole screen."
+END
+
+GUI:SidebarTab0
+"Buildings"
+END
+
+GUI:SidebarTab1
+"Defenses"
+END
+
+GUI:SidebarTab2
+"Infantry"
+END
+
+GUI:SidebarTab3
+"Vehicles"
+END
+
+GUI:SidebarAll
+"All"
+END
+
+GUI:SidebarSell
+"Sell"
+END
+
+GUI:SidebarRepair
+"Repair"
+END
+
 GUI:MenuTransitionSpeed
 "Menu Transition Speed"
 END
@@ -2462,6 +2526,10 @@ END
 
 GUI:HotkeysCommandTOGGLE_COMMAND_TAB_AIRCRAFT
 "Aircraft tab"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_DEFENSE
+"Sidebar Fourth Tab"
 END
 
 GUI:HotkeysCommandSIGNAL_ATTACK

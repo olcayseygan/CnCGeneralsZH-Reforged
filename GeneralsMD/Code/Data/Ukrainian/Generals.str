@@ -17009,6 +17009,70 @@ TOOLTIP:HealthBarColors
 "Зелена при повному здоров'ї, через жовту до червоної, або кожна смуга кольором власника, щоб бачити, чия вона. Виведені з ладу підрозділи лишаються синіми."
 END
 
+GUI:HudLayout
+"Розташування"
+END
+
+GUI:HudLayout0
+"Класичне"
+END
+
+GUI:HudLayout1
+"У стилі Red Alert"
+END
+
+TOOLTIP:HudLayout
+"Класичне розташування залишає командну панель унизу. Стиль Red Alert переносить будівництво й навчання в бічну панель праворуч, а команди вибраних підрозділів — у смугу внизу."
+END
+
+GUI:HudWidth
+"Ширина інтерфейсу"
+END
+
+GUI:HudWidth0
+"Весь екран"
+END
+
+GUI:HudWidth1
+"21:9"
+END
+
+GUI:HudWidth2
+"16:9"
+END
+
+TOOLTIP:HudWidth
+"На екрані, ширшому за вибране, інтерфейс збирається в область цього формату по центру, щоб панель лишалася перед очима. Поле бою, як і раніше, займає весь екран."
+END
+
+GUI:SidebarTab0
+"Будівлі"
+END
+
+GUI:SidebarTab1
+"Оборона"
+END
+
+GUI:SidebarTab2
+"Піхота"
+END
+
+GUI:SidebarTab3
+"Техніка"
+END
+
+GUI:SidebarAll
+"Усі"
+END
+
+GUI:SidebarSell
+"Продати"
+END
+
+GUI:SidebarRepair
+"Ремонт"
+END
+
 GUI:MenuTransitionSpeed
 "Швидкість переходів меню"
 END
@@ -17355,6 +17419,10 @@ END
 
 GUI:HotkeysCommandHOLD_POSITION
 "Утримувати позицію"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_DEFENSE
+"Четверта вкладка бічної панелі"
 END
 
 GUI:LoadModeSkirmish

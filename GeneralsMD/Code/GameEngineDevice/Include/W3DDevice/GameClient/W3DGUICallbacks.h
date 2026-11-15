@@ -44,6 +44,7 @@ extern void W3DLeftHUDDraw( GameWindow *window, WinInstanceData *instData );
 extern void W3DCameoMovieDraw( GameWindow *window, WinInstanceData *instData );
 extern void W3DRightHUDDraw( GameWindow *window, WinInstanceData *instData );
 extern void W3DPowerDraw( GameWindow *window, WinInstanceData *instData );
+extern void W3DPowerDrawV( GameWindow *window, WinInstanceData *instData );	///< the sidebar's vertical power rail
 extern void W3DMainMenuDraw( GameWindow *window, WinInstanceData *instData );
 extern void W3DMainMenuFourDraw( GameWindow *window, WinInstanceData *instData );
 extern void W3DMetalBarMenuDraw( GameWindow *window, WinInstanceData *instData );

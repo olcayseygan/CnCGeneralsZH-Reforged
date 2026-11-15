@@ -58,6 +58,12 @@ Bool GroupPanel_isOwnSide( const ThingTemplate *thing, const Player *player );
 	* the player's own do not make; a unit both make is listed once, the player's own side's copy. */
 void GroupPanel_gatherBuildable( Player *player, std::vector< GroupPanelBuildable > &out );
 
+/** The same for structures: every GUI_COMMAND_DOZER_CONSTRUCT button `player`'s live builders
+	* (KINDOF_DOZER) carry on the bar, one entry a structure, the player's own side's copy where a
+	* captured builder offers a twin.  The sidebar's Bina and Savunma tabs.  The GLA worker's fakes sit
+	* on another command set and are not listed. */
+void GroupPanel_gatherConstructible( Player *player, std::vector< GroupPanelBuildable > &out );
+
 /** A build button's look for an availability, as ControlBar::updateContextCommand reads one. */
 void GroupPanel_showAvailability( GameWindow *button, CommandAvailability availability );
 

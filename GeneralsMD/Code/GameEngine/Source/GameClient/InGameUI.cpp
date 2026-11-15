@@ -63,6 +63,7 @@
 #include "Common/Recorder.h"
 #include "Common/BuildAssistant.h"
 #include "Common/SpecialPower.h"
+#include "Common/OptionsCatalog.h"
 
 #include "GameClient/Anim2D.h"
 #include "GameClient/CommandXlat.h"
@@ -197,6 +198,32 @@ static Int stripPixels( Int nominal )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The Red Alert style layout is on screen (docs/plans/HUD-SIDEBAR-LAYOUT.md); observers, replays and
+	* a defeated player keep Classic, which isSidebarLayout says. */
+//-------------------------------------------------------------------------------------------------
+static Bool sidebarLayoutOn( void )
+{
+	return TheGlobalData->m_hudLayout == HUD_LAYOUT_SIDEBAR && TheControlBar != NULL && TheControlBar->isSidebarLayout();
+}
+
+/// every rectangle of the layout on screen, in the HudWidth area
+static HudLayoutRects hudRects( void )
+{
+	HudLayoutRects r;
+	HudLayoutForScreen( TheDisplay->getWidth(), TheDisplay->getHeight(),
+											sidebarLayoutOn() ? HUD_LAYOUT_SIDEBAR : HUD_LAYOUT_CLASSIC, TheGlobalData->m_hudWidth, &r );
+	return r;
+}
+
+/// the world the interface leaves open, whose sides the pieces EA pinned to the screen's edges stand on:
+/// the HudWidth area under Classic, so a 16:9 choice on a 32:9 screen keeps them in the middle, and left
+/// of the sidebar and above the strip under Red Alert style
+static IRegion2D hudPlay( void )
+{
+	return hudRects().play;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** One strip's tray, the general's powers tray's outline laid round a group of cells that stands
 	* against another edge of the screen or grows the other way.  The roles are the powers tray's own,
 	* named from the screen edge out: the edge down the open side of each row's innermost cell, the
@@ -237,6 +264,7 @@ struct HudCellStyle
 	const Image *readyShimmer;	///< the band climbing through it
 	HudTray production;			///< against the screen's left edge, one row
 	HudTray superweapon;		///< against the right edge, rows going down
+	HudTray superweaponUp;	///< the Red Alert style layout's, rows climbing: the powers tray itself
 };
 
 /// a tray piece the powers tray has no use for, the mirror of one it has; until a sheet draws it the
@@ -403,6 +431,7 @@ static HudCellStyle hudCellStyle( void )
 	const HudTray none = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0 };
 	style.production = none;
 	style.superweapon = none;
+	style.superweaponUp = none;
 	if( tray == NULL )
 		return style;
 
@@ -429,12 +458,25 @@ static HudCellStyle hudCellStyle( void )
 		mirroredTrayPiece( prefix, "StepDown", tray[ ControlBarScheme::TRAY_STEP ] ),
 		0, 0, 0
 	};
+	const HudTray superweaponUp =
+	{
+		cell,
+		tray[ ControlBarScheme::TRAY_EDGE_LEFT ],
+		tray[ ControlBarScheme::TRAY_EDGE_BOTTOM ],
+		tray[ ControlBarScheme::TRAY_EDGE_TOP ],
+		tray[ ControlBarScheme::TRAY_CORNER_BL ],
+		tray[ ControlBarScheme::TRAY_CORNER_TL ],
+		tray[ ControlBarScheme::TRAY_STEP ],
+		0, 0, 0
+	};
 	style.production = production;
 	style.superweapon = superweapon;
+	style.superweaponUp = superweaponUp;
 	const Real scaleX = (Real)style.cellW / cell->getImageWidth();
 	const Real scaleY = (Real)style.cellH / cell->getImageHeight();
 	sizeHudTray( &style.production, scaleX, scaleY );
 	sizeHudTray( &style.superweapon, scaleX, scaleY );
+	sizeHudTray( &style.superweaponUp, scaleX, scaleY );
 	return style;
 }
 
@@ -557,19 +599,20 @@ static IRegion2D noHudTab( void )
 	* queue's sticks up from its top against the left edge (<side>ProTrayTabUp).  Each is one fixed
 	* picture, HUD_TRAY_TAB_W by HUD_TRAY_TAB_H at 1080 and scaled as the powers tray is, whose
 	* HUD_TRAY_TAB_JOIN rows nearest the tray lie over the tray's own outer edge so the art can draw
-	* the pin there.  `screenSide` is +1 for the right edge and -1 for the left, `tray` the tray's
-	* outer line on its far side, `hangs` +1 for a tab below that line and -1 above.  The text is
+	* the pin there.  `screenSide` is +1 for the right edge and -1 for the left, `edge` that edge's x
+	* (hudPlay's side, or wherever the tray stands), `tray` the tray's outer line on its far side,
+	* `hangs` +1 for a tab below that line and -1 above.  The text is
 	* centred in the rest, inset HUD_TRAY_TAB_TEXT_INSET_X and HUD_TRAY_TAB_TEXT_INSET_Y.  A sheet
 	* without the piece yet gets a dark slab. */
 //-------------------------------------------------------------------------------------------------
-static IRegion2D hudTab( Int screenSide, Int tray, Int hangs )
+static IRegion2D hudTab( Int screenSide, Int edge, Int tray, Int hangs )
 {
 	const Real k = TheDisplay->getHeight() / 1080.0f;
 	const Int width = REAL_TO_INT_CEIL( HUD_TRAY_TAB_W * k );
 	const Int height = REAL_TO_INT_CEIL( HUD_TRAY_TAB_H * k );
 	const Int join = REAL_TO_INT_CEIL( HUD_TRAY_TAB_JOIN * k );
 	IRegion2D tab;
-	tab.lo.x = screenSide > 0 ? TheDisplay->getWidth() - width : 0;
+	tab.lo.x = screenSide > 0 ? edge - width : edge;
 	tab.hi.x = tab.lo.x + width;
 	tab.lo.y = hangs > 0 ? tray - join : tray + join - height;
 	tab.hi.y = tab.lo.y + height;
@@ -2773,7 +2816,7 @@ static RackPlace rackPlace( Int x, Int y, Bool armies )
 	at.rows = at.standings + rackPx( RACK_ROWS_TOP );
 	at.drawer = x - rackPx( RACK_DRAWER_W - RACK_DRAWER_TUCK );
 	at.tabs = ( armies ? at.drawer : x ) - rackPx( RACK_TAB_OUT );
-	at.right = TheDisplay->getWidth();
+	at.right = hudPlay().hi.x;
 	return at;
 }
 
@@ -2918,7 +2961,7 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 	const Color GOLD = GameMakeColor( 242, 194, 48, 255 );
 	const Color DIM = GameMakeColor( 92, 100, 110, 255 );
 
-	m_rackX = TheDisplay->getWidth() - rackPx( RACK_W );
+	m_rackX = hudPlay().hi.x - rackPx( RACK_W );
 	m_rackY = plateTop - rackPx( RACK_SKIRT );
 	m_rackRows = min( (Int)theRackStats.size(), (Int)RACK_ROWS );
 	const RackPlace at = rackPlace( m_rackX, m_rackY, m_rackArmies );
@@ -4291,14 +4334,16 @@ void InGameUI::fadeClassicMessages( void )
 //-------------------------------------------------------------------------------------------------
 /** Where an x EA gave as a fraction of its 800 wide screen lands at the HUD's one scale: as far from
 	* the nearer side edge as EA's was, so a column EA put on the right stays on the right of a 32:9
-	* screen.  At 4:3 this is EA's own position. */
+	* screen.  The edges are hudPlay's: the HudWidth area's, and the sidebar's left under Red Alert
+	* style.  At 4:3 this is EA's own position. */
 //-------------------------------------------------------------------------------------------------
 static Int hudEdgeX( Real fraction )
 {
 	const Real s = ControlBarUniformScale();
+	const IRegion2D play = hudPlay();
 	if( fraction < 0.5f )
-		return REAL_TO_INT( fraction * 800.0f * s );
-	return TheDisplay->getWidth() - REAL_TO_INT( ( 1.0f - fraction ) * 800.0f * s );
+		return play.lo.x + REAL_TO_INT( fraction * 800.0f * s );
+	return play.hi.x - REAL_TO_INT( ( 1.0f - fraction ) * 800.0f * s );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -4308,8 +4353,9 @@ void InGameUI::drawClassicMessages( void )
 	if( !m_messagesOn )
 		return;
 
-	// the screen's own top left corner, not the menus' 4:3 box
-	const Int x = m_messagePosition.x;
+	// the screen's own top left corner, not the menus' 4:3 box; HudWidth's centred area's on a screen
+	// wider than the choice
+	const Int x = hudPlay().lo.x + m_messagePosition.x;
 	Int y = m_messagePosition.y;
 	for( Int i = CLASSIC_MESSAGES - 1; i >= 0; i-- )
 	{
@@ -4483,6 +4529,11 @@ static Int controlBarTop( void )
 //-------------------------------------------------------------------------------------------------
 static Int radarFrameTop( void )
 {
+	// the Red Alert style radar is up in the sidebar: what stood on the radar's frame on the left
+	// stands on the selection card instead
+	if( sidebarLayoutOn() )
+		return hudRects().card.lo.y;
+
 	static NameKeyType radarKey = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:LeftHUD" );
 	const Image *const *frame = TheControlBar->getControlBarSchemeManager()->getRadarFrame();
 	GameWindow *radar = TheWindowManager->winGetWindowFromId( NULL, radarKey );
@@ -9069,31 +9120,80 @@ void InGameUI::postDraw( void )
 			// under a row, the tray's top a little under the info strip's foot whenever it is up (the
 			// strip is drawn last and would cover them), the top of the screen otherwise.  Two rows at
 			// most, the last the short one; past SUPERWEAPON_LIST_CELLS a "+N" tab hangs from the tray
+			//
+			// The Red Alert style layout stands the tray on its superweaponRow's foot instead, against
+			// the sidebar over the strip, and the rows climb from it: the powers tray the right way up,
+			// the "+N" tab sticking up from the top row.  No screen edge closes its right side there, so
+			// the queue's mirrored edge and corners do (`closer`), and the cells stand that much in.
+			//
 			const HudCellStyle style = hudCellStyle();
 			const Int cameoW = style.cameoW;
 			const Int cameoH = style.cameoH;
-			const Int right = TheDisplay->getWidth();
-			const Int top = max( hudStripBottom(), TheUIRect().y ) + stripPixels( SUPERWEAPON_TRAY_DROP ) + style.superweapon.footH;
+			const HudLayoutRects rects = hudRects();
+			const Bool climbs = rects.layout == HUD_LAYOUT_SIDEBAR;
+			const HudTray &tray = climbs ? style.superweaponUp : style.superweapon;
+			const HudTray &closer = style.production;
+			const Int edge = climbs ? rects.sidebar.lo.x : rects.play.hi.x;
+			const Int right = climbs ? edge - closer.openW : edge;
+			const Int top = max( hudStripBottom(), TheUIRect().y ) + stripPixels( SUPERWEAPON_TRAY_DROP ) + tray.footH;
+			const Int foot = rects.superweaponRow.hi.y - tray.footH;
 			const Bool more = (Int)listed.size() > SUPERWEAPON_LIST_CELLS;
 			const Int cameos = more ? SUPERWEAPON_LIST_CELLS : (Int)listed.size();
 			IRegion2D place[ SUPERWEAPON_LIST_CELLS ];
 			for( Int each = 0; each < cameos; each++ )
 			{
+				const Int row = each / SUPERWEAPON_LIST_COLUMNS;
 				place[ each ].hi.x = right - each % SUPERWEAPON_LIST_COLUMNS * style.cellW - style.marginX;
-				place[ each ].lo.y = top + each / SUPERWEAPON_LIST_COLUMNS * style.cellH + style.marginY;
 				place[ each ].lo.x = place[ each ].hi.x - cameoW;
-				place[ each ].hi.y = place[ each ].lo.y + cameoH;
+				if( climbs )
+				{
+					place[ each ].hi.y = foot - row * style.cellH - style.marginY;
+					place[ each ].lo.y = place[ each ].hi.y - cameoH;
+				}
+				else
+				{
+					place[ each ].lo.y = top + row * style.cellH + style.marginY;
+					place[ each ].hi.y = place[ each ].lo.y + cameoH;
+				}
 				m_superweaponPlace[ each ] = hudCellBox( style, place[ each ] );
 				m_superweaponJump[ each ] = listed[ each ].jump;
 			}
 			m_superweaponCells = cameos;
-			// under the last row's cell at the screen edge, below the tray's own bottom edge
+			// beside the last row's cell at the edge, past the tray's own far edge: under it, or over it
+			// when the rows climb
 			const IRegion2D &lastRow = m_superweaponPlace[ ( cameos - 1 ) / SUPERWEAPON_LIST_COLUMNS * SUPERWEAPON_LIST_COLUMNS ];
-			m_superweaponTab = more ? hudTab( 1, lastRow.hi.y + style.superweapon.uncoveredH, 1 ) : noHudTab();
-			rackPlateTop = max( lastRow.hi.y + style.superweapon.uncoveredH, m_superweaponTab.hi.y ) + rackPx( RACK_TRAY_GAP );
+			if( !more )
+				m_superweaponTab = noHudTab();
+			else if( climbs )
+				m_superweaponTab = hudTab( 1, edge, lastRow.lo.y - tray.uncoveredH, -1 );
+			else
+				m_superweaponTab = hudTab( 1, edge, lastRow.hi.y + tray.uncoveredH, 1 );
+			// a tray standing on the strip pushes nothing down from the top
+			if( !climbs )
+				rackPlateTop = max( lastRow.hi.y + tray.uncoveredH, m_superweaponTab.hi.y ) + rackPx( RACK_TRAY_GAP );
 
 			TheDisplay->beginBatch2D();
-			drawHudTray( style.superweapon, m_superweaponPlace, cameos, SUPERWEAPON_LIST_COLUMNS, -1, -1 );
+			drawHudTray( tray, m_superweaponPlace, cameos, SUPERWEAPON_LIST_COLUMNS, -1, climbs ? 1 : -1 );
+			if( climbs && tray.cell != NULL )
+			{
+				// down the outer side of every row's first cell, the foot's corner under row 0 and the far
+				// corner over the top row; place 0 of a row is always there, so the side runs unbroken
+				auto piece = []( const Image *image, Int lx, Int ly, Int hx, Int hy )
+				{
+					if( image != NULL && hx > lx && hy > ly )
+						TheDisplay->drawImage( image, lx, ly, hx, hy );
+				};
+				const Int lastRowFirst = ( cameos - 1 ) / SUPERWEAPON_LIST_COLUMNS * SUPERWEAPON_LIST_COLUMNS;
+				for( Int first = 0; first < cameos; first += SUPERWEAPON_LIST_COLUMNS )
+				{
+					const IRegion2D &c = m_superweaponPlace[ first ];
+					piece( closer.open, c.hi.x, c.lo.y, c.hi.x + closer.openW, c.hi.y );
+					if( first == 0 )
+						piece( closer.cornerFoot, c.hi.x, c.hi.y, c.hi.x + closer.openW, c.hi.y + tray.footH );
+					if( first == lastRowFirst )
+						piece( closer.cornerUncovered, c.hi.x, c.lo.y - tray.uncoveredH, c.hi.x + closer.openW, c.lo.y );
+				}
+			}
 			for( Int each = 0; each < cameos; each++ )
 				if( listed[ each ].cameo != NULL )
 					TheDisplay->drawImage( listed[ each ].cameo, place[ each ].lo.x, place[ each ].lo.y,
@@ -9121,7 +9221,7 @@ void InGameUI::postDraw( void )
 			{
 				UnicodeString rest;
 				rest.format( u"+%d", (Int)listed.size() - cameos );
-				drawHudTab( style.tabDown, m_superweaponTab, 1, cellString( m_superweaponMoreText, rest ) );
+				drawHudTab( climbs ? style.tabUp : style.tabDown, m_superweaponTab, climbs ? -1 : 1, cellString( m_superweaponMoreText, rest ) );
 			}
 		}
 	}
@@ -9498,10 +9598,11 @@ void InGameUI::militarySubtitle( const AsciiString& label, Int duration )
 	// disable tooltips until this frame, cause we don't want to collide with the military subtitles.
 	TheInGameUI->disableTooltipsUntil(messageTimeout);
 	
-	// the position passed in is an 800x600 one: at the HUD's one scale from the screen's top left, as
-	// the messages are
+	// the position passed in is an 800x600 one: at the HUD's one scale from the top left of hudPlay
+	// (the screen's, or HudWidth's centred area), as the messages are
 	Coord2D multiplier;
-	const UIRect box = { 0, 0, (Int)TheDisplay->getWidth(), (Int)TheDisplay->getHeight() };
+	const IRegion2D play = hudPlay();
+	const UIRect box = { play.lo.x, 0, play.hi.x - play.lo.x, (Int)TheDisplay->getHeight() };
 	multiplier.x = multiplier.y = ControlBarUniformScale();
 
 	// lets bring out the data structure!
@@ -12008,8 +12109,10 @@ void InGameUI::drawHudOverlay( void )
 	// screen grew: the lettering inside it scales and the margin around it did not, so a 1440-tall
 	// shot and a 1080-tall one did not overlay however the text was sized.
 	const Int pad = stripPixels( 2 );
+	// the box's right edge, or hudPlay's where that is nearer: the sidebar's left under Red Alert style
 	const UIRect box = TheUIRect();
-	Int x = box.x + box.w - stripWidth - pad - stripPixels( 4 );
+	const Int right = min( box.x + box.w, (Int)hudPlay().hi.x );
+	Int x = right - stripWidth - pad - stripPixels( 4 );
 	Int y = box.y + stripPixels( 2 );
 
 	// a plate behind it, so it stays legible over bright terrain
@@ -12354,11 +12457,12 @@ static IRegion2D drawHeroCell( const HudCellStyle &style, Int queueTop, ObjectID
 		return noHudTab();
 	const Real ratio = MAX( 0.0f, MIN( 1.0f, body->getHealth() / maxHealth ) );
 
-	const Int tabTop = hudTab( -1, queueTop - style.production.uncoveredH, -1 ).lo.y;
+	const Int left = hudPlay().lo.x;
+	const Int tabTop = hudTab( -1, left, queueTop - style.production.uncoveredH, -1 ).lo.y;
 	const Int barW = stripPixels( HUD_HERO_BAR_W );
 	IRegion2D cell;
-	cell.lo.x = 0;
-	cell.hi.x = style.cellW + barW + style.marginX;
+	cell.lo.x = left;
+	cell.hi.x = left + style.cellW + barW + style.marginX;
 	cell.hi.y = tabTop - stripPixels( PRODUCTION_LIST_LIFT ) - style.production.footH;
 	cell.lo.y = cell.hi.y - style.cellH;
 	IRegion2D cameo;
@@ -12433,7 +12537,9 @@ void InGameUI::drawProductionList( void )
 	const HudCellStyle style = hudCellStyle();
 	const Int foot = radarFrameTop() - stripPixels( PRODUCTION_LIST_LIFT ) - style.production.footH;
 	m_heroCell = drawHeroCell( style, foot - style.cellH, m_hero );
-	if( m_productionListCount == 0 )
+	// the Red Alert style sidebar's cameos wear their own queue's clocks and counts; the hero's cell
+	// stays, over the selection card (radarFrameTop)
+	if( m_productionListCount == 0 || sidebarLayoutOn() )
 		return;
 
 	// a cell wearing an "x5" stands for five.  Only a full list leaves anything out, and the tab
@@ -12446,7 +12552,7 @@ void InGameUI::drawProductionList( void )
 
 	const Int cameoW = style.cameoW;
 	const Int cameoH = style.cameoH;
-	const Int left = 0;
+	const Int left = hudPlay().lo.x;
 	IRegion2D place[ PRODUCTION_LIST_CELLS ];
 	for( Int each = 0; each < cameos; each++ )
 	{
@@ -12459,7 +12565,7 @@ void InGameUI::drawProductionList( void )
 	m_productionListCells = cameos;
 	// over the first cell, above the tray's own top edge
 	if( more )
-		m_productionListTab = hudTab( -1, m_productionListPlace[ 0 ].lo.y - style.production.uncoveredH, -1 );
+		m_productionListTab = hudTab( -1, left, m_productionListPlace[ 0 ].lo.y - style.production.uncoveredH, -1 );
 
 	// ctrl is the cells' cancel key, so while it is held the cameo a click would cancel says so: it goes
 	// red and wears a minus.  An accidental cancel costs the whole item
@@ -12558,7 +12664,10 @@ void InGameUI::drawRadarAlarmPointers( void )
 	TheTacticalView->getOrigin( &originX, &originY );
 	const Real left = originX + margin;
 	const Real top = max( originY, hudStripBottom() ) + margin;		// under the info strip, which paints after
-	const Real right = originX + TheTacticalView->getWidth() - margin;
+	// the Red Alert style sidebar stands over the view's right side and holds the radar itself
+	const Bool sidebar = sidebarLayoutOn();
+	const Int viewRight = originX + TheTacticalView->getWidth();
+	const Real right = ( sidebar ? min( viewRight, (Int)hudPlay().hi.x ) : viewRight ) - margin;
 	const Real bottom = min( originY + TheTacticalView->getHeight(), barTop ) - margin;
 	if( right <= left || bottom <= top )
 		return;
@@ -12572,7 +12681,7 @@ void InGameUI::drawRadarAlarmPointers( void )
 	{
 		static NameKeyType radarKey = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:LeftHUD" );
 		GameWindow *radar = TheWindowManager->winGetWindowFromId( NULL, radarKey );
-		if( radar && !radar->winIsHidden() )
+		if( !sidebar && radar && !radar->winIsHidden() )
 		{
 			IRegion2D inner, outer;
 			radar->winGetScreenPosition( &inner.lo.x, &inner.lo.y );

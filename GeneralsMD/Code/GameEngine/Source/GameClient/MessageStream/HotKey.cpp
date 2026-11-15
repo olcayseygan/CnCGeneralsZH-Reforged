@@ -722,6 +722,24 @@ void HotKeyManager::loadPlayerKeys( void )
 	{
 		DEBUG_LOG(( "HOTKEYS: %s stopped at a block it could not read; the keys before it stand\n", hotkeys.str() ));
 	}
+
+	// the sidebar's fourth tab took Ctrl+R by default (MetaMap::keepArrowsForCamera) before the
+	// player's file was read; a key of his own on Ctrl+R wins it back
+	// the map's records are its own and only handed out const; this one is changed in place
+	MetaMapRec *tab = NULL;
+	for( const MetaMapRec *rec = TheMetaMap->getFirstMetaMapRec(); rec && tab == NULL; rec = rec->m_next )
+		if( rec->m_meta == GameMessage::MSG_META_TOGGLE_COMMAND_TAB_DEFENSE )
+			tab = const_cast< MetaMapRec * >( rec );
+	if( tab == NULL || tab->m_key != MK_R || tab->m_modState != CTRL || tab->m_usableIn == COMMANDUSABLE_NONE )
+		return;
+	for( const MetaMapRec *rec = TheMetaMap->getFirstMetaMapRec(); rec; rec = rec->m_next )
+		if( rec != tab && rec->m_key == MK_R && rec->m_modState == CTRL && rec->m_usableIn != COMMANDUSABLE_NONE )
+		{
+			DEBUG_LOG(( "HOTKEYS: Ctrl+R is the player's own; the sidebar's fourth tab goes without a key\n" ));
+			tab->m_key = MK_NONE;
+			tab->m_usableIn = COMMANDUSABLE_NONE;
+			return;
+		}
 }
 
 //-----------------------------------------------------------------------------
@@ -936,6 +954,7 @@ std::vector< HotkeyCommandRow > Hotkeys_commandRows( const std::string& commandM
 	unbound.push_back( commandRow( "TOGGLE_COMMAND_TAB_BUILDINGS", "INTERFACE" ) );
 	unbound.push_back( commandRow( "TOGGLE_COMMAND_TAB_GROUND", "INTERFACE" ) );
 	unbound.push_back( commandRow( "TOGGLE_COMMAND_TAB_AIRCRAFT", "INTERFACE" ) );
+	unbound.push_back( commandRow( "TOGGLE_COMMAND_TAB_DEFENSE", "INTERFACE" ) );
 	unbound.push_back( commandRow( "SIGNAL_ATTACK", "INFORMATION" ) );
 	unbound.push_back( commandRow( "SIGNAL_DEFEND", "INFORMATION" ) );
 	unbound.push_back( commandRow( "SIGNAL_ATTENTION", "INFORMATION" ) );
@@ -961,12 +980,13 @@ std::vector< HotkeyCommandRow > Hotkeys_commandRows( const std::string& commandM
 	}
 	// LAUNCHER_DEFAULTS: I, free in the shipped map, for the next idle worker, and Alt with Z, X and C,
 	// which nothing in the shipped map holds, for the signals to the allies. Request money has no key:
-	// Alt+V is evacuate in place. Ctrl with Q, W and E, free too, for the bar's command tabs; the game
-	// puts all of these on (MetaMap::keepArrowsForCamera), so a file naming them names no change.
+	// Alt+V is evacuate in place. Ctrl with Q, W and E, free too, for the bar's command tabs, and Ctrl+R
+	// for the sidebar's fourth tab; the game puts all of these on (MetaMap::keepArrowsForCamera), so a
+	// file naming them names no change.
 	static const char *const DEFAULTS[][ 3 ] = { { "SELECT_NEXT_IDLE_WORKER", "KEY_I", "NONE" },
 		{ "SIGNAL_ATTACK", "KEY_Z", "ALT" }, { "SIGNAL_DEFEND", "KEY_X", "ALT" }, { "SIGNAL_ATTENTION", "KEY_C", "ALT" },
 		{ "TOGGLE_COMMAND_TAB_BUILDINGS", "KEY_Q", "CTRL" }, { "TOGGLE_COMMAND_TAB_GROUND", "KEY_W", "CTRL" },
-		{ "TOGGLE_COMMAND_TAB_AIRCRAFT", "KEY_E", "CTRL" } };
+		{ "TOGGLE_COMMAND_TAB_AIRCRAFT", "KEY_E", "CTRL" }, { "TOGGLE_COMMAND_TAB_DEFENSE", "KEY_R", "CTRL" } };
 	for( size_t each = 0; each < unbound.size(); each++ )
 		for( size_t row = 0; row < sizeof( DEFAULTS ) / sizeof( DEFAULTS[ 0 ] ); row++ )
 			if( unbound[ each ].id == DEFAULTS[ row ][ 0 ] )

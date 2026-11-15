@@ -226,6 +226,50 @@ CBCommandStatus ControlBar::processCommandTransitionUI( GameWindow *control, Gad
 }
 
 //-------------------------------------------------------------------------------------------------
+/** A structure button pressed for `builder`: refused with the bar's message when the money, the
+	* queue or the cap says no, else the structure goes on the cursor with `source` (the builder's own
+	* drawable when NULL) as the one placing it.  The bar's GUI_COMMAND_DOZER_CONSTRUCT and the
+	* sidebar's structure cameos both come here. */
+//-------------------------------------------------------------------------------------------------
+void ControlBar::startStructurePlacement( const CommandButton *button, Object *builder, Drawable *source )
+{
+	if( button == NULL )
+		return;
+	if( source == NULL && builder != NULL )
+		source = builder->getDrawable();
+
+	//Kris: September 27, 2002
+	//Make sure we have enough CASH to build it WHEN we click the button to build it,
+	//before actually previewing the purchase, otherwise, cancel altogether.
+	const ThingTemplate *whatToBuild = button->getThingTemplate();
+	CanMakeType cmt = TheBuildAssistant->canMakeUnit( builder, whatToBuild );
+	if (cmt == CANMAKE_NO_MONEY)
+	{
+		TheEva->setShouldPlay(EVA_InsufficientFunds);
+		TheInGameUI->message( "GUI:NotEnoughMoneyToBuild" );
+		return;
+	}
+	else if (cmt == CANMAKE_QUEUE_FULL)
+	{
+		TheInGameUI->message( "GUI:ProductionQueueFull" );
+		return;
+	}
+	else if (cmt == CANMAKE_PARKING_PLACES_FULL)
+	{
+		TheInGameUI->message( "GUI:ParkingPlacesFull" );
+		return;
+	}
+	else if( cmt == CANMAKE_MAXED_OUT_FOR_PLAYER )
+	{
+		TheInGameUI->message( "GUI:UnitMaxedOut" );
+		return;
+	}
+
+	// tell the UI that we want to build something so we get a building at the cursor
+	TheInGameUI->placeBuildAvailable( whatToBuild, source );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Process a button selected message from the window system that should be for one of
 	* our GUI commands */
 //-------------------------------------------------------------------------------------------------
@@ -378,36 +422,7 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 					break;
 			}
 
-			//Kris: September 27, 2002
-			//Make sure we have enough CASH to build it WHEN we click the button to build it,
-			//before actually previewing the purchase, otherwise, cancel altogether.
-			const ThingTemplate *whatToBuild = commandButton->getThingTemplate();
-			CanMakeType cmt = TheBuildAssistant->canMakeUnit( obj, whatToBuild );
-			if (cmt == CANMAKE_NO_MONEY)
-			{
-				TheEva->setShouldPlay(EVA_InsufficientFunds);
-				TheInGameUI->message( "GUI:NotEnoughMoneyToBuild" );
-				break;
-			} 
-			else if (cmt == CANMAKE_QUEUE_FULL)
-			{
-				TheInGameUI->message( "GUI:ProductionQueueFull" );
-				break;
-			}
-			else if (cmt == CANMAKE_PARKING_PLACES_FULL)
-			{
-				TheInGameUI->message( "GUI:ParkingPlacesFull" );
-				break;
-			}
-			else if( cmt == CANMAKE_MAXED_OUT_FOR_PLAYER )
-			{
-				TheInGameUI->message( "GUI:UnitMaxedOut" );
-				break;
-			} 
-
-			// tell the UI that we want to build something so we get a building at the cursor
-			TheInGameUI->placeBuildAvailable( commandButton->getThingTemplate(), source );
-
+			startStructurePlacement( commandButton, obj, source );
 			break;
 
 		}  // end dozer construct

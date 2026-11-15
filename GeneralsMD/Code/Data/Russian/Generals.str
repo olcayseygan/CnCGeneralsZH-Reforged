@@ -17009,6 +17009,70 @@ TOOLTIP:HealthBarColors
 "Зелёный при полном здоровье, через жёлтый к красному, либо каждая полоса цвета владельца, чтобы было видно, чья она. Отключённые юниты остаются синими."
 END
 
+GUI:HudLayout
+"Расположение"
+END
+
+GUI:HudLayout0
+"Классическое"
+END
+
+GUI:HudLayout1
+"В стиле Red Alert"
+END
+
+TOOLTIP:HudLayout
+"Классическое расположение оставляет командную панель внизу. Стиль Red Alert переносит строительство и обучение в боковую панель справа, а команды выбранных юнитов — в полосу внизу."
+END
+
+GUI:HudWidth
+"Ширина интерфейса"
+END
+
+GUI:HudWidth0
+"Весь экран"
+END
+
+GUI:HudWidth1
+"21:9"
+END
+
+GUI:HudWidth2
+"16:9"
+END
+
+TOOLTIP:HudWidth
+"На экране шире выбранного интерфейс собирается в область этого формата по центру, чтобы панель оставалась перед глазами. Поле боя по-прежнему занимает весь экран."
+END
+
+GUI:SidebarTab0
+"Здания"
+END
+
+GUI:SidebarTab1
+"Оборона"
+END
+
+GUI:SidebarTab2
+"Пехота"
+END
+
+GUI:SidebarTab3
+"Техника"
+END
+
+GUI:SidebarAll
+"Все"
+END
+
+GUI:SidebarSell
+"Продать"
+END
+
+GUI:SidebarRepair
+"Ремонт"
+END
+
 GUI:MenuTransitionSpeed
 "Скорость переходов меню"
 END
@@ -17355,6 +17419,10 @@ END
 
 GUI:HotkeysCommandHOLD_POSITION
 "Удерживать позицию"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_DEFENSE
+"Четвёртая вкладка боковой панели"
 END
 
 GUI:LoadModeSkirmish

@@ -919,7 +919,8 @@ void ControlBar::populateBuildQueue( Object *producer )
 void ControlBar::updateBuildQueue( Object *obj, ProductionUpdateInterface *pu )
 {
 	GameWindow *queue = m_contextParent[ CP_BUILD_QUEUE ];
-	const Bool busy = pu && pu->firstProduction() != NULL;
+	// the sidebar's cameos carry the clocks and counts, and the card keeps its portrait
+	const Bool busy = pu && pu->firstProduction() != NULL && !m_sidebarLayout;
 	if( !busy )
 	{
 		if( queue->winIsHidden() == FALSE )
@@ -2082,7 +2083,8 @@ void ControlBar::updateCommandTabButtons( void )
 	const Bool seated = m_controlBarSchemeManager != NULL && m_controlBarSchemeManager->getCommandTabSeats( seatTab, &seatPlate );
 	IRegion2D grid;
 	const Bool haveGrid = getCommandGridRect( &grid );
-	const Bool shown = playing && m_contextParent[ CP_MASTER ] != NULL && !m_contextParent[ CP_MASTER ]->winIsHidden()
+	// the sidebar has its own tabs (ControlBarSidebar.h): these hide and close under it
+	const Bool shown = playing && !m_sidebarLayout && m_contextParent[ CP_MASTER ] != NULL && !m_contextParent[ CP_MASTER ]->winIsHidden()
 		&& !TheInGameUI->isQuitMenuVisible() && ( seated || ( haveGrid && grid.lo.y < (Int)TheDisplay->getHeight() ) );
 
 	GameWindow *parent = m_commandTabParent;
@@ -2820,7 +2822,8 @@ void ControlBar::updateSignalKeys( void )
 {
 	IRegion2D seat[ SIGNAL_KEYS ], plate;
 	const Bool seated = m_controlBarSchemeManager != NULL && m_controlBarSchemeManager->getSignalSeats( seat, &plate );
-	const Bool shown = seated && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame()
+	// the seats are painted on the Classic bar's radar plate, which the sidebar does not have
+	const Bool shown = seated && !m_sidebarLayout && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame()
 		&& m_contextParent[ CP_MASTER ] != NULL && !m_contextParent[ CP_MASTER ]->winIsHidden()
 		&& !TheInGameUI->isQuitMenuVisible();
 

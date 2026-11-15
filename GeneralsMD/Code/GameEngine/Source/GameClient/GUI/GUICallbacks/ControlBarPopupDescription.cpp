@@ -79,6 +79,7 @@
 #include "Common/Upgrade.h"
 #include "GameClient/AnimateWindowManager.h"
 #include "GameClient/DisconnectMenu.h"
+#include "GameClient/Display.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/Gadget.h"
 #include "GameClient/GadgetTextEntry.h"
@@ -1370,7 +1371,42 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 			ControlBarSchemeManager::radarFrameRect( frame, radarRect, &radarOuter );
 		else
 			radarOuter.lo.y = getControlBarSchemeManager()->radarArtTop( radarRect.lo.y );
-		parent->winSetPosition( pos.x, radarOuter.lo.y - REAL_TO_INT( 6 * k ) - cardHeight );
+		ICoord2D cardAt;
+		cardAt.y = radarOuter.lo.y - REAL_TO_INT( 6 * k ) - cardHeight;
+
+		// ControlBarPopupDescription.wnd stands the card at the screen's left edge, which is the HudWidth
+		// area's left edge, where the Classic radar went
+		HudLayoutRects hud;
+		getHudLayoutRects( &hud );
+		cardAt.x = hud.area.lo.x;
+
+		//
+		// The sidebar's radar is at the top right, so the card leans on the world side instead: left of
+		// the sidebar at the hovered cell's height for a sidebar cell, above the strip at the button's x for
+		// the strip's and the card's.  Kept on the screen either way.
+		//
+		GameWindow *anchor = tooltipWin ? tooltipWin : prevWindow;
+		if( isSidebarLayout() && anchor != NULL )
+		{
+			ICoord2D at;
+			anchor->winGetScreenPosition( &at.x, &at.y );
+			const Int gap = REAL_TO_INT( 6 * k );
+			if( at.x >= hud.sidebar.lo.x )
+			{
+				cardAt.x = hud.sidebar.lo.x - gap - size.x;
+				cardAt.y = at.y;
+			}
+			else
+			{
+				cardAt.x = min( max( at.x, hud.area.lo.x ), hud.sidebar.lo.x - gap - size.x );
+				cardAt.y = hud.strip.lo.y - gap - cardHeight;
+			}
+			cardAt.x = max( cardAt.x, hud.area.lo.x );
+		}
+		else if( isSidebarLayout() )
+			cardAt.y = hud.strip.lo.y - REAL_TO_INT( 6 * k ) - cardHeight;	// no cell to lean on: over the strip
+		cardAt.y = max( 0, min( cardAt.y, hud.screen.hi.y - cardHeight ) );
+		parent->winSetPosition( cardAt.x, cardAt.y );
 
 		ICoord2D descPos;
 		win->winGetPosition(&descPos.x, &descPos.y);

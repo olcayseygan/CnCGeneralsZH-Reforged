@@ -1591,6 +1591,44 @@ static void drawRadarFrame( const Image *const *frame )
 	drawNinePiece( frame, outer, inner );
 }
 
+Bool ControlBarDrawRadarFrame( void )
+{
+	const ControlBarSchemeManager *schemes = TheControlBar ? TheControlBar->getControlBarSchemeManager() : NULL;
+	const Image *const *frame = schemes ? schemes->getRadarFrame() : NULL;
+	if( frame == NULL )
+		return FALSE;
+	drawRadarFrame( frame );
+	return TRUE;
+}
+
+Bool ControlBarDrawPowerTrayBox( const IRegion2D *cells, Int count, const IRegion2D &box )
+{
+	const ControlBarSchemeManager *schemes = TheControlBar ? TheControlBar->getControlBarSchemeManager() : NULL;
+	const Image *const *tray = schemes ? schemes->getPowerTray() : NULL;
+	if( tray == NULL )
+		return FALSE;
+
+	// the edges as thick as the powers tray wears them (ControlBar::powerTrayMetrics); a piece the art
+	// leaves out leaves what is under it showing
+	const Real k = TheDisplay->getHeight() / 1080.0f;
+	const Image *edgeLeft = tray[ ControlBarScheme::TRAY_EDGE_LEFT ];
+	const Image *edgeTop = tray[ ControlBarScheme::TRAY_EDGE_TOP ];
+	const Image *edgeFoot = tray[ ControlBarScheme::TRAY_EDGE_BOTTOM ];
+	const Int l = edgeLeft ? REAL_TO_INT_CEIL( edgeLeft->getImageWidth() * k ) : 0;
+	const Int t = edgeTop ? REAL_TO_INT_CEIL( edgeTop->getImageHeight() * k ) : 0;
+	const Int b = edgeFoot ? REAL_TO_INT_CEIL( edgeFoot->getImageHeight() * k ) : 0;
+
+	for( Int each = 0; each < count; each++ )
+		TheDisplay->drawImage( tray[ ControlBarScheme::TRAY_CELL ], cells[ each ].lo.x, cells[ each ].lo.y,
+													 cells[ each ].hi.x, cells[ each ].hi.y );
+	TheDisplay->drawImage( edgeTop, box.lo.x, box.lo.y - t, box.hi.x, box.lo.y );
+	TheDisplay->drawImage( edgeFoot, box.lo.x, box.hi.y, box.hi.x, box.hi.y + b );
+	TheDisplay->drawImage( edgeLeft, box.lo.x - l, box.lo.y, box.lo.x, box.hi.y );
+	TheDisplay->drawImage( tray[ ControlBarScheme::TRAY_CORNER_TL ], box.lo.x - l, box.lo.y - t, box.lo.x, box.lo.y );
+	TheDisplay->drawImage( tray[ ControlBarScheme::TRAY_CORNER_BL ], box.lo.x - l, box.hi.y, box.lo.x, box.hi.y + b );
+	return TRUE;
+}
+
 //-----------------------------------------------------------------------------
 /** A filled band, skipped when empty */
 //-----------------------------------------------------------------------------

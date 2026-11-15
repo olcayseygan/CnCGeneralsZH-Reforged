@@ -757,7 +757,8 @@ void ShowControlBar( Bool immediate )
 			TheControlBar->switchControlBarStage(CONTROL_BAR_STAGE_DEFAULT);
 			// full height: the three panels are drawn over the world, they do not crop it (see InGameUI::init)
 			TheTacticalView->setHeight((Int)(TheDisplay->getHeight()));
-			if (TheControlBar->m_animateWindowManager && !immediate)
+			// the sidebar does not slide: its panels draw from HudLayoutRects and would stand while the windows moved
+			if (TheControlBar->m_animateWindowManager && !immediate && !TheControlBar->isSidebarLayout())
 			{
 				TheControlBar->m_animateWindowManager->reset();
 				//TheControlBar->m_animateWindowManager->registerGameWindow(window, WIN_ANIMATION_SLIDE_BOTTOM_TIMED, TRUE, 1000, 0);
@@ -796,7 +797,7 @@ void HideControlBar( Bool immediate )
 				TheTacticalView->setHeight(TheDisplay->getHeight());
 #endif
 		}
-		if (immediate)
+		if (immediate || (TheControlBar && TheControlBar->isSidebarLayout()))
 		{
 			window->winHide(TRUE);
 			if(TheControlBar)
@@ -840,7 +841,7 @@ void ToggleControlBar( Bool immediate )
 				TheTacticalView->setHeight((Int)(TheDisplay->getHeight()));
 				window->winHide(!window->winIsHidden());
 				TheControlBar->switchControlBarStage(CONTROL_BAR_STAGE_DEFAULT);
-				if (TheControlBar->m_animateWindowManager && !immediate)
+				if (TheControlBar->m_animateWindowManager && !immediate && !TheControlBar->isSidebarLayout())
 				{
 					TheControlBar->m_animateWindowManager->reset();
 					//TheControlBar->m_animateWindowManager->registerGameWindow(window, WIN_ANIMATION_SLIDE_BOTTOM_TIMED, FALSE, 500, 0);

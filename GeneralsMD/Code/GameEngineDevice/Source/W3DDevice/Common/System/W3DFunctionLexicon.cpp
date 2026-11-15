@@ -74,6 +74,7 @@ static FunctionLexicon::TableEntry gameWinDrawTable [] =
 	{ NAMEKEY_INVALID, "W3DCameoMovieDraw",							(void *)W3DCameoMovieDraw },
 	{ NAMEKEY_INVALID, "W3DRightHUDDraw",								(void *)W3DRightHUDDraw },
 	{ NAMEKEY_INVALID, "W3DPowerDraw",									(void *)W3DPowerDraw },
+	{ NAMEKEY_INVALID, "W3DPowerDrawV",									(void *)W3DPowerDrawV },
 	{ NAMEKEY_INVALID, "W3DMainMenuDraw",								(void *)W3DMainMenuDraw },
 	{ NAMEKEY_INVALID, "W3DMainMenuFourDraw",						(void *)W3DMainMenuFourDraw },
 	{ NAMEKEY_INVALID, "W3DMetalBarMenuDraw",						(void *)W3DMetalBarMenuDraw },

@@ -1540,7 +1540,79 @@ END
 
 // the rack's top drawer: the camera lever, the fog and the armies drawer
 GUI:HudWatch
-"Watch"
+"Camera"
+END
+
+// The camera drawer's status well: its first line says what the camera does, its second the next
+// step, or what the control under the pointer does.  %ls is a player's name
+GUI:HudCamStateFree
+"Free camera"
+END
+
+GUI:HudCamStateDirector
+"Director"
+END
+
+GUI:HudCamStatePlayer
+"Screen of %ls"
+END
+
+GUI:HudCamNextFree
+"Click a player's name to see their screen"
+END
+
+GUI:HudCamNextFreeFollowed
+"Click the name to return to the screen of %ls"
+END
+
+// also the Director stop's explanation under the pointer
+GUI:HudCamNextDirector
+"The camera goes to the biggest fight by itself"
+END
+
+GUI:HudCamNextDirectorFollowed
+"Following the fights of %ls"
+END
+
+GUI:HudCamNextPlayer
+"Esc or click the name again to let go"
+END
+
+GUI:HudCamNextWaiting
+"Waiting for this player's camera"
+END
+
+GUI:HudCamNextComputer
+"A computer has no screen. Director follows its fights"
+END
+
+GUI:HudCamHintFree
+"You move the camera yourself"
+END
+
+GUI:HudCamHintPlayer
+"You see the screen of the player you pick"
+END
+
+GUI:HudCamHintFog
+"Shows only what the watched player sees"
+END
+
+GUI:HudCamHintArmies
+"Opens each player's units beside the list"
+END
+
+GUI:HudCamHintRow
+"Click to see this player's screen"
+END
+
+GUI:HudCamHintRowLive
+"Click to let go"
+END
+
+// the plate at the top of the picture while a player's own screen is on the camera, beside his name
+GUI:HudPlayerCamera
+"PLAYER CAMERA"
 END
 
 // the camera's own again

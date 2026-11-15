@@ -1401,3 +1401,58 @@ TEST(a_defeated_card_flashes_is_struck_and_closes_one_card_at_a_time)
 	CHECK_EQ( second, 100 + 54 * K );
 	CHECK_EQ( ObserverCamera_collapseFrom( 400, second ), 400 + 36 * K );
 }
+
+TEST(a_look_through_a_player_gives_back_the_camera_and_fog_the_watcher_had)
+{
+	ObserverCamera *camera = new ObserverCamera();
+	// the rack's look: the fog stays as set, a second player keeps the first mode, letting go gives it back
+	camera->setMode( OBSERVER_CAMERA_DIRECTOR );
+	camera->setFog( TRUE );
+	camera->lookThrough( 2, FALSE );
+	CHECK_EQ( (Int)camera->getMode(), (Int)OBSERVER_CAMERA_PLAYER );
+	CHECK_EQ( camera->getFollowedPlayerIndex(), 2 );
+	camera->lookThrough( 3, FALSE );
+	CHECK( camera->isLooking() );
+	CHECK( camera->stopLooking() );
+	CHECK_EQ( (Int)camera->getMode(), (Int)OBSERVER_CAMERA_DIRECTOR );
+	CHECK_EQ( camera->getFollowedPlayerIndex(), (Int)ObserverCamera::NO_PLAYER );
+	CHECK( camera->isFogOn() );
+	CHECK( !camera->stopLooking() );
+	// the observer bar's look turns the fog on, and letting go turns it off again
+	camera->setFog( FALSE );
+	camera->lookThrough( 1 );
+	CHECK( camera->isFogOn() );
+	CHECK( camera->stopLooking() );
+	CHECK( !camera->isFogOn() );
+	CHECK_EQ( (Int)camera->getMode(), (Int)OBSERVER_CAMERA_DIRECTOR );
+	// so does the lever moved off Player, the look's other way out
+	camera->lookThrough( 1 );
+	camera->setMode( OBSERVER_CAMERA_FREE );
+	CHECK( !camera->isLooking() );
+	CHECK( !camera->isFogOn() );
+	// a rewind's reset and give-back keeps the fog the look took
+	camera->lookThrough( 1 );
+	const Bool tookFog = camera->lookTookFog();
+	camera->reset();
+	camera->setMode( OBSERVER_CAMERA_PLAYER );
+	camera->followPlayer( 1 );
+	camera->setFog( TRUE );
+	camera->keepLooking( TRUE, tookFog );
+	CHECK( camera->stopLooking() );
+	CHECK( !camera->isFogOn() );
+	CHECK_EQ( (Int)camera->getMode(), (Int)OBSERVER_CAMERA_FREE );
+	camera->setMode( OBSERVER_CAMERA_DIRECTOR );
+	// the lever moved off Player ends the look: the next one remembers the new stop
+	camera->lookThrough( 1, FALSE );
+	camera->setMode( OBSERVER_CAMERA_FREE );
+	CHECK( !camera->isLooking() );
+	camera->lookThrough( 1, FALSE );
+	CHECK( camera->stopLooking() );
+	CHECK_EQ( (Int)camera->getMode(), (Int)OBSERVER_CAMERA_FREE );
+	// a follow with no look lets go of the player and keeps the director
+	camera->setMode( OBSERVER_CAMERA_DIRECTOR );
+	camera->followPlayer( 4 );
+	CHECK( camera->stopLooking() );
+	CHECK_EQ( (Int)camera->getMode(), (Int)OBSERVER_CAMERA_DIRECTOR );
+	delete camera;
+}

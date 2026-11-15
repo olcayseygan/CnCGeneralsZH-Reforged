@@ -406,11 +406,22 @@ public:
 	Bool isDriving( void ) const { return m_driving; }
 	Bool isFogOn( void ) const { return m_fog; }
 	void setFog( Bool fog ) { m_fog = fog; }
-	/// a player picked on the observer bar: his fog on the screen and his camera driving it, until
-	/// stopLooking puts back the whole map and the camera the watcher had before
-	void lookThrough( Int playerIndex );
-	/// FALSE when nobody was followed and no fog was on, so there was nothing to take back
+	/// a player picked on the observer bar or the rack: his camera driving the screen, and with takeFog
+	/// his fog on it, until stopLooking puts back the camera the watcher had before.  The mode before is
+	/// remembered once a look: a second player picked, or the same one taken again after the watcher
+	/// scrolled off him, keeps it
+	void lookThrough( Int playerIndex, Bool takeFog = TRUE );
+	/// nobody followed, the camera the watcher had before the look, and the fog off only when the look
+	/// turned it on; FALSE when nobody was followed and no look was on, so there was nothing to take back
 	Bool stopLooking( void );
+	/// a look is on: lookThrough since the last stopLooking, the lever not moved to Free or Director
+	Bool isLooking( void ) const { return m_looking; }
+	/// the look turned the fog on, so ending it turns the fog off
+	Bool lookTookFog( void ) const { return m_lookTookFog; }
+	/// a replay rewind's reset forgets the look; the rewind gives it back with the mode it kept
+	void keepLooking( Bool looking, Bool tookFog ) { m_looking = looking; m_lookTookFog = looking && tookFog; }
+	/// the player mode with a camera of the followed player's to show, which is what is on the screen
+	Bool isShowingPlayerView( void ) const;
 
 	/// the player whose fog the screen is drawn in: the local player, or whoever a watcher with fog
 	/// on is following
@@ -497,6 +508,7 @@ public:
 
 private:
 	void updateShroudViewer( void );
+	void endLook( void );
 	void holdHeight( Bool hold );
 	void driveHeight( Real extra );
 	Bool takenByHand( const ViewLocation &current ) const;
@@ -526,7 +538,6 @@ private:
 	void fitPanes( UnsignedInt frame );
 	Real paneZoom( Int pane ) const;
 	void stepPaneCameras( const ViewLocation &step, Real elapsedSeconds );
-	Bool isShowingPlayerView( void ) const;
 	Bool chooseTarget( const ViewLocation &current, ViewLocation *target );
 	Bool directorPlace( const Player *narrowTo, Coord2D *place );
 	DirectorEvent *findEvent( UnsignedInt id );
@@ -557,6 +568,8 @@ private:
 
 	ObserverCameraMode m_mode;
 	ObserverCameraMode m_modeBeforeLook;	///< what stopLooking gives back; kept across a rewind's reset
+	Bool m_looking;									///< isLooking
+	Bool m_lookTookFog;							///< the look turned the fog on, so letting go turns it off
 	Int m_followed;
 	Bool m_fog;
 	Int m_shroudViewer;

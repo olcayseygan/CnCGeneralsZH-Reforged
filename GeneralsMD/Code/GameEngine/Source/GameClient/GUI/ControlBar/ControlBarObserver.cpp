@@ -228,7 +228,8 @@ WindowMsgHandledType ControlBarObserverSystem( GameWindow *window, UnsignedInt m
 					// the cancel button or Esc gives the whole map back.  All of it is this screen's
 					// picture, nothing reaches the logic
 					Player *picked = (Player *) GadgetButtonGetData( buttonPlayer[i] );
-					if( TheObserverCamera.isFogOn() && TheObserverCamera.getFollowedPlayerIndex() == picked->getPlayerIndex() )
+					if( TheObserverCamera.isLooking() && TheObserverCamera.getMode() == OBSERVER_CAMERA_PLAYER
+							&& TheObserverCamera.getFollowedPlayerIndex() == picked->getPlayerIndex() )
 					{
 						TheObserverCamera.stopLooking();
 						TheControlBar->watchPlayer( NULL );

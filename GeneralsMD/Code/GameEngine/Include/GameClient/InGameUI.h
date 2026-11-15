@@ -1671,13 +1671,22 @@ protected:
 		RACK_TEXT_KEY, RACK_TEXT_STAT = RACK_TEXT_KEY + 7, RACK_TEXT_HINT, RACK_TEXT_PLACE_HEAD, RACK_TEXT_PLAYER_HEAD,
 		RACK_TEXT_VALUE_HEAD, RACK_TEXT_PLACE, RACK_TEXT_NAME = RACK_TEXT_PLACE + RACK_ROWS,
 		RACK_TEXT_VALUE = RACK_TEXT_NAME + RACK_ROWS, RACK_TEXT_UNITS = RACK_TEXT_VALUE + RACK_ROWS,
-		RACK_TEXT_COUNT = RACK_TEXT_UNITS + RACK_ROWS * RACK_ARMY_UNITS
+		RACK_TEXT_STATE = RACK_TEXT_UNITS + RACK_ROWS * RACK_ARMY_UNITS, RACK_TEXT_STATE_NAME, RACK_TEXT_STATE_TAIL, RACK_TEXT_NEXT,
+		RACK_TEXT_COUNT
 	};
 	void drawSpectatorRack( Int plateTop );	///< plateTop: the watch drawer's plate, 8 under the superweapon tray's foot
 	/// the kept string `slot` holding text in the bold face at px pixels at 1080, a pixel smaller at a time
 	/// down to 9 until it is no wider than room (0: any width)
 	DisplayString *rackText( Int slot, const UnicodeString &text, Int px, Int room );
 	Bool												m_rackShown;							///< the last postDraw drew it
+	/// the status well under the lever: what the camera does, and the next step or the hovered control's use
+	void drawRackStatus( Int left, Int top, Int right, const UnicodeString &hover );
+	/// a player's own screen on the camera, the fog left as the watcher set it; the mode before is kept
+	void takePlayerCamera( Int playerIndex );
+	/// the player let go of: nobody followed, the camera the watcher had before
+	void letGoOfPlayerCamera( void );
+	/// while a player's screen is on the camera, his name and "player camera" at the top of the picture
+	void drawPlayerCameraPlate( Int top );
 	Int													m_rackX, m_rackY;					///< its pieces' left and the watch drawer's top
 	Int													m_rackRows;
 	Int													m_rackRowPlayer[ RACK_ROWS ];	///< the player index on each row, top down

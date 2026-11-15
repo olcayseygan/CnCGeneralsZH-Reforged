@@ -2126,8 +2126,9 @@ void InGameUI::evaluateSoloNexus( Drawable *newlyAddedDrawable )
 
 //-------------------------------------------------------------------------------------------------
 // The spectator actions the control socket sends (runSpectatorAction): "camera:free",
-// "camera:director" or "camera:player" picks who drives the camera (ObserverCamera.h); "follow:N"
-// or "follow:none" picks the player it follows; "fog" turns the followed player's fog on and off.
+// "camera:director" or "camera:player" picks who drives the camera (ObserverCamera.h), the player
+// stop taking the top of the standings when nobody is followed; "follow:N" or "follow:none" picks the
+// player it follows and leaves the mode; "fog" turns the followed player's fog on and off.
 //-------------------------------------------------------------------------------------------------
 static const std::string CAMERA_ACTION = "camera:";
 static const std::string CAMERA_DIRECTOR = "director";
@@ -2442,6 +2443,8 @@ static void rewindReplay( UnsignedInt target )
 	const ObserverCameraMode cameraMode = TheObserverCamera.getMode();
 	const Int followed = TheObserverCamera.getFollowedPlayerIndex();
 	const Bool fog = TheObserverCamera.isFogOn();
+	const Bool looking = TheObserverCamera.isLooking();
+	const Bool lookTookFog = TheObserverCamera.lookTookFog();
 
 	// a failed load has cleared the match and said so; nothing is left to seek in or look at
 	if( !TheGameState->loadCheckpoint( checkpoint.path,
@@ -2456,6 +2459,7 @@ static void rewindReplay( UnsignedInt target )
 	TheObserverCamera.setMode( cameraMode );
 	TheObserverCamera.followPlayer( followed );
 	TheObserverCamera.setFog( fog );
+	TheObserverCamera.keepLooking( looking, lookTookFog );
 	if( followed != ObserverCamera::NO_PLAYER )
 		TheControlBar->watchPlayer( ThePlayerList->getNthPlayer( followed ) );
 
@@ -2531,7 +2535,21 @@ void InGameUI::runSpectatorAction( const std::string &action )
 		if( choice == CAMERA_DIRECTOR )
 			TheObserverCamera.setMode( OBSERVER_CAMERA_DIRECTOR );
 		else if( choice == CAMERA_PLAYER )
-			TheObserverCamera.setMode( OBSERVER_CAMERA_PLAYER );
+		{
+			// nobody followed is no dead stop: the top of the standings still in the game is taken, and
+			// with nobody left in it the camera stays as it is
+			Int player = TheObserverCamera.getFollowedPlayerIndex();
+			if( player == ObserverCamera::NO_PLAYER )
+			{
+				const std::vector< SpectatorStats > ranked = gatherSpectatorStats( SPECTATOR_STATS[ m_rackStat ],
+					ThePlayerList->getLocalPlayer(), PLAYERMASK_ALL, TRUE );
+				for( size_t row = 0; row < ranked.size() && player == ObserverCamera::NO_PLAYER; row++ )
+					if( ranked[ row ].player->isPlayerActive() )
+						player = ranked[ row ].player->getPlayerIndex();
+			}
+			if( player != ObserverCamera::NO_PLAYER )
+				takePlayerCamera( player );
+		}
 		else if( choice == CAMERA_FREE )
 			TheObserverCamera.setMode( OBSERVER_CAMERA_FREE );
 		else
@@ -2542,6 +2560,12 @@ void InGameUI::runSpectatorAction( const std::string &action )
 		// following a player is watching him too: his side on the bar
 		const std::string choice = action.substr( FOLLOW_ACTION.size() );
 		Player *player = choice == FOLLOW_NOBODY ? NULL : ThePlayerList->getNthPlayer( atoi( choice.c_str() ) );
+		// nobody during a look ends it as a second click on the row does
+		if( player == NULL && TheObserverCamera.isLooking() )
+		{
+			letGoOfPlayerCamera();
+			return;
+		}
 		deselectAllDrawables();
 		TheControlBar->watchPlayer( player );
 		TheObserverCamera.followPlayer( player != NULL ? player->getPlayerIndex() : ObserverCamera::NO_PLAYER );
@@ -2559,6 +2583,23 @@ void InGameUI::runSpectatorAction( const std::string &action )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Following him is watching him too, his side on the bar, as "follow:N" is.  The screen's picture
+	* only; nothing reaches the logic. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::takePlayerCamera( Int playerIndex )
+{
+	deselectAllDrawables();
+	TheControlBar->watchPlayer( ThePlayerList->getNthPlayer( playerIndex ) );
+	TheObserverCamera.lookThrough( playerIndex, FALSE );
+}
+
+void InGameUI::letGoOfPlayerCamera( void )
+{
+	TheObserverCamera.stopLooking();
+	TheControlBar->watchPlayer( NULL );
+}
+
+//-------------------------------------------------------------------------------------------------
 // The spectator's rack: drawers hung off the right edge under the superweapon tray, cut from one
 // reference drawer (ReforgedHudObsSpec, Tools/hud_command_bar.py paint_rack, every piece named
 // ObserverPro<piece>).  A watch drawer with the camera's three-stop lever and the fog and armies
@@ -2573,8 +2614,12 @@ enum
 	RACK_TRAY_GAP					= 8,		///< the superweapon tray's foot to the watch drawer's plate
 	RACK_NO_TRAY_DROP			= 4,		///< the info strip's foot to the plate, no superweapons up
 	RACK_TOP_H						= 28,
-	RACK_BODY_H						= 50,		///< the watch drawer's plain plate, RackBody stretched
-	RACK_WATCH_H					= 86,		///< the watch drawer's plate ends this far under its top; the standings start there
+	RACK_BODY_H						= 76,		///< the watch drawer's plain plate, RackBody stretched over the status well too
+	RACK_WATCH_H					= 112,	///< the watch drawer's plate ends this far under its top; the standings start there
+	RACK_STATUS_TOP				= 76,		///< the status well under the lever's and rockers' words, in the watch drawer
+	RACK_STATUS_BOTTOM		= 106,
+	RACK_STATUS_LINE_H		= 14,		///< each of its two lines
+	RACK_STATUS_PAD				= 6,		///< its words' clearance from its sides
 	RACK_HEAD_TOP					= 28,
 	RACK_ROWS_TOP					= 96,		///< the standings' first row under their top
 	RACK_ROW_H						= 30,
@@ -2676,6 +2721,16 @@ static Bool rackInside( const ICoord2D &mouse, Int left, Int top, Int right, Int
 static Int rackKeyLeft( const RackPlace &at, Int key )
 {
 	return at.x + rackPx( RACK_KEY_LEFT + RACK_KEY_PITCH * key );
+}
+
+/// the lever's stop nearest the pointer, as ObserverCameraMode counts
+static Int rackLeverStop( const ICoord2D &mouse, const RackPlace &at )
+{
+	Int stop = 0;
+	for( Int each = 1; each < 3; each++ )
+		if( abs( mouse.x - at.x - rackPx( RACK_LEVER_STOPS[ each ] ) ) < abs( mouse.x - at.x - rackPx( RACK_LEVER_STOPS[ stop ] ) ) )
+			stop = each;
+	return stop;
 }
 
 /// the stat key under the pointer, or -1
@@ -2854,7 +2909,9 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 	drawRackPiece( "RackTop", X, Y );
 	drawRackPiece( "RackBody", X, Y + rackPx( RACK_TOP_H ), rackPx( RACK_W ), rackPx( RACK_BODY_H ) );
 	drawRackPiece( "RackBottom", X, Y + rackPx( RACK_TOP_H + RACK_BODY_H ) );
-	drawRackPiece( "RackTally", X + rackPx( 160 ), Y + rackPx( 9 ) );
+	// the tally lamp is lit only while a player's own screen is what the camera shows
+	drawRackPiece( "RackTally", X + rackPx( 160 ), Y + rackPx( 9 ), 0, 0,
+		TheObserverCamera.isShowingPlayerView() ? 0xFFFFFFFF : GameMakeColor( 80, 80, 80, 255 ) );
 	drawRackState( RACK_LEVERS[ camera ], overLever, X + rackPx( 16 ), Y + rackPx( 30 ) );
 	drawRackState( fog ? "RackRockerOn" : "RackRockerOff", overFog, X + rackPx( 186 ), Y + rackPx( 30 ) );
 	drawRackState( m_rackArmies ? "RackRockerOn" : "RackRockerOff", overArmies, X + rackPx( 246 ), Y + rackPx( 30 ) );
@@ -2928,6 +2985,25 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 	drawRackText( rackText( RACK_TEXT_ARMIES, UIStyle::capitals( TheGameText->fetch( "GUI:HudArmies" ) ), 11, rackPx( 58 ) ),
 		X + rackPx( 240 ), Y + rackPx( 61 ), X + rackPx( 298 ), Y + rackPx( 74 ), 0, RACK_ALIGN_CENTRE, m_rackArmies ? LIT : GREY );
 
+	// the status well: what the camera does now, and what the control under the pointer would do
+	static const char *const STOP_HINTS[ 3 ] = { "GUI:HudCamHintFree", "GUI:HudCamNextDirector", "GUI:HudCamHintPlayer" };
+	const char *hoverLabel = NULL;
+	if( overLever )
+		hoverLabel = STOP_HINTS[ rackLeverStop( mouse, at ) ];
+	else if( overFog )
+		hoverLabel = "GUI:HudCamHintFog";
+	else if( overArmies )
+		hoverLabel = "GUI:HudCamHintArmies";
+	for( Int row = 0; row < rows && hoverLabel == NULL; row++ )
+	{
+		const Int top = rowTop( row );
+		const Bool on = m_rackRowPlayer[ row ] == followed;
+		if( rackInside( mouse, at.tabs + rackTabOut( on, !on ), top + rackPx( 3 ), at.right, top + rackPx( 27 ) ) )
+			hoverLabel = on && camera == OBSERVER_CAMERA_PLAYER ? "GUI:HudCamHintRowLive" : "GUI:HudCamHintRow";
+	}
+	drawRackStatus( X + rackPx( RACK_WELL_LEFT ), Y + rackPx( RACK_STATUS_TOP ), X + rackPx( RACK_WELL_RIGHT ),
+		hoverLabel != NULL ? TheGameText->fetch( hoverLabel ) : UnicodeString() );
+
 	drawRackText( rackText( RACK_TEXT_STANDINGS, UIStyle::capitals( TheGameText->fetch( "GUI:HudStandings" ) ), 12, 0 ),
 		X + rackPx( 24 ), Y2 + rackPx( 9 ), X + rackPx( 180 ), Y2 + rackPx( 23 ), rackPx( 8 ), RACK_ALIGN_LEFT, GREY );
 	// each key's letter small in its bottom right corner
@@ -3000,6 +3076,92 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Two lines in a dark well, left..right from top: what the camera is doing, white with the player's
+	* name in his colour, and under it what to do next, or in gold what the control under the pointer
+	* does (hover, empty when none is). */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::drawRackStatus( Int left, Int top, Int right, const UnicodeString &hover )
+{
+	const Color GREY = GameMakeColor( 138, 148, 159, 255 );
+	const Color WHITE = GameMakeColor( 240, 244, 246, 255 );
+	const Color GOLD = GameMakeColor( 242, 194, 48, 255 );
+	const Int bottom = top + rackPx( RACK_STATUS_BOTTOM - RACK_STATUS_TOP );
+	TheDisplay->drawFillRect( left, top, right - left, bottom - top, GameMakeColor( 6, 9, 15, 230 ) );
+	TheDisplay->drawFillRect( left, top, right - left, 1, GameMakeColor( 0, 0, 0, 255 ) );
+	TheDisplay->drawFillRect( left, bottom - 1, right - left, 1, GameMakeColor( 58, 66, 76, 255 ) );
+
+	const Int followed = TheObserverCamera.getFollowedPlayerIndex();
+	Player *player = followed != ObserverCamera::NO_PLAYER ? ThePlayerList->getNthPlayer( followed ) : NULL;
+	const ObserverCameraMode mode = TheObserverCamera.getMode();
+	const char *state = "GUI:HudCamStateFree";
+	const char *next = player != NULL ? "GUI:HudCamNextFreeFollowed" : "GUI:HudCamNextFree";
+	Bool named = FALSE;		///< the state line carries the player's name
+	if( mode == OBSERVER_CAMERA_PLAYER && player != NULL )
+	{
+		state = "GUI:HudCamStatePlayer";
+		named = TRUE;
+		if( TheObserverCamera.isShowingPlayerView() )
+			next = "GUI:HudCamNextPlayer";
+		else
+			next = player->getPlayerType() == PLAYER_COMPUTER ? "GUI:HudCamNextComputer" : "GUI:HudCamNextWaiting";
+	}
+	else if( mode == OBSERVER_CAMERA_DIRECTOR )
+	{
+		state = "GUI:HudCamStateDirector";
+		next = player != NULL ? "GUI:HudCamNextDirectorFollowed" : "GUI:HudCamNextDirector";
+	}
+
+	const Int pad = rackPx( RACK_STATUS_PAD );
+	const Int room = right - left - 2 * pad;
+	const Int line1 = top + rackPx( 1 ), line2 = line1 + rackPx( RACK_STATUS_LINE_H );
+	const UnicodeString name = player != NULL ? player->getPlayerDisplayName() : UnicodeString();
+
+	// the state: its words white either side of the name, the name in his colour fitted to what is left
+	const UnicodeString format = TheGameText->fetch( state );
+	UnicodeString head, tail;
+	Bool inName = FALSE;
+	for( Int at = 0; at < format.getLength(); at++ )
+	{
+		if( named && !inName && at + 2 < format.getLength() && format.getCharAt( at ) == u'%' && format.getCharAt( at + 1 ) == u'l'
+				&& format.getCharAt( at + 2 ) == u's' )
+		{
+			inName = TRUE;
+			at += 2;
+			continue;
+		}
+		( inName ? tail : head ).concat( format.getCharAt( at ) );
+	}
+	DisplayString *headText = rackText( RACK_TEXT_STATE, head, 11, room );
+	Int headWidth = 0, height = 0, tailWidth = 0;
+	headText->getSize( &headWidth, &height );
+	Int x = left + pad;
+	drawRackText( headText, x, line1, x + headWidth, line1 + rackPx( RACK_STATUS_LINE_H ), 0, RACK_ALIGN_LEFT, WHITE );
+	if( inName )
+	{
+		DisplayString *tailText = rackText( RACK_TEXT_STATE_TAIL, tail, 11, 0 );
+		tailText->getSize( &tailWidth, &height );
+		DisplayString *nameText = rackText( RACK_TEXT_STATE_NAME, name, 11, max( room - headWidth - tailWidth, 1 ) );
+		Int nameWidth = 0;
+		nameText->getSize( &nameWidth, &height );
+		x += headWidth;
+		drawRackText( nameText, x, line1, x + nameWidth, line1 + rackPx( RACK_STATUS_LINE_H ), 0, RACK_ALIGN_LEFT, rackColour( player ) );
+		x += nameWidth;
+		drawRackText( tailText, x, line1, x + tailWidth, line1 + rackPx( RACK_STATUS_LINE_H ), 0, RACK_ALIGN_LEFT, WHITE );
+	}
+
+	// the next step, or the hovered control's use
+	UnicodeString step = hover;
+	if( step.isEmpty() )
+	{
+		step = TheGameText->fetch( next );
+		if( player != NULL && !named )
+			step.format( TheGameText->fetch( next ), name.str() );
+	}
+	drawRackText( rackText( RACK_TEXT_NEXT, step, 11, room ), left + pad, line2, right - pad, line2 + rackPx( RACK_STATUS_LINE_H ), 0,
+		RACK_ALIGN_LEFT, hover.isEmpty() ? GREY : GOLD );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** The rack is drawn over the world rather than in a window, so a press anywhere on its plates, a
 	* follow tab or the armies drawer is its own, as on a HUD cell; between the watch drawer and the
 	* standings the world shows, and takes the click.  The boxes are the last draw's, under the same
@@ -3015,15 +3177,18 @@ Bool InGameUI::handleSpectatorRackClick( const ICoord2D *mouse, Bool act )
 	const Int foot = at.rows + rackPx( RACK_ROW_H * m_rackRows + RACK_FOOT_SOLID );
 	const Int followed = TheObserverCamera.getFollowedPlayerIndex();
 
-	// a row's tab with the whole row: follow him, or nobody when he already is
+	// a row's tab with the whole row: his screen on the camera; the same row again while it is on lets
+	// go, and while the camera has fallen off him (scrolled, or the lever moved) takes it again
 	for( Int row = 0; row < m_rackRows; row++ )
 	{
 		const Int top = at.rows + rackPx( RACK_ROW_H * row );
 		const Bool on = m_rackRowPlayer[ row ] == followed;
 		if( !rackInside( *mouse, at.tabs + rackTabOut( on, !on ), top + rackPx( 3 ), at.right, top + rackPx( 27 ) ) )
 			continue;
-		if( act )
-			runSpectatorAction( on ? FOLLOW_ACTION + FOLLOW_NOBODY : FOLLOW_ACTION + std::to_string( m_rackRowPlayer[ row ] ) );
+		if( act && on && TheObserverCamera.getMode() == OBSERVER_CAMERA_PLAYER )
+			letGoOfPlayerCamera();
+		else if( act )
+			takePlayerCamera( m_rackRowPlayer[ row ] );
 		return TRUE;
 	}
 
@@ -3032,14 +3197,7 @@ Bool InGameUI::handleSpectatorRackClick( const ICoord2D *mouse, Bool act )
 		if( !act )
 			return TRUE;
 		if( rackInside( *mouse, X + rackPx( 16 ), Y + rackPx( 30 ), X + rackPx( 172 ), Y + rackPx( 62 ) ) )
-		{
-			// the stop nearest the pointer
-			Int stop = 0;
-			for( Int each = 1; each < 3; each++ )
-				if( abs( mouse->x - X - rackPx( RACK_LEVER_STOPS[ each ] ) ) < abs( mouse->x - X - rackPx( RACK_LEVER_STOPS[ stop ] ) ) )
-					stop = each;
-			runSpectatorAction( CAMERA_ACTION + *RACK_CAMERAS[ stop ] );
-		}
+			runSpectatorAction( CAMERA_ACTION + *RACK_CAMERAS[ rackLeverStop( *mouse, at ) ] );
 		else if( rackInside( *mouse, X + rackPx( 186 ), Y + rackPx( 30 ), X + rackPx( 232 ), Y + rackPx( 62 ) ) )
 			runSpectatorAction( FOG_ACTION );
 		else if( rackInside( *mouse, X + rackPx( 246 ), Y + rackPx( 30 ), X + rackPx( 292 ), Y + rackPx( 62 ) ) )
@@ -3755,6 +3913,11 @@ void InGameUI::update( void )
 			// picture between two of them
 			observerNowMs = GameEngine_pictureMilliseconds();
 		}
+		// a looked-through player who lost or left sends no camera any more, and his last one would
+		// hold the screen still: the look ends, back to the watcher's own
+		const Int looked = TheObserverCamera.getFollowedPlayerIndex();
+		if( TheObserverCamera.isLooking() && looked != ObserverCamera::NO_PLAYER && !ThePlayerList->getNthPlayer( looked )->isPlayerActive() )
+			letGoOfPlayerCamera();
 		TheObserverCamera.update( observerNowMs );
 	}
 
@@ -8875,7 +9038,11 @@ void InGameUI::postDraw( void )
 	// a player's to know
 	m_rackShown = FALSE;
 	if( TheGameLogic->getFrame() > 0 && !TheGameLogic->isInShellGame() && localPlayerWatching() )
+	{
 		drawSpectatorRack( rackPlateTop );
+		if( TheObserverCamera.isShowingPlayerView() )
+			drawPlayerCameraPlate( TheUIRect().y );
+	}
 
 	// a player's squad list on the left, and the picked squad's build tray where a watcher's rack hangs
 	GroupPanel_draw( rackPlateTop );
@@ -11547,6 +11714,30 @@ void InGameUI::drawDirectorIntroPlate( void )
 		return;
 	const Int underLeft = min( max( REAL_TO_INT( middle.x ) - underWidth / 2, 0 ), (Int)TheDisplay->getWidth() - underWidth );
 	drawBroadcastPlate( under, underLeft, top + nameHeight, shown );
+//-------------------------------------------------------------------------------------------------
+/** The watcher's reminder that the screen is a player's own: his name in his colour and the words,
+	* on the broadcast's plate, centred a pad under top. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::drawPlayerCameraPlate( Int top )
+{
+	// the vote kick's banner and -directorrecord's score bar have the top middle first
+	Player *player = ThePlayerList->getNthPlayer( TheObserverCamera.getFollowedPlayerIndex() );
+	if( player == NULL || TheGameLogic->getKickVoteTarget() >= 0 || TheGlobalData->m_directorRecord )
+		return;
+	// keyed by size, since a string keeps the font it was made with
+	const std::string size = std::to_string( broadcastPoints( BROADCAST_NAME_POINTS ) ) + ":";
+	BroadcastPlate plate;
+	plate.pieces.push_back( broadcastNameText( "cameraname" + size + std::to_string( player->getPlayerIndex() ), player,
+		BROADCAST_NAME_POINTS, BROADCAST_BANNER_NAME_WIDEST ) );
+	plate.colors.push_back( ObserverCamera_readableColor( clientPlayerColor( player ) ) );
+	plate.pieces.push_back( broadcastText( "cameraword" + size, TheGameText->fetch( "GUI:HudPlayerCamera" ), BROADCAST_WORDS,
+		broadcastPoints( BROADCAST_SIDE_POINTS ), TRUE ) );
+	plate.colors.push_back( BROADCAST_MUTED );
+	Int width = 0, height = 0;
+	broadcastPlateSize( plate, &width, &height );
+	drawBroadcastPlate( plate, ( TheDisplay->getWidth() - width ) / 2, top + broadcastPixels( BROADCAST_PAD ), 1.0f );
+}
+
 }
 
 //-------------------------------------------------------------------------------------------------

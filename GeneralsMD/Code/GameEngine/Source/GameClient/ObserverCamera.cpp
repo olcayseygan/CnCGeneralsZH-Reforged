@@ -1516,6 +1516,7 @@ ObserverCamera::ObserverCamera()
 	m_scoutScanned = 0;
 	m_timelineLoaded = FALSE;
 	m_modeBeforeLook = OBSERVER_CAMERA_FREE;
+	m_lookTookFog = FALSE;
 	reset();
 }
 
@@ -1523,6 +1524,7 @@ ObserverCamera::ObserverCamera()
 void ObserverCamera::reset( void )
 {
 	m_mode = OBSERVER_CAMERA_FREE;
+	m_looking = FALSE;
 	m_followed = NO_PLAYER;
 	m_fog = FALSE;
 	m_shroudViewer = NO_PLAYER;
@@ -1871,6 +1873,10 @@ void ObserverCamera::notePlayerView( Int playerIndex, const ViewLocation &view )
 //-------------------------------------------------------------------------------------------------
 void ObserverCamera::setMode( ObserverCameraMode mode )
 {
+	// the lever to Free or Director is the watcher's own choice and ends a look; the watcher scrolling
+	// off a player's camera (update) drops the mode without coming here, and the look stays
+	if( mode != OBSERVER_CAMERA_PLAYER )
+		endLook();
 	m_mode = mode;
 	m_driving = FALSE;
 	m_placeValid = FALSE;
@@ -1888,25 +1894,48 @@ void ObserverCamera::followPlayer( Int playerIndex )
 /** Picking a second player while looking through the first keeps the camera the watcher had before
 	* either, so one Esc always goes back to it. */
 //-------------------------------------------------------------------------------------------------
-void ObserverCamera::lookThrough( Int playerIndex )
+void ObserverCamera::lookThrough( Int playerIndex, Bool takeFog )
 {
-	if( m_followed == NO_PLAYER && !m_fog )
-		m_modeBeforeLook = m_mode;
+	if( !m_looking )
+	{
+		m_modeBeforeLook = m_mode == OBSERVER_CAMERA_PLAYER ? OBSERVER_CAMERA_FREE : m_mode;
+		m_lookTookFog = FALSE;
+	}
 	followPlayer( playerIndex );
-	m_fog = TRUE;
+	if( takeFog && !m_fog )
+	{
+		m_fog = TRUE;
+		m_lookTookFog = TRUE;
+	}
 	setMode( OBSERVER_CAMERA_PLAYER );
+	m_looking = TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
+/** A follow with no look, the director kept to a player, lets go of him and keeps the mode; only a
+	* player's camera with nobody left to show falls back to the watcher's own. */
+//-------------------------------------------------------------------------------------------------
 Bool ObserverCamera::stopLooking( void )
 {
-	if( m_followed == NO_PLAYER && !m_fog )
+	if( m_followed == NO_PLAYER && !m_looking )
 		return FALSE;
 
 	followPlayer( NO_PLAYER );
-	m_fog = FALSE;
-	setMode( m_modeBeforeLook );
+	const ObserverCameraMode back = m_looking ? m_modeBeforeLook : m_mode;
+	endLook();
+	setMode( back == OBSERVER_CAMERA_PLAYER ? OBSERVER_CAMERA_FREE : back );
 	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Every road out of a look comes here: the fog the look turned on goes off with it. */
+//-------------------------------------------------------------------------------------------------
+void ObserverCamera::endLook( void )
+{
+	if( m_looking && m_lookTookFog )
+		m_fog = FALSE;
+	m_looking = FALSE;
+	m_lookTookFog = FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------

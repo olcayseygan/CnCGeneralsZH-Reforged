@@ -724,9 +724,9 @@ StateReturnType DeliveringState::update() // Kick a dude out every so often
 	m_didOpen = true;
 	m_dropDelayLeft = ai->getDropDelay();
 
-	if (!ai->isCloseEnoughToTarget())
-		return STATE_FAILURE;
-
+	// empty first: EA asked for the distance before it, so a plane that dropped its last item just short
+	// of the spot and flew past it in the drop delay failed here with nothing aboard, went round for a
+	// second pass and only then left, its delivery decal on the ground the whole loop
 	const ContainedItemsList* items = owner->getContain() ? owner->getContain()->getContainedItemsList() : NULL;
 	if( (!items || !items->size()) && ai->getVisibleItemsDelivered() == ai->getData()->m_visibleNumBones )
 	{
@@ -734,6 +734,9 @@ StateReturnType DeliveringState::update() // Kick a dude out every so often
 		//have one or the other or even both.
 		return STATE_SUCCESS;
 	}
+
+	if (!ai->isCloseEnoughToTarget())
+		return STATE_FAILURE;
 
 	//Handle contained payload delivery.
 	if( items && !items->empty() )

@@ -442,6 +442,82 @@ Player *OCLSpecialPower::findAirliftRecipient( const Coord3D *loc ) const
 }
 
 // ------------------------------------------------------------------------------------------------
+/** A spot an airlifted unit may land on: inside the map, on clear ground (no cliff, water, structure
+	* footprint or anything standing there now), and for a vehicle clear a radius out on all four sides */
+static Bool isAirliftDropClear( const Coord3D &pos, Real radius )
+{
+	const Real EDGE_MARGIN = 30.0f;
+	Region3D extent;
+	TheTerrainLogic->getExtent( &extent );
+	if( pos.x < extent.lo.x + radius + EDGE_MARGIN || pos.x > extent.hi.x - radius - EDGE_MARGIN ||
+			pos.y < extent.lo.y + radius + EDGE_MARGIN || pos.y > extent.hi.y - radius - EDGE_MARGIN )
+		return FALSE;
+
+	// a search of one point: minRadius and maxRadius 0 test the centre only, and a fixed start angle
+	// keeps it off the logic random stream
+	FindPositionOptions fpOptions;
+	fpOptions.flags = FPF_CLEAR_CELLS_ONLY;
+	fpOptions.startAngle = 0.0f;
+	static const Real SIDES[5][2] = { { 0, 0 }, { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+	for( Int i = 0; i < ( radius > 0.0f ? 5 : 1 ); ++i )
+	{
+		Coord3D probe = pos, found;
+		probe.x += SIDES[ i ][ 0 ] * radius;
+		probe.y += SIDES[ i ][ 1 ] * radius;
+		probe.z = TheTerrainLogic->getGroundHeight( probe.x, probe.y );
+		if( !ThePartitionManager->findPositionAround( &probe, &fpOptions, &found ) )
+			return FALSE;
+	}
+	return TRUE;
+}
+
+struct AirliftDrop
+{
+	Coord3D pos;
+	Real radius;
+	Bool vehicle;
+};
+
+// ------------------------------------------------------------------------------------------------
+/** Where one airlifted unit lands: the first clear point on a sunflower spiral round its plane's
+	* spot that keeps its distance from every landing picked before it, a vehicle's wide of the other
+	* vehicles.  The spiral packs the load tight and even, so the zone grows with the order. */
+static Coord3D pickAirliftDrop( const Coord3D &around, const ThingTemplate *tmpl, std::vector< AirliftDrop > &taken )
+{
+	const Bool vehicle = !tmpl->isKindOf( KINDOF_INFANTRY );
+	const Real radius = tmpl->getTemplateGeometryInfo().getBoundingCircleRadius();
+	const Real VEHICLE_GAP = 25.0f, GAP = 8.0f, STEP = 8.0f, GOLDEN_ANGLE = 2.3999632f;
+	const Int MAX_POINTS = 800;	// out to 8 * sqrt(800), about 226
+	for( Int k = 0; k < MAX_POINTS; ++k )
+	{
+		const Real r = STEP * sqrt( (Real)k );
+		const Real angle = fmod( GOLDEN_ANGLE * (Real)k, TWO_PI );
+		Coord3D p = around;
+		p.x += r * Cos( angle );
+		p.y += r * Sin( angle );
+
+		Bool apart = TRUE;
+		for( std::vector< AirliftDrop >::const_iterator t = taken.begin(); t != taken.end() && apart; ++t )
+		{
+			const Real need = radius + t->radius + ( vehicle && t->vehicle ? VEHICLE_GAP : GAP );
+			const Real dx = p.x - t->pos.x, dy = p.y - t->pos.y;
+			apart = dx * dx + dy * dy >= need * need;
+		}
+		if( !apart || !isAirliftDropClear( p, vehicle ? radius : 0.0f ) )
+			continue;
+
+		p.z = TheTerrainLogic->getGroundHeight( p.x, p.y );
+		AirliftDrop drop = { p, radius, vehicle };
+		taken.push_back( drop );
+		return p;
+	}
+	// nowhere clear near the spot: the plane's spot itself, as a paradrop lands
+	AirliftDrop drop = { around, radius, vehicle };
+	taken.push_back( drop );
+	return around;
+}
+
+// ------------------------------------------------------------------------------------------------
 Bool OCLSpecialPower::doAirliftOrder( const Coord3D *loc, const AirliftOrder &order )
 {
 	const OCLSpecialPowerModuleData *d = getOCLSpecialPowerModuleData();
@@ -499,15 +575,51 @@ Bool OCLSpecialPower::doAirliftOrder( const Coord3D *loc, const AirliftOrder &or
 	Team *team = player->getDefaultTeam();
 	static const NameKeyType key_DeliverPayloadAIUpdate = NAMEKEY( "DeliverPayloadAIUpdate" );
 
+	std::vector< Coord3D > starts( planes ), targets( planes );
 	for( Int i = 0; i < planes; ++i )
 	{
 		const Real side = (Real)( ( i + 1 ) / 2 ) * ( ( i % 2 ) ? 1.0f : -1.0f ) * d->m_airliftSpacing;
-		Coord3D start = edge, target = spot;
-		start.x += acrossX * side;
-		start.y += acrossY * side;
-		target.x += acrossX * side;
-		target.y += acrossY * side;
+		starts[ i ] = edge;
+		targets[ i ] = spot;
+		starts[ i ].x += acrossX * side;
+		starts[ i ].y += acrossY * side;
+		targets[ i ].x += acrossX * side;
+		targets[ i ].y += acrossY * side;
+	}
 
+	// each unit's own landing spot, the vehicles' first so they get the room: every chute steers onto
+	// its own (the OCL leaves ParachuteDirectly off), where one shared spot a plane stacked its two tanks
+	std::vector< std::vector< Coord3D > > drops( planes );
+	std::vector< AirliftDrop > taken;
+	for( Int pass = 0; pass < 2; ++pass )
+		for( Int i = 0; i < planes; ++i )
+		{
+			drops[ i ].resize( loads[ i ].size(), targets[ i ] );
+			std::vector< size_t > mine;
+			std::vector< Coord3D > picked;
+			for( size_t j = 0; j < loads[ i ].size(); ++j )
+				if( loads[ i ][ j ]->isKindOf( KINDOF_INFANTRY ) == ( pass == 1 ) )
+				{
+					mine.push_back( j );
+					picked.push_back( pickAirliftDrop( targets[ i ], loads[ i ][ j ], taken ) );
+				}
+			// the plane drops in load order as it flies, so the first out gets the spot nearest the way
+			// in and the last the far side: no chute has to steer back against the flight
+			for( size_t a = 1; a < picked.size(); ++a )
+				for( size_t b = a; b > 0; --b )
+				{
+					const Real alongB = picked[ b ].x * dx + picked[ b ].y * dy, alongA = picked[ b - 1 ].x * dx + picked[ b - 1 ].y * dy;
+					if( alongB >= alongA )
+						break;
+					std::swap( picked[ b ], picked[ b - 1 ] );
+				}
+			for( size_t m = 0; m < mine.size(); ++m )
+				drops[ i ][ mine[ m ] ] = picked[ m ];
+		}
+
+	for( Int i = 0; i < planes; ++i )
+	{
+		Coord3D start = starts[ i ], target = targets[ i ];
 		Object *plane = ObjectCreationList::create( ocl, me, &start, &target, INVALID_ANGLE );
 		ContainModuleInterface *hold = plane ? plane->getContain() : NULL;
 		if( hold == NULL )
@@ -522,6 +634,7 @@ Bool OCLSpecialPower::doAirliftOrder( const Coord3D *loc, const AirliftOrder &or
 		Int carried = 0;
 		for( std::vector< const ThingTemplate * >::const_iterator it = loads[ i ].begin(); it != loads[ i ].end(); ++it )
 		{
+			const Coord3D &landing = drops[ i ][ it - loads[ i ].begin() ];
 			Object *unit = TheThingFactory->newObject( *it, team );
 			unit->setPosition( plane->getPosition() );
 			unit->setProducer( plane );
@@ -536,6 +649,7 @@ Bool OCLSpecialPower::doAirliftOrder( const Coord3D *loc, const AirliftOrder &or
 				if( chute->getContain() && chute->getContain()->isValidContainerFor( unit, true ) )
 				{
 					chute->getContain()->addToContain( unit );
+					chute->getContain()->setOverrideDestination( &landing );
 					payload = chute;
 				}
 				else

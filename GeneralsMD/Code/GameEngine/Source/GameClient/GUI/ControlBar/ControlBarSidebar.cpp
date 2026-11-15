@@ -35,6 +35,7 @@
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GroupPanel.h"
+#include "GameClient/Image.h"
 #include "GameClient/MetaEvent.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
@@ -48,11 +49,10 @@ namespace
 	const Color CLOCK_COLOR		= GameMakeColor( 0, 0, 0, 190 );			///< darker than the queue's 160: a 140 wide cameo
 	const Color ARROW_LIT			= GameMakeColor( 220, 228, 236, 255 );
 	const Color ARROW_DARK		= GameMakeColor( 90, 96, 104, 255 );
-	const Color TAB_TEXT			= GameMakeColor( 255, 255, 255, 255 );
 	const Color TAB_TEXT_EDGE	= GameMakeColor( 0, 0, 0, 255 );
 	const Color KEY_LETTER		= GameMakeColor( 255, 210, 60, 255 );	///< the bar's hotkey letters' yellow
-	const Real TAB_POINTS			= 10.0f;	///< the tab names at 1080, smaller when a name would not fit
 	const Real KEY_POINTS			= 8.0f;		///< the key letter in a tab's top left corner, at 1080
+	const Int ICON_INSET			= 3;			///< the icon kept this far inside the bevel
 
 	// the tab body: flat steel with a 1 px bevel, the group panel's stand-in colours; the open tab is
 	// lit blue and pressed in (its bevel turned over), a hovered one a step lighter
@@ -61,7 +61,16 @@ namespace
 	const Color TAB_STEEL_OPEN	= GameMakeColor( 52, 78, 128, 255 );
 	const Color TAB_BEVEL_LIGHT	= GameMakeColor( 140, 152, 166, 255 );
 	const Color TAB_BEVEL_DARK	= GameMakeColor( 5, 7, 9, 255 );
-	const Color TAB_TEXT_DIM		= GameMakeColor( 190, 198, 206, 255 );	///< a closed tab's name
+	const Color TAB_ICON_DIM		= GameMakeColor( 190, 198, 206, 255 );	///< a closed tab's icon, tinted down
+
+	/// Each tab's icon, a "Pro" piece under the side's prefix (<S><piece>, America's when the side has
+	/// none).  Stand-ins borrowed from the bar until the per-side tab icons exist: the buildings tab's
+	/// pictogram, the defend signal's shield, the idle infantry and idle vehicle buttons.  Swap the
+	/// names here for the new pieces.
+	const char *const TAB_ICONS[ SIDEBAR_TAB_COUNT ] =
+	{
+		"ProTabBuildings", "ProSignalDefend", "ProIdleInfantry", "ProIdleVehicle"
+	};
 
 	const char *const TAB_LABELS[ SIDEBAR_TAB_COUNT ] =
 	{
@@ -97,7 +106,8 @@ namespace
 	GameWindow *s_arrowUp = NULL;
 	GameWindow *s_arrowDown = NULL;
 	GameWinDrawFunc s_buttonDraw = NULL;	///< the plain push button's draw, under the arrows' chevrons
-	DisplayString *s_nameText[ SIDEBAR_TAB_COUNT ];	///< each tab's name, set and fitted in Sidebar_layout
+	const Image *s_tabIcon[ SIDEBAR_TAB_COUNT ];		///< TAB_ICONS for the local player's side, found in Sidebar_update
+	Player *s_iconPlayer = NULL;
 	DisplayString *s_keyText[ SIDEBAR_TAB_COUNT ];	///< each tab's key letter, set in Sidebar_update
 	UnicodeString s_keyShown[ SIDEBAR_TAB_COUNT ];
 }
@@ -163,7 +173,8 @@ static void drawArrow( GameWindow *window, WinInstanceData *instData )
 }
 
 /// a tab, all drawn here: a steel body with a 1 px bevel, raised when closed and pressed in and lit
-/// when open, its name in the middle and the key it answers to in the top left corner
+/// when open, its icon in the middle and the key it answers to in the top left corner; the name is in
+/// the tooltip
 static void drawTab( GameWindow *window, WinInstanceData *instData )
 {
 	const Int t = (Int)(intptr_t)GadgetButtonGetData( window ) - 1;
@@ -188,12 +199,16 @@ static void drawTab( GameWindow *window, WinInstanceData *instData )
 
 	// pressed in, the face's contents sit a pixel down and right
 	const Int push = open ? 1 : 0;
-	if( s_nameText[ t ] != NULL )
+	// the icon centred in the face, as large as fits with its own shape kept
+	const Image *icon = s_tabIcon[ t ];
+	const Int roomW = size.x - 2 * ( 1 + ICON_INSET ), roomH = size.y - 2 * ( 1 + ICON_INSET );
+	if( icon != NULL && icon->getImageWidth() > 0 && icon->getImageHeight() > 0 && roomW > 0 && roomH > 0 )
 	{
-		Int w = 0, h = 0;
-		s_nameText[ t ]->getSize( &w, &h );
-		s_nameText[ t ]->draw( at.x + ( size.x - w ) / 2 + push, at.y + ( size.y - h ) / 2 + push,
-			open ? TAB_TEXT : TAB_TEXT_DIM, TAB_TEXT_EDGE );
+		const Real fit = min( (Real)roomW / icon->getImageWidth(), (Real)roomH / icon->getImageHeight() );
+		const Int w = max( REAL_TO_INT( icon->getImageWidth() * fit ), 1 );
+		const Int h = max( REAL_TO_INT( icon->getImageHeight() * fit ), 1 );
+		const Int x = at.x + ( size.x - w ) / 2 + push, y = at.y + ( size.y - h ) / 2 + push;
+		TheDisplay->drawImage( icon, x, y, x + w, y + h, open ? 0xFFFFFFFF : TAB_ICON_DIM );
 	}
 	if( s_keyText[ t ] != NULL && !s_keyShown[ t ].isEmpty() )
 		s_keyText[ t ]->draw( at.x + 3 + push, at.y + 1 + push, KEY_LETTER, TAB_TEXT_EDGE );
@@ -407,8 +422,6 @@ static Bool makeWindows( GameWindow *parent )
 			continue;
 		GadgetButtonSetData( button, (void *)(intptr_t)( t + 1 ) );
 		button->winSetDrawFunc( drawTab );
-		if( s_nameText[ t ] == NULL )
-			s_nameText[ t ] = TheDisplayStringManager->newDisplayString();
 		if( s_keyText[ t ] == NULL )
 			s_keyText[ t ] = TheDisplayStringManager->newDisplayString();
 		s_keyShown[ t ].clear();
@@ -486,40 +499,16 @@ void Sidebar_layout( const HudLayoutRects &rects )
 	place( s_arrowUp, rects.arrowUp, box.lo );
 	place( s_arrowDown, rects.arrowDown, box.lo );
 
-	// one size for all four names, the largest at which the longest fits its tab beside the key letter
-	const Int keyPoints = max( REAL_TO_INT( KEY_POINTS * rects.scale ), 6 );
-	GameFont *keyFont = TheFontLibrary->getFont( "Arial", keyPoints, TRUE );
-	DisplayString *probe = TheDisplayStringManager->newDisplayString();
-	Int points = max( REAL_TO_INT( TAB_POINTS * rects.scale ), 6 );
-	for( ; points > 6; points-- )
-	{
-		probe->setFont( TheFontLibrary->getFont( "Arial", points, TRUE ) );
-		Bool fits = TRUE;
-		for( Int t = 0; t < SIDEBAR_TAB_COUNT && fits; t++ )
-		{
-			probe->setText( TheGameText->fetch( TAB_LABELS[ t ] ) );
-			Int w = 0, h = 0;
-			probe->getSize( &w, &h );
-			fits = w <= rects.tabs[ t ].width() - 2 * keyPoints && h <= rects.tabs[ t ].height() - 2;
-		}
-		if( fits )
-			break;
-	}
-	TheDisplayStringManager->freeDisplayString( probe );
-	GameFont *font = TheFontLibrary->getFont( "Arial", points, TRUE );
+	GameFont *keyFont = TheFontLibrary->getFont( "Arial", max( REAL_TO_INT( KEY_POINTS * rects.scale ), 6 ), TRUE );
 	for( Int t = 0; t < SIDEBAR_TAB_COUNT; t++ )
 	{
-		if( s_nameText[ t ] != NULL && font != NULL )
-		{
-			s_nameText[ t ]->setFont( font );
-			s_nameText[ t ]->setText( TheGameText->fetch( TAB_LABELS[ t ] ) );
-		}
 		if( s_keyText[ t ] != NULL && keyFont != NULL )
 			s_keyText[ t ]->setFont( keyFont );
 	}
 
 	s_shown = TRUE;
 	s_dirty = TRUE;
+	s_iconPlayer = NULL;	// a new match keeps the slot's Player but may change its side
 	s_box->winHide( FALSE );
 }
 
@@ -626,6 +615,26 @@ void Sidebar_update( void )
 	Player *player = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
 	if( !s_shown || !boxAlive() || player == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame() )
 		return;
+
+	// the tab icons for this player's side, once a player
+	if( s_iconPlayer != player )
+	{
+		s_iconPlayer = player;
+		const AsciiString side = player->getSide();
+		const char *prefix = side.startsWith( "China" ) || side.startsWith( "Boss" ) ? "China"
+			: side.startsWith( "GLA" ) ? "Gla" : side.startsWith( "Turkiye" ) ? "Turkiye" : "America";
+		for( Int t = 0; t < SIDEBAR_TAB_COUNT; t++ )
+		{
+			AsciiString name;
+			name.format( "%s%s", prefix, TAB_ICONS[ t ] );
+			s_tabIcon[ t ] = TheMappedImageCollection->findImageByName( name );
+			if( s_tabIcon[ t ] == NULL )
+			{
+				name.format( "America%s", TAB_ICONS[ t ] );
+				s_tabIcon[ t ] = TheMappedImageCollection->findImageByName( name );
+			}
+		}
+	}
 
 	// each tab's name and the key the command map gives it now, so a key moved on Options > Hotkeys in
 	// a match shows from the next frame; rewritten only when it changed

@@ -1679,6 +1679,7 @@ GameEngine/Include/GameClient/Color.h
 GameEngine/Include/GameClient/CommandXlat.h
 GameEngine/Include/GameClient/ControlBar.h
 GameEngine/Include/GameClient/ControlBarScheme.h
+GameEngine/Include/GameClient/ControlBarSidebar.h
 GameEngine/Include/GameClient/Credits.h
 GameEngine/Include/GameClient/DIKeyCodes.h
 GameEngine/Include/GameClient/DebugDisplay.h
@@ -2321,6 +2322,7 @@ GameEngine/Source/GameClient/GUI/ControlBar/ControlBarMultiSelect.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarOCLTimer.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarObserver.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarScheme.cpp
+GameEngine/Source/GameClient/GUI/ControlBar/ControlBarSidebar.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarStructureInventory.cpp
 GameEngine/Source/GameClient/GUI/ControlBar/ControlBarUnderConstruction.cpp
 GameEngine/Source/GameClient/GUI/DisconnectMenu/DisconnectMenu.cpp

@@ -167,6 +167,20 @@ enum { SHADOW_QUALITY_COUNT = 3 };
 // What colours a health bar: 0 the health, green through red, 1 the owner's player colour.
 enum { HEALTH_BAR_COLORS_COUNT = 2 };
 
+// The in-game interface's layout ("HudLayout", GlobalData m_hudLayout): 0 Classic, today's bar along the
+// bottom, the default; 1 the Red Alert style sidebar down the right with a command strip along the
+// bottom (docs/plans/HUD-SIDEBAR-LAYOUT.md).  HudLayoutForScreen (GameClient/Display.h) places it.
+// Strings: GUI:HudLayout, GUI:HudLayout0, GUI:HudLayout1, TOOLTIP:HudLayout; the sidebar's own
+// GUI:SidebarTab0..3 (Bina, Savunma, Piyade, Araç), GUI:SidebarAll, later GUI:SidebarSell, GUI:SidebarRepair.
+enum { HUD_LAYOUT_CLASSIC, HUD_LAYOUT_SIDEBAR, HUD_LAYOUT_COUNT };
+
+// How wide the in-game interface may spread ("HudWidth", GlobalData m_hudWidth), for either layout: 0 the
+// whole screen, the default; 1 a centred 21:9 area, 2 a centred 16:9 one, so a player on a wider screen
+// keeps the bar and the sidebar in front of him while the world still fills the screen.  21:9 is 43:18,
+// a 3440x1440 panel's own shape, so no 21:9 screen loses a column to it.  HudAreaForScreen (Display.h).
+// Strings: GUI:HudWidth, GUI:HudWidth0..2, TOOLTIP:HudWidth.
+enum { HUD_WIDTH_FULL, HUD_WIDTH_21_9, HUD_WIDTH_16_9, HUD_WIDTH_COUNT };
+
 // The picture cap: off, 240, 144, 120 or 60 pictures a second.  Options.ini stores the level.
 enum { FRAME_RATE_LIMIT_COUNT = 5 };
 

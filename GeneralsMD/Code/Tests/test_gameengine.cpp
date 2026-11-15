@@ -19917,6 +19917,175 @@ TEST(the_menus_keep_the_4x3_box)
 	CHECK_EQ( UIRectForScreen( 1280, 1024 ).y, 64 );		// narrower than 4:3: full width, on the bottom with the bar
 }
 
+static Int hudRegionArea( const IRegion2D &r )
+{
+	return r.width() * r.height();
+}
+
+static Bool hudRegionInside( const IRegion2D &inner, const IRegion2D &outer )
+{
+	return inner.lo.x >= outer.lo.x && inner.lo.y >= outer.lo.y && inner.hi.x <= outer.hi.x && inner.hi.y <= outer.hi.y;
+}
+
+static Bool hudRegionsOverlap( const IRegion2D &a, const IRegion2D &b )
+{
+	return a.lo.x < b.hi.x && b.lo.x < a.hi.x && a.lo.y < b.hi.y && b.lo.y < a.hi.y;
+}
+
+/// Every cell in `cells` is non-empty, inside `parent`, and clear of every other.
+static void checkHudCells( const IRegion2D *const *cells, Int count, const IRegion2D &parent )
+{
+	for( Int i = 0; i < count; ++i )
+	{
+		CHECK( cells[ i ]->width() > 0 && cells[ i ]->height() > 0 );
+		CHECK( hudRegionInside( *cells[ i ], parent ) );
+		for( Int j = i + 1; j < count; ++j )
+			CHECK( !hudRegionsOverlap( *cells[ i ], *cells[ j ] ) );
+	}
+}
+
+TEST(hud_layout_rects_tile_the_screen)
+{
+	/* The sidebar layout's rectangles (docs/plans/HUD-SIDEBAR-LAYOUT.md): the 1920x1080 design as drawn,
+		 and at every other screen and HudWidth the open world, the sidebar and the strip tile the HUD
+		 area with no cell of one group on another. */
+	HudLayoutRects r;
+	HudLayoutForScreen( 1920, 1080, HUD_LAYOUT_SIDEBAR, HUD_WIDTH_FULL, &r );
+	CHECK_EQ( r.layout, (Int)HUD_LAYOUT_SIDEBAR );
+	CHECK_EQ( r.sidebar.lo.x, 1600 );
+	CHECK_EQ( r.sidebar.width(), 320 );
+	CHECK_EQ( r.sidebar.height(), 1080 );
+	CHECK_EQ( r.strip.lo.y, 1016 );
+	CHECK_EQ( r.strip.height(), 64 );
+	CHECK_EQ( r.strip.width(), 1600 );
+	CHECK_EQ( r.play.hi.x, 1600 );
+	CHECK_EQ( r.play.hi.y, 1016 );
+	CHECK_EQ( r.radar.lo.x, 1608 );
+	CHECK_EQ( r.radar.lo.y, 56 );
+	CHECK_EQ( r.radar.width(), 304 );
+	CHECK_EQ( r.tabs[ 3 ].lo.x, 1846 );
+	CHECK_EQ( r.tabs[ 3 ].lo.y, 420 );
+	CHECK_EQ( r.cameos[ 1 ].lo.x, 1772 );
+	CHECK_EQ( r.cameos[ 1 ].lo.y, 496 );
+	CHECK_EQ( r.cameos[ 11 ].lo.y, 950 );		// 496 + 5 * 90.8
+	CHECK_EQ( r.arrowDown.lo.y, 1044 );
+	CHECK_EQ( r.powerRail.hi.y, 1072 );
+	CHECK_EQ( r.stripButtons[ 13 ].lo.x, 840 );
+	CHECK_EQ( r.stripButtons[ 0 ].lo.y, 1020 );
+	CHECK_EQ( r.stripClock.lo.x, 1500 );
+	CHECK_EQ( r.stripSpare.lo.x, 904 );
+	CHECK_EQ( r.card.lo.y, 888 );
+	CHECK_EQ( r.gridCells[ 13 ].lo.x, 424 );
+	CHECK_EQ( r.gridCells[ 13 ].lo.y, 936 );
+	CHECK_EQ( r.powersWindow.lo.x, 1400 );
+	CHECK_EQ( r.superweaponRow.hi.x, 1592 );
+	CHECK_EQ( r.superweaponRow.hi.y, 1008 );
+	CHECK_EQ( r.superweaponRowPitch, 32 );
+
+	// Classic fills the area only
+	HudLayoutForScreen( 1920, 1080, HUD_LAYOUT_CLASSIC, HUD_WIDTH_FULL, &r );
+	CHECK_EQ( r.layout, (Int)HUD_LAYOUT_CLASSIC );
+	CHECK_EQ( r.area.width(), 1920 );
+	CHECK_EQ( r.sidebar.width(), 0 );
+
+	// HudWidth: 1920x1080 is the whole screen at every choice; ultrawide narrows to a centred 16:9 or 43:18
+	for( Int c = 0; c < HUD_WIDTH_COUNT; ++c )
+	{
+		CHECK_EQ( HudAreaForScreen( 1920, 1080, c ).lo.x, 0 );
+		CHECK_EQ( HudAreaForScreen( 1920, 1080, c ).hi.x, 1920 );
+	}
+	CHECK_EQ( HudAreaForScreen( 3440, 1440, HUD_WIDTH_FULL ).width(), 3440 );
+	CHECK_EQ( HudAreaForScreen( 3440, 1440, HUD_WIDTH_21_9 ).width(), 3440 );
+	CHECK_EQ( HudAreaForScreen( 3440, 1440, HUD_WIDTH_16_9 ).lo.x, 440 );
+	CHECK_EQ( HudAreaForScreen( 3440, 1440, HUD_WIDTH_16_9 ).width(), 2560 );
+	CHECK_EQ( HudAreaForScreen( 5120, 1440, HUD_WIDTH_16_9 ).lo.x, 1280 );
+	CHECK_EQ( HudAreaForScreen( 5120, 1440, HUD_WIDTH_16_9 ).width(), 2560 );
+	CHECK_EQ( HudAreaForScreen( 5120, 1440, HUD_WIDTH_21_9 ).width(), 3440 );
+	CHECK_EQ( HudAreaForScreen( 5120, 1440, HUD_WIDTH_FULL ).width(), 5120 );
+	CHECK_EQ( HudAreaForScreen( 1024, 768, HUD_WIDTH_16_9 ).width(), 1024 );
+	HudLayoutForScreen( 5120, 1440, HUD_LAYOUT_SIDEBAR, HUD_WIDTH_16_9, &r );
+	CHECK_EQ( r.sidebar.hi.x, 3840 );
+	CHECK_EQ( r.strip.lo.x, 1280 );
+	CHECK_EQ( r.world.width(), 5120 );
+
+	static const Int screens[][ 2 ] =
+	{
+		{ 1920, 1080 }, { 1024, 768 }, { 1280, 720 }, { 2560, 1080 }, { 3840, 2160 }, { 800, 600 },
+		{ 1280, 1024 }, { 3440, 1440 }, { 5120, 1440 }, { 1080, 1920 },
+	};
+	for( Int s = 0; s < (Int)( sizeof( screens ) / sizeof( screens[ 0 ] ) ); ++s )
+	{
+		for( Int c = 0; c < HUD_WIDTH_COUNT; ++c )
+		{
+			const Int w = screens[ s ][ 0 ], h = screens[ s ][ 1 ];
+			HudLayoutForScreen( w, h, HUD_LAYOUT_SIDEBAR, c, &r );
+
+			CHECK( hudRegionInside( r.area, r.screen ) );
+			CHECK_EQ( r.area.height(), h );
+			CHECK( ( w - r.area.hi.x ) - r.area.lo.x >= 0 && ( w - r.area.hi.x ) - r.area.lo.x <= 1 );		// centred, an odd pixel on the right
+			CHECK_EQ( r.world.width(), w );
+			CHECK_EQ( r.sidebar.hi.x, r.area.hi.x );
+			CHECK_EQ( r.strip.lo.x, r.area.lo.x );
+
+			// play, sidebar and strip tile the area
+			CHECK( hudRegionInside( r.play, r.area ) );
+			CHECK( hudRegionInside( r.sidebar, r.area ) );
+			CHECK( hudRegionInside( r.strip, r.area ) );
+			CHECK( !hudRegionsOverlap( r.play, r.sidebar ) );
+			CHECK( !hudRegionsOverlap( r.play, r.strip ) );
+			CHECK( !hudRegionsOverlap( r.sidebar, r.strip ) );
+			CHECK_EQ( hudRegionArea( r.play ) + hudRegionArea( r.sidebar ) + hudRegionArea( r.strip ), hudRegionArea( r.area ) );
+			if( c == HUD_WIDTH_FULL )
+				CHECK_EQ( hudRegionArea( r.area ), w * h );
+
+			const IRegion2D *side[ 32 ];
+			Int n = 0;
+			side[ n++ ] = &r.menuButton;
+			side[ n++ ] = &r.money;
+			side[ n++ ] = &r.diplomacyButton;
+			side[ n++ ] = &r.radar;
+			side[ n++ ] = &r.sellButton;
+			side[ n++ ] = &r.repairButton;
+			side[ n++ ] = &r.generalButton;
+			side[ n++ ] = &r.powerRail;
+			side[ n++ ] = &r.pickerAll;
+			side[ n++ ] = &r.arrowUp;
+			side[ n++ ] = &r.arrowDown;
+			for( Int i = 0; i < HUD_SIDEBAR_TABS; ++i )
+				side[ n++ ] = &r.tabs[ i ];
+			for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; ++i )
+				side[ n++ ] = &r.pickerChips[ i ];
+			for( Int i = 0; i < HUD_SIDEBAR_CAMEOS; ++i )
+				side[ n++ ] = &r.cameos[ i ];
+			checkHudCells( side, n, r.sidebar );
+
+			const IRegion2D *strip[ HUD_STRIP_BUTTONS + 2 ];
+			n = 0;
+			for( Int i = 0; i < HUD_STRIP_BUTTONS; ++i )
+				strip[ n++ ] = &r.stripButtons[ i ];
+			strip[ n++ ] = &r.stripClock;
+			checkHudCells( strip, n, r.strip );
+			CHECK( hudRegionInside( r.stripSpare, r.strip ) );
+			CHECK( r.stripSpare.lo.x >= r.stripButtons[ HUD_STRIP_BUTTONS - 1 ].hi.x );
+			CHECK( r.stripSpare.hi.x <= r.stripClock.lo.x );
+
+			const IRegion2D *card[ HUD_CARD_GRID_CELLS + 1 ];
+			n = 0;
+			card[ n++ ] = &r.portrait;
+			for( Int i = 0; i < HUD_CARD_GRID_CELLS; ++i )
+				card[ n++ ] = &r.gridCells[ i ];
+			checkHudCells( card, n, r.card );
+
+			// the world-side pieces stand in the open world and clear of each other
+			CHECK( hudRegionInside( r.card, r.play ) );
+			CHECK( hudRegionInside( r.powersWindow, r.play ) );
+			CHECK( hudRegionInside( r.superweaponRow, r.play ) );
+			CHECK( !hudRegionsOverlap( r.card, r.superweaponRow ) );
+			CHECK( r.superweaponRowPitch >= r.superweaponRow.height() );
+		}
+	}
+}
+
 TEST(a_plate_covers_the_windows_its_panel_is_responsible_for)
 {
 	/* The plates are cuts of the shipped painting and the windows are at the coordinates the .wnd

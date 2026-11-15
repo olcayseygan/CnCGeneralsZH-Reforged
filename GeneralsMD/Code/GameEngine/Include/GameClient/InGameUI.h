@@ -233,6 +233,9 @@ public:
 	void drawName(Int x, Int y, Color color, Color dropColor);
 	void drawTime(Int x, Int y, Color color, Color dropColor);
 	Real getHeight() const;
+	/// the strings setText fills, for a layout that places them itself (the Red Alert style rows)
+	DisplayString *getNameString() const { return m_nameDisplayString; }
+	DisplayString *getTimeString() const { return m_timeDisplayString; }
 
 // saved & public
 	AsciiString									m_powerName;

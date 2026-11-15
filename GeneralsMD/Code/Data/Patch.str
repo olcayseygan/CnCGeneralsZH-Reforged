@@ -2194,6 +2194,10 @@ GUI:SidebarRepair
 "Repair"
 END
 
+GUI:SidebarSuperweaponReady
+"Ready"
+END
+
 GUI:MenuTransitionSpeed
 "Menu Transition Speed"
 END

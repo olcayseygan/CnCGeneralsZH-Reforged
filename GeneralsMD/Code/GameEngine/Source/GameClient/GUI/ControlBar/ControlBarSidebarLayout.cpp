@@ -12,18 +12,164 @@
 #include "Common/OptionsCatalog.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
+#include "Common/ThingTemplate.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/ControlBarScheme.h"
 #include "GameClient/ControlBarSidebar.h"
 #include "GameClient/Display.h"
+#include "GameClient/DisplayString.h"
+#include "GameClient/DisplayStringManager.h"
+#include "GameClient/Drawable.h"
+#include "GameClient/GameFont.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
+#include "GameClient/Image.h"
+#include "GameClient/InGameUI.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/Object.h"
+#include "GameLogic/Module/BodyModule.h"
 
 /// the PowerWindow's draw before the sidebar stood it on end, W3DPowerDraw from ControlBar.wnd
 static GameWinDrawFunc s_classicPowerDraw = NULL;
 /// the right HUD's before the sidebar emptied it, W3DRightHUDDraw from ControlBar.wnd
 static GameWinDrawFunc s_classicRightHUDDraw = NULL;
+/// the portrait parent's before the sidebar gave it the card's readout (the .wnd's default draw)
+static GameWinDrawFunc s_classicUnitSelectedDraw = NULL;
+static Bool s_unitSelectedImageCleared = FALSE;
+
+//-------------------------------------------------------------------------------------------------
+/** What the card says beside the portrait, copied from the selection in ControlBar::update (the client
+	* pass, outside the render window, where the bar reads the logic for everything else) and drawn from
+	* the copy, so the draw never touches an Object. */
+//-------------------------------------------------------------------------------------------------
+struct SelectionCardReadout
+{
+	Bool shown;
+	UnicodeString name;
+	Real health;					///< 0..1, below 0 for none (a multi-selection, a body without health)
+	const Image *rank;		///< the veterancy chevron, NULL for a regular
+};
+static SelectionCardReadout s_card = { FALSE, UnicodeString(), -1.0f, NULL };
+static DisplayString *s_cardName = NULL;
+
+//-------------------------------------------------------------------------------------------------
+/** The card's portrait half (HudLayoutRects::portrait, 160x104 at 1080): the portrait picture at its
+	* top left in the cameos' 5:4, a bit over half the width, the name and the rank beside it, the health
+	* bar along the foot. */
+//-------------------------------------------------------------------------------------------------
+static void selectionCardCells( const HudLayoutRects &hud, IRegion2D *cameo, IRegion2D *text, IRegion2D *bar )
+{
+	const IRegion2D &p = hud.portrait;
+	const Int gap = MAX( 2, REAL_TO_INT( 4 * hud.scale + 0.5f ) );
+	const Int barH = MAX( 4, REAL_TO_INT( 8 * hud.scale + 0.5f ) );
+	Int w = p.width() * 55 / 100;
+	Int h = w * 4 / 5;
+	const Int roomH = p.height() - barH - gap;
+	if( h > roomH )
+	{
+		h = MAX( 1, roomH );
+		w = h * 5 / 4;
+	}
+	cameo->lo = p.lo;
+	cameo->hi.x = p.lo.x + w;
+	cameo->hi.y = p.lo.y + h;
+	text->lo.x = cameo->hi.x + gap;
+	text->lo.y = p.lo.y;
+	text->hi.x = p.hi.x;
+	text->hi.y = cameo->hi.y;
+	bar->lo.x = p.lo.x;
+	bar->hi.x = p.hi.x;
+	bar->hi.y = p.hi.y;
+	bar->lo.y = p.hi.y - barH;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** WinUnitSelected's draw under the sidebar: the selection's name, rank and health beside its portrait.
+	* The portrait and the upgrade cameos are its children and draw themselves. */
+//-------------------------------------------------------------------------------------------------
+static void drawSelectionCard( GameWindow *window, WinInstanceData *instData )
+{
+	if( !s_card.shown || TheControlBar == NULL || TheDisplay == NULL )
+		return;
+	HudLayoutRects hud;
+	TheControlBar->getHudLayoutRects( &hud );
+	IRegion2D cameo, text, bar;
+	selectionCardCells( hud, &cameo, &text, &bar );
+
+	// the name, wrapped to the column, at most its height
+	Int textBottom = text.lo.y;
+	if( s_cardName == NULL )
+		s_cardName = TheDisplayStringManager->newDisplayString();
+	if( s_cardName != NULL && text.width() > 4 )
+	{
+		GameFont *font = TheFontLibrary->getFont( "Arial", MAX( 7, REAL_TO_INT( 11 * hud.scale + 0.5f ) ), TRUE );
+		if( s_cardName->getFont() != font )
+			s_cardName->setFont( font );
+		s_cardName->setWordWrap( text.width() );
+		if( s_cardName->getText().compare( s_card.name ) != 0 )
+			s_cardName->setText( s_card.name );
+		s_cardName->setClipRegion( &text );
+		s_cardName->draw( text.lo.x, text.lo.y, GameMakeColor( 245, 245, 245, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+		Int w, h;
+		s_cardName->getSize( &w, &h );
+		textBottom = MIN( text.lo.y + h, text.hi.y );
+	}
+
+	// the rank's chevron under it, its own shape, as tall as a line of the name at most
+	if( s_card.rank != NULL && s_card.rank->getImageHeight() > 0 )
+	{
+		const Int room = text.hi.y - textBottom - 2;
+		const Int h = MIN( room, MAX( 8, REAL_TO_INT( 18 * hud.scale + 0.5f ) ) );
+		const Int w = h * s_card.rank->getImageWidth() / s_card.rank->getImageHeight();
+		if( h > 0 )
+			TheDisplay->drawImage( s_card.rank, text.lo.x, textBottom + 2, text.lo.x + w, textBottom + 2 + h );
+	}
+
+	// the health bar, green to yellow to red as the stock health bars go
+	if( s_card.health >= 0.0f && bar.width() > 2 && bar.height() > 2 )
+	{
+		const Real health = MIN( 1.0f, s_card.health );
+		const Color fill = health > 0.5f ? GameMakeColor( 0, 220, 0, 255 )
+			: ( health > 0.25f ? GameMakeColor( 230, 220, 0, 255 ) : GameMakeColor( 230, 0, 0, 255 ) );
+		TheDisplay->drawFillRect( bar.lo.x, bar.lo.y, bar.width(), bar.height(), GameMakeColor( 0, 0, 0, 200 ) );
+		const Int filled = REAL_TO_INT( ( bar.width() - 2 ) * health + 0.5f );
+		if( filled > 0 )
+			TheDisplay->drawFillRect( bar.lo.x + 1, bar.lo.y + 1, filled, bar.height() - 2, fill );
+		TheDisplay->drawOpenRect( bar.lo.x, bar.lo.y, bar.width(), bar.height(), 1.0f, GameMakeColor( 90, 90, 90, 255 ) );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+void ControlBar::updateSelectionCardReadout( void )
+{
+	s_card.shown = FALSE;
+	if( !m_sidebarLayout )
+		return;
+
+	// a multi-selection: the focused type's name over its portrait, no rank or health of one unit
+	if( m_currContext == CB_CONTEXT_MULTI_SELECT )
+	{
+		if( m_multiSelectFocus < 0 || m_multiSelectFocus >= m_multiSelectGroupCount )
+			return;
+		s_card.name = m_multiSelectGroupTemplate[ m_multiSelectFocus ]->getDisplayName();
+		s_card.health = -1.0f;
+		s_card.rank = NULL;
+		s_card.shown = TRUE;
+		return;
+	}
+
+	Drawable *draw = m_currentSelectedDrawable;
+	const Object *obj = draw ? draw->getObject() : NULL;
+	if( obj == NULL || TheInGameUI->getSelectCount() != 1 )
+		return;
+
+	// the drawable's template: a disguised enemy reads as what it wears, as its portrait does
+	s_card.name = draw->getTemplate()->getDisplayName();
+	const BodyModuleInterface *body = obj->getBodyModule();
+	s_card.health = body && body->getMaxHealth() > 0.0f ? body->getHealth() / body->getMaxHealth() : -1.0f;
+	s_card.rank = calculateVeterancyOverlayForObject( obj );
+	s_card.shown = TRUE;
+}
 
 //-------------------------------------------------------------------------------------------------
 static GameWindow *barWindow( const char *name )
@@ -146,6 +292,16 @@ void ControlBar::restoreClassicWindows( void )
 	GameWinDrawFunc noDraw = TheFunctionLexicon ? TheFunctionLexicon->gameWinDrawFunc( NAMEKEY( "W3DNoDraw" ) ) : NULL;
 	if( m_rightHUDWindow != NULL && noDraw != NULL && s_classicRightHUDDraw != NULL && m_rightHUDWindow->winGetDrawFunc() == noDraw )
 		m_rightHUDWindow->winSetDrawFunc( s_classicRightHUDDraw );
+
+	if( m_rightHUDUnitSelectParent != NULL )
+	{
+		if( s_classicUnitSelectedDraw != NULL && m_rightHUDUnitSelectParent->winGetDrawFunc() == drawSelectionCard )
+			m_rightHUDUnitSelectParent->winSetDrawFunc( s_classicUnitSelectedDraw );
+		if( s_unitSelectedImageCleared )
+			m_rightHUDUnitSelectParent->winSetStatus( WIN_STATUS_IMAGE );
+	}
+	s_unitSelectedImageCleared = FALSE;
+	s_card.shown = FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -268,7 +424,25 @@ void ControlBar::layoutSidebar( void )
 		s_classicRightHUDDraw = m_rightHUDWindow->winGetDrawFunc();
 		m_rightHUDWindow->winSetDrawFunc( noDraw );
 	}
-	fitWindowTree( this, m_rightHUDUnitSelectParent, hud.portrait );
+	// the portrait's parent spans the card, so the upgrade cameos on the grid stay inside it (tooltips);
+	// its painted well (the Classic 3x3) goes, and it draws the name, rank and health instead
+	placeWindowAt( m_rightHUDUnitSelectParent, hud.card );
+	if( BitTest( m_rightHUDUnitSelectParent->winGetStatus(), WIN_STATUS_IMAGE ) )
+	{
+		m_rightHUDUnitSelectParent->winClearStatus( WIN_STATUS_IMAGE );
+		s_unitSelectedImageCleared = TRUE;
+	}
+	if( m_rightHUDUnitSelectParent->winGetDrawFunc() != drawSelectionCard )
+	{
+		s_classicUnitSelectedDraw = m_rightHUDUnitSelectParent->winGetDrawFunc();
+		m_rightHUDUnitSelectParent->winSetDrawFunc( drawSelectionCard );
+	}
+	IRegion2D cameo, text, bar;
+	selectionCardCells( hud, &cameo, &text, &bar );
+	placeWindowAt( m_rightHUDCameoWindow, cameo );
+	// a single unit's upgrade cameos in a row on the grid, which only a multi-selection's tiles use
+	for( Int i = 0; i < MAX_RIGHT_HUD_UPGRADE_CAMEOS && i < HUD_CARD_GRID_CELLS; i++ )
+		placeWindowAt( m_rightHUDUpgradeCameos[ i ], hud.gridCells[ i ] );
 	fitWindowTree( this, m_contextParent[ CP_BUILD_QUEUE ], hud.portrait );
 	if( !m_multiSelectTiles.empty() )
 		layoutMultiSelectTiles( (Int)m_multiSelectTiles.size() );

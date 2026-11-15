@@ -183,6 +183,7 @@ enum
 	HUD_TRAY_TAB_TEXT_INSET_Y	= 2,
 	HUD_HERO_BAR_W					= 3,		///< the hero cell's upright health bar, beside the cameo
 	SUPERWEAPON_TRAY_DROP		= 4,		///< between the info strip's foot and the superweapon tray's top
+	SIDEBAR_SUPERWEAPON_ROWS	= 6,	///< the Red Alert style layout's named superweapon rows before the "+N" tab
 	HUD_READY_GLOW_PERIOD_MS	= 1400,	///< one breath of a charged superweapon's glow
 	HUD_READY_SHIMMER_RISE	= 85		///< percent of the cameo the shimmer's top edge climbs in a breath
 };
@@ -264,7 +265,6 @@ struct HudCellStyle
 	const Image *readyShimmer;	///< the band climbing through it
 	HudTray production;			///< against the screen's left edge, one row
 	HudTray superweapon;		///< against the right edge, rows going down
-	HudTray superweaponUp;	///< the Red Alert style layout's, rows climbing: the powers tray itself
 };
 
 /// a tray piece the powers tray has no use for, the mirror of one it has; until a sheet draws it the
@@ -431,7 +431,6 @@ static HudCellStyle hudCellStyle( void )
 	const HudTray none = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0 };
 	style.production = none;
 	style.superweapon = none;
-	style.superweaponUp = none;
 	if( tray == NULL )
 		return style;
 
@@ -458,25 +457,12 @@ static HudCellStyle hudCellStyle( void )
 		mirroredTrayPiece( prefix, "StepDown", tray[ ControlBarScheme::TRAY_STEP ] ),
 		0, 0, 0
 	};
-	const HudTray superweaponUp =
-	{
-		cell,
-		tray[ ControlBarScheme::TRAY_EDGE_LEFT ],
-		tray[ ControlBarScheme::TRAY_EDGE_BOTTOM ],
-		tray[ ControlBarScheme::TRAY_EDGE_TOP ],
-		tray[ ControlBarScheme::TRAY_CORNER_BL ],
-		tray[ ControlBarScheme::TRAY_CORNER_TL ],
-		tray[ ControlBarScheme::TRAY_STEP ],
-		0, 0, 0
-	};
 	style.production = production;
 	style.superweapon = superweapon;
-	style.superweaponUp = superweaponUp;
 	const Real scaleX = (Real)style.cellW / cell->getImageWidth();
 	const Real scaleY = (Real)style.cellH / cell->getImageHeight();
 	sizeHudTray( &style.production, scaleX, scaleY );
 	sizeHudTray( &style.superweapon, scaleX, scaleY );
-	sizeHudTray( &style.superweaponUp, scaleX, scaleY );
 	return style;
 }
 
@@ -8971,6 +8957,9 @@ void InGameUI::postDraw( void )
 			Int seconds;
 			Int percent;				///< of the charge done, for the sweep
 			ObjectID jump;			///< the local player's own building, which a click looks at; INVALID_ID otherwise
+			SuperweaponInfo *info;	///< its timer, whose strings the Red Alert style rows write into
+			Bool enemy;					///< the local player's enemy's: a red row
+			AsciiString power;	///< the special power's name, "GUI:<power>" its label
 		};
 		std::vector< ListedSuperweapon > listed;
 
@@ -9087,8 +9076,10 @@ void InGameUI::postDraw( void )
                 const ObjectID jump = owningObject->getControllingPlayer() == ThePlayerList->getLocalPlayer()
                                       ? owningObject->getID() : INVALID_ID;
                 const CommandButton *shortcut = powerButton( info->getSpecialPowerTemplate() );
+                const Bool enemy = ThePlayerList->getLocalPlayer()->getRelationship( owningObject->getTeam() ) == ENEMIES;
                 ListedSuperweapon line = { shortcut ? shortcut->getButtonImage() : NULL,
-                                           clientColor( info->getColor() ), isReady, readySecs, percent, jump };
+                                           clientColor( info->getColor() ), isReady, readySecs, percent, jump,
+                                           info, enemy, mapIt->first };
                 listed.push_back( line );
                 if (info->getSpecialPowerTemplate()->isSharedNSync())
                   break; // Wow, it is almost too easy!
@@ -9116,112 +9107,169 @@ void InGameUI::postDraw( void )
 					return a.ready != b.ready ? a.ready : a.seconds < b.seconds;
 				} );
 
-			// rows of SUPERWEAPON_LIST_COLUMNS in one tray hard against the screen's right edge, a row
-			// under a row, the tray's top a little under the info strip's foot whenever it is up (the
-			// strip is drawn last and would cover them), the top of the screen otherwise.  Two rows at
-			// most, the last the short one; past SUPERWEAPON_LIST_CELLS a "+N" tab hangs from the tray
-			//
-			// The Red Alert style layout stands the tray on its superweaponRow's foot instead, against
-			// the sidebar over the strip, and the rows climb from it: the powers tray the right way up,
-			// the "+N" tab sticking up from the top row.  No screen edge closes its right side there, so
-			// the queue's mirrored edge and corners do (`closer`), and the cells stand that much in.
-			//
 			const HudCellStyle style = hudCellStyle();
-			const Int cameoW = style.cameoW;
-			const Int cameoH = style.cameoH;
 			const HudLayoutRects rects = hudRects();
-			const Bool climbs = rects.layout == HUD_LAYOUT_SIDEBAR;
-			const HudTray &tray = climbs ? style.superweaponUp : style.superweapon;
-			const HudTray &closer = style.production;
-			const Int edge = climbs ? rects.sidebar.lo.x : rects.play.hi.x;
-			const Int right = climbs ? edge - closer.openW : edge;
-			const Int top = max( hudStripBottom(), TheUIRect().y ) + stripPixels( SUPERWEAPON_TRAY_DROP ) + tray.footH;
-			const Int foot = rects.superweaponRow.hi.y - tray.footH;
-			const Bool more = (Int)listed.size() > SUPERWEAPON_LIST_CELLS;
-			const Int cameos = more ? SUPERWEAPON_LIST_CELLS : (Int)listed.size();
-			IRegion2D place[ SUPERWEAPON_LIST_CELLS ];
-			for( Int each = 0; each < cameos; each++ )
+			if( rects.layout == HUD_LAYOUT_SIDEBAR )
 			{
-				const Int row = each / SUPERWEAPON_LIST_COLUMNS;
-				place[ each ].hi.x = right - each % SUPERWEAPON_LIST_COLUMNS * style.cellW - style.marginX;
-				place[ each ].lo.x = place[ each ].hi.x - cameoW;
-				if( climbs )
+				//
+				// The Red Alert style layout writes them as named rows (the wireframe's bottom right): from
+				// superweaponRow up, superweaponRowPitch apart, the right edge on the sidebar's left.  Per
+				// row the power's cameo, its name (EA's own "GUI:<power>" countdown label), the time left
+				// or "Ready" at the right end and a thin bar of the charge under them; teal for your own
+				// and your allies', red for an enemy's.  Past SIDEBAR_SUPERWEAPON_ROWS a "+N" tab sticks
+				// up from the top row.  A click on a row looks at your own building, as a cell's does.
+				//
+				const Bool more = (Int)listed.size() > SIDEBAR_SUPERWEAPON_ROWS;
+				const Int rows = more ? SIDEBAR_SUPERWEAPON_ROWS : (Int)listed.size();
+				const Real k = rects.scale;
+				const Int pad = MAX( 1, REAL_TO_INT_CEIL( 4 * k ) );
+				const Int barH = MAX( 2, REAL_TO_INT( 3 * k ) );
+				const Int edge = rects.sidebar.lo.x;
+				for( Int each = 0; each < rows; each++ )
 				{
-					place[ each ].hi.y = foot - row * style.cellH - style.marginY;
-					place[ each ].lo.y = place[ each ].hi.y - cameoH;
+					IRegion2D &row = m_superweaponPlace[ each ];
+					row.hi.x = edge;
+					row.lo.x = edge - rects.superweaponRow.width();
+					row.hi.y = rects.superweaponRow.hi.y - each * rects.superweaponRowPitch;
+					row.lo.y = row.hi.y - rects.superweaponRow.height();
+					m_superweaponJump[ each ] = listed[ each ].jump;
 				}
-				else
-				{
-					place[ each ].lo.y = top + row * style.cellH + style.marginY;
-					place[ each ].hi.y = place[ each ].lo.y + cameoH;
-				}
-				m_superweaponPlace[ each ] = hudCellBox( style, place[ each ] );
-				m_superweaponJump[ each ] = listed[ each ].jump;
-			}
-			m_superweaponCells = cameos;
-			// beside the last row's cell at the edge, past the tray's own far edge: under it, or over it
-			// when the rows climb
-			const IRegion2D &lastRow = m_superweaponPlace[ ( cameos - 1 ) / SUPERWEAPON_LIST_COLUMNS * SUPERWEAPON_LIST_COLUMNS ];
-			if( !more )
-				m_superweaponTab = noHudTab();
-			else if( climbs )
-				m_superweaponTab = hudTab( 1, edge, lastRow.lo.y - tray.uncoveredH, -1 );
-			else
-				m_superweaponTab = hudTab( 1, edge, lastRow.hi.y + tray.uncoveredH, 1 );
-			// a tray standing on the strip pushes nothing down from the top
-			if( !climbs )
-				rackPlateTop = max( lastRow.hi.y + tray.uncoveredH, m_superweaponTab.hi.y ) + rackPx( RACK_TRAY_GAP );
+				m_superweaponCells = rows;
+				m_superweaponTab = more ? hudTab( 1, edge, m_superweaponPlace[ rows - 1 ].lo.y, -1 ) : noHudTab();
 
-			TheDisplay->beginBatch2D();
-			drawHudTray( tray, m_superweaponPlace, cameos, SUPERWEAPON_LIST_COLUMNS, -1, climbs ? 1 : -1 );
-			if( climbs && tray.cell != NULL )
-			{
-				// down the outer side of every row's first cell, the foot's corner under row 0 and the far
-				// corner over the top row; place 0 of a row is always there, so the side runs unbroken
-				auto piece = []( const Image *image, Int lx, Int ly, Int hx, Int hy )
+				const Color teal = GameMakeColor( 40, 190, 160, 255 );
+				const Color red = GameMakeColor( 214, 72, 52, 255 );
+				auto iconBox = [ pad ]( const IRegion2D &row )
 				{
-					if( image != NULL && hx > lx && hy > ly )
-						TheDisplay->drawImage( image, lx, ly, hx, hy );
+					IRegion2D icon;
+					icon.lo.x = row.lo.x + pad;
+					icon.lo.y = row.lo.y + pad;
+					icon.hi.y = row.hi.y - pad;
+					icon.hi.x = icon.lo.x + ( icon.hi.y - icon.lo.y ) * 4 / 3;
+					return icon;
 				};
-				const Int lastRowFirst = ( cameos - 1 ) / SUPERWEAPON_LIST_COLUMNS * SUPERWEAPON_LIST_COLUMNS;
-				for( Int first = 0; first < cameos; first += SUPERWEAPON_LIST_COLUMNS )
+				TheDisplay->beginBatch2D();
+				for( Int each = 0; each < rows; each++ )
 				{
-					const IRegion2D &c = m_superweaponPlace[ first ];
-					piece( closer.open, c.hi.x, c.lo.y, c.hi.x + closer.openW, c.hi.y );
-					if( first == 0 )
-						piece( closer.cornerFoot, c.hi.x, c.hi.y, c.hi.x + closer.openW, c.hi.y + tray.footH );
-					if( first == lastRowFirst )
-						piece( closer.cornerUncovered, c.hi.x, c.lo.y - tray.uncoveredH, c.hi.x + closer.openW, c.lo.y );
+					const ListedSuperweapon &line = listed[ each ];
+					const IRegion2D &row = m_superweaponPlace[ each ];
+					const IRegion2D icon = iconBox( row );
+					const Color tint = line.enemy ? red : teal;
+					TheDisplay->drawFillRect( row.lo.x, row.lo.y, row.width(), row.height(), GameMakeColor( 6, 9, 11, 200 ) );
+					TheDisplay->drawOpenRect( row.lo.x, row.lo.y, row.width(), row.height(), 1, tint );
+					if( line.cameo != NULL )
+						TheDisplay->drawImage( line.cameo, icon.lo.x, icon.lo.y, icon.hi.x, icon.hi.y );
+					TheDisplay->drawOpenRect( icon.lo.x - 1, icon.lo.y - 1, icon.width() + 2, icon.height() + 2, 1, tint );
+					// the charge under the words, full once it is ready
+					const Int barX = icon.hi.x + pad;
+					const Int barW = row.hi.x - pad - barX;
+					const Int barY = row.hi.y - pad - barH;
+					TheDisplay->drawFillRect( barX, barY, barW, barH, GameMakeColor( 0, 0, 0, 170 ) );
+					TheDisplay->drawFillRect( barX, barY, barW * ( line.ready ? 100 : line.percent ) / 100, barH, tint );
+				}
+				TheDisplay->endBatch2D();
+
+				const UnicodeString readyText = TheGameText->fetch( "GUI:SidebarSuperweaponReady" );
+				const Color drop = GameMakeColor( 0, 0, 0, 255 );
+				for( Int each = 0; each < rows; each++ )
+				{
+					const ListedSuperweapon &line = listed[ each ];
+					const IRegion2D &row = m_superweaponPlace[ each ];
+					const IRegion2D icon = iconBox( row );
+					AsciiString label;
+					label.format( "GUI:%s", line.power.str() );
+					UnicodeString time;
+					if( line.ready )
+						time = readyText;
+					else
+						time.format( u"%d:%2.2d", line.seconds / 60, line.seconds % 60 );
+					line.info->setText( TheGameText->fetch( label ), time );
+
+					DisplayString *name = line.info->getNameString();
+					DisplayString *clock = line.info->getTimeString();
+					const Int textX = icon.hi.x + pad;
+					const Int textRight = row.hi.x - pad;
+					const Int barY = row.hi.y - pad - barH;
+					const Int textY = MAX( row.lo.y + 1, barY - 1 - name->getFont()->height );
+					const Int clockX = textRight - clock->getWidth();
+					const Color ink = line.enemy ? GameMakeColor( 250, 186, 172, 255 ) : GameMakeColor( 176, 240, 222, 255 );
+					clock->draw( clockX, textY, line.ready ? GameMakeColor( 255, 255, 255, 255 ) : ink, drop );
+					// a long name gives way to the time
+					IRegion2D room;
+					room.lo.x = textX;
+					room.lo.y = row.lo.y;
+					room.hi.x = clockX - pad;
+					room.hi.y = row.hi.y;
+					name->setClipRegion( &room );
+					name->draw( textX, textY, ink, drop );
+				}
+				if( more )
+				{
+					UnicodeString rest;
+					rest.format( u"+%d", (Int)listed.size() - rows );
+					drawHudTab( style.tabUp, m_superweaponTab, -1, cellString( m_superweaponMoreText, rest ) );
 				}
 			}
-			for( Int each = 0; each < cameos; each++ )
-				if( listed[ each ].cameo != NULL )
-					TheDisplay->drawImage( listed[ each ].cameo, place[ each ].lo.x, place[ each ].lo.y,
-																 place[ each ].hi.x, place[ each ].hi.y );
-			// charging, the scrim swept off as the charge runs; charged, its owner's light rising off the foot
-			for( Int each = 0; each < cameos; each++ )
+			else
 			{
-				if( !listed[ each ].ready )
-					TheDisplay->drawRemainingRectClock( place[ each ].lo.x, place[ each ].lo.y, cameoW, cameoH,
-																							listed[ each ].percent, GameMakeColor( 0, 0, 0, 130 ) );
-				else
-					drawReadyGlow( style.readyGlow, style.readyShimmer, place[ each ], listed[ each ].owner );
-			}
-			// a ring in its owner's colour says whose it is, charged or not: a tint on the readout's plate
-			// would leave a charged one, which wears no readout, with no owner at all
-			for( Int each = 0; each < cameos; each++ )
-				drawOwnerRing( place[ each ], listed[ each ].owner, style.marginX );
-			TheDisplay->endBatch2D();
+				// rows of SUPERWEAPON_LIST_COLUMNS in one tray hard against the right edge of the HUD's
+				// area, a row under a row, the tray's top a little under the info strip's foot whenever it
+				// is up (the strip is drawn last and would cover them), the top of the screen otherwise.
+				// Two rows at most, the last the short one; past SUPERWEAPON_LIST_CELLS a "+N" tab hangs
+				// from the tray
+				const Int cameoW = style.cameoW;
+				const Int cameoH = style.cameoH;
+				const Int right = rects.play.hi.x;
+				const Int top = max( hudStripBottom(), TheUIRect().y ) + stripPixels( SUPERWEAPON_TRAY_DROP ) + style.superweapon.footH;
+				const Bool more = (Int)listed.size() > SUPERWEAPON_LIST_CELLS;
+				const Int cameos = more ? SUPERWEAPON_LIST_CELLS : (Int)listed.size();
+				IRegion2D place[ SUPERWEAPON_LIST_CELLS ];
+				for( Int each = 0; each < cameos; each++ )
+				{
+					place[ each ].hi.x = right - each % SUPERWEAPON_LIST_COLUMNS * style.cellW - style.marginX;
+					place[ each ].lo.y = top + each / SUPERWEAPON_LIST_COLUMNS * style.cellH + style.marginY;
+					place[ each ].lo.x = place[ each ].hi.x - cameoW;
+					place[ each ].hi.y = place[ each ].lo.y + cameoH;
+					m_superweaponPlace[ each ] = hudCellBox( style, place[ each ] );
+					m_superweaponJump[ each ] = listed[ each ].jump;
+				}
+				m_superweaponCells = cameos;
+				// under the last row's cell at the edge, below the tray's own bottom edge
+				const IRegion2D &lastRow = m_superweaponPlace[ ( cameos - 1 ) / SUPERWEAPON_LIST_COLUMNS * SUPERWEAPON_LIST_COLUMNS ];
+				m_superweaponTab = more ? hudTab( 1, right, lastRow.hi.y + style.superweapon.uncoveredH, 1 ) : noHudTab();
+				rackPlateTop = max( lastRow.hi.y + style.superweapon.uncoveredH, m_superweaponTab.hi.y ) + rackPx( RACK_TRAY_GAP );
 
-			// a charged one wears no number: zero seconds says nothing the glow does not
-			for( Int each = 0; each < cameos; each++ )
-				if( !listed[ each ].ready )
-					drawCellSeconds( m_superweaponCellText[ each ], listed[ each ].seconds, place[ each ], style.plate );
-			if( more )
-			{
-				UnicodeString rest;
-				rest.format( u"+%d", (Int)listed.size() - cameos );
-				drawHudTab( climbs ? style.tabUp : style.tabDown, m_superweaponTab, climbs ? -1 : 1, cellString( m_superweaponMoreText, rest ) );
+				TheDisplay->beginBatch2D();
+				drawHudTray( style.superweapon, m_superweaponPlace, cameos, SUPERWEAPON_LIST_COLUMNS, -1, -1 );
+				for( Int each = 0; each < cameos; each++ )
+					if( listed[ each ].cameo != NULL )
+						TheDisplay->drawImage( listed[ each ].cameo, place[ each ].lo.x, place[ each ].lo.y,
+																	 place[ each ].hi.x, place[ each ].hi.y );
+				// charging, the scrim swept off as the charge runs; charged, its owner's light rising off the foot
+				for( Int each = 0; each < cameos; each++ )
+				{
+					if( !listed[ each ].ready )
+						TheDisplay->drawRemainingRectClock( place[ each ].lo.x, place[ each ].lo.y, cameoW, cameoH,
+																								listed[ each ].percent, GameMakeColor( 0, 0, 0, 130 ) );
+					else
+						drawReadyGlow( style.readyGlow, style.readyShimmer, place[ each ], listed[ each ].owner );
+				}
+				// a ring in its owner's colour says whose it is, charged or not: a tint on the readout's plate
+				// would leave a charged one, which wears no readout, with no owner at all
+				for( Int each = 0; each < cameos; each++ )
+					drawOwnerRing( place[ each ], listed[ each ].owner, style.marginX );
+				TheDisplay->endBatch2D();
+
+				// a charged one wears no number: zero seconds says nothing the glow does not
+				for( Int each = 0; each < cameos; each++ )
+					if( !listed[ each ].ready )
+						drawCellSeconds( m_superweaponCellText[ each ], listed[ each ].seconds, place[ each ], style.plate );
+				if( more )
+				{
+					UnicodeString rest;
+					rest.format( u"+%d", (Int)listed.size() - cameos );
+					drawHudTab( style.tabDown, m_superweaponTab, 1, cellString( m_superweaponMoreText, rest ) );
+				}
 			}
 		}
 	}

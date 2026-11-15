@@ -25,7 +25,6 @@
 #include "Common/PlayerList.h"
 #include "Common/ThingTemplate.h"
 #include "GameClient/ControlBar.h"
-#include "GameClient/ControlBarScheme.h"
 #include "GameClient/Display.h"
 #include "GameClient/DisplayString.h"
 #include "GameClient/DisplayStringManager.h"
@@ -55,14 +54,14 @@ namespace
 	const Real TAB_POINTS			= 10.0f;	///< the tab names at 1080, smaller when a name would not fit
 	const Real KEY_POINTS			= 8.0f;		///< the key letter in a tab's top left corner, at 1080
 
-	/// the command tab art each tab wears (ControlBarScheme's Buildings, Ground, Aircraft), Savunma
-	/// borrowing Bina's; a scheme naming none lends the idle buttons' pictures, as the Classic tabs do
-	const Int TAB_ART[ SIDEBAR_TAB_COUNT ] = { 0, 0, 1, 2 };
-	const char *const TAB_IDLE_ART[ SIDEBAR_TAB_COUNT ] =
-	{
-		"ControlBar.wnd:ButtonIdleWorker", "ControlBar.wnd:ButtonIdleWorker",
-		"ControlBar.wnd:ButtonIdleInfantry", "ControlBar.wnd:ButtonIdleVehicle"
-	};
+	// the tab body: flat steel with a 1 px bevel, the group panel's stand-in colours; the open tab is
+	// lit blue and pressed in (its bevel turned over), a hovered one a step lighter
+	const Color TAB_STEEL			= GameMakeColor( 44, 52, 60, 255 );
+	const Color TAB_STEEL_HOVER	= GameMakeColor( 58, 68, 79, 255 );
+	const Color TAB_STEEL_OPEN	= GameMakeColor( 52, 78, 128, 255 );
+	const Color TAB_BEVEL_LIGHT	= GameMakeColor( 140, 152, 166, 255 );
+	const Color TAB_BEVEL_DARK	= GameMakeColor( 5, 7, 9, 255 );
+	const Color TAB_TEXT_DIM		= GameMakeColor( 190, 198, 206, 255 );	///< a closed tab's name
 
 	const char *const TAB_LABELS[ SIDEBAR_TAB_COUNT ] =
 	{
@@ -98,7 +97,7 @@ namespace
 	GameWindow *s_arrowUp = NULL;
 	GameWindow *s_arrowDown = NULL;
 	GameWinDrawFunc s_buttonDraw = NULL;	///< the plain push button's draw, under the arrows' chevrons
-	GameWinDrawFunc s_tabDraw = NULL;			///< the image push button's draw, under the tabs' key letters
+	DisplayString *s_nameText[ SIDEBAR_TAB_COUNT ];	///< each tab's name, set and fitted in Sidebar_layout
 	DisplayString *s_keyText[ SIDEBAR_TAB_COUNT ];	///< each tab's key letter, set in Sidebar_update
 	UnicodeString s_keyShown[ SIDEBAR_TAB_COUNT ];
 }
@@ -163,56 +162,41 @@ static void drawArrow( GameWindow *window, WinInstanceData *instData )
 	TheDisplay->drawLine( cx, tip, cx + 2 * half, back, 2.0f, c );
 }
 
-/// the tab art and its name, then the key it answers to in the top left corner
+/// a tab, all drawn here: a steel body with a 1 px bevel, raised when closed and pressed in and lit
+/// when open, its name in the middle and the key it answers to in the top left corner
 static void drawTab( GameWindow *window, WinInstanceData *instData )
 {
-	if( s_tabDraw != NULL )
-		s_tabDraw( window, instData );
-
 	const Int t = (Int)(intptr_t)GadgetButtonGetData( window ) - 1;
-	if( t < 0 || t >= SIDEBAR_TAB_COUNT || s_keyText[ t ] == NULL || s_keyShown[ t ].isEmpty() )
+	if( t < 0 || t >= SIDEBAR_TAB_COUNT )
 		return;
-	ICoord2D at;
+	ICoord2D at, size;
 	window->winGetScreenPosition( &at.x, &at.y );
-	s_keyText[ t ]->draw( at.x + 3, at.y + 1, KEY_LETTER, TAB_TEXT_EDGE );
-}
-
-/// tab `t` in the scheme's command tab art, the open look on the shown tab (updateCommandTabButtons)
-static void dressTab( Int t )
-{
-	GameWindow *button = s_tabs[ t ];
-	if( button == NULL )
+	window->winGetSize( &size.x, &size.y );
+	if( size.x < 3 || size.y < 3 )
 		return;
 
-	const Image *up = NULL, *hilite = NULL, *pushed = NULL, *disabled = NULL, *openImage = NULL;
-	ControlBarSchemeManager *schemes = TheControlBar->getControlBarSchemeManager();
-	const Image *const *own = schemes ? schemes->getCommandTabImages( TAB_ART[ t ] ) : NULL;
-	if( own != NULL )
-	{
-		up = own[ 0 ];
-		hilite = own[ 1 ] ? own[ 1 ] : own[ 0 ];
-		pushed = own[ 2 ] ? own[ 2 ] : hilite;
-		disabled = own[ 3 ] ? own[ 3 ] : own[ 0 ];
-		openImage = own[ ControlBarScheme::COMMAND_TAB_OPEN ];
-	}
-	else
-	{
-		GameWindow *source = TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( TAB_IDLE_ART[ t ] ) );
-		if( source == NULL )
-			return;
-		up = source->winGetEnabledImage( 0 );
-		hilite = source->winGetHiliteImage( 0 );
-		pushed = source->winGetHiliteImage( 1 );
-		disabled = source->winGetDisabledImage( 0 );
-	}
-	if( pushed == NULL )
-		pushed = hilite;
 	const Bool open = t == s_tab;
-	const Image *down = openImage ? openImage : pushed;
-	GadgetButtonSetEnabledImage( button, open && down ? down : up );
-	GadgetButtonSetHiliteImage( button, open && down ? down : hilite );
-	GadgetButtonSetHiliteSelectedImage( button, open && down ? down : pushed );
-	GadgetButtonSetDisabledImage( button, disabled );
+	const Bool hover = BitTest( instData->getState(), WIN_STATE_HILITED );
+	const Color face = open ? TAB_STEEL_OPEN : hover ? TAB_STEEL_HOVER : TAB_STEEL;
+	const Color lit = open ? TAB_BEVEL_DARK : TAB_BEVEL_LIGHT;
+	const Color shade = open ? TAB_BEVEL_LIGHT : TAB_BEVEL_DARK;
+	TheDisplay->drawFillRect( at.x, at.y, size.x, size.y, face );
+	TheDisplay->drawFillRect( at.x, at.y, size.x, 1, lit );
+	TheDisplay->drawFillRect( at.x, at.y + 1, 1, size.y - 1, lit );
+	TheDisplay->drawFillRect( at.x + 1, at.y + size.y - 1, size.x - 1, 1, shade );
+	TheDisplay->drawFillRect( at.x + size.x - 1, at.y + 1, 1, size.y - 2, shade );
+
+	// pressed in, the face's contents sit a pixel down and right
+	const Int push = open ? 1 : 0;
+	if( s_nameText[ t ] != NULL )
+	{
+		Int w = 0, h = 0;
+		s_nameText[ t ]->getSize( &w, &h );
+		s_nameText[ t ]->draw( at.x + ( size.x - w ) / 2 + push, at.y + ( size.y - h ) / 2 + push,
+			open ? TAB_TEXT : TAB_TEXT_DIM, TAB_TEXT_EDGE );
+	}
+	if( s_keyText[ t ] != NULL && !s_keyShown[ t ].isEmpty() )
+		s_keyText[ t ]->draw( at.x + 3 + push, at.y + 1 + push, KEY_LETTER, TAB_TEXT_EDGE );
 }
 
 /// the letter of the key `meta` is on, without its modifiers ("Q" for Ctrl+Q); empty when it has none
@@ -224,12 +208,6 @@ static UnicodeString keyLetter( Int meta )
 		if( rec->m_meta == (GameMessage::Type)meta )
 			return MetaMap_formatChord( rec->m_key, NONE, rec->m_usableIn );
 	return UnicodeString::TheEmptyString;
-}
-
-static void dressTabs( void )
-{
-	for( Int t = 0; t < SIDEBAR_TAB_COUNT; t++ )
-		dressTab( t );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -423,18 +401,14 @@ static Bool makeWindows( GameWindow *parent )
 
 	for( Int t = 0; t < SIDEBAR_TAB_COUNT; t++ )
 	{
-		GameWindow *button = makeButton( WIN_STATUS_IMAGE );
+		GameWindow *button = makeButton( 0 );
 		s_tabs[ t ] = button;
 		if( button == NULL )
 			continue;
 		GadgetButtonSetData( button, (void *)(intptr_t)( t + 1 ) );
-		GadgetButtonSetText( button, TheGameText->fetch( TAB_LABELS[ t ] ) );
-		button->winSetEnabledTextColors( TAB_TEXT, TAB_TEXT_EDGE );
-		button->winSetHiliteTextColors( TAB_TEXT, TAB_TEXT_EDGE );
-		button->winSetDisabledTextColors( TAB_TEXT, TAB_TEXT_EDGE );
-		if( button->winGetDrawFunc() != drawTab )
-			s_tabDraw = button->winGetDrawFunc();
 		button->winSetDrawFunc( drawTab );
+		if( s_nameText[ t ] == NULL )
+			s_nameText[ t ] = TheDisplayStringManager->newDisplayString();
 		if( s_keyText[ t ] == NULL )
 			s_keyText[ t ] = TheDisplayStringManager->newDisplayString();
 		s_keyShown[ t ].clear();
@@ -462,7 +436,6 @@ static Bool makeWindows( GameWindow *parent )
 		arrows[ a ]->winSetDrawFunc( drawArrow );
 	}
 
-	dressTabs();
 	s_dirty = TRUE;
 	return TRUE;
 }
@@ -536,15 +509,14 @@ void Sidebar_layout( const HudLayoutRects &rects )
 	GameFont *font = TheFontLibrary->getFont( "Arial", points, TRUE );
 	for( Int t = 0; t < SIDEBAR_TAB_COUNT; t++ )
 	{
-		if( s_tabs[ t ] != NULL && font != NULL )
+		if( s_nameText[ t ] != NULL && font != NULL )
 		{
-			GadgetButtonSetText( s_tabs[ t ], TheGameText->fetch( TAB_LABELS[ t ] ) );
-			s_tabs[ t ]->winSetFont( font );
+			s_nameText[ t ]->setFont( font );
+			s_nameText[ t ]->setText( TheGameText->fetch( TAB_LABELS[ t ] ) );
 		}
 		if( s_keyText[ t ] != NULL && keyFont != NULL )
 			s_keyText[ t ]->setFont( keyFont );
 	}
-	dressTabs();
 
 	s_shown = TRUE;
 	s_dirty = TRUE;
@@ -568,7 +540,6 @@ void Sidebar_selectTab( Int tab )
 		s_dirty = TRUE;
 	s_tab = tab;
 	s_row = 0;
-	dressTabs();
 }
 
 //-------------------------------------------------------------------------------------------------

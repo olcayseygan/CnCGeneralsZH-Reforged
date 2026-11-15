@@ -17073,6 +17073,10 @@ GUI:SidebarRepair
 "Ремонт"
 END
 
+GUI:SidebarSuperweaponReady
+"Готово"
+END
+
 GUI:MenuTransitionSpeed
 "Скорость переходов меню"
 END

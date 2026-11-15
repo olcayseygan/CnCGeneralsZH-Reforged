@@ -3934,8 +3934,12 @@ void ControlBar::update( void )
 		evaluateContextUI();
 		populateSpecialPowerShortcut(ThePlayerList->getLocalPlayer());
 		// if we have a build tooltip layout, update it with the new data.
-		repopulateBuildTooltipLayout(); 
+		repopulateBuildTooltipLayout();
 	}
+
+	// the sidebar card's name, rank and health, from the selection the bar has just settled on
+	if( m_sidebarLayout )
+		updateSelectionCardReadout();
 
 	// nothing below here can change without either a logic tick or a rebuilt UI, and the rest
 	// of it is the expensive half: a pass over every command button in the current context.
@@ -6381,15 +6385,22 @@ static void drawPowerTraySlot( GameWindow *window, WinInstanceData *instData )
 	const Int x0 = x + slot->cell.lo.x, y0 = y + slot->cell.lo.y;
 	const Int x1 = x + slot->cell.hi.x, y1 = y + slot->cell.hi.y;
 	const Int l = slot->edgeLeft, t = slot->edgeTop, b = slot->edgeBottom, r = slot->edgeRight;
+	// a climbing tray's short rows step at the top edge's outer end and the left edge's foot; a tray
+	// going down steps at the bottom edge's outer end and the left edge's top, with the step piece's mirror
+	const Int stepTop = slot->down ? 0 : slot->stepRight, stepBottom = slot->down ? slot->stepRight : 0;
+	const Int leftFrom = slot->down ? y0 + slot->stepBelow : y0, leftTo = slot->down ? y1 : y1 - slot->stepBelow;
+	const Int stepFrom = slot->down ? y0 : y1 - slot->stepBelow;
+	const Image *step = slot->down && slot->stepBelow > 0
+		? mirroredPowerTrayPiece( "StepDown", tray[ ControlBarScheme::TRAY_STEP ] ) : tray[ ControlBarScheme::TRAY_STEP ];
 	struct Piece { const Image *image; Int lx, ly, hx, hy; Bool wanted; };
 	const Piece pieces[] =
 	{
 		{ tray[ ControlBarScheme::TRAY_CELL ], x0, y0, x1, y1, TRUE },
-		{ tray[ ControlBarScheme::TRAY_EDGE_TOP ], x0, y0 - t, x1 - slot->stepRight, y0, t > 0 },
-		{ tray[ ControlBarScheme::TRAY_EDGE_LEFT ], x0 - l, y0, x0, y1 - slot->stepBelow, l > 0 },
-		{ tray[ ControlBarScheme::TRAY_STEP ], x0 - l, y1 - slot->stepBelow, x0, y1, slot->stepBelow > 0 },
+		{ tray[ ControlBarScheme::TRAY_EDGE_TOP ], x0, y0 - t, x1 - stepTop, y0, t > 0 },
+		{ tray[ ControlBarScheme::TRAY_EDGE_LEFT ], x0 - l, leftFrom, x0, leftTo, l > 0 },
+		{ step, x0 - l, stepFrom, x0, stepFrom + slot->stepBelow, slot->stepBelow > 0 },
 		{ tray[ ControlBarScheme::TRAY_CORNER_TL ], x0 - l, y0 - t, x0, y0, l > 0 && t > 0 },
-		{ tray[ ControlBarScheme::TRAY_EDGE_BOTTOM ], x0, y1, x1, y1 + b, b > 0 },
+		{ tray[ ControlBarScheme::TRAY_EDGE_BOTTOM ], x0, y1, x1 - stepBottom, y1 + b, b > 0 },
 		{ tray[ ControlBarScheme::TRAY_CORNER_BL ], x0 - l, y1, x0, y1 + b, l > 0 && b > 0 },
 		// the outer side, closed only short of the screen's edge
 		{ r > 0 ? mirroredPowerTrayPiece( "EdgeRight", tray[ ControlBarScheme::TRAY_EDGE_LEFT ] ) : NULL, x1, y0, x1 + r, y1, r > 0 },
@@ -6444,6 +6455,8 @@ void ControlBar::arrangeSpecialPowerShortcutGrid( void )
 	getHudLayoutRects( &hud );
 	const Int closing = powerTrayClosingEdge( hud, left );
 	const Int right = hud.play.hi.x - closing;
+	// the sidebar's tray hangs level with the radar and goes down (powerTrayMetrics)
+	const Bool down = m_sidebarLayout;
 	if( !m_trayFramePlaced )
 	{
 		m_specialPowerShortcutParent->winSetPosition( origin.x, origin.y );
@@ -6474,21 +6487,32 @@ void ControlBar::arrangeSpecialPowerShortcutGrid( void )
 		const Bool innermost = place == rowLength[ row ] - 1;
 
 		TraySlot &slot = m_traySlot[ i ];
+		slot.down = down;
 		slot.edgeLeft = innermost ? left : 0;
-		slot.edgeTop = covered ? 0 : top;
-		slot.edgeBottom = row == 0 ? foot : 0;
-		// the short row above ends over this cell's outer neighbour: the step closes the corner there
+		// the first row's edge is the one away from the rows that follow it (the foot, or the top when
+		// they go down); a cell no row covers has the other
+		slot.edgeTop = down ? ( row == 0 ? top : 0 ) : ( covered ? 0 : top );
+		slot.edgeBottom = down ? ( covered ? 0 : foot ) : ( row == 0 ? foot : 0 );
+		// the short row next ends over this cell's outer neighbour: the step closes the corner there
 		slot.stepRight = !covered && place > 0 && place - 1 < rowLength[ row + 1 ] ? left : 0;
 		// and this, the short row's innermost cell, stands on a longer row
-		slot.stepBelow = innermost && row > 0 && place + 1 < rowLength[ row - 1 ] ? top : 0;
+		slot.stepBelow = innermost && row > 0 && place + 1 < rowLength[ row - 1 ] ? ( down ? foot : top ) : 0;
 		// the outermost column carries the closing edge, every row of it
 		slot.edgeRight = place == 0 ? closing : 0;
 
 		IRegion2D screen;
 		screen.hi.x = right - place * cell.x + slot.edgeRight;
 		screen.lo.x = screen.hi.x - slot.edgeRight - cell.x - slot.edgeLeft;
-		screen.hi.y = bottom - foot - row * cell.y + slot.edgeBottom;
-		screen.lo.y = screen.hi.y - slot.edgeBottom - cell.y - slot.edgeTop;
+		if( down )
+		{
+			screen.lo.y = origin.y + top + row * cell.y - slot.edgeTop;
+			screen.hi.y = screen.lo.y + slot.edgeTop + cell.y + slot.edgeBottom;
+		}
+		else
+		{
+			screen.hi.y = bottom - foot - row * cell.y + slot.edgeBottom;
+			screen.lo.y = screen.hi.y - slot.edgeBottom - cell.y - slot.edgeTop;
+		}
 		slot.cell.lo.x = slot.edgeLeft;
 		slot.cell.lo.y = slot.edgeTop;
 		slot.cell.hi.x = slot.edgeLeft + cell.x;
@@ -6557,6 +6581,13 @@ void ControlBar::powerTrayMetrics( const Image *const *tray, ICoord2D *origin, I
 	getHudLayoutRects( &hud );
 	origin->x = hud.play.hi.x - powerTrayClosingEdge( hud, *left ) - cols * cell->x - *left;
 	origin->y = *bottom - *foot - rows * cell->y - *top;
+	// the sidebar's (the owner's, 2026-11-15): its top on the radar box's top, beside the sidebar, the
+	// rows going down from there
+	if( m_sidebarLayout )
+	{
+		origin->y = hud.radar.lo.y;
+		*bottom = origin->y + *top + rows * cell->y + *foot;
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

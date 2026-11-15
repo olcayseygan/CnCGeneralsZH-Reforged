@@ -17053,6 +17053,10 @@ GUI:SidebarRepair
 "Réparer"
 END
 
+GUI:SidebarSuperweaponReady
+"Prêt"
+END
+
 GUI:MenuTransitionSpeed
 "Vitesse des transitions de menu"
 END

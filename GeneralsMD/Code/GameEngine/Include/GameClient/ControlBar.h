@@ -1387,6 +1387,7 @@ protected:
 	void layoutSidebar( void );										///< layoutPanels' second half under the sidebar, after the Classic pass
 	void hideForSidebar( GameWindow *window );		///< hide a window the sidebar has no place for, remembered for Classic
 	void restoreClassicWindows( void );						///< what hideForSidebar and layoutSidebar changed, put back
+	void updateSelectionCardReadout( void );			///< the card's name, rank and health, copied for its draw (ControlBar::update)
 	Bool m_sidebarLayout;													///< see isSidebarLayout
 	std::vector< GameWindow * > m_sidebarHidden;	///< windows layoutSidebar hid that were showing
 	Bool m_sidebarBlockSaved;											///< the strip blocker's enabled state below was saved
@@ -1458,6 +1459,7 @@ public:
 		Int edgeLeft, edgeTop, edgeBottom;
 		Int stepRight, stepBelow;
 		Int edgeRight;		///< the outer edge, only where the tray stops short of the screen's edge (the sidebar, a HudWidth area)
+		Bool down;				///< rows go down from the first (the sidebar's, level with the radar): stepRight then shortens the bottom edge and stepBelow stands at the left edge's top
 	};
 protected:
 	TraySlot m_traySlot[ MAX_SPECIAL_POWER_SHORTCUTS ];

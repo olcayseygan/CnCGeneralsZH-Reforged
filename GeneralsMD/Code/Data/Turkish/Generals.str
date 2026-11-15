@@ -16793,6 +16793,10 @@ GUI:SidebarRepair
 "Onar"
 END
 
+GUI:SidebarSuperweaponReady
+"Hazır"
+END
+
 GUI:MenuTransitionSpeed
 "Menü Geçiş Hızı"
 END

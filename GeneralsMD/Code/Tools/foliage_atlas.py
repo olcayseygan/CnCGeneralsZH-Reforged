@@ -5,8 +5,8 @@
 
 The atlas is 1024x2048 RGBA, 8 rows x 4 cells of 256x256, straight alpha.  The preview is the atlas
 alpha-tested at 0.5 over a ground, the 64 and 32 px-per-cell mips, the rock and bark cells on lit
-spheres, cylinders and cones, the canopies on domes, a grove floor, a scattered field and a fir
-built from the branch cards.
+spheres and cylinders, the canopies on domes, a grove floor, a scattered field and firs of twelve
+tent-folded whorl cards.
 
 Cells (index = row * 4 + column):
     0 short green clump   1 tall green clump   2 wide green spread   3 sparse green mix
@@ -15,12 +15,13 @@ Cells (index = row * 4 + column):
     12 granite + lichen   13 sandstone         14 basalt, wet patches    15 pebbles and gravel, top-down
     16 green canopy, top  17 dry canopy, top   18 fern               19 young fir
     20 leaf litter, top   21 needle litter, top  22 mossy log, top   23 sawn stump
-    24 dead-wood bark     25 fir bark          26 empty             27 empty
-    28 snowy fir branch   29 empty             30 fir crown          31 snowy branch whorl, top
+    24 dead-wood bark     25 empty             26 empty             27 empty
+    28 empty              29 empty             30 fir top tuft       31 frosted fir whorl, top
 
-Cells 0-10, 18, 19, 23 and 30 root at the bottom centre of the cell; 11, 15-17, 20-22 and 31 are
-centred and seen from above; 28 hangs off the trunk at the left middle of the cell.  Cells
-12-14, 24 and 25 are opaque surfaces for meshes: the whole cell minus the margin, tileable over that
+Cells 0-10, 18, 19, 23 and 30 root at the bottom centre of the cell; 11, 15-17 and 20-22 are
+centred and seen from above; 31 fills the cell corner to corner from above (the mesh folds it
+along a diagonal, one card per tier of a fir).  Cells
+12-14 and 24 are opaque surfaces for meshes: the whole cell minus the margin, tileable over that
 248 px square, no lighting but a little darkening in cracks.  Everything stays 4 px clear of the
 cell edges.  Blades, twigs and needles are at least 2 px wide at 256.  Fully transparent pixels
 carry the nearest opaque colour so mips do not fringe dark.
@@ -971,8 +972,6 @@ def paint_forest(idx):
 # ---------------------------------------------------------------- row 6: dead wood and snowy firs
 
 BLEACHED = [hexc('#5e5850'), hexc('#9b968b'), hexc('#c8c2b6')]
-LIVING_BARK = [hexc('#2e2720'), hexc('#4f4438'), hexc('#6e6354')]
-SNOW, SNOW_SHADE = hexc('#e9eef2'), hexc('#a7b6ca')
 
 
 def anoise(rng, beta, ax, ay, cut=1.0, hi=1e9):
@@ -1002,22 +1001,9 @@ def bark_deadwood(rng):
     return col * (1 - 0.22 * fine - 0.12 * smoothstep(0.35, 0.0, cn) * gate)[..., None]
 
 
-def bark_living(rng):
-    """Fir bark: brown-grey plates split by dark vertical fissures, a little flaking."""
-    plates = anoise(rng, 2.2, 1, 7, 2, 36)
-    fiss = smoothstep(0.3, 0.05, np.abs(plates))
-    tone = anoise(rng, 2.6, 1, 1.5)
-    grain = anoise(rng, 1.2, 1, 6, 8)
-    t = np.clip(0.62 + 0.15 * tone + 0.06 * grain, 0, 1)
-    col = LIVING_BARK[1] + (LIVING_BARK[2] - LIVING_BARK[1]) * np.clip((t - 0.5) * 2, 0, 1)[..., None]
-    col = mixc(col, hexc('#7a6c5a'), 0.4 * smoothstep(1.4, 2.0, anoise(rng, 1.4, 1, 2, 10)))   # flakes
-    col = mixc(col, LIVING_BARK[0] * 0.8, 0.85 * fiss)
-    return col * (1 - 0.18 * smoothstep(0.45, 0.1, np.abs(plates)))[..., None]
-
-
 def paint_row6(idx):
     rng = np.random.default_rng(SEED + 1000 + idx)
-    rgb = {24: bark_deadwood, 25: bark_living}[idx](rng)
+    rgb = bark_deadwood(rng)
     cell = np.zeros((CELL, CELL, 4))
     cell[MARGIN:-MARGIN, MARGIN:-MARGIN, :3] = np.clip(rgb / 255.0, 0, 1)
     cell[MARGIN:-MARGIN, MARGIN:-MARGIN, 3] = 1
@@ -1026,180 +1012,120 @@ def paint_row6(idx):
 
 # ---------------------------------------------------------------- row 7: fir branch cards
 
-FIR = [hexc('#26331a'), hexc('#5b683a'), hexc('#a3b07a')]   # retail pine luminance, not cell 26's
+FIR = [hexc('#212c0a'), hexc('#5f6e1f'), hexc('#bccd4c')]   # dark olive-green to bright yellow-green
+FROST = [hexc('#c9c1cf'), hexc('#aca5b9')]                  # grey-lilac frost speckle
 
 
-def needles_along(items, pts, depth, rng, ln=(7.0, 10.0), step=2.6, up=None):
-    """Needles both sides of a polyline, pointing toward its tip.  Each item: depth, centre,
-    angle, length, light (0..1, more on the side facing the sun)."""
-    pts = np.asarray(pts, float)
-    for i in range(len(pts) - 1):
-        a, b = pts[i], pts[i + 1]
-        d = b - a
-        seg = np.hypot(*d)
-        ang = np.arctan2(d[1], d[0])
-        for k in range(max(1, int(seg / step))):
-            p = a + d * (k + rng.uniform(0, 1)) / max(1, int(seg / step))
-            for side in (-1, 1):
-                na = ang + side * rng.uniform(0.5, 0.95)
-                n = rng.uniform(*ln)
-                c = p + np.array([np.cos(na), np.sin(na)]) * n * 0.45
-                face = -(np.cos(na) * 0.45 + np.sin(na) * 0.9)          # sun up and a little left
-                items.append((depth + rng.normal(0, 0.04), c, na, n, np.clip(0.5 + 0.35 * face, 0, 1)))
+def lerp3v(stops, t):
+    t = t[..., None]
+    lo = stops[0] + (stops[1] - stops[0]) * np.clip(t / 0.5, 0, 1)
+    return np.where(t < 0.5, lo, stops[1] + (stops[2] - stops[1]) * np.clip((t - 0.5) / 0.5, 0, 1))
 
 
-def draw_needles(dr, items, rng, shade_below=None):
-    for depth, c, na, n, lt in sorted(items, key=lambda it: it[0]):
-        t = np.clip(0.18 + 0.55 * lt + 0.3 * depth + rng.normal(0, 0.05), 0, 1)
-        if shade_below is not None:
-            t *= 1 - 0.3 * np.clip((c[1] - shade_below(c[0])) / 45, 0, 1)
-        d = np.array([np.cos(na), np.sin(na)]) * n / 2
-        dr.line([tuple((c - d) * SS), tuple((c + d) * SS)], fill=rgba(lerp3(FIR, t)), width=int(2.4 * SS))
+def soft_noise(rng, scale):
+    """Unit noise with features about scale px across."""
+    n = int(CELL / scale) + 1
+    a = np.asarray(Image.fromarray(rng.normal(0, 1, (n, n)).astype(np.float32)).resize((CELL, CELL), Image.BICUBIC))
+    return (a - a.mean()) / a.std()
 
 
-def snow_lumps(dr, rng, centres, w, h, ang=0.0):
-    """Snow resting on top: a blue shade under, the lit snow above it."""
-    for layer in (0, 1):
-        for (x, y), ww, hh in zip(centres, w, h):
-            if layer == 0:
-                dr.polygon(leaf_poly(x + 0.6, y + 2.2, ww * 2.1, hh * 2.2, ang, 14), fill=rgba(SNOW_SHADE))
-            else:
-                dr.polygon(leaf_poly(x, y, ww * 2, hh * 1.7, ang, 14), fill=rgba(SNOW * rng.uniform(0.95, 1.0)))
-
-
-def fir_branch():
-    """Cell 28: one branch hanging off the trunk at the left middle, drooping to the right,
-    needle tufts hanging under it, snow on top."""
-    rng = np.random.default_rng(SEED + 1000 + 28)
-    img = Image.new('RGBA', (CELL * SS, CELL * SS), (0, 0, 0, 0))
-    dr = ImageDraw.Draw(img)
-    p = np.array([MARGIN + 3.0, CELL / 2 - 14])
-    main, angs = [p], []
-    for i in range(20):
-        a = -0.12 + 0.45 * ((i + 0.5) / 20) ** 1.5 + rng.normal(0, 0.03)
-        angs.append(a)
-        main.append(main[-1] + np.array([np.cos(a), np.sin(a)]) * 212 / 20)
-    main = np.array(main)
-    items = []
-    wood = []
-    for i in range(1, 20):
-        t = i / 20
-        for sign, k, lo, hi in ((1, 1.45, 0.75, 1.3), (1, 1.0, 0.35, 0.75), (1, 0.7, 0.2, 0.45),
-                                (-1, 0.45, 0.25, 0.6)):
-            a = angs[i] + sign * rng.uniform(lo, hi)
-            ln = (42 * (1 - t) ** 0.6 + 12) * k * rng.uniform(0.75, 1.1)
-            tw = [main[i]]
-            for _ in range(4):
-                a += 0.08 * sign
-                tw.append(tw[-1] + np.array([np.cos(a), np.sin(a)]) * ln / 4)
-            wood.append(tw)
-            needles_along(items, tw, rng.uniform(0.0, 0.6) + (0.3 if sign < 0 else 0), rng)
-    needles_along(items, main, 0.7, rng, ln=(8, 11))
-    stroke(dr, main, 6.0, 2.4, BARK_DARK)
-    for tw in wood:
-        stroke(dr, tw, 2.4, 2.3, BARK_DARK * 0.9)
-    draw_needles(dr, items, rng, shade_below=lambda x: np.interp(x, main[:, 0], main[:, 1]))
-    cs, ws, hs = [], [], []
-    for i in range(2, 19):
-        t = i / 20
-        a = angs[i]
-        up = np.array([np.sin(a), -np.cos(a)])
-        for _ in range(3):
-            cs.append(main[i] + up * rng.uniform(4, 9) + np.array([np.cos(a), np.sin(a)]) * rng.uniform(-5, 5))
-            ws.append(rng.uniform(5, 11) * (1 - 0.45 * t))
-            hs.append(rng.uniform(2.8, 4.6) * (1 - 0.35 * t))
-    snow_lumps(dr, rng, cs, ws, hs, 0.0)
-    return np.asarray(img, float) / 255.0
+def needle_cluster(rng, lumps, sticks, frost_up, rim=None, frost_base=0.06):
+    """Retail-style needle mass: a union of lumpy ellipses, a ragged noisy outline, small holes,
+    short diagonal needle streaks in a high-contrast olive mottle, frost speckle over all of it.
+    lumps: (cx, cy, rx, ry, angle).  sticks: capsules drawn under the needles.  rim: 0..1 per pixel,
+    where 1 is the outside of the card (more holes, rougher edge)."""
+    xx, yy = grid()
+    best = np.full((CELL, CELL), -9.0)
+    nx, ny = np.zeros((CELL, CELL)), np.zeros((CELL, CELL))
+    for cx, cy, rx, ry, ang in lumps:
+        ca, sa = np.cos(ang), np.sin(ang)
+        u = ((xx - cx) * ca + (yy - cy) * sa) / rx
+        v = (-(xx - cx) * sa + (yy - cy) * ca) / ry
+        f = 1 - u * u - v * v
+        m = f > best
+        best = np.where(m, f, best)
+        nx = np.where(m, u * ca - v * sa, nx)
+        ny = np.where(m, u * sa + v * ca, ny)
+    rim = np.zeros((CELL, CELL)) if rim is None else rim
+    val = best + (0.25 + 0.25 * rim) * soft_noise(rng, 7) + (0.3 + 0.2 * rim) * soft_noise(rng, 1.6)
+    holes = soft_noise(rng, 1.6) > 1.6 - 1.3 * rim
+    a = smoothstep(-0.06, 0.06, val) * ~holes
+    nz = np.sqrt(np.clip(best, 0, 1))
+    shade = np.clip(-0.45 * nx - 0.6 * ny + 0.66 * nz, 0, 1)
+    w = rng.normal(0, 1, (CELL, CELL))
+    s1 = sum(np.roll(w, (k, k), (0, 1)) for k in range(4)) / 2
+    s2 = sum(np.roll(w, (k, -k), (0, 1)) for k in range(4)) / 2
+    streak = np.where(soft_noise(rng, 9) > 0, s1, s2)
+    # lump domes only lean the light a little, or the clump reads as a string of beads
+    t = np.clip(0.3 + 0.28 * shade + 0.36 * streak + 0.1 * np.clip(best, 0, 1) + 0.1 * soft_noise(rng, 14), 0, 1)
+    col = lerp3v(FIR, t)
+    p = frost_base + frost_up * 0.16 * np.clip(-ny, 0, 1) + 0.06 * shade + 0.14 * rim
+    coarse = np.asarray(Image.fromarray(rng.uniform(0, 1, (CELL // 2, CELL // 2)).astype(np.float32))
+                        .resize((CELL, CELL), Image.NEAREST))
+    frost = (coarse < p) | (rng.uniform(0, 1, (CELL, CELL)) < p * 0.5)
+    fcol = np.where((rng.uniform(0, 1, (CELL, CELL)) < 0.5)[..., None], FROST[0], FROST[1])
+    col = np.where(frost[..., None], fcol * (0.85 + 0.2 * shade)[..., None], col)
+    sa = np.zeros((CELL, CELL))
+    for p0, p1, r0, r1 in sticks:
+        d, _, _ = capsule(xx, yy, p0, p1, r0, r1)
+        sa = np.maximum(sa, np.clip(d + 0.5, 0, 1))
+    rgb = np.where((a >= 0.5)[..., None], col, BARK_DARK)
+    alpha = np.maximum(a, sa)
+    keep = np.zeros((CELL, CELL))
+    keep[MARGIN:-MARGIN, MARGIN:-MARGIN] = 1
+    alpha = shape_alpha(alpha * keep)
+    return np.concatenate([np.clip(rgb / 255, 0, 1), alpha[..., None]], -1)
 
 
 def fir_crown(rng):
-    """Cell 30: the narrow top spire, side view, bottom-rooted, a little snow on the branch tops."""
-    img = Image.new('RGBA', (CELL * SS, CELL * SS), (0, 0, 0, 0))
-    dr = ImageDraw.Draw(img)
-    cx, base, top = CELL / 2, ROOT_Y, MARGIN + 14
-    items, tops = [], []
-    for k in range(13):
-        h = 28 + k * 15 + rng.normal(0, 1.5)
-        L = 52 * (1 - h / (base - top)) ** 0.85 + 5
-        for side, depth in ((-1, rng.uniform(0.3, 0.9)), (1, rng.uniform(0.3, 0.9)), (0, 0.15)):
-            if side:   # out to one side, a little down, drooping further
-                a, ln = np.pi / 2 - side * (np.pi / 2 - 0.25), L
-            else:      # one toward the camera: a short stub
-                a, ln = np.pi / 2 + rng.normal(0, 0.4), L * 0.35
-            tw = [np.array([cx, base - h])]
-            for _ in range(4):
-                a += 0.1 * side
-                tw.append(tw[-1] + np.array([np.cos(a), np.sin(a)]) * ln / 4)
-            needles_along(items, tw, depth, rng, ln=(6, 9), step=2.2)
-            if side:
-                tops.append((tw[2], ln))
-    needles_along(items, [np.array([cx, base]), np.array([cx, top])], 0.8, rng, ln=(5, 8), step=2.0)
-    stroke(dr, [np.array([cx, base + 1.0]), np.array([cx, top + 6])], 4.5, 2.4, BARK_DARK)
-    draw_needles(dr, items, rng)
-    cs, ws, hs = [np.array([cx, top + 8.0])], [3.5], [2.6]
-    for q, ln in tops:
-        if rng.uniform() < 0.5:
-            for _ in range(rng.integers(1, 3)):
-                cs.append(q + np.array([rng.uniform(-0.25, 0.25) * ln, -3.5 + rng.normal(0, 1)]))
-                ws.append(max(2.6, rng.uniform(0.08, 0.16) * ln))
-                hs.append(rng.uniform(1.6, 2.4))
-    snow_lumps(dr, rng, cs, ws, hs)
-    return np.asarray(img, float) / 255.0
+    """Cell 30: the top tuft, side view, bottom-rooted: a blunt ragged lumpy cone of needles."""
+    cx, base, top = CELL / 2, ROOT_Y - 6, MARGIN + 24
+    lumps = []
+    for _ in range(90):   # small lumps scattered through a cone, wide low, a blunt crowd at the top
+        y = rng.uniform(top, base - 8)
+        hw = 52 * (y - top) / (base - top) + 12
+        lumps.append((cx + rng.uniform(-0.8, 0.8) * hw, y, rng.uniform(12, 20), rng.uniform(9, 15),
+                      rng.uniform(-0.6, 0.6)))
+    for _ in range(4):
+        lumps.append((cx + rng.normal(0, 6), top + rng.uniform(-4, 8), rng.uniform(9, 13), rng.uniform(8, 11),
+                      rng.uniform(-0.5, 0.5)))
+    sticks = [(np.array([cx, base + 5.0]), np.array([cx, top + 10.0]), 3.0, 1.3)]
+    return needle_cluster(rng, lumps, sticks, frost_up=1.0, frost_base=0.1)
 
 
 def fir_whorl(rng):
-    """Cell 31: a snowy whorl from above, needle sprays radiating from the trunk, snow on top."""
-    img = Image.new('RGBA', (CELL * SS, CELL * SS), (0, 0, 0, 0))
-    dr = ImageDraw.Draw(img)
-    c = np.array([CELL / 2, CELL / 2])
-    items, sprays = [], []
-    for j in range(9):
-        a = j * 2 * np.pi / 9 + rng.normal(0, 0.12)
-        ln = rng.uniform(92, 108)
-        tw = [c.copy()]
-        for _ in range(8):
-            a += rng.normal(0, 0.05)
-            tw.append(tw[-1] + np.array([np.cos(a), np.sin(a)]) * ln / 8)
-        sprays.append((tw, a))
-        needles_along(items, tw, rng.uniform(0.3, 0.8), rng, ln=(8, 11))
-        for i in (2, 4, 6):
-            b = a + rng.choice([-1, 1]) * rng.uniform(0.45, 0.75)
-            sl = rng.uniform(22, 36) * (1 - i / 12)
-            sub = [tw[i], tw[i] + np.array([np.cos(b), np.sin(b)]) * sl]
-            needles_along(items, sub, rng.uniform(0.2, 0.6), rng, ln=(7, 9))
-    for tw, _ in sprays:
-        stroke(dr, tw, 4.0, 2.3, BARK_DARK)
-    draw_needles(dr, items, rng)
-    cs, ws, hs, angs = [], [], [], []
-    for tw, a in sprays:
-        for i in (2, 3, 4, 5, 6):
-            if rng.uniform() < 0.6:
-                for _ in range(rng.integers(2, 4)):   # a ragged lump of two or three blobs
-                    cs.append(tw[i] + rng.normal(0, 3.5, 2))
-                    ws.append(rng.uniform(2.5, 5.5) * (1 - i / 14))
-                    hs.append(rng.uniform(2.0, 4.0) * (1 - i / 16))
-                    angs.append(a + rng.normal(0, 0.6))
-    for layer in (0, 1):
-        for (x, y), ww, hh, a in zip(cs, ws, hs, angs):
-            if layer == 0:
-                dr.polygon(leaf_poly(x + 1.2, y + 1.6, ww * 2.2, hh * 2.3, a, 14), fill=rgba(SNOW_SHADE))
-            else:
-                dr.polygon(leaf_poly(x, y, ww * 2, hh * 2, a, 14), fill=rgba(SNOW * rng.uniform(0.95, 1.0)))
-    r = 5 * SS
-    dr.ellipse([c[0] * SS - r, c[1] * SS - r, c[0] * SS + r, c[1] * SS + r], fill=rgba(BARK_DARK))
-    return np.asarray(img, float) / 255.0
+    """Cell 31, the fir itself: one tier seen from above, needle sprays radiating from the trunk to
+    the cell's corners (the mesh folds the card along a diagonal and those tips droop), dense in the
+    middle, ragged and gappy toward the rim."""
+    c = CELL / 2
+    lumps, sticks = [(c, c, 26, 26, 0.0)], [(np.array([c, c]), np.array([c + 1.0, c]), 5.0, 5.0)]
+    for j in range(13):
+        th = j * 2 * np.pi / 13 + rng.normal(0, 0.08)
+        d = np.array([np.cos(th), np.sin(th)])
+        R = (CELL / 2 - MARGIN - 7) / max(abs(d[0]), abs(d[1])) * rng.uniform(0.84, 0.97)
+        r = 20.0
+        while r < R - 6:
+            q = c + d * r
+            w = 10 * (1 - 0.55 * r / R) + 3.5
+            lumps.append((q[0], q[1], 21, w * rng.uniform(0.75, 1.05), th + rng.normal(0, 0.12)))
+            if rng.uniform() < 0.5:   # a side spray
+                b = th + rng.choice([-1, 1]) * rng.uniform(0.35, 0.6)
+                e = q + np.array([np.cos(b), np.sin(b)]) * w * 1.3
+                lumps.append((e[0], e[1], 14, w * 0.55, b))
+            r += rng.uniform(11, 15)
+        sticks.append((np.array([c, c]), c + d * R * 0.85, 2.2, 1.2))
+    xx, yy = grid()
+    rim = np.clip((np.hypot(xx - c, yy - c) - 45) / 115, 0, 1)
+    return needle_cluster(rng, lumps, sticks, frost_up=0.0, rim=rim, frost_base=0.1)
 
 
 def paint_row7(idx):
-    if idx == 28:
-        return finish_alpha_cell(fir_branch(), np.random.default_rng(SEED + 1000 + idx))
     rng = np.random.default_rng(SEED + 1000 + idx)
-    px = fir_crown(rng) if idx == 30 else fir_whorl(rng)
-    return finish_alpha_cell(px, rng)
+    return fir_crown(rng) if idx == 30 else fir_whorl(rng)
 
 
 ROWS = 8
-UNUSED = (26, 27, 29)   # reserved, fully transparent
+UNUSED = (25, 26, 27, 28, 29)   # reserved, fully transparent
 
 
 def build():
@@ -1304,7 +1230,7 @@ def cylinder(dst, tex, x0, y0, w, h):
 
 
 def row6(out, atlas, y0):
-    """The bark cells: the row on sand, its 64 px mip, both barks on trunks."""
+    """The bark cell: the row on sand, its 64 px mip, the bark on trunks."""
     W = CELL * 4
     yy, xx = np.mgrid[0:700, 0:W]
     sand = hexc('#c2a676') * (1 + 0.05 * np.sin(xx / 23.0) * np.sin(yy / 17.0))[..., None]
@@ -1317,9 +1243,7 @@ def row6(out, atlas, y0):
     cells64 = dict(enumerate(cells_of(small, 64, 1), 24))
     m = MARGIN
     cylinder(out, cells[24][m:-m, m:-m].astype(float), 40, y0 + 370, 90, 300)
-    cylinder(out, cells[25][m:-m, m:-m].astype(float), 160, y0 + 370, 90, 300)
-    cylinder(out, cells64[24][1:-1, 1:-1].astype(float), 280, y0 + 370, 24, 80)
-    cylinder(out, cells64[25][1:-1, 1:-1].astype(float), 320, y0 + 370, 24, 80)
+    cylinder(out, cells64[24][1:-1, 1:-1].astype(float), 160, y0 + 370, 24, 80)
 
 
 def card(dst, cell, x, y, w, h, flip=False):
@@ -1335,35 +1259,59 @@ def card(dst, cell, x, y, w, h, flip=False):
         over_tested(dst[y0:y1, x0:x1], a[y0 - y:y1 - y, x0 - x:x1 - x], 0, 0)
 
 
-def card_fir(dst, cells, cx, base, H):
-    """A fir the way the game builds it from cards: bark trunk, whorls of branch cards (28 both
-    sides, 31 as the flat whorl seen at a slant), the crown card (30) on top."""
-    m = max(1, cells[25].shape[0] * MARGIN // CELL)
+def tent_fir(dst, cells, cx, base, H, rng, tiers=12, pitch=0.7):
+    """A fir the way the game builds it: a trunk in the bark cell (24), then per tier the whorl card
+    (31) folded along a diagonal like a tent so two corners droop 20-34 degrees, turned at random,
+    tapering linearly up the trunk, seen from an RTS pitch; the top tuft card (30) on top."""
+    m = max(1, cells[24].shape[0] * MARGIN // CELL)
     tw = max(4, int(H * 0.05))
-    cylinder(dst, cells[25][m:-m, m:-m].astype(float), cx - tw // 2, base - int(H * 0.25), tw, int(H * 0.25))
-    tiers = 8
+    cylinder(dst, cells[24][m:-m, m:-m].astype(float), cx - tw // 2, base - int(H * 0.3), tw, int(H * 0.3))
+    tex = cells[31]
+    n = tex.shape[0]
+    L = np.array([-0.5, 0.35, 0.8])
+    L /= np.linalg.norm(L)
+    cp, sp = np.cos(pitch), np.sin(pitch)
     for i in range(tiers):
-        y = base - H * (0.14 + 0.083 * i)
-        L = H * 0.36 * (1 - i / (tiers + 1.2))
-        w = L * CELL / 212
-        card(dst, cells[31], cx - L, y - L * 0.32, 2 * L, 0.64 * L)
-        ax, ay = (MARGIN + 3) / CELL * w, (CELL / 2 - 14) / CELL * w
-        card(dst, cells[28], cx - ax, y - ay, w, w)
-        card(dst, cells[28], cx - w + ax, y - ay, w, w, flip=True)
-    cw = H * 0.34
-    card(dst, cells[30], cx - cw / 2, base - H * (0.14 + 0.083 * (tiers - 1)) - cw * 0.8, cw, cw)
+        f = i / (tiers - 1)
+        S = H * 0.4 * (1 - 0.82 * f)
+        yc = base - H * (0.16 + 0.7 * f)
+        yaw, k = rng.uniform(0, 2 * np.pi), np.tan(np.radians(rng.uniform(20, 34)))
+        g = int(max(64, 3 * S))
+        u, v = np.meshgrid(np.linspace(-1, 1, g), np.linspace(-1, 1, g))
+        d2 = (u - v) / np.sqrt(2)
+        X, Y, Z = u * S, v * S, -np.abs(d2) * S * k
+        cy, sy = np.cos(yaw), np.sin(yaw)
+        Xr, Yr = X * cy - Y * sy, X * sy + Y * cy
+        sx = (cx + Xr).astype(int)
+        syy = (yc - Z * cp + Yr * sp).astype(int)
+        depth = Yr * cp + Z * sp
+        s = np.sign(d2) * k / np.sqrt(2)          # the plane's normal before the turn: (s, -s, 1)
+        nrm = np.stack([s * cy + s * sy, s * sy - s * cy, np.ones_like(u)], -1)
+        nrm /= np.linalg.norm(nrm, axis=-1, keepdims=True)
+        lit = 0.55 + 0.5 * np.clip(nrm @ L, 0, 1)
+        ti = np.clip(((v + 1) / 2 * n).astype(int), 0, n - 1)
+        tj = np.clip(((u + 1) / 2 * n).astype(int), 0, n - 1)
+        texel = tex[ti, tj].astype(float)
+        ok = (texel[..., 3] >= 128) & (sx >= 0) & (sx < dst.shape[1]) & (syy >= 0) & (syy < dst.shape[0])
+        order = np.argsort(depth[ok], kind='stable')
+        dst[syy[ok][order], sx[ok][order]] = (texel[..., :3] * lit[..., None])[ok][order]
+    cw = H * 0.22
+    card(dst, cells[30], cx - cw / 2, base - H * 0.86 - cw * 0.85, cw, cw)
 
 
 def row7(out, atlas, y0):
-    """The fir branch cards: the row itself, then a fir built from the cards at full size and
-    from the 64 px mips, on snow."""
+    """The fir cards: the row itself, then firs of twelve tent-folded whorls built from the cards at
+    full size and from the 64 px mips, on snow."""
     out[y0:y0 + 760] = hexc('#dfe6ec')
     out[y0:y0 + 262] = hexc('#8d99a3')
     over_tested(out, atlas[CELL * 7:CELL * 8], 0, y0 + 3)
     full = dict(enumerate(cells_of(atlas[CELL * 6:CELL * 8], CELL, 2), 24))
     small = dict(enumerate(cells_of(mip(atlas[CELL * 6:CELL * 8], 4), 64, 2), 24))
-    card_fir(out, full, 400, y0 + 740, 470)
-    card_fir(out, small, 760, y0 + 740, 120)
+    rng = np.random.default_rng(SEED + 7)
+    tent_fir(out, full, 300, y0 + 690, 400, rng)
+    tent_fir(out, small, 640, y0 + 745, 150, rng)
+    tent_fir(out, small, 800, y0 + 745, 110, rng)
+    tent_fir(out, small, 920, y0 + 745, 80, rng)
 
 
 def cells_of(img, size, rows):

@@ -90,10 +90,13 @@ static_assert(BUSH_VARIANTS == 6 && BUSH_CORNERS == 37, "W3DGrassBuffer::m_bushC
 #define LITTER_GREY					0.4f		///< and how much of its saturation it loses
 #define LOG_HALF						6.0f		///< the log lies corner to corner, so about seventeen long
 #define DEAD_TREE_HEIGHT		29.0f		///< at scale one: two to three tanks, so it reads from the default camera
-#define FIR_BRIGHT					1.2f		///< the branch cards' light against the painting, which carries its own snow
-#define FIR_GREEN						1.05f		///< and a little greener, as the map's own pines are
-#define FIR_DARK						0.7f		///< the cards facing away from the sun
-#define FIR_HEIGHT					44.0f		///< at scale one: 33 to 55 over the scales, the retail pines' 29 to 54
+// The whorl painting is the retail pines' olive as it stands (opaque mean about 120/130/68).  On white
+// snow this frosts it toward their snowy firs' 150/158/135.
+#define FIR_FROSTED					Vector3(1.25f, 1.21f, 2.0f)
+#define FIR_WOOD						Vector3(1.1f, 1.06f, 1.08f)	///< the bleached bark to the retail pines' pale 167/156/147
+#define FIR_DARK						0.8f		///< the drooping corners turned away from the sun
+#define FIR_HEIGHT					49.0f		///< at scale one: the retail pines and firs stand 46 to 52
+#define FIR_HEIGHT_SPREAD		0.24f		///< of the piece's scale's spread: 46 to 52 over the scales
 #define DEAD_BLEACH					1.3f		///< sun-bleached wood, over the bark painting
 #define TREE_SINK						0.5f		///< a trunk's foot under the ground
 #define BUSH_TINT						0.5f		///< how far a green bush takes the grass's hue under it
@@ -1037,7 +1040,7 @@ Bool W3DGrassBuffer::addBush(Real x, Real y, Real yaw, Real radius, Real height,
 	ground TREE_SINK into it, lit from its own normals.  Still: no sway and no fold. */
 //-------------------------------------------------------------------------------------------------
 Bool W3DGrassBuffer::addTreeMesh(const TreeMesh &mesh, Real x, Real y, Real yaw, Real height, const Vector3 &tint,
-	Real dark)
+	const Vector3 &woodTint, Real dark)
 {
 	if (m_vertices.size() + mesh.vertices.size() > MAX_CHUNK_VERTICES
 		|| m_indices.size() + mesh.indices.size() > MAX_CHUNK_INDICES) {
@@ -1051,7 +1054,7 @@ Bool W3DGrassBuffer::addTreeMesh(const TreeMesh &mesh, Real x, Real y, Real yaw,
 		Real u0, v0, u1, v1;
 		atlasCorners(t.cell, u0, v0, u1, v1);
 		Vector3 normal(t.nx * c - t.ny * s, t.nx * s + t.ny * c, t.nz);
-		const UnsignedInt colour = lightRock(normal, tint, 1.0f, dark);
+		const UnsignedInt colour = lightRock(normal, t.cell == ATLAS_DEAD_BARK ? woodTint : tint, 1.0f, dark);
 		VertexFormatXYZNDUV1 v;
 		// its own height as the fold's target: a big tree never folds (it is drawn out to FAR_RADIUS,
 		// past the fold's ring), so it neither rises out of the ground nor flattens on a slope
@@ -1330,11 +1333,12 @@ void W3DGrassBuffer::buildChunk(Slot &slot, Int key)
 			break;
 		case PIECE_DEAD_TREE:
 			added = addTreeMesh(m_deadTrees[variant % DEAD_TREE_VARIANTS], wx, wy, t.yaw * 4.0f, DEAD_TREE_HEIGHT * t.scale,
-				Vector3(DEAD_BLEACH, DEAD_BLEACH, DEAD_BLEACH), ROCK_DARK);
+				Vector3(DEAD_BLEACH, DEAD_BLEACH, DEAD_BLEACH), Vector3(DEAD_BLEACH, DEAD_BLEACH, DEAD_BLEACH), ROCK_DARK);
 			break;
 		case PIECE_FIR:
-			added = addTreeMesh(m_firs[variant % FIR_VARIANTS], wx, wy, t.yaw * 4.0f, FIR_HEIGHT * t.scale,
-				Vector3(FIR_BRIGHT, FIR_BRIGHT * FIR_GREEN, FIR_BRIGHT), FIR_DARK);
+			added = addTreeMesh(m_firs[variant % FIR_VARIANTS], wx, wy, t.yaw * 4.0f,
+				FIR_HEIGHT * (1.0f + FIR_HEIGHT_SPREAD * (t.scale - 1.0f)),
+				whiteGround(cell) ? FIR_FROSTED : Vector3(1.0f, 1.0f, 1.0f), FIR_WOOD, FIR_DARK);
 			break;
 		case PIECE_LOG:
 			added = addFlat(wx, wy, t.yaw * 4.0f, LOG_HALF * t.scale, ATLAS_LOG, lightOn(cellNormal(map, cp.x, cp.y, 0.0f), 1.0f));

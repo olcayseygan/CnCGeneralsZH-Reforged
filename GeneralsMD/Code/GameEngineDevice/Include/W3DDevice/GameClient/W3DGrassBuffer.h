@@ -186,7 +186,7 @@ private:
 	Bool addBush(Real x, Real y, Real yaw, Real radius, Real height, Int variant, Int atlasCell, Real sway,
 		const Vector3 &tint);
 	Bool addTreeMesh(const FoliagePlacement::TreeMesh &mesh, Real x, Real y, Real yaw, Real height,
-		const Vector3 &tint, Real dark);
+		const Vector3 &tint, const Vector3 &woodTint, Real dark);
 	void releaseSlot(Slot &slot);	///< its buffers gone, the slot free
 	Bool addRock(Real x, Real y, Real yaw, Real radius, Real stretch, Int variant, Int atlasCell,
 		Bool detailed, Real sink, const Vector3 &tint);

@@ -486,7 +486,7 @@ TEST(foliage_tree_meshes_are_whole_and_stand_on_their_root)
 		const int faces = (int)m.indices.size() / 3;
 		CHECK_EQ((int)m.indices.size() % 3, 0);
 		if (fir)
-			CHECK(faces >= 88 && faces <= 160);
+			CHECK(faces >= 32 && faces <= 36);
 		else
 			CHECK(faces >= 120 && faces <= 320);
 		for (size_t i = 0; i < m.indices.size(); ++i)
@@ -498,7 +498,7 @@ TEST(foliage_tree_meshes_are_whole_and_stand_on_their_root)
 			if (t.z > top) top = t.z;
 			if (t.z < low) low = t.z;
 			CHECK(t.u >= 0.0f && t.u <= 1.0f && t.v >= 0.0f && t.v <= 1.0f);
-			CHECK(fir ? (t.cell == ATLAS_FIR_BARK || t.cell == ATLAS_FIR_BRANCH || t.cell == ATLAS_FIR_SPIRE
+			CHECK(fir ? (t.cell == ATLAS_DEAD_BARK || t.cell == ATLAS_FIR_SPIRE
 				|| t.cell == ATLAS_FIR_WHORL) : t.cell == ATLAS_DEAD_BARK);
 			CHECK(fabsf(t.nx * t.nx + t.ny * t.ny + t.nz * t.nz - 1.0f) < 0.01f);
 		}
@@ -506,39 +506,44 @@ TEST(foliage_tree_meshes_are_whole_and_stand_on_their_root)
 		CHECK(low > -0.15f && low < 0.0f);	// the root just under the ground
 		if (!fir)
 			continue;
-		// every branch card's painted root on the trunk, its far end lower, a whorl a tier
-		int branches = 0, whorls = 0, spires = 0;
+		// the retail scheme: tent folded whorls from the bare trunk up, drooping more and reaching
+		// less toward the top, each about the trunk; the tuft on top
+		int whorls = 0, spires = 0;
+		float lastZ = -1.0f, lastReach = 1.0f, firstZ = 0.0f, firstReach = 0.0f;
 		size_t trunk = 0;
-		while (trunk < m.vertices.size() && m.vertices[trunk].cell == ATLAS_FIR_BARK)
+		while (trunk < m.vertices.size() && m.vertices[trunk].cell == ATLAS_DEAD_BARK)
 			++trunk;
 		CHECK_EQ((m.vertices.size() - trunk) % 4, (size_t)0);
 		for (size_t q = trunk; q + 4 <= m.vertices.size(); q += 4)
 		{
 			const TreeVertex *c = &m.vertices[q];
-			if (c[0].cell == ATLAS_FIR_WHORL)
-			{
-				++whorls;
-				CHECK(c[0].z == c[2].z);
-				continue;
-			}
 			if (c[0].cell == ATLAS_FIR_SPIRE)
 			{
 				++spires;
 				CHECK(c[0].z > c[3].z);
 				continue;
 			}
-			++branches;
-			float root[3];
-			for (int k = 0; k < 3; ++k)
+			CHECK_EQ(c[0].cell, (int)ATLAS_FIR_WHORL);
+			const float cx = (c[0].x + c[2].x) * 0.5f, cy = (c[0].y + c[2].y) * 0.5f;
+			const float reach = sqrtf((c[0].x - cx) * (c[0].x - cx) + (c[0].y - cy) * (c[0].y - cy));
+			const float droop = atanf((c[0].z - c[1].z) / reach) * 57.29578f;
+			CHECK(c[0].z == c[2].z && c[1].z == c[3].z);
+			CHECK(droop > 19.5f && droop < 34.5f);
+			CHECK(sqrtf(cx * cx + cy * cy) <= FIR_TIER_OFFSET + FIR_LEAN + 1e-4f);
+			CHECK(c[0].z > lastZ && reach < lastReach);
+			if (whorls == 0)
 			{
-				const float *p0 = &c[0].x, *p1 = &c[1].x, *p3 = &c[3].x;
-				root[k] = p0[k] + (p1[k] - p0[k]) * FIR_BRANCH_ROOT_U + (p3[k] - p0[k]) * FIR_BRANCH_ROOT_V;
+				firstZ = c[1].z;	// the bare trunk ends where the lowest tier's corners hang
+				firstReach = reach;
 			}
-			CHECK(fabsf(root[0]) < 1e-4f && fabsf(root[1]) < 1e-4f);
-			CHECK(c[1].z < c[0].z);	// droops
+			lastZ = c[0].z;
+			lastReach = reach;
+			++whorls;
 		}
-		CHECK(whorls >= 6 && whorls <= 9);
-		CHECK(branches >= whorls * 5 && branches <= whorls * 7);
+		CHECK(whorls >= FIR_TIERS_MIN && whorls <= FIR_TIERS_MAX);
+		CHECK(firstZ >= FIR_BARE_LOW - 1e-4f && firstZ <= FIR_BARE_LOW + FIR_BARE_SPREAD + 1e-4f);
+		CHECK_NEAR(firstReach, FIR_REACH_LOW, 1e-4f);
+		CHECK_NEAR(lastReach, FIR_REACH_TOP, 1e-4f);
 		CHECK_EQ(spires, 2);
 	}
 }

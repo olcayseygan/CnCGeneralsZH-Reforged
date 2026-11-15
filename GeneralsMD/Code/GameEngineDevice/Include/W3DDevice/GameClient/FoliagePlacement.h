@@ -65,12 +65,10 @@ namespace FoliagePlacement
 		ATLAS_NEEDLE_LITTER = 21,	///< from above, under conifers
 		ATLAS_LOG = 22,					///< a mossy fallen log from above, lying corner to corner
 		ATLAS_STUMP = 23,				///< rooted
-		ATLAS_DEAD_BARK = 24,		///< bleached dead wood, tiling
-		ATLAS_FIR_BARK = 25,		///< tiling
-		// 26 and 27 unused
-		ATLAS_FIR_BRANCH = 28,	///< a snowy branch from the side, hanging off the trunk at the cell's left middle
-		ATLAS_FIR_SPIRE = 30,		///< the top, bottom rooted
-		ATLAS_FIR_WHORL = 31		///< a tier's needle sprays from above, centred
+		ATLAS_DEAD_BARK = 24,		///< bleached dead wood, tiling; the firs' trunks too
+		// 25 to 29 unused
+		ATLAS_FIR_SPIRE = 30,		///< the crown tuft, bottom rooted
+		ATLAS_FIR_WHORL = 31		///< a tier from above: a starburst of needles over the whole cell, centred
 	};
 
 	/// A cell's bytes.
@@ -790,9 +788,21 @@ namespace FoliagePlacement
 		#undef DT_U
 	}
 
-	/// Where a branch card's branch meets the trunk, in the cell: x 7 and y 114 of 256.
-	const float FIR_BRANCH_ROOT_U = 7.0f / 256.0f;
-	const float FIR_BRANCH_ROOT_V = 114.0f / 256.0f;
+	/// The fir in units of its height, which the buffer makes 46 to 52 like the retail pines.
+	const float FIR_TRUNK_RADIUS = 0.012f;	///< about 0.6 units at the foot, to a point at the top
+	const float FIR_LEAN = 0.02f;						///< the trunk's top off the axis at most
+	const float FIR_BARE_LOW = 0.25f;				///< bare trunk under the lowest tier's hanging corners, 25 to 40%
+	const float FIR_BARE_SPREAD = 0.15f;
+	const float FIR_TIER_STEP = 0.065f;			///< a tier every 3.2 units
+	const int FIR_TIERS_MIN = 10;
+	const int FIR_TIERS_MAX = 14;
+	const float FIR_TOP_TIER = 0.93f;
+	const float FIR_REACH_LOW = 0.21f;			///< a tier's corner from the trunk, lowest tier: about 1 wide to 3 high
+	const float FIR_REACH_TOP = 0.05f;			///< and top tier, linear between
+	const float FIR_DROOP_LOW = 0.349f;			///< the hanging corners, 20 degrees at the lowest tier
+	const float FIR_DROOP_TOP = 0.593f;			///< to 34 at the top
+	const float FIR_TIER_OFFSET = 0.03f;		///< a tier's centre off the trunk at most, 1.5 units
+	const float FIR_TUFT = 0.08f;						///< the crown tuft's height and width
 
 	/// One whole atlas cell as a quad: the cell's point (anchorU, anchorV) at anchor, across along
 	/// the cell's u, down along its v, every corner lit by normal (a unit vector).
@@ -813,53 +823,58 @@ namespace FoliagePlacement
 		m.indices.insert(m.indices.end(), tri, tri + 6);
 	}
 
-	/// A snowy fir as the map's pines are made: a trunk, six to nine whorls of five to seven branch
-	/// cards hanging off it and drooping 15 to 30 degrees, longer at the bottom, a flat whorl card
-	/// at each tier so it reads from above, and a spire of two crossed cards.  88 to 160 faces.
+	/// A snowy fir as the retail pines are made: a pale bark spike, a bare stretch of trunk, then
+	/// ten tiers a step or less apart, each one square whorl card centred on the trunk and folded along a diagonal
+	/// into a tent, the other two corners hanging 20 degrees at the bottom to 34 at the top, and a
+	/// tuft of two crossed cards on top.  32 to 36 faces.
 	inline void firMesh(int variant, TreeMesh &m)
 	{
 		m.vertices.clear();
 		m.indices.clear();
 		int salt = 0;
 		#define FIR_U() unit(hash(variant, salt++, SALT_ROCK + 4))
-		const float trunkBase[3] = { 0.0f, 0.0f, -0.05f }, trunkTop[3] = { 0.0f, 0.0f, 0.9f };
-		addLimb(m, trunkBase, trunkTop, 0.045f, 0.012f, 6, ATLAS_FIR_BARK);
-		const int tiers = 6 + (int)(hash(variant, 0, SALT_ROCK + 5) % 4);
-		const float lowest = 0.28f, highest = 0.8f;
+		const float leanAngle = 6.2831853f * FIR_U(), lean = FIR_LEAN * FIR_U();
+		const float trunkBase[3] = { 0.0f, 0.0f, -0.05f };
+		const float trunkTop[3] = { cosf(leanAngle) * lean, sinf(leanAngle) * lean, FIR_TOP_TIER + FIR_TUFT * 0.5f };
+		addLimb(m, trunkBase, trunkTop, FIR_TRUNK_RADIUS, 0.0f, 4, ATLAS_DEAD_BARK);
+		// the lowest tier's hanging corners at the bare height, so the droop hides none of it
+		const float bare = FIR_BARE_LOW + FIR_BARE_SPREAD * FIR_U() + FIR_REACH_LOW * tanf(FIR_DROOP_LOW);
+		int tiers = (int)((FIR_TOP_TIER - bare) / FIR_TIER_STEP + 1.5f);
+		tiers = tiers < FIR_TIERS_MIN ? FIR_TIERS_MIN : (tiers > FIR_TIERS_MAX ? FIR_TIERS_MAX : tiers);
 		for (int k = 0; k < tiers; ++k)
 		{
 			const float rise = (float)k / (tiers - 1);
-			const float z = lowest + (highest - lowest) * rise;
-			const float length = 0.32f * (1.0f - 0.72f * rise) * (0.9f + 0.2f * FIR_U());
-			const int branches = 5 + (int)(FIR_U() * 3.0f) % 3;
-			const float turn = 6.2831853f * FIR_U();
-			for (int b = 0; b < branches; ++b)
+			const float z = bare + (FIR_TOP_TIER - bare) * rise;
+			const float reach = FIR_REACH_LOW + (FIR_REACH_TOP - FIR_REACH_LOW) * rise;
+			const float droop = FIR_DROOP_LOW + (FIR_DROOP_TOP - FIR_DROOP_LOW) * rise;
+			// the trunk leans, so each tier follows it, plus its own small offset
+			const float offAngle = 6.2831853f * FIR_U(), off = FIR_TIER_OFFSET * FIR_U();
+			const float cx = trunkTop[0] * z + cosf(offAngle) * off, cy = trunkTop[1] * z + sinf(offAngle) * off;
+			const float yaw = 6.2831853f * FIR_U();
+			const unsigned short first = (unsigned short)m.vertices.size();
+			for (int corner = 0; corner < 4; ++corner)
 			{
-				const float yaw = turn + 6.2831853f * (b + 0.35f * (FIR_U() - 0.5f)) / branches;
-				const float droop = 0.26f + 0.26f * FIR_U();
-				const float c = cosf(yaw), s = sinf(yaw), cd = cosf(droop), sd = sinf(droop);
-				const float reach = length * (0.85f + 0.3f * FIR_U());
-				const float anchor[3] = { 0.0f, 0.0f, z };
-				const float across[3] = { c * cd * reach, s * cd * reach, -sd * reach };
-				const float down[3] = { -c * sd * reach, -s * sd * reach, -cd * reach };
-				// outward and up, so the tree's sun side is lit and its far side darker
-				const float normal[3] = { c * 0.6f, s * 0.6f, 0.8f };
-				addCellQuad(m, anchor, FIR_BRANCH_ROOT_U, FIR_BRANCH_ROOT_V, across, down, normal, ATLAS_FIR_BRANCH);
+				// corners 0 and 2 are the fold, 1 and 3 hang
+				const float a = yaw + 1.5707963f * corner, c = cosf(a), s = sinf(a);
+				const bool hangs = (corner & 1) != 0;
+				const float drop = hangs ? reach * tanf(droop) : 0.0f;
+				const float tilt = hangs ? droop : 0.0f;
+				TreeVertex t = { cx + c * reach, cy + s * reach, z - drop, c * sinf(tilt), s * sinf(tilt), cosf(tilt),
+					(corner == 1 || corner == 2) ? 1.0f : 0.0f, corner >= 2 ? 1.0f : 0.0f, ATLAS_FIR_WHORL };
+				m.vertices.push_back(t);
 			}
-			const float whorlYaw = 6.2831853f * FIR_U(), half = length * 0.95f;
-			const float wc = cosf(whorlYaw) * half * 2.0f, ws = sinf(whorlYaw) * half * 2.0f;
-			const float centre[3] = { 0.0f, 0.0f, z - 0.01f };
-			const float across[3] = { wc, ws, 0.0f }, down[3] = { ws, -wc, 0.0f }, up[3] = { 0.0f, 0.0f, 1.0f };
-			addCellQuad(m, centre, 0.5f, 0.5f, across, down, up, ATLAS_FIR_WHORL);
+			const unsigned short tri[6] = { first, (unsigned short)(first + 1), (unsigned short)(first + 2),
+				first, (unsigned short)(first + 2), (unsigned short)(first + 3) };
+			m.indices.insert(m.indices.end(), tri, tri + 6);
 		}
-		const float spireRoot[3] = { 0.0f, 0.0f, highest - 0.04f }, spireHeight = 1.0f - spireRoot[2];
-		const float spireYaw = 6.2831853f * FIR_U();
+		const float tuftYaw = 6.2831853f * FIR_U();
+		const float tuftRoot[3] = { trunkTop[0], trunkTop[1], FIR_TOP_TIER - FIR_TUFT * 0.25f };
 		for (int card = 0; card < 2; ++card)
 		{
-			const float a = spireYaw + 1.5707963f * card, c = cosf(a), s = sinf(a);
-			const float across[3] = { c * spireHeight, s * spireHeight, 0.0f }, down[3] = { 0.0f, 0.0f, -spireHeight };
+			const float a = tuftYaw + 1.5707963f * card, c = cosf(a), s = sinf(a);
+			const float across[3] = { c * FIR_TUFT, s * FIR_TUFT, 0.0f }, down[3] = { 0.0f, 0.0f, -FIR_TUFT };
 			const float normal[3] = { -s * 0.6f, c * 0.6f, 0.8f };
-			addCellQuad(m, spireRoot, 0.5f, 1.0f, across, down, normal, ATLAS_FIR_SPIRE);
+			addCellQuad(m, tuftRoot, 0.5f, 1.0f, across, down, normal, ATLAS_FIR_SPIRE);
 		}
 		#undef FIR_U
 	}

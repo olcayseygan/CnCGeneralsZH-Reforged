@@ -3167,7 +3167,11 @@ Int BaseHeightMapRenderObjClass::renderTreeShadowCasters(RenderInfoClass &sunInf
 	RTS3DScene *scene = (RTS3DScene *)Scene;
 	RefRenderObjListIterator lights(scene->getDynamicLights());
 	m_treeBuffer->drawTrees(sceneCamera, &lights, &sunInfo.Camera);
-	return m_treeBuffer->getSunCasterTrees() + m_treeBuffer->drawModelShadowCasters(sunInfo,cull);
+	Int casters = m_treeBuffer->getSunCasterTrees() + m_treeBuffer->drawModelShadowCasters(sunInfo,cull);
+	// the GroundFoliage option's upright pieces, as the screen drew them last; nothing with it off
+	if (m_grassBuffer)
+		casters += m_grassBuffer->drawGrassCasters(&sunInfo.Camera, Transform);
+	return casters;
 }
 
 void BaseHeightMapRenderObjClass::renderTrees(CameraClass * camera)

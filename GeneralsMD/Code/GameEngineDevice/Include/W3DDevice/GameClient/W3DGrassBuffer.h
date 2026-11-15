@@ -46,6 +46,7 @@ class TextureClass;
 class GeometryInfo;
 class Matrix3D;
 class Vector3;
+class AABoxClass;
 class W3DTreeBuffer;
 
 class W3DGrassBuffer
@@ -83,6 +84,10 @@ public:
 	/// Draw what is near the view's focus.  contentVersion is the terrain's: a change rebakes the chunks.
 	/// world is the terrain's transform, set only when something is drawn.
 	void drawGrass(CameraClass *camera, Int contentVersion, const Matrix3D &world);
+	/// Into the sun's map, from renderTreeShadowCasters with the sun's camera applied: every upright
+	/// piece of the chunks the screen drew last, as it drew them (same sway, same thinning, the atlas's
+	/// alpha cut), the flat cards left out.  Builds nothing.  Returns the pieces cast.
+	Int drawGrassCasters(CameraClass *sunCamera, const Matrix3D &world);
 	/// Device reset: everything the device holds goes; the next draw makes it again.
 	void freeGrassBuffers(void);
 
@@ -97,8 +102,9 @@ private:
 		MAX_DRAWN_THIN = 25000			///< cards (tufts, twigs, pebbles) drawn in a frame at most
 	};
 
-	/** One chunk's pieces, in its own buffers: first the ones that never thin (shrubs, rocks), then the
-		cards in rank order.  ends[i] is where piece i stops, indices in the low half, vertices in the high. */
+	/** One chunk's pieces, in its own buffers, by FoliagePlacement::PieceGroup: the big trees, the rest
+		that never thin, their flat ones, then the upright and the flat cards in rank order.  ends[i] is
+		where piece i stops, indices in the low half, vertices in the high. */
 	struct Slot
 	{
 		DX8VertexBufferClass *vb;
@@ -106,9 +112,9 @@ private:
 		Int vbCapacity;
 		Int ibCapacity;
 		Int key;							///< chunk index, -1 while free
-		Int farPieces;				///< the big trees, first in the buffers, all a chunk past GRASS_RADIUS draws
-		Int fixedPieces;			///< the pieces that never thin, the big trees among them
-		Int thinPieces;
+		Int groups[FoliagePlacement::PIECE_GROUPS];	///< pieces in each group
+		Int drawnThin;				///< upright cards the screen's last draw of it took, which the sun's map takes too
+		Bool drawnFarOnly;		///< and whether that draw was the far ring's, big trees alone
 		std::vector<UnsignedInt> ends;
 		UnsignedInt lastUsed;	///< m_drawFrame it was last drawn on
 		Bool dirty;
@@ -120,8 +126,7 @@ private:
 		Short x, y;
 		UnsignedByte piece;		///< FoliagePlacement::Piece
 		UnsignedByte k;				///< a tuft's slot
-		Bool thins;
-		Bool isFar;						///< FoliagePlacement::pieceFar (not "far": windef.h defines it)
+		UnsignedByte group;		///< FoliagePlacement::PieceGroup
 	};
 
 	BaseHeightMapRenderObjClass *m_terrain;
@@ -159,6 +164,13 @@ private:
 	UnsignedInt m_lastPhaseFrame;
 
 	Bool makeDeviceObjects(void);
+	Coord3D drawFocus(CameraClass *camera) const;
+	AABoxClass chunkBox(Int key) const;
+	/// The tree pass's states, the shader and its constants, for the screen or the sun's map.
+	void beginDraw(const Matrix3D &world, const Coord3D &focus, Bool sunPass);
+	void endDraw(void);
+	/// pieces first .. first + count - 1 of a slot, one draw
+	void drawPieces(const Slot &slot, Int first, Int count);
 	void dirtyCells(Int loX, Int loY, Int hiX, Int hiY);
 	void dirtyAll(void);
 	void buildChunk(Slot &slot, Int key);
@@ -174,7 +186,7 @@ private:
 	Bool addBush(Real x, Real y, Real yaw, Real radius, Real height, Int variant, Int atlasCell, Real sway,
 		const Vector3 &tint);
 	Bool addTreeMesh(const FoliagePlacement::TreeMesh &mesh, Real x, Real y, Real yaw, Real height,
-		const Vector3 &tint, Real dark, Real tipSnow = 0.0f);
+		const Vector3 &tint, Real dark);
 	void releaseSlot(Slot &slot);	///< its buffers gone, the slot free
 	Bool addRock(Real x, Real y, Real yaw, Real radius, Real stretch, Int variant, Int atlasCell,
 		Bool detailed, Real sink, const Vector3 &tint);

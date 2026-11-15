@@ -67,7 +67,10 @@ namespace FoliagePlacement
 		ATLAS_STUMP = 23,				///< rooted
 		ATLAS_DEAD_BARK = 24,		///< bleached dead wood, tiling
 		ATLAS_FIR_BARK = 25,		///< tiling
-		ATLAS_FIR_NEEDLES = 26	///< snowy needles: the cell's top is a tier's top
+		// 26 and 27 unused
+		ATLAS_FIR_BRANCH = 28,	///< a snowy branch from the side, hanging off the trunk at the cell's left middle
+		ATLAS_FIR_SPIRE = 30,		///< the top, bottom rooted
+		ATLAS_FIR_WHORL = 31		///< a tier's needle sprays from above, centred
 	};
 
 	/// A cell's bytes.
@@ -79,8 +82,19 @@ namespace FoliagePlacement
 		BYTE_FLAGS,
 		BYTE_CANOPY,		///< batched trees within GROVE_RADIUS of the cell's middle, 255 at most
 		BYTE_KIND,			///< the base tile's Bare in the low bits, and KIND_BORDER, KIND_HUG
+		BYTE_LIGHT,			///< how bright the ground's painting is, its tiles' average luminance, 0..255
 		CELL_BYTES
 	};
+
+	/// Ground this bright is open white snow: no undergrowth on it, which would sit on it as black
+	/// specks.  Patchy snow among grass stays under it and keeps its floor: Alpine Assault's grove
+	/// floor is 85% under 160, every Winter Wolf snow cell over it.
+	const int WHITE_GROUND = 160;
+
+	inline bool whiteGround(const unsigned char *cell)
+	{
+		return cell[BYTE_LIGHT] > WHITE_GROUND;
+	}
 
 	enum KindBits
 	{
@@ -418,6 +432,76 @@ namespace FoliagePlacement
 		return piece == PIECE_DEAD_TREE || piece == PIECE_FIR;
 	}
 
+	/// The cards lying flat on the ground.  Everything else stands up and casts into the sun's map;
+	/// a flat card's shadow would fall on the ground it already lies on.
+	inline bool pieceFlat(Piece piece)
+	{
+		return piece == PIECE_TWIGS || piece == PIECE_PEBBLES || piece == PIECE_LITTER || piece == PIECE_LOG;
+	}
+
+	/// Where a piece goes in a chunk's buffers, in this order: the big trees, the rest that never
+	/// thins, the flat ones of those, then the upright cards and the flat cards, each by rank.  A
+	/// chunk past the near ring draws the first group, the screen everything up to its thinning, the
+	/// sun's map every upright group.
+	enum PieceGroup
+	{
+		GROUP_FAR,
+		GROUP_FIXED,
+		GROUP_FIXED_FLAT,
+		GROUP_THIN,
+		GROUP_THIN_FLAT,
+		PIECE_GROUPS
+	};
+
+	inline PieceGroup pieceGroup(Piece piece)
+	{
+		if (pieceFar(piece))
+			return GROUP_FAR;
+		const bool flat = pieceFlat(piece);
+		if (pieceThins(piece))
+			return flat ? GROUP_THIN_FLAT : GROUP_THIN;
+		return flat ? GROUP_FIXED_FLAT : GROUP_FIXED;
+	}
+
+	/// The first piece of a group in a chunk laid out by PieceGroup.
+	inline int groupStart(const int groups[PIECE_GROUPS], int group)
+	{
+		int start = 0;
+		for (int g = 0; g < group; ++g)
+			start += groups[g];
+		return start;
+	}
+
+	struct PieceRange
+	{
+		int first, count;
+	};
+
+	/// What the screen draws of a chunk: everything that never thins, the first upright of its
+	/// upright cards and the first flat of its flat ones; past the near ring the big trees alone.
+	inline void screenRanges(const int groups[PIECE_GROUPS], bool farOnly, int upright, int flat, PieceRange out[2])
+	{
+		if (farOnly)
+		{
+			out[0].first = 0; out[0].count = groups[GROUP_FAR];
+			out[1].first = 0; out[1].count = 0;
+			return;
+		}
+		out[0].first = 0;
+		out[0].count = groupStart(groups, GROUP_THIN) + upright;
+		out[1].first = groupStart(groups, GROUP_THIN_FLAT);
+		out[1].count = flat;
+	}
+
+	/// What the sun's map takes of it: the screen's upright pieces, no flat one.
+	inline void casterRanges(const int groups[PIECE_GROUPS], bool farOnly, int upright, PieceRange out[2])
+	{
+		out[0].first = 0;
+		out[0].count = farOnly ? groups[GROUP_FAR] : groups[GROUP_FAR] + groups[GROUP_FIXED];
+		out[1].first = groupStart(groups, GROUP_THIN);
+		out[1].count = farOnly ? 0 : upright;
+	}
+
 	/// Dry ground a dead tree belongs on: desert and sand, and rock or dirt the class calls sandstone.
 	inline bool dryGround(const unsigned char *cell)
 	{
@@ -432,15 +516,15 @@ namespace FoliagePlacement
 		const unsigned char flags = cell[BYTE_FLAGS];
 		const bool foot = (flags & CF_CLIFF_FOOT) != 0;
 		const int trees = cell[BYTE_CANOPY];
-		// snow keeps its floor bare and white: no bush, fern, sapling, litter, log or stump on it, only
-		// firs and stones, or they sit on it as black specks
-		const bool ground = hasGround(cell) && cellBare(cell) != BARE_SNOW;
+		// open white snow keeps its floor bare: no bush, fern, sapling, litter, log or stump on it, only
+		// firs and stones, or they sit on it as black specks; patchy snow among grass keeps them
+		const bool ground = hasGround(cell) && !whiteGround(cell);
 		switch (piece)
 		{
 		// thickest where a field gives way to bare ground, in what grows at a cliff's foot and under
 		// a grove, and the odd dry scrub on desert and dirt, more where they meet grass
 		case PIECE_SHRUB:
-			if (cellBare(cell) == BARE_SNOW)
+			if (whiteGround(cell))
 				return 0.0f;
 			return cell[BYTE_GRASS] / 255.0f * ((flags & CF_EDGE) ? 0.45f : 0.08f)
 				+ ((foot && (cell[BYTE_GRASS] != 0 || cell[BYTE_TWIGS] != 0)) ? 0.20f : 0.0f)
@@ -706,47 +790,78 @@ namespace FoliagePlacement
 		#undef DT_U
 	}
 
-	/// A snowy fir: a short trunk and five or six stacked eight sided cones, wider at the bottom, the
-	/// needle cell's top at each tier's tip.  52 to 60 faces.
+	/// Where a branch card's branch meets the trunk, in the cell: x 7 and y 114 of 256.
+	const float FIR_BRANCH_ROOT_U = 7.0f / 256.0f;
+	const float FIR_BRANCH_ROOT_V = 114.0f / 256.0f;
+
+	/// One whole atlas cell as a quad: the cell's point (anchorU, anchorV) at anchor, across along
+	/// the cell's u, down along its v, every corner lit by normal (a unit vector).
+	inline void addCellQuad(TreeMesh &m, const float anchor[3], float anchorU, float anchorV, const float across[3],
+		const float down[3], const float normal[3], int cell)
+	{
+		const unsigned short first = (unsigned short)m.vertices.size();
+		for (int corner = 0; corner < 4; ++corner)
+		{
+			const float u = (corner == 1 || corner == 2) ? 1.0f : 0.0f, v = corner >= 2 ? 1.0f : 0.0f;
+			const float du = u - anchorU, dv = v - anchorV;
+			TreeVertex t = { anchor[0] + across[0] * du + down[0] * dv, anchor[1] + across[1] * du + down[1] * dv,
+				anchor[2] + across[2] * du + down[2] * dv, normal[0], normal[1], normal[2], u, v, cell };
+			m.vertices.push_back(t);
+		}
+		const unsigned short tri[6] = { first, (unsigned short)(first + 1), (unsigned short)(first + 2),
+			first, (unsigned short)(first + 2), (unsigned short)(first + 3) };
+		m.indices.insert(m.indices.end(), tri, tri + 6);
+	}
+
+	/// A snowy fir as the map's pines are made: a trunk, six to nine whorls of five to seven branch
+	/// cards hanging off it and drooping 15 to 30 degrees, longer at the bottom, a flat whorl card
+	/// at each tier so it reads from above, and a spire of two crossed cards.  88 to 160 faces.
 	inline void firMesh(int variant, TreeMesh &m)
 	{
 		m.vertices.clear();
 		m.indices.clear();
-		// the trunk shows under the lowest tier, which starts a quarter of the way up
-		const float trunkBase[3] = { 0.0f, 0.0f, -0.05f }, trunkTop[3] = { 0.0f, 0.0f, 0.42f };
-		addLimb(m, trunkBase, trunkTop, 0.05f, 0.028f, 6, ATLAS_FIR_BARK);
-		const int tiers = 5 + (int)(hash(variant, 0, SALT_ROCK + 4) & 1);
+		int salt = 0;
+		#define FIR_U() unit(hash(variant, salt++, SALT_ROCK + 4))
+		const float trunkBase[3] = { 0.0f, 0.0f, -0.05f }, trunkTop[3] = { 0.0f, 0.0f, 0.9f };
+		addLimb(m, trunkBase, trunkTop, 0.045f, 0.012f, 6, ATLAS_FIR_BARK);
+		const int tiers = 6 + (int)(hash(variant, 0, SALT_ROCK + 5) % 4);
+		const float lowest = 0.28f, highest = 0.8f;
 		for (int k = 0; k < tiers; ++k)
 		{
-			const float jitter = 0.9f + 0.2f * unit(hash(variant, k + 1, SALT_ROCK + 4));
-			const float base = 0.26f + k * (0.62f / tiers);
-			const float height = 0.34f - 0.025f * k;
-			const float r = 0.36f * (1.0f - 0.14f * k) * jitter;
-			const float turn = unit(hash(variant, k + 20, SALT_ROCK + 4));
-			const unsigned short first = (unsigned short)m.vertices.size();
-			for (int i = 0; i <= 8; ++i)
+			const float rise = (float)k / (tiers - 1);
+			const float z = lowest + (highest - lowest) * rise;
+			const float length = 0.32f * (1.0f - 0.72f * rise) * (0.9f + 0.2f * FIR_U());
+			const int branches = 5 + (int)(FIR_U() * 3.0f) % 3;
+			const float turn = 6.2831853f * FIR_U();
+			for (int b = 0; b < branches; ++b)
 			{
-				const float t = 6.2831853f * (i + turn) / 8.0f, c = cosf(t), s = sinf(t);
-				float n[3] = { c * height, s * height, r };
-				const float l = sqrtf(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
-				n[0] /= l; n[1] /= l; n[2] /= l;
-				TreeVertex ring = { c * r, s * r, base - 0.03f, n[0], n[1], n[2], (float)i / 8.0f, 1.0f, ATLAS_FIR_NEEDLES };
-				m.vertices.push_back(ring);
+				const float yaw = turn + 6.2831853f * (b + 0.35f * (FIR_U() - 0.5f)) / branches;
+				const float droop = 0.26f + 0.26f * FIR_U();
+				const float c = cosf(yaw), s = sinf(yaw), cd = cosf(droop), sd = sinf(droop);
+				const float reach = length * (0.85f + 0.3f * FIR_U());
+				const float anchor[3] = { 0.0f, 0.0f, z };
+				const float across[3] = { c * cd * reach, s * cd * reach, -sd * reach };
+				const float down[3] = { -c * sd * reach, -s * sd * reach, -cd * reach };
+				// outward and up, so the tree's sun side is lit and its far side darker
+				const float normal[3] = { c * 0.6f, s * 0.6f, 0.8f };
+				addCellQuad(m, anchor, FIR_BRANCH_ROOT_U, FIR_BRANCH_ROOT_V, across, down, normal, ATLAS_FIR_BRANCH);
 			}
-			for (int i = 0; i < 8; ++i)	// a tip over each face's middle
-			{
-				const float t = 6.2831853f * (i + 0.5f + turn) / 8.0f;
-				TreeVertex tip = { 0.0f, 0.0f, base + height, cosf(t) * 0.3f, sinf(t) * 0.3f, 0.95f, (i + 0.5f) / 8.0f, 0.0f,
-					ATLAS_FIR_NEEDLES };
-				m.vertices.push_back(tip);
-			}
-			for (int i = 0; i < 8; ++i)
-			{
-				const unsigned short tri[3] = { (unsigned short)(first + i), (unsigned short)(first + i + 1),
-					(unsigned short)(first + 9 + i) };
-				m.indices.insert(m.indices.end(), tri, tri + 3);
-			}
+			const float whorlYaw = 6.2831853f * FIR_U(), half = length * 0.95f;
+			const float wc = cosf(whorlYaw) * half * 2.0f, ws = sinf(whorlYaw) * half * 2.0f;
+			const float centre[3] = { 0.0f, 0.0f, z - 0.01f };
+			const float across[3] = { wc, ws, 0.0f }, down[3] = { ws, -wc, 0.0f }, up[3] = { 0.0f, 0.0f, 1.0f };
+			addCellQuad(m, centre, 0.5f, 0.5f, across, down, up, ATLAS_FIR_WHORL);
 		}
+		const float spireRoot[3] = { 0.0f, 0.0f, highest - 0.04f }, spireHeight = 1.0f - spireRoot[2];
+		const float spireYaw = 6.2831853f * FIR_U();
+		for (int card = 0; card < 2; ++card)
+		{
+			const float a = spireYaw + 1.5707963f * card, c = cosf(a), s = sinf(a);
+			const float across[3] = { c * spireHeight, s * spireHeight, 0.0f }, down[3] = { 0.0f, 0.0f, -spireHeight };
+			const float normal[3] = { -s * 0.6f, c * 0.6f, 0.8f };
+			addCellQuad(m, spireRoot, 0.5f, 1.0f, across, down, normal, ATLAS_FIR_SPIRE);
+		}
+		#undef FIR_U
 	}
 
 	inline int rockCell(Rock rock)

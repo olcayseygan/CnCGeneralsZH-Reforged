@@ -389,12 +389,18 @@ TEST(foliage_a_grove_has_a_thicket_and_a_lone_tree_a_fern)
 			dry += shrubCell(x, y, dryGrove) == ATLAS_SHRUB_SCRUB ? 1 : 0;
 	CHECK(dry < 900 / 10);
 	CHECK(coniferName("PTPine01") && coniferName("SnowFirTree") && !coniferName("PTOak01"));
-	// snow keeps its floor bare: nothing of a grove's floor, and no bush, even at a cliff's foot
-	const unsigned char snowGrove[CELL_BYTES] = { 120, 25, 40, CF_CLIFF_FOOT | CF_EDGE, 5, BARE_SNOW };
-	const Piece snowless[] = { PIECE_SHRUB, PIECE_LITTER, PIECE_FERN, PIECE_SAPLING, PIECE_LOG, PIECE_STUMP };
-	for (size_t i = 0; i < sizeof(snowless) / sizeof(snowless[0]); ++i)
-		CHECK_EQ(countPiece(snowless[i], snowGrove), 0);
-	CHECK(countPiece(PIECE_STONE, snowGrove) > 0);
+	// open white snow keeps its floor bare: nothing of a grove's floor, and no bush, even at a cliff's
+	// foot (Winter Wolf); patchy snow among grass under trees, as on Alpine, keeps its undergrowth
+	const unsigned char whiteSnow[CELL_BYTES] = { 120, 25, 40, CF_CLIFF_FOOT | CF_EDGE, 5, BARE_SNOW, 225 };
+	const unsigned char patchySnow[CELL_BYTES] = { 120, 25, 40, CF_CLIFF_FOOT | CF_EDGE, 5, BARE_SNOW, 150 };
+	const Piece undergrowth[] = { PIECE_SHRUB, PIECE_LITTER, PIECE_FERN, PIECE_SAPLING, PIECE_LOG, PIECE_STUMP };
+	for (size_t i = 0; i < sizeof(undergrowth) / sizeof(undergrowth[0]); ++i)
+	{
+		CHECK_EQ(countPiece(undergrowth[i], whiteSnow), 0);
+		CHECK(countPiece(undergrowth[i], patchySnow) > 0);
+	}
+	CHECK(countPiece(PIECE_STONE, whiteSnow) > 0);
+	CHECK(whiteGround(whiteSnow) && !whiteGround(patchySnow));
 }
 
 TEST(foliage_bush_dome_is_open_only_underneath)
@@ -451,6 +457,16 @@ TEST(foliage_big_trees_stand_only_where_no_unit_goes)
 	CHECK_EQ(countPiece(PIECE_FIR, snowHug), 0);	// the lane beside a cliff is open ground
 	CHECK(countPiece(PIECE_FIR, snowBorder) > countPiece(PIECE_DEAD_TREE, desertBorder));	// clumps, not loose groups
 	CHECK(pieceFar(PIECE_FIR) && pieceFar(PIECE_DEAD_TREE) && !pieceFar(PIECE_BOULDER));
+	// every upright piece casts into the sun's map, no flat card does
+	CHECK_EQ((int)pieceGroup(PIECE_FIR), (int)GROUP_FAR);
+	CHECK_EQ((int)pieceGroup(PIECE_SHRUB), (int)GROUP_FIXED);
+	CHECK_EQ((int)pieceGroup(PIECE_BOULDER), (int)GROUP_FIXED);
+	CHECK_EQ((int)pieceGroup(PIECE_LOG), (int)GROUP_FIXED_FLAT);
+	CHECK_EQ((int)pieceGroup(PIECE_TUFT), (int)GROUP_THIN);
+	CHECK_EQ((int)pieceGroup(PIECE_FERN), (int)GROUP_THIN);
+	CHECK_EQ((int)pieceGroup(PIECE_LITTER), (int)GROUP_THIN_FLAT);
+	CHECK_EQ((int)pieceGroup(PIECE_PEBBLES), (int)GROUP_THIN_FLAT);
+	CHECK_EQ((int)pieceGroup(PIECE_TWIGS), (int)GROUP_THIN_FLAT);
 	CHECK_EQ(countPiece(PIECE_FIR, desertBorder), 0);
 	CHECK_EQ(countPiece(PIECE_DEAD_TREE, snowHug), 0);
 	CHECK_EQ(countPiece(PIECE_DEAD_TREE, grassBorder), 0);
@@ -470,7 +486,7 @@ TEST(foliage_tree_meshes_are_whole_and_stand_on_their_root)
 		const int faces = (int)m.indices.size() / 3;
 		CHECK_EQ((int)m.indices.size() % 3, 0);
 		if (fir)
-			CHECK(faces >= 40 && faces <= 80);
+			CHECK(faces >= 88 && faces <= 160);
 		else
 			CHECK(faces >= 120 && faces <= 320);
 		for (size_t i = 0; i < m.indices.size(); ++i)
@@ -482,11 +498,97 @@ TEST(foliage_tree_meshes_are_whole_and_stand_on_their_root)
 			if (t.z > top) top = t.z;
 			if (t.z < low) low = t.z;
 			CHECK(t.u >= 0.0f && t.u <= 1.0f && t.v >= 0.0f && t.v <= 1.0f);
-			CHECK(fir ? (t.cell == ATLAS_FIR_BARK || t.cell == ATLAS_FIR_NEEDLES) : t.cell == ATLAS_DEAD_BARK);
+			CHECK(fir ? (t.cell == ATLAS_FIR_BARK || t.cell == ATLAS_FIR_BRANCH || t.cell == ATLAS_FIR_SPIRE
+				|| t.cell == ATLAS_FIR_WHORL) : t.cell == ATLAS_DEAD_BARK);
 			CHECK(fabsf(t.nx * t.nx + t.ny * t.ny + t.nz * t.nz - 1.0f) < 0.01f);
 		}
 		CHECK(top > 0.7f && top < 1.4f);
 		CHECK(low > -0.15f && low < 0.0f);	// the root just under the ground
+		if (!fir)
+			continue;
+		// every branch card's painted root on the trunk, its far end lower, a whorl a tier
+		int branches = 0, whorls = 0, spires = 0;
+		size_t trunk = 0;
+		while (trunk < m.vertices.size() && m.vertices[trunk].cell == ATLAS_FIR_BARK)
+			++trunk;
+		CHECK_EQ((m.vertices.size() - trunk) % 4, (size_t)0);
+		for (size_t q = trunk; q + 4 <= m.vertices.size(); q += 4)
+		{
+			const TreeVertex *c = &m.vertices[q];
+			if (c[0].cell == ATLAS_FIR_WHORL)
+			{
+				++whorls;
+				CHECK(c[0].z == c[2].z);
+				continue;
+			}
+			if (c[0].cell == ATLAS_FIR_SPIRE)
+			{
+				++spires;
+				CHECK(c[0].z > c[3].z);
+				continue;
+			}
+			++branches;
+			float root[3];
+			for (int k = 0; k < 3; ++k)
+			{
+				const float *p0 = &c[0].x, *p1 = &c[1].x, *p3 = &c[3].x;
+				root[k] = p0[k] + (p1[k] - p0[k]) * FIR_BRANCH_ROOT_U + (p3[k] - p0[k]) * FIR_BRANCH_ROOT_V;
+			}
+			CHECK(fabsf(root[0]) < 1e-4f && fabsf(root[1]) < 1e-4f);
+			CHECK(c[1].z < c[0].z);	// droops
+		}
+		CHECK(whorls >= 6 && whorls <= 9);
+		CHECK(branches >= whorls * 5 && branches <= whorls * 7);
+		CHECK_EQ(spires, 2);
+	}
+}
+
+TEST(foliage_screen_draws_every_piece_written_and_the_sun_every_upright_one)
+{
+	// group sizes with empty groups in every position, as chunks have them
+	const int layouts[][PIECE_GROUPS] = {
+		{ 0, 5, 2, 40, 30 }, { 3, 0, 0, 12, 0 }, { 0, 0, 0, 0, 7 }, { 2, 9, 0, 0, 4 }, { 0, 6, 1, 0, 0 },
+		{ 4, 0, 3, 8, 0 }, { 0, 0, 0, 0, 0 }, { 1, 1, 1, 1, 1 }
+	};
+	for (size_t l = 0; l < sizeof(layouts) / sizeof(layouts[0]); ++l)
+	{
+		const int *groups = layouts[l];
+		const int total = groupStart(groups, PIECE_GROUPS);
+		// the screen at full share: every piece once
+		std::vector<int> drawn(total, 0);
+		PieceRange screen[2];
+		screenRanges(groups, false, groups[GROUP_THIN], groups[GROUP_THIN_FLAT], screen);
+		for (int r = 0; r < 2; ++r)
+			for (int i = screen[r].first; i < screen[r].first + screen[r].count; ++i)
+			{
+				CHECK(i >= 0 && i < total);
+				if (i >= 0 && i < total)
+					++drawn[i];
+			}
+		for (int i = 0; i < total; ++i)
+			CHECK_EQ(drawn[i], 1);
+		// the bushes and rocks (GROUP_FIXED) are drawn whatever the thinning
+		screenRanges(groups, false, 0, 0, screen);
+		CHECK(screen[0].count >= groupStart(groups, GROUP_THIN));
+		// the sun: every upright piece the screen drew, no flat one
+		PieceRange sun[2];
+		casterRanges(groups, false, groups[GROUP_THIN], sun);
+		std::vector<int> cast(total, 0);
+		for (int r = 0; r < 2; ++r)
+			for (int i = sun[r].first; i < sun[r].first + sun[r].count; ++i)
+				if (i >= 0 && i < total)
+					++cast[i];
+		for (int g = 0; g < PIECE_GROUPS; ++g)
+		{
+			const bool flat = g == GROUP_FIXED_FLAT || g == GROUP_THIN_FLAT;
+			for (int i = groupStart(groups, g); i < groupStart(groups, g + 1); ++i)
+				CHECK_EQ(cast[i], flat ? 0 : 1);
+		}
+		// the far ring: the big trees alone, in both
+		screenRanges(groups, true, 0, 0, screen);
+		CHECK_EQ(screen[0].first, 0);
+		CHECK_EQ(screen[0].count, groups[GROUP_FAR]);
+		CHECK_EQ(screen[1].count, 0);
 	}
 }
 

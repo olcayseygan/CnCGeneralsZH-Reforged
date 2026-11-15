@@ -90,11 +90,10 @@ static_assert(BUSH_VARIANTS == 6 && BUSH_CORNERS == 37, "W3DGrassBuffer::m_bushC
 #define LITTER_GREY					0.4f		///< and how much of its saturation it loses
 #define LOG_HALF						6.0f		///< the log lies corner to corner, so about seventeen long
 #define DEAD_TREE_HEIGHT		29.0f		///< at scale one: two to three tanks, so it reads from the default camera
-#define FIR_BRIGHT					1.45f		///< the needles' light against the painting: as bright as the map's own pines
-#define FIR_GREEN						1.12f		///< and a little greener, as they are
-#define FIR_DARK						0.75f		///< the fir's side away from the sun: a cone that is not a black spike
-#define FIR_TIP_SNOW				0.55f		///< how far each tier's tip goes toward white
-#define FIR_HEIGHT					32.0f		///< at scale one: about the map's own pines
+#define FIR_BRIGHT					1.2f		///< the branch cards' light against the painting, which carries its own snow
+#define FIR_GREEN						1.05f		///< and a little greener, as the map's own pines are
+#define FIR_DARK						0.7f		///< the cards facing away from the sun
+#define FIR_HEIGHT					44.0f		///< at scale one: 33 to 55 over the scales, the retail pines' 29 to 54
 #define DEAD_BLEACH					1.3f		///< sun-bleached wood, over the bark painting
 #define TREE_SINK						0.5f		///< a trunk's foot under the ground
 #define BUSH_TINT						0.5f		///< how far a green bush takes the grass's hue under it
@@ -128,6 +127,7 @@ static_assert(BUSH_VARIANTS == 6 && BUSH_CORNERS == 37, "W3DGrassBuffer::m_bushC
 #define FOOTPRINT_MARGIN		3.0f
 #define DEFAULT_ROAD_WIDTH	30.0f
 #define GRASS_ALPHAREF			0x80		///< the atlas is straight alpha cut at a half
+#define GRASS_SUN_ALPHAREF	0x40		///< and in the sun's map, a quarter: endDraw invalidates the cached states, so the next draw sets its own
 
 // The tree pass's shader: opaque, alpha tested, both faces, writes depth.
 #define SC_GRASS ( SHADE_CNST(ShaderClass::PASS_LEQUAL, ShaderClass::DEPTH_WRITE_ENABLE, ShaderClass::COLOR_WRITE_ENABLE, ShaderClass::SRCBLEND_ONE, \
@@ -374,9 +374,9 @@ W3DGrassBuffer::W3DGrassBuffer(BaseHeightMapRenderObjClass *terrain) :
 		m_slots[i].vbCapacity = 0;
 		m_slots[i].ibCapacity = 0;
 		m_slots[i].key = -1;
-		m_slots[i].farPieces = 0;
-		m_slots[i].fixedPieces = 0;
-		m_slots[i].thinPieces = 0;
+		memset(m_slots[i].groups, 0, sizeof(m_slots[i].groups));
+		m_slots[i].drawnThin = 0;
+		m_slots[i].drawnFarOnly = FALSE;
 		m_slots[i].lastUsed = 0;
 		m_slots[i].dirty = FALSE;
 	}
@@ -458,9 +458,7 @@ void W3DGrassBuffer::clear(void)
 	m_width = m_height = m_border = m_chunksX = m_chunksY = 0;
 	for (Int i = 0; i < MAX_SLOTS; i++) {
 		m_slots[i].key = -1;
-		m_slots[i].farPieces = 0;
-		m_slots[i].fixedPieces = 0;
-		m_slots[i].thinPieces = 0;
+		memset(m_slots[i].groups, 0, sizeof(m_slots[i].groups));
 		m_slots[i].ends.clear();
 		m_slots[i].dirty = FALSE;
 	}
@@ -473,9 +471,7 @@ void W3DGrassBuffer::releaseSlot(Slot &slot)
 	slot.vbCapacity = 0;
 	slot.ibCapacity = 0;
 	slot.key = -1;
-	slot.farPieces = 0;
-	slot.fixedPieces = 0;
-	slot.thinPieces = 0;
+	memset(slot.groups, 0, sizeof(slot.groups));
 	slot.ends.clear();
 }
 
@@ -524,7 +520,7 @@ void W3DGrassBuffer::classify(WorldHeightMap *map, const W3DTreeBuffer *trees)
 	}
 
 	// tile -> what grows on it, through the tile's Terrain.ini class
-	struct TileInfo { UnsignedByte grass, stones, twigs, rock, known, bare; };
+	struct TileInfo { UnsignedByte grass, stones, twigs, rock, known, bare, light; };
 	TileInfo tileInfo[NUM_SOURCE_TILES];
 	memset(tileInfo, 0, sizeof(tileInfo));
 	const Int numClasses = min(map->m_numTextureClasses, (Int)NUM_TEXTURE_CLASSES);
@@ -547,6 +543,10 @@ void W3DGrassBuffer::classify(WorldHeightMap *map, const W3DTreeBuffer *trees)
 		info.bare = (UnsignedByte)bare;
 		for (Int t = classes[i].firstTile; t < classes[i].firstTile + classes[i].numTiles && t < NUM_SOURCE_TILES; t++) {
 			tileInfo[t] = info;
+			// the tile's painting mipped to one texel, as getTerrainColorAt reads it: its brightness
+			TileData *tile = map->getSourceTile(t);
+			const UnsignedByte *texel = tile ? tile->getRGBDataForWidth(1) : NULL;
+			tileInfo[t].light = texel ? (UnsignedByte)((texel[2] * 77 + texel[1] * 150 + texel[0] * 29) >> 8) : 0;	// BGRA
 		}
 	}
 	TileInfo none;
@@ -571,6 +571,7 @@ void W3DGrassBuffer::classify(WorldHeightMap *map, const W3DTreeBuffer *trees)
 			const UnsignedByte stones = blendMean(base.stones, hasOverlay, overlay.stones, hasExtra, extra.stones);
 			const UnsignedByte twigs = blendMean(base.twigs, hasOverlay, overlay.twigs, hasExtra, extra.twigs);
 			const UnsignedByte rock = base.known ? base.rock : overlay.rock;
+			const UnsignedByte light = blendMean(base.light, hasOverlay, overlay.light, hasExtra, extra.light);
 			const Bool cliff = map->getCliffState(x, y);
 			const Real h00 = map->getHeight(x, y) * MAP_HEIGHT_SCALE, h10 = map->getHeight(x + 1, y) * MAP_HEIGHT_SCALE;
 			const Real h01 = map->getHeight(x, y + 1) * MAP_HEIGHT_SCALE, h11 = map->getHeight(x + 1, y + 1) * MAP_HEIGHT_SCALE;
@@ -587,6 +588,7 @@ void W3DGrassBuffer::classify(WorldHeightMap *map, const W3DTreeBuffer *trees)
 				}
 				cell[BYTE_FLAGS] = rock;	// a cliff's foot may still gather stones of it
 				cell[BYTE_KIND] = kind;
+				cell[BYTE_LIGHT] = light;
 				continue;
 			}
 			if (TheTerrainLogic
@@ -595,6 +597,7 @@ void W3DGrassBuffer::classify(WorldHeightMap *map, const W3DTreeBuffer *trees)
 			}
 			cell[BYTE_FLAGS] = rock;
 			cell[BYTE_KIND] = kind;
+			cell[BYTE_LIGHT] = light;
 			if (cliff) {
 				// impassable: nothing grows, and the boulders gather at its foot; a gentle ledge
 				// holds the odd small stone
@@ -873,6 +876,18 @@ void W3DGrassBuffer::takeBreezeForDraw(void)
 		m_breezeForDraw = weatherBreezeInfo();
 	}
 	m_pauseForDraw = pause;
+	// the sway's phase walks here, once a client frame like the trees' (W3DTreeBuffer::drawTrees),
+	// before the sun's map and the screen both draw: the two take the same bend
+	const UnsignedInt now = TheGameClient ? TheGameClient->getFrame() : 0;
+	if (!pause && now != m_lastPhaseFrame) {
+		m_lastPhaseFrame = now;
+		const BreezeInfo &info = m_breezeForDraw;
+		const Real period = info.m_breezePeriod > 0 ? info.m_breezePeriod * SWAY_PERIOD_SHARE : (Real)LOGICFRAMES_PER_SECOND;
+		m_phase += 2.0f * PI / period;
+		if (m_phase > 2.0f * PI) {
+			m_phase -= 2.0f * PI;
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1022,7 +1037,7 @@ Bool W3DGrassBuffer::addBush(Real x, Real y, Real yaw, Real radius, Real height,
 	ground TREE_SINK into it, lit from its own normals.  Still: no sway and no fold. */
 //-------------------------------------------------------------------------------------------------
 Bool W3DGrassBuffer::addTreeMesh(const TreeMesh &mesh, Real x, Real y, Real yaw, Real height, const Vector3 &tint,
-	Real dark, Real tipSnow)
+	Real dark)
 {
 	if (m_vertices.size() + mesh.vertices.size() > MAX_CHUNK_VERTICES
 		|| m_indices.size() + mesh.indices.size() > MAX_CHUNK_INDICES) {
@@ -1036,14 +1051,7 @@ Bool W3DGrassBuffer::addTreeMesh(const TreeMesh &mesh, Real x, Real y, Real yaw,
 		Real u0, v0, u1, v1;
 		atlasCorners(t.cell, u0, v0, u1, v1);
 		Vector3 normal(t.nx * c - t.ny * s, t.nx * s + t.ny * c, t.nz);
-		UnsignedInt colour = lightRock(normal, tint, 1.0f, dark);
-		if (tipSnow > 0.0f && t.cell == ATLAS_FIR_NEEDLES && t.v == 0.0f) {
-			// snow lying on each tier's top
-			const Real r = ((colour >> 16) & 0xFF) + (245.0f - ((colour >> 16) & 0xFF)) * tipSnow;
-			const Real g = ((colour >> 8) & 0xFF) + (248.0f - ((colour >> 8) & 0xFF)) * tipSnow;
-			const Real b = (colour & 0xFF) + (255.0f - (colour & 0xFF)) * tipSnow;
-			colour = 0xFF000000u | (REAL_TO_UNSIGNEDINT(r) << 16) | (REAL_TO_UNSIGNEDINT(g) << 8) | REAL_TO_UNSIGNEDINT(b);
-		}
+		const UnsignedInt colour = lightRock(normal, tint, 1.0f, dark);
 		VertexFormatXYZNDUV1 v;
 		// its own height as the fold's target: a big tree never folds (it is drawn out to FAR_RADIUS,
 		// past the fold's ring), so it neither rises out of the ground nor flattens on a slope
@@ -1198,16 +1206,16 @@ Bool W3DGrassBuffer::addRock(Real x, Real y, Real yaw, Real radius, Real stretch
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Bake one chunk: the pieces that never thin first, then the cards in rank order, so drawing the
-	first n of those is an even thinning. */
+/** Bake one chunk, its pieces in PieceGroup order and the cards of each group by rank, so drawing
+	the first n of a group is an even thinning. */
 //-------------------------------------------------------------------------------------------------
 void W3DGrassBuffer::buildChunk(Slot &slot, Int key)
 {
 	slot.key = key;
 	slot.dirty = FALSE;
-	slot.farPieces = 0;
-	slot.fixedPieces = 0;
-	slot.thinPieces = 0;
+	memset(slot.groups, 0, sizeof(slot.groups));
+	slot.drawnThin = 0;
+	slot.drawnFarOnly = FALSE;
 	slot.ends.clear();
 
 	const Int cx = key % m_chunksX, cy = key / m_chunksX;
@@ -1225,8 +1233,7 @@ void W3DGrassBuffer::buildChunk(Slot &slot, Int key)
 					cp.rank = placeTuft(x, y, k).rank;
 					cp.piece = PIECE_TUFT;
 					cp.k = (UnsignedByte)k;
-					cp.thins = TRUE;
-					cp.isFar = FALSE;
+					cp.group = (UnsignedByte)pieceGroup(PIECE_TUFT);
 					m_scratch.push_back(cp);
 				}
 			}
@@ -1235,8 +1242,7 @@ void W3DGrassBuffer::buildChunk(Slot &slot, Int key)
 					cp.rank = placeTuft(x, y, pieceSlot((Piece)p)).rank;
 					cp.piece = (UnsignedByte)p;
 					cp.k = 0;
-					cp.thins = pieceThins((Piece)p);
-					cp.isFar = pieceFar((Piece)p);
+					cp.group = (UnsignedByte)pieceGroup((Piece)p);
 					m_scratch.push_back(cp);
 				}
 			}
@@ -1245,10 +1251,10 @@ void W3DGrassBuffer::buildChunk(Slot &slot, Int key)
 	if (m_scratch.empty()) {
 		return;
 	}
-	// the big trees first (all a far chunk draws), then what never thins, then the cards by rank
+	// by group: the big trees first (all a far chunk draws), what never thins, its flat ones, then the
+	// upright and the flat cards, each by rank
 	std::sort(m_scratch.begin(), m_scratch.end(), [](const ChunkPiece &a, const ChunkPiece &b) {
-		if (a.isFar != b.isFar) return a.isFar;
-		if (a.thins != b.thins) return !a.thins;
+		if (a.group != b.group) return a.group < b.group;
 		if (a.rank != b.rank) return a.rank < b.rank;
 		if (a.y != b.y) return a.y < b.y;
 		if (a.x != b.x) return a.x < b.x;
@@ -1328,7 +1334,7 @@ void W3DGrassBuffer::buildChunk(Slot &slot, Int key)
 			break;
 		case PIECE_FIR:
 			added = addTreeMesh(m_firs[variant % FIR_VARIANTS], wx, wy, t.yaw * 4.0f, FIR_HEIGHT * t.scale,
-				Vector3(FIR_BRIGHT, FIR_BRIGHT * FIR_GREEN, FIR_BRIGHT), FIR_DARK, FIR_TIP_SNOW);
+				Vector3(FIR_BRIGHT, FIR_BRIGHT * FIR_GREEN, FIR_BRIGHT), FIR_DARK);
 			break;
 		case PIECE_LOG:
 			added = addFlat(wx, wy, t.yaw * 4.0f, LOG_HALF * t.scale, ATLAS_LOG, lightOn(cellNormal(map, cp.x, cp.y, 0.0f), 1.0f));
@@ -1358,14 +1364,7 @@ void W3DGrassBuffer::buildChunk(Slot &slot, Int key)
 			break;	// the chunk is full: what is left is the last of the cards by rank
 		}
 		slot.ends.push_back((UnsignedInt)m_indices.size() | ((UnsignedInt)m_vertices.size() << 16));
-		if (cp.thins) {
-			slot.thinPieces++;
-		} else {
-			slot.fixedPieces++;
-			if (cp.isFar) {
-				slot.farPieces++;
-			}
-		}
+		slot.groups[cp.group]++;
 	}
 	if (!uploadChunk(slot)) {
 		releaseSlot(slot);	// a device that has gone away: the next bake makes new buffers
@@ -1411,8 +1410,8 @@ Bool W3DGrassBuffer::uploadChunk(Slot &slot)
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Draw what lies near the tactical view's focus.  From renderTrees, after the trees: never the sun
-	pass (none of it casts) and never the water's mirror. */
+/** Draw what lies near the tactical view's focus.  From renderTrees, after the trees; never the water's
+	mirror.  The sun's map takes the same chunks through drawGrassCasters. */
 //-------------------------------------------------------------------------------------------------
 void W3DGrassBuffer::drawGrass(CameraClass *camera, Int contentVersion, const Matrix3D &world)
 {
@@ -1444,23 +1443,8 @@ void W3DGrassBuffer::drawGrass(CameraClass *camera, Int contentVersion, const Ma
 		m_swayDirY = dirY;
 		dirtyAll();
 	}
-	const UnsignedInt now = TheGameClient ? TheGameClient->getFrame() : 0;
-	if (!m_pauseForDraw && now != m_lastPhaseFrame) {
-		m_lastPhaseFrame = now;
-		const Real period = info.m_breezePeriod > 0 ? info.m_breezePeriod * SWAY_PERIOD_SHARE : (Real)LOGICFRAMES_PER_SECOND;
-		m_phase += 2.0f * PI / period;
-		if (m_phase > 2.0f * PI) {
-			m_phase -= 2.0f * PI;
-		}
-	}
 
-	Coord3D focus;
-	if (TheTacticalView) {
-		TheTacticalView->getPosition(&focus);
-	} else {
-		const Vector3 eye = camera->Get_Position();
-		focus.set(eye.X, eye.Y, 0.0f);
-	}
+	const Coord3D focus = drawFocus(camera);
 
 	// the chunks within the radius and in the frustum, nearest first; past GRASS_RADIUS, out to
 	// FAR_RADIUS, only those holding a big tree, which is all they draw
@@ -1470,7 +1454,6 @@ void W3DGrassBuffer::drawGrass(CameraClass *camera, Int contentVersion, const Ma
 	Int numNear = 0;
 	const Real chunkWorld = CHUNK_CELLS * MAP_XY_FACTOR;
 	const Real origin = -m_border * MAP_XY_FACTOR;
-	const Real minZ = m_terrain->getMinHeight(), maxZ = m_terrain->getMaxHeight() + FIR_HEIGHT * 1.5f;
 	const Int cx0 = max(0, (Int)floorf((focus.x - FAR_RADIUS - origin) / chunkWorld));
 	const Int cy0 = max(0, (Int)floorf((focus.y - FAR_RADIUS - origin) / chunkWorld));
 	const Int cx1 = min(m_chunksX - 1, (Int)floorf((focus.x + FAR_RADIUS - origin) / chunkWorld));
@@ -1485,10 +1468,7 @@ void W3DGrassBuffer::drawGrass(CameraClass *camera, Int contentVersion, const Ma
 			if (dist > FAR_RADIUS || (dist > GRASS_RADIUS && (m_chunkFar.empty() || !m_chunkFar[key]))) {
 				continue;
 			}
-			// past the chunk's edge by what its firs' tiers and dead trees' branches reach over it
-			AABoxClass box(Vector3(x0 + chunkWorld * 0.5f, y0 + chunkWorld * 0.5f, (minZ + maxZ) * 0.5f),
-				Vector3(chunkWorld * 0.5f + BIG_MESH_REACH, chunkWorld * 0.5f + BIG_MESH_REACH, (maxZ - minZ) * 0.5f + 1.0f));
-			if (camera->Cull_Box(box)) {
+			if (camera->Cull_Box(chunkBox(key))) {
 				continue;
 			}
 			nearby[numNear].key = key;
@@ -1545,11 +1525,13 @@ void W3DGrassBuffer::drawGrass(CameraClass *camera, Int contentVersion, const Ma
 			continue;
 		}
 		slot->lastUsed = m_drawFrame;
-		if (slot->fixedPieces + slot->thinPieces == 0) {
+		slot->drawnThin = 0;
+		slot->drawnFarOnly = nearby[n].dist > GRASS_RADIUS;
+		if (slot->ends.empty()) {
 			continue;
 		}
-		if (nearby[n].dist > GRASS_RADIUS) {
-			if (slot->farPieces == 0) {
+		if (slot->drawnFarOnly) {
+			if (slot->groups[GROUP_FAR] == 0) {
 				continue;
 			}
 			draw[numDraw] = slot;
@@ -1561,7 +1543,7 @@ void W3DGrassBuffer::drawGrass(CameraClass *camera, Int contentVersion, const Ma
 		s = WWMath::Clamp(s, GRASS_MIN_SHARE, 1.0f);
 		draw[numDraw] = slot;
 		share[numDraw] = s;
-		wantedThin += (Int)(slot->thinPieces * s + 0.5f);
+		wantedThin += (Int)((slot->groups[GROUP_THIN] + slot->groups[GROUP_THIN_FLAT]) * s + 0.5f);
 		numDraw++;
 	}
 	if (numDraw == 0) {
@@ -1569,9 +1551,135 @@ void W3DGrassBuffer::drawGrass(CameraClass *camera, Int contentVersion, const Ma
 	}
 	const Real budget = wantedThin > MAX_DRAWN_THIN ? (Real)MAX_DRAWN_THIN / wantedThin : 1.0f;
 
-	// The tree pass's states, constants and shroud (W3DTreeBuffer::drawTrees).  The world matrix is
-	// the terrain's, set only here, past every way out, so a frame without grass sets nothing: apply
-	// before reading the transforms back, or the device hands over whatever was drawn last.
+	beginDraw(world, focus, FALSE);
+	for (Int n = 0; n < numDraw; n++) {
+		Slot &slot = *draw[n];
+		// everything that never thins, the upright cards' share of their group, then the flat cards'
+		Int upright = 0, flat = 0;
+		if (share[n] >= 0.0f) {
+			upright = min(slot.groups[GROUP_THIN], (Int)(slot.groups[GROUP_THIN] * share[n] * budget + 0.5f));
+			flat = min(slot.groups[GROUP_THIN_FLAT], (Int)(slot.groups[GROUP_THIN_FLAT] * share[n] * budget + 0.5f));
+		}
+		slot.drawnThin = upright;
+		PieceRange ranges[2];
+		screenRanges(slot.groups, share[n] < 0.0f, upright, flat, ranges);
+		drawPieces(slot, ranges[0].first, ranges[0].count);
+		drawPieces(slot, ranges[1].first, ranges[1].count);
+	}
+	endDraw();
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The sun's map.  The chunks the screen drew last are the ones round the view, which is what the
+	sun's box covers; each casts what the screen showed of it, the flat cards left out, through the
+	same program, sway and fold, so a tuft's shadow is that tuft.  The pixel side is the screen's: the
+	atlas's alpha tested at GRASS_ALPHAREF, so a tuft casts its blades and not its card. */
+//-------------------------------------------------------------------------------------------------
+Int W3DGrassBuffer::drawGrassCasters(CameraClass *sunCamera, const Matrix3D &world)
+{
+	if (!drawable() || !m_anyFoliage || sunCamera == NULL || m_vertexShader == NULL || m_texture == NULL
+		|| m_terrain == NULL || m_terrain->getMap() == NULL) {
+		return 0;
+	}
+	Slot *cast[MAX_SLOTS];
+	Int numCast = 0;
+	for (Int i = 0; i < MAX_SLOTS; i++) {
+		Slot &slot = m_slots[i];
+		if (slot.key < 0 || slot.lastUsed != m_drawFrame || slot.ends.empty()) {
+			continue;
+		}
+		if (sunCamera->Cull_Box(chunkBox(slot.key))) {
+			continue;	// a far ring chunk the sun's box does not reach
+		}
+		cast[numCast++] = &slot;
+	}
+	if (numCast == 0) {
+		return 0;
+	}
+	Int pieces = 0;
+	beginDraw(world, drawFocus(NULL), TRUE);
+	for (Int n = 0; n < numCast; n++) {
+		Slot &slot = *cast[n];
+		PieceRange ranges[2];
+		casterRanges(slot.groups, slot.drawnFarOnly, slot.drawnThin, ranges);
+		drawPieces(slot, ranges[0].first, ranges[0].count);
+		drawPieces(slot, ranges[1].first, ranges[1].count);
+		pieces += ranges[0].count + ranges[1].count;
+	}
+	endDraw();
+	return pieces;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Where the fold's ring is centred: the tactical view's focus on the ground. */
+//-------------------------------------------------------------------------------------------------
+Coord3D W3DGrassBuffer::drawFocus(CameraClass *camera) const
+{
+	Coord3D focus;
+	focus.set(0.0f, 0.0f, 0.0f);
+	if (TheTacticalView) {
+		TheTacticalView->getPosition(&focus);
+	} else if (camera) {
+		const Vector3 eye = camera->Get_Position();
+		focus.set(eye.X, eye.Y, 0.0f);
+	}
+	return focus;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A chunk's box: its cells, the ground's whole height range and the tallest fir over it, and past
+	its edge by what a fir's tiers or a dead tree's branches lean over it. */
+//-------------------------------------------------------------------------------------------------
+AABoxClass W3DGrassBuffer::chunkBox(Int key) const
+{
+	const Real chunkWorld = CHUNK_CELLS * MAP_XY_FACTOR;
+	const Real origin = -m_border * MAP_XY_FACTOR;
+	const Real x0 = origin + (key % m_chunksX) * chunkWorld, y0 = origin + (key / m_chunksX) * chunkWorld;
+	const Real minZ = m_terrain->getMinHeight(), maxZ = m_terrain->getMaxHeight() + FIR_HEIGHT * 1.5f;
+	return AABoxClass(Vector3(x0 + chunkWorld * 0.5f, y0 + chunkWorld * 0.5f, (minZ + maxZ) * 0.5f),
+		Vector3(chunkWorld * 0.5f + BIG_MESH_REACH, chunkWorld * 0.5f + BIG_MESH_REACH, (maxZ - minZ) * 0.5f + 1.0f));
+}
+
+void W3DGrassBuffer::drawPieces(const Slot &slot, Int first, Int count)
+{
+	if (count <= 0 || first < 0 || first + count > (Int)slot.ends.size()) {
+		return;
+	}
+	const Int startIndex = first == 0 ? 0 : (Int)(slot.ends[first - 1] & 0xFFFF);
+	const UnsignedInt end = slot.ends[first + count - 1];
+	const Int indices = (Int)(end & 0xFFFF) - startIndex, vertices = (Int)(end >> 16);
+	if (indices <= 0) {
+		return;
+	}
+	DX8Wrapper::Set_Index_Buffer(slot.ib, 0);
+	DX8Wrapper::Set_Vertex_Buffer(slot.vb);
+	DX8Wrapper::Apply_Render_State_Changes();
+	// the declaration beside the shader, every draw: the FVF the buffer set has no slot the sway
+	// rides in (the w3d-renderer rule's black-trees trap)
+	LPDIRECT3DDEVICE9 dev = DX8Wrapper::_Get_D3D_Device();
+	if (dev) {
+		dev->SetVertexDeclaration(m_vertexDeclaration);
+	}
+	DX8Wrapper::Set_Vertex_Shader(m_vertexShader);
+	DX8Wrapper::Draw_Triangles(startIndex, indices / 3, 0, vertices);
+}
+
+void W3DGrassBuffer::endDraw(void)
+{
+	DX8Wrapper::Set_Vertex_Format(DX8_FVF_XYZNDUV1);
+	DX8Wrapper::Set_Pixel_Shader(NULL);
+	DX8Wrapper::Invalidate_Cached_Render_States();	// the alpha reference and the stages went in behind the wrapper
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The tree pass's states, constants and shroud (W3DTreeBuffer::drawTrees), the screen's and the
+	sun's map's alike but for the shroud, which a shadow's shape never takes.  The world matrix is the
+	terrain's, set only here, past every way out, so a frame without grass sets nothing: apply before
+	reading the transforms back, or the device hands over whatever was drawn last. */
+//-------------------------------------------------------------------------------------------------
+void W3DGrassBuffer::beginDraw(const Matrix3D &world, const Coord3D &focus, Bool sunPass)
+{
+	const BreezeInfo &info = m_breezeForDraw;
 	DX8Wrapper::Set_Transform(D3DTS_WORLD, world);
 	DX8Wrapper::Apply_Render_State_Changes();
 	D3DXMATRIX mat, matProj, matView, matWorld;
@@ -1588,9 +1696,13 @@ void W3DGrassBuffer::drawGrass(CameraClass *camera, Int contentVersion, const Ma
 	DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_TEXCOORDINDEX, 0);
 	DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_TEXCOORDINDEX, 1);
 	DX8Wrapper::Apply_Render_State_Changes();
-	W3DShaderManager::setShroudTex(1);
-	DX8Wrapper::Apply_Render_State_Changes();
-	DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHAREF, GRASS_ALPHAREF);
+	if (!sunPass) {
+		W3DShaderManager::setShroudTex(1);
+		DX8Wrapper::Apply_Render_State_Changes();
+	}
+	// the sun's map is coarser than the screen, so a tuft there reads a smaller mip whose averaged
+	// alpha falls under the screen's cut: cut lower, or the shadow comes out thin and blotchy
+	DX8Wrapper::Set_DX8_Render_State(D3DRS_ALPHAREF, sunPass ? GRASS_SUN_ALPHAREF : GRASS_ALPHAREF);
 
 	// c4 world-view-projection, c8 still (rocks and flat cards), c9..c18 the sway, c19/c20 the fold
 	// (Direct3D 11's program only), c32/c33 the shroud
@@ -1621,30 +1733,4 @@ void W3DGrassBuffer::drawGrass(CameraClass *camera, Int contentVersion, const Ma
 		DX8Wrapper::Set_Vertex_Shader_Constant(32, &offset, 1);
 		DX8Wrapper::Set_Vertex_Shader_Constant(33, &offset, 1);
 	}
-
-	LPDIRECT3DDEVICE9 dev = DX8Wrapper::_Get_D3D_Device();
-	for (Int n = 0; n < numDraw; n++) {
-		const Slot &slot = *draw[n];
-		const Int thin = share[n] < 0.0f ? 0 : min(slot.thinPieces, (Int)(slot.thinPieces * share[n] * budget + 0.5f));
-		const Int pieces = share[n] < 0.0f ? slot.farPieces : slot.fixedPieces + thin;
-		if (pieces <= 0 || pieces > (Int)slot.ends.size()) {
-			continue;
-		}
-		const UnsignedInt end = slot.ends[pieces - 1];
-		const Int indices = (Int)(end & 0xFFFF), vertices = (Int)(end >> 16);
-		DX8Wrapper::Set_Index_Buffer(slot.ib, 0);
-		DX8Wrapper::Set_Vertex_Buffer(slot.vb);
-		DX8Wrapper::Apply_Render_State_Changes();
-		// the declaration beside the shader, every draw: the FVF the buffer set has no slot the
-		// sway rides in (the w3d-renderer rule's black-trees trap)
-		if (dev) {
-			dev->SetVertexDeclaration(m_vertexDeclaration);
-		}
-		DX8Wrapper::Set_Vertex_Shader(m_vertexShader);
-		DX8Wrapper::Draw_Triangles(0, indices / 3, 0, vertices);
-	}
-
-	DX8Wrapper::Set_Vertex_Format(DX8_FVF_XYZNDUV1);
-	DX8Wrapper::Set_Pixel_Shader(NULL);
-	DX8Wrapper::Invalidate_Cached_Render_States();	// the alpha reference and the stages went in behind the wrapper
 }

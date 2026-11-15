@@ -160,6 +160,9 @@ Color LobbyTextColorOn(Color fill);
 // A taken start spot over EA's PlayerStart drawn in this rectangle: its middle in the colour and its
 // ring as EA drew it.  The room's spot buttons and the load screen's map both draw it.
 void LobbyStartSpotFill(Int x, Int y, Int width, Int height, Color fill);
+// A seat's colour or team swatch as the room draws it: the rules page's empty check box with the
+// colour inside its hole.  The score screen's team bands draw it too.
+void LobbySwatchFill(Int x, Int y, Int width, Int height, Color fill);
 // The map pickers' Official / Unofficial radio buttons drawn as UIStyle tabs: the open one's label
 // ACTIVE, a disabled one's MUTED.  The pickers' init sets it as both buttons' draw function.
 void DrawMapListTab(GameWindow *window, class WinInstanceData *instData);

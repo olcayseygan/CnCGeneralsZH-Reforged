@@ -122,6 +122,26 @@ namespace UIStyle
 	/// a name in capitals whatever the language, so a map's English name keeps its plain I in Turkish
 	UnicodeString nameCapitals( const UnicodeString &name );
 
+	/// how wide text is, for abbreviate: a font's width on screen, or a test's own rule
+	typedef Int (*TextMeasure)( const UnicodeString &text, void *context );
+	/** The longest form of a label that fits widest, so no text ever overlaps another: the text
+		* whole; else shortForm (a hand-written short form, may be empty); else the language's own
+		* abbreviation (a word cut after a consonant and before a vowel with a period, the first
+		* syllable kept, never after a soft sign, a short i or a soft g; English drops inner vowels
+		* first; of several words the longest goes first and the last word last); else the text cut
+		* with an ellipsis, never past its first letter.  words FALSE skips the shortening (a player's
+		* name is only ever cut with the ellipsis); a word that is also a word of keep (a name inside a
+		* sentence) is never shortened.  language is a TextLanguage. */
+	UnicodeString abbreviate( const UnicodeString &text, const UnicodeString &shortForm, Int widest, Int language,
+		TextMeasure measure, void *context, Bool words = TRUE, const UnicodeString &keep = UnicodeString::TheEmptyString );
+	/// abbreviate in font for the text language the game shows
+	UnicodeString fitText( const UnicodeString &text, GameFont *font, Int widest,
+		const UnicodeString &shortForm = UnicodeString::TheEmptyString, const UnicodeString &keep = UnicodeString::TheEmptyString );
+	/// the string of key fitted in font, its "<key>_Short" form tried before the automatic one
+	UnicodeString fitKey( const char *key, GameFont *font, Int widest );
+	/// a player's name fitted in font: whole, or cut with an ellipsis, never abbreviated
+	UnicodeString fitName( const UnicodeString &name, GameFont *font, Int widest );
+
 	/// a house colour lifted toward white where it is too dark to read as words on a panel
 	Color readable( Color player );
 	Color withAlpha( Color color, Int alpha );

@@ -25000,6 +25000,7 @@ TEST(game_speed_set_to_200_and_back_reads_what_it_read)
 #include "test_map_ini_rollback.inc"
 #include "test_hostile_map.inc"
 #include "test_pathfind_slicing.inc"
+#include "test_score_screen.inc"
 
 #include "GameClient/Snow.h"
 

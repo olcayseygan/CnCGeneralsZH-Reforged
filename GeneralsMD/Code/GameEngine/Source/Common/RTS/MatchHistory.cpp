@@ -66,8 +66,10 @@ static Bool isPlayed( const Player *player )
 //-------------------------------------------------------------------------------------------------
 struct MatchCount
 {
+	const Player *player;
 	Int army;
 	Int buildings;
+	Int armyValue;
 };
 
 static void countStanding( Object *obj, void *userData )
@@ -81,6 +83,8 @@ static void countStanding( Object *obj, void *userData )
 			++count->buildings;
 		return;
 	}
+	// the spectator rack's army value: workers count, at the owner's price
+	count->armyValue += obj->getTemplate()->calcCostToBuild( count->player );
 	if( obj->isKindOf( KINDOF_DOZER ) || obj->isKindOf( KINDOF_HARVESTER ) )
 		return;
 	if( obj->isKindOf( KINDOF_INFANTRY ) || obj->isKindOf( KINDOF_VEHICLE ) || obj->isKindOf( KINDOF_AIRCRAFT ) )
@@ -112,7 +116,7 @@ void MatchHistory::sample( UnsignedInt frame )
 		Player *player = ThePlayerList->getNthPlayer( index );
 		if( !isPlayed( player ) )
 			continue;
-		MatchCount count = { 0, 0 };
+		MatchCount count = { player, 0, 0, 0 };
 		player->iterateObjects( countStanding, &count );
 		Int *values = m_values[ sampleIndex ][ index ];
 		values[ MATCH_SERIES_EARNED ] = player->getScoreKeeper()->getTotalMoneyEarned();
@@ -121,6 +125,9 @@ void MatchHistory::sample( UnsignedInt frame )
 		values[ MATCH_SERIES_BUILDINGS ] = count.buildings;
 		values[ MATCH_SERIES_POWER ] = player->getEnergy()->getProduction();
 		values[ MATCH_SERIES_LOST ] = player->getScoreKeeper()->getTotalUnitsLost();
+		values[ MATCH_SERIES_ARMY_VALUE ] = count.armyValue;
+		values[ MATCH_SERIES_VALUE_DESTROYED ] = player->getScoreKeeper()->getUnitValueDestroyed();
+		values[ MATCH_SERIES_VALUE_LOST ] = player->getScoreKeeper()->getUnitValueLost();
 		m_sampled[ index ] = TRUE;
 	}
 }
@@ -147,8 +154,8 @@ void MatchHistory::update( UnsignedInt frame )
 void MatchHistory::addEvent( UnsignedInt frame, Int player, MatchEventType type, const ThingTemplate *thing, const SpecialPowerTemplate *power, Int rank )
 {
 	// a promotion goes in past the cap: there are at most nine a player, and the late ones are the
-	// ones a long match fills the list before
-	if( m_events.size() >= MAX_EVENTS && type != MATCH_EVENT_RANK )
+	// ones a long match fills the list before; a defeat comes once a player
+	if( m_events.size() >= MAX_EVENTS && type != MATCH_EVENT_RANK && type != MATCH_EVENT_DEFEATED )
 		return;
 	MatchEvent event;
 	event.frame = frame;
@@ -206,4 +213,26 @@ void MatchHistory::notePower( const Player *player, const SpecialPowerTemplate *
 		addEvent( TheGameLogic->getFrame(), index, MATCH_EVENT_SUPERWEAPON_FIRED, source, power, 0 );
 	else if( power->getRequiredScience() != SCIENCE_INVALID )
 		addEvent( TheGameLogic->getFrame(), index, MATCH_EVENT_POWER, source, power, 0 );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The victory check marks each player eliminated once; a seat empty from the start (frame 0 or 1)
+	* was never in the match and leaves no event. */
+//-------------------------------------------------------------------------------------------------
+void MatchHistory::noteDefeated( const Player *player )
+{
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	if( player == NULL || !isPlayed( player ) || frame <= 1 || getDefeatFrame( player->getPlayerIndex() ) != 0 )
+		return;
+	addEvent( frame, player->getPlayerIndex(), MATCH_EVENT_DEFEATED, NULL, NULL, 0 );
+}
+
+UnsignedInt MatchHistory::getDefeatFrame( Int player ) const
+{
+	for( size_t each = 0; each < m_events.size(); each++ )
+	{
+		if( m_events[ each ].type == MATCH_EVENT_DEFEATED && m_events[ each ].player == player )
+			return m_events[ each ].frame;
+	}
+	return 0;
 }

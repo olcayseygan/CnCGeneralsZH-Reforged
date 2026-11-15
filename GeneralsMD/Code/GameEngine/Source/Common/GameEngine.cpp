@@ -2996,7 +2996,7 @@ static void updateHeadlessRun( void )
 	/* The score screen's graphs as numbers, for whatever reads a match afterwards (the Bot Cup's
 		 overlays): every sample, every player's build order and every event, one line each, the
 		 player being the list index the PLAYER lines use.  The display name runs to the line's end. */
-	static const char *const MATCH_EVENT_WORDS[ MATCH_EVENT_TYPE_COUNT ] = { "built", "fired", "power", "rank" };
+	static const char *const MATCH_EVENT_WORDS[ MATCH_EVENT_TYPE_COUNT ] = { "built", "fired", "power", "rank", "defeated" };
 	for( Int i = 0; i < MAX_PLAYER_COUNT; ++i )
 	{
 		if (!TheMatchHistory.wasSampled( i ))
@@ -3006,6 +3006,11 @@ static void updateHeadlessRun( void )
 								 TheMatchHistory.getValue( sample, i, MATCH_SERIES_EARNED ), TheMatchHistory.getValue( sample, i, MATCH_SERIES_BANK ),
 								 TheMatchHistory.getValue( sample, i, MATCH_SERIES_ARMY ), TheMatchHistory.getValue( sample, i, MATCH_SERIES_BUILDINGS ),
 								 TheMatchHistory.getValue( sample, i, MATCH_SERIES_POWER ), TheMatchHistory.getValue( sample, i, MATCH_SERIES_LOST )));
+		// the money series on a line of their own, so the SAMPLE line's readers keep their columns
+		for( Int sample = 0; sample < TheMatchHistory.getSampleCount(); ++sample )
+			DEBUG_LOG(("HEADLESS HISTORY WORTH %d %u %d %d %d\n", i, TheMatchHistory.getSampleFrame( sample ),
+								 TheMatchHistory.getValue( sample, i, MATCH_SERIES_ARMY_VALUE ), TheMatchHistory.getValue( sample, i, MATCH_SERIES_VALUE_DESTROYED ),
+								 TheMatchHistory.getValue( sample, i, MATCH_SERIES_VALUE_LOST )));
 		const std::vector< MatchBuild > &builds = TheMatchHistory.getBuilds( i );
 		for( size_t build = 0; build < builds.size(); ++build )
 		{

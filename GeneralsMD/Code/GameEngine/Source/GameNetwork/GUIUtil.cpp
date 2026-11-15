@@ -1141,6 +1141,11 @@ static void drawSwatch(GameWindow *window, WinInstanceData *instData)
 	Int x, y, width, height;
 	window->winGetScreenPosition(&x, &y);
 	window->winGetSize(&width, &height);
+	LobbySwatchFill(x, y, width, height, window->winGetEnabledColor(0));
+}
+
+void LobbySwatchFill(Int x, Int y, Int width, Int height, Color fill)
+{
 	TheDisplay->drawImage(TheMappedImageCollection->findImageByName("Active-Unchecked"), x, y, x + width, y + height);
 	// the art is a 22 pixel cell whose black hole runs from 3 to 17 on both axes, up and left of the
 	// middle because the drop shadow takes the last two; each edge is rounded on its own so the hole
@@ -1152,7 +1157,7 @@ static void drawSwatch(GameWindow *window, WinInstanceData *instData)
 	const Int holeBottom = y + (HOLE_END * height + CELL / 2) / CELL;
 	const Int gap = max(1, min(holeRight - holeLeft, holeBottom - holeTop) / 8);
 	TheDisplay->drawFillRect(holeLeft + gap, holeTop + gap, holeRight - holeLeft - 2 * gap,
-		holeBottom - holeTop - 2 * gap, window->winGetEnabledColor(0));
+		holeBottom - holeTop - 2 * gap, fill);
 }
 
 void DrawMapListTab(GameWindow *window, WinInstanceData *instData)

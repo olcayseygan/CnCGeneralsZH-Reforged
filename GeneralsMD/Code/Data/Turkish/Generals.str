@@ -16222,7 +16222,7 @@ GUI:HudCamNextWaiting
 END
 
 GUI:HudCamNextComputer
-"Bilgisayarın ekranı yok. Direktör çatışmalarını izler"
+"Bilgisayarın ekranı yok, Direktör izliyor"
 END
 
 GUI:HudCamHintFree
@@ -17597,19 +17597,19 @@ GUI:SummaryMoney
 END
 
 GUI:SummaryUnitsBuilt
-"Üretilen"
+"Üretim"
 END
 
 GUI:SummaryBuildingsBuilt
-"İnşa edilen"
+"Yapım"
 END
 
 GUI:SummaryLost
-"Kaybedilen"
+"Kayıp"
 END
 
 GUI:SummaryDestroyed
-"Yok edilen"
+"İmha"
 END
 
 GUI:SummaryEarned
@@ -17645,7 +17645,7 @@ GUI:GraphBuildings
 END
 
 GUI:GraphBuildOrder
-"İnşa sırası"
+"Yapım sırası"
 END
 
 GUI:GraphSuperweaponBuilt
@@ -17670,6 +17670,126 @@ END
 
 GUI:GraphNoData
 "Bu maçta hiçbir şey kaydedilmedi."
+END
+
+GUI:SummaryScore
+"Puan"
+END
+
+GUI:SummarySpent
+"Harcanan"
+END
+
+GUI:SummaryDefeated
+"Yenildi"
+END
+
+GUI:SummaryDisconnected
+"Bağlantı koptu"
+END
+
+GUI:ScoreTeamWins
+"Takım %d kazandı"
+END
+
+GUI:ScorePlayerWins
+"Kazanan: %ls"
+END
+
+GUI:ScoreNoWinner
+"Kazanan yok"
+END
+
+GUI:ScoreLength
+"Süre"
+END
+
+GUI:GraphGraphs
+"Grafikler"
+END
+
+GUI:GraphValueDestroyed
+"Yok edilen değer"
+END
+
+GUI:GraphUnitsLost
+"Kaybedilen birlik"
+END
+
+GUI:GraphLines
+"Çizgi"
+END
+
+GUI:GraphShare
+"Pay"
+END
+
+GUI:GraphPeak
+"en yüksek %ls"
+END
+
+GUI:SummaryUnits_Short
+"Birlik"
+END
+
+GUI:GraphBuildings_Short
+"Bina"
+END
+
+GUI:SummaryUnitsBuilt_Short
+"Üret."
+END
+
+GUI:SummaryDestroyed_Short
+"İmha"
+END
+
+GUI:SummaryEarned_Short
+"Kaz."
+END
+
+GUI:SummarySpent_Short
+"Harc."
+END
+
+GUI:HudCamNextFree_Short
+"Ekranı için oyuncu adına tıkla"
+END
+
+GUI:HudCamNextPlayer_Short
+"Bırakmak: Esc ya da ada tıkla"
+END
+
+GUI:HudCameraFree_Short
+"Serb."
+END
+
+GUI:HudCameraDirector_Short
+"Dir."
+END
+
+GUI:HudCameraPlayer_Short
+"Oync."
+END
+
+GUI:ScoreHighlights
+"Öne çıkanlar"
+END
+
+GUI:ScoreHighlightDestroyed
+"En çok yok eden"
+END
+
+GUI:ScoreHighlightEarned
+"En çok kazanan"
+END
+
+GUI:ScoreHighlightArmy
+"En büyük ordu"
+END
+
+GUI:ScoreHighlightSuperweapon
+"İlk süper silah"
 END
 
 INI:FactionTurkiye

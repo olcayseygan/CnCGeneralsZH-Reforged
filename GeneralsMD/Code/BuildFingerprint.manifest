@@ -1009,6 +1009,9 @@ Data/Cinema/minefx_scene_enemy.txt
 Data/Cinema/missileapex_film.txt
 Data/Cinema/missileflyon.txt
 Data/Cinema/mobwatch.txt
+Data/Cinema/moneypop.txt
+Data/Cinema/moneypop3.txt
+Data/Cinema/moneypop3still.txt
 Data/Cinema/msaa_river.txt
 Data/Cinema/ngguard.txt
 Data/Cinema/nohud.txt
@@ -1346,6 +1349,8 @@ Data/Scenarios/mobopen.txt
 Data/Scenarios/mobstress.txt
 Data/Scenarios/mobtight.txt
 Data/Scenarios/mobwin.txt
+Data/Scenarios/moneypop.txt
+Data/Scenarios/moneypop3.txt
 Data/Scenarios/msaa_river.txt
 Data/Scenarios/netrepeat.txt
 Data/Scenarios/netstance.txt
@@ -1750,6 +1755,7 @@ GameEngine/Include/GameClient/RadarContactMarks.h
 GameEngine/Include/GameClient/RadiusDecal.h
 GameEngine/Include/GameClient/RayEffect.h
 GameEngine/Include/GameClient/ReachOverlay.h
+GameEngine/Include/GameClient/ScoreScreenLayout.h
 GameEngine/Include/GameClient/SelectionInfo.h
 GameEngine/Include/GameClient/SelectionPriority.h
 GameEngine/Include/GameClient/SelectionXlat.h
@@ -4335,6 +4341,7 @@ Tests/test_production_input.inc
 Tests/test_registryfile.cpp
 Tests/test_render_hooks.cpp
 Tests/test_road_buffer.cpp
+Tests/test_score_screen.inc
 Tests/test_sdl_gpu_depth_format.cpp
 Tests/test_sdl_gpu_frame.cpp
 Tests/test_sdl_input.cpp

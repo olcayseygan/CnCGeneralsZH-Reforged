@@ -1679,10 +1679,6 @@ protected:
 		RACK_TEXT_COUNT
 	};
 	void drawSpectatorRack( Int plateTop );	///< plateTop: the watch drawer's plate, 8 under the superweapon tray's foot
-	/// the kept string `slot` holding text in the bold face at px pixels at 1080, a pixel smaller at a time
-	/// down to 9 until it is no wider than room (0: any width)
-	DisplayString *rackText( Int slot, const UnicodeString &text, Int px, Int room );
-	Bool												m_rackShown;							///< the last postDraw drew it
 	/// the status well under the lever: what the camera does, and the next step or the hovered control's use
 	void drawRackStatus( Int left, Int top, Int right, const UnicodeString &hover );
 	/// a player's own screen on the camera, the fog left as the watcher set it; the mode before is kept
@@ -1691,6 +1687,12 @@ protected:
 	void letGoOfPlayerCamera( void );
 	/// while a player's screen is on the camera, his name and "player camera" at the top of the picture
 	void drawPlayerCameraPlate( Int top );
+	/// the kept string `slot` holding text in the bold face at px pixels at 1080, or a pixel smaller
+	/// where that fits room (0: any width), else abbreviated at that size (UIStyle::fitText, shortText
+	/// first, keep's words left whole); a player's name is only ever cut with an ellipsis
+	DisplayString *rackText( Int slot, const UnicodeString &text, Int px, Int room,
+		const UnicodeString &shortText = UnicodeString::TheEmptyString, const UnicodeString &keep = UnicodeString::TheEmptyString );
+	Bool												m_rackShown;							///< the last postDraw drew it
 	Int													m_rackX, m_rackY;					///< its pieces' left and the watch drawer's top
 	Int													m_rackRows;
 	Int													m_rackRowPlayer[ RACK_ROWS ];	///< the player index on each row, top down
@@ -1699,6 +1701,7 @@ protected:
 	DisplayString *							m_rackText[ RACK_TEXT_COUNT ];
 	Int													m_rackTextPx[ RACK_TEXT_COUNT ];		///< the size and room each was laid out for
 	Int													m_rackTextRoom[ RACK_TEXT_COUNT ];
+	UnicodeString								m_rackTextSource[ RACK_TEXT_COUNT ];	///< the text before any shortening
 
 	Coord2D											m_superweaponPosition;
 	DurationFramesReal												m_superweaponFlashDuration;

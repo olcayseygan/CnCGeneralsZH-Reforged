@@ -37,6 +37,7 @@
 #include "Common/GameCommon.h"
 #include "Common/GameEngine.h"
 #include "Common/KindOf.h"
+#include "Common/MatchHistory.h"
 #include "Common/PlayerList.h"
 #include "Common/Player.h"
 #include "Common/PlayerTemplate.h"
@@ -196,6 +197,8 @@ void VictoryConditions::update( void )
 		if (p && !m_isDefeated[i] && hasSinglePlayerBeenDefeated(p))
 		{
 			m_isDefeated[i] = true;
+			// the score screen's chips and graph ends; written only, nothing in the logic reads it back
+			TheMatchHistory.noteDefeated( p );
 			if (TheGameLogic->getFrame() > 1)
 			{
 				ThePartitionManager->revealMapForPlayerPermanently( p->getPlayerIndex() );

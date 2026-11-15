@@ -262,6 +262,67 @@ static Bool isAsciiDigit( WideChar c )
 	return c >= u'0' && c <= u'9';
 }
 
+/** Watching a player, the money readout stands in the box right of his name on the observer's panel:
+	* right-aligned to the box's inner edge, a point smaller at a time while the figure is wider than the
+	* box (digits are never shortened).  The panel's frame took the readout's middle before, where the
+	* player's own bar has room for it.  The box is the panel's top row from the name's right edge to the
+	* panel's frame, 8 of its 503 pixels at 1920, plus as much again for air.  The figure reads as the
+	* HUD's money does, "$ 10,000", on one line: the window is made as wide as the figure unwrapped,
+	* measured apart from the gadget, whose own string wraps at the window's width ("$" over "10000"). */
+static UnicodeString groupThousands( const UnicodeString& text );
+static void fitObserverMoney( GameWindow *moneyWin, Int amount, Bool unlimited )
+{
+	GameWindow *info = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "ControlBar.wnd:ObserverPlayerInfoWindow" ) );
+	GameWindow *name = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "ControlBar.wnd:StaticTextPlayerName" ) );
+	TextData *data = (TextData *)moneyWin->winGetUserData();
+	if( info == NULL || name == NULL || info->winIsHidden() || data == NULL || data->text == NULL )
+		return;
+	UnicodeString figure;
+	if( unlimited )
+		figure = TheGameText->fetch( "GUI:StartingMoneyUnlimited" );
+	else
+	{
+		figure.format( TheGameText->fetch( "GUI:ControlBarMoneyDisplay" ), amount );
+		figure = groupThousands( figure );
+	}
+	if( data->text->getText().compare( figure ) != 0 )
+		GadgetStaticTextSetText( moneyWin, figure );
+	Int infoX, infoY, infoW, infoH, nameX, nameY, nameW, nameH;
+	info->winGetScreenPosition( &infoX, &infoY );
+	info->winGetSize( &infoW, &infoH );
+	name->winGetScreenPosition( &nameX, &nameY );
+	name->winGetSize( &nameW, &nameH );
+	const Int inset = max( infoW * 16 / 503, 2 );
+	const Int boxLeft = nameX + nameW + inset / 2;
+	const Int boxRight = infoX + infoW - inset;
+	if( boxRight - boxLeft < 8 )
+		return;
+	// the figure's width on one line, in the window's font and then a point smaller at a time
+	GameFont *font = moneyWin->winGetFont();
+	DisplayString *measure = TheDisplayStringManager->newDisplayString();
+	measure->setText( figure );
+	Int textW = 0, textH = 0;
+	for( ;; )
+	{
+		measure->setFont( font );
+		measure->getSize( &textW, &textH );
+		if( font == NULL || textW <= boxRight - boxLeft || font->pointSize <= 6 )
+			break;
+		font = TheFontLibrary->getFont( font->nameString, font->pointSize - 1, font->bold );
+	}
+	TheDisplayStringManager->freeDisplayString( measure );
+	if( font != NULL && font != moneyWin->winGetFont() )
+		GadgetStaticTextSetFont( moneyWin, font );
+	Int parentX = 0, parentY = 0;
+	if( moneyWin->winGetParent() )
+		moneyWin->winGetParent()->winGetScreenPosition( &parentX, &parentY );
+	data->centered = TRUE;
+	// a few pixels of slack past the figure, so the gadget's wrap at the window's width never breaks it
+	const Int slack = 6;
+	moneyWin->winSetPosition( boxRight - textW - slack - parentX, nameY - parentY );
+	moneyWin->winSetSize( textW + slack, nameH );
+}
+
 /// the amount without the currency sign the language's text puts before it: "$ 10000" reads "10000"
 static UnicodeString amountOnly( const UnicodeString& text )
 {
@@ -2799,25 +2860,34 @@ static void drawRackText( DisplayString *text, Int left, Int top, Int right, Int
 	text->draw( x, ( top + bottom - height ) / 2, colour, GameMakeColor( 0, 0, 0, 255 ) );
 }
 
-DisplayString *InGameUI::rackText( Int slot, const UnicodeString &text, Int px, Int room )
+DisplayString *InGameUI::rackText( Int slot, const UnicodeString &text, Int px, Int room, const UnicodeString &shortText,
+	const UnicodeString &keep )
 {
 	DisplayString *&string = m_rackText[ slot ];
 	if( string == NULL )
 		string = TheDisplayStringManager->newDisplayString();
-	else if( m_rackTextPx[ slot ] == px && m_rackTextRoom[ slot ] == room && string->getText().compare( text ) == 0 )
+	else if( m_rackTextPx[ slot ] == px && m_rackTextRoom[ slot ] == room && m_rackTextSource[ slot ].compare( text ) == 0 )
 		return string;
 	m_rackTextPx[ slot ] = px;
 	m_rackTextRoom[ slot ] = room;
+	m_rackTextSource[ slot ] = text;
 	string->setText( text );
-	// the face's em is its point size at 96 dots an inch
-	for( Int size = px; ; size-- )
+	// the face's em is its point size at 96 dots an inch; one pixel smaller at most, then shortened,
+	// so no label shrinks past reading or runs into the next
+	GameFont *font = NULL;
+	const Int smallest = max( px - 1, min( px, (Int)RACK_MIN_PX ) );
+	for( Int size = px; size >= smallest; size-- )
 	{
-		string->setFont( TheFontLibrary->getFont( m_superweaponNormalFont, max( rackPx( size * 0.75f ), 1 ), TRUE ) );
+		font = TheFontLibrary->getFont( m_superweaponNormalFont, max( rackPx( size * 0.75f ), 1 ), TRUE );
+		string->setFont( font );
 		Int width = 0, height = 0;
 		string->getSize( &width, &height );
-		if( room <= 0 || width <= room || size <= RACK_MIN_PX )
-			break;
+		if( room <= 0 || width <= room )
+			return string;
 	}
+	const Bool name = slot == RACK_TEXT_STATE_NAME || ( slot >= RACK_TEXT_NAME && slot < RACK_TEXT_NAME + RACK_ROWS );
+	if( font )
+		string->setText( name ? UIStyle::fitName( text, font, room ) : UIStyle::fitText( text, font, room, shortText, keep ) );
 	return string;
 }
 
@@ -2968,8 +3038,13 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 	{
 		stopLefts[ stop ] = X + rackPx( stop == 0 ? RACK_LEVER_WELL_LEFT : ( RACK_LEVER_STOPS[ stop - 1 ] + RACK_LEVER_STOPS[ stop ] ) / 2 );
 		stopRights[ stop ] = X + rackPx( stop == 2 ? RACK_LEVER_WELL_RIGHT : ( RACK_LEVER_STOPS[ stop ] + RACK_LEVER_STOPS[ stop + 1 ] ) / 2 );
+		// a stop's hand-written short form, "<label>_Short", goes before the automatic one
+		AsciiString shortLabel( RACK_LEVER_LABELS[ stop ] );
+		shortLabel.concat( "_Short" );
+		Bool known = FALSE;
+		const UnicodeString shortForm = TheGameText->fetch( shortLabel, &known );
 		stopWords[ stop ] = rackText( RACK_TEXT_STOP + stop, UIStyle::capitals( TheGameText->fetch( RACK_LEVER_LABELS[ stop ] ) ), 11,
-			stopRights[ stop ] - stopLefts[ stop ] - 2 * rackPx( RACK_STOP_PAD ) );
+			stopRights[ stop ] - stopLefts[ stop ] - 2 * rackPx( RACK_STOP_PAD ), known ? UIStyle::capitals( shortForm ) : UnicodeString::TheEmptyString );
 		if( stopFont == NULL || stopWords[ stop ]->getFont()->pointSize < stopFont->pointSize )
 			stopFont = stopWords[ stop ]->getFont();
 	}
@@ -3150,14 +3225,25 @@ void InGameUI::drawRackStatus( Int left, Int top, Int right, const UnicodeString
 	}
 
 	// the next step, or the hovered control's use
-	UnicodeString step = hover;
+	UnicodeString step = hover, stepShort;
 	if( step.isEmpty() )
 	{
+		// a step may carry a hand-written short form, "<label>_Short", tried before the automatic one
+		AsciiString shortLabel( next );
+		shortLabel.concat( "_Short" );
+		Bool known = FALSE;
+		const UnicodeString shortFormat = TheGameText->fetch( shortLabel, &known );
 		step = TheGameText->fetch( next );
+		if( known )
+			stepShort = shortFormat;
 		if( player != NULL && !named )
+		{
 			step.format( TheGameText->fetch( next ), name.str() );
+			if( known )
+				stepShort.format( shortFormat, name.str() );
+		}
 	}
-	drawRackText( rackText( RACK_TEXT_NEXT, step, 11, room ), left + pad, line2, right - pad, line2 + rackPx( RACK_STATUS_LINE_H ), 0,
+	drawRackText( rackText( RACK_TEXT_NEXT, step, 11, room, stepShort, name ), left + pad, line2, right - pad, line2 + rackPx( RACK_STATUS_LINE_H ), 0,
 		RACK_ALIGN_LEFT, hover.isEmpty() ? GREY : GOLD );
 }
 
@@ -3862,6 +3948,8 @@ void InGameUI::update( void )
 		// everything else on the bar
 		moneyWin->winHide( FALSE );
 		powerWin->winHide( FALSE );
+		if( TheControlBar->isObserverControlBarOn() )
+			fitObserverMoney( moneyWin, currentMoney, unlimited );
 	}
 	else
 	{

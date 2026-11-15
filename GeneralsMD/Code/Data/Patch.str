@@ -1562,7 +1562,7 @@ GUI:HudCamNextFree
 END
 
 GUI:HudCamNextFreeFollowed
-"Click the name to return to the screen of %ls"
+"Click the name to return to %ls"
 END
 
 // also the Director stop's explanation under the pointer
@@ -1583,7 +1583,7 @@ GUI:HudCamNextWaiting
 END
 
 GUI:HudCamNextComputer
-"A computer has no screen. Director follows its fights"
+"Computers have no screen. Director follows"
 END
 
 GUI:HudCamHintFree
@@ -3102,6 +3102,135 @@ END
 
 GUI:GraphNoData
 "Nothing was recorded in this match."
+END
+
+// the standings' columns and verdict chips
+GUI:SummaryScore
+"Score"
+END
+
+GUI:SummarySpent
+"Spent"
+END
+
+// a chip, followed by the match time it happened at: "Defeated 12:40"
+GUI:SummaryDefeated
+"Defeated"
+END
+
+GUI:SummaryDisconnected
+"Disconnected"
+END
+
+// the verdict over the map for someone watching; the screen puts it in capitals
+GUI:ScoreTeamWins
+"Team %d wins"
+END
+
+GUI:ScorePlayerWins
+"%ls wins"
+END
+
+GUI:ScoreNoWinner
+"No winner"
+END
+
+// the match's facts under the map
+GUI:ScoreLength
+"Length"
+END
+
+// the Graphs tab, its series chips, its two ways of drawing them and a legend card's peak
+GUI:GraphGraphs
+"Graphs"
+END
+
+GUI:GraphValueDestroyed
+"Value destroyed"
+END
+
+GUI:GraphUnitsLost
+"Units lost"
+END
+
+GUI:GraphLines
+"Lines"
+END
+
+GUI:GraphShare
+"Share"
+END
+
+GUI:GraphPeak
+"peak %ls"
+END
+
+// Short forms (UIStyle::fitKey, "<label>_Short"): what a label reads where its whole text does not
+// fit, before the game abbreviates it by rule
+GUI:SummaryUnits_Short
+"Units"
+END
+
+GUI:GraphBuildings_Short
+"Bldgs."
+END
+
+GUI:SummaryUnitsBuilt_Short
+"Built"
+END
+
+GUI:SummaryDestroyed_Short
+"Destr."
+END
+
+GUI:SummaryEarned_Short
+"Earned"
+END
+
+GUI:SummarySpent_Short
+"Spent"
+END
+
+GUI:HudCamNextFree_Short
+"Click a name to see their screen"
+END
+
+GUI:HudCamNextPlayer_Short
+"Esc or the name again lets go"
+END
+
+// the rack lever's three stops where the whole word does not fit
+GUI:HudCameraFree_Short
+"Free"
+END
+
+GUI:HudCameraDirector_Short
+"Dir."
+END
+
+GUI:HudCameraPlayer_Short
+"Plyr"
+END
+
+// the score screen's map column: what stood out of the match, a line each, "label: player"
+GUI:ScoreHighlights
+"Highlights"
+END
+
+GUI:ScoreHighlightDestroyed
+"Most destroyed"
+END
+
+GUI:ScoreHighlightEarned
+"Top earner"
+END
+
+GUI:ScoreHighlightArmy
+"Biggest army"
+END
+
+GUI:ScoreHighlightSuperweapon
+"First superweapon"
 END
 
 // The Turkiye faction (PlayerTemplateReforged.ini, TurkiyeReforged.ini). Units, buildings, buttons, upgrades.

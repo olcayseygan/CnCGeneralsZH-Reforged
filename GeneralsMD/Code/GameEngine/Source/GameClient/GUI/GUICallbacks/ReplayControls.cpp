@@ -47,6 +47,7 @@
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/InGameUI.h"
 #include "GameClient/Mouse.h"
+#include "GameClient/UIStyle.h"
 #include "GameLogic/GameLogic.h"
 
 //-------------------------------------------------------------------------------------------------
@@ -134,12 +135,67 @@ static UnicodeString replayClock( UnsignedInt frame )
 	return text;
 }
 
-/** Centred over the money readout, the middle of the command bar, at the bar's own scale. */
+static GameFont *replayStripFont( Real unit )
+{
+	return TheWindowManager->winFindFont( TheGlobalLanguageData->m_defaultWindowFont.name, REAL_TO_INT_FLOOR( FONT_SIZE * unit + 0.5f ), TRUE );
+}
+
+/** The labels' widths in the strip's font, measured once a scale and language: the pause button's
+	* wider word of Pause and Resume, every speed, and the clock at its widest. */
+struct ReplayLabelWidths
+{
+	Real unit;
+	Int language;
+	Int pause;
+	Int speed[ REPLAY_SPEED_COUNT ];
+	Int clock;
+};
+
+static Int replayMeasure( DisplayString *string, const UnicodeString &text )
+{
+	string->setText( text );
+	Int width = 0, height = 0;
+	string->getSize( &width, &height );
+	return width;
+}
+
+static const ReplayLabelWidths &replayLabelWidths( Real unit )
+{
+	static ReplayLabelWidths widths = { -1.0f, -1, 0, { 0 }, 0 };
+	if( widths.unit == unit && widths.language == TheGlobalData->m_textLanguage )
+		return widths;
+	widths.unit = unit;
+	widths.language = TheGlobalData->m_textLanguage;
+	DisplayString *string = TheDisplayStringManager->newDisplayString();
+	string->setFont( replayStripFont( unit ) );
+	widths.pause = max( replayMeasure( string, TheGameText->fetch( "GUI:Pause" ) ), replayMeasure( string, TheGameText->fetch( "GUI:ReplayResume" ) ) );
+	for( Int each = 0; each < REPLAY_SPEED_COUNT; each++ )
+		widths.speed[ each ] = replayMeasure( string, UnicodeString( REPLAY_SPEED_LABELS[ each ] ) );
+	widths.clock = replayMeasure( string, UnicodeString( u"00:00 / 00:00" ) );
+	TheDisplayStringManager->freeDisplayString( string );
+	return widths;
+}
+
+/** Centred over the money readout, the middle of the command bar, at the bar's own scale.  The
+	* buttons are as wide as their labels at full text, the strip as wide as the clock and the buttons
+	* need; only where the screen itself is too narrow does the pause button give way, its word then
+	* abbreviated (the speeds never are). */
 static ReplayStripLayout layOutReplayStrip( void )
 {
 	ReplayStripLayout layout;
 	layout.unit = ControlBarHudScale();
 	const Real u = layout.unit;
+	const ReplayLabelWidths &labels = replayLabelWidths( u );
+	const Int textPad = max( REAL_TO_INT_FLOOR( 4 * u ), 2 );
+	const Int gap = REAL_TO_INT_FLOOR( BUTTON_GAP * u );
+	Int buttonWidth[ REPLAY_BUTTONS ];
+	Int buttonsWidth = 0;
+	for( Int each = 0; each < REPLAY_BUTTONS; each++ )
+	{
+		const Int design = REAL_TO_INT_FLOOR( ( each == 0 ? PAUSE_WIDTH : SPEED_WIDTH ) * u );
+		buttonWidth[ each ] = max( design, ( each == 0 ? labels.pause : labels.speed[ each - 1 ] ) + 2 * textPad );
+		buttonsWidth += buttonWidth[ each ] + ( each > 0 ? gap : 0 );
+	}
 
 	GameWindow *money = TheWindowManager->winGetWindowFromId( NULL,
 		TheNameKeyGenerator->nameToKey( AsciiString( "ControlBar.wnd:ControlBarProBlockInputMoney" ) ) );
@@ -147,9 +203,18 @@ static ReplayStripLayout layOutReplayStrip( void )
 	money->winGetScreenPosition( &above.x, &above.y );
 	money->winGetSize( &aboveSize.x, &aboveSize.y );
 
-	const Int width = REAL_TO_INT_FLOOR( STRIP_WIDTH * u );
 	const Int height = REAL_TO_INT_FLOOR( STRIP_HEIGHT * u );
 	const Int pad = REAL_TO_INT_FLOOR( STRIP_PAD * u );
+	Int width = max( REAL_TO_INT_FLOOR( STRIP_WIDTH * u ), pad * 2 + labels.clock + textPad * 2 + buttonsWidth );
+	const Int screenWidth = (Int)TheDisplay->getWidth();
+	if( width > screenWidth )
+	{
+		// the screen is narrower than the strip at full text: the pause button gives the difference
+		const Int design = REAL_TO_INT_FLOOR( PAUSE_WIDTH * u );
+		const Int give = min( width - screenWidth, max( buttonWidth[ 0 ] - design, 0 ) );
+		buttonWidth[ 0 ] -= give;
+		width -= give;
+	}
 	layout.strip.lo.x = above.x + aboveSize.x / 2 - width / 2;
 	layout.strip.lo.y = above.y - REAL_TO_INT_FLOOR( STRIP_GAP * u ) - height;
 	if( TheReplayStripPlaced )
@@ -170,10 +235,10 @@ static ReplayStripLayout layOutReplayStrip( void )
 	{
 		IRegion2D &button = layout.buttons[ each ];
 		button.hi.x = right;
-		button.lo.x = right - REAL_TO_INT_FLOOR( ( each == 0 ? PAUSE_WIDTH : SPEED_WIDTH ) * u );
+		button.lo.x = right - buttonWidth[ each ];
 		button.lo.y = rowTop;
 		button.hi.y = rowTop + REAL_TO_INT_FLOOR( ROW_HEIGHT * u );
-		right = button.lo.x - REAL_TO_INT_FLOOR( BUTTON_GAP * u );
+		right = button.lo.x - gap;
 	}
 
 	layout.track.lo.x = layout.strip.lo.x + pad;
@@ -260,8 +325,7 @@ void ReplayControlDraw( GameWindow *window, WinInstanceData *instData )
 			text->buttons[ each ] = TheDisplayStringManager->newDisplayString();
 		window->winSetUserData( text );
 	}
-	GameFont *font = TheWindowManager->winFindFont( TheGlobalLanguageData->m_defaultWindowFont.name,
-		REAL_TO_INT_FLOOR( FONT_SIZE * layout.unit + 0.5f ), TRUE );
+	GameFont *font = replayStripFont( layout.unit );
 
 	const Color white = GameMakeColor( 255, 255, 255, 255 );
 	const Color shadow = GameMakeColor( 0, 0, 0, 255 );
@@ -293,9 +357,28 @@ void ReplayControlDraw( GameWindow *window, WinInstanceData *instData )
 
 		DisplayString *label = text->buttons[ each ];
 		label->setFont( font );
-		label->setText( each == 0 ? TheGameText->fetch( paused ? "GUI:ReplayResume" : "GUI:Pause" ) : UnicodeString( REPLAY_SPEED_LABELS[ each - 1 ] ) );
+		const UnicodeString words = each == 0 ? TheGameText->fetch( paused ? "GUI:ReplayResume" : "GUI:Pause" ) : UnicodeString( REPLAY_SPEED_LABELS[ each - 1 ] );
+		label->setText( words );
 		Int labelWidth, labelHeight;
 		label->getSize( &labelWidth, &labelHeight );
+		// the buttons are sized to their labels; only the pause word, on a screen too narrow for the
+		// strip, is abbreviated (UIStyle::fitText), the speeds never.  The fitted form is kept while the
+		// words and the width stay, so it is not worked out each frame
+		const Int room = w - 4;
+		if( each == 0 && labelWidth > room )
+		{
+			static UnicodeString fittedFrom[ REPLAY_BUTTONS ];
+			static UnicodeString fitted[ REPLAY_BUTTONS ];
+			static Int fittedRoom[ REPLAY_BUTTONS ];
+			if( fittedRoom[ each ] != room || fittedFrom[ each ].compare( words ) != 0 )
+			{
+				fitted[ each ] = UIStyle::fitText( words, font, room );
+				fittedFrom[ each ] = words;
+				fittedRoom[ each ] = room;
+			}
+			label->setText( fitted[ each ] );
+			label->getSize( &labelWidth, &labelHeight );
+		}
 		label->draw( button.lo.x + ( w - labelWidth ) / 2, button.lo.y + ( h - labelHeight ) / 2, white, shadow );
 	}
 

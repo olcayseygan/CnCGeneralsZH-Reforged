@@ -272,6 +272,7 @@ NEW_CONTROLS = [
     (CHECK,  "CheckStructureCollapse", "GUI:StructureCollapse"),
     (CHECK,  "CheckSmoothMotion",      "GUI:SmoothMotion"),
     (CHECK,  "CheckHeatHaze",          "GUI:HeatHaze"),
+    (CHECK,  "CheckGroundFoliage",     "GUI:GroundFoliage"),
     (LABEL,  "LabelGraphicsQuality",   "GUI:GraphicsQuality"),
     (SLIDER, "SliderGraphicsQuality",  None),
 ]
@@ -381,6 +382,7 @@ GROUP_LAYOUT = [
             ("check", "CheckStructureCollapse"),
             ("check", "CheckSmoothMotion"),
             ("check", "CheckHeatHaze"),
+            ("check", "CheckGroundFoliage"),
             # beside Classic Graphics on the Graphics page if there were room
             ("check", "CheckDetailedModels"),
             ("check", "CheckHDTextures"),

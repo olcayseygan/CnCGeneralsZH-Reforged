@@ -16657,6 +16657,14 @@ TOOLTIP:HeatHaze
 "Yangınların üstünde, lazer ışınları boyunca ve füze egzozunun arkasında hava dalgalanır. Yalnızca Direct3D 11 ile, Klasik Grafikler açıkken kapalıdır. Kabul Et'e basınca uygulanır."
 END
 
+GUI:GroundFoliage
+"Bitki Örtüsü"
+END
+
+TOOLTIP:GroundFoliage
+"Yerde otlar, çalılar, eğrelti otları ve taşlar biter, ağaçlarla birlikte rüzgârda sallanır. Yalnızca görüntüdür, birlikler içinden geçer. Yalnızca Direct3D 11 ile, Klasik Grafikler açıkken kapalıdır. Kabul Et'e basınca uygulanır."
+END
+
 GUI:StructureCollapse
 "Yıkılan Binalar"
 END

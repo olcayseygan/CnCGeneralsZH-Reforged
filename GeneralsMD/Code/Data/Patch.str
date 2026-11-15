@@ -2057,6 +2057,14 @@ TOOLTIP:HeatHaze
 "The air shimmers over fires, along laser beams and behind missile exhaust. Direct3D 11 only, and off under Classic Graphics. Applies when you press Accept."
 END
 
+GUI:GroundFoliage
+"Ground Foliage"
+END
+
+TOOLTIP:GroundFoliage
+"Grass, bushes, ferns and stones grow on the ground and sway in the breeze with the trees. Looks only: units walk through it. Direct3D 11 only, and off under Classic Graphics. Applies when you press Accept."
+END
+
 GUI:StructureCollapse
 "Collapsing Buildings"
 END

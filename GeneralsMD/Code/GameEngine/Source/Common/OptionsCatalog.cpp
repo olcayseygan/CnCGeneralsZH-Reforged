@@ -735,10 +735,10 @@ const OptionDef TheOptionCatalog[] =
 		get_m_waterFoam, set_m_waterFoam },
 
 	// Grass tufts on grass ground, swaying in the map's breeze; the tree pass draws them every frame
-	// and reads this as it does.  Client only.  Off under Classic graphics; under -d3d9 it stays set
-	// and draws nothing.  No control yet, so an Options.ini line ("GroundFoliage = yes") is the only
-	// way in.
-	{ "GroundFoliage",						"", "",
+	// and reads this as it does.  Client only.  Off under Classic graphics; under -d3d9 it stays set,
+	// draws nothing, and the menu greys it.  On Options > Display, the Graphics and Effects columns
+	// being full.
+	{ "GroundFoliage",						OPT_WND( "CheckGroundFoliage" ), "GUI:GroundFoliage",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_groundFoliage, set_m_groundFoliage },
 
@@ -911,6 +911,9 @@ const GraphicsQualityRow TheGraphicsQualityTable[] =
 	{ "CheckInternalHdr",				0.0f,  {    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    1 } },
 	{ "CheckHemiAmbient",				0.0f,  {    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    1 } },
 	{ "CheckStructureCollapse",	0.0f,  {    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    1 } },
+	// not measured yet: Direct3D 11 does not present on the machine that would sweep it.  Ultra only,
+	// for the faults docs/plans/TODO.md still lists (shader cache, structures a script makes)
+	{ "CheckGroundFoliage",			0.0f,  {    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    1 } },
 	{ "ComboBoxTextureFilter",	0.1f,  {    0,    1,    2,    2,    2,    2,    2,    2,    2,    2,    2 } },
 	{ "ComboBoxBloom",					0.1f,  {    0,    1,    2,    2,    2,    2,    2,    2,    2,    2,    2 } },
 	{ "SliderAnisotropy",				0.1f,  {    2,    4,    8,   16,   16,   16,   16,   16,   16,   16,   16 } },

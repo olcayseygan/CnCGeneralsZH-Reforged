@@ -21905,7 +21905,7 @@ TEST(graphics_quality_slider_only_ever_turns_settings_up)
 	// the looks of 2026-10-31 rise above High, which stays the picture the Classic box's untick gives,
 	// and every one is on at Ultra and a fork's row, so a Classic page keeps them off
 	static const char *const aboveHigh[] = { "CheckInternalHdr", "CheckHemiAmbient", "CheckGroundMarks", "CheckStructureCollapse",
-		"CheckWaterSplashes", "CheckAtmosphere", "CheckAmbientOcclusion", "CheckFirelight", "CheckWeather", "CheckHeatHaze" };
+		"CheckWaterSplashes", "CheckAtmosphere", "CheckAmbientOcclusion", "CheckFirelight", "CheckWeather", "CheckHeatHaze", "CheckGroundFoliage" };
 	for( Int i = 0; i < (Int)( sizeof( aboveHigh ) / sizeof( aboveHigh[ 0 ] ) ); ++i )
 	{
 		const GraphicsQualityRow *look = findGraphicsQualityRow( aboveHigh[ i ] );

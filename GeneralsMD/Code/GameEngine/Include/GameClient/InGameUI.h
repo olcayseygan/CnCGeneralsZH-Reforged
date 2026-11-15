@@ -489,6 +489,9 @@ public:  // ********************************************************************
 	/// under the units, 0x00RRGGBB: a move green, an attack red, an attack move orange, a guard gold,
 	/// everything else (enter, dock, repair, capture, an ability) cyan
 	static UnsignedInt orderKindColor( OrderHintKind kind );
+	/// the same against a given seat colour, 0x00RRGGBB: a kind within reach of the seat's hue takes
+	/// its alternate, so an order never wears the player's own ring colour
+	static UnsignedInt orderKindColor( OrderHintKind kind, UnsignedInt seat );
 
 	struct OrderHint
 	{

@@ -5157,22 +5157,55 @@ Bool InGameUI::isOrderMarkOnWater( Real x, Real y, Real *waterZ )
 
 UnsignedInt InGameUI::orderKindColor( OrderHintKind kind )
 {
+	// only the local player's own orders are drawn, so his seat's colour is the one to step aside from
+	const Player *local = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+	return orderKindColor( kind, local ? ( (UnsignedInt)clientPlayerColor( local ) & 0x00FFFFFF ) : 0 );
+}
+
+/** Hue in degrees and saturation (max - min over max) of an 0x00RRGGBB colour; brightening a colour,
+	* as the selection ring does, changes neither. */
+static Real colorHue( UnsignedInt rgb, Real *saturation )
+{
+	const Real r = (Real)( ( rgb >> 16 ) & 0xFF ), g = (Real)( ( rgb >> 8 ) & 0xFF ), b = (Real)( rgb & 0xFF );
+	const Real hi = MAX( r, MAX( g, b ) ), lo = MIN( r, MIN( g, b ) );
+	*saturation = ( hi > 0.0f ) ? ( hi - lo ) / hi : 0.0f;
+	if( hi - lo <= 0.0f )
+		return 0.0f;
+	Real hue = ( hi == r ) ? 60.0f * ( g - b ) / ( hi - lo ) : ( hi == g ) ? 60.0f * ( b - r ) / ( hi - lo ) + 120.0f : 60.0f * ( r - g ) / ( hi - lo ) + 240.0f;
+	return ( hue < 0.0f ) ? hue + 360.0f : hue;
+}
+
+UnsignedInt InGameUI::orderKindColor( OrderHintKind kind, UnsignedInt seat )
+{
+	// Each kind's colour and the one it steps to when the seat's own colour is within 25 degrees of
+	// hue of it, so an orange player's attack move does not read as his own selection rings. 25, not
+	// 30: a red seat (hue 0) is 29 from the attack move's orange and would change two kinds at once.
+	// The alternates keep 30 degrees or more off the kinds they could meet
+	//   green 131 -> teal 159 (39 off a green seat, 36 off the cyan)
+	//   red 3 -> pink-red 333 (27 off a red seat, still red enough to read as an attack)
+	//   orange 29 -> magenta 313
+	//   gold 51 -> pale yellow-white, apart by being nearly white
+	//   cyan 195 -> sky blue 216 (31 off a cyan seat)
+	UnsignedInt color, alternate;
 	switch( kind )
 	{
 		case ORDER_HINT_MOVE:
-		case ORDER_HINT_WAYPOINT:
-			return 0x0040E85C;		// green
+		case ORDER_HINT_WAYPOINT:				color = 0x0040E85C; alternate = 0x002EEBA8; break;
 		case ORDER_HINT_ATTACK:
 		case ORDER_HINT_FORCE_ATTACK:
-		case ORDER_HINT_ATTACK_GROUND:
-			return 0x00FF3A2E;		// red
-		case ORDER_HINT_ATTACK_MOVE:
-			return 0x00FF8A1C;		// orange
-		case ORDER_HINT_GUARD:
-			return 0x00FFDC46;		// gold
-		default:
-			return 0x0040D0FF;		// cyan
+		case ORDER_HINT_ATTACK_GROUND:	color = 0x00FF3A2E; alternate = 0x00FF2E8C; break;
+		case ORDER_HINT_ATTACK_MOVE:		color = 0x00FF8A1C; alternate = 0x00FF4AD8; break;
+		case ORDER_HINT_GUARD:					color = 0x00FFDC46; alternate = 0x00FFF5C8; break;
+		default:												color = 0x0040D0FF; alternate = 0x005A9CFF; break;
 	}
+	const Real SATURATED = 0.35f;		// a grey or white seat clashes with nothing
+	const Real NEAR_HUE = 25.0f;
+	Real seatSaturation, colorSaturation;
+	const Real seatHue = colorHue( seat, &seatSaturation );
+	const Real hue = colorHue( color, &colorSaturation );
+	Real apart = (Real)fabs( seatHue - hue );
+	apart = MIN( apart, 360.0f - apart );
+	return ( seatSaturation >= SATURATED && colorSaturation >= SATURATED && apart < NEAR_HUE ) ? alternate : color;
 }
 
 //-------------------------------------------------------------------------------------------------

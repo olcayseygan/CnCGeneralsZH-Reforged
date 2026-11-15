@@ -21453,6 +21453,18 @@ TEST(an_order_kind_wears_one_of_five_colours)
 		for( Int j = i + 1; j < 5; ++j )
 			CHECK_NE( five[ i ], five[ j ] );
 	}
+
+	// an orange seat's attack move steps to magenta, the rest stay; a blue seat keeps every default,
+	// and a red seat changes only the attack, not the attack move 29 degrees off it as well
+	CHECK_EQ( InGameUI::orderKindColor( InGameUI::ORDER_HINT_ATTACK_MOVE, 0x00FF8C00 ), 0x00FF4AD8u );
+	CHECK_EQ( InGameUI::orderKindColor( InGameUI::ORDER_HINT_MOVE, 0x00FF8C00 ), InGameUI::orderKindColor( InGameUI::ORDER_HINT_MOVE, 0 ) );
+	const InGameUI::OrderHintKind kinds[ 5 ] = { InGameUI::ORDER_HINT_MOVE, InGameUI::ORDER_HINT_ATTACK, InGameUI::ORDER_HINT_ATTACK_MOVE, InGameUI::ORDER_HINT_GUARD, InGameUI::ORDER_HINT_ENTER };
+	for( Int i = 0; i < 5; ++i )
+		CHECK_EQ( InGameUI::orderKindColor( kinds[ i ], 0x002A31FF ), InGameUI::orderKindColor( kinds[ i ], 0 ) );
+	CHECK_NE( InGameUI::orderKindColor( InGameUI::ORDER_HINT_ATTACK, 0x00FF0000 ), InGameUI::orderKindColor( InGameUI::ORDER_HINT_ATTACK, 0 ) );
+	CHECK_EQ( InGameUI::orderKindColor( InGameUI::ORDER_HINT_ATTACK_MOVE, 0x00FF0000 ), InGameUI::orderKindColor( InGameUI::ORDER_HINT_ATTACK_MOVE, 0 ) );
+	// a white seat clashes with nothing
+	CHECK_EQ( InGameUI::orderKindColor( InGameUI::ORDER_HINT_GUARD, 0x00FFFFFF ), InGameUI::orderKindColor( InGameUI::ORDER_HINT_GUARD, 0 ) );
 }
 
 TEST(empty_building_slots_are_a_check_box_that_starts_on)

@@ -164,7 +164,19 @@ void ControlBar::updateSelectionCardReadout( void )
 		// the focused type and how many of it the selection holds, "Crusader x4"
 		s_card.name.format( u"%ls  x%d", m_multiSelectGroupTemplate[ m_multiSelectFocus ]->getDisplayName().str(),
 			m_multiSelectGroupSize[ m_multiSelectFocus ] );
-		s_card.health = -1.0f;
+		// the whole selection's health: its units' health summed over their maximums summed
+		Real health = 0.0f, most = 0.0f;
+		const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+		for( DrawableListCIt it = selected->begin(); it != selected->end(); ++it )
+		{
+			const Object *member = *it ? ( *it )->getObject() : NULL;
+			const BodyModuleInterface *body = member ? member->getBodyModule() : NULL;
+			if( body == NULL || body->getMaxHealth() <= 0.0f )
+				continue;
+			health += body->getHealth();
+			most += body->getMaxHealth();
+		}
+		s_card.health = most > 0.0f ? health / most : -1.0f;
 		s_card.rank = NULL;
 		s_card.shown = TRUE;
 		return;

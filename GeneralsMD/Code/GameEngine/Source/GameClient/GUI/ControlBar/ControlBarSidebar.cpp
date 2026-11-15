@@ -62,7 +62,8 @@ namespace
 	const Color ARROW_DARK		= GameMakeColor( 90, 96, 104, 255 );
 	const Color TAB_TEXT_EDGE	= GameMakeColor( 0, 0, 0, 255 );
 	const Color KEY_LETTER		= GameMakeColor( 255, 210, 60, 255 );	///< the bar's hotkey letters' yellow
-	const Real KEY_POINTS			= 8.0f;		///< the key letter in a tab's top left corner, at 1080
+	const Real KEY_POINTS			= 10.0f;	///< the key letter in a tab's top left corner, about a 12 px cap at 1080
+	const Color KEY_PLATE			= GameMakeColor( 8, 10, 14, 200 );	///< the key badge's plate
 	const Int ICON_INSET			= 3;			///< the icon kept this far inside the bevel
 
 	// the tab body: flat steel with a 1 px bevel, the group panel's stand-in colours; the open tab is
@@ -106,6 +107,11 @@ namespace
 	std::vector< Int > s_clock;					///< per s_list entry: the furthest head of a queue, -1 for none
 	std::vector< ObjectID > s_producer;		///< per s_list entry: a research's building to queue it at, else INVALID_ID
 	std::vector< ObjectID > s_researcher;	///< per s_list entry: the building a research is under way at, else INVALID_ID
+	Int s_researchFrom = -1;							///< s_list index the research starts at on Savunma, a row's first cell; -1 for none
+	Int s_dividerY = -1;									///< screen y of the line between the defences and the research, -1 when not shown
+	GameWinDrawFunc s_cameoDraw = NULL;		///< the image push button's draw, under a research cell's badge
+	const Color BADGE_EDGE = GameMakeColor( 0, 0, 0, 220 );
+	const Color DIVIDER = GameMakeColor( 170, 180, 190, 160 );
 	Bool s_listed = FALSE;
 	Bool s_dirty = TRUE;
 	UnsignedInt s_listFrame = 0;
@@ -293,6 +299,19 @@ static void drawSteel( const ICoord2D &at, const ICoord2D &size, Bool lit, Bool 
 /// a tab, all drawn here: a steel body with a 1 px bevel, raised when closed and pressed in and lit
 /// when open, its icon in the middle and the key it answers to in the top left corner; the name is in
 /// the tooltip
+/// tab `t`'s key as a badge at x, y: a dark plate with its corners cut, the letter bold on it, yellow
+/// (white on the open tab) over a dark edge
+static void drawKeyBadge( Int t, Int x, Int y, Bool open )
+{
+	Int w = 0, h = 0;
+	s_keyText[ t ]->getSize( &w, &h );
+	const Int plateW = w + 6, plateH = h;
+	TheDisplay->drawFillRect( x + 1, y, plateW - 2, plateH, KEY_PLATE );
+	TheDisplay->drawFillRect( x, y + 1, 1, plateH - 2, KEY_PLATE );
+	TheDisplay->drawFillRect( x + plateW - 1, y + 1, 1, plateH - 2, KEY_PLATE );
+	s_keyText[ t ]->draw( x + 3, y, open ? KEY_LETTER_LIT : KEY_LETTER, TAB_TEXT_EDGE );
+}
+
 static void drawTab( GameWindow *window, WinInstanceData *instData )
 {
 	const Int t = (Int)(intptr_t)GadgetButtonGetData( window ) - 1;
@@ -317,7 +336,7 @@ static void drawTab( GameWindow *window, WinInstanceData *instData )
 	{
 		TheDisplay->drawImage( art, at.x, at.y, at.x + size.x, at.y + size.y );
 		if( keyed )
-			s_keyText[ t ]->draw( at.x + 3, at.y + 1, open ? KEY_LETTER_LIT : KEY_LETTER, TAB_TEXT_EDGE );
+			drawKeyBadge( t, at.x + 2, at.y + 2, open );
 		return;
 	}
 
@@ -338,11 +357,18 @@ static void drawTab( GameWindow *window, WinInstanceData *instData )
 		const Real fit = min( (Real)roomW / icon->getImageWidth(), (Real)roomH / icon->getImageHeight() );
 		const Int w = max( REAL_TO_INT( icon->getImageWidth() * fit ), 1 );
 		const Int h = max( REAL_TO_INT( icon->getImageHeight() * fit ), 1 );
-		const Int x = at.x + ( size.x - w ) / 2 + push, y = at.y + ( size.y - h ) / 2 + push;
+		// centred, but moved right off the key badge in the top left as far as the face allows
+		Int textW = 0, textH = 0;
+		if( keyed )
+			s_keyText[ t ]->getSize( &textW, &textH );
+		const Int badgeRight = keyed ? 2 + textW + 6 + 1 : 0;
+		Int x = max( ( size.x - w ) / 2, badgeRight );
+		x = at.x + min( x, size.x - 2 - w ) + push;
+		const Int y = at.y + ( size.y - h ) / 2 + push;
 		TheDisplay->drawImage( icon, x, y, x + w, y + h, open ? 0xFFFFFFFF : TAB_ICON_DIM );
 	}
 	if( keyed )
-		s_keyText[ t ]->draw( at.x + 3 + push, at.y + 1 + push, KEY_LETTER, TAB_TEXT_EDGE );
+		drawKeyBadge( t, at.x + 2 + push, at.y + 2 + push, open );
 }
 
 /// a picker chip: the side's Chip (ChipWide for Tümü), P on the current pick, else the steel stand-in;
@@ -455,10 +481,43 @@ static void drawChip( GameWindow *window, WinInstanceData *instData )
 static void drawBox( GameWindow *window, WinInstanceData *instData )
 {
 	const Image *well = Sidebar_image( "CameoWell" );
-	if( well == NULL )
+	if( well != NULL )
+		for( Int i = 0; i < HUD_SIDEBAR_CAMEOS; i++ )
+			TheDisplay->drawImage( well, s_cells[ i ].lo.x, s_cells[ i ].lo.y, s_cells[ i ].hi.x, s_cells[ i ].hi.y );
+
+	// the line in the gap between the defences' last row and the research's first
+	if( s_dividerY >= 0 )
+		TheDisplay->drawLine( s_cells[ 0 ].lo.x, s_dividerY, s_cells[ HUD_SIDEBAR_CAMEO_COLUMNS - 1 ].hi.x, s_dividerY, 1.0f, DIVIDER );
+}
+
+/// a cameo as the push button draws it, and on a research cell an up chevron in the top left corner,
+/// white over a dark edge, so it reads as research and not a building to place
+static void drawCameo( GameWindow *window, WinInstanceData *instData )
+{
+	if( s_cameoDraw != NULL )
+		s_cameoDraw( window, instData );
+	const CommandButton *command = (const CommandButton *)GadgetButtonGetData( window );
+	if( command == NULL || ( command->getCommandType() != GUI_COMMAND_PLAYER_UPGRADE && command->getCommandType() != GUI_COMMAND_OBJECT_UPGRADE ) )
 		return;
-	for( Int i = 0; i < HUD_SIDEBAR_CAMEOS; i++ )
-		TheDisplay->drawImage( well, s_cells[ i ].lo.x, s_cells[ i ].lo.y, s_cells[ i ].hi.x, s_cells[ i ].hi.y );
+
+	ICoord2D at, size;
+	window->winGetScreenPosition( &at.x, &at.y );
+	window->winGetSize( &size.x, &size.y );
+	const Int half = max( size.y / 9, 3 );						// the chevron's half width; its height is the same
+	const Int cx = at.x + 4 + half, top = at.y + 4;
+	for( Int pass = 0; pass < 2; pass++ )
+	{
+		// the dark edge a pixel down and right and wider, then the white over it
+		const Int d = pass == 0 ? 1 : 0;
+		const Color c = pass == 0 ? BADGE_EDGE : CHIP_TEXT;
+		const Real w = pass == 0 ? 4.0f : 2.0f;
+		for( Int row = 0; row < 2; row++ )
+		{
+			const Int y = top + d + row * ( half / 2 + 2 );
+			TheDisplay->drawLine( cx - half + d, y + half, cx + d, y, w, c );
+			TheDisplay->drawLine( cx + d, y, cx + half + d, y + half, w, c );
+		}
+	}
 }
 
 /// Sat or Onar: the side's KeySell or KeyRepair, P while its mode is on, else the steel stand-in with
@@ -984,6 +1043,9 @@ static Bool makeWindows( GameWindow *parent )
 			continue;
 		button->winSetTooltipFunc( buildTooltip );
 		GadgetButtonSetBorder( button, TheControlBar->getBuildBorderColor() );
+		if( button->winGetDrawFunc() != drawCameo )
+			s_cameoDraw = button->winGetDrawFunc();
+		button->winSetDrawFunc( drawCameo );
 	}
 
 	GameWindow **chips[ HUD_SIDEBAR_PICKER_CHIPS + 1 ] = { &s_chipAll };
@@ -1301,9 +1363,20 @@ static void fillList( Player *player )
 	// Savunma also carries every research the player's buildings offer, after the defences
 	if( s_tab == SIDEBAR_TAB_DEFENSE )
 	{
+		const size_t defences = s_list.size();
 		UpgradeSearch search = { player, &s_list, &s_producer };
 		player->iterateObjects( gatherUpgrades, &search );
+		// the research starts on a row of its own: an odd defence row gets an empty cell
+		if( s_list.size() > defences && defences % HUD_SIDEBAR_CAMEO_COLUMNS != 0 )
+		{
+			const Buildable gap = { NULL, NULL, COMMAND_HIDDEN };
+			s_list.insert( s_list.begin() + defences, gap );
+			s_producer.insert( s_producer.begin() + defences, INVALID_ID );
+		}
+		s_researchFrom = s_list.size() > defences ? (Int)( defences + defences % HUD_SIDEBAR_CAMEO_COLUMNS ) : -1;
 	}
+	else
+		s_researchFrom = -1;
 	s_count.assign( s_list.size(), 0 );
 	s_clock.assign( s_list.size(), -1 );
 	s_researcher.assign( s_list.size(), INVALID_ID );
@@ -1591,6 +1664,13 @@ void Sidebar_update( void )
 		}
 
 		const Buildable &entry = s_list[ at ];
+		if( entry.button == NULL )
+		{
+			// the empty cell that ends the defences' row before the research: only its well shows
+			win->winHide( TRUE );
+			GadgetButtonSetData( win, NULL );
+			continue;
+		}
 		if( GadgetButtonGetData( win ) != (void *)entry.button )
 		{
 			GadgetButtonSetEnabledImage( win, entry.button->getButtonImage() );
@@ -1609,6 +1689,15 @@ void Sidebar_update( void )
 			GadgetButtonClearClock( win );
 		GadgetButtonSetCount( win, isResearch( entry ) ? 0 : s_count[ at ] );
 		win->winHide( FALSE );
+	}
+
+	// the divider over the research's first row while that row is on screen below another
+	s_dividerY = -1;
+	if( s_researchFrom > 0 )
+	{
+		const Int row = s_researchFrom / HUD_SIDEBAR_CAMEO_COLUMNS - s_row;
+		if( row > 0 && row < HUD_SIDEBAR_CAMEO_ROWS )
+			s_dividerY = ( s_cells[ ( row - 1 ) * HUD_SIDEBAR_CAMEO_COLUMNS ].hi.y + s_cells[ row * HUD_SIDEBAR_CAMEO_COLUMNS ].lo.y ) / 2;
 	}
 
 	if( s_arrowUp != NULL )

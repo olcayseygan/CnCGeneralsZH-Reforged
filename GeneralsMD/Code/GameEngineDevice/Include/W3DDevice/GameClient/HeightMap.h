@@ -46,6 +46,8 @@
 
 #define VERTEX_BUFFER_TILE_LENGTH	32		//tiles of side length 32 (grid of 33x33 vertices).
 
+class FrustumClass;
+
 // Adjust the triangles to make cliff sides most attractive.  jba.
 #define FLIP_TRIANGLES 1
 
@@ -105,14 +107,19 @@ protected:
 		shared dynamic buffer on every pass, and they only change with what m_extraBlendKey holds:
 		the terrain's content version, the drawn rectangle, the buffer's capacity, the map and how
 		its tiles sit in the terrain texture. */
-	enum { EXTRA_BLEND_KEY_SIZE = 8 };
-	DX8VertexBufferClass *m_extraBlendVB;
-	DX8IndexBufferClass *m_extraBlendIB;
-	Int m_extraBlendCapacity;		///< tiles the two buffers hold
+	/** Subdivided, a tile is 24 indices and DX8IndexBufferClass counts them in an unsigned short, so the
+		tiles go out in batches of at most EXTRA_BLEND_SUBDIVIDED_TILES, each its own pair of buffers;
+		four of them hold the 10000 tiles the pass is ever allowed.  Two triangles a cell is one batch. */
+	enum { EXTRA_BLEND_KEY_SIZE = 8, EXTRA_BLEND_BATCHES = 4, EXTRA_BLEND_SUBDIVIDED_TILES = 65535/24 };
+	DX8VertexBufferClass *m_extraBlendVB[EXTRA_BLEND_BATCHES];
+	DX8IndexBufferClass *m_extraBlendIB[EXTRA_BLEND_BATCHES];
+	Int m_extraBlendCapacity;		///< vertices each batch's vertex buffer holds (tiles times four, or nine subdivided)
+	Int m_extraBlendBatches;		///< batches allocated
 	WorldHeightMap *m_extraBlendMap;	///< map the buffers were filled from; NULL means refill
 	Int m_extraBlendKey[EXTRA_BLEND_KEY_SIZE];
-	Int m_extraBlendVertexCount;
-	Int m_extraBlendIndexCount;
+	Int m_extraBlendVertexCount[EXTRA_BLEND_BATCHES];
+	Int m_extraBlendIndexCount[EXTRA_BLEND_BATCHES];
+	void freeExtraBlendBuffers(void);
 	DX8VertexBufferClass	**m_vertexBufferTiles;	///<collection of smaller vertex buffers that make up 1 heightmap
 	char	**m_vertexBufferBackup;	///< In memory copy of the vertex buffer data for quick update of dynamic lighting.
 	Int m_originX; ///<  Origin point in the grid.  Slides around.
@@ -167,6 +174,28 @@ protected:
 public:
 	virtual Bool sunPerPixelBaked(void) const { return m_sunPerPixel; }
 protected:
+
+	/** Each cell drawn as two by two smaller ones (m_subdivided, TerrainSubdivide.h): nine vertices a
+		cell in place of four, their heights off the samples' Catmull-Rom patch held near the cell's
+		plane, everything else blended over the old two triangles so a texel lands where it did.  The
+		index buffer is fixed and a flipped cell turns its nine vertices a quarter turn, as EA turned
+		its four.  On Direct3D 11, not Classic, not -headless, not -noTerrainSubdivide; decided at each
+		whole rebuild, which builds the buffers again when the answer moved. */
+	static Bool subdivideWanted(void);
+	Int vertsPerCell(void) const { return m_subdivided ? 9 : 4; }
+	Int polysPerCell(void) const { return m_subdivided ? 8 : 2; }
+	void allocateTileBuffers(Int x, Int y);	///< the vertex buffer tiles, their backups and the index buffer, at m_subdivided
+	Bool setSubdivided(Bool on);	///< TRUE when it changed, and the buffers have to be built again
+	/// A cell's four corners as updateVB built them (turned when flipped) into its nine subdivided vertices.
+	void writeSubdividedCell(VERTEX_FORMAT *dst, const VERTEX_FORMAT corners[4], Bool flip, Int cellX, Int cellY);
+
+	/** Each vertex buffer tile's lowest and highest ground, so a pass draws only the tiles its camera
+		sees (tileInView).  Taken where the tile is rebuilt; the drawn ground never leaves its cells'
+		corner range, subdivided or not. */
+	std::vector<Real> m_tileMinZ;
+	std::vector<Real> m_tileMaxZ;
+	void takeTileBounds(Int tileX, Int tileY);
+	Bool tileInView(const FrustumClass &frustum, Int tileX, Int tileY) const;
 
 	UnsignedInt doTheDynamicLight(VERTEX_FORMAT *vb, VERTEX_FORMAT *vbMirror, Vector3*light, Vector3*normal, const DynamicLightInputs lights[], const Int lightsHere[], Int numHere);
 	//

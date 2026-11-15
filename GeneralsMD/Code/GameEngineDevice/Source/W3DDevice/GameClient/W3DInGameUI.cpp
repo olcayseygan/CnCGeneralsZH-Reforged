@@ -68,6 +68,7 @@
 #include "W3DDevice/GameClient/W3DDisplay.h"
 #include "W3DDevice/GameClient/W3DScene.h"
 #include "W3DDevice/GameClient/W3DView.h"
+#include "W3DDevice/GameClient/BaseHeightMap.h"
 #include "W3DDevice/Common/W3DConvert.h"
 #include "WW3D2/ww3d.h"
 #include "WW3D2/hanim.h"
@@ -327,6 +328,18 @@ W3DInGameUI::~W3DInGameUI()
 	}
 
 }  // end ~W3DInGameUI
+
+// overlayGround ==============================================================
+/** The ground a sheet laid point by point goes on: logic's plane, the drawn ground's own, or the
+	subdivided tiles' triangles when they are on, so a bulge between the samples does not swallow
+	the paint (BaseHeightMapRenderObjClass::getDrawnHeight). */
+//=============================================================================
+static Real overlayGround( Real x, Real y )
+{
+	if( TheTerrainRenderObject && TheTerrainRenderObject->terrainSubdivided() )
+		return TheTerrainRenderObject->getDrawnHeight( x, y );
+	return TheTerrainLogic->getGroundHeight( x, y );
+}
 
 // loadText ===================================================================
 /** Load text from the file */
@@ -913,7 +926,7 @@ void W3DInGameUI::drawBuildGrid( void )
 	{
 		for( ix = 0; ix < GRID_POINTS; ++ix )
 		{
-			gz[ iy ][ ix ] = TheTerrainLogic->getGroundHeight( gx[ ix ], gy[ iy ] ) + GRID_LIFT;
+			gz[ iy ][ ix ] = overlayGround( gx[ ix ], gy[ iy ] ) + GRID_LIFT;
 
 			const Real dx = (Real)fabs( ix - mid );
 			const Real dy = (Real)fabs( iy - mid );
@@ -1097,7 +1110,7 @@ void W3DInGameUI::drawAttackCircleFill( void )
 			const Real angle = 2.0f * PI * (Real)s / (Real)FILL_SEGMENTS;
 			const Real x = center.x + ringRadius * (Real)cos( angle );
 			const Real y = center.y + ringRadius * (Real)sin( angle );
-			ring[ r ][ s ].Set( x, y, TheTerrainLogic->getGroundHeight( x, y ) + FILL_LIFT );
+			ring[ r ][ s ].Set( x, y, overlayGround( x, y ) + FILL_LIFT );
 		}
 	}
 
@@ -1200,7 +1213,7 @@ void W3DInGameUI::takeOrderRings( void )
 			for( Int k = 0; k < 4; ++k )
 			{
 				const Real x = ring->at.x + radii[ k ] * c, y = ring->at.y + radii[ k ] * n;
-				const Real z = ring->onGround ? TheTerrainLogic->getGroundHeight( x, y ) : ring->at.z;
+				const Real z = ring->onGround ? overlayGround( x, y ) : ring->at.z;
 				m_orderRingPoints.push_back( Vector3( x, y, z + ORDER_MARK_LIFT ) );
 			}
 		}
@@ -1221,15 +1234,15 @@ void W3DInGameUI::takeOrderRings( void )
 		const Real x = hint.pos.x, y = hint.pos.y;
 		if( isOrderMarkOnWater( x, y, NULL ) )
 			continue;		// after the water, on the sorted list (W3DWaypointBuffer::takeWaterMarks)
-		const Real ground = TheTerrainLogic->getGroundHeight( x, y );
+		const Real ground = overlayGround( x, y );
 		// a point well over the ground is a bridge's deck: flat there
 		const Bool deck = hint.pos.z > ground + 2.0f;
 		mark.at.Set( x, y, deck ? hint.pos.z : ground );
 		if( !deck )
 		{
 			const Real SLOPE_STEP = 4.0f;
-			mark.slopeX = ( TheTerrainLogic->getGroundHeight( x + SLOPE_STEP, y ) - TheTerrainLogic->getGroundHeight( x - SLOPE_STEP, y ) ) / ( 2.0f * SLOPE_STEP );
-			mark.slopeY = ( TheTerrainLogic->getGroundHeight( x, y + SLOPE_STEP ) - TheTerrainLogic->getGroundHeight( x, y - SLOPE_STEP ) ) / ( 2.0f * SLOPE_STEP );
+			mark.slopeX = ( overlayGround( x + SLOPE_STEP, y ) - overlayGround( x - SLOPE_STEP, y ) ) / ( 2.0f * SLOPE_STEP );
+			mark.slopeY = ( overlayGround( x, y + SLOPE_STEP ) - overlayGround( x, y - SLOPE_STEP ) ) / ( 2.0f * SLOPE_STEP );
 		}
 		m_orderMarkers.push_back( mark );
 	}

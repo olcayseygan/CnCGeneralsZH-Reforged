@@ -93,6 +93,7 @@
 #include "W3DDevice/GameClient/W3DShadow.h"
 #include "W3DDevice/GameClient/W3DWater.h"
 #include "W3DDevice/GameClient/W3DShroud.h"
+#include "W3DDevice/GameClient/TerrainSubdivide.h"
 #include "WW3D2/dx8wrapper.h"
 #include "WW3D2/dx11runtime.h"
 #include "WW3D2/light.h"
@@ -138,13 +139,23 @@ inline Int IABS(Int x) {	if (x>=0) return x; return -x;};
 //=============================================================================
 /** Frees the w3d resources used to draw the terrain. */
 //=============================================================================
+void HeightMapRenderObjClass::freeExtraBlendBuffers(void)
+{
+	for (Int b = 0; b < EXTRA_BLEND_BATCHES; b++) {
+		REF_PTR_RELEASE(m_extraBlendVB[b]);
+		REF_PTR_RELEASE(m_extraBlendIB[b]);
+		m_extraBlendVertexCount[b] = 0;
+		m_extraBlendIndexCount[b] = 0;
+	}
+	m_extraBlendCapacity = 0;
+	m_extraBlendBatches = 0;
+	m_extraBlendMap = NULL;
+}
+
 void HeightMapRenderObjClass::freeIndexVertexBuffers(void)
 {
 	REF_PTR_RELEASE(m_indexBuffer);
-	REF_PTR_RELEASE(m_extraBlendVB);
-	REF_PTR_RELEASE(m_extraBlendIB);
-	m_extraBlendCapacity = 0;
-	m_extraBlendMap = NULL;
+	freeExtraBlendBuffers();
 	if (m_vertexBufferTiles) {
 		for (int i=0; i<m_numVertexBufferTiles; i++)
 			REF_PTR_RELEASE(m_vertexBufferTiles[i]);
@@ -170,6 +181,7 @@ Int HeightMapRenderObjClass::freeMapResources(void)
 {
 	BaseHeightMapRenderObjClass::freeMapResources();
 	freeIndexVertexBuffers();
+	freeDrawnHalf();
 
 	return 0;
 }
@@ -279,7 +291,8 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, char *data, Int
 	Int xCoord, yCoord;
 	Int vn0,un0,vp1,up1;
 	Vector3 l2r,n2f,normalAtTexel;
-	Int	vertsPerRow=(VERTEX_BUFFER_TILE_LENGTH)*4;	//vertices per row of VB
+	const Int cellVerts = vertsPerCell();	// four, or nine subdivided
+	Int	vertsPerRow=(VERTEX_BUFFER_TILE_LENGTH)*cellVerts;	//vertices per row of VB
 
 	Int cellOffset = 1;
 	if (HALF_RES_MESH) {
@@ -316,14 +329,8 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, char *data, Int
 		
 		for (j=y0; j<y1; j++)
 		{
-			VERTEX_FORMAT *vb = vBase;
 			if (HALF_RES_MESH) {
 				if (j&1) continue;
-				vb += ((j-originY)/2)*vertsPerRow/2;	//skip to correct row in vertex buffer
-				vb += ((x0-originX)/2)*4;		//skip to correct vertex in row.
-			} else {
-				vb += (j-originY)*vertsPerRow;	//skip to correct row in vertex buffer
-				vb += (x0-originX)*4;		//skip to correct vertex in row.
 			}
 			vn0 = getYWithOrigin(j)-cellOffset;
 			if (vn0 < -pMap->getDrawOrgY())
@@ -345,6 +352,17 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, char *data, Int
 				if (up1 >= pMap->getXExtent()-pMap->getDrawOrgX())
 					up1=pMap->getXExtent()-pMap->getDrawOrgX()-1;
 				xCoord = getXWithOrigin(i)+pMap->getDrawOrgX();
+
+				// The cell's place in the tile's memory copy.  Subdivided, its four corners are built in
+				// corners[] below exactly as EA built them, and writeSubdividedCell makes the nine out of them.
+				VERTEX_FORMAT *cellBase;
+				if (HALF_RES_MESH) {
+					cellBase = vBase + ((j-originY)/2)*vertsPerRow/2 + ((i-originX)/2)*4;
+				} else {
+					cellBase = vBase + (j-originY)*vertsPerRow + (i-originX)*cellVerts;
+				}
+				VERTEX_FORMAT corners[4];
+				VERTEX_FORMAT *vb = m_subdivided ? corners : cellBase;
 
 				//update the 4 vertices in this block
 				float U[4], V[4];
@@ -519,12 +537,16 @@ Int HeightMapRenderObjClass::updateVB(DX8VertexBufferClass	*pVB, char *data, Int
 					}
 				}
 
+				if (m_subdivided) {
+					writeSubdividedCell(cellBase, corners, flipForBlend, xCoord, yCoord);
+				}
+
 				// Note - We have been building the vertex buffer in the memory location.
 				// Now copy the set of vertices into the hardware buffer.
 				// We don't copy the whole vertex buffer because we often update only
 				// a couple of rows and its a lot faster to just copy the ones that change.
-				Int offset = pCurVertices - vBase;
-				memcpy(vbHardware+offset, pCurVertices, 4*sizeof(VERTEX_FORMAT));
+				Int offset = cellBase - vBase;
+				memcpy(vbHardware+offset, cellBase, cellVerts*sizeof(VERTEX_FORMAT));
 			}
 		}
 		return 0; //success.
@@ -543,7 +565,8 @@ Int HeightMapRenderObjClass::updateVBForLight(DX8VertexBufferClass	*pVB, char *d
 	Int i,j,k;
 	Int vn0,un0,vp1,up1;
 	Vector3 l2r,n2f,normalAtTexel;
-	Int	vertsPerRow=(VERTEX_BUFFER_TILE_LENGTH)*4;	//vertices per row of VB
+	const Int cellVerts = vertsPerCell();	// four, or nine subdivided
+	Int	vertsPerRow=(VERTEX_BUFFER_TILE_LENGTH)*cellVerts;	//vertices per row of VB
 
 	if (m_vertexBufferTiles && m_map)
 	{
@@ -598,12 +621,12 @@ Int HeightMapRenderObjClass::updateVBForLight(DX8VertexBufferClass	*pVB, char *d
 			for (i=x0; i<x1; i++)
 			{
 				if (!(quads & (1u<<(i-x0)))) continue;
-				Int offset = (j-originY)*vertsPerRow+4*(i-originX);
+				Int offset = (j-originY)*vertsPerRow+cellVerts*(i-originX);
 				if (HALF_RES_MESH) {
 					offset = (j-originY)*vertsPerRow/4+2*(i-originX);
 				}
 				if (firstVertex < 0) firstVertex = offset;
-				endVertex = offset + 4;
+				endVertex = offset + cellVerts;
 			}
 		}
 		if (firstVertex < 0)
@@ -645,7 +668,7 @@ Int HeightMapRenderObjClass::updateVBForLight(DX8VertexBufferClass	*pVB, char *d
 					}
 				}
 				// vb is the pointer to the vertex in the hardware dx8 vertex buffer.
-				Int offset = (j-originY)*vertsPerRow+4*(i-originX);
+				Int offset = (j-originY)*vertsPerRow+cellVerts*(i-originX);
 				if (HALF_RES_MESH) {
 					offset = (j-originY)*vertsPerRow/4+2*(i-originX);
 				}
@@ -655,6 +678,25 @@ Int HeightMapRenderObjClass::updateVBForLight(DX8VertexBufferClass	*pVB, char *d
 				// diffuse color, and xyz location.  It is VERY SLOW to read out of the
 				// hardware vertex buffer, possibly worse... jba.
 				VERTEX_FORMAT *vbMirror = ((VERTEX_FORMAT*)data)  + offset;
+				if (m_subdivided) {
+					// Nine vertices, each lit with the patch's normal at its own half cell, found from
+					// where the copy says it stands, so a flipped cell's turned slots need no sorting.
+					const TerrainSubdivide::Heights heights = { m_map->getDataPtr(), m_map->getXExtent(), m_map->getYExtent() };
+					const Int border2 = 2*m_map->getBorderSizeInline();
+					for (Int n = 0; n < 9; n++) {
+						const Int x2 = REAL_TO_INT_FLOOR(vbMirror->x*(2.0f/MAP_XY_FACTOR) + 0.5f) + border2;
+						const Int y2 = REAL_TO_INT_FLOOR(vbMirror->y*(2.0f/MAP_XY_FACTOR) + 0.5f) + border2;
+						Real dx, dy;
+						TerrainSubdivide::slope(heights, x2, y2, dx, dy);
+						l2r.Set(2*MAP_XY_FACTOR, 0, MAP_HEIGHT_SCALE*2*dx);
+						n2f.Set(0, 2*MAP_XY_FACTOR, MAP_HEIGHT_SCALE*2*dy);
+						Vector3::Normalized_Cross_Product(l2r, n2f, &normalAtTexel);
+						Vector3 lightRay(0,0,0);
+						doTheDynamicLight(vb, vbMirror, &lightRay, &normalAtTexel, m_lastRelight.lights, lightsHere, numHere);
+						vb++;	vbMirror++;
+					}
+					continue;
+				}
 				un0 = getXWithOrigin(i)-1;
 				if (un0 < -m_map->getDrawOrgX())
 					un0=-m_map->getDrawOrgX();
@@ -841,6 +883,24 @@ Int HeightMapRenderObjClass::updateBlock(Int x0, Int y0, Int x1, Int y1,  WorldH
 		REF_PTR_SET(m_stageZeroTexture, pMap->getTerrainTexture());
 		REF_PTR_SET(m_stageOneTexture, pMap->getAlphaTerrainTexture());
 	}
+	if (m_subdivided && pMap) {
+		// A sample shapes the patch two cells round it (TerrainSubdivide::height reads x-1..x+2 and
+		// the limits of the cells beside), so the half cell table and the tiles are both redone that
+		// far out: a neighbour left as it was would keep the old height on an edge both share.
+		REF_PTR_SET(m_map, pMap);
+		x0 = max(x0 - 2, 0);
+		y0 = max(y0 - 2, 0);
+		x1 = min(x1 + 2, m_x - 1);
+		y1 = min(y1 + 2, m_y - 1);
+		// The cells' diagonals and samples first: the table is redone only when one of them moved,
+		// so a rebuild for the light or the time of day leaves it as it was.
+		const Int ax0 = x0 + pMap->getDrawOrgX() - 1, ay0 = y0 + pMap->getDrawOrgY() - 1;
+		const Int ax1 = x1 + pMap->getDrawOrgX() + 1, ay1 = y1 + pMap->getDrawOrgY() + 1;
+		const Bool moved = takeDrawnInputs(ax0, ay0, ax1, ay1);
+		if (moved || m_drawnHalfMap != m_map) {
+			refreshDrawnHalf(ax0, ay0, ax1, ay1);
+		}
+	}
 
 	Int i,j;
 	DX8VertexBufferClass	**pVB;
@@ -868,9 +928,10 @@ Int HeightMapRenderObjClass::updateBlock(Int x0, Int y0, Int x1, Int y1,  WorldH
 			if (xMin >= xMax) {
 				continue;
 			}
-			pVB=m_vertexBufferTiles+j*m_numVBTilesX+i;	//point to correct row/column of vertex buffers 
+			pVB=m_vertexBufferTiles+j*m_numVBTilesX+i;	//point to correct row/column of vertex buffers
 			char **pData = m_vertexBufferBackup+j*m_numVBTilesX+i;
 			updateVB(*pVB, *pData, xMin, yMin, xMax, yMax, originX, originY, pMap, pLightsIterator);
+			takeTileBounds(i, j);
 		}
 	}
 
@@ -907,12 +968,9 @@ m_extraBlendTilePositions(NULL),
 m_numExtraBlendTiles(0),
 m_numVisibleExtraBlendTiles(0),
 m_extraBlendTilePositionsSize(0),
-m_extraBlendVB(NULL),
-m_extraBlendIB(NULL),
 m_extraBlendCapacity(0),
+m_extraBlendBatches(0),
 m_extraBlendMap(NULL),
-m_extraBlendVertexCount(0),
-m_extraBlendIndexCount(0),
 m_vertexBufferTiles(NULL),
 m_vertexBufferBackup(NULL),
 m_originX(0),
@@ -928,6 +986,12 @@ m_sunPerPixel(FALSE),
 m_sunHeightsMap(NULL),
 m_sunHeightsVersion(0)
 {
+	for (Int b = 0; b < EXTRA_BLEND_BATCHES; b++) {
+		m_extraBlendVB[b] = NULL;
+		m_extraBlendIB[b] = NULL;
+		m_extraBlendVertexCount[b] = 0;
+		m_extraBlendIndexCount[b] = 0;
+	}
 	TheHeightMap = this;
 }
 
@@ -969,6 +1033,243 @@ void HeightMapRenderObjClass::setSunPerPixel(Bool on)
 		m_roadBuffer->updateLighting();
 	}
 #endif
+}
+
+//=============================================================================
+// HeightMapRenderObjClass::subdivideWanted
+//=============================================================================
+/** The Direct3D 11 frame, not Classic, not -headless, not -noTerrainSubdivide: the picture the HD
+tiles are drawn in.  -d3d9 keeps EA's two triangles a cell, and so does the lower terrain detail
+(FlatHeightMapRenderObjClass), which never asks. */
+//=============================================================================
+Bool HeightMapRenderObjClass::subdivideWanted(void)
+{
+	return TheGlobalData != NULL && !TheGlobalData->m_headless && !TheGlobalData->m_classicGraphics
+		&& !TheGlobalData->m_noTerrainSubdivide && Direct3D11_Present_Is_Enabled() && !HALF_RES_MESH;
+}
+
+//=============================================================================
+// HeightMapRenderObjClass::setSubdivided
+//=============================================================================
+/** Called before a whole rebuild.  A change moves the content version, which the 3-way tiles key
+on, and sends the scorches back into their buffers on the new ground. */
+//=============================================================================
+Bool HeightMapRenderObjClass::setSubdivided(Bool on)
+{
+	if (m_subdivided == on) {
+		return FALSE;
+	}
+	m_subdivided = on;
+	m_terrainContentVersion++;
+	freeDrawnHalf();	// refilled by the rebuild that follows, or not needed at all
+#ifdef DO_SCORCH
+	m_scorchesInBuffer = 0;
+#endif
+	return TRUE;
+}
+
+//=============================================================================
+// HeightMapRenderObjClass::writeSubdividedCell
+//=============================================================================
+/** The nine vertices of a subdivided cell from the four updateVB built.  The corners go in as they
+are.  The five between take their height from drawnHalfZ, and everything else (position, both
+texture coordinates, the baked colour and the blend alpha) from the cell's own two triangles at that
+point, which is what the old triangle would have interpolated there: a texel of a tile, a blend or a
+cliff's stretched mapping lands where it always did, only the ground under it moved.  The nine go
+into the slots the fixed index buffer reads row by row, turned a quarter like the corners when the
+cell is flipped, so every small quad is cut along the cell's diagonal. */
+//=============================================================================
+void HeightMapRenderObjClass::writeSubdividedCell(VERTEX_FORMAT *dst, const VERTEX_FORMAT corners[4], Bool flip, Int cellX, Int cellY)
+{
+	const Bool flipped = flip != FALSE;
+	// back to the cell's own order, (0,0), (2,0), (2,2), (0,2): a flipped cell's came a quarter turned
+	VERTEX_FORMAT c[4];
+	Int k;
+	for (k = 0; k < 4; k++) {
+		c[k] = corners[flipped ? ((k+3)&3) : k];
+	}
+	Real px[4], py[4], u1[4], v1[4], u2[4], v2[4], channel[4][4];
+	for (k = 0; k < 4; k++) {
+		px[k] = c[k].x;	py[k] = c[k].y;
+		u1[k] = c[k].u1;	v1[k] = c[k].v1;
+		u2[k] = c[k].u2;	v2[k] = c[k].v2;
+		for (Int byte = 0; byte < 4; byte++) {
+			channel[byte][k] = (Real)((c[k].diffuse >> (8*byte)) & 0xff);
+		}
+	}
+	static const Int cornerAt[9] = { 0, -1, 1, -1, -1, -1, 3, -1, 2 };
+	for (Int b = 0; b < 3; b++) {
+		for (Int a = 0; a < 3; a++) {
+			VERTEX_FORMAT v;
+			const Int at = b*3 + a;
+			if (cornerAt[at] >= 0) {
+				v = c[cornerAt[at]];
+			} else {
+				v.x = TerrainSubdivide::plane(px, flipped, a, b);
+				v.y = TerrainSubdivide::plane(py, flipped, a, b);
+				v.z = drawnHalfZ(2*cellX + a, 2*cellY + b);
+				v.u1 = TerrainSubdivide::plane(u1, flipped, a, b);
+				v.v1 = TerrainSubdivide::plane(v1, flipped, a, b);
+				v.u2 = TerrainSubdivide::plane(u2, flipped, a, b);
+				v.v2 = TerrainSubdivide::plane(v2, flipped, a, b);
+				UnsignedInt diffuse = 0;
+				for (Int byte = 0; byte < 4; byte++) {
+					Int value = REAL_TO_INT_FLOOR(TerrainSubdivide::plane(channel[byte], flipped, a, b) + 0.5f);
+					if (value < 0) value = 0;
+					if (value > 255) value = 255;
+					diffuse |= (UnsignedInt)value << (8*byte);
+				}
+				v.diffuse = diffuse;
+			}
+			// slot (sa, sb) of a flipped cell holds the point (2-sb, sa), as slot 0 holds the top right
+			dst[flipped ? (2-a)*3 + b : at] = v;
+		}
+	}
+}
+
+//=============================================================================
+// HeightMapRenderObjClass::takeTileBounds
+//=============================================================================
+/** A vertex buffer tile's lowest and highest sample, which hold every vertex it draws: the subdivided
+points stay inside their cells' corner range (TerrainSubdivide::held). */
+//=============================================================================
+void HeightMapRenderObjClass::takeTileBounds(Int tileX, Int tileY)
+{
+	const Int tile = tileY*m_numVBTilesX + tileX;
+	if (m_map == NULL || tile < 0 || tile >= (Int)m_tileMinZ.size())
+		return;
+	// the bounds, the culling and the subdivided tables read a tile at its own place: the whole map is drawn, so the origin never slides
+	DEBUG_ASSERTCRASH(m_originX == 0 && m_originY == 0, ("takeTileBounds: the terrain's origin moved to %d,%d", m_originX, m_originY));
+	const Int x0 = tileX*VERTEX_BUFFER_TILE_LENGTH + m_map->getDrawOrgX();
+	const Int y0 = tileY*VERTEX_BUFFER_TILE_LENGTH + m_map->getDrawOrgY();
+	const Int x1 = min(x0 + VERTEX_BUFFER_TILE_LENGTH, m_map->getXExtent() - 1);
+	const Int y1 = min(y0 + VERTEX_BUFFER_TILE_LENGTH, m_map->getYExtent() - 1);
+	const UnsignedByte *data = m_map->getDataPtr();
+	const Int width = m_map->getXExtent();
+	Int lo = 255, hi = 0;
+	for (Int y = y0; y <= y1; y++) {
+		for (Int x = x0; x <= x1; x++) {
+			const Int h = data[y*width + x];
+			if (h < lo) lo = h;
+			if (h > hi) hi = h;
+		}
+	}
+	if (lo > hi) {	// a tile past the map: keep it drawn
+		m_tileMinZ[tile] = -1.0e6f;
+		m_tileMaxZ[tile] = 1.0e6f;
+		return;
+	}
+	m_tileMinZ[tile] = lo*MAP_HEIGHT_SCALE;
+	m_tileMaxZ[tile] = hi*MAP_HEIGHT_SCALE;
+}
+
+//=============================================================================
+// HeightMapRenderObjClass::tileInView
+//=============================================================================
+/** Whether any of a vertex buffer tile's box can reach the camera's frustum.  Every terrain pass
+used to draw every tile of the map, whatever the camera saw. */
+//=============================================================================
+Bool HeightMapRenderObjClass::tileInView(const FrustumClass &frustum, Int tileX, Int tileY) const
+{
+	const Int tile = tileY*m_numVBTilesX + tileX;
+	if (m_map == NULL || tile < 0 || tile >= (Int)m_tileMinZ.size())
+		return TRUE;
+	const Int border = m_map->getBorderSizeInline();
+	const Real x0 = (tileX*VERTEX_BUFFER_TILE_LENGTH + m_map->getDrawOrgX() - border)*MAP_XY_FACTOR;
+	const Real y0 = (tileY*VERTEX_BUFFER_TILE_LENGTH + m_map->getDrawOrgY() - border)*MAP_XY_FACTOR;
+	const Real side = VERTEX_BUFFER_TILE_LENGTH*MAP_XY_FACTOR;
+	// a unit of slack round it, for the lift of nothing and the rounding of everything
+	const Vector3 low(x0 - 1.0f, y0 - 1.0f, m_tileMinZ[tile] - 1.0f);
+	const Vector3 high(x0 + side + 1.0f, y0 + side + 1.0f, m_tileMaxZ[tile] + 1.0f);
+	AABoxClass box;
+	box.Init(MinMaxAABoxClass(low, high));
+	return CollisionMath::Overlap_Test(frustum, box) != CollisionMath::OUTSIDE;
+}
+
+//=============================================================================
+// HeightMapRenderObjClass::allocateTileBuffers
+//=============================================================================
+/** The index buffer every tile is drawn with and the vertex buffer tiles of an x by y vertex map,
+four vertices a cell or nine subdivided (m_subdivided). */
+//=============================================================================
+void HeightMapRenderObjClass::allocateTileBuffers(Int x, Int y)
+{
+	Int i, j;
+	freeIndexVertexBuffers();
+	const Int cells = VERTEX_BUFFER_TILE_LENGTH*VERTEX_BUFFER_TILE_LENGTH;
+	//Create static index buffers.  These will index the vertex buffers holding the map.
+	m_indexBuffer=NEW_REF(DX8IndexBufferClass,(cells*polysPerCell()*3));
+	{
+		// Fill up the IB
+		DX8IndexBufferClass::WriteLockClass lockIdxBuffer(m_indexBuffer);
+		UnsignedShort *ib=lockIdxBuffer.Get_Index_Array();
+
+		// a failed lock leaves nothing to write the indices into
+		if (ib != NULL && m_subdivided) {
+			// a cell's nine vertices row by row, every small quad cut as an unflipped cell is; a flipped
+			// cell's vertices come turned (writeSubdividedCell)
+			for (i = 0; i < cells; i++) {
+				ib = TerrainSubdivide::cell(ib, i*9, false);
+			}
+		}
+		for (j=0; ib != NULL && !m_subdivided && j<(VERTEX_BUFFER_TILE_LENGTH*VERTEX_BUFFER_TILE_LENGTH*4); j+=VERTEX_BUFFER_TILE_LENGTH*4)
+		{
+			for (i=j; i<(j+VERTEX_BUFFER_TILE_LENGTH*4); i+=4)	//4 vertices per 2x2 block
+			{
+				ib[0]=i;
+				ib[1]=i+2;
+				ib[2]=i+3;
+
+				ib[3]=i;
+				ib[4]=i+1;
+				ib[5]=i+2;
+
+				ib+=6;	//skip the 6 indices we just filled
+			}
+		}
+	}
+
+	//Get number of vertex buffers needed to hold current map
+	//First round dimensions to next multiple of VERTEX_BUFFER_TILE_LENGTH since that's our
+	//blocksize
+	m_numVBTilesX=1;
+	for (i=VERTEX_BUFFER_TILE_LENGTH+1; i<x;)
+	{	i+=VERTEX_BUFFER_TILE_LENGTH;
+		m_numVBTilesX++;
+	}
+	m_numVBTilesY=1;
+	for (j=VERTEX_BUFFER_TILE_LENGTH+1; j<y;)
+	{	j+=VERTEX_BUFFER_TILE_LENGTH;
+		m_numVBTilesY++;
+	}
+
+	m_numBlockColumnsInLastVB=(x-1)%VERTEX_BUFFER_TILE_LENGTH;	//right border within last VB
+	m_numBlockRowsInLastVB=(y-1)%VERTEX_BUFFER_TILE_LENGTH;	//bottom border within last VB
+
+	m_numVertexBufferTiles=m_numVBTilesX*m_numVBTilesY;
+	m_x=x;
+	m_y=y;
+	m_vertexBufferTiles = NEW DX8VertexBufferClass*[m_numVertexBufferTiles];
+	m_vertexBufferBackup = NEW char *[m_numVertexBufferTiles];
+
+	Int numVertex = cells*vertsPerCell();
+
+	for (i=0; i<m_numVertexBufferTiles; i++) {
+#ifdef USE_NORMALS
+		m_vertexBufferTiles[i]=NEW_REF(DX8VertexBufferClass,(DX8_FVF_XYZNUV2,numVertex,DX8VertexBufferClass::USAGE_DEFAULT));
+#else
+		m_vertexBufferTiles[i]=NEW_REF(DX8VertexBufferClass,(DX8_VERTEX_FORMAT,numVertex,DX8VertexBufferClass::USAGE_DEFAULT));
+#endif
+		m_vertexBufferBackup[i] = NEW char[numVertex*sizeof(VERTEX_FORMAT)];
+	}
+	// every tile in view until its first rebuild says where it is
+	m_tileMinZ.assign(m_numVertexBufferTiles, -1.0e6f);
+	m_tileMaxZ.assign(m_numVertexBufferTiles, 1.0e6f);
+	// What the whole map costs to draw, once a map; the before and after of -noTerrainSubdivide.
+	DEBUG_LOG(("TERRAIN TILES: %dx%d samples, %d tiles, %s: %d vertices, %d triangles, %d KB a copy of the vertices\n",
+		x, y, m_numVertexBufferTiles, m_subdivided ? "subdivided" : "two triangles a cell",
+		m_numVertexBufferTiles*numVertex, m_numVertexBufferTiles*cells*polysPerCell(),
+		(Int)((Int64)m_numVertexBufferTiles*numVertex*(Int64)sizeof(VERTEX_FORMAT)/1024)));
 }
 
 //=============================================================================
@@ -1222,68 +1523,13 @@ Int HeightMapRenderObjClass::initHeightData(Int x, Int y, WorldHeightMap *pMap, 
 	if (m_stageOneTexture == NULL) {
 		needToAllocate = true;
 	}
+	// the buffers hold four vertices a cell or nine: a change of shape is a change of size
+	if (data && setSubdivided(subdivideWanted())) {
+		needToAllocate = true;
+	}
 	if (data && needToAllocate)
 	{	//requested heightmap different from old one.
-		freeIndexVertexBuffers();
-		//Create static index buffers.  These will index the vertex buffers holding the map.
-		m_indexBuffer=NEW_REF(DX8IndexBufferClass,(VERTEX_BUFFER_TILE_LENGTH*VERTEX_BUFFER_TILE_LENGTH*2*3));
-
-		// Fill up the IB
-		DX8IndexBufferClass::WriteLockClass lockIdxBuffer(m_indexBuffer);
-		UnsignedShort *ib=lockIdxBuffer.Get_Index_Array();
-
-		// a failed lock leaves nothing to write the indices into
-		for (j=0; ib != NULL && j<(VERTEX_BUFFER_TILE_LENGTH*VERTEX_BUFFER_TILE_LENGTH*4); j+=VERTEX_BUFFER_TILE_LENGTH*4)
-		{
-			for (i=j; i<(j+VERTEX_BUFFER_TILE_LENGTH*4); i+=4)	//4 vertices per 2x2 block
-			{
-				ib[0]=i;
-				ib[1]=i+2;
-				ib[2]=i+3;
-
-				ib[3]=i;
-				ib[4]=i+1;
-				ib[5]=i+2;
-
-				ib+=6;	//skip the 6 indices we just filled
-			}
-		}
-
-		//Get number of vertex buffers needed to hold current map
-		//First round dimensions to next multiple of VERTEX_BUFFER_TILE_LENGTH since that's our
-		//blocksize
-		m_numVBTilesX=1;
-		for (i=VERTEX_BUFFER_TILE_LENGTH+1; i<x;)
-		{	i+=VERTEX_BUFFER_TILE_LENGTH;
-			m_numVBTilesX++;
-		}
-		m_numVBTilesY=1;
-		for (j=VERTEX_BUFFER_TILE_LENGTH+1; j<y;)
-		{	j+=VERTEX_BUFFER_TILE_LENGTH;
-			m_numVBTilesY++;
-		}
-
-		m_numBlockColumnsInLastVB=(x-1)%VERTEX_BUFFER_TILE_LENGTH;	//right border within last VB
-		m_numBlockRowsInLastVB=(y-1)%VERTEX_BUFFER_TILE_LENGTH;	//bottom border within last VB
-
-		m_numVertexBufferTiles=m_numVBTilesX*m_numVBTilesY;
-		m_x=x;
-		m_y=y;
-		m_vertexBufferTiles = NEW DX8VertexBufferClass*[m_numVertexBufferTiles];
-		m_vertexBufferBackup = NEW char *[m_numVertexBufferTiles];
-
-		Int numVertex = VERTEX_BUFFER_TILE_LENGTH*2*VERTEX_BUFFER_TILE_LENGTH*2;
-
-		for (i=0; i<m_numVertexBufferTiles; i++) {
-#ifdef USE_NORMALS	 
-			m_vertexBufferTiles[i]=NEW_REF(DX8VertexBufferClass,(DX8_FVF_XYZNUV2,numVertex,DX8VertexBufferClass::USAGE_DEFAULT));
-#else
-			m_vertexBufferTiles[i]=NEW_REF(DX8VertexBufferClass,(DX8_VERTEX_FORMAT,numVertex,DX8VertexBufferClass::USAGE_DEFAULT));
-#endif
-			m_vertexBufferBackup[i] = NEW char[numVertex*sizeof(VERTEX_FORMAT)];
-		} 
-
-		//go with a preset material for now.
+		allocateTileBuffers(x, y);
 	}
 
 	setSunPerPixel(sunPerPixelWanted());
@@ -1654,8 +1900,11 @@ void HeightMapRenderObjClass::updateCenter(CameraClass *camera , RefRenderObjLis
 			 by a building foundation asks for it (W3DTerrainVisual::setRawMapHeight).  Logged with
 			 its cost so a stutter report can be tied to it instead of guessed at. */
 		const UnsignedInt fullUpdateStart = Clock_Milliseconds();
-		// A whole rebuild is where the tiles may change which light they hold.
+		// A whole rebuild is where the tiles may change which light they hold, and their shape.
 		setSunPerPixel(sunPerPixelWanted());
+		if (setSubdivided(subdivideWanted())) {
+			allocateTileBuffers(m_x, m_y);
+		}
 		updateBlock(0, 0, m_x-1, m_y-1, m_map, pLightsIterator);
 		DEBUG_LOG(("TERRAIN FULL UPDATE: %d ms at frame %d\n",
 							 (Int)(Clock_Milliseconds() - fullUpdateStart),
@@ -1924,6 +2173,10 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	// The tiles hold the light without the sun when this is on; the ground's two draws below, the
 	// base pass and the 3-way tiles, add it per pixel and nothing else does.
 	const Bool sunPerPixel = prepareSunPerPixel();
+	// A frame whose wish no longer matches the tiles' shape asks for the whole rebuild that remakes
+	// them, and draws them as they are: the draw's counts follow the tiles, not the wish.
+	if (m_map != NULL && subdivideWanted() != m_subdivided)
+		m_needFullUpdate = true;
 
 	// Force shaders to update.
 	m_stageTwoTexture->restore();
@@ -2028,6 +2281,7 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	}
 
 	Int pass;
+	const FrustumClass &viewFrustum = rinfo.Camera.Get_Frustum();
 	if (sunPerPixel)
 		Direct3D11_Set_Terrain_Relight(true);
 	for (pass=0; pass<devicePasses && drawGround; pass++) {	//Classic water leaves the ground out, see the shorelines below
@@ -2051,8 +2305,10 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 			{
 				static int count = 0;
 				count++;
-				Int numPolys = VERTEX_BUFFER_TILE_LENGTH*VERTEX_BUFFER_TILE_LENGTH*2;
-				Int numVertex = (VERTEX_BUFFER_TILE_LENGTH*2)*(VERTEX_BUFFER_TILE_LENGTH*2);
+				if (!tileInView(viewFrustum, i, j))
+					continue;	// a tile the camera cannot see
+				Int numPolys = VERTEX_BUFFER_TILE_LENGTH*VERTEX_BUFFER_TILE_LENGTH*polysPerCell();
+				Int numVertex = VERTEX_BUFFER_TILE_LENGTH*VERTEX_BUFFER_TILE_LENGTH*vertsPerCell();
 				if (HALF_RES_MESH) {
 					numPolys /= 4;
 					numVertex /= 4;
@@ -2246,8 +2502,10 @@ void HeightMapRenderObjClass::renderTerrainPass(CameraClass *pCamera)
 		{
 			static int count = 0;
 			count++;
-			Int numPolys = VERTEX_BUFFER_TILE_LENGTH*VERTEX_BUFFER_TILE_LENGTH*2;
-			Int numVertex = (VERTEX_BUFFER_TILE_LENGTH*2)*(VERTEX_BUFFER_TILE_LENGTH*2);
+			if (!tileInView(pCamera->Get_Frustum(), i, j))
+				continue;	// a tile the camera cannot see
+			Int numPolys = VERTEX_BUFFER_TILE_LENGTH*VERTEX_BUFFER_TILE_LENGTH*polysPerCell();
+			Int numVertex = VERTEX_BUFFER_TILE_LENGTH*VERTEX_BUFFER_TILE_LENGTH*vertsPerCell();
 			if (HALF_RES_MESH) {
 				numPolys /= 4;
 				numVertex /= 4;
@@ -2296,6 +2554,15 @@ void HeightMapRenderObjClass::renderExtraBlendTiles(void)
 
 	if (maxBlendTiles > 10000)	//we can only fit about 10000 tiles into a single VB.
 		maxBlendTiles = 10000;
+	// Subdivided, a tile is the base tiles' nine vertices on the same heights (drawnHalfZ) and four
+	// quads, so it lies on what they drew.  An index buffer counts its indices in an unsigned short,
+	// so those go out EXTRA_BLEND_SUBDIVIDED_TILES a batch, as many batches as maxBlendTiles needs.
+	const Int tileVerts = m_subdivided ? 9 : 4;
+	const Int tileIndices = m_subdivided ? 24 : 6;
+	const Int batchTiles = m_subdivided && maxBlendTiles > EXTRA_BLEND_SUBDIVIDED_TILES ? EXTRA_BLEND_SUBDIVIDED_TILES : maxBlendTiles;
+	Int batches = (maxBlendTiles + batchTiles - 1) / batchTiles;
+	if (batches > EXTRA_BLEND_BATCHES)
+		batches = EXTRA_BLEND_BATCHES;
 
 	//Loop over visible terrain and extract all the tiles that need extra blend
 	Int drawEdgeY=m_map->getDrawOrgY()+m_map->getDrawHeight()-1;
@@ -2316,29 +2583,36 @@ void HeightMapRenderObjClass::renderExtraBlendTiles(void)
 	if (m_extraBlendMap != m_map || memcmp(key, m_extraBlendKey, sizeof(key)) != 0)
 	{
 		m_extraBlendMap = NULL;
-		if (m_extraBlendCapacity != maxBlendTiles)
+		if (m_extraBlendCapacity != batchTiles*tileVerts || m_extraBlendBatches != batches)
 		{
-			REF_PTR_RELEASE(m_extraBlendVB);
-			REF_PTR_RELEASE(m_extraBlendIB);
-			m_extraBlendVB = NEW_REF(DX8VertexBufferClass,(DX8_FVF_XYZNDUV2,maxBlendTiles*4,DX8VertexBufferClass::USAGE_DEFAULT));
-			m_extraBlendIB = NEW_REF(DX8IndexBufferClass,(maxBlendTiles*6));
-			m_extraBlendCapacity = maxBlendTiles;
+			freeExtraBlendBuffers();
+			for (Int b = 0; b < batches; b++) {
+				m_extraBlendVB[b] = NEW_REF(DX8VertexBufferClass,(DX8_FVF_XYZNDUV2,batchTiles*tileVerts,DX8VertexBufferClass::USAGE_DEFAULT));
+				m_extraBlendIB[b] = NEW_REF(DX8IndexBufferClass,((unsigned short)(batchTiles*tileIndices)));
+			}
+			m_extraBlendCapacity = batchTiles*tileVerts;
+			m_extraBlendBatches = batches;
 		}
 
-		DX8VertexBufferClass::WriteLockClass lock(m_extraBlendVB);
+		const UnsignedByte* data = m_map->getDataPtr();
+
+		Int j = 0;
+		for (Int batch = 0; batch < batches; batch++)
+		{
+		vertexCount = 0;
+		indexCount = 0;
+		DX8VertexBufferClass::WriteLockClass lock(m_extraBlendVB[batch]);
 		VertexFormatXYZNDUV2* vb=(VertexFormatXYZNDUV2*)lock.Get_Vertex_Array();
-		DX8IndexBufferClass::WriteLockClass lockib(m_extraBlendIB);
+		DX8IndexBufferClass::WriteLockClass lockib(m_extraBlendIB[batch]);
 		UnsignedShort *ib=lockib.Get_Index_Array();
 
 		if (!vb || !ib) return;
 
-		const UnsignedByte* data = m_map->getDataPtr();
-
 		try {
-		for (Int j=0; j<m_numExtraBlendTiles; j++)
+		for (; j<m_numExtraBlendTiles; j++)
 		{
-			if (vertexCount >= (maxBlendTiles*4))
-				break;	//no room in vertex buffer
+			if (vertexCount >= (batchTiles*tileVerts))
+				break;	//no room in this batch's vertex buffer
 
 			Real U[4],V[4];
 			UnsignedByte alpha[4];
@@ -2360,7 +2634,53 @@ void HeightMapRenderObjClass::renderExtraBlendTiles(void)
 				if (cliffState && abs(p0-p2) > abs(p1-p3))	//cliffs sometimes force a flip
 					flipState = TRUE;
 
-				vb->x=(x-border)*MAP_XY_FACTOR;	 
+				if (m_subdivided)
+				{	// the nine points the base tile has, its texture and colour blended over this tile's own two triangles
+					const Real u[4] = { U[0], U[1], U[2], U[3] };
+					const Real v[4] = { V[0], V[1], V[2], V[3] };
+					const Int corner[4] = { getStaticDiffuse(x,y,m_sunPerPixel), getStaticDiffuse(x+1,y,m_sunPerPixel),
+						getStaticDiffuse(x+1,y+1,m_sunPerPixel), getStaticDiffuse(x,y+1,m_sunPerPixel) };
+					Real channel[4][4];
+					for (Int k = 0; k < 4; k++) {
+						channel[0][k] = (Real)(corner[k] & 0xff);
+						channel[1][k] = (Real)((corner[k] >> 8) & 0xff);
+						channel[2][k] = (Real)((corner[k] >> 16) & 0xff);
+						channel[3][k] = (Real)alpha[k];
+					}
+					const Bool flipped = flipState != FALSE;
+					for (Int b = 0; b < 3; b++) {
+						for (Int a = 0; a < 3; a++) {
+							vb->x=(x-border)*MAP_XY_FACTOR + a*0.5f*MAP_XY_FACTOR;
+							vb->y=(y-border)*MAP_XY_FACTOR + b*0.5f*MAP_XY_FACTOR;
+							vb->z=drawnHalfZ(2*x + a, 2*y + b);
+							vb->nx=0;
+							vb->ny=0;
+							vb->nz=0;
+							UnsignedInt diffuse = 0;
+							for (Int byte = 0; byte < 4; byte++) {
+								Int value = REAL_TO_INT_FLOOR(TerrainSubdivide::plane(channel[byte], flipped, a, b) + 0.5f);
+								if (value < 0) value = 0;
+								if (value > 255) value = 255;
+								diffuse |= (UnsignedInt)value << (8*byte);
+							}
+							vb->diffuse=diffuse;
+							vb->u1=TerrainSubdivide::plane(u, flipped, a, b);
+							vb->v1=TerrainSubdivide::plane(v, flipped, a, b);
+							vb->u2=0;
+							vb->v2=0;
+							vb++;
+						}
+					}
+					// Cut as the base tile is cut, by the cell's drawn diagonal, so the two surfaces are one
+					// and the pass does not fight the ground under it; the texture and the blend at the nine
+					// points keep this tile's own diagonal (above), the shape EA gave the 3-way blend.
+					ib = TerrainSubdivide::cell(ib, vertexCount, drawnFlip(x, y) != FALSE);
+					vertexCount += 9;
+					indexCount += 24;
+					continue;
+				}
+
+				vb->x=(x-border)*MAP_XY_FACTOR;
 				vb->y=(y-border)*MAP_XY_FACTOR;
 				vb->z=p0;
 				vb->nx=0;
@@ -2439,25 +2759,28 @@ void HeightMapRenderObjClass::renderExtraBlendTiles(void)
 		} catch(...) {
 			IndexBufferExceptionFunc();
 		}
+		m_extraBlendVertexCount[batch] = vertexCount;
+		m_extraBlendIndexCount[batch] = indexCount;
+		}//unlock this batch's buffers
 
 		memcpy(m_extraBlendKey, key, sizeof(key));
 		m_extraBlendMap = m_map;
-		m_extraBlendVertexCount = vertexCount;
-		m_extraBlendIndexCount = indexCount;
-	}//unlock vertex buffer
-	vertexCount = m_extraBlendVertexCount;
-	indexCount = m_extraBlendIndexCount;
+	}
+	vertexCount = 0;
+	indexCount = 0;
+	for (Int b = 0; b < m_extraBlendBatches; b++) {
+		vertexCount += m_extraBlendVertexCount[b];
+		indexCount += m_extraBlendIndexCount[b];
+	}
 
 	if (vertexCount)
 	{
 		//Check if we couldn't fit all blend tiles into vertex buffer so we can enlarge it for next frame.
 		// Only the main view grows it; the mirror reuses this frame's terrain buffers.
-		if (vertexCount == (maxBlendTiles*4) && (!TheWaterRenderObj || !TheWaterRenderObj->isModernFullMirror()))
+		if (vertexCount/tileVerts >= maxBlendTiles && maxBlendTiles < 10000 && (!TheWaterRenderObj || !TheWaterRenderObj->isModernFullMirror()))
 			maxBlendTiles += 16;	//enlarge by 16 to reduce trashing.
 
 		ShaderClass::Invalidate();	//invalidate to force shader to reset since we directly changed states
-		DX8Wrapper::Set_Index_Buffer(m_extraBlendIB,0);
-		DX8Wrapper::Set_Vertex_Buffer(m_extraBlendVB);
 		VertexMaterialClass *vmat=VertexMaterialClass::Get_Preset(VertexMaterialClass::PRELIT_DIFFUSE);
 		DX8Wrapper::Set_Material(vmat);
 		REF_PTR_RELEASE(vmat);
@@ -2474,8 +2797,14 @@ void HeightMapRenderObjClass::renderExtraBlendTiles(void)
 			DX8Wrapper::Set_Shader(shader);
 			DX8Wrapper::Set_Texture(0,NULL);	//debug mode which draws terrain tiles in white.
 			if (Is_Hidden() == 0) {
-				DX8Wrapper::Draw_Triangles(	0,indexCount/3, 0,	vertexCount);	//draw a quad, 2 triangles, 4 verts
-				m_numVisibleExtraBlendTiles += indexCount/6;
+				for (Int b = 0; b < m_extraBlendBatches; b++) {
+					if (m_extraBlendVertexCount[b] == 0)
+						continue;
+					DX8Wrapper::Set_Index_Buffer(m_extraBlendIB[b],0);
+					DX8Wrapper::Set_Vertex_Buffer(m_extraBlendVB[b]);
+					DX8Wrapper::Draw_Triangles(	0,m_extraBlendIndexCount[b]/3, 0,	m_extraBlendVertexCount[b]);
+				}
+				m_numVisibleExtraBlendTiles += indexCount/tileIndices;
 			}
 		}
 		else
@@ -2510,8 +2839,14 @@ void HeightMapRenderObjClass::renderExtraBlendTiles(void)
 			{
 				W3DShaderManager::setShader(st, pass);
 				if (Is_Hidden() == 0) {
-					DX8Wrapper::Draw_Triangles(	0,indexCount/3, 0,	vertexCount);	//draw a quad, 2 triangles, 4 verts
-					m_numVisibleExtraBlendTiles += indexCount/6;
+					for (Int b = 0; b < m_extraBlendBatches; b++) {
+						if (m_extraBlendVertexCount[b] == 0)
+							continue;
+						DX8Wrapper::Set_Index_Buffer(m_extraBlendIB[b],0);
+						DX8Wrapper::Set_Vertex_Buffer(m_extraBlendVB[b]);
+						DX8Wrapper::Draw_Triangles(	0,m_extraBlendIndexCount[b]/3, 0,	m_extraBlendVertexCount[b]);
+					}
+					m_numVisibleExtraBlendTiles += indexCount/tileIndices;
 				}
 			}
 			W3DShaderManager::resetShader(st);

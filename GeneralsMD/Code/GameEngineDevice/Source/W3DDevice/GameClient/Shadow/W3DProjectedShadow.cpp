@@ -61,6 +61,7 @@
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
 #include "W3DDevice/GameClient/W3DShadow.h"
 #include "W3DDevice/GameClient/HeightMap.h"
+#include "W3DDevice/GameClient/TerrainSubdivide.h"
 #include "Platform/RenderTypes.h"
 
 #ifdef _INTERNAL
@@ -1216,14 +1217,21 @@ void W3DProjectedShadowManager::queueDecal(W3DProjectedShadow *shadow, Bool sunC
 			endY-=numEdgeExtraY;
 		}
 
-		Int vertsPerRow=endX - startX+1;	//number of cells +1
-		Int vertsPerColumn=endY-startY+1;	//number of cells +1
-
-		if (vertsPerRow <= 1 || vertsPerColumn <= 1)
+		if (endX - startX < 1 || endY - startY < 1)
 			return;	//nothing to render
 
+		/* On subdivided ground (TerrainSubdivide.h) the decal lies on the tiles' half cells and their
+			 heights, so it follows what is drawn instead of sinking into a bulge.  Past 52 cells a side
+			 its four times the triangles would not fit the batch's sixteen bit indices, and so big a
+			 decal (a superweapon's marker) keeps the whole cells and the old lift. */
+		const Int SUBDIVIDED_DECAL_CELLS = 52;
+		const Int step = (TheTerrainRenderObject->terrainSubdivided() && endX - startX <= SUBDIVIDED_DECAL_CELLS
+			&& endY - startY <= SUBDIVIDED_DECAL_CELLS) ? 1 : 2;
+		Int vertsPerRow=(2*(endX - startX))/step+1;	//number of cells +1, or half cells +1
+		Int vertsPerColumn=(2*(endY-startY))/step+1;
+
 		Int numVerts = vertsPerRow *vertsPerColumn;	//number of terrain vertices
-		Int numIndex=(endX - startX) * (endY-startY)*6;	//6 indices per terrain cell (2 triangles).
+		Int numIndex=(vertsPerRow-1) * (vertsPerColumn-1)*6;	//6 indices per quad (2 triangles).
 
 		//a batch that cannot take this decal is drawn first
 		if (nShadowDecalVertsInBatch > (SHADOW_DECAL_VERTEX_SIZE-numVerts) ||
@@ -1241,7 +1249,7 @@ void W3DProjectedShadowManager::queueDecal(W3DProjectedShadow *shadow, Bool sunC
 		vVector.Normalize();
 		vVector /= decalSizeY + (1.0f+4.0f/64.0f);
 */
-		DEBUG_ASSERTCRASH(numVerts == ((endY-startY+1)*(endX-startX+1)), ("queueDecal VB size mismatch"));
+		DEBUG_ASSERTCRASH(numVerts == ((2*(endY-startY))/step+1)*((2*(endX-startX))/step+1), ("queueDecal VB size mismatch"));
 
 		/* Every decal's cells are laid again every pass.  A cache of them per decal was tried on
 			 2026-10-27 and saved next to nothing: most of a late game's decals turn or drift every pass
@@ -1251,32 +1259,34 @@ void W3DProjectedShadowManager::queueDecal(W3DProjectedShadow *shadow, Bool sunC
 			 getHeight and m_diffuse again for every vertex. */
 		const UnsignedInt diffuse=shadow->m_diffuse;
 		const Int firstVertex=nShadowDecalVertsInBatch;
-		const UnsignedByte *heights=hmap->getDataPtr();
-		const Int heightRow=hmap->getXExtent();
-		const Real lift=0.01f * MAP_XY_FACTOR;
+		// a decal too big for the half cells lies on whole cells over subdivided ground, which bulges up to
+		// TerrainSubdivide::CAP steps above their plane: lifted that much more, no bulge swallows it
+		const Real lift=0.01f * MAP_XY_FACTOR
+			+ ((TheTerrainRenderObject->terrainSubdivided() && step == 2) ? TerrainSubdivide::CAP*MAP_HEIGHT_SCALE : 0.0f);
 
 		/* A vertex's texture coordinates are its dot products with the decal's axes.  The column's term
 			 and the row's are taken once each and summed in Vector3::Dot_Product's order, so every bit
 			 comes out as it did per vertex. */
-		Real columnX[104], columnU[104], columnV[104];	//the clip above keeps a row to 104 vertices
+		Real columnX[2*104], columnU[2*104], columnV[2*104];	//the clip above keeps a row to 104 vertices, 105 subdivided
+		Int j2;
 		for (i=0; i<vertsPerRow; i++)
 		{
-			columnX[i]=(float)(startX+i-borderSize)*MAP_XY_FACTOR;
+			columnX[i]=(float)(2*(startX-borderSize)+i*step)*(0.5f*MAP_XY_FACTOR);
 			columnU[i]=uVector.X*(columnX[i]-objPos.X);
 			columnV[i]=vVector.X*(columnX[i]-objPos.X);
 		}
 
 		//the clamp to the drawn terrain above keeps every cell inside the map, so heights and flip bits are read unchecked
 		SHADOW_DECAL_VERTEX *pvVertices = decalStageVertices + firstVertex;
-		for (j=startY; j <= endY; j++)
+		for (j2=0; j2 < vertsPerColumn; j2++)
 		{
-			const Real y=(float)(j-borderSize) * MAP_XY_FACTOR;
+			const Int y2=2*startY+j2*step;
+			const Real y=(float)(y2-2*borderSize) * (0.5f*MAP_XY_FACTOR);
 			const Real rowU=uVector.Y*(y-objPos.Y);
 			const Real rowV=vVector.Y*(y-objPos.Y);
-			const UnsignedByte *height=heights + j*heightRow + startX;
 			for (i=0; i<vertsPerRow; i++)
 			{
-				Real z=(float)height[i]*MAP_HEIGHT_SCALE;
+				Real z=TheTerrainRenderObject->drawnHalfZ(2*startX+i*step, y2);
 				z = layerHeight ? __max(z,layerHeight) : z+lift;	//off a bridge, each cell's bottom/left edge vertex lifted off the ground
 				pvVertices->x=columnX[i];
 				pvVertices->y=y;
@@ -1291,32 +1301,18 @@ void W3DProjectedShadowManager::queueDecal(W3DProjectedShadow *shadow, Bool sunC
 		//fill each cell's vertex indices
 		UnsignedShort *pvIndices = decalStageIndices + nShadowDecalPolysInBatch*3;
 		Int rowStart;
-		for (j=startY,rowStart=firstVertex; j<endY; j++,rowStart+=vertsPerRow)
+		for (j2=0,rowStart=firstVertex; j2<vertsPerColumn-1; j2++,rowStart+=vertsPerRow)
 		{
-			for (i=rowStart,k=startX; k<endX; i++,k++)
+			//each quad takes its cell's diagonal, as the tiles cut it
+			j=(2*startY+j2*step)>>1;
+			for (i=rowStart,k=0; k<vertsPerRow-1; i++,k++)
 			{
-				///@todo: fix the winding order in heightmap to be in strip order like above!
-				if (hmap->getQuickFlipState(k,j))
-				{	pvIndices[0]=i+1;
-					pvIndices[1]=i+vertsPerRow;
-					pvIndices[2]=i;
-					pvIndices[3]=i+1;
-					pvIndices[4]=i+1+vertsPerRow;
-					pvIndices[5]=i+vertsPerRow;
-				}
-				else
-				{	pvIndices[0]=i;
-					pvIndices[1]=i+1+vertsPerRow;
-					pvIndices[2]=i+vertsPerRow;
-					pvIndices[3]=i;
-					pvIndices[4]=i+1;
-					pvIndices[5]=i+1+vertsPerRow;
-				}
-				pvIndices += 6;
+				pvIndices = TerrainSubdivide::quad(pvIndices, i, i+1, i+1+vertsPerRow, i+vertsPerRow,
+					TheTerrainRenderObject->drawnFlip((2*startX+k*step)>>1,j) != FALSE);
 			}
 		}
 
-		Int numPolys = (endX - startX)*(endY - startY)*2;	//2 triangles per cell
+		Int numPolys = (vertsPerRow-1)*(vertsPerColumn-1)*2;	//2 triangles per quad
 		nShadowDecalPolysInBatch += numPolys;
 		nShadowDecalVertsInBatch += numVerts;
 		return;

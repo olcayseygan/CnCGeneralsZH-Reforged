@@ -2847,6 +2847,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DTruckDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/StructureCollapse.h
 GameEngineDevice/Include/W3DDevice/GameClient/SunShadowCasterCull.h
 GameEngineDevice/Include/W3DDevice/GameClient/TankWheelSpin.h
+GameEngineDevice/Include/W3DDevice/GameClient/TerrainSubdivide.h
 GameEngineDevice/Include/W3DDevice/GameClient/TerrainTex.h
 GameEngineDevice/Include/W3DDevice/GameClient/TileData.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DAssetManager.h
@@ -4347,6 +4348,7 @@ Tests/test_sun_shadow_sorting.cpp
 Tests/test_supply_center_save.inc
 Tests/test_support.cpp
 Tests/test_terrain_golden.cpp
+Tests/test_terrain_subdivide.cpp
 Tests/test_user_data_guard.cpp
 Tests/test_userfolders.cpp
 Tests/test_w3dlayout.cpp

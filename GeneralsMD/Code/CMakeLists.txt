@@ -2294,6 +2294,9 @@ target_include_directories(test_audio_mix_policy PRIVATE ${CMAKE_CURRENT_SOURCE_
 add_lib_test(test_ground_marks)
 target_include_directories(test_ground_marks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
+# W3DDevice/GameClient/TerrainSubdivide.h: the subdivided ground through the samples, near the plane.
+add_lib_test(test_terrain_subdivide)
+target_include_directories(test_terrain_subdivide PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
 # W3DDevice/GameClient/FoliagePlacement.h: where the GroundFoliage option's grass tufts stand.
 add_lib_test(test_foliage_placement)
 target_include_directories(test_foliage_placement PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)

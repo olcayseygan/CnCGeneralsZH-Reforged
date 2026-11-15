@@ -238,6 +238,7 @@ public:
 	Bool m_shadowMap;							// "-shadowmap": draw the casters into the sun's depth buffer as well
 	Bool m_shadowMapReport;				// "-shadowmapreport": log what ended up in that buffer, once a second
 	Bool m_vertexTerrainSun;			// "-vertexTerrainSun": the ground keeps EA's per-vertex sun on Direct3D 11 too, the before half of a picture
+	Bool m_noTerrainSubdivide;		// "-noTerrainSubdivide": the ground keeps EA's two triangles a cell on Direct3D 11 too, the before half of a picture
 	Bool m_shadowMapOldCasters;		// "-shadowmapoldcasters": every caster through the mesh renderer, none instanced
 	Bool m_shadowMapOnly;					// "-shadowmaponly": the map's shadows with the stencil volumes' own darkening off
 	Real m_shadowMapPenumbra;			// "-shadowtune": penumbra per world unit of gap under the caster, 0 for the built-in

@@ -102,6 +102,7 @@
 #include "W3DDevice/GameClient/FlatHeightMap.h"
 #include "W3DDevice/GameClient/W3DSmudge.h"
 #include "W3DDevice/GameClient/W3DSnow.h"
+#include "W3DDevice/GameClient/TerrainSubdivide.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -191,13 +192,17 @@ void BaseHeightMapRenderObjClass::drawScorches(void)
 	if (m_curNumScorchIndices == 0) {
 		return;
 	}
-	DX8Wrapper::Set_Index_Buffer(m_indexScorch,0);
-	DX8Wrapper::Set_Vertex_Buffer(m_vertexScorch);
 	DX8Wrapper::Set_Shader(ShaderClass::_PresetAlphaShader);
 
 	DX8Wrapper::Set_Texture(0,m_scorchTexture);
 	if (Is_Hidden() == 0) {
-		DX8Wrapper::Draw_Triangles(	0,m_curNumScorchIndices/3, 0,	m_curNumScorchVertices);
+		for (Int b = 0; b < SCORCH_BUFFERS; b++) {
+			if (m_scorchIndices[b] == 0 || m_vertexScorch[b] == NULL || m_indexScorch[b] == NULL)
+				continue;
+			DX8Wrapper::Set_Index_Buffer(m_indexScorch[b],0);
+			DX8Wrapper::Set_Vertex_Buffer(m_vertexScorch[b]);
+			DX8Wrapper::Draw_Triangles(	0,m_scorchIndices[b]/3, 0,	m_scorchVertices[b]);
+		}
 	}
 }
 #endif
@@ -305,6 +310,11 @@ BaseHeightMapRenderObjClass::BaseHeightMapRenderObjClass(void)
 	m_staticDiffuseStale = true;
 	m_staticDiffuseFrame = 0;
 	m_terrainContentVersion = 0;
+	m_subdivided = FALSE;
+	m_drawnHalfWidth = 0;
+	m_drawnHalfHeight = 0;
+	m_drawnHalfMap = NULL;
+	m_drawnFlipWidth = 0;
 	m_disableTextures = false;
 	TheTerrainRenderObject = this;
 	m_treeBuffer = NULL; 
@@ -329,8 +339,12 @@ BaseHeightMapRenderObjClass::BaseHeightMapRenderObjClass(void)
 	m_roadBuffer = NEW W3DRoadBuffer;
 #endif
 #ifdef DO_SCORCH
-	m_vertexScorch = NULL;
-	m_indexScorch = NULL;
+	for (Int b = 0; b < SCORCH_BUFFERS; b++) {
+		m_vertexScorch[b] = NULL;
+		m_indexScorch[b] = NULL;
+		m_scorchVertices[b] = 0;
+		m_scorchIndices[b] = 0;
+	}
 	m_scorchTexture = NULL;
 	m_currentTextureLOD = 0;
 	clearAllScorches();
@@ -880,6 +894,42 @@ bool BaseHeightMapRenderObjClass::Cast_Ray(RayCollisionTestClass & raytest)
 		for (Y=StartCellY-offset; Y<=EndCellY+offset; Y++) { 
 
 			for (X=StartCellX-offset; X<=EndCellX+offset; X++) {
+				if (m_subdivided && X >= 0 && Y >= 0 && X < m_map->getXExtent()-1 && Y < m_map->getYExtent()-1) {
+					// The ground as the subdivided tiles draw it: four quads a cell on the half cell
+					// heights, each cut along the cell's own diagonal, wound as the two below are.
+					const Bool flip = drawnFlip(X, Y);
+					Vector3 grid[9];
+					for (Int b = 0; b < 3; b++) {
+						for (Int a = 0; a < 3; a++) {
+							grid[b*3+a].Set(ADJUST_FROM_INDEX_TO_REAL(X) + a*0.5f*MAP_XY_FACTOR,
+								ADJUST_FROM_INDEX_TO_REAL(Y) + b*0.5f*MAP_XY_FACTOR, drawnHalfZ(2*X+a, 2*Y+b));
+						}
+					}
+					for (Int q = 0; q < 4; q++) {
+						Vector3 *tl = &grid[(q>>1)*3 + (q&1)];
+						Vector3 *tr = tl + 1, *bl = tl + 3, *br = tl + 4;
+						Vector3 *corners[2][3] = { { tl, br, bl }, { tl, tr, br } };
+						if (flip) {
+							corners[0][0] = tr; corners[0][1] = bl; corners[0][2] = tl;
+							corners[1][0] = tr; corners[1][1] = br; corners[1][2] = bl;
+						}
+						for (Int t = 0; t < 2; t++) {
+							tri.V[0] = corners[t][0];
+							tri.V[1] = corners[t][1];
+							tri.V[2] = corners[t][2];
+							tri.N = &normal;
+							tri.Compute_Normal();
+							// every triangle is asked, as Collide keeps the nearest: a nearer one may come later
+							if (CollisionMath::Collide(raytest.Ray, tri, raytest.Result))
+								hit = true;
+							if (raytest.Result->StartBad)
+								return true;
+						}
+					}
+					if (hit)
+						raytest.Result->SurfaceType = SURFACE_TYPE_DEFAULT;
+					continue;
+				}
 				//test the 2 triangles in this cell
 				//	3-----2
 				//  |    /|
@@ -969,6 +1019,166 @@ Real BaseHeightMapRenderObjClass::getHeightMapHeight(Real x, Real y, Coord3D* no
 Real BaseHeightMapRenderObjClass::getDrawHeight(Real x, Real y) const
 {
 	return TerrainHeightSampling::getHeightMapHeight(m_map, m_map, x, y, NULL);
+}
+
+//=============================================================================
+/** The drawn ground at a half cell, the tiles' own height there (TerrainSubdivide::height with the
+	cell's flip bit, which is what the tiles cut the cell by). */
+//=============================================================================
+Real BaseHeightMapRenderObjClass::drawnHalfZ(Int x2, Int y2)
+{
+	if (m_drawnHalfMap != NULL && m_drawnHalfMap == m_map && x2 >= 0 && y2 >= 0
+			&& x2 < m_drawnHalfWidth && y2 < m_drawnHalfHeight)
+		return m_drawnHalf[(size_t)y2*m_drawnHalfWidth + x2];
+	return computeDrawnHalfZ(x2, y2);
+}
+
+Real BaseHeightMapRenderObjClass::computeDrawnHalfZ(Int x2, Int y2)
+{
+	if (m_map == NULL)
+		return 0.0f;
+	const TerrainSubdivide::Heights heights = { m_map->getDataPtr(), m_map->getXExtent(), m_map->getYExtent() };
+	const Bool flip = (x2 & y2 & 1) ? drawnFlip(x2 >> 1, y2 >> 1) : FALSE;
+	return MAP_HEIGHT_SCALE * TerrainSubdivide::height(heights, x2, y2, flip != FALSE);
+}
+
+//=============================================================================
+/** A cell's diagonal as the drawn ground cuts it (m_drawnFlip while subdivided). */
+//=============================================================================
+Bool BaseHeightMapRenderObjClass::drawnFlip(Int x, Int y)
+{
+	if (m_map == NULL)
+		return FALSE;
+	if (m_subdivided && m_drawnFlipWidth > 0 && x >= 0 && y >= 0 && x < m_drawnFlipWidth) {
+		const size_t at = (size_t)y*m_drawnFlipWidth + x;
+		if (at < m_drawnFlip.size())
+			return m_drawnFlip[at] != 0;
+	}
+	return m_map->getFlipState(x, y);
+}
+
+//=============================================================================
+/** The tiles' flips (getAlphaUVData, as updateVB asks it) and the samples of cells x0..x1 by y0..y1,
+	whole map indices, inclusive.  TRUE when anything differs from what was kept. */
+//=============================================================================
+Bool BaseHeightMapRenderObjClass::takeDrawnInputs(Int x0, Int y0, Int x1, Int y1)
+{
+	if (m_map == NULL)
+		return FALSE;
+	const Int width = m_map->getXExtent(), height = m_map->getYExtent();
+	Bool moved = FALSE;
+	if (m_drawnFlipWidth != width - 1 || m_drawnFlip.size() != (size_t)(width - 1)*(height - 1)
+			|| m_drawnHeights.size() != (size_t)width*height) {
+		m_drawnFlipWidth = width - 1;
+		m_drawnFlip.assign((size_t)(width - 1)*(height - 1), 0);
+		m_drawnHeights.assign((size_t)width*height, 0);
+		x0 = y0 = 0;
+		x1 = width - 2;
+		y1 = height - 2;
+		moved = TRUE;
+	}
+	x0 = max(x0, 0);
+	y0 = max(y0, 0);
+	x1 = min(x1, width - 2);
+	y1 = min(y1, height - 2);
+	const UnsignedByte *data = m_map->getDataPtr();
+	for (Int y = y0; y <= y1 + 1; y++) {
+		for (Int x = x0; x <= x1 + 1; x++) {
+			const size_t at = (size_t)y*width + x;
+			if (m_drawnHeights[at] != data[at]) {
+				m_drawnHeights[at] = data[at];
+				moved = TRUE;
+			}
+		}
+	}
+	for (Int y = y0; y <= y1; y++) {
+		for (Int x = x0; x <= x1; x++) {
+			float U[4], V[4];
+			UnsignedByte alpha[4];
+			Bool flip = FALSE;
+			m_map->getAlphaUVData(x - m_map->getDrawOrgX(), y - m_map->getDrawOrgY(), U, V, alpha, &flip, false);
+			const UnsignedByte value = flip ? 1 : 0;
+			UnsignedByte &kept = m_drawnFlip[(size_t)y*m_drawnFlipWidth + x];
+			if (kept != value) {
+				kept = value;
+				moved = TRUE;
+			}
+		}
+	}
+	return moved;
+}
+
+//=============================================================================
+/** The table drawnHalfZ reads, for the half cells of cells x0..x1 by y0..y1 and their edges.  A map
+	of another size, or another map, fills the whole of it. */
+//=============================================================================
+void BaseHeightMapRenderObjClass::refreshDrawnHalf(Int x0, Int y0, Int x1, Int y1)
+{
+	if (m_map == NULL)
+		return;
+	const Int width = 2*m_map->getXExtent() - 1;
+	const Int height = 2*m_map->getYExtent() - 1;
+	if (m_drawnHalfMap != m_map || width != m_drawnHalfWidth || height != m_drawnHalfHeight) {
+		m_drawnHalfMap = NULL;	// read through computeDrawnHalfZ while it fills
+		m_drawnHalf.assign((size_t)width*height, 0.0f);
+		m_drawnHalfWidth = width;
+		m_drawnHalfHeight = height;
+		x0 = y0 = 0;
+		x1 = m_map->getXExtent();
+		y1 = m_map->getYExtent();
+	} else {
+		m_drawnHalfMap = NULL;
+	}
+	// computeDrawnHalfZ's answers, each cell's limit worked out once (test_terrain_subdivide holds the two equal)
+	struct DrawnFlip
+	{
+		BaseHeightMapRenderObjClass *ground;
+		bool operator()(Int x, Int y) const { return ground->drawnFlip(x, y) != FALSE; }
+	} flip = { this };
+	const TerrainSubdivide::Heights heights = { m_map->getDataPtr(), m_map->getXExtent(), m_map->getYExtent() };
+	TerrainSubdivide::fill(heights, x0, y0, x1, y1, flip, MAP_HEIGHT_SCALE, &m_drawnHalf[0], width);
+	m_drawnHalfMap = m_map;
+}
+
+void BaseHeightMapRenderObjClass::freeDrawnHalf(void)
+{
+	std::vector<Real>().swap(m_drawnHalf);
+	std::vector<UnsignedByte>().swap(m_drawnFlip);
+	std::vector<UnsignedByte>().swap(m_drawnHeights);
+	m_drawnFlipWidth = 0;
+	m_drawnHalfMap = NULL;
+	m_drawnHalfWidth = 0;
+	m_drawnHalfHeight = 0;
+}
+
+//=============================================================================
+/** The drawn ground at any point: the subdivided tiles' own triangles when they are on, else
+	getDrawHeight's.  For what is laid on the ground point by point (the attack circle's wash, the
+	order rings, the build grid), which would otherwise sit on the old plane under a bulge. */
+//=============================================================================
+Real BaseHeightMapRenderObjClass::getDrawnHeight(Real x, Real y)
+{
+	if (!m_subdivided || m_map == NULL)
+		return getDrawHeight(x, y);
+	const Real half = 0.5f * MAP_XY_FACTOR;
+	const Real fx = x / half + 2*m_map->getBorderSizeInline();
+	const Real fy = y / half + 2*m_map->getBorderSizeInline();
+	const Int x2 = REAL_TO_INT_FLOOR(fx);
+	const Int y2 = REAL_TO_INT_FLOOR(fy);
+	if (x2 < 0 || y2 < 0 || x2 >= 2*(m_map->getXExtent()-1) || y2 >= 2*(m_map->getYExtent()-1))
+		return getDrawHeight(x, y);
+	const Real s = fx - x2, t = fy - y2;
+	const Real z00 = drawnHalfZ(x2, y2), z10 = drawnHalfZ(x2+1, y2);
+	const Real z11 = drawnHalfZ(x2+1, y2+1), z01 = drawnHalfZ(x2, y2+1);
+	// the small quad's cut is its cell's diagonal
+	if (!drawnFlip(x2 >> 1, y2 >> 1)) {
+		if (s >= t)
+			return z00 + s*(z10 - z00) + t*(z11 - z10);
+		return z00 + t*(z01 - z00) + s*(z11 - z01);
+	}
+	if (s + t <= 1.0f)
+		return z00 + s*(z10 - z00) + t*(z01 - z00);
+	return z11 + (1.0f - s)*(z01 - z11) + (1.0f - t)*(z10 - z11);
 }
 
 //=============================================================================
@@ -1613,8 +1823,12 @@ Int BaseHeightMapRenderObjClass::initHeightData(Int x, Int y, WorldHeightMap *pM
 //=============================================================================
 void BaseHeightMapRenderObjClass::freeScorchBuffers(void)
 {
-	REF_PTR_RELEASE(m_vertexScorch);
-	REF_PTR_RELEASE(m_indexScorch);
+	for (Int b = 0; b < SCORCH_BUFFERS; b++) {
+		REF_PTR_RELEASE(m_vertexScorch[b]);
+		REF_PTR_RELEASE(m_indexScorch[b]);
+		m_scorchVertices[b] = 0;
+		m_scorchIndices[b] = 0;
+	}
 	REF_PTR_RELEASE(m_scorchTexture);
 }
 
@@ -1625,8 +1839,9 @@ void BaseHeightMapRenderObjClass::freeScorchBuffers(void)
 //=============================================================================
 void BaseHeightMapRenderObjClass::allocateScorchBuffers(void)
 {
-	m_vertexScorch=NEW_REF(DX8VertexBufferClass,(DX8_FVF_XYZDUV1,MAX_SCORCH_VERTEX,DX8VertexBufferClass::USAGE_DEFAULT));
-	m_indexScorch=NEW_REF(DX8IndexBufferClass,(MAX_SCORCH_INDEX));
+	// the first pair; the subdivided ground's others are made the first time a fill reaches them
+	m_vertexScorch[0]=NEW_REF(DX8VertexBufferClass,(DX8_FVF_XYZDUV1,MAX_SCORCH_VERTEX,DX8VertexBufferClass::USAGE_DEFAULT));
+	m_indexScorch[0]=NEW_REF(DX8IndexBufferClass,(MAX_SCORCH_INDEX));
 	m_scorchTexture=NEW ScorchTextureClass;
 	applyScorchTextureLOD();	// a fresh texture starts at full size; the player may have asked for less
 	m_scorchesInBuffer = 0; // If we just allocated the buffers, we got no scorches in the buffer.
@@ -1659,25 +1874,17 @@ void BaseHeightMapRenderObjClass::updateScorches(void)
 		m_curNumScorchIndices = 0;
 		return;
 	}
-	if (!m_indexScorch || !m_vertexScorch) {
+	if (!m_indexScorch[0] || !m_vertexScorch[0]) {
 		return;
 	}
 	m_curNumScorchVertices = 0;
 	m_curNumScorchIndices = 0;
-	DX8IndexBufferClass::WriteLockClass lockIdxBuffer(m_indexScorch);
-	UnsignedShort *ib=lockIdxBuffer.Get_Index_Array();
-
-	DX8VertexBufferClass::WriteLockClass lockVtxBuffer(m_vertexScorch);
-	VertexFormatXYZDUV1 *vb = (VertexFormatXYZDUV1*)lockVtxBuffer.Get_Vertex_Array();
-
-	// a failed lock - a device that has gone away - hands back nothing to write into, and the
-	// counts stay at zero so nothing is drawn from a buffer that was never filled
-	if (ib == NULL || vb == NULL) {
-		return;
+	for (Int b = 0; b < SCORCH_BUFFERS; b++) {
+		m_scorchVertices[b] = 0;
+		m_scorchIndices[b] = 0;
 	}
-
-	UnsignedShort *curIb = ib;
-	VertexFormatXYZDUV1 *curVb = vb;
+	// A mark on the subdivided ground is four times the indices, so it gets four pairs and keeps EA's count.
+	const Int buffersToFill = m_subdivided ? SCORCH_BUFFERS : 1;
 
 	Int curScorch;
 	Real shadeR, shadeG, shadeB;
@@ -1706,7 +1913,32 @@ void BaseHeightMapRenderObjClass::updateScorches(void)
 	const Int markSlots = m_groundMarks.empty() ? 0 : GroundMarks::CAPACITY;
 	const UnsignedInt markFrame = TheGameLogic->getFrame();
 	const Real MARK_ALPHA = 220.0f;
-	for (curScorch=m_numScorches-1+markSlots; curScorch>=0; curScorch--) {
+	curScorch = m_numScorches-1+markSlots;
+	for (Int buffer = 0; buffer < buffersToFill && curScorch >= 0; buffer++) {
+	if (m_vertexScorch[buffer] == NULL) {
+		m_vertexScorch[buffer]=NEW_REF(DX8VertexBufferClass,(DX8_FVF_XYZDUV1,MAX_SCORCH_VERTEX,DX8VertexBufferClass::USAGE_DEFAULT));
+		m_indexScorch[buffer]=NEW_REF(DX8IndexBufferClass,(MAX_SCORCH_INDEX));
+	}
+	DX8IndexBufferClass::WriteLockClass lockIdxBuffer(m_indexScorch[buffer]);
+	UnsignedShort *ib=lockIdxBuffer.Get_Index_Array();
+
+	DX8VertexBufferClass::WriteLockClass lockVtxBuffer(m_vertexScorch[buffer]);
+	VertexFormatXYZDUV1 *vb = (VertexFormatXYZDUV1*)lockVtxBuffer.Get_Vertex_Array();
+
+	// a failed lock - a device that has gone away - hands back nothing to write into, and the
+	// counts stay at zero so nothing is drawn from a buffer that was never filled; nothing counts as
+	// built either, so the next frame tries again (a later pair's lock fails with marks already counted)
+	if (ib == NULL || vb == NULL) {
+		m_scorchesInBuffer = 0;
+		return;
+	}
+
+	UnsignedShort *curIb = ib;
+	VertexFormatXYZDUV1 *curVb = vb;
+	Int &bufferVertices = m_scorchVertices[buffer];
+	Int &bufferIndices = m_scorchIndices[buffer];
+
+	for (; curScorch>=0; curScorch--) {
 		Real radius;
 		Vector3 loc;
 		Int type;
@@ -1718,7 +1950,7 @@ void BaseHeightMapRenderObjClass::updateScorches(void)
 			}
 			m_scorchesInBuffer++;
 			const Real strength = GroundMarks::strength(markFrame - mark.born);
-			if (strength <= 0.0f || m_curNumScorchIndices > MAX_SCORCH_INDEX/2) {
+			if (strength <= 0.0f || m_curNumScorchIndices > buffersToFill*MAX_SCORCH_INDEX/2) {
 				continue;
 			}
 			radius = mark.radius;
@@ -1753,71 +1985,64 @@ void BaseHeightMapRenderObjClass::updateScorches(void)
 		if (maxY > m_map->getYExtent()-m_map->getBorderSizeInline()) {
 			maxY = m_map->getYExtent()-m_map->getBorderSizeInline();
 		}
-		Int vertexCountX = maxX-minX;
-		Int vertexCountY = maxY-minY;
-		if (vertexCountX <= 0 || vertexCountY <= 0) {
+		if (maxX-minX <= 0 || maxY-minY <= 0) {
 			continue;
 		}
+		// The scorch's grid is the ground's: half cells when the tiles are subdivided, so it lies on
+		// what they draw (drawnHalfZ) instead of cutting through it.
+		const Int step = drawnStep();
+		const Int border = m_map->getBorderSizeInline();
+		Int vertexCountX = (2*(maxX-minX-1))/step + 1;
+		Int vertexCountY = (2*(maxY-minY-1))/step + 1;
 		// The whole scorch fits or none of it is written.  Checking inside the loops left the last
 		// one half drawn, a strip of triangles cut off wherever the buffer ran out.  Newest first, so
-		// what gets dropped when it is full is the oldest marks.
-		if (m_curNumScorchVertices + vertexCountX*vertexCountY > MAX_SCORCH_VERTEX ||
-				m_curNumScorchIndices + 6*(vertexCountX-1)*(vertexCountY-1) > MAX_SCORCH_INDEX) {
-			return;
+		// what gets dropped when it is full is the oldest marks.  A full pair hands the mark on to
+		// the next; one too big for an empty pair is passed over.
+		if (bufferVertices + vertexCountX*vertexCountY > MAX_SCORCH_VERTEX ||
+				bufferIndices + 6*(vertexCountX-1)*(vertexCountY-1) > MAX_SCORCH_INDEX) {
+			if (bufferVertices == 0)
+				continue;
+			break;
 		}
-		Int startVertex = m_curNumScorchVertices;
+		Int startVertex = bufferVertices;
 		Int i, j;
-		for (j=minY; j<maxY; j++) {
-			for (i=minX; i<maxX; i++) {
+		for (j=0; j<vertexCountY; j++) {
+			for (i=0; i<vertexCountX; i++) {
+				const Int x2 = 2*(minX+border) + i*step;
+				const Int y2 = 2*(minY+border) + j*step;
 				curVb->diffuse = vertexDiffuse;
 				Real theZ;
-				theZ = amtToFloat+((float)getClipHeight(i+m_map->getBorderSizeInline(),j+m_map->getBorderSizeInline())*MAP_HEIGHT_SCALE);
+				theZ = amtToFloat+drawnHalfZ(x2, y2);
 				// The scorchmarks are spaced out by 1.5 in the texture.
 				Real uOffset = (type%SCORCH_PER_ROW) * 1.5f;
 				Real vOffset = (type/SCORCH_PER_ROW) * 1.5f;
-				Real X = i*MAP_XY_FACTOR; 
-				Real Y = j*MAP_XY_FACTOR;
+				Real X = (x2 - 2*border)*(0.5f*MAP_XY_FACTOR);
+				Real Y = (y2 - 2*border)*(0.5f*MAP_XY_FACTOR);
 				curVb->u1 = (uOffset + 0.5f + (X - loc.X)/(2*radius)) / (SCORCH_PER_ROW+1);
 				curVb->v1 = (vOffset + 0.5f + (Y - loc.Y)/(2*radius)) / (SCORCH_PER_ROW+1);
 				curVb->x = X;
 				curVb->y = Y;
 				curVb->z = theZ;
 				curVb++;
+				bufferVertices++;
 				m_curNumScorchVertices++;
 			}
 		}
-		Int yOffset = maxX-minX;
-		for (j=0; j<maxY-minY-1; j++) {
-			for (i=0; i<maxX-minX-1; i++) {
-				Int xNdx = i+minX+m_map->getBorderSizeInline();
-				Int yNdx = j+minY+m_map->getBorderSizeInline();
-				Bool flipForBlend = m_map->getFlipState(xNdx, yNdx);
-#if 0
-				UnsignedByte alpha[4];
-				float UA[4], VA[4];
-				m_map->getAlphaUVData(xNdx, yNdx, UA, VA, alpha, &flipForBlend, false);
-#endif
-				if (flipForBlend) {
-					*curIb++ = startVertex + j*yOffset + i+1;
- 					*curIb++ = startVertex + j*yOffset + i+yOffset;
-					*curIb++ = startVertex + j*yOffset + i;
- 					*curIb++ = startVertex + j*yOffset + i+1;
- 					*curIb++ = startVertex + j*yOffset + i+1+yOffset;
-					*curIb++ = startVertex + j*yOffset + i+yOffset;
-				}	
-				else 
-				{
-					*curIb++ = startVertex + j*yOffset + i;
-					*curIb++ = startVertex + j*yOffset + i+1+yOffset;
-					*curIb++ = startVertex + j*yOffset + i+yOffset;
-					*curIb++ = startVertex + j*yOffset + i;
-					*curIb++ = startVertex + j*yOffset + i+1;
-					*curIb++ = startVertex + j*yOffset + i+1+yOffset;
-				}
+		Int yOffset = vertexCountX;
+		for (j=0; j<vertexCountY-1; j++) {
+			for (i=0; i<vertexCountX-1; i++) {
+				// the quad's cell, whose diagonal it takes as the tiles do
+				Int xNdx = (2*(minX+border) + i*step) >> 1;
+				Int yNdx = (2*(minY+border) + j*step) >> 1;
+				Bool flipForBlend = drawnFlip(xNdx, yNdx);
+				const Int tl = startVertex + j*yOffset + i;
+				curIb = TerrainSubdivide::quad(curIb, tl, tl+1, tl+1+yOffset, tl+yOffset, flipForBlend != FALSE);
+				bufferIndices+=6;
 				m_curNumScorchIndices+=6;
 			}
 		}
 	}
+	}	// next pair
 
 }
 
@@ -2567,6 +2792,63 @@ void BaseHeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 /**Render parts of terrain that are along the coast line and have vertices directly under the
 water plane.  Applying a custom render to these polygons allows for a smoother land->water
 transition*/
+/** One shoreline tile into the batch: its four corners as EA had them, or, with the tiles subdivided,
+its nine half cell points on the drawn ground, cut as the tiles cut the cell.  A point between the
+corners takes the depth alpha the corners' plane gives it, less what the ground rose there
+(drawnHalfZ against that plane), so the soft edge follows the water's depth over the new shape. */
+void BaseHeightMapRenderObjClass::addShoreLineTile(const shoreLineTileInfo *shoreInfo, Bool flip,
+	VertexFormatXYZNDUV2 *&vb, UnsignedShort *&ib, Int &vertexCount, Int &indexCount)
+{
+	const Real t[4] = { shoreInfo->t0, shoreInfo->t1, shoreInfo->t2, shoreInfo->t3 };
+	const Bool flipped = flip != FALSE;
+	if (!m_subdivided) {
+		for (Int k = 0; k < 4; k++) {
+			vb->x = shoreInfo->verts[k*3];
+			vb->y = shoreInfo->verts[k*3+1];
+			vb->z = shoreInfo->verts[k*3+2];
+			vb->nx=0;	//filling these to keep AGP write buffer happy.
+			vb->ny=0;
+			vb->nz=0;
+			vb->diffuse=0;
+			vb->u1=t[k];
+			vb->v1=0;
+			vb->u2=0;
+			vb->v2=0;
+			vb++;
+		}
+		ib = TerrainSubdivide::quad(ib, vertexCount, vertexCount+1, vertexCount+2, vertexCount+3, flipped);
+		vertexCount += 4;
+		indexCount += 6;
+		return;
+	}
+	const Int x = shoreInfo->m_xy & 0xffff;
+	const Int y = shoreInfo->m_xy >> 16;
+	const Real z[4] = { shoreInfo->verts[2], shoreInfo->verts[5], shoreInfo->verts[8], shoreInfo->verts[11] };
+	const Real transparentDepth = TheWaterTransparency->m_transparentWaterDepth*TheWaterTransparency->m_minWaterOpacity;
+	const Real depthScaleFactor = transparentDepth > 0.0f ? 1.0f/transparentDepth : 0.0f;
+	for (Int b = 0; b < 3; b++) {
+		for (Int a = 0; a < 3; a++) {
+			const Real drawnZ = drawnHalfZ(2*x + a, 2*y + b);
+			vb->x = shoreInfo->verts[0] + a*0.5f*MAP_XY_FACTOR;
+			vb->y = shoreInfo->verts[1] + b*0.5f*MAP_XY_FACTOR;
+			vb->z = drawnZ;
+			vb->nx=0;
+			vb->ny=0;
+			vb->nz=0;
+			vb->diffuse=0;
+			vb->u1=TerrainSubdivide::plane(t, flipped, a, b)
+				- (drawnZ - TerrainSubdivide::plane(z, flipped, a, b))*depthScaleFactor;
+			vb->v1=0;
+			vb->u2=0;
+			vb->v2=0;
+			vb++;
+		}
+	}
+	ib = TerrainSubdivide::cell(ib, vertexCount, flipped);
+	vertexCount += 9;
+	indexCount += 24;
+}
+
 void BaseHeightMapRenderObjClass::renderShoreLines(CameraClass *pCamera)
 {
 	if (!TheGlobalData->m_isWorldBuilder)	//use faster version optimized for game and not world builder?
@@ -2606,12 +2888,14 @@ void BaseHeightMapRenderObjClass::renderShoreLines(CameraClass *pCamera)
 	//Enabled writes to destination alpha only
 	DX8Wrapper::Set_DX8_Render_State(D3DRS_COLORWRITEENABLE,D3DCOLORWRITEENABLE_ALPHA);
 	DX8Wrapper::Set_DX8_Texture_Stage_State(0,  D3DTSS_TEXCOORDINDEX, 0);
-	
+	// a subdivided tile is nine vertices and four quads, on the ground's half cells (addShoreLineTile)
+	const Int tileVerts = m_subdivided ? 9 : 4;
+	const Int tileIndices = m_subdivided ? 24 : 6;
 
 	while (j != m_numShoreLineTiles)
 	{
-		DynamicVBAccessClass vb_access(BUFFER_TYPE_DYNAMIC_DX8,dynamic_fvf_type,DEFAULT_MAX_BATCH_SHORELINE_TILES*4);
-		DynamicIBAccessClass ib_access(BUFFER_TYPE_DYNAMIC_DX8,DEFAULT_MAX_BATCH_SHORELINE_TILES*6);
+		DynamicVBAccessClass vb_access(BUFFER_TYPE_DYNAMIC_DX8,dynamic_fvf_type,DEFAULT_MAX_BATCH_SHORELINE_TILES*tileVerts);
+		DynamicIBAccessClass ib_access(BUFFER_TYPE_DYNAMIC_DX8,DEFAULT_MAX_BATCH_SHORELINE_TILES*tileIndices);
 
 		{	//Need to put this in another code block so vb/ib gets automatically locked/unlocked by destructors
 			DynamicVBAccessClass::WriteLockClass lock(&vb_access);
@@ -2627,7 +2911,7 @@ void BaseHeightMapRenderObjClass::renderShoreLines(CameraClass *pCamera)
 			//Loop over visible terrain and extract all the tiles that need shoreline blend
 			for (; j<m_numShoreLineTiles; j++)
 			{
-				if (vertexCount >= (DEFAULT_MAX_BATCH_SHORELINE_TILES*4))
+				if (vertexCount >= (DEFAULT_MAX_BATCH_SHORELINE_TILES*tileVerts))
 					break;	//no room in vertex buffer
 
 				shoreLineTileInfo *shoreInfo=&m_shoreLineTilePositions[j];
@@ -2637,80 +2921,7 @@ void BaseHeightMapRenderObjClass::renderShoreLines(CameraClass *pCamera)
 
 				if (x >= drawStartX && x < drawEdgeX &&	y >= drawStartY && y < drawEdgeY)
 				{	//this tile is inside visible region
-
-					vb->x = shoreInfo->verts[0];
-					vb->y = shoreInfo->verts[1];
-					vb->z = shoreInfo->verts[2];
-					vb->nx=0;	//filling these to keep AGP write buffer happy.
-					vb->ny=0;
-					vb->nz=0;
-					vb->diffuse=0;
-					vb->u1=shoreInfo->t0;
-					vb->v1=0;
-					vb->u2=0;
-					vb->v2=0;
-					vb++;
-
-					vb->x = shoreInfo->verts[3];
-					vb->y = shoreInfo->verts[4];
-					vb->z = shoreInfo->verts[5];
-					vb->nx=0;	//filling these to keep AGP write buffer happy.
-					vb->ny=0;
-					vb->nz=0;
-					vb->diffuse=0;
-					vb->u1=shoreInfo->t1;
-					vb->v1=0;
-					vb->u2=0;
-					vb->v2=0;
-					vb++;
-
-					vb->x = shoreInfo->verts[6];
-					vb->y = shoreInfo->verts[7];
-					vb->z = shoreInfo->verts[8];
-					vb->nx=0;	//filling these to keep AGP write buffer happy.
-					vb->ny=0;
-					vb->nz=0;
-					vb->diffuse=0;
-					vb->u1=shoreInfo->t2;
-					vb->v1=0;
-					vb->u2=0;
-					vb->v2=0;
-					vb++;
-
-					vb->x = shoreInfo->verts[9];
-					vb->y = shoreInfo->verts[10];
-					vb->z = shoreInfo->verts[11];
-					vb->nx=0;	//filling these to keep AGP write buffer happy.
-					vb->ny=0;
-					vb->nz=0;
-					vb->diffuse=0;
-					vb->u1=shoreInfo->t3;
-					vb->v1=0;
-					vb->u2=0;
-					vb->v2=0;
-					vb++;
-					
-					if (m_map->getQuickFlipState(x,y))
-					{
-						ib[0]=1+vertexCount;
-						ib[1]=3+vertexCount;
-						ib[2]=0+vertexCount;
-						ib[3]=1+vertexCount;
-						ib[4]=2+vertexCount;
-						ib[5]=3+vertexCount;
-					}
-					else
-					{
-						ib[0]=0+vertexCount;
-						ib[1]=2+vertexCount;
-						ib[2]=3+vertexCount;
-						ib[3]=0+vertexCount;
-						ib[4]=1+vertexCount;
-						ib[5]=2+vertexCount;
-					}
-					ib += 6;
-					vertexCount +=4;
-					indexCount +=6;
+					addShoreLineTile(shoreInfo, m_subdivided ? drawnFlip(x,y) : m_map->getQuickFlipState(x,y), vb, ib, vertexCount, indexCount);
 				}
 			}
 			IndexBufferExceptionFunc();
@@ -2724,7 +2935,7 @@ void BaseHeightMapRenderObjClass::renderShoreLines(CameraClass *pCamera)
 			DX8Wrapper::Set_Index_Buffer(ib_access,0);
 			DX8Wrapper::Set_Vertex_Buffer(vb_access);
 			DX8Wrapper::Draw_Triangles(	0,indexCount/3, 0,	vertexCount);	//draw a quad, 2 triangles, 4 verts
-			m_numVisibleShoreLineTiles += indexCount/6;
+			m_numVisibleShoreLineTiles += indexCount/tileIndices;
 		}
 
 		vertexCount=0;
@@ -2798,11 +3009,14 @@ void BaseHeightMapRenderObjClass::renderShoreLinesSorted(CameraClass *pCamera)
 
 	Bool isDone=FALSE;
 	Int lastRenderedTile=0;
+	// a subdivided tile is nine vertices and four quads, on the ground's half cells (addShoreLineTile)
+	const Int tileVerts = m_subdivided ? 9 : 4;
+	const Int tileIndices = m_subdivided ? 24 : 6;
 
 	while (!isDone)
 	{
-		DynamicVBAccessClass vb_access(BUFFER_TYPE_DYNAMIC_DX8,dynamic_fvf_type,DEFAULT_MAX_BATCH_SHORELINE_TILES*4);
-		DynamicIBAccessClass ib_access(BUFFER_TYPE_DYNAMIC_DX8,DEFAULT_MAX_BATCH_SHORELINE_TILES*6);
+		DynamicVBAccessClass vb_access(BUFFER_TYPE_DYNAMIC_DX8,dynamic_fvf_type,DEFAULT_MAX_BATCH_SHORELINE_TILES*tileVerts);
+		DynamicIBAccessClass ib_access(BUFFER_TYPE_DYNAMIC_DX8,DEFAULT_MAX_BATCH_SHORELINE_TILES*tileIndices);
 
 		{	//Need to put this in another code block so vb/ib gets automatically locked/unlocked by destructors
 			DynamicVBAccessClass::WriteLockClass lock(&vb_access);
@@ -2853,84 +3067,12 @@ void BaseHeightMapRenderObjClass::renderShoreLinesSorted(CameraClass *pCamera)
 						if (tileY >= edgeY)
 							break;	//since tiles are x-sorted, there will not be any visible ones after this one.
 
-						if (vertexCount >= (DEFAULT_MAX_BATCH_SHORELINE_TILES*4))
+						if (vertexCount >= (DEFAULT_MAX_BATCH_SHORELINE_TILES*tileVerts))
 						{	lastRenderedTile=k;
 							goto flushVertexBuffer0;
 						}
 
-						vb->x = shoreInfo->verts[0];
-						vb->y = shoreInfo->verts[1];
-						vb->z = shoreInfo->verts[2];
-						vb->nx=0;	//filling these to keep AGP write buffer happy.
-						vb->ny=0;
-						vb->nz=0;
-						vb->diffuse=0;
-						vb->u1=shoreInfo->t0;
-						vb->v1=0;
-						vb->u2=0;
-						vb->v2=0;
-						vb++;
-
-						vb->x = shoreInfo->verts[3];
-						vb->y = shoreInfo->verts[4];
-						vb->z = shoreInfo->verts[5];
-						vb->nx=0;	//filling these to keep AGP write buffer happy.
-						vb->ny=0;
-						vb->nz=0;
-						vb->diffuse=0;
-						vb->u1=shoreInfo->t1;
-						vb->v1=0;
-						vb->u2=0;
-						vb->v2=0;
-						vb++;
-
-						vb->x = shoreInfo->verts[6];
-						vb->y = shoreInfo->verts[7];
-						vb->z = shoreInfo->verts[8];
-						vb->nx=0;	//filling these to keep AGP write buffer happy.
-						vb->ny=0;
-						vb->nz=0;
-						vb->diffuse=0;
-						vb->u1=shoreInfo->t2;
-						vb->v1=0;
-						vb->u2=0;
-						vb->v2=0;
-						vb++;
-
-						vb->x = shoreInfo->verts[9];
-						vb->y = shoreInfo->verts[10];
-						vb->z = shoreInfo->verts[11];
-						vb->nx=0;	//filling these to keep AGP write buffer happy.
-						vb->ny=0;
-						vb->nz=0;
-						vb->diffuse=0;
-						vb->u1=shoreInfo->t3;
-						vb->v1=0;
-						vb->u2=0;
-						vb->v2=0;
-						vb++;
-					
-						if (m_map->getQuickFlipState(x,tileY))
-						{
-							ib[0]=1+vertexCount;
-							ib[1]=3+vertexCount;
-							ib[2]=0+vertexCount;
-							ib[3]=1+vertexCount;
-							ib[4]=2+vertexCount;
-							ib[5]=3+vertexCount;
-						}
-						else
-						{
-							ib[0]=0+vertexCount;
-							ib[1]=2+vertexCount;
-							ib[2]=3+vertexCount;
-							ib[3]=0+vertexCount;
-							ib[4]=1+vertexCount;
-							ib[5]=2+vertexCount;
-						}
-						ib += 6;
-						vertexCount +=4;
-						indexCount +=6;
+						addShoreLineTile(shoreInfo, m_subdivided ? drawnFlip(x,tileY) : m_map->getQuickFlipState(x,tileY), vb, ib, vertexCount, indexCount);
 						shoreInfo++;	//advance to next tile.
 					}//looping over tiles in column
 					lastRenderedTile=0;
@@ -2973,84 +3115,12 @@ flushVertexBuffer0:
 						if (tileX >= edgeX)
 							break;	//since tiles are x-sorted, there will not be any visible ones after this one.
 
-						if (vertexCount >= (DEFAULT_MAX_BATCH_SHORELINE_TILES*4))
+						if (vertexCount >= (DEFAULT_MAX_BATCH_SHORELINE_TILES*tileVerts))
 						{	lastRenderedTile=k;
 							goto flushVertexBuffer1;
 						}
 
-						vb->x = shoreInfo->verts[0];
-						vb->y = shoreInfo->verts[1];
-						vb->z = shoreInfo->verts[2];
-						vb->nx=0;	//filling these to keep AGP write buffer happy.
-						vb->ny=0;
-						vb->nz=0;
-						vb->diffuse=0;
-						vb->u1=shoreInfo->t0;
-						vb->v1=0;
-						vb->u2=0;
-						vb->v2=0;
-						vb++;
-
-						vb->x = shoreInfo->verts[3];
-						vb->y = shoreInfo->verts[4];
-						vb->z = shoreInfo->verts[5];
-						vb->nx=0;	//filling these to keep AGP write buffer happy.
-						vb->ny=0;
-						vb->nz=0;
-						vb->diffuse=0;
-						vb->u1=shoreInfo->t1;
-						vb->v1=0;
-						vb->u2=0;
-						vb->v2=0;
-						vb++;
-
-						vb->x = shoreInfo->verts[6];
-						vb->y = shoreInfo->verts[7];
-						vb->z = shoreInfo->verts[8];
-						vb->nx=0;	//filling these to keep AGP write buffer happy.
-						vb->ny=0;
-						vb->nz=0;
-						vb->diffuse=0;
-						vb->u1=shoreInfo->t2;
-						vb->v1=0;
-						vb->u2=0;
-						vb->v2=0;
-						vb++;
-
-						vb->x = shoreInfo->verts[9];
-						vb->y = shoreInfo->verts[10];
-						vb->z = shoreInfo->verts[11];
-						vb->nx=0;	//filling these to keep AGP write buffer happy.
-						vb->ny=0;
-						vb->nz=0;
-						vb->diffuse=0;
-						vb->u1=shoreInfo->t3;
-						vb->v1=0;
-						vb->u2=0;
-						vb->v2=0;
-						vb++;
-					
-						if (m_map->getQuickFlipState(tileX,y))
-						{
-							ib[0]=1+vertexCount;
-							ib[1]=3+vertexCount;
-							ib[2]=0+vertexCount;
-							ib[3]=1+vertexCount;
-							ib[4]=2+vertexCount;
-							ib[5]=3+vertexCount;
-						}
-						else
-						{
-							ib[0]=0+vertexCount;
-							ib[1]=2+vertexCount;
-							ib[2]=3+vertexCount;
-							ib[3]=0+vertexCount;
-							ib[4]=1+vertexCount;
-							ib[5]=2+vertexCount;
-						}
-						ib += 6;
-						vertexCount +=4;
-						indexCount +=6;
+						addShoreLineTile(shoreInfo, m_subdivided ? drawnFlip(tileX,y) : m_map->getQuickFlipState(tileX,y), vb, ib, vertexCount, indexCount);
 						shoreInfo++;	//advance to next tile.
 					}//looping over tiles in row
 					lastRenderedTile=0;
@@ -3070,7 +3140,7 @@ flushVertexBuffer1:
 			DX8Wrapper::Set_Index_Buffer(ib_access,0);
 			DX8Wrapper::Set_Vertex_Buffer(vb_access);
 			DX8Wrapper::Draw_Triangles(	0,indexCount/3, 0,	vertexCount);	//draw a quad, 2 triangles, 4 verts
-			m_numVisibleShoreLineTiles += indexCount/6;
+			m_numVisibleShoreLineTiles += indexCount/tileIndices;
 		}
 
 		vertexCount=0;

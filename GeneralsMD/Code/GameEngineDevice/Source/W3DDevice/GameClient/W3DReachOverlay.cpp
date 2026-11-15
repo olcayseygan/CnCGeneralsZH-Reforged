@@ -216,17 +216,18 @@ void drawCells( const ReachOverlayField &field, const Baked &baked )
 	endX = endX < 0 ? 0 : ( endX > lastX ? lastX : endX );
 	startY = startY < 0 ? 0 : ( startY > lastY ? lastY : startY );
 	endY = endY < 0 ? 0 : ( endY > lastY ? lastY : endY );
-	const Int vertsPerRow = endX - startX + 1;
-	if( vertsPerRow < 2 || endY <= startY )
+	if( endX <= startX || endY <= startY )
 		return;
+	// on the subdivided ground its half cells and their heights (drawnHalfZ), as the decals lie
+	const Int step = TheTerrainRenderObject->drawnStep();
+	const Int vertsPerRow = ( 2 * ( endX - startX ) ) / step + 1;
+	const Int rowsAll = ( 2 * ( endY - startY ) ) / step;
 
 	// the colour is in the texture; the vertex carries the opacity alone
 	const UnsignedInt alpha = (UnsignedInt)( clamp01( field.opacity ) * 255.0f + 0.5f );
 	const UnsignedInt diffuse = ( alpha << 24 ) | 0x00FFFFFF;
 	const Real uScale = 1.0f / ( baked.texel * baked.side[ 0 ] ), vScale = 1.0f / ( baked.texel * baked.side[ 1 ] );
 	const Real uHalf = 0.5f / baked.side[ 0 ], vHalf = 0.5f / baked.side[ 1 ];
-	const UnsignedByte *heights = map->getDataPtr();
-	const Int heightRow = map->getXExtent();
 
 	// in row bands, so a band's vertices and its 16 bit indices fit the dynamic buffers
 	const Int cellsPerRow = vertsPerRow - 1;
@@ -235,9 +236,9 @@ void drawCells( const ReachOverlayField &field, const Baked &baked )
 		rowsPerBand = 60000 / ( cellsPerRow * 6 );
 	if( rowsPerBand < 1 )
 		return;
-	for( Int bandStart = startY; bandStart < endY; bandStart += rowsPerBand )
+	for( Int bandStart = 0; bandStart < rowsAll; bandStart += rowsPerBand )
 	{
-		const Int bandEnd = bandStart + rowsPerBand < endY ? bandStart + rowsPerBand : endY;
+		const Int bandEnd = bandStart + rowsPerBand < rowsAll ? bandStart + rowsPerBand : rowsAll;
 		const Int rows = bandEnd - bandStart;
 		const Int verts = ( rows + 1 ) * vertsPerRow;
 		DynamicVBAccessClass vbAccess( BUFFER_TYPE_DYNAMIC_DX8, DX8_FVF_XYZNDUV2, verts );
@@ -251,14 +252,15 @@ void drawCells( const ReachOverlayField &field, const Baked &baked )
 				return;
 			for( Int j = bandStart; j <= bandEnd; ++j )
 			{
-				const Real y = (Real)( j - border ) * MAP_XY_FACTOR;
-				const UnsignedByte *height = heights + j * heightRow + startX;
+				const Int y2 = 2 * startY + j * step;
+				const Real y = (Real)( y2 - 2 * border ) * ( 0.5f * MAP_XY_FACTOR );
 				for( Int i = 0; i < vertsPerRow; ++i, ++vb )
 				{
-					const Real x = (Real)( startX + i - border ) * MAP_XY_FACTOR;
+					const Int x2 = 2 * startX + i * step;
+					const Real x = (Real)( x2 - 2 * border ) * ( 0.5f * MAP_XY_FACTOR );
 					vb->x = x;
 					vb->y = y;
-					vb->z = (Real)height[ i ] * MAP_HEIGHT_SCALE + CellLift;
+					vb->z = TheTerrainRenderObject->drawnHalfZ( x2, y2 ) + CellLift;
 					vb->nx = 0.0f;
 					vb->ny = 0.0f;
 					vb->nz = 1.0f;
@@ -274,7 +276,9 @@ void drawCells( const ReachOverlayField &field, const Baked &baked )
 				for( Int k = 0; k < cellsPerRow; ++k )
 				{
 					const UnsignedShort at = (UnsignedShort)( j * vertsPerRow + k );
-					if( map->getQuickFlipState( startX + k, bandStart + j ) )
+					// the quad's cell, cut along its diagonal as the tiles cut it
+					const Int cellX = ( 2 * startX + k * step ) >> 1, cellY = ( 2 * startY + ( bandStart + j ) * step ) >> 1;
+					if( step == 1 ? TheTerrainRenderObject->drawnFlip( cellX, cellY ) : map->getQuickFlipState( cellX, cellY ) )
 					{
 						*ib++ = at + 1; *ib++ = at + vertsPerRow; *ib++ = at;
 						*ib++ = at + 1; *ib++ = at + 1 + vertsPerRow; *ib++ = at + vertsPerRow;

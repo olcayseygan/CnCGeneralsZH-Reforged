@@ -1230,7 +1230,11 @@ Real W3DWaypointBuffer::ringGroundZ( const SelectionCircle& c, Real x, Real y ) 
 	const Real lift = MAX( RING_MIN_LIFT, RING_LIFT * m_ringWidthScale );
 	if( c.layer != LAYER_GROUND )
 		return TheTerrainLogic->getLayerHeight( x, y, c.layer, NULL, FALSE ) + lift;
-	return MAX( TheTerrainLogic->getLayerHeight( x, y, c.layer ), c.waterZ ) + lift;
+	// on the subdivided ground the drawn surface, which leaves logic's plane by up to a unit
+	const Real ground = ( TheTerrainRenderObject && TheTerrainRenderObject->terrainSubdivided() )
+		? TheTerrainRenderObject->getDrawnHeight( x, y )
+		: TheTerrainLogic->getLayerHeight( x, y, c.layer );
+	return MAX( ground, c.waterZ ) + lift;
 }
 
 /** A circle round one selected unit, at the position it is drawn. A second circle on the same spot

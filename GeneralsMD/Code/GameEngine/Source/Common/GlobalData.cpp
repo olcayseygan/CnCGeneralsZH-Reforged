@@ -732,6 +732,7 @@ GlobalData::GlobalData()
 	m_shadowMapOnly = TRUE;				//and they replace the stencil volumes rather than joining them
 	m_shadowMapReport = FALSE;
 	m_vertexTerrainSun = FALSE;
+	m_noTerrainSubdivide = FALSE;
 	m_shadowMapOldCasters = FALSE;
 	m_shadowMapPenumbra = 0.0f;		//zero anywhere here means the built-in value stands
 	m_shadowMapSkyFill = 0.0f;

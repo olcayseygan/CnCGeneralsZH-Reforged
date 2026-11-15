@@ -183,10 +183,10 @@ void HudLayoutForScreen( Int screenWidth, Int screenHeight, Int layout, Int hudW
 	for( Int i = 0; i < HUD_SIDEBAR_TABS; ++i )
 		m.sidebarTop( &out->tabs[ i ], 1624.0f + 74.0f * i, 420, 66, 36 );
 	setRegion( &out->powerRail, m.sx( 1604 ), m.ty( 420 ), m.sx( 1620 ), m.by( 1072 ) );
-	// "All" and the four chips, one size, spread evenly over 1624..1912
+	// "All" and the four chips, one size, packed from the left 3 apart (pitch 53, to 1886)
 	m.sidebarTop( &out->pickerAll, 1624, 464, 50, 28 );
 	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; ++i )
-		m.sidebarTop( &out->pickerChips[ i ], 1683.5f + 59.5f * i, 464, 50, 28 );
+		m.sidebarTop( &out->pickerChips[ i ], 1677.0f + 53.0f * i, 464, 50, 28 );
 	for( Int row = 0; row < HUD_SIDEBAR_CAMEO_ROWS; ++row )
 		for( Int col = 0; col < HUD_SIDEBAR_CAMEO_COLUMNS; ++col )
 			m.sidebarTop( &out->cameos[ row * HUD_SIDEBAR_CAMEO_COLUMNS + col ],

@@ -20013,10 +20013,11 @@ TEST(hud_layout_rects_tile_the_screen)
 	CHECK_EQ( r.pickerAll.lo.x, 1624 );
 	CHECK_EQ( r.pickerAll.width(), 50 );
 	CHECK_EQ( r.pickerAll.height(), 28 );
-	CHECK_EQ( r.pickerChips[ 0 ].lo.x, 1684 );
-	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].lo.x, 1862 );
+	CHECK_EQ( r.pickerChips[ 0 ].lo.x, 1677 );
+	CHECK_EQ( r.pickerChips[ 0 ].lo.x - r.pickerAll.hi.x, 3 );
+	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].lo.x, 1836 );
 	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].width(), 50 );
-	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].hi.x, 1912 );
+	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].hi.x, 1886 );
 	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; ++i )
 		CHECK_EQ( r.pickerChips[ i ].width(), r.pickerAll.width() );
 	CHECK_EQ( r.pickerChips[ 0 ].lo.y, 464 );

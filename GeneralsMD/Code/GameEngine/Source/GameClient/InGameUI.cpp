@@ -11712,6 +11712,8 @@ void InGameUI::drawDirectorIntroPlate( void )
 		return;
 	const Int underLeft = min( max( REAL_TO_INT( middle.x ) - underWidth / 2, 0 ), (Int)TheDisplay->getWidth() - underWidth );
 	drawBroadcastPlate( under, underLeft, top + nameHeight, shown );
+}
+
 //-------------------------------------------------------------------------------------------------
 /** The watcher's reminder that the screen is a player's own: his name in his colour and the words,
 	* on the broadcast's plate, centred a pad under top. */
@@ -11734,8 +11736,6 @@ void InGameUI::drawPlayerCameraPlate( Int top )
 	Int width = 0, height = 0;
 	broadcastPlateSize( plate, &width, &height );
 	drawBroadcastPlate( plate, ( TheDisplay->getWidth() - width ) / 2, top + broadcastPixels( BROADCAST_PAD ), 1.0f );
-}
-
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -485,6 +485,10 @@ public:  // ********************************************************************
 		ORDER_MARK_FLAG							///< EA's rally flag
 	};
 	static OrderHintMark markForOrderHint( OrderHintKind kind, Bool onObject, Bool lastPoint );
+	/// The one colour an order kind wears on the click marker, its line, its end mark and the rings
+	/// under the units, 0x00RRGGBB: a move green, an attack red, an attack move orange, a guard gold,
+	/// everything else (enter, dock, repair, capture, an ability) cyan
+	static UnsignedInt orderKindColor( OrderHintKind kind );
 
 	struct OrderHint
 	{
@@ -520,6 +524,7 @@ public:  // ********************************************************************
 		UnsignedInt dueFrame;		///< logic has run the order once its frame is past this
 		UnsignedInt armedMs;		///< when the order was given
 		UnsignedInt bornMs;			///< when the ring was first placed, 0 until then
+		Bool replaced;					///< it took over a ring of the unit's last order: placed only from a path planned for this one
 	};
 	void armOrderRings( OrderHintKind kind );		///< HintSpy: the selection was just given a move-type order
 	const std::vector<OrderRing>& getOrderRings( void ) const { return m_orderRings; }
@@ -536,6 +541,31 @@ public:  // ********************************************************************
 		ObjectID target;				///< the unit or building the order is aimed at
 		UnsignedInt dueFrame;		///< logic has run the order once its frame is past this
 	};
+	// The click a unit's last ground order went to, which its first line ends on while that line is
+	// still the order's (applyCommandedPoints)
+	struct CommandedPoint
+	{
+		ObjectID owner;
+		OrderHintKind kind;
+		Coord3D at;							///< the click
+		Coord3D goal;						///< the stopping place the unit's first path for this order gave it
+		Bool settled;						///< 'goal' is read
+		Int legs;								///< the unit's lines last frame, 0 before the first; fewer means a leg was finished
+		Bool seen;							///< the unit drew a line this frame
+		UnsignedInt dueFrame;		///< logic has run the order once its frame is past this; a path older than it is the last order's
+	};
+	// A shift-queued ground order's click, one per unit it went to, oldest first: a queued leg ends on
+	// it as the first line ends on its CommandedPoint
+	struct QueuedClick
+	{
+		ObjectID owner;
+		OrderHintKind kind;
+		Coord3D at;
+		UnsignedInt bornMs;			///< given then; kept a moment while logic has not drawn its leg yet
+		UnsignedInt dueFrame;		///< logic has run the order once its frame is past this; no leg to pair with before
+		Bool matched;						///< a leg ended on it this frame
+	};
+	void rememberQueuedClicks( OrderHintKind kind, const Coord3D& at );	///< HintSpy: a ground order went on the end of the selection's lists
 	void predictOrderHints( OrderHintKind kind, const Coord3D *to, ObjectID target );	///< HintSpy: the selection was just given this order
 	void predictFormationOrderHints( void );		///< HintSpy: the formation line just drawn was sent, each unit to its station
 	// A rally point the same way: the line and the flag go where the player clicked until logic has
@@ -581,7 +611,8 @@ public:  // ********************************************************************
 	/// in front of it.  The logic keeps the list; see OrderQueue.h.
 	void markNextOrderQueued( OrderQueueMode mode );
 
-	void createMoveHint( const GameMessage *msg );							///< Classic: EA's animated ring where a move order lands
+	void createMoveHint( const Coord3D& at, OrderHintKind kind );	///< the marker where an order lands: EA's animated ring under Classic, the order's coloured ring otherwise
+	void createFormationMoveHints( void );											///< one marker on each station of the formation line just sent
 	virtual void createAttackHint( const GameMessage *msg );		///< An attack command has occurred, start graphical "hint"
 	virtual void createForceAttackHint( const GameMessage *msg );		///< A force attack command has occurred, start graphical "hint"
 
@@ -1399,12 +1430,15 @@ protected:
 	AsciiString									m_currentlyPlayingMovie;											///< Used to push updates to TheScriptEngine
 	DrawableList								m_selectedDrawables;													///< A list of all selected drawables.
 
-	// Classic's move rings, EA's own: where each move order landed and the client frame it did
-	enum { MAX_MOVE_HINTS = 256 };
+	// Where each order landed: EA's move ring under Classic graphics, the order's coloured marker
+	// otherwise (W3DInGameUI::drawMoveHints, drawOrderRings)
+	enum { MAX_MOVE_HINTS = 256, MOVE_MARKER_MS = 750 };
 	struct MoveHintStruct
 	{
 		Coord3D pos;						///< World coords of destination point
 		UnsignedInt frame;			///< frame the command was issued on
+		UnsignedInt bornMs;			///< and the picture's clock then, for the coloured marker
+		OrderHintKind kind;
 	};
 	MoveHintStruct							m_moveHint[ MAX_MOVE_HINTS ];
 	Int													m_nextMoveHint;
@@ -1419,6 +1453,12 @@ protected:
 	std::vector<OrderHint>			m_drawnOrderHints;														///< the same, units headed the same way bunched into one
 	std::vector<OrderRing>			m_orderRings;																	///< armed or fading, one per unit
 	std::vector<PendingOrder>		m_pendingOrders;															///< sent, not yet run by logic, one per unit
+	std::vector<CommandedPoint>	m_commandedPoints;														///< one per unit at most
+	std::vector<QueuedClick>		m_queuedClicks;																///< every unit's, each unit's in the order given
+	std::vector<size_t>					m_pairLegs;																		///< applyCommandedPoints' scratch: one unit's ground legs
+	std::vector<size_t>					m_pairClicks;																	///< and its queued clicks logic has run
+	void rememberCommandedPoint( ObjectID owner, OrderHintKind kind, const Coord3D *at );	///< NULL forgets the unit's
+	void applyCommandedPoints( void );													///< each unit's first line onto its click, and the next leg's start with it
 	struct PendingRally { ObjectID building; Coord3D at; UnsignedInt dueFrame; };
 	std::vector<PendingRally>		m_pendingRallies;															///< sent, not yet run by logic, one per building
 	void expirePendingOrders( void );														///< drop what logic has run by now

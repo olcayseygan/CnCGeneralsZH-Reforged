@@ -21428,6 +21428,33 @@ TEST(an_order_ends_in_a_flag_on_ground_and_a_joint_on_a_target)
 	CHECK_EQ( (Int)InGameUI::markForOrderHint( InGameUI::ORDER_HINT_ABILITY, FALSE, FALSE ), (Int)InGameUI::ORDER_MARK_NONE );
 }
 
+TEST(an_order_kind_wears_one_of_five_colours)
+{
+	// a waypoint is a move, and every way of killing something is the same red
+	const UnsignedInt move = InGameUI::orderKindColor( InGameUI::ORDER_HINT_MOVE );
+	const UnsignedInt attack = InGameUI::orderKindColor( InGameUI::ORDER_HINT_ATTACK );
+	const UnsignedInt attackMove = InGameUI::orderKindColor( InGameUI::ORDER_HINT_ATTACK_MOVE );
+	const UnsignedInt guard = InGameUI::orderKindColor( InGameUI::ORDER_HINT_GUARD );
+	const UnsignedInt other = InGameUI::orderKindColor( InGameUI::ORDER_HINT_ENTER );
+	CHECK_EQ( InGameUI::orderKindColor( InGameUI::ORDER_HINT_WAYPOINT ), move );
+	CHECK_EQ( InGameUI::orderKindColor( InGameUI::ORDER_HINT_FORCE_ATTACK ), attack );
+	CHECK_EQ( InGameUI::orderKindColor( InGameUI::ORDER_HINT_ATTACK_GROUND ), attack );
+
+	// doing something to a thing is one colour, whatever the thing
+	CHECK_EQ( InGameUI::orderKindColor( InGameUI::ORDER_HINT_DOCK ), other );
+	CHECK_EQ( InGameUI::orderKindColor( InGameUI::ORDER_HINT_CAPTURE ), other );
+	CHECK_EQ( InGameUI::orderKindColor( InGameUI::ORDER_HINT_ABILITY ), other );
+
+	// the five apart from each other, and no alpha in any: the callers put their own
+	const UnsignedInt five[ 5 ] = { move, attack, attackMove, guard, other };
+	for( Int i = 0; i < 5; ++i )
+	{
+		CHECK_EQ( five[ i ] & 0xFF000000u, 0u );
+		for( Int j = i + 1; j < 5; ++j )
+			CHECK_NE( five[ i ], five[ j ] );
+	}
+}
+
 TEST(empty_building_slots_are_a_check_box_that_starts_on)
 {
 	const OptionDef *def = findOptionDef( "EmptyBuildingPips" );

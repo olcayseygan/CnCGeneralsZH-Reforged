@@ -1517,6 +1517,8 @@ InGameUI::InGameUI()
 	{
 		m_moveHint[ i ].pos.zero();
 		m_moveHint[ i ].frame = 0;
+		m_moveHint[ i ].bornMs = 0;
+		m_moveHint[ i ].kind = ORDER_HINT_MOVE;
 	}
 	m_nextMoveHint = 0;
 
@@ -3808,8 +3810,11 @@ void InGameUI::reset( void )
 	{
 		m_moveHint[ i ].pos.zero();
 		m_moveHint[ i ].frame = 0;
+		m_moveHint[ i ].bornMs = 0;
 	}
 	m_nextMoveHint = 0;
+	m_commandedPoints.clear();
+	m_queuedClicks.clear();
 	m_orderRings.clear();
 	m_pendingOrders.clear();
 	m_pendingRallies.clear();
@@ -4726,6 +4731,7 @@ void InGameUI::updateOrderHints( void )
 	else
 	{
 		collectOrderHints();
+		applyCommandedPoints();
 		numberOrderHints();
 		markOrderHints();
 		bunchOrderHints();
@@ -4765,16 +4771,19 @@ void InGameUI::armOrderRings( OrderHintKind kind )
 			continue;
 
 		// the new order replaces whatever ring the last one left on this unit
+		Bool replaced = FALSE;
 		for( size_t i = 0; i < m_orderRings.size(); ++i )
 		{
 			if( m_orderRings[ i ].owner == obj->getID() )
 			{
 				m_orderRings.erase( m_orderRings.begin() + i );
+				replaced = TRUE;
 				break;
 			}
 		}
 
 		OrderRing ring;
+		ring.replaced = replaced;
 		ring.owner = obj->getID();
 		ring.kind = kind;
 		ring.at.zero();
@@ -4858,6 +4867,12 @@ Bool InGameUI::placeOrderRing( OrderRing& ring )
 		ObjectID target;
 		found = getGuardedSpot( ai, to, onObject, target ) && !onObject;
 	}
+	else if( ring.replaced && ( path != NULL || ai->isWaitingForPath() ) )
+	{
+		// a unit still on its last order's way: its goal can still be that order's spot, and the dot
+		// stood there as if the new order had not taken.  It waits for the new path; a unit with no
+		// path and none coming is already on its cell and falls through to its goal
+	}
 	else if( ring.kind != ORDER_HINT_ATTACK_MOVE )
 	{
 		const StateID state = ai->getCurrentStateID();
@@ -4930,6 +4945,75 @@ void InGameUI::predictOrderHints( OrderHintKind kind, const Coord3D *to, ObjectI
 			continue;
 		order.owner = obj->getID();
 		replacePendingOrder( m_pendingOrders, order );
+		rememberCommandedPoint( order.owner, kind, ( to && target == INVALID_ID ) ? to : NULL );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The click a unit's ground order went to, for applyCommandedPoints; NULL forgets it (an order at a
+	* unit or building, or a formation line, whose stations are the units' own). */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::rememberCommandedPoint( ObjectID owner, OrderHintKind kind, const Coord3D *at )
+{
+	// an order that is not queued empties the unit's list, and the clicks queued on it with it
+	for( size_t q = 0; q < m_queuedClicks.size(); )
+	{
+		if( m_queuedClicks[ q ].owner == owner )
+			m_queuedClicks.erase( m_queuedClicks.begin() + q );
+		else
+			++q;
+	}
+	for( size_t c = 0; c < m_commandedPoints.size(); ++c )
+	{
+		if( m_commandedPoints[ c ].owner != owner )
+			continue;
+		m_commandedPoints.erase( m_commandedPoints.begin() + c );
+		break;
+	}
+	if( at == NULL )
+		return;
+	CommandedPoint point;
+	point.owner = owner;
+	point.kind = kind;
+	point.at = *at;
+	point.goal = *at;
+	point.settled = FALSE;
+	point.legs = 0;
+	point.seen = TRUE;
+	point.dueFrame = orderDueFrame();
+	// a unit that died or left the selection before its line moved off keeps its entry; the oldest go
+	if( m_commandedPoints.size() >= 512 )
+		m_commandedPoints.erase( m_commandedPoints.begin() );
+	m_commandedPoints.push_back( point );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A ground order went on the end of the selection's lists (HintSpy, shift held): each unit that
+	* would take it keeps the click, which its queued leg ends on (applyCommandedPoints).  Logic spreads
+	* a group's queued point as it spreads a plain move, and the joints of a big group's list landed on
+	* four or more spots round each click. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::rememberQueuedClicks( OrderHintKind kind, const Coord3D& at )
+{
+	const Bool attack = ( kind == ORDER_HINT_ATTACK_GROUND );
+	const Player *local = ThePlayerList->getLocalPlayer();
+	for( DrawableList::const_iterator it = m_selectedDrawables.begin(); it != m_selectedDrawables.end(); ++it )
+	{
+		const Object *obj = (*it)->getObject();
+		if( !obj || obj->getControllingPlayer() != local || obj->getAI() == NULL || obj->isKindOf( KINDOF_IGNORED_IN_GUI ) )
+			continue;
+		if( attack ? !obj->isAbleToAttack() : obj->isKindOf( KINDOF_IMMOBILE ) )
+			continue;
+		QueuedClick click;
+		click.owner = obj->getID();
+		click.kind = kind;
+		click.at = at;
+		click.bornMs = Clock_Milliseconds();
+		click.dueFrame = orderDueFrame();
+		click.matched = FALSE;
+		if( m_queuedClicks.size() >= 1024 )
+			m_queuedClicks.erase( m_queuedClicks.begin() );
+		m_queuedClicks.push_back( click );
 	}
 }
 
@@ -4949,6 +5033,7 @@ void InGameUI::predictFormationOrderHints( void )
 		order.kind = it->kind;
 		order.to = it->to;
 		replacePendingOrder( m_pendingOrders, order );
+		rememberCommandedPoint( order.owner, order.kind, NULL );
 	}
 }
 
@@ -5053,6 +5138,31 @@ InGameUI::OrderHintMark InGameUI::markForOrderHint( OrderHintKind kind, Bool onO
 	if( kind == ORDER_HINT_ABILITY || kind == ORDER_HINT_UPGRADE )
 		return ORDER_MARK_NONE;
 	return ( lastPoint && !onObject ) ? ORDER_MARK_FLAG : ORDER_MARK_JOINT;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Five colours, one per thing the player has to tell apart at a glance: going, killing, killing on
+	* the way, holding, and doing something to a thing.  Picked to stay apart from each other and from
+	* the seat colours' pure hues once a dark rim is round them, on grass, sand and snow alike. */
+//-------------------------------------------------------------------------------------------------
+UnsignedInt InGameUI::orderKindColor( OrderHintKind kind )
+{
+	switch( kind )
+	{
+		case ORDER_HINT_MOVE:
+		case ORDER_HINT_WAYPOINT:
+			return 0x0040E85C;		// green
+		case ORDER_HINT_ATTACK:
+		case ORDER_HINT_FORCE_ATTACK:
+		case ORDER_HINT_ATTACK_GROUND:
+			return 0x00FF3A2E;		// red
+		case ORDER_HINT_ATTACK_MOVE:
+			return 0x00FF8A1C;		// orange
+		case ORDER_HINT_GUARD:
+			return 0x00FFDC46;		// gold
+		default:
+			return 0x0040D0FF;		// cyan
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -6053,11 +6163,17 @@ void InGameUI::markNextOrderQueued( OrderQueueMode mode )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** A move command has occurred: Classic starts EA's ring where it lands (W3DInGameUI::drawMoveHints). */
+/** An order landed on the ground: a marker where it did.  Classic graphics start EA's ring
+	* (W3DInGameUI::drawMoveHints), and only for the moves EA gave it to; otherwise the order's own
+	* coloured marker closes in on the point (W3DInGameUI::drawOrderRings). */
 //-------------------------------------------------------------------------------------------------
-void InGameUI::createMoveHint( const GameMessage *msg )
+void InGameUI::createMoveHint( const Coord3D& at, OrderHintKind kind )
 {
-	if( getSelectCount() == 1 )
+	if( TheGlobalData->m_classicGraphics && kind != ORDER_HINT_MOVE && kind != ORDER_HINT_ATTACK_MOVE && kind != ORDER_HINT_WAYPOINT )
+		return;
+
+	// a lone tower shooting the ground still marks the spot
+	if( kind != ORDER_HINT_ATTACK_GROUND && getSelectCount() == 1 )
 	{
 		Drawable *draw = getFirstSelectedDrawable();
 		Object *obj = draw ? draw->getObject() : NULL;
@@ -6069,11 +6185,185 @@ void InGameUI::createMoveHint( const GameMessage *msg )
 	}
 
 	m_moveHint[ m_nextMoveHint ].frame = TheGameClient->getFrame();
-	m_moveHint[ m_nextMoveHint ].pos = msg->getArgument( 0 )->location;
+	m_moveHint[ m_nextMoveHint ].bornMs = MAX( 1u, (UnsignedInt)Clock_Milliseconds() );
+	m_moveHint[ m_nextMoveHint ].pos = at;
+	m_moveHint[ m_nextMoveHint ].kind = kind;
 
 	m_nextMoveHint++;
 	if (m_nextMoveHint == InGameUI::MAX_MOVE_HINTS)
 		m_nextMoveHint = 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A formation line was just sent: the stations it was worked out into are still the hints, so each
+	* gets the marker a plain move puts on its one point.  EA had no formation line, so Classic none. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::createFormationMoveHints( void )
+{
+	if( TheGlobalData->m_classicGraphics )
+		return;
+	for( std::vector<OrderHint>::const_iterator it = m_orderHints.begin(); it != m_orderHints.end(); ++it )
+		if( !it->onObject && it->mark != ORDER_MARK_NONE )
+			createMoveHint( it->to, it->kind );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A unit's first line ends where the player clicked, not where logic parks it.  A group move
+	* spreads the units' stopping places round the click, and the thread they share, the middle of
+	* those places, landed a tank's length or more off the marker the player saw.  Each unit carries
+	* the click of its last ground order from here (predictOrderHints) for as long as its first line
+	* is that order's.  It is while the line keeps the order's kind (an attack move's unit stopping
+	* to fight is still on it); while it stays within reach of the click until a path planned for this
+	* order comes back, and within reach of that path's end after; and while the unit has no fewer
+	* lines than it had, so reaching the click with a shift list behind it ends the order.  A line that
+	* moves off is another order and the click is forgotten, as is the click of a unit that draws no
+	* line and waits on no order (deselected, arrived, dead).  A shift-queued leg ends on its own click
+	* the same way (rememberQueuedClicks), the unit's queued clicks laid on its ground legs from the
+	* last back.  Each next leg starts on the click the leg before ended on, so the joint and the next
+	* thread never part.  The unit's own dot stays on its own place.  ORDERPOINT in the log says when
+	* a click settles and why one is forgotten. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::applyCommandedPoints( void )
+{
+	const Real REACH = 100.0f;		// bunchOrderHints' radius: a flood of stopping places round one click
+	// a settled unit's path end may be replanned a cell or two off its first one; further is a new order
+	const Real SETTLED_SLACK = 3.0f * PATHFIND_CELL_SIZE_F;
+	// a queued click waits this long for its leg before it is called finished or orphaned: queued
+	// orders are not drawn before logic runs them, a few frames of run-ahead in a network game
+	const UnsignedInt QUEUED_CLICK_GRACE_MS = 2000;
+	const UnsignedInt now = Clock_Milliseconds();
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	auto apartSq = []( const Coord3D& a, const Coord3D& b ) { return ( a.x - b.x ) * ( a.x - b.x ) + ( a.y - b.y ) * ( a.y - b.y ); };
+	auto hasPending = [this]( ObjectID owner )
+	{
+		for( size_t p = 0; p < m_pendingOrders.size(); ++p )
+			if( m_pendingOrders[ p ].owner == owner )
+				return TRUE;
+		return FALSE;
+	};
+	// a leg ends on 'at': it and the next leg's start
+	auto snapLeg = [this]( size_t leg, const Coord3D& at )
+	{
+		m_orderHints[ leg ].to = at;
+		if( leg + 1 < m_orderHints.size() && m_orderHints[ leg + 1 ].owner == m_orderHints[ leg ].owner && m_orderHints[ leg + 1 ].fromTarget == INVALID_ID )
+			m_orderHints[ leg + 1 ].from = at;
+	};
+
+	for( size_t c = 0; c < m_commandedPoints.size(); ++c )
+		m_commandedPoints[ c ].seen = FALSE;
+
+	for( size_t i = 0; i < m_orderHints.size(); ++i )
+	{
+		if( i > 0 && m_orderHints[ i - 1 ].owner == m_orderHints[ i ].owner )
+			continue;		// once a unit, from its first line
+		const ObjectID owner = m_orderHints[ i ].owner;
+		Int legs = 1;
+		while( i + legs < m_orderHints.size() && m_orderHints[ i + legs ].owner == owner )
+			++legs;
+
+		// the first line and the order that is not queued
+		Bool firstSnapped = FALSE;
+		size_t c = 0;
+		while( c < m_commandedPoints.size() && m_commandedPoints[ c ].owner != owner )
+			++c;
+		if( c < m_commandedPoints.size() )
+		{
+			OrderHint& hint = m_orderHints[ i ];
+			CommandedPoint& point = m_commandedPoints[ c ];
+			point.seen = TRUE;
+
+			const char *forgot = NULL;
+			// an attack move's unit stopping to fight draws the fight; the click waits for it to go on
+			const Bool fighting = point.kind == ORDER_HINT_ATTACK_MOVE && ( hint.kind == ORDER_HINT_ATTACK || hint.kind == ORDER_HINT_FORCE_ATTACK );
+			if( fighting )
+			{
+			}
+			else if( hint.onObject || hint.kind != point.kind )
+				forgot = "another kind of order";
+			else if( point.legs > 0 && legs < point.legs )
+				forgot = "a leg was finished";
+			else if( !point.settled && apartSq( hint.to, point.at ) >= REACH * REACH )
+				forgot = "out of reach of the click";
+			else if( point.settled && apartSq( hint.to, point.goal ) >= SETTLED_SLACK * SETTLED_SLACK )
+				forgot = "the stopping place moved";		// a leg finished and the next queued in the same frame, or another order
+			else if( !point.settled && !hasPending( owner ) )
+			{
+				// The path's end is the stopping place, but only a path planned for this order: a unit
+				// nudged on its way still holds the last order's path for a few frames, and settling on
+				// that put sixteen of twenty tanks on their old spots (InGameUI::placeOrderRing's test)
+				const Object *obj = TheGameLogic->findObjectByID( owner );
+				const AIUpdateInterface *ai = obj ? obj->getAI() : NULL;
+				if( ai && ai->getPath() && !ai->isWaitingForPath() && TheGameLogic->getFrame() - ai->getPathAge() >= point.dueFrame )
+				{
+					point.settled = TRUE;
+					point.goal = hint.to;
+					DEBUG_LOG(( "ORDERPOINT unit %d settled on (%.0f, %.0f), click (%.0f, %.0f)\n", (Int)owner, hint.to.x, hint.to.y, point.at.x, point.at.y ));
+				}
+			}
+			if( forgot )
+			{
+				DEBUG_LOG(( "ORDERPOINT unit %d forgot click (%.0f, %.0f): %s\n", (Int)owner, point.at.x, point.at.y, forgot ));
+				m_commandedPoints.erase( m_commandedPoints.begin() + c );
+			}
+			else if( !fighting )
+			{
+				point.legs = legs;
+				snapLeg( i, point.at );
+				firstSnapped = TRUE;
+			}
+		}
+
+		// The queued legs: the unit's ground legs after the first (or from the first, when that is a
+		// queued one already) take its queued clicks, the last leg the last click and back from there,
+		// as long as each pair is the same colour of order and within reach. Only clicks logic has run:
+		// a queued order draws no leg before then, and the newest click laid on the last drawn leg put
+		// every joint one click ahead
+		m_pairLegs.clear();
+		for( Int k = firstSnapped ? 1 : 0; k < legs; ++k )
+		{
+			const OrderHint& leg = m_orderHints[ i + k ];
+			if( !leg.onObject && leg.kind != ORDER_HINT_ABILITY && leg.kind != ORDER_HINT_UPGRADE )
+				m_pairLegs.push_back( i + k );
+		}
+		m_pairClicks.clear();
+		for( size_t q = 0; q < m_queuedClicks.size(); ++q )
+			if( m_queuedClicks[ q ].owner == owner && frame > m_queuedClicks[ q ].dueFrame )
+				m_pairClicks.push_back( q );
+		size_t g = m_pairLegs.size(), n = m_pairClicks.size();
+		while( g > 0 && n > 0 )
+		{
+			--g;
+			--n;
+			QueuedClick& click = m_queuedClicks[ m_pairClicks[ n ] ];
+			const OrderHint& leg = m_orderHints[ m_pairLegs[ g ] ];
+			if( orderKindColor( leg.kind ) != orderKindColor( click.kind ) || apartSq( leg.to, click.at ) >= REACH * REACH )
+				break;
+			snapLeg( m_pairLegs[ g ], click.at );
+			click.matched = TRUE;
+		}
+	}
+
+	// no line and no order waiting: deselected, arrived or dead
+	for( size_t c = 0; c < m_commandedPoints.size(); )
+	{
+		if( !m_commandedPoints[ c ].seen && !hasPending( m_commandedPoints[ c ].owner ) )
+			m_commandedPoints.erase( m_commandedPoints.begin() + c );
+		else
+			++c;
+	}
+	// A click logic has run and no leg ended on this frame is done with: its leg finished, logic
+	// refused the order, or the unit is gone from the selection. Given a moment first
+	for( size_t q = 0; q < m_queuedClicks.size(); )
+	{
+		QueuedClick& click = m_queuedClicks[ q ];
+		if( !click.matched && frame > click.dueFrame && now - click.bornMs > QUEUED_CLICK_GRACE_MS )
+			m_queuedClicks.erase( m_queuedClicks.begin() + q );
+		else
+		{
+			click.matched = FALSE;
+			++q;
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

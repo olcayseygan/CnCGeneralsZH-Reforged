@@ -63,6 +63,7 @@
 #include "Common/GlobalData.h"
 #include "Common/PerfTimer.h"
 
+#include "GameClient/InGameUI.h"
 #include "GameClient/TerrainVisual.h"
 #include "GameClient/View.h"
 #include "GameClient/Water.h"
@@ -655,6 +656,11 @@ void FlatHeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 
 	if (!modernFullMirror)
 		m_bibBuffer->renderBibs();
+
+	// the rings under the units' destinations and the marker where an order landed, which the
+	// detailed ground draws in the same place (HeightMapRenderObjClass::Render)
+	if (TheInGameUI && !modernFullMirror)
+		TheInGameUI->drawOrderRings();
 #endif
 	// We do some custom blending, so tell the shader class to reset everything.
 	DX8Wrapper::Set_Texture(0,NULL);

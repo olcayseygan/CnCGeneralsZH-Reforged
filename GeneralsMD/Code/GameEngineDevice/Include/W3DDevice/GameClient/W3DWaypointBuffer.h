@@ -87,14 +87,14 @@ public:
 
 
 private:
-	enum DrawKind { DRAW_PUCK, DRAW_LINE, DRAW_OUTPOST_LINE, DRAW_OUTLINE_WHITE, DRAW_OUTLINE_RED, DRAW_RING, DRAW_RING_GLOW };
+	enum DrawKind { DRAW_PUCK, DRAW_LINE, DRAW_OUTPOST_LINE, DRAW_OUTLINE_WHITE, DRAW_OUTLINE_RED, DRAW_RING, DRAW_RING_GLOW, DRAW_ORDER_LINE };
 	struct WaypointDraw
 	{
 		DrawKind kind;
 		Bool orderHint;		///< not in the water's mirror pass
 		Int first;
 		Int count;
-		Vector3 color;		///< DRAW_RING and DRAW_RING_GLOW only: colour, ribbon width and opacity
+		Vector3 color;		///< DRAW_RING, DRAW_RING_GLOW and DRAW_ORDER_LINE only: colour, ribbon width and opacity
 		Real width;
 		Real opacity;
 	};
@@ -120,6 +120,9 @@ private:
 	void recordRingLine( Int count, const Vector3 *points, const Vector3& color, Real alpha = 1.0f, Bool withGlow = TRUE, Bool withLine = TRUE );
 	void addSelectionCircle( const Coord3D& pos, Real radius, PathfindLayerEnum layer, const Vector3& color, Real pulse );
 	void recordStructureOutline( const Object *obj );	///< a selected building's line round its footprint
+	void recordOrderMark( const Vector3& at, Real radius, const Vector3& color );	///< the small ring on an order line's end or joint
+	TextureClass *rimTexture( void );									///< the ribbon's colour between two dark rims, made on first use
+	TextureClass *m_rimTexture;
 	std::vector<Vector3> m_pulsePoints;
 	static Vector3 ringColor( const Player *owner );
 	std::vector<ObjectID> m_selectedNexus;		///< the Angry Mobs in this picture's selection
@@ -144,7 +147,7 @@ private:
 	std::vector<Vector3> m_drawPoints;
 
   void setDefaultLineStyle();
-	void setLineStyle( SegmentedLineClass *line, DrawKind kind );	///< an order line's laser, or a building outline's solid colour
+	void setLineStyle( SegmentedLineClass *line, DrawKind kind );	///< a rally line's laser, or a ring's, outline's or order line's rimmed colour
 	void queueLine( const WaypointDraw& draw, Vector3 *points );	///< hand the points to a pooled line object (not rendered yet)
 	void renderQueuedLines( RenderInfoClass &rinfo );			///< render every queued line; all stay deferred on the static sort list together
 

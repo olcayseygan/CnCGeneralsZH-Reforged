@@ -83,9 +83,20 @@ protected:
 	virtual void drawPlaceAngle( View *view ); 		///< draw place building angle if needed
 	virtual void drawBuildGrid( void );						///< the pathfinder's build grid under a pending structure
 	virtual void drawAttackCircleFill( void );		///< the wash on the ground inside an attack circle
-	virtual void drawOrderRings( void );					///< the ring under each unit's destination, in the terrain pass
+	virtual void drawOrderRings( void );					///< the dot on each unit's destination and the click markers, in the terrain pass
 	void takeOrderRings( void );									///< their ground and fade, read at the sync point (recordDraw)
-	std::vector< Vector3 > m_orderRingPoints;			///< inner and outer rim, ORDER_RING_SEGMENTS + 1 pairs a ring
+	std::vector< Vector3 > m_orderRingPoints;			///< a destination dot: the rim's and the colour's inside and outside, ORDER_RING_SEGMENTS + 1 of those fours a dot
+	/** A live order marker (InGameUI::createMoveHint) on a plane laid on the ground at the sync point:
+		* it moves every picture, and the ground under a ring a few units across is near enough flat */
+	struct OrderMarker
+	{
+		Vector3 at;									///< the point, on the ground, the water or a bridge's deck
+		Real slopeX, slopeY;				///< the ground's rise per unit along x and y round it
+		UnsignedInt rgb;						///< InGameUI::orderKindColor
+		UnsignedInt bornMs;
+	};
+	std::vector< OrderMarker > m_orderMarkers;
+	Real m_orderMarkScale = 1.0f;									///< the camera's zoom at the sync point, so a marker keeps its size on the screen
 	std::vector< UnsignedInt > m_orderRingColors;	///< one a ring, the order's rgb; the fade is the draw's own clock
 	std::vector< UnsignedInt > m_orderRingBornMs;	///< one a ring, when it was placed
 	virtual void drawFormationLine( void );				///< the line an armed left drag is spreading the selection along

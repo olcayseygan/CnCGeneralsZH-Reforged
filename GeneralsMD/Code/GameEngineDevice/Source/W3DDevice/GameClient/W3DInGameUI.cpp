@@ -527,6 +527,7 @@ void W3DInGameUI::recordDraw( void )
 	m_orderRingPoints.clear();
 	m_orderRingColors.clear();
 	m_orderRingBornMs.clear();
+	m_orderMarkers.clear();
 	takeMoveHintTransforms();
 	if( CinemaDirector_hidesHud() )
 		return;
@@ -1126,19 +1127,54 @@ void W3DInGameUI::drawAttackCircleFill( void )
 
 }  // end drawAttackCircleFill
 
-enum { ORDER_RING_SEGMENTS = 48 };		// a thin line shows the facets 32 left
+enum { ORDER_RING_SEGMENTS = 16 };		// a dot a few pixels across
+
+// Every order mark on the ground is its colour on a dark rim, so a green ring still reads on snow
+// and a gold one on sand: the rim goes down first, every rim before every colour, so one unit's rim
+// never cuts into its neighbour's ring
+static const UnsignedInt ORDER_RIM_RGB = 0x00101418;	// near black, a little steel in it
+static const Real ORDER_RIM_ALPHA = 0x78;
+static const Real ORDER_MARK_LIFT = 0.35f;				// the build grid's: out of the dirt, not floating
+static const Real ORDER_MARK_MIN_ZOOM = 0.6f;			// widths follow the camera's zoom between these, so
+static const Real ORDER_MARK_MAX_ZOOM = 2.5f;			// a mark keeps about its width on the screen
+
+// Each unit's own destination: a dot on its rim, a point and not a circle. Rings the size of the
+// body drew a grid of ghost selection rings over a group's formation and drowned the click marker
+static const Real ORDER_DOT_RADIUS = 1.1f;
+static const Real ORDER_DOT_RIM = 0.4f;
+static const Real ORDER_RING_ALPHA = 0xD0;
+
+// the marker where an order lands: a ring closing on the point with four arrowheads on it pointing
+// in, there and gone inside InGameUI::MOVE_MARKER_MS. The loudest mark on the ground: twice the
+// destination dot's width of band, solid colour
+static const Real MARKER_START_RADIUS = 14.0f;
+static const Real MARKER_END_RADIUS = 3.2f;
+static const Real MARKER_CLOSE_MS = 320.0f;				// to close on the point, easing in
+static const Real MARKER_IN_MS = 50.0f;
+static const Real MARKER_FADE_MS = 260.0f;				// the last of it
+static const Real MARKER_WIDTH = 0.95f;
+static const Real MARKER_RIM = 0.4f;
+static const Real MARKER_ARROW_GAP = 0.7f;				// between the ring and an arrowhead's tip
+static const Real MARKER_ARROW_ARM = 2.6f;
+static const Real MARKER_ARROW_SPREAD = 0.62f;		// radians off the spoke, each arm
+static const Real MARKER_DOT_RADIUS = 1.2f;				// on the point once the ring is there
+static const Real MARKER_ALPHA = 0xFF;
+enum { MARKER_SEGMENTS = 32, MARKER_ARROWS = 4, MARKER_DOT_SEGMENTS = 10 };
 
 //-------------------------------------------------------------------------------------------------
-/** The order rings' ground, at the sync point: the terrain heights are logic's, and drawOrderRings
-	* runs in the terrain pass beside the tick.  Each rim is sampled at its own vertex, so a ring on a
-	* slope lies on it; one on a bridge is flat at the deck's height.
-	* ponytail: every ring's ground is sampled again each frame of its fade, 98 heights a ring; keep
-	* the points of a settled ring if a few hundred at once ever show */
+/** The order rings' and markers' ground, at the sync point: the terrain heights are logic's, and
+	* drawOrderRings runs in the terrain pass beside the tick.  Each destination dot is sampled at its
+	* own vertices, so one on a slope lies on it; one on a bridge is flat at the deck's height.  A
+	* marker moves every picture, so it takes a plane: its point's height and the slope round it.
+	* ponytail: every dot's ground is sampled again each frame of its fade, 68 heights a dot; keep
+	* the points of a settled dot if a few hundred at once ever show */
 //-------------------------------------------------------------------------------------------------
 void W3DInGameUI::takeOrderRings( void )
 {
-	const Real RING_LIFT = 0.35f;			// the build grid's: out of the dirt, not floating
 	const UnsignedInt now = Clock_Milliseconds();
+	m_orderMarkScale = MAX( ORDER_MARK_MIN_ZOOM, MIN( ORDER_MARK_MAX_ZOOM, TheTacticalView->getZoom() ) );
+	const Real dot = ORDER_DOT_RADIUS * m_orderMarkScale;
+	const Real rim = ORDER_DOT_RIM * m_orderMarkScale;
 
 	const std::vector<OrderRing>& rings = getOrderRings();
 	for( std::vector<OrderRing>::const_iterator ring = rings.begin(); ring != rings.end(); ++ring )
@@ -1146,63 +1182,179 @@ void W3DInGameUI::takeOrderRings( void )
 		if( ring->bornMs == 0 || now - ring->bornMs >= (UnsignedInt)ORDER_RING_MS )
 			continue;
 
-		// the order's colour: a move green, an attack move the attack pink, a guard the shield's gold
-		UnsignedInt rgb = 0x0040E060;
-		if( ring->kind == ORDER_HINT_ATTACK_MOVE )
-			rgb = 0x00FF5AA0;
-		else if( ring->kind == ORDER_HINT_GUARD )
-			rgb = 0x00F2C230;
-		m_orderRingColors.push_back( rgb );
+		m_orderRingColors.push_back( orderKindColor( ring->kind ) );
 		m_orderRingBornMs.push_back( ring->bornMs );
 
-		// a line, not a band: the same width under an infantryman and a tank, about two pixels at the
-		// opening zoom, so a group's rings overlap as thin circles
-		const Real RING_WIDTH = 0.8f;
-		const Real outer = ring->radius;
-		const Real inner = outer - RING_WIDTH;
+		// the same small dot under an infantryman and a tank: the rim's disc (0 to 3), the colour's
+		// inside it (1 to 2)
+		const Real radii[ 4 ] = { 0.0f, 0.0f, dot, dot + rim };
 		for( Int s = 0; s <= ORDER_RING_SEGMENTS; ++s )
 		{
 			const Real angle = 2.0f * PI * (Real)s / (Real)ORDER_RING_SEGMENTS;
 			const Real c = (Real)cos( angle );
 			const Real n = (Real)sin( angle );
-			const Real ix = ring->at.x + inner * c, iy = ring->at.y + inner * n;
-			const Real ox = ring->at.x + outer * c, oy = ring->at.y + outer * n;
-			const Real iz = ring->onGround ? TheTerrainLogic->getGroundHeight( ix, iy ) : ring->at.z;
-			const Real oz = ring->onGround ? TheTerrainLogic->getGroundHeight( ox, oy ) : ring->at.z;
-			m_orderRingPoints.push_back( Vector3( ix, iy, iz + RING_LIFT ) );
-			m_orderRingPoints.push_back( Vector3( ox, oy, oz + RING_LIFT ) );
+			for( Int k = 0; k < 4; ++k )
+			{
+				const Real x = ring->at.x + radii[ k ] * c, y = ring->at.y + radii[ k ] * n;
+				const Real z = ring->onGround ? TheTerrainLogic->getGroundHeight( x, y ) : ring->at.z;
+				m_orderRingPoints.push_back( Vector3( x, y, z + ORDER_MARK_LIFT ) );
+			}
 		}
+	}
+
+	// Classic draws EA's ring instead (drawMoveHints)
+	if( TheGlobalData->m_classicGraphics )
+		return;
+	for( Int i = 0; i < MAX_MOVE_HINTS; ++i )
+	{
+		const MoveHintStruct& hint = m_moveHint[ i ];
+		if( hint.bornMs == 0 || now - hint.bornMs >= (UnsignedInt)MOVE_MARKER_MS )
+			continue;
+		OrderMarker mark;
+		mark.rgb = orderKindColor( hint.kind );
+		mark.bornMs = hint.bornMs;
+		mark.slopeX = mark.slopeY = 0.0f;
+		const Real x = hint.pos.x, y = hint.pos.y;
+		Real ground = TheTerrainLogic->getGroundHeight( x, y );
+		Real waterZ;
+		const Bool water = TheTerrainLogic->isUnderwater( x, y, &waterZ ) && waterZ > ground;
+		if( water )
+			ground = waterZ;
+		// a point well over the ground is a bridge's deck: flat there
+		const Bool deck = hint.pos.z > ground + 2.0f;
+		mark.at.Set( x, y, deck ? hint.pos.z : ground );
+		if( !deck && !water )
+		{
+			const Real SLOPE_STEP = 4.0f;
+			mark.slopeX = ( TheTerrainLogic->getGroundHeight( x + SLOPE_STEP, y ) - TheTerrainLogic->getGroundHeight( x - SLOPE_STEP, y ) ) / ( 2.0f * SLOPE_STEP );
+			mark.slopeY = ( TheTerrainLogic->getGroundHeight( x, y + SLOPE_STEP ) - TheTerrainLogic->getGroundHeight( x, y - SLOPE_STEP ) ) / ( 2.0f * SLOPE_STEP );
+		}
+		m_orderMarkers.push_back( mark );
 	}
 }
 
 //-------------------------------------------------------------------------------------------------
-/** One ring under each unit where its order really ends, painted on the ground in the terrain pass
-	* like the attack circle's wash, so the unit standing in it is drawn over it. */
+/** One dot under each unit where its order really ends, and the marker where an order was given,
+	* painted on the ground in the terrain pass like the attack circle's wash, so the unit standing in
+	* it is drawn over it.  Rims first, every one of them, then the colours. */
 //-------------------------------------------------------------------------------------------------
 void W3DInGameUI::drawOrderRings( void )
 {
-	if( m_orderRingColors.empty() )
+	if( m_orderRingColors.empty() && m_orderMarkers.empty() )
+		return;
+	// not in the water's mirror pass: drawn PASS_ALWAYS they would lie on the reflection, as the order
+	// lines would (W3DWaypointBuffer::drawWaypoints)
+	if( ShaderClass::Is_Backface_Culling_Inverted() )
 		return;
 
 	setGroundOverlayState();
 
-	// the fade is worked out here, from this picture's clock: a picture drawn again beside the tick
-	// (phase 4) takes nothing new at the sync point, and a fade baked in there froze, then jumped
-	const Real RING_ALPHA = 0x90;
+	// the fade and the marker's closing are worked out here, from this picture's clock: a picture
+	// drawn again beside the tick (phase 4) takes nothing new at the sync point, and anything baked
+	// in there froze, then jumped
 	const UnsignedInt now = Clock_Milliseconds();
 	GroundOverlayQuads &quads = theGroundOverlayQuads;
-	const Int pairs = ORDER_RING_SEGMENTS + 1;
-	for( size_t r = 0; r < m_orderRingColors.size(); ++r )
+	const Int fours = ORDER_RING_SEGMENTS + 1;
+	const Real scale = m_orderMarkScale;
+
+	for( Int pass = 0; pass < 2; ++pass )
 	{
-		const UnsignedInt age = now - m_orderRingBornMs[ r ];
-		if( age >= (UnsignedInt)ORDER_RING_MS )
-			continue;
-		const UnsignedInt color = overlayColor( m_orderRingColors[ r ], RING_ALPHA * ( 1.0f - (Real)age / (Real)ORDER_RING_MS ) );
-		const Vector3 *p = &m_orderRingPoints[ r * pairs * 2 ];
-		for( Int s = 0; s < ORDER_RING_SEGMENTS; ++s )
+		const Bool rimPass = ( pass == 0 );
+		for( size_t r = 0; r < m_orderRingColors.size(); ++r )
 		{
-			quads.add( p[ s * 2 ], p[ s * 2 + 1 ], p[ s * 2 + 3 ], p[ s * 2 + 2 ],
-								 color, color, color, color );
+			const UnsignedInt age = now - m_orderRingBornMs[ r ];
+			if( age >= (UnsignedInt)ORDER_RING_MS )
+				continue;
+			const Real fade = 1.0f - (Real)age / (Real)ORDER_RING_MS;
+			const UnsignedInt color = rimPass ? overlayColor( ORDER_RIM_RGB, ORDER_RIM_ALPHA * fade )
+																				: overlayColor( m_orderRingColors[ r ], ORDER_RING_ALPHA * fade );
+			const Int from = rimPass ? 0 : 1;		// the rim spans all four radii, the colour the middle two
+			const Int to = rimPass ? 3 : 2;
+			const Vector3 *p = &m_orderRingPoints[ r * fours * 4 ];
+			for( Int s = 0; s < ORDER_RING_SEGMENTS; ++s )
+			{
+				const Vector3 *a = p + s * 4;
+				const Vector3 *b = p + ( s + 1 ) * 4;
+				quads.add( a[ from ], a[ to ], b[ to ], b[ from ], color, color, color, color );
+			}
+		}
+
+		for( size_t m = 0; m < m_orderMarkers.size(); ++m )
+		{
+			const OrderMarker& mark = m_orderMarkers[ m ];
+			const Real age = (Real)( now - mark.bornMs );
+			if( age >= (Real)MOVE_MARKER_MS )
+				continue;
+			const Real fade = MIN( 1.0f, age / MARKER_IN_MS ) * MIN( 1.0f, ( (Real)MOVE_MARKER_MS - age ) / MARKER_FADE_MS );
+			const UnsignedInt color = rimPass ? overlayColor( ORDER_RIM_RGB, ORDER_RIM_ALPHA * fade )
+																				: overlayColor( mark.rgb, MARKER_ALPHA * fade );
+			const Real grow = rimPass ? MARKER_RIM * scale : 0.0f;		// the rim is the same shape, this much fatter
+			auto ground = [&]( Real x, Real y ) -> Vector3
+			{
+				return Vector3( x, y, mark.at.Z + mark.slopeX * ( x - mark.at.X ) + mark.slopeY * ( y - mark.at.Y ) + ORDER_MARK_LIFT );
+			};
+			// a straight band from a to b, half as wide as given, grown at both ends by its rim
+			auto band = [&]( Real ax, Real ay, Real bx, Real by, Real half )
+			{
+				Real dx = bx - ax, dy = by - ay;
+				const Real length = (Real)sqrt( dx * dx + dy * dy );
+				if( length < 0.001f )
+					return;
+				dx /= length;
+				dy /= length;
+				ax -= dx * grow;  ay -= dy * grow;
+				bx += dx * grow;  by += dy * grow;
+				const Real nx = -dy * half, ny = dx * half;
+				quads.add( ground( ax + nx, ay + ny ), ground( bx + nx, by + ny ), ground( bx - nx, by - ny ), ground( ax - nx, ay - ny ),
+									 color, color, color, color );
+			};
+
+			// closing on the point, fast and then slower, and resting there for the rest of its life
+			const Real close = MIN( 1.0f, age / MARKER_CLOSE_MS );
+			const Real left = 1.0f - close;
+			const Real radius = ( MARKER_END_RADIUS + ( MARKER_START_RADIUS - MARKER_END_RADIUS ) * left * left * left ) * scale;
+			const Real half = 0.5f * MARKER_WIDTH * scale + grow;
+			for( Int s = 0; s < MARKER_SEGMENTS; ++s )
+			{
+				const Real a0 = 2.0f * PI * (Real)s / (Real)MARKER_SEGMENTS;
+				const Real a1 = 2.0f * PI * (Real)( s + 1 ) / (Real)MARKER_SEGMENTS;
+				const Real c0 = (Real)cos( a0 ), n0 = (Real)sin( a0 );
+				const Real c1 = (Real)cos( a1 ), n1 = (Real)sin( a1 );
+				const Real in = radius - half, out = radius + half;
+				quads.add( ground( mark.at.X + in * c0, mark.at.Y + in * n0 ), ground( mark.at.X + out * c0, mark.at.Y + out * n0 ),
+									 ground( mark.at.X + out * c1, mark.at.Y + out * n1 ), ground( mark.at.X + in * c1, mark.at.Y + in * n1 ),
+									 color, color, color, color );
+			}
+
+			// the arrowheads, outside the ring on the diagonals, their tips at it
+			const Real armHalf = 0.5f * MARKER_WIDTH * scale + grow;
+			for( Int k = 0; k < MARKER_ARROWS; ++k )
+			{
+				const Real spoke = 0.25f * PI + 2.0f * PI * (Real)k / (Real)MARKER_ARROWS;
+				const Real tip = radius + MARKER_ARROW_GAP * scale + 0.5f * MARKER_WIDTH * scale;
+				const Real tx = mark.at.X + tip * (Real)cos( spoke );
+				const Real ty = mark.at.Y + tip * (Real)sin( spoke );
+				for( Int side = -1; side <= 1; side += 2 )
+				{
+					const Real arm = spoke + side * MARKER_ARROW_SPREAD;
+					band( tx, ty, tx + MARKER_ARROW_ARM * scale * (Real)cos( arm ), ty + MARKER_ARROW_ARM * scale * (Real)sin( arm ), armHalf );
+				}
+			}
+
+			// and once it is there, a dot on the point itself
+			if( close >= 1.0f )
+			{
+				const Real dot = ( MARKER_DOT_RADIUS * scale ) + grow;
+				const Vector3 centre = ground( mark.at.X, mark.at.Y );
+				for( Int s = 0; s < MARKER_DOT_SEGMENTS; ++s )
+				{
+					const Real a0 = 2.0f * PI * (Real)s / (Real)MARKER_DOT_SEGMENTS;
+					const Real a1 = 2.0f * PI * (Real)( s + 1 ) / (Real)MARKER_DOT_SEGMENTS;
+					quads.add( centre, ground( mark.at.X + dot * (Real)cos( a0 ), mark.at.Y + dot * (Real)sin( a0 ) ),
+										 ground( mark.at.X + dot * (Real)cos( a1 ), mark.at.Y + dot * (Real)sin( a1 ) ), centre,
+										 color, color, color, color );
+				}
+			}
 		}
 	}
 
@@ -1234,11 +1386,12 @@ void W3DInGameUI::drawSelectionRegion( void )
 void W3DInGameUI::drawFormationLine( void )
 {
 	const Real width = 2.0f;
-	// the line says which order it is about to be, in the colours the order hints already use
-	const UnsignedInt color = isInAttackMoveToMode() ? 0xCCFF66CC
-											: ( isForceAttackArmed() || isForceLineHeld() ) ? 0xCCFF5555
-											: isGuardArmed() ? 0xCC55CCFF
-											: 0xCC33FF33;  //0xAARRGGBB
+	// the line says which order it is about to be, in the colours the order lines and markers use
+	const OrderHintKind kind = isInAttackMoveToMode() ? ORDER_HINT_ATTACK_MOVE
+											: ( isForceAttackArmed() || isForceLineHeld() ) ? ORDER_HINT_FORCE_ATTACK
+											: isGuardArmed() ? ORDER_HINT_GUARD
+											: ORDER_HINT_MOVE;
+	const UnsignedInt color = 0xCC000000 | orderKindColor( kind );  //0xAARRGGBB
 	const std::vector<ICoord2D>& curve = m_formationDragPoints;
 	const Int points = (Int)curve.size();
 	if( points < 2 )
@@ -1476,6 +1629,8 @@ Bool W3DInGameUI::isWorldSpaceUI( const RenderObjClass *robj, const Drawable *dr
 //-------------------------------------------------------------------------------------------------
 void W3DInGameUI::takeMoveHintTransforms( void )
 {
+	if( !TheGlobalData->m_classicGraphics )
+		return;		// the coloured marker instead (takeOrderRings)
 	for( Int i = 0; i < MAX_MOVE_HINTS; i++ )
 	{
 		Int elapsed = TheGameClient->getFrame() - m_moveHint[i].frame;
@@ -1501,10 +1656,13 @@ void W3DInGameUI::takeMoveHintTransforms( void )
 
 //-------------------------------------------------------------------------------------------------
 /** EA's animated ring on the ground where a move order landed, 40 client frames each.  EA's own
-	* code, deleted by fec052cc and brought back (InGameUI::createMoveHint fills it). */
+	* code, deleted by fec052cc and brought back (InGameUI::createMoveHint fills it).  Classic
+	* graphics only; otherwise drawOrderRings draws the order's coloured marker. */
 //-------------------------------------------------------------------------------------------------
 void W3DInGameUI::drawMoveHints( View *view )
 {
+	if( !TheGlobalData->m_classicGraphics )
+		return;
 	for( Int i = 0; i < MAX_MOVE_HINTS; i++ )
 	{
 		Int elapsed = TheGameClient->getFrame() - m_moveHint[i].frame;

@@ -6958,10 +6958,53 @@ void InGameUI::createGarrisonHint( const GameMessage *msg )
 	* in just a tooltip.  An object might get a tooltip and show its hit points.
  */
 //-------------------------------------------------------------------------------------------------
+Bool InGameUI::isOverSidebarHud( const ICoord2D &pixel ) const
+{
+	if( !sidebarLayoutOn() )
+		return FALSE;
+	const HudLayoutRects r = hudRects();
+	auto inside = [ &pixel ]( const IRegion2D &box )
+	{
+		return pixel.x >= box.lo.x && pixel.x < box.hi.x && pixel.y >= box.lo.y && pixel.y < box.hi.y;
+	};
+	if( inside( r.sidebar ) || inside( r.strip ) || inside( r.card ) )
+		return TRUE;
+	// the upgrade column only where a cell is up (ControlBar.wnd:UnitUpgrade1..5, a window state)
+	for( Int each = 0; each < HUD_UPGRADE_CELLS; each++ )
+	{
+		if( !inside( r.upgradeColumn[ each ] ) )
+			continue;
+		AsciiString name;
+		name.format( "ControlBar.wnd:UnitUpgrade%d", each + 1 );
+		GameWindow *cell = TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( name ) );
+		Bool shown = cell != NULL;
+		for( GameWindow *up = cell; up != NULL && shown; up = up->winGetParent() )
+			shown = !up->winIsHidden();
+		return shown;
+	}
+	return FALSE;
+}
+
 void InGameUI::createMouseoverHint( const GameMessage *msg )
 {
 	if (m_isScrolling || m_isSelecting)
 		return; // no mouseover for you
+
+	// The Red Alert style layout's parent window is full screen and see-through, so the world's pick
+	// ran under its steel and an object's tooltip and highlight showed through the sidebar.
+	// SelectionXlat sends one location hint as the cursor comes onto the steel and none while it stays:
+	// that one lets go of whatever was under the cursor in the world
+	if( TheMouse && isOverSidebarHud( TheMouse->getMouseStatus()->pos ) )
+	{
+		if( m_mousedOverDrawableID != INVALID_DRAWABLE_ID )
+		{
+			m_mousedOverDrawableID = INVALID_DRAWABLE_ID;
+			TheMouse->resetTooltipDelay();
+		}
+		TheMouse->setCursorTooltip( UnicodeString::TheEmptyString );
+		setMouseCursor( Mouse::ARROW );
+		return;
+	}
 
 	// a signal armed off the bar is where the next click goes, over a unit, the ground or the radar
 	if( isSignalArmed() )
@@ -9325,25 +9368,67 @@ void InGameUI::postDraw( void )
 					else
 						time.format( u"%d:%2.2d", line.seconds / 60, line.seconds % 60 );
 					line.info->setFont( m_superweaponNormalFont, s_fitPoint, TRUE );
-					line.info->setText( TheGameText->fetch( label ), time );
-
+					const UnicodeString full = TheGameText->fetch( label );
 					DisplayString *name = line.info->getNameString();
 					DisplayString *clock = line.info->getTimeString();
+					clock->setText( time );
+
 					const Int gap = MAX( 2, glass.height() / 3 );
 					const Int textY = glass.lo.y + ( glass.height() - name->getFont()->height ) / 2;
 					const Int clockX = glass.hi.x - gap - clock->getWidth();
-					// the name in the row's own colour, the clock white
-					const Color ink = line.enemy ? GameMakeColor( 255, 128, 108, 255 ) : GameMakeColor( 110, 232, 204, 255 );
-					clock->draw( clockX, textY, GameMakeColor( 240, 244, 246, 255 ), drop );
-					// the name gives way to the time.  The text's quads are clipped only when they are
-					// built, which is when the text or its place changes, so the room is held steady: a
-					// quarter of the glass for the clock, more only when the clock itself is wider
+					// the name gives way to the time, held steady: a quarter of the glass for the clock, more
+					// only when the clock itself is wider
 					const Int clockRoom = MAX( clock->getWidth(), glass.width() / 4 );
 					IRegion2D room;
 					room.lo.x = glass.lo.x + gap;
 					room.lo.y = glass.lo.y;
 					room.hi.x = glass.hi.x - gap - clockRoom - gap;
 					room.hi.y = glass.hi.y;
+
+					// a name wider than its room loses letters off its end for an ellipsis, measured in the
+					// row's font ("Particle Uplink C…").  Measuring needs the text in the string, and every
+					// change rebuilds its quads, so the count kept is remembered per row against the name,
+					// the room and the font, and worked out again only when one of them changes
+					static UnsignedInt s_nameKey[ SIDEBAR_SUPERWEAPON_ROWS ];		// 0 is never a key: nothing worked out yet
+					static Int s_nameChars[ SIDEBAR_SUPERWEAPON_ROWS ];
+					const WideChar ellipsis = (WideChar)0x2026;
+					const Int roomW = room.hi.x - room.lo.x;
+					UnsignedInt key = (UnsignedInt)roomW * 131u + (UnsignedInt)s_fitPoint * 7919u;
+					for( Int c = 0; c < full.getLength(); c++ )
+						key = key * 31u + (UnsignedInt)full.getCharAt( c );
+					key |= 1u;
+					if( key != s_nameKey[ each ] )
+					{
+						s_nameKey[ each ] = key;
+						s_nameChars[ each ] = -1;
+						name->setText( full );
+						if( name->getWidth() > roomW )
+						{
+							UnicodeString marked = full;
+							marked.concat( ellipsis );
+							name->setText( marked );
+							const Int ellipsisW = name->getWidth() - name->getWidth( full.getLength() );
+							Int keep = full.getLength();
+							while( keep > 0 && name->getWidth( keep ) + ellipsisW > roomW )
+								keep--;
+							while( keep > 0 && full.getCharAt( keep - 1 ) == (WideChar)' ' )
+								keep--;
+							s_nameChars[ each ] = keep;
+						}
+					}
+					UnicodeString shown = full;
+					if( s_nameChars[ each ] >= 0 )
+					{
+						shown.clear();
+						for( Int c = 0; c < s_nameChars[ each ]; c++ )
+							shown.concat( full.getCharAt( c ) );
+						shown.concat( ellipsis );
+					}
+					name->setText( shown );
+
+					// the name in the row's own colour, the clock white
+					const Color ink = line.enemy ? GameMakeColor( 255, 128, 108, 255 ) : GameMakeColor( 110, 232, 204, 255 );
+					clock->draw( clockX, textY, GameMakeColor( 240, 244, 246, 255 ), drop );
 					name->setClipRegion( &room );
 					name->draw( room.lo.x, textY, ink, drop );
 				}

@@ -511,9 +511,10 @@ void ControlBar::populateCommand( Object *obj )
 	{
 		const CommandButton *button = commandSet->getCommandButton( i );
 		slot[ i ] = ( m_commandWindows[ i ] && button && !BitTest( button->getOptions(), SCRIPT_ONLY ) ) ? button : NULL;
-		// the sidebar is the build list: a factory's unit buttons stay off the strip (a builder's
-		// structures, DOZER_CONSTRUCT, stay on it)
-		if( slot[ i ] != NULL && m_sidebarLayout && slot[ i ]->getCommandType() == GUI_COMMAND_UNIT_BUILD )
+		// the sidebar is the build list: a factory's units and a builder's structures stay off the strip
+		// (its builder chips pick the dozer); the builder's other orders, repair, disarm and the rest, stay
+		if( slot[ i ] != NULL && m_sidebarLayout
+				&& ( slot[ i ]->getCommandType() == GUI_COMMAND_UNIT_BUILD || slot[ i ]->getCommandType() == GUI_COMMAND_DOZER_CONSTRUCT ) )
 			slot[ i ] = NULL;
 	}
 
@@ -948,7 +949,9 @@ void ControlBar::updateBuildQueue( Object *obj, ProductionUpdateInterface *pu )
 	else if( pu->getProductionCount() != m_displayedQueueCount )
 		populateBuildQueue( obj );
 
-	GadgetButtonDrawInverseClock( m_queueData[ 0 ].control, pu->firstProduction()->getPercentComplete(), m_buildUpClockColor );
+	// the sidebar's row tile is small: a strong dark wipe, as on its cameos, where the scheme's is faint
+	const Color wipe = m_sidebarLayout ? GameMakeColor( 0, 0, 0, 190 ) : m_buildUpClockColor;
+	GadgetButtonDrawInverseClock( m_queueData[ 0 ].control, pu->firstProduction()->getPercentComplete(), wipe );
 
 }  // end updateBuildQueue
 

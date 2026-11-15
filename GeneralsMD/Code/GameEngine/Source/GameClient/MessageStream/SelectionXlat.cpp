@@ -492,6 +492,26 @@ GameMessageDisposition SelectionTranslator::translateGameMessage(const GameMessa
 			}
 			else //left button is not down (not drag select)
 			{
+				// The Red Alert style layout's steel lets the mouse through its full-screen see-through
+				// parent, so nothing stopped this pick under the sidebar, the strip or the card and the
+				// world's tooltip and highlight showed through it.  On the steel: one location hint as the
+				// cursor arrives, which lets go of what was under it (InGameUI::createMouseoverHint), and
+				// no pick while it stays.  Always off under Classic
+				static Bool s_overSidebarHud = FALSE;
+				if( TheInGameUI->isOverSidebarHud( pixel ) )
+				{
+					if( !s_overSidebarHud )
+					{
+						s_overSidebarHud = TRUE;
+						Coord3D position;
+						TheTacticalView->screenToTerrain( &pixel, &position );
+						GameMessage *leave = TheMessageStream->appendMessage( GameMessage::MSG_MOUSEOVER_LOCATION_HINT );
+						leave->appendLocationArgument( position );
+					}
+					break;
+				}
+				s_overSidebarHud = FALSE;
+
 				// insert Mouseover hint into stream for CommandTranslator and HintSpy to see.
 				GameMessage *mouseoverMessage;
 

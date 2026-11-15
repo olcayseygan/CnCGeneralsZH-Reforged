@@ -261,11 +261,12 @@ static void portraitBarTooltip( GameWindow *window, WinInstanceData *instData, U
 //-------------------------------------------------------------------------------------------------
 static WindowMsgHandledType portraitBarInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )
 {
+	// the click's own position, which the window manager packed into mData1: the cursor's
+	// (TheMouse's status) is not the click's when one is posted without moving it (the control
+	// socket's click, a replayed input), and a tile under the cursor rather than the click was
+	// never the one meant
 	if( msg == GWM_LEFT_UP && !TheSelectionTranslator->isLeftMouseButtonDown() )
-	{
-		const ICoord2D &mouse = TheMouse->getMouseStatus()->pos;
-		TheControlBar->clickMultiSelectTile( mouse.x, mouse.y );
-	}
+		TheControlBar->clickMultiSelectTile( LOLONGTOSHORT( mData1 ), HILONGTOSHORT( mData1 ) );
 	return GameWinBlockInput( window, msg, mData1, mData2 );
 }
 

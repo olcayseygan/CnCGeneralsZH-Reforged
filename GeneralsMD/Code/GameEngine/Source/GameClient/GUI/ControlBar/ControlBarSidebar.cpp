@@ -150,7 +150,7 @@ namespace
 	ObjectID s_placingBuilder = INVALID_ID;		///< the builder chip a structure on the cursor was put there for
 	ObjectID s_followed = INVALID_ID;					///< the single selected object the sidebar last followed
 	const Color GLYPH_EDGE = GameMakeColor( 0, 0, 0, 200 );
-	const Int CHIP_PICTURE_INSET = 2;															///< a factory's picture inside its chip
+	const Int CHIP_PICTURE_INSET = 4;															///< a factory's picture inside its chip's bezel, at 1080
 	const Color CHIP_PICTURE_DIM = GameMakeColor( 170, 170, 170, 255 );		///< a chip not picked, its picture a shade down
 	const Color CHIP_BADGE = GameMakeColor( 0, 0, 0, 190 );								///< behind the chip's number
 
@@ -364,15 +364,21 @@ static void drawChip( GameWindow *window, WinInstanceData *instData )
 	window->winGetSize( &size.x, &size.y );
 	if( size.x < 3 || size.y < 3 )
 		return;
-	// Tümü wears ChipWide only while its chip is wider than the others
-	Int chipW = 0, chipH = 0;
-	if( s_chips[ 0 ] != NULL )
-		s_chips[ 0 ]->winGetSize( &chipW, &chipH );
-	const Image *art = statePiece( index < 0 && size.x > chipW ? "ChipWide" : "Chip", TRUE, lit, hover );
+	// every chip, Tümü too, on the same piece at the same size
+	const Image *art = statePiece( "Chip", TRUE, lit, hover );
 	if( art != NULL )
 		TheDisplay->drawImage( art, at.x, at.y, at.x + size.x, at.y + size.y );
 	else
 		drawSteel( at, size, lit, hover );
+	if( lit )
+	{
+		// the pick's frame, inside the chip's own rect as fills (a 2 px line would straddle the edge);
+		// a picture sits 2 px in and leaves it showing
+		TheDisplay->drawFillRect( at.x, at.y, size.x, 2, KEY_LETTER );
+		TheDisplay->drawFillRect( at.x, at.y + size.y - 2, size.x, 2, KEY_LETTER );
+		TheDisplay->drawFillRect( at.x, at.y + 2, 2, size.y - 4, KEY_LETTER );
+		TheDisplay->drawFillRect( at.x + size.x - 2, at.y + 2, 2, size.y - 4, KEY_LETTER );
+	}
 
 	DisplayString *text = s_chipText[ index + 1 ];
 	const Image *icon = index >= 0 ? s_chipIcon[ index ] : NULL;
@@ -386,8 +392,9 @@ static void drawChip( GameWindow *window, WinInstanceData *instData )
 	// a dark backing; the pick's chip in a lit frame, the others' pictures a shade darker
 	if( index >= 0 && icon != NULL && !s_chipGlyph[ index ] && icon->getImageWidth() > 0 && icon->getImageHeight() > 0 )
 	{
-		IRegion2D room = { { at.x + CHIP_PICTURE_INSET, at.y + CHIP_PICTURE_INSET },
-			{ at.x + size.x - CHIP_PICTURE_INSET, at.y + size.y - CHIP_PICTURE_INSET } };
+		// inside the Chip piece's bezel, the face Tümü's text sits on: 4 px at 1080 (a 28 high chip)
+		const Int inset = max( REAL_TO_INT( CHIP_PICTURE_INSET * size.y / 28.0f + 0.5f ), 2 );
+		IRegion2D room = { { at.x + inset, at.y + inset }, { at.x + size.x - inset, at.y + size.y - inset } };
 		if( room.width() > 0 && room.height() > 0 )
 		{
 			const Real cover = max( (Real)room.width() / icon->getImageWidth(), (Real)room.height() / icon->getImageHeight() );
@@ -398,11 +405,9 @@ static void drawChip( GameWindow *window, WinInstanceData *instData )
 			TheDisplay->drawImage( icon, x, y, x + w, y + h, lit ? 0xFFFFFFFF : CHIP_PICTURE_DIM );
 			TheDisplay->enableClipping( FALSE );
 		}
-		if( lit )
-			TheDisplay->drawOpenRect( at.x, at.y, size.x, size.y, 2.0f, KEY_LETTER );
 		if( text != NULL )
 		{
-			const Int bx = at.x + size.x - CHIP_PICTURE_INSET - textW - 2, by = at.y + size.y - CHIP_PICTURE_INSET - textH;
+			const Int bx = at.x + size.x - inset - textW - 2, by = at.y + size.y - inset - textH;
 			TheDisplay->drawFillRect( bx - 2, by, textW + 4, textH, CHIP_BADGE );
 			text->draw( bx, by, CHIP_TEXT, TAB_TEXT_EDGE );
 		}

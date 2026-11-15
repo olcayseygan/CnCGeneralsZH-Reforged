@@ -254,13 +254,10 @@ void SalvageCrateCollide::doMoney( Object *other )
 		money = other->getControllingPlayer()->earnMoney( money );
 		
 		//Display cash income floating over the crate.  Position is me, everything else is them.
-		UnicodeString moneyString;
-		moneyString.format( TheGameText->fetch( "GUI:AddCash" ), money );
 		Coord3D pos;
 		pos.set( getObject()->getPosition() );
 		pos.z += 10.0f; //add a little z to make it show up above the unit.
-		Color color = other->getControllingPlayer()->getPlayerColor() | GameMakeColor( 0, 0, 0, 230 );
-		TheInGameUI->addFloatingText( moneyString, &pos, color );
+		TheInGameUI->addMoneyText( money, &pos, other->getControllingPlayer() );
 	}
 }
 

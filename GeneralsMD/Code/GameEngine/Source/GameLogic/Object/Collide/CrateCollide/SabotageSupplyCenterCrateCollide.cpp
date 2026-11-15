@@ -152,18 +152,15 @@ Bool SabotageSupplyCenterCrateCollide::executeCrateBehavior( Object *other )
 			}
 
 			//Display cash income floating over the about to be deleted saboteur.
-			UnicodeString moneyString;
-			moneyString.format( TheGameText->fetch( "GUI:AddCash" ), earned );
 			Coord3D pos;
 			pos.set( obj->getPosition() );
 			pos.z += 20.0f; //add a little z to make it show up above the unit.
-			TheInGameUI->addFloatingText( moneyString, &pos, GameMakeColor( 0, 255, 0, 255 ) );
-		
+			TheInGameUI->addMoneyText( (Int)earned, &pos, obj->getControllingPlayer() );
+
 			//Display cash lost floating over the target
-			moneyString.format( TheGameText->fetch( "GUI:LoseCash" ), cash );
 			pos.set( other->getPosition() );
 			pos.z += 30.0f; //add a little z to make it show up above the unit.
-			TheInGameUI->addFloatingText( moneyString, &pos, GameMakeColor( 255, 0, 0, 255 ) );
+			TheInGameUI->addMoneyText( -(Int)cash, &pos, other->getControllingPlayer() );
 		}
 		else
 		{

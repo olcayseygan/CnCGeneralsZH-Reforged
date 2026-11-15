@@ -1,0 +1,16 @@
+# The money pop and the money readout: seven China supply trucks ferry from three piles to seat 0's
+# supply center, so a "+$" rises over the center every second or two and the readout counts up.
+# Shot with Cinema/moneypop.txt, played as seat 0 (not -observer) so the pop is the owner's gold.
+#
+#   generals.exe -quickstart -noshellmap -multiInstance -win -borderless -xres 1920 -yres 1080 -msaa 0
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionChina -side 1 FactionAmerica -seed 1 -camera 900 900
+#     -scenario moneypop -cinema moneypop -maxframes 1500 -logPrefix moneypop_
+
+1     spawn       0  ChinaSupplyCenter         1  900 900
+1     spawn       0  ChinaPowerPlant           1  760 920
+1     spawn       0  SupplyPile                1  1100 700
+1     spawn       0  SupplyPile                1  1180 950
+1     spawn       0  SupplyPile                1  1050 1150
+10    spawn       0  ChinaVehicleSupplyTruck   7  1000 1000  40
+20    dock        0  ChinaVehicleSupplyTruck   0  SupplyPile

@@ -4625,6 +4625,47 @@ TEST(placement_snap_takes_the_nearest_45_on_both_halves_of_the_circle)
 }
 
 /*
+ * The money readout counts toward the purse instead of jumping.  Stepped every 16 ms, as a 60 Hz
+ * screen does: a 100,000 windfall has to land inside a second, a 100 supply drop has to take more
+ * than a couple of frames or nobody sees it count, and no step may run past the purse either way.
+ */
+static Int money_readout_ms_to_land(Int from, Int to, UnsignedInt frameMs, Bool *overshot)
+{
+	Int shown = from, ms = 0;
+	*overshot = FALSE;
+	while (shown != to && ms < 10000)
+	{
+		const Int next = InGameUI::stepMoneyShown(shown, to, frameMs);
+		if ((to > from && (next > to || next < shown)) || (to < from && (next < to || next > shown)))
+			*overshot = TRUE;
+		shown = next;
+		ms += (Int)frameMs;
+	}
+	return ms;
+}
+
+TEST(money_readout_counts_to_the_purse_without_passing_it)
+{
+	Bool overshot;
+	CHECK(money_readout_ms_to_land(0, 100000, 16, &overshot) < 1000);
+	CHECK(!overshot);
+	CHECK(money_readout_ms_to_land(250000, 10000, 16, &overshot) < 1000);
+	CHECK(!overshot);
+	CHECK(money_readout_ms_to_land(5000, 5100, 16, &overshot) >= 100);
+	CHECK(!overshot);
+	CHECK(money_readout_ms_to_land(5100, 5000, 16, &overshot) >= 100);
+	CHECK(!overshot);
+	CHECK(money_readout_ms_to_land(0, 100000, 3, &overshot) < 1000);	/* a 300 Hz screen too */
+	CHECK(!overshot);
+
+	/* no time, no step; a frame hitch longer than the whole count lands at once; a dollar off lands */
+	CHECK_EQ(InGameUI::stepMoneyShown(1000, 2000, 0), 1000);
+	CHECK_EQ(InGameUI::stepMoneyShown(1000, 2000, 5000), 2000);
+	CHECK_EQ(InGameUI::stepMoneyShown(1999, 2000, 16), 2000);
+	CHECK_EQ(InGameUI::stepMoneyShown(2000, 2000, 16), 2000);
+}
+
+/*
  * GridBuildPlacement.  The grid is the pathfinder's, 10 world units a cell, and what has to
  * land on it is the footprint's *edges*, not its centre: an odd number of cells wide means
  * the centre sits in the middle of a cell, an even number means it sits on the line between

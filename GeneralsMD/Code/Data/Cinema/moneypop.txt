@@ -1,0 +1,27 @@
+# Scenarios/moneypop.txt: the supply center with trucks docking, close, interface on so the money
+# readout is in the same frame. A shot a second: a pop lives 2.7 s and the deposits are not timed.
+
+0.5   hud     on
+0.5   cut     940 920 0.55 0 0
+24.0  shot
+25.0  shot
+26.0  shot
+27.0  shot
+28.0  shot
+29.0  shot
+30.0  shot
+31.0  shot
+32.0  shot
+33.0  shot
+34.0  shot
+35.0  shot
+36.0  shot
+37.0  shot
+38.0  shot
+39.0  shot
+40.0  shot
+41.0  shot
+42.0  shot
+43.0  shot
+44.0  shot
+45.0  shot

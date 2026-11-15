@@ -1627,6 +1627,8 @@ InGameUI::InGameUI()
 	m_hudDisplayString = NULL;
 	m_peaceTimeDisplayString = NULL;
 	m_lastMoneyDisplayed = -1;
+	m_moneyShownPlayer = NULL;
+	m_moneyShownMs = 0;
 	m_hudDrawCount = 0;
 	m_hudLastSampleFrame = 0;
 	m_hudLastSampleMs = 0;
@@ -1697,9 +1699,10 @@ InGameUI::InGameUI()
 	m_namedTimerUsedFlashColor = TRUE; // so next one is false
 	m_showNamedTimers = TRUE;
 
-	m_floatingTextTimeOut.setRaw( 0 );
-	m_floatingTextMoveUpSpeed.setRaw( 20.0f );		// per second: 1.0f a frame at the native speed
-	m_floatingTextMoveVanishRate.setRaw( 2.0f );	// and 0.1f
+	// retail InGameUI.ini's own numbers, so a pop without the file moves as it does with it
+	m_floatingTextTimeOut.setRaw( 333 );
+	m_floatingTextMoveUpSpeed.setRaw( 30.0f );
+	m_floatingTextMoveVanishRate.setRaw( 3.0f );
 
 	m_drawableCaptionFont = "Arial";
 	m_drawableCaptionPointSize = 10;
@@ -3655,7 +3658,15 @@ void InGameUI::update( void )
 		// -2 stands for Unlimited, apart from the -1 that a reset leaves, so switching the observed
 		// player between an unlimited purse and a counted one still rewrites the gadget
 		const Bool unlimited = moneyPlayer->getMoney()->isUnlimited();
-		Int currentMoney = unlimited ? -2 : (Int)moneyPlayer->getMoney()->countMoney();
+		const Int purse = unlimited ? -2 : (Int)moneyPlayer->getMoney()->countMoney();
+		// the figure counts up and down to the purse on the wall clock, as Red Alert 2's did; it snaps
+		// when the bar first shows it, for another player's purse, and to or from Unlimited
+		const UnsignedInt nowMs = Clock_Milliseconds();
+		Int currentMoney = purse;
+		if( !unlimited && m_lastMoneyDisplayed >= 0 && moneyPlayer == m_moneyShownPlayer )
+			currentMoney = stepMoneyShown( m_lastMoneyDisplayed, purse, nowMs - m_moneyShownMs );
+		m_moneyShownPlayer = moneyPlayer;
+		m_moneyShownMs = nowMs;
 		if( m_lastMoneyDisplayed != currentMoney )
 		{
 			UnicodeString buffer;
@@ -3689,6 +3700,7 @@ void InGameUI::update( void )
 	// update the control bar
 	TheControlBar->update();
 
+		m_moneyShownPlayer = NULL;
 	updateIdleUnitButtons();
 
 	// update any random window layout that so requests
@@ -3896,6 +3908,7 @@ void InGameUI::reset( void )
 	m_guardArmedMode		= GUARDMODE_GUARD_WITHOUT_PURSUIT;
 	m_guardRadiusScale	= 1.0f;
 	m_moveArmed					= false;
+	m_moneyShownPlayer = NULL;		// the next match's purse shows at once, not counted to from this one's
 	m_orderKeyKeptByShift	= false;
 	m_preferSelection		= false;
 	m_isAttackCircling	= FALSE;
@@ -10100,17 +10113,20 @@ void InGameUI::buildRegion( const ICoord2D *anchor, const ICoord2D *dest, IRegio
 }
 
 //-------------------------------------------------------------------------------------------------
-// The money pop: a white flash where the cash landed, a leap up that settles, gold, then gone, two
-// seconds in all on the wall clock. EA's ran on logic frames, so it stepped at the tick
-// rate, and took its distance and fade from the INI per frame, which every rate change re-tuned.
-enum
+/** How opaque a floating text is ageMs after it appeared, 0 once it is gone.  Retail's pop: solid
+	* for the INI's hold, then each logic frame took floor(n * rate) more alpha on the n-th frame after
+	* it, a fade that starts slow and ends fast, rate * 30 * t^2 / 2 lost by t seconds.  Here it runs on
+	* the wall clock, so neither the tick rate nor the game speed changes how long a figure stays; with
+	* InGameUI.ini's 333 ms and 3 that is 2.7 seconds in all, as in 2003. */
+//-------------------------------------------------------------------------------------------------
+static Int floatingTextAlpha( UnsignedInt ageMs, UnsignedInt holdMs, Real vanishRate )
 {
-	FLOATING_TEXT_LIFE_MS = 2000,
-	FLOATING_TEXT_FLASH_MS = 180,
-	FLOATING_TEXT_LEAP_MS = 600,
-	FLOATING_TEXT_FADE_FROM_MS = 1400,
-	FLOATING_TEXT_RISE = 40,		// 1080p pixels, whole steps of them on bigger screens (Drawable_pipPixel)
-};
+	if( ageMs <= holdMs )
+		return 255;
+	const Real t = INT_TO_REAL( (Int)( ageMs - holdMs ) ) / 1000.0f;
+	const Real lost = 0.5f * max( 0.1f, vanishRate ) * RETAIL_LOGICFRAMES_PER_SECOND * t * t;
+	return lost >= 255.0f ? 0 : 255 - REAL_TO_INT_CEIL( lost );
+}
 
 //-------------------------------------------------------------------------------------------------
 /** Add a new floating text to our list */
@@ -10130,21 +10146,14 @@ FloatingTextData *InGameUI::addFloatingText(const UnicodeString& text,const Coor
 
 	{
 		FloatingTextData *newFTD = newInstance( FloatingTextData );
-		// Every caller is money, and income is one gold whoever earned it, a supply drop, a Black
-		// Market, a bounty, a hack or a derrick, so the colour alone says cash (the owner's call,
-		// 2026-11-12; it was the owner's team colour, white or navy as often as not). Money taken
-		// keeps the pure red its callers give GUI:LoseCash, or a theft would read as pay. Gold
-		// over the black rim holds on grass, snow and sand alike.
-		const Color LOSS_RED = GameMakeColor( 255, 0, 0, 0 ) & 0x00FFFFFF;
-		newFTD->m_color = ( color & 0x00FFFFFF ) == LOSS_RED ? color : GameMakeColor( 255, 206, 64, 255 );
+		newFTD->m_color = color;
 		newFTD->m_pos3D.x = pos->x;
 		newFTD->m_pos3D.z = pos->z;
 		newFTD->m_pos3D.y = pos->y;
 		newFTD->m_text = text;
-		// the caption face four points up and bold: EA's 10 point plain line was the size of a
-		// unit's name and went by unread in a fight
+		// the caption face at the caption size, a unit's name's lettering, as retail's line was
 		newFTD->m_dString->setFont( TheFontLibrary->getFont( m_drawableCaptionFont,
-			TheGlobalLanguageData->adjustFontSize( m_drawableCaptionPointSize + 4 ), TRUE ) );
+			TheGlobalLanguageData->adjustFontSize( m_drawableCaptionPointSize ), m_drawableCaptionBold ) );
 		newFTD->m_dString->setText(text);
 		newFTD->m_bornMs = Clock_Milliseconds();
 
@@ -10163,6 +10172,38 @@ static const char *const SIGNAL_MARK_TEXTURES[ SIGNAL_KIND_COUNT ] =
 enum
 {
 	SIGNAL_MARK_SIZE						= 160,	///< across, in world units: 90 read as a coin from the default camera
+//-------------------------------------------------------------------------------------------------
+/** The money figure.  Who sees it is the scoreboard's rule: your own purse and your allies', and
+	* everybody's for an observer, a defeated player or a replay.  An enemy's income never shows, so
+	* the old per-caller stealth checks have nothing left to hide: a stealthed hacker or a cloaked
+	* killer is only ever seen by his own side.  Yours is the HUD's gold, an ally's is his colour so a
+	* team game says whose truck that was, and money taken is red whoever lost it. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::addMoneyText( Int amount, const Coord3D *pos, const Player *owner )
+{
+	if( LogicThread::defersEffects() )
+	{
+		const Coord3D at = *pos;
+		LogicThread::callAfterTick( [=]() { addMoneyText( amount, &at, owner ); } );
+		return;
+	}
+	const Player *local = ThePlayerList->getLocalPlayer();
+	if( amount == 0 || owner == NULL || local == NULL )
+		return;
+	if( owner != local && local->isPlayerActive() && local->getRelationship( owner->getDefaultTeam() ) != ALLIES )
+		return;
+
+	const Color HUD_GOLD = GameMakeColor( 242, 194, 48, 255 );		// BRAND.md's gold, #f2c230
+	const Color LOSS_RED = GameMakeColor( 255, 48, 48, 255 );			// the red the truce is written in
+	Color color = LOSS_RED;
+	if( amount > 0 )
+		color = owner == local ? HUD_GOLD : UIStyle::readable( clientPlayerColor( owner ) );
+
+	UnicodeString text;
+	text.format( TheGameText->fetch( amount > 0 ? "GUI:AddCash" : "GUI:LoseCash" ), amount > 0 ? amount : -amount );
+	addFloatingText( text, pos, color );
+}
+
 	SIGNAL_MARK_OPACITY					= 230	///< out of 255, so the ground under it still shows a little
 };
 #define SIGNAL_MARK_FADE_OUT_FRAMES ((Int)(LOGICFRAMES_PER_GAME_SECOND * 2))	///< the smoke's last steps, over which the mark fades
@@ -10316,7 +10357,7 @@ void InGameUI::updateFloatingText( void )
 	for(FloatingTextListIt it = m_floatingTextList.begin(); it != m_floatingTextList.end();)
 	{
 		FloatingTextData *ftd = *it;
-		if( now - ftd->m_bornMs >= FLOATING_TEXT_LIFE_MS )
+		if( floatingTextAlpha( now - ftd->m_bornMs, m_floatingTextTimeOut.raw(), m_floatingTextMoveVanishRate.raw() ) <= 0 )
 		{
 			it = m_floatingTextList.erase(it);
 			ftd->deleteInstance();
@@ -12500,37 +12541,22 @@ void InGameUI::drawFloatingText( void )
 			&& ThePartitionManager->getShroudStatusForPlayer(playerNdx, pCX, pCY) == CELLSHROUD_CLEAR )
 		{
 			// screen pixels throughout, never the camera's: the pop is one size at every zoom
-			const Int k = Drawable_pipPixel( TheUIScale() );
-			const Real age = INT_TO_REAL( (Int)min( now - ftd->m_bornMs, (UnsignedInt)FLOATING_TEXT_LIFE_MS ) );
+			const UnsignedInt ageMs = now - ftd->m_bornMs;
+			const Int alpha = floatingTextAlpha( ageMs, m_floatingTextTimeOut.raw(), m_floatingTextMoveVanishRate.raw() );
 
-			// leaps off the spot and settles, then holds still to be read: over half the rise is in
-			// the first 0.15 s, all of it by 0.6 s
-			const Real left = 1.0f - min( 1.0f, age / FLOATING_TEXT_LEAP_MS );
-			const Int rise = REAL_TO_INT( FLOATING_TEXT_RISE * k * ( 1.0f - left * left * left ) );
+			// retail's steady drift, its pixels a second at 800x600 grown with the screen as the bar is
+			const Int rise = REAL_TO_INT( m_floatingTextMoveUpSpeed.raw() * TheUIScale() * ageMs / 1000.0f );
 
-			// a white flash as it lands, easing into its own colour; solid, then gone over the last 0.6 s
 			UnsignedByte r, g, b, a;
 			GameGetColorComponents( ftd->m_color, &r, &g, &b, &a );
-			const Real white = max( 0.0f, 1.0f - age / FLOATING_TEXT_FLASH_MS );
-			r = (UnsignedByte)REAL_TO_INT( r + ( 255 - r ) * white );
-			g = (UnsignedByte)REAL_TO_INT( g + ( 255 - g ) * white );
-			b = (UnsignedByte)REAL_TO_INT( b + ( 255 - b ) * white );
-			const Real fade = age < FLOATING_TEXT_FADE_FROM_MS ? 1.0f
-				: ( FLOATING_TEXT_LIFE_MS - age ) / ( FLOATING_TEXT_LIFE_MS - FLOATING_TEXT_FADE_FROM_MS );
-			a = (UnsignedByte)REAL_TO_INT( 255.0f * fade );
-			const Color fill = GameMakeColor( r, g, b, a );
-			const Color edge = GameMakeColor( 0, 0, 0, a );
+			const Color fill = GameMakeColor( r, g, b, alpha );
+			// one drop shadow, as retail's, a little softer than the figure so it reads as shade
+			const Color shade = GameMakeColor( 0, 0, 0, alpha * 3 / 4 );
+			const Int k = Drawable_pipPixel( TheUIScale() );
 
 			Int width, height;
 			ftd->m_dString->getSize(&width, &height);
-			const Int x = pos.x - width / 2;
-			const Int y = pos.y - height - rise;
-
-			// a black rim on the four diagonals and a deeper drop under it, which holds on snow, sand
-			// and a burning base alike; a DisplayString draws one shadow a call, so the rim is two calls
-			ftd->m_dString->draw( x - k, y - k, edge, edge, 2 * k, 2 * k );
-			ftd->m_dString->draw( x - k, y + k, edge, edge, 2 * k, -2 * k );
-			ftd->m_dString->draw( x, y, fill, edge, 0, 2 * k );
+			ftd->m_dString->draw( pos.x - width / 2, pos.y - height - rise, fill, shade, k, k );
 		}
 
 	}

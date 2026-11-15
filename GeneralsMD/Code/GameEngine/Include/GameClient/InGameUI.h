@@ -679,6 +679,21 @@ public:  // ********************************************************************
 
 		return ((Real)REAL_TO_INT_FLOOR( angle / step + 0.5f )) * step;
 	}
+
+	/** The money readout's next figure on its way from shown to target, elapsedMs of wall clock on.
+		* It covers a tenth of what is left every 10 ms, never less than 300 a second, and never passes
+		* the target: a 100,000 jump lands in under a second, a 100 still ticks for a fifth of one.
+		* Inline so a test can reach it without linking the whole in-game UI. */
+	static Int stepMoneyShown( Int shown, Int target, UnsignedInt elapsedMs )
+	{
+		const Real CLOSE_MS = 100.0f;			// what is left shrinks by e every this long
+		const Real LEAST_PER_SEC = 300.0f;	// the slowest it ever counts
+		const Real left = (Real)( target > shown ? (Int64)target - shown : (Int64)shown - target );
+		const Real step = ceilf( max( left * elapsedMs / CLOSE_MS, LEAST_PER_SEC * elapsedMs / 1000.0f ) );
+		if( step >= left )
+			return target;
+		return target > shown ? shown + (Int)step : shown - (Int)step;
+	}
 	/** Experimental GridBuildPlacement: quantize a structure's position to the pathfinder's own
 		* build grid, so that structures put down by eye line up with each other and with the cells
 		* the pathfinder actually reasons about. */
@@ -1597,7 +1612,9 @@ protected:
 	/// the score bar laid out for players, under the clock's tab, team letters taken from named
 	void layOutBroadcast( const std::vector< SpectatorStats > &players, const std::vector< SpectatorStats > &named,
 		const std::string &tag, Int clockBox, Int clockBoxHeight, BroadcastLayout &layout );
-	Int													m_lastMoneyDisplayed;		///< so the money gadget is only written when the amount changes
+	Int													m_lastMoneyDisplayed;		///< the figure the money gadget shows, counting toward the purse; -1 after a reset, -2 for Unlimited
+	const Player *							m_moneyShownPlayer;			///< whose purse that figure is: another one snaps instead of counting
+	UnsignedInt									m_moneyShownMs;					///< wall clock the figure last stepped at
 	UnsignedInt									m_hudDrawCount;					///< rendered frames counted by drawHudOverlay itself
 	UnsignedInt									m_hudLastSampleFrame;		///< m_hudDrawCount the fps sample was last refreshed on
 	UnsignedInt									m_hudLastSampleMs;			///< wall clock of that sample
@@ -1747,8 +1764,8 @@ protected:
 
 	//Floating Text Data
 	FloatingTextList						m_floatingTextList;				///< Our list of floating text
-	// the three INI values are still parsed so InGameUI.ini loads, and no longer read: the money pop
-	// keeps its own wall-clock timing (drawFloatingText)
+	// read as InGameUI.ini wrote them (raw()) and run on the wall clock, never on the game speed:
+	// the hold in msec, the rise in pixels a second, the fade as retail's vanish rate (floatingTextAlpha)
 	DurationFrames									m_floatingTextTimeOut;									///< Ini value of our floating text timeout
 	VelocityPerFrame												m_floatingTextMoveUpSpeed;							///< INI value of our Move up speed
 	VelocityPerFrame												m_floatingTextMoveVanishRate;					///< INI value of our move vanish rate

@@ -2814,21 +2814,12 @@ void Player::doBountyForKill(const Object* killer, const Object* victim)
 
 		bounty = earnMoney( bounty );
 
-		// Display cash income floating over the recipient - but not to an enemy of a killer it cannot see,
-		// or the number gives the stealthed unit away. Client display only, the deposit above is logic.
-		const Object *seenKiller = killer->getContainedBy() ? killer->getContainedBy() : killer;
-		const Bool hiddenKiller = seenKiller->testStatus( OBJECT_STATUS_STEALTHED ) && !seenKiller->testStatus( OBJECT_STATUS_DETECTED );
-		const Player *localPlayer = ThePlayerList->getLocalPlayer();
-		if( !hiddenKiller || localPlayer->getRelationship( killer->getTeam() ) != ENEMIES )
-		{
-			UnicodeString moneyString;
-			moneyString.format( TheGameText->fetch( "GUI:AddCash" ), bounty );
-			Coord3D pos;
-			pos.zero();
-			pos.add( killer->getPosition() );
-			pos.z += 10.0f; //add a little z to make it show up above the unit.
-			TheInGameUI->addFloatingText( moneyString, &pos, GameMakeColor( 255, 255, 0, 255 ) );
-		}
+		// Display cash income floating over the killer. An enemy never sees it, so a stealthed killer
+		// is not given away. Client display only, the deposit above is logic.
+		Coord3D pos;
+		pos.set( killer->getPosition() );
+		pos.z += 10.0f; //add a little z to make it show up above the unit.
+		TheInGameUI->addMoneyText( bounty, &pos, this );
 	}
 }
 

@@ -808,13 +808,10 @@ void POWTruckAIUpdate::unloadPrisonersToPrison( Object *prison )
 				player->getScoreKeeper()->addMoneyEarned( prisonUnloadData.bounty );
 
 				// display text above the building
-				Color moneyColor = TheGlobalData->m_prisonBountyTextColor;
-				UnicodeString moneyString;
 				Coord3D pos = *prison->getPosition();
 
 				pos.z += prison->getGeometryInfo().getMaxHeightAbovePosition();
-				moneyString.format( TheGameText->fetch( "GUI:AddCash" ), prisonUnloadData.bounty );
-				TheInGameUI->addFloatingText( moneyString, &pos, moneyColor );
+				TheInGameUI->addMoneyText( (Int)prisonUnloadData.bounty, &pos, player );
 
 			}  // end if
 

@@ -1724,18 +1724,15 @@ void SpecialAbilityUpdate::triggerAbilityEffect()
           }
 
           //Display cash income floating over the blacklotus
-          UnicodeString moneyString;
-          moneyString.format( TheGameText->fetch( "GUI:AddCash" ), earned );
           Coord3D pos;
           pos.set( object->getPosition() );
           pos.z += 20.0f; //add a little z to make it show up above the unit.
-          TheInGameUI->addFloatingText( moneyString, &pos, GameMakeColor( 0, 255, 0, 255 ) );
-        
+          TheInGameUI->addMoneyText( (Int)earned, &pos, object->getControllingPlayer() );
+
           //Display cash lost floating over the target
-          moneyString.format( TheGameText->fetch( "GUI:LoseCash" ), cash );
           pos.set( target->getPosition() );
           pos.z += 30.0f; //add a little z to make it show up above the unit.
-          TheInGameUI->addFloatingText( moneyString, &pos, GameMakeColor( 255, 0, 0, 255 ) );
+          TheInGameUI->addMoneyText( -(Int)cash, &pos, target->getControllingPlayer() );
         }
       }
       break;

@@ -36,6 +36,7 @@
 #include "Lib/BaseType.h"
 #include "Common/GameType.h"
 #include "GameLogic/ScriptEngine.h"
+#include "W3DDevice/GameClient/FoliagePlacement.h"
 #include <vector>
 
 class BaseHeightMapRenderObjClass;
@@ -45,6 +46,7 @@ class TextureClass;
 class GeometryInfo;
 class Matrix3D;
 class Vector3;
+class W3DTreeBuffer;
 
 class W3DGrassBuffer
 {
@@ -66,10 +68,10 @@ public:
 	/// At the render's sync point, outside the logic window: the grid for the drawn map, built the
 	/// first time the option is on and the ground is subdivided (at a load, or when the option is
 	/// switched on mid-match), with every structure standing by then cleared.  Nothing otherwise.
-	void classifyIfWanted(WorldHeightMap *map);
-	/// Classify a map's cells, roads and placed structures.  Nothing for the map already classified,
-	/// so a device reset keeps the grid.
-	void classify(WorldHeightMap *map);
+	void classifyIfWanted(WorldHeightMap *map, const W3DTreeBuffer *trees);
+	/// Classify a map's cells, roads, placed structures and the groves its trees stand in.  Nothing
+	/// for the map already classified, so a device reset keeps the grid.
+	void classify(WorldHeightMap *map, const W3DTreeBuffer *trees);
 	/// Forget the map: the next classify builds the grid again.
 	void clear(void);
 	/// A building going up: no grass under it, for the rest of the match.
@@ -87,7 +89,7 @@ public:
 private:
 	enum {
 		CHUNK_CELLS = 16,
-		MAX_SLOTS = 48,
+		MAX_SLOTS = 96,							///< the far ring's tree chunks need room beside the near ones; buffers are made as used
 		MAX_CHUNK_VERTICES = 16384,	///< a chunk stops taking pieces here; a full grass chunk is 6144
 		MAX_CHUNK_INDICES = 32768,
 		BUFFER_STEP = 2048,					///< a slot's buffers grow in these
@@ -104,7 +106,8 @@ private:
 		Int vbCapacity;
 		Int ibCapacity;
 		Int key;							///< chunk index, -1 while free
-		Int fixedPieces;
+		Int farPieces;				///< the big trees, first in the buffers, all a chunk past GRASS_RADIUS draws
+		Int fixedPieces;			///< the pieces that never thin, the big trees among them
 		Int thinPieces;
 		std::vector<UnsignedInt> ends;
 		UnsignedInt lastUsed;	///< m_drawFrame it was last drawn on
@@ -118,12 +121,14 @@ private:
 		UnsignedByte piece;		///< FoliagePlacement::Piece
 		UnsignedByte k;				///< a tuft's slot
 		Bool thins;
+		Bool isFar;						///< FoliagePlacement::pieceFar (not "far": windef.h defines it)
 	};
 
 	BaseHeightMapRenderObjClass *m_terrain;
 	const WorldHeightMap *m_classifiedMap;	///< compared, never dereferenced
 	Bool m_anyFoliage;											///< a map with nothing to draw builds nothing
 	std::vector<UnsignedByte> m_cells;			///< FoliagePlacement::CELL_BYTES a cell, whole map, border included
+	std::vector<UnsignedByte> m_chunkFar;		///< a chunk a byte: it holds a big tree, so the far ring wants it
 	Int m_width;
 	Int m_height;
 	Int m_border;
@@ -135,6 +140,9 @@ private:
 	std::vector<VertexFormatXYZNDUV1> m_vertices;	///< a chunk baked here, then copied into its slot
 	std::vector<UnsignedShort> m_indices;
 	Real m_rockCorners[8][12][3];						///< FoliagePlacement::rockCorners, ROCK_VARIANTS of them
+	Real m_bushCorners[6][37][3];						///< FoliagePlacement::bushCorners, BUSH_VARIANTS of them
+	FoliagePlacement::TreeMesh m_deadTrees[FoliagePlacement::DEAD_TREE_VARIANTS];
+	FoliagePlacement::TreeMesh m_firs[FoliagePlacement::FIR_VARIANTS];
 	IDirect3DVertexShader9 *m_vertexShader;
 	IDirect3DVertexDeclaration9 *m_vertexDeclaration;
 	Bool m_deviceFailed;		///< the shader would not load; tried again after a device reset
@@ -156,12 +164,17 @@ private:
 	void buildChunk(Slot &slot, Int key);
 	Bool uploadChunk(Slot &slot);
 	void clearRoadsAndMapStructures(void);
-	void flagNeighbours(void);
+	void flagNeighbours(WorldHeightMap *map);
+	void addGroves(const W3DTreeBuffer *trees);
 	void logCounts(void);
 	// one piece into m_vertices / m_indices; FALSE when the chunk is full
 	Bool addCards(Real x, Real y, Real yaw, Int planes, Real height, Real halfWidth, Real sink,
-		Int atlasCell, Bool mirror, Real sway, UnsignedInt top, UnsignedInt root, Real canopyHalf = 0.0f);
+		Int atlasCell, Bool mirror, Real sway, UnsignedInt top, UnsignedInt root);
 	Bool addFlat(Real x, Real y, Real yaw, Real half, Int atlasCell, UnsignedInt colour);
+	Bool addBush(Real x, Real y, Real yaw, Real radius, Real height, Int variant, Int atlasCell, Real sway,
+		const Vector3 &tint);
+	Bool addTreeMesh(const FoliagePlacement::TreeMesh &mesh, Real x, Real y, Real yaw, Real height,
+		const Vector3 &tint, Real dark, Real tipSnow = 0.0f);
 	void releaseSlot(Slot &slot);	///< its buffers gone, the slot free
 	Bool addRock(Real x, Real y, Real yaw, Real radius, Real stretch, Int variant, Int atlasCell,
 		Bool detailed, Real sink, const Vector3 &tint);

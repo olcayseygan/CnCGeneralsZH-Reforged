@@ -27,6 +27,7 @@
 #include "W3DDevice/GameClient/WorldHeightMap.h"
 #include "W3DDevice/GameClient/W3DShaderManager.h"
 #include "W3DDevice/GameClient/W3DShroud.h"
+#include "W3DDevice/GameClient/W3DTreeBuffer.h"
 
 #include "Common/FileSystem.h"
 #include "Common/GameCommon.h"
@@ -61,6 +62,7 @@
 using namespace FoliagePlacement;
 
 static_assert(ROCK_VARIANTS == 8 && ROCK_CORNERS == 12, "W3DGrassBuffer::m_rockCorners is sized for these");
+static_assert(BUSH_VARIANTS == 6 && BUSH_CORNERS == 37, "W3DGrassBuffer::m_bushCorners is sized for these");
 
 // Sizes are world units.  Infantry stand about twelve tall; a tuft comes to the knee.
 #define GRASS_TEXTURE				"ReforgedFoliage.tga"
@@ -70,13 +72,32 @@ static_assert(ROCK_VARIANTS == 8 && ROCK_CORNERS == 12, "W3DGrassBuffer::m_rockC
 #define TUFT_HEIGHT					5.5f		///< at scale one
 #define TUFT_HALF_WIDTH			0.52f		///< of the height: an atlas cell is 256 wide and 246 to the root
 #define TUFT_SINK						0.6f		///< a card's foot under the ground at each corner, so its cut edge never shows
-#define SHRUB_HEIGHT				15.0f		///< at scale one: about two to three and a half tufts, so a bush reads from the default camera
-#define SHRUB_HALF_WIDTH		0.6f
-#define SHRUB_SINK					0.9f
-#define CANOPY_HEIGHT				0.62f		///< of the bush's height: the rim of its canopy
-#define CANOPY_DOME					0.1f		///< of the bush's height: how far the canopy's middle rises over its rim
-#define CANOPY_SHARE				0.8f		///< of the bush's half width: the canopy's half side
-#define BUSH_TINT						0.35f		///< how far a green bush takes the grass's hue under it
+#define BUSH_RADIUS					4.5f		///< at scale one: a round bush about nine across, so it reads from the default camera
+#define BUSH_SQUASH					0.85f		///< its height against its radius
+#define BUSH_SINK						0.3f
+#define BUSH_CONTACT				0.85f		///< the light its ring on the ground keeps: darker read as a skirt
+#define BUSH_UV_SPAN				2.1f		///< the canopy painting's width over the dome's: its edge, and its alpha, at the rim
+#define SCRUB_HEIGHT				12.0f		///< dry scrub's upright cards at scale one
+#define SCRUB_HALF_WIDTH		0.6f
+#define SCRUB_SINK					0.9f
+#define BUSH_DARK						0.55f		///< the light its side away from the sun keeps
+#define FERN_HEIGHT					8.0f		///< big enough to read as a thicket under the trees
+#define SAPLING_HEIGHT			13.0f
+#define STUMP_HEIGHT				3.5f
+#define LITTER_HALF					3.5f		///< at the largest; a patch is 0.6 to 1 of it
+#define LITTER_TINT					0.65f		///< how far litter goes toward the ground's own colour, darkened: shaded ground, not a spot
+#define LITTER_SHADE				0.7f		///< that colour's darkening
+#define LITTER_GREY					0.4f		///< and how much of its saturation it loses
+#define LOG_HALF						6.0f		///< the log lies corner to corner, so about seventeen long
+#define DEAD_TREE_HEIGHT		29.0f		///< at scale one: two to three tanks, so it reads from the default camera
+#define FIR_BRIGHT					1.45f		///< the needles' light against the painting: as bright as the map's own pines
+#define FIR_GREEN						1.12f		///< and a little greener, as they are
+#define FIR_DARK						0.75f		///< the fir's side away from the sun: a cone that is not a black spike
+#define FIR_TIP_SNOW				0.55f		///< how far each tier's tip goes toward white
+#define FIR_HEIGHT					32.0f		///< at scale one: about the map's own pines
+#define DEAD_BLEACH					1.3f		///< sun-bleached wood, over the bark painting
+#define TREE_SINK						0.5f		///< a trunk's foot under the ground
+#define BUSH_TINT						0.5f		///< how far a green bush takes the grass's hue under it
 #define BUSH_BRIGHT					1.12f		///< and how much brighter it is for it
 #define TWIG_HALF						3.5f		///< half the side of the flat card, at scale one
 #define PEBBLE_HALF					2.3f
@@ -86,6 +107,8 @@ static_assert(ROCK_VARIANTS == 8 && ROCK_CORNERS == 12, "W3DGrassBuffer::m_rockC
 #define STONE_RADIUS				2.2f		///< at scale one: about two units showing, under a soldier's knee
 #define BOULDER_RADIUS			4.0f
 #define BOULDER_BURY				0.3f		///< of the radius, further under for the quarter of the boulders half buried
+#define FOOT_RISE						2.0f		///< how much higher a cliff or steep neighbour's middle stands for a cell to be its foot
+#define ROCK_DROP						0.5f		///< of the radius: the most a rock's ground goes under the ground at its middle
 #define ROCK_SINK						0.1f		///< of the radius, under the lowest ground beneath the rock
 #define ROCK_CONTACT				0.6f		///< the light a rock keeps where it meets the ground
 #define ROCK_DARK						0.45f		///< the light its side away from the sun keeps, of the lit side's
@@ -93,6 +116,8 @@ static_assert(ROCK_VARIANTS == 8 && ROCK_CORNERS == 12, "W3DGrassBuffer::m_rockC
 #define ROOT_SHADE					0.65f		///< the roots' share of the light
 #define NORMAL_TO_UP				0.5f		///< how far a card's normal goes from the ground's toward straight up
 #define GRASS_RADIUS				480.0f	///< around the tactical view's focus
+#define FAR_RADIUS					1100.0f	///< the big trees': out past the edges of the view, as the map's own trees are drawn
+#define BIG_MESH_REACH			16.0f		///< how far a fir's tiers or a dead tree's branches lean past its chunk
 #define GRASS_FADE_WIDTH		140.0f	///< the last stretch of it, thinned on the CPU and folded on the GPU
 #define GRASS_MIN_SHARE			0.15f		///< of a chunk's cards drawn at the radius itself
 #define GUST_WAVE						220.0f	///< length of one gust across the field
@@ -258,15 +283,28 @@ namespace
 		return (Vector3(1.0f, 1.0f, 1.0f) * (1.0f - BUSH_TINT) + hue * BUSH_TINT) * BUSH_BRIGHT;
 	}
 
+	/// Leaf and needle litter's tint: LITTER_TINT of the way toward the ground's own colour, darkened
+	/// and greyed, so a grove's floor reads as the same ground in shade.  Taken raw, the painted
+	/// red-brown leaves were rust spots at the default camera.
+	Vector3 litterTint(WorldHeightMap *map, Real x, Real y)
+	{
+		RGBColor c;
+		map->getTerrainColorAt(x, y, &c);
+		const Real grey = 0.3f * c.red + 0.59f * c.green + 0.11f * c.blue;
+		const Vector3 ground((c.red + (grey - c.red) * LITTER_GREY) * LITTER_SHADE,
+			(c.green + (grey - c.green) * LITTER_GREY) * LITTER_SHADE, (c.blue + (grey - c.blue) * LITTER_GREY) * LITTER_SHADE);
+		return Vector3(1.0f, 1.0f, 1.0f) * (1.0f - LITTER_TINT) + ground * LITTER_TINT;
+	}
+
 	/// A rock face: the ground's own light, falling to ROCK_DARK of it on the side away from the sun,
 	/// so a stone has a shadowed side instead of the ambient-flat grey it was; then tint and shade.
-	UnsignedInt lightRock(const Vector3 &normal, const Vector3 &tint, Real shade)
+	UnsignedInt lightRock(const Vector3 &normal, const Vector3 &tint, Real shade, Real dark = ROCK_DARK)
 	{
 		const GlobalData::TerrainLighting *lights = TheGlobalData->m_terrainLighting[TheGlobalData->m_timeOfDay];
 		Vector3 sun(lights[0].lightPos.x, lights[0].lightPos.y, lights[0].lightPos.z);
 		sun.Normalize();
 		const Real facing = WWMath::Clamp(-Vector3::Dot_Product(sun, normal), 0.0f, 1.0f);
-		const Real light = (ROCK_DARK + (1.0f - ROCK_DARK) * facing) * shade;
+		const Real light = (dark + (1.0f - dark) * facing) * shade;
 		return tinted(lightOn(Vector3(0.0f, 0.0f, 1.0f), 1.0f), tint * light);
 	}
 
@@ -336,6 +374,7 @@ W3DGrassBuffer::W3DGrassBuffer(BaseHeightMapRenderObjClass *terrain) :
 		m_slots[i].vbCapacity = 0;
 		m_slots[i].ibCapacity = 0;
 		m_slots[i].key = -1;
+		m_slots[i].farPieces = 0;
 		m_slots[i].fixedPieces = 0;
 		m_slots[i].thinPieces = 0;
 		m_slots[i].lastUsed = 0;
@@ -343,6 +382,15 @@ W3DGrassBuffer::W3DGrassBuffer(BaseHeightMapRenderObjClass *terrain) :
 	}
 	for (Int v = 0; v < ROCK_VARIANTS; v++) {
 		rockCorners(v, m_rockCorners[v]);
+	}
+	for (Int v = 0; v < BUSH_VARIANTS; v++) {
+		bushCorners(v, m_bushCorners[v]);
+	}
+	for (Int v = 0; v < DEAD_TREE_VARIANTS; v++) {
+		deadTreeMesh(v, m_deadTrees[v]);
+	}
+	for (Int v = 0; v < FIR_VARIANTS; v++) {
+		firMesh(v, m_firs[v]);
 	}
 }
 
@@ -378,12 +426,12 @@ Bool W3DGrassBuffer::drawable(void) const
 	return wanted() && m_terrain != NULL && m_terrain->terrainSubdivided();
 }
 
-void W3DGrassBuffer::classifyIfWanted(WorldHeightMap *map)
+void W3DGrassBuffer::classifyIfWanted(WorldHeightMap *map, const W3DTreeBuffer *trees)
 {
 	if (map == NULL || map == m_classifiedMap || !drawable() || TheGlobalData->m_loadScreenRender) {
 		return;	// not while the load screen draws: the map's water and objects may be half in
 	}
-	classify(map);
+	classify(map, trees);
 	clearStructures();	// switched on mid-match: what was built since the load
 }
 
@@ -393,6 +441,7 @@ void W3DGrassBuffer::takeGrid(const W3DGrassBuffer &from)
 	m_classifiedMap = from.m_classifiedMap;
 	m_anyFoliage = from.m_anyFoliage;
 	m_cells = from.m_cells;
+	m_chunkFar = from.m_chunkFar;
 	m_width = from.m_width;
 	m_height = from.m_height;
 	m_border = from.m_border;
@@ -405,9 +454,11 @@ void W3DGrassBuffer::clear(void)
 	m_classifiedMap = NULL;
 	m_anyFoliage = FALSE;
 	m_cells.clear();
+	m_chunkFar.clear();
 	m_width = m_height = m_border = m_chunksX = m_chunksY = 0;
 	for (Int i = 0; i < MAX_SLOTS; i++) {
 		m_slots[i].key = -1;
+		m_slots[i].farPieces = 0;
 		m_slots[i].fixedPieces = 0;
 		m_slots[i].thinPieces = 0;
 		m_slots[i].ends.clear();
@@ -422,6 +473,7 @@ void W3DGrassBuffer::releaseSlot(Slot &slot)
 	slot.vbCapacity = 0;
 	slot.ibCapacity = 0;
 	slot.key = -1;
+	slot.farPieces = 0;
 	slot.fixedPieces = 0;
 	slot.thinPieces = 0;
 	slot.ends.clear();
@@ -446,7 +498,7 @@ void W3DGrassBuffer::freeGrassBuffers(void)
 //-------------------------------------------------------------------------------------------------
 /** The grid.  Once a map, at its load, so TheTerrainLogic's water is read while no tick runs. */
 //-------------------------------------------------------------------------------------------------
-void W3DGrassBuffer::classify(WorldHeightMap *map)
+void W3DGrassBuffer::classify(WorldHeightMap *map, const W3DTreeBuffer *trees)
 {
 	if (map == NULL || map == m_classifiedMap || !available()) {
 		return;	// a picture that never draws grass (-headless, Classic, -d3d9) never pays for the grid
@@ -472,7 +524,7 @@ void W3DGrassBuffer::classify(WorldHeightMap *map)
 	}
 
 	// tile -> what grows on it, through the tile's Terrain.ini class
-	struct TileInfo { UnsignedByte grass, stones, twigs, rock, known; };
+	struct TileInfo { UnsignedByte grass, stones, twigs, rock, known, bare; };
 	TileInfo tileInfo[NUM_SOURCE_TILES];
 	memset(tileInfo, 0, sizeof(tileInfo));
 	const Int numClasses = min(map->m_numTextureClasses, (Int)NUM_TEXTURE_CLASSES);
@@ -492,6 +544,7 @@ void W3DGrassBuffer::classify(WorldHeightMap *map)
 		info.twigs = twigDensity(info.grass, bare);
 		info.rock = (UnsignedByte)rockOf(bare, name);
 		info.known = 1;
+		info.bare = (UnsignedByte)bare;
 		for (Int t = classes[i].firstTile; t < classes[i].firstTile + classes[i].numTiles && t < NUM_SOURCE_TILES; t++) {
 			tileInfo[t] = info;
 		}
@@ -524,8 +577,16 @@ void W3DGrassBuffer::classify(WorldHeightMap *map)
 			// a face the pathfinder still lets units onto (a cliff texture, or a slope under its 9.8
 			// units a cell): nothing on it, and its foot is where the open ground starts below it
 			const Bool steep = !cliff && ((cliffInfo && cliffInfo[ndx] != 0) || tooSteep(h00, h10, h01, h11, MAP_XY_FACTOR));
+			// the base tile's bare ground, and the border strip outside the playable map
+			const Bool border = x < m_border || y < m_border || x >= m_width - 1 - m_border || y >= m_height - 1 - m_border;
+			const UnsignedByte kind = (UnsignedByte)((base.known ? base.bare : overlay.bare) | (border ? KIND_BORDER : 0));
 			if (grass == 0 && stones == 0 && twigs == 0 && !cliff && !steep) {
+				if (border && TheTerrainLogic
+					&& TheTerrainLogic->isUnderwater((x - m_border + 0.5f) * MAP_XY_FACTOR, (y - m_border + 0.5f) * MAP_XY_FACTOR)) {
+					continue;	// no tree on the sea bed past the map's edge
+				}
 				cell[BYTE_FLAGS] = rock;	// a cliff's foot may still gather stones of it
+				cell[BYTE_KIND] = kind;
 				continue;
 			}
 			if (TheTerrainLogic
@@ -533,6 +594,7 @@ void W3DGrassBuffer::classify(WorldHeightMap *map)
 				continue;
 			}
 			cell[BYTE_FLAGS] = rock;
+			cell[BYTE_KIND] = kind;
 			if (cliff) {
 				// impassable: nothing grows, and the boulders gather at its foot; a gentle ledge
 				// holds the odd small stone
@@ -551,7 +613,8 @@ void W3DGrassBuffer::classify(WorldHeightMap *map)
 			cell[BYTE_TWIGS] = twigs;
 		}
 	}
-	flagNeighbours();
+	flagNeighbours(map);
+	addGroves(trees);
 	clearRoadsAndMapStructures();
 	logCounts();
 }
@@ -559,18 +622,24 @@ void W3DGrassBuffer::classify(WorldHeightMap *map)
 //-------------------------------------------------------------------------------------------------
 /** The flags a cell takes from its neighbours: the foot of a cliff, and where grass meets bare ground.
 	A foot is open ground beside a cliff or a steep cell, never a steep cell itself: a scree band
-	under a cliff pushes the foot out to where the ground levels, and nothing sits on the face. */
+	under a cliff pushes the foot out to where the ground levels, and nothing sits on the face.  And
+	only below it: the open ground at a cliff's top edge is no foot, since a rock there would be
+	sunk to the ground at the bottom of the drop. */
 //-------------------------------------------------------------------------------------------------
-void W3DGrassBuffer::flagNeighbours(void)
+void W3DGrassBuffer::flagNeighbours(WorldHeightMap *map)
 {
+	// a cell's middle height, the mean of its corners
+	#define CELL_MEAN(cx, cy) ((map->getHeight(cx, cy) + map->getHeight((cx) + 1, cy) + map->getHeight(cx, (cy) + 1) \
+		+ map->getHeight((cx) + 1, (cy) + 1)) * (MAP_HEIGHT_SCALE * 0.25f))
 	for (Int y = 0; y < m_height - 1; y++) {
 		for (Int x = 0; x < m_width - 1; x++) {
 			UnsignedByte *cell = &m_cells[((size_t)y * m_width + x) * CELL_BYTES];
 			if (cell[BYTE_FLAGS] & (CF_CLIFF | CF_STEEP)) {
 				continue;
 			}
+			const Real here = CELL_MEAN(x, y);
 			const Bool grassy = cell[BYTE_GRASS] != 0;
-			Bool foot = FALSE, edge = FALSE;
+			Bool foot = FALSE, edge = FALSE, hug = FALSE;
 			for (Int dy = -1; dy <= 1; dy++) {
 				for (Int dx = -1; dx <= 1; dx++) {
 					const Int nx = x + dx, ny = y + dy;
@@ -578,20 +647,28 @@ void W3DGrassBuffer::flagNeighbours(void)
 						continue;
 					}
 					const UnsignedByte *other = &m_cells[((size_t)ny * m_width + nx) * CELL_BYTES];
+					if (other[BYTE_FLAGS] & CF_CLIFF) {
+						hug = TRUE;	// hard against ground no unit can take, its top or its foot
+					}
 					if (other[BYTE_FLAGS] & (CF_CLIFF | CF_STEEP)) {
-						foot = TRUE;
+						if (CELL_MEAN(nx, ny) > here + FOOT_RISE) {
+							foot = TRUE;	// the face rises from here
+						}
 					} else if ((dx == 0 || dy == 0) && (other[BYTE_GRASS] != 0) != grassy) {
 						edge = TRUE;
 					}
 				}
 			}
 			const Bool empty = cell[BYTE_GRASS] == 0 && cell[BYTE_STONES] == 0 && cell[BYTE_TWIGS] == 0;
-			if (foot && empty && TheTerrainLogic
+			if ((foot || hug) && empty && TheTerrainLogic
 				&& TheTerrainLogic->isUnderwater((x - m_border + 0.5f) * MAP_XY_FACTOR, (y - m_border + 0.5f) * MAP_XY_FACTOR)) {
-				foot = FALSE;	// a cliff standing in the water keeps its stones out of it
+				foot = hug = FALSE;	// a cliff standing in the water keeps its stones and trees out of it
 			}
 			if (foot) {
 				cell[BYTE_FLAGS] |= CF_CLIFF_FOOT;
+			}
+			if (hug) {
+				cell[BYTE_KIND] |= KIND_HUG;
 			}
 			if (edge) {
 				cell[BYTE_FLAGS] |= CF_EDGE;
@@ -600,11 +677,62 @@ void W3DGrassBuffer::flagNeighbours(void)
 	}
 	// what nothing will ever stand on keeps no rock either, so a clear's count means something
 	for (size_t i = 0; i < m_cells.size(); i += CELL_BYTES) {
-		if ((m_cells[i + BYTE_FLAGS] & (CF_CLIFF | CF_CLIFF_FOOT)) == 0 && m_cells[i + BYTE_GRASS] == 0
-			&& m_cells[i + BYTE_STONES] == 0 && m_cells[i + BYTE_TWIGS] == 0) {
+		if ((m_cells[i + BYTE_FLAGS] & (CF_CLIFF | CF_CLIFF_FOOT | CF_STEEP)) == 0 && m_cells[i + BYTE_GRASS] == 0
+			&& m_cells[i + BYTE_STONES] == 0 && m_cells[i + BYTE_TWIGS] == 0
+			&& (m_cells[i + BYTE_KIND] & (KIND_HUG | KIND_BORDER)) == 0) {
 			m_cells[i + BYTE_FLAGS] = 0;
 		}
 	}
+	#undef CELL_MEAN
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The trees over every cell: how many of the batched trees stand within GROVE_RADIUS of its middle,
+	and whether most of them are conifers.  That is what a grove's floor grows from (FoliagePlacement's
+	litter, ferns, saplings, logs and stumps, and the thinner grass under the canopy). */
+//-------------------------------------------------------------------------------------------------
+void W3DGrassBuffer::addGroves(const W3DTreeBuffer *trees)
+{
+	if (trees == NULL || m_cells.empty()) {
+		return;
+	}
+	std::vector<UnsignedByte> conifers((size_t)m_width * m_height, 0);
+	const Int reach = (Int)ceilf(GROVE_RADIUS / MAP_XY_FACTOR);
+	Int counted = 0;
+	for (Int i = 0; i < trees->getNumTrees(); i++) {
+		Vector3 at;
+		Bool conifer = FALSE;
+		if (!trees->getTreeForFoliage(i, &at, &conifer)) {
+			continue;
+		}
+		++counted;
+		const Int tx = (Int)floorf(at.X / MAP_XY_FACTOR) + m_border, ty = (Int)floorf(at.Y / MAP_XY_FACTOR) + m_border;
+		for (Int y = ty - reach; y <= ty + reach; y++) {
+			for (Int x = tx - reach; x <= tx + reach; x++) {
+				if (x < 0 || y < 0 || x >= m_width - 1 || y >= m_height - 1) {
+					continue;
+				}
+				const Real dx = (x - m_border + 0.5f) * MAP_XY_FACTOR - at.X, dy = (y - m_border + 0.5f) * MAP_XY_FACTOR - at.Y;
+				if (dx * dx + dy * dy > GROVE_RADIUS * GROVE_RADIUS) {
+					continue;
+				}
+				UnsignedByte *cell = &m_cells[((size_t)y * m_width + x) * CELL_BYTES];
+				if (cell[BYTE_CANOPY] < 255) {
+					cell[BYTE_CANOPY]++;
+					if (conifer) {
+						conifers[(size_t)y * m_width + x]++;
+					}
+				}
+			}
+		}
+	}
+	for (size_t i = 0; i < conifers.size(); i++) {
+		UnsignedByte *cell = &m_cells[i * CELL_BYTES];
+		if (cell[BYTE_CANOPY] != 0 && conifers[i] * 2 > cell[BYTE_CANOPY]) {
+			cell[BYTE_FLAGS] |= CF_CONIFER;
+		}
+	}
+	DEBUG_LOG(("GROUNDFOLIAGE %d trees make the groves\n", counted));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -615,18 +743,25 @@ void W3DGrassBuffer::logCounts(void)
 	Int counts[PIECE_KINDS];
 	memset(counts, 0, sizeof(counts));
 	Int cells = 0;
+	m_chunkFar.assign((size_t)m_chunksX * m_chunksY, 0);
 	for (Int y = 0; y < m_height - 1; y++) {
 		for (Int x = 0; x < m_width - 1; x++) {
 			const UnsignedByte *cell = &m_cells[((size_t)y * m_width + x) * CELL_BYTES];
-			if (cell[BYTE_GRASS] == 0 && cell[BYTE_STONES] == 0 && cell[BYTE_TWIGS] == 0 && cell[BYTE_FLAGS] == 0) {
+			if (cell[BYTE_GRASS] == 0 && cell[BYTE_STONES] == 0 && cell[BYTE_TWIGS] == 0 && cell[BYTE_FLAGS] == 0
+				&& cell[BYTE_KIND] == 0) {
 				continue;
 			}
 			++cells;
 			for (Int k = 0; k < MAX_TUFTS_PER_CELL; k++) {
-				counts[PIECE_TUFT] += tuftPresent(x, y, k, cell[BYTE_GRASS]) ? 1 : 0;
+				counts[PIECE_TUFT] += tuftPresent(x, y, k, groveGrass(cell)) ? 1 : 0;
 			}
 			for (Int p = PIECE_SHRUB; p < PIECE_KINDS; p++) {
-				counts[p] += piecePresent(x, y, (Piece)p, cell) ? 1 : 0;
+				if (piecePresent(x, y, (Piece)p, cell)) {
+					counts[p]++;
+					if (pieceFar((Piece)p)) {
+						m_chunkFar[(size_t)(y / CHUNK_CELLS) * m_chunksX + x / CHUNK_CELLS] = 1;
+					}
+				}
 			}
 		}
 	}
@@ -635,9 +770,12 @@ void W3DGrassBuffer::logCounts(void)
 		total += counts[p];
 	}
 	m_anyFoliage = total > 0;
-	DEBUG_LOG(("GROUNDFOLIAGE %d of %d cells: %d tufts, %d shrubs, %d twigs, %d pebbles, %d stones, %d boulders\n",
+	DEBUG_LOG(("GROUNDFOLIAGE %d of %d cells: %d tufts, %d shrubs, %d twigs, %d pebbles, %d stones, %d boulders, "
+		"%d litter, %d ferns, %d saplings, %d logs, %d stumps, %d dead trees, %d firs\n",
 		cells, m_width * m_height, counts[PIECE_TUFT], counts[PIECE_SHRUB], counts[PIECE_TWIGS],
-		counts[PIECE_PEBBLES], counts[PIECE_STONE], counts[PIECE_BOULDER]));
+		counts[PIECE_PEBBLES], counts[PIECE_STONE], counts[PIECE_BOULDER], counts[PIECE_LITTER],
+		counts[PIECE_FERN], counts[PIECE_SAPLING], counts[PIECE_LOG], counts[PIECE_STUMP],
+		counts[PIECE_DEAD_TREE], counts[PIECE_FIR]));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -792,11 +930,10 @@ Bool W3DGrassBuffer::makeDeviceObjects(void)
 	and still, the top swaying.  A tuft is two planes, a shrub three. */
 //-------------------------------------------------------------------------------------------------
 Bool W3DGrassBuffer::addCards(Real x, Real y, Real yaw, Int planes, Real height, Real halfWidth, Real sink,
-	Int atlasCell, Bool mirror, Real sway, UnsignedInt top, UnsignedInt root, Real canopyHalf)
+	Int atlasCell, Bool mirror, Real sway, UnsignedInt top, UnsignedInt root)
 {
 	const size_t base = m_vertices.size();
-	const Int extraVertices = canopyHalf > 0.0f ? 5 : 0, extraIndices = canopyHalf > 0.0f ? 12 : 0;
-	if (base + planes * 4 + extraVertices > MAX_CHUNK_VERTICES || m_indices.size() + planes * 6 + extraIndices > MAX_CHUNK_INDICES) {
+	if (base + planes * 4 > MAX_CHUNK_VERTICES || m_indices.size() + planes * 6 > MAX_CHUNK_INDICES) {
 		return FALSE;
 	}
 	Real u0, v0, u1, v1;
@@ -822,30 +959,101 @@ Bool W3DGrassBuffer::addCards(Real x, Real y, Real yaw, Int planes, Real height,
 			first, (UnsignedShort)(first + 2), (UnsignedShort)(first + 3) };
 		m_indices.insert(m_indices.end(), quad, quad + 6);
 	}
-	if (canopyHalf > 0.0f) {
-		// The canopy a bush shows the camera from above, where its upright planes are a thin star:
-		// a low dome over CANOPY_HEIGHT of it, four triangles from a raised middle, the middle of
-		// the bush's painting on it, turned half a plane's step off them, swaying with the top.
-		const Real cu0 = u0 + (u1 - u0) * 0.2f, cu1 = u0 + (u1 - u0) * 0.8f;
-		const Real cv0 = v0 + (v1 - v0) * 0.15f, cv1 = v0 + (v1 - v0) * 0.65f;
-		const Real rimZ = rootZ + height * CANOPY_HEIGHT, middleZ = rimZ + height * CANOPY_DOME;
-		const Real angle = yaw + PI / (planes * 2);
-		const Real c = WWMath::Cos(angle) * canopyHalf, s = WWMath::Sin(angle) * canopyHalf;
-		const Real cornerX[4] = { -1.0f, 1.0f, 1.0f, -1.0f }, cornerY[4] = { -1.0f, -1.0f, 1.0f, 1.0f };
-		const Real cornerU[4] = { cu0, cu1, cu1, cu0 }, cornerV[4] = { cv0, cv0, cv1, cv1 };
-		const UnsignedShort middle = (UnsignedShort)m_vertices.size();
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A bush: one of the dome variants, its canopy painting laid over it from straight above so the
+	camera reads a round leafy blob, smooth shaded from the dome's own normals with a dark side and
+	a darker ring where it meets the ground, the crown swaying.  The ring sits at its own drawn height,
+	a little under it. */
+//-------------------------------------------------------------------------------------------------
+Bool W3DGrassBuffer::addBush(Real x, Real y, Real yaw, Real radius, Real height, Int variant, Int atlasCell,
+	Real sway, const Vector3 &tint)
+{
+	if (m_vertices.size() + BUSH_CORNERS > MAX_CHUNK_VERTICES || m_indices.size() + BUSH_FACES * 3 > MAX_CHUNK_INDICES) {
+		return FALSE;
+	}
+	Real u0, v0, u1, v1;
+	atlasCorners(atlasCell, u0, v0, u1, v1);
+	const Real c = WWMath::Cos(yaw), s = WWMath::Sin(yaw);
+	const Real rootZ = m_terrain->getDrawnHeight(x, y) - BUSH_SINK;
+	const Real (*corners)[3] = m_bushCorners[variant % BUSH_VARIANTS];
+	// the ring sits on the ground at each corner; the fold at the ring's edge takes the crown under
+	// the lowest of them, so on a slope it sinks into the ground rather than flattening to a disc
+	// over the downhill side
+	Real ringZ[BUSH_RING];
+	Real lowest = rootZ;
+	for (Int i = 0; i < BUSH_RING; i++) {
+		ringZ[i] = m_terrain->getDrawnHeight(x + (corners[i][0] * c - corners[i][1] * s) * radius,
+			y + (corners[i][0] * s + corners[i][1] * c) * radius) - BUSH_SINK;
+		if (ringZ[i] < lowest) {
+			lowest = ringZ[i];
+		}
+	}
+	const Real crownFold = lowest - radius * 0.2f;
+	const UnsignedShort first = (UnsignedShort)m_vertices.size();
+	for (Int i = 0; i < BUSH_CORNERS; i++) {
+		const Real lx = corners[i][0], ly = corners[i][1], lz = corners[i][2];
+		const Real px = x + (lx * c - ly * s) * radius, py = y + (lx * s + ly * c) * radius;
+		const Bool ring = i < BUSH_RING;
+		const Real pz = ring ? ringZ[i] : rootZ + lz * height;
+		// the dome's normal: the corner's direction, its height stretched back to the dome's shape
+		Vector3 normal((lx * c - ly * s) * height, (lx * s + ly * c) * height, (ring ? 0.25f : lz) * radius);
+		normal.Normalize();
+		const UnsignedInt colour = lightRock(normal, tint, ring ? BUSH_CONTACT : 1.0f, BUSH_DARK);
 		VertexFormatXYZNDUV1 v;
-		putVertex(v, x, y, middleZ, sway, rootZ, top, (cu0 + cu1) * 0.5f, (cv0 + cv1) * 0.5f);
+		putVertex(v, px, py, pz, sway, ring ? pz : crownFold, colour,
+			u0 + (u1 - u0) * WWMath::Clamp(0.5f + lx / BUSH_UV_SPAN, 0.0f, 1.0f),
+			v0 + (v1 - v0) * WWMath::Clamp(0.5f + ly / BUSH_UV_SPAN, 0.0f, 1.0f));
 		m_vertices.push_back(v);
-		for (Int k = 0; k < 4; k++) {
-			putVertex(v, x + cornerX[k] * c - cornerY[k] * s, y + cornerX[k] * s + cornerY[k] * c, rimZ, sway, rootZ, top,
-				cornerU[k], cornerV[k]);
-			m_vertices.push_back(v);
+	}
+	const int (*faces)[3] = bushFaces();
+	for (Int f = 0; f < BUSH_FACES; f++) {
+		for (Int e = 0; e < 3; e++) {
+			m_indices.push_back((UnsignedShort)(first + faces[f][e]));
 		}
-		for (Int k = 0; k < 4; k++) {
-			const UnsignedShort tri[3] = { middle, (UnsignedShort)(middle + 1 + k), (UnsignedShort)(middle + 1 + (k + 1) % 4) };
-			m_indices.insert(m_indices.end(), tri, tri + 3);
+	}
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** One of our own trees (a dead one, a snowy fir), turned, scaled to height and stood on the drawn
+	ground TREE_SINK into it, lit from its own normals.  Still: no sway and no fold. */
+//-------------------------------------------------------------------------------------------------
+Bool W3DGrassBuffer::addTreeMesh(const TreeMesh &mesh, Real x, Real y, Real yaw, Real height, const Vector3 &tint,
+	Real dark, Real tipSnow)
+{
+	if (m_vertices.size() + mesh.vertices.size() > MAX_CHUNK_VERTICES
+		|| m_indices.size() + mesh.indices.size() > MAX_CHUNK_INDICES) {
+		return FALSE;
+	}
+	const Real c = WWMath::Cos(yaw), s = WWMath::Sin(yaw);
+	const Real rootZ = m_terrain->getDrawnHeight(x, y) - TREE_SINK;
+	const UnsignedShort first = (UnsignedShort)m_vertices.size();
+	for (size_t i = 0; i < mesh.vertices.size(); i++) {
+		const TreeVertex &t = mesh.vertices[i];
+		Real u0, v0, u1, v1;
+		atlasCorners(t.cell, u0, v0, u1, v1);
+		Vector3 normal(t.nx * c - t.ny * s, t.nx * s + t.ny * c, t.nz);
+		UnsignedInt colour = lightRock(normal, tint, 1.0f, dark);
+		if (tipSnow > 0.0f && t.cell == ATLAS_FIR_NEEDLES && t.v == 0.0f) {
+			// snow lying on each tier's top
+			const Real r = ((colour >> 16) & 0xFF) + (245.0f - ((colour >> 16) & 0xFF)) * tipSnow;
+			const Real g = ((colour >> 8) & 0xFF) + (248.0f - ((colour >> 8) & 0xFF)) * tipSnow;
+			const Real b = (colour & 0xFF) + (255.0f - (colour & 0xFF)) * tipSnow;
+			colour = 0xFF000000u | (REAL_TO_UNSIGNEDINT(r) << 16) | (REAL_TO_UNSIGNEDINT(g) << 8) | REAL_TO_UNSIGNEDINT(b);
 		}
+		VertexFormatXYZNDUV1 v;
+		// its own height as the fold's target: a big tree never folds (it is drawn out to FAR_RADIUS,
+		// past the fold's ring), so it neither rises out of the ground nor flattens on a slope
+		const Real pz = rootZ + t.z * height;
+		putVertex(v, x + (t.x * c - t.y * s) * height, y + (t.x * s + t.y * c) * height, pz, 0.0f, pz,
+			colour, u0 + (u1 - u0) * t.u, v0 + (v1 - v0) * t.v);
+		m_vertices.push_back(v);
+	}
+	for (size_t i = 0; i < mesh.indices.size(); i++) {
+		m_indices.push_back((UnsignedShort)(first + mesh.indices[i]));
 	}
 	return TRUE;
 }
@@ -905,7 +1113,8 @@ Bool W3DGrassBuffer::addRock(Real x, Real y, Real yaw, Real radius, Real stretch
 	const Real c = WWMath::Cos(yaw), s = WWMath::Sin(yaw);
 	// the lowest drawn ground under the whole footprint, out to the stretched side's reach in eight
 	// directions, so the downhill side of a rock on a slope is buried rather than hanging in the air
-	Real ground = m_terrain->getDrawnHeight(x, y);
+	const Real middle = m_terrain->getDrawnHeight(x, y);
+	Real ground = middle;
 	const Real reach = radius * stretch * ROCK_MAX_RADIUS * 1.05f;	// the widest corner, or a split edge pushed out
 	for (Int k = 0; k < 8; k++) {
 		const Real a = k * (PI * 0.25f);
@@ -913,6 +1122,10 @@ Bool W3DGrassBuffer::addRock(Real x, Real y, Real yaw, Real radius, Real stretch
 		if (below < ground) {
 			ground = below;
 		}
+	}
+	// but not down a drop the rock's edge reaches over: it would vanish into the ground at its middle
+	if (ground < middle - ROCK_DROP * radius) {
+		ground = middle - ROCK_DROP * radius;
 	}
 	const Real centreZ = ground - sink * radius;
 	const Real foldZ = ground - radius;	// where the fold at the ring's edge takes it: under all of that ground
@@ -992,6 +1205,7 @@ void W3DGrassBuffer::buildChunk(Slot &slot, Int key)
 {
 	slot.key = key;
 	slot.dirty = FALSE;
+	slot.farPieces = 0;
 	slot.fixedPieces = 0;
 	slot.thinPieces = 0;
 	slot.ends.clear();
@@ -1007,11 +1221,12 @@ void W3DGrassBuffer::buildChunk(Slot &slot, Int key)
 			cp.x = (Short)x;
 			cp.y = (Short)y;
 			for (Int k = 0; k < MAX_TUFTS_PER_CELL; k++) {
-				if (tuftPresent(x, y, k, cell[BYTE_GRASS])) {
+				if (tuftPresent(x, y, k, groveGrass(cell))) {
 					cp.rank = placeTuft(x, y, k).rank;
 					cp.piece = PIECE_TUFT;
 					cp.k = (UnsignedByte)k;
 					cp.thins = TRUE;
+					cp.isFar = FALSE;
 					m_scratch.push_back(cp);
 				}
 			}
@@ -1021,6 +1236,7 @@ void W3DGrassBuffer::buildChunk(Slot &slot, Int key)
 					cp.piece = (UnsignedByte)p;
 					cp.k = 0;
 					cp.thins = pieceThins((Piece)p);
+					cp.isFar = pieceFar((Piece)p);
 					m_scratch.push_back(cp);
 				}
 			}
@@ -1029,7 +1245,9 @@ void W3DGrassBuffer::buildChunk(Slot &slot, Int key)
 	if (m_scratch.empty()) {
 		return;
 	}
+	// the big trees first (all a far chunk draws), then what never thins, then the cards by rank
 	std::sort(m_scratch.begin(), m_scratch.end(), [](const ChunkPiece &a, const ChunkPiece &b) {
+		if (a.isFar != b.isFar) return a.isFar;
 		if (a.thins != b.thins) return !a.thins;
 		if (a.rank != b.rank) return a.rank < b.rank;
 		if (a.y != b.y) return a.y < b.y;
@@ -1053,28 +1271,68 @@ void W3DGrassBuffer::buildChunk(Slot &slot, Int key)
 		Bool added = FALSE;
 		switch (piece) {
 		case PIECE_TUFT:
-		case PIECE_SHRUB: {
+		case PIECE_FERN:
+		case PIECE_SAPLING:
+		case PIECE_STUMP: {
 			const Vector3 normal = cellNormal(map, cp.x, cp.y, NORMAL_TO_UP);
-			const UnsignedInt top = lightOn(normal, 1.0f);
-			const UnsignedInt root = lightOn(normal, ROOT_SHADE);
+			UnsignedInt top = lightOn(normal, 1.0f);
+			UnsignedInt root = lightOn(normal, ROOT_SHADE);
 			const Real sway = (Real)swayType(wx, wy, m_swayDirX, m_swayDirY, GUST_WAVE);
 			if (piece == PIECE_TUFT) {
 				const Real h = TUFT_HEIGHT * t.scale;
 				added = addCards(wx, wy, t.yaw, 2, h, h * TUFT_HALF_WIDTH, TUFT_SINK, t.atlasCell, t.mirror, sway, top, root);
+			} else if (piece == PIECE_STUMP) {
+				const Real h = STUMP_HEIGHT * t.scale;
+				added = addCards(wx, wy, t.yaw, 2, h, h * 0.6f, TUFT_SINK, ATLAS_STUMP, t.mirror, 0.0f, top, root);
 			} else {
-				const Real h = SHRUB_HEIGHT * t.scale;
-				const Int bush = shrubCell(cp.x, cp.y, cell);
-				UnsignedInt bushTop = top, bushRoot = root;
-				if (bush != ATLAS_SHRUB_SCRUB) {
-					const Vector3 tint = bushTint(map, wx, wy);
-					bushTop = tinted(top, tint);
-					bushRoot = tinted(root, tint);
-				}
-				added = addCards(wx, wy, t.yaw, 3, h, h * SHRUB_HALF_WIDTH, SHRUB_SINK, bush,
-					t.mirror, sway, bushTop, bushRoot, h * SHRUB_HALF_WIDTH * CANOPY_SHARE);
+				// green things under trees take the grass's hue under them, as the bushes do
+				const Vector3 tint = bushTint(map, wx, wy);
+				top = tinted(top, tint);
+				root = tinted(root, tint);
+				const Bool fern = piece == PIECE_FERN;
+				const Real h = (fern ? FERN_HEIGHT : SAPLING_HEIGHT) * t.scale;
+				added = addCards(wx, wy, t.yaw, 2, h, h * (fern ? 0.6f : 0.4f), TUFT_SINK, fern ? ATLAS_FERN : ATLAS_SAPLING,
+					t.mirror, sway, top, root);
 			}
 			break;
 		}
+		case PIECE_SHRUB: {
+			const Int bush = shrubCell(cp.x, cp.y, cell);
+			const Real sway = (Real)swayType(wx, wy, m_swayDirX, m_swayDirY, GUST_WAVE);
+			// each a little lighter or darker than the next, and 0.6 to 1.4 of its size
+			const Real shade = 0.9f + 0.2f * unit(hash(cp.x, cp.y, SALT_KIND + 0x41));
+			const Real size = 0.6f + 1.6f * (t.scale - 0.75f);
+			if (bush == ATLAS_SHRUB_SCRUB) {
+				// dry scrub stays upright cards: as a dark dome on sand it read as a burnt hole
+				const Vector3 normal = cellNormal(map, cp.x, cp.y, NORMAL_TO_UP);
+				const Vector3 dim(shade, shade, shade);
+				const Real h = SCRUB_HEIGHT * size;
+				added = addCards(wx, wy, t.yaw, 3, h, h * SCRUB_HALF_WIDTH, SCRUB_SINK, bush, t.mirror, sway,
+					tinted(lightOn(normal, 1.0f), dim), tinted(lightOn(normal, ROOT_SHADE), dim));
+			} else {
+				const Real radius = BUSH_RADIUS * size;
+				added = addBush(wx, wy, t.yaw * 4.0f, radius, radius * BUSH_SQUASH, variant, bush, sway,
+					bushTint(map, wx, wy) * shade);
+			}
+			break;
+		}
+		case PIECE_LITTER:
+			// 0.6 to 1 of LITTER_HALF, any turn, so the patches do not tile into a pattern
+			added = addFlat(wx, wy, t.yaw * 4.0f, LITTER_HALF * (0.6f + 0.8f * (t.scale - 0.75f)),
+				(cell[BYTE_FLAGS] & CF_CONIFER) ? ATLAS_NEEDLE_LITTER : ATLAS_LEAF_LITTER,
+				tinted(lightOn(cellNormal(map, cp.x, cp.y, 0.0f), 1.0f), litterTint(map, wx, wy)));
+			break;
+		case PIECE_DEAD_TREE:
+			added = addTreeMesh(m_deadTrees[variant % DEAD_TREE_VARIANTS], wx, wy, t.yaw * 4.0f, DEAD_TREE_HEIGHT * t.scale,
+				Vector3(DEAD_BLEACH, DEAD_BLEACH, DEAD_BLEACH), ROCK_DARK);
+			break;
+		case PIECE_FIR:
+			added = addTreeMesh(m_firs[variant % FIR_VARIANTS], wx, wy, t.yaw * 4.0f, FIR_HEIGHT * t.scale,
+				Vector3(FIR_BRIGHT, FIR_BRIGHT * FIR_GREEN, FIR_BRIGHT), FIR_DARK, FIR_TIP_SNOW);
+			break;
+		case PIECE_LOG:
+			added = addFlat(wx, wy, t.yaw * 4.0f, LOG_HALF * t.scale, ATLAS_LOG, lightOn(cellNormal(map, cp.x, cp.y, 0.0f), 1.0f));
+			break;
 		case PIECE_TWIGS:
 			added = addFlat(wx, wy, t.yaw * 4.0f, TWIG_HALF * t.scale, ATLAS_TWIGS,
 				lightOn(cellNormal(map, cp.x, cp.y, 0.0f), 1.0f));
@@ -1094,7 +1352,7 @@ void W3DGrassBuffer::buildChunk(Slot &slot, Int key)
 				TRUE, ROCK_SINK + ((t.rank & 3) == 0 ? BOULDER_BURY : 0.0f), groundTint(map, wx, wy));
 			break;
 		default:
-			break;
+			continue;	// a piece this switch does not know draws nothing and fills nothing
 		}
 		if (!added) {
 			break;	// the chunk is full: what is left is the last of the cards by rank
@@ -1104,6 +1362,9 @@ void W3DGrassBuffer::buildChunk(Slot &slot, Int key)
 			slot.thinPieces++;
 		} else {
 			slot.fixedPieces++;
+			if (cp.isFar) {
+				slot.farPieces++;
+			}
 		}
 	}
 	if (!uploadChunk(slot)) {
@@ -1201,34 +1462,36 @@ void W3DGrassBuffer::drawGrass(CameraClass *camera, Int contentVersion, const Ma
 		focus.set(eye.X, eye.Y, 0.0f);
 	}
 
-	// the chunks within the radius and in the frustum, nearest first
+	// the chunks within the radius and in the frustum, nearest first; past GRASS_RADIUS, out to
+	// FAR_RADIUS, only those holding a big tree, which is all they draw
 	struct Near { Int key; Real dist; };
-	enum { MAX_NEAR = 128 };
+	enum { MAX_NEAR = 256 };
 	Near nearby[MAX_NEAR];	// not "near": windef.h defines it
 	Int numNear = 0;
 	const Real chunkWorld = CHUNK_CELLS * MAP_XY_FACTOR;
 	const Real origin = -m_border * MAP_XY_FACTOR;
-	const Real minZ = m_terrain->getMinHeight(), maxZ = m_terrain->getMaxHeight() + SHRUB_HEIGHT * 1.5f;
-	const Int cx0 = max(0, (Int)floorf((focus.x - GRASS_RADIUS - origin) / chunkWorld));
-	const Int cy0 = max(0, (Int)floorf((focus.y - GRASS_RADIUS - origin) / chunkWorld));
-	const Int cx1 = min(m_chunksX - 1, (Int)floorf((focus.x + GRASS_RADIUS - origin) / chunkWorld));
-	const Int cy1 = min(m_chunksY - 1, (Int)floorf((focus.y + GRASS_RADIUS - origin) / chunkWorld));
+	const Real minZ = m_terrain->getMinHeight(), maxZ = m_terrain->getMaxHeight() + FIR_HEIGHT * 1.5f;
+	const Int cx0 = max(0, (Int)floorf((focus.x - FAR_RADIUS - origin) / chunkWorld));
+	const Int cy0 = max(0, (Int)floorf((focus.y - FAR_RADIUS - origin) / chunkWorld));
+	const Int cx1 = min(m_chunksX - 1, (Int)floorf((focus.x + FAR_RADIUS - origin) / chunkWorld));
+	const Int cy1 = min(m_chunksY - 1, (Int)floorf((focus.y + FAR_RADIUS - origin) / chunkWorld));
 	for (Int cy = cy0; cy <= cy1; cy++) {
 		for (Int cx = cx0; cx <= cx1 && numNear < MAX_NEAR; cx++) {
 			const Real x0 = origin + cx * chunkWorld, y0 = origin + cy * chunkWorld;
 			const Real dx = max(0.0f, max(x0 - focus.x, focus.x - (x0 + chunkWorld)));
 			const Real dy = max(0.0f, max(y0 - focus.y, focus.y - (y0 + chunkWorld)));
 			const Real dist = sqrtf(dx * dx + dy * dy);
-			if (dist > GRASS_RADIUS) {
+			const Int key = cy * m_chunksX + cx;
+			if (dist > FAR_RADIUS || (dist > GRASS_RADIUS && (m_chunkFar.empty() || !m_chunkFar[key]))) {
 				continue;
 			}
-			// a cell past the chunk's edge for the shrubs and boulders that lean over it
+			// past the chunk's edge by what its firs' tiers and dead trees' branches reach over it
 			AABoxClass box(Vector3(x0 + chunkWorld * 0.5f, y0 + chunkWorld * 0.5f, (minZ + maxZ) * 0.5f),
-				Vector3(chunkWorld * 0.5f + MAP_XY_FACTOR, chunkWorld * 0.5f + MAP_XY_FACTOR, (maxZ - minZ) * 0.5f + 1.0f));
+				Vector3(chunkWorld * 0.5f + BIG_MESH_REACH, chunkWorld * 0.5f + BIG_MESH_REACH, (maxZ - minZ) * 0.5f + 1.0f));
 			if (camera->Cull_Box(box)) {
 				continue;
 			}
-			nearby[numNear].key = cy * m_chunksX + cx;
+			nearby[numNear].key = key;
 			nearby[numNear].dist = dist;
 			numNear++;
 		}
@@ -1283,6 +1546,15 @@ void W3DGrassBuffer::drawGrass(CameraClass *camera, Int contentVersion, const Ma
 		}
 		slot->lastUsed = m_drawFrame;
 		if (slot->fixedPieces + slot->thinPieces == 0) {
+			continue;
+		}
+		if (nearby[n].dist > GRASS_RADIUS) {
+			if (slot->farPieces == 0) {
+				continue;
+			}
+			draw[numDraw] = slot;
+			share[numDraw] = -1.0f;	// the big trees alone
+			numDraw++;
 			continue;
 		}
 		Real s = (GRASS_RADIUS - nearby[n].dist) / GRASS_FADE_WIDTH;
@@ -1353,8 +1625,8 @@ void W3DGrassBuffer::drawGrass(CameraClass *camera, Int contentVersion, const Ma
 	LPDIRECT3DDEVICE9 dev = DX8Wrapper::_Get_D3D_Device();
 	for (Int n = 0; n < numDraw; n++) {
 		const Slot &slot = *draw[n];
-		const Int thin = min(slot.thinPieces, (Int)(slot.thinPieces * share[n] * budget + 0.5f));
-		const Int pieces = slot.fixedPieces + thin;
+		const Int thin = share[n] < 0.0f ? 0 : min(slot.thinPieces, (Int)(slot.thinPieces * share[n] * budget + 0.5f));
+		const Int pieces = share[n] < 0.0f ? slot.farPieces : slot.fixedPieces + thin;
 		if (pieces <= 0 || pieces > (Int)slot.ends.size()) {
 			continue;
 		}

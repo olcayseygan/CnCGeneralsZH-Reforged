@@ -221,7 +221,7 @@ TEST(foliage_boulders_rest_at_cliff_feet_and_never_on_the_face)
 	CHECK_EQ(countPiece(PIECE_BOULDER, cliff), 0);
 	CHECK_EQ(countPiece(PIECE_BOULDER, ledge), 0);
 	const int boulders = countPiece(PIECE_BOULDER, foot);
-	CHECK(boulders > 350 && boulders < 900);	// 6% of 10000, in clusters
+	CHECK(boulders > 550 && boulders < 1300);	// 9% of 10000, in clusters
 	// clustered: the boulders of a 3 by 3 block all fall in the blocks that hold some
 	int inQuietBlocks = 0;
 	for (int y = 0; y < 100; ++y)
@@ -274,7 +274,7 @@ TEST(foliage_shrubs_gather_where_grass_meets_bare_ground)
 		for (int x = 0; x < 30; ++x)
 		{
 			const int c = shrubCell(x, y, edge);
-			CHECK(c == ATLAS_SHRUB_LEAFY || c == ATLAS_SHRUB_SCRUB || c == ATLAS_SHRUB_BERRY);
+			CHECK(c == ATLAS_BUSH_GREEN || c == ATLAS_SHRUB_SCRUB);
 		}
 	CHECK(pieceThins(PIECE_TUFT) && pieceThins(PIECE_TWIGS) && pieceThins(PIECE_PEBBLES));
 	CHECK(!pieceThins(PIECE_SHRUB) && !pieceThins(PIECE_STONE) && !pieceThins(PIECE_BOULDER));
@@ -352,6 +352,141 @@ TEST(foliage_rock_mesh_is_closed_and_low)
 				const float m = sqrtf(ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2]);
 				CHECK(m < ROCK_MAX_RADIUS * 1.3f);
 			}
+	}
+}
+
+TEST(foliage_a_grove_has_a_thicket_and_a_lone_tree_a_fern)
+{
+	const unsigned char field[CELL_BYTES] = { 255, 0, 90, 0, 0 };
+	const unsigned char lone[CELL_BYTES] = { 255, 0, 90, 0, 1 };
+	const unsigned char edgeOfGrove[CELL_BYTES] = { 255, 0, 90, 0, 2 };
+	const unsigned char grove[CELL_BYTES] = { 255, 0, 90, 0, 5 };
+	const unsigned char cliffUnderTrees[CELL_BYTES] = { 0, 0, 0, CF_CLIFF, 5 };
+	const Piece floor[] = { PIECE_LITTER, PIECE_FERN, PIECE_SAPLING, PIECE_LOG, PIECE_STUMP };
+	for (size_t i = 0; i < sizeof(floor) / sizeof(floor[0]); ++i)
+	{
+		CHECK_EQ(countPiece(floor[i], field), 0);					// no trees, no floor
+		CHECK_EQ(countPiece(floor[i], cliffUnderTrees), 0);	// and nothing on a cliff
+	}
+	CHECK_EQ(countPiece(PIECE_LITTER, lone), 0);				// no rust spot round a lone trunk
+	CHECK_EQ(countPiece(PIECE_LITTER, edgeOfGrove), 0);	// litter only under a real canopy
+	CHECK(countPiece(PIECE_FERN, lone) > 0);
+	CHECK_EQ(countPiece(PIECE_LOG, lone), 0);
+	CHECK(countPiece(PIECE_LITTER, grove) > 3000);
+	CHECK(countPiece(PIECE_FERN, grove) > countPiece(PIECE_FERN, lone));
+	CHECK(countPiece(PIECE_SAPLING, edgeOfGrove) > countPiece(PIECE_SAPLING, grove));	// saplings at the edge
+	CHECK(countPiece(PIECE_LOG, grove) > 0);
+	CHECK(countPiece(PIECE_SHRUB, grove) > countPiece(PIECE_SHRUB, field));
+	CHECK((int)groveGrass(grove) < (int)groveGrass(edgeOfGrove));	// the tall grass thins under the canopy
+	CHECK_EQ((int)groveGrass(field), 255);
+	CHECK(pieceThins(PIECE_LITTER) && pieceThins(PIECE_FERN));
+	CHECK(!pieceThins(PIECE_SAPLING) && !pieceThins(PIECE_LOG) && !pieceThins(PIECE_STUMP));
+	// a grove's bushes are green even on dry ground
+	const unsigned char dryGrove[CELL_BYTES] = { 60, 110, 60, 0, 4 };
+	int dry = 0;
+	for (int y = 0; y < 30; ++y)
+		for (int x = 0; x < 30; ++x)
+			dry += shrubCell(x, y, dryGrove) == ATLAS_SHRUB_SCRUB ? 1 : 0;
+	CHECK(dry < 900 / 10);
+	CHECK(coniferName("PTPine01") && coniferName("SnowFirTree") && !coniferName("PTOak01"));
+	// snow keeps its floor bare: nothing of a grove's floor, and no bush, even at a cliff's foot
+	const unsigned char snowGrove[CELL_BYTES] = { 120, 25, 40, CF_CLIFF_FOOT | CF_EDGE, 5, BARE_SNOW };
+	const Piece snowless[] = { PIECE_SHRUB, PIECE_LITTER, PIECE_FERN, PIECE_SAPLING, PIECE_LOG, PIECE_STUMP };
+	for (size_t i = 0; i < sizeof(snowless) / sizeof(snowless[0]); ++i)
+		CHECK_EQ(countPiece(snowless[i], snowGrove), 0);
+	CHECK(countPiece(PIECE_STONE, snowGrove) > 0);
+}
+
+TEST(foliage_bush_dome_is_open_only_underneath)
+{
+	const int (*faces)[3] = bushFaces();
+	int edges[BUSH_CORNERS][BUSH_CORNERS] = { { 0 } };
+	for (int f = 0; f < BUSH_FACES; ++f)
+		for (int e = 0; e < 3; ++e)
+		{
+			const int a = faces[f][e], b = faces[f][(e + 1) % 3];
+			CHECK(a >= 0 && a < BUSH_CORNERS && b >= 0 && b < BUSH_CORNERS && a != b);
+			++edges[a < b ? a : b][a < b ? b : a];
+		}
+	int rim = 0;
+	for (int a = 0; a < BUSH_CORNERS; ++a)
+		for (int b = a + 1; b < BUSH_CORNERS; ++b)
+			if (edges[a][b] == 1)
+			{
+				CHECK(a < BUSH_RING && b < BUSH_RING);	// only the ring on the ground is open
+				++rim;
+			}
+			else if (edges[a][b] != 0)
+				CHECK_EQ(edges[a][b], 2);
+	CHECK_EQ(rim, BUSH_RING);
+	for (int v = 0; v < BUSH_VARIANTS; ++v)
+	{
+		float c[BUSH_CORNERS][3];
+		bushCorners(v, c);
+		for (int i = 0; i < BUSH_RING; ++i)
+		{
+			CHECK(c[i][2] == 0.0f);
+			CHECK(c[BUSH_RING * 2 + i][2] > c[BUSH_RING + i][2]);	// rings climb toward the crown
+			CHECK(c[BUSH_TOP][2] > c[BUSH_RING * 2 + i][2]);
+		}
+		for (int i = 0; i < BUSH_CORNERS; ++i)
+			CHECK(sqrtf(c[i][0] * c[i][0] + c[i][1] * c[i][1]) <= 1.16f);
+	}
+}
+
+TEST(foliage_big_trees_stand_only_where_no_unit_goes)
+{
+	// grass, stones, twigs, flags, canopy, kind
+	const unsigned char desertOpen[CELL_BYTES] = { 0, 90, 0, ROCK_SANDSTONE, 0, BARE_DESERT };
+	const unsigned char desertBorder[CELL_BYTES] = { 0, 90, 0, ROCK_SANDSTONE, 0, BARE_DESERT | KIND_BORDER };
+	const unsigned char desertCliff[CELL_BYTES] = { 0, 0, 0, ROCK_SANDSTONE | CF_CLIFF, 0, BARE_ROCKY };
+	const unsigned char snowHug[CELL_BYTES] = { 0, 25, 0, ROCK_GRANITE, 0, BARE_SNOW | KIND_HUG };
+	const unsigned char snowBorder[CELL_BYTES] = { 0, 25, 0, ROCK_GRANITE, 0, BARE_SNOW | KIND_BORDER };
+	const unsigned char snowOpen[CELL_BYTES] = { 0, 25, 0, ROCK_GRANITE, 0, BARE_SNOW };
+	const unsigned char grassBorder[CELL_BYTES] = { 255, 0, 90, 0, 0, BARE_NONE | KIND_BORDER };
+	CHECK_EQ(countPiece(PIECE_DEAD_TREE, desertOpen), 0);
+	CHECK_EQ(countPiece(PIECE_FIR, snowOpen), 0);
+	CHECK(countPiece(PIECE_DEAD_TREE, desertBorder) > 0);
+	CHECK(countPiece(PIECE_DEAD_TREE, desertCliff) > 0);	// sandstone rock counts as dry
+	CHECK_EQ(countPiece(PIECE_FIR, snowHug), 0);	// the lane beside a cliff is open ground
+	CHECK(countPiece(PIECE_FIR, snowBorder) > countPiece(PIECE_DEAD_TREE, desertBorder));	// clumps, not loose groups
+	CHECK(pieceFar(PIECE_FIR) && pieceFar(PIECE_DEAD_TREE) && !pieceFar(PIECE_BOULDER));
+	CHECK_EQ(countPiece(PIECE_FIR, desertBorder), 0);
+	CHECK_EQ(countPiece(PIECE_DEAD_TREE, snowHug), 0);
+	CHECK_EQ(countPiece(PIECE_DEAD_TREE, grassBorder), 0);
+	CHECK(!pieceThins(PIECE_DEAD_TREE) && !pieceThins(PIECE_FIR));
+}
+
+TEST(foliage_tree_meshes_are_whole_and_stand_on_their_root)
+{
+	for (int v = 0; v < DEAD_TREE_VARIANTS + FIR_VARIANTS; ++v)
+	{
+		TreeMesh m;
+		const bool fir = v >= DEAD_TREE_VARIANTS;
+		if (fir)
+			firMesh(v - DEAD_TREE_VARIANTS, m);
+		else
+			deadTreeMesh(v, m);
+		const int faces = (int)m.indices.size() / 3;
+		CHECK_EQ((int)m.indices.size() % 3, 0);
+		if (fir)
+			CHECK(faces >= 40 && faces <= 80);
+		else
+			CHECK(faces >= 120 && faces <= 320);
+		for (size_t i = 0; i < m.indices.size(); ++i)
+			CHECK(m.indices[i] < m.vertices.size());
+		float top = -1.0f, low = 1.0f;
+		for (size_t i = 0; i < m.vertices.size(); ++i)
+		{
+			const TreeVertex &t = m.vertices[i];
+			if (t.z > top) top = t.z;
+			if (t.z < low) low = t.z;
+			CHECK(t.u >= 0.0f && t.u <= 1.0f && t.v >= 0.0f && t.v <= 1.0f);
+			CHECK(fir ? (t.cell == ATLAS_FIR_BARK || t.cell == ATLAS_FIR_NEEDLES) : t.cell == ATLAS_DEAD_BARK);
+			CHECK(fabsf(t.nx * t.nx + t.ny * t.ny + t.nz * t.nz - 1.0f) < 0.01f);
+		}
+		CHECK(top > 0.7f && top < 1.4f);
+		CHECK(low > -0.15f && low < 0.0f);	// the root just under the ground
 	}
 }
 

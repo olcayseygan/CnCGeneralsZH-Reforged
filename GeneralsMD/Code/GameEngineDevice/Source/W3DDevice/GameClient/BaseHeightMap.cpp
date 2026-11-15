@@ -2455,7 +2455,7 @@ void BaseHeightMapRenderObjClass::stepTrees(void)
 		// the foliage's grid, once a map and only with the option on: it reads the water off
 		// TheTerrainLogic and the structures off TheGameLogic, which a sync point outside the window may
 		if (!LogicThread::isInsideWindow())
-			m_grassBuffer->classifyIfWanted(m_map);
+			m_grassBuffer->classifyIfWanted(m_map, m_treeBuffer);
 	}
 }
 

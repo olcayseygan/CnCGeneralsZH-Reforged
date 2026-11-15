@@ -579,12 +579,509 @@ def paint_extra(idx):
     return finish_alpha_cell(px, rng)
 
 
+# ---------------------------------------------------------------- rows 4-5: forest floor
+
+CANOPY = [hexc('#1c2a0e'), hexc('#45592a'), hexc('#869a4e')]
+CANOPY_DRY = [hexc('#33301a'), hexc('#625c34'), hexc('#978e58')]
+FERN = [hexc('#22351a'), hexc('#4a6a2a'), hexc('#88a453')]
+CONIFER = [hexc('#15241a'), hexc('#2b452c'), hexc('#5b764a')]
+SOIL, SOIL_RED = hexc('#352a1d'), hexc('#3b2a1c')
+LITTER = [hexc(c) for c in ('#6b4a26', '#93703a', '#66652f', '#4a3520', '#84461f', '#a2844a')]
+NEEDLES = [hexc(c) for c in ('#8a5530', '#6e4426', '#9c673a', '#5a3a22')]
+LOG_BARK, LOG_DARK = hexc('#5a4632'), hexc('#2a2018')
+MOSS = [hexc('#3e5220'), hexc('#5d7130'), hexc('#7f8f42')]
+LIGHT = np.array([-0.5, -0.5, 0.7]) / np.linalg.norm([-0.5, -0.5, 0.7])   # image x, image y, toward camera
+
+
+class Layer:
+    """Premultiplied paint at final scale, so numpy shapes and downsampled PIL drawing mix."""
+
+    def __init__(self):
+        self.p = np.zeros((CELL, CELL, 3))
+        self.a = np.zeros((CELL, CELL))
+
+    def paint(self, cov, col):
+        cov = np.clip(cov, 0, 1)
+        col = np.broadcast_to(col, (CELL, CELL, 3))
+        self.p = self.p * (1 - cov[..., None]) + col * cov[..., None]
+        self.a = self.a * (1 - cov) + cov
+
+    def paint_px(self, px):
+        """A supersampled PIL layer (0..1 floats) on top."""
+        d = downsample(px, SS)
+        self.paint(d[..., 3], d[..., :3] * 255)
+
+    def cell(self):
+        rgb = np.where(self.a[..., None] > 0, self.p / np.maximum(self.a, 1e-8)[..., None], 0)
+        return np.concatenate([np.clip(rgb / 255, 0, 1), self.a[..., None]], -1)
+
+
+def grid():
+    yy, xx = np.mgrid[0:CELL, 0:CELL].astype(float)
+    return xx + 0.5, yy + 0.5
+
+
+def capsule(xx, yy, p0, p1, r0, r1, flat=False):
+    """Inside depth (px), across coordinate (-1..1) and along t of a tapered capsule."""
+    d = np.subtract(p1, p0, dtype=float)
+    ln = np.hypot(*d)
+    t = ((xx - p0[0]) * d[0] + (yy - p0[1]) * d[1]) / (ln * ln)
+    tc = np.clip(t, 0, 1)
+    r = r0 + (r1 - r0) * tc
+    depth = r - np.hypot(xx - p0[0] - tc * d[0], yy - p0[1] - tc * d[1])
+    if flat:
+        depth = np.minimum(depth, np.minimum(t, 1 - t) * ln)
+    across = ((xx - p0[0]) * -d[1] + (yy - p0[1]) * d[0]) / ln / np.maximum(r, 1e-3)
+    return depth, np.clip(across, -1, 1), t
+
+
+def cyl_light(across, axis):
+    """Lambert on a lying cylinder seen from above, axis a unit image-space vector."""
+    perp = np.array([-axis[1], axis[0]])
+    z = np.sqrt(np.clip(1 - across ** 2, 0, 1))
+    return np.clip(across * (perp[0] * LIGHT[0] + perp[1] * LIGHT[1]) + z * LIGHT[2], 0, 1)
+
+
+def stretched(rng, sx, sy):
+    """Periodic noise sampled at stretched cell coordinates (grain along one axis)."""
+    n = pnoise(rng, 1.6, 2)
+    xx, yy = grid()
+    return lambda u, v: n[(v * sy).astype(int) % N, (u * sx).astype(int) % N]
+
+
+def paint_canopy(rng, dry=False):
+    """A crown from directly above: leaves over a dark core, low leaves dark, rim dark, lit top left."""
+    img = Image.new('RGBA', (CELL * SS, CELL * SS), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(img)
+    c = CELL / 2
+    R = 100.0
+    ph = rng.uniform(0, 6.28, 4)
+
+    def rim(th):
+        return R * (1 + 0.05 * np.sin(3 * th + ph[0]) + 0.03 * np.sin(5 * th + ph[1])
+                    + 0.03 * np.sin(7 * th + ph[2]) + 0.02 * np.sin(11 * th + ph[3]))
+
+    th = np.linspace(0, 2 * np.pi, 64, endpoint=False)
+    core = 0.93 if not dry else 0.7
+    dr.polygon([((c + np.cos(t) * rim(t) * core) * SS, (c + np.sin(t) * rim(t) * core) * SS) for t in th],
+               fill=rgba(CANOPY[0] * 0.8 if not dry else hexc('#2c2717')))
+    pal = CANOPY if not dry else CANOPY_DRY
+    if dry:   # twigs radiating from the centre show in the gaps
+        for _ in range(16):
+            a = rng.uniform(0, 2 * np.pi)
+            pts = [np.array([c, c]) + rng.normal(0, 4, 2)]
+            for _ in range(5):
+                a += rng.normal(0, 0.25)
+                pts.append(pts[-1] + np.array([np.cos(a), np.sin(a)]) * rim(a) * 0.165)
+            stroke(dr, pts, 4.0, 2.3, BARK * 0.8)
+            for _ in range(2):
+                q = pts[rng.integers(2, 5)]
+                b = a + rng.choice([-1, 1]) * rng.uniform(0.5, 0.9)
+                stroke(dr, [q, q + np.array([np.cos(b), np.sin(b)]) * rng.uniform(12, 24)], 2.6, 2.3, BARK * 0.7)
+    items = []
+    n = 3200 if not dry else 1500
+    clusters = rng.uniform(0, 1, (56, 2)) if dry else None
+    for _ in range(n):
+        if dry:   # leaves bunched in clumps, gaps between
+            k = rng.integers(56)
+            th0, r0 = clusters[k, 0] * 2 * np.pi, np.sqrt(clusters[k, 1]) * 0.85
+            v = np.array([np.cos(th0) * r0, np.sin(th0) * r0]) + rng.normal(0, 0.09, 2)
+        else:
+            v = rng.normal(0, 1, 2)
+            v = v / np.linalg.norm(v) * rng.uniform(0, 1) ** 0.42
+        rr = np.hypot(*v)
+        if rr >= 1:
+            continue
+        z = np.sqrt(1 - rr * rr)
+        thv = np.arctan2(v[1], v[0])
+        x, y = c + v[0] * rim(thv), c + v[1] * rim(thv)
+        nrm = np.array([v[0], v[1], z])
+        lam = max(0.0, float(nrm @ LIGHT))
+        t = np.clip(0.1 + 0.95 * lam * (0.45 + 0.55 * z), 0, 1)
+        col = lerp3(pal, t) * rng.normal(1, 0.05, 3)
+        ln = rng.uniform(8, 12)
+        items.append((z + rng.normal(0, 0.05), x, y, ln, max(2.6, ln * 0.48), rng.uniform(0, np.pi), col))
+    lo, hi = MARGIN + 7, CELL - MARGIN - 7
+    for z, x, y, ln, wd, ang, col in sorted(items, key=lambda i: i[0]):
+        dr.polygon(leaf_poly(np.clip(x, lo, hi), np.clip(y, lo, hi), ln, wd, ang), fill=rgba(col))
+    return np.asarray(img, float) / 255.0
+
+
+def fit_about(points, anchor, top_room, side_room):
+    d = np.asarray(points) - anchor
+    return min(1.0, side_room / max(1e-3, np.abs(d[:, 0]).max()), top_room / max(1e-3, -d[:, 1].min()))
+
+
+def paint_fern(rng):
+    """Fronds arching out of a crown, leaflets paired along each, smaller at both ends."""
+    img = Image.new('RGBA', (CELL * SS, CELL * SS), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(img)
+    root = np.array([CELL / 2, ROOT_Y + 0.0])
+    fronds = []
+    for _ in range(12):
+        a0 = rng.uniform(-1.0, 1.0)
+        length = rng.uniform(135, 185) * (1 - 0.3 * abs(a0))
+        bend = np.sign(a0) * rng.uniform(0.5, 1.0) + rng.normal(0, 0.1)
+        pts, ang = [root + rng.normal(0, 3, 2) * (1, 0)], []
+        for i in range(24):
+            a = float(np.clip(a0 + bend * ((i + 0.5) / 24) ** 1.5, -1.9, 1.9))
+            ang.append(a)
+            pts.append(pts[-1] + np.array([np.sin(a), -np.cos(a)]) * length / 24)
+        fronds.append((rng.uniform(0, 1), np.array(pts), np.array(ang)))
+    s = fit_about(np.vstack([f[1] for f in fronds]), root, ROOT_Y - MARGIN - 22, CELL / 2 - MARGIN - 20)
+    for depth, pts, ang in sorted(fronds, key=lambda f: f[0]):
+        pts = root + (pts - root) * s
+        shade = 0.7 + 0.3 * depth
+        stroke(dr, pts, 3.0, 2.3, FERN[0] * 1.2 * shade)
+        for i in range(2, 24):
+            t = i / 24
+            size = 17 * s * np.sin(np.pi * min(1, t * 1.15)) ** 0.7 * (1 - 0.35 * t) + 3
+            for side in (-1, 1):
+                pa = ang[i - 1] + side * (np.pi / 2 - 0.45) - np.pi / 2
+                d = np.array([np.cos(pa), np.sin(pa)])
+                col = lerp3(FERN, np.clip(0.3 + 0.6 * t + (0.12 if side < 0 else -0.05), 0, 1)) * shade
+                q = pts[i] + d * size / 2
+                dr.polygon(leaf_poly(q[0], q[1], size, max(2.6, size * 0.32), pa), fill=rgba(col * rng.normal(1, 0.04)))
+    return np.asarray(img, float) / 255.0
+
+
+def paint_conifer(rng):
+    """A young fir: a trunk and whorls of drooping needle-clad branches, a triangle overall."""
+    img = Image.new('RGBA', (CELL * SS, CELL * SS), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(img)
+    cx, base, top = CELL / 2, ROOT_Y, ROOT_Y - 222
+    branches = []
+    for k in range(10):
+        h = 38 + k * 18 + rng.normal(0, 2)
+        L = 92 * (1 - (h - 38) / 186) ** 0.9 + 9
+        for j in range(6):
+            phi = (j + rng.uniform(-0.3, 0.3)) * 2 * np.pi / 6 + k * 0.5
+            branches.append((np.sin(phi), h, L * rng.uniform(0.85, 1.05) * np.cos(phi), L))
+
+    def draw_branch(depth, h, dx, L):
+        p0 = np.array([cx, base - h])
+        p1 = p0 + np.array([dx, 0.28 * L])
+        mid = (p0 + p1) / 2 + np.array([0, 0.08 * L])
+        pts = [p0, mid, p1 + np.array([0, -0.04 * L])]
+        shade = 0.62 + 0.38 * (depth + 1) / 2
+        stroke(dr, [p0, p0 + (mid - p0) * 0.9], 3.0, 2.4, BARK_DARK * shade)
+        n = max(3, int(np.hypot(dx, 0.28 * L) / 3))
+        bd = np.arctan2(p1[1] - p0[1], p1[0] - p0[0])
+        for i in range(n):
+            t = (i + 0.5) / n
+            q = p0 + (p1 - p0) * t + np.array([0, 0.08 * L * 4 * t * (1 - t)]) + rng.normal(0, 1.0, 2)
+            for side in (-1, 1):
+                for _ in range(2):
+                    a = bd + side * rng.uniform(0.5, 1.1) + 0.3
+                    lit = 0.45 + 0.3 * (side < 0) + 0.3 * t + rng.normal(0, 0.08)
+                    col = lerp3(CONIFER, np.clip(lit * shade, 0, 1)) * rng.normal(1, 0.05)
+                    ln = rng.uniform(8, 11) * (1 - 0.3 * t)
+                    e = q + np.array([np.cos(a), np.sin(a)]) * ln * 0.4
+                    dr.polygon(leaf_poly(e[0], e[1], ln, 2.7, a, 8), fill=rgba(col))
+
+    for b in sorted(branches, key=lambda b: b[0]):
+        if b[0] < 0:
+            draw_branch(*b)
+    stroke(dr, [np.array([cx, base + 1.0]), np.array([cx, top + 10])], 6.0, 2.4, BARK)
+    for b in sorted(branches, key=lambda b: b[0]):
+        if b[0] >= 0:
+            draw_branch(*b)
+    for i in range(12):   # leader at the top
+        y = top + 4 + i * 2.5
+        for side in (-1, 1):
+            a = -np.pi / 2 + side * 0.6
+            dr.polygon(leaf_poly(cx + side * 2.5, y + 3, 8, 2.6, a, 8), fill=rgba(lerp3(CONIFER, 0.75)))
+    return np.asarray(img, float) / 255.0
+
+
+def soil_patch(rng, lay, col, radius, edge=22):
+    """A dark soil disc with a ragged soft edge, grain inside."""
+    xx, yy = grid()
+    r = np.hypot(xx - CELL / 2, yy - CELL / 2)
+    n = pnoise(rng, 2.4, 2)
+    nn = np.zeros((CELL, CELL))
+    nn[MARGIN:-MARGIN, MARGIN:-MARGIN] = n
+    cov = smoothstep(radius, radius - edge, r + 12 * nn)
+    g = np.zeros((CELL, CELL))
+    g[MARGIN:-MARGIN, MARGIN:-MARGIN] = pnoise(rng, 1.0, 8)
+    lay.paint(cov, col * (1 + 0.08 * g)[..., None])
+
+
+def broadleaf(dr, cx, cy, length, width, ang, col):
+    """A pointed leaf lying flat: lit half, shaded half, a darker midrib."""
+    t = np.linspace(0, 1, 9)
+    w = width / 2 * np.sin(np.pi * t) ** 0.75
+    xs = (t - 0.5) * length
+    ca, sa = np.cos(ang), np.sin(ang)
+
+    def pt(x, y):
+        return ((cx + x * ca - y * sa) * SS, (cy + x * sa + y * ca) * SS)
+    left = [pt(xs[i], -w[i]) for i in range(9)]
+    right = [pt(xs[i], w[i]) for i in range(9)]
+    mid = [pt(xs[i], 0) for i in range(9)]
+    dr.polygon(left + mid[::-1], fill=rgba(col * 1.08))
+    dr.polygon(right + mid[::-1], fill=rgba(col * 0.86))
+    dr.line([mid[1], mid[-1]], fill=rgba(col * 0.62), width=SS)
+
+
+def paint_leaf_litter(rng):
+    lay = Layer()
+    soil_patch(rng, lay, SOIL, 108)
+    img = Image.new('RGBA', (CELL * SS, CELL * SS), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(img)
+    for _ in range(75):
+        a, r = rng.uniform(0, 2 * np.pi), 92 * np.sqrt(rng.uniform(0, 1))
+        ln = rng.uniform(14, 24)
+        col = LITTER[rng.integers(len(LITTER))] * rng.normal(1, 0.06)
+        broadleaf(dr, CELL / 2 + np.cos(a) * r, CELL / 2 + np.sin(a) * r, ln, ln * rng.uniform(0.45, 0.6),
+                  rng.uniform(0, 2 * np.pi), col)
+    lay.paint_px(np.asarray(img, float) / 255.0)
+    return lay.cell()
+
+
+def paint_needle_litter(rng):
+    lay = Layer()
+    soil_patch(rng, lay, SOIL_RED, 108)
+    img = Image.new('RGBA', (CELL * SS, CELL * SS), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(img)
+    for _ in range(1100):
+        a, r = rng.uniform(0, 2 * np.pi), 96 * np.sqrt(rng.uniform(0, 1))
+        x, y = CELL / 2 + np.cos(a) * r, CELL / 2 + np.sin(a) * r
+        b, ln = rng.uniform(0, np.pi), rng.uniform(6, 12)
+        d = np.array([np.cos(b), np.sin(b)]) * ln / 2
+        col = NEEDLES[rng.integers(len(NEEDLES))] * rng.normal(1, 0.07)
+        dr.line([((x - d[0]) * SS, (y - d[1]) * SS), ((x + d[0]) * SS, (y + d[1]) * SS)], fill=rgba(col), width=int(2.2 * SS))
+    for _ in range(4):   # cones: a body and rows of lighter scales
+        a, r = rng.uniform(0, 2 * np.pi), 70 * np.sqrt(rng.uniform(0, 1))
+        x, y, ang = CELL / 2 + np.cos(a) * r, CELL / 2 + np.sin(a) * r, rng.uniform(0, np.pi)
+        dr.polygon(leaf_poly(x, y, 20, 11, ang, 16), fill=rgba(hexc('#4a3220')))
+        for i in range(-3, 4):
+            for j in (-1, 0, 1):
+                ox = i * 2.6
+                oy = j * 3.0 + (i % 2) * 1.5 - 0.75
+                if (ox / 9.5) ** 2 + (oy / 5) ** 2 > 1:
+                    continue
+                px = x + ox * np.cos(ang) - oy * np.sin(ang)
+                py = y + ox * np.sin(ang) + oy * np.cos(ang)
+                dr.polygon(leaf_poly(px, py, 3.0, 2.4, ang, 6), fill=rgba(hexc('#7a5434') * (1.1 - 0.1 * j)))
+    lay.paint_px(np.asarray(img, float) / 255.0)
+    return lay.cell()
+
+
+def paint_log(rng):
+    """A mossy log from above along one diagonal: bark grain along the axis, moss on the top,
+    a jagged broken end, three short broken stubs."""
+    lay = Layer()
+    xx, yy = grid()
+    a = -np.pi / 4 + rng.normal(0, 0.05)
+    axis = np.array([np.cos(a), np.sin(a)])
+    c = np.array([CELL / 2, CELL / 2])
+    p0, p1 = c - axis * 102, c + axis * 102
+    grain = stretched(rng, 0.35, 2.0)
+    moss_n = pnoise(rng, 2.2, 2)
+    u = (xx - c[0]) * axis[0] + (yy - c[1]) * axis[1]
+    v = (xx - c[0]) * -axis[1] + (yy - c[1]) * axis[0]
+    for k in range(3):   # stubs under the log, so the log covers their joint
+        t = (0.2, 0.5, 0.78)[k] + rng.normal(0, 0.03)
+        side = (1, -1, 1)[k]
+        b = a + side * rng.uniform(1.0, 1.3)
+        q0 = p0 + (p1 - p0) * t
+        q1 = q0 + np.array([np.cos(b), np.sin(b)]) * rng.uniform(30, 40)
+        d, ac, _ = capsule(xx, yy, q0, q1, 6.5, 4.5, flat=True)
+        lit = cyl_light(ac, np.array([np.cos(b), np.sin(b)]))
+        lay.paint(np.clip(d + 0.5, 0, 1), LOG_BARK[None, None] * (0.45 + 0.6 * lit)[..., None])
+    d, ac, t = capsule(xx, yy, p0, p1, 18, 15, flat=True)
+    jag = np.abs(np.sin(ac * 7 + 1.3)) * 6 + np.abs(np.sin(ac * 13)) * 3     # broken far end
+    d = np.minimum(d, (1 - t) * 204 - jag)
+    lit = cyl_light(ac, axis)
+    g = grain(u + 400, v + 400)
+    bark = LOG_BARK * (1 + 0.12 * g)[..., None]
+    bark = mixc(bark, LOG_DARK, 0.6 * smoothstep(0.6, 1.6, -g))            # grooves along the grain
+    mm = np.zeros((CELL, CELL))
+    mm[MARGIN:-MARGIN, MARGIN:-MARGIN] = moss_n
+    moss = smoothstep(-0.2, 0.5, mm + 0.9 * (1 - np.abs(ac)) - 0.6)
+    mcol = MOSS[1] + (MOSS[2] - MOSS[1]) * smoothstep(-1, 1.5, g)[..., None]
+    col = mixc(bark, mcol, 0.9 * moss)
+    lay.paint(np.clip(d + 0.5, 0, 1), col * (0.45 + 0.65 * lit)[..., None])
+    return lay.cell()
+
+
+def paint_stump(rng):
+    """A sawn stump from the side at the RTS slant: bark body, flared roots, ringed top face."""
+    lay = Layer()
+    xx, yy = grid()
+    cx, base, H, r = CELL / 2, ROOT_Y, 104, 40.0
+    grain = stretched(rng, 1.4, 0.22)
+    ytop = base - H
+    for k, (dx, dy, rr) in enumerate(((-100, -2, 13), (96, -3, 13), (-62, 5, 11), (70, 4, 12), (8, 7, 10))):
+        q0 = np.array([cx + np.sign(dx) * r * 0.5 + (dx if abs(dx) < 20 else 0) * 0.3, base - 16])
+        q1 = np.array([cx + dx, base + dy * 0.4 - 2])
+        d, ac, t = capsule(xx, yy, q0, q1, rr, 3.0)
+        lit = np.clip(0.55 - 0.45 * ac * np.sign(q1[0] - q0[0] + 1e-3) + 0.1, 0, 1)
+        g = grain(xx * 0.4 + yy, yy * 3 + xx)
+        lay.paint(np.clip(d + 0.5, 0, 1), LOG_BARK[None, None] * (0.5 + 0.55 * lit + 0.08 * g)[..., None] * 0.9)
+    h = base - yy
+    w = r * (1 + 0.5 * np.exp(-np.clip(h, 0, None) / 13))
+    s = (xx - cx) / w
+    body = np.minimum(w - np.abs(xx - cx), np.minimum(base - yy + 2, yy - ytop + 0.0))
+    z = np.sqrt(np.clip(1 - s * s, 0, 1))
+    lit = np.clip(s * LIGHT[0] * 1.2 + z * 0.75, 0, 1)
+    g = grain(xx, yy)
+    bark = LOG_BARK * (1 + 0.12 * g)[..., None]
+    bark = mixc(bark, LOG_DARK, 0.65 * smoothstep(0.5, 1.5, -g))
+    moss = smoothstep(0.2, 0.9, pnoise_cell(rng) + 1.2 * smoothstep(base - 40, base, yy) - 0.8)
+    bark = mixc(bark, MOSS[1], 0.85 * moss)
+    lay.paint(np.clip(body + 0.5, 0, 1), bark * (0.42 + 0.65 * lit)[..., None])
+    ex, ey = (xx - cx) / r, (yy - ytop) / (r * 0.36)
+    rho = np.hypot(ex, ey)
+    rings = 0.5 + 0.5 * np.sin(rho * 2 * np.pi * 8 + 0.8 * pnoise_cell(rng))
+    wood = hexc('#a4855c') + (hexc('#7d5f3c') - hexc('#a4855c')) * (0.35 * rings + 0.5 * rho ** 2)[..., None]
+    crack = smoothstep(0.06, 0.0, np.abs(np.arctan2(ey, ex) - 0.9)) * (rho > 0.15)
+    wood = mixc(wood, LOG_DARK, 0.7 * crack)
+    wood = mixc(wood, LOG_BARK * 0.8, smoothstep(0.86, 0.94, rho))
+    lay.paint(np.clip((1 - rho) * r * 0.36 + 0.5, 0, 1), wood)
+    return lay.cell()
+
+
+def pnoise_cell(rng):
+    n = np.zeros((CELL, CELL))
+    n[MARGIN:-MARGIN, MARGIN:-MARGIN] = pnoise(rng, 2.4, 2)
+    return n
+
+
+def paint_forest(idx):
+    rng = np.random.default_rng(SEED + 1000 + idx)
+    if idx in (20, 21, 22, 23):
+        cell = {20: paint_leaf_litter, 21: paint_needle_litter, 22: paint_log, 23: paint_stump}[idx](rng)
+        if idx != 20:   # the leaf litter keeps its soft soil edge
+            cell[..., 3] = shape_alpha(cell[..., 3])
+        return cell
+    px = {16: lambda: paint_canopy(rng), 17: lambda: paint_canopy(rng, dry=True),
+          18: lambda: paint_fern(rng), 19: lambda: paint_conifer(rng)}[idx]()
+    return finish_alpha_cell(px, rng)
+
+
+# ---------------------------------------------------------------- row 6: dead wood and snowy firs
+
+BLEACHED = [hexc('#5e5850'), hexc('#9b968b'), hexc('#c8c2b6')]
+LIVING_BARK = [hexc('#2e2720'), hexc('#4f4438'), hexc('#6e6354')]
+SNOW, SNOW_SHADE = hexc('#e9eef2'), hexc('#a7b6ca')
+
+
+def anoise(rng, beta, ax, ay, cut=1.0, hi=1e9):
+    """Periodic noise over N x N with its frequencies weighted ax across and ay down: ay > ax
+    gives streaks running down the cell (wood grain, bark plates).  A crack is drawn on the zero
+    line of band-limited noise (hi), or it breaks up into dots."""
+    f = np.fft.fftfreq(N) * N
+    k = np.sqrt((f[:, None] * ay) ** 2 + (f[None, :] * ax) ** 2)
+    amp = np.where((k >= cut) & (k <= hi), np.maximum(k, 1) ** (-beta / 2), 0)
+    out = np.real(np.fft.ifft2(np.fft.fft2(rng.normal(0, 1, (N, N))) * amp))
+    return (out - out.mean()) / out.std()
+
+
+def bark_deadwood(rng):
+    """Sun-bleached silver wood: fine grain and long cracks down the cell, darker weathered streaks."""
+    grain = anoise(rng, 1.4, 1, 9)
+    broad = anoise(rng, 2.6, 1, 4)
+    t = np.clip(0.55 + 0.18 * broad + 0.1 * grain, 0, 1)
+    col = (BLEACHED[1] + (BLEACHED[2] - BLEACHED[1]) * np.clip((t - 0.5) * 2, 0, 1)[..., None]
+           + (BLEACHED[0] - BLEACHED[1]) * np.clip((0.5 - t) * 2, 0, 1)[..., None])
+    col = mixc(col, hexc('#7f7466'), 0.45 * smoothstep(0.8, 1.6, anoise(rng, 2.2, 1, 6)))   # brown streaks
+    cn = np.abs(anoise(rng, 2.0, 1, 12, 2, 40))
+    gate = smoothstep(-0.4, 0.3, anoise(rng, 2.8, 1, 3))
+    crack = smoothstep(0.1, 0.0, cn) * gate
+    fine = smoothstep(0.06, 0.0, np.abs(anoise(rng, 1.6, 1, 10, 4, 60))) * 0.5
+    col = mixc(col, hexc('#3d3730'), 0.85 * crack)
+    return col * (1 - 0.22 * fine - 0.12 * smoothstep(0.35, 0.0, cn) * gate)[..., None]
+
+
+def bark_living(rng):
+    """Fir bark: brown-grey plates split by dark vertical fissures, a little flaking."""
+    plates = anoise(rng, 2.2, 1, 7, 2, 36)
+    fiss = smoothstep(0.3, 0.05, np.abs(plates))
+    tone = anoise(rng, 2.6, 1, 1.5)
+    grain = anoise(rng, 1.2, 1, 6, 8)
+    t = np.clip(0.62 + 0.15 * tone + 0.06 * grain, 0, 1)
+    col = LIVING_BARK[1] + (LIVING_BARK[2] - LIVING_BARK[1]) * np.clip((t - 0.5) * 2, 0, 1)[..., None]
+    col = mixc(col, hexc('#7a6c5a'), 0.4 * smoothstep(1.4, 2.0, anoise(rng, 1.4, 1, 2, 10)))   # flakes
+    col = mixc(col, LIVING_BARK[0] * 0.8, 0.85 * fiss)
+    return col * (1 - 0.18 * smoothstep(0.45, 0.1, np.abs(plates)))[..., None]
+
+
+def snowy_needles(rng):
+    """Needle mass for the cone tiers, tiling across: dark sprays drooping out and down, snow
+    resting on top, mostly in the upper half (the tier's top), blue shade under each clump."""
+    img = Image.new('RGB', (N * SS, N * SS), tuple(int(v) for v in CONIFER[0] * 0.8))
+    dr = ImageDraw.Draw(img)
+
+    def wrapped(fn, x, *args):
+        for ox in (-N, 0, N):
+            fn(x + ox, *args)
+
+    def needle(x, y, a, ln, col):
+        d = np.array([np.cos(a), np.sin(a)]) * ln / 2
+        dr.line([((x - d[0]) * SS, (y - d[1]) * SS), ((x + d[0]) * SS, (y + d[1]) * SS)],
+                fill=tuple(int(v) for v in np.clip(col, 0, 255)), width=int(2.3 * SS))
+
+    for _ in range(260):   # sprays: a drooping twig with needles both sides
+        x0, y0 = rng.uniform(0, N), rng.uniform(-10, N)
+        side = rng.choice([-1, 1])
+        a = np.pi / 2 - side * rng.uniform(0.5, 1.1)
+        depth = rng.uniform(0.4, 1.0)
+        p = np.array([x0, y0])
+        for i in range(7):
+            a += side * 0.06
+            q = p + np.array([np.cos(a), np.sin(a)]) * 4
+            for s in (-1, 1):
+                b = a + s * rng.uniform(0.6, 1.0)
+                col = lerp3(CONIFER, np.clip(depth * (0.55 + 0.35 * (s < 0)) + rng.normal(0, 0.06), 0, 1))
+                e = (p + q) / 2 + np.array([np.cos(b), np.sin(b)]) * 3.5
+                wrapped(lambda xx, yy=e[1], bb=b, cc=col: needle(xx, yy, bb, 8, cc), e[0])
+            p = q
+    for _ in range(85):   # snow clumps resting on the sprays, mostly high in the cell
+        y = N * rng.uniform(0, 1) ** 2.2
+        x = rng.uniform(0, N)
+        span = rng.uniform(8, 20) * (1.1 - 0.5 * y / N)
+        blobs = [(x + rng.uniform(-0.5, 0.5) * span, y + rng.uniform(-1.5, 1.5), rng.uniform(0.35, 0.6) * span,
+                  rng.uniform(2.2, 4.0), rng.uniform(0.93, 1.0)) for _ in range(rng.integers(3, 6))]
+        for layer in (0, 1):   # blue shade below everything first, then the lit snow
+            for bx, by, bw, bh, k in blobs:
+                for ox in (-N, 0, N):
+                    xx = bx + ox
+                    if layer == 0:
+                        box = [(xx - bw) * SS, (by - bh + 2.0) * SS, (xx + bw) * SS, (by + bh + 2.0) * SS]
+                        dr.ellipse(box, fill=tuple(int(v) for v in SNOW_SHADE))
+                    else:
+                        box = [(xx - bw * 0.9) * SS, (by - bh) * SS, (xx + bw * 0.9) * SS, (by + bh * 0.7) * SS]
+                        dr.ellipse(box, fill=tuple(int(v) for v in SNOW * k))
+    for _ in range(260):   # loose flakes caught in the needles
+        x, y = rng.uniform(0, N), N * rng.uniform(0, 1) ** 1.6
+        r = rng.uniform(1.0, 1.6)
+        for ox in (-N, 0, N):
+            dr.ellipse([(x + ox - r) * SS, (y - r) * SS, (x + ox + r) * SS, (y + r) * SS],
+                       fill=tuple(int(v) for v in SNOW * 0.93))
+    px = np.asarray(img, float).reshape(N, SS, N, SS, 3).mean((1, 3))
+    return px
+
+
+def paint_row6(idx):
+    rng = np.random.default_rng(SEED + 1000 + idx)
+    rgb = {24: bark_deadwood, 25: bark_living, 26: snowy_needles}[idx](rng)
+    cell = np.zeros((CELL, CELL, 4))
+    cell[MARGIN:-MARGIN, MARGIN:-MARGIN, :3] = np.clip(rgb / 255.0, 0, 1)
+    cell[MARGIN:-MARGIN, MARGIN:-MARGIN, 3] = 1
+    return cell
+
+
+ROWS = 8   # cell 27 and row 7 reserved, fully transparent
+
+
 def build():
     rng = np.random.default_rng(SEED)
-    atlas = np.zeros((CELL * 4, CELL * 4, 4))
-    for idx in range(16):
+    atlas = np.zeros((CELL * ROWS, CELL * 4, 4))
+    for idx in range(27):
         if idx >= 8:
-            cell = paint_extra(idx)
+            cell = paint_extra(idx) if idx < 16 else paint_forest(idx) if idx < 24 else paint_row6(idx)
             m = MARGIN
             a = cell[..., 3]
             assert a[:m].max() == 0 and a[-m:].max() == 0 and a[:, :m].max() == 0 and a[:, -m:].max() == 0, idx
@@ -654,22 +1151,107 @@ def rock_tex(cell, m, flat=None):
     return t[..., :3]
 
 
+def dome(dst, cell, cx, cy, R):
+    """A canopy cell laid straight down on a dome mesh, lit from upper left, alpha-tested."""
+    yy, xx = np.mgrid[0:2 * R, 0:2 * R]
+    x, y = (xx + 0.5 - R) / R, (yy + 0.5 - R) / R
+    z = np.sqrt(np.clip(1 - x * x - y * y, 0, 1))
+    lit = 0.35 + 0.8 * np.clip(x * LIGHT[0] + y * LIGHT[1] + z * LIGHT[2], 0, 1)
+    n = cell.shape[0]
+    u = np.clip(((x + 1) / 2 * n).astype(int), 0, n - 1)
+    v = np.clip(((y + 1) / 2 * n).astype(int), 0, n - 1)
+    tex = cell[v, u].astype(float)
+    reg = dst[cy - R:cy + R, cx - R:cx + R]
+    dst[cy - R:cy + R, cx - R:cx + R] = np.where(tex[..., 3:4] >= 128, tex[..., :3] * lit[..., None], reg)
+
+
+def cylinder(dst, tex, x0, y0, w, h):
+    """A trunk mock: the texture wrapped half way round a vertical cylinder, lit from the left."""
+    n = tex.shape[0]
+    s = (np.arange(w) + 0.5) / w * 2 - 1
+    th = np.arcsin(s)
+    lit = 0.3 + 0.8 * np.clip(np.cos(th + 0.7), 0, 1)
+    u = ((th / np.pi + 0.5) * n * 0.5).astype(int) % n
+    v = (np.arange(h) * n / (w * 1.57)).astype(int) % n
+    dst[y0:y0 + h, x0:x0 + w] = tex[v[:, None], u[None, :], :3] * lit[None, :, None]
+
+
+def cone(dst, tex, cx, y0, w, h):
+    """One fir tier: cell top at the apex, cell bottom at the rim, lit from the left."""
+    n = tex.shape[0]
+    for y in range(h):
+        hw = max(1, int(w / 2 * (y + 1) / h))
+        s = (np.arange(-hw, hw) + 0.5) / hw
+        th = np.arcsin(np.clip(s, -1, 1))
+        lit = 0.3 + 0.8 * np.clip(np.cos(th + 0.7), 0, 1)
+        u = ((th / np.pi + 0.5) * n * 0.5).astype(int) % n
+        dst[y0 + y, cx - hw:cx + hw] = tex[int(y * n / h), u, :3] * lit[:, None]
+
+
+def row6(out, atlas, y0):
+    """Dead wood and snowy firs: the row on sand, its 64 px mip, trunks, a snowy fir of three tiers."""
+    W = CELL * 4
+    yy, xx = np.mgrid[0:700, 0:W]
+    sand = hexc('#c2a676') * (1 + 0.05 * np.sin(xx / 23.0) * np.sin(yy / 17.0))[..., None]
+    out[y0:y0 + 700] = sand
+    out[y0 + 300:y0 + 700, 520:] = hexc('#dfe6ec')            # snow ground under the fir
+    row = atlas[CELL * 6:CELL * 7]
+    over_tested(out, row, 0, y0)
+    small = mip(row, 4)
+    over_tested(out, small, 16, y0 + 280)
+    cells = dict(enumerate(cells_of(row, CELL, 1), 24))
+    cells64 = dict(enumerate(cells_of(small, 64, 1), 24))
+    m = MARGIN
+    cylinder(out, cells[24][m:-m, m:-m].astype(float), 40, y0 + 370, 90, 300)
+    cylinder(out, cells[25][m:-m, m:-m].astype(float), 160, y0 + 370, 90, 300)
+    cylinder(out, cells64[24][1:-1, 1:-1].astype(float), 280, y0 + 370, 24, 80)
+    cylinder(out, cells64[25][1:-1, 1:-1].astype(float), 320, y0 + 370, 24, 80)
+    cylinder(out, cells[25][m:-m, m:-m].astype(float), 760 - 12, y0 + 600, 24, 80)
+    for cx, w, h, top in ((760, 300, 150, 520), (760, 240, 140, 440), (760, 170, 130, 360)):
+        cone(out, cells[26][m:-m, m:-m].astype(float), cx, y0 + top - 50, w, h)
+    for cx, w, h, top in ((940, 76, 38, 610), (940, 60, 35, 590), (940, 42, 32, 570)):
+        cone(out, cells64[26][1:-1, 1:-1].astype(float), cx, y0 + top, w, h)
+
+
+def cells_of(img, size, rows):
+    return [img[r * size:(r + 1) * size, c * size:(c + 1) * size] for r in range(rows) for c in range(4)]
+
+
+def squash(cell, f=0.6):
+    """A flat ground card as the RTS camera sees it: shorter than wide."""
+    h, w = cell.shape[:2]
+    return np.asarray(Image.fromarray(cell).resize((w, int(h * f)), Image.BILINEAR))
+
+
 def preview(atlas):
     rng = np.random.default_rng(SEED + 1)
     W = CELL * 4
-    yB, yC, yD, H = 1040, 1312, 1580, 1960
-    out = ground(H, W, rng)
-    over_tested(out, atlas, 0, 0)
-    small = mip(atlas, 4)                      # 64 px per cell, mip 2
+    yB, yC, yG, yD, H = 1552, 1960, 2230, 2660, 3040
+    out = ground(H + 700, W, rng)
+    row6(out, atlas, H)
+    over_tested(out, atlas[:CELL * 6], 0, 0)
+    small = mip(atlas[:CELL * 6], 4)           # 64 px per cell, mip 2
     over_tested(out, small, 16, yB)
-    smaller = mip(atlas, 8)                    # 32 px per cell, mip 3
+    smaller = mip(atlas[:CELL * 6], 8)         # 32 px per cell, mip 3
     over_tested(out, smaller, 16 + 256 + 24, yB)
-    cells = [atlas[r * CELL:(r + 1) * CELL, c * CELL:(c + 1) * CELL] for r in range(4) for c in range(4)]
-    cells64 = [small[r * 64:(r + 1) * 64, c * 64:(c + 1) * 64] for r in range(4) for c in range(4)]
-    flat = hexc('#6f6c44')
-    for i, k in enumerate((12, 13, 14, 15)):   # rock spheres at 64 px textures, then at 256
-        sphere(out, rock_tex(cells64[k], 1, flat if k == 15 else None), 480 + i * 140, yB + 64, 56)
-        sphere(out, rock_tex(cells[k], MARGIN, flat if k == 15 else None), 128 + i * 256, yC + 128, 118)
+    cells = cells_of(atlas, CELL, 6)
+    cells64 = cells_of(small, 64, 6)
+    for i, k in enumerate((12, 13, 14)):       # rock spheres and canopy domes at 64 px textures, then at 256
+        sphere(out, rock_tex(cells64[k], 1), 500 + i * 120, yB + 70, 50)
+        sphere(out, rock_tex(cells[k], MARGIN), 105 + i * 203, yC + 125, 96)
+    for i, k in enumerate((16, 17)):
+        dome(out, cells64[k], 500 + i * 120, yB + 250, 50)
+        dome(out, cells[k], 105 + (i + 3) * 203, yC + 125, 96)
+    # grove floor at 128 px per cell: darker soil, a canopy's soft shadow, cards then upright pieces
+    yy, xx = np.mgrid[0:yD - yG, 0:W]
+    shadow = 1 - 0.42 * smoothstep(1.0, 0.3, np.hypot((xx - W / 2) / 520, (yy - 200) / 260))
+    out[yG:yD] = out[yG:yD] * np.array([0.72, 0.7, 0.62]) * shadow[..., None]
+    c128 = cells_of(mip(atlas[:CELL * 6], 2), 128, 6)
+    for k, x, y in ((20, 110, 30), (21, 590, 20), (22, 330, 110), (20, 800, 210), (21, 40, 250), (22, 860, 40)):
+        over_tested(out, squash(c128[k]), x, yG + y)
+    for k, x, y in sorted(((23, 420, 220), (18, 150, 150), (18, 690, 270), (19, 540, 90), (19, 880, 120),
+                           (8, 250, 280), (3, 30, 290), (18, 960 - 128, 290), (19, 20, 60)), key=lambda q: q[2]):
+        over_tested(out, c128[k], x, yG + y)
     # scattered field at 64 px: flat cards (11, 15) squashed by the camera angle first, then upright tufts
     flats = [np.asarray(Image.fromarray(cells64[k]).resize((64, 38), Image.BILINEAR)) for k in (11, 15)]
     weights = np.array([3, 2, 3, 3, 1.2, 1.2, 0.5, 0.5, 0.7, 0.6, 0.35])

@@ -38,12 +38,13 @@
 #define FOLIAGE_PLACEMENT_H
 
 #include <math.h>
+#include <vector>
 
 namespace FoliagePlacement
 {
 	const int MAX_TUFTS_PER_CELL = 3;
 	const int ATLAS_COLUMNS = 4;
-	const int ATLAS_ROWS = 4;		///< 1024 square, cells of 256
+	const int ATLAS_ROWS = 8;		///< 1024 by 2048, cells of 256
 
 	/// Atlas cells past the grass's 0-7 (0-3 green, 4-5 dry, 6-7 flowering).
 	enum AtlasCell
@@ -55,7 +56,18 @@ namespace FoliagePlacement
 		ATLAS_GRANITE = 12,			///< opaque rock faces for the stone meshes
 		ATLAS_SANDSTONE = 13,
 		ATLAS_BASALT = 14,
-		ATLAS_PEBBLES = 15			///< seen from above, with alpha
+		ATLAS_PEBBLES = 15,			///< seen from above, with alpha
+		ATLAS_BUSH_GREEN = 16,	///< a bush's canopy from above, laid over the dome meshes
+		ATLAS_BUSH_DRY = 17,
+		ATLAS_FERN = 18,				///< rooted like a tuft
+		ATLAS_SAPLING = 19,			///< a young conifer, rooted
+		ATLAS_LEAF_LITTER = 20,	///< from above, under broadleaf trees
+		ATLAS_NEEDLE_LITTER = 21,	///< from above, under conifers
+		ATLAS_LOG = 22,					///< a mossy fallen log from above, lying corner to corner
+		ATLAS_STUMP = 23,				///< rooted
+		ATLAS_DEAD_BARK = 24,		///< bleached dead wood, tiling
+		ATLAS_FIR_BARK = 25,		///< tiling
+		ATLAS_FIR_NEEDLES = 26	///< snowy needles: the cell's top is a tier's top
 	};
 
 	/// A cell's bytes.
@@ -65,8 +77,20 @@ namespace FoliagePlacement
 		BYTE_STONES,
 		BYTE_TWIGS,
 		BYTE_FLAGS,
+		BYTE_CANOPY,		///< batched trees within GROVE_RADIUS of the cell's middle, 255 at most
+		BYTE_KIND,			///< the base tile's Bare in the low bits, and KIND_BORDER, KIND_HUG
 		CELL_BYTES
 	};
+
+	enum KindBits
+	{
+		KIND_BARE_MASK = 0x07,
+		KIND_BORDER = 0x08,		///< outside the playable map, in the border strip no unit reaches
+		KIND_HUG = 0x10				///< beside an impassable cell, above it or below
+	};
+
+	/// How far a tree's floor reaches, in world units.
+	const float GROVE_RADIUS = 40.0f;
 
 	enum Rock
 	{
@@ -82,7 +106,8 @@ namespace FoliagePlacement
 		CF_CLIFF_FOOT = 0x08,		///< open ground beside a cliff or steep cell: stones, boulders and bushes gather
 		CF_EDGE = 0x10,					///< grass meets bare ground: shrubs gather
 		CF_LEDGE = 0x20,				///< a cliff cell no steeper than LEDGE_SPAN: a small stone can lie on it
-		CF_STEEP = 0x40					///< passable but too steep to hold anything: a face's foot is past it, like a cliff's
+		CF_STEEP = 0x40,				///< passable but too steep to hold anything: a face's foot is past it, like a cliff's
+		CF_CONIFER = 0x80				///< most of the trees over the cell are conifers: needles, not leaves
 	};
 
 	/// A cliff cell whose corners span no more than this many cell sides can hold a small stone.
@@ -135,6 +160,13 @@ namespace FoliagePlacement
 	inline bool nameHasGrass(const char *name)
 	{
 		return nameHas(name, "grass");
+	}
+
+	/// A tree model that drops needles: its name says pine, fir, spruce, conifer, or a snowy or alpine tree.
+	inline bool coniferName(const char *name)
+	{
+		return nameHas(name, "pine") || nameHas(name, "fir") || nameHas(name, "spruce") || nameHas(name, "conifer")
+			|| nameHas(name, "alpine") || nameHas(name, "snow");
 	}
 
 	/// A class the engine's table leaves vague (the Swiss and Eastern Europe sets, transitions), by name.
@@ -307,19 +339,45 @@ namespace FoliagePlacement
 	enum Piece
 	{
 		PIECE_TUFT,
-		PIECE_SHRUB,		///< three crossed cards, rooted like a tuft
+		PIECE_SHRUB,		///< a dome mesh with a canopy painted over it from above
 		PIECE_TWIGS,		///< a flat card on the ground
 		PIECE_PEBBLES,	///< a flat card on the ground
 		PIECE_STONE,		///< a small rock mesh, knee high at most
 		PIECE_BOULDER,	///< a big rock mesh, resting at the foot of a cliff
+		PIECE_LITTER,		///< leaves or needles under trees, a flat card
+		PIECE_FERN,			///< rooted cards, under trees
+		PIECE_SAPLING,	///< a young conifer at a grove's edge, rooted cards
+		PIECE_LOG,			///< a fallen log in a grove, a flat card
+		PIECE_STUMP,		///< rooted cards, in a grove
+		PIECE_DEAD_TREE,	///< a bleached leafless tree, where no unit goes, on dry ground
+		PIECE_FIR,				///< a snowy fir, where no unit goes, on snow
 		PIECE_KINDS
 	};
 
-	/// Cards thin out with distance; solid things (shrubs, rocks) stand at any distance, so nothing a
-	/// unit could seem to drive through comes and goes.
+	/// Cards thin out with distance; solid things (bushes, rocks, logs, saplings) stand at any
+	/// distance, so nothing a unit could seem to drive through comes and goes.
 	inline bool pieceThins(Piece piece)
 	{
-		return piece == PIECE_TUFT || piece == PIECE_TWIGS || piece == PIECE_PEBBLES;
+		return piece == PIECE_TUFT || piece == PIECE_TWIGS || piece == PIECE_PEBBLES || piece == PIECE_LITTER
+			|| piece == PIECE_FERN;
+	}
+
+	/// Whether a cell has ground something can lie on: grass, dirt, sand or rock, not a cliff,
+	/// a steep face, water or pavement.
+	inline bool hasGround(const unsigned char *cell)
+	{
+		return cell[BYTE_GRASS] != 0 || cell[BYTE_STONES] != 0 || cell[BYTE_TWIGS] != 0;
+	}
+
+	/// The tuft density under the trees: the tall grass thins where the canopy is thick.
+	inline unsigned char groveGrass(const unsigned char *cell)
+	{
+		const int trees = cell[BYTE_CANOPY];
+		if (trees >= 3)
+			return (unsigned char)(cell[BYTE_GRASS] * 2 / 5);
+		if (trees == 2)
+			return (unsigned char)(cell[BYTE_GRASS] * 7 / 10);
+		return cell[BYTE_GRASS];
 	}
 
 	/// Bare ground a dry scrub grows on: dirt or desert (their stones), no grass, not rock or snow.
@@ -329,10 +387,43 @@ namespace FoliagePlacement
 	}
 
 	/// Whether the 3 by 3 block of cells (x, y) is in holds boulders at a cliff's foot: two in five do.
+	inline bool blockActive(int x, int y, int size, int salt, float share)
+	{
+		const int bx = x >= 0 ? x / size : (x - size + 1) / size, by = y >= 0 ? y / size : (y - size + 1) / size;
+		return unit(hash(bx, by, salt)) < share;
+	}
+
 	inline bool boulderBlock(int x, int y)
 	{
-		const int bx = x >= 0 ? x / 3 : (x - 2) / 3, by = y >= 0 ? y / 3 : (y - 2) / 3;
-		return unit(hash(bx, by, SALT_PIECE + 0x50)) < 0.4f;
+		return blockActive(x, y, 3, SALT_PIECE + 0x50, 0.4f);
+	}
+
+	inline Bare cellBare(const unsigned char *cell)
+	{
+		return (Bare)(cell[BYTE_KIND] & KIND_BARE_MASK);
+	}
+
+	/// Ground no unit reaches: an impassable cell or the border strip.  Big trees stand only here, so
+	/// nothing drives through a trunk or hides under a fir.  The lane beside a cliff (KIND_HUG) is open
+	/// ground and is left to the stones.
+	inline bool unreachable(const unsigned char *cell)
+	{
+		return (cell[BYTE_FLAGS] & CF_CLIFF) != 0 || (cell[BYTE_KIND] & KIND_BORDER) != 0;
+	}
+
+	/// The pieces drawn out to the far radius and never folded: big enough to be seen from as far as
+	/// the map's own trees.
+	inline bool pieceFar(Piece piece)
+	{
+		return piece == PIECE_DEAD_TREE || piece == PIECE_FIR;
+	}
+
+	/// Dry ground a dead tree belongs on: desert and sand, and rock or dirt the class calls sandstone.
+	inline bool dryGround(const unsigned char *cell)
+	{
+		const Bare bare = cellBare(cell);
+		const bool sandstone = (cell[BYTE_FLAGS] & CF_ROCK_MASK) == ROCK_SANDSTONE;
+		return bare == BARE_DESERT || (sandstone && (bare == BARE_ROCKY || bare == BARE_DIRT));
 	}
 
 	/// The chance cell (x, y)'s bytes give a piece other than a tuft.
@@ -340,14 +431,41 @@ namespace FoliagePlacement
 	{
 		const unsigned char flags = cell[BYTE_FLAGS];
 		const bool foot = (flags & CF_CLIFF_FOOT) != 0;
+		const int trees = cell[BYTE_CANOPY];
+		// snow keeps its floor bare and white: no bush, fern, sapling, litter, log or stump on it, only
+		// firs and stones, or they sit on it as black specks
+		const bool ground = hasGround(cell) && cellBare(cell) != BARE_SNOW;
 		switch (piece)
 		{
-		// thickest where a field gives way to bare ground, and in what grows at a cliff's foot
-		// and the odd dry scrub on desert and dirt, more where they meet grass
+		// thickest where a field gives way to bare ground, in what grows at a cliff's foot and under
+		// a grove, and the odd dry scrub on desert and dirt, more where they meet grass
 		case PIECE_SHRUB:
+			if (cellBare(cell) == BARE_SNOW)
+				return 0.0f;
 			return cell[BYTE_GRASS] / 255.0f * ((flags & CF_EDGE) ? 0.45f : 0.08f)
 				+ ((foot && (cell[BYTE_GRASS] != 0 || cell[BYTE_TWIGS] != 0)) ? 0.20f : 0.0f)
-				+ (scrubGround(cell) ? ((flags & CF_EDGE) ? 0.06f : 0.008f) : 0.0f);
+				+ (scrubGround(cell) ? ((flags & CF_EDGE) ? 0.06f : 0.008f) : 0.0f)
+				+ (ground ? (trees >= 3 ? 0.25f : (trees == 2 ? 0.10f : 0.0f)) : 0.0f);
+		// a grove's floor, a thicket under the trees: bushes and ferns, saplings where it thins out,
+		// litter only under the canopy of three trees or more (round a lone trunk it read as a rust
+		// spot), the odd log and stump where it is thick
+		case PIECE_LITTER:
+			return (ground && trees >= 3) ? 0.45f : 0.0f;
+		case PIECE_FERN:
+			return (ground && trees > 0) ? (trees >= 3 ? 0.35f : 0.06f * trees) : 0.0f;
+		case PIECE_SAPLING:
+			return ground ? (trees == 2 ? 0.12f : (trees >= 3 ? 0.03f : 0.0f)) : 0.0f;
+		case PIECE_LOG:
+			return (ground && trees >= 3) ? 0.012f : 0.0f;
+		case PIECE_STUMP:
+			return (ground && trees >= 2) ? 0.012f : 0.0f;
+		// big trees where no unit goes: dead ones in loose groups of one to three on dry ground,
+		// snowy firs in clumps of a few on snow
+		case PIECE_DEAD_TREE:
+			return (unreachable(cell) && dryGround(cell) && blockActive(x, y, 5, SALT_PIECE + 0x51, 0.3f)) ? 0.06f : 0.0f;
+		case PIECE_FIR:
+			return (unreachable(cell) && cellBare(cell) == BARE_SNOW && blockActive(x, y, 4, SALT_PIECE + 0x52, 0.35f))
+				? 0.25f : 0.0f;
 		case PIECE_TWIGS: return cell[BYTE_TWIGS] / 255.0f * ((flags & CF_EDGE) ? 0.05f : 0.02f);
 		case PIECE_PEBBLES: return cell[BYTE_STONES] / 255.0f * 0.15f;
 		// on open ground a unit drives through a stone, so few of them there; the foot of a cliff is
@@ -357,10 +475,10 @@ namespace FoliagePlacement
 				return (flags & CF_LEDGE) ? 0.03f : 0.0f;
 			return cell[BYTE_STONES] / 255.0f * 0.035f + (foot ? 0.30f : 0.0f);
 		// resting at a cliff's foot, never on its face: a few hundred a map
-		// in loose clusters: two blocks of 3 by 3 cells in five hold some, 15% of their foot cells
+		// in loose clusters: two blocks of 3 by 3 cells in five hold some, 22% of their foot cells
 		// each, so a cliff's foot shows a line of them with gaps and never its face
 		case PIECE_BOULDER:
-			return (foot && boulderBlock(x, y)) ? 0.15f : 0.0f;
+			return (foot && boulderBlock(x, y)) ? 0.22f : 0.0f;
 		default: return 0.0f;
 		}
 	}
@@ -377,16 +495,258 @@ namespace FoliagePlacement
 		return MAX_TUFTS_PER_CELL + piece;
 	}
 
-	/// A shrub's atlas cell: dry scrub leads on thin or edge grass, the leafy bush on a full field.
+	/// A bush's look: dry scrub (the upright cards of ATLAS_SHRUB_SCRUB, which read as scrub on sand
+	/// where a dark dome read as a burnt hole) where the class is dry (grass blended with dirt or sand,
+	/// thin grass, or none), a green dome on a field and its edges or under trees.
 	inline int shrubCell(int x, int y, const unsigned char *cell)
 	{
-		// dry where the class is: grass blended with dirt or sand, thin grass, or no grass at all; a
-		// green field's edge stays green, or its bushes read as dead patches
 		const float u = unit(hash(x, y, SALT_KIND + 0x40));
-		const bool dry = cell[BYTE_GRASS] < 100 || cell[BYTE_STONES] >= 60;
+		const bool dry = (cell[BYTE_GRASS] < 100 || cell[BYTE_STONES] >= 60) && cell[BYTE_CANOPY] < 2;
 		if (dry)
-			return u < 0.75f ? ATLAS_SHRUB_SCRUB : ATLAS_SHRUB_LEAFY;
-		return u < 0.7f ? ATLAS_SHRUB_LEAFY : (u < 0.95f ? ATLAS_SHRUB_BERRY : ATLAS_SHRUB_SCRUB);
+			return u < 0.75f ? ATLAS_SHRUB_SCRUB : ATLAS_BUSH_GREEN;
+		return u < 0.95f ? ATLAS_BUSH_GREEN : ATLAS_SHRUB_SCRUB;
+	}
+
+	/// The bush meshes: a squashed dome of three rings of BUSH_RING corners (on the ground, half way up
+	/// turned half a step, near the top) and a crown, each corner pulled a little by a fixed hash.  Open
+	/// underneath; nothing sees it.  The canopy painting is laid over it from above out to its cell's
+	/// edge, so the painted alpha cuts the rim ragged.
+	const int BUSH_RING = 12;
+	const int BUSH_CORNERS = BUSH_RING * 3 + 1;
+	const int BUSH_FACES = BUSH_RING * 5;
+	const int BUSH_VARIANTS = 6;
+	const int BUSH_TOP = BUSH_RING * 3;		///< the crown's corner
+
+	struct BushFaceTable
+	{
+		int faces[BUSH_FACES][3];
+		BushFaceTable(void)
+		{
+			int n = 0;
+			for (int band = 0; band < 2; ++band)
+			{
+				const int lo = band * BUSH_RING, hi = lo + BUSH_RING;
+				for (int i = 0; i < BUSH_RING; ++i)
+				{
+					const int j = (i + 1) % BUSH_RING;
+					// the middle ring sits half a step round from the other two
+					const int a = lo + i, b = lo + j;
+					const int c = band == 0 ? hi + i : hi + j, d = band == 0 ? hi + j : hi + i;
+					if (band == 0)
+					{
+						faces[n][0] = a; faces[n][1] = b; faces[n][2] = c; ++n;
+						faces[n][0] = b; faces[n][1] = d; faces[n][2] = c; ++n;
+					}
+					else
+					{
+						faces[n][0] = a; faces[n][1] = c; faces[n][2] = d; ++n;
+						faces[n][0] = a; faces[n][1] = b; faces[n][2] = c; ++n;
+					}
+				}
+			}
+			for (int i = 0; i < BUSH_RING; ++i)
+			{
+				faces[n][0] = BUSH_RING * 2 + i;
+				faces[n][1] = BUSH_RING * 2 + (i + 1) % BUSH_RING;
+				faces[n][2] = BUSH_TOP;
+				++n;
+			}
+		}
+	};
+
+	inline const int (*bushFaces(void))[3]
+	{
+		static const BushFaceTable table;
+		return table.faces;
+	}
+
+	/// Variant v's corners: radius about one on the ground, the crown about 0.85 up.
+	inline void bushCorners(int variant, float out[BUSH_CORNERS][3])
+	{
+		const float step = 6.2831853f / BUSH_RING;
+		for (int i = 0; i < BUSH_RING; ++i)
+		{
+			const float a = i * step, m = (i + 0.5f) * step;
+			const float r = 0.9f + 0.2f * unit(hash(variant, i, SALT_ROCK + 2));
+			const float rm = 0.84f + 0.16f * unit(hash(variant, i + 16, SALT_ROCK + 2));
+			const float zm = 0.42f + 0.1f * unit(hash(variant, i + 32, SALT_ROCK + 2));
+			const float ru = 0.5f + 0.12f * unit(hash(variant, i + 48, SALT_ROCK + 2));
+			const float zu = 0.72f + 0.08f * unit(hash(variant, i + 64, SALT_ROCK + 2));
+			out[i][0] = cosf(a) * r;
+			out[i][1] = sinf(a) * r;
+			out[i][2] = 0.0f;
+			out[BUSH_RING + i][0] = cosf(m) * rm;
+			out[BUSH_RING + i][1] = sinf(m) * rm;
+			out[BUSH_RING + i][2] = zm;
+			out[BUSH_RING * 2 + i][0] = cosf(a) * ru;
+			out[BUSH_RING * 2 + i][1] = sinf(a) * ru;
+			out[BUSH_RING * 2 + i][2] = zu;
+		}
+		out[BUSH_TOP][0] = 0.12f * (unit(hash(variant, 80, SALT_ROCK + 2)) - 0.5f);
+		out[BUSH_TOP][1] = 0.12f * (unit(hash(variant, 81, SALT_ROCK + 2)) - 0.5f);
+		out[BUSH_TOP][2] = 0.86f + 0.08f * unit(hash(variant, 82, SALT_ROCK + 2));
+	}
+
+	/// A tree of our own, about one unit tall, standing on its origin.  Each vertex carries the atlas
+	/// cell its u, v (0..1 inside the cell) belong to and an outward normal.
+	struct TreeVertex
+	{
+		float x, y, z;
+		float nx, ny, nz;
+		float u, v;
+		int cell;
+	};
+
+	struct TreeMesh
+	{
+		std::vector<TreeVertex> vertices;
+		std::vector<unsigned short> indices;
+	};
+
+	const int DEAD_TREE_VARIANTS = 6;
+	const int FIR_VARIANTS = 4;
+
+	/// A tapered prism from a to b, radius ra to rb, sides round, the cell wrapped once round it and
+	/// once along it.
+	inline void addLimb(TreeMesh &m, const float a[3], const float b[3], float ra, float rb, int sides, int cell)
+	{
+		float d[3] = { b[0] - a[0], b[1] - a[1], b[2] - a[2] };
+		const float len = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+		if (len <= 0.0f)
+			return;
+		d[0] /= len; d[1] /= len; d[2] /= len;
+		const float side[3] = { fabsf(d[2]) < 0.9f ? 0.0f : 1.0f, 0.0f, fabsf(d[2]) < 0.9f ? 1.0f : 0.0f };
+		float e1[3] = { d[1] * side[2] - d[2] * side[1], d[2] * side[0] - d[0] * side[2], d[0] * side[1] - d[1] * side[0] };
+		const float l1 = sqrtf(e1[0] * e1[0] + e1[1] * e1[1] + e1[2] * e1[2]);
+		e1[0] /= l1; e1[1] /= l1; e1[2] /= l1;
+		const float e2[3] = { d[1] * e1[2] - d[2] * e1[1], d[2] * e1[0] - d[0] * e1[2], d[0] * e1[1] - d[1] * e1[0] };
+		const unsigned short first = (unsigned short)m.vertices.size();
+		for (int end = 0; end < 2; ++end)
+			for (int i = 0; i <= sides; ++i)
+			{
+				const float t = 6.2831853f * i / sides, c = cosf(t), s = sinf(t);
+				const float n[3] = { e1[0] * c + e2[0] * s, e1[1] * c + e2[1] * s, e1[2] * c + e2[2] * s };
+				const float *at = end ? b : a;
+				const float r = end ? rb : ra;
+				TreeVertex v = { at[0] + n[0] * r, at[1] + n[1] * r, at[2] + n[2] * r, n[0], n[1], n[2],
+					(float)i / sides, end ? 0.0f : 1.0f, cell };
+				m.vertices.push_back(v);
+			}
+		for (int i = 0; i < sides; ++i)
+		{
+			const unsigned short a0 = (unsigned short)(first + i), a1 = (unsigned short)(a0 + 1);
+			const unsigned short b0 = (unsigned short)(a0 + sides + 1), b1 = (unsigned short)(b0 + 1);
+			const unsigned short tri[6] = { a0, a1, b1, a0, b1, b0 };
+			m.indices.insert(m.indices.end(), tri, tri + 6);
+		}
+	}
+
+	/// A dead tree: a trunk in three bends, three to five gnarled branches off its upper half, each
+	/// in two bends with one or two twigs off it.  Six sided trunk, five sided limbs, 130 to 240 faces.
+	inline void deadTreeMesh(int variant, TreeMesh &m)
+	{
+		m.vertices.clear();
+		m.indices.clear();
+		int salt = 0;
+		#define DT_U() unit(hash(variant, salt++, SALT_ROCK + 3))
+		float joints[4][3] = { { 0.0f, 0.0f, -0.05f } };
+		float dir[3] = { 0.0f, 0.0f, 1.0f };
+		float radius[4];
+		radius[0] = 0.055f + 0.015f * DT_U();
+		for (int s = 0; s < 3; ++s)
+		{
+			dir[0] += 0.5f * (DT_U() - 0.5f);
+			dir[1] += 0.5f * (DT_U() - 0.5f);
+			const float l = sqrtf(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
+			dir[0] /= l; dir[1] /= l; dir[2] /= l;
+			const float len = 0.26f + 0.06f * DT_U();
+			for (int k = 0; k < 3; ++k)
+				joints[s + 1][k] = joints[s][k] + dir[k] * len;
+			radius[s + 1] = radius[0] * (0.8f - 0.17f * s);
+			addLimb(m, joints[s], joints[s + 1], radius[s], radius[s + 1], 6, ATLAS_DEAD_BARK);
+		}
+		const int branches = 3 + (int)(hash(variant, 99, SALT_ROCK + 3) % 3);
+		for (int k = 0; k < branches; ++k)
+		{
+			// off the upper two bends
+			const int seg = 1 + (int)(DT_U() * 2.0f) % 2;
+			const float f = 0.3f + 0.6f * DT_U();
+			float p[3];
+			for (int i = 0; i < 3; ++i)
+				p[i] = joints[seg][i] + (joints[seg + 1][i] - joints[seg][i]) * f;
+			const float r0 = (radius[seg] + (radius[seg + 1] - radius[seg]) * f) * 0.6f;
+			const float az = 6.2831853f * (k + 0.3f * (DT_U() - 0.5f)) / branches;
+			float tilt = 0.6f + 0.5f * DT_U();
+			float bend[3] = { cosf(az) * sinf(tilt), sinf(az) * sinf(tilt), cosf(tilt) };
+			const float length = 0.3f + 0.2f * DT_U();
+			float q[3];
+			for (int i = 0; i < 3; ++i)
+				q[i] = p[i] + bend[i] * length * 0.55f;
+			addLimb(m, p, q, r0, r0 * 0.6f, 5, ATLAS_DEAD_BARK);
+			// the gnarl: the second bend turns away and droops or climbs
+			tilt += 0.5f * (DT_U() - 0.3f);
+			const float az2 = az + 0.6f * (DT_U() - 0.5f);
+			const float bend2[3] = { cosf(az2) * sinf(tilt), sinf(az2) * sinf(tilt), cosf(tilt) };
+			float tip[3];
+			for (int i = 0; i < 3; ++i)
+				tip[i] = q[i] + bend2[i] * length * 0.45f;
+			addLimb(m, q, tip, r0 * 0.6f, r0 * 0.15f, 5, ATLAS_DEAD_BARK);
+			const int twigs = 1 + (int)(DT_U() * 2.0f) % 2;
+			for (int j = 0; j < twigs; ++j)
+			{
+				const float azt = az + (j == 0 ? 0.9f : -0.9f) + 0.3f * (DT_U() - 0.5f);
+				const float tt = tilt * 0.7f;
+				const float td[3] = { cosf(azt) * sinf(tt), sinf(azt) * sinf(tt), cosf(tt) };
+				float twig[3];
+				for (int i = 0; i < 3; ++i)
+					twig[i] = q[i] + td[i] * length * 0.4f;
+				addLimb(m, q, twig, r0 * 0.4f, r0 * 0.1f, 5, ATLAS_DEAD_BARK);
+			}
+		}
+		#undef DT_U
+	}
+
+	/// A snowy fir: a short trunk and five or six stacked eight sided cones, wider at the bottom, the
+	/// needle cell's top at each tier's tip.  52 to 60 faces.
+	inline void firMesh(int variant, TreeMesh &m)
+	{
+		m.vertices.clear();
+		m.indices.clear();
+		// the trunk shows under the lowest tier, which starts a quarter of the way up
+		const float trunkBase[3] = { 0.0f, 0.0f, -0.05f }, trunkTop[3] = { 0.0f, 0.0f, 0.42f };
+		addLimb(m, trunkBase, trunkTop, 0.05f, 0.028f, 6, ATLAS_FIR_BARK);
+		const int tiers = 5 + (int)(hash(variant, 0, SALT_ROCK + 4) & 1);
+		for (int k = 0; k < tiers; ++k)
+		{
+			const float jitter = 0.9f + 0.2f * unit(hash(variant, k + 1, SALT_ROCK + 4));
+			const float base = 0.26f + k * (0.62f / tiers);
+			const float height = 0.34f - 0.025f * k;
+			const float r = 0.36f * (1.0f - 0.14f * k) * jitter;
+			const float turn = unit(hash(variant, k + 20, SALT_ROCK + 4));
+			const unsigned short first = (unsigned short)m.vertices.size();
+			for (int i = 0; i <= 8; ++i)
+			{
+				const float t = 6.2831853f * (i + turn) / 8.0f, c = cosf(t), s = sinf(t);
+				float n[3] = { c * height, s * height, r };
+				const float l = sqrtf(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+				n[0] /= l; n[1] /= l; n[2] /= l;
+				TreeVertex ring = { c * r, s * r, base - 0.03f, n[0], n[1], n[2], (float)i / 8.0f, 1.0f, ATLAS_FIR_NEEDLES };
+				m.vertices.push_back(ring);
+			}
+			for (int i = 0; i < 8; ++i)	// a tip over each face's middle
+			{
+				const float t = 6.2831853f * (i + 0.5f + turn) / 8.0f;
+				TreeVertex tip = { 0.0f, 0.0f, base + height, cosf(t) * 0.3f, sinf(t) * 0.3f, 0.95f, (i + 0.5f) / 8.0f, 0.0f,
+					ATLAS_FIR_NEEDLES };
+				m.vertices.push_back(tip);
+			}
+			for (int i = 0; i < 8; ++i)
+			{
+				const unsigned short tri[3] = { (unsigned short)(first + i), (unsigned short)(first + i + 1),
+					(unsigned short)(first + 9 + i) };
+				m.indices.insert(m.indices.end(), tri, tri + 3);
+			}
+		}
 	}
 
 	inline int rockCell(Rock rock)

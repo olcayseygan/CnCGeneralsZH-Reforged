@@ -59,6 +59,8 @@ enum
 #include "Platform/SunShadow.h"
 #include "W3DDevice/GameClient/SunShadowCasterCull.h"
 #include "W3DDevice/GameClient/W3DTreeBuffer.h"
+#include "W3DDevice/GameClient/W3DGrassBuffer.h"
+#include "W3DDevice/GameClient/FoliagePlacement.h"
 #include "W3DDevice/GameClient/W3DWater.h"
 
 #include <stdio.h>
@@ -66,6 +68,8 @@ enum
 #include <assetmgr.h>
 #include <texture.h>
 #include "Common/MapReaderWriterInfo.h"
+#include "Common/TerrainTypes.h"
+#include "W3DDevice/GameClient/BaseHeightMap.h"
 #include "Common/FileSystem.h" 
 #include "Common/file.h"
 #include "Common/PerfTimer.h"
@@ -439,8 +443,9 @@ void W3DTreeBuffer::cull(const CameraClass * camera, const CameraClass *sunCamer
 			const Int type = m_trees[curTree].treeType;
 			if (type < 0 || m_treeTypes[type].m_mesh == 0)
 				continue;
-			if (camera->Cull_Sphere(m_trees[curTree].bounds) && !(castsSilhouette && shadowCanReachView(camera->Get_Frustum(),
-					m_trees[curTree].bounds, m_trees[curTree].location.Z, stretchX, stretchY)))
+			const SphereClass bounds = cullBounds(m_trees[curTree]);
+			if (camera->Cull_Sphere(bounds) && !(castsSilhouette && shadowCanReachView(camera->Get_Frustum(),
+					bounds, m_trees[curTree].location.Z, stretchX, stretchY)))
 				continue;
 			roomVertices -= m_treeTypes[type].m_mesh->Peek_Model()->Get_Vertex_Count();
 			roomIndices -= 3 * m_treeTypes[type].m_mesh->Peek_Model()->Get_Polygon_Count();
@@ -449,14 +454,15 @@ void W3DTreeBuffer::cull(const CameraClass * camera, const CameraClass *sunCamer
 	for (curTree=0; curTree<m_numTrees; curTree++) {
 		Bool doKey = false;	// We calculate the key when a tree becomes visible.
 		const Int type = m_trees[curTree].treeType;
-		Bool visible = !camera->Cull_Sphere(m_trees[curTree].bounds);
+		const SphereClass bounds = cullBounds(m_trees[curTree]);
+		Bool visible = !camera->Cull_Sphere(bounds);
 		if (!visible && castsSilhouette)
-			visible = shadowCanReachView(camera->Get_Frustum(), m_trees[curTree].bounds, m_trees[curTree].location.Z,
+			visible = shadowCanReachView(camera->Get_Frustum(), bounds, m_trees[curTree].location.Z,
 				stretchX, stretchY);
 		// Keep one shared buffer for both views. A tree outside the screen can still
 		// cast onto it; reculling to just the screen would also rebuild it twice a frame.
 		if (!visible && sunCamera && type >= 0 && m_treeTypes[type].m_mesh != 0
-			&& !sunCamera->Cull_Sphere(m_trees[curTree].bounds)) {
+			&& !sunCamera->Cull_Sphere(bounds)) {
 			const Int vertices = m_treeTypes[type].m_mesh->Peek_Model()->Get_Vertex_Count();
 			const Int indices = 3 * m_treeTypes[type].m_mesh->Peek_Model()->Get_Polygon_Count();
 			if (vertices <= roomVertices && indices <= roomIndices) {
@@ -847,6 +853,117 @@ UnsignedInt W3DTreeBuffer::doLighting(const Vector3 *normal,
 }
 
 //=============================================================================
+// W3DTreeBuffer::varietyScale, varietyColour
+//=============================================================================
+/** With GroundFoliage on, no two trees of a kind are the same: a size within 20% either way, up to
+12% brighter or darker and 10% warmer or cooler, hashed from where the tree stands.  Drawn only: the
+tree's own scale, which a save keeps and the bounds and the toppling read, is left alone, and the
+sun's map draws from the same buffers, so its shadow is the size it is drawn.  Off, both are one
+and the picture is EA's. */
+//=============================================================================
+Real W3DTreeBuffer::varietyScale(const TTree &tree) const
+{
+	if (!m_varietyBaked) {
+		return 1.0f;
+	}
+	const UnsignedInt h = FoliagePlacement::hash((Int)floorf(tree.location.X), (Int)floorf(tree.location.Y), 0x2001);
+	return 0.8f + 0.4f * FoliagePlacement::unit(h);
+}
+
+/** And on top of that a height of its own, 0.8 to 1.35 of what its size gives: a stand of one kind
+reads as different trees by its outline, which an even size change alone barely showed. */
+Real W3DTreeBuffer::varietyHeight(const TTree &tree) const
+{
+	if (!m_varietyBaked) {
+		return 1.0f;
+	}
+	const UnsignedInt h = FoliagePlacement::hash((Int)floorf(tree.location.X), (Int)floorf(tree.location.Y), 0x2004);
+	return 0.8f + 0.55f * FoliagePlacement::unit(h);
+}
+
+/** The jitter scales a tree about where it stands, so its sphere's middle moves with it: the sphere
+round every drawn size grows by the jitter's share of the radius and of the middle's distance from
+the foot.  Off, the bounds as they always were. */
+SphereClass W3DTreeBuffer::cullBounds(const TTree &tree) const
+{
+	if (!m_varietyBaked) {
+		return tree.bounds;
+	}
+	// Across, the size alone: 0.8 to 1.2 about the foot.  Up, the size and the height together: 0.64
+	// to 1.62 about the foot, so the middle goes up to 1.13 of its height over the foot.  Round that
+	// middle every drawn point lies within the radius times the largest stretch (1.62, up) plus how
+	// far the stretches can move the sphere's own middle: 0.2 of its offset across, 0.49 of it up.
+	const Vector3 offset = tree.bounds.Center - tree.location;
+	SphereClass grown = tree.bounds;
+	grown.Center.Z = tree.location.Z + offset.Z * 1.13f;
+	grown.Radius = tree.bounds.Radius * 1.62f
+		+ sqrtf(0.04f * (offset.X * offset.X + offset.Y * offset.Y) + 0.2401f * offset.Z * offset.Z);
+	return grown;
+}
+
+UnsignedInt W3DTreeBuffer::varietyColour(const TTree &tree, UnsignedInt colour) const
+{
+	if (!m_varietyBaked) {
+		return colour;
+	}
+	const Int x = (Int)floorf(tree.location.X), y = (Int)floorf(tree.location.Y);
+	const Real bright = 0.88f + 0.24f * FoliagePlacement::unit(FoliagePlacement::hash(x, y, 0x2002));
+	const Real warm = 0.2f * (FoliagePlacement::unit(FoliagePlacement::hash(x, y, 0x2003)) - 0.5f);
+	const Real r = WWMath::Clamp(((colour >> 16) & 0xFF) * bright * (1.0f + warm), 0.0f, 255.0f);
+	const Real g = WWMath::Clamp(((colour >> 8) & 0xFF) * bright, 0.0f, 255.0f);
+	const Real b = WWMath::Clamp((colour & 0xFF) * bright * (1.0f - warm), 0.0f, 255.0f);
+	return (colour & 0xFF000000u) | (REAL_TO_UNSIGNEDINT(r) << 16) | (REAL_TO_UNSIGNEDINT(g) << 8) | REAL_TO_UNSIGNEDINT(b);
+}
+
+/** A tree on snow ground: the Terrain.ini class of the tile under it is one of the snow ones, or its
+name says snow.  Asked once a tree, the first fill with the option on. */
+Bool W3DTreeBuffer::standsOnSnow(TTree &tree) const
+{
+	if (tree.snowState < 0) {
+		tree.snowState = 0;
+		WorldHeightMap *map = TheTerrainRenderObject ? TheTerrainRenderObject->getMap() : NULL;
+		if (map) {
+			const AsciiString name = map->getTerrainNameAt(tree.location.X, tree.location.Y);
+			TerrainType *terrain = TheTerrainTypes ? TheTerrainTypes->findTerrain(name) : NULL;
+			const TerrainClass terrainClass = terrain ? terrain->getClass() : TERRAIN_NONE;
+			const Bool snow = terrainClass == TERRAIN_SNOW_1 || terrainClass == TERRAIN_SNOW_2 || terrainClass == TERRAIN_SNOW_3
+				|| terrainClass == TERRAIN_RUGGED_SNOW || terrainClass == TERRAIN_FLAT_SNOW
+				|| FoliagePlacement::nameHas(name.str(), "snow");
+			tree.snowState = snow ? 1 : 0;
+		}
+	}
+	return tree.snowState == 1;
+}
+
+UnsignedInt W3DTreeBuffer::snowColour(Bool snowy, UnsignedInt colour, Real height) const
+{
+	if (!snowy) {
+		return colour;
+	}
+	// the crown's tips most, the trunk's foot not at all
+	const Real h = WWMath::Clamp(height, 0.0f, 1.0f);
+	const Real white = 0.6f * h * sqrtf(h);
+	const Real r = ((colour >> 16) & 0xFF) + (235.0f - ((colour >> 16) & 0xFF)) * white;
+	const Real g = ((colour >> 8) & 0xFF) + (240.0f - ((colour >> 8) & 0xFF)) * white;
+	const Real b = (colour & 0xFF) + (250.0f - (colour & 0xFF)) * white;
+	return (colour & 0xFF000000u) | (REAL_TO_UNSIGNEDINT(r) << 16) | (REAL_TO_UNSIGNEDINT(g) << 8) | REAL_TO_UNSIGNEDINT(b);
+}
+
+//=============================================================================
+// W3DTreeBuffer::getTreeForFoliage
+//=============================================================================
+Bool W3DTreeBuffer::getTreeForFoliage(Int i, Vector3 *location, Bool *conifer) const
+{
+	if (i < 0 || i >= m_numTrees || m_trees[i].treeType < 0 || m_trees[i].m_toppleState != TOPPLE_UPRIGHT) {
+		return FALSE;
+	}
+	const W3DTreeDrawModuleData *data = m_treeTypes[m_trees[i].treeType].m_data;
+	*location = m_trees[i].location;
+	*conifer = data != NULL && FoliagePlacement::coniferName(data->m_modelName.str());
+	return TRUE;
+}
+
+//=============================================================================
 // W3DTreeBuffer::loadTreesInVertexAndIndexBuffers
 //=============================================================================
 /** Loads the trees into the vertex buffer for drawing. */
@@ -874,6 +991,7 @@ void W3DTreeBuffer::loadTreesInVertexAndIndexBuffers(RefRenderObjListIterator *p
 	}
 	
 	m_anythingChanged = false;
+	m_varietyBaked = W3DGrassBuffer::wanted();
 	Int curTree=0;
 	Int bNdx;
 	for (bNdx=0; bNdx<MAX_BUFFERS; ++bNdx) m_shadowRanges[bNdx].clear();
@@ -929,7 +1047,10 @@ void W3DTreeBuffer::loadTreesInVertexAndIndexBuffers(RefRenderObjListIterator *p
 				continue; // Deleted tree. [6/9/2003]
 			}
 			if (!m_trees[curTree].visible) continue;
-			Real scale = m_trees[curTree].scale;
+			Real scale = m_trees[curTree].scale * varietyScale(m_trees[curTree]);	// the drawn size only: tree.scale is saved
+			const Bool snowy = m_varietyBaked && standsOnSnow(m_trees[curTree]);
+			const Real treeTop = m_treeTypes[m_trees[curTree].treeType].m_bounds.Center.Z
+				+ m_treeTypes[m_trees[curTree].treeType].m_bounds.Radius;
 			Vector3 loc = m_trees[curTree].location;
 			Real theSin = m_trees[curTree].sin;
 			Real theCos = m_trees[curTree].cos;
@@ -1100,7 +1221,7 @@ void W3DTreeBuffer::loadTreesInVertexAndIndexBuffers(RefRenderObjListIterator *p
 				y += m_treeTypes[type].m_offset.Y;
 				vLoc.X = x*scale*theCos - y*scale*theSin;
 				vLoc.Y = y*scale*theCos + x*scale*theSin;
-				vLoc.Z = pVert[i].Z*scale; 
+				vLoc.Z = pVert[i].Z*scale*varietyHeight(m_trees[curTree]);
 				vLoc.Z += m_treeTypes[type].m_offset.Z;
 
 				if (m_trees[curTree].m_toppleState != TOPPLE_UPRIGHT) {
@@ -1135,10 +1256,11 @@ void W3DTreeBuffer::loadTreesInVertexAndIndexBuffers(RefRenderObjListIterator *p
 					} else {
 						vertexDiffuse = 0xffffffff;
 					}
-					curVb->diffuse = doLighting(&normal, objectLighting, &emissive, 
-														vertexDiffuse, 1.0f);
+					curVb->diffuse = snowColour(snowy, varietyColour(m_trees[curTree], doLighting(&normal, objectLighting, &emissive,
+														vertexDiffuse, 1.0f)), treeTop > 0.0f ? pVert[i].Z / treeTop : 0.0f);
 				} else {
-					curVb->diffuse = diffuse;
+					curVb->diffuse = snowColour(snowy, varietyColour(m_trees[curTree], diffuse),
+						treeTop > 0.0f ? pVert[i].Z / treeTop : 0.0f);
 				}
 				curVb++;
 				m_curNumTreeVertices[bNdx]++;
@@ -1165,9 +1287,8 @@ void W3DTreeBuffer::loadTreesInVertexAndIndexBuffers(RefRenderObjListIterator *p
 					ranges.back().count += shadowCount;
 				else ranges.push_back({firstShadowIndex, shadowCount});
 			}
-		}		
+		}
 	}
-
 }
 //=============================================================================
 // W3DTreeBuffer::updateVertexBuffer
@@ -1228,7 +1349,7 @@ void W3DTreeBuffer::updateVertexBuffer(void)
 			const Vector3 *pVert = m_treeTypes[type].m_mesh->Peek_Model()->Get_Vertex_Array();
 			VertexFormatXYZNDUV1 *curVb = vb + (tree.firstIndex - lo[bNdx]);
 
-			const Real scale = tree.scale;
+			const Real scale = tree.scale * varietyScale(tree);	// as the fill drew it
 			const Vector3 loc = tree.location;
 			const Real theSin = tree.sin;
 			const Real theCos = tree.cos;
@@ -1241,7 +1362,7 @@ void W3DTreeBuffer::updateVertexBuffer(void)
 				y += m_treeTypes[type].m_offset.Y;
 				vLoc.X = x*scale*theCos - y*scale*theSin;
 				vLoc.Y = y*scale*theCos + x*scale*theSin;
-				vLoc.Z = pVert[i].Z*scale;
+				vLoc.Z = pVert[i].Z*scale*varietyHeight(tree);
 				vLoc.Z += m_treeTypes[type].m_offset.Z;
 
 				if (tree.m_toppleState != TOPPLE_UPRIGHT) {
@@ -1725,6 +1846,7 @@ void W3DTreeBuffer::addTree(DrawableID id, Coord3D location, Real scale, Real an
 	m_trees[m_numTrees].pushAsideCos = 1;
 	m_trees[m_numTrees].pushAsideSin = 1;
 	m_trees[m_numTrees].m_toppleState = TOPPLE_UPRIGHT;
+	m_trees[m_numTrees].snowState = -1;
 	m_numTrees++;
 }
 
@@ -2348,6 +2470,10 @@ void W3DTreeBuffer::drawTrees(CameraClass * camera, RefRenderObjListIterator *pD
 	// A tree that came or went since the last cull drops the sun pass's key, whichever pass sees the
 	// change first.  A moved one only matters to a cull asked to redo the sort keys: a sinking tree's
 	// key follows its height.
+	// the GroundFoliage option switched: the trees' size and colour jitter goes in or out with a refill
+	if (!sunCamera && m_varietyBaked != W3DGrassBuffer::wanted()) {
+		m_anythingChanged = true;
+	}
 	if (m_anythingChanged || (m_movedSinceCull && m_updateAllKeys)) {
 		m_sunCullValid = FALSE;
 	}

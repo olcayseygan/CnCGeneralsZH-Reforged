@@ -146,6 +146,8 @@ typedef struct {
 	Matrix3D			m_mtx;
 	UnsignedInt		m_sinkFramesLeft;					///< Toppled trees sink into the terrain & disappear, how many frames left.
 
+	Char		snowState;					///< whether it stands on a snow class: -1 not asked yet, 0, 1 (the GroundFoliage dusting)
+
 } TTree;
 
 /// The individual data for a tree type.
@@ -237,6 +239,11 @@ public:
 	void setIsTerrain(void) {m_isTerrainPass = true;}; ///< Terrain calls this to tell trees to draw.
 	Bool needToDraw(void) {return m_isTerrainPass;};
 
+	/// The batched trees, for the ground foliage's groves: where tree i stands and whether its model
+	/// is a conifer.  FALSE for a deleted slot.
+	Int getNumTrees(void) const {return m_numTrees;}
+	Bool getTreeForFoliage(Int i, Vector3 *location, Bool *conifer) const;
+
 	Int getNumTiles(void) {return m_numTiles;}
 	TileData *getSourceTile(Int ndx) {return m_sourceTiles[ndx];}
 	void allocateTreeBuffers(void);							 ///< Allocates the buffers.
@@ -316,6 +323,15 @@ private:
 	UnsignedInt	m_lastTreeStepFrame;	///< last logic frame stepTrees moved the toppling and pushed trees on
 	BreezeInfo m_breezeForDraw{};
 	Bool m_pauseForDraw = FALSE;
+	Bool m_varietyBaked = FALSE;	///< the buffers hold the GroundFoliage option's scale and colour jitter
+	Real varietyScale(const TTree &tree) const;	///< the jitter's share of a tree's scale; 1 with the option off
+	Real varietyHeight(const TTree &tree) const;	///< and its height on top of that
+	UnsignedInt varietyColour(const TTree &tree, UnsignedInt colour) const;	///< and its colour
+	Bool standsOnSnow(TTree &tree) const;	///< its ground's Terrain.ini class is a snow one, asked once
+	/// A snow dusting toward white, more the higher a vertex stands on the tree; height is 0 at the
+	/// root and 1 at the top.  The colour as it was with the option off or off snow.
+	UnsignedInt snowColour(Bool snowy, UnsignedInt colour, Real height) const;
+	SphereClass cullBounds(const TTree &tree) const;	///< the bounds, grown to hold every size the jitter can draw
 	Real		m_curSwayStep[MAX_SWAY_TYPES];
 	Real		m_curSwayFactor[MAX_SWAY_TYPES];
 

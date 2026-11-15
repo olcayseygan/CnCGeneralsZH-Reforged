@@ -40,6 +40,8 @@
 #include "GameClient/ControlBar.h"
 #include "GameClient/Display.h"
 #include "GameClient/Drawable.h"
+
+extern IRegion2D SidebarWellInset( const IRegion2D &cell, Real k, Int side, Int foot );	// ControlBarSidebarLayout.cpp
 #include "GameClient/GameClient.h"
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/GameWindow.h"
@@ -205,9 +207,9 @@ void ControlBar::updateMultiSelectStrip( void )
 	setPortraitByObject( NULL );
 
 	//
-	// The sidebar's card keeps its portrait beside the grid: the focused type's, with how many of it
-	// are selected, and still no upgrades.  Its grid holds fourteen types; a selection of more shows
-	// the first fourteen and the focus keys still reach the rest
+	// The sidebar's card keeps its portrait over the row: the focused type's, with how many of it are
+	// selected, and still no upgrades.  Its row holds nine types; a selection of more shows the first
+	// nine and the focus keys still reach the rest
 	//
 	const Bool sidebar = isSidebarLayout();
 	if( sidebar )
@@ -226,7 +228,7 @@ void ControlBar::updateMultiSelectStrip( void )
 		if( win == NULL )
 			continue;
 
-		if( (Int)i < m_multiSelectGroupCount && ( !sidebar || (Int)i < HUD_CARD_GRID_CELLS ) )
+		if( (Int)i < m_multiSelectGroupCount && ( !sidebar || (Int)i < HUD_UNIT_ROW_CELLS ) )
 		{
 			const ThingTemplate *type = m_multiSelectGroupTemplate[ i ];
 			win->winHide( FALSE );
@@ -365,8 +367,8 @@ void ControlBar::layoutMultiSelectTiles( Int count )
 	Int cellW = hudSize.x / n;
 	Int cellH = hudSize.y / n;
 
-	// The sidebar's card has a grid of its own beside the portrait (HudLayoutRects::gridCells, 7x2):
-	// tile i is cell i, the types past the grid's fourteen are not shown (updateMultiSelectStrip)
+	// The sidebar's card has a flat row standing on the strip under the portrait (HudLayoutRects::unitRow):
+	// tile i is cell i, left to right, the types past its nine are not shown (updateMultiSelectStrip)
 	HudLayoutRects hud;
 	ICoord2D hudAt = { 0, 0 };
 	const Bool sidebar = isSidebarLayout();
@@ -374,8 +376,8 @@ void ControlBar::layoutMultiSelectTiles( Int count )
 	{
 		getHudLayoutRects( &hud );
 		m_rightHUDWindow->winGetScreenPosition( &hudAt.x, &hudAt.y );
-		cellW = hud.gridCells[ 0 ].width();
-		cellH = hud.gridCells[ 0 ].height();
+		cellW = hud.unitRow[ 0 ].width();
+		cellH = hud.unitRow[ 0 ].height();
 	}
 
 	// the tiles' clicks reach the HUD itself, see portraitBarInput
@@ -401,7 +403,8 @@ void ControlBar::layoutMultiSelectTiles( Int count )
 			continue;
 		if( sidebar )
 		{
-			const IRegion2D &cell = hud.gridCells[ MIN( i, (Int)HUD_CARD_GRID_CELLS - 1 ) ];
+			// in the art's well: 2 in on the left, top and right, standing on the strip's lip
+			const IRegion2D cell = SidebarWellInset( hud.unitRow[ MIN( i, (Int)HUD_UNIT_ROW_CELLS - 1 ) ], hud.scale, 2, 0 );
 			tile->winSetPosition( cell.lo.x - hudAt.x, cell.lo.y - hudAt.y );
 			tile->winSetSize( cell.width(), cell.height() );
 			continue;

@@ -43,6 +43,7 @@
 #include "Common/SpecialPower.h"
 #include "Common/ThingTemplate.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarSidebar.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/GameText.h"
 #include "Common/Geometry.h"
@@ -302,6 +303,10 @@ static CommandStatus doPlaceBeacon( const CommandButton *command, const ICoord2D
 GameMessageDisposition GUICommandTranslator::translateGameMessage(const GameMessage *msg)
 {
 	GameMessageDisposition disp = KEEP_MESSAGE;
+
+	// the sidebar's sell and repair cursors take the mouse before selection does
+	if( Sidebar_translate( msg ) )
+		return DESTROY_MESSAGE;
 
 	// only pay attention to clicks in this translator if there is a pending GUI command
 	const CommandButton *command = TheInGameUI->getGUICommand();

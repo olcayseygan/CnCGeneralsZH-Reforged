@@ -32,6 +32,7 @@
 
 #include "Common/MessageStream.h"
 #include "GameClient/HintSpy.h"
+#include "GameClient/ControlBarSidebar.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameClient.h"
@@ -58,6 +59,7 @@ GameMessageDisposition HintSpyTranslator::translateGameMessage(const GameMessage
 		case GameMessage::MSG_MOUSEOVER_DRAWABLE_HINT:
 			{
 				TheInGameUI->createMouseoverHint( msg );
+				Sidebar_pointCursor();	// the sidebar's sell or repair cursor has the last word
 
 				disp = DESTROY_MESSAGE; //hint no longer needed by anyone.  Eat it.
 			}
@@ -65,6 +67,7 @@ GameMessageDisposition HintSpyTranslator::translateGameMessage(const GameMessage
 		case GameMessage::MSG_MOUSEOVER_LOCATION_HINT:
 			{
 				TheInGameUI->createMouseoverHint( msg );
+				Sidebar_pointCursor();
 
 				disp = DESTROY_MESSAGE; //hint no longer needed by anyone.  Eat it.
 			}
@@ -104,6 +107,7 @@ GameMessageDisposition HintSpyTranslator::translateGameMessage(const GameMessage
 		case GameMessage::MSG_DO_SALVAGE_HINT:
 		case GameMessage::MSG_DO_INVALID_HINT:
 			TheInGameUI->createCommandHint( msg );
+			Sidebar_pointCursor();
 			disp = DESTROY_MESSAGE; //hint no longer needed by anyone.  Eat it.
 			break;
 

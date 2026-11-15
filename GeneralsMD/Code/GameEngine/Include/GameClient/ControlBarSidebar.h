@@ -4,7 +4,7 @@
 // the strip's ButtonCommand01..14) and then hands the rest here; every rectangle comes from
 // HudLayoutForScreen (GameClient/Display.h), nothing here is a pixel of its own.  Client only: the logic
 // hears of a cameo only through the messages a click sends (MSG_QUEUE_UNIT_FOR_GROUP, structure
-// placement, MSG_CANCEL_UNIT_CREATE).
+// placement, MSG_CANCEL_UNIT_CREATE, and Sat's and Onar's MSG_SELL and MSG_DO_REPAIR).
 // Distributed under the repository's GPL-3.0 terms; see LICENSE.md.
 #pragma once
 
@@ -12,6 +12,7 @@
 #define __CONTROLBARSIDEBAR_H__
 
 #include "Lib/BaseType.h"
+#include "Common/GameType.h"
 #include "GameClient/Display.h"
 
 class Image;
@@ -21,6 +22,11 @@ class Image;
 	* when that side has no such piece.  Looked up once a piece and side, then kept.  `piece` is the name after
 	* "Sidebar": "TabBuildingsH", "CameoWell", "Plate". */
 const Image *Sidebar_image( const char *piece );
+
+/** The builder a structure on the cursor was put there for by the sidebar's builder chip, while it is
+	* still that placement; INVALID_ID otherwise.  PlaceEventTranslator appends it to MSG_DOZER_CONSTRUCT
+	* (and _LINE) so that builder takes the job, selected or not. */
+ObjectID Sidebar_placementBuilder( void );
 
 /** The tabs, left to right, keyed Q W E R; GUI:SidebarTab0..3 name them. */
 enum SidebarTab
@@ -62,5 +68,46 @@ void Sidebar_scrollBy( Int rows );
 /** Pure: the first row shown when `count` cameos fill `cols` a row in a window of `rows` rows and the
 	* player asked for `row`, kept between 0 and the last row that still fills the window. */
 Int Sidebar_scroll( Int count, Int cols, Int rows, Int row );
+
+/** Sat and Onar under the radar: each puts the pointer into a mode, RA2 style, in which a left click on
+	* one of the player's own structures sells it (MSG_SELL with its ObjectID) or sends a builder the
+	* logic picks to repair it (MSG_DO_REPAIR with TRUE after the ObjectID).  The mode stays for the next
+	* click, until a right click, Esc, the button again, or a placement or targeting command taking over. */
+enum SidebarCursorMode
+{
+	SIDEBAR_CURSOR_NONE,
+	SIDEBAR_CURSOR_SELL,
+	SIDEBAR_CURSOR_REPAIR
+};
+
+/** What a press on Sat does. */
+enum SidebarSellPress
+{
+	SIDEBAR_SELL_PRESS_MODE_OFF,		///< the sell cursor was on: off
+	SIDEBAR_SELL_PRESS_SELECTED,		///< own sellable structures selected: sold now, no cursor
+	SIDEBAR_SELL_PRESS_MODE_ON			///< otherwise the sell cursor
+};
+
+/** Pure: a press on Sat with the sell cursor `modeOn` and `sellableSelected` of the player's own
+	* structures the bar would sell selected. */
+Int Sidebar_sellPress( Bool modeOn, Bool sellableSelected );
+
+Int Sidebar_cursorMode( void );		///< SidebarCursorMode
+
+/** Turn the mode off; TRUE when one was on (Esc takes it back before opening the menu). */
+Bool Sidebar_cancelCursorMode( void );
+
+class GameMessage;
+/** GUICommandTranslator's first look at every message: TRUE when the mode used it (destroy it).  The
+	* left button is the mode's while it is on; the right release ends it (Sidebar_takeRightRelease). */
+Bool Sidebar_translate( const GameMessage *msg );
+
+/** SelectionXlat's right release: TRUE once when that release ended the mode, so it neither deselects
+	* nor cancels anything else. */
+Bool Sidebar_takeRightRelease( void );
+
+/** HintSpy, after the hint set the pointer: the mode's cursor over the world, the valid one over a
+	* structure the click would act on, the invalid one elsewhere.  Nothing with no mode on. */
+void Sidebar_pointCursor( void );
 
 #endif // __CONTROLBARSIDEBAR_H__

@@ -39,6 +39,7 @@
 
 #include "GameClient/CommandXlat.h"
 #include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarSidebar.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/Eva.h"
 #include "GameClient/Mouse.h"
@@ -523,6 +524,12 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 							placeMsg->appendLocationArgument( worldEnd );
 
 						}  // end if
+
+						// a structure put on the cursor from the sidebar with a builder chip picked goes to
+						// that builder, selected or not (the logic checks it is the player's and can)
+						const ObjectID namedBuilder = Sidebar_placementBuilder();
+						if( namedBuilder != INVALID_ID )
+							placeMsg->appendObjectIDArgument( namedBuilder );
 
 						//
 						// The order is on its way; the structure will not be on the ground for another

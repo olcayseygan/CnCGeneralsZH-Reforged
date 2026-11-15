@@ -62,12 +62,19 @@ ARROWS = [(1624, 1044, 1764, 1072), (1772, 1044, 1912, 1072)]
 CELLS = [(8 + 64 * i, 1020, 64 + 64 * i, 1076) for i in range(14)]
 IDLE = [(1100 + 64 * i, 1020, 1156 + 64 * i, 1076) for i in range(6)]
 CLOCK = (1500, 1024, 1596, 1072)
-CARD = (8, 888, 472, 1008)
-PORTRAIT = (16, 896, 176, 1000)
-GRID = [(184 + 40 * i, 896 + 40 * j, 220 + 40 * i, 924 + 40 * j) for j in range(2) for i in range(7)]
-INFO = (184, 972, 460, 1000)                    # name and health under the grid (not in the plan's table yet)
-SW_ROWS = [(1304, 980 - 32 * n, 1592, 1008 - 32 * n) for n in range(3)]
-SW_ICON, SW_TEXT, SW_GROOVE, SW_LAMP = (4, 3, 30, 25), (34, 3, 270, 17), (34, 19, 270, 24), (273, 3, 284, 25)   # in the row
+# The card (the owner's redesign of 2026-11-15): welded to the strip, its left the screen's edge and its foot the
+# strip's top, the selected units in a row standing on the strip, the upgrades in a column up from its top left
+CARD = (0, 884, 464, 1016)
+PORTRAIT = (8, 890, 88, 954)
+NAME = (92, 890, 456, 940)                      # name and rank glass
+HEALTH = (92, 944, 456, 954)                    # the health groove
+UNITS = [(8 + 64 * i, 960, 68 + 64 * i, 1016) for i in range(7)]   # open at the foot: they stand on the strip
+UPGRADES = [(0, 840 - 44 * i, 48, 880 - 44 * i) for i in range(5)]
+UPGRADE_W, UPGRADE_H, UPGRADE_JOIN, UPGRADE_CAP = 48, 40, 4, 8
+UPGRADE_WELL = (3, 3, 45, 37)                   # the cameo's well in an UpgradeCell
+SW_W, SW_H = 288, 40                            # a superweapon timer row (40 high since 2026-11-15: 28 was unreadable)
+SW_ROWS = [(1304, 968 - 44 * n, 1592, 1008 - 44 * n) for n in range(3)]
+SW_ICON, SW_TEXT, SW_GROOVE, SW_LAMP = (4, 4, 46, 36), (52, 4, 270, 26), (52, 29, 270, 35), (274, 14, 284, 26)   # in the row
 STRIP_ORN = (906, 1016, 1092, 1080)             # the strip between the last command and the idle keys
 CAMEO_INSET = 3                                 # the cameo drawn this far inside its well, so the well's bezel shows
 MONEY_SIGN_X, MONEY_TEXT_X = 1700, 1712         # the painted "$"'s middle, the readout's left (left-aligned)
@@ -354,9 +361,9 @@ def strip_common(o, build, c):
 def st_america(o, p):
     top = [(0, 1016), (896, 1016), (902, 1022), (908, 1016), (1086, 1016), (1092, 1022), (1098, 1016), (1600, 1016),
            (1600, 1080), (0, 1080)]
-    o.tiers([top], OPEN_STRIP, 4, 7, 3, 2.6)
+    o.tiers([welded_top(top)], OPEN_STRIP, 4, 7, 3, 2.6)
     strip_common(o, "machined", 6)
-    o.inlay([plate(8, 1016.6, 890, 1017.6), plate(1104, 1016.6, 1590, 1017.6)], ACCENT, 0.4)   # a blue hairline along the top
+    o.inlay([plate(CARD[2] + 6, 1016.6, 890, 1017.6), plate(1104, 1016.6, 1590, 1017.6)], ACCENT, 0.4)   # a blue hairline along the top
     for i in range(1, 13, 2):
         o.stud(68 + 64 * i, 1048, 1.8)
     o.recess([shape("machined", 914, 1024, 1080, 1072, 6)], CLOSED, 3, 2)
@@ -371,9 +378,9 @@ def st_china(o, p):
     top = [(0, 1016), (894, 1016), (894, 1020), (910, 1020)]
     top += curve((910, 1020), (912, 1016), (918, 1014), 4)[1:] + curve((1078, 1014), (1084, 1016), (1086, 1020), 4)
     top += [(1102, 1020), (1102, 1016), (1600, 1016), (1600, 1080), (0, 1080)]
-    o.tiers([[(x, max(y, 1016)) for x, y in top]], OPEN_STRIP, 4, 9, 4, 0.9)
+    o.tiers([welded_top([(x, max(y, 1016)) for x, y in top])], OPEN_STRIP, 4, 9, 4, 0.9)
     strip_common(o, "terraced", 5)
-    o.inlay([plate(0, 1016.2, 890, 1017.8), plate(1104, 1016.2, 1600, 1017.8)], ACCENT, 0.3)   # red lacquer along the top
+    o.inlay([plate(CARD[2] + 6, 1016.2, 890, 1017.8), plate(1104, 1016.2, 1600, 1017.8)], ACCENT, 0.3)   # red lacquer along the top
     o.tiers([shape("terraced", 912, 1022, 1084, 1076, 4)], CLOSED, 8, 11, 3, 1.6)       # a raised plaque between the keys
     o.inlay([plate(918, 1027, 1078, 1029.5), plate(918, 1067, 1078, 1069.5)], ACCENT, 0.3)
     o.bump([regular(x, 1048, 2.6, 12) for x in (928, 1068, 1488)], 2.2, 1.4, GOLDM)
@@ -388,7 +395,7 @@ def st_gla(o, p):
     top = [(0, 1017), (300, 1016.5), (620, 1018), (898, 1017), (930, 1019.5), (1060, 1019), (1094, 1016.5), (1600, 1017),
            (1600, 1080), (0, 1080)]
     border = lambda a, b: a[0] == b[0] == 1600 or a[1] == b[1] == 1080 or a[0] == b[0] == 0     # noqa: E731
-    o.tiers([rag(top, 9, 1.4, 14, border)], OPEN_STRIP, 4, 7, 2.4, 0.9)
+    o.tiers([rag(welded_top(top), 9, 1.4, 14, border)], OPEN_STRIP, 4, 7, 2.4, 0.9)
     strip_common(o, "scavenged", 5)
     patch = sheet(914, 1026, 1080, 1072, -1.6)
     o.bump([patch], 1.8, 0.8, STEEL)
@@ -407,7 +414,7 @@ def st_gla(o, p):
 def st_turkiye(o, p):
     top = [(0, 1016), (896, 1016), (904, 1022), (906, 1022), (906, 1016), (1092, 1016), (1092, 1022), (1094, 1022),
            (1102, 1016), (1600, 1016), (1600, 1080), (0, 1080)]
-    o.tiers([top], OPEN_STRIP, 4, 7, 4, 3.5)
+    o.tiers([welded_top(top)], OPEN_STRIP, 4, 7, 4, 3.5)
     strip_common(o, "faceted", 4)
     o.tiers([[(912, 1076), (912, 1032), (926, 1024), (1084, 1024), (1084, 1076)]], CLOSED, 6, 9, 2.6, 1.6)  # an armour panel
     o.inlay([plate(x, 1026, x + 1, 1076) for x in (980, 1040)], INKM, 0.9)
@@ -427,80 +434,144 @@ def strip_plate(side):
     p = Painter(1600, 64 + PT)
     o = Offset(p, 0, PT - 1016)
     STRIPS[side](o, p)
-    img = bar_finish(shade(p, look, shadow=True), p, look)
+    img = bar_finish(shade(p, look, shadow=True, falloff=False), p, look)      # no falloff: the card's foot meets it level
     if side == "Turkiye":
-        img = led(img, [((924, PT + 8), (1076, PT + 8)), ((8, PT + 1), (890, PT + 1))], [(1488, PT + 18, TURQ)])
+        img = led(img, [((924, PT + 8), (1076, PT + 8)), ((CARD[2] + 6, PT + 1), (890, PT + 1))], [(1488, PT + 18, TURQ)])
     return img.crop((0, PT, 1600, PT + 64))
+
+
+def welded_top(top):
+    """A strip outline whose top runs up past the crop under the card (x 0..CARD's right), so no edge shows where the
+    card's foot stands on it: the two read as one plate."""
+    return [(0, 1016 - PT), (CARD[2], 1016 - PT), (CARD[2], 1016.5)] + [(x, y) for x, y in top if x > CARD[2] or y > 1040]
 
 
 # ---------------------------------------------------------------------------------------------- the selection card
 
+CARD_PAD = 24
+CARD_LO, CARD_HI = CARD[1] - CARD_PAD, CARD[3] + CARD_PAD      # the canvas's top and foot, in screen pixels
+OPEN_CARD = (False, True, True, False)          # the card: its foot (the strip) and its left (the screen) run on
+
+
+def card_outline(top_right):
+    """The card from the screen's left past its foot, its top left rising past the crop where the upgrades' column
+    stands on it (so no edge shows there), then the side's top edge and right corner (top_right, left to right)."""
+    return [(-CARD_PAD, CARD_HI), (-CARD_PAD, CARD_LO), (UPGRADE_W, CARD_LO), (UPGRADE_W, CARD[1])] + top_right + \
+        [(top_right[-1][0], CARD_HI)]
+
+
 def card_common(o, build, c):
-    glass(o, PORTRAIT, build, c, 2, 6, 2.5)
-    for r in GRID:
-        glass(o, r, build, c * 0.4, 1, 4, 1.4)
-    glass(o, INFO, build, c * 0.5, 1, 5, 1.6)
+    glass(o, PORTRAIT, build, c, 1, 6, 2.0)
+    glass(o, NAME, build, c * 0.6, 1, 5, 1.6)
+    o.sink([plate(*grow(HEALTH, 1))], 6, 1.0)
+    for r in UNITS:                             # open at the foot: each stands on the strip
+        o.sink([shape(build, r[0], r[1], r[2], CARD_HI + 4, c * 0.5)], 5, 1.4)
 
 
 def cd_america(o, p):
-    o.tiers([plate(10, 890, 470, 1006, tl=("cut", 6), tr=("cut", 24), br=("cut", 8), bl=("cut", 4))], CLOSED, 4, 7, 3.4, 2.6)
+    t = CARD[1]
+    o.tiers([card_outline([(UPGRADE_W, t), (442, t), (464, t + 22)])], OPEN_CARD, 4, 7, 3.4, 2.6)
     card_common(o, "machined", 6)
-    o.inlay([plate(179.5, 900, 180.5, 996)], ACCENT, 0.5)
-    o.inlay(H.chevrons(466, 930, 6, n=2), ACCENT, 0.6)
-    for y in (962, 994):
-        o.stud(466, y, 2.0)
+    o.inlay([plate(56, t + 2.2, 420, t + 3.2)], ACCENT, 0.5)                         # a blue hairline under the top
+    o.inlay([swept(424 + 7 * i, t + 1, t + 5, 3.4, 1.8, 1) for i in range(3)], ACCENT, 0.6)
+    for y in (930, 990):
+        o.stud(460.2, y, 1.8)
 
 
 def cd_china(o, p):
-    out = [(10, 1006), (10, 900), (12, 900)] + curve((12, 900), (14, 894), (10, 889), 4)[1:]
-    out += curve((10, 889), (20, 893.5), (32, 893.5), 4)[1:] + [(448, 893.5)]
-    out += curve((448, 893.5), (460, 893.5), (470, 889), 4)[1:] + curve((470, 889), (466, 894), (468, 900), 4)[1:]
-    out += [(470, 900), (470, 1002), (466, 1002), (466, 1006)]
-    o.tiers([out], CLOSED, 4, 7, 3.4, 2.0)
+    t = CARD[1]
+    top = [(UPGRADE_W, t), (UPGRADE_W + 4, t), (UPGRADE_W + 4, t + 3.5), (438, t + 3.5)]
+    top += curve((438, t + 3.5), (456, t + 3.5), (464, t), 4)[1:] + [(464, t + 7), (461, t + 10)]
+    o.tiers([card_outline(top)], OPEN_CARD, 4, 9, 4, 0.9)
     card_common(o, "terraced", 4)
-    o.inlay([plate(178.5, 902, 181.5, 994)], ACCENT, 0.3)
-    for x in range(28, 456, 16):
-        o.rivet(x, 1003, 1.3)
-    o.bump([regular(465.5, y, 2.2, 12) for y in (912, 986)], 2.0, 1.3, GOLDM)
+    o.inlay([plate(92, 955.4, 456, 958.0)], ACCENT, 0.3)                             # red lacquer between the rows
+    o.bump([regular(458.6, y, 1.9, 12) for y in (924, 992)], 2.0, 1.2, GOLDM)
+    for y in range(938, 984, 12):
+        o.rivet(458.6, y, 1.1)
 
 
 def cd_gla(o, p):
-    out = [(10, 891), (300, 890), (458, 891), (470, 900), (469, 1006), (16, 1006), (10, 1001)]
-    o.tiers([rag(out, 21, 2.0, 14)], CLOSED, 4, 7, 2.4, 0.9)
+    t = CARD[1]
+    top = [(UPGRADE_W, t + 0.4), (210, t + 0.2), (452, t + 1.4), (464, t + 11)]
+    border = lambda a, b: a[0] == b[0] == -CARD_PAD or a[1] == b[1] == CARD_HI or a[1] == b[1] == CARD_LO or a[0] == b[0] == UPGRADE_W  # noqa: E731
+    o.tiers([rag(card_outline(top), 21, 1.6, 14, border)], OPEN_CARD, 4, 7, 2.4, 0.9)
     card_common(o, "scavenged", 4)
-    patch = sheet(330, 889.5, 446, 894.5, 0.6)
-    o.bump([patch], 1.4, 0.6, STEEL)
-    welded(o, patch, 160, 0.9)
-    hazard(o, 334, 444, 890.2, 3.6, 8)
-    o.weld((180, 902), (180, 952), 170, 1.0)
-    for i, (x, y, r) in enumerate(((465, 914, 2.2), (14, 1000.5, 1.7), (466, 988, 2.6), (170, 1003, 1.9))):
+    hazard(o, 60, 300, t + 1, 3.4, 8)                                                # the top edge only
+    o.weld((92, 957), (240, 957), 170, 0.9)
+    for i, (x, y, r) in enumerate(((459, 912, 2.0), (458.6, 990, 1.6), (90.5, 956.8, 1.4))):
         o.bolt(x, y, r, seed=20 + i)
 
 
 def cd_turkiye(o, p):
-    o.tiers([plate(10, 890, 470, 1006, tr=("slant", 14), bl=("slant", 8))], CLOSED, 4, 7, 4.4, 3.5)   # a parallelogram
+    t = CARD[1]
+    o.tiers([card_outline([(UPGRADE_W, t), (436, t), (464, t + 16)])], OPEN_CARD, 4, 7, 4.4, 3.5)   # a 30 degree cut
     card_common(o, "faceted", 4)
-    o.inlay([plate(179.5, 896, 180.5, 1004)], INKM, 0.9)
-    for x, y in ((465.5, 920), (465.5, 990), (180, 1002.5)):
-        fastener(o, x, y, 2.1)
-    o.inlay([plate(x, 1002, x + 1, 1004 if i % 5 else 1005) for i, x in enumerate(range(196, 456, 8))], INKM, 0.6)
+    for y in (930, 992):
+        fastener(o, 459.6, y, 1.9)
+    o.inlay([plate(x, 955.6, x + 1, 957.4 if i % 5 else 958.4) for i, x in enumerate(range(96, 456, 8))], INKM, 0.6)
     camo(p, 7)
 
 
 CARDS = {"America": cd_america, "China": cd_china, "Gla": cd_gla, "Turkiye": cd_turkiye}
+CARD_W, CARD_H = CARD[2] - CARD[0], CARD[3] - CARD[1]
 
 
 def card_frame(side):
     look = look_of(side)
-    pad = 24
-    p = Painter(464 + 2 * pad, 120 + 2 * pad)
+    pad = CARD_PAD
+    p = Painter(CARD_W + 2 * pad, CARD_H + 2 * pad)
     o = Offset(p, pad - CARD[0], pad - CARD[1])
     CARDS[side](o, p)
-    img = bar_finish(shade(p, look, shadow=True, falloff=False), p, look, gloss=False)
+    img = bar_finish(shade(p, look, shadow=False, falloff=False), p, look, gloss=False)    # level with the strip
     if side == "Turkiye":
         S = lambda x, y: (x - CARD[0] + pad, y - CARD[1] + pad)   # noqa: E731
-        img = led(img, [(S(26, 892), S(300, 892))], [(*S(465.5, 955), TURQ)])
-    return img.crop((pad, pad, pad + 464, pad + 120))
+        img = led(img, [(S(56, CARD[1] + 1.6), S(400, CARD[1] + 1.6))], [(*S(459.6, 962), TURQ)])
+    return img.crop((pad, pad, pad + CARD_W, pad + CARD_H))
+
+
+def upgrade_column(side):
+    """The upgrades' column drawn whole, three cells over a stub of the card, lit with no falloff, and its pieces cut
+    from the middle so they stack: UpgradeCap over the top cell, UpgradeCell, UpgradeJoin between two cells and between
+    the first and the card.  Its left is the screen's edge."""
+    look = look_of(side)
+    build = look["build"]
+    W, n, P = UPGRADE_W, 3, UPGRADE_H + UPGRADE_JOIN
+    top = CARD_PAD
+    c0 = top + UPGRADE_CAP
+    Hc = c0 + n * P + 24
+    p = Painter(W + CARD_PAD, Hc)
+    if build == "scavenged":                    # the right edge bitten the same in every cell's height
+        bite = [(0, 0), (11, 1.2), (24, 0.4), (35, 1.5)]
+        right = [(W - d, c0 + P * r + y) for r in range(n) for y, d in bite]
+        outline = [(0, top + 0.6), (26, top + 0.2), (W - 3.4, top + 0.9), (W, top + 5)] + right + [(W, Hc), (0, Hc)]
+    else:
+        kind, c = {"machined": ("cut", 6), "terraced": ("notch", 4), "faceted": ("slant", 4.5)}[build]
+        outline = plate(0, top, W, Hc, tr=(kind, c))
+    p.tiers([outline], (False, True, True, False), 4, 7, 3, TIERS[side][3])
+    for r in range(n):
+        y = c0 + P * r
+        p.sink([shape(build, UPGRADE_WELL[0], y + UPGRADE_WELL[1], UPGRADE_WELL[2], y + UPGRADE_WELL[3], 3)], 4, 1.2)
+        j = y + UPGRADE_H + UPGRADE_JOIN / 2
+        if build == "machined":
+            p.inlay([plate(14, j - 0.5, 34, j + 0.5)], ACCENT, 0.4)
+        elif build == "terraced":
+            p.inlay([plate(4, j - 1, W - 4, j + 1)], ACCENT, 0.3)
+        elif build == "scavenged":
+            p.weld((6, j), (30, j), 400, 0.9)
+        else:
+            p.inlay([plate(x, j - 1, x + 1, j + 1) for x in range(6, W - 4, 6)], INKM, 0.6)
+    if build == "machined":
+        p.inlay([plate(8, top + 3, 36, top + 4)], ACCENT, 0.4)
+    elif build == "terraced":
+        p.inlay([plate(4, top + 3, 40, top + 5)], ACCENT, 0.3)
+    elif build == "faceted":
+        camo(p, 9)
+    img = bar_finish(shade(p, look, shadow=False, falloff=False), p, look, gloss=False)
+    if build == "faceted":
+        img = led(img, [((6, top + 3.5), (36, top + 3.5))], [])
+    m = c0 + P
+    return {"UpgradeCap": img.crop((0, top, W, c0)), "UpgradeCell": img.crop((0, m, W, m + UPGRADE_H)),
+            "UpgradeJoin": img.crop((0, m + UPGRADE_H, W, m + P))}
 
 
 # ---------------------------------------------------------------------------------------------- small pieces
@@ -704,6 +775,44 @@ def chip_glyph(build, kind):
     return [([pts], R), ([regular(11, 11, 2.8, 12)], I)]
 
 
+def sell_glyph(build):
+    """Sell, in a 22 box: America a block dollar sign cut at 45, China one in square steps on a plinth, the GLA a price
+    tag hung crooked, Turkiye a hexagon coin with the dollar sign cut through it."""
+    R, I = 255, 0
+
+    def dollar(c=0.0):
+        bars = [(6, 4.2, 16, 6.8), (6, 4.2, 8.6, 11.2), (6, 9.6, 16, 12.2), (13.4, 9.6, 16, 17.8), (6, 15.2, 16, 17.8)]
+        return [H.octagon(*b, c) if c else box(*b) for b in bars] + [box(9.8, 1.8, 12.2, 20.2)]
+    if build == "machined":
+        return [(dollar(0.9), R)]
+    if build == "terraced":                     # the dollar sign in square steps, on a stepped plinth
+        return [(dollar() + [box(4.6, 19.4, 17.4, 21), box(6.4, 18.6, 15.6, 19.4)], R)]
+    if build == "scavenged":
+        tag = rotated([(2.6, 7), (7, 2.6), (19.4, 2.8), (19.6, 19.2), (7.2, 19.4), (2.6, 15)], 11, 11, -7)
+        return [([tag], R), ([regular(6.4, 11, 1.6, 8)] + [rotated(q, 11, 11, -7) for q in
+                                                            [box(10, 6, 16.6, 7.8), box(10, 10.1, 16.6, 11.9), box(10, 14.2, 16.6, 16)]], I)]
+    return [([regular(11, 11, 10, 6, np.pi / 6)], R), ([[(x * 0.62 + 4.2, y * 0.62 + 4.2) for x, y in q] for q in dollar()], I)]
+
+
+def repair_glyph(build):
+    """Repair, a wrench across the key at 45 degrees, its head the build's: an octagon, a stepped square, a crooked
+    heptagon, a hexagon; the jaw cut open toward the top left."""
+    R, I = 255, 0
+    head = {"machined": regular(6, 11, 5.2, 8, np.pi / 8), "terraced": None, "scavenged": regular(6, 11.3, 5.2, 7, 0.3),
+            "faceted": regular(6, 11, 5.4, 6)}[build]
+    if build == "terraced":
+        head = [(1.4, 7.6), (3.4, 7.6), (3.4, 5.8), (8.6, 5.8), (8.6, 7.6), (10.6, 7.6), (10.6, 14.4), (8.6, 14.4), (8.6, 16.2),
+                (3.4, 16.2), (3.4, 14.4), (1.4, 14.4)]
+    handle = {"machined": [(9, 9.6), (19.4, 9.6), (20.6, 11), (19.4, 12.4), (9, 12.4)],
+              "terraced": [(9, 9.4), (17, 9.4), (17, 8.6), (20.6, 8.6), (20.6, 13.4), (17, 13.4), (17, 12.6), (9, 12.6)],
+              "scavenged": [(9, 9.8), (20.4, 9.2), (20.8, 12.2), (9, 12.6)],
+              "faceted": [(9, 9.6), (18, 9.6), (20.8, 11), (18, 12.4), (9, 12.4)]}[build]
+    jaw = [(-1, 9.6), (6.4, 9.6), (6.4, 12.4), (-1, 12.4)]
+    turn = -45 if build != "scavenged" else -38
+    t = lambda q: rotated(q, 11, 11, turn)     # noqa: E731
+    return [([t(head), t(handle)], R), ([t(jaw)], I)]
+
+
 def octagon_(x0, y0, x1, y1, c):
     return H.octagon(x0, y0, x1, y1, c)
 
@@ -744,7 +853,7 @@ def sw_row(side, enemy):
     lamp socket, the lamp round in the side's colour for one's own, a red warning triangle on slashes for an enemy's."""
     look = look_of(side)
     build = look["build"]
-    w, h, o = 288, 28, 24
+    w, h, o = SW_W, SW_H, 24
     p = Painter(w + 2 * o, h + 2 * o)
     c = {"machined": 5, "terraced": 4, "scavenged": 4, "faceted": 4}[build]
     P = Offset(p, o, o)
@@ -762,7 +871,7 @@ def sw_row(side, enemy):
     lay = Image.new("RGBA", (w * 4, h * 4), (0, 0, 0, 0))
     d = ImageDraw.Draw(lay)
     if enemy:
-        d.polygon([((cx - 4.6) * 4, (cy + 3.6) * 4), (cx * 4, (cy - 4.6) * 4), ((cx + 4.6) * 4, (cy + 3.6) * 4)], fill=(222, 44, 34, 255))
+        d.polygon([((cx - 4.4) * 4, (cy + 3.8) * 4), (cx * 4, (cy - 4.6) * 4), ((cx + 4.4) * 4, (cy + 3.8) * 4)], fill=(222, 44, 34, 255))
         d.rectangle(((cx - 0.5) * 4, (cy - 1.6) * 4, (cx + 0.5) * 4, (cy + 1.2) * 4), fill=(20, 8, 6, 255))
     else:
         d.ellipse(((cx - 3.4) * 4, (cy - 3.4) * 4, (cx + 3.4) * 4, (cy + 3.4) * 4), fill=COMMAND_TAB_OPEN[side] + (255,))
@@ -869,10 +978,11 @@ def pieces(side):
     for s in STATES:
         out["KeyMenu" + s] = key(side, 72, 32, s, icon_layers("Options", build), 0.55)
         out["KeyDiplomacy" + s] = key(side, 72, 32, s, icon_layers("Chat", build), 0.55)
-        out["KeySell" + s] = key(side, 74, 36, s)
-        out["KeyRepair" + s] = key(side, 74, 36, s)
+        out["KeySell" + s] = key(side, 74, 36, s, sell_glyph(build), 0.6)
+        out["KeyRepair" + s] = key(side, 74, 36, s, repair_glyph(build), 0.74)
         out["KeyGeneral" + s] = key(side, 140, 36, s, icon_layers("General", build), 0.55)
     out.update(powers_wing(side))
+    out.update(upgrade_column(side))
     for kind in CHIP_ICON_KINDS:
         out["ChipIcon" + kind] = flat_glyph(*CHIP_ICON, chip_glyph(build, kind), 1.08, CHIP_ICON[0] / 2, CHIP_ICON[1] / 2 - 0.4,
                                             (255, 255, 255))
@@ -897,8 +1007,8 @@ SHEET_GAP = 5                                   # between two boxes: put()'s one
 
 def sheet_names():
     """The pieces in the order they are packed, with their sizes."""
-    names = [("Plate", (320, 1080)), ("Card", (464, 120)), ("CameoWell", (140, 86)),
-             ("SuperweaponOwn", (288, 28)), ("SuperweaponEnemy", (288, 28))]
+    names = [("Plate", (320, 1080)), ("_was Card", (464, 120)), ("CameoWell", (140, 86)),
+             ("SuperweaponOwn", (SW_W, SW_H)), ("_was SuperweaponEnemy", (288, 28))]    # its old room kept, so nothing moves
     names += [("Tab" + kind + s, (66, 36)) for kind in TAB_KINDS for s in STATES] + [("TabIcon" + kind, (66, 36)) for kind in TAB_KINDS]
     names += [("Arrow" + d + s, (140, 28)) for d in ("Up", "Down") for s in STATES]
     names += [("ChipWide", (66, 28)), ("ChipWideP", (66, 28)), ("Chip", (50, 28)), ("ChipP", (50, 28))]
@@ -908,6 +1018,8 @@ def sheet_names():
     names += [("PowersCell", (C, C)), ("PowersJoint", (R, C)), ("PowersEdge", (R, C)), ("PowersTop", (C, R)),
               ("PowersBottom", (C, R)), ("PowersCornerTop", (R, R)), ("PowersCornerBottom", (R, R))]
     names += [("ChipIcon" + kind, CHIP_ICON) for kind in CHIP_ICON_KINDS]
+    names += [("UpgradeCell", (UPGRADE_W, UPGRADE_H)), ("UpgradeCap", (UPGRADE_W, UPGRADE_CAP)),
+              ("UpgradeJoin", (UPGRADE_W, UPGRADE_JOIN)), ("SuperweaponEnemy", (SW_W, SW_H)), ("Card", (CARD_W, CARD_H))]
     return names
 
 
@@ -923,7 +1035,7 @@ def sheet_at():
         x += w + SHEET_GAP
         shelf = max(shelf, h)
     assert y + shelf + 2 <= SHEET[1], "the pieces overrun the sheet"
-    return at
+    return {name: box for name, box in at.items() if not name.startswith("_")}     # "_..." is room left free
 
 
 SHEET_AT = sheet_at()

@@ -129,6 +129,53 @@ static void considerBuilderProc( Object *obj, void *userData )
 {
 	considerBuilder( obj, (BuilderPick *)userData );
 }
+
+//-------------------------------------------------------------------------------------------------
+/** The sidebar's repair cursor (MSG_DO_REPAIR with its second argument): of the player's builders
+	* the game lets repair `target` (ActionManager::canRepairObject, what a right click with one
+	* selected asks: a dozer or worker, out of any transport, the target damaged, finished, no bridge
+	* or rebuild hole), the free one nearest it, failing that the nearest one at all, the lower
+	* ObjectID on an equal distance.  Free as BuilderPick has it.  NULL when none can. */
+//-------------------------------------------------------------------------------------------------
+struct RepairPick
+{
+	const Object *target;
+	Object *best[ 2 ];				///< [0] the free one, [1] any
+	Real bestDistSqr[ 2 ];
+};
+
+static void considerRepairer( Object *obj, void *userData )
+{
+	RepairPick *pick = (RepairPick *)userData;
+	if( obj->isEffectivelyDead() || obj->testStatus( OBJECT_STATUS_SOLD ) )
+		return;
+	AIUpdateInterface *ai = obj->getAI();
+	DozerAIInterface *dozer = ai ? ai->getDozerAIInterface() : NULL;
+	if( dozer == NULL || !TheActionManager->canRepairObject( obj, pick->target, CMD_FROM_PLAYER ) )
+		return;
+
+	const Real dx = obj->getPosition()->x - pick->target->getPosition()->x;
+	const Real dy = obj->getPosition()->y - pick->target->getPosition()->y;
+	const Real distSqr = dx*dx + dy*dy;
+	const SupplyTruckAIInterface *supply = ai->getSupplyTruckAIInterface();
+	const Bool free = !dozer->isAnyTaskPending() && !( supply && supply->isCurrentlyFerryingSupplies() );
+	for( Int k = free ? 0 : 1; k < 2; k++ )
+	{
+		if( pick->best[ k ] == NULL || distSqr < pick->bestDistSqr[ k ]
+				|| ( distSqr == pick->bestDistSqr[ k ] && obj->getID() < pick->best[ k ]->getID() ) )
+		{
+			pick->best[ k ] = obj;
+			pick->bestDistSqr[ k ] = distSqr;
+		}
+	}
+}
+
+static Object *pickRepairBuilder( Player *player, const Object *target )
+{
+	RepairPick pick = { target, { NULL, NULL }, { 0.0f, 0.0f } };
+	player->iterateObjects( considerRepairer, &pick );
+	return pick.best[ 0 ] ? pick.best[ 0 ] : pick.best[ 1 ];
+}
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/OCLSpecialPower.h"
 #include "GameLogic/Module/OpenContain.h"
@@ -1809,8 +1856,29 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 		}  // end get repaired
 
 		// --------------------------------------------------------------------------------------------
+		// One argument, the target: the selected builders go, as they always did.  A second one, a
+		// Boolean TRUE, is the sidebar's repair cursor: the selection is left alone and the logic sends
+		// one builder of the sender's own (pickRepairBuilder) to his own structure.  Any other shape is
+		// dropped.  The arguments came over the network, so their shape is checked.
 		case GameMessage::MSG_DO_REPAIR:
 		{
+			if( msg->getArgumentCount() == 2 )
+			{
+				if( msg->getArgumentDataType( 0 ) != ARGUMENTDATATYPE_OBJECTID
+						|| msg->getArgumentDataType( 1 ) != ARGUMENTDATATYPE_BOOLEAN || !msg->getArgument( 1 )->boolean )
+					break;
+				Object *target = TheGameLogic->findObjectByID( msg->getArgument( 0 )->objectID );
+				if( target == NULL || target->getControllingPlayer() != thisPlayer || target->isEffectivelyDead()
+						|| !target->isKindOf( KINDOF_STRUCTURE ) )
+					break;
+				Object *builder = pickRepairBuilder( thisPlayer, target );
+				if( builder != NULL )
+					builder->getAI()->aiRepair( target, CMD_FROM_PLAYER );
+				break;
+			}
+			if( msg->getArgumentCount() != 1 )
+				break;
+
 			Object *repairTarget = TheGameLogic->findObjectByID( msg->getArgument( 0 )->objectID );
 
 			// sanity
@@ -2337,7 +2405,24 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 			pick.loc = loc;
 			pick.idle = pick.any = NULL;
 			pick.idleDistSqr = pick.anyDistSqr = 1e30f;
-			if( currentlySelectedGroup )
+
+			//
+			// The sidebar's builder pick (fork): one ObjectID after the fixed arguments names the builder
+			// to take the job, selected or not.  It came over the network, so it is only taken when it
+			// is a builder this player owns that can put this up (considerBuilder, and the control check
+			// below); anything else drops the order.  Without it, the old pick.
+			//
+			const Int fixedArgs = msg->getType() == GameMessage::MSG_DOZER_CONSTRUCT_LINE ? 4 : 3;
+			const Int argCount = msg->getArgumentCount();
+			if( argCount > fixedArgs )
+			{
+				if( argCount != fixedArgs + 1 || msg->getArgumentDataType( fixedArgs ) != ARGUMENTDATATYPE_OBJECTID || place == NULL )
+					break;
+				considerBuilder( TheGameLogic->findObjectByID( msg->getArgument( fixedArgs )->objectID ), &pick );
+				if( pick.any == NULL )
+					break;
+			}
+			else if( currentlySelectedGroup )
 			{
 				const VecObjectID& ids = currentlySelectedGroup->getAllIDs();
 				for( VecObjectID::const_iterator it = ids.begin(); it != ids.end(); ++it )
@@ -2477,8 +2562,25 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 		}  // end cancel dozer construction
 
 		// --------------------------------------------------------------------------------------------
+		// With no argument it sells what is selected, as it always did.  An optional ObjectID is the
+		// sidebar's sell cursor: that one structure and not the selection, only the sender's own and
+		// only one the bar would offer Sell on (AIGroup::mayPlayerSell); anything else drops the order.
 		case GameMessage::MSG_SELL:
 		{
+			const Int argCount = msg->getArgumentCount();
+			if( argCount == 1 )
+			{
+				if( msg->getArgumentDataType( 0 ) != ARGUMENTDATATYPE_OBJECTID )
+					break;
+				Object *target = TheGameLogic->findObjectByID( msg->getArgument( 0 )->objectID );
+				if( target == NULL || target->getControllingPlayer() != thisPlayer || target->isEffectivelyDead()
+						|| target->testStatus( OBJECT_STATUS_SOLD ) || !AIGroup::mayPlayerSell( target ) )
+					break;
+				TheBuildAssistant->sellObject( target );
+				break;
+			}
+			if( argCount != 0 )
+				break;
 
 			// use the selected group
 			if( currentlySelectedGroup )

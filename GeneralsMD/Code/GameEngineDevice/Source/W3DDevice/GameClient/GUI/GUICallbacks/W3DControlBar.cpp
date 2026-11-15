@@ -541,9 +541,9 @@ void W3DPowerDrawA( GameWindow *window, WinInstanceData *instData )
 
 //-------------------------------------------------------------------------------------------------
 /** The Red Alert style layout's power rail down the sidebar's left edge (HudLayoutRects::powerRail):
-	* W3DPowerDraw's log scale stood on end and worked out per call from the window's height, the bar
-	* filling from the foot in the state's colour and the consumption a bright tick across it.  Flat
-	* fills until the rail gets art of its own (phase 3); it reads the copy taken at the sync point. */
+	* W3DPowerDraw's log scale stood on end and worked out per call from the window's height, in
+	* Red Alert's blocks lit from the foot in the state's colour, and the consumption a bright tick
+	* across it.  It reads the copy taken at the sync point. */
 //-------------------------------------------------------------------------------------------------
 void W3DPowerDrawV( GameWindow *window, WinInstanceData *instData )
 {
@@ -584,9 +584,21 @@ void W3DPowerDrawV( GameWindow *window, WinInstanceData *instData )
 	if( !channel )
 		TheDisplay->drawFillRect( pos.x, pos.y, size.x, size.y, GameMakeColor( 6, 8, 10, 220 ) );
 	const Int inset = channel ? 0 : 1;
-	const Int bar = heightFor( (Real)production );
-	if( bar > 0 )
-		TheDisplay->drawFillRect( pos.x + inset, bottom - bar, size.x - 2 * inset, bar, fill );
+
+	// in blocks as Red Alert's is, 4 high with a 1 gap at 1080, from the foot: the production's lit
+	// in the state's colour, the rest dark
+	const Real k = TheDisplay->getHeight() / 1080.0f;
+	const Int blockH = MAX( 2, REAL_TO_INT( 4.0f * k + 0.5f ) );
+	const Int gapH = MAX( 1, REAL_TO_INT( 1.0f * k + 0.5f ) );
+	const Int pitch = blockH + gapH;
+	const Int blocks = ( size.y + gapH ) / pitch;
+	const Int lit = ( heightFor( (Real)production ) + gapH ) / pitch;
+	const Color dark = GameMakeColor( 22, 26, 30, 255 );
+	TheDisplay->beginBatch2D();
+	for( Int each = 0; each < blocks; each++ )
+		TheDisplay->drawFillRect( pos.x + inset, bottom - each * pitch - blockH, size.x - 2 * inset, blockH,
+															each < lit ? fill : dark );
+	TheDisplay->endBatch2D();
 
 	// log(1) is 0, but one unit used still shows, as W3DPowerDraw's needle does
 	if( consumption > 0 )
@@ -892,13 +904,60 @@ static void drawSidebarBackground( void )
 			drawSteelPanel( grow( r.stripButtons[ each ], px( 2 ) ), well, TRUE );
 	}
 
-	// the selection card: a raised rim round a sunk well, the rim showing past the tiles on it
+	// the selection card, rising from the strip's top edge as one piece with it: raised steel with the
+	// portrait's glass and the unit row's wells sunk into it, the row standing on the strip
 	if( card != NULL )
 		TheDisplay->drawImage( card, r.card.lo.x, r.card.lo.y, r.card.hi.x, r.card.hi.y );
 	else
 	{
-		drawSteelPanel( grow( r.card, px( 4 ) ), rim, FALSE );
-		drawSteelPanel( r.card, well, TRUE );
+		drawSteelPanel( r.card, rim, FALSE );
+		drawSteelPanel( r.portrait, well, TRUE );
+		for( Int each = 0; each < HUD_UNIT_ROW_CELLS; each++ )
+			drawSteelPanel( r.unitRow[ each ], well, TRUE );
+	}
+
+	// the single unit's upgrades stacked over the card at the area's left, as many cells as the bar
+	// shows (UnitUpgrade1..5 fill from the first; a window state, no logic read): a cell each, a join
+	// under each down to the next cell or the card, a cap over the top one.  None shown, nothing drawn
+	static NameKeyType upgradeIDs[ HUD_UPGRADE_CELLS ] = { NAMEKEY_INVALID };
+	if( upgradeIDs[ 0 ] == NAMEKEY_INVALID )
+	{
+		for( Int each = 0; each < HUD_UPGRADE_CELLS; each++ )
+		{
+			AsciiString name;
+			name.format( "ControlBar.wnd:UnitUpgrade%d", each + 1 );
+			upgradeIDs[ each ] = TheNameKeyGenerator->nameToKey( name );
+		}
+	}
+	Int upgrades = 0;
+	for( Int each = 0; each < HUD_UPGRADE_CELLS; each++ )
+	{
+		GameWindow *cell = TheWindowManager->winGetWindowFromId( NULL, upgradeIDs[ each ] );
+		Bool shown = cell != NULL;
+		for( GameWindow *up = cell; up != NULL && shown; up = up->winGetParent() )
+			shown = !up->winIsHidden();
+		if( shown )
+			upgrades++;
+	}
+	const Image *upgradeCell = Sidebar_image( "UpgradeCell" );
+	const Image *upgradeJoin = Sidebar_image( "UpgradeJoin" );
+	const Image *upgradeCap = Sidebar_image( "UpgradeCap" );
+	for( Int each = 0; each < upgrades; each++ )
+	{
+		const IRegion2D &c = r.upgradeColumn[ each ];
+		if( upgradeCell != NULL )
+			TheDisplay->drawImage( upgradeCell, c.lo.x, c.lo.y, c.hi.x, c.hi.y );
+		else
+			drawSteelPanel( c, well, TRUE );
+		// the join fills the gap down to the cell under it, the first one onto the card's top
+		const Int below = each == 0 ? r.card.lo.y : r.upgradeColumn[ each - 1 ].lo.y;
+		if( upgradeJoin != NULL && below > c.hi.y )
+			TheDisplay->drawImage( upgradeJoin, c.lo.x, c.hi.y, c.hi.x, below );
+	}
+	if( upgrades > 0 && upgradeCap != NULL )
+	{
+		const IRegion2D &top = r.upgradeColumn[ upgrades - 1 ];
+		TheDisplay->drawImage( upgradeCap, top.lo.x, top.lo.y - px( 8 ), top.hi.x, top.lo.y );
 	}
 
 	// the power rail sunk into the sidebar, the radar in a raised rim round its box, the box a well,

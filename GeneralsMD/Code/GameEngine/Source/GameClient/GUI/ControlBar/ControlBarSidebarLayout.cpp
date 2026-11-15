@@ -38,6 +38,7 @@ static GameWinDrawFunc s_classicRightHUDDraw = NULL;
 /// the portrait parent's before the sidebar gave it the card's readout (the .wnd's default draw)
 static GameWinDrawFunc s_classicUnitSelectedDraw = NULL;
 static Bool s_unitSelectedImageCleared = FALSE;
+static Bool s_queueImageCleared = FALSE;		///< the production queue's Classic well art, off in the card's row
 
 //-------------------------------------------------------------------------------------------------
 /** What the card says beside the portrait, copied from the selection in ControlBar::update (the client
@@ -55,22 +56,21 @@ static SelectionCardReadout s_card = { FALSE, UnicodeString(), -1.0f, NULL };
 static DisplayString *s_cardName = NULL;
 
 //-------------------------------------------------------------------------------------------------
-/** The card's portrait half (HudLayoutRects::portrait, 160x104 at 1080): the portrait picture at its
-	* top left in the cameos' 5:4, a bit over half the width, the name and the rank beside it, the health
-	* bar along the foot. */
+/** The card's portrait band (HudLayoutRects::portrait, 448x64 at 1080): the portrait picture at its
+	* left, the band's height in the cameos' 5:4 (80x64), and beside it the name, the rank under it and
+	* the health bar along the band's foot. */
 //-------------------------------------------------------------------------------------------------
 static void selectionCardCells( const HudLayoutRects &hud, IRegion2D *cameo, IRegion2D *text, IRegion2D *bar )
 {
 	const IRegion2D &p = hud.portrait;
 	const Int gap = MAX( 2, REAL_TO_INT( 4 * hud.scale + 0.5f ) );
-	const Int barH = MAX( 4, REAL_TO_INT( 8 * hud.scale + 0.5f ) );
-	Int w = p.width() * 55 / 100;
-	Int h = w * 4 / 5;
-	const Int roomH = p.height() - barH - gap;
-	if( h > roomH )
+	const Int barH = MAX( 4, REAL_TO_INT( 10 * hud.scale + 0.5f ) );
+	Int h = p.height();
+	Int w = h * 5 / 4;
+	if( w > p.width() * 55 / 100 )
 	{
-		h = MAX( 1, roomH );
-		w = h * 5 / 4;
+		w = p.width() * 55 / 100;
+		h = w * 4 / 5;
 	}
 	cameo->lo = p.lo;
 	cameo->hi.x = p.lo.x + w;
@@ -78,8 +78,8 @@ static void selectionCardCells( const HudLayoutRects &hud, IRegion2D *cameo, IRe
 	text->lo.x = cameo->hi.x + gap;
 	text->lo.y = p.lo.y;
 	text->hi.x = p.hi.x;
-	text->hi.y = cameo->hi.y;
-	bar->lo.x = p.lo.x;
+	text->hi.y = p.hi.y - barH - gap;
+	bar->lo.x = text->lo.x;
 	bar->hi.x = p.hi.x;
 	bar->hi.y = p.hi.y;
 	bar->lo.y = p.hi.y - barH;
@@ -104,7 +104,7 @@ static void drawSelectionCard( GameWindow *window, WinInstanceData *instData )
 		s_cardName = TheDisplayStringManager->newDisplayString();
 	if( s_cardName != NULL && text.width() > 4 )
 	{
-		GameFont *font = TheFontLibrary->getFont( "Arial", MAX( 7, REAL_TO_INT( 11 * hud.scale + 0.5f ) ), TRUE );
+		GameFont *font = TheFontLibrary->getFont( "Arial", MAX( 8, REAL_TO_INT( 13 * hud.scale + 0.5f ) ), TRUE );
 		if( s_cardName->getFont() != font )
 			s_cardName->setFont( font );
 		s_cardName->setWordWrap( text.width() );
@@ -141,6 +141,8 @@ static void drawSelectionCard( GameWindow *window, WinInstanceData *instData )
 	}
 }
 
+static Int upgradeColumnId( void );
+
 //-------------------------------------------------------------------------------------------------
 void ControlBar::updateSelectionCardReadout( void )
 {
@@ -148,12 +150,39 @@ void ControlBar::updateSelectionCardReadout( void )
 	if( !m_sidebarLayout )
 		return;
 
+	// the upgrade cameos' parent spans the cells that show, from the card's top up, and hides with none
+	GameWindow *column = TheWindowManager->winGetWindowFromId( m_contextParent[ CP_MASTER ], upgradeColumnId() );
+	if( column != NULL )
+	{
+		Int shown = -1;
+		for( Int i = 0; i < MAX_RIGHT_HUD_UPGRADE_CAMEOS && i < HUD_UPGRADE_CELLS; i++ )
+			if( m_rightHUDUpgradeCameos[ i ] != NULL && !m_rightHUDUpgradeCameos[ i ]->winIsHidden() )
+				shown = i;
+		if( shown < 0 )
+		{
+			if( !column->winIsHidden() )
+				column->winHide( TRUE );
+		}
+		else
+		{
+			HudLayoutRects hud;
+			getHudLayoutRects( &hud );
+			IRegion2D span = hud.upgradeColumn[ shown ];
+			span.hi = hud.upgradeColumn[ 0 ].hi;
+			placeWindowAt( column, span );
+			if( column->winIsHidden() )
+				column->winHide( FALSE );
+		}
+	}
+
 	// a multi-selection: the focused type's name over its portrait, no rank or health of one unit
 	if( m_currContext == CB_CONTEXT_MULTI_SELECT )
 	{
 		if( m_multiSelectFocus < 0 || m_multiSelectFocus >= m_multiSelectGroupCount )
 			return;
-		s_card.name = m_multiSelectGroupTemplate[ m_multiSelectFocus ]->getDisplayName();
+		// the focused type and how many of it the selection holds, "Crusader x4"
+		s_card.name.format( u"%ls  x%d", m_multiSelectGroupTemplate[ m_multiSelectFocus ]->getDisplayName().str(),
+			m_multiSelectGroupSize[ m_multiSelectFocus ] );
 		s_card.health = -1.0f;
 		s_card.rank = NULL;
 		s_card.shown = TRUE;
@@ -179,6 +208,49 @@ static GameWindow *barWindow( const char *name )
 	AsciiString full;
 	full.format( "ControlBar.wnd:%s", name );
 	return TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( full ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A cell's button inside the card art's well: `side` design pixels in on the left, top and right, and
+	* `foot` on the bottom (the unit row's buttons stand on the strip's lip, 0). */
+//-------------------------------------------------------------------------------------------------
+IRegion2D SidebarWellInset( const IRegion2D &cell, Real k, Int side, Int foot )
+{
+	const Int s = MAX( 1, REAL_TO_INT( side * k + 0.5f ) );
+	const Int f = foot > 0 ? MAX( 1, REAL_TO_INT( foot * k + 0.5f ) ) : 0;
+	IRegion2D r = cell;
+	r.lo.x += s;
+	r.lo.y += s;
+	r.hi.x -= s;
+	r.hi.y -= f;
+	return r;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The upgrade cameos' own parent under the sidebar: a code-made child of ControlBarParent spanning the
+	* column's shown cells, so the pointer reaches them (a tooltip) where WinUnitSelected, which ends at
+	* the card's top, could not, and blocks the world only behind the cameos that show. */
+//-------------------------------------------------------------------------------------------------
+static Int upgradeColumnId( void )
+{
+	static const Int id = (Int)TheNameKeyGenerator->nameToKey( "ControlBar:SidebarUpgradeColumn" );
+	return id;
+}
+
+static void drawNothing( GameWindow *window, WinInstanceData *instData )
+{
+}
+
+/// move `win` under `parent`, where it stood on screen
+static void reparentInPlace( GameWindow *win, GameWindow *parent )
+{
+	if( win == NULL || parent == NULL || win->winGetParent() == parent )
+		return;
+	ICoord2D at, base;
+	win->winGetScreenPosition( &at.x, &at.y );
+	parent->winGetScreenPosition( &base.x, &base.y );
+	win->winSetParent( parent );
+	win->winSetPosition( at.x - base.x, at.y - base.y );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -272,11 +344,12 @@ void ControlBar::hideForSidebar( GameWindow *window )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Where a command stands on the strip: the generic group (Attack Move, Stop, Guard and its kinds) at
+/** Where a command stands on the strip: the generic group (Attack Move, Stop, Guard and its kinds, a
+	* building's Rally Point and Sell) at
 	* the right end in that order, a container's slots (exit, evacuate) just before them, and everything
 	* else, the unit's own, from the left. */
 //-------------------------------------------------------------------------------------------------
-enum StripRole { STRIP_OWN, STRIP_CONTAINER, STRIP_ATTACK_MOVE, STRIP_STOP, STRIP_GUARD };
+enum StripRole { STRIP_OWN, STRIP_CONTAINER, STRIP_ATTACK_MOVE, STRIP_STOP, STRIP_GUARD, STRIP_RALLY, STRIP_SELL };
 
 static StripRole stripRole( const CommandButton *command )
 {
@@ -289,6 +362,8 @@ static StripRole stripRole( const CommandButton *command )
 		case GUI_COMMAND_GUARD:
 		case GUI_COMMAND_GUARD_WITHOUT_PURSUIT:
 		case GUI_COMMAND_GUARD_FLYING_UNITS_ONLY:			return STRIP_GUARD;
+		case GUI_COMMAND_SET_RALLY_POINT:							return STRIP_RALLY;
+		case GUI_COMMAND_SELL:												return STRIP_SELL;
 		case GUI_COMMAND_EXIT_CONTAINER:
 		case GUI_COMMAND_EVACUATE:										return STRIP_CONTAINER;
 		default:																			return STRIP_OWN;
@@ -331,7 +406,7 @@ void ControlBar::arrangeStripByRole( void )
 			container[ containers++ ] = i;
 		else
 		{
-			// Attack Move, Stop, Guard: kept in that order whatever the command set's
+			// Attack Move, Stop, Guard, Rally Point, Sell: kept in that order whatever the command set's
 			Int at = generics++;
 			while( at > 0 && stripRole( (const CommandButton *)GadgetButtonGetData( m_commandWindows[ generic[ at - 1 ] ] ) ) > role )
 			{
@@ -514,6 +589,19 @@ void ControlBar::restoreClassicWindows( void )
 			m_rightHUDUnitSelectParent->winSetStatus( WIN_STATUS_IMAGE );
 	}
 	s_unitSelectedImageCleared = FALSE;
+	// the upgrade cameos back under the portrait's parent, where the Classic pass just put them
+	GameWindow *column = m_contextParent[ CP_MASTER ] ? TheWindowManager->winGetWindowFromId( m_contextParent[ CP_MASTER ], upgradeColumnId() ) : NULL;
+	if( column != NULL )
+	{
+		for( Int i = 0; i < MAX_RIGHT_HUD_UPGRADE_CAMEOS; i++ )
+			if( m_rightHUDUpgradeCameos[ i ] != NULL && m_rightHUDUpgradeCameos[ i ]->winGetParent() == column )
+				reparentInPlace( m_rightHUDUpgradeCameos[ i ], m_rightHUDUnitSelectParent );
+		column->winHide( TRUE );
+	}
+
+	if( s_queueImageCleared && m_contextParent[ CP_BUILD_QUEUE ] != NULL )
+		m_contextParent[ CP_BUILD_QUEUE ]->winSetStatus( WIN_STATUS_IMAGE );
+	s_queueImageCleared = FALSE;
 	s_card.shown = FALSE;
 }
 
@@ -597,15 +685,9 @@ void ControlBar::layoutSidebar( void )
 		lamp.hi.y = hud.radar.lo.y + size.y;
 		placeWindowAt( m_radarAttackGlowWindow, lamp );
 	}
-	//
-	// Sat and Onar come with phase 2.  With the sheet's General key (painted 140 wide) the button keeps
-	// its own seat and the plate's empty Sat and Onar seats stand beside it; without it the scheme's
-	// button takes the whole row, as it did before the sheet
-	//
-	IRegion2D generalRow = hud.generalButton;
-	if( !wearSidebarKey( SIDEBAR_KEY_GENERAL ) )
-		generalRow.lo.x = MIN( hud.sellButton.lo.x, hud.generalButton.lo.x );
-	placeWindowAt( barWindow( "ButtonGeneral" ), generalRow );
+	// the General button keeps its own seat; Sat and Onar take the two left of it (Sidebar_layout)
+	wearSidebarKey( SIDEBAR_KEY_GENERAL );
+	placeWindowAt( barWindow( "ButtonGeneral" ), hud.generalButton );
 
 	// the power bar stood on end down the sidebar's left edge (W3DPowerDrawV, lane D)
 	GameWindow *power = barWindow( "PowerWindow" );
@@ -651,10 +733,11 @@ void ControlBar::layoutSidebar( void )
 	fitWindowTree( this, m_contextParent[ CP_BEACON ], buttons );
 
 	//
-	// The selection card: the right HUD covers the card, so a click on any of it reaches its tiles
-	// (portraitBarInput), and draws nothing there itself (the card's plate is the sidebar background's);
-	// the portrait with its upgrade cameos stands in `portrait`, and a multi-selection's type tiles in
-	// the grid's cells (layoutMultiSelectTiles).  A single unit is the portrait alone, the grid empty
+	// The selection card, welded to the strip: the right HUD covers the card, so a click on any of it
+	// reaches its tiles (portraitBarInput), and draws nothing there itself (the card's plate is the
+	// sidebar background's).  The portrait, name, rank and health stand in `portrait`; under them the
+	// flat row on the strip holds a multi-selection's type tiles (layoutMultiSelectTiles) or a factory's
+	// queue (updateBuildQueue), never both; a single unit's upgrade cameos climb from the card's top
 	//
 	placeWindowAt( m_rightHUDWindow, hud.card );
 	GameWinDrawFunc noDraw = TheFunctionLexicon ? TheFunctionLexicon->gameWinDrawFunc( NAMEKEY( "W3DNoDraw" ) ) : NULL;
@@ -663,9 +746,10 @@ void ControlBar::layoutSidebar( void )
 		s_classicRightHUDDraw = m_rightHUDWindow->winGetDrawFunc();
 		m_rightHUDWindow->winSetDrawFunc( noDraw );
 	}
-	// the portrait's parent spans the card, so the upgrade cameos on the grid stay inside it (tooltips);
-	// its painted well (the Classic 3x3) goes, and it draws the name, rank and health instead
-	placeWindowAt( m_rightHUDUnitSelectParent, hud.card );
+	// the portrait's parent spans the portrait band only, so a click on the row below reaches the right
+	// HUD (a type tile's, portraitBarInput); its painted well (the Classic 3x3) goes, and it draws the
+	// name, rank and health instead
+	placeWindowAt( m_rightHUDUnitSelectParent, hud.portrait );
 	if( BitTest( m_rightHUDUnitSelectParent->winGetStatus(), WIN_STATUS_IMAGE ) )
 	{
 		m_rightHUDUnitSelectParent->winClearStatus( WIN_STATUS_IMAGE );
@@ -679,10 +763,57 @@ void ControlBar::layoutSidebar( void )
 	IRegion2D cameo, text, bar;
 	selectionCardCells( hud, &cameo, &text, &bar );
 	placeWindowAt( m_rightHUDCameoWindow, cameo );
-	// a single unit's upgrade cameos in a row on the grid, which only a multi-selection's tiles use
-	for( Int i = 0; i < MAX_RIGHT_HUD_UPGRADE_CAMEOS && i < HUD_CARD_GRID_CELLS; i++ )
-		placeWindowAt( m_rightHUDUpgradeCameos[ i ], hud.gridCells[ i ] );
-	fitWindowTree( this, m_contextParent[ CP_BUILD_QUEUE ], hud.portrait );
+	// a single unit's upgrade cameos, a column climbing from the card's top at its left edge, under a
+	// parent of their own spanning the column (updateSelectionCardReadout sizes it to the cells showing),
+	// each 3 in from its cell's edges, the art's well
+	GameWindow *column = TheWindowManager->winGetWindowFromId( parent, upgradeColumnId() );
+	if( column == NULL )
+	{
+		column = TheWindowManager->winCreate( parent, WIN_STATUS_ENABLED, 0, 0, 1, 1, GameWinDefaultSystem );
+		if( column != NULL )
+		{
+			column->winSetWindowId( upgradeColumnId() );
+			column->winSetDrawFunc( drawNothing );
+			column->winSetInputFunc( GameWinBlockInput );
+		}
+	}
+	if( column != NULL )
+	{
+		IRegion2D span = hud.upgradeColumn[ HUD_UPGRADE_CELLS - 1 ];
+		span.hi = hud.upgradeColumn[ 0 ].hi;
+		placeWindowAt( column, span );
+	}
+	for( Int i = 0; i < MAX_RIGHT_HUD_UPGRADE_CAMEOS && i < HUD_UPGRADE_CELLS; i++ )
+	{
+		reparentInPlace( m_rightHUDUpgradeCameos[ i ], column );
+		placeWindowAt( m_rightHUDUpgradeCameos[ i ], SidebarWellInset( hud.upgradeColumn[ i ], hud.scale, 3, 3 ) );
+	}
+
+	// a factory's queue in the row, ButtonQueue01..07 left to right, its Classic well art off.
+	// ponytail: the row holds seven, so the queue's eighth and ninth entries do not show (and cannot be
+	// cancelled from here); a second row or a "+2" if the owner wants them
+	GameWindow *queue = m_contextParent[ CP_BUILD_QUEUE ];
+	if( queue != NULL )
+	{
+		IRegion2D rowBox = hud.unitRow[ 0 ];
+		rowBox.hi = hud.unitRow[ HUD_UNIT_ROW_CELLS - 1 ].hi;
+		placeWindowAt( queue, rowBox );
+		if( BitTest( queue->winGetStatus(), WIN_STATUS_IMAGE ) )
+		{
+			queue->winClearStatus( WIN_STATUS_IMAGE );
+			s_queueImageCleared = TRUE;
+		}
+		for( Int i = 0; i < MAX_BUILD_QUEUE_BUTTONS; i++ )
+		{
+			AsciiString name;
+			name.format( "ButtonQueue%02d", i + 1 );
+			GameWindow *button = barWindow( name.str() );
+			if( i < HUD_UNIT_ROW_CELLS )
+				placeWindowAt( button, SidebarWellInset( hud.unitRow[ i ], hud.scale, 2, 0 ) );
+			else
+				hideForSidebar( button );
+		}
+	}
 	if( !m_multiSelectTiles.empty() )
 		layoutMultiSelectTiles( (Int)m_multiSelectTiles.size() );
 
@@ -742,9 +873,6 @@ void ControlBar::layoutSidebar( void )
 	};
 	for( Int i = 0; i < (Int)( sizeof( hiddenNames ) / sizeof( hiddenNames[ 0 ] ) ); i++ )
 		hideForSidebar( barWindow( hiddenNames[ i ] ) );
-	// the queue is updateBuildQueue's to show, and it does not under the sidebar
-	if( m_contextParent[ CP_BUILD_QUEUE ] != NULL )
-		m_contextParent[ CP_BUILD_QUEUE ]->winHide( TRUE );
 
 	// the tabs, the cameos and the arrows (lane C), then the radar into its box
 	Sidebar_layout( hud );

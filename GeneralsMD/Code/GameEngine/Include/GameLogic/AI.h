@@ -1913,6 +1913,7 @@ public:
 #endif
 	void groupCheer( CommandSourceType cmdSource );
 	void groupSell( CommandSourceType cmdSource );
+	static Bool mayPlayerSell( const Object *obj );	///< the bar's checks before it shows Sell; the sidebar's Sat asks them too
 	void groupToggleOvercharge( CommandSourceType cmdSource );
 #ifdef ALLOW_SURRENDER
 	void groupPickUpPrisoner( Object *prisoner, CommandSourceType cmdSource );	///< pick up prisoner

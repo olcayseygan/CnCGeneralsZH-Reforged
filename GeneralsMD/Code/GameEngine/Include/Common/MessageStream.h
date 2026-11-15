@@ -618,7 +618,7 @@ public:
 																										 start the actual build process */
 		MSG_DOZER_CONSTRUCT_LINE,										///< Like MSG_CONSTRUCT, but for build procesess that occur in a line (like walls)
 		MSG_DOZER_CANCEL_CONSTRUCT,									///< cancel construction of a building 
-		MSG_SELL,																		///< sell a structure
+		MSG_SELL,																		///< sell the selected structures; (objectID) the sidebar's sell cursor: that one
 		MSG_EXIT,																		///< WE want to exit from whatever WE are inside of
 		MSG_EVACUATE,																///< Dump out all of OUR contained objects
 		MSG_EXECUTE_RAILED_TRANSPORT,								///< Execute railed transport sequence
@@ -630,7 +630,7 @@ public:
 		MSG_DO_FORCE_ATTACK_GROUND,									///< (locationID) bombard the given location if picked
 		MSG_GET_REPAIRED,														///< selected unit will go get repaired at clicked object
 		MSG_GET_HEALED,															///< selected unit will go get healed at clicked object
-		MSG_DO_REPAIR,															///< dozer will go repair the clicked target
+		MSG_DO_REPAIR,															///< (objectID) dozer will go repair the clicked target; (objectID, TRUE) the logic picks the builder
 		MSG_RESUME_CONSTRUCTION,										///< resume construction on a structure
 		MSG_ENTER,																	///< Enter object
 		MSG_DOCK,																		///< Dock with this object

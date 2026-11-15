@@ -10,6 +10,9 @@
 // builder that offers it, as the bar's own button does.  A right click takes back the units queued
 // deepest in their factories' queues, as many as the modifiers would have queued.
 //
+// Sat and Onar under the radar put the pointer into a sell or repair mode; GUICommandTranslator hands
+// the mode the mouse first (Sidebar_translate), HintSpy lets it have the last word on the cursor.
+//
 // Thread: LOGIC-THREAD.md.  The logic is read in Sidebar_update and on the input path only, both
 // outside the render window; the windows' state is set there and the draw callbacks read nothing
 // but the windows.
@@ -19,6 +22,7 @@
 
 #include "GameClient/ControlBarSidebar.h"
 
+#include "Common/ActionManager.h"
 #include "Common/MessageStream.h"
 #include "Common/NameKeyGenerator.h"
 #include "Common/Player.h"
@@ -36,9 +40,15 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GroupPanel.h"
 #include "GameClient/Image.h"
+#include "GameClient/InGameUI.h"
+#include "GameClient/LookAtXlat.h"
 #include "GameClient/MetaEvent.h"
+#include "GameClient/Mouse.h"
+#include "GameClient/View.h"
+#include "GameLogic/AI.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
+#include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 
 #include <algorithm>
@@ -136,7 +146,22 @@ namespace
 	DisplayString *s_chipText[ HUD_SIDEBAR_PICKER_CHIPS + 1 ];	///< [0] "Tümü", then the chips' numbers
 	const Image *s_chipIcon[ HUD_SIDEBAR_PICKER_CHIPS ];				///< each chip's building picture, set in Sidebar_update
 	Bool s_chipGlyph[ HUD_SIDEBAR_PICKER_CHIPS ];								///< the picture is a ChipIcon glyph, drawn white over a dark edge
+	UnicodeString s_chipName[ HUD_SIDEBAR_PICKER_CHIPS ];				///< each chip's building or builder, its tooltip
+	ObjectID s_placingBuilder = INVALID_ID;		///< the builder chip a structure on the cursor was put there for
+	ObjectID s_followed = INVALID_ID;					///< the single selected object the sidebar last followed
 	const Color GLYPH_EDGE = GameMakeColor( 0, 0, 0, 200 );
+	const Int CHIP_PICTURE_INSET = 2;															///< a factory's picture inside its chip
+	const Color CHIP_PICTURE_DIM = GameMakeColor( 170, 170, 170, 255 );		///< a chip not picked, its picture a shade down
+	const Color CHIP_BADGE = GameMakeColor( 0, 0, 0, 190 );								///< behind the chip's number
+
+	// Sat and Onar: their own box over the two seats under the radar, beside ButtonGeneral
+	GameWindow *s_keyBox = NULL;
+	GameWindow *s_sellKey = NULL;
+	GameWindow *s_repairKey = NULL;
+	DisplayString *s_keyLabel[ 2 ];			///< [0] Sat, [1] Onar, on the steel stand-in only
+	Int s_cursorMode = SIDEBAR_CURSOR_NONE;
+	Bool s_eatRightClick = FALSE;				///< the right release ended the mode; its click gives no order
+	Bool s_rightReleaseTaken = FALSE;		///< and SelectionXlat leaves that release alone
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -339,20 +364,53 @@ static void drawChip( GameWindow *window, WinInstanceData *instData )
 	window->winGetSize( &size.x, &size.y );
 	if( size.x < 3 || size.y < 3 )
 		return;
-	const Image *art = statePiece( index < 0 ? "ChipWide" : "Chip", TRUE, lit, hover );
+	// Tümü wears ChipWide only while its chip is wider than the others
+	Int chipW = 0, chipH = 0;
+	if( s_chips[ 0 ] != NULL )
+		s_chips[ 0 ]->winGetSize( &chipW, &chipH );
+	const Image *art = statePiece( index < 0 && size.x > chipW ? "ChipWide" : "Chip", TRUE, lit, hover );
 	if( art != NULL )
 		TheDisplay->drawImage( art, at.x, at.y, at.x + size.x, at.y + size.y );
 	else
 		drawSteel( at, size, lit, hover );
 
-	// a factory chip: its building's picture, shape kept, a small margin inside the chip's height, and
-	// the number right of it; the pair centred.  White over a dark edge on every face, lit or not
 	DisplayString *text = s_chipText[ index + 1 ];
 	const Image *icon = index >= 0 ? s_chipIcon[ index ] : NULL;
 	const Int push = lit && art == NULL ? 1 : 0;
 	Int textW = 0, textH = 0;
 	if( text != NULL )
 		text->getSize( &textW, &textH );
+
+	// a factory chip with its building's own picture: the picture fills the chip 2 px in, shape kept
+	// and cut at the chip's edges rather than shrunk; the number a badge in the bottom right corner on
+	// a dark backing; the pick's chip in a lit frame, the others' pictures a shade darker
+	if( index >= 0 && icon != NULL && !s_chipGlyph[ index ] && icon->getImageWidth() > 0 && icon->getImageHeight() > 0 )
+	{
+		IRegion2D room = { { at.x + CHIP_PICTURE_INSET, at.y + CHIP_PICTURE_INSET },
+			{ at.x + size.x - CHIP_PICTURE_INSET, at.y + size.y - CHIP_PICTURE_INSET } };
+		if( room.width() > 0 && room.height() > 0 )
+		{
+			const Real cover = max( (Real)room.width() / icon->getImageWidth(), (Real)room.height() / icon->getImageHeight() );
+			const Int w = REAL_TO_INT( icon->getImageWidth() * cover + 0.5f );
+			const Int h = REAL_TO_INT( icon->getImageHeight() * cover + 0.5f );
+			const Int x = room.lo.x + ( room.width() - w ) / 2, y = room.lo.y + ( room.height() - h ) / 2;
+			TheDisplay->setClipRegion( &room );
+			TheDisplay->drawImage( icon, x, y, x + w, y + h, lit ? 0xFFFFFFFF : CHIP_PICTURE_DIM );
+			TheDisplay->enableClipping( FALSE );
+		}
+		if( lit )
+			TheDisplay->drawOpenRect( at.x, at.y, size.x, size.y, 2.0f, KEY_LETTER );
+		if( text != NULL )
+		{
+			const Int bx = at.x + size.x - CHIP_PICTURE_INSET - textW - 2, by = at.y + size.y - CHIP_PICTURE_INSET - textH;
+			TheDisplay->drawFillRect( bx - 2, by, textW + 4, textH, CHIP_BADGE );
+			text->draw( bx, by, CHIP_TEXT, TAB_TEXT_EDGE );
+		}
+		return;
+	}
+
+	// Tümü, or a factory with no picture of its own: the artist's kind glyph (or nothing) left, the
+	// number right of it, the pair centred.  White over a dark edge on every face, lit or not
 	Int iconW = 0, iconH = 0;
 	const Int margin = max( size.y / 9, 2 );
 	if( icon != NULL && icon->getImageWidth() > 0 && icon->getImageHeight() > 0 )
@@ -393,6 +451,215 @@ static void drawBox( GameWindow *window, WinInstanceData *instData )
 		return;
 	for( Int i = 0; i < HUD_SIDEBAR_CAMEOS; i++ )
 		TheDisplay->drawImage( well, s_cells[ i ].lo.x, s_cells[ i ].lo.y, s_cells[ i ].hi.x, s_cells[ i ].hi.y );
+}
+
+/// Sat or Onar: the side's KeySell or KeyRepair, P while its mode is on, else the steel stand-in with
+/// the name on it
+static void drawKey( GameWindow *window, WinInstanceData *instData )
+{
+	const Bool sell = window == s_sellKey;
+	ICoord2D at, size;
+	window->winGetScreenPosition( &at.x, &at.y );
+	window->winGetSize( &size.x, &size.y );
+	if( size.x < 3 || size.y < 3 )
+		return;
+	const Bool lit = s_cursorMode == ( sell ? SIDEBAR_CURSOR_SELL : SIDEBAR_CURSOR_REPAIR )
+		|| BitTest( instData->getState(), WIN_STATE_SELECTED );
+	const Bool hover = BitTest( instData->getState(), WIN_STATE_HILITED );
+	const Image *art = statePiece( sell ? "KeySell" : "KeyRepair", BitTest( window->winGetStatus(), WIN_STATUS_ENABLED ), lit, hover );
+	if( art != NULL )
+	{
+		TheDisplay->drawImage( art, at.x, at.y, at.x + size.x, at.y + size.y );
+		return;
+	}
+	drawSteel( at, size, lit, hover );
+	DisplayString *label = s_keyLabel[ sell ? 0 : 1 ];
+	if( label == NULL )
+		return;
+	Int w = 0, h = 0;
+	label->getSize( &w, &h );
+	label->draw( at.x + ( size.x - w ) / 2, at.y + ( size.y - h ) / 2, CHIP_TEXT, TAB_TEXT_EDGE );
+}
+
+static void drawNothing( GameWindow *window, WinInstanceData *instData )
+{
+}
+
+//-------------------------------------------------------------------------------------------------
+// The sell and repair cursors.  Client only: what a click sends is checked again by the logic.
+//-------------------------------------------------------------------------------------------------
+Int Sidebar_sellPress( Bool modeOn, Bool sellableSelected )
+{
+	if( modeOn )
+		return SIDEBAR_SELL_PRESS_MODE_OFF;
+	return sellableSelected ? SIDEBAR_SELL_PRESS_SELECTED : SIDEBAR_SELL_PRESS_MODE_ON;
+}
+
+Int Sidebar_cursorMode( void )
+{
+	return s_cursorMode;
+}
+
+Bool Sidebar_cancelCursorMode( void )
+{
+	const Bool was = s_cursorMode != SIDEBAR_CURSOR_NONE;
+	s_cursorMode = SIDEBAR_CURSOR_NONE;
+	return was;
+}
+
+/// a structure the local player controls under `mouse`, NULL for anything else
+static Object *ownStructureAt( const ICoord2D &mouse )
+{
+	Player *player = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+	Drawable *draw = TheTacticalView && player ? TheTacticalView->pickDrawable( &mouse, FALSE, PICK_TYPE_SELECTABLE ) : NULL;
+	Object *obj = draw ? draw->getObject() : NULL;
+	if( obj == NULL || obj->getControllingPlayer() != player || obj->isEffectivelyDead() || !obj->isKindOf( KINDOF_STRUCTURE ) )
+		return NULL;
+	return obj;
+}
+
+/// what the logic's MSG_SELL asks before it sells
+static Bool sellable( const Object *obj )
+{
+	return obj != NULL && !obj->testStatus( OBJECT_STATUS_SOLD ) && AIGroup::mayPlayerSell( obj );
+}
+
+struct RepairerSearch
+{
+	const Object *target;
+	Bool found;
+};
+
+static void findRepairer( Object *obj, void *userData )
+{
+	RepairerSearch *s = (RepairerSearch *)userData;
+	if( s->found || obj->isEffectivelyDead() )
+		return;
+	AIUpdateInterface *ai = obj->getAI();
+	if( ai != NULL && ai->getDozerAIInterface() != NULL && TheActionManager->canRepairObject( obj, s->target, CMD_FROM_PLAYER ) )
+		s->found = TRUE;
+}
+
+/// one of the local player's builders could go and repair `obj`: what the logic's pick asks
+static Bool repairable( const Object *obj )
+{
+	if( obj == NULL )
+		return FALSE;
+	RepairerSearch s = { obj, FALSE };
+	ThePlayerList->getLocalPlayer()->iterateObjects( findRepairer, &s );
+	return s.found;
+}
+
+static void enterCursorMode( Int mode )
+{
+	// one thing on the pointer at a time
+	TheInGameUI->setGUICommand( NULL );
+	TheInGameUI->placeBuildAvailable( NULL, NULL );
+	TheInGameUI->disarmSignal();
+	s_cursorMode = mode;
+}
+
+static Bool sellableSelected( void )
+{
+	const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+	for( DrawableListCIt it = selected->begin(); it != selected->end(); ++it )
+	{
+		const Object *obj = *it ? (*it)->getObject() : NULL;
+		if( obj != NULL && obj->isLocallyControlled() && sellable( obj ) )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+static void pressSell( void )
+{
+	switch( Sidebar_sellPress( s_cursorMode == SIDEBAR_CURSOR_SELL, sellableSelected() ) )
+	{
+		case SIDEBAR_SELL_PRESS_MODE_OFF:	s_cursorMode = SIDEBAR_CURSOR_NONE; break;
+		// the bar's own Sell: the logic sells what of the selection it may
+		case SIDEBAR_SELL_PRESS_SELECTED:	TheMessageStream->appendMessage( GameMessage::MSG_SELL ); break;
+		default:													enterCursorMode( SIDEBAR_CURSOR_SELL ); break;
+	}
+}
+
+static void pressRepair( void )
+{
+	if( s_cursorMode == SIDEBAR_CURSOR_REPAIR )
+		s_cursorMode = SIDEBAR_CURSOR_NONE;
+	else
+		enterCursorMode( SIDEBAR_CURSOR_REPAIR );
+}
+
+Bool Sidebar_translate( const GameMessage *msg )
+{
+	const GameMessage::Type type = msg->getType();
+	if( s_eatRightClick && ( type == GameMessage::MSG_MOUSE_RIGHT_CLICK || type == GameMessage::MSG_MOUSE_RIGHT_DOUBLE_CLICK ) )
+	{
+		s_eatRightClick = FALSE;
+		return TRUE;
+	}
+	if( s_cursorMode == SIDEBAR_CURSOR_NONE )
+		return FALSE;
+
+	switch( type )
+	{
+		// the left button is the mode's: no selection box, no deselect on the release
+		case GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_DOWN:
+		case GameMessage::MSG_RAW_MOUSE_LEFT_DOUBLE_CLICK:
+		case GameMessage::MSG_RAW_MOUSE_LEFT_BUTTON_UP:
+			return TRUE;
+
+		case GameMessage::MSG_MOUSE_LEFT_CLICK:
+		case GameMessage::MSG_MOUSE_LEFT_DOUBLE_CLICK:
+		{
+			Object *obj = ownStructureAt( msg->getArgument( 0 )->pixelRegion.hi );
+			if( s_cursorMode == SIDEBAR_CURSOR_SELL && sellable( obj ) )
+			{
+				GameMessage *sell = TheMessageStream->appendMessage( GameMessage::MSG_SELL );
+				sell->appendObjectIDArgument( obj->getID() );
+			}
+			else if( s_cursorMode == SIDEBAR_CURSOR_REPAIR && repairable( obj ) )
+			{
+				GameMessage *repair = TheMessageStream->appendMessage( GameMessage::MSG_DO_REPAIR );
+				repair->appendObjectIDArgument( obj->getID() );
+				repair->appendBooleanArgument( TRUE );
+			}
+			return TRUE;
+		}
+
+		// a right click ends it, a right drag that panned does not; LookAtXlat still needs the release
+		case GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_UP:
+			if( TheLookAtTranslator == NULL || !TheLookAtTranslator->isRightDragPanning() )
+			{
+				s_cursorMode = SIDEBAR_CURSOR_NONE;
+				s_eatRightClick = TRUE;
+				s_rightReleaseTaken = TRUE;
+			}
+			return FALSE;
+	}
+	return FALSE;
+}
+
+Bool Sidebar_takeRightRelease( void )
+{
+	const Bool taken = s_rightReleaseTaken;
+	s_rightReleaseTaken = FALSE;
+	return taken;
+}
+
+void Sidebar_pointCursor( void )
+{
+	if( s_cursorMode == SIDEBAR_CURSOR_NONE || TheMouse == NULL )
+		return;
+	const MouseIO *io = TheMouse->getMouseStatus();
+	if( io == NULL )
+		return;
+	// the game has no sell cursor: the target cross stands in for one until Tools/cursors.py draws it
+	Object *obj = ownStructureAt( io->pos );
+	if( s_cursorMode == SIDEBAR_CURSOR_SELL )
+		TheMouse->setCursor( sellable( obj ) ? Mouse::CROSS : Mouse::GENERIC_INVALID );
+	else
+		TheMouse->setCursor( repairable( obj ) ? Mouse::DO_REPAIR : Mouse::GENERIC_INVALID );
 }
 
 /// the letter of the key `meta` is on, without its modifiers ("Q" for Ctrl+Q); empty when it has none
@@ -524,18 +791,62 @@ static void clickCameo( const CommandButton *command, Bool right )
 	}
 	else if( command->getCommandType() == GUI_COMMAND_DOZER_CONSTRUCT && !right )
 	{
-		Object *builder = builderFor( thing );
+		// a builder chip picked: that one puts it up (Sidebar_placementBuilder names it on the order);
+		// Tümü: the stand-in, and the logic's nearest idle builder as before
+		Object *picked = s_pick[ s_tab ] != INVALID_ID ? TheGameLogic->findObjectByID( s_pick[ s_tab ] ) : NULL;
+		Object *builder = picked != NULL && offersStructure( picked, thing ) ? picked : NULL;
+		if( picked != NULL && builder == NULL )
+			return;
+		s_placingBuilder = builder != NULL ? builder->getID() : INVALID_ID;
+		if( builder == NULL )
+			builder = builderFor( thing );
 		if( builder != NULL )
 			ControlBar::startStructurePlacement( command, builder );
 	}
 }
 
+//-------------------------------------------------------------------------------------------------
+ObjectID Sidebar_placementBuilder( void )
+{
+	// only while the structure on the cursor is still the one the picked builder's cameo put there
+	if( s_placingBuilder == INVALID_ID || TheInGameUI == NULL || TheInGameUI->getPendingPlaceType() == NULL
+			|| TheInGameUI->getPendingPlaceSourceObjectID() != s_placingBuilder )
+		return INVALID_ID;
+	return s_placingBuilder;
+}
+
+/// a factory or builder chip: its display name alone, nothing about its owner
+static void chipTooltip( GameWindow *window, WinInstanceData *instData, UnsignedInt mouse )
+{
+	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; i++ )
+		if( s_chips[ i ] == window && !s_chipName[ i ].isEmpty() )
+			TheMouse->setCursorTooltip( s_chipName[ i ] );
+}
+
 static WindowMsgHandledType boxSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )
 {
+	// the pointer off a chip takes its tooltip with it, so none is left over the cameos
+	if( msg == GBM_MOUSE_LEAVING )
+	{
+		for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; i++ )
+			if( (GameWindow *)mData1 == s_chips[ i ] )
+				TheMouse->setCursorTooltip( UnicodeString::TheEmptyString );
+	}
 	if( msg != GBM_SELECTED && msg != GBM_SELECTED_RIGHT )
 		return GameWinDefaultSystem( window, msg, mData1, mData2 );
 
 	GameWindow *control = (GameWindow *)mData1;
+	if( control != NULL && ( control == s_sellKey || control == s_repairKey ) )
+	{
+		if( msg == GBM_SELECTED )
+		{
+			if( control == s_sellKey )
+				pressSell();
+			else
+				pressRepair();
+		}
+		return MSG_HANDLED;
+	}
 	for( Int t = 0; t < SIDEBAR_TAB_COUNT; t++ )
 		if( control == s_tabs[ t ] )
 		{
@@ -580,7 +891,7 @@ static WindowMsgHandledType boxInput( GameWindow *window, UnsignedInt msg, Windo
 	return GameWinBlockInput( window, msg, mData1, mData2 );
 }
 
-static GameWindow *makeButton( UnsignedInt status )
+static GameWindow *makeButton( UnsignedInt status, GameWindow *parent = NULL )
 {
 	WinInstanceData inst;
 	inst.init();
@@ -588,7 +899,7 @@ static GameWindow *makeButton( UnsignedInt status )
 	// GadgetPushButtonInput reads the right click bit off the instance data, not the window's status
 	if( BitTest( status, WIN_STATUS_RIGHT_CLICK ) )
 		BitSet( inst.m_status, WIN_STATUS_RIGHT_CLICK );
-	GameWindow *button = TheWindowManager->gogoGadgetPushButton( s_box, status | WIN_STATUS_ENABLED, 0, 0, 1, 1, &inst, NULL, TRUE );
+	GameWindow *button = TheWindowManager->gogoGadgetPushButton( parent != NULL ? parent : s_box, status | WIN_STATUS_ENABLED, 0, 0, 1, 1, &inst, NULL, TRUE );
 	if( button == NULL )
 		return NULL;
 	GadgetButtonSetData( button, NULL );
@@ -638,7 +949,11 @@ static Bool makeWindows( GameWindow *parent )
 	{
 		*chips[ c ] = makeButton( WIN_STATUS_HIDDEN );
 		if( *chips[ c ] != NULL )
+		{
 			(*chips[ c ])->winSetDrawFunc( drawChip );
+			if( c > 0 )
+				(*chips[ c ])->winSetTooltipFunc( chipTooltip );
+		}
 		if( s_chipText[ c ] == NULL )
 			s_chipText[ c ] = TheDisplayStringManager->newDisplayString();
 	}
@@ -657,6 +972,27 @@ static Bool makeWindows( GameWindow *parent )
 			s_buttonDraw = arrows[ a ]->winGetDrawFunc();
 		arrows[ a ]->winSetDrawFunc( drawArrow );
 	}
+
+	// Sat and Onar in a box of their own: the cameo box stops short of the radar, and one box across
+	// the whole row would take the General button's clicks
+	s_keyBox = TheWindowManager->winCreate( parent, WIN_STATUS_ENABLED | WIN_STATUS_HIDDEN, 0, 0, 1, 1, boxSystem );
+	s_sellKey = s_repairKey = NULL;
+	if( s_keyBox != NULL )
+	{
+		s_keyBox->winSetDrawFunc( drawNothing );
+		s_keyBox->winSetInputFunc( GameWinBlockInput );
+		s_sellKey = makeButton( 0, s_keyBox );
+		s_repairKey = makeButton( 0, s_keyBox );
+		GameWindow *keys[] = { s_sellKey, s_repairKey };
+		for( Int k = 0; k < 2; k++ )
+		{
+			if( keys[ k ] != NULL )
+				keys[ k ]->winSetDrawFunc( drawKey );
+			if( s_keyLabel[ k ] == NULL )
+				s_keyLabel[ k ] = TheDisplayStringManager->newDisplayString();
+		}
+	}
+	s_cursorMode = SIDEBAR_CURSOR_NONE;
 
 	s_dirty = TRUE;
 	return TRUE;
@@ -678,7 +1014,12 @@ void Sidebar_layout( const HudLayoutRects &rects )
 		return;
 
 	// first of ControlBarParent's children: drawn last, over BackgroundMarker's sidebar steel, and
-	// asked first for the pointer
+	// asked first for the pointer; Sat and Onar's box right after it, over the radar's blocker too
+	if( s_keyBox != NULL && s_box->winGetNext() != s_keyBox )
+	{
+		s_keyBox->winBringToTop();
+		s_box->winBringToTop();
+	}
 	if( parent->winGetChild() != s_box )
 		s_box->winBringToTop();
 
@@ -724,7 +1065,29 @@ void Sidebar_layout( const HudLayoutRects &rects )
 	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; i++ )
 		place( s_chips[ i ], rects.pickerChips[ i ], box.lo );
 
+	IRegion2D keys = rects.sellButton;
+	keys.lo.x = min( keys.lo.x, rects.repairButton.lo.x );
+	keys.lo.y = min( keys.lo.y, rects.repairButton.lo.y );
+	keys.hi.x = max( keys.hi.x, rects.repairButton.hi.x );
+	keys.hi.y = max( keys.hi.y, rects.repairButton.hi.y );
+	place( s_keyBox, keys, origin );
+	place( s_sellKey, rects.sellButton, keys.lo );
+	place( s_repairKey, rects.repairButton, keys.lo );
+	const char *const keyNames[ 2 ] = { "GUI:SidebarSell", "GUI:SidebarRepair" };
+	GameWindow *keyWindows[ 2 ] = { s_sellKey, s_repairKey };
+	for( Int k = 0; k < 2; k++ )
+	{
+		const UnicodeString name = TheGameText->fetch( keyNames[ k ] );
+		if( keyWindows[ k ] != NULL )
+			keyWindows[ k ]->winSetTooltip( name );
+		if( s_keyLabel[ k ] != NULL )
+			s_keyLabel[ k ]->setText( name );
+	}
+
 	GameFont *chipFont = TheFontLibrary->getFont( "Arial", max( REAL_TO_INT( CHIP_POINTS * rects.scale ), 6 ), TRUE );
+	for( Int k = 0; k < 2; k++ )
+		if( s_keyLabel[ k ] != NULL && chipFont != NULL )
+			s_keyLabel[ k ]->setFont( chipFont );
 	for( Int c = 0; c <= HUD_SIDEBAR_PICKER_CHIPS; c++ )
 	{
 		if( s_chipText[ c ] == NULL || chipFont == NULL )
@@ -738,6 +1101,19 @@ void Sidebar_layout( const HudLayoutRects &rects )
 		s_chipText[ c ]->setText( text );
 	}
 
+	// Tümü smaller until it fits its chip, 3 px clear of each side
+	if( s_chipText[ 0 ] != NULL )
+	{
+		for( Int points = max( REAL_TO_INT( CHIP_POINTS * rects.scale ), 6 ); points > 5; points-- )
+		{
+			s_chipText[ 0 ]->setFont( TheFontLibrary->getFont( "Arial", points, TRUE ) );
+			Int w = 0, h = 0;
+			s_chipText[ 0 ]->getSize( &w, &h );
+			if( w <= rects.pickerAll.width() - 6 )
+				break;
+		}
+	}
+
 	GameFont *keyFont = TheFontLibrary->getFont( "Arial", max( REAL_TO_INT( KEY_POINTS * rects.scale ), 6 ), TRUE );
 	for( Int t = 0; t < SIDEBAR_TAB_COUNT; t++ )
 	{
@@ -749,14 +1125,21 @@ void Sidebar_layout( const HudLayoutRects &rects )
 	s_dirty = TRUE;
 	s_iconPlayer = NULL;	// a new match keeps the slot's Player but may change its side
 	s_box->winHide( FALSE );
+	if( s_keyBox != NULL )
+		s_keyBox->winHide( FALSE );
 }
 
 //-------------------------------------------------------------------------------------------------
 void Sidebar_hide( void )
 {
 	s_shown = FALSE;
+	s_cursorMode = SIDEBAR_CURSOR_NONE;
 	if( boxAlive() )
+	{
 		s_box->winHide( TRUE );
+		if( s_keyBox != NULL )
+			s_keyBox->winHide( TRUE );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -823,14 +1206,26 @@ static void fillList( Player *player )
 /// how the picked factory's own bar has `thing`: its button's availability, restricted when it has none
 static CommandAvailability pickedAvailability( Object *factory, const ThingTemplate *thing )
 {
+	// a factory's unit buttons on the unit tabs, a builder's structure buttons on Bina and Savunma
+	const Int type = structureTab( s_tab ) ? GUI_COMMAND_DOZER_CONSTRUCT : GUI_COMMAND_UNIT_BUILD;
 	const CommandSet *set = TheControlBar->findCommandSet( factory->getCommandSetString() );
 	for( Int i = 0; set != NULL && i < MAX_COMMANDS_PER_SET; i++ )
 	{
 		const CommandButton *button = set->getCommandButton( i );
-		if( button != NULL && button->getCommandType() == GUI_COMMAND_UNIT_BUILD && button->getThingTemplate() == thing )
+		if( button != NULL && button->getCommandType() == type && button->getThingTemplate() == thing )
 			return TheControlBar->getButtonAvailability( button, factory );
 	}
 	return COMMAND_RESTRICTED;
+}
+
+/// a live, finished builder of the player's: the Bina and Savunma tabs' chips
+static void findBuilderChip( Object *obj, void *userData )
+{
+	std::vector< ObjectID > *found = (std::vector< ObjectID > *)userData;
+	if( obj->isEffectivelyDead() || !obj->isKindOf( KINDOF_DOZER )
+			|| obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || obj->testStatus( OBJECT_STATUS_SOLD ) )
+		return;
+	found->push_back( obj->getID() );
 }
 
 struct FactorySearch
@@ -838,6 +1233,49 @@ struct FactorySearch
 	Bool infantry;										///< the Piyade tab's factories, else Araç's
 	std::vector< ObjectID > *found;
 };
+static void findFactory( Object *obj, void *userData );
+
+//-------------------------------------------------------------------------------------------------
+/** The player picked one of his producers or builders in the world: the sidebar goes to its tab with
+	* its chip lit (a builder Bina, a barracks Piyade, a war factory or airfield Araç).  Only when the
+	* selection becomes that one object, so a tab the player chose afterwards is left alone. */
+//-------------------------------------------------------------------------------------------------
+static void followSelection( Player *player )
+{
+	const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+	Object *one = selected != NULL && selected->size() == 1 && *selected->begin() != NULL ? ( *selected->begin() )->getObject() : NULL;
+	const ObjectID id = one != NULL ? one->getID() : INVALID_ID;
+	if( id == s_followed )
+		return;
+	s_followed = id;
+	if( one == NULL || one->getControllingPlayer() != player )
+		return;
+
+	Int tab = -1;
+	std::vector< ObjectID > found;
+	if( one->isKindOf( KINDOF_DOZER ) )
+	{
+		findBuilderChip( one, &found );
+		tab = found.empty() ? -1 : SIDEBAR_TAB_BUILDINGS;
+	}
+	else
+	{
+		FactorySearch infantry = { TRUE, &found };
+		findFactory( one, &infantry );
+		if( !found.empty() )
+			tab = SIDEBAR_TAB_INFANTRY;
+		else
+		{
+			FactorySearch vehicles = { FALSE, &found };
+			findFactory( one, &vehicles );
+			tab = found.empty() ? -1 : SIDEBAR_TAB_VEHICLES;
+		}
+	}
+	if( tab < 0 )
+		return;
+	Sidebar_selectTab( tab );
+	s_pick[ tab ] = id;	// a producer past the chips goes back to Tümü on the refill
+}
 
 /// a finished factory of the player's whose bar offers a unit of the tab's kind
 static void findFactory( Object *obj, void *userData )
@@ -897,7 +1335,15 @@ void Sidebar_update( void )
 	}
 	Player *player = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
 	if( !s_shown || !boxAlive() || player == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame() )
+	{
+		s_cursorMode = SIDEBAR_CURSOR_NONE;
 		return;
+	}
+
+	// a structure to place, a targeting command or a signal taken up since puts the mode down
+	if( s_cursorMode != SIDEBAR_CURSOR_NONE && ( TheInGameUI->getPendingPlaceType() != NULL
+			|| TheInGameUI->getGUICommand() != NULL || TheInGameUI->isSignalArmed() ) )
+		s_cursorMode = SIDEBAR_CURSOR_NONE;
 
 	// the tab icons for this player's side, once a player
 	if( s_iconPlayer != player )
@@ -936,6 +1382,13 @@ void Sidebar_update( void )
 		}
 	}
 
+	// a single producer or builder of the player's newly selected in the world: its tab and its chip
+	followSelection( player );
+
+	// the structure on the cursor no longer the picked builder's once the placement is over
+	if( TheInGameUI->getPendingPlaceType() == NULL )
+		s_placingBuilder = INVALID_ID;
+
 	// once a logic frame, or at once when the tab changed: nothing read here changes in between
 	const UnsignedInt frame = TheGameLogic->getFrame();
 	if( s_dirty || !s_listed || s_listFrame != frame || s_listPlayer != player )
@@ -946,36 +1399,36 @@ void Sidebar_update( void )
 		{
 			player->iterateObjects( gatherProgress, NULL );
 
-			// the picker's factories, and the pick back to Tümü once its factory is gone or off the chips
+			// the picker's factories
 			FactorySearch search = { s_tab == SIDEBAR_TAB_INFANTRY, &s_factories };
 			player->iterateObjects( findFactory, &search );
-			std::sort( s_factories.begin(), s_factories.end() );
-			const size_t chips = min( s_factories.size(), (size_t)HUD_SIDEBAR_PICKER_CHIPS );
-			if( std::find( s_factories.begin(), s_factories.begin() + chips, s_pick[ s_tab ] ) == s_factories.begin() + chips )
-				s_pick[ s_tab ] = INVALID_ID;
+		}
+		else
+			player->iterateObjects( findBuilderChip, &s_factories );	// and on Bina and Savunma the builders
 
-			// each chip's building: its picture for the draw, its name for the tooltip
+		// sorted by ObjectID, the pick back to Tümü once its producer is gone or off the chips
+		std::sort( s_factories.begin(), s_factories.end() );
+		const size_t chips = min( s_factories.size(), (size_t)HUD_SIDEBAR_PICKER_CHIPS );
+		if( std::find( s_factories.begin(), s_factories.begin() + chips, s_pick[ s_tab ] ) == s_factories.begin() + chips )
+			s_pick[ s_tab ] = INVALID_ID;
+
+		{
+			// each chip's building or builder: its picture for the draw, its name for the tooltip
 			for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; i++ )
 			{
 				Object *factory = i < (Int)chips ? TheGameLogic->findObjectByID( s_factories[ i ] ) : NULL;
-				// the artist's glyph for the kind of building, the building's own cameo only without one
-				s_chipIcon[ i ] = NULL;
+				// the building's own picture (the owner's pick); the artist's kind glyph only for one without
+				s_chipIcon[ i ] = factory != NULL ? factory->getTemplate()->getButtonImage() : NULL;
 				s_chipGlyph[ i ] = FALSE;
-				if( factory != NULL )
+				if( factory != NULL && s_chipIcon[ i ] == NULL )
 				{
 					const char *kind = factory->isKindOf( KINDOF_FS_AIRFIELD ) ? "ChipIconAirfield"
 						: factory->isKindOf( KINDOF_FS_BARRACKS ) ? "ChipIconBarracks"
 						: factory->isKindOf( KINDOF_FS_WARFACTORY ) ? "ChipIconFactory" : "ChipIconGeneric";
 					s_chipIcon[ i ] = Sidebar_image( kind );
 					s_chipGlyph[ i ] = s_chipIcon[ i ] != NULL;
-					if( s_chipIcon[ i ] == NULL )
-						s_chipIcon[ i ] = factory->getTemplate()->getButtonImage();
 				}
-				if( factory == NULL || s_chips[ i ] == NULL )
-					continue;
-				const UnicodeString name = factory->getTemplate()->getDisplayName();
-				if( name.compare( s_chips[ i ]->winGetInstanceData()->getTooltipText() ) != 0 )
-					s_chips[ i ]->winSetTooltip( name );
+				s_chipName[ i ] = factory != NULL ? factory->getTemplate()->getDisplayName() : UnicodeString::TheEmptyString;
 			}
 		}
 		s_listed = TRUE;
@@ -986,8 +1439,8 @@ void Sidebar_update( void )
 
 	const Int count = (Int)s_list.size();
 	s_row = Sidebar_scroll( count, HUD_SIDEBAR_CAMEO_COLUMNS, HUD_SIDEBAR_CAMEO_ROWS, s_row );
-	// with a factory picked the cameos read that factory's bar, so what it cannot build is greyed
-	Object *picked = structureTab( s_tab ) || s_pick[ s_tab ] == INVALID_ID ? NULL : TheGameLogic->findObjectByID( s_pick[ s_tab ] );
+	// with a factory or builder picked the cameos read its bar, so what it cannot build is greyed
+	Object *picked = s_pick[ s_tab ] == INVALID_ID ? NULL : TheGameLogic->findObjectByID( s_pick[ s_tab ] );
 	for( Int i = 0; i < HUD_SIDEBAR_CAMEOS; i++ )
 	{
 		GameWindow *win = s_cameos[ i ];
@@ -1026,11 +1479,11 @@ void Sidebar_update( void )
 	if( s_arrowDown != NULL )
 		s_arrowDown->winEnable( s_row < Sidebar_scroll( count, HUD_SIDEBAR_CAMEO_COLUMNS, HUD_SIDEBAR_CAMEO_ROWS, count ) );
 
-	// the picker on the unit tabs only: Tümü, and a chip a factory, the first five by ObjectID
-	const Bool picker = !structureTab( s_tab );
+	// the picker on every tab: Tümü, and a chip a factory (a builder on Bina and Savunma), the first
+	// HUD_SIDEBAR_PICKER_CHIPS by ObjectID
 	if( s_chipAll != NULL )
-		s_chipAll->winHide( !picker );
+		s_chipAll->winHide( FALSE );
 	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; i++ )
 		if( s_chips[ i ] != NULL )
-			s_chips[ i ]->winHide( !picker || i >= (Int)s_factories.size() );
+			s_chips[ i ]->winHide( i >= (Int)s_factories.size() );
 }

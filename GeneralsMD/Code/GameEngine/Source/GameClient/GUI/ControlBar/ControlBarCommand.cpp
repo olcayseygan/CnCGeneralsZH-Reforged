@@ -511,6 +511,10 @@ void ControlBar::populateCommand( Object *obj )
 	{
 		const CommandButton *button = commandSet->getCommandButton( i );
 		slot[ i ] = ( m_commandWindows[ i ] && button && !BitTest( button->getOptions(), SCRIPT_ONLY ) ) ? button : NULL;
+		// the sidebar is the build list: a factory's unit buttons stay off the strip (a builder's
+		// structures, DOZER_CONSTRUCT, stay on it)
+		if( slot[ i ] != NULL && m_sidebarLayout && slot[ i ]->getCommandType() == GUI_COMMAND_UNIT_BUILD )
+			slot[ i ] = NULL;
 	}
 
 	// a builder standing in for an empty selection offers its buildings, not its orders: nobody
@@ -919,21 +923,23 @@ void ControlBar::populateBuildQueue( Object *producer )
 void ControlBar::updateBuildQueue( Object *obj, ProductionUpdateInterface *pu )
 {
 	GameWindow *queue = m_contextParent[ CP_BUILD_QUEUE ];
-	// the sidebar's cameos carry the clocks and counts, and the card keeps its portrait
-	const Bool busy = pu && pu->firstProduction() != NULL && !m_sidebarLayout;
+	const Bool busy = pu && pu->firstProduction() != NULL;
 	if( !busy )
 	{
 		if( queue->winIsHidden() == FALSE )
 		{
 			queue->winHide( TRUE );
-			setPortraitByObject( obj );
+			if( !m_sidebarLayout )
+				setPortraitByObject( obj );
 		}
 		return;
 	}
 
 	// the portrait is put back by anything that re-evaluates the selection, so it is taken off
-	// every frame the queue stands in its place, as EA did
-	setPortraitByObject( NULL );
+	// every frame the queue stands in its place, as EA did.  The sidebar's queue stands in the card's
+	// row under the portrait, which stays
+	if( !m_sidebarLayout )
+		setPortraitByObject( NULL );
 	if( queue->winIsHidden() )
 	{
 		queue->winHide( FALSE );

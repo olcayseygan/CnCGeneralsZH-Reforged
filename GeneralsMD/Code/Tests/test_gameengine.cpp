@@ -20011,11 +20011,14 @@ TEST(hud_layout_rects_tile_the_screen)
 	CHECK_EQ( r.cameos[ 11 ].lo.y, 950 );		// 496 + 5 * 90.8
 	CHECK_EQ( r.arrowDown.lo.y, 1044 );
 	CHECK_EQ( r.pickerAll.lo.x, 1624 );
-	CHECK_EQ( r.pickerAll.width(), 66 );
-	CHECK_EQ( r.pickerChips[ 0 ].lo.x, 1698 );
-	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].lo.x, 1860 );
+	CHECK_EQ( r.pickerAll.width(), 50 );
+	CHECK_EQ( r.pickerAll.height(), 28 );
+	CHECK_EQ( r.pickerChips[ 0 ].lo.x, 1684 );
+	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].lo.x, 1862 );
 	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].width(), 50 );
-	CHECK( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].hi.x <= 1912 );
+	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].hi.x, 1912 );
+	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; ++i )
+		CHECK_EQ( r.pickerChips[ i ].width(), r.pickerAll.width() );
 	CHECK_EQ( r.pickerChips[ 0 ].lo.y, 464 );
 	CHECK_EQ( r.pickerChips[ 0 ].height(), 28 );
 	CHECK_EQ( r.powerRail.hi.y, 1072 );
@@ -20023,13 +20026,29 @@ TEST(hud_layout_rects_tile_the_screen)
 	CHECK_EQ( r.stripButtons[ 0 ].lo.y, 1020 );
 	CHECK_EQ( r.stripClock.lo.x, 1500 );
 	CHECK_EQ( r.stripSpare.lo.x, 904 );
-	CHECK_EQ( r.card.lo.y, 888 );
-	CHECK_EQ( r.gridCells[ 13 ].lo.x, 424 );
-	CHECK_EQ( r.gridCells[ 13 ].lo.y, 936 );
+	CHECK_EQ( r.card.lo.x, 0 );
+	CHECK_EQ( r.card.lo.y, 884 );
+	CHECK_EQ( r.card.hi.x, 464 );
+	CHECK_EQ( r.card.hi.y, 1016 );
+	CHECK_EQ( r.portrait.lo.x, 8 );
+	CHECK_EQ( r.portrait.lo.y, 890 );
+	CHECK_EQ( r.portrait.width(), 448 );
+	CHECK_EQ( r.portrait.height(), 64 );
+	CHECK_EQ( r.unitRow[ 0 ].lo.x, 8 );
+	CHECK_EQ( r.unitRow[ 0 ].lo.y, 960 );
+	CHECK_EQ( r.unitRow[ 0 ].width(), 60 );
+	CHECK_EQ( r.unitRow[ HUD_UNIT_ROW_CELLS - 1 ].hi.x, 452 );
+	CHECK_EQ( r.unitRow[ HUD_UNIT_ROW_CELLS - 1 ].hi.y, 1016 );
+	CHECK_EQ( r.upgradeColumn[ 0 ].lo.x, 0 );
+	CHECK_EQ( r.upgradeColumn[ 0 ].hi.y, 880 );
+	CHECK_EQ( r.upgradeColumn[ HUD_UPGRADE_CELLS - 1 ].lo.y, 664 );
 	CHECK_EQ( r.powersWindow.lo.x, 1400 );
-	CHECK_EQ( r.superweaponRow.hi.x, 1592 );
+	CHECK_EQ( r.superweaponRow.hi.x, 1600 );
+	CHECK_EQ( r.superweaponRow.hi.x, r.sidebar.lo.x );
+	CHECK_EQ( r.superweaponRow.width(), 288 );
+	CHECK_EQ( r.superweaponRow.height(), 40 );
 	CHECK_EQ( r.superweaponRow.hi.y, 1008 );
-	CHECK_EQ( r.superweaponRowPitch, 32 );
+	CHECK_EQ( r.superweaponRowPitch, 44 );
 
 	// Classic fills the area only
 	HudLayoutForScreen( 1920, 1080, HUD_LAYOUT_CLASSIC, HUD_WIDTH_FULL, &r );
@@ -20118,12 +20137,31 @@ TEST(hud_layout_rects_tile_the_screen)
 			CHECK( r.stripSpare.lo.x >= r.stripButtons[ HUD_STRIP_BUTTONS - 1 ].hi.x );
 			CHECK( r.stripSpare.hi.x <= r.stripClock.lo.x );
 
-			const IRegion2D *card[ HUD_CARD_GRID_CELLS + 1 ];
+			// the card welded to the strip, its unit row standing on it, the upgrade column on the card
+			const IRegion2D *card[ HUD_UNIT_ROW_CELLS + 1 ];
 			n = 0;
 			card[ n++ ] = &r.portrait;
-			for( Int i = 0; i < HUD_CARD_GRID_CELLS; ++i )
-				card[ n++ ] = &r.gridCells[ i ];
+			for( Int i = 0; i < HUD_UNIT_ROW_CELLS; ++i )
+				card[ n++ ] = &r.unitRow[ i ];
 			checkHudCells( card, n, r.card );
+			CHECK_EQ( r.card.hi.y, r.strip.lo.y );
+			CHECK_EQ( r.card.lo.x, r.area.lo.x );
+			for( Int i = 0; i < HUD_UNIT_ROW_CELLS; ++i )
+				CHECK_EQ( r.unitRow[ i ].hi.y, r.strip.lo.y );
+			const IRegion2D *column[ HUD_UPGRADE_CELLS ];
+			for( Int i = 0; i < HUD_UPGRADE_CELLS; ++i )
+			{
+				column[ i ] = &r.upgradeColumn[ i ];
+				CHECK_EQ( r.upgradeColumn[ i ].lo.x, r.card.lo.x );
+				CHECK( r.upgradeColumn[ i ].hi.y <= r.card.lo.y );
+				CHECK( i == 0 || r.upgradeColumn[ i ].hi.y <= r.upgradeColumn[ i - 1 ].lo.y );
+				CHECK( hudRegionInside( r.upgradeColumn[ i ], r.play ) );
+				CHECK( !hudRegionsOverlap( r.upgradeColumn[ i ], r.superweaponRow ) );
+				CHECK( !hudRegionsOverlap( r.upgradeColumn[ i ], r.powersWindow ) );
+			}
+			IRegion2D columnBox = r.upgradeColumn[ HUD_UPGRADE_CELLS - 1 ];
+			columnBox.hi = r.upgradeColumn[ 0 ].hi;
+			checkHudCells( column, HUD_UPGRADE_CELLS, columnBox );
 
 			// the world-side pieces stand in the open world and clear of each other
 			CHECK( hudRegionInside( r.card, r.play ) );
@@ -20153,6 +20191,16 @@ TEST(sidebar_scroll_keeps_the_window_full)
 	CHECK_EQ( Sidebar_scroll( 24, cols, rows, 3 ), 3 );
 	CHECK_EQ( Sidebar_scroll( 24, 0, rows, 3 ), 0 );				// no grid
 	CHECK_EQ( Sidebar_scroll( 24, cols, 0, 3 ), 0 );
+}
+
+TEST(sidebar_sell_press_sells_the_selection_or_toggles_the_cursor)
+{
+	/* The owner's Sat: with own sellable structures selected the press sells them at once; with none it
+		 puts the sell cursor on; with the cursor on it takes it off, whatever is selected by then. */
+	CHECK_EQ( Sidebar_sellPress( FALSE, TRUE ), (Int)SIDEBAR_SELL_PRESS_SELECTED );
+	CHECK_EQ( Sidebar_sellPress( FALSE, FALSE ), (Int)SIDEBAR_SELL_PRESS_MODE_ON );
+	CHECK_EQ( Sidebar_sellPress( TRUE, FALSE ), (Int)SIDEBAR_SELL_PRESS_MODE_OFF );
+	CHECK_EQ( Sidebar_sellPress( TRUE, TRUE ), (Int)SIDEBAR_SELL_PRESS_MODE_OFF );
 }
 
 TEST(a_plate_covers_the_windows_its_panel_is_responsible_for)

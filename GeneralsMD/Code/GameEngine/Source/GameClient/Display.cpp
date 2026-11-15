@@ -183,9 +183,10 @@ void HudLayoutForScreen( Int screenWidth, Int screenHeight, Int layout, Int hudW
 	for( Int i = 0; i < HUD_SIDEBAR_TABS; ++i )
 		m.sidebarTop( &out->tabs[ i ], 1624.0f + 74.0f * i, 420, 66, 36 );
 	setRegion( &out->powerRail, m.sx( 1604 ), m.ty( 420 ), m.sx( 1620 ), m.by( 1072 ) );
-	m.sidebarTop( &out->pickerAll, 1624, 464, 66, 28 );
+	// "All" and the four chips, one size, spread evenly over 1624..1912
+	m.sidebarTop( &out->pickerAll, 1624, 464, 50, 28 );
 	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; ++i )
-		m.sidebarTop( &out->pickerChips[ i ], 1698.0f + 54.0f * i, 464, 50, 28 );
+		m.sidebarTop( &out->pickerChips[ i ], 1683.5f + 59.5f * i, 464, 50, 28 );
 	for( Int row = 0; row < HUD_SIDEBAR_CAMEO_ROWS; ++row )
 		for( Int col = 0; col < HUD_SIDEBAR_CAMEO_COLUMNS; ++col )
 			m.sidebarTop( &out->cameos[ row * HUD_SIDEBAR_CAMEO_COLUMNS + col ],
@@ -202,17 +203,18 @@ void HudLayoutForScreen( Int screenWidth, Int screenHeight, Int layout, Int hudW
 		out->stripSpare.hi.x = out->stripSpare.lo.x;
 
 	// the selection card
-	m.areaBottom( &out->card, 8, 888, 464, 120 );
-	m.areaBottom( &out->portrait, 16, 896, 160, 104 );
-	for( Int row = 0; row < HUD_CARD_GRID_ROWS; ++row )
-		for( Int col = 0; col < HUD_CARD_GRID_COLUMNS; ++col )
-			m.areaBottom( &out->gridCells[ row * HUD_CARD_GRID_COLUMNS + col ],
-										184.0f + 40.0f * col, 896.0f + 40.0f * row, 36, 28 );
+	// welded to the strip: its foot is the strip's top, its left the area's
+	m.areaBottom( &out->card, 0, 884, 464, 132 );
+	m.areaBottom( &out->portrait, 8, 890, 448, 64 );
+	for( Int i = 0; i < HUD_UNIT_ROW_CELLS; ++i )
+		m.areaBottom( &out->unitRow[ i ], 8.0f + 64.0f * i, 960, 60, 56 );
+	for( Int i = 0; i < HUD_UPGRADE_CELLS; ++i )
+		m.areaBottom( &out->upgradeColumn[ i ], 0, 840.0f - 44.0f * i, 48, 40 );
 
 	// against the sidebar's left edge
 	setRegion( &out->powersWindow, m.lx( 1400 ), m.ty( 64 ), m.lx( 1592 ), m.ty( 304 ) );
-	setRegion( &out->superweaponRow, m.lx( 1304 ), m.by( 980 ), m.lx( 1592 ), m.by( 1008 ) );
-	out->superweaponRowPitch = m.len( 32 );
+	setRegion( &out->superweaponRow, m.lx( 1312 ), m.by( 968 ), m.lx( 1600 ), m.by( 1008 ) );
+	out->superweaponRowPitch = m.len( 44 );
 }
 
 

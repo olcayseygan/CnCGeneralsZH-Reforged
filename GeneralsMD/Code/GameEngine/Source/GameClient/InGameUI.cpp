@@ -4616,9 +4616,10 @@ static Int controlBarTop( void )
 static Int radarFrameTop( void )
 {
 	// the Red Alert style radar is up in the sidebar: what stood on the radar's frame on the left
-	// stands on the selection card instead
+	// stands on the top of the unit's upgrade column over the selection card instead (every caller
+	// stands at the left edge, where the column is; held there with the column empty, so nothing jumps)
 	if( sidebarLayoutOn() )
-		return hudRects().card.lo.y;
+		return hudRects().upgradeColumn[ HUD_UPGRADE_CELLS - 1 ].lo.y;
 
 	static NameKeyType radarKey = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:LeftHUD" );
 	const Image *const *frame = TheControlBar->getControlBarSchemeManager()->getRadarFrame();
@@ -9214,13 +9215,15 @@ void InGameUI::postDraw( void )
 				//
 				// The Red Alert style layout writes them as named rows (the wireframe's bottom right): from
 				// superweaponRow up, superweaponRowPitch apart, the right edge on the sidebar's left.  Each
-				// row is the side's SuperweaponOwn or SuperweaponEnemy plate (288x28 at 1080, the sidebar
-				// art): the power's cameo in its icon well, its name (EA's own "GUI:<power>" countdown
-				// label) and the time left or "Ready" in its glass, the charge filling its groove in the
-				// owner's colour.  Without the plate a flat one with the same seats stands in, teal for your
-				// own and your allies', red for an enemy's.  Past SIDEBAR_SUPERWEAPON_ROWS a "+N" tab
-				// sticks up from the top row.  A click on a row looks at your own building, as a cell's does.
+				// row is the side's SuperweaponOwn or SuperweaponEnemy plate (SW_ROW_W x SW_ROW_H at 1080,
+				// the sidebar art): the power's cameo in its icon well, its name (EA's own "GUI:<power>"
+				// countdown label) and the time left or "Ready" in its glass, the charge filling its groove,
+				// teal for your own and your allies', red for an enemy's.  Without the plate a flat one with
+				// the same seats stands in.  Past SIDEBAR_SUPERWEAPON_ROWS a "+N" tab sticks up from the top
+				// row.  A click on a row looks at your own building, as a cell's does.
 				//
+				// the art's own pixels, which the seats below are read in; the row on screen is superweaponRow
+				enum { SW_ROW_W = 288, SW_ROW_H = 40 };
 				const Bool more = (Int)listed.size() > SIDEBAR_SUPERWEAPON_ROWS;
 				const Int rows = more ? SIDEBAR_SUPERWEAPON_ROWS : (Int)listed.size();
 				const Int edge = rects.sidebar.lo.x;
@@ -9236,10 +9239,10 @@ void InGameUI::postDraw( void )
 				m_superweaponCells = rows;
 				m_superweaponTab = more ? hudTab( 1, edge, m_superweaponPlace[ rows - 1 ].lo.y, -1 ) : noHudTab();
 
-				// a seat on the plate, in its 288x28 art pixels, on screen
+				// a seat on the plate, in its art pixels, on screen
 				auto seat = []( const IRegion2D &row, Int x0, Int y0, Int x1, Int y1 )
 				{
-					const Real sx = row.width() / 288.0f, sy = row.height() / 28.0f;
+					const Real sx = row.width() / (Real)SW_ROW_W, sy = row.height() / (Real)SW_ROW_H;
 					IRegion2D at;
 					at.lo.x = row.lo.x + REAL_TO_INT_FLOOR( x0 * sx + 0.5f );
 					at.lo.y = row.lo.y + REAL_TO_INT_FLOOR( y0 * sy + 0.5f );
@@ -9247,9 +9250,10 @@ void InGameUI::postDraw( void )
 					at.hi.y = row.lo.y + REAL_TO_INT_FLOOR( y1 * sy + 0.5f );
 					return at;
 				};
-				auto iconWell = [ & ]( const IRegion2D &row ) { return seat( row, 4, 3, 30, 25 ); };
-				auto textGlass = [ & ]( const IRegion2D &row ) { return seat( row, 34, 3, 270, 17 ); };
-				auto groove = [ & ]( const IRegion2D &row ) { return seat( row, 34, 19, 270, 24 ); };
+				// icon well 4..46 x 4..36, glass 52..270 x 4..26, groove 52..270 x 29..35, lamp 274..284 x 14..26
+				auto iconWell = [ & ]( const IRegion2D &row ) { return seat( row, 4, 4, 46, 36 ); };
+				auto textGlass = [ & ]( const IRegion2D &row ) { return seat( row, 52, 4, 270, 26 ); };
+				auto groove = [ & ]( const IRegion2D &row ) { return seat( row, 52, 29, 270, 35 ); };
 
 				const Image *ownPlate = Sidebar_image( "SuperweaponOwn" );
 				const Image *enemyPlate = Sidebar_image( "SuperweaponEnemy" );
@@ -9277,14 +9281,16 @@ void InGameUI::postDraw( void )
 					}
 					if( line.cameo != NULL )
 						TheDisplay->drawImage( line.cameo, icon.lo.x + 1, icon.lo.y + 1, icon.hi.x - 1, icon.hi.y - 1 );
-					// the charge fills the groove in its owner's colour, all of it once it is ready
+					// the charge fills the groove, teal for yours and your allies', red for an enemy's, all of it
+					// once it is ready
 					TheDisplay->drawFillRect( charge.lo.x, charge.lo.y, charge.width() * ( line.ready ? 100 : line.percent ) / 100,
-																		charge.height(), line.owner );
+																		charge.height(), line.enemy ? red : teal );
 				}
 				TheDisplay->endBatch2D();
 
-				// the name and the clock in the glass: the largest of the superweapon font's sizes whose
-				// line fits it, found once for a glass height
+				// the name and the clock in the glass, bold: the largest of the superweapon font's sizes
+				// whose line fits it with 3 rows to spare, found once for a glass height.  A 22 pixel glass
+				// at 1080 takes a 19 pixel line, a cap of about 12
 				const Int glassH = textGlass( m_superweaponPlace[ 0 ] ).height();
 				static Int s_fitGlass = -1;
 				static Int s_fitPoint = 4;
@@ -9292,11 +9298,11 @@ void InGameUI::postDraw( void )
 				{
 					s_fitGlass = glassH;
 					s_fitPoint = 4;
-					for( Int point = m_superweaponNormalPointSize; point > 4; point-- )
+					for( Int point = 40; point > 4; point-- )
 					{
 						const GameFont *font = TheFontLibrary->getFont( m_superweaponNormalFont,
-							TheGlobalLanguageData->adjustFontSize( point ), m_superweaponNormalBold );
-						if( font != NULL && font->height <= glassH )
+							TheGlobalLanguageData->adjustFontSize( point ), TRUE );
+						if( font != NULL && font->height <= glassH - 3 )
 						{
 							s_fitPoint = point;
 							break;
@@ -9318,7 +9324,7 @@ void InGameUI::postDraw( void )
 						time = readyText;
 					else
 						time.format( u"%d:%2.2d", line.seconds / 60, line.seconds % 60 );
-					line.info->setFont( m_superweaponNormalFont, s_fitPoint, m_superweaponNormalBold );
+					line.info->setFont( m_superweaponNormalFont, s_fitPoint, TRUE );
 					line.info->setText( TheGameText->fetch( label ), time );
 
 					DisplayString *name = line.info->getNameString();
@@ -9326,8 +9332,9 @@ void InGameUI::postDraw( void )
 					const Int gap = MAX( 2, glass.height() / 3 );
 					const Int textY = glass.lo.y + ( glass.height() - name->getFont()->height ) / 2;
 					const Int clockX = glass.hi.x - gap - clock->getWidth();
-					const Color ink = line.enemy ? GameMakeColor( 250, 186, 172, 255 ) : GameMakeColor( 176, 240, 222, 255 );
-					clock->draw( clockX, textY, line.ready ? GameMakeColor( 255, 255, 255, 255 ) : ink, drop );
+					// the name in the row's own colour, the clock white
+					const Color ink = line.enemy ? GameMakeColor( 255, 128, 108, 255 ) : GameMakeColor( 110, 232, 204, 255 );
+					clock->draw( clockX, textY, GameMakeColor( 240, 244, 246, 255 ), drop );
 					// the name gives way to the time.  The text's quads are clipped only when they are
 					// built, which is when the text or its place changes, so the room is held steady: a
 					// quarter of the glass for the clock, more only when the clock itself is wider

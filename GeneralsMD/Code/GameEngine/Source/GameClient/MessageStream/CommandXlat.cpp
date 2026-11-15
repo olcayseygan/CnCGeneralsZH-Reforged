@@ -3772,6 +3772,10 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 				cancelledSomething = TRUE;
 			}
 
+			// the sidebar's sell or repair cursor
+			if( Sidebar_cancelCursorMode() )
+				cancelledSomething = TRUE;
+
 			// a watcher looking through one player's eyes gets the whole map back, menu shut first
 			if( cancelledSomething == FALSE && !TheInGameUI->isQuitMenuVisible() && TheObserverCamera.stopLooking() )
 			{

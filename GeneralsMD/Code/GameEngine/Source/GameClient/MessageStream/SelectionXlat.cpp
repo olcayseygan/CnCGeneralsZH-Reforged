@@ -48,6 +48,7 @@
 #include "GameLogic/Module/UpdateModule.h"
 
 #include "GameClient/ControlBar.h"
+#include "GameClient/ControlBarSidebar.h"
 #include "GameClient/Display.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/GameClient.h"
@@ -668,6 +669,8 @@ GameMessageDisposition SelectionTranslator::translateGameMessage(const GameMessa
 						TheMouse->setCursor( Mouse::ARROW );
 					}
 				}
+				// the hint stops here, before HintSpy: the sidebar's sell or repair cursor gets its word in
+				Sidebar_pointCursor();
 			}
 
 			break;
@@ -1221,6 +1224,10 @@ GameMessageDisposition SelectionTranslator::translateGameMessage(const GameMessa
 		//-----------------------------------------------------------------------------
 		case GameMessage::MSG_RAW_MOUSE_RIGHT_BUTTON_UP:
 		{
+			// the sidebar's sell or repair cursor is all this click took back (Sidebar_translate)
+			if( Sidebar_takeRightRelease() )
+				break;
+
 			// a signal armed off its key is all the right button takes back, in either mouse style.  This
 			// stood below the Classic branch, which breaks out on every release, so with Classic's mouse,
 			// the default, a right click never reached it.  A right drag that panned still takes nothing back

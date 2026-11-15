@@ -341,9 +341,8 @@ enum
 	HUD_SIDEBAR_CAMEOS = HUD_SIDEBAR_CAMEO_COLUMNS * HUD_SIDEBAR_CAMEO_ROWS,
 	HUD_SIDEBAR_PICKER_CHIPS = 4,			///< factories 1..4 beside "Tümü", each chip its building's icon and number
 	HUD_STRIP_BUTTONS = 14,						///< ButtonCommand01..14, the selection's commands
-	HUD_CARD_GRID_COLUMNS = 7,
-	HUD_CARD_GRID_ROWS = 2,
-	HUD_CARD_GRID_CELLS = HUD_CARD_GRID_COLUMNS * HUD_CARD_GRID_ROWS,
+	HUD_UNIT_ROW_CELLS = 7,						///< the card's flat row on the strip: a multi-selection's types, or a factory's queue (ButtonQueue01..07)
+	HUD_UPGRADE_CELLS = 5,						///< a single unit's upgrade cameos, a column above the card (MAX_RIGHT_HUD_UPGRADE_CAMEOS)
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -359,7 +358,9 @@ enum
 	* Under HUD_LAYOUT_CLASSIC only screen, world, area, play (= area), scale and layout are filled and
 	* every cell is zero: the Classic bar places its own panels, anchored to `area`.
 	*
-	* Row-major arrays: cameos[ row * HUD_SIDEBAR_CAMEO_COLUMNS + column ], gridCells[ row * 7 + col ]. */
+	* Row-major arrays: cameos[ row * HUD_SIDEBAR_CAMEO_COLUMNS + column ].  The card is welded to the
+	* strip (card.hi.y == strip.lo.y, card.lo.x == area.lo.x); its unit row stands on the strip, left to
+	* right, and the upgrade column climbs from the card's top at its left edge. */
 //-------------------------------------------------------------------------------------------------
 struct HudLayoutRects
 {
@@ -381,8 +382,8 @@ struct HudLayoutRects
 	IRegion2D generalButton;					///< 1772,368 140x36 (ButtonGeneral)
 	IRegion2D tabs[ HUD_SIDEBAR_TABS ];	///< y 420 h 36 w 66 at x 1624 / 1698 / 1772 / 1846
 	IRegion2D powerRail;							///< 1604,420 16x652, the vertical power bar (to H - 8)
-	IRegion2D pickerAll;							///< 1624,464 66x28 "Tümü" (phase 2)
-	IRegion2D pickerChips[ HUD_SIDEBAR_PICKER_CHIPS ];	///< y 464 h 28 w 50 from x 1698, pitch 54 (to 1910)
+	IRegion2D pickerAll;							///< 1624,464 50x28 "Tümü", a chip's size
+	IRegion2D pickerChips[ HUD_SIDEBAR_PICKER_CHIPS ];	///< y 464 h 28 w 50 from x 1683.5, pitch 59.5 (to 1912)
 	IRegion2D cameos[ HUD_SIDEBAR_CAMEOS ];	///< x 1624 / 1772 w 140 h 86, y 496 + 90.8 a row
 	IRegion2D arrowUp;								///< 1624,1044 140x28, bottom-anchored
 	IRegion2D arrowDown;							///< 1772,1044 140x28, bottom-anchored
@@ -393,15 +394,16 @@ struct HudLayoutRects
 	IRegion2D stripClock;							///< 96x48, right edge 4 short of the strip's (1500,1024 at 1920)
 	IRegion2D stripSpare;							///< the strip between the last button and the clock, 8 clear of both (904..1492 at 1920): idle, SelectArmy, PlaceBeacon
 
-	// the selection card on the strip at area's left: 8,888 464x120
+	// the selection card rising from the strip's top edge at area's left: 0,884 464x132
 	IRegion2D card;
-	IRegion2D portrait;								///< 16,896 160x104
-	IRegion2D gridCells[ HUD_CARD_GRID_CELLS ];	///< 7x2 of 36x28, pitch 40 both ways, from 184,896
+	IRegion2D portrait;								///< 8,890 448x64: the picture 80x64, the name and rank beside it, the health bar along its foot
+	IRegion2D unitRow[ HUD_UNIT_ROW_CELLS ];	///< 60x56 at x 8 + 64i, y 960, standing on the strip (to 452)
+	IRegion2D upgradeColumn[ HUD_UPGRADE_CELLS ];	///< 48x40 at x 0, from y 840 climbing 44 a cell (cell 4 at 664), over the card
 
 	// leaning on the sidebar's left edge
 	IRegion2D powersWindow;						///< the general's powers window: 1400,64 192x240
-	IRegion2D superweaponRow;					///< the lowest timer row, 1304,980 288x28; the next climbs by superweaponRowPitch
-	Int superweaponRowPitch;					///< 32 at 1920x1080: row n is superweaponRow moved up n * pitch
+	IRegion2D superweaponRow;					///< the lowest timer row, 1312,968 288x40, right edge on the sidebar's; the next climbs by superweaponRowPitch
+	Int superweaponRowPitch;					///< 44 at 1920x1080: row n is superweaponRow moved up n * pitch
 };
 
 //-------------------------------------------------------------------------------------------------

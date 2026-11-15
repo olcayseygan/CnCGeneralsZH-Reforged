@@ -3529,7 +3529,7 @@ void AIGroup::groupCheer( CommandSourceType cmdSource )
 /** The checks ControlBar makes before it shows the sell button.  The order lands on whatever is
 	* selected when the logic frame runs, and a selection hotkey pressed in the same frame as the
 	* button used to sell a tech building, a scaffold or a garrisoned civilian building. */
-static Bool mayPlayerSell( const Object *obj )
+Bool AIGroup::mayPlayerSell( const Object *obj )
 {
 	if( obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
 		return FALSE;

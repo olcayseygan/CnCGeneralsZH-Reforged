@@ -325,6 +325,8 @@ static Bool OrderQueue_namesItsOwnSource( const GameMessage *msg )
 	Int sourceArg;
 	switch( msg->getType() )
 	{
+		// the sidebar's repair cursor: the logic picks the builder, the selection is no part of it
+		case GameMessage::MSG_DO_REPAIR:										return msg->getArgumentCount() == 2;
 		case GameMessage::MSG_DO_SPECIAL_POWER:							sourceArg = 2; break;
 		case GameMessage::MSG_DO_SPECIAL_POWER_AT_OBJECT:		sourceArg = 3; break;
 		case GameMessage::MSG_DO_SPECIAL_POWER_AT_LOCATION:	sourceArg = 5; break;

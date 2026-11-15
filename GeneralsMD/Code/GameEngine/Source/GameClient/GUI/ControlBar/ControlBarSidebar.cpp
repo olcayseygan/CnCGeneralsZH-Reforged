@@ -114,8 +114,7 @@ namespace
 
 	/// the tabs' pieces, <Prefix>SidebarTab<Kind>{,H,P,I}: bezel and glyph baked in
 	const char *const TAB_KINDS[ SIDEBAR_TAB_COUNT ] = { "Buildings", "Defenses", "Infantry", "Vehicles" };
-	const Color KEY_LETTER_LIT	= GameMakeColor( 18, 22, 28, 255 );		///< the key letter on a lit tab piece
-	const Color KEY_LETTER_GLOW	= GameMakeColor( 255, 236, 190, 110 );
+	const Color KEY_LETTER_LIT	= GameMakeColor( 255, 255, 255, 255 );	///< the key letter on a lit tab piece, over its dark edge
 	const Real CAMEO_INSET		= 3.0f;		///< the cameo inside its well, at 1080
 
 	/// Sidebar_image's finds for the side they were made for, misses included
@@ -135,6 +134,9 @@ namespace
 	GameWindow *s_chipAll = NULL;
 	GameWindow *s_chips[ HUD_SIDEBAR_PICKER_CHIPS ];
 	DisplayString *s_chipText[ HUD_SIDEBAR_PICKER_CHIPS + 1 ];	///< [0] "Tümü", then the chips' numbers
+	const Image *s_chipIcon[ HUD_SIDEBAR_PICKER_CHIPS ];				///< each chip's building picture, set in Sidebar_update
+	Bool s_chipGlyph[ HUD_SIDEBAR_PICKER_CHIPS ];								///< the picture is a ChipIcon glyph, drawn white over a dark edge
+	const Color GLYPH_EDGE = GameMakeColor( 0, 0, 0, 200 );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -287,7 +289,7 @@ static void drawTab( GameWindow *window, WinInstanceData *instData )
 	{
 		TheDisplay->drawImage( art, at.x, at.y, at.x + size.x, at.y + size.y );
 		if( keyed )
-			s_keyText[ t ]->draw( at.x + 3, at.y + 1, open ? KEY_LETTER_LIT : KEY_LETTER, open ? KEY_LETTER_GLOW : TAB_TEXT_EDGE );
+			s_keyText[ t ]->draw( at.x + 3, at.y + 1, open ? KEY_LETTER_LIT : KEY_LETTER, TAB_TEXT_EDGE );
 		return;
 	}
 
@@ -343,14 +345,44 @@ static void drawChip( GameWindow *window, WinInstanceData *instData )
 	else
 		drawSteel( at, size, lit, hover );
 
+	// a factory chip: its building's picture, shape kept, a small margin inside the chip's height, and
+	// the number right of it; the pair centred.  White over a dark edge on every face, lit or not
 	DisplayString *text = s_chipText[ index + 1 ];
-	if( text == NULL )
-		return;
-	Int w = 0, h = 0;
-	text->getSize( &w, &h );
+	const Image *icon = index >= 0 ? s_chipIcon[ index ] : NULL;
 	const Int push = lit && art == NULL ? 1 : 0;
-	text->draw( at.x + ( size.x - w ) / 2 + push, at.y + ( size.y - h ) / 2 + push,
-		lit && art != NULL ? KEY_LETTER_LIT : CHIP_TEXT, lit && art != NULL ? KEY_LETTER_GLOW : TAB_TEXT_EDGE );
+	Int textW = 0, textH = 0;
+	if( text != NULL )
+		text->getSize( &textW, &textH );
+	Int iconW = 0, iconH = 0;
+	const Int margin = max( size.y / 9, 2 );
+	if( icon != NULL && icon->getImageWidth() > 0 && icon->getImageHeight() > 0 )
+	{
+		iconH = size.y - 2 * margin;
+		iconW = REAL_TO_INT( (Real)icon->getImageWidth() * iconH / icon->getImageHeight() );
+		// a wide picture is cut down to what leaves the number its room
+		const Int roomW = size.x - 2 * margin - textW - margin;
+		if( iconW > roomW && roomW > 0 )
+		{
+			iconH = REAL_TO_INT( (Real)iconH * roomW / iconW );
+			iconW = roomW;
+		}
+	}
+	const Int gap = iconW > 0 && textW > 0 ? margin : 0;
+	const Int left = at.x + ( size.x - iconW - gap - textW ) / 2 + push;
+	if( iconW > 0 && iconH > 0 )
+	{
+		const Int top = at.y + ( size.y - iconH ) / 2 + push;
+		if( s_chipGlyph[ index ] )
+		{
+			// a glyph: its shape in black a pixel down and right, then in white over it
+			TheDisplay->drawImage( icon, left + 1, top + 1, left + 1 + iconW, top + 1 + iconH, GLYPH_EDGE );
+			TheDisplay->drawImage( icon, left, top, left + iconW, top + iconH, CHIP_TEXT );
+		}
+		else
+			TheDisplay->drawImage( icon, left, top, left + iconW, top + iconH );
+	}
+	if( text != NULL )
+		text->draw( left + iconW + gap, at.y + ( size.y - textH ) / 2 + push, CHIP_TEXT, TAB_TEXT_EDGE );
 }
 
 /// the box: the side's cameo well under every cell, the cameos inside them
@@ -921,6 +953,30 @@ void Sidebar_update( void )
 			const size_t chips = min( s_factories.size(), (size_t)HUD_SIDEBAR_PICKER_CHIPS );
 			if( std::find( s_factories.begin(), s_factories.begin() + chips, s_pick[ s_tab ] ) == s_factories.begin() + chips )
 				s_pick[ s_tab ] = INVALID_ID;
+
+			// each chip's building: its picture for the draw, its name for the tooltip
+			for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; i++ )
+			{
+				Object *factory = i < (Int)chips ? TheGameLogic->findObjectByID( s_factories[ i ] ) : NULL;
+				// the artist's glyph for the kind of building, the building's own cameo only without one
+				s_chipIcon[ i ] = NULL;
+				s_chipGlyph[ i ] = FALSE;
+				if( factory != NULL )
+				{
+					const char *kind = factory->isKindOf( KINDOF_FS_AIRFIELD ) ? "ChipIconAirfield"
+						: factory->isKindOf( KINDOF_FS_BARRACKS ) ? "ChipIconBarracks"
+						: factory->isKindOf( KINDOF_FS_WARFACTORY ) ? "ChipIconFactory" : "ChipIconGeneric";
+					s_chipIcon[ i ] = Sidebar_image( kind );
+					s_chipGlyph[ i ] = s_chipIcon[ i ] != NULL;
+					if( s_chipIcon[ i ] == NULL )
+						s_chipIcon[ i ] = factory->getTemplate()->getButtonImage();
+				}
+				if( factory == NULL || s_chips[ i ] == NULL )
+					continue;
+				const UnicodeString name = factory->getTemplate()->getDisplayName();
+				if( name.compare( s_chips[ i ]->winGetInstanceData()->getTooltipText() ) != 0 )
+					s_chips[ i ]->winSetTooltip( name );
+			}
 		}
 		s_listed = TRUE;
 		s_dirty = FALSE;

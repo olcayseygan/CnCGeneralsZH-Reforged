@@ -7,7 +7,7 @@ each side's build.  The owner picked it from the preview of 2026-11-15
 Each side has two textures and one mapped INI, MappedImages/HandCreated/ReforgedHud<Side>Sidebar.ini:
     ReforgedHud<Side>Sidebar       512x2048: Plate 320x1080 at the sidebar's rect, Card 464x120, CameoWell 140x86,
                                    Tab<Kind>{,H,P,I} and TabIcon<Kind> 66x36 (Buildings, Defenses, Infantry,
-                                   Vehicles), ArrowUp/ArrowDown{,H,P,I} 140x28, Chip{,P} 40x28, ChipWide{,P} 66x28,
+                                   Vehicles), ArrowUp/ArrowDown{,H,P,I} 140x28, Chip{,P} 50x28, ChipWide{,P} 66x28,
                                    SuperweaponOwn/Enemy 288x28, KeyMenu/KeyDiplomacy{,H,P,I} 72x32,
                                    KeySell/KeyRepair{,H,P,I} 74x36, KeyGeneral{,H,P,I} 140x36
     ReforgedHud<Side>SidebarStrip  2048x128: Strip 1600x64
@@ -56,7 +56,7 @@ SELL, REPAIR, GENERAL = (1608, 368, 1682, 404), (1690, 368, 1764, 404), (1772, 3
 TABS = [(1624 + 74 * i, 420, 1690 + 74 * i, 456) for i in range(4)]
 RAIL = (1604, 420, 1620, 1072)
 PICK_ALL = (1624, 464, 1690, 492)
-CHIPS = [(int(1698 + 43.5 * i), 464, int(1698 + 43.5 * i) + 40, 492) for i in range(5)]
+CHIPS = [(1698 + 54 * i, 464, 1748 + 54 * i, 492) for i in range(4)]   # each the factory's icon left, its digit right (code)
 CAMEOS = [(1624 + 148 * c, int(496 + 90.8 * r), 1764 + 148 * c, int(496 + 90.8 * r) + 86) for r in range(6) for c in range(2)]
 ARROWS = [(1624, 1044, 1764, 1072), (1772, 1044, 1912, 1072)]
 CELLS = [(8 + 64 * i, 1020, 64 + 64 * i, 1076) for i in range(14)]
@@ -660,6 +660,50 @@ def tab_glyph(build, kind):
             ([H.triangle(x, 16, 2.6, 2.4, "up") for x in (6, 9.4, 12.8, 16.2)], I)]
 
 
+# The picker chips' factory icons (the coordinator's order of 2026-11-15: a shrunk building cameo smudged): flat
+# white glyphs the code tints, CHIP_ICON at 1080 on the chip's left, each side in its language as the tabs' are.
+CHIP_ICON_KINDS = ("Factory", "Airfield", "Barracks", "Generic")
+CHIP_ICON = (24, 20)
+
+
+def chip_glyph(build, kind):
+    """(polys, fill) layers in a 22 box round (11, 11)."""
+    R, I = 255, 0
+    if kind == "Factory":                       # a hall with a sawtooth roof and a wide door
+        teeth = {"machined": [(2, 9), (6, 5), (6, 9), (10, 5), (10, 9), (14, 5), (14, 9)],
+                 "terraced": [(2, 9), (2, 6), (6, 6), (6, 9), (8, 9), (8, 5), (12, 5), (12, 9), (14, 9), (14, 6)],
+                 "scavenged": [(2.4, 9.4), (5.6, 5.2), (6.4, 9), (10.2, 4.6), (10.6, 9.4), (14.6, 5.6), (14.2, 9.2)],
+                 "faceted": [(2, 9), (8, 5.2), (8, 9), (14, 5.2), (14, 9)]}[build]
+        hall = [(2, 18)] + teeth + [(17, 9), (17, 3.5), (19.5, 3.5), (19.5, 9), (20, 9), (20, 18)]
+        return [([hall], R), ([box(6.5, 12, 16.5, 18)], I)]
+    if kind == "Airfield":                      # a control tower over a runway
+        cab = {"machined": [(10, 7), (10.4, 4.6), (12, 3), (17, 3), (18.6, 4.6), (19, 7)],
+               "terraced": [(9.6, 7), (9.6, 5), (11, 5), (11, 3), (18, 3), (18, 5), (19.4, 5), (19.4, 7)],
+               "scavenged": [(10.2, 7.4), (11, 3.6), (18.6, 2.8), (19.2, 6.8)],
+               "faceted": [(10, 7), (11.6, 3), (19, 3), (19, 7)]}[build]
+        return [([cab, box(12.8, 7, 16.2, 16), [(1, 16), (21, 16), (21, 19.4), (1, 19.4)]], R),
+                ([box(11.4, 4.4, 17.6, 5.8)] + [box(x, 17.2, x + 2.6, 18.2) for x in (2.6, 7, 11.4, 15.8)], I)]
+    if kind == "Barracks":                      # a long hut, a row of windows, a door
+        body = {"machined": [(2, 18), (2, 11), (5, 7), (17, 7), (20, 11), (20, 18)],
+                "terraced": [(3, 18), (3, 10.4), (1, 10.4), (2.6, 8.6), (6, 8.6), (6, 6.4), (16, 6.4), (16, 8.6), (19.4, 8.6),
+                             (21, 10.4), (19, 10.4), (19, 18)],
+                "scavenged": [(2.4, 18), (3, 10.6), (11.4, 5.2), (19.6, 10.2), (19.2, 18)],
+                "faceted": [(2, 18), (2, 11), (9, 7), (20, 9), (20, 18)]}[build]
+        return [([body], R), ([box(9.4, 13, 12.6, 18), box(4.4, 12.4, 7.4, 14.2), box(14.6, 12.4, 17.6, 14.2)], I)]
+    n, r_out, r_in = {"machined": (8, 8.6, 6.4), "terraced": (4, 8.6, 6.6), "scavenged": (7, 8.6, 6.2), "faceted": (6, 9, 6)}[build]
+    pts = []                                    # any other producer: a cog in the build's teeth
+    for i in range(n):
+        a = 2 * np.pi * i / n - np.pi / 2
+        w = np.pi / n * (0.45 if build != "faceted" else 0.0)
+        jig = (0.0 if build != "scavenged" else (0.6 if i % 2 else -0.4))
+        if build == "faceted":
+            pts += [(11 + r_out * np.cos(a), 11 + r_out * np.sin(a)), (11 + r_in * np.cos(a + np.pi / n), 11 + r_in * np.sin(a + np.pi / n))]
+        else:
+            for aa, rr in ((a - w, r_out + jig), (a + w, r_out + jig), (a + np.pi / n - w, r_in), (a + np.pi / n + w, r_in)):
+                pts.append((11 + rr * np.cos(aa), 11 + rr * np.sin(aa)))
+    return [([pts], R), ([regular(11, 11, 2.8, 12)], I)]
+
+
 def octagon_(x0, y0, x1, y1, c):
     return H.octagon(x0, y0, x1, y1, c)
 
@@ -821,7 +865,7 @@ def pieces(side):
         out["ArrowDown" + s] = key(side, 140, 28, s, arrow_layers(build, False), 0.8, 0.8)
     for s in ("", "P"):
         out["ChipWide" + s] = key(side, 66, 28, s, corner=0.8)
-        out["Chip" + s] = key(side, 40, 28, s, corner=0.8)
+        out["Chip" + s] = key(side, 50, 28, s, corner=0.8)
     for s in STATES:
         out["KeyMenu" + s] = key(side, 72, 32, s, icon_layers("Options", build), 0.55)
         out["KeyDiplomacy" + s] = key(side, 72, 32, s, icon_layers("Chat", build), 0.55)
@@ -829,6 +873,9 @@ def pieces(side):
         out["KeyRepair" + s] = key(side, 74, 36, s)
         out["KeyGeneral" + s] = key(side, 140, 36, s, icon_layers("General", build), 0.55)
     out.update(powers_wing(side))
+    for kind in CHIP_ICON_KINDS:
+        out["ChipIcon" + kind] = flat_glyph(*CHIP_ICON, chip_glyph(build, kind), 1.08, CHIP_ICON[0] / 2, CHIP_ICON[1] / 2 - 0.4,
+                                            (255, 255, 255))
     return out
 
 
@@ -854,12 +901,13 @@ def sheet_names():
              ("SuperweaponOwn", (288, 28)), ("SuperweaponEnemy", (288, 28))]
     names += [("Tab" + kind + s, (66, 36)) for kind in TAB_KINDS for s in STATES] + [("TabIcon" + kind, (66, 36)) for kind in TAB_KINDS]
     names += [("Arrow" + d + s, (140, 28)) for d in ("Up", "Down") for s in STATES]
-    names += [("ChipWide", (66, 28)), ("ChipWideP", (66, 28)), ("Chip", (40, 28)), ("ChipP", (40, 28))]
+    names += [("ChipWide", (66, 28)), ("ChipWideP", (66, 28)), ("Chip", (50, 28)), ("ChipP", (50, 28))]
     names += [("Key" + k + s, size) for k, size in (("Menu", (72, 32)), ("Diplomacy", (72, 32)), ("Sell", (74, 36)),
                                                      ("Repair", (74, 36)), ("General", (140, 36))) for s in STATES]
     C, R = POWERS_CELL, POWERS_RIM              # appended, so nothing before them moved
     names += [("PowersCell", (C, C)), ("PowersJoint", (R, C)), ("PowersEdge", (R, C)), ("PowersTop", (C, R)),
               ("PowersBottom", (C, R)), ("PowersCornerTop", (R, R)), ("PowersCornerBottom", (R, R))]
+    names += [("ChipIcon" + kind, CHIP_ICON) for kind in CHIP_ICON_KINDS]
     return names
 
 

@@ -339,7 +339,7 @@ enum
 	HUD_SIDEBAR_CAMEO_COLUMNS = 2,
 	HUD_SIDEBAR_CAMEO_ROWS = 6,
 	HUD_SIDEBAR_CAMEOS = HUD_SIDEBAR_CAMEO_COLUMNS * HUD_SIDEBAR_CAMEO_ROWS,
-	HUD_SIDEBAR_PICKER_CHIPS = 5,			///< factories 1..5 beside "Tümü" (phase 2)
+	HUD_SIDEBAR_PICKER_CHIPS = 4,			///< factories 1..4 beside "Tümü", each chip its building's icon and number
 	HUD_STRIP_BUTTONS = 14,						///< ButtonCommand01..14, the selection's commands
 	HUD_CARD_GRID_COLUMNS = 7,
 	HUD_CARD_GRID_ROWS = 2,
@@ -382,7 +382,7 @@ struct HudLayoutRects
 	IRegion2D tabs[ HUD_SIDEBAR_TABS ];	///< y 420 h 36 w 66 at x 1624 / 1698 / 1772 / 1846
 	IRegion2D powerRail;							///< 1604,420 16x652, the vertical power bar (to H - 8)
 	IRegion2D pickerAll;							///< 1624,464 66x28 "Tümü" (phase 2)
-	IRegion2D pickerChips[ HUD_SIDEBAR_PICKER_CHIPS ];	///< y 464 h 28 w 40 from x 1698, pitch 43.5 (phase 2)
+	IRegion2D pickerChips[ HUD_SIDEBAR_PICKER_CHIPS ];	///< y 464 h 28 w 50 from x 1698, pitch 54 (to 1910)
 	IRegion2D cameos[ HUD_SIDEBAR_CAMEOS ];	///< x 1624 / 1772 w 140 h 86, y 496 + 90.8 a row
 	IRegion2D arrowUp;								///< 1624,1044 140x28, bottom-anchored
 	IRegion2D arrowDown;							///< 1772,1044 140x28, bottom-anchored

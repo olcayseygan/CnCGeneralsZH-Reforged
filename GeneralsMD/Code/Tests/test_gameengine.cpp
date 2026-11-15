@@ -20010,6 +20010,14 @@ TEST(hud_layout_rects_tile_the_screen)
 	CHECK_EQ( r.cameos[ 1 ].lo.y, 496 );
 	CHECK_EQ( r.cameos[ 11 ].lo.y, 950 );		// 496 + 5 * 90.8
 	CHECK_EQ( r.arrowDown.lo.y, 1044 );
+	CHECK_EQ( r.pickerAll.lo.x, 1624 );
+	CHECK_EQ( r.pickerAll.width(), 66 );
+	CHECK_EQ( r.pickerChips[ 0 ].lo.x, 1698 );
+	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].lo.x, 1860 );
+	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].width(), 50 );
+	CHECK( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].hi.x <= 1912 );
+	CHECK_EQ( r.pickerChips[ 0 ].lo.y, 464 );
+	CHECK_EQ( r.pickerChips[ 0 ].height(), 28 );
 	CHECK_EQ( r.powerRail.hi.y, 1072 );
 	CHECK_EQ( r.stripButtons[ 13 ].lo.x, 840 );
 	CHECK_EQ( r.stripButtons[ 0 ].lo.y, 1020 );

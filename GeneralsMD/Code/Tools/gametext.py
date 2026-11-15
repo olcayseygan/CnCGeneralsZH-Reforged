@@ -258,8 +258,11 @@ def check_translation(translated, english):
         if original is None:
             problems.append("%s is not a label the game has" % label)
             continue
+        # a "%%" reads no argument, so it may stand anywhere ("Yükleniyor %%%d" for "Loading %d%%");
+        # every other directive keeps the English order
         wanted, found = DIRECTIVE.findall(original), DIRECTIVE.findall(text)
-        if found != wanted:
+        if ([d for d in found if d != "%%"] != [d for d in wanted if d != "%%"]
+                or found.count("%%") != wanted.count("%%")):
             problems.append("%s: directives %s, the English has %s" % (label, found, wanted))
         # English writes "50%" and never formats those strings; a translation spells it "yüzde 50",
         # because "%50" in front of a letter is a directive the English does not have
@@ -345,6 +348,11 @@ def selfcheck(_arguments):
         problems.append("check let a changed directive through")
     if check_translation([("GUI:Cost", "Bedel: %d")], english):
         problems.append("check refused a string whose directives are the English ones")
+    percent = [("GUI:Load", "Loading %d%%")]
+    if check_translation([("GUI:Load", "Yükleniyor %%%d")], percent):
+        problems.append("check refused a percent sign moved before the number")
+    if not check_translation([("GUI:Load", "Yükleniyor %d")], percent):
+        problems.append("check let a percent sign go missing")
 
     reference = None
     if os.path.exists(ENGLISH_ARCHIVE):

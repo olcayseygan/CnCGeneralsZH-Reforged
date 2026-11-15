@@ -17202,6 +17202,22 @@ END
 GUI:AIPersonaRusher
 "Baskıncı"
 END
+GUI:LoadProgress
+"Yükleniyor %%%d"
+END
+
+GUI:LoadPlayerPercent
+"%%%d"
+END
+
+GUI:LoadRuleOn
+"Açık"
+END
+
+GUI:LoadRuleOff
+"Kapalı"
+END
+
 
 GUI:AIPersonaRaider
 "Akıncı"

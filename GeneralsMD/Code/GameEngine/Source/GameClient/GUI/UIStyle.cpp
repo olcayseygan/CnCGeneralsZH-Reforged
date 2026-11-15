@@ -92,6 +92,33 @@ GameFont *font( Int points, Bool bold )
 	return TheFontLibrary->getFont( AsciiString( "Arial" ), TheGlobalLanguageData->adjustFontSize( points ), bold );
 }
 
+GameFont *readableFont( Int points, Bool bold )
+{
+	// Arial's capitals stand about five eighths of its cell, so twelve pixels of capital want a cell
+	// of about nineteen and a half
+	GameFont *found = font( points, bold );
+	for( Int grown = points + 1; found && found->height * 5 < READABLE_CAPITALS * 8 && grown <= points + 12; grown++ )
+		found = font( grown, bold );
+	return found;
+}
+
+UnicodeString grouped( Int value )
+{
+	UnicodeString digits;
+	digits.format( u"%d", value < 0 ? -value : value );
+	UnicodeString text;
+	if( value < 0 )
+		text.concat( u'-' );
+	const Int length = digits.getLength();
+	for( Int each = 0; each < length; each++ )
+	{
+		if( each > 0 && ( length - each ) % 3 == 0 )
+			text.concat( u',' );
+		text.concat( digits.getCharAt( each ) );
+	}
+	return text;
+}
+
 GameFont *titleFont( Int points )
 {
 	return TheFontLibrary->getFont( AsciiString( "Generals" ), TheGlobalLanguageData->adjustFontSize( points ), FALSE );
@@ -456,6 +483,43 @@ UnicodeString abbreviate( const UnicodeString &text, const UnicodeString &shortF
 			if( pick < 0 )
 				break;
 			step[ pick ]++;
+		}
+		// several words all at their shortest and still too wide: a word of four letters or more
+		// gives way to its first letter and a period, the longest first and the last word last, so a
+		// label stays a label ("ABD S. S. Gen.") before the ellipsis takes it
+		if( forms.size() > 1 )
+		{
+			std::vector< UnicodeString > current( forms.size() );
+			for( size_t each = 0; each < forms.size(); each++ )
+				current[ each ] = forms[ each ][ step[ each ] ];
+			for( ;; )
+			{
+				// a kept word, or one under four letters, has one form and never gives
+				Int pick = -1;
+				for( size_t each = 0; each + 1 < forms.size(); each++ )
+				{
+					if( forms[ each ].size() > 1 && current[ each ].getLength() > 2
+							&& ( pick < 0 || current[ each ].getLength() > current[ pick ].getLength() ) )
+						pick = (Int)each;
+				}
+				if( pick < 0 && forms.back().size() > 1 && current.back().getLength() > 2 )
+					pick = (Int)forms.size() - 1;
+				if( pick < 0 )
+					break;
+				UnicodeString initial;
+				initial.concat( forms[ pick ][ 0 ].getCharAt( 0 ) );
+				initial.concat( u'.' );
+				current[ pick ] = initial;
+				UnicodeString joined;
+				for( size_t each = 0; each < current.size(); each++ )
+				{
+					if( each > 0 )
+						joined.concat( u' ' );
+					joined.concat( current[ each ] );
+				}
+				if( fits( joined, widest, measure, context ) )
+					return joined;
+			}
 		}
 	}
 

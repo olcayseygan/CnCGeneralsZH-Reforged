@@ -268,7 +268,8 @@ static Bool isAsciiDigit( WideChar c )
 	* player's own bar has room for it.  The box is the panel's top row from the name's right edge to the
 	* panel's frame, 8 of its 503 pixels at 1920, plus as much again for air.  The figure reads as the
 	* HUD's money does, "$ 10,000", on one line: the window is made as wide as the figure unwrapped,
-	* measured apart from the gadget, whose own string wraps at the window's width ("$" over "10000"). */
+	* measured apart from the gadget, and marked one-line, since the gadget's own string wraps ten pixels
+	* inside the window's width ("$" over "10,000"). */
 static UnicodeString groupThousands( const UnicodeString& text );
 static void fitObserverMoney( GameWindow *moneyWin, Int amount, Bool unlimited )
 {
@@ -317,7 +318,10 @@ static void fitObserverMoney( GameWindow *moneyWin, Int amount, Bool unlimited )
 	if( moneyWin->winGetParent() )
 		moneyWin->winGetParent()->winGetScreenPosition( &parentX, &parentY );
 	data->centered = TRUE;
-	// a few pixels of slack past the figure, so the gadget's wrap at the window's width never breaks it
+	// the static text's draw wraps ten pixels inside the window's width, so a window six wider than
+	// the figure broke "$ 10,000" at its space and the box cut the second line off; a one-line window
+	// is never wrapped
+	moneyWin->winSetStatus( WIN_STATUS_ONE_LINE );
 	const Int slack = 6;
 	moneyWin->winSetPosition( boxRight - textW - slack - parentX, nameY - parentY );
 	moneyWin->winSetSize( textW + slack, nameH );

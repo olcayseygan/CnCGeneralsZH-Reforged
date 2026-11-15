@@ -329,6 +329,13 @@ TEST(abbreviation_shortens_the_longest_word_first_and_the_last_word_last)
 	CHECK( abbreviated( UnicodeString( u"Value destroyed" ), 150, TEXT_LANGUAGE_ENGLISH ) == UnicodeString( u"Value destroyed" ) );
 	CHECK( abbreviated( UnicodeString( u"Value destroyed" ), 140, TEXT_LANGUAGE_ENGLISH ) == UnicodeString( u"Val. destroyed" ) );
 	CHECK( abbreviated( UnicodeString( u"Value destroyed" ), 130, TEXT_LANGUAGE_ENGLISH ) == UnicodeString( u"Val. destroy." ) );
+	// a general's side at its shortest still too wide: its words go to their initials, the longest
+	// first and the last last, before any ellipsis ("ABD Super Silah Generali", 18 at its shortest)
+	const UnicodeString general( u"ABD Super Silah Generali" );
+	CHECK( abbreviated( general, 180, TEXT_LANGUAGE_TURKISH ) == UnicodeString( u"ABD Sup. Sil. Gen." ) );
+	CHECK( abbreviated( general, 160, TEXT_LANGUAGE_TURKISH ) == UnicodeString( u"ABD S. Sil. Gen." ) );
+	CHECK( abbreviated( general, 150, TEXT_LANGUAGE_TURKISH ) == UnicodeString( u"ABD S. S. Gen." ) );
+	CHECK( abbreviated( general, 120, TEXT_LANGUAGE_TURKISH ) == UnicodeString( u"ABD S. S. G." ) );
 	// a name inside the sentence keeps every letter
 	CHECK( abbreviated( UnicodeString( u"Return to Bartholomew" ), 190, TEXT_LANGUAGE_ENGLISH, TRUE, UnicodeString::TheEmptyString,
 		UnicodeString( u"Bartholomew" ) ) == UnicodeString( u"Rtrn to Bartholomew" ) );

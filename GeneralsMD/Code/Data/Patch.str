@@ -2625,6 +2625,22 @@ END
 GUI:AIPersonaRusher
 "Rusher"
 END
+GUI:LoadProgress
+"Loading %d%%"
+END
+
+GUI:LoadPlayerPercent
+"%d%%"
+END
+
+GUI:LoadRuleOn
+"On"
+END
+
+GUI:LoadRuleOff
+"Off"
+END
+
 
 GUI:AIPersonaRaider
 "Raider"

@@ -559,6 +559,17 @@ Int SuperweaponRestrictionFromComboBox(GameWindow *comboBox)
   return (Int)(intptr_t)GadgetComboBoxGetItemData(comboBox, selIndex);
 }
 
+const char *SuperweaponCaption(Int restriction)
+{
+  for ( Int i = 0; i < (Int)(sizeof(theSuperweaponChoices)/sizeof(theSuperweaponChoices[0])); i++ )
+  {
+    if ( theSuperweaponChoices[i] == restriction )
+      return theSuperweaponCaptions[i];
+  }
+  // as the dropdown shows a mode it has no entry for
+  return theSuperweaponCaptions[0];
+}
+
 void UpdateUnitLimitCheckBox(GameWindow *checkBox, GameInfo *myGame, Bool hostMayEdit)
 {
   checkBox->winEnable( hostMayEdit );
@@ -584,6 +595,13 @@ static const char * theIncomeSharingCaptions[ INCOME_SHARING_COUNT ] =
 {
   "GUI:IncomeSharingOff", "GUI:IncomeSharingTech", "GUI:IncomeSharingAll"
 };
+
+const char *IncomeSharingCaption(Int incomeSharing)
+{
+  if ( incomeSharing < 0 || incomeSharing >= INCOME_SHARING_COUNT )
+    return theIncomeSharingCaptions[ INCOME_SHARING_OFF ];
+  return theIncomeSharingCaptions[ incomeSharing ];
+}
 
 void PopulateIncomeSharingComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMayEdit)
 {

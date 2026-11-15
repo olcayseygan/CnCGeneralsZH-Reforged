@@ -205,6 +205,47 @@ inline Int ScoreScreen_bandCount( const std::vector< ScoreTeam > &teams )
 	return ScoreScreen_banded( teams ) ? (Int)teams.size() : 0;
 }
 
+/** The number each team is called by, from 1, the score screen's and the load board's "Team N".
+	* sharedLobbyTeam[ t ] is the lobby team every member of team t shares, -1 where they share none
+	* or have none; firstSlot[ t ] the lowest lobby seat in team t.  The teams are taken in seat order,
+	* whatever order the caller lists them in, so the load board and the score screen's standings
+	* call one team by one number.  A team takes its lobby number (lobby team + 1) when no team before
+	* it took it; any other takes the lowest number still free, never past highest.  A team called by
+	* its lobby number wears that lobby team's colour; the caller tells it by number ==
+	* sharedLobbyTeam + 1. */
+inline std::vector< Int > ScoreScreen_teamNumbers( const std::vector< Int > &sharedLobbyTeam, const std::vector< Int > &firstSlot, Int highest )
+{
+	std::vector< Int > seatOrder( sharedLobbyTeam.size() );
+	for( size_t t = 0; t < seatOrder.size(); t++ )
+		seatOrder[ t ] = (Int)t;
+	std::stable_sort( seatOrder.begin(), seatOrder.end(),
+		[ &firstSlot ]( Int a, Int b ) { return firstSlot[ a ] < firstSlot[ b ]; } );
+	std::vector< Int > number( sharedLobbyTeam.size(), -1 );
+	std::vector< Bool > taken( max( highest, 1 ) + 1, FALSE );
+	for( size_t each = 0; each < seatOrder.size(); each++ )
+	{
+		const Int t = seatOrder[ each ];
+		const Int lobby = sharedLobbyTeam[ t ];
+		if( lobby >= 0 && lobby + 1 < (Int)taken.size() && !taken[ lobby + 1 ] )
+		{
+			number[ t ] = lobby + 1;
+			taken[ lobby + 1 ] = TRUE;
+		}
+	}
+	for( size_t each = 0; each < seatOrder.size(); each++ )
+	{
+		const Int t = seatOrder[ each ];
+		if( number[ t ] > 0 )
+			continue;
+		Int lowest = 1;
+		while( lowest < (Int)taken.size() - 1 && taken[ lowest ] )
+			lowest++;
+		taken[ lowest ] = TRUE;
+		number[ t ] = lowest;
+	}
+	return number;
+}
+
 /// how tight the standings pack
 struct ScoreRowFit
 {

@@ -70,6 +70,7 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/PlayerTemplate.h"
+#include "Common/SkirmishPreferences.h"
 #include "GameClient/CampaignManager.h"
 #include "GameClient/Display.h"
 #include "GameClient/DisplayStringManager.h"
@@ -82,6 +83,7 @@
 #include "GameClient/Image.h"
 #include "GameClient/GameWindowTransitions.h"
 #include "GameClient/LoadScreen.h"
+#include "GameClient/LoadScreenLayout.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/Shell.h"
@@ -89,6 +91,7 @@
 #include "GameClient/WindowLayout.h"
 #include "GameClient/WindowVideoManager.h"
 #include "GameClient/ChallengeGenerals.h"
+#include "GameClient/ScoreScreenLayout.h"
 #include "GameClient/UIStyle.h"
 #include "GameLogic/AI.h"	// aiPersonalityName, for a computer seat's card
 #include "GameLogic/FPUControl.h"
@@ -206,19 +209,16 @@ void LoadScreen::update( Int percent )
 /// the picture the boxes below are given for; another screen scales them by its smaller axis
 static const Real BOARD_WIDTH = 1920.0f;
 static const Real BOARD_HEIGHT = 1080.0f;
-static const Int BOARD_TIP_COUNT = 10;
 static const UnsignedInt BOARD_TIP_MILLISECONDS = 8000;
 /// a middle dot between spaces, spelled out: the source is read in the machine's code page
 static const WideChar BOARD_SEPARATOR[] = { ' ', ' ', ' ', 0x00B7, ' ', ' ', ' ', 0 };
-/// a column of cards, and the band between the header line and the tip over the button row
+/// the same dot between a one-line card's name and general
+static const WideChar BOARD_LINE_SEPARATOR[] = { ' ', 0x00B7, ' ', 0 };
+/// a column of cards, and the gap between a column and the middle's map and facts
 static const Real BOARD_COLUMN_WIDTH = 600.0f;
-static const Real BOARD_BAND_TOP = 176.0f;
-static const Real BOARD_BAND_BOTTOM = 866.0f;
-/// a card's inset and the room between its portrait and its words
-static const Real BOARD_CARD_PAD = 16.0f;
+static const Real BOARD_MIDDLE_GAP = 32.0f;
+/// a card's room between its portrait and its words
 static const Real BOARD_CARD_TEXT_GAP = 24.0f;
-/// U+2026 by number, for the same reason as the separator
-static const WideChar BOARD_ELLIPSIS[] = { 0x2026, 0 };
 /// the rooms' start spot button against their map preview (SkirmishGameOptionsMenu.wnd), so the spots
 /// keep the room's size on a preview of another size
 static const Int LOBBY_START_SPOT = 28;
@@ -230,18 +230,49 @@ struct BoardCard
 	Int slot;
 	Color color;
 	Color nameColor;					///< the colour, lifted toward white where it is too dark to read on the panel
-	Int team;
+	Int team;									///< the board's team, ScoreScreen_teamsFromAllies over the lobby's teams
+	Int column;								///< 0 left, 1 right
 	Int startSpot;						///< the start position the others may see, -1 when hidden
 	Int percent;							///< this player's own load, -1 on a card without a bar
 	Bool mirrored;						///< the right column's cards face left
 	const Image *emblem;			///< the general's portrait or the side's crest, NULL for a hidden or random side
+	const Image *crest;				///< the side's crest, a one-line card's emblem
 	const Image *badge;				///< an online player's rank
+	UnicodeString nameWords;	///< the words whole; the strings below hold them fitted to the card
+	UnicodeString armyWords;
+	UnicodeString detailWords;
 	DisplayString *name;
 	DisplayString *army;
 	DisplayString *detail;		///< a computer seat's level and personality
-	DisplayString *teamText;	///< the team on a card in a free-for-all layout
 	DisplayString *percentText;
+	DisplayString *disc;			///< the seat number on the start spot disc, NULL where the map shows no spot of his
 	IRegion2D box;
+};
+
+/// a team's band over its cards in a column, or the rule in its colour a crowded column keeps
+struct BoardBand
+{
+	IRegion2D box;
+	Color color;
+	Bool mirrored;
+	DisplayString *label;			///< "Team N", NULL for a rule
+};
+
+/// a row of the facts box: the lobby's label, what it was set to
+struct BoardFact
+{
+	DisplayString *label;
+	DisplayString *value;
+};
+
+/// where a card's parts stand across it, from its plan and its words
+struct BoardCardSpan
+{
+	Int emblemX;
+	Int textLeft;
+	Int textRight;
+	Int innerLeft;						///< the inner column: the disc, the percentage
+	Int innerRight;
 };
 
 /// one of the map's start spots, drawn as the room draws it
@@ -269,17 +300,20 @@ public:
 
 private:
 	static void drawWindow( GameWindow *window, WinInstanceData *instData );
-	void prepare( const UnicodeString &titleInCapitals, const UnicodeString &subtitle );
+	void prepare( const UnicodeString &titleInCapitals, const UnicodeString &subtitle, Bool titleIsName );
 	GameWindow *makeWindow( GameWindow *parent );
 	void draw( void );
 	void drawMatch( void );
 	void drawBriefing( void );
 	void drawCard( const BoardCard &card );
+	void drawTip( void );
 	Int scaled( Real pixels ) const { return REAL_TO_INT( pixels * m_scale + 0.5f ); }
-	Int emblemSize( Int cardHeight ) const { return min( cardHeight - 2 * scaled( BOARD_CARD_PAD ), scaled( 168 ) ); }
 	DisplayString *text( const UnicodeString &words, GameFont *font );
 	BoardCard *cardFor( Int slot );
-	void layoutColumn( std::vector< Int > &column, Int left, Int top, Int bottom, Bool mirrored );
+	void cardSpan( const BoardCard &card, BoardCardSpan &span );
+	void fitCard( BoardCard &card );
+	void addFact( const char *label, const UnicodeString &value, Int width );
+	void setPercentLabel( Int percent );
 
 	Real m_scale;
 	Int m_left;								///< the 16:9 picture's corner, inset on a squarer screen
@@ -287,8 +321,16 @@ private:
 	Int m_width;							///< the screen
 	Int m_height;
 	std::vector< BoardCard > m_cards;
+	std::vector< BoardBand > m_bands;
 	std::vector< BoardSpot > m_spots;
+	std::vector< BoardFact > m_facts;
 	std::vector< DisplayString * > m_strings;
+	LoadCardPlan m_plan[ 2 ];	///< each column's cards
+	GameFont *m_nameFont;
+	GameFont *m_lineNameFont;	///< a name on a small one-line card
+	GameFont *m_armyFont;
+	GameFont *m_detailFont;
+	GameFont *m_smallFont;		///< the percentage, the facts, a band's label
 	Bool m_mission;
 	DisplayString *m_briefingHead;
 	std::vector< DisplayString * > m_briefing;
@@ -296,21 +338,28 @@ private:
 	DisplayString *m_title;
 	DisplayString *m_subtitle;
 	DisplayString *m_wordmark[ 2 ];
-	DisplayString *m_columnHead[ 2 ];
-	Color m_columnTeam[ 2 ];
-	ICoord2D m_columnHeadPos[ 2 ];
 	DisplayString *m_centerLabel;
 	ICoord2D m_centerLabelPos;
 	DisplayString *m_observers;
 	ICoord2D m_observersPos;
 	DisplayString *m_unknown;
+	DisplayString *m_unknownSmall;
+	DisplayString *m_lineSeparator;
+	DisplayString *m_fullPercent;		///< "100%", the room a card keeps for its percentage
 	const Image *m_mapImage;
 	IRegion2D m_mapBox;
 	IRegion2D m_mapDrawn;
+	IRegion2D m_factsBox;
+	Int m_factPitch;
+	Int m_spotSize;						///< a start spot on the map and on a card
 	DisplayString *m_tipLabel;
 	DisplayString *m_tip;
-	Int m_tipIndex;
+	IRegion2D m_tipBox;
+	Int m_tipTextLeft;
+	std::vector< Int > m_tips;	///< the GUI:LoadTip numbers that fit in two lines here
+	Int m_tipAt;
 	UnsignedInt m_tipSince;
+	UnicodeString m_progressFormat;
 	DisplayString *m_percent;
 	DisplayString *m_waiting;
 	Int m_localPercent;
@@ -326,12 +375,21 @@ LoadScreenBoard::LoadScreenBoard( void )
 	m_top = ( m_height - scaled( BOARD_HEIGHT ) ) / 2;
 	m_mission = FALSE;
 	m_briefingHead = NULL;
-	m_title = m_subtitle = m_centerLabel = m_observers = m_unknown = NULL;
+	m_title = m_subtitle = m_centerLabel = m_observers = m_unknown = m_unknownSmall = NULL;
+	m_lineSeparator = m_fullPercent = NULL;
 	m_wordmark[ 0 ] = m_wordmark[ 1 ] = NULL;
-	m_columnHead[ 0 ] = m_columnHead[ 1 ] = NULL;
+	m_nameFont = UIStyle::font( UIStyle::TEXT_STRONG, TRUE );
+	m_lineNameFont = UIStyle::readableFont( UIStyle::TEXT_BODY, TRUE );
+	m_armyFont = UIStyle::readableFont( UIStyle::TEXT_BODY );
+	// the small type grows on a small screen until its capitals reach the floor
+	m_detailFont = UIStyle::readableFont( UIStyle::TEXT_SMALL );
+	m_smallFont = UIStyle::readableFont( UIStyle::TEXT_SMALL, TRUE );
+	m_spotSize = 1;
 	m_mapImage = NULL;
+	m_factPitch = 0;
 	m_tipLabel = m_tip = m_percent = m_waiting = NULL;
-	m_tipIndex = 0;
+	m_tipTextLeft = 0;
+	m_tipAt = 0;
 	m_tipSince = 0;
 	m_localPercent = 0;
 	m_network = FALSE;
@@ -376,19 +434,38 @@ static Int stringHeight( DisplayString *string )
 	return height;
 }
 
-/** The words cut to widest pixels with an ellipsis after what fits, left whole when they fit. */
-static void fitWidth( DisplayString *string, Int widest )
+/** A start spot as the room draws it: EA's ring (missing art draws no ring), and on a spot the
+	* others may see, the player's colour in its middle and his seat number over it.  The map's spots
+	* and a card's disc are the same mark. */
+static void drawStartSpot( Int x, Int y, Int size, Color color, DisplayString *number )
 {
-	if( string->getWidth() <= widest )
+	const Image *ring = TheMappedImageCollection->findImageByName( "PlayerStart" );
+	if( ring )
+		TheDisplay->drawImage( ring, x, y, x + size, y + size );
+	if( number == NULL )
 		return;
-	UnicodeString words = string->getText();
-	do
-	{
-		words.removeLastChar();
-		UnicodeString cut = words;
-		cut.concat( BOARD_ELLIPSIS );
-		string->setText( cut );
-	} while( words.getLength() > 0 && string->getWidth() > widest );
+	LobbyStartSpotFill( x, y, size, size, color );
+	number->draw( x + ( size - stringWidth( number ) ) / 2, y + ( size - stringHeight( number ) ) / 2,
+		LobbyTextColorOn( color ), 0 );
+}
+
+/** A player's own load on his card, "81%", in the language's own order ("%81"). */
+static UnicodeString playerPercent( Int percent )
+{
+	UnicodeString words;
+	words.format( TheGameText->fetch( "GUI:LoadPlayerPercent" ), percent );
+	return words;
+}
+
+/** The starting money as the header and the facts say it. */
+static UnicodeString cashText( const GameInfo *game )
+{
+	const Money &cash = game->getStartingCash();
+	if( cash.isUnlimited() )
+		return TheGameText->fetch( "GUI:StartingMoneyUnlimited" );
+	UnicodeString words( u"$" );
+	words.concat( UIStyle::grouped( (Int)cash.countMoney() ) );
+	return words;
 }
 
 /** The side's crest from the lobby: the three 144 pixel logos on one page.  A side on none of the
@@ -414,25 +491,19 @@ static const Image *sideEmblem( const PlayerTemplate *side )
 	return sideCrest( side );
 }
 
-/** One tip at random to start, the next every eight seconds; the clock is the wall's, never the
-	* logic's dice. */
-static UnicodeString tipText( Int index )
+/** Tip number n of the string files' GUI:LoadTip1, GUI:LoadTip2, ...; exists says whether there is one. */
+static UnicodeString tipText( Int number, Bool *exists = NULL )
 {
 	AsciiString label;
-	label.format( "GUI:LoadTip%d", index + 1 );
-	return TheGameText->fetch( label );
+	label.format( "GUI:LoadTip%d", number );
+	return TheGameText->fetch( label, exists );
 }
 
 GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool cardBars )
 {
 	m_network = cardBars;
-	GameFont *labelFont = UIStyle::font( UIStyle::TEXT_SMALL, TRUE );
 	GameFont *centerFont = UIStyle::titleFont( UIStyle::TEXT_DISPLAY );
-	GameFont *centerSmallFont = UIStyle::font( UIStyle::TEXT_HEADING, TRUE );
-	GameFont *observerFont = UIStyle::font( UIStyle::TEXT_SMALL );
-	GameFont *nameFont = UIStyle::font( UIStyle::TEXT_STRONG, TRUE );
-	GameFont *armyFont = UIStyle::font( UIStyle::TEXT_BODY );
-	GameFont *detailFont = UIStyle::font( UIStyle::TEXT_SMALL );
+	GameFont *observerFont = UIStyle::readableFont( UIStyle::TEXT_SMALL );
 
 	// a watcher, a replay's viewer among them, sees every side as it is; a player sees what the
 	// lobby let him see of his enemies
@@ -440,10 +511,16 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 	const Bool seeAll = TheGameLogic->isInReplayGame() || game->getLocalSlotNum() < 0
 		|| game->getConstSlot( game->getLocalSlotNum() )->getOriginalPlayerTemplate() == PLAYERTEMPLATE_OBSERVER;
 
-	// the cards, with each team's players together in the order the lobby lists them
-	UnicodeString observerNames;
-	std::vector< Int > teamOf;		// a team number, or -100 - slot for a player alone
-	std::vector< std::vector< Int > > groups;
+	// a card a player, in the order the lobby lists them.  Someone watching from this screen without a
+	// seat (an -observer match) is a watcher too, under the name the skirmish room would have given
+	// him; a replay's viewer is not one of the match's
+	std::vector< UnicodeString > observerNames;
+	if( game->getLocalSlotNum() < 0 && !TheGameLogic->isInReplayGame() )
+	{
+		SkirmishPreferences preferences;
+		observerNames.push_back( preferences.getUserName() );
+	}
+	std::vector< Int > lobbyTeam;
 	for( Int i = 0; i < MAX_SLOTS; ++i )
 	{
 		const GameSlot *slot = game->getConstSlot( i );
@@ -451,9 +528,7 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 			continue;
 		if( slot->getOriginalPlayerTemplate() == PLAYERTEMPLATE_OBSERVER )
 		{
-			if( !observerNames.isEmpty() )
-				observerNames.concat( u", " );
-			observerNames.concat( slot->getName() );
+			observerNames.push_back( slot->getName() );
 			continue;
 		}
 
@@ -462,22 +537,29 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 		const Int colorIndex = seeAll ? slot->getColor() : slot->getApparentColor();
 		card.color = TheMultiplayerSettings->getColor( colorIndex )->getColor();
 		card.nameColor = UIStyle::readable( card.color );
-		card.team = slot->getTeamNumber();
+		card.team = 0;
+		card.column = 0;
 		card.startSpot = seeAll ? slot->getStartPos() : slot->getApparentStartPos();
 		card.percent = cardBars && slot->isHuman() ? 0 : -1;
 		card.mirrored = FALSE;
 		card.badge = NULL;
 		card.emblem = NULL;
+		card.crest = NULL;
+		card.disc = NULL;
 		const Int sideIndex = seeAll ? slot->getPlayerTemplate() : slot->getApparentPlayerTemplate();
 		UnicodeString army = TheGameText->fetch( "GUI:Random" );
 		if( sideIndex >= 0 )
 		{
 			const PlayerTemplate *side = ThePlayerTemplateStore->getNthPlayerTemplate( sideIndex );
 			card.emblem = sideEmblem( side );
+			card.crest = sideCrest( side );
 			army = side->getDisplayName();
 		}
-		card.name = text( slot->getName(), nameFont );
-		card.army = text( army, armyFont );
+		card.nameWords = slot->getName();
+		card.armyWords = army;
+		card.name = text( card.nameWords, m_nameFont );
+		card.army = text( card.armyWords, m_armyFont );
+		lobbyTeam.push_back( slot->getTeamNumber() );
 
 		UnicodeString detail;
 		if( slot->isAI() )
@@ -494,49 +576,81 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 				detail.concat( TheGameText->fetch( label ) );
 			}
 		}
-		card.detail = text( detail, detailFont );
-		UnicodeString teamWords;
-		if( card.team >= 0 )
-			teamWords.format( TheGameText->fetch( "GUI:LoadTeam" ), card.team + 1 );
-		card.teamText = text( teamWords, labelFont );
-		card.percentText = text( UnicodeString( u"0%" ), labelFont );
+		card.detailWords = detail;
+		card.detail = text( detail, m_detailFont );
+		card.percentText = text( playerPercent( 0 ), m_smallFont );
 		m_cards.push_back( card );
-
-		const Int key = card.team >= 0 ? card.team : -100 - i;
-		size_t group = 0;
-		while( group < teamOf.size() && teamOf[ group ] != key )
-			group++;
-		if( group == teamOf.size() )
-		{
-			teamOf.push_back( key );
-			groups.push_back( std::vector< Int >() );
-		}
-		groups[ group ].push_back( (Int)m_cards.size() - 1 );
 	}
 
-	// two sides face each other across the map; more share the two columns, a whole team to a side
-	const Bool versus = groups.size() == 2;
-	Bool everyoneAlone = TRUE;
-	std::vector< Int > columns[ 2 ];
-	UnicodeString makeup;
-	for( size_t group = 0; group < groups.size(); group++ )
+	// the teams the score screen's way: mutual allies from the lobby's team numbers, a player with
+	// none a team of his own, in the order they first appear
+	const Int count = (Int)m_cards.size();
+	std::vector< Bool > allied( count * count, FALSE );
+	for( Int a = 0; a < count; a++ )
 	{
-		if( groups[ group ].size() > 1 )
-			everyoneAlone = FALSE;
-		const Int side = versus ? (Int)group : ( columns[ 1 ].size() < columns[ 0 ].size() ? 1 : 0 );
-		for( size_t each = 0; each < groups[ group ].size(); each++ )
-			columns[ side ].push_back( groups[ group ][ each ] );
-		UnicodeString count;
-		count.format( u"%d", (Int)groups[ group ].size() );
-		if( !makeup.isEmpty() )
-			makeup.concat( u" vs " );
-		makeup.concat( count );
+		for( Int b = 0; b < count; b++ )
+			allied[ a * count + b ] = a != b && lobbyTeam[ a ] >= 0 && lobbyTeam[ a ] == lobbyTeam[ b ];
 	}
-	const Bool freeForAll = everyoneAlone && groups.size() > 2;
-	if( freeForAll )
-		makeup = TheGameText->fetch( "GUI:LoadFreeForAll" );
+	const std::vector< Int > teamOf = ScoreScreen_teamsFromAllies( count, allied );
+	std::vector< ScoreTeam > teams;
+	for( Int a = 0; a < count; a++ )
+	{
+		if( teamOf[ a ] >= (Int)teams.size() )
+		{
+			teams.resize( teamOf[ a ] + 1 );
+			teams[ teamOf[ a ] ].team = teamOf[ a ];
+		}
+		teams[ teamOf[ a ] ].members.push_back( a );
+		m_cards[ a ].team = teamOf[ a ];
+	}
+	Bool freeForAll = FALSE;
+	const std::string format = teams.empty() ? std::string() : ScoreScreen_format( teams, &freeForAll );
+	const Bool banded = ScoreScreen_banded( teams );
+	const Bool versus = teams.size() == 2;
 
-	// the header: the map, then what kind of game, how many a side and the starting cash
+	// a team is called by its lobby number and wears its lobby colour; a player alone takes the
+	// lowest number no lobby team has, on the room's no-team slate, as the score screen calls him
+	// (a team here is one lobby team, or one player with none)
+	std::vector< Int > sharedLobbyTeam( teams.size(), -1 );
+	std::vector< Int > firstSlot( teams.size(), 0 );
+	for( size_t t = 0; t < teams.size(); t++ )
+	{
+		// the cards run in seat order, so a team's first member has its lowest seat
+		sharedLobbyTeam[ t ] = lobbyTeam[ teams[ t ].members[ 0 ] ];
+		firstSlot[ t ] = m_cards[ teams[ t ].members[ 0 ] ].slot;
+	}
+	const std::vector< Int > teamNumber = ScoreScreen_teamNumbers( sharedLobbyTeam, firstSlot, MAX_SLOTS + 1 );
+	std::vector< Color > teamColor( teams.size(), LobbyTeamColor( -1 ) );
+	for( size_t t = 0; t < teams.size(); t++ )
+	{
+		if( sharedLobbyTeam[ t ] >= 0 && teamNumber[ t ] == sharedLobbyTeam[ t ] + 1 )
+			teamColor[ t ] = LobbyTeamColor( sharedLobbyTeam[ t ] );
+	}
+
+	// two teams face each other across the map; more share the two columns, whole teams, the largest
+	// first, each to the column with fewer rows, so a team is never split across the map
+	std::vector< Int > bySize( teams.size() );
+	for( size_t t = 0; t < teams.size(); t++ )
+		bySize[ t ] = (Int)t;
+	if( !versus )
+	{
+		std::stable_sort( bySize.begin(), bySize.end(),
+			[ &teams ]( Int a, Int b ) { return teams[ a ].members.size() > teams[ b ].members.size(); } );
+	}
+	std::vector< Int > columnTeams[ 2 ];
+	Int columnRows[ 2 ] = { 0, 0 };
+	for( size_t each = 0; each < bySize.size(); each++ )
+	{
+		const Int t = bySize[ each ];
+		const Int side = versus ? (Int)each : ( columnRows[ 1 ] < columnRows[ 0 ] ? 1 : 0 );
+		columnTeams[ side ].push_back( t );
+		columnRows[ side ] += (Int)teams[ t ].members.size() + ( banded ? 1 : 0 );
+	}
+	// a column keeps its teams in seat order
+	for( Int side = 0; side < 2; side++ )
+		std::sort( columnTeams[ side ].begin(), columnTeams[ side ].end() );
+
+	// the header: the map, then what kind of game, its format as the score screen words it, the cash
 	const MapMetaData *map = TheMapCache->findMap( game->getMap() );
 	UnicodeString mapName;
 	if( map )
@@ -544,111 +658,186 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 	else
 		mapName.translate( TheGameState->getMapLeafName( game->getMap() ) );
 	UnicodeString subtitle = TheGameText->fetch( modeLabel );
+	UnicodeString makeup;
+	if( freeForAll )
+	{
+		UnicodeString players;
+		players.format( u" (%d)", count );
+		makeup = TheGameText->fetch( "GUI:LoadFreeForAll" );
+		makeup.concat( players );
+	}
+	else
+		makeup.translate( AsciiString( format.c_str() ) );
 	if( !makeup.isEmpty() )
 	{
 		subtitle.concat( BOARD_SEPARATOR );
 		subtitle.concat( makeup );
 	}
-	UnicodeString cash;
-	cash.format( u"$%u", game->getStartingCash().countMoney() );
 	subtitle.concat( BOARD_SEPARATOR );
-	subtitle.concat( cash );
-	prepare( UIStyle::nameCapitals( mapName ), subtitle );
+	subtitle.concat( cashText( game ) );
+	prepare( UIStyle::nameCapitals( mapName ), subtitle, TRUE );
 
-	// the cards: two columns with the map between, as tall as four cards a side allow
 	m_unknown = text( UnicodeString( u"?" ), centerFont );
+	m_unknownSmall = text( UnicodeString( u"?" ), m_smallFont );
+	m_lineSeparator = text( UnicodeString( BOARD_LINE_SEPARATOR ), m_armyFont );
+	m_fullPercent = text( playerPercent( 100 ), m_smallFont );
 
 	const Int columnWidth = scaled( BOARD_COLUMN_WIDTH );
-	const Int bandTop = m_top + scaled( BOARD_BAND_TOP );
-	const Int bandBottom = m_top + scaled( BOARD_BAND_BOTTOM );
-	Int cardsTop = bandTop;
-	for( Int side = 0; side < 2; side++ )
-	{
-		m_columnHead[ side ] = NULL;
-		if( !versus || teamOf[ side ] < 0 )
-			continue;
-		UnicodeString label;
-		label.format( TheGameText->fetch( "GUI:LoadTeam" ), teamOf[ side ] + 1 );
-		m_columnHead[ side ] = text( label, labelFont );
-		m_columnTeam[ side ] = LobbyTeamColor( teamOf[ side ] );
-		cardsTop = bandTop + stringHeight( m_columnHead[ side ] ) + scaled( 12 );
-	}
+	const Int bandTop = m_top + scaled( LOAD_BAND_TOP );
+	const Int bandBottom = m_tipBox.lo.y - scaled( LOAD_FOOT_GAP );
 	const Int leftX = m_left + scaled( UIStyle::ROOM_INSET );
 	const Int rightX = m_left + scaled( UIStyle::ROOM_PANEL_RIGHT + UIStyle::ROOM_PANEL_LEFT - UIStyle::ROOM_INSET ) - columnWidth;
-	layoutColumn( columns[ 0 ], leftX, cardsTop, bandBottom, FALSE );
-	layoutColumn( columns[ 1 ], rightX, cardsTop, bandBottom, TRUE );
-	// a team's name sits over its first card, the swatch on the outer edge
-	for( Int side = 0; side < 2; side++ )
-	{
-		if( m_columnHead[ side ] == NULL )
-			continue;
-		const Int swatch = stringHeight( m_columnHead[ side ] ) - scaled( 4 );
-		m_columnHeadPos[ side ].y = m_cards[ columns[ side ][ 0 ] ].box.lo.y - stringHeight( m_columnHead[ side ] ) - scaled( 12 );
-		m_columnHeadPos[ side ].x = side == 0 ? leftX + swatch + scaled( 10 ) : rightX + columnWidth - stringWidth( m_columnHead[ side ] ) - swatch - scaled( 10 );
-	}
-	// words wider than a card's are cut; a bar card's name leaves room for the percentage, which a
-	// short card moves to the end of the name's line
-	DisplayString *fullPercent = text( UnicodeString( u"100%" ), labelFont );
-	for( size_t each = 0; each < m_cards.size(); each++ )
-	{
-		BoardCard &card = m_cards[ each ];
-		const Int words = columnWidth - UIStyle::stripeWidth() - 2 * scaled( BOARD_CARD_PAD )
-			- emblemSize( card.box.hi.y - card.box.lo.y ) - scaled( BOARD_CARD_TEXT_GAP );
-		fitWidth( card.name, card.percent >= 0 ? words - stringWidth( fullPercent ) - scaled( 12 ) : words );
-		fitWidth( card.army, words );
-		fitWidth( card.detail, words );
-	}
 
-	// the middle: VS or free for all over the map, the watchers under it
-	m_centerLabel = NULL;
-	if( versus )
-		m_centerLabel = text( UnicodeString( u"VS" ), centerFont );
-	else if( freeForAll )
-		m_centerLabel = text( TheGameText->fetch( "GUI:LoadFreeForAll" ), centerSmallFont );
-	m_observers = NULL;
-	const Int mapSize = min( scaled( 384 ), rightX - leftX - columnWidth - 2 * scaled( 48 ) );
-	if( !observerNames.isEmpty() )
+	// the middle, between the columns with a gap to the cards: VS over the map in a versus, the map
+	// as large as the room leaves, the facts box under it and the watchers under that
+	const Int middleLeft = leftX + columnWidth + scaled( BOARD_MIDDLE_GAP );
+	const Int middleWidth = rightX - scaled( BOARD_MIDDLE_GAP ) - middleLeft;
+	const Int gap = scaled( 16 );
+	m_centerLabel = versus ? text( UnicodeString( u"VS" ), centerFont ) : NULL;
+
+	// the lobby's rules with the lobby's words for them
 	{
-		UnicodeString line = TheGameText->fetch( "GUI:LoadObservers" );
-		line.concat( u"  " );
-		line.concat( observerNames );
-		m_observers = text( line, observerFont );
-		m_observers->setWordWrap( mapSize );
+		Int speed = 0;
+		for( Int each = 0; each < PLAYER_GAME_SPEED_COUNT; each++ )
+		{
+			if( PLAYER_GAME_SPEED_PERCENTS[ each ] == GAME_SPEED_PERCENT )
+				speed = each;
+		}
+		AsciiString speedLabel;
+		speedLabel.format( "GUI:GameSpeedMissions%d", speed );
+		addFact( "GUI:GameSpeed", TheGameText->fetch( speedLabel ), middleWidth );
+		addFact( "GUI:StartingMoney", cashText( game ), middleWidth );
+		addFact( "GUI:Superweapons", TheGameText->fetch( SuperweaponCaption( game->getSuperweaponRestriction() ) ), middleWidth );
+		addFact( "GUI:IncomeSharing", TheGameText->fetch( IncomeSharingCaption( game->getIncomeSharing() ) ), middleWidth );
+		UnicodeString words;
+		if( game->getSupplyPileLimit() > 0 )
+			words.format( TheGameText->fetch( "GUI:SupplyPileLimitFormat" ), game->getSupplyPileLimit() );
+		else
+			words = TheGameText->fetch( "GUI:SupplyPileLimitOff" );
+		addFact( "GUI:SupplyPileLimit", words, middleWidth );
+		if( game->getTechRespawn() > 0 )
+			words.format( TheGameText->fetch( "GUI:TechRespawnFormat" ), game->getTechRespawn() );
+		else
+			words = TheGameText->fetch( "GUI:TechRespawnOff" );
+		addFact( "GUI:TechRespawn", words, middleWidth );
+		addFact( "GUI:UnitLimit", TheGameText->fetch( game->getUnitLimit() ? "GUI:LoadRuleOn" : "GUI:LoadRuleOff" ), middleWidth );
+	}
+	const Int factPad = scaled( 10 );
+	const Int factLeast = m_factPitch;
+
+	// the watchers, the one at this screen among them: as many names as the lines hold, then how
+	// many more; two lines, more where the map leaves the room
+	m_observers = NULL;
+	Int observerLines = 2;
+	if( !observerNames.empty() )
+		m_observers = text( TheGameText->fetch( "GUI:LoadObservers" ), observerFont );
+	Int observerLine = m_observers ? stringHeight( m_observers ) : 0;
+	if( m_observers )
+	{
+		m_observers->setWordWrap( middleWidth );
 		m_observers->setWordWrapCentered( TRUE );
 	}
-	const Int gap = scaled( 28 );
-	Int stack = mapSize;
+
+	// the map's own shape inside the room left, the frame hugging it as the score screen's does
+	Real aspect = 1.0f;
+	if( map && map->m_extent.width() > 0.0f && map->m_extent.height() > 0.0f )
+		aspect = map->m_extent.width() / map->m_extent.height();
+	Int mapWidth = 0, mapHeight = 0, factsHeight = 0;
+	for( Int pass = 0; pass < 2; pass++ )
+	{
+		if( m_observers )
+		{
+			const Int total = (Int)observerNames.size();
+			const Int most = observerLines * observerLine + observerLine / 2;
+			for( Int shown = total; shown >= 0; shown-- )
+			{
+				UnicodeString line = TheGameText->fetch( "GUI:LoadObservers" );
+				line.concat( u"  " );
+				for( Int each = 0; each < shown; each++ )
+				{
+					if( each > 0 )
+						line.concat( u", " );
+					line.concat( UIStyle::fitName( observerNames[ each ], observerFont, middleWidth / 2 ) );
+				}
+				if( shown < total )
+				{
+					UnicodeString more;
+					more.format( u"  +%d", total - shown );
+					line.concat( more );
+				}
+				m_observers->setText( line );
+				if( stringHeight( m_observers ) < most )
+					break;
+			}
+		}
+		factsHeight = (Int)m_facts.size() * m_factPitch + 2 * factPad;
+		Int stack = gap + factsHeight;
+		if( m_centerLabel )
+			stack += stringHeight( m_centerLabel ) + gap;
+		if( m_observers )
+			stack += gap + stringHeight( m_observers );
+		const Int roomHigh = max( scaled( 120 ), bandBottom - bandTop - stack );
+		mapWidth = middleWidth;
+		mapHeight = REAL_TO_INT( mapWidth / aspect );
+		if( mapHeight > roomHigh )
+		{
+			mapHeight = roomHigh;
+			mapWidth = REAL_TO_INT( mapHeight * aspect );
+		}
+		mapWidth = max( mapWidth, 1 );
+		mapHeight = max( mapHeight, 1 );
+		if( pass == 1 )
+			break;
+		// what a wide map leaves goes to the facts' rows, up to the lobby's pitch, then to the watchers
+		Int spare = roomHigh - mapHeight;
+		if( !m_facts.empty() && spare > 0 )
+		{
+			const Int grow = min( spare / (Int)m_facts.size(), max( 0, scaled( 38 ) - factLeast ) );
+			m_factPitch = factLeast + grow;
+			spare -= grow * (Int)m_facts.size();
+		}
+		if( m_observers && observerLine > 0 && spare > observerLine )
+			observerLines = min( 2 + spare / observerLine, 6 );
+	}
+	Int stack = gap + factsHeight + mapHeight;
 	if( m_centerLabel )
 		stack += stringHeight( m_centerLabel ) + gap;
 	if( m_observers )
 		stack += gap + stringHeight( m_observers );
-	const Int middle = m_left + scaled( BOARD_WIDTH ) / 2;
-	Int y = ( bandTop + bandBottom - stack ) / 2;
+	const Int middle = middleLeft + middleWidth / 2;
+	Int y = bandTop + max( 0, bandBottom - bandTop - stack ) / 2;
 	if( m_centerLabel )
 	{
 		m_centerLabelPos.x = middle - stringWidth( m_centerLabel ) / 2;
 		m_centerLabelPos.y = y;
 		y += stringHeight( m_centerLabel ) + gap;
 	}
-	m_mapBox.lo.x = middle - mapSize / 2;
+	m_mapBox.lo.x = middle - mapWidth / 2;
 	m_mapBox.lo.y = y;
-	m_mapBox.hi.x = m_mapBox.lo.x + mapSize;
-	m_mapBox.hi.y = y + mapSize;
+	m_mapBox.hi.x = m_mapBox.lo.x + mapWidth;
+	m_mapBox.hi.y = y + mapHeight;
 	m_mapDrawn = m_mapBox;
-	y += mapSize + gap;
+	y += mapHeight + gap;
+	m_factsBox.lo.x = middleLeft;
+	m_factsBox.lo.y = y;
+	m_factsBox.hi.x = middleLeft + middleWidth;
+	m_factsBox.hi.y = y + factsHeight;
+	y += factsHeight + gap;
 	if( m_observers )
 	{
-		m_observersPos.x = middle - mapSize / 2;
+		m_observersPos.x = middleLeft;
 		m_observersPos.y = y;
 	}
 
-	// the preview the lobby showed, at the map's own shape, and every start spot as the room shows it:
-	// the player's colour and seat on a spot the others may see, the ring alone on the rest
+	// the preview the lobby showed and the start spots the others may see, the player's colour and
+	// seat on each, as the room shows them; an open or hidden spot is not drawn, as on the score
+	// screen.  A card whose spot shows wears the same disc at the same size, never under 18 pixels
+	// at 720 and never too small for its number
 	m_mapImage = getMapPreviewImage( game->getMap() );
+	GameFont *numberFont = m_smallFont;
+	m_spotSize = max( max( mapWidth, mapHeight ) * LOBBY_START_SPOT / LOBBY_MAP_PREVIEW, max( scaled( 27 ), numberFont->height + 2 ) );
 	if( map )
 	{
-		findDrawPositions( m_mapBox.lo.x, m_mapBox.lo.y, mapSize, mapSize, map->m_extent, &m_mapDrawn.lo, &m_mapDrawn.hi );
-		GameFont *numberFont = UIStyle::font( UIStyle::TEXT_SMALL, TRUE );
 		for( Int start = 0; start < map->m_numPlayers && map->m_isMultiplayer; start++ )
 		{
 			AsciiString waypoint;
@@ -658,46 +847,272 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 				continue;
 			const Real across = ( it->second.x - map->m_extent.lo.x ) / map->m_extent.width();
 			const Real down = 1.0f - ( it->second.y - map->m_extent.lo.y ) / map->m_extent.height();
-			BoardSpot spot;
-			spot.pos.x = m_mapDrawn.lo.x + REAL_TO_INT( across * ( m_mapDrawn.hi.x - m_mapDrawn.lo.x ) );
-			spot.pos.y = m_mapDrawn.lo.y + REAL_TO_INT( down * ( m_mapDrawn.hi.y - m_mapDrawn.lo.y ) );
-			spot.color = 0;
-			spot.number = NULL;
 			for( size_t each = 0; each < m_cards.size(); each++ )
 			{
 				if( m_cards[ each ].startSpot != start )
 					continue;
-				AsciiString seat;
-				seat.format( "NUMBER:%d", m_cards[ each ].slot + 1 );
+				// the seat as a number, so seat 9 and past read as 9 and not as a missing string
+				UnicodeString seat;
+				seat.format( u"%d", m_cards[ each ].slot + 1 );
+				BoardSpot spot;
+				spot.pos.x = m_mapDrawn.lo.x + REAL_TO_INT( across * ( m_mapDrawn.hi.x - m_mapDrawn.lo.x ) );
+				spot.pos.y = m_mapDrawn.lo.y + REAL_TO_INT( down * ( m_mapDrawn.hi.y - m_mapDrawn.lo.y ) );
 				spot.color = m_cards[ each ].color;
-				spot.number = text( TheGameText->fetch( seat ), numberFont );
+				spot.number = text( seat, numberFont );
+				m_cards[ each ].disc = text( seat, numberFont );
+				m_spots.push_back( spot );
 			}
-			m_spots.push_back( spot );
 		}
 	}
+
+	// each column's cards, under their teams' bands, as tall as the column lets them be;
+	// LoadScreen_planCards says what a crowded column gives up
+	LoadCardLines lines;
+	lines.scale = m_scale;
+	lines.name = m_nameFont->height;
+	lines.army = max( m_armyFont->height, m_lineNameFont->height );
+	lines.percent = m_smallFont->height;
+	lines.band = m_smallFont->height;
+	lines.disc = m_spotSize;
+	lines.bars = cardBars;
+	const Int columnHeight = bandBottom - bandTop;
+	for( Int side = 0; side < 2; side++ )
+	{
+		// the column's cards in its teams' order, each with its team
+		std::vector< Int > order, orderTeam;
+		lines.detail = 0;
+		for( size_t t = 0; t < columnTeams[ side ].size(); t++ )
+		{
+			const ScoreTeam &team = teams[ columnTeams[ side ][ t ] ];
+			for( size_t m = 0; m < team.members.size(); m++ )
+			{
+				order.push_back( team.members[ m ] );
+				orderTeam.push_back( columnTeams[ side ][ t ] );
+				if( !m_cards[ team.members[ m ] ].detailWords.isEmpty() )
+					lines.detail = m_detailFont->height;
+			}
+		}
+		const Int cards = (Int)order.size();
+		const Int columnBands = banded ? (Int)columnTeams[ side ].size() : 0;
+		const Int subColumns = LoadScreen_subColumns( cards, columnBands, columnHeight, lines );
+
+		// more than one sub-column splits the cards by count, a team running on into the second keeps
+		// a band over it there too
+		const Int firstCount = ( cards + subColumns - 1 ) / subColumns;
+		Int subCards[ 2 ] = { 0, 0 };
+		Int subBands[ 2 ] = { 0, 0 };
+		for( Int each = 0; each < cards; each++ )
+		{
+			const Int sub = each < firstCount ? 0 : 1;
+			const Bool teamStarts = each == 0 || each == firstCount || orderTeam[ each ] != orderTeam[ each - 1 ];
+			subCards[ sub ]++;
+			if( banded && teamStarts )
+				subBands[ sub ]++;
+		}
+		m_plan[ side ] = subColumns == 1 ? LoadScreen_planCards( cards, columnBands, columnHeight, lines )
+			: LoadScreen_planCards( max( subCards[ 0 ], subCards[ 1 ] ), max( subBands[ 0 ], subBands[ 1 ] ), columnHeight, lines, LOAD_CARD_LINE );
+		const LoadCardPlan &plan = m_plan[ side ];
+		const Int subGap = scaled( 8 );
+		const Int subWidth = subColumns == 1 ? columnWidth : ( columnWidth - subGap ) / 2;
+		Int y = 0;
+		for( Int each = 0; each < cards; each++ )
+		{
+			const Int sub = each < firstCount ? 0 : 1;
+			const Int x = ( side == 0 ? leftX : rightX ) + sub * ( subWidth + subGap );
+			if( each == 0 || each == firstCount )
+			{
+				const Int used = subCards[ sub ] * plan.cardHeight + ( plan.bandHeight > 0 ? subBands[ sub ] : 0 ) * plan.bandHeight
+					+ ( subCards[ sub ] + ( plan.bandHeight > 0 ? subBands[ sub ] : 0 ) - 1 ) * plan.gap;
+				y = bandTop + max( 0, columnHeight - used ) / 2;
+			}
+			const Int which = orderTeam[ each ];
+			const Bool teamStarts = each == 0 || each == firstCount || which != orderTeam[ each - 1 ];
+			if( banded && teamStarts && plan.bandHeight > 0 )
+			{
+				BoardBand band;
+				band.box.lo.x = x;
+				band.box.lo.y = y;
+				band.box.hi.x = x + subWidth;
+				band.box.hi.y = y + plan.bandHeight;
+				band.color = teamColor[ which ];
+				band.mirrored = side == 1;
+				band.label = NULL;
+				if( plan.bandLabels )
+				{
+					UnicodeString label;
+					label.format( TheGameText->fetch( "GUI:LoadTeam" ), teamNumber[ which ] );
+					band.label = text( UIStyle::fitText( label, m_smallFont, subWidth / 2 ), m_smallFont );
+				}
+				m_bands.push_back( band );
+				y += plan.bandHeight + plan.gap;
+			}
+			BoardCard &card = m_cards[ order[ each ] ];
+			card.column = side;
+			card.mirrored = side == 1;
+			card.box.lo.x = x;
+			card.box.lo.y = y;
+			card.box.hi.x = x + subWidth;
+			card.box.hi.y = y + plan.cardHeight;
+			y += plan.cardHeight + plan.gap;
+		}
+	}
+	for( size_t each = 0; each < m_cards.size(); each++ )
+		fitCard( m_cards[ each ] );
 
 	return makeWindow( NULL );
 }
 
-/** The header's and the foot's words, the same on every board. */
-void LoadScreenBoard::prepare( const UnicodeString &titleInCapitals, const UnicodeString &subtitle )
+/** A row for the facts box, the label shortened by its language's rule before it would touch the
+	* value, the value kept to three fifths of the row. */
+void LoadScreenBoard::addFact( const char *label, const UnicodeString &value, Int width )
+{
+	GameFont *font = UIStyle::readableFont( UIStyle::TEXT_SMALL );
+	const Int pad = scaled( 10 );
+	const Int room = width - 3 * pad;
+	BoardFact fact;
+	fact.value = text( value, font );
+	if( stringWidth( fact.value ) > room * 3 / 5 )
+		fact.value->setText( UIStyle::fitText( value, font, room * 3 / 5 ) );
+	fact.label = text( UIStyle::fitKey( label, font, room - stringWidth( fact.value ) ), font );
+	m_factPitch = font->height + scaled( 6 );
+	m_facts.push_back( fact );
+}
+
+/** Where a card's parts stand across it: the portrait or crest at the outer edge by the stripe, the
+	* words beside it, and at the inner edge a column for the start spot disc and the percentage,
+	* stacked on a tall card and side by side on a one-line card. */
+void LoadScreenBoard::cardSpan( const BoardCard &card, BoardCardSpan &span )
+{
+	const LoadCardPlan &plan = m_plan[ card.column ];
+	const Int x0 = card.box.lo.x;
+	const Int width = card.box.hi.x - x0;
+	const Int stripe = UIStyle::stripeWidth();
+	const Int pad = scaled( LOAD_CARD_PAD );
+	const Bool tall = plan.mode <= LOAD_CARD_SHORT;
+	const Int textGap = scaled( tall ? BOARD_CARD_TEXT_GAP : 12.0f );
+	const Int percentRoom = card.percent >= 0 ? stringWidth( m_fullPercent ) : 0;
+	const Int discRoom = card.disc ? plan.disc : 0;
+	Int inner = tall ? max( percentRoom, discRoom ) : percentRoom + discRoom + ( percentRoom > 0 && discRoom > 0 ? scaled( 8 ) : 0 );
+	const Int innerGap = inner > 0 ? scaled( 12 ) : 0;
+	if( !card.mirrored )
+	{
+		span.emblemX = x0 + stripe + pad;
+		span.textLeft = span.emblemX + plan.emblem + textGap;
+		span.innerRight = x0 + width - pad;
+		span.innerLeft = span.innerRight - inner;
+		span.textRight = span.innerLeft - innerGap;
+	}
+	else
+	{
+		span.emblemX = x0 + width - stripe - pad - plan.emblem;
+		span.textRight = span.emblemX - textGap;
+		span.innerLeft = x0 + pad;
+		span.innerRight = span.innerLeft + inner;
+		span.textLeft = span.innerRight + innerGap;
+	}
+}
+
+/** The card's words fitted to its plan: a tall card's name cut with an ellipsis only, its general
+	* and its third line shortened by their language's rule; a one-line card's general gives way
+	* first, down to two fifths of the line, and the name then takes what is left. */
+void LoadScreenBoard::fitCard( BoardCard &card )
+{
+	const LoadCardPlan &plan = m_plan[ card.column ];
+	BoardCardSpan span;
+	cardSpan( card, span );
+	const Int room = max( 0, span.textRight - span.textLeft );
+	GameFont *nameFont = plan.mode == LOAD_CARD_SMALL_LINE ? m_lineNameFont : m_nameFont;
+	card.name->setFont( nameFont );
+	card.name->setText( card.nameWords );
+	const Int badgeRoom = card.badge ? stringHeight( card.name ) * 3 / 4 + scaled( 10 ) : 0;
+	if( plan.mode <= LOAD_CARD_SHORT )
+	{
+		card.name->setText( UIStyle::fitName( card.nameWords, nameFont, room - badgeRoom ) );
+		card.army->setText( UIStyle::fitText( card.armyWords, m_armyFont, room ) );
+		card.detail->setText( UIStyle::fitText( card.detailWords, m_detailFont, room ) );
+		return;
+	}
+	card.army->setText( card.armyWords );
+	const Int avail = room - badgeRoom - stringWidth( m_lineSeparator );
+	if( stringWidth( card.name ) + stringWidth( card.army ) <= avail )
+		return;
+	card.army->setText( UIStyle::fitText( card.armyWords, m_armyFont, max( avail - stringWidth( card.name ), avail * 2 / 5 ) ) );
+	card.name->setText( UIStyle::fitName( card.nameWords, nameFont, avail - stringWidth( card.army ) ) );
+}
+
+/** The header's and the foot's words, the same on every board: the title cut before it would reach
+	* the subtitle, the subtitle shortened before it would reach the wordmark; a tip panel over the
+	* button row with the tips that fit it in two lines. */
+void LoadScreenBoard::prepare( const UnicodeString &titleInCapitals, const UnicodeString &subtitle, Bool titleIsName )
 {
 	GameFont *wordmarkFont = UIStyle::font( UIStyle::TEXT_STRONG, TRUE );
-	GameFont *tipFont = UIStyle::font( UIStyle::TEXT_BODY );
-	m_title = text( titleInCapitals, UIStyle::titleFont( UIStyle::TEXT_TITLE ) );
-	m_subtitle = text( subtitle, tipFont );
+	GameFont *tipFont = UIStyle::readableFont( UIStyle::TEXT_BODY );
+	GameFont *titleFont = UIStyle::titleFont( UIStyle::TEXT_TITLE );
+	GameFont *subtitleFont = UIStyle::readableFont( UIStyle::TEXT_BODY );
+	m_title = text( titleInCapitals, titleFont );
+	m_subtitle = text( subtitle, subtitleFont );
 	m_wordmark[ 0 ] = text( UnicodeString( u"Zero Hour" ), wordmarkFont );
 	m_wordmark[ 1 ] = text( UnicodeString( u" Reforged" ), wordmarkFont );
 
-	// the foot: a tip, the load's percentage and its bar
-	m_tipLabel = text( TheGameText->fetch( "GUI:LoadTip" ), UIStyle::font( UIStyle::TEXT_SMALL, TRUE ) );
-	m_tipIndex = (Int)( Clock_Milliseconds() % BOARD_TIP_COUNT );
+	const Int left = m_left + scaled( UIStyle::ROOM_INSET );
+	const Int right = m_left + scaled( UIStyle::ROOM_PANEL_RIGHT + UIStyle::ROOM_PANEL_LEFT - UIStyle::ROOM_INSET );
+	const Int between = scaled( 32 );
+	Int room = right - ( m_left + scaled( UIStyle::ROOM_TITLE_LEFT ) );
+	if( !m_mission )
+		room -= stringWidth( m_wordmark[ 0 ] ) + stringWidth( m_wordmark[ 1 ] ) + between;
+	if( stringWidth( m_title ) + between + stringWidth( m_subtitle ) > room )
+	{
+		const Int titleRoom = max( room - between - min( stringWidth( m_subtitle ), room * 2 / 5 ), room / 2 );
+		if( stringWidth( m_title ) > titleRoom )
+			m_title->setText( titleIsName ? UIStyle::fitName( titleInCapitals, titleFont, titleRoom )
+				: UIStyle::fitText( titleInCapitals, titleFont, titleRoom ) );
+		m_subtitle->setText( UIStyle::fitText( subtitle, subtitleFont, room - between - stringWidth( m_title ) ) );
+	}
+
+	// the foot: a panel of two lines over the button row, the TIP chip in it and a tip beside the
+	// chip; a tip needs no shortening, so one that wants a third line here is never shown
+	m_tipLabel = text( TheGameText->fetch( "GUI:LoadTip" ), m_smallFont );
+	m_tip = text( UnicodeString( u"X" ), tipFont );
+	const Int tipLine = stringHeight( m_tip );
+	const Int panelHeight = LoadScreen_tipPanelHeight( tipLine, m_scale );
+	m_tipBox.lo.x = left;
+	m_tipBox.hi.x = right;
+	m_tipBox.hi.y = m_top + scaled( UIStyle::ROOM_BUTTON_TOP ) - scaled( LOAD_FOOT_GAP );
+	m_tipBox.lo.y = m_tipBox.hi.y - panelHeight;
+	const Int pad = scaled( LOAD_TIP_PAD );
+	m_tipTextLeft = left + pad + stringWidth( m_tipLabel ) + 2 * scaled( 8 ) + scaled( 16 );
+	m_tip->setWordWrap( right - pad - m_tipTextLeft );
+	m_tips.clear();
+	for( Int number = 1; ; number++ )
+	{
+		Bool exists = FALSE;
+		const UnicodeString words = tipText( number, &exists );
+		if( !exists )
+			break;
+		m_tip->setText( words );
+		if( stringHeight( m_tip ) < 2 * tipLine + tipLine / 2 )
+			m_tips.push_back( number );
+	}
+	// one at random to start, the next every eight seconds; the clock is the wall's, never the
+	// logic's dice
+	m_tipAt = m_tips.empty() ? 0 : (Int)( Clock_Milliseconds() % m_tips.size() );
 	m_tipSince = Clock_Milliseconds();
-	m_tip = text( tipText( m_tipIndex ), tipFont );
+	m_tip->setText( m_tips.empty() ? UnicodeString::TheEmptyString : tipText( m_tips[ m_tipAt ] ) );
+
 	// lettered as a lobby button's label
-	m_percent = text( UnicodeString( u"0%" ), UIStyle::titleFont( UIStyle::TEXT_HEADING ) );
+	m_progressFormat = TheGameText->fetch( "GUI:LoadProgress" );
+	m_percent = text( UnicodeString::TheEmptyString, UIStyle::titleFont( UIStyle::TEXT_HEADING ) );
 	m_waiting = text( UIStyle::capitals( TheGameText->fetch( "GUI:LoadWaiting" ) ), UIStyle::titleFont( UIStyle::TEXT_HEADING ) );
 	m_localPercent = 0;
+	setPercentLabel( 0 );
+}
+
+/** "LOADING 81%", in the language's own order: the string file's format says where the number goes. */
+void LoadScreenBoard::setPercentLabel( Int percent )
+{
+	UnicodeString words;
+	words.format( m_progressFormat, min( max( percent, 0 ), 100 ) );
+	m_percent->setText( UIStyle::capitals( words ) );
 }
 
 GameWindow *LoadScreenBoard::makeWindow( GameWindow *parent )
@@ -715,14 +1130,14 @@ GameWindow *LoadScreenBoard::createMission( GameWindow *parent, const UnicodeStr
 	const UnicodeString *briefing, Int briefingLines )
 {
 	m_mission = TRUE;
-	prepare( UIStyle::capitals( title ), subtitle );
+	prepare( UIStyle::capitals( title ), subtitle, FALSE );
 
 	const Int pad = scaled( 28 );
 	const Int width = scaled( BOARD_COLUMN_WIDTH );
 	m_briefingBox.lo.x = m_left + scaled( UIStyle::ROOM_INSET );
-	m_briefingBox.lo.y = m_top + scaled( BOARD_BAND_TOP );
+	m_briefingBox.lo.y = m_top + scaled( LOAD_BAND_TOP );
 	m_briefingBox.hi.x = m_briefingBox.lo.x + width;
-	m_briefingHead = text( TheGameText->fetch( "GUI:LoadBriefing" ), UIStyle::font( UIStyle::TEXT_SMALL, TRUE ) );
+	m_briefingHead = text( UIStyle::fitKey( "GUI:LoadBriefing", m_smallFont, width - 2 * pad ), m_smallFont );
 	Int bottom = m_briefingBox.lo.y + pad + stringHeight( m_briefingHead ) + scaled( 8 );
 	GameFont *lineFont = UIStyle::font( UIStyle::TEXT_STRONG );
 	for( Int line = 0; line < briefingLines; line++ )
@@ -738,31 +1153,14 @@ GameWindow *LoadScreenBoard::createMission( GameWindow *parent, const UnicodeStr
 	return makeWindow( parent );
 }
 
-/** One column's cards, as tall as the column allows up to a 1v1's, centred in it. */
-void LoadScreenBoard::layoutColumn( std::vector< Int > &column, Int left, Int top, Int bottom, Bool mirrored )
-{
-	if( column.empty() )
-		return;
-	const Int count = (Int)column.size();
-	// five or more to a column close up, so six or seven cards keep room for a bar under the words
-	const Int gap = scaled( count > 4 ? 8 : 16 );
-	const Int height = min( scaled( 220 ), ( bottom - top - gap * ( count - 1 ) ) / count );
-	Int y = top + ( bottom - top - ( height * count + gap * ( count - 1 ) ) ) / 2;
-	for( Int each = 0; each < count; each++ )
-	{
-		BoardCard &card = m_cards[ column[ each ] ];
-		card.mirrored = mirrored;
-		card.box.lo.x = left;
-		card.box.lo.y = y;
-		card.box.hi.x = left + scaled( BOARD_COLUMN_WIDTH );
-		card.box.hi.y = y + height;
-		y += height + gap;
-	}
-}
-
+/** An online player's rank beside his name, which gives the badge its room. */
 void LoadScreenBoard::setBadge( Int slot, const Image *badge )
 {
-	cardFor( slot )->badge = badge;
+	BoardCard *card = cardFor( slot );
+	if( card == NULL )
+		return;
+	card->badge = badge;
+	fitCard( *card );
 }
 
 void LoadScreenBoard::setProgress( Int slot, Int percent )
@@ -771,9 +1169,7 @@ void LoadScreenBoard::setProgress( Int slot, Int percent )
 	if( card == NULL || card->percent < 0 || card->percent == percent )
 		return;
 	card->percent = percent;
-	UnicodeString words;
-	words.format( u"%d%%", percent );
-	card->percentText->setText( words );
+	card->percentText->setText( playerPercent( percent ) );
 }
 
 void LoadScreenBoard::setLocalProgress( Int percent )
@@ -781,9 +1177,7 @@ void LoadScreenBoard::setLocalProgress( Int percent )
 	if( percent == m_localPercent )
 		return;
 	m_localPercent = percent;
-	UnicodeString words;
-	words.format( u"%d%%", min( percent, 100 ) );
-	m_percent->setText( words );
+	setPercentLabel( percent );
 }
 
 void LoadScreenBoard::drawWindow( GameWindow *window, WinInstanceData *instData )
@@ -802,101 +1196,121 @@ void LoadScreenBoard::drawCard( const BoardCard &card )
 	const Int stripe = UIStyle::stripeWidth();
 	UIStyle::stripe( card.mirrored ? x0 + width - stripe : x0, y0, height, card.color );
 
-	// the portrait, in a frame of the player's colour
-	const Int pad = scaled( BOARD_CARD_PAD );
-	const Int emblem = emblemSize( height );
-	const Int emblemX = card.mirrored ? x0 + width - stripe - pad - emblem : x0 + stripe + pad;
-	const Int emblemY = y0 + ( height - emblem ) / 2;
-	TheDisplay->drawFillRect( emblemX, emblemY, emblem, emblem, UIStyle::GROUND );
-	if( card.emblem )
-		TheDisplay->drawImage( card.emblem, emblemX + 2, emblemY + 2, emblemX + emblem - 2, emblemY + emblem - 2 );
+	const LoadCardPlan &plan = m_plan[ card.column ];
+	const Bool tall = plan.mode <= LOAD_CARD_SHORT;
+	BoardCardSpan span;
+	cardSpan( card, span );
+
+	// the portrait in a frame of the player's colour; a one-line card has the side's crest at the
+	// line's height instead
+	const Int emblem = plan.emblem;
+	const Int emblemX = span.emblemX;
+	const Int emblemY = y0 + plan.emblemTop;
+	if( tall )
+	{
+		TheDisplay->drawFillRect( emblemX, emblemY, emblem, emblem, UIStyle::GROUND );
+		if( card.emblem )
+			TheDisplay->drawImage( card.emblem, emblemX + 2, emblemY + 2, emblemX + emblem - 2, emblemY + emblem - 2 );
+		else
+			m_unknown->draw( emblemX + ( emblem - stringWidth( m_unknown ) ) / 2, emblemY + ( emblem - stringHeight( m_unknown ) ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
+		TheDisplay->drawOpenRect( emblemX, emblemY, emblem, emblem, 1.0f, UIStyle::withAlpha( card.color, 200 ) );
+	}
+	else if( card.crest )
+		TheDisplay->drawImage( card.crest, emblemX, emblemY, emblemX + emblem, emblemY + emblem );
 	else
-		m_unknown->draw( emblemX + ( emblem - stringWidth( m_unknown ) ) / 2, emblemY + ( emblem - stringHeight( m_unknown ) ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
-	TheDisplay->drawOpenRect( emblemX, emblemY, emblem, emblem, 1.0f, UIStyle::withAlpha( card.color, 200 ) );
+		m_unknownSmall->draw( emblemX + ( emblem - stringWidth( m_unknownSmall ) ) / 2, emblemY + ( emblem - stringHeight( m_unknownSmall ) ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
 
-	// the words, on the portrait's far side, aligned away from it
-	const Int textGap = scaled( BOARD_CARD_TEXT_GAP );
-	const Int textLeft = card.mirrored ? x0 + pad : emblemX + emblem + textGap;
-	const Int textRight = card.mirrored ? emblemX - textGap : x0 + width - pad;
-	const Int lineGap = scaled( 4 );
-	// seven cards to a column leave no room for the third line beside a bar
-	Int block = stringHeight( card.name ) + lineGap + stringHeight( card.army );
-	const Int barRoom = card.percent >= 0 ? scaled( 24 ) : 0;
-	const Bool hasDetail = card.detail->getTextLength() > 0
-		&& block + lineGap + stringHeight( card.detail ) + barRoom <= height - 2 * scaled( 8 );
-	if( hasDetail )
-		block += lineGap + stringHeight( card.detail );
-	// a network player's bar sits on the card's foot with its percentage beside it; where the words
-	// would reach that percentage (six or seven cards to a column) the bar goes under the army, the
-	// whole stack centred, and the percentage to the end of the name's line
-	const Int barHeight = max( 3, scaled( 5 ) );
-	Int barY = y0 + height - pad - barHeight;
-	Bool stacked = FALSE;
-	Int y = y0 + ( height - block ) / 2;
-	if( card.percent >= 0 )
+	// the words, on the portrait's far side, aligned toward it; the rank badge after the name
+	const Int nameWidth = stringWidth( card.name );
+	const Int badgeSize = stringHeight( card.name ) * 3 / 4;
+	const Int badgeRoom = card.badge ? scaled( 10 ) + badgeSize : 0;
+	if( tall )
 	{
-		y -= scaled( 8 );
-		const Int percentTop = barY + barHeight / 2 - stringHeight( card.percentText ) / 2;
-		if( y + block + scaled( 6 ) > percentTop )
+		const Int nameX = card.mirrored ? span.textRight - nameWidth : span.textLeft;
+		card.name->draw( nameX, y0 + plan.nameTop, card.nameColor, UIStyle::SHADOW );
+		if( card.badge )
 		{
-			stacked = TRUE;
-			const Int barGap = scaled( 8 );
-			y = y0 + ( height - block - barGap - barHeight ) / 2;
-			barY = y + block + barGap;
+			const Int bx = card.mirrored ? nameX - scaled( 10 ) - badgeSize : nameX + nameWidth + scaled( 10 );
+			const Int by = y0 + plan.nameTop + ( stringHeight( card.name ) - badgeSize ) / 2;
+			TheDisplay->drawImage( card.badge, bx, by, bx + badgeSize, by + badgeSize );
+		}
+		const Int armyWidth = stringWidth( card.army );
+		card.army->draw( card.mirrored ? span.textRight - armyWidth : span.textLeft, y0 + plan.armyTop, UIStyle::INK, UIStyle::SHADOW );
+		if( plan.detailTop >= 0 && card.detail->getTextLength() > 0 )
+		{
+			const Int detailWidth = stringWidth( card.detail );
+			card.detail->draw( card.mirrored ? span.textRight - detailWidth : span.textLeft, y0 + plan.detailTop, UIStyle::MUTED, UIStyle::SHADOW );
 		}
 	}
-	const Int nameY = y;
-	DisplayString *lines[ 3 ] = { card.name, card.army, card.detail };
-	const Color colors[ 3 ] = { card.nameColor, UIStyle::INK, UIStyle::MUTED };
-	for( Int line = 0; line < ( hasDetail ? 3 : 2 ); line++ )
+	else
 	{
-		const Int w = stringWidth( lines[ line ] );
-		lines[ line ]->draw( card.mirrored ? textRight - w : textLeft, y, colors[ line ], UIStyle::SHADOW );
-		if( line == 0 && card.badge )
+		// "name · general", read left to right in either column, against the crest
+		const Int total = nameWidth + badgeRoom + stringWidth( m_lineSeparator ) + stringWidth( card.army );
+		Int x = card.mirrored ? span.textRight - total : span.textLeft;
+		card.name->draw( x, y0 + plan.nameTop, card.nameColor, UIStyle::SHADOW );
+		x += nameWidth;
+		if( card.badge )
 		{
-			const Int size = stringHeight( card.name ) * 3 / 4;
-			const Int bx = card.mirrored ? textRight - w - scaled( 10 ) - size : textLeft + w + scaled( 10 );
-			TheDisplay->drawImage( card.badge, bx, y + ( stringHeight( card.name ) - size ) / 2, bx + size, y + ( stringHeight( card.name ) + size ) / 2 );
+			const Int by = y0 + plan.nameTop + ( stringHeight( card.name ) - badgeSize ) / 2;
+			TheDisplay->drawImage( card.badge, x + scaled( 10 ), by, x + scaled( 10 ) + badgeSize, by + badgeSize );
+			x += badgeRoom;
 		}
-		y += stringHeight( lines[ line ] ) + lineGap;
+		m_lineSeparator->draw( x, y0 + plan.armyTop, UIStyle::MUTED, UIStyle::SHADOW );
+		x += stringWidth( m_lineSeparator );
+		card.army->draw( x, y0 + plan.armyTop, UIStyle::INK, UIStyle::SHADOW );
 	}
 
-	// a team chip in the inner top corner where the columns are not the teams
-	if( card.teamText->getTextLength() > 0 && m_columnHead[ 0 ] == NULL && m_columnHead[ 1 ] == NULL )
-	{
-		const Int swatch = stringHeight( card.teamText ) - scaled( 4 );
-		const Int w = stringWidth( card.teamText );
-		const Int ty = y0 + scaled( 10 );
-		const Int tx = card.mirrored ? x0 + scaled( 14 ) : x0 + width - scaled( 14 ) - w;
-		const Int sx = card.mirrored ? tx + w + scaled( 8 ) : tx - scaled( 8 ) - swatch;
-		TheDisplay->drawFillRect( sx, ty + scaled( 2 ), swatch, swatch, LobbyTeamColor( card.team ) );
-		TheDisplay->drawOpenRect( sx, ty + scaled( 2 ), swatch, swatch, 1.0f, UIStyle::FRAME );
-		card.teamText->draw( tx, ty, UIStyle::MUTED, UIStyle::SHADOW );
-	}
+	// the start spot the map shows for him, in the inner top corner, or at the line's inner end
+	const Int discRoom = card.disc ? plan.disc + scaled( 8 ) : 0;
+	if( card.disc )
+		drawStartSpot( card.mirrored ? span.innerLeft : span.innerRight - plan.disc, y0 + plan.discTop, plan.disc, card.color, card.disc );
 
-	// a network player's own load
+	// a network player's own load: a bar under the words, the percentage in the inner column beside
+	// it, or on a one-line card beside the disc; a column too full for bars keeps the percentage
 	if( card.percent >= 0 )
 	{
-		const Int label = stacked ? 0 : stringWidth( card.percentText ) + scaled( 12 );
-		const Int barLeft = card.mirrored ? textLeft + label : textLeft;
-		const Int barRight = card.mirrored ? textRight : textRight - label;
-		TheDisplay->drawFillRect( barLeft, barY, barRight - barLeft, barHeight, UIStyle::GRID );
-		const Int filled = ( barRight - barLeft ) * card.percent / 100;
-		TheDisplay->drawFillRect( card.mirrored ? barRight - filled : barLeft, barY, filled, barHeight, card.color );
-		const Int labelY = stacked ? nameY + ( stringHeight( card.name ) - stringHeight( card.percentText ) ) / 2
-			: barY + barHeight / 2 - stringHeight( card.percentText ) / 2;
-		card.percentText->draw( card.mirrored ? textLeft : textRight - stringWidth( card.percentText ), labelY,
-			card.percent >= 100 ? UIStyle::INK : UIStyle::MUTED, UIStyle::SHADOW );
+		if( plan.barTop >= 0 )
+		{
+			const Int barLeft = span.textLeft;
+			const Int barRight = span.textRight;
+			const Int barY = y0 + plan.barTop;
+			TheDisplay->drawFillRect( barLeft, barY, barRight - barLeft, plan.barHeight, UIStyle::GRID );
+			const Int filled = ( barRight - barLeft ) * min( card.percent, 100 ) / 100;
+			TheDisplay->drawFillRect( card.mirrored ? barRight - filled : barLeft, barY, filled, plan.barHeight, card.color );
+		}
+		const Int percentWidth = stringWidth( card.percentText );
+		Int percentX;
+		if( tall )
+			percentX = card.mirrored ? span.innerLeft : span.innerRight - percentWidth;
+		else
+			percentX = card.mirrored ? span.innerLeft + discRoom : span.innerRight - discRoom - percentWidth;
+		card.percentText->draw( percentX, y0 + plan.percentTop, card.percent >= 100 ? UIStyle::INK : UIStyle::MUTED, UIStyle::SHADOW );
 	}
+}
+
+/** The foot's panel: the TIP chip, the tip beside it on up to two lines. */
+void LoadScreenBoard::drawTip( void )
+{
+	const Int width = m_tipBox.hi.x - m_tipBox.lo.x;
+	const Int height = m_tipBox.hi.y - m_tipBox.lo.y;
+	UIStyle::panel( m_tipBox.lo.x, m_tipBox.lo.y, width, height, UIStyle::PANEL );
+	const Int chipPad = scaled( 8 );
+	const Int chipHeight = stringHeight( m_tipLabel ) + scaled( 4 );
+	const Int chipX = m_tipBox.lo.x + scaled( LOAD_TIP_PAD );
+	const Int chipY = m_tipBox.lo.y + ( height - chipHeight ) / 2;
+	TheDisplay->drawOpenRect( chipX, chipY, stringWidth( m_tipLabel ) + 2 * chipPad, chipHeight, 1.0f, UIStyle::FRAME );
+	m_tipLabel->draw( chipX + chipPad, chipY + scaled( 2 ), UIStyle::ACTIVE, UIStyle::SHADOW );
+	if( m_tip->getTextLength() > 0 )
+		m_tip->draw( m_tipTextLeft, m_tipBox.lo.y + ( height - stringHeight( m_tip ) ) / 2, UIStyle::INK, UIStyle::SHADOW );
 }
 
 void LoadScreenBoard::draw( void )
 {
-	if( Clock_Milliseconds() - m_tipSince > BOARD_TIP_MILLISECONDS )
+	if( m_tips.size() > 1 && Clock_Milliseconds() - m_tipSince > BOARD_TIP_MILLISECONDS )
 	{
-		m_tipIndex = ( m_tipIndex + 1 ) % BOARD_TIP_COUNT;
+		m_tipAt = ( m_tipAt + 1 ) % (Int)m_tips.size();
 		m_tipSince = Clock_Milliseconds();
-		m_tip->setText( tipText( m_tipIndex ) );
+		m_tip->setText( tipText( m_tips[ m_tipAt ] ) );
 	}
 
 	const Int panelLeft = m_left + scaled( UIStyle::ROOM_PANEL_LEFT );
@@ -908,11 +1322,10 @@ void LoadScreenBoard::draw( void )
 	const Int right = m_left + scaled( UIStyle::ROOM_PANEL_RIGHT + UIStyle::ROOM_PANEL_LEFT - UIStyle::ROOM_INSET );
 	const Int buttonTop = m_top + scaled( UIStyle::ROOM_BUTTON_TOP );
 	const Int buttonHeight = scaled( UIStyle::ROOM_BUTTON_BOTTOM - UIStyle::ROOM_BUTTON_TOP );
-	const Int rowY = buttonTop - scaled( 24 ) - stringHeight( m_tip );
 	if( m_mission )
 	{
 		// the mission's own picture stays; the lobby's panel frames only its header and its foot
-		const Int footTop = rowY - scaled( 24 );
+		const Int footTop = m_tipBox.lo.y - scaled( LOAD_FOOT_GAP );
 		UIStyle::panel( panelLeft, panelTop, panelWidth, headerLine - panelTop, UIStyle::PANEL );
 		UIStyle::panel( panelLeft, footTop, panelWidth, panelBottom - footTop, UIStyle::PANEL );
 		drawBriefing();
@@ -937,13 +1350,9 @@ void LoadScreenBoard::draw( void )
 		UIStyle::wordmark( m_wordmark, right, titleMiddle - stringHeight( m_wordmark[ 0 ] ) / 2 );
 	UIStyle::rule( panelLeft, headerLine, panelWidth );
 
-	// the foot: a tip over the lobby's button row, whose one wide button fills as the game loads
-	const Int chipPad = scaled( 8 );
-	const Int chipHeight = stringHeight( m_tipLabel ) + scaled( 4 );
-	const Int chipY = rowY + ( stringHeight( m_tip ) - chipHeight ) / 2;
-	TheDisplay->drawOpenRect( left, chipY, stringWidth( m_tipLabel ) + 2 * chipPad, chipHeight, 1.0f, UIStyle::FRAME );
-	m_tipLabel->draw( left + chipPad, chipY + scaled( 2 ), UIStyle::ACTIVE, UIStyle::SHADOW );
-	m_tip->draw( left + stringWidth( m_tipLabel ) + 2 * chipPad + scaled( 16 ), rowY, UIStyle::INK, UIStyle::SHADOW );
+	// the foot: the tip's panel over the lobby's button row, whose one wide button fills as the game
+	// loads
+	drawTip();
 	UIStyle::button( left, buttonTop, right - left, buttonHeight );
 	const Int edge = 3;
 	const Int filled = ( right - left - 2 * edge ) * min( m_localPercent, 100 ) / 100;
@@ -975,15 +1384,25 @@ void LoadScreenBoard::drawBriefing( void )
 
 void LoadScreenBoard::drawMatch( void )
 {
-	for( Int side = 0; side < 2; side++ )
+	// a team's band over its cards: the room's team swatch at the outer edge and its name, or where the
+	// column is crowded a rule in the team's colour
+	for( size_t each = 0; each < m_bands.size(); each++ )
 	{
-		if( m_columnHead[ side ] == NULL )
+		const BoardBand &band = m_bands[ each ];
+		const Int width = band.box.hi.x - band.box.lo.x;
+		const Int height = band.box.hi.y - band.box.lo.y;
+		if( band.label == NULL )
+		{
+			const Int rule = max( 2, scaled( 3 ) );
+			TheDisplay->drawFillRect( band.box.lo.x, band.box.lo.y + ( height - rule ) / 2, width, rule, band.color );
 			continue;
-		const Int swatch = stringHeight( m_columnHead[ side ] ) - scaled( 4 );
-		const Int sx = side == 0 ? m_columnHeadPos[ side ].x - scaled( 10 ) - swatch : m_columnHeadPos[ side ].x + stringWidth( m_columnHead[ side ] ) + scaled( 10 );
-		TheDisplay->drawFillRect( sx, m_columnHeadPos[ side ].y + scaled( 2 ), swatch, swatch, m_columnTeam[ side ] );
-		TheDisplay->drawOpenRect( sx, m_columnHeadPos[ side ].y + scaled( 2 ), swatch, swatch, 1.0f, UIStyle::FRAME );
-		m_columnHead[ side ]->draw( m_columnHeadPos[ side ].x, m_columnHeadPos[ side ].y, UIStyle::ACTIVE, UIStyle::SHADOW );
+		}
+		const Int swatch = stringHeight( band.label ) + 2;
+		const Int middle = band.box.lo.y + height / 2;
+		const Int swatchX = band.mirrored ? band.box.hi.x - swatch : band.box.lo.x;
+		LobbySwatchFill( swatchX, middle - swatch / 2, swatch, swatch, band.color );
+		const Int labelX = band.mirrored ? swatchX - scaled( 10 ) - stringWidth( band.label ) : swatchX + swatch + scaled( 10 );
+		band.label->draw( labelX, middle - stringHeight( band.label ) / 2, UIStyle::ACTIVE, UIStyle::SHADOW );
 	}
 
 	for( size_t each = 0; each < m_cards.size(); each++ )
@@ -992,27 +1411,30 @@ void LoadScreenBoard::drawMatch( void )
 	// the middle
 	if( m_centerLabel )
 		m_centerLabel->draw( m_centerLabelPos.x, m_centerLabelPos.y, UIStyle::INK, UIStyle::SHADOW );
-	const Int mapSize = m_mapBox.hi.x - m_mapBox.lo.x;
-	TheDisplay->drawFillRect( m_mapBox.lo.x, m_mapBox.lo.y, mapSize, mapSize, UIStyle::GROUND );
+	const Int mapWidth = m_mapBox.hi.x - m_mapBox.lo.x;
+	const Int mapHeight = m_mapBox.hi.y - m_mapBox.lo.y;
+	TheDisplay->drawFillRect( m_mapBox.lo.x, m_mapBox.lo.y, mapWidth, mapHeight, UIStyle::GROUND );
 	if( m_mapImage )
 		TheDisplay->drawImage( m_mapImage, m_mapDrawn.lo.x, m_mapDrawn.lo.y, m_mapDrawn.hi.x, m_mapDrawn.hi.y );
-	// the lobby's map preview wears a button's edge
-	UIStyle::edge( m_mapBox.lo.x - 3, m_mapBox.lo.y - 3, mapSize + 6, mapSize + 6 );
-	// the room's start spot: EA's ring (missing art draws no ring), the colour in its middle
-	const Int spot = mapSize * LOBBY_START_SPOT / LOBBY_MAP_PREVIEW;
-	const Image *ring = TheMappedImageCollection->findImageByName( "PlayerStart" );
+	// the lobby's map preview wears a button's edge, here round the map's own shape
+	UIStyle::edge( m_mapBox.lo.x - 3, m_mapBox.lo.y - 3, mapWidth + 6, mapHeight + 6 );
+	const Int spot = m_spotSize;
 	for( size_t each = 0; each < m_spots.size(); each++ )
 	{
 		const BoardSpot &mark = m_spots[ each ];
-		const Int x = mark.pos.x - spot / 2;
-		const Int y = mark.pos.y - spot / 2;
-		if( ring )
-			TheDisplay->drawImage( ring, x, y, x + spot, y + spot );
-		if( mark.number == NULL )
-			continue;
-		LobbyStartSpotFill( x, y, spot, spot, mark.color );
-		mark.number->draw( x + ( spot - stringWidth( mark.number ) ) / 2, y + ( spot - stringHeight( mark.number ) ) / 2,
-			LobbyTextColorOn( mark.color ), 0 );
+		drawStartSpot( mark.pos.x - spot / 2, mark.pos.y - spot / 2, spot, mark.color, mark.number );
+	}
+
+	// the facts in the lobby's rules box: the label on the left, what it was set to on the right
+	const Int factsWidth = m_factsBox.hi.x - m_factsBox.lo.x;
+	UIStyle::panel( m_factsBox.lo.x, m_factsBox.lo.y, factsWidth, m_factsBox.hi.y - m_factsBox.lo.y, UIStyle::PANEL );
+	const Int factPad = scaled( 10 );
+	for( size_t each = 0; each < m_facts.size(); each++ )
+	{
+		const BoardFact &fact = m_facts[ each ];
+		const Int rowMiddle = m_factsBox.lo.y + factPad + (Int)each * m_factPitch + m_factPitch / 2;
+		fact.label->draw( m_factsBox.lo.x + factPad, rowMiddle - stringHeight( fact.label ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
+		fact.value->draw( m_factsBox.hi.x - factPad - stringWidth( fact.value ), rowMiddle - stringHeight( fact.value ) / 2, UIStyle::INK, UIStyle::SHADOW );
 	}
 	if( m_observers )
 		m_observers->draw( m_observersPos.x, m_observersPos.y, UIStyle::MUTED, UIStyle::SHADOW );

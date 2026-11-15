@@ -25231,6 +25231,7 @@ TEST(ai_persona_rides_the_slot_entry_and_normal_leaves_it_unchanged)
 	slot.setState( SLOT_BRUTAL_AI );		// another rung keeps it, as it keeps the faction
 	CHECK_EQ( slot.getAIPersonality(), (Int)AIPERSONA_TURTLE );
 	GameSlot copy = slot;								// GameInfo::setSlot copies the parsed slot in whole
+#include "test_load_screen.inc"
 	CHECK_EQ( copy.getAIPersonality(), (Int)AIPERSONA_TURTLE );
 	UnicodeString name;
 	name.translate( AsciiString( "Player" ) );

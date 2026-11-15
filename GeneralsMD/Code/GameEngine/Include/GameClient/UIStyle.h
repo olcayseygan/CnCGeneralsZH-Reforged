@@ -94,6 +94,12 @@ namespace UIStyle
 	GameFont *font( Int points, Bool bold = FALSE );
 	/// the "Generals" face the layouts' titles and buttons are set in
 	GameFont *titleFont( Int points );
+	/// the floor under every word on a code screen: capitals this many pixels tall, at 1280x720 too
+	const Int READABLE_CAPITALS = 12;
+	/// font( points, bold ), or the next size up whose capitals reach READABLE_CAPITALS on this screen
+	GameFont *readableFont( Int points, Bool bold = FALSE );
+	/// a number with its thousands grouped: 12,345
+	UnicodeString grouped( Int value );
 
 	/// a filled box with a FRAME edge
 	void panel( Int x, Int y, Int width, Int height, Color fill );

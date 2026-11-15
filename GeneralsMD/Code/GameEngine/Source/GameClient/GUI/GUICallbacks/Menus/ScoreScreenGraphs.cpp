@@ -366,24 +366,6 @@ static UnicodeString valueText( Int value )
 	return text;
 }
 
-/// a number in the table: 12,345
-static UnicodeString groupedText( Int value )
-{
-	UnicodeString digits;
-	digits.format( u"%d", value < 0 ? -value : value );
-	UnicodeString text;
-	if( value < 0 )
-		text.concat( u'-' );
-	const Int length = digits.getLength();
-	for( Int each = 0; each < length; each++ )
-	{
-		if( each > 0 && ( length - each ) % 3 == 0 )
-			text.concat( u',' );
-		text.concat( digits.getCharAt( each ) );
-	}
-	return text;
-}
-
 static UnicodeString fetchText( const char *label )
 {
 	return TheGameText->fetch( label );
@@ -753,13 +735,14 @@ static void prepareStandings( void )
 	// a team is called by its lobby number and wears its lobby colour where its members share one;
 	// any other (a player alone, allies made in the match) takes the lowest number no lobby team
 	// has, on the room's no-team slate
-	s_teamNumber.assign( s_order.size(), -1 );
-	s_teamColor.assign( s_order.size(), LobbyTeamColor( -1 ) );
-	std::vector< Bool > numberTaken( MAX_SLOTS + 2, FALSE );
+	// numbered in seat order, as the load board numbers them, though the rows run in standings order
+	std::vector< Int > sharedLobbyTeam( s_order.size(), -1 );
+	std::vector< Int > firstSlot( s_order.size(), 0 );
 	for( size_t t = 0; t < s_order.size(); t++ )
 	{
 		Int number = -1;
 		Bool shared = TRUE;
+		Int first = MAX_SLOTS + (Int)s_players.size();
 		for( size_t m = 0; m < s_order[ t ].members.size(); m++ )
 		{
 			const GraphPlayer &player = s_players[ s_order[ t ].members[ m ] ];
@@ -769,23 +752,19 @@ static void prepareStandings( void )
 				number = lobbyTeam;
 			else if( lobbyTeam != number )
 				shared = FALSE;
+			// a player with no seat (a campaign's) after every seated one, in the standings' own order
+			first = min( first, player.slot >= 0 ? player.slot : MAX_SLOTS + s_order[ t ].members[ m ] );
 		}
-		if( shared && number >= 0 && number + 1 < (Int)numberTaken.size() && !numberTaken[ number + 1 ] )
-		{
-			s_teamNumber[ t ] = number + 1;
-			s_teamColor[ t ] = LobbyTeamColor( number );
-			numberTaken[ number + 1 ] = TRUE;
-		}
+		if( shared )
+			sharedLobbyTeam[ t ] = number;
+		firstSlot[ t ] = first;
 	}
+	s_teamNumber = ScoreScreen_teamNumbers( sharedLobbyTeam, firstSlot, MAX_SLOTS + 1 );
+	s_teamColor.assign( s_order.size(), LobbyTeamColor( -1 ) );
 	for( size_t t = 0; t < s_order.size(); t++ )
 	{
-		if( s_teamNumber[ t ] > 0 )
-			continue;
-		Int number = 1;
-		while( number < (Int)numberTaken.size() - 1 && numberTaken[ number ] )
-			number++;
-		numberTaken[ number ] = TRUE;
-		s_teamNumber[ t ] = number;
+		if( sharedLobbyTeam[ t ] >= 0 && s_teamNumber[ t ] == sharedLobbyTeam[ t ] + 1 )
+			s_teamColor[ t ] = LobbyTeamColor( sharedLobbyTeam[ t ] );
 	}
 
 	// the header's subtitle: the format and the length
@@ -1445,7 +1424,7 @@ static void layoutSummary( Int pad )
 			if( chipFor( winner, disconnected, fell, chip, chipColor, chipEdge ) )
 				addChip( chip, chipColor, chipEdge, namesRight, middle );
 			for( Int col = 0; col < COL_COUNT; col++ )
-				addText( groupedText( total[ col ] ), s_small, colRight[ col ], middle - s_small->height / 2, UIStyle::MUTED, 2 );
+				addText( UIStyle::grouped( total[ col ] ), s_small, colRight[ col ], middle - s_small->height / 2, UIStyle::MUTED, 2 );
 		}
 
 		for( size_t m = 0; m < team.members.size(); m++ )
@@ -1488,7 +1467,7 @@ static void layoutSummary( Int pad )
 						middle - s_font->height / 2 + s_font->height - s_small->height - 1, UIStyle::MUTED );
 			}
 			for( Int col = 0; col < COL_COUNT; col++ )
-				addText( groupedText( player.stats[ col ] ), s_body, colRight[ col ], middle - s_body->height / 2,
+				addText( UIStyle::grouped( player.stats[ col ] ), s_body, colRight[ col ], middle - s_body->height / 2,
 					bestRow[ col ] == row ? UIStyle::GOLD : UIStyle::INK, 2 );
 			y += fit.cardPitch;
 		}
@@ -1542,7 +1521,7 @@ static void layoutSummary( Int pad )
 			else
 			{
 				UnicodeString money( u"$" );
-				money.concat( groupedText( (Int)cash.countMoney() ) );
+				money.concat( UIStyle::grouped( (Int)cash.countMoney() ) );
 				factValues.push_back( money );
 			}
 		}
@@ -1671,10 +1650,10 @@ static void layoutLegend( Int chart, Int pad )
 		const Int middle = y + cardHeight / 2;
 		s_marks.push_back( newMark( r0, y, r1 - r0, cardHeight, UIStyle::PANEL, UIStyle::FRAME ) );
 		s_marks.push_back( newMark( r0 + 1, y + 1, stripe, cardHeight - 2, hidden ? UIStyle::withAlpha( player.color, 70 ) : player.color, 0 ) );
-		const Int valueWidth = addText( groupedText( values[ last ] ), s_body, r1 - pad, twoLines ? middle - ( s_body->height + s_small->height ) / 2 : middle - s_body->height / 2,
+		const Int valueWidth = addText( UIStyle::grouped( values[ last ] ), s_body, r1 - pad, twoLines ? middle - ( s_body->height + s_small->height ) / 2 : middle - s_body->height / 2,
 			hidden ? UIStyle::MUTED : UIStyle::INK, 2 );
 		UnicodeString peakText;
-		peakText.format( fetchText( "GUI:GraphPeak" ), groupedText( peak ).str() );
+		peakText.format( fetchText( "GUI:GraphPeak" ), UIStyle::grouped( peak ).str() );
 		Int peakWidth = 0;
 		if( twoLines )
 			peakWidth = addText( fittedLabel( peakText, s_small, ( r1 - r0 ) / 2 ), s_small, r1 - pad, middle - ( s_body->height + s_small->height ) / 2 + s_body->height, UIStyle::MUTED, 2 );
@@ -1987,7 +1966,7 @@ static std::vector< GraphTipLine > plotTip( Int sample )
 		static UnicodeString of( Int value, Int total, Bool share )
 		{
 			if( !share )
-				return groupedText( value );
+				return UIStyle::grouped( value );
 			UnicodeString text;
 			text.format( u"%d%%", total > 0 ? max( value, 0 ) * 100 / total : 0 );
 			return text;

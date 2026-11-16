@@ -1423,9 +1423,13 @@ TEST(water_splashes_take_blasts_by_name_and_every_list_that_scorches)
 	 which already had a muzzle light, and the faster tracers six more, each with EA's own light.
 	 The smoke-trail fragments added two of EA's blasts, the jet missile with its own light and the
 	 Particle Cannon's ground hit with one of the fork's.  The three wreck impacts, dust and a
-	 shake by how hard an aircraft hits the ground, are dust and carry no light either. */
+	 shake by how hard an aircraft hits the ground, are dust and carry no light either.  ZH Enhanced's
+	 techniques added three lit ones, the civilian collapse's first stage, the Nuke Cannon's shot and
+	 the Particle Cannon's death, which also lit the pink one; the dust an artillery shell throws on
+	 dry ground is dust and stays unlit. */
 static const char *const s_unlitReforgedFXList = "FXList SupW_FX_ParticleUplinkDeathInitial";
 static const char *const s_unlitReforgedImpacts = "FXList FX_Reforged_Impact";
+static const char *const s_unlitReforgedShellDust = "FXList FX_ReforgedShellGroundDust";
 
 TEST(fxlist_reforged_ini_parses_and_keeps_its_light)
 {
@@ -1455,7 +1459,8 @@ TEST(fxlist_reforged_ini_parses_and_keeps_its_light)
 	while( fgets( line, sizeof( line ), fp ) != NULL )
 	{
 		if( strncmp( line, s_unlitReforgedFXList, strlen( s_unlitReforgedFXList ) ) == 0 ||
-				strncmp( line, s_unlitReforgedImpacts, strlen( s_unlitReforgedImpacts ) ) == 0 )
+				strncmp( line, s_unlitReforgedImpacts, strlen( s_unlitReforgedImpacts ) ) == 0 ||
+				strncmp( line, s_unlitReforgedShellDust, strlen( s_unlitReforgedShellDust ) ) == 0 )
 		{
 			open = 0;
 		}
@@ -1478,7 +1483,7 @@ TEST(fxlist_reforged_ini_parses_and_keeps_its_light)
 	}
 	fclose( fp );
 
-	CHECK_EQ( blocks, 135 );
+	CHECK_EQ( blocks, 138 );
 	CHECK_EQ( lit, blocks );
 }
 

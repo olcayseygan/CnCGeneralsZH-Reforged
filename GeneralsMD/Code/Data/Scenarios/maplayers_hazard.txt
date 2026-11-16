@@ -10,10 +10,13 @@
 # field.
 #
 # Measured 2026-11-17, seed 1. With the layers: "pulls a hurt 'AmericaTankCrusader' ... out at 34%, 50
-# against 50, (1005,1684) to (1185,1682): threat 50 on the way, 800 down the road home", it kills the
-# Battlemaster and is alive at 103 of 480 at file frame 600. With -aiknobsoff all maplayers: "50 against 32
-# ... to (1004,1564): threat 0 on the way, 0 down the road home", into the field, and alive at 157. The
-# field costs a tank little; the side it chose kept it in the Battlemaster's fight.
+# against 50, (1005,1684) to (1089,1598): threat 25 on the way, 50 down the road home", back and to the side
+# of the field, alive at 157 of 480 at file frame 600. With -aiknobsoff all maplayers: "50 against 32 ... to
+# (1004,1564): threat 0 on the way, 0 down the road home", into the field, and alive at 157 too.
+#
+# The first run that day had a hazard read as 400 a cell, eight Battlemasters: the road home read 800, the
+# Crusader pulled out sideways to (1185,1682), still inside the Battlemaster's reach, and ended at 103. The
+# hazard is half a Battlemaster a cell now.
 #
 #   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
 #     -map "Maps\Tournament Desert\Tournament Desert.map" -autoskirmish 2 -aidiff hard -takeover 1

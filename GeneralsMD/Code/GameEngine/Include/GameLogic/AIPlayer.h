@@ -1009,20 +1009,23 @@ protected:
 	mutable AIThreatMix m_foeMix;
 	mutable UnsignedInt m_foeMixFrame;						///< the frame of it, plus one; 0 for none
 	/** A jet or Comanche sent the long way round the anti-air guns on the straight flight (steerAircraft): it flies
-		* to via and only then strikes. */
+		* to via and only then strikes, and once it strikes it is home round the guns when it is empty. */
 	struct StrikeRoute
 	{
 		ObjectID		aircraft;
 		ObjectID		target;		///< INVALID_ID for a strike on the ground at
 		Coord3D			at;
 		Coord3D			via;
-		UnsignedInt	frame;		///< when it was sent
+		UnsignedInt	frame;		///< when it was sent, or when it struck
+		Bool				struck;		///< sent in from via: kept only to send it home when empty
 	};
 	std::vector<StrikeRoute> m_strikeRoutes;
 	Bool turnPointRound(const Coord3D *from, const Coord3D *to, ObjectID ignored, const std::vector<AIKnownGun> &guns,
 		Coord3D *via, Real *straight, Real *round);		///< a turn point whose two legs cross no known anti-air gun but ignored
 	Bool routeStrike(Object *aircraft, Object *target, const Coord3D *at, const std::vector<AIKnownGun> &guns);	///< TRUE when it was sent round
-	void flyStrikeRoutes(void);										///< the ones at their turn strike; the rest fly on
+	void flyTurnLeg(Object *aircraft, const Coord3D *via);	///< to via as a path, which a busy jet obeys
+	void routeHome(Object *aircraft, const std::vector<AIKnownGun> &guns);	///< an empty jet home round the known guns
+	void flyStrikeRoutes(void);										///< the ones at their turn strike, the empty go home; the rest fly on
 	void ensureInfluence(void);										///< the map, no older than this rung reads it, for a player that does not stamp it
 	Bool hasTacticalMap(void) const;							///< Hard's map, for the reads the rungs below it do not make
 	AIThreatMix readMix(const AIThreatMix &wanted) const;	///< the weights this seat reads its map with for a reader that moves wanted

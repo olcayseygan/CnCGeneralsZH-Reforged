@@ -15283,24 +15283,79 @@ Bool AIPlayer::routeStrike( Object *aircraft, Object *target, const Coord3D *at,
 	route.at = *at;
 	route.via = via;
 	route.frame = TheGameLogic->getFrame();
+	route.struck = FALSE;
 	m_strikeRoutes.push_back( route );
-	aircraft->getAI()->aiMoveToPosition( &via, CMD_FROM_AI );
+	flyTurnLeg( aircraft, &via );
 	DEBUG_LOG(("AI AIR frame %d player %d '%s' %d flies round to '%s' (%.0f,%.0f) by (%.0f,%.0f): air threat %.0f straight, %.0f round\n",
 		route.frame, m_player->getPlayerIndex(), aircraft->getTemplate()->getName().str(), aircraft->getID(),
 		target ? target->getTemplate()->getName().str() : "a place", at->x, at->y, via.x, via.y, straight, round));
 	return TRUE;
 }
 
+/** Sends an aircraft to a turn point as a path.  aiMoveToPosition from the computer to a unit busy attacking or
+	* landing is only a temporary state over the busy one, and a Raptor given it flew straight on at its target
+	* through the gun it was sent round, then straight home over it again (maplayers_jetroute). */
+void AIPlayer::flyTurnLeg( Object *aircraft, const Coord3D *via )
+{
+	std::vector<Coord3D> leg( 1, *via );
+	aircraft->getAI()->aiFollowPath( &leg, NULL, CMD_FROM_AI );
+}
+
+/** An empty jet whose flight home crosses a known anti-air gun flies home round it, to the turn point
+	* turnPointRound finds between it and where it lands.  At the turn point it is idle and empty, and JetAIUpdate
+	* flies it home from there.  Where it lands is its airfield, else our nearest one, else the spot it took off from
+	* with no airfield (JetAIUpdate's return).
+	* ponytail: nearest airfield by straight distance; JetAIUpdate's findSuitableAirfield also wants a free space. */
+void AIPlayer::routeHome( Object *aircraft, const std::vector<AIKnownGun> &guns )
+{
+	const Coord3D *pos = aircraft->getPosition();
+	Coord3D home = *aircraft->getAI()->getJetAIUpdate()->friend_getProducerLocation();
+	const Object *producer = TheGameLogic->findObjectByID( aircraft->getProducerID() );
+	if( producer && !producer->isEffectivelyDead() && producer->isKindOf( KINDOF_FS_AIRFIELD ) )
+		home = *producer->getPosition();
+	else
+	{
+		std::vector<Object *> owned;
+		m_player->iterateObjects( collectOwned, &owned );
+		Real nearest = -1.0f;
+		for( size_t o = 0; o < owned.size(); ++o )
+		{
+			const Object *field = owned[ o ];
+			if( !field->isKindOf( KINDOF_FS_AIRFIELD ) || field->isEffectivelyDead() || field->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+				continue;
+			const Real distSqr = sqr( field->getPosition()->x - pos->x ) + sqr( field->getPosition()->y - pos->y );
+			if( nearest < 0.0f || distSqr < nearest )
+			{
+				nearest = distSqr;
+				home = *field->getPosition();
+			}
+		}
+	}
+	if( gunsOverFlight( guns, pos->x, pos->y, home.x, home.y ) == 0 )
+		return;
+	Coord3D via;
+	Real straight = 0.0f, round = -1.0f;
+	if( !turnPointRound( pos, &home, INVALID_ID, guns, &via, &straight, &round ) )
+		return;
+	flyTurnLeg( aircraft, &via );
+	DEBUG_LOG(("AI AIR frame %d player %d '%s' %d flies home to (%.0f,%.0f) round by (%.0f,%.0f): air threat %.0f straight, %.0f round\n",
+		TheGameLogic->getFrame(), m_player->getPlayerIndex(), aircraft->getTemplate()->getName().str(), aircraft->getID(),
+		home.x, home.y, via.x, via.y, straight, round));
+}
+
 /** Every routed aircraft at its turn point, or out of time, strikes: its target if that still stands and is known,
-	* the ground it was going for if it stands unseen or was a place.  One dead or landed is let go, and one out of
-	* ammo already, which some other order spent. */
+	* the ground it was going for if it stands unseen or was a place.  Its route is kept, struck, until it is empty
+	* or out of time again, so steerAircraft does not judge the strike afresh from wherever the jet turned in.  One
+	* empty is sent home round the guns (routeHome) and let go, and one dead or landed is let go. */
 void AIPlayer::flyStrikeRoutes( void )
 {
 	const UnsignedInt now = TheGameLogic->getFrame();
 	const Int me = m_player->getPlayerIndex();
+	std::vector<AIKnownGun> guns;
+	Bool gunsRead = FALSE;
 	for( size_t r = 0; r < m_strikeRoutes.size(); )
 	{
-		const StrikeRoute &route = m_strikeRoutes[ r ];
+		StrikeRoute &route = m_strikeRoutes[ r ];
 		Object *aircraft = TheGameLogic->findObjectByID( route.aircraft );
 		AIUpdateInterface *ai = aircraft ? aircraft->getAI() : NULL;
 		const JetAIUpdate *jet = ai ? ai->getJetAIUpdate() : NULL;
@@ -15311,27 +15366,54 @@ void AIPlayer::flyStrikeRoutes( void )
 		}
 		if( jet->isOutOfSpecialReloadAmmo() )
 		{
-			DEBUG_LOG(("AI AIR frame %d player %d '%s' %d is out of ammo before its turn point, its route to (%.0f,%.0f) ends\n", now, me,
-				aircraft->getTemplate()->getName().str(), aircraft->getID(), route.at.x, route.at.y));
+			if( !route.struck )
+				DEBUG_LOG(("AI AIR frame %d player %d '%s' %d is out of ammo before its turn point, its route to (%.0f,%.0f) ends\n", now, me,
+					aircraft->getTemplate()->getName().str(), aircraft->getID(), route.at.x, route.at.y));
+			if( !gunsRead )
+			{
+				collectKnownGuns( &guns );
+				gunsRead = TRUE;
+			}
+			routeHome( aircraft, guns );
 			m_strikeRoutes.erase( m_strikeRoutes.begin() + r );
 			continue;
 		}
 		const Coord3D *pos = aircraft->getPosition();
+		if( route.struck )
+		{
+			if( now < route.frame + STRIKE_ROUTE_MAX_FRAMES )
+				++r;
+			else
+				m_strikeRoutes.erase( m_strikeRoutes.begin() + r );
+			continue;
+		}
 		if( sqr( pos->x - route.via.x ) + sqr( pos->y - route.via.y ) > sqr( STRIKE_ROUTE_SLACK ) && now < route.frame + STRIKE_ROUTE_MAX_FRAMES )
 		{
 			++r;
 			continue;
 		}
 		Object *target = TheGameLogic->findObjectByID( route.target );
+		Bool strikes = TRUE;
 		if( target && !target->isEffectivelyDead() && observerKnowsAbout( target, me ) )
 			ai->aiAttackObject( target, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
 		else if( route.target == INVALID_ID || (target && !target->isEffectivelyDead()) )
 			ai->aiAttackPosition( &route.at, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
-		else if( jet->friend_needsRunway() )
-			ai->aiIdle( CMD_FROM_AI );
+		else
+		{
+			strikes = FALSE;
+			if( jet->friend_needsRunway() )
+				ai->aiIdle( CMD_FROM_AI );
+		}
 		DEBUG_LOG(("AI AIR frame %d player %d '%s' %d turns in on its strike at (%.0f,%.0f)\n", now, me,
 			aircraft->getTemplate()->getName().str(), aircraft->getID(), route.at.x, route.at.y));
-		m_strikeRoutes.erase( m_strikeRoutes.begin() + r );
+		if( strikes )
+		{
+			route.struck = TRUE;
+			route.frame = now;
+			++r;
+		}
+		else
+			m_strikeRoutes.erase( m_strikeRoutes.begin() + r );
 	}
 }
 
@@ -17738,9 +17820,11 @@ static const Real STAMP_EDGE_SHARE = 0.75f;
 /** A moving gun stamps from where it will be this many game seconds on, no further ahead than two cells. */
 static const Real STAMP_LEAD_SECONDS = 1.0f;
 static const Real STAMP_MAX_LEAD = 2.0f * INFLUENCE_CELL_SIZE;
-/** A hazard on the map counts as this much threat a cell: about half a tank's on the class map, enough to walk
-	* round a fire field and not enough to make a column turn back from one. */
-static const Real HAZARD_FIGURE = 400.0f;
+/** A hazard on the map counts as this much threat a cell: half a Battlemaster's 50 on the class map, enough to walk
+	* round a fire field and not enough to make a column turn back from one.  At 400 a Poison Field read eight
+	* Battlemasters, and a hurt Crusader pulled out sideways inside a real one's reach rather than back through the
+	* poison, ending at 103 of 480 where backing through it left 157 (maplayers_hazard, 2026-11-17). */
+static const Real HAZARD_FIGURE = 25.0f;
 /** The cells round a building or a gatherer that its worth goes on, so a raid aimed near it reads it. */
 static const Real VALUE_RADIUS = 2.0f * INFLUENCE_CELL_SIZE;
 
@@ -23451,7 +23535,7 @@ void AIPlayer::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 40;		// 40: the influence map's still, friendly-by-class, worth and hazard layers, the jets' strike routes  39: the heroes' charged buildings  38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
+	XferVersion currentVersion = 41;		// 41: a strike route kept once struck  40: the influence map's still, friendly-by-class, worth and hazard layers, the jets' strike routes  39: the heroes' charged buildings  38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -24060,6 +24144,10 @@ void AIPlayer::xfer( Xfer *xfer )
 			xfer->xferCoord3D( &route.at );
 			xfer->xferCoord3D( &route.via );
 			xfer->xferUnsignedInt( &route.frame );
+			if( version >= 41 )
+				xfer->xferBool( &route.struck );
+			else if( xfer->getXferMode() == XFER_LOAD )
+				route.struck = FALSE;
 		}
 	}
 	else

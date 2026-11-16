@@ -7,7 +7,10 @@ reskins (TurkiyeReforged.ini) and weapons (TurkiyeWeaponReforged.ini) after them
 is the AI's own matchup arithmetic (AIPlayer.cpp shotPatternAgainst and computeTemplateFramesToKill,
 AI.cpp aiFramesToKill): best weapon of the unconditioned WeaponSet against the target's
 unconditioned ArmorSet and body MaxHealth, frames to kill both ways. The page divides the two and
-can weigh them by price; the AI's aiMatchupScore is the same ratio on a log scale.
+can weigh them by price; the AI's aiMatchupScore is the same ratio on a log scale. Its toggles go past
+the AI's view: the shorter-ranged side walking in under fire, every upgrade the side can get (the sets
+the upgrade flags pick, the PLAYER_UPGRADE weapon bonus, added health, the upgraded locomotor) and a
+rank on both sides, with the cells whose winner differs from the AI's view marked.
 
     python unitmatrix.py --out <page.html>
     python unitmatrix.py --json <matrix.json>     # the website's: English and Turkish, seconds on the clock
@@ -87,8 +90,18 @@ OWN_FACTION_SIDES = {"Turkiye"}
 PATCH_FILES = ("Data/INI/BalanceReforged.ini", "Data/INI/FixesReforged.ini", "Data/INI/TurkiyeReforged.ini")
 # Object::look: a unit sees no further than half as far again as its longest weapon reaches
 SIGHT_PER_WEAPON_RANGE = 1.5
+# the upgrade modules that change a fight: WeaponSetUpgrade, ArmorUpgrade and WeaponBonusUpgrade set the
+# PLAYER_UPGRADE flag of their kind, MaxHealthUpgrade adds health, LocomotorSetUpgrade swaps to SET_NORMAL_UPGRADED
+UPGRADE_MODULES = {"weaponsetupgrade", "armorupgrade", "weaponbonusupgrade", "maxhealthupgrade", "locomotorsetupgrade"}
+# Object::onVeterancyLevelChanged: one flag per rank on the weapon set, the armor set and the weapon bonus
+LEVELS = (None, "VETERAN", "ELITE", "HERO")
+HEALTH_BONUS_KEYS = (None, "healthbonus_veteran", "healthbonus_elite", "healthbonus_heroic")
+# UpgradeCenter::getVetUpgradeName: Upgrade_Veterancy_ and TheVeterancyNames
+VETERANCY_UPGRADES = (None, "upgrade_veterancy_veteran", "upgrade_veterancy_elite", "upgrade_veterancy_heroic")
 
 Shots = collections.namedtuple("Shots", "damage delay clip reload opening")
+# what a unit fights with under some upgrades and rank: the sets the engine would pick and its health
+Fighter = collections.namedtuple("Fighter", "weapons armor bonus health speed projectiles")
 
 
 def f32(value):
@@ -224,7 +237,7 @@ def percent(token):
 def new_weapon(name):
     return {"name": name, "damage": 0.0, "type": "EXPLOSION", "range": 0.0, "min_range": 0.0, "delay": (0, 0), "clip": 0,
             "reload": 0, "anti_air": False, "anti_ground": True, "reload_type": "YES", "pre_attack": 0,
-            "prefire": "PER_SHOT", "fire_one": None, "fire_two": None, "bonus": {}}
+            "prefire": "PER_SHOT", "fire_one": None, "fire_two": None, "bonus": {}, "projectile": None}
 
 
 def apply_weapon(weapon, children):
@@ -265,6 +278,8 @@ def apply_weapon(weapon, children):
             weapon["fire_two"] = int(real(value[0]))
         elif key == "weaponbonus":
             weapon["bonus"].setdefault(value[0].upper(), {})[value[1].upper()] = percent(value[2])
+        elif key == "projectileobject":
+            weapon["projectile"] = None if value[0].upper() == "NONE" else value[0].lower()
 
 
 def parse_armor(children):
@@ -296,7 +311,9 @@ class Thing:
         self.cost = 0.0
         self.display = ""
         self.locomotor = None
-        self.speed_scale = 1.0              # SpeedScale: Turkiye's speeds on the American locomotors
+        self.locomotor_upgraded = None      # SET_NORMAL_UPGRADED, what a LocomotorSetUpgrade switches to
+        self.upgrades = {}                  # module tag -> (module name, its fields), for UPGRADE_MODULES
+        self.speed_scale = 1.0             # SpeedScale: Turkiye's speeds on the American locomotors
         self.sight = 0.0                    # ShroudClearingRange, before Object::look caps it
         self.spotter = False                # SpotterSight: the cap does not apply
         self.beyond_vision = False          # AcquiresBeyondVision: picks targets out to its range from what the team sees
@@ -321,6 +338,15 @@ class Thing:
         sets = self.sets[kind]
         return min(sets, key=lambda entry: len(entry[0]))[1] if sets else None
 
+    def matched(self, kind, flags):
+        """SparseMatchFinder::findBestInfoSlow: most of the asked flags, then the fewest it did not ask for."""
+        best, best_yes, best_extra = None, 0, 999
+        for conditions, content in self.sets[kind]:
+            yes_match, extra = len(flags & conditions), len(conditions - flags)
+            if yes_match > best_yes or (yes_match >= best_yes and extra < best_extra):
+                best, best_yes, best_extra = content, yes_match, extra
+        return best
+
     def apply(self, children, multifile, weapons=None):
         for line, nested in children:
             key, value = field(line)
@@ -334,6 +360,8 @@ class Thing:
                 self.display = value[0]
             elif key == "locomotor" and value[0].upper() == "SET_NORMAL":
                 self.locomotor = value[1].lower()
+            elif key == "locomotor" and value[0].upper() == "SET_NORMAL_UPGRADED":
+                self.locomotor_upgraded = value[1].lower()
             elif key == "speedscale":
                 self.speed_scale = real(value[0])
             elif key == "shroudclearingrange":
@@ -401,6 +429,7 @@ class Thing:
 
     def drop_module(self, tag):
         self.modules.pop(tag.lower(), None)
+        self.upgrades.pop(tag.lower(), None)
         if self.body and self.body[0].lower() == tag.lower():
             self.body = None
 
@@ -413,6 +442,8 @@ class Thing:
     def add_module(self, key, value, nested):
         if len(value) > 1:
             self.modules[value[1].lower()] = value[0].lower()
+            if value[0].lower() in UPGRADE_MODULES:
+                self.upgrades[value[1].lower()] = (value[0].lower(), dict(field(line) for line, _ in nested or ()))
         if value[0].lower() == "commandsetupgrade":
             self.command_sets += [words[0].lower() for name, words in (field(line) for line, _ in nested)
                                   if name in ("commandset", "commandsetalt") and words]
@@ -453,6 +484,17 @@ class GameData:
             if keyword.lower() == "armor":
                 self.armors[args[0].lower()] = parse_armor(children)
                 self.armor_names[args[0].lower()] = args[0]
+        # GameData's WeaponBonus set (every weapon's, before its own) and the health a rank multiplies by
+        self.global_bonus = {}
+        self.health_bonus = [1.0] * len(LEVELS)
+        # GameEngine::init loads Default/GameData.ini, then GameData.ini over it
+        game_data = [line for path in ("Data/INI/Default/GameData.ini", "Data/INI/GameData.ini") if files.read(path)
+                     for _, _, children in ini_blocks(files.text(path)) for line, _ in children]
+        for key, value in map(field, game_data):
+            if key == "weaponbonus" and len(value) > 2:
+                self.global_bonus.setdefault(value[0].upper(), {})[value[1].upper()] = percent(value[2])
+            elif key in HEALTH_BONUS_KEYS:
+                self.health_bonus[HEALTH_BONUS_KEYS.index(key)] = percent(value[0])
 
         self.default = Thing("DefaultThingTemplate")
         for keyword, args, children in ini_blocks(files.text("Data/INI/Default/Object.ini")):
@@ -477,9 +519,10 @@ class GameData:
                     self.command_sets[args[0].lower()] = [buttons[value[0].lower()] for key, value in map(field, (
                         line for line, _ in children)) if value and value[0].lower() in buttons]
 
-    def reachable(self, starts):
+    def reachable(self, starts, upgrades=None):
         """Every object a player starting with these can build: the command sets of what it has, the
-        buttons in them that build or construct, and the sets of what those make, until nothing is new."""
+        buttons in them that build or construct, and the sets of what those make, until nothing is new.
+        The upgrades its buttons research or buy go into the set passed as upgrades."""
         seen, units, todo = set(), set(), [name.lower() for name in starts]
         while todo:
             name = todo.pop()
@@ -489,6 +532,8 @@ class GameData:
             for command_set in self.things[name].command_sets:
                 for button in self.command_sets.get(command_set, ()):
                     command = button.get("command", [""])[0].upper()
+                    if upgrades is not None and command in ("PLAYER_UPGRADE", "OBJECT_UPGRADE") and button.get("upgrade"):
+                        upgrades.add(button["upgrade"][0].lower())
                     if command in ("UNIT_BUILD", "DOZER_CONSTRUCT") and "object" in button:
                         todo.append(button["object"][0].lower())
                         if command == "UNIT_BUILD":
@@ -523,24 +568,38 @@ class GameData:
 
 # ---- the AI's matchup arithmetic -----------------------------------------------------------------------
 
-def shot_pattern(weapon, target, armors):
-    """AIPlayer.cpp shotPatternAgainst: None when the weapon may not aim at the target."""
+def shot_pattern(weapon, target, armors, armor_name=None, health=None, flags=(), global_bonus=None, damage_flags=()):
+    """AIPlayer.cpp shotPatternAgainst: None when the weapon may not aim at the target. With no armor or
+    health given the target's unconditioned ones are read, as the AI reads them; flags are the shooter's
+    weapon bonus conditions (PLAYER_UPGRADE, a rank), summed as Weapon::computeBonus sums them, each once.
+    damage_flags are the shell's own, which only the detonation reads: they add damage, never rate."""
     if not weapon["anti_air" if "AIRCRAFT" in target.kinds else "anti_ground"]:
         return None
 
     # a gattling is read at the fastest step its own WeaponBonus block gives it
     bonus = {"DAMAGE": 1.0, "RATE_OF_FIRE": 1.0, "PRE_ATTACK": 1.0}
+    flags = list(dict.fromkeys(flags))
     if weapon["bonus"]:
         spun_up = ("CONTINUOUS_FIRE_FAST" if weapon["fire_two"] is not None
                    else "CONTINUOUS_FIRE_MEAN" if weapon["fire_one"] is not None else None)
-        for name, value in weapon["bonus"].get(spun_up, {}).items():
-            bonus[name] = bonus.get(name, 1.0) + value - 1.0
+        flags.append(spun_up)
+    # the detonation ORs the launcher's flags into the shell's, so a flag both carry counts once
+    shell_only = [flag for flag in dict.fromkeys(damage_flags) if flag not in flags]
+    for flag in flags + shell_only:
+        for bonus_set in (global_bonus or {}, weapon["bonus"]):
+            for name, value in bonus_set.get(flag, {}).items():
+                if flag in shell_only and name != "DAMAGE":
+                    continue
+                bonus[name] = bonus.get(name, 1.0) + value - 1.0
 
-    armor_name = target.unconditioned("armor")
+    if armor_name is None:
+        armor_name = target.unconditioned("armor")
+    if health is None:
+        health = target.health()
     armor = armors[armor_name] if armor_name else None
     damage_type = weapon["type"]
     if damage_type == "KILL_PILOT":
-        damage = adjust_damage(armor, damage_type, target.health()) if "VEHICLE" in target.kinds else 0.0
+        damage = adjust_damage(armor, damage_type, health) if "VEHICLE" in target.kinds else 0.0
     elif damage_type in NOT_HEALTH_DAMAGE:
         damage = 0.0
     else:
@@ -574,9 +633,11 @@ def kill_frames(health, shots):
     return shots.opening + first + (needed - 1 - reloads) * shots.delay + reloads * shots.reload
 
 
-def best_attack(data, attacker, target):
-    """computeTemplateFramesToKill, with the weapon that wins: (frames, weapon) or None."""
-    weapon_set = attacker.unconditioned("weapon") or {}
+def best_attack(data, attacker, target, mine=None, theirs=None):
+    """computeTemplateFramesToKill, with the weapon that wins: (frames, weapon) or None. Without the two
+    Fighters it is the AI's view, unconditioned sets both sides."""
+    weapon_set = (mine.weapons if mine else attacker.unconditioned("weapon")) or {}
+    health = theirs.health if theirs else target.health()
     best = None
     for slot in WEAPON_SLOTS:
         if not weapon_set.get(slot):
@@ -584,11 +645,74 @@ def best_attack(data, attacker, target):
         weapon = data.weapons[weapon_set[slot]]
         if weapon["damage"] < DUMMY_DAMAGE:
             continue
-        shots = shot_pattern(weapon, target, data.armors)
-        frames = kill_frames(target.health(), shots) if shots else CANNOT_KILL
+        if mine:
+            shell = ("PLAYER_UPGRADE",) if weapon["name"] in mine.projectiles else ()
+            shots = shot_pattern(weapon, target, data.armors, theirs.armor, health, mine.bonus, data.global_bonus, shell)
+        else:
+            shots = shot_pattern(weapon, target, data.armors)
+        frames = kill_frames(health, shots) if shots else CANNOT_KILL
         if frames >= 0.0 and (best is None or frames < best[0]):
             best = (frames, weapon)
     return best
+
+
+def capped_sight(data, thing, weapon_set):
+    """Object::look: the weapon caps the sight of all but a structure, a dozer and a spotter; the dummy
+    weapons count, as getLargestWeaponRange counts every slot of the set the unit holds now."""
+    reach = max((data.weapons[name]["range"] for name in (weapon_set or {}).values() if name), default=-1.0)
+    if reach > 0.0 and not thing.spotter and not {"STRUCTURE", "DOZER"} & set(thing.kinds):
+        return min(thing.sight, reach * SIGHT_PER_WEAPON_RANGE)
+    return thing.sight
+
+
+def fighter(data, thing, researchable, upgraded, level):
+    """The sets and health the engine gives a unit with every upgrade its side can research applied (or
+    none) at a rank: weapon and armor set chosen as findWeaponTemplateSet chooses with the flags the upgrade
+    modules and Object::onVeterancyLevelChanged set, the rank's HealthBonus over MaxHealthUpgrade's health."""
+    # Object::onVeterancyLevelChanged gives the rank's Upgrade_Veterancy_<level>; a unit that ranked up
+    # by kills holds every rung it passed. ponytail: one promoted straight to a rank holds only that one
+    owned = (set(researchable) if upgraded else set()) | set(VETERANCY_UPGRADES[1:level + 1])
+
+    def granted(fields):
+        """UpgradeMux: its triggers are owned (one, or all with RequiresAllTriggers) and no ConflictsWith is."""
+        triggers = [name.lower() for name in fields.get("triggeredby", [])]
+        need_all = yes(fields.get("requiresalltriggers", ["no"])[0])
+        if any(name.lower() in owned for name in fields.get("conflictswith", [])):
+            return False
+        return bool(triggers) and (all if need_all else any)(name in owned for name in triggers)
+
+    weapon_flags, armor_flags, bonus = set(), set(), []
+    health, locomotor = thing.health(), thing.locomotor
+    for module, fields in thing.upgrades.values():
+        if not granted(fields):
+            continue
+        if module == "weaponsetupgrade":
+            weapon_flags.update(flag.upper() for flag in fields.get("weaponsetflag", ["PLAYER_UPGRADE"]))
+        elif module == "armorupgrade":
+            armor_flags.add("PLAYER_UPGRADE")
+        elif module == "weaponbonusupgrade":
+            bonus.append("PLAYER_UPGRADE")
+        elif module == "maxhealthupgrade":
+            health += real(fields.get("addmaxhealth", ["0"])[0])
+        elif module == "locomotorsetupgrade" and thing.locomotor_upgraded:
+            locomotor = thing.locomotor_upgraded
+    if LEVELS[level]:
+        weapon_flags.add(LEVELS[level])
+        armor_flags.add(LEVELS[level])
+        bonus.append(LEVELS[level])
+    # ponytail: the rank multiplies the health after the upgrade added to it, as a promotion after the
+    # research does; promoted first, the upgrade's health would not be multiplied
+    health *= data.health_bonus[level]
+    weapons = thing.matched("weapon", frozenset(weapon_flags)) or {}
+    # uranium shells and AP rockets upgrade the shell, not the tank: WeaponStore::handleProjectileDetonation
+    # reads the projectile's own PLAYER_UPGRADE, set by a WeaponBonusUpgrade on the projectile object
+    projectiles = set()
+    for name in filter(None, weapons.values()):
+        shell = data.things.get(data.weapons[name]["projectile"] or "")
+        if shell and any(module == "weaponbonusupgrade" and granted(fields) for module, fields in shell.upgrades.values()):
+            projectiles.add(data.weapons[name]["name"])
+    return Fighter(weapons, thing.matched("armor", frozenset(armor_flags)), tuple(dict.fromkeys(bonus)), health,
+                   data.locomotors.get(locomotor, 0.0) * thing.speed_scale, frozenset(projectiles))
 
 
 # ---- the page ------------------------------------------------------------------------------------------
@@ -659,8 +783,9 @@ def build(files):
     # what each side's buildings and dozers offer; a unit keeps its own Side when that is one of the
     # lobby's, and takes the first side that builds it otherwise
     owner = {}
+    researchable = {side: set() for side in sides}
     for side in sorted(sides, key=lambda side: sides[side]["order"]):
-        for name in data.reachable(starts[side]):
+        for name in data.reachable(starts[side], researchable[side]):
             owner.setdefault(name, data.things[name].side if data.things[name].side in sides else side)
     # ...and every build button whose object says it is a lobby side's, in no set or not: the page has always
     # carried those (Lazr_AmericaTankPaladin, Slth_GLAVehicleScudLauncher), so the retail page stays as it was
@@ -687,12 +812,7 @@ def build(files):
         weapon_set = fighter.unconditioned("weapon") or {}
         weapons = [data.weapons[weapon_set[slot]] for slot in WEAPON_SLOTS if weapon_set.get(slot)]
         armor = fighter.unconditioned("armor")
-        # Object::look: the weapon caps the sight of all but a structure, a dozer and a spotter; the dummy
-        # weapons count, as getLargestWeaponRange counts every slot
-        reach = max((weapon["range"] for weapon in weapons), default=-1.0)
-        sight = fighter.sight
-        if reach > 0.0 and not fighter.spotter and not {"STRUCTURE", "DOZER"} & set(fighter.kinds):
-            sight = min(sight, reach * SIGHT_PER_WEAPON_RANGE)
+        sight = capped_sight(data, fighter, weapon_set)
         return dict(describe(index), cost=candidates[index].cost, health=fighter.health(),
                     kinds=sorted(kind for kind in fighter.kinds if kind in SHOWN_KINDS),
                     armor=data.armor_names[armor] if armor else None,
@@ -705,6 +825,35 @@ def build(files):
         return {"frames": round(frames, 3), "weapon": weapon["name"], "range": weapon["range"],
                 "minRange": weapon["min_range"]}
 
+    # the page's toggles, past the AI's view: every upgrade the unit's side can research or buy, and a rank,
+    # the same on both sides. A cell is [frames, index into weapons]; "00" is the AI's view, in attacks
+    weapons, weapon_index = [], {}
+
+    def cell(fight):
+        if not fight:
+            return None
+        frames, weapon = fight
+        if weapon["name"] not in weapon_index:
+            weapon_index[weapon["name"]] = len(weapons)
+            weapons.append({"name": weapon["name"], "range": weapon["range"], "minRange": weapon["min_range"]})
+        # as many decimals as attacks, so a near-even AI cell cannot flip on rounding alone
+        return [round(frames, 3), weapon_index[weapon["name"]]]
+
+    variants = {}
+    for upgraded in (0, 1):
+        for level in range(len(LEVELS)):
+            if not upgraded and not level:
+                continue
+            states = [fighter(data, fighters[index], researchable[owner[candidates[index].name.lower()]], upgraded, level)
+                      for index in kept]
+            variants["%d%d" % (upgraded, level)] = {
+                "health": [round(state.health, 1) for state in states],
+                "speed": [round(state.speed, 2) for state in states],
+                "sight": [capped_sight(data, fighters[index], state.weapons) for index, state in zip(kept, states)],
+                "attacks": [[cell(best_attack(data, fighters[a], fighters[t], states[row], states[col]))
+                             for col, t in enumerate(kept)] for row, a in enumerate(kept)],
+            }
+
     # what the reader could not make a fighter of: a body with no health it knows
     unread = ["%s (%s)" % (fighter.name, fighter.modules.get(fighter.body[0].lower(), "?") if fighter.body else "no body")
               for fighter in fighters if fighter.health() <= 0.0]
@@ -712,6 +861,11 @@ def build(files):
         "units": [unit(index) for index in kept],
         "attacks": [[attack(fights[a][t]) if fights[a][t] else None for t in kept] for a in kept],
         "excluded": [describe(index) for index in range(len(candidates)) if index not in kept],
+        "weapons": weapons,
+        "variants": variants,
+        "ranks": [{"health": data.health_bonus[level],
+                   "rof": data.global_bonus.get(LEVELS[level], {}).get("RATE_OF_FIRE", 1.0),
+                   "damage": data.global_bonus.get(LEVELS[level], {}).get("DAMAGE", 1.0)} for level in range(1, len(LEVELS))],
         "fps": LOGIC_FPS,
         "sortieMsec": SORTIE_MSEC,
         "sides": sides,
@@ -735,6 +889,14 @@ def selfcheck():
     ticks_per_game_second(LOGIC_FPS)
     assert msec_to_frames(1000) == LOGIC_FPS
     assert real("75.0.") == 75.0 and real("-2e1x") == -20.0 and percent("50%") == 0.5
+    # SparseMatchFinder: the most asked-for flags win, then the fewest unasked ones; no flags is unconditioned
+    thing = Thing("sets")
+    thing.sets["armor"] = [(frozenset(), "plain"), (frozenset({"PLAYER_UPGRADE", "VETERAN"}), "both"),
+                           (frozenset({"PLAYER_UPGRADE"}), "upgraded")]
+    assert thing.matched("armor", frozenset()) == thing.unconditioned("armor") == "plain"
+    assert thing.matched("armor", frozenset({"PLAYER_UPGRADE"})) == "upgraded"
+    assert thing.matched("armor", frozenset({"PLAYER_UPGRADE", "VETERAN"})) == "both"
+    assert thing.matched("armor", frozenset({"ELITE"})) == "plain"
     print("unitmatrix selfcheck: ok")
 
 
@@ -836,6 +998,8 @@ TEMPLATE = r'''<!doctype html>
   --tip-ground: #141c18;
   --tip-ink: #eef2ef;
   --tip-muted: #9aa6a0;
+  --flip: #f0a500;
+  --flip-rim: #141c18;
 
   --w1: #cde2fb; --w2: #9ec5f4; --w3: #6da7ec; --w4: #3987e5; --w5: #256abf; --w6: #184f95; --w7: #0d366b;
   --l1: #fbd9d7; --l2: #f5b3b0; --l3: #ec8a86; --l4: #e05553; --l5: #c23a39; --l6: #962b2b; --l7: #6b1f1f;
@@ -1172,6 +1336,9 @@ table.matrix {
 .l5 { background: var(--l5); color: #ffffff; } .l6 { background: var(--l6); color: #ffffff; }
 .l7 { background: var(--l7); color: #ffffff; }
 .matrix td.cross { filter: brightness(0.93); }
+/* amber carries the dark bins, its near-black rim the light ones; both colours are the same in either theme */
+.matrix td.flip { background-image: linear-gradient(135deg, var(--flip) 0 8px, var(--flip-rim) 8px 10px, transparent 10px); }
+.flip-key { display: inline-block; width: 12px; height: 12px; background: linear-gradient(135deg, var(--flip) 0 38%, var(--flip-rim) 38% 50%, transparent 50%); vertical-align: -1px; }
 .matrix td:hover { outline: 2px solid var(--ink); outline-offset: -2px; }
 
 .tooltip {
@@ -1262,6 +1429,22 @@ table.matrix {
       <span class="label">Görüş</span>
       <label class="toggle" for="spotted"><input type="checkbox" id="spotted">Gözcü var, herkes menzilinin sonuna kadar görüyor</label>
     </div>
+    <div class="control">
+      <span class="label" id="upgradeLabel">Yükseltme</span>
+      <div class="segmented" role="radiogroup" aria-labelledby="upgradeLabel">
+        <input type="radio" name="upgrade" id="upgradeNone" value="0" checked><label for="upgradeNone">Yok</label>
+        <input type="radio" name="upgrade" id="upgradeAll" value="1"><label for="upgradeAll">İki taraf da tam</label>
+      </div>
+    </div>
+    <div class="control">
+      <span class="label" id="levelLabel">Rütbe, iki taraf</span>
+      <div class="segmented" role="radiogroup" aria-labelledby="levelLabel">
+        <input type="radio" name="level" id="level0" value="0" checked><label for="level0">Yok</label>
+        <input type="radio" name="level" id="level1" value="1"><label for="level1">Veteran</label>
+        <input type="radio" name="level" id="level2" value="2"><label for="level2">Elit</label>
+        <input type="radio" name="level" id="level3" value="3"><label for="level3">Kahraman</label>
+      </div>
+    </div>
     <div class="legend" aria-hidden="true">
       <div class="legend-bar" id="legendBar"></div>
       <div class="legend-ticks"><span>−20 zayıf</span><span>−3</span><span>eşit</span><span>3</span><span>20 güçlü</span></div>
@@ -1271,7 +1454,7 @@ table.matrix {
   <section class="board">
     <div class="board-head">
       <span>Mavi, 3: soldaki saldıran üstteki hedefi 3 kat hızlı öldürüyor. Kırmızı, −3: hedef saldıranı 3 kat hızlı öldürüyor. Hücrenin üstüne gelince iki yönün öldürme süresi ve silah çıkar.</span>
-      <span class="axis-note">∞ hedef karşılık veremiyor · 0 saldıran hedefe zarar veremiyor · taralı: ikisi de veremiyor</span>
+      <span class="axis-note">∞ hedef karşılık veremiyor · 0 saldıran hedefe zarar veremiyor · taralı: ikisi de veremiyor · <span class="flip-key"></span> kazanan, yapay zekânın gördüğü tabloya göre el değiştirdi</span>
     </div>
     <div class="matrix-frame">
       <div class="axis axis-attacker" aria-hidden="true">Saldıran ↓ <small>soldaki birim ateş ediyor</small></div>
@@ -1288,12 +1471,14 @@ table.matrix {
       <p>Her yön için öldürme süresi hesaplanıyor: hedefin <code>MaxHealth</code> değeri, silahın <code>PrimaryDamage</code> değerinin hedef zırhındaki yüzdesiyle çarpımına bölünüyor, çıkan atış sayısı <code>DelayBetweenShots</code>, şarjör ve <code>ClipReloadTime</code> ile saniyeye çevriliyor. Hücre, sütunun süresinin satırın süresine oranı. Birim birden fazla silah taşıyorsa o hedefe en hızlı öldüreni seçiliyor.</p>
       <p>Oyundaki yapay zekâ karşı birim seçerken aynı hesabı yapıyor (<code>aiFramesToKill</code>), bu tablo onun gördüğü sayıları gösteriyor.</p>
       <p>"Aynı para ile" oranı iki birimin fiyat oranıyla çarpıyor. Doğrusal bir düzeltme bu: 900'lük Crusader'a karşı 600'lük birimden bir buçuk tane geldiğini varsayıyor, kalabalığın kendi ateş gücünü katlamasını hesaba katmıyor.</p>
-      <p>Menzil açıkken kısa menzilli taraf aradaki farkı kendi <code>Speed</code> değeriyle kapatana kadar ateş yiyor ve bu süre onun öldürme süresine ekleniyor. Kaçıp ateş etme hesapta yok.</p>
+      <p>Menzil açıkken kısa menzilli taraf aradaki farkı kendi <code>Speed</code> değeriyle kapatana kadar ateş yiyor ve bu süre onun öldürme süresine ekleniyor. Karşılık veremeyen bir hedefe yürümek bedava, süre eklenmiyor. Hızı sıfır olan bir birim kendisinden uzağa vuran hedefe hiç varamıyor ve onu öldüremiyor sayılıyor. Uçaksavarı olmayan kara birimi uçağa zaten ateş edemiyor, menzil bunu değiştirmiyor. Kaçıp ateş etme hesapta yok.</p>
+      <p>Yükseltmede "İki taraf da tam" seçilince her birim, tarafının araştırabildiği ya da satın alabildiği bütün yükseltmeleri almış sayılıyor; hangisinin tarafa açık olduğu tarafın bina ve birim düğmelerinden okunuyor. Silah ve zırh seti motorun yöntemiyle seçiliyor: <code>WeaponSetUpgrade</code> ve <code>ArmorUpgrade</code> bayraklarını koyuyor, en çok bayrağı tutan set kazanıyor. <code>WeaponBonusUpgrade</code> silahın kendi <code>PLAYER_UPGRADE</code> hasar bonusunu açıyor. Uranyum mermi ve zırh delici roket bu bonusu tankta değil mermi nesnesinde taşıyor, hesap da mermiye bakıyor. Kompozit zırh gibi can ekleyenler (<code>MaxHealthUpgrade</code>) cana, nükleer tank gibi hız verenler yaklaşma süresine giriyor. Bir modülün <code>ConflictsWith</code> satırındaki yükseltme de alınmış sayıldığı için Overlord'un gatling topu gibi birbirini dışlayan eklentiler devreye girmiyor.</p>
+      <p id="rankNote"></p>
       <p>Menzil açıkken bir birim gördüğünden uzağa ateş edemiyor. Görüş oyunun hesapladığı gibi: <code>ShroudClearingRange</code>, en uzun silah menzilinin bir buçuk katıyla sınırlı (gözcüler ve inşaatçılar hariç). Türkiye'nin <code>GÖZ</code> etiketli topçusu (Firtina ve Sakarya) 100 görüyor, 500-600 atıyor ve 100'den yakına ateş edemiyor: tek başına hiç atış bulamıyor, bunu bir gözcünün ya da başka bir birimin gözü için yapıyor. "Gözcü var" açılınca herkes menzilinin sonuna kadar görüyor sayılıyor, topçu ancak o zaman menzilinden ateş ediyor.</p>
     </div>
     <div>
       <h2>Hesapta olmayanlar</h2>
-      <p>Yalnızca yükseltmesiz silah seti (<code>Conditions = None</code>) kullanılıyor: kompozit zırh, uranyum mermi, terfi ve general güçleri yok. Her atış isabet ediyor, alan hasarı ve zehrin sonradan işleyen hasarı sayılmıyor, bu yüzden Toxin Tractor ve Dragon gerçekte olduğundan zayıf görünüyor. Gatling silahları sürekli ateşin en yüksek kademesinden hesaplanıyor.</p>
+      <p>Açılışta görünen tablo yapay zekânın gördüğü tablo: yükseltmesiz silah ve zırh seti (<code>Conditions = None</code>), rütbe yok. Köşesi sarı hücreler hep bu tabloya göre karşılaştırılıyor. Hiçbir görünümde olmayanlar general güçleri, kasa yükseltmeleri ve dışarıdan gelen bonuslar (Propaganda Kulesi, kalabalık piyadenin hızlı ateşi). Her atış isabet ediyor, alan hasarı ve zehrin sonradan işleyen hasarı sayılmıyor, bu yüzden Toxin Tractor ve Dragon gerçekte olduğundan zayıf görünüyor. Gatling silahları sürekli ateşin en yüksek kademesinden hesaplanıyor.</p>
       <p>Jarmen Kell'in pilot vuruşu araçlara karşı tek atışlık öldürme sayılıyor, çünkü araç tarafsızlaşıp savaştan çıkıyor. Şarjörü bitince üsse dönen uçaklara her yeni şarjör için 20 saniyelik bir sefer süresi yazıldı; bu bir tahmin, oyundan okunmadı.</p>
       <p class="excluded" id="excluded"></p>
     </div>
@@ -1310,6 +1495,11 @@ const DATA = window.UNIT_DATA;
 const UNITS = DATA.units;
 const ATTACKS = DATA.attacks;
 const FPS = DATA.fps;
+// the same fights with every upgrade the side can get, or a rank, or both; "00" is ATTACKS itself
+const WEAPONS = DATA.weapons;
+const VARIANTS = DATA.variants;
+// the AI's view: what every toggle is measured against when it marks a winner that changed
+const AI_VIEW = { useRange: false, spotted: false, upgrade: "0", level: "0" };
 
 // the sides the game's lobby offers, read from its PlayerTemplate.ini; "main" is each faction's first
 const SIDES = DATA.sides;
@@ -1337,17 +1527,53 @@ function readState() {
     sort: document.querySelector("input[name=sort]:checked").value,
     useRange: $("useRange").checked,
     spotted: $("spotted").checked,
+    upgrade: document.querySelector("input[name=upgrade]:checked").value,
+    level: document.querySelector("input[name=level]:checked").value,
   };
+}
+
+function variantOf(state) {
+  const key = state.upgrade + state.level;
+  return key === "00" ? null : VARIANTS[key];
+}
+
+function isAiView(state) {
+  return Object.keys(AI_VIEW).every(key => state[key] === AI_VIEW[key]);
+}
+
+function attackOf(attackerIndex, targetIndex, state) {
+  const variant = variantOf(state);
+  if (!variant) return ATTACKS[attackerIndex][targetIndex];
+  const cell = variant.attacks[attackerIndex][targetIndex];
+  if (!cell) return null;
+  const weapon = WEAPONS[cell[1]];
+  return { frames: cell[0], weapon: weapon.name, range: weapon.range, minRange: weapon.minRange };
+}
+
+function healthOf(index, state) {
+  const variant = variantOf(state);
+  return variant ? variant.health[index] : UNITS[index].health;
+}
+
+function speedOf(index, state) {
+  const variant = variantOf(state);
+  return variant ? variant.speed[index] : UNITS[index].speed;
+}
+
+// an upgraded weapon set can reach further, and its range caps the sight
+function sightOf(index, state) {
+  const variant = variantOf(state);
+  return variant ? variant.sight[index] : UNITS[index].sight;
 }
 
 // how far a unit shoots in a fight of its own: no further than it sees, unless a spotter sees for it
 function reach(unitIndex, attack, state) {
-  return state.spotted ? attack.range : Math.min(attack.range, UNITS[unitIndex].sight);
+  return state.spotted ? attack.range : Math.min(attack.range, sightOf(unitIndex, state));
 }
 
 function killFrames(attackerIndex, targetIndex, state) {
-  const attack = ATTACKS[attackerIndex][targetIndex];
-  const reply = ATTACKS[targetIndex][attackerIndex];
+  const attack = attackOf(attackerIndex, targetIndex, state);
+  const reply = attackOf(targetIndex, attackerIndex, state);
   if (!attack) return { frames: Infinity, closing: 0 };
   if (!state.useRange) return { frames: attack.frames, closing: 0 };
   const own = reach(attackerIndex, attack, state);
@@ -1355,21 +1581,28 @@ function killFrames(attackerIndex, targetIndex, state) {
   if (own <= attack.minRange) return { frames: Infinity, closing: 0, blind: true };
   let closing = 0;
   const theirs = reply ? reach(targetIndex, reply, state) : 0;
-  if (reply && theirs > own) {
-    const attacker = UNITS[attackerIndex];
-    closing = attacker.speed > 0 ? (theirs - own) / attacker.speed * FPS : Infinity;
+  // only a target that shoots back makes the walk in cost anything (one too blind to fire alone does not);
+  // a unit that cannot move never arrives
+  if (reply && theirs > reply.minRange && theirs > own) {
+    const speed = speedOf(attackerIndex, state);
+    closing = speed > 0 ? (theirs - own) / speed * FPS : Infinity;
   }
-  return { frames: attack.frames + closing, closing };
+  return { frames: attack.frames + closing, closing, stuck: closing === Infinity };
 }
 
 function ratio(rowIndex, colIndex, state) {
-  if (rowIndex === colIndex) return ATTACKS[rowIndex][rowIndex] ? 1 : NaN;
+  if (rowIndex === colIndex) return attackOf(rowIndex, rowIndex, state) ? 1 : NaN;
   const rowKill = killFrames(rowIndex, colIndex, state).frames;
   const colKill = killFrames(colIndex, rowIndex, state).frames;
   if (rowKill === Infinity && colKill === Infinity) return NaN;
   let value = colKill / rowKill;
   if (state.mode === "cost") value *= UNITS[colIndex].cost / UNITS[rowIndex].cost;
   return value;
+}
+
+// the winner swapped sides against the AI's view: one side was faster to kill there, the other is here
+function flipped(value, aiValue) {
+  return (value > 1 && aiValue < 1) || (value < 1 && aiValue > 1);
 }
 
 function bin(value) {
@@ -1451,6 +1684,8 @@ function render() {
     parts.push(`<th scope="col" class="${groupStart(cols, position) ? "group-start" : ""}" title="${unit.name} (${SIDES[unit.side].label})${spotterNote(unit)}"><span class="col-label">${unit.name}<span class="tag">${unitTags(unit)}</span></span></th>`);
   });
   parts.push("</tr></thead><tbody>");
+  const aiView = isAiView(state) ? null : { ...state, ...AI_VIEW };
+  let flips = 0;
   rows.forEach((rowIndex, rowPosition) => {
     const unit = UNITS[rowIndex];
     parts.push(`<tr class="${groupStart(rows, rowPosition) ? "group-start" : ""}"><th scope="row" title="${unit.name} (${SIDES[unit.side].label})${spotterNote(unit)}">${unit.name}<span class="tag">${unitTags(unit)}</span></th>`);
@@ -1458,6 +1693,10 @@ function render() {
       const value = ratio(rowIndex, colIndex, state);
       const classes = rowIndex === colIndex ? ["diag", bin(value)] : [bin(value)];
       if (groupStart(cols, colPosition)) classes.push("group-start");
+      if (aiView && flipped(value, ratio(rowIndex, colIndex, aiView))) {
+        classes.push("flip");
+        flips += 1;
+      }
       parts.push(`<td class="${classes.join(" ")}" data-r="${rowPosition}" data-c="${colPosition}">${format(value)}</td>`);
     });
     parts.push("</tr>");
@@ -1466,7 +1705,8 @@ function render() {
   $("matrix").innerHTML = parts.join("");
 
   const cells = rows.length * cols.length;
-  $("readout").innerHTML = `<b>${rows.length}</b> × <b>${cols.length}</b> birim · <b>${cells.toLocaleString("tr-TR")}</b> eşleşme<br>toplam ${UNITS.length} savaşan birim okundu`;
+  const flipNote = aiView ? `<br><b>${flips.toLocaleString("tr-TR")}</b> hücrede kazanan değişti` : "";
+  $("readout").innerHTML = `<b>${rows.length}</b> × <b>${cols.length}</b> birim · <b>${cells.toLocaleString("tr-TR")}</b> eşleşme<br>toplam ${UNITS.length} savaşan birim okundu${flipNote}`;
 }
 
 function describeTooltip(rowPosition, colPosition) {
@@ -1478,27 +1718,36 @@ function describeTooltip(rowPosition, colPosition) {
   const value = ratio(rowIndex, colIndex, state);
   const rowKill = killFrames(rowIndex, colIndex, state);
   const colKill = killFrames(colIndex, rowIndex, state);
-  const rowAttack = ATTACKS[rowIndex][colIndex];
-  const colAttack = ATTACKS[colIndex][rowIndex];
+  const rowAttack = attackOf(rowIndex, colIndex, state);
+  const colAttack = attackOf(colIndex, rowIndex, state);
 
-  let verdict;
-  if (rowIndex === colIndex) verdict = rowAttack ? "1× · kendine karşı" : "kendi türüne saldıramıyor";
-  else if (Number.isNaN(value)) verdict = "ikisi de birbirine zarar veremiyor";
-  else if (value === Infinity) verdict = "∞ · hedef karşılık veremiyor";
-  else if (value === 0) verdict = "0 · saldıran zarar veremiyor";
-  else if (value >= 1) verdict = `saldıran ${value.toFixed(2)}× güçlü`;
-  else verdict = `saldıran ${(1 / value).toFixed(2)}× zayıf`;
+  const verdictOf = v => Number.isNaN(v) ? "ikisi de birbirine zarar veremiyor"
+    : v === Infinity ? "∞ · hedef karşılık veremiyor"
+    : v === 0 ? "0 · saldıran zarar veremiyor"
+    : v >= 1 ? `saldıran ${v.toFixed(2)}× güçlü`
+    : `saldıran ${(1 / v).toFixed(2)}× zayıf`;
+  const verdict = rowIndex !== colIndex ? verdictOf(value)
+    : rowAttack ? "1× · kendine karşı" : "kendi türüne saldıramıyor";
 
-  const line = (unit, kill, attack) => {
+  const line = (unit, kill, attack, index) => {
     const closing = kill.closing > 0 && kill.closing !== Infinity ? ` <span class="tip-weapon">(${(kill.closing / FPS).toFixed(1)} sn yaklaşma dahil)</span>` : "";
-    const sight = attack && attack.range > unit.sight
-      ? ` · görüş ${unit.sight}, ötesini ${unit.beyondVision ? "bir gözcü görünce" : "ancak başkası görünce"} vurur`
+    const sees = sightOf(index, state);
+    const sight = attack && attack.range > sees
+      ? ` · görüş ${sees}, ötesini ${unit.beyondVision ? "bir gözcü görünce" : "ancak başkası görünce"} vurur`
       : "";
     const blind = kill.blind ? ` · en az ${attack.minRange} uzağa ateş ediyor, tek başına hiç atış bulamaz` : "";
-    const weapon = attack ? `<br><span class="tip-weapon">${attack.weapon} · menzil ${attack.range}${sight}${blind}</span>` : "";
+    const stuck = kill.stuck ? " · yürüyemiyor, hedefin menziline giremez" : "";
+    const weapon = attack ? `<br><span class="tip-weapon">${attack.weapon} · menzil ${attack.range}${sight}${blind}${stuck}</span>` : "";
     return `<span>${unit.name}</span><span>${seconds(kill.frames)}${closing}${weapon}</span>`;
   };
   const costLine = state.mode === "cost" ? `<span>fiyat</span><span>${rowUnit.cost} / ${colUnit.cost}</span>` : "";
+  let aiLine = "";
+  if (!isAiView(state) && rowIndex !== colIndex) {
+    const aiValue = ratio(rowIndex, colIndex, { ...state, ...AI_VIEW });
+    const turn = flipped(value, aiValue) ? ", kazanan değişti" : "";
+    const cellText = Number.isNaN(aiValue) || aiValue === Infinity || aiValue === 0 ? "" : `${format(aiValue)} · `;
+    aiLine = `<span>yapay zekâ</span><span>${cellText}${verdictOf(aiValue)}${turn}</span>`;
+  }
 
   return `<div class="tip-row">
       <span>saldıran</span><span class="tip-title">${rowUnit.name} <span class="tag">${unitTags(rowUnit)}</span></span>
@@ -1507,10 +1756,11 @@ function describeTooltip(rowPosition, colPosition) {
     <div class="tip-ratio">${verdict}</div>
     <div class="tip-row">
       <span>öldürür</span><span></span>
-      ${line(rowUnit, rowKill, rowAttack)}
-      ${line(colUnit, colKill, colAttack)}
-      <span>can</span><span>${rowUnit.health} / ${colUnit.health}</span>
+      ${line(rowUnit, rowKill, rowAttack, rowIndex)}
+      ${line(colUnit, colKill, colAttack, colIndex)}
+      <span>can</span><span>${healthOf(rowIndex, state)} / ${healthOf(colIndex, state)}</span>
       ${costLine}
+      ${aiLine}
     </div>`;
 }
 
@@ -1553,6 +1803,9 @@ function buildControls() {
   $("colFilter").innerHTML = options;
   const steps = ["l7", "l6", "l5", "l4", "l3", "l2", "l1", "n", "w1", "w2", "w3", "w4", "w5", "w6", "w7"];
   $("legendBar").innerHTML = steps.map(step => `<span class="${step}" style="background: var(--${step === "n" ? "neutral-cell" : step})"></span>`).join("");
+  const pct = value => Math.round((value - 1) * 100);
+  const [veteran, elite, hero] = DATA.ranks;
+  $("rankNote").textContent = `Rütbe iki tarafa birden veriliyor. GameData.ini'ye göre veteran yüzde ${pct(veteran.rof)} hızlı ateş ediyor ve yüzde ${pct(veteran.damage)} fazla vuruyor, kahramanda bunlar yüzde ${pct(hero.rof)} ve yüzde ${pct(hero.damage)}. Can veteranda ${veteran.health.toLocaleString("tr-TR")}, elitte ${elite.health.toLocaleString("tr-TR")}, kahramanda ${hero.health.toLocaleString("tr-TR")} katına çıkıyor. Rütbenin kendi silah ya da zırh seti varsa o da seçiliyor, terfinin verdiği Upgrade_Veterancy yükseltmesine bağlı modüller de çalışıyor.`;
   const excluded = DATA.excluded.map(unit => unit.name);
   const uniqueExcluded = [...new Set(excluded)].sort((a, b) => a.localeCompare(b, "tr"));
   $("excluded").textContent = `Matrise girmeyen ${excluded.length} kayıt, silahı öldürücü olmayan ya da hasarını başka nesnelere yaptıran birimler: ${uniqueExcluded.join(", ")}. Avenger'ın lazerleri, Korkut'un topu, Battle Bus ve Troop Crawler'ın yolcuları ayrı nesneler olduğu için bu hesabın dışında kaldı.`;

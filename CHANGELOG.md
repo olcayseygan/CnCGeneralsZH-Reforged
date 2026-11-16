@@ -34,6 +34,7 @@ found and fixed, EA's own, not port damage.**
 - A unit that has to reach its target to hit it no longer loses its way there when the game is busy finding routes for many units at once.
 - A unit shoved aside by a friendly one could drive on along a route that had already been thrown away. That is fixed, after the same fix in TheSuperHackers' version of this source.
 - After a saved game is loaded, the computer's attack moves behave as the computer's again, and a unit halfway through being freed from a jam carries on where it was.
+- A transport whose passengers shoot out of it now brings them into an attack move's fights. The Infantry General's Troop Crawler, sent on an attack move past an enemy Power Plant, used to drive up to it and stop there for good while its eight soldiers never fired: the order went to the Crawler alone, whose own gun is a stand-in that does next to nothing, and soldiers riding inside pick only units for themselves. Now everyone aboard who can hit the target gets it, and the Power Plant goes down. Any transport with firing seats hands its target over the same way, to the passengers within reach of it. If nobody aboard can hurt the target, the transport drives on and leaves it be.
 - A replay recorded before this change will not play back.
 
 ## Water maps run like dry ones

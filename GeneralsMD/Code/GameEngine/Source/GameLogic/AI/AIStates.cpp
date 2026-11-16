@@ -72,6 +72,7 @@
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/SpawnBehavior.h"
 #include "GameLogic/Module/StealthUpdate.h"
+#include "GameLogic/Module/TransportContain.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -3681,6 +3682,7 @@ AIAttackMoveToState::AIAttackMoveToState( StateMachine *machine ) : AIMoveToStat
 	m_commandSrc = CMD_FROM_AI;
 	m_engageOrigin.zero();
 	m_victimID = INVALID_ID;
+	clearUntouchables();
 	m_engageStartFrame = 0;
 	m_ammoAtEngage = 0;
 	m_frameToScanOn = 0;
@@ -3721,7 +3723,7 @@ void AIAttackMoveToState::crc( Xfer *xfer )
 void AIAttackMoveToState::xfer( Xfer *xfer )
 {
   // version
-  XferVersion currentVersion = 7;
+  XferVersion currentVersion = 8;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
 
@@ -3760,6 +3762,10 @@ void AIAttackMoveToState::xfer( Xfer *xfer )
 		// update branches on it (a player's order retries to the end), so a load must not invent it
 		xfer->xferUser(&m_commandSrc, sizeof(m_commandSrc));
 	}
+	if (version>=8) {
+		for (Int i = 0; i < ATTACK_MOVE_UNTOUCHABLE_SLOTS; ++i)
+			xfer->xferObjectID(&m_untouchableIDs[i]);
+	}
 	xfer->xferSnapshot(m_attackMoveMachine);
 }  // end xfer
 
@@ -3797,6 +3803,7 @@ StateReturnType AIAttackMoveToState::onEnter()
 	m_isEngaging = FALSE;
 	m_chaseWasAllowed = ai->isAllowedToChase();
 	m_victimID = INVALID_ID;
+	clearUntouchables();
 	m_engageStartFrame = 0;
 	m_engageOrigin = *owner->getPosition();
 	m_reengageGoalDistSqr = 0.0f;
@@ -3841,6 +3848,123 @@ static Int countRemainingAmmo( const Object *obj )
 	return total;
 }
 
+//----------------------------------------------------------------------------------------------------------
+/**
+ * Riders who fire out of a transport are its guns on attack move too.  A player's attack order hands
+ * the victim to them (AIGroup.cpp, groupAttackObject), but attack move engaged the transport alone, and
+ * a rider's own scan takes no buildings: an Infantry General's Troop Crawler, whose own weapon is a
+ * stand-in that does next to nothing, drove up to a building and sat there for good while its eight
+ * soldiers looked on.
+ *
+ * Gives victim to every rider that may fire out and can hit it - all of them when the transport has
+ * just picked it, only the idle ones after that, so a rider busy with an enemy of its own finishes it.
+ * TRUE when any rider aboard can hit victim from where the transport stands.
+ */
+static Bool AIAttackMove_putRidersOn( Object *owner, Object *victim, Bool everyone )
+{
+	ContainModuleInterface *contain = owner->getContain();
+	if (contain == NULL || !contain->isPassengerAllowedToFire())
+		return FALSE;
+
+	const ContainedItemsList *riders = contain->getContainedItemsList();
+	if (riders == NULL)
+		return FALSE;
+
+	Bool anyCan = FALSE;
+	for (ContainedItemsList::const_iterator it = riders->begin(); it != riders->end(); ++it)
+	{
+		Object *rider = *it;
+		if (!contain->isPassengerAllowedToFire(rider->getID()) || !rider->isAbleToAttack())
+			continue;
+
+		CanAttackResult result = rider->getAbleToAttackSpecificObject(ATTACK_NEW_TARGET, victim, CMD_FROM_AI);
+		if (result != ATTACKRESULT_POSSIBLE && result != ATTACKRESULT_POSSIBLE_AFTER_MOVING)
+			continue;
+
+		anyCan = TRUE;
+		AIUpdateInterface *riderAI = rider->getAI();
+		if (riderAI != NULL && (everyone || riderAI->isIdle()))
+			riderAI->aiAttackObject(victim, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI);
+	}
+	return anyCan;
+}
+
+/** Whether a template's own weapon set is only its riders' (ArmedRidersUpgradeMyWeaponSet): the
+	* Troop Crawler's dummy gun, which says the riders can shoot and does no work of its own. */
+static Bool AIAttackMove_gunIsTheRiders( const ThingTemplate *tmpl )
+{
+	const ModuleInfo &modules = tmpl->getBehaviorModuleInfo();
+	for (Int m = 0; m < modules.getCount(); ++m)
+		if (modules.getNthName(m).compare("TransportContain") == 0)
+			return ((const TransportContainModuleData *)modules.getNthData(m))->m_armedRidersUpgradeWeaponSet;
+	return FALSE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/**
+ * For a transport whose riders fire out: keeps the riders on the victim, and says when the fight is
+ * one nobody can win from here - no rider can hit the victim, our own gun reaches it but is only the
+ * riders' stand-in (or does it no harm).  Still approaching is not that: a rider out of reach reads as
+ * unable, so the answer waits until our own weapon is in range.
+ */
+Bool AIAttackMoveToState::ridersLeftNothingToFight( void )
+{
+	Object *owner = getMachineOwner();
+	Object *victim = TheGameLogic->findObjectByID(m_victimID);
+	if (victim == NULL || victim->isEffectivelyDead())
+		return FALSE;
+
+	ContainModuleInterface *contain = owner->getContain();
+	if (contain == NULL || !contain->isPassengerAllowedToFire())
+		return FALSE;		// no firing seats: the fight is the owner's own, as before
+
+	if (AIAttackMove_putRidersOn(owner, victim, FALSE))
+		return FALSE;
+
+	// Only a weapon that may aim at the victim says where the fight is: the Battle Bus's 320-range
+	// anti-air dummy counted a building far beyond its riders as in reach, and the bus gave up on it
+	// before it had driven a yard closer.
+	const Bool gunIsTheRiders = AIAttackMove_gunIsTheRiders(owner->getTemplate());
+	const Int antiMask = WeaponSet::getVictimAntiMask(victim);
+	Bool inReach = FALSE;
+	for (Int slot = 0; slot < WEAPONSLOT_COUNT; ++slot)
+	{
+		Weapon *weapon = owner->getWeaponInWeaponSlot((WeaponSlotType)slot);
+		if (weapon == NULL || (weapon->getAntiMask() & antiMask) == 0 || !weapon->isWithinAttackRange(owner, victim))
+			continue;
+		inReach = TRUE;
+		if (!gunIsTheRiders && weapon->estimateWeaponDamage(owner, victim) > 0.0f)
+			return FALSE;
+	}
+	return inReach;
+}
+
+//----------------------------------------------------------------------------------------------------------
+Bool AIAttackMoveToState::isUntouchable( const Object *obj ) const
+{
+	for (Int i = 0; i < ATTACK_MOVE_UNTOUCHABLE_SLOTS; ++i)
+		if (m_untouchableIDs[i] != INVALID_ID && m_untouchableIDs[i] == obj->getID())
+			return TRUE;
+	return FALSE;
+}
+
+/** Newest first; a full list drops its oldest, which at worst lets that one be tried once more. */
+void AIAttackMoveToState::markUntouchable( ObjectID id )
+{
+	for (Int i = 0; i < ATTACK_MOVE_UNTOUCHABLE_SLOTS; ++i)
+		if (m_untouchableIDs[i] == id)
+			return;
+	for (Int i = ATTACK_MOVE_UNTOUCHABLE_SLOTS - 1; i > 0; --i)
+		m_untouchableIDs[i] = m_untouchableIDs[i - 1];
+	m_untouchableIDs[0] = id;
+}
+
+void AIAttackMoveToState::clearUntouchables( void )
+{
+	for (Int i = 0; i < ATTACK_MOVE_UNTOUCHABLE_SLOTS; ++i)
+		m_untouchableIDs[i] = INVALID_ID;
+}
+
 void AIAttackMoveToState::startEngaging( Object *victim, Bool allowChase )
 {
 	Object *owner = getMachineOwner();
@@ -3883,6 +4007,9 @@ void AIAttackMoveToState::startEngaging( Object *victim, Bool allowChase )
 	// as on every frame after it.
 	ai->friend_setLastCommandSource(CMD_FROM_AI);
 	m_attackMoveMachine->setState( AI_ATTACK_OBJECT );
+
+	// and riders who fire out of us take the same victim (see AIAttackMove_putRidersOn)
+	AIAttackMove_putRidersOn(owner, victim, TRUE);
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -4051,6 +4178,10 @@ Object *AIAttackMoveToState::findRetaliationTarget( void )
 	if (attacker == NULL || attacker->isEffectivelyDead())
 		return NULL;
 
+	// nobody aboard could hurt it last time either, so turning on it would only park us again
+	if (isUntouchable( attacker ))
+		return NULL;
+
 	Bool canShootBack = owner->isAbleToAttack() && owner->getRelationship( attacker ) == ENEMIES;
 	if (canShootBack)
 	{
@@ -4187,6 +4318,17 @@ StateReturnType AIAttackMoveToState::update()
 			requireProgressTowardGoal();
 			shouldRepathThisFrame = true;
 		}
+		else if (((TheGameLogic->getFrame() + owner->getID()) % (UnsignedInt)ATTACK_MOVE_SCAN_RATE) == 0
+						 && ridersLeftNothingToFight())
+		{
+			// Nobody aboard can hurt it, and our own gun is only the riders' or no use against it either:
+			// drive on, and leave it alone for the rest of this order rather than come back and park at it.
+			markUntouchable(m_victimID);
+			m_attackMoveMachine->setState( AI_IDLE );
+			stopEngaging();
+			ai->friend_setLastCommandSource(m_commandSrc);
+			shouldRepathThisFrame = true;
+		}
 		else
 		{
 			//
@@ -4273,6 +4415,8 @@ StateReturnType AIAttackMoveToState::update()
 				Object *scanned = ai->getNextMoodTarget( true, false, true, !mayApproach || nextObjectToAttack != NULL );
 				if (scanned != NULL && !mayApproach && scanned->getID() == m_victimID)
 					scanned = NULL;		// the one we just failed on
+				if (scanned != NULL && isUntouchable(scanned))
+					scanned = NULL;		// the one nobody aboard could hurt (see ridersLeftNothingToFight)
 				if (scanned != NULL && (nextObjectToAttack == NULL || TheAI->prefersTarget(owner, scanned, nextObjectToAttack)))
 					nextObjectToAttack = scanned;
 			}

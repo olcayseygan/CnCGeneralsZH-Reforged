@@ -610,6 +610,10 @@ protected:
 	void startEngaging( Object *victim, Bool allowChase );	///< stop here and hand the victim to the attack sub-machine
 	void stopEngaging( void );									///< the fight is over; put back what startEngaging changed
 	Bool hasLeftTheLeash( void );								///< has the victim dragged us too far off the attack move?
+	Bool ridersLeftNothingToFight( void );			///< put riders who fire out of us on the victim; TRUE when nobody can hurt it
+	Bool isUntouchable( const Object *obj ) const;	///< one of m_untouchableIDs?
+	void markUntouchable( ObjectID id );				///< remember id, dropping the oldest when full
+	void clearUntouchables( void );
 	Object *findRetaliationTarget( void );			///< whoever is shooting us right now, if we can shoot back
 	Bool canHitFromHere( const Object *victim );	///< can we shoot it without moving an inch?
 	Bool mayEngageYet( void );									///< has the required progress toward the goal been made?
@@ -622,6 +626,8 @@ protected:
 	Real					m_retryDist;					///< how far off the goal a player's order last stopped short (0 = not yet)
 	Coord3D				m_engageOrigin;				///< where we stood when we picked the current victim
 	ObjectID			m_victimID;						///< who we picked
+	enum { ATTACK_MOVE_UNTOUCHABLE_SLOTS = 4 };
+	ObjectID			m_untouchableIDs[ATTACK_MOVE_UNTOUCHABLE_SLOTS];	///< victims nobody aboard could hurt from where we stood, newest first; not taken again this order
 	UnsignedInt		m_engageStartFrame;		///< when we picked it
 	UnsignedInt		m_frameToScanOn;			///< next frame we may look for a target
 	UnsignedInt		m_frameToApproachOn;	///< until this frame we only take targets we can already shoot

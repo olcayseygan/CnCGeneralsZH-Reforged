@@ -4427,6 +4427,21 @@ void Drawable::drawBattlePlans( const IRegion2D *healthBarRegion )
 }
 
 // ------------------------------------------------------------------------------------------------
+/** Where drawUIText puts the control group digit's left edge across the screen. drawVeterancy asks
+	* it too, to keep the chevrons off the digit. */
+// ------------------------------------------------------------------------------------------------
+static Int groupNumberX( const IRegion2D *healthBarRegion )
+{
+	Int xPos = healthBarRegion->lo.x;
+	if (TheDrawGroupInfo->m_usingPixelOffsetX) {
+		xPos += TheDrawGroupInfo->m_pixelOffsetX;
+	} else {
+		xPos += (healthBarRegion->width() * TheDrawGroupInfo->m_percentOffsetX);
+	}
+	return xPos;
+}
+
+// ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 void Drawable::drawUIText()
 {
@@ -4452,14 +4467,8 @@ void Drawable::drawUIText()
 
 	if (groupNum > NO_HOTKEY_SQUAD && groupNum < NUM_HOTKEY_SQUADS ) 
 	{
-		Int xPos = healthBarRegion->lo.x;
+		Int xPos = groupNumberX( healthBarRegion );
 		Int yPos = healthBarRegion->lo.y;
-
-		if (TheDrawGroupInfo->m_usingPixelOffsetX) {
-			xPos += TheDrawGroupInfo->m_pixelOffsetX;
-		} else {
-			xPos += (healthBarRegion->width() * TheDrawGroupInfo->m_percentOffsetX);
-		}
 
 		if (TheDrawGroupInfo->m_usingPixelOffsetY) {
 			yPos += TheDrawGroupInfo->m_pixelOffsetY;
@@ -5226,12 +5235,44 @@ void Drawable::drawVeterancy( const IRegion2D *healthBarRegion )
 	// bar's middle over its right end, which sat on the old ammo strip: an amber chevron on the
 	// last amber round. Beside the bar nothing else is drawn.
 	//
+	// Without one (smart mode on a unit nobody selected or hurt) the right end is empty air a
+	// screen-scaled bar's width from a small unit: an ejected pilot, which select-all skips and
+	// nothing shoots, wore his rank floating off to one side. They sit centred over the unit then,
+	// just above where the bar would be.
+	//
 	if( healthBarRegion )
 	{
-		const Int barHeight = max( 3, (Int)(healthBarRegion->hi.y - healthBarRegion->lo.y) );
-		const Int x = healthBarRegion->hi.x + 2;
-		const Int y = healthBarRegion->lo.y + barHeight / 2 - REAL_TO_INT( vetBoxHeight * 0.5f );
-		TheDisplay->drawImage( image, x, y, x + REAL_TO_INT( vetBoxWidth ), y + REAL_TO_INT( vetBoxHeight ) );
+		const Int w = REAL_TO_INT( vetBoxWidth );
+		const Int h = REAL_TO_INT( vetBoxHeight );
+		Int x, y;
+		if( wearsHealthBar() )
+		{
+			const Int barHeight = max( 3, (Int)(healthBarRegion->hi.y - healthBarRegion->lo.y) );
+			x = healthBarRegion->hi.x + 2;
+			y = healthBarRegion->lo.y + barHeight / 2 - REAL_TO_INT( vetBoxHeight * 0.5f );
+		}
+		else
+		{
+			// the region runs from 0.45 of its width left of the unit to 0.55 right (computeHealthRegion)
+			const Int unitX = healthBarRegion->lo.x + REAL_TO_INT( (healthBarRegion->hi.x - healthBarRegion->lo.x) * 0.45f );
+			x = unitX - w / 2;
+			y = healthBarRegion->lo.y - h;
+
+			// the control group digit stands at the region's left end, about as high: start past it
+			const Player *owner = obj->getControllingPlayer();
+			const Int groupNum = owner ? owner->getSquadNumberForObject( obj ) : NO_HOTKEY_SQUAD;
+			if( obj->isLocallyControlled() && groupNum > NO_HOTKEY_SQUAD && groupNum < NUM_HOTKEY_SQUADS )
+			{
+				DisplayString *digit = TheDisplayStringManager->getGroupNumeralString( groupNum );
+				if( digit )
+					x = max( x, groupNumberX( healthBarRegion ) + digit->getWidth() + 1 );
+			}
+
+			// a disabled unit's lightning sits over the region's left end, its foot on the bar's line
+			if( m_iconInfo && m_iconInfo->m_icon[ ICON_DISABLED ] )
+				y -= m_iconInfo->m_icon[ ICON_DISABLED ]->getCurrentFrameHeight();
+		}
+		TheDisplay->drawImage( image, x, y, x + w, y + h );
 		return;
 	}
 
@@ -5513,65 +5554,78 @@ void Drawable::healthBarColors( Real healthRatio, Color *color, Color *outlineCo
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Whether this drawable wears a health bar this frame. drawHealthBar draws one only when this says
+	* so, and drawVeterancy asks it too: chevrons beside a bar that is not there float off to one side
+	* of the unit. */
+//-------------------------------------------------------------------------------------------------
+Bool Drawable::wearsHealthBar( void ) const
+{
+	// m_showObjectHealth is the debug master switch (a cheat key toggles it); which units wear a bar
+	// while it is on is the player's HealthBars setting, applied last once the health is known
+	if( !TheGlobalData->m_showObjectHealth )
+		return FALSE;
+
+	const Object *obj = getObject();
+
+	// if no object, nothing to do
+	if( obj == NULL )
+		return FALSE;
+
+	// effect objects, scenery and death puppets wear none (Drawable_kindShowsHealthBar)
+	if( !Drawable_kindShowsHealthBar( obj->getTemplate()->getKindOfMask() ) )
+		return FALSE;
+
+	if( obj->isKindOf( KINDOF_STRUCTURE ) )
+	{
+		const ContainModuleInterface *contain = obj->getContain();
+		const Bool isBridge = obj->isKindOf( KINDOF_BRIDGE ) ||
+													obj->isKindOf( KINDOF_LANDMARK_BRIDGE ) ||
+													obj->isKindOf( KINDOF_BRIDGE_TOWER );
+		//
+		// "nobody's" is a side test, not a player-pointer test: a map hands its houses either to
+		// the neutral player or to a Civilian-faction player of its own, and both are equally not
+		// in the match. Every faction anyone plays is a playable side, so a captured tech building
+		// or a rebuilt GLA hole is owned the moment it changes hands.
+		//
+		const Player *owner = obj->getControllingPlayer();
+		const Bool isUnowned = owner == NULL || !owner->isPlayableSide();
+
+		if( !Drawable_structureShowsHealthBar( isBridge, isUnowned,
+																					 contain != NULL && contain->isGarrisonable(),
+																					 obj->isKindOf( KINDOF_CAPTURABLE ) ) )
+			return FALSE;
+	}
+
+	// get the health and max health
+	const BodyModuleInterface *body = obj->getBodyModule();
+	const Real health = body->getHealth();
+	const Real maxHealth = body->getMaxHealth();
+
+	// if no max health or health at all we will draw nothing
+	if( maxHealth == 0.0f || health == 0.0f )
+		return FALSE;
+
+	// the player's setting decides who wears one.  It is tested last because smart mode needs the
+	// health, and the health needs the body module.
+	return Drawable_healthBarModeShows( TheGlobalData->m_healthBarMode,
+																			isSelected(),
+																			TheInGameUI != NULL &&
+																				TheInGameUI->getMousedOverDrawableID() == getID(),
+																			health < maxHealth );
+}
+
+//-------------------------------------------------------------------------------------------------
 void Drawable::drawHealthBar(const IRegion2D* healthBarRegion)
 {
 	if (!healthBarRegion)
 		return;
 
-	// m_showObjectHealth is the debug master switch (a cheat key toggles it); which units wear a bar
-	// while it is on is the player's HealthBars setting, applied further down once the health is known
-	if( TheGlobalData->m_showObjectHealth )
+	if( wearsHealthBar() )
 	{
 		Object *obj = getObject();
-
-		// if no object, nothing to do
-		if( obj == NULL )
-			return;
-
-		// effect objects, scenery and death puppets wear none (Drawable_kindShowsHealthBar)
-		if( !Drawable_kindShowsHealthBar( obj->getTemplate()->getKindOfMask() ) )
-			return;
-
-		if( obj->isKindOf( KINDOF_STRUCTURE ) )
-		{
-			const ContainModuleInterface *contain = obj->getContain();
-			const Bool isBridge = obj->isKindOf( KINDOF_BRIDGE ) ||
-														obj->isKindOf( KINDOF_LANDMARK_BRIDGE ) ||
-														obj->isKindOf( KINDOF_BRIDGE_TOWER );
-			//
-			// "nobody's" is a side test, not a player-pointer test: a map hands its houses either to
-			// the neutral player or to a Civilian-faction player of its own, and both are equally not
-			// in the match. Every faction anyone plays is a playable side, so a captured tech building
-			// or a rebuilt GLA hole is owned the moment it changes hands.
-			//
-			const Player *owner = obj->getControllingPlayer();
-			const Bool isUnowned = owner == NULL || !owner->isPlayableSide();
-
-			if( !Drawable_structureShowsHealthBar( isBridge, isUnowned,
-																						 contain != NULL && contain->isGarrisonable(),
-																						 obj->isKindOf( KINDOF_CAPTURABLE ) ) )
-				return;
-		}
-
-		// get body module of object
 		BodyModuleInterface *body = obj->getBodyModule();
-
-		// get the health and max health
 		Real health = body->getHealth();
 		Real maxHealth = body->getMaxHealth();
-
-		// if no max health or health at all we will draw nothing
-		if( maxHealth == 0.0f || health == 0.0f )
-			return;
-
-		// the player's setting decides who wears one.  It is tested here rather than at the top of the
-		// function because smart mode needs the health, and the health needs the body module.
-		if( !Drawable_healthBarModeShows( TheGlobalData->m_healthBarMode,
-																			isSelected(),
-																			TheInGameUI != NULL &&
-																				TheInGameUI->getMousedOverDrawableID() == getID(),
-																			health < maxHealth ) )
-			return;
 
 		// what is our health ratio
 		Real healthRatio = health / maxHealth;

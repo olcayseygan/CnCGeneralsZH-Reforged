@@ -1,0 +1,36 @@
+# A computer jet that gives up its strike: does it pick its next target by what is worth hitting?
+#
+# Seat 0 is a Hard USA; seat 1 is emptied by -takeover 1. A Raptor is ordered at a powered Gattling Cannon,
+# which one strike cannot kill, so steerAircraft calls the strike off and picks another known target with a
+# clear flight (pickAirTarget). Two are known, each with a Humvee watching: a Battlemaster about 530 from the
+# jet and a Supply Center about 1050 from it.
+#
+# With the map layers the worth layer pulls a target in by what of the enemy's money stands round it (a
+# Supply Center counts its cost half again), so the Supply Center reads nearer than the tank. Without them
+# the nearer target wins.
+#
+# Measured 2026-11-17, seed 7. With the layers: "calls off its strike at 'ChinaGattlingCannon' ... for
+# ChinaSupplyCenter", the Supply Center at 1490 of 2000 by file frame 1350 and the Battlemaster untouched.
+# With -aiknobsoff all maplayers: "... for ChinaTankBattleMaster", the Battlemaster killed by the Raptor and
+# the Supply Center at 1890 of 2000. The Raptor is gone by 1350 in both.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -aidiff hard -takeover 1
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -maxframes 1400
+#     -scenario maplayers_worth -logPrefix maplayers_worth_ [-aiknobsoff all maplayers]
+
+30    spawn      1  ChinaPowerPlant              1   1650 3550
+30    spawn      1  ChinaGattlingCannon          1   1650 3300
+30    spawn      0  AmericaVehicleHumvee         1   1650 2950
+30    spawn      1  ChinaTankBattleMaster        1   800 2900
+30    spawn      0  AmericaVehicleHumvee         1   800 2500
+30    spawn      1  ChinaSupplyCenter            1   1250 3950
+30    spawn      0  AmericaVehicleHumvee         1   950 3700
+30    spawn      0  AmericaJetRaptor             1   400 3300
+40    stance     1  ChinaTankBattleMaster            defensive
+300   attack     0  AmericaJetRaptor             1   ChinaGattlingCannon
+300   tally      1  ChinaTankBattleMaster
+300   tally      1  ChinaSupplyCenter
+1350  tally      0  AmericaJetRaptor
+1350  tally      1  ChinaTankBattleMaster
+1350  tally      1  ChinaSupplyCenter

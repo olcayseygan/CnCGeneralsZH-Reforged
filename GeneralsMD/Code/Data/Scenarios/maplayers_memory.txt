@@ -1,0 +1,50 @@
+# A hurt computer tank whose only quiet side was where enemy tanks drove into the fog: does it remember them?
+#
+# Seat 0 is a Hard USA at start 0; seat 1 is emptied by -takeover 1. A Crusader stands 1100 north of the
+# American base with a Battlemaster 140 north of it, a powered Gattling Cannon 160 south (on its road home)
+# and two Battlemasters 220 east, all defensive. Three Gattling tanks stand 230 west of it in plain sight and
+# at file frame 240 drive 900 west, out of its sight. The Crusader is held at full health to file frame 420,
+# then set to 34%, seven game seconds after the tanks left.
+#
+# Without the map layers the tanks are gone from the map the moment they leave sight, so the west reads
+# quietest and the hurt tank pulls out 180 that way. With them they stay on the map where they were last seen,
+# fading over fifteen seconds, so the walk west sums them and goes further, round them.
+#
+# Measured 2026-11-17, seed 1. With the layers: "pulls a hurt 'AmericaTankCrusader' ... out at 33%, 101
+# against 50, (1005,1684) to (525,1687): threat 541 on the way, 710 down the road home" and "AI ROUTE ...
+# round (948,2044): threat 541 straight, 200 round"; alive at 161 of 480 at file frame 900. With
+# -aiknobsoff all maplayers: "101 against 32 ... to (825,1685): threat 101 on the way, 355 down the road
+# home"; alive at 72.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Tournament Desert\Tournament Desert.map" -autoskirmish 2 -aidiff hard -takeover 1
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 950
+#     -scenario maplayers_memory -logPrefix maplayers_memory_ [-aiknobsoff all maplayers]
+
+5     spawn       0  AmericaInfantryRanger     2  start0:200:0
+150   spawn       0  AmericaTankCrusader       1  start0:0:1100
+150   spawn       1  ChinaTankBattleMaster     1  start0:0:1240
+150   spawn       1  ChinaGattlingCannon       1  start0:0:940
+150   spawn       1  ChinaPowerPlant           1  start0:-400:1300
+150   spawn       1  ChinaTankBattleMaster     2  start0:220:1130
+150   spawn       1  ChinaTankGattling         3  start0:-230:1100
+160   stance      1  ChinaTankBattleMaster        defensive
+160   stance      1  ChinaTankGattling            defensive
+240   move        1  ChinaTankGattling            105 1684
+
+180   health      0  AmericaTankCrusader          100
+210   health      0  AmericaTankCrusader          100
+240   health      0  AmericaTankCrusader          100
+270   health      0  AmericaTankCrusader          100
+300   health      0  AmericaTankCrusader          100
+330   health      0  AmericaTankCrusader          100
+360   health      0  AmericaTankCrusader          100
+390   health      0  AmericaTankCrusader          100
+420   health      0  AmericaTankCrusader          100
+450   health      0  AmericaTankCrusader          34
+450   tally       0  AmericaTankCrusader
+480   health      0  AmericaTankCrusader          34
+510   health      0  AmericaTankCrusader          34
+540   health      0  AmericaTankCrusader          34
+570   health      0  AmericaTankCrusader          34
+900   tally       0  AmericaTankCrusader

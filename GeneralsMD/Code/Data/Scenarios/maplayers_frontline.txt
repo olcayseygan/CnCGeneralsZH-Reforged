@@ -1,0 +1,20 @@
+# Where does a Hard wave gather, with the map layers and without?
+#
+# Two Hard computers, USA against China, on generated map 2, and nothing spawned: the pair is the AIs' own
+# game. Each wave that parks before an attack logs "AI HOLD ... gathers at (x,y) on <road>". Without the map
+# layers it gathers on the first waypoint of its road a third of the way to the enemy, unless a known gun
+# covers it. With them it gathers on the last waypoint short of that third that its own side still holds
+# against the army it remembers the enemy having (heldAt), so a known gun on the third no longer sends the
+# wave home.
+#
+# Measured 2026-11-17 to frame 9000: 28 "AI HOLD" lines with the layers, 21 without. The first holds on the
+# same frames moved: player 3 on Flank1 from (1820,1470) to (1800,1620), player 2 on Center2 from
+# (1120,940) to (1090,850). The retreat's regroup at the front line, which this pair was also meant to show,
+# fired in neither run nor in four 12000-frame replay-check games, and was taken out.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit -randommap 2 2
+#     -autoskirmish 2 -aidiff hard -side 0 FactionAmerica -side 1 FactionChina -seed 2 -maxframes 9000
+#     -scenario maplayers_frontline -logPrefix maplayers_frontline_ [-aiknobsoff all maplayers]
+
+100   tally      0  AmericaVehicleDozer
+6000  tally      0  AmericaVehicleDozer

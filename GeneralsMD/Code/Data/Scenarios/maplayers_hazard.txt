@@ -1,0 +1,41 @@
+# A hurt computer tank with a poison field on its road home: does it pull out round the field?
+#
+# Seat 0 is a Hard USA at start 0; seat 1 is emptied by -takeover 1. A Crusader stands 1100 north of the
+# American base with a Battlemaster 140 north of it (defensive). A Poison Field lies 90 south of the
+# Crusader, on its road home, laid again every three seconds so it does not run out. The Crusader is held at
+# full health to file frame 270, then set to 34%.
+#
+# With the map layers the field is on the map for anything that walks, so the road home sums the poison and
+# the hurt tank pulls out the other way. Without them the road reads empty and it backs straight into the
+# field.
+#
+# Measured 2026-11-17, seed 1. With the layers: "pulls a hurt 'AmericaTankCrusader' ... out at 34%, 50
+# against 50, (1005,1684) to (1185,1682): threat 50 on the way, 800 down the road home", it kills the
+# Battlemaster and is alive at 103 of 480 at file frame 600. With -aiknobsoff all maplayers: "50 against 32
+# ... to (1004,1564): threat 0 on the way, 0 down the road home", into the field, and alive at 157. The
+# field costs a tank little; the side it chose kept it in the Battlemaster's fight.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Tournament Desert\Tournament Desert.map" -autoskirmish 2 -aidiff hard -takeover 1
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 700
+#     -scenario maplayers_hazard -logPrefix maplayers_hazard_ [-aiknobsoff all maplayers]
+
+5     spawn       0  AmericaInfantryRanger     2  start0:200:0
+150   spawn       0  AmericaTankCrusader       1  start0:0:1100
+150   spawn       1  ChinaTankBattleMaster     1  start0:0:1240
+160   stance      1  ChinaTankBattleMaster        defensive
+150   spawn       1  PoisonFieldMedium         1  start0:0:1010
+240   spawn       1  PoisonFieldMedium         1  start0:0:1010
+330   spawn       1  PoisonFieldMedium         1  start0:0:1010
+
+180   health      0  AmericaTankCrusader          100
+210   health      0  AmericaTankCrusader          100
+240   health      0  AmericaTankCrusader          100
+270   health      0  AmericaTankCrusader          100
+300   health      0  AmericaTankCrusader          34
+300   tally       0  AmericaTankCrusader
+330   health      0  AmericaTankCrusader          34
+360   health      0  AmericaTankCrusader          34
+390   health      0  AmericaTankCrusader          34
+420   health      0  AmericaTankCrusader          34
+600   tally       0  AmericaTankCrusader

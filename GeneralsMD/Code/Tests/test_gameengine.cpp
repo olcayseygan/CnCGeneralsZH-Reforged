@@ -17489,31 +17489,6 @@ TEST(influence_map_friendly_layer_reads_by_class_and_holds_ground)
 	CHECK( map.heldAt( 75.0f, 75.0f, AITHREAT_GROUND_MIX, AITHREAT_GROUND_MIX ) );		// nobody's ground
 }
 
-/** The front line on the walk home is the first ground our guns hold: past where the enemy's reach thins out
-	 under ours, not where ours first appear. */
-TEST(front_line_point_is_the_first_ground_our_side_holds)
-{
-	AIInfluenceMap map;
-	map.reset( 0.0f, 0.0f, 2000.0f, 200.0f, 50.0f );
-	CHECK_EQ( 40, map.getCols() );
-	const Int row = 2;		// y 100 to 150, centre 125
-	for( Int col = 0; col < 40; ++col )
-	{
-		const Int index = row * map.getCols() + col;
-		if( col <= 17 )
-			map.addEnemy( &index, 1, 10.0f, 10.0f );
-		if( col >= 12 )
-			map.addFriend( &index, 1, 6.0f, 6.0f );
-		if( col >= 15 )
-			map.addFriend( &index, 1, 6.0f, 6.0f );
-	}
-	Real x = 0.0f, y = 0.0f;
-	CHECK( aiFrontLinePoint( 25.0f, 125.0f, 1975.0f, 125.0f, 50.0f, &map, AITHREAT_GROUND_MIX, AITHREAT_GROUND_MIX, &x, &y ) );
-	CHECK_EQ( 775.0f, x );		// column 15: 12 of ours against 10 of theirs; columns 12 to 14 were 6 against 10
-	CHECK_EQ( 125.0f, y );
-	CHECK( !aiFrontLinePoint( 25.0f, 125.0f, 575.0f, 125.0f, 50.0f, &map, AITHREAT_GROUND_MIX, AITHREAT_GROUND_MIX, &x, &y ) );
-}
-
 /** A moving gun stamps a little ahead, never more than the cap; a remembered one fades evenly to nothing. */
 TEST(influence_lead_and_memory_fade)
 {

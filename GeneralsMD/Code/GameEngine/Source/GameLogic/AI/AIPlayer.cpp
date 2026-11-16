@@ -15221,52 +15221,62 @@ void AIPlayer::steerAircraft( void )
 static const Real STRIKE_ROUTE_SLACK = 150.0f;
 #define STRIKE_ROUTE_MAX_FRAMES ((UnsignedInt)(20 * LOGICFRAMES_PER_GAME_SECOND))
 
-/** How far past aiDetourWaypoint's turn point, as shares of its offset from the straight flight, a strike route
-	* looks for one whose legs clear every gun by HELIX_GUN_MARGIN: the air layer goes quiet at a gun's bare reach,
-	* so the first quiet turn point grazes it. */
+/** How far past aiDetourWaypoint's turn point, as shares of its offset from the straight flight, a route looks for
+	* one whose legs clear every gun by HELIX_GUN_MARGIN: the air layer goes quiet at a gun's bare reach, so the first
+	* quiet turn point grazes it. */
 static const Real STRIKE_ROUTE_WIDEN[] = { 1.0f, 1.5f, 2.0f };
 
-/** A strike the straight flight cannot make, flown round the anti-air instead (map layers, Hard's air layer): the
-	* turn point aiDetourWaypoint finds by summing the air layer along both legs, pushed out from the straight
-	* flight (STRIKE_ROUTE_WIDEN) until neither leg crosses a known anti-air gun but the target's own, and the
-	* target, if it is one, dies to the strike (airStrikeKills).  The aircraft flies to the turn point and
-	* flyStrikeRoutes sends it in from there. */
-Bool AIPlayer::routeStrike( Object *aircraft, Object *target, const Coord3D *at, const std::vector<AIKnownGun> &guns )
+/** The turn point aiDetourWaypoint finds for a flight from from to to by summing the air layer along both legs,
+	* pushed out from the straight flight (STRIKE_ROUTE_WIDEN) until neither leg crosses a known anti-air gun but
+	* ignored.  FALSE when the map has no quieter way or none clears the guns. */
+Bool AIPlayer::turnPointRound( const Coord3D *from, const Coord3D *to, ObjectID ignored, const std::vector<AIKnownGun> &guns,
+															 Coord3D *via, Real *straight, Real *round )
 {
 	if( !layersHere() || !hasTacticalMap() )
 		return FALSE;
-	const Coord3D *pos = aircraft->getPosition();
 	Region3D extent;
 	TheTerrainLogic->getExtent( &extent );
 	const Real bounds[ 4 ] = { extent.lo.x, extent.lo.y, extent.hi.x, extent.hi.y };
 	Coord3D turn;
-	Real straight = 0.0f, round = -1.0f;
-	if( !aiDetourWaypoint( pos->x, pos->y, at->x, at->y, INFLUENCE_CELL_SIZE, bounds, &m_influence, readMix( AITHREAT_AIR_MIX ),
-			&turn.x, &turn.y, &straight, &round ) )
+	if( !aiDetourWaypoint( from->x, from->y, to->x, to->y, INFLUENCE_CELL_SIZE, bounds, &m_influence, readMix( AITHREAT_AIR_MIX ),
+			&turn.x, &turn.y, straight, round ) )
+		return FALSE;
+	// the turn point's foot on the straight flight, and its offset square to it
+	const Real lineX = to->x - from->x;
+	const Real lineY = to->y - from->y;
+	const Real lineSqr = lineX * lineX + lineY * lineY;
+	const Real along = lineSqr > 0.0f ? ((turn.x - from->x) * lineX + (turn.y - from->y) * lineY) / lineSqr : 0.0f;
+	const Real footX = from->x + lineX * along;
+	const Real footY = from->y + lineY * along;
+	for( Int w = 0; w < (Int)(sizeof( STRIKE_ROUTE_WIDEN ) / sizeof( STRIKE_ROUTE_WIDEN[ 0 ] )); ++w )
+	{
+		via->x = footX + (turn.x - footX) * STRIKE_ROUTE_WIDEN[ w ];
+		via->y = footY + (turn.y - footY) * STRIKE_ROUTE_WIDEN[ w ];
+		if( via->x >= bounds[ 0 ] && via->y >= bounds[ 1 ] && via->x <= bounds[ 2 ] && via->y <= bounds[ 3 ] &&
+				gunsOverFlight( guns, from->x, from->y, via->x, via->y ) == 0 && gunsOverFlight( guns, via->x, via->y, to->x, to->y, ignored ) == 0 )
+		{
+			via->z = TheTerrainLogic->getGroundHeight( via->x, via->y );
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+/** A strike the straight flight cannot make, flown round the anti-air instead (map layers, Hard's air layer), by
+	* turnPointRound, when the target, if it is a gun, dies to the strike (airStrikeKills).  The aircraft flies to
+	* the turn point and flyStrikeRoutes sends it in from there. */
+Bool AIPlayer::routeStrike( Object *aircraft, Object *target, const Coord3D *at, const std::vector<AIKnownGun> &guns )
+{
+	if( !layersHere() || !hasTacticalMap() )
 		return FALSE;
 	const ObjectID id = target ? target->getID() : INVALID_ID;
-	// the turn point's foot on the straight flight, and its offset square to it
-	const Real lineX = at->x - pos->x;
-	const Real lineY = at->y - pos->y;
-	const Real lineSqr = lineX * lineX + lineY * lineY;
-	const Real along = lineSqr > 0.0f ? ((turn.x - pos->x) * lineX + (turn.y - pos->y) * lineY) / lineSqr : 0.0f;
-	const Real footX = pos->x + lineX * along;
-	const Real footY = pos->y + lineY * along;
-	Coord3D via;
-	Bool clear = FALSE;
-	for( Int w = 0; w < (Int)(sizeof( STRIKE_ROUTE_WIDEN ) / sizeof( STRIKE_ROUTE_WIDEN[ 0 ] )) && !clear; ++w )
-	{
-		via.x = footX + (turn.x - footX) * STRIKE_ROUTE_WIDEN[ w ];
-		via.y = footY + (turn.y - footY) * STRIKE_ROUTE_WIDEN[ w ];
-		clear = via.x >= bounds[ 0 ] && via.y >= bounds[ 1 ] && via.x <= bounds[ 2 ] && via.y <= bounds[ 3 ] &&
-			gunsOverFlight( guns, pos->x, pos->y, via.x, via.y ) == 0 && gunsOverFlight( guns, via.x, via.y, at->x, at->y, id ) == 0;
-	}
-	if( !clear )
-		return FALSE;
 	for( size_t g = 0; target && g < guns.size(); ++g )
 		if( guns[ g ].m_id == id && guns[ g ].m_airReach > 0.0f && !airStrikeKills( aircraft, target ) )
 			return FALSE;
-	via.z = TheTerrainLogic->getGroundHeight( via.x, via.y );
+	Coord3D via;
+	Real straight = 0.0f, round = -1.0f;
+	if( !turnPointRound( aircraft->getPosition(), at, id, guns, &via, &straight, &round ) )
+		return FALSE;
 	StrikeRoute route;
 	route.aircraft = aircraft->getID();
 	route.target = id;
@@ -15282,7 +15292,8 @@ Bool AIPlayer::routeStrike( Object *aircraft, Object *target, const Coord3D *at,
 }
 
 /** Every routed aircraft at its turn point, or out of time, strikes: its target if that still stands and is known,
-	* the ground it was going for if it stands unseen or was a place.  One dead, landed or out of ammo is let go. */
+	* the ground it was going for if it stands unseen or was a place.  One dead or landed is let go, and one out of
+	* ammo already, which some other order spent. */
 void AIPlayer::flyStrikeRoutes( void )
 {
 	const UnsignedInt now = TheGameLogic->getFrame();
@@ -15293,8 +15304,15 @@ void AIPlayer::flyStrikeRoutes( void )
 		Object *aircraft = TheGameLogic->findObjectByID( route.aircraft );
 		AIUpdateInterface *ai = aircraft ? aircraft->getAI() : NULL;
 		const JetAIUpdate *jet = ai ? ai->getJetAIUpdate() : NULL;
-		if( jet == NULL || aircraft->isEffectivelyDead() || !aircraft->isAirborneTarget() || jet->isOutOfSpecialReloadAmmo() )
+		if( jet == NULL || aircraft->isEffectivelyDead() || !aircraft->isAirborneTarget() )
 		{
+			m_strikeRoutes.erase( m_strikeRoutes.begin() + r );
+			continue;
+		}
+		if( jet->isOutOfSpecialReloadAmmo() )
+		{
+			DEBUG_LOG(("AI AIR frame %d player %d '%s' %d is out of ammo before its turn point, its route to (%.0f,%.0f) ends\n", now, me,
+				aircraft->getTemplate()->getName().str(), aircraft->getID(), route.at.x, route.at.y));
 			m_strikeRoutes.erase( m_strikeRoutes.begin() + r );
 			continue;
 		}
@@ -16769,28 +16787,9 @@ void AIPlayer::doRetreats( void )
 			const Real bounds[ 4 ] = { map.lo.x, map.lo.y, map.hi.x, map.hi.y };
 			ensureInfluence();
 			const AIThreatMix retreating = teamMix( team );
-			Bool shortOfHome = !measuringWithoutTactics() &&
+			const Bool shortOfHome = !measuringWithoutTactics() &&
 				aiRetreatFallbackPoint( centre.x, centre.y, m_baseCenter.x, m_baseCenter.y, INFLUENCE_CELL_SIZE,
 					enemyGuns.empty() ? NULL : &enemyGuns[ 0 ], (Int)enemyGuns.size() / 3, bounds, &fallback.x, &fallback.y, &m_influence, &retreating );
-			// with the map layers, no quiet ground short of home is not a walk home yet: the team regroups at the front
-			// line, the first ground on the way that our guns hold against what the enemy has there (aiFrontLinePoint),
-			// when that is out of the reach of every gun in this fight
-			if( !shortOfHome && !measuringWithoutTactics() && layersHere() && hasTacticalMap() )
-			{
-				Coord3D front;
-				front.zero();
-				Bool clear = aiFrontLinePoint( centre.x, centre.y, m_baseCenter.x, m_baseCenter.y, INFLUENCE_CELL_SIZE, &m_influence,
-					friendReadMix(), retreating, &front.x, &front.y ) && !isAtHome( &front );
-				for( size_t g = 0; clear && g + 2 < enemyGuns.size(); g += 3 )
-					clear = sqr( front.x - enemyGuns[ g ] ) + sqr( front.y - enemyGuns[ g + 1 ] ) > sqr( enemyGuns[ g + 2 ] );
-				if( clear )
-				{
-					DEBUG_LOG(("AI RETREAT frame %d player %d '%s' regroups at the front line (%.0f,%.0f), no quiet ground short of home\n",
-						TheGameLogic->getFrame(), m_player->getPlayerIndex(), team->getName().str(), front.x, front.y));
-					fallback = front;
-					shortOfHome = TRUE;
-				}
-			}
 			if( shortOfHome )
 				fallback.z = TheTerrainLogic->getGroundHeight( fallback.x, fallback.y );
 			const Real homeX = m_baseCenter.x - centre.x;
@@ -17731,8 +17730,10 @@ static void blankShape( StampShape *shape )
 	shape->hazardFirst = shape->hazardCount = 0;
 }
 
-/** Past this share of its reach a gun counts half: a shot at the edge of range is the first a target walks out of,
-	* and a shell's scatter is widest there. */
+/** Past this share of its reach an anti-air gun counts half, so a flight's sum peaks over the gun itself and
+	* aiDetourWaypoint turns round its middle, not round the first cell of a flat reach.  Ground reach has no edge:
+	* at half, a hurt Crusader 140 from a Battlemaster read itself half covered, stayed and was killed where it
+	* pulled out without the layers (maplayers_hazard, 2026-11-17). */
 static const Real STAMP_EDGE_SHARE = 0.75f;
 /** A moving gun stamps from where it will be this many game seconds on, no further ahead than two cells. */
 static const Real STAMP_LEAD_SECONDS = 1.0f;
@@ -17843,7 +17844,7 @@ static void shapeObject( const Object *obj, const AIInfluenceMap &map, Bool laye
 	}
 	shape->armed = range > 0.0f;
 	if( shape->armed )
-		map.cellsBanded( x, y, z, range, minGround, edgeShare, cells, scratch, &shape->edge );
+		map.cellsBanded( x, y, z, range, minGround, 1.0f, cells, scratch, &shape->edge );
 	shape->count = (Int)cells.size() - shape->first - shape->edge;
 	// the air reach for every turn, Hard's seat or not: a turn is shaped once for whoever shares it
 	if( shape->armed || airRange > 0.0f )
@@ -17851,7 +17852,7 @@ static void shapeObject( const Object *obj, const AIInfluenceMap &map, Bool laye
 	shape->airFirst = shape->first;
 	if( airRange > 0.0f && shape->threat[ AITHREAT_AIR ] > 0.0f )
 	{
-		if( airRange == range && minAir == minGround )
+		if( airRange == range && minAir == minGround && edgeShare == 1.0f )
 		{
 			shape->airCount = shape->count;
 			shape->airEdge = shape->edge;
@@ -20645,7 +20646,10 @@ void AIPlayer::tacticsFor( Object *obj )
 	// with the map layers our guns here are weighed against the army we remember, so a cell of tank guns does not
 	// count as covered against helicopters
 	const Real friendsHere = m_influence.friendAt( pos->x, pos->y, friendReadMix() );
-	if( body && body->getHealth() < body->getMaxHealth() * HURT_HEALTH_SHARE && threatHere > friendsHere && !isAtHome( pos ) )
+	// read by class, a hurt Crusader's own gun equals a Battlemaster's to the bit, and a third of a tank in an even
+	// fight is a dead one (maplayers_hazard): with the layers an even reading pulls it out too
+	const Bool outgunned = threatHere > friendsHere || (layersHere() && threatHere > 0.0f && threatHere >= friendsHere);
+	if( body && body->getHealth() < body->getMaxHealth() * HURT_HEALTH_SHARE && outgunned && !isAtHome( pos ) )
 	{
 		// out to the first ground nothing known covers, not all the way home: on a big map the walk home
 		// crossed the ground it was pulled out of, and it stays near enough to guard the road behind the

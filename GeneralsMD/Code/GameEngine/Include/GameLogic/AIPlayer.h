@@ -1019,6 +1019,8 @@ protected:
 		UnsignedInt	frame;		///< when it was sent
 	};
 	std::vector<StrikeRoute> m_strikeRoutes;
+	Bool turnPointRound(const Coord3D *from, const Coord3D *to, ObjectID ignored, const std::vector<AIKnownGun> &guns,
+		Coord3D *via, Real *straight, Real *round);		///< a turn point whose two legs cross no known anti-air gun but ignored
 	Bool routeStrike(Object *aircraft, Object *target, const Coord3D *at, const std::vector<AIKnownGun> &guns);	///< TRUE when it was sent round
 	void flyStrikeRoutes(void);										///< the ones at their turn strike; the rest fly on
 	void ensureInfluence(void);										///< the map, no older than this rung reads it, for a player that does not stamp it

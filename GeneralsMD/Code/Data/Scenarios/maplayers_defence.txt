@@ -1,49 +1,56 @@
 # A hurt computer tank with a defence between it and home: does its way out go round the defence?
 #
 # Seat 0 is a Hard USA at start 0; seat 1 is emptied by -takeover 1. A Crusader stands 1100 north of the
-# American base, a Battlemaster 140 north of it (defensive, so it shoots what comes into reach and chases
-# nothing) and a Gattling Cannon with a power plant beside it 160 south, between the Crusader and home. All
-# of it is in the Crusader's sight and so on the AI's map. At file frame 165 the Crusader is set to 34% and
-# held there to 480, so Hard's tactics pull it out and it lives to show the way it took. Two Rangers at home
-# are put down first for the AI's scouts.
+# American base with five Battlemasters ahead of it (defensive, so they shoot what comes into reach and chase
+# nothing) and a powered Gattling Cannon 160 south, between the Crusader and home. All of it is in the
+# Crusader's sight and so on the AI's map. The Crusader is held whole to file frame 270 so the AI reads the
+# field, then set to 34% and held there to 600, so Hard's tactics pull it out and it lives to show the way it
+# took. Two Rangers at home are put down first for the AI's scouts.
 #
 # With the map layers the Gattling Cannon stands in the still layer and a route counts it twice (routeAt), so
-# the walk out sums more threat through the gun than round it and the "AI ROUTE ... round" line should take
-# it wide. Read "AI TACTICS ... pulls a hurt" and "AI ROUTE" for the turn point and the two sums, and the arrive
-# line for whether it drove over the Gattling's ground. The pair to compare is the same line with
-# -aiknobsoff all maplayers, which is the class map of source 45a11258.
+# a walk past it sums more threat than one round it. Read "AI TACTICS ... pulls a hurt" for the two sums and
+# "AI ROUTE" for a turn point. The pair is the same line with -aiknobsoff all maplayers, the class map of
+# source 45a11258.
 #
-# Measured 2026-11-16, seed 1, and it does not show the route: the power plant's spot is refused
-# (LBC_OBJECTS_IN_THE_WAY) and with the layers the Crusader is never pulled out at all. It stays, kills the
-# Battlemaster at file frame 357 and is alive at 43 of 480 at 900, so no "AI ROUTE" line is written. With
-# -aiknobsoff all maplayers it is pulled out ("101 against 32", to the side) and the Battlemaster kills it at
-# 424. A drive round the Gattling still needs a layout where the pull-out happens with the layers too.
+# Measured 2026-11-17, seed 1, and it does not show a route round the gun. Both builds pull the Crusader out
+# at logic frame 201 to the same spot short of the Gattling, (1001,1144), and both have it alive at 82 of 480
+# at file frame 1150. What differs is the reading. With the layers: "101 against 50 ... threat 710 on the
+# way, 710 down the road home", the Gattling counted twice. With -aiknobsoff all maplayers: "101 against 32
+# ... threat 355 on the way, 355 down the road home". No "AI ROUTE" line in either: the pull-out stops short
+# of the gun, so the walk never crosses it, and five tries at other layouts (2026-11-16 and 17) either had the
+# Crusader killed before it moved or stopped it short the same way. The power plant spot that was refused
+# (LBC_OBJECTS_IN_THE_WAY) is moved to start0:-400:1300, which takes it.
 #
 #   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
 #     -map "Maps\Tournament Desert\Tournament Desert.map" -autoskirmish 2 -aidiff hard -takeover 1
-#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 900
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 1150
 #     -scenario maplayers_defence -logPrefix maplayers_defence_ [-aiknobsoff all maplayers]
 
 5     spawn       0  AmericaInfantryRanger     2  start0:200:0
 150   spawn       0  AmericaTankCrusader       1  start0:0:1100
 150   spawn       1  ChinaTankBattleMaster     1  start0:0:1240
 150   spawn       1  ChinaGattlingCannon       1  start0:0:940
-150   spawn       1  ChinaPowerPlant           1  start0:180:860
+150   spawn       1  ChinaPowerPlant           1  start0:-400:1300
+150   spawn       1  ChinaTankBattleMaster     2  start0:-220:1130
+150   spawn       1  ChinaTankBattleMaster     2  start0:220:1130
 160   stance      1  ChinaTankBattleMaster        defensive
 
-165   health      0  AmericaTankCrusader          34
-165   arrive      0  AmericaTankCrusader          start0:0:940  80
-165   tally       0  AmericaTankCrusader
-180   health      0  AmericaTankCrusader          34
-210   health      0  AmericaTankCrusader          34
-240   health      0  AmericaTankCrusader          34
-270   health      0  AmericaTankCrusader          34
+180   health      0  AmericaTankCrusader          100
+210   health      0  AmericaTankCrusader          100
+240   health      0  AmericaTankCrusader          100
+270   health      0  AmericaTankCrusader          100
 300   health      0  AmericaTankCrusader          34
+300   arrive      0  AmericaTankCrusader          start0:0:940  80
+300   tally       0  AmericaTankCrusader
 330   health      0  AmericaTankCrusader          34
 360   health      0  AmericaTankCrusader          34
 390   health      0  AmericaTankCrusader          34
 420   health      0  AmericaTankCrusader          34
 450   health      0  AmericaTankCrusader          34
 480   health      0  AmericaTankCrusader          34
+510   health      0  AmericaTankCrusader          34
+540   health      0  AmericaTankCrusader          34
+570   health      0  AmericaTankCrusader          34
+600   health      0  AmericaTankCrusader          34
 600   tally       0  AmericaTankCrusader
-900   tally       0  AmericaTankCrusader
+1150  tally       0  AmericaTankCrusader

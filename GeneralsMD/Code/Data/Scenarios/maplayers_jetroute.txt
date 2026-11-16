@@ -12,11 +12,16 @@
 # round to 'ChinaTankOverlord'", then "turns in on its strike" at the turn point. The tallies say whether the
 # Raptor lived and the Overlord took the hit. The pair is the same line with -aiknobsoff all maplayers.
 #
-# Measured 2026-11-16, seed 7. With the layers: "flies round to 'ChinaTankOverlord' (2250,3300) by
-# (1428,4396): air threat 2343 straight, 0 round", the Overlord at 700 of 1100 by file frame 1350 and the
-# Raptor shot down by the Gattling at logic frame 632 on its way home; no "turns in" line, so the hit came
-# before the turn point's hand-off. Without them: "calls off its strike", the Raptor alive, the Overlord
-# untouched. The flight home is not routed.
+# Measured 2026-11-17, seed 7. With the layers: "flies round to 'ChinaTankOverlord' (2250,3300) by
+# (1428,4396): air threat 2343 straight, 0 round", then at logic frame 568 "is out of ammo before its turn
+# point, its route to (2250,3300) ends", the Overlord at 700 of 1100 by file frame 1350 and the Raptor shot
+# down by the Gattling at logic frame 632 on its way home. Without them: "calls off its strike", the Raptor
+# alive, the Overlord untouched. That is why there is no "turns in" line: the Raptor never flies the turn
+# point. A position trace (2026-11-17) had its goal at the turn point while it flew straight along y 3308
+# through the gun's reach to the Overlord, fired, and flew straight home to the spot it was spawned at
+# (JetAIUpdate's return with no airfield). A move order to a turn point on the way home, tried the same day,
+# was ignored the same way, so the route home was taken out again. The jet's own update overrules the AI's
+# moves here, and the Raptor does not survive until that is found.
 #
 #   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
 #     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -aidiff hard -takeover 1

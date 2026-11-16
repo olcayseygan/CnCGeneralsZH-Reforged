@@ -25305,6 +25305,7 @@ TEST(game_speed_set_to_200_and_back_reads_what_it_read)
 #include "test_hostile_map.inc"
 #include "test_pathfind_slicing.inc"
 #include "test_score_screen.inc"
+#include "test_load_screen.inc"
 
 #include "GameClient/Snow.h"
 
@@ -25366,7 +25367,6 @@ TEST(ai_persona_rides_the_slot_entry_and_normal_leaves_it_unchanged)
 	slot.setState( SLOT_BRUTAL_AI );		// another rung keeps it, as it keeps the faction
 	CHECK_EQ( slot.getAIPersonality(), (Int)AIPERSONA_TURTLE );
 	GameSlot copy = slot;								// GameInfo::setSlot copies the parsed slot in whole
-#include "test_load_screen.inc"
 	CHECK_EQ( copy.getAIPersonality(), (Int)AIPERSONA_TURTLE );
 	UnicodeString name;
 	name.translate( AsciiString( "Player" ) );

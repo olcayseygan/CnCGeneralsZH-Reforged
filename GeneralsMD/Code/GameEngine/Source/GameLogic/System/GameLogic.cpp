@@ -1688,6 +1688,18 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	TheTeamFactory->reset();
 	ThePlayerList->newGame();
 
+	// -observer gives no seat to this machine, so newGame put the first human player in the local seat,
+	// and with -takeover that is a driverless opponent: the watcher saw through his fog and every enemy
+	// stealthed unit stayed invisible.  The ReplayObserver takes the screen as it does in a playback; the
+	// keyboard player newGame chose stays, so the simulation and its recording are what they were.
+	if (TheGlobalData->m_autoSkirmishObserver && m_gameMode == GAME_SKIRMISH
+		&& !(TheRecorder && TheRecorder->getMode() == RECORDERMODETYPE_PLAYBACK))
+	{
+		Player *observer = ThePlayerList->findPlayerWithNameKey(TheNameKeyGenerator->nameToKey("ReplayObserver"));
+		if (observer)
+			ThePlayerList->setLocalPlayer(observer);
+	}
+
 	// the AI's unit-against-unit tables, here on the loading screen rather than at its first team choice
 	AIPlayer::prepareMatchupTables();
 

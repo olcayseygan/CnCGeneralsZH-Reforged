@@ -605,6 +605,150 @@ static bool write_bright_block(DX11DeviceClass & device, DX11PostProcessClass & 
 	return true;
 }
 
+// A square of one half float colour written into the scene target, its top left corner at left, top.
+static bool write_half_block(DX11DeviceClass & device, DX11PostProcessClass & post, unsigned left,
+	unsigned top, unsigned size, unsigned short red, unsigned short green, unsigned short blue)
+{
+	ID3D11RenderTargetView * view = post.Scene_View();
+	if (view == NULL || size == 0 || left + size > SURFACE_SIZE || top + size > SURFACE_SIZE) {
+		return false;
+	}
+	unsigned short block[SURFACE_SIZE * SURFACE_SIZE * HALF_CHANNELS];
+	for (unsigned index = 0; index < size * size; ++index) {
+		block[index * HALF_CHANNELS + 0] = red;
+		block[index * HALF_CHANNELS + 1] = green;
+		block[index * HALF_CHANNELS + 2] = blue;
+		block[index * HALF_CHANNELS + 3] = HALF_ONE;
+	}
+	ID3D11Resource * resource = NULL;
+	view->GetResource(&resource);
+	if (resource == NULL) {
+		return false;
+	}
+	D3D11_BOX box;
+	box.left = left;
+	box.top = top;
+	box.front = 0;
+	box.right = left + size;
+	box.bottom = top + size;
+	box.back = 1;
+	device.Get_Context()->UpdateSubresource(resource, 0, &box, block,
+		size * HALF_CHANNELS * sizeof(unsigned short), 0);
+	resource->Release();
+	return true;
+}
+
+// One channel of one pixel of the back buffer, which is blue, green, red, alpha.
+static int pixel_channel(const unsigned char * pixels, unsigned pitch, unsigned x, unsigned y,
+	unsigned channel)
+{
+	return pixels[y * pitch + x * BYTES_A_PIXEL + channel];
+}
+
+static const unsigned short HALF_QUARTER = 0x3400;
+static const unsigned short HALF_FIVE_EIGHTHS = 0x3900;
+static const unsigned short HALF_TWO = 0x4000;
+static const unsigned CHANNEL_BLUE = 0;
+static const unsigned CHANNEL_RED = 2;
+
+TEST(dx11post_bloom_saturation_leaves_an_orange_halo_less_blue_and_no_less_red)
+{
+	DeviceFixture fixture;
+	if (!fixture.Create()) {
+		printf("skip: no Direct3D 11 device on this machine\n");
+		return;
+	}
+
+	const DX11PostEffect chain[] = { DX11_POST_BLOOM };
+	fixture.Get_Post().Set_Chain(chain, 1);
+
+	// A fire past white, orange: four, two and one times white.  Ten pixels above it the scene is
+	// black, so what reaches the screen there is the glow alone.
+	int red[2];
+	int blue[2];
+	const float saturations[2] = { 1.0f, 1.5f };
+	for (unsigned run = 0; run < 2; ++run) {
+		DX11Post_Set_Bloom(1.0f, 1.5f, 1.0f, 2, saturations[run]);
+		fixture.Get_Post().Begin_Frame();
+		CHECK(clear_scene(fixture.Get_Device(), fixture.Get_Post(), 0.0f));
+		CHECK(write_half_block(fixture.Get_Device(), fixture.Get_Post(), SURFACE_SIZE / 2,
+			SURFACE_SIZE / 2, BRIGHT_BLOCK_SIZE, HALF_FOUR, HALF_TWO, HALF_ONE));
+		CHECK(fixture.Get_Post().Run_Chain());
+		unsigned pitch = 0;
+		unsigned char * result = read_back_buffer(fixture.Get_Device(), pitch);
+		CHECK(result != NULL);
+		red[run] = (result != NULL) ? pixel_channel(result, pitch, SURFACE_SIZE / 2, SURFACE_SIZE / 2 - 10, CHANNEL_RED) : -1;
+		blue[run] = (result != NULL) ? pixel_channel(result, pitch, SURFACE_SIZE / 2, SURFACE_SIZE / 2 - 10, CHANNEL_BLUE) : -1;
+		delete [] result;
+	}
+	DX11Post_Set_Bloom(1.0f, 1.5f, 1.0f, 2);
+
+	CHECK(red[0] > 0);
+	CHECK(red[1] >= red[0]);
+	CHECK(blue[1] < blue[0]);
+}
+
+TEST(dx11post_clarity_parts_an_edge_and_leaves_a_flat_field_and_the_off_frame_alone)
+{
+	DeviceFixture fixture;
+	if (!fixture.Create()) {
+		printf("skip: no Direct3D 11 device on this machine\n");
+		return;
+	}
+
+	const DX11PostEffect chain[] = { DX11_POST_BLOOM };
+	fixture.Get_Post().Set_Chain(chain, 1);
+	DX11Post_Set_Bloom(1.0f, 0.0f, 1.0f, 2);
+
+	// A lit square on dull ground, nothing near white, so nothing blooms.  Just inside its edge and
+	// just outside it, with the clarity off and then on.
+	const unsigned left = 24;
+	const unsigned size = 16;
+	int inside[3];
+	int outside[3];
+	const float strengths[3] = { 0.0f, 0.75f, 0.0f };
+	for (unsigned run = 0; run < 3; ++run) {
+		DX11Post_Set_Clarity(strengths[run]);
+		fixture.Get_Post().Begin_Frame();
+		CHECK(clear_scene(fixture.Get_Device(), fixture.Get_Post(), 0.25f));
+		CHECK(write_half_block(fixture.Get_Device(), fixture.Get_Post(), left, left, size,
+			HALF_FIVE_EIGHTHS, HALF_FIVE_EIGHTHS, HALF_FIVE_EIGHTHS));
+		CHECK(fixture.Get_Post().Run_Chain());
+		unsigned pitch = 0;
+		unsigned char * result = read_back_buffer(fixture.Get_Device(), pitch);
+		CHECK(result != NULL);
+		inside[run] = (result != NULL) ? pixel_level(result, pitch, left + 1, left + size / 2) : -1;
+		outside[run] = (result != NULL) ? pixel_level(result, pitch, left - 2, left + size / 2) : -1;
+		delete [] result;
+	}
+
+	// Off is the frame that went in; on, the light side of the edge rises and the dark side sinks;
+	// off again is the first frame to the bit.
+	CHECK(inside[0] >= 158 && inside[0] <= 160);
+	CHECK(outside[0] >= 63 && outside[0] <= 64);
+	CHECK(inside[1] > inside[0] + 4);
+	CHECK(outside[1] < outside[0] - 2);
+	CHECK_EQ(inside[0], inside[2]);
+	CHECK_EQ(outside[0], outside[2]);
+
+	// A field with no edge in it has no detail to lift.
+	DX11Post_Set_Clarity(0.75f);
+	fixture.Get_Post().Begin_Frame();
+	CHECK(clear_scene(fixture.Get_Device(), fixture.Get_Post(), 0.25f));
+	CHECK(fixture.Get_Post().Run_Chain());
+	unsigned pitch = 0;
+	unsigned char * result = read_back_buffer(fixture.Get_Device(), pitch);
+	CHECK(result != NULL);
+	if (result != NULL) {
+		const int flat = pixel_level(result, pitch, SURFACE_SIZE / 2, SURFACE_SIZE / 2);
+		CHECK(flat >= outside[0] - 1 && flat <= outside[0] + 1);
+		delete [] result;
+	}
+
+	DX11Post_Set_Clarity(0.0f);
+	DX11Post_Set_Bloom(1.0f, 1.5f, 1.0f, 2);
+}
+
 TEST(dx11post_bloom_keeps_ordinary_levels_and_folds_overbright_to_white)
 {
 	DeviceFixture fixture;

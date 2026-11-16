@@ -93,14 +93,36 @@ static float BloomThreshold = BLOOM_THRESHOLD;
 static float BloomIntensity = BLOOM_INTENSITY;
 static float BloomAdditiveGain = 1.0f;
 static unsigned BloomBlurPasses = BLOOM_BLUR_PASSES;
+static float BloomSaturation = 1.0f;
 
-void DX11Post_Set_Bloom(float threshold, float intensity, float additive_gain, unsigned blur_passes)
+// The bright pass's colour is pushed this far from its own grey at most.  ZH Enhanced's ReShade bloom
+// runs at 1.53; past about 3 a fire's halo turns a red no flame has.
+static const float BLOOM_SATURATION_LIMIT = 3.0f;
+
+void DX11Post_Set_Bloom(float threshold, float intensity, float additive_gain, unsigned blur_passes,
+	float saturation)
 {
 	BloomThreshold = (threshold > 0.0f) ? threshold : 0.0f;
 	BloomIntensity = (intensity > 0.0f) ? intensity : 0.0f;
 	BloomAdditiveGain = (additive_gain > 1.0f) ? additive_gain : 1.0f;
 	BloomBlurPasses = (blur_passes < 1) ? 1
 		: (blur_passes > BLOOM_BLUR_PASS_LIMIT) ? BLOOM_BLUR_PASS_LIMIT : blur_passes;
+	BloomSaturation = (saturation < 0.0f) ? 0.0f
+		: (saturation > BLOOM_SATURATION_LIMIT) ? BLOOM_SATURATION_LIMIT : saturation;
+}
+
+// Clarity: local contrast on the luminance, measured against a blur of it about fifteen pixels wide
+// at 1080p (two of the bloom's blur pairs at a quarter of the window), so what it lifts is the shape
+// of a tank, a crater or a cliff rather than the grain of a texture, which the sharpen pass owns.
+// Zero, the default and what the tests start from, is no pass at all and leaves the bloom's programs
+// drawing what they drew.  The game sets it every frame from the LightingStyle option.
+static const unsigned CLARITY_BLUR_PASSES = 2;
+static const float CLARITY_LIMIT = 2.0f;
+static float ClarityStrength = 0.0f;
+
+void DX11Post_Set_Clarity(float strength)
+{
+	ClarityStrength = (strength < 0.0f) ? 0.0f : (strength > CLARITY_LIMIT) ? CLARITY_LIMIT : strength;
 }
 
 float DX11Post_Additive_Gain()
@@ -208,7 +230,10 @@ struct PostConstantBlock
 	// frame, because the bloom passes do not run at the size of the window.
 	float TexelSize[4];
 
-	// The step a separable blur takes, already in texture coordinates.
+	// The step a separable blur takes, already in texture coordinates.  Then two numbers the
+	// prologue's text could not grow fields for without moving every cached program's key: z is the
+	// bloom's saturation, which the bright pass reads; w is the clarity's strength in the composite,
+	// and in a blur pass whether it carries the clarity's luminance along (above nought) or leaves it.
 	float BlurDirection[4];
 
 	// Threshold, intensity, knee.
@@ -898,6 +923,15 @@ static const char * const ATMOSPHERE_SHADER_BODY =
 // could not have held, carried in the pixel's own hue so an orange fire glows orange.  Over the
 // first Tuning.w past the threshold it keeps the square of that excess (the soft knee), so it
 // starts at nothing with no step and the art, which never passes white, keeps nothing.
+//
+// Then the glow is pushed away from its own grey by BlurDirection.z (the Glow option's 1.5; one is
+// the hue as it was).  Added back to the ground round a fire, a glow carrying the fire's own hue
+// still lands as cream, because the tone curve folds its red into the same last fifth as the
+// green; a glow with less green and blue in it than the fire comes out of that fold orange.  ZH
+// Enhanced's ReShade bloom does the same at 1.53, and that is where its orange halos come from.
+//
+// The alpha carries the clarity's luminance: the tone-mapped grey of the same four taps, which the
+// first blur pairs spread for the composite to measure each pixel against.
 static const char * const BLOOM_EXTRACT_SHADER_BODY =
 	"float4 main(VertexOutput input) : SV_TARGET\n"
 	"{\n"
@@ -911,11 +945,16 @@ static const char * const BLOOM_EXTRACT_SHADER_BODY =
 	"    float over = max(bright - Tuning.x, 0.0);\n"
 	"    float knee = max(Tuning.w, 0.0001);\n"
 	"    float kept = (over < knee) ? over * over / (2.0 * knee) : over - knee * 0.5;\n"
-	"    return float4(colour * (kept / max(bright, 0.0001)), 1.0);\n"
+	"    float3 glow = colour * (kept / max(bright, 0.0001));\n"
+	"    float glowGrey = dot(glow, float3(0.299, 0.587, 0.114));\n"
+	"    glow = max(lerp(glowGrey.xxx, glow, BlurDirection.z), 0.0);\n"
+	"    return float4(glow, dot(tone_curve(colour), float3(0.299, 0.587, 0.114)));\n"
 	"}\n";
 
 // One half of a separable gaussian.  The direction comes in as a constant, so the same program is
-// the horizontal pass and the vertical one.
+// the horizontal pass and the vertical one.  The alpha, the clarity's luminance, is blurred only by
+// the pairs that say so (BlurDirection.w) and passed through by the rest, so the clarity measures
+// against the same width at every Glow level.
 static const char * const BLOOM_BLUR_SHADER_BODY =
 	"static const float WEIGHTS[5] =\n"
 	"    { 0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216 };\n"
@@ -923,34 +962,58 @@ static const char * const BLOOM_BLUR_SHADER_BODY =
 	"float4 main(VertexOutput input) : SV_TARGET\n"
 	"{\n"
 	"    float2 step = BlurDirection.xy;\n"
-	"    float3 sum = Source.Sample(Sampler, input.Texture).rgb * WEIGHTS[0];\n"
+	"    float4 centre = Source.Sample(Sampler, input.Texture);\n"
+	"    float4 sum = centre * WEIGHTS[0];\n"
 	"    for (int index = 1; index < 5; ++index) {\n"
 	"        float2 offset = step * index;\n"
-	"        sum += Source.Sample(Sampler, input.Texture + offset).rgb * WEIGHTS[index];\n"
-	"        sum += Source.Sample(Sampler, input.Texture - offset).rgb * WEIGHTS[index];\n"
+	"        sum += Source.Sample(Sampler, input.Texture + offset) * WEIGHTS[index];\n"
+	"        sum += Source.Sample(Sampler, input.Texture - offset) * WEIGHTS[index];\n"
 	"    }\n"
-	"    return float4(sum, 1.0);\n"
+	"    return float4(sum.rgb, (BlurDirection.w > 0.0) ? sum.a : centre.a);\n"
 	"}\n";
+
+// Clarity, ZH Enhanced's other ReShade pass taken over: local contrast on the luminance, the way
+// Clarity.fx's overlay blend does it.  Detail is how much brighter the pixel's own tone-mapped grey
+// is than the blur of it round about; the grey moves by that times the strength times its distance
+// from the nearer end (the overlay's weight), so black and white stay put and a mid tone moves the
+// most.  The pixel keeps its hue: the colour is scaled, not added to.  Under about a tenth of white
+// it fades out, as Clarity.fx's blend-if-dark of 25 does, or the shade beside a lit wall goes to
+// black.  The glow is not in the detail (plain is the scene without it), so a fire's halo is not
+// read as an edge and does not ring.
+#define CLARITY_TEXT \
+	"float3 clarity(float3 colour, float3 plain, float blurred)\n" \
+	"{\n" \
+	"    float3 weights = float3(0.299, 0.587, 0.114);\n" \
+	"    float detail = dot(plain, weights) - blurred;\n" \
+	"    float grey = dot(saturate(colour), weights);\n" \
+	"    float moved = grey + BlurDirection.w * min(grey, 1.0 - grey) * detail * smoothstep(0.04, 0.12, grey);\n" \
+	"    return saturate(colour * (saturate(moved) / max(grey, 0.0001)));\n" \
+	"}\n" \
+	"\n"
 
 // The scene and the glow added, then the tone curve, then eight bits.  One pass rather than two
 // because the addition is what makes a value overbright and the curve is what brings it back, and
-// splitting them would mean writing the sum into a float target nobody else reads.
-static const char * const BLOOM_COMPOSITE_SHADER_BODY =
-	"float4 main(VertexOutput input) : SV_TARGET\n"
-	"{\n"
-	"    float3 scene = Source.Sample(Sampler, input.Texture).rgb;\n"
-	"    float3 glow = Extra.Sample(Sampler, input.Texture).rgb;\n"
-	"    return float4(grade(tone_curve(scene + glow * Tuning.y)), 1.0);\n"
-	"}\n";
+// splitting them would mean writing the sum into a float target nobody else reads.  The clarity
+// goes on between the curve and the grade, where Clarity.fx stood in ZH Enhanced's chain: on the
+// picture as it would reach the screen.  Off, it is one untaken branch.
+#define BLOOM_COMPOSITE_TEXT(curve) \
+	CLARITY_TEXT \
+	"float4 main(VertexOutput input) : SV_TARGET\n" \
+	"{\n" \
+	"    float3 scene = Source.Sample(Sampler, input.Texture).rgb;\n" \
+	"    float4 glow = Extra.Sample(Sampler, input.Texture);\n" \
+	"    float3 colour = " curve "(scene + glow.rgb * Tuning.y);\n" \
+	"    if (BlurDirection.w > 0.0) colour = clarity(colour, tone_curve(scene), glow.a);\n" \
+	"    return float4(grade(colour), 1.0);\n" \
+	"}\n"
+
+static const char * const BLOOM_COMPOSITE_SHADER_BODY = BLOOM_COMPOSITE_TEXT("tone_curve");
 
 static const char * const BLOOM_COMPOSITE_WIDE_SHADER_BODY =
 	WIDE_CURVE_TEXT
-	"float4 main(VertexOutput input) : SV_TARGET\n"
-	"{\n"
-	"    float3 scene = Source.Sample(Sampler, input.Texture).rgb;\n"
-	"    float3 glow = Extra.Sample(Sampler, input.Texture).rgb;\n"
-	"    return float4(grade(wide_curve(scene + glow * Tuning.y)), 1.0);\n"
-	"}\n";
+	BLOOM_COMPOSITE_TEXT("wide_curve");
+#undef BLOOM_COMPOSITE_TEXT
+#undef CLARITY_TEXT
 
 // A blast bending the picture, one read per pixel whatever the number of warps: every warp adds
 // to where the pixel reads from, and the frame is sampled once at the sum.
@@ -2165,8 +2228,8 @@ void DX11PostProcessClass::Draw_Pass(const PassSetup & pass)
 	block.TexelSize[3] = static_cast<float>(pass.SourceHeight);
 	block.BlurDirection[0] = pass.BlurX;
 	block.BlurDirection[1] = pass.BlurY;
-	block.BlurDirection[2] = 0.0f;
-	block.BlurDirection[3] = 0.0f;
+	block.BlurDirection[2] = pass.Saturation;
+	block.BlurDirection[3] = pass.Clarity;
 	block.Tuning[0] = BloomThreshold;
 	block.Tuning[1] = BloomIntensity;
 	block.Tuning[2] = TONE_CURVE_KNEE;
@@ -2294,13 +2357,24 @@ ID3D11ShaderResourceView * DX11PostProcessClass::Run_Bloom(ID3D11RenderTargetVie
 	pass.DestinationHeight = BloomHeight;
 	pass.SourceWidth = Width;
 	pass.SourceHeight = Height;
+	pass.Saturation = BloomSaturation;
 	Draw_Pass(pass);
+	pass.Saturation = 0.0f;
+
+	// The clarity's blur is the first two pairs, whatever the glow asks for; with the glow off
+	// those two pairs are all that run.
+	const bool clarity = (ClarityStrength > 0.0f);
+	unsigned pairs = (BloomIntensity > 0.0f) ? BloomBlurPasses : 0;
+	if (clarity && pairs < CLARITY_BLUR_PASSES) {
+		pairs = CLARITY_BLUR_PASSES;
+	}
 
 	pass.Shader = BloomBlurShader;
 	pass.SourceWidth = BloomWidth;
 	pass.SourceHeight = BloomHeight;
 	unsigned source = 0;
-	for (unsigned iteration = 0; iteration < BloomBlurPasses; ++iteration) {
+	for (unsigned iteration = 0; iteration < pairs; ++iteration) {
+		pass.Clarity = (clarity && iteration < CLARITY_BLUR_PASSES) ? 1.0f : 0.0f;
 		// Each pair steps a texel wider than the last.  What the earlier pairs left is smooth
 		// enough by then that the taps landing between texels miss nothing, and the widths add
 		// up in squares, which is how four pairs reach twice as far as two.
@@ -2326,6 +2400,7 @@ ID3D11ShaderResourceView * DX11PostProcessClass::Run_Bloom(ID3D11RenderTargetVie
 	pass.SourceHeight = Height;
 	pass.BlurX = 0.0f;
 	pass.BlurY = 0.0f;
+	pass.Clarity = ClarityStrength;
 	Draw_Pass(pass);
 
 	return ChainTargets[0].Resource;
@@ -2354,7 +2429,9 @@ bool DX11PostProcessClass::Finish(const DX11PostEffect * effects, unsigned count
 		// the time it hands over. If it is also the last thing in the chain it writes the screen.
 		const bool alone = (count == 1) && !warp;
 		ID3D11RenderTargetView * bloom_destination = alone ? back_buffer : ChainTargets[0].View;
-		if (BloomIntensity > 0.0f) {
+		if (BloomIntensity > 0.0f || ClarityStrength > 0.0f) {
+			// The clarity's blur rides the bloom's targets, so with the glow off and the clarity
+			// on this still runs, with nothing in the glow.
 			source = Run_Bloom(bloom_destination, scene);
 		} else {
 			// Bloom switched off in the options: no glow, but the scene is still half floats and

@@ -109,8 +109,21 @@ const char * DX11Post_Effect_Name(DX11PostEffect effect);
 // GlobalData.  An intensity of zero skips the bright pass and the blur and leaves only the tone
 // curve, so the half float scene still reaches eight bits, and it takes the gain back to one.
 // Until somebody calls this the chain runs at the values it was tuned at, which is what the tests
-// measure.
-void DX11Post_Set_Bloom(float threshold, float intensity, float additive_gain, unsigned blur_passes);
+// measure.  Saturation pushes the glow away from its own grey before it is spread, so a fire's halo
+// comes out of the tone curve orange rather than cream: one keeps the fire's hue as it was, the
+// Glow option asks for 1.5 (ZH Enhanced's ReShade bloom ran 1.53), and it is held under 3.
+void DX11Post_Set_Bloom(float threshold, float intensity, float additive_gain, unsigned blur_passes,
+	float saturation = 1.0f);
+
+// Clarity, local contrast on the luminance against a blur about fifteen pixels wide at 1080p, laid
+// on where the half float scene comes down to eight bits, between the tone curve and the grade.  The
+// strength is Clarity.fx's own (ZH Enhanced ran 0.75): a mid grey moves by half of it times how much
+// brighter or darker than its surroundings it is.  Zero, the default and what the tests start from,
+// is no clarity and leaves the chain drawing what it drew; above zero the bloom's bright pass and
+// first two blur pairs run even with the glow off, since the blur rides their targets.  The game
+// sets it every frame from the LightingStyle option.  A chain that does not start with bloom keeps
+// its scene in eight bits and never takes it.
+void DX11Post_Set_Clarity(float strength);
 
 // The gain the scene's additive draws take this frame: one whenever the glow is off.
 float DX11Post_Additive_Gain();
@@ -340,6 +353,11 @@ private:
 		bool World;
 		// The Atmosphere option's: its own constants in the haze's slots, the sky at t3 and s1.
 		bool Atmosphere;
+		// The bright pass's saturation (DX11Post_Set_Bloom), zero for every other pass.
+		float Saturation;
+		// The composite's clarity strength, or in a blur pass one when it carries the clarity's
+		// luminance along (DX11Post_Set_Clarity).
+		float Clarity;
 	};
 
 	bool Draw_Atmosphere(unsigned index, ID3D11ShaderResourceView * depth, const float world_from_clip[16]);

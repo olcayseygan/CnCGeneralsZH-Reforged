@@ -237,6 +237,12 @@ static Int bloomIntensity(void)
 	that turned every fireball into a white disc.  Two blur pairs at Low, three at Medium and four
 	at High and Ultra, each pair a step wider than the last.
 
+	At every level the glow is pushed half again away from its own grey before it is spread
+	(ZH Enhanced's ReShade bloom, 1.53), so a fire's halo comes down through the tone curve orange
+	and not cream.  ZH Enhanced's threshold of 0.2 is not taken: it is a threshold on an eight bit
+	frame, where it blooms every lit wall and the sand, and the option promises those never glow.
+	Its radius of 32 pixels is about what High and Ultra's four pairs reach at 1080p.
+
 	Direct3D 9 draws the scene in eight bits and has nothing past white to find, so its bloom keeps
 	what is over 88% of white, four times over, at 25 to 100% strength: the white centres of fire
 	and laser cores, and nothing of a building in daylight.  Snow can reach that; it is the price
@@ -247,9 +253,16 @@ struct GlowTuning
 	Real intensity;			///< D3D11: what the blurred excess is worth when added back
 	Real additiveGain;	///< D3D11: what an additive draw into the scene is multiplied by
 	UnsignedInt blurPasses;	///< D3D11: pairs of blur passes, each a step wider
+	Real saturation;		///< D3D11: how far the glow is pushed from its own grey, 1 its own hue
 	Int fixedThreshold;	///< D3D9: 0..255 below which nothing blooms
 	Int fixedIntensity;	///< D3D9: composite strength in percent
 };
+
+static const Real GLOW_SATURATION = 1.5f;
+
+/** The Reforged lighting style's clarity on Direct3D 11 (DX11Post_Set_Clarity): ZH Enhanced's
+	Clarity.fx strength.  It goes with the style's grade, since both are the same picture's contrast. */
+static const Real REFORGED_CLARITY = 0.75f;
 
 static GlowTuning glowTuning(void)
 {
@@ -259,6 +272,7 @@ static GlowTuning glowTuning(void)
 	tuning.intensity = (p > 0.0f) ? 0.2f + 1.4f * p : 0.0f;
 	tuning.additiveGain = 1.0f + 0.6f * p;
 	tuning.blurPasses = (p > 0.5f) ? 4 : (p > 0.25f) ? 3 : 2;
+	tuning.saturation = GLOW_SATURATION;
 	tuning.fixedThreshold = 224;
 	tuning.fixedIntensity = bloomIntensity();
 	return tuning;
@@ -507,8 +521,11 @@ static Int fixedFunctionBloomIntensity(void)
 #if defined(_WIN32)
 		//Pushed every frame, so a change on the options screen shows at once.
 		const GlowTuning tuning = glowTuning();
-		DX11Post_Set_Bloom(tuning.threshold, tuning.intensity, tuning.additiveGain, tuning.blurPasses);
-		DX11Post_Set_Grade(TheGlobalData->m_lightingStyle == LIGHTING_STYLE_REFORGED ? 1.0f : 0.0f);
+		DX11Post_Set_Bloom(tuning.threshold, tuning.intensity, tuning.additiveGain, tuning.blurPasses,
+			tuning.saturation);
+		const Bool reforged = TheGlobalData->m_lightingStyle == LIGHTING_STYLE_REFORGED;
+		DX11Post_Set_Grade(reforged ? 1.0f : 0.0f);
+		DX11Post_Set_Clarity(reforged ? REFORGED_CLARITY : 0.0f);
 		DX11Post_Set_Internal_Hdr(TheGlobalData->m_internalHdr != FALSE);
 #endif
 		return 0;

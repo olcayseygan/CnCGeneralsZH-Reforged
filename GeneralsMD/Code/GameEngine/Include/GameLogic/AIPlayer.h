@@ -553,8 +553,14 @@ protected:
 	Bool abilityShot(Object *obj, const struct AIAbilityButton &entry, Object *victim, Int rung);
 	Bool abilityArea(Object *obj, const struct AIAbilityButton &entry, Object *victim, Int rung);
 	Bool abilityWalkUp(Object *obj, const struct AIAbilityButton &entry);
+	Object *pickWalkUp(Object *obj, const struct AIAbilityButton &entry, Bool threatened, Real *score, char *why) const;	///< the walk-up's target and its score, NULL for none; orders nothing
+	Bool heroWalkUp(Object *obj, const std::vector<struct AIAbilityButton> &buttons, Bool threatened);	///< a hero's walk-ups weighed against each other, the best ordered
+	Bool heroThreatened(const Object *obj, Bool *loses, Coord3D *away) const;	///< the hero is in a fight with enemies in reach; loses when its guns lose it, away is their middle
+	Bool heroChargeSpent(const Object *target) const;	///< a hero charged this building lately and it still stands above half
 	Bool abilityToggle(Object *obj, const struct AIAbilityButton &entry, Object *victim);
 	Bool abilitySuicide(Object *obj, const struct AIAbilityButton &entry);
+	Bool abilityDetonate(Object *obj, const struct AIAbilityButton &entry);
+	Bool abilityHack(Object *obj, const struct AIAbilityButton &entry, Object *victim);
 	Int walkUpsInFlight(std::vector<ObjectID> *taken) const;	///< our units walking to, or busy with, a walk-up special right now; taken gets their targets
 	Bool walkIsCovered(const Object *obj, const Coord3D *to) const;	///< no step of the straight walk to 'to' where its map has the enemy over us
 	void steerAircraft(void);	///< aircraft off strikes whose flight crosses known anti-air, onto clear ones or home
@@ -1033,6 +1039,15 @@ protected:
 	std::vector<Object *>	m_lookTurn;
 	std::vector<Object *>	m_fireTurn;
 	std::vector<Object *>	m_abilityTurn;		///< doAbilities' own turn on a rung without the tactics' look; scratch, never saved
+	/** A building a hero sent a charge at, and when: one that still stands above half its health afterwards
+		* (a Command Center's armour, a repair) is left for the next building until the entry runs out.  Sorted by
+		* target, saved. */
+	struct HeroCharge
+	{
+		ObjectID		target;
+		UnsignedInt	frame;
+	};
+	std::vector<HeroCharge>	m_heroCharges;
 	void answerFire(const std::vector<Object *> *turn);	///< turn: this frame's look already collected, or NULL
 	AIFireAnswer answerHit(Object *obj, Object *shooter, Object *gun);	///< decided and ordered
 	const GunReading &readGun(const Object *obj, const Object *gun);

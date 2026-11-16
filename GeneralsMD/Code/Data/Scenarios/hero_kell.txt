@@ -1,0 +1,54 @@
+# A Hard AI's Demolition General Jarmen Kell 400 short of a China base: its Command Center, a War
+# Factory, a Barracks, and an Overlord with two Battlemasters 150 behind him. With his buttons
+# the AI snipes the Overlord's crew first, then the Battlemasters', and plants charges on the
+# buildings as Burton does; without them he plinks at armour.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionChina -side 1 FactionGLADemolitionGeneral -seed 1 -maxframes 2400
+#     -scenario hero_kell -logPrefix hero_kell_
+#
+# Add -aiknobsoff odd abilities for the seat without its buttons. A sniped tank turns neutral, so
+# it leaves seat 0's tally while its hull still stands.
+
+10    spawn   0  ChinaWarFactory           1  start0:300:0
+10    spawn   0  ChinaBarracks             1  start0:-300:0
+30    spawn   1  Demo_GLAInfantryJarmenKell  1  start0:0:-400  20
+30    spawn   0  ChinaTankOverlord         1  start0:-200:-550
+30    spawn   0  ChinaTankBattleMaster     2  start0:200:-550  40
+300   tally   0  ChinaTankOverlord
+300   tally   0  ChinaTankBattleMaster
+300   tally   0  ChinaCommandCenter
+300   tally   0  ChinaWarFactory
+300   tally   0  ChinaBarracks
+600   tally   0  ChinaTankOverlord
+600   tally   0  ChinaTankBattleMaster
+600   tally   0  ChinaCommandCenter
+600   tally   0  ChinaWarFactory
+600   tally   0  ChinaBarracks
+900   tally   0  ChinaTankOverlord
+900   tally   0  ChinaTankBattleMaster
+900   tally   0  ChinaCommandCenter
+900   tally   0  ChinaWarFactory
+900   tally   0  ChinaBarracks
+1200  tally   0  ChinaTankOverlord
+1200  tally   0  ChinaTankBattleMaster
+1200  tally   0  ChinaCommandCenter
+1200  tally   0  ChinaWarFactory
+1200  tally   0  ChinaBarracks
+1800  tally   0  ChinaTankOverlord
+1800  tally   0  ChinaTankBattleMaster
+1800  tally   0  ChinaCommandCenter
+1800  tally   0  ChinaWarFactory
+1800  tally   0  ChinaBarracks
+2400  tally   0  ChinaTankOverlord
+2400  tally   0  ChinaTankBattleMaster
+2400  tally   0  ChinaCommandCenter
+2400  tally   0  ChinaWarFactory
+2400  tally   0  ChinaBarracks
+3500  tally   0  ChinaTankOverlord
+3500  tally   0  ChinaTankBattleMaster
+3500  tally   0  ChinaCommandCenter
+3500  tally   0  ChinaWarFactory
+3500  tally   0  ChinaBarracks
+3500  tally   1  Demo_GLAInfantryJarmenKell

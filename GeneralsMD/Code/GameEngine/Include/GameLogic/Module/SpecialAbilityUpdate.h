@@ -237,6 +237,7 @@ public:
 	const AsciiString &getSpecialObjectName() const { return getSpecialAbilityUpdateModuleData()->m_specialObjectName; }
 	const WeaponTemplate *getTriggerWeapon() const { return getSpecialAbilityUpdateModuleData()->m_triggerWeapon; }
 	ObjectID getAbilityTargetID() const { return m_targetID; }
+	const std::list<ObjectID> &getSpecialObjectIDs() const { return m_specialObjectIDList; }	///< the charges it has planted, in planting order
 
 //	virtual Bool isBusy() const { return m_isBusy; }
 

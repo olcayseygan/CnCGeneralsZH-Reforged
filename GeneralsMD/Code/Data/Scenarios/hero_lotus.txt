@@ -1,0 +1,49 @@
+# A Hard AI's Black Lotus 350 short of a USA base, close enough to see it: its Command Center, a War
+# Factory, a Supply Center with a Fire Base beside it, and three Crusaders beside her. A capture the
+# Fire Base would take back is worth less than the cash hack's thousand. (A Patriot there detects her,
+# and a hack under it is no safe walk.) With her buttons the AI switches the tanks off
+# in the fight, steals cash from the Supply Center and the Command Center and captures what it can
+# reach; without them she has no gun at all.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 2400
+#     -scenario hero_lotus -logPrefix hero_lotus_
+#
+# Add -aiknobsoff odd abilities for the seat without its buttons. A captured building leaves seat
+# 0's tally, so a drop with no explosion in the log is a capture.
+
+10    spawn   0  AmericaWarFactory         1  start0:300:0
+10    spawn   0  AmericaSupplyCenter       1  start0:-300:0
+10    spawn   0  AmericaFireBase           1  start0:-500:150
+30    spawn   1  ChinaInfantryBlackLotus   1  start0:0:-350  20
+30    spawn   0  AmericaTankCrusader       3  start0:-250:-400  50
+300   tally   0  AmericaTankCrusader
+300   tally   0  AmericaCommandCenter
+300   tally   0  AmericaWarFactory
+300   tally   0  AmericaSupplyCenter
+600   tally   0  AmericaTankCrusader
+600   tally   0  AmericaCommandCenter
+600   tally   0  AmericaWarFactory
+600   tally   0  AmericaSupplyCenter
+900   tally   0  AmericaTankCrusader
+900   tally   0  AmericaCommandCenter
+900   tally   0  AmericaWarFactory
+900   tally   0  AmericaSupplyCenter
+1200  tally   0  AmericaTankCrusader
+1200  tally   0  AmericaCommandCenter
+1200  tally   0  AmericaWarFactory
+1200  tally   0  AmericaSupplyCenter
+1800  tally   0  AmericaTankCrusader
+1800  tally   0  AmericaCommandCenter
+1800  tally   0  AmericaWarFactory
+1800  tally   0  AmericaSupplyCenter
+2400  tally   0  AmericaTankCrusader
+2400  tally   0  AmericaCommandCenter
+2400  tally   0  AmericaWarFactory
+2400  tally   0  AmericaSupplyCenter
+3500  tally   0  AmericaTankCrusader
+3500  tally   0  AmericaCommandCenter
+3500  tally   0  AmericaWarFactory
+3500  tally   0  AmericaSupplyCenter
+3500  tally   1  ChinaInfantryBlackLotus

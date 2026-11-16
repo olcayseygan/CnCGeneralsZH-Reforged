@@ -83,6 +83,7 @@
 #include "GameLogic/Module/SpecialPowerModule.h"	// ... and the module that does it
 #include "GameLogic/Module/SpecialAbilityUpdate.h"	// ending a raider's bomb run
 #include "GameLogic/Module/StealthUpdate.h"	// a unit that goes invisible from the factory
+#include "GameLogic/Module/StealthDetectorUpdate.h"	// ... and whether an enemy's detector is switched on
 #include "GameLogic/Module/VeterancyGainCreate.h"	// ... or veteran, the doctrine's edge
 #include "GameLogic/ExperienceTracker.h"				// ... and whether one did anything before it died
 #include "GameLogic/Module/CollideModule.h"	// ... and the collide that takes a vehicle by touching it
@@ -402,9 +403,11 @@ enum AIAbilityKind
 	AIABILITY_WALKUP,		///< a special the unit walks up to a target to do (charges, TNT, hacks, Designate), or sabotage
 	AIABILITY_TOGGLE,		///< a weapon switch (the flashbang, neutron shells, the Scud's warheads)
 	AIABILITY_SUICIDE,	///< a weapon fired at nothing that ends the unit (the bomb truck, the Demo general's suicide)
+	AIABILITY_DETONATE,	///< the remote charges' trigger, a special at nothing (Burton, the Demo general's Kell)
+	AIABILITY_HACK,			///< a special at a vehicle in reach, no walk (Black Lotus's vehicle hack)
 	AIABILITY_KIND_COUNT
 };
-static const char *const theAIAbilityKindName[ AIABILITY_KIND_COUNT ] = { "laser", "shot", "area", "walk-up", "toggle", "suicide" };
+static const char *const theAIAbilityKindName[ AIABILITY_KIND_COUNT ] = { "laser", "shot", "area", "walk-up", "toggle", "suicide", "detonate", "hack" };
 
 struct AIAbilityButton
 {
@@ -18457,6 +18460,25 @@ static const Real ABILITY_TOGGLE_MARGIN = 1.25f;
 static const Real ABILITY_TOGGLE_ROUND = 80.0f;					///< the enemies round a toggle's target it weighs, past the Nuke Cannon's 70 neutron blast
 static const Real ABILITY_WALKUP_SHARE = 0.5f;				///< a hack or a capture, which leave no blast to weigh, takes a target worth this much of the unit
 static const Real ABILITY_WALKUP_TEAM_RADIUS = 300.0f;	///< our units this near a walk-up's target count as the guns already on it
+/** A hero (Burton, Black Lotus, Jarmen Kell) works through the enemy's buildings as a job: it looks this far
+	* for one, past its own sight, and weighs each by its worth over the time it takes, walk and set-up,
+	* ABILITY_HERO_TIME_SCALE_SECONDS of it halving the worth, so it goes on to the next building near rather
+	* than across the map. */
+static const Real ABILITY_HERO_LEASH = 1500.0f;
+static const Real ABILITY_HERO_TIME_SCALE_SECONDS = 20.0f;
+static const Real ABILITY_HERO_STICK = 0.5f;						///< a charged building still above this share of its health was only scratched
+static const Real ABILITY_HERO_CHARGE_MEMORY_SECONDS = 60.0f;	///< ... and is left alone this long, game time, before a hero tries it again
+static const Real ABILITY_HERO_THREAT_LOOK = 600.0f;		///< the widest reach an enemy gun is looked for within, past an Overlord's
+static const Real ABILITY_HERO_THREAT_STEP = 50.0f;			///< an enemy this far past its reach is still a threat: one step and it fires
+static const Real ABILITY_HERO_HIT_MEMORY_SECONDS = 2.0f;	///< a hero hit this lately, game time, is in a fight
+static const Real ABILITY_HERO_RETREAT_STEP = 300.0f;		///< how far a hero pulls back from a fight it loses
+static const Real ABILITY_CASH_HACK_TAKE = 1000.0f;			///< SpecialAbilityUpdate's steal-cash case takes this, or what the owner has
+static const Real ABILITY_GUARD_RADIUS = 300.0f;				///< enemy guns this near a building take a capture back
+static const Real ABILITY_GUARDED_CAPTURE_SHARE = 0.25f;	///< ... so a guarded capture is worth this share of the building
+static const Real ABILITY_TECH_WORTH = 1000.0f;				///< a tech building, which costs nothing to read a price off
+static const Real ABILITY_DETECTOR_REACH = 450.0f;		///< the widest sight a stealth detector is looked for within
+static const Real ABILITY_KNIFE_STEP = 30.0f;					///< a hero's knife goes for a soldier this far past its reach
+static const Real ABILITY_DETONATE_CLEAR = 90.0f;		///< remote charges go off once the planter stands this far from every one: past C4's 75 blast, inside Burton's 100 flee
 static const Int ABILITY_WALKUPS_IN_FLIGHT = 2;
 static const Real ABILITY_WALKUP_FAR = 2000.0f;					///< a special with no StartAbilityRange (the module's huge default) reads as this
 static const Real ABILITY_SUICIDE_HURT = 0.3f;
@@ -18596,24 +18618,35 @@ static std::vector<AIAbilityButton> abilitiesOf( const Object *obj )
 			case GUI_COMMAND_SPECIAL_POWER:
 			{
 				const SpecialPowerTemplate *power = button->getSpecialPowerTemplate();
-				if( power == NULL || (options & (NEED_TARGET_ENEMY_OBJECT | SCRIPT_ONLY)) != NEED_TARGET_ENEMY_OBJECT )
+				if( power == NULL || (options & SCRIPT_ONLY) )
 					break;
 				ability.power = power->getSpecialPowerType();
 				if( obj->findSpecialAbilityUpdate( ability.power ) == NULL )
 					break;
+				// the remote charges' second button, the same special at nothing, sets off what the first planted
+				if( (options & NEED_TARGET_ENEMY_OBJECT) == 0 )
+				{
+					if( ability.power == SPECIAL_REMOTE_CHARGES && (options & (NEED_TARGET_POS | NEED_TARGET_NEUTRAL_OBJECT | NEED_TARGET_ALLY_OBJECT)) == 0 )
+						ability.kind = AIABILITY_DETONATE;
+					break;
+				}
 				switch( ability.power )
 				{
 					case SPECIAL_MISSILE_DEFENDER_LASER_GUIDED_MISSILES:
 						ability.kind = AIABILITY_LASER;
 						break;
-					// remote charges wait on a second button, the capture and the vehicle hack are doCapture's and
-					// doHijack's, the Helix's bomb doHelixes', the disguise and the booby trap weigh nothing that can be read
+					// the Helix's bomb is doHelixes', the infantry capture doCapture's, the disguise and the booby
+					// trap weigh nothing that can be read
 					case SPECIAL_TIMED_CHARGES:
+					case SPECIAL_REMOTE_CHARGES:
 					case SPECIAL_TANKHUNTER_TNT_ATTACK:
 					case SPECIAL_HACKER_DISABLE_BUILDING:
 					case SPECIAL_BLACKLOTUS_CAPTURE_BUILDING:
 					case SPECIAL_BLACKLOTUS_STEAL_CASH_HACK:
 						ability.kind = AIABILITY_WALKUP;
+						break;
+					case SPECIAL_BLACKLOTUS_DISABLE_VEHICLE_HACK:
+						ability.kind = AIABILITY_HACK;
 						break;
 					default:
 						break;
@@ -18706,23 +18739,61 @@ static Real abilityArmoured( const WeaponTemplate *weapon, const ThingTemplate *
 	return armor.adjustDamage( weapon->getDamageType(), damage );
 }
 
-/** Enemies the player knows of within radius of a point, in ObjectID order. */
-static void abilityEnemiesNear( const Player *player, const Coord3D *at, Real radius, std::vector<Object *> *out )
+/** Enemies the player knows of within radius of a point, in ObjectID order; with neutralTech the neutral tech
+	* buildings too, which a capture takes as well. */
+static void abilityEnemiesNear( const Player *player, const Coord3D *at, Real radius, std::vector<Object *> *out,
+																Bool neutralTech = FALSE )
 {
 	out->clear();
-	PartitionFilterPlayerAffiliation enemies( player, ALLOW_ENEMIES, true );
+	PartitionFilterPlayerAffiliation enemies( player, neutralTech ? (ALLOW_ENEMIES | ALLOW_NEUTRAL) : ALLOW_ENEMIES, true );
 	PartitionFilterAlive alive;
 	PartitionFilter *filters[] = { &enemies, &alive, NULL };
 	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( at, radius, FROM_BOUNDINGSPHERE_2D, filters );
 	MemoryPoolObjectHolder hold( iter );
 	for( Object *obj = iter->first(); obj; obj = iter->next() )
 	{
-		if( obj->isKindOf( KINDOF_PROJECTILE ) || obj->isEffectivelyDead() || player->getRelationship( obj->getTeam() ) != ENEMIES ||
-				!observerKnowsAbout( obj, player->getPlayerIndex() ) )
+		if( obj->isKindOf( KINDOF_PROJECTILE ) || obj->isEffectivelyDead() || !observerKnowsAbout( obj, player->getPlayerIndex() ) )
+			continue;
+		const Relationship r = player->getRelationship( obj->getTeam() );
+		if( r != ENEMIES && !(neutralTech && r == NEUTRAL && obj->isKindOf( KINDOF_TECH_BUILDING )) )
 			continue;
 		out->push_back( obj );
 	}
 	std::sort( out->begin(), out->end(), aiAbilityByID );
+}
+
+/** An enemy that sees through stealth watches a point: a stealthed walk there is no longer unseen.  The
+	* detector has to be switched on: one that waits for an upgrade or a power is in the template all match, and
+	* reading the template kept Burton out of a base nothing in it could see him in.  It has to see the walker's
+	* kind too: a USA Dozer's detector finds mines, and it kept Black Lotus off every Supply Center. */
+static Bool abilityDetectorWatches( const Player *player, const Coord3D *at, const Object *walker )
+{
+	static const NameKeyType detectorKey = NAMEKEY( "StealthDetectorUpdate" );
+	std::vector<Object *> watchers;
+	abilityEnemiesNear( player, at, ABILITY_DETECTOR_REACH, &watchers );
+	for( size_t w = 0; w < watchers.size(); ++w )
+	{
+		Object *watcher = watchers[ w ];
+		const StealthDetectorUpdate *detector = (const StealthDetectorUpdate *)watcher->findUpdateModule( detectorKey );
+		if( detector == NULL || !detector->isSDEnabled() )
+			continue;
+		Real reach = watcher->getVisionRange();
+		Bool seesWalker = TRUE;
+		const ModuleInfo &modules = watcher->getTemplate()->getBehaviorModuleInfo();
+		for( Int m = 0; m < modules.getCount(); ++m )
+		{
+			if( modules.getNthName( m ).compareNoCase( "StealthDetectorUpdate" ) != 0 )
+				continue;
+			const StealthDetectorUpdateModuleData *data = static_cast<const StealthDetectorUpdateModuleData *>( modules.getNthData( m ) );
+			seesWalker = walker->isKindOfMulti( data->m_extraDetectKindof, data->m_extraDetectKindofNot );
+			if( data->m_detectionRange > 0.0f )
+				reach = data->m_detectionRange;
+			break;
+		}
+		if( seesWalker && sqr( watcher->getPosition()->x - at->x ) + sqr( watcher->getPosition()->y - at->y ) <= sqr( reach ) )
+			return TRUE;
+	}
+	return FALSE;
 }
 
 /** What of ours and our allies' stands within radius of a point, by worth; the unit itself left out. */
@@ -18867,19 +18938,25 @@ Bool AIPlayer::abilityLaser( Object *obj, const AIAbilityButton &entry, Object *
 Bool AIPlayer::abilityShot( Object *obj, const AIAbilityButton &entry, Object *victim, Int /*rung*/ )
 {
 	const Weapon *weapon = obj->getWeaponInWeaponSlot( entry.slot );
-	if( !abilityWeaponReady( weapon ) || !abilityUpgradeReady( obj, entry.button ) || weapon->getAttackRange( obj ) < ABILITY_MELEE_RANGE )
+	if( !abilityWeaponReady( weapon ) || !abilityUpgradeReady( obj, entry.button ) )
 		return FALSE;
-	const Real floor = ABILITY_WORTH_FLOOR_SHARE * abilityWorth( obj );
+	// a knife is a hero's alone, on a soldier already at its elbow: Burton's kills outright where his rifle
+	// takes a burst, and walking him further into a crowd for it is no trade
+	const Bool knife = weapon->getAttackRange( obj ) < ABILITY_MELEE_RANGE;
+	if( knife && !obj->isKindOf( KINDOF_HERO ) )
+		return FALSE;
+	const Real reach = knife ? weapon->getAttackRange( obj ) + ABILITY_KNIFE_STEP : weapon->getAttackRange( obj );
+	const Real floor = knife ? 0.0f : ABILITY_WORTH_FLOOR_SHARE * abilityWorth( obj );
 	std::vector<Object *> candidates;
-	abilityEnemiesNear( m_player, obj->getPosition(), weapon->getAttackRange( obj ), &candidates );
-	if( victim )
+	abilityEnemiesNear( m_player, obj->getPosition(), reach, &candidates );
+	if( victim && !knife )
 		candidates.insert( candidates.begin(), victim );
 	Object *best = NULL;
 	Real bestWorth = 0.0f, bestShot = 0.0f, bestGuns = 0.0f;
 	for( size_t c = 0; c < candidates.size(); ++c )
 	{
 		Object *target = candidates[ c ];
-		if( !entry.button->isValidObjectTarget( obj, target ) || !weapon->isWithinAttackRange( obj, target ) )
+		if( !entry.button->isValidObjectTarget( obj, target ) || (knife ? !target->isKindOf( KINDOF_INFANTRY ) : !weapon->isWithinAttackRange( obj, target )) )
 			continue;
 		const Real worth = abilityWorth( target );
 		const Real shot = abilityFramesToKill( obj, target, entry.slot );
@@ -18999,9 +19076,76 @@ Bool AIPlayer::abilityArea( Object *obj, const AIAbilityButton &entry, Object *v
 	return TRUE;
 }
 
+/** The nearest live charge one of the unit's specials planted, and how many are live; NULL when none. */
+static const Object *nearestOwnCharge( const Object *obj, SpecialPowerType power, Real *distSqr, Int *planted )
+{
+	*distSqr = 0.0f;
+	*planted = 0;
+	const SpecialAbilityUpdate *update = obj->findSpecialAbilityUpdate( power );
+	if( update == NULL )
+		return NULL;
+	const Object *nearest = NULL;
+	const std::list<ObjectID> &charges = update->getSpecialObjectIDs();
+	for( std::list<ObjectID>::const_iterator it = charges.begin(); it != charges.end(); ++it )
+	{
+		const Object *charge = TheGameLogic->findObjectByID( *it );
+		if( charge == NULL || charge->isEffectivelyDead() )
+			continue;
+		++*planted;
+		const Real d = sqr( charge->getPosition()->x - obj->getPosition()->x ) + sqr( charge->getPosition()->y - obj->getPosition()->y );
+		if( nearest == NULL || d < *distSqr )
+		{
+			nearest = charge;
+			*distSqr = d;
+		}
+	}
+	return nearest;
+}
+
+/** A charge of the unit's own, remote or timed, inside its blast: C4 hurts its planter too, so the planter
+	* gets clear (the special's own flee) before anything gives it a new order. */
+static Bool besideOwnCharge( const Object *obj )
+{
+	const SpecialPowerType powers[] = { SPECIAL_REMOTE_CHARGES, SPECIAL_TIMED_CHARGES };
+	for( Int p = 0; p < 2; ++p )
+	{
+		Real distSqr = 0.0f;
+		Int planted = 0;
+		if( nearestOwnCharge( obj, powers[ p ], &distSqr, &planted ) != NULL && distSqr < sqr( ABILITY_DETONATE_CLEAR ) )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+/** An enemy vehicle the hero's guns can hurt has the hero as its target.  Black Lotus, who has no gun, is never
+	* better off standing. */
+static Bool heroChasedByVehicle( const Player *player, const Object *hero )
+{
+	std::vector<Object *> enemies;
+	abilityEnemiesNear( player, hero->getPosition(), ABILITY_HERO_THREAT_LOOK, &enemies );
+	for( size_t e = 0; e < enemies.size(); ++e )
+		if( enemies[ e ]->isKindOf( KINDOF_VEHICLE ) && enemies[ e ]->getAI() && enemies[ e ]->getAI()->getCurrentVictim() == hero &&
+				abilityFramesToKill( hero, enemies[ e ], -1 ) > 0.0f )
+			return TRUE;
+	return FALSE;
+}
+
+/** An armed enemy other than the building itself stands near it, switched on. */
+static Bool abilityGuarded( const Player *player, const Object *target )
+{
+	std::vector<Object *> guards;
+	abilityEnemiesNear( player, target->getPosition(), ABILITY_GUARD_RADIUS, &guards );
+	for( size_t g = 0; g < guards.size(); ++g )
+		if( guards[ g ] != target && guards[ g ]->isKindOf( KINDOF_CAN_ATTACK ) && !guards[ g ]->isDisabled() )
+			return TRUE;
+	return FALSE;
+}
+
 /** What a walk-up is worth on a target: its price, more for what keeps the enemy going. */
 static Real walkUpWorth( const Object *target )
 {
+	if( target->isKindOf( KINDOF_TECH_BUILDING ) )
+		return ABILITY_TECH_WORTH;
 	Real price = INT_TO_REAL( target->getTemplate()->calcCostToBuild( target->getControllingPlayer() ) );
 	if( price <= 0.0f )
 		price = abilityWorth( target );
@@ -19085,37 +19229,204 @@ static Real walkUpTeamRate( const Player *player, const Object *planter, const O
 	* weigh, takes a target worth ABILITY_WALKUP_SHARE of the unit. */
 Bool AIPlayer::abilityWalkUp( Object *obj, const AIAbilityButton &entry )
 {
-	if( !hasTacticalMap() )
+	Real score = 0.0f;
+	char why[ 160 ];
+	Object *best = pickWalkUp( obj, entry, FALSE, &score, why );
+	if( best == NULL )
 		return FALSE;
+	logAbility( this, m_player, obj, entry, best, best->getPosition(), why );
+	obj->doCommandButtonAtObject( entry.button, best, CMD_FROM_AI );
+	return TRUE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+Bool AIPlayer::heroChargeSpent( const Object *target ) const
+{
+	for( size_t c = 0; c < m_heroCharges.size(); ++c )
+	{
+		if( m_heroCharges[ c ].target != target->getID() )
+			continue;
+		const BodyModuleInterface *body = target->getBodyModule();
+		return body != NULL && body->getHealth() > ABILITY_HERO_STICK * body->getMaxHealth();
+	}
+	return FALSE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** The hero is in a fight: it was hit a moment ago, or an enemy has it as its target.  The threat is every enemy
+	* that can hurt it standing within its reach of it plus a step; a hero under its camouflage that nothing has
+	* found has none.  It loses when their guns kill it before its own kill them; away is the middle of them. */
+Bool AIPlayer::heroThreatened( const Object *obj, Bool *loses, Coord3D *away ) const
+{
+	*loses = FALSE;
+	away->zero();
+	if( obj->testStatus( OBJECT_STATUS_STEALTHED ) && !obj->testStatus( OBJECT_STATUS_DETECTED ) )
+		return FALSE;
+	const UnsignedInt hit = obj->getBodyModule() ? obj->getBodyModule()->getLastDamageTimestamp() : 0;
+	const UnsignedInt memory = (UnsignedInt)( ABILITY_HERO_HIT_MEMORY_SECONDS * LOGICFRAMES_PER_GAME_SECOND );
+	Bool engaged = hit != 0 && TheGameLogic->getFrame() <= hit + memory;
+	std::vector<Object *> enemies;
+	abilityEnemiesNear( m_player, obj->getPosition(), ABILITY_HERO_THREAT_LOOK, &enemies );
+	const Real health = obj->getBodyModule() ? obj->getBodyModule()->getHealth() : 0.0f;
+	Real theirRate = 0.0f;
+	Real ourFrames = 0.0f;
+	Int count = 0;
+	for( size_t e = 0; e < enemies.size(); ++e )
+	{
+		Object *enemy = enemies[ e ];
+		const Real theirs = abilityFramesToKill( enemy, obj, -1 );
+		if( theirs <= 0.0f )
+			continue;
+		const Real reach = enemy->getLargestWeaponRange() + ABILITY_HERO_THREAT_STEP;
+		if( sqr( enemy->getPosition()->x - obj->getPosition()->x ) + sqr( enemy->getPosition()->y - obj->getPosition()->y ) > sqr( reach ) )
+			continue;
+		if( enemy->getAI() && enemy->getAI()->getCurrentVictim() == obj )
+			engaged = TRUE;
+		++count;
+		away->x += enemy->getPosition()->x;
+		away->y += enemy->getPosition()->y;
+		theirRate += health / theirs;
+		const Real ours = abilityFramesToKill( obj, enemy, -1 );
+		ourFrames = (ours > 0.0f && ourFrames >= 0.0f) ? ourFrames + ours : AI_CANNOT_KILL;
+	}
+	if( !engaged || count == 0 )
+		return FALSE;
+	away->x /= count;
+	away->y /= count;
+	*loses = ourFrames < 0.0f || ourFrames >= health / theirRate;
+	return TRUE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** A hero's walk-ups weighed against each other: the capture against the cash hack, the remote charge against
+	* the timed one.  Each button's best target comes with its score, the best of all is ordered.  Threatened,
+	* only what wins the fight in front of it is walked (a charge on the tank shooting it); the job waits. */
+Bool AIPlayer::heroWalkUp( Object *obj, const std::vector<AIAbilityButton> &buttons, Bool threatened )
+{
+	const AIAbilityButton *bestEntry = NULL;
+	Object *best = NULL;
+	Real bestScore = 0.0f;
+	char bestWhy[ 160 ] = "";
+	for( size_t b = 0; b < buttons.size(); ++b )
+	{
+		if( buttons[ b ].kind != AIABILITY_WALKUP )
+			continue;
+		Real score = 0.0f;
+		char why[ 160 ];
+		Object *target = pickWalkUp( obj, buttons[ b ], threatened, &score, why );
+		if( target == NULL || (best != NULL && score <= bestScore) )
+			continue;
+		bestEntry = &buttons[ b ];
+		best = target;
+		bestScore = score;
+		strcpy( bestWhy, why );
+	}
+	if( best == NULL )
+		return FALSE;
+	logAbility( this, m_player, obj, *bestEntry, best, best->getPosition(), bestWhy );
+	obj->doCommandButtonAtObject( bestEntry->button, best, CMD_FROM_AI );
+	if( best->isKindOf( KINDOF_STRUCTURE ) && (bestEntry->power == SPECIAL_REMOTE_CHARGES || bestEntry->power == SPECIAL_TIMED_CHARGES) )
+	{
+		HeroCharge charge;
+		charge.target = best->getID();
+		charge.frame = TheGameLogic->getFrame();
+		std::vector<HeroCharge>::iterator at = m_heroCharges.begin();
+		while( at != m_heroCharges.end() && at->target < charge.target )
+			++at;
+		if( at != m_heroCharges.end() && at->target == charge.target )
+			at->frame = charge.frame;
+		else
+			m_heroCharges.insert( at, charge );
+	}
+	return TRUE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** The walk-up's target, with its score and the log line's reason; orders nothing.  A hero's job (a building)
+	* scores its worth over the time it takes, walk and set-up, and a charge by the share of the building it
+	* takes off; a target that only scores its worth is everything else, which has to pass the gains test. */
+Object *AIPlayer::pickWalkUp( Object *obj, const AIAbilityButton &entry, Bool threatened, Real *score, char *why ) const
+{
+	*score = 0.0f;
+	if( !hasTacticalMap() )
+		return NULL;
 	const Bool sabotage = entry.button->getCommandType() == GUICOMMANDMODE_SABOTAGE_BUILDING;
 	const SpecialAbilityUpdate *update = sabotage ? NULL : obj->findSpecialAbilityUpdate( entry.power );
 	if( !sabotage && (update == NULL || !abilitySpecialReady( obj, entry.button )) )
-		return FALSE;
+		return NULL;
+	if( besideOwnCharge( obj ) )
+		return NULL;
 	// the leash: twice the reach the special starts from, and never under what the unit sees itself, since a
-	// charge's reach is a touch
+	// charge's reach is a touch; a hero looks for buildings much further
+	const Bool hero = obj->isKindOf( KINDOF_HERO );
 	const Real start = update ? min( update->getStartAbilityRange(), ABILITY_WALKUP_FAR ) : 0.0f;
 	const Real leash = max( 2.0f * start, obj->getVisionRange() );
+	const Real heroLeash = hero ? max( leash, ABILITY_HERO_LEASH ) : leash;
 	std::vector<Object *> targets;
-	abilityEnemiesNear( m_player, obj->getPosition(), leash, &targets );
-	// one walk-up a target: a second Designate or charge on what one of ours is already doing it to is wasted
+	abilityEnemiesNear( m_player, obj->getPosition(), heroLeash, &targets, entry.power == SPECIAL_BLACKLOTUS_CAPTURE_BUILDING );
+	// one walk-up a target: a second Designate or charge on what one of ours is already doing it to is wasted.
+	// The cap on walk-ups at once is for the army's units; a hero's job is its own
 	std::vector<ObjectID> taken;
-	if( targets.empty() || walkUpsInFlight( &taken ) >= ABILITY_WALKUPS_IN_FLIGHT )
-		return FALSE;
+	const Int inFlight = walkUpsInFlight( &taken );
+	if( targets.empty() || (!hero && inFlight >= ABILITY_WALKUPS_IN_FLIGHT) )
+		return NULL;
 	Real fuse = 0.0f;
 	const WeaponTemplate *blast = update ? walkUpBlast( update, &fuse ) : NULL;
 	const Real setUp = update ? INT_TO_REAL( (Int)(update->getUnpackFrames() + update->getPreparationFrames()) ) + fuse : 0.0f;
 	const Real speed = max( obj->getAI()->getCurLocomotorSpeed(), 0.1f );
-	const Real floor = blast ? 0.0f : ABILITY_WALKUP_SHARE * abilityWorth( obj );
+	const Real floor = (blast || hero) ? 0.0f : ABILITY_WALKUP_SHARE * abilityWorth( obj );
 	const Bool unseen = obj->testStatus( OBJECT_STATUS_STEALTHED ) && !obj->testStatus( OBJECT_STATUS_DETECTED );
 	Object *best = NULL;
+	Real bestScore = 0.0f;
 	Real bestWorth = 0.0f;
 	Real bestWith = 0.0f;
 	Real bestGuns = 0.0f;
+	Bool bestJob = FALSE;
 	for( size_t t = 0; t < targets.size(); ++t )
 	{
 		Object *target = targets[ t ];
-		const Real worth = walkUpWorth( target );
-		if( worth < floor || (best && worth <= bestWorth) )
+		// a cash hack takes what the owner has, up to SpecialAbilityUpdate's thousand, and leaves the building
+		Real worth = walkUpWorth( target );
+		if( entry.power == SPECIAL_BLACKLOTUS_STEAL_CASH_HACK )
+		{
+			const Money *money = target->getControllingPlayer() ? target->getControllingPlayer()->getMoney() : NULL;
+			worth = money ? min( ABILITY_CASH_HACK_TAKE, INT_TO_REAL( (Int)money->countMoney() ) ) : 0.0f;
+		}
+		if( worth < floor || worth <= 0.0f )
+			continue;
+		// a hero's building is its job: no gains test, any building it knows of in its wide leash; a hero in a
+		// fight leaves its job for later
+		const Bool job = hero && target->isKindOf( KINDOF_STRUCTURE );
+		if( job && threatened )
+			continue;
+		// a remote charge is for a building: on a tank it waits for the planter to get clear while the tank drives
+		// off, so a vehicle gets the timed one and its gains test
+		if( entry.power == SPECIAL_REMOTE_CHARGES && !job )
+			continue;
+		// a building a charge only scratched is left for the next
+		if( job && blast && heroChargeSpent( target ) )
+			continue;
+		const Coord3D *from = obj->getPosition();
+		const Coord3D *at = target->getPosition();
+		const Real distance = (Real)sqrt( sqr( at->x - from->x ) + sqr( at->y - from->y ) );
+		if( !job && distance - target->getGeometryInfo().getBoundingCircleRadius() > leash )
+			continue;
+		const Real walk = max( 0.0f, distance - start );
+		// a charge that cannot bring the building down is worth its share of it: one C4 left a Command Center
+		// at 4355 of 5000, where it fells a War Factory
+		Real share = 1.0f;
+		if( job && blast )
+		{
+			const Real health = target->getBodyModule() ? target->getBodyModule()->getHealth() : 0.0f;
+			const Real damage = abilityArmoured( blast, target->getTemplate(), blast->getPrimaryDamage( WeaponBonus() ) );
+			share = health > damage ? damage / health : 1.0f;
+		}
+		// a capture next to the enemy's guns is taken back; the cash is in the bank the moment the hack ends
+		if( job && entry.power == SPECIAL_BLACKLOTUS_CAPTURE_BUILDING && abilityGuarded( m_player, target ) )
+			share = ABILITY_GUARDED_CAPTURE_SHARE;
+		const Real took = walk / speed + setUp;
+		const Real score = job ? share * worth / (1.0f + took / (ABILITY_HERO_TIME_SCALE_SECONDS * LOGICFRAMES_PER_GAME_SECOND)) : worth;
+		if( best && score <= bestScore )
 			continue;
 		if( entry.power == SPECIAL_HACKER_DISABLE_BUILDING && target->isDisabled() )
 			continue;			// already off
@@ -19127,22 +19438,20 @@ Bool AIPlayer::abilityWalkUp( Object *obj, const AIAbilityButton &entry )
 			TheActionManager->canDoSpecialPowerAtObject( obj, target, CMD_FROM_AI, entry.button->getSpecialPowerTemplate(), entry.button->getOptions() );
 		if( !can )
 			continue;
-		// the walk ends where the special starts from, so only that much of it has to be ours
-		const Coord3D *from = obj->getPosition();
-		const Coord3D *at = target->getPosition();
-		const Real distance = (Real)sqrt( sqr( at->x - from->x ) + sqr( at->y - from->y ) );
-		const Real walk = max( 0.0f, distance - start );
+		// the walk ends where the special starts from, so only that much of it has to be ours; unseen holds only
+		// while nothing that sees through stealth stands over where it ends
 		Coord3D stop = *at;
 		if( distance > 0.0f )
 		{
 			stop.x = from->x + (at->x - from->x) * walk / distance;
 			stop.y = from->y + (at->y - from->y) * walk / distance;
 		}
-		if( !unseen && !walkIsCovered( obj, &stop ) )
+		const Bool hidden = unseen && !abilityDetectorWatches( m_player, &stop, obj );
+		if( !hidden && !walkIsCovered( obj, &stop ) )
 			continue;
 		Real with = 0.0f;
 		Real guns = 0.0f;
-		if( blast )
+		if( blast && !job )
 		{
 			const Real health = target->getBodyModule() ? target->getBodyModule()->getHealth() : 0.0f;
 			const Real own = abilityFramesToKill( obj, target, -1 );
@@ -19156,24 +19465,27 @@ Bool AIPlayer::abilityWalkUp( Object *obj, const AIAbilityButton &entry )
 				blast->getPrimaryDamageRadius( bonus ) >= target->getGeometryInfo().getBoundingCircleRadius() + start;
 			const Real damage = abilityArmoured( blast, target->getTemplate(), inner ? blast->getPrimaryDamage( bonus ) : blast->getSecondaryDamage( bonus ) );
 			with = AIAbility_walkUpKillFrames( health, damage, walk / speed + setUp, teamRate, ownRate );
-			guns = teamRate + ownRate > 0.0f ? health / (teamRate + ownRate) : AI_CANNOT_KILL;			if( with < 0.0f || (guns >= 0.0f && with >= guns) )
+			guns = teamRate + ownRate > 0.0f ? health / (teamRate + ownRate) : AI_CANNOT_KILL;
+			if( with < 0.0f || (guns >= 0.0f && with >= guns) )
 				continue;
 		}
 		best = target;
+		bestScore = score;
 		bestWorth = worth;
 		bestWith = with;
 		bestGuns = guns;
+		bestJob = job;
 	}
 	if( best == NULL )
-		return FALSE;
-	char why[ 160 ];
-	if( blast )
+		return NULL;
+	*score = bestScore;
+	if( bestJob )
+		sprintf( why, "hero's job, worth %.0f, score %.0f, leash %.0f, %s", bestWorth, bestScore, heroLeash, unseen ? "unseen" : "walk covered" );
+	else if( blast )
 		sprintf( why, "dies in %.0f frames with it against %.0f under the guns, leash %.0f, %s", bestWith, bestGuns, leash, unseen ? "unseen" : "walk covered" );
 	else
 		sprintf( why, "worth %.0f, floor %.0f, leash %.0f, %s", bestWorth, floor, leash, unseen ? "unseen" : "walk covered" );
-	logAbility( this, m_player, obj, entry, best, best->getPosition(), why );
-	obj->doCommandButtonAtObject( entry.button, best, CMD_FROM_AI );
-	return TRUE;
+	return best;
 }
 
 /** The blast radius of a weapon whose shell is a neutron blast, 0 for any other.  Its damage is a token: the
@@ -19310,8 +19622,75 @@ Bool AIPlayer::useAbility( Object *obj, const AIAbilityButton &entry, Int rung, 
 		case AIABILITY_TOGGLE:	return abilityToggle( obj, entry, victim );
 		case AIABILITY_WALKUP:	return rung >= 2 && abilityWalkUp( obj, entry );
 		case AIABILITY_SUICIDE:	return rung >= 2 && abilitySuicide( obj, entry );
+		case AIABILITY_DETONATE:	return rung >= 2 && abilityDetonate( obj, entry );
+		case AIABILITY_HACK:		return abilityHack( obj, entry, victim );
 	}
 	return FALSE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** (g) Set the remote charges off, every one planted, once the planter stands ABILITY_DETONATE_CLEAR from all
+	* of them.  Nothing tells the AI more than that: a charge waits for nothing but its trigger, and the building
+	* under it is what the planter chose. */
+Bool AIPlayer::abilityDetonate( Object *obj, const AIAbilityButton &entry )
+{
+	const SpecialAbilityUpdate *update = obj->findSpecialAbilityUpdate( entry.power );
+	if( update == NULL || update->isActive() || update->getSpecialObjectCount() == 0 )
+		return FALSE;
+	Real nearestSqr = 0.0f;
+	Int planted = 0;
+	const Object *nearest = nearestOwnCharge( obj, entry.power, &nearestSqr, &planted );
+	if( nearest == NULL || nearestSqr < sqr( ABILITY_DETONATE_CLEAR ) )
+		return FALSE;
+	char why[ 96 ];
+	sprintf( why, "%d planted, the nearest %.0f off", planted, (Real)sqrt( nearestSqr ) );
+	logAbility( this, m_player, obj, entry, NULL, nearest->getPosition(), why );
+	obj->doCommandButton( entry.button, CMD_FROM_AI );
+	return TRUE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** (h) A hack at a vehicle in reach, in a fight as much as standing about: the unit's own target when it is a
+	* vehicle the hack takes, else the most worth in reach.  Black Lotus shuts it down, and an Overlord switched off
+	* is a fight won for its price. */
+Bool AIPlayer::abilityHack( Object *obj, const AIAbilityButton &entry, Object *victim )
+{
+	const SpecialAbilityUpdate *update = obj->findSpecialAbilityUpdate( entry.power );
+	if( update == NULL || update->isActive() || !abilitySpecialReady( obj, entry.button ) )
+		return FALSE;
+	const Real reach = max( min( update->getStartAbilityRange(), ABILITY_WALKUP_FAR ), obj->getVisionRange() );
+	std::vector<Object *> candidates;
+	abilityEnemiesNear( m_player, obj->getPosition(), reach, &candidates );
+	if( victim )
+		candidates.insert( candidates.begin(), victim );
+	Object *best = NULL;
+	Real bestWorth = 0.0f;
+	for( size_t c = 0; c < candidates.size(); ++c )
+	{
+		Object *target = candidates[ c ];
+		if( !target->isKindOf( KINDOF_VEHICLE ) || target->isDisabled() || !entry.button->isValidObjectTarget( obj, target ) ||
+				!TheActionManager->canDoSpecialPowerAtObject( obj, target, CMD_FROM_AI, entry.button->getSpecialPowerTemplate(), entry.button->getOptions() ) )
+			continue;
+		const Real worth = abilityWorth( target );
+		if( target == victim )
+		{
+			best = target;
+			bestWorth = worth;
+			break;
+		}
+		if( best == NULL || worth > bestWorth )
+		{
+			best = target;
+			bestWorth = worth;
+		}
+	}
+	if( best == NULL )
+		return FALSE;
+	char why[ 96 ];
+	sprintf( why, "worth %.0f, reach %.0f", bestWorth, reach );
+	logAbility( this, m_player, obj, entry, best, best->getPosition(), why );
+	obj->doCommandButtonAtObject( entry.button, best, CMD_FROM_AI );
+	return TRUE;
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -19329,6 +19708,15 @@ void AIPlayer::doAbilities( void )
 		turn = &m_abilityTurn;
 	}
 	const Int me = m_player->getPlayerIndex();
+	// the heroes' charged buildings: gone, or remembered long enough
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const UnsignedInt memory = (UnsignedInt)( ABILITY_HERO_CHARGE_MEMORY_SECONDS * LOGICFRAMES_PER_GAME_SECOND );
+	for( size_t c = m_heroCharges.size(); c-- > 0; )
+	{
+		const Object *building = TheGameLogic->findObjectByID( m_heroCharges[ c ].target );
+		if( building == NULL || building->isEffectivelyDead() || now >= m_heroCharges[ c ].frame + memory )
+			m_heroCharges.erase( m_heroCharges.begin() + c );
+	}
 	Int scans = 0;
 	for( size_t i = 0; i < turn->size() && scans < ABILITY_SCANS_PER_FRAME; ++i )
 	{
@@ -19343,9 +19731,55 @@ void AIPlayer::doAbilities( void )
 		Object *victim = obj->getAI()->getCurrentVictim();
 		if( victim && (victim->isEffectivelyDead() || m_player->getRelationship( victim->getTeam() ) != ENEMIES || !observerKnowsAbout( victim, me )) )
 			victim = NULL;
-		for( size_t b = 0; b < buttons.size(); ++b )
-			if( useAbility( obj, buttons[ b ], rung, victim ) )
-				break;
+		// what it can press where it stands goes before a walk: Black Lotus hacks the tank in her fight before
+		// she leaves it for a building, Burton sets off what he planted before he plants the next.  A hero then
+		// weighs its walks against each other; in a fight it walks only what wins it, and pulls back home from
+		// one its guns lose
+		if( obj->isKindOf( KINDOF_HERO ) )
+		{
+			Bool loses = FALSE;
+			Coord3D threat;
+			const Bool threatened = heroThreatened( obj, &loses, &threat );
+			Bool used = FALSE;
+			for( size_t b = 0; b < buttons.size() && !used; ++b )
+				if( buttons[ b ].kind != AIABILITY_WALKUP )
+					used = useAbility( obj, buttons[ b ], rung, victim );
+			if( !used && rung >= 2 )
+				used = heroWalkUp( obj, buttons, threatened );
+			// ponytail: a soldier does not outrun a tank, so a hero chased by a vehicle stands and fights; a measured
+			// speed comparison when a fast hero (a bike rider) turns up
+			if( !used && threatened && loses && !heroChasedByVehicle( m_player, obj ) )
+			{
+				// a step straight away from the guns, toward home when they stand on top of it; out of their sight its
+				// camouflage comes back and the job goes on from there
+				Coord3D to = *obj->getPosition();
+				Real dx = to.x - threat.x;
+				Real dy = to.y - threat.y;
+				Real length = (Real)sqrt( dx * dx + dy * dy );
+				if( length < 1.0f )
+				{
+					dx = m_baseCenter.x - to.x;
+					dy = m_baseCenter.y - to.y;
+					length = max( (Real)sqrt( dx * dx + dy * dy ), 1.0f );
+				}
+				to.x += dx / length * ABILITY_HERO_RETREAT_STEP;
+				to.y += dy / length * ABILITY_HERO_RETREAT_STEP;
+				DEBUG_LOG(( "AI ABILITY frame %d player %d '%s' %d pulls back to (%.0f,%.0f): the fight in front of it is lost\n",
+					TheGameLogic->getFrame(), m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), obj->getID(), to.x, to.y ));
+				obj->getAI()->aiMoveToPosition( &to, CMD_FROM_AI );
+			}
+			continue;
+		}
+		// of the walks a remote charge goes first, since it blows when he says and a timed one twenty seconds later
+		Bool used = FALSE;
+		for( Int pass = 0; pass < 3 && !used; ++pass )
+			for( size_t b = 0; b < buttons.size() && !used; ++b )
+			{
+				const AIAbilityButton &entry = buttons[ b ];
+				const Int order = entry.kind != AIABILITY_WALKUP ? 0 : (entry.power == SPECIAL_REMOTE_CHARGES ? 1 : 2);
+				if( order == pass )
+					used = useAbility( obj, entry, rung, victim );
+			}
 	}
 }
 
@@ -20419,6 +20853,8 @@ Object *AIPlayer::findScout( void )
 			continue;
 		if( obj->getID() == m_capturerID || obj->getID() == m_hijackerID || isDutyAmbulance( obj ) )
 			continue;		// it has a job; two owners giving one unit orders is how both jobs stall
+		if( obj->isKindOf( KINDOF_HERO ) && unitAbilitiesRung() >= 2 )
+			continue;		// a hero's job is the enemy's buildings (doAbilities); a scout's walk would hold it all match
 
 		Bool alreadyScouting = FALSE;
 		for( Int slot = 0; slot < MAX_AI_SCOUTS; ++slot )
@@ -22568,7 +23004,7 @@ void AIPlayer::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 38;		// 38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
+	XferVersion currentVersion = 39;		// 39: the heroes' charged buildings  38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -23145,6 +23581,22 @@ void AIPlayer::xfer( Xfer *xfer )
 				xfer->xferReal( &m_doctrineLoadedTrust[ d ] );
 		}
 	}
+
+	// the buildings the heroes charged lately, sorted by target, so a loaded game leaves the same ones alone
+	if( version >= 39 )
+	{
+		UnsignedShort charged = (UnsignedShort)m_heroCharges.size();
+		xfer->xferUnsignedShort( &charged );
+		if( xfer->getXferMode() == XFER_LOAD )
+			m_heroCharges.resize( charged );
+		for( UnsignedShort c = 0; c < charged; ++c )
+		{
+			xfer->xferObjectID( &m_heroCharges[ c ].target );
+			xfer->xferUnsignedInt( &m_heroCharges[ c ].frame );
+		}
+	}
+	else
+		m_heroCharges.clear();
 
 }  // end xfer
 

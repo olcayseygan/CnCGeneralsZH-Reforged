@@ -1,0 +1,65 @@
+# A Hard AI's Colonel Burton 700 short of a China base: its Command Center, a War Factory, a
+# Barracks, two Gattling Cannons and a Bunker. With his buttons the AI walks him in stealthed and
+# plants charges on the buildings, the factory and the Command Center first; without them he
+# stands off with a rifle that cannot hurt a building.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionChina -side 1 FactionAmerica -seed 1 -maxframes 2400
+#     -scenario hero_burton -logPrefix hero_burton_
+#
+# Add -aiknobsoff odd abilities for the seat without its buttons. Seat 0 starts at (1363,1966).
+# A tally of 0 for a building the log counted before is a building he blew up.
+
+10    spawn   0  ChinaWarFactory           1  start0:300:0
+10    spawn   0  ChinaBarracks             1  start0:-300:0
+10    spawn   0  ChinaGattlingCannon       1  start0:150:-250
+10    spawn   0  ChinaGattlingCannon       1  start0:-150:-250
+10    spawn   0  ChinaBunker               1  start0:0:-450
+30    spawn   1  AmericaInfantryColonelBurton  1  start0:0:-700  20
+300   tally   0  ChinaCommandCenter
+300   tally   0  ChinaWarFactory
+300   tally   0  ChinaBarracks
+300   tally   0  ChinaGattlingCannon
+300   tally   0  ChinaBunker
+600   tally   0  ChinaCommandCenter
+600   tally   0  ChinaWarFactory
+600   tally   0  ChinaBarracks
+600   tally   0  ChinaGattlingCannon
+600   tally   0  ChinaBunker
+900   tally   0  ChinaCommandCenter
+900   tally   0  ChinaWarFactory
+900   tally   0  ChinaBarracks
+900   tally   0  ChinaGattlingCannon
+900   tally   0  ChinaBunker
+1200  tally   0  ChinaCommandCenter
+1200  tally   0  ChinaWarFactory
+1200  tally   0  ChinaBarracks
+1200  tally   0  ChinaGattlingCannon
+1200  tally   0  ChinaBunker
+1500  tally   0  ChinaCommandCenter
+1500  tally   0  ChinaWarFactory
+1500  tally   0  ChinaBarracks
+1500  tally   0  ChinaGattlingCannon
+1500  tally   0  ChinaBunker
+1800  tally   0  ChinaCommandCenter
+1800  tally   0  ChinaWarFactory
+1800  tally   0  ChinaBarracks
+1800  tally   0  ChinaGattlingCannon
+1800  tally   0  ChinaBunker
+2400  tally   0  ChinaCommandCenter
+2400  tally   0  ChinaWarFactory
+2400  tally   0  ChinaBarracks
+2400  tally   0  ChinaGattlingCannon
+2400  tally   0  ChinaBunker
+3000  tally   0  ChinaCommandCenter
+3000  tally   0  ChinaWarFactory
+3000  tally   0  ChinaBarracks
+3000  tally   0  ChinaGattlingCannon
+3000  tally   0  ChinaBunker
+3500  tally   0  ChinaCommandCenter
+3500  tally   0  ChinaWarFactory
+3500  tally   0  ChinaBarracks
+3500  tally   0  ChinaGattlingCannon
+3500  tally   0  ChinaBunker
+3500  tally   1  AmericaInfantryColonelBurton

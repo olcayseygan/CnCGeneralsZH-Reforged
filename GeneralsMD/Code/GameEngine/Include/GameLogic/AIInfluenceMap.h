@@ -28,13 +28,35 @@
 
 class Xfer;
 
+/** What a gun is a threat to: the enemy layer holds one figure for each, since a tank, a rifleman and a
+	* helicopter fear different guns. */
+enum AIThreatClass
+{
+	AITHREAT_VEHICLE,
+	AITHREAT_INFANTRY,
+	AITHREAT_AIR,
+	AITHREAT_COUNT
+};
+
+/** How a reader weighs the three: what it moves, by share.  The weights sum to one. */
+struct AIThreatMix
+{
+	Real w[ AITHREAT_COUNT ];
+};
+
+static const AIThreatMix AITHREAT_GROUND_MIX = { { 0.5f, 0.5f, 0.0f } };	///< a reader that does not say what it moves
+static const AIThreatMix AITHREAT_COST_MIX = { { 1.0f, 0.0f, 0.0f } };		///< the vehicle slot alone, which the cost map (-aiknobsoff ... costmap) fills
+static const AIThreatMix AITHREAT_INFANTRY_MIX = { { 0.0f, 1.0f, 0.0f } };
+static const AIThreatMix AITHREAT_AIR_MIX = { { 0.0f, 0.0f, 1.0f } };
+
 /** A grid over the map, one per computer player, rebuilt from what that player knows about.
 	*
 	* The engine's own per-cell threat layer is built from ThingTemplate::ThreatValue, which the shipped
 	* data almost never sets, so every one of its cells reads zero.  This one stamps each armed thing's
-	* combat power onto every cell its guns reach, the reach stretched by the high ground the way
-	* Weapon_elevatedRange stretches it, so "how much can hit me here" is one lookup.  The friendly
-	* layer is the same stamp for this player's own units and its allies', drawn for Hard's tactics alone.
+	* threat to vehicles, to infantry and to aircraft onto every cell its guns for each reach, the reach
+	* stretched by the high ground the way Weapon_elevatedRange stretches it, so "how much can hit me here"
+	* is one lookup weighted by what is asking.  The friendly layer is one figure, the build cost, drawn for
+	* Hard's tactics alone.
 	*
 	* Everything here is plain arithmetic on logic state in the order the caller hands it over, so two
 	* machines that stamp the same objects in the same order hold the same map. */
@@ -54,16 +76,19 @@ public:
 	void cellCenter( Int col, Int row, Real *x, Real *y ) const;
 	void setCellHeight( Int col, Int row, Real z );
 
-	/** Add power to every cell a weapon of this range, fired from (x, y, z), reaches. */
-	void stampEnemy( Real x, Real y, Real z, Real range, Real power );
+	/** Add power[ AITHREAT_VEHICLE ] and power[ AITHREAT_INFANTRY ] to every cell a gun of groundRange,
+		* fired from (x, y, z), reaches, and power[ AITHREAT_AIR ] to every cell one of airRange reaches. */
+	void stampEnemy( Real x, Real y, Real z, Real groundRange, Real airRange, const Real *power );
 	void stampFriend( Real x, Real y, Real z, Real range, Real power );
 
-	Real enemyAt( Real x, Real y ) const;
+	/** The enemy layer read with the reader's weights.  AITHREAT_COST_MIX reads the vehicle slot alone, exactly. */
+	Real enemyAt( Real x, Real y, const AIThreatMix &mix ) const;
 	Real friendAt( Real x, Real y ) const;
 
 	/** The whole map, into a save and back: a loaded game reads the same map the uninterrupted one
-		* holds until its next rebuild, which can be most of a second away. */
-	void xfer( Xfer *xfer );
+		* holds until its next rebuild, which can be most of a second away.  version is the owner's: below
+		* 37 a cell held one enemy figure, which goes into all three slots. */
+	void xfer( Xfer *xfer, UnsignedByte version );
 
 	void markBuilt( UnsignedInt frame ) { m_builtFrame = frame; m_built = TRUE; }
 	void markUnbuilt() { m_built = FALSE; }
@@ -74,7 +99,8 @@ public:
 		* in the order a stamp adds to them, then the adding.  The same sums in the same order as stampEnemy and
 		* stampFriend, on any map of the same grid: the heights come off the one terrain. */
 	void cellsReached( Real x, Real y, Real z, Real range, std::vector<Int> &cells ) const;
-	void addEnemy( const Int *cells, Int count, Real power );
+	void addEnemy( const Int *cells, Int count, Real vehicle, Real infantry );
+	void addEnemyAir( const Int *cells, Int count, Real air );
 	void addFriend( const Int *cells, Int count, Real power );
 	Bool sameGrid( Int cols, Int rows, Real originX, Real originY, Real cellSize ) const;
 	Real getOriginX() const { return m_originX; }
@@ -82,13 +108,12 @@ public:
 	Real getCellSize() const { return m_cellSize; }
 
 private:
-	void stamp( std::vector<Real> &layer, Real x, Real y, Real z, Real range, Real power );
 	template <class Visit> void visitReach( Real x, Real y, Real z, Real range, Visit &visit ) const;
 	Int cellIndexAt( Real x, Real y ) const;
 
 	Real m_originX, m_originY, m_cellSize;
 	Int m_cols, m_rows;
-	std::vector<Real> m_enemy;
+	std::vector<Real> m_enemy;		///< AITHREAT_COUNT a cell, in AIThreatClass order
 	std::vector<Real> m_friend;
 	std::vector<Real> m_height;
 	Bool m_built;

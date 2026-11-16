@@ -17230,35 +17230,181 @@ TEST(the_difficulty_ladder_climbs_in_every_direction_it_should)
 /** The influence map is what every fighting decision of Hard's reads, so what it says about a patch of
 	 ground has to be what the guns there can actually do: reach it flat, reach further from above, and
 	 add up when two of them cover the same cell. */
+/** A cost map's stamp: one figure into the vehicle slot, the ground reach alone. */
+static void stampCost( AIInfluenceMap &map, Real x, Real y, Real z, Real range, Real power )
+{
+	const Real cost[ AITHREAT_COUNT ] = { power, 0.0f, 0.0f };
+	map.stampEnemy( x, y, z, range, 0.0f, cost );
+}
+
 TEST(influence_map_covers_what_a_gun_reaches_and_the_high_ground_reaches_further)
 {
 	AIInfluenceMap map;
 	map.reset( 0.0f, 0.0f, 1000.0f, 1000.0f, 50.0f );
 	CHECK_EQ( 20, map.getCols() );
 
-	map.stampEnemy( 500.0f, 500.0f, 0.0f, 100.0f, 1000.0f );
-	CHECK_EQ( 1000.0f, map.enemyAt( 500.0f, 500.0f ) );
-	CHECK_EQ( 1000.0f, map.enemyAt( 575.0f, 525.0f ) );		// cell centre 575,525: 79 away
-	CHECK_EQ( 0.0f, map.enemyAt( 675.0f, 525.0f ) );			// 175 away, out of a 100 gun's reach
+	stampCost( map, 500.0f, 500.0f, 0.0f, 100.0f, 1000.0f );
+	CHECK_EQ( 1000.0f, map.enemyAt( 500.0f, 500.0f, AITHREAT_COST_MIX ) );
+	CHECK_EQ( 1000.0f, map.enemyAt( 575.0f, 525.0f, AITHREAT_COST_MIX ) );		// cell centre 575,525: 79 away
+	CHECK_EQ( 0.0f, map.enemyAt( 675.0f, 525.0f, AITHREAT_COST_MIX ) );			// 175 away, out of a 100 gun's reach
 	CHECK_EQ( 0.0f, map.friendAt( 500.0f, 500.0f ) );
 
 	// the same gun thirty units up reaches 90 further (three a unit), which covers the 175 cell
 	map.clear();
-	map.stampEnemy( 500.0f, 500.0f, 30.0f, 100.0f, 1000.0f );
-	CHECK_EQ( 1000.0f, map.enemyAt( 675.0f, 525.0f ) );
-	CHECK_EQ( 0.0f, map.enemyAt( 775.0f, 525.0f ) );
+	stampCost( map, 500.0f, 500.0f, 30.0f, 100.0f, 1000.0f );
+	CHECK_EQ( 1000.0f, map.enemyAt( 675.0f, 525.0f, AITHREAT_COST_MIX ) );
+	CHECK_EQ( 0.0f, map.enemyAt( 775.0f, 525.0f, AITHREAT_COST_MIX ) );
 
 	// ... and a cell on a hill as high as the gun gets no bonus against it
 	map.clear();
 	for( Int row = 0; row < map.getRows(); ++row )
 		for( Int col = 0; col < map.getCols(); ++col )
 			map.setCellHeight( col, row, 30.0f );
-	map.stampEnemy( 500.0f, 500.0f, 30.0f, 100.0f, 1000.0f );
-	CHECK_EQ( 0.0f, map.enemyAt( 675.0f, 525.0f ) );
+	stampCost( map, 500.0f, 500.0f, 30.0f, 100.0f, 1000.0f );
+	CHECK_EQ( 0.0f, map.enemyAt( 675.0f, 525.0f, AITHREAT_COST_MIX ) );
 
-	map.stampEnemy( 500.0f, 500.0f, 30.0f, 100.0f, 500.0f );
-	CHECK_EQ( 1500.0f, map.enemyAt( 500.0f, 500.0f ) );
-	CHECK_EQ( 0.0f, map.enemyAt( -10.0f, 500.0f ) );			// off the map reads as nothing
+	stampCost( map, 500.0f, 500.0f, 30.0f, 100.0f, 500.0f );
+	CHECK_EQ( 1500.0f, map.enemyAt( 500.0f, 500.0f, AITHREAT_COST_MIX ) );
+	CHECK_EQ( 0.0f, map.enemyAt( -10.0f, 500.0f, AITHREAT_COST_MIX ) );			// off the map reads as nothing
+}
+
+/** Threat by target class: a tank gun and an AA gun on one cell are read by what is asking.  A tank fears the
+	 tank gun, a helicopter the AA gun, a wave of both a share of each; the cost mix reads the vehicle slot alone,
+	 to the bit, whatever the other two hold. */
+TEST(influence_map_reads_threat_by_what_the_reader_moves)
+{
+	AIInfluenceMap map;
+	map.reset( 0.0f, 0.0f, 1000.0f, 1000.0f, 50.0f );
+	const Real tankGun[ AITHREAT_COUNT ] = { 600.0f, 200.0f, 0.0f };
+	const Real flakGun[ AITHREAT_COUNT ] = { 0.0f, 0.0f, 900.25f };
+	map.stampEnemy( 500.0f, 500.0f, 0.0f, 100.0f, 0.0f, tankGun );
+	map.stampEnemy( 500.0f, 500.0f, 0.0f, 0.0f, 300.0f, flakGun );
+
+	CHECK_EQ( 600.0f, map.enemyAt( 500.0f, 500.0f, AITHREAT_COST_MIX ) );
+	CHECK_EQ( 200.0f, map.enemyAt( 500.0f, 500.0f, AITHREAT_INFANTRY_MIX ) );
+	CHECK_EQ( 900.25f, map.enemyAt( 500.0f, 500.0f, AITHREAT_AIR_MIX ) );
+	CHECK_EQ( 400.0f, map.enemyAt( 500.0f, 500.0f, AITHREAT_GROUND_MIX ) );
+	const AIThreatMix half = { { 0.5f, 0.0f, 0.5f } };
+	CHECK_EQ( 750.125f, map.enemyAt( 500.0f, 500.0f, half ) );
+
+	// the air reach is the flak gun's 300: a helicopter 250 off is under it, a tank there is not under anything
+	CHECK_EQ( 900.25f, map.enemyAt( 725.0f, 625.0f, AITHREAT_AIR_MIX ) );
+	CHECK_EQ( 0.0f, map.enemyAt( 725.0f, 625.0f, AITHREAT_COST_MIX ) );
+	CHECK_EQ( 0.0f, map.enemyAt( 875.0f, 875.0f, AITHREAT_AIR_MIX ) );		// 530 off, out of it
+}
+
+/** Quarter powers add exactly, so the seats and rounds stamping in another order hold the same map, cell for
+	 cell, and the shared turn's two halves (cellsReached, then the adds) are the one stamp. */
+TEST(influence_map_stamps_add_the_same_in_any_order)
+{
+	AIInfluenceMap ab, ba, halves;
+	ab.reset( 0.0f, 0.0f, 1000.0f, 1000.0f, 50.0f );
+	ba.reset( 0.0f, 0.0f, 1000.0f, 1000.0f, 50.0f );
+	halves.reset( 0.0f, 0.0f, 1000.0f, 1000.0f, 50.0f );
+	const Real a[ AITHREAT_COUNT ] = { 1234.25f, 0.25f, 77.5f };
+	const Real b[ AITHREAT_COUNT ] = { 0.75f, 98765.5f, 3.25f };
+	const Real c[ AITHREAT_COUNT ] = { 4096.75f, 12.0f, 0.0f };
+	ab.stampEnemy( 480.0f, 510.0f, 0.0f, 150.0f, 220.0f, a );
+	ab.stampEnemy( 530.0f, 470.0f, 0.0f, 120.0f, 120.0f, b );
+	ab.stampEnemy( 500.0f, 500.0f, 0.0f, 300.0f, 0.0f, c );
+	ba.stampEnemy( 500.0f, 500.0f, 0.0f, 300.0f, 0.0f, c );
+	ba.stampEnemy( 530.0f, 470.0f, 0.0f, 120.0f, 120.0f, b );
+	ba.stampEnemy( 480.0f, 510.0f, 0.0f, 150.0f, 220.0f, a );
+	std::vector<Int> ground, air;
+	halves.cellsReached( 480.0f, 510.0f, 0.0f, 150.0f, ground );
+	halves.cellsReached( 480.0f, 510.0f, 0.0f, 220.0f, air );
+	halves.addEnemy( &ground[ 0 ], (Int)ground.size(), a[ AITHREAT_VEHICLE ], a[ AITHREAT_INFANTRY ] );
+	halves.addEnemyAir( &air[ 0 ], (Int)air.size(), a[ AITHREAT_AIR ] );
+	halves.stampEnemy( 530.0f, 470.0f, 0.0f, 120.0f, 120.0f, b );
+	halves.stampEnemy( 500.0f, 500.0f, 0.0f, 300.0f, 0.0f, c );
+	const AIThreatMix mixes[] = { AITHREAT_COST_MIX, AITHREAT_INFANTRY_MIX, AITHREAT_AIR_MIX };
+	Int same = 0, cells = 0;
+	for( Int row = 0; row < ab.getRows(); ++row )
+		for( Int col = 0; col < ab.getCols(); ++col )
+		{
+			Real x, y;
+			ab.cellCenter( col, row, &x, &y );
+			for( Int m = 0; m < 3; ++m, ++cells )
+				if( ab.enemyAt( x, y, mixes[ m ] ) == ba.enemyAt( x, y, mixes[ m ] ) &&
+						ab.enemyAt( x, y, mixes[ m ] ) == halves.enemyAt( x, y, mixes[ m ] ) )
+					++same;
+		}
+	CHECK_EQ( cells, same );
+	CHECK_EQ( 1234.25f + 0.75f + 4096.75f, ab.enemyAt( 500.0f, 500.0f, AITHREAT_COST_MIX ) );
+}
+
+/** A minimal in-memory Xfer for a save's bytes, written then read back. */
+class MemoryXfer : public Xfer
+{
+public:
+	MemoryXfer() : m_at( 0 ) { m_xferMode = XFER_SAVE; }
+	void rewind() { m_xferMode = XFER_LOAD; m_at = 0; }
+	virtual void open( AsciiString ) {}
+	virtual void close( void ) {}
+	virtual Int beginBlock( void ) { return 0; }
+	virtual void endBlock( void ) {}
+	virtual void skip( Int dataSize ) { m_at += dataSize; }
+	virtual void xferSnapshot( Snapshot * ) {}
+protected:
+	virtual void xferImplementation( void *data, Int dataSize )
+	{
+		if( m_xferMode == XFER_SAVE )
+			m_bytes.insert( m_bytes.end(), (const UnsignedByte *)data, (const UnsignedByte *)data + dataSize );
+		else
+		{
+			memcpy( data, &m_bytes[ m_at ], dataSize );
+			m_at += dataSize;
+		}
+	}
+private:
+	std::vector<UnsignedByte> m_bytes;
+	size_t m_at;
+};
+
+/** A save from before the classes (AIPlayer version 36) held one enemy figure a cell: it loads into all three
+	 slots, so every reader sees what it saw until the next round; a version 37 map comes back slot for slot. */
+TEST(influence_map_from_an_old_save_loads_into_every_class)
+{
+	MemoryXfer old;
+	Real originX = 0.0f, originY = 0.0f, cellSize = 50.0f;
+	Int cols = 2, rows = 1;
+	Bool built = TRUE;
+	UnsignedInt builtFrame = 300;
+	old.xferReal( &originX );
+	old.xferReal( &originY );
+	old.xferReal( &cellSize );
+	old.xferInt( &cols );
+	old.xferInt( &rows );
+	old.xferBool( &built );
+	old.xferUnsignedInt( &builtFrame );
+	Real cell[ 2 ][ 3 ] = { { 750.0f, 120.0f, 4.0f }, { 0.0f, 0.0f, 9.0f } };		// enemy, friend, height
+	for( Int i = 0; i < 2; ++i )
+		for( Int k = 0; k < 3; ++k )
+			old.xferReal( &cell[ i ][ k ] );
+	old.rewind();
+	AIInfluenceMap map;
+	map.xfer( &old, 36 );
+	CHECK_EQ( 2, map.getCols() );
+	CHECK( map.isBuilt() );
+	CHECK_EQ( 300u, map.getBuiltFrame() );
+	CHECK_EQ( 750.0f, map.enemyAt( 25.0f, 25.0f, AITHREAT_COST_MIX ) );
+	CHECK_EQ( 750.0f, map.enemyAt( 25.0f, 25.0f, AITHREAT_INFANTRY_MIX ) );
+	CHECK_EQ( 750.0f, map.enemyAt( 25.0f, 25.0f, AITHREAT_AIR_MIX ) );
+	CHECK_EQ( 120.0f, map.friendAt( 25.0f, 25.0f ) );
+	CHECK_EQ( 0.0f, map.enemyAt( 75.0f, 25.0f, AITHREAT_GROUND_MIX ) );
+
+	const Real threat[ AITHREAT_COUNT ] = { 1.0f, 2.0f, 3.0f };
+	map.stampEnemy( 75.0f, 25.0f, 9.0f, 10.0f, 10.0f, threat );
+	MemoryXfer now;
+	map.xfer( &now, 37 );
+	now.rewind();
+	AIInfluenceMap back;
+	back.xfer( &now, 37 );
+	CHECK_EQ( 750.0f, back.enemyAt( 25.0f, 25.0f, AITHREAT_COST_MIX ) );		// a reach of 10 covers its own cell alone
+	CHECK_EQ( 750.0f, back.enemyAt( 25.0f, 25.0f, AITHREAT_INFANTRY_MIX ) );
+	CHECK_EQ( 1.0f, back.enemyAt( 75.0f, 25.0f, AITHREAT_COST_MIX ) );
+	CHECK_EQ( 2.0f, back.enemyAt( 75.0f, 25.0f, AITHREAT_INFANTRY_MIX ) );
+	CHECK_EQ( 3.0f, back.enemyAt( 75.0f, 25.0f, AITHREAT_AIR_MIX ) );
 }
 
 /** Kiting: a unit steps back into the band between the enemy's reach and its own, and only when the
@@ -17734,15 +17880,22 @@ TEST(a_losing_team_keeps_off_every_gun_on_the_map)
 
 	// a gun at 300 east reaching 200 covers the road from about 100 to 500; 45 degrees off it is clear at
 	// 120, and the list of the fight's guns is empty.  The same call without the map walks straight in
-	influence.stampEnemy( 300.0f, 0.0f, 0.0f, 200.0f, 900.0f );
+	// it is a gun against men alone, so a column of tanks reading the map by its own class walks the road
+	const Real antiInfantry[ AITHREAT_COUNT ] = { 0.0f, 900.0f, 0.0f };
+	influence.stampEnemy( 300.0f, 0.0f, 0.0f, 200.0f, 0.0f, antiInfantry );
 	CHECK( aiRetreatFallbackPoint( 0.0f, 0.0f, 2000.0f, 0.0f, 60.0f, NULL, 0, bounds, &x, &y, &influence ) );
 	CHECK_NEAR( 84.853f, x, 0.01f );
 	CHECK_NEAR( 84.853f, y, 0.01f );
 	CHECK( aiRetreatFallbackPoint( 0.0f, 0.0f, 2000.0f, 0.0f, 60.0f, NULL, 0, bounds, &x, &y ) );
 	CHECK_NEAR( 120.0f, x, 0.01f );
+	CHECK( aiRetreatFallbackPoint( 0.0f, 0.0f, 2000.0f, 0.0f, 60.0f, NULL, 0, bounds, &x, &y, &influence, &AITHREAT_COST_MIX ) );
+	CHECK_NEAR( 120.0f, x, 0.01f );
+	CHECK( aiRetreatFallbackPoint( 0.0f, 0.0f, 2000.0f, 0.0f, 60.0f, NULL, 0, bounds, &x, &y, &influence, &AITHREAT_INFANTRY_MIX ) );
+	CHECK_NEAR( 84.853f, x, 0.01f );
 
 	// the map all covered: home, and FALSE says so
-	influence.stampEnemy( 0.0f, 0.0f, 0.0f, 5000.0f, 900.0f );
+	const Real everything[ AITHREAT_COUNT ] = { 900.0f, 900.0f, 900.0f };
+	influence.stampEnemy( 0.0f, 0.0f, 0.0f, 5000.0f, 5000.0f, everything );
 	CHECK( !aiRetreatFallbackPoint( 0.0f, 0.0f, 2000.0f, 0.0f, 60.0f, NULL, 0, bounds, &x, &y, &influence ) );
 	CHECK_NEAR( 2000.0f, x, 0.01f );
 }

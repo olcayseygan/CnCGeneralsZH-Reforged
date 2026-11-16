@@ -664,7 +664,7 @@ public:
 	virtual Bool checkBridges(Object *unit, Waypoint *way);
 
 	/// The skirmish approach this player's team should take: the script's choice, unless the AI reads the map.
-	AsciiString chooseApproachLabel(const Coord3D *from, const AsciiString &requested, Int pathSuffix);
+	AsciiString chooseApproachLabel(const Coord3D *from, const AsciiString &requested, Int pathSuffix, Team *team = NULL);	///< team: what goes, for the guns it fears
 
 	/// TRUE when the AI parks this team to go out with the rest of its wave instead of on its own.
 	Bool holdTeamForWave(Team *team, const AsciiString &approach, Int pathSuffix);

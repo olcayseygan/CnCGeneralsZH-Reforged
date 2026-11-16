@@ -298,7 +298,7 @@ public: // AIPlayer interface, may be overridden by AISkirmishPlayer.  jba.
 	virtual Bool checkBridges(Object *unit, Waypoint *way) {return false;}
 	/** Center, Flank or Backdoor: the approach with the least enemy firepower this AI knows about.
 		* The script's own label when the rung does not read the map, or the label is not one of the three. */
-	AsciiString chooseApproachLabel(const Coord3D *from, const AsciiString &requested, Int pathSuffix);
+	AsciiString chooseApproachLabel(const Coord3D *from, const AsciiString &requested, Int pathSuffix, const AIThreatMix *mix = NULL, Team *team = NULL);	///< mix: what the wave moves, as readMix gives it; NULL takes team's (teamMix), and with no team AITHREAT_GROUND_MIX
 	/** C2: park an attack team that is not a wave on its own until the rest of the wave is in hand.
 		* TRUE when it is parked, and the caller's own order must not go out.  logRefusal writes the AI
 		* ENGAGE line for a team that goes on its own instead; a caller that logs its own passes FALSE. */
@@ -338,6 +338,7 @@ public:
 	/// This rung's knobs, for any behaviour that has a difficulty-dependent decision to make.
 	const AIDifficultyProfile *getSkillProfile(void) const;
 	Bool knobsOffHere(void) const;		///< -aiknobsoff reaches this slot; its mask says which knobs
+	Bool costMapHere(void) const;		///< -aiknobsoff ... costmap reaches this slot: the influence map of build cost, one layer
 
 	/// What a seat that predates the ladder (an old save, a replay, a script) plays at.
 	static AISkillLevel skillLevelForDifficulty(GameDifficulty difficulty);
@@ -529,8 +530,8 @@ protected:
 	Int workGroundFlood(Int budget);	///< works the flood under way, delivering it when done; what is left of budget
 	void dropGroundFlood(Int kind);		///< a flood under way of that kind is for a point no longer wanted
 	Bool reachableFromBase(const Coord3D *pos);	///< a vehicle at the base center could drive there; TRUE before the base is placed
-	Real knownFirepowerAlongPath(Waypoint *way);	///< what this AI has seen that can shoot, along an approach
-	AsciiString secondApproachLabel(const Coord3D *from, const AsciiString &taken, Int pathSuffix);	///< the quietest other road, or empty
+	Real knownFirepowerAlongPath(Waypoint *way, const AIThreatMix *mix = NULL);	///< what this AI has seen that can shoot, along an approach
+	AsciiString secondApproachLabel(const Coord3D *from, const AsciiString &taken, Int pathSuffix, const AIThreatMix *mix = NULL);	///< the quietest other road, or empty
 	Bool loadGunships(void);	///< infantry boards the transports it can shoot out of: the wave's anything at home, a team's its own; TRUE while a firing gunship is still filling
 	Int buyGunshipRiders(Int freeSeats);	///< Medium and up train the men for the firing seats nobody fills; how many are in training
 	void garrisonBuildings(void);	///< infantry into our own buildings it shoots out of, and into empty ones with an enemy near, at home and at the front
@@ -561,7 +562,7 @@ protected:
 	Bool isGunshipRider(const Object *obj) const;	///< infantry loadGunships may put in a transport
 	void sendIdleAttackTeams(void);	///< attack teams standing at home join the next wave instead of waiting for the script's signal
 	Real addHomeStrays(AIGroup *wave) const;	///< the default team's fighters idle at home go with the wave
-	Real knownFirepowerNear(const Coord3D *pos);	///< what this AI has seen that can shoot, near a point
+	Real knownFirepowerNear(const Coord3D *pos, const AIThreatMix *mix = NULL);	///< what this AI has seen that can shoot, near a point; mix as chooseApproachLabel's
 	Bool forwardHoldPoint(const AsciiString &approach, Int pathSuffix, const Coord3D *enemyPos, Coord3D *hold);	///< where a wave gathers on its road
 	void sendWave(AIGroup *wave, const AsciiString &approach, Int pathSuffix, Int teams, Real power, UnsignedInt heldFrames, const char *cause);
 	void logEngage(const char *cause, const std::vector<Object *> &units);	///< AI ENGAGE: what goes out, and how it weighs against the army it remembers
@@ -979,7 +980,12 @@ protected:
 	void stampFireReports(AIInfluenceMap &map);
 	void ensureInfluence(void);										///< the map, no older than this rung reads it, for a player that does not stamp it
 	Bool hasTacticalMap(void) const;							///< Hard's map, for the reads the rungs below it do not make
-	Bool quietGround(const Coord3D *from, const Real *gun, Coord3D *spot);	///< where to go from here to be off the map's guns and clear of this one (x, y, reach, or NULL); FALSE when no way gets out
+	AIThreatMix readMix(const AIThreatMix &wanted) const;	///< the weights this seat reads its map with for a reader that moves wanted
+	AIThreatMix unitMix(const Object *obj) const;				///< ... for one unit, by its own class
+	AIThreatMix shareMix(const AIThreatMix &sum) const;	///< ... for power summed by class
+	AIThreatMix groupMix(const AIGroup *group) const;		///< ... for a group, by its power's share in each class
+	AIThreatMix teamMix(Team *team) const;							///< ... for a team's members
+	Bool quietGround(const Coord3D *from, const Real *gun, Coord3D *spot, const AIThreatMix &mix);	///< where to go from here to be off the map's guns, read with mix, and clear of this one (x, y, reach, or NULL); FALSE when no way gets out
 
 	/** A gun that has hit this player from past where its fights look or from the fog.  It goes on the map as
 		* if seen, where it stood at the last hit, and counts in the fights around that hit, for the rung's

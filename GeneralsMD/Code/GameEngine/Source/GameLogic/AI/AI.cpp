@@ -2021,7 +2021,7 @@ Real aiRetreatRatio( Real myHealth, Real myPower, Real enemyHealth, Real enemyPo
 	return (ratio > NOT_A_FIGHT) ? NOT_A_FIGHT : ratio;
 }
 
-static Bool gunsReach( Real x, Real y, const Real *guns, Int gunCount, const AIInfluenceMap *map )
+static Bool gunsReach( Real x, Real y, const Real *guns, Int gunCount, const AIInfluenceMap *map, const AIThreatMix &mix )
 {
 	for( Int g = 0; g < gunCount; ++g )
 	{
@@ -2030,7 +2030,7 @@ static Bool gunsReach( Real x, Real y, const Real *guns, Int gunCount, const AII
 		if( gx * gx + gy * gy <= guns[ 3 * g + 2 ] * guns[ 3 * g + 2 ] )
 			return TRUE;
 	}
-	return map != NULL && map->enemyAt( x, y ) > 0.0f;
+	return map != NULL && map->enemyAt( x, y, mix ) > 0.0f;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2038,7 +2038,7 @@ static Bool gunsReach( Real x, Real y, const Real *guns, Int gunCount, const AII
 	* spot no gun reaches with one more step of clear ground past it, that next step included; -1 when it
 	* is not out by maxWalk, or walks off the map (bounds: low x, low y, high x, high y) first. */
 static Real walkOutOfReach( Real fromX, Real fromY, Real dirX, Real dirY, Real maxWalk, Real step,
-														const Real *guns, Int gunCount, const Real *bounds, const AIInfluenceMap *map )
+														const Real *guns, Int gunCount, const Real *bounds, const AIInfluenceMap *map, const AIThreatMix &mix )
 {
 	for( Real along = step; along + step < maxWalk; along += step )
 	{
@@ -2046,8 +2046,8 @@ static Real walkOutOfReach( Real fromX, Real fromY, Real dirX, Real dirY, Real m
 		const Real nextY = fromY + dirY * (along + step);
 		if( nextX < bounds[ 0 ] || nextY < bounds[ 1 ] || nextX > bounds[ 2 ] || nextY > bounds[ 3 ] )
 			return -1.0f;
-		if( !gunsReach( fromX + dirX * along, fromY + dirY * along, guns, gunCount, map ) &&
-				!gunsReach( fromX + dirX * (along + step), fromY + dirY * (along + step), guns, gunCount, map ) )
+		if( !gunsReach( fromX + dirX * along, fromY + dirY * along, guns, gunCount, map, mix ) &&
+				!gunsReach( fromX + dirX * (along + step), fromY + dirY * (along + step), guns, gunCount, map, mix ) )
 			return along + step;
 	}
 	return -1.0f;
@@ -2068,8 +2068,9 @@ static Real walkOutOfReach( Real fromX, Real fromY, Real dirX, Real dirY, Real m
 //-------------------------------------------------------------------------------------------------
 Bool aiRetreatFallbackPoint( Real fromX, Real fromY, Real homeX, Real homeY, Real step,
 														 const Real *guns, Int gunCount, const Real *bounds, Real *outX, Real *outY,
-														 const AIInfluenceMap *map )
+														 const AIInfluenceMap *map, const AIThreatMix *mix )
 {
+	const AIThreatMix &reads = mix ? *mix : AITHREAT_GROUND_MIX;
 	*outX = homeX;
 	*outY = homeY;
 	const Real dx = homeX - fromX;
@@ -2092,7 +2093,7 @@ Bool aiRetreatFallbackPoint( Real fromX, Real fromY, Real homeX, Real homeY, Rea
 	Real bestWalk = 0.0f;
 	for( Int w = 0; w < 5; ++w )
 	{
-		const Real walk = walkOutOfReach( fromX, fromY, ways[ w ][ 0 ], ways[ w ][ 1 ], homeDist, step, guns, gunCount, bounds, map );
+		const Real walk = walkOutOfReach( fromX, fromY, ways[ w ][ 0 ], ways[ w ][ 1 ], homeDist, step, guns, gunCount, bounds, map, reads );
 		if( walk >= 0.0f && (best < 0 || walk + step < bestWalk) )
 		{
 			best = w;

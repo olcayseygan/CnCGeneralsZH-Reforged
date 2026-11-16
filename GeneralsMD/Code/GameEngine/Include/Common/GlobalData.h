@@ -117,6 +117,7 @@ enum
 	AIKNOB_BASE_WATCH		= 8,
 	AIKNOB_STRIKE_DODGE	= 16,
 	AIKNOB_DEFENSE_QUEUE	= 32,	///< the scripts' base defences go down on the frame they are asked for, as before they queued
+	AIKNOB_COST_MAP			= 64,	///< the influence map stamps build cost against everything, as before it stamped threat by target class
 };
 
 //-------------------------------------------------------------------------------------------------

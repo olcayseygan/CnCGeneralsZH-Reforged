@@ -8,6 +8,12 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## The computer knows which guns hurt what it sends
+
+- The computer's map of enemy guns weighed every gun by its price, so a Gatling Cannon counted the same against a tank column as against a squad of Rangers, and an Avenger, which shoots only aircraft, did not count at all. Each gun now carries three figures worked out from what it actually does to vehicles, to infantry and to aircraft in this match's armies, and the computer reads the one that matters for what it is moving: a tank column picks the road the anti-tank guns do not cover, infantry keeps off the machine guns.
+- On Hard, the Chinooks and helicopters now plan their flights round the guns that shoot aircraft. They used to fly round tanks, which cannot touch them, and straight over anti-aircraft guns that only shoot the sky.
+- A replay recorded before this change will not play back, and a game saved before it loads with the old map until the next round of looking replaces it.
+
 ## The score screen is the lobby's twin
 
 - The score screen used to be one flat table sorted by score, so a 4v4 read as eight strangers and you had to remember who stood with whom. It is laid out like the lobby you started from now. The left column holds the standings in teams, each under a band with the lobby's team colour square and its name, a team of two or more with a gold Winner or a "Defeated 12:40" chip and its totals. The players are the lobby's seat cards: the faction icon, the name in the player's colour, the general under it, or beside it where eight players leave one line a card. A free-for-all is a plain ranked list. Winners come first, then every other team by how long it held out, then by score; a match left before anyone won keeps the teams still standing above the beaten ones and shows no chips.

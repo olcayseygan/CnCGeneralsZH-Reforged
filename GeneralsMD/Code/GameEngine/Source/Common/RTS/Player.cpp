@@ -1698,9 +1698,9 @@ Bool Player::checkBridges(Object *unit, Waypoint *way)
 }
 
 //-------------------------------------------------------------------------------------------------
-AsciiString Player::chooseApproachLabel(const Coord3D *from, const AsciiString &requested, Int pathSuffix)
+AsciiString Player::chooseApproachLabel(const Coord3D *from, const AsciiString &requested, Int pathSuffix, Team *team)
 {
-	return m_ai ? m_ai->chooseApproachLabel(from, requested, pathSuffix) : requested;
+	return m_ai ? m_ai->chooseApproachLabel(from, requested, pathSuffix, NULL, team) : requested;
 }
 
 //-------------------------------------------------------------------------------------------------

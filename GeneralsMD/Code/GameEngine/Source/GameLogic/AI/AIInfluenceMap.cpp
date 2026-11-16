@@ -37,7 +37,7 @@ void AIInfluenceMap::reset( Real originX, Real originY, Real width, Real height,
 	m_cellSize = cellSize;
 	m_cols = (width > 0.0f) ? REAL_TO_INT_CEIL( width / cellSize ) : 0;
 	m_rows = (height > 0.0f) ? REAL_TO_INT_CEIL( height / cellSize ) : 0;
-	m_enemy.assign( m_cols * m_rows, 0.0f );
+	m_enemy.assign( m_cols * m_rows * AITHREAT_COUNT, 0.0f );
 	m_friend.assign( m_cols * m_rows, 0.0f );
 	m_height.assign( m_cols * m_rows, 0.0f );
 	m_built = FALSE;
@@ -97,35 +97,59 @@ void AIInfluenceMap::visitReach( Real x, Real y, Real z, Real range, Visit &visi
 	}
 }
 
-struct AddPower
-{
-	std::vector<Real> *layer;
-	Real power;
-	void operator()( Int index ) { (*layer)[ index ] += power; }
-};
-
 struct CollectCell
 {
 	std::vector<Int> *cells;
 	void operator()( Int index ) { cells->push_back( index ); }
 };
 
-void AIInfluenceMap::stamp( std::vector<Real> &layer, Real x, Real y, Real z, Real range, Real power )
+/** Adds to one slot of every cell: stride 1 and slot 0 for the friendly layer, AITHREAT_COUNT for the enemy's. */
+struct AddPower
 {
-	if( m_cols <= 0 || power <= 0.0f || range <= 0.0f )
-		return;
-	AddPower add = { &layer, power };
-	visitReach( x, y, z, range, add );
-}
+	Real *layer;
+	Int stride;
+	Int slot;
+	Real power;
+	void operator()( Int index ) { layer[ index * stride + slot ] += power; }
+};
 
-void AIInfluenceMap::stampEnemy( Real x, Real y, Real z, Real range, Real power )
+/** The vehicle and infantry slots of every cell a ground gun reaches. */
+struct AddGroundPower
 {
-	stamp( m_enemy, x, y, z, range, power );
+	Real *layer;
+	Real vehicle;
+	Real infantry;
+	void operator()( Int index )
+	{
+		layer[ index * AITHREAT_COUNT + AITHREAT_VEHICLE ] += vehicle;
+		layer[ index * AITHREAT_COUNT + AITHREAT_INFANTRY ] += infantry;
+	}
+};
+
+/** The same cells in the same order as cellsReached, so a seat stamping alone adds what the seats sharing a
+	* turn's shapes add. */
+void AIInfluenceMap::stampEnemy( Real x, Real y, Real z, Real groundRange, Real airRange, const Real *power )
+{
+	if( m_cols <= 0 )
+		return;
+	if( groundRange > 0.0f && (power[ AITHREAT_VEHICLE ] > 0.0f || power[ AITHREAT_INFANTRY ] > 0.0f) )
+	{
+		AddGroundPower add = { &m_enemy[ 0 ], power[ AITHREAT_VEHICLE ], power[ AITHREAT_INFANTRY ] };
+		visitReach( x, y, z, groundRange, add );
+	}
+	if( airRange > 0.0f && power[ AITHREAT_AIR ] > 0.0f )
+	{
+		AddPower add = { &m_enemy[ 0 ], AITHREAT_COUNT, AITHREAT_AIR, power[ AITHREAT_AIR ] };
+		visitReach( x, y, z, airRange, add );
+	}
 }
 
 void AIInfluenceMap::stampFriend( Real x, Real y, Real z, Real range, Real power )
 {
-	stamp( m_friend, x, y, z, range, power );
+	if( m_cols <= 0 || power <= 0.0f || range <= 0.0f )
+		return;
+	AddPower add = { &m_friend[ 0 ], 1, 0, power };
+	visitReach( x, y, z, range, add );
 }
 
 void AIInfluenceMap::cellsReached( Real x, Real y, Real z, Real range, std::vector<Int> &cells ) const
@@ -136,10 +160,28 @@ void AIInfluenceMap::cellsReached( Real x, Real y, Real z, Real range, std::vect
 	visitReach( x, y, z, range, collect );
 }
 
-void AIInfluenceMap::addEnemy( const Int *cells, Int count, Real power )
+/** The powers are whole quarters (the cost map's whole units and ranks of a quarter), so every sum is exact
+	* below 2^22 and the order the seats add in cannot change a cell. */
+static const Real EXACT_SUM_LIMIT = 4194304.0f;
+
+void AIInfluenceMap::addEnemy( const Int *cells, Int count, Real vehicle, Real infantry )
 {
 	for( Int i = 0; i < count; ++i )
-		m_enemy[ cells[ i ] ] += power;
+	{
+		Real *cell = &m_enemy[ cells[ i ] * AITHREAT_COUNT ];
+		cell[ AITHREAT_VEHICLE ] += vehicle;
+		cell[ AITHREAT_INFANTRY ] += infantry;
+		DEBUG_ASSERTCRASH( cell[ AITHREAT_VEHICLE ] < EXACT_SUM_LIMIT && cell[ AITHREAT_INFANTRY ] < EXACT_SUM_LIMIT, ("influence sum past exact quarters") );
+	}
+}
+
+void AIInfluenceMap::addEnemyAir( const Int *cells, Int count, Real air )
+{
+	for( Int i = 0; i < count; ++i )
+	{
+		m_enemy[ cells[ i ] * AITHREAT_COUNT + AITHREAT_AIR ] += air;
+		DEBUG_ASSERTCRASH( m_enemy[ cells[ i ] * AITHREAT_COUNT + AITHREAT_AIR ] < EXACT_SUM_LIMIT, ("influence sum past exact quarters") );
+	}
 }
 
 void AIInfluenceMap::addFriend( const Int *cells, Int count, Real power )
@@ -153,10 +195,15 @@ Bool AIInfluenceMap::sameGrid( Int cols, Int rows, Real originX, Real originY, R
 	return m_cols == cols && m_rows == rows && m_originX == originX && m_originY == originY && m_cellSize == cellSize;
 }
 
-Real AIInfluenceMap::enemyAt( Real x, Real y ) const
+Real AIInfluenceMap::enemyAt( Real x, Real y, const AIThreatMix &mix ) const
 {
 	const Int index = cellIndexAt( x, y );
-	return (index < 0) ? 0.0f : m_enemy[ index ];
+	if( index < 0 )
+		return 0.0f;
+	const Real *cell = &m_enemy[ index * AITHREAT_COUNT ];
+	// a weight of 0 times a finite sum adds an exact 0, so AITHREAT_COST_MIX is the vehicle slot to the bit
+	return mix.w[ AITHREAT_VEHICLE ] * cell[ AITHREAT_VEHICLE ] + mix.w[ AITHREAT_INFANTRY ] * cell[ AITHREAT_INFANTRY ] +
+		mix.w[ AITHREAT_AIR ] * cell[ AITHREAT_AIR ];
 }
 
 Real AIInfluenceMap::friendAt( Real x, Real y ) const
@@ -165,7 +212,7 @@ Real AIInfluenceMap::friendAt( Real x, Real y ) const
 	return (index < 0) ? 0.0f : m_friend[ index ];
 }
 
-void AIInfluenceMap::xfer( Xfer *xfer )
+void AIInfluenceMap::xfer( Xfer *xfer, UnsignedByte version )
 {
 	xfer->xferReal( &m_originX );
 	xfer->xferReal( &m_originY );
@@ -177,13 +224,24 @@ void AIInfluenceMap::xfer( Xfer *xfer )
 	const size_t cells = (size_t)m_cols * (size_t)m_rows;
 	if( xfer->getXferMode() == XFER_LOAD )
 	{
-		m_enemy.assign( cells, 0.0f );
+		m_enemy.assign( cells * AITHREAT_COUNT, 0.0f );
 		m_friend.assign( cells, 0.0f );
 		m_height.assign( cells, 0.0f );
 	}
 	for( size_t i = 0; i < cells; ++i )
 	{
-		xfer->xferReal( &m_enemy[ i ] );
+		Real *enemy = &m_enemy[ i * AITHREAT_COUNT ];
+		if( version < 37 )
+		{
+			// one figure, the build cost of what reached the cell: every reader sees it until the next round
+			xfer->xferReal( &enemy[ AITHREAT_VEHICLE ] );
+			enemy[ AITHREAT_INFANTRY ] = enemy[ AITHREAT_AIR ] = enemy[ AITHREAT_VEHICLE ];
+		}
+		else
+		{
+			for( Int c = 0; c < AITHREAT_COUNT; ++c )
+				xfer->xferReal( &enemy[ c ] );
+		}
 		xfer->xferReal( &m_friend[ i ] );
 		xfer->xferReal( &m_height[ i ] );
 	}

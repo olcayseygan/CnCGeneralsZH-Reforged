@@ -562,6 +562,7 @@ public:
 
 	Weapon* getWeaponInWeaponSlot(WeaponSlotType wslot) const { return m_weaponSet.getWeaponInWeaponSlot(wslot); }
 	UnsignedInt getWeaponInWeaponSlotCommandSourceMask( WeaponSlotType wSlot ) const { return m_weaponSet.getNthCommandSourceMask( wSlot ); }
+	const WeaponTemplateSet* getCurWeaponTemplateSet() const { return m_weaponSet.getCurWeaponTemplateSet(); }
 
 	// see if this current weapon set's weapons has shared reload times
 	const Bool isReloadTimeShared() const { return m_weaponSet.isSharedReloadTime(); }

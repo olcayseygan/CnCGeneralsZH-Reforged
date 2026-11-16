@@ -1765,7 +1765,7 @@ void ScriptActions::doTeamFollowSkirmishApproachPath(const AsciiString& teamName
 	AsciiString pathLabel;
 	// the script names the approach; an AI that reads the map may take a quieter one
 	const AsciiString lane = theTeam->getControllingPlayer() ?
-		theTeam->getControllingPlayer()->chooseApproachLabel( &pos, waypointPathLabel, mpNdx ) : waypointPathLabel;
+		theTeam->getControllingPlayer()->chooseApproachLabel( &pos, waypointPathLabel, mpNdx, theTeam ) : waypointPathLabel;
 	pathLabel.format("%s%d", lane.str(), mpNdx);
 	Waypoint *way = TheTerrainLogic->getClosestWaypointOnPath( &pos, pathLabel );
 	if (!way) {
@@ -1832,7 +1832,7 @@ void ScriptActions::doTeamMoveToSkirmishApproachPath(const AsciiString& teamName
 	AsciiString pathLabel;
 	// the script names the approach; an AI that reads the map may take a quieter one
 	const AsciiString lane = theTeam->getControllingPlayer() ?
-		theTeam->getControllingPlayer()->chooseApproachLabel( &pos, waypointPathLabel, mpNdx ) : waypointPathLabel;
+		theTeam->getControllingPlayer()->chooseApproachLabel( &pos, waypointPathLabel, mpNdx, theTeam ) : waypointPathLabel;
 	pathLabel.format("%s%d", lane.str(), mpNdx);
 	/* This action is the slowest single thing left in a four-player skirmish frame - 40ms of a 45ms
 		 logic frame, once or twice a match, on the frame a team is told to take its approach path.

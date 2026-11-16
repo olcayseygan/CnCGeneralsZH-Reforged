@@ -45,6 +45,7 @@ class BuildListInfo;
 // this header used to compile only behind whoever happened to include Team.h first
 class TeamPrototype;
 class TeamTemplateInfo;
+struct AIAbilityButton;
 class ProductionUpdateInterface;
 
 /// the skirmish scripts send this team at the enemy at some point, rather than keeping it home on guard
@@ -338,6 +339,7 @@ public:
 	/// This rung's knobs, for any behaviour that has a difficulty-dependent decision to make.
 	const AIDifficultyProfile *getSkillProfile(void) const;
 	Bool knobsOffHere(void) const;		///< -aiknobsoff reaches this slot; its mask says which knobs
+	Int unitAbilitiesRung(void) const;	///< the profile's UnitAbilities with -aiknobsoff's abilities applied, safe to ask of another seat
 	Bool costMapHere(void) const;		///< -aiknobsoff ... costmap reaches this slot: the influence map of build cost, one layer
 
 	/// What a seat that predates the ladder (an old save, a replay, a script) plays at.
@@ -544,6 +546,17 @@ protected:
 	Int loadShuttle(Object *ship);	///< call the attack teams' ground units at home into one Chinook; how many were called
 	Bool flightIsQuiet(const Coord3D *from, Real x, Real y) const;	///< a straight flight crosses nothing the AI has seen shoot
 	void doHelixes(void);	///< China's Helixes: the upgrade the enemy army calls for, healers behind the wave, bomb raids
+	void doAbilities(void);	///< the units press their own buttons: laser lock, manual shots, area weapons, walk-up specials, toggles, suicides
+	Bool abilityUnitBusy(const Object *obj) const;	///< mid-ability, or a job that owns its orders
+	Bool useAbility(Object *obj, const struct AIAbilityButton &entry, Int rung, Object *victim);	///< one button's rule for one unit; TRUE when it ordered
+	Bool abilityLaser(Object *obj, const struct AIAbilityButton &entry, Object *victim);
+	Bool abilityShot(Object *obj, const struct AIAbilityButton &entry, Object *victim, Int rung);
+	Bool abilityArea(Object *obj, const struct AIAbilityButton &entry, Object *victim, Int rung);
+	Bool abilityWalkUp(Object *obj, const struct AIAbilityButton &entry);
+	Bool abilityToggle(Object *obj, const struct AIAbilityButton &entry, Object *victim);
+	Bool abilitySuicide(Object *obj, const struct AIAbilityButton &entry);
+	Int walkUpsInFlight(std::vector<ObjectID> *taken) const;	///< our units walking to, or busy with, a walk-up special right now; taken gets their targets
+	Bool walkIsCovered(const Object *obj, const Coord3D *to) const;	///< no step of the straight walk to 'to' where its map has the enemy over us
 	void steerAircraft(void);	///< aircraft off strikes whose flight crosses known anti-air, onto clear ones or home
 	void buyDutyHelix(void);	///< Medium and up buy the healers and raiders their Helixes' buttons allow
 	Int helixRoleWanted(const ThingTemplate *tmpl) const;	///< the job a Helix of this kind would take now, -1 for none
@@ -973,6 +986,7 @@ protected:
 	static void lookJob(Int index, void *context);
 	UnsignedInt m_lookFrame;											///< the frame look ran, plus one: the ledger and the map's stamps are this frame's
 	UnsignedInt m_lookTurnFrame;									///< ... m_lookTurn was collected by it
+	UnsignedInt m_tacticsTurnFrame;								///< frame + 1 on which doTactics walked m_lookTurn, so doAbilities may take it
 	UnsignedInt m_lookDefencesFrame;							///< ... m_lookDefences was collected by it
 	std::vector<KnownDefence> m_lookDefences;		///< holdAtDefences' known guns, when its turn falls on this frame
 	void rebuildInfluence(void);									///< the whole map on one frame
@@ -1018,6 +1032,7 @@ protected:
 		* doTactics and, when its look is the same length, answerFire; held so a frame allocates nothing. */
 	std::vector<Object *>	m_lookTurn;
 	std::vector<Object *>	m_fireTurn;
+	std::vector<Object *>	m_abilityTurn;		///< doAbilities' own turn on a rung without the tactics' look; scratch, never saved
 	void answerFire(const std::vector<Object *> *turn);	///< turn: this frame's look already collected, or NULL
 	AIFireAnswer answerHit(Object *obj, Object *shooter, Object *gun);	///< decided and ordered
 	const GunReading &readGun(const Object *obj, const Object *gun);

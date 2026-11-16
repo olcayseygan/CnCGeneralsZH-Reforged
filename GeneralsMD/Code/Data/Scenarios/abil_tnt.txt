@@ -1,0 +1,28 @@
+# A Hard AI's two Tank Hunters and eight Red Guards 140 from an Overlord. TNT is a walk-up button
+# and pays only where the target dies sooner with it, the walk and the ten second fuse counted, than
+# under the guns round it: the rifles hardly scratch the Overlord and the rockets are slow on it, so a
+# hunter walks up under the Red Guards' cover and plants. Against tanks with Battlemasters beside
+# them the guns finish first and nobody walks, and on a building the charge lies where he stood, off
+# its middle, and lands only its outer 150. The Overlord comes once TNT has charged, 7.5 s from the
+# hunters' making.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionChina -side 1 FactionChina -seed 1 -maxframes 1400
+#     -scenario abil_tnt -logPrefix abil_tnt_
+#
+# Add -aiknobsoff odd abilities for the seat without its buttons.
+
+30    spawn   1  ChinaInfantryTankHunter  2  813 1388  20
+30    spawn   1  ChinaInfantryRedguard    8  813 1360  15
+35    spawn   1  ChinaInfantryRedguard    4  start1:0:250  20
+300   spawn   0  ChinaTankOverlord        1  813 1528
+300   tally   0  ChinaTankOverlord
+450   tally   0  ChinaTankOverlord
+600   tally   0  ChinaTankOverlord
+900   tally   0  ChinaTankOverlord
+1200  tally   0  ChinaTankOverlord
+1500  tally   0  ChinaTankOverlord
+2000  tally   0  ChinaTankOverlord
+2000  tally   1  ChinaInfantryTankHunter
+2000  tally   1  ChinaInfantryRedguard

@@ -17207,6 +17207,7 @@ TEST(the_difficulty_ladder_climbs_in_every_direction_it_should)
 		CHECK( upper.m_adaptiveHarvesters >= lower.m_adaptiveHarvesters );
 		CHECK( upper.m_selfTriggeredExpansion >= lower.m_selfTriggeredExpansion );
 		CHECK( upper.m_defendExpansions >= lower.m_defendExpansions );
+		CHECK( upper.m_unitAbilities >= lower.m_unitAbilities );
 
 		// more of the map: another base sooner, more of them, docks further out
 		CHECK( upper.m_secondBaseSeconds < lower.m_secondBaseSeconds );
@@ -17719,6 +17720,80 @@ TEST(the_ai_pulls_ranked_units_out_sooner_the_higher_the_rank)
 	CHECK( AIRank_valueScale( 3 ) > AIRank_valueScale( 2 ) );
 	CHECK( AIRank_valueScale( 2 ) > AIRank_valueScale( 1 ) );
 	CHECK( AIRank_valueScale( 1 ) > 1.0f );
+}
+
+
+/** AIPlayer.cpp: the units' own buttons.  A manual shot pays when it kills sooner than the unit's guns on
+	 something worth the reload; a volley goes where it takes the most. */
+extern Bool AIAbility_pays( Real manualFrames, Real defaultFrames, Real value, Real floor );
+extern Int AIAbility_bestAreaAim( const Real *xs, const Real *ys, const Real *values, const Real *centreValues, Int n, Real radius,
+																	Int onlyIndex, Real *score );
+
+TEST(the_ai_presses_a_button_only_where_it_pays)
+{
+	// Kell's snipe empties a Crusader in one shot his rifle never kills: worth it above the floor
+	CHECK( AIAbility_pays( 30.0f, AI_CANNOT_KILL, 900.0f, 450.0f ) );
+	// ... not on something worth less than the reload
+	CHECK( !AIAbility_pays( 30.0f, AI_CANNOT_KILL, 300.0f, 450.0f ) );
+	// ... nor where the guns are quicker, nor with a weapon that cannot kill it
+	CHECK( !AIAbility_pays( 120.0f, 60.0f, 900.0f, 0.0f ) );
+	CHECK( AIAbility_pays( 59.0f, 60.0f, 900.0f, 0.0f ) );
+	CHECK( !AIAbility_pays( AI_CANNOT_KILL, 60.0f, 900.0f, 0.0f ) );
+
+	// twelve soldiers in a clump at 1000,1000 and one alone at 1400,1000: the volley goes into the clump
+	Real xs[ 13 ], ys[ 13 ], values[ 13 ], centres[ 13 ];
+	for( Int i = 0; i < 12; ++i )
+	{
+		xs[ i ] = 1000.0f + 10.0f * (Real)(i % 4);
+		ys[ i ] = 1000.0f + 10.0f * (Real)(i / 4);
+		values[ i ] = 100.0f;
+		centres[ i ] = 100.0f;
+	}
+	xs[ 12 ] = 1400.0f;
+	ys[ 12 ] = 1000.0f;
+	values[ 12 ] = 300.0f;
+	centres[ 12 ] = 300.0f;
+	Real score = 0.0f;
+	const Int aim = AIAbility_bestAreaAim( xs, ys, values, centres, 13, 50.0f, -1, &score );
+	CHECK( aim >= 0 && aim < 12 );
+	CHECK_NEAR( 1200.0f, score, 0.01f );
+	// one out of reach (a negative centre value) is never the aim, though it still counts round another
+	for( Int i = 0; i < 12; ++i )
+		centres[ i ] = -1.0f;
+	CHECK_EQ( 12, AIAbility_bestAreaAim( xs, ys, values, centres, 13, 50.0f, -1, &score ) );
+	CHECK_NEAR( 300.0f, score, 0.01f );
+	// Medium weighs only its own target's spot
+	centres[ 3 ] = 100.0f;
+	CHECK_EQ( 3, AIAbility_bestAreaAim( xs, ys, values, centres, 13, 50.0f, 3, &score ) );
+	CHECK_NEAR( 1200.0f, score, 0.01f );
+	CHECK_EQ( -1, AIAbility_bestAreaAim( xs, ys, values, centres, 13, 50.0f, 5, &score ) );
+}
+
+extern Real AIAbility_walkUpKillFrames( Real health, Real damage, Real detonateFrames, Real teamRate, Real ownRate );
+
+TEST(a_charge_is_planted_only_where_it_beats_the_guns)
+{
+	// Burton's charge (2000) on a 2000 building, 500 frames off, against his own rifle at 4 a frame: the
+	// charge needs 500, the rifle 500 too, so it does not pay to walk
+	CHECK_NEAR( 500.0f, AIAbility_walkUpKillFrames( 2000.0f, 2000.0f, 500.0f, 0.0f, 4.0f ), 0.01f );
+	// ... on a tank his rifle hardly scratches (0.5 a frame, 2000 frames), the charge's 500 wins
+	CHECK_NEAR( 500.0f, AIAbility_walkUpKillFrames( 1100.0f, 2000.0f, 500.0f, 0.0f, 0.55f ), 0.01f );
+	// TNT (500) on a 480 Crusader 220 frames off, while two Battlemasters take 4 a frame: they finish it at
+	// 120, before the TNT goes off, so the walk buys nothing
+	CHECK_NEAR( 120.0f, AIAbility_walkUpKillFrames( 480.0f, 500.0f, 220.0f, 4.0f, 1.0f ), 0.01f );
+	// TNT's full 500 on a 1500 target with one Tank Hunter's rockets at 1 a frame: 220 to the blast, then 1000
+	// left at 1 a frame, 1220 against the rockets' 1500 alone
+	CHECK_NEAR( 1220.0f, AIAbility_walkUpKillFrames( 1500.0f, 500.0f, 220.0f, 0.0f, 1.0f ), 0.01f );
+	// ... and a blast short of the health with no gun to finish it never kills
+	CHECK_NEAR( AI_CANNOT_KILL, AIAbility_walkUpKillFrames( 1500.0f, 500.0f, 220.0f, 0.0f, 0.0f ), 0.01f );
+}
+
+TEST(the_ladder_presses_more_buttons_as_it_climbs)
+{
+	TAiData data;
+	CHECK_EQ( 0, data.m_skill[ AISKILL_EASY ].m_unitAbilities );
+	CHECK_EQ( 1, data.m_skill[ AISKILL_MEDIUM ].m_unitAbilities );
+	CHECK_EQ( 2, data.m_skill[ AISKILL_BRUTAL ].m_unitAbilities );
 }
 
 

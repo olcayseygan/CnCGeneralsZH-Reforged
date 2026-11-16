@@ -310,6 +310,9 @@ struct AIDifficultyProfile
 
 	// Income: the one bonus on the ladder (Player::incomePercent)
 	Int		m_incomePercent;								///< what a skirmish AI banks of what it earns by playing, in percent, before the falling-behind bonus; the score screen counts the 100
+
+	// Its units' own buttons (AIPlayer::doAbilities)
+	Int		m_unitAbilities;								///< 0 none; 1 the laser lock, manual shots, area weapons at the unit's own target and weapon toggles; 2 those anywhere in reach, walk-up specials and suicides too
 };
 
 //-------------------------------------------------------------------------------------------------

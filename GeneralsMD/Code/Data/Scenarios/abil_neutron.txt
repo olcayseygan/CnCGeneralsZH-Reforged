@@ -1,0 +1,31 @@
+# A Hard AI's two Nuke Cannons with neutron shells bought, sent at a house twelve Rebels garrison. The
+# neutron shell is a weapon switch: its blast kills every soldier, every crew and everyone inside a
+# building or vehicle it reaches, which the plain shell only does by bringing the house down. So the
+# AI switches to it on the house and on a crowd it reaches more of; against Rebels in the open the
+# plain shell's 400 kills as many and it stays.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionGLA -side 1 FactionChina -seed 1 -maxframes 2800
+#     -scenario abil_neutron -logPrefix abil_neutron_
+#
+# Add -aiknobsoff odd abilities for the seat without its buttons.
+
+# 813 1528 is the one spot near seat 1's start where a structure may stand
+30    spawn         1  ChinaNuclearMissileLauncher  1  813 1528
+40    shiftupgrade  1  ChinaNuclearMissileLauncher  Upgrade_ChinaNeutronShells
+# the houses in front of seat 1's start: the Rebels take the nearest
+1800  spawn         0  GLAInfantryRebel             12 start1:0:650  14
+1810  autogarrison  0  GLAInfantryRebel
+1900  spawn         1  ChinaVehicleNukeLauncher     2  start1:0:950  50
+1905  spawn         1  ChinaInfantryRedguard        4  start1:0:250  20
+1910  attack        1  ChinaVehicleNukeLauncher        0  GermanTownHouse1
+1910  attack        1  ChinaVehicleNukeLauncher        0  GermanPub01
+1900  tally         0  GLAInfantryRebel
+2100  tally         0  GLAInfantryRebel
+2300  tally         0  GLAInfantryRebel
+2500  tally         0  GLAInfantryRebel
+2800  tally         0  GLAInfantryRebel
+3400  tally         0  GLAInfantryRebel
+4100  tally         0  GLAInfantryRebel
+4100  tally         1  ChinaVehicleNukeLauncher

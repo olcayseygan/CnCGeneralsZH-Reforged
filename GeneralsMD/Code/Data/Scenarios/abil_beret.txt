@@ -1,0 +1,29 @@
+# A Hard AI's two Maroon Berets 300 from three Battlemasters standing close, then a Crusader. Kargu
+# Swarm is an area button (three drones on a spot); Designate Target is a power on a unit, which
+# the AI treats as a walk-up. The power's clock runs from the Beret's making, a game minute.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionChina -side 1 FactionTurkiye -seed 1 -maxframes 2400
+#     -scenario abil_beret -logPrefix abil_beret_
+#
+# Add -aiknobsoff odd abilities for the seat without its buttons.
+
+30    spawn   1  TurkiyeInfantryMaroonBeret  2  start1:0:650  20
+35    spawn   1  TurkiyeInfantryMehmetcik    4  start1:0:250  20
+30    spawn   0  ChinaTankBattleMaster       3  start1:0:950  30
+# the Crusader comes once Designate has charged, inside the Berets' sight: the call, like any power, is
+# refused on a target in the fog
+1700  spawn   0  AmericaTankCrusader         1  start1:0:850
+30    tally   0  ChinaTankBattleMaster
+1700  tally   0  AmericaTankCrusader
+300   tally   0  ChinaTankBattleMaster
+600   tally   0  ChinaTankBattleMaster
+1200  tally   0  ChinaTankBattleMaster
+1800  tally   0  ChinaTankBattleMaster
+1800  tally   0  AmericaTankCrusader
+2400  tally   0  ChinaTankBattleMaster
+2400  tally   0  AmericaTankCrusader
+3500  tally   0  ChinaTankBattleMaster
+3500  tally   0  AmericaTankCrusader
+3500  tally   1  TurkiyeInfantryMaroonBeret

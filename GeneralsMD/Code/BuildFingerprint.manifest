@@ -1219,6 +1219,16 @@ Data/INI/WindowTransitionsReforged.ini
 Data/Install_Final.bmp
 Data/Patch.str
 Data/Russian/Generals.str
+Data/Scenarios/abil_beret.txt
+Data/Scenarios/abil_charge.txt
+Data/Scenarios/abil_flash.txt
+Data/Scenarios/abil_laser.txt
+Data/Scenarios/abil_neutron.txt
+Data/Scenarios/abil_pods.txt
+Data/Scenarios/abil_snipe.txt
+Data/Scenarios/abil_suicide.txt
+Data/Scenarios/abil_sungur.txt
+Data/Scenarios/abil_tnt.txt
 Data/Scenarios/airbelow.txt
 Data/Scenarios/airbelowfar.txt
 Data/Scenarios/allyaid.txt

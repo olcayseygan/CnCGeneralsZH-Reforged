@@ -1,0 +1,24 @@
+# abil_laser for Turkiye: a Hard AI's four Sungur 180 from two Overlords, the same laser lock button
+# on the same generated map. Closer than the Missile Defenders, since the Sungur sees 200 and the
+# lock, like any power, is refused on a target in the shroud.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 1 2 normal -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionChina -side 1 FactionTurkiye -seed 1 -maxframes 1400
+#     -scenario abil_sungur -logPrefix abil_sungur_
+#
+# Add -aiknobsoff odd abilities for the seat without its buttons.
+
+30    spawn   1  TurkiyeInfantrySungur     4  start1:-400:500  20
+35    spawn   1  TurkiyeInfantryMehmetcik  4  start1:-100:200  20
+30    spawn   0  ChinaTankOverlord         2  start1:-400:680  60
+# the order a computer's attack wave would give, the same with the buttons and without
+40    attack  1  TurkiyeInfantrySungur        0  ChinaTankOverlord
+30    tally   0  ChinaTankOverlord
+300   tally   0  ChinaTankOverlord
+600   tally   0  ChinaTankOverlord
+900   tally   0  ChinaTankOverlord
+1200  tally   0  ChinaTankOverlord
+1500  tally   0  ChinaTankOverlord
+2000  tally   0  ChinaTankOverlord
+2000  tally   1  TurkiyeInfantrySungur

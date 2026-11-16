@@ -93,6 +93,9 @@
 #include "GameLogic/Module/CleanupHazardUpdate.h"	// an Ambulance out cleaning is left to it
 #include "GameLogic/Module/ParticleUplinkCannonUpdate.h"	// driving the beam
 #include "GameLogic/Module/PhysicsUpdate.h"		// which way a unit is walking, at the edge of a defence's reach
+#include "GameLogic/Module/SlowDeathBehavior.h"	// a planted charge's blast is its last death weapon ...
+#include "GameLogic/Module/LifetimeUpdate.h"		// ... and its fuse the life it is given
+#include "GameLogic/Module/NeutronBlastBehavior.h"	// a neutron shell kills by its blast's kind, not its damage
 #include <map>
 #include "Platform/MsvcFloatCasts.h"
 
@@ -382,10 +385,62 @@ struct AITemplatePairHash
 	}
 };
 static std::unordered_map<AITemplatePair, Real, AITemplatePairHash> theFramesToKillCache;
+static std::unordered_map<AITemplatePair, Real, AITemplatePairHash> theAutoFramesToKillCache;	///< ... with the button-only weapons left out
 // the two questions under it that walk a template's module list by name, kept the same way: the first
 // team choice of a match fills all three at once, and that one choice was the 90ms frame
 static std::map<const ThingTemplate *, Real> theMaxHealthCache;
 static std::map<const ThingTemplate *, Bool> theDetectsStealthCache;
+
+/** The buttons of a unit's own the skirmish AI presses (AIPlayer::doAbilities), sorted by what rule weighs
+	* them.  Read off the command set and the weapon sets, so a unit the data gives such a button needs no
+	* line here; the special powers go by their enum, the few whose rule is known. */
+enum AIAbilityKind
+{
+	AIABILITY_LASER,		///< a special that puts the unit on its laser-guided missiles at one vehicle (Missile Defender, Sungur)
+	AIABILITY_SHOT,			///< a weapon only a button fires, at an object (Jarmen Kell's snipe)
+	AIABILITY_AREA,			///< ... at a spot on the ground (rocket pods, Kargu, the fire wall, contaminate)
+	AIABILITY_WALKUP,		///< a special the unit walks up to a target to do (charges, TNT, hacks, Designate), or sabotage
+	AIABILITY_TOGGLE,		///< a weapon switch (the flashbang, neutron shells, the Scud's warheads)
+	AIABILITY_SUICIDE,	///< a weapon fired at nothing that ends the unit (the bomb truck, the Demo general's suicide)
+	AIABILITY_KIND_COUNT
+};
+static const char *const theAIAbilityKindName[ AIABILITY_KIND_COUNT ] = { "laser", "shot", "area", "walk-up", "toggle", "suicide" };
+
+struct AIAbilityButton
+{
+	const CommandButton *button;
+	Int kind;										///< AIAbilityKind
+	WeaponSlotType slot;				///< the button's weapon slot, for a weapon
+	SpecialPowerType power;			///< the button's special power, for a special
+};
+
+/** One template's buttons, kept by template ID with the command set they were read from: an upgrade that
+	* swaps the set has them read again.  Filled on the logic thread only, and only ever indexed. */
+struct AIAbilityClass
+{
+	const CommandSet *set;
+	Bool known;
+	std::vector<AIAbilityButton> buttons;
+	AIAbilityClass() : set( NULL ), known( FALSE ) {}
+};
+static std::vector<AIAbilityClass> theAbilityClasses;
+
+/** A unit in the middle of one of its buttons: a special walking up or under way, or a weapon locked for a
+	* shot that is not its first slot (the lock the button and the laser lock take, which lasts the clip). */
+static Bool aiAbilityWeaponHeld( const Object *obj )
+{
+	if( obj->getCurWeaponLockStatus() == LOCKED_TEMPORARILY && obj->getCurWeaponSlot() != PRIMARY_WEAPON )
+		return TRUE;
+	if( !obj->hasAnySpecialPower() )
+		return FALSE;
+	for( BehaviorModule **m = obj->getBehaviorModules(); *m; ++m )
+	{
+		SpecialPowerUpdateInterface *spu = (*m)->getSpecialPowerUpdateInterface();
+		if( spu && spu->isSpecialAbility() && spu->isActive() )
+			return TRUE;
+	}
+	return FALSE;
+}
 
 AIPlayer::AIPlayer( Player *p ) :
 m_player(p),
@@ -415,6 +470,7 @@ m_role(AIROLE_AGGRESSIVE)
 	m_knownGunsFrame = 0;
 	m_lookFrame = 0;
 	m_lookTurnFrame = 0;
+	m_tacticsTurnFrame = 0;
 	m_lookDefencesFrame = 0;
 	for (Int scoutSlot = 0; scoutSlot < MAX_AI_SCOUTS; ++scoutSlot) {
 		m_scoutID[scoutSlot] = INVALID_ID;
@@ -3799,17 +3855,25 @@ void aiShotTiming( const WeaponTemplate *weapon, const WeaponBonus &bonus, AISho
 /** Frames one unit template needs to kill another, with the best weapon it carries against it.  The target's
 	* health is the caller's, so a job on a worker can ask without touching templateMaxHealth's cache. */
 //-------------------------------------------------------------------------------------------------
-static Real computeSetFramesToKill( const WeaponTemplateSet *set, const ThingTemplate *target, Real health );
+static Real computeSetFramesToKill( const WeaponTemplateSet *set, const ThingTemplate *target, Real health, Bool manual = TRUE );
 
-static Real computeTemplateFramesToKill( const ThingTemplate *attacker, const ThingTemplate *target, Real health )
+/** A slot only a button fires: its AutoChooseSources leave the AI out (Jarmen Kell's snipe, the rocket pods,
+	* the Missile Defender's laser missiles). */
+static Bool isManualSlot( const WeaponTemplateSet *set, Int slot )
+{
+	return set != NULL && (set->getNthCommandSourceMask( (WeaponSlotType)slot ) & (1 << CMD_FROM_AI)) == 0;
+}
+
+static Real computeTemplateFramesToKill( const ThingTemplate *attacker, const ThingTemplate *target, Real health, Bool manual )
 {
 	if( attacker->getWeaponTemplateSets().empty() )
 		return AI_CANNOT_KILL;			// a dozer, a supply truck: the data gives it nothing to shoot with
-	return computeSetFramesToKill( attacker->findWeaponTemplateSet( WeaponSetFlags() ), target, health );
+	return computeSetFramesToKill( attacker->findWeaponTemplateSet( WeaponSetFlags() ), target, health, manual );
 }
 
-/** ... with one of its weapon sets, the one an upgrade or a veterancy switched it to. */
-static Real computeSetFramesToKill( const WeaponTemplateSet *set, const ThingTemplate *target, Real health )
+/** ... with one of its weapon sets, the one an upgrade or a veterancy switched it to.  manual FALSE leaves out
+	* the slots only a button fires, for a seat whose units never press one. */
+static Real computeSetFramesToKill( const WeaponTemplateSet *set, const ThingTemplate *target, Real health, Bool manual )
 {
 	Real best = AI_CANNOT_KILL;
 	if( set == NULL )
@@ -3818,7 +3882,7 @@ static Real computeSetFramesToKill( const WeaponTemplateSet *set, const ThingTem
 	{
 		const WeaponTemplate *weapon = set->getNth( (WeaponSlotType)slot );
 		AIShotPattern shots;
-		if( weapon == NULL || !shotPatternAgainst( weapon, target, health, &shots ) )
+		if( weapon == NULL || (!manual && isManualSlot( set, slot )) || !shotPatternAgainst( weapon, target, health, &shots ) )
 			continue;
 
 		const Real frames = aiFramesToKill( health, shots );
@@ -3828,15 +3892,26 @@ static Real computeSetFramesToKill( const WeaponTemplateSet *set, const ThingTem
 	return best;
 }
 
-static Real templateFramesToKill( const ThingTemplate *attacker, const ThingTemplate *target )
+/** manual: count the weapons only a button fires.  A seat whose units press no buttons asks with FALSE about its
+	* own units (aiCreditsManual), so -aiknobsoff abilities moves what it builds as well as what it presses. */
+static Real templateFramesToKill( const ThingTemplate *attacker, const ThingTemplate *target, Bool manual = TRUE )
 {
+	std::unordered_map<AITemplatePair, Real, AITemplatePairHash> &cache = manual ? theFramesToKillCache : theAutoFramesToKillCache;
 	const AITemplatePair key( attacker, target );
-	std::unordered_map<AITemplatePair, Real, AITemplatePairHash>::const_iterator known = theFramesToKillCache.find( key );
-	if( known != theFramesToKillCache.end() )
+	std::unordered_map<AITemplatePair, Real, AITemplatePairHash>::const_iterator known = cache.find( key );
+	if( known != cache.end() )
 		return known->second;
-	const Real frames = computeTemplateFramesToKill( attacker, target, templateMaxHealth( target ) );
-	theFramesToKillCache[ key ] = frames;
+	const Real frames = computeTemplateFramesToKill( attacker, target, templateMaxHealth( target ), manual );
+	cache[ key ] = frames;
 	return frames;
+}
+
+/** Whether a player's matchups count its own units' button-only weapons: a human's and a script AI's do, a
+	* skirmish seat's while its rung presses buttons. */
+static Bool aiCreditsManual( const Player *owner )
+{
+	const AIPlayer *ai = owner ? owner->getAIPlayer() : NULL;
+	return ai == NULL || ai->unitAbilitiesRung() > 0;
 }
 
 /** B4's threat by target class.  What an armed template does to a vehicle, a man and an aircraft is the
@@ -3997,6 +4072,8 @@ static void prepareClassRates( const std::vector<const ThingTemplate *> &units )
 /*static*/ void AIPlayer::prepareMatchupTables( void )
 {
 	theFramesToKillCache.clear();
+	theAutoFramesToKillCache.clear();
+	theAbilityClasses.clear();
 	theMaxHealthCache.clear();
 	theDetectsStealthCache.clear();
 	// the next match's templates are another set, and a table left from this one would answer for them
@@ -4043,7 +4120,10 @@ static void prepareClassRates( const std::vector<const ThingTemplate *> &units )
 	{
 		templateDetectsStealth( units[ a ] );
 		for( size_t t = 0; t < units.size(); ++t )
+		{
 			templateFramesToKill( units[ a ], units[ t ] );
+			templateFramesToKill( units[ a ], units[ t ], FALSE );
+		}
 	}
 	prepareClassRates( units );
 #ifdef DEBUG_LOGGING
@@ -4077,7 +4157,7 @@ static void addToVisibleArmy( std::vector<AIVisibleEnemy> *army, const ThingTemp
 //-------------------------------------------------------------------------------------------------
 /** How one army trades against another, unit against unit and money for money (aiArmyAdvantage). */
 //-------------------------------------------------------------------------------------------------
-static Real armyAdvantage( const std::vector<AIVisibleEnemy> &mine, const std::vector<AIVisibleEnemy> &theirs )
+static Real armyAdvantage( const std::vector<AIVisibleEnemy> &mine, const std::vector<AIVisibleEnemy> &theirs, Bool mineManual = TRUE )
 {
 	if( mine.empty() || theirs.empty() )
 		return 1.0f;
@@ -4088,7 +4168,7 @@ static Real armyAdvantage( const std::vector<AIVisibleEnemy> &mine, const std::v
 		theirValue.push_back( theirs[ j ].m_weight );
 	for( size_t i = 0; i < mine.size(); ++i )
 		for( size_t j = 0; j < theirs.size(); ++j )
-			score.push_back( aiMatchupScore( templateFramesToKill( mine[ i ].m_template, theirs[ j ].m_template ),
+			score.push_back( aiMatchupScore( templateFramesToKill( mine[ i ].m_template, theirs[ j ].m_template, mineManual ),
 				templateFramesToKill( theirs[ j ].m_template, mine[ i ].m_template ), mine[ i ].m_cost, theirs[ j ].m_cost ) );
 	return aiArmyAdvantage( &myValue[ 0 ], (Int)myValue.size(), &theirValue[ 0 ], (Int)theirValue.size(), &score[ 0 ] );
 }
@@ -4205,7 +4285,7 @@ void AIPlayer::logEngage( const char *cause, const std::vector<Object *> &units 
 		theirPower += k->m_weight;
 	DEBUG_LOG(("AI ENGAGE frame %d player %d %s: %d units, %.0f power against %.0f remembered, cost %.2f matchup %.2f\n",
 		TheGameLogic->getFrame(), m_player->getPlayerIndex(), cause, (Int)units.size(), power, theirPower,
-		theirPower > 0.0f ? power / theirPower : 99.0f, armyAdvantage( mine, theirs )));
+		theirPower > 0.0f ? power / theirPower : 99.0f, armyAdvantage( mine, theirs, aiCreditsManual( m_player ) )));
 }
 
 /** How the doctrine's trust in a signature unit moves: times DECAY for each one lost without a trade, never
@@ -4307,7 +4387,7 @@ struct AIMatchupRows
 				return kinds ? &scores[ u * kinds ] : NULL;
 		units.push_back( tmpl );
 		for( std::vector<AIVisibleEnemy>::const_iterator enemy = army->begin(); enemy != army->end(); ++enemy )
-			scores.push_back( aiMatchupScore( templateFramesToKill( tmpl, enemy->m_template ),
+			scores.push_back( aiMatchupScore( templateFramesToKill( tmpl, enemy->m_template, aiCreditsManual( owner ) ),
 				templateFramesToKill( enemy->m_template, tmpl ), myCost, enemy->m_cost ) );
 		return kinds ? &scores[ ( units.size() - 1 ) * kinds ] : NULL;
 	}
@@ -4343,7 +4423,7 @@ static AITeamCapability teamCapability( const TeamPrototype *proto, const Player
 		size_t k = 0;
 		for( std::vector<AIVisibleEnemy>::const_iterator enemy = army.begin(); enemy != army.end(); ++enemy, ++k )
 		{
-			const Real score = scores ? scores[ k ] : aiMatchupScore( templateFramesToKill( tmpl, enemy->m_template ),
+			const Real score = scores ? scores[ k ] : aiMatchupScore( templateFramesToKill( tmpl, enemy->m_template, aiCreditsManual( owner ) ),
 																				 templateFramesToKill( enemy->m_template, tmpl ), myCost, enemy->m_cost );
 			answered += fielded * enemy->m_weight * score;
 			weighed += fielded * enemy->m_weight;
@@ -6623,9 +6703,9 @@ static void aiPhaseEnd( Int phase )
 
 /* "tactics" is three quarters of the AI at 32 seats, so it is split the way base is: the influence stamping,
 	 answering fire, the units' own look, the row sweep, the edge of the guns and the aircraft.  Never nested. */
-enum { TAC_INFL, TAC_FIRE, TAC_UNITS, TAC_ROWS, TAC_HOLD, TAC_DODGE, TAC_DROP, TAC_SHUTTLE, TAC_HELIX, TAC_STEER, TAC_OTHER, TAC_SUB_COUNT };
+enum { TAC_INFL, TAC_FIRE, TAC_UNITS, TAC_ROWS, TAC_HOLD, TAC_DODGE, TAC_DROP, TAC_SHUTTLE, TAC_HELIX, TAC_STEER, TAC_ABIL, TAC_OTHER, TAC_SUB_COUNT };
 static const char *theAITacSubName[ TAC_SUB_COUNT ] =
-	{ "infl", "fire", "units", "rows", "hold", "dodge", "drop", "shuttle", "helix", "steer", "other" };
+	{ "infl", "fire", "units", "rows", "hold", "dodge", "drop", "shuttle", "helix", "steer", "abil", "other" };
 static Real theAITacSubMS[ TAC_SUB_COUNT ];
 static Int64 theAITacSubStart;
 static void aiTacBegin( void )
@@ -6737,6 +6817,7 @@ void AIPlayer::update( void )
 		AI_PHASE( AIP_TACTICS, AI_TAC( TAC_HELIX, doHelixes() ) );		// Helix upgrades by the enemy army, healers, bomb raids.
 		AI_PHASE( AIP_TACTICS, AI_TAC( TAC_STEER, steerAircraft() ) );	// No strike flown through the enemy's anti-air.
 		AI_PHASE( AIP_TACTICS, AI_TAC( TAC_OTHER, doAmbulances() ) );	// Ambulances behind the army, for the hurt and the hazards.
+		AI_PHASE( AIP_TACTICS, AI_TAC( TAC_ABIL, doAbilities() ) );		// The units' own buttons, last, on the turn the tactics looked at.
 	}
 
 #ifdef DEBUG_LOGGING
@@ -6763,6 +6844,7 @@ void AIPlayer::newMap( void )
 	m_knownGunsFrame = 0;
 	m_lookFrame = 0;
 	m_lookTurnFrame = 0;
+	m_tacticsTurnFrame = 0;
 	m_lookDefencesFrame = 0;
 	BuildListInfo *info = m_player->getBuildList();
 	// Add any factories placed to the build list.
@@ -10034,10 +10116,10 @@ static Real templateGroundReach( const ThingTemplate *tmpl )
 /** aiMatchupScore for a unit of ours against one kind of the enemy's.  enemyReach is a building's: a
 	* building cannot walk up to what outranges it, so a gun that does is never shot back at, the way an
 	* Inferno Cannon shells a Gatling Cannon. */
-static Real matchupAgainst( const ThingTemplate *tmpl, Real cost, const AIVisibleEnemy &enemy, Real enemyReach )
+static Real matchupAgainst( const ThingTemplate *tmpl, Real cost, const AIVisibleEnemy &enemy, Real enemyReach, Bool manual )
 {
 	const Bool outranges = enemyReach > 0.0f && templateGroundReach( tmpl ) >= enemyReach + DEFENCE_FIGHT_SLACK;
-	return aiMatchupScore( templateFramesToKill( tmpl, enemy.m_template ),
+	return aiMatchupScore( templateFramesToKill( tmpl, enemy.m_template, manual ),
 		outranges ? AI_CANNOT_KILL : templateFramesToKill( enemy.m_template, tmpl ), cost, enemy.m_cost );
 }
 
@@ -10389,7 +10471,7 @@ static const ThingTemplate *bestDefender( Object *factory, const Player *owner, 
 			continue;
 
 		const Int cost = tmpl->calcCostToBuild( owner );
-		const Real score = matchupAgainst( tmpl, INT_TO_REAL( cost ), enemy, enemyReach );
+		const Real score = matchupAgainst( tmpl, INT_TO_REAL( cost ), enemy, enemyReach, aiCreditsManual( owner ) );
 		if( best == NULL || score > bestScore || (score == bestScore && cost > bestCost) )
 		{
 			best = tmpl;
@@ -10412,7 +10494,7 @@ static void creditAnswer( const ThingTemplate *tmpl, const Player *owner, const 
 	Real bestScore = -1.0f;
 	for( size_t k = 0; k < army.size(); ++k )
 	{
-		const Real score = aiMatchupScore( templateFramesToKill( tmpl, army[ k ].m_template ),
+		const Real score = aiMatchupScore( templateFramesToKill( tmpl, army[ k ].m_template, aiCreditsManual( owner ) ),
 			templateFramesToKill( army[ k ].m_template, tmpl ), cost, army[ k ].m_cost );
 		if( score > bestScore )
 		{
@@ -10608,7 +10690,7 @@ void AIPlayer::defendHome( void )
 	// by unit against unit as well as price: four Tank Hunters are a match for two Overlords that cost as
 	// much again, and four Crusaders are not.  The advantage is the square law's, so its root scales power
 	if( getSkillProfile()->m_engageGate )
-		homePower *= (Real)sqrt( armyAdvantage( home, army ) );
+		homePower *= (Real)sqrt( armyAdvantage( home, army, aiCreditsManual( m_player ) ) );
 	// one that cannot shoot is worth going at with anything
 	if( homePower < 0.5f * intruderWorth && !(squatter && !intruder->isAbleToAttack()) )
 		return;
@@ -10695,7 +10777,7 @@ static void creditWhereNeeded( const ThingTemplate *tmpl, const Player *owner, c
 	Int best = -1;
 	for( size_t k = 0; k < army.size(); ++k )
 	{
-		if( matchupAgainst( tmpl, cost, army[ k ], reach[ k ] ) < ANSWER_SCORE )
+		if( matchupAgainst( tmpl, cost, army[ k ], reach[ k ], aiCreditsManual( owner ) ) < ANSWER_SCORE )
 			continue;
 		if( best < 0 || army[ k ].m_weight - (*answered)[ k ] > army[ best ].m_weight - (*answered)[ best ] )
 			best = (Int)k;
@@ -10828,7 +10910,7 @@ static Real armyMatchup( const ThingTemplate *tmpl, const Player *owner, const s
 	for( size_t k = 0; k < army.size(); ++k )
 	{
 		weighed += army[ k ].m_weight;
-		scored += army[ k ].m_weight * aiMatchupScore( templateFramesToKill( tmpl, army[ k ].m_template ),
+		scored += army[ k ].m_weight * aiMatchupScore( templateFramesToKill( tmpl, army[ k ].m_template, aiCreditsManual( owner ) ),
 			templateFramesToKill( army[ k ].m_template, tmpl ), cost, army[ k ].m_cost );
 	}
 	return weighed > 0.0f ? scored / weighed : 0.5f;
@@ -12025,7 +12107,7 @@ const ThingTemplate *AIPlayer::pickMassUnit( const std::vector<AIVisibleEnemy> &
 			Real weighed = 0.0f, scored = 0.0f, countered = 0.0f;
 			for( std::vector<AIVisibleEnemy>::const_iterator k = army.begin(); k != army.end(); ++k )
 			{
-				const Real mineFrames = templateFramesToKill( tmpl, k->m_template );
+				const Real mineFrames = templateFramesToKill( tmpl, k->m_template, aiCreditsManual( m_player ) );
 				const Real theirFrames = templateFramesToKill( k->m_template, tmpl );
 				scored += k->m_weight * aiMatchupScore( mineFrames, theirFrames, INT_TO_REAL( cost ), k->m_cost );
 				weighed += k->m_weight;
@@ -12098,7 +12180,7 @@ void AIPlayer::doMass( void )
 		const Real cost = INT_TO_REAL( m_massTemplate->calcCostToBuild( m_player ) );
 		Real countered = 0.0f;
 		for( std::vector<AIVisibleEnemy>::const_iterator k = army.begin(); k != army.end(); ++k )
-			if( aiMatchupScore( templateFramesToKill( k->m_template, m_massTemplate ), templateFramesToKill( m_massTemplate, k->m_template ),
+			if( aiMatchupScore( templateFramesToKill( k->m_template, m_massTemplate ), templateFramesToKill( m_massTemplate, k->m_template, aiCreditsManual( m_player ) ),
 						k->m_cost, cost ) >= MASS_COUNTERED )
 				countered += k->m_weight;
 		if( countered >= MASS_DROP_SHARE * armyPower )
@@ -12680,7 +12762,7 @@ void AIPlayer::updatePressure( void )
 			if( !(*o)->isKindOf( KINDOF_STRUCTURE ) && !(*o)->isKindOf( KINDOF_MONEY_HACKER ) && !(*o)->isKindOf( KINDOF_PROJECTILE ) )
 				addToArmy( &myArmy, *o );
 		rememberedArmy( &theirArmy );
-		myPower *= (Real)sqrt( armyAdvantage( myArmy, theirArmy ) );
+		myPower *= (Real)sqrt( armyAdvantage( myArmy, theirArmy, aiCreditsManual( m_player ) ) );
 	}
 	KnownArmy allies = { -1, 0.0f, 0, 0.0f, 0.0f };
 	Int enemyAllies = 0;
@@ -13489,7 +13571,7 @@ static const ThingTemplate *gunshipRiderTemplate( Object *factory, const ThingTe
 			continue;
 		if( armour == NULL )
 			return tmpl;
-		const Real frames = templateFramesToKill( tmpl, armour );
+		const Real frames = templateFramesToKill( tmpl, armour, aiCreditsManual( factory->getControllingPlayer() ) );
 		if( best == NULL || frames < bestFrames )
 		{
 			best = tmpl;
@@ -14945,7 +15027,7 @@ static Bool airStrikeKills( Object *aircraft, const Object *gun )
 		return TRUE;
 	if( !endless )
 		return FALSE;
-	const Real mine = templateFramesToKill( aircraft->getTemplate(), gun->getTemplate() );
+	const Real mine = templateFramesToKill( aircraft->getTemplate(), gun->getTemplate(), aiCreditsManual( aircraft->getControllingPlayer() ) );
 	const Real theirs = templateFramesToKill( gun->getTemplate(), aircraft->getTemplate() );
 	return mine >= 0.0f && (theirs < 0.0f || mine < theirs);
 }
@@ -16812,7 +16894,7 @@ void AIPlayer::measureFight( const Coord3D *centre, Bool countHolders, Real *myH
 		}
 	}
 	if( advantage )
-		*advantage = armyAdvantage( mine, theirs );
+		*advantage = armyAdvantage( mine, theirs, aiCreditsManual( m_player ) );
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -17158,7 +17240,7 @@ static Int shellDefence( const Player *player, Object *obj, Real range, const st
 		if( range < defences[ d ].m_reach + DEFENCE_FIGHT_SLACK || distSqr > sqr( range + SHELL_WALK ) || (best >= 0 && distSqr >= bestSqr) )
 			continue;
 		// a map lookup, so after the distances: every unit of every seat asked it of every known gun on the map
-		const Real framesToKill = templateFramesToKill( obj->getTemplate(), defences[ d ].m_object->getTemplate() );
+		const Real framesToKill = templateFramesToKill( obj->getTemplate(), defences[ d ].m_object->getTemplate(), aiCreditsManual( player ) );
 		if( framesToKill < 0.0f || framesToKill > SHELL_MAX_FRAMES )
 			continue;
 		const Real dist = (Real)sqrt( distSqr );
@@ -18273,6 +18355,8 @@ void AIPlayer::doTactics( void )
 	const Bool unitsLook = tactics && m_baseCenterSet;
 	if( unitsLook && m_lookTurnFrame != now + 1 )
 		AI_TAC( TAC_UNITS, collectLookTurn( m_player, TACTICS_RATE, &m_lookTurn ) );
+	if( unitsLook )
+		m_tacticsTurnFrame = now + 1;
 	const Bool sameLook = unitsLook && rungFrames( getSkillProfile()->m_fireLookSeconds ) == TACTICS_RATE;
 
 	AI_TAC( TAC_FIRE, answerFire( sameLook ? &m_lookTurn : NULL ) );
@@ -18342,6 +18426,927 @@ void AIPlayer::doTactics( void )
 #ifdef DEBUG_LOGGING
 	aiTacEnd( TAC_ROWS );
 #endif
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** The units' own buttons.  The skirmish AI left every one of them to the map scripts, which press a few in
+	* a hunt and nothing else: a Missile Defender never lased, a Comanche carried its rocket pods home unfired,
+	* Jarmen Kell walked past tanks he could have emptied.  Each unit whose turn comes up (Hard's tactics'
+	* turn, or the rung's own look) is read for buttons by abilitiesOf and each button weighed by its kind's
+	* rule, the first that pays ordered.  UnitAbilities 1 (Medium) has the laser lock, the manual shot, an area
+	* weapon at the unit's own target and the toggles; 2 (Hard) has the area weapons anywhere in reach, the
+	* walk-up specials and the suicides as well.
+	*
+	* Thresholds, each a named number with its reason:
+	* A manual shot or a volley sits out a long reload (Kell's snipe 30 s, the pods 30 s, the Kargu 45 s), so
+	* it goes on what is worth ABILITY_WORTH_FLOOR_SHARE of the shooter at least: a Comanche's pods on two
+	* soldiers, not one.  A walk-up takes the unit out of the fight for the whole walk, and the target has to
+	* be worth ABILITY_WALKUP_SHARE of it.  A toggle switches only on ABILITY_TOGGLE_MARGIN more kill rate
+	* than the slot it is on, so two near-equal slots do not swap every look.  A suicide goes off below
+	* ABILITY_SUICIDE_HURT of its health (it is going to die there anyway) or on ABILITY_SUICIDE_TRADE times
+	* its own price in enemies.  ABILITY_WALKUPS_IN_FLIGHT caps how many units walk to a target at once,
+	* the owner's limit on the walk-ups. */
+//----------------------------------------------------------------------------------------------------------
+static const Int ABILITY_SCANS_PER_FRAME = 8;						///< units with buttons weighed a frame; the rest wait for their next turn
+static const Real ABILITY_WORTH_FLOOR_SHARE = 0.3f;
+static const Real ABILITY_AREA_FRIEND_SHARE = 0.25f;		///< our own worth under a volley, against what it takes from the enemy
+static const Real ABILITY_AREA_AIR_THREAT = 1.0f;				///< an aircraft fires from a spot whose anti-air is worth at most this much of it
+static const Int ABILITY_STREAM_SHOTS = 10;							///< a clipless area weapon (a spray, a flame) is weighed as this many shots
+static const Real ABILITY_MELEE_RANGE = 30.0f;					///< a manual weapon this short is a knife: walking a hero into it is a walk-up without a walk-up's checks
+static const Real ABILITY_TOGGLE_MARGIN = 1.25f;
+static const Real ABILITY_TOGGLE_ROUND = 80.0f;					///< the enemies round a toggle's target it weighs, past the Nuke Cannon's 70 neutron blast
+static const Real ABILITY_WALKUP_SHARE = 0.5f;				///< a hack or a capture, which leave no blast to weigh, takes a target worth this much of the unit
+static const Real ABILITY_WALKUP_TEAM_RADIUS = 300.0f;	///< our units this near a walk-up's target count as the guns already on it
+static const Int ABILITY_WALKUPS_IN_FLIGHT = 2;
+static const Real ABILITY_WALKUP_FAR = 2000.0f;					///< a special with no StartAbilityRange (the module's huge default) reads as this
+static const Real ABILITY_SUICIDE_HURT = 0.3f;
+static const Real ABILITY_SUICIDE_TRADE = 1.5f;
+/** The blast a suicide is weighed by.  The button's weapon is a dummy: the damage is the unit's death
+	* weapons, upgrade by upgrade (FireWeaponWhenDead), so it is read as the bomb truck's outer ring. */
+static const Real ABILITY_SUICIDE_RADIUS = 65.0f;
+
+/** A manual shot is worth taking: it kills, it kills sooner than the unit's own guns, and the target is
+	* worth the reload it costs.  Frames are AI_CANNOT_KILL (below zero) for a weapon that cannot. */
+Bool AIAbility_pays( Real manualFrames, Real defaultFrames, Real value, Real floor )
+{
+	if( manualFrames < 0.0f || value < floor )
+		return FALSE;
+	return defaultFrames < 0.0f || manualFrames < defaultFrames;
+}
+
+/** Frames until a target of health dies when a blast of damage lands on it detonateFrames from now, while
+	* the rest of our guns take teamRate a frame off it all along and the planter's own guns add ownRate once
+	* it has planted.  The guns alone when they finish it before the blast; AI_CANNOT_KILL when nothing does. */
+Real AIAbility_walkUpKillFrames( Real health, Real damage, Real detonateFrames, Real teamRate, Real ownRate )
+{
+	if( teamRate > 0.0f && teamRate * detonateFrames >= health )
+		return health / teamRate;
+	const Real left = health - damage - teamRate * detonateFrames;
+	if( left <= 0.0f )
+		return detonateFrames;
+	const Real after = teamRate + ownRate;
+	return after > 0.0f ? detonateFrames + left / after : AI_CANNOT_KILL;
+}
+
+/** Where a volley takes the most.  Each point i is an enemy at (xs[i], ys[i]); values[i] is what the volley
+	* takes from it standing within radius of the aim, centreValues[i] what it takes from it as the aim itself,
+	* below zero for one that cannot be aimed at (out of reach).  The aim is the point whose own centre value
+	* and the values of the others within radius sum highest, the lowest index on a tie; -1 for none.
+	* onlyIndex >= 0 weighs that one aim alone. */
+Int AIAbility_bestAreaAim( const Real *xs, const Real *ys, const Real *values, const Real *centreValues, Int n, Real radius,
+													 Int onlyIndex, Real *score )
+{
+	Int best = -1;
+	Real bestScore = 0.0f;
+	const Real radiusSqr = radius * radius;
+	for( Int i = 0; i < n; ++i )
+	{
+		if( centreValues[ i ] < 0.0f || (onlyIndex >= 0 && i != onlyIndex) )
+			continue;
+		Real sum = centreValues[ i ];
+		for( Int j = 0; j < n; ++j )
+		{
+			if( j == i )
+				continue;
+			const Real dx = xs[ j ] - xs[ i ];
+			const Real dy = ys[ j ] - ys[ i ];
+			if( dx * dx + dy * dy <= radiusSqr )
+				sum += values[ j ];
+		}
+		if( best < 0 || sum > bestScore )
+		{
+			best = i;
+			bestScore = sum;
+		}
+	}
+	if( score )
+		*score = best >= 0 ? bestScore : 0.0f;
+	return best;
+}
+
+static Bool aiAbilityByID( const Object *a, const Object *b )
+{
+	return a->getID() < b->getID();
+}
+
+/** A slot of any of the template's weapon sets that only a button fires. */
+static Bool slotIsManualAnywhere( const ThingTemplate *tmpl, WeaponSlotType slot )
+{
+	const WeaponTemplateSetVector &sets = tmpl->getWeaponTemplateSets();
+	for( size_t s = 0; s < sets.size(); ++s )
+		if( sets[ s ].getNth( slot ) != NULL && isManualSlot( &sets[ s ], slot ) )
+			return TRUE;
+	return FALSE;
+}
+
+/** ... that goes off where the unit stands, the suicide bomber's mark. */
+static Bool slotIsSuicide( const ThingTemplate *tmpl, WeaponSlotType slot )
+{
+	const WeaponTemplateSetVector &sets = tmpl->getWeaponTemplateSets();
+	for( size_t s = 0; s < sets.size(); ++s )
+	{
+		const WeaponTemplate *weapon = sets[ s ].getNth( slot );
+		if( weapon != NULL && weapon->getDamageDealtAtSelfPosition() )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+/** The unit's buttons the AI has a rule for. */
+static std::vector<AIAbilityButton> abilitiesOf( const Object *obj )
+{
+	const ThingTemplate *tmpl = obj->getTemplate();
+	if( tmpl == NULL || tmpl->isKindOf( KINDOF_STRUCTURE ) )
+		return std::vector<AIAbilityButton>();
+	const CommandSet *set = TheCommandStore->findCommandSet( obj->getCommandSetString() );
+	const UnsignedInt id = tmpl->getTemplateID();
+	if( id >= theAbilityClasses.size() )
+		theAbilityClasses.resize( id + 1 );
+	AIAbilityClass &entry = theAbilityClasses[ id ];
+	if( entry.known && entry.set == set )
+		return entry.buttons;
+	entry.known = TRUE;
+	entry.set = set;
+	entry.buttons.clear();
+	Int toggles = 0;
+	for( Int i = 0; set && i < MAX_COMMANDS_PER_SET; ++i )
+	{
+		const CommandButton *button = set->getCommandButton( i );
+		if( button == NULL )
+			continue;
+		const UnsignedInt options = button->getOptions();
+		AIAbilityButton ability;
+		ability.button = button;
+		ability.kind = -1;
+		ability.slot = button->getWeaponSlot();
+		ability.power = SPECIAL_INVALID;
+		switch( button->getCommandType() )
+		{
+			case GUI_COMMAND_FIRE_WEAPON:
+				// a slot the AI picks by itself already fires (the ECM's jammer, the MiG's napalm)
+				if( options & (USES_MINE_CLEARING_WEAPONSET | SCRIPT_ONLY) )
+					break;
+				if( options & NEED_TARGET_POS )
+					ability.kind = slotIsManualAnywhere( tmpl, ability.slot ) ? AIABILITY_AREA : -1;
+				else if( options & NEED_TARGET_ENEMY_OBJECT )
+					ability.kind = slotIsManualAnywhere( tmpl, ability.slot ) ? AIABILITY_SHOT : -1;
+				else if( (options & (NEED_TARGET_NEUTRAL_OBJECT | NEED_TARGET_ALLY_OBJECT)) == 0 && slotIsSuicide( tmpl, ability.slot ) )
+					ability.kind = AIABILITY_SUICIDE;
+				break;
+			case GUI_COMMAND_SPECIAL_POWER:
+			{
+				const SpecialPowerTemplate *power = button->getSpecialPowerTemplate();
+				if( power == NULL || (options & (NEED_TARGET_ENEMY_OBJECT | SCRIPT_ONLY)) != NEED_TARGET_ENEMY_OBJECT )
+					break;
+				ability.power = power->getSpecialPowerType();
+				if( obj->findSpecialAbilityUpdate( ability.power ) == NULL )
+					break;
+				switch( ability.power )
+				{
+					case SPECIAL_MISSILE_DEFENDER_LASER_GUIDED_MISSILES:
+						ability.kind = AIABILITY_LASER;
+						break;
+					// remote charges wait on a second button, the capture and the vehicle hack are doCapture's and
+					// doHijack's, the Helix's bomb doHelixes', the disguise and the booby trap weigh nothing that can be read
+					case SPECIAL_TIMED_CHARGES:
+					case SPECIAL_TANKHUNTER_TNT_ATTACK:
+					case SPECIAL_HACKER_DISABLE_BUILDING:
+					case SPECIAL_BLACKLOTUS_CAPTURE_BUILDING:
+					case SPECIAL_BLACKLOTUS_STEAL_CASH_HACK:
+						ability.kind = AIABILITY_WALKUP;
+						break;
+					default:
+						break;
+				}
+				break;
+			}
+			case GUICOMMANDMODE_SABOTAGE_BUILDING:
+				ability.kind = AIABILITY_WALKUP;
+				break;
+			case GUI_COMMAND_SWITCH_WEAPON:
+				ability.kind = AIABILITY_TOGGLE;
+				++toggles;
+				break;
+			default:
+				break;
+		}
+		if( ability.kind >= 0 )
+			entry.buttons.push_back( ability );
+	}
+	// one switch alone has nothing to switch between
+	if( toggles < 2 )
+		for( size_t b = entry.buttons.size(); b-- > 0; )
+			if( entry.buttons[ b ].kind == AIABILITY_TOGGLE )
+				entry.buttons.erase( entry.buttons.begin() + b );
+	DEBUG_LOG(( "AI ABILITY BUTTONS '%s' set '%s': %d\n", tmpl->getName().str(), obj->getCommandSetString().str(), (Int)entry.buttons.size() ));
+	return entry.buttons;
+}
+
+/** What a unit is worth to the AI, rank counted, never nothing. */
+static Real abilityWorth( const Object *obj )
+{
+	const Real power = aiCombatPower( obj );
+	return power > 1.0f ? power : 1.0f;
+}
+
+/** A button's NEED_UPGRADE met: the player's upgrade or the unit's own. */
+static Bool abilityUpgradeReady( const Object *obj, const CommandButton *button )
+{
+	if( (button->getOptions() & NEED_UPGRADE) == 0 || button->getUpgradeTemplate() == NULL )
+		return TRUE;
+	const UpgradeTemplate *upgrade = button->getUpgradeTemplate();
+	if( upgrade->getUpgradeType() == UPGRADE_TYPE_PLAYER )
+		return obj->getControllingPlayer() && obj->getControllingPlayer()->hasUpgradeComplete( upgrade );
+	return obj->hasUpgrade( upgrade );
+}
+
+/** A weapon there, loaded, and with its whole clip: a volley half spent is not the volley weighed. */
+static Bool abilityWeaponReady( const Weapon *weapon )
+{
+	if( weapon == NULL || weapon->getStatus() != READY_TO_FIRE )
+		return FALSE;
+	const Int clip = weapon->getClipSize();
+	return clip <= 0 || (Int)weapon->getRemainingAmmo() >= clip;
+}
+
+/** The special the button fires, charged and allowed (its science bought). */
+static Bool abilitySpecialReady( Object *obj, const CommandButton *button )
+{
+	const SpecialPowerTemplate *power = button->getSpecialPowerTemplate();
+	SpecialPowerModuleInterface *mod = power ? obj->getSpecialPowerModule( power ) : NULL;
+	return mod != NULL && mod->isReady() && TheSpecialPowerStore->canUseSpecialPower( obj, power );
+}
+
+/** Frames the unit's live weapon in one slot takes to kill the target, or with the best of the slots the AI
+	* fires by itself when slot is below zero. */
+static Real abilityFramesToKill( const Object *obj, const Object *target, Int slot )
+{
+	const Real health = target->getBodyModule() ? target->getBodyModule()->getHealth() : 0.0f;
+	Real best = AI_CANNOT_KILL;
+	for( Int s = PRIMARY_WEAPON; s < WEAPONSLOT_COUNT; ++s )
+	{
+		if( slot >= 0 ? s != slot : (obj->getWeaponInWeaponSlotCommandSourceMask( (WeaponSlotType)s ) & (1 << CMD_FROM_AI)) == 0 )
+			continue;
+		const Weapon *weapon = obj->getWeaponInWeaponSlot( (WeaponSlotType)s );
+		AIShotPattern shots;
+		if( weapon == NULL || !shotPatternAgainst( weapon->getTemplate(), target->getTemplate(), health, &shots ) )
+			continue;
+		const Real frames = aiFramesToKill( health, shots );
+		if( frames >= 0.0f && (best < 0.0f || frames < best) )
+			best = frames;
+	}
+	return best;
+}
+
+/** One weapon's damage on one target's armour. */
+static Real abilityArmoured( const WeaponTemplate *weapon, const ThingTemplate *target, Real damage )
+{
+	const ArmorTemplateSet *armorSet = target->findArmorTemplateSet( ArmorSetFlags() );
+	const Armor armor = TheArmorStore->makeArmor( armorSet ? armorSet->getArmorTemplate() : NULL );
+	return armor.adjustDamage( weapon->getDamageType(), damage );
+}
+
+/** Enemies the player knows of within radius of a point, in ObjectID order. */
+static void abilityEnemiesNear( const Player *player, const Coord3D *at, Real radius, std::vector<Object *> *out )
+{
+	out->clear();
+	PartitionFilterPlayerAffiliation enemies( player, ALLOW_ENEMIES, true );
+	PartitionFilterAlive alive;
+	PartitionFilter *filters[] = { &enemies, &alive, NULL };
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( at, radius, FROM_BOUNDINGSPHERE_2D, filters );
+	MemoryPoolObjectHolder hold( iter );
+	for( Object *obj = iter->first(); obj; obj = iter->next() )
+	{
+		if( obj->isKindOf( KINDOF_PROJECTILE ) || obj->isEffectivelyDead() || player->getRelationship( obj->getTeam() ) != ENEMIES ||
+				!observerKnowsAbout( obj, player->getPlayerIndex() ) )
+			continue;
+		out->push_back( obj );
+	}
+	std::sort( out->begin(), out->end(), aiAbilityByID );
+}
+
+/** What of ours and our allies' stands within radius of a point, by worth; the unit itself left out. */
+static Real abilityFriendsNear( const Player *player, const Object *self, const Coord3D *at, Real radius )
+{
+	PartitionFilterPlayerAffiliation friends( player, ALLOW_ALLIES, true );
+	PartitionFilterAlive alive;
+	PartitionFilter *filters[] = { &friends, &alive, NULL };
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( at, radius, FROM_BOUNDINGSPHERE_2D, filters );
+	MemoryPoolObjectHolder hold( iter );
+	// summed in ObjectID order: a float sum in the partition's cell order is not one every machine shares
+	std::vector<Object *> nearby;
+	for( Object *obj = iter->first(); obj; obj = iter->next() )
+	{
+		if( obj == self || obj->isKindOf( KINDOF_PROJECTILE ) || obj->isEffectivelyDead() )
+			continue;
+		if( obj->getControllingPlayer() == player || player->getRelationship( obj->getTeam() ) == ALLIES )
+			nearby.push_back( obj );
+	}
+	std::sort( nearby.begin(), nearby.end(), aiAbilityByID );
+	Real worth = 0.0f;
+	for( size_t n = 0; n < nearby.size(); ++n )
+		worth += abilityWorth( nearby[ n ] );
+	return worth;
+}
+
+static void logAbility( const AIPlayer *ai, const Player *player, const Object *obj, const AIAbilityButton &entry,
+												const Object *target, const Coord3D *at, const char *why )
+{
+	DEBUG_LOG(( "AI ABILITY frame %d player %d '%s' %d %s %s at '%s' %d (%.0f,%.0f): %s\n", TheGameLogic->getFrame(), player->getPlayerIndex(),
+		obj->getTemplate()->getName().str(), obj->getID(), theAIAbilityKindName[ entry.kind ], entry.button->getName().str(),
+		target ? target->getTemplate()->getName().str() : "ground", target ? target->getID() : INVALID_ID, at->x, at->y, why ));
+}
+
+//----------------------------------------------------------------------------------------------------------
+Bool AIPlayer::abilityUnitBusy( const Object *obj ) const
+{
+	if( obj->testStatus( OBJECT_STATUS_IS_USING_ABILITY ) || aiAbilityWeaponHeld( obj ) )
+		return TRUE;
+	const ObjectID id = obj->getID();
+	if( id == m_capturerID || id == m_hijackerID || isDutyHelix( obj ) || isDutyAmbulance( obj ) ||
+			isWalkingToAmbulance( obj ) || isOutToMend( obj ) )
+		return TRUE;
+	for( Int i = 0; i < MAX_AI_SCOUTS; ++i )
+		if( id == m_scoutID[ i ] )
+			return TRUE;
+	// a kite, a hurt pull-out or a retreat's walk home owns the unit's orders until it is done
+	const TacticalStep *row = findTacticalStep( id );
+	return row != NULL && (row->resumeFrame != 0 || row->hurtAt > 0.0f || row->fallingBack ||
+		TheGameLogic->getFrame() < row->leaveAloneUntil);
+}
+
+//----------------------------------------------------------------------------------------------------------
+Int AIPlayer::walkUpsInFlight( std::vector<ObjectID> *taken ) const
+{
+	taken->clear();
+	std::vector<Object *> owned;
+	m_player->iterateObjects( collectOwned, &owned );
+	Int count = 0;
+	for( size_t o = 0; o < owned.size(); ++o )
+	{
+		const Object *obj = owned[ o ];
+		if( obj->isEffectivelyDead() || obj->isKindOf( KINDOF_STRUCTURE ) )
+			continue;
+		const std::vector<AIAbilityButton> buttons = abilitiesOf( obj );
+		for( size_t b = 0; b < buttons.size(); ++b )
+		{
+			if( buttons[ b ].kind != AIABILITY_WALKUP )
+				continue;
+			Bool busy = FALSE;
+			if( buttons[ b ].button->getCommandType() == GUICOMMANDMODE_SABOTAGE_BUILDING )
+			{
+				// a saboteur on its way in has the building for its goal
+				AIUpdateInterface *ai = const_cast<Object *>( obj )->getAI();
+				const Object *goal = ai && !ai->isIdle() ? ai->getGoalObject() : NULL;
+				busy = goal && goal->isKindOf( KINDOF_STRUCTURE ) && m_player->getRelationship( goal->getTeam() ) == ENEMIES;
+				if( busy )
+					taken->push_back( goal->getID() );
+			}
+			else
+			{
+				const SpecialAbilityUpdate *update = obj->findSpecialAbilityUpdate( buttons[ b ].power );
+				busy = update && update->isActive();
+				if( busy )
+					taken->push_back( update->getAbilityTargetID() );
+			}
+			if( busy )
+			{
+				++count;
+				break;
+			}
+		}
+	}
+	return count;
+}
+
+//----------------------------------------------------------------------------------------------------------
+Bool AIPlayer::walkIsCovered( const Object *obj, const Coord3D *to ) const
+{
+	const Coord3D *from = obj->getPosition();
+	const Real dx = to->x - from->x;
+	const Real dy = to->y - from->y;
+	const Real length = (Real)sqrt( dx * dx + dy * dy );
+	const Int samples = (Int)(length / INFLUENCE_CELL_SIZE + 0.5f);
+	const AIThreatMix mix = unitMix( obj );
+	for( Int i = 1; i <= samples; ++i )
+	{
+		const Real x = from->x + dx * i / samples;
+		const Real y = from->y + dy * i / samples;
+		if( m_influence.enemyAt( x, y, mix ) > m_influence.friendAt( x, y ) )
+			return FALSE;
+	}
+	return TRUE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** (a) The laser lock: the unit's own target is a vehicle, the special is charged, and lasing it and the
+	* laser missiles (always the second slot, SpecialAbilityUpdate's trigger) kill it sooner than its guns do. */
+Bool AIPlayer::abilityLaser( Object *obj, const AIAbilityButton &entry, Object *victim )
+{
+	if( victim == NULL || victim->isKindOf( KINDOF_STRUCTURE ) || !abilitySpecialReady( obj, entry.button ) ||
+			!TheActionManager->canDoSpecialPowerAtObject( obj, victim, CMD_FROM_AI, entry.button->getSpecialPowerTemplate(), entry.button->getOptions() ) )
+		return FALSE;
+	const Real laser = abilityFramesToKill( obj, victim, SECONDARY_WEAPON );
+	if( laser < 0.0f )
+		return FALSE;
+	const SpecialAbilityUpdate *update = obj->findSpecialAbilityUpdate( entry.power );
+	const Real lasing = update ? INT_TO_REAL( (Int)update->getPreparationFrames() ) : 0.0f;
+	const Real guns = abilityFramesToKill( obj, victim, -1 );
+	if( !AIAbility_pays( laser + lasing, guns, abilityWorth( victim ), 0.0f ) )
+		return FALSE;
+	char why[ 128 ];
+	sprintf( why, "laser %.0f + lasing %.0f frames against guns %.0f", laser, lasing, guns );
+	logAbility( this, m_player, obj, entry, victim, victim->getPosition(), why );
+	obj->doCommandButtonAtObject( entry.button, victim, CMD_FROM_AI );
+	return TRUE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** (b) A manual shot at an object: the unit's own target when the shot pays on it, else the most worth in
+	* reach that it pays on (Medium too: the owner left only the area weapons to the unit's own target). */
+Bool AIPlayer::abilityShot( Object *obj, const AIAbilityButton &entry, Object *victim, Int /*rung*/ )
+{
+	const Weapon *weapon = obj->getWeaponInWeaponSlot( entry.slot );
+	if( !abilityWeaponReady( weapon ) || !abilityUpgradeReady( obj, entry.button ) || weapon->getAttackRange( obj ) < ABILITY_MELEE_RANGE )
+		return FALSE;
+	const Real floor = ABILITY_WORTH_FLOOR_SHARE * abilityWorth( obj );
+	std::vector<Object *> candidates;
+	abilityEnemiesNear( m_player, obj->getPosition(), weapon->getAttackRange( obj ), &candidates );
+	if( victim )
+		candidates.insert( candidates.begin(), victim );
+	Object *best = NULL;
+	Real bestWorth = 0.0f, bestShot = 0.0f, bestGuns = 0.0f;
+	for( size_t c = 0; c < candidates.size(); ++c )
+	{
+		Object *target = candidates[ c ];
+		if( !entry.button->isValidObjectTarget( obj, target ) || !weapon->isWithinAttackRange( obj, target ) )
+			continue;
+		const Real worth = abilityWorth( target );
+		const Real shot = abilityFramesToKill( obj, target, entry.slot );
+		const Real guns = abilityFramesToKill( obj, target, -1 );
+		if( !AIAbility_pays( shot, guns, worth, floor ) )
+			continue;
+		if( target == victim )
+		{
+			best = target;
+			bestWorth = worth; bestShot = shot; bestGuns = guns;
+			break;			// its own target first: the rest of the team is on it already
+		}
+		if( best == NULL || worth > bestWorth )
+		{
+			best = target;
+			bestWorth = worth; bestShot = shot; bestGuns = guns;
+		}
+	}
+	if( best == NULL )
+		return FALSE;
+	char why[ 128 ];
+	sprintf( why, "shot %.0f frames against guns %.0f, worth %.0f", bestShot, bestGuns, bestWorth );
+	logAbility( this, m_player, obj, entry, best, best->getPosition(), why );
+	obj->doCommandButtonAtObject( entry.button, best, CMD_FROM_AI );
+	return TRUE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** (c) A volley at the ground: aimed at the enemy it takes the most from with the others round it, each
+	* counted for the share of its worth the volley's damage is of its health.  Medium aims only at the unit's own
+	* target. */
+Bool AIPlayer::abilityArea( Object *obj, const AIAbilityButton &entry, Object *victim, Int rung )
+{
+	const Weapon *weapon = obj->getWeaponInWeaponSlot( entry.slot );
+	if( !abilityWeaponReady( weapon ) || !abilityUpgradeReady( obj, entry.button ) || (rung < 2 && victim == NULL) )
+		return FALSE;
+	const WeaponTemplate *wt = weapon->getTemplate();
+	const WeaponBonus bonus;
+	const Real range = weapon->getAttackRange( obj );
+	const Real minRange = wt->getMinimumAttackRange();
+	const Real inner = wt->getPrimaryDamageRadius( bonus );
+	const Real outer = wt->getSecondaryDamageRadius( bonus );
+	const Real spread = max( wt->getScatterRadius(), wt->getScatterTargetsVector().empty() ? 0.0f : wt->getScatterTargetScalar() );
+	const Real radius = max( spread, max( inner, outer ) );
+	const Int shots = wt->getClipSize() > 0 ? wt->getClipSize() : ABILITY_STREAM_SHOTS;
+
+	std::vector<Object *> enemies;
+	abilityEnemiesNear( m_player, obj->getPosition(), range + radius, &enemies );
+	const Int n = (Int)enemies.size();
+	if( n == 0 )
+		return FALSE;
+	std::vector<Real> xs( n ), ys( n ), values( n ), centres( n );
+	Int only = -1;
+	for( Int i = 0; i < n; ++i )
+	{
+		const Object *enemy = enemies[ i ];
+		xs[ i ] = enemy->getPosition()->x;
+		ys[ i ] = enemy->getPosition()->y;
+		const Real health = enemy->getBodyModule() ? enemy->getBodyModule()->getHealth() : 0.0f;
+		AIShotPattern can;
+		if( health <= 0.0f || !shotPatternAgainst( wt, enemy->getTemplate(), health, &can ) || enemy->isKindOf( KINDOF_STRUCTURE ) )
+		{
+			values[ i ] = 0.0f;
+			centres[ i ] = -1.0f;
+			continue;
+		}
+		const Real primary = abilityArmoured( wt, enemy->getTemplate(), wt->getPrimaryDamage( bonus ) );
+		const Real secondary = abilityArmoured( wt, enemy->getTemplate(), wt->getSecondaryDamage( bonus ) );
+		// a spread volley lands evenly over its circle, so a target takes the share of the shots whose blast
+		// reaches it; a single aimed shot hits the aim with the inner damage and the rest with the outer
+		Real onAim, roundAim;
+		if( spread > 0.0f )
+		{
+			const Real share = primary * min( 1.0f, inner * inner / (spread * spread) ) + secondary * min( 1.0f, outer * outer / (spread * spread) );
+			onAim = roundAim = share;
+		}
+		else
+		{
+			onAim = primary;
+			roundAim = outer > 0.0f ? secondary : primary;
+		}
+		const Real worth = abilityWorth( enemy );
+		values[ i ] = worth * min( 1.0f, INT_TO_REAL( shots ) * roundAim / health );
+		const Real distSqr = sqr( xs[ i ] - obj->getPosition()->x ) + sqr( ys[ i ] - obj->getPosition()->y );
+		const Bool reach = distSqr <= sqr( range ) && distSqr >= sqr( minRange );
+		centres[ i ] = reach ? worth * min( 1.0f, INT_TO_REAL( shots ) * onAim / health ) : -1.0f;
+		if( enemy == victim )
+			only = i;
+	}
+	if( rung < 2 && only < 0 )
+		return FALSE;
+	Real score = 0.0f;
+	const Int aim = AIAbility_bestAreaAim( &xs[ 0 ], &ys[ 0 ], &values[ 0 ], &centres[ 0 ], n, radius, rung < 2 ? only : -1, &score );
+	const Real floor = ABILITY_WORTH_FLOOR_SHARE * abilityWorth( obj );
+	if( aim < 0 || score < floor )
+		return FALSE;
+	Coord3D at = *enemies[ aim ]->getPosition();
+	const Real friends = abilityFriendsNear( m_player, obj, &at, radius );
+	if( friends > ABILITY_AREA_FRIEND_SHARE * score )
+		return FALSE;
+	// an aircraft flies to its firing spot, range short of the aim on its way in: not into anti-air
+	Real threat = 0.0f;
+	if( obj->isKindOf( KINDOF_AIRCRAFT ) && hasTacticalMap() )
+	{
+		const Real dx = obj->getPosition()->x - at.x;
+		const Real dy = obj->getPosition()->y - at.y;
+		const Real dist = (Real)sqrt( dx * dx + dy * dy );
+		const Real back = dist > range ? range / dist : 1.0f;
+		threat = m_influence.enemyAt( at.x + dx * back, at.y + dy * back, unitMix( obj ) );
+		if( threat > ABILITY_AREA_AIR_THREAT * abilityWorth( obj ) )
+			return FALSE;
+	}
+	char why[ 160 ];
+	sprintf( why, "volley takes %.0f of %d in reach, floor %.0f, ours %.0f, air threat %.0f", score, n, floor, friends, threat );
+	logAbility( this, m_player, obj, entry, enemies[ aim ], &at, why );
+	obj->doCommandButtonAtPosition( entry.button, &at, CMD_FROM_AI );
+	return TRUE;
+}
+
+/** What a walk-up is worth on a target: its price, more for what keeps the enemy going. */
+static Real walkUpWorth( const Object *target )
+{
+	Real price = INT_TO_REAL( target->getTemplate()->calcCostToBuild( target->getControllingPlayer() ) );
+	if( price <= 0.0f )
+		price = abilityWorth( target );
+	if( target->isKindOf( KINDOF_FS_SUPERWEAPON ) )
+		return 3.0f * price;
+	if( target->isKindOf( KINDOF_FS_FACTORY ) || target->isKindOf( KINDOF_FS_BARRACKS ) || target->isKindOf( KINDOF_FS_WARFACTORY ) ||
+			target->isKindOf( KINDOF_FS_AIRFIELD ) || target->isKindOf( KINDOF_COMMANDCENTER ) )
+		return 2.0f * price;
+	if( target->isKindOf( KINDOF_FS_BASE_DEFENSE ) || target->isKindOf( KINDOF_FS_POWER ) || target->isKindOf( KINDOF_FS_SUPPLY_CENTER ) ||
+			target->isKindOf( KINDOF_CASH_GENERATOR ) )
+		return 1.5f * price;
+	return price * AIRank_valueScale( (Int)target->getVeterancyLevel() );
+}
+
+/** What a walk-up leaves on its target: the blast's weapon, and in fuseFrames the frames from the planting to
+	* the blast.  A charge or TNT is the special object's last death weapon and the life it is given; the
+	* Beret's strike is the trigger weapon fired as the unpacking ends.  NULL for a hack or a capture. */
+static const WeaponTemplate *walkUpBlast( const SpecialAbilityUpdate *update, Real *fuseFrames )
+{
+	*fuseFrames = 0.0f;
+	if( update->getTriggerWeapon() )
+		return update->getTriggerWeapon();
+	const ThingTemplate *charge = update->getSpecialObjectName().isEmpty() ? NULL :
+		TheThingFactory->findTemplate( update->getSpecialObjectName(), FALSE );
+	if( charge == NULL )
+		return NULL;
+	const WeaponTemplate *blast = NULL;
+	const ModuleInfo &modules = charge->getBehaviorModuleInfo();
+	for( Int m = 0; m < modules.getCount(); ++m )
+	{
+		const AsciiString name = modules.getNthName( m );
+		if( name.compareNoCase( "SlowDeathBehavior" ) == 0 )
+		{
+			const WeaponTemplateVec &weapons = static_cast<const SlowDeathBehaviorModuleData *>( modules.getNthData( m ) )->m_weapons[ SDPHASE_FINAL ];
+			if( !weapons.empty() )
+				blast = weapons.back();
+		}
+		else if( name.compareNoCase( "LifetimeUpdate" ) == 0 )
+		{
+			const UnsignedInt life = static_cast<const LifetimeUpdateModuleData *>( modules.getNthData( m ) )->m_minFrames;
+			*fuseFrames = INT_TO_REAL( (Int)life );
+		}
+	}
+	return blast;
+}
+
+/** How fast our units and our allies' near a target, the planter left out, take its health off, a frame. */
+static Real walkUpTeamRate( const Player *player, const Object *planter, const Object *target, Real health )
+{
+	PartitionFilterPlayerAffiliation friends( player, ALLOW_ALLIES, true );
+	PartitionFilterAlive alive;
+	PartitionFilter *filters[] = { &friends, &alive, NULL };
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( target->getPosition(), ABILITY_WALKUP_TEAM_RADIUS, FROM_BOUNDINGSPHERE_2D, filters );
+	MemoryPoolObjectHolder hold( iter );
+	std::vector<Object *> guns;
+	for( Object *obj = iter->first(); obj; obj = iter->next() )
+	{
+		if( obj == planter || obj->isKindOf( KINDOF_PROJECTILE ) || obj->isEffectivelyDead() || obj->isDisabled() )
+			continue;
+		if( obj->getControllingPlayer() != player && player->getRelationship( obj->getTeam() ) != ALLIES )
+			continue;
+		guns.push_back( obj );
+	}
+	// summed in ObjectID order, as abilityFriendsNear
+	std::sort( guns.begin(), guns.end(), aiAbilityByID );
+	Real rate = 0.0f;
+	for( size_t g = 0; g < guns.size(); ++g )
+	{
+		const Real frames = abilityFramesToKill( guns[ g ], target, -1 );
+		if( frames > 0.0f )
+			rate += health / frames;
+	}
+	return rate;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** (d) Walk up and press it where it pays: within the leash, along a walk our side holds on the map or
+	* unseen, and no more than ABILITY_WALKUPS_IN_FLIGHT at a time.  A blast (a charge, TNT, the Beret's
+	* strike) pays when the target dies sooner with it, the walk, the unpacking and the fuse counted, than
+	* under the guns of the planter and our units round the target; a hack or a capture, with no blast to
+	* weigh, takes a target worth ABILITY_WALKUP_SHARE of the unit. */
+Bool AIPlayer::abilityWalkUp( Object *obj, const AIAbilityButton &entry )
+{
+	if( !hasTacticalMap() )
+		return FALSE;
+	const Bool sabotage = entry.button->getCommandType() == GUICOMMANDMODE_SABOTAGE_BUILDING;
+	const SpecialAbilityUpdate *update = sabotage ? NULL : obj->findSpecialAbilityUpdate( entry.power );
+	if( !sabotage && (update == NULL || !abilitySpecialReady( obj, entry.button )) )
+		return FALSE;
+	// the leash: twice the reach the special starts from, and never under what the unit sees itself, since a
+	// charge's reach is a touch
+	const Real start = update ? min( update->getStartAbilityRange(), ABILITY_WALKUP_FAR ) : 0.0f;
+	const Real leash = max( 2.0f * start, obj->getVisionRange() );
+	std::vector<Object *> targets;
+	abilityEnemiesNear( m_player, obj->getPosition(), leash, &targets );
+	// one walk-up a target: a second Designate or charge on what one of ours is already doing it to is wasted
+	std::vector<ObjectID> taken;
+	if( targets.empty() || walkUpsInFlight( &taken ) >= ABILITY_WALKUPS_IN_FLIGHT )
+		return FALSE;
+	Real fuse = 0.0f;
+	const WeaponTemplate *blast = update ? walkUpBlast( update, &fuse ) : NULL;
+	const Real setUp = update ? INT_TO_REAL( (Int)(update->getUnpackFrames() + update->getPreparationFrames()) ) + fuse : 0.0f;
+	const Real speed = max( obj->getAI()->getCurLocomotorSpeed(), 0.1f );
+	const Real floor = blast ? 0.0f : ABILITY_WALKUP_SHARE * abilityWorth( obj );
+	const Bool unseen = obj->testStatus( OBJECT_STATUS_STEALTHED ) && !obj->testStatus( OBJECT_STATUS_DETECTED );
+	Object *best = NULL;
+	Real bestWorth = 0.0f;
+	Real bestWith = 0.0f;
+	Real bestGuns = 0.0f;
+	for( size_t t = 0; t < targets.size(); ++t )
+	{
+		Object *target = targets[ t ];
+		const Real worth = walkUpWorth( target );
+		if( worth < floor || (best && worth <= bestWorth) )
+			continue;
+		if( entry.power == SPECIAL_HACKER_DISABLE_BUILDING && target->isDisabled() )
+			continue;			// already off
+		if( std::find( taken.begin(), taken.end(), target->getID() ) != taken.end() )
+			continue;
+		if( !entry.button->isValidObjectTarget( obj, target ) )
+			continue;
+		const Bool can = sabotage ? TheActionManager->canSabotageBuilding( obj, target, CMD_FROM_AI ) :
+			TheActionManager->canDoSpecialPowerAtObject( obj, target, CMD_FROM_AI, entry.button->getSpecialPowerTemplate(), entry.button->getOptions() );
+		if( !can )
+			continue;
+		// the walk ends where the special starts from, so only that much of it has to be ours
+		const Coord3D *from = obj->getPosition();
+		const Coord3D *at = target->getPosition();
+		const Real distance = (Real)sqrt( sqr( at->x - from->x ) + sqr( at->y - from->y ) );
+		const Real walk = max( 0.0f, distance - start );
+		Coord3D stop = *at;
+		if( distance > 0.0f )
+		{
+			stop.x = from->x + (at->x - from->x) * walk / distance;
+			stop.y = from->y + (at->y - from->y) * walk / distance;
+		}
+		if( !unseen && !walkIsCovered( obj, &stop ) )
+			continue;
+		Real with = 0.0f;
+		Real guns = 0.0f;
+		if( blast )
+		{
+			const Real health = target->getBodyModule() ? target->getBodyModule()->getHealth() : 0.0f;
+			const Real own = abilityFramesToKill( obj, target, -1 );
+			const Real ownRate = own > 0.0f ? health / own : 0.0f;
+			const Real teamRate = walkUpTeamRate( m_player, obj, target, health );
+			// on a building the charge stays where the planter stood (StickyBombUpdate::init), so only a blast whose
+			// inner ring reaches past the building's middle lands its full damage; TNT's 10 gave a Supply Stash 150
+			// ponytail: the planter is taken to stand at the bounding circle, not where its path really ends
+			const WeaponBonus bonus;
+			const Bool inner = update->getTriggerWeapon() != NULL || !target->isKindOf( KINDOF_IMMOBILE ) ||
+				blast->getPrimaryDamageRadius( bonus ) >= target->getGeometryInfo().getBoundingCircleRadius() + start;
+			const Real damage = abilityArmoured( blast, target->getTemplate(), inner ? blast->getPrimaryDamage( bonus ) : blast->getSecondaryDamage( bonus ) );
+			with = AIAbility_walkUpKillFrames( health, damage, walk / speed + setUp, teamRate, ownRate );
+			guns = teamRate + ownRate > 0.0f ? health / (teamRate + ownRate) : AI_CANNOT_KILL;			if( with < 0.0f || (guns >= 0.0f && with >= guns) )
+				continue;
+		}
+		best = target;
+		bestWorth = worth;
+		bestWith = with;
+		bestGuns = guns;
+	}
+	if( best == NULL )
+		return FALSE;
+	char why[ 160 ];
+	if( blast )
+		sprintf( why, "dies in %.0f frames with it against %.0f under the guns, leash %.0f, %s", bestWith, bestGuns, leash, unseen ? "unseen" : "walk covered" );
+	else
+		sprintf( why, "worth %.0f, floor %.0f, leash %.0f, %s", bestWorth, floor, leash, unseen ? "unseen" : "walk covered" );
+	logAbility( this, m_player, obj, entry, best, best->getPosition(), why );
+	obj->doCommandButtonAtObject( entry.button, best, CMD_FROM_AI );
+	return TRUE;
+}
+
+/** The blast radius of a weapon whose shell is a neutron blast, 0 for any other.  Its damage is a token: the
+	* blast kills every soldier in it, everyone inside a building or vehicle in it, and every vehicle's crew
+	* (NeutronBlastBehavior::neutronBlastToObject). */
+static Real neutronBlastRadius( const WeaponTemplate *wt )
+{
+	const ThingTemplate *shell = wt->getProjectileTemplate();
+	if( shell == NULL )
+		return 0.0f;
+	const ModuleInfo &modules = shell->getBehaviorModuleInfo();
+	for( Int m = 0; m < modules.getCount(); ++m )
+		if( modules.getNthName( m ).compareNoCase( "NeutronBlastBehavior" ) == 0 )
+			return static_cast<const NeutronBlastBehaviorModuleData *>( modules.getNthData( m ) )->m_blastRadius;
+	return 0.0f;
+}
+
+/** How fast one slot takes worth off the unit's target and what stands in its blast round it, a frame.  A
+	* weapon that clears a garrison (the flashbang) counts the soldiers inside a garrisoned target; a neutron
+	* shell counts what its blast kills outright, a shot apart. */
+static Real toggleKillRate( const Object *obj, Int slot, const Object *victim, const std::vector<Object *> &round )
+{
+	const Weapon *weapon = obj->getWeaponInWeaponSlot( (WeaponSlotType)slot );
+	if( weapon == NULL )
+		return 0.0f;
+	const WeaponTemplate *wt = weapon->getTemplate();
+	const WeaponBonus bonus;
+	const Real neutron = neutronBlastRadius( wt );
+	if( neutron > 0.0f )
+	{
+		AIShotPattern timing;
+		aiShotTiming( wt, bonus, &timing );
+		Real worth = 0.0f;
+		for( size_t r = 0; r < round.size(); ++r )
+		{
+			const Object *enemy = round[ r ];
+			if( enemy != victim && sqr( enemy->getPosition()->x - victim->getPosition()->x ) + sqr( enemy->getPosition()->y - victim->getPosition()->y ) > sqr( neutron ) )
+				continue;
+			if( enemy->isKindOf( KINDOF_INFANTRY ) || (enemy->isKindOf( KINDOF_VEHICLE ) && !enemy->isKindOf( KINDOF_DRONE ) && !enemy->isKindOf( KINDOF_AIRCRAFT )) )
+				worth += abilityWorth( enemy );
+			const ContainModuleInterface *holds = enemy->getContain();
+			const ContainedItemsList *inside = holds ? holds->getContainedItemsList() : NULL;
+			if( inside )
+				for( ContainedItemsList::const_iterator it = inside->begin(); it != inside->end(); ++it )
+					worth += abilityWorth( *it );
+		}
+		return worth / max( 1.0f, timing.m_delayFrames + (timing.m_clipSize > 0 ? timing.m_reloadFrames / INT_TO_REAL( timing.m_clipSize ) : 0.0f) );
+	}
+	Real rate = 0.0f;
+	const ContainModuleInterface *contain = victim->getContain();
+	const DamageType type = wt->getDamageType();
+	if( (type == DAMAGE_SURRENDER || type == DAMAGE_KILL_GARRISONED) && contain && contain->isGarrisonable() &&
+			contain->getContainCount() > 0 && !contain->isImmuneToClearBuildingAttacks() )
+	{
+		AIShotPattern timing;
+		aiShotTiming( wt, bonus, &timing );
+		const ContainedItemsList *inside = contain->getContainedItemsList();
+		Real worth = 0.0f;
+		if( inside )
+			for( ContainedItemsList::const_iterator it = inside->begin(); it != inside->end(); ++it )
+				worth += abilityWorth( *it );
+		rate += worth / max( 1.0f, timing.m_delayFrames + (timing.m_clipSize > 0 ? timing.m_reloadFrames / INT_TO_REAL( timing.m_clipSize ) : 0.0f) );
+	}
+	const Real reach = max( wt->getPrimaryDamageRadius( bonus ), wt->getSecondaryDamageRadius( bonus ) );
+	for( size_t r = 0; r < round.size(); ++r )
+	{
+		const Object *enemy = round[ r ];
+		if( enemy != victim && sqr( enemy->getPosition()->x - victim->getPosition()->x ) + sqr( enemy->getPosition()->y - victim->getPosition()->y ) > sqr( reach ) )
+			continue;
+		const Real frames = abilityFramesToKill( obj, enemy, slot );
+		if( frames > 0.0f )
+			rate += abilityWorth( enemy ) / frames;
+	}
+	return rate;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** (e) A weapon switch, onto this button's slot when it takes worth off the unit's target and its neighbours
+	* ABILITY_TOGGLE_MARGIN faster than the slot it is on.  Nothing is kept: the margin is what holds a choice. */
+Bool AIPlayer::abilityToggle( Object *obj, const AIAbilityButton &entry, Object *victim )
+{
+	if( victim == NULL || !abilityUpgradeReady( obj, entry.button ) || obj->getWeaponInWeaponSlot( entry.slot ) == NULL )
+		return FALSE;
+	const Int current = obj->getCurWeaponLockStatus() == LOCKED_PERMANENTLY ? (Int)obj->getCurWeaponSlot() : (Int)PRIMARY_WEAPON;
+	if( current == (Int)entry.slot )
+		return FALSE;
+	std::vector<Object *> round;
+	abilityEnemiesNear( m_player, victim->getPosition(), ABILITY_TOGGLE_ROUND, &round );
+	const Real mine = toggleKillRate( obj, entry.slot, victim, round );
+	const Real now = toggleKillRate( obj, current, victim, round );
+	if( mine <= 0.0f || mine < ABILITY_TOGGLE_MARGIN * now )
+		return FALSE;
+	char why[ 128 ];
+	sprintf( why, "slot %d takes %.2f a frame against slot %d's %.2f", (Int)entry.slot, mine, current, now );
+	logAbility( this, m_player, obj, entry, victim, victim->getPosition(), why );
+	obj->doCommandButton( entry.button, CMD_FROM_AI );
+	return TRUE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** (f) Go off where it stands: nearly dead with enemies in the blast, or with ABILITY_SUICIDE_TRADE times its
+	* own worth of them there, and never with more than half that of ours. */
+Bool AIPlayer::abilitySuicide( Object *obj, const AIAbilityButton &entry )
+{
+	if( obj->getWeaponInWeaponSlot( entry.slot ) == NULL || !abilityUpgradeReady( obj, entry.button ) || obj->getBodyModule() == NULL )
+		return FALSE;
+	std::vector<Object *> enemies;
+	abilityEnemiesNear( m_player, obj->getPosition(), ABILITY_SUICIDE_RADIUS, &enemies );
+	Real theirs = 0.0f;
+	for( size_t e = 0; e < enemies.size(); ++e )
+		theirs += abilityWorth( enemies[ e ] );
+	if( theirs <= 0.0f )
+		return FALSE;
+	const Real ours = abilityFriendsNear( m_player, obj, obj->getPosition(), ABILITY_SUICIDE_RADIUS );
+	const Real own = abilityWorth( obj );
+	const Real health = obj->getBodyModule()->getHealth() / max( 1.0f, obj->getBodyModule()->getMaxHealth() );
+	if( ours > 0.5f * theirs || (health >= ABILITY_SUICIDE_HURT && theirs < ABILITY_SUICIDE_TRADE * own) )
+		return FALSE;
+	char why[ 128 ];
+	sprintf( why, "%.0f of theirs in the blast against own %.0f and ours %.0f, health %.2f", theirs, own, ours, health );
+	logAbility( this, m_player, obj, entry, enemies.front(), obj->getPosition(), why );
+	obj->doCommandButton( entry.button, CMD_FROM_AI );
+	return TRUE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+Bool AIPlayer::useAbility( Object *obj, const AIAbilityButton &entry, Int rung, Object *victim )
+{
+	switch( entry.kind )
+	{
+		case AIABILITY_LASER:		return abilityLaser( obj, entry, victim );
+		case AIABILITY_SHOT:		return abilityShot( obj, entry, victim, rung );
+		case AIABILITY_AREA:		return abilityArea( obj, entry, victim, rung );
+		case AIABILITY_TOGGLE:	return abilityToggle( obj, entry, victim );
+		case AIABILITY_WALKUP:	return rung >= 2 && abilityWalkUp( obj, entry );
+		case AIABILITY_SUICIDE:	return rung >= 2 && abilitySuicide( obj, entry );
+	}
+	return FALSE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+void AIPlayer::doAbilities( void )
+{
+	const Int rung = unitAbilitiesRung();
+	if( rung <= 0 || !m_baseCenterSet || measuringWithoutTactics() )
+		return;
+	// Hard's tactics collected this frame's turn already (doTactics); a rung without them takes its own on the
+	// same clock
+	const std::vector<Object *> *turn = &m_lookTurn;
+	if( m_tacticsTurnFrame != TheGameLogic->getFrame() + 1 )
+	{
+		collectLookTurn( m_player, TACTICS_RATE, &m_abilityTurn );
+		turn = &m_abilityTurn;
+	}
+	const Int me = m_player->getPlayerIndex();
+	Int scans = 0;
+	for( size_t i = 0; i < turn->size() && scans < ABILITY_SCANS_PER_FRAME; ++i )
+	{
+		Object *obj = (*turn)[ i ];
+		if( obj->isEffectivelyDead() || obj->getControllingPlayer() != m_player || obj->isContained() || obj->isDisabled() ||
+				obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || obj->getAI() == NULL )
+			continue;
+		const std::vector<AIAbilityButton> buttons = abilitiesOf( obj );
+		if( buttons.empty() || abilityUnitBusy( obj ) )
+			continue;
+		++scans;
+		Object *victim = obj->getAI()->getCurrentVictim();
+		if( victim && (victim->isEffectivelyDead() || m_player->getRelationship( victim->getTeam() ) != ENEMIES || !observerKnowsAbout( victim, me )) )
+			victim = NULL;
+		for( size_t b = 0; b < buttons.size(); ++b )
+			if( useAbility( obj, buttons[ b ], rung, victim ) )
+				break;
+	}
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -18658,6 +19663,10 @@ Bool AIPlayer::fightsOnItsOwn( Object *obj )
 	// armed, not "able to attack" this frame: that reads false while a clip reloads, which is exactly
 	// when a Rocket Buggy has to step away, and it took every buggy out of here the moment it had fired
 	if( obj->isEffectivelyDead() || obj->isContained() || groundAttackRange( obj ) <= 0.0f )
+		return FALSE;
+	// a unit pressing one of its buttons (doAbilities): the next attack or step these order would wipe the
+	// ability's own state or the weapon it locked for the shot.  A rung that presses none skips none, as before
+	if( unitAbilitiesRung() > 0 && (obj->testStatus( OBJECT_STATUS_IS_USING_ABILITY ) || aiAbilityWeaponHeld( obj )) )
 		return FALSE;
 	if( obj->isKindOf( KINDOF_STRUCTURE ) || obj->isKindOf( KINDOF_IMMOBILE ) || obj->isKindOf( KINDOF_AIRCRAFT ) ||
 			obj->isKindOf( KINDOF_DOZER ) || obj->isKindOf( KINDOF_HARVESTER ) || obj->isKindOf( KINDOF_PROJECTILE ) )
@@ -19135,7 +20144,7 @@ const AIPlayer::GunReading &AIPlayer::readGun( const Object *obj, const Object *
 	fightersNear( obj->getPosition(), RETREAT_ENGAGEMENT_RADIUS, &fighters );
 	for( size_t f = 0; f < fighters.size(); ++f )
 	{
-		if( templateFramesToKill( fighters[ f ]->getTemplate(), gun->getTemplate() ) < 0.0f )
+		if( templateFramesToKill( fighters[ f ]->getTemplate(), gun->getTemplate(), aiCreditsManual( m_player ) ) < 0.0f )
 			continue;
 		reading.ours += aiCombatPower( fighters[ f ] );
 		addToArmy( &mine, fighters[ f ] );
@@ -19145,7 +20154,7 @@ const AIPlayer::GunReading &AIPlayer::readGun( const Object *obj, const Object *
 	if( getSkillProfile()->m_engageGate )
 	{
 		addToArmy( &theirs, gun );
-		reading.ours *= (Real)sqrt( armyAdvantage( mine, theirs ) );
+		reading.ours *= (Real)sqrt( armyAdvantage( mine, theirs, aiCreditsManual( m_player ) ) );
 	}
 	// a building's own cell is no place to walk to, its reach is what counts; and the owner's rule for a defence
 	// holds whatever fired first, nobody walks into one short of the rung's odds at its edge (holdAtDefences).
@@ -19194,7 +20203,7 @@ AIFireAnswer AIPlayer::answerHit( Object *obj, Object *shooter, Object *gun )
 		cover = reading.cover;
 		// a holder goes back when the hold says; a spotter's carbine is for show, the guns it spots for are what
 		// answers this; and a gun nobody can see cannot be shot however close they walk
-		canGetAtIt = !holding && !obj->getTemplate()->hasSpotterSight() && templateFramesToKill( obj->getTemplate(), gun->getTemplate() ) >= 0.0f &&
+		canGetAtIt = !holding && !obj->getTemplate()->hasSpotterSight() && templateFramesToKill( obj->getTemplate(), gun->getTemplate(), aiCreditsManual( m_player ) ) >= 0.0f &&
 			(!gun->testStatus( OBJECT_STATUS_STEALTHED ) || gun->testStatus( OBJECT_STATUS_DETECTED )) &&
 			(fixed ? reading.edge >= aiFireOddsNow( EDGE_ODDS[ m_skillLevel ], committed, FIRE_RETURN_MARGIN ) :
 				TheAI->pathfinder()->clientSafeQuickDoesPathExist( ai->getLocomotorSet(), pos, at ));
@@ -20675,6 +21684,15 @@ Bool AIPlayer::knobsOffHere( void ) const
 				 (parity == 2 || (ThePlayerList->getSlotIndex( m_player->getPlayerIndex() ) & 1) == parity);
 }
 
+/** The rung's UnitAbilities less -aiknobsoff's abilities, read without getSkillProfile's copy into
+	* m_measuredProfile, so another seat's matchup may ask it of this one (a personality never moves it). */
+Int AIPlayer::unitAbilitiesRung( void ) const
+{
+	if( knobsOffHere() && (TheGlobalData->m_aiKnobsOffMask & AIKNOB_ABILITIES) != 0 )
+		return 0;
+	return TheAI->getDifficultyProfile( m_skillLevel )->m_unitAbilities;
+}
+
 const AIDifficultyProfile *AIPlayer::getSkillProfile( void ) const
 {
 	const AIDifficultyProfile *profile = TheAI->getDifficultyProfile( m_skillLevel );
@@ -20690,6 +21708,7 @@ const AIDifficultyProfile *AIPlayer::getSkillProfile( void ) const
 		if( mask & AIKNOB_MASS_UNIT )		m_measuredProfile.m_massUnit = FALSE;
 		if( mask & AIKNOB_BASE_WATCH )	m_measuredProfile.m_baseWatchSeconds = 0.0f;
 		if( mask & AIKNOB_STRIKE_DODGE )	m_measuredProfile.m_strikeDodgeSeconds = 0.0f;
+		if( mask & AIKNOB_ABILITIES )		m_measuredProfile.m_unitAbilities = 0;
 	}
 	if( m_persona == AIPERSONA_NORMAL )
 		return &m_measuredProfile;
@@ -22141,6 +23160,7 @@ void AIPlayer::loadPostProcess( void )
 	m_knownGunsFrame = 0;
 	m_lookFrame = 0;
 	m_lookTurnFrame = 0;
+	m_tacticsTurnFrame = 0;
 	m_lookDefencesFrame = 0;
 	forgetStampTurns();
 }  // end loadPostProcess

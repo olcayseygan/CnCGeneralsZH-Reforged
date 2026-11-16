@@ -6380,8 +6380,9 @@ void Object::doCommandButton( const CommandButton *commandButton, CommandSourceT
 					if( !BitTest( commandButton->getOptions(), COMMAND_OPTION_NEED_OBJECT_TARGET ) && !BitTest( commandButton->getOptions(), NEED_TARGET_POS ) )
 					{
 						setWeaponLock( commandButton->getWeaponSlot(), LOCKED_TEMPORARILY );
-						//LOCATION BASED FIRE WEAPON
-						ai->aiAttackPosition( NULL, commandButton->getMaxShotsToFire(), cmdSource );
+						//LOCATION BASED FIRE WEAPON: at its own feet, as AIGroup::groupAttackPosition reads a NULL spot
+						// (aiAttackPosition copies the spot, so EA's NULL here read address zero)
+						ai->aiAttackPosition( getPosition(), commandButton->getMaxShotsToFire(), cmdSource );
 					}
 					else
 					{

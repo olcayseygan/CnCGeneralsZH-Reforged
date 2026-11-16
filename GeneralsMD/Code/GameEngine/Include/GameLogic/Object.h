@@ -630,6 +630,8 @@ public:
 	Bool setWeaponLock( WeaponSlotType weaponSlot, WeaponLockType lockType ){ return m_weaponSet.setWeaponLock( weaponSlot, lockType ); }
 	void releaseWeaponLock(WeaponLockType lockType){ m_weaponSet.releaseWeaponLock(lockType); }
 	Bool isCurWeaponLocked() const { return m_weaponSet.isCurWeaponLocked(); }
+	WeaponLockType getCurWeaponLockStatus() const { return m_weaponSet.getCurWeaponLockStatus(); }
+	WeaponSlotType getCurWeaponSlot() const { return m_weaponSet.getCurWeaponSlot(); }
 
 	void setArmorSetFlag(ArmorSetType ast);
 	void clearArmorSetFlag(ArmorSetType ast);

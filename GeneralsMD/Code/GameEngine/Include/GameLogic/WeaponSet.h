@@ -234,6 +234,7 @@ public:
 	Bool hasWeaponToDealDamageType(DamageType typeToDeal) const { return m_totalDamageTypeMask.test(typeToDeal); }
 	Bool hasSingleDamageType(DamageType typeToDeal) const { return (m_totalDamageTypeMask.test(typeToDeal) && (m_totalDamageTypeMask.count() == 1) ); }
 	Bool isCurWeaponLocked() const { return m_curWeaponLockedStatus != NOT_LOCKED; }
+	WeaponLockType getCurWeaponLockStatus() const { return m_curWeaponLockedStatus; }
 	Weapon* getCurWeapon() { return m_weapons[m_curWeapon]; }
 	const Weapon* getCurWeapon() const { return m_weapons[m_curWeapon]; }
 	WeaponSlotType getCurWeaponSlot() const { return m_curWeapon; }

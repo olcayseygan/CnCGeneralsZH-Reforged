@@ -1,0 +1,23 @@
+# A Hard AI's Colonel Burton 120 from an Overlord that cannot see him, inside his own sight. His timed charge is a walk-up
+# button and pays only where the target dies sooner with it than under the guns: his rifle hardly
+# scratches a tank, the charge's 2000 kills it outright, so he walks up unseen and plants it. On an
+# empty Arms Dealer his rifle is as quick as the charge, and he does not plant.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionChina -side 1 FactionAmerica -seed 1 -maxframes 1400
+#     -scenario abil_charge -logPrefix abil_charge_
+#
+# Add -aiknobsoff odd abilities for the seat without its buttons.
+
+30    spawn   1  AmericaInfantryColonelBurton  1  813 1408
+35    spawn   1  AmericaInfantryRanger         4  start1:0:250  20
+30    spawn   0  ChinaTankOverlord             1  813 1528
+30    tally   0  ChinaTankOverlord
+300   tally   0  ChinaTankOverlord
+600   tally   0  ChinaTankOverlord
+900   tally   0  ChinaTankOverlord
+1200  tally   0  ChinaTankOverlord
+1500  tally   0  ChinaTankOverlord
+2000  tally   0  ChinaTankOverlord
+2000  tally   1  AmericaInfantryColonelBurton

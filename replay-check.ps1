@@ -29,8 +29,8 @@ param(
 	[int[]] $Seeds = @(0, 1),
 	# players in each match
 	[int] $Players = 2,
-	# easy | medium | brutal
-	[string] $Difficulty = "brutal",
+	# easy | medium | hard
+	[string] $Difficulty = "hard",
 	# how long each match runs, in seconds of game time (400 is 6 min 40 s), turned into logic frames
 	# at LOGICFRAMES_PER_SECOND from GameCommon.h. Long enough to build and fight; a divergence in
 	# movement code needs units on the move, and the first half minute is two workers walking to a

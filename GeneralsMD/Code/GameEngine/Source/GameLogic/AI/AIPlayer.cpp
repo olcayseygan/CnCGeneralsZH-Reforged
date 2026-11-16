@@ -19392,7 +19392,9 @@ Bool AIPlayer::abilityShot( Object *obj, const AIAbilityButton &entry, Object *v
 		const Real worth = abilityWorth( target );
 		const Real shot = abilityFramesToKill( obj, target, entry.slot );
 		const Real guns = abilityFramesToKill( obj, target, -1 );
-		if( !AIAbility_pays( shot, guns, worth, floor ) )
+		// the knife skips the race: its 833 ms stab loses to Burton's three-round burst on a Red Guard, so the
+		// test never let it out, and a soldier at his elbow is the owner's call to stab
+		if( !knife && !AIAbility_pays( shot, guns, worth, floor ) )
 			continue;
 		if( target == victim )
 		{

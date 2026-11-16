@@ -1,0 +1,23 @@
+# A Hard AI's Colonel Burton with three Red Guards at his elbow in an open field. His knife kills a
+# soldier outright where his rifle takes a burst, and the soldiers are inside its reach, so he knifes
+# them; without his buttons he shoots.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionChina -side 1 FactionAmerica -seed 1 -maxframes 900
+#     -scenario hero_knife -logPrefix hero_knife_
+#
+# Add -aiknobsoff odd abilities for the seat without its buttons. The knife shows as an AI ABILITY
+# line naming Command_ColonelBurtonKnifeAttack, and the frame 90 tally holds the survivor at full
+# health where the rifle leaves him at 80.
+
+30    spawn   1  AmericaInfantryColonelBurton  1  813 1408
+32    spawn   0  ChinaInfantryRedguard         3  813 1430  15
+30    tally   0  ChinaInfantryRedguard
+90    tally   0  ChinaInfantryRedguard
+150   tally   0  ChinaInfantryRedguard
+300   tally   0  ChinaInfantryRedguard
+600   tally   0  ChinaInfantryRedguard
+900   tally   0  ChinaInfantryRedguard
+1300  tally   0  ChinaInfantryRedguard
+1300  tally   1  AmericaInfantryColonelBurton

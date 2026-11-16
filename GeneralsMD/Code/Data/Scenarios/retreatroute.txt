@@ -1,0 +1,54 @@
+# A hurt computer unit with the enemy between it and home: does it drive through them on its way out?
+#
+# Seat 0 is a Hard China at start 0; seat 1 is emptied by -takeover 1 and its tanks, set defensive, only
+# shoot what comes into reach. Two Red Guards at home are put down first for the AI's scouts, which would
+# otherwise take the tank. A Battlemaster stands 1100 north of the Chinese base, a Crusader 140 north of it
+# and a Paladin 140 south, between it and home, both in its sight and so on the AI's map. At
+# file frame 165 it is set to 34% health, and Hard's tactics pull it out; it is held at 34% to file frame
+# 480 so that it lives to show where it goes. Read "AI TACTICS ... pulls a hurt" for where it goes and the
+# threat summed on the way against the road home's, and the arrive line for whether it drove over the
+# Paladin's ground. The road home runs over the Paladin; the way out to the side does not. The pull-out
+# waits for the AI's map, which is drawn over a second and read up to two old.
+#
+# Under -aiknobsoff all costmap the build before the route-aware choice pulls the unit out too, so that is
+# the pair to compare; the build before also pulled no hurt unit out at all on the class map.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Tournament Desert\Tournament Desert.map" -autoskirmish 2 -aidiff hard -takeover 1
+#     -side 0 FactionChina -side 1 FactionAmerica -seed 1 -maxframes 900
+#     -scenario retreatroute -logPrefix retreatroute_ [-aiknobsoff all costmap]
+
+5     spawn       0  ChinaInfantryRedguard    2  start0:200:0
+150   spawn       0  ChinaTankBattleMaster    1  start0:0:1100
+150   spawn       1  AmericaTankCrusader      1  start0:0:1240
+150   spawn       1  AmericaTankPaladin       1  start0:0:960
+# defensive, so they shoot what comes into reach and chase nothing: the way out decides, not a pursuit
+160   stance      1  AmericaTankCrusader         defensive
+160   stance      1  AmericaTankPaladin          defensive
+
+165   health      0  ChinaTankBattleMaster       34
+165   arrive      0  ChinaTankBattleMaster       start0:0:960  80
+165   tally       0  ChinaTankBattleMaster
+180   health      0  ChinaTankBattleMaster       34
+195   health      0  ChinaTankBattleMaster       34
+210   health      0  ChinaTankBattleMaster       34
+225   health      0  ChinaTankBattleMaster       34
+240   health      0  ChinaTankBattleMaster       34
+255   health      0  ChinaTankBattleMaster       34
+270   health      0  ChinaTankBattleMaster       34
+285   health      0  ChinaTankBattleMaster       34
+300   health      0  ChinaTankBattleMaster       34
+315   health      0  ChinaTankBattleMaster       34
+330   health      0  ChinaTankBattleMaster       34
+345   health      0  ChinaTankBattleMaster       34
+360   health      0  ChinaTankBattleMaster       34
+375   health      0  ChinaTankBattleMaster       34
+390   health      0  ChinaTankBattleMaster       34
+405   health      0  ChinaTankBattleMaster       34
+420   health      0  ChinaTankBattleMaster       34
+435   health      0  ChinaTankBattleMaster       34
+450   health      0  ChinaTankBattleMaster       34
+465   health      0  ChinaTankBattleMaster       34
+480   health      0  ChinaTankBattleMaster       34
+600   tally       0  ChinaTankBattleMaster
+900   tally       0  ChinaTankBattleMaster

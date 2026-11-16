@@ -17671,6 +17671,22 @@ TEST(the_retreat_never_orders_an_aircraft_home)
 }
 
 
+/** AIPlayer.cpp: one pulled out hurt turns back once mended to 65%, and never on less than 25 points over
+	 what it left at; one that left nearly whole goes back whole. */
+extern Bool AIRetreat_mendedEnough( Real healthFraction, Real hurtAt );
+
+TEST(a_unit_pulled_out_hurt_turns_back_once_mended)
+{
+	CHECK( !AIRetreat_mendedEnough( 0.40f, 0.30f ) );
+	CHECK( !AIRetreat_mendedEnough( 0.64f, 0.30f ) );
+	CHECK( AIRetreat_mendedEnough( 0.65f, 0.30f ) );
+	CHECK( !AIRetreat_mendedEnough( 0.70f, 0.50f ) );		// a heroic out at 50% waits for 75%
+	CHECK( AIRetreat_mendedEnough( 0.75f, 0.50f ) );
+	CHECK( !AIRetreat_mendedEnough( 0.99f, 0.85f ) );		// a ranked one out of a losing fight at 85% goes back whole
+	CHECK( AIRetreat_mendedEnough( 1.00f, 0.85f ) );
+}
+
+
 /** AIPlayer.cpp: a ranked unit leaves a fight on its own health and before its team does, the higher
 	 the rank the sooner, and counts for more in every weighing of forces. */
 extern Bool AIRetreat_rankPullsOut( Int rank, Real healthFraction, Bool inFight, Real ratio, Real retreatRatio );
@@ -17898,6 +17914,54 @@ TEST(a_losing_team_keeps_off_every_gun_on_the_map)
 	influence.stampEnemy( 0.0f, 0.0f, 0.0f, 5000.0f, 5000.0f, everything );
 	CHECK( !aiRetreatFallbackPoint( 0.0f, 0.0f, 2000.0f, 0.0f, 60.0f, NULL, 0, bounds, &x, &y, &influence ) );
 	CHECK_NEAR( 2000.0f, x, 0.01f );
+}
+
+
+/** AI.cpp: the way out is the one with the least threat on it, not the one out soonest.  A weak gun covers the
+	 road home and the start; two strong guns stand either side.  Straight out to the side is out soonest and runs
+	 under the strong guns; 45 degrees off the road takes longer under the weak one and nothing else. */
+TEST(a_retreat_takes_the_way_with_the_least_threat_on_it)
+{
+	Real x = 0.0f, y = 0.0f, threat = 0.0f, road = 0.0f;
+	const Real bounds[] = { -1000.0f, -1000.0f, 3000.0f, 1000.0f };
+	AIInfluenceMap influence;
+	influence.reset( -1000.0f, -1000.0f, 4000.0f, 2000.0f, 60.0f );
+	const Real weak[ AITHREAT_COUNT ] = { 10.0f, 10.0f, 0.0f };
+	const Real strong[ AITHREAT_COUNT ] = { 900.0f, 900.0f, 0.0f };
+	influence.stampEnemy( 300.0f, 0.0f, 0.0f, 320.0f, 0.0f, weak );
+	influence.stampEnemy( 0.0f, 150.0f, 0.0f, 100.0f, 0.0f, strong );
+	influence.stampEnemy( 0.0f, -150.0f, 0.0f, 100.0f, 0.0f, strong );
+	CHECK( aiRetreatFallbackPoint( 0.0f, 0.0f, 2000.0f, 0.0f, 60.0f, NULL, 0, bounds, &x, &y, &influence, NULL, &threat, &road ) );
+	CHECK( x > 200.0f );
+	CHECK_NEAR( x, y, 0.01f );
+	CHECK( threat > 0.0f );
+	CHECK( threat < road );
+	CHECK( threat < 900.0f );		// never under a strong gun
+}
+
+
+/** AI.cpp: a walk whose straight line crosses the enemy's reach goes round it by a waypoint; a clear one does not. */
+TEST(a_walk_home_goes_round_the_enemy_between)
+{
+	Real x = 0.0f, y = 0.0f, straight = 0.0f, round = 0.0f;
+	const Real bounds[] = { -1000.0f, -1000.0f, 3000.0f, 1000.0f };
+	AIInfluenceMap influence;
+	influence.reset( -1000.0f, -1000.0f, 4000.0f, 2000.0f, 60.0f );
+	CHECK( !aiDetourWaypoint( 0.0f, 0.0f, 2000.0f, 0.0f, 60.0f, bounds, &influence, AITHREAT_GROUND_MIX, &x, &y, &straight, &round ) );
+	CHECK_NEAR( 0.0f, straight, 0.001f );
+
+	const Real army[ AITHREAT_COUNT ] = { 900.0f, 900.0f, 0.0f };
+	influence.stampEnemy( 1000.0f, 0.0f, 0.0f, 200.0f, 0.0f, army );
+	CHECK( aiDetourWaypoint( 0.0f, 0.0f, 2000.0f, 0.0f, 60.0f, bounds, &influence, AITHREAT_GROUND_MIX, &x, &y, &straight, &round ) );
+	CHECK( straight > 0.0f );
+	CHECK_NEAR( 0.0f, round, 0.001f );
+	CHECK( y > 300.0f );
+	CHECK( x > 700.0f && x < 1300.0f );
+
+	// with the map edge 100 to the north, round by the south
+	const Real northEdge[] = { -1000.0f, -1000.0f, 3000.0f, 100.0f };
+	CHECK( aiDetourWaypoint( 0.0f, 0.0f, 2000.0f, 0.0f, 60.0f, northEdge, &influence, AITHREAT_GROUND_MIX, &x, &y, &straight, &round ) );
+	CHECK( y < -300.0f );
 }
 
 

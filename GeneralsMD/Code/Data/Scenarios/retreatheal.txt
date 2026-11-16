@@ -1,0 +1,24 @@
+# A hurt computer unit sent home mends on the way: does it turn back, or drive all the way home?
+#
+# Seat 0 is a Hard China at start 0 with nothing built yet, so nothing at home mends a tank; seat 1 is
+# emptied by -takeover 1. Two Red Guards at home are put down first for the AI's scouts, which would
+# otherwise take the tank. A veteran Battlemaster 1100 north of the base is set to 30% health at file
+# frame 180, under the 35% a veteran leaves at, and the retreat walks it home. At file frame 330, on the
+# way, it is set to 80%, as a heal aura or a heroic rank's mending would leave it. Read
+# "AI VETERAN ... pulls", then "AI MENDED ... turns back" with its frame and health; the arrive line counts
+# it at home.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Tournament Desert\Tournament Desert.map" -autoskirmish 2 -aidiff hard -takeover 1
+#     -side 0 FactionChina -side 1 FactionAmerica -seed 1 -maxframes 1200
+#     -scenario retreatheal -logPrefix retreatheal_
+
+5     spawn       0  ChinaInfantryRedguard    2  start0:200:0
+150   spawn       0  ChinaTankBattleMaster    1  start0:0:1100
+180   health      0  ChinaTankBattleMaster       30  1
+180   arrive      0  ChinaTankBattleMaster       start0  300
+180   tally       0  ChinaTankBattleMaster
+330   health      0  ChinaTankBattleMaster       80
+330   tally       0  ChinaTankBattleMaster
+600   tally       0  ChinaTankBattleMaster
+1200  tally       0  ChinaTankBattleMaster

@@ -2033,6 +2033,37 @@ static Bool gunsReach( Real x, Real y, const Real *guns, Int gunCount, const AII
 	return map != NULL && map->enemyAt( x, y, mix ) > 0.0f;
 }
 
+/** How much can shoot at (x, y): the map read with mix, and one for each gun in guns[] that reaches it.
+	* ponytail: a gun of the list counts one whatever it is, next to the map's threat values in the hundreds;
+	* the list's guns are the fight's and on the map too, and only a list without a map leans on the count */
+static Real threatAt( Real x, Real y, const Real *guns, Int gunCount, const AIInfluenceMap *map, const AIThreatMix &mix )
+{
+	Real sum = map != NULL ? map->enemyAt( x, y, mix ) : 0.0f;
+	for( Int g = 0; g < gunCount; ++g )
+	{
+		const Real gx = x - guns[ 3 * g ];
+		const Real gy = y - guns[ 3 * g + 1 ];
+		if( gx * gx + gy * gy <= guns[ 3 * g + 2 ] * guns[ 3 * g + 2 ] )
+			sum += 1.0f;
+	}
+	return sum;
+}
+
+/** threatAt summed at about every step along the straight walk from (fromX, fromY) to (toX, toY), evenly spaced,
+	* the end included and the start, where the walker already stands, not. */
+static Real threatAlong( Real fromX, Real fromY, Real toX, Real toY, Real step,
+												 const Real *guns, Int gunCount, const AIInfluenceMap *map, const AIThreatMix &mix )
+{
+	const Real dx = toX - fromX;
+	const Real dy = toY - fromY;
+	const Real length = (Real)sqrt( dx * dx + dy * dy );
+	const Int samples = (Int)(length / step + 0.5f);
+	Real sum = 0.0f;
+	for( Int i = 1; i <= samples; ++i )
+		sum += threatAt( fromX + dx * i / samples, fromY + dy * i / samples, guns, gunCount, map, mix );
+	return sum;
+}
+
 //-------------------------------------------------------------------------------------------------
 /** How far a force at (fromX, fromY) walks along (dirX, dirY), a unit vector, in steps, to the first
 	* spot no gun reaches with one more step of clear ground past it, that next step included; -1 when it
@@ -2064,15 +2095,27 @@ static Real walkOutOfReach( Real fromX, Real fromY, Real dirX, Real dirY, Real m
 	* pulled out of a fight there died to a building within fifteen seconds of the order.  A way that walks
 	* off the map (bounds) is no way out; ground the pathfinder cannot stand on is its to move to the
 	* nearest that it can, as with any move.  With a map, every enemy gun on it counts as well as the ones in
-	* guns[]: those are the guns of the fight, and a spot clear of them stood under the next gun over. */
+	* guns[]: those are the guns of the fight, and a spot clear of them stood under the next gun over.
+	*
+	* Of the ways out, the one with the least threat summed along it (threatAlong), and of two within a tenth of
+	* each other the one out more than a step sooner.  Picked by its length alone, the way that got out first
+	* was the way under the enemy's army whenever the army stood nearer than the edge of a lone gun's reach,
+	* and a unit pulled out of a fight drove through the tanks between it and home.  outThreat and roadThreat,
+	* when given, take the chosen way's sum and the road home's (-1 when the road never gets out). */
 //-------------------------------------------------------------------------------------------------
+static const Real ROUTE_THREAT_MARGIN = 0.9f;
+
 Bool aiRetreatFallbackPoint( Real fromX, Real fromY, Real homeX, Real homeY, Real step,
 														 const Real *guns, Int gunCount, const Real *bounds, Real *outX, Real *outY,
-														 const AIInfluenceMap *map, const AIThreatMix *mix )
+														 const AIInfluenceMap *map, const AIThreatMix *mix, Real *outThreat, Real *roadThreat )
 {
 	const AIThreatMix &reads = mix ? *mix : AITHREAT_GROUND_MIX;
 	*outX = homeX;
 	*outY = homeY;
+	if( outThreat )
+		*outThreat = -1.0f;
+	if( roadThreat )
+		*roadThreat = -1.0f;
 	const Real dx = homeX - fromX;
 	const Real dy = homeY - fromY;
 	const Real homeDist = (Real)sqrt( dx * dx + dy * dy );
@@ -2091,20 +2134,95 @@ Bool aiRetreatFallbackPoint( Real fromX, Real fromY, Real homeX, Real homeY, Rea
 	};
 	Int best = -1;
 	Real bestWalk = 0.0f;
+	Real bestThreat = 0.0f;
 	for( Int w = 0; w < 5; ++w )
 	{
 		const Real walk = walkOutOfReach( fromX, fromY, ways[ w ][ 0 ], ways[ w ][ 1 ], homeDist, step, guns, gunCount, bounds, map, reads );
-		if( walk >= 0.0f && (best < 0 || walk + step < bestWalk) )
+		if( walk < 0.0f )
+			continue;
+		const Real threat = threatAlong( fromX, fromY, fromX + ways[ w ][ 0 ] * walk, fromY + ways[ w ][ 1 ] * walk, step, guns, gunCount, map, reads );
+		if( w == 0 && roadThreat )
+			*roadThreat = threat;
+		const Bool quieter = threat < bestThreat * ROUTE_THREAT_MARGIN;
+		const Bool asQuietAndSooner = threat * ROUTE_THREAT_MARGIN <= bestThreat && walk + step < bestWalk;
+		if( best < 0 || quieter || asQuietAndSooner )
 		{
 			best = w;
 			bestWalk = walk;
+			bestThreat = threat;
 		}
 	}
 	if( best < 0 )
 		return FALSE;
 	*outX = fromX + ways[ best ][ 0 ] * bestWalk;
 	*outY = fromY + ways[ best ][ 1 ] * bestWalk;
+	if( outThreat )
+		*outThreat = bestThreat;
 	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A waypoint that takes the straight walk from (fromX, fromY) to (toX, toY) round the enemy reach the map
+	* shows on it.  The spots tried stand off the line's hottest point, square to it, DETOUR_REACH_STEPS steps
+	* either side; the one whose two legs sum the least threat (threatAlong, map read with mix) is the waypoint
+	* when that is under DETOUR_WORTH of the straight walk's.  The pathfinder knows nothing of the map, so this
+	* is the whole of the walk going round: a move to the waypoint and on to the end.  FALSE when the line is
+	* clear or nothing round it is that much quieter.  straightThreat and detourThreat take both sums, the
+	* detour's -1 when none was tried. */
+//-------------------------------------------------------------------------------------------------
+static const Real DETOUR_REACH_STEPS[] = { 3.0f, 6.0f, 9.0f, 12.0f };
+static const Real DETOUR_WORTH = 0.5f;
+
+Bool aiDetourWaypoint( Real fromX, Real fromY, Real toX, Real toY, Real step, const Real *bounds,
+											 const AIInfluenceMap *map, const AIThreatMix &mix, Real *wayX, Real *wayY,
+											 Real *straightThreat, Real *detourThreat )
+{
+	*detourThreat = -1.0f;
+	*straightThreat = threatAlong( fromX, fromY, toX, toY, step, NULL, 0, map, mix );
+	const Real dx = toX - fromX;
+	const Real dy = toY - fromY;
+	const Real length = (Real)sqrt( dx * dx + dy * dy );
+	const Int samples = (Int)(length / step + 0.5f);
+	if( *straightThreat <= 0.0f || samples < 2 )
+		return FALSE;
+
+	// the hottest point on the line, the first of equals
+	Int hottest = 1;
+	Real hottestThreat = -1.0f;
+	for( Int i = 1; i <= samples; ++i )
+	{
+		const Real threat = map->enemyAt( fromX + dx * i / samples, fromY + dy * i / samples, mix );
+		if( threat > hottestThreat )
+		{
+			hottest = i;
+			hottestThreat = threat;
+		}
+	}
+	const Real hotX = fromX + dx * hottest / samples;
+	const Real hotY = fromY + dy * hottest / samples;
+	const Real sideX = -dy / length;
+	const Real sideY = dx / length;
+
+	Bool found = FALSE;
+	for( Int k = 0; k < (Int)(sizeof( DETOUR_REACH_STEPS ) / sizeof( DETOUR_REACH_STEPS[ 0 ] )); ++k )
+	{
+		for( Int turn = 1; turn >= -1; turn -= 2 )
+		{
+			const Real x = hotX + sideX * turn * DETOUR_REACH_STEPS[ k ] * step;
+			const Real y = hotY + sideY * turn * DETOUR_REACH_STEPS[ k ] * step;
+			if( x < bounds[ 0 ] || y < bounds[ 1 ] || x > bounds[ 2 ] || y > bounds[ 3 ] )
+				continue;
+			const Real threat = threatAlong( fromX, fromY, x, y, step, NULL, 0, map, mix ) + threatAlong( x, y, toX, toY, step, NULL, 0, map, mix );
+			if( !found || threat < *detourThreat )
+			{
+				found = TRUE;
+				*detourThreat = threat;
+				*wayX = x;
+				*wayY = y;
+			}
+		}
+	}
+	return found && *detourThreat < *straightThreat * DETOUR_WORTH;
 }
 
 //-------------------------------------------------------------------------------------------------

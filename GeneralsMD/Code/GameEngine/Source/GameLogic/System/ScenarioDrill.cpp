@@ -272,6 +272,8 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_HANDOVER;
 	else if (token == "airlift")
 		*action = SCENARIO_ACTION_AIRLIFT;
+	else if (token == "health")
+		*action = SCENARIO_ACTION_HEALTH;
 	else
 		return FALSE;
 
@@ -385,6 +387,7 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_TOPUP:				return SCENARIO_TOKENS_MOVE;
 		case SCENARIO_ACTION_HANDOVER:		return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_AIRLIFT:			return SCENARIO_TOKENS_ATTACK;
+		case SCENARIO_ACTION_HEALTH:			return SCENARIO_TOKENS_STANCE;
 	}
 	return SCENARIO_TOKENS_STOP;
 }
@@ -570,6 +573,14 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 			action->name = tokens[ 5 ];
 			if (action->name != "on" && action->name != "off")
 				return SCENARIO_PARSE_BAD_ACTION;
+			break;
+
+		case SCENARIO_ACTION_HEALTH:
+			if (!parseWholeNumber( tokens[ 4 ], &action->count ) || action->count < 1 || action->count > 100)
+				return SCENARIO_PARSE_BAD_COUNT;
+			action->targetSlot = -1;		// no rank given: the units keep theirs
+			if (count > 5 && (!parseWholeNumber( tokens[ 5 ], &action->targetSlot ) || action->targetSlot > LEVEL_HEROIC))
+				return SCENARIO_PARSE_BAD_COUNT;
 			break;
 
 		case SCENARIO_ACTION_GIVEMONEY:
@@ -2109,6 +2120,25 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 			group->groupIdle( CMD_FROM_PLAYER );		// what GameLogicDispatch does with MSG_DO_STOP
 			DEBUG_LOG(("SCENARIO: frame %d clickstop slot %d '%s' x%d\n",
 								 action.frame, action.slot, action.selector.str(), taken));
+			break;
+		}
+
+		case SCENARIO_ACTION_HEALTH:
+		{
+			// the rank first: a rank's health bonus moves the maximum the share is taken of
+			const VecObjectID &ids = group->getAllIDs();
+			for (VecObjectID::const_iterator it = ids.begin(); it != ids.end(); ++it)
+			{
+				Object *obj = TheGameLogic->findObjectByID( *it );
+				BodyModuleInterface *body = obj ? obj->getBodyModule() : NULL;
+				if (body == NULL)
+					continue;
+				if (action.targetSlot >= 0 && obj->getExperienceTracker())
+					obj->getExperienceTracker()->setVeterancyLevel( (VeterancyLevel)action.targetSlot, FALSE );
+				body->internalChangeHealth( body->getMaxHealth() * action.count / 100.0f - body->getHealth() );
+				DEBUG_LOG(("SCENARIO: frame %d health slot %d '%s' %d rank %d: %.0f of %.0f\n", action.frame, action.slot,
+									 obj->getTemplate()->getName().str(), obj->getID(), (Int)obj->getVeterancyLevel(), body->getHealth(), body->getMaxHealth()));
+			}
 			break;
 		}
 

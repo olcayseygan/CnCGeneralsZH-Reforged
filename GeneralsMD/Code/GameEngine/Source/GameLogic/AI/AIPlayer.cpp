@@ -3922,6 +3922,15 @@ static void aiClassPower( const Object *obj, Real *power )
 		power[ c ] = quarterOf( entry.rate[ set * AITHREAT_COUNT + c ] * rank );
 }
 
+/** What one of ours puts on the friendly layer: its threat to the ground, read the way AITHREAT_GROUND_MIX reads
+	* the enemy layer, so the tactics' hurt pull-out weighs like against like.  The friendly layer kept the build
+	* cost when the enemy one went over to these rates, and a cost in the hundreds against a rate near one never
+	* read as outgunned: no hurt unit was pulled out at all.  Quarters halved stay exact, as quarterOf wants. */
+static Real friendFigure( const Real *threat )
+{
+	return 0.5f * (threat[ AITHREAT_VEHICLE ] + threat[ AITHREAT_INFANTRY ]);
+}
+
 static void prepareClassRates( const std::vector<const ThingTemplate *> &units )
 {
 	// R_c, the match's units by class, as the field has them (the override map.ini left)
@@ -16356,7 +16365,12 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 		step->fallingBack = FALSE;
 		step->fallbackFrom = *obj->getPosition();
 		step->fallbackFrame = now;
-		stepCalmly( obj, step, to );
+		step->hurtAt = health;
+		step->hurtTeam = team != m_player->getDefaultTeam() ? team->getID() : TEAM_ID_INVALID;
+		if( mender )
+			stepCalmly( obj, step, to );		// the dock order below takes the walk over
+		else
+			walkCalmlyRound( obj, step, to );
 		if( mender && TheActionManager->canGetRepairedAt( obj, mender, CMD_FROM_AI ) )
 			obj->getAI()->aiGetRepaired( mender, CMD_FROM_SCRIPT );
 		else if( mender )
@@ -16582,7 +16596,10 @@ void AIPlayer::doRetreats( void )
 					step->fallingBack = shortOfHome;
 					step->fallbackFrom = centre;
 					step->fallbackFrame = TheGameLogic->getFrame();
-					stepCalmly( obj, step, &fallback );
+					// one sent on its own exchange is one too hurt to stay, and comes back when it has mended
+					const BodyModuleInterface *body = obj->getBodyModule();
+					step->hurtAt = !profile->m_retreatTeams && body ? body->getHealth() / body->getMaxHealth() : 0.0f;
+					walkCalmlyRound( obj, step, &fallback );
 				}
 			}
 			if( ordered > 0 )
@@ -16895,6 +16912,8 @@ Bool AIPlayer::doFallback( Team *team )
 			continue;
 		step->fallingBack = FALSE;
 		step->fallbackFrame = 0;		// free to be pulled out of the next fight, unless it is walked home below
+		const Real hurtAt = step->hurtAt;		// and still hurt only on that walk
+		step->hurtAt = 0.0f;
 		if( obj->isEffectivelyDead() || obj->getAI() == NULL )
 			continue;
 		// One that is already on its way somewhere was given that by its script, the home guard or a
@@ -16922,7 +16941,8 @@ Bool AIPlayer::doFallback( Team *team )
 		{
 			leaveTacticsAlone( obj->getID() );
 			step->fallbackFrame = now;		// the walk home doRetreats leaves alone
-			stepCalmly( obj, step, &m_baseCenter );
+			step->hurtAt = hurtAt;
+			walkCalmlyRound( obj, step, &m_baseCenter );
 		}
 	}
 	return TRUE;
@@ -17429,7 +17449,11 @@ void AIPlayer::stampInfluence( AIInfluenceMap &map, const Object *obj )
 	if( mine || relation == ALLIES )
 	{
 		if( range > 0.0f )
-			map.stampFriend( pos->x, pos->y, firingHeight( obj ), range, power );
+		{
+			Real threat[ AITHREAT_COUNT ];
+			aiClassPower( obj, threat );
+			map.stampFriend( pos->x, pos->y, firingHeight( obj ), range, costMapHere() ? power : friendFigure( threat ) );
+		}
 		return;
 	}
 	if( costMapHere() )
@@ -17746,7 +17770,7 @@ void AIPlayer::stampInfluenceTurn( void )
 		if( friendly )
 		{
 			if( ground )
-				m_influenceNext.addFriend( &turn.cells[ shape.first ], shape.count, shape.power );
+				m_influenceNext.addFriend( &turn.cells[ shape.first ], shape.count, costMap ? shape.power : friendFigure( shape.threat ) );
 			continue;
 		}
 		if( !observerKnowsAbout( obj, me ) )
@@ -17956,6 +17980,8 @@ AIPlayer::TacticalStep *AIPlayer::tacticalStepFor( ObjectID unit )
 	step.fallbackFrom.zero();
 	step.fallbackFrame = 0;
 	step.answerFrame = 0;
+	step.hurtAt = 0.0f;
+	step.hurtTeam = TEAM_ID_INVALID;
 	const Bool indexed = m_tacticsRowOf.size() == m_tactics.size();
 	m_tactics.push_back( step );
 	if( indexed )
@@ -17974,7 +18000,7 @@ void AIPlayer::leaveTacticsAlone( ObjectID unit )
 	* an attack move (AIMoveToState::update): the kite, the climb and the walk out of a lost fight would
 	* turn round at the first enemy in reach and go back to shooting.  So the step is taken calm, and the
 	* mood comes back when the step is over. */
-void AIPlayer::stepCalmly( Object *obj, TacticalStep *step, const Coord3D *spot )
+void AIPlayer::stepCalmly( Object *obj, TacticalStep *step, const Coord3D *spot, const Coord3D *via )
 {
 	AIUpdateInterface *ai = obj->getAI();
 	if( step->savedAttitude == AI_INVALID )
@@ -17993,7 +18019,43 @@ void AIPlayer::stepCalmly( Object *obj, TacticalStep *step, const Coord3D *spot 
 	// and given as an order rather than an AI's aside: a CMD_FROM_AI move to a unit that is busy is laid
 	// over its attack as a temporary state (privateMoveToPosition), and the attack carries on under it
 	// - the buggy that was told to back away drove on towards the tank it was shooting
-	ai->aiMoveToPosition( spot, CMD_FROM_SCRIPT );
+	if( via )
+	{
+		std::vector<Coord3D> path;
+		path.push_back( *via );
+		path.push_back( *spot );
+		ai->aiFollowPath( &path, NULL, CMD_FROM_SCRIPT );
+	}
+	else
+		ai->aiMoveToPosition( spot, CMD_FROM_SCRIPT );
+}
+
+/** The walk out of a fight or home from one, round what the map shows on the straight line (aiDetourWaypoint)
+	* and read with the walker's own class.  Straight, the walk home of a unit with the enemy between it and home
+	* went through the enemy.  -notactics walks straight, as its map is never drawn. */
+void AIPlayer::walkCalmlyRound( Object *obj, TacticalStep *step, const Coord3D *spot )
+{
+	const Coord3D *pos = obj->getPosition();
+	Coord3D via;
+	Real straight = 0.0f, round = -1.0f;
+	Bool detour = FALSE;
+	if( !measuringWithoutTactics() )
+	{
+		ensureInfluence();
+		Region3D map;
+		TheTerrainLogic->getExtent( &map );
+		const Real bounds[ 4 ] = { map.lo.x, map.lo.y, map.hi.x, map.hi.y };
+		detour = aiDetourWaypoint( pos->x, pos->y, spot->x, spot->y, INFLUENCE_CELL_SIZE, bounds, &m_influence, unitMix( obj ),
+			&via.x, &via.y, &straight, &round );
+	}
+	if( detour )
+	{
+		via.z = TheTerrainLogic->getGroundHeight( via.x, via.y );
+		DEBUG_LOG(("AI ROUTE frame %d player %d '%s' %d (%.0f,%.0f) to (%.0f,%.0f) round (%.0f,%.0f): threat %.0f straight, %.0f round\n",
+			TheGameLogic->getFrame(), m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), obj->getID(),
+			pos->x, pos->y, spot->x, spot->y, via.x, via.y, straight, round));
+	}
+	stepCalmly( obj, step, spot, detour ? &via : NULL );
 }
 
 void AIPlayer::restoreMood( Object *obj, TacticalStep *step )
@@ -18002,6 +18064,91 @@ void AIPlayer::restoreMood( Object *obj, TacticalStep *step )
 		return;
 	obj->getAI()->setAttitude( (AttitudeType)step->savedAttitude );
 	step->savedAttitude = AI_INVALID;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** One pulled out hurt (by the tactics, by its rank, or alone by the retreat) turns back once it has mended to
+	* MENDED_HEALTH_SHARE on the way, and never on less than MENDED_HEALTH_GAIN over the share it left at.  Well
+	* over the 35% that pulls one out, so the first volley on the way back does not pull it straight out again;
+	* well short of whole, since a heal aura or a heroic rank's mending that has given that much back has made it
+	* worth more at the front than on the road.  The gain is for a ranked unit, which
+	* leaves a losing fight at up to 90%.  Before this nothing looked at its health until it stood still: a unit
+	* sent home drove all the way home, mended or not.
+	*
+	* Only while it is still on the move, and only out of every reach the map shows for its class: one standing
+	* still has arrived, is at the pad, or is in an Ambulance, and turned round under a gun it is back in the
+	* fight it left on the spot.  Back to the middle of its team, attack-moving, or, for one with no team to go
+	* to, to the fight it left.  A ranked one gets its team back if that team still stands.  On doTactics' clock
+	* over its rows, so every rung but -notactics, which never pulls one out this way. */
+static const Real MENDED_HEALTH_SHARE = 0.65f;
+static const Real MENDED_HEALTH_GAIN = 0.25f;
+
+/** Split out with plain values so the rule is testable without a running game. */
+Bool AIRetreat_mendedEnough( Real healthFraction, Real hurtAt )
+{
+	return healthFraction >= min( 1.0f, max( MENDED_HEALTH_SHARE, hurtAt + MENDED_HEALTH_GAIN ) );
+}
+
+Bool AIPlayer::turnBackMended( Object *obj, TacticalStep *step )
+{
+	AIUpdateInterface *ai = obj->getAI();
+	const BodyModuleInterface *body = obj->getBodyModule();
+	if( ai == NULL || body == NULL || obj->isContained() || !ai->isMoving() || ai->hasTunnelTrip() )
+		return FALSE;
+	const Real health = body->getHealth() / body->getMaxHealth();
+	if( !AIRetreat_mendedEnough( health, step->hurtAt ) )
+		return FALSE;
+	ensureInfluence();
+	const Coord3D *pos = obj->getPosition();
+	if( m_influence.enemyAt( pos->x, pos->y, unitMix( obj ) ) > 0.0f )
+		return FALSE;
+
+	const Real hurtAt = step->hurtAt;
+	step->hurtAt = 0.0f;
+	step->fallingBack = FALSE;
+	step->fallbackFrame = 0;
+	step->rejoin = FALSE;
+	step->resumeFrame = 0;
+	step->leaveAloneUntil = TheGameLogic->getFrame();
+	restoreMood( obj, step );
+	// a ranked one out to be mended: its team again, or any team's once it is recruitable
+	if( isOutToMend( obj ) )
+	{
+		Team *team = step->hurtTeam != TEAM_ID_INVALID ? TheTeamFactory->findTeamByID( step->hurtTeam ) : NULL;
+		if( team && team != obj->getTeam() && team->getControllingPlayer() == m_player )
+			obj->setTeam( team );
+		ai->setIsRecruitable( TRUE );
+	}
+	step->hurtTeam = TEAM_ID_INVALID;
+
+	Coord3D goal = step->fallbackFrom;
+	Team *team = obj->getTeam();
+	if( team && team != m_player->getDefaultTeam() )
+	{
+		Real count = 0.0f;
+		Coord3D centre;
+		centre.zero();
+		for( DLINK_ITERATOR<Object> iter = team->iterate_TeamMemberList(); !iter.done(); iter.advance() )
+		{
+			const Object *mate = iter.cur();
+			if( mate == NULL || mate == obj || mate->isEffectivelyDead() || mate->isContained() )
+				continue;
+			centre.x += mate->getPosition()->x;
+			centre.y += mate->getPosition()->y;
+			count += 1.0f;
+		}
+		if( count > 0.0f )
+		{
+			goal.x = centre.x / count;
+			goal.y = centre.y / count;
+		}
+	}
+	goal.z = TheTerrainLogic->getGroundHeight( goal.x, goal.y );
+	DEBUG_LOG(("AI MENDED frame %d player %d '%s' %d turns back at %.0f%% health, pulled out at %.0f%%, at (%.0f,%.0f) to (%.0f,%.0f)\n",
+		TheGameLogic->getFrame(), m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), obj->getID(),
+		health * 100.0f, hurtAt * 100.0f, pos->x, pos->y, goal.x, goal.y));
+	ai->aiAttackMoveToPosition( &goal, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+	return TRUE;
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -18153,7 +18300,13 @@ void AIPlayer::doTactics( void )
 	for( size_t i = 0; i < m_tactics.size(); )
 	{
 		Object *unit = TheGameLogic->findObjectByID( m_tactics[ i ].unit );
+		if( unit && !unit->isEffectivelyDead() && m_tactics[ i ].hurtAt > 0.0f )
+			turnBackMended( unit, &m_tactics[ i ] );
 		const TacticalStep &row = m_tactics[ i ];
+		// one pulled out hurt that the tactics do not look at (out to be mended) keeps its row while it walks,
+		// or its mending is never seen
+		const Bool walkingHurt = row.hurtAt > 0.0f && unit && unit->getAI() && unit->getAI()->isMoving() &&
+			now < row.leaveAloneUntil + WALK_HOME_MAX_FRAMES;
 		// with the tactics running a row goes when the unit has not been looked at for a while; without
 		// them the only rows are walks home from a retreat, which end when the walk does.  One holding
 		// after a retreat is doFallback's until it sends it back or home, and doFallback does that by the
@@ -18165,7 +18318,7 @@ void AIPlayer::doTactics( void )
 			row.fallingBack ? aiHolderLetGo( getSkillProfile()->m_retreatTtkRatio > 0.0f && unit->getTeam() != m_player->getDefaultTeam(),
 				now - row.fallbackFrame, unit->getAI() && unit->getAI()->isMoving(), FIRE_HOLD_FRAMES, FALLBACK_STALE_FRAMES ) :
 			row.answerFrame != 0 ? FALSE :		// finishAnswers ends these
-			tactics ? now - row.lastSeenFrame > TACTICAL_ROW_EXPIRY_FRAMES :
+			tactics ? now - row.lastSeenFrame > TACTICAL_ROW_EXPIRY_FRAMES && !walkingHurt :
 			now >= row.leaveAloneUntil && (unit->getAI() == NULL || !unit->getAI()->isMoving() || now >= row.leaveAloneUntil + WALK_HOME_MAX_FRAMES);
 		if( done )
 		{
@@ -18583,6 +18736,7 @@ void AIPlayer::tacticsFor( Object *obj )
 	if( step->rejoin && victim == NULL && threatHere <= 0.0f && !ai->isMoving() )
 	{
 		step->rejoin = FALSE;
+		step->hurtAt = 0.0f;		// back to the team, mended or not, as before
 		Coord3D centre;
 		centre.zero();
 		Real count = 0.0f;
@@ -18615,28 +18769,26 @@ void AIPlayer::tacticsFor( Object *obj )
 	const Real friendsHere = m_influence.friendAt( pos->x, pos->y );
 	if( body && body->getHealth() < body->getMaxHealth() * HURT_HEALTH_SHARE && threatHere > friendsHere && !isAtHome( pos ) )
 	{
-		DEBUG_LOG(("AI TACTICS frame %d player %d pulls a hurt '%s' out, %.0f against %.0f\n", now, m_player->getPlayerIndex(),
-			obj->getTemplate()->getName().str(), threatHere, friendsHere));
-		// out to the first ground on the way home that nothing known covers, not all the way home: on a
-		// big map the walk home crossed the ground it was pulled out of, and it stays near enough to
-		// guard the road behind the fight
-		Coord3D safe = m_baseCenter;
-		const Real homeX = m_baseCenter.x - pos->x;
-		const Real homeY = m_baseCenter.y - pos->y;
-		const Real homeDist = sqrt( homeX * homeX + homeY * homeY );
-		for( Real along = INFLUENCE_CELL_SIZE; along < homeDist; along += INFLUENCE_CELL_SIZE )
-		{
-			const Real x = pos->x + homeX * along / homeDist;
-			const Real y = pos->y + homeY * along / homeDist;
-			if( m_influence.enemyAt( x, y, mix ) <= 0.0f )
-			{
-				safe.x = x + homeX * INFLUENCE_CELL_SIZE / homeDist;		// a cell past the edge of the reach
-				safe.y = y + homeY * INFLUENCE_CELL_SIZE / homeDist;
-				safe.z = TheTerrainLogic->getGroundHeight( safe.x, safe.y );
-				break;
-			}
-		}
-		stepCalmly( obj, step, &safe );
+		// out to the first ground nothing known covers, not all the way home: on a big map the walk home
+		// crossed the ground it was pulled out of, and it stays near enough to guard the road behind the
+		// fight.  The way home or one off it, whichever sums the least threat on the way out
+		// (aiRetreatFallbackPoint): the first quiet cell down the road home was behind the enemy whenever the
+		// enemy stood between the unit and home, and it drove through them to get there
+		Coord3D safe;
+		Real threatOut = -1.0f, threatRoad = -1.0f;
+		ensureInfluence();
+		Region3D map;
+		TheTerrainLogic->getExtent( &map );
+		const Real bounds[ 4 ] = { map.lo.x, map.lo.y, map.hi.x, map.hi.y };
+		aiRetreatFallbackPoint( pos->x, pos->y, m_baseCenter.x, m_baseCenter.y, INFLUENCE_CELL_SIZE, NULL, 0, bounds,
+			&safe.x, &safe.y, &m_influence, &mix, &threatOut, &threatRoad );
+		safe.z = TheTerrainLogic->getGroundHeight( safe.x, safe.y );
+		DEBUG_LOG(("AI TACTICS frame %d player %d pulls a hurt '%s' %d out at %.0f%%, %.0f against %.0f, (%.0f,%.0f) to (%.0f,%.0f): threat %.0f on the way, %.0f down the road home\n",
+			now, m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), obj->getID(),
+			body->getHealth() / body->getMaxHealth() * 100.0f, threatHere, friendsHere, pos->x, pos->y, safe.x, safe.y, threatOut, threatRoad));
+		step->hurtAt = body->getHealth() / body->getMaxHealth();
+		step->fallbackFrom = *pos;
+		walkCalmlyRound( obj, step, &safe );
 		step->rejoin = TRUE;
 		step->leaveAloneUntil = now + LEAVE_ALONE_FRAMES;
 		return;
@@ -21397,7 +21549,7 @@ void AIPlayer::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 37;		// 37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
+	XferVersion currentVersion = 38;		// 38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -21653,6 +21805,17 @@ void AIPlayer::xfer( Xfer *xfer )
 				xfer->xferUnsignedInt( &step.answerFrame );
 			else
 				step.answerFrame = 0;
+			// one pulled out hurt, so a loaded game still turns it back once it has mended
+			if( version >= 38 )
+			{
+				xfer->xferReal( &step.hurtAt );
+				xfer->xferUnsignedInt( &step.hurtTeam );
+			}
+			else
+			{
+				step.hurtAt = 0.0f;
+				step.hurtTeam = TEAM_ID_INVALID;
+			}
 		}
 	}
 	// the capturer's helicopter, and the riders a helicopter is putting down at a fight

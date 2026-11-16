@@ -450,10 +450,19 @@ Real aiRetreatRatio( Real myHealth, Real myPower, Real enemyHealth, Real enemyPo
 /** Where a force losing a fight stops: the first spot on its line home, or 45 or 90 degrees off it, that
 	* none of the fight's guns reach (x, y, reach triples) and that map, when given, has no enemy gun on,
 	* plus one step, on the ground (bounds: low x, low y, high x, high y).  FALSE and home when there is none
-	* short of it.  mix is how the force reads the map, by what it moves; NULL is AITHREAT_GROUND_MIX. */
+	* short of it.  mix is how the force reads the map, by what it moves; NULL is AITHREAT_GROUND_MIX.  Of
+	* the ways out, the one with the least threat summed along it; outThreat and roadThreat take its sum and
+	* the road home's. */
 Bool aiRetreatFallbackPoint( Real fromX, Real fromY, Real homeX, Real homeY, Real step,
 														 const Real *guns, Int gunCount, const Real *bounds, Real *outX, Real *outY,
-														 const AIInfluenceMap *map = NULL, const AIThreatMix *mix = NULL );
+														 const AIInfluenceMap *map = NULL, const AIThreatMix *mix = NULL,
+														 Real *outThreat = NULL, Real *roadThreat = NULL );
+
+/** A waypoint off the straight walk from one point to another that goes round the enemy reach map shows on
+	* it, when the walk round sums under half the straight walk's threat (bounds: low x, low y, high x, high y). */
+Bool aiDetourWaypoint( Real fromX, Real fromY, Real toX, Real toY, Real step, const Real *bounds,
+											 const AIInfluenceMap *map, const AIThreatMix &mix, Real *wayX, Real *wayY,
+											 Real *straightThreat, Real *detourThreat );
 
 /** What a unit that has just been hit does about the gun that hit it. */
 enum AIFireAnswer

@@ -1048,6 +1048,8 @@ protected:
 		Coord3D			fallbackFrom;			///< the fight it was pulled out of
 		UnsignedInt	fallbackFrame;		///< when it was pulled out
 		UnsignedInt	answerFrame;			///< when it was sent at a gun that hit it, 0 while it is not; target and origin are what it goes back to
+		Real				hurtAt;						///< its health share when it was pulled out for being hurt, 0 when it was not; turnBackMended watches these
+		UnsignedInt	hurtTeam;					///< TeamID of the team a ranked one was taken out of, to go back to, 0 for none
 	};
 	std::vector<TacticalStep>	m_tactics;
 	/** Where each unit's row is in m_tactics, kept as rows come and go; built again whenever its size and the
@@ -1065,7 +1067,9 @@ protected:
 	Bool doFallback(Team *team);		///< TRUE when it sent the team's holders back or home on this pass
 	void pullOutRanked(Team *team, Bool inFight, Real ratio);	///< veterans and up leave earlier than the team, to a repair or heal pad
 	void releaseMended(void);		///< pulled-out veterans and let-out patients standing idle again become recruitable
-	void stepCalmly(Object *obj, TacticalStep *step, const Coord3D *spot);	///< a move the unit's mood cannot turn into an attack move
+	void stepCalmly(Object *obj, TacticalStep *step, const Coord3D *spot, const Coord3D *via = NULL);	///< a move the unit's mood cannot turn into an attack move, through via first when given
+	void walkCalmlyRound(Object *obj, TacticalStep *step, const Coord3D *spot);	///< stepCalmly, round the enemy reach the straight walk would cross
+	Bool turnBackMended(Object *obj, TacticalStep *step);	///< one pulled out hurt and mended on the way goes back to its team
 	void restoreMood(Object *obj, TacticalStep *step);
 	Bool pickTacticalSpot(const Object *obj, const Coord3D *from, const Coord3D *awayFrom, Real distance,
 		const Coord3D *mustReach, Real reach, Coord3D *spot);

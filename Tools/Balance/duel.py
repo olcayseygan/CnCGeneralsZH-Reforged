@@ -1,29 +1,46 @@
 """Equal-money armies of two unit types meet on open ground; the money each side has left is the answer.
 
-Every cross-faction pair fights twice with the two starting points swapped: on generated map 1 the
-side starting at 1000,1150 won 118 of 183 decided fights, so one orientation measures the ground.
-duel_report.py averages the two.
+Every cross-faction pair fights with the two starting points swapped, once per game seed: on generated
+map 1 one start point won 118 of 183 decided fights in the first round, so one orientation measures the
+ground, and a third of the pairs flip winner with it. duel_report.py averages the orientations and
+gives the spread over the seeds.
 
-    python duel.py <exe name in Run> <tag> [budget] [pair filter]
+    python duel.py <exe name in Run> <tag> [budget] [pair filter] [--seeds N]
 """
 
-import concurrent.futures
+import argparse
 import itertools
 import json
+import random
 import re
-import subprocess
 import sys
 
 import siege
 
 BUDGET = 4800
+SEEDS = 3
 MAX_FRAMES = 3000 * siege.LOGIC_FPS // siege.SCENARIO_FPS  # logic frames; the rest are scenario frames
 TALLY_FRAME = 2950
+TALLY_EVERY = 30
 SPAWN_FRAME = 30
 ATTACK_FRAME = 60
-LEFT_AT = (760, 800)
-RIGHT_AT = (1000, 1150)
-MEET_AT = (880, 975)
+# open ground on generated map 1, generator version 18, wide enough for 32 Rebels at spread 35:
+# from (1200,1200) that many reach the cliff cells about (1112,1112) and the spawn is refused
+LEFT_AT = (960, 825)
+RIGHT_AT = (1300, 1170)
+# The game seed alone barely moves a fight (Ranger against Rebel came out identical on seeds 1 and 2),
+# so each seed also shifts both spots and the formation spread. This envelope passed 32 Rebels and
+# 3 Overlords on seeds 1 to 12. Cliff cells near (990,915), (1370,1270), (1155,1055) and (830,705)
+# refused spawns from wider ones, so a bigger envelope or a seed past 12 wants probing again.
+JITTER = 20
+SPREADS = (32, 37)
+
+
+def layout(seed: int) -> tuple:
+    """The seed's left spot, right spot and formation spread, the same in both orientations."""
+    rng = random.Random(seed)
+    shift = lambda at: (at[0] + rng.randint(-JITTER, JITTER), at[1] + rng.randint(-JITTER, JITTER))
+    return shift(LEFT_AT), shift(RIGHT_AT), rng.randint(*SPREADS)
 
 # the direct-fire ground core each side builds most of
 UNITS = {
@@ -36,61 +53,65 @@ UNITS = {
 }
 
 
-def run_one(exe: str, tag: str, index: int, left: str, right: str, budget: int, swapped: bool) -> dict:
-    left_at, right_at = (RIGHT_AT, LEFT_AT) if swapped else (LEFT_AT, RIGHT_AT)
-    left_count = max(1, round(budget / UNITS[left]))
-    right_count = max(1, round(budget / UNITS[right]))
-    name = "dl%s%03d" % (tag, index)
+def count(unit: str, budget: int) -> int:
+    return max(1, round(budget / UNITS[unit]))
+
+
+def run_one(exe: str, tag: str, index: int, left: str, right: str, budget: int, swapped: bool, seed: int) -> dict:
+    west, east, spread = layout(seed)
+    left_at, right_at = (east, west) if swapped else (west, east)
+    name = "dl%s%04d" % (tag, index)
     lines = [
-        "%d spawn 0 %s %d %d %d 35" % (SPAWN_FRAME, left, left_count, *left_at),
-        "%d spawn 1 %s %d %d %d 35" % (SPAWN_FRAME, right, right_count, *right_at),
+        "%d spawn 0 %s %d %d %d %d" % (SPAWN_FRAME, left, count(left, budget), *left_at, spread),
+        "%d spawn 1 %s %d %d %d %d" % (SPAWN_FRAME, right, count(right, budget), *right_at, spread),
         "%d attackmove 0 %s %d %d" % (ATTACK_FRAME, siege.selector(left), *right_at),
         "%d attackmove 1 %s %d %d" % (ATTACK_FRAME, siege.selector(right), *left_at),
     ]
-    for frame in (ATTACK_FRAME, TALLY_FRAME):
+    # The duel ends on the first tally where one army is gone. A winner that walks on into the loser's
+    # start base can lose units to it or kill its command centre, which ends the match as decided
+    # before TALLY_FRAME; neither is the duel. With both armies alive, the last tally both got.
+    for frame in range(ATTACK_FRAME, TALLY_FRAME + 1, TALLY_EVERY):
         lines.append("%d tally 0 %s" % (frame, siege.selector(left)))
         lines.append("%d tally 1 %s" % (frame, siege.selector(right)))
-    scenario = siege.SCENARIO_DIR / (name + ".txt")
-    scenario.write_text("\n".join(lines) + "\n", encoding="ascii")
-    log = siege.RUN_DIR / (name + "_DebugLogFile.txt")
-    log.unlink(missing_ok=True)
-    arguments = [str(siege.RUN_DIR / exe), "-headless", "-quickstart", "-noshellmap", "-observer", "-multiInstance",
-                 "-noFPSLimit", "-randommap", "1", "2", "small", "-autoskirmish", "2", "-takeover",
-                 "-side", "0", "FactionAmerica", "-side", "1", "FactionChina", "-seed", "1",
-                 "-maxframes", str(MAX_FRAMES), "-scenario", name, "-logPrefix", name + "_"]
-    process = subprocess.Popen(arguments, cwd=siege.RUN_DIR, creationflags=subprocess.ABOVE_NORMAL_PRIORITY_CLASS)
-    try:
-        process.wait(timeout=siege.TIMEOUT_SECONDS)
-    except subprocess.TimeoutExpired:
-        process.kill()
-    scenario.unlink()
+    text = siege.launch(exe, name, lines, MAX_FRAMES, seed)
     tallies = {}
-    for match in siege.TALLY.finditer(log.read_text(encoding="latin-1", errors="replace")):
+    for match in siege.TALLY.finditer(text or ""):
         # counted in units, not worth: a Technical's chassis templates carry no build cost
         slot = int(match.group(2))
         tallies[(int(match.group(1)), slot)] = int(match.group(4)) * UNITS[left if slot == 0 else right]
-    log.unlink()
-    return {"left": left, "right": right, "swapped": swapped, "leftSpent": tallies.get((ATTACK_FRAME, 0)),
-            "rightSpent": tallies.get((ATTACK_FRAME, 1)), "leftLeft": tallies.get((TALLY_FRAME, 0)),
-            "rightLeft": tallies.get((TALLY_FRAME, 1))}
+    common = sorted(frame for frame, slot in tallies if slot == 0 and (frame, 1) in tallies)
+    end = next((frame for frame in common if 0 in (tallies[(frame, 0)], tallies[(frame, 1)])), common[-1] if common else None)
+    return {"left": left, "right": right, "swapped": swapped, "seed": seed, "budget": budget, "endFrame": end,
+            "leftAt": left_at, "rightAt": right_at, "spread": spread, "timedOut": text is None,
+            "leftSpent": tallies.get((ATTACK_FRAME, 0)), "rightSpent": tallies.get((ATTACK_FRAME, 1)),
+            "leftLeft": tallies.get((end, 0)), "rightLeft": tallies.get((end, 1))}
 
 
 def main() -> int:
-    exe, tag = sys.argv[1], sys.argv[2]
-    budget = int(sys.argv[3]) if len(sys.argv) > 3 else BUDGET
+    parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
+    parser.add_argument("exe", help="exe name in Run, a copy so a rebuild does not pull it away")
+    parser.add_argument("tag")
+    parser.add_argument("budget", nargs="?", type=int, default=BUDGET)
+    parser.add_argument("pair", nargs="?", default=".", help="regex over 'left right'")
+    parser.add_argument("--seeds", type=int, default=SEEDS, help="game seeds 1..N, each pair both ways per seed")
+    args = parser.parse_args()
     faction = lambda name: re.match(r"America|China|GLA", name).group(0)
-    pairs = [(a, b, swapped) for a, b in itertools.combinations(UNITS, 2) if faction(a) != faction(b)
-             for swapped in (False, True)]
-    if len(sys.argv) > 4:
-        pairs = [pair for pair in pairs if re.search(sys.argv[4], pair[0] + " " + pair[1])]
+    jobs = [(a, b, args.budget, swapped, seed) for a, b in itertools.combinations(UNITS, 2)
+            if faction(a) != faction(b) and re.search(args.pair, a + " " + b)
+            for swapped in (False, True) for seed in range(1, args.seeds + 1)]
     results = []
-    with concurrent.futures.ThreadPoolExecutor(siege.PARALLEL_RUNS) as pool:
-        for row in pool.map(lambda item: run_one(exe, tag, item[0], item[1][0], item[1][1], budget, item[1][2]), enumerate(pairs)):
-            results.append(row)
-            print("%-32s %s/%s  vs  %-32s %s/%s" % (row["left"], row["leftLeft"], row["leftSpent"], row["right"],
-                                                   row["rightLeft"], row["rightSpent"]), flush=True)
     siege.OUT_DIR.mkdir(exist_ok=True)
-    (siege.OUT_DIR / ("duel_" + tag + ".json")).write_text(json.dumps(results, indent=1), encoding="utf-8")
+    try:
+        for row in siege.run_all(lambda index, *job: run_one(args.exe, args.tag, index, *job),
+                                 [(index, *job) for index, job in enumerate(jobs)]):
+            results.append(row)
+            print("%-32s %s/%s  vs  %-32s %s/%s  seed %d%s%s" % (row["left"], row["leftLeft"], row["leftSpent"], row["right"],
+                                                               row["rightLeft"], row["rightSpent"], row["seed"],
+                                                               "  swapped" if row["swapped"] else "",
+                                                               "  TIMED OUT" if row["timedOut"] else ""), flush=True)
+    finally:
+        # a stopped sweep keeps what it finished
+        (siege.OUT_DIR / ("duel_" + args.tag + ".json")).write_text(json.dumps(results, indent=1), encoding="utf-8")
     return 0
 
 

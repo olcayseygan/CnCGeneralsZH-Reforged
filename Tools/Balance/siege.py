@@ -17,6 +17,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 # the game's data sits beside the exe; a worktree without the archives points this at a Run that has them
@@ -37,11 +38,15 @@ TALLY_FRAME = 3550
 SPAWN_FRAME = 30
 ENTER_FRAME = 40
 ATTACK_FRAME = 120
-DEFENCE_AT = (1000, 1150)
-POWER_AT = (1200, 950)
-# west and north: the ground from the south-west hides the infantry from a defence's line of sight
-APPROACHES = ((550, 1150), (1000, 1600))
-GARRISON_AT = (1080, 1150)
+# spots on generated map 1 as generator version 18 lays it out; a generator change can turn any of
+# them into restricted ground, and then launch() stops the run on the scenario's "refused" line
+DEFENCE_AT = (1200, 1200)
+POWER_AT = (1400, 800)
+# west and north: the ground from the south-west hides the infantry from a defence's line of sight.
+# The west spot keeps clear of the cliff cells about (770-840, 1130-1200), where a big army's spread
+# from (750,1200) put a Ranger and got the spawn refused.
+APPROACHES = ((700, 1300), (1200, 1650))
+GARRISON_AT = (1280, 1200)
 BUDGETS = (1, 2)
 
 # name: (EA's price, power plant or None, garrison template, garrison count). The army is sized on
@@ -68,13 +73,76 @@ ATTACKERS = {
 # a Technical spawns as one of its chassis templates
 CHASSIS_UNITS = {"GLAVehicleTechnical"}
 TALLY = re.compile(r"HEADLESS TALLY: frame (\d+) slot (\d+) '(\S+)': (\d+) alive, health (\d+) of (\d+), worth (\d+)")
+# what ScenarioDrill.cpp logs when the scenario did not put on the field what the file asked for
+REFUSED = re.compile(r"SCENARIO: .*(refused at|no template named|is no template|cannot open|read as nothing"
+                     r"|[1-9]\d* lines refused|owns nothing matching|this map has no|nobody is sitting in slot).*")
+# the games running now, so a stopped sweep can kill them by their own handles, never by name
+LIVE = set()
+LIVE_LOCK = threading.Lock()
+STOPPED = threading.Event()
+
+
+class ScenarioRefused(RuntimeError):
+    """A spawn or line the engine would not take: whatever the run tallies afterwards is not the fight asked for."""
+
+
+def launch(exe: str, name: str, lines: list[str], max_frames: int, seed: int = 1) -> str | None:
+    """Play one scenario headless on generated map 1 and return its debug log, None when it ran out of time."""
+    scenario = SCENARIO_DIR / (name + ".txt")
+    scenario.write_text("\n".join(lines) + "\n", encoding="ascii")
+    log = RUN_DIR / (name + "_DebugLogFile.txt")
+    log.unlink(missing_ok=True)
+    arguments = [str(RUN_DIR / exe), "-headless", "-quickstart", "-noshellmap", "-observer", "-multiInstance",
+                 "-noFPSLimit", "-randommap", "1", "2", "small", "-autoskirmish", "2", "-takeover",
+                 "-side", "0", "FactionAmerica", "-side", "1", "FactionChina", "-seed", str(seed),
+                 "-maxframes", str(max_frames), "-scenario", name, "-logPrefix", name + "_"]
+    with LIVE_LOCK:
+        if STOPPED.is_set():
+            scenario.unlink()
+            raise RuntimeError("%s: the sweep was stopped" % name)
+        process = subprocess.Popen(arguments, cwd=RUN_DIR, creationflags=subprocess.ABOVE_NORMAL_PRIORITY_CLASS)
+        LIVE.add(process)
+    try:
+        process.wait(timeout=TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+        print("%s: no end in %d s, killed; its log is %s" % (name, TIMEOUT_SECONDS, log), file=sys.stderr, flush=True)
+        return None
+    finally:
+        with LIVE_LOCK:
+            LIVE.discard(process)
+        scenario.unlink(missing_ok=True)
+    text = log.read_text(encoding="latin-1", errors="replace") if log.exists() else ""
+    log.unlink(missing_ok=True)
+    refused = [match.group(0) for match in REFUSED.finditer(text)]
+    if refused:
+        raise ScenarioRefused("%s: %s" % (name, "; ".join(refused)))
+    return text
+
+
+def run_all(work, jobs):
+    """Yield work(job) for every job as it finishes, PARALLEL_RUNS at a time; a refused scenario stops the
+    whole run, since the same spot is refused in every job that uses it."""
+    with concurrent.futures.ThreadPoolExecutor(PARALLEL_RUNS) as pool:
+        futures = [pool.submit(work, *job) for job in jobs]
+        try:
+            for future in concurrent.futures.as_completed(futures):
+                yield future.result()
+        except BaseException:
+            pool.shutdown(wait=False, cancel_futures=True)
+            with LIVE_LOCK:
+                STOPPED.set()
+                for process in LIVE:
+                    process.kill()
+            raise
 
 
 def selector(template: str) -> str:
     return template + "*" if template in CHASSIS_UNITS else template
 
 
-def scenario_text(defence: str, attacker: str, count: int, approach: int) -> str:
+def scenario_text(defence: str, attacker: str, count: int, approach: int) -> list[str]:
     price, power, garrison, garrison_count = DEFENCES[defence]
     lines = ["%d spawn 1 %s 1 %d %d" % (SPAWN_FRAME, defence, *DEFENCE_AT)]
     if power:
@@ -89,7 +157,7 @@ def scenario_text(defence: str, attacker: str, count: int, approach: int) -> str
         lines.append("%d tally 1 %s" % (frame, defence))
         if garrison:
             lines.append("%d tally 1 %s" % (frame, garrison))
-    return "\n".join(lines) + "\n"
+    return lines
 
 
 def run_one(exe: str, tag: str, index: int, defence: str, attacker: str, budget: int, approach: int) -> dict:
@@ -98,25 +166,15 @@ def run_one(exe: str, tag: str, index: int, defence: str, attacker: str, budget:
     count = max(1, round(budget * total / ATTACKERS[attacker]))
     # the log prefix is cut at about thirty characters, so the name has to be short and unique
     name = "sg%s%03d" % (tag, index)
-    (SCENARIO_DIR / (name + ".txt")).write_text(scenario_text(defence, attacker, count, approach), encoding="ascii")
-    log = RUN_DIR / (name + "_DebugLogFile.txt")
-    log.unlink(missing_ok=True)
-    arguments = [str(RUN_DIR / exe), "-headless", "-quickstart", "-noshellmap", "-observer", "-multiInstance",
-                 "-noFPSLimit", "-randommap", "1", "2", "small", "-autoskirmish", "2", "-takeover",
-                 "-side", "0", "FactionAmerica", "-side", "1", "FactionChina", "-seed", "1",
-                 "-maxframes", str(MAX_FRAMES), "-scenario", name, "-logPrefix", name + "_"]
-    process = subprocess.Popen(arguments, cwd=RUN_DIR, creationflags=subprocess.ABOVE_NORMAL_PRIORITY_CLASS)
-    try:
-        process.wait(timeout=TIMEOUT_SECONDS)
-    except subprocess.TimeoutExpired:
-        process.kill()
-    (SCENARIO_DIR / (name + ".txt")).unlink()
+    text = launch(exe, name, scenario_text(defence, attacker, count, approach), MAX_FRAMES)
+    if text is None:
+        return {"defence": defence, "attacker": attacker, "budget": budget, "approach": approach, "error": "timeout",
+                "tallies": ""}
     tallies = {}
-    for match in TALLY.finditer(log.read_text(encoding="latin-1", errors="replace")):
+    for match in TALLY.finditer(text):
         frame, name = int(match.group(1)), match.group(3)
         tallies[(frame, name)] = {"alive": int(match.group(4)), "health": int(match.group(5)),
                                       "maxHealth": int(match.group(6)), "worth": int(match.group(7))}
-    log.unlink()
     start = lambda name: tallies.get((ATTACK_FRAME, selector(name)))
     end = lambda name: tallies.get((TALLY_FRAME, selector(name)))
     if not (start(attacker) and end(attacker) and start(defence) and end(defence)):
@@ -142,19 +200,21 @@ def main() -> int:
             for b in BUDGETS for approach in range(len(APPROACHES))]
     OUT_DIR.mkdir(exist_ok=True)
     results = []
-    with concurrent.futures.ThreadPoolExecutor(PARALLEL_RUNS) as pool:
-        futures = [pool.submit(run_one, exe, tag, index, *job) for index, job in enumerate(jobs)]
-        for future in concurrent.futures.as_completed(futures):
-            row = future.result()
+    try:
+        for row in run_all(lambda index, *job: run_one(exe, tag, index, *job),
+                           [(index, *job) for index, job in enumerate(jobs)]):
             results.append(row)
             if "error" in row:
-                print("%-24s %-32s x%d ERROR %s" % (row["defence"], row["attacker"], row["budget"], row["tallies"]), flush=True)
+                print("%-24s %-32s x%d ERROR %s %s" % (row["defence"], row["attacker"], row["budget"], row["error"],
+                                                       row["tallies"]), flush=True)
             else:
                 print("%-24s %-32s x%d  %2d units  lost $%5d of $%5d  defence %s %.0f%%" % (
                     row["defence"], row["attacker"], row["budget"], row["count"], row["attackerLost"],
                     row["attackerSpent"], "STANDS" if row["defenceStanding"] else "dead  ", row["defenceHealth"] * 100),
                     flush=True)
-    (OUT_DIR / (tag + ".json")).write_text(json.dumps(results, indent=1), encoding="utf-8")
+    finally:
+        # a stopped sweep keeps what it finished
+        (OUT_DIR / (tag + ".json")).write_text(json.dumps(results, indent=1), encoding="utf-8")
     return 0
 
 

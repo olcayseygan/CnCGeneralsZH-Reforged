@@ -94,6 +94,7 @@
 #include "GameLogic/Module/CleanupHazardUpdate.h"	// an Ambulance out cleaning is left to it
 #include "GameLogic/Module/ParticleUplinkCannonUpdate.h"	// driving the beam
 #include "GameLogic/Module/PhysicsUpdate.h"		// which way a unit is walking, at the edge of a defence's reach
+#include "GameLogic/Module/FireWeaponUpdate.h"	// how far a fire or a radiation field burns, for the map's hazards
 #include "GameLogic/Module/SlowDeathBehavior.h"	// a planted charge's blast is its last death weapon ...
 #include "GameLogic/Module/LifetimeUpdate.h"		// ... and its fuse the life it is given
 #include "GameLogic/Module/NeutronBlastBehavior.h"	// a neutron shell kills by its blast's kind, not its damage
@@ -588,6 +589,8 @@ m_role(AIROLE_AGGRESSIVE)
 	}
 	m_heldSince = 0;
 	m_strikeNoticeFrame = 0;
+	m_foeMix = AITHREAT_GROUND_MIX;
+	m_foeMixFrame = 0;
 	m_pressure = AIPRESSURE_NORMAL;
 	m_knownEnemyPower = 0.0f;
 	m_pressureEnemy = -1;
@@ -4000,14 +4003,9 @@ static void aiClassPower( const Object *obj, Real *power )
 		power[ c ] = quarterOf( entry.rate[ set * AITHREAT_COUNT + c ] * rank );
 }
 
-/** What one of ours puts on the friendly layer: its threat to the ground, read the way AITHREAT_GROUND_MIX reads
-	* the enemy layer, so the tactics' hurt pull-out weighs like against like.  The friendly layer kept the build
-	* cost when the enemy one went over to these rates, and a cost in the hundreds against a rate near one never
-	* read as outgunned: no hurt unit was pulled out at all.  Quarters halved stay exact, as quarterOf wants. */
-static Real friendFigure( const Real *threat )
-{
-	return 0.5f * (threat[ AITHREAT_VEHICLE ] + threat[ AITHREAT_INFANTRY ]);
-}
+/* The friendly layer holds the same three rates per class as the enemy's (applyShape), so the tactics' hurt
+	 pull-out weighs like against like.  It kept the build cost when the enemy one went over to these rates, and a
+	 cost in the hundreds against a rate near one never read as outgunned: no hurt unit was pulled out at all. */
 
 static void prepareClassRates( const std::vector<const ThingTemplate *> &units )
 {
@@ -10045,9 +10043,12 @@ Real AIPlayer::knownFirepowerAlongPath( Waypoint *way, const AIThreatMix *mix )
 {
 	const AIThreatMix reads = mix ? *mix : readMix( AITHREAT_GROUND_MIX );
 	Real firepower = 0.0f;
+	// routeAt: the still guns counted twice and the hazards on the road with the map layers, the enemy layer to the
+	// bit without them
 	for( Int step = 0; way != NULL && step < APPROACH_MAX_WAYPOINTS; ++step )
 	{
-		firepower += knownFirepowerNear( way->getLocation(), &reads );
+		firepower += hasTacticalMap() ? m_influence.routeAt( way->getLocation()->x, way->getLocation()->y, reads ) :
+			knownFirepowerNear( way->getLocation(), &reads );
 		Waypoint *next = (way->getNumLinks() > 0) ? way->getLink( 0 ) : NULL;
 		if( next && hasTacticalMap() )
 		{
@@ -10060,7 +10061,7 @@ Real AIPlayer::knownFirepowerAlongPath( Waypoint *way, const AIThreatMix *mix )
 			for( Int i = 1; i < samples; ++i )
 			{
 				const Real t = INT_TO_REAL( i ) / INT_TO_REAL( samples );
-				firepower += m_influence.enemyAt( a->x + (b->x - a->x) * t, a->y + (b->y - a->y) * t, reads );
+				firepower += m_influence.routeAt( a->x + (b->x - a->x) * t, a->y + (b->y - a->y) * t, reads );
 			}
 		}
 		way = next;
@@ -10168,6 +10169,29 @@ Bool AIPlayer::forwardHoldPoint( const AsciiString &approach, Int pathSuffix, co
 	pathLabel.format( "%s%d", approach.str(), pathSuffix );
 	Waypoint *way = TheTerrainLogic->getClosestWaypointOnPath( &m_baseCenter, pathLabel );
 	const Real reach = HOLD_POINT_SHARE * sqrt( sqr( enemyPos->x - m_baseCenter.x ) + sqr( enemyPos->y - m_baseCenter.y ) );
+	if( layersHere() && hasTacticalMap() )
+	{
+		// the map layers rally at the front line instead: the last waypoint out along the road, short of the third,
+		// that our side still holds (heldAt, the friendly layer against the army we remember), past the base's edge.
+		// A known gun on the third no longer sends the whole wave home to gather.
+		const AIThreatMix friends = friendReadMix();
+		const AIThreatMix waiting = readMix( AITHREAT_GROUND_MIX );
+		Bool found = FALSE;
+		for( Int step = 0; way != NULL && step < APPROACH_MAX_WAYPOINTS; ++step )
+		{
+			const Coord3D *at = way->getLocation();
+			const Real distSqr = sqr( at->x - m_baseCenter.x ) + sqr( at->y - m_baseCenter.y );
+			if( distSqr > sqr( reach ) || !m_influence.heldAt( at->x, at->y, friends, waiting ) )
+				break;
+			if( distSqr > sqr( m_baseRadius ) )
+			{
+				*hold = *at;
+				found = TRUE;
+			}
+			way = (way->getNumLinks() > 0) ? way->getLink( 0 ) : NULL;
+		}
+		return found;
+	}
 	for( Int step = 0; way != NULL && step < APPROACH_MAX_WAYPOINTS; ++step )
 	{
 		const Coord3D *at = way->getLocation();
@@ -12530,7 +12554,10 @@ Bool AIPlayer::holdTeamForWave( Team *team, const AsciiString &approach, Int pat
 	// the map chooses the ground: never a spot a gun it knows of already covers
 	ensureInfluence();
 	const AIThreatMix waiting = teamMix( team );
-	if( m_influence.enemyAt( staging.x, staging.y, waiting ) > 0.0f )
+	// ... except, with the map layers, ground a known gun reaches that our own guns there outweigh: the front line,
+	// which is where the wave is meant to gather
+	if( m_influence.enemyAt( staging.x, staging.y, waiting ) > 0.0f &&
+			!(layersHere() && hasTacticalMap() && m_influence.heldAt( staging.x, staging.y, friendReadMix(), waiting )) )
 	{
 		const Coord3D wanted = staging;
 		if( !quietGround( &wanted, NULL, &staging, waiting ) )
@@ -14968,6 +14995,7 @@ static Bool carriesWeapon( const Object *obj )
 void AIPlayer::readKnownGuns( std::vector<AIKnownGun> *guns ) const
 {
 	const Int me = m_player->getPlayerIndex();
+	const Bool layers = layersHere();
 	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
 	{
 		// not a superweapon: a Scud Storm's weapon reaches 999999, and once one was known every healer saw
@@ -14975,6 +15003,11 @@ void AIPlayer::readKnownGuns( std::vector<AIKnownGun> *guns ) const
 		// Unarmed reaches nothing and is left before whether it is known, which walks the cells it covers.
 		if( obj->isEffectivelyDead() || obj->isKindOf( KINDOF_PROJECTILE ) || obj->isKindOf( KINDOF_FS_SUPERWEAPON ) ||
 				m_player->getRelationship( obj->getTeam() ) != ENEMIES || !carriesWeapon( obj ) || !observerKnowsAbout( obj, me ) )
+			continue;
+		// with the map layers a building's gun that is going up, sold, out of power, EMP'd or hacked is no gun, as
+		// on the map (shapeObject)
+		if( layers && (obj->isKindOf( KINDOF_STRUCTURE ) || obj->isKindOf( KINDOF_IMMOBILE )) &&
+				(obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || obj->testStatus( OBJECT_STATUS_SOLD ) || obj->isDisabled()) )
 			continue;
 		AIKnownGun gun;
 		gun.m_x = obj->getPosition()->x;
@@ -15059,9 +15092,15 @@ static void collectKnownEnemies( const Player *player, std::vector<Object *> *kn
 			known->push_back( obj );
 }
 
+/** A cell worth this much of the enemy's (the worth layer) brings a target in to half its distance. */
+static const Real AIR_TARGET_WORTH_PULL = 1500.0f;
+
 /** The nearest of the known enemies that the aircraft can attack with a clear strike (airStrikeIsClear), the
-	* first in the object list of two as near; NULL for none. */
-static Object *pickAirTarget( Object *aircraft, const std::vector<Object *> &known, const std::vector<AIKnownGun> &guns )
+	* first in the object list of two as near; NULL for none.  With worth, the map's worth layer, a target's distance
+	* is cut by the enemy's worth round it, so a jet off a called-off strike takes his supply centre over a tank a
+	* little nearer. */
+static Object *pickAirTarget( Object *aircraft, const std::vector<Object *> &known, const std::vector<AIKnownGun> &guns,
+															const AIInfluenceMap *worth )
 {
 	const Coord3D *pos = aircraft->getPosition();
 	Object *best = NULL;
@@ -15069,7 +15108,9 @@ static Object *pickAirTarget( Object *aircraft, const std::vector<Object *> &kno
 	for( size_t k = 0; k < known.size(); ++k )
 	{
 		Object *obj = known[ k ];
-		const Real distSqr = sqr( obj->getPosition()->x - pos->x ) + sqr( obj->getPosition()->y - pos->y );
+		Real distSqr = sqr( obj->getPosition()->x - pos->x ) + sqr( obj->getPosition()->y - pos->y );
+		if( worth )
+			distSqr /= sqr( 1.0f + worth->valueAt( obj->getPosition()->x, obj->getPosition()->y ) / AIR_TARGET_WORTH_PULL );
 		if( (best && distSqr >= bestSqr) ||
 				aircraft->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, obj, CMD_FROM_AI ) < ATTACKRESULT_POSSIBLE_AFTER_MOVING ||
 				!airStrikeIsClear( aircraft, obj, obj->getPosition(), guns ) )
@@ -15096,6 +15137,7 @@ void AIPlayer::steerAircraft( void )
 	const UnsignedInt rate = AIR_STEER_RATE( m_skillLevel );
 	if( !m_baseCenterSet || (now + computeUpdatePhase( m_player->getPlayerIndex(), rate )) % rate != 0 )
 		return;
+	flyStrikeRoutes();
 
 	std::vector<AIKnownGun> guns;
 	Bool gunsRead = FALSE;
@@ -15107,6 +15149,12 @@ void AIPlayer::steerAircraft( void )
 	{
 		Object *aircraft = owned[ o ];
 		AIUpdateInterface *ai = aircraft->getAI();
+		// one flying the long way round to a strike is flyStrikeRoutes'
+		Bool routed = FALSE;
+		for( size_t r = 0; r < m_strikeRoutes.size() && !routed; ++r )
+			routed = m_strikeRoutes[ r ].aircraft == aircraft->getID();
+		if( routed )
+			continue;
 		// a jet or a helicopter of the army: not a power's cargo plane or gunship, whose own update flies it
 		if( !aircraft->isKindOf( KINDOF_AIRCRAFT ) || aircraft->isKindOf( KINDOF_HARVESTER ) || aircraft->isKindOf( KINDOF_DRONE ) ||
 				ai == NULL || ai->getJetAIUpdate() == NULL || aircraft->isEffectivelyDead() || !aircraft->isAirborneTarget() ||
@@ -15140,13 +15188,16 @@ void AIPlayer::steerAircraft( void )
 		}
 		if( airStrikeIsClear( aircraft, target, at, guns ) )
 			continue;
+		// the long way round, by the air layer, before calling it off (map layers)
+		if( routeStrike( aircraft, target, at, guns ) )
+			continue;
 
 		if( !knownRead )
 		{
 			collectKnownEnemies( m_player, &known );
 			knownRead = TRUE;
 		}
-		Object *other = pickAirTarget( aircraft, known, guns );
+		Object *other = pickAirTarget( aircraft, known, guns, layersHere() && hasTacticalMap() ? &m_influence : NULL );
 		DEBUG_LOG(("AI AIR frame %d player %d '%s' %d calls off its strike at '%s' (%.0f,%.0f), %d known anti-air guns over it, for %s\n",
 			now, m_player->getPlayerIndex(), aircraft->getTemplate()->getName().str(), aircraft->getID(),
 			target ? target->getTemplate()->getName().str() : "a place", at->x, at->y,
@@ -15162,6 +15213,107 @@ void AIPlayer::steerAircraft( void )
 			home.z = TheTerrainLogic->getGroundHeight( home.x, home.y );
 			ai->aiMoveToPosition( &home, CMD_FROM_AI );
 		}
+	}
+}
+
+/** How near its turn point a routed aircraft has to be to strike, and the longest it flies the detour before
+	* striking from wherever it is. */
+static const Real STRIKE_ROUTE_SLACK = 150.0f;
+#define STRIKE_ROUTE_MAX_FRAMES ((UnsignedInt)(20 * LOGICFRAMES_PER_GAME_SECOND))
+
+/** How far past aiDetourWaypoint's turn point, as shares of its offset from the straight flight, a strike route
+	* looks for one whose legs clear every gun by HELIX_GUN_MARGIN: the air layer goes quiet at a gun's bare reach,
+	* so the first quiet turn point grazes it. */
+static const Real STRIKE_ROUTE_WIDEN[] = { 1.0f, 1.5f, 2.0f };
+
+/** A strike the straight flight cannot make, flown round the anti-air instead (map layers, Hard's air layer): the
+	* turn point aiDetourWaypoint finds by summing the air layer along both legs, pushed out from the straight
+	* flight (STRIKE_ROUTE_WIDEN) until neither leg crosses a known anti-air gun but the target's own, and the
+	* target, if it is one, dies to the strike (airStrikeKills).  The aircraft flies to the turn point and
+	* flyStrikeRoutes sends it in from there. */
+Bool AIPlayer::routeStrike( Object *aircraft, Object *target, const Coord3D *at, const std::vector<AIKnownGun> &guns )
+{
+	if( !layersHere() || !hasTacticalMap() )
+		return FALSE;
+	const Coord3D *pos = aircraft->getPosition();
+	Region3D extent;
+	TheTerrainLogic->getExtent( &extent );
+	const Real bounds[ 4 ] = { extent.lo.x, extent.lo.y, extent.hi.x, extent.hi.y };
+	Coord3D turn;
+	Real straight = 0.0f, round = -1.0f;
+	if( !aiDetourWaypoint( pos->x, pos->y, at->x, at->y, INFLUENCE_CELL_SIZE, bounds, &m_influence, readMix( AITHREAT_AIR_MIX ),
+			&turn.x, &turn.y, &straight, &round ) )
+		return FALSE;
+	const ObjectID id = target ? target->getID() : INVALID_ID;
+	// the turn point's foot on the straight flight, and its offset square to it
+	const Real lineX = at->x - pos->x;
+	const Real lineY = at->y - pos->y;
+	const Real lineSqr = lineX * lineX + lineY * lineY;
+	const Real along = lineSqr > 0.0f ? ((turn.x - pos->x) * lineX + (turn.y - pos->y) * lineY) / lineSqr : 0.0f;
+	const Real footX = pos->x + lineX * along;
+	const Real footY = pos->y + lineY * along;
+	Coord3D via;
+	Bool clear = FALSE;
+	for( Int w = 0; w < (Int)(sizeof( STRIKE_ROUTE_WIDEN ) / sizeof( STRIKE_ROUTE_WIDEN[ 0 ] )) && !clear; ++w )
+	{
+		via.x = footX + (turn.x - footX) * STRIKE_ROUTE_WIDEN[ w ];
+		via.y = footY + (turn.y - footY) * STRIKE_ROUTE_WIDEN[ w ];
+		clear = via.x >= bounds[ 0 ] && via.y >= bounds[ 1 ] && via.x <= bounds[ 2 ] && via.y <= bounds[ 3 ] &&
+			gunsOverFlight( guns, pos->x, pos->y, via.x, via.y ) == 0 && gunsOverFlight( guns, via.x, via.y, at->x, at->y, id ) == 0;
+	}
+	if( !clear )
+		return FALSE;
+	for( size_t g = 0; target && g < guns.size(); ++g )
+		if( guns[ g ].m_id == id && guns[ g ].m_airReach > 0.0f && !airStrikeKills( aircraft, target ) )
+			return FALSE;
+	via.z = TheTerrainLogic->getGroundHeight( via.x, via.y );
+	StrikeRoute route;
+	route.aircraft = aircraft->getID();
+	route.target = id;
+	route.at = *at;
+	route.via = via;
+	route.frame = TheGameLogic->getFrame();
+	m_strikeRoutes.push_back( route );
+	aircraft->getAI()->aiMoveToPosition( &via, CMD_FROM_AI );
+	DEBUG_LOG(("AI AIR frame %d player %d '%s' %d flies round to '%s' (%.0f,%.0f) by (%.0f,%.0f): air threat %.0f straight, %.0f round\n",
+		route.frame, m_player->getPlayerIndex(), aircraft->getTemplate()->getName().str(), aircraft->getID(),
+		target ? target->getTemplate()->getName().str() : "a place", at->x, at->y, via.x, via.y, straight, round));
+	return TRUE;
+}
+
+/** Every routed aircraft at its turn point, or out of time, strikes: its target if that still stands and is known,
+	* the ground it was going for if it stands unseen or was a place.  One dead, landed or out of ammo is let go. */
+void AIPlayer::flyStrikeRoutes( void )
+{
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const Int me = m_player->getPlayerIndex();
+	for( size_t r = 0; r < m_strikeRoutes.size(); )
+	{
+		const StrikeRoute &route = m_strikeRoutes[ r ];
+		Object *aircraft = TheGameLogic->findObjectByID( route.aircraft );
+		AIUpdateInterface *ai = aircraft ? aircraft->getAI() : NULL;
+		const JetAIUpdate *jet = ai ? ai->getJetAIUpdate() : NULL;
+		if( jet == NULL || aircraft->isEffectivelyDead() || !aircraft->isAirborneTarget() || jet->isOutOfSpecialReloadAmmo() )
+		{
+			m_strikeRoutes.erase( m_strikeRoutes.begin() + r );
+			continue;
+		}
+		const Coord3D *pos = aircraft->getPosition();
+		if( sqr( pos->x - route.via.x ) + sqr( pos->y - route.via.y ) > sqr( STRIKE_ROUTE_SLACK ) && now < route.frame + STRIKE_ROUTE_MAX_FRAMES )
+		{
+			++r;
+			continue;
+		}
+		Object *target = TheGameLogic->findObjectByID( route.target );
+		if( target && !target->isEffectivelyDead() && observerKnowsAbout( target, me ) )
+			ai->aiAttackObject( target, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+		else if( route.target == INVALID_ID || (target && !target->isEffectivelyDead()) )
+			ai->aiAttackPosition( &route.at, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+		else if( jet->friend_needsRunway() )
+			ai->aiIdle( CMD_FROM_AI );
+		DEBUG_LOG(("AI AIR frame %d player %d '%s' %d turns in on its strike at (%.0f,%.0f)\n", now, me,
+			aircraft->getTemplate()->getName().str(), aircraft->getID(), route.at.x, route.at.y));
+		m_strikeRoutes.erase( m_strikeRoutes.begin() + r );
 	}
 }
 
@@ -16617,9 +16769,28 @@ void AIPlayer::doRetreats( void )
 			const Real bounds[ 4 ] = { map.lo.x, map.lo.y, map.hi.x, map.hi.y };
 			ensureInfluence();
 			const AIThreatMix retreating = teamMix( team );
-			const Bool shortOfHome = !measuringWithoutTactics() &&
+			Bool shortOfHome = !measuringWithoutTactics() &&
 				aiRetreatFallbackPoint( centre.x, centre.y, m_baseCenter.x, m_baseCenter.y, INFLUENCE_CELL_SIZE,
 					enemyGuns.empty() ? NULL : &enemyGuns[ 0 ], (Int)enemyGuns.size() / 3, bounds, &fallback.x, &fallback.y, &m_influence, &retreating );
+			// with the map layers, no quiet ground short of home is not a walk home yet: the team regroups at the front
+			// line, the first ground on the way that our guns hold against what the enemy has there (aiFrontLinePoint),
+			// when that is out of the reach of every gun in this fight
+			if( !shortOfHome && !measuringWithoutTactics() && layersHere() && hasTacticalMap() )
+			{
+				Coord3D front;
+				front.zero();
+				Bool clear = aiFrontLinePoint( centre.x, centre.y, m_baseCenter.x, m_baseCenter.y, INFLUENCE_CELL_SIZE, &m_influence,
+					friendReadMix(), retreating, &front.x, &front.y ) && !isAtHome( &front );
+				for( size_t g = 0; clear && g + 2 < enemyGuns.size(); g += 3 )
+					clear = sqr( front.x - enemyGuns[ g ] ) + sqr( front.y - enemyGuns[ g + 1 ] ) > sqr( enemyGuns[ g + 2 ] );
+				if( clear )
+				{
+					DEBUG_LOG(("AI RETREAT frame %d player %d '%s' regroups at the front line (%.0f,%.0f), no quiet ground short of home\n",
+						TheGameLogic->getFrame(), m_player->getPlayerIndex(), team->getName().str(), front.x, front.y));
+					fallback = front;
+					shortOfHome = TRUE;
+				}
+			}
 			if( shortOfHome )
 				fallback.z = TheTerrainLogic->getGroundHeight( fallback.x, fallback.y );
 			const Real homeX = m_baseCenter.x - centre.x;
@@ -17515,47 +17686,299 @@ static Real firingHeight( const Object *obj )
 /** B4, the map itself.  Every armed thing this player knows about is stamped onto the cells its guns
 	* reach: the enemy's into one layer, this player's and its allies' into the other.  Known means
 	* observerKnowsAbout, the same line every other decision here draws, so a gun it has never seen
-	* does not steer it and a bunker it saw once keeps doing so. */
+	* does not steer it and a bunker it saw once keeps doing so.
+	*
+	* A stamp in two halves: its shape (shapeObject), what the object stamps whoever is looking, worked out once
+	* for every seat sharing a turn, then each seat's adding (applyShape), by what the object is to it.  With the
+	* map layers the shape carries a gun's minimum-range hole and its weaker edge, a moving gun's lead, whether it
+	* stands still, what it is worth and what it burns; without them it is the class map's plain stamp, cell for
+	* cell. */
 //----------------------------------------------------------------------------------------------------------
-void AIPlayer::stampInfluence( AIInfluenceMap &map, const Object *obj )
+struct StampShape
 {
+	Bool armed;		///< power and ground reach both above nothing: the cost map's stamp and the friendly layer's
+	Bool fixed;		///< it stands still, a defence or a gun firing out of a building: the still layer (map layers)
+	Real power;		///< aiCombatPower, the cost map's figure
+	Real threat[ AITHREAT_COUNT ];		///< aiClassPower, the class map's
+	Int first;		///< into the turn's cells: the ground reach's count full cells, then its edge cells
+	Int count;
+	Int edge;
+	Int airFirst;	///< ... the air reach's, the ground's own when the two reaches are one
+	Int airCount;
+	Int airEdge;
+	Real value;		///< what it is worth to the enemy of its owner, over valueCount cells from valueFirst (map layers)
+	Int valueFirst;
+	Int valueCount;
+	Real hazard;	///< what standing in it costs, over hazardCount cells from hazardFirst (map layers)
+	Bool hazardAnyone;	///< a field burns its owner's side too; a mine does not
+	Int hazardFirst;
+	Int hazardCount;
+};
+
+static void blankShape( StampShape *shape )
+{
+	shape->armed = FALSE;
+	shape->fixed = FALSE;
+	shape->power = 0.0f;
+	for( Int c = 0; c < AITHREAT_COUNT; ++c )
+		shape->threat[ c ] = 0.0f;
+	shape->first = shape->count = shape->edge = 0;
+	shape->airFirst = shape->airCount = shape->airEdge = 0;
+	shape->value = 0.0f;
+	shape->valueFirst = shape->valueCount = 0;
+	shape->hazard = 0.0f;
+	shape->hazardAnyone = FALSE;
+	shape->hazardFirst = shape->hazardCount = 0;
+}
+
+/** Past this share of its reach a gun counts half: a shot at the edge of range is the first a target walks out of,
+	* and a shell's scatter is widest there. */
+static const Real STAMP_EDGE_SHARE = 0.75f;
+/** A moving gun stamps from where it will be this many game seconds on, no further ahead than two cells. */
+static const Real STAMP_LEAD_SECONDS = 1.0f;
+static const Real STAMP_MAX_LEAD = 2.0f * INFLUENCE_CELL_SIZE;
+/** A hazard on the map counts as this much threat a cell: about half a tank's on the class map, enough to walk
+	* round a fire field and not enough to make a column turn back from one. */
+static const Real HAZARD_FIGURE = 400.0f;
+/** The cells round a building or a gatherer that its worth goes on, so a raid aimed near it reads it. */
+static const Real VALUE_RADIUS = 2.0f * INFLUENCE_CELL_SIZE;
+
+/** What it stands in: itself, or the building it fires out of. */
+static const Object *standsIn( const Object *obj )
+{
+	while( obj->getContainedBy() )
+		obj = obj->getContainedBy();
+	return obj;
+}
+
+/** The nearest any of its guns of that kind can shoot: the hole the stamp leaves.  0 when one of them shoots point
+	* blank, or it has none. */
+static Real minimumReach( const Object *obj, Int antiMask )
+{
+	Real least = -1.0f;
+	for( Int slot = PRIMARY_WEAPON; slot < WEAPONSLOT_COUNT; ++slot )
+	{
+		const Weapon *weapon = obj->getWeaponInWeaponSlot( (WeaponSlotType)slot );
+		if( weapon == NULL || (weapon->getTemplate()->getAntiMask() & antiMask) == 0 )
+			continue;
+		const Real reach = weapon->getTemplate()->getMinimumAttackRange();
+		if( least < 0.0f || reach < least )
+			least = reach;
+	}
+	return least > 0.0f ? least : 0.0f;
+}
+
+/** Worth on the map, as a share of its price: income first (the enemy's money is what a raid takes away), then
+	* what it builds with and what unlocks the rest, its power least.  0 for anything else. */
+static Real valueShare( const Object *obj )
+{
+	if( obj->isKindOf( KINDOF_FS_SUPPLY_CENTER ) || obj->isKindOf( KINDOF_FS_SUPPLY_DROPZONE ) || obj->isKindOf( KINDOF_FS_BLACK_MARKET ) ||
+			obj->isKindOf( KINDOF_FS_INTERNET_CENTER ) || obj->isKindOf( KINDOF_CASH_GENERATOR ) ||
+			((obj->isKindOf( KINDOF_HARVESTER ) || obj->isKindOf( KINDOF_DOZER )) && !obj->isKindOf( KINDOF_AIRCRAFT )) )
+		return 1.5f;
+	if( obj->isKindOf( KINDOF_FS_BARRACKS ) || obj->isKindOf( KINDOF_FS_WARFACTORY ) || obj->isKindOf( KINDOF_FS_AIRFIELD ) ||
+			obj->isKindOf( KINDOF_FS_TECHNOLOGY ) || obj->isKindOf( KINDOF_FS_ADVANCED_TECH ) || obj->isKindOf( KINDOF_FS_SUPERWEAPON ) )
+		return 1.0f;
+	if( obj->isKindOf( KINDOF_FS_POWER ) )
+		return 0.5f;
+	return 0.0f;
+}
+
+/** How far round itself something hurts whoever stands there: a known mine its body, a fire, toxin or radiation
+	* field the reach of the weapon it fires at its own feet.  0 for anything else.  The template's own module
+	* list, read and never cached, since the seats' workers run this. */
+static Real hazardReach( const Object *obj )
+{
+	if( obj->isKindOf( KINDOF_MINE ) )
+		return obj->getGeometryInfo().getMajorRadius();
+	if( !obj->isKindOf( KINDOF_IMMOBILE ) || !obj->isKindOf( KINDOF_NO_COLLIDE ) || obj->isKindOf( KINDOF_STRUCTURE ) )
+		return 0.0f;
+	const ModuleInfo &modules = obj->getTemplate()->getBehaviorModuleInfo();
+	Real reach = 0.0f;
+	for( Int m = 0; m < modules.getCount(); ++m )
+	{
+		if( modules.getNthName( m ).compareNoCase( "FireWeaponUpdate" ) != 0 )
+			continue;
+		const FireWeaponUpdateModuleData *data = (const FireWeaponUpdateModuleData *)modules.getNthData( m );
+		if( data && data->m_weaponTemplate )
+			reach = max( reach, data->m_weaponTemplate->getPrimaryDamageRadius( WeaponBonus() ) );
+	}
+	return reach;
+}
+
+/** The shape of what obj stamps, its cells appended to cells (scratch holds a reach's edge meanwhile).  Reads the
+	* object and the map's grid and heights, and nothing of any seat's. */
+static void shapeObject( const Object *obj, const AIInfluenceMap &map, Bool layers, std::vector<Int> &cells,
+												 std::vector<Int> &scratch, StampShape *shape )
+{
+	blankShape( shape );
+	shape->first = shape->airFirst = (Int)cells.size();
 	if( obj->isEffectivelyDead() || obj->isKindOf( KINDOF_PROJECTILE ) )
 		return;
-	const Bool mine = obj->getControllingPlayer() == m_player;
-	const Relationship relation = m_player->getRelationship( obj->getTeam() );
-	// the friendly layer is for the tactics alone, so the rungs below Hard do not pay for it
-	if( (mine || relation == ALLIES) ? !getSkillProfile()->m_tacticalMicro : relation != ENEMIES )
-		return;
-	const Real power = aiCombatPower( obj );
-	if( power <= 0.0f )
-		return;
-	const Real range = groundAttackRange( obj );
 	const Coord3D *pos = obj->getPosition();
-	if( mine || relation == ALLIES )
+	Real x = pos->x, y = pos->y;
+	const Real z = firingHeight( obj );
+	shape->power = aiCombatPower( obj );
+	Real range = shape->power > 0.0f ? groundAttackRange( obj ) : 0.0f;
+	Real airRange = shape->power > 0.0f ? airAttackRange( obj ) : 0.0f;
+	Real minGround = 0.0f, minAir = 0.0f, edgeShare = 1.0f;
+	if( layers )
 	{
-		if( range > 0.0f )
+		const Object *carrier = standsIn( obj );
+		shape->fixed = carrier->isKindOf( KINDOF_STRUCTURE ) || carrier->isKindOf( KINDOF_IMMOBILE );
+		// a building's guns are silent while it goes up, is sold, out of power, EMP'd or hacked, and its riders' are
+		// when it lets nobody fire out (fixedGunPower's rule)
+		const ContainModuleInterface *contain = carrier->getContain();
+		if( shape->fixed && (carrier->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || carrier->testStatus( OBJECT_STATUS_SOLD ) ||
+				carrier->isDisabled() || (carrier != obj && (contain == NULL || !contain->isPassengerAllowedToFire()))) )
+			range = airRange = 0.0f;
+		if( !shape->fixed && carrier == obj && obj->getPhysics() )
 		{
-			Real threat[ AITHREAT_COUNT ];
-			aiClassPower( obj, threat );
-			map.stampFriend( pos->x, pos->y, firingHeight( obj ), range, costMapHere() ? power : friendFigure( threat ) );
+			const Coord3D *vel = obj->getPhysics()->getVelocity();
+			AIInfluence_projectedCentre( pos->x, pos->y, vel->x, vel->y, STAMP_LEAD_SECONDS * LOGICFRAMES_PER_GAME_SECOND, STAMP_MAX_LEAD, &x, &y );
+		}
+		minGround = range > 0.0f ? minimumReach( obj, WEAPON_ANTI_GROUND ) : 0.0f;
+		minAir = airRange > 0.0f ? minimumReach( obj, WEAPON_ANTI_AIRBORNE_VEHICLE ) : 0.0f;
+		edgeShare = STAMP_EDGE_SHARE;
+	}
+	shape->armed = range > 0.0f;
+	if( shape->armed )
+		map.cellsBanded( x, y, z, range, minGround, edgeShare, cells, scratch, &shape->edge );
+	shape->count = (Int)cells.size() - shape->first - shape->edge;
+	// the air reach for every turn, Hard's seat or not: a turn is shaped once for whoever shares it
+	if( shape->armed || airRange > 0.0f )
+		aiClassPower( obj, shape->threat );
+	shape->airFirst = shape->first;
+	if( airRange > 0.0f && shape->threat[ AITHREAT_AIR ] > 0.0f )
+	{
+		if( airRange == range && minAir == minGround )
+		{
+			shape->airCount = shape->count;
+			shape->airEdge = shape->edge;
+		}
+		else
+		{
+			shape->airFirst = (Int)cells.size();
+			map.cellsBanded( x, y, z, airRange, minAir, edgeShare, cells, scratch, &shape->airEdge );
+			shape->airCount = (Int)cells.size() - shape->airFirst - shape->airEdge;
+		}
+	}
+	if( !layers )
+		return;
+	const Real share = valueShare( obj );
+	if( share > 0.0f )
+	{
+		// the list price: calcCostToBuild asks the template's lazy name key, which a seat's worker may not fill
+		shape->value = quarterOf( share * INT_TO_REAL( obj->getTemplate()->friend_getBuildCost() ) );
+		shape->valueFirst = (Int)cells.size();
+		if( shape->value > 0.0f )
+			map.cellsInDisc( pos->x, pos->y, VALUE_RADIUS, cells );
+		shape->valueCount = (Int)cells.size() - shape->valueFirst;
+	}
+	const Real burns = hazardReach( obj );
+	if( burns > 0.0f )
+	{
+		shape->hazard = HAZARD_FIGURE;
+		shape->hazardAnyone = !obj->isKindOf( KINDOF_MINE );
+		shape->hazardFirst = (Int)cells.size();
+		map.cellsInDisc( pos->x, pos->y, burns, cells );
+		shape->hazardCount = (Int)cells.size() - shape->hazardFirst;
+	}
+}
+
+/** What one object's shape adds to this seat's map, by what it is to the seat: the friendly layer for its own and
+	* its allies' guns (Hard alone), the enemy layer for an enemy's it knows of, the still layer beside it for a still
+	* one, the worth of an enemy's it knows of, and a hazard it knows of.  The same sums in the same order for a seat
+	* stamping alone and seats sharing the turn's shapes. */
+void AIPlayer::applyShape( AIInfluenceMap &map, const Object *obj, const StampShape &shape, const Int *cells )
+{
+	const Bool micro = getSkillProfile()->m_tacticalMicro;
+	const Bool costMap = costMapHere();
+	const Bool layers = layersHere();
+	const Bool ground = shape.armed && shape.count + shape.edge > 0;
+	const Bool air = micro && !costMap && shape.airCount + shape.airEdge > 0;
+	const Bool marks = shape.valueCount > 0 || shape.hazardCount > 0;
+	// what stamps nothing is skipped before the relationship's two map lookups, which would skip it anyway
+	if( (!ground && !air && !marks) || obj->isEffectivelyDead() )
+		return;
+	const Int me = m_player->getPlayerIndex();
+	const Relationship relation = m_player->getRelationship( obj->getTeam() );
+	const Bool friendly = obj->getControllingPlayer() == m_player || relation == ALLIES;
+	if( marks && layers && observerKnowsAbout( obj, me ) )
+	{
+		if( shape.hazardCount > 0 && (shape.hazardAnyone || relation == ENEMIES) )
+			map.addHazard( cells + shape.hazardFirst, shape.hazardCount, shape.hazard );
+		if( shape.valueCount > 0 && relation == ENEMIES )
+			map.addValue( cells + shape.valueFirst, shape.valueCount, shape.value );
+	}
+	if( (!ground && !air) || (friendly ? !micro : relation != ENEMIES) )
+		return;
+	const Real *threat = shape.threat;
+	// the edge's half, in quarters like every stamp
+	Real half[ AITHREAT_COUNT ];
+	for( Int c = 0; c < AITHREAT_COUNT; ++c )
+		half[ c ] = quarterOf( 0.5f * threat[ c ] );
+	const Int *full = cells + shape.first;
+	const Int *edge = full + shape.count;
+	const Int *airFull = cells + shape.airFirst;
+	const Int *airEdge = airFull + shape.airCount;
+	if( friendly )
+	{
+		if( ground )
+		{
+			if( costMap )
+				map.addFriend( full, shape.count, shape.power, 0.0f );
+			else
+			{
+				map.addFriend( full, shape.count, threat[ AITHREAT_VEHICLE ], threat[ AITHREAT_INFANTRY ] );
+				map.addFriend( edge, shape.edge, half[ AITHREAT_VEHICLE ], half[ AITHREAT_INFANTRY ] );
+			}
+		}
+		if( air && layers )
+		{
+			map.addFriendAir( airFull, shape.airCount, threat[ AITHREAT_AIR ] );
+			map.addFriendAir( airEdge, shape.airEdge, half[ AITHREAT_AIR ] );
 		}
 		return;
 	}
-	if( costMapHere() )
+	if( !observerKnowsAbout( obj, me ) )
+		return;
+	if( costMap )
 	{
-		const Real cost[ AITHREAT_COUNT ] = { power, 0.0f, 0.0f };
-		if( range > 0.0f && observerKnowsAbout( obj, m_player->getPlayerIndex() ) )
-			map.stampEnemy( pos->x, pos->y, firingHeight( obj ), range, 0.0f, cost );
+		if( ground )
+			map.addEnemy( full, shape.count, shape.power, 0.0f );
 		return;
 	}
-	// the air layer is Hard's, the one rung whose aircraft read it
-	const Real airRange = getSkillProfile()->m_tacticalMicro ? airAttackRange( obj ) : 0.0f;
-	if( (range > 0.0f || airRange > 0.0f) && observerKnowsAbout( obj, m_player->getPlayerIndex() ) )
+	const Bool still = layers && shape.fixed;
+	if( ground && (threat[ AITHREAT_VEHICLE ] > 0.0f || threat[ AITHREAT_INFANTRY ] > 0.0f) )
 	{
-		Real threat[ AITHREAT_COUNT ];
-		aiClassPower( obj, threat );
-		map.stampEnemy( pos->x, pos->y, firingHeight( obj ), range, airRange, threat );
+		map.addEnemy( full, shape.count, threat[ AITHREAT_VEHICLE ], threat[ AITHREAT_INFANTRY ] );
+		map.addEnemy( edge, shape.edge, half[ AITHREAT_VEHICLE ], half[ AITHREAT_INFANTRY ] );
+		if( still )
+		{
+			map.addStatic( full, shape.count, threat[ AITHREAT_VEHICLE ], threat[ AITHREAT_INFANTRY ] );
+			map.addStatic( edge, shape.edge, half[ AITHREAT_VEHICLE ], half[ AITHREAT_INFANTRY ] );
+		}
 	}
+	if( air )
+	{
+		map.addEnemyAir( airFull, shape.airCount, threat[ AITHREAT_AIR ] );
+		map.addEnemyAir( airEdge, shape.airEdge, half[ AITHREAT_AIR ] );
+		if( still )
+		{
+			map.addStaticAir( airFull, shape.airCount, threat[ AITHREAT_AIR ] );
+			map.addStaticAir( airEdge, shape.airEdge, half[ AITHREAT_AIR ] );
+		}
+	}
+}
+
+void AIPlayer::stampInfluence( AIInfluenceMap &map, const Object *obj )
+{
+	StampShape shape;
+	m_stampCells.clear();
+	shapeObject( obj, map, layersHere(), m_stampCells, m_stampEdge, &shape );
+	if( !m_stampCells.empty() )
+		applyShape( map, obj, shape, &m_stampCells[ 0 ] );
 }
 
 /** One gun known by its shells, at where it stood (at, reaching reach on the ground).  The cost map stamps
@@ -17596,25 +18019,15 @@ void AIPlayer::stampFireReports( AIInfluenceMap &map )
 	* seat stamping on rounds of one length reads the same share, so the list is walked once a frame for all of
 	* them, where 32 seats each walked all of it for a sixtieth: 137000 steps a frame at minute 9.  IDs and not
 	* pointers, let go of with the match (forgetStampTurns); an object made after the frame's first reader waits
-	* for its next turn. */
-/** What every seat stamping one object of the turn needs whatever it is to that object: its power, and the
-	* cells its reach covers.  Worked out for the whole turn by the first seat to prepare (prepareInfluence) and
-	* only read by the seats' stamping, which runs side by side on the world as the players' update found it. */
-struct StampShape
-{
-	Bool armed;		///< power and ground reach both above nothing: the cost map's stamp and the friendly layer's
-	Real power;		///< aiCombatPower, the cost map's and the friendly layer's figure
-	Real threat[ AITHREAT_COUNT ];		///< aiClassPower, the class map's
-	Int first;		///< into StampTurn::cells, the ground reach's
-	Int count;
-	Int airFirst;	///< ... the air reach's, the ground's own when the two reaches are one
-	Int airCount;
-};
-
+	* for its next turn.  Each id's StampShape is worked out for the whole turn by the first seat to prepare
+	* (prepareInfluence) and only read by the seats' stamping, which runs side by side on the world as the players'
+	* update found it.  A turn is shaped with the map layers or without, so a batch with some seats knobbed off
+	* keeps a turn of each. */
 struct StampTurn
 {
 	UnsignedInt frame;	///< the frame read, plus one; 0 for never
 	Int round;
+	Bool layers;				///< the shapes are the map layers'
 	std::vector<ObjectID> ids;
 	std::vector<StampShape> shapes;		///< one per id
 	std::vector<Int> cells;
@@ -17623,17 +18036,18 @@ struct StampTurn
 	Int rows;
 	Real originX, originY, cellSize;
 };
-// a round is the rung's alone (influenceRound), so one frame asks for at most AISKILL_COUNT; something that
-// gave two seats of one rung different rounds would need a slot for each
-enum { STAMP_TURN_SLOTS = AISKILL_COUNT + 1 };
+// a round is the rung's alone (influenceRound), so one frame asks for at most AISKILL_COUNT, twice over when some
+// seats play without the map layers; something that gave two seats of one rung different rounds would need a slot
+// for each
+enum { STAMP_TURN_SLOTS = 2 * AISKILL_COUNT + 1 };
 static StampTurn theStampTurns[ STAMP_TURN_SLOTS ];
 
-static StampTurn &stampTurn( Int round )
+static StampTurn &stampTurn( Int round, Bool layers )
 {
 	StampTurn *turn = &theStampTurns[ 0 ];
 	for( Int i = 0; i < STAMP_TURN_SLOTS; ++i )
 	{
-		if( theStampTurns[ i ].round == round )
+		if( theStampTurns[ i ].round == round && theStampTurns[ i ].layers == layers )
 		{
 			turn = &theStampTurns[ i ];
 			break;
@@ -17642,7 +18056,7 @@ static StampTurn &stampTurn( Int round )
 			turn = &theStampTurns[ i ];
 	}
 	const UnsignedInt now = TheGameLogic->getFrame();
-	if( turn->frame != now + 1 || turn->round != round )
+	if( turn->frame != now + 1 || turn->round != round || turn->layers != layers )
 	{
 		turn->ids.clear();
 		const UnsignedInt share = now % (UnsignedInt)round;
@@ -17668,15 +18082,9 @@ static StampTurn &stampTurn( Int round )
 		}
 		turn->frame = now + 1;
 		turn->round = round;
+		turn->layers = layers;
 		StampShape blank;
-		blank.armed = FALSE;
-		blank.power = 0.0f;
-		for( Int c = 0; c < AITHREAT_COUNT; ++c )
-			blank.threat[ c ] = 0.0f;
-		blank.first = 0;
-		blank.count = 0;
-		blank.airFirst = 0;
-		blank.airCount = 0;
+		blankShape( &blank );
 		turn->shapes.assign( turn->ids.size(), blank );
 		turn->cells.clear();
 		turn->shaped = FALSE;
@@ -17695,6 +18103,7 @@ static StampTurn &stampTurn( Int round )
 	{
 		theStampTurns[ i ].frame = 0;
 		theStampTurns[ i ].round = 0;
+		theStampTurns[ i ].layers = FALSE;
 		theStampTurns[ i ].ids.clear();
 		theStampTurns[ i ].shapes.clear();
 		theStampTurns[ i ].cells.clear();
@@ -17716,6 +18125,7 @@ static Int influenceRound( const AIDifficultyProfile *profile )
 	* of its own.  As many runs whatever the pool, so the cells' order never depends on the threads. */
 enum { SHAPE_RUNS = 16, SHAPE_RUN_IDS = 32 };
 static std::vector<Int> theShapeRunCells[ SHAPE_RUNS ];
+static std::vector<Int> theShapeRunEdge[ SHAPE_RUNS ];
 struct ShapeRuns
 {
 	StampTurn *turn;
@@ -17733,33 +18143,8 @@ static void shapeRun( Int run, void *context )
 	for( Int i = run * runs->perRun; i < end; ++i )
 	{
 		const Object *obj = TheGameLogic->findObjectByID( turn.ids[ i ] );
-		if( obj == NULL || obj->isEffectivelyDead() || obj->isKindOf( KINDOF_PROJECTILE ) )
-			continue;
-		StampShape &shape = turn.shapes[ i ];
-		shape.power = aiCombatPower( obj );
-		const Real range = shape.power > 0.0f ? groundAttackRange( obj ) : 0.0f;
-		shape.armed = range > 0.0f;
-		shape.first = (Int)cells.size();
-		if( shape.armed )
-			runs->map->cellsReached( obj->getPosition()->x, obj->getPosition()->y, firingHeight( obj ), range, cells );
-		shape.count = (Int)cells.size() - shape.first;
-		// the air reach for every turn, Hard's seat or not: a turn is shaped once for whoever shares it
-		const Real airRange = shape.power > 0.0f ? airAttackRange( obj ) : 0.0f;
-		if( shape.armed || airRange > 0.0f )
-			aiClassPower( obj, shape.threat );
-		shape.airFirst = shape.first;
-		shape.airCount = 0;
-		if( airRange > 0.0f && shape.threat[ AITHREAT_AIR ] > 0.0f )
-		{
-			if( airRange == range )
-				shape.airCount = shape.count;
-			else
-			{
-				shape.airFirst = (Int)cells.size();
-				runs->map->cellsReached( obj->getPosition()->x, obj->getPosition()->y, firingHeight( obj ), airRange, cells );
-				shape.airCount = (Int)cells.size() - shape.airFirst;
-			}
-		}
+		if( obj != NULL )
+			shapeObject( obj, *runs->map, turn.layers, cells, theShapeRunEdge[ run ], &turn.shapes[ i ] );
 	}
 }
 
@@ -17788,7 +18173,7 @@ void AIPlayer::prepareInfluence( void )
 		m_influenceNext.markUnbuilt();
 	}
 
-	StampTurn &turn = stampTurn( influenceRound( getSkillProfile() ) );
+	StampTurn &turn = stampTurn( influenceRound( getSkillProfile() ), layersHere() );
 	if( turn.cols == 0 )
 	{
 		turn.cols = m_influenceNext.getCols();
@@ -17818,6 +18203,8 @@ void AIPlayer::prepareInfluence( void )
 		{
 			turn.shapes[ i ].first += base;
 			turn.shapes[ i ].airFirst += base;
+			turn.shapes[ i ].valueFirst += base;
+			turn.shapes[ i ].hazardFirst += base;
 		}
 		turn.cells.insert( turn.cells.end(), theShapeRunCells[ run ].begin(), theShapeRunCells[ run ].end() );
 	}
@@ -17827,49 +18214,18 @@ void AIPlayer::stampInfluenceTurn( void )
 {
 	const UnsignedInt now = TheGameLogic->getFrame();
 	const Int round = influenceRound( getSkillProfile() );
-	const StampTurn &turn = stampTurn( round );
+	const StampTurn &turn = stampTurn( round, layersHere() );
 	const Bool shared = turn.shaped && m_influenceNext.sameGrid( turn.cols, turn.rows, turn.originX, turn.originY, turn.cellSize );
-	const Bool micro = getSkillProfile()->m_tacticalMicro;
-	const Bool costMap = costMapHere();
-	const Int me = m_player->getPlayerIndex();
+	const Int *cells = turn.cells.empty() ? NULL : &turn.cells[ 0 ];
 	for( size_t i = 0; i < turn.ids.size(); ++i )
 	{
 		const Object *obj = TheGameLogic->findObjectByID( turn.ids[ i ] );
 		if( obj == NULL )
 			continue;
 		if( !shared )
-		{
 			stampInfluence( m_influenceNext, obj );
-			continue;
-		}
-		const StampShape &shape = turn.shapes[ i ];
-		const Bool ground = shape.armed && shape.count > 0;
-		const Bool air = micro && !costMap && shape.airCount > 0;
-		// what stamps nothing is skipped before the relationship's two map lookups, which would skip it anyway
-		if( (!ground && !air) || obj->isEffectivelyDead() )
-			continue;
-		const Relationship relation = m_player->getRelationship( obj->getTeam() );
-		const Bool friendly = obj->getControllingPlayer() == m_player || relation == ALLIES;
-		if( friendly ? !micro : relation != ENEMIES )
-			continue;
-		if( friendly )
-		{
-			if( ground )
-				m_influenceNext.addFriend( &turn.cells[ shape.first ], shape.count, costMap ? shape.power : friendFigure( shape.threat ) );
-			continue;
-		}
-		if( !observerKnowsAbout( obj, me ) )
-			continue;
-		if( costMap )
-		{
-			if( ground )
-				m_influenceNext.addEnemy( &turn.cells[ shape.first ], shape.count, shape.power, 0.0f );
-			continue;
-		}
-		if( ground && (shape.threat[ AITHREAT_VEHICLE ] > 0.0f || shape.threat[ AITHREAT_INFANTRY ] > 0.0f) )
-			m_influenceNext.addEnemy( &turn.cells[ shape.first ], shape.count, shape.threat[ AITHREAT_VEHICLE ], shape.threat[ AITHREAT_INFANTRY ] );
-		if( air )
-			m_influenceNext.addEnemyAir( &turn.cells[ shape.airFirst ], shape.airCount, shape.threat[ AITHREAT_AIR ] );
+		else if( cells != NULL )
+			applyShape( m_influenceNext, obj, turn.shapes[ i ], cells );
 	}
 
 	if( (now + computeUpdatePhase( m_player->getPlayerIndex(), round )) % round == 0 )
@@ -17877,6 +18233,8 @@ void AIPlayer::stampInfluenceTurn( void )
 		if( m_influenceNext.isBuilt() )
 		{
 			stampFireReports( m_influenceNext );
+			if( layersHere() )
+				stampMemory( m_influenceNext );
 			std::swap( m_influence, m_influenceNext );
 			m_influence.markBuilt( now );
 		}
@@ -17908,7 +18266,49 @@ void AIPlayer::rebuildInfluence( void )
 	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
 		stampInfluence( m_influence, obj );
 	stampFireReports( m_influence );
+	if( layersHere() )
+		stampMemory( m_influence );
 	m_influence.markBuilt( TheGameLogic->getFrame() );
+}
+
+/** How long an enemy that walked out of sight stays on the map, fading, in game seconds: a column that went into
+	* the fog a breath ago is still about where it went, one gone half a minute could be anywhere. */
+static const Real MEMORY_SECONDS = 15.0f;
+
+/** The ledger's enemies this player no longer sees, where it last saw them, their figures falling evenly to
+	* nothing over MEMORY_SECONDS.  The first round and a ledger turn after it went out of sight are left out, since
+	* the round may still have stamped it where it stood; so is one a fire report already puts on the map.  The
+	* ledger in ID order, so every machine adds the same stamps in the same order, in quarters. */
+void AIPlayer::stampMemory( AIInfluenceMap &map )
+{
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const Int me = m_player->getPlayerIndex();
+	const Bool micro = getSkillProfile()->m_tacticalMicro;
+	const UnsignedInt quiet = (UnsignedInt)( influenceRound( getSkillProfile() ) + LEDGER_RATE );
+	const UnsignedInt fade = (UnsignedInt)rungFrames( MEMORY_SECONDS );
+	for( std::map<ObjectID, SeenEnemy>::const_iterator it = m_seenEnemies.begin(); it != m_seenEnemies.end(); ++it )
+	{
+		const SeenEnemy &row = it->second;
+		if( now < row.seen + quiet )
+			continue;
+		const Real share = AIInfluence_memoryShare( now - row.seen - quiet, fade );
+		if( share <= 0.0f )
+			continue;
+		const Object *obj = TheGameLogic->findObjectByID( it->first );
+		if( obj == NULL || obj->isEffectivelyDead() || obj->isContained() || observerKnowsAbout( obj, me ) )
+			continue;
+		Bool reported = FALSE;
+		for( size_t r = 0; r < m_fireReports.size() && !reported; ++r )
+			reported = m_fireReports[ r ].shooter == it->first;
+		if( reported )
+			continue;
+		Real threat[ AITHREAT_COUNT ];
+		aiClassPower( obj, threat );
+		for( Int c = 0; c < AITHREAT_COUNT; ++c )
+			threat[ c ] = quarterOf( threat[ c ] * share );
+		const Real z = obj->isKindOf( KINDOF_AIRCRAFT ) ? TheTerrainLogic->getGroundHeight( row.pos.x, row.pos.y ) : row.pos.z;
+		map.stampEnemy( row.pos.x, row.pos.y, z, groundAttackRange( obj ), micro ? airAttackRange( obj ) : 0.0f, threat );
+	}
 }
 
 /** Every rung stamps its map over the frames of its clock (updateInfluence), so this draws it whole only for
@@ -17938,6 +18338,35 @@ Bool AIPlayer::hasTacticalMap( void ) const
 Bool AIPlayer::costMapHere( void ) const
 {
 	return knobsOffHere() && (TheGlobalData->m_aiKnobsOffMask & AIKNOB_COST_MAP) != 0;
+}
+
+/** The map layers: everything source 45a11258's class map did not have.  -aiknobsoff ... maplayers takes them off
+	* this seat, and so does costmap, which is the map before the classes. */
+Bool AIPlayer::layersHere( void ) const
+{
+	return !costMapHere() && !(knobsOffHere() && (TheGlobalData->m_aiKnobsOffMask & AIKNOB_MAP_LAYERS) != 0);
+}
+
+/** The army this AI remembers (the ledger), by class and worth: what the friendly layer's guns have to answer, so
+	* a cell full of tank guns is not held against an army of helicopters.  Worked out once a frame. */
+AIThreatMix AIPlayer::foeMix( void ) const
+{
+	const UnsignedInt stamp = TheGameLogic->getFrame() + 1;
+	if( m_foeMixFrame == stamp )
+		return m_foeMix;
+	AIThreatMix sum = { { 0.0f, 0.0f, 0.0f } };
+	for( std::map<ObjectID, SeenEnemy>::const_iterator it = m_seenEnemies.begin(); it != m_seenEnemies.end(); ++it )
+		sum.w[ threatClassOf( it->second.tmpl ) ] += templateCombatPower( it->second.tmpl, ThePlayerList->getNthPlayer( it->second.owner ) );
+	m_foeMix = shareMix( sum );
+	m_foeMixFrame = stamp;
+	return m_foeMix;
+}
+
+/** How this seat reads its friendly layer: against the army it remembers with the map layers, as the ground mix
+	* reads it without them (the cost map's one slot when that is the map). */
+AIThreatMix AIPlayer::friendReadMix( void ) const
+{
+	return layersHere() ? foeMix() : readMix( AITHREAT_GROUND_MIX );
 }
 
 /** The weights this seat reads the map with for a reader that moves wanted.  The cost map has one slot;
@@ -18283,7 +18712,8 @@ Bool AIPlayer::pickTacticalSpot( const Object *obj, const Coord3D *from, const C
 			if( sqr( at.x - mustReach->x ) + sqr( at.y - mustReach->y ) > sqr( reachFromThere ) )
 				continue;
 		}
-		const Real threat = m_influence.enemyAt( at.x, at.y, mix );
+		// a still gun twice and a burning field beside it with the map layers (routeAt), the enemy layer without
+		const Real threat = m_influence.routeAt( at.x, at.y, mix );
 		// about as quiet: within a tenth, or both nothing
 		const Bool quieter = !found || threat < bestThreat * 0.9f;
 		const Bool asQuietAndHigher = found && threat <= bestThreat * 1.1f && at.z > bestZ;
@@ -18899,11 +19329,12 @@ Bool AIPlayer::walkIsCovered( const Object *obj, const Coord3D *to ) const
 	const Real length = (Real)sqrt( dx * dx + dy * dy );
 	const Int samples = (Int)(length / INFLUENCE_CELL_SIZE + 0.5f);
 	const AIThreatMix mix = unitMix( obj );
+	const AIThreatMix friends = friendReadMix();
 	for( Int i = 1; i <= samples; ++i )
 	{
 		const Real x = from->x + dx * i / samples;
 		const Real y = from->y + dy * i / samples;
-		if( m_influence.enemyAt( x, y, mix ) > m_influence.friendAt( x, y ) )
+		if( !m_influence.heldAt( x, y, friends, mix ) )
 			return FALSE;
 	}
 	return TRUE;
@@ -20209,7 +20640,9 @@ void AIPlayer::tacticsFor( Object *obj )
 	// a hurt unit on ground it cannot win goes home, where the next wave will pick it up; one already
 	// at home has nowhere better to be and fights where it stands
 	const BodyModuleInterface *body = obj->getBodyModule();
-	const Real friendsHere = m_influence.friendAt( pos->x, pos->y );
+	// with the map layers our guns here are weighed against the army we remember, so a cell of tank guns does not
+	// count as covered against helicopters
+	const Real friendsHere = m_influence.friendAt( pos->x, pos->y, friendReadMix() );
 	if( body && body->getHealth() < body->getMaxHealth() * HURT_HEALTH_SHARE && threatHere > friendsHere && !isAtHome( pos ) )
 	{
 		// out to the first ground nothing known covers, not all the way home: on a big map the walk home
@@ -22380,6 +22813,11 @@ void AIPlayer::doPersonaRaids( void )
 	Real bestScore = 0.0f;
 	Int bestGuns = 0;
 	Bool bestWorker = FALSE;
+	// with the map layers, of two as covered the one with more of his worth round it less the still guns over it
+	// (the worth and still layers), then the nearest; 0 for every target without them
+	const Bool weighWorth = layersHere() && hasTacticalMap();
+	const AIThreatMix raidMix = readMix( AITHREAT_COST_MIX );
+	Real bestWorth = 0.0f;
 	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
 	{
 		const Bool worker = isGroundGatherer( obj );
@@ -22395,13 +22833,16 @@ void AIPlayer::doPersonaRaids( void )
 		if( worker && covering > RAID_MAX_GUNS_OVER_TARGET )
 			continue;
 		const Real score = (Real)sqrt( sqr( at->x - m_baseCenter.x ) + sqr( at->y - m_baseCenter.y ) );
+		const Real worth = weighWorth ? m_influence.valueAt( at->x, at->y ) - m_influence.staticAt( at->x, at->y, raidMix ) : 0.0f;
 		if( target == NULL || (worker && !bestWorker) ||
-				(worker == bestWorker && (covering < bestGuns || (covering == bestGuns && score < bestScore))) )
+				(worker == bestWorker && (covering < bestGuns ||
+					(covering == bestGuns && (worth > bestWorth || (worth == bestWorth && score < bestScore))))) )
 		{
 			target = obj;
 			bestScore = score;
 			bestGuns = covering;
 			bestWorker = worker;
+			bestWorth = worth;
 		}
 	}
 
@@ -23004,7 +23445,7 @@ void AIPlayer::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 39;		// 39: the heroes' charged buildings  38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
+	XferVersion currentVersion = 40;		// 40: the influence map's still, friendly-by-class, worth and hazard layers, the jets' strike routes  39: the heroes' charged buildings  38: hurt pull-outs  37: the influence map by target class  36: the doctrine's money and trust  35: the falling-behind income bonus  34: the word of a launch not yet acted on  2: scout 3: rung and role  4: scouting stamps  5: the capturer  6: parked waves  7: superweapon aims  8: the hijacker  9: tactical steps  10: the ferry and dropped riders  11: the outward placement ring  12: the pressure level  13: falling back  14: gunship Chinooks and the boarding wait  15: transport Chinooks and the lent one  16: healer and raider Helixes  17: the seen-enemy ledger  18: the fist  19: the Ambulances  20: the last Ambulance lost  21: the purchase queue's reservation  22: the measured income  23: the Ambulances bought  24: the starting fortune  25: the factory backlog clocks  26: the personality  27: the team request inbox  28: the last aircraft refused for parking  29: the watched sites and the cooled spots  30: the factory backlog as a window of passes  31: the factories that let a unit out since the last pass  32: the guns known by their shells, the answers to fire  33: the influence map being stamped
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -23597,6 +24038,28 @@ void AIPlayer::xfer( Xfer *xfer )
 	}
 	else
 		m_heroCharges.clear();
+
+	// the jets flying round the anti-air to a strike, or a loaded one would strike nothing at its turn
+	if( version >= 40 )
+	{
+		UnsignedShort routes = (UnsignedShort)m_strikeRoutes.size();
+		xfer->xferUnsignedShort( &routes );
+		if( xfer->getXferMode() == XFER_LOAD )
+			m_strikeRoutes.resize( routes );
+		for( UnsignedShort r = 0; r < routes; ++r )
+		{
+			StrikeRoute &route = m_strikeRoutes[ r ];
+			xfer->xferObjectID( &route.aircraft );
+			xfer->xferObjectID( &route.target );
+			xfer->xferCoord3D( &route.at );
+			xfer->xferCoord3D( &route.via );
+			xfer->xferUnsignedInt( &route.frame );
+		}
+	}
+	else
+		m_strikeRoutes.clear();
+	if( xfer->getXferMode() == XFER_LOAD )
+		m_foeMixFrame = 0;
 
 }  // end xfer
 

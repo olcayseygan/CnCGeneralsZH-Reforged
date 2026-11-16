@@ -2045,7 +2045,8 @@ static Bool gunsReach( Real x, Real y, const Real *guns, Int gunCount, const AII
 	* the list's guns are the fight's and on the map too, and only a list without a map leans on the count */
 static Real threatAt( Real x, Real y, const Real *guns, Int gunCount, const AIInfluenceMap *map, const AIThreatMix &mix )
 {
-	Real sum = map != NULL ? map->enemyAt( x, y, mix ) : 0.0f;
+	// routeAt: still guns twice and hazards by the share that walks, where the map has those layers
+	Real sum = map != NULL ? map->routeAt( x, y, mix ) : 0.0f;
 	for( Int g = 0; g < gunCount; ++g )
 	{
 		const Real gx = x - guns[ 3 * g ];
@@ -2198,7 +2199,7 @@ Bool aiDetourWaypoint( Real fromX, Real fromY, Real toX, Real toY, Real step, co
 	Real hottestThreat = -1.0f;
 	for( Int i = 1; i <= samples; ++i )
 	{
-		const Real threat = map->enemyAt( fromX + dx * i / samples, fromY + dy * i / samples, mix );
+		const Real threat = map->routeAt( fromX + dx * i / samples, fromY + dy * i / samples, mix );
 		if( threat > hottestThreat )
 		{
 			hottest = i;
@@ -2230,6 +2231,31 @@ Bool aiDetourWaypoint( Real fromX, Real fromY, Real toX, Real toY, Real step, co
 		}
 	}
 	return found && *detourThreat < *straightThreat * DETOUR_WORTH;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The first point a step apart on the straight walk from (fromX, fromY) to (toX, toY), the end included and the
+	* start not, that our side holds (AIInfluenceMap::heldAt): where friend and enemy influence meet, read from the
+	* enemy's side.  FALSE when the whole walk is the enemy's. */
+//-------------------------------------------------------------------------------------------------
+Bool aiFrontLinePoint( Real fromX, Real fromY, Real toX, Real toY, Real step, const AIInfluenceMap *map,
+											 const AIThreatMix &friendMix, const AIThreatMix &enemyMix, Real *outX, Real *outY )
+{
+	const Real dx = toX - fromX;
+	const Real dy = toY - fromY;
+	const Int samples = max<Int>( 1, (Int)((Real)sqrt( dx * dx + dy * dy ) / step + 0.5f) );
+	for( Int i = 1; i <= samples; ++i )
+	{
+		const Real x = fromX + dx * i / samples;
+		const Real y = fromY + dy * i / samples;
+		if( map->heldAt( x, y, friendMix, enemyMix ) )
+		{
+			*outX = x;
+			*outY = y;
+			return TRUE;
+		}
+	}
+	return FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------

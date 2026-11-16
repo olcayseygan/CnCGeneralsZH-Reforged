@@ -1,0 +1,30 @@
+# A hurt computer tank inside an artillery piece's minimum range: does it stay and kill the gun?
+#
+# Seat 0 is a Hard USA at start 0; seat 1 is emptied by -takeover 1. A Nuke Cannon (shoots from 150 to 350)
+# stands 1100 north of the American base, set defensive, and a Crusader 90 south of it, inside the hole
+# where the cannon cannot fire. At file frame 165 the Crusader is set to 34%.
+#
+# Without the map layers the cannon stamps its threat over the cell the Crusader stands on, so Hard's tactics
+# read a hurt tank outgunned and pull it out ("AI TACTICS ... pulls a hurt"), into the cannon's reach on the
+# way home. With them the stamp leaves the minimum range empty: the Crusader reads nothing over it and shoots
+# the cannon, which cannot answer. Read the pull-out lines and the closing tallies: the cannon dead and the
+# Crusader alive is the layers' answer. The pair is the same line with -aiknobsoff all maplayers.
+#
+# Measured 2026-11-16, seed 1: with the layers no pull-out line, the cannon dead and the Crusader alive at
+# 163 of 480 by file frame 1150. With -aiknobsoff all maplayers: "pulls a hurt 'AmericaTankCrusader' ... out
+# at 34%, 46 against 32", the Crusader alive and the cannon at 120 of 240.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Tournament Desert\Tournament Desert.map" -autoskirmish 2 -aidiff hard -takeover 1
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 1200
+#     -scenario maplayers_artillery -logPrefix maplayers_artillery_ [-aiknobsoff all maplayers]
+
+5     spawn       0  AmericaInfantryRanger     2  start0:200:0
+150   spawn       1  ChinaVehicleNukeLauncher  1  start0:0:1100
+150   spawn       0  AmericaTankCrusader       1  start0:0:1010
+160   stance      1  ChinaVehicleNukeLauncher     defensive
+165   health      0  AmericaTankCrusader          34
+165   tally       0  AmericaTankCrusader
+165   tally       1  ChinaVehicleNukeLauncher
+1150  tally       0  AmericaTankCrusader          1
+1150  tally       1  ChinaVehicleNukeLauncher     0

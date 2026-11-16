@@ -467,6 +467,12 @@ Bool aiDetourWaypoint( Real fromX, Real fromY, Real toX, Real toY, Real step, co
 											 const AIInfluenceMap *map, const AIThreatMix &mix, Real *wayX, Real *wayY,
 											 Real *straightThreat, Real *detourThreat );
 
+/** The front line on a walk from the enemy's ground to ours: the first point a step apart from (fromX, fromY)
+	* toward (toX, toY) where nothing the enemy has (map read with enemyMix) outweighs what we have (friendMix).
+	* FALSE when no point on the walk is ours. */
+Bool aiFrontLinePoint( Real fromX, Real fromY, Real toX, Real toY, Real step, const AIInfluenceMap *map,
+											 const AIThreatMix &friendMix, const AIThreatMix &enemyMix, Real *outX, Real *outY );
+
 /** What a unit that has just been hit does about the gun that hit it. */
 enum AIFireAnswer
 {

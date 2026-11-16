@@ -17413,6 +17413,179 @@ TEST(influence_map_from_an_old_save_loads_into_every_class)
 	CHECK_EQ( 3.0f, back.enemyAt( 75.0f, 25.0f, AITHREAT_AIR_MIX ) );
 }
 
+/** A gun's shape (map layers): nothing inside its minimum range, the full figure out to three quarters of its
+	 reach, half over the rest; with no minimum and no edge the banded cells are cellsReached's, cell for cell. */
+TEST(influence_map_gun_shape_leaves_its_minimum_range_and_halves_its_edge)
+{
+	AIInfluenceMap map;
+	map.reset( 0.0f, 0.0f, 1000.0f, 1000.0f, 50.0f );
+	std::vector<Int> cells, scratch;
+	Int edge = -1;
+	map.cellsBanded( 500.0f, 500.0f, 0.0f, 200.0f, 100.0f, 0.75f, cells, scratch, &edge );
+	CHECK( edge > 0 );
+	const Int full = (Int)cells.size() - edge;
+	map.addEnemy( &cells[ 0 ], full, 8.0f, 4.0f );
+	map.addEnemy( &cells[ full ], edge, 4.0f, 2.0f );
+	CHECK_EQ( 0.0f, map.enemyAt( 525.0f, 525.0f, AITHREAT_COST_MIX ) );		// 35 off: inside the 100 minimum
+	CHECK_EQ( 8.0f, map.enemyAt( 625.0f, 525.0f, AITHREAT_COST_MIX ) );		// 127 off: full, inside 150
+	CHECK_EQ( 4.0f, map.enemyAt( 675.0f, 525.0f, AITHREAT_COST_MIX ) );		// 177 off: the edge
+	CHECK_EQ( 0.0f, map.enemyAt( 725.0f, 525.0f, AITHREAT_COST_MIX ) );		// 226 off: out of reach
+
+	std::vector<Int> plain, banded;
+	map.cellsReached( 480.0f, 510.0f, 30.0f, 150.0f, plain );
+	map.cellsBanded( 480.0f, 510.0f, 30.0f, 150.0f, 0.0f, 1.0f, banded, scratch, &edge );
+	CHECK_EQ( 0, edge );
+	CHECK( plain == banded );
+}
+
+/** A route fears a still gun twice and a hazard by the share of the reader that walks; with those layers empty it
+	 reads the enemy layer to the bit. */
+TEST(influence_map_route_counts_still_guns_twice_and_hazards_for_walkers)
+{
+	AIInfluenceMap map;
+	map.reset( 0.0f, 0.0f, 1000.0f, 1000.0f, 50.0f );
+	std::vector<Int> cell;
+	map.cellsInDisc( 525.0f, 525.0f, 10.0f, cell );		// smaller than a cell: its own cell alone
+	CHECK_EQ( 1, (Int)cell.size() );
+	map.addEnemy( &cell[ 0 ], 1, 100.0f, 60.0f );
+	map.addStatic( &cell[ 0 ], 1, 100.0f, 60.0f );
+	map.addHazard( &cell[ 0 ], 1, 400.0f );
+	CHECK_EQ( 80.0f, map.enemyAt( 525.0f, 525.0f, AITHREAT_GROUND_MIX ) );
+	CHECK_EQ( 100.0f, map.staticAt( 525.0f, 525.0f, AITHREAT_COST_MIX ) );
+	CHECK_EQ( 400.0f, map.hazardAt( 525.0f, 525.0f ) );
+	CHECK_EQ( 560.0f, map.routeAt( 525.0f, 525.0f, AITHREAT_GROUND_MIX ) );
+	CHECK_EQ( 0.0f, map.routeAt( 525.0f, 525.0f, AITHREAT_AIR_MIX ) );		// a field burns nothing in the air
+
+	std::vector<Int> other;
+	map.cellsInDisc( 125.0f, 125.0f, 10.0f, other );
+	map.addEnemy( &other[ 0 ], 1, 1234.25f, 0.75f );
+	const AIThreatMix mixes[] = { AITHREAT_COST_MIX, AITHREAT_INFANTRY_MIX, AITHREAT_GROUND_MIX };
+	for( Int m = 0; m < 3; ++m )
+		CHECK_EQ( map.enemyAt( 125.0f, 125.0f, mixes[ m ] ), map.routeAt( 125.0f, 125.0f, mixes[ m ] ) );
+
+	std::vector<Int> disc;
+	map.cellsInDisc( 500.0f, 500.0f, 60.0f, disc );		// the four cells round the corner, and no more
+	CHECK_EQ( 4, (Int)disc.size() );
+}
+
+/** The friendly layer by class: tank guns do not hold ground against aircraft, and a cell is held when nothing the
+	 enemy has there outweighs ours. */
+TEST(influence_map_friendly_layer_reads_by_class_and_holds_ground)
+{
+	AIInfluenceMap map;
+	map.reset( 0.0f, 0.0f, 1000.0f, 1000.0f, 50.0f );
+	std::vector<Int> cell;
+	map.cellsInDisc( 525.0f, 525.0f, 10.0f, cell );
+	map.addFriend( &cell[ 0 ], 1, 6.0f, 2.0f );
+	map.addFriendAir( &cell[ 0 ], 1, 10.0f );
+	CHECK_EQ( 4.0f, map.friendAt( 525.0f, 525.0f, AITHREAT_GROUND_MIX ) );
+	CHECK_EQ( 4.0f, map.friendAt( 525.0f, 525.0f ) );
+	CHECK_EQ( 6.0f, map.friendAt( 525.0f, 525.0f, AITHREAT_COST_MIX ) );
+	CHECK_EQ( 10.0f, map.friendAt( 525.0f, 525.0f, AITHREAT_AIR_MIX ) );
+	CHECK( map.heldAt( 525.0f, 525.0f, AITHREAT_GROUND_MIX, AITHREAT_GROUND_MIX ) );
+	map.addEnemy( &cell[ 0 ], 1, 5.0f, 5.0f );
+	CHECK( !map.heldAt( 525.0f, 525.0f, AITHREAT_GROUND_MIX, AITHREAT_GROUND_MIX ) );	// 5 against 4
+	CHECK( map.heldAt( 525.0f, 525.0f, AITHREAT_AIR_MIX, AITHREAT_GROUND_MIX ) );			// our 10 against their aircraft
+	CHECK( map.heldAt( 75.0f, 75.0f, AITHREAT_GROUND_MIX, AITHREAT_GROUND_MIX ) );		// nobody's ground
+}
+
+/** The front line on the walk home is the first ground our guns hold: past where the enemy's reach thins out
+	 under ours, not where ours first appear. */
+TEST(front_line_point_is_the_first_ground_our_side_holds)
+{
+	AIInfluenceMap map;
+	map.reset( 0.0f, 0.0f, 2000.0f, 200.0f, 50.0f );
+	CHECK_EQ( 40, map.getCols() );
+	const Int row = 2;		// y 100 to 150, centre 125
+	for( Int col = 0; col < 40; ++col )
+	{
+		const Int index = row * map.getCols() + col;
+		if( col <= 17 )
+			map.addEnemy( &index, 1, 10.0f, 10.0f );
+		if( col >= 12 )
+			map.addFriend( &index, 1, 6.0f, 6.0f );
+		if( col >= 15 )
+			map.addFriend( &index, 1, 6.0f, 6.0f );
+	}
+	Real x = 0.0f, y = 0.0f;
+	CHECK( aiFrontLinePoint( 25.0f, 125.0f, 1975.0f, 125.0f, 50.0f, &map, AITHREAT_GROUND_MIX, AITHREAT_GROUND_MIX, &x, &y ) );
+	CHECK_EQ( 775.0f, x );		// column 15: 12 of ours against 10 of theirs; columns 12 to 14 were 6 against 10
+	CHECK_EQ( 125.0f, y );
+	CHECK( !aiFrontLinePoint( 25.0f, 125.0f, 575.0f, 125.0f, 50.0f, &map, AITHREAT_GROUND_MIX, AITHREAT_GROUND_MIX, &x, &y ) );
+}
+
+/** A moving gun stamps a little ahead, never more than the cap; a remembered one fades evenly to nothing. */
+TEST(influence_lead_and_memory_fade)
+{
+	Real x = 0.0f, y = 0.0f;
+	AIInfluence_projectedCentre( 100.0f, 100.0f, 3.0f, 4.0f, 10.0f, 1000.0f, &x, &y );
+	CHECK_EQ( 130.0f, x );
+	CHECK_EQ( 140.0f, y );
+	AIInfluence_projectedCentre( 100.0f, 100.0f, 3.0f, 4.0f, 10.0f, 25.0f, &x, &y );		// 50 of lead, cut to 25
+	CHECK_EQ( 115.0f, x );
+	CHECK_EQ( 120.0f, y );
+	AIInfluence_projectedCentre( 100.0f, 100.0f, 0.0f, 0.0f, 10.0f, 25.0f, &x, &y );
+	CHECK_EQ( 100.0f, x );
+	CHECK_EQ( 1.0f, AIInfluence_memoryShare( 0, 300 ) );
+	CHECK_EQ( 0.5f, AIInfluence_memoryShare( 150, 300 ) );
+	CHECK_EQ( 0.0f, AIInfluence_memoryShare( 300, 300 ) );
+	CHECK_EQ( 0.0f, AIInfluence_memoryShare( 400, 300 ) );
+	CHECK_EQ( 0.0f, AIInfluence_memoryShare( 0, 0 ) );
+}
+
+/** The map layers go into a save (AIPlayer version 40) and come back; a version 39 map's one friendly figure
+	 loads into the vehicle and infantry slots, so the ground mix and the cost mix both read it as it was. */
+TEST(influence_map_layers_survive_a_save)
+{
+	AIInfluenceMap map;
+	map.reset( 0.0f, 0.0f, 100.0f, 50.0f, 50.0f );
+	std::vector<Int> cell;
+	map.cellsInDisc( 75.0f, 25.0f, 10.0f, cell );
+	map.addEnemy( &cell[ 0 ], 1, 7.0f, 3.0f );
+	map.addStatic( &cell[ 0 ], 1, 7.0f, 3.0f );
+	map.addStaticAir( &cell[ 0 ], 1, 2.0f );
+	map.addFriend( &cell[ 0 ], 1, 5.0f, 1.0f );
+	map.addFriendAir( &cell[ 0 ], 1, 9.0f );
+	map.addValue( &cell[ 0 ], 1, 1500.0f );
+	map.addHazard( &cell[ 0 ], 1, 400.0f );
+	MemoryXfer save;
+	map.xfer( &save, 40 );
+	save.rewind();
+	AIInfluenceMap back;
+	back.xfer( &save, 40 );
+	CHECK_EQ( 7.0f, back.staticAt( 75.0f, 25.0f, AITHREAT_COST_MIX ) );
+	CHECK_EQ( 2.0f, back.staticAt( 75.0f, 25.0f, AITHREAT_AIR_MIX ) );
+	CHECK_EQ( 3.0f, back.friendAt( 75.0f, 25.0f ) );
+	CHECK_EQ( 9.0f, back.friendAt( 75.0f, 25.0f, AITHREAT_AIR_MIX ) );
+	CHECK_EQ( 1500.0f, back.valueAt( 75.0f, 25.0f ) );
+	CHECK_EQ( 400.0f, back.hazardAt( 75.0f, 25.0f ) );
+	CHECK_EQ( 0.0f, back.valueAt( 25.0f, 25.0f ) );
+
+	MemoryXfer old;
+	Real originX = 0.0f, originY = 0.0f, cellSize = 50.0f;
+	Int cols = 1, rows = 1;
+	Bool built = TRUE;
+	UnsignedInt builtFrame = 30;
+	old.xferReal( &originX );
+	old.xferReal( &originY );
+	old.xferReal( &cellSize );
+	old.xferInt( &cols );
+	old.xferInt( &rows );
+	old.xferBool( &built );
+	old.xferUnsignedInt( &builtFrame );
+	Real figures[ 5 ] = { 11.0f, 12.0f, 13.0f, 120.0f, 4.0f };		// enemy by class, friend, height
+	for( Int k = 0; k < 5; ++k )
+		old.xferReal( &figures[ k ] );
+	old.rewind();
+	AIInfluenceMap loaded;
+	loaded.xfer( &old, 39 );
+	CHECK_EQ( 12.0f, loaded.enemyAt( 25.0f, 25.0f, AITHREAT_INFANTRY_MIX ) );
+	CHECK_EQ( 120.0f, loaded.friendAt( 25.0f, 25.0f, AITHREAT_GROUND_MIX ) );
+	CHECK_EQ( 120.0f, loaded.friendAt( 25.0f, 25.0f, AITHREAT_COST_MIX ) );
+	CHECK_EQ( 0.0f, loaded.staticAt( 25.0f, 25.0f, AITHREAT_GROUND_MIX ) );
+	CHECK_EQ( 0.0f, loaded.hazardAt( 25.0f, 25.0f ) );
+}
+
 /** Kiting: a unit steps back into the band between the enemy's reach and its own, and only when the
 	 band is wide enough to stand in. */
 TEST(kite_standoff_sits_between_the_two_ranges)

@@ -46,6 +46,7 @@ class BuildListInfo;
 class TeamPrototype;
 class TeamTemplateInfo;
 struct AIAbilityButton;
+struct StampShape;
 class ProductionUpdateInterface;
 
 /// the skirmish scripts send this team at the enemy at some point, rather than keeping it home on guard
@@ -341,6 +342,7 @@ public:
 	Bool knobsOffHere(void) const;		///< -aiknobsoff reaches this slot; its mask says which knobs
 	Int unitAbilitiesRung(void) const;	///< the profile's UnitAbilities with -aiknobsoff's abilities applied, safe to ask of another seat
 	Bool costMapHere(void) const;		///< -aiknobsoff ... costmap reaches this slot: the influence map of build cost, one layer
+	Bool layersHere(void) const;		///< the map's still, worth, hazard and memory layers, gun shapes and front line: off under -aiknobsoff ... maplayers or costmap
 
 	/// What a seat that predates the ladder (an old save, a replay, a script) plays at.
 	static AISkillLevel skillLevelForDifficulty(GameDifficulty difficulty);
@@ -998,6 +1000,27 @@ protected:
 	void rebuildInfluence(void);									///< the whole map on one frame
 	void stampInfluence(AIInfluenceMap &map, const Object *obj);
 	void stampFireReports(AIInfluenceMap &map);
+	void applyShape(AIInfluenceMap &map, const Object *obj, const StampShape &shape, const Int *cells);	///< one object's stamp into this seat's map, by what the object is to it
+	void stampMemory(AIInfluenceMap &map);				///< the ledger's enemies out of sight, fading (map layers)
+	std::vector<Int> m_stampCells;								///< stampInfluence's scratch, the seat's own so seats stamping side by side share nothing
+	std::vector<Int> m_stampEdge;
+	AIThreatMix foeMix(void) const;								///< what the remembered enemy army is, by class: how the friendly layer is read with the map layers
+	AIThreatMix friendReadMix(void) const;				///< ... or the ground mix without them
+	mutable AIThreatMix m_foeMix;
+	mutable UnsignedInt m_foeMixFrame;						///< the frame of it, plus one; 0 for none
+	/** A jet or Comanche sent the long way round the anti-air guns on the straight flight (steerAircraft): it flies
+		* to via and only then strikes. */
+	struct StrikeRoute
+	{
+		ObjectID		aircraft;
+		ObjectID		target;		///< INVALID_ID for a strike on the ground at
+		Coord3D			at;
+		Coord3D			via;
+		UnsignedInt	frame;		///< when it was sent
+	};
+	std::vector<StrikeRoute> m_strikeRoutes;
+	Bool routeStrike(Object *aircraft, Object *target, const Coord3D *at, const std::vector<AIKnownGun> &guns);	///< TRUE when it was sent round
+	void flyStrikeRoutes(void);										///< the ones at their turn strike; the rest fly on
 	void ensureInfluence(void);										///< the map, no older than this rung reads it, for a player that does not stamp it
 	Bool hasTacticalMap(void) const;							///< Hard's map, for the reads the rungs below it do not make
 	AIThreatMix readMix(const AIThreatMix &wanted) const;	///< the weights this seat reads its map with for a reader that moves wanted

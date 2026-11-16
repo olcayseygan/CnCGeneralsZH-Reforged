@@ -1,0 +1,38 @@
+# A computer jet sent at a target with an anti-air gun on the straight flight: does it fly round the gun?
+#
+# Seat 0 is a Hard USA; seat 1 is emptied by -takeover 1. A Raptor at cruise is ordered at an Overlord 1850
+# east of it, with a Gattling Cannon (anti-air reach 398) on the straight line 1250 out. A Humvee 300 south
+# of the gun, outside its ground reach, keeps it in the American AI's sight and so on its map. The Gattling
+# needs power, and an unpowered one is no gun on the map, so three power plant spots are tried; the one at
+# (1400,3000) is the Humvee's to kill late in the run.
+#
+# steerAircraft looks at the strike every half second on Hard. Without the map layers the straight flight
+# crosses the gun and the strike is called off: "AI AIR ... calls off its strike". With them the air layer is
+# summed along both legs round the gun (aiDetourWaypoint) and the jet is sent the long way: "AI AIR ... flies
+# round to 'ChinaTankOverlord'", then "turns in on its strike" at the turn point. The tallies say whether the
+# Raptor lived and the Overlord took the hit. The pair is the same line with -aiknobsoff all maplayers.
+#
+# Measured 2026-11-16, seed 7. With the layers: "flies round to 'ChinaTankOverlord' (2250,3300) by
+# (1428,4396): air threat 2343 straight, 0 round", the Overlord at 700 of 1100 by file frame 1350 and the
+# Raptor shot down by the Gattling at logic frame 632 on its way home; no "turns in" line, so the hit came
+# before the turn point's hand-off. Without them: "calls off its strike", the Raptor alive, the Overlord
+# untouched. The flight home is not routed.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -aidiff hard -takeover 1
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -maxframes 1400
+#     -scenario maplayers_jetroute -logPrefix maplayers_jetroute_ [-aiknobsoff all maplayers]
+
+30    spawn      1  ChinaTankOverlord            1   2250 3300
+30    spawn      1  ChinaPowerPlant              1   1650 3550
+30    spawn      1  ChinaPowerPlant              1   1400 3000
+30    spawn      1  ChinaPowerPlant              1   2000 3000
+30    spawn      1  ChinaGattlingCannon          1   1650 3300
+30    spawn      0  AmericaVehicleHumvee         1   1650 3000
+30    spawn      0  AmericaJetRaptor             1   400 3300
+300   attack     0  AmericaJetRaptor             1   ChinaTankOverlord
+300   tally      0  AmericaJetRaptor
+300   tally      1  ChinaTankOverlord
+1350  tally      0  AmericaJetRaptor
+1350  tally      1  ChinaTankOverlord
+1350  tally      1  ChinaGattlingCannon

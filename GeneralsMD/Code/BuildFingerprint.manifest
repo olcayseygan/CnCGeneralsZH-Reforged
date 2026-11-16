@@ -1350,6 +1350,9 @@ Data/Scenarios/leadinfantry.txt
 Data/Scenarios/leadvehicle.txt
 Data/Scenarios/logicscroll.txt
 Data/Scenarios/looks4.txt
+Data/Scenarios/maplayers_artillery.txt
+Data/Scenarios/maplayers_defence.txt
+Data/Scenarios/maplayers_jetroute.txt
 Data/Scenarios/mappers.txt
 Data/Scenarios/mass420x2.txt
 Data/Scenarios/mass840.txt

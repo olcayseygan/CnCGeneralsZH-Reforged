@@ -1981,6 +1981,8 @@ Real AI::getAdjustedVisionRangeForObject(const Object *object, Int factorsToCons
 	* reach is how far a dock may be from home, or from one of those bases, for a supply centre of its own
 	* choosing, and a dock beside one of those bases is not held to the side-of-map test.  Easy founds one
 	* late, at twenty minutes, so it is rare; Medium two from twelve; Hard every empty start from seven.
+	* Since 2026-11-17 the base out there is a Command Center founded the moment home is full, so 2ndS only
+	* times the war factory -aiknobsoff secondbase keeps; 2nd still caps the count on every rung.
 	*
 	* inc%, 2026-11-02.  The owner: 1.5x on everything a skirmish AI earns by playing, the same on every
 	* rung, in place of the flat double it had, and up to 150 points more while it falls behind its

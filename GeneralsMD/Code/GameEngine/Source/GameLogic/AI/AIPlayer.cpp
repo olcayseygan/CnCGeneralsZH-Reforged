@@ -8732,8 +8732,9 @@ Bool AIPlayer::queueAtOutpost( const ThingTemplate *tmpl, const Coord3D *at, Rea
 	* of them.  With no empty start there is no second base.  Then, one building a look, every base away
 	* from home gets a power plant behind it, a gun in front, a supply centre at its dock and a second gun.
 	*
-	* Since 2026-11-17 that base is a Command Center, founded only once home has no room left for one
-	* (foundSecondBase); -aiknobsoff secondbase keeps the factory on the timer.
+	* Since 2026-11-17 that base is a Command Center, founded as soon as home has no room left for one, on
+	* every rung and at any minute of the match (foundSecondBase); -aiknobsoff secondbase keeps the factory
+	* on the rung's timer.
 	*
 	* Nothing is remembered: a base away from home is any factory, or Command Center, of this player's
 	* standing or going up past OUTPOST_REACH base radii, so a savegame carries it with the objects and a factory the economy
@@ -8745,7 +8746,10 @@ void AIPlayer::doSecondBase( void )
 {
 	const AIDifficultyProfile *profile = getSkillProfile();
 	const UnsignedInt now = TheGameLogic->getFrame();
-	if( profile->m_secondBaseSeconds <= 0.0f || now < (UnsignedInt)( profile->m_secondBaseSeconds * LOGICFRAMES_PER_GAME_SECOND ) )
+	if( profile->m_secondBaseSeconds <= 0.0f )		// a rung of 0 never goes out
+		return;
+	// a full home is the only wait for a Command Center out there; the rung's clock is the factory's alone
+	if( !secondBaseCenters() && now < (UnsignedInt)( profile->m_secondBaseSeconds * LOGICFRAMES_PER_GAME_SECOND ) )
 		return;
 	if( ( now + computeUpdatePhase( m_player->getPlayerIndex(), SECOND_BASE_CHECK_RATE ) ) % SECOND_BASE_CHECK_RATE != 0 )
 		return;

@@ -1278,6 +1278,7 @@ Data/Scenarios/dragonfirewall.txt
 Data/Scenarios/dragonflame.txt
 Data/Scenarios/drawlooks.txt
 Data/Scenarios/driveby.txt
+Data/Scenarios/dropzoneplane.txt
 Data/Scenarios/empfriendly.txt
 Data/Scenarios/exitmovebuild.txt
 Data/Scenarios/exitorders.txt
@@ -1287,6 +1288,10 @@ Data/Scenarios/explreel.txt
 Data/Scenarios/firelook.txt
 Data/Scenarios/flatshells.txt
 Data/Scenarios/fogleak.txt
+Data/Scenarios/foreign_capture.txt
+Data/Scenarios/foreign_hijack.txt
+Data/Scenarios/foreign_lotus.txt
+Data/Scenarios/foreign_snipe.txt
 Data/Scenarios/gate60hz.txt
 Data/Scenarios/geproto_alpine.txt
 Data/Scenarios/geproto_fogedge.txt

@@ -61,6 +61,7 @@
 #include "GameClient/InGameUI.h"
 
 #include "GameLogic/AI.h"
+#include "GameLogic/AIPlayer.h"
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/FiringTracker.h"
@@ -5303,8 +5304,10 @@ void Object::onCapture( Player *oldOwner, Player *newOwner )
 	TheControlBar->markUIDirty();
 
 	if (oldOwner!=newOwner && newOwner->isSkirmishAIPlayer()) {
-		// The skirmish ai doesn't know what to do with captured faction buildings except sell them.
-		if (isFactionStructure()) {
+		// The skirmish ai doesn't know what to do with captured faction buildings except sell them,
+		// short of the foreign tree ForeignTech builds on.
+		const AIPlayer *ai = newOwner->getAIPlayer();
+		if (isFactionStructure() && !(ai && ai->keepsCaptured(this))) {
 			TheBuildAssistant->sellObject( this );
 		}
 	}

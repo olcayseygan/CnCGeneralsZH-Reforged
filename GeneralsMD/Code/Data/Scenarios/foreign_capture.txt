@@ -1,0 +1,34 @@
+# A Hard USA AI with four Rangers out on the road to a China base that is only its Command Center and an
+# idle Dozer, and a Barracks of its own to buy the capture in. With ForeignTech the capturer weighs the
+# unguarded Command Center (worth twice anything else to a seat with no foreign tree) over the oil
+# derricks, takes it, the Command Center trains a China Dozer, is sold where it stands, and the Dozer
+# drives home and puts a China Command Center up there; read the AI CAPTURE and AI FOREIGN lines.
+# Without it the Rangers take the derricks and leave the enemy's buildings alone.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionChina -side 1 FactionAmerica -seed 1 -startingcash 30000 -maxframes 12000
+#     -scenario foreign_capture -logPrefix foreign_capture_
+#
+# Add -aiknobsoff odd foreigntech for the seat without it.
+
+10    spawn   1  AmericaBarracks         1  start1:300:0
+30    spawn   1  AmericaInfantryRanger   4  1063 1238  20
+# power plants of seat 0's out in the corners, whichever of them the map takes: with its Command Center
+# captured and no other building the seat is beaten and the run ends on the frame of the capture
+10    spawn   0  ChinaPowerPlant         1  300 1200
+10    spawn   0  ChinaPowerPlant         1  400 2100
+10    spawn   0  ChinaPowerPlant         1  2300 2100
+10    spawn   0  ChinaPowerPlant         1  2400 1500
+10    spawn   0  ChinaPowerPlant         1  300 1600
+600   tally   1  ChinaCommandCenter
+1800  tally   1  ChinaCommandCenter
+3000  tally   1  ChinaCommandCenter
+3000  tally   1  ChinaVehicleDozer
+6000  tally   1  ChinaCommandCenter
+6000  tally   1  ChinaVehicleDozer
+9000  tally   1  ChinaCommandCenter
+12000 tally   1  ChinaCommandCenter
+12000 tally   1  ChinaVehicleDozer
+12000 tally   1  ChinaBarracks
+12000 tally   1  ChinaWarFactory

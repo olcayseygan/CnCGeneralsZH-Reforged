@@ -341,6 +341,9 @@ public:
 	const AIDifficultyProfile *getSkillProfile(void) const;
 	Bool knobsOffHere(void) const;		///< -aiknobsoff reaches this slot; its mask says which knobs
 	Int unitAbilitiesRung(void) const;	///< the profile's UnitAbilities with -aiknobsoff's abilities applied, safe to ask of another seat
+	Int foreignTechRung(void) const;	///< the profile's ForeignTech with -aiknobsoff's foreigntech applied
+	Bool isForeignTemplate(const ThingTemplate *tmpl) const;	///< a thing of a side whose base side is not this player's: another faction's dozer, Command Center or building
+	Bool keepsCaptured(const Object *building) const;	///< a building just captured that ForeignTech works (a foreign Command Center, barracks or war factory) rather than the skirmish AI's sale on capture
 	Bool costMapHere(void) const;		///< -aiknobsoff ... costmap reaches this slot: the influence map of build cost, one layer
 	Bool layersHere(void) const;		///< the map's still, worth, hazard and memory layers, gun shapes and front line: off under -aiknobsoff ... maplayers or costmap
 
@@ -423,7 +426,17 @@ protected:
 		* Lotus shuts one down for nothing.  Neither had ever been used by a computer player. */
 	virtual void doHijack(void);
 	Object *findHijacker(void);					///< a unit of ours that takes a vehicle by walking into it
-	Object *nearestStealableVehicle(const Coord3D *from, Real reach);	///< the closest enemy vehicle in sight; reach <= 0 is the map
+	Object *nearestStealableVehicle(const Coord3D *from, Real reach, Bool foreignDozersOnly = FALSE);	///< the closest enemy vehicle in sight; reach <= 0 is the map
+
+	/** Another side's tech tree: a dozer of another faction that falls into its hands puts that faction's
+		* Command Center up at home, a captured Command Center trains one and is sold, and the foreign base grows
+		* a supply centre, a barracks and a war factory that train into the army (ForeignTech). */
+	void doForeignTech(void);
+	Bool wantsForeignDozer(void) const;	///< ForeignTech 2 and no foreign dozer or Command Center of ours yet: worth hunting one
+	void crewEmptyDozers(void);			///< send a soldier into a foreign dozer whose crew was shot out
+	Bool growForeignBase(Object *dozer, Object *center);	///< the next of the foreign base's buildings off this dozer, round its Command Center; TRUE when it spent the look
+	Bool placeForeign(Object *dozer, const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, const char *what);	///< a spot near center and the dozer told to build there, paid from the bank
+	Object *enemyBuildingToCapture(const Coord3D *from, Object *walker, Real *score);	///< ForeignTech 2: the enemy building most worth a capture over the walk, unguarded and along ground we hold, and its score
 
 	/** Past the hoard, buy what the build list never had.  A tank factory or a barracks when that
 		* queue is backing up, an airfield with no count cap, income buildings the same way, and money
@@ -510,7 +523,7 @@ protected:
 	void buyMoneyUnits(void);
 	Int moneyUnitRoom(void) const;	///< how many more money units this player's army and internet centers carry
 	Bool hasEnoughMoneyUnitsFor(TeamPrototype *proto) const;	///< this team is all hackers and there is no room for more
-	Bool placeNear(const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, Bool walkOutward);	///< the nearest legal, safe spot by the ground from center, queued for a dozer. walkOutward keeps searching further out as the near ground fills
+	Bool placeNear(const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, Bool walkOutward, Coord3D *spotOnly = NULL);	///< the nearest legal, safe spot by the ground from center, queued for a dozer, or only written to spotOnly. walkOutward keeps searching further out as the near ground fills
 	Bool queueExtraFactory(Object *dozer, KindOfType kind, Bool doctrine = FALSE);	///< one more of this factory, beside a held expansion or around the base, once the ones standing fall behind their queues; the doctrine's without waiting for that
 	Bool holdsExtraFactory(const ThingTemplate *tmpl);	///< a factory of a kind already standing or going up, while the ones standing keep up with their queues
 	const ThingTemplate *nextBaseDefense(Object *dozer);	///< the base defence off this dozer's buttons that the base has fewest of, NULL for none
@@ -598,7 +611,7 @@ protected:
 	virtual void checkQueuedTeams(void);
 	virtual void doTeamBuilding(void);
 	virtual void doUpgradesAndSkills(void);
-	virtual Object *findDozer(const Coord3D *pos);
+	virtual Object *findDozer(const Coord3D *pos, const ThingTemplate *plan = NULL);	///< plan: only a dozer whose own buttons build it
 	Object *findNearestDozer(const Coord3D *pos);	///< the nearest dozer, busy or not
 	Bool isPowerThin(void) const;	///< less than one more building's draw left over
 	virtual void queueDozer(void);
@@ -832,6 +845,7 @@ protected:
 	Int				m_logDocksTotal;
 	UnsignedInt m_logMoneyFrame;				///< for the log only, not saved: when the next earnings line is due
 	ObjectID	m_logCaptureTarget;				///< for the log only, not saved: the building last ordered taken, until it is ours
+	UnsignedInt	m_logForeignWaitFrame;		///< for the log only, not saved: the next frame a foreign build waiting on the bank may say so
 
 	Bool		m_readyToBuildTeam;				///< True if the team select timer has expired.
 	Bool		m_readyToBuildStructure;	///< True if the buildDelay timer has expired.

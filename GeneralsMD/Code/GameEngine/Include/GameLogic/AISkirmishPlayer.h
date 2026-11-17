@@ -93,7 +93,7 @@ protected:
 	virtual void checkReadyTeams(void);
 	virtual void checkQueuedTeams(void);
 	virtual void doTeamBuilding(void);
-	virtual Object *findDozer(const Coord3D *pos);
+	virtual Object *findDozer(const Coord3D *pos, const ThingTemplate *plan = NULL);
 	virtual void queueDozer(void);
 
 protected:

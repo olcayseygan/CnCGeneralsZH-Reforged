@@ -120,6 +120,7 @@ enum
 	AIKNOB_COST_MAP			= 64,	///< the influence map stamps build cost against everything, as before it stamped threat by target class
 	AIKNOB_ABILITIES		= 128,	///< its units never press their own buttons, and its matchups credit no weapon only a button fires
 	AIKNOB_MAP_LAYERS		= 256,	///< the influence map without its still, worth, hazard and memory layers, its gun shapes and its front line, as before them
+	AIKNOB_FOREIGN_TECH	= 512,	///< no other side's tech tree: a foreign dozer or Command Center is left as before, and nothing goes after one (ForeignTech 0)
 };
 
 //-------------------------------------------------------------------------------------------------

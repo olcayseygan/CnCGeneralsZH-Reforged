@@ -1,0 +1,29 @@
+# A Hard China AI's Black Lotus 350 short of a USA base that is only its Command Center and an idle
+# Dozer. With ForeignTech she captures the Command Center, it trains a USA Dozer at once, the captured
+# one is sold for the cash where it stands, and the Dozer drives home and puts a USA Command Center up
+# in the China base; read the AI ABILITY and AI FOREIGN lines. Without it the captured Command Center
+# is sold the moment it changes hands, as the skirmish AI always did.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -startingcash 30000 -maxframes 12000
+#     -scenario foreign_lotus -logPrefix foreign_lotus_
+#
+# Add -aiknobsoff odd foreigntech for the seat without it.
+
+30    spawn   1  ChinaInfantryBlackLotus  1  start0:0:-350
+# power plants of seat 0's out in the corners, whichever of them the map takes: with its only building
+# captured the seat is beaten and the run ends on the frame of the capture
+10    spawn   0  AmericaPowerPlant        1  300 1200
+10    spawn   0  AmericaPowerPlant        1  400 2100
+10    spawn   0  AmericaPowerPlant        1  2300 2100
+10    spawn   0  AmericaPowerPlant        1  2400 1500
+10    spawn   0  AmericaPowerPlant        1  300 1600
+600   tally   1  AmericaCommandCenter
+1800  tally   1  AmericaVehicleDozer
+3000  tally   1  AmericaCommandCenter
+6000  tally   1  AmericaCommandCenter
+9000  tally   1  AmericaCommandCenter
+12000 tally   1  AmericaCommandCenter
+12000 tally   1  AmericaVehicleDozer
+12000 tally   1  AmericaBarracks

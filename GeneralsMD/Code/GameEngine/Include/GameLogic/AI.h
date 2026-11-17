@@ -313,6 +313,9 @@ struct AIDifficultyProfile
 
 	// Its units' own buttons (AIPlayer::doAbilities)
 	Int		m_unitAbilities;								///< 0 none; 1 the laser lock, manual shots, area weapons at the unit's own target and weapon toggles; 2 those anywhere in reach, walk-up specials and suicides too
+
+	// Another side's tech tree (AIPlayer::doForeignTech)
+	Int		m_foreignTech;									///< 0 none; 1 a foreign dozer or Command Center that falls into its hands builds that side's base and army; 2 it also goes after them: dozers stolen or emptied and crewed, Command Centers and other buildings captured
 };
 
 //-------------------------------------------------------------------------------------------------

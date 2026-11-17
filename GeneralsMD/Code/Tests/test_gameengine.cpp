@@ -17977,6 +17977,29 @@ TEST(the_ai_presses_a_button_only_where_it_pays)
 	CHECK_EQ( -1, AIAbility_bestAreaAim( xs, ys, values, centres, 13, 50.0f, 5, &score ) );
 }
 
+/** AIPlayer.cpp: another side's tech tree.  One of our own dozers takes a foreign site over when it stands
+	 at most half the foreign dozer's distance from it; a capture's worth halves every 500 of the walk. */
+extern Bool AIForeign_handOver( Real foreignDistSqr, Real ownDistSqr, Real share );
+extern Real AIForeign_captureScore( Real worth, Real distance, Real halfAt );
+
+TEST(a_foreign_base_goes_to_the_nearer_dozer_and_the_nearer_capture)
+{
+	// the stolen dozer 1200 from the site at home, ours 300: ours finishes it
+	CHECK( AIForeign_handOver( 1200.0f * 1200.0f, 300.0f * 300.0f, 0.5f ) );
+	// ... at exactly half it still does, past half the stolen one keeps it
+	CHECK( AIForeign_handOver( 1200.0f * 1200.0f, 600.0f * 600.0f, 0.5f ) );
+	CHECK( !AIForeign_handOver( 1200.0f * 1200.0f, 601.0f * 601.0f, 0.5f ) );
+	// the stolen dozer already on the site: nobody is that near
+	CHECK( !AIForeign_handOver( 0.0f, 10.0f, 0.5f ) );
+
+	// a Command Center doubled (8000) 1500 away against a War Factory (4000) 200 away: the factory first
+	CHECK_NEAR( 2000.0f, AIForeign_captureScore( 8000.0f, 1500.0f, 500.0f ), 0.01f );
+	CHECK_NEAR( 2857.14f, AIForeign_captureScore( 4000.0f, 200.0f, 500.0f ), 0.01f );
+	// ... and right beside it, its whole worth; no halving scale is no halving
+	CHECK_NEAR( 8000.0f, AIForeign_captureScore( 8000.0f, 0.0f, 500.0f ), 0.01f );
+	CHECK_NEAR( 8000.0f, AIForeign_captureScore( 8000.0f, 1500.0f, 0.0f ), 0.01f );
+}
+
 extern Real AIAbility_walkUpKillFrames( Real health, Real damage, Real detonateFrames, Real teamRate, Real ownRate );
 
 TEST(a_charge_is_planted_only_where_it_beats_the_guns)

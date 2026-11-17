@@ -589,6 +589,7 @@ m_role(AIROLE_AGGRESSIVE)
 	m_logDocksTotal = -1;
 	m_logMoneyFrame = 0;
 	m_logCaptureTarget = INVALID_ID;
+	m_logForeignWaitFrame = 0;
 	m_hijackerID = INVALID_ID;
 	m_hijackTimer = 1;
 
@@ -1918,8 +1919,8 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 		giveUpOnSpot(info);
 		return NULL;
 	}
-	// Find a dozer.
-	Object *dozer = findDozer(info->getLocation());
+	// Find a dozer, one that can build it when another side's dozer is ours too.
+	Object *dozer = findDozer(info->getLocation(), foreignTechRung() > 0 ? bldgPlan : NULL);
 	if (dozer==NULL && runsOwnAI() && getSkillProfile()->m_economyBuildings && isPowerThin() &&
 			bldgPlan->isKindOf(KINDOF_FS_POWER) && !bldgPlan->isKindOf(KINDOF_CASH_GENERATOR)) {
 		// every dozer busy and the power running out: a Hard AI takes one off whatever it is doing. A China
@@ -6810,6 +6811,7 @@ void AIPlayer::update( void )
 		AI_PHASE( AIP_EXPAND,  doSecondBase() );				// ... and a base away from home, so one stroke does not finish it.
 		AI_PHASE( AIP_CAPTURE, doCapture() );						// ... and the money that is standing around.
 		AI_PHASE( AIP_CAPTURE, doHijack() );						// Take the enemy's tanks rather than shoot them.
+		AI_PHASE( AIP_CAPTURE, doForeignTech() );				// ... and a dozer or Command Center taken, that side's whole tree.
 		AI_PHASE( AIP_ECONOMY, doEconomy() );						// ... and the money sitting in the bank.
 		AI_PHASE( AIP_ECONOMY, doSpending() );					// Upgrades for the army, and whatever is over the bank target.
 		AI_PHASE( AIP_POWER,   doPower() );							// Keep the lights on, and out of reach.
@@ -8229,12 +8231,66 @@ static void putToHacking( Object *obj, void *userData )
 	ai->aiHackInternet( CMD_FROM_AI );
 }
 
-/** The first dozer this player owns, busy or not. */
+/** Another side's dozer in the hands of a computer player that plays its tech tree on its own
+	* (doForeignTech).  The jobs that plan off a dozer's buttons leave it alone: the first of these a
+	* power or a second base asked of put the other side's plant on the build list. */
+static Bool isOwnersForeignDozer( const Object *obj )
+{
+	const Player *owner = obj->getControllingPlayer();
+	const AIPlayer *ai = owner ? owner->getAIPlayer() : NULL;
+	return ai != NULL && ai->foreignTechRung() > 0 && ai->isForeignTemplate( obj->getTemplate() );
+}
+
+/** The first dozer this player owns, busy or not, of its own side. */
 static void findAnyDozer( Object *obj, void *userData )
 {
 	Object **dozer = (Object **)userData;
-	if( *dozer == NULL && obj->isKindOf( KINDOF_DOZER ) && !obj->isEffectivelyDead() )
+	if( *dozer == NULL && obj->isKindOf( KINDOF_DOZER ) && !obj->isEffectivelyDead() && !isOwnersForeignDozer( obj ) )
 		*dozer = obj;
+}
+
+/** The Command Center on a dozer's own buttons, whoever owns it now: what that dozer is worth taken. */
+static const ThingTemplate *commandCenterOnButtons( const Object *dozer )
+{
+	const CommandSet *commandSet = TheCommandStore->findCommandSet( dozer->getCommandSetString() );
+	for( Int i = 0; commandSet && i < MAX_COMMANDS_PER_SET; ++i )
+	{
+		const CommandButton *button = commandSet->getCommandButton( i );
+		if( button && button->getCommandType() == GUI_COMMAND_DOZER_CONSTRUCT && button->getThingTemplate() &&
+				button->getThingTemplate()->isKindOf( KINDOF_COMMANDCENTER ) )
+			return button->getThingTemplate();
+	}
+	return NULL;
+}
+
+/** What a foreign dozer is worth to a hunt: the Command Center it can put up for us, in that one's price.
+	* ponytail: the price alone, not the base and army that come after it. */
+static Real foreignDozerPrize( const Object *dozer, const Player *taker )
+{
+	const ThingTemplate *center = commandCenterOnButtons( dozer );
+	return center ? INT_TO_REAL( center->calcCostToBuild( taker ) ) : 0.0f;
+}
+
+/** A Command Center the hunt weighs this many times its worth: Black Lotus or the capturer takes that
+	* side's whole tree with it, not one building. */
+static const Real FOREIGN_CENTER_CAPTURE_SCALE = 2.0f;
+
+/** The walk over which a capture's worth halves (AIForeign_captureScore). */
+static const Real FOREIGN_CAPTURE_HALF_AT = 500.0f;
+
+/** Hand a foreign site over to one of our own dozers when that one stands at most this share of the
+	* foreign dozer's distance from it: a dozer at home finishes a Command Center the stolen one is still
+	* driving to.  Pure, for the test. */
+Bool AIForeign_handOver( Real foreignDistSqr, Real ownDistSqr, Real share )
+{
+	return ownDistSqr <= share * share * foreignDistSqr;
+}
+
+/** A capture's score: what the building is worth over the walk, worth halved every scale of distance, as
+	* the hero's job scores its buildings.  Pure, for the test. */
+Real AIForeign_captureScore( Real worth, Real distance, Real halfAt )
+{
+	return halfAt > 0.0f ? worth / (1.0f + distance / halfAt) : worth;
 }
 
 struct DozerTally
@@ -9884,7 +9940,7 @@ Bool AIPlayer::holdsExtraFactory( const ThingTemplate *tmpl )
 	* distance it reached in m_placementRing, so the search moves out across calls instead of giving
 	* up at the opening base, and goes back to the middle once the flood runs out of ground. */
 //----------------------------------------------------------------------------------------------------------
-Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, Bool walkOutward )
+Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, Bool walkOutward, Coord3D *spotOnly )
 {
 	const Real structureRadius = tmpl->getTemplateGeometryInfo().getBoundingCircleRadius();
 	const Real placeAngle = tmpl->getPlacementViewAngle();
@@ -9956,6 +10012,11 @@ Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real
 		{
 			if( walkOutward )
 				m_placementRing = distance;
+			if( spotOnly )
+			{
+				*spotOnly = pos;		// the caller orders its own dozer there; nothing goes on the build list
+				return TRUE;
+			}
 			DEBUG_LOG(("AI ECONOMY frame %d player %d builds '%s' at (%.0f,%.0f), %d in the bank, %.0f from a base of radius %.0f, %.0f by the ground from where it looked\n", TheGameLogic->getFrame(),
 				m_player->getPlayerIndex(), tmpl->getName().str(), pos.x, pos.y, m_player->getMoney()->countMoney(),
 				sqrt( sqr( pos.x - m_baseCenter.x ) + sqr( pos.y - m_baseCenter.y ) ), m_baseRadius,
@@ -19476,7 +19537,11 @@ Bool AIPlayer::abilityShot( Object *obj, const AIAbilityButton &entry, Object *v
 		Object *target = candidates[ c ];
 		if( !entry.button->isValidObjectTarget( obj, target ) || (knife ? !target->isKindOf( KINDOF_INFANTRY ) : !weapon->isWithinAttackRange( obj, target )) )
 			continue;
-		const Real worth = abilityWorth( target );
+		Real worth = abilityWorth( target );
+		// a shot that empties a foreign dozer's cab is that side's Command Center for one crewman (doForeignTech)
+		if( weapon->getDamageType() == DAMAGE_KILLPILOT && target->isKindOf( KINDOF_DOZER ) &&
+				isForeignTemplate( target->getTemplate() ) && wantsForeignDozer() )
+			worth = max( worth, foreignDozerPrize( target, m_player ) );
 		const Real shot = abilityFramesToKill( obj, target, entry.slot );
 		const Real guns = abilityFramesToKill( obj, target, -1 );
 		// the knife skips the race: its 833 ms stab loses to Burton's three-round burst on a Red Guard, so the
@@ -19912,6 +19977,10 @@ Object *AIPlayer::pickWalkUp( Object *obj, const AIAbilityButton &entry, Bool th
 			const Money *money = target->getControllingPlayer() ? target->getControllingPlayer()->getMoney() : NULL;
 			worth = money ? min( ABILITY_CASH_HACK_TAKE, INT_TO_REAL( (Int)money->countMoney() ) ) : 0.0f;
 		}
+		// another side's Command Center taken is that side's whole tree (doForeignTech)
+		if( entry.power == SPECIAL_BLACKLOTUS_CAPTURE_BUILDING && target->isKindOf( KINDOF_COMMANDCENTER ) &&
+				isForeignTemplate( target->getTemplate() ) && wantsForeignDozer() )
+			worth *= FOREIGN_CENTER_CAPTURE_SCALE;
 		if( worth < floor || worth <= 0.0f )
 			continue;
 		// a hero's building is its job: no gains test, any building it knows of in its wide leash; a hero in a
@@ -22035,6 +22104,21 @@ void AIPlayer::doCapture( void )
 	// capture led to the next one further out, so the round walked into the middle of the map and the
 	// derricks behind the base waited on it for minutes, or were never taken.
 	Object *target = nearestTechBuilding( &m_baseCenter, FALSE );
+	// ForeignTech 2 also weighs the enemy's own buildings where no gun guards them, worth over the walk against
+	// the derrick's (doForeignTech then works a Command Center taken this way)
+	Bool enemyTarget = FALSE;
+	if( foreignTechRung() >= 2 )
+	{
+		Real enemyScore = 0.0f;
+		Object *enemy = enemyBuildingToCapture( &from, capturer, &enemyScore );
+		const Real techScore = target == NULL ? 0.0f : AIForeign_captureScore( walkUpWorth( target ),
+			(Real)sqrt( sqr( target->getPosition()->x - from.x ) + sqr( target->getPosition()->y - from.y ) ), FOREIGN_CAPTURE_HALF_AT );
+		if( enemy && (target == NULL || enemyScore > techScore) )
+		{
+			target = enemy;
+			enemyTarget = TRUE;
+		}
+	}
 
 	// only pay for one when there is something to spend it on
 	if( capturer == NULL && target )
@@ -22088,7 +22172,13 @@ void AIPlayer::doCapture( void )
 	}
 
 	AIUpdateInterface *ai = capturer->getAI();
-	if( ai == NULL || !ai->isIdle() )
+	// the walk to an enemy building ends against its wall and never reads idle: a Ranger stood beside a China
+	// Command Center from frame 930 to the end with its capture ready, so one it can take now is taken.  Not
+	// again while the capture runs: its walk in reads neither idle nor using the ability, and each order restarts it
+	const SpecialAbilityUpdate *capture = capturer->findSpecialAbilityUpdate( SPECIAL_INFANTRY_CAPTURE_BUILDING );
+	const Bool takeEnemyNow = enemyTarget && mod && ai && !(capture && capture->isActive()) &&
+		TheActionManager->canCaptureBuilding( capturer, target, CMD_FROM_AI );
+	if( ai == NULL || (!ai->isIdle() && !takeEnemyNow) )
 		return;			// still on its way, to the building or to its seat
 	m_ferryID = INVALID_ID;		// standing and out, so the helicopter is free for the waves again
 
@@ -22100,7 +22190,7 @@ void AIPlayer::doCapture( void )
 	// with a rifleman standing on it, and each restart left another copy of the ability's loop
 	// sound playing.
 	//
-	if( capturer->testStatus( OBJECT_STATUS_IS_USING_ABILITY ) )
+	if( capturer->testStatus( OBJECT_STATUS_IS_USING_ABILITY ) || (enemyTarget && capture && capture->isActive()) )
 		return;			// already taking one
 
 	if( target == NULL )
@@ -22122,6 +22212,9 @@ void AIPlayer::doCapture( void )
 		mod->doSpecialPowerAtObject( target, 0 );
 		DEBUG_LOG(("AI CAPTURE frame %d player %d capturing a '%s' %d\n", TheGameLogic->getFrame(), m_player->getPlayerIndex(),
 							 target->getTemplate()->getName().str(), target->getID()));
+		if( enemyTarget )
+			DEBUG_LOG(("AI FOREIGN frame %d player %d capturer '%s' %d takes an enemy '%s' %d\n", TheGameLogic->getFrame(), m_player->getPlayerIndex(),
+				capturer->getTemplate()->getName().str(), capturer->getID(), target->getTemplate()->getName().str(), target->getID()));
 		m_logCaptureTarget = target->getID();
 	}
 	else
@@ -22299,7 +22392,7 @@ Object *AIPlayer::findHijacker( void )
  * Nearest, not richest: a thief walks, and the Humvee it reaches is worth more than the Overlord it
  * dies halfway to.
  */
-Object *AIPlayer::nearestStealableVehicle( const Coord3D *from, Real reach )
+Object *AIPlayer::nearestStealableVehicle( const Coord3D *from, Real reach, Bool foreignDozersOnly )
 {
 	if( ThePlayerList == NULL || from == NULL )
 		return NULL;
@@ -22336,6 +22429,8 @@ Object *AIPlayer::nearestStealableVehicle( const Coord3D *from, Real reach )
 						continue;
 					if( obj->isKindOf( KINDOF_AIRCRAFT ) || obj->isKindOf( KINDOF_DRONE ) )
 						continue;			// neither a hijacker nor a hacker is allowed either of those
+					if( foreignDozersOnly && (!obj->isKindOf( KINDOF_DOZER ) || !isForeignTemplate( obj->getTemplate() )) )
+						continue;
 					if( !observerKnowsAbout( obj, myNdx ) )
 						continue;
 
@@ -22426,7 +22521,11 @@ void AIPlayer::doHijack( void )
 	if( thief )
 		from = *thief->getPosition();
 
-	Object *target = nearestStealableVehicle( &from, HIJACK_REACH );
+	// ForeignTech 2: another side's dozer in reach goes first, nearer tanks or not; it is that side's tree
+	Object *target = wantsForeignDozer() ? nearestStealableVehicle( &from, HIJACK_REACH, TRUE ) : NULL;
+	const Bool foreignPrey = target != NULL;
+	if( target == NULL )
+		target = nearestStealableVehicle( &from, HIJACK_REACH );
 	if( target == NULL )
 		return;			// nothing in reach; the thief waits where it is rather than walk into the fog
 
@@ -22453,7 +22552,481 @@ void AIPlayer::doHijack( void )
 		ai->aiEnter( target, CMD_FROM_AI );
 		DEBUG_LOG(("AI player %d sends a '%s' after a '%s'\n", m_player->getPlayerIndex(),
 							 thief->getTemplate()->getName().str(), target->getTemplate()->getName().str()));
+		if( foreignPrey )
+			DEBUG_LOG(("AI FOREIGN frame %d player %d hijacker '%s' %d goes after a foreign '%s' %d\n", TheGameLogic->getFrame(),
+				m_player->getPlayerIndex(), thief->getTemplate()->getName().str(), thief->getID(), target->getTemplate()->getName().str(), target->getID()));
 	}
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** How often doForeignTech looks, in game time. */
+#define FOREIGN_CHECK_RATE ((Int)(2 * LOGICFRAMES_PER_GAME_SECOND))
+/** The log's quiet spell between two lines of waiting on the bank, on room or on a dozer. */
+#define FOREIGN_LOG_GAP ((UnsignedInt)(30 * LOGICFRAMES_PER_GAME_SECOND))
+/** How far from one of our soldiers an emptied foreign dozer is worth the walk to crew it. */
+static const Real FOREIGN_CREW_REACH = 600.0f;
+/** How far from the capturer an enemy building is weighed for a capture. */
+static const Real FOREIGN_CAPTURE_LEASH = 1500.0f;
+/** An enemy building has to be worth this many times the capturer's price: a Ranger traded for a wall is no trade. */
+static const Real FOREIGN_CAPTURE_FLOOR = 2.0f;
+/** One of our own dozers this share of the foreign one's distance from a foreign site, or nearer, takes it over. */
+static const Real FOREIGN_HANDOVER_SHARE = 0.5f;
+/** The foreign base, in the order it goes up off the foreign dozer's buttons; a kind whose building waits on
+	* another puts that one up first (missingPrerequisite), a USA barracks its power plant. */
+static const Int FOREIGN_BASE_KIND_COUNT = 3;
+static const KindOfType FOREIGN_BASE_KINDS[ FOREIGN_BASE_KIND_COUNT ] = { KINDOF_FS_SUPPLY_CENTER, KINDOF_FS_BARRACKS, KINDOF_FS_WARFACTORY };
+
+/** What of another side this player holds: its dozers (crewed, out in the open), its Command Centers standing or
+	* going up, its sites, its finished barracks and war factories.  In the player's own object order. */
+struct ForeignTally
+{
+	const AIPlayer *ai;
+	std::vector<Object *> dozers;
+	std::vector<Object *> centers;
+	std::vector<Object *> sites;
+	std::vector<Object *> factories;
+};
+
+static void tallyForeign( Object *obj, void *userData )
+{
+	ForeignTally *tally = (ForeignTally *)userData;
+	if( obj->isEffectivelyDead() || obj->testStatus( OBJECT_STATUS_SOLD ) || !tally->ai->isForeignTemplate( obj->getTemplate() ) )
+		return;
+	if( obj->isKindOf( KINDOF_DOZER ) )
+	{
+		if( !obj->isContained() && obj->getAI() && obj->getAI()->getDozerAIInterface() && !obj->isDisabledByType( DISABLED_UNMANNED ) )
+			tally->dozers.push_back( obj );
+		return;
+	}
+	if( !obj->isKindOf( KINDOF_STRUCTURE ) )
+		return;
+	if( obj->isKindOf( KINDOF_COMMANDCENTER ) )
+		tally->centers.push_back( obj );
+	if( obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+		tally->sites.push_back( obj );
+	else if( (obj->isKindOf( KINDOF_FS_BARRACKS ) || obj->isKindOf( KINDOF_FS_WARFACTORY )) && obj->getProductionUpdateInterface() )
+		tally->factories.push_back( obj );
+}
+
+/** The dozer is on its way to, or working on, this site. */
+static Bool dozerBuilds( Object *dozer, const Object *site )
+{
+	DozerAIInterface *dozerAI = dozer && dozer->getAI() ? dozer->getAI()->getDozerAIInterface() : NULL;
+	return dozerAI && dozerAI->isTaskPending( DOZER_TASK_BUILD ) && dozerAI->getTaskTarget( DOZER_TASK_BUILD ) == site->getID();
+}
+
+/** The dozer has a build of any kind on its hands. */
+static Bool dozerBusyBuilding( Object *dozer )
+{
+	DozerAIInterface *dozerAI = dozer->getAI() ? dozer->getAI()->getDozerAIInterface() : NULL;
+	return dozerAI && dozerAI->isTaskPending( DOZER_TASK_BUILD );
+}
+
+struct OwnIdleDozerSearch
+{
+	const AIPlayer *ai;
+	Coord3D at;
+	ObjectID site;
+	ObjectID skip;
+	std::vector<ObjectID> builders;		///< builders of our other sites: the base builder sends each back to its own
+	Object *dozer;
+	Real distSqr;
+};
+
+/** The builders of this player's sites, all but one. */
+static void collectSiteBuilders( Object *obj, void *userData )
+{
+	OwnIdleDozerSearch *search = (OwnIdleDozerSearch *)userData;
+	if( obj->isKindOf( KINDOF_STRUCTURE ) && obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) && !obj->isEffectivelyDead() &&
+			obj->getBuilderID() != INVALID_ID && obj->getID() != search->site )
+		search->builders.push_back( obj->getBuilderID() );
+}
+
+/** The nearest of this side's own dozers with no task at all and no other site of ours to go back to. */
+static void findOwnIdleDozer( Object *obj, void *userData )
+{
+	OwnIdleDozerSearch *search = (OwnIdleDozerSearch *)userData;
+	if( !obj->isKindOf( KINDOF_DOZER ) || obj->isEffectivelyDead() || obj->getID() == search->skip || obj->isContained() ||
+			search->ai->isForeignTemplate( obj->getTemplate() ) || obj->getAI() == NULL ||
+			std::find( search->builders.begin(), search->builders.end(), obj->getID() ) != search->builders.end() )
+		return;
+	DozerAIInterface *dozerAI = obj->getAI()->getDozerAIInterface();
+	if( dozerAI == NULL || dozerAI->isAnyTaskPending() )
+		return;
+	const Real distSqr = sqr( obj->getPosition()->x - search->at.x ) + sqr( obj->getPosition()->y - search->at.y );
+	if( search->dozer == NULL || distSqr < search->distSqr || (distSqr == search->distSqr && obj->getID() < search->dozer->getID()) )
+	{
+		search->dozer = obj;
+		search->distSqr = distSqr;
+	}
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** ForeignTech 2 wants one, and there is no foreign dozer or Command Center of ours to build on yet. */
+Bool AIPlayer::wantsForeignDozer( void ) const
+{
+	if( foreignTechRung() < 2 )
+		return FALSE;
+	ForeignTally tally;
+	tally.ai = this;
+	m_player->iterateObjects( tallyForeign, &tally );
+	return tally.dozers.empty() && tally.centers.empty();
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** Jarmen Kell's snipe leaves a dozer empty and neutral, and any soldier who walks into it owns it: the nearest
+	* idle one of ours within FOREIGN_CREW_REACH does, one a dozer. */
+void AIPlayer::crewEmptyDozers( void )
+{
+	Player *neutral = ThePlayerList->getNeutralPlayer();
+	if( neutral == NULL )
+		return;
+	std::vector<Object *> empty;
+	neutral->iterateObjects( collectOwned, &empty );
+	std::sort( empty.begin(), empty.end(), aiAbilityByID );		// team list order moves on capture and on load
+	std::vector<Object *> ours;
+	const Int me = m_player->getPlayerIndex();
+	for( size_t e = 0; e < empty.size(); ++e )
+	{
+		Object *dozer = empty[ e ];
+		if( dozer->isEffectivelyDead() || !dozer->isKindOf( KINDOF_DOZER ) || !dozer->isDisabledByType( DISABLED_UNMANNED ) ||
+				!isForeignTemplate( dozer->getTemplate() ) || !observerKnowsAbout( dozer, me ) )
+			continue;
+		if( ours.empty() )
+		{
+			m_player->iterateObjects( collectOwned, &ours );
+			std::sort( ours.begin(), ours.end(), aiAbilityByID );
+		}
+		Object *best = NULL;
+		Real bestSqr = sqr( FOREIGN_CREW_REACH );
+		Bool sent = FALSE;
+		for( size_t o = 0; o < ours.size() && !sent; ++o )
+		{
+			Object *soldier = ours[ o ];
+			// not a worker: the base builder takes it back for the next building before it gets there
+			if( soldier->isEffectivelyDead() || !soldier->isKindOf( KINDOF_INFANTRY ) || soldier->isKindOf( KINDOF_HERO ) ||
+					soldier->isKindOf( KINDOF_DOZER ) || soldier->isKindOf( KINDOF_REJECT_UNMANNED ) || soldier->isContained() || soldier->getAI() == NULL )
+				continue;
+			if( soldier->getAI()->getGoalObject() == dozer )
+				sent = TRUE;			// one is on its way
+			else if( soldier->getAI()->isIdle() && !abilityUnitBusy( soldier ) )
+			{
+				const Real distSqr = sqr( soldier->getPosition()->x - dozer->getPosition()->x ) + sqr( soldier->getPosition()->y - dozer->getPosition()->y );
+				if( distSqr < bestSqr && TheActionManager->canEnterObject( soldier, dozer, CMD_FROM_AI, DONT_CHECK_CAPACITY ) )
+				{
+					best = soldier;
+					bestSqr = distSqr;
+				}
+			}
+		}
+		if( sent || best == NULL )
+			continue;
+		best->getAI()->aiEnter( dozer, CMD_FROM_AI );
+		DEBUG_LOG(("AI FOREIGN frame %d player %d sends '%s' %d to crew the empty '%s' %d, %.0f away\n", TheGameLogic->getFrame(), me,
+			best->getTemplate()->getName().str(), best->getID(), dozer->getTemplate()->getName().str(), dozer->getID(), sqrt( bestSqr )));
+	}
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** A spot round center the building fits and the dozer told to put it up there, the bank paying as for any
+	* building the purchase queue lets through.  Not on the build list: the base builder hands its entries to
+	* any dozer of ours that can build them, and only this one can. */
+Bool AIPlayer::placeForeign( Object *dozer, const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, const char *what )
+{
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const Int cost = tmpl->calcCostToBuild( m_player );
+	const Int bank = (Int)m_player->getMoney()->countMoney();
+	if( bank < cost || !purchaseAllowed( tmpl->getTemplateID(), cost, purchaseKindOf( tmpl ), TRUE, tmpl->getName() ) )
+	{
+		if( now >= m_logForeignWaitFrame )
+		{
+			DEBUG_LOG(("AI FOREIGN frame %d player %d waits for the bank for a foreign '%s' (%s), %d of %d\n", now,
+				m_player->getPlayerIndex(), tmpl->getName().str(), what, bank, cost));
+			m_logForeignWaitFrame = now + FOREIGN_LOG_GAP;
+		}
+		return FALSE;
+	}
+	if( TheBuildAssistant->canMakeUnit( dozer, tmpl ) != CANMAKE_OK )
+		return FALSE;
+	// a full base has no room on the rings round center by the time a captured Command Center's dozer drives in
+	// (a China one in a USA base, frame 3050 on): the band half a base further out is tried too
+	Coord3D spot;
+	if( !placeNear( tmpl, center, innerRadius, FALSE, &spot ) && !placeNear( tmpl, center, innerRadius + 0.5f * m_baseRadius, FALSE, &spot ) )
+	{
+		if( now >= m_logForeignWaitFrame )
+		{
+			DEBUG_LOG(("AI FOREIGN frame %d player %d has no room for a foreign '%s' (%s) by (%.0f,%.0f)\n", now,
+				m_player->getPlayerIndex(), tmpl->getName().str(), what, center->x, center->y));
+			m_logForeignWaitFrame = now + FOREIGN_LOG_GAP;
+		}
+		return FALSE;
+	}
+	spot.z = TheTerrainLogic->getGroundHeight( spot.x, spot.y );
+	Object *site = TheBuildAssistant->buildObjectNow( dozer, tmpl, &spot, tmpl->getPlacementViewAngle(), m_player );
+	TheTerrainVisual->removeAllBibs();
+	if( site == NULL )
+	{
+		DEBUG_LOG(("AI FOREIGN frame %d player %d: its '%s' %d was refused a foreign '%s' at (%.0f,%.0f)\n", now,
+			m_player->getPlayerIndex(), dozer->getTemplate()->getName().str(), dozer->getID(), tmpl->getName().str(), spot.x, spot.y));
+		return FALSE;
+	}
+	purchased( tmpl->getTemplateID(), cost, purchaseKindOf( tmpl ), tmpl->getName() );
+	DEBUG_LOG(("AI FOREIGN frame %d player %d places a foreign '%s' %d (%s) at (%.0f,%.0f) with its '%s' %d, %.0f from home, %d left in the bank\n", now,
+		m_player->getPlayerIndex(), site->getTemplate()->getName().str(), site->getID(), what, spot.x, spot.y,
+		dozer->getTemplate()->getName().str(), dozer->getID(), sqrt( sqr( spot.x - m_baseCenter.x ) + sqr( spot.y - m_baseCenter.y ) ),
+		m_player->getMoney()->countMoney()));
+	return TRUE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** The foreign base round its Command Center: a supply centre, a barracks, a war factory, each the first of
+	* its kind on the dozer's buttons and one of each; a kind whose building waits on another puts that up
+	* first.  TRUE when a kind was due, placed or waiting on the bank, so the look goes no further. */
+Bool AIPlayer::growForeignBase( Object *dozer, Object *center )
+{
+	for( Int k = 0; k < FOREIGN_BASE_KIND_COUNT; ++k )
+	{
+		const ThingTemplate *tmpl = buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, FOREIGN_BASE_KINDS[ k ], TRUE );
+		const Bool waitsOn = tmpl == NULL;
+		if( waitsOn )
+			tmpl = missingPrerequisite( dozer, FOREIGN_BASE_KINDS[ k ] );
+		if( tmpl == NULL )
+			continue;
+		Int owned = 0;
+		m_player->countObjectsByThingTemplate( 1, &tmpl, TRUE, &owned, FALSE );
+		if( owned > 0 )
+			continue;
+		static const char *kindNames[ FOREIGN_BASE_KIND_COUNT ] = { "supply", "barracks", "war factory" };
+		AsciiString what = kindNames[ k ];
+		if( waitsOn )
+			what.concat( ", what it waits on" );
+		placeForeign( dozer, tmpl, center->getPosition(), center->getGeometryInfo().getBoundingCircleRadius(), what.str() );
+		return TRUE;
+	}
+	return FALSE;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/** ForeignTech 2: the enemy building best worth a capture from here, its worth (walkUpWorth, a wanted Command
+	* Center doubled) halved every FOREIGN_CAPTURE_HALF_AT of the walk.  Only one no armed enemy guards
+	* (abilityGuarded) and, with the map up, one the walker can reach along ground the map says is ours. */
+Object *AIPlayer::enemyBuildingToCapture( const Coord3D *from, Object *walker, Real *bestScoreOut )
+{
+	*bestScoreOut = 0.0f;
+	std::vector<Object *> enemies;
+	abilityEnemiesNear( m_player, from, FOREIGN_CAPTURE_LEASH, &enemies );
+	const ThingTemplate *capturerTmpl = walker ? walker->getTemplate() : cheapestCapturerTemplate( m_player );
+	const Real floor = capturerTmpl ? FOREIGN_CAPTURE_FLOOR * INT_TO_REAL( capturerTmpl->calcCostToBuild( m_player ) ) : 0.0f;
+	const Bool wantCenter = wantsForeignDozer();
+	const Bool mapUp = walker != NULL && hasTacticalMap();
+	Object *best = NULL;
+	Real bestScore = 0.0f;
+	for( size_t t = 0; t < enemies.size(); ++t )
+	{
+		Object *target = enemies[ t ];
+		if( !target->isKindOf( KINDOF_STRUCTURE ) || target->isKindOf( KINDOF_IMMUNE_TO_CAPTURE ) || target->isKindOf( KINDOF_TECH_BUILDING ) ||
+				target->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || target->testStatus( OBJECT_STATUS_SOLD ) )
+			continue;			// a tech building is nearestTechBuilding's, enemy-held or not
+		Real worth = walkUpWorth( target );
+		if( wantCenter && target->isKindOf( KINDOF_COMMANDCENTER ) && isForeignTemplate( target->getTemplate() ) )
+			worth *= FOREIGN_CENTER_CAPTURE_SCALE;
+		if( worth < floor )
+			continue;
+		const Real distance = (Real)sqrt( sqr( target->getPosition()->x - from->x ) + sqr( target->getPosition()->y - from->y ) );
+		const Real score = AIForeign_captureScore( worth, distance, FOREIGN_CAPTURE_HALF_AT );
+		if( best && score <= bestScore )
+			continue;
+		if( abilityGuarded( m_player, target ) )
+			continue;
+		if( mapUp && !walkIsCovered( walker, target->getPosition() ) )
+			continue;
+		best = target;
+		bestScore = score;
+	}
+	*bestScoreOut = bestScore;
+	return best;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/**
+ * Another side's tech tree.  The owner: a computer that steals an enemy dozer or takes his Command Center
+ * should build on it, as a player does.  Nothing did: a hijacked dozer stood on the default team, the base
+ * builder kept picking it while idle, and buildObjectNow refused it this side's buildings every time.
+ *
+ * Once every FOREIGN_CHECK_RATE, out of what this player holds of another side (ForeignTally):
+ * a site of that side with nobody on it gets a builder, and one of our own idle dozers takes over a site
+ * the foreign dozer is still a long way from; a Command Center of that side with no dozer of its kind
+ * trains one, and once one stands, a captured Command Center away from home is sold for the cash; each
+ * foreign dozer drives home and puts its side's Command Center up there when the bank has the price, then
+ * the base round it (growForeignBase); and an idle foreign barracks or war factory trains a unit out of what
+ * is over the bank target, the answer surplusUnit picks.  Nothing is remembered: the objects say it all, so
+ * a savegame carries it with them.
+ */
+void AIPlayer::doForeignTech( void )
+{
+	if( foreignTechRung() <= 0 || !m_baseCenterSet || !m_player->isPlayableSide() )
+		return;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	if( ( now + computeUpdatePhase( m_player->getPlayerIndex(), FOREIGN_CHECK_RATE ) ) % FOREIGN_CHECK_RATE != 0 )
+		return;
+	const Int me = m_player->getPlayerIndex();
+
+	crewEmptyDozers();
+
+	ForeignTally tally;
+	tally.ai = this;
+	m_player->iterateObjects( tallyForeign, &tally );
+	// by ObjectID: a captured or stolen object goes to the front of its team's list when it changes hands and
+	// somewhere else when a save loads, and the first of each list gets the site, the placement and the money
+	std::sort( tally.dozers.begin(), tally.dozers.end(), aiAbilityByID );
+	std::sort( tally.centers.begin(), tally.centers.end(), aiAbilityByID );
+	std::sort( tally.sites.begin(), tally.sites.end(), aiAbilityByID );
+	std::sort( tally.factories.begin(), tally.factories.end(), aiAbilityByID );
+	if( tally.dozers.empty() && tally.centers.empty() && tally.factories.empty() )
+		return;
+
+	// a computer player keeps canBuildUnits off between team orders, and canMakeUnit reads it
+	const Bool canBuildUnits = m_player->getCanBuildUnits();
+	m_player->setCanBuildUnits( TRUE );
+
+	// the sites first: one nobody builds gets a builder, and one the foreign dozer is far from goes to ours
+	for( size_t s = 0; s < tally.sites.size(); ++s )
+	{
+		Object *site = tally.sites[ s ];
+		Object *builder = TheGameLogic->findObjectByID( site->getBuilderID() );
+		if( builder && (builder->isEffectivelyDead() || builder->getControllingPlayer() != m_player || !dozerBuilds( builder, site )) )
+			builder = NULL;
+		OwnIdleDozerSearch own;
+		own.ai = this;
+		own.at = *site->getPosition();
+		own.site = site->getID();
+		own.skip = builder ? builder->getID() : INVALID_ID;
+		own.dozer = NULL;
+		own.distSqr = 0.0f;
+		m_player->iterateObjects( collectSiteBuilders, &own );
+		m_player->iterateObjects( findOwnIdleDozer, &own );
+		if( builder )
+		{
+			const Real builderSqr = sqr( builder->getPosition()->x - own.at.x ) + sqr( builder->getPosition()->y - own.at.y );
+			if( own.dozer == NULL || !isForeignTemplate( builder->getTemplate() ) || !AIForeign_handOver( builderSqr, own.distSqr, FOREIGN_HANDOVER_SHARE ) )
+				continue;
+			// the foreign dozer lets go first: the AI's own resume is refused while another builder works the site
+			builder->getAI()->getDozerAIInterface()->cancelTask( DOZER_TASK_BUILD );
+			own.dozer->getAI()->aiResumeConstruction( site, CMD_FROM_AI );
+			if( !isAtHome( builder->getPosition() ) )
+				aiOrderMove( builder->getAI(), &m_baseCenter );
+			DEBUG_LOG(("AI FOREIGN frame %d player %d hands its foreign '%s' %d to its own '%s' %d, %.0f away against the '%s' %d's %.0f\n", now, me,
+				site->getTemplate()->getName().str(), site->getID(), own.dozer->getTemplate()->getName().str(), own.dozer->getID(),
+				sqrt( own.distSqr ), builder->getTemplate()->getName().str(), builder->getID(), sqrt( builderSqr )));
+			continue;
+		}
+		// nobody on it: a foreign dozer of ours not building, else our own nearest idle one
+		Object *next = NULL;
+		for( size_t d = 0; d < tally.dozers.size() && next == NULL; ++d )
+			if( !dozerBusyBuilding( tally.dozers[ d ] ) )
+				next = tally.dozers[ d ];
+		if( next == NULL )
+			next = own.dozer;
+		if( next == NULL )
+			continue;
+		next->getAI()->aiResumeConstruction( site, CMD_FROM_AI );
+		DEBUG_LOG(("AI FOREIGN frame %d player %d sends its '%s' %d to finish the foreign '%s' %d\n", now, me,
+			next->getTemplate()->getName().str(), next->getID(), site->getTemplate()->getName().str(), site->getID()));
+	}
+
+	// the Command Centers: each trains a dozer of its kind while there is none, and a captured one away from
+	// home is sold once one is out
+	for( size_t c = 0; c < tally.centers.size(); ++c )
+	{
+		Object *center = tally.centers[ c ];
+		if( center->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+			continue;
+		Bool hasDozer = FALSE;
+		for( size_t d = 0; d < tally.dozers.size() && !hasDozer; ++d )
+		{
+			const ThingTemplate *onButtons = commandCenterOnButtons( tally.dozers[ d ] );
+			hasDozer = onButtons && onButtons->isEquivalentTo( center->getTemplate() );
+		}
+		if( !hasDozer )
+		{
+			ProductionUpdateInterface *pu = center->getProductionUpdateInterface();
+			const ThingTemplate *dozerTmpl = pu && pu->getProductionCount() == 0 ?
+				buildableOfKind( center, GUI_COMMAND_UNIT_BUILD, KINDOF_DOZER, TRUE ) : NULL;
+			if( dozerTmpl && buyUnit( pu, dozerTmpl, AIBUY_DOZER ) )
+				DEBUG_LOG(("AI FOREIGN frame %d player %d trains a '%s' at its foreign '%s' %d, %s\n", now, me,
+					dozerTmpl->getName().str(), center->getTemplate()->getName().str(), center->getID(),
+					isAtHome( center->getPosition() ) ? "at home" : "where it was taken"));
+			else if( now >= m_logForeignWaitFrame )
+			{
+				DEBUG_LOG(("AI FOREIGN frame %d player %d has no dozer of its foreign '%s' %d yet: %s, %d in the bank\n", now, me,
+					center->getTemplate()->getName().str(), center->getID(),
+					pu == NULL ? "no production" : pu->getProductionCount() > 0 ? "one on order" : dozerTmpl == NULL ? "none on its buttons it can make" : "the purchase queue holds it",
+					m_player->getMoney()->countMoney()));
+				m_logForeignWaitFrame = now + FOREIGN_LOG_GAP;
+			}
+			continue;
+		}
+		if( !isAtHome( center->getPosition() ) )
+		{
+			DEBUG_LOG(("AI FOREIGN frame %d player %d sells the captured '%s' %d where it stands, its dozer out, %d in the bank\n", now, me,
+				center->getTemplate()->getName().str(), center->getID(), m_player->getMoney()->countMoney()));
+			TheBuildAssistant->sellObject( center );
+		}
+	}
+
+	// each foreign dozer: home, its side's Command Center there, then the base round it.  One placement a look.
+	Bool placed = FALSE;
+	for( size_t d = 0; d < tally.dozers.size() && !placed; ++d )
+	{
+		Object *dozer = tally.dozers[ d ];
+		const ThingTemplate *centerTmpl = commandCenterOnButtons( dozer );
+		if( centerTmpl == NULL || dozerBusyBuilding( dozer ) )
+			continue;
+		Object *home = NULL;
+		for( size_t c = 0; c < tally.centers.size() && home == NULL; ++c )
+			if( tally.centers[ c ]->getTemplate()->isEquivalentTo( centerTmpl ) && isAtHome( tally.centers[ c ]->getPosition() ) )
+				home = tally.centers[ c ];
+		if( home == NULL )
+		{
+			if( !isAtHome( dozer->getPosition() ) && dozer->getAI()->isIdle() )
+			{
+				aiOrderMove( dozer->getAI(), &m_baseCenter );
+				DEBUG_LOG(("AI FOREIGN frame %d player %d drives its foreign '%s' %d home from (%.0f,%.0f)\n", now, me,
+					dozer->getTemplate()->getName().str(), dozer->getID(), dozer->getPosition()->x, dozer->getPosition()->y));
+			}
+			placed = placeForeign( dozer, centerTmpl, &m_baseCenter, 0.5f * m_baseRadius, "Command Center" );
+			continue;
+		}
+		if( home->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
+			continue;		// the sites above have it
+		placed = growForeignBase( dozer, home );
+	}
+
+	// the foreign army: an idle barracks or war factory of that side trains out of what is over the bank target
+	Int spare = (Int)m_player->getMoney()->countMoney() - bankTarget();
+	if( spare > 0 && !tally.factories.empty() )
+	{
+		std::vector<AIVisibleEnemy> army;
+		rememberedArmy( &army );
+		for( size_t f = 0; f < tally.factories.size(); ++f )
+		{
+			Object *factory = tally.factories[ f ];
+			ProductionUpdateInterface *pu = factory->getProductionUpdateInterface();
+			if( pu->getProductionCount() > 0 )
+				continue;
+			const ThingTemplate *unit = surplusUnit( factory, m_player, army, getSkillProfile()->m_counterCompositionWeight );
+			if( unit == NULL )
+				continue;
+			const Int cost = unit->calcCostToBuild( m_player );
+			if( cost > spare || !buyUnit( pu, unit, AIBUY_ARMY ) )
+				continue;
+			spare -= cost;
+			DEBUG_LOG(("AI FOREIGN frame %d player %d trains a foreign '%s' at its '%s' %d, %d over the bank target left\n", now, me,
+				unit->getName().str(), factory->getTemplate()->getName().str(), factory->getID(), spare));
+		}
+	}
+
+	m_player->setCanBuildUnits( canBuildUnits );
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -22573,8 +23146,11 @@ void AIPlayer::queueDozer( void )
 	// If we need a dozer, turn on unit building for a moment.
 	m_player->setCanBuildUnits(true);
 	const ThingTemplate *tTemplate = TheThingFactory->firstTemplate();
+	// a foreign Command Center makes its own side's dozer, which this side's plan cannot use: doForeignTech
+	// trains that one there itself
+	const Bool ownSideOnly = foreignTechRung() > 0;
 	while (tTemplate) {
-		if (tTemplate->isKindOf(KINDOF_DOZER)) {
+		if (tTemplate->isKindOf(KINDOF_DOZER) && !(ownSideOnly && isForeignTemplate(tTemplate))) {
 			Object *factory = findFactory(tTemplate, true);
 			if (factory) {
 				// we can build one.
@@ -22652,6 +23228,44 @@ Int AIPlayer::unitAbilitiesRung( void ) const
 	if( knobsOffHere() && (TheGlobalData->m_aiKnobsOffMask & AIKNOB_ABILITIES) != 0 )
 		return 0;
 	return TheAI->getDifficultyProfile( m_skillLevel )->m_unitAbilities;
+}
+
+/** The rung's ForeignTech less -aiknobsoff's foreigntech, for the seat's own AI only. */
+Int AIPlayer::foreignTechRung( void ) const
+{
+	if( !const_cast<AIPlayer *>( this )->runsOwnAI() || (knobsOffHere() && (TheGlobalData->m_aiKnobsOffMask & AIKNOB_FOREIGN_TECH) != 0) )
+		return 0;
+	return TheAI->getDifficultyProfile( m_skillLevel )->m_foreignTech;
+}
+
+/** The template's side, as the player templates name its base side ("AmericaAirForceGeneral" is America),
+	* is not this player's.  A side no player template names (the civilians) is its own base side. */
+Bool AIPlayer::isForeignTemplate( const ThingTemplate *tmpl ) const
+{
+	if( tmpl == NULL || m_player == NULL || m_player->getBaseSide().isEmpty() )
+		return FALSE;
+	const AsciiString &side = tmpl->getDefaultOwningSide();
+	if( side.isEmpty() )
+		return FALSE;
+	AsciiString base = side;
+	for( Int i = 0; i < ThePlayerTemplateStore->getPlayerTemplateCount(); ++i )
+	{
+		const PlayerTemplate *pt = ThePlayerTemplateStore->getNthPlayerTemplate( i );
+		if( pt && pt->getSide() == side )
+		{
+			base = pt->getBaseSide();
+			break;
+		}
+	}
+	return !base.isEmpty() && base.compareNoCase( m_player->getBaseSide() ) != 0;
+}
+
+/** Object::onCapture sells every faction building a skirmish AI takes; a foreign Command Center (it trains that
+	* side's dozer, then doForeignTech sells it), barracks or war factory (that side's army) is kept. */
+Bool AIPlayer::keepsCaptured( const Object *building ) const
+{
+	return foreignTechRung() > 0 && isForeignTemplate( building->getTemplate() ) &&
+		(building->isKindOf( KINDOF_COMMANDCENTER ) || building->isKindOf( KINDOF_FS_BARRACKS ) || building->isKindOf( KINDOF_FS_WARFACTORY ));
 }
 
 const AIDifficultyProfile *AIPlayer::getSkillProfile( void ) const
@@ -23411,6 +24025,7 @@ void AIPlayer::logPersonaSummary( void )
 struct FindDozerSearch
 {
 	const Coord3D *pos;
+	const ThingTemplate *plan;		///< only a dozer with a button for it; NULL takes any
 	ObjectID repairDozer;
 	Bool needDozer;
 	Object *dozer;
@@ -23441,6 +24056,9 @@ static void considerDozer( Object *obj, void *userData )
 	}
 	if (obj->getID() == search->repairDozer)
 		return; // don't steal the repair dozer.
+	// another side's dozer has none of this side's buttons, and buildObjectNow refuses it the building
+	if (search->plan && TheBuildAssistant->findBuildButtonTemplate(obj, search->plan) == NULL)
+		return;
 
 	search->needDozer = false; // dozer exists, may be busy.
 	if (dozerAI->isTaskPending(DOZER_TASK_BUILD))
@@ -23466,10 +24084,11 @@ static void considerDozer( Object *obj, void *userData )
 /* Walks this player's own objects rather than every object in the game. The skirmish AI asks once per
 	 missing build-list entry, so a late 4v4 walked the whole world twenty times in one frame here:
 	 27ms of a 50ms base-building pass. The player's own list is a few dozen objects. */
-Object * AIPlayer::findDozer( const Coord3D *pos )
+Object * AIPlayer::findDozer( const Coord3D *pos, const ThingTemplate *plan )
 {
 	FindDozerSearch search;
 	search.pos = pos;
+	search.plan = plan;
 	search.repairDozer = m_repairDozer;
 	search.needDozer = true;
 	search.dozer = NULL;

@@ -1994,12 +1994,21 @@ Real AI::getAdjustedVisionRangeForObject(const Object *object, Int factorsToCons
 	* TNT, hacks, the Maroon Beret's Designate) and the suicides.  A seat at 0 also leaves out of its matchups
 	* every weapon only a button fires, so the build choice moves with it.
 	*
-	*                      scoutS maxSc decis  cntr  mass   ttk  indiv team infl focus save harv expand guard hoard econ micro  gate  answer massU  bankS  floor payoff upgr    nonc  share backlog push   minPow  siege  beam  strikeE strikeT swDef                     stall  lost retry  stage  spot arty    inflS fireLook word   odds   fireMem  watch watchOdds dodge  2ndS  2nd  reach    inc% abil */
+	* frgn, 2026-11-17.  The owner: Hard takes over an enemy side's tech tree when it can (AIPlayer::
+	* doForeignTech).  1 (Medium) uses what falls into its hands: a dozer of another side, stolen, or an
+	* emptied one crewed, puts that side's Command Center up at home when the bank has its price, and a
+	* captured Command Center trains that dozer and is sold.  The foreign Command Center grows a supply
+	* centre, a barracks and a war factory, and those train into the army out of what is over the bank.
+	* 2 (Hard) goes after them: the hijacker and Jarmen Kell's snipe take a foreign dozer first, Black
+	* Lotus and the capturing infantry weigh an enemy Command Center double, and the capturer takes an enemy
+	* building no gun guards when it scores over the next derrick, worth against the walk.  Easy none.
+	*
+	*                      scoutS maxSc decis  cntr  mass   ttk  indiv team infl focus save harv expand guard hoard econ micro  gate  answer massU  bankS  floor payoff upgr    nonc  share backlog push   minPow  siege  beam  strikeE strikeT swDef                     stall  lost retry  stage  spot arty    inflS fireLook word   odds   fireMem  watch watchOdds dodge  2ndS  2nd  reach    inc% abil frgn */
 static const AIDifficultyProfile s_defaultSkillLadder[ AISKILL_COUNT ] =
 {
-	/* Easy      */ { 75.0f, 1,  7.0f,  0.00f, FALSE, 0.00f, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE,  FALSE, FALSE,     0, FALSE, FALSE, FALSE, FALSE, FALSE, 120.0f, 6000, 4.0f, 720.0f, 0.05f, 0.05f,  90.0f, 360.0f, 1500.0f,  80.0f, 0.00f, 0.0f, 2.0f, 3,                        300.0f, 3, 300.0f, FALSE, 1, 1.00f, 4.0f, 3.00f,   0.0f, 0.60f, 10.0f, 16.0f, 1.0f, 3.25f, 1200.0f, 1, 2000.0f, 150, 0 },
-	/* Medium    */ { 45.0f, 1,  3.0f,  0.50f, FALSE, 0.35f, TRUE,  FALSE, FALSE, TRUE,  TRUE,  TRUE,  TRUE,  FALSE,  6000, FALSE, FALSE, FALSE, FALSE, FALSE,  60.0f, 5000, 2.5f, 420.0f, 0.05f, 0.25f,  75.0f, 300.0f, 2000.0f, 120.0f, 1.00f, 2.0f, 1.0f, 6,                        240.0f, 2, 240.0f, TRUE,  1, 0.50f, 2.0f, 1.00f, 150.0f, 0.80f, 20.0f,  6.0f, 1.5f, 1.50f,  720.0f, 2, 2500.0f, 150, 1 },
-	/* Hard      */ { 25.0f, 2,  1.5f,  1.00f, TRUE,  0.50f, TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,   4000, TRUE,  TRUE,  TRUE,  TRUE,  FALSE,  30.0f, 4000, 1.5f, 180.0f, 0.05f, 1.00f,  45.0f, 240.0f, 4500.0f, 160.0f, 0.25f, 3.0f, 0.0f, DEFENSES_PER_SUPERWEAPON, 180.0f, 2, 180.0f, TRUE,  2, 0.25f, 1.0f, 0.33f, 300.0f, 1.00f, 40.0f,  2.0f, 2.0f, 0.33f,  420.0f, MAX_PLAYER_COUNT, 4000.0f, 150, 2 }
+	/* Easy      */ { 75.0f, 1,  7.0f,  0.00f, FALSE, 0.00f, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE,  FALSE, FALSE,     0, FALSE, FALSE, FALSE, FALSE, FALSE, 120.0f, 6000, 4.0f, 720.0f, 0.05f, 0.05f,  90.0f, 360.0f, 1500.0f,  80.0f, 0.00f, 0.0f, 2.0f, 3,                        300.0f, 3, 300.0f, FALSE, 1, 1.00f, 4.0f, 3.00f,   0.0f, 0.60f, 10.0f, 16.0f, 1.0f, 3.25f, 1200.0f, 1, 2000.0f, 150, 0, 0 },
+	/* Medium    */ { 45.0f, 1,  3.0f,  0.50f, FALSE, 0.35f, TRUE,  FALSE, FALSE, TRUE,  TRUE,  TRUE,  TRUE,  FALSE,  6000, FALSE, FALSE, FALSE, FALSE, FALSE,  60.0f, 5000, 2.5f, 420.0f, 0.05f, 0.25f,  75.0f, 300.0f, 2000.0f, 120.0f, 1.00f, 2.0f, 1.0f, 6,                        240.0f, 2, 240.0f, TRUE,  1, 0.50f, 2.0f, 1.00f, 150.0f, 0.80f, 20.0f,  6.0f, 1.5f, 1.50f,  720.0f, 2, 2500.0f, 150, 1, 1 },
+	/* Hard      */ { 25.0f, 2,  1.5f,  1.00f, TRUE,  0.50f, TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE,   4000, TRUE,  TRUE,  TRUE,  TRUE,  FALSE,  30.0f, 4000, 1.5f, 180.0f, 0.05f, 1.00f,  45.0f, 240.0f, 4500.0f, 160.0f, 0.25f, 3.0f, 0.0f, DEFENSES_PER_SUPERWEAPON, 180.0f, 2, 180.0f, TRUE,  2, 0.25f, 1.0f, 0.33f, 300.0f, 1.00f, 40.0f,  2.0f, 2.0f, 0.33f,  420.0f, MAX_PLAYER_COUNT, 4000.0f, 150, 2, 2 }
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -3245,6 +3254,7 @@ void AI::parseSkillLevel(INI *ini, void *instance, void* /*store*/, const void* 
 		{ "ExpansionReach",						INI::parseReal, NULL, offsetof( AIDifficultyProfile, m_expansionReach ) },
 		{ "IncomePercent",						INI::parseInt,  NULL, offsetof( AIDifficultyProfile, m_incomePercent ) },
 		{ "UnitAbilities",						INI::parseInt,  NULL, offsetof( AIDifficultyProfile, m_unitAbilities ) },
+		{ "ForeignTech",							INI::parseInt,  NULL, offsetof( AIDifficultyProfile, m_foreignTech ) },
 		{ NULL, NULL, NULL, 0 }
 	};
 

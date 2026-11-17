@@ -1,0 +1,32 @@
+# A Hard GLA AI's Jarmen Kell 150 from an idle USA Dozer at the edge of its base, five Rebels behind
+# him. With ForeignTech his snipe empties the Dozer's cab, a Rebel climbs in, and the Dozer puts a USA
+# Command Center up at home; read the AI ABILITY and AI FOREIGN lines. Without it he leaves an unarmed
+# Dozer alone and nobody crews one.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionAmerica -side 1 FactionGLA -seed 1 -startingcash 30000 -maxframes 6000
+#     -scenario foreign_snipe -logPrefix foreign_snipe_
+#
+# Add -aiknobsoff odd foreigntech for the seat without it.
+
+30    spawn   0  AmericaVehicleDozer     1  start1:0:450
+30    spawn   1  GLAInfantryJarmenKell   1  start1:0:300
+# five Rebels: Hard keeps two scouts out and one capturer, and those are the first spare units it finds
+30    spawn   1  GLAInfantryRebel        5  start1:0:200  20
+# power plants of seat 0's out in the corners, whichever of them the map takes, so the match outlasts its
+# Command Center
+10    spawn   0  AmericaPowerPlant       1  300 1200
+10    spawn   0  AmericaPowerPlant       1  400 2100
+10    spawn   0  AmericaPowerPlant       1  2300 2100
+10    spawn   0  AmericaPowerPlant       1  2400 1500
+10    spawn   0  AmericaPowerPlant       1  300 1600
+600   tally   1  GLAInfantryJarmenKell
+600   tally   1  AmericaVehicleDozer
+1200  tally   1  AmericaVehicleDozer
+1200  tally   1  GLAInfantryJarmenKell
+1200  tally   1  GLAInfantryRebel
+600   tally   1  GLAInfantryRebel
+3000  tally   1  AmericaCommandCenter
+6000  tally   1  AmericaCommandCenter
+6000  tally   1  AmericaVehicleDozer

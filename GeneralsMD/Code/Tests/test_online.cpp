@@ -1814,7 +1814,7 @@ TEST(online_results_are_sending_until_the_replay_is_queued)
 	OnlineSession::get().forgetAccount();
 	CHECK( !OnlineIsSendingResults() );
 
-	// an older server never answers: report.ok from nowhere changes nothing it waits on
+	// an older server never answers: once the replay is queued nothing waits for a report.ok
 	rig.login();
 	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"q6\"}" );
 	rig.peerResponses();

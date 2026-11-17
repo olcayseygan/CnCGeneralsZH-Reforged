@@ -4187,21 +4187,6 @@ namespace
 		TheDisplay->drawFillRect( x, y + e, w, h - e, edge );
 		TheDisplay->drawFillRect( x + e, y + e, w - 2 * e, h - 2 * e, fill );
 	}
-
-	// Zoomed far enough out that a chip's corners would leave under two pixels of fill (a three pixel
-	// chip drew a plus with one pixel of colour), both rows turn to dots: from three pixels up the
-	// colour inset a pixel in a dark block, so the rim that holds it on snow and sand stays, and the
-	// bare colour below that.
-	void fillDot( Int x, Int y, Int w, Int h, Color dark, Color colour )
-	{
-		if( w < 3 || h < 3 )
-		{
-			TheDisplay->drawFillRect( x, y, w, h, colour );
-			return;
-		}
-		TheDisplay->drawFillRect( x, y, w, h, dark );
-		TheDisplay->drawFillRect( x + 1, y + 1, w - 2, h - 2, colour );
-	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -4215,7 +4200,14 @@ Int Drawable::loadPips( const IRegion2D *healthBarRegion, Bool draw ) const
 	const Int e = pipLen( 1, s, 1 );		// the edge
 	const Int gap = pipLen( 2, s, 1 );
 	const Int c = pipLen( 6, s, 2 );		// a seat's side
-	const Bool dots = c - 2 * e < 2;		// one switch for both rows
+	//
+	// Zoomed far enough out that a chip's corners would leave under two pixels of fill (a three pixel
+	// chip drew a plus with one pixel of colour), both rows turn to plain dots of the seat's or the
+	// round's colour, the light edge's when free. A dark rim inside a dot that small left one pixel
+	// of colour and read dark, lit and free alike, and a dot never reaches four pixels: the switch
+	// comes at three.
+	//
+	const Bool dots = c - 2 * e < 2;
 	const Int left = healthBarRegion->lo.x;
 	Int y = pipsTop( healthBarRegion, s );
 	Int bottom = pipsClearTop( healthBarRegion );
@@ -4240,7 +4232,7 @@ Int Drawable::loadPips( const IRegion2D *healthBarRegion, Bool draw ) const
 			for( Int i = 0; i < total; ++i )
 			{
 				if( dots )
-					fillDot( left + i * pitch, y, w, h, EDGE, i < full ? ROUND : EMPTY_EDGE );
+					TheDisplay->drawFillRect( left + i * pitch, y, w, h, i < full ? ROUND : EMPTY_EDGE );
 				else
 					fillSlug( left + i * pitch, y, w, h, e, i < full ? EDGE : EMPTY_EDGE, i < full ? ROUND : EMPTY_FILL );
 			}
@@ -4262,7 +4254,7 @@ Int Drawable::loadPips( const IRegion2D *healthBarRegion, Bool draw ) const
 			{
 				const Color fill = i < soldiers ? SOLDIER : i < full ? VEHICLE : EMPTY_FILL;
 				if( dots )
-					fillDot( left + i * ( c + gap ), y, c, c, EDGE, i < full ? fill : EMPTY_EDGE );
+					TheDisplay->drawFillRect( left + i * ( c + gap ), y, c, c, i < full ? fill : EMPTY_EDGE );
 				else
 					fillChip( left + i * ( c + gap ), y, c, e, i < full ? EDGE : EMPTY_EDGE, fill );
 			}

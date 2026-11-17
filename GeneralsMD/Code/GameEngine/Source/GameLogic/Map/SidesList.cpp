@@ -519,7 +519,7 @@ SidesInfo *SidesList::findSkirmishSideNamed(const AsciiString& side, TeamsInfoRe
 		return false;
 
 	// The generator's maps sit in the player's own Maps folder, but the game made them.  Told by the
-	// leaf name alone ("rmg_v17_..."), the way the lobby and the replay carry it: isGeneratedMapPath
+	// leaf name alone ("rmg_v<version>_..."), the way the lobby and the replay carry it: isGeneratedMapPath
 	// also checks a template's CRC against this machine's copy of it, a local file.
 	const char *back = path.reverseFind('\\');
 	const char *forward = path.reverseFind('/');

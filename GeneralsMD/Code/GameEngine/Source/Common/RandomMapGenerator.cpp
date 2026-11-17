@@ -532,10 +532,12 @@ static Real ringNoise( const UnsignedByte perm[512], Real unitX, Real unitY, Rea
 	return t;
 }
 
-/// Repeatable per-cell randomness, for scattering that must not depend on order.
-static UnsignedInt hashCell( Int seed, Int x, Int y )
+/** Repeatable per-cell randomness, for scattering that must not depend on order. The seed is
+	unsigned so a caller salts it as (UnsignedInt)seed + salt: a lobby seed runs to 0x7fffffff, and
+	the same sum in Int is signed overflow, which the compiler may assume never happens. */
+static UnsignedInt hashCell( UnsignedInt seed, Int x, Int y )
 {
-	UnsignedInt h = (UnsignedInt)seed * 374761393U;
+	UnsignedInt h = seed * 374761393U;
 	h += (UnsignedInt)x * 668265263U;
 	h ^= h >> 13;
 	h += (UnsignedInt)y * 2246822519U;
@@ -884,7 +886,7 @@ struct RMGTownPlan
 };
 
 /// A hash read as a fraction of one, which is how every choice a town makes is made.
-static Real hashUnit( Int seed, Int a, Int b )
+static Real hashUnit( UnsignedInt seed, Int a, Int b )
 {
 	return (Real)(hashCell( seed, a, b ) % 4096U) / 4096.0f;
 }
@@ -906,7 +908,7 @@ static Real snapAngle45( Real angle )
 }
 
 /// Where one direction's streets run, spaced unevenly and centred on the town. Returns the span.
-static Real rollStreetLines( Int seed, Int town, Int streets, Real blockMax, Real *out )
+static Real rollStreetLines( UnsignedInt seed, Int town, Int streets, Real blockMax, Real *out )
 {
 	Real at = 0.0f;
 	Int line;
@@ -926,7 +928,7 @@ static Real rollStreetLines( Int seed, Int town, Int streets, Real blockMax, Rea
 
 /** smallest: the fewest streets each way and the closest blocks, the plan a map tries once the
 	town it rolled has found no room anywhere. */
-static void rollTownPlan( Int seed, Int town, Bool smallest, RMGTownPlan *plan )
+static void rollTownPlan( UnsignedInt seed, Int town, Bool smallest, RMGTownPlan *plan )
 {
 	plan->m_rotation = (Real)(hashCell( seed + 613, town, 0 ) % 8U) * (PI * 0.25f);
 
@@ -1027,6 +1029,14 @@ public:
 	UnsignedByte terrainAtCell( Int x, Int y ) const { return m_terrain[cellIndex( x, y )]; }
 	Bool passableAtCell( Int x, Int y ) const { return m_passable[cellIndex( x, y )] != 0; }
 	Bool underwaterAtCell( Int x, Int y ) const;
+	/** Inside the boundary writeLayout gives the pathfinder, which clamps every unit to it: a map cell
+		of the border band is nobody's ground, however flat. */
+	Bool insidePlayable( Int x, Int y ) const
+	{
+		return x >= RMG_BORDER_CELLS && y >= RMG_BORDER_CELLS && x < RMG_BORDER_CELLS + m_settings.m_playableCells
+			&& y < RMG_BORDER_CELLS + m_settings.m_playableCells;
+	}
+	Bool m_playable;					///< every start distinct, dry and reachable from the others, every money reachable
 
 	RandomMapSettings m_settings;
 	const RMGStyle *m_style;			///< the shipped map this one is in the style of, or NULL
@@ -1084,6 +1094,7 @@ private:
 	void buildLakeMask( void );
 	void chooseStarts( void );
 	void searchStarts( const std::vector<RMGStartCandidate>& candidates );
+	Bool addDryStart( void );
 	void sortStartsRoundCentre( void );
 	void ringStarts( const std::vector<RMGStartCandidate>& candidates, Real angle, Real ring, Real edgeRing );
 	void startWalks( const std::vector<Int>& cost, std::vector<Int>& walks ) const;
@@ -1118,7 +1129,11 @@ private:
 	void startPerimeterToward( Int startIndex, Int targetX, Int targetY, Int *outX, Int *outY ) const;
 	void buildTerrainClasses( const UnsignedByte perm[512] );
 	void buildBlends( void );
-	void buildObjects( const UnsignedByte perm[512] );
+	void placeMoney( void );
+	void placeDressing( const UnsignedByte perm[512] );
+	Bool everyoneReaches( void );
+	Bool lockedWithin( Real cellX, Real cellY, Int radius ) const;
+	void clearLockedGround( void );
 	void addApproachPaths( Int *waypointID );
 	void addApproachWaypoint( const char *lane, Int targetStart, Int fromStart, Int step, Real cellX, Real cellY,
 														Int *waypointID, Int *previous );
@@ -1186,7 +1201,8 @@ private:
 
 	std::map<Int, Short> m_blendLookup;	///< tile and shape to the table entry that holds them
 	std::vector<RMGSite> m_sites;		///< everything placed so far, with its elbow room
-	std::vector<char> m_routeLock;		///< cells on a walk to somebody's money, which pads leave alone
+	std::vector<char> m_routeLock;		///< cells on a walk to somebody's money or a repair's roadway, which pads and buildings leave alone
+	Bool m_lockCarves;					///< cutTowardLevel locks the roadway it cuts: the repairs after the money
 	std::vector< std::vector<Int> > m_floodQueues;	///< a breadth-first queue a start, kept between floods
 	std::vector<char> m_baseLevelled;	///< cells a base blend has touched
 	std::vector<UnsignedByte> m_baseUnder;	///< and the ground it blended there
@@ -2769,18 +2785,14 @@ void RMGLayout::chooseStarts( void )
 		}
 	}
 
-	if( candidates.empty() )
+	/* Nowhere flat enough for every seat: the search takes what candidates there are and seats the
+		rest on the driest ground left (addDryStart). A plain ring, as it was, put a seat in a lake or on
+		the river wherever the ring crossed one. */
+	if( (Int)candidates.size() < m_settings.m_numPlayers )
 	{
-		// Nowhere is flat: fall back to a ring, which is always somewhere.
-		Real centre = (Real)playable * 0.5f;
-		for( Int i = 0; i < m_settings.m_numPlayers; i++ )
-		{
-			Real angle = 2.0f * PI * (Real)i / (Real)m_settings.m_numPlayers;
-			RMGPoint start;
-			start.m_cellX = centre + centre * 0.62f * Cos( angle );
-			start.m_cellY = centre + centre * 0.62f * Sin( angle );
-			m_starts.push_back( start );
-		}
+		searchStarts( candidates );
+		if( m_settings.m_numPlayers > RandomMapGenerator::DEFAULT_PLAYERS )
+			sortStartsRoundCentre();
 		return;
 	}
 
@@ -2811,7 +2823,9 @@ void RMGLayout::chooseStarts( void )
 		/* Two or four seats on a river map go out to the edge of the start box instead, as far as the
 			search would have put them, and leave the middle to the river and the towns. */
 		ringStarts( candidates, m_riverAngle + PI / (Real)players, ring, players <= 4 ? ringLimit : 0.0f );
-		return;
+		if( (Int)m_starts.size() == players )
+			return;
+		// a ring that ran out of sites seats nobody; the layouts below seat everybody
 	}
 
 	// A duel is fair by symmetry: each base is the other's nearest enemy, at one walk.
@@ -2835,7 +2849,7 @@ void RMGLayout::chooseStarts( void )
 	{
 		for( Int x = 0; x < m_width - 1; x++ )
 		{
-			if( underwaterAtCell( x, y ) )
+			if( underwaterAtCell( x, y ) || !insidePlayable( x, y ) )
 				continue;
 			cost[cellIndex( x, y )] = cellSpanWorld( x, y ) > RMG_CLIFF_WORLD_SPAN ? RMG_START_CLIFF_COST : 1;
 		}
@@ -3234,6 +3248,7 @@ void RMGLayout::ringStarts( const std::vector<RMGStartCandidate>& candidates, Re
 void RMGLayout::searchStarts( const std::vector<RMGStartCandidate>& candidates )
 {
 	m_starts.clear();
+	std::vector<char> used( candidates.size(), 0 );
 
 	// The flattest candidate opens the list.
 	UnsignedInt flattest = 0;
@@ -3244,9 +3259,13 @@ void RMGLayout::searchStarts( const std::vector<RMGStartCandidate>& candidates )
 	}
 
 	RMGPoint start;
-	start.m_cellX = candidates[flattest].m_cellX;
-	start.m_cellY = candidates[flattest].m_cellY;
-	m_starts.push_back( start );
+	if( !candidates.empty() )
+	{
+		start.m_cellX = candidates[flattest].m_cellX;
+		start.m_cellY = candidates[flattest].m_cellY;
+		m_starts.push_back( start );
+		used[flattest] = 1;
+	}
 
 	/* Two base discs may not touch, whatever the map looks like. A candidate inside this is not
 		scored against the others at all; only a map with nowhere else to go falls back to it. */
@@ -3257,9 +3276,14 @@ void RMGLayout::searchStarts( const std::vector<RMGStartCandidate>& candidates )
 		Real bestScore = -1.0e9f;
 		UnsignedInt bestCandidate = 0;
 		Bool foundClearOne = FALSE;
+		Bool foundAny = FALSE;
 
 		for( UnsignedInt i = 0; i < candidates.size(); i++ )
 		{
+			// a site already taken would stack two seats on one pad
+			if( used[i] )
+				continue;
+			foundAny = TRUE;
 			Real distance = distanceToNearestStart( candidates[i].m_cellX, candidates[i].m_cellY );
 
 			Bool clearOfTheFloor = distance >= hardFloor;
@@ -3279,10 +3303,87 @@ void RMGLayout::searchStarts( const std::vector<RMGStartCandidate>& candidates )
 			}
 		}
 
+		if( !foundAny )
+		{
+			if( !addDryStart() )
+			{
+				// no dry cell left anywhere: a point of a ring, so every seat exists, and the final check
+				// flags the map
+				Real centre = (Real)m_settings.m_playableCells * 0.5f;
+				Real angle = 2.0f * PI * (Real)m_starts.size() / (Real)m_settings.m_numPlayers;
+				start.m_cellX = (Real)(Int)( centre + centre * 0.62f * Cos( angle ) );
+				start.m_cellY = (Real)(Int)( centre + centre * 0.62f * Sin( angle ) );
+				m_starts.push_back( start );
+			}
+			continue;
+		}
+
+		used[bestCandidate] = 1;
 		start.m_cellX = candidates[bestCandidate].m_cellX;
 		start.m_cellY = candidates[bestCandidate].m_cellY;
 		m_starts.push_back( start );
 	}
+}
+
+/** One more seat when the candidates have run out: the cell of the playable area, the disc's own
+	margin in from the edge, that is furthest from every seat so far, preferring one whose base would
+	be dry by the blend's width, then by the flat's, then dry at all. Rough ground is fine, since
+	flattenBases levels it; water is not, since a base levels to its middle's height. Off the massif's
+	top, as a candidate is. The first seat goes to the dry cell furthest from the middle. FALSE when
+	no dry cell is left that is not a seat already. */
+Bool RMGLayout::addDryStart( void )
+{
+	const Int playable = m_settings.m_playableCells;
+	const Int margin = (Int)RMG_FLAT_RADIUS + 1;
+	const Real hardFloor = 2.0f * RMG_FLAT_RADIUS + 6.0f;
+	const Real centre = (Real)playable * 0.5f;
+
+	Int bestTier = -1;
+	Bool bestClear = FALSE;
+	Real bestDistance = 0.0f;
+	RMGPoint best;
+	best.m_cellX = best.m_cellY = 0.0f;
+	for( Int y = margin; y < playable - margin; y += m_startSearchStride )
+	{
+		for( Int x = margin; x < playable - margin; x += m_startSearchStride )
+		{
+			if( m_type->m_massif > 0.0f && massifClearance( (Real)x, (Real)y ) < RMG_BLEND_RADIUS )
+				continue;
+			Real shore;
+			insideLake( (Real)x, (Real)y, &shore );
+			if( shore <= 0.0f || underwaterAtCell( x + RMG_BORDER_CELLS, y + RMG_BORDER_CELLS ) )
+				continue;
+			const Int tier = shore >= RMG_BLEND_RADIUS ? 2 : ( shore >= RMG_FLAT_RADIUS ? 1 : 0 );
+
+			Real distance;
+			if( m_starts.empty() )
+			{
+				const Real dx = (Real)x - centre, dy = (Real)y - centre;
+				distance = sqrtf( dx * dx + dy * dy );
+			}
+			else
+				distance = distanceToNearestStart( (Real)x, (Real)y );
+			if( distance < 1.0f )
+				continue;
+			const Bool clear = m_starts.empty() || distance >= hardFloor;
+
+			// clear of the other discs first, then the drier tier, then the further; ties keep walk order
+			Bool better = bestTier < 0 || ( clear && !bestClear );
+			if( !better && clear == bestClear )
+				better = tier > bestTier || ( tier == bestTier && distance > bestDistance );
+			if( !better )
+				continue;
+			bestTier = tier;
+			bestClear = clear;
+			bestDistance = distance;
+			best.m_cellX = (Real)x;
+			best.m_cellY = (Real)y;
+		}
+	}
+	if( bestTier < 0 )
+		return FALSE;
+	m_starts.push_back( best );
+	return TRUE;
 }
 
 /** A point's bearing from (centre, centre) as a diamond angle, 0 to 4 round the turn: plain
@@ -3568,13 +3669,7 @@ void RMGLayout::buildPassability( void )
 	for( Int y = 0; y < m_height - 1; y++ )
 	{
 		for( Int x = 0; x < m_width - 1; x++ )
-		{
-			Bool passable = cellSpanWorld( x, y ) <= RMG_CLIFF_WORLD_SPAN;
-			if( passable && underwaterAtCell( x, y ) )
-				passable = FALSE;
-
-			m_passable[cellIndex( x, y )] = passable ? 1 : 0;
-		}
+			m_passable[cellIndex( x, y )] = playableAtCell( x, y ) ? 1 : 0;
 	}
 }
 
@@ -3653,7 +3748,8 @@ Bool RMGLayout::carvePassBetweenCells( Int fromX, Int fromY, Int toX, Int toY, B
 		{
 			Int nx = x + offsetX[i];
 			Int ny = y + offsetY[i];
-			if( nx < 1 || ny < 1 || nx >= m_width - 2 || ny >= m_height - 2 )
+			// a route through the border band joins nothing a unit can drive
+			if( !insidePlayable( nx, ny ) )
 				continue;
 
 			Int climb = (Int)m_heights[cellIndex( nx, ny )] - (Int)m_heights[index];
@@ -3786,6 +3882,13 @@ void RMGLayout::cutTowardLevel( Int x, Int y, Real level, Bool skipLake,
 			Int ny = y + dy;
 			if( nx < 0 || ny < 0 || nx >= m_width || ny >= m_height )
 				continue;
+			// a repair's roadway is kept free of whatever is placed after it (build)
+			if( m_lockCarves && dx * dx + dy * dy <= RMG_PASS_HALF_WIDTH * RMG_PASS_HALF_WIDTH )
+			{
+				if( m_routeLock.size() != m_heights.size() )
+					m_routeLock.assign( m_heights.size(), 0 );
+				m_routeLock[cellIndex( nx, ny )] = 1;
+			}
 			if( skipLake && m_inLake[cellIndex( nx, ny )] )
 				continue;
 
@@ -3900,13 +4003,16 @@ void RMGLayout::connectStarts( void )
 			return;
 
 		if( !carvePass( 0, unreachable ) )
-			return;
+			break;
 
 		// The route runs into the base at either end of it, so the discs are laid flat again
 		// rather than left with a ramp cut across the ground somebody has to build on.
 		flattenBases();
 	}
 
+	// ensurePlayability tries again on the finished ground, and build flags the map if that fails too
+	DEBUG_LOG(( "random map: seed %d - connectStarts used its %d passes or found no route, a start may be cut off\n",
+		m_settings.m_seed, RMG_PASS_ATTEMPTS ));
 	buildPassability();
 }
 
@@ -4158,15 +4264,17 @@ Bool RMGLayout::nearRamp( Real cellX, Real cellY, Real radius ) const
 // Playability after pads: a second way out of each base, and a walk to the money
 //-----------------------------------------------------------------------------
 
+/** The one test of walkable ground, which buildPassability stores and every flood reads: inside the
+	playable boundary, no cliff, not under the water. A lake cell a route has raised above the surface
+	is ground, as the pathfinder has it; counting every basin cell as water here while the carve counted
+	it as ground re-cut the same causeway every attempt and never saw it open. */
 Bool RMGLayout::playableAtCell( Int x, Int y ) const
 {
-	if( x < 0 || y < 0 || x >= m_width - 1 || y >= m_height - 1 )
+	if( !insidePlayable( x, y ) )
 		return FALSE;
 	if( cellSpanWorld( x, y ) > RMG_CLIFF_WORLD_SPAN )
 		return FALSE;
-	if( m_inLake[cellIndex( x, y )] )
-		return FALSE;
-	return TRUE;
+	return !underwaterAtCell( x, y );
 }
 
 Int RMGLayout::ringCrossings( Int startIndex ) const
@@ -4460,9 +4568,22 @@ void RMGLayout::ensurePlayability( void )
 {
 	buildPassability();
 
-	for( Int attempt = 0; attempt < RMG_PASS_ATTEMPTS; attempt++ )
+	for( Int attempt = 0; ; attempt++ )
 	{
 		floodPlayableFrom( 0 );
+		// the attempt count is checked after the flood, so the last carve is judged before giving up
+		if( attempt == RMG_PASS_ATTEMPTS )
+		{
+			for( UnsignedInt i = 1; i < m_starts.size(); i++ )
+			{
+				Int x = (Int)(m_starts[i].m_cellX + 0.5f) + RMG_BORDER_CELLS;
+				Int y = (Int)(m_starts[i].m_cellY + 0.5f) + RMG_BORDER_CELLS;
+				if( !m_visited[y * m_width + x] )
+					DEBUG_LOG(( "random map: seed %d - start %d still cut off from start 1 after %d passes\n",
+						m_settings.m_seed, i + 1, RMG_PASS_ATTEMPTS ));
+			}
+			break;
+		}
 
 		Int unreachable = -1;
 		for( UnsignedInt i = 1; i < m_starts.size(); i++ )
@@ -4491,7 +4612,10 @@ void RMGLayout::ensurePlayability( void )
 		Real protectX = m_starts[0].m_cellX + (Real)RMG_BORDER_CELLS;
 		Real protectY = m_starts[0].m_cellY + (Real)RMG_BORDER_CELLS;
 		if( !carvePassBetweenCells( fromX, fromY, toX, toY, FALSE, RMG_FLAT_RADIUS, protectX, protectY ) )
+		{
+			DEBUG_LOG(( "random map: seed %d - no route to cut from start 1 to start %d\n", m_settings.m_seed, unreachable + 1 ));
 			break;
+		}
 
 		buildPassability();
 	}
@@ -4657,9 +4781,65 @@ void RMGLayout::holdMoneyWalks( void )
 			if( bestOff < 0 )
 				continue;
 
+			/* The dock moves with everything that was placed by it: its site, so later pads and the
+				scenery keep their distance from where it stands now, the walk it is held to, and its pad,
+				widened round the new spot so no corner hangs over the old pad's blend. Nothing that
+				blocks is placed before this, so only the money sites have to keep clear of it. */
 			RMGObject& dock = m_objects[money.m_object];
+			Int site = -1;
+			for( UnsignedInt s = 0; s < m_sites.size() && site < 0; s++ )
+			{
+				if( m_sites[s].m_cellX * MAP_XY_FACTOR == dock.m_worldX && m_sites[s].m_cellY * MAP_XY_FACTOR == dock.m_worldY )
+					site = (Int)s;
+			}
+			const Real newX = dock.m_worldX / MAP_XY_FACTOR + (Real)bestX;
+			const Real newY = dock.m_worldY / MAP_XY_FACTOR + (Real)bestY;
+			RMGSite own;
+			own.m_cellX = newX;
+			own.m_cellY = newY;
+			own.m_radius = RMG_SITE_CLEARANCE;
+			if( site >= 0 )
+			{
+				own = m_sites[site];
+				m_sites.erase( m_sites.begin() + site );
+				own.m_cellX = newX;
+				own.m_cellY = newY;
+			}
+			/* Clear of the other money only. The sites before it are the starts' discs and the massif,
+				and a dock a cell over the midline sits against its placer's disc more often than not: held
+				to those too, the slide was refused just where it was wanted. */
+			const UnsignedInt firstMoneySite = m_starts.size() + ( m_type->m_massif > 0.0f ? 1 : 0 );
+			Bool clear = TRUE;
+			for( UnsignedInt s = firstMoneySite; s < m_sites.size() && clear; s++ )
+			{
+				Real sx = newX - m_sites[s].m_cellX;
+				Real sy = newY - m_sites[s].m_cellY;
+				clear = sqrtf( sx * sx + sy * sy ) >= own.m_radius + m_sites[s].m_radius;
+			}
+			if( !clear )
+			{
+				if( site >= 0 )
+				{
+					own.m_cellX = newX - (Real)bestX;
+					own.m_cellY = newY - (Real)bestY;
+					m_sites.insert( m_sites.begin() + site, own );
+				}
+				continue;
+			}
+			flattenPad( newX, newY, RMG_PAD_RADIUS, RMG_PAD_BLEND );
+			if( site >= 0 )
+				m_sites.insert( m_sites.begin() + site, own );
+			else
+				m_sites.push_back( own );
+
 			dock.m_worldX += (Real)bestX * MAP_XY_FACTOR;
 			dock.m_worldY += (Real)bestY * MAP_XY_FACTOR;
+			RMGMoneyWalk& moved = m_moneyWalks[m];
+			moved.m_cellX += bestX;
+			moved.m_cellY += bestY;
+			moved.m_walk = mine[cellIndex( moved.m_cellX, moved.m_cellY )];
+			buildPassability();
+			flooded.assign( players, 0 );
 		}
 	}
 }
@@ -5283,6 +5463,9 @@ void RMGLayout::gradeTown( Real centreX, Real centreY, const RMGTownPlan& plan,
 			if( x < left || y < top || x > right || y > bottom )
 				continue;
 			if( underwaterAtCell( x, y ) )
+				continue;
+			// a locked walk keeps its ground, as it does under a pad
+			if( !m_routeLock.empty() && m_routeLock[cellIndex( x, y )] )
 				continue;
 
 			Real playX = (Real)(x - RMG_BORDER_CELLS);
@@ -6329,7 +6512,7 @@ void RMGLayout::placeTowns( void )
 			continue;
 		townsPlaced++;
 
-		UnsignedInt hash = hashCell( m_settings.m_seed + 613, (Int)site.m_cellX, (Int)site.m_cellY );
+		UnsignedInt hash = hashCell( (UnsignedInt)m_settings.m_seed + 613U, (Int)site.m_cellX, (Int)site.m_cellY );
 		Int nameOffset = (Int)(hash % (UnsignedInt)numStreetNames);
 
 		Real acrossEnd = plan.m_acrossAt[plan.m_streetsAcross - 1] + plan.m_setBack;
@@ -6396,7 +6579,7 @@ void RMGLayout::placeTowns( void )
 
 					for( Int side = 0; side < 2; side++ )
 					{
-						Real jitter = (hashUnit( m_settings.m_seed + 6141, town * 64 + line * 4 + side,
+						Real jitter = (hashUnit( (UnsignedInt)m_settings.m_seed + 6141U, town * 64 + line * 4 + side,
 																		 plot ) - 0.5f) * 2.0f * RMG_TOWN_JITTER;
 						Real back = (side == 0) ? -plan.m_setBack - jitter : plan.m_setBack + jitter;
 						Real facing = (side == 0) ? 0.0f : PI;
@@ -6420,12 +6603,15 @@ void RMGLayout::placeTowns( void )
 						Real outY = (buildingY - site.m_cellY) / plan.m_thinRadius;
 						UnsignedInt gap = RMG_TOWN_GAP_IN_100
 							+ (UnsignedInt)(RMG_TOWN_EDGE_GAP_IN_100 * (outX * outX + outY * outY));
-						UnsignedInt plotHash = hashCell( m_settings.m_seed + 6139,
+						UnsignedInt plotHash = hashCell( (UnsignedInt)m_settings.m_seed + 6139U,
 																						 town * 64 + line * 4 + side, plot );
 						if( plotHash % 100U < gap )
 							continue;
 
 						if( !dryAt( buildingX, buildingY, RMG_TOWN_DRY_MARGIN ) )
+							continue;
+						// nor across a walk to somebody's money or a repaired way out
+						if( lockedWithin( buildingX, buildingY, (Int)RMG_TOWN_LOT_PAD ) )
 							continue;
 
 						// Each building on its own small level, so a street down a slope steps.
@@ -6471,8 +6657,10 @@ void RMGLayout::placeBunkers( void )
 
 		if( distanceToNearestStart( site.m_cellX, site.m_cellY ) < RMG_BLEND_RADIUS + 8.0f )
 			continue;
+		if( lockedWithin( site.m_cellX, site.m_cellY, (Int)RMG_TOWN_LOT_PAD ) )
+			continue;
 
-		UnsignedInt hash = hashCell( m_settings.m_seed + 5309, (Int)site.m_cellX, (Int)site.m_cellY );
+		UnsignedInt hash = hashCell( (UnsignedInt)m_settings.m_seed + 5309U, (Int)site.m_cellX, (Int)site.m_cellY );
 		Real angle = snapAngle45( (Real)(hash % 8U) * (PI * 0.25f) );
 
 		AsciiString uniqueID;
@@ -6669,12 +6857,12 @@ void RMGLayout::plantGroves( const char *const *theTreeNames, Int *propID, Int *
 			continue;
 		groves.push_back( grove );
 
-		UnsignedInt woodHash = hashCell( m_settings.m_seed + 40011, (Int)start, 0 );
+		UnsignedInt woodHash = hashCell( (UnsignedInt)m_settings.m_seed + 40011U, (Int)start, 0 );
 		for( Int tree = 0; tree < RMG_GROVE_TREES && *treeBudget > 0; tree++ )
 		{
 			// Square root of the spread, so the stand is as thick at its middle as at its rim.
-			Real spread = sqrtf( hashUnit( m_settings.m_seed + 40013, (Int)start, tree ) );
-			Real angle = hashUnit( m_settings.m_seed + 40017, (Int)start, tree ) * 2.0f * PI;
+			Real spread = sqrtf( hashUnit( (UnsignedInt)m_settings.m_seed + 40013U, (Int)start, tree ) );
+			Real angle = hashUnit( (UnsignedInt)m_settings.m_seed + 40017U, (Int)start, tree ) * 2.0f * PI;
 			Real x = grove.m_cellX + Cos( angle ) * spread * RMG_GROVE_RADIUS;
 			Real y = grove.m_cellY + Sin( angle ) * spread * RMG_GROVE_RADIUS;
 			if( !sceneryMayStand( x, y ) )
@@ -6764,7 +6952,7 @@ void RMGLayout::placeScenery( const UnsignedByte perm[512] )
 			if( woodland && distanceToNearestStart( (Real)x, (Real)y ) < baseClearing )
 				continue;
 
-			UnsignedInt hash = hashCell( m_settings.m_seed + 7717, x, y );
+			UnsignedInt hash = hashCell( (UnsignedInt)m_settings.m_seed + 7717U, x, y );
 			Real jitterX = (Real)(hash % 100U) / 100.0f - 0.5f;
 			Real jitterY = (Real)((hash >> 7) % 100U) / 100.0f - 0.5f;
 			Real angle = snapAngle45( (Real)((hash >> 14) % 8U) * (PI * 0.25f) );
@@ -6897,9 +7085,9 @@ void RMGLayout::placeScenery( const UnsignedByte perm[512] )
 			spot.m_y = (Real)y + jitterY;
 			// the depth the cap trims by, ragged by a slice of the hash so the kept edge of a wood is a
 			// band rather than one contour line
-			spot.m_depth = (Int)( density * 10000.0f ) + (Int)( hashCell( m_settings.m_seed + 7723, x, y ) % RMG_TREE_EDGE_RAGGED );
+			spot.m_depth = (Int)( density * 10000.0f ) + (Int)( hashCell( (UnsignedInt)m_settings.m_seed + 7723U, x, y ) % RMG_TREE_EDGE_RAGGED );
 			spot.m_angle = angle;
-			spot.m_wood = hashCell( m_settings.m_seed + 40009, x / 16, y / 16 );		// the wood, not the tree, picks the species
+			spot.m_wood = hashCell( (UnsignedInt)m_settings.m_seed + 40009U, x / 16, y / 16 );		// the wood, not the tree, picks the species
 			spots.push_back( spot );
 		}
 	}
@@ -7162,13 +7350,16 @@ Bool RMGLayout::stepDownFlood( const std::vector<Int>& dist, Int *x, Int *y, Rea
 	return TRUE;
 }
 
-void RMGLayout::buildObjects( const UnsignedByte perm[512] )
+/** The starts' waypoints and everybody's money: what the repairs in build have to keep reachable. */
+void RMGLayout::placeMoney( void )
 {
 	m_objects.clear();
 	m_sites.clear();
 	m_routeLock.clear();
 	m_moneyWalks.clear();
 	m_laneDist.clear();
+	m_lanes.clear();
+	m_waypointLinks.clear();
 
 	Int waypointID = 1;
 	for( UnsignedInt i = 0; i < m_starts.size(); i++ )
@@ -7185,12 +7376,11 @@ void RMGLayout::buildObjects( const UnsignedByte perm[512] )
 
 		reserveSite( m_starts[i].m_cellX, m_starts[i].m_cellY, RMG_FLAT_RADIUS );
 	}
-	addApproachPaths( &waypointID );
 
 	/* The money and the towns level and grade the ground they stand on, and on the massif's edge
 		that turns the cliff into a slope. They keep off it, and off the top as well, which is ground
-		to fight for rather than to farm; the bunkers and the trees placed after may still go there. */
-	const UnsignedInt massifSite = m_sites.size();
+		to fight for rather than to farm; the bunkers and the trees placed after may still go there.
+		It is the site after the starts' own, which placeDressing drops once the towns are down. */
 	if( m_type->m_massif > 0.0f )
 	{
 		Real middle = (Real)m_settings.m_playableCells * 0.5f;
@@ -7198,6 +7388,17 @@ void RMGLayout::buildObjects( const UnsignedByte perm[512] )
 								 + RMG_MASSIF_RIM );
 	}
 	placeSupplyAndDerricks();
+}
+
+/** Everything placed on the repaired ground: the AI's paths walked over it as it will be played, then
+	towns, bunkers, waves and scenery, none of which stands on a locked cell. */
+void RMGLayout::placeDressing( const UnsignedByte perm[512] )
+{
+	Int waypointID = (Int)m_starts.size() + 1;
+	buildPassability();
+	addApproachPaths( &waypointID );
+
+	const UnsignedInt massifSite = m_starts.size();
 	// the shipped map a style comes from has neither a town nor a bunker on it, and a skeleton gets
 	// its towns and its dressing from the template
 	if( !m_style && !m_skeleton )
@@ -7221,6 +7422,102 @@ void RMGLayout::buildObjects( const UnsignedByte perm[512] )
 	placeScenery( perm );
 }
 
+/// What a player has to reach: their money and the neutral money between them.
+static Bool rmgIsMoney( const AsciiString& templateName )
+{
+	return templateName.compare( "SupplyDock" ) == 0 || templateName.compare( "TechOilDerrick" ) == 0
+		|| templateName.compare( "SupplyPileSmall" ) == 0;
+}
+
+/** The finished ground walked once more: every start on dry ground of its own and reached from the
+	first, every piece of money reached from it (its cell or one beside it, as ensurePlayability asks). */
+Bool RMGLayout::everyoneReaches( void )
+{
+	buildPassability();
+	floodPlayableFrom( 0 );
+
+	for( UnsignedInt i = 0; i < m_starts.size(); i++ )
+	{
+		Int x = (Int)(m_starts[i].m_cellX + 0.5f) + RMG_BORDER_CELLS;
+		Int y = (Int)(m_starts[i].m_cellY + 0.5f) + RMG_BORDER_CELLS;
+		if( !m_visited[cellIndex( x, y )] || underwaterAtCell( x, y ) )
+			return FALSE;
+		for( UnsignedInt j = 0; j < i; j++ )
+		{
+			if( m_starts[j].m_cellX == m_starts[i].m_cellX && m_starts[j].m_cellY == m_starts[i].m_cellY )
+				return FALSE;
+		}
+	}
+
+	static const Int neighbourX[5] = { 0, 1, -1, 0, 0 };
+	static const Int neighbourY[5] = { 0, 0, 0, 1, -1 };
+	for( UnsignedInt o = 0; o < m_objects.size(); o++ )
+	{
+		if( !rmgIsMoney( m_objects[o].m_templateName ) )
+			continue;
+		Int cellX = (Int)(m_objects[o].m_worldX / MAP_XY_FACTOR + 0.5f) + RMG_BORDER_CELLS;
+		Int cellY = (Int)(m_objects[o].m_worldY / MAP_XY_FACTOR + 0.5f) + RMG_BORDER_CELLS;
+		Bool reached = FALSE;
+		for( Int n = 0; n < 5 && !reached; n++ )
+		{
+			Int nx = cellX + neighbourX[n];
+			Int ny = cellY + neighbourY[n];
+			reached = nx >= 0 && ny >= 0 && nx < m_width && ny < m_height && m_visited[cellIndex( nx, ny )];
+		}
+		if( !reached )
+			return FALSE;
+	}
+	return TRUE;
+}
+
+/// Whether any locked cell lies within radius cells of this playable-area point.
+Bool RMGLayout::lockedWithin( Real cellX, Real cellY, Int radius ) const
+{
+	if( m_routeLock.empty() )
+		return FALSE;
+	Int centreX = (Int)(cellX + 0.5f) + RMG_BORDER_CELLS;
+	Int centreY = (Int)(cellY + 0.5f) + RMG_BORDER_CELLS;
+	for( Int dy = -radius; dy <= radius; dy++ )
+	{
+		for( Int dx = -radius; dx <= radius; dx++ )
+		{
+			Int x = centreX + dx;
+			Int y = centreY + dy;
+			if( dx * dx + dy * dy > radius * radius || x < 0 || y < 0 || x >= m_width || y >= m_height )
+				continue;
+			if( m_routeLock[cellIndex( x, y )] )
+				return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+/** A repair run after the dressing is down cuts under whatever stands there: every building, bunker,
+	tree or rock on its roadway goes. Waypoints, roads, money and waves stay; the money was all placed
+	before any of these, so its indices in m_objects (RMGMoneyWalk::m_object) do not move. */
+void RMGLayout::clearLockedGround( void )
+{
+	UnsignedInt kept = 0;
+	for( UnsignedInt o = 0; o < m_objects.size(); o++ )
+	{
+		const RMGObject& object = m_objects[o];
+		Bool blocks = object.m_waypointID == 0 && object.m_flags == 0 && !rmgIsMoney( object.m_templateName )
+			&& object.m_templateName.compare( "AmbientWavesLake" ) != 0;
+		if( blocks )
+		{
+			Int radius = object.m_uniqueID.startsWith( "Civilian " ) || object.m_uniqueID.startsWith( "Bunker " )
+				? (Int)RMG_TOWN_LOT_PAD : 1;
+			blocks = lockedWithin( object.m_worldX / MAP_XY_FACTOR, object.m_worldY / MAP_XY_FACTOR, radius );
+		}
+		if( blocks )
+			continue;
+		if( kept != o )
+			m_objects[kept] = object;
+		kept++;
+	}
+	m_objects.resize( kept );
+}
+
 //-----------------------------------------------------------------------------
 // The whole layout
 //-----------------------------------------------------------------------------
@@ -7238,6 +7535,8 @@ void RMGLayout::build( const RandomMapSettings& settings, Bool skeleton )
 
 	m_settings = settings;
 	RandomMapGenerator::clampSettings( m_settings );
+	m_lockCarves = FALSE;
+	m_playable = FALSE;
 
 	/* The seed picks what kind of map this is and what it is made of, apart from each other, so a
 		river can run through snow as well as through grass. Neither depends on the player count:
@@ -7312,12 +7611,37 @@ void RMGLayout::build( const RandomMapSettings& settings, Bool skeleton )
 		bunker and town levels a pad under itself, and a pad moves the cliffs and the shore lines
 		that the passability and the texture classes are read from. Pads can also wall a dock or
 		close the second way out of a base, so playability is repaired on the finished height
-		field rather than by picking a different seed. */
-	buildObjects( perm );
+		field rather than by picking a different seed.
+
+		The money goes down first and the repairs right after it, before anything that blocks a
+		unit: a repair cut under a town or a wood used to leave a building or a rock standing in the
+		corridor it had just opened. Each repair locks its roadway, which the towns, bunkers and
+		scenery after keep off. Their pads keep off it too, but can still close something else, so the
+		ground is walked once more at the end; a repair that has to run then clears whatever stands
+		on its roadway. */
+	placeMoney();
+	m_lockCarves = TRUE;
 	ensurePlayability();
 	flattenBases();
 	// After the last levelling: levelling again would ease a cut ramp back into the base's ring.
 	holdMoneyWalks();
+	placeDressing( perm );
+	if( !everyoneReaches() )
+	{
+		// a cut can run into a base's ring, which is levelled again as after the first repair; the
+		// check below says whether the levelling closed what the cut opened
+		ensurePlayability();
+		flattenBases();
+		// the levelling can ease a money walk's ramp or a contested dock's lead away again
+		holdMoneyWalks();
+		clearLockedGround();
+	}
+	m_lockCarves = FALSE;
+	// a seat, a start or any money still cut off: built anyway, flagged and logged
+	m_playable = everyoneReaches();
+	if( !m_playable )
+		DEBUG_LOG(( "random map: seed %d, %d players, %d cells, style %d - a start or its money is cut off, or a seat is wet\n",
+			m_settings.m_seed, m_settings.m_numPlayers, m_settings.m_playableCells, m_settings.m_style ));
 
 	buildTerrainClasses( perm );
 	buildBlends();
@@ -7730,6 +8054,29 @@ Int RandomMapGenerator::cellsFor( RandomMapSize size, Int numPlayers, const Asci
 	return cellsForTemplate( size, numPlayers, cellsX, cellsY, seats );
 }
 
+static Bool rmgTemplateFullCRC( const AsciiString& templatePath, UnsignedInt *crcOut );
+
+/** A template map from settings whose CRC is the full one (rmgTemplateFullCRC): checked against this
+	machine's template and rules, then handed to the synthesis with the CRC of the .map alone, which is
+	the one rmgGenerateFromTemplate checks the bytes it reads against. Nothing on a mismatch. */
+static void rmgGenerateFromTemplateChecked( const RandomMapSettings& clamped, std::vector<char>& mapBytes,
+	std::vector<char> *previewBytes )
+{
+	RandomMapSettings bare = clamped;
+	UnsignedInt full = 0;
+	if( !rmgTemplateFullCRC( clamped.m_template, &full ) || full != clamped.m_templateCRC
+		|| !rmgTemplateCRC( clamped.m_template, &bare.m_templateCRC ) )
+	{
+		DEBUG_LOG(( "random map: template '%s' with rules CRC %08X is not installed here\n", clamped.m_template.str(),
+			clamped.m_templateCRC ));
+		mapBytes.clear();
+		if( previewBytes )
+			previewBytes->clear();
+		return;
+	}
+	rmgGenerateFromTemplate( bare, mapBytes, previewBytes );
+}
+
 void RandomMapGenerator::clampSettings( RandomMapSettings& settings )
 {
 	if( settings.m_numPlayers < MIN_PLAYERS ) settings.m_numPlayers = MIN_PLAYERS;
@@ -7747,7 +8094,7 @@ void RandomMapGenerator::clampSettings( RandomMapSettings& settings )
 		settings.m_template.toLower();
 		AsciiString token;
 		UnsignedInt installed = 0;
-		if( !rmgTemplateToken( settings.m_template, token ) || !rmgTemplateCRC( settings.m_template, &installed ) )
+		if( !rmgTemplateToken( settings.m_template, token ) || !rmgTemplateFullCRC( settings.m_template, &installed ) )
 		{
 			settings.m_template.clear();
 			settings.m_templateCRC = 0;
@@ -7774,6 +8121,16 @@ void RandomMapGenerator::clampSettings( RandomMapSettings& settings )
 			if( settings.m_playableCells < rmgStyleSmallestCells( style ) )
 				settings.m_playableCells = rmgStyleSmallestCells( style );
 		}
+	}
+
+	/* A typed cell count or a name read back is held to the least the bowl can shrink to, 0.6 of its
+		full size (build's m_styleScale floor): under it the ring, the rim and the ramp still came out at
+		0.6, so "-randommap 1 8 64 twilight" was one plateau over the whole map, starts five cells apart. */
+	if( settings.m_style > 0 )
+	{
+		const Int least = ( rmgStyleSmallestCells( theStyles[settings.m_style - 1] ) * 3 + 4 ) / 5;
+		if( settings.m_playableCells < least )
+			settings.m_playableCells = least;
 	}
 
 	/* A template's smallest size is the least ground its seats can be spread over. The size buttons
@@ -8102,7 +8459,7 @@ void RandomMapGenerator::generate( const RandomMapSettings& settings, std::vecto
 	clampSettings( clamped );
 	if( !clamped.m_template.isEmpty() )
 	{
-		rmgGenerateFromTemplate( clamped, mapBytes, NULL );
+		rmgGenerateFromTemplateChecked( clamped, mapBytes, NULL );
 		return;
 	}
 
@@ -8149,6 +8506,13 @@ UnsignedInt RandomMapGenerator::fingerprint( const RandomMapSettings& settings )
 	return crc.get();
 }
 
+Bool RandomMapGenerator::isPlayable( const RandomMapSettings& settings )
+{
+	RMGLayout layout;
+	layout.build( settings );
+	return layout.m_playable;
+}
+
 //-----------------------------------------------------------------------------
 // Preview
 //-----------------------------------------------------------------------------
@@ -8179,7 +8543,7 @@ void RandomMapGenerator::generatePreview( const RandomMapSettings& settings,
 	{
 		std::vector<char> mapBytes;
 		tgaBytes.clear();
-		rmgGenerateFromTemplate( clamped, mapBytes, &tgaBytes );
+		rmgGenerateFromTemplateChecked( clamped, mapBytes, &tgaBytes );
 		return;
 	}
 
@@ -8358,7 +8722,7 @@ static Bool settingsFromGeneratedPath( const AsciiString& path, RandomMapSetting
 		}
 		rmgTemplateFromToken( token, templatePath );
 		UnsignedInt installed = 0;
-		if( !rmgTemplateCRC( templatePath, &installed ) || installed != templateCRC )
+		if( !rmgTemplateFullCRC( templatePath, &installed ) || installed != templateCRC )
 			return FALSE;
 	}
 	else if( *rest == '_' )
@@ -8402,11 +8766,16 @@ Bool generatedMapTemplate( const AsciiString& path, AsciiString& templatePathOut
 	return TRUE;
 }
 
-/* On the wire "rmg_v17_2147483647_8p_672c_t1a2b3c4d_bombardment beach" is
-	"~17_zik0zj_8_io~143e": the numbers in base 36 and the template as four base-36 letters of its
-	folder's name. A plain or styled map keeps its tail, "~17_zik0zj_8_io_twilight". */
+/* On the wire "rmg_v19_2147483647_8p_672c_tffffffff_bombardment beach" is
+	"~19_zik0zj_8_io~143ez3": the numbers in base 36, then four base-36 letters of the template folder's
+	name and two of its CRC. A plain or styled map keeps its tail, "~19_zik0zj_8_io_twilight". The CRC's
+	own eight hex digits would cost every seat's name in a full LAN room six letters more than a shipped
+	map's field does; with two, the field is as long as "maps/bombardment beach". The name's letters pick
+	the folder without opening a file, and only that folder's template is read for the CRC's: a machine
+	whose template or rules differ fails those two letters 1295 times in 1296, so the name does not read
+	back and the room sees a map it does not have. The map's own CRC in the options catches the rest. */
 static const char WIRE_MARK = '~';
-enum { WIRE_TEMPLATE_LETTERS = 4, WIRE_NUMBER_LETTERS = 15 };
+enum { WIRE_NAME_LETTERS = 4, WIRE_CRC_LETTERS = 2, WIRE_NUMBER_LETTERS = 15 };
 
 static AsciiString base36( UnsignedInt value, Int width )
 {
@@ -8423,12 +8792,20 @@ static AsciiString base36( UnsignedInt value, Int width )
 	return AsciiString( letters + at );
 }
 
-/// Four base-36 letters of a template folder's name: 1.7 million values for the sixty-odd shipped maps.
-static AsciiString wireTemplateLetters( const AsciiString& token )
+/// Four base-36 letters of a template folder's name: 1.7 million values for the 150 shipped maps.
+static AsciiString wireNameLetters( const AsciiString& token )
 {
 	CRC crc;
 	crc.computeCRC( token.str(), token.getLength() );
-	return base36( crc.get() % ( 36u * 36u * 36u * 36u ), WIRE_TEMPLATE_LETTERS );
+	return base36( crc.get() % ( 36u * 36u * 36u * 36u ), WIRE_NAME_LETTERS );
+}
+
+/// The name's letters and two of the template's CRC.
+static AsciiString wireTemplateLetters( const AsciiString& token, UnsignedInt templateCRC )
+{
+	AsciiString letters = wireNameLetters( token );
+	letters.concat( base36( templateCRC % ( 36u * 36u ), WIRE_CRC_LETTERS ) );
+	return letters;
 }
 
 Bool generatedMapWireName( const AsciiString& folder, AsciiString& wireOut )
@@ -8439,7 +8816,8 @@ Bool generatedMapWireName( const AsciiString& folder, AsciiString& wireOut )
 	const char *rest = folder.str() + read;
 	AsciiString tail = rest;
 	if( isTemplateTail( rest ) )
-		tail.format( "%c%s", WIRE_MARK, wireTemplateLetters( AsciiString( rest + 11 ) ).str() );
+		tail.format( "%c%s", WIRE_MARK,
+			wireTemplateLetters( AsciiString( rest + 11 ), (UnsignedInt)strtoul( rest + 2, NULL, 16 ) ).str() );
 	wireOut.format( "%c%d_%s_%d_%s%s", WIRE_MARK, version, base36( (UnsignedInt)seed, 1 ).str(), players,
 		base36( (UnsignedInt)cells, 1 ).str(), tail.str() );
 	return TRUE;
@@ -8452,8 +8830,9 @@ Bool generatedMapFromWireName( const AsciiString& wire, AsciiString& folderOut )
 	if( wire.getCharAt( 0 ) != WIRE_MARK
 		|| sscanf( wire.str() + 1, "%d_%15[0-9a-z]_%d_%15[0-9a-z]%n", &version, seedText, &players, cellText, &read ) != 4 )
 		return FALSE;
+	// the seed went out as its 32 bits unsigned and comes back signed, so "-5" reads back as "-5"
 	AsciiString head;
-	head.format( "rmg_v%d_%u_%dp_%uc", version, (UnsignedInt)strtoul( seedText, NULL, 36 ), players,
+	head.format( "rmg_v%d_%d_%dp_%uc", version, (Int)(UnsignedInt)strtoul( seedText, NULL, 36 ), players,
 		(UnsignedInt)strtoul( cellText, NULL, 36 ) );
 	const char *rest = wire.str() + 1 + read;
 	if( *rest != WIRE_MARK )
@@ -8462,9 +8841,18 @@ Bool generatedMapFromWireName( const AsciiString& wire, AsciiString& folderOut )
 		return TRUE;
 	}
 
-	// ponytail: the first shipped map whose letters match wins, so two folders sharing four letters
-	// leave the later one out of LAN games; a fifth letter when that ever happens, which a test over
-	// every shipped map folder says (every_shipped_map_has_wire_letters_of_its_own)
+	/* ponytail: the first shipped map whose name letters and CRC letters both match wins, so two
+		folders sharing four name letters leave the later one out of LAN games unless their CRCs differ in
+		those two letters; a fifth name letter when that ever happens. The name letters do not depend on
+		any file, so every_shipped_map_has_wire_letters_of_its_own checks them over every shipped folder
+		with no game data. The CRC is read only for a folder whose name letters match, so a parse opens
+		one template, not all of them. */
+	const AsciiString wanted( rest + 1 );
+	if( wanted.getLength() != WIRE_NAME_LETTERS + WIRE_CRC_LETTERS )
+		return FALSE;
+	AsciiString wantedName = wanted;
+	for( Int i = 0; i < WIRE_CRC_LETTERS; i++ )
+		wantedName.removeLastChar();
 	FilenameList maps;
 	TheFileSystem->getFileListInDirectory( AsciiString( "Maps\\" ), AsciiString( "*.map" ), maps, TRUE );
 	AsciiString token;
@@ -8473,8 +8861,8 @@ Bool generatedMapFromWireName( const AsciiString& wire, AsciiString& folderOut )
 		AsciiString path = *it;
 		path.toLower();
 		UnsignedInt crc = 0;
-		if( rmgTemplateToken( path, token ) && wireTemplateLetters( token ) == AsciiString( rest + 1 )
-			&& rmgTemplateCRC( path, &crc ) )
+		if( rmgTemplateToken( path, token ) && wireNameLetters( token ) == wantedName
+			&& rmgTemplateFullCRC( path, &crc ) && wireTemplateLetters( token, crc ) == wanted )
 		{
 			folderOut.format( "%s_t%08x_%s", head.str(), crc, token.str() );
 			return TRUE;
@@ -8527,6 +8915,29 @@ static const std::vector<char>& templateRules( const AsciiString& templatePath )
 		delete [] contents;
 	}
 	return rules;
+}
+
+/** A template's CRC as a generated map's name carries it: the .map's (rmgTemplateCRC) with the bytes of
+	the map.ini beside it folded in, since those rules override the logic of the objects the map copies
+	and two machines with other rules would play other games on the same name. A template with no
+	map.ini keeps the .map's own CRC. Never 0, which is "not installed". */
+static Bool rmgTemplateFullCRC( const AsciiString& templatePath, UnsignedInt *crcOut )
+{
+	UnsignedInt mapCRC = 0;
+	*crcOut = 0;
+	if( !rmgTemplateCRC( templatePath, &mapCRC ) )
+		return FALSE;
+	const std::vector<char>& rules = templateRules( templatePath );
+	if( rules.empty() )
+	{
+		*crcOut = mapCRC;
+		return TRUE;
+	}
+	CRC crc;
+	crc.computeCRC( &mapCRC, sizeof(mapCRC) );
+	crc.computeCRC( &rules[0], (Int)rules.size() );
+	*crcOut = crc.get() == 0 ? 1 : crc.get();
+	return TRUE;
 }
 
 /// "<generated map folder>\map.ini", for a seed that snows or a template that has one; its bytes or NULL.
@@ -8605,7 +9016,7 @@ static RMGStagedMap *stageMap( const RandomMapSettings& clamped )
 	slot->m_previewBytes.clear();
 	// a template map is a synthesis of seconds, so the map and its preview come out of one pass
 	if( !clamped.m_template.isEmpty() )
-		rmgGenerateFromTemplate( clamped, slot->m_mapBytes, &slot->m_previewBytes );
+		rmgGenerateFromTemplateChecked( clamped, slot->m_mapBytes, &slot->m_previewBytes );
 	else
 	{
 		RandomMapGenerator::generate( clamped, slot->m_mapBytes );

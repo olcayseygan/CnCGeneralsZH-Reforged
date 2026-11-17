@@ -39,6 +39,7 @@
 #include <string.h>
 #include <algorithm>
 #include <map>
+#include <new>
 #include <queue>
 #include "Common/RandomMapTemplate.h"
 #include "Common/crc.h"
@@ -450,6 +451,24 @@ void reach( const Mask& passable, Int W, Int H, Int start, Mask& seen )
 	}
 }
 
+/** Where a walk from a start begins: the start's cell, or when that cell is no ground (a cliff's grown
+	rim, a deck's edge) the nearest passable one within two cells, the 5x5 the reach checks count a start
+	reached by. When there is none the start's cell comes back, impassable, and the caller asks. */
+Int reachOrigin( const Mask& passable, Int W, Int H, Int start )
+{
+	if( passable[start] )
+		return start;
+	const Int sy = start / W, sx = start % W;
+	Int best = start, bestD = 0x7fffffff;
+	for( Int y = std::max( sy - 2, 0 ); y <= std::min( sy + 2, H - 1 ); y++ )
+		for( Int x = std::max( sx - 2, 0 ); x <= std::min( sx + 2, W - 1 ); x++ )
+		{
+			const Int d = ( y - sy ) * ( y - sy ) + ( x - sx ) * ( x - sx );
+			if( passable[y * W + x] && d < bestD ) { bestD = d; best = y * W + x; }
+		}
+	return best;
+}
+
 /// Each cell's nearest seed's class, four-way steps and no further than reach, else -1: one flood from
 /// every seed at once, the seeds in raster order, and the first to come to a cell keeps it.
 void nearestClass( const Mask& seed, const std::vector<Int>& cls, Int W, Int H, Int reach, std::vector<Int>& out )
@@ -599,7 +618,9 @@ void splitChunks( const std::vector<char>& data, Int pos, Int end, std::vector<C
 		readBytes( data, pos, &c.id, 4 );
 		readBytes( data, pos + 4, &c.version, 2 );
 		Int size = readInt( data, pos + 6 );
-		c.body.resize( size < 0 ? 0 : size );
+		// a size past the bytes is refused before anything is allocated for it
+		readBytes( data, pos + 10, NULL, size );
+		c.body.resize( size );
 		readBytes( data, pos + 10, c.body.empty() ? NULL : &c.body[0], size );
 		out.push_back( c );
 		pos += 10 + size;
@@ -816,7 +837,13 @@ struct SynthMap
 				}
 				Int size = readInt( b, pos );
 				pos += 4;
-				if( W <= 0 || H <= 0 || W > MAP_SIDE_MAX || H > MAP_SIDE_MAX || size != W * H || playX <= 0 || playY <= 0 )
+				if( W <= 0 || H <= 0 || W > MAP_SIDE_MAX || H > MAP_SIDE_MAX || size != W * H || border < 0 || 2 * border >= std::min( W, H ) )
+					return FALSE;
+				// a boundary wider than the grid inside the border is held to it: every loop over the
+				// playable area runs from the border for this many cells
+				playX = std::min( playX, W - 2 * border );
+				playY = std::min( playY, H - 2 * border );
+				if( playX <= 0 || playY <= 0 )
 					return FALSE;
 				readBytes( b, pos, NULL, size );
 				heights.assign( (const UnsignedByte *)&b[pos], (const UnsignedByte *)&b[pos] + size );
@@ -871,6 +898,9 @@ struct SynthMap
 					TexClass t;
 					t.first = readInt( b, pos );
 					t.count = readInt( b, pos + 4 );
+					// a tile index is a short over four: a class past that range owns no tile there is
+					if( t.first < 0 || t.count < 0 || t.first > 0x10000 || t.count > 0x10000 )
+						return FALSE;
 					pos += 16;
 					pos = readAscii( b, pos, &t.name );
 					t.width = (Int)sqrtf( (Real)t.count + 0.5f );
@@ -968,7 +998,16 @@ struct SynthMap
 		std::stable_sort( numbered.begin(), numbered.end(),
 			[]( const std::pair<Int, YX>& a, const std::pair<Int, YX>& b ) { return a.first < b.first; } );
 		for( size_t i = 0; i < numbered.size(); i++ )
-			starts.push_back( numbered[i].second );
+		{
+			// a start off the grid has no cell to stand on (Levels::init's rounding)
+			const YX& s = numbered[i].second;
+			if( !( s.y + border > -1.0f && s.y + border < (Real)H && s.x + border > -1.0f && s.x + border < (Real)W ) )
+				return FALSE;
+			const Int gy = (Int)( s.y + 0.5f ) + border, gx = (Int)( s.x + 0.5f ) + border;
+			if( gy < 0 || gx < 0 || gy >= H || gx >= W )
+				return FALSE;
+			starts.push_back( s );
+		}
 		return blendVersion != 0 && starts.size() >= 2;
 	}
 
@@ -1711,7 +1750,8 @@ struct Exemplar
 
 	Bool load( const std::vector<char>& data, CivilianTest civilian )
 	{
-		if( !m.load( data ) )
+		// a template with no texture class has nothing to paint a cell with (tileFor reads class 0)
+		if( !m.load( data ) || m.classes.empty() )
 			return FALSE;
 		const Int W = m.W, H = m.H, b = m.border;
 		lv.init( m );
@@ -2097,6 +2137,7 @@ struct Plan
 	std::vector<Int> fixedSource;	///< the exemplar cell a copy put here, -1 for none
 	std::vector<UnsignedByte> fixedTurn;	///< how that copy turned the exemplar, Copy::quarterTurn
 	Field fixedWeight;				///< how much of the cell's height is the copy's
+	std::vector<Int> fixedCopy;		///< which of copies holds it, -1 for none
 	std::vector<UnsignedByte> townDone;	///< the exemplar's towns a crossing already brought
 	std::vector<PlannedTech> tech;
 	Bool hasMesa;
@@ -2112,6 +2153,7 @@ struct Plan
 		fixedSource.assign( cells, -1 );
 		fixedTurn.assign( cells, 0 );
 		fixedWeight.assign( cells, 0.0f );
+		fixedCopy.assign( cells, -1 );
 		hasMesa = FALSE;
 		mesaY = mesaX = 0;
 	}
@@ -2458,13 +2500,25 @@ struct Composer
 			{
 				Real w = copy.weight( y, x, COPY_FADE );
 				Int i = y * W + x;
-				// where two copies meet, the one that holds the cell harder keeps it
-				if( w <= 0.0f || w <= plan.fixedWeight[i] ) continue;
+				// where two copies meet, the one that holds the cell harder keeps it; two pads that hold it alike,
+				// cores over each other, split it by the nearer start, so no seat wins ground by its order. A
+				// crossing laid first keeps its ground from a pad as before.
+				if( w <= 0.0f || w < plan.fixedWeight[i] ) continue;
+				if( w == plan.fixedWeight[i] )
+				{
+					const Int by = plan.fixedCopy[i];
+					if( by < 0 || copy.radius <= 0.0f || plan.copies[by].radius <= 0.0f ) continue;
+					const Copy& other = plan.copies[by];
+					const Real mine = ( y - copy.target.y ) * ( y - copy.target.y ) + ( x - copy.target.x ) * ( x - copy.target.x );
+					const Real theirs = ( y - other.target.y ) * ( y - other.target.y ) + ( x - other.target.x ) * ( x - other.target.x );
+					if( mine >= theirs ) continue;
+				}
 				YX s = copy.toSource( (Real)y, (Real)x );
 				Int o = clampi( roundi( s.y ), 0, SH - 1 ) * SW + clampi( roundi( s.x ), 0, SW - 1 );
 				const Real copied = copy.pivot + copy.lift + ( src.lv.h[o] - copy.pivot ) * copy.heightScale;
 				h[i] = w * copied + ( 1.0f - w ) * h[i];
-				plan.fixedWeight[i] = std::max( plan.fixedWeight[i], w );
+				plan.fixedWeight[i] = w;
+				plan.fixedCopy[i] = (Int)plan.copies.size();
 				if( w >= 0.5f )
 				{
 					plan.fixedSource[i] = o;
@@ -5054,15 +5108,22 @@ Bool blendChunk( const Exemplar& src, Int W, Int H, const std::vector<Int>& syMa
 	// the exemplar's shapes, then each turned one the copies need, in the order the cells ask for them
 	std::vector< std::pair< std::string, Int > > shapes = src.shapes;
 	std::map< std::pair<Int, Int>, Int > turned;
-	auto shapeTurned = [&]( Int shape, Int quarterTurn ) -> Int
+	auto shapeTurned = [&]( Int shape, Int quarterTurn, Bool besideDiagonal ) -> Int
 	{
 		if( quarterTurn == 0 ) return shape;
-		std::pair<Int, Int> key( shape, quarterTurn );
+		std::pair<Int, Int> key( shape, quarterTurn | ( besideDiagonal ? 8 : 0 ) );
 		std::map< std::pair<Int, Int>, Int >::const_iterator it = turned.find( key );
 		if( it != turned.end() ) return it->second;
 		char flags[6];
 		memcpy( flags, shapes[shape].first.data(), 6 );
 		blendFlagsFor( turnedCorners( blendCorners( flags ), quarterTurn ), flags );
+		/* A side blend's flip is the cut of the diagonal it shares its cell with, and the renderer reads
+			it on sides alone (WorldHeightMap::getAlphaUVData). An odd quarter turn or a mirror, not both,
+			moves that diagonal onto the other pair of corners (0x1 to 0x2), so the cut turns over with it.
+			A side with no diagonal beside it has no cut to follow and keeps its bit. */
+		const Bool swapsDiagonal = ( ( quarterTurn & 1 ) != 0 ) != ( ( quarterTurn & 4 ) != 0 );
+		if( besideDiagonal && swapsDiagonal && ( flags[BLEND_HORIZONTAL] || flags[BLEND_VERTICAL] ) )
+			flags[BLEND_INVERTED] ^= BLEND_FLIPPED_BIT;
 		std::pair< std::string, Int > wanted( std::string( flags, 6 ), shapes[shape].second );
 		Int index = (Int)( std::find( shapes.begin(), shapes.end(), wanted ) - shapes.begin() );
 		if( index == (Int)shapes.size() ) shapes.push_back( wanted );
@@ -5140,12 +5201,21 @@ Bool blendChunk( const Exemplar& src, Int W, Int H, const std::vector<Int>& syMa
 			}
 			if( loose == 0 )
 			{
+				// whether one of the cell's blends is a diagonal a side beside it takes its cut from
+				Bool diagonal = FALSE;
+				for( Int l = 0; l < 2; l++ )
+				{
+					Int e = entry[l];
+					if( e <= 0 || e >= (Int)src.entries.size() ) continue;
+					const Int c = blendCorners( src.entries[e].flags );
+					diagonal = diagonal || ( c != 0 && c != 0x3 && c != 0x6 && c != 0x9 && c != 0xC );
+				}
 				for( Int l = 0; l < 2; l++ )
 				{
 					Int e = entry[l];
 					if( e <= 0 || e >= (Int)src.entries.size() ) continue;
 					tiles[l][i] = src.tileFor( src.blendClass[e], y, x );
-					shapeOf[l][i] = shapeTurned( src.blendShape[e], turns[i] );
+					shapeOf[l][i] = shapeTurned( src.blendShape[e], turns[i], diagonal );
 				}
 				continue;
 			}
@@ -5727,28 +5797,51 @@ Bool padSite( const Exemplar& src, const Copy& pad, Real sy, Real sx, const Synt
 	return TRUE;
 }
 
+/** Whether a pad brings the exemplar's dock (kind 0) or derrick (kind 1) number k, and where: padSite
+	takes it and it is one of the share nearest the pad's start, share being what every pad brings
+	(carryMoney). padSite pulls back or drops a different few on each pad, by how near the map's edge
+	its start stands, and one seat with a derrick more than the next is not a fair map. */
+Bool padMoney( const Exemplar& src, const Copy& pad, Int kind, size_t k, Int share, const SynthMap& skm, YX& at )
+{
+	const Int sb = src.m.border;
+	const std::vector<YX>& theirs = kind == 0 ? src.m.supplies : src.m.derricks;
+	if( k >= theirs.size() || !padSite( src, pad, theirs[k].y + sb, theirs[k].x + sb, skm, at ) )
+		return FALSE;
+	const Real mine = ( at.y - pad.target.y ) * ( at.y - pad.target.y ) + ( at.x - pad.target.x ) * ( at.x - pad.target.x );
+	Int nearer = 0;
+	for( size_t j = 0; j < theirs.size() && nearer < share; j++ )
+	{
+		YX other;
+		if( j == k || !padSite( src, pad, theirs[j].y + sb, theirs[j].x + sb, skm, other ) ) continue;
+		const Real d = ( other.y - pad.target.y ) * ( other.y - pad.target.y ) + ( other.x - pad.target.x ) * ( other.x - pad.target.x );
+		nearer += d < mine || ( d == mine && j < k );
+	}
+	return nearer < share;
+}
+
 /** The docks and derricks: the skeleton's off the pads, the exemplar's the pads carry. A kind some pad
 	brings none of onto the map, Twilight Flame's derricks out in its bowl or an open base's docks past
 	its reach, keeps the skeleton's under every pad instead, so no seat loses its home dock or its
-	derricks to the copy; one pad short decides for all, so the seats stay alike. The skeleton's kept
+	derricks to the copy; one pad short decides for all, so the seats stay alike. Otherwise every pad
+	brings as many of a kind as the pad that brings fewest, share[kind] (padMoney). The skeleton's kept
 	under a pad are listed in levelled for a flat disc on the copied ground. */
-void carryMoney( const Exemplar& src, const std::vector<Copy>& pads, SynthMap& skm, Bool fellBack[2], std::vector<YX>& levelled )
+void carryMoney( const Exemplar& src, const std::vector<Copy>& pads, SynthMap& skm, Bool fellBack[2], Int share[2], std::vector<YX>& levelled )
 {
 	const Int b = skm.border, sb = src.m.border;
 	std::vector<YX> *mine[2] = { &skm.supplies, &skm.derricks };
 	const std::vector<YX> *theirs[2] = { &src.m.supplies, &src.m.derricks };
 	for( Int kind = 0; kind < 2; kind++ )
 	{
-		Bool every = !pads.empty();
 		YX at;
-		for( size_t c = 0; c < pads.size() && every; c++ )
+		share[kind] = pads.empty() ? 0 : (Int)theirs[kind]->size();
+		for( size_t c = 0; c < pads.size() && share[kind] > 0; c++ )
 		{
-			Bool any = FALSE;
-			for( size_t k = 0; k < theirs[kind]->size() && !any; k++ )
-				any = padSite( src, pads[c], ( *theirs[kind] )[k].y + sb, ( *theirs[kind] )[k].x + sb, skm, at );
-			every = any;
+			Int brought = 0;
+			for( size_t k = 0; k < theirs[kind]->size(); k++ )
+				brought += padSite( src, pads[c], ( *theirs[kind] )[k].y + sb, ( *theirs[kind] )[k].x + sb, skm, at );
+			share[kind] = std::min( share[kind], brought );
 		}
-		fellBack[kind] = !every;
+		fellBack[kind] = share[kind] == 0;
 		std::vector<YX> kept;
 		for( size_t k = 0; k < mine[kind]->size(); k++ )
 		{
@@ -5760,14 +5853,9 @@ void carryMoney( const Exemplar& src, const std::vector<Copy>& pads, SynthMap& s
 			if( covered && fellBack[kind] ) levelled.push_back( yx( p.y + b, p.x + b ) );
 		}
 		for( size_t c = 0; c < pads.size() && !fellBack[kind]; c++ )
-		{
 			for( size_t k = 0; k < theirs[kind]->size(); k++ )
-			{
-				const YX& p = ( *theirs[kind] )[k];
-				if( padSite( src, pads[c], p.y + sb, p.x + sb, skm, at ) )
+				if( padMoney( src, pads[c], kind, k, share[kind], skm, at ) )
 					kept.push_back( yx( at.y - b, at.x - b ) );
-			}
-		}
 		mine[kind]->swap( kept );
 	}
 }
@@ -5934,7 +6022,11 @@ Int repairReach( std::vector<Int>& heights, Int W, Int H, const Plan& plan, cons
 					wet[i] = plan.wet[i] && heights[i] < plan.level[i] && !decks[i];
 					passable[i] = ( ( walk[i] && !wet[i] ) || decks[i] ) && play[i];
 				}
-				reach( passable, W, H, firstStart, reached );
+				const Int origin = reachOrigin( passable, W, H, firstStart );
+				// a first start standing on no ground reaches nothing but itself, and every ramp would be cut to it
+				if( !passable[origin] )
+					return cut;
+				reach( passable, W, H, origin, reached );
 				stale = FALSE;
 			}
 			Int ty = clampi( (Int)targets[k].y, 0, H - 1 ), tx = clampi( (Int)targets[k].x, 0, W - 1 );
@@ -6034,12 +6126,18 @@ Real rmgJoinShare( Int pairLeast, Int sum )
 /** The exemplar, unpacked the way the map loader unpacks it. */
 static Bool unpackExemplar( const std::vector<char>& exemplarBytes, std::vector<char>& raw )
 {
+	if( exemplarBytes.empty() )
+		return FALSE;
 	if( !CompressionManager::isDataCompressed( &exemplarBytes[0], (Int)exemplarBytes.size() ) )
 	{
 		raw = exemplarBytes;
 		return TRUE;
 	}
+	// the packed header's size is the file's word: none, or more than a map of the largest side could
+	// hold with all its chunks, is refused before anything is allocated for it
 	Int size = CompressionManager::getUncompressedSize( &exemplarBytes[0], (Int)exemplarBytes.size() );
+	if( size <= 0 || size > 64 * MAP_SIDE_MAX * MAP_SIDE_MAX )
+		return FALSE;
 	raw.resize( size );
 	std::vector<char> packed( exemplarBytes );
 	return CompressionManager::decompressData( &packed[0], (Int)packed.size(), &raw[0], size ) == size;
@@ -6050,15 +6148,17 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	RMGTemplateReport *report )
 {
 	mapBytes.clear();
-	UnsignedInt callersFPMode = getFPMode();
-	setFPMode();
+	// the caller's rounding mode comes back on every way out, a throw included
+	struct FPModeGuard
+	{
+		UnsignedInt callers;
+		FPModeGuard() : callers( getFPMode() ) { setFPMode(); }
+		~FPModeGuard() { restoreFPMode( callers ); }
+	} fpMode;
 
 	std::vector<char> raw;
 	if( !unpackExemplar( exemplarBytes, raw ) )
-	{
-		restoreFPMode( callersFPMode );
 		return FALSE;
-	}
 
 	// the template is a file off the disk: bytes that end early refuse it rather than read past it
 	Exemplar src;
@@ -6072,10 +6172,13 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 		DEBUG_LOG(( "random map: the template '%s' ends at byte %d of a chunk, %d wanted at %d\n",
 			clamped.m_template.str(), fault.size, fault.count, fault.pos ));
 	}
+	catch( const std::bad_alloc& )
+	{
+		DEBUG_LOG(( "random map: the template '%s' asks for more memory than there is\n", clamped.m_template.str() ));
+	}
 	if( !loaded )
 	{
 		DEBUG_LOG(( "random map: the template '%s' is not a skirmish map this reader knows\n", clamped.m_template.str() ));
-		restoreFPMode( callersFPMode );
 		return FALSE;
 	}
 
@@ -6084,10 +6187,7 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	rmgBuildSkeleton( clamped, skeletonBytes );
 	SynthMap skm;
 	if( !skm.load( skeletonBytes ) )
-	{
-		restoreFPMode( callersFPMode );
 		return FALSE;
-	}
 	Levels skel;
 	skel.init( skm );
 	const Int W = skm.W, H = skm.H, b = skm.border;
@@ -6101,8 +6201,9 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	std::vector<Copy> basePads;
 	planPads( src, skel, W, H, seed, regions, reaches, edges, raised, basePads );
 	Bool moneyFellBack[2];
+	Int moneyShare[2];
 	std::vector<YX> levelledMoney;
-	carryMoney( src, basePads, skm, moneyFellBack, levelledMoney );
+	carryMoney( src, basePads, skm, moneyFellBack, moneyShare, levelledMoney );
 
 	// the exemplar's large features first, then what of the skeleton keeps its own height
 	Composer composer( src, skm, skel, seed, basePads );
@@ -6252,6 +6353,7 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 		return FALSE;
 	};
 	std::vector<Chunk> kept, piles;
+	std::vector<size_t> startChunks;	// the seats' waypoints in kept, which the snapping leaves on their pads
 	for( size_t k = 0; k < skm.things.size(); k++ )
 	{
 		const MapThing&t = skm.things[k];
@@ -6262,6 +6364,8 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 		const Int kind = moneyKind( t.name );
 		if( !t.waypointID && underCopy( t.y + b, t.x + b, kind >= 0 && moneyFellBack[kind] ) )
 			continue;
+		if( t.waypointID && t.waypointName.startsWith( "Player_" ) && t.waypointName.endsWith( "_Start" ) )
+			startChunks.push_back( kept.size() );
 		( t.name == "SupplyPileSmall" ? piles : kept ).push_back( chunk );
 	}
 	// the objects that came out of the skeleton, for the snapping below: a waypoint or a pile by its template
@@ -6275,7 +6379,7 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	// the border is no ground: the pathfinder keeps to the playable area
 	for( Int i = 0; i < W * H; i++ ) passable[i] = ( ( walk[i] && !levelWet[i] ) || decks[i] ) && f.play[i];
 	const Int firstStart = (Int)f.starts[0].y * W + (Int)f.starts[0].x;
-	reach( passable, W, H, firstStart, reached );
+	reach( passable, W, H, reachOrigin( passable, W, H, firstStart ), reached );
 	for( Int i = 0; i < W * H; i++ ) openGround[i] = passable[i] && reached[i] && !plan.keepout[i] && !levelWet[i];
 
 	// the piles: where the exemplar keeps its own on high ground, a pair halfway to the next seat and a
@@ -6363,49 +6467,73 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	for( size_t s = 0; s < plan.tech.size(); s++ ) mustReach.push_back( yx( (Real)plan.tech[s].y, (Real)plan.tech[s].x ) );
 	const Int ramps = repairReach( heights, W, H, plan, decks, f.play, firstStart, mustReach );
 
-	// a waypoint or a pile the water, a new cliff or a pocket now holds goes to the nearest ground the starts share
-	cliffOf( heights, W, H, cliff );
-	walkable( cliff, W, H, walk );
-	for( Int i = 0; i < W * H; i++ ) levelWet[i] = plan.wet[i] && heights[i] < plan.level[i];
-	for( Int i = 0; i < W * H; i++ ) passable[i] = ( ( walk[i] && !levelWet[i] ) || decks[i] ) && f.play[i];
+	/* A waypoint or a pile the water, a new cliff or a pocket now holds goes to the nearest ground the
+		starts share. The piles go first, each levelled where it lands, then the waypoints on the ground
+		that leaves. A seat's start stays on its pad: repairReach and the report count it reached by the
+		cells round it, and the pads, the reach and the cut-off check all still name its old spot. A first
+		start on no ground shares nothing with the others, and then nothing moves rather than all onto it. */
 	Mask ground, wetClear;
-	reach( passable, W, H, firstStart, ground );
-	maskGrow( levelWet, W, H, 3, wetClear );
-	for( Int i = 0; i < W * H; i++ ) ground[i] = ground[i] && !wetClear[i] && !decks[i];
-	Int snapped = 0;
-	for( size_t k = 0; k < kept.size(); k++ )
+	Bool anchored = FALSE;
+	auto findGround = [&]()
 	{
-		Chunk& c = kept[k];
-		AsciiString name;
-		readAscii( c.body, 20, &name );
-		if( !( name == "*Waypoints/Waypoint" ) && !( name == "SupplyPileSmall" ) )
-			continue;
-		Int cy = (Int)( readReal( c.body, 4 ) / MAP_XY ) + b, cx = (Int)( readReal( c.body, 0 ) / MAP_XY ) + b;
-		cy = clampi( cy, 0, H - 1 );
-		cx = clampi( cx, 0, W - 1 );
-		if( ground[cy * W + cx] )
-			continue;
-		Int best = -1, bestD = 0x7fffffff;
-		for( Int r = 1; r < std::max( W, H ) && ( best < 0 || bestD > r * r ); r++ )
+		cliffOf( heights, W, H, cliff );
+		walkable( cliff, W, H, walk );
+		for( Int i = 0; i < W * H; i++ ) levelWet[i] = plan.wet[i] && heights[i] < plan.level[i];
+		for( Int i = 0; i < W * H; i++ ) passable[i] = ( ( walk[i] && !levelWet[i] ) || decks[i] ) && f.play[i];
+		const Int origin = reachOrigin( passable, W, H, firstStart );
+		anchored = passable[origin] != 0;
+		reach( passable, W, H, origin, ground );
+		maskGrow( levelWet, W, H, 3, wetClear );
+		for( Int i = 0; i < W * H; i++ ) ground[i] = ground[i] && !wetClear[i] && !decks[i];
+	};
+	auto snapAll = [&]( Bool pilesPass ) -> Int
+	{
+		Int moved = 0;
+		for( size_t k = 0; k < kept.size() && anchored; k++ )
 		{
-			for( Int y = cy - r; y <= cy + r; y++ )
+			Chunk& c = kept[k];
+			AsciiString name;
+			readAscii( c.body, 20, &name );
+			if( pilesPass ? !( name == "SupplyPileSmall" ) : !( name == "*Waypoints/Waypoint" ) )
+				continue;
+			if( std::find( startChunks.begin(), startChunks.end(), k ) != startChunks.end() )
+				continue;
+			Int cy = (Int)( readReal( c.body, 4 ) / MAP_XY ) + b, cx = (Int)( readReal( c.body, 0 ) / MAP_XY ) + b;
+			cy = clampi( cy, 0, H - 1 );
+			cx = clampi( cx, 0, W - 1 );
+			if( ground[cy * W + cx] )
+				continue;
+			Int best = -1, bestD = 0x7fffffff;
+			for( Int r = 1; r < std::max( W, H ) && ( best < 0 || bestD > r * r ); r++ )
 			{
-				if( y < 0 || y >= H ) continue;
-				const Bool edgeRow = y == cy - r || y == cy + r;
-				for( Int x = cx - r; x <= cx + r; x += edgeRow ? 1 : 2 * r )
+				for( Int y = cy - r; y <= cy + r; y++ )
 				{
-					if( x < 0 || x >= W || !ground[y * W + x] ) continue;
-					Int d = ( y - cy ) * ( y - cy ) + ( x - cx ) * ( x - cx );
-					if( d < bestD ) { bestD = d; best = y * W + x; }
+					if( y < 0 || y >= H ) continue;
+					const Bool edgeRow = y == cy - r || y == cy + r;
+					for( Int x = cx - r; x <= cx + r; x += edgeRow ? 1 : 2 * r )
+					{
+						if( x < 0 || x >= W || !ground[y * W + x] ) continue;
+						Int d = ( y - cy ) * ( y - cy ) + ( x - cx ) * ( x - cx );
+						if( d < bestD ) { bestD = d; best = y * W + x; }
+					}
 				}
 			}
+			if( best < 0 ) continue;
+			Real wx = ( best % W - b + 0.5f ) * MAP_XY, wy = ( best / W - b + 0.5f ) * MAP_XY;
+			memcpy( &c.body[0], &wx, 4 );
+			memcpy( &c.body[4], &wy, 4 );
+			// the disc levelled for the pile where it stood is no use where it stands now
+			if( pilesPass )
+				levelDisc( heights, W, H, best / W, best % W, PILE_FLAT );
+			moved++;
 		}
-		if( best < 0 ) continue;
-		Real wx = ( best % W - b + 0.5f ) * MAP_XY, wy = ( best / W - b + 0.5f ) * MAP_XY;
-		memcpy( &c.body[0], &wx, 4 );
-		memcpy( &c.body[4], &wy, 4 );
-		snapped++;
-	}
+		return moved;
+	};
+	findGround();
+	Int snapped = snapAll( TRUE );
+	if( snapped > 0 )
+		findGround();
+	snapped += snapAll( FALSE );
 
 	// the exemplar's scenery wherever its cell landed off the pads, the kept slopes, the features' edges and the water
 	std::vector<YX> taken( pileSites );
@@ -6687,6 +6815,17 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 		peelCutRoads();
 	}
 
+	// each exemplar dock's and derrick's place in src.m.supplies or src.m.derricks, the lists padMoney counts in
+	std::vector<Int> moneyIndex( src.m.things.size(), -1 );
+	{
+		Int counted[2] = { 0, 0 };
+		for( size_t k = 0; k < src.m.things.size(); k++ )
+		{
+			const Int kind = src.m.things[k].waypointID ? -1 : moneyKind( src.m.things[k].name );
+			if( kind >= 0 ) moneyIndex[k] = counted[kind]++;
+		}
+	}
+
 	// what stands on a copy goes with it, turned as it is: a pad brings its base's money and dressing (no
 	// building when it shrank, they would stand in each other), a crossing its town; the bridges are planned
 	for( size_t c = 0; c < plan.copies.size(); c++ )
@@ -6720,7 +6859,10 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 				const MapThing&u = src.m.things[first + g];
 				if( pad && money )
 				{
-					inside = padSite( src, copy, u.y + sb, u.x + sb, skm, ats[g] );
+					// a dock or derrick only as many as every seat gets (carryMoney); other tech as padSite has it
+					inside = kind >= 0 && moneyIndex[first + g] >= 0
+						? padMoney( src, copy, kind, (size_t)moneyIndex[first + g], moneyShare[kind], skm, ats[g] )
+						: padSite( src, copy, u.y + sb, u.x + sb, skm, ats[g] );
 					continue;
 				}
 				inside = copy.carries( u.y + sb, u.x + sb );
@@ -6768,7 +6910,6 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	if( !blendChunk( src, W, H, syMap, sxMap, plan.fixedTurn, cliff, heights, blendBody ) )
 	{
 		DEBUG_LOG(( "random map: '%s' needs more blends than the renderer holds\n", clamped.m_template.str() ));
-		restoreFPMode( callersFPMode );
 		return FALSE;
 	}
 	blend->version = 8;
@@ -6780,10 +6921,7 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	Chunk *triggers = out.chunk( "PolygonTriggers" );
 	std::vector<char> triggerBody;
 	if( !triggers || !waterTriggers( *triggers, plan.water, b, triggerBody ) )
-	{
-		restoreFPMode( callersFPMode );
 		return FALSE;
-	}
 	triggers->body.swap( triggerBody );
 	for( size_t c = 0; c < src.m.raw.chunks.size(); c++ )
 	{
@@ -6806,7 +6944,7 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	for( Int i = 0; i < W * H; i++ ) levelWet[i] = plan.wet[i] && heights[i] < plan.level[i];
 	walkable( cliff, W, H, walk );
 	for( Int i = 0; i < W * H; i++ ) passable[i] = ( ( walk[i] && !levelWet[i] ) || decks[i] ) && f.play[i];
-	reach( passable, W, H, firstStart, reached );
+	reach( passable, W, H, reachOrigin( passable, W, H, firstStart ), reached );
 	auto cutOff = [&]( Real py, Real px ) -> Bool
 	{
 		for( Int y = (Int)py - 2; y <= (Int)py + 2; y++ )
@@ -6855,7 +6993,6 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 		writePreview( src, skm, heights, cls, levelWet, cliff, f.starts, *previewBytes );
 	}
 
-	restoreFPMode( callersFPMode );
 	return TRUE;
 }
 
@@ -6895,7 +7032,7 @@ Bool rmgTemplateCRC( const AsciiString& templatePath, UnsignedInt *crcOut )
 	}
 	std::vector<char> bytes;
 	*crcOut = 0;
-	if( TheFileSystem == NULL || !readTemplate( templatePath, bytes ) )
+	if( TheFileSystem == NULL || templatePath.isEmpty() || !readTemplate( templatePath, bytes ) )
 		return FALSE;
 	UnsignedInt value = crcOfTemplate( bytes );
 	theCRCs[templatePath] = value;
@@ -6931,6 +7068,10 @@ Bool rmgTemplateShape( const AsciiString& templatePath, Int *cellsX, Int *cellsY
 			DEBUG_LOG(( "random map: the template '%s' ends at byte %d of a chunk, %d wanted at %d\n",
 				templatePath.str(), fault.size, fault.count, fault.pos ));
 		}
+		catch( const std::bad_alloc& )
+		{
+			DEBUG_LOG(( "random map: the template '%s' asks for more memory than there is\n", templatePath.str() ));
+		}
 		it = theShapes.insert( std::make_pair( templatePath, shape ) ).first;
 	}
 	*cellsX = it->second.cellsX;
@@ -6959,6 +7100,14 @@ Bool rmgTemplateToken( const AsciiString& templatePath, AsciiString& tokenOut )
 
 void rmgTemplateFromToken( const AsciiString& token, AsciiString& templatePathOut )
 {
+	// the token comes in a received map's name: one that would reach outside its own folder under maps
+	// names no template, and an empty path is one no machine has installed
+	const char *text = token.str();
+	if( token.isEmpty() || strchr( text, '\\' ) || strchr( text, '/' ) || strchr( text, ':' ) || strstr( text, ".." ) )
+	{
+		templatePathOut.clear();
+		return;
+	}
 	templatePathOut.format( "maps\\%s\\%s.map", token.str(), token.str() );
 	templatePathOut.toLower();
 }

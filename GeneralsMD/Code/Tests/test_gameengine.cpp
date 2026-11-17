@@ -14620,15 +14620,15 @@ TEST(the_generator_still_turns_a_seed_into_the_bytes_it_used_to)
 {
 	CHECK( bootOnce() );
 
-	CHECK_EQ( RANDOM_MAP_GENERATOR_VERSION, 18 );
+	CHECK_EQ( RANDOM_MAP_GENERATOR_VERSION, 19 );
 
 	struct RMGFingerprint { Int m_seed, m_players, m_cells, m_style; UnsignedInt m_crc; };
 	static const RMGFingerprint theFingerprints[] =
 	{
-		{ 0, 2, 64, 0, 0x1BF70484 },
-		{ 12345, 4, 96, 0, 0x114BBAEA },
-		{ 7, 8, 128, 0, 0xFB27A0BB },
-		{ 7, 4, 200, 1, 0x1F261D65 },
+		{ 0, 2, 64, 0, 0x37DE617A },
+		{ 12345, 4, 96, 0, 0xFDB4EB7C },
+		{ 7, 8, 128, 0, 0x14D69CEE },
+		{ 7, 4, 200, 1, 0xBFE61224 },
 	};
 	const Int numFingerprints = sizeof(theFingerprints) / sizeof(theFingerprints[0]);
 
@@ -14670,6 +14670,44 @@ TEST(the_generator_still_turns_a_seed_into_the_bytes_it_used_to)
 
 	// and the caller's mode is handed back rather than left at the simulation's
 	CHECK_EQ( _controlfp( 0, 0 ), entry );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A map that cuts somebody off, seats two players on one pad or a base in a lake still gets built,
+	so nothing would say so but this. The fingerprinted maps, and a styled bowl asked for at a size it
+	cannot shrink to, which is held to 0.6 of its full size (214 of 356 cells) rather than built as one
+	plateau with the starts five cells apart. */
+//-------------------------------------------------------------------------------------------------
+TEST(every_generated_seat_is_dry_and_walks_to_the_others_and_the_money)
+{
+	CHECK( bootOnce() );
+
+	RandomMapSettings bowl;
+	bowl.m_seed = 1;
+	bowl.m_numPlayers = 8;
+	bowl.m_playableCells = 64;
+	bowl.m_style = 1;
+	RandomMapGenerator::clampSettings( bowl );
+	CHECK_EQ( bowl.m_playableCells, 214 );
+
+	struct RMGCase { Int m_seed, m_players, m_cells, m_style; };
+	static const RMGCase theCases[] =
+	{
+		{ 0, 2, 64, 0 }, { 12345, 4, 96, 0 }, { 7, 8, 128, 0 }, { 7, 4, 200, 1 }, { 1, 8, 64, 1 },
+	};
+	for( Int i = 0; i < (Int)( sizeof(theCases) / sizeof(theCases[0]) ); i++ )
+	{
+		RandomMapSettings settings;
+		settings.m_seed = theCases[i].m_seed;
+		settings.m_numPlayers = theCases[i].m_players;
+		settings.m_playableCells = theCases[i].m_cells;
+		settings.m_style = theCases[i].m_style;
+		const Bool playable = RandomMapGenerator::isPlayable( settings );
+		if( !playable )
+			printf( "  seed %d players %d cells %d style %d is not playable\n", settings.m_seed, settings.m_numPlayers,
+				settings.m_playableCells, settings.m_style );
+		CHECK( playable );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -14873,7 +14911,7 @@ TEST(a_template_map_comes_out_the_same_twice_and_every_start_walks_to_every_othe
 	RandomMapGenerator::generate( exemplarSettings, exemplar );
 
 	// the bytes themselves, pinned like the generator's: a change here is a change to every template map's name
-	static const UnsignedInt theTemplateFingerprints[2] = { 0x26A63ABEu, 0x6D469E48u };
+	static const UnsignedInt theTemplateFingerprints[2] = { 0x1357CB4Cu, 0xE273FE41u };
 	for( Int players = 2; players <= 8; players += 6 )
 	{
 		RandomMapSettings settings;
@@ -16322,11 +16360,12 @@ TEST(a_template_joins_two_plateau_bases_across_a_corridor_not_a_valley)
 }
 
 //-------------------------------------------------------------------------------------------------
-/** A LAN game names a template map by four letters of its folder's name, and a machine binds the
-	first folder under maps\ whose letters match, so two shipped maps sharing four letters would put
-	the later one out of LAN games without a word. Every map folder Zero Hour and Generals ship, read
-	out of MapsZH.big and Maps.big, has letters of its own; the day one does not, the wire takes a
-	fifth letter. */
+/** A LAN game names a template map by four letters of its folder's name and two of its CRC, and a
+	machine binds the first folder under maps\ whose name letters match and then whose CRC letters do,
+	so two shipped maps sharing four name letters could put the later one out of LAN games without a
+	word. The name letters depend on no file, so this needs no game data: every map folder Zero Hour and
+	Generals ship, read out of MapsZH.big and Maps.big, has name letters of its own; the day one does
+	not, the wire takes a fifth. */
 //-------------------------------------------------------------------------------------------------
 TEST(every_shipped_map_has_wire_letters_of_its_own)
 {
@@ -16365,15 +16404,17 @@ TEST(every_shipped_map_has_wire_letters_of_its_own)
 	for( Int i = 0; i < numShippedMaps; i++ )
 	{
 		AsciiString folder, wire;
-		folder.format( "rmg_v17_1_2p_200c_t00000001_%s", theShippedMaps[i] );
+		folder.format( "rmg_v19_1_2p_200c_t00000001_%s", theShippedMaps[i] );
 		CHECK( generatedMapWireName( folder, wire ) );
-		const char *letters = strrchr( wire.str(), '~' );
-		CHECK( letters != NULL && letters != wire.str() );
-		if( letters == NULL )
+		const char *tail = strrchr( wire.str(), '~' );
+		CHECK( tail != NULL && tail != wire.str() && strlen( tail ) == 7 );
+		if( tail == NULL || strlen( tail ) != 7 )
 			continue;
+		// "~", four name letters, two CRC letters: the name letters are what binds a folder
+		const std::string letters( tail + 1, 4 );
 		std::map<std::string, const char *>::const_iterator twin = seen.find( letters );
 		if( twin != seen.end() )
-			printf( "  '%s' and '%s' both go as %s\n", twin->second, theShippedMaps[i], letters );
+			printf( "  '%s' and '%s' both go as %s\n", twin->second, theShippedMaps[i], letters.c_str() );
 		CHECK( twin == seen.end() );
 		seen[letters] = theShippedMaps[i];
 	}
@@ -16480,7 +16521,8 @@ TEST(a_style_map_is_named_for_its_style_and_rebuilt_from_the_name)
 
 	AsciiString path;
 	CHECK( stageRandomMap( settings, path ) );
-	CHECK( path.endsWithNoCase( "_77_4p_200c_twilight.map" ) );
+	// 200 is under the least the bowl shrinks to, 0.6 of its 356, so the name says what was built
+	CHECK( path.endsWithNoCase( "_77_4p_214c_twilight.map" ) );
 
 	std::vector<char> styled, plain;
 	RandomMapGenerator::generate( settings, styled );
@@ -24228,11 +24270,16 @@ TEST(lan_options_fit_eight_humans_on_a_generated_template_map)
 	// the replay's field, which the launcher reads, names a template map in full
 	CHECK_STR( GameInfoMapField( AsciiString( paths[4] ) ).str(),
 		"userdata/maps/rmg_v17_2147483647_8p_672c_tffffffff_bombardment beach" );
-	// a template map's CRC and folder go as four letters; reading them back needs the shipped maps,
-	// which replay-check on a template map covers
+	// a template map's folder goes as four letters and its CRC as two, the field no longer than the
+	// shipped map's; reading them back needs the shipped maps, which replay-check on a template map covers
 	const AsciiString wire = GameInfoLobbyMapField( AsciiString( paths[4] ) );
 	CHECK( wire.startsWith( "~17_zik0zj_8_io~" ) );
-	CHECK_EQ( wire.getLength(), 20 );
+	CHECK_EQ( wire.getLength(), 22 );
+	CHECK_STR( wire.str(), "~17_zik0zj_8_io~143ez3" );
+	// a negative seed goes out as its 32 bits and reads back as the host's name, sign and all
+	const char *const negative = "userdata\\maps\\rmg_v19_-5_2p_140c\\rmg_v19_-5_2p_140c.map";
+	CHECK_STR( GameInfoLobbyMapField( AsciiString( negative ) ).str(), "~19_1z141yz_2_3w" );
+	CHECK_STR( GameInfoMapPathFromField( GameInfoLobbyMapField( AsciiString( negative ) ) ).str(), negative );
 
 	GlobalData *saved = TheWritableGlobalData;
 	TheWritableGlobalData = NEW GlobalData;

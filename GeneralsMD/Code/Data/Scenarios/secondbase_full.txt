@@ -1,0 +1,27 @@
+# Two Hard USA computers on Twilight Flame, six start positions empty. Seat 1's home is packed with its
+# own power plants a little more than a footprint apart, so no Command Center fits inside its edge; seat 0's
+# home is left open. Read the AI EXPAND lines past logic frame 8400 (seven minutes): seat 1 finds home
+# full, saves for a Command Center and founds it on the nearest empty start ("founds a second base with
+# 'AmericaCommandCenter'"), seat 0 logs "keeps one base, room at home" and founds nothing. Peace time
+# keeps the two from ending the match before either decides.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -aidiff hard
+#     -side 0 FactionAmerica -side 1 FactionAmerica -seed 1 -startingcash 30000 -peacetime 15
+#     -maxframes 13500 -scenario secondbase_full -logPrefix secondbase_full_
+#
+# Add -aiknobsoff all secondbase for the war factory on the clock, room at home or not.
+
+10    spawn   1  AmericaPowerPlant      256  start1  110
+3000  tally   0  AmericaCommandCenter
+3000  tally   1  AmericaCommandCenter
+3000  tally   1  AmericaPowerPlant
+12000 tally   0  AmericaCommandCenter
+12000 tally   1  AmericaCommandCenter
+15000 tally   0  AmericaCommandCenter
+15000 tally   1  AmericaCommandCenter
+20000 tally   0  AmericaCommandCenter
+20000 tally   1  AmericaCommandCenter
+20000 tally   0  AmericaWarFactory
+20000 tally   1  AmericaWarFactory
+20000 tally   1  AmericaPowerPlant

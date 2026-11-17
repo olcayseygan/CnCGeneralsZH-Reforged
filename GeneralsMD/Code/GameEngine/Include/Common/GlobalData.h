@@ -121,6 +121,7 @@ enum
 	AIKNOB_ABILITIES		= 128,	///< its units never press their own buttons, and its matchups credit no weapon only a button fires
 	AIKNOB_MAP_LAYERS		= 256,	///< the influence map without its still, worth, hazard and memory layers, its gun shapes and its front line, as before them
 	AIKNOB_FOREIGN_TECH	= 512,	///< no other side's tech tree: a foreign dozer or Command Center is left as before, and nothing goes after one (ForeignTech 0)
+	AIKNOB_SECOND_BASE	= 1024,	///< a base away from home is a war factory on the rung's timer, as before it was a Command Center founded once home is full
 };
 
 //-------------------------------------------------------------------------------------------------

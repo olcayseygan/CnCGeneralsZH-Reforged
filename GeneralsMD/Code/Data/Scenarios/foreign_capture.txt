@@ -7,7 +7,7 @@
 #
 #   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
 #     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
-#     -side 0 FactionChina -side 1 FactionAmerica -seed 1 -startingcash 30000 -maxframes 12000
+#     -side 0 FactionChina -side 1 FactionAmerica -seed 1 -startingcash 30000 -maxframes 15000
 #     -scenario foreign_capture -logPrefix foreign_capture_
 #
 # Add -aiknobsoff odd foreigntech for the seat without it.
@@ -21,6 +21,14 @@
 10    spawn   0  ChinaPowerPlant         1  2300 2100
 10    spawn   0  ChinaPowerPlant         1  2400 1500
 10    spawn   0  ChinaPowerPlant         1  300 1600
+# and GLA holes on seat 0's half, which nobody captures and the army leaves alone: the capturer takes the
+# power plants too, and without these the seat was beaten at logic frame 4443, before the China Command
+# Center at home stood. Speaker Towers in their place were shot down one by one, the last at 7231
+10    spawn   0  GLAHole                 1  150 1300
+10    spawn   0  GLAHole                 1  450 1700
+10    spawn   0  GLAHole                 1  450 2100
+10    spawn   0  GLAHole                 1  900 1650
+10    spawn   0  GLAHole                 1  1400 2400
 600   tally   1  ChinaCommandCenter
 1800  tally   1  ChinaCommandCenter
 3000  tally   1  ChinaCommandCenter
@@ -32,3 +40,10 @@
 12000 tally   1  ChinaVehicleDozer
 12000 tally   1  ChinaBarracks
 12000 tally   1  ChinaWarFactory
+22200 tally   1  ChinaCommandCenter
+22200 tally   1  ChinaVehicleDozer
+22200 tally   1  ChinaBarracks
+22200 tally   1  ChinaWarFactory
+22200 tally   1  ChinaInfantry*
+22200 tally   1  ChinaTank*
+22200 tally   1  ChinaVehicle*

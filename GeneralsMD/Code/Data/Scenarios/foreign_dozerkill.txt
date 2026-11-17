@@ -1,0 +1,42 @@
+# foreign_hijack with the stolen Dozer shot dead right after it lays the USA Command Center's foundation.
+# The owner: the stolen Dozer will very likely be killed, so the computer's own workers put up what it
+# places. Read the AI FOREIGN lines: the site goes to a GLA Worker ("sends its 'GLAInfantryWorker' ..
+# to finish"), the Command Center stands, trains a USA Dozer of its own, and the base and army follow.
+# Without ForeignTech the hijacker takes whatever is nearest and nothing is placed.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
+#     -side 0 FactionAmerica -side 1 FactionGLA -seed 1 -startingcash 30000 -maxframes 12000
+#     -scenario foreign_dozerkill -logPrefix foreign_dozerkill_
+#
+# Add -aiknobsoff odd foreigntech for the seat without it.
+
+30    spawn   0  AmericaVehicleDozer     1  start1:0:450
+30    spawn   1  GLAInfantryHijacker     3  start1:0:250  20
+# the foundation goes down at logic frame 170 (file 255); two Crusaders of seat 0's turn up beside the
+# Dozer, now the GLA's, and it is left at 1% so the first shell kills it
+280   spawn   0  AmericaTankCrusader     2  start1:0:400  40
+300   health  1  AmericaVehicleDozer     1
+300   attack  0  AmericaTankCrusader     1  AmericaVehicleDozer
+600   tally   1  AmericaVehicleDozer
+# power plants of seat 0's out in the corners, whichever of them the map takes, and GLA holes on seat 0's
+# half, which nobody captures and the army leaves alone, so the match outlasts its Command Center
+10    spawn   0  AmericaPowerPlant       1  300 1200
+10    spawn   0  AmericaPowerPlant       1  300 1600
+10    spawn   0  GLAHole                 1  150 1300
+10    spawn   0  GLAHole                 1  450 1700
+10    spawn   0  GLAHole                 1  450 2100
+10    spawn   0  GLAHole                 1  900 1650
+10    spawn   0  GLAHole                 1  1400 2400
+3000  tally   1  AmericaCommandCenter
+6000  tally   1  AmericaCommandCenter
+6000  tally   1  AmericaVehicleDozer
+9000  tally   1  AmericaBarracks
+9000  tally   1  AmericaWarFactory
+17700 tally   1  AmericaCommandCenter
+17700 tally   1  AmericaVehicleDozer
+17700 tally   1  AmericaBarracks
+17700 tally   1  AmericaWarFactory
+17700 tally   1  AmericaInfantry*
+17700 tally   1  AmericaTank*
+17700 tally   1  AmericaVehicle*

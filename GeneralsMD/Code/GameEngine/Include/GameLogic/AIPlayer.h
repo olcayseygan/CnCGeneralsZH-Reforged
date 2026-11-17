@@ -392,7 +392,8 @@ protected:
 	/** B3 proposal 3: a base away from home - a factory on an empty start position, then power, guns and
 		* a supply centre beside it - so one stroke at home does not finish the AI. */
 	void doSecondBase(void);
-	Bool foundSecondBase(Object *dozer, const Coord3D *outposts, Int count);	///< a factory on the nearest empty start position; TRUE when it spent the look's placement
+	Bool foundSecondBase(Object *dozer, const Coord3D *outposts, Int count);	///< a Command Center (a factory under -aiknobsoff secondbase) on the nearest empty start position; TRUE when it spent the look's placement
+	Bool secondBaseCenters(void) const;	///< a base away from home is a Command Center founded once home is full, not a factory on a timer
 	Int findOutposts(Coord3D *at, Int max);	///< this player's factories far from home, one per site, in object order
 	Bool onEmptyStart(const Coord3D *pos) const;	///< within reach of a start position no player started on: a second base's ground
 	const ThingTemplate *missingPrerequisite(Object *dozer, KindOfType kind);	///< the building a dozer button of this kind waits on, that this player has none of
@@ -523,7 +524,7 @@ protected:
 	void buyMoneyUnits(void);
 	Int moneyUnitRoom(void) const;	///< how many more money units this player's army and internet centers carry
 	Bool hasEnoughMoneyUnitsFor(TeamPrototype *proto) const;	///< this team is all hackers and there is no room for more
-	Bool placeNear(const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, Bool walkOutward, Coord3D *spotOnly = NULL);	///< the nearest legal, safe spot by the ground from center, queued for a dozer, or only written to spotOnly. walkOutward keeps searching further out as the near ground fills
+	Bool placeNear(const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, Bool walkOutward, Coord3D *spotOnly = NULL, Bool homeOnly = FALSE);	///< the nearest legal, safe spot by the ground from center, queued for a dozer, or only written to spotOnly. walkOutward keeps searching further out as the near ground fills; homeOnly holds any building to the base's edge as staysHome holds its own
 	Bool queueExtraFactory(Object *dozer, KindOfType kind, Bool doctrine = FALSE);	///< one more of this factory, beside a held expansion or around the base, once the ones standing fall behind their queues; the doctrine's without waiting for that
 	Bool holdsExtraFactory(const ThingTemplate *tmpl);	///< a factory of a kind already standing or going up, while the ones standing keep up with their queues
 	const ThingTemplate *nextBaseDefense(Object *dozer);	///< the base defence off this dozer's buttons that the base has fewest of, NULL for none
@@ -611,7 +612,7 @@ protected:
 	virtual void checkQueuedTeams(void);
 	virtual void doTeamBuilding(void);
 	virtual void doUpgradesAndSkills(void);
-	virtual Object *findDozer(const Coord3D *pos, const ThingTemplate *plan = NULL);	///< plan: only a dozer whose own buttons build it
+	virtual Object *findDozer(const Coord3D *pos);
 	Object *findNearestDozer(const Coord3D *pos);	///< the nearest dozer, busy or not
 	Bool isPowerThin(void) const;	///< less than one more building's draw left over
 	virtual void queueDozer(void);

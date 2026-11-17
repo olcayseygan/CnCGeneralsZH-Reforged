@@ -1289,6 +1289,7 @@ Data/Scenarios/firelook.txt
 Data/Scenarios/flatshells.txt
 Data/Scenarios/fogleak.txt
 Data/Scenarios/foreign_capture.txt
+Data/Scenarios/foreign_dozerkill.txt
 Data/Scenarios/foreign_hijack.txt
 Data/Scenarios/foreign_lotus.txt
 Data/Scenarios/foreign_snipe.txt
@@ -1451,6 +1452,7 @@ Data/Scenarios/s240_town.txt
 Data/Scenarios/scud_pack.txt
 Data/Scenarios/scudlaunch_film.txt
 Data/Scenarios/scudstorm.txt
+Data/Scenarios/secondbase_full.txt
 Data/Scenarios/sentryattack.txt
 Data/Scenarios/sentrydrone.txt
 Data/Scenarios/shellpaths.txt

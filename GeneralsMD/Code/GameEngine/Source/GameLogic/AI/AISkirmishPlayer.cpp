@@ -315,9 +315,7 @@ void AISkirmishPlayer::processBaseBuilding( void )
 				continue; // marked to not build automatically.
 			}
 			AIPlayer::profileBaseSubBegin();
-			// with another side's dozer in hand only one that can build the plan will do: the foreign one was
-			// picked first while idle, canMakeUnit refused it, and the plan waited
-			Object *dozer = findDozer(info->getLocation(), foreignTechRung() > 0 ? curPlan : NULL);
+			Object *dozer = findDozer(info->getLocation());
 			AIPlayer::profileBaseSubEnd( AIPlayer::BASE_SUB_FINDDOZER );
 			if (dozer==NULL) {
 				if (isUnderPowered) {
@@ -1610,9 +1608,9 @@ void AISkirmishPlayer::queueDozer( void )
 /**
  * Finds a dozer that isn't building or collecting resources.
  */
-Object * AISkirmishPlayer::findDozer( const Coord3D *pos, const ThingTemplate *plan )
+Object * AISkirmishPlayer::findDozer( const Coord3D *pos )
 {
-	return AIPlayer::findDozer(pos, plan);
+	return AIPlayer::findDozer(pos);
 }
 
 

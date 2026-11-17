@@ -5,7 +5,7 @@
 #
 #   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
 #     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover 0 -aidiff hard
-#     -side 0 FactionAmerica -side 1 FactionGLA -seed 1 -startingcash 30000 -maxframes 6000
+#     -side 0 FactionAmerica -side 1 FactionGLA -seed 1 -startingcash 30000 -maxframes 12000
 #     -scenario foreign_snipe -logPrefix foreign_snipe_
 #
 # Add -aiknobsoff odd foreigntech for the seat without it.
@@ -21,6 +21,13 @@
 10    spawn   0  AmericaPowerPlant       1  2300 2100
 10    spawn   0  AmericaPowerPlant       1  2400 1500
 10    spawn   0  AmericaPowerPlant       1  300 1600
+# and GLA holes on seat 0's half, which nobody captures and the army leaves alone: the capturing Rebel
+# takes the power plants too, and without these the seat was beaten at logic frame 6329
+10    spawn   0  GLAHole                 1  150 1300
+10    spawn   0  GLAHole                 1  450 1700
+10    spawn   0  GLAHole                 1  450 2100
+10    spawn   0  GLAHole                 1  900 1650
+10    spawn   0  GLAHole                 1  1400 2400
 600   tally   1  GLAInfantryJarmenKell
 600   tally   1  AmericaVehicleDozer
 1200  tally   1  AmericaVehicleDozer
@@ -30,3 +37,9 @@
 3000  tally   1  AmericaCommandCenter
 6000  tally   1  AmericaCommandCenter
 6000  tally   1  AmericaVehicleDozer
+17700 tally   1  AmericaCommandCenter
+17700 tally   1  AmericaBarracks
+17700 tally   1  AmericaWarFactory
+17700 tally   1  AmericaInfantry*
+17700 tally   1  AmericaTank*
+17700 tally   1  AmericaVehicle*

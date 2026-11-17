@@ -19,6 +19,13 @@
 10    spawn   0  AmericaPowerPlant        1  2300 2100
 10    spawn   0  AmericaPowerPlant        1  2400 1500
 10    spawn   0  AmericaPowerPlant        1  300 1600
+# and GLA holes on seat 0's half, which nobody captures and the army leaves alone: the capturing Red Guard
+# takes the power plants too, and without these the seat was beaten at logic frame 5912
+10    spawn   0  GLAHole                  1  150 1300
+10    spawn   0  GLAHole                  1  450 1700
+10    spawn   0  GLAHole                  1  450 2100
+10    spawn   0  GLAHole                  1  900 1650
+10    spawn   0  GLAHole                  1  1400 2400
 600   tally   1  AmericaCommandCenter
 1800  tally   1  AmericaVehicleDozer
 3000  tally   1  AmericaCommandCenter
@@ -27,3 +34,8 @@
 12000 tally   1  AmericaCommandCenter
 12000 tally   1  AmericaVehicleDozer
 12000 tally   1  AmericaBarracks
+17700 tally   1  AmericaCommandCenter
+17700 tally   1  AmericaWarFactory
+17700 tally   1  AmericaInfantry*
+17700 tally   1  AmericaTank*
+17700 tally   1  AmericaVehicle*

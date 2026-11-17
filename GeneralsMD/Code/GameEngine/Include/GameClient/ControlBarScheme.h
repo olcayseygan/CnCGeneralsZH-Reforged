@@ -404,8 +404,9 @@ public:
 	static void radarFrameRect( const Image *const *frame, const IRegion2D& radar, IRegion2D *outer );
 	/// the steel round a radar Minimap Size grew out of a scheme with no radar frame; painted or plate-drawn bar alike
 	static void drawGrownRadarFrame( void );
-	/// the side's own grown frame laid round 'well' (grown_compose); drawGrownRadarFrame's art path
-	static void drawGrownRadarPieces( const Image *const *pieces, Real scale, const IRegion2D &well, Bool lit, const Image *glass );
+	/// the side's own grown frame laid round 'well' from the left edge of 'outer' (grown_compose);
+	/// drawGrownRadarFrame's art path
+	static void drawGrownRadarPieces( const Image *const *pieces, Real scale, const IRegion2D &outer, const IRegion2D &well, Bool lit, const Image *glass );
 	/// the general's powers tray's pieces (ControlBarScheme::TRAY_*) of the scheme on screen, or NULL
 	/// without a cell; the tray then keeps the shipped column
 	const Image *const *getPowerTray( void ) const;

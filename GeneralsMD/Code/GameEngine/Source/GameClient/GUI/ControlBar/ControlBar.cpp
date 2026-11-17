@@ -3062,6 +3062,16 @@ void ControlBar::fitSquareRadar( GameWindow *const *windows, const IRegion2D *bo
 	// down in height instead of letterboxed.
 	const Real aspect = m_radarFitWidth / m_radarFitHeight;
 	Int insideHeight = REAL_TO_INT( ( square.hi.y - square.lo.y - 2 * RADAR_BEZEL ) * sizePercent / 100.0f + 0.5f );
+	// The side's own frame is laid round the picture joined with the painted glass, so a picture
+	// narrower than that glass left a band of bare glass down its right side (Twilight Flame at 125,
+	// 24 pixels of it at 1080).  The picture grows to the glass's width at least, up to
+	// the height Minimap Size's 200 gives, past which a tall map keeps its band.
+	if( pieces != NULL )
+	{
+		const Int fullHeight = ( square.hi.y - square.lo.y - 2 * RADAR_BEZEL ) * 2;
+		const Int glassHeight = REAL_TO_INT_CEIL( ( square.hi.x - square.lo.x - 2 * RADAR_BEZEL ) / aspect );
+		insideHeight = MAX( insideHeight, MIN( glassHeight, fullHeight ) );
+	}
 	// The frame and the blocker stop a pixel short of the production plate's blocker, so a press on
 	// the plate's left edge stays a build button's.  With no plate the box's own width is the limit.
 	Int widthCap = MAX( square.hi.x, block.hi.x ) - fit.lo.x - 2 * RADAR_BEZEL;

@@ -399,9 +399,23 @@ class Painter:
         self.mat[ys[g], xs[g]] = INKM
 
 
-def shade(p, side, seams=(), shadow=True, seed=7, falloff=True):
+def scratches(rng, shape_, wrap=(0, 0)):
+    """The GLA's scratches through the paint and the scale, 0..1, one per 2500 texels of the canvas; a wrap
+    (rows, columns) draws each again a period on either side, so the layer repeats along that axis."""
+    im = Image.new("L", (shape_[1], shape_[0]), 0)
+    d = ImageDraw.Draw(im)
+    for _ in range(shape_[0] * shape_[1] // (2500 * SS * SS)):
+        x, y, a, length = rng.uniform(0, shape_[1]), rng.uniform(0, shape_[0]), rng.uniform(0, np.pi), rng.uniform(4, 22) * SS
+        for k in (-1, 0, 1) if any(wrap) else (0,):
+            ox, oy = k * wrap[1], k * wrap[0]
+            d.line([(x + ox, y + oy), (x + ox + np.cos(a) * length, y + oy + np.sin(a) * length)], fill=255, width=max(1, SS // 2))
+    return np.asarray(im, np.float32) / 255.0
+
+
+def shade(p, side, seams=(), shadow=True, seed=7, falloff=True, tiling=None):
     """falloff darkens the steel and the glass from top to bottom, as down a panel; a piece the game
-    tiles (the tray's) goes without, or each copy would step against the next."""
+    tiles (the tray's) goes without, or each copy would step against the next.  tiling (GrownTiling)
+    lays the grain, rust and scratches out periodic along the runs a frame's edge pieces are cut from."""
     shape_ = p.h.shape
     build = side["build"]
     rng = np.random.default_rng(seed)
@@ -417,6 +431,8 @@ def shade(p, side, seams=(), shadow=True, seed=7, falloff=True):
     ndh = np.clip(n @ half, 0, 1)
 
     def noise(sigma, block=1):
+        if tiling is not None:
+            return tiling.noise(rng, sigma, block)
         f = ndimage.gaussian_filter(rng.standard_normal((-(-shape_[0] // block), -(-shape_[1] // block))).astype(np.float32), sigma)
         f /= f.std() + 1e-6
         return np.kron(f, np.ones((block, block), np.float32))[: shape_[0], : shape_[1]] if block > 1 else f
@@ -427,8 +443,7 @@ def shade(p, side, seams=(), shadow=True, seed=7, falloff=True):
     fine = noise(0.5 * SS)
     spec_base, rough_base = 0.55, 36.0
     if build == "machined":                            # brushed: long horizontal streaks
-        streak = ndimage.gaussian_filter(rng.standard_normal(shape_).astype(np.float32), (0.5 * SS, 40 * SS))
-        streak /= streak.std() + 1e-6
+        streak = noise((0.5 * SS, 40 * SS))
         grain = 1.0 + 0.05 * streak + 0.06 * mottle + 0.025 * fine
     elif build == "terraced":                          # cast: a heavy mottle, coarse grain and pits
         grain = 1.0 + 0.10 * mottle + 0.05 * noise(1.2 * SS)
@@ -494,12 +509,7 @@ def shade(p, side, seams=(), shadow=True, seed=7, falloff=True):
     crest = np.clip(-ndimage.laplace(ndimage.gaussian_filter(p.h, 0.7 * SS)) * SS * SS * 1.2, 0, 1) * (m != GLASS)
     lit += (crest * (0.35 + 0.65 * ndl))[..., None] * 0.35
     if build == "scavenged":                           # scratches through the paint and the scale
-        im = Image.new("L", (shape_[1], shape_[0]), 0)
-        d = ImageDraw.Draw(im)
-        for _ in range(shape_[0] * shape_[1] // (2500 * SS * SS)):
-            x, y, a, length = rng.uniform(0, shape_[1]), rng.uniform(0, shape_[0]), rng.uniform(0, np.pi), rng.uniform(4, 22) * SS
-            d.line([(x, y), (x + np.cos(a) * length, y + np.sin(a) * length)], fill=255, width=max(1, SS // 2))
-        lit += (np.asarray(im, np.float32) / 255.0 * (m != GLASS) * 0.10)[..., None]
+        lit += ((tiling.scratches(rng) if tiling is not None else scratches(rng, shape_)) * (m != GLASS) * 0.10)[..., None]
 
     # an ink keyline round the outside, so the plate parts from bright ground
     alpha_mask = p.alpha & p.limit if p.limit.any() else p.alpha
@@ -650,12 +660,8 @@ def signal_plate(side_name, _made={}):
     return _made[side_name]
 
 
-def _signal_plate(side_name):
-    look = BAR_LOOKS[side_name]
-    build = look["build"]
-    foot, top0 = SIGNAL_FOOT[side_name], 700
-    W = 220
-    p = Painter(W, foot - top0)
+def signal_outline(build, foot):
+    """The plate's outline in screen pixels at 100% radar, its foot (open and straight) at foot."""
     if build == "machined":                     # 45 degree cuts
         outline = [(0, 752), (146, 752), (158, 764), (158, foot), (0, foot)]
     elif build == "terraced":                   # its end flicking up as an eave
@@ -667,6 +673,16 @@ def _signal_plate(side_name):
         outline = [(x, foot if y > foot - 2 else y) for x, y in outline]     # the foot stays open and straight
     else:                                       # wide chamfers
         outline = [(0, 752), (140, 752), (158, 770), (158, foot), (0, foot)]
+    return outline
+
+
+def _signal_plate(side_name):
+    look = BAR_LOOKS[side_name]
+    build = look["build"]
+    foot, top0 = SIGNAL_FOOT[side_name], 700
+    W = 220
+    p = Painter(W, foot - top0)
+    outline = signal_outline(build, foot)
     L = lambda poly: [(x, y - top0) for x, y in poly]      # noqa: E731
     p.tiers([L(outline)], (False, True, True, False), 9, 12, 4, 2.0)
     corner = {"machined": "cut", "terraced": "notch", "scavenged": "rough"}.get(build, "cut")
@@ -745,13 +761,106 @@ GROWN_RIGHT = {"America": 18, "China": 18, "Gla": 22, "Turkiye": 18}       # the
 GROWN_TOP, GROWN_LEDGE, GROWN_HEAD = 20, 17, 24     # box top lip over the glass, ledge over the box, room above that
 GROWN_TLW, GROWN_TILE = 282, 120                    # the top-left piece's width (ledge and its point), edge tile
 GROWN_PERIOD = {"America": 100, "China": 104, "Gla": 120, "Turkiye": 80}  # the right edge's tile, its fittings' period
-GROWN_REF = (5, 600, 455, 1064)                     # the reference glass the pieces are cut from
+GROWN_RUNS = {"America": 5, "China": 5, "Gla": 4, "Turkiye": 6}           # the right lip's tiles in the reference
+# The pieces join because the reference is drawn for it.  Every run in it is whole tiles from corner to corner where
+# the outline or a fitting changes along it (the top across, three tiles; the right lip down), the outline is
+# straight along every run (a ragged edge or a jog stays in the corners and the ledge), so a run cut anywhere still
+# meets its corner on the same rim, and the grain is laid periodic along each run and in phase with both its
+# corners (GrownTiling).  Each edge piece is cut from a tile clear of both corners (grown_cuts).
 
 
-def grown_frame_ref(side_name, glass=GROWN_REF):
+def grown_ref(side_name):
+    """The reference glass the pieces are cut from (x5, yT, xR, yB): the top three tiles long, the right lip
+    GROWN_RUNS whole periods, the foot on the screen's, as the game's."""
+    yB = RADAR_GLASS_AT[3]
+    return (RADAR_GLASS_AT[0], yB - 24 - 30 - GROWN_RUNS[side_name] * GROWN_PERIOD[side_name],
+            GROWN_TLW + 3 * GROWN_TILE + 12, yB)
+
+
+def grown_cuts(side_name):
+    """Every piece's rect on the reference (screen px): the corners where they stand, T, L and B the second tile of
+    their run, R the second period of the lip, C a patch of glass."""
+    x5, yT, xR, yB = grown_ref(side_name)
+    Rx, P, t, tl = xR + GROWN_RIGHT[side_name], GROWN_PERIOD[side_name], GROWN_TILE, GROWN_TLW
+    top = yT - GROWN_TOP - GROWN_LEDGE - GROWN_HEAD
+    assert (xR - 12 - tl) % t == 0 and (yB - 24 - yT - 30) % P == 0 and (yB - 24 - yT - 30) // P >= 3, "a run is not whole tiles"
+    return {"TL": (0, top, tl, yT + 24), "T": (tl + t, top, tl + 2 * t, yT), "TR": (xR - 12, top, Rx, yT + 30),
+            "L": (0, yT + 24 + t, x5, yT + 24 + 2 * t), "R": (xR, yT + 30 + P, Rx, yT + 30 + 2 * P),
+            "BL": (0, yB - 24, x5, 1080), "B": (x5 + t, yB, x5 + 2 * t, 1080), "BR": (xR - 12, yB - 24, Rx, 1080),
+            "C": (100, yT + 100, 104, yT + 102)}
+
+
+class GrownTiling:
+    """The grain of a grown frame's reference (shade's tiling): periodic along every run, across the top and the
+    foot (GROWN_TILE), down the left edge (GROWN_TILE) and down the right lip (its period), each field in phase with
+    the corners at both ends of its run, and the bands handing over to the edges' fields inside the corners, where
+    nothing tiles.  The phase may jump in the reference between a cut piece and a corner (the foot and the left
+    edge are not whole tiles long); nothing filters the grain, so no piece sees it."""
+
+    def __init__(self, side_name, y0, shape_):
+        x5, yT, xR, yB = grown_ref(side_name)
+        cuts = grown_cuts(side_name)
+        self.shape = H, W = shape_
+        self.px, self.pl, self.pr = GROWN_TILE * SS, GROWN_TILE * SS, GROWN_PERIOD[side_name] * SS
+        y = y0 + np.arange(H) // SS                     # each supersampled row's screen row, each column's
+        x = np.arange(W) // SS
+        smooth = lambda t: np.clip(t, 0, 1) ** 2 * (3 - 2 * np.clip(t, 0, 1))   # noqa: E731
+        self.w = np.minimum(smooth((y - yT) / 22.0), 1 - smooth((y - (yB - 24)) / 22.0))[:, None].astype(np.float32)
+        foot = np.where(x < (cuts["B"][2] + xR - 12) // 2, x5, xR - 12)          # B in phase with BL, BR its own
+        ax = np.where((y < (yT + yB) // 2)[:, None], GROWN_TLW, foot[None, :])  # the top: TL to TR is whole tiles
+        self.ux = (np.arange(W)[None, :] - ax * SS) % self.px
+        rows = np.arange(H)[:, None]
+        left = np.where(y < (cuts["L"][3] + yB - 24) // 2, yT + 24, yB - 24)[:, None]   # L in phase with TL, BL its own
+        self.vl = np.broadcast_to((rows - (left - y0) * SS) % self.pl, shape_)
+        self.vr = np.broadcast_to((rows - (yT + 30 - y0) * SS) % self.pr, shape_)
+        self.left = (x < (x5 + xR) // 2)[None, :]
+
+    @staticmethod
+    def field(rng, shape_, sigma, block, axis):
+        """A unit field of shape_, periodic along axis (0 down, 1 across), its grain sigma, in blocks."""
+        n = [-(-s // block) for s in shape_]
+        n[axis] = max(1, round(shape_[axis] / block))
+        mode = ["reflect", "reflect"]
+        mode[axis] = "wrap"
+        f = ndimage.gaussian_filter(rng.standard_normal(n).astype(np.float32), sigma, mode=mode)
+        f /= f.std() + 1e-6
+        idx = [np.arange(s) * n[a] // s if a == axis else np.arange(s) // block for a, s in enumerate(shape_)]
+        return f[np.ix_(*idx)]
+
+    def compose(self, across, down_left, down_right, unit=True):
+        band = np.take_along_axis(across, self.ux, axis=1)
+        edge = np.where(self.left, np.take_along_axis(down_left, self.vl, axis=0), np.take_along_axis(down_right, self.vr, axis=0))
+        w = self.w
+        out = band * (1 - w) + edge * w
+        return out / np.sqrt((1 - w) ** 2 + w ** 2) if unit else out
+
+    def noise(self, rng, sigma, block=1):
+        H, W = self.shape
+        return self.compose(self.field(rng, (H, self.px), sigma, block, 1), self.field(rng, (self.pl, W), sigma, block, 0),
+                            self.field(rng, (self.pr, W), sigma, block, 0))
+
+    def scratches(self, rng):
+        H, W = self.shape
+        return self.compose(scratches(rng, (H, self.px), (0, self.px)), scratches(rng, (self.pl, W), (self.pl, 0)),
+                            scratches(rng, (self.pr, W), (self.pr, 0)), unit=False)
+
+
+def clip_below(poly, c):
+    """The part of a polygon at or below row c."""
+    out = []
+    for a, b in zip(poly, poly[1:] + poly[:1]):
+        if a[1] >= c:
+            out.append(a)
+        if (a[1] >= c) != (b[1] >= c):
+            out.append((a[0] + (b[0] - a[0]) * (c - a[1]) / (b[1] - a[1]), c))
+    return out
+
+
+def grown_frame_ref(side_name, glass=None):
     """The radar box drawn round a glass well in screen pixels: (image from x 0 and y0 down to 1080, y0)."""
     look = BAR_LOOKS[side_name]
     build = look["build"]
+    glass = glass or grown_ref(side_name)
     x5, yT, xR, yB = glass
     R, P = GROWN_RIGHT[side_name], GROWN_PERIOD[side_name]
     Rx, otop = xR + R, yT - GROWN_TOP
@@ -761,24 +870,35 @@ def grown_frame_ref(side_name, glass=GROWN_REF):
     L = lambda poly: [(x, y - y0) for x, y in poly]                         # noqa: E731
     jl = lambda poly, seed, amp=2.5: [(x, y + TOP) for x, y in jitter([(x, y - TOP) for x, y in poly], seed, amp, 14)]  # noqa: E731
     lip = range(yT + 30, yB - 40, P)                                       # each right-edge tile's top
+    # the corner's cut starts 10 or more texels inside TR, past the reach of the lip's inset and the shading, so
+    # T's last column meets TR's first on the same rim
     if build == "machined":
-        box = [(0, otop), (Rx - 28, otop), (Rx, otop + 28), (Rx, 1080), (0, 1080)]
+        box = [(0, otop), (Rx - 20, otop), (Rx, otop + 20), (Rx, 1080), (0, 1080)]
         ledge = [(0, ltop), (226, ltop), (262, ltop + 14), (226, ltop + 28), (0, ltop + 28)]
     elif build == "terraced":
-        box = [(0, otop), (Rx - 24, otop), (Rx - 24, otop + 10), (Rx - 12, otop + 10), (Rx - 12, otop + 20), (Rx, otop + 20),
+        box = [(0, otop), (Rx - 20, otop), (Rx - 20, otop + 10), (Rx - 10, otop + 10), (Rx - 10, otop + 20), (Rx, otop + 20),
                (Rx, 1080), (0, 1080)]
         d = ltop - 795
         ledge = [(0, 795), (214, 795)]
         ledge += (curve((214, 795), (238, 795), (262, 781), 8) + curve((256, 787), (244, 815), (226, 815), 8))[1:] + [(0, 815)]
         ledge = [(x, y + d) for x, y in ledge]
     elif build == "scavenged":
-        box = jl([(0, otop + 4), (180, otop), (Rx - 53, otop - 4), (Rx - 9, otop + 10), (Rx, otop + 40), (Rx - 2, 1080), (0, 1080)], 5)
+        # ragged at the ledge's end and round the corner, straight along the top and down the lip, which tile
+        box = jl([(0, otop + 4), (180, otop), (Rx - 30, otop), (Rx - 13, otop - 3), (Rx - 5, otop + 12), (Rx, otop + 40),
+                  (Rx, 1080), (0, 1080)], 5)
+        box = [(x, y) for x, y in box if not (180 < x < Rx - 30 and abs(y - otop) < 3.5 or y > otop + 40 and x < Rx and x > Rx - 4)]
         ledge = jl([(0, ltop + 4), (130, ltop), (200, ltop - 8), (238, ltop - 4), (244, ltop + 14), (0, ltop + 22)], 7, 1.5)
     else:
         box = [(0, otop), (Rx - 24, otop), (Rx, otop + 24), (Rx, 1080), (0, 1080)]
         ledge = [(0, ltop), (224, ltop), (248, ltop + 24), (0, ltop + 26)]
+    # The signal keys' plate (signal_plate) stands on the ledge, lifted with the well (updateSignalKeys): its foot's
+    # last rows are the ledge's own, so the ledge's rim turns up round the plate instead of running under it
+    lift = yT - RADAR_GLASS_AT[1]
+    foot = SIGNAL_FOOT[side_name] + lift
+    seat = clip_below([(x, y + lift) for x, y in signal_outline(build, SIGNAL_FOOT[side_name])], foot - 8)
+    seat = [(x, foot + 3 if y >= foot - 0.01 else y) for x, y in seat]
     p.tiers([L(box)], None, 4.0, 7.0, 5.0, 2.6)
-    p.tiers([L(ledge)], None, 9, 12, 4, 2.0)
+    p.tiers([L(ledge), L(seat)], None, 9, 12, 4, 2.0)
     corner = {"machined": ("cut", 6), "terraced": ("notch", 4), "scavenged": ("rough", 4)}.get(build, ("cut", 5))
     p.recess([L(plate(0, yT - 5, xR + 5, 1080, tr=corner))], None, 3.0, 2.0)
     p.sink([L(plate(*grow(glass, 2)))], 5, 2)
@@ -802,6 +922,8 @@ def grown_frame_ref(side_name, glass=GROWN_REF):
         p.bump([L(sh)], 1.4, 0.8, STEEL)
         for i, (x, y) in enumerate(((Rx - 7, 1066), (10, 1068), (90, ltop + 10))):
             p.bolt(x, y - y0, 2.6 + (i % 3) * 0.4, seed=i)
+        for x in range(10 + GROWN_TILE, xR - 40, GROWN_TILE):   # the foot's bolt, one a tile as B repeats it
+            p.bolt(x, 1068 - y0, 3.0, seed=1)
     else:
         ticks = [plate(Rx - 8, y + k, Rx - (2 if (k // 8) % 5 == 0 else 5), y + k + 1) for y in lip for k in range(0, P, 8)]
         p.inlay([L(q) for q in ticks + [plate(x, ltop + 1, x + 1, ltop + 25) for x in (120,)]], INKM, 0.6)
@@ -812,7 +934,8 @@ def grown_frame_ref(side_name, glass=GROWN_REF):
         for x, y in ((Rx - 6, 1068), (14, ltop + 21), (236, ltop + 22)):
             p.inlay([L(regular(x, y, 2.8, 12))], DARK, 1.0)
             p.bump([L(regular(x, y, 1.5, 6))], 0.6, 0.6, STEEL)
-    img = bar_finish(shade(p, look, shadow=False, falloff=False), p, look, gloss=False)
+    tiling = GrownTiling(side_name, y0, p.h.shape) if glass == grown_ref(side_name) else None
+    img = bar_finish(shade(p, look, shadow=False, falloff=False, tiling=tiling), p, look, gloss=False)
     if build == "faceted":
         img = led(img, [((6, ltop + 23 - y0), (110, ltop + 23 - y0))], [(205, ltop - y0, TURQ)])
     return img, y0
@@ -847,14 +970,7 @@ def grown_glass(picture, radar=RADAR_GLASS_AT):
 
 def _grown_pieces(side_name):
     img, y0 = grown_frame_ref(side_name)
-    x5, yT, xR, yB = GROWN_REF
-    Rx, P, t, tl = xR + GROWN_RIGHT[side_name], GROWN_PERIOD[side_name], GROWN_TILE, GROWN_TLW
-    top = yT - GROWN_TOP - GROWN_LEDGE - GROWN_HEAD
-    rects = {"TL": (0, top, tl, yT + 24), "T": (tl, top, tl + t, yT), "TR": (xR - 12, top, Rx, yT + 30),
-             "L": (0, yT + 24, x5, yT + 24 + t), "R": (xR, yT + 30, Rx, yT + 30 + P),
-             "BL": (0, yB - 24, x5, 1080), "B": (x5, yB, x5 + t, 1080), "BR": (xR - 12, yB - 24, Rx, 1080),
-             "C": (100, yT + 100, 104, yT + 102)}
-    return {k: (img.crop((r[0], r[1] - y0, r[2], r[3] - y0)), r) for k, r in rects.items()}
+    return {k: (img.crop((r[0], r[1] - y0, r[2], r[3] - y0)), r) for k, r in grown_cuts(side_name).items()}
 
 
 def grown_compose(side_name, glass, pieces=None):
@@ -872,8 +988,9 @@ def grown_compose(side_name, glass, pieces=None):
         screen foot     yB + B's height (1080)
 
     Order: the four edges tiled, then the four corners over them, then the glass C over the well, then the picture.
-    A tiled edge starts its first tile at its start and steps by the piece's own size; the last tile is cut, keeping
-    its top left, where the run ends.  Nothing is stretched."""
+    A tiled edge starts its first tile at its start and steps by the piece's own size; a run longer than one tile
+    ends on a whole tile against its far end, so both corners meet the same texels at every size, and the one cut
+    tile, keeping its top left, falls just before that last one.  Nothing is stretched."""
     pieces = pieces or grown_pieces(side_name)
     P = {k: v[0] for k, v in pieces.items()}
     x5, yT, xR, yB = glass
@@ -885,11 +1002,16 @@ def grown_compose(side_name, glass, pieces=None):
     top = yT - head
     out = Image.new("RGBA", (1920, 1080), (0, 0, 0, 0))
 
-    def tile(name, x0, y0, x1, y1):             # the run x0..x1, y0..y1, tiles from its top left, the last ones cut
+    def starts(lo, hi, size):                   # each tile's start and end along a run: whole ones, the far one whole
+        last = hi - size if hi - lo > size else lo
+        at = list(range(lo, last, size)) + [last]
+        return list(zip(at, at[1:] + [hi]))
+
+    def tile(name, x0, y0, x1, y1):             # the run x0..x1, y0..y1 (drawGrownRadarPieces' grownTile)
         img = P[name]
-        for y in range(y0, y1, img.height):
-            for x in range(x0, x1, img.width):
-                out.alpha_composite(img.crop((0, 0, min(img.width, x1 - x), min(img.height, y1 - y))), (x, y))
+        for y, y_end in starts(y0, y1, img.height):
+            for x, x_end in starts(x0, x1, img.width):
+                out.alpha_composite(img.crop((0, 0, x_end - x, y_end - y)), (x, y))
     tile("T", P["TL"].width, top, xR - cut, yT)                     # across, between TL and TR
     tile("L", 0, yT + l0, x5, yB - foot)                            # down the screen's left edge, between TL and BL
     tile("R", xR, yT + r0, xR + R, yB - foot)                       # down the right lip, between TR and BR

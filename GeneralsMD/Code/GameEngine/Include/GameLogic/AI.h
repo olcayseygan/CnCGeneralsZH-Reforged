@@ -392,6 +392,9 @@ struct AIDifficultyProfile
 	Int		m_incomePercent;								///< what a skirmish AI banks of what it earns by playing, in percent, before the falling-behind bonus; the score screen counts the 100
 	Int		m_incomeBonusMaxPercent;				///< the falling-behind bonus's ceiling in percentage points over m_incomePercent (Easy 25, Hard 100)
 
+	// Pace: the factor on EA's finished build delays (AIPlayer::buildDelayScale), 1 on Hard so Hard is EA's
+	Real	m_buildDelayScale;							///< Easy 1.5, Hard 1.0; a falling curve, 1.2 at 15
+
 	// Its units' own buttons (AIPlayer::doAbilities)
 	Int		m_unitAbilities;								///< 0 none; 1 the laser lock, manual shots, area weapons at the unit's own target and weapon toggles; 2 those anywhere in reach, walk-up specials and suicides too
 
@@ -886,6 +889,10 @@ Real aiEnemyCost( Real distSqr, Bool crippled, Bool alreadyTargetedByAnotherAI,
 	* Twice the threshold halves the delay, four times quarters it, and it stops there - this is a
 	* decision to spend faster, not a production multiplier, and D10 draws that line. */
 Int aiHoardAdjustedDelay( Int frames, Int money, Int hoardAt );
+
+/** A finished build delay times the rated BuildDelayScale, rounded up and never under a frame.  A
+	* scale of 1 (Hard) returns the frames untouched, so Hard keeps EA's pace to the frame. */
+Int aiScaledBuildDelay( Int frames, Real scale );
 
 /** How many copies of one team a skirmish AI may field.  The skirmish scripts cap the army by
 	* their roster: late in a match every attack team left to build allows one copy, so the AI

@@ -647,6 +647,7 @@ protected:
 	Int computeStructureDelay( void );	///< frames to wait before trying the next structure
 	Int computeTeamDelay( void );				///< frames to wait before trying the next team
 	Int hoardThreshold( void );					///< bank that speeds the two delays up; skirmish AI only
+	Real buildDelayScale( void );				///< the rated BuildDelayScale on both delays, last; skirmish AI only
 
 public:
 	/// the arithmetic behind the two above, free of the Player so a test can reach it

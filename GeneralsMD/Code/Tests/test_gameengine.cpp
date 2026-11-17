@@ -17596,6 +17596,12 @@ TEST(an_ai_rating_is_easy_and_hard_at_their_anchors_and_one_curve_through_and_pa
 	CHECK( atMinus10.m_incomeBonusMaxPercent < easy.m_incomeBonusMaxPercent && atMinus10.m_incomeBonusMaxPercent >= 0 );
 	CHECK_EQ( 3, hard.m_secondBases );		// a count, no longer MAX_PLAYER_COUNT for "every empty start"
 	CHECK_EQ( 2, at15.m_secondBases );
+	// pace on EA's build delays: Hard is EA's, Easy half as slow again, a falling curve past both
+	CHECK_EQ( 1.0f, hard.m_buildDelayScale );
+	CHECK_EQ( 1.5f, easy.m_buildDelayScale );
+	CHECK_NEAR( 1.2f, at15.m_buildDelayScale, 1.0e-5f );
+	CHECK( at100.m_buildDelayScale > 0.5f && at100.m_buildDelayScale < 0.6f );
+	CHECK( atMinus10.m_buildDelayScale > easy.m_buildDelayScale );
 
 	// the curves themselves: a falling one hits Hard exactly and never 0, a rising share nears 1, Hard's 0
 	// is a straight line to it, a gated one is off below 7.5 and passes Medium at 15
@@ -19699,6 +19705,26 @@ TEST(a_cash_hoard_shortens_the_wait_but_only_so_far)
 	// the ladder switches it on at Medium and tightens it as you climb
 	TAiData data;
 	CHECK_EQ( 0, data.m_skill[ AISKILL_EASY ].m_cashHoardThreshold );
+
+	// the rated pace comes last, on the finished delay: Hard's 1 leaves every frame count as it was
+	for( Int frames = 0; frames <= 3000; frames += 7 )
+		CHECK_EQ( frames, aiScaledBuildDelay( frames, data.m_skill[ AISKILL_BRUTAL ].m_buildDelayScale ) );
+	CHECK_EQ( 450, aiScaledBuildDelay( 300, data.m_skill[ AISKILL_EASY ].m_buildDelayScale ) );
+	AIDifficultyProfile at100;
+	aiRatingProfile( 100.0f, data.m_skill, &at100 );
+	CHECK( aiScaledBuildDelay( 300, at100.m_buildDelayScale ) < 180 );
+	CHECK_EQ( 1, aiScaledBuildDelay( 1, 0.1f ) );		// never under a frame
+	CHECK_EQ( 0, aiScaledBuildDelay( 0, 1.5f ) );			// no delay stays none
+
+	// a side's gatherer counts are a curve through its Easy and Hard numbers
+	const AIRungInt rising = { { 1, 2, 3 }, AIKNOB_OPEN };
+	CHECK_EQ( 1, aiRatingLerp( AI_RATING_EASY, rising ) );
+	CHECK_EQ( 3, aiRatingLerp( AI_RATING_HARD, rising ) );
+	CHECK_EQ( 2, aiRatingLerp( AI_RATING_MEDIUM, rising ) );
+	CHECK_EQ( 8, aiRatingLerp( 100.0f, rising ) );
+	const AIRungInt flat = { { 2, 2, 2 }, AIKNOB_OPEN };
+	CHECK_EQ( 2, aiRatingLerp( 100.0f, flat ) );
+	CHECK_EQ( 2, aiRatingLerp( -10.0f, flat ) );
 	CHECK( data.m_skill[ AISKILL_MEDIUM ].m_cashHoardThreshold > 0 );
 	CHECK( data.m_skill[ AISKILL_BRUTAL ].m_cashHoardThreshold <
 				 data.m_skill[ AISKILL_MEDIUM ].m_cashHoardThreshold );

@@ -796,7 +796,11 @@ void AIPlayer::checkForSupplyCenter( BuildListInfo *info, Object *bldg )
 		info->setSupplyBuilding(true);
 		Int desiredGatherers = 0;
 		const AISideInfo *resInfo = TheAI->getAiData()->findSideInfo( m_player );
-		if (resInfo) {
+		if (resInfo && runsOwnAI()) {
+			// the side's Easy and Hard counts are the anchors of one curve read at the seat's rating
+			const AIRungInt gatherers = { { resInfo->m_easy, resInfo->m_normal, resInfo->m_hard }, AIKNOB_OPEN };
+			desiredGatherers = aiRatingLerp( m_rating, gatherers );
+		} else if (resInfo) {
 			GameDifficulty difficulty = m_difficulty;
 			if (difficulty == DIFFICULTY_EASY) {
 				desiredGatherers = resInfo->m_easy;
@@ -6165,7 +6169,7 @@ void AIPlayer::queueUnits( void )
  */
 Int AIPlayer::computeStructureDelay( void )
 {
-	return aiHoardAdjustedDelay( computeBuildDelay( TheAI->getAiData()->m_structureSeconds,
+	return aiScaledBuildDelay( aiHoardAdjustedDelay( computeBuildDelay( TheAI->getAiData()->m_structureSeconds,
 													  m_player->getMoney()->countMoney(),
 													  TheAI->getAiData()->m_resourcesPoor,
 													  TheAI->getAiData()->m_resourcesWealthy,
@@ -6173,7 +6177,8 @@ Int AIPlayer::computeStructureDelay( void )
 													  TheAI->getAiData()->m_structuresWealthyMod,
 													  getBuildRateScale() ),
 															 m_player->getMoney()->countMoney(),
-															 hoardThreshold() );
+															 hoardThreshold() ),
+														 buildDelayScale() );
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -6195,6 +6200,17 @@ Int AIPlayer::knowledgeObserver( void )
 Int AIPlayer::hoardThreshold( void )
 {
 	return runsOwnAI() ? getSkillProfile()->m_cashHoardThreshold : 0;
+}
+
+//----------------------------------------------------------------------------------------------------------
+/**
+ * What a skirmish AI's rating does to its finished build delays: 1 on Hard, so Hard builds at EA's pace
+ * bent by wealth, a script's construction speed and the hoard, slower below it and faster above.  A
+ * Challenge or mission opponent keeps the pace its script was written for.
+ */
+Real AIPlayer::buildDelayScale( void )
+{
+	return runsOwnAI() ? getSkillProfile()->m_buildDelayScale : 1.0f;
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -6246,7 +6262,7 @@ Int AIPlayer::computeBuildDelay( Real seconds, Int money, Int poorAt, Int wealth
  */
 Int AIPlayer::computeTeamDelay( void )
 {
-	return aiHoardAdjustedDelay( computeBuildDelay( (Real)m_teamSeconds,
+	return aiScaledBuildDelay( aiHoardAdjustedDelay( computeBuildDelay( (Real)m_teamSeconds,
 													  m_player->getMoney()->countMoney(),
 													  TheAI->getAiData()->m_resourcesPoor,
 													  TheAI->getAiData()->m_resourcesWealthy,
@@ -6254,7 +6270,8 @@ Int AIPlayer::computeTeamDelay( void )
 													  TheAI->getAiData()->m_teamWealthyMod,
 													  getBuildRateScale() ),
 															 m_player->getMoney()->countMoney(),
-															 hoardThreshold() );
+															 hoardThreshold() ),
+														 buildDelayScale() );
 }
 
 //----------------------------------------------------------------------------------------------------------

@@ -16436,20 +16436,6 @@ TEST(every_shipped_map_has_wire_letters_of_its_own)
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Not a check: with RMG_TEMPLATE_DUMP set to "<dir> <exemplar.map> <seed>,<players>,<cells> ..." it
-	synthesises each map from the exemplar (a .map taken out of the game's archive, packed or not) and
-	writes it and its preview into dir, with the report and the time it took. RMG_TEMPLATE_CIVILIANS
-	names a file of town building names, one a line, standing in for the object INI. Run as
-	test_gameengine.exe write_the_maps_RMG_TEMPLATE_DUMP_names. */
-//-------------------------------------------------------------------------------------------------
-#include "Lib/Clock.h"
-
-TEST(write_the_maps_RMG_TEMPLATE_DUMP_names)
-{
-	const char *dump = getenv( "RMG_TEMPLATE_DUMP" );
-	if( dump == NULL )
-		return;
-//-------------------------------------------------------------------------------------------------
 /** Two letters of a template's CRC on a LAN name leave one machine in 1296 with other rules reading
 	the host's name back. What still tells them apart is the map CRC the room compares (MapUtil's
 	calcCRC), which reads "<map folder>\map.ini" beside the map: for a generated map built from a
@@ -16530,6 +16516,20 @@ TEST(a_template_maps_rules_are_served_beside_it_and_in_its_name)
 	TheWritableGlobalData = saved;
 }
 
+//-------------------------------------------------------------------------------------------------
+/** Not a check: with RMG_TEMPLATE_DUMP set to "<dir> <exemplar.map> <seed>,<players>,<cells> ..." it
+	synthesises each map from the exemplar (a .map taken out of the game's archive, packed or not) and
+	writes it and its preview into dir, with the report and the time it took. RMG_TEMPLATE_CIVILIANS
+	names a file of town building names, one a line, standing in for the object INI. Run as
+	test_gameengine.exe write_the_maps_RMG_TEMPLATE_DUMP_names. */
+//-------------------------------------------------------------------------------------------------
+#include "Lib/Clock.h"
+
+TEST(write_the_maps_RMG_TEMPLATE_DUMP_names)
+{
+	const char *dump = getenv( "RMG_TEMPLATE_DUMP" );
+	if( dump == NULL )
+		return;
 	CHECK( bootOnce() );
 
 	const char *civilians = getenv( "RMG_TEMPLATE_CIVILIANS" );
@@ -26656,7 +26656,7 @@ TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 	CHECK( TankSkin_describe( 2, unit, unitLabel, label ) );
 	CHECK_STR( unit.str(), "Battlemaster" );
 	CHECK_STR( unitLabel.str(), "OBJECT:BattleMaster" );
-	CHECK_STR( label.str(), "SKIN:Gold1K" );
+	CHECK_STR( label.str(), "SKIN:Splinter" );
 	CHECK( TankSkin_describe( 3, unit, unitLabel, label ) && unitLabel == "OBJECT:Scorpion" );
 	CHECK( TankSkin_describe( 1, unit, unitLabel, label ) && unitLabel == "OBJECT:Crusader" );
 	CHECK( !TankSkin_describe( 9, unit, unitLabel, label ) );

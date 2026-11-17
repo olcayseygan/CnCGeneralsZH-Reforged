@@ -4138,8 +4138,24 @@ Int Drawable_pipPixel( Real uiScale )
 	return max( 1, (Int)( uiScale / 1.8f + 0.5f ) );
 }
 
+// ------------------------------------------------------------------------------------------------
+Real Drawable_pipScale( Real uiScale, Real zoom )
+{
+	// at the default camera and closer the chips keep their whole step; pulled back past it they
+	// shrink as the health bar's width does, so a far view of a town is not a field of seat rows
+	// wider than the buildings under them
+	const Real k = (Real)Drawable_pipPixel( uiScale );
+	return zoom > 1.0f ? k / zoom : k;
+}
+
 namespace
 {
+	// n chip pixels at s screen pixels each, never under `least`
+	Int pipLen( Int n, Real s, Int least )
+	{
+		return max( least, (Int)( n * s + 0.5f ) );
+	}
+
 	// the first free row under a bar nothing hangs from: the selection frame's row and one clear
 	Int pipsClearTop( const IRegion2D *bar )
 	{
@@ -4148,28 +4164,43 @@ namespace
 
 	// the first row's top: past the selection frame's row, whether or not it is drawn, then three
 	// clear pixels, so the row never touches the bar and does not jump when the unit is selected
-	Int pipsTop( const IRegion2D *bar, Int k )
+	Int pipsTop( const IRegion2D *bar, Real s )
 	{
-		return bar->lo.y + max( 3, (Int)(bar->hi.y - bar->lo.y) ) + 1 + 3 * k;
+		return bar->lo.y + max( 3, (Int)(bar->hi.y - bar->lo.y) ) + 1 + pipLen( 3, s, 1 );
 	}
 
 	//
-	// The shapes are masks in 1080p pixels, each pixel k screen pixels square: a seat is a 6x6 chip
-	// with its corners cut, a round a 4x8 slug with a 2 pixel tip. The outer mask is the 1 pixel edge,
-	// what lies inside every neighbour is the fill.
+	// The shapes are masks in 1080p pixels, each pixel s screen pixels square: a seat is a 6x6 chip
+	// with its corners cut, a round a 4x8 slug with a 2 pixel tip. The outer mask is the edge `e`
+	// thick, what lies inside every neighbour is the fill.
 	//
-	void fillChip( Int x, Int y, Int k, Color edge, Color fill )
+	void fillChip( Int x, Int y, Int c, Int e, Color edge, Color fill )
 	{
-		TheDisplay->drawFillRect( x + k, y, 4 * k, 6 * k, edge );
-		TheDisplay->drawFillRect( x, y + k, 6 * k, 4 * k, edge );
-		TheDisplay->drawFillRect( x + k, y + k, 4 * k, 4 * k, fill );
+		TheDisplay->drawFillRect( x + e, y, c - 2 * e, c, edge );
+		TheDisplay->drawFillRect( x, y + e, c, c - 2 * e, edge );
+		TheDisplay->drawFillRect( x + e, y + e, c - 2 * e, c - 2 * e, fill );
 	}
 
-	void fillSlug( Int x, Int y, Int k, Color edge, Color fill )
+	void fillSlug( Int x, Int y, Int w, Int h, Int e, Color edge, Color fill )
 	{
-		TheDisplay->drawFillRect( x + k, y, 2 * k, k, edge );
-		TheDisplay->drawFillRect( x, y + k, 4 * k, 7 * k, edge );
-		TheDisplay->drawFillRect( x + k, y + k, 2 * k, 6 * k, fill );
+		TheDisplay->drawFillRect( x + e, y, w - 2 * e, e, edge );
+		TheDisplay->drawFillRect( x, y + e, w, h - e, edge );
+		TheDisplay->drawFillRect( x + e, y + e, w - 2 * e, h - 2 * e, fill );
+	}
+
+	// Zoomed far enough out that a chip's corners would leave under two pixels of fill (a three pixel
+	// chip drew a plus with one pixel of colour), both rows turn to dots: from three pixels up the
+	// colour inset a pixel in a dark block, so the rim that holds it on snow and sand stays, and the
+	// bare colour below that.
+	void fillDot( Int x, Int y, Int w, Int h, Color dark, Color colour )
+	{
+		if( w < 3 || h < 3 )
+		{
+			TheDisplay->drawFillRect( x, y, w, h, colour );
+			return;
+		}
+		TheDisplay->drawFillRect( x, y, w, h, dark );
+		TheDisplay->drawFillRect( x + 1, y + 1, w - 2, h - 2, colour );
 	}
 }
 
@@ -4180,9 +4211,13 @@ namespace
 // ------------------------------------------------------------------------------------------------
 Int Drawable::loadPips( const IRegion2D *healthBarRegion, Bool draw ) const
 {
-	const Int k = Drawable_pipPixel( TheUIScale() );
+	const Real s = Drawable_pipScale( TheUIScale(), TheTacticalView->getZoom() );
+	const Int e = pipLen( 1, s, 1 );		// the edge
+	const Int gap = pipLen( 2, s, 1 );
+	const Int c = pipLen( 6, s, 2 );		// a seat's side
+	const Bool dots = c - 2 * e < 2;		// one switch for both rows
 	const Int left = healthBarRegion->lo.x;
-	Int y = pipsTop( healthBarRegion, k );
+	Int y = pipsTop( healthBarRegion, s );
 	Int bottom = pipsClearTop( healthBarRegion );
 	Int total, full, infantry;
 
@@ -4195,15 +4230,24 @@ Int Drawable::loadPips( const IRegion2D *healthBarRegion, Bool draw ) const
 	// rounds: amber slugs, six pixels apart
 	if( ammoPipCounts( total, full ) )
 	{
+		// as wide as a fill inside the edge needs while the chips still have one
+		const Int w = dots ? pipLen( 4, s, 2 ) : max( pipLen( 4, s, 2 ), 2 * e + 1 );
+		const Int h = pipLen( 8, s, 3 );
 		if( draw )
 		{
 			const Color ROUND = GameMakeColor( 255, 190, 48, 255 );
+			const Int pitch = max( w + 1, pipLen( 6, s, 1 ) );
 			for( Int i = 0; i < total; ++i )
-				fillSlug( left + i * 6 * k, y, k, i < full ? EDGE : EMPTY_EDGE, i < full ? ROUND : EMPTY_FILL );
+			{
+				if( dots )
+					fillDot( left + i * pitch, y, w, h, EDGE, i < full ? ROUND : EMPTY_EDGE );
+				else
+					fillSlug( left + i * pitch, y, w, h, e, i < full ? EDGE : EMPTY_EDGE, i < full ? ROUND : EMPTY_FILL );
+			}
 		}
-		y += 8 * k;
-		bottom = y + 2 * k;
-		y += 2 * k;		// a unit carrying both keeps its seats under its rounds
+		y += h;
+		bottom = y + gap;
+		y += gap;		// a unit carrying both keeps its seats under its rounds
 	}
 
 	// seats: soldiers first in green, anything else aboard in blue, then the free seats; eight apart
@@ -4215,11 +4259,16 @@ Int Drawable::loadPips( const IRegion2D *healthBarRegion, Bool draw ) const
 			const Color VEHICLE = GameMakeColor( 110, 190, 255, 255 );
 			const Int soldiers = min( infantry, full );
 			for( Int i = 0; i < total; ++i )
-				fillChip( left + i * 8 * k, y, k, i < full ? EDGE : EMPTY_EDGE,
-									i < soldiers ? SOLDIER : i < full ? VEHICLE : EMPTY_FILL );
+			{
+				const Color fill = i < soldiers ? SOLDIER : i < full ? VEHICLE : EMPTY_FILL;
+				if( dots )
+					fillDot( left + i * ( c + gap ), y, c, c, EDGE, i < full ? fill : EMPTY_EDGE );
+				else
+					fillChip( left + i * ( c + gap ), y, c, e, i < full ? EDGE : EMPTY_EDGE, fill );
+			}
 		}
-		y += 6 * k;
-		bottom = y + 2 * k;
+		y += c;
+		bottom = y + gap;
 	}
 	return bottom;
 }

@@ -11139,6 +11139,17 @@ TEST(load_pip_chips_scale_in_whole_pixels)
 	CHECK_EQ( Drawable_pipPixel( 0.5f ), 1 );
 }
 
+/** Pulled back past the default camera the chips shrink as the health bar's width does; at it and
+	 closer they keep the whole step, so a close look never grows them. */
+TEST(load_pip_chips_shrink_with_the_bar_when_zoomed_out)
+{
+	CHECK_NEAR( Drawable_pipScale( 1.8f, 0.5f ), 1.0f, 1e-6f );		// close: never larger
+	CHECK_NEAR( Drawable_pipScale( 1.8f, 1.0f ), 1.0f, 1e-6f );
+	CHECK_NEAR( Drawable_pipScale( 1.8f, 2.0f ), 0.5f, 1e-6f );
+	CHECK_NEAR( Drawable_pipScale( 3.6f, 0.5f ), 2.0f, 1e-6f );		// 4K keeps its step up close
+	CHECK_NEAR( Drawable_pipScale( 3.6f, 2.9f ), 2.0f / 2.9f, 1e-6f );
+}
+
 /** Who still shows free seats with nobody inside: a transport always, a garrison or a Barracks
 	 never whatever the option says, a Tunnel Network as Empty Building Slots says. */
 TEST(empty_seats_hide_on_a_barracks_whatever_the_option)

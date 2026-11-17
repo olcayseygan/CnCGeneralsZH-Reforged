@@ -262,7 +262,7 @@ static void fitSendingBox( GameWindow *box )
 	bodyH = textH + 2 * margin;		// the body centres its text vertically
 	body->winSetPosition( bodyX, bandH );
 	body->winSetSize( bodyW, bodyH );
-	boxH = bandH + bodyH;
+	boxH = bandH + bodyH + UIStyle::px( 6.0f );		// the body's black fill stops short of the box's bottom edge
 	parent->winSetSize( boxW, boxH );
 	parent->winSetPosition( (TheDisplay->getWidth() - boxW) / 2, (TheDisplay->getHeight() - boxH) / 2 );
 }

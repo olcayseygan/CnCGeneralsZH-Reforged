@@ -1,0 +1,43 @@
+# The Supply Drop Zone's cargo plane flown over anti-air, for the rule that nothing may target it
+# (AmericaJetCargoPlaneDropZone in FixesReforged.ini, OCL_AmericaSupplyDropZoneCrateDrop in
+# ObjectCreationListReforged.ini). cargocrash.txt's lane on Twilight Flame: eight Avengers of seat 1
+# at 2100,4100, whose laser only shoots aircraft. First the drop zone's plane crosses the lane, then
+# the plain cargo plane the Supply Drop power and the paradrops fly. Then a real drop zone of seat 0
+# goes up at 837,3488, with eight more Avengers at 437,3488 between it and the west edge its plane
+# comes in from. Its first plane is called two minutes after it stands, about frame 5210.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -maxframes 7500
+#     -scenario dropzoneplane -logPrefix dropzoneplane_
+#
+# Reading the log: AmericaJetCargoPlaneDropZone at 800 is 1 alive at 1000 of 1000 after crossing the
+# lane; AmericaJetCargoPlane at 1600 is 0 alive, shot down on the same lane. The first plane stays
+# parked at the lane's far end, so from 5400 the drop zone's own plane is the second one alive, and
+# every tally after that must read 1000 health a plane. Seat 0's money rises by the drop's 1500 once
+# the crates land, and no AmericaJetCargoPlane appears.
+
+15    spawn      1  AmericaTankAvenger           8   2100 4100   40
+
+30    spawn      0  AmericaJetCargoPlaneDropZone 1   900 4100
+31    move       0  AmericaJetCargoPlaneDropZone     4400 4100
+800   tally      0  AmericaJetCargoPlaneDropZone 1
+
+810   spawn      0  AmericaJetCargoPlane         1   900 4100
+811   move       0  AmericaJetCargoPlane             4400 4100
+1600  tally      0  AmericaJetCargoPlane         0
+
+1610  spawn      0  AmericaSupplyDropZone        1   start0:300:300
+1620  spawn      1  AmericaTankAvenger           8   start0:-100:300   40
+
+5100  tally      0  AmericaJetCargoPlaneDropZone 1
+5400  tally      0  AmericaJetCargoPlaneDropZone
+5700  tally      0  AmericaJetCargoPlaneDropZone
+6000  tally      0  AmericaJetCargoPlaneDropZone
+6300  tally      0  AmericaJetCargoPlaneDropZone
+6600  tally      0  AmericaJetCargoPlaneDropZone
+6900  tally      0  AmericaJetCargoPlaneDropZone
+7200  tally      0  AmericaJetCargoPlaneDropZone
+7200  tally      0  AmericaJetCargoPlane         0
+7200  tally      1  AmericaTankAvenger           16
+7200  tally      0  AmericaSupplyDropZone        1

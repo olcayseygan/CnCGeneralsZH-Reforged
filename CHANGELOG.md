@@ -1364,6 +1364,7 @@ found and fixed, EA's own, not port damage.**
 - A Paladin's laser fires every two seconds instead of every second. It used to shoot down every missile a Patriot sent at it, so four Paladins killed a Patriot every time and lost a quarter of its price doing it, while Crusaders for the same money never broke one. The Patriot now stands half the time.
 - The Quad Cannon costs 800, up from 700 (850 for the Toxin and Demolitions generals). For the same money seven of them were an even fight for five Crusaders; now tanks beat them, and they still shred every kind of infantry.
 - The Dragon Tank has 400 health instead of 280. It was the worst unit in the game for its price and lost to every armored target; now it trades evenly with Paladins and Quad Cannons and still loses to main battle tanks.
+- The Supply Drop Zone's cargo plane can no longer be shot at. A new one comes every two minutes whatever happened to the last, so anti-air on its route spent its fire on a plane that was back two minutes later. No defence, unit or computer player picks it as a target now and you cannot order an attack on it, so it wears no health bar either. Eight Avengers sat on its route in a test and the plane flew in, dropped its $1,500 and left at full health; the cargo plane of the Supply Drop power, the paradrops and the reinforcement pads is still fair game, and the same Avengers shot it down.
 - Replays recorded before this change play out differently.
 
 ## Weapons and units that were quietly wrong

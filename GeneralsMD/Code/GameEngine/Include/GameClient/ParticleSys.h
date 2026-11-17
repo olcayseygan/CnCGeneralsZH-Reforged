@@ -216,6 +216,17 @@ public:
 	/// The cell of its template's flipbook this particle shows now (ParticleSystemTemplate's Flipbook
 	/// fields), counted row by row from the top left; 0 for a card that is not a flipbook.
 	UnsignedInt getFlipbookFrame( void ) const;
+	/// Whether this particle's flipbook frame is drawn flipped left to right (FlipbookMirror).
+	Bool isFlipbookMirrored( void ) const { return m_flipbookMirrored; }
+
+	/** The flipbook cell for a particle: an atlas of frames cut into variants equal runs, the run it
+		* picked, the frame it starts on inside that run, its age and lifetime in logic frames, and the
+		* rate in frames a second with the game seconds a logic frame lasts (a rate of 0 plays the run
+		* once over the life).  Pure, so the tests can hold it. */
+	static UnsignedInt flipbookFrameAt( UnsignedInt frames, UnsignedInt variants, UnsignedInt variant, UnsignedInt start,
+		UnsignedInt age, UnsignedInt lifetime, Real rate, Real secondsPerLogicFrame );
+	/// How many frames one run of the atlas holds: frames over variants, the whole atlas for 0 or 1 or too many.
+	static UnsignedInt flipbookRunLength( UnsignedInt frames, UnsignedInt variants );
 
 protected:
 
@@ -254,7 +265,9 @@ protected:
 
 
 	Bool							m_diesThisUpdate;											///< set on the job pool, read when the dead are removed; never saved
-	UnsignedByte			m_flipbookStart;											///< the flipbook cell it starts on; drawing only, never saved
+	UnsignedByte			m_flipbookStart;											///< the flipbook cell it starts on inside its run; drawing only, never saved
+	UnsignedByte			m_flipbookVariant;										///< the run of frames it plays (FlipbookVariants); drawing only, never saved
+	Bool							m_flipbookMirrored;										///< drawn flipped left to right (FlipbookMirror); drawing only, never saved
 public:
 	Bool							m_inSystemList;
 	Bool							m_inOverallList;
@@ -650,7 +663,13 @@ public:
 		* second, looping; 0 (the default) plays the frames once over the particle's life.
 		* "FlipbookRandomStart = Yes" starts each particle on a frame from the client's random stream,
 		* and a particle playing once then runs from there to the last.  Drawing only, and only for
-		* billboards and the point group: a streak or a ground field still draws the whole atlas. */
+		* billboards and the point group: a streak or a ground field still draws the whole atlas.
+		* "FlipbookVariants = 4" cuts the frames into that many equal runs back to back (4 runs of 16 in
+		* an 8 by 8); each particle picks one at birth and the rate, the play once and the random start
+		* all work inside it.  Frames left over past the last whole run are never shown.
+		* "FlipbookMirror = Yes" draws about half the particles flipped left to right, picked at birth,
+		* and only with a FlipbookGrid: a plain card ignores it.  It mirrors the sorted billboards, which is nearly every smoke, fire and dust system; an
+		* alpha-tested, ground-aligned or volume flipbook, drawn by the point group, is not mirrored. */
 	/** "Emissive = Yes": an alpha blended system that gives light rather than takes it, a fireball's
 		* body: no glow from nearby fires and lights, and nothing cast into the sun's smoke map, so it
 		* neither shades itself nor darkens the ground under it.  Drawing only. */
@@ -664,6 +683,8 @@ public:
 	Bool isGpuEligible( void ) const;
 	const AsciiString &getParticleTypeName( void ) const { return m_particleTypeName; }
 	Bool isFlipbookRandomStart( void ) const { return m_flipbookRandomStart; }
+	UnsignedInt getFlipbookVariants( void ) const { return m_flipbookVariants; }
+	Bool isFlipbookMirror( void ) const { return m_flipbookMirror; }
 
 	// This function was made const because of update modules' module data being all const.
 	ParticleSystem *createSlaveSystem( Bool createSlaves = TRUE ) const ;					///< if returns non-NULL, it is a slave system for use
@@ -694,6 +715,8 @@ protected:
 	UnsignedByte							m_flipbookGridLog2;								///< log2 of the flipbook's frames a side, 0 for a plain card (client only)
 	Real											m_flipbookRate;										///< flipbook frames a second, looping; 0 plays once over the life (client only)
 	Bool											m_flipbookRandomStart;						///< each particle starts on a random flipbook frame (client only)
+	UnsignedByte							m_flipbookVariants;								///< equal runs of frames, each particle playing one, 1 for the whole atlas (client only)
+	Bool											m_flipbookMirror;									///< about half the particles drawn flipped left to right (client only)
 
 	// This has to be mutable because of the delayed initialization thing in createSlaveSystem
 	mutable const ParticleSystemTemplate *m_slaveTemplate;		///< if non-NULL, use this to create a slave system

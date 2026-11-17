@@ -250,15 +250,18 @@ public:
 	/// (DX8Wrapper::Convert_Color_Clamp).  glow goes in the normal, which an unlit billboard does not
 	/// otherwise read.  frame_log2 and frame pick one cell of a square atlas, as
 	/// Set_Frame_Row_Column_Count_Log2 and the frame array do; 0 and 0 are the whole texture.
+	/// mirror flips the cell left to right inside its own bounds (a particle's FlipbookMirror).
 	/// Touches nothing but its arguments and the static tables, so any thread may call it.
 	static inline void		Write_Billboard(VertexFormatXYZNDUV2 *quad, const Matrix4x4 &view,
 										const Vector3 &world, float size, unsigned char orientation, unsigned color,
-										const Vector3 &glow, unsigned frame_log2=0, unsigned frame=0)
+										const Vector3 &glow, unsigned frame_log2=0, unsigned frame=0, bool mirror=false)
 	{
 		const Vector4 result=view*world;
 		const Vector3 point(result.X,result.Y,result.Z);
 		const Vector3 *corners=_QuadVertexLocationOrientationTable[orientation];
 		const Vector2 *uv=_QuadVertexUVFrameTable[frame_log2] + frame*4;
+		// corner 0 is the cell's left edge and corner 2 its right, so u becomes left + right - u
+		const float mirror_sum=uv[0].X + uv[2].X;
 		for (int k=0;k<4;++k)
 		{
 			const Vector3 location=point + corners[k] * size;
@@ -269,7 +272,7 @@ public:
 			quad[k].ny=glow.Y;
 			quad[k].nz=glow.Z;
 			quad[k].diffuse=color;
-			quad[k].u1=uv[k].X;
+			quad[k].u1=mirror ? mirror_sum - uv[k].X : uv[k].X;
 			quad[k].v1=uv[k].Y;
 		}
 	}

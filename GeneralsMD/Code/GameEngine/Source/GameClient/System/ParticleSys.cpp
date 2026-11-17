@@ -348,10 +348,22 @@ Particle::Particle( ParticleSystem *system, const ParticleInfo *info )
 
 	// Drawn only when the system's template is a flipbook that asks for it, so every other system
 	// leaves the client's random stream as it was.
+	// Variants and the mirror draw in that order, before and after the start, each only when asked for.
 	const ParticleSystemTemplate *flipbook = system->getTemplate();
 	m_flipbookStart = 0;
-	if (flipbook->getFlipbookGridLog2() != 0 && flipbook->isFlipbookRandomStart())
-		m_flipbookStart = (UnsignedByte)GameClientRandomValue( 0, ( 1 << ( 2 * flipbook->getFlipbookGridLog2() ) ) - 1 );
+	m_flipbookVariant = 0;
+	m_flipbookMirrored = FALSE;
+	if (flipbook->getFlipbookGridLog2() != 0)
+	{
+		const UnsignedInt frames = 1u << ( 2 * flipbook->getFlipbookGridLog2() );
+		const UnsignedInt run = flipbookRunLength( frames, flipbook->getFlipbookVariants() );
+		if (run < frames)
+			m_flipbookVariant = (UnsignedByte)GameClientRandomValue( 0, (Int)( frames / run ) - 1 );
+		if (flipbook->isFlipbookRandomStart())
+			m_flipbookStart = (UnsignedByte)GameClientRandomValue( 0, (Int)run - 1 );
+		if (flipbook->isFlipbookMirror())
+			m_flipbookMirrored = GameClientRandomValue( 0, 1 ) != 0;
+	}
 
 	m_size = info->m_size;
 	m_sizeRate = info->m_sizeRate;
@@ -419,16 +431,35 @@ Particle::~Particle()
 UnsignedInt Particle::getFlipbookFrame( void ) const
 {
 	const ParticleSystemTemplate *flipbook = m_system->getTemplate();
-	const UnsignedInt frames = 1u << ( 2 * flipbook->getFlipbookGridLog2() );
-	if (frames == 1 || m_lifetime == 0)
-		return m_flipbookStart;
+	return flipbookFrameAt( 1u << ( 2 * flipbook->getFlipbookGridLog2() ), flipbook->getFlipbookVariants(), m_flipbookVariant,
+		m_flipbookStart, m_lifetime - m_lifetimeLeft, m_lifetime, flipbook->getFlipbookRate(), GAME_SECONDS_PER_LOGICFRAME_REAL );
+}
 
-	const UnsignedInt age = m_lifetime - m_lifetimeLeft;
-	if (flipbook->getFlipbookRate() > 0.0f)
-		return ( m_flipbookStart + (UnsignedInt)( age * flipbook->getFlipbookRate() * GAME_SECONDS_PER_LOGICFRAME_REAL ) ) % frames;
+// ------------------------------------------------------------------------------------------------
+/*static*/ UnsignedInt Particle::flipbookRunLength( UnsignedInt frames, UnsignedInt variants )
+{
+	return ( variants > 1 && variants <= frames ) ? frames / variants : frames;
+}
 
-	const UnsignedInt frame = m_flipbookStart + (UnsignedInt)( (Real)age / (Real)m_lifetime * (Real)( frames - m_flipbookStart ) );
-	return frame < frames ? frame : frames - 1;
+// ------------------------------------------------------------------------------------------------
+/** At one variant it is the whole atlas as before, the same casts in the same order, so a template
+	* without FlipbookVariants shows the frames it showed. */
+// ------------------------------------------------------------------------------------------------
+/*static*/ UnsignedInt Particle::flipbookFrameAt( UnsignedInt frames, UnsignedInt variants, UnsignedInt variant, UnsignedInt start,
+	UnsignedInt age, UnsignedInt lifetime, Real rate, Real secondsPerLogicFrame )
+{
+	const UnsignedInt run = flipbookRunLength( frames, variants );
+	const UnsignedInt base = ( variant < frames / run ? variant : 0 ) * run;
+	if (start >= run)
+		start = run - 1;
+	if (run == 1 || lifetime == 0)
+		return base + start;
+
+	if (rate > 0.0f)
+		return base + ( start + (UnsignedInt)( age * rate * secondsPerLogicFrame ) ) % run;
+
+	const UnsignedInt frame = start + (UnsignedInt)( (Real)age / (Real)lifetime * (Real)( run - start ) );
+	return base + ( frame < run ? frame : run - 1 );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -3611,6 +3642,8 @@ const FieldParse ParticleSystemTemplate::m_fieldParseTable[] =
 	{ "FlipbookGrid",								parseFlipbookGrid,										NULL,		offsetof( ParticleSystemTemplate, m_flipbookGridLog2 ) },
 	{ "FlipbookRate",								INI::parseReal,												NULL,		offsetof( ParticleSystemTemplate, m_flipbookRate ) },
 	{ "FlipbookRandomStart",				INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_flipbookRandomStart ) },
+	{ "FlipbookVariants",						INI::parseUnsignedByte,								NULL,		offsetof( ParticleSystemTemplate, m_flipbookVariants ) },
+	{ "FlipbookMirror",							INI::parseBool,												NULL,		offsetof( ParticleSystemTemplate, m_flipbookMirror ) },
 
 	{ "Lifetime",								SPEED_FIELD( ParticleSystemTemplate, m_lifetime ) },
 	{ "SystemLifetime",					SPEED_FIELD( ParticleSystemTemplate, m_systemLifetime ) },
@@ -3789,6 +3822,8 @@ ParticleSystemTemplate::ParticleSystemTemplate( const AsciiString &name ) :
 	m_flipbookGridLog2 = 0;
 	m_flipbookRate = 0.0f;
 	m_flipbookRandomStart = FALSE;
+	m_flipbookVariants = 1;
+	m_flipbookMirror = FALSE;
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -10,11 +10,11 @@ texture (brightness percentiles, scratch work of 2026-11-16) so the INI's retail
 these exactly as they tint the card they replace.
 
 Looks:
-    blast A-D   ReforgedBlastA.dds .. ReforgedBlastD.dds, 4 by 4 frames of 256 pixels, played once
-                over a particle's life (FlipbookRate 0). A cluster of billows bursts out, rolls,
-                cools and breaks into lumps. Additive (black ground), EXexplo03's ramp. Four
-                different clusters, one atlas each: the engine has no per-particle variant pick, so
-                each blast system takes its own and a death mixes them.
+    blast       ReforgedBlastV.dds, 8 by 8 frames of 256 pixels: four different clusters of 16
+                frames each, back to back (frames 0-15, 16-31, 32-47, 48-63, counted row by row),
+                for FlipbookVariants = 4, so every particle picks one cluster at birth and plays it
+                once over its life (FlipbookRate 0). A cluster of billows bursts out, rolls, cools
+                and breaks into lumps. Additive (black ground), EXexplo03's ramp.
     smoke       ReforgedSmokeLoop.dds, 8 by 8 frames of 256 pixels, one churning puff whose 64
                 frames loop. Alpha, the mid grey of EXCloud01 and EXSmokePuff. FlipbookRate with
                 FlipbookRandomStart: every puff starts on its own frame, so no two look alike.
@@ -423,11 +423,10 @@ def dds(image, cell, additive):
 
 # ---------------------------------------------------------------------------------------------
 
+BLAST_SEEDS = (11, 23, 37, 52)		# the four clusters, once ReforgedBlastA..D, now the runs of ReforgedBlastV
+
 LOOKS = (
-	("ReforgedBlastA", lambda: blast_frames(11), True),
-	("ReforgedBlastB", lambda: blast_frames(23), True),
-	("ReforgedBlastC", lambda: blast_frames(37), True),
-	("ReforgedBlastD", lambda: blast_frames(52), True),
+	("ReforgedBlastV", lambda: np.concatenate([blast_frames(seed) for seed in BLAST_SEEDS]), True),
 	("ReforgedSmokeLoop", lambda: smoke_frames(7), False),
 	("ReforgedFireLoop", lambda: fire_frames(5), True),
 )
@@ -479,6 +478,9 @@ def selfcheck():
 	frames = blast_frames(3, cell=32, frames=4)
 	assert frames.shape == (4, 32, 32, 4) and frames[..., :3].max() > 0.2
 	assert frames[0, 0, 0, :3].max() == 0.0											# black ground
+	runs = np.arange(64, dtype=float)[:, None, None, None] * np.ones((1, 2, 2, 4))
+	atlas = sheet(runs)
+	assert atlas[4, 0, 0] == 16 and atlas[0, 15, 0] == 7 and atlas[12, 2, 0] == 49	# variants run row by row
 	loop = fire_frames(3, cell=32, frames=8)
 	last, largest = seam(loop)
 	assert last <= largest * 1.25, (last, largest)			# the seam is one more step, not a jump

@@ -825,7 +825,7 @@ static void fillBillboards( Int index, void *context )
 		// The orientation table's index wraps, as it did on Windows (Platform/MsvcFloatCasts.h).
 		const uint8 orientation = floatToByteAsMsvc( p->getAngle() * 255.0f / (2.0f * PI) );
 		PointGroupClass::Write_Billboard( quad, job->view, Vector3( pos->x, pos->y, pos->z ), psize,
-			orientation, packed, glow, flipbookLog2, flipbookLog2 ? p->getFlipbookFrame() : 0 );
+			orientation, packed, glow, flipbookLog2, flipbookLog2 ? p->getFlipbookFrame() : 0, p->isFlipbookMirrored() );
 		if (fill.fire)
 		{
 			// FIRE_LOOK_SAMPLING's packing: a whole number below 256, the seed times eight plus the

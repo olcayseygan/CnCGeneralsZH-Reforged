@@ -1407,6 +1407,35 @@ TEST(water_splashes_take_blasts_by_name_and_every_list_that_scorches)
 	CHECK_NEAR( TheFXListStore->findFXList( "SplashTest_Nuke" )->getSplashRadius(), 120.0f, 0.01f );
 }
 
+/* A flipbook's frame: at one variant the whole atlas as before (once over the life from the start,
+	 or looping at the rate), and with FlipbookVariants the same inside the particle's own run. */
+TEST(flipbook_frame_plays_inside_the_particles_variant)
+{
+	const Real SPF = 0.05f;
+	// one variant, EA's atlas whole: once over the life, from a random start, looping at a rate
+	CHECK_EQ( Particle::flipbookFrameAt( 64, 1, 0, 0, 50, 100, 0.0f, SPF ), 32u );
+	CHECK_EQ( Particle::flipbookFrameAt( 64, 1, 0, 0, 100, 100, 0.0f, SPF ), 63u );
+	CHECK_EQ( Particle::flipbookFrameAt( 64, 1, 0, 10, 50, 100, 0.0f, SPF ), 37u );
+	CHECK_EQ( Particle::flipbookFrameAt( 64, 1, 0, 0, 30, 100, 20.0f, SPF ), 30u );
+	CHECK_EQ( Particle::flipbookFrameAt( 64, 1, 0, 0, 70, 100, 20.0f, SPF ), 6u );
+	CHECK_EQ( Particle::flipbookFrameAt( 1, 1, 0, 0, 70, 100, 20.0f, SPF ), 0u );
+
+	// four runs of 16 in an 8 by 8: each plays and loops inside its own run
+	CHECK_EQ( Particle::flipbookFrameAt( 64, 4, 2, 0, 50, 100, 0.0f, SPF ), 40u );
+	CHECK_EQ( Particle::flipbookFrameAt( 64, 4, 2, 0, 100, 100, 0.0f, SPF ), 47u );
+	CHECK_EQ( Particle::flipbookFrameAt( 64, 4, 3, 0, 70, 100, 20.0f, SPF ), 54u );
+	CHECK_EQ( Particle::flipbookFrameAt( 64, 4, 1, 5, 30, 100, 20.0f, SPF ), 19u );
+	CHECK_EQ( Particle::flipbookFrameAt( 64, 4, 2, 5, 70, 0, 20.0f, SPF ), 37u );
+
+	// three runs of 21 leave frame 63 unshown; nonsense counts and picks fall back, never overrun
+	CHECK_EQ( Particle::flipbookFrameAt( 64, 3, 2, 0, 100, 100, 0.0f, SPF ), 62u );
+	CHECK_EQ( Particle::flipbookRunLength( 64, 0 ), 64u );
+	CHECK_EQ( Particle::flipbookRunLength( 64, 100 ), 64u );
+	CHECK_EQ( Particle::flipbookRunLength( 256, 16 ), 16u );
+	CHECK_EQ( Particle::flipbookFrameAt( 64, 4, 5, 0, 0, 100, 0.0f, SPF ), 0u );
+	CHECK_EQ( Particle::flipbookFrameAt( 64, 4, 0, 40, 0, 100, 0.0f, SPF ), 15u );
+}
+
 /* Data\INI\FXListReforged.ini is the fork's own explosion light: 89 of EA's FXLists, each repeated
 	 whole with one LightPulse added.  Whole, because FXListStore::parseFXListDefinition clears an
 	 entry before re-reading it - a half-copied block does not add a light, it deletes an explosion.

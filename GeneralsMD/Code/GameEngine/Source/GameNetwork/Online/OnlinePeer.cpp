@@ -139,6 +139,7 @@ void OnlineSession::forgetAccount()
 {
 	authed = FALSE;
 	peerLoggedIn = FALSE;
+	serverAcks = FALSE;		// no answer comes for this account's report any more
 	replayedMatch = matchId;		// the account's match is gone with it: no replay goes up under it after a new login
 	quickMatch.clear();
 	id = 0;
@@ -182,6 +183,9 @@ void OnlineSession::beginTest( std::vector<OnlineMessage> *lines )
 	replayedMatch.clear();
 	quickMatch.clear();
 	recordingMatch.clear();
+	replaySentMatch.clear();
+	reportAnswered.clear();
+	replayAnswered.clear();
 	resultLine.clear();
 	result.clear();
 	motd.clear();
@@ -583,6 +587,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		authWaiting = FALSE;
 		authed = TRUE;
 		peerLoggedIn = FALSE;
+		serverAcks = m.getBool( "acks" );		// an older server answers neither a report nor a replay
 		id = m.getInt( "id" );
 		nick = m.getString( "nick" );
 		token = m.getString( "token" );
@@ -931,6 +936,20 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 	{
 		armies = m;
 		armiesState = ONLINE_LADDER_READY;
+	}
+	else if (t == "report.ok" || t == "report.err" || t == "replay.ok" || t == "replay.err")
+	{
+		// the server has the report or the replay, or refused it: either way the score screen stops waiting
+		const std::string match = m.getString( "match" );
+		if (match.empty() || match != matchId)
+		{
+			DEBUG_LOG(("online: ignored a %s for match %s\n", t.c_str(), match.c_str()));
+			return;
+		}
+		const Bool isReport = t.compare( 0, 7, "report." ) == 0;
+		(isReport ? reportAnswered : replayAnswered) = match;
+		if (t == "report.err" || t == "replay.err")
+			DEBUG_LOG(("ONLINE %s REFUSED match=%s code=%s\n", isReport ? "REPORT" : "REPLAY", match.c_str(), m.getString( "code", "unknown" ).c_str()));
 	}
 	else if (t == "rated" || t == "unrated")
 	{

@@ -144,10 +144,12 @@ enum { ONLINE_REPLAY_CHUNK = 4096, ONLINE_REPLAY_MAX = 2 * 1024 * 1024 };
 AsciiString OnlineClaimQuickMatch( void );
 void OnlineSendReplay( const char *match, const AsciiString &path );
 
-/* TRUE while the last match's report went out and something of it has not reached the socket: the
-	 replay its recording claimed is not queued yet, or the connection still holds lines it has not
-	 written.  FALSE with no report for the match, and once the connection is gone (nothing left to wait
-	 for).  The score screen holds a "sending results" box on it. */
+/* TRUE while the last match's report went out and the server may not have it yet: the replay its
+	 recording claimed is not queued yet, or, from a server whose auth.ok said acks, report.ok/err (and
+	 replay.ok/err when this client sent the replay) has not come back for the match.  An older server
+	 confirms nothing, and there it is the connection still holding lines it has not written.  FALSE with
+	 no report for the match, and once the connection is gone (nothing left to wait for).  The score
+	 screen holds a "sending results" box on it. */
 Bool OnlineIsSendingResults( void );
 
 /* What the server has said about a player, by nick: the round trip to the server from `player` events

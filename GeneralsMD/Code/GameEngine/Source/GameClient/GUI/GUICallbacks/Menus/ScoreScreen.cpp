@@ -220,7 +220,8 @@ static void showOnlineVerdict( void )
 
 /* -online: the report and the replay leave on the connection's own thread while this screen is up, and
 	 a player who quits here can take them down with the process.  A box with no button holds the screen
-	 until the connection has written them, or SENDING_BOX_MAX_MS, whichever comes first; it never holds
+	 until the server confirms them (an older server: until the connection has written them), or
+	 SENDING_BOX_MAX_MS, whichever comes first; it never holds
 	 the send itself.  It stays a second at least, so a small replay does not flash it for one frame, and
 	 shows once a screen, so chat sent after it does not bring it back. */
 enum { SENDING_BOX_MIN_MS = 1000, SENDING_BOX_MAX_MS = 30000 };

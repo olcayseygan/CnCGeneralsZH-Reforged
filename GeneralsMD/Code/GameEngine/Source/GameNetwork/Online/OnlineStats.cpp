@@ -206,7 +206,9 @@ Bool OnlineIsSendingResults( void )
 		return FALSE;		// no report went out for this match
 	if (s.recordingMatch == s.matchId && s.replayedMatch != s.matchId)
 		return TRUE;		// the recording has not closed: its replay is still to be queued
-	return s.connection && s.connection->unsentLines() > 0;
+	if (s.serverAcks)
+		return s.reportAnswered != s.matchId || (s.replaySentMatch == s.matchId && s.replayAnswered != s.matchId);
+	return s.connection && s.connection->unsentLines() > 0;		// an older server: written is all we can know
 }
 
 void OnlineSendReplay( const char *match, const AsciiString &path )
@@ -245,6 +247,7 @@ void OnlineSendReplay( const char *match, const AsciiString &path )
 		m.setString( "data", base64( (const unsigned char *)bytes.data() + at, len ) );
 		s.send( m );
 	}
+	s.replaySentMatch = s.matchId;
 	DEBUG_LOG(("ONLINE REPLAY match=%s bytes=%d lines=%d\n", s.matchId.c_str(), (Int)bytes.size(), seq));
 }
 

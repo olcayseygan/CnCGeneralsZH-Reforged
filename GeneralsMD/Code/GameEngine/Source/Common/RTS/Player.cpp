@@ -1001,6 +1001,11 @@ void Player::initFromDict(const Dict* d)
 				m_ai->setAISkillLevel((AISkillLevel)skillInt);
 			else
 				m_ai->setAISkillLevel(AIPlayer::skillLevelForDifficulty(difficulty));
+			// the rating, which only a seat off its rung's anchor writes (-airating); without it the rung's anchor
+			Bool ratingExists = false;
+			const Int ratingHundredths = d->getInt(TheKey_skirmishAIRating, &ratingExists);
+			if (ratingExists)
+				m_ai->setAIRating(aiRatingFromHundredths(ratingHundredths));
 			// the personality, which only a non-Normal seat writes; after the rung, since a Rusher's rush reads it
 			Bool personaExists = false;
 			const Int personaInt = d->getInt(TheKey_skirmishAIPersonality, &personaExists);
@@ -3714,7 +3719,7 @@ Int IncomeBonusStep( Int bonus, Int target )
 
 Int Player::incomePercent( void )
 {
-  return isSkirmishAIPlayer() ? TheAI->getDifficultyProfile( getAISkillLevel() )->m_incomePercent + m_ai->getIncomeBonus() : 100;
+  return isSkirmishAIPlayer() ? m_ai->ratedProfile()->m_incomePercent + m_ai->getIncomeBonus() : 100;
 }
 
 UnsignedInt Player::earnMoney( UnsignedInt amount )
@@ -3834,7 +3839,7 @@ Bool Player::canBuildMoreOfType( const ThingTemplate *whatToBuild, Int unitsPerO
     // at most this many guns, whatever the rung's own ration asks
     static const Int TECH_FIRST_DEFENSES[ AISKILL_COUNT ] = { 8, 6, 4 };
     const Bool techFirst = count.superweapons == 0 && m_ai->superweaponIsPlan() &&
-      count.defenses >= TECH_FIRST_DEFENSES[ getAISkillLevel() ];
+      count.defenses >= aiRatingLerp( m_ai->getAIRating(), TECH_FIRST_DEFENSES );
     if ( !techFirst && SuperweaponDefenseCapRefuses( count.defenses, count.superweapons,
                                                      m_ai->getSkillProfile()->m_superweaponDefenses ) )
       return false;

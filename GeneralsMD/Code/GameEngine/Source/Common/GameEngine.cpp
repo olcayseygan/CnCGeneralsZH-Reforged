@@ -779,7 +779,21 @@ static void startAutoSkirmish( Int numPlayersWanted )
 			Int state = TheGlobalData->m_autoSkirmishAIState;
 			if ((i & 1) && TheGlobalData->m_autoSkirmishAIStateOdd != 0)
 				state = TheGlobalData->m_autoSkirmishAIStateOdd;
+			// -airating and -airating2 the same way, over the rung: the seat takes the nearest rung, and the
+			// rating goes in the slot only when it is not that rung's anchor
+			Int rating = TheGlobalData->m_autoSkirmishRating;	// hundredths
+			if ((i & 1) && TheGlobalData->m_autoSkirmishRatingOdd != AI_RATING_NONE)
+				rating = TheGlobalData->m_autoSkirmishRatingOdd;
+			if (rating != AI_RATING_NONE)
+			{
+				static const SlotState RUNG_STATES[ AISKILL_COUNT ] = { SLOT_EASY_AI, SLOT_MED_AI, SLOT_BRUTAL_AI };
+				const AISkillLevel rung = aiSkillOfRating( aiRatingFromHundredths( rating ) );
+				state = RUNG_STATES[ rung ];
+				if (rating == aiRatingToHundredths( aiRatingOfSkill( rung ) ))
+					rating = AI_RATING_NONE;
+			}
 			slot.setState( (SlotState)state );
+			slot.setAIRating( rating );	// after setState, which drops a rating on a change of state
 			slot.setAIPersonality( TheGlobalData->autoSkirmishPersona( i ) );
 			if (TheGlobalData->m_autoSkirmishSeatName[ i ].isNotEmpty())
 			{

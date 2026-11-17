@@ -751,6 +751,8 @@ GlobalData::GlobalData()
 	m_autoSkirmishPlayers = 0; // no skirmish from the command line
 	m_autoSkirmishAIState = SLOT_BRUTAL_AI;
 	m_autoSkirmishAIStateOdd = 0;		// 0 = not set: every slot plays at -aidiff
+	m_autoSkirmishRating = -1;			// AI_RATING_NONE: every AI slot plays its rung's anchor
+	m_autoSkirmishRatingOdd = -1;
 	m_noTacticsSlotParity = -1;
 	m_aiKnobsOffParity = -1;
 	m_aiKnobsOffMask = 0;

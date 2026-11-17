@@ -46,7 +46,7 @@
 
 #include "GameLogic/SidesList.h"
 #include "GameLogic/Object.h"
-#include "GameLogic/AI.h"			// the rung decides whether a team fires together
+#include "GameLogic/AIPlayer.h"	// the seat's rating decides whether a team fires together
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/PolygonTrigger.h"
@@ -1561,7 +1561,7 @@ void Team::setTeamTargetObject(const Object *target)
 		//
 		Player *player = getControllingPlayer();
 		const Bool focusFire = player->aiRunsOwnAI()
-			? TheAI->getDifficultyProfile(player->getAISkillLevel())->m_focusFire
+			? player->getAIPlayer()->ratedProfile()->m_focusFire
 			: player->getPlayerDifficulty() != DIFFICULTY_EASY;
 		if (!focusFire) {
 			return;

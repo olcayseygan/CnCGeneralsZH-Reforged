@@ -228,6 +228,7 @@ void GameSlot::reset()
 	m_teamNumber = -1;
 	m_aiPersonality = AIPERSONA_NORMAL;
 	m_handicap = HANDICAP_FULL;
+	m_aiRating = AI_RATING_NONE;
 	m_skins = 0;
 	m_NATBehavior = FirewallHelperClass::FIREWALL_TYPE_SIMPLE;
 	m_lastFrameInGame = 0;
@@ -464,6 +465,9 @@ void GameSlot::setState( SlotState state, UnicodeString name, UnsignedInt IP )
 	// An opponent seat keeps its colour, faction, team and start spot while it stays an opponent
 	// seat - SLOT_TAKEOVER included, or the menu's own refresh (which re-sends the state to the
 	// slot) would wipe the faction and team the moment you picked them.
+	// a rating belongs to the rung it was set beside; any other state, another rung included, drops it
+	if (state != m_state)
+		m_aiRating = AI_RATING_NONE;
 	if (!(isAI() && IsAISlotState( state )))
 	{
 		m_color = -1;
@@ -1488,11 +1492,17 @@ static AsciiString buildGameInfoAsciiString( const GameInfo *game, const AsciiSt
 			// an older parser stops at the team and never sees the personality after it
 			const Int handicap = slot->getHandicap();
 			const Bool personaHolds = handicap != HANDICAP_FULL && slot->getAIPersonality() == AIPERSONA_NORMAL;
-			str.format("C%c,%d,%s,%d,%d%s%s:", SlotStateToOptionsChar(slot->getState()),
+			AsciiString tail;
+			if (slot->getAIRating() != AI_RATING_NONE)
+				tail.format(",%d,%d,%d", slot->getAIPersonality(), handicap, slot->getAIRating());
+			else
+			{
+				tail = personaHolds ? AsciiString(",0") : AIPersonaSlotField(slot->getAIPersonality());
+				tail.concat(HandicapSlotField(handicap));
+			}
+			str.format("C%c,%d,%s,%d,%d%s:", SlotStateToOptionsChar(slot->getState()),
 				slot->getColor(), PlayerTemplateSlotField(slot->getPlayerTemplate()).str(),
-				slot->getStartPos(), slot->getTeamNumber(),
-				personaHolds ? ",0" : AIPersonaSlotField(slot->getAIPersonality()).str(),
-				HandicapSlotField(handicap).str());
+				slot->getStartPos(), slot->getTeamNumber(), tail.str());
 		}
 		else if (slot && slot->getState() == SLOT_OPEN)
 		{
@@ -1549,6 +1559,15 @@ Int HandicapFromSlotField( const char *field )
 		return HANDICAP_FULL;
 	const Int handicap = atoi(field);
 	return IsValidHandicap(handicap) ? handicap : HANDICAP_FULL;
+}
+
+Int AIRatingFromSlotField( const char *field )
+{
+	if (field == NULL || *field == 0)
+		return AI_RATING_NONE;
+	const Int hundredths = atoi(field);
+	return (hundredths >= aiRatingToHundredths(AI_RATING_EASY) && hundredths <= aiRatingToHundredths(AI_RATING_HARD))
+		? hundredths : AI_RATING_NONE;
 }
 
 Bool ApplyHandicapRequest( GameInfo *game, GameSlot *slot, Int handicap )
@@ -2035,6 +2054,9 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
 							//Read the optional handicap
 							newSlot[i].setHandicap(HandicapFromSlotField(strtok_r(NULL,",",&slotPos)));
 
+							//Read the optional rating
+							newSlot[i].setAIRating(AIRatingFromSlotField(strtok_r(NULL,",",&slotPos)));
+
 						}//case 'C':
 						break;
 						case 'O':
@@ -2126,7 +2148,7 @@ void SkirmishGameInfo::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void SkirmishGameInfo::xfer( Xfer *xfer )
 {
-	const XferVersion currentVersion = 13;	// 5 adds m_peaceTime, 6 m_unitLimit, 7 m_proRules, 8 m_incomeSharing, 9 m_techRespawn, 10 m_supplyPileLimit, 11 each slot's AI personality, 12 each slot's handicap, 13 a 64-bit preorder mask
+	const XferVersion currentVersion = 14;	// 5 adds m_peaceTime, 6 m_unitLimit, 7 m_proRules, 8 m_incomeSharing, 9 m_techRespawn, 10 m_supplyPileLimit, 11 each slot's AI personality, 12 each slot's handicap, 13 a 64-bit preorder mask, 14 each slot's AI rating
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -2216,6 +2238,12 @@ void SkirmishGameInfo::xfer( Xfer *xfer )
 		else
 			handicap = HANDICAP_FULL;
 
+		Int rating = m_slot[slot]->getAIRating();
+		if (version >= 14)
+			xfer->xferInt(&rating);
+		else
+			rating = AI_RATING_NONE;
+
 		if( xfer->getXferMode() == XFER_LOAD ) {
 			m_slot[slot]->setState((SlotState)state, name);
 			if (isAccepted) m_slot[slot]->setAccept();
@@ -2231,6 +2259,7 @@ void SkirmishGameInfo::xfer( Xfer *xfer )
 			m_slot[slot]->setPlayerTemplate(playerTemplate);
 			m_slot[slot]->setAIPersonality(persona);
 			m_slot[slot]->setHandicap(handicap);
+			m_slot[slot]->setAIRating(rating);
 		}
 	}
 

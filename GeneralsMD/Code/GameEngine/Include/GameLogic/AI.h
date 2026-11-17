@@ -166,6 +166,40 @@ enum AISkillLevel
 };
 
 //-------------------------------------------------------------------------------------------------
+/** A skirmish AI's strength as one number per seat, its rating, on the scale of a player's online
+	* rating as zerohour.gg's ladder shows it (the OpenSkill ordinal mu - 3 sigma: a new player 0,
+	* sergeant 5, captain 15, general 30 and up), so a ranked match can pick the AI's rating from the
+	* player's.  The three rungs are the anchors, Easy 0, Medium 15 and Hard 30, set here and nowhere
+	* else, and every knob that differs by rung (the ladder's profile, each table of
+	* three in AIPlayer.cpp) is read at the rating by aiRatingLerp: a straight line between the two
+	* anchors around it, a*(1-f) + b*f, so f of 0 or 1 gives the rung's own value to the bit and a seat
+	* at an anchor plays exactly that rung.  An Int rounds to the nearest; a Bool flips where its line
+	* crosses one half, the midpoint between two anchors, which is also where aiSkillOfRating moves to
+	* the next rung.  The rung stays, derived, for what is discrete by nature: the map scripts' easy,
+	* normal and hard flags, the gatherer counts, the menus and the logs.  A rating outside the
+	* anchors is clamped to them. */
+//-------------------------------------------------------------------------------------------------
+#define AI_RATING_EASY		0.0f
+#define AI_RATING_MEDIUM	15.0f
+#define AI_RATING_HARD		30.0f
+/** The game setup carries a rating as whole hundredths, the ladder's two decimals, so a slot string,
+	* a replay header and a dict hold an Int and every machine reads the same Real back from it. */
+#define AI_RATING_NONE		(-1)		///< no rating in the setup: the seat plays its rung's anchor
+Int aiRatingToHundredths( Real rating );		///< rounded to the nearest hundredth, clamped first
+Real aiRatingFromHundredths( Int hundredths );
+
+Real aiRatingClamp( Real rating );								///< held to [AI_RATING_EASY, AI_RATING_HARD]
+Real aiRatingOfSkill( AISkillLevel level );				///< the rung's anchor; Hard for anything out of range
+AISkillLevel aiSkillOfRating( Real rating );			///< the nearest rung, the upper one at a midpoint
+/** The rating has reached the midpoint below rung's anchor: what "this rung or above" means for a
+	* rating, the same answer as before at every anchor. */
+inline Bool aiRatingReaches( Real rating, AISkillLevel rung ) { return aiSkillOfRating( rating ) >= rung; }
+/** A table of three, Easy, Medium and Hard, read at a rating. */
+Real aiRatingLerp( Real rating, const Real byRung[ AISKILL_COUNT ] );
+Int aiRatingLerp( Real rating, const Int byRung[ AISKILL_COUNT ] );
+Bool aiRatingLerp( Real rating, const Bool byRung[ AISKILL_COUNT ] );
+
+//-------------------------------------------------------------------------------------------------
 /** What the AI is trying to do, as opposed to how well it does it.  A preference, never a bonus:
 	* the roles have to be about equally strong or the axis silently becomes a difficulty setting. */
 //-------------------------------------------------------------------------------------------------
@@ -317,6 +351,10 @@ struct AIDifficultyProfile
 	// Another side's tech tree (AIPlayer::doForeignTech)
 	Int		m_foreignTech;									///< 0 none; 1 a foreign dozer or Command Center that falls into its hands builds that side's base and army; 2 it also goes after them: dozers stolen or emptied and crewed, Command Centers and other buildings captured
 };
+
+/** The profile at a rating: every field of the two rows of ladder around it through aiRatingLerp, by
+	* its type in the AI.ini SkillLevel parse table, so a field the table names is a field interpolated. */
+void aiRatingProfile( Real rating, const AIDifficultyProfile ladder[ AISKILL_COUNT ], AIDifficultyProfile *out );
 
 //-------------------------------------------------------------------------------------------------
 /** What an enemy is fielding, as shares of the threat value the observer can actually see.  The
@@ -1250,8 +1288,9 @@ public:
 	static Real s_lastPlayerUpdateMS;				///< see getLastPlayerUpdateMS
 	const TAiData *getAiData() {return m_aiData;}
 
-	/// The rung's knobs. Bounds-checked, so a bad index reads as the baseline rather than as memory.
-	const AIDifficultyProfile *getDifficultyProfile( AISkillLevel level ) const;
+	/** The knobs at a rating: the ladder's own row at an anchor, else the two rows around it
+		* interpolated into scratch (aiRatingProfile), which is then what comes back. */
+	const AIDifficultyProfile *getRatedProfile( Real rating, AIDifficultyProfile *scratch ) const;
 
 	static void parseSkillLevel(INI *ini, void *instance, void *store, const void *userData);
 

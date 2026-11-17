@@ -1355,6 +1355,30 @@ Int parseAIDifficulty2(char *args[], int num)
 	return 2;
 }
 
+/** -airating <r> and -airating2 <r>: an -autoskirmish AI seat's rating, every seat's and the odd seats',
+	* over -aidiff and -aidiff2, on the online ladder's scale.  Clamped to AI_RATING_EASY..AI_RATING_HARD
+	* and kept to the hundredth; the seat's rung is the nearest, so its map scripts run at that rung, and
+	* the anchors (0, 15, 30) are exactly Easy, Medium and Hard.  It goes into the slot, so the replay
+	* header carries it and playback takes no switch. */
+static Int parseRatingValue( const char *arg )
+{
+	return aiRatingToHundredths( (Real)atof( arg ) );
+}
+
+Int parseAIRating(char *args[], int num)
+{
+	if (TheWritableGlobalData && num > 1)
+		TheWritableGlobalData->m_autoSkirmishRating = parseRatingValue(args[1]);
+	return 2;
+}
+
+Int parseAIRating2(char *args[], int num)
+{
+	if (TheWritableGlobalData && num > 1)
+		TheWritableGlobalData->m_autoSkirmishRatingOdd = parseRatingValue(args[1]);
+	return 2;
+}
+
 /** -notactics even|odd: those slots keep their rung but fight without its unit tactics, so a batch can
 	* play Hard against the same Hard minus one thing, from both sides of the map.  Read only in a
 	* single-player skirmish (AIPlayer::doTactics), so a network game never sees it. */
@@ -2985,6 +3009,8 @@ static CommandLineParam params[] =
 	{ "-autoskirmish", parseAutoSkirmish },
 	{ "-aidiff", parseAIDifficulty },
 	{ "-aidiff2", parseAIDifficulty2 },
+	{ "-airating", parseAIRating },
+	{ "-airating2", parseAIRating2 },
 	{ "-aipersona", parseAIPersona },
 	{ "-aipersona2", parseAIPersona2 },
 	{ "-aipersonaall", parseAIPersonaAll },

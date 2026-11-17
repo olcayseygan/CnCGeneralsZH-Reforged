@@ -911,6 +911,16 @@ DEFINE_KEY(skirmishAIPersonality)
 
 /**
 	Which: Player Properties
+	Type: Int
+	Usage: (optional) this computer player's rating in whole hundredths, AI_RATING_EASY to
+	       AI_RATING_HARD on the online ladder's scale, which every rung-keyed knob is read at;
+	       absent when it is its rung's anchor, so a seat without
+	       -airating has the dict it always had.
+*/
+DEFINE_KEY(skirmishAIRating)
+
+/**
+	Which: Player Properties
 	Type: Bool
 	Usage: (optional) if present, signifies if the player is the local player
 */

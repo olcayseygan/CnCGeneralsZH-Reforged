@@ -1628,6 +1628,9 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 				// absent for Normal, so a Normal seat's dict is the one it always was
 				if (slot->getAIPersonality() != AIPERSONA_NORMAL)
 					d.setInt(TheKey_skirmishAIPersonality, slot->getAIPersonality());
+				// and the rating in hundredths, only on a seat off its rung's anchor (-airating)
+				if (slot->getAIRating() != AI_RATING_NONE)
+					d.setInt(TheKey_skirmishAIRating, slot->getAIRating());
 			}
 
 			// by index: the name went through an ASCII translate and back, which no name with a

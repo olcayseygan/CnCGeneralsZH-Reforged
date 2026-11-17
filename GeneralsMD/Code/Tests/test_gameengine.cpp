@@ -17476,6 +17476,86 @@ TEST(the_difficulty_ladder_climbs_in_every_direction_it_should)
 	}
 }
 
+/** A seat's rating reads every rung-keyed knob off a line between the two anchors around it.  At 0, 15
+	 and 30 it has to be the rung to the bit, or every replay of a rung stops playing back, and 15 is read
+	 from the Easy-Medium span with f = 1, so a profile field the interpolation walks past would show there
+	 as Easy's value. */
+TEST(an_ai_rating_is_the_rung_at_its_anchors_and_a_line_between_them)
+{
+	TAiData data;
+	AIDifficultyProfile out;
+
+	for( Int i = 0; i < AISKILL_COUNT; ++i )
+	{
+		const Real anchor = aiRatingOfSkill( (AISkillLevel)i );
+		aiRatingProfile( anchor, data.m_skill, &out );
+		CHECK( memcmp( &out, &data.m_skill[ i ], sizeof( out ) ) == 0 );
+		CHECK_EQ( (Int)i, (Int)aiSkillOfRating( anchor ) );
+	}
+
+	// clamped to the ends
+	aiRatingProfile( -6.0f, data.m_skill, &out );
+	CHECK( memcmp( &out, &data.m_skill[ AISKILL_EASY ], sizeof( out ) ) == 0 );
+	aiRatingProfile( 39.0f, data.m_skill, &out );
+	CHECK( memcmp( &out, &data.m_skill[ AISKILL_BRUTAL ], sizeof( out ) ) == 0 );
+	CHECK_EQ( AI_RATING_EASY, aiRatingClamp( -5.0f ) );
+	CHECK_EQ( AI_RATING_HARD, aiRatingClamp( 45.0f ) );
+
+	// the ladder shows two decimals; a seat carries whole hundredths, and an anchor comes back exact
+	CHECK_EQ( 1234, aiRatingToHundredths( 12.34f ) );
+	CHECK_EQ( 1234, aiRatingToHundredths( aiRatingFromHundredths( 1234 ) ) );
+	CHECK_EQ( AI_RATING_MEDIUM, aiRatingFromHundredths( 1500 ) );
+	CHECK_EQ( AI_RATING_HARD, aiRatingFromHundredths( 3000 ) );
+	CHECK_EQ( 0, aiRatingToHundredths( -2.0f ) );
+	CHECK_EQ( 3000, aiRatingToHundredths( 31.0f ) );
+
+	// a Real half way between Easy and Medium is the mean of the two
+	const AIDifficultyProfile &easy = data.m_skill[ AISKILL_EASY ];
+	const AIDifficultyProfile &medium = data.m_skill[ AISKILL_MEDIUM ];
+	const AIDifficultyProfile &hard = data.m_skill[ AISKILL_BRUTAL ];
+	aiRatingProfile( 7.5f, data.m_skill, &out );
+	CHECK_NEAR( 0.5f * ( easy.m_scoutIntervalSeconds + medium.m_scoutIntervalSeconds ), out.m_scoutIntervalSeconds, 1.0e-4f );
+	CHECK_NEAR( 0.5f * ( easy.m_counterCompositionWeight + medium.m_counterCompositionWeight ), out.m_counterCompositionWeight, 1.0e-6f );
+	CHECK_EQ( ( easy.m_cashHoardThreshold + medium.m_cashHoardThreshold ) / 2, out.m_cashHoardThreshold );
+
+	// an Int rounds, a Bool flips at the midpoint, and the rung changes there too
+	static const Int CENTERS[ AISKILL_COUNT ] = { 3, 4, 6 };
+	CHECK_EQ( 5, aiRatingLerp( 22.5f, CENTERS ) );
+	CHECK_EQ( 4, aiRatingLerp( 18.0f, CENTERS ) );		// 4.4
+	CHECK_EQ( 5, aiRatingLerp( 21.75f, CENTERS ) );		// 4.9
+	static const Real ODDS[ AISKILL_COUNT ] = { 0.0f, 1.0f, 1.25f };
+	CHECK_NEAR( 0.5f, aiRatingLerp( 7.5f, ODDS ), 1.0e-6f );
+	CHECK_EQ( 1.25f, aiRatingLerp( 30.0f, ODDS ) );
+	CHECK( !easy.m_retreatIndividualUnits && medium.m_retreatIndividualUnits );
+	aiRatingProfile( 7.49f, data.m_skill, &out );
+	CHECK( !out.m_retreatIndividualUnits );
+	aiRatingProfile( 7.5f, data.m_skill, &out );
+	CHECK( out.m_retreatIndividualUnits );
+	CHECK( !medium.m_massBeforeAttacking && hard.m_massBeforeAttacking );
+	aiRatingProfile( 22.49f, data.m_skill, &out );
+	CHECK( !out.m_massBeforeAttacking );
+	CHECK_EQ( 1, out.m_maxScouts );		// 1.499, Medium's 1 to Hard's 2
+	aiRatingProfile( 22.5f, data.m_skill, &out );
+	CHECK( out.m_massBeforeAttacking );
+	CHECK_EQ( 2, out.m_maxScouts );
+	CHECK_EQ( (Int)AISKILL_EASY, (Int)aiSkillOfRating( 7.49f ) );
+	CHECK_EQ( (Int)AISKILL_MEDIUM, (Int)aiSkillOfRating( 7.5f ) );
+	CHECK_EQ( (Int)AISKILL_MEDIUM, (Int)aiSkillOfRating( 22.49f ) );
+	CHECK_EQ( (Int)AISKILL_BRUTAL, (Int)aiSkillOfRating( 22.5f ) );
+	CHECK( !aiRatingReaches( 7.49f, AISKILL_MEDIUM ) );
+	CHECK( aiRatingReaches( 7.5f, AISKILL_MEDIUM ) );
+	CHECK( !aiRatingReaches( 15.0f, AISKILL_BRUTAL ) );
+
+	// the slot field carries hundredths; only a rating inside the anchors survives, anything else is none
+	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( NULL ) );
+	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( "" ) );
+	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( "-5" ) );
+	CHECK_EQ( 0, AIRatingFromSlotField( "0" ) );
+	CHECK_EQ( 1234, AIRatingFromSlotField( "1234" ) );
+	CHECK_EQ( 3000, AIRatingFromSlotField( "3000" ) );
+	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( "3001" ) );
+}
+
 /** The influence map is what every fighting decision of Hard's reads, so what it says about a patch of
 	 ground has to be what the guns there can actually do: reach it flat, reach further from above, and
 	 add up when two of them cover the same cell. */
@@ -18208,27 +18288,27 @@ TEST(the_ladder_presses_more_buttons_as_it_climbs)
 
 /** AIPlayer.cpp: the computer buys its first Ambulance once it has an army and a second once the army
 	 is big, and calls in the badly hurt from near it only. */
-extern Int AIAmbulance_wanted( Int army, Int skill );
+extern Int AIAmbulance_wanted( Int army, Real rating );
 extern Bool AIAmbulance_callsPatient( Real healthFraction, Real distance, UnsignedInt sinceHit );
-extern Bool AIAmbulance_mayBuyMore( Int bought, Int skill );
+extern Bool AIAmbulance_mayBuyMore( Int bought, Real rating );
 
 TEST(the_ai_buys_ambulances_by_army_and_calls_in_the_hurt_nearby)
 {
-	CHECK_EQ( 0, AIAmbulance_wanted( 0, AISKILL_BRUTAL ) );
-	CHECK_EQ( 0, AIAmbulance_wanted( 7, AISKILL_BRUTAL ) );
-	CHECK_EQ( 1, AIAmbulance_wanted( 8, AISKILL_BRUTAL ) );
-	CHECK_EQ( 1, AIAmbulance_wanted( 19, AISKILL_BRUTAL ) );
-	CHECK_EQ( 2, AIAmbulance_wanted( 20, AISKILL_BRUTAL ) );
-	CHECK_EQ( 2, AIAmbulance_wanted( 200, AISKILL_BRUTAL ) );
+	CHECK_EQ( 0, AIAmbulance_wanted( 0, AI_RATING_HARD ) );
+	CHECK_EQ( 0, AIAmbulance_wanted( 7, AI_RATING_HARD ) );
+	CHECK_EQ( 1, AIAmbulance_wanted( 8, AI_RATING_HARD ) );
+	CHECK_EQ( 1, AIAmbulance_wanted( 19, AI_RATING_HARD ) );
+	CHECK_EQ( 2, AIAmbulance_wanted( 20, AI_RATING_HARD ) );
+	CHECK_EQ( 2, AIAmbulance_wanted( 200, AI_RATING_HARD ) );
 	// Medium keeps one, Easy none
-	CHECK_EQ( 1, AIAmbulance_wanted( 200, AISKILL_MEDIUM ) );
-	CHECK_EQ( 0, AIAmbulance_wanted( 200, AISKILL_EASY ) );
+	CHECK_EQ( 1, AIAmbulance_wanted( 200, AI_RATING_MEDIUM ) );
+	CHECK_EQ( 0, AIAmbulance_wanted( 200, AI_RATING_EASY ) );
 	// and a match buys only so many
-	CHECK( AIAmbulance_mayBuyMore( 5, AISKILL_BRUTAL ) );
-	CHECK( !AIAmbulance_mayBuyMore( 6, AISKILL_BRUTAL ) );
-	CHECK( AIAmbulance_mayBuyMore( 2, AISKILL_MEDIUM ) );
-	CHECK( !AIAmbulance_mayBuyMore( 3, AISKILL_MEDIUM ) );
-	CHECK( !AIAmbulance_mayBuyMore( 0, AISKILL_EASY ) );
+	CHECK( AIAmbulance_mayBuyMore( 5, AI_RATING_HARD ) );
+	CHECK( !AIAmbulance_mayBuyMore( 6, AI_RATING_HARD ) );
+	CHECK( AIAmbulance_mayBuyMore( 2, AI_RATING_MEDIUM ) );
+	CHECK( !AIAmbulance_mayBuyMore( 3, AI_RATING_MEDIUM ) );
+	CHECK( !AIAmbulance_mayBuyMore( 0, AI_RATING_EASY ) );
 
 	// two seconds since the last hit is quiet enough
 	const UnsignedInt quiet = 2 * LOGICFRAMES_PER_GAME_SECOND;
@@ -18244,32 +18324,32 @@ TEST(the_ai_buys_ambulances_by_army_and_calls_in_the_hurt_nearby)
 
 /** AIPlayer.cpp: an Ambulance keeps clear of known guns by a margin scaled to the map, pulls back when
 	 shot at or within it, only ever to clearer ground, and a lost one is replaced only after a wait. */
-extern Real AIAmbulance_gunMargin( Real baseDistance, Int skill );
-extern Bool AIAmbulance_pullsBack( UnsignedInt now, UnsignedInt lastHit, Real clear, Real margin, Int skill );
+extern Real AIAmbulance_gunMargin( Real baseDistance, Real rating );
+extern Bool AIAmbulance_pullsBack( UnsignedInt now, UnsignedInt lastHit, Real clear, Real margin, Real rating );
 extern Bool AIAmbulance_movesBack( Real hereClear, Real spotClear, Bool hitSinceLook );
 extern Bool AIAmbulance_waitsAt( Real hereClear, Real spotClear, Real margin );
-extern Bool AIAmbulance_rebuyWaits( UnsignedInt now, UnsignedInt lost, Int skill );
+extern Bool AIAmbulance_rebuyWaits( UnsignedInt now, UnsignedInt lost, Real rating );
 
 TEST(the_ai_ambulance_pulls_back_when_hit_and_is_not_rebought_at_once)
 {
 	const UnsignedInt second = LOGICFRAMES_PER_GAME_SECOND;
 	// the margin: Hard 8% of the base distance between 80 and 200, Medium 6% between 60 and 160
-	CHECK_NEAR( 80.0f, AIAmbulance_gunMargin( 700.0f, AISKILL_BRUTAL ), 0.01f );
-	CHECK_NEAR( 120.0f, AIAmbulance_gunMargin( 1500.0f, AISKILL_BRUTAL ), 0.01f );
-	CHECK_NEAR( 200.0f, AIAmbulance_gunMargin( 4000.0f, AISKILL_BRUTAL ), 0.01f );
-	CHECK_NEAR( 60.0f, AIAmbulance_gunMargin( 700.0f, AISKILL_MEDIUM ), 0.01f );
-	CHECK_NEAR( 160.0f, AIAmbulance_gunMargin( 4000.0f, AISKILL_MEDIUM ), 0.01f );
-	CHECK( AIAmbulance_gunMargin( 4000.0f, AISKILL_MEDIUM ) < AIAmbulance_gunMargin( 4000.0f, AISKILL_BRUTAL ) );
+	CHECK_NEAR( 80.0f, AIAmbulance_gunMargin( 700.0f, AI_RATING_HARD ), 0.01f );
+	CHECK_NEAR( 120.0f, AIAmbulance_gunMargin( 1500.0f, AI_RATING_HARD ), 0.01f );
+	CHECK_NEAR( 200.0f, AIAmbulance_gunMargin( 4000.0f, AI_RATING_HARD ), 0.01f );
+	CHECK_NEAR( 60.0f, AIAmbulance_gunMargin( 700.0f, AI_RATING_MEDIUM ), 0.01f );
+	CHECK_NEAR( 160.0f, AIAmbulance_gunMargin( 4000.0f, AI_RATING_MEDIUM ), 0.01f );
+	CHECK( AIAmbulance_gunMargin( 4000.0f, AI_RATING_MEDIUM ) < AIAmbulance_gunMargin( 4000.0f, AI_RATING_HARD ) );
 
 	// within the margin, or inside the reach
-	CHECK( AIAmbulance_pullsBack( 1000, 0, 50.0f, 80.0f, AISKILL_BRUTAL ) );
-	CHECK( AIAmbulance_pullsBack( 1000, 0, -10.0f, 80.0f, AISKILL_BRUTAL ) );
-	CHECK( !AIAmbulance_pullsBack( 1000, 0, 90.0f, 80.0f, AISKILL_BRUTAL ) );
+	CHECK( AIAmbulance_pullsBack( 1000, 0, 50.0f, 80.0f, AI_RATING_HARD ) );
+	CHECK( AIAmbulance_pullsBack( 1000, 0, -10.0f, 80.0f, AI_RATING_HARD ) );
+	CHECK( !AIAmbulance_pullsBack( 1000, 0, 90.0f, 80.0f, AI_RATING_HARD ) );
 	// hit lately: Hard stays back 8 s, Medium 6
-	CHECK( AIAmbulance_pullsBack( 1000 + 7 * second, 1000, 1.0e9f, 80.0f, AISKILL_BRUTAL ) );
-	CHECK( !AIAmbulance_pullsBack( 1000 + 8 * second, 1000, 1.0e9f, 80.0f, AISKILL_BRUTAL ) );
-	CHECK( !AIAmbulance_pullsBack( 1000 + 6 * second, 1000, 1.0e9f, 80.0f, AISKILL_MEDIUM ) );
-	CHECK( !AIAmbulance_pullsBack( 1000, 0, 1.0e9f, 80.0f, AISKILL_BRUTAL ) );
+	CHECK( AIAmbulance_pullsBack( 1000 + 7 * second, 1000, 1.0e9f, 80.0f, AI_RATING_HARD ) );
+	CHECK( !AIAmbulance_pullsBack( 1000 + 8 * second, 1000, 1.0e9f, 80.0f, AI_RATING_HARD ) );
+	CHECK( !AIAmbulance_pullsBack( 1000 + 6 * second, 1000, 1.0e9f, 80.0f, AI_RATING_MEDIUM ) );
+	CHECK( !AIAmbulance_pullsBack( 1000, 0, 1.0e9f, 80.0f, AI_RATING_HARD ) );
 
 	// only to ground a reorder step clearer: none such, it holds, which is what stops the cycle
 	CHECK( AIAmbulance_movesBack( 20.0f, 200.0f, FALSE ) );
@@ -18284,11 +18364,11 @@ TEST(the_ai_ambulance_pulls_back_when_hit_and_is_not_rebought_at_once)
 	CHECK( AIAmbulance_waitsAt( -20.0f, 90.0f, 80.0f ) );
 
 	// Hard waits a minute and a half, Medium twice as long
-	CHECK( !AIAmbulance_rebuyWaits( 1000, 0, AISKILL_BRUTAL ) );
-	CHECK( AIAmbulance_rebuyWaits( 1000, 900, AISKILL_BRUTAL ) );
-	CHECK( !AIAmbulance_rebuyWaits( 900 + 90 * second, 900, AISKILL_BRUTAL ) );
-	CHECK( AIAmbulance_rebuyWaits( 900 + 170 * second, 900, AISKILL_MEDIUM ) );
-	CHECK( !AIAmbulance_rebuyWaits( 900 + 180 * second, 900, AISKILL_MEDIUM ) );
+	CHECK( !AIAmbulance_rebuyWaits( 1000, 0, AI_RATING_HARD ) );
+	CHECK( AIAmbulance_rebuyWaits( 1000, 900, AI_RATING_HARD ) );
+	CHECK( !AIAmbulance_rebuyWaits( 900 + 90 * second, 900, AI_RATING_HARD ) );
+	CHECK( AIAmbulance_rebuyWaits( 900 + 170 * second, 900, AI_RATING_MEDIUM ) );
+	CHECK( !AIAmbulance_rebuyWaits( 900 + 180 * second, 900, AI_RATING_MEDIUM ) );
 }
 
 /** CleanupHazardUpdate.cpp: an area cleaner out of reach of its hazard counts a scan against it only when

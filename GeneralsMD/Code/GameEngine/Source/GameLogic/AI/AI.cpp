@@ -3186,22 +3186,94 @@ Real aiArmyAdvantage( const Real *myValue, Int myKinds, const Real *theirValue, 
 }
 
 //-------------------------------------------------------------------------------------------------
-const AIDifficultyProfile *AI::getDifficultyProfile( AISkillLevel level ) const
+Real aiRatingClamp( Real rating )
 {
-	if( m_aiData == NULL )
-		return &s_defaultSkillLadder[ AISKILL_BRUTAL ];
-	if( level < 0 || level >= AISKILL_COUNT )
-		level = AISKILL_BRUTAL;				// the baseline; a bad index must not read as a handicap
-	return &m_aiData->m_skill[ level ];
+	return rating < AI_RATING_EASY ? AI_RATING_EASY : ( rating > AI_RATING_HARD ? AI_RATING_HARD : rating );
+}
+
+Int aiRatingToHundredths( Real rating )
+{
+	return (Int)floor( aiRatingClamp( rating ) * 100.0f + 0.5f );
+}
+
+Real aiRatingFromHundredths( Int hundredths )
+{
+	return aiRatingClamp( INT_TO_REAL( hundredths ) / 100.0f );
+}
+
+Real aiRatingOfSkill( AISkillLevel level )
+{
+	switch( level )
+	{
+		case AISKILL_EASY:		return AI_RATING_EASY;
+		case AISKILL_MEDIUM:	return AI_RATING_MEDIUM;
+		default:							return AI_RATING_HARD;	// the baseline; a bad index must not read as a handicap
+	}
+}
+
+AISkillLevel aiSkillOfRating( Real rating )
+{
+	if( rating < 0.5f * ( AI_RATING_EASY + AI_RATING_MEDIUM ) )
+		return AISKILL_EASY;
+	return rating < 0.5f * ( AI_RATING_MEDIUM + AI_RATING_HARD ) ? AISKILL_MEDIUM : AISKILL_BRUTAL;
+}
+
+/** Where a rating stands between the two anchors around it: the lower rung in *lower, and 0 at that
+	* rung's anchor to 1 at the next one's.  A rating on Medium's anchor is the top of the lower span. */
+static Real ratingSpan( Real rating, Int *lower )
+{
+	const Real r = aiRatingClamp( rating );
+	if( r <= AI_RATING_MEDIUM )
+	{
+		*lower = AISKILL_EASY;
+		return ( r - AI_RATING_EASY ) / ( AI_RATING_MEDIUM - AI_RATING_EASY );
+	}
+	*lower = AISKILL_MEDIUM;
+	return ( r - AI_RATING_MEDIUM ) / ( AI_RATING_HARD - AI_RATING_MEDIUM );
+}
+
+/** a at f 0 and b at f 1, each to the bit: the other term is a product with exactly 0 */
+static Real lerpSpan( Real a, Real b, Real f )
+{
+	return a * ( 1.0f - f ) + b * f;
+}
+
+static Int lerpSpanInt( Int a, Int b, Real f )
+{
+	return (Int)floor( lerpSpan( INT_TO_REAL( a ), INT_TO_REAL( b ), f ) + 0.5f );
+}
+
+static Bool lerpSpanBool( Bool a, Bool b, Real f )
+{
+	return lerpSpan( a ? 1.0f : 0.0f, b ? 1.0f : 0.0f, f ) >= 0.5f;
+}
+
+Real aiRatingLerp( Real rating, const Real byRung[ AISKILL_COUNT ] )
+{
+	Int lo;
+	const Real f = ratingSpan( rating, &lo );
+	return lerpSpan( byRung[ lo ], byRung[ lo + 1 ], f );
+}
+
+Int aiRatingLerp( Real rating, const Int byRung[ AISKILL_COUNT ] )
+{
+	Int lo;
+	const Real f = ratingSpan( rating, &lo );
+	return lerpSpanInt( byRung[ lo ], byRung[ lo + 1 ], f );
+}
+
+Bool aiRatingLerp( Real rating, const Bool byRung[ AISKILL_COUNT ] )
+{
+	Int lo;
+	const Real f = ratingSpan( rating, &lo );
+	return lerpSpanBool( byRung[ lo ], byRung[ lo + 1 ], f );
 }
 
 //-------------------------------------------------------------------------------------------------
-/** SkillLevel = Brutal ... End, in AI.ini: tuning the ladder without a recompile, which is what
-	* the headless batch runner wants.  Anything the block does not mention keeps its default. */
+/** SkillLevel = Brutal ... End, in AI.ini, field by field; aiRatingProfile walks the same list, so a
+	* field added to the profile and to this table is both tunable and interpolated. */
 //-------------------------------------------------------------------------------------------------
-void AI::parseSkillLevel(INI *ini, void *instance, void* /*store*/, const void* /*userData*/)
-{
-	static const FieldParse myFieldParse[] =
+static const FieldParse s_skillLevelFields[] =
 	{
 		{ "ScoutIntervalSeconds",			INI::parseReal, NULL, offsetof( AIDifficultyProfile, m_scoutIntervalSeconds ) },
 		{ "MaxScouts",								INI::parseInt,  NULL, offsetof( AIDifficultyProfile, m_maxScouts ) },
@@ -3260,6 +3332,47 @@ void AI::parseSkillLevel(INI *ini, void *instance, void* /*store*/, const void* 
 		{ NULL, NULL, NULL, 0 }
 	};
 
+void aiRatingProfile( Real rating, const AIDifficultyProfile ladder[ AISKILL_COUNT ], AIDifficultyProfile *out )
+{
+	Int lo;
+	const Real f = ratingSpan( rating, &lo );
+	*out = ladder[ lo ];
+	const char *a = (const char *)&ladder[ lo ];
+	const char *b = (const char *)&ladder[ lo + 1 ];
+	char *o = (char *)out;
+	for( const FieldParse *field = s_skillLevelFields; field->token != NULL; ++field )
+	{
+		const Int at = field->offset;
+		if( field->parse == INI::parseReal )
+			*(Real *)( o + at ) = lerpSpan( *(const Real *)( a + at ), *(const Real *)( b + at ), f );
+		else if( field->parse == INI::parseInt )
+			*(Int *)( o + at ) = lerpSpanInt( *(const Int *)( a + at ), *(const Int *)( b + at ), f );
+		else if( field->parse == INI::parseBool )
+			*(Bool *)( o + at ) = lerpSpanBool( *(const Bool *)( a + at ), *(const Bool *)( b + at ), f );
+		else
+			DEBUG_CRASH(( "aiRatingProfile: SkillLevel field %s has a parser it cannot interpolate", field->token ));
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+const AIDifficultyProfile *AI::getRatedProfile( Real rating, AIDifficultyProfile *scratch ) const
+{
+	const AIDifficultyProfile *ladder = m_aiData != NULL ? m_aiData->m_skill : s_defaultSkillLadder;
+	const Real r = aiRatingClamp( rating );
+	for( Int i = 0; i < AISKILL_COUNT; ++i )
+		if( r == aiRatingOfSkill( (AISkillLevel)i ) )
+			return &ladder[ i ];
+	aiRatingProfile( r, ladder, scratch );
+	return scratch;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** SkillLevel = Brutal ... End, in AI.ini: tuning the ladder without a recompile, which is what
+	* the headless batch runner wants.  Anything the block does not mention keeps its default.  An
+	* overridden rung is an anchor, so the ratings either side of it move with it. */
+//-------------------------------------------------------------------------------------------------
+void AI::parseSkillLevel(INI *ini, void *instance, void* /*store*/, const void* /*userData*/)
+{
 	static const char *names[ AISKILL_COUNT ] =
 		{ "Easy", "Medium", "Brutal" };
 
@@ -3275,7 +3388,7 @@ void AI::parseSkillLevel(INI *ini, void *instance, void* /*store*/, const void* 
 		which = AISKILL_BRUTAL;			// parse it somewhere rather than throw the block on the floor
 	}
 
-	ini->initFromINI( &((TAiData*)instance)->m_skill[ which ], myFieldParse );
+	ini->initFromINI( &((TAiData*)instance)->m_skill[ which ], s_skillLevelFields );
 }
 
 TAiData::TAiData() : 

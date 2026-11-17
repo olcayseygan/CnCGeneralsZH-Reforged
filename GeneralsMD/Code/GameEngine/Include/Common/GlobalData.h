@@ -507,6 +507,8 @@ public:
 	Bool m_headless;							///< -headless: never draw a frame, never pace the logic tick, quit when the match ends
 	Bool m_turbo;									///< -turbo: draw, but run one logic frame a pass instead of pacing it to the wall clock
 	Int m_autoSkirmishAIStateOdd;		///< -aidiff2 <name>: rung for the odd-numbered slots (0 = same as -aidiff)
+	Int m_autoSkirmishRating;				///< -airating <r>: every AI slot's rating in hundredths, the rung its nearest; over -aidiff (-1, AI_RATING_NONE, = off)
+	Int m_autoSkirmishRatingOdd;		///< -airating2 <r>: the odd-numbered slots' rating in hundredths, over -aidiff2 (-1 = same as -airating)
 	Int m_noTacticsSlotParity;			///< -notactics even|odd: those slots of a skirmish fight without Hard's unit tactics; -1 none
 	Int m_aiKnobsOffParity;				///< -aiknobsoff even|odd|all <names>: those slots of a skirmish play with these profile knobs off; -1 none, 2 all
 	Int m_aiKnobsOffMask;					///< ... which knobs: AIKNOB_* bits

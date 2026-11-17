@@ -322,7 +322,11 @@ public:
 	/** Which rung of the six-step ladder this AI plays at, and what it is trying to do.  Two
 		* independent axes: the rung says how well, the role says what.  See AI-ROADMAP.md D6/D8. */
 	AISkillLevel getAISkillLevel(void) const {return m_skillLevel;}
-	void setAISkillLevel(AISkillLevel level) {m_skillLevel = level;}
+	void setAISkillLevel(AISkillLevel level) {m_skillLevel = level; m_rating = aiRatingOfSkill(level); refreshRatedProfile();}	///< the rung at its anchor rating
+	/** The seat's rating (AI_RATING_EASY..AI_RATING_HARD), which every rung-keyed knob is read at; the
+		* rung follows it as the nearest one.  Setting it clamps it. */
+	Real getAIRating(void) const {return m_rating;}
+	void setAIRating(Real rating) {m_rating = aiRatingClamp(rating); m_skillLevel = aiSkillOfRating(m_rating); refreshRatedProfile();}
 	Int getIncomeBonus(void) const {return m_incomeBonus;}	///< points over the rung's IncomePercent while it falls behind (stepIncomeBonus)
 	AIRole getAIRole(void) const {return m_role;}
 
@@ -339,6 +343,8 @@ public:
 
 	/// This rung's knobs, for any behaviour that has a difficulty-dependent decision to make.
 	const AIDifficultyProfile *getSkillProfile(void) const;
+	const AIDifficultyProfile *ratedProfile(void) const {return &m_ratedProfile;}	///< the ladder at this seat's rating alone: no -aiknobsoff, no personality
+	void refreshRatedProfile(void);	///< reads m_ratedProfile off the ladder at m_rating; the only writer of it
 	Bool knobsOffHere(void) const;		///< -aiknobsoff reaches this slot; its mask says which knobs
 	Int unitAbilitiesRung(void) const;	///< the profile's UnitAbilities with -aiknobsoff's abilities applied, safe to ask of another seat
 	Int foreignTechRung(void) const;	///< the profile's ForeignTech with -aiknobsoff's foreigntech applied
@@ -704,7 +710,9 @@ protected:
 
 	Player *m_player;									///< the Player we represent
 
-	AISkillLevel m_skillLevel;				///< rung of the ladder: how well this AI plays
+	AISkillLevel m_skillLevel;				///< rung of the ladder nearest m_rating, for what stays discrete
+	Real m_rating;										///< how well this AI plays: every rung-keyed knob is read here (aiRatingLerp)
+	AIDifficultyProfile m_ratedProfile;	///< the ladder at m_rating, written only when the rating is set or loaded (refreshRatedProfile)
 	mutable AIDifficultyProfile m_measuredProfile;	///< the rung's profile less the knobs -aiknobsoff turns off for this slot
 	AIRole		m_role;									///< what it is trying to do; rolled once, kept for the match
 

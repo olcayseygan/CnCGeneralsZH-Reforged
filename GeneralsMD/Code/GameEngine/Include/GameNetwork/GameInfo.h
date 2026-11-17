@@ -156,6 +156,9 @@ public:
 	void setHandicap( Int handicap ) { m_handicap = handicap; }	///< percent of max health this seat's units have, see IsValidHandicap
 	Int getHandicap( void ) const { return m_handicap; }
 
+	void setAIRating( Int rating ) { m_aiRating = rating; }	///< an AI seat's rating off its rung's anchor (-airating), in hundredths; AI_RATING_NONE for the anchor
+	Int getAIRating( void ) const { return m_aiRating; }
+
 	void setSkins( UnsignedInt64 skins ) { m_skins = skins; }	///< the SkinLoadout this seat's units are drawn in; drawing only, the logic never reads it
 	UnsignedInt64 getSkins( void ) const { return m_skins; }
 
@@ -210,6 +213,7 @@ protected:
 	Int m_teamNumber;																	///< alliance, -1 for none
 	Int m_aiPersonality;															///< AIPersonality of an AI seat, AIPERSONA_NORMAL otherwise
 	Int m_handicap;																		///< percent of max health this seat's units have, HANDICAP_FULL for none
+	Int m_aiRating;																		///< AI rating off the rung's anchor in hundredths, AI_RATING_NONE for the anchor
 	UnsignedInt64 m_skins;														///< SkinLoadout of an online human seat, 0 for none (TankSkin.h)
 	Int m_origColor;																			///< color, or -1 for random
 	Int m_origStartPos;																		///< start position, or -1 for random
@@ -451,6 +455,13 @@ Int AIPersonaFromSlotField( const char *field );
 Bool IsValidHandicap( Int handicap );
 AsciiString HandicapSlotField( Int handicap );
 Int HandicapFromSlotField( const char *field );
+
+// An AI seat's rating off its rung's anchor (-airating) goes after the handicap, persona and handicap
+// then written out in full: C<rung>,color,tmpl,start,team,persona,handicap,rating.  Only such a seat
+// writes it, so every other string stays the one it was, and an older parser stops at the handicap.
+// It is whole hundredths (1250 is 12.50).  Absent, or outside AI_RATING_EASY..AI_RATING_HARD, is
+// AI_RATING_NONE: the rung's anchor.
+Int AIRatingFromSlotField( const char *field );
 
 // A guest's "Handicap=<n>" request reaching the host.  TRUE when the slot list has to go round again,
 // which it does for a pick that does not fit in the options string as well: the guest's box has to

@@ -53,6 +53,7 @@
 // USER INCLUDES //////////////////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include "Lib/Clock.h"
 #include "Platform/SleepMilliseconds.h"
 
 #include "Common/AudioAffect.h"
@@ -86,6 +87,7 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/Gadget.h"
 #include "GameClient/GameText.h"
+#include "GameClient/MessageBox.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/Shell.h"
 #include "GameClient/KeyDefs.h"
@@ -216,6 +218,47 @@ static void showOnlineVerdict( void )
 	GadgetListBoxAddEntryText( listboxChatWindowScoreScreen, line, GameSpyColor[GSCOLOR_MOTD_HEADING], -1 );
 }
 
+/* -online: the report and the replay leave on the connection's own thread while this screen is up, and
+	 a player who quits here can take them down with the process.  A box with no button holds the screen
+	 until the connection has written them, or SENDING_BOX_MAX_MS, whichever comes first; it never holds
+	 the send itself.  It stays a second at least, so a small replay does not flash it for one frame, and
+	 shows once a screen, so chat sent after it does not bring it back. */
+enum { SENDING_BOX_MIN_MS = 1000, SENDING_BOX_MAX_MS = 30000 };
+static GameWindow *s_sendingBox = NULL;
+static Bool s_sendingBoxShown = FALSE;
+static UnsignedInt s_sendingBoxSince = 0;
+
+static void closeSendingBox( void )
+{
+	if (s_sendingBox && TheWindowManager)
+		TheWindowManager->winDestroy( s_sendingBox );
+	s_sendingBox = NULL;
+}
+
+static void updateSendingBox( void )
+{
+	if (screenType != SCORESCREEN_INTERNET || !OnlineIsEnabled())
+		return;
+	const Bool sending = OnlineIsSendingResults();
+	if (!s_sendingBox)
+	{
+		if (!sending || s_sendingBoxShown)
+			return;
+		s_sendingBoxShown = TRUE;
+		s_sendingBoxSince = Clock_Milliseconds();
+		s_sendingBox = MessageBoxOk( TheGameText->fetch( "GUI:OnlineSendingResultsTitle" ),
+			TheGameText->fetch( "GUI:OnlineSendingResults" ), NULL );
+		GameWindow *ok = s_sendingBox ? TheWindowManager->winGetWindowFromId( s_sendingBox,
+			TheNameKeyGenerator->nameToKey( "MessageBox.wnd:ButtonOk" ) ) : NULL;
+		if (ok)
+			ok->winHide( TRUE );		// it goes away by itself
+		return;
+	}
+	const UnsignedInt shown = Clock_Milliseconds() - s_sendingBoxSince;
+	if ((!sending && shown >= SENDING_BOX_MIN_MS) || shown >= SENDING_BOX_MAX_MS)
+		closeSendingBox();
+}
+
 struct ScoreGather
 {
 	Int m_totalMoneyEarned;						///< The total money that was harvested, refined, received in crates
@@ -308,6 +351,8 @@ void ScoreScreenInit( WindowLayout *layout, void *userData )
 	DontShowMainMenu = TRUE; //KRIS
 	buttonIsFinishCampaign = FALSE;
 	s_onlineVerdictShown = FALSE;
+	s_sendingBox = NULL;
+	s_sendingBoxShown = FALSE;
 
 	//Store the keys so we have them later
 	parentID = TheNameKeyGenerator->nameToKey( AsciiString( "ScoreScreen.wnd:ParentScoreScreen" ) );
@@ -447,6 +492,7 @@ void ScoreScreenShutdown( WindowLayout *layout, void *userData )
 {
 	DontShowMainMenu = FALSE; //KRIS
 	ScoreScreenGraphsShutdown();
+	closeSendingBox();
 
 	// hide the layout
 	layout->hide( TRUE );
@@ -485,6 +531,7 @@ void ScoreScreenUpdate( WindowLayout * layout, void *userData)
 	}
 
 	showOnlineVerdict();
+	updateSendingBox();
 
 	//TheGameLogic->clearGameData() gets called after ScoreScreenInit and before the
 	//first ScoreScreenUpdate(), so it was creatively moved here so we can actually

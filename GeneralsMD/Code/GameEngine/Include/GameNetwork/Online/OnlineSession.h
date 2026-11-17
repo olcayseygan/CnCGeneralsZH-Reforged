@@ -175,6 +175,7 @@ struct OnlineSession
 	std::string reportedMatch;
 	std::string replayedMatch;	///< the match whose replay last went up, or was given up (OnlineSendReplay)
 	std::string quickMatch;	///< qm.matched's id until a recording claims it (OnlineClaimQuickMatch) or it is dropped
+	std::string recordingMatch;	///< what the last recording claimed: its replay goes up when the recording closes
 	std::string resultLine;	///< the last ONLINE RATED / ONLINE UNRATED line logged
 	OnlineMessage result;		///< the last rated or unrated line itself
 

@@ -148,6 +148,7 @@ public:
 	State state() const;
 	std::string error() const;			///< why the connection ended or failed to start; empty while it is fine
 	unsigned droppedLines() const;	///< received lines that were oversize or not a JSON object parse() takes
+	unsigned unsentLines() const;		///< lines send() queued that have not all gone into the socket yet; 0 once closed
 
 	/* ISRG Root X1 and X2, the roots Let's Encrypt chains to, as PEM. */
 	static const char *defaultRoots();

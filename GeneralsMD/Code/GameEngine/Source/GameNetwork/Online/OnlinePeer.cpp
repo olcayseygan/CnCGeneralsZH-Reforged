@@ -181,6 +181,7 @@ void OnlineSession::beginTest( std::vector<OnlineMessage> *lines )
 	reportedMatch.clear();
 	replayedMatch.clear();
 	quickMatch.clear();
+	recordingMatch.clear();
 	resultLine.clear();
 	result.clear();
 	motd.clear();

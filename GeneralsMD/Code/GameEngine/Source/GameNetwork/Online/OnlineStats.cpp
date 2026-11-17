@@ -194,8 +194,19 @@ AsciiString OnlineClaimQuickMatch( void )
 {
 	OnlineSession &s = OnlineSession::get();
 	AsciiString id = s.quickMatch.c_str();
+	s.recordingMatch = s.quickMatch;
 	s.quickMatch.clear();
 	return id;
+}
+
+Bool OnlineIsSendingResults( void )
+{
+	const OnlineSession &s = OnlineSession::get();
+	if (s.matchId.empty() || s.reportedMatch != s.matchId)
+		return FALSE;		// no report went out for this match
+	if (s.recordingMatch == s.matchId && s.replayedMatch != s.matchId)
+		return TRUE;		// the recording has not closed: its replay is still to be queued
+	return s.connection && s.connection->unsentLines() > 0;
 }
 
 void OnlineSendReplay( const char *match, const AsciiString &path )

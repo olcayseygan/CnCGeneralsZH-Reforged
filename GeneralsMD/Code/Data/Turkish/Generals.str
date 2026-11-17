@@ -19184,6 +19184,14 @@ GUI:OnlineUnrated_cancelled
 "Puana sayılmadı: maç iptal oldu."
 END
 
+GUI:OnlineSendingResultsTitle
+"Sonuçlar Gönderiliyor"
+END
+
+GUI:OnlineSendingResults
+"Maç sonucu ve tekrarı gönderiliyor. Lütfen bekleyin, oyunu kapatmayın."
+END
+
 GUI:Talents
 "YETENEKLER"
 END

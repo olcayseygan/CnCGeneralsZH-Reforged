@@ -4937,6 +4937,14 @@ GUI:OnlineUnrated_cancelled
 "Not rated: the match was called off."
 END
 
+GUI:OnlineSendingResultsTitle
+"Sending Results"
+END
+
+GUI:OnlineSendingResults
+"The match result and replay are being sent. Please wait, and do not close the game."
+END
+
 // The general's ranks past EA's five, named the way the first five are (EA's 6 to 8 were joke names
 // no rank ever reached)
 

@@ -144,6 +144,12 @@ enum { ONLINE_REPLAY_CHUNK = 4096, ONLINE_REPLAY_MAX = 2 * 1024 * 1024 };
 AsciiString OnlineClaimQuickMatch( void );
 void OnlineSendReplay( const char *match, const AsciiString &path );
 
+/* TRUE while the last match's report went out and something of it has not reached the socket: the
+	 replay its recording claimed is not queued yet, or the connection still holds lines it has not
+	 written.  FALSE with no report for the match, and once the connection is gone (nothing left to wait
+	 for).  The score screen holds a "sending results" box on it. */
+Bool OnlineIsSendingResults( void );
+
 /* What the server has said about a player, by nick: the round trip to the server from `player` events
 	 (ping), the site's rating, tier and games from `player`, auth.ok and stats.  A number nobody sent is
 	 -1 (rank 0); hasRating is FALSE until a rating arrived.  An older server sends none of it, and the

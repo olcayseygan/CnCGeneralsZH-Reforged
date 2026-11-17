@@ -587,6 +587,7 @@ TEST(online_tls_loopback_against_the_test_ca)
 		CHECK( got[ 3 ].type() == "bye" );
 	}
 	CHECK_EQ( c.droppedLines(), 2u );		// the nested one and the oversize one
+	CHECK_EQ( c.unsentLines(), 0u );			// the hello is written: the answers came after it, on the same thread
 	CHECK_EQ( c.state(), OnlineConnection::OPEN );
 	if (!c.error().empty())
 		printf( "  error: %s\n", c.error().c_str() );
@@ -1752,6 +1753,63 @@ TEST(online_replay_chunks_and_goes_once)
 	OnlineSendReplay( "m11", AsciiString::TheEmptyString );		// a desynced recording uses m11 up
 	OnlineSendReplay( "m11", path );
 	CHECK_EQ( rig.sent.size(), (size_t)0 );
+	remove( path );
+}
+
+/* The score screen's "sending results" box: up from the report until the claimed replay is queued, and
+	 never for a match that sent no report.  Captured lines count as written, so only the replay waits. */
+TEST(online_results_are_sending_until_the_replay_is_queued)
+{
+	AdapterRig rig;
+	const char *path = "test_online_sending.tmp";
+	FILE *f = fopen( path, "wb" );
+	CHECK( f != NULL );
+	if (!f)
+		return;
+	fputs( "GENREP", f );
+	fclose( f );
+	rig.login();
+	OnlineReport report;
+	report.numPlayers = 2;
+
+	CHECK( !OnlineIsSendingResults() );		// no match
+
+	// a custom game: the report goes out, no replay follows
+	rig.feed( "{\"t\":\"game.start\",\"match\":\"c3\"}" );
+	rig.peerResponses();
+	CHECK_STR( OnlineClaimQuickMatch().str(), "" );
+	CHECK( !OnlineIsSendingResults() );		// no report yet
+	OnlineSendReport( report );
+	CHECK( !OnlineIsSendingResults() );
+
+	// a Quick Match: from the report until its recording closes
+	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"q3\"}" );
+	rig.peerResponses();
+	const AsciiString claimed = OnlineClaimQuickMatch();
+	CHECK_STR( claimed.str(), "q3" );
+	CHECK( !OnlineIsSendingResults() );
+	OnlineSendReport( report );
+	CHECK( OnlineIsSendingResults() );
+	OnlineSendReplay( claimed.str(), path );
+	CHECK( !OnlineIsSendingResults() );
+
+	// a desynced recording gives its replay up, and nothing is left to wait for
+	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"q4\"}" );
+	rig.peerResponses();
+	CHECK_STR( OnlineClaimQuickMatch().str(), "q4" );
+	OnlineSendReport( report );
+	CHECK( OnlineIsSendingResults() );
+	OnlineSendReplay( "q4", AsciiString::TheEmptyString );
+	CHECK( !OnlineIsSendingResults() );
+
+	// a logout drops the match: nothing waits under it
+	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"q5\"}" );
+	rig.peerResponses();
+	CHECK_STR( OnlineClaimQuickMatch().str(), "q5" );
+	OnlineSendReport( report );
+	CHECK( OnlineIsSendingResults() );
+	OnlineSession::get().forgetAccount();
+	CHECK( !OnlineIsSendingResults() );
 	remove( path );
 }
 

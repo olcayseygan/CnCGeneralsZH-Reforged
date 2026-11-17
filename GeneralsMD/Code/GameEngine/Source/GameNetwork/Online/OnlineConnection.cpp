@@ -761,11 +761,12 @@ struct OnlineConnection::Impl
 	std::deque<std::string> outgoing;
 	std::deque<OnlineMessage> incoming;
 	unsigned dropped;
+	unsigned unsent;				///< outgoing plus the lines the thread took and has not finished writing
 	std::string host;
 	unsigned short port;
 	mbedtls_x509_crt ca;
 
-	Impl() : stop( false ), state( IDLE ), dropped( 0 ), port( 0 ) { mbedtls_x509_crt_init( &ca ); }
+	Impl() : stop( false ), state( IDLE ), dropped( 0 ), unsent( 0 ), port( 0 ) { mbedtls_x509_crt_init( &ca ); }
 	~Impl() { mbedtls_x509_crt_free( &ca ); }
 
 	void finish( const std::string &why )
@@ -775,6 +776,7 @@ struct OnlineConnection::Impl
 		if (!stop)
 			error = why;
 		outgoing.clear();
+		unsent = 0;
 	}
 	void run();
 };
@@ -977,6 +979,12 @@ void OnlineConnection::Impl::run()
 						break;
 					}
 				}
+				if (done == line.size())
+				{
+					std::lock_guard<std::mutex> guard( lock );
+					if (unsent > 0)
+						--unsent;
+				}
 			}
 			if (!why.empty())
 				break;
@@ -1044,6 +1052,7 @@ bool OnlineConnection::connect( const std::string &host, unsigned short port, co
 	m_impl->outgoing.clear();
 	m_impl->incoming.clear();
 	m_impl->dropped = 0;
+	m_impl->unsent = 0;
 	m_impl->stop = false;
 	if (host.empty() || port == 0)
 	{
@@ -1078,6 +1087,7 @@ bool OnlineConnection::send( const OnlineMessage &message )
 	if (m_impl->state != CONNECTING && m_impl->state != OPEN)
 		return false;
 	m_impl->outgoing.push_back( line );
+	++m_impl->unsent;
 	return true;
 }
 
@@ -1117,6 +1127,12 @@ unsigned OnlineConnection::droppedLines() const
 {
 	std::lock_guard<std::mutex> guard( m_impl->lock );
 	return m_impl->dropped;
+}
+
+unsigned OnlineConnection::unsentLines() const
+{
+	std::lock_guard<std::mutex> guard( m_impl->lock );
+	return m_impl->unsent;
 }
 
 // https://letsencrypt.org/certs/isrgrootx1.pem (SHA-256 96:BC:EC:06:...:DF:08:C6, until 2035-06-04) and

@@ -145,7 +145,15 @@ void destroyQuitMenu()
 	//
 	saveLoadMenuLayout = NULL;
 
+	//
+	// The in-game UI's copy of the flag goes with the menu.  EA left it set, so a player who surrendered
+	// and stayed on as an observer had a match that still thought its quit menu was up: no chat, no
+	// diplomacy, no left click through the selection translator until Escape opened and closed the menu
+	// again, and -control's quitmenu found no menu to press Exit in.
+	//
 	isVisible = FALSE;
+	if( TheInGameUI )
+		TheInGameUI->setQuitMenuVisible( FALSE );
 }
 
 //

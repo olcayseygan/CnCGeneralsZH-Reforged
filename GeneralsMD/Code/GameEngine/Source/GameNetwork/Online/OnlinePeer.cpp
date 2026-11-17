@@ -948,6 +948,8 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		}
 		const Bool isReport = t.compare( 0, 7, "report." ) == 0;
 		(isReport ? reportAnswered : replayAnswered) = match;
+		// what online_check greps to see the answer arrive; the server logs the same ack with its time
+		DEBUG_LOG(("ONLINE ACK %s match=%s\n", t.c_str(), match.c_str()));
 		if (t == "report.err" || t == "replay.err")
 			DEBUG_LOG(("ONLINE %s REFUSED match=%s code=%s\n", isReport ? "REPORT" : "REPLAY", match.c_str(), m.getString( "code", "unknown" ).c_str()));
 	}

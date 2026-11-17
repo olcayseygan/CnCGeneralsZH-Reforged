@@ -213,6 +213,7 @@ found and fixed, EA's own, not port damage.**
 - When a joiner leaves your online room on his own game's say-so, your room's chat tells you why: he could not find you as the host, your seat list never reached him, or it stopped listing him. Before, he just vanished.
 - "Could not join - other game version" now says which half differs. A different build of the game means the host or you need the update; the same version with different game data files means a repair or reinstall, or a loose file you put in the Data folder, and the message says so.
 - A file left behind in the game's folder under Documents by an earlier install could make a healthy copy of the game look like a different version to everyone else online, and a reinstall did not clear it. The game no longer trusts that file: one written by another version or another install is thrown away and made again, which costs the first start after an update a little longer.
+- Surrender from the menu and stay on to watch, and the match used to go on as if the menu were still open: chat and diplomacy would not come up, a left click selected nothing, and only opening and closing the menu with Escape brought them back. EA's game had it the same way. The menu now takes all of that with it when it closes.
 
 ## Wrecks keep the speed they died at
 

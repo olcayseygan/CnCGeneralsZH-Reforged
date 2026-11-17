@@ -1023,7 +1023,6 @@ protected:
 	Bool turnPointRound(const Coord3D *from, const Coord3D *to, ObjectID ignored, const std::vector<AIKnownGun> &guns,
 		Coord3D *via, Real *straight, Real *round);		///< a turn point whose two legs cross no known anti-air gun but ignored
 	Bool routeStrike(Object *aircraft, Object *target, const Coord3D *at, const std::vector<AIKnownGun> &guns);	///< TRUE when it was sent round
-	void flyTurnLeg(Object *aircraft, const Coord3D *via);	///< to via as a path, which a busy jet obeys
 	void routeHome(Object *aircraft, const std::vector<AIKnownGun> &guns);	///< an empty jet home round the known guns
 	void flyStrikeRoutes(void);										///< the ones at their turn strike, the empty go home; the rest fly on
 	void ensureInfluence(void);										///< the map, no older than this rung reads it, for a player that does not stamp it

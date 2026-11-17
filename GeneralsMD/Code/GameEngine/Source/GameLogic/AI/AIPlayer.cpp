@@ -111,6 +111,17 @@
 
 #define USE_DOZER 1
 
+/** The computer's move order to a unit that may be busy, given as a one-point path.  aiMoveToPosition from the
+	* computer to a unit that is not idle is only a temporary move laid over what it is doing
+	* (privateMoveToPosition), and the attack, guard or hunt under it carries on: a routed Raptor flew straight at
+	* its target through the gun it was sent round, and every healer Helix order in a 9000-frame match landed over
+	* its guard or attack (2026-11-17).  A path clears the machine, as a player's order does. */
+static void aiOrderMove( AIUpdateInterface *ai, const Coord3D *pos )
+{
+	std::vector<Coord3D> leg( 1, *pos );
+	ai->aiFollowPath( &leg, NULL, CMD_FROM_AI );
+}
+
 /** Does 'observerNdx' know this thing is there?
 	*
 	* "I can see it now, or it is a building I have seen and buildings do not walk away" - which is
@@ -15211,7 +15222,7 @@ void AIPlayer::steerAircraft( void )
 		{
 			Coord3D home = m_baseCenter;
 			home.z = TheTerrainLogic->getGroundHeight( home.x, home.y );
-			ai->aiMoveToPosition( &home, CMD_FROM_AI );
+			aiOrderMove( ai, &home );
 		}
 	}
 }
@@ -15285,20 +15296,11 @@ Bool AIPlayer::routeStrike( Object *aircraft, Object *target, const Coord3D *at,
 	route.frame = TheGameLogic->getFrame();
 	route.struck = FALSE;
 	m_strikeRoutes.push_back( route );
-	flyTurnLeg( aircraft, &via );
+	aiOrderMove( aircraft->getAI(), &via );
 	DEBUG_LOG(("AI AIR frame %d player %d '%s' %d flies round to '%s' (%.0f,%.0f) by (%.0f,%.0f): air threat %.0f straight, %.0f round\n",
 		route.frame, m_player->getPlayerIndex(), aircraft->getTemplate()->getName().str(), aircraft->getID(),
 		target ? target->getTemplate()->getName().str() : "a place", at->x, at->y, via.x, via.y, straight, round));
 	return TRUE;
-}
-
-/** Sends an aircraft to a turn point as a path.  aiMoveToPosition from the computer to a unit busy attacking or
-	* landing is only a temporary state over the busy one, and a Raptor given it flew straight on at its target
-	* through the gun it was sent round, then straight home over it again (maplayers_jetroute). */
-void AIPlayer::flyTurnLeg( Object *aircraft, const Coord3D *via )
-{
-	std::vector<Coord3D> leg( 1, *via );
-	aircraft->getAI()->aiFollowPath( &leg, NULL, CMD_FROM_AI );
 }
 
 /** An empty jet whose flight home crosses a known anti-air gun flies home round it, to the turn point
@@ -15337,7 +15339,7 @@ void AIPlayer::routeHome( Object *aircraft, const std::vector<AIKnownGun> &guns 
 	Real straight = 0.0f, round = -1.0f;
 	if( !turnPointRound( pos, &home, INVALID_ID, guns, &via, &straight, &round ) )
 		return;
-	flyTurnLeg( aircraft, &via );
+	aiOrderMove( aircraft->getAI(), &via );
 	DEBUG_LOG(("AI AIR frame %d player %d '%s' %d flies home to (%.0f,%.0f) round by (%.0f,%.0f): air threat %.0f straight, %.0f round\n",
 		TheGameLogic->getFrame(), m_player->getPlayerIndex(), aircraft->getTemplate()->getName().str(), aircraft->getID(),
 		home.x, home.y, via.x, via.y, straight, round));
@@ -15762,7 +15764,7 @@ void AIPlayer::steerHealer( Int slot, const std::vector<AIKnownGun> &guns )
 			patient ? patient->getTemplate()->getName().str() : "",
 			out, nearest ? (Real)sqrt( nearestSqr ) : 0.0f, nearest ? nearest->m_reach : 0.0f));
 	}
-	ai->aiMoveToPosition( &spot, CMD_FROM_AI );
+	aiOrderMove( ai, &spot );
 	duty.spot = spot;
 	duty.phase = phase;
 	duty.target = patientID;
@@ -15840,13 +15842,13 @@ void AIPlayer::flyRaid( Int slot, const std::vector<AIKnownGun> &guns )
 			if( (lastHit != 0 && now - lastHit < HEALER_HIT_FRAMES) || deepestReach( guns, pos->x, pos->y, TRUE ) > -HELIX_GUN_MARGIN )
 			{
 				const Coord3D clear = rearOf( pos, guns, HELIX_GUN_MARGIN );
-				ai->aiMoveToPosition( &clear, CMD_FROM_AI );
+				aiOrderMove( ai, &clear );
 				break;
 			}
 			if( !isAtHome( pos ) )
 			{
 				if( ai->isIdle() )
-					ai->aiMoveToPosition( &home, CMD_FROM_AI );
+					aiOrderMove( ai, &home );
 				break;
 			}
 			if( !bomb->isReady() || health < RAID_DEPART_HEALTH || isBaseUnderAttack() )
@@ -15865,7 +15867,7 @@ void AIPlayer::flyRaid( Int slot, const std::vector<AIKnownGun> &guns )
 			duty.targetHealth = -1.0f;
 			duty.phase = RAID_OUT;
 			duty.frame = now;
-			ai->aiMoveToPosition( &entry, CMD_FROM_AI );
+			aiOrderMove( ai, &entry );
 			break;
 		}
 
@@ -15888,14 +15890,14 @@ void AIPlayer::flyRaid( Int slot, const std::vector<AIKnownGun> &guns )
 					duty.target = pick->getID();
 					duty.spot = entry;
 					duty.frame = now;
-					ai->aiMoveToPosition( &entry, CMD_FROM_AI );
+					aiOrderMove( ai, &entry );
 					break;
 				}
 				abort = "the way in turned hot";
 			}
 			if( abort )
 			{
-				ai->aiMoveToPosition( &home, CMD_FROM_AI );
+				aiOrderMove( ai, &home );
 				break;
 			}
 			if( ai->isIdle() || sqr( pos->x - duty.spot.x ) + sqr( pos->y - duty.spot.y ) <= sqr( HELIX_REORDER_DISTANCE ) )
@@ -15906,7 +15908,7 @@ void AIPlayer::flyRaid( Int slot, const std::vector<AIKnownGun> &guns )
 			}
 			else if( now - duty.frame > RAID_LEG_FRAMES )
 			{
-				ai->aiMoveToPosition( &duty.spot, CMD_FROM_AI );
+				aiOrderMove( ai, &duty.spot );
 				duty.frame = now;
 			}
 			break;
@@ -15920,7 +15922,7 @@ void AIPlayer::flyRaid( Int slot, const std::vector<AIKnownGun> &guns )
 					now, m_player->getPlayerIndex(), helix->getTemplate()->getName().str(), duty.id,
 					targetGone ? "nothing" : target->getTemplate()->getName().str(), duty.target, pos->x, pos->y, (now - duty.frame) / LOGICFRAMES_PER_GAME_SECOND,
 					duty.targetHealth, targetGone ? 0.0f : target->getBodyModule()->getMaxHealth()));
-				ai->aiMoveToPosition( &duty.spot, CMD_FROM_AI );
+				aiOrderMove( ai, &duty.spot );
 				duty.phase = RAID_BACK;
 				duty.frame = now;
 			}
@@ -15931,7 +15933,7 @@ void AIPlayer::flyRaid( Int slot, const std::vector<AIKnownGun> &guns )
 			else if( now - duty.frame > RAID_RUN_FRAMES )
 				abort = "the run took too long";
 			if( abort )
-				ai->aiMoveToPosition( &duty.spot, CMD_FROM_AI );
+				aiOrderMove( ai, &duty.spot );
 			// The bomb is a persistent ability: it drops again under the Helix every time it recharges, and
 			// an aborted one flies back to its spot the moment the Helix is idle.  Only an order from
 			// outside the AI ends it, and these are all the AI's own, so a raider bombed its way home and
@@ -15951,7 +15953,7 @@ void AIPlayer::flyRaid( Int slot, const std::vector<AIKnownGun> &guns )
 				duty.frame = now;
 			}
 			else if( ai->isIdle() || now - duty.frame > RAID_LEG_FRAMES )
-				ai->aiMoveToPosition( &home, CMD_FROM_AI );
+				aiOrderMove( ai, &home );
 			break;
 	}
 	if( abort )
@@ -17525,7 +17527,7 @@ static Int shellDefence( const Player *player, Object *obj, Real range, const st
 	else
 	{
 		fire.z = TheTerrainLogic->getGroundHeight( fire.x, fire.y );
-		ai->aiMoveToPosition( &fire, CMD_FROM_AI );
+		aiOrderMove( ai, &fire );
 	}
 	return best;
 }
@@ -20284,7 +20286,7 @@ void AIPlayer::doAbilities( void )
 				to.y += dy / length * ABILITY_HERO_RETREAT_STEP;
 				DEBUG_LOG(( "AI ABILITY frame %d player %d '%s' %d pulls back to (%.0f,%.0f): the fight in front of it is lost\n",
 					TheGameLogic->getFrame(), m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), obj->getID(), to.x, to.y ));
-				obj->getAI()->aiMoveToPosition( &to, CMD_FROM_AI );
+				aiOrderMove( obj->getAI(), &to );
 			}
 			continue;
 		}

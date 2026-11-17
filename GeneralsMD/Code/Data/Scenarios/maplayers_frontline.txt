@@ -7,7 +7,8 @@
 # against the army it remembers the enemy having (heldAt), so a known gun on the third no longer sends the
 # wave home.
 #
-# Measured 2026-11-17 to frame 9000: 28 "AI HOLD" lines with the layers, 21 without. The first holds on the
+# Measured 2026-11-17 to frame 9000: 26 "AI HOLD" lines with the layers, 20 without (28 and 21 before the
+# healer and raider Helixes' moves became real orders the same day). The first holds on the
 # same frames moved: player 3 on Flank1 from (1820,1470) to (1800,1620), player 2 on Center2 from
 # (1120,940) to (1090,850). The retreat's regroup at the front line, which this pair was also meant to show,
 # fired in neither run nor in four 12000-frame replay-check games, and was taken out.

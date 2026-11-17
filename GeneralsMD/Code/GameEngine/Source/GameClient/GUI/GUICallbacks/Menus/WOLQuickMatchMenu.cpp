@@ -40,6 +40,7 @@
 #include "Common/LadderPreferences.h"
 #include "Common/MultiplayerSettings.h"
 #include "Common/PlayerTemplate.h"
+#include "Common/RandomMapGenerator.h"
 #include "GameClient/AnimateWindowManager.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/Gadget.h"
@@ -251,6 +252,8 @@ static void hideUnusedQuickMatchOptions( void )
 		"WOLQuickMatchMenu.wnd:ComboBoxMaxDisconnects", "WOLQuickMatchMenu.wnd:StaticTextMaxDisconnects",
 		"WOLQuickMatchMenu.wnd:ComboBoxLadder", "WOLQuickMatchMenu.wnd:StaticTextLadder",
 		"WOLQuickMatchMenu.wnd:ButtonBuddies",
+		// every ranked match is on a map generated for it, so there is no pool to veto
+		"WOLQuickMatchMenu.wnd:ListBoxMapSelect", "WOLQuickMatchMenu.wnd:StaticTextAllowableMaps",
 	};
 	for (size_t i = 0; i < sizeof(unused) / sizeof(unused[0]); ++i)
 	{
@@ -366,7 +369,8 @@ void UpdateStartButton(void)
 	GadgetComboBoxGetSelectedPos( comboBoxLadder, &selected );
 	index = (Int)(intptr_t)GadgetComboBoxGetItemData( comboBoxLadder, selected );
 	const LadderInfo *li = TheLadderList->findLadderByIndex( index );
-	if (li)
+	// -online hides the map list: its match is on a generated map, whatever was ticked
+	if (li || OnlineIsEnabled())
 	{
 		buttonStart->winEnable(TRUE);
 		return;
@@ -1526,15 +1530,22 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 							std::list<AsciiString> maps = TheGameSpyConfig->getQMMaps();
 							if (OnlineIsEnabled())
 							{
-								// -online: mapIdx counts the service's whole pool, installed here or not
-								for (std::list<AsciiString>::const_iterator it = maps.begin(); it != maps.end(); ++it)
-								{
-									if (resp.qmStatus.mapIdx-- == 0)
-									{
-										TheGameSpyGame->setMap(*it);
-										break;
-									}
-								}
+								/* -online is ranked: every peer generates the same map from the match seed and the seat
+									 count, and the server's mapIdx goes unused.  The map starts black and the load screen
+									 shows neither it nor a start spot, so nobody knows where anybody is. */
+								TheGameSpyGame->setStartShrouded(TRUE);
+								AsciiString generated;
+								stageRandomMap(RandomMapGenerator::quickMatchSettings(resp.qmStatus.seed, numPlayers), generated);
+								generated.toLower();
+								TheMapCache->updateCache();
+								/* No fallback map: QM peers never compare MC=, so a machine that played another map
+									 would split the match with nothing to refuse it.  A map that did not build stays
+									 set by name, and launchGame finds no such map and leaves the match with its
+									 "could not transfer map" box. */
+								TheGameSpyGame->setMap(generated);
+								if (TheMapCache->findMap(generated) == NULL)
+									DEBUG_LOG(("ONLINE MATCHED no generated map: seed=%d players=%d map=%s, leaving the match\n",
+										resp.qmStatus.seed, numPlayers, generated.str()));
 								maps.clear();
 							}
 							for (std::list<AsciiString>::const_iterator it = maps.begin(); it != maps.end(); ++it)
@@ -1577,6 +1588,19 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 									slot->setTeamNumber( i/numPlayersPerTeam );
 									if (i==0)
 										TheGameSpyGame->setGameName(uName);
+								}
+							}
+
+							if (OnlineIsEnabled())
+							{
+								// the options string's MC= and MS=, off the map every peer staged
+								AsciiString lowerMap = TheGameSpyGame->getMap();
+								lowerMap.toLower();
+								const MapMetaData *md = TheMapCache->findMap(lowerMap);
+								if (md)
+								{
+									TheGameSpyGame->setMapCRC(md->m_CRC);
+									TheGameSpyGame->setMapSize(md->m_filesize);
 								}
 							}
 
@@ -1838,23 +1862,13 @@ WindowMsgHandledType WOLQuickMatchMenuSystem( GameWindow *window, UnsignedInt ms
 					Int numMaps = GadgetListBoxGetNumEntries(listboxMapSelect);
 					if (OnlineIsEnabled())
 					{
-						// the service's qm.join maps index its whole pool, the welcome's <QMMaps>; a pool map
-						// this machine does not list (not installed, too few seats) is a veto
+						/* the service's qm.join maps index its whole pool, the welcome's <QMMaps>.  The match is
+							 played on a map generated from its seed and the pool map goes unused, so nothing is
+							 vetoed: a veto would only keep the server from pairing two players over a map neither
+							 of them plays. */
 						std::list<AsciiString> pool = TheGameSpyConfig->getQMMaps();
 						for (std::list<AsciiString>::const_iterator it = pool.begin(); it != pool.end(); ++it)
-						{
-							Bool ticked = FALSE;
-							for ( Int i=0; i<numMaps; ++i )
-							{
-								const MapMetaData *md = (const MapMetaData *)GadgetListBoxGetItemData(listboxMapSelect, i, 1);
-								if (md && md->m_fileName.compareNoCase(*it) == 0)
-								{
-									ticked = GadgetListBoxGetItemData(listboxMapSelect, i, 0) != NULL;
-									break;
-								}
-							}
-							req.qmMaps.push_back(ticked);
-						}
+							req.qmMaps.push_back(TRUE);
 					}
 					else
 					{

@@ -576,6 +576,7 @@ void GameInfo::reset( void )
   m_incomeSharing = INCOME_SHARING_OFF;
   m_techRespawn = 0;
   m_supplyPileLimit = 0;
+  m_startShrouded = FALSE;
   m_gameSpeedPercent = PLAYER_GAME_SPEED_PERCENT_DEFAULT;
 
 	//
@@ -1448,6 +1449,7 @@ static AsciiString buildGameInfoAsciiString( const GameInfo *game, const AsciiSt
 	concatOptionUnlessZero(optionsString, "IS", game->getIncomeSharing());
 	concatOptionUnlessZero(optionsString, "TR", game->getTechRespawn());
 	concatOptionUnlessZero(optionsString, "PL", game->getSupplyPileLimit());
+	concatOptionUnlessZero(optionsString, "SH", game->getStartShrouded() ? 1 : 0);
 	// the game speed is not in the string: a network game always plays the native speed, and a skirmish's
 	// reaches its replay as the header's GS= field.  Turbo's "TB" key is no longer written
 
@@ -1613,6 +1615,7 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
   Int incomeSharing = INCOME_SHARING_OFF; // the same
   Int techRespawn = 0; // the same
   Int supplyPileLimit = 0; // the same
+  Bool startShrouded = FALSE; // the same
 
 	Bool sawMap, sawMapCRC, sawMapSize, sawSeed, sawSlotlist, sawUseStats, sawSuperweaponRestriction, sawStartingCash, sawOldFactions;
 	sawMap = sawMapCRC = sawMapSize = sawSeed = sawSlotlist = sawUseStats = sawSuperweaponRestriction = sawStartingCash = sawOldFactions = FALSE;
@@ -1723,6 +1726,10 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
     else if (key.compare("PL") == 0 )
     {
       supplyPileLimit = atoi(val.str());
+    }
+    else if (key.compare("SH") == 0 )
+    {
+      startShrouded = atoi(val.str()) != 0;
     }
     else if (key.compare("TB") == 0 )
     {
@@ -2092,6 +2099,7 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
     game->setIncomeSharing( incomeSharing );
     game->setTechRespawn( techRespawn );
     game->setSupplyPileLimit( supplyPileLimit );
+    game->setStartShrouded( startShrouded );
 
 		return true;
 	}

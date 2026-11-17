@@ -8,6 +8,12 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Ranked Quick Match plays blind
+
+- Every ranked Quick Match is played on a map generated for that match from its seed, sized for the seats in it, so nobody has learned it in advance. The map list on the Quick Match screen is gone, since there is nothing left to veto.
+- The map starts black, as in a skirmish with the shroud on, where every other online game starts with the whole map revealed under the fog. The load screen shows a question mark where the map would be and no start spot for anyone, your own included. Start spots stay random.
+- Lobby games, LAN and skirmish start as they always did. A ranked replay starts black too; a replay recorded before this change still plays back.
+
 ## Explosions after ZH Enhanced
 
 - A building's blast throws a ring of dust out from its foot that settles in about three seconds, with clods of earth, the bigger buildings a bigger ring. Turn on Collapsing Buildings and the dust goes up round a building as it sinks. A civilian building that comes down floor by floor kicks up dust at every stage.

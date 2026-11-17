@@ -511,6 +511,8 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 	// (a director's recording has no local seat at all)
 	const Bool seeAll = TheGameLogic->isInReplayGame() || game->getLocalSlotNum() < 0
 		|| game->getConstSlot( game->getLocalSlotNum() )->getOriginalPlayerTemplate() == PLAYERTEMPLATE_OBSERVER;
+	// a ranked Quick Match gives a player neither the map nor any start spot, his own included
+	const Bool mapHidden = game->getStartShrouded() && !seeAll;
 
 	// a card a player, in the order the lobby lists them.  Someone watching from this screen without a
 	// seat (an -observer match) is a watcher too, under the name the skirmish room would have given
@@ -540,7 +542,7 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 		card.nameColor = UIStyle::readable( card.color );
 		card.team = 0;
 		card.column = 0;
-		card.startSpot = seeAll ? slot->getStartPos() : slot->getApparentStartPos();
+		card.startSpot = mapHidden ? -1 : seeAll ? slot->getStartPos() : slot->getApparentStartPos();
 		card.percent = cardBars && slot->isHuman() ? 0 : -1;
 		card.mirrored = FALSE;
 		card.badge = NULL;
@@ -834,7 +836,7 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 	// seat on each, as the room shows them; an open or hidden spot is not drawn, as on the score
 	// screen.  A card whose spot shows wears the same disc at the same size, never under 18 pixels
 	// at 720 and never too small for its number
-	m_mapImage = getMapPreviewImage( game->getMap() );
+	m_mapImage = mapHidden ? TheMappedImageCollection->findImageByName( "UnknownMap" ) : getMapPreviewImage( game->getMap() );
 	GameFont *numberFont = m_smallFont;
 	m_spotSize = max( max( mapWidth, mapHeight ) * LOBBY_START_SPOT / LOBBY_MAP_PREVIEW, max( scaled( 27 ), numberFont->height + 2 ) );
 	if( map )

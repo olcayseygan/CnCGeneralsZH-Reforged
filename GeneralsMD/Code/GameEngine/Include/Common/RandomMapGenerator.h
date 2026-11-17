@@ -110,6 +110,12 @@ public:
 	/** The style a name such as "twilight" stands for, 0 when none does. A style is baked into the
 		exe rather than read from a file, because every machine rebuilds the map from its name. */
 	static Int styleNamed( const char *name );
+
+	/** A ranked Quick Match's map, from the match seed the server handed every player and the number
+		of seats: no template, so nothing hangs on which shipped maps a machine has installed, the seed
+		picking the kind of map, Medium for that many players. Every peer derives the same settings and
+		so stages the same name and bytes. */
+	static RandomMapSettings quickMatchSettings( Int matchSeed, Int numPlayers );
 };
 
 /** Generate the map and its preview and keep both in memory under a path in the

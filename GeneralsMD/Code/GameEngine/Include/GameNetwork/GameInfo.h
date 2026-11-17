@@ -339,6 +339,13 @@ public:
   inline Int getSupplyPileLimit( void ) const;
   void setSupplyPileLimit( Int players );
 
+  // A ranked Quick Match starts under the black shroud, where every other network game starts on a
+  // revealed, fogged map (MultiplayerSettings' UseShroud = No), and its load screen shows neither the
+  // map nor a start spot.  SH=1 in the options string, so a replay starts the same way; off writes
+  // nothing and every other string stays as it was.
+  Bool getStartShrouded( void ) const { return m_startShrouded; }
+  void setStartShrouded( Bool shrouded ) { m_startShrouded = shrouded; }
+
   // Game speed in percent of retail's pace, one of PLAYER_GAME_SPEED_PERCENTS: the game time each tick
   // advances.  Only the skirmish lobby sets another value than the default; it is not in the options
   // string, and reaches the engine as MSG_NEW_GAME's game speed and the replay as its GS= field.
@@ -374,6 +381,7 @@ protected:
   Int m_incomeSharing; // an IncomeSharing, INCOME_SHARING_OFF = the retail game
   Int m_techRespawn; // minutes before a destroyed tech building comes back, 0 = never
   Int m_supplyPileLimit; // players who may gather from one supply pile at once, 0 = any number
+  Bool m_startShrouded; // the map starts black for every player, a ranked Quick Match
   Int m_gameSpeedPercent; // the skirmish lobby's game speed, PLAYER_GAME_SPEED_PERCENT_DEFAULT elsewhere
 };
 

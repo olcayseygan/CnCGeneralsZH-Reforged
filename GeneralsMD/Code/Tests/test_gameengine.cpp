@@ -12218,6 +12218,32 @@ TEST(a_seed_generates_the_same_map_bytes_every_single_time)
 }
 
 //-------------------------------------------------------------------------------------------------
+/** A ranked Quick Match has no lobby to send a map name: every peer derives the map from the match
+	seed and the seat count alone, so the derivation is pinned here.  A change to it splits two builds
+	that otherwise agree into different maps, which the map CRC then refuses. */
+//-------------------------------------------------------------------------------------------------
+TEST(a_quick_match_seed_derives_the_same_generated_map_settings)
+{
+	const RandomMapSettings duel = RandomMapGenerator::quickMatchSettings( 123456789, 2 );
+	CHECK_EQ( duel.m_seed, 123456789 );
+	CHECK_EQ( duel.m_numPlayers, 2 );
+	CHECK_EQ( duel.m_playableCells, RandomMapGenerator::cellsFor( RANDOM_MAP_SIZE_NORMAL, 2 ) );
+	CHECK_EQ( duel.m_playableCells, 248 );
+	CHECK_EQ( duel.m_style, 0 );
+	CHECK( duel.m_template.isEmpty() );
+
+	const RandomMapSettings again = RandomMapGenerator::quickMatchSettings( 123456789, 2 );
+	CHECK_EQ( again.m_seed, duel.m_seed );
+	CHECK_EQ( again.m_playableCells, duel.m_playableCells );
+
+	// a 2v2 gets each seat its share of ground, and a negative server seed still names a map
+	const RandomMapSettings fours = RandomMapGenerator::quickMatchSettings( -5, 4 );
+	CHECK_EQ( fours.m_seed, (Int)( -5 & 0x7fffffff ) );
+	CHECK_EQ( fours.m_numPlayers, 4 );
+	CHECK_EQ( fours.m_playableCells, 304 );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Generating bytes is easy; generating bytes the game will read is the job.  Run the engine's own
 	chunk reader over the result and check the fields the terrain and map code go looking for. */
 //-------------------------------------------------------------------------------------------------
@@ -25986,6 +26012,19 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 	CHECK( ParseAsciiStringToGameInfo( &guest, odd ) );
 	CHECK_EQ( guest.getSlot( 0 )->getHandicap(), (Int)HANDICAP_FULL );
 	CHECK_EQ( guest.getSlot( 1 )->getHandicap(), (Int)HANDICAP_FULL );
+
+	/* A ranked Quick Match's black start rides as SH=1, written only when set, so every other game's
+		 string and replay stays byte for byte what it was. */
+	CHECK( strstr( picked.str(), "SH=" ) == NULL );
+	host.setStartShrouded( TRUE );
+	const AsciiString shrouded = GameInfoOptionsString( &host, mapPath, 0 );
+	host.setStartShrouded( FALSE );
+	CHECK( strstr( shrouded.str(), "SH=1;" ) != NULL );
+	CHECK( ParseAsciiStringToGameInfo( &guest, shrouded ) );
+	CHECK( guest.getStartShrouded() );
+	CHECK( ParseAsciiStringToGameInfo( &guest, picked ) );
+	CHECK( !guest.getStartShrouded() );
+	CHECK_STR( GameInfoOptionsString( &host, mapPath, 0 ).str(), picked.str() );
 
 	/* A replay's slot list as startRecording writes it, the logic rate last: readReplayHeader takes the
 		 rate off and hands the parser the string as it was, so the replay is not refused as bad options. */

@@ -7694,6 +7694,16 @@ Int RandomMapGenerator::cellsFor( RandomMapSize size, Int numPlayers )
 	return cells;
 }
 
+RandomMapSettings RandomMapGenerator::quickMatchSettings( Int matchSeed, Int numPlayers )
+{
+	RandomMapSettings settings;
+	// non-negative, as the lobby's random tab makes them, so the name has the shape every other has
+	settings.m_seed = matchSeed & 0x7fffffff;
+	settings.m_numPlayers = numPlayers;
+	settings.m_playableCells = cellsFor( RANDOM_MAP_SIZE_NORMAL, numPlayers );
+	return settings;
+}
+
 Int RandomMapGenerator::cellsForTemplate( RandomMapSize size, Int numPlayers, Int cellsX, Int cellsY, Int seats )
 {
 	// area against Medium, in percent: Extra Large for eight on Twilight Flame is 708 across

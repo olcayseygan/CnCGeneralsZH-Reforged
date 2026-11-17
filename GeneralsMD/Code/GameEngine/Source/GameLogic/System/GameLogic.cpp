@@ -1981,8 +1981,9 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 			}
 			else
 			{
-				// remove shroud for the player in MP games
-				if (!TheMultiplayerSettings->isShroudInMultiplayer())
+				// remove shroud for the player in MP games; a ranked Quick Match starts black, which the
+				// options string carries so both machines and the replay agree
+				if (!TheMultiplayerSettings->isShroudInMultiplayer() && !game->getStartShrouded())
 					ThePartitionManager->revealMapForPlayer( player->getPlayerIndex() );
 			}
 		}

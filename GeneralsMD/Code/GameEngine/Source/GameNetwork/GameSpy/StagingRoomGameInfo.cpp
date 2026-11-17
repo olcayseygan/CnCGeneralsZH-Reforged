@@ -35,6 +35,7 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/PlayerTemplate.h"
+#include "Common/RandomMapGenerator.h"
 #include "Common/RandomValue.h"
 #include "Common/ScoreKeeper.h"
 #include "GameClient/GameText.h"
@@ -942,14 +943,25 @@ void GameSpyStagingRoom::launchGame( void )
 
 	// see if we really have the map.  if not, back out.
 	TheMapCache->updateCache();
-	if (!filesOk || TheMapCache->findMap(getMap()) == NULL)
+	const MapMetaData *startMap = TheMapCache->findMap(getMap());
+	// A generated map is built here from its name and the file system serves that build over any copy
+	// that arrived, so the host's MC= is all there is to check it against: a copy that came out
+	// different would split the match at the first CRC check. The room refuses to start on one; this
+	// catches a start that raced it.
+	const Bool mapDiffers = startMap != NULL && !amIHost() && isGeneratedMapPath(getMap())
+		&& startMap->m_CRC != getMapCRC();
+	if (!filesOk || startMap == NULL || mapDiffers)
 	{
-		DEBUG_LOG(("After transfer, we didn't really have the map.  Bailing...\n"));
+		DEBUG_LOG(("After transfer, we didn't really have the map (generated map CRC %X, host's %X).  Bailing...\n",
+			startMap ? startMap->m_CRC : 0, getMapCRC()));
 		if (TheNetwork != NULL) {
 			delete TheNetwork;
 			TheNetwork = NULL;
 		}
-		GSMessageBoxOk(TheGameText->fetch("GUI:Error"), TheGameText->fetch("GUI:CouldNotTransferMap"));
+		UnicodeString text = TheGameText->fetch("GUI:CouldNotTransferMap");
+		if (mapDiffers)
+			text.format(TheGameText->fetch("GUI:LocalPlayerMapDiffers"), startMap->m_displayName.str());
+		GSMessageBoxOk(TheGameText->fetch("GUI:Error"), text);
 
 		void PopBackToLobby( void );
 		PopBackToLobby();

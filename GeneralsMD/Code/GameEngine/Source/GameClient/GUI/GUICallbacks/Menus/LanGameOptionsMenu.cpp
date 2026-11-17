@@ -33,6 +33,7 @@
 
 
 #include "Common/PlayerTemplate.h"
+#include "Common/RandomMapGenerator.h"
 #include "Common/GameEngine.h"
 #include "Common/UserPreferences.h"
 #include "Common/QuotedPrintable.h"
@@ -375,6 +376,7 @@ void StartPressed(void)
 	// see if everyone's accepted and count the number of players in the game
 	UnicodeString mapDisplayName;
 	const MapMetaData *mapData = TheMapCache->findMap( myGame->getMap() );
+	const Bool isGenerated = isGeneratedMapPath( myGame->getMap() );
 	Bool willTransfer = TRUE;
 	if (mapData)
 	{
@@ -392,7 +394,7 @@ void StartPressed(void)
 		if( slot->isHuman() && !slot->isAccepted())
 		{
 			isReady = false;
-			if (!willTransfer)
+			if (!willTransfer && !isGenerated)
 			{
 				if (!slot->hasMap())
 				{
@@ -402,6 +404,17 @@ void StartPressed(void)
 					allHaveMap = false;
 				}
 			}
+		}
+		// A generated map is never sent: every seat builds it from its name, and a copy that came out
+		// different plays itself and splits the match at the first CRC check. A seat that accepted
+		// counts too, since accepting does not wait for the map.
+		if( isGenerated && slot->isHuman() && !slot->hasMap() )
+		{
+			UnicodeString msg;
+			msg.format(TheGameText->fetch("GUI:PlayerMapDiffers"), slot->getName().str(), mapDisplayName.str());
+			GadgetListBoxAddEntryText(listboxChatWindowLanGame, msg , chatSystemColor, -1, 0);
+			isReady = false;
+			allHaveMap = false;
 		}
 		if( slot->isHuman() && slot->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER )
 			playerCount++;

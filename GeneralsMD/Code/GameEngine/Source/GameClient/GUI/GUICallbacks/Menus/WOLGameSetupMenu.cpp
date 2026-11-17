@@ -40,6 +40,7 @@
 #include "GameClient/GameText.h"
 #include "Common/MultiplayerSettings.h"
 #include "Common/PlayerTemplate.h"
+#include "Common/RandomMapGenerator.h"
 #include "Common/CustomMatchPreferences.h"
 #include "GameClient/AnimateWindowManager.h"
 #include "GameClient/InGameUI.h"
@@ -1061,6 +1062,7 @@ static void StartPressed(void)
 	// see if everyone's accepted and count the number of players in the game
 	UnicodeString mapDisplayName;
 	const MapMetaData *mapData = TheMapCache->findMap( myGame->getMap() );
+	const Bool isGenerated = isGeneratedMapPath( myGame->getMap() );
 	Bool willTransfer = TRUE;
 	if (mapData)
 	{
@@ -1077,13 +1079,24 @@ static void StartPressed(void)
 		if ((myGame->getSlot(i)->isAccepted() == FALSE) && (myGame->getSlot(i)->isHuman() == TRUE))
 		{
 			isReady = FALSE;
-			if (!myGame->getSlot(i)->hasMap() && !willTransfer)
+			if (!myGame->getSlot(i)->hasMap() && !willTransfer && !isGenerated)
 			{
 				UnicodeString msg;
 				msg.format(TheGameText->fetch("GUI:PlayerNoMap"), myGame->getSlot(i)->getName().str(), mapDisplayName.str());
 				TheGameSpyInfo->addText(msg, GameSpyColor[GSCOLOR_DEFAULT], listboxGameSetupChat);
 				allHaveMap = FALSE;
 			}
+		}
+		// A generated map is never usefully sent: every seat builds it from its name, and the file system
+		// serves that build over any copy that arrives, so one that came out different plays itself and
+		// splits the match at the first CRC check. A seat that accepted counts too.
+		if (isGenerated && myGame->getSlot(i)->isHuman() && !myGame->getSlot(i)->hasMap())
+		{
+			UnicodeString msg;
+			msg.format(TheGameText->fetch("GUI:PlayerMapDiffers"), myGame->getSlot(i)->getName().str(), mapDisplayName.str());
+			TheGameSpyInfo->addText(msg, GameSpyColor[GSCOLOR_DEFAULT], listboxGameSetupChat);
+			isReady = FALSE;
+			allHaveMap = FALSE;
 		}
 		if(myGame->getSlot(i)->isOccupied() && myGame->getSlot(i)->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER)
 		{
@@ -2584,7 +2597,10 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 											mapDisplayName.format(u"%hs", TheGameState->getMapLeafName(game->getMap()).str());
 											willTransfer = WouldMapTransfer(game->getMap());
 										}
-										if (willTransfer)
+										// a generated map is built on every seat from its name and never sent
+										if (isGeneratedMapPath(game->getMap()))
+											text.format(TheGameText->fetch("GUI:LocalPlayerMapDiffers"), mapDisplayName.str());
+										else if (willTransfer)
 											text.format(TheGameText->fetch("GUI:LocalPlayerNoMapWillTransfer"), mapDisplayName.str());
 										else
 											text.format(TheGameText->fetch("GUI:LocalPlayerNoMap"), mapDisplayName.str());
@@ -2756,7 +2772,10 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 										willTransfer = WouldMapTransfer(game->getMap());
 									}
 									UnicodeString text;
-									if (willTransfer)
+									// a generated map is built on every seat from its name and never sent
+									if (isGeneratedMapPath(game->getMap()))
+										text.format(TheGameText->fetch("GUI:PlayerMapDiffers"), game->getSlot(slotNum)->getName().str(), mapDisplayName.str());
+									else if (willTransfer)
 										text.format(TheGameText->fetch("GUI:PlayerNoMapWillTransfer"), game->getSlot(slotNum)->getName().str(), mapDisplayName.str());
 									else
 										text.format(TheGameText->fetch("GUI:PlayerNoMap"), game->getSlot(slotNum)->getName().str(), mapDisplayName.str());

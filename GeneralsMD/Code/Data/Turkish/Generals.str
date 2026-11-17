@@ -19955,3 +19955,19 @@ END
 CONTROLBAR:ToolTipStealthTalent10B
 "GPS Karıştırıcı birlikleri yarısı kadar daha uzağa saklar, 100 yerine 150, hedef çemberi de büyür."
 END
+
+GUI:PlayerMapDiffers
+"%ls oyuncusunun oyunu %ls haritasını sizinkinden farklı kurdu. İkiniz aynı sürüme geçmeden maç başlamaz."
+END
+
+GUI:LocalPlayerMapDiffers
+"Oyununuz %ls haritasını kurucununkinden farklı kurdu. İkiniz aynı sürüme geçmeden maç başlamaz."
+END
+
+GUI:QMMapDiffers
+"%ls oyuncusunun oyunu bu maçın haritasını sizinkinden farklı kurdu, maç iptal edildi. İkinizin de aynı sürümü kullandığından emin olun."
+END
+
+GUI:QMMapNoAnswer
+"%ls oyuncusunun oyunu bu maçın haritasını onaylamadı, maç iptal edildi. Oyunu eski bir sürüm olabilir."
+END

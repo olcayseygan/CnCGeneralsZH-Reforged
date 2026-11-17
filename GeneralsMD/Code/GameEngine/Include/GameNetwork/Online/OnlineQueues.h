@@ -130,6 +130,10 @@ struct OnlineReport
 	OnlineReport();
 };
 Bool OnlineSendReport( const OnlineReport &report );	///< TRUE when it went out, FALSE for no match or one already reported
+/* The Quick Match the last game.start named was called off before it loaded (WOLQuickMatchMenu's map
+	 check): qm.abort, which the server takes as leaving inside its grace, a no contest. Nothing for no
+	 match or one already reported; an older server answers an error that is only logged. */
+void OnlineCallOffQuickMatch( const char *reason );
 
 /* Only a Quick Match's replay goes up: the server keeps no other.  An internet game's recording calls
 	 OnlineClaimQuickMatch as it starts and gets the qm.matched id waiting for a recording, or empty for a

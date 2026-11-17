@@ -169,6 +169,17 @@ Bool OnlineSendReport( const OnlineReport &report )
 	return TRUE;
 }
 
+void OnlineCallOffQuickMatch( const char *reason )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (s.matchId.empty() || s.matchId == s.reportedMatch)
+		return;
+	s.quickMatch.clear();		// nothing was recorded, so no replay goes up under it
+	OnlineMessage m;
+	m.setString( "t", "qm.abort" ).setString( "match", s.matchId ).setString( "reason", reason );
+	s.send( m );
+}
+
 //-------------------------------------------------------------------------------------------------
 // the replay
 //-------------------------------------------------------------------------------------------------

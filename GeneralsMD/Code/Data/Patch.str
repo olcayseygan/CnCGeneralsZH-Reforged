@@ -5763,3 +5763,19 @@ END
 CONTROLBAR:ToolTipStealthTalent10B
 "The GPS Scrambler hides units half as far again, out to 150 instead of 100, and the targeting circle grows to match."
 END
+
+GUI:PlayerMapDiffers
+"%ls's game built %ls differently from yours. The match cannot start until you both run the same version."
+END
+
+GUI:LocalPlayerMapDiffers
+"Your game built %ls differently from the host's. The match cannot start until you both run the same version."
+END
+
+GUI:QMMapDiffers
+"%ls's game built this match's map differently from yours, so the match was called off. Check that you both run the same version."
+END
+
+GUI:QMMapNoAnswer
+"%ls's game never confirmed this match's map, so the match was called off. Their game may be an older version."
+END

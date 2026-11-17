@@ -38,6 +38,7 @@
 #include "GameNetwork/LANAPI.h"
 #include "GameNetwork/NetworkUtil.h"
 #include "Common/GlobalData.h"
+#include "Common/RandomMapGenerator.h"
 #include "Common/RandomValue.h"
 #include "GameClient/GameText.h"
 #include "GameClient/MapUtil.h"
@@ -931,7 +932,10 @@ void LANAPI::RequestHasMap( void )
 			mapDisplayName.format(u"%hs", TheGameState->getMapLeafName(m_currentGame->getMap()).str());
 			willTransfer = WouldMapTransfer(m_currentGame->getMap());
 		}
-		if (willTransfer)
+		// a generated map is built on every seat from its name and never sent
+		if (isGeneratedMapPath(m_currentGame->getMap()))
+			text.format(TheGameText->fetch("GUI:LocalPlayerMapDiffers"), mapDisplayName.str());
+		else if (willTransfer)
 			text.format(TheGameText->fetch("GUI:LocalPlayerNoMapWillTransfer"), mapDisplayName.str());
 		else
 			text.format(TheGameText->fetch("GUI:LocalPlayerNoMap"), mapDisplayName.str());

@@ -236,6 +236,37 @@ static void closeSendingBox( void )
 	s_sendingBox = NULL;
 }
 
+/* MessageBox.wnd is laid out for a paragraph over a row of buttons; this box has two lines and no
+	 button, so the layout left it two thirds empty.  Keep its width and title band, cut the body to its
+	 wrapped text with a margin above and below, and centre the box on the screen. */
+static void fitSendingBox( GameWindow *box )
+{
+	GameWindow *parent = TheWindowManager->winGetWindowFromId( box,
+		TheNameKeyGenerator->nameToKey( "MessageBox.wnd:MessageBoxParent" ) );
+	GameWindow *body = parent ? TheWindowManager->winGetWindowFromId( parent->winGetChild(),
+		TheNameKeyGenerator->nameToKey( "MessageBox.wnd:StaticTextMessage" ) ) : NULL;
+	// the title band: the unnamed frame child, which shares the layout root's name
+	GameWindow *band = parent ? TheWindowManager->winGetWindowFromId( parent->winGetChild(),
+		TheNameKeyGenerator->nameToKey( "MessageBox.wnd:" ) ) : NULL;
+	TextData *data = body ? (TextData *)body->winGetUserData() : NULL;
+	if (!band || !data || !data->text)
+		return;
+	Int boxW, boxH, bandW, bandH, bodyX, bodyY, bodyW, bodyH, textW, textH;
+	parent->winGetSize( &boxW, &boxH );
+	band->winGetSize( &bandW, &bandH );
+	body->winGetPosition( &bodyX, &bodyY );
+	body->winGetSize( &bodyW, &bodyH );
+	data->text->setWordWrap( bodyW - 10 );		// as W3DGadgetStaticTextDraw wraps it
+	data->text->getSize( &textW, &textH );
+	const Int margin = UIStyle::px( 24.0f );
+	bodyH = textH + 2 * margin;		// the body centres its text vertically
+	body->winSetPosition( bodyX, bandH );
+	body->winSetSize( bodyW, bodyH );
+	boxH = bandH + bodyH;
+	parent->winSetSize( boxW, boxH );
+	parent->winSetPosition( (TheDisplay->getWidth() - boxW) / 2, (TheDisplay->getHeight() - boxH) / 2 );
+}
+
 static void updateSendingBox( void )
 {
 	if (screenType != SCORESCREEN_INTERNET || !OnlineIsEnabled())
@@ -253,6 +284,8 @@ static void updateSendingBox( void )
 			TheNameKeyGenerator->nameToKey( "MessageBox.wnd:ButtonOk" ) ) : NULL;
 		if (ok)
 			ok->winHide( TRUE );		// it goes away by itself
+		if (s_sendingBox)
+			fitSendingBox( s_sendingBox );
 		return;
 	}
 	const UnsignedInt shown = Clock_Milliseconds() - s_sendingBoxSince;

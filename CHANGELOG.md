@@ -12,7 +12,8 @@ found and fixed, EA's own, not port damage.**
 
 - Every ranked Quick Match is played on a map generated for that match from its seed, sized for the seats in it, so nobody has learned it in advance. The map list on the Quick Match screen is gone, since there is nothing left to veto.
 - The map starts black, as in a skirmish with the shroud on, where every other online game starts with the whole map revealed under the fog. The load screen shows a question mark where the map would be and no start spot for anyone, your own included. Start spots stay random.
-- Lobby games, LAN and skirmish start as they always did. A ranked replay starts black too; a replay recorded before this change still plays back.
+- Lobby games, LAN and skirmish start on the map they always did, revealed under the fog. A ranked replay starts black too; a replay recorded before this change still plays back.
+- Any match on a random map keeps its question mark on the load screen as well, in skirmish, on LAN and in online rooms: the board used to draw the generated map with your start spot and your allies' on it, so a spot the game picked for you at random was out before the first frame. The lobby still shows the spots players picked themselves, and a replay or an observer still sees the real map.
 
 ## Explosions after ZH Enhanced
 

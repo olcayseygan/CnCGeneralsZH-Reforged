@@ -70,6 +70,7 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/PlayerTemplate.h"
+#include "Common/RandomMapGenerator.h"
 #include "Common/SkirmishPreferences.h"
 #include "GameClient/CampaignManager.h"
 #include "GameClient/Display.h"
@@ -511,8 +512,9 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 	// (a director's recording has no local seat at all)
 	const Bool seeAll = TheGameLogic->isInReplayGame() || game->getLocalSlotNum() < 0
 		|| game->getConstSlot( game->getLocalSlotNum() )->getOriginalPlayerTemplate() == PLAYERTEMPLATE_OBSERVER;
-	// a ranked Quick Match gives a player neither the map nor any start spot, his own included
-	const Bool mapHidden = game->getStartShrouded() && !seeAll;
+	// a ranked Quick Match, and any match on a generated map, gives a player neither the map nor any
+	// start spot, his own included, so the board never tells where the game put anyone
+	const Bool mapHidden = ( game->getStartShrouded() || isGeneratedMapPath( game->getMap() ) ) && !seeAll;
 
 	// a card a player, in the order the lobby lists them.  Someone watching from this screen without a
 	// seat (an -observer match) is a watcher too, under the name the skirmish room would have given

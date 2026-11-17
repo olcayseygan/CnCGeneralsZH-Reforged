@@ -22,9 +22,9 @@
 // The options menu's Hotkeys page: what the launcher's Hotkeys page does, inside the game.  Every
 // command on the left with its chord, and on the right the command bar of one building or unit,
 // picked by general and object, with each button's letter.  A double click, Enter or Change waits for
-// the key; Esc lets go.  The page edits the keyboard scheme the HotkeyScheme combo shows, Classic in
-// Hotkeys.ini, Red Alert in HotkeysRedAlert.ini (HotkeyScheme_fileName); picking the other scheme
-// puts this one's edits aside and shows the other's.  Nothing is written until Accept, which writes
+// the key; Esc lets go.  The page edits the keyboard scheme of the layout the HudLayout combo shows
+// (hotkeySchemeForHudLayout), Classic in Hotkeys.ini, Red Alert in HotkeysRedAlert.ini
+// (HotkeyScheme_fileName); picking the other layout puts this scheme's edits aside and shows the other's.  Nothing is written until Accept, which writes
 // each scheme's file that changed, in the user data folder in the launcher's own format
 // (Hotkeys_format in HotKey.cpp), and reads every key again, so a key changed from Esc > Options in a
 // match counts from the next press.  The bars are found the way
@@ -97,7 +97,7 @@ GameWindow *s_note = NULL;
 GameWindow *s_change = NULL;
 GameWindow *s_clear = NULL;
 GameWindow *s_default = NULL;
-GameWindow *s_schemeCombo = NULL;	///< the catalog's HotkeyScheme combo, on another page; the page follows it
+GameWindow *s_schemeCombo = NULL;	///< the catalog's HudLayout combo, on another page; the page follows its layout's scheme
 
 // the shown scheme's keys
 std::vector< HotkeyCommandRow > s_rows;
@@ -706,7 +706,7 @@ void OptionsHotkeysInit( void )
 	s_change = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "OptionsMenu.wnd:ButtonHotkeyChange" ) );
 	s_clear = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "OptionsMenu.wnd:ButtonHotkeyClear" ) );
 	s_default = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "OptionsMenu.wnd:ButtonHotkeyDefault" ) );
-	s_schemeCombo = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "OptionsMenu.wnd:ComboBoxHotkeyScheme" ) );
+	s_schemeCombo = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "OptionsMenu.wnd:ComboBoxHudLayout" ) );
 
 	AsciiString commandMap;
 	commandMap.format( "Data\\%s\\CommandMap.ini", GetRegistryLanguage().str() );
@@ -716,12 +716,12 @@ void OptionsHotkeysInit( void )
 		loadShown( scheme, commandMapText );
 		swapShown( scheme );
 	}
-	// the combo's choice, which fillCatalogWidgets has just shown
+	// the scheme of the layout the combo shows, which fillCatalogWidgets has just put there
 	s_openScheme = TheGlobalData->m_hotkeyScheme;
-	Int scheme = s_openScheme;
+	Int layout = TheGlobalData->m_hudLayout;
 	if( s_schemeCombo )
-		GadgetComboBoxGetSelectedPos( s_schemeCombo, &scheme );
-	s_scheme = scheme >= 0 && scheme < HOTKEY_SCHEME_COUNT ? scheme : HOTKEY_SCHEME_CLASSIC;
+		GadgetComboBoxGetSelectedPos( s_schemeCombo, &layout );
+	s_scheme = hotkeySchemeForHudLayout( layout );
 	swapShown( s_scheme );
 	s_active = 0;
 	s_commandRow = -1;
@@ -744,14 +744,14 @@ Bool OptionsHotkeysSystem( UnsignedInt msg, GameWindow *control, WindowMsgData r
 {
 	if( s_commandList == NULL || s_filling )
 		return FALSE;
-	// the scheme combo is the catalog's, so the menu goes on with it after the page follows
+	// the layout combo is the catalog's, so the menu goes on with it after the page follows
 	if( control != NULL && control == s_schemeCombo )
 	{
-		Int scheme = -1;
+		Int layout = -1;
 		if( msg == GCM_SELECTED )
-			GadgetComboBoxGetSelectedPos( s_schemeCombo, &scheme );
-		if( scheme >= 0 && scheme < HOTKEY_SCHEME_COUNT && scheme != s_scheme )
-			showScheme( scheme );
+			GadgetComboBoxGetSelectedPos( s_schemeCombo, &layout );
+		if( layout >= 0 && layout < HUD_LAYOUT_COUNT && hotkeySchemeForHudLayout( layout ) != s_scheme )
+			showScheme( hotkeySchemeForHudLayout( layout ) );
 		return FALSE;
 	}
 	const Bool ours = control == s_commandList || control == s_buttonList || control == s_factionCombo
@@ -915,7 +915,7 @@ void OptionsHotkeysSave( void )
 		DEBUG_LOG(( "HOTKEYS: wrote %s from the options menu\n", path.str() ));
 		wrote = TRUE;
 	}
-	// saveOptions has put the combo's scheme in force by now
+	// saveOptions has put the layout's scheme in force by now (set_m_hudLayout)
 	if( wrote || TheGlobalData->m_hotkeyScheme != s_openScheme )
 		HotKeyManager::reloadKeys();
 }

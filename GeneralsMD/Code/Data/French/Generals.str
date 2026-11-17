@@ -17002,7 +17002,7 @@ GUI:HudLayout1
 END
 
 TOOLTIP:HudLayout
-"Classique garde la barre de commande en bas. Style Red Alert place la construction et l'entraînement dans une barre latérale à droite et les ordres des unités sélectionnées dans une bande en bas."
+"Classique garde la barre de commande en bas et les touches du jeu. Style Red Alert place la construction et l'entraînement dans une barre latérale à droite, les ordres des unités sélectionnées dans une bande en bas, et reprend les touches de Red Alert 2 là où elles conviennent à ce jeu : Q W E R pour les onglets de construction, D pour déployer, L pour vendre, K pour réparer, Z maintenu pour les points de passage. Chaque disposition garde ses propres modifications de touches dans la page Raccourcis."
 END
 
 GUI:HudWidth
@@ -17425,20 +17425,12 @@ GUI:HotkeysCommandHOLD_POSITION
 "Tenir la position"
 END
 
-GUI:HotkeyScheme
-"Jeu de raccourcis"
-END
-
 GUI:HotkeyScheme0
 "Classique"
 END
 
 GUI:HotkeyScheme1
 "Red Alert"
-END
-
-TOOLTIP:HotkeyScheme
-"Classique garde les touches du jeu. Red Alert reprend les touches de Red Alert 2 là où elles conviennent à ce jeu : Q W E R pour les onglets de construction, D pour déployer, L pour vendre, K pour réparer, Z maintenu pour les points de passage. Chaque jeu garde ses propres modifications dans la page Raccourcis."
 END
 
 GUI:HotkeysEditingScheme

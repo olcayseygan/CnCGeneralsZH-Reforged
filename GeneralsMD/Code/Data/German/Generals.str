@@ -15202,7 +15202,7 @@ GUI:HudLayout1
 END
 
 TOOLTIP:HudLayout
-"Klassisch lässt die Befehlsleiste unten. Der Red-Alert-Stil legt Bau und Ausbildung in eine Seitenleiste rechts und die Befehle der gewählten Einheiten in eine Leiste unten."
+"Klassisch lässt die Befehlsleiste unten und behält die Tasten des Spiels. Der Red-Alert-Stil legt Bau und Ausbildung in eine Seitenleiste rechts, die Befehle der gewählten Einheiten in eine Leiste unten und übernimmt die Tasten von Red Alert 2, wo sie zu diesem Spiel passen: Q W E R für die Bau-Reiter, D zum Entfalten, L zum Verkaufen, K zum Reparieren, Z gehalten für Wegpunkte. Jede Anordnung behält ihre eigenen Tastenänderungen auf der Seite Hotkeys."
 END
 
 GUI:HudWidth
@@ -15605,20 +15605,12 @@ GUI:HotkeysCommandHOLD_POSITION
 "Position halten"
 END
 
-GUI:HotkeyScheme
-"Tastenbelegung"
-END
-
 GUI:HotkeyScheme0
 "Klassisch"
 END
 
 GUI:HotkeyScheme1
 "Red Alert"
-END
-
-TOOLTIP:HotkeyScheme
-"Klassisch behält die Tasten des Spiels. Red Alert übernimmt die Tasten von Red Alert 2, wo sie zu diesem Spiel passen: Q W E R für die Bau-Reiter, D zum Entfalten, L zum Verkaufen, K zum Reparieren, Z gehalten für Wegpunkte. Jede Belegung behält ihre eigenen Änderungen auf der Seite Hotkeys."
 END
 
 GUI:HotkeysEditingScheme

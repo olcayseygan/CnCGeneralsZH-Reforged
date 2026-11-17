@@ -143,9 +143,15 @@ OPTION_BOOL_ACCESSORS( m_hdTextures )
 OPTION_INT_ACCESSORS( m_lightingStyle )
 OPTION_INT_ACCESSORS( m_healthBarMode )
 OPTION_INT_ACCESSORS( m_healthBarColors )
-OPTION_INT_ACCESSORS( m_hudLayout )
+// The keys follow the layout (hotkeySchemeForHudLayout).  Options.ini's line, the menu's Accept and
+// Defaults all come through here, so the scheme in force is always the one the layout names.
+static Int get_m_hudLayout( void ) { return TheGlobalData->m_hudLayout; }
+static void set_m_hudLayout( Int value )
+{
+	TheWritableGlobalData->m_hudLayout = value;
+	TheWritableGlobalData->m_hotkeyScheme = hotkeySchemeForHudLayout( value );
+}
 OPTION_INT_ACCESSORS( m_hudWidth )
-OPTION_INT_ACCESSORS( m_hotkeyScheme )
 OPTION_INT_ACCESSORS( m_playerColorScheme )
 OPTION_INT_ACCESSORS( m_textLanguage )
 OPTION_BOOL_ACCESSORS( m_showOrderLines )
@@ -596,7 +602,9 @@ const OptionDef TheOptionCatalog[] =
 	// Where the in-game interface sits: 0 Classic, the bar along the bottom, 1 the Red Alert style
 	// sidebar down the right with a command strip under the world (docs/plans/HUD-SIDEBAR-LAYOUT.md).
 	// Read as the bar is laid out, so Accept builds the shell and the bar again, in a match too.
-	// Every menu is fitted; MenuLayout, HudScale and the old InterfaceStyle are gone for good.
+	// Every menu is fitted; MenuLayout, HudScale and the old InterfaceStyle are gone for good.  The
+	// layout brings its keys too, Classic's or Red Alert's (set_m_hudLayout); HotkeyScheme was a row of
+	// its own until 2026-11-16, and a line left from then is a key nothing reads.
 	{ "HudLayout",								OPT_WND( "ComboBoxHudLayout" ), "GUI:HudLayout",
 		OPTION_ENUM, APPLY_SHELL_REBUILD, 0, HUD_LAYOUT_COUNT - 1,
 		get_m_hudLayout, set_m_hudLayout },
@@ -606,12 +614,6 @@ const OptionDef TheOptionCatalog[] =
 	{ "HudWidth",									OPT_WND( "ComboBoxHudWidth" ), "GUI:HudWidth",
 		OPTION_ENUM, APPLY_SHELL_REBUILD, 0, HUD_WIDTH_COUNT - 1,
 		get_m_hudWidth, set_m_hudWidth },
-
-	// Which keyboard: 0 Classic, today's keys, 1 Red Alert, Red Alert 2's defaults fitted to this game
-	// in its own HotkeysRedAlert.ini (docs/plans/HOTKEY-SCHEME-RA.md).  Live: Accept reloads the keys.
-	{ "HotkeyScheme",							OPT_WND( "ComboBoxHotkeyScheme" ), "GUI:HotkeyScheme",
-		OPTION_ENUM, APPLY_LIVE, 0, HOTKEY_SCHEME_COUNT - 1,
-		get_m_hotkeyScheme, set_m_hotkeyScheme },
 
 	// Whose colour a player is drawn in.  Purely local: the match still agrees on the lobby's
 	// colours and this only changes what this screen puts on top of them, so two people in the same

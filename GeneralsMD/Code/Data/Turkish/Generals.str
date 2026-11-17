@@ -16750,7 +16750,7 @@ GUI:HudLayout1
 END
 
 TOOLTIP:HudLayout
-"Klasik, komuta çubuğunu altta tutar. Red Alert tarzı bina ve birim üretimini sağdaki yan panele taşır, seçili birimlerin komutlarını alttaki şeride koyar."
+"Klasik, komuta çubuğunu altta ve oyunun kendi tuşlarını tutar. Red Alert tarzı bina ve birim üretimini sağdaki yan panele taşır, seçili birimlerin komutlarını alttaki şeride koyar ve Red Alert 2'nin tuşlarını bu oyuna uyduğu yerde alır: yapım sekmeleri için Q W E R, konuşlanmak için D, satmak için L, onarmak için K, ara noktalar için basılı Z. Her düzen Kısayollar sayfasındaki tuş değişikliklerini ayrı tutar."
 END
 
 GUI:HudWidth
@@ -17173,20 +17173,12 @@ GUI:HotkeysCommandHOLD_POSITION
 "Yerini koru"
 END
 
-GUI:HotkeyScheme
-"Kısayol Düzeni"
-END
-
 GUI:HotkeyScheme0
 "Klasik"
 END
 
 GUI:HotkeyScheme1
 "Red Alert"
-END
-
-TOOLTIP:HotkeyScheme
-"Klasik, oyunun kendi tuşlarını kullanır. Red Alert, Red Alert 2'nin tuşlarını bu oyuna uyduğu yerde alır: yapım sekmeleri için Q W E R, konuşlanmak için D, satmak için L, onarmak için K, ara noktalar için basılı Z. Her düzen Kısayollar sayfasındaki değişikliklerini ayrı tutar."
 END
 
 GUI:HotkeysEditingScheme

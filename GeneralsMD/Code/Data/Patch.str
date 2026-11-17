@@ -2151,7 +2151,7 @@ GUI:HudLayout1
 END
 
 TOOLTIP:HudLayout
-"Classic keeps the command bar along the bottom. Red Alert Style moves building and training into a sidebar down the right and puts the selected units' commands in a strip along the bottom."
+"Classic keeps the command bar along the bottom and the game's own keys. Red Alert Style moves building and training into a sidebar down the right, puts the selected units' commands in a strip along the bottom, and takes Red Alert 2's keys where they fit this game: Q W E R for the build tabs, D to deploy, L to sell, K to repair, Z held for waypoints. Each layout keeps its own key changes on the Hotkeys page."
 END
 
 GUI:HudWidth
@@ -2596,20 +2596,12 @@ GUI:HotkeysCommandHOLD_POSITION
 "Hold position"
 END
 
-GUI:HotkeyScheme
-"Hotkey Scheme"
-END
-
 GUI:HotkeyScheme0
 "Classic"
 END
 
 GUI:HotkeyScheme1
 "Red Alert"
-END
-
-TOOLTIP:HotkeyScheme
-"Classic keeps the game's own keys. Red Alert takes Red Alert 2's keys where they fit this game: Q W E R for the build tabs, D to deploy, L to sell, K to repair, Z held for waypoints. Each scheme keeps its own changes on the Hotkeys page."
 END
 
 GUI:HotkeysEditingScheme

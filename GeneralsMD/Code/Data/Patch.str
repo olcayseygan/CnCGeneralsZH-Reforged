@@ -4849,8 +4849,8 @@ GUI:OnlineSkinsRefused
 "zerohour.gg refused that pick, so your skins stay as they were. Open this screen again to see what your account holds."
 END
 
-SKIN:Gold1K
-"1K GOLD"
+SKIN:Splinter
+"SPLINTER CAMO"
 END
 
 GUI:OnlineLadderRank

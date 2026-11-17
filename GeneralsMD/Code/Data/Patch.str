@@ -4841,6 +4841,63 @@ GUI:OnlineSkinsRefused
 "zerohour.gg refused that pick, so your skins stay as they were. Open this screen again to see what your account holds."
 END
 
+// Play vs AI on the online hub: the button, the speed and AI rating beside it, and why a match did not start
+GUI:OnlineVsAIButton
+"PLAY VS AI"
+END
+
+GUI:OnlineAISpeed
+"1.5x speed"
+END
+
+GUI:OnlineAIRating
+"1.5x speed, AI rating %.2f"
+END
+
+GUI:OnlineAIRated
+"1.5x speed, AI rating %.2f -> %.2f"
+END
+
+GUI:OnlineAIUnrated
+"1.5x speed, not rated: %ls"
+END
+
+GUI:OnlineAIGames
+"%d games · %d%% won"
+END
+
+GUI:OnlineAIGame
+"1 game · %d%% won"
+END
+
+GUI:OnlineAIMapMissing
+"The server picked a map this game does not have (%ls), so the match did not start."
+END
+
+GUI:OnlineAIRefused
+"The server did not start the match (%ls)."
+END
+
+GUI:OnlineAIRefused_build
+"Your game files differ from the release. Update the game from the launcher, then try again."
+END
+
+GUI:OnlineAIRefused_pending
+"Your last match against the AI is still being rated. Try again in a moment."
+END
+
+GUI:OnlineAIRefused_banned
+"This account may not play rated matches against the AI."
+END
+
+GUI:OnlineAIRefused_unavailable
+"zerohour.gg did not answer. Try again in a moment."
+END
+
+GUI:OnlineAIRefused_signedout
+"You are not signed in."
+END
+
 SKIN:Splinter
 "SPLINTER CAMO"
 END

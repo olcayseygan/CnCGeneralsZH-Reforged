@@ -35,6 +35,7 @@
 #include "GameNetwork/Online/OnlineSession.h"
 #include "zhio.h"
 
+#include <chrono>
 #include <limits.h>
 #include <math.h>
 #include <stdio.h>
@@ -43,6 +44,13 @@
 #if defined(_WIN32)
 #include <shellapi.h>		// ShellExecuteA, OnlineOpenURL
 #endif
+
+// wall time for Play vs AI's ticks and seconds: a steady clock, which no time zone or clock change moves
+static long long onlineNowMs( void )
+{
+	return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::steady_clock::now().time_since_epoch() ).count();
+}
 
 // FirewallHelperClass::FIREWALL_TYPE_SIMPLE: every route goes through the relay, nothing to negotiate
 static const Int ONLINE_NAT_SIMPLE = 1;
@@ -130,7 +138,7 @@ OnlineSession &OnlineSession::get()
 OnlineSession::OnlineSession() :
 	connection( NULL ), capture( NULL ), status( ONLINE_OFF ), relayPort( 0 ), testMode( FALSE ), failRetry( 0 ),
 	cardSerial( 0 ), ladderState( ONLINE_LADDER_FAILED ), armiesState( ONLINE_LADDER_FAILED ), revealing( FALSE ), revealSerial( 0 ),
-	peer( NULL ), buddy( NULL ), ps( NULL )
+	aiVerdictSerial( 0 ), peer( NULL ), buddy( NULL ), ps( NULL )
 {
 	forgetAccount();
 }
@@ -172,6 +180,13 @@ void OnlineSession::forgetAccount()
 	armiesState = ONLINE_LADDER_FAILED;
 	armies.clear();
 	revealing = FALSE;
+	aiState = ONLINE_AI_IDLE;		// a match the server never hears the end of, it settles itself
+	aiReady.clear();
+	aiRefusal.clear();
+	aiMatch.clear();
+	aiReadyMs = aiTickMs = 0;
+	aiWonMatch.clear();
+	aiVerdict.clear();
 }
 
 void OnlineSession::beginTest( std::vector<OnlineMessage> *lines )
@@ -501,6 +516,15 @@ void OnlineSession::noteCard( const OnlineMessage &m )
 		c.losses = v->kind == OnlineValue::NUMBER ? m.getInt( "losses" ) : -1;
 	if ((v = m.find( "rank" )) != NULL)
 		c.rank = v->kind == OnlineValue::NUMBER ? m.getInt( "rank" ) : 0;
+	if ((v = m.find( "aiRating" )) != NULL)
+	{
+		c.hasAIRating = v->kind == OnlineValue::NUMBER;
+		c.aiRating = c.hasAIRating ? m.getNumber( "aiRating" ) : 0;
+	}
+	if ((v = m.find( "aiGames" )) != NULL)
+		c.aiGames = v->kind == OnlineValue::NUMBER ? m.getInt( "aiGames" ) : 0;
+	if ((v = m.find( "aiWins" )) != NULL)
+		c.aiWins = v->kind == OnlineValue::NUMBER ? m.getInt( "aiWins" ) : 0;
 	if (m.type() == "stats")
 	{
 		c.hasStats = TRUE;
@@ -509,7 +533,9 @@ void OnlineSession::noteCard( const OnlineMessage &m )
 	// the serial moves only on a real change: a screen redraws on it, and the same ping again is no news
 	if (c.ping != before.ping || c.rating != before.rating || c.games != before.games || c.wins != before.wins
 		|| c.losses != before.losses || c.rank != before.rank || c.hasRating != before.hasRating
-		|| c.notOnline != before.notOnline || c.hasStats != before.hasStats || c.tier != before.tier || !before.serial)
+		|| c.notOnline != before.notOnline || c.hasStats != before.hasStats || c.tier != before.tier
+		|| c.hasAIRating != before.hasAIRating || c.aiRating != before.aiRating || c.aiGames != before.aiGames
+		|| c.aiWins != before.aiWins || !before.serial)
 		c.serial = ++cardSerial;
 }
 
@@ -688,6 +714,11 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 			// a server from before skins.set answers unknown
 			skinsState = ONLINE_SKINS_FAILED;
 			skinsError = "unavailable";
+		}
+		else if (what == "ai.start" && aiState == ONLINE_AI_WAITING)
+		{
+			aiState = ONLINE_AI_REFUSED;		// a server from before Play vs AI, or a throttle
+			aiRefusal = code == "throttled" ? code : "unavailable";
 		}
 	}
 	else if (t == "room")
@@ -969,6 +1000,56 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 			stats.setString( "t", "stats.get" ).setInt( "id", id );
 			send( stats );
 		}
+	}
+	else if (t == "ai.ready" && aiState == ONLINE_AI_WAITING)
+	{
+		// what the hub needs to start the match; one that names no match or no map cannot be played
+		if (m.getString( "matchId" ).empty() || m.getString( "map" ).empty())
+		{
+			aiState = ONLINE_AI_REFUSED;
+			aiRefusal = "unknown";
+		}
+		else
+		{
+			aiReady = m;
+			aiState = ONLINE_AI_READY;
+			aiReadyMs = aiTickMs = onlineNowMs();
+		}
+		const OnlineValue *rating = m.find( "aiRating" );
+		DEBUG_LOG(("ONLINE AI READY match=%s aiRating=%s map=%s seed=%lld\n", m.getString( "matchId" ).c_str(),
+			rating ? rating->text.c_str() : "", m.getString( "map" ).c_str(), m.getInt( "seed" )));
+	}
+	else if (t == "ai.refused" && !m.has( "matchId" ) && aiState == ONLINE_AI_WAITING)
+	{
+		aiState = ONLINE_AI_REFUSED;
+		aiRefusal = m.getString( "reason", "unknown" );
+		DEBUG_LOG(("ONLINE AI REFUSED reason=%s\n", aiRefusal.c_str()));
+	}
+	// an ai.refused naming a match turned its result down (unknown, reported, badinput, or the site's own
+	// code): that match is not rated, as an ai.unrated says
+	else if (t == "ai.rated" || t == "ai.unrated" || (t == "ai.refused" && m.has( "matchId" )))
+	{
+		aiVerdict = m;
+		++aiVerdictSerial;
+		if (t == "ai.rated" && authed)
+		{
+			// the hub's own card shows the new rating at once, without asking for stats
+			OnlineCard &c = cards[OnlineNickKey( nick )];
+			c.hasAIRating = TRUE;
+			c.aiRating = m.getNumber( "after" );
+			c.aiGames = m.getInt( "games" );
+			if (m.has( "wins" ))
+				c.aiWins = m.getInt( "wins" );
+			else if (m.getString( "matchId" ) == aiWonMatch)
+				++c.aiWins;
+			c.serial = ++cardSerial;
+		}
+		const OnlineValue *before = m.find( "before" ), *after = m.find( "after" );
+		if (t == "ai.rated")
+			DEBUG_LOG(("ONLINE AI RATED match=%s before=%s after=%s games=%lld\n", m.getString( "matchId" ).c_str(),
+				before ? before->text.c_str() : "", after ? after->text.c_str() : "", m.getInt( "games" )));
+		else
+			DEBUG_LOG(("ONLINE AI UNRATED match=%s reason=%s\n", m.getString( "matchId" ).c_str(), m.getString( "reason" ).c_str()));
 	}
 	else
 	{
@@ -1380,6 +1461,119 @@ OnlineSkinsState OnlineGetSkins( UnsignedInt64 &owned, AsciiString &error )
 	owned = s.authed ? s.skinsOwned : 0;
 	error = s.authed ? s.skinsError.c_str() : "signedout";
 	return s.authed ? (OnlineSkinsState)s.skinsState : ONLINE_SKINS_FAILED;
+}
+
+void OnlineRequestAIMatch( const AsciiString &army )
+{
+	OnlineSession &s = OnlineSession::get();
+	s.aiReady.clear();
+	s.aiRefusal.clear();
+	s.aiVerdict.clear();		// the last match's line goes with a new one
+	if (!s.authed)
+	{
+		s.aiState = ONLINE_AI_REFUSED;
+		s.aiRefusal = "signedout";
+		return;
+	}
+	s.aiState = ONLINE_AI_WAITING;
+	// the CRCs hello sends: the server refuses a build or data that is not the release's
+	OnlineMessage m;
+	m.setString( "t", "ai.start" ).setString( "army", army.str() );
+	m.setInt( "exe", TheGlobalData ? TheGlobalData->m_exeCRC : 0 ).setInt( "ini", TheGlobalData ? TheGlobalData->m_iniCRC : 0 );
+	s.send( m );
+}
+
+OnlineAIMatchState OnlineGetAIMatch( OnlineAIMatch &out )
+{
+	OnlineSession &s = OnlineSession::get();
+	const OnlineAIMatchState state = (OnlineAIMatchState)s.aiState;
+	out.match.clear();
+	out.aiRating = 0.0f;
+	out.map.clear();
+	out.seed = 0;
+	out.reason.clear();
+	if (state == ONLINE_AI_READY)
+	{
+		s.aiMatch = s.aiReady.getString( "matchId" );
+		s.aiWonMatch.clear();
+		out.match = s.aiMatch.c_str();
+		out.aiRating = (Real)s.aiReady.getNumber( "aiRating" );
+		out.map = s.aiReady.getString( "map" ).c_str();
+		out.seed = (Int)(UnsignedInt)s.aiReady.getInt( "seed" );
+		s.aiReady.clear();
+	}
+	else if (state == ONLINE_AI_REFUSED)
+		out.reason = s.aiRefusal.c_str();
+	if (state == ONLINE_AI_READY || state == ONLINE_AI_REFUSED)
+		s.aiState = ONLINE_AI_IDLE;		// handed out once
+	return state;
+}
+
+Bool OnlineIsAIMatchLive( void )
+{
+	return !OnlineSession::get().aiMatch.empty();
+}
+
+void OnlineDropAIMatch( void )
+{
+	OnlineSession::get().aiMatch.clear();
+}
+
+void OnlineSendAITick( Int frame )
+{
+	OnlineSession &s = OnlineSession::get();
+	const long long now = onlineNowMs();
+	if (s.aiMatch.empty() || now - s.aiTickMs < ONLINE_AI_TICK_SECONDS * 1000LL)
+		return;
+	s.aiTickMs = now;
+	OnlineMessage m;
+	m.setString( "t", "ai.tick" ).setString( "matchId", s.aiMatch ).setInt( "frame", frame );
+	s.send( m );
+}
+
+void OnlineSendAIResult( const OnlineAIResult &r )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (s.aiMatch.empty())
+		return;
+	const long long seconds = (onlineNowMs() - s.aiReadyMs) / 1000;
+	OnlineMessage stats;
+	stats.setInt( "unitsBuilt", r.unitsBuilt ).setInt( "unitsLost", r.unitsLost ).setInt( "unitsKilled", r.unitsKilled );
+	stats.setInt( "structuresBuilt", r.structuresBuilt ).setInt( "structuresLost", r.structuresLost );
+	stats.setInt( "structuresKilled", r.structuresKilled ).setInt( "moneyEarned", r.moneyEarned );
+	OnlineMessage m;
+	m.setString( "t", "ai.result" ).setString( "matchId", s.aiMatch ).setString( "result", r.won ? "win" : "loss" );
+	m.setInt( "seconds", seconds ).setInt( "endFrame", r.endFrame ).setInt( "blind", r.blind );
+	m.setString( "playerArmy", r.playerArmy.str() ).setString( "aiArmy", r.aiArmy.str() ).setObject( "stats", stats );
+	s.send( m );
+	DEBUG_LOG(("ONLINE AI RESULT match=%s result=%s seconds=%lld endFrame=%d blind=%d army=%s ai=%s units=%d/%d/%d"
+		" structures=%d/%d/%d earned=%d\n", s.aiMatch.c_str(), r.won ? "win" : "loss", seconds, r.endFrame, r.blind,
+		r.playerArmy.str(), r.aiArmy.str(), r.unitsBuilt, r.unitsLost, r.unitsKilled, r.structuresBuilt, r.structuresLost,
+		r.structuresKilled, r.moneyEarned));
+	if (r.won)
+		s.aiWonMatch = s.aiMatch;		// its recording goes up as it closes (OnlineSendReplay)
+	s.aiMatch.clear();
+}
+
+AsciiString OnlineClaimAIMatch( void )
+{
+	return OnlineSession::get().aiMatch.c_str();
+}
+
+Bool OnlineGetAIVerdict( OnlineAIVerdict &out )
+{
+	const OnlineSession &s = OnlineSession::get();
+	const OnlineMessage &m = s.aiVerdict;
+	if (m.type().empty())
+		return FALSE;
+	out.match = m.getString( "matchId" ).c_str();
+	out.rated = m.type() == "ai.rated";
+	out.before = (Real)m.getNumber( "before" );
+	out.after = (Real)m.getNumber( "after" );
+	out.games = (Int)m.getInt( "games" );
+	out.reason = m.getString( "reason" ).c_str();
+	out.serial = s.aiVerdictSerial;
+	return TRUE;
 }
 
 AsciiString OnlineGetSessionToken( void )

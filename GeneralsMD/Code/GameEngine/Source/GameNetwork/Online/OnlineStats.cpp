@@ -228,8 +228,8 @@ void OnlineSendReplay( const char *match, const AsciiString &path )
 	OnlineSession &s = OnlineSession::get();
 	if (!match || !*match || s.replayedMatch == match)
 		return;		// a custom game, or this match's replay went up (or was given up) already
-	if (s.matchId != match)
-		return;		// a later match or a logout replaced it
+	if (s.matchId != match && s.aiWonMatch != match)
+		return;		// a later match or a logout replaced it, or an AI match that was not won
 	s.replayedMatch = match;
 	if (path.isEmpty() || !s.authed || s.status != ONLINE_WELCOMED)
 		return;
@@ -254,13 +254,13 @@ void OnlineSendReplay( const char *match, const AsciiString &path )
 	{
 		const size_t len = bytes.size() - at < chunk ? bytes.size() - at : chunk;
 		OnlineMessage m;
-		m.setString( "t", "replay" ).setString( "match", s.matchId ).setInt( "seq", seq );
+		m.setString( "t", "replay" ).setString( "match", match ).setInt( "seq", seq );
 		m.setBool( "last", at + len == bytes.size() );
 		m.setString( "data", base64( (const unsigned char *)bytes.data() + at, len ) );
 		s.send( m );
 	}
-	s.replaySentMatch = s.matchId;
-	DEBUG_LOG(("ONLINE REPLAY match=%s bytes=%d lines=%d\n", s.matchId.c_str(), (Int)bytes.size(), seq));
+	s.replaySentMatch = match;
+	DEBUG_LOG(("ONLINE REPLAY match=%s bytes=%d lines=%d\n", match, (Int)bytes.size(), seq));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -269,7 +269,7 @@ void OnlineSendReplay( const char *match, const AsciiString &path )
 
 OnlinePlayerInfo::OnlinePlayerInfo() :
 	ping( -1 ), hasRating( FALSE ), rating( 0 ), games( -1 ), wins( -1 ), losses( -1 ), rank( 0 ),
-	notOnline( FALSE ), hasStats( FALSE ), serial( 0 )
+	notOnline( FALSE ), hasStats( FALSE ), hasAIRating( FALSE ), aiRating( 0.0f ), aiGames( 0 ), aiWins( 0 ), serial( 0 )
 {
 }
 
@@ -296,6 +296,10 @@ Bool OnlineGetPlayerInfo( const AsciiString &nick, OnlinePlayerInfo &out )
 	out.rank = (Int)c.rank;
 	out.notOnline = c.notOnline;
 	out.hasStats = c.hasStats;
+	out.hasAIRating = c.hasAIRating;
+	out.aiRating = (Real)c.aiRating;
+	out.aiGames = (Int)c.aiGames;
+	out.aiWins = (Int)c.aiWins;
 	return TRUE;
 }
 

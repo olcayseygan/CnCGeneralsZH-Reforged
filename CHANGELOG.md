@@ -8,6 +8,12 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Play vs AI online
+
+- The online hub has a PLAY VS AI button under Options. One press starts a 1v1 against a computer player as strong as your AI rating, on a map and seed the server picks. The AI rating is a second rating zerohour.gg keeps beside the ladder's, starting at 0, and the hub shows it left of the button.
+- You play the army saved in your skirmish setup, or a random one when none is saved; the computer's army is random. The match plays at 1.5x, the speed of every network game, whatever your own speed setting is, and the hub says so beside the button. Cheats and the developer switches that change a match are off in it.
+- Win or lose, the match ends back on the hub, where the line beside the button reads "1.5x speed, AI rating 12.40 -> 14.10", or says why the match was not rated, with your games against the AI and the share you won under it ("35 games · 60% won"). Quitting is a loss, and so is a match left unfinished by a crash or a lost connection. A game whose files differ from the release cannot start one and says so.
+
 ## Every computer plays to one rating
 
 - A computer player's strength now follows one number on the online ladder's scale, the same one your own rating shows: Easy plays at 0, Medium at 15 and Hard at 30, and every habit moves along with it: the higher the number, the sooner it decides and the bigger the wave it waits for. Money too: Easy earns what you earn and at most a quarter more when it falls behind, Hard half again and up to two and a half times, where every difficulty used to earn half again and up to triple. Easy also waits half as long again between buildings and between teams, which every difficulty used to share, and the number of supply trucks it runs follows the same line. Medium sits halfway along the line now and plays harder than it did. Replays recorded before this change will not play back.

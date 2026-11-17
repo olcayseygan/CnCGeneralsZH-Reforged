@@ -39,8 +39,14 @@
 #include "Common/GameSpyMiscPreferences.h"
 #include "Common/CustomMatchPreferences.h"
 #include "Common/GlobalData.h"
+#include "Common/MessageStream.h"
+#include "Common/RandomValue.h"
+#include "Common/SkirmishPreferences.h"
 #include "Common/UserPreferences.h"
 #include "Common/PlayerTemplate.h"
+#include "GameLogic/AI.h"
+#include "GameLogic/GameLogic.h"
+#include "GameNetwork/GameInfo.h"
 
 #include "GameClient/AnimateWindowManager.h"
 #include "GameClient/Display.h"
@@ -57,6 +63,8 @@
 #include "GameClient/MessageBox.h"
 #include "GameClient/GameWindowTransitions.h"
 #include "GameClient/GUICallbacks.h"
+#include "GameClient/MapUtil.h"
+#include "GameClient/UIStyle.h"
 
 #include "GameNetwork/FirewallHelper.h"
 #include "GameNetwork/GameSpyOverlay.h"
@@ -106,6 +114,8 @@ static GameWindow *buttonLadder = NULL;
 static GameWindow *buttonMyInfo = NULL;
 static GameWindow *buttonbuttonOptions = NULL;
 static GameWindow *buttonSkins = NULL;		///< -online, made here: the layout has no slot for it
+static GameWindow *buttonPlayAI = NULL;		///< -online, made here under Options, the column's next slot
+static GameWindow *staticTextAIRating = NULL;	///< the AI rating, left of buttonPlayAI
 static WindowLayout *welcomeLayout = NULL;
 static GameWindow *listboxInfo = NULL;
 
@@ -203,9 +213,11 @@ static void shutdownComplete( WindowLayout *layout )
 	isShuttingDown = FALSE;
 
 	// made again by the next init: a push hides this layout and the pop that follows runs init again
-	if (buttonSkins)
-		TheWindowManager->winDestroy( buttonSkins );
-	buttonSkins = NULL;
+	GameWindow *made[] = { buttonSkins, buttonPlayAI, staticTextAIRating };
+	for (size_t i = 0; i < sizeof(made) / sizeof(made[0]); ++i)
+		if (made[i])
+			TheWindowManager->winDestroy( made[i] );
+	buttonSkins = buttonPlayAI = staticTextAIRating = NULL;
 
 	// hide the layout
 	layout->hide( TRUE );
@@ -478,8 +490,186 @@ void UpdateLocalPlayerStats(void)
 	{
 		PopulatePlayerInfoWindows( "WOLQuickMatchMenu.wnd" );
 	}
-	
+
 	return;
+}
+
+//-------------------------------------------------------------------------------------------------
+// -online: Play vs AI.  The button asks the server (WOLPlayVsAI) and the screen's update hands its answer
+// on (WOLPlayVsAIUpdate): a 1v1 skirmish against one computer player as strong as the player's AI rating,
+// on the map and seed the server picked, or the server's reason not to.  OnlineQueues.h has the lines.
+//-------------------------------------------------------------------------------------------------
+static Bool s_aiAsked = FALSE;							///< ai.start is out
+static Int s_aiArmy = PLAYERTEMPLATE_RANDOM;	///< the army it named, which the player then plays
+
+/* The match: slot 0 the player in that army, slot 1 the computer at the server's rating, on the rung
+	 nearest it as -airating seats it, its army, both colours and both start spots drawn from the seed.  The
+	 native speed and tick rate, as a network game.  Built here rather than through -autoskirmish's door so no
+	 switch of that door reaches a match the server rates.  FALSE, with nothing started, when the map is not
+	 in this game. */
+static Bool startAIMatch( const OnlineAIMatch &ai )
+{
+	const MapMetaData *md = TheMapCache ? TheMapCache->findMap( ai.map ) : NULL;
+	if (md == NULL || !md->m_isMultiplayer || md->m_numPlayers < 2)
+		return FALSE;
+
+	if (TheGameLogic->isInGame())
+		TheGameLogic->clearGameData( FALSE );		// the shell map
+
+	if (TheSkirmishGameInfo == NULL)
+		TheSkirmishGameInfo = NEW SkirmishGameInfo;
+	TheSkirmishGameInfo->init();
+	TheSkirmishGameInfo->clearSlotList();
+	TheSkirmishGameInfo->reset();
+	TheSkirmishGameInfo->enterGame();
+
+	SkirmishPreferences prefs;
+	GameSlot player;
+	player.setState( SLOT_PLAYER, prefs.getUserName() );
+	player.setPlayerTemplate( s_aiArmy );
+	player.setColor( -1 );
+	player.setStartPos( -1 );
+
+	static const SlotState RUNG_STATES[ AISKILL_COUNT ] = { SLOT_EASY_AI, SLOT_MED_AI, SLOT_BRUTAL_AI };
+	const AISkillLevel rung = aiSkillOfRating( ai.aiRating );
+	Int rating = aiRatingToHundredths( ai.aiRating );
+	if (rating == aiRatingToHundredths( aiRatingOfSkill( rung ) ))
+		rating = AI_RATING_NONE;		// a rung's own anchor is written as the rung alone
+	GameSlot computer;
+	computer.setState( RUNG_STATES[ rung ] );
+	computer.setAIRating( rating );		// after setState, which drops a rating on a change of state
+	computer.setPlayerTemplate( PLAYERTEMPLATE_RANDOM );
+	computer.setColor( -1 );
+	computer.setStartPos( -1 );
+
+	TheSkirmishGameInfo->setSlot( 0, player );
+	TheSkirmishGameInfo->setSlot( 1, computer );
+	TheSkirmishGameInfo->setLocalIP( TheSkirmishGameInfo->getSlot( 0 )->getIP() );
+	TheSkirmishGameInfo->setMap( md->m_fileName );
+	TheSkirmishGameInfo->setGameSpeedPercent( NATIVE_GAME_SPEED_PERCENT );
+	TheSkirmishGameInfo->setSeed( ai.seed );
+	TheWritableGlobalData->m_mapName = TheSkirmishGameInfo->getMap();
+	TheSkirmishGameInfo->startGame( 0 );
+
+	InitRandom( ai.seed );
+	GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_NEW_GAME );
+	msg->appendIntegerArgument( GAME_SKIRMISH );
+	msg->appendIntegerArgument( DIFFICULTY_NORMAL );
+	msg->appendIntegerArgument( 0 );
+	msg->appendIntegerArgument( LOGICFRAMES_PER_SECOND );			// the native tick, whatever -fps says
+	msg->appendIntegerArgument( NATIVE_GAME_SPEED_PERCENT );
+	DEBUG_LOG(("ONLINE AI START match=%s map=%s seed=%d aiRating=%.2f rung=%d army=%d\n", ai.match.str(),
+		md->m_fileName.str(), ai.seed, ai.aiRating, (Int)rung, s_aiArmy));
+	return TRUE;
+}
+
+void WOLPlayVsAI( void )
+{
+	if (s_aiAsked)
+		return;
+	SkirmishPreferences prefs;
+	s_aiArmy = prefs.getPreferredFaction();		// Random when none is saved, or a pool of them
+	const PlayerTemplate *army = s_aiArmy >= 0 ? ThePlayerTemplateStore->getNthPlayerTemplate( s_aiArmy ) : NULL;
+	OnlineRequestAIMatch( army ? army->getName() : AsciiString( "Random" ) );
+	s_aiAsked = TRUE;
+}
+
+Bool WOLPlayVsAIUpdate( void )
+{
+	if (!s_aiAsked)
+		return FALSE;
+	OnlineAIMatch ai;
+	const OnlineAIMatchState state = OnlineGetAIMatch( ai );
+	if (state == ONLINE_AI_WAITING)
+		return TRUE;
+	s_aiAsked = FALSE;
+	UnicodeString what;
+	if (state == ONLINE_AI_READY)
+	{
+		if (startAIMatch( ai ))
+			return FALSE;
+		OnlineDropAIMatch();
+		DEBUG_LOG(("ONLINE AI START map=%s missing\n", ai.map.str()));
+		UnicodeString map;
+		map.translate( ai.map );
+		what.format( TheGameText->fetch( "GUI:OnlineAIMapMissing" ), map.str() );
+	}
+	else if (state == ONLINE_AI_REFUSED)
+	{
+		AsciiString label;
+		label.format( "GUI:OnlineAIRefused_%s", ai.reason.str() );
+		Bool known = FALSE;
+		what = TheGameText->fetch( label, &known );
+		if (!known)
+		{
+			UnicodeString reason;
+			reason.translate( ai.reason );
+			what.format( TheGameText->fetch( "GUI:OnlineAIRefused" ), reason.str() );
+		}
+	}
+	if (!what.isEmpty())
+		GSMessageBoxOk( TheGameText->fetch( "GUI:GSErrorTitle" ), what );
+	return FALSE;
+}
+
+/* What the hub shows beside the button: the speed, then the last match's verdict this sign-in ("AI rating
+	 12.40 -> 14.10", or why it was not rated), else the rating auth.ok brought; under it the games played
+	 against the AI and the share won.  The strings say 1.5x, which is NATIVE_GAME_SPEED_PERCENT, the speed
+	 startAIMatch plays at. */
+UnicodeString WOLAIRatingText( void )
+{
+	UnicodeString text;
+	OnlinePlayerInfo card;
+	const Bool rated = TheGameSpyInfo && OnlineGetPlayerInfo( TheGameSpyInfo->getLocalName(), card ) && card.hasAIRating;
+	OnlineAIVerdict verdict;
+	if (OnlineGetAIVerdict( verdict ))
+	{
+		if (verdict.rated)
+			text.format( TheGameText->fetch( "GUI:OnlineAIRated" ), verdict.before, verdict.after );
+		else
+		{
+			UnicodeString reason;
+			reason.translate( verdict.reason );
+			text.format( TheGameText->fetch( "GUI:OnlineAIUnrated" ), reason.str() );
+		}
+	}
+	else if (rated)
+		text.format( TheGameText->fetch( "GUI:OnlineAIRating" ), card.aiRating );
+	else
+		text = TheGameText->fetch( "GUI:OnlineAISpeed" );
+	if (rated && card.aiGames > 0)
+	{
+		const Int won = (card.aiWins * 100 + card.aiGames / 2) / card.aiGames;
+		UnicodeString games;
+		if (card.aiGames == 1)
+			games.format( TheGameText->fetch( "GUI:OnlineAIGame" ), won );
+		else
+			games.format( TheGameText->fetch( "GUI:OnlineAIGames" ), card.aiGames, won );
+		text.concat( L'\n' );
+		text.concat( games );
+	}
+	return text;
+}
+
+/* The line is as long as its words and ends against the button, so a short rating does not float away
+	 from it and a Turkish one has room.  Cheap to call every update: it only lays out a change. */
+static void showAIRating( void )
+{
+	if (!staticTextAIRating || !buttonPlayAI)
+		return;
+	const UnicodeString text = WOLAIRatingText();
+	if (text == GadgetStaticTextGetText( staticTextAIRating ))
+		return;
+	GadgetStaticTextSetText( staticTextAIRating, text );
+	TextData *data = (TextData *)staticTextAIRating->winGetUserData();
+	Int textW = 0, textH = 0, bx = 0, by = 0, w = 0, h = 0;
+	if (data && data->text)
+		data->text->getSize( &textW, &textH );
+	buttonPlayAI->winGetPosition( &bx, &by );
+	staticTextAIRating->winGetSize( &w, &h );
+	const Int pad = UIStyle::px( 24.0f );		// W3DGadgetStaticTextDraw wraps 10 short of the width
+	staticTextAIRating->winSetPosition( bx - textW - pad, by );
+	staticTextAIRating->winSetSize( textW + pad, h );
 }
 
 static Bool raiseMessageBoxes = FALSE;
@@ -607,6 +797,33 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 				(Int)(552 * sx) - (Int)(380 * sx), (Int)(556 * sy) - (Int)(520 * sy), "GUI:OnlineSkinsButton");
 			if (buttonSkins)
 				buttonSkins->winBringToTop();
+		}
+		// Play vs AI under Options, the column's next slot, over the empty right of the player panel; its
+		// rating to its left, under the message box, in the rank line's face
+		GameWindow *model = buttonbuttonOptions ? buttonbuttonOptions : buttonBack;
+		if (model && !buttonPlayAI)
+		{
+			const Real sx = TheDisplay->getWidth() / 800.0f, sy = TheDisplay->getHeight() / 600.0f;
+			const Int x = (Int)(560 * sx), y = (Int)(296 * sy), w = (Int)(736 * sx) - x, h = (Int)(332 * sy) - y;
+			buttonPlayAI = WOLMakeButtonLike( parentWOLWelcome, model, x, y, w, h, "GUI:OnlineVsAIButton" );
+			if (buttonPlayAI)
+				buttonPlayAI->winBringToTop();
+			GameWindow *rank = TheWindowManager->winGetWindowFromId( parentWOLWelcome, NAMEKEY("WOLWelcomeMenu.wnd:StaticTextRank") );
+			WinInstanceData inst;
+			inst.init();
+			BitSet( inst.m_style, GWS_STATIC_TEXT );
+			TextData data;
+			memset( &data, 0, sizeof(data) );
+			data.centeredVertically = TRUE;
+			staticTextAIRating = TheWindowManager->gogoGadgetStaticText( parentWOLWelcome, WIN_STATUS_ENABLED | WIN_STATUS_NO_INPUT,
+				(Int)(300 * sx), y, x - (Int)(300 * sx), h, &inst, &data, rank ? rank->winGetFont() : model->winGetFont(), FALSE );
+			if (staticTextAIRating)
+			{
+				staticTextAIRating->winSetEnabledTextColors( GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+				staticTextAIRating->winSetEnabledColor( 0, GameMakeColor( 2, 2, 2, 0 ) );
+				staticTextAIRating->winSetEnabledBorderColor( 0, GameMakeColor( 0, 0, 0, 0 ) );
+			}
+			showAIRating();
 		}
 		OnlineRequestStats(TheGameSpyInfo->getLocalName());
 		// the win percentages arrive after the screen drew (WOLWelcomeMenuUpdate); until then, none
@@ -827,6 +1044,13 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 			UpdateLocalPlayerStats();
 		}
 
+		// -online: Play vs AI's answer, the button greyed while it is awaited, and the rating beside it
+		if (OnlineIsEnabled() && buttonPlayAI && !buttonPushed)
+		{
+			buttonPlayAI->winEnable( !WOLPlayVsAIUpdate() );
+			showAIRating();
+		}
+
 		// -online: the armies' answer, once per opening of the screen
 		std::vector<OnlineArmyRow> armies;
 		if (OnlineIsEnabled() && !s_onlineArmiesShown && OnlineGetArmies(armies) == ONLINE_LADDER_READY)
@@ -873,7 +1097,7 @@ WindowMsgHandledType WOLWelcomeMenuInput( GameWindow *window, UnsignedInt msg,
 		{
 			UnsignedByte key = mData1;
 			UnsignedByte state = mData2;
-			if (buttonPushed)
+			if (buttonPushed || s_aiAsked)		// leaving while ai.start is out would open a match nobody plays
 				break;
 
 			switch( key )
@@ -942,7 +1166,7 @@ WindowMsgHandledType WOLWelcomeMenuSystem( GameWindow *window, UnsignedInt msg,
 
 		case GBM_SELECTED:
 			{
-				if (buttonPushed)
+				if (buttonPushed || s_aiAsked)		// the server's answer to Play vs AI comes first
 					break;
 
 				GameWindow *control = (GameWindow *)mData1;
@@ -1031,6 +1255,11 @@ WindowMsgHandledType WOLWelcomeMenuSystem( GameWindow *window, UnsignedInt msg,
 				else if (control == buttonSkins && buttonSkins)
 				{
 					WOLSkinsScreenOpen();
+				}
+				else if (control == buttonPlayAI && buttonPlayAI)
+				{
+					WOLPlayVsAI();
+					buttonPlayAI->winEnable( FALSE );
 				}
 				else if (controlID == buttonBuddiesID)
 				{

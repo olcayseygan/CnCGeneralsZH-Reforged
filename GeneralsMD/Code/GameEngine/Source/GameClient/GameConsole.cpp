@@ -38,6 +38,7 @@
 #include "Common/version.h"
 #include "GameLogic/GameLogic.h"
 #include "GameNetwork/GameSpy/ThreadUtils.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 
 #include "GameClient/CinemaDirector.h"
 #include "GameClient/Color.h"
@@ -129,11 +130,11 @@ static Bool isInMatch( void )
 
 //-------------------------------------------------------------------------------------------------
 /** Cheats exist only in a campaign or skirmish match being played; anywhere else the console does
-	* not mention them at all. */
+	* not mention them at all.  A Play vs AI match is rated online, so it has none either. */
 //-------------------------------------------------------------------------------------------------
 static Bool areCheatsAvailable( void )
 {
-	return isInMatch() && !TheGameLogic->isInMultiplayerGame()
+	return isInMatch() && !TheGameLogic->isInMultiplayerGame() && !OnlineIsAIMatchLive()
 		&& TheRecorder->getMode() != RECORDERMODETYPE_PLAYBACK;
 }
 

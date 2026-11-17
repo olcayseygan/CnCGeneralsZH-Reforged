@@ -114,10 +114,14 @@ struct OnlineCard
 	long long ping, rating, games, wins, losses, rank;
 	Bool hasRating, notOnline, hasStats;
 	std::string tier;
+	Bool hasAIRating;			///< aiRating and aiGames arrived (auth.ok, ai.rated)
+	double aiRating;				///< the rating against the AI, a scale of its own; two decimals
+	long long aiGames, aiWins;
 	UnsignedInt serial;		///< the session's cardSerial when this card last changed
 
 	OnlineCard() : ping( -1 ), rating( 0 ), games( -1 ), wins( -1 ), losses( -1 ), rank( 0 ),
-		hasRating( FALSE ), notOnline( FALSE ), hasStats( FALSE ), serial( 0 ) {}
+		hasRating( FALSE ), notOnline( FALSE ), hasStats( FALSE ), hasAIRating( FALSE ), aiRating( 0 ), aiGames( 0 ), aiWins( 0 ),
+		serial( 0 ) {}
 };
 
 /* The key cards are kept under: the nick in lower case.  The server finds a nick without regard to
@@ -206,6 +210,17 @@ struct OnlineSession
 	OnlineMessage reveal;
 	Bool revealing;
 	UnsignedInt revealSerial;
+
+	// Play vs AI (OnlineRequestAIMatch): the last ai.start's answer, then the match it named
+	Int aiState;						///< OnlineAIMatchState
+	OnlineMessage aiReady;	///< the ai.ready not yet taken
+	std::string aiRefusal;	///< the ai.refused reason not yet taken
+	std::string aiMatch;		///< the match taken from ai.ready, until its ai.result goes
+	long long aiReadyMs;		///< when that ai.ready arrived, in steady-clock milliseconds
+	long long aiTickMs;			///< when the last ai.tick went
+	std::string aiWonMatch;	///< the match whose ai.result said win: only its replay goes up
+	OnlineMessage aiVerdict;	///< the last ai.rated or ai.unrated
+	UnsignedInt aiVerdictSerial;
 
 	OnlinePeerQueue *peer;
 	OnlineBuddyQueue *buddy;

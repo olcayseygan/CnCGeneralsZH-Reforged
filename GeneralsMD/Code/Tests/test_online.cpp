@@ -226,9 +226,21 @@ TEST(online_json_reads_one_level_of_objects)
 	CHECK( m.getObject( "t", me ) );
 	CHECK_EQ( m.getObjects( "u" ).size(), (size_t)1 );
 
-	// the client never sends one
+	// an object goes out as it came in (an ai.result's stats); an array of objects never does
 	std::string line;
 	CHECK( !m.toLine( line ) );
+	CHECK( line.empty() );
+	OnlineMessage stats, out, back;
+	std::vector<long long> pair;
+	pair.push_back( 1 );
+	pair.push_back( 2 );
+	stats.setInt( "unitsBuilt", 12 ).setString( "army", "FactionChina" ).setInts( "pair", pair );
+	CHECK( out.setString( "t", "ai.result" ).setObject( "stats", stats ).toLine( line ) );
+	CHECK_STR( line.c_str(), "{\"t\":\"ai.result\",\"stats\":{\"unitsBuilt\":12,\"army\":\"FactionChina\",\"pair\":[1,2]}}\n" );
+	CHECK( OnlineMessage::parse( line.data(), line.size() - 1, back ) );
+	CHECK( back.getObject( "stats", me ) );
+	CHECK_EQ( me.getInt( "unitsBuilt" ), 12LL );
+	CHECK( !out.setObject( "stats", m ).toLine( line ) );		// an object in an object
 	CHECK( line.empty() );
 }
 
@@ -1354,6 +1366,135 @@ TEST(online_adapter_skins_owned_saved_and_refused)
 	CHECK( owned == 0 && TankSkin_localLoadout() == 0 );
 	rig.feed( "{\"t\":\"skins.ok\",\"owned\":[1],\"skins\":[1]}" );		// a late answer for the account that left
 	CHECK( TankSkin_localLoadout() == 0 );
+}
+
+/* Play vs AI's lines: auth.ok's AI rating on the card, ai.start carrying the build, ai.ready handed out
+	 once, the first ai.tick waiting its half minute, ai.result once and a loss's replay never sent, a win's
+	 sent under its match, the verdicts, the refusals and a logout ending a live match with nothing sent. */
+TEST(online_adapter_play_vs_ai)
+{
+	AdapterRig rig;
+	OnlineSession &s = OnlineSession::get();
+	OnlineAIMatch ai;
+	OnlineRequestAIMatch( "Random" );		// signed out
+	CHECK( rig.sent.empty() );
+	CHECK_EQ( (int)OnlineGetAIMatch( ai ), (int)ONLINE_AI_REFUSED );
+	CHECK_STR( ai.reason.str(), "signedout" );
+
+	rig.feed( "{\"t\":\"auth.ok\",\"id\":7,\"nick\":\"Tank\",\"token\":\"t\",\"ticket\":\"00112233445566778899aabbccddeeff\",\"aiRating\":12.4,\"aiGames\":3,\"aiWins\":2}" );
+	OnlinePlayerInfo card;
+	CHECK( OnlineGetPlayerInfo( "Tank", card ) && card.hasAIRating );
+	CHECK_NEAR( card.aiRating, 12.4f, 0.001f );
+	CHECK_EQ( card.aiGames, 3 );
+	CHECK_EQ( card.aiWins, 2 );
+
+	rig.sent.clear();
+	OnlineRequestAIMatch( "FactionAmerica" );
+	CHECK_STR( rig.sentType( 0 ).c_str(), "ai.start" );
+	CHECK( rig.sent.size() == 1 && rig.sent[0].getString( "army" ) == "FactionAmerica" && rig.sent[0].has( "exe" ) && rig.sent[0].has( "ini" ) );
+	CHECK_EQ( (int)OnlineGetAIMatch( ai ), (int)ONLINE_AI_WAITING );
+	rig.feed( "{\"t\":\"ai.ready\",\"matchId\":\"m1\",\"aiRating\":12.4,\"map\":\"maps\\\\alpine assault\\\\alpine assault.map\",\"seed\":2147483000}" );
+	CHECK( !OnlineIsAIMatchLive() );		// live once the hub takes it
+	CHECK_EQ( (int)OnlineGetAIMatch( ai ), (int)ONLINE_AI_READY );
+	CHECK_STR( ai.match.str(), "m1" );
+	CHECK_STR( ai.map.str(), "maps\\alpine assault\\alpine assault.map" );
+	CHECK_NEAR( ai.aiRating, 12.4f, 0.001f );
+	CHECK_EQ( ai.seed, 2147483000 );
+	CHECK_EQ( (int)OnlineGetAIMatch( ai ), (int)ONLINE_AI_IDLE );		// handed out once
+	CHECK( OnlineIsAIMatchLive() );
+	CHECK_STR( OnlineClaimAIMatch().str(), "m1" );
+
+	rig.sent.clear();
+	OnlineSendAITick( 30 );
+	CHECK( rig.sent.empty() );		// the first waits its half minute
+	s.aiTickMs -= ONLINE_AI_TICK_SECONDS * 1000 + 1;
+	OnlineSendAITick( 900 );
+	CHECK( rig.sent.size() == 1 && rig.sentType( 0 ) == "ai.tick" && rig.sent[0].getString( "matchId" ) == "m1" && rig.sent[0].getInt( "frame" ) == 900 );
+
+	// a loss, once; its recording is not sent
+	const char *path = "test_online_ai_replay.tmp";
+	FILE *f = fopen( path, "wb" );
+	CHECK( f != NULL );
+	if (!f)
+		return;
+	fwrite( "GENREP", 1, 6, f );
+	fclose( f );
+	rig.sent.clear();
+	OnlineAIResult result;
+	result.endFrame = 1200;
+	result.blind = 2;
+	result.playerArmy = "FactionAmerica";
+	result.aiArmy = "FactionGLAToxinGeneral";
+	result.unitsBuilt = 14;
+	result.structuresKilled = 3;
+	result.moneyEarned = 8200;
+	OnlineSendAIResult( result );
+	result.won = TRUE;
+	OnlineSendAIResult( result );
+	CHECK_EQ( rig.sent.size(), (size_t)1 );
+	CHECK( rig.sentType( 0 ) == "ai.result" && rig.sent[0].getString( "matchId" ) == "m1" && rig.sent[0].getString( "result" ) == "loss" );
+	CHECK( rig.sent[0].getInt( "endFrame" ) == 1200 && rig.sent[0].getInt( "blind" ) == 2 && rig.sent[0].has( "seconds" ) );
+	CHECK( rig.sent[0].getString( "playerArmy" ) == "FactionAmerica" && rig.sent[0].getString( "aiArmy" ) == "FactionGLAToxinGeneral" );
+	OnlineMessage stats;
+	CHECK( rig.sent[0].getObject( "stats", stats ) && stats.size() == 7 );
+	CHECK( stats.getInt( "unitsBuilt" ) == 14 && stats.getInt( "unitsLost" ) == 0 && stats.getInt( "structuresKilled" ) == 3 );
+	CHECK( stats.getInt( "moneyEarned" ) == 8200 && stats.has( "unitsKilled" ) && stats.has( "structuresBuilt" ) && stats.has( "structuresLost" ) );
+	std::string line;
+	CHECK( rig.sent[0].toLine( line ) );
+	CHECK( !OnlineIsAIMatchLive() );
+	OnlineSendReplay( "m1", path );
+	CHECK_EQ( rig.sent.size(), (size_t)1 );
+
+	// ai.rated moves the card at once
+	rig.feed( "{\"t\":\"ai.rated\",\"matchId\":\"m1\",\"before\":12.4,\"after\":11.9,\"games\":4}" );
+	OnlineAIVerdict verdict;
+	CHECK( OnlineGetAIVerdict( verdict ) && verdict.rated );
+	CHECK_NEAR( verdict.before, 12.4f, 0.001f );
+	CHECK_NEAR( verdict.after, 11.9f, 0.001f );
+	CHECK( OnlineGetPlayerInfo( "Tank", card ) && card.aiGames == 4 && card.aiWins == 2 );
+	CHECK_NEAR( card.aiRating, 11.9f, 0.001f );
+
+	// a win: its recording goes up under the match; a new ai.start drops the last verdict
+	OnlineRequestAIMatch( "Random" );
+	CHECK( !OnlineGetAIVerdict( verdict ) );
+	rig.feed( "{\"t\":\"ai.ready\",\"matchId\":\"m2\",\"aiRating\":11.9,\"map\":\"maps\\\\winter wolf\\\\winter wolf.map\",\"seed\":5}" );
+	OnlineGetAIMatch( ai );
+	result.endFrame = 5000;
+	OnlineSendAIResult( result );
+	rig.sent.clear();
+	OnlineSendReplay( "m2", path );
+	CHECK( rig.sent.size() == 1 && rig.sentType( 0 ) == "replay" && rig.sent[0].getString( "match" ) == "m2" && rig.sent[0].getBool( "last" ) );
+	// rated without its wins, the card counts the win it reported; with them, it takes the server's
+	rig.feed( "{\"t\":\"ai.rated\",\"matchId\":\"m2\",\"before\":11.9,\"after\":12.6,\"games\":5}" );
+	CHECK( OnlineGetPlayerInfo( "Tank", card ) && card.aiGames == 5 && card.aiWins == 3 );
+	rig.feed( "{\"t\":\"ai.rated\",\"matchId\":\"m2\",\"before\":11.9,\"after\":12.6,\"games\":5,\"wins\":4}" );
+	CHECK( OnlineGetPlayerInfo( "Tank", card ) && card.aiWins == 4 );
+	rig.feed( "{\"t\":\"ai.unrated\",\"matchId\":\"m2\",\"reason\":\"gap\"}" );
+	CHECK( OnlineGetAIVerdict( verdict ) && !verdict.rated );
+	CHECK_STR( verdict.reason.str(), "gap" );
+	rig.feed( "{\"t\":\"ai.refused\",\"matchId\":\"m2\",\"reason\":\"reported\"}" );		// a result turned down
+	CHECK( OnlineGetAIVerdict( verdict ) && !verdict.rated );
+	CHECK_STR( verdict.reason.str(), "reported" );
+	remove( path );
+
+	// the server's refusal, and a server from before Play vs AI
+	OnlineRequestAIMatch( "Random" );
+	rig.feed( "{\"t\":\"ai.refused\",\"reason\":\"build\"}" );
+	CHECK_EQ( (int)OnlineGetAIMatch( ai ), (int)ONLINE_AI_REFUSED );
+	CHECK_STR( ai.reason.str(), "build" );
+	OnlineRequestAIMatch( "Random" );
+	rig.feed( "{\"t\":\"error\",\"for\":\"ai.start\",\"code\":\"unknown\"}" );
+	CHECK_EQ( (int)OnlineGetAIMatch( ai ), (int)ONLINE_AI_REFUSED );
+	CHECK_STR( ai.reason.str(), "unavailable" );
+
+	// a logout ends a live match with nothing sent: the server settles it
+	OnlineRequestAIMatch( "Random" );
+	rig.feed( "{\"t\":\"ai.ready\",\"matchId\":\"m3\",\"aiRating\":0,\"map\":\"maps\\\\winter wolf\\\\winter wolf.map\",\"seed\":1}" );
+	OnlineGetAIMatch( ai );
+	CHECK( OnlineIsAIMatchLive() );
+	s.disconnect();
+	CHECK( !OnlineIsAIMatchLive() );
+	CHECK( !OnlineGetAIVerdict( verdict ) );
 }
 
 /* proto 2 on login, the room snapshot's cards, nicks in any case, Stop ending a reveal at once. */

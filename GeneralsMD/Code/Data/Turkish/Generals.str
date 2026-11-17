@@ -19088,6 +19088,62 @@ GUI:OnlineSkinsRefused
 "zerohour.gg bu seçimi kabul etmedi, skinlerin olduğu gibi kaldı. Hesabında ne olduğunu görmek için bu ekranı yeniden aç."
 END
 
+GUI:OnlineVsAIButton
+"YAPAY ZEKÂYA KARŞI"
+END
+
+GUI:OnlineAISpeed
+"1.5x hız"
+END
+
+GUI:OnlineAIRating
+"1.5x hız, YZ puanı %.2f"
+END
+
+GUI:OnlineAIRated
+"1.5x hız, YZ puanı %.2f -> %.2f"
+END
+
+GUI:OnlineAIUnrated
+"1.5x hız, puanlanmadı: %ls"
+END
+
+GUI:OnlineAIGames
+"%d maç · %%%d galibiyet"
+END
+
+GUI:OnlineAIGame
+"1 maç · %%%d galibiyet"
+END
+
+GUI:OnlineAIMapMissing
+"Sunucu bu oyunda olmayan bir harita seçti (%ls), maç başlamadı."
+END
+
+GUI:OnlineAIRefused
+"Sunucu maçı başlatmadı (%ls)."
+END
+
+GUI:OnlineAIRefused_build
+"Oyun dosyaların yayımlanan sürümden farklı. Oyunu başlatıcıdan güncelle, sonra yeniden dene."
+END
+
+GUI:OnlineAIRefused_pending
+"Yapay zekâya karşı son maçın hâlâ puanlanıyor. Birazdan yeniden dene."
+END
+
+GUI:OnlineAIRefused_banned
+"Bu hesap yapay zekâya karşı puanlı maç oynayamaz."
+END
+
+GUI:OnlineAIRefused_unavailable
+"zerohour.gg cevap vermedi. Birazdan yeniden dene."
+END
+
+GUI:OnlineAIRefused_signedout
+"Giriş yapmadın."
+END
+
 SKIN:Splinter
 "PARÇALI KAMUFLAJ"
 END

@@ -460,6 +460,34 @@ static bool appendScalar( std::string &out, const OnlineValue &v )
 	}
 }
 
+// a scalar, or an array of scalars
+static bool appendFlat( std::string &out, const OnlineValue &v )
+{
+	if (v.kind != OnlineValue::ARRAY)
+		return appendScalar( out, v );
+	bool ok = true;
+	out += '[';
+	for (size_t k = 0; k < v.items.size() && ok; ++k)
+	{
+		if (k > 0)
+			out += ',';
+		ok = appendScalar( out, v.items[ k ] );
+	}
+	out += ']';
+	return ok;
+}
+
+static bool appendMember( std::string &out, const std::string &key, bool first )
+{
+	if (!isCleanText( key ))
+		return false;
+	if (!first)
+		out += ',';
+	appendQuoted( out, key );
+	out += ':';
+	return true;
+}
+
 bool OnlineMessage::toLine( std::string &out ) const
 {
 	out = "{";
@@ -467,26 +495,16 @@ bool OnlineMessage::toLine( std::string &out ) const
 	for (size_t i = 0; i < m_fields.size() && ok; ++i)
 	{
 		const OnlineValue &v = m_fields[ i ].second;
-		ok = isCleanText( m_fields[ i ].first );
-		if (!ok)
-			break;
-		if (i > 0)
-			out += ',';
-		appendQuoted( out, m_fields[ i ].first );
-		out += ':';
-		if (v.kind == OnlineValue::ARRAY)
+		ok = appendMember( out, m_fields[ i ].first, i == 0 );
+		if (ok && v.kind == OnlineValue::OBJECT)
 		{
-			out += '[';
+			out += '{';
 			for (size_t k = 0; k < v.items.size() && ok; ++k)
-			{
-				if (k > 0)
-					out += ',';
-				ok = appendScalar( out, v.items[ k ] );
-			}
-			out += ']';
+				ok = appendMember( out, v.keys[ k ], k == 0 ) && appendFlat( out, v.items[ k ] );
+			out += '}';
 		}
-		else
-			ok = appendScalar( out, v );
+		else if (ok)
+			ok = appendFlat( out, v );
 	}
 	out += '}';
 	if (!ok || out.size() > ONLINE_MAX_LINE)
@@ -611,6 +629,18 @@ OnlineMessage &OnlineMessage::set( const char *key, const OnlineValue &value )
 		}
 	m_fields.push_back( std::make_pair( std::string( key ), value ) );
 	return *this;
+}
+
+OnlineMessage &OnlineMessage::setObject( const char *key, const OnlineMessage &value )
+{
+	OnlineValue v;
+	v.kind = OnlineValue::OBJECT;
+	for (size_t i = 0; i < value.m_fields.size(); ++i)
+	{
+		v.keys.push_back( value.m_fields[ i ].first );
+		v.items.push_back( value.m_fields[ i ].second );
+	}
+	return set( key, v );
 }
 
 OnlineMessage &OnlineMessage::setString( const char *key, const std::string &value )

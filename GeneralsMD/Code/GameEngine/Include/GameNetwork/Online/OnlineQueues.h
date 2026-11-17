@@ -172,6 +172,10 @@ struct OnlinePlayerInfo
 	Int rank;									///< ladder position, 0 for none
 	Bool notOnline;						///< the last stats asked for this nick came back noplayer
 	Bool hasStats;						///< a stats answer for this nick arrived (wins and losses are then known)
+	Bool hasAIRating;					///< aiRating and aiGames arrived (auth.ok, ai.rated)
+	Real aiRating;						///< the rating against the AI, a scale of its own (0 for a new player)
+	Int aiGames;
+	Int aiWins;
 	UnsignedInt serial;				///< moves on whenever this player's numbers change: redraw on it, not on everyone's
 
 	OnlinePlayerInfo();
@@ -246,5 +250,66 @@ OnlineSkinsState OnlineGetSkins( UnsignedInt64 &owned, AsciiString &error );
 /* The server's verdict on the match the last game.start or qm.matched named: rated (delta, rating) or
 	 unrated (reason).  FALSE until it arrives. */
 Bool OnlineGetMatchResult( Bool &rated, Real &delta, Real &rating, AsciiString &reason );
+
+/* Play vs AI, a 1v1 skirmish the server rates on a scale of its own (the card's aiRating).
+	 OnlineRequestAIMatch sends ai.start{army, exe, ini}; OnlineGetAIMatch reads the answer and hands it out
+	 once: READY with ai.ready's match, the AI seat's rating and the map and seed the server picked, then
+	 the match is live; or REFUSED with ai.refused's reason ("build": this exe or its data is not the
+	 release's), "unavailable" from a server without it and "signedout" when the login went.
+	 While live, OnlineSendAITick sends ai.tick{match, frame} every ONLINE_AI_TICK_SECONDS of wall time and
+	 OnlineSendAIResult sends ai.result{match, result, seconds since ai.ready, endFrame, blind, playerArmy,
+	 aiArmy, stats{...}} once, which ends it.  OnlineDropAIMatch ends it with nothing sent (it could not start).  A win's recording goes up
+	 as a Quick Match's does: OnlineClaimAIMatch as it starts, OnlineSendReplay as it closes, and a loss's
+	 is never sent.  A logout ends it too; the server settles a match it never heard the end of.
+	 OnlineGetAIVerdict reads the last ai.rated{before, after, games}, or ai.unrated{reason} or a result's
+	 ai.refused{matchId, reason}, both unrated; ai.rated also moves the card's aiRating, aiGames and aiWins
+	 (its wins when it carries them, else one more after a win this client reported). */
+enum OnlineAIMatchState
+{
+	ONLINE_AI_IDLE,
+	ONLINE_AI_WAITING,		///< ai.start is out
+	ONLINE_AI_READY,
+	ONLINE_AI_REFUSED,
+};
+enum { ONLINE_AI_TICK_SECONDS = 30 };
+struct OnlineAIMatch
+{
+	AsciiString match;
+	Real aiRating;
+	AsciiString map;
+	Int seed;
+	AsciiString reason;		///< REFUSED only
+};
+void OnlineRequestAIMatch( const AsciiString &army );
+OnlineAIMatchState OnlineGetAIMatch( OnlineAIMatch &out );
+Bool OnlineIsAIMatchLive( void );
+void OnlineDropAIMatch( void );
+void OnlineSendAITick( Int frame );
+struct OnlineAIResult
+{
+	Bool won;
+	Int endFrame;
+	Int blind;									///< the player's orders at objects he could not see, as a Quick Match report counts them
+	AsciiString playerArmy;			///< player template names, random already resolved
+	AsciiString aiArmy;
+	Int unitsBuilt, unitsLost, unitsKilled;		///< the player's numbers on the score screen
+	Int structuresBuilt, structuresLost, structuresKilled;
+	Int moneyEarned;
+
+	OnlineAIResult() : won( FALSE ), endFrame( 0 ), blind( 0 ), unitsBuilt( 0 ), unitsLost( 0 ), unitsKilled( 0 ),
+		structuresBuilt( 0 ), structuresLost( 0 ), structuresKilled( 0 ), moneyEarned( 0 ) {}
+};
+void OnlineSendAIResult( const OnlineAIResult &result );
+AsciiString OnlineClaimAIMatch( void );
+struct OnlineAIVerdict
+{
+	AsciiString match;
+	Bool rated;
+	Real before, after;
+	Int games;
+	AsciiString reason;		///< unrated only
+	UnsignedInt serial;		///< moves on with every verdict
+};
+Bool OnlineGetAIVerdict( OnlineAIVerdict &out );		///< FALSE before the first this sign-in
 
 #endif // _ONLINE_QUEUES_H_

@@ -47,6 +47,7 @@
 #include "Common/PerfTimer.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
+#include "Common/PlayerTemplate.h"
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
@@ -630,6 +631,34 @@ void GameClient::registerDrawable( Drawable *draw )
 
 }  // end registerDrawable
 
+/* A Play vs AI match as this pass sees it, for its ai.result: the armies after random was resolved, and
+	 the player's numbers as the score screen shows them. */
+static void readAIMatch( Player *me, OnlineAIResult &out )
+{
+	out.endFrame = (Int)TheGameLogic->getFrame();
+	out.blind = TheGameLogic->getBlindOrderCount( me->getPlayerIndex() );
+	out.playerArmy = me->getPlayerTemplate() ? me->getPlayerTemplate()->getName() : AsciiString::TheEmptyString;
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		AsciiString seat;
+		seat.format( "player%d", i );
+		const Player *p = ThePlayerList->findPlayerWithNameKey( NAMEKEY( seat ) );
+		if (p && p != me && p->getPlayerTemplate())
+		{
+			out.aiArmy = p->getPlayerTemplate()->getName();
+			break;
+		}
+	}
+	ScoreKeeper *score = me->getScoreKeeper();
+	out.unitsBuilt = score->getTotalUnitsBuilt();
+	out.unitsLost = score->getTotalUnitsLost();
+	out.unitsKilled = score->getTotalUnitsDestroyed();
+	out.structuresBuilt = score->getTotalBuildingsBuilt();
+	out.structuresLost = score->getTotalBuildingsLost();
+	out.structuresKilled = score->getTotalBuildingsDestroyed();
+	out.moneyEarned = score->getTotalMoneyEarned();
+}
+
 /** -----------------------------------------------------------------------------------------------
  * -online, once a client pass.  The relay session gets its keepalive while the lobby has no Transport
  * to pump it, and a match's report goes out on the first pass after the match is decided, without
@@ -641,6 +670,37 @@ static void updateOnline( void )
 	if (!OnlineIsEnabled())
 		return;
 	Transport::keepOnlineRelay();
+
+	/* Play vs AI: an ai.tick every half minute while the match plays, and its result once, on the pass the
+		 victory conditions decide it, or as a loss on the first pass after it was left undecided (a quit).
+		 That one carries the last pass's numbers: the players are gone by then. */
+	static Bool s_aiPlaying = FALSE;
+	static OnlineAIResult s_aiResult;
+	if (OnlineIsAIMatchLive())
+	{
+		Player *me = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+		if (TheGameLogic->isInGame() && TheGameLogic->getGameMode() == GAME_SKIRMISH && !TheGameLogic->isLoadingMap() && me)
+		{
+			s_aiPlaying = TRUE;
+			readAIMatch( me, s_aiResult );
+			const Int endFrame = TheVictoryConditions ? (Int)TheVictoryConditions->getEndFrame() : 0;
+			if (endFrame > 0)
+			{
+				s_aiResult.won = TheVictoryConditions->isLocalAlliedVictory();
+				s_aiResult.endFrame = endFrame;
+				OnlineSendAIResult( s_aiResult );
+			}
+			else
+				OnlineSendAITick( s_aiResult.endFrame );
+		}
+		else if (s_aiPlaying)
+		{
+			s_aiResult.won = FALSE;
+			OnlineSendAIResult( s_aiResult );
+		}
+	}
+	if (!OnlineIsAIMatchLive())
+		s_aiPlaying = FALSE;
 
 	static Bool s_reported = FALSE;
 	if (!TheGameLogic->isInGame() || TheGameLogic->getGameMode() != GAME_INTERNET

@@ -183,6 +183,11 @@ extern WindowMsgHandledType WOLLadderScreenInput( GameWindow *window, UnsignedIn
 extern void WOLSkinsScreenOpen( void );
 /// a push button in model's look (a layout button's art, colours and font) on parent, labelled from the string table
 extern GameWindow *WOLMakeButtonLike( GameWindow *parent, GameWindow *model, Int x, Int y, Int w, Int h, const char *label );
+/// -online, Play vs AI (WOLWelcomeMenu.cpp): the button asks the server; the update, once a pass while the
+/// screen is up, starts the match or shows the refusal, and is TRUE while the answer is awaited
+extern void WOLPlayVsAI( void );
+extern Bool WOLPlayVsAIUpdate( void );
+extern UnicodeString WOLAIRatingText( void );		///< "AI rating 12.40", or the last match's verdict
 
 //  WOL Login Menu ---------------------------------------------------------------------------------
 extern void WOLLoginMenuInit( WindowLayout *layout, void *userData );

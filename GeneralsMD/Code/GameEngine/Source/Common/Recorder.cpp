@@ -620,6 +620,8 @@ void RecorderClass::startRecording(GameDifficulty diff, Int originalGameMode, In
 	theReplayQueue.write("GENREP", 6);
 	if (originalGameMode == GAME_INTERNET)
 		theOnlineMatch = OnlineClaimQuickMatch().str();
+	else if (originalGameMode == GAME_SKIRMISH)
+		theOnlineMatch = OnlineClaimAIMatch().str();		// a Play vs AI match: its replay goes up if it is won
 
 	//
 	// save space for stats to be filled in.

@@ -75,15 +75,16 @@ public:
 	OnlineMessage &setNull( const char *key );
 	OnlineMessage &setStrings( const char *key, const std::vector<std::string> &values );
 	OnlineMessage &setInts( const char *key, const std::vector<long long> &values );
+	OnlineMessage &setObject( const char *key, const OnlineMessage &value );		///< value's scalars and scalar arrays
 	OnlineMessage &set( const char *key, const OnlineValue &value );
 
 	void clear() { m_fields.clear(); }
 	size_t size() const { return m_fields.size(); }
 	const std::vector< std::pair<std::string, OnlineValue> > &fields() const { return m_fields; }
 
-	/* The object as one line, newline included.  False when a string is not valid UTF-8, a value is an
-		 object (the client never sends one), or the line would be longer than ONLINE_MAX_LINE; out is left
-		 empty then. */
+	/* The object as one line, newline included.  False when a string is not valid UTF-8, a value nests
+		 deeper than the comment at the top allows or is an array of objects (the client never sends one), or
+		 the line would be longer than ONLINE_MAX_LINE; out is left empty then. */
 	bool toLine( std::string &out ) const;
 
 	/* One line, without its newline (a trailing CR is allowed).  False on anything but an object of the

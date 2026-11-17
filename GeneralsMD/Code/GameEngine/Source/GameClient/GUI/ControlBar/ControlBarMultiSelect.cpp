@@ -417,8 +417,9 @@ void ControlBar::layoutMultiSelectTiles( Int count )
 			continue;
 		if( sidebar )
 		{
-			// in the art's well, 2 in from every edge
-			const IRegion2D cell = SidebarWellInset( hud.trayCells[ MIN( i, (Int)HUD_TRAY_CELLS - 1 ) ], hud.scale, 2, 2 );
+			// in the art's well, 2 in from every edge, at the cameo's 5:4
+			const IRegion2D cell = HudFitAspect( SidebarWellInset( hud.trayCells[ MIN( i, (Int)HUD_TRAY_CELLS - 1 ) ], hud.scale, 2, 2 ),
+				HUD_CAMEO_ART_W, HUD_CAMEO_ART_H );
 			tile->winSetPosition( cell.lo.x - hudAt.x, cell.lo.y - hudAt.y );
 			tile->winSetSize( cell.width(), cell.height() );
 			continue;

@@ -1230,6 +1230,8 @@ Int Mouse::getCursorIndex(const AsciiString& name)
 		"Hijack",
 		"Sabotage",
 		"CarBomb",
+		"Sell",
+		"SellInvalid",
 
 	};
 

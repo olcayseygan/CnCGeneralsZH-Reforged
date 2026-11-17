@@ -7,7 +7,9 @@
 // left corner (pressed and lit while the squad is the one the tray is up for), "xN" in its bottom
 // right, a soft "+N" in its top right for the units still being built for it or walking to it, and
 // the squad's health in the power bar's colours along the cell's foot.  A squad whose units shot or
-// were hit in the last few seconds has its picture blink red inside the rim, a translucent fill.
+// were hit in the last few seconds has its picture blink red inside the rim, a translucent fill.  The
+// Red Alert style layout mirrors it onto the open world's right edge, against the sidebar, between the
+// general's powers wing and the superweapon rows.
 //
 // On the right, while a squad picked by its number is still the selection and has no building in
 // it, a tray between the superweapons and the general's powers: the powers tray's own stepped body
@@ -425,19 +427,12 @@ static Int controlBarTop( Int panel )
 	return TheControlBar->getPanelRect( panel )->lo.y + barPos.y - TheControlBar->getPanelOrigin()->y;
 }
 
-/// the top of the radar's frame, InGameUI.cpp's radarFrameTop
+/// the top of the radar's frame, InGameUI.cpp's radarFrameTop (the Classic bar's; the sidebar layout's
+/// list stands on the world's right instead, drawList)
 static Int radarFrameTop( void )
 {
 	static NameKeyType radarKey = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:LeftHUD" );
 	const Int barTop = controlBarTop( ControlBar::CB_PANEL_LEFT );
-	// in the sidebar layout the radar is up in the sidebar; what stands on the world's bottom left is
-	// the selection card (InGameUI's radarFrameTop has a branch too)
-	if( TheControlBar->isSidebarLayout() )
-	{
-		HudLayoutRects r;
-		HudLayoutForScreen( (Int)TheDisplay->getWidth(), (Int)TheDisplay->getHeight(), HUD_LAYOUT_SIDEBAR, TheGlobalData->m_hudWidth, &r );
-		return barTop < (Int)TheDisplay->getHeight() ? r.card.lo.y : barTop;
-	}
 	const Image *const *frame = TheControlBar->getControlBarSchemeManager()->getRadarFrame();
 	GameWindow *radar = TheWindowManager->winGetWindowFromId( NULL, radarKey );
 	if( radar == NULL || radar->winIsHidden() || barTop >= (Int)TheDisplay->getHeight() )
@@ -452,6 +447,43 @@ static Int radarFrameTop( void )
 	inner.hi.y += inner.lo.y;
 	ControlBarSchemeManager::radarFrameRect( frame, inner, &outer );
 	return outer.lo.y;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** `each` for every general's power slot window showing, its tray's frame included. */
+//-------------------------------------------------------------------------------------------------
+static void forEachPowerSlot( const std::function<void( GameWindow * )> &each )
+{
+	// the shortcut layout is the player template's; its slot windows are found by name once a layout
+	static AsciiString keyedLayout;
+	static NameKeyType barKey = NAMEKEY_INVALID;
+	static NameKeyType slotKeys[ MAX_SPECIAL_POWER_SHORTCUTS ];
+	static Int slotCount = 0;
+	const PlayerTemplate *pt = ThePlayerList->getLocalPlayer()->getPlayerTemplate();
+	if( pt == NULL || pt->getSpecialPowerShortcutWinName().isEmpty() )
+		return;
+	if( keyedLayout != pt->getSpecialPowerShortcutWinName() )
+	{
+		keyedLayout = pt->getSpecialPowerShortcutWinName();
+		AsciiString name;
+		name.format( "%s:GenPowersShortcutBarParent", keyedLayout.str() );
+		barKey = TheNameKeyGenerator->nameToKey( name );
+		slotCount = min( pt->getSpecialPowerShortcutButtonCount(), (Int)MAX_SPECIAL_POWER_SHORTCUTS );
+		for( Int i = 0; i < slotCount; i++ )
+		{
+			name.format( "%s:ButtonParent%d", keyedLayout.str(), i + 1 );
+			slotKeys[ i ] = TheNameKeyGenerator->nameToKey( name );
+		}
+	}
+	GameWindow *bar = TheWindowManager->winGetWindowFromId( NULL, barKey );
+	if( bar == NULL || bar->winIsHidden() )
+		return;
+	for( Int i = 0; i < slotCount; i++ )
+	{
+		GameWindow *slot = TheWindowManager->winGetWindowFromId( bar, slotKeys[ i ] );
+		if( slot != NULL && !slot->winIsHidden() )
+			each( slot );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -475,33 +507,7 @@ static Int rightTrayFloor( void )
 	static NameKeyType generalKey = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ButtonGeneral" );
 	if( !TheControlBar->isSidebarLayout() )
 		standOn( TheWindowManager->winGetWindowFromId( NULL, generalKey ) );
-
-	// the shortcut layout is the player template's; its slot windows are found by name once a layout
-	static AsciiString keyedLayout;
-	static NameKeyType barKey = NAMEKEY_INVALID;
-	static NameKeyType slotKeys[ MAX_SPECIAL_POWER_SHORTCUTS ];
-	static Int slotCount = 0;
-	const PlayerTemplate *pt = ThePlayerList->getLocalPlayer()->getPlayerTemplate();
-	if( pt == NULL || pt->getSpecialPowerShortcutWinName().isEmpty() )
-		return floor;
-	if( keyedLayout != pt->getSpecialPowerShortcutWinName() )
-	{
-		keyedLayout = pt->getSpecialPowerShortcutWinName();
-		AsciiString name;
-		name.format( "%s:GenPowersShortcutBarParent", keyedLayout.str() );
-		barKey = TheNameKeyGenerator->nameToKey( name );
-		slotCount = min( pt->getSpecialPowerShortcutButtonCount(), (Int)MAX_SPECIAL_POWER_SHORTCUTS );
-		for( Int i = 0; i < slotCount; i++ )
-		{
-			name.format( "%s:ButtonParent%d", keyedLayout.str(), i + 1 );
-			slotKeys[ i ] = TheNameKeyGenerator->nameToKey( name );
-		}
-	}
-	GameWindow *bar = TheWindowManager->winGetWindowFromId( NULL, barKey );
-	if( bar == NULL || bar->winIsHidden() )
-		return floor;
-	for( Int i = 0; i < slotCount; i++ )
-		standOn( TheWindowManager->winGetWindowFromId( bar, slotKeys[ i ] ) );
+	forEachPowerSlot( standOn );
 	return floor;
 }
 
@@ -1077,17 +1083,46 @@ static void drawList( void )
 
 	const Pieces &p = pieces();
 	const Int screenH = (Int)TheDisplay->getHeight();
-	const Int top = REAL_TO_INT( screenH * LIST_TOP_SHARE );
-	// in the sidebar layout the radar is in the sidebar and no production row hangs over the bar: the
-	// list stands on the selection card (radarFrameTop's sidebar branch)
-	const Int bottom = TheControlBar->isSidebarLayout()
-		? radarFrameTop() - px( LIST_CLEARANCE )
-		: radarFrameTop() - stripPixels( PRODUCTION_LIFT ) - stripPixels( PRODUCTION_ROOM )
+	Int top = REAL_TO_INT( screenH * LIST_TOP_SHARE );
+	Int bottom = 0;
+
+	//
+	// The sidebar layout stands the list on the open world's right edge, against the sidebar (the
+	// plan's), mirrored: its open side left.  Down from under the build tray's notch and the general's
+	// powers wing, whichever reaches lower, to over the superweapon rows at their tallest, the six
+	// named rows InGameUI stacks from superweaponRow and the "+N" tab over them, since how many it
+	// draws is not known here.
+	// ponytail: ten squads beside a seven-power wing and six superweapon rows overrun that room even
+	// at the list's smallest; reading InGameUI's real row count would give it back
+	//
+	const Bool sidebar = TheControlBar->isSidebarLayout();
+	Int edge = 0;		// the side the list stands against: the screen's left, or the open world's right
+	if( sidebar )
+	{
+		enum { SIDEBAR_SUPERWEAPON_ROWS = 6 };	// InGameUI.cpp's
+		HudLayoutRects r;
+		hudRects( &r );
+		edge = r.play.hi.x;
+		Int wingFoot = r.powersWindow.lo.y + px( LEDGE_H );
+		forEachPowerSlot( [ &wingFoot ]( GameWindow *slot )
+		{
+			Int x, y, w, h;
+			slot->winGetScreenPosition( &x, &y );
+			slot->winGetSize( &w, &h );
+			wingFoot = max( wingFoot, y + h );
+		} );
+		top = wingFoot + px( LIST_CLEARANCE );
+		bottom = r.superweaponRow.hi.y - ( SIDEBAR_SUPERWEAPON_ROWS - 1 ) * r.superweaponRowPitch
+			- r.superweaponRow.height() - px( PRODUCTION_TAB_H ) - px( LIST_CLEARANCE );
+	}
+	else
+		bottom = radarFrameTop() - stripPixels( PRODUCTION_LIFT ) - stripPixels( PRODUCTION_ROOM )
 			- px( PRODUCTION_TAB_H ) - px( LIST_CLEARANCE );
 	const Int room = max( bottom - top, 1 );
 
 	// the production tray's pieces (InGameUI.cpp hudCellStyle) laid going down, as the superweapons'
-	// are: the powers tray's top edge over the first cell, its foot under the last, the open side right
+	// are: the powers tray's top edge over the first cell, its foot under the last, the open side right,
+	// or left against the sidebar
 	const Image *const *tray = TheControlBar->getControlBarSchemeManager()->getPowerTray();
 	Tray body = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0 };
 	if( tray != NULL && tray[ ControlBarScheme::TRAY_CELL ] != NULL )
@@ -1104,6 +1139,13 @@ static void drawList( void )
 			0, 0, 0
 		};
 		body = pieced;
+		if( sidebar )
+		{
+			// the tray's own left edge and corners, as the build tray beside it wears them
+			body.open = tray[ ControlBarScheme::TRAY_EDGE_LEFT ];
+			body.cornerFoot = tray[ ControlBarScheme::TRAY_CORNER_TL ];
+			body.cornerUncovered = tray[ ControlBarScheme::TRAY_CORNER_BL ];
+		}
 	}
 
 	// the cell at `s`, and the edges as thick against it as the tray's are against its cell piece
@@ -1131,8 +1173,8 @@ static void drawList( void )
 		s = max( s * 0.95f, 0.4f );
 
 	const Int height = measure( s );
-	s_listBox.lo.x = 0;
-	s_listBox.hi.x = cellW + body.openW;
+	s_listBox.lo.x = sidebar ? edge - cellW - body.openW : edge;
+	s_listBox.hi.x = s_listBox.lo.x + cellW + body.openW;
 	s_listBox.lo.y = top + max( ( room - height ) / 2, 0 );
 	s_listBox.hi.y = s_listBox.lo.y + height;
 
@@ -1140,11 +1182,11 @@ static void drawList( void )
 	for( Int r = 0; r < s_rowCount; r++ )
 	{
 		IRegion2D &c = cells[ r ];
-		c.lo.x = 0;
-		c.hi.x = cellW;
+		c.lo.x = sidebar ? edge - cellW : edge;
+		c.hi.x = c.lo.x + cellW;
 		c.lo.y = s_listBox.lo.y + body.footH + r * cellH;
 		c.hi.y = c.lo.y + cellH;
-		s_rows[ r ].box.lo.x = 0;
+		s_rows[ r ].box.lo.x = s_listBox.lo.x;
 		s_rows[ r ].box.hi.x = s_listBox.hi.x;
 		s_rows[ r ].box.lo.y = c.lo.y;
 		s_rows[ r ].box.hi.y = c.hi.y;
@@ -1152,7 +1194,7 @@ static void drawList( void )
 
 	TheDisplay->beginBatch2D();
 	if( body.cell != NULL )
-		drawStepTray( body, cells, s_rowCount, 1, 1, -1 );
+		drawStepTray( body, cells, s_rowCount, 1, sidebar ? -1 : 1, -1 );
 	else
 		drawSteel( s_listBox );
 	TheDisplay->endBatch2D();

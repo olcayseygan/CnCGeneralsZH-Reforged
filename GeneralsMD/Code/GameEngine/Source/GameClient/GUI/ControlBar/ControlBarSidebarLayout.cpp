@@ -219,6 +219,12 @@ IRegion2D SidebarWellInset( const IRegion2D &cell, Real k, Int side, Int foot )
 	return r;
 }
 
+/// a tray tile's cameo: 2 in from its well's edges at 1080 and the art's 5:4 centred in what is left
+static IRegion2D trayCameo( const IRegion2D &cell, Real k )
+{
+	return HudFitAspect( SidebarWellInset( cell, k, 2, 2 ), HUD_CAMEO_ART_W, HUD_CAMEO_ART_H );
+}
+
 //-------------------------------------------------------------------------------------------------
 static IRegion2D screenRect( GameWindow *window )
 {
@@ -494,8 +500,8 @@ static void restoreClassicKeys( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-// The money readout left-aligned after the "$" the sidebar's plate paints in the money glass (x 1700 at
-// 1920, the digits from 1712).  The scheme's alignment comes back for the Classic bar unless a scheme
+// The money readout left-aligned after the "$" the sidebar's plate paints in the money glass (x 1698 at
+// 1920, 12 into the glass; the digits from 1710, 24 into it).  The scheme's alignment comes back for the Classic bar unless a scheme
 // set since gave its own: the saved one is kept with the side it was read under.
 //-------------------------------------------------------------------------------------------------
 static Bool s_moneySaved = FALSE;
@@ -612,10 +618,10 @@ void ControlBar::layoutSidebar( void )
 	wearSidebarKey( SIDEBAR_KEY_MENU );
 	wearSidebarKey( SIDEBAR_KEY_DIPLOMACY );
 
-	// the digits left-aligned from x 1712 at 1920, after the plate's painted "$" at 1700
+	// the digits left-aligned 24 into the glass (x 1710 at 1920), after the plate's painted "$" at 12
 	GameWindow *money = barWindow( "MoneyDisplay" );
 	IRegion2D moneyAt = hud.money;
-	moneyAt.lo.x = MIN( hud.sidebar.lo.x + REAL_TO_INT( ( 1712 - 1600 ) * hud.scale + 0.5f ), hud.money.hi.x - 1 );
+	moneyAt.lo.x = MIN( hud.money.lo.x + REAL_TO_INT( 24 * hud.scale + 0.5f ), hud.money.hi.x - 1 );
 	placeWindowAt( money, moneyAt );
 	TextData *moneyData = moneyText( money );
 	if( moneyData != NULL )
@@ -727,11 +733,12 @@ void ControlBar::layoutSidebar( void )
 		s_classicUnitSelectedInput = m_rightHUDUnitSelectParent->winGetInputFunc();
 		m_rightHUDUnitSelectParent->winSetInputFunc( passToParent );
 	}
-	placeWindowAt( m_rightHUDCameoWindow, hud.portrait );
+	// the portrait at the art's own shape (120x96) in the medallion's well, which is a little wider
+	placeWindowAt( m_rightHUDCameoWindow, HudFitAspect( hud.portrait, HUD_CAMEO_ART_W, HUD_CAMEO_ART_H ) );
 
 	// a single unit's upgrades in the tray's first five tiles, each 2 in from its tile's edges
 	for( Int i = 0; i < MAX_RIGHT_HUD_UPGRADE_CAMEOS && i < HUD_TRAY_CELLS; i++ )
-		placeWindowAt( m_rightHUDUpgradeCameos[ i ], SidebarWellInset( hud.trayCells[ i ], hud.scale, 2, 2 ) );
+		placeWindowAt( m_rightHUDUpgradeCameos[ i ], trayCameo( hud.trayCells[ i ], hud.scale ) );
 
 	// a factory's queue in the tray, ButtonQueue01..06 left to right, its Classic well art off.
 	// ponytail: the tray holds six, so the queue's seventh to ninth entries do not show (and cannot be
@@ -753,7 +760,7 @@ void ControlBar::layoutSidebar( void )
 			name.format( "ButtonQueue%02d", i + 1 );
 			GameWindow *button = barWindow( name.str() );
 			if( i < HUD_TRAY_CELLS )
-				placeWindowAt( button, SidebarWellInset( hud.trayCells[ i ], hud.scale, 2, 2 ) );
+				placeWindowAt( button, trayCameo( hud.trayCells[ i ], hud.scale ) );
 			else
 				hideForSidebar( button );
 		}
@@ -771,8 +778,15 @@ void ControlBar::layoutSidebar( void )
 		"ButtonIdleWorker", "ButtonIdleInfantry", "ButtonIdleVehicle", "ButtonIdleAircraft", "ButtonSelectArmy", "ButtonPlaceBeacon"
 	};
 	enum { ROW_COUNT = sizeof( rowNames ) / sizeof( rowNames[ 0 ] ) };
+	// each 36 high at 1080, centred on the strip, and as wide as its own art makes it (Reforged's 54x35
+	// comes to 56, retail's 34x24 to 51), the commands' gap between them: six to 356, which a 16:10
+	// strip still has room for
 	GameWindow *row[ ROW_COUNT ];
+	Int rowW[ ROW_COUNT ];
 	Int count = 0;
+	const Int size = MAX( 8, REAL_TO_INT( 36 * hud.scale + 0.5f ) );
+	const Int gap = hud.stripButtons[ 1 ].lo.x - hud.stripButtons[ 0 ].hi.x;
+	Int need = 0;
 	for( Int i = 0; i < ROW_COUNT; i++ )
 	{
 		GameWindow *win = barWindow( rowNames[ i ] );
@@ -780,18 +794,21 @@ void ControlBar::layoutSidebar( void )
 		if( win != NULL )
 			win->winGetSize( &extent.x, &extent.y );
 		// a scheme without a seat for one of them sizes it to nothing (ControlBarScheme::init)
-		if( win != NULL && extent.x > 0 && extent.y > 0 )
-			row[ count++ ] = win;
+		if( win == NULL || extent.x <= 0 || extent.y <= 0 )
+			continue;
+		const Image *art = GadgetButtonGetEnabledImage( win );
+		if( art != NULL && art->getImageWidth() > 0 && art->getImageHeight() > 0 )
+			rowW[ count ] = ( size * art->getImageWidth() + art->getImageHeight() / 2 ) / art->getImageHeight();
+		else
+			rowW[ count ] = size * extent.x / extent.y;
+		need += ( count > 0 ? gap : 0 ) + rowW[ count ];
+		row[ count++ ] = win;
 	}
-	const Int size = hud.stripButtons[ 0 ].height();
-	const Int pitch = hud.stripButtons[ 1 ].lo.x - hud.stripButtons[ 0 ].lo.x;
-	const Int gap = pitch - size;
-	const Int need = count > 0 ? count * pitch - gap : 0;
 	ICoord2D rowAt;
 	if( hud.stripSpare.width() >= need )
 	{
 		rowAt.x = MIN( MAX( hud.area.lo.x + REAL_TO_INT( 1100 * hud.scale ), hud.stripSpare.lo.x ), hud.stripSpare.hi.x - need );
-		rowAt.y = hud.stripButtons[ 0 ].lo.y;
+		rowAt.y = hud.strip.lo.y + ( hud.strip.height() - size ) / 2;
 	}
 	else
 	{
@@ -801,11 +818,12 @@ void ControlBar::layoutSidebar( void )
 	for( Int i = 0; i < count; i++ )
 	{
 		IRegion2D cell;
-		cell.lo.x = rowAt.x + i * pitch;
+		cell.lo.x = rowAt.x;
 		cell.lo.y = rowAt.y;
-		cell.hi.x = cell.lo.x + size;
+		cell.hi.x = cell.lo.x + rowW[ i ];
 		cell.hi.y = cell.lo.y + size;
 		placeWindowAt( row[ i ], cell );
+		rowAt.x = cell.hi.x + gap;
 	}
 
 	// what the sidebar has no place for
@@ -821,4 +839,19 @@ void ControlBar::layoutSidebar( void )
 	// the tabs, the cameos and the arrows (lane C), then the radar into its box
 	Sidebar_layout( hud );
 	fitRadarToMap( TRUE );
+}
+
+//-------------------------------------------------------------------------------------------------
+GameWindow *ControlBar::getShownPowerShortcut( Int i ) const
+{
+	if( m_specialPowerShortcutButtons == NULL || i < 0 || i >= m_currentlyUsedSpecialPowersButtons || i >= MAX_SPECIAL_POWER_SHORTCUTS )
+		return NULL;
+	GameWindow *win = m_specialPowerShortcutButtons[ i ];
+	return win != NULL && !win->winIsHidden() && GadgetButtonGetData( win ) != NULL ? win : NULL;
+}
+
+//-------------------------------------------------------------------------------------------------
+void ControlBar::firePowerCell( GameWindow *cell )
+{
+	processCommandUI( cell, GBM_SELECTED );
 }

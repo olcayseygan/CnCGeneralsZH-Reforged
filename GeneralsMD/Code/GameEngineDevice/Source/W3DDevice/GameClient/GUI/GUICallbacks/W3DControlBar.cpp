@@ -47,6 +47,7 @@
 #include "GameClient/VideoPlayer.h"
 #include "GameLogic/GameLogic.h"
 #include "Common/LogicThread.h"
+#include "Lib/Clock.h"
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -540,19 +541,24 @@ void W3DPowerDrawA( GameWindow *window, WinInstanceData *instData )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The Red Alert style layout's power rail down the sidebar's left edge (HudLayoutRects::powerRail):
-	* W3DPowerDraw's log scale stood on end and worked out per call from the window's height, in
-	* Red Alert's blocks lit from the foot in the state's colour, and the consumption a bright tick
-	* across it.  It reads the copy taken at the sync point. */
+/** The Red Alert style layout's power rail down the sidebar's left edge (HudLayoutRects::powerRail),
+	* Red Alert's power bar: blocks from the foot on one linear scale whose top is a quarter over the
+	* larger of production and consumption, so the two always stand at a readable height against each
+	* other.  The rail is lit up to the production; the part of it in use, up to the consumption, in
+	* the state's colour (green, yellow within PowerBarYellowRange of the limit, red past it), the part
+	* spare a dim green; past the limit the shortfall between production and consumption blinks red.
+	* A bright cap marks the production and a white needle with a dark edge the consumption.  It reads
+	* the copy taken at the sync point (readPowerForDraw), nothing else of the logic. */
 //-------------------------------------------------------------------------------------------------
 void W3DPowerDrawV( GameWindow *window, WinInstanceData *instData )
 {
 	Player *player = powerPlayer();
-	// a log base of 1 or less has no scale (log10 of it is 0 or undefined)
-	if( !player || !TheGlobalData || TheGlobalData->m_powerBarIntervals <= 0.0f || TheGlobalData->m_powerBarBase <= 1 )
+	if( !player || !TheGlobalData )
 		return;
 	Int consumption, production;
 	readPowerForDraw( player, production, consumption );
+	production = MAX( production, 0 );
+	consumption = MAX( consumption, 0 );
 
 	ICoord2D pos, size;
 	window->winGetScreenPosition( &pos.x, &pos.y );
@@ -560,22 +566,16 @@ void W3DPowerDrawV( GameWindow *window, WinInstanceData *instData )
 	if( size.x <= 2 || size.y <= 2 )
 		return;
 
-	const Real pixelsPerInterval = size.y / TheGlobalData->m_powerBarIntervals;
-	const Int base = TheGlobalData->m_powerBarBase;
-	auto heightFor = [ & ]( Real amount ) -> Int
+	const Int state = PowerRail_state( production, consumption, TheGlobalData->m_powerBarYellowRange );
+	static const Color USED[ POWER_RAIL_STATES ] =
 	{
-		// log(0) has no height; past the top the rail is full
-		if( amount <= 0.0f )
-			return 0;
-		return MAX( 0, MIN( size.y, REAL_TO_INT( logN( amount, base ) * pixelsPerInterval ) ) );
+		GameMakeColor( 40, 200, 70, 255 ), GameMakeColor( 232, 190, 40, 255 ), GameMakeColor( 220, 44, 30, 255 )
 	};
-
-	const Int delta = TheGlobalData->m_powerBarYellowRange;
-	Color fill = GameMakeColor( 40, 200, 70, 255 );
-	if( consumption > production )
-		fill = GameMakeColor( 210, 44, 30, 255 );
-	else if( consumption > production - delta )
-		fill = GameMakeColor( 232, 190, 40, 255 );
+	const Color spare = GameMakeColor( 22, 82, 40, 255 );
+	const Color dark = GameMakeColor( 22, 26, 30, 255 );
+	// the shortfall blinks on the wall clock, two a second, as the low power warning does
+	const Bool blinkOn = ( Clock_Milliseconds() / 250 ) % 2 == 0;
+	const Color shortfall = blinkOn ? GameMakeColor( 255, 70, 50, 255 ) : GameMakeColor( 90, 20, 16, 255 );
 
 	// the side's sidebar plate has the rail's channel sunk in it; without the plate the rail gets a
 	// dark well of its own
@@ -585,29 +585,44 @@ void W3DPowerDrawV( GameWindow *window, WinInstanceData *instData )
 		TheDisplay->drawFillRect( pos.x, pos.y, size.x, size.y, GameMakeColor( 6, 8, 10, 220 ) );
 	const Int inset = channel ? 0 : 1;
 
-	// in blocks as Red Alert's is, 4 high with a 1 gap at 1080, from the foot: the production's lit
-	// in the state's colour, the rest dark
+	// in blocks as Red Alert's is, 4 high with a 1 gap at 1080, from the foot
 	const Real k = TheDisplay->getHeight() / 1080.0f;
 	const Int blockH = MAX( 2, REAL_TO_INT( 4.0f * k + 0.5f ) );
 	const Int gapH = MAX( 1, REAL_TO_INT( 1.0f * k + 0.5f ) );
 	const Int pitch = blockH + gapH;
 	const Int blocks = ( size.y + gapH ) / pitch;
-	const Int lit = ( heightFor( (Real)production ) + gapH ) / pitch;
-	const Color dark = GameMakeColor( 22, 26, 30, 255 );
+	const Int made = PowerRail_blocks( production, production, consumption, blocks );
+	const Int used = PowerRail_blocks( consumption, production, consumption, blocks );
 	TheDisplay->beginBatch2D();
 	for( Int each = 0; each < blocks; each++ )
-		TheDisplay->drawFillRect( pos.x + inset, bottom - each * pitch - blockH, size.x - 2 * inset, blockH,
-															each < lit ? fill : dark );
-	TheDisplay->endBatch2D();
+	{
+		Color c = dark;
+		if( each < used && each < made )
+			c = USED[ state ];
+		else if( each < made )
+			c = spare;
+		else if( each < used )
+			c = shortfall;
+		TheDisplay->drawFillRect( pos.x + inset, bottom - each * pitch - blockH, size.x - 2 * inset, blockH, c );
+	}
 
-	// log(1) is 0, but one unit used still shows, as W3DPowerDraw's needle does
+	// the production's cap: a light bar, 2 high at 1080, over its top block
+	const Int edge = MAX( 1, REAL_TO_INT( k + 0.5f ) );
+	const Int lineH = MAX( 1, REAL_TO_INT( 2.0f * k + 0.5f ) );
+	if( made > 0 )
+	{
+		const Int y = bottom - made * pitch + gapH - lineH;
+		TheDisplay->drawFillRect( pos.x, MAX( pos.y, y ), size.x, lineH, GameMakeColor( 190, 255, 200, 255 ) );
+	}
+	// the consumption's needle, over everything and 2 proud of the rail's edges at 1080, on a dark edge
 	if( consumption > 0 )
 	{
-		const Int need = heightFor( consumption == 1 ? 1.5f : (Real)consumption );
-		const Int y = MAX( pos.y + 1, MIN( bottom - 2, bottom - need ) );
-		TheDisplay->drawFillRect( pos.x, y - 1, size.x, 3, GameMakeColor( 10, 12, 14, 255 ) );
-		TheDisplay->drawFillRect( pos.x, y, size.x, 1, GameMakeColor( 240, 244, 246, 255 ) );
+		const Int y = MAX( pos.y + edge, MIN( bottom - lineH - edge, bottom - used * pitch + gapH - lineH ) );
+		const Int proud = lineH;
+		TheDisplay->drawFillRect( pos.x - proud - edge, y - edge, size.x + 2 * ( proud + edge ), lineH + 2 * edge, GameMakeColor( 10, 12, 14, 255 ) );
+		TheDisplay->drawFillRect( pos.x - proud, y, size.x + 2 * proud, lineH, GameMakeColor( 245, 248, 250, 255 ) );
 	}
+	TheDisplay->endBatch2D();
 }
 
 void W3DCommandBarGridDraw( GameWindow *window, WinInstanceData *instData )
@@ -848,6 +863,91 @@ static void drawSteelPanel( const IRegion2D &r, Color face, Bool sunk )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** A plate designed `designLength` along the run and `designSide` across it, over `r` at the layout's
+	* k, so its pixels stay square however long `r` is: the head, design [0, head) along the run, from
+	* r's start, the tail, [tail, designLength), to r's end, and the band between them repeated, the
+	* last copy cut.  At the design's own length that is the plate drawn once, whole.  Along x for the
+	* strip (a 21:9 strip is longer than 1600:64, a 4:3 one shorter), along y for the sidebar (a screen
+	* narrower than 1328:1080 shrinks k by its width and leaves the sidebar taller than 1080k).  The
+	* slices are in design pixels, so a sheet cut at twice the size slices the same. */
+//-------------------------------------------------------------------------------------------------
+static void drawPlateRun( const Image *image, const IRegion2D &r, Real k, Bool alongX, Int designLength, Int designSide,
+													Int head, Int tail )
+{
+	if( r.width() <= 0 || r.height() <= 0 )
+		return;
+	// a plate of another shape than the design the slices were measured on goes on whole, as it used to
+	const Int artLength = alongX ? image->getImageWidth() : image->getImageHeight();
+	const Int artSide = alongX ? image->getImageHeight() : image->getImageWidth();
+	const Int skew = artLength * designSide - artSide * designLength;
+	if( k <= 0.0f || artLength <= 0 || artSide <= 0 || skew > designLength || -skew > designLength
+			|| head <= 0 || tail - head < 3 || tail >= designLength )
+	{
+		TheDisplay->drawImage( image, r.lo.x, r.lo.y, r.hi.x, r.hi.y );
+		return;
+	}
+	// along the run in HudLayoutForScreen's own rounding (HudMapper::len), so the painted wells and
+	// glass land on the windows it placed; across, the plate fills r
+	auto len = [ k ]( Int design ) { return (Int)( design * k + 0.5f ); };
+	const Int start = alongX ? r.lo.x : r.lo.y, end = alongX ? r.hi.x : r.hi.y;
+	const Int whole = len( designLength );
+
+	// the plate with its start at `at` along the run, drawn only over [lo, hi).  drawImage's clipping
+	// turns a quad lying wholly outside the region inside out, so such a slice is not drawn at all
+	auto slice = [ & ]( Int at, Int lo, Int hi )
+	{
+		lo = MAX( lo, at );
+		hi = MIN( hi, at + whole );
+		if( hi <= lo )
+			return;
+		IRegion2D clip = r;
+		if( alongX )
+		{
+			clip.lo.x = lo;
+			clip.hi.x = hi;
+		}
+		else
+		{
+			clip.lo.y = lo;
+			clip.hi.y = hi;
+		}
+		TheDisplay->setClipRegion( &clip );
+		TheDisplay->enableClipping( TRUE );
+		if( alongX )
+			TheDisplay->drawImage( image, at, r.lo.y, at + whole, r.hi.y );
+		else
+			TheDisplay->drawImage( image, r.lo.x, at, r.hi.x, at + whole );
+		TheDisplay->enableClipping( FALSE );
+	};
+
+	// a run shorter than head and tail together keeps the tail whole and cuts the head
+	const Int tailAt = MAX( start, end - len( designLength - tail ) );
+	const Int headEnd = MIN( start + len( head ), tailAt );
+	slice( start, start, headEnd );
+
+	// the band: first the plate in its own place, which at the design's length is all of it, then
+	// copies of design [head + 1, tail - 1) end to end, the last one cut.  A design pixel in from each
+	// end, so at a scale between texels the filter never reaches the head's or the tail's last column
+	// (the clock glass's edge was a faint line at every repeat)
+	Int at = start + len( tail ) >= tailAt ? tailAt : start + len( tail - 1 );
+	slice( start, headEnd, at );
+	const Int band = MAX( 1, len( tail - head - 2 ) );
+	for( ; at < tailAt; at += band )
+		slice( at - len( head + 1 ), at, MIN( at + band, tailAt ) );
+	slice( end - whole, tailAt, end );
+}
+
+/// The sidebar plate (320x1080) and its slices (drawPlateRun, along y): the top down to the cameo
+/// grid's foot (1040) stands on the top, the arrows and the rail's foot from 1044 on the bottom, as
+/// HudLayoutForScreen anchors them, and the plain rows between, crossed only by the rail's channel,
+/// repeat
+enum { SIDEBAR_PLATE_W = 320, SIDEBAR_PLATE_H = 1080, SIDEBAR_PLATE_HEAD = 1040, SIDEBAR_PLATE_TAIL = 1044 };
+/// The strip plate (1600x64) and its slices (along x): the fourteen command wells to 904 from the
+/// area's left, the clock's glass from 1496 to the sidebar, and the plain 592 between, where the idle
+/// row moves about, repeat
+enum { STRIP_PLATE_W = 1600, STRIP_PLATE_H = 64, STRIP_PLATE_HEAD = 904, STRIP_PLATE_TAIL = 1496 };
+
+//-------------------------------------------------------------------------------------------------
 /** The Red Alert style layout's steel, from HudLayoutForScreen alone: the sidebar and the railed strip
 	* as panels, a well under each command slot, the selection card, the power rail and the radar box
 	* sunk in rims (the side's radar frame over that where its scheme names one), the cameo grid
@@ -877,22 +977,23 @@ static void drawSidebarBackground( void )
 	};
 
 	// the side's own plates where its sheet has them (hud_command_bar.py --sidebar, lane C's
-	// Sidebar_image), each standing on its rect; the flat steel below is the stand-in for a missing one
+	// Sidebar_image), each standing on its rect at its own shape; the flat steel below is the stand-in
+	// for a missing one
 	const Image *plate = Sidebar_image( "Plate" );
 	const Image *strip = Sidebar_image( "Strip" );
 	const Image *card = Sidebar_image( "Card" );
 
 	TheDisplay->beginBatch2D();
 	if( plate != NULL )
-		TheDisplay->drawImage( plate, r.sidebar.lo.x, r.sidebar.lo.y, r.sidebar.hi.x, r.sidebar.hi.y );
+		drawPlateRun( plate, r.sidebar, k, FALSE, SIDEBAR_PLATE_H, SIDEBAR_PLATE_W, SIDEBAR_PLATE_HEAD, SIDEBAR_PLATE_TAIL );
 	else
 		drawSteelPanel( r.sidebar, steel, FALSE );
 
 	// the strip: steel under a rail along its top edge, and a sunk well for each of the fourteen
 	// command slots, so a selection's buttons sit in fixed places whichever of them it has.  The
-	// strip plate has the wells, the idle seats, the clock's glass and the plaque in it
+	// strip plate has the wells and the clock's glass in it
 	if( strip != NULL )
-		TheDisplay->drawImage( strip, r.strip.lo.x, r.strip.lo.y, r.strip.hi.x, r.strip.hi.y );
+		drawPlateRun( strip, r.strip, k, TRUE, STRIP_PLATE_W, STRIP_PLATE_H, STRIP_PLATE_HEAD, STRIP_PLATE_TAIL );
 	else
 	{
 		drawSteelPanel( r.strip, steel, FALSE );

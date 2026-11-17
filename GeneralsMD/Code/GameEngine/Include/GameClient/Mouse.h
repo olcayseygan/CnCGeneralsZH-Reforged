@@ -246,6 +246,9 @@ public:  // enumerations and types
 		HIJACK,
 		SABOTAGE,
 		CAR_BOMB,
+		// the Red Alert sidebar's sell mode, which EA never had: over a building that sells, and over anything else
+		SELL,
+		SELL_INVALID,
 
 
 		// ***** dont forget to update CursorININames[] *****

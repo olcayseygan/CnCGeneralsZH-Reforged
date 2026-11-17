@@ -6680,8 +6680,9 @@ void ControlBar::powerTrayMetrics( const Image *const *tray, ICoord2D *origin, I
 
 //-------------------------------------------------------------------------------------------------
 /** The sidebar's powers wing (the owner's, 2026-11-15): the general's powers as part of the sidebar,
-	* flush on its left edge with a joint piece on the seam, the top on the radar box's top, 72x72 cells
-	* at 1080, one column or, past POWERS_WING_ONE_COLUMN powers, two, the rows going down.  Slot i is
+	* flush on its left edge with a joint piece on the seam, the top on the radar box's top, 78x64 cells
+	* at 1080 holding a 70x56 button 4 in, the power art's 60x48 shape, one column or, past
+	* POWERS_WING_ONE_COLUMN powers, two, the rows going down.  Slot i is
 	* row i / columns and place i % columns counted out from the sidebar, the order the chords read, so a
 	* short last row is short on the outside.  Each slot window is its cell and the pieces that close it:
 	* the column's cap on the first row, its foot where the column ends, the outer edge on a row's
@@ -6689,22 +6690,27 @@ void ControlBar::powerTrayMetrics( const Image *const *tray, ICoord2D *origin, I
 //-------------------------------------------------------------------------------------------------
 void ControlBar::arrangePowersWing( void )
 {
-	enum { POWERS_WING_ONE_COLUMN = 6, POWERS_WING_ROWS = 6 };	// two columns of six hold MAX_SPECIAL_POWER_SHORTCUTS
+	// a column of seven reaches 520 at 1080, so seven powers stand without an odd cell beside them; past
+	// that two columns of six hold MAX_SPECIAL_POWER_SHORTCUTS
+
+	enum { POWERS_WING_ONE_COLUMN = 7, POWERS_WING_ROWS = 7 };
 	HudLayoutRects hud;
 	getHudLayoutRects( &hud );
 	const Real k = hud.scale;
-	const Int cellSize = REAL_TO_INT( 72 * k + 0.5f );
+	const Int cellW = REAL_TO_INT( 78 * k + 0.5f );
+	const Int cellH = REAL_TO_INT( 64 * k + 0.5f );
+	const Int margin = MAX( 2, REAL_TO_INT( 4 * k + 0.5f ) );
 	const Int piece = MAX( 1, REAL_TO_INT( 8 * k + 0.5f ) );		// joint, edge, cap and foot are 8 at 1080
 	const Int seam = hud.sidebar.lo.x;
 	const Int topY = hud.radar.lo.y;
 
 	ICoord2D origin;
-	origin.x = seam - piece - 2 * cellSize - piece;
+	origin.x = seam - piece - 2 * cellW - piece;
 	origin.y = topY;
 	if( !m_trayFramePlaced )
 	{
 		m_specialPowerShortcutParent->winSetPosition( origin.x, origin.y );
-		m_specialPowerShortcutParent->winSetSize( seam - origin.x, piece + POWERS_WING_ROWS * cellSize + piece );
+		m_specialPowerShortcutParent->winSetSize( seam - origin.x, piece + POWERS_WING_ROWS * cellH + piece );
 		m_trayFramePlaced = TRUE;
 	}
 
@@ -6734,10 +6740,10 @@ void ControlBar::arrangePowersWing( void )
 		slot.stepRight = slot.stepBelow = 0;
 
 		IRegion2D cell;
-		cell.hi.x = seam - piece - place * cellSize;
-		cell.lo.x = cell.hi.x - cellSize;
-		cell.lo.y = topY + piece + row * cellSize;
-		cell.hi.y = cell.lo.y + cellSize;
+		cell.hi.x = seam - piece - place * cellW;
+		cell.lo.x = cell.hi.x - cellW;
+		cell.lo.y = topY + piece + row * cellH;
+		cell.hi.y = cell.lo.y + cellH;
 		IRegion2D screen;
 		screen.lo.x = cell.lo.x - slot.edgeLeft;
 		screen.hi.x = cell.hi.x + slot.edgeRight;
@@ -6745,15 +6751,16 @@ void ControlBar::arrangePowersWing( void )
 		screen.hi.y = cell.hi.y + slot.edgeBottom;
 		slot.cell.lo.x = slot.edgeLeft;
 		slot.cell.lo.y = slot.edgeTop;
-		slot.cell.hi.x = slot.edgeLeft + cellSize;
-		slot.cell.hi.y = slot.edgeTop + cellSize;
+		slot.cell.hi.x = slot.edgeLeft + cellW;
+		slot.cell.hi.y = slot.edgeTop + cellH;
 
 		slotWin->winSetPosition( screen.lo.x - origin.x, screen.lo.y - origin.y );
 		slotWin->winSetSize( screen.hi.x - screen.lo.x, screen.hi.y - screen.lo.y );
 		slotWin->winSetUserData( &slot );
 		slotWin->winSetDrawFunc( drawPowerTraySlot );
 
-		// the button inside its cell at its own shape, a margin all round; the Classic size kept for later
+		// the button inside its cell at the power art's 60x48, a margin all round; the Classic size kept
+		// for later
 		Int bw, bh;
 		button->winGetSize( &bw, &bh );
 		if( !s_powerButtonResized[ shown[ i ] ] )
@@ -6762,20 +6769,14 @@ void ControlBar::arrangePowersWing( void )
 			s_powerButtonSize[ shown[ i ] ].y = bh;
 			s_powerButtonResized[ shown[ i ] ] = TRUE;
 		}
-		const Int room = cellSize - 2 * MAX( 2, REAL_TO_INT( 4 * k + 0.5f ) );
-		const ICoord2D &was = s_powerButtonSize[ shown[ i ] ];
-		if( was.x > 0 && was.y > 0 )
-		{
-			bw = room;
-			bh = room * was.y / was.x;
-			if( bh > room )
-			{
-				bh = room;
-				bw = room * was.x / was.y;
-			}
-			button->winSetSize( bw, bh );
-		}
-		button->winSetPosition( slot.cell.lo.x + ( cellSize - bw ) / 2, slot.cell.lo.y + ( cellSize - bh ) / 2 );
+		IRegion2D room = slot.cell;
+		room.lo.x += margin;
+		room.lo.y += margin;
+		room.hi.x -= margin;
+		room.hi.y -= margin;
+		const IRegion2D fit = HudFitAspect( room, HUD_CAMEO_ART_W, HUD_CAMEO_ART_H );
+		button->winSetSize( fit.width(), fit.height() );
+		button->winSetPosition( fit.lo.x, fit.lo.y );
 	}
 }
 

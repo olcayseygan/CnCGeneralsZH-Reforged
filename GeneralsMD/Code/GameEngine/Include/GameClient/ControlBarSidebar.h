@@ -1,7 +1,8 @@
 // The Red Alert style sidebar (HudLayout 1, docs/plans/HUD-SIDEBAR-LAYOUT.md): four production tabs,
-// a 2x6 grid of build cameos that scrolls two to a row, and the two arrows under it, made in code as
-// children of ControlBarParent.  ControlBar::layoutSidebar places the bar's own windows (radar, money,
-// the strip's ButtonCommand01..14) and then hands the rest here; every rectangle comes from
+// a grid of build cameos HUD_SIDEBAR_CAMEO_COLUMNS to a row that scrolls a row at a time, and the
+// two arrows under it, made in code as children of ControlBarParent.  ControlBar::layoutSidebar
+// places the bar's own windows (radar, money, the strip's ButtonCommand01..14) and then hands the
+// rest here; every rectangle comes from
 // HudLayoutForScreen (GameClient/Display.h), nothing here is a pixel of its own.  Client only: the logic
 // hears of a cameo only through the messages a click sends (MSG_QUEUE_UNIT_FOR_GROUP, structure
 // placement, MSG_CANCEL_UNIT_CREATE, and Sat's and Onar's MSG_SELL and MSG_DO_REPAIR).
@@ -15,6 +16,8 @@
 #include "Common/GameType.h"
 #include "GameClient/Display.h"
 
+#include <vector>
+
 class Image;
 
 /** The sidebar art for the local player's side: the MappedImage `<Prefix>Sidebar<piece>`, Prefix
@@ -23,16 +26,62 @@ class Image;
 	* "Sidebar": "TabBuildingsH", "CameoWell", "Plate". */
 const Image *Sidebar_image( const char *piece );
 
-/** The builder a structure on the cursor was put there for by the sidebar's builder chip, while it is
-	* still that placement; INVALID_ID otherwise.  PlaceEventTranslator appends it to MSG_DOZER_CONSTRUCT
-	* (and _LINE) so that builder takes the job, selected or not. */
+class DisplayString;
+class GameFont;
+
+/** The one key letter font of the sidebar layout, the tabs' and the strip's alike (10 points at 1080,
+	* times the layout's k); NULL while the sidebar is not shown, so a caller falls back to Classic's. */
+GameFont *Sidebar_keyFont( void );
+
+/** A key badge, the same on every tab and button of the sidebar layout: a dark plate with a grey rim,
+	* square at the line's height so every letter stands on the same plate (a chord's name widens it),
+	* `designInset` (at 1080, scaled by k) in from `window`'s top left corner, the letter centred on it in
+	* `color` over a dark edge.  Tabs stand it 6 in, inside their face; a command button 2, inside its
+	* picture's border.  `letter` is set in Sidebar_keyFont's font. */
+void Sidebar_drawKeyBadge( DisplayString *letter, const IRegion2D &window, Real designInset, Color color );
+
+/** The power rail's state (W3DPowerDrawV), Red Alert's three colours. */
+enum PowerRailState
+{
+	POWER_RAIL_GREEN,		///< room to spare
+	POWER_RAIL_YELLOW,	///< consumption within `yellowRange` of production, as the Classic bar's yellow
+	POWER_RAIL_RED,			///< consumption over production: brownout
+
+	POWER_RAIL_STATES
+};
+
+/** Pure: the rail's state for `production` and `consumption`; nothing used is green. */
+Int PowerRail_state( Int production, Int consumption, Int yellowRange );
+
+/** Pure: how many of the rail's `blocks` `amount` lights, on the one linear scale the rail draws
+	* production and consumption on: its top a quarter over the larger of the two, so that one stands at
+	* four fifths of the rail.  Anything above nothing lights at least one block; none when both are 0. */
+Int PowerRail_blocks( Int amount, Int production, Int consumption, Int blocks );
+
+/** The builder a structure on the cursor was put there for by the sidebar's lit builder chips, while it
+	* is still that placement; INVALID_ID otherwise.  With several lit, the one the logic picks among
+	* selected builders, of them: the free one nearest the placement anchor, else the nearest of those
+	* with the fewest jobs; one already named in this placement (a Shift run) counts as busy.
+	* PlaceEventTranslator appends it to MSG_DOZER_CONSTRUCT (and _LINE) so that builder takes the job,
+	* selected or not. */
 ObjectID Sidebar_placementBuilder( void );
+
+/** Pure: a press on the factory picker over a tab's lit set `picks` (sorted by ObjectID, empty for
+	* Tümü).  Tümü (`chip` INVALID_ID) empties it; a plain press lights `chip` alone; with `toggle`
+	* (Shift held) `chip` goes into the set, or out of it when it was lit. */
+void Sidebar_pressChip( std::vector< ObjectID > &picks, ObjectID chip, Bool toggle );
+
+/** Pure: the lit factory that takes the next unit of a batch, as the bar spreads a build over several
+	* selected factories: the fewest in its queue (`queued`, this batch's units included) of those under
+	* their `caps`, the first on a tie.  Counts the unit into `queued` and returns its index, -1 when
+	* every queue is full. */
+Int Sidebar_nextFactory( std::vector< UnsignedInt > &queued, const std::vector< UnsignedInt > &caps );
 
 /** The tabs, left to right, keyed Q W E R; GUI:SidebarTab0..3 name them. */
 enum SidebarTab
 {
-	SIDEBAR_TAB_BUILDINGS,		///< Bina: what the builders put up, less base defences
-	SIDEBAR_TAB_DEFENSE,			///< Savunma: KINDOF_FS_BASE_DEFENSE structures, then every research the player's buildings offer
+	SIDEBAR_TAB_BUILDINGS,		///< Bina: every structure the builders put up, base defences included
+	SIDEBAR_TAB_POWERS,				///< Yükseltmeler ve güçler: the powers tray's buttons (bought general's powers, superweapons), then every research the player's buildings offer
 	SIDEBAR_TAB_INFANTRY,			///< Piyade: KINDOF_INFANTRY units
 	SIDEBAR_TAB_VEHICLES,			///< Araç: every other unit, aircraft included
 
@@ -64,6 +113,13 @@ Int Sidebar_selectedTab( void );
 /** Move the selected tab's cameos by `rows` rows, negative up: the arrows and the wheel over the grid.
 	* Kept in range by Sidebar_scroll. */
 void Sidebar_scrollBy( Int rows );
+
+/** Pure: the order a tab shows its items in, as indices into them: by `country`, the item's country's
+	* place among the player's (his own 0, each foreign one in the order he gained it), then by `seen`,
+	* the place the item took when it first showed on the tab (what was there at the start in the command
+	* sets' order, each one unlocked since after them).  So a newly unlocked item ends its own country's
+	* group, not the list. */
+void Sidebar_showOrder( const std::vector< Int > &country, const std::vector< Int > &seen, std::vector< Int > &order );
 
 /** Pure: the first row shown when `count` cameos fill `cols` a row in a window of `rows` rows and the
 	* player asked for `row`, kept between 0 and the last row that still fills the window. */

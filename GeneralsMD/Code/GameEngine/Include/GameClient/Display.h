@@ -335,20 +335,33 @@ IRegion2D HudAreaForScreen( Int screenWidth, Int screenHeight, Int hudWidth );
 //-------------------------------------------------------------------------------------------------
 enum
 {
-	HUD_SIDEBAR_TABS = 4,							///< Q W E R: Bina, Savunma, Piyade, Araç (SIDEBAR_TAB_*, ControlBarSidebar.h)
-	HUD_SIDEBAR_CAMEO_COLUMNS = 2,
-	HUD_SIDEBAR_CAMEO_ROWS = 6,
+	HUD_SIDEBAR_TABS = 4,							///< Q W E R: Bina, Yükseltmeler ve güçler, Piyade, Araç (SIDEBAR_TAB_*, ControlBarSidebar.h)
+	HUD_SIDEBAR_CAMEO_COLUMNS = 3,
+	HUD_SIDEBAR_CAMEO_ROWS = 7,
 	HUD_SIDEBAR_CAMEOS = HUD_SIDEBAR_CAMEO_COLUMNS * HUD_SIDEBAR_CAMEO_ROWS,
 	HUD_SIDEBAR_PICKER_CHIPS = 4,			///< factories 1..4 beside "Tümü", each chip its building's icon and number
 	HUD_STRIP_BUTTONS = 14,						///< ButtonCommand01..14, the selection's commands
 	HUD_TRAY_CELLS = 6,								///< the card's tray: a single unit's upgrades, a multi-selection's types, or a factory's queue (ButtonQueue01..06)
 };
 
+/// The shape of a cameo, a command button and a general's power button: retail draws every one of them
+/// 60x48 (the fork's are 120x96), and the stock image button stretches its picture to its window
+enum { HUD_CAMEO_ART_W = 60, HUD_CAMEO_ART_H = 48 };
+
+//-------------------------------------------------------------------------------------------------
+/** The largest rectangle of the shape w:h centred in `cell`, so a picture drawn over the whole of it
+	* keeps its own shape.  A cell of no size, or a shape of none, comes back as it went in. */
+//-------------------------------------------------------------------------------------------------
+IRegion2D HudFitAspect( const IRegion2D &cell, Int w, Int h );
+
 //-------------------------------------------------------------------------------------------------
 /** Every rectangle of the in-game interface for one screen, one layout and one HudWidth, in screen
 	* pixels, hi exclusive (a cell [lo, hi) as placeWindowAt takes it).  The design is 1920x1080 and
 	* scales by k = H/1080, smaller only where the area is too narrow for the strip's fourteen buttons
-	* and its clock beside the sidebar (under about 1324:1080, narrower than 5:4).  The sidebar stands
+	* and its clock beside the sidebar (under 1328:1080, narrower than 5:4).  One k for both axes, so
+	* every cell keeps the design's shape; only the strip's length and, under 1328:1080, the sidebar's
+	* height differ from the design's shape, and the plates are drawn in slices for that (W3DControlBar's
+	* drawSidebarBackground).  The sidebar stands
 	* on the area's right edge, top to bottom; the strip runs along the bottom from the area's left
 	* edge to the sidebar; the selection card sits on the strip at the area's left; the superweapon
 	* rows and the general's powers window lean on the sidebar's left edge.  `play` (the open world),
@@ -370,39 +383,42 @@ struct HudLayoutRects
 	IRegion2D area;										///< HudAreaForScreen: the centred part the interface keeps to
 	IRegion2D play;										///< the world the interface leaves open inside `area`: left of the sidebar, above the strip
 
-	// the sidebar, right edge on area's right edge: 1600,0 320x1080
+	// the sidebar, right edge on area's right edge: 1600,0 320x1080.  Down to the tabs everything stands
+	// on one grid of four 70 wide columns 8 apart over the radar's 1608..1912 (x 1608, 1686, 1764, 1842),
+	// a wide piece taking two; under the tabs the power rail runs down the left and the picker, the
+	// cameos and the arrows fill 1624..1912
 	IRegion2D sidebar;
-	IRegion2D menuButton;							///< 1608,8 72x32 (ButtonOptions)
-	IRegion2D money;									///< 1688,8 144x32 (MoneyDisplay)
-	IRegion2D diplomacyButton;				///< 1840,8 72x32 (PopupCommunicator)
+	IRegion2D menuButton;							///< 1608,8 70x32 (ButtonOptions), column 0
+	IRegion2D money;									///< 1686,8 148x32 (MoneyDisplay), columns 1 and 2
+	IRegion2D diplomacyButton;				///< 1842,8 70x32 (PopupCommunicator), column 3
 	IRegion2D radar;									///< 1608,56 304x304, the box the radar is fitted into
-	IRegion2D sellButton;							///< 1608,368 74x36 "Sat" (phase 2)
-	IRegion2D repairButton;						///< 1690,368 74x36 "Onar" (phase 2, or hidden)
-	IRegion2D generalButton;					///< 1772,368 140x36 (ButtonGeneral)
-	IRegion2D tabs[ HUD_SIDEBAR_TABS ];	///< y 420 h 36, x 1624 / 1697 / 1770 / 1843, w 70 / 70 / 70 / 69 (to 1912, 3 apart)
-	IRegion2D powerRail;							///< 1604,420 16x652, the vertical power bar (to H - 8)
+	IRegion2D sellButton;							///< 1608,368 70x36 "Sat", column 0
+	IRegion2D repairButton;						///< 1686,368 70x36 "Onar", column 1
+	IRegion2D generalButton;					///< 1764,368 148x36 (ButtonGeneral), columns 2 and 3
+	IRegion2D tabs[ HUD_SIDEBAR_TABS ];	///< y 420 70x36, one a column: x 1608 / 1686 / 1764 / 1842
+	IRegion2D powerRail;							///< 1608,459 12x613, the vertical power bar, from the picker's top to H - 8
 	IRegion2D pickerAll;							///< 1624,459 50x28 "Tümü", a chip's size, 3 under the tabs
-	IRegion2D pickerChips[ HUD_SIDEBAR_PICKER_CHIPS ];	///< y 459 h 28 w 50 from x 1677, pitch 53 (to 1886)
-	IRegion2D cameos[ HUD_SIDEBAR_CAMEOS ];	///< x 1624 / 1772 w 140 h 86, y 491 + 90.8 a row
+	IRegion2D pickerChips[ HUD_SIDEBAR_PICKER_CHIPS ];	///< y 459 h 28 w 50 from x 1680, pitch 56 (6 apart, as the cameo wells are; to 1898)
+	IRegion2D cameos[ HUD_SIDEBAR_CAMEOS ];	///< 3x7 wells of 92x75, x 1624 + 98 a column (to 1912), y 491 + 79 a row (to 1040); the cameo 3 inside, 86x69, the art's 5:4
 	IRegion2D arrowUp;								///< 1624,1044 140x28, bottom-anchored
 	IRegion2D arrowDown;							///< 1772,1044 140x28, bottom-anchored
 
 	// the command strip along the bottom: 0,1016 1600x64, from area's left edge to the sidebar
 	IRegion2D strip;
-	IRegion2D stripButtons[ HUD_STRIP_BUTTONS ];	///< 56x56 at x 8 + 64i, y 1020 (ButtonCommand01..14 in order)
+	IRegion2D stripButtons[ HUD_STRIP_BUTTONS ];	///< 60x48, the art's own size, at x 8 + 64i, y 1024 (ButtonCommand01..14 in order, to 900)
 	IRegion2D stripClock;							///< 96x48, right edge 4 short of the strip's (1500,1024 at 1920)
-	IRegion2D stripSpare;							///< the strip between the last button and the clock, 8 clear of both (904..1492 at 1920): idle, SelectArmy, PlaceBeacon
+	IRegion2D stripSpare;							///< the strip between the last button and the clock, 8 clear of both (908..1492, y 1024..1072 at 1920): idle, SelectArmy, PlaceBeacon
 
 	// the selection card rising from the strip's top edge at area's left: 0,896 470x120 (its bounds)
 	IRegion2D card;
 	IRegion2D medallion;							///< 0,896 136x120: the portrait's frame, full height
-	IRegion2D portrait;								///< 8,904 116x90: the selection's picture
+	IRegion2D portrait;								///< 8,904 116x90: the selection's picture's well (the picture HudFitAspect'd in it, 113x90)
 	IRegion2D rankRect;								///< 10,998 112x14: the rank's chevrons, centred
 	IRegion2D labelPlate;							///< 136,932 334x84: the plate beside the medallion, lower than it
 	IRegion2D nameText;								///< 146,935 274x18: the name, bold, left-aligned
 	IRegion2D healthBar;							///< 146,956 316x6: the health groove, its fill a pixel inside
 	IRegion2D tray;										///< 140,966 326x50: the tiles' well
-	IRegion2D trayCells[ HUD_TRAY_CELLS ];	///< 50x42 at x 146 + 53i, y 970; a button 2 inside (46x38)
+	IRegion2D trayCells[ HUD_TRAY_CELLS ];	///< 50x42 at x 146 + 53i, y 970; a button 2 inside, 5:4 centred (46x37)
 
 	// leaning on the sidebar's left edge
 	IRegion2D powersWindow;						///< the general's powers window: 1400,64 192x240

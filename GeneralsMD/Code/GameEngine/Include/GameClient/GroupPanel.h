@@ -60,7 +60,7 @@ void GroupPanel_gatherBuildable( Player *player, std::vector< GroupPanelBuildabl
 
 /** The same for structures: every GUI_COMMAND_DOZER_CONSTRUCT button `player`'s live builders
 	* (KINDOF_DOZER) carry on the bar, one entry a structure, the player's own side's copy where a
-	* captured builder offers a twin.  The sidebar's Bina and Savunma tabs.  The GLA worker's fakes sit
+	* captured builder offers a twin.  The sidebar's Bina tab.  The GLA worker's fakes sit
 	* on another command set and are not listed. */
 void GroupPanel_gatherConstructible( Player *player, std::vector< GroupPanelBuildable > &out );
 

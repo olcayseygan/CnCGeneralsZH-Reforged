@@ -1226,6 +1226,18 @@ public:
 	/// getCommandAvailability for a button on no bar window: the group panel's build tray (GroupPanel.cpp)
 	CommandAvailability getButtonAvailability( const CommandButton *command, Object *obj ) const { return getCommandAvailability( command, obj, NULL ); }
 
+	/// The general's power shortcut window `i` while the powers tray shows it, else NULL: what the
+	/// player owns and may fire, his bought powers and his superweapons, captured ones too
+	/// (populateSpecialPowerShortcut).  The sidebar's powers tab lists the same buttons.
+	GameWindow *getShownPowerShortcut( Int i ) const;
+
+	/// The sidebar's power cell `cell`, carrying one of those buttons: its availability, with the
+	/// recharge clock drawn on it as the tray's own button gets it
+	CommandAvailability getPowerCellAvailability( const CommandButton *command, Object *holder, GameWindow *cell ) const { return getCommandAvailability( command, holder, cell ); }
+
+	/// A press on that cell: the tray button's own processing, which finds the holder itself
+	void firePowerCell( GameWindow *cell );
+
 protected:
 	/** The same question asked of a whole multi-selection: a command one of the selected buildings
 		* can carry out is offered, not greyed out because the group's representative happens to have

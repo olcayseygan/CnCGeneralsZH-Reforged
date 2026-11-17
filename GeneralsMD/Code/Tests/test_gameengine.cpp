@@ -20691,24 +20691,50 @@ TEST(hud_layout_rects_tile_the_screen)
 	CHECK_EQ( r.radar.lo.x, 1608 );
 	CHECK_EQ( r.radar.lo.y, 56 );
 	CHECK_EQ( r.radar.width(), 304 );
-	CHECK_EQ( r.tabs[ 0 ].lo.x, 1624 );
-	CHECK_EQ( r.tabs[ 0 ].width(), 70 );
-	CHECK_EQ( r.tabs[ 1 ].lo.x - r.tabs[ 0 ].hi.x, 3 );
-	CHECK_EQ( r.tabs[ 3 ].lo.x, 1843 );
-	CHECK_EQ( r.tabs[ 3 ].hi.x, 1912 );
-	CHECK_EQ( r.tabs[ 3 ].lo.y, 420 );
-	CHECK_EQ( r.cameos[ 1 ].lo.x, 1772 );
+	// down to the tabs one grid of four 70 wide columns 8 apart over the radar's width: the menu, the
+	// Sell key and the first tab share column 0, the money and the General button two columns each
+	for( Int i = 0; i < HUD_SIDEBAR_TABS; ++i )
+	{
+		CHECK_EQ( r.tabs[ i ].lo.x, 1608 + 78 * i );
+		CHECK_EQ( r.tabs[ i ].width(), 70 );
+		CHECK_EQ( r.tabs[ i ].lo.y, 420 );
+	}
+	CHECK_EQ( r.tabs[ 3 ].hi.x, r.radar.hi.x );
+	CHECK_EQ( r.menuButton.lo.x, r.tabs[ 0 ].lo.x );
+	CHECK_EQ( r.menuButton.hi.x, r.tabs[ 0 ].hi.x );
+	CHECK_EQ( r.sellButton.lo.x, r.tabs[ 0 ].lo.x );
+	CHECK_EQ( r.sellButton.hi.x, r.tabs[ 0 ].hi.x );
+	CHECK_EQ( r.repairButton.lo.x, r.tabs[ 1 ].lo.x );
+	CHECK_EQ( r.repairButton.hi.x, r.tabs[ 1 ].hi.x );
+	CHECK_EQ( r.money.lo.x, r.tabs[ 1 ].lo.x );
+	CHECK_EQ( r.money.hi.x, r.tabs[ 2 ].hi.x );
+	CHECK_EQ( r.generalButton.lo.x, r.tabs[ 2 ].lo.x );
+	CHECK_EQ( r.generalButton.hi.x, r.tabs[ 3 ].hi.x );
+	CHECK_EQ( r.diplomacyButton.lo.x, r.tabs[ 3 ].lo.x );
+	CHECK_EQ( r.diplomacyButton.hi.x, r.tabs[ 3 ].hi.x );
+	CHECK_EQ( r.powerRail.lo.y, r.pickerAll.lo.y );
+	CHECK( r.powerRail.hi.x < r.pickerAll.lo.x );
+	// three wells of 92x75 across the tabs' 1624..1912, seven rows down to 1040, 4 over the arrows
+	CHECK_EQ( HUD_SIDEBAR_CAMEO_COLUMNS, 3 );
+	CHECK_EQ( HUD_SIDEBAR_CAMEO_ROWS, 7 );
+	CHECK_EQ( r.cameos[ 0 ].lo.x, 1624 );
+	CHECK_EQ( r.cameos[ 0 ].width(), 92 );
+	CHECK_EQ( r.cameos[ 0 ].height(), 75 );
+	CHECK_EQ( r.cameos[ 1 ].lo.x, 1722 );
 	CHECK_EQ( r.cameos[ 1 ].lo.y, 491 );
-	CHECK_EQ( r.cameos[ 11 ].lo.y, 945 );		// 491 + 5 * 90.8
+	CHECK_EQ( r.cameos[ 2 ].hi.x, 1912 );
+	CHECK_EQ( r.cameos[ HUD_SIDEBAR_CAMEO_COLUMNS ].lo.y, 570 );
+	CHECK_EQ( r.cameos[ HUD_SIDEBAR_CAMEOS - 1 ].lo.y, 965 );		// 491 + 6 * 79
+	CHECK_EQ( r.cameos[ HUD_SIDEBAR_CAMEOS - 1 ].hi.y, 1040 );
 	CHECK_EQ( r.arrowDown.lo.y, 1044 );
 	CHECK_EQ( r.pickerAll.lo.x, 1624 );
 	CHECK_EQ( r.pickerAll.width(), 50 );
 	CHECK_EQ( r.pickerAll.height(), 28 );
-	CHECK_EQ( r.pickerChips[ 0 ].lo.x, 1677 );
-	CHECK_EQ( r.pickerChips[ 0 ].lo.x - r.pickerAll.hi.x, 3 );
-	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].lo.x, 1836 );
+	CHECK_EQ( r.pickerChips[ 0 ].lo.x, 1680 );
+	CHECK_EQ( r.pickerChips[ 0 ].lo.x - r.pickerAll.hi.x, r.cameos[ 1 ].lo.x - r.cameos[ 0 ].hi.x );
+	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].lo.x, 1848 );
 	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].width(), 50 );
-	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].hi.x, 1886 );
+	CHECK_EQ( r.pickerChips[ HUD_SIDEBAR_PICKER_CHIPS - 1 ].hi.x, 1898 );
 	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; ++i )
 		CHECK_EQ( r.pickerChips[ i ].width(), r.pickerAll.width() );
 	CHECK_EQ( r.pickerChips[ 0 ].lo.y, 459 );
@@ -20716,10 +20742,16 @@ TEST(hud_layout_rects_tile_the_screen)
 	CHECK_EQ( r.cameos[ 0 ].lo.y - r.pickerAll.hi.y, 4 );
 	CHECK_EQ( r.pickerChips[ 0 ].height(), 28 );
 	CHECK_EQ( r.powerRail.hi.y, 1072 );
+	// the commands at the art's own 60x48, 8 in from the strip's top and foot like the clock
 	CHECK_EQ( r.stripButtons[ 13 ].lo.x, 840 );
-	CHECK_EQ( r.stripButtons[ 0 ].lo.y, 1020 );
+	CHECK_EQ( r.stripButtons[ 13 ].hi.x, 900 );
+	CHECK_EQ( r.stripButtons[ 0 ].lo.y, 1024 );
+	CHECK_EQ( r.stripButtons[ 0 ].width(), HUD_CAMEO_ART_W );
+	CHECK_EQ( r.stripButtons[ 0 ].height(), HUD_CAMEO_ART_H );
 	CHECK_EQ( r.stripClock.lo.x, 1500 );
-	CHECK_EQ( r.stripSpare.lo.x, 904 );
+	CHECK_EQ( r.stripSpare.lo.x, 908 );
+	CHECK_EQ( r.stripSpare.lo.y, 1024 );
+	CHECK_EQ( r.stripSpare.hi.y, 1072 );
 	CHECK_EQ( r.card.lo.x, 0 );
 	CHECK_EQ( r.card.lo.y, 896 );
 	CHECK_EQ( r.card.hi.x, 470 );
@@ -20754,6 +20786,25 @@ TEST(hud_layout_rects_tile_the_screen)
 	CHECK_EQ( r.superweaponRow.height(), 40 );
 	CHECK_EQ( r.superweaponRow.hi.y, 1008 );
 	CHECK_EQ( r.superweaponRowPitch, 44 );
+
+	// the pictures keep the art's 5:4 in wells of another shape: the portrait in its 116x90, a tray
+	// tile in what 2 in from its 50x42 leaves
+	IRegion2D fit = HudFitAspect( r.portrait, HUD_CAMEO_ART_W, HUD_CAMEO_ART_H );
+	CHECK_EQ( fit.width(), 113 );
+	CHECK_EQ( fit.height(), 90 );
+	CHECK_EQ( fit.lo.x, 9 );
+	CHECK_EQ( fit.lo.y, r.portrait.lo.y );
+	IRegion2D well = r.trayCells[ 0 ];
+	well.lo.x += 2;
+	well.lo.y += 2;
+	well.hi.x -= 2;
+	well.hi.y -= 2;
+	fit = HudFitAspect( well, HUD_CAMEO_ART_W, HUD_CAMEO_ART_H );
+	CHECK_EQ( fit.width(), 46 );
+	CHECK_EQ( fit.height(), 37 );
+	CHECK( hudRegionInside( fit, well ) );
+	IRegion2D none = { { 5, 5 }, { 5, 9 } };
+	CHECK_EQ( HudFitAspect( none, HUD_CAMEO_ART_W, HUD_CAMEO_ART_H ).hi.y, 9 );		// no width: as it went in
 
 	// Classic fills the area only
 	HudLayoutForScreen( 1920, 1080, HUD_LAYOUT_CLASSIC, HUD_WIDTH_FULL, &r );
@@ -20811,7 +20862,7 @@ TEST(hud_layout_rects_tile_the_screen)
 			if( c == HUD_WIDTH_FULL )
 				CHECK_EQ( hudRegionArea( r.area ), w * h );
 
-			const IRegion2D *side[ 32 ];
+			const IRegion2D *side[ 11 + HUD_SIDEBAR_TABS + HUD_SIDEBAR_PICKER_CHIPS + HUD_SIDEBAR_CAMEOS ];
 			Int n = 0;
 			side[ n++ ] = &r.menuButton;
 			side[ n++ ] = &r.money;
@@ -20831,6 +20882,15 @@ TEST(hud_layout_rects_tile_the_screen)
 			for( Int i = 0; i < HUD_SIDEBAR_CAMEOS; ++i )
 				side[ n++ ] = &r.cameos[ i ];
 			checkHudCells( side, n, r.sidebar );
+
+			// one k across and down: every command button and cameo well keeps its design shape to a
+			// pixel each way, so nothing drawn over one is stretched, and the grid stays over the arrows
+			for( Int i = 0; i < HUD_STRIP_BUTTONS; ++i )
+				CHECK( abs( r.stripButtons[ i ].width() * HUD_CAMEO_ART_H - r.stripButtons[ i ].height() * HUD_CAMEO_ART_W )
+					<= HUD_CAMEO_ART_W + HUD_CAMEO_ART_H );
+			for( Int i = 0; i < HUD_SIDEBAR_CAMEOS; ++i )
+				CHECK( abs( r.cameos[ i ].width() * 75 - r.cameos[ i ].height() * 92 ) <= 92 + 75 );
+			CHECK( r.cameos[ HUD_SIDEBAR_CAMEOS - 1 ].hi.y <= r.arrowUp.lo.y );
 
 			const IRegion2D *strip[ HUD_STRIP_BUTTONS + 2 ];
 			n = 0;
@@ -20878,22 +20938,71 @@ TEST(hud_layout_rects_tile_the_screen)
 
 TEST(sidebar_scroll_keeps_the_window_full)
 {
-	/* The sidebar's cameos scroll two to a row in a window of six rows: the first row shown never goes
-		 above the top, and never so far down that the window shows empty rows a shorter scroll would
-		 have filled. */
+	/* The sidebar's cameos scroll three to a row in a window of seven rows: the first row shown never
+		 goes above the top, and never so far down that the window shows empty rows a shorter scroll
+		 would have filled. */
 	const Int cols = HUD_SIDEBAR_CAMEO_COLUMNS, rows = HUD_SIDEBAR_CAMEO_ROWS;
+	CHECK_EQ( cols * rows, 21 );
 	CHECK_EQ( Sidebar_scroll( 0, cols, rows, 3 ), 0 );
 	CHECK_EQ( Sidebar_scroll( 5, cols, rows, 2 ), 0 );			// fits: no scrolling
-	CHECK_EQ( Sidebar_scroll( 12, cols, rows, 1 ), 0 );			// exactly the window
-	CHECK_EQ( Sidebar_scroll( 13, cols, rows, 5 ), 1 );			// seven rows, the odd cell alone on the last
-	CHECK_EQ( Sidebar_scroll( 13, cols, rows, 1 ), 1 );
-	CHECK_EQ( Sidebar_scroll( 13, cols, rows, -2 ), 0 );
-	CHECK_EQ( Sidebar_scroll( 23, cols, rows, 6 ), 6 );			// twelve rows
-	CHECK_EQ( Sidebar_scroll( 24, cols, rows, 7 ), 6 );
-	CHECK_EQ( Sidebar_scroll( 24, cols, rows, 0x7fff ), 6 );
-	CHECK_EQ( Sidebar_scroll( 24, cols, rows, 3 ), 3 );
-	CHECK_EQ( Sidebar_scroll( 24, 0, rows, 3 ), 0 );				// no grid
-	CHECK_EQ( Sidebar_scroll( 24, cols, 0, 3 ), 0 );
+	CHECK_EQ( Sidebar_scroll( 21, cols, rows, 1 ), 0 );			// exactly the window
+	CHECK_EQ( Sidebar_scroll( 22, cols, rows, 5 ), 1 );			// eight rows, the odd cell alone on the last
+	CHECK_EQ( Sidebar_scroll( 22, cols, rows, 1 ), 1 );
+	CHECK_EQ( Sidebar_scroll( 22, cols, rows, -2 ), 0 );
+	CHECK_EQ( Sidebar_scroll( 35, cols, rows, 6 ), 5 );			// twelve rows
+	CHECK_EQ( Sidebar_scroll( 36, cols, rows, 6 ), 5 );
+	CHECK_EQ( Sidebar_scroll( 36, cols, rows, 0x7fff ), 5 );
+	CHECK_EQ( Sidebar_scroll( 36, cols, rows, 3 ), 3 );
+	CHECK_EQ( Sidebar_scroll( 36, 0, rows, 3 ), 0 );				// no grid
+	CHECK_EQ( Sidebar_scroll( 36, cols, 0, 3 ), 0 );
+}
+
+TEST(power_rail_scale_and_state)
+{
+	/* The sidebar's power rail (W3DPowerDrawV): one linear scale whose top is a quarter over the larger
+		 of production and consumption, so the larger stands at four fifths of the rail; Red Alert's three
+		 colours on the Classic bar's yellow range. */
+	CHECK_EQ( PowerRail_blocks( 10, 10, 4, 100 ), 80 );
+	CHECK_EQ( PowerRail_blocks( 4, 10, 4, 100 ), 32 );
+	CHECK_EQ( PowerRail_blocks( 9, 10, 9, 100 ), 72 );
+	CHECK_EQ( PowerRail_blocks( 19, 10, 19, 100 ), 80 );			// over the limit the consumption sets the scale
+	CHECK_EQ( PowerRail_blocks( 10, 10, 19, 100 ), 42 );			// 10 / 23.75 of 100
+	CHECK_EQ( PowerRail_blocks( 1, 1000, 0, 100 ), 1 );			// anything at all lights a block
+	CHECK_EQ( PowerRail_blocks( 0, 10, 0, 100 ), 0 );
+	CHECK_EQ( PowerRail_blocks( 0, 0, 0, 100 ), 0 );				// the GLA: no power, nothing lit
+	CHECK_EQ( PowerRail_blocks( 10, 10, 4, 0 ), 0 );
+	CHECK( PowerRail_blocks( 9, 10, 9, 122 ) < PowerRail_blocks( 10, 10, 9, 122 ) );	// one unit from the limit still shows
+	CHECK_EQ( PowerRail_state( 10, 0, 5 ), (Int)POWER_RAIL_GREEN );
+	CHECK_EQ( PowerRail_state( 10, 4, 5 ), (Int)POWER_RAIL_GREEN );
+	CHECK_EQ( PowerRail_state( 10, 5, 5 ), (Int)POWER_RAIL_GREEN );
+	CHECK_EQ( PowerRail_state( 10, 6, 5 ), (Int)POWER_RAIL_YELLOW );
+	CHECK_EQ( PowerRail_state( 10, 10, 5 ), (Int)POWER_RAIL_YELLOW );
+	CHECK_EQ( PowerRail_state( 10, 11, 5 ), (Int)POWER_RAIL_RED );
+	CHECK_EQ( PowerRail_state( 0, 0, 5 ), (Int)POWER_RAIL_GREEN );
+}
+
+TEST(sidebar_show_order_groups_by_country_then_first_seen)
+{
+	/* The owner's order for a tab: the player's own country first, each foreign one in the order he
+		 gained it, and inside a country the order each item first showed, so a newly unlocked item ends
+		 its own country's group rather than the list. */
+	std::vector< Int > order;
+	const Int countries[] = { 0, 1, 0, 0, 1, 2 };
+	const Int seen[] = { 0, 1, 2, 5, 3, 4 };
+	Sidebar_showOrder( std::vector< Int >( countries, countries + 6 ), std::vector< Int >( seen, seen + 6 ), order );
+	const Int wanted[] = { 0, 2, 3, 1, 4, 5 };
+	CHECK_EQ( (Int)order.size(), 6 );
+	for( Int i = 0; i < 6 && i < (Int)order.size(); i++ )
+		CHECK_EQ( order[ i ], wanted[ i ] );
+
+	// a start-of-match list, all one country and seen in gather order, keeps that order
+	const Int own[] = { 0, 0, 0 };
+	const Int gathered[] = { 2, 0, 1 };
+	Sidebar_showOrder( std::vector< Int >( own, own + 3 ), std::vector< Int >( gathered, gathered + 3 ), order );
+	CHECK_EQ( (Int)order.size(), 3 );
+	CHECK( order.size() == 3 && order[ 0 ] == 1 && order[ 1 ] == 2 && order[ 2 ] == 0 );
+	Sidebar_showOrder( std::vector< Int >(), std::vector< Int >(), order );
+	CHECK_EQ( (Int)order.size(), 0 );
 }
 
 TEST(sidebar_sell_press_sells_the_selection_or_toggles_the_cursor)
@@ -20904,6 +21013,74 @@ TEST(sidebar_sell_press_sells_the_selection_or_toggles_the_cursor)
 	CHECK_EQ( Sidebar_sellPress( FALSE, FALSE ), (Int)SIDEBAR_SELL_PRESS_MODE_ON );
 	CHECK_EQ( Sidebar_sellPress( TRUE, FALSE ), (Int)SIDEBAR_SELL_PRESS_MODE_OFF );
 	CHECK_EQ( Sidebar_sellPress( TRUE, TRUE ), (Int)SIDEBAR_SELL_PRESS_MODE_OFF );
+}
+
+TEST(sidebar_chip_press_lights_a_set)
+{
+	/* Several factories selected light several chips; on the picker a plain press lights one chip
+		 alone, Shift puts a chip into the lit set or takes it out, and Tümü empties it.  The set stays
+		 sorted by ObjectID, which is the order the batch is spread in. */
+	std::vector< ObjectID > picks;
+	Sidebar_pressChip( picks, (ObjectID)7, FALSE );
+	CHECK_EQ( (Int)picks.size(), 1 );
+	CHECK_EQ( (Int)picks[ 0 ], 7 );
+
+	Sidebar_pressChip( picks, (ObjectID)3, TRUE );
+	Sidebar_pressChip( picks, (ObjectID)9, TRUE );
+	CHECK_EQ( (Int)picks.size(), 3 );
+	CHECK_EQ( (Int)picks[ 0 ], 3 );
+	CHECK_EQ( (Int)picks[ 1 ], 7 );
+	CHECK_EQ( (Int)picks[ 2 ], 9 );
+
+	Sidebar_pressChip( picks, (ObjectID)7, TRUE );		// lit: out again
+	CHECK_EQ( (Int)picks.size(), 2 );
+	CHECK_EQ( (Int)picks[ 0 ], 3 );
+	CHECK_EQ( (Int)picks[ 1 ], 9 );
+
+	Sidebar_pressChip( picks, (ObjectID)9, FALSE );		// a plain press: that one alone
+	CHECK_EQ( (Int)picks.size(), 1 );
+	CHECK_EQ( (Int)picks[ 0 ], 9 );
+
+	Sidebar_pressChip( picks, (ObjectID)9, TRUE );		// the last one out is Tümü
+	CHECK( picks.empty() );
+
+	Sidebar_pressChip( picks, (ObjectID)3, TRUE );
+	Sidebar_pressChip( picks, (ObjectID)9, TRUE );
+	Sidebar_pressChip( picks, INVALID_ID, FALSE );		// Tümü
+	CHECK( picks.empty() );
+	Sidebar_pressChip( picks, (ObjectID)5, FALSE );
+	Sidebar_pressChip( picks, INVALID_ID, TRUE );			// Tümü with Shift is still Tümü
+	CHECK( picks.empty() );
+}
+
+TEST(sidebar_batch_spreads_over_lit_factories)
+{
+	/* A cameo click with several factories lit hands each unit of the batch to the lit factory with
+		 the fewest in its queue, this batch's units counted, the first (lowest ObjectID) on a tie, and
+		 never to a full queue; -1 once every queue is full. */
+	std::vector< UnsignedInt > queued, caps;
+	queued.push_back( 2 ); caps.push_back( 9 );
+	queued.push_back( 0 ); caps.push_back( 9 );
+	queued.push_back( 0 ); caps.push_back( 1 );
+
+	const Int expected[] = { 1, 2, 1, 0, 1, 0, 1 };
+	for( Int each = 0; each < (Int)ARRAY_SIZE( expected ); each++ )
+	{
+		const Int at = Sidebar_nextFactory( queued, caps );
+		CHECK_EQ( at, expected[ each ] );
+	}
+	CHECK_EQ( (Int)queued[ 0 ], 4 );
+	CHECK_EQ( (Int)queued[ 1 ], 4 );
+	CHECK_EQ( (Int)queued[ 2 ], 1 );
+
+	std::vector< UnsignedInt > full( 2, 5 ), fullCaps( 2, 5 );
+	const Int none = Sidebar_nextFactory( full, fullCaps );
+	CHECK_EQ( none, -1 );
+	CHECK_EQ( (Int)full[ 0 ], 5 );
+
+	std::vector< UnsignedInt > one( 1, 0 ), noCaps;
+	const Int unmatched = Sidebar_nextFactory( one, noCaps );	// no cap for it: not taken
+	CHECK_EQ( unmatched, -1 );
 }
 
 TEST(a_plate_covers_the_windows_its_panel_is_responsible_for)

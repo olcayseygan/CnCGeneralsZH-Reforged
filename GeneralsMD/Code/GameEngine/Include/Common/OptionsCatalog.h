@@ -171,7 +171,7 @@ enum { HEALTH_BAR_COLORS_COUNT = 2 };
 // bottom, the default; 1 the Red Alert style sidebar down the right with a command strip along the
 // bottom (docs/plans/HUD-SIDEBAR-LAYOUT.md).  HudLayoutForScreen (GameClient/Display.h) places it.
 // Strings: GUI:HudLayout, GUI:HudLayout0, GUI:HudLayout1, TOOLTIP:HudLayout; the sidebar's own
-// GUI:SidebarTab0..3 (Bina, Savunma, Piyade, Araç), GUI:SidebarAll, later GUI:SidebarSell, GUI:SidebarRepair.
+// GUI:SidebarTab0..3 (Bina, Yükseltmeler ve güçler, Piyade, Araç), GUI:SidebarAll, later GUI:SidebarSell, GUI:SidebarRepair.
 enum { HUD_LAYOUT_CLASSIC, HUD_LAYOUT_SIDEBAR, HUD_LAYOUT_COUNT };
 
 // How wide the in-game interface may spread ("HudWidth", GlobalData m_hudWidth), for either layout: 0 the

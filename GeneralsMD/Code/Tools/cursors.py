@@ -5,7 +5,8 @@ triangles round a yellow dot for attack, red with green between them for attack 
 corner brackets for select, a white dart for the pointer, green block arrows at the screen edge,
 stacked triangles for enter, a red ring for anything that cannot be done, and a small pictogram
 with a white arrow tip for each unit ability. Orders EA never drew a mark for (guard, garrison,
-board, unload, hijack, sabotage, car bomb, the refused build) get one in the same hand.
+board, unload, hijack, sabotage, car bomb, the refused build, the sidebar's sell) get one in the
+same hand.
 
 The hand is EA's too: only the 16 colour Windows palette (13 of its colours), flat fills, a 1 px
 black line round every shape, and at most a lit half and a half-bright half per shape. No
@@ -223,6 +224,10 @@ def ring(cx, cy, r, w):
 def oval_ring(x0, y0, x1, y1, w):
     """A flat ellipse's band, the ground at the game's camera angle."""
     return lambda d, k: d.ellipse([x0 * k, y0 * k, x1 * k, y1 * k], outline=255, width=_w(w, k))
+
+
+def oval(x0, y0, x1, y1):
+    return lambda d, k: d.ellipse([x0 * k, y0 * k, x1 * k, y1 * k], fill=255)
 
 
 def arc(cx, cy, r, w, a0, a1):
@@ -513,6 +518,27 @@ def wrench(deg=0.0, c=(4, 4)):
               [poly(*p(slot)), circle(*p([(37, 37)])[0], 2.6)], shade=rot([(-1, 1)], deg, (0, 0))[0])]
 
 
+# A pixel-font dollar sign, five cells by seven; a cell is 3 units, so 3 px at 48 and 2 px at 32
+DOLLAR = ("..#..", ".####", "#.#..", ".###.", "..#.#", "####.", "..#..")
+
+
+def coin(s=1.0):
+    """A gold coin with a milled rim and a dollar sign struck in it, turned to s of its width:
+    1 faces the player, smaller is on its way round edge-on."""
+    r, cell = 16, 3
+    out = [L(Y, [oval(24 - r * s, 24 - r, 24 + r * s, 24 + r)]),
+           L(OL, [oval_ring(24 - r * s, 24 - r, 24 + r * s, 24 + r, 3)], outline=False)]
+    if s < 0.4:   # edge-on: the rim is all there is
+        return out
+    # a tenth off centre, so no cell edge lands on a half pixel that round() would split 2 and 4 at 48
+    x0, y0, cw = 24.1 - 2.5 * cell * s, 24.1 - 3.5 * cell, cell * s
+    out.append(L(OL, [rect(x0 + c * cw, y0 + j * cell, x0 + (c + 1) * cw, y0 + (j + 1) * cell)
+                      for j, row in enumerate(DOLLAR) for c, ch in enumerate(row) if ch == "#"], outline=False))
+    if s == 1:
+        out.append(L(W, [arc(24, 24, 12.5, 1.5, 195, 245)], outline=False))   # the shine, top left
+    return out
+
+
 def bomb_ball(spark):
     out = [L(R, [circle(24, 14, 7)], shade=(1, 1)),
            L(K, [line([(28, 9), (32, 4)], 1.5)], outline=False)]
@@ -566,6 +592,10 @@ def build_set():
     s["Build"] = ((24, 24), [build_cross(Y), build_cross(OL)], 30)
     s["BuildInvalid"] = ((24, 24), [build_cross(DG) + [no_ring()]], 0)
     s["Invalid"] = ((24, 24), [[no_ring(cross=True)]], 0)
+    # the sidebar's sell mode: a gold coin that holds still, then flips; over what will not sell, the
+    # same coin under the red ring, so the pointer does not jump between the two
+    s["Sell"] = ((24, 24), [coin(f) for f in (1, 1, 1, 1, 1, 0.6, 0.2, 0.6)], 6)
+    s["SellInvalid"] = ((24, 24), [coin() + [no_ring()]], 0)
     s["Rally"] = ((24, 24), [[block_arrow(d, a) for a in (0, 90, 180, 270)] for d in (9, 7, 5, 3)], 6)
     beacon = []
     for r in (0, 4, 8, 12, 16):
@@ -690,7 +720,7 @@ MOUSE_INI = {
     "Dock": "Dock", "FireFlame": "Flame", "FireBomb": "FireBomb", "PlaceBeacon": "Beacon",
     "DisguiseAsVehicle": "Disguise", "Waypoint": "Waypoint", "OutRange": "OutRange",
     "StabAttackInvalid": "StabInvalid", "PlaceChargeInvalid": "ChargeInvalid", "Hack": "Hack",
-    "ParticleUplinkCannon": "Uplink",
+    "ParticleUplinkCannon": "Uplink", "Sell": "Sell", "SellInvalid": "SellInvalid",
 }
 # What EA's Mouse.ini (INIZH.big) gives each of those names
 RETAIL = {
@@ -759,7 +789,7 @@ def comparison(rendered, retail_dir, path):
     """EA's cursor and ours for every Mouse.ini name, each at its own size and at 2x, on both grounds."""
     rows = [(key, RETAIL[key], MOUSE_INI[key] if key != "Scroll" else "Scroll0") for key in RETAIL]
     rows += [(name + " (new)", RETAIL[shared], name) for name, shared in NEW_ONLY.items()]
-    rows += [("Build (no EA art)", None, "Build"), ("InvalidBuild (no EA art)", None, "BuildInvalid")]
+    rows += [(key + " (no EA art)", None, ours) for key, ours in MOUSE_INI.items() if key not in RETAIL]
     files = {f.lower(): f for f in os.listdir(retail_dir)}
     cols, tw, th = 2, 560, 120
     sheet = Image.new("RGBA", (cols * tw, ((len(rows) + cols - 1) // cols) * th + 24), (24, 26, 30, 255))

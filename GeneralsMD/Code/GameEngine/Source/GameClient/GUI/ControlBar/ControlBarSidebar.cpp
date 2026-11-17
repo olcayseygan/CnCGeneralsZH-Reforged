@@ -1,14 +1,19 @@
 // The Red Alert style sidebar (ControlBarSidebar.h, docs/plans/HUD-SIDEBAR-LAYOUT.md lane C): four
-// tabs, twelve cameos two to a row and two arrows, all in one box window that is a child of
-// ControlBarParent and stays the first of its children, so it draws over BackgroundMarker's steel and
-// takes the pointer before the sidebar's blocker.
+// tabs, the cameo grid (HUD_SIDEBAR_CAMEO_COLUMNS a row) and two arrows, all in one box window that
+// is a child of ControlBarParent and stays the first of its children, so it draws over
+// BackgroundMarker's steel and takes the pointer before the sidebar's blocker.
 //
-// Bina and Savunma list what the player's builders put up (GroupPanel_gatherConstructible), split on
-// KINDOF_FS_BASE_DEFENSE; Piyade and Araç what his factories make (GroupPanel_gatherBuildable), split
-// on KINDOF_INFANTRY, aircraft under Araç.  A left click on a unit queues it with no squad, through
-// the group panel's MSG_QUEUE_UNIT_FOR_GROUP; on a structure it puts the structure on the cursor for a
-// builder that offers it, as the bar's own button does.  A right click takes back the units queued
-// deepest in their factories' queues, as many as the modifiers would have queued.
+// Bina lists every structure the player's builders put up (GroupPanel_gatherConstructible), base
+// defences included; the powers tab the powers tray's buttons (his bought general's powers and his
+// superweapons, fired through ControlBar::processCommandUI as the tray fires them) and every research
+// his buildings offer; Piyade and Araç what his factories make (GroupPanel_gatherBuildable), split on
+// KINDOF_INFANTRY, aircraft under Araç.  Only what is unlocked shows (prerequisites, sciences and
+// upgrades met; too dear still shows, greyed), grouped by country, his own first, in the order each
+// item first showed (Sidebar_showOrder).  A left click on a unit queues it with no squad, through
+// the group panel's MSG_QUEUE_UNIT_FOR_GROUP, at the lit factory chips (several share the batch) or
+// the logic's pick under Tümü; on a structure it puts the structure on the cursor for a lit builder
+// that offers it, or one the bar would use, as the bar's own button does.  A right click takes back
+// the units queued deepest in their factories' queues, as many as the modifiers would have queued.
 //
 // Sat and Onar under the radar put the pointer into a sell or repair mode; GUICommandTranslator hands
 // the mode the mouse first (Sidebar_translate), HintSpy lets it have the last word on the cursor.
@@ -27,6 +32,7 @@
 #include "Common/NameKeyGenerator.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
+#include "Common/SpecialPower.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Upgrade.h"
 #include "GameClient/ControlBar.h"
@@ -42,6 +48,7 @@
 #include "GameClient/GroupPanel.h"
 #include "GameClient/Image.h"
 #include "GameClient/InGameUI.h"
+#include "GameClient/Keyboard.h"
 #include "GameClient/LookAtXlat.h"
 #include "GameClient/MetaEvent.h"
 #include "GameClient/Mouse.h"
@@ -50,7 +57,9 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/Module/DozerAIUpdate.h"
 #include "GameLogic/Module/ProductionUpdate.h"
+#include "GameLogic/Module/SupplyTruckAIUpdate.h"
 
 #include <algorithm>
 #include <vector>
@@ -62,8 +71,16 @@ namespace
 	const Color ARROW_DARK		= GameMakeColor( 90, 96, 104, 255 );
 	const Color TAB_TEXT_EDGE	= GameMakeColor( 0, 0, 0, 255 );
 	const Color KEY_LETTER		= GameMakeColor( 255, 210, 60, 255 );	///< the bar's hotkey letters' yellow
-	const Real KEY_POINTS			= 10.0f;	///< the key letter in a tab's top left corner, about a 12 px cap at 1080
-	const Color KEY_PLATE			= GameMakeColor( 8, 10, 14, 200 );	///< the key badge's plate
+	const Real KEY_POINTS			= 10.0f;	///< every key letter on the sidebar and the strip, at 1080: a 15 px line, a 10 px cap
+	const Color KEY_PLATE			= GameMakeColor( 2, 4, 5, 230 );		///< the key badge's plate, the Classic badge's
+	const Color KEY_PLATE_RIM	= GameMakeColor( 90, 90, 90, 255 );	///< and its one pixel rim
+	/// where a key badge stands, at 1080: this far in from the window's top left.  A tab's face starts
+	/// 4.7 in (hud_sidebar.py TAB_FACE), so its badge sits a pixel inside the face, clear of the bezel; a
+	/// command button is its picture, so its badge is that pixel inside the picture's own border
+	const Real KEY_INSET_TAB			= 6.0f;
+	const Real KEY_INSET_BUTTON		= 2.0f;
+	GameFont *s_keyFont = NULL;		///< KEY_POINTS at the layout's k, set by Sidebar_layout
+	Real s_keyScale = 1.0f;				///< and that k
 	const Int ICON_INSET			= 3;			///< the icon kept this far inside the bevel
 
 	// the tab body: flat steel with a 1 px bevel, the group panel's stand-in colours; the open tab is
@@ -107,11 +124,22 @@ namespace
 	std::vector< Int > s_clock;					///< per s_list entry: the furthest head of a queue, -1 for none
 	std::vector< ObjectID > s_producer;		///< per s_list entry: a research's building to queue it at, else INVALID_ID
 	std::vector< ObjectID > s_researcher;	///< per s_list entry: the building a research is under way at, else INVALID_ID
-	Int s_researchFrom = -1;							///< s_list index the research starts at on Savunma, a row's first cell; -1 for none
-	Int s_dividerY = -1;									///< screen y of the line between the defences and the research, -1 when not shown
 	GameWinDrawFunc s_cameoDraw = NULL;		///< the image push button's draw, under a research cell's badge
 	const Color BADGE_EDGE = GameMakeColor( 0, 0, 0, 220 );
-	const Color DIVIDER = GameMakeColor( 170, 180, 190, 160 );
+
+	// the show order (Sidebar_showOrder): each tab's items in the order they first showed, and the
+	// countries in the order the player gained them, his own first.  The client's own memory, kept
+	// for a match: a new bar (a new match, a load, Options' Accept) or the logic's clock running back
+	// starts it again from what is unlocked then, in the command sets' order
+	std::vector< const void * > s_seen[ SIDEBAR_TAB_COUNT ];
+	std::vector< AsciiString > s_countries;
+	UnsignedInt s_seenFrame = 0;					///< the logic frame the other tabs were last looked at, 0 for not yet
+	Player *s_orderPlayer = NULL;					///< the player the order is for
+	std::vector< Int > s_countryOf;				///< scratch: per gathered item
+	std::vector< Int > s_seenAt;
+	std::vector< Int > s_showOrder;
+	std::vector< Buildable > s_gathered;
+	std::vector< ObjectID > s_gatheredProducer;
 	Bool s_listed = FALSE;
 	Bool s_dirty = TRUE;
 	UnsignedInt s_listFrame = 0;
@@ -130,6 +158,7 @@ namespace
 	DisplayString *s_keyText[ SIDEBAR_TAB_COUNT ];	///< each tab's key letter, set in Sidebar_update
 	UnicodeString s_keyShown[ SIDEBAR_TAB_COUNT ];
 	IRegion2D s_cells[ HUD_SIDEBAR_CAMEOS ];				///< the cameo cells on screen, the wells drawn under them
+	IRegion2D s_cameoRoom[ HUD_SIDEBAR_CAMEOS ];		///< each cell less its inset: the most a cameo window takes
 
 	/// the tabs' pieces, <Prefix>SidebarTab<Kind>{,H,P,I}: bezel and glyph baked in
 	const char *const TAB_KINDS[ SIDEBAR_TAB_COUNT ] = { "Buildings", "Defenses", "Infantry", "Vehicles" };
@@ -148,7 +177,7 @@ namespace
 	// the factory picker under the tabs, on the unit tabs only: "Tümü", then one chip a factory
 	const Real CHIP_POINTS			= 9.0f;		///< the chips' text, at 1080
 	const Color CHIP_TEXT				= GameMakeColor( 255, 255, 255, 255 );
-	ObjectID s_pick[ SIDEBAR_TAB_COUNT ];		///< each tab's picked factory, INVALID_ID for Tümü
+	std::vector< ObjectID > s_picks[ SIDEBAR_TAB_COUNT ];	///< each tab's lit factories or builders, by ObjectID up; none for Tümü
 	std::vector< ObjectID > s_factories;		///< the shown unit tab's factories, by ObjectID up, all of them
 	GameWindow *s_chipAll = NULL;
 	GameWindow *s_chips[ HUD_SIDEBAR_PICKER_CHIPS ];
@@ -156,10 +185,11 @@ namespace
 	const Image *s_chipIcon[ HUD_SIDEBAR_PICKER_CHIPS ];				///< each chip's building picture, set in Sidebar_update
 	Bool s_chipGlyph[ HUD_SIDEBAR_PICKER_CHIPS ];								///< the picture is a ChipIcon glyph, drawn white over a dark edge
 	UnicodeString s_chipName[ HUD_SIDEBAR_PICKER_CHIPS ];				///< each chip's building or builder, its tooltip
-	ObjectID s_placingBuilder = INVALID_ID;		///< the builder chip a structure on the cursor was put there for
-	ObjectID s_followed = INVALID_ID;					///< the single selected object the sidebar last followed
+	std::vector< ObjectID > s_placingBuilders;	///< the lit builders a structure on the cursor was put there for, [0] its source
+	std::vector< ObjectID > s_namedBuilders;		///< each builder Sidebar_placementBuilder named in this placement, once a job: busy before the logic hears of it
+	std::vector< ObjectID > s_followed;				///< the player's producers and builders in the selection the sidebar last followed
 	const Color GLYPH_EDGE = GameMakeColor( 0, 0, 0, 200 );
-	const Int CHIP_PICTURE_INSET = 4;															///< a factory's picture inside its chip's bezel, at 1080
+	const Int CHIP_PICTURE_INSET = 2;															///< a factory's picture inside its chip's edge, at 1080 (a 28 high chip)
 	const Color CHIP_PICTURE_DIM = GameMakeColor( 170, 170, 170, 255 );		///< a chip not picked, its picture a shade down
 	const Color CHIP_BADGE = GameMakeColor( 0, 0, 0, 190 );								///< behind the chip's number
 
@@ -231,6 +261,27 @@ Int Sidebar_scroll( Int count, Int cols, Int rows, Int row )
 }
 
 //-------------------------------------------------------------------------------------------------
+Int PowerRail_state( Int production, Int consumption, Int yellowRange )
+{
+	if( consumption <= 0 )
+		return POWER_RAIL_GREEN;
+	if( consumption > production )
+		return POWER_RAIL_RED;
+	return consumption > production - yellowRange ? POWER_RAIL_YELLOW : POWER_RAIL_GREEN;
+}
+
+//-------------------------------------------------------------------------------------------------
+Int PowerRail_blocks( Int amount, Int production, Int consumption, Int blocks )
+{
+	const Int larger = MAX( production, consumption );
+	if( amount <= 0 || larger <= 0 || blocks <= 0 )
+		return 0;
+	// amount / ( larger * 5 / 4 ) of the rail, to the nearest block
+	const Int lit = (Int)( ( (Int64)amount * blocks * 8 + larger * 5 ) / ( (Int64)larger * 10 ) );
+	return MIN( MAX( lit, 1 ), blocks );
+}
+
+//-------------------------------------------------------------------------------------------------
 // The windows: made on the first layout and again whenever the window manager has thrown them away
 // with ControlBarParent.
 //-------------------------------------------------------------------------------------------------
@@ -296,20 +347,49 @@ static void drawSteel( const ICoord2D &at, const ICoord2D &size, Bool lit, Bool 
 	TheDisplay->drawFillRect( at.x + size.x - 1, at.y + 1, 1, size.y - 2, shade );
 }
 
-/// a tab, all drawn here: a steel body with a 1 px bevel, raised when closed and pressed in and lit
-/// when open, its icon in the middle and the key it answers to in the top left corner; the name is in
-/// the tooltip
-/// tab `t`'s key as a badge at x, y: a dark plate with its corners cut, the letter bold on it, yellow
-/// (white on the open tab) over a dark edge
-static void drawKeyBadge( Int t, Int x, Int y, Bool open )
+/// the badge's plate for `letters` characters measuring `textW` x `textH`: a square of the line's
+/// height, so every single letter, I or W, stands on the same plate (a bold W is narrower than the
+/// line, though getSize's overlap can say otherwise); a longer text (a chord's name) widens it.  Never
+/// wider than `roomW` nor taller than `roomH`
+static void keyPlateSize( Int letters, Int textW, Int textH, Int roomW, Int roomH, Int *plateW, Int *plateH )
 {
-	Int w = 0, h = 0;
-	s_keyText[ t ]->getSize( &w, &h );
-	const Int plateW = w + 6, plateH = h;
-	TheDisplay->drawFillRect( x + 1, y, plateW - 2, plateH, KEY_PLATE );
-	TheDisplay->drawFillRect( x, y + 1, 1, plateH - 2, KEY_PLATE );
-	TheDisplay->drawFillRect( x + plateW - 1, y + 1, 1, plateH - 2, KEY_PLATE );
-	s_keyText[ t ]->draw( x + 3, y, open ? KEY_LETTER_LIT : KEY_LETTER, TAB_TEXT_EDGE );
+	*plateH = MIN( textH, roomH );
+	*plateW = MIN( letters > 1 ? MAX( *plateH, textW + 4 ) : *plateH, roomW );
+}
+
+//-------------------------------------------------------------------------------------------------
+GameFont *Sidebar_keyFont( void )
+{
+	return s_shown ? s_keyFont : NULL;
+}
+
+//-------------------------------------------------------------------------------------------------
+void Sidebar_drawKeyBadge( DisplayString *letter, const IRegion2D &window, Real designInset, Color color )
+{
+	if( letter == NULL )
+		return;
+	Int textW = 0, textH = 0;
+	letter->getSize( &textW, &textH );
+	const Int inset = MAX( REAL_TO_INT( designInset * s_keyScale + 0.5f ), 1 );
+	const Int roomW = window.width() - 2 * inset, roomH = window.height() - 2 * inset;
+	if( textW <= 0 || textH <= 0 || roomW <= 2 || roomH <= 2 )
+		return;
+	Int plateW = 0, plateH = 0;
+	keyPlateSize( letter->getTextLength(), textW, textH, roomW, roomH, &plateW, &plateH );
+	const Int left = window.lo.x + inset, top = window.lo.y + inset;
+	TheDisplay->drawFillRect( left, top, plateW, plateH, KEY_PLATE );
+	TheDisplay->drawOpenRect( left, top, plateW, plateH, 1, KEY_PLATE_RIM );
+	// the line box centred on the plate: Arial's caps sit within a pixel of the line's middle
+	IRegion2D plate = { { left, top }, { left + plateW, top + plateH } };
+	letter->setClipRegion( &plate );
+	letter->draw( left + ( plateW - textW ) / 2, top + ( plateH - textH ) / 2, color, TAB_TEXT_EDGE );
+}
+
+/// tab `t`'s key: the sidebar's one badge, yellow, white on the open tab
+static void drawKeyBadge( Int t, const ICoord2D &at, const ICoord2D &size, Bool open )
+{
+	IRegion2D window = { { at.x, at.y }, { at.x + size.x, at.y + size.y } };
+	Sidebar_drawKeyBadge( s_keyText[ t ], window, KEY_INSET_TAB, open ? KEY_LETTER_LIT : KEY_LETTER );
 }
 
 static void drawTab( GameWindow *window, WinInstanceData *instData )
@@ -323,7 +403,8 @@ static void drawTab( GameWindow *window, WinInstanceData *instData )
 	if( size.x < 3 || size.y < 3 )
 		return;
 
-	const Bool open = t == s_tab;
+	// the open tab, and one held down under the button, take the lit, pressed-in look
+	const Bool open = t == s_tab || BitTest( instData->getState(), WIN_STATE_SELECTED );
 	const Bool hover = BitTest( instData->getState(), WIN_STATE_HILITED );
 	const Bool keyed = s_keyText[ t ] != NULL && !s_keyShown[ t ].isEmpty();
 
@@ -336,7 +417,7 @@ static void drawTab( GameWindow *window, WinInstanceData *instData )
 	{
 		TheDisplay->drawImage( art, at.x, at.y, at.x + size.x, at.y + size.y );
 		if( keyed )
-			drawKeyBadge( t, at.x + 2, at.y + 2, open );
+			drawKeyBadge( t, at, size, open );
 		return;
 	}
 
@@ -358,20 +439,35 @@ static void drawTab( GameWindow *window, WinInstanceData *instData )
 		const Int w = max( REAL_TO_INT( icon->getImageWidth() * fit ), 1 );
 		const Int h = max( REAL_TO_INT( icon->getImageHeight() * fit ), 1 );
 		// centred, but moved right off the key badge in the top left as far as the face allows
-		Int textW = 0, textH = 0;
+		Int textW = 0, textH = 0, plateW = 0, plateH = 0;
+		const Int inset = MAX( REAL_TO_INT( KEY_INSET_TAB * s_keyScale + 0.5f ), 1 );
 		if( keyed )
+		{
 			s_keyText[ t ]->getSize( &textW, &textH );
-		const Int badgeRight = keyed ? 2 + textW + 6 + 1 : 0;
+			keyPlateSize( s_keyText[ t ]->getTextLength(), textW, textH, size.x - 2 * inset, size.y - 2 * inset, &plateW, &plateH );
+		}
+		const Int badgeRight = keyed ? inset + plateW + 1 : 0;
 		Int x = max( ( size.x - w ) / 2, badgeRight );
 		x = at.x + min( x, size.x - 2 - w ) + push;
 		const Int y = at.y + ( size.y - h ) / 2 + push;
 		TheDisplay->drawImage( icon, x, y, x + w, y + h, open ? 0xFFFFFFFF : TAB_ICON_DIM );
 	}
 	if( keyed )
-		drawKeyBadge( t, at.x + 2 + push, at.y + 2 + push, open );
+	{
+		const ICoord2D pushed = { at.x + push, at.y + push };
+		drawKeyBadge( t, pushed, size, open );
+	}
 }
 
-/// a picker chip: the side's Chip (ChipWide for Tümü), P on the current pick, else the steel stand-in;
+/// whether the shown tab's picker has `id` lit: a factory or builder in the lit set, or Tümü
+/// (INVALID_ID) when the set is empty
+static Bool chipLit( ObjectID id )
+{
+	const std::vector< ObjectID > &picks = s_picks[ s_tab ];
+	return id == INVALID_ID ? picks.empty() : std::binary_search( picks.begin(), picks.end(), id );
+}
+
+/// a picker chip: the side's Chip, P on every lit chip and while held down, else the steel stand-in;
 /// its text in the middle, dark on the lit piece
 static void drawChip( GameWindow *window, WinInstanceData *instData )
 {
@@ -385,7 +481,8 @@ static void drawChip( GameWindow *window, WinInstanceData *instData )
 			return;
 	}
 	const ObjectID id = index < 0 || index >= (Int)s_factories.size() ? INVALID_ID : s_factories[ index ];
-	const Bool lit = s_pick[ s_tab ] == id;
+	const Bool lit = chipLit( id );
+	const Bool pushed = lit || BitTest( instData->getState(), WIN_STATE_SELECTED );
 	const Bool hover = BitTest( instData->getState(), WIN_STATE_HILITED );
 
 	ICoord2D at, size;
@@ -394,11 +491,11 @@ static void drawChip( GameWindow *window, WinInstanceData *instData )
 	if( size.x < 3 || size.y < 3 )
 		return;
 	// every chip, Tümü too, on the same piece at the same size
-	const Image *art = statePiece( "Chip", TRUE, lit, hover );
+	const Image *art = statePiece( "Chip", TRUE, pushed, hover );
 	if( art != NULL )
 		TheDisplay->drawImage( art, at.x, at.y, at.x + size.x, at.y + size.y );
 	else
-		drawSteel( at, size, lit, hover );
+		drawSteel( at, size, pushed, hover );
 	if( lit )
 	{
 		// the pick's frame, inside the chip's own rect as fills (a 2 px line would straddle the edge);
@@ -411,7 +508,7 @@ static void drawChip( GameWindow *window, WinInstanceData *instData )
 
 	DisplayString *text = s_chipText[ index + 1 ];
 	const Image *icon = index >= 0 ? s_chipIcon[ index ] : NULL;
-	const Int push = lit && art == NULL ? 1 : 0;
+	const Int push = pushed && art == NULL ? 1 : 0;
 	Int textW = 0, textH = 0;
 	if( text != NULL )
 		text->getSize( &textW, &textH );
@@ -421,7 +518,7 @@ static void drawChip( GameWindow *window, WinInstanceData *instData )
 	// a dark backing; the pick's chip in a lit frame, the others' pictures a shade darker
 	if( index >= 0 && icon != NULL && !s_chipGlyph[ index ] && icon->getImageWidth() > 0 && icon->getImageHeight() > 0 )
 	{
-		// inside the Chip piece's bezel, the face Tümü's text sits on: 4 px at 1080 (a 28 high chip)
+		// over the bezel up to the lit frame's 2 px, so the picture takes all of a chip that small
 		const Int inset = max( REAL_TO_INT( CHIP_PICTURE_INSET * size.y / 28.0f + 0.5f ), 2 );
 		IRegion2D room = { { at.x + inset, at.y + inset }, { at.x + size.x - inset, at.y + size.y - inset } };
 		if( room.width() > 0 && room.height() > 0 )
@@ -484,10 +581,6 @@ static void drawBox( GameWindow *window, WinInstanceData *instData )
 	if( well != NULL )
 		for( Int i = 0; i < HUD_SIDEBAR_CAMEOS; i++ )
 			TheDisplay->drawImage( well, s_cells[ i ].lo.x, s_cells[ i ].lo.y, s_cells[ i ].hi.x, s_cells[ i ].hi.y );
-
-	// the line in the gap between the defences' last row and the research's first
-	if( s_dividerY >= 0 )
-		TheDisplay->drawLine( s_cells[ 0 ].lo.x, s_dividerY, s_cells[ HUD_SIDEBAR_CAMEO_COLUMNS - 1 ].hi.x, s_dividerY, 1.0f, DIVIDER );
 }
 
 /// a cameo as the push button draws it, and on a research cell an up chevron in the top left corner,
@@ -724,10 +817,9 @@ void Sidebar_pointCursor( void )
 	const MouseIO *io = TheMouse->getMouseStatus();
 	if( io == NULL )
 		return;
-	// the game has no sell cursor: the target cross stands in for one until Tools/cursors.py draws it
 	Object *obj = ownStructureAt( io->pos );
 	if( s_cursorMode == SIDEBAR_CURSOR_SELL )
-		TheMouse->setCursor( sellable( obj ) ? Mouse::CROSS : Mouse::GENERIC_INVALID );
+		TheMouse->setCursor( sellable( obj ) ? Mouse::SELL : Mouse::SELL_INVALID );
 	else
 		TheMouse->setCursor( repairable( obj ) ? Mouse::DO_REPAIR : Mouse::GENERIC_INVALID );
 }
@@ -846,12 +938,96 @@ static void cancelNewest( const ThingTemplate *thing )
 }
 
 //-------------------------------------------------------------------------------------------------
-static Bool isResearch( const Buildable &entry );
+void Sidebar_pressChip( std::vector< ObjectID > &picks, ObjectID chip, Bool toggle )
+{
+	if( chip == INVALID_ID || !toggle )
+	{
+		picks.clear();
+		if( chip != INVALID_ID )
+			picks.push_back( chip );
+		return;
+	}
+	std::vector< ObjectID >::iterator at = std::lower_bound( picks.begin(), picks.end(), chip );
+	if( at != picks.end() && *at == chip )
+		picks.erase( at );
+	else
+		picks.insert( at, chip );
+}
 
-static void clickCameo( const CommandButton *command, Bool right )
+Int Sidebar_nextFactory( std::vector< UnsignedInt > &queued, const std::vector< UnsignedInt > &caps )
+{
+	Int best = -1;
+	for( Int i = 0; i < (Int)queued.size() && i < (Int)caps.size(); i++ )
+		if( queued[ i ] < caps[ i ] && ( best < 0 || queued[ i ] < queued[ best ] ) )
+			best = i;
+	if( best >= 0 )
+		queued[ best ]++;
+	return best;
+}
+
+static Bool isResearch( const Buildable &entry );
+static Bool isPower( const Buildable &entry );
+static CommandAvailability pickedAvailability( Object *factory, const ThingTemplate *thing );
+
+/// a unit cameo's left click.  Tümü: the logic picks the factory (MSG_QUEUE_UNIT_FOR_GROUP with no
+/// squad); one chip lit: that factory; several: the batch spread over those whose own bar has the
+/// unit ready, each unit to the least loaded as the bar spreads a build over several selected
+/// factories (ControlBarCommandProcessing.cpp, GUI_COMMAND_UNIT_BUILD), the lower ObjectID on a tie,
+/// each order naming its factory.  Cut to the bank as GroupPanel_queueUnit cuts it; the logic checks
+/// every factory again (Player::factoryTakesGroupUnit) and drops an order that no longer fits.
+static void queueAtPicks( const ThingTemplate *thing )
+{
+	const std::vector< ObjectID > &picks = s_picks[ s_tab ];
+	if( picks.size() <= 1 )
+	{
+		GroupPanel_queueUnit( thing, -1, picks.empty() ? INVALID_ID : picks[ 0 ] );
+		return;
+	}
+
+	std::vector< ObjectID > factories;
+	std::vector< UnsignedInt > queued, caps;
+	for( size_t p = 0; p < picks.size(); p++ )
+	{
+		Object *factory = TheGameLogic->findObjectByID( picks[ p ] );
+		const ProductionUpdateInterface *pu = factory != NULL ? factory->getProductionUpdateInterface() : NULL;
+		if( pu == NULL || pickedAvailability( factory, thing ) != COMMAND_AVAILABLE )
+			continue;
+		factories.push_back( picks[ p ] );
+		queued.push_back( pu->getProductionCount() );
+		caps.push_back( getQueueCap( pu ) );
+	}
+
+	Player *player = ThePlayerList->getLocalPlayer();
+	Int wanted = getBuildBatchCount();
+	const Int cost = thing->calcCostToBuild( player );
+	if( cost > 0 )
+		wanted = min( wanted, (Int)( player->getMoney()->countMoney() / (UnsignedInt)cost ) );
+	for( Int each = 0; each < wanted; each++ )
+	{
+		const Int at = Sidebar_nextFactory( queued, caps );
+		if( at < 0 )
+			break;
+		GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_QUEUE_UNIT_FOR_GROUP );
+		msg->appendIntegerArgument( thing->getTemplateID() );
+		msg->appendIntegerArgument( -1 );
+		msg->appendObjectIDArgument( factories[ at ] );
+	}
+}
+
+static void clickCameo( GameWindow *control, const CommandButton *command, Bool right )
 {
 	if( ThePlayerList->getLocalPlayer() == NULL )
 		return;
+
+	// a power cell fires as the tray's button does: the bar finds the holder itself, no selection
+	// needed, and the logic hears of it through the same messages
+	for( size_t at = 0; at < s_list.size(); at++ )
+		if( s_list[ at ].button == command && isPower( s_list[ at ] ) )
+		{
+			if( !right )
+				TheControlBar->firePowerCell( control );
+			return;
+		}
 
 	// a research cell: queued at the building that offers it, cancelled at the one researching it,
 	// both named on the message so no selection is needed (the logic checks the building is the
@@ -893,19 +1069,22 @@ static void clickCameo( const CommandButton *command, Bool right )
 		if( right )
 			cancelNewest( thing );
 		else
-			GroupPanel_queueUnit( thing, -1, s_pick[ s_tab ] );
+			queueAtPicks( thing );
 	}
 	else if( command->getCommandType() == GUI_COMMAND_DOZER_CONSTRUCT && !right )
 	{
-		// a builder chip picked: that one puts it up (Sidebar_placementBuilder names it on the order);
-		// Tümü: the stand-in, and the logic's nearest idle builder as before
-		Object *picked = s_pick[ s_tab ] != INVALID_ID ? TheGameLogic->findObjectByID( s_pick[ s_tab ] ) : NULL;
-		Object *builder = picked != NULL && offersStructure( picked, thing ) ? picked : NULL;
-		if( picked != NULL && builder == NULL )
+		// builder chips lit: those of them that offer it put it up, one of them named on the order
+		// (Sidebar_placementBuilder); none of them can, nothing (its cameo is grey).  Tümü: the
+		// stand-in, and the logic's nearest idle builder as before
+		const std::vector< ObjectID > &picks = s_picks[ s_tab ];
+		s_placingBuilders.clear();
+		s_namedBuilders.clear();
+		for( size_t p = 0; p < picks.size(); p++ )
+			if( offersStructure( TheGameLogic->findObjectByID( picks[ p ] ), thing ) )
+				s_placingBuilders.push_back( picks[ p ] );
+		if( !picks.empty() && s_placingBuilders.empty() )
 			return;
-		s_placingBuilder = builder != NULL ? builder->getID() : INVALID_ID;
-		if( builder == NULL )
-			builder = builderFor( thing );
+		Object *builder = s_placingBuilders.empty() ? builderFor( thing ) : TheGameLogic->findObjectByID( s_placingBuilders[ 0 ] );
 		if( builder != NULL )
 			ControlBar::startStructurePlacement( command, builder );
 	}
@@ -914,11 +1093,54 @@ static void clickCameo( const CommandButton *command, Bool right )
 //-------------------------------------------------------------------------------------------------
 ObjectID Sidebar_placementBuilder( void )
 {
-	// only while the structure on the cursor is still the one the picked builder's cameo put there
-	if( s_placingBuilder == INVALID_ID || TheInGameUI == NULL || TheInGameUI->getPendingPlaceType() == NULL
-			|| TheInGameUI->getPendingPlaceSourceObjectID() != s_placingBuilder )
+	// only while the structure on the cursor is still the one the lit builders' cameo put there
+	if( s_placingBuilders.empty() || TheInGameUI == NULL || TheInGameUI->getPendingPlaceType() == NULL
+			|| TheInGameUI->getPendingPlaceSourceObjectID() != s_placingBuilders[ 0 ] )
 		return INVALID_ID;
-	return s_placingBuilder;
+	ICoord2D anchor;
+	Coord3D site;
+	if( s_placingBuilders.size() == 1 || !TheInGameUI->isPlacementAnchored() || TheTacticalView == NULL )
+		return s_placingBuilders[ 0 ];
+	TheInGameUI->getPlacementPoints( &anchor, NULL );
+	if( !TheTacticalView->screenToTerrain( &anchor, &site ) )
+		return s_placingBuilders[ 0 ];
+
+	// several lit: the pick MSG_DOZER_CONSTRUCT makes among selected builders (GameLogicDispatch.cpp,
+	// considerBuilder), made among them: the free one nearest the site, else the nearest of those with
+	// the fewest jobs, the lower ObjectID on an equal distance.  A builder already named in this
+	// placement is busy: a Shift run's orders are still on their way to the logic, which has not given
+	// him the job yet
+	const ThingTemplate *thing = TheInGameUI->getPendingPlaceType();
+	ObjectID best[ 2 ] = { INVALID_ID, INVALID_ID };		///< [0] the free one, [1] any
+	Real bestDistSqr[ 2 ] = { 0.0f, 0.0f };
+	Int bestJobs = 0;																	///< [1]'s jobs named in this placement
+	for( size_t b = 0; b < s_placingBuilders.size(); b++ )
+	{
+		Object *obj = TheGameLogic->findObjectByID( s_placingBuilders[ b ] );
+		if( !offersStructure( obj, thing ) )
+			continue;
+		const Real dx = obj->getPosition()->x - site.x, dy = obj->getPosition()->y - site.y;
+		const Real distSqr = dx * dx + dy * dy;
+		const Int jobs = (Int)std::count( s_namedBuilders.begin(), s_namedBuilders.end(), obj->getID() );
+		AIUpdateInterface *ai = obj->getAI();
+		DozerAIInterface *dozer = ai != NULL ? ai->getDozerAIInterface() : NULL;
+		const SupplyTruckAIInterface *supply = ai != NULL ? ai->getSupplyTruckAIInterface() : NULL;
+		const Bool idle = jobs == 0 && dozer != NULL && !dozer->isAnyTaskPending() && !( supply != NULL && supply->isCurrentlyFerryingSupplies() );
+		if( idle && ( best[ 0 ] == INVALID_ID || distSqr < bestDistSqr[ 0 ] ) )
+		{
+			best[ 0 ] = obj->getID();
+			bestDistSqr[ 0 ] = distSqr;
+		}
+		if( best[ 1 ] == INVALID_ID || jobs < bestJobs || ( jobs == bestJobs && distSqr < bestDistSqr[ 1 ] ) )
+		{
+			best[ 1 ] = obj->getID();
+			bestDistSqr[ 1 ] = distSqr;
+			bestJobs = jobs;
+		}
+	}
+	const ObjectID named = best[ 0 ] != INVALID_ID ? best[ 0 ] : best[ 1 ] != INVALID_ID ? best[ 1 ] : s_placingBuilders[ 0 ];
+	s_namedBuilders.push_back( named );
+	return named;
 }
 
 /// a factory or builder chip: its display name alone, nothing about its owner
@@ -960,17 +1182,19 @@ static WindowMsgHandledType boxSystem( GameWindow *window, UnsignedInt msg, Wind
 				Sidebar_selectTab( t );
 			return MSG_HANDLED;
 		}
+	// Tümü lights itself alone; a chip alone, or with Shift goes into the lit set or out of it, as
+	// Shift adds to and takes from a selection
 	if( control == s_chipAll )
 	{
 		if( msg == GBM_SELECTED )
-			s_pick[ s_tab ] = INVALID_ID;
+			Sidebar_pressChip( s_picks[ s_tab ], INVALID_ID, FALSE );
 		return MSG_HANDLED;
 	}
 	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; i++ )
 		if( control == s_chips[ i ] )
 		{
 			if( msg == GBM_SELECTED && i < (Int)s_factories.size() )
-				s_pick[ s_tab ] = s_factories[ i ];
+				Sidebar_pressChip( s_picks[ s_tab ], s_factories[ i ], TheKeyboard != NULL && TheKeyboard->isShift() );
 			return MSG_HANDLED;
 		}
 	if( control == s_arrowUp || control == s_arrowDown )
@@ -982,7 +1206,7 @@ static WindowMsgHandledType boxSystem( GameWindow *window, UnsignedInt msg, Wind
 
 	const CommandButton *command = (const CommandButton *)GadgetButtonGetData( control );
 	if( command != NULL )
-		clickCameo( command, msg == GBM_SELECTED_RIGHT );
+		clickCameo( control, command, msg == GBM_SELECTED_RIGHT );
 	return MSG_HANDLED;
 }
 
@@ -1066,9 +1290,12 @@ static Bool makeWindows( GameWindow *parent )
 		if( s_chipText[ c ] == NULL )
 			s_chipText[ c ] = TheDisplayStringManager->newDisplayString();
 	}
-	// a bar made again is most often a new match, whose ObjectIDs mean other buildings
+	// a bar made again is most often a new match, whose ObjectIDs mean other buildings; and with the
+	// lit sets gone the selection is followed again, so Options' Accept mid-match keeps its chips lit
 	for( Int t = 0; t < SIDEBAR_TAB_COUNT; t++ )
-		s_pick[ t ] = INVALID_ID;
+		s_picks[ t ].clear();
+	s_followed.clear();
+	s_countries.clear();
 
 	s_arrowUp = makeButton( 0 );
 	s_arrowDown = makeButton( 0 );
@@ -1113,6 +1340,29 @@ static void place( GameWindow *win, const IRegion2D &cell, const ICoord2D &origi
 		return;
 	win->winSetPosition( cell.lo.x - origin.x, cell.lo.y - origin.y );
 	win->winSetSize( cell.width(), cell.height() );
+}
+
+/// cameo `i` on its art's own shape: as large as its room in the well holds, centred.  The push
+/// button draws its picture, clock, count and hover over the whole window, so the window takes the
+/// picture's shape rather than the picture the cell's; with no picture it takes the whole room
+static void fitCameo( Int i, const Image *art )
+{
+	if( s_cameos[ i ] == NULL || s_box == NULL )
+		return;
+	IRegion2D r = s_cameoRoom[ i ];
+	if( art != NULL && art->getImageWidth() > 0 && art->getImageHeight() > 0 && r.width() > 0 && r.height() > 0 )
+	{
+		const Real fit = min( (Real)r.width() / art->getImageWidth(), (Real)r.height() / art->getImageHeight() );
+		const Int w = max( REAL_TO_INT( art->getImageWidth() * fit + 0.5f ), 1 );
+		const Int h = max( REAL_TO_INT( art->getImageHeight() * fit + 0.5f ), 1 );
+		r.lo.x += ( r.width() - w ) / 2;
+		r.lo.y += ( r.height() - h ) / 2;
+		r.hi.x = r.lo.x + w;
+		r.hi.y = r.lo.y + h;
+	}
+	ICoord2D origin;
+	s_box->winGetScreenPosition( &origin.x, &origin.y );
+	place( s_cameos[ i ], r, origin );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1161,12 +1411,13 @@ void Sidebar_layout( const HudLayoutRects &rects )
 		// the cell is the well; the cameo sits 3 px inside it at 1080
 		const Int inset = max( REAL_TO_INT( CAMEO_INSET * rects.scale + 0.5f ), 1 );
 		s_cells[ i ] = rects.cameos[ i ];
-		IRegion2D cameo = rects.cameos[ i ];
-		cameo.lo.x += inset;
-		cameo.lo.y += inset;
-		cameo.hi.x -= inset;
-		cameo.hi.y -= inset;
-		place( s_cameos[ i ], cameo, box.lo );
+		IRegion2D &room = s_cameoRoom[ i ];
+		room = rects.cameos[ i ];
+		room.lo.x += inset;
+		room.lo.y += inset;
+		room.hi.x -= inset;
+		room.hi.y -= inset;
+		fitCameo( i, s_cameos[ i ] != NULL ? GadgetButtonGetEnabledImage( s_cameos[ i ] ) : NULL );
 	}
 	place( s_arrowUp, rects.arrowUp, box.lo );
 	place( s_arrowDown, rects.arrowDown, box.lo );
@@ -1223,7 +1474,11 @@ void Sidebar_layout( const HudLayoutRects &rects )
 		}
 	}
 
-	GameFont *keyFont = TheFontLibrary->getFont( "Arial", max( REAL_TO_INT( KEY_POINTS * rects.scale ), 6 ), TRUE );
+	// one key font for the tabs and the strip's command buttons (W3DPushButton asks Sidebar_keyFont),
+	// rounded rather than cut so 720's 6.7 points is 7, not 6
+	GameFont *keyFont = TheFontLibrary->getFont( "Arial", max( REAL_TO_INT( KEY_POINTS * rects.scale + 0.5f ), 6 ), TRUE );
+	s_keyFont = keyFont;
+	s_keyScale = rects.scale;
 	for( Int t = 0; t < SIDEBAR_TAB_COUNT; t++ )
 	{
 		if( s_keyText[ t ] != NULL && keyFont != NULL )
@@ -1279,11 +1534,108 @@ void Sidebar_scrollBy( Int rows )
 //-------------------------------------------------------------------------------------------------
 static Bool structureTab( Int tab )
 {
-	return tab == SIDEBAR_TAB_BUILDINGS || tab == SIDEBAR_TAB_DEFENSE;
+	return tab == SIDEBAR_TAB_BUILDINGS;
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Savunma's research: every upgrade button on the command set of a finished structure of the
+void Sidebar_showOrder( const std::vector< Int > &country, const std::vector< Int > &seen, std::vector< Int > &order )
+{
+	order.clear();
+	for( Int i = 0; i < (Int)country.size() && i < (Int)seen.size(); i++ )
+		order.push_back( i );
+	std::stable_sort( order.begin(), order.end(), [ & ]( Int a, Int b )
+	{
+		return country[ a ] != country[ b ] ? country[ a ] < country[ b ] : seen[ a ] < seen[ b ];
+	} );
+}
+
+/// the country a side belongs to: a general's own faction is his country's ("AmericaAirForceGeneral"
+/// is America's), anything else its own
+static AsciiString countryOf( const AsciiString &side )
+{
+	static const char *const COUNTRIES[] = { "America", "China", "GLA", "Turkiye", "Boss" };
+	for( Int i = 0; i < (Int)( sizeof( COUNTRIES ) / sizeof( COUNTRIES[ 0 ] ) ); i++ )
+		if( side.startsWith( COUNTRIES[ i ] ) )
+			return AsciiString( COUNTRIES[ i ] );
+	return side;
+}
+
+/// `country`'s place among the player's: his own was put first when the order began, a foreign one
+/// takes the next place the first time anything of it shows
+static Int countryRank( const AsciiString &country )
+{
+	for( Int i = 0; i < (Int)s_countries.size(); i++ )
+		if( s_countries[ i ] == country )
+			return i;
+	s_countries.push_back( country );
+	return (Int)s_countries.size() - 1;
+}
+
+/// `key`'s place in `tab`'s first-seen order, taking the next one the first time it shows
+static Int seenRank( Int tab, const void *key )
+{
+	std::vector< const void * > &seen = s_seen[ tab ];
+	for( Int i = 0; i < (Int)seen.size(); i++ )
+		if( seen[ i ] == key )
+			return i;
+	seen.push_back( key );
+	return (Int)seen.size() - 1;
+}
+
+/// the show order starts again (a new bar: a new match, a load, Options' Accept), the player's own
+/// country first.  The lit chips and the builders a placement named go with it: after a load or a
+/// clock run back their ObjectIDs may name buildings the player never picked
+static void resetShowOrder( Player *player )
+{
+	for( Int t = 0; t < SIDEBAR_TAB_COUNT; t++ )
+	{
+		s_seen[ t ].clear();
+		s_picks[ t ].clear();
+	}
+	s_followed.clear();
+	s_placingBuilders.clear();
+	s_namedBuilders.clear();
+	s_countries.clear();
+	if( player != NULL )
+		s_countries.push_back( countryOf( player->getSide() ) );
+	s_seenFrame = 0;
+}
+
+/// whether `thing`'s own prerequisites are met: the buildings and sciences it asks for, and not barred
+/// by a script.  What Player::canBuild reads for the bar, less the count limits, so a unit at its cap
+/// is still listed (greyed) and one whose building is missing is not
+static Bool prerequisitesMet( const Player *player, const ThingTemplate *thing )
+{
+	if( thing == NULL || !player->allowedToBuild( thing ) )
+		return FALSE;
+	if( thing->getBuildable() == BSTATUS_IGNORE_PREREQUISITES )
+		return TRUE;
+	for( Int i = 0; i < thing->getPrereqCount(); i++ )
+		if( !thing->getNthPrereq( i )->isSatisfied( player ) )
+			return FALSE;
+	return TRUE;
+}
+
+/// whether a gathered cell is unlocked: its prerequisites, the sciences its button asks for and a
+/// player upgrade it needs are all there.  Too dear, busy or at its cap is still unlocked (greyed, as
+/// the bar has it); locked is left off the tab altogether
+static Bool unlocked( const Player *player, const Buildable &entry )
+{
+	const CommandButton *button = entry.button;
+	if( button == NULL )
+		return FALSE;
+	for( size_t i = 0; i < button->getScienceVec().size(); i++ )
+		if( !player->hasScience( button->getScienceVec()[ i ] ) )
+			return FALSE;
+	const UpgradeTemplate *upgrade = button->getUpgradeTemplate();
+	if( BitTest( button->getOptions(), NEED_UPGRADE ) && upgrade != NULL && upgrade->getUpgradeType() == UPGRADE_TYPE_PLAYER
+			&& !player->hasUpgradeComplete( upgrade ) )
+		return FALSE;
+	return entry.thing == NULL || prerequisitesMet( player, entry.thing );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The powers tab's research: every upgrade button on the command set of a finished structure of the
 	* player's, one cell an upgrade.  A player upgrade the player has finished is left out, and so is
 	* an object upgrade no building still lacks.  The cell keeps the building with the best availability
 	* (the bar's own reading), and a click researches it there. */
@@ -1322,7 +1674,7 @@ static void gatherUpgrades( Object *obj, void *userData )
 			continue;
 
 		size_t at = 0;
-		while( at < s->list->size() && ( (*s->list)[ at ].thing != NULL || (*s->list)[ at ].button->getUpgradeTemplate() != upgrade ) )
+		while( at < s->list->size() && ( !isResearch( (*s->list)[ at ] ) || (*s->list)[ at ].button->getUpgradeTemplate() != upgrade ) )
 			at++;
 		if( at < s->list->size() )
 		{
@@ -1334,6 +1686,8 @@ static void gatherUpgrades( Object *obj, void *userData )
 			continue;
 		}
 		const Buildable added = { NULL, button, now };
+		if( !unlocked( s->player, added ) )
+			continue;
 		s->list->push_back( added );
 		s->producers->push_back( obj->getID() );
 	}
@@ -1341,45 +1695,134 @@ static void gatherUpgrades( Object *obj, void *userData )
 
 static Bool isResearch( const Buildable &entry )
 {
-	return entry.thing == NULL && entry.button != NULL && entry.button->getUpgradeTemplate() != NULL;
+	if( entry.thing != NULL || entry.button == NULL )
+		return FALSE;
+	const GUICommandType type = entry.button->getCommandType();
+	return type == GUI_COMMAND_PLAYER_UPGRADE || type == GUI_COMMAND_OBJECT_UPGRADE;
 }
 
-static void fillList( Player *player )
+/// a powers tray button on the powers tab: a general's power, a superweapon, a select-all
+static Bool isPower( const Buildable &entry )
 {
-	const Bool structures = structureTab( s_tab );
+	return entry.thing == NULL && entry.button != NULL && !isResearch( entry );
+}
+
+/// what a power cell fires from (the most ready holder of its power, as the tray asks), or the first
+/// of the units a select-all names; NULL when the player has none
+static Object *powerHolder( Player *player, const CommandButton *button )
+{
+	if( button->getSpecialPowerTemplate() != NULL )
+		return player->findMostReadyShortcutSpecialPowerOfType( button->getSpecialPowerTemplate()->getSpecialPowerType() );
+	return button->getThingTemplate() != NULL ? player->findAnyExistingObjectWithThingTemplate( button->getThingTemplate() ) : NULL;
+}
+
+/// `tab`'s unlocked items as the gathers find them, in the command sets' order, and per item the
+/// building a research is queued at.  The powers tab: the tray's shown buttons that still have
+/// something behind them, then the research
+static void gatherTab( Player *player, Int tab, std::vector< Buildable > &items, std::vector< ObjectID > &producers )
+{
+	items.clear();
+	producers.clear();
+	if( tab == SIDEBAR_TAB_POWERS )
+	{
+		for( Int i = 0; i < MAX_SPECIAL_POWER_SHORTCUTS; i++ )
+		{
+			GameWindow *win = TheControlBar->getShownPowerShortcut( i );
+			if( win == NULL )
+				continue;
+			const CommandButton *button = (const CommandButton *)GadgetButtonGetData( win );
+			const CommandAvailability now = TheControlBar->getButtonAvailability( button, powerHolder( player, button ) );
+			if( now == COMMAND_HIDDEN )
+				continue;
+			const Buildable power = { NULL, button, now };
+			items.push_back( power );
+			producers.push_back( INVALID_ID );
+		}
+		UpgradeSearch search = { player, &items, &producers };
+		player->iterateObjects( gatherUpgrades, &search );
+		return;
+	}
+
+	const Bool structures = structureTab( tab );
 	if( structures )
 		GroupPanel_gatherConstructible( player, s_all );
 	else
 		GroupPanel_gatherBuildable( player, s_all );
-
-	s_list.clear();
 	for( size_t i = 0; i < s_all.size(); i++ )
 	{
-		const ThingTemplate *thing = s_all[ i ].thing;
-		const Bool pick = structures ? thing->isKindOf( KINDOF_FS_BASE_DEFENSE ) == ( s_tab == SIDEBAR_TAB_DEFENSE )
-			: thing->isKindOf( KINDOF_INFANTRY ) == ( s_tab == SIDEBAR_TAB_INFANTRY );
-		if( pick )
-			s_list.push_back( s_all[ i ] );
+		const Bool pick = structures || s_all[ i ].thing->isKindOf( KINDOF_INFANTRY ) == ( tab == SIDEBAR_TAB_INFANTRY );
+		if( pick && unlocked( player, s_all[ i ] ) )
+			items.push_back( s_all[ i ] );
 	}
-	s_producer.assign( s_list.size(), INVALID_ID );
+	producers.assign( items.size(), INVALID_ID );
+}
 
-	// Savunma also carries every research the player's buildings offer, after the defences
-	if( s_tab == SIDEBAR_TAB_DEFENSE )
+/// what an item is for the first-seen order: its structure's or unit's template, its research's
+/// upgrade, its power's button
+static const void *showKey( const Buildable &entry )
+{
+	if( entry.thing != NULL )
+		return entry.thing;
+	return isResearch( entry ) ? (const void *)entry.button->getUpgradeTemplate() : (const void *)entry.button;
+}
+
+/// an item's country's place: a structure's or unit's own side, a research's building's, a power's
+/// holder's; the player's own (0) for one with no side or no holder
+static Int countryPlace( Player *player, const Buildable &entry, ObjectID producer )
+{
+	const ThingTemplate *from = entry.thing;
+	if( from == NULL )
 	{
-		const size_t defences = s_list.size();
-		UpgradeSearch search = { player, &s_list, &s_producer };
-		player->iterateObjects( gatherUpgrades, &search );
-		// the research starts on a row of its own: an odd defence row gets an empty cell
-		if( s_list.size() > defences && defences % HUD_SIDEBAR_CAMEO_COLUMNS != 0 )
-		{
-			const Buildable gap = { NULL, NULL, COMMAND_HIDDEN };
-			s_list.insert( s_list.begin() + defences, gap );
-			s_producer.insert( s_producer.begin() + defences, INVALID_ID );
-		}
-		s_researchFrom = s_list.size() > defences ? (Int)( defences + defences % HUD_SIDEBAR_CAMEO_COLUMNS ) : -1;
+		const Object *obj = isResearch( entry ) ? TheGameLogic->findObjectByID( producer ) : powerHolder( player, entry.button );
+		from = obj != NULL ? obj->getTemplate() : NULL;
 	}
-	else
-		s_researchFrom = -1;
+	if( from == NULL || from->getDefaultOwningSide().isEmpty() )
+		return 0;
+	return countryRank( countryOf( from->getDefaultOwningSide() ) );
+}
+
+/// `items`' show order into s_showOrder; an item never seen on `tab` before takes the next place in
+/// its first-seen order, and a country never seen the next place among the player's
+static void orderTab( Player *player, Int tab, const std::vector< Buildable > &items, const std::vector< ObjectID > &producers )
+{
+	s_countryOf.clear();
+	s_seenAt.clear();
+	for( size_t i = 0; i < items.size(); i++ )
+	{
+		s_countryOf.push_back( countryPlace( player, items[ i ], producers[ i ] ) );
+		s_seenAt.push_back( seenRank( tab, showKey( items[ i ] ) ) );
+	}
+	Sidebar_showOrder( s_countryOf, s_seenAt, s_showOrder );
+}
+
+/// the tabs not shown are looked at a few times a second, so what unlocks on one of them while
+/// another is shown takes its place in the order it unlocked, not the order the player looked
+static void watchOtherTabs( Player *player, UnsignedInt frame )
+{
+	const UnsignedInt WATCH_FRAMES = LOGICFRAMES_PER_SECOND / 3;
+	if( s_seenFrame != 0 && frame < s_seenFrame + WATCH_FRAMES )
+		return;
+	s_seenFrame = frame;
+	for( Int t = 0; t < SIDEBAR_TAB_COUNT; t++ )
+	{
+		if( t == s_tab )
+			continue;
+		gatherTab( player, t, s_gathered, s_gatheredProducer );
+		orderTab( player, t, s_gathered, s_gatheredProducer );
+	}
+}
+
+static void fillList( Player *player )
+{
+	gatherTab( player, s_tab, s_gathered, s_gatheredProducer );
+	orderTab( player, s_tab, s_gathered, s_gatheredProducer );
+	s_list.clear();
+	s_producer.clear();
+	for( size_t i = 0; i < s_showOrder.size(); i++ )
+	{
+		s_list.push_back( s_gathered[ s_showOrder[ i ] ] );
+		s_producer.push_back( s_gatheredProducer[ s_showOrder[ i ] ] );
+	}
 	s_count.assign( s_list.size(), 0 );
 	s_clock.assign( s_list.size(), -1 );
 	s_researcher.assign( s_list.size(), INVALID_ID );
@@ -1397,7 +1840,7 @@ static void fillList( Player *player )
 /// how the picked factory's own bar has `thing`: its button's availability, restricted when it has none
 static CommandAvailability pickedAvailability( Object *factory, const ThingTemplate *thing )
 {
-	// a factory's unit buttons on the unit tabs, a builder's structure buttons on Bina and Savunma
+	// a factory's unit buttons on the unit tabs, a builder's structure buttons on Bina
 	const Int type = structureTab( s_tab ) ? GUI_COMMAND_DOZER_CONSTRUCT : GUI_COMMAND_UNIT_BUILD;
 	const CommandSet *set = TheControlBar->findCommandSet( factory->getCommandSetString() );
 	for( Int i = 0; set != NULL && i < MAX_COMMANDS_PER_SET; i++ )
@@ -1409,7 +1852,7 @@ static CommandAvailability pickedAvailability( Object *factory, const ThingTempl
 	return COMMAND_RESTRICTED;
 }
 
-/// a live, finished builder of the player's: the Bina and Savunma tabs' chips
+/// a live, finished builder of the player's: the Bina tab's chips
 static void findBuilderChip( Object *obj, void *userData )
 {
 	std::vector< ObjectID > *found = (std::vector< ObjectID > *)userData;
@@ -1427,45 +1870,73 @@ struct FactorySearch
 static void findFactory( Object *obj, void *userData );
 
 //-------------------------------------------------------------------------------------------------
-/** The player picked one of his producers or builders in the world: the sidebar goes to its tab with
-	* its chip lit (a builder Bina, a barracks Piyade, a war factory or airfield Araç).  Only when the
-	* selection becomes that one object, so a tab the player chose afterwards is left alone. */
+/** The player picked producers or builders of his in the world: each tab one of them belongs to (a
+	* builder Bina, a barracks Piyade, a war factory or airfield Araç) gets exactly those chips lit, and
+	* the sidebar shows the shown tab if it is one of them, else the first of them.  Only when the
+	* producers in the selection change, so a tab or a chip the player chose afterwards is left alone. */
 //-------------------------------------------------------------------------------------------------
 static void followSelection( Player *player )
 {
+	static std::vector< ObjectID > now;
+	static std::vector< Object * > objects;
+	now.clear();
+	objects.clear();
 	const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
-	Object *one = selected != NULL && selected->size() == 1 && *selected->begin() != NULL ? ( *selected->begin() )->getObject() : NULL;
-	const ObjectID id = one != NULL ? one->getID() : INVALID_ID;
-	if( id == s_followed )
+	if( selected != NULL )
+		for( DrawableListCIt it = selected->begin(); it != selected->end(); ++it )
+		{
+			Object *obj = *it != NULL ? ( *it )->getObject() : NULL;
+			if( obj != NULL && obj->getControllingPlayer() == player && ( obj->isKindOf( KINDOF_DOZER ) || obj->getProductionUpdateInterface() != NULL ) )
+			{
+				now.push_back( obj->getID() );
+				objects.push_back( obj );
+			}
+		}
+	if( now == s_followed )
 		return;
-	s_followed = id;
-	if( one == NULL || one->getControllingPlayer() != player )
-		return;
+	s_followed = now;
 
-	Int tab = -1;
-	std::vector< ObjectID > found;
-	if( one->isKindOf( KINDOF_DOZER ) )
+	std::vector< ObjectID > lit[ SIDEBAR_TAB_COUNT ];
+	for( size_t o = 0; o < objects.size(); o++ )
 	{
-		findBuilderChip( one, &found );
-		tab = found.empty() ? -1 : SIDEBAR_TAB_BUILDINGS;
-	}
-	else
-	{
-		FactorySearch infantry = { TRUE, &found };
-		findFactory( one, &infantry );
-		if( !found.empty() )
-			tab = SIDEBAR_TAB_INFANTRY;
+		Object *obj = objects[ o ];
+		std::vector< ObjectID > found;
+		Int tab = -1;
+		if( obj->isKindOf( KINDOF_DOZER ) )
+		{
+			findBuilderChip( obj, &found );
+			tab = found.empty() ? -1 : SIDEBAR_TAB_BUILDINGS;
+		}
 		else
 		{
-			FactorySearch vehicles = { FALSE, &found };
-			findFactory( one, &vehicles );
-			tab = found.empty() ? -1 : SIDEBAR_TAB_VEHICLES;
+			FactorySearch infantry = { TRUE, &found };
+			findFactory( obj, &infantry );
+			if( !found.empty() )
+				tab = SIDEBAR_TAB_INFANTRY;
+			else
+			{
+				FactorySearch vehicles = { FALSE, &found };
+				findFactory( obj, &vehicles );
+				tab = found.empty() ? -1 : SIDEBAR_TAB_VEHICLES;
+			}
 		}
+		if( tab >= 0 )
+			lit[ tab ].push_back( obj->getID() );
 	}
-	if( tab < 0 )
-		return;
-	Sidebar_selectTab( tab );
-	s_pick[ tab ] = id;	// a producer past the chips goes back to Tümü on the refill
+
+	Int show = lit[ s_tab ].empty() ? -1 : s_tab;
+	for( Int t = 0; t < SIDEBAR_TAB_COUNT; t++ )
+	{
+		if( lit[ t ].empty() )
+			continue;
+		if( show < 0 )
+			show = t;
+		// those past the chips drop out on the refill, and with none left the tab is back on Tümü
+		std::sort( lit[ t ].begin(), lit[ t ].end() );
+		s_picks[ t ].swap( lit[ t ] );
+	}
+	if( show >= 0 )
+		Sidebar_selectTab( show );
 }
 
 /// a finished factory of the player's whose bar offers a unit of the tab's kind
@@ -1590,39 +2061,52 @@ void Sidebar_update( void )
 		}
 	}
 
-	// a single producer or builder of the player's newly selected in the world: its tab and its chip
+	// producers or builders of the player's newly selected in the world: their tabs and their chips
 	followSelection( player );
 
-	// the structure on the cursor no longer the picked builder's once the placement is over
+	// the structure on the cursor no longer the lit builders' once the placement is over
 	if( TheInGameUI->getPendingPlaceType() == NULL )
-		s_placingBuilder = INVALID_ID;
+	{
+		s_placingBuilders.clear();
+		s_namedBuilders.clear();
+	}
 
 	// once a logic frame, or at once when the tab changed: nothing read here changes in between
 	const UnsignedInt frame = TheGameLogic->getFrame();
+	// the show order starts again for a new player or a clock that ran back (a load), or once the bar
+	// was made again (makeWindows empties the countries)
+	if( s_countries.empty() || s_orderPlayer != player || frame < s_seenFrame )
+	{
+		resetShowOrder( player );
+		s_orderPlayer = player;
+		s_dirty = TRUE;
+	}
 	if( s_dirty || !s_listed || s_listFrame != frame || s_listPlayer != player )
 	{
 		fillList( player );
+		watchOtherTabs( player, frame );
 		s_factories.clear();
-		if( !structureTab( s_tab ) )
-		{
-			player->iterateObjects( gatherProgress, NULL );
-
-			// the picker's factories
-			FactorySearch search = { s_tab == SIDEBAR_TAB_INFANTRY, &s_factories };
-			player->iterateObjects( findFactory, &search );
-		}
+		if( s_tab == SIDEBAR_TAB_BUILDINGS )
+			player->iterateObjects( findBuilderChip, &s_factories );		// the builders
 		else
 		{
-			player->iterateObjects( findBuilderChip, &s_factories );	// and on Bina and Savunma the builders
-			if( s_tab == SIDEBAR_TAB_DEFENSE )
-				player->iterateObjects( gatherProgress, NULL );					// the research under way
+			player->iterateObjects( gatherProgress, NULL );						// units queued, research under way
+			if( s_tab != SIDEBAR_TAB_POWERS )
+			{
+				// the picker's factories
+				FactorySearch search = { s_tab == SIDEBAR_TAB_INFANTRY, &s_factories };
+				player->iterateObjects( findFactory, &search );
+			}
 		}
 
-		// sorted by ObjectID, the pick back to Tümü once its producer is gone or off the chips
+		// sorted by ObjectID; a lit producer drops out once it is gone or off the chips, and with none
+		// left the tab is back on Tümü
 		std::sort( s_factories.begin(), s_factories.end() );
 		const size_t chips = min( s_factories.size(), (size_t)HUD_SIDEBAR_PICKER_CHIPS );
-		if( std::find( s_factories.begin(), s_factories.begin() + chips, s_pick[ s_tab ] ) == s_factories.begin() + chips )
-			s_pick[ s_tab ] = INVALID_ID;
+		std::vector< ObjectID > &picks = s_picks[ s_tab ];
+		for( size_t p = picks.size(); p-- > 0; )
+			if( std::find( s_factories.begin(), s_factories.begin() + chips, picks[ p ] ) == s_factories.begin() + chips )
+				picks.erase( picks.begin() + p );
 
 		{
 			// each chip's building or builder: its picture for the draw, its name for the tooltip
@@ -1651,8 +2135,16 @@ void Sidebar_update( void )
 
 	const Int count = (Int)s_list.size();
 	s_row = Sidebar_scroll( count, HUD_SIDEBAR_CAMEO_COLUMNS, HUD_SIDEBAR_CAMEO_ROWS, s_row );
-	// with a factory or builder picked the cameos read its bar, so what it cannot build is greyed
-	Object *picked = s_pick[ s_tab ] == INVALID_ID ? NULL : TheGameLogic->findObjectByID( s_pick[ s_tab ] );
+	// with factories or builders lit the cameos read their bars, so what none of them can build is
+	// greyed: each cameo as the best of them has it
+	static std::vector< Object * > lit;
+	lit.clear();
+	for( size_t p = 0; p < s_picks[ s_tab ].size(); p++ )
+	{
+		Object *obj = TheGameLogic->findObjectByID( s_picks[ s_tab ][ p ] );
+		if( obj != NULL )
+			lit.push_back( obj );
+	}
 	for( Int i = 0; i < HUD_SIDEBAR_CAMEOS; i++ )
 	{
 		GameWindow *win = s_cameos[ i ];
@@ -1667,23 +2159,37 @@ void Sidebar_update( void )
 		}
 
 		const Buildable &entry = s_list[ at ];
-		if( entry.button == NULL )
-		{
-			// the empty cell that ends the defences' row before the research: only its well shows
-			win->winHide( TRUE );
-			GadgetButtonSetData( win, NULL );
-			continue;
-		}
 		if( GadgetButtonGetData( win ) != (void *)entry.button )
 		{
 			GadgetButtonSetEnabledImage( win, entry.button->getButtonImage() );
 			GadgetButtonSetData( win, (void *)entry.button );
+			fitCameo( i, entry.button->getButtonImage() );
 		}
-		// a research cell keeps its own building's reading: the picked builder has no research
-		GroupPanel_showAvailability( win, picked != NULL && !isResearch( entry ) ? pickedAvailability( picked, entry.thing ) : entry.best );
+		win->winClearStatus( WIN_STATUS_CANCEL_WHEN_DISABLED );
+		if( isPower( entry ) )
+		{
+			// a power cell reads as the tray's button does, its recharge clock drawn on it by the bar,
+			// which finds a shortcut power's holder itself; only a select-all is handed its unit
+			GadgetButtonClearClock( win );
+			const Bool selectAll = entry.button->getCommandType() == GUI_COMMAND_SELECT_ALL_UNITS_OF_TYPE;
+			Object *holder = selectAll ? powerHolder( player, entry.button ) : NULL;
+			GroupPanel_showAvailability( win, TheControlBar->getPowerCellAvailability( entry.button, holder, win ) );
+			GadgetButtonSetCount( win, 0 );
+			win->winHide( FALSE );
+			continue;
+		}
+		// a research cell keeps its own building's reading: the lit builders have no research
+		CommandAvailability availability = entry.best;
+		if( !isResearch( entry ) )
+			for( size_t l = 0; l < lit.size(); l++ )
+			{
+				const CommandAvailability now = pickedAvailability( lit[ l ], entry.thing );
+				if( l == 0 || ControlBar::commandAvailabilityRank( now ) > ControlBar::commandAvailabilityRank( availability ) )
+					availability = now;
+			}
+		GroupPanel_showAvailability( win, availability );
 
 		// a greyed cameo with units queued still takes the right click that cancels them
-		win->winClearStatus( WIN_STATUS_CANCEL_WHEN_DISABLED );
 		if( s_count[ at ] > 0 )
 			win->winSetStatus( WIN_STATUS_CANCEL_WHEN_DISABLED );
 		if( s_clock[ at ] >= 0 )
@@ -1694,24 +2200,15 @@ void Sidebar_update( void )
 		win->winHide( FALSE );
 	}
 
-	// the divider over the research's first row while that row is on screen below another
-	s_dividerY = -1;
-	if( s_researchFrom > 0 )
-	{
-		const Int row = s_researchFrom / HUD_SIDEBAR_CAMEO_COLUMNS - s_row;
-		if( row > 0 && row < HUD_SIDEBAR_CAMEO_ROWS )
-			s_dividerY = ( s_cells[ ( row - 1 ) * HUD_SIDEBAR_CAMEO_COLUMNS ].hi.y + s_cells[ row * HUD_SIDEBAR_CAMEO_COLUMNS ].lo.y ) / 2;
-	}
-
 	if( s_arrowUp != NULL )
 		s_arrowUp->winEnable( s_row > 0 );
 	if( s_arrowDown != NULL )
 		s_arrowDown->winEnable( s_row < Sidebar_scroll( count, HUD_SIDEBAR_CAMEO_COLUMNS, HUD_SIDEBAR_CAMEO_ROWS, count ) );
 
-	// the picker on every tab: Tümü, and a chip a factory (a builder on Bina and Savunma), the first
-	// HUD_SIDEBAR_PICKER_CHIPS by ObjectID
+	// the picker on every tab but the powers': Tümü, and a chip a factory (a builder on Bina), the
+	// first HUD_SIDEBAR_PICKER_CHIPS by ObjectID
 	if( s_chipAll != NULL )
-		s_chipAll->winHide( FALSE );
+		s_chipAll->winHide( s_tab == SIDEBAR_TAB_POWERS );
 	for( Int i = 0; i < HUD_SIDEBAR_PICKER_CHIPS; i++ )
 		if( s_chips[ i ] != NULL )
 			s_chips[ i ]->winHide( i >= (Int)s_factories.size() );

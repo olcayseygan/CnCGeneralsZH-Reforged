@@ -56,6 +56,7 @@
 #include "GameClient/GameWindowGlobal.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GadgetPushButton.h"
+#include "GameClient/ControlBarSidebar.h"	// Sidebar_keyFont, Sidebar_drawKeyBadge: the sidebar layout's key badge
 #include "GameClient/Display.h"
 #include "GameClient/DisplayStringManager.h"
 #include "GameClient/InGameUI.h"		// HudReadout_draw, the plate every corner marking stands on
@@ -145,6 +146,7 @@ static GameFont *getBadgeFont( GameWindow *window, Real designPoints = BADGE_DES
 static void drawBadge( GameWindow *window, const UnicodeString &text, Real designPoints,
 											 HudReadoutCorner corner, Color color );
 static void drawClassicKeyBadge( GameWindow *window, const UnicodeString &text, Color color );
+static DisplayString *badgeString( const UnicodeString &text, GameFont *font );
 
 // drawButtonText =============================================================
 /** Draw button text to the screen */
@@ -190,7 +192,16 @@ static void drawButtonText( GameWindow *window, WinInstanceData *instData )
 	if( BitTest( window->winGetStatus(), WIN_STATUS_SHORTCUT_BUTTON ) )
 	{
 		const Bool enabled = BitTest( window->winGetStatus(), WIN_STATUS_ENABLED );
-		drawClassicKeyBadge( window, text->getText(), enabled ? GameMakeColor( 255, 210, 60, 255 ) : textColor );
+		const Color keyColor = enabled ? GameMakeColor( 255, 210, 60, 255 ) : textColor;
+		// the Red Alert style layout's one badge, the size and place its tabs wear
+		GameFont *sidebarFont = Sidebar_keyFont();
+		if( sidebarFont != NULL )
+		{
+			IRegion2D cell = { { origin.x, origin.y }, { origin.x + size.x, origin.y + size.y } };
+			Sidebar_drawKeyBadge( badgeString( text->getText(), sidebarFont ), cell, 2.0f, keyColor );
+			return;
+		}
+		drawClassicKeyBadge( window, text->getText(), keyColor );
 		return;
 	}
 

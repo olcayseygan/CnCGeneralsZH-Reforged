@@ -16435,6 +16435,87 @@ TEST(write_the_maps_RMG_TEMPLATE_DUMP_names)
 	const char *dump = getenv( "RMG_TEMPLATE_DUMP" );
 	if( dump == NULL )
 		return;
+//-------------------------------------------------------------------------------------------------
+/** Two letters of a template's CRC on a LAN name leave one machine in 1296 with other rules reading
+	the host's name back. What still tells them apart is the map CRC the room compares (MapUtil's
+	calcCRC), which reads "<map folder>\map.ini" beside the map: for a generated map built from a
+	template the store serves the template's own map.ini there, so the rules are in that CRC. This
+	pins the serving, with a made-up template on disk (a generated map's bytes standing in for the
+	.map), and that the name carries a CRC with the rules in it. */
+//-------------------------------------------------------------------------------------------------
+TEST(a_template_maps_rules_are_served_beside_it_and_in_its_name)
+{
+	CHECK( bootOnce() );
+
+	GlobalData *saved = TheWritableGlobalData;
+	TheWritableGlobalData = NEW GlobalData;
+
+	const std::filesystem::path home = std::filesystem::current_path();
+	const std::filesystem::path dir = std::filesystem::temp_directory_path() / "zh_rmg_template_rules";
+	std::filesystem::remove_all( dir );
+	std::filesystem::create_directories( dir / "maps" / "rmgtest rules" );
+	std::filesystem::current_path( dir );
+
+	RandomMapSettings exemplar;
+	exemplar.m_seed = 5;
+	exemplar.m_numPlayers = 2;
+	std::vector<char> mapBytes;
+	RandomMapGenerator::generate( exemplar, mapBytes );
+	FILE *fp = fopen( "maps\\rmgtest rules\\rmgtest rules.map", "wb" );
+	CHECK( fp != NULL );
+	if( fp )
+	{
+		fwrite( &mapBytes[0], 1, mapBytes.size(), fp );
+		fclose( fp );
+	}
+	const char *const rules = "Weather\r\n  SnowEnabled = Yes\r\nEnd\r\n";
+	writeFile( "maps\\rmgtest rules\\map.ini", rules );
+
+	RandomMapSettings settings;
+	settings.m_seed = 77;
+	settings.m_numPlayers = 2;
+	settings.m_playableCells = 200;
+	settings.m_template = "maps\\rmgtest rules\\rmgtest rules.map";
+	RandomMapGenerator::clampSettings( settings );
+	CHECK( !settings.m_template.isEmpty() );
+
+	// the name's CRC is the .map's with the rules folded in
+	UnsignedInt bare = 0;
+	CHECK( rmgTemplateCRC( settings.m_template, &bare ) );
+	CHECK( settings.m_templateCRC != 0 && settings.m_templateCRC != bare );
+
+	// the generated folder's map.ini is the template's, byte for byte, which is what the map CRC reads
+	AsciiString path;
+	CHECK( stageRandomMap( settings, path ) );
+	AsciiString rulesPath = path;
+	while( !rulesPath.isEmpty() && !rulesPath.endsWith( "\\" ) )
+		rulesPath.removeLastChar();
+	rulesPath.concat( "map.ini" );
+	File *file = TheFileSystem->openFile( rulesPath.str(), File::READ | File::BINARY );
+	CHECK( file != NULL );
+	if( file )
+	{
+		const Int size = file->size();
+		char *served = file->readEntireAndClose();
+		CHECK_EQ( size, (Int)strlen( rules ) );
+		CHECK( size == (Int)strlen( rules ) && memcmp( served, rules, size ) == 0 );
+		delete [] served;
+	}
+
+	// a name carrying the CRC of the .map alone, a machine without these rules, is no map of ours
+	AsciiString token, other;
+	CHECK( rmgTemplateToken( settings.m_template, token ) );
+	other.format( "Maps\\RMG_v%d_77_2p_%dc_t%08x_%s\\map.ini", RANDOM_MAP_GENERATOR_VERSION, settings.m_playableCells,
+		bare, token.str() );
+	CHECK( !isGeneratedMapPath( other ) );
+
+	std::filesystem::current_path( home );
+	std::error_code ec;
+	std::filesystem::remove_all( dir, ec );
+	delete TheWritableGlobalData;
+	TheWritableGlobalData = saved;
+}
+
 	CHECK( bootOnce() );
 
 	const char *civilians = getenv( "RMG_TEMPLATE_CIVILIANS" );

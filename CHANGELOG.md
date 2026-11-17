@@ -8,6 +8,10 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Every computer plays to one rating
+
+- A computer player's strength now follows one number on the online ladder's scale, the same one your own rating shows: Easy plays at 0, Medium at 15 and Hard at 30, and every habit moves along with it: the higher the number, the sooner it decides and the bigger the wave it waits for. Money too: Easy earns what you earn and at most a quarter more when it falls behind, Hard half again and up to two and a half times, where every difficulty used to earn half again and up to triple. Medium sits halfway along the line now and plays harder than it did. Replays recorded before this change will not play back.
+
 ## Ranked Quick Match plays blind
 
 - Every ranked Quick Match is played on a map generated for that match from its seed, sized for the seats in it, so nobody has learned it in advance. The map list on the Quick Match screen is gone, since there is nothing left to veto.

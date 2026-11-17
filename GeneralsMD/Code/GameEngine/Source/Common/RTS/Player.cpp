@@ -3664,15 +3664,15 @@ UnsignedInt IncomeAllyShare( UnsignedInt amount, Int sharers )
 
 UnsignedInt EarnedAmount( UnsignedInt amount, Int percent )
 {
-  return amount * (UnsignedInt)percent / 100;
+  return (UnsignedInt)( (UnsignedInt64)amount * (UnsignedInt)percent / 100 );
 }
 
-Int IncomeBonusTarget( Int ownStrength, Int strongestEnemyStrength )
+Int IncomeBonusTarget( Int ownStrength, Int strongestEnemyStrength, Int maxBonus )
 {
-  if( strongestEnemyStrength <= 0 || ownStrength >= strongestEnemyStrength )
+  if( maxBonus <= 0 || strongestEnemyStrength <= 0 || ownStrength >= strongestEnemyStrength )
     return 0;
-  const Int bonus = (Int)( (Int64)4 * AI_INCOME_BONUS_MAX * ( strongestEnemyStrength - ownStrength ) / ( (Int64)3 * strongestEnemyStrength ) );
-  return bonus < AI_INCOME_BONUS_MAX ? bonus : AI_INCOME_BONUS_MAX;
+  const Int bonus = (Int)( (Int64)4 * maxBonus * ( strongestEnemyStrength - ownStrength ) / ( (Int64)3 * strongestEnemyStrength ) );
+  return bonus < maxBonus ? bonus : maxBonus;
 }
 
 void IncomeSideWorths( const Int *worth, const PlayerMaskType *allies, Int count, Int self, Int *ownAverage, Int *strongestEnemyAverage )
@@ -3708,12 +3708,13 @@ void IncomeSideWorths( const Int *worth, const PlayerMaskType *allies, Int count
   }
 }
 
-Int IncomeBonusStep( Int bonus, Int target )
+Int IncomeBonusStep( Int bonus, Int target, Int maxBonus )
 {
-  if( target > bonus + AI_INCOME_BONUS_STEP )
-    return bonus + AI_INCOME_BONUS_STEP;
-  if( target < bonus - AI_INCOME_BONUS_STEP )
-    return bonus - AI_INCOME_BONUS_STEP;
+  const Int step = ( maxBonus + AI_INCOME_BONUS_STEPS - 1 ) / AI_INCOME_BONUS_STEPS;
+  if( target > bonus + step )
+    return bonus + step;
+  if( target < bonus - step )
+    return bonus - step;
   return target;
 }
 
@@ -3788,6 +3789,10 @@ Int Player::countUnitsTowardCap( void ) const
   return count;
 }
 
+/** The most base defences a Tech computer's first superweapon waits for, Easy, Medium and Hard, read at the
+	* seat's rating; extern for aiRatingTables. */
+extern const AIRungInt TECH_FIRST_DEFENSES = { { 8, 6, 4 }, AIKNOB_OPEN };
+
 //=============================================================================
 Bool Player::canBuildMoreOfType( const ThingTemplate *whatToBuild, Int unitsPerOrder ) const
 {
@@ -3836,8 +3841,7 @@ Bool Player::canBuildMoreOfType( const ThingTemplate *whatToBuild, Int unitsPerO
     SuperweaponDefenseCount count = { 0, 0 };
     iterateObjects( countSuperweaponDefenses, &count );
     // a Tech computer's first superweapon is its plan, and a GLA Air one's SCUD Storm, and waits for
-    // at most this many guns, whatever the rung's own ration asks
-    static const Int TECH_FIRST_DEFENSES[ AISKILL_COUNT ] = { 8, 6, 4 };
+    // at most this many guns, whatever the rung's own ration asks (TECH_FIRST_DEFENSES)
     const Bool techFirst = count.superweapons == 0 && m_ai->superweaponIsPlan() &&
       count.defenses >= aiRatingLerp( m_ai->getAIRating(), TECH_FIRST_DEFENSES );
     if ( !techFirst && SuperweaponDefenseCapRefuses( count.defenses, count.superweapons,

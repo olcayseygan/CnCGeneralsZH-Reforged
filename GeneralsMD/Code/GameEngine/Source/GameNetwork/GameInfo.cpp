@@ -1565,9 +1565,10 @@ Int AIRatingFromSlotField( const char *field )
 {
 	if (field == NULL || *field == 0)
 		return AI_RATING_NONE;
-	const Int hundredths = atoi(field);
-	return (hundredths >= aiRatingToHundredths(AI_RATING_EASY) && hundredths <= aiRatingToHundredths(AI_RATING_HARD))
-		? hundredths : AI_RATING_NONE;
+	// strtoll into 64 bits: atoi past an Int's range saturates on Windows and truncates elsewhere
+	const Int64 hundredths = strtoll(field, NULL, 10);
+	return (hundredths >= aiRatingToHundredths(-AI_RATING_LIMIT) && hundredths <= aiRatingToHundredths(AI_RATING_LIMIT))
+		? (Int)hundredths : AI_RATING_NONE;
 }
 
 Bool ApplyHandicapRequest( GameInfo *game, GameSlot *slot, Int handicap )
@@ -2148,7 +2149,7 @@ void SkirmishGameInfo::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void SkirmishGameInfo::xfer( Xfer *xfer )
 {
-	const XferVersion currentVersion = 14;	// 5 adds m_peaceTime, 6 m_unitLimit, 7 m_proRules, 8 m_incomeSharing, 9 m_techRespawn, 10 m_supplyPileLimit, 11 each slot's AI personality, 12 each slot's handicap, 13 a 64-bit preorder mask, 14 each slot's AI rating
+	const XferVersion currentVersion = 15;	// 5 adds m_peaceTime, 6 m_unitLimit, 7 m_proRules, 8 m_incomeSharing, 9 m_techRespawn, 10 m_supplyPileLimit, 11 each slot's AI personality, 12 each slot's handicap, 13 a 64-bit preorder mask, 14 each slot's AI rating, 15 that rating's "none" as AI_RATING_NONE instead of -1
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -2242,6 +2243,9 @@ void SkirmishGameInfo::xfer( Xfer *xfer )
 		if (version >= 14)
 			xfer->xferInt(&rating);
 		else
+			rating = AI_RATING_NONE;
+		// version 14 wrote -1 for "no rating", which reads as a rating of -0.01 now that negatives are legal
+		if (version < 15 && rating < 0)
 			rating = AI_RATING_NONE;
 
 		if( xfer->getXferMode() == XFER_LOAD ) {

@@ -4487,23 +4487,24 @@ enum { SHARE_VEHICLE, SHARE_INFANTRY, SHARE_AIR, SHARE_STEALTH, SHARE_AIR_ANALOG
 /** The share of its kind among the units it has built that an Air, Infantry, Armor or Sneaky AI wants,
 	* by rung, before the scripts' teams short of that kind are built again.  A team under half its cost
 	* of the kind is short of it: an infantry team riding a Humvee is still infantry. */
-static const Real PERSONA_SHARE_TARGET[ SHARE_KINDS ][ AISKILL_COUNT ] = {
-	{ 0.50f, 0.65f, 0.75f }, { 0.60f, 0.65f, 0.70f }, { 0.35f, 0.50f, 0.60f }, { 0.30f, 0.40f, 0.50f }, { 0.35f, 0.50f, 0.60f } };
+static const AIRungReal PERSONA_SHARE_TARGET[ SHARE_KINDS ] = {
+	{ { 0.50f, 0.65f, 0.75f }, AIKNOB_SHARE }, { { 0.60f, 0.65f, 0.70f }, AIKNOB_SHARE }, { { 0.35f, 0.50f, 0.60f }, AIKNOB_SHARE },
+	{ { 0.30f, 0.40f, 0.50f }, AIKNOB_SHARE }, { { 0.35f, 0.50f, 0.60f }, AIKNOB_SHARE } };
 static const Real PERSONA_TEAM_KIND_SHARE = 0.5f;
 /** The bank, by rung, past which nothing is skipped: Hard's hoard, and Easy's floor where it has none. */
-static const Int PERSONA_SKIP_BANK[ AISKILL_COUNT ] = { 3000, 4000, 4000 };
+static const AIRungInt PERSONA_SKIP_BANK = { { 3000, 4000, 4000 }, AIKNOB_OPEN };
 
 /** The doctrine (ensureDoctrine), by rung: the share of the money spent on the army that goes on the
 	* side's signature units before the scripts' teams short of them are built again, and the share of a
 	* team's cost in them that is not short.  An Air Force General spent 13% on aircraft off the scripts. */
-static const Real DOCTRINE_SHARE_TARGET[ AISKILL_COUNT ] = { 0.25f, 0.35f, 0.45f };
+static const AIRungReal DOCTRINE_SHARE_TARGET = { { 0.25f, 0.35f, 0.45f }, AIKNOB_SHARE };
 static const Real DOCTRINE_TEAM_SHARE = 0.34f;
 /** What a team all of signature units adds to its score, in production priority. */
 static const Real DOCTRINE_TEAM_SPAN = 20.0f;
 /** The share of the bank past its target the signature units may draw on a spend pass, by rung, on top
 	* of the rung's surplus (doSpending, trainDoctrine).  None on Easy, whose hoard is its handicap: 5% of
 	* it raised an Easy army from 8-27,000 to 90,000 in fifteen minutes. */
-static const Real DOCTRINE_DRAIN[ AISKILL_COUNT ] = { 0.0f, 0.15f, 0.30f };
+static const AIRungReal DOCTRINE_DRAIN = { { 0.0f, 0.15f, 0.30f }, AIKNOB_SHARE };
 
 static Bool isAirAnalogue( const ThingTemplate *tmpl );
 
@@ -7007,7 +7008,7 @@ static Bool hasGuardNear( Player *player, const Coord3D *pos, Real reach )
 
 /** Supply centers an AI expands to on its own, counting only those beside a pile with boxes left, by
 	* rung: Easy, Medium, Hard. */
-static const Int MAX_WORKING_CENTERS[ AISKILL_COUNT ] = { 3, 4, 6 };
+static const AIRungInt MAX_WORKING_CENTERS = { { 3, 4, 6 }, AIKNOB_OPEN };
 
 struct WorkingCenterCount
 {
@@ -7422,10 +7423,10 @@ static const Real TURTLE_FRONT = 0.25f;
 static const Real TURTLE_CHOKE_GUARD = 500.0f;
 /** Chokes fortified, the share of Turtle's own defence allowance it stands, the guns at a choke that
 	* buy the mine upgrade and the demo traps laid in front of the line, by rung. */
-static const Int TURTLE_CHOKES[ AISKILL_COUNT ] = { 1, 2, 3 };
-static const Real TURTLE_DEFENSE_SCALE[ AISKILL_COUNT ] = { 0.4f, 0.7f, 1.0f };
-static const Int TURTLE_MINED_GUNS[ AISKILL_COUNT ] = { 2, 4, 8 };
-static const Int TURTLE_DEMO_TRAPS[ AISKILL_COUNT ] = { 2, 4, 6 };
+static const AIRungInt TURTLE_CHOKES = { { 1, 2, 3 }, AIKNOB_OPEN };
+static const AIRungReal TURTLE_DEFENSE_SCALE = { { 0.4f, 0.7f, 1.0f }, AIKNOB_SHARE };
+static const AIRungInt TURTLE_MINED_GUNS = { { 2, 4, 8 }, AIKNOB_OPEN };
+static const AIRungInt TURTLE_DEMO_TRAPS = { { 2, 4, 6 }, AIKNOB_OPEN };
 /** Where the chokes are looked for, in base radii from the base by the ground, and never past this
 	* share of the road to the enemy.  Two enemies whose chokes lie closer than TURTLE_CHOKE_MERGE share one. */
 static const Real TURTLE_CHOKE_NEAR = 1.0f;
@@ -8035,15 +8036,15 @@ static const Int PRODUCTION_KINDS = 3;
 static const KindOfType PRODUCTION_KIND[ PRODUCTION_KINDS ] = { KINDOF_FS_WARFACTORY, KINDOF_FS_BARRACKS, KINDOF_FS_AIRFIELD };
 
 /** How deep a spending personality queues its surplus behind what a factory already builds, by rung. */
-static const Int PERSONA_SURPLUS_DEPTH[ AISKILL_COUNT ] = { 2, 2, 3 };
+static const AIRungInt PERSONA_SURPLUS_DEPTH = { { 2, 2, 3 }, AIKNOB_OPEN };
 /** How many factories of its favoured kind a personality with a unit taste stands without waiting for
 	* a backlog, by rung. */
-static const Int PERSONA_FAVOURED_FACTORIES[ AISKILL_COUNT ] = { 2, 3, 4 };
+static const AIRungInt PERSONA_FAVOURED_FACTORIES = { { 2, 3, 4 }, AIKNOB_OPEN };
 /** How many vehicles a Raider sortie takes, by rung (AIPlayer::doPersonaRaids); it keeps twice that
 	* many of its cheapest vehicle, the quickest it can buy (trainFavoured). */
-static const Int RAID_PARTY[ AISKILL_COUNT ] = { 2, 3, 4 };
+static const AIRungInt RAID_PARTY = { { 2, 3, 4 }, AIKNOB_OPEN };
 /** When the first sortie goes; the raiders are bought from a minute before. */
-static const Int RAID_START_SECONDS[ AISKILL_COUNT ] = { 300, 240, 180 };
+static const AIRungInt RAID_START_SECONDS = { { 300, 240, 180 }, AIKNOB_OPEN };
 
 /** The PRODUCTION_KIND a personality's taste favours, -1 for none: aircraft the airfield, infantry and
 	* stealth the barracks, vehicles the war factory. */
@@ -8359,7 +8360,7 @@ static BaseTally tallyBase( Player *player )
 
 /** The base defences that shoot up an Air AI stands before its aircraft outrank them, by rung: with
 	* every dollar on airfields and jets a Hard USA Air stood none, and its Patriots sat on the list. */
-static const Int AIR_AA_DEFENSES[ AISKILL_COUNT ] = { 1, 2, 3 };
+static const AIRungInt AIR_AA_DEFENSES = { { 1, 2, 3 }, AIKNOB_OPEN };
 /** ... and what lifts one of those over a jet (55 + the row's 20 + the liked 10) from the row's 45 - 15. */
 static const Int AIR_AA_DEFENSE_SCORE = 60;
 
@@ -8386,7 +8387,7 @@ Int AIPlayer::personaBuildingScore( const ThingTemplate *tmpl ) const
 /** Money units that earn in the open: what a player owns before an internet center stands, and what
 	it keeps beside the centers it has, by rung: Easy, Medium, Hard.  Four on every rung, and only Hard
 	ever bought any, so a China AI earned from three or four hackers all match. */
-static const Int MONEY_UNITS_IN_THE_OPEN[ AISKILL_COUNT ] = { 2, 4, 6 };
+static const AIRungInt MONEY_UNITS_IN_THE_OPEN = { { 2, 4, 6 }, AIKNOB_OPEN };
 
 /** Fighting units for every money unit past that.  The hackers share the barracks queue with the
 	infantry, and a Hard Tank General with no ratio spent two thirds of 20,000 frames on them. */
@@ -8954,11 +8955,11 @@ static const KindOfType EARLY_INCOME[ EARLY_INCOME_KINDS ] = { KINDOF_FS_SUPPLY_
 /** From this far into the match a player that owns no drop zone or black market puts one up, and the
 	* building it waits on first, by rung: Easy, Medium, Hard.  Before it only the opening's purchase queue
 	* bought one (buyEarlyIncome), so one lost, or one whose prerequisite never stood, was never bought. */
-static const Real FIRST_INCOME_SECONDS[ AISKILL_COUNT ] = { 600.0f, 360.0f, 180.0f };
+static const AIRungReal FIRST_INCOME_SECONDS = { { 600.0f, 360.0f, 180.0f }, AIKNOB_OPEN };
 
 /** How many of each income building (drop zone, black market, internet center) the hoard pass buys,
 	* by rung: Easy, Medium, Hard.  Only Hard's pass buys them past the first. */
-static const Int INCOME_BUILDINGS[ AISKILL_COUNT ] = { 1, 2, 3 };
+static const AIRungInt INCOME_BUILDINGS = { { 1, 2, 3 }, AIKNOB_OPEN };
 
 /** Early in the match the first drop zone and the first black market do not wait for the hoard: they
 	* are asked for when none stands, and the purchase queue ranks them over the army and saves for them.
@@ -9515,7 +9516,7 @@ static Bool planNamesSuperweapon( Player *player )
 
 /** Easy's and Medium's first superweapon when the scripts cannot build it: America's scripts ask for
 	* the uplink at escalation 180 and 100, a point every ten seconds. */
-static const Int SCRIPTLESS_SUPERWEAPON_SECONDS[ AISKILL_COUNT ] = { 1800, 1000, 0 };
+static const AIRungInt SCRIPTLESS_SUPERWEAPON_SECONDS = { { 1800, 1000, 0 }, AIKNOB_OPEN };
 #define SCRIPTLESS_SUPERWEAPON_FRAMES( rating ) ((UnsignedInt)( aiRatingLerp( rating, SCRIPTLESS_SUPERWEAPON_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ))
 
 void AIPlayer::doSuperweapons( void )
@@ -9682,8 +9683,9 @@ static Int incomeStrength( Player *player )
 /** The owner, 2026-11-02: a computer that starts losing earns more.  Every AI_INCOME_BONUS_FRAMES it weighs
 	* its side, itself and every ally humans included, a player at a time against the strongest enemy side
 	* still in the match (IncomeSideWorths), and moves the bonus a step toward what
-	* IncomeBonusTarget says that is owed, so the percent climbs and falls by at most AI_INCOME_BONUS_STEP
-	* points at a time.  The score screen still counts the plain amount. */
+	* IncomeBonusTarget says that is owed, up to the rated profile's IncomeBonusMaxPercent, so the percent
+	* climbs and falls by at most a sixth of that ceiling at a time (AI_INCOME_BONUS_STEPS).  The score
+	* screen still counts the plain amount. */
 //----------------------------------------------------------------------------------------------------------
 void AIPlayer::stepIncomeBonus( void )
 {
@@ -9714,7 +9716,8 @@ void AIPlayer::stepIncomeBonus( void )
 	}
 	Int own, strongest;
 	IncomeSideWorths( worth, allies, count, self, &own, &strongest );
-	const Int bonus = IncomeBonusStep( m_incomeBonus, IncomeBonusTarget( own, strongest ) );
+	const Int maxBonus = ratedProfile()->m_incomeBonusMaxPercent;
+	const Int bonus = IncomeBonusStep( m_incomeBonus, IncomeBonusTarget( own, strongest, maxBonus ), maxBonus );
 	if( bonus == m_incomeBonus )
 		return;
 	DEBUG_LOG(( "AI INCOME frame %d player %d side worth %d a player against %d, income %d%% -> %d%%\n",
@@ -10743,6 +10746,9 @@ void AIPlayer::sendAtSquatter( Object *squatter, Real worth, const std::vector<O
 			m_player->getPlayerIndex(), sent, squatter->getTemplate()->getName().str(), squatter->getPosition()->x, squatter->getPosition()->y, m_baseRadius));
 }
 
+/** The odds defendHome wants before it goes at a gun standing still outside the base, Easy the least careful. */
+static const AIRungReal OUTSIDE_BASE_ODDS = { { 1.0f, 1.5f, 2.0f }, AIKNOB_OPEN };
+
 //----------------------------------------------------------------------------------------------------------
 /** A base under attack spends its bank on the fight.  A Hard USA rushed a minute in had two fighting
 	* units and 8,000 in the bank, because the opening goes on buildings first and the team plan trains
@@ -10880,7 +10886,7 @@ void AIPlayer::defendHome( void )
 	// time were the biggest loss to defences in 32 Hard against Medium matches.  They go only with odds
 	// that win, Easy the least careful.  A unit that can move is still met wherever it stands at home:
 	// gating those too slowed the quick wins on small maps and lost more over the longer matches.
-	static const Real OUTSIDE_BASE_ODDS[ AISKILL_COUNT ] = { 1.0f, 1.5f, 2.0f };
+	// (OUTSIDE_BASE_ODDS)
 	const Bool outsideBase =
 		sqr( intruder->getPosition()->x - m_baseCenter.x ) + sqr( intruder->getPosition()->y - m_baseCenter.y ) > sqr( m_baseRadius );
 	if( intruder->isKindOf( KINDOF_IMMOBILE ) && outsideBase && homePower < aiRatingLerp( m_rating, OUTSIDE_BASE_ODDS ) * intruderWorth )
@@ -11697,13 +11703,13 @@ void AIPlayer::trainSurplus( Int budget )
 }
 
 /** How deep a personality with a unit taste keeps its favoured factories' queues, below the bank target, by rung. */
-static const Int PERSONA_FAVOURED_DEPTH[ AISKILL_COUNT ] = { 1, 2, 2 };
+static const AIRungInt PERSONA_FAVOURED_DEPTH = { { 1, 2, 2 }, AIKNOB_OPEN };
 /** The same for the Air, Infantry and Armor AIs, whose kind is their whole army now that the scripts'
 	* teams short of it are skipped (selectTeamToBuild): an aircraft costs three to six soldiers, so by
 	* count its share only climbs with more of them on order, and a barracks that trained one soldier at
 	* a time could not field a horde. */
-static const Int KIND_FAVOURED_DEPTH[ AISKILL_COUNT ] = { 1, 3, 3 };
-static const Int INFANTRY_FAVOURED_DEPTH[ AISKILL_COUNT ] = { 2, 3, 4 };
+static const AIRungInt KIND_FAVOURED_DEPTH = { { 1, 3, 3 }, AIKNOB_OPEN };
+static const AIRungInt INFANTRY_FAVOURED_DEPTH = { { 2, 3, 4 }, AIKNOB_OPEN };
 /** What a kind AI queues on top while its bank is past PERSONA_SKIP_BANK. */
 static const Int RICH_FAVOURED_DEPTH = 2;
 
@@ -11799,7 +11805,7 @@ void AIPlayer::trainFavoured( void )
 	const Bool raider = m_persona == AIPERSONA_RAIDER;
 	const Bool sneaky = m_persona == AIPERSONA_SNEAKY;
 	const Bool ofItsKind = m_persona == AIPERSONA_AIR || m_persona == AIPERSONA_INFANTRY || m_persona == AIPERSONA_ARMOR || sneaky;
-	if( raider ? TheGameLogic->getFrame() < (UnsignedInt)( ( aiRatingLerp( m_rating, RAID_START_SECONDS ) - 60 ) * LOGICFRAMES_PER_GAME_SECOND )
+	if( raider ? TheGameLogic->getFrame() < (UnsignedInt)( max( 0, aiRatingLerp( m_rating, RAID_START_SECONDS ) - 60 ) * LOGICFRAMES_PER_GAME_SECOND )
 						 : !ofItsKind && !readyToPush() )
 		return;
 	const AIPersonaWeights taste = personaTaste();
@@ -11821,7 +11827,7 @@ void AIPlayer::trainFavoured( void )
 			continue;
 		++ofKind;
 		ProductionUpdateInterface *pu = (*f)->getProductionUpdateInterface();
-		const Int *depth = m_persona == AIPERSONA_INFANTRY ? INFANTRY_FAVOURED_DEPTH : ofItsKind ? KIND_FAVOURED_DEPTH : PERSONA_FAVOURED_DEPTH;
+		const AIRungInt &depth = m_persona == AIPERSONA_INFANTRY ? INFANTRY_FAVOURED_DEPTH : ofItsKind ? KIND_FAVOURED_DEPTH : PERSONA_FAVOURED_DEPTH;
 		// a bank past the skip line queues deeper: the money is there and the queue was the limit
 		const Int rich = ofItsKind && (Int)m_player->getMoney()->countMoney() > aiRatingLerp( m_rating, PERSONA_SKIP_BANK ) ? RICH_FAVOURED_DEPTH : 0;
 		if( (Int)pu->getProductionCount() >= aiRatingLerp( m_rating, depth ) + rich )
@@ -11889,11 +11895,11 @@ static const Real DOCTRINE_VETERANCY_EDGE = 0.2f;
 /** By rung: how deep a factory's queue of signature units goes (one more past the bank target), how many
 	* factories of the signature's kind stand without waiting for a backlog, and how many while the bank is
 	* over its target and every one is queued that deep or refuses for want of room, an airfield's parking. */
-static const Int DOCTRINE_DEPTH[ AISKILL_COUNT ] = { 1, 2, 2 };
-static const Int DOCTRINE_FACTORIES[ AISKILL_COUNT ] = { 1, 2, 2 };
-static const Int DOCTRINE_FACTORIES_MAX[ AISKILL_COUNT ] = { 2, 3, 5 };
+static const AIRungInt DOCTRINE_DEPTH = { { 1, 2, 2 }, AIKNOB_OPEN };
+static const AIRungInt DOCTRINE_FACTORIES = { { 1, 2, 2 }, AIKNOB_OPEN };
+static const AIRungInt DOCTRINE_FACTORIES_MAX = { { 2, 3, 5 }, AIKNOB_OPEN };
 /** How many more deep a factory queues signature units past the bank target, at most. */
-static const Int DOCTRINE_RICH_DEPTH[ AISKILL_COUNT ] = { 1, 2, 4 };
+static const AIRungInt DOCTRINE_RICH_DEPTH = { { 1, 2, 4 }, AIKNOB_OPEN };
 
 /** The kind a unit is counted in, as PRODUCTION_KIND: vehicles 0, infantry 1, aircraft 2; -1 for none. */
 static Int doctrineKindOf( const ThingTemplate *tmpl )
@@ -12094,12 +12100,12 @@ Real AIPlayer::doctrineTeamShare( const TeamPrototype *proto, const std::vector<
 }
 
 /** The matchup a signature aircraft has to clear against the remembered army, over DOCTRINE_COUNTER_FLOOR. */
-static const Real DOCTRINE_AIR_FLOOR[ AISKILL_COUNT ] = { 0.35f, 0.4f, 0.45f };
+static const AIRungReal DOCTRINE_AIR_FLOOR = { { 0.35f, 0.4f, 0.45f }, AIKNOB_SHARE };
 /** Anti-air strong enough that no signature aircraft is favoured at all: this many known enemy guns that
 	* can aim at an aircraft, and this share of all the known guns.  The army ledger holds no buildings, so a
 	* ring of Stinger Sites never lowered a jet's matchup. */
-static const Int DOCTRINE_AIR_GUNS[ AISKILL_COUNT ] = { 6, 4, 3 };
-static const Real DOCTRINE_AIR_GUN_SHARE[ AISKILL_COUNT ] = { 0.5f, 0.4f, 0.3f };
+static const AIRungInt DOCTRINE_AIR_GUNS = { { 6, 4, 3 }, AIKNOB_OPEN };
+static const AIRungReal DOCTRINE_AIR_GUN_SHARE = { { 0.5f, 0.4f, 0.3f }, AIKNOB_SHARE };
 /** A floor no matchup reaches (aiMatchupScore is 0 to 1). */
 static const Real DOCTRINE_AIR_SHUT = 2.0f;
 
@@ -12795,7 +12801,7 @@ static void addKnownArmy( Object *obj, void *userData )
 static const Real KNOWN_ARMY_KEPT = 0.9f;
 static const Real UNSEEN_ARMY_GROWS = 0.02f;
 /** How much of an ally's army, or an enemy ally's, this AI counts on when it rates its chance, by rung. */
-static const Real ALLY_ARMY_SHARE[ AISKILL_COUNT ] = { 0.5f, 0.75f, 1.0f };
+static const AIRungReal ALLY_ARMY_SHARE = { { 0.5f, 0.75f, 1.0f }, AIKNOB_SHARE };
 
 /** How often the guards at home are sent hunting once the enemy is finished.  Not every wave tick: a
 	* guard whose script puts it straight back on guard would be sent again every two seconds. */
@@ -13465,13 +13471,13 @@ static const Real GARRISON_ENEMY_GONE = 500.0f;
 
 /** How far from where he stands a man out in the field goes for a building, by skill.  Easy takes none:
 	* its men stay with their team, as they always did. */
-static const Real GARRISON_FRONT_REACH[] = { 0.0f, 150.0f, 250.0f };
+static const AIRungReal GARRISON_FRONT_REACH = { { 0.0f, 150.0f, 250.0f }, AIKNOB_OPEN };
 /** ... and an Infantry personality's, which fills the houses of a city map from Easy up. */
-static const Real GARRISON_FRONT_REACH_INFANTRY[] = { 150.0f, 300.0f, 450.0f };
+static const AIRungReal GARRISON_FRONT_REACH_INFANTRY = { { 150.0f, 300.0f, 450.0f }, AIKNOB_OPEN };
 
 /** The health share under which our men leave a building before it comes down on them, by skill.  A
 	* civilian building hurts its men when it falls (DamagePercentToUnits).  Easy stays to the end. */
-static const Real GARRISON_LEAVE_HEALTH[] = { 0.0f, 0.25f, 0.4f };
+static const AIRungReal GARRISON_LEAVE_HEALTH = { { 0.0f, 0.25f, 0.4f }, AIKNOB_SHARE };
 
 /** The nearest visible enemy unit within radius of pos that is not a worker, or NULL. */
 static Object *enemyWithin( Player *player, const Coord3D *pos, Real radius )
@@ -14005,7 +14011,7 @@ void AIPlayer::sendWave( AIGroup *wave, const AsciiString &approach, Int pathSuf
 //----------------------------------------------------------------------------------------------------------
 /** How often a rung that does not mass its waves calls up what stands idle at home; 0 is every wave
 	* tick, Hard's. */
-static const Int IDLE_CALLUP_SECONDS[ AISKILL_COUNT ] = { 60, 20, 0 };
+static const AIRungInt IDLE_CALLUP_SECONDS = { { 60, 20, 0 }, AIKNOB_OPEN };
 
 void AIPlayer::sendIdleAttackTeams( void )
 {
@@ -14084,13 +14090,13 @@ void AIPlayer::sendIdleAttackTeams( void )
 
 /** How often an Attacker on a rung that does not mass its waves sends what stands idle at home, by
 	* rung; Hard masses, and its waves are the Attacker's knobs already. */
-static const Int PERSONA_SORTIE_SECONDS[ AISKILL_COUNT ] = { 120, 75, 0 };
+static const AIRungInt PERSONA_SORTIE_SECONDS = { { 120, 75, 0 }, AIKNOB_OPEN };
 /** ... and an Air, Infantry or Armor AI's, on every rung, an Infantry AI's transports with them
 	* (sendPersonaTransports). */
-static const Int KIND_SORTIE_SECONDS[ AISKILL_COUNT ] = { 150, 120, 90 };
+static const AIRungInt KIND_SORTIE_SECONDS = { { 150, 120, 90 }, AIKNOB_OPEN };
 /** ... and what a sortie of theirs has to be worth, in the rung's smallest attacks: at one, a Hard
 	* Infantry China went out ten times a match in handfuls and lost twice what it killed. */
-static const Real KIND_SORTIE_POWER[ AISKILL_COUNT ] = { 1.0f, 1.5f, 2.0f };
+static const AIRungReal KIND_SORTIE_POWER = { { 1.0f, 1.5f, 2.0f }, AIKNOB_OPEN };
 
 Bool AIPlayer::isKindPersona( void ) const
 {
@@ -14098,7 +14104,7 @@ Bool AIPlayer::isKindPersona( void ) const
 }
 
 /** The ground transports an Infantry AI keeps, by rung, and the fewest seats one has to have to count. */
-static const Int INFANTRY_TRANSPORTS[ AISKILL_COUNT ] = { 1, 2, 3 };
+static const AIRungInt INFANTRY_TRANSPORTS = { { 1, 2, 3 }, AIKNOB_OPEN };
 static const Int INFANTRY_TRANSPORT_MIN_SEATS = 5;
 
 /** A ground vehicle whose hold carries infantry: a Humvee, a Battle Bus, a Troop Crawler, a Technical. */
@@ -14221,7 +14227,7 @@ void AIPlayer::personaSortie( void )
 	}
 	else
 	{
-		const Int *seconds = isKindPersona() ? KIND_SORTIE_SECONDS : PERSONA_SORTIE_SECONDS;
+		const AIRungInt &seconds = isKindPersona() ? KIND_SORTIE_SECONDS : PERSONA_SORTIE_SECONDS;
 		const UnsignedInt every = (UnsignedInt)( aiRatingLerp( m_rating, seconds ) * LOGICFRAMES_PER_GAME_SECOND );
 		// once a period, without a member for it: doWaves runs every WAVE_CHECK_RATE frames
 		if( every == 0 || now % every >= (UnsignedInt)WAVE_CHECK_RATE || !readyToPush() )
@@ -15188,9 +15194,10 @@ void AIPlayer::readKnownGuns( std::vector<AIKnownGun> *guns ) const
 //----------------------------------------------------------------------------------------------------------
 /** How often each rung looks at its aircraft's strikes: an Easy jet is half way into a Stinger Site's
 	* reach before it turns. */
-static const Real AIR_STEER_SECONDS[ AISKILL_COUNT ] = { 2.0f, 1.0f, 0.5f };
-/** truncated, so Hard's half second is the whole frames it always was at an odd tick rate */
-#define AIR_STEER_RATE( rating ) ((UnsignedInt)( aiRatingLerp( rating, AIR_STEER_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ))
+static const AIRungReal AIR_STEER_SECONDS = { { 2.0f, 1.0f, 0.5f }, AIKNOB_OPEN };
+/** truncated, so Hard's half second is the whole frames it always was at an odd tick rate; a modulus, so a
+	* rating far past Hard still steers every frame rather than dividing by 0 */
+#define AIR_STEER_RATE( rating ) max<UnsignedInt>( 1, (UnsignedInt)( aiRatingLerp( rating, AIR_STEER_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ) )
 /** A helicopter's goal this near the base centre is the way home steerAircraft sent it on. */
 static const Real AIR_HOME_SLACK = 300.0f;
 
@@ -16219,11 +16226,11 @@ static const Real AMBULANCE_REORDER_DISTANCE = 100.0f;
 	* where its own base stood that close to known enemy guns: no ground was clear, and on 32 such matches
 	* the Hard USA pulled back 312 times against 116, at full health and unhit for minutes, cycling between
 	* its wait spot and its base.  On Twilight Flame the share reaches the cap. */
-static const Int AMBULANCE_HIT_SECONDS[ AISKILL_COUNT ] = { 4, 6, 8 };
+static const AIRungInt AMBULANCE_HIT_SECONDS = { { 4, 6, 8 }, AIKNOB_OPEN };
 #define AMBULANCE_HIT_FRAMES( rating ) ((UnsignedInt)( aiRatingLerp( rating, AMBULANCE_HIT_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ))
-static const Real AMBULANCE_MARGIN_SHARE[ AISKILL_COUNT ] = { 0.04f, 0.06f, 0.08f };
-static const Real AMBULANCE_MARGIN_MIN[ AISKILL_COUNT ] = { 40.0f, 60.0f, 80.0f };
-static const Real AMBULANCE_MARGIN_MAX[ AISKILL_COUNT ] = { 120.0f, 160.0f, 200.0f };
+static const AIRungReal AMBULANCE_MARGIN_SHARE = { { 0.04f, 0.06f, 0.08f }, AIKNOB_SHARE };
+static const AIRungReal AMBULANCE_MARGIN_MIN = { { 40.0f, 60.0f, 80.0f }, AIKNOB_OPEN };
+static const AIRungReal AMBULANCE_MARGIN_MAX = { { 120.0f, 160.0f, 200.0f }, AIKNOB_OPEN };
 /** A spot it waits at stands this share of the margin farther clear again, so a gun a step closer does
 	* not send it back the moment it gets there. */
 static const Real AMBULANCE_WAIT_SLACK = 0.5f;
@@ -16232,8 +16239,8 @@ static const Real AMBULANCE_REPAIR_HEALTH = 0.5f;
 /** Medium keeps one at a time, waits twice as long to replace it and buys half as many in a match.
 	* Each lost one was bought again on Hard every 90 seconds: eight came out of two USA seats in one
 	* 16-minute match (ambA4_700), and a player counted dozens over a long game. */
-static const Int AMBULANCE_REBUY_SECONDS[ AISKILL_COUNT ] = { 180, 180, 90 };
-static const Int AMBULANCE_MATCH_CAP[ AISKILL_COUNT ] = { 0, 3, 6 };
+static const AIRungInt AMBULANCE_REBUY_SECONDS = { { 180, 180, 90 }, AIKNOB_OPEN };
+static const AIRungInt AMBULANCE_MATCH_CAP = { { 0, 3, 6 }, AIKNOB_OPEN };
 
 /** By rating, as every knob here: Easy fields none, and a second one is Hard's alone. */
 Int AIAmbulance_wanted( Int army, Real rating )
@@ -17595,7 +17602,7 @@ void AIPlayer::keepSiegeBehind( void )
 	* quickest ground unit covers between two looks: at 45 an idle unit that picked the defence as its next
 	* target was past the edge before the next look, and the Air Force lost more of those than before. */
 #define EDGE_RATE ((Int)(LOGICFRAMES_PER_GAME_SECOND))
-static const Real EDGE_ODDS[ AISKILL_COUNT ] = { 0.0f, 1.0f, 1.25f };
+static const AIRungReal EDGE_ODDS = { { 0.0f, 1.0f, 1.25f }, AIKNOB_OPEN };
 static const Real EDGE_LOOKAHEAD = 120.0f;
 static const Real EDGE_WAIT = 90.0f;
 /** A wait spot another gun covers moves out by EDGE_WAIT, this many times at most before the unit goes home. */
@@ -23418,7 +23425,7 @@ const AIDifficultyProfile *AIPlayer::getSkillProfile( void ) const
 //-------------------------------------------------------------------------------------------------
 /** A Rusher's one big attack, by rung: Easy the latest.  If it has not gone two minutes after, it
 	* never will, and the Rusher plays on as an Attacker. */
-static const Int RUSH_SECONDS[ AISKILL_COUNT ] = { 270, 225, 180 };
+static const AIRungInt RUSH_SECONDS = { { 270, 225, 180 }, AIKNOB_OPEN };
 #define RUSH_GIVE_UP_FRAMES ((UnsignedInt)(120 * LOGICFRAMES_PER_GAME_SECOND))
 
 UnsignedInt AIPlayer::rushFrame( void ) const
@@ -23521,7 +23528,7 @@ void AIPlayer::notePersonaProgress( void )
 	* With no gatherer known it drives at a supply depot, attacking what it meets on the way, which is
 	* the gatherers at it.  Easy sends the fewest, the latest and the least often. */
 //-------------------------------------------------------------------------------------------------
-static const Int RAID_EVERY_SECONDS[ AISKILL_COUNT ] = { 60, 40, 30 };
+static const AIRungInt RAID_EVERY_SECONDS = { { 60, 40, 30 }, AIKNOB_OPEN };
 static const Int RAID_MAX_GUNS_OVER_TARGET = 1;
 static const Real RAID_GUN_MARGIN = 50.0f;
 /** How far a raider looks round itself for a gatherer to turn on, and how near a supply centre a pile
@@ -23678,7 +23685,7 @@ void AIPlayer::doPersonaRaids( void )
 		const Int count = possibleEnemyStarts( starts, &known );
 		if( count == 0 )
 			return;
-		const Int sortie = (Int)( now / ( aiRatingLerp( m_rating, RAID_EVERY_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ) );
+		const Int sortie = (Int)( now / max( 1, aiRatingLerp( m_rating, RAID_EVERY_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ) );
 		guess = starts[ known > 0 ? sortie % known : sortie % count ];
 		from = &guess;
 	}
@@ -23844,7 +23851,7 @@ void AIPlayer::defendAlly( void )
 	* poorest ally still in the game, the first in the player list of two alike.  The most each rung
 	* passes at a time, Easy the least. */
 //-------------------------------------------------------------------------------------------------
-static const Int SHARE_CAP[ AISKILL_COUNT ] = { 1000, 2000, 3000 };
+static const AIRungInt SHARE_CAP = { { 1000, 2000, 3000 }, AIKNOB_OPEN };
 #define SHARE_EVERY_FRAMES ((UnsignedInt)(60 * LOGICFRAMES_PER_GAME_SECOND))
 
 void AIPlayer::shareSurplusWithAllies( Int bank, Int target )
@@ -25327,4 +25334,82 @@ void AIPlayer::getPlayerStructureBounds( Region2D *bounds, Int playerNdx, Bool c
 		// aimed at the map corner.)
 		*bounds = objBounds;
 	}
+}
+
+//----------------------------------------------------------------------------------------------------------
+// every table of three the game reads at a rating, by its constant's name (aiRatingTables)
+extern const AIRungInt TECH_FIRST_DEFENSES;
+extern const AIRungInt SURRENDER_EARLIEST_MINUTE;
+extern const AIRungInt SURRENDER_WORTH_PERCENT;
+extern const AIRungInt SURRENDER_HOLD_SECONDS;
+
+#define AI_TABLE_REAL( name ) { #name, &name, NULL }
+#define AI_TABLE_INT( name ) { #name, NULL, &name }
+static const AIRatingTable s_ratingTables[] =
+{
+	{ "PERSONA_SHARE_TARGET[VEHICLE]", &PERSONA_SHARE_TARGET[ SHARE_VEHICLE ], NULL },
+	{ "PERSONA_SHARE_TARGET[INFANTRY]", &PERSONA_SHARE_TARGET[ SHARE_INFANTRY ], NULL },
+	{ "PERSONA_SHARE_TARGET[AIR]", &PERSONA_SHARE_TARGET[ SHARE_AIR ], NULL },
+	{ "PERSONA_SHARE_TARGET[STEALTH]", &PERSONA_SHARE_TARGET[ SHARE_STEALTH ], NULL },
+	{ "PERSONA_SHARE_TARGET[AIR_ANALOGUE]", &PERSONA_SHARE_TARGET[ SHARE_AIR_ANALOGUE ], NULL },
+	AI_TABLE_INT( PERSONA_SKIP_BANK ),
+	AI_TABLE_REAL( DOCTRINE_SHARE_TARGET ),
+	AI_TABLE_REAL( DOCTRINE_DRAIN ),
+	AI_TABLE_INT( MAX_WORKING_CENTERS ),
+	AI_TABLE_INT( TURTLE_CHOKES ),
+	AI_TABLE_REAL( TURTLE_DEFENSE_SCALE ),
+	AI_TABLE_INT( TURTLE_MINED_GUNS ),
+	AI_TABLE_INT( TURTLE_DEMO_TRAPS ),
+	AI_TABLE_INT( PERSONA_SURPLUS_DEPTH ),
+	AI_TABLE_INT( PERSONA_FAVOURED_FACTORIES ),
+	AI_TABLE_INT( RAID_PARTY ),
+	AI_TABLE_INT( RAID_START_SECONDS ),
+	AI_TABLE_INT( AIR_AA_DEFENSES ),
+	AI_TABLE_INT( MONEY_UNITS_IN_THE_OPEN ),
+	AI_TABLE_REAL( FIRST_INCOME_SECONDS ),
+	AI_TABLE_INT( INCOME_BUILDINGS ),
+	AI_TABLE_INT( SCRIPTLESS_SUPERWEAPON_SECONDS ),
+	AI_TABLE_REAL( OUTSIDE_BASE_ODDS ),
+	AI_TABLE_INT( PERSONA_FAVOURED_DEPTH ),
+	AI_TABLE_INT( KIND_FAVOURED_DEPTH ),
+	AI_TABLE_INT( INFANTRY_FAVOURED_DEPTH ),
+	AI_TABLE_INT( DOCTRINE_DEPTH ),
+	AI_TABLE_INT( DOCTRINE_FACTORIES ),
+	AI_TABLE_INT( DOCTRINE_FACTORIES_MAX ),
+	AI_TABLE_INT( DOCTRINE_RICH_DEPTH ),
+	AI_TABLE_REAL( DOCTRINE_AIR_FLOOR ),
+	AI_TABLE_INT( DOCTRINE_AIR_GUNS ),
+	AI_TABLE_REAL( DOCTRINE_AIR_GUN_SHARE ),
+	AI_TABLE_REAL( ALLY_ARMY_SHARE ),
+	AI_TABLE_REAL( GARRISON_FRONT_REACH ),
+	AI_TABLE_REAL( GARRISON_FRONT_REACH_INFANTRY ),
+	AI_TABLE_REAL( GARRISON_LEAVE_HEALTH ),
+	AI_TABLE_INT( IDLE_CALLUP_SECONDS ),
+	AI_TABLE_INT( PERSONA_SORTIE_SECONDS ),
+	AI_TABLE_INT( KIND_SORTIE_SECONDS ),
+	AI_TABLE_REAL( KIND_SORTIE_POWER ),
+	AI_TABLE_INT( INFANTRY_TRANSPORTS ),
+	AI_TABLE_REAL( AIR_STEER_SECONDS ),
+	AI_TABLE_INT( AMBULANCE_HIT_SECONDS ),
+	AI_TABLE_REAL( AMBULANCE_MARGIN_SHARE ),
+	AI_TABLE_REAL( AMBULANCE_MARGIN_MIN ),
+	AI_TABLE_REAL( AMBULANCE_MARGIN_MAX ),
+	AI_TABLE_INT( AMBULANCE_REBUY_SECONDS ),
+	AI_TABLE_INT( AMBULANCE_MATCH_CAP ),
+	AI_TABLE_REAL( EDGE_ODDS ),
+	AI_TABLE_INT( RUSH_SECONDS ),
+	AI_TABLE_INT( RAID_EVERY_SECONDS ),
+	AI_TABLE_INT( SHARE_CAP ),
+	AI_TABLE_INT( TECH_FIRST_DEFENSES ),
+	AI_TABLE_INT( SURRENDER_EARLIEST_MINUTE ),
+	AI_TABLE_INT( SURRENDER_WORTH_PERCENT ),
+	AI_TABLE_INT( SURRENDER_HOLD_SECONDS ),
+};
+#undef AI_TABLE_REAL
+#undef AI_TABLE_INT
+
+const AIRatingTable *aiRatingTables( Int *count )
+{
+	*count = (Int)( sizeof( s_ratingTables ) / sizeof( s_ratingTables[ 0 ] ) );
+	return s_ratingTables;
 }

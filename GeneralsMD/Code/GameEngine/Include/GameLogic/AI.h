@@ -150,8 +150,8 @@ public:
 	* every shipped map and .scb, into the campaign's stat bonus tables and into network messages.
 	* This one answers "how well does it play".  No rung has a build-rate, vision or stat handicap, in
 	* either direction.  Income is the one bonus: a skirmish AI banks its rung's IncomePercent of what it
-	* earns by playing (Player::earnMoney), 150 on every rung and up to 300 while it falls behind its
-	* strongest enemy (AIPlayer::stepIncomeBonus).  Keeping it a separate enum is what lets a rung be
+	* earns by playing (Player::earnMoney), 100 on Easy and 150 on Hard, and up to IncomeBonusMaxPercent
+	* more (25 and 100) while it falls behind its strongest enemy (AIPlayer::stepIncomeBonus).  Keeping it a separate enum is what lets a rung be
 	* tuned in AI.ini without touching what a map's scripts do.
 	* See AI-ROADMAP.md sections D6, D7 and D10.
 	*/
@@ -170,34 +170,80 @@ enum AISkillLevel
 	* rating as zerohour.gg's ladder shows it (the OpenSkill ordinal mu - 3 sigma: a new player 0,
 	* sergeant 5, captain 15, general 30 and up), so a ranked match can pick the AI's rating from the
 	* player's.  The three rungs are the anchors, Easy 0, Medium 15 and Hard 30, set here and nowhere
-	* else, and every knob that differs by rung (the ladder's profile, each table of
-	* three in AIPlayer.cpp) is read at the rating by aiRatingLerp: a straight line between the two
-	* anchors around it, a*(1-f) + b*f, so f of 0 or 1 gives the rung's own value to the bit and a seat
-	* at an anchor plays exactly that rung.  An Int rounds to the nearest; a Bool flips where its line
-	* crosses one half, the midpoint between two anchors, which is also where aiSkillOfRating moves to
-	* the next rung.  The rung stays, derived, for what is discrete by nature: the map scripts' easy,
-	* normal and hard flags, the gatherer counts, the menus and the logs.  A rating outside the
-	* anchors is clamped to them. */
+	* else, and every knob that differs by rung (the ladder's profile, each table of three in
+	* AIPlayer.cpp) is read at the rating.  A seat at Easy or Hard plays exactly that rung.  The rung
+	* stays, derived as the nearest (aiSkillOfRating, Easy under 7.5, Hard from 22.5), for what is
+	* discrete by nature: the map scripts' easy, normal and hard flags, the gatherer counts, the menus
+	* and the logs.
+	*
+	* The rating is one multiplier with no edge of its own: every knob is one smooth curve of it through
+	* Easy's value E at 0 and Hard's value H at 30 (aiKnobAt), and Medium's row is where the curve passes
+	* at 15, no longer a point it has to hit.  With t = r / 30:
+	*   a knob that falls (H < E, a period, a delay, a threshold): E / (1 + c t) for t >= 0 and
+	*     E (1 - c t) below, c = E/H - 1, the same value and slope at 0; H = 0 is E (1 - t), and 0 past it;
+	*   a knob that rises (H > E, a power, a count, a reach): E (1 - t) + H t for t >= 0, and
+	*     E / (1 - s t / E) below, s = H - E, which falls towards 0 and never reaches it; E = 0 is 0 below;
+	*   a share (AIKNOB_SHARE, a fraction that means nothing past 1) that rises: 1 minus the falling curve
+	*     of what is left to 1, so it nears 1 and never passes it, and the same decay as above below 0; one
+	*     that falls: the falling curve for t >= 0, and below 0 what is left to 1 decays towards 0;
+	*   AIKNOB_GATED, a knob whose Easy 0 means "off" (CashHoardThreshold, BeamSteerSeconds): off below
+	*     7.5 like a Bool, from there the curve through Medium at 15 and Hard at 30;
+	*   E = H: flat.
+	* A Bool reads its nearest rung (on from 7.5 or 22.5, as before), an Int rounds its curve.  Only + - * /.
+	* The rating itself is held to AI_RATING_LIMIT either way, far past any ladder, so its hundredths stay
+	* an Int; nothing else is clamped. */
 //-------------------------------------------------------------------------------------------------
 #define AI_RATING_EASY		0.0f
 #define AI_RATING_MEDIUM	15.0f
 #define AI_RATING_HARD		30.0f
+/** Not a cap on the scale: the furthest a rating is carried either way, so its hundredths and every
+	* knob extrapolated from it stay well inside an Int. */
+#define AI_RATING_LIMIT		1000.0f
 /** The game setup carries a rating as whole hundredths, the ladder's two decimals, so a slot string,
 	* a replay header and a dict hold an Int and every machine reads the same Real back from it. */
-#define AI_RATING_NONE		(-1)		///< no rating in the setup: the seat plays its rung's anchor
-Int aiRatingToHundredths( Real rating );		///< rounded to the nearest hundredth, clamped first
+#define AI_RATING_NONE		(-0x7FFFFFFF - 1)		///< no rating in the setup: the seat plays its rung's anchor
+Int aiRatingToHundredths( Real rating );		///< rounded to the nearest hundredth, held to AI_RATING_LIMIT first
 Real aiRatingFromHundredths( Int hundredths );
 
-Real aiRatingClamp( Real rating );								///< held to [AI_RATING_EASY, AI_RATING_HARD]
+Real aiRatingClamp( Real rating );								///< held to [-AI_RATING_LIMIT, AI_RATING_LIMIT]
 Real aiRatingOfSkill( AISkillLevel level );				///< the rung's anchor; Hard for anything out of range
 AISkillLevel aiSkillOfRating( Real rating );			///< the nearest rung, the upper one at a midpoint
 /** The rating has reached the midpoint below rung's anchor: what "this rung or above" means for a
 	* rating, the same answer as before at every anchor. */
 inline Bool aiRatingReaches( Real rating, AISkillLevel rung ) { return aiSkillOfRating( rating ) >= rung; }
-/** A table of three, Easy, Medium and Hard, read at a rating. */
-Real aiRatingLerp( Real rating, const Real byRung[ AISKILL_COUNT ] );
-Int aiRatingLerp( Real rating, const Int byRung[ AISKILL_COUNT ] );
-Bool aiRatingLerp( Real rating, const Bool byRung[ AISKILL_COUNT ] );
+
+/** Which curve a knob's E and H are read on (aiKnobAt); whether it rises or falls is theirs. */
+enum AIKnobForm
+{
+	AIKNOB_OPEN = 0,		///< a magnitude with no ceiling
+	AIKNOB_SHARE,				///< a fraction, never past 1
+	AIKNOB_GATED,				///< Easy's 0 is "off": off below the Easy-Medium midpoint, then the curve from Medium to Hard
+};
+/** A table of three, Easy, Medium and Hard, and its curve. */
+struct AIRungReal
+{
+	Real m_byRung[ AISKILL_COUNT ];
+	AIKnobForm m_form;
+};
+struct AIRungInt
+{
+	Int m_byRung[ AISKILL_COUNT ];
+	AIKnobForm m_form;
+};
+/** A knob at a rating: Easy's and Hard's values to the bit at their anchors, the curve between and past. */
+Real aiKnobAt( Real rating, Real easy, Real medium, Real hard, AIKnobForm form );
+Real aiRatingLerp( Real rating, const AIRungReal &knob );
+Int aiRatingLerp( Real rating, const AIRungInt &knob );		///< the curve rounded to the nearest
+/** One table of three outside the profile, by its constant's name: one of the two pointers, the other NULL. */
+struct AIRatingTable
+{
+	const char *m_name;
+	const AIRungReal *m_real;
+	const AIRungInt *m_int;
+};
+/** Every AIRungReal and AIRungInt the game reads (AIPlayer.cpp, Player.cpp, AISkirmishPlayer.cpp), so
+	* the curves can be drawn and checked from the tables themselves; *count takes how many. */
+const AIRatingTable *aiRatingTables( Int *count );
 
 //-------------------------------------------------------------------------------------------------
 /** What the AI is trying to do, as opposed to how well it does it.  A preference, never a bonus:
@@ -256,8 +302,8 @@ AIPersonality aiPersonalityFromName( const char *name );
 	* switch(difficulty) somewhere, so the whole ladder can be read, tuned and measured in one place.
 	*
 	* Nothing in here may exceed the AI's baseline - the top rung IS the baseline and the lower rungs
-	* are handicaps on its *decisions*.  m_incomePercent is the one exception, the owner's call of
-	* 2026-11-02.  If another field ever appears that multiplies income, build rate, vision or unit
+	* are handicaps on its *decisions*.  Income is the one exception, the owner's call of 2026-11-02,
+	* and since 2026-11-17 it rises with the rating too, so Easy earns less than Hard.  If another field ever appears that multiplies income, build rate, vision or unit
 	* stats per rung, the design has drifted. */
 //-------------------------------------------------------------------------------------------------
 struct AIDifficultyProfile
@@ -339,11 +385,12 @@ struct AIDifficultyProfile
 
 	// Taking more of the map (AIPlayer::doSecondBase, AIPlayer::findSupplyCenter)
 	Real	m_secondBaseSeconds;						///< no base away from home before this far into the match; 0 = never
-	Int		m_secondBases;									///< how many empty start positions it founds a base on, nearest first
+	Int		m_secondBases;									///< how many empty start positions it founds a base on, nearest first; Hard 3, a count the rating's line can read
 	Real	m_expansionReach;								///< how far from home, or from one of those bases, a supply center of its own choosing may go
 
 	// Income: the one bonus on the ladder (Player::incomePercent)
 	Int		m_incomePercent;								///< what a skirmish AI banks of what it earns by playing, in percent, before the falling-behind bonus; the score screen counts the 100
+	Int		m_incomeBonusMaxPercent;				///< the falling-behind bonus's ceiling in percentage points over m_incomePercent (Easy 25, Hard 100)
 
 	// Its units' own buttons (AIPlayer::doAbilities)
 	Int		m_unitAbilities;								///< 0 none; 1 the laser lock, manual shots, area weapons at the unit's own target and weapon toggles; 2 those anywhere in reach, walk-up specials and suicides too
@@ -352,9 +399,11 @@ struct AIDifficultyProfile
 	Int		m_foreignTech;									///< 0 none; 1 a foreign dozer or Command Center that falls into its hands builds that side's base and army; 2 it also goes after them: dozers stolen or emptied and crewed, Command Centers and other buildings captured
 };
 
-/** The profile at a rating: every field of the two rows of ladder around it through aiRatingLerp, by
-	* its type in the AI.ini SkillLevel parse table, so a field the table names is a field interpolated. */
+/** The profile at a rating: every Real and Int field of the AI.ini SkillLevel parse table on its curve
+	* (aiKnobAt, the form in the row's userData), every Bool from the nearest rung's row. */
 void aiRatingProfile( Real rating, const AIDifficultyProfile ladder[ AISKILL_COUNT ], AIDifficultyProfile *out );
+/** The SkillLevel parse table: a Real or Int row's userData is its AIKnobForm, a Bool row's NULL. */
+const struct FieldParse *aiSkillLevelFields( void );
 
 //-------------------------------------------------------------------------------------------------
 /** What an enemy is fielding, as shares of the threat value the observer can actually see.  The
@@ -1010,11 +1059,10 @@ struct AIPurchaseQueue
 /** How long a stretch of income is measured over before the rate is taken again. */
 #define AI_INCOME_WINDOW_FRAMES ((UnsignedInt)(30 * LOGICFRAMES_PER_GAME_SECOND))
 
-/** The falling-behind income bonus (AIPlayer::stepIncomeBonus): how often it is weighed again, how far
-	* it moves at one weighing, and its ceiling over the rung's IncomePercent, in percentage points. */
+/** The falling-behind income bonus (AIPlayer::stepIncomeBonus): how often it is weighed again, and in
+	* how many weighings it climbs from nothing to the profile's IncomeBonusMaxPercent (a step of 25 at 150). */
 #define AI_INCOME_BONUS_FRAMES ((UnsignedInt)(30 * LOGICFRAMES_PER_GAME_SECOND))
-const Int AI_INCOME_BONUS_STEP = 25;
-const Int AI_INCOME_BONUS_MAX = 150;
+const Int AI_INCOME_BONUS_STEPS = 6;
 
 /** The bank a computer player keeps: seconds of its income, and never under the floor. */
 Int aiBankTarget( Real incomePerSecond, Real seconds, Int floor );

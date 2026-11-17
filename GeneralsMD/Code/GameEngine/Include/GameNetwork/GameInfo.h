@@ -459,8 +459,8 @@ Int HandicapFromSlotField( const char *field );
 // An AI seat's rating off its rung's anchor (-airating) goes after the handicap, persona and handicap
 // then written out in full: C<rung>,color,tmpl,start,team,persona,handicap,rating.  Only such a seat
 // writes it, so every other string stays the one it was, and an older parser stops at the handicap.
-// It is whole hundredths (1250 is 12.50).  Absent, or outside AI_RATING_EASY..AI_RATING_HARD, is
-// AI_RATING_NONE: the rung's anchor.
+// It is whole hundredths (1250 is 12.50, -1000 is -10.00).  Absent, or past AI_RATING_LIMIT either way,
+// is AI_RATING_NONE: the rung's anchor.
 Int AIRatingFromSlotField( const char *field );
 
 // A guest's "Handicap=<n>" request reaching the host.  TRUE when the slot list has to go round again,

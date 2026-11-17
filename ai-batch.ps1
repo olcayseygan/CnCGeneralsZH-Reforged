@@ -35,11 +35,12 @@ param(
 	[string] $Difficulty = "brutal",
 	# rung for the odd-numbered slots; empty means the same as -Difficulty, so a rung plays itself
 	[string] $Difficulty2 = "",
-	# AI rating for every slot on the online ladder's scale, 0 (Easy) to 15 (Medium) to 30 (Hard),
-	# fractions kept to the hundredth, over -Difficulty; negative (the default) leaves the rung's own
-	[double] $Rating = -1,
-	# rating for the odd-numbered slots, over -Difficulty2; negative means the same as -Rating
-	[double] $Rating2 = -1,
+	# AI rating for every slot on the online ladder's scale, Easy 0 and Hard 30 with no edge either
+	# way (100 and -10 are ratings), fractions kept to the hundredth, over -Difficulty; NaN (the
+	# default) leaves the rung's own
+	[double] $Rating = [double]::NaN,
+	# rating for the odd-numbered slots, over -Difficulty2; NaN means the same as -Rating
+	[double] $Rating2 = [double]::NaN,
 	# AI personality for every slot by name (Normal, Attacker, Turtle, ... Random); empty is Normal
 	[string] $Persona = "",
 	# personality for the odd-numbered slots; empty means the same as -Persona, so a personality
@@ -157,8 +158,8 @@ for ($i = 0; $i -lt $Runs; $i++) {
 	if ($Difficulty2) { $args += "-aidiff2"; $args += $Difficulty2 }
 	# and a rating between the rungs, every slot's and the odd slots'
 	# invariant culture, so a Turkish locale's decimal comma never reaches the game's atof
-	if ($Rating -ge 0) { $args += "-airating"; $args += $Rating.ToString([Globalization.CultureInfo]::InvariantCulture) }
-	if ($Rating2 -ge 0) { $args += "-airating2"; $args += $Rating2.ToString([Globalization.CultureInfo]::InvariantCulture) }
+	if (-not [double]::IsNaN($Rating)) { $args += "-airating"; $args += $Rating.ToString([Globalization.CultureInfo]::InvariantCulture) }
+	if (-not [double]::IsNaN($Rating2)) { $args += "-airating2"; $args += $Rating2.ToString([Globalization.CultureInfo]::InvariantCulture) }
 	# and personalities the same way, so one can be played against another
 	if ($Persona) { $args += "-aipersonaall"; $args += $Persona }
 	if ($Persona2) { $args += "-aipersona2"; $args += $Persona2 }

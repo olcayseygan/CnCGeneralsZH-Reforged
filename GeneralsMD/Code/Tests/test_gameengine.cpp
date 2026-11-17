@@ -2603,7 +2603,7 @@ TEST(income_sharing_splits_evenly_and_keeps_the_remainder)
 	CHECK_EQ( IncomeAllyShare( 200, 1 ), 0u );
 }
 
-/* Player.cpp: a skirmish computer banks its rung's income percent (150 on every rung), rounded down. */
+/* Player.cpp: a skirmish computer banks its rated income percent (100 Easy, 150 Hard), rounded down. */
 TEST(skirmish_ai_earnings_by_rung_percent)
 {
 	/* anyone who is not a computer */
@@ -2611,26 +2611,43 @@ TEST(skirmish_ai_earnings_by_rung_percent)
 	/* a computer: the derrick's 1000 is 1500, a truckload of 75 banks 112, the odd half dropped */
 	CHECK_EQ( EarnedAmount( 1000, 150 ), 1500u );
 	CHECK_EQ( EarnedAmount( 75, 150 ), 112u );
+	/* a rating of 1000 earns about 4300 percent; a million times that would wrap 32 bits */
+	CHECK_EQ( EarnedAmount( 1000000, 4300 ), 43000000u );
 }
 
 /* Player.cpp: the falling-behind bonus, points over the rung's percent, and its step at one weighing. */
 TEST(skirmish_ai_earnings_bonus_when_behind)
 {
 	/* level or ahead, or no enemy left: none */
-	CHECK_EQ( IncomeBonusTarget( 1000, 1000 ), 0 );
-	CHECK_EQ( IncomeBonusTarget( 3000, 1000 ), 0 );
-	CHECK_EQ( IncomeBonusTarget( 1000, 0 ), 0 );
-	/* three quarters of the enemy: 200 percent on a 150 rung; half of it: 250 */
-	CHECK_EQ( IncomeBonusTarget( 750, 1000 ), 50 );
-	CHECK_EQ( IncomeBonusTarget( 500, 1000 ), 100 );
-	/* a quarter of it and below: the ceiling, 300 percent */
-	CHECK_EQ( IncomeBonusTarget( 250, 1000 ), 150 );
-	CHECK_EQ( IncomeBonusTarget( 0, 1000 ), 150 );
-	/* 25 points a weighing, either way, and straight onto a target that close */
-	CHECK_EQ( IncomeBonusStep( 0, 150 ), 25 );
-	CHECK_EQ( IncomeBonusStep( 140, 150 ), 150 );
-	CHECK_EQ( IncomeBonusStep( 150, 0 ), 125 );
-	CHECK_EQ( IncomeBonusStep( 5, 0 ), 0 );
+	CHECK_EQ( IncomeBonusTarget( 1000, 1000, 150 ), 0 );
+	CHECK_EQ( IncomeBonusTarget( 3000, 1000, 150 ), 0 );
+	CHECK_EQ( IncomeBonusTarget( 1000, 0, 150 ), 0 );
+	/* three quarters of the enemy under a 150 ceiling: 50 points; half of it: 100 */
+	CHECK_EQ( IncomeBonusTarget( 750, 1000, 150 ), 50 );
+	CHECK_EQ( IncomeBonusTarget( 500, 1000, 150 ), 100 );
+	/* a quarter of it and below: the ceiling */
+	CHECK_EQ( IncomeBonusTarget( 250, 1000, 150 ), 150 );
+	CHECK_EQ( IncomeBonusTarget( 0, 1000, 150 ), 150 );
+	/* another ceiling is reached at the same quarter: Easy's 25, Hard's 100, none at 0 */
+	CHECK_EQ( IncomeBonusTarget( 500, 1000, 100 ), 66 );
+	CHECK_EQ( IncomeBonusTarget( 250, 1000, 100 ), 100 );
+	CHECK_EQ( IncomeBonusTarget( 250, 1000, 25 ), 25 );
+	CHECK_EQ( IncomeBonusTarget( 0, 1000, 0 ), 0 );
+	/* a sixth of the ceiling a weighing, either way, and straight onto a target that close */
+	CHECK_EQ( IncomeBonusStep( 0, 150, 150 ), 25 );
+	CHECK_EQ( IncomeBonusStep( 140, 150, 150 ), 150 );
+	CHECK_EQ( IncomeBonusStep( 150, 0, 150 ), 125 );
+	CHECK_EQ( IncomeBonusStep( 5, 0, 150 ), 0 );
+	CHECK_EQ( IncomeBonusStep( 0, 100, 100 ), 17 );
+	CHECK_EQ( IncomeBonusStep( 0, 25, 25 ), 5 );
+	/* six weighings from nothing to any ceiling, as at 150 */
+	for( Int ceiling = 25; ceiling <= 300; ceiling += 25 )
+	{
+		Int bonus = 0;
+		for( Int weighing = 0; weighing < AI_INCOME_BONUS_STEPS; ++weighing )
+			bonus = IncomeBonusStep( bonus, ceiling, ceiling );
+		CHECK_EQ( bonus, ceiling );
+	}
 }
 
 /* Player.cpp: the bonus weighs sides, a player at a time, not one seat against another. */
@@ -2644,7 +2661,7 @@ TEST(skirmish_ai_earnings_bonus_weighs_sides)
 	CHECK_EQ( own, 500 );
 	CHECK_EQ( enemy, 2000 );
 	/* a quarter of the strongest side's average: the ceiling */
-	CHECK_EQ( IncomeBonusTarget( own, enemy ), 150 );
+	CHECK_EQ( IncomeBonusTarget( own, enemy, 150 ), 150 );
 	/* free for all: every enemy is a side of one, the richest counts */
 	const Int ffa[ 3 ] = { 300, 100, 200 };
 	const PlayerMaskType none[ 3 ] = { 0, 0, 0 };
@@ -17476,56 +17493,137 @@ TEST(the_difficulty_ladder_climbs_in_every_direction_it_should)
 	}
 }
 
-/** A seat's rating reads every rung-keyed knob off a line between the two anchors around it.  At 0, 15
-	 and 30 it has to be the rung to the bit, or every replay of a rung stops playing back, and 15 is read
-	 from the Easy-Medium span with f = 1, so a profile field the interpolation walks past would show there
-	 as Easy's value. */
-TEST(an_ai_rating_is_the_rung_at_its_anchors_and_a_line_between_them)
+/** A finite number, and not under 0: every knob on the ladder is a period, a count, a weight or a share. */
+static Bool aiKnobSane( Real value )
+{
+	return value == value && value >= 0.0f && value < 1.0e30f;
+}
+
+/** A Real or Int field of the SkillLevel table read out of a profile as a Real. */
+static Real aiProfileField( const AIDifficultyProfile &profile, const FieldParse *field )
+{
+	const char *at = (const char *)&profile + field->offset;
+	return field->parse == INI::parseReal ? *(const Real *)at : INT_TO_REAL( *(const Int *)at );
+}
+
+/** A seat's rating reads every rung-keyed knob off one curve through Easy's value at 0 and Hard's at 30
+	 (aiKnobAt).  At 0 and 30 it has to be the rung to the bit, or every replay of the rung stops playing
+	 back; Medium is wherever the curve passes at 15.  Past either end there is no edge: 100 and -10 are
+	 ratings, and every knob stays a finite number that means something. */
+TEST(an_ai_rating_is_easy_and_hard_at_their_anchors_and_one_curve_through_and_past_them)
 {
 	TAiData data;
 	AIDifficultyProfile out;
 
-	for( Int i = 0; i < AISKILL_COUNT; ++i )
-	{
-		const Real anchor = aiRatingOfSkill( (AISkillLevel)i );
-		aiRatingProfile( anchor, data.m_skill, &out );
-		CHECK( memcmp( &out, &data.m_skill[ i ], sizeof( out ) ) == 0 );
-		CHECK_EQ( (Int)i, (Int)aiSkillOfRating( anchor ) );
-	}
-
-	// clamped to the ends
-	aiRatingProfile( -6.0f, data.m_skill, &out );
+	aiRatingProfile( AI_RATING_EASY, data.m_skill, &out );
 	CHECK( memcmp( &out, &data.m_skill[ AISKILL_EASY ], sizeof( out ) ) == 0 );
-	aiRatingProfile( 39.0f, data.m_skill, &out );
+	aiRatingProfile( AI_RATING_HARD, data.m_skill, &out );
 	CHECK( memcmp( &out, &data.m_skill[ AISKILL_BRUTAL ], sizeof( out ) ) == 0 );
-	CHECK_EQ( AI_RATING_EASY, aiRatingClamp( -5.0f ) );
-	CHECK_EQ( AI_RATING_HARD, aiRatingClamp( 45.0f ) );
+	for( Int i = 0; i < AISKILL_COUNT; ++i )
+		CHECK_EQ( (Int)i, (Int)aiSkillOfRating( aiRatingOfSkill( (AISkillLevel)i ) ) );
 
-	// the ladder shows two decimals; a seat carries whole hundredths, and an anchor comes back exact
+	// no edge on the scale: only an Int's guard far past any ladder
+	CHECK_EQ( 100.0f, aiRatingClamp( 100.0f ) );
+	CHECK_EQ( -10.0f, aiRatingClamp( -10.0f ) );
+	CHECK_EQ( AI_RATING_LIMIT, aiRatingClamp( 5000.0f ) );
+	// NaN is Easy, and its hundredths 0 on every machine
+	const Real notANumber = std::numeric_limits<Real>::quiet_NaN();
+	CHECK_EQ( AI_RATING_EASY, aiRatingClamp( notANumber ) );
+	CHECK_EQ( 0, aiRatingToHundredths( notANumber ) );
+
+	// the ladder shows two decimals; a seat carries whole hundredths either side of 0
 	CHECK_EQ( 1234, aiRatingToHundredths( 12.34f ) );
 	CHECK_EQ( 1234, aiRatingToHundredths( aiRatingFromHundredths( 1234 ) ) );
-	CHECK_EQ( AI_RATING_MEDIUM, aiRatingFromHundredths( 1500 ) );
+	CHECK_EQ( -1050, aiRatingToHundredths( -10.5f ) );
+	CHECK_EQ( -1050, aiRatingToHundredths( aiRatingFromHundredths( -1050 ) ) );
+	CHECK_EQ( 10000, aiRatingToHundredths( 100.0f ) );
 	CHECK_EQ( AI_RATING_HARD, aiRatingFromHundredths( 3000 ) );
-	CHECK_EQ( 0, aiRatingToHundredths( -2.0f ) );
-	CHECK_EQ( 3000, aiRatingToHundredths( 31.0f ) );
+	CHECK_EQ( 100000, aiRatingToHundredths( 5000.0f ) );
 
-	// a Real half way between Easy and Medium is the mean of the two
+	// every Real and Int knob: finite and not negative far either way, the same value either side of 0,
+	// and the old Medium against the new one for the record
+	printf( "  knob                          Easy    Medium(old)  at 15      Hard     at 60      at 100     at -10\n" );
 	const AIDifficultyProfile &easy = data.m_skill[ AISKILL_EASY ];
 	const AIDifficultyProfile &medium = data.m_skill[ AISKILL_MEDIUM ];
 	const AIDifficultyProfile &hard = data.m_skill[ AISKILL_BRUTAL ];
-	aiRatingProfile( 7.5f, data.m_skill, &out );
-	CHECK_NEAR( 0.5f * ( easy.m_scoutIntervalSeconds + medium.m_scoutIntervalSeconds ), out.m_scoutIntervalSeconds, 1.0e-4f );
-	CHECK_NEAR( 0.5f * ( easy.m_counterCompositionWeight + medium.m_counterCompositionWeight ), out.m_counterCompositionWeight, 1.0e-6f );
-	CHECK_EQ( ( easy.m_cashHoardThreshold + medium.m_cashHoardThreshold ) / 2, out.m_cashHoardThreshold );
+	static const Real FAR_RATINGS[] = { -1000.0f, -100.0f, -10.0f, 0.5f, 7.5f, 15.0f, 22.5f, 45.0f, 60.0f, 100.0f, 1000.0f };
+	AIDifficultyProfile at15, at60, at100, atMinus10, justOver, justUnder;
+	aiRatingProfile( 15.0f, data.m_skill, &at15 );
+	aiRatingProfile( 60.0f, data.m_skill, &at60 );
+	aiRatingProfile( 100.0f, data.m_skill, &at100 );
+	aiRatingProfile( -10.0f, data.m_skill, &atMinus10 );
+	aiRatingProfile( 0.001f, data.m_skill, &justOver );
+	aiRatingProfile( -0.001f, data.m_skill, &justUnder );
+	for( const FieldParse *field = aiSkillLevelFields(); field->token != NULL; ++field )
+	{
+		if( field->parse == INI::parseBool )
+			continue;
+		CHECK( field->userData != NULL );
+		for( Int r = 0; r < (Int)( sizeof( FAR_RATINGS ) / sizeof( FAR_RATINGS[ 0 ] ) ); ++r )
+		{
+			aiRatingProfile( FAR_RATINGS[ r ], data.m_skill, &out );
+			CHECK( aiKnobSane( aiProfileField( out, field ) ) );
+		}
+		const Real e = aiProfileField( easy, field );
+		if( field->parse == INI::parseReal )
+			CHECK_NEAR( aiProfileField( justOver, field ), aiProfileField( justUnder, field ), 0.01f + 0.001f * ( e + aiProfileField( hard, field ) ) );
+		printf( "  %-28s %9.3f %9.3f %9.3f %9.3f %9.3f %9.3f %9.3f\n", field->token, e, aiProfileField( medium, field ),
+			aiProfileField( at15, field ), aiProfileField( hard, field ), aiProfileField( at60, field ),
+			aiProfileField( at100, field ), aiProfileField( atMinus10, field ) );
+	}
 
-	// an Int rounds, a Bool flips at the midpoint, and the rung changes there too
-	static const Int CENTERS[ AISKILL_COUNT ] = { 3, 4, 6 };
-	CHECK_EQ( 5, aiRatingLerp( 22.5f, CENTERS ) );
-	CHECK_EQ( 4, aiRatingLerp( 18.0f, CENTERS ) );		// 4.4
-	CHECK_EQ( 5, aiRatingLerp( 21.75f, CENTERS ) );		// 4.9
-	static const Real ODDS[ AISKILL_COUNT ] = { 0.0f, 1.0f, 1.25f };
-	CHECK_NEAR( 0.5f, aiRatingLerp( 7.5f, ODDS ), 1.0e-6f );
-	CHECK_EQ( 1.25f, aiRatingLerp( 30.0f, ODDS ) );
+	// past Hard a falling knob keeps falling and a rising one keeps rising; a share nears 1 and stays under
+	AIDifficultyProfile at45;
+	aiRatingProfile( 45.0f, data.m_skill, &at45 );
+	CHECK( hard.m_decisionIntervalSeconds > at45.m_decisionIntervalSeconds && at45.m_decisionIntervalSeconds > at100.m_decisionIntervalSeconds );
+	CHECK( at100.m_decisionIntervalSeconds > 0.0f );
+	CHECK( hard.m_minAttackPower < at45.m_minAttackPower && at45.m_minAttackPower < at100.m_minAttackPower );
+	CHECK( hard.m_retreatTtkRatio < at45.m_retreatTtkRatio && at45.m_retreatTtkRatio < at100.m_retreatTtkRatio );
+	CHECK( at100.m_retreatTtkRatio < 1.0f );
+	CHECK( hard.m_scoutIntervalSeconds > at100.m_scoutIntervalSeconds && at100.m_scoutIntervalSeconds > 0.0f );
+	CHECK( easy.m_scoutIntervalSeconds < atMinus10.m_scoutIntervalSeconds );
+	CHECK( easy.m_minAttackPower > atMinus10.m_minAttackPower && atMinus10.m_minAttackPower > 0.0f );
+	// income, the owner's 2026-11-17 call: Easy 1.0x up to 1.25x, Hard 1.5x up to 2.5x, rising on past Hard
+	CHECK_EQ( 100, easy.m_incomePercent );
+	CHECK_EQ( 25, easy.m_incomeBonusMaxPercent );
+	CHECK_EQ( 150, hard.m_incomePercent );
+	CHECK_EQ( 100, hard.m_incomeBonusMaxPercent );
+	CHECK_EQ( 125, at15.m_incomePercent );
+	CHECK( at15.m_incomeBonusMaxPercent == 62 || at15.m_incomeBonusMaxPercent == 63 );
+	CHECK_EQ( 267, at100.m_incomePercent );
+	CHECK_EQ( 275, at100.m_incomeBonusMaxPercent );
+	CHECK( atMinus10.m_incomePercent < easy.m_incomePercent && atMinus10.m_incomePercent > 0 );
+	CHECK( atMinus10.m_incomeBonusMaxPercent < easy.m_incomeBonusMaxPercent && atMinus10.m_incomeBonusMaxPercent >= 0 );
+	CHECK_EQ( 3, hard.m_secondBases );		// a count, no longer MAX_PLAYER_COUNT for "every empty start"
+	CHECK_EQ( 2, at15.m_secondBases );
+
+	// the curves themselves: a falling one hits Hard exactly and never 0, a rising share nears 1, Hard's 0
+	// is a straight line to it, a gated one is off below 7.5 and passes Medium at 15
+	CHECK_EQ( 1.5f, aiKnobAt( 30.0f, 7.0f, 3.0f, 1.5f, AIKNOB_OPEN ) );
+	CHECK_NEAR( 7.0f / ( 1.0f + ( 7.0f / 1.5f - 1.0f ) * 0.5f ), aiKnobAt( 15.0f, 7.0f, 3.0f, 1.5f, AIKNOB_OPEN ), 1.0e-5f );
+	CHECK( aiKnobAt( 1000.0f, 7.0f, 3.0f, 1.5f, AIKNOB_OPEN ) > 0.0f );
+	CHECK( aiKnobAt( -10.0f, 7.0f, 3.0f, 1.5f, AIKNOB_OPEN ) > 7.0f );
+	CHECK( aiKnobAt( 100.0f, 0.0f, 0.35f, 0.5f, AIKNOB_SHARE ) < 1.0f );
+	CHECK( aiKnobAt( 100.0f, 0.0f, 0.35f, 0.5f, AIKNOB_SHARE ) > 0.5f );
+	CHECK_EQ( 0.0f, aiKnobAt( -10.0f, 0.0f, 0.35f, 0.5f, AIKNOB_SHARE ) );
+	CHECK( aiKnobAt( -10.0f, 0.5f, 0.75f, 1.0f, AIKNOB_SHARE ) < 0.5f );
+	CHECK( aiKnobAt( -10.0f, 0.5f, 0.75f, 1.0f, AIKNOB_SHARE ) > 0.0f );
+	CHECK( aiKnobAt( -10.0f, 1.0f, 0.5f, 0.25f, AIKNOB_SHARE ) <= 1.0f );
+	CHECK_EQ( 1.0f, aiKnobAt( 60.0f, 0.5f, 0.75f, 1.0f, AIKNOB_SHARE ) );
+	CHECK_EQ( 1.0f, aiKnobAt( 15.0f, 2.0f, 1.0f, 0.0f, AIKNOB_OPEN ) );
+	CHECK_EQ( 0.0f, aiKnobAt( 100.0f, 2.0f, 1.0f, 0.0f, AIKNOB_OPEN ) );
+	CHECK_EQ( 0.0f, aiKnobAt( 7.49f, 0.0f, 6000.0f, 4000.0f, AIKNOB_GATED ) );
+	CHECK_EQ( 6000.0f, aiKnobAt( 15.0f, 0.0f, 6000.0f, 4000.0f, AIKNOB_GATED ) );
+	CHECK( aiKnobAt( 100.0f, 0.0f, 6000.0f, 4000.0f, AIKNOB_GATED ) < 4000.0f );
+	CHECK( aiKnobAt( 100.0f, 0.0f, 6000.0f, 4000.0f, AIKNOB_GATED ) > 0.0f );
+	static const AIRungInt CENTERS = { { 3, 4, 6 }, AIKNOB_OPEN };
+	CHECK_EQ( 3, aiRatingLerp( 0.0f, CENTERS ) );
+	CHECK_EQ( 5, aiRatingLerp( 15.0f, CENTERS ) );		// 4.5 rounds up
+	CHECK_EQ( 6, aiRatingLerp( 30.0f, CENTERS ) );
+	CHECK_EQ( 13, aiRatingLerp( 100.0f, CENTERS ) );		// 3 + 3 * 100 / 30
+	CHECK_EQ( 2, aiRatingLerp( -10.0f, CENTERS ) );		// 3 / (1 + 10 / 30)
+
+	// a Bool reads its nearest rung, so it flips at 7.5 or 22.5 and holds past the ends
 	CHECK( !easy.m_retreatIndividualUnits && medium.m_retreatIndividualUnits );
 	aiRatingProfile( 7.49f, data.m_skill, &out );
 	CHECK( !out.m_retreatIndividualUnits );
@@ -17534,26 +17632,192 @@ TEST(an_ai_rating_is_the_rung_at_its_anchors_and_a_line_between_them)
 	CHECK( !medium.m_massBeforeAttacking && hard.m_massBeforeAttacking );
 	aiRatingProfile( 22.49f, data.m_skill, &out );
 	CHECK( !out.m_massBeforeAttacking );
-	CHECK_EQ( 1, out.m_maxScouts );		// 1.499, Medium's 1 to Hard's 2
 	aiRatingProfile( 22.5f, data.m_skill, &out );
 	CHECK( out.m_massBeforeAttacking );
-	CHECK_EQ( 2, out.m_maxScouts );
+	CHECK( at100.m_massBeforeAttacking && !atMinus10.m_retreatIndividualUnits );
 	CHECK_EQ( (Int)AISKILL_EASY, (Int)aiSkillOfRating( 7.49f ) );
 	CHECK_EQ( (Int)AISKILL_MEDIUM, (Int)aiSkillOfRating( 7.5f ) );
 	CHECK_EQ( (Int)AISKILL_MEDIUM, (Int)aiSkillOfRating( 22.49f ) );
 	CHECK_EQ( (Int)AISKILL_BRUTAL, (Int)aiSkillOfRating( 22.5f ) );
+	CHECK_EQ( (Int)AISKILL_BRUTAL, (Int)aiSkillOfRating( 100.0f ) );
+	CHECK_EQ( (Int)AISKILL_EASY, (Int)aiSkillOfRating( -10.0f ) );
 	CHECK( !aiRatingReaches( 7.49f, AISKILL_MEDIUM ) );
 	CHECK( aiRatingReaches( 7.5f, AISKILL_MEDIUM ) );
 	CHECK( !aiRatingReaches( 15.0f, AISKILL_BRUTAL ) );
 
-	// the slot field carries hundredths; only a rating inside the anchors survives, anything else is none
+	// the slot field carries hundredths, negative ones too; only past the guard is it none
 	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( NULL ) );
 	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( "" ) );
-	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( "-5" ) );
+	CHECK_EQ( -5, AIRatingFromSlotField( "-5" ) );
+	CHECK_EQ( -1000, AIRatingFromSlotField( "-1000" ) );
 	CHECK_EQ( 0, AIRatingFromSlotField( "0" ) );
 	CHECK_EQ( 1234, AIRatingFromSlotField( "1234" ) );
-	CHECK_EQ( 3000, AIRatingFromSlotField( "3000" ) );
-	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( "3001" ) );
+	CHECK_EQ( 10000, AIRatingFromSlotField( "10000" ) );
+	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( "100001" ) );
+	// past an Int: atoi saturated on Windows and truncated elsewhere, 4294967396 truncating to 100
+	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( "4294967396" ) );
+	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( "-4294967396" ) );
+	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( "99999999999999999999999" ) );
+}
+
+/** What curve E, Medium and H make under form, in words, and its k in rating units (-1 for none): the
+	 rating over which a falling knob loses half of what lies between it and its end, the same for what a
+	 rising share has left to 1, and a gated knob's counted from Medium. */
+static const char *aiKnobFormName( Real e, Real m, Real h, AIKnobForm form, Real *k )
+{
+	const Real span = AI_RATING_HARD - AI_RATING_EASY;
+	*k = -1.0f;
+	if( form == AIKNOB_GATED )
+	{
+		if( h < m && h > 0.0f )
+		{
+			*k = ( AI_RATING_HARD - AI_RATING_MEDIUM ) / ( m / h - 1.0f );
+			return "GATED off below 7.5, falls Medium to Hard";
+		}
+		return "GATED off below 7.5, then Medium to Hard";
+	}
+	if( e == h )
+		return "flat";
+	if( form == AIKNOB_SHARE )
+	{
+		if( h > e )
+		{
+			if( h >= 1.0f )
+				return "SHARE line to 1";
+			*k = span / ( ( 1.0f - e ) / ( 1.0f - h ) - 1.0f );
+			return "SHARE rises towards 1";
+		}
+		if( h <= 0.0f )
+			return "SHARE line to 0";
+		*k = span / ( e / h - 1.0f );
+		return "SHARE falls towards 0";
+	}
+	if( h > e )
+		return "OPEN rises, a line";
+	if( h <= 0.0f )
+		return "OPEN line to 0";
+	*k = span / ( e / h - 1.0f );
+	return "OPEN falls towards 0";
+}
+
+static const Int CURVE_SAMPLES = 221;		// -10 to 100 by a half
+static Real aiCurveRating( Int i ) { return -10.0f + 0.5f * INT_TO_REAL( i ); }
+
+static void writeCurve( FILE *fp, Bool *first, const char *name, const char *source, const char *type, const char *form,
+	Real e, Real m, Real h, Real k, const Real *samples )
+{
+	fprintf( fp, "%s  {\"name\":\"%s\",\"source\":\"%s\",\"type\":\"%s\",\"form\":\"%s\",\"e\":%.6g,\"oldM\":%.6g,\"h\":%.6g,\"k\":",
+		*first ? "" : ",\n", name, source, type, form, e, m, h );
+	if( k > 0.0f )
+		fprintf( fp, "%.6g", k );
+	else
+		fprintf( fp, "null" );
+	fprintf( fp, ",\"samples\":[" );
+	for( Int i = 0; i < CURVE_SAMPLES; ++i )
+		fprintf( fp, "%s%.6g", i == 0 ? "" : ",", samples[ i ] );
+	fprintf( fp, "]}" );
+	*first = FALSE;
+}
+
+/** Every table of three outside the profile (aiRatingTables): Easy's and Hard's own values at 0 and 30, a
+	 finite number not under 0 anywhere.  With ZH_AI_CURVES_JSON naming a file, every knob of the profile and
+	 every table is written there as JSON, sampled from -10 to 100 by a half through the game's own code, for
+	 the chart of the curves. */
+TEST(every_rated_table_is_its_rows_at_the_ends_and_the_curves_can_be_written_out)
+{
+	Int count = 0;
+	const AIRatingTable *tables = aiRatingTables( &count );
+	CHECK( count > 50 );
+	static const Real FAR_RATINGS[] = { -1000.0f, -10.0f, 15.0f, 100.0f, 1000.0f };
+	for( Int t = 0; t < count; ++t )
+	{
+		const AIRatingTable &table = tables[ t ];
+		CHECK( ( table.m_real != NULL ) != ( table.m_int != NULL ) );
+		if( table.m_real != NULL )
+		{
+			CHECK_EQ( table.m_real->m_byRung[ AISKILL_EASY ], aiRatingLerp( AI_RATING_EASY, *table.m_real ) );
+			CHECK_EQ( table.m_real->m_byRung[ AISKILL_BRUTAL ], aiRatingLerp( AI_RATING_HARD, *table.m_real ) );
+			for( Int r = 0; r < (Int)( sizeof( FAR_RATINGS ) / sizeof( FAR_RATINGS[ 0 ] ) ); ++r )
+				CHECK( aiKnobSane( aiRatingLerp( FAR_RATINGS[ r ], *table.m_real ) ) );
+		}
+		else
+		{
+			CHECK_EQ( table.m_int->m_byRung[ AISKILL_EASY ], aiRatingLerp( AI_RATING_EASY, *table.m_int ) );
+			CHECK_EQ( table.m_int->m_byRung[ AISKILL_BRUTAL ], aiRatingLerp( AI_RATING_HARD, *table.m_int ) );
+			for( Int r = 0; r < (Int)( sizeof( FAR_RATINGS ) / sizeof( FAR_RATINGS[ 0 ] ) ); ++r )
+				CHECK( aiKnobSane( INT_TO_REAL( aiRatingLerp( FAR_RATINGS[ r ], *table.m_int ) ) ) );
+		}
+	}
+
+	const char *path = getenv( "ZH_AI_CURVES_JSON" );
+	if( path == NULL || *path == 0 )
+		return;
+	FILE *fp = fopen( path, "w" );
+	CHECK( fp != NULL );
+	if( fp == NULL )
+		return;
+
+	TAiData data;
+	static AIDifficultyProfile profiles[ CURVE_SAMPLES ];
+	for( Int i = 0; i < CURVE_SAMPLES; ++i )
+		aiRatingProfile( aiCurveRating( i ), data.m_skill, &profiles[ i ] );
+	const AIDifficultyProfile &easy = data.m_skill[ AISKILL_EASY ];
+	const AIDifficultyProfile &medium = data.m_skill[ AISKILL_MEDIUM ];
+	const AIDifficultyProfile &hard = data.m_skill[ AISKILL_BRUTAL ];
+	Real samples[ CURVE_SAMPLES ];
+	Bool first = TRUE;
+	fprintf( fp, "[\n" );
+	for( const FieldParse *field = aiSkillLevelFields(); field->token != NULL; ++field )
+	{
+		if( field->parse == INI::parseBool )
+		{
+			const Int at = field->offset;
+			for( Int i = 0; i < CURVE_SAMPLES; ++i )
+				samples[ i ] = *(const Bool *)( (const char *)&profiles[ i ] + at ) ? 1.0f : 0.0f;
+			writeCurve( fp, &first, field->token, "profile", "Bool", "bool, the nearest rung's",
+				*(const Bool *)( (const char *)&easy + at ) ? 1.0f : 0.0f, *(const Bool *)( (const char *)&medium + at ) ? 1.0f : 0.0f,
+				*(const Bool *)( (const char *)&hard + at ) ? 1.0f : 0.0f, -1.0f, samples );
+			continue;
+		}
+		for( Int i = 0; i < CURVE_SAMPLES; ++i )
+			samples[ i ] = aiProfileField( profiles[ i ], field );
+		const Real e = aiProfileField( easy, field );
+		const Real m = aiProfileField( medium, field );
+		const Real h = aiProfileField( hard, field );
+		Real k;
+		const char *form = aiKnobFormName( e, m, h, *(const AIKnobForm *)field->userData, &k );
+		writeCurve( fp, &first, field->token, "profile", field->parse == INI::parseReal ? "Real" : "Int", form, e, m, h, k, samples );
+	}
+	for( Int t = 0; t < count; ++t )
+	{
+		const AIRatingTable &table = tables[ t ];
+		Real e, m, h;
+		AIKnobForm shape;
+		if( table.m_real != NULL )
+		{
+			e = table.m_real->m_byRung[ AISKILL_EASY ];
+			m = table.m_real->m_byRung[ AISKILL_MEDIUM ];
+			h = table.m_real->m_byRung[ AISKILL_BRUTAL ];
+			shape = table.m_real->m_form;
+			for( Int i = 0; i < CURVE_SAMPLES; ++i )
+				samples[ i ] = aiRatingLerp( aiCurveRating( i ), *table.m_real );
+		}
+		else
+		{
+			e = INT_TO_REAL( table.m_int->m_byRung[ AISKILL_EASY ] );
+			m = INT_TO_REAL( table.m_int->m_byRung[ AISKILL_MEDIUM ] );
+			h = INT_TO_REAL( table.m_int->m_byRung[ AISKILL_BRUTAL ] );
+			shape = table.m_int->m_form;
+			for( Int i = 0; i < CURVE_SAMPLES; ++i )
+				samples[ i ] = INT_TO_REAL( aiRatingLerp( aiCurveRating( i ), *table.m_int ) );
+		}
+		Real k;
+		const char *form = aiKnobFormName( e, m, h, shape, &k );
+		writeCurve( fp, &first, table.m_name, "table", table.m_real != NULL ? "Real" : "Int", form, e, m, h, k, samples );
+	}
+	fprintf( fp, "\n]\n" );
+	fclose( fp );
+	printf( "  curves written to %s\n", path );
 }
 
 /** The influence map is what every fighting decision of Hard's reads, so what it says about a patch of
@@ -18363,12 +18627,13 @@ TEST(the_ai_ambulance_pulls_back_when_hit_and_is_not_rebought_at_once)
 	CHECK( !AIAmbulance_waitsAt( 50.0f, 110.0f, 80.0f ) );
 	CHECK( AIAmbulance_waitsAt( -20.0f, 90.0f, 80.0f ) );
 
-	// Hard waits a minute and a half, Medium twice as long
+	// Hard waits a minute and a half, Easy twice as long, and a rating of 15 two minutes on the curve
+	// between them (180 / (1 + 0.5))
 	CHECK( !AIAmbulance_rebuyWaits( 1000, 0, AI_RATING_HARD ) );
 	CHECK( AIAmbulance_rebuyWaits( 1000, 900, AI_RATING_HARD ) );
 	CHECK( !AIAmbulance_rebuyWaits( 900 + 90 * second, 900, AI_RATING_HARD ) );
-	CHECK( AIAmbulance_rebuyWaits( 900 + 170 * second, 900, AI_RATING_MEDIUM ) );
-	CHECK( !AIAmbulance_rebuyWaits( 900 + 180 * second, 900, AI_RATING_MEDIUM ) );
+	CHECK( AIAmbulance_rebuyWaits( 900 + 110 * second, 900, AI_RATING_MEDIUM ) );
+	CHECK( !AIAmbulance_rebuyWaits( 900 + 120 * second, 900, AI_RATING_MEDIUM ) );
 }
 
 /** CleanupHazardUpdate.cpp: an area cleaner out of reach of its hazard counts a scan against it only when

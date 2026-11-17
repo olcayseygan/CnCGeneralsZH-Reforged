@@ -16547,6 +16547,46 @@ TEST(a_generated_map_comes_with_a_preview_the_map_list_can_show)
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The lobby, load and score screens put a start's number at the top of the picture for a high y,
+	and a shipped preview is bottom-up with the map's lowest y in its first row (WorldBuilder's
+	MapPreview). The white dot baked into a generated preview has to sit under that number, which it
+	did not: it came out mirrored top to bottom. */
+//-------------------------------------------------------------------------------------------------
+TEST(a_generated_preview_marks_each_start_where_the_lobby_numbers_it)
+{
+	CHECK( bootOnce() );
+
+	RandomMapSettings settings;
+	settings.m_seed = 248;
+	settings.m_playableCells = 128;
+	settings.m_numPlayers = 2;
+	RandomMapGenerator::clampSettings( settings );
+
+	std::vector<char> map, tga;
+	RandomMapGenerator::generate( settings, map );
+	RandomMapGenerator::generatePreview( settings, tga );
+	parseGeneratedMap( map );
+
+	const Int headerBytes = 18;
+	const Int pixels = RandomMapGenerator::PREVIEW_PIXELS;
+	const Real cellsPerPixel = (Real)settings.m_playableCells / (Real)pixels;
+	CHECK_EQ( (Int)theRMGParse.m_waypointNames.size(), 2 );
+
+	for( Int s = 0; s < (Int)theRMGParse.m_waypointPositions.size(); s++ )
+	{
+		const Coord3D& start = theRMGParse.m_waypointPositions[s];
+		const Int column = (Int)(start.x / MAP_XY_FACTOR / cellsPerPixel);
+		const Int row = (Int)(start.y / MAP_XY_FACTOR / cellsPerPixel);		// file row, bottom-up
+		CHECK( column >= 0 && column < pixels && row >= 0 && row < pixels );
+
+		const Int at = headerBytes + (row * pixels + column) * 3;
+		CHECK_EQ( (Int)(UnsignedByte)tga[at], 240 );
+		CHECK_EQ( (Int)(UnsignedByte)tga[at + 1], 240 );
+		CHECK_EQ( (Int)(UnsignedByte)tga[at + 2], 240 );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Four texture classes are only worth writing if the map uses more than one of them.  Rock wants
 	the steep ground, sand wants the lake shores, and the map should still be mostly walkable
 	ground rather than a quarry. */

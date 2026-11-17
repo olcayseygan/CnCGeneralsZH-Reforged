@@ -5371,13 +5371,13 @@ void writePreview( const Exemplar& src, const SynthMap& skm, const std::vector<I
 	}
 	const Int W = skm.W;
 	Real cellsPerPixel = (Real)skm.playable / pixels;
+	// bottom-up, the first row the map's lowest y, the way WorldBuilder wrote every shipped preview
 	for( Int row = 0; row < pixels; row++ )
 	{
-		Int py = pixels - 1 - row;
 		for( Int column = 0; column < pixels; column++ )
 		{
 			Int x = std::min( (Int)( column * cellsPerPixel ) + skm.border, skm.W - 2 );
-			Int y = std::min( (Int)( py * cellsPerPixel ) + skm.border, skm.H - 2 );
+			Int y = std::min( (Int)( row * cellsPerPixel ) + skm.border, skm.H - 2 );
 			Int i = y * W + x;
 			Real rgb[3] = { colours[cls[i]][0], colours[cls[i]][1], colours[cls[i]][2] };
 			// light from the north-west, so the relief reads

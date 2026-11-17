@@ -8202,13 +8202,12 @@ void RandomMapGenerator::generatePreview( const RandomMapSettings& settings,
 
 	for( Int row = 0; row < pixels; row++ )
 	{
-		// Bottom-up file order, and the map's y grows the way the image's does.
-		Int previewY = pixels - 1 - row;
-
+		// Bottom-up file order, the first row the map's lowest y, as WorldBuilder wrote every shipped
+		// preview: the menus put a map's highest y at the top of the picture and its start marks there.
 		for( Int column = 0; column < pixels; column++ )
 		{
 			Int cellX = (Int)((Real)column * cellsPerPixel) + RMG_BORDER_CELLS;
-			Int cellY = (Int)((Real)previewY * cellsPerPixel) + RMG_BORDER_CELLS;
+			Int cellY = (Int)((Real)row * cellsPerPixel) + RMG_BORDER_CELLS;
 
 			if( cellX >= layout.m_width ) cellX = layout.m_width - 1;
 			if( cellY >= layout.m_height ) cellY = layout.m_height - 1;

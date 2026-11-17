@@ -656,9 +656,56 @@ void W3DRadar::drawViewBox( Int pixelX, Int pixelY, Int width, Int height )
 	picture.lo.y = pixelY;
 	picture.hi.x = pixelX + width;
 	picture.hi.y = pixelY + height;
-	drawBoxLines( corners, m_zoomView.zoom > 1.0f ? &picture : NULL );
+	drawBoxLines( corners, m_zoomView.zoom > 1.0f || !TheGlobalData->m_classicGraphics ? &picture : NULL );
 
 }  // end drawViewBox
+
+//-------------------------------------------------------------------------------------------------
+/** A convex polygon of 'count' points in x, y cut to the rectangle lo..hi in place (Sutherland-
+	* Hodgman, one edge of the rectangle at a time), returning the points left.  The four corners of
+	* a box gain at most one point an edge, so BOX_CLIP_MAX holds any result. */
+//-------------------------------------------------------------------------------------------------
+enum { BOX_CLIP_MAX = 8 };
+static Int clipPolygonToRect( Real *x, Real *y, Int count, Real loX, Real loY, Real hiX, Real hiY )
+{
+	if( loX > hiX || loY > hiY )
+		return 0;
+	for( Int edge = 0; edge < 4 && count > 0; edge++ )
+	{
+		// edge 0 keeps x >= loX, 1 x <= hiX, 2 y >= loY, 3 y <= hiY
+		const Bool alongX = edge < 2;
+		const Real bound = edge == 0 ? loX : edge == 1 ? hiX : edge == 2 ? loY : hiY;
+		const Real sign = ( edge & 1 ) ? -1.0f : 1.0f;
+		Real outX[ BOX_CLIP_MAX ], outY[ BOX_CLIP_MAX ];
+		Int out = 0;
+		for( Int i = 0; i < count; i++ )
+		{
+			const Int j = ( i + 1 ) % count;
+			const Real di = sign * ( ( alongX ? x[ i ] : y[ i ] ) - bound );
+			const Real dj = sign * ( ( alongX ? x[ j ] : y[ j ] ) - bound );
+			if( di >= 0.0f && out < BOX_CLIP_MAX )
+			{
+				outX[ out ] = x[ i ];
+				outY[ out ] = y[ i ];
+				out++;
+			}
+			if( ( di >= 0.0f ) != ( dj >= 0.0f ) && out < BOX_CLIP_MAX )
+			{
+				const Real t = di / ( di - dj );
+				outX[ out ] = x[ i ] + t * ( x[ j ] - x[ i ] );
+				outY[ out ] = y[ i ] + t * ( y[ j ] - y[ i ] );
+				out++;
+			}
+		}
+		for( Int i = 0; i < out; i++ )
+		{
+			x[ i ] = outX[ i ];
+			y[ i ] = outY[ i ];
+		}
+		count = out;
+	}
+	return count;
+}
 
 //-------------------------------------------------------------------------------------------------
 /** The view box's four lines through corners in pixels, upper left, upper right, lower right and
@@ -684,6 +731,64 @@ void W3DRadar::drawBoxLines( const ICoord2D *corners, const IRegion2D *picture )
 	clipRegion.hi.y = radarWindowScreenPos.y + radarWindowSize.y;
 	if( picture )
 		clipRegion = *picture;
+
+	//
+	// The Reforged box: a bright line on a dark keyline a pixel wider each side, as the reinforcement
+	// and order lines are, so it reads on snow and sand as well as on dark ground; EA's one-pixel
+	// yellow went into the sand of a desert map.  It thickens with the picture (one pixel at the 1080p
+	// bar's 220, two from 330).  Every keyline goes down before any bright line, so a side's dark edge
+	// never cuts the top's light one, and a square on each corner fills the notch two thick lines
+	// leave there.
+	//
+	if( !TheGlobalData->m_classicGraphics )
+	{
+		const Int core = max( 1, REAL_TO_INT_FLOOR( max( clipRegion.width(), clipRegion.height() ) / 165.0f ) );
+		const Int keyline = core + 2;
+		const Color coreColor = GameMakeColor( 255, 236, 90, 255 );
+		const Color keylineColor = GameMakeColor( 10, 10, 6, 255 );	// opaque: translucent ends blend twice where they meet
+
+		// A line is drawn w wide about its centre, so the box is cut as a polygon to the picture brought
+		// in by half the keyline: nothing spills onto the frame or into a letterbox band, and a side past
+		// the picture's edge (the camera at the map's edge) runs along that edge, so the box stays closed.
+		Real x[ BOX_CLIP_MAX ], y[ BOX_CLIP_MAX ];
+		for( Int corner = 0; corner < 4; corner++ )
+		{
+			x[ corner ] = INT_TO_REAL( corners[ corner ].x );
+			y[ corner ] = INT_TO_REAL( corners[ corner ].y );
+		}
+		const Int count = clipPolygonToRect( x, y, 4,
+			INT_TO_REAL( clipRegion.lo.x + keyline / 2 ), INT_TO_REAL( clipRegion.lo.y + keyline / 2 ),
+			INT_TO_REAL( clipRegion.hi.x - ( keyline - keyline / 2 ) ), INT_TO_REAL( clipRegion.hi.y - ( keyline - keyline / 2 ) ) );
+		if( count < 2 )
+			return;
+		ICoord2D at[ BOX_CLIP_MAX ];
+		for( Int i = 0; i < count; i++ )
+		{
+			at[ i ].x = REAL_TO_INT_FLOOR( x[ i ] + 0.5f );
+			at[ i ].y = REAL_TO_INT_FLOOR( y[ i ] + 0.5f );
+		}
+
+		for( Int pass = 0; pass < 2; ++pass )
+		{
+			const Int w = pass == 0 ? keyline : core;
+			const Color colour = pass == 0 ? keylineColor : coreColor;
+			// An odd width through c lights the pixels about c - 1 (w 1 at x 47 lit column 46, w 3 lit
+			// 45 to 47) and an even one c - w/2 to c + w/2 - 1, where the corner square from at - w/2
+			// is exact: an odd line goes a pixel on, so every line covers its corner square's pixels and
+			// the keyline ends at the picture's edge rather than on the frame (read off both devices)
+			const Int nudge = w & 1;
+			for( Int i = 0; i < count; i++ )
+			{
+				const ICoord2D &from = at[ i ];
+				const ICoord2D &to = at[ ( i + 1 ) % count ];
+				if( from.x != to.x || from.y != to.y )
+					TheDisplay->drawLine( from.x + nudge, from.y + nudge, to.x + nudge, to.y + nudge, (Real)w, colour );
+			}
+			for( Int i = 0; i < count; i++ )
+				fillClipped( clipRegion, at[ i ].x - w / 2, at[ i ].y - w / 2, w, colour );
+		}
+		return;
+	}
 
 	for( Int line = 0; line < 4; line++ )
 	{

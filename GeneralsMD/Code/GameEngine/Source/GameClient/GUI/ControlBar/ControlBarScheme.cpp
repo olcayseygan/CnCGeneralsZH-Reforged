@@ -302,11 +302,14 @@ void ControlBarScheme::reset(void)
 			if( im )
 				delete im;
 			im = NULL;
-			it ++;	
+			it ++;
 		}
 		m_layer[i].clear();
-	
+
 	}
+	if( m_grownRadarGlass )
+		m_grownRadarGlass->deleteInstance();
+	m_grownRadarGlass = NULL;
 
 
 	ControlBarSchemeAnimationList::iterator it = m_animations.begin();
@@ -552,6 +555,7 @@ ControlBarScheme::ControlBarScheme(void)
 	m_grownRadarRight = 0;
 	m_grownRadarPeriod = 0;
 	m_grownRadarLedge = 0;
+	m_grownRadarGlass = NULL;
 	m_tooltip = ControlBarTooltipImages();
 	for( Int i = 0; i < TALENT_PIECE_COUNT; i++ )
 		m_talent[ i ] = NULL;
@@ -633,6 +637,28 @@ void ControlBarScheme::init(void)
 	findPieces( m_signalPlateImageName, "", tabStates, 1, &m_signalPlateImage );
 	static const char *const grownSuffixes[ GROWN_PIECE_COUNT ] = { "TL", "T", "TR", "L", "R", "BL", "B", "BR", "C" };
 	findPieces( m_grownRadarName, "", grownSuffixes, GROWN_PIECE_COUNT, m_grownRadar );
+
+	// C taken at the point in its middle, which bilinear filtering answers with the average of the
+	// four texels round it wherever the quad is drawn: one flat colour however far it stretches
+	if( m_grownRadarGlass )
+		m_grownRadarGlass->deleteInstance();
+	m_grownRadarGlass = NULL;
+	if( const Image *c = m_grownRadar[ GROWN_C ] )
+	{
+		m_grownRadarGlass = newInstance( Image );
+		m_grownRadarGlass->setName( c->getName() );
+		m_grownRadarGlass->setFilename( c->getFilename() );
+		m_grownRadarGlass->setTextureWidth( c->getTextureSize()->x );
+		m_grownRadarGlass->setTextureHeight( c->getTextureSize()->y );
+		ICoord2D size = *c->getImageSize();
+		m_grownRadarGlass->setImageSize( &size );
+		m_grownRadarGlass->setStatus( c->getStatus() );
+		const Region2D *uv = c->getUV();
+		Region2D middle;
+		middle.lo.x = middle.hi.x = ( uv->lo.x + uv->hi.x ) * 0.5f;
+		middle.lo.y = middle.hi.y = ( uv->lo.y + uv->hi.y ) * 0.5f;
+		m_grownRadarGlass->setUV( &middle );
+	}
 	m_tooltip.find( m_tooltipName );
 	static const char *const talentSuffixes[ TALENT_PIECE_COUNT ] =
 		{ "GeneralsPowerWindowWide", "TalentPlateLocked", "TalentPlateWaiting", "TalentPlatePicked", "TalentPlateRejected",
@@ -1499,6 +1525,11 @@ Int ControlBarSchemeManager::getGrownRadarLedge( void ) const
 	return m_currentScheme ? REAL_TO_INT_FLOOR( m_currentScheme->m_grownRadarLedge * getArtScale() + 0.5f ) : 0;
 }
 
+const Image *ControlBarSchemeManager::getGrownRadarGlass( void ) const
+{
+	return m_currentScheme ? m_currentScheme->m_grownRadarGlass : NULL;
+}
+
 const Image *const *ControlBarSchemeManager::getSignalImages( Int kind ) const
 {
 	if( m_currentScheme == NULL || kind < 0 || kind >= ControlBarScheme::SIGNAL_KEY_COUNT || m_currentScheme->m_signal[ kind ][ 0 ] == NULL )
@@ -1682,7 +1713,7 @@ static void grownCorner( const Image *piece, Real scale, Int x, Int y, Color tin
 	* picture is the radar window's, drawn after.  While the under-attack lamp is lit the frame's pieces
 	* take its red, the glass and the picture none. */
 //-----------------------------------------------------------------------------
-void ControlBarSchemeManager::drawGrownRadarPieces( const Image *const *P, Real s, const IRegion2D &well, Bool lit )
+void ControlBarSchemeManager::drawGrownRadarPieces( const Image *const *P, Real s, const IRegion2D &well, Bool lit, const Image *glass )
 {
 	const Int x5 = well.lo.x, yT = well.lo.y, xR = well.hi.x, yB = well.hi.y;
 	const Int head = grownSize( P[ ControlBarScheme::GROWN_T ]->getImageHeight(), s );
@@ -1703,7 +1734,13 @@ void ControlBarSchemeManager::drawGrownRadarPieces( const Image *const *P, Real 
 	grownCorner( P[ ControlBarScheme::GROWN_TR ], s, xR - cut, top, tint );
 	grownCorner( P[ ControlBarScheme::GROWN_BL ], s, 0, yB - foot, tint );
 	grownCorner( P[ ControlBarScheme::GROWN_BR ], s, xR - cut, yB - foot, tint );
-	grownTile( P[ ControlBarScheme::GROWN_C ], s, x5, yT, xR, yB, 0xFFFFFFFF );
+
+	// The glass is one quad, not tiled: C is a 4x2 patch, and tiled over a well Minimap Size had grown
+	// to 200% it was some 24000 drawImage calls a frame, each its own draw outside a 2D batch.  It is
+	// C sampled at its middle alone (ControlBarScheme's m_grownRadarGlass), one flat colour, since C's
+	// texels straddle a DXT block seam and stretched whole they made a gradient in the letterbox bands,
+	// the only glass the picture leaves showing.
+	TheDisplay->drawImage( glass ? glass : P[ ControlBarScheme::GROWN_C ], x5, yT, xR, yB );
 }
 
 //-----------------------------------------------------------------------------
@@ -1725,7 +1762,7 @@ void ControlBarSchemeManager::drawGrownRadarFrame( void )
 	const Image *const *pieces = schemes ? schemes->getGrownRadarPieces() : NULL;
 	if( pieces != NULL )
 	{
-		drawGrownRadarPieces( pieces, schemes->getArtScale(), i, lit );
+		drawGrownRadarPieces( pieces, schemes->getArtScale(), i, lit, schemes->getGrownRadarGlass() );
 		return;
 	}
 

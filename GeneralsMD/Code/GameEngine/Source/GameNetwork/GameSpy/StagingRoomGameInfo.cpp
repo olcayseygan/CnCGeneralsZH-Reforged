@@ -886,9 +886,15 @@ void GameSpyStagingRoom::sendOnlineReport( const char *from )
 		if (slot >= 0 && slot < MAX_SLOTS && reportIndexOfSlot[slot] >= 0)
 			report.crcOdd[report.numCrcOdd++] = reportIndexOfSlot[slot];
 	}
-	OnlineSendReport( report );
-	DEBUG_LOG(("ONLINE REPORT sent from=%s seed=%d endFrame=%d winner=%d desync=%d crcOdd=%d\n", from, report.seed,
-		report.endFrame, report.winningTeam, (Int)report.sawDesync, report.numCrcOdd));
+	/* The score screen's call runs while clearGameData takes the objects down, so hasAchievedVictory finds
+		 nobody standing and its winner reads -1.  It is only ever sent when the match ended undecided (a
+		 desync, or a defeated player leaving early), where -1 is the truth; after an endframe report
+		 OnlineSendReport drops it, and the log says so rather than printing a report that never left. */
+	if (OnlineSendReport( report ))
+		DEBUG_LOG(("ONLINE REPORT sent from=%s seed=%d endFrame=%d winner=%d desync=%d crcOdd=%d\n", from, report.seed,
+			report.endFrame, report.winningTeam, (Int)report.sawDesync, report.numCrcOdd));
+	else
+		DEBUG_LOG(("ONLINE REPORT not sent from=%s: no match, or its report already went\n", from));
 }
 
 void GameSpyStagingRoom::launchGame( void )

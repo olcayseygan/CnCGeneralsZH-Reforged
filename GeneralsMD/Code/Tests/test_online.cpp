@@ -1522,12 +1522,14 @@ TEST(online_adapter_report_goes_once_a_match)
 	report.side[1] = "China";
 	report.discon[1] = TRUE;
 
-	OnlineSendReport( report );
+	CHECK( !OnlineSendReport( report ) );
 	CHECK( rig.sent.empty() );		// no match yet
 
 	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"q1\",\"seed\":77,\"mapIdx\":0,\"nicks\":[\"Tank\",\"Kim\"],\"ids\":[7,9],\"vips\":[1,2],\"sides\":[0,0],\"colors\":[0,1]}" );
-	OnlineSendReport( report );
-	OnlineSendReport( report );		// the score screen's second call
+	CHECK( OnlineSendReport( report ) );
+	report.winningTeam = -1;		// the score screen reads it off a world already torn down
+	CHECK( !OnlineSendReport( report ) );		// the score screen's second call: dropped, says so
+	report.winningTeam = 1;
 	CHECK_EQ( rig.sent.size(), (size_t)1 );
 	if (rig.sent.size() == 1)
 	{
@@ -1545,7 +1547,7 @@ TEST(online_adapter_report_goes_once_a_match)
 
 	// the next match reports again
 	rig.feed( "{\"t\":\"game.start\",\"match\":\"m2\",\"ids\":[7,9],\"nicks\":[\"Tank\",\"Kim\"],\"vips\":[1,2]}" );
-	OnlineSendReport( report );
+	CHECK( OnlineSendReport( report ) );
 	CHECK_EQ( rig.sent.size(), (size_t)2 );
 }
 

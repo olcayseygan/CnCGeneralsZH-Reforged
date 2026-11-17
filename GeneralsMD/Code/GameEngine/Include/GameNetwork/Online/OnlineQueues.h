@@ -129,7 +129,7 @@ struct OnlineReport
 
 	OnlineReport();
 };
-void OnlineSendReport( const OnlineReport &report );
+Bool OnlineSendReport( const OnlineReport &report );	///< TRUE when it went out, FALSE for no match or one already reported
 
 /* Only a Quick Match's replay goes up: the server keeps no other.  An internet game's recording calls
 	 OnlineClaimQuickMatch as it starts and gets the qm.matched id waiting for a recording, or empty for a

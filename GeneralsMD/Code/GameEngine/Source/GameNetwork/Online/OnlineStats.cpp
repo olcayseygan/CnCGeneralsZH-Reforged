@@ -137,11 +137,11 @@ OnlineReport::OnlineReport() :
 	}
 }
 
-void OnlineSendReport( const OnlineReport &report )
+Bool OnlineSendReport( const OnlineReport &report )
 {
 	OnlineSession &s = OnlineSession::get();
 	if (s.matchId.empty() || s.matchId == s.reportedMatch)
-		return;		// no match, or the score screen's second call
+		return FALSE;		// no match, or the score screen's second call
 	s.reportedMatch = s.matchId;
 
 	OnlineMessage m;
@@ -166,6 +166,7 @@ void OnlineSendReport( const OnlineReport &report )
 	m.setInts( "discon", discon ).setStrings( "side", side );
 	m.setInts( "blind", blind ).setInts( "crcOdd", crcOdd );
 	s.send( m );
+	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------

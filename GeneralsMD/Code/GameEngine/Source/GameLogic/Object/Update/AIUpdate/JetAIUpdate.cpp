@@ -247,6 +247,12 @@ Bool JetAIUpdate::isOutOfSpecialReloadAmmo() const
 }
 
 //-------------------------------------------------------------------------------------------------
+Bool JetAIUpdate::isReturningForLanding() const
+{
+	return getStateMachine()->getCurrentStateID() == RETURNING_FOR_LANDING;
+}
+
+//-------------------------------------------------------------------------------------------------
 static ParkingPlaceBehaviorInterface* getPP(ObjectID id, Object** airfieldPP = NULL)
 {
 	if (airfieldPP)

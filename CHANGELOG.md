@@ -8,6 +8,13 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## The computer stops paying for guns it has already seen
+
+- The Air Force General's supply Chinooks flew to the middle docks on Tournament Desert under China's Gattling Cannons, trip after trip, and in 16 Hard matches against China 564 of them were shot down by buildings, 465 by Gattlings. A Medium or Hard computer's Chinook now passes over a pile whose flight crosses an anti-air gun it knows about and gathers from another. Over the same 16 matches it lost 190, and the Air Force won 7 where it had won 5.
+- A computer jet flying home to rearm took the straight line back from wherever its strike left it, across any Gattling Cannon in the way, and that is how 94 of the 124 jets the Air Force lost to Gattlings in those matches died. On Medium and Hard it now flies home round the guns it knows about. The Air Force lost 88 jets to Gattlings, 70 of them on the way home.
+- A hurt veteran used to be walked out of the fight to be repaired at once, wherever it stood. It turned its back on the enemy and died a few steps on: in the same 16 matches, 984 of the Air Force's veterans and 1,276 of China's died within 15 seconds of being sent off, nearly all inside 3 seconds and 30 metres of where they started, without firing. On Medium and Hard a veteran under enemy guns now fights on where it stands and leaves once it is clear: 167 and 66 died that way. Against GLA the GLA lost 20 where it lost 523. Easy plays as before.
+- Replays with a computer player recorded before this change will not play back.
+
 ## The match film stops missing strikes
 
 - A filmed match (the Bot Cup's camera) missed 21 of the 52 general's powers in one cup match. A carpet bomb or an A-10 strike flies in from the edge of the map and its bombs fall twenty seconds or more after it is called, and the camera gave up on a power that had hit nothing after twelve. It now waits up to thirty seconds, knows from the first run of the match when each strike comes down, and is on the target four seconds before the bombs.

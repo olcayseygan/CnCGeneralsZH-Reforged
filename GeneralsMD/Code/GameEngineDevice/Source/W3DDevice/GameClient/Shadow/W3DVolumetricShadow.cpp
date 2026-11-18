@@ -227,8 +227,12 @@ int nShadowVertsInBuf=0;	//model vetices in vertex buffer
 int nShadowStartBatchVertex=0;
 int nShadowIndicesInBuf=0;	//model vetices in vertex buffer
 int nShadowStartBatchIndex=0;
-int SHADOW_VERTEX_SIZE=4096;
-int SHADOW_INDEX_SIZE=8192;
+//EA's 4096 and 8192 held one volume of a retail model; a modded one with a few thousand edges on
+//its silhouette wanted more and was copied past the end.  A volume's indices are 16 bits from its
+//own first vertex, so 65536 vertices is the most one can use, and its triangles are half its
+//vertices (allocateShadowVolume).  A volume larger still is not drawn (RenderDynamicMeshVolume).
+int SHADOW_VERTEX_SIZE=65536;
+int SHADOW_INDEX_SIZE=98304;
 
 //Rough bounding box around visible portion of the terrain
 //useful for quick culling
@@ -1707,8 +1711,10 @@ void W3DVolumetricShadow::RenderDynamicMeshVolume(Int meshIndex, Int lightIndex,
 	numPolys = geometry->GetNumActivePolygon();
 	numIndex = numPolys * 3;
 
-	// reject shadows with no data
-	if( numVerts == 0 || numPolys == 0 )
+	// reject shadows with no data, and a volume the streaming buffers cannot hold at all: the room
+	// checks below only start a buffer over, and a volume that does not fit an empty one was copied
+	// past its end
+	if( numVerts == 0 || numPolys == 0 || numVerts > SHADOW_VERTEX_SIZE || numIndex > SHADOW_INDEX_SIZE )
 		return;
 
 
@@ -4827,8 +4833,8 @@ void W3DVolumetricShadowManager::renderShadows( Bool forceStencilFill )
 
  		//According to Nvidia there's a D3D bug that happens if you don't start with a
  		//new dynamic VB each frame - so we force a DISCARD by overflowing the counter.
- 		nShadowIndicesInBuf = 0xffff;
- 		nShadowVertsInBuf = 0xffff;
+ 		nShadowIndicesInBuf = SHADOW_INDEX_SIZE;
+ 		nShadowVertsInBuf = SHADOW_VERTEX_SIZE;
 
 		//Set W3D to some known state
 		VertexMaterialClass *vmat=VertexMaterialClass::Get_Preset(VertexMaterialClass::PRELIT_DIFFUSE);

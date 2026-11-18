@@ -436,9 +436,12 @@ Render2DSentenceClass::Build_Textures (void)
 		SurfaceClass *texture_surface = new_texture->Get_Surface_Level ();
 
 		//
-		//	Copy the contents of the texture from the surface
+		//	Copy the contents of the texture from the surface.  A lost or removed device makes the
+		//	texture without a D3D texture, and Get_Surface_Level hands back no surface for it.
 		//
-		DX8Wrapper::_Copy_DX8_Rects (curr_surface->Peek_D3D_Surface (), NULL, 0, texture_surface->Peek_D3D_Surface (), NULL);
+		if (texture_surface != NULL) {
+			DX8Wrapper::_Copy_DX8_Rects (curr_surface->Peek_D3D_Surface (), NULL, 0, texture_surface->Peek_D3D_Surface (), NULL);
+		}
 		REF_PTR_RELEASE (texture_surface);
 	
 		//
@@ -571,9 +574,10 @@ Render2DSentenceClass::Draw_Sentence (uint32 color)
 		RectClass uv_rect			= data.UVRect;
 
 		//
-		//	Clip the quad (as necessary)
+		//	Clip the quad (as necessary).  A surface the device refused has no size and gets no
+		//	texture in Build_Textures, so its quad would draw as a solid box in the text colour.
 		//
-		bool add_quad = true;
+		bool add_quad = (desc.Width != 0);
 		if (IsClippedEnabled) {
 			
 			//

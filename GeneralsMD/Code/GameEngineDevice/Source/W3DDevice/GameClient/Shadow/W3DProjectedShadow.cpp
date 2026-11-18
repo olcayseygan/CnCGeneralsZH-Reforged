@@ -454,6 +454,11 @@ Int W3DProjectedShadowManager::renderProjectedTerrainShadow(W3DProjectedShadow *
 
 		Int numVerts = vertsPerRow *vertsPerColumn;	//number of terrain vertices
 
+		//the volumes' streaming buffers start over when full, but a patch larger than an empty one
+		//would be copied past its end
+		if (numVerts > SHADOW_VERTEX_SIZE || (vertsPerRow-1)*(vertsPerColumn-1)*6 > SHADOW_INDEX_SIZE)
+			return 0;
+
 		DX11BufferLockClass vertexLock;
 		const UnsignedInt vertexStride = sizeof(SHADOW_VOLUME_VERTEX);
 		UnsignedInt vertexOffset;

@@ -195,6 +195,10 @@ class ArchiveFileSystem : public SubsystemInterface
 	/// off the base art and Detailed Models off the batches, except ReforgedSkins.big, the online skins'
 	/// sheets for both looks, which every setting mounts.
 	static Bool		reforgedArchiveWanted(const AsciiString& path, Bool classicGraphics, Bool hdTextures, Bool detailedModels);
+	/// One of the archives the fork ships, the names the launcher's payload carries: ReforgedSkins,
+	/// ReforgedUSA, ReforgedChina, ReforgedGLA, ReforgedTurkiye, ReforgedNeutral<letter>, ReforgedTextures
+	/// and ReforgedTerrain.  Any other Reforged*.big goes into the tree nowhere, since one mounts over retail.
+	static Bool		isForkArchive(const AsciiString& path);
 
 	/// TRUE for a .tga or .dds asked for in a folder named Textures under a name, extension aside, that
 	/// EA's texture archives hold (keepRetailTextures).  FileSystem serves such a name from the archives

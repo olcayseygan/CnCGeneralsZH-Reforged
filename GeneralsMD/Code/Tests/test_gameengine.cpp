@@ -27729,13 +27729,49 @@ TEST(a_retail_texture_comes_only_from_the_games_own_sources)
 	const std::string texturesZHBytes[] = { "retail helix", "retail fork" };
 	static const char *const englishZH[] = { "Data\\English\\Art\\Textures\\zhrtex_gameover.tga", NULL };
 	const std::string englishZHBytes[] = { "retail gameover" };
+	// EA's base game archives sit in the base game's folder; the same names beside the exe are strays,
+	// and W3DEnglishZH.big is no language archive
+	static const char *const german[] = { "Data\\German\\Art\\Textures\\zhrtex_flagge.tga", NULL };
+	const std::string germanBytes[] = { "retail flagge" };
+	static const char *const textures[] = { "Art\\Textures\\zhrtex_flag.dds", NULL };
+	const std::string texturesBytes[] = { "retail flag" };
+	static const char *const strayEnglish[] = { "Data\\English\\Art\\Textures\\zhrtex_flag.dds", NULL };
+	static const char *const strayTextures[] = { "Art\\Textures\\zhrtex_flag.tga", NULL };
+	static const char *const strayW3D[] = { "Data\\W3DEnglish\\Art\\Textures\\zhrtex_helix.dds", NULL };
+	const std::string strayOne[] = { "stray" };
 
 	MountOrderFileSystem fs;
+	fs.m_baseGameDirectory = "ZH_Generals\\";
 	fs.mountRetail( new ServingArchive( stray, strayBytes ), "!skins.big", FALSE );		// sorts first, claims first
+	fs.mountRetail( new ServingArchive( strayEnglish, strayOne ), "English.big", FALSE );
 	fs.mountRetail( new ServingArchive( englishZH, englishZHBytes ), "EnglishZH.big", FALSE );
+	fs.mountRetail( new ServingArchive( strayTextures, strayOne ), "Textures.big", FALSE );
 	fs.mountRetail( new ServingArchive( texturesZH, texturesZHBytes ), "TexturesZH.big", FALSE );
+	fs.mountRetail( new ServingArchive( strayW3D, strayOne ), "W3DEnglishZH.big", FALSE );
+	fs.mountRetail( new ServingArchive( german, germanBytes ), "ZH_Generals\\German.big", FALSE );
+	fs.mountRetail( new ServingArchive( textures, texturesBytes ), "ZH_Generals\\Textures.big", FALSE );
 	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "art\\textures\\zhrtex_helix.dds" ) ).str(), "!skins.big" );
 	fs.keepRetail();
+
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "data\\english\\art\\textures\\zhrtex_flag.dds" ) ).str(), "" );
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "art\\textures\\zhrtex_flag.tga" ) ).str(), "" );
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "art\\textures\\zhrtex_flag.dds" ) ).str(), "ZH_Generals\\Textures.big" );
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "data\\w3denglish\\art\\textures\\zhrtex_helix.dds" ) ).str(), "" );
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "data\\german\\art\\textures\\zhrtex_flagge.tga" ) ).str(), "ZH_Generals\\German.big" );
+	CHECK( fs.isRetailTexture( "Art/Textures/zhrtex_flagge.dds" ) );
+
+	// only the fork's own archive names mount over retail; a reskin renamed Reforged*.big is not one
+	CHECK( ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedSkins.big" ) ) );
+	CHECK( ArchiveFileSystem::isForkArchive( AsciiString( "C:\\Run\\reforgedusa.BIG" ) ) );
+	CHECK( ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedTurkiye.big" ) ) );
+	CHECK( ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedNeutralG.big" ) ) );
+	CHECK( ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedTextures.big" ) ) );
+	CHECK( ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedTerrain.big" ) ) );
+	CHECK( !ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedZSkins.big" ) ) );
+	CHECK( !ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedNeutral.big" ) ) );
+	CHECK( !ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedNeutralAB.big" ) ) );
+	CHECK( !ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedNormals.big" ) ) );
+	CHECK( !ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedSkins.big.big" ) ) );
 
 	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "art\\textures\\zhrtex_helix.dds" ) ).str(), "TexturesZH.big" );
 	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "art\\textures\\zhrtex_helix.tga" ) ).str(), "" );

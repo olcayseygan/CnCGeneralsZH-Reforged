@@ -859,6 +859,15 @@ Bool FileSystem::createDirectory(AsciiString directory)
 static const char *const RetailLanguages[] = { "english", "german", "french", "spanish", "italian",
 	"korean", "chinese", "brazilian", "polish", "russian" };
 
+Bool FileSystem::isRetailLanguage(const char *language)
+{
+	for (Int i = 0; i < (Int)ARRAY_SIZE(RetailLanguages); ++i) {
+		if (strcasecmp(language, RetailLanguages[i]) == 0)
+			return TRUE;
+	}
+	return FALSE;
+}
+
 AsciiString FileSystem::installedLanguage(const AsciiString &language) const
 {
 	AsciiString probe;

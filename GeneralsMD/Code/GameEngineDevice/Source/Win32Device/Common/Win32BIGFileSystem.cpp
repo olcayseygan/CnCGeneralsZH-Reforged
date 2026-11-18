@@ -478,6 +478,14 @@ Bool Win32BIGFileSystem::loadBigFilesFromDirectory(AsciiString dir, AsciiString 
 			it++;
 			continue;
 		}
+		if (isReforgedArchive(*it) && !ArchiveFileSystem::isForkArchive(*it)) {
+			// The name alone mounts an archive over retail, so a reskin renamed Reforged<anything>.big came
+			// back over TexturesZH.big.  Only the archives the fork ships go in; ReforgedNormals.big, which
+			// nothing has read since 2026-10-06, stays out with the rest.
+			DEBUG_LOG(("Win32BIGFileSystem::loadBigFilesFromDirectory - %s is not one of the fork's archives, left out.\n", (*it).str()));
+			it++;
+			continue;
+		}
 		if (isReforgedArchive(*it)) {
 			// Classic draws retail and leaves all of them shut but the skins' sheets; Detailed Models off
 			// leaves the batches shut and HD Textures off the base art.  The rest wait for the end of init,

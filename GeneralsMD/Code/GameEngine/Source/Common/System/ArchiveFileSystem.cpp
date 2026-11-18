@@ -176,6 +176,21 @@ Bool ArchiveFileSystem::reforgedArchiveWanted(const AsciiString& path, Bool clas
 	return !classicGraphics && (isReforgedBaseArt(path) ? hdTextures : detailedModels);
 }
 
+Bool ArchiveFileSystem::isForkArchive(const AsciiString& path)
+{
+	static const char *const named[] = { "ReforgedSkins.big", "ReforgedUSA.big", "ReforgedChina.big", "ReforgedGLA.big",
+		"ReforgedTurkiye.big", "ReforgedTextures.big", "ReforgedTerrain.big" };
+	const char *name = archiveBaseName(path);
+	for (Int i = 0; i < (Int)(sizeof(named) / sizeof(named[0])); ++i) {
+		if (strcasecmp(name, named[i]) == 0) {
+			return TRUE;
+		}
+	}
+	// the map batches, ReforgedNeutralA.big on
+	return strlen(name) == 20 && strncasecmp(name, "ReforgedNeutral", 15) == 0 && isalpha((unsigned char)name[15])
+		&& strcasecmp(name + 16, ".big") == 0;
+}
+
 void ArchiveFileSystem::mountOverRetail(ArchiveFile *archiveFile, const AsciiString& archiveFilename)
 {
 	FilenameList models;
@@ -245,9 +260,13 @@ void ArchiveFileSystem::keepRetailTextures()
 	static const char *const holders[] = { "Textures.big", "TexturesZH.big", "Patch.big", "PatchZH.big" };
 
 	// What EA ships, path by path: Art\Textures from its texture and patch archives, Data\<language>\
-	// Art\Textures from <language>.big and <language>ZH.big.  Where two hold a path, a Zero Hour
+	// Art\Textures from <language>.big and <language>ZH.big for a language EA shipped (so W3DEnglishZH.big
+	// is no language archive).  A Zero Hour archive counts beside the exe, a base game one in the base
+	// game's folder, or beside the exe when the base game was found there (m_baseGameDirectory empty): a
+	// stray English.big beside a Steam install's exe is nobody's.  Where two hold a path, a Zero Hour
 	// archive over a base game one and then the first by name, the order the plain mount gives them.
-	// ponytail: archive names, not contents, say what is EA's; an edited TexturesZH.big passes as retail.
+	// ponytail: archive names and folders, not contents, say what is EA's; an edited TexturesZH.big, or a
+	// stray in a folder that holds the base game beside the exe, passes as retail.
 	std::map<std::string, AsciiString> shipped;
 	for (Int zeroHour = 1; zeroHour >= 0; --zeroHour) {
 		for (ArchiveFileMap::const_iterator it = m_archiveFileMap.begin(); it != m_archiveFileMap.end(); ++it) {
@@ -257,13 +276,22 @@ void ArchiveFileSystem::keepRetailTextures()
 			if (zh != (zeroHour != 0) || length < 4 || strcasecmp(name + length - 4, ".big") != 0) {
 				continue;
 			}
+			const Bool besideExe = name == it->first.str();
+			const Bool inBaseGame = !m_baseGameDirectory.isEmpty()
+				&& strncasecmp(it->first.str(), m_baseGameDirectory.str(), m_baseGameDirectory.getLength()) == 0;
+			if ((zh || m_baseGameDirectory.isEmpty()) ? !besideExe : !inBaseGame) {
+				continue;
+			}
 			AsciiString directory = ART_TEXTURES;
 			Bool holder = FALSE;
 			for (Int i = 0; i < (Int)(sizeof(holders) / sizeof(holders[0])); ++i) {
 				holder = holder || strcasecmp(name, holders[i]) == 0;
 			}
 			if (!holder) {
-				std::string language(name, length - (zh ? 6 : 4));
+				const std::string language(name, length - (zh ? 6 : 4));
+				if (!FileSystem::isRetailLanguage(language.c_str())) {
+					continue;
+				}
 				directory.format("data\\%s\\%s", language.c_str(), ART_TEXTURES);
 			}
 			FilenameList files;

@@ -151,6 +151,8 @@ public:
 	AsciiString installedLanguage(const AsciiString &language) const;
 	/// the retail language whose <language>ZH.big sits loose in the install folder, otherwise empty.
 	AsciiString zeroHourLanguage() const;
+	/// one of the languages EA shipped the game in, lower or upper case ("english", "German")
+	static Bool isRetailLanguage(const char *language);
 
 	/// The fork's own loose textures, lower case: Data\Art\Textures as the build found it, which the build
 	/// copies to Run\Art\Textures.  The INI CRC hashes their bytes; nothing in Run says what is on the list.

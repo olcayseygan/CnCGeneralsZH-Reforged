@@ -1182,8 +1182,9 @@ target_include_directories(gameengine PRIVATE ${ZH_FINGERPRINT_DIR})
 # The fork's own loose textures by name (FileSystem::forkTextures): of a texture name EA's archives ship,
 # only a loose copy on this list is drawn, and the INI CRC hashes their bytes.  Taken from the masters,
 # not from Run/, so no file a player can edit says what is the fork's.  Rewritten only when it changes.
-file(GLOB ZH_FORK_TEXTURES CONFIGURE_DEPENDS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/Data/Art/Textures
+file(GLOB ZH_FORK_TEXTURES CONFIGURE_DEPENDS LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/Data/Art/Textures
      ${CMAKE_CURRENT_SOURCE_DIR}/Data/Art/Textures/*)
+list(FILTER ZH_FORK_TEXTURES INCLUDE REGEX "\\.([tT][gG][aA]|[dD][dD][sS])$")
 list(SORT ZH_FORK_TEXTURES)
 set(ZH_FORK_TEXTURE_LINES "")
 foreach(_zh_texture IN LISTS ZH_FORK_TEXTURES)

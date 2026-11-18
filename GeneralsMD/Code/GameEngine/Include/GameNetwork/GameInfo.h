@@ -156,7 +156,7 @@ public:
 	void setHandicap( Int handicap ) { m_handicap = handicap; }	///< percent of max health this seat's units have, see IsValidHandicap
 	Int getHandicap( void ) const { return m_handicap; }
 
-	void setAIRating( Int rating ) { m_aiRating = rating; }	///< an AI seat's rating off its rung's anchor (-airating), in hundredths; AI_RATING_NONE for the anchor
+	void setAIRating( Int rating );	///< an AI seat's rating off its rung's anchor (-airating), in hundredths; AI_RATING_NONE for the anchor.  A Hard seat still under its default name takes the name of the rating's level
 	Int getAIRating( void ) const { return m_aiRating; }
 
 	void setSkins( UnsignedInt64 skins ) { m_skins = skins; }	///< the SkinLoadout this seat's units are drawn in; drawing only, the logic never reads it
@@ -487,6 +487,16 @@ Bool IsAISlotState( SlotState state );
 char SlotStateToOptionsChar( SlotState state );
 Bool OptionsCharToSlotState( char c, SlotState *state );
 UnicodeString SlotStateName( SlotState state );
+/// the same, for a seat at a rating (hundredths): a Hard seat at one of the levels above Hard is called by that level
+UnicodeString SlotStateName( SlotState state, Int aiRating );
+
+// The levels above Hard are not rungs: each is a Hard seat at a rating of its own, in hundredths, so
+// the slot string, saves and replays already carry them.  The player slot box offers them after Hard,
+// and a line's item data is its pick: a SlotState, or one of these ratings, which no state reaches.
+enum { AI_LEVELS_ABOVE_HARD = 4 };
+extern const Int AILevelAboveHardRating[ AI_LEVELS_ABOVE_HARD ];
+Int SlotPickOf( const GameSlot *slot );				///< the line of the box a seat sits on
+void SlotApplyPick( GameSlot *slot, Int pick );	///< seat the pick: its state, then its rating
 
 // A seat in the lobby's game list, from the name and the profile ID the host advertised for it.  An
 // AI seat advertises its SlotState as the profile ID and "CE", "CM", "CH" (or nothing) as the name;

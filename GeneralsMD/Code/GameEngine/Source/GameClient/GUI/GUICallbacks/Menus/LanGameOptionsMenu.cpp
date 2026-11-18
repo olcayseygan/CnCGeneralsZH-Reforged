@@ -1503,20 +1503,20 @@ WindowMsgHandledType LanGameOptionsMenuSystem( GameWindow *window, UnsignedInt m
 						  // Get
 						  Int pos = -1;
 						  GadgetComboBoxGetSelectedPos(comboBoxPlayer[i], &pos);
-						  SlotState pickedState = (pos >= 0) ? (SlotState)(Int)(intptr_t)GadgetComboBoxGetItemData(comboBoxPlayer[i], pos) : SLOT_OPEN;
+						  Int pick = (pos >= 0) ? (Int)(intptr_t)GadgetComboBoxGetItemData(comboBoxPlayer[i], pos) : SLOT_OPEN;
 						  if( pos >= 0 )
 						  {
 							  if( myGame->getLANSlot(i)->getState() == SLOT_PLAYER )
 							  {
 								  UnicodeString name = myGame->getPlayerName(i);
-								  myGame->getLANSlot(i)->setState(pickedState);
+								  SlotApplyPick(myGame->getLANSlot(i), pick);
 								  myGame->resetAccepted();
 								  TheLAN->OnPlayerLeave(name);
 							  }
-							  else if( myGame->getLANSlot(i)->getState() != pickedState )
+							  else if( SlotPickOf(myGame->getLANSlot(i)) != pick )
 							  {
 								  Bool wasAI = (myGame->getLANSlot(i)->isAI());
-								  myGame->getLANSlot(i)->setState(pickedState);
+								  SlotApplyPick(myGame->getLANSlot(i), pick);
 								  Bool isAI = (myGame->getLANSlot(i)->isAI());
 								  if (wasAI || isAI)
 									  myGame->resetAccepted();

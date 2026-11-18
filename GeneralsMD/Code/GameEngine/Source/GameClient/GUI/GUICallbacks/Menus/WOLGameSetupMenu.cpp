@@ -3220,7 +3220,7 @@ WindowMsgHandledType WOLGameSetupMenuSystem( GameWindow *window, UnsignedInt msg
 						  // Get
 						  Int pos = -1;
 						  GadgetComboBoxGetSelectedPos(comboBoxPlayer[i], &pos);
-						  SlotState pickedState = (pos >= 0) ? (SlotState)(Int)(intptr_t)GadgetComboBoxGetItemData(comboBoxPlayer[i], pos) : SLOT_OPEN;
+						  Int pick = (pos >= 0) ? (Int)(intptr_t)GadgetComboBoxGetItemData(comboBoxPlayer[i], pos) : SLOT_OPEN;
 						  if( pos >= 0 )
 						  {
 							  if( myGame->getSlot(i)->getState() == SLOT_PLAYER )
@@ -3236,16 +3236,16 @@ WindowMsgHandledType WOLGameSetupMenuSystem( GameWindow *window, UnsignedInt msg
 								  TheGameSpyPeerMessageQueue->addRequest(req);
 
 								  UnicodeString name = myGame->getSlot(i)->getName();
-								  myGame->getSlot(i)->setState(pickedState);
+								  SlotApplyPick(myGame->getSlot(i), pick);
 								  myGame->resetAccepted();
 								  TheGameSpyInfo->setGameOptions();
 								  WOLDisplaySlotList();
 								  //TheLAN->OnPlayerLeave(name);
 							  }
-							  else if( myGame->getSlot(i)->getState() != pickedState )
+							  else if( SlotPickOf(myGame->getSlot(i)) != pick )
 							  {
 								  Bool wasAI = (myGame->getSlot(i)->isAI());
-								  myGame->getSlot(i)->setState(pickedState);
+								  SlotApplyPick(myGame->getSlot(i), pick);
 								  Bool isAI = (myGame->getSlot(i)->isAI());
 								  myGame->resetAccepted();
 								  if (wasAI ^ isAI)

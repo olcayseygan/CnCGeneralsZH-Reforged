@@ -20413,6 +20413,56 @@ TEST(every_ai_rung_is_named_the_same_way_as_every_other)
 		for (Int b = a + 1; b < numRungs; ++b)
 			CHECK( WideCharCmp( SlotStateName( rungs[a] ).str(), SlotStateName( rungs[b] ).str() ) != 0 );
 }
+
+/* The four levels above Hard are Hard seats at ratings 45, 60, 90 and 120.  The slot box's item data
+	 holds a SlotState or one of those ratings, so they must never meet; a Hard seat at one of them goes
+	 by that level's name and comes back to that line, and any other rating stays plain Hard. */
+TEST(levels_above_hard_are_hard_seats_with_names_of_their_own)
+{
+	for (Int i = 0; i < AI_LEVELS_ABOVE_HARD; ++i)
+	{
+		const Int rating = AILevelAboveHardRating[i];
+		CHECK( rating > SLOT_TAKEOVER );
+		CHECK( WideCharCmp( SlotStateName( SLOT_BRUTAL_AI, rating ).str(), SlotStateName( SLOT_BRUTAL_AI ).str() ) != 0 );
+		if (i > 0)
+			CHECK( rating > AILevelAboveHardRating[i - 1] );
+	}
+	CHECK( WideCharCmp( SlotStateName( SLOT_BRUTAL_AI, 6000 ).str(), u"Vicious AI" ) == 0 );
+	CHECK( WideCharCmp( SlotStateName( SLOT_BRUTAL_AI, 5000 ).str(), u"Hard AI" ) == 0 );
+	CHECK( WideCharCmp( SlotStateName( SLOT_MED_AI, 6000 ).str(), u"Medium AI" ) == 0 );
+
+	// picking the level seats Hard at its rating under its name, and the seat finds its line again
+	GameSlot slot;
+	SlotApplyPick( &slot, 6000 );
+	CHECK_EQ( (Int)slot.getState(), (Int)SLOT_BRUTAL_AI );
+	CHECK_EQ( slot.getAIRating(), 6000 );
+	CHECK( WideCharCmp( slot.getName().str(), u"Vicious AI" ) == 0 );
+	CHECK_EQ( SlotPickOf( &slot ), 6000 );
+
+	// back to plain Hard drops the rating and the name, though the state does not change
+	SlotApplyPick( &slot, SLOT_BRUTAL_AI );
+	CHECK_EQ( slot.getAIRating(), (Int)AI_RATING_NONE );
+	CHECK( WideCharCmp( slot.getName().str(), u"Hard AI" ) == 0 );
+	CHECK_EQ( SlotPickOf( &slot ), (Int)SLOT_BRUTAL_AI );
+
+	// a rating set by itself, as the slot string and a save do, renames the seat too
+	slot.setAIRating( 12000 );
+	CHECK( WideCharCmp( slot.getName().str(), u"Insane AI" ) == 0 );
+
+	// a Hard seat at a rating that is not a level (-airating 50) is Hard in the box
+	slot.setAIRating( 5000 );
+	CHECK( WideCharCmp( slot.getName().str(), u"Hard AI" ) == 0 );
+	CHECK_EQ( SlotPickOf( &slot ), (Int)SLOT_BRUTAL_AI );
+
+	// a name of its own (-seatname) is left alone
+	slot.setName( UnicodeString( u"Bot" ) );
+	slot.setAIRating( 4500 );
+	CHECK( WideCharCmp( slot.getName().str(), u"Bot" ) == 0 );
+
+	SlotApplyPick( &slot, SLOT_EASY_AI );
+	CHECK_EQ( slot.getAIRating(), (Int)AI_RATING_NONE );
+	CHECK( WideCharCmp( slot.getName().str(), u"Easy AI" ) == 0 );
+}
 //-------------------------------------------------------------------------------------------------
 // THREADING-ROADMAP.md 3.1 - the fork-join pool.
 //

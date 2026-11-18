@@ -1085,10 +1085,9 @@ static void handlePlayerSelection(int index)
     return;
 
 	GameWindow *combo = comboBoxPlayer[index];
-	Int playerType, selIndex;
+	Int pick, selIndex;
 	GadgetComboBoxGetSelectedPos(combo, &selIndex);
-  UnicodeString title = GadgetComboBoxGetText(combo);
-	playerType = (Int)(intptr_t)GadgetComboBoxGetItemData(combo, selIndex);
+	pick = (Int)(intptr_t)GadgetComboBoxGetItemData(combo, selIndex);
 	GameInfo *myGame = TheSkirmishGameInfo;
 
 	if (myGame)
@@ -1096,8 +1095,9 @@ static void handlePlayerSelection(int index)
 		GameSlot * slot = myGame->getSlot(index);
     if(!slot)
       return;
-    slot->setState(SlotState(playerType), title);
-    
+		// the line the seat already sits on keeps it as it is, a Hard seat's -airating rating included
+		if (SlotPickOf(slot) != pick)
+			SlotApplyPick(slot, pick);
 	}
   //skirmishUpdateSlotList();
 }

@@ -160,7 +160,7 @@ void RefreshGameInfoWindow(GameInfo *gameInfo, UnicodeString gameName)
 		}
 		if(slot->isAI())
 		{
-			addedRow = GadgetListBoxAddEntryText(listBoxPlayers,SlotStateName(slot->getState()),playerColor,-1, 1);
+			addedRow = GadgetListBoxAddEntryText(listBoxPlayers,SlotStateName(slot->getState(), slot->getAIRating()),playerColor,-1, 1);
 		}
 		else if(slot->isHuman())
 		{

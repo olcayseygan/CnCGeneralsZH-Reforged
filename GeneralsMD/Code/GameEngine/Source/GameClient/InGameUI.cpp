@@ -11086,8 +11086,17 @@ static Int broadcastPoints( Int at720 )
 static Bool broadcastByDifficulty( Player *player )
 {
 	const UnicodeString &name = player->getPlayerDisplayName();
-	return player->getPlayerType() == PLAYER_COMPUTER && ( name.compare( SlotStateName( SLOT_EASY_AI ) ) == 0
-		|| name.compare( SlotStateName( SLOT_MED_AI ) ) == 0 || name.compare( SlotStateName( SLOT_BRUTAL_AI ) ) == 0 );
+	if( player->getPlayerType() != PLAYER_COMPUTER )
+		return FALSE;
+	if( name.compare( SlotStateName( SLOT_EASY_AI ) ) == 0 || name.compare( SlotStateName( SLOT_MED_AI ) ) == 0
+		|| name.compare( SlotStateName( SLOT_BRUTAL_AI ) ) == 0 )
+		return TRUE;
+	for( Int i = 0; i < AI_LEVELS_ABOVE_HARD; ++i )
+	{
+		if( name.compare( SlotStateName( SLOT_BRUTAL_AI, AILevelAboveHardRating[i] ) ) == 0 )
+			return TRUE;
+	}
+	return FALSE;
 }
 
 static UnicodeString broadcastName( Player *player )

@@ -573,7 +573,7 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 		UnicodeString detail;
 		if( slot->isAI() )
 		{
-			const UnicodeString level = SlotStateName( slot->getState() );
+			const UnicodeString level = SlotStateName( slot->getState(), slot->getAIRating() );
 			if( slot->getName().compare( level ) != 0 )
 				detail = level;
 			if( slot->getAIPersonality() != AIPERSONA_NORMAL )

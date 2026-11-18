@@ -330,7 +330,7 @@ static void gameTooltip(GameWindow *window,
 		{
 			++numPlayers;
 			tooltip.concat(u'\n');
-			tooltip.concat(SlotStateName(slot->getState()));
+			tooltip.concat(SlotStateName(slot->getState(), slot->getAIRating()));
 		}
 	}
 	DEBUG_ASSERTCRASH(numPlayers, ("Tooltipping a 0-player game!\n"));

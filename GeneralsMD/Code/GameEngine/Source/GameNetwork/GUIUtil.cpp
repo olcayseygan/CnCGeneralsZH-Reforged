@@ -223,8 +223,9 @@ void PopulatePlayerSlotComboBox(GameWindow *comboBox, Int color, Bool allowTakeo
 	if (!comboBox)
 		return;
 
-	// the order the ladder climbs in; what each one is called is SlotStateName's business
-	static const SlotState seats[] =
+	// the order the ladder climbs in, the levels above Hard last (SlotPickOf); what each one is called
+	// is SlotStateName's business
+	static const Int seats[] =
 	{
 		SLOT_OPEN,
 		SLOT_CLOSED,
@@ -232,6 +233,10 @@ void PopulatePlayerSlotComboBox(GameWindow *comboBox, Int color, Bool allowTakeo
 		SLOT_EASY_AI,
 		SLOT_MED_AI,
 		SLOT_BRUTAL_AI,
+		AILevelAboveHardRating[0],
+		AILevelAboveHardRating[1],
+		AILevelAboveHardRating[2],
+		AILevelAboveHardRating[3],
 	};
 
 	// The combo box only grows its listbox when an add crosses the current length, and both
@@ -254,8 +259,9 @@ void PopulatePlayerSlotComboBox(GameWindow *comboBox, Int color, Bool allowTakeo
 	{
 		if (seats[i] == SLOT_TAKEOVER && !allowTakeover)
 			continue;
-		GadgetComboBoxAddEntry(comboBox, SlotStateName(seats[i]), color);
-		GadgetComboBoxSetItemData(comboBox, shown, (void *)seats[i]);
+		const UnicodeString name = seats[i] > SLOT_TAKEOVER ? SlotStateName(SLOT_BRUTAL_AI, seats[i]) : SlotStateName((SlotState)seats[i]);
+		GadgetComboBoxAddEntry(comboBox, name, color);
+		GadgetComboBoxSetItemData(comboBox, shown, (void *)(intptr_t)seats[i]);
 		++shown;
 	}
 	GadgetComboBoxSetSelectedPos(comboBox, 0);
@@ -1755,7 +1761,7 @@ void UpdateSlotList( GameInfo *myGame, GameWindow *comboPlayer[],
 				Int pos = slot->getState();
 				for (Int item = 0; comboPlayer[i] && item < GadgetComboBoxGetLength(comboPlayer[i]); ++item)
 				{
-					if ((Int)(intptr_t)GadgetComboBoxGetItemData(comboPlayer[i], item) == slot->getState())
+					if ((Int)(intptr_t)GadgetComboBoxGetItemData(comboPlayer[i], item) == SlotPickOf(slot))
 					{
 						pos = item;
 						break;

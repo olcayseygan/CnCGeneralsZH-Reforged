@@ -460,6 +460,59 @@ UnicodeString SlotStateName( SlotState state )
 	}
 }
 
+const Int AILevelAboveHardRating[ AI_LEVELS_ABOVE_HARD ] = { 4500, 6000, 9000, 12000 };
+
+UnicodeString SlotStateName( SlotState state, Int aiRating )
+{
+	static const char16_t *const names[ AI_LEVELS_ABOVE_HARD ] =
+	{
+		u"Brutal AI", u"Vicious AI", u"Merciless AI", u"Insane AI"
+	};
+	if (state == SLOT_BRUTAL_AI)
+	{
+		for (Int i = 0; i < AI_LEVELS_ABOVE_HARD; ++i)
+		{
+			if (aiRating == AILevelAboveHardRating[i])
+				return UnicodeString( names[i] );
+		}
+	}
+	return SlotStateName( state );
+}
+
+Int SlotPickOf( const GameSlot *slot )
+{
+	if (slot->getState() == SLOT_BRUTAL_AI)
+	{
+		for (Int i = 0; i < AI_LEVELS_ABOVE_HARD; ++i)
+		{
+			if (slot->getAIRating() == AILevelAboveHardRating[i])
+				return AILevelAboveHardRating[i];
+		}
+	}
+	return slot->getState();
+}
+
+void SlotApplyPick( GameSlot *slot, Int pick )
+{
+	if (pick > SLOT_TAKEOVER)
+	{
+		slot->setState( SLOT_BRUTAL_AI );
+		slot->setAIRating( pick );
+	}
+	else
+	{
+		slot->setState( (SlotState)pick );
+		slot->setAIRating( AI_RATING_NONE );
+	}
+}
+
+void GameSlot::setAIRating( Int rating )
+{
+	if (m_state == SLOT_BRUTAL_AI && m_name.compare( SlotStateName( m_state, m_aiRating ) ) == 0)
+		m_name = SlotStateName( m_state, rating );
+	m_aiRating = rating;
+}
+
 void GameSlot::setState( SlotState state, UnicodeString name, UnsignedInt IP )
 {
 	// An opponent seat keeps its colour, faction, team and start spot while it stays an opponent
@@ -494,7 +547,7 @@ void GameSlot::setState( SlotState state, UnicodeString name, UnsignedInt IP )
 		m_state = state;
 		m_isAccepted = true;
 		m_hasMap = true;
-		m_name = SlotStateName( state );
+		m_name = SlotStateName( state, m_aiRating );
 	}
 
 	m_IP = IP;

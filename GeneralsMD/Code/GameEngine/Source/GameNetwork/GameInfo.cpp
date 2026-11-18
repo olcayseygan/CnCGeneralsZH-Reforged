@@ -466,7 +466,7 @@ UnicodeString SlotStateName( SlotState state, Int aiRating )
 {
 	static const char16_t *const names[ AI_LEVELS_ABOVE_HARD ] =
 	{
-		u"Brutal AI", u"Vicious AI", u"Merciless AI", u"Insane AI"
+		u"Brutal AI", u"Vicious AI", u"Savage AI", u"Insane AI"
 	};
 	if (state == SLOT_BRUTAL_AI)
 	{

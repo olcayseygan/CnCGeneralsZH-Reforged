@@ -87,4 +87,13 @@ extern Real rmgJoinShare( Int pairLeast, Int sum );
 	no scenery, towns or bunkers. */
 extern void rmgBuildSkeleton( const RandomMapSettings& settings, std::vector<char>& mapBytes );
 
+/** And the plain map's finish on a template map's ground (map cells, border in): each road in roads
+	(the cells along it, in order) laid at a road's grade with a cutting through any crest it tops, then
+	with settle no walkable cell left in the band that reads as a cliff and the roads laid again. keep
+	is 1 where nothing may move and 2 on the shore, which keeps even a spike; walls the cells that
+	steepen into a cliff rather than ease. */
+extern void rmgFinishTemplateGround( Int playableCells, std::vector<Int>& heights, Int width, Int height,
+	const std::vector< std::vector<Int> >& roads, const std::vector<char>& keep, const std::vector<char>& walls,
+	Bool settle );
+
 #endif  // __RANDOMMAPTEMPLATE_H_

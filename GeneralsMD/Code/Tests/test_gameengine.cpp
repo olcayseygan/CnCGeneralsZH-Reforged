@@ -11969,6 +11969,8 @@ struct RMGParse
 	std::vector<Int> m_classTiles, m_classWidths;	///< each class's tile count and sheet width
 	std::vector<Short> m_cliffIndexes;			///< per cell, into m_cliffInfos; 0 is the planar tiling
 	std::vector<RMGCliffInfo> m_cliffInfos;		///< the table, entry 0 the default the file never holds
+	std::vector<char> m_cliffBits;				///< the pathfinder's cliff bit a cell, rows of m_cliffRowBytes, bit x & 7
+	Int m_cliffRowBytes;
 	std::vector<AsciiString> m_waypointNames;
 	std::vector<Coord3D> m_waypointPositions;
 	std::vector<AsciiString> m_pathWaypointNames;		///< the approach paths' waypoints, "Center2_from1_0"
@@ -11991,7 +11993,7 @@ struct RMGParse
 		m_numTextureClasses(0), m_firstTile(0), m_numTiles(0), m_tileWidth(0),
 		m_numSides(0), m_numTeams(0), m_numObjects(0), m_numWaterAreas(0),
 		m_weather(-1), m_compression(-1), m_timeOfDay(-1), m_lightingBytesLeftOver(-1),
-		m_blendBytesLeftOver(-1)
+		m_blendBytesLeftOver(-1), m_cliffRowBytes(0)
 	{
 		memset( m_terrainAmbient, 0, sizeof(m_terrainAmbient) );
 		memset( m_terrainDiffuse, 0, sizeof(m_terrainDiffuse) );
@@ -12040,8 +12042,14 @@ static Bool RMGParseBlendTile( DataChunkInput &file, DataChunkInfo *info, void *
 	if( info->version >= 7 )
 	{
 		Int rowBytes = info->version == 7 ? ( theRMGParse.m_width + 1 ) / 8 : ( theRMGParse.m_width + 7 ) / 8;
-		std::vector<char> cliffBits( rowBytes * theRMGParse.m_height + 1 );
-		file.readArrayOfBytes( &cliffBits[0], rowBytes * theRMGParse.m_height );
+		theRMGParse.m_cliffBits.assign( rowBytes * theRMGParse.m_height + 1, 0 );
+		file.readArrayOfBytes( &theRMGParse.m_cliffBits[0], rowBytes * theRMGParse.m_height );
+		theRMGParse.m_cliffRowBytes = rowBytes;
+	}
+	else
+	{
+		theRMGParse.m_cliffBits.clear();
+		theRMGParse.m_cliffRowBytes = 0;
 	}
 
 	theRMGParse.m_numBitmapTiles = file.readInt();
@@ -14735,7 +14743,7 @@ TEST(the_generator_still_turns_a_seed_into_the_bytes_it_used_to)
 	{
 		{ 0, 2, 64, 0, 0xE9E74BA7 },
 		{ 12345, 4, 96, 0, 0xCEE6ECA4 },
-		{ 7, 8, 128, 0, 0xD07136B9 },
+		{ 7, 8, 128, 0, 0x9345A3BC },
 		{ 7, 4, 200, 1, 0xBFE61244 },
 	};
 	const Int numFingerprints = sizeof(theFingerprints) / sizeof(theFingerprints[0]);
@@ -15040,7 +15048,7 @@ TEST(a_template_map_comes_out_the_same_twice_and_every_start_walks_to_every_othe
 	RandomMapGenerator::generate( exemplarSettings, exemplar );
 
 	// the bytes themselves, pinned like the generator's: a change here is a change to every template map's name
-	static const UnsignedInt theTemplateFingerprints[2] = { 0x5357CB4Cu, 0xE373FE41u };
+	static const UnsignedInt theTemplateFingerprints[2] = { 0xCB55DF22u, 0x64B83240u };
 	for( Int players = 2; players <= 8; players += 6 )
 	{
 		RandomMapSettings settings;
@@ -16433,10 +16441,13 @@ TEST(a_template_map_gives_every_seat_the_same_base_and_keeps_its_money_on_the_ma
 				piles[gap]++;
 			}
 		}
+		// the steepest cell the pathfinder walks; a copy's rim over the basin is a cliff and carries the bit
 		Real steepest = 0.0f;
+		CHECK( theRMGParse.m_cliffRowBytes > 0 );
 		for( Int y = b; y + 1 < theRMGParse.m_height - b; y++ )
 			for( Int x = b; x + 1 < W - b; x++ )
-				steepest = std::max( steepest, RMGCellSpan( x, y ) );
+				if( theRMGParse.m_cliffRowBytes > 0 && ( theRMGParse.m_cliffBits[y * theRMGParse.m_cliffRowBytes + ( x >> 3 )] & ( 1 << ( x & 7 ) ) ) == 0 )
+					steepest = std::max( steepest, RMGCellSpan( x, y ) );
 		Bool even = TRUE;
 		for( size_t s = 1; s < tops.size(); s++ ) even = even && tops[s] == tops[0];
 		for( size_t s = 0; s < piles.size() && theCases[c].uneven; s++ ) even = even && piles[s] == 4;
@@ -16464,8 +16475,10 @@ TEST(a_template_map_gives_every_seat_the_same_base_and_keeps_its_money_on_the_ma
 			for( size_t s = 0; s < piles.size(); s++ )
 				CHECK_EQ( piles[s], 4 );
 		// the way joining two plateaus falls back to the ground over cells, not in one: 85 world units a
-		// cell at 2p and 43 at 8p with a hard edge, 33 and 28 faded
-		CHECK( steepest <= 40.0f );
+		// cell at 2p and 43 at 8p with a hard edge, 33 and 28 faded. A copy's hill now ends in a cliff of
+		// three cells where it stands over 30 bytes off the basin, 88 at 2p on a diagonal, so the slope
+		// counted is the one walked: every cell spanning 10 bytes is a wall to the pathfinder
+		CHECK( steepest < 10.0f * MAP_HEIGHT_SCALE );
 		// no tree on a wall the copy's ramps or levelled discs made (11 at 2p, the exemplar's own cliffs excepted)
 		CHECK_EQ( treesOnCliffs, 0 );
 	}

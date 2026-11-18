@@ -76,6 +76,9 @@ const Int SEAM_BAND = 2;
 const Real PAD_INNER = 24.0f, PAD_OUTER = 34.0f;
 const Real SITE_INNER = 7.0f, SITE_OUTER = 12.0f;
 const Real COPY_FADE = 10.0f;			// cells over which a copied pad or crossing fades into the map round it
+const Real COPY_STEEP_DROP = 30.0f;		// bytes between a copy and the ground under it past which the fade closes to a cliff
+const Real COPY_STEEP_EASE = 20.0f;		// bytes over which it closes
+const Real COPY_CLIFF_CELLS = 3.0f;		// cells the closed fade falls over
 const Real PAD_MARGIN = 12.0f;			// a pad's reach past the exemplar's base plateau
 const Real PAD_MOST = 90.0f;			// the furthest a base plateau reaches from its start in the exemplar
 const Real PAD_OPEN = 24.0f;			// the base's reach on open ground
@@ -87,10 +90,15 @@ const Int PAD_CORRIDOR = 28;				// cells between two plateau bases, Twilight Fla
 const Int JOIN_FADE = 16;				// cells of the two bases' summed distance over which a filled way falls back to the ground past it: eight cells aside
 const Real PAD_SITE_LEAST = 20.0f;		// cells a dock or derrick pulled in off the map's edge keeps from its start, past the command centre
 const Real PAD_SHORE = 4.0f;			// cells a pad stays off the exemplar's water
-const Real RAMP_STEEP = 8.0f;			// bytes a cell, the steepest a cut ramp climbs
+const Real PAD_SEAM_WANDER = 10.0f;		// cells the cut between two bases' level ground wanders off the halfway line
+const Real PAD_EDGE_WANDER = 6.0f;		// cells a pad stops short of the exemplar's playable edge, half of the most
+const Real PAD_SEAM_CELLS = 20.0f;		// cells between the wander's lattice points: a bend every twenty or so
+const Real WALL_BYTES = 10.0f;			// bytes of corner span from which a finished cell is a wall (cliffOf): RandomMapGenerator.cpp RMG_STEEP_BYTES
 const Int WIDE_RAMP_HALF = 16;			// cells either side of its walk, a scaled plateau's ramp: Twilight Flame's 22 and the cliffs' growth
 const Int WIDE_RAMP_BLEND = 4;			// cells over which a widened ramp fades into the ground beside it
-const Real WIDE_RAMP_STEEP = 6.0f;		// bytes a cell along a widened ramp, so its corners stay under the cliff span across it too
+// bytes a cell along a widened ramp: at 6 a ramp laid on a diagonal rounded into stripes of 6 and 9 byte
+// cells, which the hillshade drew as a ribbed slab; at 4.5 a diagonal cell spans 6 at most
+const Real WIDE_RAMP_STEEP = 4.5f;
 const Int CROSS_WET = 100;				// water cells in a town's box that put the town on its river
 const Int CROSS_STEP = 8;				// cells between the places tried for a crossing along its river
 const Real CALM_EASE = 20.0f;			// cells over which a river's wander comes back past a crossing
@@ -100,9 +108,12 @@ const Real CROSS_GUARD = 0.3f;			// how far into a pad's fade a crossing may rea
 const Int CROSS_LEAST = 20;				// cells a side, the least of a crossing cut down to fit: a bridge and its banks
 const Int CROSS_CROPS = 6;				// the cuts of a crossing tried, the whole of it first
 const Real CROSS_CROP[CROSS_CROPS] = { 1.0f, 0.75f, 0.55f, 0.4f, 0.3f, 0.2f };
-const Int REPAIR_ROUNDS = 4;
+const Int REPAIR_ROUNDS = 8;			// passes of repairReach: a ramp's edge can wall in the next one's way, which the next pass cuts
 const Real SLOPE_REACH = 100.0f;
 const Int PILE_FLAT = 4;
+const Int FINISH_BASE = 16;				// cells round a start the ground's finish leaves alone (RandomMapGenerator.cpp RMG_SETTLE_BASE)
+const Int FINISH_OBJECT = 5;			// cells round a building a copy carries that the finish leaves alone: the footprint and RMG_SETTLE_OBJECT
+const Int FINISH_ROUNDS = 3;			// times the roads are laid again over repairReach's ramps and what that cuts off is ramped to
 const Int TECH_FLAT = 8;
 const Real MIN_RELIEF = 60.0f;
 
@@ -125,6 +136,14 @@ const Real SEA_FLOOR = 8.0f;
 const Real COAST_WOBBLE = 8.0f;
 const Real CAUSEWAY_CELLS = 12.0f;
 const Real ROAD_CLIMB = 0.5f;
+// RandomMapGenerator.cpp's RMG_ROAD_GENTLE, _STEEP over its step price of 10, _CREST_REACH, _CREST_FREE, _CREST over 10
+const Real ROAD_GENTLE = 2.0f;
+const Real ROAD_STEEP = 0.6f;
+const Int ROAD_CREST_REACH = 6;
+const Real ROAD_CREST_FREE = 2.0f;
+const Real ROAD_CREST = 2.4f;
+const Real ROAD_COST_MOST = 1000.0f;		// units a cell's price is held under
+const Real ROAD_STEEPEST = 9.0f;		// bytes of corner span a road's cells may have: under the 10 that read as a wall
 const Int ROAD_LEAST = 6;
 const Int ROAD_SPACING = 2;
 const Real ROAD_TOLERANCE = 1.5f;
@@ -235,6 +254,17 @@ inline Real fade( Real x )
 	if( x < 0.0f ) x = 0.0f;
 	if( x > 1.0f ) x = 1.0f;
 	return x * x * ( 3.0f - 2.0f * x );
+}
+
+/// Value noise in -1 to 1, a lattice point every `cells` cells, eased between them: a line drawn on it wanders.
+Real valueNoise( Int seed, Real y, Real x, Real cells )
+{
+	const Real fy = y / cells, fx = x / cells;
+	const Int iy = (Int)floorf( fy ), ix = (Int)floorf( fx );
+	const Real ty = fade( fy - iy ), tx = fade( fx - ix );
+	const Real top = hashUnit( seed, ix, iy ) + ( hashUnit( seed, ix + 1, iy ) - hashUnit( seed, ix, iy ) ) * tx;
+	const Real low = hashUnit( seed, ix, iy + 1 ) + ( hashUnit( seed, ix + 1, iy + 1 ) - hashUnit( seed, ix, iy + 1 ) ) * tx;
+	return 2.0f * ( top + ( low - top ) * ty ) - 1.0f;
 }
 
 inline Int clampi( Int v, Int lo, Int hi )
@@ -2516,7 +2546,14 @@ struct Composer
 				YX s = copy.toSource( (Real)y, (Real)x );
 				Int o = clampi( roundi( s.y ), 0, SH - 1 ) * SW + clampi( roundi( s.x ), 0, SW - 1 );
 				const Real copied = copy.pivot + copy.lift + ( src.lv.h[o] - copy.pivot ) * copy.heightScale;
-				h[i] = w * copied + ( 1.0f - w ) * h[i];
+				/* Faded over COPY_FADE cells, a plateau cut where its level ground ran on to the next base
+					stood as a slope of 8 to 15 bytes a cell: walked as open ground and drawn as a wall. Past
+					COPY_STEEP_DROP the fade closes to COPY_CLIFF_CELLS, a cliff like the exemplar's own rims,
+					eased in over the next COPY_STEEP_EASE bytes so neighbouring cells do not jump. */
+				const Real sharp = fade( ( w - 0.5f ) * COPY_FADE / COPY_CLIFF_CELLS + 0.5f );
+				const Real steep = clampr( ( fabsf( copied - h[i] ) - COPY_STEEP_DROP ) / COPY_STEEP_EASE, 0.0f, 1.0f );
+				const Real hw = w + ( sharp - w ) * steep;
+				h[i] = hw * copied + ( 1.0f - hw ) * h[i];
 				plan.fixedWeight[i] = w;
 				plan.fixedCopy[i] = (Int)plan.copies.size();
 				if( w >= 0.5f )
@@ -4104,7 +4141,9 @@ struct Composer
 		}
 		Mask cliff, walk, wetNear, open( W * H );
 		Field rounded( h.size() );
-		for( size_t i = 0; i < h.size(); i++ ) rounded[i] = (Real)roundi( h[i] );
+		// a road keeps off any slope that reads as a wall, not only off the cliffs: up a plateau's rim it
+		// stood across a step its grading could not cut
+		for( size_t i = 0; i < h.size(); i++ ) rounded[i] = (Real)roundi( h[i] ) * CLIFF_SPAN / ( ROAD_STEEPEST * MAP_Z );
 		spanCliff( rounded, W, H, cliff );
 		walkable( cliff, W, H, walk );
 		maskGrow( plan.wet, W, H, 2, wetNear );
@@ -4160,15 +4199,34 @@ struct Composer
 				for( Int x = (Int)nodes[k].x - 2; x <= (Int)nodes[k].x + 2; x++ )
 					if( y >= 0 && x >= 0 && y < H && x < W ) open[y * W + x] = 1;
 
-		// a cell's cost: 1, and half a unit for each byte a cell the ground climbs (np.gradient), in thousandths
+		/* A cell's cost, in thousandths: 1, half a unit for each byte a cell the ground climbs (np.gradient),
+			and a plain map's way's prices for the rest (RandomMapGenerator.cpp roadStepCost, a step there
+			costing 10): the square of each byte a cell past the gentle grade, and each byte the cell stands
+			over the ground ROAD_CREST_REACH cells off both ways along any line through it past the free
+			rise. Priced on the climb alone, a road went straight over any hill lower than its detour. */
 		std::vector<Int> cost( W * H );
+		static const Int theLineY[4] = { 0, 1, 1, -1 }, theLineX[4] = { 1, 0, 1, 1 };
 		for( Int y = 0; y < H; y++ )
 		{
 			for( Int x = 0; x < W; x++ )
 			{
 				Real gy = y == 0 ? h[W + x] - h[x] : y == H - 1 ? h[y * W + x] - h[( y - 1 ) * W + x] : 0.5f * ( h[( y + 1 ) * W + x] - h[( y - 1 ) * W + x] );
 				Real gx = x == 0 ? h[y * W + 1] - h[y * W] : x == W - 1 ? h[y * W + x] - h[y * W + x - 1] : 0.5f * ( h[y * W + x + 1] - h[y * W + x - 1] );
-				cost[y * W + x] = roundi( 1000.0f * ( 1.0f + ROAD_CLIMB * hypotr( gy, gx ) ) );
+				const Real grade = hypotr( gy, gx );
+				const Real past = std::max( grade - ROAD_GENTLE, 0.0f );
+				Real crest = 0.0f;
+				for( Int line = 0; line < 4; line++ )
+				{
+					const Int reach = line < 2 ? ROAD_CREST_REACH : ( ROAD_CREST_REACH * 5 + 3 ) / 7;
+					const Int ay = y + theLineY[line] * reach, ax = x + theLineX[line] * reach;
+					const Int by = y - theLineY[line] * reach, bx = x - theLineX[line] * reach;
+					if( ay < 0 || ax < 0 || ay >= H || ax >= W || by < 0 || bx < 0 || by >= H || bx >= W ) continue;
+					crest = std::max( crest, std::min( h[y * W + x] - h[ay * W + ax], h[y * W + x] - h[by * W + bx] ) );
+				}
+				const Real ridge = std::max( crest - ROAD_CREST_FREE, 0.0f );
+				// held under a thousand units, so a diagonal step's 1414 / 1000 stays inside an Int
+				const Real units = std::min( 1.0f + ROAD_CLIMB * grade + ROAD_STEEP * past * past + ROAD_CREST * ridge, ROAD_COST_MOST );
+				cost[y * W + x] = roundi( 1000.0f * units );
 			}
 		}
 		std::vector<Int> bridgeTo( W * H, -1 );
@@ -5511,9 +5569,14 @@ void levelDisc( std::vector<Int>& h, Int W, Int H, Int cy, Int cx, Int radius )
 				h[y * W + x] = level;
 }
 
+/** The finished map's cliffs, the cells the file's cliff bits mark impassable and the texture paints as
+	rock: a span past the engine's cliff rule, and a span of WALL_BYTES or more that the rule would leave
+	open. A shipped map paints such a slope impassable by hand; computed from the span alone it was a
+	cell that looked a wall and that tanks drove down. */
 void cliffOf( const std::vector<Int>& h, Int W, Int H, Mask& out )
 {
 	Field f( h.begin(), h.end() );
+	for( size_t i = 0; i < f.size(); i++ ) f[i] *= CLIFF_SPAN / ( ( WALL_BYTES - 0.5f ) * MAP_Z );
 	spanCliff( f, W, H, out );
 }
 
@@ -5529,10 +5592,26 @@ void baseRegions( const Exemplar& src, std::vector<Field>& regions, std::vector<
 	const Int SW = src.m.W, SH = src.m.H;
 	const std::vector<Int>& ys = src.lv.startY;
 	const std::vector<Int>& xs = src.lv.startX;
-	Mask wet, shore;
+	Mask wet, shore, edgeBand( SW * SH, 0 );
 	src.m.waterGrid( src.m.water, wet );
 	maskGrow( wet, SW, SH, (Int)PAD_SHORE, shore );
+	/* No pad reaches into the border: a shipped map's border is its edge cells drawn out, and copied
+		round a start it stood as a slab of stripes beside the base (Desert Fury, Cairo Commandos). The
+		pad stops short of the playable edge by a wandering margin, or a base by the exemplar's edge
+		was cut off along a ruled line. The margin only trims the region once it is measured: grown
+		round it, it changed the rim count that tells a plateau from a hollow and the reach the pads are
+		scaled by, and the river test's map came out with a fifth of its river. */
+	const Int sb = src.m.border;
+	for( Int y = 0; y < SH; y++ )
+		for( Int x = 0; x < SW; x++ )
+		{
+			const Int toEdge = std::min( std::min( y - sb, sb + src.m.playY - 1 - y ), std::min( x - sb, sb + src.m.playX - 1 - x ) );
+			if( (Real)toEdge < PAD_EDGE_WANDER * ( 1.0f + valueNoise( 7907, (Real)y, (Real)x, PAD_SEAM_CELLS ) ) )
+				edgeBand[y * SW + x] = 1;
+		}
 	const Int out = (Int)( PAD_MARGIN + COPY_FADE );
+	const Int FAR = 0x3fffffff;
+	std::vector<Int> chamfer( SW * SH );
 	std::vector<Int> queue, steps( SW * SH );
 	std::vector<Real> ring, below;
 	for( size_t t = 0; t < ys.size(); t++ )
@@ -5568,11 +5647,51 @@ void baseRegions( const Exemplar& src, std::vector<Field>& regions, std::vector<
 						}
 					}
 					plateau = most == PAD_MOST && fallingRim >= PAD_CLIFF * ( fallingRim + otherRim );
+					/* The margin and the fade past the level ground, out to `out` cells by a 3-4 chamfer
+						(joinPlateaus' distance): counted in eight-way steps it grew a square round every
+						corner, and the copy's fade drew it as a box with straight walls. */
+					for( Int i = 0; i < SW * SH; i++ ) chamfer[i] = steps[i] == 0 ? 0 : FAR;
+					for( Int sweep = 0; sweep < 2; sweep++ )
+					{
+						for( Int y = 0; y < SH; y++ )
+							for( Int x = 0; x < SW; x++ )
+							{
+								const Int i = y * SW + x;
+								if( shore[i] ) continue;
+								Int v = chamfer[i];
+								if( x > 0 ) v = std::min( v, chamfer[i - 1] + 3 );
+								if( y > 0 )
+								{
+									v = std::min( v, chamfer[i - SW] + 3 );
+									if( x > 0 ) v = std::min( v, chamfer[i - SW - 1] + 4 );
+									if( x + 1 < SW ) v = std::min( v, chamfer[i - SW + 1] + 4 );
+								}
+								chamfer[i] = v;
+							}
+						for( Int y = SH - 1; y >= 0; y-- )
+							for( Int x = SW - 1; x >= 0; x-- )
+							{
+								const Int i = y * SW + x;
+								if( shore[i] ) continue;
+								Int v = chamfer[i];
+								if( x + 1 < SW ) v = std::min( v, chamfer[i + 1] + 3 );
+								if( y + 1 < SH )
+								{
+									v = std::min( v, chamfer[i + SW] + 3 );
+									if( x + 1 < SW ) v = std::min( v, chamfer[i + SW + 1] + 4 );
+									if( x > 0 ) v = std::min( v, chamfer[i + SW - 1] + 4 );
+								}
+								chamfer[i] = v;
+							}
+					}
+					for( Int i = 0; i < SW * SH; i++ )
+						if( steps[i] != 0 && chamfer[i] <= 3 * out )
+							steps[i] = std::max( ( chamfer[i] + 1 ) / 3, 1 );
+					continue;
 				}
 				for( size_t head = 0; head < queue.size(); head++ )
 				{
 					Int i = queue[head], y = i / SW, x = i % SW;
-					if( pass == 1 && steps[i] >= out ) continue;
 					for( Int dy = -1; dy <= 1; dy++ )
 						for( Int dx = -1; dx <= 1; dx++ )
 						{
@@ -5583,8 +5702,17 @@ void baseRegions( const Exemplar& src, std::vector<Field>& regions, std::vector<
 								if( ( dx != 0 && dy != 0 ) || fabsf( src.lv.h[n] - level ) > PLATEAU_TOLERANCE ) continue;
 								Real mine = hypotr( (Real)( ny - ys[t] ), (Real)( nx - xs[t] ) );
 								Bool nearest = mine <= most;
+								/* Nearer this start than any other, give or take a wander: the line halfway
+									between two starts is straight, and a plateau cut along it was a ruled wall.
+									The wander is the pair's own and changes sign with the side, so the two bases
+									still share the ground between them without a gap or an overlap. */
 								for( size_t o = 0; o < ys.size() && nearest; o++ )
-									nearest = o == t || mine <= hypotr( (Real)( ny - ys[o] ), (Real)( nx - xs[o] ) );
+								{
+									if( o == t ) continue;
+									const Int pair = (Int)std::min( t, o ) * 64 + (Int)std::max( t, o );
+									const Real wander = PAD_SEAM_WANDER * valueNoise( 7919 + pair, (Real)ny, (Real)nx, PAD_SEAM_CELLS );
+									nearest = mine - hypotr( (Real)( ny - ys[o] ), (Real)( nx - xs[o] ) ) <= ( t < o ? wander : -wander );
+								}
 								if( !nearest ) continue;
 								steps[n] = 0;
 							}
@@ -5616,6 +5744,8 @@ void baseRegions( const Exemplar& src, std::vector<Field>& regions, std::vector<
 			region[i] = fade( ( out - steps[i] ) / COPY_FADE );
 			if( region[i] >= 0.5f )
 				reach = std::max( reach, hypotr( (Real)( i / SW - ys[t] ), (Real)( i % SW - xs[t] ) ) );
+			if( edgeBand[i] )
+				region[i] = 0.0f;
 		}
 		regions.push_back( region );
 		reaches.push_back( reach );
@@ -5860,17 +5990,59 @@ void carryMoney( const Exemplar& src, const std::vector<Copy>& pads, SynthMap& s
 	}
 }
 
+/** The water as the map will draw it on these heights: a cell is wet under the surface of a planned
+	area whose outline holds its centre, or of plan.wet's own level. plan.wet alone missed the edge of
+	a river's outline, and a ford repairReach laid across Eastern Everglades' river stopped half way,
+	at the edge of plan.wet, short of a bank still under the drawn water. surface is the highest water
+	over each cell, -1 where there is none. */
+void waterNow( const Plan& plan, const std::vector<Int>& heights, Int W, Int H, Mask& wet, Field& surface )
+{
+	surface.assign( W * H, -1.0f );
+	for( Int i = 0; i < W * H; i++ )
+		if( plan.wet[i] ) surface[i] = plan.level[i];
+	std::vector<Real> crossings;
+	for( size_t a = 0; a < plan.water.size(); a++ )
+	{
+		const std::vector<YX>& p = plan.water[a].points;
+		if( p.size() < 3 ) continue;
+		Real lo = 1.0e9f, hi = -1.0e9f;
+		for( size_t k = 0; k < p.size(); k++ ) { lo = std::min( lo, p[k].y ); hi = std::max( hi, p[k].y ); }
+		for( Int cy = std::max( 0, (Int)lo ); cy < std::min( H, (Int)hi + 1 ); cy++ )
+		{
+			const Real py = cy + 0.5f;
+			crossings.clear();
+			for( size_t k = 0; k < p.size(); k++ )
+			{
+				const YX& a1 = p[( k + p.size() - 1 ) % p.size()];
+				const YX& a2 = p[k];
+				if( ( a1.y > py ) != ( a2.y > py ) )
+					crossings.push_back( a1.x + ( py - a1.y ) * ( a2.x - a1.x ) / ( a2.y - a1.y ) );
+			}
+			std::sort( crossings.begin(), crossings.end() );
+			for( size_t k = 0; k + 1 < crossings.size(); k += 2 )
+				for( Int cx = std::max( 0, (Int)ceilf( crossings[k] - 0.5f ) ); cx <= std::min( W - 1, (Int)floorf( crossings[k + 1] - 0.5f ) ); cx++ )
+					surface[cy * W + cx] = std::max( surface[cy * W + cx], plan.water[a].surface );
+		}
+	}
+	wet.assign( W * H, 0 );
+	for( Int i = 0; i < W * H; i++ )
+		wet[i] = (Real)heights[i] < surface[i];
+}
+
 /** A plateau copied smaller keeps its ramps' climb but not their width, and an army queues at the
 	narrow mouth; one copied at full size keeps only the ramps inside its region, where the exemplar's
 	base opens onto the basin along far more. Every way down off a plateau is widened to
 	WIDE_RAMP_HALF either side of its walk, each cell beside it at the height of the walk where it
 	passes: the ramp's own climb, as wide as the exemplar's. The ways down are the first cells a walk from the start reaches halfway
-	down, a ramp's width apart; each walk runs on from there to the ground. */
+	down, a ramp's width apart; each walk runs on from there to the ground. The walks go where the engine
+	walks, not by cliffOf: an exemplar's ramp at 12 bytes a cell is a wall to the finished map, and found
+	by that rule no plateau had a way down to widen, and repairReach ran a causeway at the plateau's
+	height across the basin to the next one instead. */
 void widenRamps( std::vector<Int>& heights, Int W, Int H, Int border, const Plan& plan, const std::vector<Copy>& pads, Real ground )
 {
 	const Int EXIT_APART = 4 * WIDE_RAMP_HALF, MOST_EXITS = 4;
 	Mask cliff, walk;
-	cliffOf( heights, W, H, cliff );
+	spanCliff( Field( heights.begin(), heights.end() ), W, H, cliff );
 	walkable( cliff, W, H, walk );
 	std::vector<Int> previous( W * H ), path, seen( W * H, 0 );
 	Field want( W * H ), weight( W * H );
@@ -5916,11 +6088,22 @@ void widenRamps( std::vector<Int>& heights, Int W, Int H, Int border, const Plan
 		// a straight ramp from the plateau's rim to the foot, its climb no steeper than WIDE_RAMP_STEEP
 		auto layRamp = [&]( Int rim, Int base )
 		{
-			const Real high = (Real)heights[rim], low = (Real)heights[base];
+			const Real high = (Real)heights[rim];
 			const Real cy = 0.5f * ( rim / W + base / W ), cx = 0.5f * ( rim % W + base % W );
 			const Real span = hypotr( (Real)( base / W - rim / W ), (Real)( base % W - rim % W ) );
 			if( span < 1.0f ) return;
 			const Real uy = ( base / W - rim / W ) / span, ux = ( base % W - rim % W ) / span;
+			/* The foot meets the ground across the ramp's width, not the bottom of the ditch its walk ended
+				in: a foot laid at a crater's floor on Scorched Earth dug a trench forty cells wide and 37
+				bytes deep across the flat beyond it, a wall the finish's keep then held. */
+			std::vector<Real> across;
+			for( Int t = -WIDE_RAMP_HALF; t <= WIDE_RAMP_HALF; t++ )
+			{
+				const Int y = clampi( roundi( base / W + ux * t ), 0, H - 1 ), x = clampi( roundi( base % W - uy * t ), 0, W - 1 );
+				across.push_back( (Real)heights[y * W + x] );
+			}
+			const Real low = std::max( (Real)heights[base], medianOf( across ) );
+			if( low > high - PLATEAU_TOLERANCE ) return;
 			const Real reach = 0.5f * std::max( span, ( high - low ) / WIDE_RAMP_STEEP );
 			const Int box = (Int)( reach + out ) + 1;
 			for( Int y = std::max( (Int)cy - box, 0 ); y <= std::min( (Int)cy + box, H - 1 ); y++ )
@@ -5998,15 +6181,25 @@ void widenRamps( std::vector<Int>& heights, Int W, Int H, Int border, const Plan
 }
 
 /** Where a start, dock, derrick or tech building is cut off from the first start, a ramp along the
-	cheapest way to the ground that start reaches: through a cliff at a price, never through water nor
-	the border, which the pathfinder does not walk. Returns the ramps cut. */
+	cheapest way to the ground that start reaches: through a cliff at a price, never through the border,
+	which the pathfinder does not walk. Water costs far more than a cliff and is crossed only where
+	nothing else reaches, by a ford at the banks' height: Eastern Everglades and Victory Valley left a
+	dock in a river's bend with no bridge to it. The way runs on into the reached ground until it is
+	long enough to climb at RAMP_GRADE a step: a ledge 40 bytes under the plateau beside it took a ramp
+	of eight cells, 11 bytes a cell across its diagonal, a wall again under the cliff rule. RAMP_GRADE is
+	under half the wall, since a way four ways round climbs it in both directions on a diagonal. Returns
+	the ramps cut. */
 Int repairReach( std::vector<Int>& heights, Int W, Int H, const Plan& plan, const Mask& decks, const Mask& play, Int firstStart,
 	const std::vector<YX>& targets )
 {
-	const Int RAMP_HALF = 4, RAMP_BLEND = 3, CLIFF_COST = 6;
+	const Int RAMP_HALF = 4, RAMP_BLEND = 3, CLIFF_COST = 6, WET_COST = 40, RAMP_GRADE = 3;
+	// bytes of water a ford is laid through; Fortress Avalanche's high lake outline lay 55 over the ground
+	// beside a dock, and the ford stood up a tower at the lake's height
+	const Real FORD_DEEPEST = 20.0f;
 	Int cut = 0;
 	Mask cliff, walk, passable( W * H ), wet( W * H ), reached;
-	std::vector<Int> cost( W * H ), previous( W * H );
+	Field surface;
+	std::vector<Int> cost( W * H ), previous( W * H ), steps( W * H );
 	Bool stale = TRUE;
 	for( Int round = 0; round < REPAIR_ROUNDS; round++ )
 	{
@@ -6017,9 +6210,10 @@ Int repairReach( std::vector<Int>& heights, Int W, Int H, const Plan& plan, cons
 			{
 				cliffOf( heights, W, H, cliff );
 				walkable( cliff, W, H, walk );
+				waterNow( plan, heights, W, H, wet, surface );
 				for( Int i = 0; i < W * H; i++ )
 				{
-					wet[i] = plan.wet[i] && heights[i] < plan.level[i] && !decks[i];
+					wet[i] = wet[i] && !decks[i];
 					passable[i] = ( ( walk[i] && !wet[i] ) || decks[i] ) && play[i];
 				}
 				const Int origin = reachOrigin( passable, W, H, firstStart );
@@ -6039,9 +6233,10 @@ Int repairReach( std::vector<Int>& heights, Int W, Int H, const Plan& plan, cons
 			// Dijkstra from the target to the nearest reached cell
 			std::fill( cost.begin(), cost.end(), 0x7fffffff );
 			std::priority_queue< std::pair<Int, Int>, std::vector< std::pair<Int, Int> >, std::greater< std::pair<Int, Int> > > open;
-			Int from = ty * W + tx, end = -1;
+			Int from = ty * W + tx, end = -1, nearest = -1;
 			cost[from] = 0;
 			previous[from] = -1;
+			steps[from] = 0;
 			open.push( std::make_pair( 0, from ) );
 			while( !open.empty() && end < 0 )
 			{
@@ -6049,51 +6244,70 @@ Int repairReach( std::vector<Int>& heights, Int W, Int H, const Plan& plan, cons
 				open.pop();
 				Int i = top.second;
 				if( top.first > cost[i] ) continue;
-				if( reached[i] ) { end = i; break; }
+				if( reached[i] && nearest < 0 ) nearest = i;
+				if( reached[i] && abs( heights[i] - heights[from] ) <= RAMP_GRADE * steps[i] ) { end = i; break; }
 				Int x = i % W, y = i / W;
 				const Int n[4] = { x + 1 < W ? i + 1 : -1, x > 0 ? i - 1 : -1, y + 1 < H ? i + W : -1, y > 0 ? i - W : -1 };
 				for( Int j = 0; j < 4; j++ )
 				{
-					if( n[j] < 0 || wet[n[j]] || !play[n[j]] ) continue;
-					Int step = top.first + ( passable[n[j]] ? 1 : CLIFF_COST );
+					if( n[j] < 0 || !play[n[j]] || ( wet[n[j]] && surface[n[j]] - heights[n[j]] > FORD_DEEPEST ) ) continue;
+					Int step = top.first + ( passable[n[j]] ? 1 : wet[n[j]] ? WET_COST : CLIFF_COST );
 					if( step >= cost[n[j]] ) continue;
 					cost[n[j]] = step;
 					previous[n[j]] = i;
+					steps[n[j]] = steps[i] + 1;
 					open.push( std::make_pair( step, n[j] ) );
 				}
 			}
+			// the reached ground the way came to first, where none farther on lies low enough for the grade
+			if( end < 0 ) end = nearest;
 			if( end < 0 ) continue;
 			std::vector<Int> path;
 			for( Int i = end; i >= 0; i = previous[i] ) path.push_back( i );
-			Int first = -1, last = -1;
-			for( Int p = 0; p < (Int)path.size(); p++ )
-				if( !passable[path[p]] ) { if( first < 0 ) first = p; last = p; }
-			if( first < 0 ) continue;
-			// long enough that the climb stays under RAMP_STEEP a cell
-			Int lo = first, hi = last;
-			while( ( lo > 0 || hi + 1 < (Int)path.size() ) &&
-				( hi - lo ) * RAMP_STEEP < abs( heights[path[hi]] - heights[path[lo]] ) + RAMP_STEEP )
-			{
-				if( lo > 0 ) lo--;
-				if( hi + 1 < (Int)path.size() ) hi++;
-			}
-			Real low = (Real)heights[path[lo]], high = (Real)heights[path[hi]];
+			/* A ramp over each run of wall along the way, between the ground either side of it. One ramp from
+				the first wall to the last laid a plateau-to-plateau way level across the basin between: a
+				causeway at the plateaus' height with a cliff down both its sides. */
 			Field want( W * H, -1.0f ), weight( W * H, 0.0f );
-			for( Int p = lo; p <= hi; p++ )
+			Bool laid = FALSE;
+			for( Int first = 0; first < (Int)path.size(); first++ )
 			{
-				Real level = low + ( high - low ) * ( p - lo ) / std::max( hi - lo, 1 );
-				Int py = path[p] / W, px = path[p] % W;
-				for( Int y = std::max( py - RAMP_HALF - RAMP_BLEND, 0 ); y <= std::min( py + RAMP_HALF + RAMP_BLEND, H - 1 ); y++ )
-					for( Int x = std::max( px - RAMP_HALF - RAMP_BLEND, 0 ); x <= std::min( px + RAMP_HALF + RAMP_BLEND, W - 1 ); x++ )
-					{
-						Real w = fade( ( RAMP_HALF + RAMP_BLEND - hypotr( (Real)( y - py ), (Real)( x - px ) ) ) / RAMP_BLEND );
-						Int i = y * W + x;
-						if( w > weight[i] ) { weight[i] = w; want[i] = level; }
-					}
+				if( passable[path[first]] ) continue;
+				Int last = first;
+				while( last + 1 < (Int)path.size() && !passable[path[last + 1]] ) last++;
+				// from dry bank to dry bank, and long enough that the climb stays under RAMP_GRADE a cell
+				Int lo = first, hi = last;
+				while( lo > 0 && wet[path[lo]] ) lo--;
+				while( hi + 1 < (Int)path.size() && wet[path[hi]] ) hi++;
+				while( ( lo > 0 || hi + 1 < (Int)path.size() ) &&
+					( hi - lo ) * RAMP_GRADE < abs( heights[path[hi]] - heights[path[lo]] ) + RAMP_GRADE )
+				{
+					if( lo > 0 ) lo--;
+					if( hi + 1 < (Int)path.size() ) hi++;
+				}
+				Real low = (Real)heights[path[lo]], high = (Real)heights[path[hi]];
+				for( Int p = lo; p <= hi; p++ )
+				{
+					Real level = low + ( high - low ) * ( p - lo ) / std::max( hi - lo, 1 );
+					Int py = path[p] / W, px = path[p] % W;
+					for( Int y = std::max( py - RAMP_HALF - RAMP_BLEND, 0 ); y <= std::min( py + RAMP_HALF + RAMP_BLEND, H - 1 ); y++ )
+						for( Int x = std::max( px - RAMP_HALF - RAMP_BLEND, 0 ); x <= std::min( px + RAMP_HALF + RAMP_BLEND, W - 1 ); x++ )
+						{
+							Real w = fade( ( RAMP_HALF + RAMP_BLEND - hypotr( (Real)( y - py ), (Real)( x - px ) ) ) / RAMP_BLEND );
+							Int i = y * W + x;
+							if( w > weight[i] ) { weight[i] = w; want[i] = level; }
+						}
+				}
+				laid = TRUE;
+				first = last;
 			}
+			if( !laid ) continue;
 			for( Int i = 0; i < W * H; i++ )
-				if( weight[i] > 0.0f )
-					heights[i] = clampi( roundi( weight[i] * want[i] + ( 1.0f - weight[i] ) * heights[i] ), 0, 255 );
+			{
+				if( weight[i] <= 0.0f ) continue;
+				// a ford stands clear of its water even where a marsh's banks lie under the surface
+				const Real level = weight[i] >= 1.0f && surface[i] >= 0.0f ? std::max( want[i], surface[i] + 1.0f ) : want[i];
+				heights[i] = clampi( roundi( weight[i] * level + ( 1.0f - weight[i] ) * heights[i] ), 0, 255 );
+			}
 			cut++;
 			fixedAny = TRUE;
 			stale = TRUE;
@@ -6370,7 +6584,8 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	}
 	// the objects that came out of the skeleton, for the snapping below: a waypoint or a pile by its template
 	Mask levelWet( W * H ), decks( W * H, 0 ), lines( W * H, 0 );
-	for( Int i = 0; i < W * H; i++ ) levelWet[i] = plan.wet[i] && heights[i] < plan.level[i];
+	Field surfaceNow;
+	waterNow( plan, heights, W, H, levelWet, surfaceNow );
 	for( size_t k = 0; k < plan.bridges.size(); k++ )
 		lineCells( plan.bridges[k].a, plan.bridges[k].z, W, H, lines );
 	maskGrow( lines, W, H, 1, decks );
@@ -6460,12 +6675,97 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 		added.push_back( one );
 	}
 
-	// every start, dock, derrick and tech building the first start cannot walk to gets a ramp
+	/* The plain map's finish (rmgFinishTemplateGround): the roads laid at a road's grade, cut through a
+		crest they top, and no walkable cell left spanning the 10 to 15 bytes that read as a wall. A shipped
+		map paints its walls impassable whatever their slope, and the new map's cliffs come from the heights
+		alone, so an exemplar wall copied at 12 bytes a cell was a slope tanks drove down. Such a cell
+		steepens into a cliff where its source was painted one, and eases under the band elsewhere. The
+		bases' own level, the towns, the bridges' ends, the buildings on the pads, the money and tech and
+		the water's edge keep their ground. */
+	std::vector< std::vector<Int> > roadCells;
+	std::vector<char> finishKeep( W * H, 0 ), walls( W * H, 0 );
+	{
+		for( size_t k = 0; k < plan.roads.size(); k++ )
+		{
+			const std::vector<YX>& points = plan.roads[k].points;
+			std::vector<Int> cells;
+			for( size_t p = 0; p + 1 < points.size(); p++ )
+			{
+				const Real dy = points[p + 1].y - points[p].y, dx = points[p + 1].x - points[p].x;
+				const Int steps = (Int)( 2.0f * hypotr( dy, dx ) ) + 1;
+				for( Int s = 0; s <= steps; s++ )
+				{
+					const Int cy = clampi( roundi( points[p].y + dy * s / steps ), 0, H - 1 );
+					const Int cx = clampi( roundi( points[p].x + dx * s / steps ), 0, W - 1 );
+					if( cells.empty() || cells.back() != cy * W + cx )
+						cells.push_back( cy * W + cx );
+				}
+			}
+			if( cells.size() >= 2 )
+				roadCells.push_back( cells );
+		}
+		Mask wetNow( W * H ), shoreNow, deckNear;
+		waterNow( plan, heights, W, H, wetNow, surfaceNow );
+		maskGrow( wetNow, W, H, 2, shoreNow );
+		maskGrow( decks, W, H, 3, deckNear );
+		auto keepDisc = [&]( Real cy, Real cx, Int r )
+		{
+			for( Int y = std::max( roundi( cy ) - r, 0 ); y <= std::min( roundi( cy ) + r, H - 1 ); y++ )
+				for( Int x = std::max( roundi( cx ) - r, 0 ); x <= std::min( roundi( cx ) + r, W - 1 ); x++ )
+					finishKeep[y * W + x] = 1;
+		};
+		for( Int i = 0; i < W * H; i++ )
+		{
+			if( deckNear[i] ) finishKeep[i] = 1;
+			if( shoreNow[i] ) finishKeep[i] = 2;
+			walls[i] = src.m.cliff[syMap[i] * SW + sxMap[i]];
+		}
+		for( size_t s = 0; s < plan.stamps.size(); s++ )
+			for( Int y = plan.stamps[s].ty; y < plan.stamps[s].ty + plan.stamps[s].rows; y++ )
+				for( Int x = plan.stamps[s].tx; x < plan.stamps[s].tx + plan.stamps[s].cols; x++ )
+					finishKeep[y * W + x] = 1;
+		/* A pad's ground is finished like any other, only what it carries keeps its own: kept whole, a
+			copied base held every wall and ramp stripe it brought, and a road across it kept its 13 byte
+			steps. The buildings stand where the copy puts them below, each on the ground it stood on. */
+		for( size_t c = 0; c < plan.copies.size(); c++ )
+			for( size_t k = 0; k < src.m.things.size(); k++ )
+			{
+				const MapThing& t = src.m.things[k];
+				if( t.waypointID || ( t.flags & ( FLAG_ROAD_FLAGS | FLAG_BRIDGE_FLAGS ) ) || ( civilian && !civilian( t.name.str() ) ) )
+					continue;
+				if( !plan.copies[c].carries( t.y + src.m.border, t.x + src.m.border ) )
+					continue;
+				const YX at = plan.copies[c].toTarget( t.y + src.m.border, t.x + src.m.border );
+				keepDisc( at.y, at.x, FINISH_OBJECT );
+			}
+		// a base's own level and a rim, as a plain map keeps it (RMG_SETTLE_BASE): the outcrops further out on a
+		// copied base are ground like any other
+		for( size_t s = 0; s < f.starts.size(); s++ ) keepDisc( f.starts[s].y, f.starts[s].x, FINISH_BASE );
+		for( size_t k = 0; k < plan.tech.size(); k++ ) keepDisc( (Real)plan.tech[k].y, (Real)plan.tech[k].x, TECH_FLAT + 3 );
+		for( size_t k = 0; k < pileSites.size(); k++ ) keepDisc( pileSites[k].y, pileSites[k].x, PILE_FLAT + 3 );
+		for( size_t k = 0; k < levelledMoney.size(); k++ ) keepDisc( levelledMoney[k].y, levelledMoney[k].x, PILE_FLAT + 3 );
+		for( size_t s = 0; s < skm.supplies.size(); s++ ) keepDisc( skm.supplies[s].y + b, skm.supplies[s].x + b, (Int)SITE_INNER );
+		for( size_t s = 0; s < skm.derricks.size(); s++ ) keepDisc( skm.derricks[s].y + b, skm.derricks[s].x + b, (Int)SITE_INNER );
+		rmgFinishTemplateGround( skm.playable, heights, W, H, roadCells, finishKeep, walls, TRUE );
+	}
+
+	/* Every start, dock, derrick and tech building the first start cannot walk to gets a ramp. A ramp
+		cut across a road leaves its side wall on the road, 43 bytes a cell on Tournament City, so the
+		roads are laid at their grade again over the ramps and whatever that walls off is cut to again. */
+	// the money at the cell the report's cut-off check reads it at, or a site reached two cells off one way is cut two cells off the other
 	std::vector<YX> mustReach( f.starts );
-	for( size_t s = 0; s < skm.supplies.size(); s++ ) mustReach.push_back( yx( skm.supplies[s].y + b, skm.supplies[s].x + b ) );
-	for( size_t s = 0; s < skm.derricks.size(); s++ ) mustReach.push_back( yx( skm.derricks[s].y + b, skm.derricks[s].x + b ) );
+	for( size_t s = 0; s < skm.supplies.size(); s++ )
+		mustReach.push_back( yx( (Real)( (Int)( skm.supplies[s].y + 0.5f ) + b ), (Real)( (Int)( skm.supplies[s].x + 0.5f ) + b ) ) );
+	for( size_t s = 0; s < skm.derricks.size(); s++ )
+		mustReach.push_back( yx( (Real)( (Int)( skm.derricks[s].y + 0.5f ) + b ), (Real)( (Int)( skm.derricks[s].x + 0.5f ) + b ) ) );
 	for( size_t s = 0; s < plan.tech.size(); s++ ) mustReach.push_back( yx( (Real)plan.tech[s].y, (Real)plan.tech[s].x ) );
-	const Int ramps = repairReach( heights, W, H, plan, decks, f.play, firstStart, mustReach );
+	Int ramps = repairReach( heights, W, H, plan, decks, f.play, firstStart, mustReach );
+	for( Int round = 0, added = ramps; round < FINISH_ROUNDS && added > 0; round++ )
+	{
+		rmgFinishTemplateGround( skm.playable, heights, W, H, roadCells, finishKeep, walls, FALSE );
+		added = repairReach( heights, W, H, plan, decks, f.play, firstStart, mustReach );
+		ramps += added;
+	}
 
 	/* A waypoint or a pile the water, a new cliff or a pocket now holds goes to the nearest ground the
 		starts share. The piles go first, each levelled where it lands, then the waypoints on the ground
@@ -6478,7 +6778,7 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	{
 		cliffOf( heights, W, H, cliff );
 		walkable( cliff, W, H, walk );
-		for( Int i = 0; i < W * H; i++ ) levelWet[i] = plan.wet[i] && heights[i] < plan.level[i];
+		waterNow( plan, heights, W, H, levelWet, surfaceNow );
 		for( Int i = 0; i < W * H; i++ ) passable[i] = ( ( walk[i] && !levelWet[i] ) || decks[i] ) && f.play[i];
 		const Int origin = reachOrigin( passable, W, H, firstStart );
 		anchored = passable[origin] != 0;
@@ -6657,6 +6957,38 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 		}
 	}
 
+	/* Money a pad brings beside the share every seat gets (padSite's other tech) is not in the list
+		repairReach ramps to, and a derrick on Lone Eagle and Green Pastures stood on a ledge no start
+		walks to. Such money stays off the map, read as the report reads the rest: any cell two round it. */
+	Mask walkTo;
+	reach( passable, W, H, reachOrigin( passable, W, H, firstStart ), walkTo );
+	auto walksTo = [&]( const YX& at ) -> Bool
+	{
+		for( Int y = (Int)at.y - 2; y <= (Int)at.y + 2; y++ )
+			for( Int x = (Int)at.x - 2; x <= (Int)at.x + 2; x++ )
+				if( y >= 0 && x >= 0 && y < H && x < W && walkTo[y * W + x] )
+					return TRUE;
+		return FALSE;
+	};
+	// and so does a dock or derrick repairReach could not reach, standing under a lake's outline too deep to ford
+	for( size_t k = kept.size(); k-- > 0; )
+	{
+		AsciiString name;
+		readAscii( kept[k].body, 20, &name );
+		if( moneyKind( name ) < 0 ) continue;
+		if( !walksTo( yx( readReal( kept[k].body, 4 ) / MAP_XY + b, readReal( kept[k].body, 0 ) / MAP_XY + b ) ) )
+			kept.erase( kept.begin() + k );
+	}
+	for( Int kind = 0; kind < 2; kind++ )
+	{
+		std::vector<YX>& sites = kind == 0 ? skm.supplies : skm.derricks;
+		std::vector<YX> reachable;
+		for( size_t s = 0; s < sites.size(); s++ )
+			if( walksTo( yx( (Real)( (Int)( sites[s].y + 0.5f ) + b ), (Real)( (Int)( sites[s].x + 0.5f ) + b ) ) ) )
+				reachable.push_back( sites[s] );
+		sites.swap( reachable );
+	}
+
 	// the roads, a pair of objects a segment, the exemplar's own pair with the end flags most of its pairs carry
 	Int segments = 0;
 	for( size_t k = 0; k < plan.roads.size(); k++ )
@@ -6717,6 +7049,21 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	auto sameSpot = [&]( Int i, Int j ) -> Bool
 	{
 		return src.m.things[i].x == src.m.things[j].x && src.m.things[i].y == src.m.things[j].y;
+	};
+	/* A copied pair that runs over a wall of the finished map or off its playable ground is cut like one
+		that left its copy: on its exemplar it ran over a ramp the finish made a wall, or down a slope the
+		pad's edge never had, 13 bytes a cell on Tournament City's base roads. */
+	auto overWall = [&]( const YX& a, const YX& z ) -> Bool
+	{
+		const Int steps = (Int)( 2.0f * hypotr( z.y - a.y, z.x - a.x ) ) + 1;
+		for( Int s = 0; s <= steps; s++ )
+		{
+			const Real y = a.y + ( z.y - a.y ) * s / steps, x = a.x + ( z.x - a.x ) * s / steps;
+			if( y < 0.0f || x < 0.0f || y >= (Real)H || x >= (Real)W ) return TRUE;
+			const Int i = (Int)y * W + (Int)x;
+			if( cliff[i] || !f.play[i] ) return TRUE;
+		}
+		return FALSE;
 	};
 	Int copied = 0;
 	auto peelCutRoads = [&]()
@@ -6796,6 +7143,8 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 					onCliff = onCliff || cliff[clampi( (Int)cys[g], 0, H - 1 ) * W + clampi( (Int)cxs[g], 0, W - 1 )];
 			}
 			const Bool road = ( t.flags & FLAG_ROAD_POINT1 ) && group == 2;
+			if( inside && road )
+				onCliff = onCliff || overWall( yx( cys[0], cxs[0] ), yx( cys[1], cxs[1] ) );
 			if( !inside || onCliff )
 			{
 				if( road ) cutRoads.push_back( (Int)first );
@@ -6863,6 +7212,7 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 					inside = kind >= 0 && moneyIndex[first + g] >= 0
 						? padMoney( src, copy, kind, (size_t)moneyIndex[first + g], moneyShare[kind], skm, ats[g] )
 						: padSite( src, copy, u.y + sb, u.x + sb, skm, ats[g] );
+					inside = inside && walksTo( ats[g] );
 					continue;
 				}
 				inside = copy.carries( u.y + sb, u.x + sb );
@@ -6876,6 +7226,8 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 				}
 			}
 			const Bool road = ( t.flags & FLAG_ROAD_POINT1 ) && group == 2;
+			if( inside && road )
+				inside = !overWall( ats[0], ats[1] );
 			if( !inside )
 			{
 				if( road ) cutRoads.push_back( (Int)first );
@@ -6941,7 +7293,7 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 	out.bytes( mapBytes );
 
 	// every start walks to every other, every dock, derrick and tech building, over the bridges and round the water
-	for( Int i = 0; i < W * H; i++ ) levelWet[i] = plan.wet[i] && heights[i] < plan.level[i];
+	waterNow( plan, heights, W, H, levelWet, surfaceNow );
 	walkable( cliff, W, H, walk );
 	for( Int i = 0; i < W * H; i++ ) passable[i] = ( ( walk[i] && !levelWet[i] ) || decks[i] ) && f.play[i];
 	reach( passable, W, H, reachOrigin( passable, W, H, firstStart ), reached );

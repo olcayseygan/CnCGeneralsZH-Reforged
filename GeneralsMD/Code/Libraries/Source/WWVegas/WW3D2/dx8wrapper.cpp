@@ -6030,3 +6030,25 @@ bool DX8Wrapper::Supports_Per_Pixel_Lighting(void)
 	return PosixPerPixelLightingAvailable(_Get_D3D_Device());
 #endif
 }
+
+namespace RenderLighting {
+void SetHemiAmbient(bool enabled)
+{
+#if defined(_WIN32)
+	Direct3D11_Set_Hemi_Ambient(enabled);
+#else
+	SetHemiAmbient(DX8Wrapper::_Get_D3D_Device(), enabled);
+#endif
+}
+}
+#if !defined(_WIN32)
+extern bool PosixHemisphericAmbientAvailable(IDirect3DDevice9 *device);
+#endif
+bool DX8Wrapper::Supports_Hemispheric_Ambient(void)
+{
+#if defined(_WIN32)
+	return Direct3D11_Is_Active();
+#else
+	return PosixHemisphericAmbientAvailable(_Get_D3D_Device());
+#endif
+}

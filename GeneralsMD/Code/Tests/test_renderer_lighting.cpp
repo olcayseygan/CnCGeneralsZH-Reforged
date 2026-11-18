@@ -136,6 +136,12 @@ static void check_packets(PosixDevice9 *device)
     CHECK(!device->Static_Lighting_Matches());
     apply_packet(device);RenderLighting::VertexEnvironment empty={};
     device->Set_Light_Environments(empty,nullptr);CHECK(!device->Static_Lighting_Matches());
+    device->Set_Hemi_Ambient(true);CHECK(device->Build_Vertex_Description(full));CHECK(full.HemiAmbient);
+    D3DMATRIX view={};view._11=1;view._23=1;view._32=-1;view._44=1;
+    device->SetTransform(D3DTS_VIEW,&view);device->Build_Constants(a,p);
+    CHECK(a.MaterialPower[1]==0 && a.MaterialPower[2]==-1 && a.MaterialPower[3]==0);
+    device->SetFVF(D3DFVF_XYZRHW);CHECK(device->Build_Vertex_Description(full));CHECK(!full.HemiAmbient);
+    device->Set_Hemi_Ambient(false);
     const float headlights[8]={1,2,3,40,0,0,-1,.85f},gain[3]={2,3,4};
     const float blast[12]={4,5,6,50,.2f,.3f,.4f,10,.01f,.02f,.03f,0};
     device->Set_Headlights(headlights,1,gain);device->Set_Blast_Lights(blast,1);
@@ -187,16 +193,20 @@ static void check_gpu(PosixDevice9 *device)
 {
     configure(device);
     CHECK(PosixPerPixelLightingAvailable(device));
+    CHECK(PosixHemisphericAmbientAvailable(device));
     SunShadow::SceneScope scene(device,true);
     const float blast[]={0,0,-.5f,4,.2f,.2f,.2f,1,0,0,0,0};device->Set_Blast_Lights(blast,1);
 
+    device->Set_Hemi_Ambient(true);
     CHECK(SunShadow::Begin(device,32));
-    VertexPipelineDescription captureDescription;CHECK(device->Build_Vertex_Description(captureDescription));
+    VertexPipelineDescription captureDescription;CHECK(device->Build_Vertex_Description(captureDescription));CHECK(!captureDescription.HemiAmbient);
+    device->Set_Hemi_Ambient(false);
     RenderLighting::VertexEnvironment caster={};device->Set_Light_Environments(caster,nullptr);
     device->LightEnable(0,0);device->SetRenderState(D3DRS_AMBIENT,0);
     device->Set_Blast_Lights(nullptr,0);
     CHECK(SunShadow::End(device));CHECK(device->Static_Lighting_Matches());
-    CHECK(device->Build_Vertex_Description(captureDescription));
+    CHECK(device->Build_Vertex_Description(captureDescription));CHECK(captureDescription.HemiAmbient);
+    device->Set_Hemi_Ambient(false);
     SdlEnginePixelConstants restored={};device->Build_Light_Constants(restored);CHECK(restored.BlastLightParameters[0]==1);
     CHECK(SunShadow::Parameters(device,0,0,0,0,0,1,0));CHECK(device->Lights_Per_Pixel());
     const int lit=render(device);CHECK(lit>=75 && lit<=78); // .25098 * (1+.2), once
@@ -212,7 +222,15 @@ static void check_gpu(PosixDevice9 *device)
     const float headlight[]={0,0,-.5f,4,0,0,1,.85f},gain[]={.3f,.3f,.3f};
     device->Set_Headlights(headlight,1,gain);const int head=render(device);CHECK(head>=75 && head<=78);
     device->Set_Headlights(nullptr,0,nullptr);CHECK(render(device)==unlit);
-    std::vector<uint8_t> pixels;
+    // Existing shared formula varies ambient by world normal and returns exactly to the old result when disabled.
+    device->Set_Hemi_Ambient(true);const int down=render(device);
+    Vertex up[6];std::memcpy(up,plane,sizeof(up));for(auto &v:up)v.nz=1;
+    device->Clear(0,nullptr,D3DCLEAR_TARGET|D3DCLEAR_ZBUFFER,0,1,0);
+    CHECK(device->DrawPrimitiveUP(D3DPT_TRIANGLELIST,2,up,sizeof(Vertex))==D3D_OK);
+    std::vector<uint8_t> pixels;CHECK(device->Get_Gpu()->Read_Back(device->Get_Gpu()->Back_Buffer(),64,64,pixels));
+    CHECK(pixels.size()==64*64*4);
+    if(pixels.size()==64*64*4) { const int brighter=pixels[(32*64+32)*4+2];CHECK(brighter>unlit && down<unlit); }
+    device->Set_Hemi_Ambient(false);CHECK(render(device)==unlit);
     CHECK(device->Commit_Terrain_Lighting());
     device->SetRenderState(D3DRS_LIGHTING,0);device->SetFVF(D3DFVF_XYZ|D3DFVF_DIFFUSE);
     device->Set_Light_Environments(empty,nullptr); // excluded-model policy must not disable terrain
@@ -436,7 +454,8 @@ int main(int argc,char **argv)
     check_snapshots();
     IDirect3D9 *api=nullptr;auto *device=create_device(api);CHECK(device);
     CHECK(!PosixPerPixelLightingAvailable(nullptr));
-    if(device) { CHECK(!PosixPerPixelLightingAvailable(device));check_packets(device); }
+    CHECK(!PosixHemisphericAmbientAvailable(nullptr));
+    if(device) { CHECK(!PosixPerPixelLightingAvailable(device));CHECK(!PosixHemisphericAmbientAvailable(device));check_packets(device); }
     int result=failures?1:0;
     if(!failures && argc>1 && !std::strcmp(argv[1],"--gpu")) {
         setenv("ZH_SUN_SHADOW_MODE","mapped",1);

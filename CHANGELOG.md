@@ -32,6 +32,10 @@ found and fixed, EA's own, not port damage.**
 - The film no longer splits the screen, not between players and not between two powers. One camera has the whole picture, and a second power landing off it, or a second fight, plays in a small framed window in the lower right corner with the name and army of whoever called it. Before, the second power had to land most of a screen's width further away than that to get any picture at all, so an artillery barrage called on the same frame as a superweapon across the same base was shown nowhere. A superweapon takes the window from a smaller power at once.
 - A superweapon or strike that neither the camera nor the window caught comes back as an instant replay: the match is played through a third time and the two seconds before the hit and six after it are filmed on their own, with a list of where each one fits into the match film at the next quiet moment.
 
+## Native SDL GPU hemispheric ambient
+
+- Hemi Ambient now gives upward-facing surfaces more sky fill and downward-facing surfaces more ground fill on the native SDL GPU renderer. Turning it off or enabling Classic Graphics restores the previous ambient lighting.
+
 ## Native SDL GPU dynamic lighting
 
 - Vehicle headlights, explosions and Firelight now illuminate surfaces per pixel on the native SDL GPU renderer. Unsupported views keep their previous lighting, and models and terrain receive each dynamic light once.

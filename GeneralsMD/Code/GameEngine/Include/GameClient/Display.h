@@ -223,6 +223,7 @@ public:
 	virtual const WideChar *getRendererName( void ) const = 0;	///< the graphics API the picture is presented through, for the HUD corner
 
 	virtual Bool supportsPerPixelLighting(void) const { return FALSE; }
+	virtual Bool supportsHemisphericAmbient(void) const { return FALSE; }
 
 	virtual void setCinematicText( AsciiString string ) { m_cinematicText = string; }
 	virtual void setCinematicFont( GameFont *font ) { m_cinematicFont = font; }

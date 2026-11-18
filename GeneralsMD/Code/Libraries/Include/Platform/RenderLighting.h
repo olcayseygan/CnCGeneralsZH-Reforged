@@ -12,6 +12,7 @@ bool LightsPerPixel();
 // A late optional-shadow failure cannot change the choice for already prepared ground.
 bool PrepareTerrainLighting();
 void UseTerrainCpuLighting();
+void SetHemiAmbient(bool enabled);
 }
 #if !defined(_WIN32)
 struct IDirect3DDevice9;
@@ -21,6 +22,7 @@ void SetBlastLights(IDirect3DDevice9 *, const float *, unsigned);
 bool LightsPerPixel(IDirect3DDevice9 *);
 bool PrepareTerrainLighting(IDirect3DDevice9 *);
 void UseTerrainCpuLighting(IDirect3DDevice9 *);
+void SetHemiAmbient(IDirect3DDevice9 *, bool);
 // Pure, bounded environment packets. Types are backend-independent.
 enum class LightType { Point, Spot, Directional };
 struct VertexLight {

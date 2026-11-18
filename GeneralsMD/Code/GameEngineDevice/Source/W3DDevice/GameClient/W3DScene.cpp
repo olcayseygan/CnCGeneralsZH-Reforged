@@ -1570,7 +1570,7 @@ void RTS3DScene::Customized_Render( RenderInfoClass &rinfo )
 		}
 	}
 
-	Direct3D11_Set_Hemi_Ambient(TheGlobalData->m_hemiAmbient);
+	RenderLighting::SetHemiAmbient(TheGlobalData->m_hemiAmbient && !TheGlobalData->m_classicGraphics);
 
 	// After the lights' fade has stepped and before the terrain and the models are lit.
 	if (m_customPassMode == SCENE_PASS_DEFAULT && !ShaderClass::Is_Backface_Culling_Inverted())

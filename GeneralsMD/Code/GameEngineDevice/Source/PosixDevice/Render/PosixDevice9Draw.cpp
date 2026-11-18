@@ -273,6 +273,7 @@ bool PosixDevice9::Build_Vertex_Description(VertexPipelineDescription &descripti
 	description.FVF = FVF;
 	// Pretransformed vertices skip transform and lighting altogether.
 	description.LightingEnabled = RenderStates[D3DRS_LIGHTING] != 0 && (FVF & D3DFVF_POSITION_MASK) != D3DFVF_XYZRHW;
+	description.HemiAmbient = HemiAmbient && !SunActive && description.LightingEnabled;
 	description.SpecularEnabled = RenderStates[D3DRS_SPECULARENABLE] != 0;
 	description.LocalViewer = RenderStates[D3DRS_LOCALVIEWER] != 0;
 	description.ColourVertexEnabled = RenderStates[D3DRS_COLORVERTEX] != 0;
@@ -461,6 +462,8 @@ void PosixDevice9::Build_Constants(SdlVertexConstants &vertex, SdlPixelConstants
 	colour_value(Material.Specular, vertex.MaterialSpecular);
 	colour_value(Material.Emissive, vertex.MaterialEmissive);
 	vertex.MaterialPower[0] = Material.Power;
+	// The shared sky/ground blend needs world up expressed in the current camera space.
+	if (HemiAmbient && !SunActive) memcpy(vertex.MaterialPower + 1, view + 8, 3 * sizeof(float));
 	colour_of(staticLights && Static_Lighting_Matches() ? StaticAmbient : RenderStates[D3DRS_AMBIENT], vertex.GlobalAmbient);
 
 	// Fog start, end and density are floats carried in DWORD states.

@@ -628,7 +628,8 @@ void W3DInGameUI::draw( void )
 
 		// -directorrecord's opening plates, each pane's own, then the score bar and a split's labels over
 		// everything and pane 0's alone like the lines
-		if( TheGlobalData->m_directorRecord )
+		// the replay pass's picture is the moment alone: the episode's cut lays its own band over it
+		if( TheGlobalData->m_directorRecord && !TheObserverCamera.isReplaying() )
 		{
 			drawDirectorIntroPlate();
 			if( !TheObserverCamera.isDrawingSecond() )

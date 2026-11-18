@@ -25,7 +25,7 @@
 // a while before it looks for a bigger fight.  A special power used anywhere outranks any fight and
 // takes the camera at once: it is shown where it lands until the dust settles, for 30 seconds at the
 // most, a laser followed along its sweep, and one landing off the picture while another is shown
-// splits a recording's picture a pane each.  A power that only looks or hurts nobody, a spy
+// goes into a recording's corner window at the lower right.  A power that only looks or hurts nobody, a spy
 // satellite, a radar scan, a paradrop, never takes the camera.  Hits on infantry count for a
 // quarter, so a skirmish of riflemen rarely takes the camera from tanks or buildings.  The camera glides between places on a spring and only cuts across
 // most of a map, and stops short of a place that would put ground off the map on the screen.  Over
@@ -54,10 +54,12 @@
 
 #include "Common/AsciiString.h"
 #include "Common/GameCommon.h"
+#include "Common/GameType.h"
 #include "Common/SpecialPowerType.h"
 #include "GameClient/Color.h"
 #include "GameClient/View.h"
 
+#include <stdio.h>
 #include <vector>
 
 enum ObserverCameraMode
@@ -94,9 +96,10 @@ struct DirectorEvent
 	Bool landed;		///< it hurt somebody where it was aimed: a superweapon from the start, any other once a hit is seen there
 	Bool looksOnly;	///< a power that hurts nobody, a scan or a paradrop, which never lands
 	UnsignedInt landsAt;	///< the frame the scouting pass saw its first hit at its target, 0 when it saw none
-	Bool shown;			///< the director's picture or a split's pane has been on it
+	Bool shown;			///< the director's picture or the recording's corner window has been on it
 	const SpecialPowerTemplate *power;	///< the power used; NULL for a warhead no power sent
 	const ThingTemplate *sourceThing;		///< what it was fired from
+	UnsignedInt landedAt;	///< the frame it was first seen hitting its target, 0 before; an instant replay is cut round it
 };
 
 /// whether a power of this type only looks or hurts nobody where it is aimed: a spy satellite, a radar
@@ -110,11 +113,104 @@ Bool ObserverCamera_landsNow( const DirectorEvent &event, UnsignedInt frame, Boo
 /// whether a power landing at target is off the picture the director shows round place: further than
 /// a share of screenGround, the ground the whole picture spans across its middle row
 Bool ObserverCamera_offPicture( const Coord2D &target, const Coord2D &place, Real screenGround );
-/// -directorrecord: the id of the landed power, not shown, landing off the picture round place, that a
-/// split's pane 1 shows beside shown.  The heaviest, so a superweapon fired while two powers hold the
-/// panes takes pane 1 at once; of equals held, the one pane 1 shows now, then the latest.  0 for none
+/// -directorrecord: the id of the landed power, not shown, landing off the picture round place, that the
+/// corner window shows beside shown.  The heaviest, so a superweapon fired while two powers hold the
+/// picture and the window takes the window at once; of equals held, the one the window shows now, then
+/// the latest.  0 for none
 UnsignedInt ObserverCamera_secondPower( const std::vector< DirectorEvent > &events, UnsignedInt shown, UnsignedInt held,
 	const Coord2D &place, Real screenGround );
+
+/// -directorrecord's corner window at the lower right, the second action beside the full screen
+/// picture: a second power off the picture first, else a second fight worth filming off it
+enum DirectorWindowKind { DIRECTOR_WINDOW_NONE, DIRECTOR_WINDOW_POWER, DIRECTOR_WINDOW_FIGHT };
+DirectorWindowKind ObserverCamera_pickWindow( UnsignedInt secondPower, Bool secondFight );
+/// whether the window is up after this frame, given whether it is now, whether there is something for
+/// it, and how long ago it last came up or went: it slides all the way in before it goes, and all the
+/// way out before it comes again
+Bool ObserverCamera_holdWindow( Bool on, Bool wanted, UnsignedInt framesSince );
+/// the window's picture is its camera's whole picture made OBSERVER_WINDOW_SCALE times smaller each way
+enum { OBSERVER_WINDOW_SCALE = 4 };
+/// the plate round the window's picture, in pixels of a picture height pixels high: its sides and foot,
+/// the band over the picture that holds the name chip, the trim rule along the top, the top right
+/// corner cut at 45 degrees and the highlight line round the picture
+struct DirectorWindowFrame
+{
+	Int border;
+	Int header;
+	Int rule;
+	Int cut;
+	Int highlight;
+};
+DirectorWindowFrame ObserverCamera_windowFrame( Int height );
+/// the window's picture on a width by height picture, progress 0 to 1 of the way slid in from past the
+/// right edge: a quarter of the picture each way in the lower right corner, its plate a margin in from
+/// both edges, so the lower left stays clear.  Empty at progress 0
+IRegion2D ObserverCamera_windowRect( Int width, Int height, Real progress );
+
+/// -directorrecord's events file, Videos\<name>.events beside the film: what happened and where, a line
+/// each, for whatever is made of the film afterwards.  An event line is its logic frame, its type
+/// (built, power, scan, superweapon, lost, defeated, rank), the player, where (-1 -1 for none) and the
+/// thing's template name, "-" for none
+struct DirectorFilmEvent
+{
+	UnsignedInt frame;
+	AsciiString type;
+	Int player;
+	Real x;
+	Real y;
+	AsciiString thing;
+};
+/// "event <frame> <type> <player> <x> <y> <thing>", and back; FALSE for a line that is not one
+AsciiString ObserverCamera_formatFilmEvent( const DirectorFilmEvent &event );
+Bool ObserverCamera_parseFilmEvent( const char *line, DirectorFilmEvent *event );
+/// "map <map file> <loX> <loY> <hiX> <hiY>": the map's file name, which may hold spaces, and its extent
+AsciiString ObserverCamera_formatFilmMap( const char *mapFile, Real loX, Real loY, Real hiX, Real hiY );
+Bool ObserverCamera_parseFilmMap( const char *line, AsciiString *mapFile, Real *loX, Real *loY, Real *hiX, Real *hiY );
+/// "player <index> <template> <RRGGBB> <display name>", the name UTF-8 and last, since it may hold spaces
+AsciiString ObserverCamera_formatFilmPlayer( Int index, const char *playerTemplate, UnsignedInt rgb, const char *displayName );
+Bool ObserverCamera_parseFilmPlayer( const char *line, Int *index, AsciiString *playerTemplate, UnsignedInt *rgb, AsciiString *displayName );
+
+/// -directorrecord's instant replays.  A superweapon or a general's power that landed and that neither the
+/// picture nor the corner window was ever on is shown again once the film is calm: the filming pass writes
+/// each to Videos\<name>.replays, a third pass plays the match again undrawn but for those frames and
+/// records them back to back into Videos\<name>_replays.mp4, and Videos\<name>_replays.txt says where each
+/// clip is in it and where it goes into the film.  A clip is logic frames first to last round landed, the
+/// frame the power hit; splice is the first calm logic frame of the film after it, 0 until it is known
+struct DirectorReplay
+{
+	UnsignedInt first;
+	UnsignedInt last;
+	UnsignedInt landed;
+	Coord2D target;
+	Int player;
+	AsciiString power;	///< the power's name, "-" for a warhead no power sent
+	UnsignedInt splice;
+};
+/// whether a power the director is done with is a missed big moment: a superweapon or a general's power
+/// (one a promotion bought) that hit somebody where it was aimed and was never on the picture or in the window
+Bool ObserverCamera_missedBigMoment( Bool superweapon, Bool generalsPower, Bool landed, Bool shown );
+/// the frames a replay of a power that landed on landed shows: a couple of seconds before it, several after
+void ObserverCamera_replayRange( UnsignedInt landed, UnsignedInt *first, UnsignedInt *last );
+/// whether frame is the replay's splice: past its last frame, and the director calm there (no power, no
+/// fight, nothing in the window), or a while past it whatever the director is doing
+Bool ObserverCamera_spliceNow( UnsignedInt frame, UnsignedInt last, Bool calm );
+/// "replay <first> <last> <landed> <x> <y> <player> <splice> <power>", and back; FALSE for a line that is not one
+AsciiString ObserverCamera_formatReplay( const DirectorReplay &replay );
+Bool ObserverCamera_parseReplay( const char *line, DirectorReplay *replay );
+/// the replays in the order they are played, by first frame, each cut to start after the one before ends
+/// since one pass plays every frame once; one cut past the frame it landed on is dropped
+void ObserverCamera_planReplays( std::vector< DirectorReplay > &replays );
+/// the planned replay whose frames, or the lead frames drawn unrecorded before them, hold frame; -1 for none
+Int ObserverCamera_replayAt( const std::vector< DirectorReplay > &replays, UnsignedInt frame, UnsignedInt lead );
+/// the film's picture a logic frame's first picture is, the film starting on logic frame start at pictures
+/// a logic frame (-recordfps over the logic rate)
+UnsignedInt ObserverCamera_filmPicture( UnsignedInt frame, UnsignedInt start, Int pictures );
+/// one line of Videos\<name>_replays.txt: "clip <index> <first picture> <pictures> <splice picture> <first
+/// frame> <last frame> <player> <power>", pictures of the replays movie and of the film, frames logic frames
+AsciiString ObserverCamera_formatReplayClip( Int index, UnsignedInt firstPicture, UnsignedInt pictures, UnsignedInt splicePicture,
+	const DirectorReplay &replay );
+/// the .replays file the filming pass wrote, "" when it wrote no replay: WinMain runs the replay pass on it
+const char *ObserverCamera_replaysWritten( void );
 
 /// -directorrecord's broadcast shows some things one at a time from a queue: a special power's or a
 /// bought upgrade's flag under its player's card in the score bar, and a defeated player's banner.
@@ -306,6 +402,9 @@ Bool ObserverCamera_holdSideSplit( Bool split, Bool opening, Bool big, Int fight
 /// -directorrecord's panes.  The picture is cut by rays from one point, and pane i is the wedge from
 /// ray i counterclockwise to ray i + 1.  Angles are degrees, 0 to the right and 90 up the screen
 enum { OBSERVER_MOST_PANES = 8 };
+/// the corner window's draw is numbered after the panes, so a recording keeps OBSERVER_DRAWN_PANES
+/// pictures a frame at the most
+enum { OBSERVER_WINDOW_PANE = OBSERVER_MOST_PANES, OBSERVER_DRAWN_PANES = OBSERVER_MOST_PANES + 1 };
 /// the rays for count panes on a width by height picture, ascending from 0 to 360, so that every
 /// pane's wedge of it is as big as every other's; the number of rays, which is count, or 0 for fewer
 /// than two panes.  Pane 0 is the one the radar belongs to and the one left when the panes go
@@ -464,9 +563,20 @@ public:
 	/// the watcher's own height back on the view, if the director had raised it over a fight
 	void releaseHeight( void );
 
-	/// -directorrecord's panes: the players' bases for the first seconds of a match, then two fights
-	/// far apart side by side.  Each pane past the first is drawn first, for the recording only and
-	/// never presented, then the frame everybody sees; the recording joins them along the rays
+	/// -directorrecord's corner window at the lower right: a second power, or a second fight, off the
+	/// picture.  Drawn before the frame everybody sees, for the recording only and never presented, and
+	/// the recording shrinks it into the window's picture; the plate round it is pane 0's broadcast
+	Bool isWindowDrawn( void ) const { return m_windowProgress > 0.0f; }
+	Bool isDrawingWindow( void ) const { return m_drawingPane == OBSERVER_WINDOW_PANE; }
+	/// where the window's picture lies now, empty while it is not drawn
+	IRegion2D getWindowRect( void ) const;
+	/// who the window shows: the power's user, or everybody dealing or taking hits in its fight
+	PlayerMaskType getWindowSides( void ) const;
+	Bool isWindowPower( void ) const { return m_windowKind == DIRECTOR_WINDOW_POWER; }
+	void beginWindowPass( void );
+
+	/// -directorrecord's panes, the split screen the owner took out on 2026-11-18: nothing opens them
+	/// any more, so the frame is drawn once and getDrawnPaneCount is 1.  The machinery stays for now
 	Bool isSplit( void ) const { return m_split; }
 	/// how many panes the next frame is drawn in, 1 when the picture is whole
 	Int getDrawnPaneCount( void ) const { return m_paneProgress > 0.0f ? m_paneCount : 1; }
@@ -493,9 +603,7 @@ public:
 	Real getPaneProgress( void ) const { return m_paneProgress; }
 	/// how far the gold lines have drawn out on the settled panes, 0 to 1, not eased
 	Real getLineProgress( void ) const { return m_lineProgress; }
-	/// who a split's pane shows: everybody dealing or taking hits in its fight, and in a match of two
-	/// the pane's own player whatever he does, or for a pane a special power holds the player who used
-	/// it; 0 when nobody is
+	/// who a split's pane shows: everybody dealing or taking hits in its fight; 0 when nobody is
 	PlayerMaskType getPaneSides( Int pane ) const;
 	/// the panes are the match's opening, each one player's: his index, and the point over his command
 	/// centre his plate hangs from, on the ground where his things crowd when he has none
@@ -527,6 +635,16 @@ public:
 	/// and at its end, the timeline written to the -directorscout file
 	void finishScout( void );
 
+	/// -directorreplays: this run is -directorrecord's replay pass, the match played again for the
+	/// missed moments' frames alone
+	Bool isReplaying( void ) const;
+	/// the logic frame is one of a replay's, recorded
+	Bool replayRecords( UnsignedInt frame );
+	/// the logic frame is drawn by nobody: no replay's frames, nor the lead before them
+	Bool replaySkipsDraw( UnsignedInt frame );
+	/// every replay is recorded, or the match went another way and the pass gave up: the run quits
+	Bool replaysFinished( UnsignedInt frame );
+
 	enum { NO_PLAYER = -1 };
 
 private:
@@ -543,13 +661,16 @@ private:
 	Real groundReach( const Coord2D &subject, const Coord2D &centre, Real radius, Real zoom );
 	Real zoomInMap( Int pane, const Coord2D &subject, Real nearest, Real wanted );
 	Coord2D placePane( Int pane, const Coord2D &subject, const Coord2D &pixel, Real zoom );
-	void logPanes( UnsignedInt frame ) const;
-	void logHandover( const ViewLocation &step, const ViewLocation &placed );
 	void pickIntroBases( void );
 	Region2D mapRegion( void ) const;
-	Bool updateSplit( void );
-	Bool updateEventSplit( void );
-	Bool updateSideSplit( void );
+	void updateSecondFight( void );
+	void updateWindow( UnsignedInt frame );
+	void easeWindow( Real at );
+	void stepWindowCamera( const ViewLocation &step, Real elapsedSeconds );
+	void openFilmEvents( void );
+	void noteFilmEvent( UnsignedInt frame, const char *type, Int player, Real x, Real y, const char *thing );
+	void scanFilmEvents( UnsignedInt frame );
+	void flushFilmEvents( void );
 	/// everybody dealing or taking the last scan's hits in the fight at subject
 	PlayerMaskType sidesAround( const Coord2D &subject ) const;
 	void measureScreenGround( void );
@@ -569,6 +690,10 @@ private:
 	void checkTimeline( UnsignedInt frame );
 	void noteFlag( const DirectorEvent &event );
 	void updateBroadcastMoments( UnsignedInt frame );
+	void noteMissedMoment( const DirectorEvent &event );
+	void updateReplaysFile( UnsignedInt frame );
+	void loadReplays( void );
+	void updateReplay( void );
 
 	/// a sight, a fight going on, a special power, or a fight the timeline says is about to begin
 	enum PlaceKind { PLACE_SIGHT, PLACE_FIGHT, PLACE_EVENT, PLACE_UPCOMING };
@@ -586,6 +711,18 @@ private:
 	std::vector< DirectorMoment > m_timeline;		///< what the scouting pass saw, for the filming pass
 	std::vector< CrcCheckpoint > m_timelineCrcs;
 	Bool m_timelineLoaded;
+	/// -directorrecord's replays, the whole process's like the timeline: the filming pass's missed moments
+	/// waiting for a splice, or the replay pass's plan
+	std::vector< DirectorReplay > m_replays;
+	std::vector< CrcCheckpoint > m_replayCrcs;	///< the filming pass's own CRC checkpoints, written beside the replays and checked by the replay pass
+	size_t m_replayCrcsWritten;									///< how many of them the file has
+	FILE *m_replayFile;													///< the filming pass's Videos\<name>.replays, NULL until its first replay
+	Bool m_replayFileTried;
+	Bool m_replaysLoaded;												///< the replay pass has read its file
+	Bool m_replayGaveUp;												///< the replay pass's match went another way than the film's
+	Bool m_replaysDone;													///< the replay pass has written its clip list or given up
+	Int m_replayClip;														///< the replay the camera is on, -1 for none
+	UnsignedInt m_replayFrame;									///< the logic frame the replay pass last checked
 	Int m_placeMoment;													///< the timeline's moment the director waits at, while the place is one
 	Coord2D m_skippedFight;											///< the last fizzling fight the director passed over, so it is logged once
 
@@ -603,13 +740,8 @@ private:
 	Real m_drivenHeight;						///< the height the director left the view at last frame
 	Real m_heightExtra;							///< the height over the watcher's own the director has eased to so far
 	Real m_heightExtraVelocity;			///< how fast that height is moving, for its spring
-	Bool m_panesHeldZoom;						///< last frame's panes set the zoom outright
 	Real m_lastZoom;								///< the view's zoom at the last update, for the zoom jump log
 	Bool m_lastCut;									///< the last update cut
-	UnsignedInt m_handoverLogUntil;	///< the frame the per-frame hand-over log stops at
-	Coord2D m_paneLookLast[ 2 ];		///< each pane's subject at the last frame panes were up, for the jump check
-	UnsignedInt m_paneLookFrame;		///< that frame, 0 while no panes are up
-	Real m_paneLookStepMost[ 2 ];		///< each pane's largest subject step a logic frame while these panes are up
 	Int m_paneSurvivor;							///< the pane that fills the screen as the panes go out: 1 when the split ended on the director taking pane 1's fight
 	Int m_spentMoment;							///< the timeline moment whose split was ended early, so it does not open again
 	Bool m_survivorHandover;				///< the panes have just gone out on pane 1, whose camera the single view takes over this update
@@ -630,9 +762,22 @@ private:
 	Real m_placeHeight;							///< how much higher than the watcher's own the place is watched from
 	Real m_placePeak;								///< the hottest the fight held has been since the director came to it
 	UnsignedInt m_placeEvent;				///< the id of the event the place is, while it is one
-	UnsignedInt m_eventSecond;			///< another event landing off that one's picture at the same time, 0 for none; the split's pane 1
-	Bool m_eventSplit;							///< the split up is the two events', which no rest or hold of a fight's split keeps down
-	PlayerMaskType m_eventPaneSides[ 2 ];	///< who used each of those two
+	UnsignedInt m_eventSecond;			///< another event landing off that one's picture at the same time, 0 for none; the window's power
+	DirectorWindowKind m_windowKind;	///< what the corner window shows, kept while it slides out
+	Bool m_windowOn;								///< the window is coming in or in, rather than going or gone
+	UnsignedInt m_windowChanged;		///< the logic frame it last came up or went
+	Coord2D m_windowSubject;				///< where its camera looks, kept while it goes
+	PlayerMaskType m_windowSides;		///< who it shows, kept while it goes
+	Real m_windowProgress;					///< how far in it is, 0 to 1, eased
+	ViewLocation m_windowGlide;			///< where its camera's glide to its subject has got to
+	ObserverCameraVelocity m_windowVelocity;
+	ViewLocation m_windowView;			///< its camera for its draw
+	FILE *m_filmEvents;							///< the events file, NULL until the filming pass opens it
+	Bool m_filmEventsTried;					///< opened or failed once this run; a later match does not write over it
+	std::vector< AsciiString > m_filmPending;	///< lines still to write: a power is noted from the logic, the file is written from update
+	std::vector< ObjectID > m_filmBuilding;	///< the structures under construction at the last look
+	std::vector< ObjectID > m_filmLost;			///< the dear things dead at the last look, already written
+	Int m_filmRank[ MAX_PLAYER_COUNT ];			///< each player's rank at the last look, -1 before the first
 	std::vector< Coord2D > m_seen;	///< the last few sights, oldest first, not gone back to while there is another
 	std::vector< DirectorEvent > m_events;	///< the special powers still worth watching, oldest first
 	UnsignedInt m_nextEventId;
@@ -650,17 +795,14 @@ private:
 	std::vector< PlayerMaskType > m_fightSources;	///< and the player who dealt each of them
 	std::vector< DirectorHeat > m_sights;	///< the last scan's things worth seeing, unhurt or not
 	std::vector< PlayerMaskType > m_sightOwners;	///< and whose each of them is, 0 for nobody's
-	const Player *m_sidePlayers[ 2 ];			///< a match of two: the opening's pane players, each split's pane 0 and pane 1 follow the same one
-	Coord2D m_sideFirst;									///< where pane 0's player is, the place the director holds while that split is up
-	Bool m_sideOpening;										///< the split up is the one the opening's panes went on as
 	std::vector< IRegion2D > m_broadcast;	///< the rectangles the broadcast drew over pane 0 this frame
 	Real m_broadcastTop;									///< the rows the score bar took
 	Real m_screenGround;									///< the ground the whole picture spans across its middle row, last measured with no panes up
 	Real m_circleGround;									///< and the least a split's pane circle reaches on the ground with it
-	Bool m_split;										///< -directorrecord wants two fights side by side
-	Real m_splitApart;							///< how far apart the split's two fights had to be when it last went on or off
-	UnsignedInt m_splitChanged;			///< the logic frame the split last went on or off
-	Coord2D m_secondPlace;					///< the second fight, shown in the second pane
+	Bool m_split;										///< -directorrecord has a second fight off the picture for the corner window
+	Real m_splitApart;							///< how far from the director's place the second fight had to be when it last came or went
+	UnsignedInt m_splitChanged;			///< the logic frame the second fight last came or went
+	Coord2D m_secondPlace;					///< the second fight
 
 	enum PanePhase { PANES_NONE, PANES_RADAR_OUT, PANES_IN, PANES_DRAW, PANES_HELD, PANES_UNDRAW, PANES_OUT, PANES_RADAR_IN };
 	/// the panes all in, their lines drawing, drawn or going back

@@ -256,10 +256,16 @@ Bool CinemaDirector_parseLine( const char *line, CinemaShot *shot, Bool *isShot,
 		if (args == 2 && !parseCinemaNumber( tokens[ 3 ], &shot->seconds ))
 			return refuseCinemaLine( reason, "follow's length is a number of seconds" );
 	}
+	else if (verb == "shot" && args == 1 && tokens[ 2 ] == "map")
+	{
+		// shot map: the picture and where the map's ground lands on it
+		shot->verb = CINEMA_VERB_SHOT;
+		shot->name = tokens[ 2 ];
+	}
 	else if (verb == "unfollow" || verb == "shot" || verb == "end")
 	{
 		if (args != 0)
-			return refuseCinemaLine( reason, "unfollow, shot and end take nothing" );
+			return refuseCinemaLine( reason, "unfollow and end take nothing, shot nothing or map" );
 		if (verb == "unfollow")
 			shot->verb = CINEMA_VERB_UNFOLLOW;
 		else if (verb == "shot")
@@ -1117,6 +1123,43 @@ static void cinemaHoldTheFrame( void )
 	}
 }
 
+/** shot map: where the ground of the map lands on the picture, so world positions from a log can be
+		drawn on it afterwards. A grid over the playable extent, corners included, each point at its
+		ground height, one 'CINEMA: map <x> <y> <z> -> <px> <py>' line each in the picture's pixels
+		(px py are 'off' where the camera cannot project the point). A pinhole camera, so six or more
+		of these fix it exactly; `experiments/tournament/tools/mapshot.py` in the wrapper fits it.
+		It is logged on the pass after the shot: the screenshot is read at the end of that shot's draw,
+		and a shot that fires in the same pass as the camera verb before it (a run whose load put the
+		clock past both) would otherwise project through the camera from before the cut. */
+static const Int CINEMA_MAP_GRID = 9;
+static Bool theCinemaMapPending = FALSE;
+
+static void cinemaLogMapProjection( void )
+{
+	Region3D extent;
+	TheTerrainLogic->getExtent( &extent );
+	Int originX, originY;
+	TheTacticalView->getOrigin( &originX, &originY );
+	DEBUG_LOG(("CINEMA: map picture %dx%d, view %dx%d at (%d,%d), extent (%.0f,%.0f) to (%.0f,%.0f), %dx%d points\n",
+		TheDisplay->getWidth(), TheDisplay->getHeight(), TheTacticalView->getWidth(), TheTacticalView->getHeight(),
+		originX, originY, extent.lo.x, extent.lo.y, extent.hi.x, extent.hi.y, CINEMA_MAP_GRID, CINEMA_MAP_GRID));
+	for (Int j = 0; j < CINEMA_MAP_GRID; ++j)
+	{
+		for (Int i = 0; i < CINEMA_MAP_GRID; ++i)
+		{
+			Coord3D w;
+			w.x = extent.lo.x + (extent.hi.x - extent.lo.x) * (Real)i / (Real)(CINEMA_MAP_GRID - 1);
+			w.y = extent.lo.y + (extent.hi.y - extent.lo.y) * (Real)j / (Real)(CINEMA_MAP_GRID - 1);
+			w.z = TheTerrainLogic->getGroundHeight( w.x, w.y );
+			ICoord2D s;
+			if (TheTacticalView->worldToScreenTriReturn( &w, &s ) == View::WTS_INVALID)
+				DEBUG_LOG(("CINEMA: map %.1f %.1f %.2f -> off\n", w.x, w.y, w.z));
+			else
+				DEBUG_LOG(("CINEMA: map %.1f %.1f %.2f -> %d %d\n", w.x, w.y, w.z, s.x, s.y));
+		}
+	}
+}
+
 static void runShot( const CinemaShot &shot )
 {
 	const Real now = shot.at;
@@ -1261,6 +1304,7 @@ static void runShot( const CinemaShot &shot )
 			DEBUG_LOG(("CINEMA: shot at %.2fs, looking at (%.0f,%.0f), zoom %.2f, angle %.1f, pitch %.1f\n", now,
 				pos.x, pos.y, TheTacticalView->getZoom(), TheTacticalView->getAngle() * 180.0f / PI,
 				TheTacticalView->getPitch() * 180.0f / PI));
+			theCinemaMapPending = (shot.name == "map");
 			TheDisplay->takeScreenShot();
 			break;
 		}
@@ -1365,6 +1409,13 @@ void CinemaDirector_update( void )
 	{
 		loadCinema();
 		cinemaSetHud( TRUE );
+	}
+
+	// the camera has not moved since the last draw, which is the one 'shot map' saved
+	if (theCinemaMapPending)
+	{
+		theCinemaMapPending = FALSE;
+		cinemaLogMapProjection();
 	}
 
 	const Real now = cinemaNow();

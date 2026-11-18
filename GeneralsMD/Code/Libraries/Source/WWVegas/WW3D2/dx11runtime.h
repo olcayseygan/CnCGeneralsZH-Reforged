@@ -399,7 +399,7 @@ void Direct3D11_Release_Capture(unsigned char * pixels);
 // DX11_FRAME_COPY_SLOTS staging textures kept from call to call; Map hands that copy back a frame
 // later, by when the GPU has long made it, and is null for a slot that holds nothing.  A Map is
 // followed by an Unmap of the same slot before the slot is queued again.
-enum { DX11_FRAME_COPY_SLOTS = 16 };
+enum { DX11_FRAME_COPY_SLOTS = 18 };
 bool Direct3D11_Queue_Frame_Copy(unsigned slot);
 const unsigned char * Direct3D11_Map_Frame_Copy(unsigned slot, unsigned & width, unsigned & height,
 	unsigned & pitch);

@@ -72,6 +72,7 @@
 #include "GameClient/Mouse.h"
 #include "GameClient/IMEManager.h"
 #include "GameClient/LookAtXlat.h"
+#include "GameClient/ObserverCamera.h"	// -directorrecord's replay pass reads what the film wrote
 #include "Win32Device/GameClient/Win32Mouse.h"
 #include "Win32Device/Common/Win32GameEngine.h"
 #include "Common/Version.h"
@@ -1184,7 +1185,8 @@ static void runDirectorScout( int &argc, char **argv, int capacity )
 			recording = TRUE;
 		if (strcasecmp( argv[index], "-seed" ) == 0 || strcasecmp( argv[index], "-replay" ) == 0)
 			seeded = TRUE;
-		if (strcasecmp( argv[index], "-headless" ) == 0 || strcasecmp( argv[index], "-directortimeline" ) == 0)
+		if (strcasecmp( argv[index], "-headless" ) == 0 || strcasecmp( argv[index], "-directortimeline" ) == 0
+				|| strcasecmp( argv[index], "-directorreplays" ) == 0)
 			return;
 	}
 	if (!recording)
@@ -1267,6 +1269,98 @@ static void runDirectorScout( int &argc, char **argv, int capacity )
 	static char timelineSwitch[] = "-directortimeline";
 	argv[argc++] = timelineSwitch;
 	argv[argc++] = timelinePath;
+}
+
+/** The arguments after a switch that belong to it: up to most, none starting with '-'. */
+static int switchArguments( int index, int argc, char **argv, int most )
+{
+	int taken = 0;
+	while( taken < most && index + 1 + taken < argc && argv[ index + 1 + taken ][ 0 ] != '-' )
+		++taken;
+	return taken;
+}
+
+/** -directorrecord's third pass, its instant replays.  The film is done and wrote its missed big
+	moments to Videos\<name>.replays; the same match is played once more in a copy of this process with
+	-directorreplays naming that file, undrawn but for the replays' frames, which it records back to back
+	as Videos\<name>_replays.mp4 with Videos\<name>_replays.txt beside it.  The copy has the film's own
+	line, its -seed included, less the timeline, the sound recording and the log prefix, and the job that
+	holds it dies with this process.  A sound pass (-video beside -directorrecord) films no replays. */
+static void runDirectorReplays( int argc, char **argv )
+{
+	const char *replays = ObserverCamera_replaysWritten();
+	if( replays[ 0 ] == '\0' )
+		return;
+	const char *name = "director";
+	for( int index = 1; index < argc; ++index )
+	{
+		if( strcasecmp( argv[index], "-video" ) == 0 || strcasecmp( argv[index], "-directorreplays" ) == 0 || strcasecmp( argv[index], "-headless" ) == 0 )
+			return;
+		if( strcasecmp( argv[index], "-directorrecord" ) == 0 && switchArguments( index, argc, argv, 1 ) == 1 )
+			name = argv[index + 1];
+	}
+
+	char exePath[ _MAX_PATH ];
+	GetModuleFileNameA( NULL, exePath, sizeof( exePath ) );
+	char logPrefix[ 32 ] = "";
+	findEarlyCommandLineValue( L"-logPrefix", logPrefix, sizeof( logPrefix ) );
+	char replayPrefix[ 32 ];
+	snprintf( replayPrefix, sizeof( replayPrefix ), "replays_%s", logPrefix );
+	char replayName[ 96 ];
+	snprintf( replayName, sizeof( replayName ), "%s_replays", name );
+
+	static char commandLine[ 32768 ];
+	snprintf( commandLine, sizeof( commandLine ), "\"%s\"", exePath );
+	for( int index = 1; index < argc; ++index )
+	{
+		int skipped = -1;
+		if( strcasecmp( argv[index], "-directorrecord" ) == 0 )
+			skipped = switchArguments( index, argc, argv, 1 );
+		else if( strcasecmp( argv[index], "-logPrefix" ) == 0 || strcasecmp( argv[index], "-directortimeline" ) == 0 )
+			skipped = switchArguments( index, argc, argv, 1 );
+		else if( strcasecmp( argv[index], "-wav" ) == 0 )
+			skipped = switchArguments( index, argc, argv, 3 );
+		if( skipped >= 0 )
+		{
+			index += skipped;
+			continue;
+		}
+		appendArgument( commandLine, sizeof( commandLine ), argv[index] );
+	}
+	strlcat( commandLine, " -directorrecord", sizeof( commandLine ) );
+	appendArgument( commandLine, sizeof( commandLine ), replayName );
+	// -multiInstance and -logPrefix are read word by word off the raw line, so never quoted
+	strlcat( commandLine, " -multiInstance -logPrefix ", sizeof( commandLine ) );
+	strlcat( commandLine, replayPrefix, sizeof( commandLine ) );
+	strlcat( commandLine, " -directorreplays", sizeof( commandLine ) );
+	appendArgument( commandLine, sizeof( commandLine ), replays );
+
+	STARTUPINFOA startup;
+	memset( &startup, 0, sizeof( startup ) );
+	startup.cb = sizeof( startup );
+	PROCESS_INFORMATION process;
+	if( !CreateProcessA( exePath, commandLine, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, &startup, &process ) )
+	{
+		DEBUG_LOG(("-directorrecord: the replay pass did not start, error %lu, the film has no replays\n", GetLastError()));
+		return;
+	}
+	HANDLE job = CreateJobObjectA( NULL, NULL );
+	JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits;
+	memset( &limits, 0, sizeof( limits ) );
+	limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+	SetInformationJobObject( job, JobObjectExtendedLimitInformation, &limits, sizeof( limits ) );
+	AssignProcessToJobObject( job, process.hProcess );
+	const DWORD started = GetTickCount();
+	ResumeThread( process.hThread );
+	DEBUG_LOG(("-directorrecord: replay pass %lu started: %s\n", process.dwProcessId, commandLine));
+	WaitForSingleObject( process.hProcess, INFINITE );
+	DWORD exitCode = 0;
+	GetExitCodeProcess( process.hProcess, &exitCode );
+	CloseHandle( process.hThread );
+	CloseHandle( process.hProcess );
+	CloseHandle( job );
+	DEBUG_LOG(("-directorrecord: replay pass took %lu ms, exit code %lu, its log is %sDebugLogFile.txt\n",
+		GetTickCount() - started, exitCode, replayPrefix));
 }
 
 // WinMain ====================================================================
@@ -1573,6 +1667,9 @@ Int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 		// run the game main loop
 		GameMain(argc, argv);
+
+		// -directorrecord's instant replays, once the film is done
+		runDirectorReplays( argc, argv );
 
 #ifdef DO_COPY_PROTECTION
 		// Clean up copy protection

@@ -530,6 +530,7 @@ public:
 	Bool m_directorRecord;					///< -directorrecord [name]: the director films the whole match, split for two fights, and the run quits at its end
 	AsciiString m_directorScoutFile;	///< -directorscout <file>: -directorrecord's first pass, headless, writes the match's fights and special powers here
 	AsciiString m_directorTimelineFile;	///< -directortimeline <file>: what the first pass wrote, which the filming pass reads to arrive before each fight
+	AsciiString m_directorReplaysFile;	///< -directorreplays <file>: -directorrecord's third pass, the film's missed moments (its .replays) recorded again as instant replays
 	Int m_wavStartFrame;						///< -wav <from> <to> [name]: the first logic frame of the sound recording
 	Int m_wavEndFrame;							///< -wav: the last logic frame recorded (0 = no sound recording)
 	AsciiString m_wavName;					///< -wav: the recording is Videos\<name>.wav next to the save games

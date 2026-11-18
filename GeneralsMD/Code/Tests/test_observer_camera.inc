@@ -257,6 +257,106 @@ TEST(a_power_off_the_picture_gets_pane_one_and_a_superweapon_takes_it_from_a_lig
 	CHECK_EQ( ObserverCamera_secondPower( events, 1, 2, place, screen ), 3u );
 }
 
+TEST(the_corner_window_shows_a_second_power_before_a_second_fight)
+{
+	CHECK_EQ( (Int)ObserverCamera_pickWindow( 0, FALSE ), (Int)DIRECTOR_WINDOW_NONE );
+	CHECK_EQ( (Int)ObserverCamera_pickWindow( 0, TRUE ), (Int)DIRECTOR_WINDOW_FIGHT );
+	CHECK_EQ( (Int)ObserverCamera_pickWindow( 7, TRUE ), (Int)DIRECTOR_WINDOW_POWER );
+	CHECK_EQ( (Int)ObserverCamera_pickWindow( 7, FALSE ), (Int)DIRECTOR_WINDOW_POWER );
+}
+
+TEST(the_corner_window_slides_all_the_way_in_before_it_goes_and_out_before_it_comes)
+{
+	// the slide is a pane's, half a second of the retail clock
+	const UnsignedInt slide = ConvertRetailFramesWall( 15U );
+	// down and nothing wanted: stays down; wanted: comes once the last slide out is done
+	CHECK( !ObserverCamera_holdWindow( FALSE, FALSE, 1000 ) );
+	CHECK( ObserverCamera_holdWindow( FALSE, TRUE, slide ) );
+	CHECK( !ObserverCamera_holdWindow( FALSE, TRUE, slide - 1 ) );
+	// up: stays while wanted, and while still sliding in when nothing is; goes once in
+	CHECK( ObserverCamera_holdWindow( TRUE, TRUE, 0 ) );
+	CHECK( ObserverCamera_holdWindow( TRUE, FALSE, slide - 1 ) );
+	CHECK( !ObserverCamera_holdWindow( TRUE, FALSE, slide ) );
+}
+
+TEST(the_corner_window_is_a_quarter_of_the_picture_in_the_lower_right_and_slides_in_from_past_it)
+{
+	CHECK_EQ( ObserverCamera_windowRect( 1920, 1080, 0.0f ).hi.x, 0 );
+	const IRegion2D in = ObserverCamera_windowRect( 1920, 1080, 1.0f );
+	CHECK_EQ( in.hi.x - in.lo.x, 480 );
+	CHECK_EQ( in.hi.y - in.lo.y, 270 );
+	const DirectorWindowFrame frame = ObserverCamera_windowFrame( 1080 );
+	// the plate on the screen, a margin in from the right edge and the foot
+	CHECK( in.hi.x + frame.border < 1920 );
+	CHECK( in.hi.y + frame.border < 1080 );
+	CHECK( in.hi.x > 1920 - 60 );
+	CHECK( in.hi.y > 1080 - 60 );
+	// the lower left stays clear for the event map, and the header with its chip is over the picture
+	CHECK( in.lo.x - frame.border > 1920 / 2 );
+	CHECK( in.lo.y - frame.header > 1080 / 2 );
+	CHECK( frame.header > frame.border );
+	CHECK( frame.cut > 0 && frame.rule > 0 && frame.highlight < frame.border );
+	// barely in, it and its plate are still past the right edge; half in, part of the way
+	CHECK( ObserverCamera_windowRect( 1920, 1080, 0.001f ).lo.x - frame.border >= 1919 );
+	CHECK( ObserverCamera_windowRect( 1920, 1080, 0.5f ).lo.x > in.lo.x );
+	CHECK_EQ( ObserverCamera_windowRect( 1920, 1080, 0.5f ).lo.y, in.lo.y );
+	// the recording shrinks the whole picture into it exactly
+	const IRegion2D at720 = ObserverCamera_windowRect( 1280, 720, 1.0f );
+	CHECK_EQ( ( at720.hi.x - at720.lo.x ) * OBSERVER_WINDOW_SCALE, 1280 );
+	CHECK_EQ( ( at720.hi.y - at720.lo.y ) * OBSERVER_WINDOW_SCALE, 720 );
+}
+
+TEST(an_events_file_line_reads_back_as_the_event_it_was_written_from)
+{
+	DirectorFilmEvent event;
+	event.frame = 5400;
+	event.type = "lost";
+	event.player = 3;
+	event.x = 1234.4f;
+	event.y = 987.6f;
+	event.thing = "AmericaTankCrusader";
+	const AsciiString line = ObserverCamera_formatFilmEvent( event );
+	CHECK_STR( line.str(), "event 5400 lost 3 1234 988 AmericaTankCrusader" );
+	DirectorFilmEvent read;
+	CHECK( ObserverCamera_parseFilmEvent( line.str(), &read ) );
+	CHECK_EQ( read.frame, 5400u );
+	CHECK_STR( read.type.str(), "lost" );
+	CHECK_EQ( read.player, 3 );
+	CHECK_NEAR( read.x, 1234.0f, 0.001f );
+	CHECK_NEAR( read.y, 988.0f, 0.001f );
+	CHECK_STR( read.thing.str(), "AmericaTankCrusader" );
+
+	// a player's defeat has no place and no thing
+	event.type = "defeated";
+	event.x = event.y = -1.0f;
+	event.thing.clear();
+	CHECK_STR( ObserverCamera_formatFilmEvent( event ).str(), "event 5400 defeated 3 -1 -1 -" );
+	CHECK( !ObserverCamera_parseFilmEvent( "player 0 FactionAmerica FF0000 Bob", &read ) );
+
+	// a map's file name may hold spaces, so its extent is read off the end
+	const AsciiString map = ObserverCamera_formatFilmMap( "maps\\tournament desert\\tournament desert.map", 0.0f, 0.0f, 4000.0f, 3500.0f );
+	CHECK_STR( map.str(), "map maps\\tournament desert\\tournament desert.map 0 0 4000 3500" );
+	AsciiString mapFile;
+	Real lo[ 2 ], hi[ 2 ];
+	CHECK( ObserverCamera_parseFilmMap( ( std::string( map.str() ) + "\n" ).c_str(), &mapFile, &lo[ 0 ], &lo[ 1 ], &hi[ 0 ], &hi[ 1 ] ) );
+	CHECK_STR( mapFile.str(), "maps\\tournament desert\\tournament desert.map" );
+	CHECK_NEAR( hi[ 0 ], 4000.0f, 0.001f );
+	CHECK_NEAR( hi[ 1 ], 3500.0f, 0.001f );
+	CHECK( !ObserverCamera_parseFilmMap( "map 0 0 4000 3500", &mapFile, &lo[ 0 ], &lo[ 1 ], &hi[ 0 ], &hi[ 1 ] ) );
+
+	// a player's display name is last and may hold spaces; the colour is six hex digits
+	const AsciiString player = ObserverCamera_formatFilmPlayer( 2, "FactionAmericaAirForceGeneral", 0xFF2840E0u, "Hard AI" );
+	CHECK_STR( player.str(), "player 2 FactionAmericaAirForceGeneral 2840E0 Hard AI" );
+	Int index = -1;
+	AsciiString playerTemplate, name;
+	UnsignedInt rgb = 0;
+	CHECK( ObserverCamera_parseFilmPlayer( ( std::string( player.str() ) + "\r\n" ).c_str(), &index, &playerTemplate, &rgb, &name ) );
+	CHECK_EQ( index, 2 );
+	CHECK_STR( playerTemplate.str(), "FactionAmericaAirForceGeneral" );
+	CHECK_EQ( rgb, 0x2840E0u );
+	CHECK_STR( name.str(), "Hard AI" );
+}
+
 TEST(the_director_keeps_its_event_when_none_may_be_shown_any_more)
 {
 	// narrowed to a player whose things at the target all died, the event it shows is filtered out
@@ -1560,4 +1660,110 @@ TEST(a_look_through_a_player_gives_back_the_camera_and_fog_the_watcher_had)
 	CHECK( camera->stopLooking() );
 	CHECK_EQ( (Int)camera->getMode(), (Int)OBSERVER_CAMERA_DIRECTOR );
 	delete camera;
+}
+
+static DirectorReplay directorReplay( UnsignedInt landed, Real x, Int player, const char *power )
+{
+	DirectorReplay replay;
+	replay.landed = landed;
+	ObserverCamera_replayRange( landed, &replay.first, &replay.last );
+	replay.target.x = x;
+	replay.target.y = 500.0f;
+	replay.player = player;
+	replay.power = power;
+	replay.splice = 0;
+	return replay;
+}
+
+TEST(an_instant_replay_is_a_missed_superweapon_or_generals_power_that_landed)
+{
+	CHECK( ObserverCamera_missedBigMoment( TRUE, FALSE, TRUE, FALSE ) );
+	CHECK( ObserverCamera_missedBigMoment( FALSE, TRUE, TRUE, FALSE ) );
+	// shown on the picture or in the window, or never landing, or a unit's own ability: nothing to replay
+	CHECK( !ObserverCamera_missedBigMoment( TRUE, FALSE, TRUE, TRUE ) );
+	CHECK( !ObserverCamera_missedBigMoment( FALSE, TRUE, FALSE, FALSE ) );
+	CHECK( !ObserverCamera_missedBigMoment( FALSE, FALSE, TRUE, FALSE ) );
+}
+
+TEST(an_instant_replay_runs_round_its_landing_and_goes_in_on_a_calm_frame_after_it)
+{
+	const UnsignedInt K = LOGICFRAMES_PER_SECOND;
+	UnsignedInt first = 0, last = 0;
+	ObserverCamera_replayRange( 100 * K, &first, &last );
+	CHECK_EQ( first, 98 * K );
+	CHECK_EQ( last, 106 * K );
+	// a power in the match's first second starts its replay on the first frame
+	ObserverCamera_replayRange( K, &first, &last );
+	CHECK_EQ( first, 1u );
+	CHECK_EQ( last, 7 * K );
+
+	// not inside its own frames, calm or not; calm after them; past the wait whatever goes on
+	CHECK( !ObserverCamera_spliceNow( 106 * K, 106 * K, TRUE ) );
+	CHECK( ObserverCamera_spliceNow( 106 * K + 1, 106 * K, TRUE ) );
+	CHECK( !ObserverCamera_spliceNow( 110 * K, 106 * K, FALSE ) );
+	CHECK( ObserverCamera_spliceNow( 116 * K, 106 * K, FALSE ) );
+
+	// the film's pictures from its first recorded frame, -recordfps 60 at 30 being two a frame
+	CHECK_EQ( ObserverCamera_filmPicture( 1, 1, 2 ), 0u );
+	CHECK_EQ( ObserverCamera_filmPicture( 3001, 1, 2 ), 6000u );
+	CHECK_EQ( ObserverCamera_filmPicture( 3001, 1, 1 ), 3000u );
+}
+
+TEST(instant_replays_are_played_in_order_and_never_twice_over_one_frame)
+{
+	const UnsignedInt K = LOGICFRAMES_PER_SECOND;
+	std::vector< DirectorReplay > replays;
+	replays.push_back( directorReplay( 300 * K, 3000.0f, 2, "SuperweaponNeutronMissile" ) );
+	replays.push_back( directorReplay( 100 * K, 1000.0f, 1, "SpecialPowerCarpetBomb" ) );
+	// landing 7 s after the carpet bomb: starts where its replay ends and keeps its own landing
+	replays.push_back( directorReplay( 107 * K, 2000.0f, 3, "SpecialPowerA10ThunderboltMissileStrike" ) );
+	// landing a second after it, the carpet bomb's replay runs past this one's landing: nothing of it is left
+	replays.push_back( directorReplay( 101 * K, 2500.0f, 4, "SpecialPowerArtilleryBarrage" ) );
+	ObserverCamera_planReplays( replays );
+	CHECK_EQ( (Int)replays.size(), 3 );
+	CHECK_EQ( replays[ 0 ].landed, 100 * K );
+	CHECK_EQ( replays[ 1 ].first, 106 * K + 1 );
+	CHECK_EQ( replays[ 1 ].landed, 107 * K );
+	CHECK_EQ( replays[ 1 ].last, 113 * K );
+	CHECK_EQ( replays[ 2 ].landed, 300 * K );
+
+	// the lead drawn before a replay counts as its own, but never takes frames from the one before
+	CHECK_EQ( ObserverCamera_replayAt( replays, 98 * K, 0 ), 0 );
+	CHECK_EQ( ObserverCamera_replayAt( replays, 97 * K, 0 ), -1 );
+	CHECK_EQ( ObserverCamera_replayAt( replays, 97 * K, 2 * K ), 0 );
+	CHECK_EQ( ObserverCamera_replayAt( replays, 106 * K, 2 * K ), 0 );
+	CHECK_EQ( ObserverCamera_replayAt( replays, 106 * K + 1, 2 * K ), 1 );
+	CHECK_EQ( ObserverCamera_replayAt( replays, 200 * K, 2 * K ), -1 );
+}
+
+TEST(a_replays_file_line_reads_back_and_the_clip_list_line_is_pictures_and_frames)
+{
+	DirectorReplay replay = directorReplay( 3000, 1234.4f, 2, "SuperweaponNeutronMissile" );
+	replay.splice = 3500;
+	const AsciiString line = ObserverCamera_formatReplay( replay );
+	const UnsignedInt first = replay.first;
+	const UnsignedInt last = replay.last;
+	AsciiString expected;
+	expected.format( "replay %u %u 3000 1234 500 2 3500 SuperweaponNeutronMissile", first, last );
+	CHECK_STR( line.str(), expected.str() );
+	DirectorReplay read;
+	CHECK( ObserverCamera_parseReplay( ( std::string( line.str() ) + "\n" ).c_str(), &read ) );
+	CHECK_EQ( read.first, first );
+	CHECK_EQ( read.last, last );
+	CHECK_EQ( read.landed, 3000u );
+	CHECK_NEAR( read.target.x, 1234.0f, 0.001f );
+	CHECK_NEAR( read.target.y, 500.0f, 0.001f );
+	CHECK_EQ( read.player, 2 );
+	CHECK_EQ( read.splice, 3500u );
+	CHECK_STR( read.power.str(), "SuperweaponNeutronMissile" );
+	// a warhead no power sent, a CRC line, and a range running backwards are no replay
+	replay.power.clear();
+	CHECK( ObserverCamera_parseReplay( ObserverCamera_formatReplay( replay ).str(), &read ) );
+	CHECK_STR( read.power.str(), "-" );
+	CHECK( !ObserverCamera_parseReplay( "crc 900 12345", &read ) );
+	CHECK( !ObserverCamera_parseReplay( "replay 500 400 450 0 0 1 600 X", &read ) );
+
+	replay.power = "SpecialPowerCarpetBomb";
+	CHECK_STR( ObserverCamera_formatReplayClip( 1, 480, 480, 6998, replay ).str(),
+		( std::string( "clip 1 480 480 6998 " ) + std::to_string( first ) + " " + std::to_string( last ) + " 2 SpecialPowerCarpetBomb" ).c_str() );
 }

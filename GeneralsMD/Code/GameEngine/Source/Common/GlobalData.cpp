@@ -777,6 +777,7 @@ GlobalData::GlobalData()
 	m_directorRecord = FALSE;
 	m_directorScoutFile.clear();
 	m_directorTimelineFile.clear();
+	m_directorReplaysFile.clear();
 	m_wavStartFrame = 0;
 	m_wavEndFrame = 0; // record no sound unless -wav asks for a range
 	m_wavName.clear();

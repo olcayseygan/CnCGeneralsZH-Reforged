@@ -1811,6 +1811,16 @@ Int parseDirectorTimeline(char *args[], int num)
 	return 2;
 }
 
+/* -directorreplays <file>: -directorrecord's third pass, which WinMain starts once the film is done
+	 when the filming pass wrote any instant replay to its Videos\<name>.replays.  The same match again,
+	 undrawn but for the replays' frames, recorded back to back as Videos\<name>_replays.mp4. */
+Int parseDirectorReplays(char *args[], int num)
+{
+	if (TheWritableGlobalData && num > 1)
+		TheWritableGlobalData->m_directorReplaysFile = args[1];
+	return 2;
+}
+
 /* -wav <from> <to> [name]: record what the game sounds like over logic frames <from> to <to>.
 	 *
 	 * A movie made by -video has no sound in it: the picture comes from a frame dump and the frames are
@@ -3029,6 +3039,7 @@ static CommandLineParam params[] =
 	{ "-recordfps", parseRecordFps },
 	{ "-directorscout", parseDirectorScout },
 	{ "-directortimeline", parseDirectorTimeline },
+	{ "-directorreplays", parseDirectorReplays },
 	{ "-wav", parseWav },
 	{ "-turbo", parseTurbo },
 	{ "-msaa", parseMSAA },

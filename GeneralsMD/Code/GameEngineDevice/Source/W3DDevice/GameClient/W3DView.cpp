@@ -1762,6 +1762,18 @@ ICoord2D W3DView::overlayShift( void )
 	return shift;
 }
 
+/** Every drawable on the map, past its edge by the overscan and at any height. */
+static void getWholeMapRegion( Region3D &wholeMap )
+{
+	TheTerrainRenderObject->getDrawnExtent( &wholeMap );
+	wholeMap.lo.x -= DRAWABLE_OVERSCAN;
+	wholeMap.lo.y -= DRAWABLE_OVERSCAN;
+	wholeMap.hi.x += DRAWABLE_OVERSCAN;
+	wholeMap.hi.y += DRAWABLE_OVERSCAN;
+	wholeMap.lo.z -= 999999.0f;
+	wholeMap.hi.z += 999999.0f;
+}
+
 DECLARE_PERF_TIMER(W3DView_updateView)
 void W3DView::update(void)
 {
@@ -1919,13 +1931,7 @@ void W3DView::update(void)
 		if (TheScriptEngine->isTimeFast() || TheTerrainRenderObject == NULL)
 			return;
 		Region3D wholeMap;
-		TheTerrainRenderObject->getDrawnExtent( &wholeMap );
-		wholeMap.lo.x -= DRAWABLE_OVERSCAN;
-		wholeMap.lo.y -= DRAWABLE_OVERSCAN;
-		wholeMap.hi.x += DRAWABLE_OVERSCAN;
-		wholeMap.hi.y += DRAWABLE_OVERSCAN;
-		wholeMap.lo.z -= 999999.0f;
-		wholeMap.hi.z += 999999.0f;
+		getWholeMapRegion( wholeMap );
 		if (drawsDrawables())
 			TheGameClient->iterateDrawablesInRegion( &wholeMap, drawDrawable, this );
 		return;
@@ -2295,8 +2301,14 @@ void W3DView::update(void)
   TheTerrainVisual->updateSeismicSimulations();
 #endif
   
+	/* -directorrecord's corner window draws first on its client frames and takes the frame's one
+		 drawable update, so it poses the whole map: under its own camera alone, a unit on the main
+		 picture and off the window's would keep its last pose for as long as the window was up. */
 	Region3D axisAlignedRegion;
-	getAxisAlignedViewRegion(axisAlignedRegion);
+	if (TheObserverCamera.isWindowDrawn() && TheTerrainRenderObject != NULL)
+		getWholeMapRegion(axisAlignedRegion);
+	else
+		getAxisAlignedViewRegion(axisAlignedRegion);
 
 	// render all of the visible Drawables
 	/// @todo this needs to use a real region partition or something

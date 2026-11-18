@@ -1818,6 +1818,9 @@ static Bool isVideoFrame( Int frame )
 {
 	if (TheGlobalData->m_videoEndFrame <= 0 || TheGameLogic == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame())
 		return FALSE;
+	// -directorreplays records its replays' frames alone, back to back
+	if (TheObserverCamera.isReplaying())
+		return frame > 0 && TheObserverCamera.replayRecords( (UnsignedInt)frame );
 	return frame >= TheGlobalData->m_videoStartFrame && frame <= TheGlobalData->m_videoEndFrame;
 }
 
@@ -2766,6 +2769,13 @@ static void updateHeadlessRun( void )
 	if ((TheGlobalData->m_directorRecord || scouting) && !TheGameEngine->getQuitting())
 	{
 		const Bool inMatch = TheGameLogic->isInGame() && !TheGameLogic->isInShellGame();
+		// -directorreplays ends past its last replay, or as soon as its match went another way than the film's
+		if (inMatch && TheObserverCamera.isReplaying() && TheObserverCamera.replaysFinished( TheGameLogic->getFrame() ))
+		{
+			DEBUG_LOG(("-directorreplays: done on frame %u, quitting\n", TheGameLogic->getFrame()));
+			TheGameEngine->setQuitting( TRUE );
+			return;
+		}
 		if (inMatch)
 		{
 			directorRecordSawMatch = TRUE;
@@ -3108,6 +3118,10 @@ void GameEngine::planLogicPass( LogicPassPlan &plan )
 	/* -jumpToFrame n: undrawn and as fast as the machine goes up to frame n, then paced.  EA's loop
 		 ran a tick a pass anyway; paced on the wall clock, jumping to minute 24 took 24 minutes. */
 	fastMode = fastMode || TheGlobalData->m_noDraw > TheGameLogic->getFrame();
+
+	/* -directorreplays: the whole match a logic frame a pass, undrawn but for the replays and the lead
+		 drawn before each, as fast as the machine goes. */
+	fastMode = fastMode || TheObserverCamera.isReplaying();
 
 	/* -turbo: the same for a run that draws, unless a network owns the clock.  A -wav recording does
 		 not: its mix moves with the logic frames, not the wall clock (updateSoundCapture).  The five seconds before a -screenshot run at the real rate.  Taken straight out of

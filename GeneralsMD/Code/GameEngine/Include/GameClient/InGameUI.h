@@ -1124,6 +1124,9 @@ public:  // ********************************************************************
 	/// the opening's plate over the command centre of the player in the pane being drawn, in every
 	/// pane's own draw
 	void drawDirectorIntroPlate( void );
+	/// the plate round -directorrecord's corner window at the lower right, its chip naming whose power
+	/// or fight it is; the picture inside is the recording's to put in.  Pane 0's draw alone
+	void drawDirectorWindow( void );
 
 	//
 	// The production list on the left: one cameo per item the local player has coming, queued in a

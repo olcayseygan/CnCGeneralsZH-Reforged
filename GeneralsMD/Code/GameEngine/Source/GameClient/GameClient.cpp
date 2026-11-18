@@ -1085,7 +1085,8 @@ void GameClient::update( void )
 			 not the client - which is what makes an unattended run fast: rendering is the larger half
 			 of the loop's wall clock in a normal match.  -jumpToFrame skips it the same way until its
 			 frame, past the first, which draws the load away. */
-		const Bool jumping = TheGlobalData->m_noDraw > TheGameLogic->getFrame() && TheGameLogic->getFrame() > 0;
+		const Bool jumping = ( TheGlobalData->m_noDraw > TheGameLogic->getFrame() && TheGameLogic->getFrame() > 0 )
+			|| TheObserverCamera.replaySkipsDraw( TheGameLogic->getFrame() );	// -directorreplays draws its replays alone
 		if (!TheGlobalData->m_headless && !jumping)
 		{
 #ifdef DEBUG_LOGGING
@@ -1101,6 +1102,13 @@ void GameClient::update( void )
 			for( Int pane = 1; pane < TheObserverCamera.getDrawnPaneCount(); pane++ )
 			{
 				TheObserverCamera.beginPanePass( pane );
+				TheDisplay->DRAW();
+				TheObserverCamera.endPanePass();
+			}
+			// and the corner window at the lower right, a second action off the picture, the same way
+			if( TheObserverCamera.isWindowDrawn() )
+			{
+				TheObserverCamera.beginWindowPass();
 				TheDisplay->DRAW();
 				TheObserverCamera.endPanePass();
 			}

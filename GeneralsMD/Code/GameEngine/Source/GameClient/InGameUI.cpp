@@ -36,6 +36,7 @@
 #endif
 #include "Lib/Clock.h"
 #include "Lib/WideCharFns.h"
+#include <wctype.h>
 
 #define DEFINE_SHADOW_NAMES
 
@@ -11585,6 +11586,126 @@ void InGameUI::layOutBroadcast( const std::vector< SpectatorStats > &players, co
 	}
 }
 
+// -directorrecord's corner window is drawn in the brand's video tokens (docs/reference/BRAND.md, Video):
+// the plate, the recess behind the picture, the trim along the top, the chip's steel and the
+// highlight round the picture.  No gold
+static const Color WINDOW_PLATE = GameMakeColor( 0x17, 0x18, 0x1a, 255 );
+static const Color WINDOW_SUNK = GameMakeColor( 0x0b, 0x0c, 0x0d, 255 );
+static const Color WINDOW_TRIM = GameMakeColor( 0x5b, 0x7b, 0xe0, 255 );
+static const Color WINDOW_STEEL = GameMakeColor( 0xc3, 0xc8, 0xce, 255 );
+static const Color WINDOW_ACCENT = GameMakeColor( 0x6c, 0xc0, 0xea, 255 );
+/// the chip's mono capitals, in 720 line points, and its hairline and the gap inside it in 720 pixels
+static const Int WINDOW_CHIP_POINTS = 7;
+static const Real WINDOW_CHIP_LINE = 1.0f;
+static const Real WINDOW_CHIP_PAD = 3.0f;
+/// U+00B7 by number, for the same reason as the ellipsis
+static const WideChar WINDOW_CHIP_DOT[] = { ' ', 0x00B7, ' ', 0 };
+
+/** text in capitals, the chip's mono labels. */
+static UnicodeString windowCapitals( const UnicodeString &text )
+{
+	UnicodeString capitals;
+	for( Int index = 0; index < text.getLength(); index++ )
+		capitals.concat( (WideChar)towupper( (wint_t)text.getCharAt( index ) ) );
+	return capitals;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** -directorrecord's corner window at the lower right: a plate round the picture the recording
+	* shrinks into it (W3DDisplay's joinVideoWindow), its top right corner cut at 45 degrees and a trim
+	* rule along its top, a chip over the picture naming whose power or fight it is, and the highlight
+	* round the picture.  Pane 0's draw alone, like the rest of the broadcast; its rectangles are the
+	* broadcast's, so the recording keeps them, and the picture's own rectangle is left to the window. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::drawDirectorWindow( void )
+{
+	const IRegion2D window = TheObserverCamera.getWindowRect();
+	if( window.hi.x <= window.lo.x )
+		return;
+	const DirectorWindowFrame frame = ObserverCamera_windowFrame( TheDisplay->getHeight() );
+	const Int left = window.lo.x - frame.border;
+	const Int right = window.hi.x + frame.border;
+	const Int top = window.lo.y - frame.header;
+	const Int bottom = window.hi.y + frame.border;
+	const Int width = right - left;
+
+	// the plate, a row at a time where the corner is cut, then the trim along the top up to the cut
+	for( Int row = 0; row < frame.cut; row++ )
+		TheDisplay->drawFillRect( left, top + row, width - ( frame.cut - row ), 1, WINDOW_PLATE );
+	TheDisplay->drawFillRect( left, top + frame.cut, width, bottom - top - frame.cut, WINDOW_PLATE );
+	TheDisplay->drawFillRect( left, top, width - frame.cut, frame.rule, WINDOW_TRIM );
+	// the recess the picture goes into, which a frame with no picture of the window keeps
+	TheDisplay->drawFillRect( window.lo.x, window.lo.y, window.hi.x - window.lo.x, window.hi.y - window.lo.y, WINDOW_SUNK );
+	const Int line = frame.highlight;
+	TheDisplay->drawFillRect( window.lo.x - line, window.lo.y - line, window.hi.x - window.lo.x + 2 * line, line, WINDOW_ACCENT );
+	TheDisplay->drawFillRect( window.lo.x - line, window.hi.y, window.hi.x - window.lo.x + 2 * line, line, WINDOW_ACCENT );
+	TheDisplay->drawFillRect( window.lo.x - line, window.lo.y, line, window.hi.y - window.lo.y, WINDOW_ACCENT );
+	TheDisplay->drawFillRect( window.hi.x, window.lo.y, line, window.hi.y - window.lo.y, WINDOW_ACCENT );
+
+	// the chip: the power's user, his name and his side; a fight's players, by name
+	const PlayerMaskType sides = TheObserverCamera.getWindowSides();
+	std::vector< Player * > players;
+	for( Int index = 0; index < ThePlayerList->getPlayerCount(); index++ )
+	{
+		Player *player = ThePlayerList->getNthPlayer( index );
+		if( ( player->getPlayerMask() & sides ) != 0 && player->isPlayableSide() && !player->isPlayerObserver() )
+			players.push_back( player );
+	}
+	if( !players.empty() )
+	{
+		UnicodeString text;
+		if( players.size() == 1 )
+		{
+			text = broadcastName( players[ 0 ] );
+			text.concat( WINDOW_CHIP_DOT );
+			text.concat( broadcastSide( players[ 0 ] ) );
+		}
+		else
+		{
+			for( size_t index = 0; index < players.size(); index++ )
+			{
+				if( index > 0 )
+					text.concat( UnicodeString( u" vs " ) );
+				text.concat( broadcastName( players[ index ] ) );
+			}
+		}
+		const Int points = broadcastPoints( WINDOW_CHIP_POINTS );
+		const Int hairline = max( broadcastPixels( WINDOW_CHIP_LINE ), 1 );
+		const Int pad = broadcastPixels( WINDOW_CHIP_PAD );
+		const Int room = width - frame.cut - 2 * frame.border - 2 * ( pad + hairline );
+		const UnicodeString capitals = windowCapitals( text );
+		DisplayString *chip = broadcastText( "windowchip", broadcastFitted( broadcastText( "windowchipfull", capitals, BROADCAST_NUMBERS, points, TRUE ),
+			broadcastText( "windowchipellipsis", UnicodeString( BROADCAST_ELLIPSIS ), BROADCAST_NUMBERS, points, TRUE ), room ),
+			BROADCAST_NUMBERS, points, TRUE );
+		Int chipWidth = 0, chipHeight = 0;
+		chip->getSize( &chipWidth, &chipHeight );
+		const Int boxWidth = chipWidth + 2 * ( pad + hairline );
+		const Int boxHeight = min( chipHeight + 2 * hairline, frame.header - frame.rule - 2 * line );
+		const Int boxLeft = left + frame.border;
+		const Int boxTop = top + frame.rule + ( frame.header - frame.rule - line - boxHeight ) / 2;
+		TheDisplay->drawOpenRect( boxLeft, boxTop, boxWidth, boxHeight, (Real)hairline, WINDOW_STEEL );
+		chip->draw( boxLeft + hairline + pad, boxTop + ( boxHeight - chipHeight ) / 2, WINDOW_STEEL, WINDOW_PLATE );
+	}
+
+	// the plate's four sides are the broadcast's; the picture between them is the window's
+	IRegion2D strip;
+	strip.lo.x = left;
+	strip.lo.y = top;
+	strip.hi.x = right;
+	strip.hi.y = window.lo.y;
+	TheObserverCamera.addBroadcast( strip );
+	strip.lo.y = window.hi.y;
+	strip.hi.y = bottom;
+	TheObserverCamera.addBroadcast( strip );
+	strip.lo.y = window.lo.y;
+	strip.hi.y = window.hi.y;
+	strip.hi.x = window.lo.x;
+	TheObserverCamera.addBroadcast( strip );
+	strip.lo.x = window.hi.x;
+	strip.hi.x = right;
+	TheObserverCamera.addBroadcast( strip );
+}
+
 //-------------------------------------------------------------------------------------------------
 /** The score bar hangs from the top edge in the middle: the match clock in a tab of its own, and under
 	* it every side in one row (two rows of one-line cards from five players), "Team A vs Team B vs a player alone", a card a player with his name in
@@ -11602,6 +11723,8 @@ void InGameUI::layOutBroadcast( const std::vector< SpectatorStats > &players, co
 void InGameUI::drawDirectorBroadcast( void )
 {
 	TheObserverCamera.clearBroadcast();
+	// the corner window first, so a banner across the lower picture lies over it
+	drawDirectorWindow();
 	// everyone who played, the ones who lost included, so a team keeps its letter after a player of it is
 	// gone; the bar holds the ones still in, and a defeated player's card until it has closed
 	std::vector< SpectatorStats > named = gatherSpectatorStats( SPECTATOR_STATS[ 0 ], NULL, TheObserverCamera.getPlayedMask() );

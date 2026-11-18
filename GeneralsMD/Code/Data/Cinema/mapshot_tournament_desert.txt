@@ -1,0 +1,19 @@
+# Tournament Desert straight down, the whole map in one picture, for drawing Bot Cup events on it
+# after the fact. 'shot map' logs where a grid of ground points lands on the picture (CINEMA: map
+# lines); experiments/tournament/tools/mapshot.py in the wrapper turns the log into the mapping file.
+# The second shot is the same camera a minute on, with the first buildings standing, to check the
+# mapping against the AI's logged build positions.
+#
+#   generals.exe -win -xres 3840 -yres 5120 -msaa 0 -quickstart -noshellmap -observer -multiInstance
+#     -map "Maps\Tournament Desert\Tournament Desert.map" -autoskirmish 2 -seed 1
+#     -cinema mapshot_tournament_desert -logPrefix mapshot_
+#
+# The playable extent is 2040 by 2700 with its middle at (1020,1350). A window narrower than 16:9 keeps
+# the 50 degree horizontal lens and opens the vertical one, so at 3:4 the eye has to be 2190 above the
+# ground for the width and 2170 for the height; 2300 leaves a margin. The eye ends over the point it
+# looks at, so the heading is the path's (+y, north up) and the tilt the freecam's steepest, 89.5 down.
+
+0.05  drone 1  1020 1349 2300  1020 1350 2300  look 1020 1350  sway 0  bank 0
+1.0   shot map
+60.0  shot map
+61.0  end

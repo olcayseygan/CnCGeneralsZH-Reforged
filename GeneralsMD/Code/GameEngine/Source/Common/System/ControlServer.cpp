@@ -55,6 +55,7 @@
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/ScenarioDrill.h"
 #include "GameLogic/TerrainLogic.h"
+#include "GameLogic/VictoryConditions.h"
 #include "GameNetwork/GameInfo.h"		// MAX_SLOTS, for the skirmish command's player count
 #include "GameNetwork/Online/OnlineQueues.h"
 
@@ -980,7 +981,7 @@ static void handleCommand( const AsciiString &command )
 	/* The quit menu's Exit, which in a network game is the other half of "quit": the process goes
 		 on, the player surrenders and the match is left through the network, so everybody else sees
 		 a player leave on an agreed frame rather than a connection drop. exitQuitMenu in QuitMenu.cpp
-		 posts the same two messages. */
+		 posts the same two messages, and like it spares a side that has already won. */
 	if (command == "leave")
 	{
 		if (TheGameLogic == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame())
@@ -988,7 +989,8 @@ static void handleCommand( const AsciiString &command )
 			replyError( "leave needs a match in progress" );
 			return;
 		}
-		if (TheGameLogic->isInMultiplayerGame() && !TheGameLogic->isInSkirmishGame())
+		if (TheGameLogic->isInMultiplayerGame() && !TheGameLogic->isInSkirmishGame()
+				&& !TheVictoryConditions->isLocalAlliedVictory())
 		{
 			GameMessage *surrender = TheMessageStream->appendMessage( GameMessage::MSG_SELF_DESTRUCT );
 			surrender->appendBooleanArgument( TRUE );

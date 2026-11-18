@@ -48,6 +48,7 @@
 #include "Common/CRCDebug.h"
 #include "Common/LogicThread.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/VictoryConditions.h"
 
 #include "Common/RandomValue.h"
 
@@ -1057,9 +1058,13 @@ void Network::quitGame() {
 		m_conMgr->quitGame();
 	}
 
-	// Blow up / Transfer your units when you quit.  Like a normal quit menu quit.
-	GameMessage *msg = TheMessageStream->appendMessage(GameMessage::MSG_SELF_DESTRUCT);
-	msg->appendBooleanArgument(TRUE);
+	// Blow up / Transfer your units when you quit.  Like a normal quit menu quit, which spares a
+	// side that has already won: victory is read off who still stands (exitQuitMenu has the why).
+	if (!TheVictoryConditions->isLocalAlliedVictory())
+	{
+		GameMessage *msg = TheMessageStream->appendMessage(GameMessage::MSG_SELF_DESTRUCT);
+		msg->appendBooleanArgument(TRUE);
+	}
 
 	TheMessageStream->appendMessage(GameMessage::MSG_CLEAR_GAME_DATA);
 	m_localStatus = NETLOCALSTATUS_POSTGAME;

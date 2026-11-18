@@ -716,19 +716,17 @@ StateReturnType AIGuardReturnState::onEnter( void )
 	// That holds for the order itself. Once the unit has stood at its post, though, it comes back
 	// here after every kill, and waiting for the next scan made a player's guard drop the enemy
 	// beside it, take a step home, then turn round for him. One scan, only then, only on a player's
-	// order: the AI's and the scripts' guards keep EA's timing.
-	// Once a frame: a nemesis the attack refuses straight away would otherwise bring the machine
-	// back here and round again inside the same frame.
+	// order: the AI's and the scripts' guards keep EA's timing. Only when the last nemesis is dead:
+	// one still alive was refused (behind a cliff, across water), and picking it again here every
+	// time would spend a path request a cycle instead of waiting for the return scan.
 	m_stayedAtPost = FALSE;
+	const Object *lastNemesis = TheGameLogic->findObjectByID(getGuardMachine()->getNemesisID());
 	if (getGuardMachine()->hasReachedPost() && getMachineOwner()->getAI()->getLastCommandSource() == CMD_FROM_PLAYER
-			&& m_enterScanFrame != now)
+			&& (lastNemesis == NULL || lastNemesis->isEffectivelyDead())
+			&& getGuardMachine()->lookForInnerTarget())
 	{
-		m_enterScanFrame = now;
-		if (getGuardMachine()->lookForInnerTarget())
-		{
-			m_stayedAtPost = TRUE;	// no move was started, so onExit has none to end
-			return STATE_FAILURE;	// to AIGuardInnerState, on the new nemesis
-		}
+		m_stayedAtPost = TRUE;	// no move was started; onExit ends only what was left running
+		return STATE_FAILURE;	// to AIGuardInnerState, on the new nemesis
 	}
 
 	Object* targetToGuard = getGuardMachine()->findTargetToGuardByID();
@@ -758,7 +756,8 @@ StateReturnType AIGuardReturnState::onEnter( void )
 	// point with the whole group. The first walk to the post after the order is still made, and a
 	// guard without a radius (no wheel, AI, scripts, old replays) goes back as EA's did.
 	const Real radius = getMachineOwner()->getAI()->getGuardRadius();
-	if (!m_stayedAtPost && radius > 0.0f && getGuardMachine()->hasReachedPost() && !targetToGuard && !area)
+	if (!m_stayedAtPost && radius > 0.0f && getGuardMachine()->hasReachedPost()
+			&& getMachineOwner()->getAI()->getGuardTargetType() == GUARDTARGET_LOCATION)
 	{
 		const Coord3D *post = getGuardMachine()->getPositionToGuard();
 		const Real px = post->x - pos->x;
@@ -793,7 +792,16 @@ StateReturnType AIGuardReturnState::update( void )
 void AIGuardReturnState::onExit( StateExitType status )
 {
 	if (m_stayedAtPost)
+	{
+		// No move of ours to end, but the fight or the crate before us may have left one running,
+		// path and all: EA's return always asked for a path of its own, which threw the old one away.
+		// Left standing, the unit sat at its post still marked as moving, jogging on the spot and
+		// never deploying.
+		AIUpdateInterface *ai = getMachineOwner()->getAI();
+		ai->destroyPath();
+		ai->friend_endingMove();
 		return;
+	}
 	AIInternalMoveToState::onExit( status );
 }
 
@@ -927,7 +935,7 @@ StateReturnType AIGuardPickUpCrateState::update( void )
 //--------------------------------------------------------------------------------------
 void AIGuardPickUpCrateState::onExit( StateExitType status )
 {
-	
+
 }
 
 //-- AIGuardAttackAggressorState ------------------------------------------------------------------

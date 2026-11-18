@@ -232,7 +232,6 @@ public:
 	{
 		m_nextReturnScanTime = 0;
 		m_stayedAtPost = FALSE;
-		m_enterScanFrame = 0;
 	}
 	virtual Bool isAttack() const { return FALSE; }
 	virtual StateReturnType onEnter( void );
@@ -245,8 +244,7 @@ protected:
 	virtual void loadPostProcess();
 private:
 	UnsignedInt m_nextReturnScanTime;
-	Bool m_stayedAtPost;	///< onEnter skipped the move, so there is no move for onExit to end
-	UnsignedInt m_enterScanFrame;	///< the frame onEnter last scanned on; only ever compared with the current frame, so not saved
+	Bool m_stayedAtPost;	///< onEnter started no move of its own; onExit only ends one left running
 };
 EMPTY_DTOR(AIGuardReturnState)
 

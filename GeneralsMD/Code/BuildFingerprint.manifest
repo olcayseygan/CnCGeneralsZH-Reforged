@@ -1011,7 +1011,13 @@ Data/Cinema/lsv_burst.txt
 Data/Cinema/lsv_laser.txt
 Data/Cinema/lsv_spam.txt
 Data/Cinema/lsv_spam2.txt
+Data/Cinema/mapshot_alpine_assault.txt
+Data/Cinema/mapshot_bombardment_beach.txt
+Data/Cinema/mapshot_dust_devil.txt
+Data/Cinema/mapshot_sand_serpent.txt
 Data/Cinema/mapshot_tournament_desert.txt
+Data/Cinema/mapshot_tournament_plains.txt
+Data/Cinema/mapshot_winter_wolf.txt
 Data/Cinema/minefx.txt
 Data/Cinema/minefx_blast.txt
 Data/Cinema/minefx_desert.txt

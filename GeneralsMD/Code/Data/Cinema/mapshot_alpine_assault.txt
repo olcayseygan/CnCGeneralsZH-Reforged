@@ -1,0 +1,13 @@
+# Alpine Assault straight down, the whole map in one picture, for drawing Bot Cup events on it after
+# the fact; mapshot_tournament_desert.txt explains the method and the sizing.
+#
+#   generals.exe -win -xres 3840 -yres 4160 -msaa 0 -quickstart -noshellmap -observer -multiInstance
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -seed 1
+#     -cinema mapshot_alpine_assault -logPrefix mapshot_alpine_assault_
+#
+# The playable extent is 2390 by 2590 with its middle at (1195,1295). The window keeps the extent's shape,
+# so the eye has to be 2564 above the ground to see all of it; 2700 leaves a margin.
+
+0.05  drone 1  1195 1294 2700  1195 1295 2700  look 1195 1295  sway 0  bank 0
+10.0  shot map
+20.0  end

@@ -1,0 +1,13 @@
+# Sand Serpent straight down, the whole map in one picture, for drawing Bot Cup events on it after
+# the fact; mapshot_tournament_desert.txt explains the method and the sizing.
+#
+#   generals.exe -win -xres 4096 -yres 4096 -msaa 0 -quickstart -noshellmap -observer -multiInstance
+#     -map "Maps\Sand Serpent\Sand Serpent.map" -autoskirmish 2 -seed 1
+#     -cinema mapshot_sand_serpent -logPrefix mapshot_sand_serpent_
+#
+# The playable extent is 2640 by 2640 with its middle at (1320,1320). The window keeps the extent's shape,
+# so the eye has to be 2831 above the ground to see all of it; 2980 leaves a margin.
+
+0.05  drone 1  1320 1319 2980  1320 1320 2980  look 1320 1320  sway 0  bank 0
+10.0  shot map
+20.0  end

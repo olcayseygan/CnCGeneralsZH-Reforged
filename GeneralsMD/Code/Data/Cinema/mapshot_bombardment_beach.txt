@@ -1,0 +1,13 @@
+# Bombardment Beach straight down, the whole map in one picture, for drawing Bot Cup events on it after
+# the fact; mapshot_tournament_desert.txt explains the method and the sizing.
+#
+#   generals.exe -win -xres 4096 -yres 4096 -msaa 0 -quickstart -noshellmap -observer -multiInstance
+#     -map "Maps\Bombardment Beach\Bombardment Beach.map" -autoskirmish 2 -seed 1
+#     -cinema mapshot_bombardment_beach -logPrefix mapshot_bombardment_beach_
+#
+# The playable extent is 2750 by 2750 with its middle at (1375,1375). The window keeps the extent's shape,
+# so the eye has to be 2949 above the ground to see all of it; 3100 leaves a margin.
+
+0.05  drone 1  1375 1374 3100  1375 1375 3100  look 1375 1375  sway 0  bank 0
+10.0  shot map
+20.0  end

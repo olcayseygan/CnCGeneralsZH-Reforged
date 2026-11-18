@@ -1,0 +1,13 @@
+# Dust Devil straight down, the whole map in one picture, for drawing Bot Cup events on it after
+# the fact; mapshot_tournament_desert.txt explains the method and the sizing.
+#
+#   generals.exe -win -xres 4096 -yres 4096 -msaa 0 -quickstart -noshellmap -observer -multiInstance
+#     -map "Maps\Dust Devil\Dust Devil.map" -autoskirmish 2 -seed 1
+#     -cinema mapshot_dust_devil -logPrefix mapshot_dust_devil_
+#
+# The playable extent is 2500 by 2500 with its middle at (1250,1250). The window keeps the extent's shape,
+# so the eye has to be 2681 above the ground to see all of it; 2820 leaves a margin.
+
+0.05  drone 1  1250 1249 2820  1250 1250 2820  look 1250 1250  sway 0  bank 0
+10.0  shot map
+20.0  end

@@ -1,0 +1,13 @@
+# Tournament Plains straight down, the whole map in one picture, for drawing Bot Cup events on it after
+# the fact; mapshot_tournament_desert.txt explains the method and the sizing.
+#
+#   generals.exe -win -xres 5040 -yres 3600 -msaa 0 -quickstart -noshellmap -observer -multiInstance
+#     -map "Maps\Tournament Plains\Tournament Plains.map" -autoskirmish 2 -seed 1
+#     -cinema mapshot_tournament_plains -logPrefix mapshot_tournament_plains_
+#
+# The playable extent is 3500 by 2500 with its middle at (1750,1250). The window keeps the extent's shape,
+# so the eye has to be 3753 above the ground to see all of it; 3950 leaves a margin.
+
+0.05  drone 1  1750 1249 3950  1750 1250 3950  look 1750 1250  sway 0  bank 0
+10.0  shot map
+20.0  end

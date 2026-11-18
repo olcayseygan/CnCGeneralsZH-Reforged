@@ -1,0 +1,13 @@
+# Winter Wolf straight down, the whole map in one picture, for drawing Bot Cup events on it after
+# the fact; mapshot_tournament_desert.txt explains the method and the sizing.
+#
+#   generals.exe -win -xres 4096 -yres 4096 -msaa 0 -quickstart -noshellmap -observer -multiInstance
+#     -map "Maps\Winter Wolf\Winter Wolf.map" -autoskirmish 2 -seed 1
+#     -cinema mapshot_winter_wolf -logPrefix mapshot_winter_wolf_
+#
+# The playable extent is 2200 by 2200 with its middle at (1100,1100). The window keeps the extent's shape,
+# so the eye has to be 2359 above the ground to see all of it; 2480 leaves a margin.
+
+0.05  drone 1  1100 1099 2480  1100 1100 2480  look 1100 1100  sway 0  bank 0
+10.0  shot map
+20.0  end

@@ -7577,6 +7577,20 @@ Bool ScriptEngine::isVideoComplete( const AsciiString& completedVideo, Bool remo
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Restart only a matching cached wait. Conditions can be polled before the play action;
+ * unrelated and never-requested names retain their existing lazy timeout behavior. */
+//-------------------------------------------------------------------------------------------------
+void ScriptEngine::notifySpeechRequested( const AsciiString& speechName )
+{
+	for (ListAsciiStringUINTIt it = m_testingSpeech.begin(); it != m_testingSpeech.end(); ) {
+		if (it->first == speechName)
+			it = m_testingSpeech.erase(it);
+		else
+			++it;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Determine whether a speech has completed */
 //-------------------------------------------------------------------------------------------------
 Bool ScriptEngine::isSpeechComplete( const AsciiString& testSpeech, Bool removeFromList )

@@ -94,6 +94,9 @@
 #include "Common/AudioRandomValue.h"
 #include "GameNetwork/CrcAgreement.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/GhostObject.h"
+#include "GameLogic/ScriptActions.h"
+#include "GameLogic/ScriptConditions.h"
 #include "Common/EarlyCommandLine.h"
 #include "Common/CommandLine.h"
 #include "Common/GlobalData.h"
@@ -7533,6 +7536,77 @@ public:
 	Bool flag( Int ndx ) const { return m_flags[ ndx ].value; }
 	void raiseFlag( Int ndx ) { m_flags[ ndx ].value = TRUE; }
 };
+
+
+// A condition may have already timed out before its cue is requested. Use a silent provider
+// whose logical clip duration changes to distinguish a stale deadline from a fresh lookup.
+class SpeechWaitAudio : public NullAudioManager
+{
+public:
+	Real duration = 0;
+	Int queries = 0;
+	virtual Real getAudioLengthMS(const AudioEventRTS *) { ++queries; return duration; }
+};
+
+TEST(script_speech_request_restarts_only_the_matching_cached_wait)
+{
+	AudioManager *savedAudio = TheAudio;
+	GameLogic *savedLogic = TheGameLogic;
+	TerrainLogic *savedTerrain = TheTerrainLogic;
+	TheTerrainLogic = NULL;
+	SpeechWaitAudio audio;
+	TheAudio = &audio;
+	GameLogic *logic = new GameLogic;
+	TheGameLogic = logic;
+	ScriptEngine *engine = new ScriptEngine;
+	const AsciiString cue("SpeechCue"), other("OtherCue"), differentCase("speechcue");
+
+	CHECK(engine->isSpeechComplete(cue, FALSE)); // pre-query: old deadline at frame zero
+	CHECK(engine->isSpeechComplete(other, FALSE));
+	CHECK(engine->isSpeechComplete(differentCase, FALSE));
+	audio.duration = 3000;
+	const Int beforeRequest = audio.queries;
+	engine->notifySpeechRequested(cue);
+	CHECK_EQ(audio.queries, beforeRequest); // requests neither ask the device nor consume audio RNG
+	CHECK(!engine->isSpeechComplete(cue, FALSE));
+	CHECK_EQ(audio.queries, beforeRequest + 1);
+	CHECK(engine->isSpeechComplete(other, FALSE)); // mismatched and unplayed names keep their waits
+	CHECK(engine->isSpeechComplete(differentCase, FALSE)); // exact, case-sensitive name
+	CHECK_EQ(audio.queries, beforeRequest + 1);
+
+	// Repeating the request invalidates its new wait as well, without affecting the fallback.
+	audio.duration = 0;
+	engine->notifySpeechRequested(cue);
+	CHECK(engine->isSpeechComplete(cue, TRUE));
+	audio.duration = 3000;
+	CHECK(!engine->isSpeechComplete(cue, FALSE)); // removeFromList still permits a fresh lazy wait
+	engine->notifySpeechRequested(AsciiString("NeverPolled"));
+	CHECK(!engine->isSpeechComplete(AsciiString("NeverPolled"), FALSE));
+	CHECK(engine->isSpeechComplete(other, TRUE));
+
+	delete engine;
+	// GameLogic normally owns these singletons. This isolated clock must not destroy
+	// the surrounding test environment when its empty object list is torn down.
+	auto *savedGhosts = TheGhostObjectManager;
+	auto *savedPartition = ThePartitionManager;
+	auto *savedActions = TheScriptActions;
+	auto *savedConditions = TheScriptConditions;
+	auto *savedScripts = TheScriptEngine;
+	TheGhostObjectManager = NULL;
+	ThePartitionManager = NULL;
+	TheScriptActions = NULL;
+	TheScriptConditions = NULL;
+	TheScriptEngine = NULL;
+	delete logic;
+	TheGhostObjectManager = savedGhosts;
+	ThePartitionManager = savedPartition;
+	TheScriptActions = savedActions;
+	TheScriptConditions = savedConditions;
+	TheScriptEngine = savedScripts;
+	TheGameLogic = savedLogic;
+	TheTerrainLogic = savedTerrain;
+	TheAudio = savedAudio;
+}
 
 TEST(scriptengine_gives_every_flag_and_counter_its_own_slot_past_256)
 {

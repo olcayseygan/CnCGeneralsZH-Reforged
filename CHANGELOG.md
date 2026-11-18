@@ -32,6 +32,10 @@ found and fixed, EA's own, not port damage.**
 - The film no longer splits the screen, not between players and not between two powers. One camera has the whole picture, and a second power landing off it, or a second fight, plays in a small framed window in the lower right corner with the name and army of whoever called it. Before, the second power had to land most of a screen's width further away than that to get any picture at all, so an artillery barrage called on the same frame as a superweapon across the same base was shown nowhere. A superweapon takes the window from a smaller power at once.
 - A superweapon or strike that neither the camera nor the window caught comes back as an instant replay: the match is played through a third time and the two seconds before the hit and six after it are filmed on their own, with a list of where each one fits into the match film at the next quiet moment.
 
+## Campaign dialogue
+
+- A campaign script that checked for the end of a speech before requesting it could skip ahead as the speech began. Requesting that same speech now starts a fresh wait; unrelated dialogue waits keep their timing.
+
 ## Crashes from the 4.0 reports
 
 - The commonest crash of 4.0 was fixed in 4.1; this round closes what the reports left behind.

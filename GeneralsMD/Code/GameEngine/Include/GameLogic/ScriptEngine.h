@@ -335,6 +335,7 @@ public:
 	virtual void signalUIInteract(const AsciiString& hookName);	///< Notify that a UI button was pressed and some flag should go true, for one frame only.
 
 	virtual Bool isVideoComplete( const AsciiString& completedVideo, Bool removeFromList );	///< Determine whether a video has completed
+	void notifySpeechRequested( const AsciiString& speechName );
 	virtual Bool isSpeechComplete( const AsciiString& completedSpeech, Bool removeFromList );	///< Determine whether a speech has completed
 	virtual Bool isAudioComplete( const AsciiString& completedAudio, Bool removeFromList );	///< Determine whether a sound has completed
 	virtual Bool isSpecialPowerTriggered( Int playerIndex, const AsciiString& completedPower, Bool removeFromList, ObjectID sourceObj );

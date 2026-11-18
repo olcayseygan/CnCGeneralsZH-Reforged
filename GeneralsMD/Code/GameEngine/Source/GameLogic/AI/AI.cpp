@@ -3035,6 +3035,31 @@ Int aiLeastDefendedLane( const Real *laneFirepower, Int laneCount, Int requested
 }
 
 //-------------------------------------------------------------------------------------------------
+void aiWeighLaneLosses( Real *laneFirepower, const Real *laneLoss, Int laneCount, Real lossWeight )
+{
+	Real fire = 0.0f;
+	Real lost = 0.0f;
+	for( Int i = 0; i < laneCount; ++i )
+	{
+		if( laneFirepower[ i ] < 0.0f )
+			continue;
+		fire += laneFirepower[ i ];
+		if( laneLoss[ i ] > 0.0f )
+			lost += laneLoss[ i ];
+	}
+	if( lossWeight <= 0.0f || lost <= 0.0f )
+		return;
+	for( Int i = 0; i < laneCount; ++i )
+	{
+		if( laneFirepower[ i ] < 0.0f )
+			continue;
+		const Real fireShare = fire > 0.0f ? laneFirepower[ i ] / fire : 0.0f;
+		const Real lossShare = laneLoss[ i ] > 0.0f ? laneLoss[ i ] / lost : 0.0f;
+		laneFirepower[ i ] = fireShare + lossWeight * lossShare;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool aiReleaseWave( Real heldPower, Real wavePower, UnsignedInt heldFrames, UnsignedInt maxHoldFrames )
 {
 	if( heldPower <= 0.0f )

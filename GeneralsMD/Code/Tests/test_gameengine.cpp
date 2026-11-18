@@ -17935,6 +17935,50 @@ static void stampCost( AIInfluenceMap &map, Real x, Real y, Real z, Real range, 
 	map.stampEnemy( x, y, z, range, 0.0f, cost );
 }
 
+/** The loss map: a loss sits in its cell, a read round a spot takes the cell and its neighbours, a read along
+	 a road counts each cell once however many of its spots reach it, and it fades to nothing under the least. */
+TEST(loss_map_reads_each_cell_once_and_fades)
+{
+	AILossMap losses;
+	losses.reset( 0.0f, 0.0f, 600.0f, 600.0f, 60.0f );
+	losses.add( 330.0f, 330.0f, 1000.0f );		// cell 5,5, centre 330,330
+	losses.add( 400.0f, 330.0f, 500.0f );			// cell 6,5, centre 390,330
+	losses.add( -5.0f, 330.0f, 9999.0f );			// off the grid: nothing
+	CHECK_EQ( 1500.0f, losses.lossAround( 330.0f, 330.0f, 90.0f ) );
+	CHECK_EQ( 0.0f, losses.lossAround( 100.0f, 100.0f, 90.0f ) );
+
+	const Real xs[] = { 300.0f, 320.0f, 340.0f, 360.0f, 380.0f };
+	const Real ys[] = { 330.0f, 330.0f, 330.0f, 330.0f, 330.0f };
+	std::vector<Int> scratch;
+	CHECK_EQ( 1500.0f, losses.lossAround( xs, ys, 5, 90.0f, scratch ) );
+
+	losses.fade( 0.5f, 300.0f );
+	CHECK_EQ( 500.0f, losses.lossAround( 330.0f, 330.0f, 90.0f ) );		// 250 went under 300 and was cleared
+}
+
+/** The lanes weighed with their losses: shares of both, a missing lane left alone, and with no loss anywhere
+	 the firepower untouched to the bit. */
+TEST(lane_losses_turn_a_wave_off_the_road_it_died_on)
+{
+	Real firepower[ 3 ] = { 100.0f, 300.0f, -1.0f };
+	const Real none[ 3 ] = { 0.0f, 0.0f, 0.0f };
+	aiWeighLaneLosses( firepower, none, 3, 1.0f );
+	CHECK_EQ( 100.0f, firepower[ 0 ] );
+	CHECK_EQ( 300.0f, firepower[ 1 ] );
+	CHECK_EQ( 0, aiLeastDefendedLane( firepower, 3, 1 ) );
+
+	const Real lost[ 3 ] = { 3000.0f, 0.0f, 0.0f };
+	aiWeighLaneLosses( firepower, lost, 3, 1.0f );
+	CHECK_NEAR( firepower[ 0 ], 1.25f, 0.0001f );		// a quarter of the guns, all of the losses
+	CHECK_NEAR( firepower[ 1 ], 0.75f, 0.0001f );
+	CHECK_EQ( -1.0f, firepower[ 2 ] );
+	CHECK_EQ( 1, aiLeastDefendedLane( firepower, 3, 0 ) );
+
+	Real off[ 2 ] = { 100.0f, 300.0f };
+	aiWeighLaneLosses( off, lost, 2, 0.0f );		// Easy reads no losses
+	CHECK_EQ( 100.0f, off[ 0 ] );
+}
+
 TEST(influence_map_covers_what_a_gun_reaches_and_the_high_ground_reaches_further)
 {
 	AIInfluenceMap map;

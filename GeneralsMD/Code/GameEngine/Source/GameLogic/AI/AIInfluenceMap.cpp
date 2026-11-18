@@ -412,6 +412,101 @@ void AIInfluenceMap::xfer( Xfer *xfer, UnsignedByte version )
 	}
 }
 
+AILossMap::AILossMap() :
+	m_originX( 0.0f ), m_originY( 0.0f ), m_cellSize( 1.0f ), m_cols( 0 ), m_rows( 0 )
+{
+}
+
+void AILossMap::reset( Real originX, Real originY, Real width, Real height, Real cellSize )
+{
+	m_originX = originX;
+	m_originY = originY;
+	m_cellSize = cellSize;
+	m_cols = (width > 0.0f) ? REAL_TO_INT_CEIL( width / cellSize ) : 0;
+	m_rows = (height > 0.0f) ? REAL_TO_INT_CEIL( height / cellSize ) : 0;
+	m_loss.assign( m_cols * m_rows, 0.0f );
+}
+
+void AILossMap::add( Real x, Real y, Real power )
+{
+	const Int col = REAL_TO_INT_FLOOR( (x - m_originX) / m_cellSize );
+	const Int row = REAL_TO_INT_FLOOR( (y - m_originY) / m_cellSize );
+	if( col < 0 || row < 0 || col >= m_cols || row >= m_rows || power <= 0.0f )
+		return;
+	m_loss[ row * m_cols + col ] += power;
+}
+
+void AILossMap::cellsWithin( Real x, Real y, Real radius, std::vector<Int> &cells ) const
+{
+	const Int colLo = max<Int>( 0, REAL_TO_INT_FLOOR( (x - radius - m_originX) / m_cellSize ) );
+	const Int colHi = min<Int>( m_cols - 1, REAL_TO_INT_FLOOR( (x + radius - m_originX) / m_cellSize ) );
+	const Int rowLo = max<Int>( 0, REAL_TO_INT_FLOOR( (y - radius - m_originY) / m_cellSize ) );
+	const Int rowHi = min<Int>( m_rows - 1, REAL_TO_INT_FLOOR( (y + radius - m_originY) / m_cellSize ) );
+	const Real radiusSqr = sqr( radius );
+	for( Int row = rowLo; row <= rowHi; ++row )
+	{
+		const Real cy = m_originY + (row + 0.5f) * m_cellSize;
+		for( Int col = colLo; col <= colHi; ++col )
+		{
+			const Real cx = m_originX + (col + 0.5f) * m_cellSize;
+			if( sqr( cx - x ) + sqr( cy - y ) <= radiusSqr )
+				cells.push_back( row * m_cols + col );
+		}
+	}
+	// the cell it stands in, however small the radius
+	const Int col = REAL_TO_INT_FLOOR( (x - m_originX) / m_cellSize );
+	const Int row = REAL_TO_INT_FLOOR( (y - m_originY) / m_cellSize );
+	if( col >= 0 && row >= 0 && col < m_cols && row < m_rows )
+		cells.push_back( row * m_cols + col );
+}
+
+Real AILossMap::lossAround( const Real *xs, const Real *ys, Int count, Real radius, std::vector<Int> &scratch ) const
+{
+	if( m_cols <= 0 || count <= 0 )
+		return 0.0f;
+	scratch.clear();
+	for( Int i = 0; i < count; ++i )
+		cellsWithin( xs[ i ], ys[ i ], radius, scratch );
+	std::sort( scratch.begin(), scratch.end() );
+	scratch.erase( std::unique( scratch.begin(), scratch.end() ), scratch.end() );
+	Real sum = 0.0f;
+	for( size_t i = 0; i < scratch.size(); ++i )
+		sum += m_loss[ scratch[ i ] ];
+	return sum;
+}
+
+Real AILossMap::lossAround( Real x, Real y, Real radius ) const
+{
+	std::vector<Int> scratch;
+	return lossAround( &x, &y, 1, radius, scratch );
+}
+
+void AILossMap::fade( Real kept, Real least )
+{
+	for( size_t i = 0; i < m_loss.size(); ++i )
+	{
+		if( m_loss[ i ] <= 0.0f )
+			continue;
+		m_loss[ i ] *= kept;
+		if( m_loss[ i ] < least )
+			m_loss[ i ] = 0.0f;
+	}
+}
+
+void AILossMap::xfer( Xfer *xfer )
+{
+	xfer->xferReal( &m_originX );
+	xfer->xferReal( &m_originY );
+	xfer->xferReal( &m_cellSize );
+	xfer->xferInt( &m_cols );
+	xfer->xferInt( &m_rows );
+	const size_t cells = (size_t)m_cols * (size_t)m_rows;
+	if( xfer->getXferMode() == XFER_LOAD )
+		m_loss.assign( cells, 0.0f );
+	for( size_t i = 0; i < cells; ++i )
+		xfer->xferReal( &m_loss[ i ] );
+}
+
 Bool AIKite_standoffDistance( Real myRange, Real enemyRange, Real margin, Real *distance )
 {
 	if( myRange < enemyRange + 2.0f * margin )

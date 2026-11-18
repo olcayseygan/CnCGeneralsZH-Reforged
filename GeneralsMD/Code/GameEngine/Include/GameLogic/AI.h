@@ -1104,6 +1104,13 @@ Int aiPickUpgrade( const Real *covered, const Int *cost, Int count, Real payoff,
 	* script asked for, so an AI that has not scouted plays exactly as the script wrote it. */
 Int aiLeastDefendedLane( const Real *laneFirepower, Int laneCount, Int requestedLane );
 
+/** The firepower of each lane weighed with what this AI has lost along it (AILossMap), before
+	* aiLeastDefendedLane picks: each lane becomes its share of the firepower plus lossWeight times its share
+	* of the losses.  The two are counted in different currencies, the map's rates and the losses' build cost,
+	* so shares are what can be added.  A negative entry stays as it is.  With no loss on any lane, or a weight
+	* of 0, nothing changes, to the bit. */
+void aiWeighLaneLosses( Real *laneFirepower, const Real *laneLoss, Int laneCount, Real lossWeight );
+
 /** Whether the attack teams parked at the staging point go now: when what is parked adds up to a wave,
 	* or the oldest has waited long enough.  The threshold is this AI's own force, never a fraction of
 	* the enemy's, because two AIs each waiting to outnumber the other never move. */

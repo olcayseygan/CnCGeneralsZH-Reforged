@@ -969,6 +969,18 @@ protected:
 	Bool holdsTeamsForWaves(void) const;					///< this rung parks attack teams at the current level
 	Bool readyToPush(void);												///< the economy is in and the opening is over: attack teams may leave home
 	Bool waveGoes(Real power, UnsignedInt heldFrames);	///< what is parked, worth this, leaves now
+
+	/** Kill zones: where this AI's own units died (m_lossMap), and the guns it knows on the road an attack takes.
+		* -aiknobsoff ... killzones takes all of it off a seat. */
+	Bool killZonesHere(void) const;
+	Real killZoneWeight(void) const;							///< how much of the loss record a reading counts, 0 when off
+	Real killZoneAt(const Coord3D *at) const;			///< ... the losses round one spot, weighed
+	Real gunOdds(void) const;											///< what an attack has to be worth against the guns it meets, 0 when off
+	void recordLoss(const Object *obj);						///< one of ours died here
+	Real guardedRoad(void);												///< the known guns and the losses on the quietest road to the enemy's base and at it
+	Bool attackBeatsGuns(Real power, const char *what);	///< an attack worth power may go: it beats guardedRoad at the odds, or the guns have held attacks long enough
+	AILossMap		m_lossMap;
+	UnsignedInt	m_gunHoldSince;										///< frame the guns first held an attack back, 0 when nothing is held
 	void buyEarlyIncome(void);										///< the first drop zone and black market, ahead of the army
 	void keepSiegeBehind(void);										///< artillery out with a wave trails its front unit
 	void holdAtDefences(void);

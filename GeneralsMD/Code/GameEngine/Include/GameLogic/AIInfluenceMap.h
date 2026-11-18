@@ -155,6 +155,34 @@ private:
 	UnsignedInt m_builtFrame;
 };
 
+/** Where one computer player's own units died, and what they were worth, in aiCombatPower's currency.  The
+	* influence map above is drawn again from what is known every round; this is never redrawn, it fades, so a
+	* road where a wave was shot to pieces stays a kill zone for minutes after the guns that did it went back
+	* into the fog.  One figure a cell, on a grid the owner sizes like the influence map's. */
+class AILossMap
+{
+public:
+	AILossMap();
+	void reset( Real originX, Real originY, Real width, Real height, Real cellSize );
+	Bool isSized() const { return m_cols > 0; }
+	/** power into the cell (x, y) stands in; nothing off the grid. */
+	void add( Real x, Real y, Real power );
+	/** What was lost in every cell whose centre is within radius of any of the count points, each cell once,
+		* summed in cell order.  scratch holds the cells meanwhile. */
+	Real lossAround( const Real *xs, const Real *ys, Int count, Real radius, std::vector<Int> &scratch ) const;
+	Real lossAround( Real x, Real y, Real radius ) const;
+	/** Every cell times kept, and to nothing once under least. */
+	void fade( Real kept, Real least );
+	void xfer( Xfer *xfer );
+
+private:
+	void cellsWithin( Real x, Real y, Real radius, std::vector<Int> &cells ) const;
+
+	Real m_originX, m_originY, m_cellSize;
+	Int m_cols, m_rows;
+	std::vector<Real> m_loss;
+};
+
 /** What a gun on the move stamps from: its place plus leadFrames of its velocity, the lead no longer than
 	* maxLead, so the map shows where a column is about to be and not where it was. */
 void AIInfluence_projectedCentre( Real x, Real y, Real velX, Real velY, Real leadFrames, Real maxLead, Real *outX, Real *outY );

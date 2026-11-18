@@ -156,6 +156,7 @@ OPTION_INT_ACCESSORS( m_playerColorScheme )
 OPTION_INT_ACCESSORS( m_textLanguage )
 OPTION_BOOL_ACCESSORS( m_showOrderLines )
 OPTION_BOOL_ACCESSORS( m_aircraftAltitudeLine )
+OPTION_BOOL_ACCESSORS( m_selectionOutlines )
 OPTION_BOOL_ACCESSORS( m_showNetBox )
 OPTION_INT_ACCESSORS( m_minimapSize )
 OPTION_BOOL_ACCESSORS( m_showEmptyBuildingPips )
@@ -519,7 +520,8 @@ const OptionDef TheOptionCatalog[] =
 	// A ceiling on the pictures a second, for a card that runs hot drawing hundreds of them (GitHub
 	// #149).  GameEngine::execute waits out the rest of each picture's time after the present; the
 	// logic is paced by its own clock and the cap never goes under the logic's rate.  Off is the
-	// uncapped picture.  The shell and its menus hold 60 whatever this says (#153).
+	// uncapped picture in a match; the shell and its menus hold 60 under Off (#153) and the picked
+	// limit otherwise.
 	{ "FrameRateLimit",						OPT_WND( "ComboBoxFrameRateLimit" ), "GUI:FrameRateLimit",
 		OPTION_ENUM, APPLY_LIVE, 0, FRAME_RATE_LIMIT_COUNT - 1,
 		get_m_frameRateLimit, set_m_frameRateLimit },
@@ -636,6 +638,15 @@ const OptionDef TheOptionCatalog[] =
 	{ "AircraftAltitudeLine",			OPT_WND( "CheckAircraftAltitudeLine" ), "GUI:AircraftAltitudeLine",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_aircraftAltitudeLine, set_m_aircraftAltitudeLine },
+
+	// The glowing ring in its owner's colour under each selected unit, and the same line round a
+	// selected building's footprint (W3DWaypointBuffer::takeSelectionRings, recordStructureOutline).
+	// Drawn fresh every frame, so the box takes them away at once.  On by default like the altitude
+	// line: the owner keeps them and leaves the player who finds them noise to turn them off.  Health
+	// bars, order lines and the order target's red flash do not ask it.  Client only, no quality row.
+	{ "SelectionOutlines",				OPT_WND( "CheckSelectionOutlines" ), "GUI:SelectionOutlines",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_selectionOutlines, set_m_selectionOutlines },
 
 	// The box in the top right corner: the match clock, the frame rates and, in a network game, the
 	// connection.  Off, the superweapon timers move up into the corner it leaves.  A key of its own

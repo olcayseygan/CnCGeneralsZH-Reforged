@@ -400,6 +400,7 @@ public:
 	Int m_textLanguage;						///< TextLanguageType: the translation GameText lays over the CSF, read once at startup (client only)
 	Bool m_showOrderLines;				///< draw a line from each selected unit to where it is going, and its queue (client only)
 	Bool m_aircraftAltitudeLine;	///< "AircraftAltitudeLine": a line from each aircraft in the air down to the ground under it (client only)
+	Bool m_selectionOutlines;			///< "SelectionOutlines": the ring under each selected unit and the line round a selected building (client only)
 	Bool m_scriptDebug;						///< Should we attempt to load the script debugger window (.DLL)
 	Bool m_particleEdit;					///< Should we attempt to load the particle editor (.DLL)
 	Bool m_displayDebug;					///< Used to display display debug info

@@ -15294,7 +15294,7 @@ GUI:FrameRateLimit4
 END
 
 TOOLTIP:FrameRateLimit
-"Maçta saniyede en fazla kaç kare çizileceği. Sınırı düşürürsen ekran kartın daha serin ve sessiz çalışır, oyun da yavaşlamaz. Menüler zaten 60'ta durur."
+"Maçta ve menülerde saniyede en fazla kaç kare çizileceği. Sınırı düşürürsen ekran kartın daha serin ve sessiz çalışır, oyun da yavaşlamaz. Kapalıyken maç makinenin çizebildiği kadar hızlı akar, menüler 60'ta durur."
 END
 
 GUI:ClassicGraphics
@@ -15687,6 +15687,14 @@ END
 
 TOOLTIP:AircraftAltitudeLine
 "Havadaki her uçaktan altındaki yere dümdüz ince bir çizgi iner. Çizginin değdiği yer uçağın asıl yeri, boyu da ne kadar yüksekte uçtuğu. Yerde duran uçakta çizgi olmaz."
+END
+
+GUI:SelectionOutlines
+"Seçim Çizgileri"
+END
+
+TOOLTIP:SelectionOutlines
+"Seçili her birimin altında sahibinin renginde parlayan bir halka, seçili binanın çevresinde de aynı çizgi. Kapalıyken ikisi de çizilmez; emir çizgileri ve tıklanan yerdeki işaretler kalır."
 END
 
 GUI:PlayerColors
@@ -20736,4 +20744,8 @@ END
 
 GUI:OnlineHubCustomExplain_Short
 "Oda kur ya da katıl. %ls sunucusundakilerle sohbet et."
+END
+
+GUI:GroupTrayTraining
+"+%d üretimde"
 END

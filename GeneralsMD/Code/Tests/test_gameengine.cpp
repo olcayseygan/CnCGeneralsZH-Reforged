@@ -8890,6 +8890,10 @@ TEST(random_pool_round_trips_and_plain_random_leaves_out_turkiye)
 	CHECK( !IsValidPlayerTemplatePick( 5 ) );
 	CHECK( IsValidPlayerTemplatePick( PLAYERTEMPLATE_OBSERVER ) );
 	CHECK( IsValidPlayerTemplatePick( 4 ) );
+	// a template with no command center is no seat's army: a saved Civilian computer seat (retail's
+	// number 0) crashed the match start in 4.0.0
+	CHECK( !IsValidPlayerTemplatePick( 0 ) );
+	CHECK( !IsValidPlayerTemplatePick( PlayerTemplateFromSlotField( AsciiString( "0" ) ) ) );
 
 	// the slot string carries a pool as its mask in hex, nine bytes at the widest where the number was eleven
 	CHECK_STR( PlayerTemplateSlotField( pick ).str(), "P9" );
@@ -23172,6 +23176,28 @@ TEST(aircraft_altitude_lines_are_a_check_box_that_starts_on)
 	CHECK( scratch->m_aircraftAltitudeLine );
 	def->set( 0 );
 	CHECK( !scratch->m_aircraftAltitudeLine );
+
+	TheWritableGlobalData = saved;
+	delete scratch;
+}
+
+TEST(selection_outlines_are_a_check_box_that_starts_on)
+{
+	const OptionDef *def = findOptionDef( "SelectionOutlines" );
+	CHECK( def != NULL );
+	if( def == NULL )
+		return;
+	CHECK_EQ( (Int)def->kind, (Int)OPTION_BOOL );
+	CHECK_EQ( (Int)def->apply, (Int)APPLY_LIVE );
+	CHECK( strstr( def->widgetName, "CheckSelectionOutlines" ) != NULL );
+
+	GlobalData *saved = TheWritableGlobalData;
+	GlobalData *scratch = NEW GlobalData;
+	TheWritableGlobalData = scratch;
+
+	CHECK( scratch->m_selectionOutlines );
+	def->set( 0 );
+	CHECK( !scratch->m_selectionOutlines );
 
 	TheWritableGlobalData = saved;
 	delete scratch;

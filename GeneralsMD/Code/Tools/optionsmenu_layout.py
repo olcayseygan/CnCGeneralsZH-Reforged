@@ -201,6 +201,7 @@ NEW_CONTROLS = [
     (COMBO,  "ComboBoxLanguage",       None),
     (CHECK,  "CheckOrderLines",        "GUI:OrderLines"),
     (CHECK,  "CheckAircraftAltitudeLine", "GUI:AircraftAltitudeLine"),
+    (CHECK,  "CheckSelectionOutlines", "GUI:SelectionOutlines"),
     (CHECK,  "CheckNetBox",            "GUI:NetBox"),
     (CHECK,  "CheckEmptyBuildingPips", "GUI:EmptyBuildingPips"),
     (CHECK,  "CheckZoomToCursor",      "GUI:ZoomToCursor"),
@@ -506,6 +507,7 @@ GROUP_LAYOUT = [
             setting("LabelPlayerColors", "ComboBoxPlayerColors"),
             ("check", "CheckOrderLines"),
             ("check", "CheckAircraftAltitudeLine"),
+            ("check", "CheckSelectionOutlines"),
             ("check", "CheckEmptyBuildingPips")]),
         # after the battlefield: a combo row is taller than the box it replaced, and the first column
         # ran past the page with it there

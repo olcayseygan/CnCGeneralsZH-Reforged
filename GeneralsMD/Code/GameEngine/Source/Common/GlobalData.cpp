@@ -1051,6 +1051,7 @@ GlobalData::GlobalData()
 	m_textLanguage = TEXT_LANGUAGE_ENGLISH;
 	m_showOrderLines = FALSE;
 	m_aircraftAltitudeLine = TRUE;		// the owner's word: on until a player turns it off
+	m_selectionOutlines = TRUE;				// the same: the rings and building lines stay as they are until a player turns them off
 
 	m_particleEdit = FALSE;
 

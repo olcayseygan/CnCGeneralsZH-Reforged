@@ -8,6 +8,30 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Crashes from the 4.0 reports
+
+- The commonest crash of 4.0 was fixed in 4.1; this round closes what the reports left behind.
+- A modded unit with a very detailed model no longer crashes skirmish and online games when it casts a shadow. It casts its shadow normally.
+- A mod that renames or replaces units no longer stops 4.1 at startup with an error about TalentsReforged.ini. The general's talents skip the units the mod doesn't have.
+- A mod whose Generals' Challenge file misspells a general's name (Project Raptor's does) no longer stops the game at startup.
+- A mod whose art has no sky box no longer crashes the moment a match starts on a map that turns the sky on.
+- A modded point-defence laser whose weapon the game cannot find stands idle instead of crashing the match.
+- A skirmish where a saved setting had turned a computer opponent into the Civilians no longer crashes as the match loads. The lobby throws the broken setting away and opens fresh.
+- Pressing an arrow key in an empty list, such as the skirmish map list, no longer crashes the game.
+- A cargo plane, Chinook or gunship checking whether it had flown off the map could crash the game if the terrain's graphics were being rebuilt at that moment. It can't any more.
+- A rare crash right after a busy moment in a match, when two parts of the game looked up the same unit model at once, is gone.
+- On Linux and Steam Deck (Wine/Proton) with no working sound output the game used to crash at startup. It now starts and plays without sound.
+- Coming back to a match after a long time away, or after the graphics driver restarted, no longer crashes the game when you open the quit menu.
+- When the game runs out of memory or meets a bad value deep inside, its crash report now says where.
+
+## Screen and controls
+
+- The command bar and menus no longer go dark now and then, as if a shadow fell over them. The sun's shadows and smoke land only on the battlefield.
+- A new match no longer opens on a black screen with only a corner of the map showing. The camera starts over your base every time.
+- Options, Interface has a Selection Outlines box. Untick it and the glowing rings under your selected units and the line around a selected building are gone; order lines and click markers stay.
+- The group build tray shows how many units are still in production for that group, takes a little less of the screen, and its fold tab is wider, so a quick click in a fight lands.
+- Frame Rate Limit now applies in the menus as well as in a match. Pick 144 or 240 and the main menu runs at that rate instead of being stuck at 60; Off still holds the menus at 60, so an idle menu doesn't run your graphics card hot.
+
 ## Play vs AI online
 
 - The online hub has a PLAY VS AI button under Options. One press starts a 1v1 against a computer player as strong as your AI rating, on a map and seed the server picks. The AI rating is a second rating zerohour.gg keeps beside the ladder's, starting at 0, and the hub shows it left of the button.

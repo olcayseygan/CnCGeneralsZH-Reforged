@@ -76,6 +76,7 @@
 #include "Common/NameKeyGenerator.h"
 #include "Common/ModuleFactory.h"
 #include "Common/Debug.h"
+#include "Common/StackDump.h"		// the recent throws' stacks, when an exception ends the game
 #include "Common/GameState.h"
 #include "Common/GameStateMap.h"
 #include "Common/Science.h"
@@ -214,6 +215,67 @@ void initSubsystem(SUBSYSTEM*& sysref, AsciiString name, SUBSYSTEM* sys, Xfer *p
 extern HINSTANCE ApplicationHInstance;  ///< our application instance
 extern CComModule _Module;		// ATL's module, for the embedded browser's COM; nothing off Windows uses COM
 #endif
+
+//-------------------------------------------------------------------------------------------------
+/* An ErrorCode is a bare C++ throw, and by the time a catch here runs the frames that threw are gone:
+	 the crash report's stack starts at the catch.  Crash reports 4032, 4056 and 4073 (ERROR_OUT_OF_MEMORY)
+	 and 3946 (ERROR_BAD_ARG) named no thrower at all.  A first-chance handler keeps the return addresses
+	 of the last few throws, any thread, and a catch that ends the game writes them into the log.  A ring,
+	 not one slot: a throw on the logic thread reaches the main thread as a rethrow, which is a throw too.
+	 Racy by design; a torn entry costs one wrong line in a dying process. */
+#if defined(_WIN32)
+static const ULONG THROW_RING_SIZE = 4;
+// deep enough that the five or so dispatch frames (this handler, RtlpCallVectoredHandlers,
+// RtlDispatchException, RaiseException, _CxxThrowException) still leave the thrower's callers
+static const ULONG THROW_STACK_DEPTH = 28;
+static void *s_throwStacks[ THROW_RING_SIZE ][ THROW_STACK_DEPTH ];
+static DWORD s_throwThreads[ THROW_RING_SIZE ];
+static volatile LONG s_throwCount = 0;
+
+static LONG CALLBACK recordCxxThrow( EXCEPTION_POINTERS *info )
+{
+	const EXCEPTION_RECORD *rec = info->ExceptionRecord;
+	// MSVC's code for a C++ throw, and only the exe's own: [3] is the ThrowImageBase on x64 and ARM64,
+	// so a driver's or a runtime DLL's internal throw cannot push ours out of the four slots
+	if (rec->ExceptionCode == 0xE06D7363 && rec->NumberParameters >= 4
+		&& rec->ExceptionInformation[ 3 ] == (ULONG_PTR)GetModuleHandle( NULL ))
+	{
+		const ULONG slot = ( (ULONG)InterlockedIncrement( &s_throwCount ) - 1 ) % THROW_RING_SIZE;
+		memset( s_throwStacks[ slot ], 0, sizeof( s_throwStacks[ slot ] ) );
+		::CaptureStackBackTrace( 1, THROW_STACK_DEPTH, s_throwStacks[ slot ], NULL );	// 1: not this frame
+		s_throwThreads[ slot ] = GetCurrentThreadId();
+	}
+	return EXCEPTION_CONTINUE_SEARCH;
+}
+#endif
+
+static void installThrowRecorder()
+{
+#if defined(_WIN32)
+	static PVOID handler = AddVectoredExceptionHandler( 0, recordCxxThrow );
+	(void)handler;
+#endif
+}
+
+/* Oldest first, so the throw that started it comes before the rethrows it set off.  The first few
+	 frames of each are the exception dispatch and _CxxThrowException; the thrower follows them. */
+static void logRecentThrows()
+{
+#if defined(_WIN32)
+	const ULONG count = (ULONG)s_throwCount;
+	void *stacks[ THROW_RING_SIZE ][ THROW_STACK_DEPTH ];
+	DWORD threads[ THROW_RING_SIZE ];
+	memcpy( stacks, s_throwStacks, sizeof( stacks ) );
+	memcpy( threads, s_throwThreads, sizeof( threads ) );
+	const ULONG first = count > THROW_RING_SIZE ? count - THROW_RING_SIZE : 0;
+	for( ULONG n = first; n != count; n++ )
+	{
+		const ULONG slot = n % THROW_RING_SIZE;
+		DEBUG_LOG(( "C++ throw %u of %u, thread %u:\n", (UnsignedInt)( n + 1 ), (UnsignedInt)count, (UnsignedInt)threads[ slot ] ));
+		StackDumpFromAddresses( stacks[ slot ], THROW_STACK_DEPTH, NULL );
+	}
+#endif
+}
 
 //-------------------------------------------------------------------------------------------------
 static void updateTGAtoDDS();
@@ -949,6 +1011,7 @@ static void startAutoNetGame( void )
 void GameEngine::init( void ) {} /// @todo: I changed this to take argc & argv so we can parse those after the GDF is loaded.  We need to rethink this immediately as it is a nasty hack
 void GameEngine::init( int argc, char *argv[] )
 {
+	installThrowRecorder();
 	try {
 		//create an INI object to use for loading stuff
 		INI ini;
@@ -1547,6 +1610,7 @@ void GameEngine::init( int argc, char *argv[] )
 			 during startup.  Say which code it was and where it left the engine. */
 		DEBUG_LOG(("GameEngine::init - ErrorCode %d escaped initialization (TheGameLogic=%p, TheGameClient=%p)\n",
 			(Int)ec, TheGameLogic, TheGameClient));
+		logRecentThrows();
 		if (ec == ERROR_INVALID_D3D)
 		{
 			RELEASE_CRASHLOCALIZED("ERROR:D3DFailurePrompt", "ERROR:D3DFailureMessage");
@@ -3612,8 +3676,10 @@ extern HWND ApplicationHWnd;
 
 /* The picture cap (GitHub #149, #153): the rate a pass may present at, 0 for none.  An uncapped
 	 picture held a card at 100% and 86 C, and the main menu, which draws next to nothing, ran it
-	 hottest.  The shell holds 60 whatever the player picked; a match holds the FrameRateLimit row.
-	 Never under the logic's own rate, so a pass a tick is always there to be had; the pacer runs
+	 hottest.  A match holds the FrameRateLimit row, and so does the shell once the player picks a
+	 limit; Off leaves the shell at 60, the one place where Off still caps (a v4.1.0 player read the
+	 old shell's fixed 60 as a lock the menu could not change).  Never under the logic's own rate, so
+	 a pass a tick is always there to be had; the pacer runs
 	 the ticks on the wall clock and catches up in a pass, and a wait outside it moves none of them.
 	 None at all for -noFPSLimit and for a pass that ran a logic frame a pass (-headless, -turbo, a
 	 replay's fast-forward, -video): those want every pass they can get. */
@@ -3624,11 +3690,8 @@ static Int renderCapFramesPerSecond( Int logicFps )
 	if (TheGlobalData->m_noFrameRateCap || TheGlobalData->m_headless || TheGlobalData->m_turbo || s_passWasFast)
 		return 0;
 	Int fps = frameRateLimitForLevel( TheGlobalData->m_frameRateLimit );
-	if (!TheGameLogic->isInGame() || TheGameLogic->isInShellGame())
-	{
-		if (fps == 0 || fps > SHELL_FRAME_RATE_CAP)
-			fps = SHELL_FRAME_RATE_CAP;
-	}
+	if (fps == 0 && (!TheGameLogic->isInGame() || TheGameLogic->isInShellGame()))
+		fps = SHELL_FRAME_RATE_CAP;
 	if (fps > 0 && fps < logicFps)
 		fps = logicFps;
 	return fps;
@@ -3784,8 +3847,10 @@ void GameEngine::execute( void )
 				}
 				catch (...)
 				{
+					// before anything below throws again and pushes the thrower out of the ring
+					logRecentThrows();
 					// try to save info off
-					try 
+					try
 					{
 						if (TheRecorder && TheRecorder->getMode() == RECORDERMODETYPE_RECORD && TheRecorder->isMultiplayer())
 							TheRecorder->cleanUpReplayFile();

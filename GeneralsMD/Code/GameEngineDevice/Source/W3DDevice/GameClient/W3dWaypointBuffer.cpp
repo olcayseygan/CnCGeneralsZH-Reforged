@@ -522,7 +522,9 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 	// units' thin glowing line in its owner's colour, round its footprint with sharp corners
 	// (recordStructureOutline). EA's red one round a building the selection is attacking is not drawn:
 	// it only ever came of the local player's own attack orders, and the target's model flashing red
-	// (Drawable_flashOrderTargets) says it now
+	// (Drawable_flashOrderTargets) says it now.  The Selection Outlines option takes these away with
+	// the rings below.
+	if( TheGlobalData->m_selectionOutlines )
 	{
 		const std::vector<InGameUI::StructureOutline>& outlines = TheInGameUI->getStructureOutlines();
 		for( std::vector<InGameUI::StructureOutline>::const_iterator it = outlines.begin(); it != outlines.end(); ++it )
@@ -941,7 +943,7 @@ void W3DWaypointBuffer::takeRingView( void )
 void W3DWaypointBuffer::takeSelectionRings( void )
 {
 	m_circles.clear();
-	if( CinemaDirector_hidesHud() )
+	if( CinemaDirector_hidesHud() || !TheGlobalData->m_selectionOutlines )
 		return;
 
 	// A selected Angry Mob is drawn from its nexus: its members come from the sync point's copy whether

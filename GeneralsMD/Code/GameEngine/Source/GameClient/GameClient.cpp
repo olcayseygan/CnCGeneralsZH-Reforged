@@ -670,6 +670,8 @@ static void updateOnline( void )
 	if (!OnlineIsEnabled())
 		return;
 	Transport::keepOnlineRelay();
+	// the server's lines on any screen, a match included: a notice or maintenance shows on the banner at once
+	OnlinePumpIfConnected();
 
 	/* Play vs AI: an ai.tick every half minute while the match plays, and its result once, on the pass the
 		 victory conditions decide it, or as a loss on the first pass after it was left undecided (a quit).

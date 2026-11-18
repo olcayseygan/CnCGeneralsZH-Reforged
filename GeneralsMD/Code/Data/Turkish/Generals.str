@@ -10769,6 +10769,38 @@ GUI:OnlineLoginBanned
 "Bu hesap yasaklı."
 END
 
+GUI:OnlineMaintenance
+"Çevrimiçi hizmet bakımda. Sonra yeniden dene."
+END
+
+GUI:OnlineMaintenanceUntil
+"Çevrimiçi hizmet bakımda. Tahmini dönüş: %s."
+END
+
+GUI:OnlineMaintenanceTitle
+"Bakımda"
+END
+
+GUI:OnlineNoticeMaintenance
+"BAKIM"
+END
+
+GUI:OnlineNoticeInfo
+"DUYURU"
+END
+
+GUI:OnlineNoticeMaintenanceWords
+"Çevrimiçi oyun bakımda."
+END
+
+GUI:OnlineNoticeBack
+"Dönüş: %s"
+END
+
+GUI:OnlineNoticeUntil
+"Bitiş: %s"
+END
+
 GUI:OnlineLoginElsewhere
 "Bu hesapla başka bir bilgisayardan giriş yapıldı."
 END

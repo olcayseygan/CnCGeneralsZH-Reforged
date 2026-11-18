@@ -4602,6 +4602,38 @@ GUI:OnlineLoginBanned
 "This account is banned."
 END
 
+GUI:OnlineMaintenance
+"The online service is under maintenance. Try again later."
+END
+
+GUI:OnlineMaintenanceUntil
+"The online service is under maintenance. It should be back at %s."
+END
+
+GUI:OnlineMaintenanceTitle
+"Under maintenance"
+END
+
+GUI:OnlineNoticeMaintenance
+"MAINTENANCE"
+END
+
+GUI:OnlineNoticeInfo
+"NOTICE"
+END
+
+GUI:OnlineNoticeMaintenanceWords
+"Online play is down for maintenance."
+END
+
+GUI:OnlineNoticeBack
+"Back at %s"
+END
+
+GUI:OnlineNoticeUntil
+"Until %s"
+END
+
 GUI:OnlineLoginElsewhere
 "This account signed in from another computer."
 END

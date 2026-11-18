@@ -1187,6 +1187,15 @@ static void StartPressed(void)
 		req.peerRequestType = PeerRequest::PEERREQUEST_STARTGAME;
 		TheGameSpyPeerMessageQueue->addRequest(req);
 
+		// under maintenance the server may refuse the match: the host launches on its game.start, which comes
+		// back as PEERRESPONSE_GAMESTART as a guest's does, and not on the click
+		if (OnlineIsHostStartWaiting())
+		{
+			if (buttonStart)
+				buttonStart->winEnable(FALSE);
+			return;
+		}
+
 		SendStatsToOtherPlayers(myGame);
 
 		// we've started, there's no going back
@@ -2117,6 +2126,11 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 	{
 		HandleBuddyResponses();
 		HandlePersistentStorageResponses();
+
+		// the server refused the host's Start for maintenance (a room made before it began): the room stays
+		// as it was, Start live again, and the box says why
+		if (OnlineIsEnabled() && OnlineShowMaintenanceRefusal() && buttonStart)
+			buttonStart->winEnable( TRUE );
 
 		if (TheGameSpyGame && TheGameSpyGame->isGameInProgress())
 		{

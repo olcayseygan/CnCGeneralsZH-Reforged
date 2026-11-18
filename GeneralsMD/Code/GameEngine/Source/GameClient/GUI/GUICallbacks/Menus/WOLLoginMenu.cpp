@@ -924,6 +924,24 @@ static void onlineStatus( const UnicodeString &text, Bool error = FALSE )
 	DEBUG_LOG(("ONLINE LOGINSTATUS error=%d %s\n", (Int)error, WideCharAsUtf8( text.str() ).str()));
 }
 
+/* A maintenance notice, from the welcome on or -testNotice, says so on the status line under Sign In before
+	 anyone tries, with when the service should be back; the line goes when the notice does. */
+static Bool s_maintenanceShown = FALSE;
+static UnsignedInt s_maintenanceSerial = 0;
+static void onlineMaintenanceLine( void )
+{
+	OnlineNotice notice;
+	const Bool on = OnlineGetNotice( notice ) && notice.maintenance;
+	if (on == s_maintenanceShown && (!on || notice.serial == s_maintenanceSerial))
+		return;
+	if (on)
+		onlineStatus( OnlineMaintenanceText( notice.until ), TRUE );
+	else
+		onlineStatus( UnicodeString::TheEmptyString );
+	s_maintenanceShown = on;
+	s_maintenanceSerial = notice.serial;
+}
+
 /// Sign In's label: what the screen is doing while it cannot be pressed (connecting, signing in), else Sign In
 static void onlineLoginLabel( const char *key )
 {
@@ -1124,10 +1142,12 @@ static void onlineLoginError( const UnicodeString &text )
 static void onlineLoginFailed( Int reason )
 {
 	Int retry = 0;
-	AsciiString file;
-	const AsciiString code = OnlineGetLoginFailure( &retry, &file );
+	AsciiString file, until;
+	const AsciiString code = OnlineGetLoginFailure( &retry, &file, &until );
 	UnicodeString text;
-	if (code == "files" && file.isEmpty())
+	if (code == "maintenance")
+		text = OnlineMaintenanceText( until );
+	else if (code == "files" && file.isEmpty())
 		text = TheGameText->fetch( "GUI:OnlineLoginFilesNone" );		// no list reached it, or none was hashed
 	else if (code == "files")
 	{
@@ -1202,7 +1222,9 @@ static void onlineAwaitWelcome( void )
 	if (buttonLogin)
 		buttonLogin->winEnable( TRUE );
 	onlineLoginLabel( "GUI:OnlineSignIn" );
-	onlineLoginError( TheGameText->fetch( "GUI:OnlineCannotReachServer" ) );
+	// -testNotice has no server behind it: the proof shot of the maintenance line wants no box over it
+	if (TheGlobalData->m_testNotice.isEmpty())
+		onlineLoginError( TheGameText->fetch( "GUI:OnlineCannotReachServer" ) );
 }
 
 static GameWindow *loginWindow( const char *name )
@@ -1250,6 +1272,7 @@ static void onlineLoginScreen( void )
 	s_onlineAwaitWelcome = FALSE;
 	s_savedSignIn = FALSE;
 	s_countsShown = FALSE;
+	s_maintenanceShown = FALSE;
 	if (!OnlineIsEnabled())
 		return;
 	UIStyle::onlinePageInit( parentWOLLogin, "GameSpyLoginProfile.wnd", UIStyle::ONLINE_TAB_NONE );
@@ -1423,7 +1446,11 @@ void WOLLoginMenuUpdate( WindowLayout * layout, void *userData)
 	if (s_onlineAwaitWelcome && !buttonPushed && !isShuttingDown)
 		onlineAwaitWelcome();
 	if (!isShuttingDown)
+	{
 		onlineServerPanel();
+		if (OnlineIsEnabled())
+			onlineMaintenanceLine();
+	}
 
 	if (TheShell->isAnimFinished() && !buttonPushed && TheGameSpyPeerMessageQueue)
 	{

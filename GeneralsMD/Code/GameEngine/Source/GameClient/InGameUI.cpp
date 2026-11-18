@@ -113,6 +113,7 @@
 #include "GameClient/UIStyle.h"
 
 #include "GameNetwork/NetworkInterface.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 
 #include "GameLogic/AI.h"
 #include "GameLogic/AIGuard.h"
@@ -12432,6 +12433,103 @@ void InGameUI::drawKickVoteBanner( void )
 	const Int y = box.y + stripPixels( 40 );
 	TheDisplay->drawFillRect( x - pad, y - pad, width + pad*2, height + pad*2, GameMakeColor( 0, 0, 0, 170 ) );
 	banner->draw( x, y, GameMakeColor( 255, 210, 90, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+}
+
+/// the maintenance banner's warning: the hotkey page's clash colour, the one error colour the front end has
+static const Color NOTICE_WARNING = GameMakeColor( 255, 104, 72, 255 );
+
+//-------------------------------------------------------------------------------------------------
+/** The online service's notice (OnlineGetNotice), on every screen: a plate hanging from the top edge
+	* in the middle, as the general's powers tray hangs from its edge, in the front end's panel and
+	* chip.  Info is a PANEL with a FRAME edge and an ACTIVE chip; maintenance is taller, wears the
+	* button's lit three-line edge, a warning stripe down its left and a warning chip, its words bold.
+	* In a match it keeps to the open world (left of the sidebar, inside the HudWidth area) and stands
+	* under the top right info strip when that is shown.  Drawn, not a window: it takes no click. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::drawOnlineNotice( void )
+{
+	OnlineNotice notice;
+	if( !OnlineGetNotice( notice ) || !TheDisplay || !TheGameText )
+		return;
+
+	const Bool inMatch = TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() && !TheGameLogic->isLoadingMap();
+	Int left = 0, right = TheDisplay->getWidth(), top = 0;
+	if( inMatch && TheControlBar )
+	{
+		const IRegion2D play = hudPlay();
+		left = play.lo.x;
+		right = play.hi.x;
+		top = play.lo.y;
+		if( TheGlobalData->m_showNetBox )
+			top = max( top, hudStripBottom() );
+	}
+	const Bool maintenance = notice.maintenance;
+	const Int margin = UIStyle::px( 16.0f );
+	const Int width = min( right - left - 2 * margin, UIStyle::px( 1200.0f ) );
+	if( width <= 0 )
+		return;
+	const Int x = left + ( right - left - width ) / 2;
+
+	// the words: the server's in the player's language, the game's own for a maintenance that sent none
+	UnicodeString words;
+	const AsciiString utf8 = OnlineNoticeWords( notice, TheGlobalData->m_textLanguage );
+	if( utf8.isNotEmpty() )
+		words = UnicodeString( MultiByteToWideCharSingleLine( utf8.str() ).c_str() );
+	else
+		words = TheGameText->fetch( "GUI:OnlineNoticeMaintenanceWords" );
+	UnicodeString until;
+	const UnicodeString when = OnlineUntilText( notice.until );
+	if( !when.isEmpty() )
+		until.format( TheGameText->fetch( maintenance ? "GUI:OnlineNoticeBack" : "GUI:OnlineNoticeUntil" ), when.str() );
+
+	GameFont *wordFont = UIStyle::readableFont( maintenance ? UIStyle::TEXT_STRONG : UIStyle::TEXT_BODY, maintenance );
+	GameFont *untilFont = UIStyle::readableFont( UIStyle::TEXT_BODY );
+	struct Piece { const char *key; GameFont *font; };
+	DisplayString *strings[ 3 ];
+	const Piece pieces[ 3 ] = { { "notice:chip", UIStyle::chipFont() }, { "notice:words", wordFont }, { "notice:until", untilFont } };
+	for( Int i = 0; i < 3; ++i )
+	{
+		DisplayString *&s = m_broadcastTexts[ pieces[ i ].key ];
+		if( s == NULL )
+			s = TheDisplayStringManager->newDisplayString();
+		if( s->getFont() != pieces[ i ].font )
+			s->setFont( pieces[ i ].font );
+		strings[ i ] = s;
+	}
+	DisplayString *chip = strings[ 0 ], *wordText = strings[ 1 ], *untilText = strings[ 2 ];
+	chip->setText( TheGameText->fetch( maintenance ? "GUI:OnlineNoticeMaintenance" : "GUI:OnlineNoticeInfo" ) );
+	untilText->setText( until );
+
+	const Int pad = UIStyle::px( maintenance ? 12.0f : 8.0f );
+	const Int gap = UIStyle::px( 14.0f );
+	const Int stripe = maintenance ? UIStyle::stripeWidth() : 0;
+	Int chipW = 0, chipH = 0, untilW = 0, untilH = 0, wordW = 0, wordH = 0;
+	chip->getSize( &chipW, &chipH );
+	untilText->getSize( &untilW, &untilH );
+	chipW += 2 * UIStyle::px( 8.0f );
+	chipH += UIStyle::px( 9.0f );
+	const Int textLeft = x + stripe + pad + chipW + gap;
+	const Int untilRoom = until.isEmpty() ? 0 : untilW + gap;
+	const Int wordRoom = x + width - pad - untilRoom - textLeft;
+	wordText->setText( UIStyle::fitName( words, wordFont, max( 0, wordRoom ) ) );
+	wordText->getSize( &wordW, &wordH );
+	const Int height = max( chipH, max( wordH, untilH ) ) + 2 * pad;
+
+	TheDisplay->drawFillRect( x, top, width, height, UIStyle::PANEL );
+	if( maintenance )
+	{
+		UIStyle::edge( x, top, width, height );
+		UIStyle::stripe( x + 3, top + 3, height - 6, NOTICE_WARNING );
+	}
+	else
+		TheDisplay->drawOpenRect( x, top, width, height, 1.0f, UIStyle::FRAME );
+
+	const Int middle = top + height / 2;
+	UIStyle::chip( chip, x + stripe + pad, middle - chipH / 2, maintenance ? NOTICE_WARNING : UIStyle::ACTIVE,
+								 maintenance ? NOTICE_WARNING : UIStyle::FRAME );
+	wordText->draw( textLeft, middle - wordH / 2, UIStyle::INK, UIStyle::SHADOW );
+	if( !until.isEmpty() )
+		untilText->draw( textLeft + wordW + gap, middle - untilH / 2, UIStyle::MUTED, UIStyle::SHADOW );
 }
 
 //-------------------------------------------------------------------------------------------------

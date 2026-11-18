@@ -398,9 +398,14 @@ Bool WOLPlayVsAIUpdate( void )
 	else if (state == ONLINE_AI_REFUSED)
 	{
 		// a reason the strings name has its own sentence; any other is quoted in the general one
-		AsciiString label;
+		AsciiString label, until;
 		label.format( "GUI:OnlineAIRefused_%s", ai.reason.str() );
-		if (UIStyle::hasText( label.str() ))
+		if (ai.reason == "maintenance")
+		{
+			OnlineTakeMaintenanceRefusal( until );		// the error names no time, the notice in force does
+			what = OnlineMaintenanceText( until );
+		}
+		else if (UIStyle::hasText( label.str() ))
 			what = TheGameText->fetch( label );
 		else
 		{

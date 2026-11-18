@@ -27,6 +27,7 @@
 #include "Common/MultiplayerSettings.h"
 #include "Common/PlayerTemplate.h"
 #include "GameClient/GameText.h"
+#include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/Online/OnlineSession.h"
 #include "zhio.h"
 
@@ -34,6 +35,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 OnlinePSQueue::OnlinePSQueue() : m_running( FALSE )
 {
@@ -372,6 +374,98 @@ UnicodeString OnlineRatingText( const OnlinePlayerInfo &info )
 	else if (info.tier.isNotEmpty())
 		text = OnlineTierName( info.tier );
 	return text;
+}
+
+//-------------------------------------------------------------------------------------------------
+// the notice's and a maintenance refusal's until
+//-------------------------------------------------------------------------------------------------
+long long OnlineParseUtc( const char *iso )
+{
+	int y, mo, d, h, mi, s = 0, used = 0;
+	if (!iso || !isdigit( (unsigned char)iso[0] )
+		|| sscanf( iso, "%4d-%2d-%2dT%2d:%2d%n", &y, &mo, &d, &h, &mi, &used ) != 5 || used != 16)
+		return -1;
+	const char *p = iso + used;
+	if (*p == ':')
+	{
+		if (!isdigit( (unsigned char)p[1] ) || !isdigit( (unsigned char)p[2] ))
+			return -1;
+		s = (p[1] - '0') * 10 + (p[2] - '0');
+		p += 3;
+		if (*p == '.')
+		{
+			for (++p; isdigit( (unsigned char)*p ); ++p) {}
+		}
+	}
+	long long offset = 0;
+	if (*p == 'Z')
+		++p;
+	else if ((*p == '+' || *p == '-') && isdigit( (unsigned char)p[1] ) && isdigit( (unsigned char)p[2] ) && p[3] == ':'
+		&& isdigit( (unsigned char)p[4] ) && isdigit( (unsigned char)p[5] ))
+	{
+		offset = (((p[1] - '0') * 10 + (p[2] - '0')) * 60 + (p[4] - '0') * 10 + (p[5] - '0')) * 60LL;
+		if (*p == '-')
+			offset = -offset;
+		p += 6;
+	}
+	else
+		return -1;		// a time with no zone is no time the server sends
+	if (*p || mo < 1 || mo > 12 || d < 1 || d > 31 || h > 23 || mi > 59 || s > 60)
+		return -1;
+	// days since 1970-01-01 for a proleptic Gregorian date (Howard Hinnant's days_from_civil)
+	const long long yy = mo <= 2 ? y - 1 : y;
+	const long long era = (yy >= 0 ? yy : yy - 399) / 400;
+	const long long yoe = yy - era * 400;
+	const long long doy = (153 * (mo + (mo > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+	const long long doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+	const long long days = era * 146097 + doe - 719468;
+	return days * 86400 + h * 3600 + mi * 60 + s - offset;
+}
+
+UnicodeString OnlineUntilText( const AsciiString &until )
+{
+	UnicodeString text;
+	if (until.isEmpty())
+		return text;
+	const long long when = OnlineParseUtc( until.str() );
+	const time_t t = (time_t)when;
+	const struct tm *at = when >= 0 ? localtime( &t ) : NULL;
+	if (!at)
+	{
+		text.translate( until );		// not a time this reads: the server's own words
+		return text;
+	}
+	const struct tm local = *at;
+	const time_t nowT = time( NULL );
+	const struct tm *now = localtime( &nowT );
+	if (now && now->tm_year == local.tm_year && now->tm_yday == local.tm_yday)
+		text.format( u"%02d:%02d", local.tm_hour, local.tm_min );
+	else if (TheGlobalData && TheGlobalData->m_textLanguage != TEXT_LANGUAGE_ENGLISH)
+		text.format( u"%02d.%02d.%04d %02d:%02d", local.tm_mday, local.tm_mon + 1, local.tm_year + 1900, local.tm_hour, local.tm_min );
+	else
+		text.format( u"%04d-%02d-%02d %02d:%02d", local.tm_year + 1900, local.tm_mon + 1, local.tm_mday, local.tm_hour, local.tm_min );
+	return text;
+}
+
+UnicodeString OnlineMaintenanceText( const AsciiString &until )
+{
+	UnicodeString text;
+	if (!TheGameText)
+		return text;
+	const UnicodeString when = OnlineUntilText( until );
+	if (when.isEmpty())
+		return TheGameText->fetch( "GUI:OnlineMaintenance" );
+	text.format( TheGameText->fetch( "GUI:OnlineMaintenanceUntil" ), when.str() );
+	return text;
+}
+
+Bool OnlineShowMaintenanceRefusal( void )
+{
+	AsciiString until;
+	if (!OnlineIsEnabled() || !OnlineTakeMaintenanceRefusal( until ))
+		return FALSE;
+	GSMessageBoxOk( TheGameText->fetch( "GUI:OnlineMaintenanceTitle" ), OnlineMaintenanceText( until ) );
+	return TRUE;
 }
 
 void OnlineRequestLadder( Int offset )

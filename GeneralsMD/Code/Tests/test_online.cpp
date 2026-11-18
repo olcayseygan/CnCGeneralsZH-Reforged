@@ -25,6 +25,7 @@
 #include "Common/InstallFiles.h"
 #include "GameClient/TankSkin.h"
 #include "Common/MultiplayerSettings.h"
+#include "Common/GlobalData.h"		// TEXT_LANGUAGE_*
 
 #include <chrono>
 #include <stdio.h>
@@ -2795,4 +2796,158 @@ TEST(online_last_ai_match_id_outlives_the_match)
 	CHECK( verdict.match == OnlineGetLastAIMatchId() );
 	OnlineSession::get().forgetAccount();
 	CHECK( OnlineGetLastAIMatchId().isEmpty() );
+}
+
+/* The server's notice{kind,en,tr,until}: the hello asks for it, it is shown until an info with no words
+	 replaces it or the connection goes, a maintenance with no words still shows, and each change moves the
+	 serial.  The words come in the player's language, the other one when that is empty. */
+TEST(online_notice_parse_and_clear)
+{
+	CHECK_EQ( OnlineHelloLine( 1, 2, "4.1.0" ).getInt( "notice" ), 1ll );
+
+	AdapterRig rig;
+	OnlineNotice n;
+	CHECK( !OnlineGetNotice( n ) );
+	const UnsignedInt first = n.serial;
+
+	rig.feed( "{\"t\":\"notice\",\"kind\":\"info\",\"en\":\"Ladder resets Sunday\",\"tr\":\"Lig pazar s\\u0131f\\u0131rlan\\u0131yor\",\"until\":\"\"}" );
+	CHECK( OnlineGetNotice( n ) );
+	CHECK( !n.maintenance );
+	CHECK_STR( OnlineNoticeWords( n, TEXT_LANGUAGE_ENGLISH ).str(), "Ladder resets Sunday" );
+	CHECK_STR( OnlineNoticeWords( n, TEXT_LANGUAGE_TURKISH ).str(), "Lig pazar s\xC4\xB1" "f\xC4\xB1rlan\xC4\xB1yor" );
+	CHECK_STR( OnlineNoticeWords( n, TEXT_LANGUAGE_GERMAN ).str(), "Ladder resets Sunday" );
+	CHECK( n.serial != first );
+
+	rig.feed( "{\"t\":\"notice\",\"kind\":\"maintenance\",\"en\":\"Deploy\",\"tr\":\"\",\"until\":\"2026-11-18T22:00:00.000Z\"}" );
+	CHECK( OnlineGetNotice( n ) );
+	CHECK( n.maintenance );
+	CHECK_STR( n.until.str(), "2026-11-18T22:00:00.000Z" );
+	CHECK_STR( OnlineNoticeWords( n, TEXT_LANGUAGE_TURKISH ).str(), "Deploy" );		// no Turkish: the English
+
+	const UnsignedInt before = n.serial;
+	rig.feed( "{\"t\":\"notice\",\"kind\":\"maintenance\",\"en\":\"\",\"tr\":\"\",\"until\":\"\"}" );
+	CHECK( OnlineGetNotice( n ) );		// maintenance with no words still shows
+	CHECK( n.maintenance );
+	CHECK( n.serial != before );
+
+	rig.feed( "{\"t\":\"notice\",\"kind\":\"info\",\"en\":\"\",\"tr\":\"\",\"until\":\"\"}" );
+	CHECK( !OnlineGetNotice( n ) );		// an info with no words clears it
+
+	rig.feed( "{\"t\":\"notice\",\"kind\":\"info\",\"en\":\"Hello\",\"tr\":\"Merhaba\"}" );
+	CHECK( OnlineGetNotice( n ) );
+	OnlineSession::get().connectionGone();		// a sign-out or a dropped line takes it down
+	CHECK( !OnlineGetNotice( n ) );
+}
+
+/* until as the server writes it (Node's toISOString, or with an offset) in Unix seconds; anything else is
+	 no time and is shown as the server's own text. */
+TEST(online_notice_until_parses_utc)
+{
+	CHECK_EQ( OnlineParseUtc( "1970-01-01T00:00:00Z" ), 0ll );
+	CHECK_EQ( OnlineParseUtc( "2026-11-18T22:00:00.000Z" ), 1795039200ll );
+	CHECK_EQ( OnlineParseUtc( "2026-11-18T22:00Z" ), 1795039200ll );
+	CHECK_EQ( OnlineParseUtc( "2026-11-19T01:00:00+03:00" ), 1795039200ll );
+	CHECK_EQ( OnlineParseUtc( "2026-11-18T21:30:00-00:30" ), 1795039200ll );
+	CHECK_EQ( OnlineParseUtc( "2024-02-29T12:00:00Z" ), 1709208000ll );
+	CHECK_EQ( OnlineParseUtc( "2026-11-18T22:00:00" ), -1ll );		// no zone
+	CHECK_EQ( OnlineParseUtc( "22:00" ), -1ll );
+	CHECK_EQ( OnlineParseUtc( "2026-13-01T00:00:00Z" ), -1ll );
+	CHECK_EQ( OnlineParseUtc( "2026-11-18T22:00:00Zjunk" ), -1ll );
+	CHECK_EQ( OnlineParseUtc( "" ), -1ll );
+	CHECK_EQ( OnlineParseUtc( NULL ), -1ll );
+}
+
+/* Maintenance: a login refused with its until (the notice's when the line has none), and a new lobby, game,
+	 start, Quick Match or Play vs AI refused, each handed once to the screen that asked.  A Quick Match the
+	 server empties is maintenance only when the player did not leave himself.  Under maintenance the host
+	 waits for the server's game.start before it launches; a refused start launches nothing. */
+TEST(online_maintenance_refusals)
+{
+	AdapterRig rig;
+	AsciiString until, file;
+
+	// the login
+	BuddyRequest req;
+	memset( &req, 0, sizeof(req) );
+	req.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGIN;
+	strcpy( req.arg.login.email, "tank@example.com" );
+	strcpy( req.arg.login.password, "secret" );
+	rig.buddy->addRequest( req );
+	rig.feed( "{\"t\":\"auth.fail\",\"code\":\"maintenance\",\"until\":\"2026-11-18T22:00:00.000Z\"}" );
+	CHECK_STR( OnlineGetLoginFailure( NULL, &file, &until ).str(), "maintenance" );
+	CHECK_STR( until.str(), "2026-11-18T22:00:00.000Z" );
+	rig.peerResponses();
+	rig.feed( "{\"t\":\"notice\",\"kind\":\"maintenance\",\"en\":\"\",\"tr\":\"\",\"until\":\"2026-11-18T23:00:00Z\"}" );
+	rig.buddy->addRequest( req );
+	rig.feed( "{\"t\":\"auth.fail\",\"code\":\"maintenance\",\"until\":\"\"}" );
+	OnlineGetLoginFailure( NULL, NULL, &until );
+	CHECK_STR( until.str(), "2026-11-18T23:00:00Z" );		// the notice's
+	CHECK( !OnlineTakeMaintenanceRefusal( until ) );		// a login is the login screen's, not a refusal
+	rig.peerResponses();
+
+	rig.login();
+	const char *const errors[] = { "game.host", "game.join", "qm.join", "game.start" };
+	for (size_t i = 0; i < sizeof(errors) / sizeof(errors[0]); ++i)
+	{
+		char line[128];
+		snprintf( line, sizeof(line), "{\"t\":\"error\",\"for\":\"%s\",\"code\":\"maintenance\"}", errors[i] );
+		rig.feed( line );
+		until.clear();
+		CHECK( OnlineTakeMaintenanceRefusal( until ) );
+		CHECK_STR( until.str(), "2026-11-18T23:00:00Z" );
+		CHECK( !OnlineTakeMaintenanceRefusal( until ) );		// once
+	}
+	rig.peerResponses();
+	rig.feed( "{\"t\":\"error\",\"for\":\"game.host\",\"code\":\"full\"}" );
+	CHECK( !OnlineTakeMaintenanceRefusal( until ) );
+
+	// Play vs AI
+	OnlineRequestAIMatch( "FactionAmerica" );
+	rig.feed( "{\"t\":\"ai.refused\",\"reason\":\"maintenance\"}" );
+	OnlineAIMatch ai;
+	CHECK_EQ( (int)OnlineGetAIMatch( ai ), (int)ONLINE_AI_REFUSED );
+	CHECK_STR( ai.reason.str(), "maintenance" );
+	CHECK( OnlineTakeMaintenanceRefusal( until ) );
+	OnlineRequestAIMatch( "FactionAmerica" );
+	rig.feed( "{\"t\":\"error\",\"for\":\"ai.start\",\"code\":\"maintenance\"}" );
+	CHECK_EQ( (int)OnlineGetAIMatch( ai ), (int)ONLINE_AI_REFUSED );
+	CHECK_STR( ai.reason.str(), "maintenance" );
+	CHECK( OnlineTakeMaintenanceRefusal( until ) );
+
+	// the queue: emptied by the server is maintenance, our own leave is not
+	rig.feed( "{\"t\":\"qm.status\",\"status\":\"left\",\"pool\":0}" );
+	CHECK( OnlineTakeMaintenanceRefusal( until ) );
+	PeerRequest stop;
+	stop.peerRequestType = PeerRequest::PEERREQUEST_STOPQUICKMATCH;
+	rig.peer->addRequest( stop );
+	rig.feed( "{\"t\":\"qm.status\",\"status\":\"left\",\"pool\":0}" );
+	CHECK( !OnlineTakeMaintenanceRefusal( until ) );
+	rig.peerResponses();
+
+	// the host's start waits on the server under maintenance
+	rig.feed( "{\"t\":\"game.joined\",\"id\":4,\"host\":\"Tank\",\"hostId\":7,\"ids\":[7],\"nicks\":[\"Tank\"]}" );
+	rig.peerResponses();
+	PeerRequest start;
+	start.peerRequestType = PeerRequest::PEERREQUEST_STARTGAME;
+	rig.peer->addRequest( start );
+	CHECK( OnlineIsHostStartWaiting() );
+	rig.feed( "{\"t\":\"error\",\"for\":\"game.start\",\"code\":\"maintenance\"}" );
+	CHECK( !OnlineIsHostStartWaiting() );
+	CHECK( OnlineTakeMaintenanceRefusal( until ) );
+	CHECK( rig.peerResponses().empty() );		// nothing launches
+	rig.peer->addRequest( start );
+	CHECK( OnlineIsHostStartWaiting() );
+	rig.feed( "{\"t\":\"game.start\",\"match\":\"m1\",\"ids\":[7],\"nicks\":[\"Tank\"],\"vips\":[167772163]}" );
+	std::vector<PeerResponse> r = rig.peerResponses();
+	CHECK( r.size() == 1 && r[0].peerResponseType == PeerResponse::PEERRESPONSE_GAMESTART );
+	CHECK( !OnlineIsHostStartWaiting() );
+
+	// without maintenance the host launches on its click, as before
+	rig.feed( "{\"t\":\"notice\",\"kind\":\"info\",\"en\":\"\",\"tr\":\"\"}" );
+	rig.feed( "{\"t\":\"game.joined\",\"id\":5,\"host\":\"Tank\",\"hostId\":7,\"ids\":[7],\"nicks\":[\"Tank\"]}" );
+	rig.peerResponses();
+	rig.peer->addRequest( start );
+	CHECK( !OnlineIsHostStartWaiting() );
+	rig.feed( "{\"t\":\"game.start\",\"match\":\"m2\",\"ids\":[7],\"nicks\":[\"Tank\"],\"vips\":[167772163]}" );
+	CHECK( rig.peerResponses().empty() );
 }

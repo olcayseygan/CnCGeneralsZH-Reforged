@@ -830,6 +830,7 @@ GlobalData::GlobalData()
 	m_onlineStart = 0;
 	m_quickMatchOnStart = FALSE;
 	m_onlineLoginOnStart = FALSE;
+	m_testNotice.clear();
 	m_lanLobbyOnStart = FALSE;
 	m_skirmishLobbyOnStart = FALSE;
 	m_optionsMenuOnStart = FALSE;

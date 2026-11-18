@@ -42,6 +42,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #if defined(_WIN32)
 #include <shellapi.h>		// ShellExecuteA, OnlineOpenURL
 #endif
@@ -138,7 +139,7 @@ OnlineSession &OnlineSession::get()
 
 OnlineSession::OnlineSession() :
 	connection( NULL ), capture( NULL ), status( ONLINE_OFF ), relayPort( 0 ), testMode( FALSE ), failRetry( 0 ),
-	cardSerial( 0 ), ladderState( ONLINE_LADDER_FAILED ), armiesState( ONLINE_LADDER_FAILED ), historySerial( 0 ), revealing( FALSE ),
+	noticeSerial( 0 ), maintenanceRefused( FALSE ), cardSerial( 0 ), ladderState( ONLINE_LADDER_FAILED ), armiesState( ONLINE_LADDER_FAILED ), historySerial( 0 ), revealing( FALSE ),
 	revealSerial( 0 ), aiVerdictSerial( 0 ), peer( NULL ), buddy( NULL ), ps( NULL )
 {
 	connectionGone();
@@ -155,6 +156,14 @@ void OnlineSession::connectionGone()
 	pingSentMs = 0;
 	pingSmoothedMs = -1;
 	pingRefused = FALSE;
+	if (!noticeKind.empty())
+		++noticeSerial;
+	noticeKind.clear();
+	noticeEn.clear();
+	noticeTr.clear();
+	noticeUntil.clear();
+	maintenanceRefused = FALSE;
+	maintenanceUntil.clear();
 }
 
 void OnlineSession::forgetAccount()
@@ -180,6 +189,7 @@ void OnlineSession::forgetAccount()
 	gameId = 0;
 	joiningGame = 0;
 	hosting = FALSE;
+	hostStartWaiting = FALSE;
 	hostInfo.clear();
 	hostNick.clear();
 	hostLeftGame = 0;
@@ -198,6 +208,7 @@ void OnlineSession::forgetAccount()
 	qmLockUntilMs = 0;
 	qmWindow.clear();
 	qmWindowMs = 0;
+	qmLeaveSent = FALSE;
 	revealing = FALSE;
 	aiState = ONLINE_AI_IDLE;		// a match the server never hears the end of, it settles itself
 	aiReady.clear();
@@ -249,6 +260,7 @@ void OnlineSession::beginTest( std::vector<OnlineMessage> *lines )
 	accountUrl.clear();
 	failCode.clear();
 	failFile.clear();
+	failUntil.clear();
 	failRetry = 0;
 	status = lines ? ONLINE_WELCOMED : ONLINE_OFF;
 }
@@ -306,6 +318,7 @@ OnlineMessage OnlineHelloLine( UnsignedInt exe, UnsignedInt ini, const char *ver
 	hello.setString( "t", "hello" ).setInt( "exe", exe ).setInt( "ini", ini ).setString( "ver", ver ? ver : "" );
 	hello.setInt( "proto", ONLINE_PROTO );
 	hello.setInt( "files", 1 );		// the install files' hashes come before the login (OnlineSession::sendFiles)
+	hello.setInt( "notice", 1 );	// the server's notices and maintenance, after the welcome and on every change
 	return hello;
 }
 
@@ -332,6 +345,7 @@ void OnlineSession::requestAuth( const OnlineMessage &line )
 	authWaiting = TRUE;
 	failCode.clear();
 	failFile.clear();
+	failUntil.clear();
 	failRetry = 0;
 	pendingAuth = m;
 	hasPendingAuth = TRUE;
@@ -690,6 +704,16 @@ void OnlineSession::noteSkins( const OnlineMessage &m )
 	skinsError.clear();
 }
 
+void OnlineSession::noteMaintenance( const OnlineMessage &m )
+{
+	maintenanceRefused = TRUE;
+	// an error names no time: the notice in force does
+	maintenanceUntil = m.getString( "until", noticeUntil.c_str() );
+	if (maintenanceUntil.empty())
+		maintenanceUntil = noticeUntil;
+	DEBUG_LOG(("ONLINE MAINTENANCE refused %s until=%s\n", m.type().c_str(), maintenanceUntil.c_str()));
+}
+
 void OnlineSession::dispatch( const OnlineMessage &m )
 {
 	const std::string t = m.type();
@@ -769,6 +793,9 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 			return;
 		failCode = code;
 		failFile = m.getString( "file" );		// code files: the install file that is not the release's
+		failUntil = m.getString( "until" );	// code maintenance: when the service should be back, else the notice's
+		if (failUntil.empty())
+			failUntil = noticeUntil;
 		failRetry = (Int)m.getInt( "retry" );
 		Bool wasIn = authed;
 		forgetAccount();
@@ -792,6 +819,13 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 	{
 		const std::string what = m.getString( "for" ), code = m.getString( "code" );
 		DEBUG_LOG(("online: %s refused: %s\n", what.c_str(), code.c_str()));
+		// a lobby, a game or a match the service will not open while it is under maintenance: the screen that
+		// asked takes it with the answer below
+		if (code == "maintenance" && (what == "room.join" || what == "game.host" || what == "game.join" || what == "game.start"
+			|| what == "qm.join" || (what == "ai.start" && aiState == ONLINE_AI_WAITING)))
+			noteMaintenance( m );
+		if (what == "game.start")
+			hostStartWaiting = FALSE;		// refused: the room stays, nothing launches
 		if (what == "room.join")
 		{
 			PeerResponse r = makePeer( PeerResponse::PEERRESPONSE_JOINGROUPROOM );
@@ -854,8 +888,8 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		}
 		else if (what == "ai.start" && aiState == ONLINE_AI_WAITING)
 		{
-			aiState = ONLINE_AI_REFUSED;		// a server from before Play vs AI, or a throttle
-			aiRefusal = code == "throttled" ? code : "unavailable";
+			aiState = ONLINE_AI_REFUSED;		// a server from before Play vs AI, a throttle or maintenance
+			aiRefusal = code == "throttled" || code == "maintenance" ? code : "unavailable";
 		}
 	}
 	else if (t == "room")
@@ -1026,12 +1060,16 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		const Bool wasHost = hosting;
 		gameId = 0;
 		hosting = FALSE;
-		if (!wasHost)
-			peerResponse( makePeer( PeerResponse::PEERRESPONSE_GAMESTART ) );		// the host started on its own click
+		// the host started on its own click, unless it waited for this (OnlineIsHostStartWaiting)
+		if (!wasHost || hostStartWaiting)
+			peerResponse( makePeer( PeerResponse::PEERRESPONSE_GAMESTART ) );
+		hostStartWaiting = FALSE;
 	}
 	else if (t == "qm.status")
 	{
 		const std::string st = m.getString( "status" );
+		const Bool qmLeaving = qmLeaveSent;
+		qmLeaveSent = FALSE;
 		if (revealing)
 		{
 			// the opponent dropped in the reveal (searching again), or we left: nothing starts
@@ -1049,12 +1087,19 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 			noteLock( 0 );		// the queue took us: no lock
 		}
 		else if (st == "left")
+		{
 			r.qmStatus.status = QM_STOPPED;
+			// out of the queue without asking, while maintenance is on: the server closed it
+			if (!qmLeaving && noticeKind == "maintenance")
+				noteMaintenance( m );
+		}
 		else
 		{
 			// locked (the leaver lock) or busy.  The page tells a lock by OnlineGetQuickMatchLockSeconds, so a
 			// lock always reads at least a second, even in its last fraction of one
 			r.qmStatus.status = QM_COULDNOTFINDBOT;
+			if (st == "maintenance")
+				noteMaintenance( m );
 			if (st == "locked" && m.has( "seconds" ))
 				noteLock( m.getInt( "seconds" ) > 1 ? m.getInt( "seconds" ) : 1 );
 		}
@@ -1182,7 +1227,22 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 	{
 		aiState = ONLINE_AI_REFUSED;
 		aiRefusal = m.getString( "reason", "unknown" );
+		if (aiRefusal == "maintenance")
+			noteMaintenance( m );
 		DEBUG_LOG(("ONLINE AI REFUSED reason=%s\n", aiRefusal.c_str()));
+	}
+	else if (t == "notice")
+	{
+		// notice{kind, en, tr, until}: the banner across the top of the screen; no words in either language
+		// takes it down
+		noticeEn = m.getString( "en" );
+		noticeTr = m.getString( "tr" );
+		// maintenance shows with no words too (the game says it in its own); an info with none is the clear
+		const Bool clear = noticeEn.empty() && noticeTr.empty() && m.getString( "kind" ) != "maintenance";
+		noticeKind = clear ? std::string() : m.getString( "kind", "info" );
+		noticeUntil = clear ? std::string() : m.getString( "until" );
+		++noticeSerial;
+		DEBUG_LOG(("ONLINE NOTICE kind=%s until=%s en=%s\n", noticeKind.c_str(), noticeUntil.c_str(), noticeEn.c_str()));
 	}
 	// an ai.refused naming a match turned its result down (unknown, reported, badinput, or the site's own
 	// code): that match is not rated, as an ai.unrated says
@@ -1432,6 +1492,8 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 		return;
 
 	case PeerRequest::PEERREQUEST_STARTGAME:
+		// under maintenance the host waits for the server's game.start before it launches (it may refuse)
+		s.hostStartWaiting = s.hosting && s.noticeKind == "maintenance";
 		m.setString( "t", "game.start" );
 		s.send( m );
 		return;
@@ -1465,6 +1527,7 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 		// a reveal ends with our leaving, whatever the server's qm.status says on its way back
 		s.revealing = FALSE;
 		s.quickMatch.clear();
+		s.qmLeaveSent = TRUE;		// the qm.status{left} that answers is ours, not maintenance closing the queue
 		m.setString( "t", "qm.leave" );
 		s.send( m );
 		return;
@@ -1499,6 +1562,13 @@ void OnlineUpdate( void )
 {
 	if (OnlineIsEnabled())
 		OnlineSession::get().pump();
+}
+
+void OnlinePumpIfConnected( void )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (s.connection && !s.capture && s.status != ONLINE_OFF && OnlineIsEnabled())
+		s.pump();
 }
 
 OnlineStatus OnlineGetStatus( void )
@@ -1588,14 +1658,76 @@ Bool OnlineGetQuickMatchChanceWindow( Real &chanceLo, Real &chanceHi, Int &nextM
 	return s.qmWindow.has( "lo" ) && s.qmWindow.has( "hi" );
 }
 
-AsciiString OnlineGetLoginFailure( Int *retrySeconds, AsciiString *file )
+AsciiString OnlineGetLoginFailure( Int *retrySeconds, AsciiString *file, AsciiString *until )
 {
 	const OnlineSession &s = OnlineSession::get();
 	if (retrySeconds)
 		*retrySeconds = s.failRetry > 0 ? s.failRetry : 0;
 	if (file)
 		*file = s.failFile.c_str();
+	if (until)
+		*until = s.failUntil.c_str();
 	return s.failCode.c_str();
+}
+
+Bool OnlineGetNotice( OnlineNotice &out )
+{
+	const OnlineSession &s = OnlineSession::get();
+	out.serial = s.noticeSerial;
+	if (!s.noticeKind.empty())
+	{
+		out.maintenance = s.noticeKind == "maintenance";
+		out.en = s.noticeEn.c_str();
+		out.tr = s.noticeTr.c_str();
+		out.until = s.noticeUntil.c_str();
+		return TRUE;
+	}
+	// -testNotice: a fixed notice with no server, back two hours from the start, for the proof shots
+	const AsciiString test = TheGlobalData ? TheGlobalData->m_testNotice : AsciiString::TheEmptyString;
+	if (test.isEmpty())
+		return FALSE;
+	static time_t s_testStart = time( NULL );
+	out.maintenance = test.compareNoCase( "info" ) != 0;
+	if (out.maintenance)
+	{
+		out.en = "Online play is down for maintenance. Skirmish and LAN games are not affected.";
+		out.tr = "\xC3\x87" "evrimi\xC3\xA7i oyun bak\xC4\xB1mda. \xC3\x87" "at\xC4\xB1\xC5\x9Fma ve LAN oyunlar\xC4\xB1 etkilenmiyor.";
+	}
+	else
+	{
+		out.en = "Test notice: this is where a message from the online service shows.";
+		out.tr = "Deneme duyurusu: \xC3\xA7" "evrimi\xC3\xA7i hizmetten gelen mesaj burada g\xC3\xB6r\xC3\xBCn\xC3\xBCr.";
+	}
+	const time_t back = s_testStart + 2 * 3600;
+	const struct tm *utc = gmtime( &back );
+	char iso[32] = "";
+	if (utc)
+		strftime( iso, sizeof(iso), "%Y-%m-%dT%H:%M:%SZ", utc );
+	out.until = iso;
+	out.serial = 0;
+	return TRUE;
+}
+
+AsciiString OnlineNoticeWords( const OnlineNotice &notice, Int language )
+{
+	const Bool turkish = language == TEXT_LANGUAGE_TURKISH;
+	const AsciiString &first = turkish ? notice.tr : notice.en;
+	return first.isNotEmpty() ? first : (turkish ? notice.en : notice.tr);
+}
+
+Bool OnlineIsHostStartWaiting( void )
+{
+	return OnlineIsEnabled() && OnlineSession::get().hostStartWaiting;
+}
+
+Bool OnlineTakeMaintenanceRefusal( AsciiString &until )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (!s.maintenanceRefused)
+		return FALSE;
+	s.maintenanceRefused = FALSE;
+	until = s.maintenanceUntil.c_str();
+	return TRUE;
 }
 
 Bool OnlineIsCheckingFiles( void )

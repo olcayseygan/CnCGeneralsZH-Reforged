@@ -93,6 +93,7 @@ class W3DVideoBuffer : public VideoBuffer
 
 		static WW3DFormat TypeToW3DFormat( VideoBuffer::Type format );
 		static VideoBuffer::Type W3DFormatToType( WW3DFormat w3dFormat );
+		static UnsignedInt bytesPerPixel( VideoBuffer::Type format );	///< what BinkCopyToBuffer writes per pixel, 0 for a type it does not write
 };
 
 

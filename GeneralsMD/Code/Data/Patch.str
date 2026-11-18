@@ -4611,7 +4611,11 @@ GUI:OnlineCheckingFiles
 END
 
 GUI:OnlineLoginFiles
-"This file is not the one the game shipped with:\n\n%ls\n\nReinstall the game from the launcher, or delete that file, then sign in again."
+"This file is not the one the game shipped with:\n\n%ls\n\nReinstall the game from the launcher, or delete that file, then restart the game and sign in again."
+END
+
+GUI:OnlineLoginFilesNone
+"The server could not check your game files. Restart the game and sign in again; if it happens again, reinstall the game from the launcher."
 END
 
 // the online hub's info box when the server sent no message of the day

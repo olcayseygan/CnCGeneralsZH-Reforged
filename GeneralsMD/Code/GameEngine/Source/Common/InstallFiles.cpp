@@ -304,7 +304,11 @@ void InstallFiles_start()
 	static const char *const LOOSE_FOLDERS[] = { "Art\\", "Data\\", "Window\\" };
 	for (size_t i = 0; i < sizeof(LOOSE_FOLDERS) / sizeof(LOOSE_FOLDERS[0]); ++i)
 		TheLocalFileSystem->getFileListInDirectory( AsciiString( LOOSE_FOLDERS[i] ), AsciiString::TheEmptyString, AsciiString( "*" ), loose, TRUE );
-	names.insert( names.end(), loose.begin(), loose.end() );
+	// a .big down there is mounted by nothing (only the exe's own folder and the base game's are), so it
+	// is never read, and the server would refuse it as an archive the release does not ship
+	for (FilenameList::const_iterator it = loose.begin(); it != loose.end(); ++it)
+		if (!it->endsWithNoCase( ".big" ))
+			names.push_back( *it );
 
 	std::vector<Job> jobs;
 	for (size_t i = 0; i < names.size(); ++i)

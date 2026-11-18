@@ -355,7 +355,7 @@ void OnlineSession::flushAuth()
 }
 
 /* files{seq,last,paths[],hashes[]}: every install file the game reads, path and sha256 at the same index,
-	 cut into lines under 4096 bytes.  A path's length is counted as if every byte were escaped as \uXXXX
+	 cut into lines under 4096 bytes, at least one line.  A path's length is counted as if every byte were escaped as \uXXXX
 	 where JSON may escape it, so no line can outgrow that however odd a file name. */
 void OnlineSession::sendFiles()
 {
@@ -380,7 +380,9 @@ void OnlineSession::sendFiles()
 				cost += (ch < 0x20 || ch >= 0x7f || ch == '"' || ch == '\\') ? 6 : 1;
 			}
 		}
-		if (!paths.empty() && (end || bytes + cost > BUDGET))
+		// an empty list still goes, as one line with empty arrays: the server then refuses for want of
+		// files instead of waiting on a list that never comes
+		if ((end && seq == 0) || (!paths.empty() && (end || bytes + cost > BUDGET)))
 		{
 			OnlineMessage m;
 			m.setString( "t", "files" ).setInt( "seq", seq++ ).setInt( "last", end ? 1 : 0 );

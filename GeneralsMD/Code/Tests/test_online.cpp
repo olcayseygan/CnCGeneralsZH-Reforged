@@ -765,10 +765,16 @@ TEST(online_adapter_login_waits_for_the_relay)
 	strcpy( req.arg.login.password, "secret" );
 	rig.buddy->addRequest( req );
 
-	CHECK_EQ( rig.sent.size(), (size_t)1 );
-	CHECK_STR( rig.sentType( 0 ).c_str(), "login" );
-	CHECK_STR( rig.sent[0].getString( "email" ).c_str(), "tank@example.com" );
-	CHECK_STR( rig.sent[0].getString( "pass" ).c_str(), "secret" );
+	// no install files hashed here: the list still goes, empty, so the server refuses instead of waiting
+	CHECK_EQ( rig.sent.size(), (size_t)2 );
+	CHECK_STR( rig.sentType( 0 ).c_str(), "files" );
+	CHECK_EQ( rig.sent[0].getInt( "seq", -1 ), 0ll );
+	CHECK_EQ( rig.sent[0].getInt( "last" ), 1ll );
+	CHECK( rig.sent[0].has( "paths" ) && rig.sent[0].getStrings( "paths" ).empty() );
+	CHECK( rig.sent[0].has( "hashes" ) && rig.sent[0].getStrings( "hashes" ).empty() );
+	CHECK_STR( rig.sentType( 1 ).c_str(), "login" );
+	CHECK_STR( rig.sent[1].getString( "email" ).c_str(), "tank@example.com" );
+	CHECK_STR( rig.sent[1].getString( "pass" ).c_str(), "secret" );
 	CHECK( rig.peer->isConnecting() );
 	CHECK( !rig.peer->isConnected() );
 
@@ -807,7 +813,7 @@ TEST(online_adapter_login_waits_for_the_relay)
 	}
 	CHECK( rig.peer->isConnected() );
 	CHECK_EQ( OnlineGetRelayVip(), 0x0A000003u );
-	CHECK_STR( rig.sentType( 1 ).c_str(), "stats.get" );		// our own stats, as GameSpy's login read them
+	CHECK_STR( rig.sentType( 2 ).c_str(), "stats.get" );		// our own stats, as GameSpy's login read them
 }
 
 TEST(online_adapter_login_refusal_and_no_register)
@@ -825,9 +831,10 @@ TEST(online_adapter_login_refusal_and_no_register)
 
 	req.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGIN;
 	rig.buddy->addRequest( req );
-	CHECK_EQ( rig.sent.size(), (size_t)1 );
-	CHECK_STR( rig.sentType( 0 ).c_str(), "login" );
-	CHECK_STR( rig.sent[0].getString( "email" ).c_str(), "tank@example.com" );
+	CHECK_EQ( rig.sent.size(), (size_t)2 );		// the (empty) install file list, then the login
+	CHECK_STR( rig.sentType( 0 ).c_str(), "files" );
+	CHECK_STR( rig.sentType( 1 ).c_str(), "login" );
+	CHECK_STR( rig.sent[1].getString( "email" ).c_str(), "tank@example.com" );
 
 	Int retry = -1;
 	CHECK( OnlineGetLoginFailure( &retry ).isEmpty() );
@@ -845,10 +852,11 @@ TEST(online_adapter_login_refusal_and_no_register)
 	UnsignedByte ticket[16];
 	CHECK( !OnlineGetRelayTicket( ticket ) );
 
-	// a resume with a saved token is the same login
+	// a resume with a saved token is the same login, on the same connection without the list again
 	OnlineResume( "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" );
-	CHECK_STR( rig.sentType( 1 ).c_str(), "resume" );
-	CHECK_EQ( rig.sent[1].getString( "token" ).size(), (size_t)64 );
+	CHECK_EQ( rig.sent.size(), (size_t)3 );
+	CHECK_STR( rig.sentType( 2 ).c_str(), "resume" );
+	CHECK_EQ( rig.sent[2].getString( "token" ).size(), (size_t)64 );
 	CHECK( OnlineGetLoginFailure( &retry ).isEmpty() );		// a new login forgets the last refusal
 
 	rig.feed( "{\"t\":\"auth.fail\",\"code\":\"throttled\",\"retry\":42}" );

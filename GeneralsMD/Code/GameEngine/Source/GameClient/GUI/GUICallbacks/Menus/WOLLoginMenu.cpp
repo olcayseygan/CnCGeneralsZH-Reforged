@@ -1127,7 +1127,9 @@ static void onlineLoginFailed( Int reason )
 	AsciiString file;
 	const AsciiString code = OnlineGetLoginFailure( &retry, &file );
 	UnicodeString text;
-	if (code == "files")
+	if (code == "files" && file.isEmpty())
+		text = TheGameText->fetch( "GUI:OnlineLoginFilesNone" );		// no list reached it, or none was hashed
+	else if (code == "files")
 	{
 		UnicodeString name;
 		name.translate( file );

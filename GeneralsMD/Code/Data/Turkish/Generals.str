@@ -10778,7 +10778,11 @@ GUI:OnlineCheckingFiles
 END
 
 GUI:OnlineLoginFiles
-"Bu dosya oyunla gelen dosya değil:\n\n%ls\n\nOyunu başlatıcıdan yeniden kur ya da o dosyayı sil, sonra yeniden giriş yap."
+"Bu dosya oyunla gelen dosya değil:\n\n%ls\n\nOyunu başlatıcıdan yeniden kur ya da o dosyayı sil, sonra oyunu yeniden başlatıp giriş yap."
+END
+
+GUI:OnlineLoginFilesNone
+"Sunucu oyun dosyalarını denetleyemedi. Oyunu yeniden başlatıp giriş yap; yine olursa oyunu başlatıcıdan yeniden kur."
 END
 
 TOOLTIP:OnlinePlayerInfo

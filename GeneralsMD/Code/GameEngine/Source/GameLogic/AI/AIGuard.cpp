@@ -170,7 +170,8 @@ AIGuardMachine::AIGuardMachine( Object *owner ) :
 	m_targetToGuard(INVALID_ID),
 	m_areaToGuard(NULL),
 	m_nemesisToAttack(INVALID_ID),
-	m_guardMode(GUARDMODE_NORMAL)
+	m_guardMode(GUARDMODE_NORMAL),
+	m_reachedPost(FALSE)
 {
 	m_positionToGuard.zero();
 	
@@ -393,13 +394,16 @@ void AIGuardMachine::crc( Xfer *xfer )
 void AIGuardMachine::xfer( Xfer *xfer )
 {
   // version
-  XferVersion currentVersion = 2;
+	// 3: m_reachedPost
+  XferVersion currentVersion = 3;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
 
 	if (version>=2) {
 		StateMachine::xfer(xfer);	// Forgot this in initial implementation.  jba.
 	}
+	if (version>=3)
+		xfer->xferBool(&m_reachedPost);
 
 	xfer->xferObjectID(&m_targetToGuard);
 	xfer->xferObjectID(&m_nemesisToAttack);
@@ -486,7 +490,7 @@ StateReturnType AIGuardInnerState::onEnter( void )
 		}
 		m_exitConditions.m_center = pos;
 		m_exitConditions.m_radiusSqr = sqr(AIGuardMachine::getGuardRange(getMachineOwner()));
-		m_exitConditions.m_conditionsToConsider = (ExitConditions::ATTACK_ExitIfOutsideRadius | 
+		m_exitConditions.m_conditionsToConsider = (ExitConditions::ATTACK_ExitIfOutsideRadius |
 																								ExitConditions::ATTACK_ExitIfNoUnitFound);
 
 		m_attackState = newInstance(AIAttackState)(getMachine(), false, true, false, &m_exitConditions);
@@ -709,6 +713,24 @@ StateReturnType AIGuardReturnState::onEnter( void )
 //	if (getGuardMachine()->lookForInnerTarget()) 
 //		return STATE_FAILURE; // early termination because we found a target.
 
+	// That holds for the order itself. Once the unit has stood at its post, though, it comes back
+	// here after every kill, and waiting for the next scan made a player's guard drop the enemy
+	// beside it, take a step home, then turn round for him. One scan, only then, only on a player's
+	// order: the AI's and the scripts' guards keep EA's timing.
+	// Once a frame: a nemesis the attack refuses straight away would otherwise bring the machine
+	// back here and round again inside the same frame.
+	m_stayedAtPost = FALSE;
+	if (getGuardMachine()->hasReachedPost() && getMachineOwner()->getAI()->getLastCommandSource() == CMD_FROM_PLAYER
+			&& m_enterScanFrame != now)
+	{
+		m_enterScanFrame = now;
+		if (getGuardMachine()->lookForInnerTarget())
+		{
+			m_stayedAtPost = TRUE;	// no move was started, so onExit has none to end
+			return STATE_FAILURE;	// to AIGuardInnerState, on the new nemesis
+		}
+	}
+
 	Object* targetToGuard = getGuardMachine()->findTargetToGuardByID();
 	m_goalPosition = targetToGuard ? *targetToGuard->getPosition() : *getGuardMachine()->getPositionToGuard();
 
@@ -730,6 +752,19 @@ StateReturnType AIGuardReturnState::onEnter( void )
 	Real dx = m_goalPosition.x - pos->x;
 	Real dy = m_goalPosition.y - pos->y;
 	m_stayedAtPost = getMachineOwner()->testStatus(OBJECT_STATUS_DEPLOYED) && dx*dx + dy*dy <= 4*PATHFIND_CELL_SIZE_F*PATHFIND_CELL_SIZE_F;
+
+	// A circle the player sized with the wheel is the ground to hold, and it can be 800 wide: after
+	// a fight a unit still inside it stays where it is rather than driving back to the one middle
+	// point with the whole group. The first walk to the post after the order is still made, and a
+	// guard without a radius (no wheel, AI, scripts, old replays) goes back as EA's did.
+	const Real radius = getMachineOwner()->getAI()->getGuardRadius();
+	if (!m_stayedAtPost && radius > 0.0f && getGuardMachine()->hasReachedPost() && !targetToGuard && !area)
+	{
+		const Coord3D *post = getGuardMachine()->getPositionToGuard();
+		const Real px = post->x - pos->x;
+		const Real py = post->y - pos->y;
+		m_stayedAtPost = px*px + py*py <= radius*radius;
+	}
 	if (m_stayedAtPost)
 	{
 		return STATE_SUCCESS;
@@ -797,6 +832,7 @@ StateReturnType AIGuardIdleState::onEnter( void )
 	// to avoid "spikes". 
 	UnsignedInt now = TheGameLogic->getFrame();
 	m_nextEnemyScanTime = now + GameLogicRandomValue(0, TheAI->getAiData()->m_guardEnemyScanRate);
+	getGuardMachine()->setReachedPost();
 
 	return STATE_CONTINUE;
 }

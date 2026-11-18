@@ -105,6 +105,7 @@ private:
 	Coord3D									m_positionToGuard;
 	ObjectID								m_nemesisToAttack;
 	GuardMode								m_guardMode;
+	Bool										m_reachedPost;	///< went idle once since the order, so the walk to the post is done
 
 protected:
 	// snapshot interface
@@ -132,6 +133,9 @@ public:
 
 	GuardMode getGuardMode() const { return m_guardMode; }
 	void setGuardMode(GuardMode guardMode) { m_guardMode = guardMode; }
+
+	Bool hasReachedPost() const { return m_reachedPost; }
+	void setReachedPost() { m_reachedPost = TRUE; }
 
 	Bool lookForInnerTarget(void);
 
@@ -228,6 +232,7 @@ public:
 	{
 		m_nextReturnScanTime = 0;
 		m_stayedAtPost = FALSE;
+		m_enterScanFrame = 0;
 	}
 	virtual Bool isAttack() const { return FALSE; }
 	virtual StateReturnType onEnter( void );
@@ -241,6 +246,7 @@ protected:
 private:
 	UnsignedInt m_nextReturnScanTime;
 	Bool m_stayedAtPost;	///< onEnter skipped the move, so there is no move for onExit to end
+	UnsignedInt m_enterScanFrame;	///< the frame onEnter last scanned on; only ever compared with the current frame, so not saved
 };
 EMPTY_DTOR(AIGuardReturnState)
 

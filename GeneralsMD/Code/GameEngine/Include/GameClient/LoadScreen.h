@@ -49,6 +49,19 @@ class VideoBuffer;
 class VideoStreamInterface;
 class WindowVideoManager;
 class LoadScreenBoard;
+class AudioManager;
+
+/// Separate original-Generals narration, cued once without restoring legacy window animation.
+class CampaignBriefingVoice
+{
+public:
+	CampaignBriefingVoice() : m_attempted(FALSE) {}
+	void reset() { m_attempted = FALSE; }
+	void cancel() { m_attempted = TRUE; }
+	void update(AudioManager &audio, const AudioEventRTS &voice, Int movieFrame, Bool skipMovie);
+private:
+	Bool m_attempted;
+};
 
 
 
@@ -118,6 +131,8 @@ private:
 	VideoStreamInterface *m_videoStream;
 	LoadScreenBoard *m_board;					///< the mission's name, briefing and tip, over the picture once the movie is done
 
+	CampaignBriefingVoice m_briefingVoice;
+	void startBriefingAudio(const Mission &mission, Int movieFrame, Bool skipMovie = FALSE);
 	void moveWindows( Int frame );
 
 	AudioEventRTS m_ambientLoop;

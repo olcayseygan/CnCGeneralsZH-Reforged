@@ -2358,6 +2358,15 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	TheTacticalView->setAngleAndPitchToDefault();
 	// the opening zoom is the view's to pick from client settings (View::setZoomToStart)
 	TheTacticalView->setZoomToStart( isInShellGame() );
+	{
+		// where the match opens, to set beside W3DView's CAMERA FIRST DRAW: a match that opened
+		// looking past the map's edge left nothing in the log to say so
+		Coord3D look;
+		TheTacticalView->getPosition( &look );
+		DEBUG_LOG(( "CAMERA START look point %.1f %.1f from %s %.1f %.1f %.1f\n", look.x, look.y,
+			way ? startingCamName.str() : "the map's middle",
+			way ? way->getLocation()->x : look.x, way ? way->getLocation()->y : look.y, way ? way->getLocation()->z : 0.0f ));
+	}
 
 	// update the loadscreen 
 	updateLoadProgress(LOAD_PROGRESS_POST_STARTING_CAMERA_2);

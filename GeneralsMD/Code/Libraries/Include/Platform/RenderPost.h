@@ -6,7 +6,7 @@ struct IDirect3DSurface9;
 namespace RenderPost {
 struct Settings {
     const char *Chain = "off";
-    bool Classic = false, InternalHDR = false;
+    bool Classic = false, InternalHDR = false, WorldAO = false;
     float BloomThreshold = 1, BloomIntensity = 0.75f, BloomSaturation = 1;
     float Clarity = 0, AdditiveGain = 1, Grade = 0;
     float ClearAlpha = 1; // same main-scene clear alpha used by Begin_Render
@@ -15,6 +15,8 @@ struct Settings {
 void BeginMain(const Settings &);
 unsigned BeginView(bool eligible, float nearPlane, float farPlane, bool reflection = false);
 void EndView(unsigned token);
+void OpaqueScene(bool allowWorldAO); // explicit caller gate, before water
+void BeforeTransparent();
 void FinishScene();
 void FinishFrame();
 bool ReplacesLegacyBloom();
@@ -32,6 +34,8 @@ public:
 void BeginMain(IDirect3DDevice9 *, const Settings &);
 unsigned BeginView(IDirect3DDevice9 *, bool, float, float, bool);
 void EndView(IDirect3DDevice9 *, unsigned);
+void OpaqueScene(IDirect3DDevice9 *, bool);
+void BeforeTransparent(IDirect3DDevice9 *);
 void FinishScene(IDirect3DDevice9 *, bool);
 bool ReplacesLegacyBloom(IDirect3DDevice9 *);
 void SetSceneStandIn(IDirect3DDevice9 *, IDirect3DBaseTexture9 *, IDirect3DSurface9 *);

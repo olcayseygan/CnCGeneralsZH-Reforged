@@ -1169,8 +1169,8 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 
 	// The Ambient Occlusion option goes on under the water and every translucent draw, none of which
 	// writes depth: the water takes no corner's shade from its bed and only the bed's shows through it.
-	if (TheGlobalData->m_ambientOcclusion && !TheGlobalData->m_classicGraphics && m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
-		Direct3D11_Ambient_Occlusion();
+	if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
+		RenderPost::OpaqueScene(TheGlobalData->m_ambientOcclusion && !TheGlobalData->m_classicGraphics);
 
 	WW3D::Render_And_Clear_Static_Sort_Lists(rinfo);	//draws things like water
 
@@ -1196,7 +1196,7 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 			// The Direct3D 11 chain's ambient occlusion goes on here, over the world with every
 			// corner in its depth and under the fire and smoke, which write none: put on the
 			// finished frame it shaded a fireball by the chimneys and trees behind it.
-			Direct3D11_Occlude_Scene();
+			RenderPost::BeforeTransparent();
 			DoParticles(rinfo);	//queue up particles for rendering.
 		}
 

@@ -524,6 +524,7 @@ void W3DShaderManager::beginMainPostScene(void)
 	settings.Chain = TheGlobalData->m_direct3D11PostChain.str();
 	settings.Classic = TheGlobalData->m_classicGraphics != FALSE;
 	settings.ClearAlpha = TheWaterTransparency->m_minWaterOpacity;
+	settings.WorldAO = TheGlobalData->m_ambientOcclusion != FALSE;
 	settings.BloomThreshold = tuning.threshold; settings.BloomIntensity = tuning.intensity;
 	settings.BloomSaturation = tuning.saturation;
 	settings.AdditiveGain = tuning.additiveGain; settings.BlurPasses = tuning.blurPasses;

@@ -5981,3 +5981,31 @@ void SetGlowDraw(bool enabled) {
 #endif
 }
 }
+
+#include "Platform/RenderPost.h"
+namespace RenderPost {
+void OpaqueScene(bool allowWorldAO) {
+#if defined(_WIN32)
+    if (allowWorldAO) Direct3D11_Ambient_Occlusion();
+#else
+    OpaqueScene(DX8Wrapper::_Get_D3D_Device(),allowWorldAO);
+#endif
+}
+void BeforeTransparent() {
+#if defined(_WIN32)
+    Direct3D11_Occlude_Scene();
+#else
+    BeforeTransparent(DX8Wrapper::_Get_D3D_Device());
+#endif
+}
+}
+#if !defined(_WIN32)
+struct SdlMainViewSnapshot;
+enum class SdlSceneCapturePhase;
+bool PosixRenderer_Main_View(IDirect3DDevice9 *,SdlMainViewSnapshot &);
+bool PosixRenderer_Capture_Main_View(IDirect3DDevice9 *,SdlSceneCapturePhase,SdlMainViewSnapshot &);
+bool PosixRenderer_Main_View(SdlMainViewSnapshot &s) { return PosixRenderer_Main_View(DX8Wrapper::_Get_D3D_Device(),s); }
+bool PosixRenderer_Capture_Main_View(SdlSceneCapturePhase p,SdlMainViewSnapshot &s) {
+    return PosixRenderer_Capture_Main_View(DX8Wrapper::_Get_D3D_Device(),p,s);
+}
+#endif

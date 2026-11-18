@@ -1,16 +1,23 @@
 #include "PosixDevice9.h"
 #include "SdlGpuFrame.h"
 #include "SdlPostProcess.h"
+#include "SdlSceneCapture.h"
+#include "SdlSceneContext.h"
+#include "SdlRenderMatrix.h"
+#include <cstring>
 #include <SDL3/SDL.h>
 #include <cmath>
 #include <cstdio>
 
 struct PosixDevice9::PostSession {
+    explicit PostSession(SdlGpuFrame &frame) : Captures(frame) {}
+    SdlSceneCaptureCache Captures;
+    SdlMainViewSnapshot CurrentView, LastView, ViewStack[8];
+    bool WorldAO = false;
     SdlPostProcess Processor;
     SdlPostSettings Settings;
     SdlTarget Scene = {}, Presentation = {};
     bool Routed = false, InView = false, Entered = false;
-    bool ViewStack[8] = {};
     unsigned ViewDepth = 0;
     uint64_t Serial = 0;
     IDirect3DBaseTexture9 *StandInTexture = nullptr;
@@ -21,20 +28,17 @@ struct PosixDevice9::PostSession {
 void PosixDevice9::Begin_Post(const RenderPost::Settings &settings)
 {
     if (!Gpu) return;
-    if (!Post) Post = std::make_shared<PostSession>();
+    if (!Post) Post = std::make_shared<PostSession>(*Gpu);
     if (Post->Routed) Finish_Post(true);
     auto &s = *Post;
     s.InView = s.Entered = false; s.ViewDepth = 0;
+    s.CurrentView = {}; s.LastView = {};
+    s.WorldAO = settings.WorldAO && !settings.Classic;
     s.StandInTexture = nullptr; s.StandInSurface = nullptr;
     s.Settings = {};
     if (!settings.Classic && !DX11Post_Parse_Chain(settings.Chain, s.Settings.Chain, s.Settings.Count))
         s.Settings.Count = 0;
-    // The saved default chain includes AO. This slot has no depth consumer;
-    // omit only that stage locally, preserving all other order/options and DX11.
-    unsigned supported = 0;
-    for (unsigned i = 0; i < s.Settings.Count; ++i)
-        if (s.Settings.Chain[i] != DX11_POST_AO) s.Settings.Chain[supported++] = s.Settings.Chain[i];
-    s.Settings.Count = supported;
+    if (!s.Settings.Count && s.WorldAO) { s.Settings.Count = 1; s.Settings.Chain[0] = DX11_POST_COPY; }
     s.Settings.MainViewKey = ++s.Serial;
     // Every actual SDL scene attachment is created with SDL_GPU_SAMPLECOUNT_1.
     // The D3D9 requested multisample option is not an attachment capability.
@@ -59,23 +63,106 @@ unsigned PosixDevice9::Begin_Post_View(bool eligible, float nearPlane, float far
 {
     if (!Post || !Gpu) return 0;
     auto &s = *Post;
-    if (s.ViewDepth == 8) { s.InView = false; return 0; }
-    s.ViewStack[s.ViewDepth++] = s.InView;
-    s.InView = false;
-    SdlTarget actual = {}; std::string error;
-    if (eligible && !reflection && !SunActive && s.Routed && !s.Entered &&
-        std::isfinite(nearPlane) && std::isfinite(farPlane) && nearPlane > 0 && farPlane > nearPlane &&
-        Resolve_Target(actual, error) && actual.Colour == s.Scene.Colour && actual.Depth == s.Scene.Depth &&
-        Viewport.Width && Viewport.Height && Viewport.X <= actual.Width && Viewport.Y <= actual.Height &&
-        Viewport.Width <= actual.Width - Viewport.X && Viewport.Height <= actual.Height - Viewport.Y) {
-        s.InView = s.Entered = true;
+    if (s.ViewDepth == 8) { s.CurrentView = {}; s.InView = false; return 0; }
+    s.ViewStack[s.ViewDepth++] = s.CurrentView;
+    const unsigned token = s.ViewDepth;
+    const bool nested = s.ViewDepth > 1;
+    s.CurrentView = {}; s.InView = false;
+    SdlTarget target = {}; std::string error;
+    if (nested || !eligible || reflection || SunActive || !Resolve_Target(target, error) || !target.Colour || !target.Depth ||
+        !Viewport.Width || !Viewport.Height || Viewport.X > target.Width || Viewport.Y > target.Height ||
+        Viewport.Width > target.Width - Viewport.X || Viewport.Height > target.Height - Viewport.Y ||
+        !std::isfinite(nearPlane) || !std::isfinite(farPlane) || nearPlane <= 0 || farPlane <= nearPlane) return token;
+    // Nested custom/mirror targets never replace an explicitly prepared main source.
+    const SdlTarget expected = s.Routed ? s.Scene : Gpu->Back_Buffer_Target();
+    if (target.Colour != expected.Colour || target.Depth != expected.Depth) return token;
+    SdlMainViewSnapshot view;
+    view.Frame = Gpu; view.Target = target; view.Pass = SdlSceneView::Main;
+    view.DeviceGeneration = Gpu->Device_Generation(); view.FrameSerial = Gpu->Scene_Frame();
+    const float viewport[] = {float(Viewport.X),float(Viewport.Y),float(Viewport.Width),float(Viewport.Height),Viewport.MinZ,Viewport.MaxZ};
+    std::memcpy(view.Viewport,viewport,sizeof(viewport));
+    view.Scissor[0]=Viewport.X; view.Scissor[1]=Viewport.Y; view.Scissor[2]=Viewport.Width; view.Scissor[3]=Viewport.Height;
+    multiply(&Transforms[D3DTS_VIEW]._11,&Transforms[D3DTS_PROJECTION]._11,view.ViewProjection);
+    if (!render_inverse(view.ViewProjection,view.WorldFromClip) ||
+        !render_full_texture_to_world(&Transforms[D3DTS_VIEW]._11,&Transforms[D3DTS_PROJECTION]._11,
+            target.Width,target.Height,viewport,view.FullTextureWorldFromClip,view.ProjectionScale)) return token;
+    if (s.Entered && !s.InView) {
+        // A second explicit view has its own ownership key; no old phase capture can satisfy it.
+        s.Settings.MainViewKey = ++s.Serial;
+        if (s.Routed && !s.Processor.Prepare(*Gpu,s.Presentation,s.Settings,s.Scene)) s.Routed=false;
     }
-    return s.ViewDepth;
+    view.ViewKey=s.Settings.MainViewKey;
+    view.Capture.Source=target;
+    view.Capture.Source.ColourFormat=Gpu->Target_Colour_Format(target);
+    view.Capture.Source.DepthFormat=Gpu->Target_Depth_Format(target);
+    view.Capture.Frame=view.FrameSerial; view.Capture.Generation=Gpu->Scene_Generation();
+    view.Capture.ViewKey=view.ViewKey; view.Near=nearPlane; view.Far=farPlane;
+    s.CurrentView=s.LastView=view; s.InView=s.Entered=true;
+    return token;
 }
 void PosixDevice9::End_Post_View(unsigned token)
 {
-    if (!Post || !token || token != Post->ViewDepth) return;
-    Post->InView = Post->ViewStack[--Post->ViewDepth];
+    if (!Post || !token || token!=Post->ViewDepth) return;
+    Post->CurrentView=Post->ViewStack[--Post->ViewDepth];
+    Post->InView=Post->CurrentView.Pass==SdlSceneView::Main;
+}
+bool PosixDevice9::Read_Main_View(SdlMainViewSnapshot &snapshot, bool capture, SdlSceneCapturePhase phase)
+{
+    snapshot={};
+    if (!Gpu || !Post || !Post->InView || SunActive || Post->CurrentView.Pass!=SdlSceneView::Main) return false;
+    auto view=Post->CurrentView;
+    SdlTarget actual={}; std::string error;
+    if (!Resolve_Target(actual,error)) return false;
+    auto current=view.Capture; current.Source=actual;
+    current.Source.ColourFormat=Gpu->Target_Colour_Format(actual);
+    current.Source.DepthFormat=Gpu->Target_Depth_Format(actual);
+    current.Frame=Gpu->Scene_Frame(); current.Generation=Gpu->Scene_Generation();
+    if (!current.Same_Identity(view.Capture) || view.DeviceGeneration!=Gpu->Device_Generation()) return false;
+    view.Capture.Phase=phase; view.Capture.Depth=capture;
+    if (capture) {
+        SdlSceneDepthCapture depth;
+        if (!Post->Captures.Capture(view.Capture,depth)) return false;
+        view.Capture=depth.Identity; view.SampledDepth=depth.Texture;
+        view.DepthWidth=depth.Width; view.DepthHeight=depth.Height; view.DepthFormat=depth.Format;
+    }
+    snapshot=view; return true;
+}
+bool PosixDevice9::Read_Post_Inputs(SdlSceneCapturePhase phase, SdlPostSceneInputs &inputs)
+{
+    inputs={};
+    if (!Gpu || !Post || !Post_Active()) return false;
+    SdlMainViewSnapshot view;
+    if (phase==SdlSceneCapturePhase::BeforePost) {
+        view=Post->LastView;
+        if (view.Pass!=SdlSceneView::Main || view.Capture.Frame!=Gpu->Scene_Frame() ||
+            view.Capture.Generation!=Gpu->Scene_Generation() || view.ViewKey!=Post->Settings.MainViewKey ||
+            view.Target.Colour!=Post->Scene.Colour || view.Target.Depth!=Post->Scene.Depth) return false;
+        view.Capture.Phase=phase; view.Capture.Depth=true;
+        SdlSceneDepthCapture depth;
+        if (!Post->Captures.Capture(view.Capture,depth)) return false;
+        view.Capture=depth.Identity; view.SampledDepth=depth.Texture;
+        view.DepthWidth=depth.Width; view.DepthHeight=depth.Height; view.DepthFormat=depth.Format;
+    } else if (!Read_Main_View(view,true,phase)) return false;
+    inputs.Capture=view.Capture; inputs.SampledDepth=view.SampledDepth;
+    inputs.DepthWidth=view.DepthWidth; inputs.DepthHeight=view.DepthHeight; inputs.DepthFormat=view.DepthFormat;
+    inputs.Near=view.Near; inputs.Far=view.Far;
+    std::memcpy(inputs.WorldFromClip,view.FullTextureWorldFromClip,sizeof(inputs.WorldFromClip));
+    std::memcpy(inputs.ProjectionScale,view.ProjectionScale,sizeof(inputs.ProjectionScale));
+    return true;
+}
+void PosixDevice9::Post_Opaque_Scene(bool allowWorldAO)
+{
+    if (!allowWorldAO || !Post_Active() || !Post->InView || !Post->WorldAO) return;
+    SdlPostSceneInputs inputs;
+    if (Read_Post_Inputs(SdlSceneCapturePhase::OpaqueScene,inputs))
+        Post->Processor.Apply_World_AO(*Gpu,Post->Scene,inputs);
+}
+void PosixDevice9::Post_Before_Transparent()
+{
+    if (!Post_Active() || !Post->InView || !Post->Processor.Needs_BeforePost_Depth()) return;
+    SdlPostSceneInputs inputs;
+    if (Read_Post_Inputs(SdlSceneCapturePhase::BeforeTransparent,inputs))
+        Post->Processor.Apply_Chain_AO(*Gpu,Post->Scene,inputs);
 }
 bool PosixDevice9::Post_Active() const { return Post && Post->Routed; }
 bool PosixDevice9::Post_Replaces_Bloom() const { return Post_Active() && Post->Processor.Replaces_Legacy_Bloom(); }
@@ -121,7 +208,10 @@ void PosixDevice9::Finish_Post(bool fallback)
     if (!Gpu || !Post_Active()) return;
     auto &s = *Post;
     const bool normal = !fallback && s.Entered;
-    bool finished = normal ? s.Processor.Finish(*Gpu, s.Scene, s.Presentation) :
+    SdlPostSceneInputs inputs;
+    const SdlPostSceneInputs *depth = normal && s.Processor.Needs_BeforePost_Depth() &&
+        Read_Post_Inputs(SdlSceneCapturePhase::BeforePost,inputs) ? &inputs : nullptr;
+    bool finished = normal ? s.Processor.Finish(*Gpu, s.Scene, s.Presentation, depth) :
         s.Processor.Copy_Through(*Gpu, s.Scene, s.Presentation);
     if (!finished && normal) finished = s.Processor.Copy_Through(*Gpu, s.Scene, s.Presentation);
     if (!finished) std::fprintf(stderr, "PosixDevice9: main post finish failed: %s\n", s.Processor.Error().c_str());
@@ -148,4 +238,15 @@ void FinishScene(IDirect3DDevice9 *d, bool f) { if(d) static_cast<PosixDevice9 *
 bool ReplacesLegacyBloom(IDirect3DDevice9 *d) { return d && static_cast<PosixDevice9 *>(d)->Post_Replaces_Bloom(); }
 void SetSceneStandIn(IDirect3DDevice9 *d, IDirect3DBaseTexture9 *t, IDirect3DSurface9 *s) { if(d) static_cast<PosixDevice9 *>(d)->Post_Stand_In(t,s); }
 void SetGlowDraw(IDirect3DDevice9 *d, bool e) { if(d) static_cast<PosixDevice9 *>(d)->Set_Glow_Draw(e); }
+}
+
+namespace RenderPost {
+void OpaqueScene(IDirect3DDevice9 *d,bool allowWorldAO) { if(d) static_cast<PosixDevice9 *>(d)->Post_Opaque_Scene(allowWorldAO); }
+void BeforeTransparent(IDirect3DDevice9 *d) { if(d) static_cast<PosixDevice9 *>(d)->Post_Before_Transparent(); }
+}
+bool PosixRenderer_Main_View(IDirect3DDevice9 *d,SdlMainViewSnapshot &s) {
+    s={}; return d && static_cast<PosixDevice9 *>(d)->Read_Main_View(s,false,SdlSceneCapturePhase::OpaqueScene);
+}
+bool PosixRenderer_Capture_Main_View(IDirect3DDevice9 *d,SdlSceneCapturePhase p,SdlMainViewSnapshot &s) {
+    s={}; return d && static_cast<PosixDevice9 *>(d)->Read_Main_View(s,true,p);
 }

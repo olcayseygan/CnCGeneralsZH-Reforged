@@ -185,6 +185,7 @@ public:
 	void Fail_Next_Native_Record_For_Test(unsigned count = 1) { NativeRecordRefusalsForTest = count; }
 	uint64_t Scene_Frame() const { return SceneFrame; }
 	uint64_t Scene_Generation() const { return SceneGeneration; }
+	uint64_t Device_Generation() const { return DeviceGeneration; }
 	static unsigned Target_Colour_Format(const SdlTarget &target);
 	bool Record_Native_Draw(const SdlTarget &, const SdlRecordedDraw &, const SdlNativeUniformBlock *, unsigned);
 	bool Record_Native_Draw_Batch(const SdlNativeDrawPacket *, unsigned);
@@ -219,6 +220,9 @@ public:
 	unsigned int Depth_Usage() const;
 	/// Device capability selected at frame creation, including the R32F resolve target.
 	bool Supports_Scene_Depth() const { return DepthSampleable; }
+    // Independent normalized R32 depth: submits existing writers/readers first.
+    // No shared water snapshot or scene attachment is returned to the consumer.
+    bool Capture_Scene_Depth(const SdlTarget &source, SDL_GPUTexture *destination);
 
 	/// Flush, then the back buffer to the window through the gamma ramp (null: none, a straight blit).
 	bool Present(const uint16_t (*ramp)[256]);
@@ -452,7 +456,7 @@ private:
 	SDL_GPUShader * ClearPixel;
 	struct ClearPipelineEntry { unsigned Which, ColourFormat, DepthFormat; SDL_GPUGraphicsPipeline *Pipeline; };
 	std::vector<ClearPipelineEntry> ClearPipelines;
-	uint64_t SceneFrame = 0, SceneGeneration = 0;
+	uint64_t SceneFrame = 0, SceneGeneration = 0, DeviceGeneration = 0;
 	unsigned NativeRecordRefusalsForTest = 0;
 	void Append_Native_Draw(const SdlTarget &, const SdlRecordedDraw &, const SdlNativeUniformBlock *, unsigned);
 	SDL_GPUBuffer * StreamBuffer;		///< the staging stream on the GPU, grown as needed

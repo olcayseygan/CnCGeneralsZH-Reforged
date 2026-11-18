@@ -43,3 +43,25 @@ static bool render_inverse(const float source[16], float result[16])
 		for (unsigned c = 0; c < 4; ++c) result[r * 4 + c] = (float)rows[r][c + 4];
 	return true;
 }
+
+// AO/haze sample a full attachment, while the camera viewport can exclude the command bar.
+// Reach consumers already subtract their explicit viewport and must use the original camera inverse.
+static bool render_full_texture_to_world(const float view[16], const float projection[16],
+	unsigned width, unsigned height, const float viewport[6], float result[16], float projectionScale[2])
+{
+	if (!width || !height || viewport[0] < 0 || viewport[1] < 0 || viewport[2] <= 0 || viewport[3] <= 0 ||
+		viewport[0] + viewport[2] > width || viewport[1] + viewport[3] > height || viewport[5] <= viewport[4]) return false;
+	float clip[16], inverse[16];
+	multiply(view, projection, clip);
+	if (!render_inverse(clip, inverse)) return false;
+	float cameraNdc[16] = {};
+	cameraNdc[0] = float(width) / viewport[2]; cameraNdc[5] = float(height) / viewport[3];
+	cameraNdc[10] = 1 / (viewport[5] - viewport[4]); cameraNdc[15] = 1;
+	cameraNdc[12] = (float(width) - 2 * viewport[0] - viewport[2]) / viewport[2];
+	cameraNdc[13] = (2 * viewport[1] + viewport[3] - height) / viewport[3];
+	cameraNdc[14] = -viewport[4] * cameraNdc[10];
+	multiply(cameraNdc, inverse, result);
+	projectionScale[0] = fabsf(projection[0]) * viewport[2] / width;
+	projectionScale[1] = fabsf(projection[5]) * viewport[3] / height;
+	return projectionScale[0] > 0 && projectionScale[1] > 0;
+}

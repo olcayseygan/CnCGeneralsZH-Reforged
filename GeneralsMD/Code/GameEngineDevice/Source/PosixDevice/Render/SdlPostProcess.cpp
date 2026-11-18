@@ -43,6 +43,7 @@ struct SdlPostProcess::Impl
     Program Programs[POST_SHADER_COUNT];
     Images Targets;
     SdlPostSettings Settings;
+    SdlPostOcclusion Occlusion;
     SdlTarget Scene = {}, Presentation = {};
     uint64_t Frame = 0, Generation = 0;
     bool Enabled = false, Armed = false, Finished = false, FailedFinish = false;
@@ -212,6 +213,10 @@ struct SdlPostProcess::Impl
 
 SdlPostProcess::SdlPostProcess() : State(new Impl) {}
 void SdlPostProcess::Set_Failure_For_Test(TestFailure failure) { State->FailureForTest = failure; }
+void SdlPostProcess::Set_AO_Failure_For_Test(SdlPostOcclusion::TestFailure failure)
+{
+    State->Occlusion.Set_Failure_For_Test(failure);
+}
 SdlPostProcess::~SdlPostProcess()
 {
     if (State->Owner && !Release(*State->Owner)) {
@@ -228,6 +233,10 @@ bool SdlPostProcess::Prepare(SdlGpuFrame &frame, const SdlTarget &presentation,
     Impl &s = *State;
     scene = presentation; s.Enabled = s.Armed = s.Finished = s.FailedFinish = false;
     s.Presentation = presentation;
+    struct ClearAbandonedAO {
+        Impl &State;
+        ~ClearAbandonedAO() { if (!State.Enabled) State.Occlusion.Abandon(); }
+    } clearAbandoned{s};
     if (s.Owner && s.Owner != &frame) return s.fail("Release the previous frame owner before rebinding");
     if (!presentation.Colour || !presentation.Width || !presentation.Height)
         return s.fail("missing presentation colour target or dimensions");
@@ -258,6 +267,7 @@ bool SdlPostProcess::Prepare(SdlGpuFrame &frame, const SdlTarget &presentation,
     const bool hdr = requested.Chain[0] == DX11_POST_BLOOM;
     const bool bloom = hdr && (s.Settings.BloomIntensity > 0 || s.Settings.Clarity > 0);
     std::vector<PostShaderProgram> needed = {hdr ? POST_SHADER_TONE_MAP : POST_SHADER_COPY};
+    bool chainAO = false;
     for (unsigned i = 0; i < requested.Count; ++i) {
         if (requested.Chain[i] == DX11_POST_BLOOM) {
             if (bloom) {
@@ -265,26 +275,30 @@ bool SdlPostProcess::Prepare(SdlGpuFrame &frame, const SdlTarget &presentation,
                 needed.push_back(requested.InternalHDR ? POST_SHADER_BLOOM_COMPOSITE_WIDE : POST_SHADER_BLOOM_COMPOSITE);
             } else needed.push_back(requested.InternalHDR ? POST_SHADER_TONE_MAP_WIDE : POST_SHADER_TONE_MAP);
         } else if (requested.Chain[i] == DX11_POST_AO) {
-            return s.fail("AO requires the later depth-consumer port");
+            chainAO = true; needed.push_back(POST_SHADER_COPY); // early/missing-depth AO bypass still presents
         } else needed.push_back(PostShader_Simple_Effect(requested.Chain[i]));
     }
     if (!s.programs(needed, format)) return false;
+    if (chainAO && !s.Occlusion.Prepare_Final(frame, format)) return s.fail(s.Occlusion.Error());
     if (!s.images(presentation.Width, presentation.Height, format, hdr, bloom)) return false;
     scene = presentation;
     scene.Colour = hdr ? s.Targets.SceneHDR : s.Targets.Scene8;
     scene.ColourFormat = hdr ? FLOAT_FORMAT : format;
     s.Scene = scene; s.Frame = frame.Scene_Frame(); s.Generation = frame.Scene_Generation();
+    s.Occlusion.Prepare(requested.MainViewKey);
     s.Enabled = s.Armed = true; s.LastError.clear();
     return true;
 }
 
-bool SdlPostProcess::Finish(SdlGpuFrame &frame, const SdlTarget &scene, const SdlTarget &presentation)
+bool SdlPostProcess::Finish(SdlGpuFrame &frame, const SdlTarget &scene, const SdlTarget &presentation,
+    const SdlPostSceneInputs *beforePost)
 {
     Impl &s = *State; s.Finished = s.FailedFinish = false;
     if (!s.Enabled) return true;
     if (!s.Armed || s.Owner != &frame || frame.Scene_Frame() != s.Frame || frame.Scene_Generation() != s.Generation
         || !same_target(scene, s.Scene) || !same_target(presentation, s.Presentation))
         return s.fail("finish does not match its prepared main scene/frame");
+    const bool earlyOccluded = s.Occlusion.Was_Occluded(frame, scene);
     s.Armed = false;
     // Only an exact, armed normal attempt can authorize one ungraded recovery.
     // Intermediate passes do not replace the original scene, so recovery never
@@ -322,12 +336,55 @@ bool SdlPostProcess::Finish(SdlGpuFrame &frame, const SdlTarget &scene, const Sd
                 if (!s.pass(wide ? POST_SHADER_BLOOM_COMPOSITE_WIDE : POST_SHADER_BLOOM_COMPOSITE,
                     source, scene.Width, scene.Height, destination, s.Targets.Bloom[0])) return false;
             }
+        } else if (s.Settings.Chain[i] == DX11_POST_AO) {
+            bool applied = false;
+            if (!earlyOccluded && beforePost) {
+                const SdlTarget input = s.target(source, scene.Width, scene.Height,
+                    i == 0 ? SdlGpuFrame::Target_Colour_Format(scene) : s.Targets.Format);
+                applied = s.Occlusion.Filter_Final(frame, scene, input, destination, *beforePost);
+            }
+            if (!earlyOccluded && !applied)
+                s.fail(beforePost ? s.Occlusion.Error() : "final AO bypassed: fresh BeforePost depth was not supplied");
+            if (!applied && !s.pass(POST_SHADER_COPY, source, scene.Width, scene.Height, destination)) return false;
         } else if (!s.pass(PostShader_Simple_Effect(s.Settings.Chain[i]), source,
             scene.Width, scene.Height, destination)) return false;
         source = destination.Colour;
     }
     s.FailedFinish = false; s.Finished = true;
     return true;
+}
+
+bool SdlPostProcess::Needs_BeforePost_Depth() const
+{
+    const Impl &s = *State;
+    if (!s.Enabled || !s.Armed || !s.Owner || s.Owner->Scene_Frame() != s.Frame
+        || s.Owner->Scene_Generation() != s.Generation || s.Occlusion.Was_Occluded(*s.Owner, s.Scene)) return false;
+    for (unsigned i = 0; i < s.Settings.Count; ++i) if (s.Settings.Chain[i] == DX11_POST_AO) return true;
+    return false;
+}
+
+bool SdlPostProcess::Apply_World_AO(SdlGpuFrame &frame, const SdlTarget &scene, const SdlPostSceneInputs &inputs)
+{
+    Impl &s = *State;
+    if (!s.Enabled) return false;
+    if (!s.Armed || s.Owner != &frame || s.Frame != frame.Scene_Frame() || s.Generation != frame.Scene_Generation()
+        || !same_target(scene, s.Scene)) return s.fail("world AO requested outside its unresolved prepared main scene");
+    const bool recorded = s.Occlusion.Apply_World(frame, scene, inputs);
+    if (!recorded && !s.Occlusion.Error().empty()) s.LastError = s.Occlusion.Error();
+    return recorded;
+}
+
+bool SdlPostProcess::Apply_Chain_AO(SdlGpuFrame &frame, const SdlTarget &scene, const SdlPostSceneInputs &inputs)
+{
+    Impl &s = *State;
+    bool wanted = false;
+    for (unsigned i = 0; i < s.Settings.Count; ++i) wanted |= s.Settings.Chain[i] == DX11_POST_AO;
+    if (!s.Enabled || !wanted) return false;
+    if (!s.Armed || s.Owner != &frame || s.Frame != frame.Scene_Frame() || s.Generation != frame.Scene_Generation()
+        || !same_target(scene, s.Scene)) return s.fail("chain AO requested outside its unresolved prepared main scene");
+    const bool recorded = s.Occlusion.Apply_Chain(frame, scene, inputs);
+    if (!recorded && !s.Occlusion.Error().empty()) s.LastError = s.Occlusion.Error();
+    return recorded;
 }
 
 bool SdlPostProcess::Copy_Through(SdlGpuFrame &frame, const SdlTarget &scene, const SdlTarget &presentation)
@@ -338,6 +395,7 @@ bool SdlPostProcess::Copy_Through(SdlGpuFrame &frame, const SdlTarget &scene, co
         || !same_target(scene, s.Scene) || !same_target(presentation, s.Presentation))
         return s.fail("copy-through does not match its prepared main scene/frame");
     s.Armed = s.FailedFinish = false;
+    s.Occlusion.Abandon();
     return s.pass(Scene_Is_Float() ? POST_SHADER_TONE_MAP : POST_SHADER_COPY, scene.Colour,
         scene.Width, scene.Height, s.target(presentation.Colour, presentation.Width, presentation.Height,
             SdlGpuFrame::Target_Colour_Format(presentation)), nullptr, 0, 0, true);
@@ -349,6 +407,7 @@ bool SdlPostProcess::Release(SdlGpuFrame &frame)
     if (!s.Owner) return true;
     if (s.Owner != &frame) return s.fail("Release called with the wrong frame owner");
     if (frame.Has_Pending_Work() && !frame.Flush()) return s.fail("cannot release resources while queued post draws remain unsubmitted");
+    if (!s.Occlusion.Release(frame)) return s.fail(s.Occlusion.Error());
     s.dispose_images(s.Targets, false);
     for (Impl::Program &program : s.Programs) {
         for (SDL_GPUGraphicsPipeline *pipeline : program.Pipelines)
@@ -421,6 +480,9 @@ SdlPostResources SdlPostProcess::Resources() const
         result.Shaders += program.Shader != nullptr;
         for (const SDL_GPUGraphicsPipeline *pipeline : program.Pipelines) result.Pipelines += pipeline != nullptr;
     }
-    result.Creations = s.Creations;
+    const auto ao = s.Occlusion.Resources();
+    result.Textures += ao.Textures; result.Shaders += ao.Shaders;
+    result.Pipelines += ao.Pipelines; result.Samplers += ao.Samplers;
+    result.Creations = s.Creations + ao.Creations;
     return result;
 }

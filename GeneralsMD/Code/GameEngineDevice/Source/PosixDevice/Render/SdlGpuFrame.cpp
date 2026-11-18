@@ -151,6 +151,7 @@ SdlGpuFrame::SdlGpuFrame() :
 {
 	memset(LastConstants,0,sizeof(LastConstants));memset(LastConstantsSize,0,sizeof(LastConstantsSize));
 	SceneGeneration = next_scene_generation();
+	DeviceGeneration = SceneGeneration;
 	InFlight[0] = InFlight[1] = NULL;
 	// ZH_GPU_FLUSH_LIMIT=<n>: at most n mid-frame flushes in flight (default 3); 0 lets them pile up as before
 	// the ring, which is how the ring's effect is measured.
@@ -1231,4 +1232,19 @@ bool SdlGpuFrame::Read_Back(SDL_GPUTexture * texture, unsigned int width, unsign
 	}
 	SDL_ReleaseGPUTransferBuffer(GpuDevice, transfer);
 	return ok;
+}
+
+bool SdlGpuFrame::Capture_Scene_Depth(const SdlTarget &source, SDL_GPUTexture *destination)
+{
+	if (!DepthSampleable || !source.Depth || !source.Width || !source.Height || !destination ||
+		destination == source.Depth || destination == source.Colour || !Create_Scene_Depth_Pipeline())
+		return false;
+	if (Has_Pending_Work() && !Flush()) return false;
+	SDL_GPUCommandBuffer *commands = SDL_AcquireGPUCommandBuffer(GpuDevice);
+	if (!commands) return false;
+	if (!Resolve_Scene_Depth(commands, source.Depth, destination, source.Width, source.Height)) {
+		SDL_CancelGPUCommandBuffer(commands);
+		return false;
+	}
+	return SerializeSubmits ? Submit(commands) : Submit_Flush(commands);
 }

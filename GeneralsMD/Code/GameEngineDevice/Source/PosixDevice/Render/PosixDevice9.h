@@ -56,6 +56,7 @@
 #include <map>
 #include <string>
 #include <vector>
+enum class SdlSceneCapturePhase;
 
 class SdlGpuFrame;
 class SdlPipelineCache;
@@ -211,6 +212,10 @@ public:
     void Begin_Post(const RenderPost::Settings &);
     unsigned Begin_Post_View(bool, float, float, bool);
     void End_Post_View(unsigned);
+    bool Read_Main_View(struct SdlMainViewSnapshot &, bool, SdlSceneCapturePhase);
+    bool Read_Post_Inputs(SdlSceneCapturePhase, struct SdlPostSceneInputs &);
+    void Post_Opaque_Scene(bool);
+    void Post_Before_Transparent();
     void Finish_Post(bool);
     void Release_Post(bool teardown = false);
     bool Post_Active() const;

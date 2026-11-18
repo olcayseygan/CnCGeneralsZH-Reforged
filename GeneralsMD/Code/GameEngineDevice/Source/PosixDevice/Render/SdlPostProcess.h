@@ -3,6 +3,7 @@
 #pragma once
 #include "postprocess.h"
 #include "SdlGpuFrame.h"
+#include "SdlPostOcclusion.h"
 #include <string>
 
 struct SdlPostSettings
@@ -43,8 +44,17 @@ public:
     // or written by a post pass. Neither method changes the engine's render state or frame target.
     bool Prepare(SdlGpuFrame &frame, const SdlTarget &presentation, const SdlPostSettings &settings,
         SdlTarget &scene);
-    // Finishes exactly the prepared scene/frame once, before health bars or HUD.
-    bool Finish(SdlGpuFrame &frame, const SdlTarget &scene, const SdlTarget &presentation);
+    // Unperformed chain AO requires fresh BeforePost inputs at its requested chain positions.
+    // Missing/stale input bypasses those stages with a diagnostic while preserving presentation.
+    // Final AO preserves incoming chain-source alpha; in-place AO preserves scene destination alpha.
+    bool Finish(SdlGpuFrame &frame, const SdlTarget &scene, const SdlTarget &presentation,
+        const SdlPostSceneInputs *beforePost = nullptr);
+    bool Needs_BeforePost_Depth() const;
+    // OpaqueScene world AO precedes water; BeforeTransparent chain AO precedes particles.
+    // Both require an active, unresolved prepared main scene; chain AO additionally requires "ao".
+    // Successful early occlusion is shared across phases and suppresses every final-chain AO entry.
+    bool Apply_World_AO(SdlGpuFrame &frame, const SdlTarget &scene, const SdlPostSceneInputs &inputs);
+    bool Apply_Chain_AO(SdlGpuFrame &frame, const SdlTarget &scene, const SdlPostSceneInputs &inputs);
     // Frame abandonment/menu fallback: copy an eight-bit scene, or legacy tone-map HDR without
     // grade/bloom/wide mapping, matching DX11 Copy_Through. Prepared before scene rerouting.
     // One exact armed normal Finish that fails also authorizes one recovery copy.
@@ -70,6 +80,7 @@ public:
     SdlPostResources Resources() const;
     enum class TestFailure { None, Prepare, Shader, Pipeline, Target, TargetAfterOne };
     void Set_Failure_For_Test(TestFailure failure);
+    void Set_AO_Failure_For_Test(SdlPostOcclusion::TestFailure failure);
 
 private:
     struct Impl;

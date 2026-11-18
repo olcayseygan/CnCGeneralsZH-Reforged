@@ -3036,6 +3036,8 @@ GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloudSharedShader.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloudSharedShader.h
 GameEngineDevice/Source/PosixDevice/Render/SdlPipelineCache.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlPipelineCache.h
+GameEngineDevice/Source/PosixDevice/Render/SdlPostOcclusion.cpp
+GameEngineDevice/Source/PosixDevice/Render/SdlPostOcclusion.h
 GameEngineDevice/Source/PosixDevice/Render/SdlPostProcess.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlPostProcess.h
 GameEngineDevice/Source/PosixDevice/Render/SdlPostShader.cpp
@@ -3045,6 +3047,9 @@ GameEngineDevice/Source/PosixDevice/Render/SdlProgramCache.h
 GameEngineDevice/Source/PosixDevice/Render/SdlRenderMatrix.h
 GameEngineDevice/Source/PosixDevice/Render/SdlResourceMirror.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlResourceMirror.h
+GameEngineDevice/Source/PosixDevice/Render/SdlSceneCapture.cpp
+GameEngineDevice/Source/PosixDevice/Render/SdlSceneCapture.h
+GameEngineDevice/Source/PosixDevice/Render/SdlSceneContext.h
 GameEngineDevice/Source/PosixDevice/Render/SdlSunShadowDebug.h
 GameEngineDevice/Source/SdlDevice/Common/SdlDisplays.cpp
 GameEngineDevice/Source/SdlDevice/Common/SdlGameEngine.cpp
@@ -4429,6 +4434,7 @@ Tests/test_registryfile.cpp
 Tests/test_render_hooks.cpp
 Tests/test_road_buffer.cpp
 Tests/test_score_screen.inc
+Tests/test_sdl_ao.cpp
 Tests/test_sdl_gpu_depth_format.cpp
 Tests/test_sdl_gpu_frame.cpp
 Tests/test_sdl_input.cpp

@@ -32,6 +32,11 @@ found and fixed, EA's own, not port damage.**
 - The film no longer splits the screen, not between players and not between two powers. One camera has the whole picture, and a second power landing off it, or a second fight, plays in a small framed window in the lower right corner with the name and army of whoever called it. Before, the second power had to land most of a screen's width further away than that to get any picture at all, so an artillery barrage called on the same frame as a superweapon across the same base was shown nowhere. A superweapon takes the window from a smaller power at once.
 - A superweapon or strike that neither the camera nor the window caught comes back as an instant replay: the match is played through a third time and the two seconds before the hit and six after it are filmed on their own, with a list of where each one fits into the match film at the next quiet moment.
 
+## Native Linux ambient occlusion
+
+- Ambient Occlusion now adds contact shade beneath buildings and terrain corners on the native renderer before water and particles are drawn. Its option works with the post chain turned off, and Classic graphics keeps its original picture.
+- Post-chain AO now uses the native scene depth. Missing or unsupported depth safely leaves the scene visible, and old snapshots are discarded when the view, frame, render target or window size changes.
+
 ## Native Linux glow and post processing
 
 - Glow now uses the native scene's floating point color buffer, with the same bloom and Internal HDR tone mapping as Direct3D 11. Reforged lighting also applies its local contrast and color grade before unit health bars and the interface are drawn.

@@ -214,6 +214,7 @@ public:
     void Set_Fire_Look(bool enabled) { FireLookDraw = enabled; }
     void Take_Particle_Depth();
     bool Read_Soft_Depth(struct SdlMainViewSnapshot &);
+    bool Read_Particle_Context(struct SdlGpuParticlesContext &);
     void Refuse_Next_Sprite_For_Test(unsigned flags) { SpriteRefusalForTest = flags; }
     void Begin_Post(const RenderPost::Settings &);
     unsigned Begin_Post_View(bool, float, float, bool);

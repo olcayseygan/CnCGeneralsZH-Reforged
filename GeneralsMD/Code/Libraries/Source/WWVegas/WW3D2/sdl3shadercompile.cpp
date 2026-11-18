@@ -39,14 +39,15 @@ void start_shadercross()
 	std::call_once(shadercross_ready, []() { shadercross_ok = SDL_ShaderCross_Init(); });
 }
 
-SDL_ShaderCross_SPIRV_Info spirv_info(const std::vector<unsigned char> & spirv, bool vertex_stage)
+SDL_ShaderCross_SPIRV_Info spirv_info(const std::vector<unsigned char> & spirv, SDL3_ShaderStage stage)
 {
 	SDL_ShaderCross_SPIRV_Info info;
 	SDL_zero(info);
 	info.bytecode = spirv.empty() ? NULL : &spirv[0];
 	info.bytecode_size = spirv.size();
 	info.entrypoint = "main";
-	info.shader_stage = vertex_stage ? SDL_SHADERCROSS_SHADERSTAGE_VERTEX : SDL_SHADERCROSS_SHADERSTAGE_FRAGMENT;
+	info.shader_stage = stage == SDL3_ShaderStage::Compute ? SDL_SHADERCROSS_SHADERSTAGE_COMPUTE
+		: stage == SDL3_ShaderStage::Vertex ? SDL_SHADERCROSS_SHADERSTAGE_VERTEX : SDL_SHADERCROSS_SHADERSTAGE_FRAGMENT;
 	return info;
 }
 
@@ -57,11 +58,18 @@ SDL_ShaderCross_SPIRV_Info spirv_info(const std::vector<unsigned char> & spirv, 
 bool SDL3_Compile_HLSL_To_SPIRV(const std::string & hlsl, bool vertex_stage, std::vector<unsigned char> & spirv,
 	std::string & log)
 {
+	return SDL3_Compile_HLSL_To_SPIRV(hlsl, vertex_stage ? SDL3_ShaderStage::Vertex : SDL3_ShaderStage::Fragment, spirv, log);
+}
+
+bool SDL3_Compile_HLSL_To_SPIRV(const std::string & hlsl, SDL3_ShaderStage shader_stage, std::vector<unsigned char> & spirv,
+	std::string & log)
+{
 	std::call_once(glslang_ready, []() { glslang_initialize_process(); });
 	spirv.clear();
 	log.clear();
 
-	const glslang_stage_t stage = vertex_stage ? GLSLANG_STAGE_VERTEX : GLSLANG_STAGE_FRAGMENT;
+	const glslang_stage_t stage = shader_stage == SDL3_ShaderStage::Compute ? GLSLANG_STAGE_COMPUTE
+		: shader_stage == SDL3_ShaderStage::Vertex ? GLSLANG_STAGE_VERTEX : GLSLANG_STAGE_FRAGMENT;
 	glslang_input_t input;
 	memset(&input, 0, sizeof(input));
 	input.language = GLSLANG_SOURCE_HLSL;
@@ -108,6 +116,12 @@ bool SDL3_Compile_HLSL_To_SPIRV(const std::string & hlsl, bool vertex_stage, std
 bool SDL3_Translate_SPIRV_To_MSL(const std::vector<unsigned char> & spirv, bool vertex_stage, std::string & msl,
 	std::string & log)
 {
+	return SDL3_Translate_SPIRV_To_MSL(spirv, vertex_stage ? SDL3_ShaderStage::Vertex : SDL3_ShaderStage::Fragment, msl, log);
+}
+
+bool SDL3_Translate_SPIRV_To_MSL(const std::vector<unsigned char> & spirv, SDL3_ShaderStage shader_stage, std::string & msl,
+	std::string & log)
+{
 	start_shadercross();
 	msl.clear();
 	log.clear();
@@ -115,7 +129,7 @@ bool SDL3_Translate_SPIRV_To_MSL(const std::vector<unsigned char> & spirv, bool 
 		log = SDL_GetError();
 		return false;
 	}
-	const SDL_ShaderCross_SPIRV_Info info = spirv_info(spirv, vertex_stage);
+	const SDL_ShaderCross_SPIRV_Info info = spirv_info(spirv, shader_stage);
 	char * text = static_cast<char *>(SDL_ShaderCross_TranspileMSLFromSPIRV(&info));
 	if (text == NULL) {
 		log = SDL_GetError();
@@ -175,7 +189,7 @@ SDL_GPUShader * SDL3_Create_Shader(SDL_GPUDevice * device, const std::vector<uns
 		log = SDL_GetError();
 		return NULL;
 	}
-	const SDL_ShaderCross_SPIRV_Info info = spirv_info(spirv, vertex_stage);
+	const SDL_ShaderCross_SPIRV_Info info = spirv_info(spirv, vertex_stage ? SDL3_ShaderStage::Vertex : SDL3_ShaderStage::Fragment);
 	SDL_ShaderCross_GraphicsShaderResourceInfo resources;
 	SDL_zero(resources);
 	SDL3_Shader_Slots(spirv, vertex_stage, resources.num_samplers, resources.num_uniform_buffers);

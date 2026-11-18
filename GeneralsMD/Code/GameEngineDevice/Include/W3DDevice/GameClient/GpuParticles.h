@@ -23,8 +23,8 @@
 // (which slot a system has, where the ring's head and tail are, what died) is the particle
 // manager's, in W3DParticleSys.cpp; this only holds what the device holds.
 //
-// DX11GpuParticles.cpp is the Direct3D 11 answer.  GpuParticlesUnsupported.cpp answers for every
-// build without one, where Supported is false and the particle manager never asks for the rest.
+// DX11GpuParticles.cpp supplies Direct3D 11; SdlGpuParticlesAdapter.cpp supplies native SDL GPU.
+// Builds without a device provider use GpuParticlesUnsupported.cpp and retain CPU particles.
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #pragma once

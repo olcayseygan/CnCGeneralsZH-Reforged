@@ -1027,7 +1027,7 @@ if(ZH_PLATFORM_POSIX)
   target_link_libraries(sdl3_shadercross PUBLIC SDL3::SDL3-static PRIVATE spirv-cross-c)
 
   # HLSL to SPIR-V to what a device takes, behind the one function that names the HLSL front end.
-  add_library(sdl3shadercompile STATIC ${WW}/WW3D2/sdl3shadercompile.cpp)
+  add_library(sdl3shadercompile STATIC ${WW}/WW3D2/sdl3shadercompile.cpp ${WW}/WW3D2/sdl3storage.cpp)
   target_include_directories(sdl3shadercompile PUBLIC ${WW}/WW3D2)
   target_link_libraries(sdl3shadercompile PUBLIC SDL3::SDL3-static
     PRIVATE sdl3_shadercross glslang::glslang glslang::glslang-default-resource-limits)
@@ -1481,9 +1481,11 @@ if(ZH_PLATFORM_POSIX)
   # Hazard clouds bridge the scene and SDL device; keep that bridge above the
   # D3D compatibility library so low-level device tests stay independent.
   list(FILTER POSIXD3D9_SOURCES EXCLUDE REGEX "/SdlHazardCloud[^/]*\\.cpp$")
-  add_library(posixd3d9 STATIC ${POSIXD3D9_SOURCES})
+  add_library(posixd3d9 STATIC ${POSIXD3D9_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/W3DDevice/GameClient/ParticleGpuShader.cpp)
   set_target_properties(posixd3d9 PROPERTIES CXX_STANDARD 17)
-  target_include_directories(posixd3d9 PUBLIC ${ZH_POSIX_D3D9_INCLUDE})
+  target_include_directories(posixd3d9 PUBLIC ${ZH_POSIX_D3D9_INCLUDE}
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include ${GE}/Include)
   # A3: with a window the device draws through SDL3 GPU, and compiles its own small programs (the gamma
   # pass) the way the generated ones are compiled.
   target_link_libraries(posixd3d9 PRIVATE SDL3::SDL3-static sdl3shadercompile engineshader ffshader ffvertex postprocess)
@@ -1511,6 +1513,34 @@ if(ZH_PLATFORM_POSIX)
   add_test(NAME test_renderer_particles COMMAND test_renderer_particles)
   add_test(NAME test_renderer_particles_gpu COMMAND test_renderer_particles --gpu)
   set_tests_properties(test_renderer_particles_gpu PROPERTIES SKIP_RETURN_CODE 77 RUN_SERIAL TRUE)
+
+  add_executable(test_sdl_storage ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_storage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render/SdlGpuStorage.cpp)
+  target_include_directories(test_sdl_storage PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(test_sdl_storage PRIVATE sdl3shadercompile)
+  add_test(NAME test_sdl_storage COMMAND test_sdl_storage)
+  add_test(NAME test_sdl_storage_gpu COMMAND test_sdl_storage --gpu)
+  set_tests_properties(test_sdl_storage_gpu PROPERTIES SKIP_RETURN_CODE 77 RUN_SERIAL TRUE)
+  add_executable(test_sdl_gpu_particles ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_gpu_particles.cpp)
+  target_include_directories(test_sdl_gpu_particles PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include ${GE}/Include ${GE}/Include/Precompiled
+    ${WW}/WW3D2 ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug)
+  target_include_directories(test_sdl_gpu_particles PRIVATE $<TARGET_PROPERTY:gameengine,INCLUDE_DIRECTORIES>)
+  target_compile_options(test_sdl_gpu_particles PRIVATE -ffunction-sections -fdata-sections)
+  target_link_options(test_sdl_gpu_particles PRIVATE -Wl,--gc-sections)
+  target_link_libraries(test_sdl_gpu_particles PRIVATE posixd3d9 SDL3::SDL3-static)
+  add_test(NAME test_sdl_gpu_particles COMMAND test_sdl_gpu_particles)
+  add_test(NAME test_sdl_gpu_particles_gpu COMMAND test_sdl_gpu_particles --gpu)
+  set_tests_properties(test_sdl_gpu_particles_gpu PROPERTIES SKIP_RETURN_CODE 77 RUN_SERIAL TRUE)
+  set_target_properties(test_sdl_storage test_sdl_gpu_particles PROPERTIES CXX_STANDARD 17)
+  add_executable(test_sdl_gpu_particles_context ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_gpu_particles_context.cpp)
+  target_include_directories(test_sdl_gpu_particles_context PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(test_sdl_gpu_particles_context PRIVATE posixd3d9 SDL3::SDL3-static)
+  set_target_properties(test_sdl_gpu_particles_context PROPERTIES CXX_STANDARD 17)
+  add_test(NAME test_sdl_gpu_particles_context COMMAND test_sdl_gpu_particles_context)
+  set_tests_properties(test_sdl_gpu_particles_context PROPERTIES SKIP_RETURN_CODE 77 RUN_SERIAL TRUE)
+
 
   # Depth-format fallback follows the complete scene-depth capability, without requiring a GPU.
   add_executable(sdl_gpu_depth_format_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_gpu_depth_format.cpp)
@@ -1642,7 +1672,10 @@ if(ZH_PLATFORM_POSIX)
   # POSIX factory below; the no-backend factory is compiled only without it, and
   # the Direct3D 11 backend only on Windows.
   list(FILTER W3DDEVICE_SOURCES EXCLUDE REGEX "/(HazardCloudUnsupported|DX11HazardCloud)\\.cpp$")
-  # The GPU particles have only a Direct3D 11 backend; GpuParticlesUnsupported answers for SDL3.
+  # Native SDL supplies the manager API; shader storage is in the low-level native library.
+  list(FILTER W3DDEVICE_SOURCES EXCLUDE REGEX "/(GpuParticlesUnsupported|ParticleGpuShader)\\.cpp$")
+  set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/W3DDevice/GameClient/SdlGpuParticlesAdapter.cpp
+    PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render")
   list(FILTER W3DDEVICE_SOURCES EXCLUDE REGEX "/DX11GpuParticles\\.cpp$")
   # The reach overlay's Direct3D 11 pass; W3DReachOverlay.cpp calls it only on Windows and draws the
   # fixed-function sheet without it.
@@ -1826,6 +1859,7 @@ list(FILTER GAMEENGINEDEVICE_SOURCES EXCLUDE REGEX "/Source/SdlDevice/")
 list(FILTER GAMEENGINEDEVICE_SOURCES EXCLUDE REGEX "/HazardCloudUnsupported\\.cpp$")
 # The same for the GPU particles (DX11GpuParticles.cpp here, GpuParticlesUnsupported.cpp elsewhere).
 list(FILTER GAMEENGINEDEVICE_SOURCES EXCLUDE REGEX "/GpuParticlesUnsupported\\.cpp$")
+list(FILTER GAMEENGINEDEVICE_SOURCES EXCLUDE REGEX "/(SdlGpuParticlesAdapter|ParticleGpuShader)\\.cpp$")
 # Sound and video are the game's own.  Miles and Bink were binary-only, and the DLLs the retail
 # game ships are 32-bit, so there is nothing for a 64-bit exe to bind to: what it links instead is
 # those two APIs written over XAudio2 and FFmpeg.  FFmpeg decodes binkvideo and binkaudio natively,
@@ -3157,14 +3191,16 @@ if(ZH_PLATFORM_POSIX)
   # measured on a Linux x86_64 host).  Not dummy there: it has no Vulkan_CreateSurface, so SDL finds no GPU backend.
   if(APPLE)
     foreach(_zh_test sdl_gpu_frame_selfcheck sdl_program_cache_selfcheck sdl_pipeline_state_selfcheck
-                     posix_gpu_draw_selfcheck ffref_gpu_selfcheck ffref_capture_selfcheck)
+                     posix_gpu_draw_selfcheck ffref_gpu_selfcheck ffref_capture_selfcheck
+                     test_sdl_storage_gpu test_sdl_gpu_particles_gpu test_sdl_gpu_particles_context)
       if(TEST ${_zh_test})
         set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT "SDL_VIDEO_DRIVER=dummy" "ZH_SDL_GPU_METAL_WINDOWLESS=1")
       endif()
     endforeach()
   elseif(ZH_PLATFORM_LINUX)
     foreach(_zh_test sdl_gpu_frame_selfcheck sdl_program_cache_selfcheck sdl_pipeline_state_selfcheck
-                     posix_gpu_draw_selfcheck ffref_gpu_selfcheck ffref_capture_selfcheck test_sun_shadow_sorting)
+                     posix_gpu_draw_selfcheck ffref_gpu_selfcheck ffref_capture_selfcheck test_sun_shadow_sorting
+                     test_sdl_storage_gpu test_sdl_gpu_particles_gpu test_sdl_gpu_particles_context)
       if(TEST ${_zh_test})
         set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen")
       endif()

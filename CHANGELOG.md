@@ -32,6 +32,11 @@ found and fixed, EA's own, not port damage.**
 - The film no longer splits the screen, not between players and not between two powers. One camera has the whole picture, and a second power landing off it, or a second fight, plays in a small framed window in the lower right corner with the name and army of whoever called it. Before, the second power had to land most of a screen's width further away than that to get any picture at all, so an artillery barrage called on the same frame as a superweapon across the same base was shown nowhere. A superweapon takes the window from a smaller power at once.
 - A superweapon or strike that neither the camera nor the window caught comes back as an instant replay: the match is played through a third time and the two seconds before the hit and six after it are filmed on their own, with a list of where each one fits into the match film at the next quiet moment.
 
+## Native Linux GPU particles
+
+- The GPU particle setting now runs eligible billboard particles on the native renderer, using the same closed-form motion, texture slices and alpha/additive passes as Direct3D 11. Particle limits keep their existing meaning, and systems the GPU cannot accept continue on the CPU under the existing admission rules.
+- Classic graphics keeps its existing particle rendering. Native GPU resources are released safely on device teardown, while invalid depth snapshots keep the original hard edge.
+
 ## Native Linux soft particles and fire
 
 - Smoke and particle billboards now fade into the ground and nearby objects on the native renderer. Ground flares retain their hard edge, and Classic graphics keeps the original particle picture.

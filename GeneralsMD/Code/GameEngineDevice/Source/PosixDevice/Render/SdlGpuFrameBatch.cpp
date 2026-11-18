@@ -220,7 +220,9 @@ static bool valid_native_draw(const SdlTarget &target, const SdlRecordedDraw &so
 {
 	if ((!target.Colour && !target.Depth) || !target.Width || !target.Height || !source.Pipeline
 		|| count > 6 || (count && !blocks) || source.SamplerCount > SdlRecordedDraw::MAXIMUM_SAMPLERS
-		|| source.VertexSamplerCount > SdlRecordedDraw::MAXIMUM_SAMPLERS) return false;
+		|| source.VertexSamplerCount > SdlRecordedDraw::MAXIMUM_SAMPLERS
+        || source.VertexStorageCount > SdlRecordedDraw::MAXIMUM_VERTEX_STORAGE_BUFFERS) return false;
+    for(unsigned i=0;i<source.VertexStorageCount;++i) if(!source.VertexStorageBuffers[i]) return false;
 	if (source.FloatBlendFactor) for (float value : source.BlendConstants) if (!std::isfinite(value)) return false;
 	unsigned used[2] = {};
 	for (unsigned i=0; i<count; ++i) {
@@ -681,6 +683,9 @@ bool SdlGpuFrame::Record_Passes(SDL_GPUCommandBuffer * commands, SDL_GPUBuffer *
 			}
 			SDL_BindGPUFragmentSamplers(pass, 0, bindings, draw.SamplerCount);
 		}
+        if(draw.VertexStorageCount && (last==nullptr || last->VertexStorageCount!=draw.VertexStorageCount ||
+            memcmp(last->VertexStorageBuffers,draw.VertexStorageBuffers,sizeof(draw.VertexStorageBuffers[0])*draw.VertexStorageCount)))
+            SDL_BindGPUVertexStorageBuffers(pass,0,draw.VertexStorageBuffers,draw.VertexStorageCount);
 		if (draw.VertexSamplerCount > 0 && (last == NULL || last->VertexSamplerCount != draw.VertexSamplerCount
 			|| memcmp(last->VertexTextures, draw.VertexTextures, sizeof(draw.VertexTextures[0]) * draw.VertexSamplerCount) != 0
 			|| memcmp(last->VertexSamplers, draw.VertexSamplers, sizeof(draw.VertexSamplers[0]) * draw.VertexSamplerCount) != 0)) {

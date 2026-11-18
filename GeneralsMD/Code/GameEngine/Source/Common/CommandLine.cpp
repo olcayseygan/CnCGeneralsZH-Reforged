@@ -966,8 +966,8 @@ Int parseParticleCap(char *args[], int num)
 	 detail preset's (Ultra 1 << 20 down to Low 1 << 17).  The preset is applied after the command line,
 	 so this is a field of its own, read through getEffectiveGpuParticleCapacity, as -particlecap is.
 	 Bare is Ultra's 1 << 20; 0 keeps every particle on the CPU path with its cap.  The number is
-	 optional, so only a word that starts with a digit is taken.  -d3d9, Classic and the SDL3 builds
-	 never draw on the GPU whatever this says.  GPU-PARTICLES.md. */
+	 optional, so only a word that starts with a digit is taken.  -d3d9 and Classic
+	 keep the CPU picture; native SDL GPU uses the same ring setting as Direct3D 11.  GPU-PARTICLES.md. */
 Int parseGpuParticles(char *args[], int num)
 {
 	if (TheWritableGlobalData)

@@ -23,6 +23,7 @@
 #include "PosixPixelCodec.h"
 #include "PosixResources9.h"
 #include "SdlGpuFrame.h"
+#include "SdlGpuParticlesContext.h"
 
 #include <SDL3/SDL.h>
 
@@ -31,6 +32,7 @@
 #include <string.h>
 
 static SdlResourceMirrors * LiveMirrors = NULL;
+static uint64_t NextTextureIdentity = 0;
 
 // A development aid until A3d's capture: ZH_GPU_DUMP_TEXTURES=<dir> writes level 0 of every texture at
 // least 256 wide, decoded to RGB, and its alpha as a second picture, each time it goes up.
@@ -299,6 +301,9 @@ SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::
 		copy.Buffer = NULL;
 		copy.Size = 0;
 		copy.Native = native;
+        copy.Identity = ++NextTextureIdentity;
+        if(!copy.Identity) copy.Identity = ++NextTextureIdentity;
+        copy.Generation = 1;
 		copy.UsedBatch = 0;
 		if (copy.Texture == NULL) {
 			refusal = std::string("the GPU refused the texture: ") + SDL_GetError();
@@ -330,6 +335,7 @@ SDL_GPUTexture * SdlResourceMirrors::Texture(IDirect3DBaseTexture9 * base, std::
 			Frame->Queue_Texture_Upload(copy.Texture, level, image.width(), image.height(), offset);
 			copy.Versions[level] = image.version();
 		}
+		if(++copy.Generation==0) ++copy.Generation;
 		++TexturesUploaded;
 		if (Sdl_Creation_Log_Asked()) {
 			char detail[96];
@@ -458,4 +464,32 @@ SDL_GPUTexture * SdlResourceMirrors::White()
 		}
 	}
 	return WhiteTexture;
+}
+
+bool SdlResourceMirrors::Native_Texture_View(IDirect3DBaseTexture9 *base,
+    SdlGpuParticleTextureView &view, std::string &error)
+{
+    view = {};
+    SdlResourceMirrors *table = LiveMirrors;
+    if (!table || !base || base->GetType() != D3DRTYPE_TEXTURE) {
+        error = "native particle source is not a live 2D texture"; return false;
+    }
+    if (table->Frame->Has_Pending_Work() && !table->Frame->Flush()) {
+        error = "native particle texture readers could not be submitted"; return false;
+    }
+    SDL_GPUTexture *texture = table->Texture(base, error);
+    if (!texture) return false;
+    D3DSURFACE_DESC desc = {};
+    if (static_cast<IDirect3DTexture9 *>(base)->GetLevelDesc(0, &desc) != D3D_OK) return false;
+    std::lock_guard<std::mutex> guard(table->Lock);
+    auto found = table->Copies.find(base);
+    if (found == table->Copies.end()) return false;
+    Copy &copy = found->second;
+    // GPU render-target writes have no CPU version. Conservatively refresh such
+    // slices on every request; ordinary art keeps its stable content generation.
+    if ((desc.Usage & D3DUSAGE_RENDERTARGET) && ++copy.Generation == 0) ++copy.Generation;
+    view.Texture = texture; view.Identity = copy.Identity; view.Generation = copy.Generation;
+    view.Width = desc.Width; view.Height = desc.Height;
+    view.MipLevels = static_cast<PosixTexture9 *>(base)->levelCount();
+    return true;
 }

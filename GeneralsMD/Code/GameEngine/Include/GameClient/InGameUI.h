@@ -1630,6 +1630,7 @@ protected:
 	const Player *							m_moneyShownPlayer;			///< whose purse that figure is: another one snaps instead of counting
 	UnsignedInt									m_moneyShownMs;					///< wall clock the figure last stepped at
 	UnsignedInt									m_hudDrawCount;					///< rendered frames counted by drawHudOverlay itself
+	Int													m_noticeTop;						///< the first row the online notice may use in a match: under the info strip, peace time and the kick vote plate, as drawHudOverlay laid them out at the sync point
 	UnsignedInt									m_hudLastSampleFrame;		///< m_hudDrawCount the fps sample was last refreshed on
 	UnsignedInt									m_hudLastSampleMs;			///< wall clock of that sample
 	RateReading									m_hudFps;								///< render rate

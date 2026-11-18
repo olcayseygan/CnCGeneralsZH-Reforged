@@ -2858,9 +2858,10 @@ TEST(online_notice_until_parses_utc)
 }
 
 /* Maintenance: a login refused with its until (the notice's when the line has none), and a new lobby, game,
-	 start, Quick Match or Play vs AI refused, each handed once to the screen that asked.  A Quick Match the
-	 server empties is maintenance only when the player did not leave himself.  Under maintenance the host
-	 waits for the server's game.start before it launches; a refused start launches nothing. */
+	 Quick Match or Play vs AI refused, each handed once to the screen that asked and dropped by the next such
+	 request.  A Quick Match the server empties is maintenance only when the player did not leave himself.
+	 Under maintenance the host waits for the server's game.start before it launches; a start refused for any
+	 reason launches nothing and goes to the staging screen alone. */
 TEST(online_maintenance_refusals)
 {
 	AdapterRig rig;
@@ -2886,7 +2887,7 @@ TEST(online_maintenance_refusals)
 	rig.peerResponses();
 
 	rig.login();
-	const char *const errors[] = { "game.host", "game.join", "qm.join", "game.start" };
+	const char *const errors[] = { "game.host", "game.join", "qm.join", "room.join" };
 	for (size_t i = 0; i < sizeof(errors) / sizeof(errors[0]); ++i)
 	{
 		char line[128];
@@ -2920,9 +2921,19 @@ TEST(online_maintenance_refusals)
 	PeerRequest stop;
 	stop.peerRequestType = PeerRequest::PEERREQUEST_STOPQUICKMATCH;
 	rig.peer->addRequest( stop );
+	rig.feed( "{\"t\":\"qm.status\",\"status\":\"searching\",\"pool\":1}" );		// still on its way before our left
 	rig.feed( "{\"t\":\"qm.status\",\"status\":\"left\",\"pool\":0}" );
 	CHECK( !OnlineTakeMaintenanceRefusal( until ) );
 	rig.peerResponses();
+
+	// a new request drops a refusal nobody took
+	rig.feed( "{\"t\":\"error\",\"for\":\"game.join\",\"code\":\"maintenance\"}" );
+	PeerRequest host;
+	host.peerRequestType = PeerRequest::PEERREQUEST_STARTQUICKMATCH;
+	rig.peer->addRequest( host );
+	CHECK( !OnlineTakeMaintenanceRefusal( until ) );
+	rig.peerResponses();
+	rig.sent.clear();
 
 	// the host's start waits on the server under maintenance
 	rig.feed( "{\"t\":\"game.joined\",\"id\":4,\"host\":\"Tank\",\"hostId\":7,\"ids\":[7],\"nicks\":[\"Tank\"]}" );
@@ -2933,8 +2944,18 @@ TEST(online_maintenance_refusals)
 	CHECK( OnlineIsHostStartWaiting() );
 	rig.feed( "{\"t\":\"error\",\"for\":\"game.start\",\"code\":\"maintenance\"}" );
 	CHECK( !OnlineIsHostStartWaiting() );
-	CHECK( OnlineTakeMaintenanceRefusal( until ) );
+	AsciiString code;
+	CHECK( OnlineTakeStartRefusal( code, until ) );		// the staging screen's alone
+	CHECK_STR( code.str(), "maintenance" );
+	CHECK_STR( until.str(), "2026-11-18T23:00:00Z" );
+	CHECK( !OnlineTakeStartRefusal( code, until ) );
+	CHECK( !OnlineTakeMaintenanceRefusal( until ) );		// no other screen sees it
 	CHECK( rig.peerResponses().empty() );		// nothing launches
+	rig.peer->addRequest( start );
+	rig.feed( "{\"t\":\"error\",\"for\":\"game.start\",\"code\":\"throttled\"}" );		// any refusal lets Start go
+	CHECK( !OnlineIsHostStartWaiting() );
+	CHECK( OnlineTakeStartRefusal( code, until ) );
+	CHECK_STR( code.str(), "throttled" );
 	rig.peer->addRequest( start );
 	CHECK( OnlineIsHostStartWaiting() );
 	rig.feed( "{\"t\":\"game.start\",\"match\":\"m1\",\"ids\":[7],\"nicks\":[\"Tank\"],\"vips\":[167772163]}" );

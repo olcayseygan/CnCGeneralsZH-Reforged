@@ -10770,15 +10770,19 @@ GUI:OnlineLoginBanned
 END
 
 GUI:OnlineMaintenance
-"Çevrimiçi hizmet bakımda. Sonra yeniden dene."
+"Çevrimiçi oyun bakımda. Sonra yeniden dene."
 END
 
 GUI:OnlineMaintenanceUntil
-"Çevrimiçi hizmet bakımda. Tahmini dönüş: %s."
+"Çevrimiçi oyun bakımda. Tahmini dönüş: %s."
 END
 
 GUI:OnlineMaintenanceTitle
 "Bakımda"
+END
+
+GUI:OnlineStartRefused
+"Sunucu oyunu başlatmadı (%s)."
 END
 
 GUI:OnlineNoticeMaintenance

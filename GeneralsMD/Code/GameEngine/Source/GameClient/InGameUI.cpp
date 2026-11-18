@@ -1735,6 +1735,7 @@ InGameUI::InGameUI()
 	m_moneyShownPlayer = NULL;
 	m_moneyShownMs = 0;
 	m_hudDrawCount = 0;
+	m_noticeTop = 0;
 	m_hudLastSampleFrame = 0;
 	m_hudLastSampleMs = 0;
 	m_cameraKeyLastMs = 0;
@@ -12228,6 +12229,10 @@ Int InGameUI::hudStripBottom( void ) const
 //-------------------------------------------------------------------------------------------------
 void InGameUI::drawHudOverlay( void )
 {
+	// the online notice stands under whatever of this the frame shows; laid out here, at the sync point,
+	// because the notice draws inside the overlap window, where peace time and the vote are not to be read
+	m_noticeTop = 0;
+
 	// only once a real game is under way - not in the shell, and not on the menu's background map
 	if( !TheGameLogic->isInGame() || TheGameLogic->isInShellGame() )
 		return;
@@ -12244,6 +12249,7 @@ void InGameUI::drawHudOverlay( void )
 	const Bool peace = TheGameLogic->isPeaceTime();
 	if( !showInfo && !peace )
 		return;
+	m_noticeTop = max( m_noticeTop, hudStripBottom() );
 
 	//
 	// Two rates, both sampled over half a second of wall clock so the numbers are readable, and
@@ -12433,18 +12439,64 @@ void InGameUI::drawKickVoteBanner( void )
 	const Int y = box.y + stripPixels( 40 );
 	TheDisplay->drawFillRect( x - pad, y - pad, width + pad*2, height + pad*2, GameMakeColor( 0, 0, 0, 170 ) );
 	banner->draw( x, y, GameMakeColor( 255, 210, 90, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
+	m_noticeTop = max( m_noticeTop, y + height + pad );		// the online notice goes under the vote
 }
 
 /// the maintenance banner's warning: the hotkey page's clash colour, the one error colour the front end has
 static const Color NOTICE_WARNING = GameMakeColor( 255, 104, 72, 255 );
+/// the info banner's trim: Generals blue, the HUD's (BRAND.md, "The in-game HUD"), and its chip's label
+static const Color NOTICE_BLUE = GameMakeColor( 68, 89, 182, 255 );
+static const Color NOTICE_BLUE_LABEL = GameMakeColor( 150, 170, 240, 255 );
+/// Generals steel, brushed and lit from the top left: the plate's lit and shaded halves, its bevel's light
+/// and shade, and the sunk tray the words sit in
+static const Color STEEL_LIT = GameMakeColor( 72, 77, 85, 245 );
+static const Color STEEL_DARK = GameMakeColor( 50, 54, 60, 245 );
+static const Color STEEL_LIGHT = GameMakeColor( 138, 145, 155, 255 );
+static const Color STEEL_SHADE = GameMakeColor( 18, 20, 23, 255 );
+static const Color STEEL_TRAY = GameMakeColor( 13, 15, 18, 235 );
+
+/// a steel plate hanging from y, its two lower corners cut at 45 degrees (the emblem's language), a trim of
+/// trimSize along its foot and up the cuts
+static void drawSteelPlate( Int x, Int y, Int width, Int height, Int cut, Color trim, Int trimSize )
+{
+	const Int body = height - cut;
+	TheDisplay->drawFillRect( x, y, width, body / 2, STEEL_LIT );
+	TheDisplay->drawFillRect( x, y + body / 2, width, body - body / 2, STEEL_DARK );
+	TheDisplay->drawFillRect( x, y, 1, body, STEEL_LIGHT );
+	TheDisplay->drawFillRect( x + width - 1, y, 1, body, STEEL_SHADE );
+	// the cuts a row at a time, each row one in from the last, its ends in the trim
+	for( Int i = 0; i < cut; ++i )
+	{
+		const Int left = x + i + 1, rowWidth = width - 2 * ( i + 1 );
+		if( rowWidth <= 0 )
+			break;
+		TheDisplay->drawFillRect( left, y + body + i, rowWidth, 1, STEEL_DARK );
+		TheDisplay->drawFillRect( left, y + body + i, min( trimSize, rowWidth ), 1, trim );
+		TheDisplay->drawFillRect( left + rowWidth - min( trimSize, rowWidth ), y + body + i, min( trimSize, rowWidth ), 1, trim );
+	}
+	TheDisplay->drawFillRect( x + cut, y + height - trimSize, width - 2 * cut, trimSize, trim );
+}
+
+/// a tray sunk into the plate: shade along its top and left, a lit lip along its foot and right
+static void drawSteelTray( Int x, Int y, Int width, Int height )
+{
+	TheDisplay->drawFillRect( x, y, width, height, STEEL_TRAY );
+	TheDisplay->drawFillRect( x, y, width, 1, STEEL_SHADE );
+	TheDisplay->drawFillRect( x, y, 1, height, STEEL_SHADE );
+	TheDisplay->drawFillRect( x, y + height - 1, width, 1, STEEL_LIGHT );
+	TheDisplay->drawFillRect( x + width - 1, y, 1, height, STEEL_LIGHT );
+}
 
 //-------------------------------------------------------------------------------------------------
 /** The online service's notice (OnlineGetNotice), on every screen: a plate hanging from the top edge
-	* in the middle, as the general's powers tray hangs from its edge, in the front end's panel and
-	* chip.  Info is a PANEL with a FRAME edge and an ACTIVE chip; maintenance is taller, wears the
-	* button's lit three-line edge, a warning stripe down its left and a warning chip, its words bold.
-	* In a match it keeps to the open world (left of the sidebar, inside the HudWidth area) and stands
-	* under the top right info strip when that is shown.  Drawn, not a window: it takes no click. */
+	* as the general's powers tray hangs from its edge, in the HUD's Generals steel, the same in the
+	* shell and a match.  A bevelled plate with its lower corners cut at 45 degrees and a trim along its
+	* foot, the words in a sunk tray after a chip.  Info is trimmed in Generals blue; maintenance in the
+	* warning colour, with a warning stripe down the tray and its words bold.  The plate is as wide as its
+	* words, and the words wrap to more lines rather than lose any.  In the shell it stays left of the
+	* main menu's logo (board x 1240); in a match it keeps to the open world (left of the sidebar, inside
+	* the HudWidth area) and stands under the top right info strip, peace time and a kick vote's plate
+	* when they show (m_noticeTop).  Drawn, not a window: it takes no click. */
 //-------------------------------------------------------------------------------------------------
 void InGameUI::drawOnlineNotice( void )
 {
@@ -12453,22 +12505,25 @@ void InGameUI::drawOnlineNotice( void )
 		return;
 
 	const Bool inMatch = TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() && !TheGameLogic->isLoadingMap();
+	const Int margin = UIStyle::px( 16.0f );
 	Int left = 0, right = TheDisplay->getWidth(), top = 0;
+	Int limit = right;		// the plate's right edge goes no further
 	if( inMatch && TheControlBar )
 	{
 		const IRegion2D play = hudPlay();
 		left = play.lo.x;
-		right = play.hi.x;
+		right = limit = play.hi.x;
 		top = play.lo.y;
-		if( TheGlobalData->m_showNetBox )
-			top = max( top, hudStripBottom() );
+		// under the info strip, peace time and an open kick vote, as the sync point laid them out
+		if( m_noticeTop > 0 )
+			top = max( top, m_noticeTop + UIStyle::px( 4.0f ) );
 	}
+	else
+		limit = min( right, UIStyle::boardX( 1240.0f ) );		// clear of the main menu's COMMAND & CONQUER logo
 	const Bool maintenance = notice.maintenance;
-	const Int margin = UIStyle::px( 16.0f );
-	const Int width = min( right - left - 2 * margin, UIStyle::px( 1200.0f ) );
-	if( width <= 0 )
+	const Int widest = min( limit - left - 2 * margin, UIStyle::px( 1200.0f ) );
+	if( widest <= 0 )
 		return;
-	const Int x = left + ( right - left - width ) / 2;
 
 	// the words: the server's in the player's language, the game's own for a maintenance that sent none
 	UnicodeString words;
@@ -12482,7 +12537,7 @@ void InGameUI::drawOnlineNotice( void )
 	if( !when.isEmpty() )
 		until.format( TheGameText->fetch( maintenance ? "GUI:OnlineNoticeBack" : "GUI:OnlineNoticeUntil" ), when.str() );
 
-	GameFont *wordFont = UIStyle::readableFont( maintenance ? UIStyle::TEXT_STRONG : UIStyle::TEXT_BODY, maintenance );
+	GameFont *wordFont = UIStyle::readableFont( UIStyle::TEXT_BODY, maintenance );
 	GameFont *untilFont = UIStyle::readableFont( UIStyle::TEXT_BODY );
 	struct Piece { const char *key; GameFont *font; };
 	DisplayString *strings[ 3 ];
@@ -12500,36 +12555,49 @@ void InGameUI::drawOnlineNotice( void )
 	chip->setText( TheGameText->fetch( maintenance ? "GUI:OnlineNoticeMaintenance" : "GUI:OnlineNoticeInfo" ) );
 	untilText->setText( until );
 
-	const Int pad = UIStyle::px( maintenance ? 12.0f : 8.0f );
-	const Int gap = UIStyle::px( 14.0f );
+	// the plate round a tray round [stripe] chip words until, all sized to what they hold
+	const Int cut = UIStyle::px( 6.0f );						// the 45 degree corners, and the plate's side margin
+	const Int rim = UIStyle::px( 3.0f );						// plate over and under the tray
+	const Int trim = max( 2, UIStyle::px( 3.0f ) );
+	const Int trayPadX = UIStyle::px( 10.0f ), trayPadY = UIStyle::px( 4.0f );
+	const Int gap = UIStyle::px( 12.0f );
 	const Int stripe = maintenance ? UIStyle::stripeWidth() : 0;
 	Int chipW = 0, chipH = 0, untilW = 0, untilH = 0, wordW = 0, wordH = 0;
 	chip->getSize( &chipW, &chipH );
 	untilText->getSize( &untilW, &untilH );
-	chipW += 2 * UIStyle::px( 8.0f );
+	chipW += 2 * UIStyle::px( 8.0f );		// UIStyle::chip's own margins
 	chipH += UIStyle::px( 9.0f );
-	const Int textLeft = x + stripe + pad + chipW + gap;
-	const Int untilRoom = until.isEmpty() ? 0 : untilW + gap;
-	const Int wordRoom = x + width - pad - untilRoom - textLeft;
-	wordText->setText( UIStyle::fitName( words, wordFont, max( 0, wordRoom ) ) );
+	const Int fixed = stripe + 2 * trayPadX + chipW + gap + ( until.isEmpty() ? 0 : gap + untilW );
+	const Int wordRoom = max( UIStyle::px( 120.0f ), widest - 2 * cut - fixed );
+	wordText->setWordWrap( wordRoom );		// more lines before any word is lost
+	wordText->setText( words );
 	wordText->getSize( &wordW, &wordH );
-	const Int height = max( chipH, max( wordH, untilH ) ) + 2 * pad;
+	wordW = min( wordW, wordRoom );
 
-	TheDisplay->drawFillRect( x, top, width, height, UIStyle::PANEL );
-	if( maintenance )
-	{
-		UIStyle::edge( x, top, width, height );
-		UIStyle::stripe( x + 3, top + 3, height - 6, NOTICE_WARNING );
-	}
-	else
-		TheDisplay->drawOpenRect( x, top, width, height, 1.0f, UIStyle::FRAME );
+	const Int trayW = fixed + wordW;
+	const Int trayH = max( chipH, max( wordH, untilH ) ) + 2 * trayPadY;
+	const Int width = trayW + 2 * cut;
+	const Int height = rim + trayH + rim + cut;
+	// centred on the open world, and in the shell pushed left of the logo when the centre would reach it
+	Int x = left + ( right - left - width ) / 2;
+	if( x + width > limit - margin )
+		x = limit - margin - width;
+	x = max( x, left + margin );
 
-	const Int middle = top + height / 2;
-	UIStyle::chip( chip, x + stripe + pad, middle - chipH / 2, maintenance ? NOTICE_WARNING : UIStyle::ACTIVE,
-								 maintenance ? NOTICE_WARNING : UIStyle::FRAME );
-	wordText->draw( textLeft, middle - wordH / 2, UIStyle::INK, UIStyle::SHADOW );
+	const Color trimColor = maintenance ? NOTICE_WARNING : NOTICE_BLUE;
+	drawSteelPlate( x, top, width, height, cut, trimColor, trim );
+	const Int trayX = x + cut, trayY = top + rim;
+	drawSteelTray( trayX, trayY, trayW, trayH );
+	if( stripe )
+		TheDisplay->drawFillRect( trayX + 1, trayY + 1, stripe, trayH - 2, NOTICE_WARNING );
+
+	const Int middle = trayY + trayH / 2;
+	const Int chipX = trayX + stripe + trayPadX;
+	UIStyle::chip( chip, chipX, middle - chipH / 2, maintenance ? NOTICE_WARNING : NOTICE_BLUE_LABEL, trimColor );
+	const Int wordX = chipX + chipW + gap;
+	wordText->draw( wordX, middle - wordH / 2, UIStyle::INK, UIStyle::SHADOW );
 	if( !until.isEmpty() )
-		untilText->draw( textLeft + wordW + gap, middle - untilH / 2, UIStyle::MUTED, UIStyle::SHADOW );
+		untilText->draw( wordX + wordW + gap, middle - untilH / 2, UIStyle::MUTED, UIStyle::SHADOW );
 }
 
 //-------------------------------------------------------------------------------------------------

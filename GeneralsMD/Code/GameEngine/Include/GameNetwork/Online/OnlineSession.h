@@ -210,6 +210,8 @@ struct OnlineSession
 	long long joiningGame;	///< game.join sent, game.joined not back yet
 	Bool hosting;
 	Bool hostStartWaiting;	///< the host's game.start went under maintenance: it launches on the server's game.start
+	std::string startRefusal;			///< the code of an error{for:game.start} the host waited on: OnlineTakeStartRefusal
+	std::string startRefusalUntil;	///< its until, else the notice's
 	OnlineMessage hostInfo;	///< CREATESTAGINGROOM's CRCs and ladder, repeated in every game.opts
 	std::string hostNick;
 	long long hostLeftGame;	///< a game removed under a guest: host left, unless game.start follows

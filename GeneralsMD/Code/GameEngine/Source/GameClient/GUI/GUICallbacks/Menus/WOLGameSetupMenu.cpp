@@ -246,6 +246,7 @@ static NameKeyType comboBoxSupplyPileLimitID = NAMEKEY_INVALID;
 static GameWindow *parentWOLGameSetup = NULL;
 static GameWindow *buttonBack = NULL;
 static GameWindow *buttonStart = NULL;
+static Bool s_startHeld = FALSE;		///< Start pressed under maintenance: waits on the server's game.start or its refusal
 static GameWindow *buttonSelectMap = NULL;
 static GameWindow *buttonEmote = NULL;
 static GameWindow *textEntryChat = NULL;
@@ -1191,6 +1192,7 @@ static void StartPressed(void)
 		// back as PEERRESPONSE_GAMESTART as a guest's does, and not on the click
 		if (OnlineIsHostStartWaiting())
 		{
+			s_startHeld = TRUE;
 			if (buttonStart)
 				buttonStart->winEnable(FALSE);
 			return;
@@ -1812,6 +1814,7 @@ static void onlineStagingScript( void )
 //-------------------------------------------------------------------------------------------------
 void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 {
+	s_startHeld = FALSE;
 	if (TheGameSpyGame && TheGameSpyGame->isGameInProgress())
 	{
 		TheGameSpyGame->setGameInProgress(FALSE);
@@ -2127,10 +2130,32 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 		HandleBuddyResponses();
 		HandlePersistentStorageResponses();
 
-		// the server refused the host's Start for maintenance (a room made before it began): the room stays
-		// as it was, Start live again, and the box says why
-		if (OnlineIsEnabled() && OnlineShowMaintenanceRefusal() && buttonStart)
-			buttonStart->winEnable( TRUE );
+		// a Start held on the server's answer: refused (maintenance for a room made before it, nothost,
+		// throttled...), the room stays as it was, Start is live again and the box says why; a game.start
+		// launches through PEERRESPONSE_GAMESTART and lets the hold go
+		if (s_startHeld && !OnlineIsHostStartWaiting())
+		{
+			AsciiString code, until;
+			if (OnlineTakeStartRefusal( code, until ))
+			{
+				s_startHeld = FALSE;
+				if (buttonStart)
+					buttonStart->winEnable( TRUE );
+				UnicodeString why;
+				if (code == "maintenance")
+					why = OnlineMaintenanceText( until );
+				else
+				{
+					UnicodeString word;
+					word.translate( code );
+					why.format( TheGameText->fetch( "GUI:OnlineStartRefused" ), word.str() );
+				}
+				DEBUG_LOG(("ONLINE START refused code=%s\n", code.str()));
+				GSMessageBoxOk( TheGameText->fetch( code == "maintenance" ? "GUI:OnlineMaintenanceTitle" : "GUI:Error" ), why );
+			}
+			else if (TheGameSpyGame && TheGameSpyGame->isGameInProgress())
+				s_startHeld = FALSE;
+		}
 
 		if (TheGameSpyGame && TheGameSpyGame->isGameInProgress())
 		{

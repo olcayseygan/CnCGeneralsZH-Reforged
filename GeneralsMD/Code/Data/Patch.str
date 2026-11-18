@@ -4603,15 +4603,19 @@ GUI:OnlineLoginBanned
 END
 
 GUI:OnlineMaintenance
-"The online service is under maintenance. Try again later."
+"Online play is down for maintenance. Try again later."
 END
 
 GUI:OnlineMaintenanceUntil
-"The online service is under maintenance. It should be back at %s."
+"Online play is down for maintenance. It should be back at %s."
 END
 
 GUI:OnlineMaintenanceTitle
 "Under maintenance"
+END
+
+GUI:OnlineStartRefused
+"The server would not start the game (%s)."
 END
 
 GUI:OnlineNoticeMaintenance

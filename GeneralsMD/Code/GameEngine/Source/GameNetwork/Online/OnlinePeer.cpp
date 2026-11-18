@@ -190,6 +190,8 @@ void OnlineSession::forgetAccount()
 	joiningGame = 0;
 	hosting = FALSE;
 	hostStartWaiting = FALSE;
+	startRefusal.clear();
+	startRefusalUntil.clear();
 	hostInfo.clear();
 	hostNick.clear();
 	hostLeftGame = 0;
@@ -821,11 +823,19 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		DEBUG_LOG(("online: %s refused: %s\n", what.c_str(), code.c_str()));
 		// a lobby, a game or a match the service will not open while it is under maintenance: the screen that
 		// asked takes it with the answer below
-		if (code == "maintenance" && (what == "room.join" || what == "game.host" || what == "game.join" || what == "game.start"
+		if (code == "maintenance" && (what == "room.join" || what == "game.host" || what == "game.join"
 			|| what == "qm.join" || (what == "ai.start" && aiState == ONLINE_AI_WAITING)))
 			noteMaintenance( m );
-		if (what == "game.start")
-			hostStartWaiting = FALSE;		// refused: the room stays, nothing launches
+		// a start the host waited on, refused for any reason: the room stays, nothing launches, and the staging
+		// screen takes the code (OnlineTakeStartRefusal)
+		if (what == "game.start" && hostStartWaiting)
+		{
+			hostStartWaiting = FALSE;
+			startRefusal = code.empty() ? std::string( "unknown" ) : code;
+			startRefusalUntil = m.getString( "until", noticeUntil.c_str() );
+			if (startRefusalUntil.empty())
+				startRefusalUntil = noticeUntil;
+		}
 		if (what == "room.join")
 		{
 			PeerResponse r = makePeer( PeerResponse::PEERRESPONSE_JOINGROUPROOM );
@@ -1068,8 +1078,10 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 	else if (t == "qm.status")
 	{
 		const std::string st = m.getString( "status" );
+		// our qm.leave is answered by a left, not by a searching or a window update still on its way
 		const Bool qmLeaving = qmLeaveSent;
-		qmLeaveSent = FALSE;
+		if (st == "left")
+			qmLeaveSent = FALSE;
 		if (revealing)
 		{
 			// the opponent dropped in the reveal (searching again), or we left: nothing starts
@@ -1352,6 +1364,10 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 {
 	OnlineSession &s = OnlineSession::get();
 	OnlineMessage m;
+	// a maintenance refusal belongs to the last request that can draw one: a new one drops a stale one
+	if (req.peerRequestType == PeerRequest::PEERREQUEST_JOINGROUPROOM || req.peerRequestType == PeerRequest::PEERREQUEST_CREATESTAGINGROOM
+		|| req.peerRequestType == PeerRequest::PEERREQUEST_JOINSTAGINGROOM || req.peerRequestType == PeerRequest::PEERREQUEST_STARTQUICKMATCH)
+		s.maintenanceRefused = FALSE;
 	switch (req.peerRequestType)
 	{
 	case PeerRequest::PEERREQUEST_LOGIN:
@@ -1494,6 +1510,7 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 	case PeerRequest::PEERREQUEST_STARTGAME:
 		// under maintenance the host waits for the server's game.start before it launches (it may refuse)
 		s.hostStartWaiting = s.hosting && s.noticeKind == "maintenance";
+		s.startRefusal.clear();
 		m.setString( "t", "game.start" );
 		s.send( m );
 		return;
@@ -1720,6 +1737,17 @@ Bool OnlineIsHostStartWaiting( void )
 	return OnlineIsEnabled() && OnlineSession::get().hostStartWaiting;
 }
 
+Bool OnlineTakeStartRefusal( AsciiString &code, AsciiString &until )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (!OnlineIsEnabled() || s.startRefusal.empty())
+		return FALSE;
+	code = s.startRefusal.c_str();
+	until = s.startRefusalUntil.c_str();
+	s.startRefusal.clear();
+	return TRUE;
+}
+
 Bool OnlineTakeMaintenanceRefusal( AsciiString &until )
 {
 	OnlineSession &s = OnlineSession::get();
@@ -1823,6 +1851,7 @@ void OnlineRequestAIMatch( const AsciiString &army )
 	s.aiReady.clear();
 	s.aiRefusal.clear();
 	s.aiVerdict.clear();		// the last match's line goes with a new one
+	s.maintenanceRefused = FALSE;		// a stale refusal is not this ask's
 	if (!s.authed)
 	{
 		s.aiState = ONLINE_AI_REFUSED;

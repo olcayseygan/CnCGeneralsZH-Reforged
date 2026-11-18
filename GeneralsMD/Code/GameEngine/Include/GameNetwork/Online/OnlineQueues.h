@@ -119,10 +119,11 @@ long long OnlineParseUtc( const char *iso );
 /* until as the player reads it: the local time, 22:00 today, the date before it on another day; the text
 	 itself when it is no time this reads; empty for none. */
 UnicodeString OnlineUntilText( const AsciiString &until );
-/* "The online service is under maintenance", with when it should be back where until says. */
+/* "Online play is down for maintenance", with when it should be back where until says. */
 UnicodeString OnlineMaintenanceText( const AsciiString &until );
 /* A new lobby, game, Quick Match or Play vs AI the server refused with code maintenance (error, qm.status
-	 or ai.refused): TRUE once, with its until, for the screen whose request it was. */
+	 or ai.refused): TRUE once, with its until, for the screen whose request it was.  The next request of those
+	 kinds drops one nobody took.  The host's start has its own, OnlineTakeStartRefusal. */
 Bool OnlineTakeMaintenanceRefusal( AsciiString &until );
 /* OnlineTakeMaintenanceRefusal in EA's message box, the maintenance sentence in it; FALSE, and no box, when
 	 there was none (or no -online). */
@@ -131,6 +132,9 @@ Bool OnlineShowMaintenanceRefusal( void );
 	 code:maintenance}), so the host launches on the server's game.start, which arrives as PEERRESPONSE_GAMESTART
 	 the way a guest's does, and not on its click. */
 Bool OnlineIsHostStartWaiting( void );
+/* That start refused (error{for:game.start}: maintenance, nothost, throttled...): TRUE once, with the code and
+	 until (the notice's when the line has none), for the staging screen that asked. */
+Bool OnlineTakeStartRefusal( AsciiString &code, AsciiString &until );
 /* A login waits on the install files' hashes (the first start on a machine reads every file): the login
 	 screen says it is checking them. */
 Bool OnlineIsCheckingFiles( void );

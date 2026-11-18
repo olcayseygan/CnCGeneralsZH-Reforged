@@ -13,6 +13,7 @@
 #include <windows.h>
 #include "Lib/Clock.h"
 #include <xaudio2.h>
+#include "MSS/MSS.h"	// AIL_ex_xaudio_faulted, shared with miles_xaudio2.cpp
 #else
 // Off Windows the movie's sound is a voice in C4's mix (mss_ex_pcm.h), not an audio engine of its own,
 // and its path is the engine's spelling ("Data\\Movies\\x.bik"), resolved as every file open is.
@@ -104,6 +105,37 @@ double frameDueSeconds(Movie *movie, unsigned int frameNumber)
 }
 
 #if defined(_WIN32)
+// The movie's engine and master.  Wine's xaudio2_9.dll faults inside these when the prefix has no
+// endpoint that opens (miles_xaudio2.cpp's openMasterGuarded, crash reports 4016 to 4025); the movie
+// then plays without sound.  What the engine had made is not safe to Release and is left alone.
+// One flag for the process, the game's audio and the movies alike (AIL_ex_xaudio_faulted): a fault
+// may leave xaudio2_9's own lock held, and the next XAudio2Create would hang where __except is no help.
+bool openEngineGuarded(Movie *movie)
+{
+	if (AIL_ex_xaudio_faulted()) {
+		return false;
+	}
+	__try {
+		if (FAILED(XAudio2Create(&movie->xaudio, 0, XAUDIO2_DEFAULT_PROCESSOR))) {
+			movie->xaudio = NULL;
+			return false;
+		}
+		if (FAILED(movie->xaudio->CreateMasteringVoice(&movie->master))) {
+			movie->master = NULL;
+			movie->xaudio->Release();
+			movie->xaudio = NULL;
+			return false;
+		}
+		return true;
+	}
+	__except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+		AIL_ex_set_xaudio_faulted();
+		movie->xaudio = NULL;
+		movie->master = NULL;
+		return false;
+	}
+}
+
 // A voice nothing has played.  BinkGoto takes a new one rather than flushing this one and feeding it
 // on: xaudio2_9.dll's resampler can carry its place in the flushed audio over as frame -1 of the next
 // buffer and read it as an unsigned index, gigabytes past the buffer (miles_xaudio2.cpp's freshVoice).
@@ -125,12 +157,7 @@ void openAudio(Movie *movie)
 		return;
 	}
 #if defined(_WIN32)
-	if (FAILED(XAudio2Create(&movie->xaudio, 0, XAUDIO2_DEFAULT_PROCESSOR))) {
-		return;
-	}
-	if (FAILED(movie->xaudio->CreateMasteringVoice(&movie->master))) {
-		movie->xaudio->Release();
-		movie->xaudio = NULL;
+	if (!openEngineGuarded(movie)) {
 		return;
 	}
 #endif

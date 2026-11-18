@@ -1458,27 +1458,56 @@ void closeOutput()
 	g_engine.onPickedDevice = false;
 }
 
+// Set once an engine faulted while it was being made, here or in the movie player
+// (AIL_ex_xaudio_faulted); the process makes no other.
+std::atomic<bool> g_engineFaulted(false);
+
+// openOutput's engine and master.  Wine's xaudio2_9.dll faults inside these when the prefix has no
+// endpoint that opens: crash reports 4016 to 4025 and 4125, a NULL IAudioClient called right after
+// AUDCLNT_E_DEVICE_INVALIDATED, which took the game down during initialisation.  A fault is an
+// output that will not open, as in DX11DeviceClass::Create_Device_Guarded.  What the engine had made
+// is not safe to Release and is left where it is, and the game plays on in silence.
+// No C++ object in here: __try may not share a function with one that needs unwinding.
+bool openMasterGuarded(UINT32 channels)
+{
+	if (g_engineFaulted.load()) {
+		return false;	// a fault may have left xaudio2_9's own lock held: the next create could hang
+	}
+	__try {
+		if (g_engine.xaudio == NULL) {
+			if (FAILED(XAudio2Create(&g_engine.xaudio, 0, XAUDIO2_DEFAULT_PROCESSOR))) {
+				g_engine.xaudio = NULL;
+				return false;
+			}
+			g_engine.xaudio->RegisterForCallbacks(&g_engineWatch);
+		}
+		g_engine.onPickedDevice = g_outputDevice[0] != 0 && SUCCEEDED(g_engine.xaudio->CreateMasteringVoice(&g_engine.master,
+			channels, XAUDIO2_DEFAULT_SAMPLERATE, 0, g_outputDevice, NULL, AudioCategory_GameEffects));
+		if (!g_engine.onPickedDevice && FAILED(g_engine.xaudio->CreateMasteringVoice(&g_engine.master,
+				channels, XAUDIO2_DEFAULT_SAMPLERATE, 0, NULL, NULL, AudioCategory_GameEffects))) {
+			g_engine.master = NULL;	// this machine has no endpoint (0x80070490), or none that will open
+			return false;
+		}
+		return true;
+	}
+	__except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+		g_engineFaulted.store(true);
+		g_engine.xaudio = NULL;
+		g_engine.master = NULL;
+		g_engine.onPickedDevice = false;
+		return false;
+	}
+}
+
 // The engine and its master, on the endpoint AIL_ex_set_output_device picked or the default when that
 // one is not there, at the speaker type's channel count; then the master's tap and a voice
 // for every stream, playing again where one was.  False with no endpoint at all, the engine kept.
 // Under the lock.
 bool openOutput()
 {
-	if (g_engine.xaudio == NULL) {
-		if (FAILED(XAudio2Create(&g_engine.xaudio, 0, XAUDIO2_DEFAULT_PROCESSOR))) {
-			g_engine.xaudio = NULL;
-			return false;
-		}
-		g_engine.xaudio->RegisterForCallbacks(&g_engineWatch);
-	}
-
 	const UINT32 channels = g_speakerType == AIL_3D_71_SPEAKER ? 8
 		: (g_speakerType == AIL_3D_51_SPEAKER ? 6 : (g_speakerType == AIL_3D_4_SPEAKER ? 4 : 2));
-	g_engine.onPickedDevice = g_outputDevice[0] != 0 && SUCCEEDED(g_engine.xaudio->CreateMasteringVoice(&g_engine.master,
-		channels, XAUDIO2_DEFAULT_SAMPLERATE, 0, g_outputDevice, NULL, AudioCategory_GameEffects));
-	if (!g_engine.onPickedDevice && FAILED(g_engine.xaudio->CreateMasteringVoice(&g_engine.master,
-			channels, XAUDIO2_DEFAULT_SAMPLERATE, 0, NULL, NULL, AudioCategory_GameEffects))) {
-		g_engine.master = NULL;	// this machine has no endpoint (0x80070490), or none that will open
+	if (!openMasterGuarded(channels)) {
 		return false;
 	}
 	XAUDIO2_VOICE_DETAILS masterDetails;
@@ -2106,6 +2135,17 @@ void AILCALL AIL_ex_set_output_device(const char *id)
 	if (g_engine.started) {
 		LeaveCriticalSection(&g_engine.lock);
 	}
+}
+
+// Whether an engine faulted as it was made, here or in the movie player, which reports its own here.
+S32 AILCALL AIL_ex_xaudio_faulted(void)
+{
+	return g_engineFaulted.load() ? 1 : 0;
+}
+
+void AILCALL AIL_ex_set_xaudio_faulted(void)
+{
+	g_engineFaulted.store(true);
 }
 
 // The index-th active render endpoint: its id in UTF-8 and its friendly name ("Speakers (Realtek(R)

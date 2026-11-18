@@ -1802,8 +1802,9 @@ set(FFMPEG_CORE
   ${FFMPEG_DIR}/lib/swresample.lib)
 
 add_library(binkvideo STATIC ${WW}/Bink/ffmpeg/bink_ffmpeg.cpp)
-target_include_directories(binkvideo PRIVATE ${WW}/Bink/include ${FFMPEG_DIR}/include)
-target_link_libraries(binkvideo PRIVATE ${FFMPEG_CORE} ${FFMPEG_DIR}/lib/swscale.lib xaudio2)
+# milesaudio for AIL_ex_xaudio_faulted: one flag for every XAudio2 engine in the process (MSS.h)
+target_include_directories(binkvideo PRIVATE ${WW}/Bink/include ${FFMPEG_DIR}/include ${WW}/Miles6/include)
+target_link_libraries(binkvideo PRIVATE ${FFMPEG_CORE} ${FFMPEG_DIR}/lib/swscale.lib xaudio2 milesaudio)
 
 # Two Miles backends in one library: XAudio2 for what a player hears, and miniaudio's mix, the one
 # off Windows, for -wav, where the logic clock has to move the mix and XAudio2 cannot be stepped.

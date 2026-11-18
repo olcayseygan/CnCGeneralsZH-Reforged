@@ -328,6 +328,16 @@ void      AILCALL AIL_ex_set_limiter(S32 on);
 void      AILCALL AIL_ex_set_output_device(const char *id);
 S32       AILCALL AIL_ex_enumerate_output_devices(S32 index, char *id, S32 id_bytes, U16 *name, S32 name_chars);
 
+#if defined(_WIN32)
+/* Not Miles, and miles_xaudio2.cpp's alone (not in mss_backend_names.h: the miniaudio backend has no
+ * copy to collide with).  Whether an XAudio2 engine faulted while it was being made, the game's or a
+ * movie's.  Wine's xaudio2_9.dll does that on a prefix with no endpoint that opens, and may keep its
+ * own lock as it goes, so the next XAudio2Create anywhere in the process could hang where it faulted
+ * before: once this says 1, nothing makes another engine.  The movie player sets it too. */
+S32       AILCALL AIL_ex_xaudio_faulted(void);
+void      AILCALL AIL_ex_set_xaudio_faulted(void);
+#endif
+
 /* ---- file format helpers ---------------------------------------------- */
 S32       AILCALL AIL_WAV_info(const void *data, AILSOUNDINFO *info);
 S32       AILCALL AIL_decompress_ADPCM(const AILSOUNDINFO *info, void **outdata, U32 *outsize);

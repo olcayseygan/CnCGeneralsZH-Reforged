@@ -145,6 +145,25 @@ static const Int K_SCRIPT_LIST_DATA_VERSION_1 = 1;
 #define RMG_RIVER_MIN_LENGTH	36		///< downhill steps before a stream counts
 #define RMG_FORD_STUB_STEPS		4.0f	///< river steps past a ford's half-width a stretch beside it must run, or it goes dry
 #define RMG_POLYGON_MAX			96		///< sides written into the water area
+#define RMG_RIVER_POLYGON_MAX	256		///< and into a stretch of river, whose banks bend every few cells
+/* Lakes are kept round enough to read as lakes. The flood pays for distance from its seed as well as
+	for height, so it fills the pocket round the seed before it runs up a valley; then arms thinner
+	than an opening's disc are taken off, bays as thin closed, and what still reaches past a share of
+	the lake's own radius from its middle is cut back. Left to the height alone a basin followed every
+	gully and came out as a claw or a hook. */
+#define RMG_LAKE_ROUNDING		1.4f	///< height bytes the flood pays per cell from its seed
+#define RMG_LAKE_OPEN			4		///< cells: water thinner than twice this is not a lake
+#define RMG_LAKE_CLOSE			2		///< cells: land thinner than twice this inside a lake is water
+#define RMG_LAKE_REACH			1.3f	///< of the radius a lake's area gives, the furthest its water reaches
+#define RMG_STREAM_OPEN			2		///< the opening every water mask gets once the stream has joined it
+// A river map's river runs from map edge to map edge, bends and changes width as it goes.
+#define RMG_RIVER_BEND			0.09f	///< of the playable size, the river's long swing off its line
+#define RMG_RIVER_MEANDER		0.05f	///< and its shorter meander on top
+#define RMG_RIVER_NARROW		0.55f	///< of the river's mean half-width, the narrowest it gets
+#define RMG_RIVER_WIDE			1.6f	///< and the widest
+#define RMG_FORD_DRY_STEPS		2.0f	///< river steps past the half-width either side of a ford that stay dry
+#define RMG_FORD_TAPER_STEPS	14.0f	///< and the steps over which the river narrows into the ford
+#define RMG_FORD_TIP			0.4f	///< of its width, what the river is down to where the ford begins
 
 // A start position gets a flat disc to build on, easing back into the terrain.
 #define RMG_FLAT_RADIUS			13.0f
@@ -253,12 +272,23 @@ static const Int K_SCRIPT_LIST_DATA_VERSION_1 = 1;
 
 // A massif: the middle of the map lifted into a table with a cliff round it.
 #define RMG_MASSIF_HEIGHT		44.0f	///< height bytes, almost two terrace steps
-#define RMG_MASSIF_RADIUS		0.16f	///< fraction of the playable size, to the foot of the cliff
+#define RMG_MASSIF_RADIUS		0.16f	///< fraction of the playable size, the largest the foot's mean radius is rolled
+#define RMG_MASSIF_RADIUS_MIN	0.12f	///< and the smallest
+#define RMG_MASSIF_STRETCH		1.8f	///< the most a massif's long axis may be over its short one
+#define RMG_MASSIF_OFFSET		0.07f	///< of the playable size, how far off the middle a massif may stand
+#define RMG_MASSIF_SPLIT_IN_100	35		///< massifs out of a hundred that stand as two with a pass between
 #define RMG_MASSIF_RIM			4.0f	///< cells the cliff takes from foot to top
+#define RMG_MASSIF_SLOPE_RIM	16.0f	///< cells a walkable stretch of the rim takes instead
+#define RMG_MASSIF_CROWN		14.0f	///< height bytes the terrace on top stands over the rest of it
+#define RMG_MASSIF_CROWN_RIM	7.0f	///< cells the terrace's edge takes, a slope a tank drives
 #define RMG_MASSIF_WOBBLE		0.10f	///< share of the radius the outline wanders out by
 #define RMG_MASSIF_WOBBLE_IN	0.24f	///< and in by: inward costs no start any room
-#define RMG_MASSIF_ROAD_TOP		3.0f	///< cells either side of a ramp's centre where it meets the top
-#define RMG_MASSIF_ROAD_FOOT	6.0f	///< and where it meets the ground below, so the foot opens out
+#define RMG_MASSIF_ROAD_TOP		4.0f	///< cells either side of a ramp's centre where it meets the top
+#define RMG_MASSIF_ROAD_FOOT	8.0f	///< and where it meets the ground below, so the foot opens out
+#define RMG_MASSIF_ROAD_SWING	4		///< steps of eight degrees either side of a base's bearing a ramp may move to a slope
+#define RMG_GORGE_WALL			4.0f	///< cells a canyon wall takes at its steepest, which is a cliff
+#define RMG_GORGE_WALL_SWING	4.0f	///< and the cells it may take besides, where it eases to a slope
+#define RMG_GORGE_ENDS			0.35f	///< of the floor's width, what a gorge narrows to where it runs out
 #define RMG_MASSIF_ROAD_BANK	4.0f	///< cells over which a ramp's sides ease back into the ground
 #define RMG_MASSIF_ROAD_GRADE	3.0f	///< height bytes a ramp climbs per cell at most
 #define RMG_MASSIF_ROAD_SIDE	2.0f	///< height bytes per cell a ramp's cut or fill banks out at
@@ -570,8 +600,9 @@ enum RMGTerrainClass
 	canyon map has a few long gorges winding through it. A black forest is low ground under one
 	wood from edge to edge, with clear rides cut through it from every base to the middle and round
 	the ring of bases; trees do not stop a tank in this game, so the rides are the lanes an army
-	can be seen in, not walls. A massif map lifts the middle into one table of high ground with a
-	cliff all round it and a ramp up from each base's side. The starts, the money and every
+	can be seen in, not walls. A massif map lifts one or two tables of high ground near the middle,
+	of a size, length and lie the seed rolls, with a terrace on top and a rim that is cliff in places
+	and slope in others, and a ramp up from each base's side. The starts, the money and every
 	playability repair run the same on all of them. */
 enum RMGMapType
 {
@@ -590,7 +621,7 @@ struct RMGMapTypeShape
 {
 	Real m_amplitude;		///< times RMG_AMPLITUDE
 	Real m_valleyDrop;		///< height bytes the valley field cuts at its deepest
-	Real m_gorgeWidth;		///< above zero: valleys are the thin band either side of the field's zero line
+	Real m_gorgeWidth;		///< above zero: valleys are gorges along the field's zero line, this many cells either side of their floor's middle
 	Real m_shelfRidge;		///< ridge noise above this flattens into a shelf
 	Int m_extraLakes;		///< basins on top of the usual one per two players, below zero fewer
 	Real m_lakeArea;		///< times RMG_LAKE_AREA
@@ -607,7 +638,7 @@ static const RMGMapTypeShape theMapTypes[RMG_MAP_TYPE_COUNT] =
 	{	1.30f,	30.0f,	0.0f,	0.22f,	-1,		0.8f,	FALSE,	0.14f,	FALSE,	0.0f	},	// highlands
 	{	0.85f,	30.0f,	0.0f,	0.42f,	2,		1.5f,	FALSE,	0.12f,	FALSE,	0.0f	},	// lake country
 	{	0.85f,	24.0f,	0.0f,	0.46f,	-9,		1.0f,	TRUE,	0.10f,	FALSE,	0.0f	},	// river and fords
-	{	1.00f,	44.0f,	0.07f,	0.50f,	-1,		0.8f,	FALSE,	0.18f,	FALSE,	0.0f	},	// canyon
+	{	1.00f,	44.0f,	7.0f,	0.50f,	-1,		0.8f,	FALSE,	0.18f,	FALSE,	0.0f	},	// canyon
 	{	0.60f,	12.0f,	0.0f,	0.50f,	-9,		0.6f,	FALSE,	0.0f,	TRUE,	0.0f	},	// black forest
 	{	0.70f,	16.0f,	0.0f,	0.46f,	-9,		0.7f,	FALSE,	0.12f,	FALSE,	RMG_MASSIF_HEIGHT	},	// massif
 };
@@ -995,6 +1026,23 @@ struct RMGLake
 	std::vector<RMGPoint> m_polygon;
 };
 
+/** One table of a massif map's high ground: an ellipse turned to an angle, its outline wandering
+	with the bearing, its rim a cliff on some bearings and a slope on others. A massif is one of these
+	or two with a pass between them. */
+struct RMGMassifLobe
+{
+	Real m_cellX;			///< the middle, playable cells
+	Real m_cellY;
+	Real m_major;			///< cells from the middle to the foot along the long axis, before the wander
+	Real m_minor;			///< and along the short one
+	Real m_cos;				///< the long axis' direction
+	Real m_sin;
+	Real m_height;			///< height bytes the table stands over the ground
+	Real m_salt;			///< offsets this lobe's outline noise from the other's
+	Real m_crownX;			///< the terrace on top: its middle in the lobe's own axes, cells
+	Real m_crownY;
+};
+
 /// A place something has been put, and how much room it wants around it.
 struct RMGSite
 {
@@ -1056,8 +1104,10 @@ public:
 	std::vector<Short> m_extraBlendIndex;	///< the second layer, drawn over the first; 0 for none
 	std::vector<char> m_passable;
 	std::vector<RMGLake> m_lakes;
-	std::vector<RMGPoint> m_riverLine;	///< a river map's centre line, inside the water margin
+	std::vector<RMGPoint> m_riverLine;	///< a river map's centre line, from map edge to map edge
+	std::vector<Real> m_riverHalf;		///< and the river's half-width at each point of it, cells
 	Real m_riverAngle;					///< and the way it runs
+	std::vector<RMGMassifLobe> m_massifLobes;	///< a massif map's high ground, one or two tables
 	std::vector<RMGObject> m_objects;
 	std::vector< std::pair<Int, Int> > m_waypointLinks;	///< waypointID to waypointID, for WaypointsList
 
@@ -1082,6 +1132,11 @@ private:
 	void placeLakes( const UnsignedByte perm[512] );
 	void growBasin( const UnsignedByte perm[512], Int seedX, Int seedY, Int targetCells, Real fillRise,
 									std::vector<Int> *painted );
+	void openWater( Int openRadius, Int closeRadius );
+	void trimLakeReach( void );
+	void planMassif( void );
+	Real massifRim( const RMGMassifLobe& lobe, Real cellX, Real cellY, Real *rimOut ) const;
+	Real massifLift( Real cellX, Real cellY, Real *heightOut ) const;
 	Real lakeEdgeRise( const UnsignedByte perm[512], Int mapX, Int mapY ) const;
 	void paintRiver( const UnsignedByte perm[512] );
 	void paintMainRiver( const UnsignedByte perm[512] );
@@ -1211,6 +1266,7 @@ private:
 	std::vector<Int> m_baseCells;		///< cells a base levelling touches
 	std::vector<Real> m_baseBlendT;		///< and how far into the blend each is, 0 on the flat
 	std::vector<UnsignedByte> m_baseOwners;	///< and whose base it is
+	std::vector<Real> m_baseLevels;		///< the height each base is levelled to, height bytes
 	std::vector<RMGMoneyWalk> m_moneyWalks;	///< every walked placement of a player's own money
 	std::vector<RMGPoint> m_ramps;		///< where a carved route changed layer, for the bunkers
 	std::vector<char> m_inLake;			///< cells the basins drowned, whatever the ground does
@@ -1352,6 +1408,156 @@ Real RMGLayout::bowlHeight( Real cellX, Real cellY, Real noise ) const
 }
 
 //-----------------------------------------------------------------------------
+// A massif map's high ground
+//-----------------------------------------------------------------------------
+
+/** The seed rolls the massif's size, how long it is against how wide and which way it lies, how far
+	off the middle it stands, and whether it is one table or two with a pass between them. Every
+	massif used to be the same scalloped disc at the same size in the middle of the map. */
+void RMGLayout::planMassif( void )
+{
+	m_massifLobes.clear();
+	if( m_type->m_massif <= 0.0f || m_style )
+		return;
+
+	const UnsignedInt seed = (UnsignedInt)m_settings.m_seed;
+	const Real playable = (Real)m_settings.m_playableCells;
+	const Real radius = playable * lerpReal( RMG_MASSIF_RADIUS_MIN, RMG_MASSIF_RADIUS, hashUnit( seed, 9101, 1 ) );
+	const Real stretch = sqrtf( 1.0f + ( RMG_MASSIF_STRETCH - 1.0f ) * hashUnit( seed, 9101, 2 ) );
+	const Real axis = hashUnit( seed, 9101, 3 ) * PI;
+	const Real offAngle = hashUnit( seed, 9101, 4 ) * 2.0f * PI;
+	const Real off = playable * RMG_MASSIF_OFFSET * hashUnit( seed, 9101, 5 );
+
+	RMGMassifLobe lobe = {};
+	lobe.m_cos = Cos( axis );
+	lobe.m_sin = Sin( axis );
+	lobe.m_cellX = playable * 0.5f + off * Cos( offAngle );
+	lobe.m_cellY = playable * 0.5f + off * Sin( offAngle );
+	lobe.m_major = radius * stretch;
+	lobe.m_minor = radius / stretch;
+	lobe.m_height = m_type->m_massif * ( 0.9f + 0.25f * hashUnit( seed, 9101, 7 ) );
+	lobe.m_salt = 0.0f;
+
+	if( hashCell( seed, 9101, 6 ) % 100U < (UnsignedInt)RMG_MASSIF_SPLIT_IN_100 )
+	{
+		// Two tables along the long axis, the second a step lower, with a saddle of open ground
+		// between their feet.
+		const Real centreX = lobe.m_cellX;
+		const Real centreY = lobe.m_cellY;
+		const Real apart = 0.68f * lobe.m_major;
+		RMGMassifLobe second = lobe;
+		lobe.m_major *= 0.46f;
+		lobe.m_minor *= 0.85f;
+		second.m_major = lobe.m_major;
+		second.m_minor = lobe.m_minor;
+		lobe.m_cellX = centreX + apart * lobe.m_cos;
+		lobe.m_cellY = centreY + apart * lobe.m_sin;
+		second.m_cellX = centreX - apart * lobe.m_cos;
+		second.m_cellY = centreY - apart * lobe.m_sin;
+		second.m_height = m_type->m_massif * ( 0.75f + 0.15f * hashUnit( seed, 9101, 8 ) );
+		second.m_salt = 17.0f;
+		second.m_crownX = ( hashUnit( seed, 9101, 11 ) - 0.5f ) * 0.5f * second.m_major;
+		second.m_crownY = ( hashUnit( seed, 9101, 12 ) - 0.5f ) * 0.5f * second.m_minor;
+		lobe.m_crownX = ( hashUnit( seed, 9101, 9 ) - 0.5f ) * 0.5f * lobe.m_major;
+		lobe.m_crownY = ( hashUnit( seed, 9101, 10 ) - 0.5f ) * 0.5f * lobe.m_minor;
+		m_massifLobes.push_back( lobe );
+		m_massifLobes.push_back( second );
+		return;
+	}
+
+	lobe.m_crownX = ( hashUnit( seed, 9101, 9 ) - 0.5f ) * 0.5f * lobe.m_major;
+	lobe.m_crownY = ( hashUnit( seed, 9101, 10 ) - 0.5f ) * 0.5f * lobe.m_minor;
+	m_massifLobes.push_back( lobe );
+}
+
+/** Cells in from a lobe's foot to this point, negative outside it, and the rim's width on its
+	bearing. The outline wanders with a noise read off the bearing, which keeps it one closed shape;
+	fractal noise only reaches a third or so of its range, so it is doubled and clamped, and it reaches
+	further in than out, since the outer bound is what the start search keeps clear of. A second noise
+	on the bearing makes the rim a cliff on some stretches and a slope a tank drives on others: those
+	are the ways up, and the ramps carved later move onto them. The slope reaches half its extra width
+	out past the cliff's foot and half in. */
+Real RMGLayout::massifRim( const RMGMassifLobe& lobe, Real cellX, Real cellY, Real *rimOut ) const
+{
+	Real dx = cellX - lobe.m_cellX;
+	Real dy = cellY - lobe.m_cellY;
+	Real a = dx * lobe.m_cos + dy * lobe.m_sin;
+	Real b = dy * lobe.m_cos - dx * lobe.m_sin;
+	Real na = a / lobe.m_major;
+	Real nb = b / lobe.m_minor;
+	Real q = sqrtf( na * na + nb * nb );
+
+	Real slopeRim = RMG_MASSIF_SLOPE_RIM;
+	if( slopeRim > 0.5f * lobe.m_minor )
+		slopeRim = 0.5f * lobe.m_minor;
+	if( slopeRim < RMG_MASSIF_RIM )
+		slopeRim = RMG_MASSIF_RIM;
+
+	if( q < 0.001f )
+	{
+		*rimOut = RMG_MASSIF_RIM;
+		return lobe.m_minor;
+	}
+	Real ux = na / q;
+	Real uy = nb / q;
+
+	Real wander = 2.0f * fractalNoise( m_perm, ux * 1.6f + 41.0f + lobe.m_salt, uy * 1.6f - 37.0f, 2 );
+	if( wander > 1.0f ) wander = 1.0f;
+	if( wander < -1.0f ) wander = -1.0f;
+	Real footQ = 1.0f + ( wander > 0.0f ? RMG_MASSIF_WOBBLE : RMG_MASSIF_WOBBLE_IN ) * wander;
+
+	Real gentle = 0.5f + 1.6f * fractalNoise( m_perm, ux * 1.7f + 5.0f + lobe.m_salt, uy * 1.7f + 11.0f, 2 );
+	gentle = fadeCurve( rmgUnit( ( gentle - 0.45f ) / 0.2f ) );
+	Real rim = RMG_MASSIF_RIM + gentle * ( slopeRim - RMG_MASSIF_RIM );
+	*rimOut = rim;
+
+	Real r = sqrtf( a * a + b * b );
+	return r * ( footQ / q - 1.0f ) + 0.5f * ( rim - RMG_MASSIF_RIM );
+}
+
+/** How far up the massif a point is, 0 on the plain to 1 on the top, and the height in bytes the top
+	stands over the plain there. Each lobe carries a terrace on top, an off-centre table a step higher
+	with a drivable edge, so the top has a high side and a low side instead of being one flat sheet. */
+Real RMGLayout::massifLift( Real cellX, Real cellY, Real *heightOut ) const
+{
+	Real best = 0.0f;
+	Real bestLift = 0.0f;
+	*heightOut = 0.0f;
+	for( UnsignedInt l = 0; l < m_massifLobes.size(); l++ )
+	{
+		const RMGMassifLobe& lobe = m_massifLobes[l];
+		Real rim;
+		Real inside = massifRim( lobe, cellX, cellY, &rim );
+		if( inside <= 0.0f )
+			continue;
+		Real lift = fadeCurve( rmgUnit( inside / rim ) );
+
+		Real height = lobe.m_height;
+		Real crownMinor = 0.45f * lobe.m_minor;
+		if( crownMinor > 1.5f * RMG_MASSIF_CROWN_RIM )
+		{
+			Real dx = cellX - lobe.m_cellX;
+			Real dy = cellY - lobe.m_cellY;
+			Real a = dx * lobe.m_cos + dy * lobe.m_sin - lobe.m_crownX;
+			Real b = dy * lobe.m_cos - dx * lobe.m_sin - lobe.m_crownY;
+			Real na = a / ( 0.45f * lobe.m_major );
+			Real nb = b / crownMinor;
+			Real crownInside = ( 1.0f - sqrtf( na * na + nb * nb ) ) * crownMinor
+				+ 4.0f * fractalNoise( m_perm, cellX * 0.07f + 3.0f + lobe.m_salt, cellY * 0.07f - 9.0f, 2 );
+			height += RMG_MASSIF_CROWN * fadeCurve( rmgUnit( crownInside / RMG_MASSIF_CROWN_RIM ) );
+		}
+
+		if( lift * height > best )
+		{
+			best = lift * height;
+			bestLift = lift;
+			*heightOut = height;
+		}
+	}
+	return bestLift;
+}
+
+//-----------------------------------------------------------------------------
 // Height field
 //-----------------------------------------------------------------------------
 
@@ -1390,37 +1596,17 @@ void RMGLayout::buildHeights( const UnsignedByte perm[512] )
 			if( m_style )
 				raw = bowlHeight( cellX, cellY, raw - RMG_BASE_HEIGHT );
 
-			/* The massif goes in before the valleys and is spared by them, so its top is one table
-				and not a table with the valley field's ditches through it. The outline wanders with a
-				noise read off the bearing from the middle, which keeps it one closed shape. */
+			/* The massif goes in before the valleys and is spared by them, so its top is not a table
+				with the valley field's ditches through it. Its shape, size, place and rim come from
+				planMassif and massifLift. */
 			Real massif = 0.0f;
-			if( m_type->m_massif > 0.0f )
+			if( !m_massifLobes.empty() )
 			{
-				Real dx = cellX - playable * 0.5f;
-				Real dy = cellY - playable * 0.5f;
-				Real r = sqrtf( dx * dx + dy * dy );
-				Real foot = playable * RMG_MASSIF_RADIUS;
-				if( r < foot * ( 1.0f + RMG_MASSIF_WOBBLE ) + 1.0f )
-				{
-					Real ux = ( r > 0.5f ) ? dx / r : 0.0f;
-					Real uy = ( r > 0.5f ) ? dy / r : 0.0f;
-					/* Fractal noise only reaches a third or so of its range, so read at face value the
-						wobble moved the foot by a few percent and the massif stood as a circle. Doubled
-						and clamped it uses the whole band, and the band reaches further in than out: the
-						outer bound is what the start search keeps clear of, the inner one only sets where
-						the ramps meet the top. */
-					Real wander = 2.0f * fractalNoise( perm, ux * 2.4f + 41.0f, uy * 2.4f - 37.0f, 3 );
-					if( wander > 1.0f ) wander = 1.0f;
-					if( wander < -1.0f ) wander = -1.0f;
-					foot *= 1.0f + ( wander > 0.0f ? RMG_MASSIF_WOBBLE : RMG_MASSIF_WOBBLE_IN ) * wander;
-					Real t = ( foot - r ) / RMG_MASSIF_RIM;
-					if( t > 1.0f ) t = 1.0f;
-					if( t > 0.0f )
-						massif = fadeCurve( t );
-				}
-				// One table at one height, with a quarter of the roll left on it, so the cliff stands
-				// all the way round and not only where the ground outside happens to be low.
-				Real table = RMG_BASE_HEIGHT + m_type->m_massif + 0.25f * ( raw - RMG_BASE_HEIGHT );
+				Real lift = 0.0f;
+				massif = massifLift( cellX, cellY, &lift );
+				// Two fifths of the roll left on the top, so it is high ground with relief of its own;
+				// the table is still lifted clear of whatever stood under it.
+				Real table = RMG_BASE_HEIGHT + lift + 0.4f * ( raw - RMG_BASE_HEIGHT );
 				if( table < raw + 20.0f )
 					table = raw + 20.0f;		// a hill under the table still ends up under it
 				raw = lerpReal( raw, table, massif );
@@ -1428,27 +1614,41 @@ void RMGLayout::buildHeights( const UnsignedByte perm[512] )
 
 			if( m_type->m_gorgeWidth > 0.0f )
 			{
-				/* At two fifths of the valley field's frequency and two octaves: a few long
-					canyons that bend, not a maze. A third octave put a wiggle and a small closed loop
-					on every stretch of the zero line, and each one drew two more cliff ribbons. */
-				Real valley = fractalNoise( perm, cellX * valleyScale * 0.4f + 13.0f,
-																		cellY * valleyScale * 0.4f - 21.0f, 2 );
-				/* A gorge is the thin band along the field's zero line, which winds and forks across
-					the whole map the way a canyon system does, where the low tail of the field only
-					ever makes separate hollows. The fade keeps a flat floor and a flat rim with the
-					drop between them, so a wall is steep at its middle and drivable at both ends. A
-					slower field decides where the zero line is a canyon at all, so a gorge runs out
-					into open ground instead of every branch of the line being cut. */
-				Real off = fabsf( valley );
-				if( off < m_type->m_gorgeWidth )
+				/* At a third of the valley field's frequency and two octaves: a few long canyons
+					that bend, not a maze. A third octave put a wiggle and a small closed loop on every
+					stretch of the zero line, and each one drew two more cliff ribbons. */
+				const Real gorgeScale = valleyScale * 0.32f;
+				Real valley = fractalNoise( perm, cellX * gorgeScale + 13.0f, cellY * gorgeScale - 21.0f, 2 );
+				/* A gorge runs along the field's zero line, which winds and forks across the map the
+					way a canyon system does. Its distance from the line is the field over its slope, so
+					the floor is as wide where the field turns slowly as where it turns fast; a band of
+					the field's own value was a groove one or two cells across wherever the field was
+					steep. The floor is flat, the walls drop over a few cells, which is a cliff, and
+					ease out where a slower field says so, which is a slope a tank climbs. */
+				Real stepX = fractalNoise( perm, ( cellX + 1.0f ) * gorgeScale + 13.0f, cellY * gorgeScale - 21.0f, 2 ) - valley;
+				Real stepY = fractalNoise( perm, cellX * gorgeScale + 13.0f, ( cellY + 1.0f ) * gorgeScale - 21.0f, 2 ) - valley;
+				Real slope = sqrtf( stepX * stepX + stepY * stepY );
+				if( slope < 0.4f * gorgeScale )
+					slope = 0.4f * gorgeScale;
+				Real off = fabsf( valley ) / slope;
+				Real reachMost = m_type->m_gorgeWidth * 1.5f + RMG_GORGE_WALL + RMG_GORGE_WALL_SWING;
+				if( off < reachMost )
 				{
-					Real reach = fractalNoise( perm, cellX * valleyScale * 0.2f - 41.0f,
-																		 cellY * valleyScale * 0.2f + 7.0f, 2 );
-					Real depth = ( reach + 0.24f ) / 0.24f;
-					if( depth < 0.0f ) depth = 0.0f;
-					if( depth > 1.0f ) depth = 1.0f;
-					raw -= fadeCurve( 1.0f - off / m_type->m_gorgeWidth ) * fadeCurve( depth )
-						* m_type->m_valleyDrop;
+					/* A slower field decides where the zero line is a canyon at all, so a gorge runs out
+						into open ground instead of every branch of the line being cut, and it runs out
+						by getting narrower and shallower together over a long stretch, not by stopping. */
+					Real reach = fractalNoise( perm, cellX * valleyScale * 0.12f - 41.0f,
+																		 cellY * valleyScale * 0.12f + 7.0f, 2 );
+					Real depth = fadeCurve( rmgUnit( ( reach + 0.22f ) / 0.2f ) );
+					Real form = 0.5f + 1.4f * fractalNoise( perm, cellX * gorgeScale * 3.0f + 5.0f,
+																									 cellY * gorgeScale * 3.0f + 71.0f, 2 );
+					Real floorHalf = m_type->m_gorgeWidth * ( 0.7f + 0.8f * rmgUnit( form ) )
+						* ( RMG_GORGE_ENDS + ( 1.0f - RMG_GORGE_ENDS ) * depth );
+					Real wall = RMG_GORGE_WALL + RMG_GORGE_WALL_SWING * fadeCurve( rmgUnit( 1.0f - form ) );
+					Real cut = 1.0f;
+					if( off > floorHalf )
+						cut = 1.0f - fadeCurve( rmgUnit( ( off - floorHalf ) / wall ) );
+					raw -= cut * depth * m_type->m_valleyDrop;
 				}
 			}
 			else
@@ -1773,8 +1973,13 @@ void RMGLayout::growBasin( const UnsignedByte perm[512], Int seedX, Int seedY, I
 	std::vector<RMGBasinCell> open;
 	std::vector<char> queued( m_width * m_height, 0 );
 
+	/* In sixteenths of a height byte, so the price of the distance from the seed adds to the height
+		without rounding it away. A skeleton's lakes are a template's to replace and keep their old
+		shape. */
+	const Real rounding = m_skeleton ? 0.0f : RMG_LAKE_ROUNDING;
+
 	RMGBasinCell first;
-	first.m_cost = (Int)m_heights[cellIndex( seedX, seedY )];
+	first.m_cost = 16 * (Int)m_heights[cellIndex( seedX, seedY )];
 	first.m_index = cellIndex( seedX, seedY );
 	open.push_back( first );
 	queued[first.m_index] = 1;
@@ -1798,9 +2003,10 @@ void RMGLayout::growBasin( const UnsignedByte perm[512], Int seedX, Int seedY, I
 
 		Int x = index % m_width;
 		Int y = index / m_width;
-		if( (Real)cheapest.m_cost > maxH )
+		const Real here = (Real)m_heights[index];
+		if( here > maxH )
 			continue;
-		if( !painted->empty() && (Real)cheapest.m_cost + lakeEdgeRise( perm, x, y ) > maxH )
+		if( !painted->empty() && here + lakeEdgeRise( perm, x, y ) > maxH )
 		{
 			edgeTurned++;
 			continue;
@@ -1821,11 +2027,118 @@ void RMGLayout::growBasin( const UnsignedByte perm[512], Int seedX, Int seedY, I
 				continue;
 
 			queued[next] = 1;
+			const Real fromSeedX = (Real)( nx - seedX );
+			const Real fromSeedY = (Real)( ny - seedY );
 			RMGBasinCell reached;
-			reached.m_cost = (Int)m_heights[next];
+			reached.m_cost = 16 * (Int)m_heights[next]
+				+ (Int)( 16.0f * rounding * sqrtf( fromSeedX * fromSeedX + fromSeedY * fromSeedY ) );
 			reached.m_index = next;
 			open.push_back( reached );
 			std::push_heap( open.begin(), open.end() );
+		}
+	}
+}
+
+/** One morphological step on a water mask: a cell is water after an erosion when every cell within
+	the radius was, after a dilation when any was. A dilation never puts water where waterAllowedAt
+	keeps it off. */
+static void rmgMorphWater( const std::vector<char>& in, std::vector<char>& out, Int width, Int height,
+													 Int radius, Bool dilate, const std::vector<char>& allowed )
+{
+	out.assign( width * height, 0 );
+	for( Int y = 0; y < height; y++ )
+	{
+		for( Int x = 0; x < width; x++ )
+		{
+			Int index = y * width + x;
+			if( dilate ? !allowed[index] : !in[index] )
+				continue;
+			// a dilation looks for one water cell, an erosion for one dry one
+			Bool found = FALSE;
+			for( Int dy = -radius; dy <= radius && !found; dy++ )
+			{
+				for( Int dx = -radius; dx <= radius && !found; dx++ )
+				{
+					if( dx * dx + dy * dy > radius * radius )
+						continue;
+					Int nx = x + dx;
+					Int ny = y + dy;
+					Bool water = nx >= 0 && ny >= 0 && nx < width && ny < height && in[ny * width + nx] != 0;
+					found = dilate ? water : !water;
+				}
+			}
+			out[index] = ( dilate ? found : !found ) ? 1 : 0;
+		}
+	}
+}
+
+/** Opens the water mask, which takes off every arm and sliver thinner than the opening's disc, then
+	closes it, which fills every bay and spit thinner than the closing's. */
+void RMGLayout::openWater( Int openRadius, Int closeRadius )
+{
+	std::vector<char> allowed( m_width * m_height, 0 );
+	for( Int y = 0; y < m_height; y++ )
+		for( Int x = 0; x < m_width; x++ )
+			allowed[cellIndex( x, y )] = waterAllowedAt( x, y ) ? 1 : 0;
+
+	std::vector<char> scratch;
+	if( openRadius > 0 )
+	{
+		rmgMorphWater( m_inLake, scratch, m_width, m_height, openRadius, FALSE, allowed );
+		rmgMorphWater( scratch, m_inLake, m_width, m_height, openRadius, TRUE, allowed );
+	}
+	if( closeRadius > 0 )
+	{
+		rmgMorphWater( m_inLake, scratch, m_width, m_height, closeRadius, TRUE, allowed );
+		rmgMorphWater( scratch, m_inLake, m_width, m_height, closeRadius, FALSE, allowed );
+	}
+}
+
+/** Each lake cut back to the cells within RMG_LAKE_REACH of the radius its own area gives, measured
+	from its middle. An oval keeps its ends; the hook a basin grew up a side valley does not. */
+void RMGLayout::trimLakeReach( void )
+{
+	static const Int offsetX[4] = { 1, -1, 0, 0 };
+	static const Int offsetY[4] = { 0, 0, 1, -1 };
+	std::vector<char> seen( m_width * m_height, 0 );
+	for( Int start = 0; start < m_width * m_height; start++ )
+	{
+		if( !m_inLake[start] || seen[start] )
+			continue;
+		std::vector<Int> cells;
+		cells.push_back( start );
+		seen[start] = 1;
+		Real sumX = 0.0f;
+		Real sumY = 0.0f;
+		for( UnsignedInt head = 0; head < cells.size(); head++ )
+		{
+			Int x = cells[head] % m_width;
+			Int y = cells[head] / m_width;
+			sumX += (Real)x;
+			sumY += (Real)y;
+			for( Int i = 0; i < 4; i++ )
+			{
+				Int nx = x + offsetX[i];
+				Int ny = y + offsetY[i];
+				if( nx < 0 || ny < 0 || nx >= m_width || ny >= m_height )
+					continue;
+				Int next = cellIndex( nx, ny );
+				if( seen[next] || !m_inLake[next] )
+					continue;
+				seen[next] = 1;
+				cells.push_back( next );
+			}
+		}
+		Real count = (Real)cells.size();
+		Real middleX = sumX / count;
+		Real middleY = sumY / count;
+		Real reach = RMG_LAKE_REACH * sqrtf( count / PI );
+		for( UnsignedInt c = 0; c < cells.size(); c++ )
+		{
+			Real dx = (Real)( cells[c] % m_width ) - middleX;
+			Real dy = (Real)( cells[c] / m_width ) - middleY;
+			if( dx * dx + dy * dy > reach * reach )
+				m_inLake[cells[c]] = 0;
 		}
 	}
 }
@@ -1996,10 +2309,17 @@ void RMGLayout::paintRiver( const UnsignedByte perm[512] )
 	}
 }
 
-/** A river map's river: one band of water through the middle of the map from one side to the
-	other, at one of eight angles the seed picks, wandering either side of its line. Both ends stop
-	at the margin every lake keeps off the map edge, so the ends are ways across. It goes in unbroken
-	here; the fords are cut once the starts are known (openFordsAtStarts). */
+/// The mean half-width of a river map's river, cells.
+static Real rmgRiverHalf( Int playableCells )
+{
+	return 4.0f + (Real)playableCells * 0.012f;
+}
+
+/** A river map's river: one band of water across the whole map, from map edge to map edge, at one
+	of eight angles the seed picks. It swings off its line in a long bend and meanders on top of
+	that, and it widens and narrows as it goes, so it reads as a river and not as a ruled canal; its
+	ends run on into the border, so the edge of the map is no way across. It goes in unbroken here;
+	the fords are cut once the starts are known (openFordsAtStarts). */
 void RMGLayout::paintMainRiver( const UnsignedByte perm[512] )
 {
 	Int playable = m_settings.m_playableCells;
@@ -2007,59 +2327,78 @@ void RMGLayout::paintMainRiver( const UnsignedByte perm[512] )
 	m_riverAngle = (Real)(hashCell( m_settings.m_seed, 9001, 41 ) % 8U) * (PI * 0.125f);
 	Real alongX = Cos( m_riverAngle );
 	Real alongY = Sin( m_riverAngle );
-	Real wander = (Real)playable * 0.07f;
+	Real bend = (Real)playable * RMG_RIVER_BEND;
+	Real meander = (Real)playable * RMG_RIVER_MEANDER;
+	Real meanHalf = rmgRiverHalf( playable );
 
 	m_riverLine.clear();
-	for( Int step = -playable; step <= playable; step++ )
+	m_riverHalf.clear();
+	for( Int step = -playable - RMG_BORDER_CELLS; step <= playable + RMG_BORDER_CELLS; step++ )
 	{
 		Real t = (Real)step;
-		Real side = wander * fractalNoise( perm, t * 0.011f + 7.5f, 3.25f, 2 );
+		Real longSwing = 2.0f * fractalNoise( perm, t * 0.006f + 7.5f, 3.25f, 2 );
+		Real shortSwing = 2.0f * fractalNoise( perm, t * 0.02f - 3.1f, 9.7f, 2 );
+		if( longSwing > 1.0f ) longSwing = 1.0f;
+		if( longSwing < -1.0f ) longSwing = -1.0f;
+		if( shortSwing > 1.0f ) shortSwing = 1.0f;
+		if( shortSwing < -1.0f ) shortSwing = -1.0f;
+		Real side = bend * longSwing + meander * shortSwing;
 
 		RMGPoint p;
 		p.m_cellX = centre + alongX * t - alongY * side;
 		p.m_cellY = centre + alongY * t + alongX * side;
 		Int mapX = (Int)floorf( p.m_cellX + 0.5f ) + RMG_BORDER_CELLS;
 		Int mapY = (Int)floorf( p.m_cellY + 0.5f ) + RMG_BORDER_CELLS;
-		if( !waterAllowedAt( mapX, mapY ) )
+		if( mapX < 1 || mapY < 1 || mapX >= m_width - 1 || mapY >= m_height - 1 )
 			continue;
 		m_riverLine.push_back( p );
+
+		Real width = rmgUnit( 0.5f + 1.6f * fractalNoise( perm, t * 0.015f + 2.2f, -5.1f, 2 ) );
+		m_riverHalf.push_back( meanHalf * lerpReal( RMG_RIVER_NARROW, RMG_RIVER_WIDE, width ) );
 	}
 
 	std::vector<Int> noFords;
 	paintRiverStretches( noFords );
 }
 
-/** Paint the river along its line, leaving dry the steps either side of each ford's index. The
-	basin carve turns each gap into a low crossing between two beaches, and every stretch between
-	two fords is a water area of its own. */
+/** Paint the river along its line, leaving dry the steps either side of each ford's index. The river
+	narrows into a ford over RMG_FORD_TAPER_STEPS, so the banks turn in to meet it the way a river
+	shallows over a bar, rather than the water stopping in a round end. The basin carve turns each gap
+	into a low crossing between two beaches, and every stretch between two fords is a water area of
+	its own. */
 void RMGLayout::paintRiverStretches( const std::vector<Int>& fords )
 {
-	Real half = 4.0f + (Real)m_settings.m_playableCells * 0.012f;
-	Real fordHalf = half + 7.0f;		///< steps either side of a ford's middle left dry
 	const std::vector<RMGPoint>& line = m_riverLine;
-
 	Int n = (Int)line.size();
-	Int reach = (Int)( half + 0.5f );
-	Int radiusSq = (Int)( half * half + 0.5f );
 
 	std::vector<char> dry( n, 0 );
+	std::vector<Real> narrowing( n, 1.0f );
 	for( Int i = 0; i < n; i++ )
 	{
 		for( UnsignedInt ford = 0; ford < fords.size(); ford++ )
 		{
-			if( fabsf( (Real)( i - fords[ford] ) ) < fordHalf )
+			Real dryHalf = m_riverHalf[fords[ford]] + RMG_FORD_DRY_STEPS;
+			Real off = fabsf( (Real)( i - fords[ford] ) );
+			if( off < dryHalf )
 				dry[i] = 1;
+			else if( off < dryHalf + RMG_FORD_TAPER_STEPS )
+			{
+				Real keep = RMG_FORD_TIP + ( 1.0f - RMG_FORD_TIP ) * fadeCurve( ( off - dryHalf ) / RMG_FORD_TAPER_STEPS );
+				if( keep < narrowing[i] )
+					narrowing[i] = keep;
+			}
 		}
 	}
 
-	/* A stretch cut off between a ford and the end of the river, or between two fords, that is too
-		short to read as river is a square pond capping the line: the end is already a way across and
-		a pond there serves nothing. It goes dry with the ford beside it. The length scales with the
-		ford, so a small map's real stretches stay, and the longest stretch always stays, so a river
-		map keeps its river. */
+	/* A stretch cut off between two fords that is too short to read as river is a pond, and serves
+		nothing. It goes dry with the fords beside it. The length scales with the ford, so a small map's
+		real stretches stay, and the longest stretch always stays, so a river map keeps its river. A
+		stretch from a ford to the end of the line stays however short: it runs on off the map, and
+		drying it stopped the river short of the edge. */
 	if( !fords.empty() )
 	{
-		const Int minRun = (Int)( fordHalf + RMG_FORD_STUB_STEPS );
+		const Int minRun = (Int)( rmgRiverHalf( m_settings.m_playableCells ) + RMG_FORD_DRY_STEPS + RMG_FORD_TAPER_STEPS
+			+ RMG_FORD_STUB_STEPS );
 		Int longestFrom = -1, longest = 0;
 		for( Int i = 0; i < n; )
 		{
@@ -2078,7 +2417,7 @@ void RMGLayout::paintRiverStretches( const std::vector<Int>& fords )
 			Int end = i;
 			while( end < n && dry[end] == dry[i] )
 				end++;
-			if( !dry[i] && i != longestFrom && end - i < minRun )
+			if( !dry[i] && i != longestFrom && end - i < minRun && i > 0 && end < n )
 			{
 				for( Int k = i; k < end; k++ )
 					dry[k] = 1;
@@ -2092,17 +2431,23 @@ void RMGLayout::paintRiverStretches( const std::vector<Int>& fords )
 		if( dry[i] )
 			continue;
 
+		Real half = m_riverHalf[i] * narrowing[i];
+		Int reach = (Int)( half + 0.5f );
+		Real radiusSq = half * half + 0.25f;
 		Int cx = (Int)floorf( line[i].m_cellX + 0.5f ) + RMG_BORDER_CELLS;
 		Int cy = (Int)floorf( line[i].m_cellY + 0.5f ) + RMG_BORDER_CELLS;
 		for( Int dy = -reach; dy <= reach; dy++ )
 		{
 			for( Int dx = -reach; dx <= reach; dx++ )
 			{
-				if( dx * dx + dy * dy > radiusSq )
+				if( (Real)( dx * dx + dy * dy ) > radiusSq )
 					continue;
-				if( !waterAllowedAt( cx + dx, cy + dy ) )
+				Int x = cx + dx;
+				Int y = cy + dy;
+				// to the map's edge, a cell short of it so the outline still closes inside the map
+				if( x < 1 || y < 1 || x >= m_width - 1 || y >= m_height - 1 )
 					continue;
-				m_inLake[cellIndex( cx + dx, cy + dy )] = 1;
+				m_inLake[cellIndex( x, y )] = 1;
 			}
 		}
 	}
@@ -2117,7 +2462,11 @@ void RMGLayout::openFordsAtStarts( const std::vector<UnsignedByte>& uncarved )
 	if( !m_type->m_river || m_riverLine.empty() )
 		return;
 
-	Real fordHalf = 4.0f + (Real)m_settings.m_playableCells * 0.012f + 7.0f;
+	/* Two fords closer than twice this along the river are made one. The water between them would be
+		too short a stretch to keep (paintRiverStretches), and drying it left a land bridge three fords
+		wide; or it narrowed into both fords and lay between them as a round pond. */
+	const Real riverHalf = rmgRiverHalf( m_settings.m_playableCells );
+	Real fordHalf = riverHalf + RMG_FORD_DRY_STEPS + RMG_FORD_TAPER_STEPS + 10.0f;
 	std::vector<Int> nearest;
 	for( UnsignedInt s = 0; s < m_starts.size(); s++ )
 	{
@@ -2148,6 +2497,37 @@ void RMGLayout::openFordsAtStarts( const std::vector<UnsignedByte>& uncarved )
 		first = i;
 	}
 
+	/* The river runs off the map at both ends, so the fords are the only ways across. A duel's two
+		seats share one, and a single crossing for a whole river is a gate, not a front: a second goes
+		where the river is furthest along from the first, inside the middle half of the playable
+		stretch, which is as far from one seat as from its mirror on the far bank. */
+	if( fords.size() == 1 )
+	{
+		const Real playable = (Real)m_settings.m_playableCells;
+		const Real alongX = Cos( m_riverAngle );
+		const Real alongY = Sin( m_riverAngle );
+		Int best = -1;
+		Int bestOff = 0;
+		for( Int i = 0; i < (Int)m_riverLine.size(); i++ )
+		{
+			Real along = ( m_riverLine[i].m_cellX - 0.5f * playable ) * alongX
+				+ ( m_riverLine[i].m_cellY - 0.5f * playable ) * alongY;
+			if( fabsf( along ) > 0.25f * playable )
+				continue;
+			Int off = i > fords[0] ? i - fords[0] : fords[0] - i;
+			if( off > bestOff )
+			{
+				bestOff = off;
+				best = i;
+			}
+		}
+		if( best >= 0 && (Real)bestOff >= fordHalf * 2.0f )
+		{
+			fords.push_back( best );
+			std::sort( fords.begin(), fords.end() );
+		}
+	}
+
 	m_inLake.assign( m_width * m_height, 0 );
 	paintRiverStretches( fords );
 	extractLakePolygons();
@@ -2156,9 +2536,21 @@ void RMGLayout::openFordsAtStarts( const std::vector<UnsignedByte>& uncarved )
 	carveLakeBasins();
 }
 
+/** A corner of a water outline in playable cells, packed. It is packed counted from the map's own
+	corner, since a river runs on into the border where a playable coordinate is below nought. */
 static Int rmgVertexKey( Int x, Int y )
 {
-	return ( y << 16 ) | ( x & 0xFFFF );
+	return ( ( y + RMG_BORDER_CELLS ) << 16 ) | ( ( x + RMG_BORDER_CELLS ) & 0xFFFF );
+}
+
+static Int rmgVertexX( Int key )
+{
+	return ( key & 0xFFFF ) - RMG_BORDER_CELLS;
+}
+
+static Int rmgVertexY( Int key )
+{
+	return ( key >> 16 ) - RMG_BORDER_CELLS;
 }
 
 static void rmgResamplePolygon( std::vector<RMGPoint>& loop, Int maxPoints )
@@ -2355,10 +2747,10 @@ void RMGLayout::extractLakePolygons( void )
 			for( std::map<Int, Int>::const_iterator it = nextVertex.begin();
 					 it != nextVertex.end(); ++it )
 			{
-				Int vx = it->first & 0xFFFF;
-				Int vy = it->first >> 16;
-				Int sx = startKey & 0xFFFF;
-				Int sy = startKey >> 16;
+				Int vx = rmgVertexX( it->first );
+				Int vy = rmgVertexY( it->first );
+				Int sx = rmgVertexX( startKey );
+				Int sy = rmgVertexY( startKey );
 				if( vx < sx || ( vx == sx && vy < sy ) )
 					startKey = it->first;
 			}
@@ -2369,8 +2761,8 @@ void RMGLayout::extractLakePolygons( void )
 			for( Int guard = 0; guard < (Int)nextVertex.size() + 2; guard++ )
 			{
 				RMGPoint p;
-				p.m_cellX = (Real)( v & 0xFFFF );
-				p.m_cellY = (Real)( v >> 16 );
+				p.m_cellX = (Real)rmgVertexX( v );
+				p.m_cellY = (Real)rmgVertexY( v );
 				loop.push_back( p );
 
 				std::map<Int, Int>::const_iterator found = nextVertex.find( v );
@@ -2412,7 +2804,7 @@ void RMGLayout::extractLakePolygons( void )
 					loop.swap( simple );
 			}
 
-			rmgResamplePolygon( loop, RMG_POLYGON_MAX );
+			rmgResamplePolygon( loop, m_type->m_river ? RMG_RIVER_POLYGON_MAX : RMG_POLYGON_MAX );
 			rmgInflatePolygon( loop, 1.0f );
 
 			RMGLake lake;
@@ -2583,7 +2975,18 @@ void RMGLayout::placeLakes( const UnsignedByte perm[512] )
 		}
 	}
 
-	paintRiver( perm );
+	if( !m_skeleton )
+	{
+		openWater( RMG_LAKE_OPEN, RMG_LAKE_CLOSE );
+		trimLakeReach();
+		openWater( RMG_LAKE_OPEN, 0 );
+	}
+	/* Lake country has its lakes and a canyon map its gorges; a stream walked into either came out
+		as an arm off a lake, the finger and the hook the lakes are now kept from growing. */
+	if( m_skeleton || ( m_type->m_extraLakes <= 0 && m_type->m_gorgeWidth <= 0.0f ) )
+		paintRiver( perm );
+	if( !m_skeleton )
+		openWater( RMG_STREAM_OPEN, 0 );
 	extractLakePolygons();
 }
 
@@ -2742,7 +3145,7 @@ void RMGLayout::chooseStarts( void )
 
 			// The massif is the ground everybody climbs to, not a base: its top is level enough to
 			// pass as one, and a seat up there would own every ramp.
-			if( m_type->m_massif > 0.0f && massifClearance( (Real)x, (Real)y ) < RMG_BLEND_RADIUS )
+			if( !m_massifLobes.empty() && massifClearance( (Real)x, (Real)y ) < RMG_BLEND_RADIUS )
 				continue;
 
 			// Far enough that flattening the base does not leave a puddle in the middle of it,
@@ -2849,8 +3252,15 @@ void RMGLayout::chooseStarts( void )
 	{
 		for( Int x = 0; x < m_width - 1; x++ )
 		{
-			if( underwaterAtCell( x, y ) || !insidePlayable( x, y ) )
+			if( !insidePlayable( x, y ) )
 				continue;
+			// A river has no fords yet; one will be cut by each seat, so its water is priced as a cliff.
+			if( underwaterAtCell( x, y ) )
+			{
+				if( m_type->m_river )
+					cost[cellIndex( x, y )] = RMG_START_CLIFF_COST;
+				continue;
+			}
 			cost[cellIndex( x, y )] = cellSpanWorld( x, y ) > RMG_CLIFF_WORLD_SPAN ? RMG_START_CLIFF_COST : 1;
 		}
 	}
@@ -3347,7 +3757,7 @@ Bool RMGLayout::addDryStart( void )
 	{
 		for( Int x = margin; x < playable - margin; x += m_startSearchStride )
 		{
-			if( m_type->m_massif > 0.0f && massifClearance( (Real)x, (Real)y ) < RMG_BLEND_RADIUS )
+			if( !m_massifLobes.empty() && massifClearance( (Real)x, (Real)y ) < RMG_BLEND_RADIUS )
 				continue;
 			Real shore;
 			insideLake( (Real)x, (Real)y, &shore );
@@ -3432,7 +3842,8 @@ void RMGLayout::flattenBases( void )
 	{
 		Int mapX = (Int)(m_starts[i].m_cellX + 0.5f) + RMG_BORDER_CELLS;
 		Int mapY = (Int)(m_starts[i].m_cellY + 0.5f) + RMG_BORDER_CELLS;
-		startHeights.push_back( (Real)m_heights[cellIndex( mapX, mapY )] );
+		// the level shapeBases chose, or the start's own cell where it chose none
+		startHeights.push_back( m_baseLevels[i] >= 0.0f ? m_baseLevels[i] : (Real)m_heights[cellIndex( mapX, mapY )] );
 	}
 
 	for( UnsignedInt e = 0; e < m_baseCells.size(); e++ )
@@ -3472,6 +3883,7 @@ void RMGLayout::shapeBases( void )
 	m_baseCells.clear();
 	m_baseBlendT.clear();
 	m_baseOwners.clear();
+	m_baseLevels.clear();
 
 	std::vector<Real> flatRadii;
 	std::vector<Real> flatWidest;
@@ -3512,6 +3924,78 @@ void RMGLayout::shapeBases( void )
 		Real widest = flat + swing;
 		if( widest > nearestOther * 0.45f )
 			widest = nearestOther * 0.45f;
+
+		/* The level a base is cut to is the median of the dry ground under its flat and the inner half
+			of its blend, which moves the least earth there: half of it is cut and half filled. It used to
+			be the height of the start's own cell, so a seat on a knoll stood on a raised tray with a rim
+			round it and one in a dip sat in a pit. And the more the ground round the flat differs from
+			that level, the wider the blend,
+			so the ground runs into the base at one slope instead of a ring that is steep where the
+			difference is large. A style and a skeleton keep the start cell's height. */
+		Real level = -1.0f;
+		if( !m_style && !m_skeleton )
+		{
+			Int histogram[256];
+			for( Int k = 0; k < 256; k++ )
+				histogram[k] = 0;
+			Int counted = 0;
+			Real ringDiff = 0.0f;
+			Int ringCount = 0;
+			const Real ringOut = 0.5f * ( flat + blend );
+			const Int box = (Int)ringOut + 1;
+			const Int sx = (Int)( m_starts[i].m_cellX + 0.5f ) + RMG_BORDER_CELLS;
+			const Int sy = (Int)( m_starts[i].m_cellY + 0.5f ) + RMG_BORDER_CELLS;
+			for( Int pass = 0; pass < 2; pass++ )
+			{
+				for( Int dy = -box; dy <= box; dy++ )
+				{
+					for( Int dx = -box; dx <= box; dx++ )
+					{
+						Int x = sx + dx;
+						Int y = sy + dy;
+						if( x < 0 || y < 0 || x >= m_width || y >= m_height )
+							continue;
+						Real d = sqrtf( (Real)( dx * dx + dy * dy ) );
+						Bool under = d <= ringOut;
+						Bool ring = d > flat && d <= ringOut;
+						if( pass == 0 ? !under : !ring )
+							continue;
+						Real shore;
+						insideLake( (Real)( x - RMG_BORDER_CELLS ), (Real)( y - RMG_BORDER_CELLS ), &shore );
+						if( shore < RMG_PAD_SHORE_KEEP )
+							continue;
+						Int h = m_heights[cellIndex( x, y )];
+						if( pass == 0 )
+						{
+							histogram[h]++;
+							counted++;
+						}
+						else
+						{
+							ringDiff += fabsf( (Real)h - level );
+							ringCount++;
+						}
+					}
+				}
+				if( pass == 0 )
+				{
+					if( counted == 0 )
+						break;
+					Int below = 0;
+					Int k = 0;
+					for( ; k < 255; k++ )
+					{
+						below += histogram[k];
+						if( 2 * below >= counted )
+							break;
+					}
+					level = (Real)k;
+				}
+			}
+			if( ringCount > 0 )
+				blend += 2.0f * ringDiff / (Real)ringCount;
+		}
+		m_baseLevels.push_back( level );
 
 		if( blend > nearestOther * 0.9f )
 			blend = nearestOther * 0.9f;
@@ -4016,52 +4500,169 @@ void RMGLayout::connectStarts( void )
 	buildPassability();
 }
 
-/// Cells from the outermost the massif's foot can reach, negative inside it.
+/** Cells from the outermost any lobe's foot can reach on this point's bearing from its middle,
+	negative inside it. Measured along the ray, which on an ellipse no longer than RMG_MASSIF_STRETCH
+	is near enough the distance that keeps a base's ring off the slope. */
 Real RMGLayout::massifClearance( Real cellX, Real cellY ) const
 {
-	Real playable = (Real)m_settings.m_playableCells;
-	Real dx = cellX - playable * 0.5f;
-	Real dy = cellY - playable * 0.5f;
-	return sqrtf( dx * dx + dy * dy ) - playable * RMG_MASSIF_RADIUS * ( 1.0f + RMG_MASSIF_WOBBLE );
+	Real nearest = 1.0e9f;
+	for( UnsignedInt l = 0; l < m_massifLobes.size(); l++ )
+	{
+		const RMGMassifLobe& lobe = m_massifLobes[l];
+		Real dx = cellX - lobe.m_cellX;
+		Real dy = cellY - lobe.m_cellY;
+		Real a = dx * lobe.m_cos + dy * lobe.m_sin;
+		Real b = dy * lobe.m_cos - dx * lobe.m_sin;
+		Real na = a / lobe.m_major;
+		Real nb = b / lobe.m_minor;
+		Real q = sqrtf( na * na + nb * nb );
+		Real slopeOut = 0.5f * ( ( RMG_MASSIF_SLOPE_RIM < 0.5f * lobe.m_minor ? RMG_MASSIF_SLOPE_RIM : 0.5f * lobe.m_minor )
+			- RMG_MASSIF_RIM );
+		if( slopeOut < 0.0f )
+			slopeOut = 0.0f;
+		Real clearance = -lobe.m_minor;
+		if( q >= 0.001f )
+		{
+			Real r = sqrtf( a * a + b * b );
+			clearance = r * ( 1.0f - ( 1.0f + RMG_MASSIF_WOBBLE ) / q ) - slopeOut;
+		}
+		if( clearance < nearest )
+			nearest = clearance;
+	}
+	return nearest;
 }
 
-/** One ramp up the massif for each base, on the bearing from the middle to that base, so every seat
-	has its own way onto the high ground and the same length of climb as the next one. The route
-	search would find a ramp too, but only for a pair it had to join, and it joins them round the
-	foot of the massif rather than over it, which leaves the top as a table nobody can reach. */
+/** A ramp up the massif for each base, from the lobe nearest it, so every seat has its own way onto
+	the high ground and about the same climb as the next one, and one more for a lobe no base is
+	nearest. The route search would find a ramp too, but only for a pair it had to join, and it joins
+	them round the foot of the massif rather than over it, which leaves the top as a table nobody can
+	reach. A ramp leaves on the base's bearing from the lobe's middle or up to RMG_MASSIF_ROAD_SWING
+	steps of eight degrees off it, where the rim is widest: on a stretch where the rim is a slope
+	already the road is graded into the slope rather than cut through a cliff as a notch. */
 void RMGLayout::carveMassifRamps( void )
 {
-	Real playable = (Real)m_settings.m_playableCells;
-	Real centre = playable * 0.5f;
-	Real outer = playable * RMG_MASSIF_RADIUS * ( 1.0f + RMG_MASSIF_WOBBLE );
-	Real inner = playable * RMG_MASSIF_RADIUS * ( 1.0f - RMG_MASSIF_WOBBLE_IN ) - RMG_MASSIF_RIM;
-
+	struct RMGMassifRamp
+	{
+		UnsignedInt m_lobe;
+		UnsignedInt m_start;
+	};
+	std::vector<RMGMassifRamp> planned;
+	std::vector<char> served( m_massifLobes.size(), 0 );
 	for( UnsignedInt i = 0; i < m_starts.size(); i++ )
 	{
-		Real dx = m_starts[i].m_cellX - centre;
-		Real dy = m_starts[i].m_cellY - centre;
+		Real bestInside = -1.0e9f;
+		UnsignedInt bestLobe = 0;
+		for( UnsignedInt l = 0; l < m_massifLobes.size(); l++ )
+		{
+			Real rim;
+			Real inside = massifRim( m_massifLobes[l], m_starts[i].m_cellX, m_starts[i].m_cellY, &rim );
+			if( inside > bestInside )
+			{
+				bestInside = inside;
+				bestLobe = l;
+			}
+		}
+		RMGMassifRamp ramp;
+		ramp.m_lobe = bestLobe;
+		ramp.m_start = i;
+		planned.push_back( ramp );
+		served[bestLobe] = 1;
+	}
+	for( UnsignedInt l = 0; l < m_massifLobes.size(); l++ )
+	{
+		if( served[l] || m_starts.empty() )
+			continue;
+		Real bestInside = -1.0e9f;
+		UnsignedInt bestStart = 0;
+		for( UnsignedInt i = 0; i < m_starts.size(); i++ )
+		{
+			Real rim;
+			Real inside = massifRim( m_massifLobes[l], m_starts[i].m_cellX, m_starts[i].m_cellY, &rim );
+			if( inside > bestInside )
+			{
+				bestInside = inside;
+				bestStart = i;
+			}
+		}
+		RMGMassifRamp ramp;
+		ramp.m_lobe = l;
+		ramp.m_start = bestStart;
+		planned.push_back( ramp );
+	}
+
+	for( UnsignedInt p = 0; p < planned.size(); p++ )
+	{
+		const RMGMassifLobe& lobe = m_massifLobes[planned[p].m_lobe];
+		const UnsignedInt i = planned[p].m_start;
+		const Real centreX = lobe.m_cellX;
+		const Real centreY = lobe.m_cellY;
+		Real dx = m_starts[i].m_cellX - centreX;
+		Real dy = m_starts[i].m_cellY - centreY;
 		Real length = sqrtf( dx * dx + dy * dy );
 		if( length < 1.0f )
 			continue;
+		const Real bearing = ATan2( dy, dx );
+		const Real farthest = 2.0f * lobe.m_major + 40.0f;
+
 		Real ux = dx / length;
 		Real uy = dy / length;
+		Real outer = 0.0f;
+		Real inner = 0.0f;
+		Real bestScore = -1.0e9f;
+		for( Int k = -RMG_MASSIF_ROAD_SWING; k <= RMG_MASSIF_ROAD_SWING; k++ )
+		{
+			const Real angle = bearing + (Real)k * ( PI / 22.5f );
+			const Real cx = Cos( angle );
+			const Real cy = Sin( angle );
+			Real topAt = 0.0f;
+			Real footAt = farthest;
+			for( Real t = 0.0f; t < farthest; t += 1.0f )
+			{
+				Real rim;
+				Real inside = massifRim( lobe, centreX + cx * t, centreY + cy * t, &rim );
+				if( inside >= rim )
+					topAt = t;
+				if( inside <= 0.0f )
+				{
+					footAt = t;
+					break;
+				}
+			}
+			Real score = footAt - topAt - 1.5f * (Real)( k < 0 ? -k : k );
+			if( score > bestScore )
+			{
+				bestScore = score;
+				ux = cx;
+				uy = cy;
+				outer = footAt;
+				inner = topAt;
+			}
+		}
 
-		// Out far enough that the climb is a slope a tank takes, and no further than the base's ring.
+		// Out far enough that the climb is a slope a tank takes, and no nearer any base than its ring.
 		Real foot = outer + 12.0f;
-		if( foot > length - RMG_BLEND_RADIUS )
-			foot = length - RMG_BLEND_RADIUS;
 		Real top = inner - 6.0f;
 		if( top < 2.0f )
 			top = 2.0f;
+		for( ; foot > top; foot -= 1.0f )
+		{
+			Bool clear = TRUE;
+			for( UnsignedInt s = 0; s < m_starts.size() && clear; s++ )
+			{
+				Real fx = centreX + ux * foot - m_starts[s].m_cellX;
+				Real fy = centreY + uy * foot - m_starts[s].m_cellY;
+				clear = fx * fx + fy * fy >= RMG_BLEND_RADIUS * RMG_BLEND_RADIUS;
+			}
+			if( clear )
+				break;
+		}
 		if( foot <= top )
 			continue;
 
-		Real footX = centre + ux * foot + (Real)RMG_BORDER_CELLS;
-		Real footY = centre + uy * foot + (Real)RMG_BORDER_CELLS;
-		Real topX = centre + ux * top + (Real)RMG_BORDER_CELLS;
-		Real topY = centre + uy * top + (Real)RMG_BORDER_CELLS;
-		Real baseX = m_starts[i].m_cellX + (Real)RMG_BORDER_CELLS;
-		Real baseY = m_starts[i].m_cellY + (Real)RMG_BORDER_CELLS;
+		Real footX = centreX + ux * foot + (Real)RMG_BORDER_CELLS;
+		Real footY = centreY + uy * foot + (Real)RMG_BORDER_CELLS;
+		Real topX = centreX + ux * top + (Real)RMG_BORDER_CELLS;
+		Real topY = centreY + uy * top + (Real)RMG_BORDER_CELLS;
 
 		/* A graded road rather than a corridor cut to one width: the climb eases in at both ends,
 			the road opens out towards the foot the way a spur of spoil would, and its sides blend
@@ -4083,8 +4684,8 @@ void RMGLayout::carveMassifRamps( void )
 		for( Int s = 0; s < profileCount; s++ )
 		{
 			Real along = profileFrom + (Real)s;
-			Int cx = (Int)( centre + ux * along + (Real)RMG_BORDER_CELLS + 0.5f );
-			Int cy = (Int)( centre + uy * along + (Real)RMG_BORDER_CELLS + 0.5f );
+			Int cx = (Int)( centreX + ux * along + (Real)RMG_BORDER_CELLS + 0.5f );
+			Int cy = (Int)( centreY + uy * along + (Real)RMG_BORDER_CELLS + 0.5f );
 			if( cx < 0 ) cx = 0;
 			if( cy < 0 ) cy = 0;
 			if( cx >= m_width ) cx = m_width - 1;
@@ -4137,13 +4738,18 @@ void RMGLayout::carveMassifRamps( void )
 					continue;
 				if( m_inLake[cellIndex( x, y )] )
 					continue;
-				Real bx = (Real)x - baseX;
-				Real by = (Real)y - baseY;
-				if( bx * bx + by * by < RMG_BLEND_RADIUS * RMG_BLEND_RADIUS )
+				Bool onBase = FALSE;
+				for( UnsignedInt s = 0; s < m_starts.size() && !onBase; s++ )
+				{
+					Real bx = (Real)x - m_starts[s].m_cellX - (Real)RMG_BORDER_CELLS;
+					Real by = (Real)y - m_starts[s].m_cellY - (Real)RMG_BORDER_CELLS;
+					onBase = bx * bx + by * by < RMG_BLEND_RADIUS * RMG_BLEND_RADIUS;
+				}
+				if( onBase )
 					continue;
 
-				Real px = (Real)x - (Real)RMG_BORDER_CELLS - centre;
-				Real py = (Real)y - (Real)RMG_BORDER_CELLS - centre;
+				Real px = (Real)x - (Real)RMG_BORDER_CELLS - centreX;
+				Real py = (Real)y - (Real)RMG_BORDER_CELLS - centreY;
 				Real along = px * ux + py * uy;
 				Real across = fabsf( px * uy - py * ux );
 				Real t = ( along - top ) / span;		// 0 at the top, 1 at the foot
@@ -4196,8 +4802,8 @@ void RMGLayout::carveMassifRamps( void )
 		}
 
 		RMGPoint ramp;
-		ramp.m_cellX = centre + ux * ( foot + top ) * 0.5f;
-		ramp.m_cellY = centre + uy * ( foot + top ) * 0.5f;
+		ramp.m_cellX = centreX + ux * ( foot + top ) * 0.5f;
+		ramp.m_cellY = centreY + uy * ( foot + top ) * 0.5f;
 		m_ramps.push_back( ramp );
 	}
 
@@ -4808,7 +5414,7 @@ void RMGLayout::holdMoneyWalks( void )
 			/* Clear of the other money only. The sites before it are the starts' discs and the massif,
 				and a dock a cell over the midline sits against its placer's disc more often than not: held
 				to those too, the slide was refused just where it was wanted. */
-			const UnsignedInt firstMoneySite = m_starts.size() + ( m_type->m_massif > 0.0f ? 1 : 0 );
+			const UnsignedInt firstMoneySite = m_starts.size() + m_massifLobes.size();
 			Bool clear = TRUE;
 			for( UnsignedInt s = firstMoneySite; s < m_sites.size() && clear; s++ )
 			{
@@ -6713,7 +7319,8 @@ void RMGLayout::placeShoreWaves( void )
 
 			Int mapX = (Int)(x + 0.5f) + RMG_BORDER_CELLS;
 			Int mapY = (Int)(y + 0.5f) + RMG_BORDER_CELLS;
-			if( mapX < 1 || mapY < 1 || mapX >= m_width - 1 || mapY >= m_height - 1 )
+			// a river's outline runs on into the border, where nobody hears it
+			if( !insidePlayable( mapX, mapY ) )
 				continue;
 
 			AsciiString uniqueID;
@@ -6978,13 +7585,15 @@ void RMGLayout::placeScenery( const UnsignedByte perm[512] )
 				if( nearRamp( (Real)x, (Real)y, RMG_MASSIF_ROCK_CLEAR ) )
 					continue;
 				// Nor round the massif's cliff, where they would stand in a ring drawn with compasses.
-				if( m_type->m_massif > 0.0f )
+				Bool onRim = FALSE;
+				for( UnsignedInt l = 0; l < m_massifLobes.size() && !onRim; l++ )
 				{
-					Real clearance = massifClearance( (Real)x, (Real)y );
-					if( clearance < 3.0f &&
-							clearance > -playable * RMG_MASSIF_RADIUS * ( RMG_MASSIF_WOBBLE + RMG_MASSIF_WOBBLE_IN ) - RMG_MASSIF_RIM - 3.0f )
-						continue;
+					Real rim;
+					Real inside = massifRim( m_massifLobes[l], (Real)x, (Real)y, &rim );
+					onRim = inside > -3.0f && inside < rim + 3.0f;
 				}
+				if( onRim )
+					continue;
 
 				AsciiString uniqueID;
 				uniqueID.format( "Prop %d", propID++ );
@@ -7380,12 +7989,13 @@ void RMGLayout::placeMoney( void )
 	/* The money and the towns level and grade the ground they stand on, and on the massif's edge
 		that turns the cliff into a slope. They keep off it, and off the top as well, which is ground
 		to fight for rather than to farm; the bunkers and the trees placed after may still go there.
-		It is the site after the starts' own, which placeDressing drops once the towns are down. */
-	if( m_type->m_massif > 0.0f )
+		They are the sites after the starts' own, one a lobe, which placeDressing drops once the towns
+		are down. A lobe is reserved as the circle round its long axis. */
+	for( UnsignedInt l = 0; l < m_massifLobes.size(); l++ )
 	{
-		Real middle = (Real)m_settings.m_playableCells * 0.5f;
-		reserveSite( middle, middle, (Real)m_settings.m_playableCells * RMG_MASSIF_RADIUS * ( 1.0f + RMG_MASSIF_WOBBLE )
-								 + RMG_MASSIF_RIM );
+		const RMGMassifLobe& lobe = m_massifLobes[l];
+		reserveSite( lobe.m_cellX, lobe.m_cellY, lobe.m_major * ( 1.0f + RMG_MASSIF_WOBBLE )
+								 + 0.5f * ( RMG_MASSIF_SLOPE_RIM - RMG_MASSIF_RIM ) + RMG_MASSIF_RIM );
 	}
 	placeSupplyAndDerricks();
 }
@@ -7412,8 +8022,7 @@ void RMGLayout::placeDressing( const UnsignedByte perm[512] )
 		placeTowns();
 		m_sites.erase( m_sites.begin() + startRings, m_sites.begin() + startRings + m_starts.size() );
 	}
-	if( m_type->m_massif > 0.0f )
-		m_sites.erase( m_sites.begin() + massifSite );
+	m_sites.erase( m_sites.begin() + massifSite, m_sites.begin() + massifSite + m_massifLobes.size() );
 	if( m_skeleton )
 		return;
 	if( !m_style )
@@ -7577,6 +8186,7 @@ void RMGLayout::build( const RandomMapSettings& settings, Bool skeleton )
 
 	if( m_style )
 		placeBowlStarts();
+	planMassif();
 	buildHeights( perm );
 	placeLakes( perm );
 	m_heights.swap( m_landHeights );
@@ -7595,7 +8205,7 @@ void RMGLayout::build( const RandomMapSettings& settings, Bool skeleton )
 
 	m_ramps.clear();
 	connectStarts();
-	if( m_type->m_massif > 0.0f )
+	if( !m_massifLobes.empty() )
 		carveMassifRamps();
 	// the bowl's ramps, so no rock is set on one
 	for( UnsignedInt i = 0; m_style && i < m_starts.size(); i++ )

@@ -172,6 +172,7 @@ OPTION_BOOL_ACCESSORS( m_explosionDebrisTrails )
 OPTION_BOOL_ACCESSORS( m_mapLight )
 OPTION_BOOL_ACCESSORS( m_teamGlow )
 OPTION_BOOL_ACCESSORS( m_waterFoam )
+OPTION_BOOL_ACCESSORS( m_mapAwareWaveHeading )
 OPTION_BOOL_ACCESSORS( m_groundFoliage )
 OPTION_BOOL_ACCESSORS( m_groundMarks )
 OPTION_BOOL_ACCESSORS( m_firelight )
@@ -750,6 +751,10 @@ const OptionDef TheOptionCatalog[] =
 
 	// Foam, a shore band and the sun's shadow on rivers and lakes; the water asks every frame.  Off
 	// under Classic graphics too.  On Options > Effects beside Soft Shorelines.
+	// Native water steering is an explicit opt-in, independent of menu presets.
+	{ "MapAwareWaveHeading", "", "", OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_mapAwareWaveHeading, set_m_mapAwareWaveHeading },
+
 	{ "WaterFoam",								OPT_WND( "CheckWaterFoam" ), "GUI:WaterFoam",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_waterFoam, set_m_waterFoam },

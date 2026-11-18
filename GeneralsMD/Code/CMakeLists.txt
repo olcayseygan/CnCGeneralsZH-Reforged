@@ -2539,6 +2539,14 @@ if(ZH_GAME_DATA)
 endif()
 # T1c (defect 17): the water grid's step, moved to the top of each logic frame, against the original
 # code's output under EA's one-pass-per-frame loop (Tests/water_grid_oracle.cpp), under catch-up too.
+if(ZH_PLATFORM_LINUX)
+  add_lib_test(test_water_heading_shader ffvertex engineshader sdl3shadercompile)
+  set_target_properties(test_water_heading_shader PROPERTIES CXX_STANDARD 17)
+endif()
+
+add_lib_test(test_water_wave_heading)
+set_target_properties(test_water_wave_heading PROPERTIES CXX_STANDARD 17)
+
 add_lib_test(test_water_grid gameengine)
 target_sources(test_water_grid PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
 set_target_properties(test_water_grid PROPERTIES CXX_STANDARD 17)

@@ -1179,6 +1179,20 @@ add_custom_command(
 add_custom_target(build_fingerprint_header DEPENDS ${ZH_FINGERPRINT_DIR}/BuildFingerprint.stamp)
 add_dependencies(gameengine build_fingerprint_header)
 target_include_directories(gameengine PRIVATE ${ZH_FINGERPRINT_DIR})
+# The fork's own loose textures by name (FileSystem::forkTextures): of a texture name EA's archives ship,
+# only a loose copy on this list is drawn, and the INI CRC hashes their bytes.  Taken from the masters,
+# not from Run/, so no file a player can edit says what is the fork's.  Rewritten only when it changes.
+file(GLOB ZH_FORK_TEXTURES CONFIGURE_DEPENDS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/Data/Art/Textures
+     ${CMAKE_CURRENT_SOURCE_DIR}/Data/Art/Textures/*)
+list(SORT ZH_FORK_TEXTURES)
+set(ZH_FORK_TEXTURE_LINES "")
+foreach(_zh_texture IN LISTS ZH_FORK_TEXTURES)
+  string(TOLOWER "${_zh_texture}" _zh_texture)
+  string(APPEND ZH_FORK_TEXTURE_LINES "\"${_zh_texture}\",\n")
+endforeach()
+file(CONFIGURE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/generated/forktextures/ForkTextures.inc
+     CONTENT "${ZH_FORK_TEXTURE_LINES}")
+target_include_directories(gameengine PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated/forktextures)
 if(ZH_PLATFORM_POSIX)		# bash and perl: the value itself is the same tool on every platform
   # the fingerprint: LF and CRLF copies of the tree agree, one byte or a rename changes it, the header holds it
   add_test(NAME build_fingerprint_check

@@ -25,6 +25,7 @@ found and fixed, EA's own, not port damage.**
 - A custom map whose train or ferry had no track laid out for it crashed the game the moment that transport was sent on its way, a bug as old as EA's release. It now stays where it is and opens its doors.
 - Some Intel and AMD graphics drivers handed the EA logo a picture far smaller than the movie, and copying the frame into it overwrote the game's memory with black pixels: a crash at startup, or a strange one at the first map. The game now refuses such a picture and skips the movie.
 - When the game runs out of memory or meets a bad value deep inside, its crash report now says where.
+- Reskinned units are gone. A bright green Helix or glowing red GLA infantry dropped in as loose files or an extra archive no longer loads, so every player sees the same units, and a game with altered Reforged artwork is refused at the lobby like altered rules.
 
 ## Screen and controls
 

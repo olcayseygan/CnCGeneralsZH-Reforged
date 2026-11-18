@@ -427,24 +427,38 @@ static Bool isSameFile( const FileInfo &left, const FileInfo &right )
 	* logic reads of a model is its bones, never its meshes.
 	* Reading all of them is about 375 MB, so what a model hashed to is kept in the user folder
 	* against the size and write time of the file it came from, and read again only when that file
-	* changes. */
+	* changes.
+	* The fork's own loose textures go in after the models, loose only and through the same cache: of a
+	* name EA ships, the fork's copy is the one loose file the game draws (FileSystem::looseTextureRefused),
+	* so an edited one has to refuse the join like an edited model. */
 //-------------------------------------------------------------------------------------------------
 static void checksumModels( XferCRC &xferCRC )
 {
 	FilenameList models;
 	TheFileSystem->getFileListInDirectory( AsciiString( "Art\\W3D\\" ), AsciiString( "*.w3d" ), models, TRUE );
+	std::vector<AsciiString> files( models.begin(), models.end() );
+	const size_t modelCount = files.size();
+	const std::set<std::string> &forkTextures = FileSystem::forkTextures();
+	for( std::set<std::string>::const_iterator it = forkTextures.begin(); it != forkTextures.end(); ++it )
+	{
+		AsciiString texture( "art\\textures\\" );
+		texture.concat( it->c_str() );
+		files.push_back( texture );
+	}
 
 	const ModelChecksumMap cache = readModelChecksumCache();
 	ModelChecksumMap current;
 	Int modelsRead = 0, modelsCounted = 0;
 
-	for( FilenameListIter it = models.begin(); it != models.end(); ++it )
+	for( size_t i = 0; i < files.size(); ++i )
 	{
-		AsciiString model = *it;
+		AsciiString model = files[i];
 		model.toLower();
 
 		const Bool loose = TheLocalFileSystem->doesFileExist( model.str() );
-		AsciiString source = loose ? model : TheArchiveFileSystem->getRetailArchiveFilenameForFile( model );
+		// a fork texture with no loose copy is drawn from nowhere the CRC could vouch for: left out
+		AsciiString source = loose ? model
+			: i < modelCount ? TheArchiveFileSystem->getRetailArchiveFilenameForFile( model ) : AsciiString::TheEmptyString;
 		if (source.isEmpty())
 			continue;		// only a Reforged archive has it, so a player without one has nothing to hash
 		++modelsCounted;
@@ -482,7 +496,7 @@ static void checksumModels( XferCRC &xferCRC )
 
 	if (modelsRead > 0)
 		writeModelChecksumCache( current );
-	DEBUG_LOG(( "INI CRC covers %d models, %d of them read this start\n", modelsCounted, modelsRead ));
+	DEBUG_LOG(( "INI CRC covers %d models and fork textures, %d of them read this start\n", modelsCounted, modelsRead ));
 }
 
 Int GameEngine::getFramesPerSecondLimit( void )

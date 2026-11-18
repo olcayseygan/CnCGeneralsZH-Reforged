@@ -263,6 +263,11 @@ void Win32BIGFileSystem::init() {
       }
     }
 
+	// A texture EA ships comes from EA's archive: the plain pass is first-wins alphabetically, so a
+	// stray "!skins.big" beside the exe used to claim every unit texture it carried over TexturesZH.big.
+	// Before the Reforged art, which may still go over them.
+	keepRetailTextures();
+
     // ... except where that costs resolution: a number of the base game's textures were shipped
     // downscaled in TexturesZH.big, and load order alone made those the ones the game uses.
     prioritizeLargerFiles(TGA_DIR_PATH, "TexturesZH.big", "Textures.big");

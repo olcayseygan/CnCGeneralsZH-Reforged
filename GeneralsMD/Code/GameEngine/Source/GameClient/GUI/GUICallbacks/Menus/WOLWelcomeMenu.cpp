@@ -41,7 +41,6 @@
 #include "Common/GlobalData.h"
 #include "Common/MessageStream.h"
 #include "Common/RandomValue.h"
-#include "Common/SkirmishPreferences.h"
 #include "Common/UserPreferences.h"
 #include "Common/PlayerTemplate.h"
 #include "GameLogic/AI.h"
@@ -78,8 +77,12 @@
 #include "GameNetwork/GameSpy/BuddyThread.h"
 #include "GameNetwork/GameSpy/ThreadUtils.h"
 #include "GameNetwork/GameSpy/MainMenuUtils.h"
+#include "GameNetwork/GameSpy/LobbyUtils.h"
+#include "GameNetwork/GameSpy/GSConfig.h"
 #include "GameNetwork/Online/OnlineQueues.h"
 #include "GameClient/GadgetPushButton.h"
+#include "GameClient/DisplayStringManager.h"
+#include "Common/QuickmatchPreferences.h"
 #include "GameNetwork/GeneralsOnline/OnlineBridge.h"
 #include "GameNetwork/WOLBrowser/WebBrowser.h"
 
@@ -91,118 +94,55 @@
 // PRIVATE DATA ///////////////////////////////////////////////////////////////////////////////////
 static Bool isShuttingDown = FALSE;
 static Bool buttonPushed = FALSE;
-static char *nextScreen = NULL;
+static const char *nextScreen = NULL;		///< a screen pushed once the hub has popped: the login, after Sign out
 
 // window ids ------------------------------------------------------------------------------
 static NameKeyType parentWOLWelcomeID = NAMEKEY_INVALID;
 static NameKeyType buttonBackID = NAMEKEY_INVALID;
 static NameKeyType buttonQuickMatchID = NAMEKEY_INVALID;
 static NameKeyType buttonLobbyID = NAMEKEY_INVALID;
-static NameKeyType buttonBuddiesID = NAMEKEY_INVALID;
-static NameKeyType buttonLadderID = NAMEKEY_INVALID;
 static NameKeyType buttonMyInfoID = NAMEKEY_INVALID;
-
-static NameKeyType listboxInfoID = NAMEKEY_INVALID;
-static NameKeyType buttonOptionsID = NAMEKEY_INVALID;
+static NameKeyType buttonPlayAIID = NAMEKEY_INVALID;
+static NameKeyType buttonSignOutID = NAMEKEY_INVALID;
 // Window Pointers ------------------------------------------------------------------------
 static GameWindow *parentWOLWelcome = NULL;
 static GameWindow *buttonBack = NULL;
 static GameWindow *buttonQuickMatch = NULL;
 static GameWindow *buttonLobby = NULL;
-static GameWindow *buttonBuddies = NULL;
-static GameWindow *buttonLadder = NULL;
-static GameWindow *buttonMyInfo = NULL;
-static GameWindow *buttonbuttonOptions = NULL;
-static GameWindow *buttonSkins = NULL;		///< -online, made here: the layout has no slot for it
-static GameWindow *buttonPlayAI = NULL;		///< -online, made here under Options, the column's next slot
-static GameWindow *staticTextAIRating = NULL;	///< the AI rating, left of buttonPlayAI
-static WindowLayout *welcomeLayout = NULL;
+static GameWindow *buttonPlayAI = NULL;
 static GameWindow *listboxInfo = NULL;
 
-static GameWindow *staticTextServerName = NULL;
-static GameWindow *staticTextLastUpdated = NULL;
-
-static GameWindow *staticTextLadderWins = NULL;
-static GameWindow *staticTextLadderLosses = NULL;
-static GameWindow *staticTextLadderRank = NULL;
-static GameWindow *staticTextLadderPoints = NULL;
-static GameWindow *staticTextLadderDisconnects = NULL;
-
-static GameWindow *staticTextHighscoreWins = NULL;
-static GameWindow *staticTextHighscoreLosses = NULL;
-static GameWindow *staticTextHighscoreRank = NULL;
-static GameWindow *staticTextHighscorePoints = NULL;
-
-static UnicodeString gServerName;
-void updateServerDisplay(UnicodeString serverName)
+/// the hub's own window by its name in the master, and its id
+static GameWindow *hubWindow( const char *name, NameKeyType *id = NULL )
 {
-	if (staticTextServerName)
-	{
-		GadgetStaticTextSetText(staticTextServerName, serverName);
-	}
-	gServerName = serverName;
+	AsciiString full;
+	full.format( "WOLWelcomeMenu.wnd:%s", name );
+	const NameKeyType key = TheNameKeyGenerator->nameToKey( full );
+	if (id)
+		*id = key;
+	return TheWindowManager->winGetWindowFromId( NULL, key );
 }
 
-/*
-void updateLocalPlayerScores(AsciiString name, const WOL::Ladder *ladder, const WOL::Highscore *highscore)
+
+static Bool s_controlsLive = FALSE;		///< Find match and Browse games as the room list and joins allow
+static Bool s_joiningRoom = FALSE;		///< a chat room join is out (Browse games): the hub waits for its answer
+
+/// Find match also waits out the server's lock on a player who left a ranked match
+static void applyControls( void )
 {
-	if (ladder)
-	{
-		AsciiString a;
-		UnicodeString u;
-
-		a.format("%d", ladder->wins);
-		u.translate(a);
-		GadgetStaticTextSetText(staticTextLadderWins, u);
-
-		a.format("%d", ladder->losses);
-		u.translate(a);
-		GadgetStaticTextSetText(staticTextLadderLosses, u);
-
-		a.format("%d", ladder->rank);
-		u.translate(a);
-		GadgetStaticTextSetText(staticTextLadderRank, u);
-
-		a.format("%d", ladder->points);
-		u.translate(a);
-		GadgetStaticTextSetText(staticTextLadderPoints, u);
-
-		a.format("%d", ladder->disconnects);
-		u.translate(a);
-		GadgetStaticTextSetText(staticTextLadderDisconnects, u);
-	}
-	if (highscore)
-	{
-		AsciiString a;
-		UnicodeString u;
-
-		a.format("%d", highscore->wins);
-		u.translate(a);
-		GadgetStaticTextSetText(staticTextHighscoreWins, u);
-
-		a.format("%d", highscore->losses);
-		u.translate(a);
-		GadgetStaticTextSetText(staticTextHighscoreLosses, u);
-
-		a.format("%d", highscore->rank);
-		u.translate(a);
-		GadgetStaticTextSetText(staticTextHighscoreRank, u);
-
-		a.format("%d", highscore->points);
-		u.translate(a);
-		GadgetStaticTextSetText(staticTextHighscorePoints, u);
-	}
+	if (buttonQuickMatch)
+		buttonQuickMatch->winEnable( s_controlsLive && OnlineGetQuickMatchLockSeconds() == 0 );
+	if (buttonLobby)
+		buttonLobby->winEnable( s_controlsLive );
 }
-*/
-
 
 static void enableControls( Bool state )
 {
-	if (buttonQuickMatch)
-		buttonQuickMatch->winEnable(state);
-	if (buttonLobby)
-		buttonLobby->winEnable(state);
+	s_controlsLive = state;
+	applyControls();
 }
+
+static void freeHubStrings( void );
 
 //-------------------------------------------------------------------------------------------------
 /** This is called when a shutdown is complete for this menu */
@@ -213,11 +153,8 @@ static void shutdownComplete( WindowLayout *layout )
 	isShuttingDown = FALSE;
 
 	// made again by the next init: a push hides this layout and the pop that follows runs init again
-	GameWindow *made[] = { buttonSkins, buttonPlayAI, staticTextAIRating };
-	for (size_t i = 0; i < sizeof(made) / sizeof(made[0]); ++i)
-		if (made[i])
-			TheWindowManager->winDestroy( made[i] );
-	buttonSkins = buttonPlayAI = staticTextAIRating = NULL;
+	UIStyle::onlinePageShutdown( parentWOLWelcome );
+	freeHubStrings();
 
 	// hide the layout
 	layout->hide( TRUE );
@@ -227,7 +164,7 @@ static void shutdownComplete( WindowLayout *layout )
 
 	if (nextScreen != NULL)
 	{
-		TheShell->push(nextScreen);
+		TheShell->push( AsciiString( nextScreen ) );
 	}
 
 	nextScreen = NULL;
@@ -235,11 +172,9 @@ static void shutdownComplete( WindowLayout *layout )
 }  // end if
 
 //-------------------------------------------------------------------------------------------------
-/** Handle Num Players Online data */
+/** The message of the day, in the hub's MOTD card: its first line INK, the rest MUTED, a line that
+	* names its own colour ("\aarrggbbText") in that colour */
 //-------------------------------------------------------------------------------------------------
-
-static Int lastNumPlayersOnline = 0;
-
 static UnsignedByte grabUByte(const char *s)
 {
 	char tmp[5] = "0xff";
@@ -249,249 +184,88 @@ static UnsignedByte grabUByte(const char *s)
 	return b;
 }
 
-static void updateNumPlayersOnline(void)
+static void addMOTDLine( UnicodeString line, Color color )
 {
-	GameWindow *playersOnlineWindow = TheWindowManager->winGetWindowFromId(
-		NULL, NAMEKEY("WOLWelcomeMenu.wnd:StaticTextNumPlayersOnline") );
+	line.trim();
+	if (line.isEmpty())
+		line = UnicodeString(u" ");
+	GadgetListBoxAddEntryText(listboxInfo, line, color, -1, -1);
+}
 
-	if (playersOnlineWindow)
+static void fillMOTD(void)
+{
+	if (!listboxInfo || !TheGameSpyInfo)
+		return;
+	GadgetListBoxReset(listboxInfo);
+	AsciiString aMotd = TheGameSpyInfo->getMOTD();
+	AsciiString trimmedMotd = aMotd;
+	trimmedMotd.trim();
+	// -online: the server's MOTD alone, without EA's "Welcome to Generals Zero Hour Online." over it;
+	// a line of our own when the server sent none
+	UnicodeString headingStr;
+	if (!OnlineIsEnabled())
+		headingStr = TheGameText->fetch("MOTD:NumPlayersHeading");
+	else if (trimmedMotd.isEmpty())
+		headingStr = TheGameText->fetch("GUI:OnlineHubWelcome");
+
+	Bool first = TRUE;
+	UnicodeString line;
+	while (headingStr.nextToken(&line, UnicodeString(u"\n")))
 	{
-		UnicodeString valStr;
-		valStr.format(TheGameText->fetch("GUI:NumPlayersOnline"), lastNumPlayersOnline);
-		GadgetStaticTextSetText(playersOnlineWindow, valStr);
+		addMOTDLine( line, first ? UIStyle::INK : UIStyle::MUTED );
+		first = FALSE;
 	}
 
-	if (listboxInfo && TheGameSpyInfo)
+	AsciiString aLine;
+	while (aMotd.nextToken(&aLine, "\n"))
 	{
-		GadgetListBoxReset(listboxInfo);
-		AsciiString aLine;
-		UnicodeString line;
-		AsciiString aMotd = TheGameSpyInfo->getMOTD();
-		UnicodeString headingStr;
-		//Kris: Patch 1.01 - November 12, 2003
-		//Removed number of players from string, and removed the argument. The number is incorrect anyways...
-		//This was a Harvard initiated fix.
-		headingStr.format(TheGameText->fetch("MOTD:NumPlayersHeading"));
-		// -online: the server's MOTD alone, without EA's "Welcome to Generals Zero Hour Online." over it;
-		// a line of our own when the server sent none
-		AsciiString trimmedMotd = aMotd;
-		trimmedMotd.trim();
-		if (OnlineIsEnabled())
-			headingStr = trimmedMotd.isEmpty() ? TheGameText->fetch("GUI:OnlineHubWelcome") : UnicodeString::TheEmptyString;
-
-		while (headingStr.nextToken(&line, UnicodeString(u"\n")))
+		aLine.trim();
+		Color c = first ? UIStyle::INK : UIStyle::MUTED;
+		first = FALSE;
+		if (aLine.startsWith("\\\\"))
 		{
-			if (line.getCharAt(line.getLength()-1) == '\r')
-				line.removeLastChar();	// there is a trailing '\r'
-
-			line.trim();
-
-			if (line.isEmpty())
-			{
-				line = UnicodeString(u" ");
-			}
-
-			GadgetListBoxAddEntryText(listboxInfo, line, GameSpyColor[GSCOLOR_MOTD_HEADING], -1, -1);
+			aLine = aLine.str()+1;
 		}
-		if (!OnlineIsEnabled())
-			GadgetListBoxAddEntryText(listboxInfo, UnicodeString(u" "), GameSpyColor[GSCOLOR_MOTD_HEADING], -1, -1);
-
-		while (aMotd.nextToken(&aLine, "\n"))
+		else if (aLine.startsWith("\\") && aLine.getLength() > 9)
 		{
-			if (aLine.getCharAt(aLine.getLength()-1) == '\r')
-				aLine.removeLastChar();	// there is a trailing '\r'
-
-			aLine.trim();
-
-			if (aLine.isEmpty())
-			{
-				aLine = " ";
-			}
-
-			Color c = GameSpyColor[GSCOLOR_MOTD];
-			if (aLine.startsWith("\\\\"))
-			{
-				aLine = aLine.str()+1;
-			}
-			else if (aLine.startsWith("\\") && aLine.getLength() > 9)
-			{
-				// take out the hex value from strings starting as "\ffffffffText"
-				UnsignedByte a, r, g, b;
-				a = grabUByte(aLine.str()+1);
-				r = grabUByte(aLine.str()+3);
-				g = grabUByte(aLine.str()+5);
-				b = grabUByte(aLine.str()+7);
-				c = GameMakeColor(r, g, b, a);
-				DEBUG_LOG(("MOTD line '%s' has color %X\n", aLine.str(), c));
-				aLine = aLine.str() + 9;
-			}
-			line = UnicodeString(MultiByteToWideCharSingleLine(aLine.str()).c_str());
-
-			GadgetListBoxAddEntryText(listboxInfo, line, c, -1, -1);
+			// take out the hex value from strings starting as "\ffffffffText"
+			UnsignedByte a, r, g, b;
+			a = grabUByte(aLine.str()+1);
+			r = grabUByte(aLine.str()+3);
+			g = grabUByte(aLine.str()+5);
+			b = grabUByte(aLine.str()+7);
+			c = GameMakeColor(r, g, b, a);
+			aLine = aLine.str() + 9;
 		}
+		addMOTDLine( UnicodeString(MultiByteToWideCharSingleLine(aLine.str()).c_str()), c );
 	}
+
+	if (OnlineIsEnabled())
+		addMOTDLine( TheGameText->fetch("GUI:OnlineHubMotd3"), UIStyle::MUTED );
+
+	// the scroll bar only for a message longer than its card
+	const ListboxData *list = (const ListboxData *)listboxInfo->winGetUserData();
+	const Bool fits = list->totalHeight <= list->displayHeight - TOTAL_OUTLINE_HEIGHT;
+	GameWindow *const bar[] = { list->upButton, list->downButton, list->slider };
+	for (size_t i = 0; i < sizeof( bar ) / sizeof( bar[ 0 ] ); ++i)
+		if (bar[ i ])
+			bar[ i ]->winHide( fits );
 }
 
 void HandleNumPlayersOnline( Int numPlayersOnline )
 {
-	lastNumPlayersOnline = numPlayersOnline;
-	if (lastNumPlayersOnline < 1)
-		lastNumPlayersOnline = 1;
-	updateNumPlayersOnline();
+	fillMOTD();
 }
 
-//-------------------------------------------------------------------------------------------------
-/** Handle Overall Stats data */
-//-------------------------------------------------------------------------------------------------
-static std::map<AsciiString,float> s_winStats;
-static float s_totalWinPercent = 0;
-static Bool s_onlineArmiesShown = TRUE;		///< -online: the armies' answer for this opening is drawn
-
-static const char* FindNextNumber( const char* pStart )
-{
-	const char* pNum = strchr( pStart, '\n' );  //go to next line
-	if( !pNum )
-		return pStart;  //error
-
-	while( !isdigit(*pNum) )
-		++pNum;  //go to next number
-	return pNum;
-}
-
-
-//parse win/loss stats received from GameSpy
+/// GameSpy's daily army win percentages fed a panel the hub no longer has
 void HandleOverallStats( const char* szHTTPStats, unsigned len )
 {
-//x	DEBUG_LOG(("Parsing win percent stats:\n%s\n", szHTTPStats));
-	//find today's stats
-	const char* pToday = strstr( szHTTPStats, "Today" );
-	if( !pToday )
-	{	//error
-		DEBUG_LOG(( "Unable to parse win/loss stats.  Could not find 'Today' in:\n%s\n", szHTTPStats ));
-		return;
-	}
-	s_winStats.clear();
-	s_totalWinPercent = 0;
-
-	//find win/loss for each side
-	for( int i = 0; i < ThePlayerTemplateStore->getPlayerTemplateCount(); i++)
-	{	//get current side (USA, GLA, etc.)
-		const PlayerTemplate* pTemplate = ThePlayerTemplateStore->getNthPlayerTemplate(i);
-		if( !pTemplate->isPlayableSide()  ||  pTemplate->getSide().compare("Boss") == 0 )
-			continue;  //skip non-players
-
-		AsciiString side = pTemplate->getSide();
-		if( side == "America" )
-			side = "USA";  //conform to GameSpy name
-
-		//find this side
-		const char* pSide = strstr( pToday, side.str() );
-		if( pSide == NULL )
-		{	//error, skip this side
-			DEBUG_LOG(( "Unable to parse win/loss stats for %s in:\n%s\n", side.str(), szHTTPStats ));
-			continue;
-		}
-
-		//Note: win% reported by GameSpy = team's wins / #games played by team
-		//      we want win% = team's wins / total # games played by all teams
-		const char* pTotal = FindNextNumber(pSide);
-		const char* pWins = FindNextNumber(pTotal);
-		float percent = atof(pWins) / max(1.0,atof(pTotal));  //max prevents divide by zero
-		s_totalWinPercent += percent;
-
-		s_winStats.insert(std::make_pair( side, percent ));
-//x		DEBUG_LOG(("Added win percent: %s, %d\n", side.str(), percent));
-	} //for i
-} //HandleOverallStats
-
-
-/* -online: the server's games and wins per army in place of GameSpy's page, through EA's own formula.
-	 Every playable side gets a figure, 0 when the answer leaves it out, so no box keeps its raw label;
-	 an answer where nobody played leaves s_winStats empty and the panel hidden. */
-static void HandleOnlineArmyStats( const std::vector<OnlineArmyRow> &rows )
-{
-	s_winStats.clear();
-	s_totalWinPercent = 0;
-	Bool anyGames = FALSE;
-	for (int i = 0; i < ThePlayerTemplateStore->getPlayerTemplateCount(); i++)
-	{
-		const PlayerTemplate* pTemplate = ThePlayerTemplateStore->getNthPlayerTemplate(i);
-		if (!pTemplate->isPlayableSide() || pTemplate->getSide().compare("Boss") == 0)
-			continue;
-		AsciiString side = pTemplate->getSide();
-		float percent = 0;
-		for (size_t r = 0; r < rows.size(); ++r)
-		{
-			if (rows[r].side == side && rows[r].games > 0)
-			{
-				anyGames = TRUE;
-				percent = (float)rows[r].wins / (float)rows[r].games;
-			}
-		}
-		if (side == "America")
-			side = "USA";  // the window's name, as EA spelled it for GameSpy
-		s_totalWinPercent += percent;
-		s_winStats.insert(std::make_pair( side, percent ));
-	}
-	if (!anyGames)
-		s_winStats.clear();
 }
 
-//called from WOLWelcomeMenuInit, and under -online again when the armies' answer lands
-static void updateOverallStats(void)
-{
-	UnicodeString percStr;
-	AsciiString wndName;
-	GameWindow* pWin;
-
-	if( s_totalWinPercent <= 0 )
-		s_totalWinPercent = 1;  //prevent divide by zero
-
-	// No figures (no GameSpy page, an -online answer not in yet, refused or with no games): the twelve
-	// boxes would show their raw "%d%%" label, so the community panel goes instead
-	static const char *community[] = { "WOLWelcomeMenu.wnd:CommunityInfoParent", "WOLWelcomeMenu.wnd:StaticTextCommunity" };
-	for (size_t i = 0; i < sizeof(community) / sizeof(community[0]); ++i)
-	{
-		// the panel and its "Daily Army Win Percentages" heading, which stands outside it
-		GameWindow *win = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY(community[i]) );
-		if (win)
-			win->winHide(s_winStats.empty());
-	}
-	if (s_winStats.empty())
-		return;
-
-	std::map<AsciiString,float>::iterator it;
-	for( it = s_winStats.begin();  it != s_winStats.end();  ++it )
-	{
-		int percent = REAL_TO_INT(100.0f * (it->second / s_totalWinPercent));
-		percStr.format( TheGameText->fetch("GUI:WinPercent"), percent );
-		wndName.format( "WOLWelcomeMenu.wnd:Percent%s", it->first.str() );
-		pWin = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY(wndName) );
-		GadgetCheckBoxSetText( pWin, percStr );
-//x		DEBUG_LOG(("Initialized win percent: %s -> %s %f=%s\n", wndName.str(), it->first.str(), it->second, percStr.str() ));
-	} //for
-} //updateOverallStats
-
-
-//-------------------------------------------------------------------------------------------------
-/** Handle player stats */
-//-------------------------------------------------------------------------------------------------
-
+/// GameSpy's own stats filled a player panel on the hub and on Quick Match; neither has one now (the hub's
+/// cards and Quick Match's header read OnlineGetPlayerInfo each frame)
 void UpdateLocalPlayerStats(void)
 {
-
-	GameWindow *welcomeParent = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY("WOLWelcomeMenu.wnd:WOLWelcomeMenuParent") );
-
-	if (welcomeParent)
-	{
-		PopulatePlayerInfoWindows( "WOLWelcomeMenu.wnd" );
-	}
-	else
-	{
-		PopulatePlayerInfoWindows( "WOLQuickMatchMenu.wnd" );
-	}
-
-	return;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -501,6 +275,32 @@ void UpdateLocalPlayerStats(void)
 //-------------------------------------------------------------------------------------------------
 static Bool s_aiAsked = FALSE;							///< ai.start is out
 static Int s_aiArmy = PLAYERTEMPLATE_RANDOM;	///< the army it named, which the player then plays
+static UnicodeString s_aiRefusal;					///< why the last Play did not start, shown on the card over Play
+static Bool s_cardsDirty = TRUE;						///< the cards' words want laying out again
+static Bool s_playOnEntry = FALSE;					///< WOLWelcomeMenuStartPlayVsAIOnEntry: the next init presses Play
+
+/// the army picked on the Quick Match page, which Play vs AI plays too: a player template, or
+/// PLAYERTEMPLATE_RANDOM for -1 and for any army the page does not offer (it offers USA, China and GLA
+/// and their generals: no Turkiye, no Boss)
+static Int quickMatchArmy( void )
+{
+	if (TheGameSpyInfo == NULL)
+		return PLAYERTEMPLATE_RANDOM;
+	QuickMatchPreferences pref;
+	const Int pick = pref.getSide();
+	const PlayerTemplate *army = pick >= 0 && pick < ThePlayerTemplateStore->getPlayerTemplateCount()
+		? ThePlayerTemplateStore->getNthPlayerTemplate( pick ) : NULL;
+	if (army == NULL || !army->isPlayableSide() || army->getSide() == "Boss")
+		return PLAYERTEMPLATE_RANDOM;
+	const AsciiString base = army->getBaseSide();
+	return base == "America" || base == "China" || base == "GLA" ? pick : PLAYERTEMPLATE_RANDOM;
+}
+
+/// still signed in: a disconnect on a page over the hub resets TheGameSpyInfo (no profile) and pops back here
+static Bool signedIn( void )
+{
+	return TheGameSpyInfo && TheGameSpyInfo->getLocalProfileID() != 0 && !TheGameSpyInfo->isDisconnectedAfterGameStart( NULL );
+}
 
 /* The match: slot 0 the player in that army, slot 1 the computer at the server's rating, on the rung
 	 nearest it as -airating seats it, its army, both colours and both start spots drawn from the seed.  The
@@ -523,9 +323,10 @@ static Bool startAIMatch( const OnlineAIMatch &ai )
 	TheSkirmishGameInfo->reset();
 	TheSkirmishGameInfo->enterGame();
 
-	SkirmishPreferences prefs;
+	// the seat carries the signed-in nick: the skirmish name defaults to the PC's, which the score
+	// screen would then show
 	GameSlot player;
-	player.setState( SLOT_PLAYER, prefs.getUserName() );
+	player.setState( SLOT_PLAYER, UnicodeString( MultiByteToWideCharSingleLine( TheGameSpyInfo->getLocalName().str() ).c_str() ) );
 	player.setPlayerTemplate( s_aiArmy );
 	player.setColor( -1 );
 	player.setStartPos( -1 );
@@ -567,13 +368,13 @@ void WOLPlayVsAI( void )
 {
 	if (s_aiAsked)
 		return;
-	SkirmishPreferences prefs;
-	s_aiArmy = prefs.getPreferredFaction();		// Random when none is saved, or a pool of them
+	s_aiArmy = quickMatchArmy();
 	const PlayerTemplate *army = s_aiArmy >= 0 ? ThePlayerTemplateStore->getNthPlayerTemplate( s_aiArmy ) : NULL;
 	OnlineRequestAIMatch( army ? army->getName() : AsciiString( "Random" ) );
 	s_aiAsked = TRUE;
 }
 
+/// the answer to Play: the match starts, or the reason it did not goes on the Play vs AI card
 Bool WOLPlayVsAIUpdate( void )
 {
 	if (!s_aiAsked)
@@ -596,11 +397,12 @@ Bool WOLPlayVsAIUpdate( void )
 	}
 	else if (state == ONLINE_AI_REFUSED)
 	{
+		// a reason the strings name has its own sentence; any other is quoted in the general one
 		AsciiString label;
 		label.format( "GUI:OnlineAIRefused_%s", ai.reason.str() );
-		Bool known = FALSE;
-		what = TheGameText->fetch( label, &known );
-		if (!known)
+		if (UIStyle::hasText( label.str() ))
+			what = TheGameText->fetch( label );
+		else
 		{
 			UnicodeString reason;
 			reason.translate( ai.reason );
@@ -608,68 +410,605 @@ Bool WOLPlayVsAIUpdate( void )
 		}
 	}
 	if (!what.isEmpty())
-		GSMessageBoxOk( TheGameText->fetch( "GUI:GSErrorTitle" ), what );
+	{
+		DEBUG_LOG(("ONLINE AI REFUSED %s\n", WideCharAsUtf8( what.str() ).str()));
+		s_aiRefusal = what;
+		s_cardsDirty = TRUE;
+	}
 	return FALSE;
 }
 
-/* What the hub shows beside the button: the speed, then the last match's verdict this sign-in ("AI rating
-	 12.40 -> 14.10", or why it was not rated), else the rating auth.ok brought; under it the games played
-	 against the AI and the share won.  The strings say 1.5x, which is NATIVE_GAME_SPEED_PERCENT, the speed
-	 startAIMatch plays at. */
-UnicodeString WOLAIRatingText( void )
+/// the score screen's Play again: the hub's next init presses Play as the player would
+void WOLWelcomeMenuStartPlayVsAIOnEntry( void )
 {
-	UnicodeString text;
-	OnlinePlayerInfo card;
-	const Bool rated = TheGameSpyInfo && OnlineGetPlayerInfo( TheGameSpyInfo->getLocalName(), card ) && card.hasAIRating;
-	OnlineAIVerdict verdict;
-	if (OnlineGetAIVerdict( verdict ))
-	{
-		if (verdict.rated)
-			text.format( TheGameText->fetch( "GUI:OnlineAIRated" ), verdict.before, verdict.after );
-		else
-		{
-			UnicodeString reason;
-			reason.translate( verdict.reason );
-			text.format( TheGameText->fetch( "GUI:OnlineAIUnrated" ), reason.str() );
-		}
-	}
-	else if (rated)
-		text.format( TheGameText->fetch( "GUI:OnlineAIRating" ), card.aiRating );
-	else
-		text = TheGameText->fetch( "GUI:OnlineAISpeed" );
-	if (rated && card.aiGames > 0)
-	{
-		const Int won = (card.aiWins * 100 + card.aiGames / 2) / card.aiGames;
-		UnicodeString games;
-		if (card.aiGames == 1)
-			games.format( TheGameText->fetch( "GUI:OnlineAIGame" ), won );
-		else
-			games.format( TheGameText->fetch( "GUI:OnlineAIGames" ), card.aiGames, won );
-		text.concat( L'\n' );
-		text.concat( games );
-	}
+	s_playOnEntry = TRUE;
+}
+
+static void pressPlay( void )
+{
+	s_aiRefusal.clear();
+	s_cardsDirty = TRUE;
+	WOLPlayVsAI();
+	if (buttonPlayAI)
+		buttonPlayAI->winEnable( FALSE );		// the update wakes it when the answer is in
+}
+
+//-------------------------------------------------------------------------------------------------
+// The hub's cards (ONLINE-UI-REDESIGN.md "Hub", experiments/online-redesign/hub.html), drawn in code
+// behind the master's buttons on the master's own boxes.  Every length is the mockup's at 1080 through
+// UIStyle::px, the scale the master's boxes were fitted at; the lettering shrinks with them at 4:3
+// (hubPoints), as the master's own does, so a card's words fit the card the master fitted.
+//-------------------------------------------------------------------------------------------------
+enum { CARD_FACTS = 3, RECENT_ROWS = 5 };
+static const Real FACT_WIDTH = 190.0f;
+static const Real WIDE_FACT_WIDTH = 250.0f;		///< Custom games' one fact, whose label is long in Turkish
+static const Real EXPLAIN_TOP = 238.0f;			///< a card's paragraph, from the card's top
+static const Real EXPLAIN_GAP = 6.0f;				///< between the paragraph's last line and the card's button
+
+struct HubCard
+{
+	GameWindow *window;
+	Bool portraitColumn;				///< Play vs AI and Quick Match keep the rank portrait's column
+	const Image *portrait;			///< NULL for an unranked player, who shows none
+	Color explainColor;
+	DisplayString *title, *lead, *label, *figure, *tier, *explain;
+	DisplayString *factLabel[ CARD_FACTS ], *factValue[ CARD_FACTS ];
+	Int facts;
+	Real factWidth;							///< the facts' column at 1080
+	Int explainRoom;						///< pixels from the paragraph's top to the button under it
+};
+enum { CARD_AI, CARD_QUICK_MATCH, CARD_CUSTOM, CARD_COUNT };
+static HubCard s_cards[ CARD_COUNT ];
+
+/// a recent match's cells, left to right as the mockup's row
+enum RecentCell { CELL_CHIP, CELL_MODE, CELL_OPPONENT, CELL_RATING, CELL_MAP, CELL_CHANGE, CELL_AGE, CELL_COUNT };
+/// the cells' widths at 1080 (the rating shares the opponent's), 1080 in all, each padded CELL_PAD either side
+static const Real CELL_WIDTH[] = { 110.0f, 160.0f, 300.0f, 0.0f, 240.0f, 120.0f, 150.0f };
+static const Real CELL_PAD = 10.0f;
+static Int s_cellWidth[ CELL_COUNT ];		///< on this screen: the chip's as wide as its widest result, taken from the map's
+static DisplayString *s_recent[ RECENT_ROWS ][ CELL_COUNT ];
+static Bool s_recentWon[ RECENT_ROWS ];
+static Color s_recentChange[ RECENT_ROWS ];
+static Int s_recentRows = 0;
+static DisplayString *s_recentTitle = NULL;
+static DisplayString *s_recentLine = NULL;		///< no matches, or no answer
+static DisplayString *s_motdTitle = NULL;
+static GameWindow *s_cardRecent = NULL;
+static GameWindow *s_cardMOTD = NULL;
+static UnsignedInt s_cardsSerial = 0;
+static Int s_cardsCounts[ 3 ];
+static Int s_cardsLock = 0;					///< the Quick Match lock's seconds the card last showed
+static UnsignedInt s_recentSerial = 0;		///< OnlineGetHistorySerial as the rows were last built
+static Bool s_recentStale = TRUE;				///< new strings: build the rows whatever the serial says
+
+static std::vector<DisplayString *> s_strings;		///< every string the cards made, freed together
+
+static DisplayString *hubString( GameFont *font )
+{
+	DisplayString *text = TheDisplayStringManager->newDisplayString();
+	text->setFont( font );
+	s_strings.push_back( text );
 	return text;
 }
 
-/* The line is as long as its words and ends against the button, so a short rating does not float away
-	 from it and a Turkish one has room.  Cheap to call every update: it only lays out a change. */
-static void showAIRating( void )
+static void freeHubStrings( void )
 {
-	if (!staticTextAIRating || !buttonPlayAI)
+	for (size_t i = 0; i < s_strings.size(); ++i)
+		TheDisplayStringManager->freeDisplayString( s_strings[ i ] );
+	s_strings.clear();
+	memset( s_cards, 0, sizeof( s_cards ) );
+	memset( s_recent, 0, sizeof( s_recent ) );
+	s_recentTitle = s_recentLine = s_motdTitle = NULL;
+	s_recentRows = 0;
+}
+
+/// a layout's points on the cards: UIStyle's size at 16:9 and wider, shrunk with the fitted board at 4:3
+static Int hubPoints( Int points )
+{
+	return max( 1, REAL_TO_INT( points * UIStyle::px( 1080.0f ) / (Real)UIStyle::tallPx( 1080.0f ) + 0.5f ) );
+}
+static GameFont *bodyFont( void )			{ return UIStyle::readableFont( hubPoints( UIStyle::TEXT_BODY ) ); }
+/// a card's heading, two points over the body's size whatever the readable floor grew the body to
+/// (UIStyle::sectionFont's rule on the hub's own body): on hubPoints( TEXT_STRONG ) alone it came out
+/// at 14 pixels over an 18 pixel body at 1280x720
+static GameFont *headingFont( void )
+{
+	const Int bodyHeight = bodyFont()->height;
+	Int bodyPoints = hubPoints( UIStyle::TEXT_BODY );
+	while (UIStyle::font( bodyPoints )->height < bodyHeight)
+		++bodyPoints;
+	return UIStyle::font( bodyPoints + UIStyle::TEXT_STRONG - UIStyle::TEXT_BODY );
+}
+static GameFont *chipFont( void )			{ return UIStyle::readableFont( hubPoints( UIStyle::TEXT_SMALL ), TRUE ); }
+
+static void makeCard( HubCard &card, const char *window, const char *button, const char *title, const char *lead,
+	const char *label, Bool portraitColumn, Real factWidth, Int facts, const char *const factKeys[] )
+{
+	card.window = hubWindow( window );
+	card.portraitColumn = portraitColumn;
+	card.portrait = NULL;
+	card.explainColor = UIStyle::MUTED;
+	card.factWidth = factWidth;
+	Int w = 0, h = 0;
+	if (card.window)
+		card.window->winGetSize( &w, &h );
+	// the paragraph has the card from its top to the button the master put under it
+	card.explainRoom = h - UIStyle::px( EXPLAIN_TOP );
+	GameWindow *action = hubWindow( button );
+	if (card.window && action)
+	{
+		Int cardX, cardY, buttonX, buttonY;
+		card.window->winGetScreenPosition( &cardX, &cardY );
+		action->winGetScreenPosition( &buttonX, &buttonY );
+		card.explainRoom = buttonY - cardY - UIStyle::px( EXPLAIN_TOP + EXPLAIN_GAP );
+	}
+	GameFont *body = bodyFont();
+	const Int inner = w - UIStyle::px( 48.0f );
+	card.title = hubString( headingFont() );
+	card.title->setText( UIStyle::fitKey( title, headingFont(), inner ) );
+	card.lead = hubString( body );
+	card.lead->setText( UIStyle::fitKey( lead, body, inner ) );
+	// the figure's column runs from the portrait's right (or the card's inset) to the facts
+	const Int figureLeft = UIStyle::px( portraitColumn ? 148.0f : 24.0f );
+	const Int figureWidth = w - UIStyle::px( 24.0f + factWidth + 12.0f ) - figureLeft;
+	card.label = hubString( body );
+	card.label->setText( label ? UIStyle::fitKey( label, body, figureWidth ) : UnicodeString::TheEmptyString );
+	card.figure = hubString( UIStyle::titleFont( hubPoints( UIStyle::TEXT_DISPLAY ) ) );
+	card.tier = hubString( body );
+	card.explain = hubString( body );
+	card.explain->setWordWrap( inner );
+	card.facts = facts;
+	for (Int i = 0; i < facts; ++i)
+	{
+		card.factLabel[ i ] = hubString( body );
+		card.factLabel[ i ]->setText( UIStyle::fitKey( factKeys[ i ], body, UIStyle::px( factWidth - 60.0f ) ) );
+		card.factValue[ i ] = hubString( body );
+	}
+}
+
+static void drawModeCard( const HubCard &card, Int x, Int y, Int w )
+{
+	const Int left = x + UIStyle::px( 24.0f );
+	UIStyle::heading( card.title, left, y + UIStyle::px( 22.0f ) );
+	card.lead->draw( left, y + UIStyle::px( 56.0f ), UIStyle::MUTED, UIStyle::SHADOW );
+	TheDisplay->drawFillRect( left, y + UIStyle::px( 92.0f ), w - UIStyle::px( 48.0f ), 1, UIStyle::GRID );
+
+	Int figureX = left;
+	if (card.portraitColumn)
+	{
+		const Int top = y + UIStyle::px( 112.0f );
+		const Int size = UIStyle::px( 104.0f );
+		if (card.portrait)
+			TheDisplay->drawImage( card.portrait, left, top, left + size, top + size );
+		figureX = x + UIStyle::px( 148.0f );
+	}
+	card.label->draw( figureX, y + UIStyle::px( 112.0f ), UIStyle::MUTED, UIStyle::SHADOW );
+	card.figure->draw( figureX, y + UIStyle::px( 136.0f ), UIStyle::INK, UIStyle::SHADOW );
+	card.tier->draw( figureX, y + UIStyle::px( 204.0f ), UIStyle::INK, UIStyle::SHADOW );
+
+	const Int factsX = x + w - UIStyle::px( 24.0f + card.factWidth );
+	for (Int i = 0; i < card.facts; ++i)
+		UIStyle::fact( card.factLabel[ i ], card.factValue[ i ], factsX, y + UIStyle::px( 106.0f + 36.0f * i ),
+			UIStyle::px( card.factWidth ), UIStyle::px( 36.0f ) );
+
+	card.explain->draw( left, y + UIStyle::px( EXPLAIN_TOP ), card.explainColor, UIStyle::SHADOW );
+}
+
+/// a cell's words centred on the row, from x, or ending at x when right
+static void drawCell( DisplayString *text, Int x, Int top, Int height, Color color, Bool right = FALSE )
+{
+	Int w, h;
+	text->getSize( &w, &h );
+	text->draw( right ? x - w : x, top + ( height - h ) / 2, color, UIStyle::SHADOW );
+}
+
+static void drawRecent( Int x, Int y, Int w )
+{
+	UIStyle::heading( s_recentTitle, x + UIStyle::px( 24.0f ), y + UIStyle::px( 20.0f ) );
+	const Int rowTop = y + UIStyle::px( 60.0f );
+	const Int rowHeight = UIStyle::px( 44.0f );
+	if (s_recentRows == 0)
+	{
+		drawCell( s_recentLine, x + UIStyle::px( 24.0f ), rowTop, rowHeight, UIStyle::MUTED );
 		return;
-	const UnicodeString text = WOLAIRatingText();
-	if (text == GadgetStaticTextGetText( staticTextAIRating ))
+	}
+	const Int rowX = x + UIStyle::px( 14.0f );
+	const Int pad = UIStyle::px( CELL_PAD );
+	Int start[ CELL_COUNT + 1 ];
+	start[ 0 ] = rowX;
+	for (Int c = 0; c < CELL_COUNT; ++c)
+		start[ c + 1 ] = start[ c ] + s_cellWidth[ c ];
+	for (Int r = 0; r < s_recentRows; ++r)
+	{
+		DisplayString **cell = s_recent[ r ];
+		const Int top = rowTop + r * rowHeight;
+		Int w0, h0;
+		cell[ CELL_CHIP ]->getSize( &w0, &h0 );
+		const Int chipHeight = h0 + UIStyle::tallPx( 5.0f ) + UIStyle::tallPx( 4.0f );
+		UIStyle::chip( cell[ CELL_CHIP ], start[ CELL_CHIP ] + pad, top + ( rowHeight - chipHeight ) / 2,
+			s_recentWon[ r ] ? UIStyle::GOLD : UIStyle::MUTED, s_recentWon[ r ] ? UIStyle::GOLD : UIStyle::FRAME );
+		drawCell( cell[ CELL_MODE ], start[ CELL_MODE ] + pad, top, rowHeight, UIStyle::MUTED );
+		drawCell( cell[ CELL_OPPONENT ], start[ CELL_OPPONENT ] + pad, top, rowHeight, UIStyle::INK );
+		cell[ CELL_OPPONENT ]->getSize( &w0, &h0 );
+		drawCell( cell[ CELL_RATING ], start[ CELL_OPPONENT ] + pad + w0 + UIStyle::px( 6.0f ), top, rowHeight, UIStyle::MUTED );
+		drawCell( cell[ CELL_MAP ], start[ CELL_MAP ] + pad, top, rowHeight, UIStyle::INK );
+		drawCell( cell[ CELL_CHANGE ], start[ CELL_AGE ] - pad, top, rowHeight, s_recentChange[ r ], TRUE );
+		drawCell( cell[ CELL_AGE ], start[ CELL_COUNT ] - pad, top, rowHeight, UIStyle::MUTED, TRUE );
+		TheDisplay->drawFillRect( rowX, top + rowHeight - 1, start[ CELL_COUNT ] - rowX, 1, UIStyle::GRID );
+	}
+}
+
+/// every card's draw: the card's box, then what it holds
+static void drawHubCard( GameWindow *window, WinInstanceData *instData )
+{
+	Int x, y, w, h;
+	window->winGetScreenPosition( &x, &y );
+	window->winGetSize( &w, &h );
+	UIStyle::panel( x, y, w, h, UIStyle::PANEL );
+	if (s_strings.empty())
 		return;
-	GadgetStaticTextSetText( staticTextAIRating, text );
-	TextData *data = (TextData *)staticTextAIRating->winGetUserData();
-	Int textW = 0, textH = 0, bx = 0, by = 0, w = 0, h = 0;
-	if (data && data->text)
-		data->text->getSize( &textW, &textH );
-	buttonPlayAI->winGetPosition( &bx, &by );
-	staticTextAIRating->winGetSize( &w, &h );
-	const Int pad = UIStyle::px( 24.0f );		// W3DGadgetStaticTextDraw wraps 10 short of the width
-	staticTextAIRating->winSetPosition( bx - textW - pad, by );
-	staticTextAIRating->winSetSize( textW + pad, h );
+	for (Int c = 0; c < CARD_COUNT; ++c)
+	{
+		if (s_cards[ c ].window == window)
+			drawModeCard( s_cards[ c ], x, y, w );
+	}
+	if (window == s_cardRecent)
+		drawRecent( x, y, w );
+	if (window == s_cardMOTD)
+		UIStyle::heading( s_motdTitle, x + UIStyle::px( 24.0f ), y + UIStyle::px( 20.0f ) );
+}
+
+/// the header (wordmark and the player's line) on the see-through ButtonHolder, which draws over the
+/// panel; the master's StaticTextTitle and HeaderRule draw the title and its rule
+static void drawHubHeader( GameWindow *window, WinInstanceData *instData )
+{
+	UIStyle::onlineHeader( UnicodeString::TheEmptyString, UnicodeString::TheEmptyString );
+}
+
+static void makeCards( void )
+{
+	freeHubStrings();
+	static const char *const aiFacts[] = { "GUI:OnlineGamesLabel", "GUI:OnlineWinRateLabel", "GUI:OnlineSpeedLabel" };
+	static const char *const qmFacts[] = { "GUI:OnlinePlaceLabel", "GUI:OnlineHubRecord", "GUI:OnlineHubInQueue" };
+	// the client knows players online and open games, not who sits in a room or plays: one fact
+	static const char *const customFacts[] = { "GUI:OnlineLoginOnlineNow" };
+	makeCard( s_cards[ CARD_AI ], "CardPlayVsAI", "ButtonPlayVsAI", "GUI:OnlineHubVsAITitle", "GUI:OnlineHubVsAILead",
+		"GUI:OnlineAIRatingLabel", TRUE, FACT_WIDTH, 3, aiFacts );
+	makeCard( s_cards[ CARD_QUICK_MATCH ], "CardQuickMatch", "ButtonQuickMatch", "GUI:OnlineQuickMatchLabel",
+		"GUI:OnlineHubQuickMatchLead", "GUI:OnlineLadderRatingLabel", TRUE, FACT_WIDTH, 3, qmFacts );
+	makeCard( s_cards[ CARD_CUSTOM ], "CardCustom", "ButtonCustomMatch", "GUI:OnlineHubCustomTitle", "GUI:OnlineHubCustomLead",
+		"GUI:OnlineOpenGamesLabel", FALSE, WIDE_FACT_WIDTH, 1, customFacts );
+	// the speed every Play vs AI match plays at, startAIMatch's
+	UnicodeString speed;
+	speed.format( u"%d.%dx", NATIVE_GAME_SPEED_PERCENT / 100, NATIVE_GAME_SPEED_PERCENT % 100 / 10 );
+	s_cards[ CARD_AI ].factValue[ 2 ]->setText( speed );
+
+	s_cardRecent = hubWindow( "CardRecent" );
+	s_cardMOTD = hubWindow( "CardMOTD" );
+	Int w = 0, h = 0;
+	if (s_cardRecent)
+		s_cardRecent->winGetSize( &w, &h );
+	s_recentTitle = hubString( headingFont() );
+	s_recentTitle->setText( UIStyle::fitKey( "GUI:OnlineHubRecent", headingFont(), w - UIStyle::px( 48.0f ) ) );
+	s_recentLine = hubString( bodyFont() );
+	for (Int r = 0; r < RECENT_ROWS; ++r)
+		for (Int c = 0; c < CELL_COUNT; ++c)
+			s_recent[ r ][ c ] = hubString( c == CELL_CHIP ? chipFont() : bodyFont() );
+	// the cells on this screen, each edge rounded once so the row keeps its width; the result column
+	// as wide as its widest chip (Turkish's loss outgrows "Loss"), the extra taken from the map's
+	Real at = 0.0f;
+	for (Int c = 0; c < CELL_COUNT; ++c)
+	{
+		s_cellWidth[ c ] = UIStyle::px( at + CELL_WIDTH[ c ] ) - UIStyle::px( at );
+		at += CELL_WIDTH[ c ];
+	}
+	static const char *const results[] = { "GUI:OnlineWinLabel", "GUI:OnlineLossLabel" };
+	Int widestChip = 0;
+	for (size_t i = 0; i < sizeof( results ) / sizeof( results[ 0 ] ); ++i)
+	{
+		s_recent[ 0 ][ CELL_CHIP ]->setText( TheGameText->fetch( results[ i ] ) );
+		Int chipWidth, chipHeight;
+		s_recent[ 0 ][ CELL_CHIP ]->getSize( &chipWidth, &chipHeight );
+		widestChip = max( widestChip, chipWidth + 2 * UIStyle::tallPx( 8.0f ) );		// UIStyle::chip's sides
+	}
+	const Int grown = UIStyle::px( CELL_PAD ) + widestChip - s_cellWidth[ CELL_CHIP ];
+	if (grown > 0)
+	{
+		s_cellWidth[ CELL_CHIP ] += grown;
+		s_cellWidth[ CELL_MAP ] -= grown;
+	}
+	if (s_cardMOTD)
+		s_cardMOTD->winGetSize( &w, &h );
+	UnicodeString from;
+	from.format( TheGameText->fetch( "GUI:OnlineHubFrom" ), LobbyServerLabel().str() );
+	s_motdTitle = hubString( headingFont() );
+	s_motdTitle->setText( UIStyle::fitText( from, headingFont(), w - UIStyle::px( 48.0f ) ) );
+
+	GameWindow *boxes[] = { s_cards[ CARD_AI ].window, s_cards[ CARD_QUICK_MATCH ].window, s_cards[ CARD_CUSTOM ].window,
+		s_cardRecent, s_cardMOTD };
+	for (size_t i = 0; i < sizeof( boxes ) / sizeof( boxes[ 0 ] ); ++i)
+		if (boxes[ i ])
+			boxes[ i ]->winSetDrawFunc( drawHubCard );
+	s_cardsDirty = TRUE;
+	s_recentStale = TRUE;
+}
+
+/// key's "<key>_Short" form, or empty when the strings have none
+static UnicodeString shortFormOf( const char *key )
+{
+	AsciiString shortKey;
+	shortKey.format( "%s_Short", key );
+	return UIStyle::hasText( shortKey.str() ) ? TheGameText->fetch( shortKey ) : UnicodeString::TheEmptyString;
+}
+
+/** A card's paragraph in the room over its button: the text, else its short form, in the body face;
+	* then in each smaller size down to the layout's own body size, the size the master's fit gives (at
+	* 1280x720 and at 4:3 the readable floor grows the body face past what the room holds). */
+static void fitParagraph( HubCard &card, const UnicodeString &text, const UnicodeString &shortForm )
+{
+	std::vector<GameFont *> faces( 1, bodyFont() );
+	for (Int points = hubPoints( UIStyle::TEXT_BODY ); ; ++points)
+	{
+		GameFont *face = UIStyle::font( points );
+		if (face == NULL || face->height >= faces[ 0 ]->height)
+			break;
+		faces.insert( faces.begin() + 1, face );		// largest of the smaller sizes first
+	}
+	for (size_t i = 0; i < faces.size(); ++i)
+	{
+		card.explain->setFont( faces[ i ] );
+		const UnicodeString *forms[] = { &text, &shortForm };
+		for (size_t f = 0; f < sizeof( forms ) / sizeof( forms[ 0 ] ); ++f)
+		{
+			if (forms[ f ]->isEmpty())
+				continue;
+			card.explain->setText( *forms[ f ] );
+			Int width, height;
+			card.explain->getSize( &width, &height );
+			if (height <= card.explainRoom)
+				return;
+		}
+	}
+}
+
+/// the three cards' numbers, laid out again when the player's numbers, the counts or the army change
+static void refreshCards( void )
+{
+	if (s_strings.empty() || TheGameSpyInfo == NULL)
+		return;
+	OnlinePlayerInfo info;
+	OnlineGetPlayerInfo( TheGameSpyInfo->getLocalName(), info );
+	Int counts[ 3 ];
+	if (!OnlineGetCounts( counts[ 0 ], counts[ 1 ], counts[ 2 ] ))
+		counts[ 0 ] = counts[ 1 ] = counts[ 2 ] = -1;
+	const Int lock = OnlineGetQuickMatchLockSeconds();
+	if (!s_cardsDirty && info.serial == s_cardsSerial && memcmp( counts, s_cardsCounts, sizeof( counts ) ) == 0
+		&& lock == s_cardsLock)
+		return;
+	s_cardsDirty = FALSE;
+	s_cardsSerial = info.serial;
+	memcpy( s_cardsCounts, counts, sizeof( counts ) );
+	s_cardsLock = lock;
+
+	const UnicodeString none( u"\x2013" );		// an en dash for a number nobody sent
+	const Int army = quickMatchArmy();
+	const AsciiString side = army >= 0 ? ThePlayerTemplateStore->getNthPlayerTemplate( army )->getBaseSide() : AsciiString( "Random" );
+	UnicodeString text;
+
+	HubCard &ai = s_cards[ CARD_AI ];
+	const UIStyle::RatingTier aiTier = UIStyle::ratingTier( info.aiRating, info.hasAIRating ? info.aiGames : -1 );
+	ai.portrait = UIStyle::tierImage( aiTier, side );
+	ai.figure->setText( info.hasAIRating ? UIStyle::ratingText( info.aiRating ) : none );
+	ai.tier->setText( OnlineTierName( UIStyle::tierKey( aiTier ) ) );
+	ai.factValue[ 0 ]->setText( info.hasAIRating ? UIStyle::grouped( info.aiGames ) : none );
+	ai.factValue[ 1 ]->setText( info.hasAIRating && info.aiGames > 0
+		? UIStyle::percentText( UIStyle::percent( info.aiWins, info.aiGames ) ) : none );
+	ai.explainColor = s_aiRefusal.isEmpty() ? UIStyle::MUTED : UIStyle::INK;
+	if (s_aiRefusal.isEmpty())
+		fitParagraph( ai, TheGameText->fetch( "GUI:OnlineHubVsAIExplain" ), shortFormOf( "GUI:OnlineHubVsAIExplain" ) );
+	else
+		fitParagraph( ai, s_aiRefusal, UnicodeString::TheEmptyString );
+
+	HubCard &qm = s_cards[ CARD_QUICK_MATCH ];
+	const UIStyle::RatingTier tier = UIStyle::playerTier( info );
+	qm.portrait = UIStyle::tierImage( tier, side );
+	qm.figure->setText( info.hasRating ? UIStyle::ratingText( info.exactRating ) : none );
+	qm.tier->setText( OnlineTierName( UIStyle::tierKey( tier ) ) );
+	// under five rated games the ladder places nobody: how far along instead (-1 is a count nobody sent)
+	if (info.hasRating && info.games >= 0 && info.games < UIStyle::RANKED_GAMES)
+		text.format( TheGameText->fetch( "GUI:OnlineHubRankedGames" ), info.games, (Int)UIStyle::RANKED_GAMES );
+	else if (info.hasStats && info.rank > 0)
+		text.format( TheGameText->fetch( "GUI:OnlinePlaceValue" ), info.rank );
+	else
+		text = none;
+	qm.factValue[ 0 ]->setText( UIStyle::fitText( text, bodyFont(), UIStyle::px( 120.0f ) ) );		// beside a short "Place"
+	if (info.hasStats)
+		text.format( u"%d\x2013%d", info.wins, info.losses );
+	else
+		text = none;
+	qm.factValue[ 1 ]->setText( text );
+	qm.factValue[ 2 ]->setText( counts[ 2 ] >= 0 ? UIStyle::grouped( counts[ 2 ] ) : none );
+	// a player who left a ranked match waits out the server's lock: how long, over Find match, greyed meanwhile
+	static const Int SECONDS_PER_MINUTE = 60;
+	qm.explainColor = lock > 0 ? UIStyle::INK : UIStyle::MUTED;
+	if (lock > 0)
+	{
+		text.format( TheGameText->fetch( "GUI:OnlineHubQuickMatchLocked" ), lock / SECONDS_PER_MINUTE, lock % SECONDS_PER_MINUTE );
+		fitParagraph( qm, text, UnicodeString::TheEmptyString );
+	}
+	else
+		fitParagraph( qm, TheGameText->fetch( "GUI:OnlineHubQuickMatchExplain" ), shortFormOf( "GUI:OnlineHubQuickMatchExplain" ) );
+
+	HubCard &custom = s_cards[ CARD_CUSTOM ];
+	custom.figure->setText( counts[ 1 ] >= 0 ? UIStyle::grouped( counts[ 1 ] ) : none );
+	custom.factValue[ 0 ]->setText( counts[ 0 ] >= 0 ? UIStyle::grouped( counts[ 0 ] ) : none );
+	const UnicodeString server = LobbyServerLabel();
+	text.format( TheGameText->fetch( "GUI:OnlineHubCustomExplain" ), server.str() );
+	const UnicodeString shortPattern = shortFormOf( "GUI:OnlineHubCustomExplain" );
+	UnicodeString shortText;
+	if (!shortPattern.isEmpty())
+		shortText.format( shortPattern.str(), server.str() );
+	fitParagraph( custom, text, shortText );
+}
+
+/// how long ago, in the coarsest unit that says it
+static UnicodeString ageText( Int seconds )
+{
+	UnicodeString text;
+	if (seconds < 3600)
+		text.format( TheGameText->fetch( "GUI:OnlineHubAgoMinutes" ), max( 1, seconds / 60 ) );
+	else if (seconds < 86400)
+		text.format( TheGameText->fetch( "GUI:OnlineHubAgoHours" ), seconds / 3600 );
+	else if (seconds < 2 * 86400)
+		text = TheGameText->fetch( "GUI:OnlineHubYday" );
+	else
+		text.format( TheGameText->fetch( "GUI:OnlineHubAgoDays" ), seconds / 86400 );
+	return text;
+}
+
+/// the recent matches, copied and built again only when the history's serial moves
+static void refreshRecent( void )
+{
+	if (s_strings.empty())
+		return;
+	const UnsignedInt serial = OnlineGetHistorySerial( 0, ONLINE_HISTORY_ALL );
+	if (!s_recentStale && serial == s_recentSerial)
+		return;
+	s_recentStale = FALSE;
+	s_recentSerial = serial;
+	OnlineHistory history;
+	const OnlineLadderState state = OnlineGetHistory( 0, ONLINE_HISTORY_ALL, history );
+	s_recentRows = history.arrived ? min( (Int)history.rows.size(), (Int)RECENT_ROWS ) : 0;
+	if (state == ONLINE_LADDER_READY && s_recentRows == 0)
+		s_recentLine->setText( TheGameText->fetch( "GUI:OnlineHubRecentNone" ) );
+	else if (state == ONLINE_LADDER_FAILED && s_recentRows == 0)
+		s_recentLine->setText( TheGameText->fetch( "GUI:OnlineHubRecentNoAnswer" ) );
+	else
+		s_recentLine->setText( UnicodeString::TheEmptyString );
+
+	GameFont *body = bodyFont();
+	const Int pad = UIStyle::px( 2.0f * CELL_PAD );
+	for (Int r = 0; r < s_recentRows; ++r)
+	{
+		const OnlineHistoryRow &row = history.rows[ r ];
+		DisplayString **cell = s_recent[ r ];
+		s_recentWon[ r ] = row.won;
+		s_recentChange[ r ] = UIStyle::changeColor( row.change );
+		cell[ CELL_CHIP ]->setText( TheGameText->fetch( row.won ? "GUI:OnlineWinLabel" : "GUI:OnlineLossLabel" ) );
+		cell[ CELL_MODE ]->setText( UIStyle::fitKey( row.ai ? "GUI:OnlineHubMatchAI" : "GUI:OnlineQuickMatchLabel", body,
+			s_cellWidth[ CELL_MODE ] - pad ) );
+		cell[ CELL_RATING ]->setText( UIStyle::ratingText( row.opponentRating ) );
+		Int ratingWidth, h;
+		cell[ CELL_RATING ]->getSize( &ratingWidth, &h );
+		UnicodeString opponent;
+		if (row.ai)
+			opponent = TheGameText->fetch( "GUI:OnlineComputerLabel" );
+		else
+			opponent = UnicodeString( MultiByteToWideCharSingleLine( row.opponent.str() ).c_str() );
+		cell[ CELL_OPPONENT ]->setText( UIStyle::fitName( opponent, body,
+			s_cellWidth[ CELL_OPPONENT ] - pad - ratingWidth - UIStyle::px( 6.0f ) ) );
+		// a ranked map is generated from the match seed and its name only says so ("rmg_v19_..."); an AI
+		// match's map is one of the official ones, by its shown name
+		UnicodeString map;
+		if (row.map.startsWithNoCase( "rmg_" ))
+			map = TheGameText->fetch( "GUI:Random" );
+		else
+			map = UnicodeString( MultiByteToWideCharSingleLine( row.map.str() ).c_str() );
+		cell[ CELL_MAP ]->setText( UIStyle::fitText( map, body, s_cellWidth[ CELL_MAP ] - pad, UnicodeString::TheEmptyString, map ) );
+		cell[ CELL_CHANGE ]->setText( UIStyle::ratingText( row.change, TRUE ) );
+		cell[ CELL_AGE ]->setText( ageText( row.age ) );
+	}
+}
+
+/// whether joinBestGroupRoom sends a join: no room held, and a room besides Quick Match's channel to
+/// pick.  Otherwise it bails or raises its own failure box, and no answer ever comes.
+// ponytail: mirrors the pick in PeerDefs.cpp joinBestGroupRoom; a Bool return from it would retire this copy
+static Bool joinSendsRequest( void )
+{
+	if (TheGameSpyInfo->getCurrentGroupRoom() != 0)
+		return FALSE;
+	static const Int NO_ROOM_YET = 1000;		// EA's starting count, under which any room's waiting players fall
+	static const Int SETTLED = 25;					// EA stops looking once a room this quiet is picked
+	Int pick = -1;
+	Int fewest = NO_ROOM_YET;
+	const GroupRoomMap *rooms = TheGameSpyInfo->getGroupRoomList();
+	for (GroupRoomMap::const_iterator it = rooms->begin(); it != rooms->end(); ++it)
+	{
+		const GameSpyGroupRoom &room = it->second;
+		if (TheGameSpyConfig->getQMChannel() != room.m_groupID && fewest > SETTLED && room.m_numWaiting < fewest)
+		{
+			pick = room.m_groupID;
+			fewest = room.m_numWaiting;
+		}
+	}
+	return pick > 0;
+}
+
+/// Custom games joins a chat room first, as Browse games always did; the lobby goes up when the join
+/// answers (WOLWelcomeMenuUpdate), and until then only Back and Sign out answer a click.  The Custom
+/// tab waits for the room list as Browse games does, greyed.
+static void joinRoom( void )
+{
+	if (!s_controlsLive)
+		return;
+	const Bool sends = joinSendsRequest();
+	TheGameSpyInfo->joinBestGroupRoom();
+	if (!sends)
+		return;
+	s_joiningRoom = TRUE;
+	enableControls( FALSE );
+}
+
+/** A tab's way off the hub, and Find match's and Browse games': the hub stays at the stack's foot and
+	* the page goes on top of it. */
+static void hubLeave( UIStyle::OnlineTab to )
+{
+	if (to == UIStyle::ONLINE_TAB_CUSTOM)
+	{
+		joinRoom();
+		return;
+	}
+	const char *screen = UIStyle::onlineTabScreen( to );
+	if (screen == NULL)
+		return;
+	buttonPushed = TRUE;
+	TheShell->push( AsciiString( screen ) );
+}
+
+/// Main Menu's and Sign out's goodbye to the service
+static void logOut( void )
+{
+	if (TheGameSpyPeerMessageQueue)
+	{
+		PeerRequest req;
+		req.peerRequestType = PeerRequest::PEERREQUEST_LOGOUT;
+		TheGameSpyPeerMessageQueue->addRequest( req );
+	}
+	if (TheGameSpyBuddyMessageQueue)
+	{
+		BuddyRequest breq;
+		breq.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGOUT;
+		TheGameSpyBuddyMessageQueue->addRequest( breq );
+	}
+
+	DEBUG_LOG(("Tearing down GameSpy from WOLWelcomeMenuSystem(GBM_SELECTED)\n"));
+	TearDownGameSpy();
+}
+
+/** Off the hub to the login screen: Sign out (forget drops the kept sign-in, so the login screen asks
+	* for the password instead of signing straight back in), and a login that went while the hub stood
+	* under another page or on its own (the kept sign-in stays).  The login screen needs the queues it
+	* found when the main menu opened it. */
+static void leaveForLogin( Bool forget )
+{
+	DEBUG_LOG(("ONLINE HUB to=login forget=%d\n", (Int)forget));
+	if (forget && TheGameSpyInfo)
+		OnlineSaveToken( TheGameSpyInfo->getLocalEmail(), AsciiString::TheEmptyString );
+	logOut();
+	SetUpGameSpy( OnlineGetMOTD().str(), OnlineGetConfig().str() );
+	buttonPushed = TRUE;
+	nextScreen = "Menus/GameSpyLoginProfile.wnd";
+	TheShell->pop();
 }
 
 static Bool raiseMessageBoxes = FALSE;
@@ -681,90 +1020,47 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 	nextScreen = NULL;
 	buttonPushed = FALSE;
 	isShuttingDown = FALSE;
+	s_joiningRoom = FALSE;
 
-	welcomeLayout = layout;
+	parentWOLWelcome = hubWindow( "WOLWelcomeMenuParent", &parentWOLWelcomeID );
+	buttonBack = hubWindow( "ButtonBack", &buttonBackID );
+	buttonQuickMatch = hubWindow( "ButtonQuickMatch", &buttonQuickMatchID );
+	buttonLobby = hubWindow( "ButtonCustomMatch", &buttonLobbyID );
+	hubWindow( "ButtonMyInfo", &buttonMyInfoID );
+	buttonPlayAI = hubWindow( "ButtonPlayVsAI", &buttonPlayAIID );
+	GameWindow *buttonSignOut = hubWindow( "ButtonSignOut", &buttonSignOutID );
+	listboxInfo = hubWindow( "InfoListbox" );
 
-	//TheWOL->reset();
-
-	parentWOLWelcomeID = TheNameKeyGenerator->nameToKey( AsciiString( "WOLWelcomeMenu.wnd:WOLWelcomeMenuParent" ) );
-	buttonBackID = TheNameKeyGenerator->nameToKey( AsciiString( "WOLWelcomeMenu.wnd:ButtonBack" ) );
-	parentWOLWelcome = TheWindowManager->winGetWindowFromId( NULL, parentWOLWelcomeID );
-	buttonBack = TheWindowManager->winGetWindowFromId( NULL,  buttonBackID);
-	buttonOptionsID = TheNameKeyGenerator->nameToKey( "WOLWelcomeMenu.wnd:ButtonOptions" );
-	buttonbuttonOptions = TheWindowManager->winGetWindowFromId( NULL,  buttonOptionsID);
-	listboxInfoID = TheNameKeyGenerator->nameToKey( AsciiString( "WOLWelcomeMenu.wnd:InfoListbox" ) );
-
-	listboxInfo = TheWindowManager->winGetWindowFromId( NULL,  listboxInfoID);
-
-	staticTextServerName = TheWindowManager->winGetWindowFromId( parentWOLWelcome,
-		TheNameKeyGenerator->nameToKey( "WOLWelcomeMenu.wnd:StaticTextServerName" ));
-	staticTextLastUpdated = TheWindowManager->winGetWindowFromId( parentWOLWelcome,
-		TheNameKeyGenerator->nameToKey( "WOLWelcomeMenu.wnd:StaticTextLastUpdated" ));
-
-	staticTextLadderWins = TheWindowManager->winGetWindowFromId( parentWOLWelcome,
-		TheNameKeyGenerator->nameToKey( "WOLWelcomeMenu.wnd:StaticTextLadderWins" ));
-	staticTextLadderLosses = TheWindowManager->winGetWindowFromId( parentWOLWelcome,
-		TheNameKeyGenerator->nameToKey( "WOLWelcomeMenu.wnd:StaticTextLadderLosses" ));
-	staticTextLadderPoints = TheWindowManager->winGetWindowFromId( parentWOLWelcome,
-		TheNameKeyGenerator->nameToKey( "WOLWelcomeMenu.wnd:StaticTextLadderPoints" ));
-	staticTextLadderRank = TheWindowManager->winGetWindowFromId( parentWOLWelcome,
-		TheNameKeyGenerator->nameToKey( "WOLWelcomeMenu.wnd:StaticTextLadderRank" ));
-	staticTextLadderDisconnects = TheWindowManager->winGetWindowFromId( parentWOLWelcome,
-		TheNameKeyGenerator->nameToKey( "WOLWelcomeMenu.wnd:StaticTextDisconnects" ));
-
-	staticTextHighscoreWins = TheWindowManager->winGetWindowFromId( parentWOLWelcome,
-		TheNameKeyGenerator->nameToKey( "WOLWelcomeMenu.wnd:StaticTextHighscoreWins" ));
-	staticTextHighscoreLosses = TheWindowManager->winGetWindowFromId( parentWOLWelcome,
-		TheNameKeyGenerator->nameToKey( "WOLWelcomeMenu.wnd:StaticTextHighscoreLosses" ));
-	staticTextHighscorePoints = TheWindowManager->winGetWindowFromId( parentWOLWelcome,
-		TheNameKeyGenerator->nameToKey( "WOLWelcomeMenu.wnd:StaticTextHighscorePoints" ));
-	staticTextHighscoreRank = TheWindowManager->winGetWindowFromId( parentWOLWelcome,
-		TheNameKeyGenerator->nameToKey( "WOLWelcomeMenu.wnd:StaticTextHighscoreRank" ));
-
-	if (staticTextServerName)
+	// the master's frame: the tabs with Home open, the header over the panel, the cards behind the buttons
+	UIStyle::onlinePageInit( parentWOLWelcome, "WOLWelcomeMenu.wnd", UIStyle::ONLINE_TAB_HOME );
+	makeCards();
+	if (GameWindow *holder = hubWindow( "ButtonHolder" ))
+		holder->winSetDrawFunc( drawHubHeader );
+	// the recent matches are drawn on their card: a chip and a coloured change are more than a
+	// one-column listbox's text
+	if (GameWindow *recent = hubWindow( "ListboxRecent" ))
+		recent->winHide( TRUE );
+	// the message of the day stands on its card, not in a box of its own, in the cards' body face (the
+	// master's fitted size falls to 10 px at 1280x720 and 4:3)
+	if (listboxInfo)
 	{
-		GadgetStaticTextSetText(staticTextServerName, gServerName);
+		listboxInfo->winSetFont( bodyFont() );
+		const Color none = WIN_COLOR_UNDEFINED;
+		listboxInfo->winSetEnabledColor( 0, none );
+		listboxInfo->winSetEnabledBorderColor( 0, none );
+		listboxInfo->winSetHiliteColor( 0, none );
+		listboxInfo->winSetHiliteBorderColor( 0, none );
 	}
-
-	GameWindow *staticTextTitle = TheWindowManager->winGetWindowFromId(parentWOLWelcome, NAMEKEY("WOLWelcomeMenu.wnd:StaticTextTitle"));
-	if (staticTextTitle && TheGameSpyInfo)
+	// Play is the card's first action, its label lit as the focused button's; Play vs AI and Sign out
+	// belong to the -online service
+	if (buttonPlayAI)
 	{
-		UnicodeString title;
-		title.format(TheGameText->fetch("GUI:WOLWelcome"), TheGameSpyInfo->getLocalBaseName().str());
-		GadgetStaticTextSetText(staticTextTitle, title);
+		buttonPlayAI->winSetEnabledTextColors( UIStyle::ACTIVE, UIStyle::SHADOW );
+		buttonPlayAI->winHide( !OnlineIsEnabled() );
 	}
-
-	// Clear some defaults
-	/*
-	UnicodeString questionMark = UnicodeString(L"?");
-	GadgetStaticTextSetText(staticTextLastUpdated, questionMark);
-	GadgetStaticTextSetText(staticTextLadderWins, questionMark);
-	GadgetStaticTextSetText(staticTextLadderLosses, questionMark);
-	GadgetStaticTextSetText(staticTextLadderPoints, questionMark);
-	GadgetStaticTextSetText(staticTextLadderRank, questionMark);
-	GadgetStaticTextSetText(staticTextLadderDisconnects, questionMark);
-	GadgetStaticTextSetText(staticTextHighscoreWins, questionMark);
-	GadgetStaticTextSetText(staticTextHighscoreLosses, questionMark);
-	GadgetStaticTextSetText(staticTextHighscorePoints, questionMark);
-	GadgetStaticTextSetText(staticTextHighscoreRank, questionMark);
-	*/
-
-	//DEBUG_ASSERTCRASH(listboxInfo, ("No control found!"));
-
-	buttonQuickMatchID = TheNameKeyGenerator->nameToKey( AsciiString( "WOLWelcomeMenu.wnd:ButtonQuickMatch" ) );
-	buttonQuickMatch = TheWindowManager->winGetWindowFromId( parentWOLWelcome, buttonQuickMatchID );
-
-	buttonLobbyID = TheNameKeyGenerator->nameToKey( AsciiString( "WOLWelcomeMenu.wnd:ButtonCustomMatch" ) );
-	buttonLobby = TheWindowManager->winGetWindowFromId( parentWOLWelcome, buttonLobbyID );
-
-	buttonBuddiesID = TheNameKeyGenerator->nameToKey( AsciiString( "WOLWelcomeMenu.wnd:ButtonBuddies" ) );
-	buttonBuddies = TheWindowManager->winGetWindowFromId( parentWOLWelcome, buttonBuddiesID );
-
-	buttonMyInfoID = TheNameKeyGenerator->nameToKey( AsciiString( "WOLWelcomeMenu.wnd:ButtonMyInfo" ) );
-	buttonMyInfo = TheWindowManager->winGetWindowFromId( parentWOLWelcome, buttonMyInfoID );
-
-	buttonLadderID = TheNameKeyGenerator->nameToKey( AsciiString( "WOLWelcomeMenu.wnd:ButtonLadder" ) );
-	buttonLadder = TheWindowManager->winGetWindowFromId( parentWOLWelcome, buttonLadderID );
+	if (buttonSignOut)
+		buttonSignOut->winHide( !OnlineIsEnabled() );
+	s_aiRefusal.clear();
 
 	Bool serviceOnline = FALSE;
 #ifdef ZH_ONLINE
@@ -773,71 +1069,20 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 	if (serviceOnline)
 	{
 		// lobbies and custom games only, and the service's connections need no firewall detection
-		if (buttonQuickMatch)
-			buttonQuickMatch->winHide(TRUE);
-		if (buttonLadder)
-			buttonLadder->winHide(TRUE);
-		if (buttonBuddies)
-			buttonBuddies->winHide(TRUE);
+		static const char *const theirs[] = { "ButtonQuickMatch", "TabQuickMatch", "TabLadder", "TabSkins" };
+		for (size_t i = 0; i < sizeof(theirs) / sizeof(theirs[0]); ++i)
+			if (GameWindow *win = hubWindow( theirs[i] ))
+				win->winHide(TRUE);
 	}
 	// -online: every packet goes through our relay, so EA's firewall probe (against its dead mangler
-	// servers) has nothing to find.  Quick Match and the ladder are the service's; buddies are not.
+	// servers) has nothing to find, signed in or not.  The cards' numbers and the recent matches arrive
+	// after the screen drew; signed out, the first update leaves for the login.
 	else if (OnlineIsEnabled())
 	{
-		// retail's hub has no Ladder button (EA reached its web ladder elsewhere), and nothing answers
-		// Buddies here: that slot becomes Ladder
-		if (buttonBuddies)
-			GadgetButtonSetText(buttonBuddies, TheGameText->fetch("GUI:OnlineLadderButton"));		// capitals, as the hub's other buttons
-		// the account's skins, picked here since the site's own picker went; the button column is full,
-		// so it sits left of Back on the panel's foot, as the ladder's Next does
-		if (buttonBack && !buttonSkins)
+		if (signedIn())
 		{
-			const Real sx = TheDisplay->getWidth() / 800.0f, sy = TheDisplay->getHeight() / 600.0f;
-			buttonSkins = WOLMakeButtonLike(parentWOLWelcome, buttonBack, (Int)(380 * sx), (Int)(520 * sy),
-				(Int)(552 * sx) - (Int)(380 * sx), (Int)(556 * sy) - (Int)(520 * sy), "GUI:OnlineSkinsButton");
-			if (buttonSkins)
-				buttonSkins->winBringToTop();
-		}
-		// Play vs AI under Options, the column's next slot, over the empty right of the player panel; its
-		// rating to its left, under the message box, in the rank line's face
-		GameWindow *model = buttonbuttonOptions ? buttonbuttonOptions : buttonBack;
-		if (model && !buttonPlayAI)
-		{
-			const Real sx = TheDisplay->getWidth() / 800.0f, sy = TheDisplay->getHeight() / 600.0f;
-			const Int x = (Int)(560 * sx), y = (Int)(296 * sy), w = (Int)(736 * sx) - x, h = (Int)(332 * sy) - y;
-			buttonPlayAI = WOLMakeButtonLike( parentWOLWelcome, model, x, y, w, h, "GUI:OnlineVsAIButton" );
-			if (buttonPlayAI)
-				buttonPlayAI->winBringToTop();
-			GameWindow *rank = TheWindowManager->winGetWindowFromId( parentWOLWelcome, NAMEKEY("WOLWelcomeMenu.wnd:StaticTextRank") );
-			WinInstanceData inst;
-			inst.init();
-			BitSet( inst.m_style, GWS_STATIC_TEXT );
-			TextData data;
-			memset( &data, 0, sizeof(data) );
-			data.centeredVertically = TRUE;
-			staticTextAIRating = TheWindowManager->gogoGadgetStaticText( parentWOLWelcome, WIN_STATUS_ENABLED | WIN_STATUS_NO_INPUT,
-				(Int)(300 * sx), y, x - (Int)(300 * sx), h, &inst, &data, rank ? rank->winGetFont() : model->winGetFont(), FALSE );
-			if (staticTextAIRating)
-			{
-				staticTextAIRating->winSetEnabledTextColors( GameMakeColor( 255, 255, 255, 255 ), GameMakeColor( 0, 0, 0, 255 ) );
-				staticTextAIRating->winSetEnabledColor( 0, GameMakeColor( 2, 2, 2, 0 ) );
-				staticTextAIRating->winSetEnabledBorderColor( 0, GameMakeColor( 0, 0, 0, 0 ) );
-			}
-			showAIRating();
-		}
-		OnlineRequestStats(TheGameSpyInfo->getLocalName());
-		// the win percentages arrive after the screen drew (WOLWelcomeMenuUpdate); until then, none
-		s_winStats.clear();
-		s_onlineArmiesShown = FALSE;
-		OnlineRequestArmies();
-		// EA's "Win percentages for each army..." tooltip covered the whole panel and popped wherever the
-		// cursor rested; each army's box keeps its own name
-		static const char *panel[] = { "WOLWelcomeMenu.wnd:CommunityInfoParent", "WOLWelcomeMenu.wnd:StaticTextCommunity" };
-		for (size_t i = 0; i < sizeof(panel) / sizeof(panel[0]); ++i)
-		{
-			GameWindow *win = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY(panel[i]) );
-			if (win)
-				win->winSetTooltip( UnicodeString::TheEmptyString );
+			OnlineRequestStats(TheGameSpyInfo->getLocalName());
+			OnlineRequestHistory( 0, ONLINE_HISTORY_ALL, RECENT_ROWS );
 		}
 	}
 	else
@@ -851,29 +1096,6 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 			TheFirewallHelper = NULL;
 		}
 	}
-	/*
-
-	if (TheGameSpyChat && TheGameSpyChat->isConnected())
-	{
-		const char *keys[3] = { "locale", "wins", "losses" };
-		char valueStrings[3][20];
-		char *values[3] = { valueStrings[0], valueStrings[1], valueStrings[2] };
-		snprintf(values[0], 20, "%s", TheGameSpyPlayerInfo->getLocale().str());
-		snprintf(values[1], 20, "%d", TheGameSpyPlayerInfo->getWins());
-		snprintf(values[2], 20, "%d", TheGameSpyPlayerInfo->getLosses());
-		peerSetGlobalKeys(TheGameSpyChat->getPeer(), 3, (const char **)keys, (const char **)values);
-		peerSetGlobalWatchKeys(TheGameSpyChat->getPeer(), GroupRoom,   3, keys, PEERFalse);
-		peerSetGlobalWatchKeys(TheGameSpyChat->getPeer(), StagingRoom, 3, keys, PEERFalse);
-	}
-	*/
-
-//	// animate controls
-//	TheShell->registerWithAnimateManager(buttonQuickMatch, WIN_ANIMATION_SLIDE_LEFT, TRUE, 800);
-//	TheShell->registerWithAnimateManager(buttonLobby, WIN_ANIMATION_SLIDE_LEFT, TRUE, 600);
-//	//TheShell->registerWithAnimateManager(NULL, WIN_ANIMATION_SLIDE_LEFT, TRUE, 400);
-//	TheShell->registerWithAnimateManager(buttonBuddies, WIN_ANIMATION_SLIDE_LEFT, TRUE, 200);
-//	//TheShell->registerWithAnimateManager(NULL, WIN_ANIMATION_SLIDE_LEFT, TRUE, 1);
-//	TheShell->registerWithAnimateManager(buttonBack, WIN_ANIMATION_SLIDE_BOTTOM, TRUE, 1);
 
 	// Show Menu
 	layout->hide( FALSE );
@@ -884,10 +1106,7 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 	enableControls( TheGameSpyInfo->gotGroupRoomList() );
 	TheShell->showShellMap(TRUE);
 
-	updateNumPlayersOnline();
-	updateOverallStats();
-
-	UpdateLocalPlayerStats();
+	fillMOTD();
 
 	// -online keeps no locale and shows none, so it does not ask for one
 	GameSpyMiscPreferences cPref;
@@ -898,6 +1117,14 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 
 	raiseMessageBoxes = TRUE;
 	TheTransitionHandler->setGroup("WOLWelcomeMenuFade");
+
+	// the score screen's Play again lands here
+	if (s_playOnEntry)
+	{
+		s_playOnEntry = FALSE;
+		if (OnlineIsEnabled() && buttonPlayAI && signedIn())
+			pressPlay();
+	}
 
 } // WOLWelcomeMenuInit
 
@@ -964,8 +1191,21 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 		}
 	}
 
-	if (TheShell->isAnimFinished() && !buttonPushed && TheGameSpyPeerMessageQueue)
+	// The shell updates every layout on its stack, hidden ones too.  Only the hub on top and showing reads
+	// the queues: covered (a page pushed over it, Quick Match pushed by a score screen over a hub that
+	// hideShell hid for a match and whose init never ran since) it would eat that page's messages.
+	const Bool showing = TheShell->top() == layout && !layout->isHidden();
+	if (showing && TheShell->isAnimFinished() && !buttonPushed && TheGameSpyPeerMessageQueue)
 	{
+		// -online: the login went under a page over the hub (that page reset the info and popped back
+		// here), or after a game: the login screen, not a hub of dead numbers.  Here and not from init,
+		// whose pop the shell's own pop in progress would swallow.
+		if (OnlineIsEnabled() && !signedIn())
+		{
+			leaveForLogin( FALSE );
+			return;
+		}
+
 		HandleBuddyResponses();
 		HandlePersistentStorageResponses();
 
@@ -987,7 +1227,7 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 					room.m_numPlaying = resp.groupRoom.numPlaying;
 					room.m_numWaiting = resp.groupRoom.numWaiting;
 					TheGameSpyInfo->addGroupRoom( room );
-					if (room.m_groupID == 0)
+					if (room.m_groupID == 0 && !s_joiningRoom)
 					{
 						enableControls( TRUE );
 					}
@@ -996,6 +1236,7 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 			case PeerResponse::PEERRESPONSE_JOINGROUPROOM:
 				{
 					sawImportantMessage = TRUE;
+					s_joiningRoom = FALSE;
 					enableControls( TRUE );
 					if (resp.joinGroupRoom.ok)
 					{
@@ -1005,10 +1246,9 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 							DEBUG_LOG(("ONLINE LOBBY joined room=%d\n", resp.joinGroupRoom.id));
 						//GSMessageBoxOk( TheGameText->fetch("GUI:GSErrorTitle"), TheGameText->fetch("GUI:GSGroupRoomJoinOK") );
 
+						// the lobby goes on top: the hub stays at the stack's foot
 						buttonPushed = TRUE;
-						nextScreen = "Menus/WOLCustomLobby.wnd";
-						TheShell->pop();
-						//TheShell->push( "Menus/WOLCustomLobby.wnd" );
+						TheShell->push( AsciiString( UIStyle::onlineTabScreen( UIStyle::ONLINE_TAB_CUSTOM ) ) );
 					}
 					else
 					{
@@ -1026,40 +1266,34 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 					body = TheGameText->fetch( disconMunkee );
 					GameSpyCloseAllOverlays();
 					GSMessageBoxOk( title, body );
+					if (OnlineIsEnabled())
+					{
+						leaveForLogin( FALSE );
+						return;
+					}
 					TheShell->pop();
 				}
 				break;
 			}
 		}
 
+		// -online: Play vs AI's answer, the button greyed while it or a room join is awaited; Find match
+		// through the leaver lock's last second; the cards' numbers and the recent matches as they arrive
+		// (auth.ok, stats, counts, history)
+		if (OnlineIsEnabled() && !buttonPushed)
+		{
+			if (buttonPlayAI)
+			{
+				const Bool answerAwaited = WOLPlayVsAIUpdate();
+				buttonPlayAI->winEnable( !answerAwaited && !s_joiningRoom );
+			}
+			applyControls();
+			refreshCards();
+			refreshRecent();
+		}
+
 		// -online scripting: once per process, the click a player would make next.  -quickmatch opens Quick
 		// Match; -onlinehost, -onlinejoin and -onlinesay go to the lobby, which carries them on.
-		// -online: our own rating, tier and record arrive after the screen drew (auth.ok, stats)
-		static UnsignedInt s_onlineInfoSerial = 0;
-		OnlinePlayerInfo card;
-		if (OnlineIsEnabled() && !buttonPushed && OnlineGetPlayerInfo(TheGameSpyInfo->getLocalName(), card)
-			&& card.serial != s_onlineInfoSerial)
-		{
-			s_onlineInfoSerial = card.serial;
-			UpdateLocalPlayerStats();
-		}
-
-		// -online: Play vs AI's answer, the button greyed while it is awaited, and the rating beside it
-		if (OnlineIsEnabled() && buttonPlayAI && !buttonPushed)
-		{
-			buttonPlayAI->winEnable( !WOLPlayVsAIUpdate() );
-			showAIRating();
-		}
-
-		// -online: the armies' answer, once per opening of the screen
-		std::vector<OnlineArmyRow> armies;
-		if (OnlineIsEnabled() && !s_onlineArmiesShown && OnlineGetArmies(armies) == ONLINE_LADDER_READY)
-		{
-			s_onlineArmiesShown = TRUE;
-			HandleOnlineArmyStats(armies);
-			updateOverallStats();
-		}
-
 		static Bool s_onlineAutoDone = FALSE;
 		if (OnlineIsEnabled() && !s_onlineAutoDone && !buttonPushed && TheGameSpyInfo->gotGroupRoomList())
 		{
@@ -1067,16 +1301,13 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 			if (TheGlobalData->m_quickMatchOnStart)
 			{
 				DEBUG_LOG(("ONLINE WELCOME to=quickmatch\n"));
-				buttonPushed = TRUE;
-				nextScreen = "Menus/WOLQuickMatchMenu.wnd";
-				TheShell->pop();
+				hubLeave( UIStyle::ONLINE_TAB_QUICK_MATCH );
 			}
 			else if (TheGlobalData->m_onlineHostGame.isNotEmpty() || TheGlobalData->m_onlineJoinGame.isNotEmpty()
 				|| TheGlobalData->m_onlineSay.isNotEmpty())
 			{
 				DEBUG_LOG(("ONLINE WELCOME to=lobby\n"));
-				TheGameSpyInfo->joinBestGroupRoom();
-				enableControls( FALSE );
+				joinRoom();
 			}
 		}
 	}
@@ -1171,63 +1402,26 @@ WindowMsgHandledType WOLWelcomeMenuSystem( GameWindow *window, UnsignedInt msg,
 
 				GameWindow *control = (GameWindow *)mData1;
 				Int controlID = control->winGetWindowId();
+				// a room join is out: the lobby is about to go up, and only the ways off the service still answer
+				if (s_joiningRoom && controlID != buttonBackID && controlID != buttonSignOutID)
+					break;
+				if (UIStyle::onlineTabClicked( control, hubLeave ))
+					break;
 
 				if ( controlID == buttonBackID )
 				{
-					//DEBUG_ASSERTCRASH(TheGameSpyChat->getPeer(), ("No GameSpy Peer object!"));
-					//TheGameSpyChat->disconnectFromChat();
-					
-					PeerRequest req;
-					req.peerRequestType = PeerRequest::PEERREQUEST_LOGOUT;
-					TheGameSpyPeerMessageQueue->addRequest( req );
-					BuddyRequest breq;
-					breq.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGOUT;
-					TheGameSpyBuddyMessageQueue->addRequest( breq );
-
-					DEBUG_LOG(("Tearing down GameSpy from WOLWelcomeMenuSystem(GBM_SELECTED)\n"));
-					TearDownGameSpy();
-
-					/*
-					if (TheGameSpyChat->getPeer())
-					{
-						peerDisconnect(TheGameSpyChat->getPeer());
-					}
-					*/
-
+					logOut();
 					buttonPushed = TRUE;
-
 					TheShell->pop();
-
-					/// @todo: log out instead of disconnecting
-					//TheWOL->addCommand( WOL::WOLCOMMAND_LOGOUT );
-					/**
-					closeAllOverlays();
-					TheShell->pop();
-					delete TheWOL;
-					TheWOL = NULL;
-					delete TheWOLGame;
-					TheWOLGame = NULL;
-					**/
-
-				} //if ( controlID == buttonBack )
-				else if (controlID == buttonOptionsID)
-				{					
-					GameSpyOpenOverlay( GSOVERLAY_OPTIONS );
+				}
+				else if (controlID == buttonSignOutID)
+				{
+					leaveForLogin( TRUE );
 				}
 				else if (controlID == buttonQuickMatchID)
 				{
-					GameSpyMiscPreferences mPref;
-					if ((TheDisplay->getWidth() != 800 || TheDisplay->getHeight() != 600) && mPref.getQuickMatchResLocked())
-					{
-						GSMessageBoxOk(TheGameText->fetch("GUI:GSErrorTitle"), TheGameText->fetch("GUI:QuickMatch800x600"));
-					}
-					else
-					{
-						buttonPushed = TRUE;
-						nextScreen = "Menus/WOLQuickMatchMenu.wnd";
-						TheShell->pop();
-					}
-				}// else if
+					hubLeave( UIStyle::ONLINE_TAB_QUICK_MATCH );
+				}
 				else if (controlID == buttonMyInfoID )
 				{
 					SetLookAtPlayer(TheGameSpyInfo->getLocalProfileID(), TheGameSpyInfo->getLocalName());
@@ -1235,56 +1429,11 @@ WindowMsgHandledType WOLWelcomeMenuSystem( GameWindow *window, UnsignedInt msg,
 				}
 				else if (controlID == buttonLobbyID)
 				{
-					//TheGameSpyChat->clearGroupRoomList();
-					//peerListGroupRooms(TheGameSpyChat->getPeer(), ListGroupRoomsCallback, NULL, PEERTrue);
-					TheGameSpyInfo->joinBestGroupRoom();
-					enableControls( FALSE );
-
-
-					/*
-					TheWOL->setScreen(WOL::WOLAPI_MENU_CUSTOMLOBBY);
-					TheWOL->setGameMode(WOL::WOLTYPE_CUSTOM);
-					TheWOL->setState( WOL::WOLAPI_LOBBY );
-					TheWOL->addCommand( WOL::WOLCOMMAND_REFRESH_CHANNELS );
-					*/
-				}// else if
-				else if (controlID == buttonBuddiesID && OnlineIsEnabled())
-				{
-					TheShell->push(AsciiString("Menus/WOLLadderScreen.wnd"));
+					hubLeave( UIStyle::ONLINE_TAB_CUSTOM );
 				}
-				else if (control == buttonSkins && buttonSkins)
+				else if (controlID == buttonPlayAIID)
 				{
-					WOLSkinsScreenOpen();
-				}
-				else if (control == buttonPlayAI && buttonPlayAI)
-				{
-					WOLPlayVsAI();
-					buttonPlayAI->winEnable( FALSE );
-				}
-				else if (controlID == buttonBuddiesID)
-				{
-					GameSpyToggleOverlay( GSOVERLAY_BUDDY );
-					/*
-					Bool joinedRoom = FALSE;
-					ClearGroupRoomList();
-					peerJoinTitleRoom(TheGameSpyChat->getPeer(), JoinRoomCallback, &joinedRoom, PEERTrue);
-					if (joinedRoom)
-					{
-						GameSpyUsingGroupRooms = FALSE;
-						GameSpyCurrentGroupRoomID = 0;
-						TheShell->pop();
-						TheShell->push("Menus/WOLCustomLobby.wnd");
-					}
-					else
-					{
-						GameSpyCurrentGroupRoomID = 0;
-						GSMessageBoxOk(UnicodeString(L"Oops"), UnicodeString(L"Unable to join title room"), NULL);
-					}
-					*/
-				}
-				else if (controlID == buttonLadderID)
-				{
-					TheShell->push(AsciiString("Menus/WOLLadderScreen.wnd"));
+					pressPlay();
 				}
 				break;
 			}// case GBM_SELECTED:

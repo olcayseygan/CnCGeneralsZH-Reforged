@@ -82,6 +82,9 @@
 #include "GameClient/CDCheck.h"
 #include "GameClient/PlayerColorScheme.h"
 #include "GameClient/Display.h"
+#include "GameClient/DisplayString.h"
+#include "GameClient/DisplayStringManager.h"
+#include "GameClient/GameFont.h"
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/GameWindowManager.h"
@@ -99,6 +102,7 @@
 #include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/GameSpy/GameResultsThread.h"
 #include "GameNetwork/NetworkDefs.h"
+#include "GameNetwork/NAT.h"
 #include "GameNetwork/LANAPICallbacks.h"
 #include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/Online/OnlineQueues.h"
@@ -163,6 +167,10 @@ extern void ScoreScreenGraphsShow( GameWindow *floor, Bool chat );
 extern Real ScoreScreenGraphsChatTop( Real listBottom );
 extern void ScoreScreenGraphsSinglePlayer( void );
 extern void ScoreScreenGraphsShutdown( void );
+extern Bool ScoreScreenGraphsSummaryOpen( void );
+extern void ScoreScreenGraphsSubtitle( const char *key );
+// WOLWelcomeMenu.cpp: the hub's next init starts a Play vs AI match as if Play were pressed
+extern void WOLWelcomeMenuStartPlayVsAIOnEntry( void );
 
 void initSinglePlayer( void );
 void finishSinglePlayerInit( void );
@@ -179,6 +187,7 @@ void grabMultiPlayerInfo( void );
 void grabSinglePlayerInfo( void );
 static void hideScoreTable( void );
 static void placeButtonRow( void );
+static void placeOnBoard( GameWindow *win, Real x0, Real y0, Real x1, Real y1 );
 void ScoreScreenEnableControls(Bool enable);
 void displayChallengewinLoss( Image *imageGeneral, AsciiString strGeneral );
 enum {
@@ -191,11 +200,552 @@ enum {
 static Int screenType;
 static Bool s_onlineVerdictShown = FALSE;		///< -online: the rated/unrated line is in the chat box
 
-/* -online: the server rates the match a moment after both reports are in, so the verdict comes while
-	 this screen is up.  One line in the chat box: "Rating +1.3 -> 22", or why the match was unrated. */
+/// a skirmish the online screens started: they start one only as Play vs AI, and stay up under this screen
+static Bool isOnlineAIMatch( void )
+{
+	return screenType == SCORESCREEN_SKIRMISH && OnlineIsEnabled() && TheGameSpyInfo != NULL;
+}
+
+/// the key of why the server left a match unrated, GUI:OnlineUnrated where the strings have no word for it;
+/// worked out once a reason, as the card asks every pass and hasText walks the strings
+static AsciiString unratedKey( const AsciiString &reason )
+{
+	static AsciiString s_reason;
+	static AsciiString s_label( "GUI:OnlineUnrated" );
+	if( reason == s_reason )
+		return s_label;
+	s_reason = reason;
+	s_label.format( "GUI:OnlineUnrated_%s", reason.str() );
+	if( reason.isEmpty() || !UIStyle::hasText( s_label.str() ) )
+		s_label = "GUI:OnlineUnrated";
+	return s_label;
+}
+
+//-----------------------------------------------------------------------------
+// -online, after a Quick Match or Play vs AI: the rating card under the standings (ONLINE-UI-REDESIGN.md,
+// "Score screen after an online match").  The rating that moved, the new tier's rank portrait, the old
+// value, an arrow, the new one and the change, the tier and the next one with a track, and one line on
+// where the result stands.  After a Quick Match the chat keeps its place under it; after an AI match a
+// box there says how the AI rating moves.  The card stands on the Summary alone: Graphs and Build order
+// keep their whole page.
+//-----------------------------------------------------------------------------
+enum ScoreCard
+{
+	SCORE_CARD_NONE,
+	SCORE_CARD_LADDER,		///< a Quick Match: the ladder rating
+	SCORE_CARD_AI,				///< Play vs AI: the AI rating
+};
+static ScoreCard s_card = SCORE_CARD_NONE;
+static Bool s_cardWon = FALSE;
+static AsciiString s_cardSide;								///< the local player's base side, for the rank portrait
+static AsciiString s_cardAIMatch;							///< the Play vs AI match still live as the screen opened (a quit)
+static UnsignedInt s_cardSince = 0;						///< when the screen opened: the line's no-answer clock
+static GameWindow *s_cardWindow = NULL;
+static GameWindow *s_howWindow = NULL;
+
+/// where the card's buttons send the player once this screen is gone
+enum ScoreLeave
+{
+	SCORE_LEAVE_STAY,					///< what the pop uncovers: Quick Match after a Quick Match, the hub after Play vs AI
+	SCORE_LEAVE_HUB,					///< the hub at the online stack's foot
+	SCORE_LEAVE_LADDER,				///< Ladder over the hub
+	SCORE_LEAVE_QUICK_MATCH,	///< Quick Match over the hub, after Play vs AI
+};
+static ScoreLeave s_leave = SCORE_LEAVE_STAY;
+
+/// the send as it holds Exit and the wide button, once a screen
+static Bool s_sendingSeen = FALSE;
+static Bool s_sendingOver = FALSE;
+static UnsignedInt s_sendingSince = 0;
+
+/// what the card shows; its words are made again only when this changes
+struct RatingFacts
+{
+	Bool shown;					///< a rating to show at all: the server sent one
+	Bool moved;					///< the verdict moved it: the old value, the arrow and the change
+	Real before;
+	Real after;					///< the value in the display face
+	Int games;					///< for the tier, -1 unknown
+	AsciiString line;		///< the last line's key
+	Bool sending;				///< the line says the result is on its way, over a sliding track
+
+	RatingFacts() : shown( FALSE ), moved( FALSE ), before( 0.0f ), after( 0.0f ), games( -1 ), sending( FALSE ) {}
+	Bool operator==( const RatingFacts &other ) const
+	{
+		return shown == other.shown && moved == other.moved && before == other.before && after == other.after
+			&& games == other.games && line == other.line && sending == other.sending;
+	}
+};
+static RatingFacts s_cardFacts;
+static Bool s_cardBuilt = FALSE;
+
+enum
+{
+	CARD_HEADING,
+	CARD_OLD,
+	CARD_ARROW,
+	CARD_NEW,
+	CARD_CHANGE,
+	CARD_TIER,
+	CARD_NEXT,
+	CARD_LINE,
+	CARD_HOW,					///< the AI box's heading and words, made once
+	CARD_HOW_BODY,
+	CARD_TEXT_COUNT
+};
+static DisplayString *s_cardText[ CARD_TEXT_COUNT ];
+static const Image *s_cardPortrait = NULL;
+static Color s_cardChangeColor = 0;
+static Real s_cardProgress = 0.0f;		///< toward the next tier, 0 to 1
+static Int s_cardTrackWidth = 0;
+static Bool s_cardSending = FALSE;		///< the line says the result is on its way, over a sliding track
+
+static void setCardText( Int which, const UnicodeString &text, GameFont *font )
+{
+	if( s_cardText[ which ] == NULL )
+		s_cardText[ which ] = TheDisplayStringManager->newDisplayString();
+	s_cardText[ which ]->setFont( font );
+	s_cardText[ which ]->setText( text );
+}
+
+static void freeCardText( Int first, Int end )
+{
+	for( Int each = first; each < end; each++ )
+	{
+		if( s_cardText[ each ] && TheDisplayStringManager )
+			TheDisplayStringManager->freeDisplayString( s_cardText[ each ] );
+		s_cardText[ each ] = NULL;
+	}
+}
+
+static void cardSize( Int which, Int &width, Int &height )
+{
+	width = height = 0;
+	if( s_cardText[ which ] )
+		s_cardText[ which ]->getSize( &width, &height );
+}
+
+/* The AI verdict on this match, by its id: the match still live as the screen opened (a quit, whose result
+	 goes on the next pass), else the one whose result went on the pass that decided it.  A late verdict on
+	 an earlier match names that match and is not shown. */
+static Bool thisAIVerdict( OnlineAIVerdict &verdict )
+{
+	const AsciiString match = s_cardAIMatch.isNotEmpty() ? s_cardAIMatch : OnlineGetLastAIMatchId();
+	return match.isNotEmpty() && OnlineGetAIVerdict( verdict ) && verdict.match == match;
+}
+
+static RatingFacts readRatingFacts( void )
+{
+	RatingFacts facts;
+	OnlinePlayerInfo me;
+	const Bool known = TheGameSpyInfo && OnlineGetPlayerInfo( TheGameSpyInfo->getLocalName(), me );
+	AsciiString verdictLine;
+	Bool sending = FALSE;
+	// a Quick Match's replay always goes up, Play vs AI's only after a win
+	AsciiString sendingLine( "GUI:OnlineScoreSending" );
+	if( s_card == SCORE_CARD_LADDER )
+	{
+		facts.shown = known && me.hasRating;
+		facts.after = me.exactRating;
+		facts.games = known ? me.games : -1;
+		Bool rated = FALSE;
+		Real delta = 0.0f, rating = 0.0f;
+		AsciiString reason;
+		if( OnlineGetMatchResult( rated, delta, rating, reason ) )
+		{
+			if( rated )
+			{
+				facts.shown = facts.moved = TRUE;
+				facts.before = rating - delta;
+				facts.after = rating;
+				verdictLine = "GUI:OnlineScoreConfirmed";
+			}
+			else
+				verdictLine = unratedKey( reason );		// the rating unchanged, no change shown
+		}
+		// the line waits while the report or the replay is on its way; the numbers need not
+		sending = OnlineIsSendingResults();
+	}
+	else
+	{
+		facts.shown = known && me.hasAIRating;
+		facts.after = me.aiRating;
+		facts.games = known ? me.aiGames : -1;
+		if( !s_cardWon )
+			sendingLine = "GUI:OnlineScoreSendingResult";
+		OnlineAIVerdict verdict;
+		if( thisAIVerdict( verdict ) )
+		{
+			if( verdict.rated )
+			{
+				facts.shown = facts.moved = TRUE;
+				facts.before = verdict.before;
+				facts.after = verdict.after;
+				facts.games = verdict.games;
+				verdictLine = "GUI:OnlineScoreAISaved";
+			}
+			// a win held back is with an admin, and the line never names the check that held it
+			else
+				verdictLine = s_cardWon ? "GUI:OnlineScoreAIHeld" : "GUI:OnlineUnrated";
+		}
+	}
+	switch( ScoreScreen_ratingLine( verdictLine.isNotEmpty(), sending, Clock_Milliseconds() - s_cardSince ) )
+	{
+		case SCORE_LINE_VERDICT: facts.line = verdictLine; break;
+		case SCORE_LINE_SENDING: facts.line = sendingLine; facts.sending = TRUE; break;
+		case SCORE_LINE_NO_ANSWER: facts.line = "GUI:OnlineScoreNoAnswer"; break;
+	}
+	return facts;
+}
+
+/// the card's two lines the strings may not have yet: theirs, else the English
+static UnicodeString newCardWords( const AsciiString &key )
+{
+	if( UIStyle::hasText( key.str() ) )
+		return TheGameText->fetch( key );
+	if( key == "GUI:OnlineScoreNoAnswer" )
+		return UnicodeString( u"The server has not answered yet. The result will show on zerohour.gg." );
+	return UnicodeString( u"Sending the result" );
+}
+
+static void buildRatingCard( const RatingFacts &facts )
+{
+	freeCardText( CARD_HEADING, CARD_HOW );
+	GameFont *body = UIStyle::font( UIStyle::TEXT_BODY );
+	setCardText( CARD_HEADING, TheGameText->fetch( s_card == SCORE_CARD_AI ? "GUI:OnlineAIRatingLabel" : "GUI:OnlineLadderRatingLabel" ),
+		UIStyle::sectionFont() );
+	Int width = 0, height = 0;
+	s_cardWindow->winGetSize( &width, &height );
+	const Int pad = UIStyle::px( 24.0f );
+	s_cardPortrait = NULL;
+	if( facts.shown )
+	{
+		const UIStyle::RatingTier tier = UIStyle::ratingTier( facts.after, facts.games );
+		s_cardPortrait = UIStyle::tierImage( tier, s_cardSide );
+		if( facts.moved )
+		{
+			setCardText( CARD_OLD, UIStyle::ratingText( facts.before ), UIStyle::titleFont( UIStyle::TEXT_TITLE ) );
+			static const WideChar ARROW[] = { 0x2192, 0 };		// as a code unit: the sources build without /utf-8
+			setCardText( CARD_ARROW, UnicodeString( ARROW ), UIStyle::font( UIStyle::TEXT_HEADING ) );
+			setCardText( CARD_CHANGE, UIStyle::ratingText( facts.after - facts.before, TRUE ), UIStyle::font( UIStyle::TEXT_STRONG, TRUE ) );
+			// a defeat's change is MUTED, as its verdict is
+			s_cardChangeColor = s_cardWon ? UIStyle::changeColor( facts.after - facts.before ) : UIStyle::MUTED;
+		}
+		setCardText( CARD_NEW, UIStyle::ratingText( facts.after ), UIStyle::titleFont( UIStyle::TEXT_DISPLAY ) );
+		setCardText( CARD_TIER, OnlineTierName( AsciiString( UIStyle::tierKey( tier ) ) ), body );
+
+		// the next tier at the card's right, as far left as the numbers leave room; none past the last
+		// tier, and none for the unranked, whose next step is games played and not a rating
+		Int numbersRight = pad + ( s_cardPortrait ? UIStyle::px( 126.0f ) : 0 );
+		for( Int each = CARD_OLD; each <= CARD_CHANGE; each++ )
+		{
+			Int w, h;
+			cardSize( each, w, h );
+			if( s_cardText[ each ] )
+				numbersRight += w + UIStyle::px( 16.0f );
+		}
+		const Int nextRoom = min( UIStyle::tallPx( 436.0f ), width - pad - numbersRight );
+		if( tier != UIStyle::TIER_UNRANKED && tier + 1 < UIStyle::TIER_COUNT && nextRoom > 0 )
+		{
+			const UIStyle::RatingTier next = (UIStyle::RatingTier)( tier + 1 );
+			const Real start = UIStyle::tierStart( tier );
+			const Real goal = UIStyle::tierStart( next );
+			UnicodeString words;
+			words.format( TheGameText->fetch( "GUI:OnlineNextTier" ), OnlineTierName( AsciiString( UIStyle::tierKey( next ) ) ).str(),
+				UIStyle::ratingText( goal ).str(), UIStyle::ratingText( goal - facts.after ).str() );
+			setCardText( CARD_NEXT, UIStyle::fitText( words, body, nextRoom ), body );
+			s_cardProgress = goal > start ? ( facts.after - start ) / ( goal - start ) : 1.0f;
+			s_cardTrackWidth = min( UIStyle::px( 436.0f ), nextRoom );
+		}
+	}
+
+	UnicodeString line;
+	s_cardSending = facts.sending;
+	if( facts.line == "GUI:OnlineScoreAISaved" )
+		line.format( TheGameText->fetch( facts.line ), UIStyle::ratingText( facts.after ).str() );
+	else if( facts.line == "GUI:OnlineScoreNoAnswer" || facts.line == "GUI:OnlineScoreSendingResult" )
+		line = newCardWords( facts.line );
+	else
+		line = TheGameText->fetch( facts.line );
+	setCardText( CARD_LINE, UIStyle::fitText( line, body, width - pad * 2 ), body );
+}
+
+/* The card on the mockup's grid at 1080 (px), each line pushed down where the one above it runs taller,
+	 as the type keeps its 1080 size on a 4:3 screen while px shrinks. */
+static void drawRatingCard( GameWindow *window, WinInstanceData *instData )
+{
+	if( s_cardText[ CARD_HEADING ] == NULL || s_cardText[ CARD_LINE ] == NULL )
+		return;
+	Int x, y, width, height;
+	window->winGetScreenPosition( &x, &y );
+	window->winGetSize( &width, &height );
+	UIStyle::panel( x, y, width, height, UIStyle::PANEL );
+	const Int pad = UIStyle::px( 24.0f );
+	const Int right = x + width - pad;
+	UIStyle::heading( s_cardText[ CARD_HEADING ], x + pad, y + UIStyle::px( 18.0f ) );
+
+	Int left = x + pad;
+	if( s_cardPortrait )
+	{
+		const Int portrait = UIStyle::px( 104.0f );
+		const Int top = y + UIStyle::px( 58.0f );
+		TheDisplay->drawImage( s_cardPortrait, left, top, left + portrait, top + portrait );
+		left += UIStyle::px( 126.0f );
+	}
+
+	Int lineTop = y + UIStyle::px( 178.0f );
+	if( s_cardText[ CARD_NEW ] )
+	{
+		// the numbers on one baseline, which sits about four fifths down a face's line
+		const Int rowTop = y + UIStyle::px( 62.0f );
+		Int w, h;
+		cardSize( CARD_NEW, w, h );
+		const Int newHeight = h;
+		const Int baseline = rowTop + newHeight * 4 / 5;
+		const Color colors[] = { UIStyle::MUTED, UIStyle::MUTED, UIStyle::INK, s_cardChangeColor };
+		Int at = left;
+		for( Int each = CARD_OLD; each <= CARD_CHANGE; each++ )
+		{
+			if( s_cardText[ each ] == NULL )
+				continue;
+			cardSize( each, w, h );
+			s_cardText[ each ]->draw( at, baseline - h * 4 / 5, colors[ each - CARD_OLD ], UIStyle::SHADOW );
+			at += w + UIStyle::px( 16.0f );
+		}
+		const Int tierTop = max( y + UIStyle::px( 138.0f ), rowTop + newHeight + UIStyle::px( 2.0f ) );
+		s_cardText[ CARD_TIER ]->draw( left, tierTop, UIStyle::INK, UIStyle::SHADOW );
+		cardSize( CARD_TIER, w, h );
+		lineTop = max( lineTop, tierTop + h + UIStyle::px( 6.0f ) );
+		if( s_cardText[ CARD_NEXT ] )
+		{
+			cardSize( CARD_NEXT, w, h );
+			const Int nextTop = y + UIStyle::px( 62.0f );
+			s_cardText[ CARD_NEXT ]->draw( right - w, nextTop, UIStyle::MUTED, UIStyle::SHADOW );
+			const Int trackTop = max( y + UIStyle::px( 98.0f ), nextTop + h + UIStyle::px( 4.0f ) );
+			UIStyle::track( right - s_cardTrackWidth, trackTop, s_cardTrackWidth, max( UIStyle::px( 10.0f ), 2 ), s_cardProgress );
+		}
+	}
+
+	s_cardText[ CARD_LINE ]->draw( x + pad, lineTop, UIStyle::MUTED, UIStyle::SHADOW );
+	if( s_cardSending )
+	{
+		// a quarter of a track sliding along it after the words: how long the send takes is not known
+		Int w, h;
+		cardSize( CARD_LINE, w, h );
+		const Int trackLeft = x + pad + w + pad;
+		const Int trackWidth = min( UIStyle::px( 300.0f ), right - trackLeft );
+		const Int trackHeight = max( UIStyle::px( 10.0f ), 2 );
+		if( trackWidth > trackHeight * 4 )
+		{
+			const Int trackTop = lineTop + ( h - trackHeight ) / 2;
+			UIStyle::track( trackLeft, trackTop, trackWidth, trackHeight, 0.0f );
+			const Int segment = trackWidth / 4;
+			const Int period = 1500;
+			const Int at = (Int)( Clock_Milliseconds() % period ) * ( trackWidth + segment ) / period - segment;
+			const Int from = max( at, 0 );
+			const Int to = min( at + segment, trackWidth );
+			if( to > from )
+				TheDisplay->drawFillRect( trackLeft + from, trackTop, to - from, trackHeight, UIStyle::EDGE );
+		}
+	}
+}
+
+/// after an AI match, in the chat's place: how the AI rating moves
+static void drawHowBox( GameWindow *window, WinInstanceData *instData )
+{
+	if( s_cardText[ CARD_HOW ] == NULL || s_cardText[ CARD_HOW_BODY ] == NULL )
+		return;
+	Int x, y, width, height;
+	window->winGetScreenPosition( &x, &y );
+	window->winGetSize( &width, &height );
+	UIStyle::panel( x, y, width, height, UIStyle::PANEL );
+	const Int pad = UIStyle::px( 24.0f );
+	const Int headTop = y + UIStyle::px( 20.0f );
+	UIStyle::heading( s_cardText[ CARD_HOW ], x + pad, headTop );
+	Int w, h;
+	cardSize( CARD_HOW, w, h );
+	s_cardText[ CARD_HOW_BODY ]->draw( x + pad, max( y + UIStyle::px( 60.0f ), headTop + h + UIStyle::px( 8.0f ) ), UIStyle::MUTED, UIStyle::SHADOW );
+}
+
+static GameWindow *makeCardWindow( Real top, Real bottom, GameWinDrawFunc draw )
+{
+	// over the summary panel, which is the backdrop's last child; it shows what is under it, and takes no input
+	GameWindow *window = TheWindowManager->winCreate( backdrop, WIN_STATUS_ENABLED | WIN_STATUS_NO_INPUT, 0, 0, 1, 1, GameWinDefaultSystem );
+	placeOnBoard( window, SCORE_LEFT, top, SCORE_LEFT_RIGHT, bottom );
+	window->winSetDrawFunc( draw );
+	return window;
+}
+
+/* The send holds Exit, the wide button and the card's Ladder or Quick Match button, every way off the
+	 screen, as the "Sending Results" box held the screen: from the first time the screen sees it, while
+	 it lasts, a second at least and thirty at most, and once a screen, so chat sent after it does not
+	 bring it back.  Any online network game; the card's line says why. */
+static void updateSendingHold( void )
+{
+	if( screenType != SCORESCREEN_INTERNET || !OnlineIsEnabled() || s_sendingOver )
+		return;
+	const Bool sending = OnlineIsSendingResults();
+	if( !s_sendingSeen )
+	{
+		if( !sending )
+			return;
+		s_sendingSeen = TRUE;
+		s_sendingSince = Clock_Milliseconds();
+	}
+	const Bool hold = ScoreScreen_sendingHolds( sending, Clock_Milliseconds() - s_sendingSince );
+	s_sendingOver = !hold;
+	// the release leaves them to the Save replay popup while it is up: it enables them as it closes
+	WindowLayout *replayPopup = TheShell->getPopupReplayLayout();
+	if( !hold && replayPopup && !replayPopup->isHidden() )
+		return;
+	GameWindow *held[] = { buttonOk, buttonContinue, s_card != SCORE_CARD_NONE ? buttonBuddies : NULL };
+	for( Int each = 0; each < ARRAY_SIZE( held ); each++ )
+	{
+		if( held[ each ] )
+			held[ each ]->winEnable( !hold );
+	}
+}
+
+static void updateRatingCard( void )
+{
+	if( s_card == SCORE_CARD_NONE || s_cardWindow == NULL )
+		return;
+	OnlineUpdate();
+	s_cardWindow->winHide( !ScoreScreenGraphsSummaryOpen() );
+	const RatingFacts facts = readRatingFacts();
+	if( s_cardBuilt && facts == s_cardFacts )
+		return;
+	s_cardFacts = facts;
+	s_cardBuilt = TRUE;
+	buildRatingCard( facts );
+}
+
+/** After the init of the screen's kind: the card for a Quick Match or a Play vs AI match, the row's
+	* buttons as the card's, and the AI box in the chat's place. */
+static void initRatingCard( void )
+{
+	s_card = SCORE_CARD_NONE;
+	s_leave = SCORE_LEAVE_STAY;
+	s_sendingSeen = s_sendingOver = FALSE;
+	s_cardBuilt = FALSE;
+	s_cardAIMatch.clear();
+	s_cardSince = Clock_Milliseconds();
+	if( !OnlineIsEnabled() )
+		return;
+	if( screenType == SCORESCREEN_INTERNET && TheGameSpyGame && TheGameSpyGame->isQMGame() )
+		s_card = SCORE_CARD_LADDER;
+	else if( isOnlineAIMatch() )
+		s_card = SCORE_CARD_AI;
+	else
+		return;
+	s_cardWon = TheVictoryConditions && TheVictoryConditions->isLocalAlliedVictory();
+	Player *local = ThePlayerList->getLocalPlayer();
+	s_cardSide = local ? local->getBaseSide() : AsciiString::TheEmptyString;
+	if( s_card == SCORE_CARD_AI && OnlineIsAIMatchLive() )
+		s_cardAIMatch = OnlineClaimAIMatch();
+	ScoreScreenGraphsSubtitle( s_card == SCORE_CARD_AI ? "GUI:OnlineScoreSubAI" : "GUI:OnlineScoreSubRanked" );
+
+	// the row: Save replay, Ladder (Quick Match after an AI match), Exit, and the wide button
+	if( buttonBuddies )
+	{
+		buttonBuddies->winHide( FALSE );
+		GadgetButtonSetText( buttonBuddies, TheGameText->fetch( s_card == SCORE_CARD_AI ? "GUI:OnlineTabQuickMatch" : "GUI:OnlineLadderButton" ) );
+	}
+	if( buttonContinue )
+	{
+		buttonContinue->winHide( FALSE );
+		GadgetButtonSetText( buttonContinue, TheGameText->fetch( s_card == SCORE_CARD_AI ? "GUI:OnlineScorePlayAgain" : "GUI:OnlineScoreAgain" ) );
+	}
+
+	s_cardWindow = makeCardWindow( SCORE_RATING_TOP, SCORE_RATING_BOTTOM, drawRatingCard );
+	if( s_card == SCORE_CARD_AI )
+	{
+		s_howWindow = makeCardWindow( SCORE_CHAT_TOP, SCORE_CONTENT_BOTTOM, drawHowBox );
+		setCardText( CARD_HOW, TheGameText->fetch( "GUI:OnlineScoreHow" ), UIStyle::sectionFont() );
+		setCardText( CARD_HOW_BODY, TheGameText->fetch( "GUI:OnlineScoreHow1" ), UIStyle::font( UIStyle::TEXT_BODY ) );
+		Int width, height;
+		s_howWindow->winGetSize( &width, &height );
+		s_cardText[ CARD_HOW_BODY ]->setWordWrap( width - UIStyle::px( 48.0f ) );
+	}
+	updateRatingCard();
+}
+
+static void freeRatingCard( void )
+{
+	freeCardText( 0, CARD_TEXT_COUNT );
+	GameWindow *made[] = { s_cardWindow, s_howWindow };
+	for( Int each = 0; each < ARRAY_SIZE( made ); each++ )
+	{
+		if( made[ each ] && TheWindowManager )
+			TheWindowManager->winDestroy( made[ each ] );
+	}
+	s_cardWindow = s_howWindow = NULL;
+	s_cardPortrait = NULL;
+	s_card = SCORE_CARD_NONE;
+}
+
+/* The card's buttons on the online stack, the hub at its foot.  This screen's pop left the page it
+	 uncovered asleep (Quick Match after a Quick Match, the hub after Play vs AI): every page's init starts
+	 the shell map, and two inits in one pass would start it twice.  So Quick Match goes without its init,
+	 the match it played closed here as its init would close it, and the hub wakes or a page opens over it
+	 as a tab would open it. */
+static void leaveToOnlinePage( ScoreLeave leave )
+{
+	WindowLayout *top = TheShell->top();
+	const AsciiString quickMatch( UIStyle::onlineTabScreen( UIStyle::ONLINE_TAB_QUICK_MATCH ) );
+	if( top && quickMatch.compareNoCase( top->getFilename() ) == 0 )
+	{
+		// as WOLQuickMatchMenuInit closes it: the match over, its negotiation gone, the room's slots cleared,
+		// so no card takes the finished game for the player's room
+		if( TheGameSpyGame && TheGameSpyGame->isGameInProgress() )
+			TheGameSpyGame->setGameInProgress( FALSE );
+		if( TheNAT != NULL )
+		{
+			delete TheNAT;
+			TheNAT = NULL;
+		}
+		if( TheGameSpyGame )
+			TheGameSpyGame->reset();
+		if( leave == SCORE_LEAVE_HUB )
+		{
+			TheShell->popImmediate();		// the hub's init runs
+			return;
+		}
+		TheShell->popImmediateIntoGame();
+	}
+	else if( leave == SCORE_LEAVE_HUB )
+	{
+		TheShell->showShell();		// whatever stood under this screen, woken as a plain pop would wake it
+		return;
+	}
+	TheShell->push( UIStyle::onlineTabScreen( leave == SCORE_LEAVE_LADDER ? UIStyle::ONLINE_TAB_LADDER : UIStyle::ONLINE_TAB_QUICK_MATCH ) );
+}
+
+/** A click on Exit, the Ladder or Quick Match button, or the wide one while the card is up. */
+static void ratingCardLeave( Int controlID )
+{
+	// Quick Match again lands on Quick Match with its picks kept, Exit after Play vs AI on the hub: both
+	// are what the pop uncovers.  Play again: that hub starts the next match as it opens.
+	s_leave = SCORE_LEAVE_STAY;
+	if( controlID == buttonBuddiesID )
+		s_leave = s_card == SCORE_CARD_AI ? SCORE_LEAVE_QUICK_MATCH : SCORE_LEAVE_LADDER;
+	else if( controlID == buttonOkID && s_card == SCORE_CARD_LADDER )
+		s_leave = SCORE_LEAVE_HUB;
+	else if( controlID == buttonContinueID && s_card == SCORE_CARD_AI )
+		WOLWelcomeMenuStartPlayVsAIOnEntry();
+	// a connection lost after the start: Quick Match's own init says so and goes back to the hub
+	if( s_card == SCORE_CARD_LADDER && TheGameSpyInfo && TheGameSpyInfo->isDisconnectedAfterGameStart( NULL ) )
+		s_leave = SCORE_LEAVE_STAY;
+	TheShell->pop();
+}
+
+/* -online, after any other network game (a custom one): the server's verdict as one line in the chat box,
+	 "Rating +1.3 -> 22" or why the match was unrated.  It comes a moment after both reports are in, while
+	 this screen is up. */
 static void showOnlineVerdict( void )
 {
-	if (s_onlineVerdictShown || screenType != SCORESCREEN_INTERNET || !OnlineIsEnabled() || !listboxChatWindowScoreScreen)
+	if (s_onlineVerdictShown || s_card != SCORE_CARD_NONE || screenType != SCORESCREEN_INTERNET || !OnlineIsEnabled()
+		|| !listboxChatWindowScoreScreen)
 		return;
 	OnlineUpdate();
 	Bool rated = FALSE;
@@ -208,89 +758,8 @@ static void showOnlineVerdict( void )
 	if (rated)
 		line.format( TheGameText->fetch( "GUI:OnlineRatedResult" ), delta, REAL_TO_INT( floorf( rating + 0.5f ) ) );
 	else
-	{
-		AsciiString label;
-		label.format( "GUI:OnlineUnrated_%s", reason.str() );
-		Bool known = FALSE;
-		UnicodeString why = TheGameText->fetch( label, &known );
-		line = known ? why : TheGameText->fetch( "GUI:OnlineUnrated" );
-	}
+		line = TheGameText->fetch( unratedKey( reason ) );
 	GadgetListBoxAddEntryText( listboxChatWindowScoreScreen, line, GameSpyColor[GSCOLOR_MOTD_HEADING], -1 );
-}
-
-/* -online: the report and the replay leave on the connection's own thread while this screen is up, and
-	 a player who quits here can take them down with the process.  A box with no button holds the screen
-	 until the server confirms them (an older server: until the connection has written them), or
-	 SENDING_BOX_MAX_MS, whichever comes first; it never holds
-	 the send itself.  It stays a second at least, so a small replay does not flash it for one frame, and
-	 shows once a screen, so chat sent after it does not bring it back. */
-enum { SENDING_BOX_MIN_MS = 1000, SENDING_BOX_MAX_MS = 30000 };
-static GameWindow *s_sendingBox = NULL;
-static Bool s_sendingBoxShown = FALSE;
-static UnsignedInt s_sendingBoxSince = 0;
-
-static void closeSendingBox( void )
-{
-	if (s_sendingBox && TheWindowManager)
-		TheWindowManager->winDestroy( s_sendingBox );
-	s_sendingBox = NULL;
-}
-
-/* MessageBox.wnd is laid out for a paragraph over a row of buttons; this box has two lines and no
-	 button, so the layout left it two thirds empty.  Keep its width and title band, cut the body to its
-	 wrapped text with a margin above and below, and centre the box on the screen. */
-static void fitSendingBox( GameWindow *box )
-{
-	GameWindow *parent = TheWindowManager->winGetWindowFromId( box,
-		TheNameKeyGenerator->nameToKey( "MessageBox.wnd:MessageBoxParent" ) );
-	GameWindow *body = parent ? TheWindowManager->winGetWindowFromId( parent->winGetChild(),
-		TheNameKeyGenerator->nameToKey( "MessageBox.wnd:StaticTextMessage" ) ) : NULL;
-	// the title band: the unnamed frame child, which shares the layout root's name
-	GameWindow *band = parent ? TheWindowManager->winGetWindowFromId( parent->winGetChild(),
-		TheNameKeyGenerator->nameToKey( "MessageBox.wnd:" ) ) : NULL;
-	TextData *data = body ? (TextData *)body->winGetUserData() : NULL;
-	if (!band || !data || !data->text)
-		return;
-	Int boxW, boxH, bandW, bandH, bodyX, bodyY, bodyW, bodyH, textW, textH;
-	parent->winGetSize( &boxW, &boxH );
-	band->winGetSize( &bandW, &bandH );
-	body->winGetPosition( &bodyX, &bodyY );
-	body->winGetSize( &bodyW, &bodyH );
-	data->text->setWordWrap( bodyW - 10 );		// as W3DGadgetStaticTextDraw wraps it
-	data->text->getSize( &textW, &textH );
-	const Int margin = UIStyle::px( 24.0f );
-	bodyH = textH + 2 * margin;		// the body centres its text vertically
-	body->winSetPosition( bodyX, bandH );
-	body->winSetSize( bodyW, bodyH );
-	boxH = bandH + bodyH + UIStyle::px( 6.0f );		// the body's black fill stops short of the box's bottom edge
-	parent->winSetSize( boxW, boxH );
-	parent->winSetPosition( (TheDisplay->getWidth() - boxW) / 2, (TheDisplay->getHeight() - boxH) / 2 );
-}
-
-static void updateSendingBox( void )
-{
-	if (screenType != SCORESCREEN_INTERNET || !OnlineIsEnabled())
-		return;
-	const Bool sending = OnlineIsSendingResults();
-	if (!s_sendingBox)
-	{
-		if (!sending || s_sendingBoxShown)
-			return;
-		s_sendingBoxShown = TRUE;
-		s_sendingBoxSince = Clock_Milliseconds();
-		s_sendingBox = MessageBoxOk( TheGameText->fetch( "GUI:OnlineSendingResultsTitle" ),
-			TheGameText->fetch( "GUI:OnlineSendingResults" ), NULL );
-		GameWindow *ok = s_sendingBox ? TheWindowManager->winGetWindowFromId( s_sendingBox,
-			TheNameKeyGenerator->nameToKey( "MessageBox.wnd:ButtonOk" ) ) : NULL;
-		if (ok)
-			ok->winHide( TRUE );		// it goes away by itself
-		if (s_sendingBox)
-			fitSendingBox( s_sendingBox );
-		return;
-	}
-	const UnsignedInt shown = Clock_Milliseconds() - s_sendingBoxSince;
-	if ((!sending && shown >= SENDING_BOX_MIN_MS) || shown >= SENDING_BOX_MAX_MS)
-		closeSendingBox();
 }
 
 struct ScoreGather
@@ -385,8 +854,6 @@ void ScoreScreenInit( WindowLayout *layout, void *userData )
 	DontShowMainMenu = TRUE; //KRIS
 	buttonIsFinishCampaign = FALSE;
 	s_onlineVerdictShown = FALSE;
-	s_sendingBox = NULL;
-	s_sendingBoxShown = FALSE;
 
 	//Store the keys so we have them later
 	parentID = TheNameKeyGenerator->nameToKey( AsciiString( "ScoreScreen.wnd:ParentScoreScreen" ) );
@@ -480,6 +947,9 @@ void ScoreScreenInit( WindowLayout *layout, void *userData )
 		buttonSaveReplay->winHide(TRUE);
 	}
 
+	// -online: the rating card after a Quick Match or Play vs AI, and the row's buttons for it
+	initRatingCard();
+
 	// The panel is the whole score screen; the layout's own table and its Tactical Analysis box stay
 	// hidden.  A General's Challenge mission keeps its portrait of the general instead, which
 	// finishSinglePlayerInit puts where the table was.  The panel stops above the chat after a
@@ -492,6 +962,8 @@ void ScoreScreenInit( WindowLayout *layout, void *userData )
 		if (!isChallengeCampaign)
 			ScoreScreenGraphsShow(staticTextGameSaved, FALSE);
 	}
+	else if (s_howWindow)
+		ScoreScreenGraphsShow(s_howWindow, TRUE);		// the AI box keeps the chat's place, and the seats stop over it as over the chat
 	else if (listboxChatWindowScoreScreen->winIsHidden())
 		ScoreScreenGraphsShow(NULL, FALSE);
 	else
@@ -526,13 +998,15 @@ void ScoreScreenShutdown( WindowLayout *layout, void *userData )
 {
 	DontShowMainMenu = FALSE; //KRIS
 	ScoreScreenGraphsShutdown();
-	closeSendingBox();
+	freeRatingCard();
+	const ScoreLeave leave = TheGameEngine != NULL && !TheGameEngine->getQuitting() ? s_leave : SCORE_LEAVE_STAY;
+	s_leave = SCORE_LEAVE_STAY;
 
 	// hide the layout
 	layout->hide( TRUE );
 
-	// our shutdown is complete
-	TheShell->shutdownComplete( layout );
+	// our shutdown is complete; where the card's buttons go elsewhere, the page uncovered stays asleep
+	TheShell->shutdownComplete( layout, leave != SCORE_LEAVE_STAY );
 
 	// Stopped, not faded.  A fade steps once per audio update, and what comes next is a map load
 	// (the shell map, or the next mission) that runs no audio update until it is done.  The score
@@ -545,6 +1019,8 @@ void ScoreScreenShutdown( WindowLayout *layout, void *userData )
 	if( TheGameEngine != NULL && !TheGameEngine->getQuitting() )
 		TheAudio->update();
 
+	if( leave != SCORE_LEAVE_STAY )
+		leaveToOnlinePage( leave );
 }
 
 /** Update the ScoreScreen */
@@ -565,7 +1041,8 @@ void ScoreScreenUpdate( WindowLayout * layout, void *userData)
 	}
 
 	showOnlineVerdict();
-	updateSendingBox();
+	updateSendingHold();
+	updateRatingCard();
 
 	//TheGameLogic->clearGameData() gets called after ScoreScreenInit and before the
 	//first ScoreScreenUpdate(), so it was creatively moved here so we can actually
@@ -621,10 +1098,11 @@ WindowMsgHandledType ScoreScreenInput( GameWindow *window, UnsignedInt msg,
 					// send a simulated selected event to the parent window of the
 					// back/exit button
 					//
-					if( BitTest( state, KEY_STATE_UP ) )
+					// not while the send holds the button
+					if( BitTest( state, KEY_STATE_UP ) && ( buttonOk == NULL || buttonOk->winGetEnabled() ) )
 					{
 
-						TheWindowManager->winSendSystemMsg( window, GBM_SELECTED, 
+						TheWindowManager->winSendSystemMsg( window, GBM_SELECTED,
 																								(WindowMsgData)buttonOk, buttonOkID );
 
 					}  // end if
@@ -677,7 +1155,9 @@ WindowMsgHandledType ScoreScreenSystem( GameWindow *window, UnsignedInt msg,
 
 			GameWindow *control = (GameWindow *)mData1;
 			Int controlID = control->winGetWindowId();
-			if( controlID == buttonOkID )
+			if( s_card != SCORE_CARD_NONE && ( controlID == buttonOkID || controlID == buttonContinueID || controlID == buttonBuddiesID ) )
+				ratingCardLeave( controlID );
+			else if( controlID == buttonOkID )
 			{
 				TheShell->pop();
 				TheCampaignManager->setCampaign(AsciiString::TheEmptyString);
@@ -1512,7 +1992,10 @@ void populatePlayerInfo( Player *player, Int pos)
 		DEBUG_ASSERTCRASH(FALSE,("Player %s does not have a scoreKeeper", player->getPlayerDisplayName().str()));
 		return;
 	}
-	ScoreScreenGraphsAddPlayer( player, overidePlayerDisplayName ? TheGameText->fetch("GUI:Player") : player->getPlayerDisplayName(), color );
+	UnicodeString name = overidePlayerDisplayName ? TheGameText->fetch("GUI:Player") : player->getPlayerDisplayName();
+	if( isOnlineAIMatch() && player->getPlayerType() == PLAYER_COMPUTER )
+		name = TheGameText->fetch( "GUI:OnlineComputerLabel" );		// Play vs AI's opponent, whose skill is its rating
+	ScoreScreenGraphsAddPlayer( player, name, color );
 
 	if ( screenType == SCORESCREEN_SKIRMISH && player->isLocalPlayer() )
 	{

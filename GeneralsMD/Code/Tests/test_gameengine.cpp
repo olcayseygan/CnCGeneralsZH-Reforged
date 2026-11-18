@@ -55,6 +55,7 @@
 #include "GameClient/ChallengeGenerals.h"
 #include "GameClient/FactionPicker.h"
 #include "GameClient/UIStyle.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 #include <fstream>
 #include <sstream>
 #include "GameNetwork/FrameResendPolicy.h"
@@ -8705,6 +8706,75 @@ TEST(capitals_reach_turkish_and_cyrillic_letters)
 	CHECK( UIStyle::capitals( UnicodeString( u"ß ÷" ) ) == UnicodeString( u"ß ÷" ) );
 	delete TheWritableGlobalData;
 	TheWritableGlobalData = saved;
+}
+
+/* The online pages write a rating to two decimals the language's way (the owner's "12.40 -> 14.10",
+	 Turkish 22,70) and a percentage Turkish puts the sign before; a tier is the site's (Player.php
+	 TIERS), unranked under five games, and shows EA's rank portrait of its name. */
+TEST(online_ratings_tiers_and_rank_portraits)
+{
+	CHECK( UIStyle::ratingTextIn( 22.7f, FALSE, TEXT_LANGUAGE_ENGLISH ) == UnicodeString( u"22.70" ) );
+	CHECK( UIStyle::ratingTextIn( 22.7f, FALSE, TEXT_LANGUAGE_TURKISH ) == UnicodeString( u"22,70" ) );
+	CHECK( UIStyle::ratingTextIn( 1.7f, TRUE, TEXT_LANGUAGE_ENGLISH ) == UnicodeString( u"+1.70" ) );
+	CHECK( UIStyle::ratingTextIn( -0.62f, TRUE, TEXT_LANGUAGE_TURKISH ) == UnicodeString( u"-0,62" ) );
+	CHECK( UIStyle::ratingTextIn( -0.004f, TRUE, TEXT_LANGUAGE_ENGLISH ) == UnicodeString( u"0.00" ) );
+	CHECK( UIStyle::ratingTextIn( 0.0f, FALSE, TEXT_LANGUAGE_GERMAN ) == UnicodeString( u"0,00" ) );
+	CHECK( UIStyle::ratingTextIn( 14.1f, FALSE, TEXT_LANGUAGE_ENGLISH ) == UnicodeString( u"14.10" ) );
+
+	CHECK_EQ( UIStyle::percent( 2, 3 ), 67 );
+	CHECK_EQ( UIStyle::percent( 1, 2 ), 50 );
+	CHECK_EQ( UIStyle::percent( 0, 0 ), 0 );
+	CHECK( UIStyle::percentTextIn( 55, TEXT_LANGUAGE_ENGLISH ) == UnicodeString( u"55%" ) );
+	CHECK( UIStyle::percentTextIn( 55, TEXT_LANGUAGE_TURKISH ) == UnicodeString( u"%55" ) );
+	CHECK( UIStyle::percentTextIn( 55, TEXT_LANGUAGE_FRENCH ) == UnicodeString( u"55 %" ) );
+
+	CHECK_EQ( UIStyle::ratingTier( 22.7f, 41 ), UIStyle::TIER_MAJOR );
+	CHECK_EQ( UIStyle::ratingTier( 22.7f, 4 ), UIStyle::TIER_UNRANKED );
+	CHECK_EQ( UIStyle::ratingTier( 22.7f, -1 ), UIStyle::TIER_UNRANKED );
+	CHECK_EQ( UIStyle::ratingTier( 30.0f, 5 ), UIStyle::TIER_GENERAL );
+	CHECK_EQ( UIStyle::ratingTier( 29.99f, 5 ), UIStyle::TIER_COLONEL );
+	CHECK_EQ( UIStyle::ratingTier( 14.1f, 27 ), UIStyle::TIER_LIEUTENANT );
+	CHECK_EQ( UIStyle::ratingTier( 5.0f, 5 ), UIStyle::TIER_SERGEANT );
+	CHECK_EQ( UIStyle::ratingTier( -3.0f, 10 ), UIStyle::TIER_PRIVATE );
+	CHECK_NEAR( UIStyle::tierStart( UIStyle::TIER_CAPTAIN ), 15.0f, 0.0001f );
+	CHECK_STR( UIStyle::tierKey( UIStyle::TIER_LIEUTENANT ), "lieutenant" );
+	CHECK_STR( UIStyle::tierKey( UIStyle::TIER_UNRANKED ), "unranked" );
+
+	// the site's tier wins: it rates the exact value (19.996 shows 20.00 and is still a captain), knows
+	// who is banned and its own minimum of games; the client's rule only when it sent none
+	OnlinePlayerInfo site;
+	site.hasRating = TRUE;
+	site.exactRating = 19.996f;
+	site.games = 41;
+	site.tier = "captain";
+	CHECK_EQ( UIStyle::playerTier( site ), UIStyle::TIER_CAPTAIN );
+	site.tier = "unranked";
+	CHECK_EQ( UIStyle::playerTier( site ), UIStyle::TIER_UNRANKED );
+	site.tier = "Major";
+	CHECK_EQ( UIStyle::playerTier( site ), UIStyle::TIER_MAJOR );
+	site.tier.clear();
+	site.exactRating = 22.7f;
+	CHECK_EQ( UIStyle::playerTier( site ), UIStyle::TIER_MAJOR );
+	site.tier = "marshal";
+	site.games = 3;
+	CHECK_EQ( UIStyle::playerTier( site ), UIStyle::TIER_UNRANKED );
+	site.hasRating = FALSE;
+	site.games = 41;
+	site.tier.clear();
+	CHECK_EQ( UIStyle::playerTier( site ), UIStyle::TIER_UNRANKED );
+
+	CHECK_EQ( UIStyle::tierRank( UIStyle::TIER_UNRANKED ), -1 );
+	CHECK_STR( UIStyle::rankImageName( AsciiString( "USA" ), UIStyle::tierRank( UIStyle::TIER_MAJOR ) ).str(), "Rank_Major_USA" );
+	CHECK_STR( UIStyle::rankImageName( AsciiString( "GLA" ), UIStyle::tierRank( UIStyle::TIER_GENERAL ) ).str(), "Rank_General_GLA" );
+	CHECK_STR( UIStyle::rankImageName( AsciiString( "America" ), UIStyle::tierRank( UIStyle::TIER_SERGEANT ) ).str(), "Rank_Sergeant_USA" );
+	CHECK_STR( UIStyle::rankImageName( AsciiString( "Random" ), UIStyle::tierRank( UIStyle::TIER_CAPTAIN ) ).str(), "Rank_CaptainElite" );
+	CHECK_STR( UIStyle::rankImageName( AsciiString( "Random" ), UIStyle::tierRank( UIStyle::TIER_PRIVATE ) ).str(), "Rank" );
+	CHECK_STR( UIStyle::rankImageName( AsciiString( "" ), 3 ).str(), "NewPlayer" );
+	CHECK( UIStyle::rankImageName( AsciiString( "China" ), 10 ).isEmpty() );
+
+	CHECK_EQ( UIStyle::changeColor( 1.4f ), UIStyle::GOLD );
+	CHECK_EQ( UIStyle::changeColor( -0.62f ), UIStyle::MUTED );
+	CHECK_EQ( UIStyle::changeColor( 0.0f ), UIStyle::INK );
 }
 
 /* The army screen's side box is ticked while the whole side is in the pool, and a click puts the

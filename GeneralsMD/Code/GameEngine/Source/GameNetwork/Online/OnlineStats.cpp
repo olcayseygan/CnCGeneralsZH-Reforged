@@ -24,6 +24,8 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Common/MultiplayerSettings.h"
+#include "Common/PlayerTemplate.h"
 #include "GameClient/GameText.h"
 #include "GameNetwork/Online/OnlineSession.h"
 #include "zhio.h"
@@ -165,6 +167,16 @@ Bool OnlineSendReport( const OnlineReport &report )
 		crcOdd.push_back( report.crcOdd[i] );
 	m.setInts( "discon", discon ).setStrings( "side", side );
 	m.setInts( "blind", blind ).setInts( "crcOdd", crcOdd );
+	// the map's folder and file, as the AI maps are named: a generated map lives under the user folder, whose
+	// path names the player's account on this machine and stays here.  A name toLine would refuse is left
+	// out, not the whole report with it.
+	const std::string path = report.map.str();
+	const size_t file = path.find_last_of( "\\/" );
+	const size_t folder = file == std::string::npos || file == 0 ? std::string::npos : path.find_last_of( "\\/", file - 1 );
+	const std::string map = folder == std::string::npos ? path.substr( file == std::string::npos ? 0 : file + 1 )
+		: "maps\\" + path.substr( folder + 1, file - folder - 1 ) + "\\" + path.substr( file + 1 );
+	if (!map.empty() && map.size() <= 255 && OnlineIsUtf8( map.data(), map.size() ))
+		m.setString( "map", map );
 	s.send( m );
 	return TRUE;
 }
@@ -268,13 +280,20 @@ void OnlineSendReplay( const char *match, const AsciiString &path )
 //-------------------------------------------------------------------------------------------------
 
 OnlinePlayerInfo::OnlinePlayerInfo() :
-	ping( -1 ), hasRating( FALSE ), rating( 0 ), games( -1 ), wins( -1 ), losses( -1 ), rank( 0 ),
+	ping( -1 ), hasRating( FALSE ), rating( 0 ), exactRating( 0.0f ), games( -1 ), wins( -1 ), losses( -1 ), rank( 0 ),
 	notOnline( FALSE ), hasStats( FALSE ), hasAIRating( FALSE ), aiRating( 0.0f ), aiGames( 0 ), aiWins( 0 ), serial( 0 )
 {
 }
 
-OnlineLadderRow::OnlineLadderRow() : rank( 0 ), hasRating( FALSE ), rating( 0 ), wins( 0 ), losses( 0 )
+OnlineLadderRow::OnlineLadderRow() : rank( 0 ), hasRating( FALSE ), rating( 0 ), exactRating( 0.0f ), wins( 0 ), losses( 0 ),
+	side( -1 ), color( -1 )
 {
+}
+
+// the whole number the %d screens print, from the two-decimal rating
+static Int roundRating( double rating )
+{
+	return (Int)floor( rating + 0.5 );
 }
 
 Bool OnlineGetPlayerInfo( const AsciiString &nick, OnlinePlayerInfo &out )
@@ -288,7 +307,8 @@ Bool OnlineGetPlayerInfo( const AsciiString &nick, OnlinePlayerInfo &out )
 	out.serial = c.serial;
 	out.ping = (Int)c.ping;
 	out.hasRating = c.hasRating;
-	out.rating = (Int)c.rating;
+	out.rating = roundRating( c.rating );
+	out.exactRating = (Real)c.rating;
 	out.tier = c.tier.c_str();
 	out.games = (Int)c.games;
 	out.wins = (Int)c.wins;
@@ -375,10 +395,14 @@ static OnlineLadderRow ladderRow( const OnlineMessage &m )
 	r.nick = m.getString( "nick" ).c_str();
 	const OnlineValue *rating = m.find( "rating" );
 	r.hasRating = rating && rating->kind == OnlineValue::NUMBER;
-	r.rating = r.hasRating ? (Int)floor( m.getNumber( "rating" ) + 0.5 ) : 0;
+	r.exactRating = r.hasRating ? (Real)m.getNumber( "rating" ) : 0.0f;
+	r.rating = r.hasRating ? roundRating( m.getNumber( "rating" ) ) : 0;
 	r.tier = m.getString( "tier" ).c_str();
 	r.wins = (Int)m.getInt( "wins", 0 );
 	r.losses = (Int)m.getInt( "losses", 0 );
+	// qm.matched's opponents: the seat's pick, clamped as a seat clamps it, so a screen may index with it
+	r.side = OnlineSeatSide( m.getInt( "side", -1 ), ThePlayerTemplateStore ? ThePlayerTemplateStore->getPlayerTemplateCount() : 0 );
+	r.color = OnlineSeatColor( m.getInt( "color", -1 ), TheMultiplayerSettings ? TheMultiplayerSettings->getNumColors() : 0 );
 	return r;
 }
 
@@ -441,6 +465,8 @@ Bool OnlineGetMatchReveal( OnlineMatchReveal &out )
 	out.opponents.clear();
 	out.server.clear();
 	out.revealMs = 0;
+	out.hasChance = FALSE;
+	out.chance = 0.0f;
 	out.serial = s.revealSerial;
 	if (!s.revealing)
 		return FALSE;
@@ -449,7 +475,147 @@ Bool OnlineGetMatchReveal( OnlineMatchReveal &out )
 		out.opponents.push_back( ladderRow( got[i] ) );
 	out.server = s.reveal.getString( "server" ).c_str();
 	out.revealMs = (Int)s.reveal.getInt( "revealMs", 0 );
+	const OnlineValue *chance = s.reveal.find( "chance" );
+	out.hasChance = chance && chance->kind == OnlineValue::NUMBER;
+	out.chance = (Real)s.reveal.getNumber( "chance" );
 	return TRUE;
+}
+
+static const char *const HISTORY_MODES[] = { "all", "qm", "ai" };		// by OnlineHistoryMode
+
+// a mode's name as OnlineHistoryMode, -1 for one this build does not know
+static Int historyMode( const std::string &name )
+{
+	for (Int k = ONLINE_HISTORY_ALL; k <= ONLINE_HISTORY_AI; ++k)
+		if (name == HISTORY_MODES[k])
+			return k;
+	return -1;
+}
+
+void OnlineRequestHistory( Int id, OnlineHistoryMode mode, Int limit )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (!s.authed || mode < ONLINE_HISTORY_ALL || mode > ONLINE_HISTORY_AI)
+		return;
+	s.expireHistory();
+	const OnlineHistoryKey key( id ? id : s.id, mode );
+	OnlineHistoryEntry &e = s.history[key];
+	if (e.askedMs)
+		return;		// one ask per key: its answer, its error or its timeout comes first
+	e.state = ONLINE_LADDER_WAITING;
+	e.askedMs = OnlineNowMs();
+	e.serial = ++s.historySerial;
+	OnlineMessage m;
+	m.setString( "t", "history" );
+	if (id)
+		m.setInt( "id", id );
+	m.setString( "mode", HISTORY_MODES[mode] ).setInt( "limit", limit < 1 ? 1 : limit > 20 ? 20 : limit );
+	s.send( m );
+	s.historyAsked.push_back( key );
+}
+
+void OnlineSession::historySettled( const OnlineHistoryKey &key, Int state )
+{
+	OnlineHistoryEntry &e = history[key];
+	e.state = state;
+	e.askedMs = 0;
+	e.serial = ++historySerial;
+	for (std::deque<OnlineHistoryKey>::iterator it = historyAsked.begin(); it != historyAsked.end(); ++it)
+	{
+		if (*it == key)
+		{
+			historyAsked.erase( it );
+			break;
+		}
+	}
+}
+
+void OnlineSession::noteHistory( const OnlineMessage &m )
+{
+	const Int k = historyMode( m.getString( "mode" ) );
+	if (k < 0)
+	{
+		DEBUG_LOG(("online: ignored a history line for mode %s\n", m.getString( "mode" ).c_str()));
+		return;
+	}
+	const OnlineHistoryKey key( m.getInt( "id", id ), k );
+	history[key].reply = m;
+	historySettled( key, ONLINE_LADDER_READY );
+}
+
+void OnlineSession::historyRefused( const OnlineMessage &m )
+{
+	// a server that names the ask in its error (id, mode) is matched on them, since a throttled ask is
+	// answered out of order; an older one names nothing, and its errors come in the order of the asks
+	const Int k = historyMode( m.getString( "mode" ) );
+	if (k >= 0)
+		historySettled( OnlineHistoryKey( m.getInt( "id", id ), k ), ONLINE_LADDER_FAILED );
+	else if (!historyAsked.empty())
+		historySettled( historyAsked.front(), ONLINE_LADDER_FAILED );
+}
+
+void OnlineSession::expireHistory()
+{
+	// a server that never answers (a handler that threw) must not leave a key waiting for ever
+	const long long now = OnlineNowMs();
+	for (std::map<OnlineHistoryKey, OnlineHistoryEntry>::iterator it = history.begin(); it != history.end(); ++it)
+		if (it->second.askedMs && now - it->second.askedMs > ONLINE_HISTORY_TIMEOUT_MS)
+			historySettled( it->first, ONLINE_LADDER_FAILED );		// an existing key: no insert, the iterator holds
+}
+
+UnsignedInt OnlineGetHistorySerial( Int id, OnlineHistoryMode mode )
+{
+	OnlineSession &s = OnlineSession::get();
+	s.expireHistory();
+	std::map<OnlineHistoryKey, OnlineHistoryEntry>::const_iterator it = s.history.find( OnlineHistoryKey( id ? id : s.id, mode ) );
+	return it == s.history.end() ? 0 : it->second.serial;
+}
+
+static void historyArmies( const OnlineMessage &m, const char *key, std::vector<OnlineHistoryArmy> &out )
+{
+	const std::vector<OnlineMessage> got = m.getObjects( key );
+	for (size_t i = 0; i < got.size(); ++i)
+	{
+		OnlineHistoryArmy a;
+		a.army = got[i].getString( "army" ).c_str();
+		a.games = (Int)got[i].getInt( "games" );
+		a.wins = (Int)got[i].getInt( "wins" );
+		out.push_back( a );
+	}
+}
+
+OnlineLadderState OnlineGetHistory( Int id, OnlineHistoryMode mode, OnlineHistory &out )
+{
+	OnlineSession &s = OnlineSession::get();
+	s.expireHistory();
+	out = OnlineHistory();
+	std::map<OnlineHistoryKey, OnlineHistoryEntry>::const_iterator it = s.history.find( OnlineHistoryKey( id ? id : s.id, mode ) );
+	if (it == s.history.end())
+		return ONLINE_LADDER_FAILED;
+	const OnlineMessage &m = it->second.reply;
+	out.arrived = m.size() > 0;
+	out.id = (Int)m.getInt( "id", it->first.first );
+	out.games = (Int)m.getInt( "games" );
+	out.wins = (Int)m.getInt( "wins" );
+	const std::vector<OnlineMessage> rows = m.getObjects( "rows" );
+	for (size_t i = 0; i < rows.size(); ++i)
+	{
+		OnlineHistoryRow r;
+		r.ai = rows[i].getString( "mode" ) == "ai";
+		r.won = rows[i].getString( "result" ) == "win";
+		r.map = rows[i].getString( "map" ).c_str();
+		r.opponent = rows[i].getString( "opponent" ).c_str();
+		r.opponentRating = (Real)rows[i].getNumber( "opponentRating" );
+		r.playerArmy = rows[i].getString( "playerArmy" ).c_str();
+		r.opponentArmy = rows[i].getString( "opponentArmy" ).c_str();
+		r.seconds = (Int)rows[i].getInt( "seconds" );
+		r.change = (Real)rows[i].getNumber( "change" );
+		r.age = (Int)rows[i].getInt( "age" );
+		out.rows.push_back( r );
+	}
+	historyArmies( m, "byArmy", out.byArmy );
+	historyArmies( m, "byOpponentArmy", out.byOpponentArmy );
+	return (OnlineLadderState)it->second.state;
 }
 
 Bool OnlineGetMatchResult( Bool &rated, Real &delta, Real &rating, AsciiString &reason )
@@ -458,8 +624,10 @@ Bool OnlineGetMatchResult( Bool &rated, Real &delta, Real &rating, AsciiString &
 	if (!s.result.size() || s.matchId.empty() || s.result.getString( "match" ) != s.matchId)
 		return FALSE;
 	rated = s.result.type() == "rated";
-	delta = (Real)s.result.getNumber( "delta" );
-	rating = (Real)s.result.getNumber( "rating" );
+	// delta and rating, or before and after from a server that sends those instead
+	const double after = s.result.getNumber( "after" );
+	delta = (Real)s.result.getNumber( "delta", after - s.result.getNumber( "before", after ) );
+	rating = (Real)s.result.getNumber( "rating", after );
 	reason = s.result.getString( "reason" ).c_str();
 	return TRUE;
 }

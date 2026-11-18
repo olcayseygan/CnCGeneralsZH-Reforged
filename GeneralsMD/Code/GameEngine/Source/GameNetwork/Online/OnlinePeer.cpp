@@ -45,8 +45,8 @@
 #include <shellapi.h>		// ShellExecuteA, OnlineOpenURL
 #endif
 
-// wall time for Play vs AI's ticks and seconds: a steady clock, which no time zone or clock change moves
-static long long onlineNowMs( void )
+// wall time for Play vs AI's ticks and seconds, the ping, the lock and the timeouts
+long long OnlineNowMs( void )
 {
 	return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::steady_clock::now().time_since_epoch() ).count();
@@ -137,10 +137,22 @@ OnlineSession &OnlineSession::get()
 
 OnlineSession::OnlineSession() :
 	connection( NULL ), capture( NULL ), status( ONLINE_OFF ), relayPort( 0 ), testMode( FALSE ), failRetry( 0 ),
-	cardSerial( 0 ), ladderState( ONLINE_LADDER_FAILED ), armiesState( ONLINE_LADDER_FAILED ), revealing( FALSE ), revealSerial( 0 ),
-	aiVerdictSerial( 0 ), peer( NULL ), buddy( NULL ), ps( NULL )
+	cardSerial( 0 ), ladderState( ONLINE_LADDER_FAILED ), armiesState( ONLINE_LADDER_FAILED ), historySerial( 0 ), revealing( FALSE ),
+	revealSerial( 0 ), aiVerdictSerial( 0 ), peer( NULL ), buddy( NULL ), ps( NULL )
 {
+	connectionGone();
 	forgetAccount();
+}
+
+void OnlineSession::connectionGone()
+{
+	counts.clear();
+	serverInfo.clear();
+	hasServerInfo = FALSE;
+	pingN = pingHeardN = 0;
+	pingSentMs = 0;
+	pingSmoothedMs = -1;
+	pingRefused = FALSE;
 }
 
 void OnlineSession::forgetAccount()
@@ -179,6 +191,11 @@ void OnlineSession::forgetAccount()
 	ladder.clear();
 	armiesState = ONLINE_LADDER_FAILED;
 	armies.clear();
+	history.clear();
+	historyAsked.clear();
+	qmLockUntilMs = 0;
+	qmWindow.clear();
+	qmWindowMs = 0;
 	revealing = FALSE;
 	aiState = ONLINE_AI_IDLE;		// a match the server never hears the end of, it settles itself
 	aiReady.clear();
@@ -186,7 +203,25 @@ void OnlineSession::forgetAccount()
 	aiMatch.clear();
 	aiReadyMs = aiTickMs = 0;
 	aiWonMatch.clear();
+	aiSentMatch.clear();
 	aiVerdict.clear();
+}
+
+void OnlineSession::pingServer()
+{
+	const long long now = OnlineNowMs();
+	if (status != ONLINE_WELCOMED || pingRefused || (pingSentMs && now - pingSentMs < ONLINE_PING_MS))
+		return;
+	OnlineMessage m;
+	m.setString( "t", "ping" ).setInt( "n", ++pingN );
+	pingSentMs = now;
+	send( m );
+}
+
+void OnlineSession::noteLock( long long seconds )
+{
+	// a year at most: a hostile number must not wrap the clock
+	qmLockUntilMs = seconds > 0 ? OnlineNowMs() + (seconds < 86400LL * 365 ? seconds : 86400LL * 365) * 1000 : 0;
 }
 
 void OnlineSession::beginTest( std::vector<OnlineMessage> *lines )
@@ -209,6 +244,7 @@ void OnlineSession::beginTest( std::vector<OnlineMessage> *lines )
 	testMode = FALSE;
 	registerUrl.clear();
 	resetUrl.clear();
+	accountUrl.clear();
 	failCode.clear();
 	failRetry = 0;
 	status = lines ? ONLINE_WELCOMED : ONLINE_OFF;
@@ -251,16 +287,22 @@ void OnlineSession::dial()
 	{
 		DEBUG_LOG(("online: cannot connect: %s\n", connection->error().c_str()));
 		status = ONLINE_FAILED;
+		connectionGone();
 		return;
 	}
 	status = ONLINE_CONNECTING;
+	connection->send( OnlineHelloLine( TheGlobalData->m_exeCRC, TheGlobalData->m_iniCRC,
+		TheVersion ? TheVersion->getReleaseVersion().str() : "" ) );
+}
 
+OnlineMessage OnlineHelloLine( UnsignedInt exe, UnsignedInt ini, const char *ver )
+{
+	// proto here as well as on the login: the welcome carries an object (counts) only to an exe that says
+	// it reads them, and a server from before reads exe, ini and ver and nothing else
 	OnlineMessage hello;
-	hello.setString( "t", "hello" );
-	hello.setInt( "exe", TheGlobalData->m_exeCRC );
-	hello.setInt( "ini", TheGlobalData->m_iniCRC );
-	hello.setString( "ver", TheVersion ? TheVersion->getReleaseVersion().str() : "" );
-	connection->send( hello );
+	hello.setString( "t", "hello" ).setInt( "exe", exe ).setInt( "ini", ini ).setString( "ver", ver ? ver : "" );
+	hello.setInt( "proto", ONLINE_PROTO );
+	return hello;
 }
 
 void OnlineSession::disconnect()
@@ -273,6 +315,7 @@ void OnlineSession::disconnect()
 	}
 	if (!capture)
 		status = ONLINE_OFF;
+	connectionGone();
 	forgetAccount();
 }
 
@@ -315,6 +358,7 @@ void OnlineSession::pump()
 			status = ONLINE_FAILED;
 			Bool wasIn = authed;
 			Bool wasTrying = authWaiting;
+			connectionGone();
 			forgetAccount();
 			if (wasIn || wasTrying)
 			{
@@ -324,6 +368,9 @@ void OnlineSession::pump()
 			}
 		}
 	}
+
+	if (connection && !capture)
+		pingServer();		// tests ping on the welcome alone, so a captured line list stays what the test sent
 
 	if (hostLeftGame && ++hostLeftPumps >= 2)
 		resolveHostLeft();
@@ -415,7 +462,9 @@ void OnlineSession::gameListEntry( const OnlineMessage &m )
 {
 	PeerResponse r = makePeer( PeerResponse::PEERRESPONSE_STAGINGROOM );
 	r.stagingRoom.action = m.getString( "action" ) == "add" ? PEER_ADD : PEER_UPDATE;
-	r.stagingRoom.isStaging = TRUE;
+	// GameSpy's meaning: a game being played is no longer staging.  The server keeps a started game listed
+	// with playing:true and refuses a join to it as full.
+	r.stagingRoom.isStaging = !m.getBool( "playing" );
 	r.stagingRoom.percentComplete = 100;
 	r.stagingRoom.id = (Int)m.getInt( "id" );
 	r.stagingServerName = MultiByteToWideCharSingleLine( m.getString( "name" ).c_str() );
@@ -496,6 +545,10 @@ void OnlineSession::noteCard( const OnlineMessage &m )
 	const std::string who = m.getString( "nick" );
 	if (who.empty())
 		return;
+	// the abandon lock rides on the player's own card (auth.ok, player, room.players), absent when free; a
+	// stats answer carries none, so it says nothing either way
+	if (authed && m.type() != "stats" && OnlineNickKey( who ) == OnlineNickKey( nick ))
+		noteLock( m.getInt( "lockSeconds" ) );
 	OnlineCard &c = cards[OnlineNickKey( who )];
 	const OnlineCard before = c;
 	const OnlineValue *v;
@@ -504,7 +557,7 @@ void OnlineSession::noteCard( const OnlineMessage &m )
 	if ((v = m.find( "rating" )) != NULL)
 	{
 		c.hasRating = v->kind == OnlineValue::NUMBER;
-		c.rating = c.hasRating ? (long long)floor( m.getNumber( "rating" ) + 0.5 ) : 0;
+		c.rating = c.hasRating ? m.getNumber( "rating" ) : 0;
 	}
 	if ((v = m.find( "tier" )) != NULL)
 		c.tier = m.getString( "tier" );
@@ -588,6 +641,17 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		send( pong );
 		return;
 	}
+	// the answer to our own ping: the round trip, smoothed as TCP smooths its own (an eighth of each sample)
+	if (t == "pong")
+	{
+		if (pingSentMs && m.getInt( "n", -1 ) == pingN && pingHeardN != pingN)
+		{
+			const double sample = (double)(OnlineNowMs() - pingSentMs);
+			pingSmoothedMs = pingSmoothedMs < 0 ? sample : pingSmoothedMs + (sample - pingSmoothedMs) / 8;
+			pingHeardN = pingN;
+		}
+		return;
+	}
 
 	// A game removed under a guest is the host leaving, unless it was removed because it started.
 	if (hostLeftGame && t != "game.start")
@@ -601,12 +665,17 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		testMode = m.getBool( "testMode" );
 		registerUrl = m.getString( "registerUrl" );
 		resetUrl = m.getString( "resetUrl" );
+		accountUrl = m.getString( "accountUrl" );
+		m.getObject( "counts", counts );		// none from an older server: cleared
+		hasServerInfo = m.getObject( "server", serverInfo );
 		status = ONLINE_WELCOMED;
 		if (hasPendingAuth)
 		{
 			hasPendingAuth = FALSE;
 			send( pendingAuth );
 		}
+		pingSentMs = 0;		// the first round trip at once
+		pingServer();
 	}
 	else if (t == "auth.ok")
 	{
@@ -708,6 +777,14 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		else if (what == "armies")
 		{
 			armiesState = ONLINE_LADDER_FAILED;
+		}
+		else if (what == "history")
+		{
+			historyRefused( m );
+		}
+		else if (what == "ping" && code == "unknown")
+		{
+			pingRefused = TRUE;		// a server from before the client's ping: no round trip to show
 		}
 		else if (what == "skins.get" || what == "skins.set")
 		{
@@ -902,20 +979,32 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 			revealing = FALSE;
 			quickMatch.clear();
 		}
+		m.getObject( "window", qmWindow );		// none from an older server, or once the search ended: cleared
+		qmWindowMs = OnlineNowMs();
 		PeerResponse r = makePeer( PeerResponse::PEERRESPONSE_QUICKMATCHSTATUS );
 		r.qmStatus.poolSize = (Int)m.getInt( "pool" );
 		if (st == "searching")
+		{
 			r.qmStatus.status = QM_WORKING;
+			noteLock( 0 );		// the queue took us: no lock
+		}
 		else if (st == "left")
 			r.qmStatus.status = QM_STOPPED;
 		else
-			r.qmStatus.status = QM_COULDNOTFINDBOT;		// locked: the leaver lock
+		{
+			// locked (the leaver lock) or busy.  The page tells a lock by OnlineGetQuickMatchLockSeconds, so a
+			// lock always reads at least a second, even in its last fraction of one
+			r.qmStatus.status = QM_COULDNOTFINDBOT;
+			if (st == "locked" && m.has( "seconds" ))
+				noteLock( m.getInt( "seconds" ) > 1 ? m.getInt( "seconds" ) : 1 );
+		}
 		peerResponse( r );
 	}
 	else if (t == "qm.matched")
 	{
 		matchId = m.getString( "match" );
 		quickMatch = matchId;		// the one match whose replay may go up, claimed by the recording it starts
+		qmWindow.clear();				// the search is over
 		rememberVips( *this, m );
 		const std::vector<OnlineMessage> opponents = m.getObjects( "opponents" );
 		for (size_t i = 0; i < opponents.size(); ++i)
@@ -968,6 +1057,16 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		armies = m;
 		armiesState = ONLINE_LADDER_READY;
 	}
+	else if (t == "history" && authed)
+	{
+		noteHistory( m );
+	}
+	else if (t == "counts")
+	{
+		// counts{players, games, queue} or the three at the top: either spelling of the 30-second push
+		if (!m.getObject( "counts", counts ))
+			counts = m;
+	}
 	else if (t == "report.ok" || t == "report.err" || t == "replay.ok" || t == "replay.err")
 	{
 		// the server has the report or the replay, or refused it: either way the score screen stops waiting
@@ -1013,7 +1112,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		{
 			aiReady = m;
 			aiState = ONLINE_AI_READY;
-			aiReadyMs = aiTickMs = onlineNowMs();
+			aiReadyMs = aiTickMs = OnlineNowMs();
 		}
 		const OnlineValue *rating = m.find( "aiRating" );
 		DEBUG_LOG(("ONLINE AI READY match=%s aiRating=%s map=%s seed=%lld\n", m.getString( "matchId" ).c_str(),
@@ -1212,9 +1311,12 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 			o.setInt( "np", req.gameOptions.numPlayers );
 			o.setInt( "no", req.gameOptions.numObservers );
 			o.setInt( "mp", req.gameOptions.maxPlayers );
+			/* the seated players only, one entry each in the order GameSpyInfo::setGameOptions packs them, name
+				 i with profile ID i: nothing past the last of them goes out, whatever the request holds there */
 			std::vector<std::string> names;
 			std::vector<long long> wins, losses, pids, factions, colors;
-			for (Int i = 0; i < MAX_SLOTS; ++i)
+			const Int seated = req.gameOptions.numPlayers + req.gameOptions.numObservers;
+			for (Int i = 0; i < seated && i < MAX_SLOTS; ++i)
 			{
 				names.push_back( req.gameOptsPlayerNames[i] );
 				wins.push_back( req.gameOptions.wins[i] );
@@ -1374,6 +1476,58 @@ AsciiString OnlineGetResetUrl( void )
 	return OnlineSession::get().resetUrl.c_str();
 }
 
+AsciiString OnlineGetAccountUrl( void )
+{
+	return OnlineSession::get().accountUrl.c_str();
+}
+
+Bool OnlineGetCounts( Int &players, Int &games, Int &queue )
+{
+	const OnlineMessage &c = OnlineSession::get().counts;
+	players = (Int)c.getInt( "players" );
+	games = (Int)c.getInt( "games" );
+	queue = (Int)c.getInt( "queue" );
+	return c.has( "players" );
+}
+
+Bool OnlineGetServerInfo( AsciiString &name, AsciiString &city, Int &pingMs )
+{
+	const OnlineSession &s = OnlineSession::get();
+	name = s.serverInfo.getString( "name" ).c_str();
+	city = s.serverInfo.getString( "city" ).c_str();
+	pingMs = s.pingSmoothedMs < 0 ? -1 : s.pingSmoothedMs >= INT_MAX ? INT_MAX : (Int)floor( s.pingSmoothedMs + 0.5 );
+	return s.hasServerInfo;
+}
+
+Int OnlineGetQuickMatchLockSeconds( void )
+{
+	const OnlineSession &s = OnlineSession::get();
+	if (!s.qmLockUntilMs)
+		return 0;
+	const long long left = s.qmLockUntilMs - OnlineNowMs();
+	return left <= 0 ? 0 : (Int)((left + 999) / 1000);		// a lock in its last fraction of a second still reads 1
+}
+
+AsciiString OnlineGetLastAIMatchId( void )
+{
+	return OnlineSession::get().aiSentMatch.c_str();
+}
+
+Bool OnlineGetQuickMatchChanceWindow( Real &chanceLo, Real &chanceHi, Int &nextMs )
+{
+	const OnlineSession &s = OnlineSession::get();
+	chanceLo = (Real)s.qmWindow.getNumber( "lo" );
+	chanceHi = (Real)s.qmWindow.getNumber( "hi" );
+	nextMs = -1;
+	const OnlineValue *next = s.qmWindow.find( "nextMs" );
+	if (next && next->kind == OnlineValue::NUMBER)
+	{
+		const long long left = s.qmWindow.getInt( "nextMs" ) - (OnlineNowMs() - s.qmWindowMs);
+		nextMs = left <= 0 ? 0 : left >= INT_MAX ? INT_MAX : (Int)left;
+	}
+	return s.qmWindow.has( "lo" ) && s.qmWindow.has( "hi" );
+}
+
 AsciiString OnlineGetLoginFailure( Int *retrySeconds )
 {
 	const OnlineSession &s = OnlineSession::get();
@@ -1522,7 +1676,7 @@ void OnlineDropAIMatch( void )
 void OnlineSendAITick( Int frame )
 {
 	OnlineSession &s = OnlineSession::get();
-	const long long now = onlineNowMs();
+	const long long now = OnlineNowMs();
 	if (s.aiMatch.empty() || now - s.aiTickMs < ONLINE_AI_TICK_SECONDS * 1000LL)
 		return;
 	s.aiTickMs = now;
@@ -1536,7 +1690,7 @@ void OnlineSendAIResult( const OnlineAIResult &r )
 	OnlineSession &s = OnlineSession::get();
 	if (s.aiMatch.empty())
 		return;
-	const long long seconds = (onlineNowMs() - s.aiReadyMs) / 1000;
+	const long long seconds = (OnlineNowMs() - s.aiReadyMs) / 1000;
 	OnlineMessage stats;
 	stats.setInt( "unitsBuilt", r.unitsBuilt ).setInt( "unitsLost", r.unitsLost ).setInt( "unitsKilled", r.unitsKilled );
 	stats.setInt( "structuresBuilt", r.structuresBuilt ).setInt( "structuresLost", r.structuresLost );
@@ -1552,6 +1706,7 @@ void OnlineSendAIResult( const OnlineAIResult &r )
 		r.structuresKilled, r.moneyEarned));
 	if (r.won)
 		s.aiWonMatch = s.aiMatch;		// its recording goes up as it closes (OnlineSendReplay)
+	s.aiSentMatch = s.aiMatch;		// the score screen matches the verdict against it
 	s.aiMatch.clear();
 }
 

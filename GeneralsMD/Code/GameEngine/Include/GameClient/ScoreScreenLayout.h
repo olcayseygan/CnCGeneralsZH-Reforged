@@ -62,6 +62,41 @@ const Real SCORE_STRIP_MIN = 90.0f;					///< the match strip under the standings
 const Real SCORE_STRIP_MAX = 120.0f;				///< and no taller than this under its label
 const Real SCORE_STRIP_BANDS = 48.0f;				///< the strip's bands never less: its marker lanes go first, then the strip
 
+/// -online, after a Quick Match or Play vs AI: the rating card under the two seat cards (both are 1v1),
+/// over the chat or the box on how the AI rating moves, which keep the chat's place from SCORE_CHAT_TOP
+const Real SCORE_RATING_TOP = 362.0f;
+const Real SCORE_RATING_BOTTOM = 590.0f;
+
+/// how long the card's "sending" line holds Exit and the wide button once the send was first seen: a
+/// second at least, so a small replay does not flash it, thirty at most, so a server that never answers
+/// does not keep the player
+const UnsignedInt SCORE_SENDING_MIN_MS = 1000;
+const UnsignedInt SCORE_SENDING_MAX_MS = 30000;
+
+/** Whether the buttons are still held shownMs after the send was first seen, sending while the result
+	* and replay are on their way. */
+inline Bool ScoreScreen_sendingHolds( Bool sending, UnsignedInt shownMs )
+{
+	return shownMs < SCORE_SENDING_MAX_MS && ( sending || shownMs < SCORE_SENDING_MIN_MS );
+}
+
+/// what the card's last line says
+enum ScoreRatingLine
+{
+	SCORE_LINE_SENDING,			///< the result on its way, over a sliding track
+	SCORE_LINE_NO_ANSWER,		///< no verdict SCORE_SENDING_MAX_MS after the screen opened
+	SCORE_LINE_VERDICT,			///< rated or unrated, as the server said
+};
+
+/** The line shownMs after the screen opened, with or without the server's verdict and with the send
+	* still going or done.  A verdict that comes after the no-answer line replaces it. */
+inline ScoreRatingLine ScoreScreen_ratingLine( Bool verdict, Bool sending, UnsignedInt shownMs )
+{
+	if( verdict && !sending )
+		return SCORE_LINE_VERDICT;
+	return shownMs < SCORE_SENDING_MAX_MS ? SCORE_LINE_SENDING : SCORE_LINE_NO_ANSWER;
+}
+
 /// one player as the standings see him
 struct ScoreSeat
 {

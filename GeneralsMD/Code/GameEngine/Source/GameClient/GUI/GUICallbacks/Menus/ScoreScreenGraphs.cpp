@@ -325,6 +325,7 @@ static std::vector< GraphHit > s_hits;
 static GraphPlot s_plot;
 static DisplayString *s_title = NULL;							///< the map's name
 static DisplayString *s_subtitle = NULL;					///< the format and the length, "4v4" a middle dot "23:41"
+static const char *s_subtitleKey = NULL;					///< -online: the words round the format and the length (ScoreScreenGraphsSubtitle)
 static DisplayString *s_wordmark[ 2 ] = { NULL, NULL };
 static DisplayString *s_verdict = NULL;						///< VICTORY, DEFEAT, TEAM 2 WINS, NO WINNER
 static Color s_verdictColor = 0;
@@ -785,6 +786,13 @@ static void prepareStandings( void )
 		subtitle.concat( UIStyle::HEADER_JOINER );
 	}
 	subtitle.concat( clockText( matchEndFrame() ) );
+	if( s_subtitleKey && !s_campaign && !s_order.empty() )
+	{
+		Bool freeForAll = FALSE;
+		UnicodeString format;
+		format.translate( AsciiString( ScoreScreen_format( s_order, &freeForAll ).c_str() ) );
+		subtitle.format( fetchText( s_subtitleKey ), format.str(), clockText( matchEndFrame() ).str() );
+	}
 	freeText( s_subtitle );
 	s_subtitle = newText( subtitle, UIStyle::subtitleFont() );
 
@@ -2250,6 +2258,7 @@ void ScoreScreenGraphsInit( GameWindow *backdrop )
 	s_small = UIStyle::font( UIStyle::TEXT_SMALL );
 	s_smallBold = UIStyle::font( UIStyle::TEXT_SMALL, TRUE );
 	s_campaign = FALSE;		// until ScoreScreenGraphsSinglePlayer says the rows are a mission's
+	s_subtitleKey = NULL;
 	readMatchEnd();
 
 	// the match's map names the page, as it named the load screen; a campaign mission's map has no
@@ -2401,6 +2410,20 @@ void ScoreScreenGraphsShow( GameWindow *floor, Bool chat )
 	}
 	layoutPanel();
 	s_panel->winHide( FALSE );
+}
+
+/// TRUE while the Summary is the open page: the rating card after an online match stands on it alone
+Bool ScoreScreenGraphsSummaryOpen( void )
+{
+	return s_tab == TAB_SUMMARY;
+}
+
+/// -online: the header's subtitle as key words it, its two %ls the format and the length ("Ranked 1v1 ·
+/// 14:32"); before the panel is shown.  The key is a literal and outlives the screen.
+void ScoreScreenGraphsSubtitle( const char *key )
+{
+	s_subtitleKey = key;
+	s_prepared = FALSE;
 }
 
 void ScoreScreenGraphsShutdown( void )

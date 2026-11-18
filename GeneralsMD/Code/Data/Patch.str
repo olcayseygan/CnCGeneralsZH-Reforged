@@ -5828,3 +5828,721 @@ END
 GUI:QMMapNoAnswer
 "%ls's game never confirmed this match's map, so the match was called off. Their game may be an older version."
 END
+
+// The redesigned online screens (docs/plans/ONLINE-UI-REDESIGN.md): words shared by several screens.
+// A rating is a pre-formatted UnicodeString argument (%ls), since Turkish writes 22,70.
+GUI:OnlineLabel
+"ONLINE"
+END
+
+GUI:OnlineTabHome
+"HOME"
+END
+
+GUI:OnlineTabQuickMatch
+"QUICK MATCH"
+END
+
+GUI:OnlineTabCustom
+"CUSTOM GAMES"
+END
+
+GUI:OnlineAIShort
+"AI"
+END
+
+GUI:OnlineLadderRatingLabel
+"Ladder rating"
+END
+
+GUI:OnlineAIRatingLabel
+"AI rating"
+END
+
+GUI:OnlineGamesLabel
+"Games"
+END
+
+GUI:OnlineWinRateLabel
+"Win rate"
+END
+
+GUI:OnlineSpeedLabel
+"Speed"
+END
+
+GUI:OnlinePlaceLabel
+"Place"
+END
+
+GUI:OnlinePlaceValue
+"#%d"
+END
+
+GUI:OnlineWinLabel
+"Win"
+END
+
+GUI:OnlineLossLabel
+"Loss"
+END
+
+GUI:OnlineMapLabel
+"Map"
+END
+
+GUI:OnlineOpponentLabel
+"Opponent"
+END
+
+GUI:OnlineOpenGamesLabel
+"Open games"
+END
+
+GUI:OnlineComputerLabel
+"Computer"
+END
+
+GUI:OnlineQuickMatchLabel
+"Quick Match"
+END
+
+GUI:OnlineNextTier
+"%ls at %ls · %ls to go"
+END
+
+// the general's short names on the army cards and the score screen
+GUI:OnlineGeneralSuper
+"Superweapon"
+END
+
+GUI:OnlineGeneralLaser
+"Laser"
+END
+
+GUI:OnlineGeneralAir
+"Air Force"
+END
+
+GUI:OnlineGeneralTank
+"Tank"
+END
+
+GUI:OnlineGeneralInf
+"Infantry"
+END
+
+GUI:OnlineGeneralNuke
+"Nuke"
+END
+
+GUI:OnlineGeneralToxin
+"Toxin"
+END
+
+GUI:OnlineGeneralDemo
+"Demolition"
+END
+
+GUI:OnlineGeneralStealth
+"Stealth"
+END
+
+// login
+GUI:OnlineLoginOnlineNow
+"Online now"
+END
+
+GUI:OnlineLoginInQuickMatch
+"In Quick Match"
+END
+
+GUI:OnlineLoginLauncher
+"The launcher picks the server, the nearest by ping unless you choose another there."
+END
+
+GUI:OnlineLoginHeading
+"Sign in"
+END
+
+GUI:OnlineLoginKeepHint
+"Your password is never stored"
+END
+
+GUI:OnlineLoginFailed
+"Sign in failed"
+END
+
+GUI:OnlineLoginBadBody
+"Wrong email, nickname or password. Check them and try again."
+END
+
+GUI:OnlineLoginBrowser
+"Both open zerohour.gg in your browser."
+END
+
+// hub
+GUI:OnlineHubVsAITitle
+"Play vs AI"
+END
+
+GUI:OnlineHubVsAILead
+"Unranked · against the computer"
+END
+
+GUI:OnlineHubRecord
+"W–L"
+END
+
+GUI:OnlineHubVsAIExplain
+"Random official 1v1 map. The computer plays at your AI rating; a win raises it, a loss lowers it."
+END
+
+GUI:OnlineHubPlay
+"PLAY"
+END
+
+GUI:OnlineHubQuickMatchLead
+"Ranked · 1v1"
+END
+
+GUI:OnlineHubInQueue
+"In queue"
+END
+
+GUI:OnlineHubQuickMatchExplain
+"One opponent near your ladder rating, on a map generated for the match. The result moves you on the ladder."
+END
+
+GUI:OnlineHubFindMatch
+"FIND MATCH"
+END
+
+GUI:OnlineHubCustomTitle
+"Custom games"
+END
+
+GUI:OnlineHubCustomLead
+"Unranked · 2 to 8 players"
+END
+
+GUI:OnlineHubCustomExplain
+"Host a room with your own rules or join one. Chat with whoever is on %ls."
+END
+
+GUI:OnlineHubBrowse
+"BROWSE GAMES"
+END
+
+GUI:OnlineHubRecent
+"Recent matches"
+END
+
+GUI:OnlineHubMatchAI
+"vs AI"
+END
+
+GUI:OnlineHubAgoHours
+"%d h ago"
+END
+
+GUI:OnlineHubYday
+"Yesterday"
+END
+
+GUI:OnlineHubAgoDays
+"%d days ago"
+END
+
+GUI:OnlineHubFrom
+"From %ls"
+END
+
+GUI:OnlineHubMotd3
+"The ladder and every match are on zerohour.gg."
+END
+
+GUI:OnlineHubMyCard
+"MY CARD"
+END
+
+GUI:OnlineHubSignOut
+"SIGN OUT"
+END
+
+// player card
+GUI:OnlineCardInRoom
+"In the %ls room · %ls"
+END
+
+GUI:OnlineCardTabAI
+"VS AI"
+END
+
+GUI:OnlineCardByOwn
+"By own army"
+END
+
+GUI:OnlineCardByAI
+"By AI army"
+END
+
+GUI:OnlineCardByOpp
+"By opponent's army"
+END
+
+GUI:OnlineCardLastAI
+"Last AI matches"
+END
+
+GUI:OnlineCardLastQM
+"Last Quick Matches"
+END
+
+GUI:OnlineCardColAI
+"AI played at"
+END
+
+GUI:OnlineCardProfile
+"PROFILE ON ZEROHOUR.GG"
+END
+
+GUI:OnlineCardArmyChinaTank
+"China Tank"
+END
+
+GUI:OnlineCardArmyUsaLaser
+"USA Laser"
+END
+
+GUI:OnlineCardArmyGlaToxin
+"GLA Toxin"
+END
+
+GUI:OnlineCardArmyGlaStealth
+"GLA Stealth"
+END
+
+GUI:OnlineCardArmyChinaNuke
+"China Nuke"
+END
+
+GUI:OnlineCardArmyUsaAir
+"USA Air Force"
+END
+
+// ladder
+GUI:OnlineLadderSub
+"Every server, one ladder"
+END
+
+GUI:OnlineLadderPage
+"Ranks %d–%d"
+END
+
+// literal percent sign: the screen runs this through format
+GUI:OnlineLadderWinPct
+"Win %%"
+END
+
+GUI:OnlineLadderYourPlace
+"Your place"
+END
+
+GUI:OnlineLadderRecord
+"%d wins · %d losses"
+END
+
+GUI:OnlineLadderJump
+"JUMP TO MY PAGE"
+END
+
+GUI:OnlineLadderTiers
+"Ranks"
+END
+
+GUI:OnlineLadderTierUp
+"%ls and up"
+END
+
+GUI:OnlineLadderTierRange
+"%ls to %ls"
+END
+
+GUI:OnlineLadderTierUnder
+"under %ls"
+END
+
+GUI:OnlineLadderTierUnranked
+"under 5 games"
+END
+
+// lobby
+GUI:OnlineLobbyCount
+"%d open · %d playing"
+END
+
+GUI:OnlineLobbyColGame
+"Game"
+END
+
+GUI:OnlineLobbyColPlayers
+"Players"
+END
+
+GUI:OnlineLobbyFull
+"Full"
+END
+
+GUI:OnlineLobbyInRoom
+"In %ls"
+END
+
+GUI:OnlineLobbyRoomGeneral
+"General"
+END
+
+GUI:OnlineLobbyRoomCount
+"%ls %d"
+END
+
+GUI:OnlineLobbySay
+"Say something to %ls"
+END
+
+GUI:OnlineLobbyJoin
+"JOIN"
+END
+
+GUI:OnlineLobbyHost
+"HOST GAME"
+END
+
+// Quick Match page
+GUI:QMRandomArmy
+"Random army"
+END
+
+GUI:QMRandomHint
+"One of the twelve, drawn when the match starts"
+END
+
+GUI:QMNoGeneral
+"No general"
+END
+
+GUI:QMAll
+"ALL"
+END
+
+GUI:QMNone
+"NONE"
+END
+
+GUI:QMSearch
+"SEARCH"
+END
+
+GUI:QMSearching
+"Searching for an opponent"
+END
+
+GUI:QMWindow
+"Window"
+END
+
+GUI:QMWindowValue
+"Opponents you would beat %d to %d times in 100"
+END
+
+GUI:QMWidens
+"Widens to %d to %d in %d:%02d"
+END
+
+GUI:QMWidenCap
+"Stops widening at %d to %d"
+END
+
+GUI:QMYourPicks
+"Your picks"
+END
+
+GUI:QMPicksHint
+"Stop the search to change them."
+END
+
+GUI:QMStop
+"STOP"
+END
+
+GUI:QMFound
+"Opponent found"
+END
+
+GUI:QMYou
+"You"
+END
+
+GUI:QMVs
+"VS"
+END
+
+GUI:QMChance
+"Win chance"
+END
+
+GUI:QMStartsBanner
+"MATCH STARTS IN %d"
+END
+
+// room
+// the room's rule labels where the whole text does not fit (UIStyle::fitKey, "<label>_Short")
+GUI:GameSpeed_Short
+"Speed"
+END
+
+GUI:StartingMoney_Short
+"Cash"
+END
+
+GUI:Superweapons_Short
+"Supers"
+END
+
+GUI:IncomeSharing_Short
+"Sharing"
+END
+
+GUI:SupplyPileLimit_Short
+"Piles"
+END
+
+GUI:TechRespawn_Short
+"Respawn"
+END
+
+GUI:UnitLimit_Short
+"Units"
+END
+
+// online score screen
+GUI:OnlineScoreSubRanked
+"Ranked %ls · %ls"
+END
+
+GUI:OnlineScoreSubAI
+"Play vs AI · %ls · %ls · not on the ladder"
+END
+
+GUI:OnlineScoreSending
+"Sending the result and replay"
+END
+
+GUI:OnlineScoreConfirmed
+"Result confirmed by both players. Replay stored on zerohour.gg."
+END
+
+GUI:OnlineScoreAISaved
+"Saved to your account. The next computer plays at %ls."
+END
+
+GUI:OnlineScoreAIHeld
+"The win was not rated. An admin will look at it."
+END
+
+GUI:OnlineScoreAgain
+"QUICK MATCH AGAIN"
+END
+
+GUI:OnlineScorePlayAgain
+"PLAY AGAIN"
+END
+
+GUI:OnlineScoreHow
+"How the AI rating moves"
+END
+
+GUI:OnlineScoreHow1
+"A win against the computer raises your AI rating and a loss lowers it. The next computer plays at the new number. Your ladder rating moves only in Quick Match."
+END
+
+// skins
+GUI:OnlineSkinsSub
+"One look per unit"
+END
+
+GUI:OnlineSkinsUsaTank
+"USA tank"
+END
+
+GUI:OnlineSkinsChinaTank
+"China tank"
+END
+
+GUI:OnlineSkinsGlaTank
+"GLA tank"
+END
+
+GUI:OnlineSkinsWorn
+"Worn"
+END
+
+GUI:OnlineSkinsOwned
+"Owned"
+END
+
+GUI:OnlineSkinsLocked
+"Not owned"
+END
+
+GUI:OnlineSkinsUnsaved
+"Picked, not saved"
+END
+
+GUI:OnlineSkinsLockedHint
+"Redeem a code at zerohour.gg"
+END
+
+GUI:OnlineSkinsGet
+"Getting skins"
+END
+
+GUI:OnlineSkinsGet1
+"A skin belongs to your zerohour.gg account. Redeem a code on the account page, then open this page again."
+END
+
+GUI:OnlineSkinsOpenSite
+"OPEN ZEROHOUR.GG"
+END
+
+GUI:OnlineSkinsWho
+"Who sees them"
+END
+
+GUI:OnlineSkinsWho1
+"Everyone in your Quick Match and custom games. LAN and skirmish games never show a skin."
+END
+
+GUI:OnlineSkinsPending
+"%d changes not saved yet"
+END
+
+GUI:OnlineSkinsPending1
+"1 change not saved yet"
+END
+
+// the load screen's next tip (it counts GUI:LoadTip<n> until one is missing)
+GUI:LoadTip11
+"Play vs AI online keeps its own AI rating and never touches your ladder rating."
+END
+
+// online screens, second pass: the Quick Match page on generated maps, the lobby and hub states
+GUI:OnlineLadderShort
+"Ladder"
+END
+
+GUI:QMQueueHere
+"%d others are searching on %ls"
+END
+
+GUI:QMGeneratedLine
+"Every match is played on a map made for it alone, so neither of you has seen it before."
+END
+
+GUI:QMNewMap
+"New map"
+END
+
+GUI:QMMapGenerated
+"Made for this match alone. Neither of you has played it."
+END
+
+GUI:QMCheckingMap
+"Checking the map with your opponent"
+END
+
+GUI:QMRefused
+"The server would not put you in the queue. Try again in a moment."
+END
+
+GUI:OnlineLobbyEmpty
+"No open games on %ls. Host one."
+END
+
+GUI:OnlineLobbyJoining
+"Joining"
+END
+
+GUI:OnlineLobbyCountOpen
+"%d open"
+END
+
+GUI:OnlineLadderGamesOf
+"%d of %d games"
+END
+
+GUI:OnlineHubRankedGames
+"%d of %d games"
+END
+
+GUI:OnlineHubAgoMinutes
+"%d min ago"
+END
+
+GUI:OnlineHubRecentNone
+"No Quick Match or AI games yet."
+END
+
+GUI:OnlineHubRecentNoAnswer
+"The server sent no match history."
+END
+
+GUI:OnlineCardArmyUsaSuper
+"USA Superweapon"
+END
+
+GUI:OnlineCardArmyChinaInf
+"China Infantry"
+END
+
+GUI:OnlineCardArmyGlaDemo
+"GLA Demolition"
+END
+
+GUI:OnlineCardUnavailable
+"Match history is not available right now."
+END
+
+// online screens, third pass
+GUI:OnlineLobbyPlaying
+"Playing"
+END
+
+GUI:OnlineHubQuickMatchLocked
+"Quick Match is locked for %d:%02d"
+END
+
+GUI:QMLocked
+"Quick Match is locked for %d:%02d"
+END
+
+GUI:OnlineScoreSendingResult
+"Sending the result"
+END
+
+GUI:OnlineScoreNoAnswer
+"The server has not answered yet. The result will show on zerohour.gg."
+END
+
+// the hub card paragraphs where the whole text does not fit (UIStyle::fitKey, "<label>_Short")
+GUI:OnlineHubVsAIExplain_Short
+"Official 1v1 map. A win raises your AI rating, a loss lowers it."
+END
+
+GUI:OnlineHubQuickMatchExplain_Short
+"One opponent near your rating on a generated map. Counts for the ladder."
+END
+
+GUI:OnlineHubCustomExplain_Short
+"Host or join a room. Chat with whoever is on %ls."
+END

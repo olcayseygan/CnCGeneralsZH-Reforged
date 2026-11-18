@@ -71,6 +71,7 @@
 #include "GameNetwork/GameSpy/PersistentStorageThread.h"
 #include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/Online/OnlineQueues.h"
+#include "GameClient/UIStyle.h"
 #include "Lib/WideCharFns.h"
 #include "GameNetwork/NAT.h"
 #include "GameNetwork/GUIUtil.h"
@@ -1343,7 +1344,20 @@ void WOLDisplaySlotList( void )
 				slot->setPingString(TheGameSpyInfo->getPingString());
 			}
 
-			if (genericPingWindow[i])
+			if (genericPingWindow[i] && OnlineIsEnabled())
+			{
+				// -online routes every game through the relay, so the pinger's figure reads 1000 for
+				// everyone; the seat's light is the player's own round trip to the server, from his card,
+				// and no light while the lobby has not heard one
+				AsciiString nick;
+				nick.translate(slot->getName());
+				OnlinePlayerInfo card;
+				const Image *light = OnlineGetPlayerInfo(nick, card) ? UIStyle::pingImage(card.ping) : NULL;
+				genericPingWindow[i]->winHide(light == NULL);
+				if (light)
+					genericPingWindow[i]->winSetEnabledImage(0, light);
+			}
+			else if (genericPingWindow[i])
 			{
 				genericPingWindow[i]->winHide(FALSE);
 				Int ping = slot->getPingAsInt();

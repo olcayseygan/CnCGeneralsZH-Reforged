@@ -32,10 +32,14 @@
 
 #include "Lib/BaseType.h"
 #include "GameClient/Color.h"
+#include "Common/AsciiString.h"
 #include "Common/UnicodeString.h"
 
 class GameFont;
 class DisplayString;
+class GameWindow;
+class Image;
+struct OnlinePlayerInfo;
 
 namespace UIStyle
 {
@@ -56,7 +60,8 @@ namespace UIStyle
 	extern const Color FRAME;						///< a panel's and a card's edge, the header rule
 	extern const Color GRID;						///< faint rules: a chart's grid, between rows, a bar's track
 	extern const Color EDGE;						///< a button's edge, a progress bar, a selection
-	extern const Color EDGE_LIT;				///< the bright middle line of a button's edge, a hover	extern const Color TAB_EDGE;				///< a tab's box
+	extern const Color EDGE_LIT;				///< the bright middle line of a button's edge, a hover
+	extern const Color TAB_EDGE;				///< a tab's box
 	extern const Color INK;							///< words and numbers
 	extern const Color MUTED;						///< what is secondary
 	extern const Color ACTIVE;					///< the layouts' green: section headings, the open tab, chip labels
@@ -150,6 +155,10 @@ namespace UIStyle
 	/// abbreviate in font for the text language the game shows
 	UnicodeString fitText( const UnicodeString &text, GameFont *font, Int widest,
 		const UnicodeString &shortForm = UnicodeString::TheEmptyString, const UnicodeString &keep = UnicodeString::TheEmptyString );
+	/// whether the string files hold key, asked without fetching it: a fetch of a missing label logs
+	/// "TEXT MISSING", which online_check.py fails a run on, so an optional key (a _Short form, the
+	/// tip after the last) is probed here first
+	Bool hasText( const char *key );
 	/// the string of key fitted in font, its "<key>_Short" form tried before the automatic one
 	UnicodeString fitKey( const char *key, GameFont *font, Int widest );
 	/// a player's name fitted in font: whole, or cut with an ellipsis, never abbreviated
@@ -158,6 +167,153 @@ namespace UIStyle
 	/// a house colour lifted toward white where it is too dark to read as words on a panel
 	Color readable( Color player );
 	Color withAlpha( Color color, Int alpha );
+
+	/// the face of a section heading inside a panel: the rooms' column heads' size, as the options
+	/// screen's "Volume" measures
+	GameFont *sectionFont( void );
+	/// a section heading, ACTIVE, in sectionFont
+	void heading( DisplayString *words, Int x, Int y );
+	/// a fact row (Games, Win rate, Speed on a hub card): the label MUTED at the left, the value in
+	/// valueColor ending at the row's right edge, both centred on the row, a GRID rule under it
+	void fact( DisplayString *label, DisplayString *value, Int x, Int y, Int width, Int height, Color valueColor = INK );
+	/// a track: GRID, filled from the left to fraction (0 to 1) in fill
+	void track( Int x, Int y, Int width, Int height, Real fraction, Color fill = EDGE );
+	/// a chip's face, TEXT_SMALL bold
+	GameFont *chipFont( void );
+	/// a chip (Open, Worn, a result): a one-pixel edge round its label, top left at x, y; returns its
+	/// width.  A win is GOLD on GOLD, a loss MUTED on FRAME, the rest ACTIVE on FRAME.
+	Int chip( DisplayString *label, Int x, Int y, Color color = ACTIVE, Color edge = FRAME );
+
+	//-----------------------------------------------------------------------------------------------
+	// Ratings as the online pages write them (ONLINE-UI-REDESIGN.md).  The pure ones take the
+	// language, a TextLanguageType, so a test can ask for any; the others read the game's.
+	//-----------------------------------------------------------------------------------------------
+	/// rated games a player needs before the ladder ranks him, the site's ladder_min_games
+	const Int RANKED_GAMES = 5;
+	/// the site's tiers (website/app/Models/Player.php TIERS), lowest first; each shows EA's rank
+	/// portrait of its name, and Corporal, Brigadier and Commander go unused
+	enum RatingTier
+	{
+		TIER_UNRANKED,
+		TIER_PRIVATE,
+		TIER_SERGEANT,
+		TIER_LIEUTENANT,
+		TIER_CAPTAIN,
+		TIER_MAJOR,
+		TIER_COLONEL,
+		TIER_GENERAL,
+		TIER_COUNT
+	};
+	/// the tier a rating falls in: general from 30, colonel 25, major 20, captain 15, lieutenant 10,
+	/// sergeant 5, private under that; unranked under RANKED_GAMES games or with the count unknown
+	/// (-1).  For the AI rating, which the site gives no tier; a ladder rating goes through playerTier.
+	RatingTier ratingTier( Real rating, Int games );
+	/// a player's ladder tier: the site's (info.tier), which knows its own minimum of games and who is
+	/// banned and rates the exact value, as the ladder shows it; ratingTier only when the site sent
+	/// none or a key this build does not know
+	RatingTier playerTier( const OnlinePlayerInfo &info );
+	/// the rating a tier starts at, for the next tier's track; private and unranked start at 0
+	Real tierStart( RatingTier tier );
+	/// the site's key for a tier ("major"): OnlineTierName and GUI:OnlineTier_<key> say it in words
+	const char *tierKey( RatingTier tier );
+	/// EA's rank (RANK_PRIVATE onward, as rankImage reads it) whose portrait a tier shows, -1 unranked
+	Int tierRank( RatingTier tier );
+	/** A rank portrait's mapped image name: Rank_<rank>_USA, _China or _GLA for side, a PlayerTemplate
+		* base side ("America" reads as USA), Rank_<rank>Elite for "Random" or any other army, EA's own
+		* "Rank" for the elite private, "NewPlayer" for no side, empty for a rank past EA's ten. */
+	AsciiString rankImageName( const AsciiString &side, Int rank );
+	/// that image, NULL where the name is empty or the art is missing
+	const Image *rankImage( const AsciiString &side, Int rank );
+	/// a tier's portrait for side; NULL for unranked, who shows none
+	const Image *tierImage( RatingTier tier, const AsciiString &side );
+	/// a rating to two decimals, the language's way: 22.70, and 22,70 in Turkish, German, French,
+	/// Russian and Ukrainian; sign puts a + before a rise, for a change.  Never "-0.00".
+	UnicodeString ratingTextIn( Real rating, Bool sign, Int language );
+	UnicodeString ratingText( Real rating, Bool sign = FALSE );
+	/// part of whole in whole percent, rounded half up; 0 with no whole
+	Int percent( Int part, Int whole );
+	/// a percentage the language's way: 55%, %55 in Turkish (as the load screen's YÜKLENİYOR %81),
+	/// 55 % in German, French, Russian and Ukrainian
+	UnicodeString percentTextIn( Int value, Int language );
+	UnicodeString percentText( Int value );
+	/// how a rating's move reads: a rise GOLD, a fall MUTED (the score screen's winner and defeat),
+	/// no move INK
+	Color changeColor( Real change );
+
+	//-----------------------------------------------------------------------------------------------
+	// The online pages: the hub, Quick Match, Custom games, Ladder and Skins stand in one frame, the
+	// room's panel, header and button row, with five tabs on the score screen's tab row and the
+	// player's line at its right end.  Their masters (Tools/online_layout.py) are authored at
+	// 1920x1080 and fitted, so the header is drawn on the same fitted board (boardX, boardY, px).
+	//-----------------------------------------------------------------------------------------------
+	const Real ROOM_INSET_RIGHT = 1796.0f;				///< ROOM_INSET mirrored: the content's right edge
+	const Real ONLINE_TABS_TOP = 158.0f;					///< the score screen's tab row
+	const Real ONLINE_TABS_BOTTOM = 190.0f;
+	const Real ONLINE_CONTENT_TOP = 206.0f;
+	const Real ONLINE_CONTENT_BOTTOM = 916.0f;
+	const Real ONLINE_SIDE_WIDTH = 540.0f;				///< the side column; the main column takes the rest
+	const Real ONLINE_COLUMN_GAP = 24.0f;
+
+	/// a length that holds text on a code-drawn online page, by the height's scale.  px takes the
+	/// smaller axis, 0.75 at 1440x1080, while adjustFontSize keeps the type at 1080's size there, so
+	/// a box sized by px would be a third too small for its words; by the height it is not, and the
+	/// main column narrows instead.  The same as px on any screen 16:9 or wider.
+	Int tallPx( Real at1080 );
+	/// the online pages' content band, ONLINE_CONTENT_TOP to ONLINE_CONTENT_BOTTOM on the board: a
+	/// side column ONLINE_SIDE_WIDTH wide (tallPx) ending at ROOM_INSET_RIGHT, and the main column
+	/// from ROOM_INSET to ONLINE_COLUMN_GAP before it.  1108 and 540 at 16:9; at 4:3 the side keeps
+	/// its width and the main column narrows.
+	void onlineColumns( IRegion2D &main, IRegion2D &side );
+	/// a ping light for a round trip in milliseconds, the lobby's rule (LobbyPingImage) on
+	/// TheGameSpyConfig's cut-offs: Ping03 good, Ping02 middling, Ping01 bad; NULL for an unknown (< 0)
+	const Image *pingImage( Int ms );
+	/// the server the client is on, as every online page's subtitle has it: "<name> · <city> · 38 ms",
+	/// each part left out while unknown, empty with no server
+	UnicodeString onlineServerLine( void );
+
+	/// the five tabs, in the masters' order; their buttons are TabHome, TabQuickMatch, TabCustom,
+	/// TabLadder and TabSkins
+	enum OnlineTab
+	{
+		ONLINE_TAB_NONE = -1,
+		ONLINE_TAB_HOME,
+		ONLINE_TAB_QUICK_MATCH,
+		ONLINE_TAB_CUSTOM,
+		ONLINE_TAB_LADDER,
+		ONLINE_TAB_SKINS,
+		ONLINE_TAB_COUNT
+	};
+	/** An online page's init: finds the tab buttons of layout ("WOLLadderScreen.wnd") under parent by
+		* name, gives them the score screen's tab art with open's label ACTIVE, puts their labels in
+		* capitals fitted to their boxes, and makes the header's words.  A page with no tabs (the login)
+		* passes ONLINE_TAB_NONE and gets the header without the player's line.  Pair it with
+		* onlinePageShutdown, from the page's shutdown. */
+	void onlinePageInit( GameWindow *parent, const char *layout, OnlineTab open );
+	/// frees what onlinePageInit made, unless a later page's init (pushed in the same step) owns it now
+	void onlinePageShutdown( GameWindow *parent );
+	/** The header, from the page's draw callback: the wordmark at the right of the title line and the
+		* player's line at the right end of the tab row (nick, tier, ladder rating, AI rating, from what
+		* the server said about the local player); with a title, also the title in capitals from x 120
+		* in the Generals face and the two-pixel FRAME rule at 147.  An empty title is for a master that
+		* carries its own title and rule (StaticTextTitle).  The subtitle follows the title's text, ours
+		* or the master's, MUTED and cut with an ellipsis before the wordmark; an empty one is the
+		* server line, its ping light before the milliseconds as the mockups have it. */
+	void onlineHeader( const UnicodeString &title, const UnicodeString &subtitle = UnicodeString::TheEmptyString );
+	/// a page's way out to a tab: its Back with the tab as the argument (see onlineTabClicked)
+	typedef void (*OnlineLeave)( OnlineTab to );
+	/** For the page's GBM_SELECTED: TRUE when control is one of its tabs, and the page then returns
+		* MSG_HANDLED and does nothing else with it.  The open tab does nothing; any other calls
+		* leave( tab ), where the page does what its Back does, refusing or asking where Back does (a
+		* search, a join under way), with onlineTabScreen( tab ) as the next screen.  The shell is a
+		* stack with the hub at its foot: the hub pushes that screen over itself, every other page sets
+		* it as its next screen and pops, so its shutdown pushes it over the uncovered hub, and Home
+		* (NULL) only pops. */
+	Bool onlineTabClicked( GameWindow *control, OnlineLeave leave );
+	/// the layout a tab opens, NULL for Home; Ladder and Skins share WOLLadderScreen.wnd
+	const char *onlineTabScreen( OnlineTab tab );
+	/// the tab the last click went to, so WOLLadderScreen.wnd opens as Skins; read it before
+	/// onlinePageInit, which clears it
+	OnlineTab onlineTabAsked( void );
 }
 
 #endif // _UISTYLE_H_

@@ -187,7 +187,8 @@ extern GameWindow *WOLMakeButtonLike( GameWindow *parent, GameWindow *model, Int
 /// screen is up, starts the match or shows the refusal, and is TRUE while the answer is awaited
 extern void WOLPlayVsAI( void );
 extern Bool WOLPlayVsAIUpdate( void );
-extern UnicodeString WOLAIRatingText( void );		///< "AI rating 12.40", or the last match's verdict
+/// the score screen's Play again: the hub's next init starts a Play vs AI match as if Play were pressed
+extern void WOLWelcomeMenuStartPlayVsAIOnEntry( void );
 
 //  WOL Login Menu ---------------------------------------------------------------------------------
 extern void WOLLoginMenuInit( WindowLayout *layout, void *userData );

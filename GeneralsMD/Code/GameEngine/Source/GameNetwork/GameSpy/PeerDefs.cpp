@@ -206,15 +206,21 @@ void GameSpyInfo::setGameOptions( void )
 	}
 	req.gameOptsMapName = newMapName.str();
 
-	req.gameOptions.numPlayers = 0;
-	req.gameOptions.numObservers = 0;
+	/* One entry per seated player, packed in seat order, the names with the rest: the game list pairs name i
+		 with profile ID i (GameSpy's player keys run 0 to players + observers - 1, and the online game list reads
+		 them the same way).  The names went by seat and the rest packed, so with an open seat between two taken
+		 ones a name met another player's ID, or an AI's state where nobody sat.  Zeroed first: the request is
+		 a stack union, and whatever lay past the last seated player went out in the game list. */
+	memset( &req.gameOptions, 0, sizeof(req.gameOptions) );
+	for (i=0; i<MAX_SLOTS; ++i)
+		req.gameOptsPlayerNames[i] = "";
 	Int numOpenSlots = 0;
 	AsciiString playerInfo = "";
 	for (i=0; i<MAX_SLOTS; ++i)
 	{
 		Int wins = 0, losses = 0, profileID = 0;
 		GameSpyGameSlot *slot = TheGameSpyGame->getGameSpySlot(i);
-		req.gameOptsPlayerNames[i] = "";
+		const Int seated = req.gameOptions.numObservers + req.gameOptions.numPlayers;
 		if (!slot->isOccupied())
 		{
 			if (slot->isOpen())
@@ -226,7 +232,7 @@ void GameSpyInfo::setGameOptions( void )
 			if (slot->isHuman())
 			{
 				playerName.translate(slot->getName());
-				req.gameOptsPlayerNames[i] = playerName.str();
+				req.gameOptsPlayerNames[seated] = playerName.str();
 				PlayerInfoMap::iterator it = m_playerInfoMap.find(playerName);
 				if (it != m_playerInfoMap.end())
 				{
@@ -234,11 +240,11 @@ void GameSpyInfo::setGameOptions( void )
 					losses = it->second.m_losses;
 					profileID = it->second.m_profileID;
 				}
-				req.gameOptions.wins[req.gameOptions.numObservers+req.gameOptions.numPlayers] = wins;
-				req.gameOptions.losses[req.gameOptions.numObservers+req.gameOptions.numPlayers] = losses;
-				req.gameOptions.profileID[req.gameOptions.numObservers+req.gameOptions.numPlayers] = profileID;
-				req.gameOptions.faction[req.gameOptions.numObservers+req.gameOptions.numPlayers] = slot->getPlayerTemplate();
-				req.gameOptions.color[req.gameOptions.numObservers+req.gameOptions.numPlayers] = slot->getColor();
+				req.gameOptions.wins[seated] = wins;
+				req.gameOptions.losses[seated] = losses;
+				req.gameOptions.profileID[seated] = profileID;
+				req.gameOptions.faction[seated] = slot->getPlayerTemplate();
+				req.gameOptions.color[seated] = slot->getColor();
 				if (slot->getPlayerTemplate() == PLAYERTEMPLATE_OBSERVER)
 				{
 					++req.gameOptions.numObservers;
@@ -263,12 +269,10 @@ void GameSpyInfo::setGameOptions( void )
 					playerName = "CH";
 					break;
 				}
-				req.gameOptsPlayerNames[i] = playerName.str(); // name is unused - we go off of the profileID
-				req.gameOptions.wins[req.gameOptions.numObservers+req.gameOptions.numPlayers] = 0;
-				req.gameOptions.losses[req.gameOptions.numObservers+req.gameOptions.numPlayers] = 0;
-				req.gameOptions.profileID[req.gameOptions.numObservers+req.gameOptions.numPlayers] = slot->getState();
-				req.gameOptions.faction[req.gameOptions.numObservers+req.gameOptions.numPlayers] = slot->getPlayerTemplate();
-				req.gameOptions.color[req.gameOptions.numObservers+req.gameOptions.numPlayers] = slot->getColor();
+				req.gameOptsPlayerNames[seated] = playerName.str(); // name is unused - we go off of the profileID
+				req.gameOptions.profileID[seated] = slot->getState();
+				req.gameOptions.faction[seated] = slot->getPlayerTemplate();
+				req.gameOptions.color[seated] = slot->getColor();
 				++req.gameOptions.numPlayers;
 			}
 		}

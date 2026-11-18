@@ -2948,6 +2948,12 @@ if(Python3_Interpreter_FOUND)
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/Tools/lobbyroom_layout.py selfcheck)
 
+  # The online screens stand on the room's grid the same way, and keep every window their callbacks
+  # look up: a gadget the design drops stays as a hidden window, so a lookup never comes back empty.
+  add_test(NAME online_layout_selfcheck
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/Tools/online_layout.py selfcheck)
+
   # The map pickers stand where the rooms' seat table and map preview stand, read from the rooms'
   # own layouts, so a room laid out again without the pickers following is caught here.
   add_test(NAME mapselect_selfcheck

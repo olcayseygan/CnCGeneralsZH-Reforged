@@ -60,6 +60,8 @@
 #include "GameClient/GadgetTextEntry.h"
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/Display.h"
+#include "GameClient/DisplayString.h"
+#include "GameClient/DisplayStringManager.h"
 #include "GameClient/UIStyle.h"
 #include "GameClient/MessageBox.h"
 #include "GameClient/ShellHooks.h"
@@ -94,7 +96,7 @@ static Bool useWebBrowserForTOS = FALSE;
 
 static Bool isShuttingDown = false;
 static Bool buttonPushed = false;
-static char *nextScreen = NULL;
+static const char *nextScreen = NULL;
 
 static const UnsignedInt loginTimeoutInMS = 10000;
 static UnsignedInt loginAttemptTime = 0;
@@ -360,6 +362,8 @@ static void startPings( void )
 //-------------------------------------------------------------------------------------------------
 /** This is called when a shutdown is complete for this menu */
 //-------------------------------------------------------------------------------------------------
+static void onlineLoginScreenDone( void );
+
 static void shutdownComplete( WindowLayout *layout )
 {
 
@@ -367,6 +371,7 @@ static void shutdownComplete( WindowLayout *layout )
 
 	// hide the layout
 	layout->hide( TRUE );
+	onlineLoginScreenDone();
 
 	// our shutdown is complete
 	TheShell->shutdownComplete( layout, (nextScreen != NULL) );
@@ -883,79 +888,192 @@ static void onlineAutoLogin( void )
 	pressLogin();
 }
 
-/* -online's status line under the fields and the help text in the panel's right half, made in code: the
-	 layout is EA's, read from the retail archive.  Both die with the layout. */
-static GameWindow *s_onlineStatus = NULL;
-static GameWindow *s_onlineHelp = NULL;
+/* -online, on GameSpyLoginProfile.wnd as Tools/online_layout.py writes it (ONLINE-UI-REDESIGN.md "Login"):
+	 the server panel on the left, the sign-in panel on the right, every text in one of the master's static
+	 texts.  The counts and the wordmark are drawn in code over the server panel. */
+static GameWindow *s_onlineStatus = NULL;		///< under Sign In: a page opened, or fields left empty
+static GameWindow *s_onlineMOTD = NULL;
 static Bool s_onlineAwaitWelcome = FALSE;		///< the screen dialled and waits for the service's welcome
-static Color s_onlineInk = 0;
-static Color s_onlineInkBorder = 0;
+static Bool s_savedSignIn = FALSE;					///< the password is empty and a token is saved for the login typed
+static GameWinDrawFunc s_serverPanelDraw = NULL;
+static GameWinDrawFunc s_passwordDraw = NULL;
+static DisplayString *s_savedHint = NULL;		///< GUI:OnlineLoginSavedToken, inside the empty password field
 
-static Int onlineLayoutX( Int v ) { return (Int)(v * (TheDisplay->getWidth() / 800.0f)); }
-static Int onlineLayoutY( Int v ) { return (Int)(v * (TheDisplay->getHeight() / 600.0f)); }
+/// players online, open games and players in Quick Match: a label and a figure each
+enum { ONLINE_COUNTS = 3 };
+static DisplayString *s_countLabel[ONLINE_COUNTS];
+static DisplayString *s_countFigure[ONLINE_COUNTS];
+static Int s_countShown[ONLINE_COUNTS];
+static Bool s_countsShown = FALSE;
+/// the message of the day stands under the counts, or alone in their place under the heading
+static Int s_motdX = 0, s_motdWidth = 0, s_motdBottom = 0, s_motdUnderCounts = 0, s_motdAlone = 0;
+/// the panel's heading: the server's name and city and the host (the header's server line has the ping)
+static GameWindow *s_serverText = NULL;
+static Bool s_serverLaidOut = FALSE;
+static AsciiString s_serverName, s_serverCity;
 
-/// a retail gadget moved to a point of the layout's own 800x600 page; its size stays
-static void onlineMove( GameWindow *win, Int x, Int y )
-{
-	if (!win)
-		return;
-	Int px = 0, py = 0;
-	if (win->winGetParent())
-		win->winGetParent()->winGetScreenPosition( &px, &py );
-	win->winSetPosition( onlineLayoutX( x ) - px, onlineLayoutY( y ) - py );
-}
+static const Color STATUS_ERROR = GameMakeColor( 255, 96, 96, 255 );
 
-static void onlineResize( GameWindow *win, Int x0, Int y0, Int x1, Int y1 )
-{
-	if (win)
-		win->winSetSize( onlineLayoutX( x1 ) - onlineLayoutX( x0 ), onlineLayoutY( y1 ) - onlineLayoutY( y0 ) );
-}
-
-/// a static text on the layout's page, in the labels' colours, see-through
-static GameWindow *onlineText( GameWindow *parent, Int x0, Int y0, Int x1, Int y1, GameFont *font, Bool middle )
-{
-	if (!parent)
-		return NULL;
-	WinInstanceData inst;
-	inst.init();
-	BitSet( inst.m_style, GWS_STATIC_TEXT );
-	TextData data;
-	memset( &data, 0, sizeof(data) );
-	data.centeredVertically = middle;
-	Int px = 0, py = 0;
-	parent->winGetScreenPosition( &px, &py );
-	GameWindow *win = TheWindowManager->gogoGadgetStaticText( parent, WIN_STATUS_ENABLED | WIN_STATUS_NO_INPUT,
-		onlineLayoutX( x0 ) - px, onlineLayoutY( y0 ) - py, onlineLayoutX( x1 ) - onlineLayoutX( x0 ), onlineLayoutY( y1 ) - onlineLayoutY( y0 ),
-		&inst, &data, font, FALSE );
-	if (win)
-	{
-		win->winSetEnabledTextColors( s_onlineInk, s_onlineInkBorder );
-		win->winSetEnabledColor( 0, GameMakeColor( 0, 0, 0, 0 ) );
-		win->winSetEnabledBorderColor( 0, GameMakeColor( 0, 0, 0, 0 ) );
-	}
-	return win;
-}
-
-/// the status line: what the screen is doing, or what went wrong in red
+/// the status line: what happened, or what went wrong in red
 static void onlineStatus( const UnicodeString &text, Bool error = FALSE )
 {
 	if (!s_onlineStatus)
 		return;
-	s_onlineStatus->winSetEnabledTextColors( error ? GameMakeColor( 255, 96, 96, 255 ) : s_onlineInk, GameMakeColor( 0, 0, 0, 255 ) );
+	s_onlineStatus->winSetEnabledTextColors( error ? STATUS_ERROR : UIStyle::MUTED, UIStyle::SHADOW );
 	GadgetStaticTextSetText( s_onlineStatus, text );
 	DEBUG_LOG(("ONLINE LOGINSTATUS error=%d %s\n", (Int)error, WideCharAsUtf8( text.str() ).str()));
 }
 
-/// an empty password with a token saved for this login signs in with the token: say so
+/// Sign In's label: what the screen is doing while it cannot be pressed (connecting, signing in), else Sign In
+static void onlineLoginLabel( const char *key )
+{
+	if (buttonLogin)
+		GadgetButtonSetText( buttonLogin, UIStyle::capitals( TheGameText->fetch( key ) ) );
+}
+
+/// an empty password with a token saved for this login signs in with the token: the field says so
 static void onlineSavedLoginHint( void )
 {
-	if (!OnlineIsEnabled() || !s_onlineStatus || loginAttemptTime || s_onlineAwaitWelcome || !comboBoxEmail || !textEntryPassword)
+	s_savedSignIn = FALSE;
+	if (!OnlineIsEnabled() || !comboBoxEmail || !textEntryPassword)
 		return;
 	AsciiString email;
 	email.translate( GadgetComboBoxGetText( comboBoxEmail ) );
-	const Bool saved = email.isNotEmpty() && GadgetTextEntryGetText( textEntryPassword ).isEmpty()
+	s_savedSignIn = email.isNotEmpty() && GadgetTextEntryGetText( textEntryPassword ).isEmpty()
 		&& OnlineGetSavedToken( email ).isNotEmpty();
-	onlineStatus( saved ? TheGameText->fetch( "GUI:OnlineLoginSavedToken" ) : UnicodeString::TheEmptyString );
+}
+
+/// the password field as EA draws it, with the saved sign-in's line in it while it is empty
+static void drawPasswordEntry( GameWindow *window, WinInstanceData *instData )
+{
+	if (s_passwordDraw)
+		s_passwordDraw( window, instData );
+	if (!s_savedSignIn || !s_savedHint)
+		return;
+	Int x, y, width, height, w, h;
+	window->winGetScreenPosition( &x, &y );
+	window->winGetSize( &width, &height );
+	s_savedHint->getSize( &w, &h );
+	s_savedHint->draw( x + UIStyle::px( 14.0f ), y + ( height - h ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
+}
+
+/// the server panel as the master fills it, the three counts across its top, and the page's header
+/// (wordmark, and the server line with its ping after the master's title)
+static void drawServerPanel( GameWindow *window, WinInstanceData *instData )
+{
+	if (s_serverPanelDraw)
+		s_serverPanelDraw( window, instData );
+	UIStyle::onlineHeader( UnicodeString::TheEmptyString, UnicodeString::TheEmptyString );
+	if (!s_countsShown)
+		return;
+	// on the board, as login.html sets them: a column every 306 from 148, the label at 270, the figure
+	// 10 under it, a GRID rule at 386 over the message of the day
+	for (Int i = 0; i < ONLINE_COUNTS; ++i)
+	{
+		const Int x = UIStyle::boardX( 148.0f + 306.0f * i );
+		const Int y = UIStyle::boardY( 270.0f );
+		Int w, h;
+		s_countLabel[i]->getSize( &w, &h );
+		s_countLabel[i]->draw( x, y, UIStyle::MUTED, UIStyle::SHADOW );
+		s_countFigure[i]->draw( x, y + h + UIStyle::px( 10.0f ), UIStyle::INK, UIStyle::SHADOW );
+	}
+	TheDisplay->drawFillRect( UIStyle::boardX( 148.0f ), UIStyle::boardY( 386.0f ), UIStyle::px( 904.0f ), 1, UIStyle::GRID );
+}
+
+static UnicodeString fromUtf8( const AsciiString &bytes )
+{
+	return UnicodeString( MultiByteToWideCharSingleLine( bytes.str() ).c_str() );
+}
+
+/// the heading as the server names itself, "EU1 · Somewhere · eu1.example.org" joined as the header joins
+/// its parts; the host alone from a server that sends no name
+static void onlineServerHeading( void )
+{
+	AsciiString name, city;
+	Int ms;
+	if (!OnlineIsEnabled() || !s_serverText)
+		return;
+	if (!OnlineGetServerInfo( name, city, ms ))
+		name = city = AsciiString::TheEmptyString;
+	if (s_serverLaidOut && name == s_serverName && city == s_serverCity)
+		return;
+	s_serverLaidOut = TRUE;
+	s_serverName = name;
+	s_serverCity = city;
+	UnicodeString heading = fromUtf8( name ), host;
+	if (city.isNotEmpty())
+	{
+		if (!heading.isEmpty())
+			heading.concat( UIStyle::HEADER_JOINER );
+		heading.concat( fromUtf8( city ) );
+	}
+	host.translate( TheGlobalData->m_onlineHost );
+	if (!heading.isEmpty())
+		heading.concat( UIStyle::HEADER_JOINER );
+	heading.concat( host );
+	GadgetStaticTextSetText( s_serverText, heading );
+}
+
+/// every update: the server's name, the counts the server sent, and the message of the day under them or
+/// in their place
+static void onlineServerPanel( void )
+{
+	onlineServerHeading();
+	Int counts[ONLINE_COUNTS];
+	const Bool have = OnlineIsEnabled() && s_countFigure[0] && OnlineGetCounts( counts[0], counts[1], counts[2] );
+	for (Int i = 0; have && i < ONLINE_COUNTS; ++i)
+	{
+		if (counts[i] != s_countShown[i])
+		{
+			s_countShown[i] = counts[i];
+			s_countFigure[i]->setText( UIStyle::grouped( counts[i] ) );
+		}
+	}
+	if (s_onlineMOTD && have != s_countsShown)
+	{
+		const Int top = have ? s_motdUnderCounts : s_motdAlone;
+		s_onlineMOTD->winSetPosition( s_motdX, top );
+		s_onlineMOTD->winSetSize( s_motdWidth, s_motdBottom - top );
+	}
+	s_countsShown = have;
+}
+
+/// the welcome's message of the day as one text, EA's colour prefixes ("\aarrggbb", "\\") dropped as the
+/// hub drops them; the game's own welcome line when the server sent none
+static UnicodeString onlineMOTDText( void )
+{
+	AsciiString motd = OnlineGetMOTD();
+	motd.trim();
+	if (motd.isEmpty())
+		return TheGameText->fetch( "GUI:OnlineHubWelcome" );
+	UnicodeString text;
+	AsciiString line;
+	while (motd.nextToken( &line, "\n" ))
+	{
+		line.trim();
+		if (line.startsWith( "\\\\" ))
+			line = line.str() + 1;
+		else if (line.startsWith( "\\" ) && line.getLength() > 9)
+			line = line.str() + 9;
+		if (!text.isEmpty())
+			text.concat( u"\n" );
+		text.concat( UnicodeString( MultiByteToWideCharSingleLine( line.str() ).c_str() ) );
+	}
+	return text;
+}
+
+/// Create Account and Forgot Password show when the welcome named their pages, the line under them when both do
+static void onlineSiteButtons( void )
+{
+	const Bool create = OnlineGetRegisterUrl().isNotEmpty();
+	const Bool reset = OnlineGetResetUrl().isNotEmpty();
+	if (buttonCreateAccount)
+		buttonCreateAccount->winHide( !create );
+	if (buttonTOS)
+		buttonTOS->winHide( !reset );
+	GameWindow *browser = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "GameSpyLoginProfile.wnd:StaticTextBrowser" ) );
+	if (browser)
+		browser->winHide( !( create && reset ) );
 }
 
 /* The box for a login the screen keeps nothing of.  EA unticked it, so under -online, where the email is
@@ -987,16 +1105,29 @@ static void onlineOpenPage( const AsciiString &url, const char *what )
 		onlineStatus( TheGameText->fetch( "GUI:OnlineBrowserFailed" ), TRUE );
 }
 
-/* A refused or failed sign-in, in the status line: the server's code worded honestly (a wrong password
-	 and an unknown login read the same), EA's disconnect text when no refusal arrived.  The password is
-	 cleared and focused for the next try; a token the server no longer takes is forgotten. */
+static void focusPassword( void )
+{
+	if (textEntryPassword && !buttonPushed)
+		TheWindowManager->winSetFocus( textEntryPassword );
+}
+
+/// what went wrong, in EA's message box over the panel as retail shows it; OK puts the cursor in the password
+static void onlineLoginError( const UnicodeString &text )
+{
+	DEBUG_LOG(("ONLINE LOGINERROR %s\n", WideCharAsUtf8( text.str() ).str()));
+	GSMessageBoxOk( TheGameText->fetch( "GUI:OnlineLoginFailed" ), text, focusPassword );
+}
+
+/* A refused or failed sign-in: the server's code worded honestly (a wrong password and an unknown login
+	 read the same), EA's disconnect text when no refusal arrived.  The password is cleared and focused for
+	 the next try; a token the server no longer takes is forgotten. */
 static void onlineLoginFailed( Int reason )
 {
 	Int retry = 0;
 	const AsciiString code = OnlineGetLoginFailure( &retry );
 	UnicodeString text;
 	if (code == "badlogin" || code == "badtoken")
-		text = TheGameText->fetch( "GUI:OnlineLoginBadLogin" );
+		text = TheGameText->fetch( "GUI:OnlineLoginBadBody" );
 	else if (code == "throttled" && retry > 0)
 		text.format( TheGameText->fetch( "GUI:OnlineLoginThrottled" ), retry );
 	else if (code == "throttled")
@@ -1020,7 +1151,9 @@ static void onlineLoginFailed( Int reason )
 	GadgetTextEntrySetText( textEntryPassword, UnicodeString::TheEmptyString );
 	TheWindowManager->winSetFocus( textEntryPassword );
 	DEBUG_LOG(("ONLINE LOGINFOCUS password=%d\n", (Int)(textEntryPassword && TheWindowManager->winGetFocus() == textEntryPassword)));
-	onlineStatus( text, TRUE );
+	onlineSavedLoginHint();
+	onlineLoginLabel( "GUI:OnlineSignIn" );
+	onlineLoginError( text );
 }
 
 /* -online: the screen opens at once and dials the service itself; Sign In waits for the welcome.  EA put a
@@ -1038,7 +1171,8 @@ static void onlineStartConnect( void )
 	OnlineUpdate();
 	if (buttonLogin)
 		buttonLogin->winEnable( FALSE );
-	onlineStatus( TheGameText->fetch( "GUI:OnlineConnecting" ) );
+	onlineLoginLabel( "GUI:OnlineConnecting" );
+	onlineStatus( UnicodeString::TheEmptyString );
 }
 
 /// every update while the screen waits: the welcome, or a server that cannot be reached (Sign In retries)
@@ -1058,54 +1192,131 @@ static void onlineAwaitWelcome( void )
 	DEBUG_LOG(("ONLINE CONNECT fail status=%d\n", (Int)status));
 	if (buttonLogin)
 		buttonLogin->winEnable( TRUE );
-	onlineStatus( TheGameText->fetch( "GUI:OnlineCannotReachServer" ), TRUE );
+	onlineLoginLabel( "GUI:OnlineSignIn" );
+	onlineLoginError( TheGameText->fetch( "GUI:OnlineCannotReachServer" ) );
 }
 
-/* -online: the game only logs in, the site makes accounts (the owner's call of 2026-11-06).  One field takes
-	 the email or the nick, so the nick box and the birth date go and the rows under them close up; Create
-	 Account and Forgot Password open the site's pages the server named in its welcome, and go when it named
-	 none.  The right half explains the account, the status line says what is happening. */
+static GameWindow *loginWindow( const char *name )
+{
+	AsciiString full;
+	full.format( "GameSpyLoginProfile.wnd:%s", name );
+	return TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( full ) );
+}
+
+/// a master's static text in one of UIStyle's colours, with text when given
+static GameWindow *loginText( const char *name, Color color, const UnicodeString &text = UnicodeString::TheEmptyString )
+{
+	GameWindow *win = loginWindow( name );
+	if (win)
+	{
+		win->winSetEnabledTextColors( color, UIStyle::SHADOW );
+		if (!text.isEmpty())
+			GadgetStaticTextSetText( win, text );
+	}
+	return win;
+}
+
+static DisplayString *newLoginString( GameFont *font, const UnicodeString &text )
+{
+	DisplayString *words = TheDisplayStringManager->newDisplayString();
+	words->setFont( font );
+	words->setText( text );
+	return words;
+}
+
+static void freeLoginString( DisplayString *&words )
+{
+	if (words)
+		TheDisplayStringManager->freeDisplayString( words );
+	words = NULL;
+}
+
+/* -online: the game only logs in, the site makes accounts (the owner's call of 2026-11-06).  The master
+	 holds one field for the email or the nick and hides the nick box and the birth date; Create Account and
+	 Forgot Password open the site's pages the server named in its welcome, and go when it named none. */
 static void onlineLoginScreen( void )
 {
 	s_onlineStatus = NULL;
-	s_onlineHelp = NULL;
+	s_onlineMOTD = NULL;
 	s_onlineAwaitWelcome = FALSE;
+	s_savedSignIn = FALSE;
+	s_countsShown = FALSE;
 	if (!OnlineIsEnabled())
 		return;
-	const char *hidden[] = { "GameSpyLoginProfile.wnd:WinAge", "GameSpyLoginProfile.wnd:StaticTextLoginName",
-		"GameSpyLoginProfile.wnd:ComboBoxLoginName", "GameSpyLoginProfile.wnd:ParentESRB" };
-	for (Int i = 0; i < (Int)ARRAY_SIZE(hidden); ++i)
-	{
-		GameWindow *win = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( hidden[i] ) );
-		if (win)
-			win->winHide( TRUE );
-	}
-	GameWindow *emailLabel = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "GameSpyLoginProfile.wnd:StaticTextEmail" ) );
-	if (emailLabel)
-		GadgetStaticTextSetText( emailLabel, TheGameText->fetch( "GUI:OnlineLoginName" ) );
-	GameWindow *title = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "GameSpyLoginProfile.wnd:StaticTextTitle" ) );
-	if (title)
-	{
-		onlineResize( title, 113, 114, 680, 158 );
-		GadgetStaticTextSetText( title, TheGameText->fetch( "GUI:OnlineLoginTitle" ) );
-	}
-	if (buttonLogin)
-		GadgetButtonSetText( buttonLogin, TheGameText->fetch( "GUI:OnlineSignIn" ) );
+	UIStyle::onlinePageInit( parentWOLLogin, "GameSpyLoginProfile.wnd", UIStyle::ONLINE_TAB_NONE );
 
-	/* The layout's page is 800x600.  Password, its label and the checkbox move up into the nick's rows, the
-		 status line takes the next, the buttons follow and the panel ends 12 under them, as EA's did. */
-	GameWindow *passwordLabel = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "GameSpyLoginProfile.wnd:StaticTextPassword" ) );
-	GameWindow *gadgetParent = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "GameSpyLoginProfile.wnd:GadgetParent" ) );
-	onlineMove( passwordLabel, 125, 228 );
-	onlineMove( textEntryPassword, 128, 258 );
-	GameFont *labelFont = passwordLabel ? passwordLabel->winGetFont() : NULL;
-	if (labelFont)
+	// the server panel: the server's heading, the counts drawn over it, the message of the day
+	s_serverText = loginText( "StaticTextServer", UIStyle::ACTIVE );
+	s_serverLaidOut = FALSE;
+	loginText( "StaticTextLauncher", UIStyle::MUTED );
+	s_onlineMOTD = loginText( "StaticTextMOTD", UIStyle::INK );
+	const char *countKeys[ONLINE_COUNTS] = { "GUI:OnlineLoginOnlineNow", "GUI:OnlineOpenGamesLabel", "GUI:OnlineLoginInQuickMatch" };
+	for (Int i = 0; i < ONLINE_COUNTS; ++i)
 	{
-		// what is typed in the labels' face; EA set the fields in Arial 10
-		if (comboBoxEmail)
-			comboBoxEmail->winSetFont( labelFont );
-		if (textEntryPassword)
-			textEntryPassword->winSetFont( labelFont );
+		freeLoginString( s_countLabel[i] );
+		freeLoginString( s_countFigure[i] );
+		s_countLabel[i] = newLoginString( UIStyle::readableFont( UIStyle::TEXT_BODY ), TheGameText->fetch( countKeys[i] ) );
+		s_countFigure[i] = newLoginString( UIStyle::titleFont( UIStyle::TEXT_DISPLAY ), UnicodeString::TheEmptyString );
+		s_countShown[i] = -1;
+	}
+	GameWindow *help = loginText( "StaticTextHelp", UIStyle::MUTED, TheGameText->fetch( "GUI:OnlineLoginHelp" ) );
+	if (s_onlineMOTD && help)
+	{
+		// from its top, as a page reads, where a static text centres its words in the box
+		TextData *motd = (TextData *)s_onlineMOTD->winGetUserData();
+		if (motd)
+			motd->centeredVertically = FALSE;
+		// under the counts as the master has it, or alone from the help line's height, as tall as it can be
+		Int y, height;
+		s_onlineMOTD->winGetPosition( &s_motdX, &s_motdUnderCounts );
+		s_onlineMOTD->winGetSize( &s_motdWidth, &height );
+		s_motdBottom = s_motdUnderCounts + height;
+		help->winGetPosition( &y, &s_motdAlone );
+		s_onlineMOTD->winSetPosition( s_motdX, s_motdAlone );
+		s_onlineMOTD->winSetSize( s_motdWidth, s_motdBottom - s_motdAlone );
+	}
+	GameWindow *serverPanel = loginWindow( "PanelServer" );
+	if (serverPanel)
+	{
+		// a second init on the same layout must not take the hook for the master's draw
+		if (serverPanel->winGetDrawFunc() != drawServerPanel)
+			s_serverPanelDraw = serverPanel->winGetDrawFunc();
+		serverPanel->winSetDrawFunc( drawServerPanel );
+	}
+
+	// the sign-in panel
+	loginText( "StaticTextSignIn", UIStyle::ACTIVE );
+	loginText( "StaticTextKeepHint", UIStyle::MUTED );
+	loginText( "StaticTextBrowser", UIStyle::MUTED );
+	s_onlineStatus = loginText( "StaticTextStatus", UIStyle::MUTED );
+	// the field labels in the body face, as the help line over them (EA's labels are a size up)
+	const char *labels[] = { "StaticTextEmail", "StaticTextPassword" };
+	for (Int i = 0; help && i < (Int)ARRAY_SIZE(labels); ++i)
+	{
+		GameWindow *label = loginWindow( labels[i] );
+		if (label)
+			label->winSetFont( help->winGetFont() );
+	}
+	// Create Account and Forgot Password are small buttons: 21 of a layout button's 28 at 1080, scaled
+	// from their own fitted face so a squarer screen keeps the ratio
+	GameWindow *siteButtons[] = { buttonCreateAccount, buttonTOS };		// not "small": a Windows macro
+	for (Int i = 0; i < (Int)ARRAY_SIZE(siteButtons); ++i)
+	{
+		GameFont *face = siteButtons[i] ? siteButtons[i]->winGetFont() : NULL;
+		if (face)
+			siteButtons[i]->winSetFont( TheFontLibrary->getFont( face->nameString, max( 1, ( face->pointSize * 21 + 14 ) / 28 ), face->bold ) );
+	}
+	if (textEntryPassword)
+	{
+		if (textEntryPassword->winGetDrawFunc() != drawPasswordEntry)
+			s_passwordDraw = textEntryPassword->winGetDrawFunc();
+		textEntryPassword->winSetDrawFunc( drawPasswordEntry );
+		Int width, height;
+		textEntryPassword->winGetSize( &width, &height );
+		freeLoginString( s_savedHint );
+		GameFont *font = textEntryPassword->winGetFont();
+		s_savedHint = newLoginString( font,
+			UIStyle::fitText( TheGameText->fetch( "GUI:OnlineLoginSavedToken" ), font, width - 2 * UIStyle::px( 14.0f ) ) );
 	}
 	// a fresh profile has no remembered logins: no arrow over an empty list, the field takes its room
 	GameWindow *dropDown = comboBoxEmail ? GadgetComboBoxGetDropDownButton( comboBoxEmail ) : NULL;
@@ -1120,33 +1331,13 @@ static void onlineLoginScreen( void )
 	}
 	if (checkBoxRememberPassword)
 	{
-		onlineMove( checkBoxRememberPassword, 128, 290 );
-		onlineResize( checkBoxRememberPassword, 128, 290, 266, 315 );		// Forgot Password shares the row
+		// the master's StaticTextKeepHint is its second line
 		GadgetCheckBoxSetText( checkBoxRememberPassword, TheGameText->fetch( "GUI:OnlineKeepSignedIn" ) );
 		checkBoxRememberPassword->winSetTooltip( TheGameText->fetch( "TOOLTIP:OnlineKeepSignedIn" ) );
-		if (labelFont)
-			checkBoxRememberPassword->winSetFont( labelFont );
 	}
-	onlineMove( buttonLogin, 127, 351 );
-	onlineMove( buttonCreateAccount, 319, 351 );
-	onlineMove( buttonBack, 511, 351 );
-	if (buttonLogin && buttonLogin->winGetParent())
-		onlineResize( buttonLogin->winGetParent(), 111, 114, 683, 395 );		// the panel, a window with no name
-
-	if (buttonTOS)
-	{
-		// on the checkbox's row, its right edge on the password field's
-		onlineMove( buttonTOS, 270, 290 );
-		onlineResize( buttonTOS, 270, 290, 396, 315 );
-		buttonTOS->winSetFont( UIStyle::titleFont( 13 ) );
-		GadgetButtonSetText( buttonTOS, TheGameText->fetch( "GUI:OnlineForgotPassword" ) );
-	}
-
-	s_onlineInk = passwordLabel ? passwordLabel->winGetEnabledTextColor() : GameMakeColor( 255, 255, 255, 255 );
-	s_onlineInkBorder = passwordLabel ? passwordLabel->winGetEnabledTextBorderColor() : GameMakeColor( 0, 0, 0, 255 );
-	s_onlineHelp = onlineText( gadgetParent, 456, 168, 669, 318, UIStyle::font( UIStyle::TEXT_STRONG ), FALSE );
-	// the status line in the labels' face, over the busy shell map on their black drop shadow
-	s_onlineStatus = onlineText( gadgetParent, 127, 319, 671, 349, labelFont ? labelFont : UIStyle::font( UIStyle::TEXT_HEADING ), TRUE );
+	onlineSiteButtons();		// none before a welcome names the pages
+	onlineSavedLoginHint();
+	onlineServerHeading();		// the host before any welcome
 
 	if (OnlineGetStatus() == ONLINE_WELCOMED)
 		onlineWelcomed( FALSE );
@@ -1154,9 +1345,25 @@ static void onlineLoginScreen( void )
 		onlineStartConnect();
 }
 
-/* The service's welcome is in: Create Account and Forgot Password show when it named their pages, the help
-	 text says what they do, Sign In wakes up.  reload remakes the queues with the welcome's MOTD and config,
-	 which the screen opened without. */
+/// what onlineLoginScreen made, from shutdownComplete before the next screen goes up
+static void onlineLoginScreenDone( void )
+{
+	UIStyle::onlinePageShutdown( parentWOLLogin );
+	for (Int i = 0; i < ONLINE_COUNTS; ++i)
+	{
+		freeLoginString( s_countLabel[i] );
+		freeLoginString( s_countFigure[i] );
+	}
+	freeLoginString( s_savedHint );
+	s_countsShown = FALSE;
+	s_onlineStatus = NULL;
+	s_onlineMOTD = NULL;
+	s_serverText = NULL;
+}
+
+/* The service's welcome is in: Create Account and Forgot Password show when it named their pages, the
+	 message of the day goes in, Sign In wakes up.  reload remakes the queues with the welcome's MOTD and
+	 config, which the screen opened without. */
 static void onlineWelcomed( Bool reload )
 {
 	s_onlineAwaitWelcome = FALSE;
@@ -1167,30 +1374,14 @@ static void onlineWelcomed( Bool reload )
 	}
 	DEBUG_LOG(("ONLINE CONNECT ok\n"));
 
-	const AsciiString resetUrl = OnlineGetResetUrl();
-	if (buttonTOS)
-		buttonTOS->winHide( resetUrl.isEmpty() );
 	const AsciiString url = OnlineGetRegisterUrl();
-	if (buttonCreateAccount)
-		buttonCreateAccount->winHide( url.isEmpty() );
+	onlineSiteButtons();
 	if (buttonLogin)
 		buttonLogin->winEnable( TRUE );
-	if (s_onlineHelp)
-	{
-		UnicodeString help = TheGameText->fetch( "GUI:OnlineLoginHelp" );
-		if (url.isNotEmpty())
-		{
-			help.concat( u"\n\n" );
-			help.concat( TheGameText->fetch( "GUI:OnlineLoginHelpRegister" ) );
-		}
-		if (resetUrl.isNotEmpty())
-		{
-			help.concat( u"\n\n" );
-			help.concat( TheGameText->fetch( "GUI:OnlineLoginHelpReset" ) );
-		}
-		GadgetStaticTextSetText( s_onlineHelp, help );
-	}
-	onlineSavedLoginHint();		// replaces "Connecting..."
+	onlineLoginLabel( "GUI:OnlineSignIn" );
+	if (s_onlineMOTD)
+		GadgetStaticTextSetText( s_onlineMOTD, onlineMOTDText() );
+	onlineSavedLoginHint();
 
 	// what a player can type into, for online_check.py: a window counts when neither it nor a parent is hidden
 	AsciiString shown;
@@ -1222,6 +1413,8 @@ void WOLLoginMenuUpdate( WindowLayout * layout, void *userData)
 
 	if (s_onlineAwaitWelcome && !buttonPushed && !isShuttingDown)
 		onlineAwaitWelcome();
+	if (!isShuttingDown)
+		onlineServerPanel();
 
 	if (TheShell->isAnimFinished() && !buttonPushed && TheGameSpyPeerMessageQueue)
 	{
@@ -1294,7 +1487,7 @@ void WOLLoginMenuUpdate( WindowLayout * layout, void *userData)
 					loginAttemptTime = 0;
 					if (OnlineIsEnabled())
 					{
-						// the status line, not EA's box; read before the teardown below
+						// the server's refusal worded, read before the teardown below
 						EnableLoginControls( TRUE );
 						onlineLoginFailed( resp.discon.reason );
 					}
@@ -1896,7 +2089,8 @@ WindowMsgHandledType WOLLoginMenuSystem( GameWindow *window, UnsignedInt msg,
 							if (OnlineIsEnabled())
 							{
 								onlineLoginSent( email, token.isNotEmpty() ? "resume" : "login" );
-								onlineStatus( TheGameText->fetch( "GUI:OnlineSigningIn" ) );
+								onlineLoginLabel( "GUI:OnlineSigningIn" );
+								onlineStatus( UnicodeString::TheEmptyString );
 							}
 							EnableLoginControls( FALSE );
 

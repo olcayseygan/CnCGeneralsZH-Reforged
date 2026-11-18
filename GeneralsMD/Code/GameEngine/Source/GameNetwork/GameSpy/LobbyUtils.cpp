@@ -38,6 +38,10 @@
 #include "Common/PlayerTemplate.h"
 #include "Common/version.h"
 #include "GameClient/AnimateWindowManager.h"
+#include "GameClient/Display.h"
+#include "GameClient/DisplayString.h"
+#include "GameClient/DisplayStringManager.h"
+#include "GameClient/UIStyle.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/Gadget.h"
 #include "GameClient/Image.h"
@@ -73,17 +77,28 @@
 #endif
 
 // PRIVATE DATA ///////////////////////////////////////////////////////////////////////////////////
-// Note: if you add more columns, you must modify the .wnd files and change the listbox properties (yuck!)
+/* The game list's eight cells, the count the layout gives it.  The page draws them (drawGameList): name,
+	 map, seats, a lock for a password, the host's ping light and milliseconds, and the row's chip.  The
+	 light's image is as tall as a row, which is what makes a row as tall as the mockup's. */
 enum {
 	COLUMN_NAME = 0,
 	COLUMN_MAP,
-	COLUMN_LADDER,
 	COLUMN_NUMPLAYERS,
 	COLUMN_PASSWORD,
-	COLUMN_OBSERVER,
-  COLUMN_USE_STATS,
+	COLUMN_LIGHT,
 	COLUMN_PING,
+	COLUMN_STATE,
+	COLUMN_UNUSED,
+	GAME_COLUMNS
 };
+// at 1080, of the list's width less its scroll bar: the mockup's 390, 270, 120, 120 and 156
+static const Int GAME_COLUMN_PERCENT[ GAME_COLUMNS ] = { 36, 25, 11, 3, 3, 8, 14, 0 };
+// a list narrower than this at the height's scale drops the seats column, as the design's 4:3 rule says
+static const Real GAME_LIST_FULL_WIDTH = 900.0f;
+static const Int GAME_COLUMN_PERCENT_NARROW[ GAME_COLUMNS ] = { 43, 29, 0, 3, 3, 8, 14, 0 };
+static const Real GAME_ROW_HEIGHT = 40.0f;		///< the mockup's, at 1080
+static const Real GAME_HEAD_HEIGHT = 36.0f;		///< the column heads' band over the list
+static const Real CELL_PAD = 10.0f;
 
 static NameKeyType buttonSortAlphaID = NAMEKEY_INVALID;
 static NameKeyType buttonSortPingID = NAMEKEY_INVALID;
@@ -198,8 +213,6 @@ static GameWindow *parentGameListLarge = NULL;
        GameWindow *listboxLobbyGamesLarge = NULL;
        //GameWindow *listboxLobbyGameInfo = NULL;
 
-static const Image *pingImages[3] = { NULL, NULL, NULL };
-
 static void gameTooltip(GameWindow *window,
 													WinInstanceData *instData,
 													UnsignedInt mouse)
@@ -224,7 +237,7 @@ static void gameTooltip(GameWindow *window,
 		return;
 	}
 
-	if (col == COLUMN_PING)
+	if (col == COLUMN_PING || col == COLUMN_LIGHT)
 	{
 #if 0 //def DEBUG_LOGGING
 		UnicodeString s;
@@ -256,18 +269,6 @@ static void gameTooltip(GameWindow *window,
 			TheMouse->setCursorTooltip( UnicodeString::TheEmptyString );
 		return;
 	}
-  if (col == COLUMN_USE_STATS)
-  {
-    if ( room->getUseStats() )
-    {
-      TheMouse->setCursorTooltip( TheGameText->fetch("TOOLTIP:UseStatsOn") );
-    }
-    else
-    {
-      TheMouse->setCursorTooltip( TheGameText->fetch("TOOLTIP:UseStatsOff") );
-    }
-    return;
-  }
 
 	UnicodeString tooltip;
 
@@ -337,6 +338,404 @@ static void gameTooltip(GameWindow *window,
 	TheMouse->setCursorTooltip( tooltip, 10, NULL, 2.0f ); // the text and width are the only params used.  the others are the default values.
 }
 
+//-------------------------------------------------------------------------------------------------
+// The lists drawn in the online pages' look
+//-------------------------------------------------------------------------------------------------
+static const Real LIGHT_SIZE = 16.0f;		///< a ping light or a lock in a row, at 1080
+
+static Int s_joiningGame = 0;
+enum { HEAD_GAME, HEAD_MAP, HEAD_PLAYERS, HEAD_PING, HEAD_COUNT };
+static const Int HEAD_COLUMN[ HEAD_COUNT ] = { COLUMN_NAME, COLUMN_MAP, COLUMN_NUMPLAYERS, COLUMN_LIGHT };
+static const char *const HEAD_KEY[ HEAD_COUNT ] = { "GUI:OnlineLobbyColGame", "GUI:OnlineMapLabel", "GUI:OnlineLobbyColPlayers",
+	"GUI:DiplomacyPing" };
+static DisplayString *s_gameHeads[ HEAD_COUNT ];
+static DisplayString *s_noGames = NULL;			///< "No open games on EU1. Host one."
+static DisplayString *s_joiningChip = NULL;
+
+void LobbySetJoiningGame( Int gameID )
+{
+	s_joiningGame = gameID;
+}
+
+Bool LobbyGameFull( const GameSpyStagingRoom *game )
+{
+	const Int seats = game->getReportedMaxPlayers();
+	return seats > 0 && game->getReportedNumPlayers() + game->getReportedNumObservers() >= seats;
+}
+
+UnicodeString LobbyServerLabel( void )
+{
+	// the name the server gives itself in its welcome, which the site may write in UTF-8
+	AsciiString name, city;
+	Int pingMs;
+	if (OnlineGetServerInfo( name, city, pingMs ) && name.isNotEmpty())
+	{
+		WideChar text[ 64 ];
+		WideCharFromUtf8( name.str(), text, sizeof( text ) / sizeof( text[ 0 ] ) );
+		return UnicodeString( text );
+	}
+
+	// else a host name by its first label in capitals, an address whole
+	const AsciiString host = TheGlobalData->m_onlineHost;
+	Bool named = FALSE;
+	for (const char *c = host.str(); *c; ++c)
+		named = named || isalpha( (unsigned char)*c );
+	AsciiString label = host;
+	if (named && strchr( host.str(), '.' ))
+	{
+		AsciiString rest = host, first;
+		rest.nextToken( &first, "." );
+		label.clear();
+		for (const char *c = first.str(); *c; ++c)
+			label.concat( (char)toupper( (unsigned char)*c ) );
+	}
+	UnicodeString wide;
+	wide.translate( label );
+	return wide;
+}
+
+/// a selected row in the list's own art: EA's hilite bar, its ends at their width and its middle stretched
+static void drawSelection( GameWindow *list, Int left, Int top, Int right, Int bottom )
+{
+	const Image *leftEnd, *rightEnd, *middle;
+	if (!BitTest( list->winGetStatus(), WIN_STATUS_ENABLED ))
+	{
+		leftEnd = GadgetListBoxGetDisabledSelectedItemImageLeft( list );
+		rightEnd = GadgetListBoxGetDisabledSelectedItemImageRight( list );
+		middle = GadgetListBoxGetDisabledSelectedItemImageCenter( list );
+	}
+	else if (BitTest( list->winGetInstanceData()->getState(), WIN_STATE_HILITED ))
+	{
+		leftEnd = GadgetListBoxGetHiliteSelectedItemImageLeft( list );
+		rightEnd = GadgetListBoxGetHiliteSelectedItemImageRight( list );
+		middle = GadgetListBoxGetHiliteSelectedItemImageCenter( list );
+	}
+	else
+	{
+		leftEnd = GadgetListBoxGetEnabledSelectedItemImageLeft( list );
+		rightEnd = GadgetListBoxGetEnabledSelectedItemImageRight( list );
+		middle = GadgetListBoxGetEnabledSelectedItemImageCenter( list );
+	}
+	if (!leftEnd || !rightEnd || !middle)
+	{
+		TheDisplay->drawOpenRect( left, top, right - left, bottom - top, 1.0f, UIStyle::EDGE );
+		return;
+	}
+	const Int leftWidth = leftEnd->getImageWidth();
+	const Int rightWidth = rightEnd->getImageWidth();
+	TheWindowManager->winDrawImage( leftEnd, left, top, left + leftWidth, bottom );
+	if (right - rightWidth > left + leftWidth)
+		TheWindowManager->winDrawImage( middle, left + leftWidth, top, right - rightWidth, bottom );
+	TheWindowManager->winDrawImage( rightEnd, right - rightWidth, top, right, bottom );
+}
+
+void LobbyDrawRows( GameWindow *list, LobbyRowDraw draw, Int litRow )
+{
+	ListboxData *data = list ? (ListboxData *)list->winGetUserData() : NULL;
+	if (!data || !data->listData || !draw)
+		return;
+	Int x, y, width, height;
+	list->winGetScreenPosition( &x, &y );
+	list->winGetSize( &width, &height );
+	if (data->slider && !data->slider->winIsHidden())
+	{
+		Int sliderWidth, sliderHeight;
+		data->slider->winGetSize( &sliderWidth, &sliderHeight );
+		width -= sliderWidth + 3;
+	}
+	IRegion2D clip;
+	clip.lo.x = x + 1;
+	clip.lo.y = y + 1;
+	clip.hi.x = x + width - 1;
+	clip.hi.y = y + height - 1;
+
+	// rows where W3DListBox puts them: four pixels in, scrolled by displayPos, a pixel between two
+	Int top = y + 4 - data->displayPos;
+	for (Int row = 0; row < data->endPos && top < clip.hi.y; ++row)
+	{
+		IRegion2D rect;
+		rect.lo.x = x;
+		rect.lo.y = top;
+		rect.hi.x = x + width;
+		rect.hi.y = top + data->listData[row].height + 1;
+		top = rect.hi.y;
+		if (rect.hi.y <= clip.lo.y)
+			continue;
+
+		Bool selected = row == litRow;
+		if (data->multiSelect)
+		{
+			for (Int i = 0; data->selections && i < data->listLength && data->selections[i] >= 0 && !selected; ++i)
+				selected = data->selections[i] == row;
+		}
+		else
+			selected = data->selectPos == row;
+
+		TheDisplay->setClipRegion( &clip );
+		if (selected)
+			drawSelection( list, rect.lo.x + 1, rect.lo.y, rect.hi.x, rect.hi.y );
+		draw( list, row, rect, clip );
+	}
+	TheDisplay->enableClipping( FALSE );
+}
+
+void LobbyColumnSpan( GameWindow *list, Int x, Int column, Int &left, Int &width )
+{
+	ListboxData *data = list ? (ListboxData *)list->winGetUserData() : NULL;
+	left = x;
+	width = 0;
+	if (!data || !data->columnWidth || column < 0 || column >= data->columns)
+		return;
+	for (Int each = 0; each < column; ++each)
+		left += data->columnWidth[each];
+	width = data->columnWidth[column];
+}
+
+/// the text of a cell and its colour, NULL for an image or an empty cell
+static DisplayString *cellText( GameWindow *list, Int row, Int column, Color *color )
+{
+	ListboxData *data = list ? (ListboxData *)list->winGetUserData() : NULL;
+	if (!data || row < 0 || row >= data->endPos || column < 0 || column >= data->columns || !data->listData[row].cell)
+		return NULL;
+	const ListEntryCell &cell = data->listData[row].cell[column];
+	if (cell.cellType != LISTBOX_TEXT || cell.data == NULL)
+		return NULL;
+	if (color)
+		*color = cell.color;
+	return (DisplayString *)cell.data;
+}
+
+void LobbyDrawCell( GameWindow *list, Int row, Int column, const IRegion2D &rect, const IRegion2D &clip, LobbyAlign align )
+{
+	ListboxData *data = list ? (ListboxData *)list->winGetUserData() : NULL;
+	if (!data || row < 0 || row >= data->endPos || column < 0 || column >= data->columns || !data->listData[row].cell)
+		return;
+	const ListEntryCell &cell = data->listData[row].cell[column];
+	Int left, width;
+	LobbyColumnSpan( list, rect.lo.x, column, left, width );
+	if (width <= 0 || cell.data == NULL)
+		return;
+
+	// the column, inside the list
+	IRegion2D box;
+	box.lo.x = max( left, clip.lo.x );
+	box.hi.x = min( left + width, clip.hi.x );
+	box.lo.y = max( rect.lo.y, clip.lo.y );
+	box.hi.y = min( rect.hi.y, clip.hi.y );
+	if (box.hi.x <= box.lo.x || box.hi.y <= box.lo.y)
+		return;
+
+	// text keeps a pad from its column's edge; a light or a lock sits on the edge
+	const Bool text = cell.cellType == LISTBOX_TEXT;
+	const Int pad = text ? UIStyle::tallPx( CELL_PAD ) : 0;
+	const Int rowHeight = rect.hi.y - rect.lo.y;
+	Int w, h;
+	if (text)
+	{
+		DisplayString *words = (DisplayString *)cell.data;
+		if (words->getFont() != list->winGetFont())
+			words->setFont( list->winGetFont() );
+		words->getSize( &w, &h );
+	}
+	else
+	{
+		const Image *image = (const Image *)cell.data;
+		h = min( UIStyle::tallPx( LIGHT_SIZE ), rowHeight );
+		w = image->getImageHeight() > 0 ? h * image->getImageWidth() / image->getImageHeight() : h;
+	}
+	Int at = left + pad;
+	if (align == LOBBY_ALIGN_CENTER)
+		at = left + ( width - w ) / 2;
+	else if (align == LOBBY_ALIGN_RIGHT)
+		at = left + width - pad - w;
+	const Int top = rect.lo.y + ( rowHeight - h ) / 2;
+
+	if (text)
+	{
+		DisplayString *words = (DisplayString *)cell.data;
+		words->setClipRegion( &box );
+		words->draw( at, top, cell.color, UIStyle::SHADOW );
+	}
+	else
+	{
+		TheDisplay->setClipRegion( &box );
+		TheWindowManager->winDrawImage( (const Image *)cell.data, at, top, at + w, top + h );
+		IRegion2D inside = clip;
+		TheDisplay->setClipRegion( &inside );
+	}
+}
+
+void LobbySetColumns( GameWindow *list, Int columns, const Int *percent )
+{
+	ListboxData *data = list ? (ListboxData *)list->winGetUserData() : NULL;
+	if (!data || columns < 2 || !percent)
+		return;
+	if (columns != data->columns)
+	{
+		// a row's cells are as many as the columns it was made under
+		GadgetListBoxReset( list );
+		delete[] data->columnWidth;
+		delete[] data->columnWidthPercentage;
+		data->columns = columns;
+		data->columnWidth = NEW Int[ columns ];
+		data->columnWidthPercentage = NEW Int[ columns ];
+	}
+	for (Int each = 0; each < columns; ++each)
+		data->columnWidthPercentage[ each ] = percent[ each ];
+	// the listbox works its widths out from the percentages whenever it is sized
+	Int width, height;
+	list->winGetSize( &width, &height );
+	list->winSetSize( width, height );
+}
+
+/// a game's row: name and map from the left, seats and the light at the right of theirs, the chip last
+static void drawGameRow( GameWindow *list, Int row, const IRegion2D &rect, const IRegion2D &clip )
+{
+	LobbyDrawCell( list, row, COLUMN_NAME, rect, clip, LOBBY_ALIGN_LEFT );
+	LobbyDrawCell( list, row, COLUMN_MAP, rect, clip, LOBBY_ALIGN_LEFT );
+	LobbyDrawCell( list, row, COLUMN_NUMPLAYERS, rect, clip, LOBBY_ALIGN_RIGHT );
+	LobbyDrawCell( list, row, COLUMN_PASSWORD, rect, clip, LOBBY_ALIGN_CENTER );
+	LobbyDrawCell( list, row, COLUMN_LIGHT, rect, clip, LOBBY_ALIGN_RIGHT );
+	LobbyDrawCell( list, row, COLUMN_PING, rect, clip, LOBBY_ALIGN_LEFT );
+
+	// Open, Full, or Joining while the join for this game is out
+	Color color = UIStyle::ACTIVE;
+	DisplayString *chip = cellText( list, row, COLUMN_STATE, &color );
+	if (s_joiningGame && s_joiningChip && (Int)(intptr_t)GadgetListBoxGetItemData( list, row ) == s_joiningGame)
+	{
+		chip = s_joiningChip;
+		color = UIStyle::ACTIVE;
+	}
+	if (chip)
+	{
+		GameFont *face = UIStyle::chipFont();
+		if (chip->getFont() != face)
+			chip->setFont( face );
+		Int left, width, w, h;
+		LobbyColumnSpan( list, rect.lo.x, COLUMN_STATE, left, width );
+		chip->getSize( &w, &h );
+		// UIStyle::chip's box round the label
+		const Int chipWidth = w + 2 * UIStyle::tallPx( 8.0f );
+		const Int chipHeight = h + UIStyle::tallPx( 5.0f ) + UIStyle::tallPx( 4.0f );
+		IRegion2D inside = clip;
+		chip->setClipRegion( &inside );
+		UIStyle::chip( chip, left + width - UIStyle::tallPx( CELL_PAD ) - chipWidth,
+			rect.lo.y + ( rect.hi.y - rect.lo.y - chipHeight ) / 2, color, UIStyle::FRAME );
+	}
+
+	if (rect.hi.y <= clip.hi.y)
+		TheDisplay->drawFillRect( rect.lo.x, rect.hi.y - 1, rect.hi.x - rect.lo.x, 1, UIStyle::GRID );
+}
+
+/// the game list: the column heads on their rule over it, its rows, or the line saying it is empty
+static void drawGameList( GameWindow *window, WinInstanceData *instData )
+{
+	Int x, y, width, height;
+	window->winGetScreenPosition( &x, &y );
+	window->winGetSize( &width, &height );
+	const Int band = UIStyle::tallPx( GAME_HEAD_HEIGHT );
+	const Int pad = UIStyle::tallPx( CELL_PAD );
+	for (Int head = 0; head < HEAD_COUNT; ++head)
+	{
+		Int left, columnWidth, w, h;
+		LobbyColumnSpan( window, x, HEAD_COLUMN[ head ], left, columnWidth );
+		if (columnWidth <= 0 || s_gameHeads[ head ] == NULL)
+			continue;
+		s_gameHeads[ head ]->getSize( &w, &h );
+		Int at = left + pad;
+		if (head == HEAD_PLAYERS)
+			at = left + columnWidth - pad - w;
+		else if (head == HEAD_PING)		// from where the light starts
+			at = left + columnWidth - min( UIStyle::tallPx( LIGHT_SIZE ), UIStyle::tallPx( GAME_ROW_HEIGHT ) );
+		s_gameHeads[ head ]->draw( at, y - band + ( band - h ) / 2, UIStyle::INK, UIStyle::SHADOW );
+	}
+	Int last, lastWidth;
+	LobbyColumnSpan( window, x, GAME_COLUMNS - 1, last, lastWidth );
+	TheDisplay->drawFillRect( x, y - 1, last + lastWidth - x, 1, UIStyle::FRAME );
+
+	if (GadgetListBoxGetNumEntries( window ) > 0)
+	{
+		LobbyDrawRows( window, drawGameRow );
+		return;
+	}
+	if (s_noGames && OnlineIsEnabled())
+	{
+		Int w, h;
+		s_noGames->getSize( &w, &h );
+		s_noGames->draw( x + ( width - w ) / 2, y + ( height - h ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
+	}
+}
+
+/* The list under its column heads.  The layout puts it right under its box's heading, so it moves down by
+	 the heads' band, counted from the box's top: a second call, or a layout that already leaves the band,
+	 lands where it is. */
+static void freeGameListText( void );
+static void placeGameList( void )
+{
+	GameWindow *list = listboxLobbyGamesLarge;
+	freeGameListText();
+	if (!list || !parentGameListLarge)
+		return;
+	Int boxX, boxY, x, y, width, height;
+	parentGameListLarge->winGetScreenPosition( &boxX, &boxY );
+	list->winGetScreenPosition( &x, &y );
+	list->winGetSize( &width, &height );
+	const Int top = boxY + UIStyle::px( 56.0f ) + UIStyle::tallPx( GAME_HEAD_HEIGHT );
+	const Int bottom = y + height;
+	if (top != y && bottom - top > UIStyle::tallPx( GAME_ROW_HEIGHT ))
+	{
+		Int left, above;
+		list->winGetPosition( &left, &above );
+		list->winSetPosition( left, above + top - y );
+		height = bottom - top;
+		list->winSetSize( width, height );
+	}
+	LobbySetColumns( list, GAME_COLUMNS,
+		width >= UIStyle::tallPx( GAME_LIST_FULL_WIDTH ) ? GAME_COLUMN_PERCENT : GAME_COLUMN_PERCENT_NARROW );
+	list->winSetDrawFunc( drawGameList );
+
+	// the heads fitted to their columns, the empty line, the joining chip
+	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
+	for (Int head = 0; head < HEAD_COUNT; ++head)
+	{
+		Int left, columnWidth;
+		LobbyColumnSpan( list, x, HEAD_COLUMN[ head ], left, columnWidth );
+		if (head == HEAD_PING)		// the light's column and the milliseconds' together
+		{
+			Int pingLeft, pingWidth;
+			LobbyColumnSpan( list, x, COLUMN_PING, pingLeft, pingWidth );
+			columnWidth += pingWidth;
+		}
+		s_gameHeads[ head ] = TheDisplayStringManager->newDisplayString();
+		s_gameHeads[ head ]->setFont( body );
+		s_gameHeads[ head ]->setText( UIStyle::fitKey( HEAD_KEY[ head ], body, max( columnWidth - 2 * UIStyle::tallPx( CELL_PAD ), 1 ) ) );
+	}
+	UnicodeString empty;
+	empty.format( TheGameText->fetch( "GUI:OnlineLobbyEmpty" ), LobbyServerLabel().str() );
+	s_noGames = TheDisplayStringManager->newDisplayString();
+	s_noGames->setFont( body );
+	s_noGames->setText( UIStyle::fitText( empty, body, max( width - 2 * UIStyle::tallPx( CELL_PAD ), 1 ) ) );
+	s_joiningChip = TheDisplayStringManager->newDisplayString();
+	s_joiningChip->setFont( UIStyle::chipFont() );
+	s_joiningChip->setText( TheGameText->fetch( "GUI:OnlineLobbyJoining" ) );
+}
+
+static void freeGameListText( void )
+{
+	for (Int head = 0; head < HEAD_COUNT; ++head)
+	{
+		if (s_gameHeads[ head ])
+			TheDisplayStringManager->freeDisplayString( s_gameHeads[ head ] );
+		s_gameHeads[ head ] = NULL;
+	}
+	if (s_noGames)
+		TheDisplayStringManager->freeDisplayString( s_noGames );
+	if (s_joiningChip)
+		TheDisplayStringManager->freeDisplayString( s_joiningChip );
+	s_noGames = s_joiningChip = NULL;
+	s_joiningGame = 0;
+}
+
 static Bool isSmall = TRUE;
 
 GameWindow *GetGameListBox( void )
@@ -365,13 +764,6 @@ void GrabWindowInfo( void )
 	parentID = NAMEKEY( "WOLCustomLobby.wnd:WOLLobbyMenuParent" );
 	parent = TheWindowManager->winGetWindowFromId(NULL, parentID);
 
-	pingImages[0] = TheMappedImageCollection->findImageByName("Ping03");
-	pingImages[1] = TheMappedImageCollection->findImageByName("Ping02");
-	pingImages[2] = TheMappedImageCollection->findImageByName("Ping01");
-	DEBUG_ASSERTCRASH(pingImages[0], ("Can't find ping image!"));
-	DEBUG_ASSERTCRASH(pingImages[1], ("Can't find ping image!"));
-	DEBUG_ASSERTCRASH(pingImages[2], ("Can't find ping image!"));
-
 //	parentGameListSmallID = NAMEKEY( "WOLCustomLobby.wnd:ParentGameListSmall" );
 //	parentGameListSmall = TheWindowManager->winGetWindowFromId(NULL, parentGameListSmallID);
 
@@ -385,6 +777,7 @@ void GrabWindowInfo( void )
 	listboxLobbyGamesLargeID = NAMEKEY( "WOLCustomLobby.wnd:ListboxGamesLarge" );
 	listboxLobbyGamesLarge = TheWindowManager->winGetWindowFromId(NULL, listboxLobbyGamesLargeID);
 	listboxLobbyGamesLarge->winSetTooltipFunc(gameTooltip);
+	placeGameList();
 //
 //	listboxLobbyGameInfoID = NAMEKEY( "WOLCustomLobby.wnd:ListboxGameInfo" );
 //	listboxLobbyGameInfo = TheWindowManager->winGetWindowFromId(NULL, listboxLobbyGameInfoID);
@@ -408,6 +801,7 @@ void GrabWindowInfo( void )
 
 void ReleaseWindowInfo( void )
 {
+	freeGameListText();
 	isSmall = TRUE;
 	parent = NULL;
 //	parentGameListSmall = NULL;
@@ -486,8 +880,8 @@ struct GameSortStruct
 		}
 
 		// sort full games to the bottom
-		Bool g1Full = (g1->getNumNonObserverPlayers() == g1->getMaxPlayers() || g1->getNumPlayers() == MAX_SLOTS);
-		Bool g2Full = (g2->getNumNonObserverPlayers() == g2->getMaxPlayers() || g2->getNumPlayers() == MAX_SLOTS);
+		Bool g1Full = LobbyGameFull(g1);
+		Bool g2Full = LobbyGameFull(g2);
 		if ( g1Full ^ g2Full )
 		{
 			return g2Full;
@@ -522,18 +916,16 @@ struct GameSortStruct
 	}
 };
 
-static Int insertGame( GameWindow *win, GameSpyStagingRoom *game, Bool showMap )
+/* A game's row (drawGameRow draws it): an open game in INK with an Open chip, a full one MUTED with a
+	 Full chip, a started one MUTED with a Playing chip, one of another build or data MUTED with no chip (its
+	 tooltip says why it cannot be joined). */
+static Int insertGame( GameWindow *win, GameSpyStagingRoom *game )
 {
 	game->cleanUpSlotPointers();
-	Color gameColor = GameSpyColor[GSCOLOR_GAME];
-	if (game->getNumNonObserverPlayers() == game->getMaxPlayers() || game->getNumPlayers() == MAX_SLOTS)
-	{
-		gameColor = GameSpyColor[GSCOLOR_GAME_FULL];
-	}
-	if (game->getExeCRC() != TheGlobalData->m_exeCRC || game->getIniCRC() != TheGlobalData->m_iniCRC)
-	{
-		gameColor = GameSpyColor[GSCOLOR_GAME_CRCMISMATCH];
-	}
+	const Bool full = LobbyGameFull(game);
+	const Bool playing = game->isGameInProgress();
+	const Bool otherBuild = game->getExeCRC() != TheGlobalData->m_exeCRC || game->getIniCRC() != TheGlobalData->m_iniCRC;
+	const Color gameColor = (full || playing || otherBuild) ? UIStyle::MUTED : UIStyle::INK;
 	UnicodeString gameName = game->getGameName();
 	
 	if(TheGameSpyInfo->getDisallowAsianText())
@@ -565,95 +957,56 @@ static Int insertGame( GameWindow *win, GameSpyStagingRoom *game, Bool showMap )
 
 
 
-	Int index = GadgetListBoxAddEntryText(win, game->getGameName(), gameColor, -1, COLUMN_NAME);
+	// a typed name and a map's are cut with an ellipsis, never abbreviated
+	GameFont *font = win->winGetFont();
+	const Int pad = 2 * UIStyle::tallPx( CELL_PAD );
+	Int index = GadgetListBoxAddEntryText(win, UIStyle::fitName(gameName, font, GadgetListBoxGetColumnWidth(win, COLUMN_NAME) - pad),
+		gameColor, -1, COLUMN_NAME);
 	GadgetListBoxSetItemData(win, (void *)(intptr_t)game->getID(), index);
 
 	UnicodeString s;
-
-	if (showMap)
+	UnicodeString mapName;
+	const MapMetaData *md = TheMapCache->findMap(game->getMap());
+	if (md)
 	{
-		UnicodeString mapName;
-		const MapMetaData *md = TheMapCache->findMap(game->getMap());
-		if (md)
-		{
-			mapName = md->m_displayName;
-		}
-		else
-		{
-			const char *start = game->getMap().reverseFind('\\');
-			if (start)
-			{
-				++start;
-			}
-			else
-			{
-				start = game->getMap().str();
-			}
-			mapName.translate( start );
-		}
-		GadgetListBoxAddEntryText(win, mapName, gameColor, index, COLUMN_MAP);
-
-		const LadderInfo * li = TheLadderList->findLadder(game->getLadderIP(), game->getLadderPort());
-		if (li)
-		{
-			GadgetListBoxAddEntryText(win, li->name, gameColor, index, COLUMN_LADDER);
-		}
-		else if (game->getLadderPort())
-		{
-			GadgetListBoxAddEntryText(win, TheGameText->fetch("GUI:UnknownLadder"), gameColor, index, COLUMN_LADDER);
-		}
-		else
-		{
-			GadgetListBoxAddEntryText(win, TheGameText->fetch("GUI:NoLadder"), gameColor, index, COLUMN_LADDER);
-		}
+		mapName = md->m_displayName;
 	}
 	else
 	{
-		GadgetListBoxAddEntryText(win, UnicodeString(u" "), gameColor, index, COLUMN_MAP);
-		GadgetListBoxAddEntryText(win, UnicodeString(u" "), gameColor, index, COLUMN_LADDER);
+		const char *start = game->getMap().reverseFind('\\');
+		if (start)
+		{
+			++start;
+		}
+		else
+		{
+			start = game->getMap().str();
+		}
+		mapName.translate( start );
 	}
+	GadgetListBoxAddEntryText(win, UIStyle::fitName(mapName, font, GadgetListBoxGetColumnWidth(win, COLUMN_MAP) - pad),
+		UIStyle::MUTED, index, COLUMN_MAP);
 
-	s.format(u"%d/%d", game->getReportedNumPlayers(), game->getReportedMaxPlayers());
+	s.format(u"%d / %d", game->getReportedNumPlayers(), game->getReportedMaxPlayers());
 	GadgetListBoxAddEntryText(win, s, gameColor, index, COLUMN_NUMPLAYERS);
 
 	if (game->getHasPassword())
 	{
 		const Image *img = TheMappedImageCollection->findImageByName("Password");
-		Int width = 10, height = 10;
 		if (img)
-		{
-			width = img->getImageWidth();
-			height = img->getImageHeight();
-		}
-		GadgetListBoxAddEntryImage(win, img, index, COLUMN_PASSWORD, width, height);
-	}
-	else
-	{
-		GadgetListBoxAddEntryText(win, UnicodeString(u" "), gameColor, index, COLUMN_PASSWORD);
+			GadgetListBoxAddEntryImage(win, img, index, COLUMN_PASSWORD, img->getImageHeight(), img->getImageWidth());
 	}
 
-	if (game->getAllowObservers())
-	{
-		const Image *img = TheMappedImageCollection->findImageByName("Observer");
-		GadgetListBoxAddEntryImage(win, img, index, COLUMN_OBSERVER);
-	}
-	else
-	{
-		GadgetListBoxAddEntryText(win, UnicodeString(u" "), gameColor, index, COLUMN_OBSERVER);
-	}
+	if (playing)
+		GadgetListBoxAddEntryText(win, TheGameText->fetch("GUI:OnlineLobbyPlaying"), UIStyle::MUTED, index, COLUMN_STATE);
+	else if (!otherBuild)
+		GadgetListBoxAddEntryText(win, TheGameText->fetch(full ? "GUI:OnlineLobbyFull" : "GUI:Open"),
+			full ? UIStyle::MUTED : UIStyle::ACTIVE, index, COLUMN_STATE);
 
-  {
-    if (game->getUseStats())
-    {
-      const Image *img = TheMappedImageCollection->findImageByName("GoodStatsIcon");
-      GadgetListBoxAddEntryImage(win, img, index, COLUMN_USE_STATS, img->getImageHeight(), img->getImageWidth());
-	}
-    
-  }
-  
 	Int ping = game->getPingAsInt();
-	// -online: every route runs through the relay, so the pinger's figure means nothing; the host's own
-	// round trip to the server, as the server last reported it, is the part of the lag a game list can tell
+	// -online: every route runs through the relay, so the pinger's figure means nothing (it reads 1000 for
+	// everyone); the host's own round trip to the server, as the server last reported it, is the part of the
+	// lag a game list can tell, and a host whose card the lobby has not heard is a dash with no light
 	if (OnlineIsEnabled())
 	{
 		GameSlot *host = game->getSlot(0);
@@ -661,30 +1014,17 @@ static Int insertGame( GameWindow *win, GameSpyStagingRoom *game, Bool showMap )
 		AsciiString hostNick;
 		if (host && host->isHuman())
 			hostNick.translate(host->getName());
-		if (hostNick.isNotEmpty() && OnlineGetPlayerInfo(hostNick, card) && card.ping >= 0)
-			ping = card.ping;
+		ping = hostNick.isNotEmpty() && OnlineGetPlayerInfo(hostNick, card) ? card.ping : -1;
 	}
-	s.format(u"%d", ping);
-	GadgetListBoxAddEntryText(win, s, gameColor, index, COLUMN_PING);
-	Int width = 10, height = 10;
-	if (pingImages[0])
-	{
-		width = pingImages[0]->getImageWidth();
-		height = pingImages[0]->getImageHeight();
-	}
-	// CLH picking an arbitrary number for our ping display
-	if (ping < TheGameSpyConfig->getPingCutoffGood())
-	{
-		GadgetListBoxAddEntryImage(win, pingImages[0], index, COLUMN_PING, width, height);
-	}
-	else if (ping < TheGameSpyConfig->getPingCutoffBad())
-	{
-		GadgetListBoxAddEntryImage(win, pingImages[1], index, COLUMN_PING, width, height);
-	}
+	if (ping >= 0)
+		s.format(u"%d", ping);
 	else
-	{
-		GadgetListBoxAddEntryImage(win, pingImages[2], index, COLUMN_PING, width, height);
-	}
+		s = UnicodeString(u"\x2013");
+	GadgetListBoxAddEntryText(win, s, gameColor, index, COLUMN_PING);
+	// the light's cell is a row high, which is what sets the row's height
+	const Image *light = UIStyle::pingImage(ping);
+	GadgetListBoxAddEntryImage(win, light, index, COLUMN_LIGHT, UIStyle::tallPx(GAME_ROW_HEIGHT) - 1,
+		light ? light->getImageWidth() : UIStyle::tallPx(LIGHT_SIZE));
 
 	return index;
 }
@@ -724,7 +1064,7 @@ void RefreshGameListBox( GameWindow *win, Bool showMap )
 		GameSpyStagingRoom *game = *sglIt;
 		if (game)
 		{
-			Int index = insertGame(win, game, showMap);
+			Int index = insertGame(win, game);
 			if (game->getID() == selectedID)
 			{
 				indexToSelect = index;

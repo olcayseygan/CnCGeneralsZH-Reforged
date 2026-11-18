@@ -852,6 +852,7 @@ void GameSpyStagingRoom::sendOnlineReport( const char *from )
 	report.sawGameEnd = report.endFrame > 0;
 	report.sawDesync = TheNetwork->sawCRCMismatch();
 	report.surrendered = FALSE;		// a surrender is a defeat here, and the winner already says so
+	report.map = getMap();				// a Quick Match's generated map: the server never learns its name otherwise
 	report.winningTeam = -1;
 	report.numPlayers = 0;
 	Int teamsLeft = 0;

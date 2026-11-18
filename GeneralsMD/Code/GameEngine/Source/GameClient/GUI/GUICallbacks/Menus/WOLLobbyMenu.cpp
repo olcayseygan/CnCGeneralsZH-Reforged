@@ -57,6 +57,9 @@
 #include "GameClient/MessageBox.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/Display.h"
+#include "GameClient/DisplayString.h"
+#include "GameClient/DisplayStringManager.h"
+#include "GameClient/UIStyle.h"
 #include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/Online/OnlineQueues.h"
 #include "Lib/WideCharFns.h"
@@ -76,6 +79,9 @@
 #include "GameNetwork/GameSpy/LobbyUtils.h"
 #include "GameNetwork/RankPointValue.h"
 #include "GameNetwork/GameDataMatch.h"
+
+#include <algorithm>
+#include <vector>
 
 // Which half of the room's pair differs from ours: a build the player updates, or data files he can put back
 static const char *joinRefusalLabel( const GameSpyStagingRoom *room )
@@ -109,7 +115,7 @@ static LogClass s_perfLog("Perf.txt");
 // PRIVATE DATA ///////////////////////////////////////////////////////////////////////////////////
 static Bool isShuttingDown = false;
 static Bool buttonPushed = false;
-static char *nextScreen = NULL;
+static const char *nextScreen = NULL;
 static Bool raiseMessageBoxes = false;
 static time_t gameListRefreshTime = 0;
 static const time_t gameListRefreshInterval = 10000;
@@ -119,7 +125,14 @@ static const time_t playerListRefreshInterval = 5000;
 void setUnignoreText( WindowLayout *layout, AsciiString nick, GPProfile id);
 static void doSliderTrack(GameWindow *control, Int val);
 Bool DontShowMainMenu = FALSE;
-enum { COLUMN_PLAYERNAME = 1 };
+/* The player list's cells (drawPlayerRow draws them): the nick as shown, the tier, the ladder rating,
+	 the ping light, whose image is a row high, and the whole nick in a column of no width, which is what
+	 the right-click menu and the tooltip look a player up by. */
+enum { PLAYER_NICK, PLAYER_TIER, PLAYER_RATING, PLAYER_LIGHT, PLAYER_KEY, PLAYER_COLUMNS };
+// the mockup's 190, 136, 104 and 58 of a 488 list
+static const Int PLAYER_COLUMN_PERCENT[ PLAYER_COLUMNS ] = { 39, 28, 21, 12, 0 };
+static const Real PLAYER_ROW_HEIGHT = 36.0f;		///< at 1080
+static const Real LOBBY_PAD = 10.0f;
 
 // window ids ------------------------------------------------------------------------------
 static NameKeyType parentWOLLobbyID = NAMEKEY_INVALID;
@@ -244,6 +257,8 @@ static Bool s_tryingToHostOrJoin = FALSE;
 void SetLobbyAttemptHostJoin(Bool start)
 {
 	s_tryingToHostOrJoin = start;
+	if (!start)
+		LobbySetJoiningGame( 0 );		// the join came back, or the password box was cancelled
 }
 
 /* -online scripting in the lobby, once per process each: -onlinesay says its line once somebody else is in
@@ -318,6 +333,7 @@ static void onlineLobbyScript( void )
 			TheGameSpyGame->setLadderIP( room->getLadderIP() );
 			TheGameSpyGame->setLadderPort( room->getLadderPort() );
 			SetLobbyAttemptHostJoin( TRUE );
+			LobbySetJoiningGame( it->first );
 			PeerRequest req;
 			req.peerRequestType = PeerRequest::PEERREQUEST_JOINSTAGINGROOM;
 			req.text = room->getGameName().str();
@@ -332,13 +348,11 @@ static void onlineLobbyScript( void )
 
 // Tooltips -------------------------------------------------------------------------------
 
-/* The nick a player-list row shows.  -online writes the rating and the ping after it, and a nick has no
-	 spaces, so the first word is the nick either way. */
+/// the whole nick of a player-list row (the shown one may be cut with an ellipsis)
 static AsciiString nickInRow( GameWindow *listbox, Int row )
 {
-	AsciiString full, nick;		// nextToken leaves nick empty on an empty row
-	full.translate( GadgetListBoxGetText( listbox, row, COLUMN_PLAYERNAME ) );
-	full.nextToken( &nick, " " );
+	AsciiString nick;
+	nick.translate( GadgetListBoxGetText( listbox, row, PLAYER_KEY ) );
 	return nick;
 }
 
@@ -370,19 +384,6 @@ static void playerTooltip(GameWindow *window,
 	}
 	PlayerInfo *info = &(it->second);
 	Bool isLocalPlayer = (TheGameSpyInfo->getLocalName().compareNoCase(info->m_name) == 0);
-
-	if (col == 0)
-	{
-		if (info->m_preorder)
-		{
-			TheMouse->setCursorTooltip( TheGameText->fetch("TOOLTIP:LobbyOfficersClub") );
-		}
-		else
-		{
-			TheMouse->setCursorTooltip( UnicodeString::TheEmptyString);
-		}
-		return;
-	}
 
 	AsciiString	playerLocale = info->m_locale;
 	AsciiString localeIdentifier;
@@ -560,74 +561,63 @@ static Int insertPlayerInListbox(const PlayerInfo& info, Color color)
 	UnicodeString uStr;
 	uStr.translate(info.m_name);
 
-	Int currentRank = info.m_rankPoints;
-	Int currentSide = info.m_side;
-	/* since PersistentStorage updates now update PlayerInfo, we don't need this.
-	if (info.m_profileID)
-	{
-		PSPlayerStats psStats = TheGameSpyPSMessageQueue->findPlayerStatsByID(info.m_profileID);
-		if (psStats.id)
-		{
-			currentRank = CalculateRank(psStats);
-
-			PerGeneralMap::iterator it;
-			Int numGames = 0;
-			for(it = psStats.games.begin(); it != psStats.games.end(); ++it)
-			{
-				if(it->second >= numGames)
-				{
-					numGames = it->second;
-					currentSide = it->first;
-				}
-			}
-			if(numGames == 0 || psStats.gamesAsRandom >= numGames )
-			{
-				currentSide = 0;
-			}
-		}
-	}
-	*/
-
-	Bool isPreorder = TheGameSpyInfo->didPlayerPreorder(info.m_profileID);
-
-	const Image *preorderImg = TheMappedImageCollection->findImageByName("OfficersClubsmall");
-	Int w = (preorderImg)?preorderImg->getImageWidth():10;
-	//Int h = (preorderImg)?preorderImg->getImageHeight():10;
-	w = min(GadgetListBoxGetColumnWidth(listboxLobbyPlayers, 0), w);
-	Int h = w;
-	if (!isPreorder)
-		preorderImg = NULL;
-
-	const Image *rankImg = LookupSmallRankImage(currentSide, currentRank);
-
-	// -online: the rating and the round trip to the server after the nick (nickInRow reads it back)
+	/* The nick (cut with an ellipsis to its column), the tier and the ladder rating at two decimals from the
+		 server's card for the nick, and the light for its round trip to the server.  A player the server has
+		 sent no rating for is Unranked with a dash. */
+	GameWindow *list = listboxLobbyPlayers;
+	const Int pad = 2 * UIStyle::tallPx( LOBBY_PAD );
 	OnlinePlayerInfo card;
-	if (OnlineIsEnabled() && OnlineGetPlayerInfo(info.m_name, card))
-	{
-		UnicodeString extra;
-		if (card.hasRating)
-		{
-			extra.format(u"  %d", card.rating);
-			uStr.concat(extra);
-		}
-		if (card.ping >= 0)
-		{
-			extra.format(TheGameText->fetch("GUI:OnlinePingMs"), card.ping);
-			uStr.concat(u"  ");
-			uStr.concat(extra);
-		}
-	}
+	const Bool known = OnlineIsEnabled() && OnlineGetPlayerInfo(info.m_name, card);
+	Int index = GadgetListBoxAddEntryText(list, UIStyle::fitName(uStr, list->winGetFont(), GadgetListBoxGetColumnWidth(list, PLAYER_NICK) - pad),
+		color, -1, PLAYER_NICK);
+	GadgetListBoxAddEntryText(list, uStr, color, index, PLAYER_KEY);
 
-#if 0  //Officer's Club (preorder image) no longer used in Zero Hour
-	Int index = GadgetListBoxAddEntryImage(listboxLobbyPlayers, preorderImg, -1, 0, w, h);
-	GadgetListBoxAddEntryImage(listboxLobbyPlayers, rankImg, index, 1, w, h);
-	GadgetListBoxAddEntryText(listboxLobbyPlayers, uStr, color, index, 2);
-#else
-	Int index = GadgetListBoxAddEntryImage(listboxLobbyPlayers, rankImg, -1, 0, w, h);
-	GadgetListBoxAddEntryText(listboxLobbyPlayers, uStr, color, index, 1);
-#endif
+	const Bool rated = known && card.hasRating;
+	const AsciiString tier( UIStyle::tierKey( known ? UIStyle::playerTier( card ) : UIStyle::TIER_UNRANKED ) );
+	GadgetListBoxAddEntryText(list, UIStyle::fitText(OnlineTierName(tier), list->winGetFont(), GadgetListBoxGetColumnWidth(list, PLAYER_TIER) - pad),
+		UIStyle::MUTED, index, PLAYER_TIER);
+	GadgetListBoxAddEntryText(list, rated ? UIStyle::ratingText(card.exactRating) : UnicodeString(u"\x2013"), color, index, PLAYER_RATING);
+
+	// the light's cell is a row high, which is what sets the row's height
+	const Image *light = known ? UIStyle::pingImage(card.ping) : NULL;
+	GadgetListBoxAddEntryImage(list, light, index, PLAYER_LIGHT, UIStyle::tallPx(PLAYER_ROW_HEIGHT) - 1,
+		light ? light->getImageWidth() : 1);
 	return index;
 }
+
+/// a player's row: nick, tier and rating, the light at the middle of its column
+static void drawPlayerRow( GameWindow *list, Int row, const IRegion2D &rect, const IRegion2D &clip )
+{
+	LobbyDrawCell( list, row, PLAYER_NICK, rect, clip, LOBBY_ALIGN_LEFT );
+	LobbyDrawCell( list, row, PLAYER_TIER, rect, clip, LOBBY_ALIGN_LEFT );
+	LobbyDrawCell( list, row, PLAYER_RATING, rect, clip, LOBBY_ALIGN_RIGHT );
+	LobbyDrawCell( list, row, PLAYER_LIGHT, rect, clip, LOBBY_ALIGN_CENTER );
+	if (rect.hi.y <= clip.hi.y)
+		TheDisplay->drawFillRect( rect.lo.x, rect.hi.y - 1, rect.hi.x - rect.lo.x, 1, UIStyle::GRID );
+}
+
+/* The player's own row, lit in the selection's art but never selected: GameSpyInfo::sendChat reads the
+	 players list's selection as the whisper list, so a selected own row would send every line to him alone. */
+static Int s_ownPlayerRow = -1;
+
+static void drawPlayerList( GameWindow *window, WinInstanceData *instData )
+{
+	LobbyDrawRows( window, drawPlayerRow, s_ownPlayerRow );
+}
+
+/// highest ladder rating first, a player with none after everyone rated; the order before it otherwise
+struct PlayerByRating
+{
+	bool operator()( const std::pair<PlayerInfo, Color> &a, const std::pair<PlayerInfo, Color> &b ) const
+	{
+		OnlinePlayerInfo first, second;
+		const Bool firstRated = OnlineGetPlayerInfo( a.first.m_name, first ) && first.hasRating;
+		const Bool secondRated = OnlineGetPlayerInfo( b.first.m_name, second ) && second.hasRating;
+		if (firstRated != secondRated)
+			return firstRated;
+		return firstRated && first.exactRating > second.exactRating;
+	}
+};
 
 
 void PopulateLobbyPlayerListbox(void)
@@ -640,7 +630,6 @@ void PopulateLobbyPlayerListbox(void)
 	PlayerInfoMap *players = TheGameSpyInfo->getPlayerInfoMap();
 	PlayerInfoMap::iterator it;
 	BuddyInfoMap *buddies = TheGameSpyInfo->getBuddyMap();
-	BuddyInfoMap::iterator bIt;
 	if (listboxLobbyPlayers)
 	{
 		// save off old selection
@@ -669,56 +658,41 @@ void PopulateLobbyPlayerListbox(void)
 
 		GadgetListBoxReset(listboxLobbyPlayers);
 
-		// Ops
-		for (it = players->begin(); it != players->end(); ++it)
+		// EA's order, ops, then buddies, then everyone else; online, highest rating first over it
+		std::vector< std::pair<PlayerInfo, Color> > rows;
+		for (Int group = 0; group < 3; ++group)
 		{
-			PlayerInfo info = it->second;
-			if (info.m_flags & PEER_FLAG_OP || TheGameSpyConfig->isPlayerVIP(info.m_profileID))
+			for (it = players->begin(); it != players->end(); ++it)
 			{
-				Int index = insertPlayerInListbox(info, info.isIgnored()?GameSpyColor[GSCOLOR_PLAYER_IGNORED]:GameSpyColor[GSCOLOR_PLAYER_OWNER]);
-
-				selIt = selectedNames.find(info.m_name);
-				if (selIt != selectedNames.end())
-				{
-					DEBUG_LOG(("Marking index %d (%s) to re-select\n", index, info.m_name.str()));
-					indicesToSelect.insert(index);
-				}
+				PlayerInfo info = it->second;	// isIgnored is not const
+				const Bool op = (info.m_flags & PEER_FLAG_OP) || TheGameSpyConfig->isPlayerVIP(info.m_profileID);
+				const Bool buddy = !op && buddies->find(info.m_profileID) != buddies->end();
+				if (group != (op ? 0 : buddy ? 1 : 2))
+					continue;
+				Color color = GameSpyColor[op ? GSCOLOR_PLAYER_OWNER : buddy ? GSCOLOR_PLAYER_BUDDY : GSCOLOR_PLAYER_NORMAL];
+				if (OnlineIsEnabled())
+					color = UIStyle::INK;
+				if (info.isIgnored())
+					color = OnlineIsEnabled() ? UIStyle::MUTED : GameSpyColor[GSCOLOR_PLAYER_IGNORED];
+				rows.push_back(std::make_pair(info, color));
 			}
 		}
+		if (OnlineIsEnabled())
+			std::stable_sort(rows.begin(), rows.end(), PlayerByRating());
 
-		// Buddies
-		for (it = players->begin(); it != players->end(); ++it)
+		s_ownPlayerRow = -1;
+		for (size_t each = 0; each < rows.size(); ++each)
 		{
-			PlayerInfo info = it->second;
-			bIt = buddies->find(info.m_profileID);
-			if ( !(info.m_flags & PEER_FLAG_OP || TheGameSpyConfig->isPlayerVIP(info.m_profileID)) && bIt != buddies->end() )
+			const PlayerInfo &info = rows[each].first;
+			Int index = insertPlayerInListbox(info, rows[each].second);
+			if (TheGameSpyInfo->getLocalName().compareNoCase(info.m_name) == 0)
+				s_ownPlayerRow = index;
+
+			selIt = selectedNames.find(info.m_name);
+			if (selIt != selectedNames.end())
 			{
-				Int index = insertPlayerInListbox(info, info.isIgnored()?GameSpyColor[GSCOLOR_PLAYER_IGNORED]:GameSpyColor[GSCOLOR_PLAYER_BUDDY]);
-
-				selIt = selectedNames.find(info.m_name);
-				if (selIt != selectedNames.end())
-				{
-					DEBUG_LOG(("Marking index %d (%s) to re-select\n", index, info.m_name.str()));
-					indicesToSelect.insert(index);
-				}
-			}
-		}
-
-		// Everyone else
-		for (it = players->begin(); it != players->end(); ++it)
-		{
-			PlayerInfo info = it->second;
-			bIt = buddies->find(info.m_profileID);
-			if ( !(info.m_flags & PEER_FLAG_OP || TheGameSpyConfig->isPlayerVIP(info.m_profileID)) && bIt == buddies->end() )
-			{
-				Int index = insertPlayerInListbox(info, info.isIgnored()?GameSpyColor[GSCOLOR_PLAYER_IGNORED]:GameSpyColor[GSCOLOR_PLAYER_NORMAL]);
-
-				selIt = selectedNames.find(info.m_name);
-				if (selIt != selectedNames.end())
-				{
-					DEBUG_LOG(("Marking index %d (%s) to re-select\n", index, info.m_name.str()));
-					indicesToSelect.insert(index);
-				}
+				DEBUG_LOG(("Marking index %d (%s) to re-select\n", index, info.m_name.str()));
+				indicesToSelect.insert(index);
 			}
 		}
 
@@ -746,6 +720,324 @@ void PopulateLobbyPlayerListbox(void)
 		GadgetListBoxSetTopVisibleEntry(listboxLobbyPlayers, previousTopIndex);
 	}
 
+}
+
+//-------------------------------------------------------------------------------------------------
+// The page in the online pages' frame (ONLINE-UI-REDESIGN.md, "Custom games"): the header, the two
+// boxes' headings, the chat rooms as tabs over the chat, the chat entry's hint
+//-------------------------------------------------------------------------------------------------
+enum LobbyText
+{
+	TEXT_GAMES,					///< the game box's heading
+	TEXT_GAMES_COUNT,		///< "12 open"
+	TEXT_PLAYERS,				///< "In General"
+	TEXT_PLAYERS_COUNT,
+	TEXT_SAY,						///< the chat entry's hint while it is empty
+	TEXT_COUNT
+};
+enum { MAX_ROOM_TABS = 8 };
+static DisplayString *s_text[ TEXT_COUNT ];
+static UnicodeString s_playersWords;							///< the player box's heading before it was fitted
+static DisplayString *s_roomTab[ MAX_ROOM_TABS ];
+static UnicodeString s_roomTabWords[ MAX_ROOM_TABS ];	///< each tab's label before it was fitted
+static Int s_roomTabGroup[ MAX_ROOM_TABS ];
+static IRegion2D s_roomTabRect[ MAX_ROOM_TABS ];
+static Int s_roomTabsShown = 0;
+static GameWinDrawFunc s_gadgetParentDraw = NULL;
+static GameWinDrawFunc s_panelGamesDraw = NULL;
+static GameWinDrawFunc s_panelPlayersDraw = NULL;
+static GameWinDrawFunc s_chatEntryDraw = NULL;
+
+/// a chat room's name; the online server's one room (OnlinePeer.cpp's "Lobby") is the design's General
+static UnicodeString roomName( const GameSpyGroupRoom &room )
+{
+	if (OnlineIsEnabled() && room.m_name.compareNoCase( "Lobby" ) == 0)
+		return TheGameText->fetch( "GUI:OnlineLobbyRoomGeneral" );
+	return room.m_translatedName;
+}
+
+static const GameSpyGroupRoom *currentRoom( void )
+{
+	GroupRoomMap *rooms = TheGameSpyInfo->getGroupRoomList();
+	GroupRoomMap::const_iterator it = rooms->find( TheGameSpyInfo->getCurrentGroupRoom() );
+	return it != rooms->end() ? &it->second : NULL;
+}
+
+/// who is in a room: the players heard in this one, the server's count for the others
+static Int roomCount( const GameSpyGroupRoom &room )
+{
+	if (room.m_groupID == TheGameSpyInfo->getCurrentGroupRoom())
+		return (Int)TheGameSpyInfo->getPlayerInfoMap()->size();
+	return room.m_numWaiting;
+}
+
+/// the game on a row of the game list has started: it is listed as Playing, which no Join can take
+static Bool gameRowPlaying( GameWindow *list, Int row )
+{
+	StagingRoomMap *games = TheGameSpyInfo->getStagingRoomList();
+	StagingRoomMap::iterator it = games->find( (Int)(intptr_t)GadgetListBoxGetItemData( list, row ) );
+	return it != games->end() && it->second && it->second->isGameInProgress();
+}
+
+/// moves to another chat room, as EA's room combo box did
+static void joinRoom( Int groupID )
+{
+	if (!groupID || groupID == TheGameSpyInfo->getCurrentGroupRoom())
+		return;
+	TheGameSpyInfo->leaveGroupRoom();
+	TheGameSpyInfo->joinGroupRoom(groupID);
+
+	if (TheGameSpyConfig->restrictGamesToLobby())
+	{
+		TheGameSpyInfo->clearStagingRoomList();
+		RefreshGameListBoxes();
+		PeerRequest req;
+		req.peerRequestType = PeerRequest::PEERREQUEST_STARTGAMELIST;
+		req.gameList.restrictGameList = TRUE;
+		TheGameSpyPeerMessageQueue->addRequest(req);
+	}
+}
+
+/* The chat rooms the server listed, as tabs in the strip the hidden room combo box keeps: "General 41",
+	 the open one's label ACTIVE, all of them MUTED while a game is being hosted or joined.  A click lands in
+	 WOLLobbyMenuInput, which finds the tab by the rectangles drawn here. */
+static void drawRoomTabs( void )
+{
+	s_roomTabsShown = 0;
+	if (!comboLobbyGroupRooms)
+		return;
+	Int x, y, width, height;
+	comboLobbyGroupRooms->winGetScreenPosition( &x, &y );
+	comboLobbyGroupRooms->winGetSize( &width, &height );
+	const Int right = x + width;
+	const Int pad = UIStyle::tallPx( 22.0f );		// the page tabs' pad either side of a label
+	const Int gap = UIStyle::px( 8.0f );
+	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
+	const MouseIO *mouse = TheMouse ? TheMouse->getMouseStatus() : NULL;
+	GroupRoomMap *rooms = TheGameSpyInfo->getGroupRoomList();
+	for (GroupRoomMap::const_iterator it = rooms->begin(); it != rooms->end() && s_roomTabsShown < MAX_ROOM_TABS; ++it)
+	{
+		const GameSpyGroupRoom &room = it->second;
+		if (room.m_groupID == TheGameSpyConfig->getQMChannel() || !s_roomTab[ s_roomTabsShown ])
+			continue;
+		const Int tab = s_roomTabsShown;
+		UnicodeString words;
+		words.format( TheGameText->fetch( "GUI:OnlineLobbyRoomCount" ), roomName( room ).str(), roomCount( room ) );
+		if (words.compare( s_roomTabWords[ tab ] ) != 0)
+		{
+			s_roomTabWords[ tab ] = words;
+			s_roomTab[ tab ]->setText( UIStyle::fitText( words, body, max( width - 2 * pad, 1 ) ) );
+		}
+		Int w, h;
+		s_roomTab[ tab ]->getSize( &w, &h );
+		const Int tabWidth = w + 2 * pad;
+		if (x + tabWidth > right)
+			break;
+
+		IRegion2D &rect = s_roomTabRect[ tab ];
+		rect.lo.x = x;
+		rect.lo.y = y;
+		rect.hi.x = x + tabWidth;
+		rect.hi.y = y + height;
+		const Bool open = room.m_groupID == TheGameSpyInfo->getCurrentGroupRoom();
+		const Bool hovered = mouse && !open && mouse->pos.x >= rect.lo.x && mouse->pos.x < rect.hi.x
+			&& mouse->pos.y >= rect.lo.y && mouse->pos.y < rect.hi.y;
+		const Color color = UIStyle::tab( x, y, tabWidth, height, !s_tryingToHostOrJoin, open, hovered );
+		s_roomTab[ tab ]->draw( x + pad, y + ( height - h ) / 2, color, UIStyle::SHADOW );
+		s_roomTabGroup[ tab ] = room.m_groupID;
+		++s_roomTabsShown;
+		x += tabWidth + gap;
+	}
+}
+
+/// the room panel, then the header on it (the title, the server line, the wordmark, the player's line)
+static void drawGadgetParent( GameWindow *window, WinInstanceData *instData )
+{
+	if (s_gadgetParentDraw)
+		s_gadgetParentDraw( window, instData );
+	UIStyle::onlineHeader( TheGameText->fetch( "GUI:OnlineTabCustom" ) );
+	drawRoomTabs();
+}
+
+/// a box's heading ACTIVE in the section face and its count MUTED at its right, in the band over its list
+static void drawBoxHeading( GameWindow *box, DisplayString *heading, DisplayString *count )
+{
+	if (!heading || !count)
+		return;
+	Int x, y, width, height;
+	box->winGetScreenPosition( &x, &y );
+	box->winGetSize( &width, &height );
+	const Int band = UIStyle::px( 56.0f );		// the layout starts a box's list this far under its top
+	Int w, h;
+	heading->getSize( &w, &h );
+	UIStyle::heading( heading, x + UIStyle::px( 24.0f ), y + ( band - h ) / 2 );
+	count->getSize( &w, &h );
+	count->draw( x + width - UIStyle::px( 48.0f ) - w, y + ( band - h ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
+}
+
+/// the game box: "Games", and how many a Join can take, with how many are being played when any are
+static void drawPanelGames( GameWindow *window, WinInstanceData *instData )
+{
+	if (s_panelGamesDraw)
+		s_panelGamesDraw( window, instData );
+	Int open = 0;
+	Int playing = 0;
+	StagingRoomMap *games = TheGameSpyInfo->getStagingRoomList();
+	for (StagingRoomMap::iterator it = games->begin(); it != games->end(); ++it)
+	{
+		GameSpyStagingRoom *game = it->second;
+		if (!game)
+			continue;
+		if (game->isGameInProgress())
+		{
+			++playing;
+			continue;
+		}
+		if (!LobbyGameFull(game) && game->getExeCRC() == TheGlobalData->m_exeCRC && game->getIniCRC() == TheGlobalData->m_iniCRC)
+			++open;
+	}
+	UnicodeString count;
+	if (playing > 0)
+		count.format( TheGameText->fetch( "GUI:OnlineLobbyCount" ), open, playing );
+	else
+		count.format( TheGameText->fetch( "GUI:OnlineLobbyCountOpen" ), open );
+	if (s_text[ TEXT_GAMES_COUNT ])
+		s_text[ TEXT_GAMES_COUNT ]->setText( count );
+	drawBoxHeading( window, s_text[ TEXT_GAMES ], s_text[ TEXT_GAMES_COUNT ] );
+}
+
+/// the player box: "In General" and how many are in it
+static void drawPanelPlayers( GameWindow *window, WinInstanceData *instData )
+{
+	if (s_panelPlayersDraw)
+		s_panelPlayersDraw( window, instData );
+	if (!s_text[ TEXT_PLAYERS ] || !s_text[ TEXT_PLAYERS_COUNT ])
+		return;
+	const GameSpyGroupRoom *room = currentRoom();
+	const UnicodeString name = room ? roomName( *room ) : UnicodeString::TheEmptyString;
+	UnicodeString words;
+	words.format( TheGameText->fetch( "GUI:OnlineLobbyInRoom" ), name.str() );
+	if (words.compare( s_playersWords ) != 0)
+	{
+		Int width, height;
+		window->winGetSize( &width, &height );
+		s_playersWords = words;
+		s_text[ TEXT_PLAYERS ]->setText( UIStyle::fitText( words, UIStyle::sectionFont(), max( width - UIStyle::px( 120.0f ), 1 ) ) );
+	}
+	UnicodeString count;
+	count.format( u"%d", (Int)TheGameSpyInfo->getPlayerInfoMap()->size() );
+	s_text[ TEXT_PLAYERS_COUNT ]->setText( count );
+	drawBoxHeading( window, s_text[ TEXT_PLAYERS ], s_text[ TEXT_PLAYERS_COUNT ] );
+}
+
+/// the chat entry, and while it is empty "Say something to General" MUTED where its text starts
+static void drawChatEntry( GameWindow *window, WinInstanceData *instData )
+{
+	if (s_chatEntryDraw)
+		s_chatEntryDraw( window, instData );
+	DisplayString *hint = s_text[ TEXT_SAY ];
+	if (!hint || !GadgetTextEntryGetText( window ).isEmpty())
+		return;
+	const GameSpyGroupRoom *room = currentRoom();
+	if (!room)
+		return;
+	UnicodeString words;
+	words.format( TheGameText->fetch( "GUI:OnlineLobbySay" ), roomName( *room ).str() );
+	hint->setText( words );
+	Int x, y, width, height, w, h;
+	window->winGetScreenPosition( &x, &y );
+	window->winGetSize( &width, &height );
+	hint->getSize( &w, &h );
+	// W3DTextEntry starts its text seven pixels in; the hint stands a little after the caret
+	hint->draw( x + 7 + UIStyle::tallPx( 8.0f ), y + ( height - h ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
+}
+
+/// puts draw over a window's own; a second init on the same layout keeps the first capture, or the
+/// hook would call itself
+static void hookDraw( GameWindow *window, GameWinDrawFunc &saved, GameWinDrawFunc draw )
+{
+	if (!window || window->winGetDrawFunc() == draw)
+		return;
+	saved = window->winGetDrawFunc();
+	window->winSetDrawFunc( draw );
+}
+
+static GameWindow *lobbyWindow( const char *name )
+{
+	AsciiString full;
+	full.format( "WOLCustomLobby.wnd:%s", name );
+	return TheWindowManager->winGetWindowFromId( parent, NAMEKEY( full ) );
+}
+
+static void freeLobbyText( void )
+{
+	for (Int each = 0; each < TEXT_COUNT; ++each)
+	{
+		if (s_text[ each ])
+			TheDisplayStringManager->freeDisplayString( s_text[ each ] );
+		s_text[ each ] = NULL;
+	}
+	for (Int tab = 0; tab < MAX_ROOM_TABS; ++tab)
+	{
+		if (s_roomTab[ tab ])
+			TheDisplayStringManager->freeDisplayString( s_roomTab[ tab ] );
+		s_roomTab[ tab ] = NULL;
+		s_roomTabWords[ tab ].clear();
+	}
+	s_playersWords.clear();
+	s_roomTabsShown = 0;
+}
+
+/// the page's frame on the layout's windows, from its init
+static void initLobbyLook( void )
+{
+	UIStyle::onlinePageInit( parent, "WOLCustomLobby.wnd", UIStyle::ONLINE_TAB_CUSTOM );
+	// the header draws the title with its subtitle; the layout's title would stand under it twice
+	GameWindow *title = lobbyWindow( "StaticTextTitle" );
+	if (title)
+		title->winHide( TRUE );
+
+	hookDraw( lobbyWindow( "GadgetParent" ), s_gadgetParentDraw, drawGadgetParent );
+	hookDraw( lobbyWindow( "PanelGames" ), s_panelGamesDraw, drawPanelGames );
+	hookDraw( lobbyWindow( "PanelPlayers" ), s_panelPlayersDraw, drawPanelPlayers );
+	hookDraw( textEntryChat, s_chatEntryDraw, drawChatEntry );
+
+	// the player list: a line a row, the page's columns, the page's rows
+	if (listboxLobbyPlayers)
+	{
+		listboxLobbyPlayers->winSetStatus( WIN_STATUS_ONE_LINE );
+		LobbySetColumns( listboxLobbyPlayers, PLAYER_COLUMNS, PLAYER_COLUMN_PERCENT );
+		listboxLobbyPlayers->winSetDrawFunc( drawPlayerList );
+	}
+
+	freeLobbyText();
+	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
+	GameFont *const faces[ TEXT_COUNT ] = { UIStyle::sectionFont(), body, UIStyle::sectionFont(), body,
+		textEntryChat ? textEntryChat->winGetFont() : body };
+	for (Int each = 0; each < TEXT_COUNT; ++each)
+	{
+		s_text[ each ] = TheDisplayStringManager->newDisplayString();
+		s_text[ each ]->setFont( faces[ each ] );
+	}
+	s_text[ TEXT_GAMES ]->setText( TheGameText->fetch( "GUI:Games" ) );
+	for (Int tab = 0; tab < MAX_ROOM_TABS; ++tab)
+	{
+		s_roomTab[ tab ] = TheDisplayStringManager->newDisplayString();
+		s_roomTab[ tab ]->setFont( body );
+	}
+}
+
+/// Back, or a tab: out of the chat room, Home by popping to the hub under this page, a tab by pushing its
+/// page over the hub; refused while a game is being hosted or joined, as Back always was
+static void leaveLobby( UIStyle::OnlineTab to )
+{
+	if (s_tryingToHostOrJoin)
+		return;
+	TheGameSpyInfo->leaveGroupRoom();
+	SetLobbyAttemptHostJoin( TRUE ); // pretend, since we don't want to queue up another action
+	buttonPushed = true;
+	nextScreen = UIStyle::onlineTabScreen( to );
+	TheShell->pop();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -801,6 +1093,7 @@ void WOLLobbyMenuInit( WindowLayout *layout, void *userData )
 	GadgetTextEntrySetText(textEntryChat, UnicodeString::TheEmptyString);
 
 	populateGroupRoomListbox(comboLobbyGroupRooms);
+	initLobbyLook();
 
 	// Show Menu
 	layout->hide( FALSE );
@@ -875,6 +1168,10 @@ static void shutdownComplete( WindowLayout *layout )
 
 	// hide the layout
 	layout->hide( TRUE );
+
+	// the frame drew through the fade; the next page's init, from the push below, makes its own
+	UIStyle::onlinePageShutdown( parent );
+	freeLobbyText();
 
 	// our shutdown is complete
 	TheShell->shutdownComplete( layout, (nextScreen != NULL) );
@@ -1110,7 +1407,7 @@ void WOLLobbyMenuUpdate( WindowLayout * layout, void *userData)
 					{
 						GameSpyGroupRoom room = iter->second;
 						UnicodeString msg;
-						msg.format(TheGameText->fetch("GUI:LobbyJoined"), room.m_translatedName.str());
+						msg.format(TheGameText->fetch("GUI:LobbyJoined"), roomName(room).str());
 						TheGameSpyInfo->addText(msg, GameSpyColor[GSCOLOR_DEFAULT], NULL);
 					}
 				}
@@ -1361,6 +1658,8 @@ void WOLLobbyMenuUpdate( WindowLayout * layout, void *userData)
 							room.setReportedNumPlayers(resp.stagingRoom.numPlayers);
 							room.setReportedMaxPlayers(resp.stagingRoom.maxPlayers);
 							room.setReportedNumObservers(resp.stagingRoom.numObservers);
+							// a started game stays listed, as Playing, which no Join can take
+							room.setGameInProgress(!resp.stagingRoom.isStaging);
 
 							Int i;
 							AsciiString gsMapName = resp.stagingRoomMapName.c_str();
@@ -1530,7 +1829,29 @@ WindowMsgHandledType WOLLobbyMenuInput( GameWindow *window, UnsignedInt msg,
 
 			}  // end switch( key )
 
+			break;
+
 		}  // end char
+
+		// --------------------------------------------------------------------------------------------
+		// a click on a chat room's tab, which nothing under it took (drawRoomTabs drew it)
+		case GWM_LEFT_UP:
+		{
+			if (buttonPushed || s_tryingToHostOrJoin)
+				break;
+			const Int x = LOLONGTOSHORT( mData1 );
+			const Int y = HILONGTOSHORT( mData1 );
+			for (Int tab = 0; tab < s_roomTabsShown; ++tab)
+			{
+				const IRegion2D &rect = s_roomTabRect[ tab ];
+				if (x >= rect.lo.x && x < rect.hi.x && y >= rect.lo.y && y < rect.hi.y)
+				{
+					joinRoom( s_roomTabGroup[ tab ] );
+					return MSG_HANDLED;
+				}
+			}
+			break;
+		}
 
 	}  // end switch( msg )
 
@@ -1634,7 +1955,7 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 					int rowSelected = mData2;
 					if( rowSelected >= 0 )
 					{
-						buttonJoin->winEnable(TRUE);
+						buttonJoin->winEnable(!gameRowPlaying(control, rowSelected));
 						static UnsignedInt lastFrame = 0;
 						static Int lastID = -1;
 						UnsignedInt now = TheGameClient->getFrame();
@@ -1673,23 +1994,15 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 				GameWindow *control = (GameWindow *)mData1;
 				Int controlID = control->winGetWindowId();
 
+				if (UIStyle::onlineTabClicked(control, leaveLobby))
+					break;
 				if (HandleSortButton((NameKeyType)controlID))
 					break;
 
 				// If we back out, just bail - we haven't gotten far enough to need to log out
 				if ( controlID == buttonBackID )
 				{
-					if (s_tryingToHostOrJoin)
-						break;
-
-					// Leave any group room, then pop off the screen
-					TheGameSpyInfo->leaveGroupRoom();
-
-					SetLobbyAttemptHostJoin( TRUE ); // pretend, since we don't want to queue up another action
-					buttonPushed = true;
-					nextScreen = "Menus/WOLWelcomeMenu.wnd";
-					TheShell->pop();
-
+					leaveLobby( UIStyle::ONLINE_TAB_HOME );
 				} //if ( controlID == buttonBack )
 				else if ( controlID == buttonRefreshID )
 				{
@@ -1727,6 +2040,8 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 							if (srmIt != srm->end())
 							{
 								GameSpyStagingRoom *roomToJoin = srmIt->second;
+								if (roomToJoin && roomToJoin->isGameInProgress())
+									break;	// a double click reaches here past the disabled button
 								if (!roomToJoin || roomToJoin->getExeCRC() != TheGlobalData->m_exeCRC || roomToJoin->getIniCRC() != TheGlobalData->m_iniCRC)
 								{
 									// bad crc.  don't go.
@@ -1753,7 +2068,7 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 									GSMessageBoxOk(TheGameText->fetch("GUI:JoinFailedDefault"), TheGameText->fetch("GUI:JoinFailedUnknownLadder"));
 									break;
 								}
-								if (roomToJoin->getNumPlayers() == MAX_SLOTS)
+								if (LobbyGameFull(roomToJoin))		// the row's own Full, by the listing's numbers
 								{
 									GSMessageBoxOk(TheGameText->fetch("GUI:JoinFailedDefault"), TheGameText->fetch("GUI:JoinFailedRoomFull"));
 									break;
@@ -1763,6 +2078,7 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 								TheGameSpyGame->setLadderIP(roomToJoin->getLadderIP());
 								TheGameSpyGame->setLadderPort(roomToJoin->getLadderPort());
 								SetLobbyAttemptHostJoin( TRUE );
+								LobbySetJoiningGame( selectedID );
 								if (roomToJoin->getHasPassword())
 								{
 									GameSpyOpenOverlay(GSOVERLAY_GAMEPASSWORD);
@@ -1832,21 +2148,7 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 						Int groupID;
 						groupID = (Int)(intptr_t)GadgetComboBoxGetItemData(comboLobbyGroupRooms, rowSelected);
 						DEBUG_LOG(("ItemData was %d, current Group Room is %d\n", groupID, TheGameSpyInfo->getCurrentGroupRoom()));
-						if (groupID && groupID != TheGameSpyInfo->getCurrentGroupRoom())
-						{
-							TheGameSpyInfo->leaveGroupRoom();
-							TheGameSpyInfo->joinGroupRoom(groupID);
-
-							if (TheGameSpyConfig->restrictGamesToLobby())
-							{
-								TheGameSpyInfo->clearStagingRoomList();
-								RefreshGameListBoxes();
-								PeerRequest req;
-								req.peerRequestType = PeerRequest::PEERREQUEST_STARTGAMELIST;
-								req.gameList.restrictGameList = TRUE;
-								TheGameSpyPeerMessageQueue->addRequest(req);
-							}
-						}
+						joinRoom(groupID);
 					}
 				}
 			} // case GCM_SELECTED

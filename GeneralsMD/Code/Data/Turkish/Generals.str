@@ -20019,3 +20019,721 @@ END
 GUI:QMMapNoAnswer
 "%ls oyuncusunun oyunu bu maçın haritasını onaylamadı, maç iptal edildi. Oyunu eski bir sürüm olabilir."
 END
+
+// Yeniden tasarlanan çevrimiçi ekranlar (docs/plans/ONLINE-UI-REDESIGN.md): birkaç ekranın ortak sözcükleri.
+// Puan, %ls ile gelen hazır biçimlenmiş bir metindir, çünkü Türkçe 22,70 yazar.
+GUI:OnlineLabel
+"ÇEVRİMİÇİ"
+END
+
+GUI:OnlineTabHome
+"ANA SAYFA"
+END
+
+GUI:OnlineTabQuickMatch
+"HIZLI MAÇ"
+END
+
+GUI:OnlineTabCustom
+"ÖZEL OYUNLAR"
+END
+
+GUI:OnlineAIShort
+"Bilgisayar"
+END
+
+GUI:OnlineLadderRatingLabel
+"Lig puanı"
+END
+
+GUI:OnlineAIRatingLabel
+"Bilgisayar puanı"
+END
+
+GUI:OnlineGamesLabel
+"Maç"
+END
+
+GUI:OnlineWinRateLabel
+"Kazanma"
+END
+
+GUI:OnlineSpeedLabel
+"Hız"
+END
+
+GUI:OnlinePlaceLabel
+"Sıra"
+END
+
+GUI:OnlinePlaceValue
+"%d."
+END
+
+GUI:OnlineWinLabel
+"Galibiyet"
+END
+
+GUI:OnlineLossLabel
+"Mağlubiyet"
+END
+
+GUI:OnlineMapLabel
+"Harita"
+END
+
+GUI:OnlineOpponentLabel
+"Rakip"
+END
+
+GUI:OnlineOpenGamesLabel
+"Açık oyun"
+END
+
+GUI:OnlineComputerLabel
+"Bilgisayar"
+END
+
+GUI:OnlineQuickMatchLabel
+"Hızlı maç"
+END
+
+GUI:OnlineNextTier
+"%ls için %ls · %ls kaldı"
+END
+
+// komutanın kısa adları: ordu kartları ve skor ekranı
+GUI:OnlineGeneralSuper
+"Süper Silah"
+END
+
+GUI:OnlineGeneralLaser
+"Lazer"
+END
+
+GUI:OnlineGeneralAir
+"Hava Kuvvetleri"
+END
+
+GUI:OnlineGeneralTank
+"Tank"
+END
+
+GUI:OnlineGeneralInf
+"Piyade"
+END
+
+GUI:OnlineGeneralNuke
+"Nükleer"
+END
+
+GUI:OnlineGeneralToxin
+"Toksin"
+END
+
+GUI:OnlineGeneralDemo
+"Yıkım"
+END
+
+GUI:OnlineGeneralStealth
+"Gizlilik"
+END
+
+// giriş
+GUI:OnlineLoginOnlineNow
+"Şu an çevrimiçi"
+END
+
+GUI:OnlineLoginInQuickMatch
+"Hızlı maçta"
+END
+
+GUI:OnlineLoginLauncher
+"Sunucuyu başlatıcı seçer: sen orada başkasını seçmedikçe ping'i en düşük olanı."
+END
+
+GUI:OnlineLoginHeading
+"Giriş yap"
+END
+
+GUI:OnlineLoginKeepHint
+"Şifren hiçbir yere kaydedilmez"
+END
+
+GUI:OnlineLoginFailed
+"Giriş yapılamadı"
+END
+
+GUI:OnlineLoginBadBody
+"E-posta, kullanıcı adı ya da şifre yanlış. Kontrol edip yeniden dene."
+END
+
+GUI:OnlineLoginBrowser
+"İkisi de zerohour.gg'yi tarayıcında açar."
+END
+
+// merkez
+GUI:OnlineHubVsAITitle
+"Bilgisayara karşı"
+END
+
+GUI:OnlineHubVsAILead
+"Lige sayılmaz · bilgisayara karşı"
+END
+
+GUI:OnlineHubRecord
+"G–M"
+END
+
+GUI:OnlineHubVsAIExplain
+"Rastgele resmi 1v1 haritası. Bilgisayar senin puanınla oynar; kazanırsan puan artar, kaybedersen düşer."
+END
+
+GUI:OnlineHubPlay
+"OYNA"
+END
+
+GUI:OnlineHubQuickMatchLead
+"Lig maçı · 1v1"
+END
+
+GUI:OnlineHubInQueue
+"Sırada"
+END
+
+GUI:OnlineHubQuickMatchExplain
+"Lig puanına yakın bir rakip, maç için üretilen bir haritada. Sonuç ligdeki yerini değiştirir."
+END
+
+GUI:OnlineHubFindMatch
+"MAÇ ARA"
+END
+
+GUI:OnlineHubCustomTitle
+"Özel oyunlar"
+END
+
+GUI:OnlineHubCustomLead
+"Lige sayılmaz · 2-8 oyuncu"
+END
+
+GUI:OnlineHubCustomExplain
+"Kendi kurallarınla oda kur ya da birine katıl. %ls sunucusundaki herkesle sohbet et."
+END
+
+GUI:OnlineHubBrowse
+"OYUNLARA BAK"
+END
+
+GUI:OnlineHubRecent
+"Son maçlar"
+END
+
+GUI:OnlineHubMatchAI
+"Bilgisayar"
+END
+
+GUI:OnlineHubAgoHours
+"%d sa önce"
+END
+
+GUI:OnlineHubYday
+"Dün"
+END
+
+GUI:OnlineHubAgoDays
+"%d gün önce"
+END
+
+GUI:OnlineHubFrom
+"%ls duyurusu"
+END
+
+GUI:OnlineHubMotd3
+"Lig ve tüm maçlar zerohour.gg'de."
+END
+
+GUI:OnlineHubMyCard
+"KARTIM"
+END
+
+GUI:OnlineHubSignOut
+"ÇIKIŞ YAP"
+END
+
+// oyuncu kartı
+GUI:OnlineCardInRoom
+"%ls odasında · %ls"
+END
+
+GUI:OnlineCardTabAI
+"BİLGİSAYARA KARŞI"
+END
+
+GUI:OnlineCardByOwn
+"Kendi ordusuna göre"
+END
+
+GUI:OnlineCardByAI
+"Bilgisayarın ordusuna göre"
+END
+
+GUI:OnlineCardByOpp
+"Rakibin ordusuna göre"
+END
+
+GUI:OnlineCardLastAI
+"Son bilgisayar maçları"
+END
+
+GUI:OnlineCardLastQM
+"Son hızlı maçlar"
+END
+
+GUI:OnlineCardColAI
+"Bilgisayarın puanı"
+END
+
+GUI:OnlineCardProfile
+"ZEROHOUR.GG PROFİLİ"
+END
+
+GUI:OnlineCardArmyChinaTank
+"Çin Tank"
+END
+
+GUI:OnlineCardArmyUsaLaser
+"ABD Lazer"
+END
+
+GUI:OnlineCardArmyGlaToxin
+"GLA Toksin"
+END
+
+GUI:OnlineCardArmyGlaStealth
+"GLA Gizlilik"
+END
+
+GUI:OnlineCardArmyChinaNuke
+"Çin Nükleer"
+END
+
+GUI:OnlineCardArmyUsaAir
+"ABD Hava K."
+END
+
+// lig
+GUI:OnlineLadderSub
+"Tüm sunucular, tek lig"
+END
+
+GUI:OnlineLadderPage
+"%d–%d. sıralar"
+END
+
+// düz yüzde işareti: ekran bunu format'tan geçirir
+GUI:OnlineLadderWinPct
+"Kazanma %%"
+END
+
+GUI:OnlineLadderYourPlace
+"Ligdeki yerin"
+END
+
+GUI:OnlineLadderRecord
+"%d galibiyet · %d mağlubiyet"
+END
+
+GUI:OnlineLadderJump
+"SAYFAMA GİT"
+END
+
+GUI:OnlineLadderTiers
+"Rütbeler"
+END
+
+GUI:OnlineLadderTierUp
+"%ls ve üstü"
+END
+
+GUI:OnlineLadderTierRange
+"%ls – %ls"
+END
+
+GUI:OnlineLadderTierUnder
+"%ls altı"
+END
+
+GUI:OnlineLadderTierUnranked
+"5 maçtan az"
+END
+
+// lobi
+GUI:OnlineLobbyCount
+"%d açık · %d oynanıyor"
+END
+
+GUI:OnlineLobbyColGame
+"Oyun"
+END
+
+GUI:OnlineLobbyColPlayers
+"Oyuncu"
+END
+
+GUI:OnlineLobbyFull
+"Dolu"
+END
+
+GUI:OnlineLobbyInRoom
+"%ls odasında"
+END
+
+GUI:OnlineLobbyRoomGeneral
+"Genel"
+END
+
+GUI:OnlineLobbyRoomCount
+"%ls %d"
+END
+
+GUI:OnlineLobbySay
+"%ls odasına bir şey yaz"
+END
+
+GUI:OnlineLobbyJoin
+"KATIL"
+END
+
+GUI:OnlineLobbyHost
+"OYUN KUR"
+END
+
+// Hızlı maç sayfası
+GUI:QMRandomArmy
+"Rastgele ordu"
+END
+
+GUI:QMRandomHint
+"On ikiden biri, maç başlarken çekilir"
+END
+
+GUI:QMNoGeneral
+"Generalsiz"
+END
+
+GUI:QMAll
+"TÜMÜ"
+END
+
+GUI:QMNone
+"HİÇBİRİ"
+END
+
+GUI:QMSearch
+"ARA"
+END
+
+GUI:QMSearching
+"Rakip aranıyor"
+END
+
+GUI:QMWindow
+"Aralık"
+END
+
+GUI:QMWindowValue
+"100 maçta %d ile %d arası yeneceğin rakipler"
+END
+
+GUI:QMWidens
+"%d ile %d arasına %d:%02d sonra açılır"
+END
+
+GUI:QMWidenCap
+"%d ile %d arasında durur"
+END
+
+GUI:QMYourPicks
+"Seçimlerin"
+END
+
+GUI:QMPicksHint
+"Değiştirmek için aramayı durdur."
+END
+
+GUI:QMStop
+"DURDUR"
+END
+
+GUI:QMFound
+"Rakip bulundu"
+END
+
+GUI:QMYou
+"Sen"
+END
+
+GUI:QMVs
+"VS"
+END
+
+GUI:QMChance
+"Kazanma şansı"
+END
+
+GUI:QMStartsBanner
+"MAÇ %d SANİYE SONRA BAŞLIYOR"
+END
+
+// oda
+// odanın kural etiketleri, tam metin sığmadığında (UIStyle::fitKey, "<etiket>_Short")
+GUI:GameSpeed_Short
+"Hız"
+END
+
+GUI:StartingMoney_Short
+"Para"
+END
+
+GUI:Superweapons_Short
+"Süper"
+END
+
+GUI:IncomeSharing_Short
+"Paylaşım"
+END
+
+GUI:SupplyPileLimit_Short
+"Yığın"
+END
+
+GUI:TechRespawn_Short
+"Dönüş"
+END
+
+GUI:UnitLimit_Short
+"Birlik"
+END
+
+// çevrimiçi skor ekranı
+GUI:OnlineScoreSubRanked
+"Lig maçı %ls · %ls"
+END
+
+GUI:OnlineScoreSubAI
+"Bilgisayara karşı · %ls · %ls · lige sayılmaz"
+END
+
+GUI:OnlineScoreSending
+"Sonuç ve tekrar gönderiliyor"
+END
+
+GUI:OnlineScoreConfirmed
+"Sonuç iki oyuncu tarafından onaylandı. Tekrar zerohour.gg'de saklandı."
+END
+
+GUI:OnlineScoreAISaved
+"Hesabına kaydedildi. Sıradaki bilgisayarın puanı: %ls."
+END
+
+GUI:OnlineScoreAIHeld
+"Bu galibiyet puana sayılmadı. Bir yönetici bakacak."
+END
+
+GUI:OnlineScoreAgain
+"YENİDEN HIZLI MAÇ"
+END
+
+GUI:OnlineScorePlayAgain
+"YENİDEN OYNA"
+END
+
+GUI:OnlineScoreHow
+"Bilgisayar puanı nasıl değişir"
+END
+
+GUI:OnlineScoreHow1
+"Bilgisayarı yenersen bilgisayar puanın artar, kaybedersen düşer. Sıradaki bilgisayar yeni puanla oynar. Lig puanın yalnızca hızlı maçta değişir."
+END
+
+// skinler
+GUI:OnlineSkinsSub
+"Birim başına bir görünüm"
+END
+
+GUI:OnlineSkinsUsaTank
+"ABD tankı"
+END
+
+GUI:OnlineSkinsChinaTank
+"Çin tankı"
+END
+
+GUI:OnlineSkinsGlaTank
+"GLA tankı"
+END
+
+GUI:OnlineSkinsWorn
+"Giyili"
+END
+
+GUI:OnlineSkinsOwned
+"Sende var"
+END
+
+GUI:OnlineSkinsLocked
+"Sende yok"
+END
+
+GUI:OnlineSkinsUnsaved
+"Seçildi, kaydedilmedi"
+END
+
+GUI:OnlineSkinsLockedHint
+"Kodu zerohour.gg'de kullan"
+END
+
+GUI:OnlineSkinsGet
+"Skin edinmek"
+END
+
+GUI:OnlineSkinsGet1
+"Skin, zerohour.gg hesabına aittir. Kodu hesap sayfasında kullan, sonra bu sayfayı yeniden aç."
+END
+
+GUI:OnlineSkinsOpenSite
+"ZEROHOUR.GG'Yİ AÇ"
+END
+
+GUI:OnlineSkinsWho
+"Kim görür"
+END
+
+GUI:OnlineSkinsWho1
+"Hızlı maç ve özel oyunlardaki herkes. LAN ve çatışma oyunları skin göstermez."
+END
+
+GUI:OnlineSkinsPending
+"%d değişiklik henüz kaydedilmedi"
+END
+
+GUI:OnlineSkinsPending1
+"1 değişiklik henüz kaydedilmedi"
+END
+
+// yükleme ekranının sıradaki ipucu
+GUI:LoadTip11
+"Çevrimiçi bilgisayara karşı oyun kendi bilgisayar puanını tutar, lig puanına dokunmaz."
+END
+
+// çevrimiçi ekranlar, ikinci tur: üretilen haritalarla Hızlı maç sayfası, lobi ve merkez durumları
+GUI:OnlineLadderShort
+"Lig"
+END
+
+GUI:QMQueueHere
+"%d kişi daha %ls sunucusunda arıyor"
+END
+
+GUI:QMGeneratedLine
+"Her maç, yalnızca o maç için üretilen bir haritada oynanır. İkiniz de haritayı daha önce görmediniz."
+END
+
+GUI:QMNewMap
+"Yeni harita"
+END
+
+GUI:QMMapGenerated
+"Yalnızca bu maç için üretildi. İkiniz de bu haritayı oynamadınız."
+END
+
+GUI:QMCheckingMap
+"Harita rakibinle doğrulanıyor"
+END
+
+GUI:QMRefused
+"Sunucu seni sıraya almadı. Biraz sonra yeniden dene."
+END
+
+GUI:OnlineLobbyEmpty
+"%ls sunucusunda açık oyun yok. Bir tane kur."
+END
+
+GUI:OnlineLobbyJoining
+"Katılıyor"
+END
+
+GUI:OnlineLobbyCountOpen
+"%d açık"
+END
+
+GUI:OnlineLadderGamesOf
+"%d / %d maç"
+END
+
+GUI:OnlineHubRankedGames
+"%d / %d maç"
+END
+
+GUI:OnlineHubAgoMinutes
+"%d dk önce"
+END
+
+GUI:OnlineHubRecentNone
+"Henüz hızlı maç ya da bilgisayar maçı yok."
+END
+
+GUI:OnlineHubRecentNoAnswer
+"Sunucu maç geçmişi göndermedi."
+END
+
+GUI:OnlineCardArmyUsaSuper
+"ABD Süper Silah"
+END
+
+GUI:OnlineCardArmyChinaInf
+"Çin Piyade"
+END
+
+GUI:OnlineCardArmyGlaDemo
+"GLA Yıkım"
+END
+
+GUI:OnlineCardUnavailable
+"Maç geçmişi şu an açılmıyor."
+END
+
+// çevrimiçi ekranlar, üçüncü tur
+GUI:OnlineLobbyPlaying
+"Oynanıyor"
+END
+
+GUI:OnlineHubQuickMatchLocked
+"Hızlı maç %d:%02d daha kilitli"
+END
+
+GUI:QMLocked
+"Hızlı maç %d:%02d daha kilitli"
+END
+
+GUI:OnlineScoreSendingResult
+"Sonuç gönderiliyor"
+END
+
+GUI:OnlineScoreNoAnswer
+"Sunucu henüz yanıt vermedi. Sonuç zerohour.gg'de görünecek."
+END
+
+// merkez kartlarının paragrafları, tam metin sığmadığında (UIStyle::fitKey, "<etiket>_Short")
+GUI:OnlineHubVsAIExplain_Short
+"Resmi 1v1 haritası. Kazanırsan puanın artar, kaybedersen düşer."
+END
+
+GUI:OnlineHubQuickMatchExplain_Short
+"Puanına yakın bir rakip, üretilen bir haritada. Lige sayılır."
+END
+
+GUI:OnlineHubCustomExplain_Short
+"Oda kur ya da katıl. %ls sunucusundakilerle sohbet et."
+END

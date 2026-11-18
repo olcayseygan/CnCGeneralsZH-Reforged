@@ -25,13 +25,21 @@
 
 #include "GameClient/UIStyle.h"
 #include "Common/GlobalData.h"
+#include "Common/NameKeyGenerator.h"
 #include "GameClient/Display.h"
 #include "GameClient/DisplayString.h"
 #include "GameClient/DisplayStringManager.h"
+#include "GameClient/Gadget.h"
+#include "GameClient/GadgetPushButton.h"
 #include "GameClient/GameFont.h"
 #include "GameClient/GameText.h"
+#include "GameClient/GameWindow.h"
+#include "GameClient/GameWindowManager.h"
 #include "GameClient/GlobalLanguage.h"
 #include "GameClient/Image.h"
+#include "GameNetwork/GameSpy/GSConfig.h"
+#include "GameNetwork/GameSpy/PeerDefs.h"
+#include "GameNetwork/Online/OnlineQueues.h"
 #include "Lib/WideCharFns.h"
 
 namespace UIStyle
@@ -92,14 +100,21 @@ GameFont *font( Int points, Bool bold )
 	return TheFontLibrary->getFont( AsciiString( "Arial" ), TheGlobalLanguageData->adjustFontSize( points ), bold );
 }
 
-GameFont *readableFont( Int points, Bool bold )
+/// the layout points readableFont settles on: points, or the next size up whose capitals reach
+/// READABLE_CAPITALS, at most twelve up
+static Int readablePoints( Int points, Bool bold )
 {
 	// Arial's capitals stand about five eighths of its cell, so twelve pixels of capital want a cell
 	// of about nineteen and a half
-	GameFont *found = font( points, bold );
-	for( Int grown = points + 1; found && found->height * 5 < READABLE_CAPITALS * 8 && grown <= points + 12; grown++ )
-		found = font( grown, bold );
-	return found;
+	Int grown = points;
+	for( GameFont *found = font( grown, bold ); found && found->height * 5 < READABLE_CAPITALS * 8 && grown < points + 12; )
+		found = font( ++grown, bold );
+	return grown;
+}
+
+GameFont *readableFont( Int points, Bool bold )
+{
+	return font( readablePoints( points, bold ), bold );
 }
 
 UnicodeString grouped( Int value )
@@ -573,18 +588,639 @@ UnicodeString fitText( const UnicodeString &text, GameFont *font, Int widest, co
 	return abbreviate( text, shortForm, widest, TheGlobalData->m_textLanguage, measureInFont, font, TRUE, keep );
 }
 
+Bool hasText( const char *key )
+{
+	if( TheGameText == NULL || key == NULL )
+		return FALSE;
+	// GameText has no quiet lookup: the labels that start with key as the string files spell it, then
+	// the one that is key, as fetch compares them
+	const AsciiStringVec &labels = TheGameText->getStringsWithLabelPrefix( AsciiString( key ) );
+	for( size_t each = 0; each < labels.size(); each++ )
+	{
+		if( labels[ each ].compareNoCase( key ) == 0 )
+			return TRUE;
+	}
+	return FALSE;
+}
+
 UnicodeString fitKey( const char *key, GameFont *font, Int widest )
 {
+	// most keys have no short form, and a fetch of one would log it as missing text
 	AsciiString shortKey = key;
 	shortKey.concat( "_Short" );
-	Bool known = FALSE;
-	const UnicodeString shortForm = TheGameText->fetch( shortKey, &known );
-	return fitText( TheGameText->fetch( key ), font, widest, known ? shortForm : UnicodeString::TheEmptyString );
+	const UnicodeString shortForm = hasText( shortKey.str() ) ? TheGameText->fetch( shortKey ) : UnicodeString::TheEmptyString;
+	return fitText( TheGameText->fetch( key ), font, widest, shortForm );
 }
 
 UnicodeString fitName( const UnicodeString &name, GameFont *font, Int widest )
 {
 	return abbreviate( name, UnicodeString::TheEmptyString, widest, TheGlobalData->m_textLanguage, measureInFont, font, FALSE );
+}
+
+//-------------------------------------------------------------------------------------------------
+// The boxes inside the online pages' panels
+//-------------------------------------------------------------------------------------------------
+GameFont *sectionFont( void )
+{
+	// the rooms' "Players" and "Map Preview" measure 25 pixels at 1080, TEXT_STRONG's size: two points
+	// over the body.  The body is readableFont's, grown at 720 to keep its capitals readable, so the
+	// heading keeps its two points over whatever the body grew to; on font( TEXT_STRONG ) alone it
+	// came out at 14 pixels under a 17 pixel body
+	return font( readablePoints( TEXT_BODY, FALSE ) + TEXT_STRONG - TEXT_BODY );
+}
+
+void heading( DisplayString *words, Int x, Int y )
+{
+	words->draw( x, y, ACTIVE, SHADOW );
+}
+
+void fact( DisplayString *label, DisplayString *value, Int x, Int y, Int width, Int height, Color valueColor )
+{
+	Int w, h;
+	label->getSize( &w, &h );
+	label->draw( x, y + ( height - h ) / 2, MUTED, SHADOW );
+	value->getSize( &w, &h );
+	value->draw( x + width - w, y + ( height - h ) / 2, valueColor, SHADOW );
+	TheDisplay->drawFillRect( x, y + height - 1, width, 1, GRID );
+}
+
+void track( Int x, Int y, Int width, Int height, Real fraction, Color fill )
+{
+	TheDisplay->drawFillRect( x, y, width, height, GRID );
+	const Int filled = REAL_TO_INT( width * max( 0.0f, min( 1.0f, fraction ) ) + 0.5f );
+	if( filled > 0 )
+		TheDisplay->drawFillRect( x, y, filled, height, fill );
+}
+
+GameFont *chipFont( void )
+{
+	// the spec's 16 pixels at 1080; readableFont grew it to the body's 21 and a Turkish
+	// "Mağlubiyet" ran into the next column
+	return font( TEXT_SMALL, TRUE );
+}
+
+Int chip( DisplayString *label, Int x, Int y, Color color, Color edge )
+{
+	// the load screen's TIP: eight pixels either side of the label, five over and four under at 1080
+	Int w, h;
+	label->getSize( &w, &h );
+	const Int side = tallPx( 8.0f );
+	const Int over = tallPx( 5.0f );
+	const Int width = w + 2 * side;
+	TheDisplay->drawOpenRect( x, y, width, h + over + tallPx( 4.0f ), 1.0f, edge );
+	label->draw( x + side, y + over, color, SHADOW );
+	return width;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Ratings
+//-------------------------------------------------------------------------------------------------
+// website/app/Models/Player.php TIERS, the rating each tier starts at; private's 0 is only the
+// floor of its track, as a rating can fall under it
+static const Real TIER_START[ TIER_COUNT ] = { 0.0f, 0.0f, 5.0f, 10.0f, 15.0f, 20.0f, 25.0f, 30.0f };
+static const char *const TIER_KEY[ TIER_COUNT ] = { "unranked", "private", "sergeant", "lieutenant", "captain", "major", "colonel", "general" };
+// EA's rank table below, by name: RANK_NAME[ 7 ] is the portrait called General
+static const Int TIER_RANK[ TIER_COUNT ] = { -1, 0, 2, 3, 4, 5, 6, 7 };
+
+RatingTier ratingTier( Real rating, Int games )
+{
+	if( games < RANKED_GAMES )
+		return TIER_UNRANKED;
+	for( Int tier = TIER_GENERAL; tier > TIER_PRIVATE; tier-- )
+	{
+		if( rating >= TIER_START[ tier ] )
+			return (RatingTier)tier;
+	}
+	return TIER_PRIVATE;
+}
+
+RatingTier playerTier( const OnlinePlayerInfo &info )
+{
+	for( Int tier = 0; tier < TIER_COUNT; tier++ )
+	{
+		if( info.tier.compareNoCase( TIER_KEY[ tier ] ) == 0 )
+			return (RatingTier)tier;
+	}
+	return ratingTier( info.exactRating, info.hasRating ? info.games : -1 );
+}
+
+Real tierStart( RatingTier tier )
+{
+	return tier >= 0 && tier < TIER_COUNT ? TIER_START[ tier ] : 0.0f;
+}
+
+const char *tierKey( RatingTier tier )
+{
+	return tier >= 0 && tier < TIER_COUNT ? TIER_KEY[ tier ] : TIER_KEY[ TIER_UNRANKED ];
+}
+
+Int tierRank( RatingTier tier )
+{
+	return tier >= 0 && tier < TIER_COUNT ? TIER_RANK[ tier ] : -1;
+}
+
+// EA's names for the rank portraits, by rank (moved from PopupPlayerInfo.cpp); its seventh and
+// eighth are named the other way round from RankPointValue.h's RANK_BRIGADIER_GENERAL and RANK_GENERAL
+static const char *const RANK_NAME[] = { "Private", "Corporal", "Sergeant", "Lieutenant", "Captain", "Major",
+	"Colonel", "General", "Brigadier", "Commander" };
+
+AsciiString rankImageName( const AsciiString &side, Int rank )
+{
+	if( side.isEmpty() )
+		return AsciiString( "NewPlayer" );
+	if( rank < 0 || rank >= (Int)( sizeof( RANK_NAME ) / sizeof( RANK_NAME[ 0 ] ) ) )
+		return AsciiString::TheEmptyString;
+
+	// the artists' names: a side after an underscore, the random army's Elite after none
+	const char *suffix = "Elite";
+	if( side == "USA" || side == "America" )
+		suffix = "_USA";
+	else if( side == "China" )
+		suffix = "_China";
+	else if( side == "GLA" )
+		suffix = "_GLA";
+	AsciiString name;
+	name.format( "Rank_%s%s", RANK_NAME[ rank ], suffix );
+	if( name == "Rank_PrivateElite" )
+		name = "Rank";
+	return name;
+}
+
+const Image *rankImage( const AsciiString &side, Int rank )
+{
+	const AsciiString name = rankImageName( side, rank );
+	if( name.isEmpty() )
+		return NULL;
+	const Image *image = TheMappedImageCollection->findImageByName( name );
+	DEBUG_ASSERTCRASH( image, ( "Could not load rank image: %s", name.str() ) );
+	return image;
+}
+
+const Image *tierImage( RatingTier tier, const AsciiString &side )
+{
+	const Int rank = tierRank( tier );
+	return rank < 0 ? NULL : rankImage( side.isEmpty() ? AsciiString( "Random" ) : side, rank );
+}
+
+/// the languages that write a decimal comma; every one the game has but English
+static Bool decimalComma( Int language )
+{
+	return language != TEXT_LANGUAGE_ENGLISH;
+}
+
+UnicodeString ratingTextIn( Real rating, Bool sign, Int language )
+{
+	// in whole hundredths, so a rounding never shows -0.00 and no C library's locale decides the point
+	const Int hundredths = (Int)floor( rating * 100.0 + 0.5 );
+	const Int whole = hundredths < 0 ? -hundredths : hundredths;
+	AsciiString text;
+	text.format( "%s%d%c%02d", hundredths < 0 ? "-" : ( sign && hundredths > 0 ? "+" : "" ), whole / 100,
+		decimalComma( language ) ? ',' : '.', whole % 100 );
+	UnicodeString wide;
+	wide.translate( text );
+	return wide;
+}
+
+UnicodeString ratingText( Real rating, Bool sign )
+{
+	return ratingTextIn( rating, sign, TheGlobalData->m_textLanguage );
+}
+
+Int percent( Int part, Int whole )
+{
+	return whole > 0 ? ( part * 200 + whole ) / ( whole * 2 ) : 0;
+}
+
+UnicodeString percentTextIn( Int value, Int language )
+{
+	UnicodeString text;
+	if( language == TEXT_LANGUAGE_TURKISH )
+		text.format( u"%%%d", value );
+	else if( language == TEXT_LANGUAGE_ENGLISH )
+		text.format( u"%d%%", value );
+	else
+		text.format( u"%d %%", value );
+	return text;
+}
+
+UnicodeString percentText( Int value )
+{
+	return percentTextIn( value, TheGlobalData->m_textLanguage );
+}
+
+Color changeColor( Real change )
+{
+	if( change > 0.0f )
+		return GOLD;
+	return change < 0.0f ? MUTED : INK;
+}
+
+//-------------------------------------------------------------------------------------------------
+// The online pages' frame
+//-------------------------------------------------------------------------------------------------
+Int tallPx( Real at1080 )
+{
+	return REAL_TO_INT( at1080 * TheDisplay->getHeight() / 1080.0f + 0.5f );
+}
+
+void onlineColumns( IRegion2D &main, IRegion2D &side )
+{
+	side.hi.x = boardX( ROOM_INSET_RIGHT );
+	side.lo.x = side.hi.x - tallPx( ONLINE_SIDE_WIDTH );
+	main.lo.x = boardX( ROOM_INSET );
+	main.hi.x = side.lo.x - tallPx( ONLINE_COLUMN_GAP );
+	main.lo.y = side.lo.y = boardY( ONLINE_CONTENT_TOP );
+	main.hi.y = side.hi.y = boardY( ONLINE_CONTENT_BOTTOM );
+}
+
+const Image *pingImage( Int ms )
+{
+	if( ms < 0 )
+		return NULL;
+	// LobbyPingImage's rule; its images are found only by the lobby's own init.  300 and 600 are
+	// GSConfig's defaults, for a client that has no config yet
+	const Int good = TheGameSpyConfig ? TheGameSpyConfig->getPingCutoffGood() : 300;
+	const Int bad = TheGameSpyConfig ? TheGameSpyConfig->getPingCutoffBad() : 600;
+	return TheMappedImageCollection->findImageByName( ms < good ? "Ping03" : ( ms < bad ? "Ping02" : "Ping01" ) );
+}
+
+/// the server's own words, which the site may write in UTF-8 (a city with an umlaut)
+static UnicodeString fromUtf8( const AsciiString &bytes )
+{
+	WideChar text[ 128 ];
+	WideCharFromUtf8( bytes.str(), text, sizeof( text ) / sizeof( text[ 0 ] ) );
+	return UnicodeString( text );
+}
+
+/// the server line in its two halves: the name and city joined ("<name> · <city>"), and the round
+/// trip ("38 ms"), either empty while unknown.  A welcome with no server object still has a round trip.
+static void serverLine( UnicodeString &place, UnicodeString &ping, Int &ms )
+{
+	AsciiString name, city;
+	ms = -1;
+	place.clear();
+	ping.clear();
+	if( !OnlineGetServerInfo( name, city, ms ) )
+		name = city = AsciiString::TheEmptyString;
+	place = fromUtf8( name );
+	if( city.isNotEmpty() )
+	{
+		if( !place.isEmpty() )
+			place.concat( HEADER_JOINER );
+		place.concat( fromUtf8( city ) );
+	}
+	if( ms >= 0 )
+		ping.format( u"%d ms", ms );
+}
+
+UnicodeString onlineServerLine( void )
+{
+	UnicodeString place, ping;
+	Int ms;
+	serverLine( place, ping, ms );
+	if( !place.isEmpty() && !ping.isEmpty() )
+		place.concat( HEADER_JOINER );
+	place.concat( ping );
+	return place;
+}
+
+static const char *const TAB_WINDOW[ ONLINE_TAB_COUNT ] = { "TabHome", "TabQuickMatch", "TabCustom", "TabLadder", "TabSkins" };
+// Home is the hub at the stack's foot, reached by popping
+static const char *const TAB_SCREEN[ ONLINE_TAB_COUNT ] = { NULL, "Menus/WOLQuickMatchMenu.wnd", "Menus/WOLCustomLobby.wnd",
+	"Menus/WOLLadderScreen.wnd", "Menus/WOLLadderScreen.wnd" };
+
+/// the header's words, made by onlinePageInit and freed by onlinePageShutdown
+enum HeaderText
+{
+	HEADER_TITLE,
+	HEADER_SUBTITLE,
+	HEADER_MARK,				///< "Zero Hour"
+	HEADER_MARK_BLUE,		///< " Reforged"
+	HEADER_NICK,
+	HEADER_TIER,
+	HEADER_LADDER,
+	HEADER_LADDER_VALUE,
+	HEADER_AI,
+	HEADER_AI_VALUE,
+	HEADER_PING,				///< the server line's "38 ms", after its light
+	HEADER_TEXT_COUNT
+};
+
+static GameWindow *s_pageParent = NULL;
+static GameWindow *s_tabs[ ONLINE_TAB_COUNT ];
+static GameWindow *s_masterTitle = NULL;	///< the master's StaticTextTitle, when it carries the title
+static OnlineTab s_openTab = ONLINE_TAB_NONE;
+static OnlineTab s_askedTab = ONLINE_TAB_NONE;
+static DisplayString *s_header[ HEADER_TEXT_COUNT ];
+static UnicodeString s_titleShown;			///< the title as last asked for
+static UnicodeString s_subtitleShown;		///< the subtitle's words, its ping and its room as last fitted
+static UnicodeString s_pingShown;
+static Int s_subtitleRoom = -1;
+static UnsignedInt s_lineSerial = 0;		///< the player's card serial the line was last laid out for
+static Bool s_lineLaidOut = FALSE;
+
+/// a word the strings may not have yet: the key's, else the English
+static UnicodeString wordOr( const char *key, const WideChar *english )
+{
+	return hasText( key ) ? TheGameText->fetch( key ) : UnicodeString( english );
+}
+
+static void freeHeader( void )
+{
+	for( Int each = 0; each < HEADER_TEXT_COUNT; each++ )
+	{
+		if( s_header[ each ] )
+			TheDisplayStringManager->freeDisplayString( s_header[ each ] );
+		s_header[ each ] = NULL;
+	}
+}
+
+/// a tab: the score screen's (UIStyle::tab), the open one's label ACTIVE and never lit by the mouse
+static void drawOnlineTab( GameWindow *window, WinInstanceData *instData )
+{
+	Int x, y, width, height;
+	window->winGetScreenPosition( &x, &y );
+	window->winGetSize( &width, &height );
+	const Bool open = s_openTab != ONLINE_TAB_NONE && window == s_tabs[ s_openTab ];
+	const Color color = tab( x, y, width, height, BitTest( window->winGetStatus(), WIN_STATUS_ENABLED ), open,
+		!open && BitTest( instData->getState(), WIN_STATE_HILITED ) );
+	DisplayString *text = instData->getTextDisplayString();
+	if( text->getFont() != window->winGetFont() )
+		text->setFont( window->winGetFont() );
+	Int textWidth, textHeight;
+	text->getSize( &textWidth, &textHeight );
+	text->draw( x + ( width - textWidth ) / 2, y + ( height - textHeight ) / 2, color, SHADOW );
+}
+
+void onlinePageInit( GameWindow *parent, const char *layout, OnlineTab open )
+{
+	freeHeader();
+	s_pageParent = parent;
+	s_openTab = open;
+	s_askedTab = ONLINE_TAB_NONE;
+	s_titleShown.clear();
+	s_subtitleShown.clear();
+	s_pingShown.clear();
+	s_subtitleRoom = -1;
+	s_lineLaidOut = FALSE;
+	s_masterTitle = NULL;
+	if( parent )
+	{
+		AsciiString name;
+		name.format( "%s:StaticTextTitle", layout );
+		s_masterTitle = TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( name ) );
+	}
+
+	GameFont *body = readableFont( TEXT_BODY );
+	for( Int each = 0; each < ONLINE_TAB_COUNT; each++ )
+	{
+		s_tabs[ each ] = NULL;
+		if( open == ONLINE_TAB_NONE || parent == NULL )
+			continue;
+		AsciiString name;
+		name.format( "%s:%s", layout, TAB_WINDOW[ each ] );
+		s_tabs[ each ] = TheWindowManager->winGetWindowFromId( parent, TheNameKeyGenerator->nameToKey( name ) );
+	}
+
+	// One face for all five labels, in capitals: the body's, or the largest under it at which every
+	// label reads whole with a pad either side.  The boxes shrink with the fitted board (0.75 at
+	// 1440x1080, 0.667 at 720) and the body does not, so at the body's size they were cut ("QUICK M…").
+	const Int pad = max( 4, px( 10.0f ) );
+	GameFont *labelFont = NULL;
+	for( Int points = readablePoints( TEXT_BODY, FALSE ); points >= 4 && labelFont == NULL; points-- )
+	{
+		GameFont *candidate = font( points );
+		Bool whole = candidate != NULL;
+		for( Int each = 0; each < ONLINE_TAB_COUNT && whole; each++ )
+		{
+			if( s_tabs[ each ] == NULL )
+				continue;
+			Int width, height;
+			s_tabs[ each ]->winGetSize( &width, &height );
+			whole = measureInFont( capitals( s_tabs[ each ]->winGetText() ), candidate ) <= width - 2 * pad
+				&& candidate->height <= height;
+		}
+		if( whole )
+			labelFont = candidate;
+	}
+	if( labelFont == NULL )
+		labelFont = font( 4 );
+	for( Int each = 0; each < ONLINE_TAB_COUNT; each++ )
+	{
+		GameWindow *window = s_tabs[ each ];
+		if( window == NULL )
+			continue;
+		Int width, height;
+		window->winGetSize( &width, &height );
+		window->winSetFont( labelFont );
+		GadgetButtonSetText( window, fitText( capitals( window->winGetText() ), labelFont, width - 2 * pad ) );
+		window->winSetDrawFunc( drawOnlineTab );
+	}
+
+	const Int fonts[ HEADER_TEXT_COUNT ] = { 0, 1, 2, 2, 3, 4, 4, 4, 4, 4, 1 };
+	GameFont *faces[] = { titleFont( TEXT_TITLE ), subtitleFont(), font( TEXT_STRONG, TRUE ), readableFont( TEXT_BODY, TRUE ), body };
+	for( Int each = 0; each < HEADER_TEXT_COUNT; each++ )
+	{
+		s_header[ each ] = TheDisplayStringManager->newDisplayString();
+		s_header[ each ]->setFont( faces[ fonts[ each ] ] );
+	}
+	s_header[ HEADER_MARK ]->setText( UnicodeString( u"Zero Hour" ) );
+	s_header[ HEADER_MARK_BLUE ]->setText( UnicodeString( u" Reforged" ) );
+	s_header[ HEADER_LADDER ]->setText( wordOr( "GUI:OnlineLadderShort", u"Ladder" ) );
+	s_header[ HEADER_AI ]->setText( wordOr( "GUI:OnlineAIShort", u"AI" ) );
+}
+
+void onlinePageShutdown( GameWindow *parent )
+{
+	// the hub's shutdown can finish after the page it pushed has made its own
+	if( parent != s_pageParent )
+		return;
+	freeHeader();
+	for( Int each = 0; each < ONLINE_TAB_COUNT; each++ )
+		s_tabs[ each ] = NULL;
+	s_masterTitle = NULL;
+	s_pageParent = NULL;
+	s_openTab = ONLINE_TAB_NONE;
+}
+
+/** The player's line, right to left from right: the AI rating, the ladder rating, the tier, the nick
+	* in bold, the nick cut with an ellipsis where the tabs leave too little room. */
+static void drawPlayerLine( Int right )
+{
+	Int left = -1;
+	for( Int each = 0; each < ONLINE_TAB_COUNT; each++ )
+	{
+		if( s_tabs[ each ] == NULL )
+			continue;
+		Int x, y, width, height;
+		s_tabs[ each ]->winGetScreenPosition( &x, &y );
+		s_tabs[ each ]->winGetSize( &width, &height );
+		left = max( left, x + width + px( ONLINE_COLUMN_GAP ) );
+	}
+	if( left < 0 || !OnlineIsEnabled() || TheGameSpyInfo == NULL )
+		return;
+	const AsciiString nick = TheGameSpyInfo->getLocalName();
+	if( nick.isEmpty() )
+		return;
+
+	OnlinePlayerInfo info;
+	OnlineGetPlayerInfo( nick, info );
+	const Int gap = px( 12.0f );
+	const Int space = px( 6.0f );
+	DisplayString **t = s_header;
+	if( !s_lineLaidOut || info.serial != s_lineSerial )
+	{
+		s_lineLaidOut = TRUE;
+		s_lineSerial = info.serial;
+		const UnicodeString none( u"\x2013" );		// an en dash for a number nobody sent
+		t[ HEADER_TIER ]->setText( OnlineTierName( tierKey( playerTier( info ) ) ) );
+		t[ HEADER_LADDER_VALUE ]->setText( info.hasRating ? ratingText( info.exactRating ) : none );
+		t[ HEADER_AI_VALUE ]->setText( info.hasAIRating ? ratingText( info.aiRating ) : none );
+		Int rest = 3 * gap + 2 * space;
+		for( Int each = HEADER_TIER; each <= HEADER_AI_VALUE; each++ )
+		{
+			Int w, h;
+			t[ each ]->getSize( &w, &h );
+			rest += w;
+		}
+		UnicodeString shown;
+		shown.translate( nick );
+		t[ HEADER_NICK ]->setText( fitName( shown, t[ HEADER_NICK ]->getFont(), right - left - rest ) );
+	}
+
+	const Int top = boardY( ONLINE_TABS_TOP );
+	const Int rowHeight = boardY( ONLINE_TABS_BOTTOM ) - top;
+	const Int order[] = { HEADER_AI_VALUE, HEADER_AI, HEADER_LADDER_VALUE, HEADER_LADDER, HEADER_TIER, HEADER_NICK };
+	const Color colors[] = { INK, MUTED, INK, MUTED, MUTED, INK };
+	Int x = right;
+	for( Int each = 0; each < 6; each++ )
+	{
+		Int w, h;
+		t[ order[ each ] ]->getSize( &w, &h );
+		x -= w;
+		t[ order[ each ] ]->draw( x, top + ( rowHeight - h ) / 2, colors[ each ], SHADOW );
+		x -= ( order[ each ] == HEADER_AI || order[ each ] == HEADER_LADDER || order[ each ] == HEADER_TIER ) ? gap : space;
+	}
+}
+
+/** The subtitle from left, MUTED, centred on middle and kept short of limit: the page's words, or
+	* with none the server line, its ping light between the place and the milliseconds. */
+static void drawSubtitle( const UnicodeString &subtitle, Int left, Int limit, Int middle )
+{
+	DisplayString **t = s_header;
+	UnicodeString words = subtitle, ping;
+	Int ms = -1;
+	if( subtitle.isEmpty() )
+		serverLine( words, ping, ms );
+	const Image *light = ping.isEmpty() ? NULL : pingImage( ms );
+	const Int lightSize = px( 16.0f );
+	const Int gap = px( 10.0f );
+	const Int room = limit - left;
+	if( room != s_subtitleRoom || words.compare( s_subtitleShown ) != 0 || ping.compare( s_pingShown ) != 0 )
+	{
+		s_subtitleRoom = room;
+		s_subtitleShown = words;
+		s_pingShown = ping;
+		t[ HEADER_PING ]->setText( ping );
+		Int pingWidth = 0, pingHeight = 0;
+		if( !ping.isEmpty() )
+			t[ HEADER_PING ]->getSize( &pingWidth, &pingHeight );
+		const Int wordsRoom = room - ( ping.isEmpty() ? 0 : pingWidth + gap + ( light ? lightSize + gap : 0 ) );
+		t[ HEADER_SUBTITLE ]->setText( wordsRoom > 0 ? fitName( words, t[ HEADER_SUBTITLE ]->getFont(), wordsRoom ) : UnicodeString::TheEmptyString );
+	}
+
+	Int x = left;
+	const Int top = middle - t[ HEADER_SUBTITLE ]->getFont()->height / 2;
+	if( t[ HEADER_SUBTITLE ]->getTextLength() > 0 )
+	{
+		Int w, h;
+		t[ HEADER_SUBTITLE ]->getSize( &w, &h );
+		t[ HEADER_SUBTITLE ]->draw( x, top, MUTED, SHADOW );
+		x += w + gap;
+	}
+	if( ping.isEmpty() )
+		return;
+	if( light )
+	{
+		TheDisplay->drawImage( light, x, middle - lightSize / 2, x + lightSize, middle - lightSize / 2 + lightSize );
+		x += lightSize + gap;
+	}
+	t[ HEADER_PING ]->draw( x, top, MUTED, SHADOW );
+}
+
+void onlineHeader( const UnicodeString &title, const UnicodeString &subtitle )
+{
+	DisplayString **t = s_header;
+	if( t[ HEADER_TITLE ] == NULL )
+		return;		// no page, or between a page's shutdown and the next one's init
+
+	// the wordmark as the score screen sets it, its right edge on the content's
+	const Int right = boardX( ROOM_INSET_RIGHT );
+	const Int middle = boardY( ROOM_TITLE_MIDDLE );
+	Int first, second, markHeight;
+	t[ HEADER_MARK ]->getSize( &first, &markHeight );
+	t[ HEADER_MARK_BLUE ]->getSize( &second, &markHeight );
+	wordmark( &t[ HEADER_MARK ], right, middle - markHeight / 2 );
+
+	// where the subtitle starts: after our title, or after the master's title's text
+	Int after = -1;
+	if( !title.isEmpty() )
+	{
+		const Int x = boardX( ROOM_TITLE_LEFT );
+		if( title.compare( s_titleShown ) != 0 )
+		{
+			s_titleShown = title;
+			t[ HEADER_TITLE ]->setText( capitals( title ) );
+		}
+		header( t[ HEADER_TITLE ], NULL, x, middle );
+		rule( boardX( ROOM_PANEL_LEFT ), boardY( ROOM_HEADER_LINE ), boardX( ROOM_PANEL_RIGHT ) - boardX( ROOM_PANEL_LEFT ) );
+		Int titleWidth, titleHeight;
+		t[ HEADER_TITLE ]->getSize( &titleWidth, &titleHeight );
+		after = x + titleWidth + headerGap();
+	}
+	else if( s_masterTitle && !s_masterTitle->winIsHidden() && BitTest( s_masterTitle->winGetStyle(), GWS_STATIC_TEXT ) )
+	{
+		// placed as W3DStaticText draws it: centred, or from its left margin
+		const TextData *data = (const TextData *)s_masterTitle->winGetUserData();
+		Int x, y, width, height, textWidth = 0, textHeight = 0;
+		s_masterTitle->winGetScreenPosition( &x, &y );
+		s_masterTitle->winGetSize( &width, &height );
+		if( data && data->text )
+			data->text->getSize( &textWidth, &textHeight );
+		after = ( data && data->centered ? x + width / 2 + textWidth / 2 : x + ( data ? data->leftMargin : 0 ) + textWidth ) + headerGap();
+	}
+	if( after >= 0 )
+		drawSubtitle( subtitle, after, right - first - second - headerGap(), middle );
+
+	drawPlayerLine( right );
+}
+
+Bool onlineTabClicked( GameWindow *control, OnlineLeave leave )
+{
+	OnlineTab clicked = ONLINE_TAB_NONE;
+	for( Int each = 0; each < ONLINE_TAB_COUNT && clicked == ONLINE_TAB_NONE; each++ )
+	{
+		if( control != NULL && control == s_tabs[ each ] )
+			clicked = (OnlineTab)each;
+	}
+	if( clicked == ONLINE_TAB_NONE )
+		return FALSE;
+	if( clicked != s_openTab && leave )
+	{
+		s_askedTab = clicked;
+		leave( clicked );
+	}
+	return TRUE;
+}
+
+const char *onlineTabScreen( OnlineTab tab )
+{
+	return tab >= 0 && tab < ONLINE_TAB_COUNT ? TAB_SCREEN[ tab ] : NULL;
+}
+
+OnlineTab onlineTabAsked( void )
+{
+	return s_askedTab;
 }
 
 }

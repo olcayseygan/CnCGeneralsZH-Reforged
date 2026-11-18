@@ -1,6 +1,7 @@
 #include "PosixDevice9.h"
 #include "SdlGpuFrame.h"
 #include "SdlPostProcess.h"
+#include "Platform/RenderTeamGlow.h"
 #include <SDL3/SDL.h>
 #include <cmath>
 #include <cstdio>
@@ -25,6 +26,8 @@ void PosixDevice9::Begin_Post(const RenderPost::Settings &settings)
     if (Post->Routed) Finish_Post(true);
     auto &s = *Post;
     s.InView = s.Entered = false; s.ViewDepth = 0;
+    TeamGlowDraw = false;
+    TeamGlowAllowed = !settings.Classic; // do not reread TeamGlow: meshes keep their load-time markings
     s.StandInTexture = nullptr; s.StandInSurface = nullptr;
     s.Settings = {};
     if (!settings.Classic && !DX11Post_Parse_Chain(settings.Chain, s.Settings.Chain, s.Settings.Count))
@@ -148,4 +151,13 @@ void FinishScene(IDirect3DDevice9 *d, bool f) { if(d) static_cast<PosixDevice9 *
 bool ReplacesLegacyBloom(IDirect3DDevice9 *d) { return d && static_cast<PosixDevice9 *>(d)->Post_Replaces_Bloom(); }
 void SetSceneStandIn(IDirect3DDevice9 *d, IDirect3DBaseTexture9 *t, IDirect3DSurface9 *s) { if(d) static_cast<PosixDevice9 *>(d)->Post_Stand_In(t,s); }
 void SetGlowDraw(IDirect3DDevice9 *d, bool e) { if(d) static_cast<PosixDevice9 *>(d)->Set_Glow_Draw(e); }
+}
+
+namespace RenderTeamGlow {
+void SetDraw(IDirect3DDevice9 *d, bool marked) { if(d) static_cast<PosixDevice9 *>(d)->Set_Team_Glow(marked); }
+bool Available(IDirect3DDevice9 *d) {
+    auto *frame = d ? static_cast<PosixDevice9 *>(d)->Get_Gpu() : nullptr;
+    return frame && SDL_GPUTextureSupportsFormat(frame->Device(), SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT,
+        SDL_GPU_TEXTURETYPE_2D, SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER);
+}
 }

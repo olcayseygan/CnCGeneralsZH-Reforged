@@ -220,6 +220,8 @@ public:
     bool Post_Texture(IDirect3DBaseTexture9 *, struct SDL_GPUTexture *&);
     float Post_Additive_Gain(const struct SdlTarget &) const;
     void Set_Glow_Draw(bool e) { GlowDraw = e; }
+    void Set_Team_Glow(bool marked) { TeamGlowDraw = marked; }
+    void Refuse_Next_Team_Glow_For_Test(unsigned mask) { TeamGlowRefusalForTest |= mask; }
 	SdlGpuFrame * Get_Gpu() const { return Gpu; }
 	SdlResourceMirrors * Get_Mirrors() const { return Mirrors; }
 	/// Draws recorded on the GPU, and the draws refused, by reason.
@@ -380,6 +382,8 @@ protected:
 	bool SunActive = false, SunFailed = false, SunReady = false;
 	bool SmokeGlow = false;
 	bool GlowDraw = false;
+    bool TeamGlowDraw = false, TeamGlowAllowed = false;
+    unsigned TeamGlowRefusalForTest = 0;
 	struct PostSession;
 	std::shared_ptr<PostSession> Post;
 	unsigned SunCasterEffect = 0;

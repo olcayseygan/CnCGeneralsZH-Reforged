@@ -43,6 +43,7 @@
 #include "Common/Monitors.h"
 #include "Common/EarlyOptions.h"
 #include "Common/OptionsCatalog.h"
+#include "Platform/RenderTeamGlow.h"
 #include "Common/Registry.h"
 #include "Common/version.h"
 
@@ -3154,6 +3155,10 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 		for( Int i = 0; i < (Int)( sizeof( direct3D11Only ) / sizeof( direct3D11Only[ 0 ] ) ); ++i )
 			findOptionWidget( *findOptionDef( direct3D11Only[ i ] ) )->winEnable( FALSE );
 	}
+
+    // This existing next-map option has an actual native HDR provider as well.
+    // Enabling its widget never changes the saved value or retags already loaded meshes.
+    findOptionWidget(*findOptionDef("TeamGlow"))->winEnable(RenderTeamGlow::Available());
 
 	// A preset is its own step on the quality slider, whatever step Options.ini kept from a Custom mix,
 	// as long as the boxes show that step.  An Options.ini from before the slider can hold a preset

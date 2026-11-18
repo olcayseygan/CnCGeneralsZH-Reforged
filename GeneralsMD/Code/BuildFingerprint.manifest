@@ -3218,6 +3218,7 @@ Libraries/Include/Platform/PosixD3D9/d3d9.h
 Libraries/Include/Platform/PosixD3D9/d3d9caps.h
 Libraries/Include/Platform/PosixD3D9/d3d9types.h
 Libraries/Include/Platform/RenderPost.h
+Libraries/Include/Platform/RenderTeamGlow.h
 Libraries/Include/Platform/RenderTypes.h
 Libraries/Include/Platform/RendererName.h
 Libraries/Include/Platform/SleepMilliseconds.h
@@ -4442,6 +4443,7 @@ Tests/test_smooth_motion.cpp
 Tests/test_sun_shadow_sorting.cpp
 Tests/test_supply_center_save.inc
 Tests/test_support.cpp
+Tests/test_team_glow.cpp
 Tests/test_terrain_golden.cpp
 Tests/test_terrain_subdivide.cpp
 Tests/test_user_data_guard.cpp

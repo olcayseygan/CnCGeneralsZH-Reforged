@@ -17,7 +17,8 @@
 #define SUN_VALUES(X) \
     X(RenderStates) X(TextureStageStates) X(SamplerStates) X(Transforms) X(Viewport) \
     X(Material) X(Lights) X(LightsEnabled) X(ClipPlanes) X(StreamOffsets) X(StreamStrides) \
-    X(DeclarationIsCurrent) X(FVF) X(VertexShaderConstants) X(PixelShaderConstants) X(SmokeGlow)
+    X(DeclarationIsCurrent) X(FVF) X(VertexShaderConstants) X(PixelShaderConstants) X(SmokeGlow) \
+    X(TeamGlowDraw) X(TeamGlowAllowed)
 #define SUN_REFS(X) X(DepthStencil) X(Indices) X(Declaration) X(VertexShader) X(PixelShader)
 #define SUN_REF_ARRAYS(X) X(RenderTargets) X(Textures) X(Streams)
 

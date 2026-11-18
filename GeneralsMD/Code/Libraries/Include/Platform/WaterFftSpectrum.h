@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <array>
+#include "Platform/WaterCleanSpectrum.h"
 
 namespace WaterFftSpectrum {
 constexpr unsigned Resolution=256, Phases=8, Cascades=3, Maps=6;
@@ -52,7 +54,88 @@ inline float Random(uint32_t &state) {
     t=(t^(t>>15))*(t|1u);t^=t+(t^(t>>7))*(t|61u);
     return float(double(t^(t>>14))/4294967296.0);
 }
-inline std::vector<float> InitialSpectrum(Configuration configuration=ForResolution(Resolution)) {
+inline std::vector<float> CleanInitialSpectrum(Configuration configuration, const WaterCleanSpectrum::Parameters &settings,
+    bool spectrumSplit, const double *heights=HeightRms, double windAngle=Pi/4) {
+    const unsigned n=configuration.resolution,texels=n*n;
+    std::vector<float> noise(texels*2),result(texels*Cascades*4);
+    uint32_t seed=0;for(float &v:noise)v=Random(seed);
+    double energy[Cascades]={};
+    const double wind=windAngle;
+    // Normalize each component on the actual deterministic Gaussian lattice before
+    // mixing POWER. This makes share an energy fraction in each affected band,
+    // including a narrow swell whose tail only barely reaches the medium band.
+    // The resulting density still uses one Gaussian realization and one FFT.
+    std::vector<double> secondary;
+    double secondaryGain[Cascades]={};
+    if(settings.sea2Share>0) {
+        secondary.resize(texels*2);double primaryEnergy[2]={},secondaryEnergy[2]={};
+        for(unsigned y=1;y<n;++y)for(unsigned x=1;x<n;++x) {
+            const unsigned at=y*n+x;
+            const double radius2=-2*std::log((std::max)(double(noise[at*2+1]),1.0/4294967296.0));
+            for(unsigned c=0;c<2;++c) {
+                const double dk=2*Pi/Sizes[c],kx=dk*(int(x)-int(n/2)),ky=dk*(int(y)-int(n/2));
+                const double k=std::hypot(kx,ky);if(k==0)continue;
+                const double omega=std::sqrt(WaterCleanSpectrum::Gravity*k),wavelength=2*Pi*WorldScale/k;
+                const double cell=BandPower(c,wavelength)*(0.5*WaterCleanSpectrum::Gravity/omega)/k*dk*dk;
+                primaryEnergy[c]+=radius2*cell*WaterCleanSpectrum::Jonswap(omega,settings)
+                    *WaterCleanSpectrum::Spreading(std::atan2(ky,kx)-wind,omega,settings);
+                // Positive time phase with the positive-sign inverse FFT travels
+                // opposite k: turn the requested absolute travel angle by pi.
+                const double value=cell*WaterCleanSpectrum::SecondaryDensity(wavelength,
+                    std::atan2(ky,kx)-(settings.sea2Angle*Pi/180+Pi),settings);
+                secondary[c*texels+at]=value;secondaryEnergy[c]+=radius2*value;
+            }
+        }
+        for(unsigned c=0;c<2;++c)secondaryGain[c]=secondaryEnergy[c]>0?primaryEnergy[c]/secondaryEnergy[c]:0;
+    }
+    for(unsigned y=1;y<n;++y)for(unsigned x=1;x<n;++x) {
+        const unsigned at=y*n+x;
+        const double angle=2*Pi*noise[at*2];
+        const double radius=std::sqrt(-2*std::log((std::max)(double(noise[at*2+1]),1.0/4294967296.0)));
+        for(unsigned c=0;c<Cascades;++c) {
+            const double dk=2*Pi/Sizes[c],kx=dk*(int(x)-int(n/2)),ky=dk*(int(y)-int(n/2));
+            const double k=std::sqrt(kx*kx+ky*ky);if(k==0)continue;
+            const double omega=std::sqrt(WaterCleanSpectrum::Gravity*k);
+            // S(omega,theta) d(omega)/dk / k converts polar frequency density to a
+            // Cartesian k-cell power; dk^2 is essential for the spectrum-driven split.
+            const double power=BandPower(c,2*Pi*WorldScale/k)*WaterCleanSpectrum::Jonswap(omega,settings)
+                *(0.5*WaterCleanSpectrum::Gravity/omega)/k*dk*dk;
+            const double theta=std::atan2(ky,kx)-wind;
+            double density=power*WaterCleanSpectrum::Spreading(theta,omega,settings);
+            if(settings.sea2Share>0 && c<2)
+                density=(1-settings.sea2Share)*density+settings.sea2Share*secondaryGain[c]*secondary[c*texels+at];
+            const double positive=std::sqrt(density);
+            float *h=&result[(c*texels+at)*4];
+            h[0]=float(radius*std::cos(angle)*positive);h[1]=float(radius*std::sin(angle)*positive);
+        }
+    }
+    // Tessendorf h0(k), conjugate(h0(-k)); copy the exact float coefficients.
+    for(unsigned c=0;c<Cascades;++c)for(unsigned y=0;y<n;++y)for(unsigned x=0;x<n;++x) {
+        float *h=&result[(c*texels+y*n+x)*4];
+        const float *other=&result[(c*texels+((n-y)%n)*n+(n-x)%n)*4];
+        h[2]=other[0];h[3]=-other[1];
+        for(unsigned j=0;j<4;++j)energy[c]+=double(h[j])*h[j];
+    }
+    double total=0,target=0;for(unsigned c=0;c<Cascades;++c){total+=energy[c];target+=heights[c]*heights[c];}
+    for(unsigned c=0;c<Cascades;++c) {
+        const double gain=spectrumSplit ? (total>0?std::sqrt(target/total)/WorldScale:0)
+            : (energy[c]>0?heights[c]/(WorldScale*std::sqrt(energy[c])):0);
+        for(unsigned i=0;i<texels*4;++i)result[c*texels*4+i]=float(double(result[c*texels*4+i])*gain);
+    }
+    return result;
+}
+// A/B experiment only: seeded RMS, also used by crest colour and clean-band diagnostics.
+inline std::array<double,Cascades> SpectrumHeightRms(const std::vector<float> &spectrum) {
+    std::array<double,Cascades> rms={};const size_t band=spectrum.size()/Cascades;
+    for(unsigned c=0;c<Cascades;++c) {
+        for(size_t i=0;i<band;++i){double h=spectrum[c*band+i];rms[c]+=h*h;}
+        rms[c]=WorldScale*std::sqrt(rms[c]);
+    }
+    return rms;
+}
+inline std::vector<float> InitialSpectrum(Configuration configuration=ForResolution(Resolution),bool clean=false) {
+    if(clean)return CleanInitialSpectrum(configuration,WaterCleanSpectrum::Settings(),true);
+
     const unsigned n=configuration.resolution,texels=n*n;
     std::vector<float> noise(texels*2),result(texels*Cascades*4);
     uint32_t seed=0;

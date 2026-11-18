@@ -297,6 +297,7 @@ void SdlGpuFrame::Release_Targets()
 // window dimensions: resizing scene targets keeps both its seed and paused frame unchanged.
 struct SdlGpuFrame::OceanResources
 {
+	bool Clean = false;
 	WaterFftSpectrum::Configuration Configuration = WaterFftSpectrum::ForResolution(WaterFftSpectrum::Resolution);
 	SDL_GPUTexture *Initial[3]={}, *Ping[2][6]={}, *Maps[6]={}, *Butterfly=NULL;
 	SDL_GPUShader *Vertex=NULL, *Pixels[4]={};
@@ -367,7 +368,7 @@ bool SdlGpuFrame::Fail_Ocean(const char *reason)
 	OceanFailed=true;Release_Ocean();return false;
 }
 
-bool SdlGpuFrame::Create_Ocean(WaterFftSpectrum::Configuration configuration)
+bool SdlGpuFrame::Create_Ocean(WaterFftSpectrum::Configuration configuration, bool clean)
 {
 	using namespace WaterFftSpectrum;
 	if (FailNextOceanRebuild) { FailNextOceanRebuild = false; return Fail_Ocean("injected rebuild failure"); }
@@ -376,7 +377,7 @@ bool SdlGpuFrame::Create_Ocean(WaterFftSpectrum::Configuration configuration)
 	if(!SDL_GPUTextureSupportsFormat(GpuDevice,SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT,SDL_GPU_TEXTURETYPE_2D,usage))
 		return Fail_Ocean("RGBA32F colour-target/sampler usage unsupported");
 	Ocean=new OceanResources;
-	Ocean->Configuration = configuration;
+	Ocean->Configuration = configuration;Ocean->Clean=clean;
 	SDL_GPUTextureCreateInfo texture={};texture.type=SDL_GPU_TEXTURETYPE_2D;
 	texture.format=SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT;texture.usage=usage;
 	texture.width=texture.height=Resolution;texture.layer_count_or_depth=texture.num_levels=1;
@@ -413,7 +414,7 @@ bool SdlGpuFrame::Create_Ocean(WaterFftSpectrum::Configuration configuration)
 		Ocean->Pipelines[i]=SDL_CreateGPUGraphicsPipeline(GpuDevice,&pipeline);
 		if(!Ocean->Pipelines[i]) return Fail_Ocean(SDL_GetError());
 	}
-	const std::vector<float> initial=InitialSpectrum(configuration),butterfly=Butterfly(configuration);
+	const std::vector<float> initial=InitialSpectrum(configuration,clean),butterfly=Butterfly(configuration);
 	const Uint32 fieldBytes=Resolution*Resolution*4*sizeof(float),butterflyBytes=Phases*Resolution*4*sizeof(float);
 	SDL_GPUTransferBufferCreateInfo transferInfo={};transferInfo.usage=SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
 	transferInfo.size=fieldBytes*3+butterflyBytes;
@@ -441,17 +442,17 @@ bool SdlGpuFrame::Create_Ocean(WaterFftSpectrum::Configuration configuration)
 	return true;
 }
 
-bool SdlGpuFrame::Prepare_Ocean(float time, unsigned resolution)
+bool SdlGpuFrame::Prepare_Ocean(float time, unsigned resolution, bool clean)
 {
 	if (!std::isfinite(time)) return false;
 	const auto requested = WaterFftSpectrum::ForResolution(resolution);
-	if (OceanRequestedResolution != requested.resolution) {
+	if (OceanRequestedResolution != requested.resolution || OceanRequestedClean != clean) {
 		OceanFailedResolution = 0;
-		OceanRequestedResolution = requested.resolution;
+		OceanRequestedResolution = requested.resolution;OceanRequestedClean=clean;
 	}
 	const bool boundary = OceanPrepareFrame != WaterFrame;
 	OceanPrepareFrame = WaterFrame;
-	const bool rebuild = !Ocean || (boundary && Ocean->Configuration.resolution != requested.resolution
+	const bool rebuild = !Ocean || ((Ocean->Clean!=clean || (boundary && Ocean->Configuration.resolution != requested.resolution))
 		&& OceanFailedResolution != requested.resolution);
 	if (OceanFailed && !Ocean && OceanFailedResolution == requested.resolution) return false;
 	if (!rebuild && OceanReady && time == OceanTime) return true;
@@ -470,7 +471,7 @@ bool SdlGpuFrame::Prepare_Ocean(float time, unsigned resolution)
 		}
 		return false;
 	};
-	if (rebuild && !Create_Ocean(requested)) {
+	if (rebuild && !Create_Ocean(requested,clean)) {
 		OceanFailedResolution = requested.resolution;
 		if (previous) {
 			Ocean = previous; OceanReady = previousReady; OceanTime = previousTime; OceanFailed = false;
@@ -1229,3 +1230,5 @@ bool SdlGpuFrame::Read_Back(SDL_GPUTexture * texture, unsigned int width, unsign
 	SDL_ReleaseGPUTransferBuffer(GpuDevice, transfer);
 	return ok;
 }
+
+bool SdlGpuFrame::Ocean_Is_Clean() const {return Ocean && Ocean->Clean;}

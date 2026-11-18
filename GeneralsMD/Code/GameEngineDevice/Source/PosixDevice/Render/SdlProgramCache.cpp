@@ -222,15 +222,15 @@ const SdlProgram &SdlProgramCache::Vertex_Program(const VertexPipelineDescriptio
 	return made;
 }
 
-const SdlProgram &SdlProgramCache::Water_Vertex_Program(const VertexPipelineDescription &description, bool waveHeading)
+const SdlProgram &SdlProgramCache::Water_Vertex_Program(const VertexPipelineDescription &description, bool waveHeading, bool cleanWater)
 {
-	struct Lookup { VertexPipelineDescription Vertex; bool Heading; } lookup = {};
-	lookup.Vertex=description;lookup.Heading=waveHeading;
+	struct Lookup { VertexPipelineDescription Vertex; bool Heading,Clean; } lookup = {};
+	lookup.Vertex=description;lookup.Heading=waveHeading;lookup.Clean=cleanWater;
 	if (SdlProgram *found = WaterVertexByBytes.Find(&lookup, sizeof(lookup))) {
 		++found->Uses;
 		return *found;
 	}
-	const std::string key = "water-fft:" + VertexShader_Key(description) + (waveHeading ? ":heading" : ":fixed");
+	const std::string key = "water-fft:" + VertexShader_Key(description) + (waveHeading ? ":heading" : ":fixed") + (cleanWater ? ":clean" : ":legacy");
 	std::map<std::string, SdlProgram>::iterator existing = VertexPrograms.find(key);
 	if (existing != VertexPrograms.end()) {
 		++existing->second.Uses;
@@ -240,7 +240,7 @@ const SdlProgram &SdlProgramCache::Water_Vertex_Program(const VertexPipelineDesc
 	std::string hlsl;
 	const bool generated = !description.LightingEnabled
 		&& VertexShader_Generate(description, VERTEX_SHADER_TARGET_D3D11, hlsl)
-		&& WaterFftSampling::WrapVertex(hlsl,true,waveHeading) && SDL3_Shader_Retarget(hlsl, true);
+		&& WaterFftSampling::WrapVertex(hlsl,true,waveHeading,cleanWater) && SDL3_Shader_Retarget(hlsl, true);
 	const SdlProgram &made = Make(VertexPrograms, key, generated, hlsl, true);
 	WaterVertexByBytes.Add(&lookup, sizeof(lookup), &VertexPrograms[key]);
 	return made;
@@ -267,13 +267,13 @@ const SdlProgram &SdlProgramCache::Engine_Vertex_Program(int program)
 	return made;
 }
 
-const SdlProgram &SdlProgramCache::Engine_Pixel_Program(int program, const PixelPipelineDescription &pipeline, bool waveHeading)
+const SdlProgram &SdlProgramCache::Engine_Pixel_Program(int program, const PixelPipelineDescription &pipeline, bool waveHeading, bool cleanWater)
 {
 	// The program and the pipeline description, side by side, as the lookup's bytes.
 	struct {
 		int Program;
 		PixelPipelineDescription Pipeline;
-		unsigned Resolution, Refraction, Reflections; bool Heading;
+		unsigned Resolution, Refraction, Reflections; bool Heading,Clean;
 	} lookup;
 	memset(&lookup, 0, sizeof(lookup));
 	lookup.Program = program;
@@ -283,7 +283,7 @@ const SdlProgram &SdlProgramCache::Engine_Pixel_Program(int program, const Pixel
 		lookup.Resolution = settings.activeFftResolution;
 		lookup.Refraction = unsigned(settings.refraction);
 		lookup.Reflections = settings.sceneReflections ? 1 : 0;
-		lookup.Heading = waveHeading;
+		lookup.Heading = waveHeading;lookup.Clean=cleanWater;
 	}
 	memcpy(&lookup.Pipeline, &pipeline, sizeof(pipeline));	// padding and all, as the caller built it
 	if (SdlProgram *found = EnginePixelByBytes.Find(&lookup, sizeof(lookup))) {
@@ -293,7 +293,7 @@ const SdlProgram &SdlProgramCache::Engine_Pixel_Program(int program, const Pixel
 	const EngineShaderProgram engine = (EngineShaderProgram)program;
 	const std::string key = std::string("engine:") + EngineShader_Name(engine) + CombinerShader_Pipeline_Key(pipeline)
 		+ (water ? ":water:" + std::to_string(lookup.Resolution) + ":" + std::to_string(lookup.Refraction)
-			+ ":" + std::to_string(lookup.Reflections) + (lookup.Heading ? ":heading" : ":fixed") : std::string());
+			+ ":" + std::to_string(lookup.Reflections) + (lookup.Heading ? ":heading" : ":fixed") + (lookup.Clean ? ":clean" : ":legacy") : std::string());
 	std::map<std::string, SdlProgram>::iterator existing = PixelPrograms.find(key);
 	if (existing != PixelPrograms.end()) {
 		++existing->second.Uses;
@@ -301,7 +301,7 @@ const SdlProgram &SdlProgramCache::Engine_Pixel_Program(int program, const Pixel
 		return existing->second;
 	}
 	std::string hlsl;
-	const bool written = EngineShader_Pixel_Program(engine, pipeline, hlsl, COMBINER_SHADER_TARGET_SDL3_GPU, waveHeading);
+	const bool written = EngineShader_Pixel_Program(engine, pipeline, hlsl, COMBINER_SHADER_TARGET_SDL3_GPU, waveHeading,cleanWater);
 	const SdlProgram &made = Make(PixelPrograms, key, written, hlsl, false);
 	EnginePixelByBytes.Add(&lookup, sizeof(lookup), &PixelPrograms[key]);
 	return made;

@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstring>
 #include "Platform/WaterWaveHeading.h"
+#include "Platform/WaterCleanShader.h"
 #include "Platform/WaterFftGeometry.h"
 #include "Platform/WaterVesselWaves.h"
 #include "Platform/WaterFftFiltering.h"
@@ -99,7 +100,7 @@ constexpr double SwellHashScale=0.1031, SwellHashOffset=33.33;
 // Both stages consume the same immutable draw snapshot. Slot zero remains the generated
 // fixed vertex block; the vessel field is water-only slot one on the vertex stage.
 // Opt-in Linux field; default/shared shader text remains unchanged.
-inline std::string HeadingSource(bool vertex,unsigned resolution=WaterFftSpectrum::Resolution) {
+inline std::string HeadingSource(bool vertex,unsigned resolution=WaterFftSpectrum::Resolution,bool clean=false) {
     char constants[2048];
     const double noiseVariance=(26.0/35)*(26.0/35)/12;
     std::snprintf(constants,sizeof(constants),
@@ -119,7 +120,7 @@ inline std::string HeadingSource(bool vertex,unsigned resolution=WaterFftSpectru
     char base[128];
     std::snprintf(base,sizeof(base),"static const float2 fftBaseHeading=float2(%.9g,%.9g);\n",
         double(WaterWaveHeading::BaseHeading.x),double(WaterWaveHeading::BaseHeading.y));
-    return std::string(vertex?R"HLSL(
+    std::string source=std::string(vertex?R"HLSL(
 Texture2D FftHeadingTexture : register(t4);
 SamplerState FftHeadingSampler : register(s4);
 )HLSL":R"HLSL(
@@ -202,6 +203,11 @@ FftSwell fftFilteredSwell(FftSwell value) {
     return value;
 }
 )HLSL";
+    if(clean) {
+        for(const auto &r:{std::pair<const char*,const char*>{"width/2","width/4"},{"at.x*2","at.x*4"}})
+            for(size_t at=source.find(r.first);at!=std::string::npos;at=source.find(r.first,at+std::strlen(r.second)))source.replace(at,std::strlen(r.first),r.second);
+    }
+    return source;
 }
 inline std::string HeadingVertexSource() {
     return R"HLSL(
@@ -275,7 +281,7 @@ void fftRawAndShadingSurface(float2 p,float3 lod,out FftSurface physical,out Fft
 }
 )HLSL";
 }
-inline std::string VertexSource(bool waveHeading=false)
+inline std::string VertexSource(bool waveHeading=false,bool clean=false)
 {
     std::string source=std::string(R"HLSL(
 Texture2D FftDisplacement0 : register(t0);
@@ -319,7 +325,12 @@ float3 fftVertexDisplacement(float2 p,float level,float horizontalScale) {
 float3 fftVertexDisplacement(float2 p,float level) {return fftVertexDisplacement(p,level,0.0);}
 float3 fftVertexDisplacement(float2 p) {return fftVertexDisplacement(p,WaterParameters.w);}
 )HLSL";
-    if(waveHeading) {
+    if(clean) {
+        const std::string entry="float3 fftRawDisplacement(float2 p)";
+        source.replace(source.find(entry),entry.size(),"float3 fftUnrotatedDisplacement(float2 p)");
+        const size_t end=source.find("\n}",source.find("float3 fftUnrotatedDisplacement"))+3;
+        source.insert(end,HeadingSource(true,WaterFftSpectrum::Resolution,true)+WaterCleanShader::VertexSource()+"float3 fftRawDisplacement(float2 p){return fftCleanDisplacement(p,fftMediumDepthField(p));}\n");
+    } else if(waveHeading) {
         const std::string entry="float3 fftRawDisplacement(float2 p)";
         source.replace(source.find(entry),entry.size(),"float3 fftUnrotatedDisplacement(float2 p)");
         const size_t end=source.find("\n}",source.find("float3 fftUnrotatedDisplacement"))+3;
@@ -329,7 +340,7 @@ float3 fftVertexDisplacement(float2 p) {return fftVertexDisplacement(p,WaterPara
 }
 // Add a water-only wrapper to the generated fixed vertex program. It retains the engine's
 // original projection, shroud coordinate generation and fog after moving the actual vertex.
-inline bool WrapVertex(std::string &hlsl,bool sdl=false,bool waveHeading=false)
+inline bool WrapVertex(std::string &hlsl,bool sdl=false,bool waveHeading=false,bool clean=false)
 {
     const std::string entry="Output main(Input input)";
     const size_t at=hlsl.find(entry);
@@ -337,7 +348,7 @@ inline bool WrapVertex(std::string &hlsl,bool sdl=false,bool waveHeading=false)
         || hlsl.find("float2 TexCoord1")==std::string::npos) return false;
     hlsl.replace(at,entry.size(),"Output waterFixedVertex(Input input)");
     hlsl+=UniformSource("WaterVertexParameters",1,false,sdl);
-    hlsl+=VertexSource(waveHeading);
+    hlsl+=VertexSource(waveHeading,clean);
     hlsl+=WaterWaveCageShader::Source(true);
     hlsl+=R"HLSL(
 Output main(Input input)
@@ -378,9 +389,9 @@ Output main(Input input)
 )HLSL";
     return true;
 }
-inline std::string PixelSource(WaterFftSpectrum::Configuration configuration=WaterFftSpectrum::ForResolution(WaterFftSpectrum::Resolution),bool waveHeading=false)
+inline std::string PixelSource(WaterFftSpectrum::Configuration configuration=WaterFftSpectrum::ForResolution(WaterFftSpectrum::Resolution),bool waveHeading=false,bool clean=false)
 {
-    std::string source=CommonSource()+WaterBowLift::Source()+WaterVesselWaves::Source()+WaterFftFiltering::Source(configuration)+R"HLSL(
+    std::string source=CommonSource()+WaterBowLift::Source()+WaterVesselWaves::Source()+WaterFftFiltering::Source(configuration,clean)+R"HLSL(
 struct FftSurface {
     float3 bow;
     float3 displacement;
@@ -561,7 +572,17 @@ float2 fftParameterGradient(float value,float2 px,float2 py) {
     return float2(ddx(value)*py.y-ddy(value)*px.y,ddy(value)*px.x-ddx(value)*py.x)*inverse;
 }
 )HLSL";
-    if(waveHeading) {
+    if(clean) {
+        const size_t begin=source.find("FftSurface fftRawSurface(float2 p,float3 lod)");
+        const size_t end=source.find("FftSurface fftSurface(float2 p,float level,float footprint",begin);
+        source.replace(begin,end-begin,HeadingSource(false,configuration.resolution,true)+WaterCleanShader::PixelSource(configuration)+R"HLSL(
+FftSurface fftRawSurface(float2 p,float3 lod){return fftCleanSurface(p,fftMediumDepthField(p),lod);}
+FftSurface fftRawSurface(float2 p){return fftRawSurface(p,float3(0,0,0));}
+void fftRawAndShadingSurface(float2 p,float3 lod,out FftSurface physical,out FftSurface shading){fftCleanAndShadingSurface(p,fftMediumDepthField(p),lod,physical,shading);}
+)HLSL");
+        const std::string from="value.unresolvedSlopeVariance=fftShadingVariance(shadingLod)*";
+        source.replace(source.find(from),from.size(),"value.unresolvedSlopeVariance=shading.unresolvedSlopeVariance*");
+    } else if(waveHeading) {
         // Only rename the position entry points, never fftMapSamples / fftDecodeSamples.
         const size_t begin=source.find("FftSurface fftRawSurface(float2 p,float3 lod)");
         const size_t end=source.find("FftSurface fftSurface(float2 p,float level,float footprint",begin);

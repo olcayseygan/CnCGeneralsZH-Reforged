@@ -6226,6 +6226,24 @@ static void check_gpu_fft_quality_switch(SdlGpuFrame *frame)
     printf("sdl_gpu_frame_selfcheck: FFT128 direct Fourier max %.9g; all mip extents, queued old reader, same-time boundary switches and deterministic restoration checked\n",maximum);
 }
 
+static void check_gpu_clean_fft_mode_switch(SdlGpuFrame *frame)
+{
+    CHECK(frame->Prepare_Ocean(2.25f,256,false));CHECK(!frame->Ocean_Is_Clean());
+    const auto legacy=read_ocean(frame);const auto *old=frame->Ocean_Map(0);
+    const auto updates=frame->Ocean_Updates();
+    frame->Fail_Next_Ocean_Rebuild_For_Test();
+    CHECK(frame->Prepare_Ocean(2.25f,256,true));CHECK(!frame->Ocean_Is_Clean());
+    CHECK(frame->Ocean_Map(0)==old && frame->Ocean_Updates()==updates);
+    CHECK(frame->Prepare_Ocean(2.25f,256,true));CHECK(frame->Ocean_Updates()==updates);
+    CHECK(frame->Prepare_Ocean(2.25f,256,false));
+    CHECK(frame->Prepare_Ocean(2.25f,256,true));CHECK(frame->Ocean_Is_Clean());
+    const auto clean=read_ocean(frame);CHECK(clean.size()==legacy.size() && clean!=legacy);
+    const auto cleanUpdates=frame->Ocean_Updates();CHECK(frame->Prepare_Ocean(2.25f,256,true));
+    CHECK(frame->Ocean_Updates()==cleanUpdates && read_ocean(frame)==clean);
+    CHECK(frame->Prepare_Ocean(2.25f,256,false));CHECK(!frame->Ocean_Is_Clean());
+    CHECK(read_ocean(frame)==legacy);
+}
+
 static void check_gpu_water_opaque_alpha(SdlGpuFrame *frame)
 {
     // Execute each generated program's actual final coverage block, then actual
@@ -7018,6 +7036,7 @@ int main()
 	check_scene_depth_snapshot(frame);
 	check_gpu_fft_ocean(frame);
 	check_gpu_fft_quality_switch(frame);
+	check_gpu_clean_fft_mode_switch(frame);
 	check_gpu_water_opaque_alpha(frame);
 	check_gpu_water_vertex_uniform_order(frame);
 	check_gpu_modern_water_material(frame);

@@ -675,7 +675,7 @@ static bool write_engine_pixel_program(EngineShaderProgram program,
 // SDL map water has a dedicated, explicitly packed uniform block (SdlWaterPixelConstants).
 // Runtime-generated normal detail, terrain depth, refraction and the coloured planar reflection
 // are composed before the existing shore/shroud alpha blend. No additional assets are required.
-static void write_modern_water(std::string &hlsl, bool river, bool sdl = false, bool waveHeading = false)
+static void write_modern_water(std::string &hlsl, bool river, bool sdl = false, bool waveHeading = false, bool cleanWater = false)
 {
 	const auto quality = sdl ? WaterPerformanceSettings::Applied() : WaterPerformanceSettings::Configuration();
 	hlsl.clear();
@@ -937,7 +937,7 @@ float4 waterMirrorFiltered(float2 uv, int2 size)
 	hlsl += ModernWaterMaterial::OpticalSource();
 	hlsl += ModernWaterMaterial::BubbleSource();
 	hlsl += WaterHullModel::GetHlslSource();
-	hlsl += WaterFftSampling::PixelSource(WaterFftSpectrum::ForResolution(quality.activeFftResolution),waveHeading);
+	hlsl += WaterFftSampling::PixelSource(WaterFftSpectrum::ForResolution(quality.activeFftResolution),waveHeading,cleanWater);
 	hlsl += WaterWaveCageShader::Source(false);
 	char oceanBound[96];
 	snprintf(oceanBound, sizeof(oceanBound), "static const float oceanDisplacementBound = %.9g;\n",
@@ -1618,10 +1618,29 @@ float4 main(Input input) : SV_Target
 		hlsl += "    float4 edge = Texture3.Sample(Sampler3, input.TexCoord3);\n";
 		hlsl += "    current = float4(saturate(surface) * edge.rgb, saturate(depth * 2.0) * lerp(input.Diffuse.a * base.a, step(0.001, input.Diffuse.a * base.a), " + std::string(sdl ? "WATER_REFRACTION_QUALITY == 2 ? 1.0 : SceneParameters.x" : "SceneParameters.x") + "));\n";
 	}
+    if(cleanWater) {
+        const auto replace=[&](const std::string &from,const std::string &to) {for(size_t at=hlsl.find(from);at!=std::string::npos;at=hlsl.find(from,at+to.size()))hlsl.replace(at,from.size(),to);};
+        replace("lerp(0.016, 0.036, offshore)","0.024");
+        replace("? terrainWaveAttenuation(baseLevel-surfaceTerrainHeight, offshore) : 1.0;","? 1.0 : 1.0;");
+        replace("    float3 body=WaterOpticalBody(scene,transmission,scatter,caustic,SceneParameters.x);",R"HLSL(
+    float3 gains=float3(fftMediumGain(fftMediumDepthField(wavePosition),24).x,fftMediumGain(fftMediumDepthField(wavePosition),12).x,fftMediumGain(fftMediumDepthField(wavePosition),4).x);
+    float rms=max(length(fftCleanRms*gains),.05);
+    float crestColour=smoothstep(0.0,1.8,max(0.0,spectral.shadingDisplacement.z)/rms);
+    float amount=.11*crestColour*(.25+.75*saturate(.5-2*dot(resolvedNormal.xy,light.xy)))*(.35+.65*(1-saturate(nDotV)))*daylight*sunVisible*fftWeight*fftDamping*(1-cageAmount);
+    scatter=lerp(scatter,max(scatter*1.25,float3(.055,.24,.16)),amount);
+    float3 body=WaterOpticalBody(scene,transmission,scatter,caustic,SceneParameters.x);
+)HLSL");
+        replace("    crestFoam=lerp(crestFoam,fftFoam,fftWeight);",R"HLSL(
+    float width=.08+fwidth(spectral.incidentCompression)*.5;
+    fftFoam=(1-smoothstep(.73-width,.73+width,spectral.incidentCompression))*min(input.Diffuse.r,hullEffects.z)*(1-cageAmount)*(.2+.8*daylight);
+    crestFoam=lerp(crestFoam,fftFoam,fftWeight);
+)HLSL");
+    }
+
 }
 
 bool EngineShader_Pixel_Program(EngineShaderProgram program,
-	const PixelPipelineDescription & pipeline, std::string & hlsl, CombinerShaderTarget target, bool waveHeading)
+	const PixelPipelineDescription & pipeline, std::string & hlsl, CombinerShaderTarget target, bool waveHeading, bool cleanWater)
 {
 	// As the vertex half: D3D11 only, and SDL3 GPU as the D3D11 text rebound, without the smoke the
 	// SDL3 backend has no map for.
@@ -1633,7 +1652,7 @@ bool EngineShader_Pixel_Program(EngineShaderProgram program,
 	if (target == COMBINER_SHADER_TARGET_SDL3_GPU) {
 #if defined(__linux__)
 		if (modern_water) {
-			write_modern_water(hlsl, program == ENGINE_SHADER_WATER_RIVER, true, waveHeading && program != ENGINE_SHADER_WATER_RIVER);
+			write_modern_water(hlsl, program == ENGINE_SHADER_WATER_RIVER, true, waveHeading && program != ENGINE_SHADER_WATER_RIVER, cleanWater && program != ENGINE_SHADER_WATER_RIVER);
 			if (!CombinerShader_Append_Pixel_Pipeline(pipeline, hlsl)) return false;
 			hlsl += "    return current;\n}\n";
 			return SDL3_Shader_Retarget(hlsl, false);

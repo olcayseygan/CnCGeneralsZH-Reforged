@@ -463,6 +463,7 @@ protected:
 	bool Engine_Program_Of(const void *shader, const char *stage, int &program);
 
 	PosixDirect3D9 *Adapter;			///< held, as D3D9's device holds its IDirect3D9
+	bool CleanWaterRefused = false; // optional-provider failure latch for this device lifetime
 	SdlGpuFrame *Gpu;					///< the SDL3 GPU frame, with a window only
 	SdlProgramCache *Programs;			///< the draw's caches and GPU copies, with the frame
 	SdlPipelineCache *Pipelines;

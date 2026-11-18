@@ -39,6 +39,7 @@
 #include "Platform/WaterPerformanceSettings.h"
 #include "Platform/ModernWaterMaterial.h"
 #include "Platform/WaterWaveHeading.h"
+#include "Platform/WaterCleanShore.h"
 #include "Platform/WaterShoreOverlay.h"
 #include "Platform/WaterFoamWindow.h"
 #include "Platform/WaterFoamParticlePolicy.h"
@@ -1327,7 +1328,8 @@ void WaterRenderObjClass::setupModernWaterShader(Bool river, Bool heightCorrecti
 	if(!river && optical && m_modernHeadingEnabled)
 		for(const ModernOpticalTexture &cached:m_modernOpticalTextures)
 			if(cached.level==m_modernOpticalLevel){heading=cached.heading;prevailing.x=cached.prevailingRotation;prevailing.y=cached.swellStep;break;}
-	prevailing.z=heading?1.0f:0.0f;
+	prevailing.z=heading?(m_modernCleanEnabled?2.0f:1.0f):0.0f;
+	prevailing.w=TheGlobalData->m_mapAwareWaveHeading?1.0f:0.0f;
 	DX8Wrapper::Set_DX8_Texture(WaterWaveHeading::PixelTextureSlot,heading?heading->Peek_D3D_Texture():NULL);
 	setModernWaterConstants(WaterWaveHeading::PrevailingRegister,prevailing,1);
 #endif
@@ -1530,11 +1532,13 @@ void WaterRenderObjClass::refreshModernWaterOpticalPolygons(void)
 TextureClass *WaterRenderObjClass::modernWaterOpticalTexture(Real level)
 {
 #if ZH_MODERN_WATER
-	const Bool headingWanted=TheGlobalData && TheGlobalData->m_mapAwareWaveHeading
+	const Bool cleanWanted=TheGlobalData && TheGlobalData->m_cleanFftWater && !TheGlobalData->m_classicGraphics
+		&& TheGlobalData->m_waterStyle!=0 && WaterWaveHeading::Supported();
+	const Bool headingWanted=TheGlobalData && (TheGlobalData->m_mapAwareWaveHeading || cleanWanted)
 		&& !TheGlobalData->m_classicGraphics && TheGlobalData->m_waterStyle!=0 && WaterWaveHeading::Supported();
-	if(headingWanted!=m_modernHeadingEnabled) {
+	if(headingWanted!=m_modernHeadingEnabled || cleanWanted!=m_modernCleanEnabled) {
 		invalidateModernWaterShore();clearModernWaterOpticalTextures();
-		m_modernHeadingEnabled=headingWanted;
+		m_modernHeadingEnabled=headingWanted;m_modernCleanEnabled=cleanWanted;
 	}
 	if (!m_modernOpticalPolygonsValid) return NULL;
 	for (size_t i=0;i<m_modernOpticalTextures.size();++i)
@@ -1564,18 +1568,26 @@ TextureClass *WaterRenderObjClass::modernWaterOpticalTexture(Real level)
 	cached.texture=texture;
 #if defined(__linux__)
 	if(m_modernHeadingEnabled) {
+		if(m_modernCleanEnabled && WaterMediumDepth::Build(m_modernHeights.data(),field.wet.data(),field.shore.data(),
+			m_modernHeightWidth,m_modernHeightHeight,MAP_XY_FACTOR,MAP_HEIGHT_SCALE,level,cached.cleanDepth))
+			WaterCleanShore::Build(cached.cleanDepth,field.wet.data(),MAP_XY_FACTOR);
 		WaterWaveHeading::Field heading;
-		if(WaterWaveHeading::Build(field.wet.data(),field.exposure.data(),
+		if((!m_modernCleanEnabled || !cached.cleanDepth.depth.empty()) && WaterWaveHeading::Build(field.wet.data(),field.exposure.data(),
 			m_modernHeightWidth,m_modernHeightHeight,m_modernHeightBorder,MAP_XY_FACTOR,heading,field.links.data())) {
-			TextureClass *headingTexture=NEW_REF(TextureClass,(2*m_modernHeightSide,m_modernHeightSide,WW3D_FORMAT_A8R8G8B8,MIP_LEVELS_1));
+			const Int headingStride=m_modernCleanEnabled?4:2;
+			TextureClass *headingTexture=NEW_REF(TextureClass,(headingStride*m_modernHeightSide,m_modernHeightSide,WW3D_FORMAT_A8R8G8B8,MIP_LEVELS_1));
 			SurfaceClass *headingSurface=headingTexture?headingTexture->Get_Surface_Level():NULL;
 			Int headingPitch=0;void *headingBits=headingSurface?headingSurface->Lock(&headingPitch):NULL;
-			const Bool uploaded=headingBits && headingPitch>=m_modernHeightSide*8;
+			const Bool uploaded=headingBits && headingPitch>=m_modernHeightSide*headingStride*4;
 			if(uploaded)
 				for(Int y=0;y<m_modernHeightSide;++y) for(Int x=0;x<m_modernHeightSide;++x) {
 					const size_t n=size_t(min(y,m_modernHeightHeight-1))*m_modernHeightWidth+min(x,m_modernHeightWidth-1);
-					((UnsignedInt*)((char*)headingBits+y*headingPitch))[2*x]=heading.texels[2*n];
-					((UnsignedInt*)((char*)headingBits+y*headingPitch))[2*x+1]=heading.texels[2*n+1];
+					((UnsignedInt*)((char*)headingBits+y*headingPitch))[headingStride*x]=heading.texels[2*n];
+					((UnsignedInt*)((char*)headingBits+y*headingPitch))[headingStride*x+1]=heading.texels[2*n+1];
+					if(m_modernCleanEnabled) {
+						((UnsignedInt*)((char*)headingBits+y*headingPitch))[headingStride*x+2]=WaterCleanShore::Word(cached.cleanDepth,n);
+						((UnsignedInt*)((char*)headingBits+y*headingPitch))[headingStride*x+3]=WaterCleanShore::DistanceWord(cached.cleanDepth,n);
+					}
 				}
 			if(headingBits)headingSurface->Unlock();
 			REF_PTR_RELEASE(headingSurface);
@@ -4360,7 +4372,7 @@ Real WaterRenderObjClass::modernWaterDamping(Real x, Real y, Real z, Real offsho
 	// Early zero returns remain zero for both the complete CPU fallback and the FFT envelope.
 	if (hullFreeDamping) *hullFreeDamping=0.0f;
 	WorldHeightMap *map=TheTerrainRenderObject?TheTerrainRenderObject->getMap():NULL;
-	Real damping=1.0f;
+	Real damping=1.0f,cleanObstacle=1.0f;
 	if (cachedTerrain) {
 		if (terrainDepth) *terrainDepth=cachedTerrain[0];
 		damping=cachedTerrain[1];
@@ -4394,6 +4406,7 @@ Real WaterRenderObjClass::modernWaterDamping(Real x, Real y, Real z, Real offsho
 				obstacleDamping=legacy+(obstacleDamping-legacy)*offshore;
 			}
 		} else obstacleDamping=WaterSurfaceModel::ShoreDamping(sqrtf(dx*dx+dy*dy)-o.radius);
+		if(!o.hasHull)cleanObstacle=min(cleanObstacle,obstacleDamping);
 		// Cage displacement applies the exact rendered hull in the shader, including R0.
 		// Its independent object envelope must not inherit the legacy circular hull proxy.
 		if (hullFreeObstacle && !o.hasHull) *hullFreeObstacle=min(*hullFreeObstacle,obstacleDamping);
@@ -4405,7 +4418,7 @@ Real WaterRenderObjClass::modernWaterDamping(Real x, Real y, Real z, Real offsho
 		}
 		if (damping<=0.0f && !hullFreeObstacle) return 0.0f;
 	}
-	if (hullFreeDamping) *hullFreeDamping=damping;
+	if (hullFreeDamping) *hullFreeDamping=cleanWaterApplies(z)?cleanObstacle:damping;
 	if (offshore>0.0f && damping>0.0f) {
 		const Real hull=1.0f+(modernHullDamping(x,y,z)-1.0f)*offshore;
 		damping=min(damping,hull);
@@ -5909,4 +5922,12 @@ bool Supported()
 	return false;
 #endif
 }
+}
+
+Bool WaterRenderObjClass::cleanWaterApplies(Real level) const
+{
+	if(!m_modernCleanEnabled)return FALSE;
+	for(const auto &field:m_modernOpticalTextures)
+		if(field.level==level)return field.cleanDepth.depth.size()==size_t(m_modernHeightWidth)*m_modernHeightHeight;
+	return FALSE;
 }

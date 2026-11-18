@@ -977,15 +977,26 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	const bool fft_requested = !SunActive && pixel_engine == ENGINE_SHADER_WATER_TRAPEZOID
 		&& vertex_engine == ENGINE_SHADER_NONE && !vertex.LightingEnabled
 		&& PixelShaderConstants[6][2] > 0.5f && PixelShaderConstants[6][3] > 0.5f;
-	bool fft_water = fft_requested && Gpu->Prepare_Ocean(PixelShaderConstants[1][0]*WaterFftSampling::TimeScale,
-		WaterPerformanceSettings::Applied().requestedFftResolution);
+	const bool clean_draw_requested=PixelShaderConstants[WaterWaveHeading::PrevailingRegister][2]>=2.0f;
+	const bool clean_requested=clean_draw_requested && !CleanWaterRefused;
+	bool fft_water = fft_requested && !(clean_draw_requested && CleanWaterRefused) && Gpu->Prepare_Ocean(PixelShaderConstants[1][0]*WaterFftSampling::TimeScale,
+		WaterPerformanceSettings::Applied().requestedFftResolution,clean_requested);
+	if(fft_water && Gpu->Ocean_Is_Clean()!=clean_requested)fft_water=false;
+	bool clean_water=fft_water && clean_requested;
 	if (fft_water) WaterPerformanceSettings::Applied().activeFftResolution = Gpu->Ocean_Configuration().resolution;
 	std::string heading_refusal;
-	bool wave_heading = fft_water && PixelShaderConstants[WaterWaveHeading::PrevailingRegister][2]>.5f && Textures[WaterWaveHeading::PixelTextureSlot]
+	bool wave_heading = fft_water && !(clean_draw_requested && !clean_water) && PixelShaderConstants[WaterWaveHeading::PrevailingRegister][2]>.5f && Textures[WaterWaveHeading::PixelTextureSlot]
 		&& Mirrors->Texture(Textures[WaterWaveHeading::PixelTextureSlot],heading_refusal);
-	const SdlProgram *fft_vertex = fft_water ? &Programs->Water_Vertex_Program(vertex, wave_heading) : NULL;
+	const auto use_cpu_water=[&]() {
+		// Mesh heights retain the complete original analytic picture. Do not mix a clean
+		// spectrum or its FFT-only envelope with an unrelated legacy shader on failure.
+		CleanWaterRefused=true;clean_water=false;wave_heading=false;fft_water=false;
+	};
+	if(clean_water && !wave_heading)use_cpu_water();
+	const SdlProgram *fft_vertex = fft_water ? &Programs->Water_Vertex_Program(vertex, wave_heading,clean_water) : NULL;
 	if (fft_vertex && !fft_vertex->Shader && wave_heading) {
-		wave_heading=false;fft_vertex=&Programs->Water_Vertex_Program(vertex,false);
+		if(clean_water)use_cpu_water();else wave_heading=false;
+		fft_vertex=fft_water?&Programs->Water_Vertex_Program(vertex,false):NULL;
 	}
 	if (fft_vertex && fft_vertex->Shader == NULL) fft_water = false;
 	const SdlProgram *vertex_program = vertex_engine != ENGINE_SHADER_NONE
@@ -994,12 +1005,12 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	const SdlProgram *pixel_program = SunActive
 		? &Programs->Sun_Pixel_Program(combiner, pixel_engine)
 		: pixel_engine != ENGINE_SHADER_NONE
-			? &Programs->Engine_Pixel_Program(pixel_engine, combiner.PixelPipeline, wave_heading)
+			? &Programs->Engine_Pixel_Program(pixel_engine, combiner.PixelPipeline, wave_heading,clean_water)
 			: &Programs->Pixel_Program(combiner);
 	const auto retry_without_heading = [&]() {
 		if(!wave_heading)return false;
-		wave_heading=false;
-		vertex_program=&Programs->Water_Vertex_Program(vertex,false);
+		if(clean_water)use_cpu_water();else wave_heading=false;
+		vertex_program=fft_water?&Programs->Water_Vertex_Program(vertex,false):&Programs->Vertex_Program(vertex);
 		pixel_program=&Programs->Engine_Pixel_Program(pixel_engine,combiner.PixelPipeline,false);
 		return vertex_program->Shader && pixel_program->Shader;
 	};
@@ -1200,6 +1211,9 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 				states[D3DSAMP_ADDRESSU]=states[D3DSAMP_ADDRESSV]=D3DTADDRESS_CLAMP;
 				states[D3DSAMP_MINFILTER]=states[D3DSAMP_MAGFILTER]=D3DTEXF_POINT;states[D3DSAMP_MIPFILTER]=D3DTEXF_NONE;
 				draw.Samplers[slot]=Samplers->Sampler(states);draw.Textures[slot]=heading?heading:Mirrors->White();
+				if(clean_water && (!heading || !draw.Samplers[slot])) {
+					use_cpu_water();return Gpu_Draw(call); // the device latch bounds this retry
+				}
 				water_heading=heading && draw.Samplers[slot];
 				if(!draw.Textures[slot] || !draw.Samplers[slot])return D3D_OK;
 				if(draw.VertexSamplerCount>WaterWaveHeading::VertexTextureSlot) {
@@ -1472,7 +1486,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		water.SceneParameters[2] = 1.0f / (float)target.Height;
 		water.SceneParameters[3] = water_depth ? 1.0f : 0.0f;
 		water.FftParameters[0] = fft_water ? 1.0f : 0.0f;
-		water.FftParameters[2] = water_heading ? 1.0f : 0.0f;
+		water.FftParameters[2] = water_heading ? (clean_water?(PixelShaderConstants[WaterWaveHeading::PrevailingRegister][3]>.5f?3.0f:2.0f):1.0f) : 0.0f;
 		water.FftParameters[3] = water_heading ? PixelShaderConstants[WaterWaveHeading::PrevailingRegister][0] : 0.0f;
 		water.FoamFillLights[3][3] = water_heading ? PixelShaderConstants[WaterWaveHeading::PrevailingRegister][1] : 0.0f;
 		if (!water_history) water.FoamHistoryParameters[0] = 0.0f;

@@ -245,7 +245,8 @@ public:
 	SDL_GPUTexture * Ready_Scene_Depth(const SdlTarget &source, uint64_t &serial) const;
 	/// Lazy, GPU-only Phillips spectrum/IFFT. Previous draws finish recording before maps change;
 	/// repeated paused times reuse the same field. Failure leaves the analytic water fallback usable.
-	bool Prepare_Ocean(float time, unsigned resolution = WaterFftSpectrum::Resolution);
+	bool Prepare_Ocean(float time, unsigned resolution = WaterFftSpectrum::Resolution, bool clean = false);
+	bool Ocean_Is_Clean() const;
 	WaterFftSpectrum::Configuration Ocean_Configuration() const;
 	void Fail_Next_Ocean_Rebuild_For_Test() { FailNextOceanRebuild = true; }
 	uint64_t Water_Colour_Captures() const { return WaterColourCaptures; }
@@ -351,8 +352,9 @@ private:
 	uint64_t OceanUpdates = 0;
 	uint64_t OceanPrepareFrame = UINT64_MAX;
 	unsigned OceanFailedResolution = 0, OceanRequestedResolution = 0;
+	bool OceanRequestedClean = false;
 	bool FailNextOceanRebuild = false;
-	bool Create_Ocean(WaterFftSpectrum::Configuration configuration);
+	bool Create_Ocean(WaterFftSpectrum::Configuration configuration, bool clean);
 	void Release_Ocean();
 	bool Fail_Ocean(const char *reason);
 

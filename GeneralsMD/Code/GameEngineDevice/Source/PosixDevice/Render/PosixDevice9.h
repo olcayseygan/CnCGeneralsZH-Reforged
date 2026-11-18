@@ -213,6 +213,12 @@ public:
     unsigned Begin_Post_View(bool, float, float, bool);
     void End_Post_View(unsigned);
     bool Read_Main_View(struct SdlMainViewSnapshot &, bool, SdlSceneCapturePhase);
+    bool Current_Gpu_Target(struct SdlTarget &target, std::string &error) { return Resolve_Target(target,error); }
+    bool Classic_Water_Foam_Available() const;
+    bool Prepare_Classic_Water_Foam();
+    struct SDL_GPUTexture *Classic_Water_Depth();
+    bool Build_Main_View_Constants(struct SdlEnginePixelConstants &, bool receiving);
+    void Refuse_Next_Foam_For_Test(unsigned flags) { FoamRefusalForTest = flags; }
     bool Read_Post_Inputs(SdlSceneCapturePhase, struct SdlPostSceneInputs &);
     void Post_Opaque_Scene(bool);
     void Post_Before_Transparent();
@@ -382,6 +388,7 @@ public:
 protected:
 	struct SunCapture;
 	std::shared_ptr<SunCapture> Sun;
+	unsigned FoamRefusalForTest = 0;
 	bool SunActive = false, SunFailed = false, SunReady = false;
 	bool SmokeGlow = false;
 	bool GlowDraw = false;

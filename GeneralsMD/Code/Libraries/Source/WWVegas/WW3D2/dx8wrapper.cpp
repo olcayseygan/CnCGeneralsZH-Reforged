@@ -5918,6 +5918,7 @@ bool DX8Wrapper::Device_Is_Ready()
 }
 
 #include "Platform/RenderPost.h"
+#include "Platform/RenderWaterFoam.h"
 namespace RenderPost {
 void BeginMain(const Settings &settings) {
 #if !defined(_WIN32)
@@ -6009,3 +6010,23 @@ bool PosixRenderer_Capture_Main_View(SdlSceneCapturePhase p,SdlMainViewSnapshot 
     return PosixRenderer_Capture_Main_View(DX8Wrapper::_Get_D3D_Device(),p,s);
 }
 #endif
+
+namespace RenderWaterFoam {
+bool Ready() {
+#if !defined(_WIN32)
+    return Ready(DX8Wrapper::_Get_D3D_Device());
+#else
+    return Direct3D11_Present_Is_Enabled();
+#endif
+}
+}
+
+namespace RenderWaterFoam {
+bool Available() {
+#if defined(_WIN32)
+    return Direct3D11_Present_Is_Enabled();
+#else
+    return Available(DX8Wrapper::_Get_D3D_Device());
+#endif
+}
+}

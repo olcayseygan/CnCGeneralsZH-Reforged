@@ -319,7 +319,8 @@ bool PosixDevice9::Sun_Receiving(int vertexProgram, int pixelProgram, const SdlT
         || !RenderStates[D3DRS_ZENABLE] || RenderStates[D3DRS_FILLMODE] != D3DFILL_SOLID
         || (RenderStates[D3DRS_COLORWRITEENABLE] & 7u) != 7u) return false;
     const bool ground = EngineShader_Paints_Ground(static_cast<EngineShaderProgram>(pixelProgram));
-    if (pixelProgram != ENGINE_SHADER_NONE && !ground) return false;
+    if (pixelProgram != ENGINE_SHADER_NONE && !ground &&
+        !EngineShader_Reads_Scene_Depth(static_cast<EngineShaderProgram>(pixelProgram))) return false;
     if (vertexProgram != ENGINE_SHADER_NONE && vertexProgram != ENGINE_SHADER_TREES
         && vertexProgram != ENGINE_SHADER_GRASS) return false;
     // Match Windows: ordinary alpha surfaces/particles receive even without depth writes.

@@ -954,6 +954,18 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		return D3D_OK;
 	}
 
+    const bool foam_requested = EngineShader_Reads_Scene_Depth(static_cast<EngineShaderProgram>(pixel_engine));
+    const int foam_plain = pixel_engine == ENGINE_SHADER_WATER_TRAPEZOID_FOAM ?
+        ENGINE_SHADER_WATER_CLASSIC_TRAPEZOID : ENGINE_SHADER_WATER_CLASSIC_RIVER;
+    bool classic_foam = false, foam_fallback = false;
+    SDL_GPUTexture *foam_depth = nullptr, *foam_white = nullptr; SDL_GPUSampler *foam_sampler = nullptr;
+    const unsigned foam_fault = foam_requested ? FoamRefusalForTest & 14u : 0;
+    if (foam_requested) {
+        FoamRefusalForTest &= ~14u;
+        classic_foam = !(foam_fault & 8) && Prepare_Classic_Water_Foam() &&
+            (foam_depth = Classic_Water_Depth()) && (foam_sampler = Samplers->Sampler(SamplerStates[0])) && (foam_white = Mirrors->White());
+        if (!classic_foam) { pixel_engine = foam_plain; foam_fallback = true; }
+    }
 	// The programs and the pipeline.
 	std::string refusal;
 	SdlVertexLayout layout;
@@ -1002,6 +1014,14 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		pixel_program = &Programs->Pixel_Program(combiner);
 		return pixel_program->Shader != NULL;
 	};
+    const auto retry_without_foam = [&]() {
+        if (!classic_foam) return false;
+        classic_foam = false; foam_fallback = true; foam_depth = nullptr; foam_sampler = nullptr;
+        pixel_engine = foam_plain; combiner.ShadowReceiving = false;
+        pixel_program = &Programs->Engine_Pixel_Program(pixel_engine, combiner.PixelPipeline);
+        return pixel_program->Shader != nullptr;
+    };
+    if (!pixel_program->Shader || (foam_fault & 2)) retry_without_foam();
 	if (!pixel_program->Shader) retry_without_sun("pixel program refused");
 	const SdlProgram *legacy_pixel_program=pixel_program;
 	const ShoreRegion *shore_region=NULL;
@@ -1038,6 +1058,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	}
 	if (pixel_program->SamplerSlots > SdlRecordedDraw::MAXIMUM_SAMPLERS)
 		retry_without_sun("receiver sampler count");
+	if (pixel_program->SamplerSlots > SdlRecordedDraw::MAXIMUM_SAMPLERS) retry_without_foam();
 	if (pixel_program->SamplerSlots > SdlRecordedDraw::MAXIMUM_SAMPLERS
 		|| vertex_program.SamplerSlots > (fft_water ? 4u : 0u)) {
 		Refuse_Draw("more sampler slots than a draw binds");
@@ -1046,7 +1067,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	const bool modern_water_pixel=pixel_engine==ENGINE_SHADER_WATER_TRAPEZOID || pixel_engine==ENGINE_SHADER_WATER_RIVER;
 	if(!Sdl_Draw_Uniform_Buffers_Supported(fft_water,modern_water_pixel,
 		vertex_program.UniformBuffers,pixel_program->UniformBuffers))
-		retry_without_sun("receiver uniform layout");
+		if (!retry_without_foam()) retry_without_sun("receiver uniform layout");
 	if(!pixel_program->Shader || !Sdl_Draw_Uniform_Buffers_Supported(fft_water,modern_water_pixel,
 		vertex_program.UniformBuffers,pixel_program->UniformBuffers)) {
 		Refuse_Draw("uniform blocks without an explicit draw binding");
@@ -1091,6 +1112,19 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		glow_states[D3DRS_SRCBLEND] = D3DBLEND_BLENDFACTOR;
 		states = glow_states;
 	}
+    RenderUInt32 foam_plain_states[RENDER_STATE_COUNT];
+    const auto restore_plain_foam_blend = [&]() {
+        // The CPU foam branch replaced the shoreline's destination-alpha feather
+        // with depth-derived source alpha. A late optional refusal restores EA's pair.
+        if (foam_fallback && (RenderStates[D3DRS_TEXTUREFACTOR] >> 24) != 0 &&
+            RenderStates[D3DRS_SRCBLEND] == D3DBLEND_SRCALPHA && RenderStates[D3DRS_DESTBLEND] == D3DBLEND_INVSRCALPHA) {
+            std::memcpy(foam_plain_states, states, sizeof(foam_plain_states));
+            foam_plain_states[D3DRS_SRCBLEND] = D3DBLEND_DESTALPHA;
+            foam_plain_states[D3DRS_DESTBLEND] = D3DBLEND_INVDESTALPHA;
+            states = foam_plain_states;
+        }
+    };
+    restore_plain_foam_blend();
 	SdlPipelineKey key;
 	if (!Sdl_Pipeline_Key(states, call.Type, vertex_program.Shader, pixel_program->Shader, FVF,
 		SdlGpuFrame::Target_Colour_Format(target), Gpu->Target_Depth_Format(target), key, refusal)) {
@@ -1100,7 +1134,14 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	phases.Mark("target+programs");
 	SdlRecordedDraw draw;
 	memset(&draw, 0, sizeof(draw));
-	draw.Pipeline = Pipelines->Pipeline(key, combiner.ShadowReceiving && pixel_engine == ENGINE_SHADER_NONE);
+	draw.Pipeline = ((foam_fault & 4) && classic_foam) ? nullptr : Pipelines->Pipeline(key, combiner.ShadowReceiving && pixel_engine == ENGINE_SHADER_NONE);
+    if (!draw.Pipeline && retry_without_foam()) {
+        restore_plain_foam_blend();
+        legacy_pixel_program = pixel_program;
+        if (Sdl_Pipeline_Key(states,call.Type,vertex_program.Shader,pixel_program->Shader,FVF,
+            SdlGpuFrame::Target_Colour_Format(target),Gpu->Target_Depth_Format(target),key,refusal))
+            draw.Pipeline = Pipelines->Pipeline(key);
+    }
 	if (!draw.Pipeline && retry_without_sun("pipeline refused")) {
 		if (Sdl_Pipeline_Key(states, call.Type, vertex_program.Shader, pixel_program->Shader, FVF,
 			SdlGpuFrame::Target_Colour_Format(target), Gpu->Target_Depth_Format(target), key, refusal))
@@ -1158,10 +1199,16 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		for (unsigned int slot = 0; slot < pixel_program->SamplerSlots; ++slot) {
 			const int texture_stage = pixel_program->SlotTexture[slot];
 			const int sampler_stage = pixel_program->SlotSampler[slot];
+            if (classic_foam && texture_stage == 7) {
+                draw.Textures[slot] = foam_depth; draw.Samplers[slot] = foam_sampler; continue;
+            }
+            if (classic_foam && texture_stage == 4) {
+                draw.Textures[slot] = foam_white; draw.Samplers[slot] = foam_sampler; continue;
+            }
 			// Ground programs declare these slots even when their receiving strength is zero.
 			// Bind neutral textures then, never material textures or the active attachment.
 			const bool ground = EngineShader_Paints_Ground(static_cast<EngineShaderProgram>(pixel_engine));
-			if (texture_stage == 5 && (combiner.ShadowReceiving || ground)) {
+			if (texture_stage == 5 && (combiner.ShadowReceiving || ground || classic_foam)) {
 				draw.Textures[slot] = combiner.ShadowReceiving ? Sun_Texture() : Mirrors->White();
 				draw.Samplers[slot] = combiner.ShadowReceiving ? Sun_Sampler() : Samplers->Sampler(SamplerStates[0]);
 				if (!draw.Textures[slot] || !draw.Samplers[slot]) {
@@ -1174,7 +1221,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 				}
 				continue;
 			}
-			if (texture_stage == 6 && (combiner.ShadowReceiving || ground)) {
+			if (texture_stage == 6 && (combiner.ShadowReceiving || ground || classic_foam)) {
 				const bool smoke = combiner.ShadowReceiving && Gpu->Sun_Smoke_Texture();
 				draw.Textures[slot] = smoke ? Gpu->Sun_Smoke_Texture() : Mirrors->White();
 				draw.Samplers[slot] = smoke ? Gpu->Sun_Smoke_Sampler() : Samplers->Sampler(SamplerStates[0]);
@@ -1489,6 +1536,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		memset(&engine_constants, 0, sizeof(engine_constants));
 		engine_constants.Combiner = pixel_constants;
 		if (combiner.ShadowReceiving) Build_Sun_Constants(engine_constants);
+        if (classic_foam) Build_Main_View_Constants(engine_constants, combiner.ShadowReceiving);
 		if (combiner.DrawEffect) engine_constants.DrawEffectParameters[3] = SunCasterOpacity;
 		draw.PixelConstants = Gpu->Constants(1, &engine_constants, sizeof(engine_constants));
 		draw.PixelConstantsSize = sizeof(engine_constants);

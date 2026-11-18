@@ -30,6 +30,7 @@
 //			  on the surface.
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+#include "Platform/RenderWaterFoam.h"
 #define SCROLL_UV
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
@@ -257,7 +258,12 @@ static Bool wireframeForDebug = 0;
 static Bool waterFoam(void)
 {
 	return TheGlobalData->m_waterFoam && !TheGlobalData->m_classicGraphics
-		&& TheGlobalData->m_waterStyle == 0 && Direct3D11_Present_Is_Enabled();
+		&& TheGlobalData->m_waterStyle == 0
+#if defined(_WIN32)
+        && Direct3D11_Present_Is_Enabled();
+#else
+        && RenderWaterFoam::Ready();
+#endif
 }
 
 // What the foam programs read out of the texture factor: green is the swell's phase, alpha the

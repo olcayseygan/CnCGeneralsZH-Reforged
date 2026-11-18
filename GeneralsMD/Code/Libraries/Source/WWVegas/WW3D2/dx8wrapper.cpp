@@ -5916,3 +5916,16 @@ bool DX8Wrapper::Device_Is_Ready()
 	// Deliberately not a DX8CALL - a lost device is the answer here, not an error to log.
 	return device->TestCooperativeLevel()==D3D_OK;
 }
+
+// The building collapse use ordinary fixed-function draws already implemented by SDL GPU.
+#if !defined(_WIN32)
+extern bool PosixBuildingCollapseAvailable(IDirect3DDevice9 *device);
+#endif
+bool DX8Wrapper::Supports_Building_Collapse(void)
+{
+#if defined(_WIN32)
+	return Direct3D11_Present_Is_Enabled();
+#else
+	return PosixBuildingCollapseAvailable(_Get_D3D_Device());
+#endif
+}

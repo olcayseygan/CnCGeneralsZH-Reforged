@@ -220,6 +220,8 @@ static Real getHeightAroundPos(Real x, Real y)
 //-------------------------------------------------------------------------------------------------
 W3DView::W3DView()
 {
+	m_cinematicCameraSmooth = false;
+	invalidateCinematicCameraPose();
 	
 	m_3DCamera = NULL;
 	m_2DCamera = NULL;
@@ -437,15 +439,17 @@ void W3DView::setOrigin( Int x, Int y)
 // 2.9 puts the ceiling at 899 over GameData.ini's MaxCameraHeight of 310; it was 3.2 (992).
 // The wheel keeps EA's 10 unit step (View.cpp).
 #define ZOOM_OUT_LIMIT_FACTOR (2.9f)
-void W3DView::buildCameraTransform( Matrix3D *transform )
+void W3DView::buildCameraTransform( Matrix3D *transform, CameraTransformSource source )
 {
 	Vector3 sourcePos, targetPos;
 
 	Real groundLevel = m_groundLevel; // 93.0f; 
 
-	Real zoom = getZoom();
-	Real angle = getAngle();
+	const Bool presented = source != CAMERA_AUTHORITATIVE_POSE && m_cinematicCameraPoseValid;
+	Real zoom = presented ? m_cinematicCameraZoom : getZoom();
+	Real angle = presented ? m_cinematicCameraAngle : getAngle();
 	Real pitch = getPitch();
+	Real fxPitch = presented ? m_cinematicCameraPitch : m_FXPitch;
 	Coord3D pos = *getPosition();
 
 	// add in the camera shake, if any
@@ -561,24 +565,25 @@ void W3DView::buildCameraTransform( Matrix3D *transform )
 	}
 
 
+	if (m_useRealZoomCam) fxPitch = m_FXPitch; // this legacy mode computes its own pitch above
 	// do fxPitch adjustment
 	if (m_useRealZoomCam)
 	{
-		sourcePos.X = targetPos.X + ((sourcePos.X - targetPos.X) / m_FXPitch);
-		sourcePos.Y = targetPos.Y + ((sourcePos.Y - targetPos.Y) / m_FXPitch);
+		sourcePos.X = targetPos.X + ((sourcePos.X - targetPos.X) / fxPitch);
+		sourcePos.Y = targetPos.Y + ((sourcePos.Y - targetPos.Y) / fxPitch);
 	}
 	else
 	{
-		if (m_FXPitch <= 1.0f)
+		if (fxPitch <= 1.0f)
 		{
 			Real height = sourcePos.Z - targetPos.Z;
-			height *= m_FXPitch;
+			height *= fxPitch;
 			targetPos.Z = sourcePos.Z - height;
 		}
 		else
 		{
-			sourcePos.X = targetPos.X + ((sourcePos.X - targetPos.X) / m_FXPitch);
-			sourcePos.Y = targetPos.Y + ((sourcePos.Y - targetPos.Y) / m_FXPitch);
+			sourcePos.X = targetPos.X + ((sourcePos.X - targetPos.X) / fxPitch);
+			sourcePos.Y = targetPos.Y + ((sourcePos.Y - targetPos.Y) / fxPitch);
 		}
 	}
 
@@ -606,17 +611,21 @@ void W3DView::buildCameraTransform( Matrix3D *transform )
 	transform->Make_Identity();
 	transform->Look_At( sourcePos, targetPos, 0 );
 
-	//WST 11/12/2002 New camera shaker system
-	// This runs once per render frame (and again on every scrollBy), not once per 30Hz
-	// tick, so step the shaker by real elapsed time to keep shakes framerate-independent.
-	static UnsignedInt prevShakeTime = cameraClockMilliseconds( this );
-	UnsignedInt nowShakeTime = cameraClockMilliseconds( this );
-	Real shakeDt = (nowShakeTime - prevShakeTime) * 0.001f;
-	prevShakeTime = nowShakeTime;
-	if (shakeDt > 1.0f/30.0f)
-		shakeDt = 1.0f/30.0f;
-	CameraShakerSystem.Timestep(shakeDt);
-	CameraShakerSystem.Update_Camera_Shaker(sourcePos, &m_shakerAngles);
+	// Extra pictures reuse the sampled shake instead of integrating it beside the logic tick.
+	if (source != CAMERA_PRESENTED_BESIDE_TICK)
+	{
+		//WST 11/12/2002 New camera shaker system
+		// This runs once per render frame (and again on every scrollBy), not once per 30Hz
+		// tick, so step the shaker by real elapsed time to keep shakes framerate-independent.
+		static UnsignedInt prevShakeTime = cameraClockMilliseconds( this );
+		UnsignedInt nowShakeTime = cameraClockMilliseconds( this );
+		Real shakeDt = (nowShakeTime - prevShakeTime) * 0.001f;
+		prevShakeTime = nowShakeTime;
+		if (shakeDt > 1.0f/30.0f)
+			shakeDt = 1.0f/30.0f;
+		CameraShakerSystem.Timestep(shakeDt);
+		CameraShakerSystem.Update_Camera_Shaker(sourcePos, &m_shakerAngles);
+	}
 	transform->Rotate_X(m_shakerAngles.X);
 	transform->Rotate_Y(m_shakerAngles.Y);
 	transform->Rotate_Z(m_shakerAngles.Z);
@@ -684,7 +693,7 @@ void W3DView::applyCameraConstraint( void )
 	if (!m_cameraConstraintValid)
 	{
 		Matrix3D cameraTransform;
-		buildCameraTransform(&cameraTransform);
+		buildCameraTransform(&cameraTransform, CAMERA_AUTHORITATIVE_POSE);
 		m_3DCamera->Set_Transform( cameraTransform );
 		calcCameraConstraints();
 	}
@@ -810,6 +819,7 @@ Bool W3DView::isDoingScriptedCamera( void ) const
 // scripted pitch and zoom running, and setPitch left the waypoint-arrival flag set.
 void W3DView::stopDoingScriptedCamera( void )
 {
+	invalidateCinematicCameraPose();
 	m_doingMoveCameraOnWaypointPath = false;
 	m_CameraArrivedAtWaypointOnPathFlag = false;
 	m_doingRotateCamera = false;
@@ -1020,6 +1030,11 @@ void W3DView::setCameraTransform( void )
 //-------------------------------------------------------------------------------------------------
 void W3DView::aimCamera( void )
 {
+	aimCamera(CAMERA_PRESENTED_POSE);
+}
+
+void W3DView::aimCamera(CameraTransformSource source)
+{
 	m_cameraHasMovedSinceRequest = true;
 	if (m_freeCamera)
 	{
@@ -1045,30 +1060,31 @@ void W3DView::aimCamera( void )
 	if (heightMultiplier > 1.0f)
 		farZ *= heightMultiplier;
 
+	const Real fxPitch = source != CAMERA_AUTHORITATIVE_POSE ? cameraPresentationPitch() : m_FXPitch;
 	if (m_useRealZoomCam)	//WST 10.19.2002
 	{
-		if (m_FXPitch<0.95f)
+		if (fxPitch<0.95f)
 		{
-			farZ = farZ / m_FXPitch; //Extend far Z when we pitch up for RealZoomCam
+			farZ = farZ / fxPitch; //Extend far Z when we pitch up for RealZoomCam
 		}
 	}
 	else
 	{
-		if ((TheGlobalData && TheGlobalData->m_drawEntireTerrain) || m_FXPitch<0.95f)
+		if ((TheGlobalData && TheGlobalData->m_drawEntireTerrain) || fxPitch<0.95f)
 		{	//need to extend far clip plane so entire terrain can be visible
 			farZ *= 10.0f;
 		}
 	}
 
 	m_3DCamera->Set_Clip_Planes(nearZ, farZ);
-	applyCameraConstraint();
+	if (source != CAMERA_PRESENTED_BESIDE_TICK) applyCameraConstraint();
 
 #if defined(_DEBUG) || defined(_INTERNAL)
 	m_3DCamera->Set_View_Plane( m_FOV, -1 );
 #endif
 
 	// rebuild it (even if we just did it due to camera constraints)
-	buildCameraTransform( &cameraTransform );
+	buildCameraTransform( &cameraTransform, source );
 
 	// The isometric camera: a 4 degree cone from far away is near enough orthographic that a tank
 	// is drawn the same size at the top of the screen as at the bottom.  It is not a real
@@ -1324,6 +1340,7 @@ static Bool s_matchFirstDrawLogged = FALSE;
 
 void W3DView::reset( void )
 {
+	invalidateCinematicCameraPose();
 	View::reset();
 	m_drawableUpdate.reset();
 	// the recording outlives its replays now (Display::replay); its strings go with Display::reset
@@ -1750,6 +1767,13 @@ void W3DView::updateView(void)
 
 void W3DView::updateCameraBesideTick( void )
 {
+	if (advanceCinematicCameraPicture(Clock_Milliseconds()))
+	{
+		// Publish only a transform/clip planes from the captured presentation clock.
+		aimCamera(CAMERA_PRESENTED_BESIDE_TICK);
+		m_recalcCamera = false;
+		return;
+	}
 	// a slaved camera (the 3DS Max playback) looks its unit up through the script engine as it builds
 	if (m_recalcCamera && !m_freeCamera && !m_isCameraSlaved)
 		setCameraTransform();
@@ -1786,6 +1810,7 @@ void W3DView::update(void)
 	USE_PERF_TIMER(W3DView_updateView)
 	// The camera transform is rebuilt once, here, rather than at every setter that dirtied it.
 	// Setting angle, pitch and zoom in one breath used to build it three times.
+	captureCinematicCameraEligibility(CinematicCameraModeForClientUpdate());
 	Bool recalcCamera = m_recalcCamera;
 	Bool didScriptedMovement = false;
 #ifdef LOG_FRAME_TIMES
@@ -1877,6 +1902,8 @@ void W3DView::update(void)
 	scriptedWaypointMs += waypointElapsedMs * scriptedRate;
 	const Int scriptedElapsedMs = (Int)scriptedWaypointMs;
 	scriptedWaypointMs -= scriptedElapsedMs;
+	Real scriptedCameraPhase = (Real)(nowCameraStepTime - prevCameraStepTime) / (Real)CAMERA_STEP_MSEC;
+	Real scriptedCameraStepMS = (Real)CAMERA_STEP_MSEC;
 	// a recorded picture steps on its logic frame's last picture (above), so its steps are counted there
 	Int scriptedSteps = pictureClock ? pictureScriptedSteps : ( stepTime ? 1 : 0 );
 	if (scriptedRate != 1.0f && !pictureClock)
@@ -1899,6 +1926,8 @@ void W3DView::update(void)
 		}
 		if (scriptedStepMs > RETAIL_STEP_MS)
 			scriptedStepMs = RETAIL_STEP_MS;
+		scriptedCameraPhase = scriptedStepMs / RETAIL_STEP_MS;
+		scriptedCameraStepMS = RETAIL_STEP_MS;
 	}
 
 	IRegion2D dirtyTerrain;
@@ -2130,7 +2159,8 @@ void W3DView::update(void)
 		}
 	}	
 
-	Bool scriptMovesAllowed = !(TheScriptEngine->isTimeFrozenDebug()/* || TheScriptEngine->isTimeFrozenScript()*/) && !TheGameLogic->isGamePaused();
+	Bool scriptMovesAllowed = CinematicCameraMovesAllowed(TheGameLogic->isGamePaused(),
+		TheScriptEngine->isTimeFrozenDebug(), TheScriptEngine->isTimeFrozenScript());
 
 	// the waypoint pan is ms-interpolated: advance it by the real time this render frame
 	// took, every render frame - no 33ms gate, no judder (rotate still owns the camera
@@ -2295,6 +2325,16 @@ void W3DView::update(void)
 		return; // don't draw - makes it faster :) jba.
 	}
 	
+	if (updateCinematicCameraPose(scriptedCameraPhase, scriptMovesAllowed,
+		!(isTimeFrozen() && !isCameraMovementFinished())))
+		recalcCamera = true;
+	m_cinematicCameraExtraPictures = m_cinematicCameraPoseValid && scriptMovesAllowed && !pictureClock
+		&& !(isTimeFrozen() && !isCameraMovementFinished());
+	m_cinematicCameraClockTime = nowCameraStepTime;
+	m_cinematicCameraClockPhase = CinematicCameraProgress::clamp(scriptedCameraPhase);
+	// Preserve the active clock's exact interval: scaled steps use 1000/30, the legacy gate uses 33.
+	m_cinematicCameraClockRate = scriptedRate * CAMERA_STEP_MSEC / scriptedCameraStepMS;
+
 	// (gth) C&C3 if m_isCameraSlaved then force the camera to update each frame
 	if ((recalcCamera) || (m_isCameraSlaved) || wantsIsometric() != m_isometricApplied) {
 		setCameraTransform();
@@ -2925,6 +2965,83 @@ void W3DView::setSnapMode( CameraLockType lockType, Real lockDist )
 /** Scroll the view by the given delta in SCREEN COORDINATES, this interface 
 	* assumes we will be scrolling along the X,Y plane */
 //-------------------------------------------------------------------------------------------------
+void W3DView::invalidateCinematicCameraPose()
+{
+	m_cinematicCameraPoseValid = false;
+	m_cinematicCameraExtraPictures = false;
+	m_cinematicZoomProgress.reset();
+	m_cinematicAngleProgress.reset();
+	m_cinematicPitchProgress.reset();
+}
+
+Real W3DView::cameraPresentationPitch() const
+{
+	return m_cinematicCameraPoseValid ? m_cinematicCameraPitch : m_FXPitch;
+}
+
+void W3DView::captureCinematicCameraEligibility(const CinematicAnimationClockMode &mode)
+{
+	m_cinematicCameraSmooth = mode.allowsRenderTime();
+	if (!m_cinematicCameraSmooth)
+	{
+		if (m_cinematicCameraPoseValid) m_recalcCamera = true;
+		invalidateCinematicCameraPose();
+	}
+}
+
+Bool W3DView::updateCinematicCameraPose(Real phase, Bool movesAllowed, Bool eligible)
+{
+	const Bool wasValid = m_cinematicCameraPoseValid;
+	// One-step actions are cuts. Tracking an object uses an incremental recurrence, not the fixed
+	// start/end curve below; RealZoom and the frozen-time inner draw loop retain their legacy path.
+	const Bool zooming = m_doingZoomCamera && m_zcInfo.numFrames > 1;
+	const Bool pitching = m_doingPitchCamera && m_pcInfo.numFrames > 1;
+	const Bool rotating = m_doingRotateCamera && !m_rcInfo.trackObject && m_rcInfo.numFrames > 1;
+	if (!m_cinematicCameraSmooth || !eligible || m_useRealZoomCam || m_freeCamera || m_isCameraSlaved
+		|| getCameraLockDrawable() != NULL || !(zooming || pitching || rotating))
+	{
+		invalidateCinematicCameraPose();
+		return wasValid;
+	}
+	m_cinematicCameraZoom = m_zoom;
+	m_cinematicCameraAngle = m_angle;
+	m_cinematicCameraPitch = m_FXPitch;
+	if (zooming)
+	{
+		const Real step = m_cinematicZoomProgress.sample(m_zcInfo.curFrame, m_zcInfo.numFrames, phase, !movesAllowed);
+		m_cinematicCameraZoom = CinematicCameraProgress::value(m_zcInfo.startZoom, m_zcInfo.endZoom,
+			m_zcInfo.numFrames, step, m_zcInfo.ease);
+	}
+	if (pitching)
+	{
+		const Real step = m_cinematicPitchProgress.sample(m_pcInfo.curFrame, m_pcInfo.numFrames, phase, !movesAllowed);
+		m_cinematicCameraPitch = CinematicCameraProgress::value(m_pcInfo.startPitch, m_pcInfo.endPitch,
+			m_pcInfo.numFrames, step, m_pcInfo.ease);
+	}
+	if (rotating)
+	{
+		const Real step = m_cinematicAngleProgress.sample(m_rcInfo.curFrame, m_rcInfo.numFrames, phase, !movesAllowed);
+		// Keep the authored, unwrapped sweep: a full turn or a reverse rotation is intentional.
+		m_cinematicCameraAngle = CinematicCameraProgress::value(m_rcInfo.angle.startAngle, m_rcInfo.angle.endAngle,
+			m_rcInfo.numFrames, step, m_rcInfo.ease);
+		normAngle(m_cinematicCameraAngle);
+	}
+	m_cinematicCameraPoseValid = true;
+	return true; // The render camera also changes on pictures between authoritative steps.
+}
+
+Bool W3DView::advanceCinematicCameraPicture(UnsignedInt now)
+{
+	if (!m_cinematicCameraExtraPictures || !m_cinematicCameraPoseValid)
+		return false;
+	// Only the already captured render clock is used beside the tick. In particular, do not ask
+	// GameEngine_missionTimeRate, script state or a logic-frame getter from this overlap window.
+	const Real phase = m_cinematicCameraClockPhase
+		+ (Real)(now - m_cinematicCameraClockTime) * m_cinematicCameraClockRate / (Real)CAMERA_STEP_MSEC;
+	return updateCinematicCameraPose(CinematicCameraProgress::clamp(phase), true, true);
+}
+
+
 void W3DView::scrollBy( Coord2D *delta )
 {
 	// Sample every render tick, including zero movement. Measuring only nonzero scrolls
@@ -3666,6 +3783,8 @@ void W3DView::moveCameraTo(const Coord3D *o, Int milliseconds, Int shutter, Bool
 //-------------------------------------------------------------------------------------------------
 void W3DView::rotateCamera(Real rotations, Int milliseconds, Real easeIn, Real easeOut)
 {
+	m_cinematicAngleProgress.reset();
+	m_cinematicCameraPoseValid = false;
 	m_rcInfo.numHoldFrames = 0;
 	m_rcInfo.trackObject = FALSE;
 
@@ -3691,6 +3810,8 @@ void W3DView::rotateCamera(Real rotations, Int milliseconds, Real easeIn, Real e
 //-------------------------------------------------------------------------------------------------
 void W3DView::rotateCameraTowardObject(ObjectID id, Int milliseconds, Int holdMilliseconds, Real easeIn, Real easeOut)
 {
+	m_cinematicAngleProgress.reset();
+	m_cinematicCameraPoseValid = false;
 	m_rcInfo.trackObject = TRUE;
 	if (holdMilliseconds<1) holdMilliseconds = 0;
 	m_rcInfo.numHoldFrames = holdMilliseconds/CAMERA_STEP_MSEC;
@@ -3719,6 +3840,8 @@ void W3DView::rotateCameraTowardObject(ObjectID id, Int milliseconds, Int holdMi
 //-------------------------------------------------------------------------------------------------
 void W3DView::rotateCameraTowardPosition(const Coord3D *pLoc, Int milliseconds, Real easeIn, Real easeOut, Bool reverseRotation)
 {
+	m_cinematicAngleProgress.reset();
+	m_cinematicCameraPoseValid = false;
 	m_rcInfo.numHoldFrames = 0;
 	m_rcInfo.trackObject = FALSE;
 
@@ -3763,6 +3886,8 @@ void W3DView::rotateCameraTowardPosition(const Coord3D *pLoc, Int milliseconds, 
 //-------------------------------------------------------------------------------------------------
 void W3DView::zoomCamera( Real finalZoom, Int milliseconds, Real easeIn, Real easeOut )
 {
+	m_cinematicZoomProgress.reset();
+	m_cinematicCameraPoseValid = false;
 	if (milliseconds<1) milliseconds = 1;
 	m_zcInfo.numFrames = milliseconds/CAMERA_STEP_MSEC;
 	if (m_zcInfo.numFrames < 1) {
@@ -3779,6 +3904,8 @@ void W3DView::zoomCamera( Real finalZoom, Int milliseconds, Real easeIn, Real ea
 //-------------------------------------------------------------------------------------------------
 void W3DView::pitchCamera( Real finalPitch, Int milliseconds, Real easeIn, Real easeOut )
 {
+	m_cinematicPitchProgress.reset();
+	m_cinematicCameraPoseValid = false;
 	if (milliseconds<1) milliseconds = 1;
 	m_pcInfo.numFrames = milliseconds/CAMERA_STEP_MSEC;
 	if (m_pcInfo.numFrames < 1) {
@@ -4123,6 +4250,8 @@ void W3DView::moveCameraAlongWaypointPath(Waypoint *pWay, Int milliseconds, Int 
 // ------------------------------------------------------------------------------------------------
 void W3DView::setupWaypointPath(Bool orient)
 {
+	m_cinematicAngleProgress.reset();
+	m_cinematicCameraPoseValid = false;
 	m_mcwpInfo.curSegment = 1;
 	m_mcwpInfo.curSegDistance = 0;
 	m_mcwpInfo.totalDistance = 0;
@@ -4732,6 +4861,7 @@ void W3DView::screenToWorldAtZ( const ICoord2D *s, Coord3D *w, Real z )
 
 void W3DView::cameraEnableSlaveMode(const AsciiString & objectName, const AsciiString & boneName)
 {
+	invalidateCinematicCameraPose();
 	m_isCameraSlaved = true;
 	m_cameraSlaveObjectName = objectName;
 	m_cameraSlaveObjectBoneName = boneName;
@@ -4739,11 +4869,13 @@ void W3DView::cameraEnableSlaveMode(const AsciiString & objectName, const AsciiS
 
 void W3DView::cameraDisableSlaveMode(void)	
 {
+	invalidateCinematicCameraPose();
 	m_isCameraSlaved = false;
 }
 
 void W3DView::cameraEnableRealZoomMode(void) //WST added 10/18/2002
 {
+	invalidateCinematicCameraPose();
 	m_useRealZoomCam = true;
 	m_FXPitch = 1.0f;	//Reset to default
 	//m_zoom = 1.0f;
@@ -4752,6 +4884,7 @@ void W3DView::cameraEnableRealZoomMode(void) //WST added 10/18/2002
 
 void W3DView::cameraDisableRealZoomMode(void) //WST added 10/18/2002
 {
+	invalidateCinematicCameraPose();
 	m_useRealZoomCam = false;
 	m_FXPitch = 1.0f;	//Reset to default
 	//m_zoom = 1.0f;

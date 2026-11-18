@@ -2931,6 +2931,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/W3DAssetManagerExposed.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DBibBuffer.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DBridgeBuffer.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DBufferManager.h
+GameEngineDevice/Include/W3DDevice/GameClient/W3DCinematicCamera.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DCustomEdging.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DCustomScene.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DDebugDisplay.h

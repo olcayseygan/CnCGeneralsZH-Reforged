@@ -49,6 +49,7 @@
 #include "GameClient/View.h"
 #include "GameClient/CameraScrollClock.h"
 #include "W3DDevice/GameClient/W3DDrawableUpdate.h"
+#include "W3DDevice/GameClient/W3DCinematicCamera.h"
 #include "WW3D2/camera.h"
 
 // FORWARD REFERENCES /////////////////////////////////////////////////////////////////////////////
@@ -269,6 +270,21 @@ public:
 
 
 private:
+		friend struct CinematicCameraTestAccess;
+		Bool m_cinematicCameraSmooth; // automatic eligibility captured by the ordinary client update
+		Bool m_cinematicCameraPoseValid;
+		Bool m_cinematicCameraExtraPictures;
+		UnsignedInt m_cinematicCameraClockTime;
+		Real m_cinematicCameraClockPhase, m_cinematicCameraClockRate;
+		Real m_cinematicCameraZoom, m_cinematicCameraAngle, m_cinematicCameraPitch;
+		CinematicCameraProgress m_cinematicZoomProgress, m_cinematicAngleProgress, m_cinematicPitchProgress;
+		void invalidateCinematicCameraPose();
+		void captureCinematicCameraEligibility(const CinematicAnimationClockMode &mode);
+		Bool updateCinematicCameraPose(Real phase, Bool movesAllowed, Bool eligible);
+		Bool advanceCinematicCameraPicture(UnsignedInt now);
+		Real cameraPresentationPitch() const;
+		enum CameraTransformSource { CAMERA_AUTHORITATIVE_POSE, CAMERA_PRESENTED_POSE, CAMERA_PRESENTED_BESIDE_TICK };
+		void aimCamera(CameraTransformSource source);
 	W3DDrawableUpdate m_drawableUpdate;
 	Bool drawsDrawables( void );
 
@@ -357,7 +373,7 @@ private:
 	void stopDoingScriptedCamera( void );						///< Hand the view back to the user, whatever the script was doing
 	void setCameraTransform( void );								///< set the transform matrix of m_3DCamera, based on m_pos & m_angle
 	Bool wantsIsometric( void ) const;							///< the option is on and no cinematic has the camera
-	void buildCameraTransform( Matrix3D *transform ) ;			///< calculate (but do not set) the transform matrix of m_3DCamera, based on m_pos & m_angle
+	void buildCameraTransform( Matrix3D *transform, CameraTransformSource source = CAMERA_PRESENTED_POSE ) ;			///< calculate (but do not set) the transform matrix of m_3DCamera, based on m_pos & m_angle
 	void calcCameraConstraints() ;			///< recalc m_cameraConstraint
 	void moveAlongWaypointPath(Int milliseconds); ///< Move camera along path.
 	void getPickRay(const ICoord2D *screen, Vector3 *rayStart, Vector3 *rayEnd);	///<returns a line segment (ray) originating at the given screen position

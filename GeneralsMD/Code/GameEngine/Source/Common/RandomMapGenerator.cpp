@@ -155,6 +155,11 @@ static const Int K_SCRIPT_LIST_DATA_VERSION_1 = 1;
 #define RMG_LAKE_OPEN			4		///< cells: water thinner than twice this is not a lake
 #define RMG_LAKE_CLOSE			2		///< cells: land thinner than twice this inside a lake is water
 #define RMG_LAKE_REACH			1.3f	///< of the radius a lake's area gives, the furthest its water reaches
+#define RMG_LAKE_STRETCH		1.5f	///< at most, the square root of how much longer than wide a plain map's lake grows
+#define RMG_LAKE_OPEN_SHARE		0.45f	///< of that radius, the disc a big lake is opened with, so its arms scale with it
+#define RMG_LAKE_OPEN_MOST		9		///< cells, the widest that disc gets
+#define RMG_LAKE_CLOSE_SHARE	0.25f	///< of that radius, the disc each lake is closed with after, filling its bites
+#define RMG_LAKE_CLOSE_MOST		5		///< cells, the widest that disc gets
 #define RMG_STREAM_OPEN			2		///< the opening every water mask gets once the stream has joined it
 // A river map's river runs from map edge to map edge, bends and changes width as it goes.
 #define RMG_RIVER_BEND			0.09f	///< of the playable size, the river's long swing off its line
@@ -183,6 +188,7 @@ static const Int K_SCRIPT_LIST_DATA_VERSION_1 = 1;
 #define RMG_START_RING_TURNS	6		///< rotations of the ring tried within one seat's arc
 #define RMG_START_RING_SIZES	2		///< ring radii tried, each this much smaller than the last
 #define RMG_START_RING_STEP		0.02f
+#define RMG_START_RIVER_RING_SIZES	4		///< sizes of the mirrored river ring walked for six and eight seats
 #define RMG_START_CLOSE_COST	1.0f	///< score a layout loses for each share its closest pair gives up
 #define RMG_START_CLIFF_COST	30		///< flat steps a cliff cell is worth when seats are compared: the ring routes go a long way round one
 #define RMG_START_NUDGES		4		///< seat moves tried on the chosen layout
@@ -234,6 +240,9 @@ static const Int K_SCRIPT_LIST_DATA_VERSION_1 = 1;
 #define RMG_TOWN_GRADE_FADE		14.0f	///< cells the grading eases back into the hills over
 #define RMG_TOWN_GRADE_SWING	0.6f	///< share of that the fade's outer edge wanders out by
 #define RMG_TOWN_GRADE_BLUR		9		///< cells either side the ground is averaged over
+#define RMG_TOWN_RELIEF_KEEP	0.3f	///< share of its eased roll a plain map's town plate keeps
+#define RMG_TOWN_PLATE_FADE		1.8f	///< and how much wider than RMG_TOWN_GRADE_FADE its rim eases out
+#define RMG_TOWN_SQUEEZE		0.5f	///< of its radius, the clear ground a plain map's last-chance town asks for
 #define RMG_TOWN_JITTER			2.0f	///< cells a building sits off its own frontage line
 #define RMG_TOWN_DRY_MARGIN		4.0f	///< cells a building or a street keeps off the water
 #define RMG_TOWN_REROLLS		6		///< plans a town tries, and as many small ones after for a map with no town yet
@@ -275,12 +284,15 @@ static const Int K_SCRIPT_LIST_DATA_VERSION_1 = 1;
 #define RMG_MASSIF_RADIUS		0.16f	///< fraction of the playable size, the largest the foot's mean radius is rolled
 #define RMG_MASSIF_RADIUS_MIN	0.12f	///< and the smallest
 #define RMG_MASSIF_STRETCH		1.8f	///< the most a massif's long axis may be over its short one
+#define RMG_MASSIF_STRETCH_MIN	1.25f	///< and the least, squared like it: a rolled 1 left a round table
+#define RMG_MASSIF_SHAPE2		0.26f	///< the most the two-lobed swing moves the foot, a share of the radius
+#define RMG_MASSIF_SHAPE3		0.16f	///< and the three-lobed one
 #define RMG_MASSIF_OFFSET		0.07f	///< of the playable size, how far off the middle a massif may stand
 #define RMG_MASSIF_SPLIT_IN_100	35		///< massifs out of a hundred that stand as two with a pass between
 #define RMG_MASSIF_RIM			4.0f	///< cells the cliff takes from foot to top
 #define RMG_MASSIF_SLOPE_RIM	16.0f	///< cells a walkable stretch of the rim takes instead
-#define RMG_MASSIF_CROWN		14.0f	///< height bytes the terrace on top stands over the rest of it
-#define RMG_MASSIF_CROWN_RIM	7.0f	///< cells the terrace's edge takes, a slope a tank drives
+#define RMG_MASSIF_CROWN		14.0f	///< height bytes the crown on top rises over the table's edge
+#define RMG_MASSIF_CROWN_SPAN	0.8f	///< of the lobe's axes, how far out the rise to the crown begins
 #define RMG_MASSIF_WOBBLE		0.10f	///< share of the radius the outline wanders out by
 #define RMG_MASSIF_WOBBLE_IN	0.24f	///< and in by: inward costs no start any room
 #define RMG_MASSIF_ROAD_TOP		4.0f	///< cells either side of a ramp's centre where it meets the top
@@ -1039,9 +1051,26 @@ struct RMGMassifLobe
 	Real m_sin;
 	Real m_height;			///< height bytes the table stands over the ground
 	Real m_salt;			///< offsets this lobe's outline noise from the other's
-	Real m_crownX;			///< the terrace on top: its middle in the lobe's own axes, cells
+	Real m_crownX;			///< the rise on top: its middle in the lobe's own axes, cells
 	Real m_crownY;
+	Real m_shapeCos2;		///< the outline's two- and three-lobed swings, amplitude times the cosine
+	Real m_shapeSin2;		///< and sine of each one's turn
+	Real m_shapeCos3;
+	Real m_shapeSin3;
 };
+
+/** How far out a lobe's foot reaches on a bearing (ux, uy, a unit vector in the lobe's own ellipse
+	axes), over its plain ellipse. A sum of a two-lobed and a three-lobed swing, written out in the
+	vector's components so no angle is taken: it bulges and pinches the outline into a shape of its own
+	where the noise wander alone left a scalloped disc. */
+static Real rmgLobeShape( const RMGMassifLobe& lobe, Real ux, Real uy )
+{
+	Real cos2 = ux * ux - uy * uy;
+	Real sin2 = 2.0f * ux * uy;
+	Real cos3 = ux * ( ux * ux - 3.0f * uy * uy );
+	Real sin3 = uy * ( 3.0f * ux * ux - uy * uy );
+	return 1.0f + lobe.m_shapeCos2 * cos2 + lobe.m_shapeSin2 * sin2 + lobe.m_shapeCos3 * cos3 + lobe.m_shapeSin3 * sin3;
+}
 
 /// A place something has been put, and how much room it wants around it.
 struct RMGSite
@@ -1134,7 +1163,9 @@ private:
 									std::vector<Int> *painted );
 	void openWater( Int openRadius, Int closeRadius );
 	void trimLakeReach( void );
+	void openEachLake( void );
 	void planMassif( void );
+	void shapeMassifLobe( RMGMassifLobe& lobe, Int which ) const;
 	Real massifRim( const RMGMassifLobe& lobe, Real cellX, Real cellY, Real *rimOut ) const;
 	Real massifLift( Real cellX, Real cellY, Real *heightOut ) const;
 	Real lakeEdgeRise( const UnsignedByte perm[512], Int mapX, Int mapY ) const;
@@ -1142,6 +1173,8 @@ private:
 	void paintMainRiver( const UnsignedByte perm[512] );
 	void paintRiverStretches( const std::vector<Int>& fords );
 	void openFordsAtStarts( const std::vector<UnsignedByte>& uncarved );
+	void fordsForStarts( std::vector<Int>& fords ) const;
+	void priceRiverByFords( std::vector<Int>& cost ) const;
 	void extractLakePolygons( void );
 	void buildShoreDistance( std::vector<Real> &dist, Bool straight ) const;
 	Bool waterAllowedAt( Int mapX, Int mapY ) const;
@@ -1423,7 +1456,7 @@ void RMGLayout::planMassif( void )
 	const UnsignedInt seed = (UnsignedInt)m_settings.m_seed;
 	const Real playable = (Real)m_settings.m_playableCells;
 	const Real radius = playable * lerpReal( RMG_MASSIF_RADIUS_MIN, RMG_MASSIF_RADIUS, hashUnit( seed, 9101, 1 ) );
-	const Real stretch = sqrtf( 1.0f + ( RMG_MASSIF_STRETCH - 1.0f ) * hashUnit( seed, 9101, 2 ) );
+	const Real stretch = sqrtf( lerpReal( RMG_MASSIF_STRETCH_MIN, RMG_MASSIF_STRETCH, hashUnit( seed, 9101, 2 ) ) );
 	const Real axis = hashUnit( seed, 9101, 3 ) * PI;
 	const Real offAngle = hashUnit( seed, 9101, 4 ) * 2.0f * PI;
 	const Real off = playable * RMG_MASSIF_OFFSET * hashUnit( seed, 9101, 5 );
@@ -1437,6 +1470,7 @@ void RMGLayout::planMassif( void )
 	lobe.m_minor = radius / stretch;
 	lobe.m_height = m_type->m_massif * ( 0.9f + 0.25f * hashUnit( seed, 9101, 7 ) );
 	lobe.m_salt = 0.0f;
+	shapeMassifLobe( lobe, 0 );
 
 	if( hashCell( seed, 9101, 6 ) % 100U < (UnsignedInt)RMG_MASSIF_SPLIT_IN_100 )
 	{
@@ -1456,6 +1490,7 @@ void RMGLayout::planMassif( void )
 		second.m_cellY = centreY - apart * lobe.m_sin;
 		second.m_height = m_type->m_massif * ( 0.75f + 0.15f * hashUnit( seed, 9101, 8 ) );
 		second.m_salt = 17.0f;
+		shapeMassifLobe( second, 1 );
 		second.m_crownX = ( hashUnit( seed, 9101, 11 ) - 0.5f ) * 0.5f * second.m_major;
 		second.m_crownY = ( hashUnit( seed, 9101, 12 ) - 0.5f ) * 0.5f * second.m_minor;
 		lobe.m_crownX = ( hashUnit( seed, 9101, 9 ) - 0.5f ) * 0.5f * lobe.m_major;
@@ -1468,6 +1503,21 @@ void RMGLayout::planMassif( void )
 	lobe.m_crownX = ( hashUnit( seed, 9101, 9 ) - 0.5f ) * 0.5f * lobe.m_major;
 	lobe.m_crownY = ( hashUnit( seed, 9101, 10 ) - 0.5f ) * 0.5f * lobe.m_minor;
 	m_massifLobes.push_back( lobe );
+}
+
+/** The lobe's own outline: a two-lobed and a three-lobed swing, each at a rolled strength and turn. */
+void RMGLayout::shapeMassifLobe( RMGMassifLobe& lobe, Int which ) const
+{
+	const UnsignedInt seed = (UnsignedInt)m_settings.m_seed;
+	const Int salt = 20 + 4 * which;
+	Real amount2 = RMG_MASSIF_SHAPE2 * ( 0.55f + 0.45f * hashUnit( seed, 9101, salt ) );
+	Real turn2 = hashUnit( seed, 9101, salt + 1 ) * 2.0f * PI;
+	Real amount3 = RMG_MASSIF_SHAPE3 * ( 0.55f + 0.45f * hashUnit( seed, 9101, salt + 2 ) );
+	Real turn3 = hashUnit( seed, 9101, salt + 3 ) * 2.0f * PI;
+	lobe.m_shapeCos2 = amount2 * Cos( turn2 );
+	lobe.m_shapeSin2 = amount2 * Sin( turn2 );
+	lobe.m_shapeCos3 = amount3 * Cos( turn3 );
+	lobe.m_shapeSin3 = amount3 * Sin( turn3 );
 }
 
 /** Cells in from a lobe's foot to this point, negative outside it, and the rim's width on its
@@ -1504,7 +1554,7 @@ Real RMGLayout::massifRim( const RMGMassifLobe& lobe, Real cellX, Real cellY, Re
 	Real wander = 2.0f * fractalNoise( m_perm, ux * 1.6f + 41.0f + lobe.m_salt, uy * 1.6f - 37.0f, 2 );
 	if( wander > 1.0f ) wander = 1.0f;
 	if( wander < -1.0f ) wander = -1.0f;
-	Real footQ = 1.0f + ( wander > 0.0f ? RMG_MASSIF_WOBBLE : RMG_MASSIF_WOBBLE_IN ) * wander;
+	Real footQ = ( 1.0f + ( wander > 0.0f ? RMG_MASSIF_WOBBLE : RMG_MASSIF_WOBBLE_IN ) * wander ) * rmgLobeShape( lobe, ux, uy );
 
 	Real gentle = 0.5f + 1.6f * fractalNoise( m_perm, ux * 1.7f + 5.0f + lobe.m_salt, uy * 1.7f + 11.0f, 2 );
 	gentle = fadeCurve( rmgUnit( ( gentle - 0.45f ) / 0.2f ) );
@@ -1516,8 +1566,8 @@ Real RMGLayout::massifRim( const RMGMassifLobe& lobe, Real cellX, Real cellY, Re
 }
 
 /** How far up the massif a point is, 0 on the plain to 1 on the top, and the height in bytes the top
-	stands over the plain there. Each lobe carries a terrace on top, an off-centre table a step higher
-	with a drivable edge, so the top has a high side and a low side instead of being one flat sheet. */
+	stands over the plain there. Each lobe's top rises toward an off-centre crown, so it has a high side
+	and a low side instead of being one flat sheet. */
 Real RMGLayout::massifLift( Real cellX, Real cellY, Real *heightOut ) const
 {
 	Real best = 0.0f;
@@ -1532,20 +1582,19 @@ Real RMGLayout::massifLift( Real cellX, Real cellY, Real *heightOut ) const
 			continue;
 		Real lift = fadeCurve( rmgUnit( inside / rim ) );
 
+		/* The top rises toward an off-centre crown over most of the lobe's width, with a noise of its
+			own warping the rise, so the high ground has a high end, a low end and knolls. A crown with a
+			short edge of its own read from above as a ring laid on the table. */
 		Real height = lobe.m_height;
-		Real crownMinor = 0.45f * lobe.m_minor;
-		if( crownMinor > 1.5f * RMG_MASSIF_CROWN_RIM )
-		{
-			Real dx = cellX - lobe.m_cellX;
-			Real dy = cellY - lobe.m_cellY;
-			Real a = dx * lobe.m_cos + dy * lobe.m_sin - lobe.m_crownX;
-			Real b = dy * lobe.m_cos - dx * lobe.m_sin - lobe.m_crownY;
-			Real na = a / ( 0.45f * lobe.m_major );
-			Real nb = b / crownMinor;
-			Real crownInside = ( 1.0f - sqrtf( na * na + nb * nb ) ) * crownMinor
-				+ 4.0f * fractalNoise( m_perm, cellX * 0.07f + 3.0f + lobe.m_salt, cellY * 0.07f - 9.0f, 2 );
-			height += RMG_MASSIF_CROWN * fadeCurve( rmgUnit( crownInside / RMG_MASSIF_CROWN_RIM ) );
-		}
+		Real dx = cellX - lobe.m_cellX;
+		Real dy = cellY - lobe.m_cellY;
+		Real a = dx * lobe.m_cos + dy * lobe.m_sin - lobe.m_crownX;
+		Real b = dy * lobe.m_cos - dx * lobe.m_sin - lobe.m_crownY;
+		Real na = a / ( RMG_MASSIF_CROWN_SPAN * lobe.m_major );
+		Real nb = b / ( RMG_MASSIF_CROWN_SPAN * lobe.m_minor );
+		Real rise = 1.0f - sqrtf( na * na + nb * nb )
+			+ 0.8f * fractalNoise( m_perm, cellX * 0.05f + 3.0f + lobe.m_salt, cellY * 0.05f - 9.0f, 2 );
+		height += RMG_MASSIF_CROWN * fadeCurve( rmgUnit( rise ) );
 
 		if( lift * height > best )
 		{
@@ -1978,6 +2027,16 @@ void RMGLayout::growBasin( const UnsignedByte perm[512], Int seedX, Int seedY, I
 		shape. */
 	const Real rounding = m_skeleton ? 0.0f : RMG_LAKE_ROUNDING;
 
+	/* The distance is read in an oval of the seed's own turn and length, so a lake grows as an oval
+		lying its own way rather than every lake coming out a disc. */
+	const UnsignedInt lakeHash = hashCell( (UnsignedInt)m_settings.m_seed + 7717U, seedX, seedY );
+	const Real lakeTurn = (Real)( lakeHash % 1024U ) / 1024.0f * PI;
+	const Real lakeStretch = 1.0f + ( RMG_LAKE_STRETCH - 1.0f ) * (Real)( ( lakeHash >> 10 ) % 1024U ) / 1024.0f;
+	const Real lakeCos = Cos( lakeTurn ) / lakeStretch;
+	const Real lakeSin = Sin( lakeTurn ) / lakeStretch;
+	const Real lakeCosAcross = Cos( lakeTurn ) * lakeStretch;
+	const Real lakeSinAcross = Sin( lakeTurn ) * lakeStretch;
+
 	RMGBasinCell first;
 	first.m_cost = 16 * (Int)m_heights[cellIndex( seedX, seedY )];
 	first.m_index = cellIndex( seedX, seedY );
@@ -2029,9 +2088,11 @@ void RMGLayout::growBasin( const UnsignedByte perm[512], Int seedX, Int seedY, I
 			queued[next] = 1;
 			const Real fromSeedX = (Real)( nx - seedX );
 			const Real fromSeedY = (Real)( ny - seedY );
+			const Real along = fromSeedX * lakeCos + fromSeedY * lakeSin;
+			const Real across = fromSeedY * lakeCosAcross - fromSeedX * lakeSinAcross;
 			RMGBasinCell reached;
 			reached.m_cost = 16 * (Int)m_heights[next]
-				+ (Int)( 16.0f * rounding * sqrtf( fromSeedX * fromSeedX + fromSeedY * fromSeedY ) );
+				+ (Int)( 16.0f * rounding * sqrtf( along * along + across * across ) );
 			reached.m_index = next;
 			open.push_back( reached );
 			std::push_heap( open.begin(), open.end() );
@@ -2132,13 +2193,206 @@ void RMGLayout::trimLakeReach( void )
 		Real count = (Real)cells.size();
 		Real middleX = sumX / count;
 		Real middleY = sumY / count;
-		Real reach = RMG_LAKE_REACH * sqrtf( count / PI );
+
+		/* Measured against the lake's own spread rather than a circle, so an oval keeps its length:
+			a cell of a solid ellipse lies at most two of its spreads out along any line through the
+			middle, a disc's rim at its radius, so RMG_LAKE_REACH of that is the same cut a round lake
+			got. */
+		Real spreadXX = 0.0f, spreadYY = 0.0f, spreadXY = 0.0f;
 		for( UnsignedInt c = 0; c < cells.size(); c++ )
 		{
 			Real dx = (Real)( cells[c] % m_width ) - middleX;
 			Real dy = (Real)( cells[c] / m_width ) - middleY;
-			if( dx * dx + dy * dy > reach * reach )
+			spreadXX += dx * dx;
+			spreadYY += dy * dy;
+			spreadXY += dx * dy;
+		}
+		spreadXX = spreadXX / count + 1.0f / 12.0f;	// a cell's own spread, so one row of cells is not flat
+		spreadYY = spreadYY / count + 1.0f / 12.0f;
+		spreadXY /= count;
+		Real determinant = spreadXX * spreadYY - spreadXY * spreadXY;
+		Real reach = 2.0f * RMG_LAKE_REACH;
+		for( UnsignedInt c = 0; c < cells.size(); c++ )
+		{
+			Real dx = (Real)( cells[c] % m_width ) - middleX;
+			Real dy = (Real)( cells[c] / m_width ) - middleY;
+			Real out = ( spreadYY * dx * dx - 2.0f * spreadXY * dx * dy + spreadXX * dy * dy ) / determinant;
+			if( out > reach * reach )
 				m_inLake[cells[c]] = 0;
+		}
+	}
+}
+
+/** Each lake opened again with a disc in proportion to its own size. One disc for every lake took
+	the slivers off a pond and left a big lake its arms, since an arm of a big lake is wider than any
+	disc a pond survives. An opening only takes water away, so each lake is opened on its own cells and
+	a lake the disc would erase whole is left as it was. */
+void RMGLayout::openEachLake( void )
+{
+	static const Int offsetX[4] = { 1, -1, 0, 0 };
+	static const Int offsetY[4] = { 0, 0, 1, -1 };
+	std::vector<char> seen( m_width * m_height, 0 );
+	std::vector<char> mine( m_width * m_height, 0 );
+	std::vector<char> core( m_width * m_height, 0 );
+	std::vector<char> grown( m_width * m_height, 0 );
+	for( Int start = 0; start < m_width * m_height; start++ )
+	{
+		if( !m_inLake[start] || seen[start] )
+			continue;
+		std::vector<Int> cells;
+		cells.push_back( start );
+		seen[start] = 1;
+		for( UnsignedInt head = 0; head < cells.size(); head++ )
+		{
+			Int x = cells[head] % m_width;
+			Int y = cells[head] / m_width;
+			for( Int i = 0; i < 4; i++ )
+			{
+				Int nx = x + offsetX[i];
+				Int ny = y + offsetY[i];
+				if( nx < 0 || ny < 0 || nx >= m_width || ny >= m_height )
+					continue;
+				Int next = cellIndex( nx, ny );
+				if( seen[next] || !m_inLake[next] )
+					continue;
+				seen[next] = 1;
+				cells.push_back( next );
+			}
+		}
+
+		const Real lakeRadius = sqrtf( (Real)cells.size() / PI );
+		Int radius = (Int)( RMG_LAKE_OPEN_SHARE * lakeRadius );
+		if( radius > RMG_LAKE_OPEN_MOST )
+			radius = RMG_LAKE_OPEN_MOST;
+
+		for( UnsignedInt c = 0; c < cells.size(); c++ )
+			mine[cells[c]] = 1;
+
+		if( radius <= RMG_LAKE_OPEN )
+			radius = 0;
+
+		// the core: cells whose whole disc is this lake's
+		Bool anyCore = FALSE;
+		for( UnsignedInt c = 0; c < cells.size() && radius > 0; c++ )
+		{
+			Int x = cells[c] % m_width;
+			Int y = cells[c] / m_width;
+			Bool whole = TRUE;
+			for( Int dy = -radius; dy <= radius && whole; dy++ )
+			{
+				for( Int dx = -radius; dx <= radius; dx++ )
+				{
+					if( dx * dx + dy * dy > radius * radius )
+						continue;
+					Int nx = x + dx;
+					Int ny = y + dy;
+					if( nx < 0 || ny < 0 || nx >= m_width || ny >= m_height || !mine[cellIndex( nx, ny )] )
+					{
+						whole = FALSE;
+						break;
+					}
+				}
+			}
+			core[cells[c]] = whole ? 1 : 0;
+			anyCore = anyCore || whole;
+		}
+
+		// kept: the cells within the disc of the core
+		if( anyCore )
+		{
+			for( UnsignedInt c = 0; c < cells.size(); c++ )
+			{
+				Int x = cells[c] % m_width;
+				Int y = cells[c] / m_width;
+				Bool kept = FALSE;
+				for( Int dy = -radius; dy <= radius && !kept; dy++ )
+				{
+					for( Int dx = -radius; dx <= radius; dx++ )
+					{
+						Int nx = x + dx;
+						Int ny = y + dy;
+						if( dx * dx + dy * dy > radius * radius || nx < 0 || ny < 0 || nx >= m_width || ny >= m_height )
+							continue;
+						if( core[cellIndex( nx, ny )] )
+						{
+							kept = TRUE;
+							break;
+						}
+					}
+				}
+				if( !kept )
+					m_inLake[cells[c]] = 0;
+			}
+		}
+
+		/* Then closed, by a disc a quarter of its radius: the bite a basin's edge left in one side, the
+			notch between two bulges, fills in as water. The closing grows only onto ground water may
+			cover and not into another lake, and keeps what an erosion of the grown lake leaves. */
+		Int close = (Int)( RMG_LAKE_CLOSE_SHARE * lakeRadius );
+		if( close > RMG_LAKE_CLOSE_MOST )
+			close = RMG_LAKE_CLOSE_MOST;
+		std::vector<Int> grownCells;
+		for( UnsignedInt c = 0; c < cells.size(); c++ )
+			mine[cells[c]] = m_inLake[cells[c]];
+		for( UnsignedInt c = 0; c < cells.size() && close >= RMG_LAKE_CLOSE; c++ )
+		{
+			if( !mine[cells[c]] )
+				continue;
+			Int x = cells[c] % m_width;
+			Int y = cells[c] / m_width;
+			for( Int dy = -close; dy <= close; dy++ )
+			{
+				for( Int dx = -close; dx <= close; dx++ )
+				{
+					Int nx = x + dx;
+					Int ny = y + dy;
+					if( dx * dx + dy * dy > close * close || nx < 0 || ny < 0 || nx >= m_width || ny >= m_height )
+						continue;
+					Int next = cellIndex( nx, ny );
+					if( mine[next] || grown[next] || m_inLake[next] || !waterAllowedAt( nx, ny ) )
+						continue;
+					grown[next] = 1;
+					grownCells.push_back( next );
+				}
+			}
+		}
+		std::vector<Int> filled;
+		for( UnsignedInt g = 0; g < grownCells.size(); g++ )
+		{
+			Int x = grownCells[g] % m_width;
+			Int y = grownCells[g] / m_width;
+			Bool inside = TRUE;
+			for( Int dy = -close; dy <= close && inside; dy++ )
+			{
+				for( Int dx = -close; dx <= close; dx++ )
+				{
+					Int nx = x + dx;
+					Int ny = y + dy;
+					if( dx * dx + dy * dy > close * close )
+						continue;
+					if( nx < 0 || ny < 0 || nx >= m_width || ny >= m_height
+						|| !( mine[cellIndex( nx, ny )] || grown[cellIndex( nx, ny )] ) )
+					{
+						inside = FALSE;
+						break;
+					}
+				}
+			}
+			if( inside )
+				filled.push_back( grownCells[g] );
+		}
+		for( UnsignedInt g = 0; g < grownCells.size(); g++ )
+			grown[grownCells[g]] = 0;
+		for( UnsignedInt f = 0; f < filled.size(); f++ )
+		{
+			m_inLake[filled[f]] = 1;
+			seen[filled[f]] = 1;
+		}
+
+		for( UnsignedInt c = 0; c < cells.size(); c++ )
+		{
+			mine[cells[c]] = 0;
+			core[cells[c]] = 0;
 		}
 	}
 }
@@ -2462,6 +2716,21 @@ void RMGLayout::openFordsAtStarts( const std::vector<UnsignedByte>& uncarved )
 	if( !m_type->m_river || m_riverLine.empty() )
 		return;
 
+	std::vector<Int> fords;
+	fordsForStarts( fords );
+	m_inLake.assign( m_width * m_height, 0 );
+	paintRiverStretches( fords );
+	extractLakePolygons();
+	buildLakeMask();
+	m_heights = uncarved;
+	carveLakeBasins();
+}
+
+/** The river steps the fords go at for the starts as they stand, in order along the river. */
+void RMGLayout::fordsForStarts( std::vector<Int>& fords ) const
+{
+	fords.clear();
+
 	/* Two fords closer than twice this along the river are made one. The water between them would be
 		too short a stretch to keep (paintRiverStretches), and drying it left a land bridge three fords
 		wide; or it narrowed into both fords and lay between them as a round pond. */
@@ -2487,7 +2756,6 @@ void RMGLayout::openFordsAtStarts( const std::vector<UnsignedByte>& uncarved )
 	}
 	std::sort( nearest.begin(), nearest.end() );
 
-	std::vector<Int> fords;
 	UnsignedInt first = 0;
 	for( UnsignedInt i = 1; i <= nearest.size(); i++ )
 	{
@@ -2527,13 +2795,41 @@ void RMGLayout::openFordsAtStarts( const std::vector<UnsignedByte>& uncarved )
 			std::sort( fords.begin(), fords.end() );
 		}
 	}
+}
 
-	m_inLake.assign( m_width * m_height, 0 );
-	paintRiverStretches( fords );
-	extractLakePolygons();
-	buildLakeMask();
-	m_heights = uncarved;
-	carveLakeBasins();
+/** A start layout's walks on a river map, with the river as the fords will leave it: closed but for
+	the dry gap at each ford those starts would get. Pricing the whole river as a cliff let a seat
+	count a crossing straight in front of it that the fords never cut. */
+void RMGLayout::priceRiverByFords( std::vector<Int>& cost ) const
+{
+	std::vector<Int> fords;
+	fordsForStarts( fords );
+	const Int n = (Int)m_riverLine.size();
+	for( UnsignedInt ford = 0; ford < fords.size(); ford++ )
+	{
+		Int dryHalf = (Int)( m_riverHalf[fords[ford]] + RMG_FORD_DRY_STEPS );
+		for( Int i = fords[ford] - dryHalf; i <= fords[ford] + dryHalf; i++ )
+		{
+			if( i < 0 || i >= n )
+				continue;
+			Real half = m_riverHalf[i] + 1.0f;
+			Int reach = (Int)( half + 0.5f );
+			Int cx = (Int)floorf( m_riverLine[i].m_cellX + 0.5f ) + RMG_BORDER_CELLS;
+			Int cy = (Int)floorf( m_riverLine[i].m_cellY + 0.5f ) + RMG_BORDER_CELLS;
+			for( Int dy = -reach; dy <= reach; dy++ )
+			{
+				for( Int dx = -reach; dx <= reach; dx++ )
+				{
+					Int x = cx + dx;
+					Int y = cy + dy;
+					if( (Real)( dx * dx + dy * dy ) > half * half || x < 0 || y < 0 || x >= m_width - 1 || y >= m_height - 1 )
+						continue;
+					if( insidePlayable( x, y ) && underwaterAtCell( x, y ) )
+						cost[cellIndex( x, y )] = 1;
+				}
+			}
+		}
+	}
 }
 
 /** A corner of a water outline in playable cells, packed. It is packed counted from the map's own
@@ -2940,6 +3236,17 @@ void RMGLayout::placeLakes( const UnsignedByte perm[512] )
 		if( target < RMG_LAKE_MIN_FILL )
 			target = RMG_LAKE_MIN_FILL;
 
+		/* A plain map's lake starts its own radius in from the edge of the water margin. Grown from a low
+			pocket against the edge, it spread along the margin and came out with one side ruled straight. */
+		if( !m_skeleton )
+		{
+			Int keep = (Int)RMG_LAKE_SHORE + (Int)sqrtf( (Real)target / PI );
+			Int px = seeds[i].m_x - RMG_BORDER_CELLS;
+			Int py = seeds[i].m_y - RMG_BORDER_CELLS;
+			if( px < keep || py < keep || px >= playable - keep || py >= playable - keep )
+				continue;
+		}
+
 		std::vector<Int> painted;
 		growBasin( perm, seeds[i].m_x, seeds[i].m_y, target, RMG_LAKE_FILL_RISE, &painted );
 		if( (Int)painted.size() < RMG_LAKE_MIN_FILL )
@@ -2980,10 +3287,13 @@ void RMGLayout::placeLakes( const UnsignedByte perm[512] )
 		openWater( RMG_LAKE_OPEN, RMG_LAKE_CLOSE );
 		trimLakeReach();
 		openWater( RMG_LAKE_OPEN, 0 );
+		openEachLake();
 	}
-	/* Lake country has its lakes and a canyon map its gorges; a stream walked into either came out
-		as an arm off a lake, the finger and the hook the lakes are now kept from growing. */
-	if( m_skeleton || ( m_type->m_extraLakes <= 0 && m_type->m_gorgeWidth <= 0.0f ) )
+	/* A plain map paints no stream. Walked into a lake it came out as an arm off it, the finger and the
+		hook the lakes are now kept from growing; walked anywhere else it ran down into the water margin
+		and lay along the map's edge as a fat sausage of water with one side ruled straight. A template
+		map keeps its stream for the template to replace. */
+	if( m_skeleton )
 		paintRiver( perm );
 	if( !m_skeleton )
 		openWater( RMG_STREAM_OPEN, 0 );
@@ -3217,17 +3527,35 @@ void RMGLayout::chooseStarts( void )
 		the other three. */
 	Int players = m_settings.m_numPlayers;
 	Real ringLimit = (Real)playable * 0.5f - (Real)margin;
-	Bool riverRing = m_type->m_river && !m_riverLine.empty() && players % 2 == 0;
-	if( riverRing )
+	const Bool river = m_type->m_river && !m_riverLine.empty();
+	std::vector< std::vector<RMGPoint> > layouts;
+	if( river && players % 2 == 0 )
 	{
 		Real ring = (Real)playable * RMG_CIRCLE_RADIUS;
 		if( ring > ringLimit )
 			ring = ringLimit;
 		/* Two or four seats on a river map go out to the edge of the start box instead, as far as the
 			search would have put them, and leave the middle to the river and the towns. */
-		ringStarts( candidates, m_riverAngle + PI / (Real)players, ring, players <= 4 ? ringLimit : 0.0f );
-		if( (Int)m_starts.size() == players )
-			return;
+		if( players <= 4 )
+		{
+			ringStarts( candidates, m_riverAngle + PI / (Real)players, ring, ringLimit );
+			if( (Int)m_starts.size() == players )
+				return;
+		}
+		/* Six and eight are too many to trust the mirror alone: the bends push the seats beside the
+			river back from it by different amounts, and one seat of eight stood 40% further from its
+			nearest enemy than another. The mirrored ring at a few sizes goes in with the other layouts
+			and is walked like them. */
+		else
+		{
+			for( Int size = 0; size < RMG_START_RIVER_RING_SIZES; size++ )
+			{
+				Real sized = ring - (Real)playable * RMG_START_RING_STEP * (Real)size;
+				ringStarts( candidates, m_riverAngle + PI / (Real)players, sized, 0.0f );
+				if( (Int)m_starts.size() == players )
+					layouts.push_back( m_starts );
+			}
+		}
 		// a ring that ran out of sites seats nobody; the layouts below seat everybody
 	}
 
@@ -3254,18 +3582,12 @@ void RMGLayout::chooseStarts( void )
 		{
 			if( !insidePlayable( x, y ) )
 				continue;
-			// A river has no fords yet; one will be cut by each seat, so its water is priced as a cliff.
+			// A river has no fords yet; each layout opens the ones its seats would get (priceRiverByFords).
 			if( underwaterAtCell( x, y ) )
-			{
-				if( m_type->m_river )
-					cost[cellIndex( x, y )] = RMG_START_CLIFF_COST;
 				continue;
-			}
 			cost[cellIndex( x, y )] = cellSpanWorld( x, y ) > RMG_CLIFF_WORLD_SPAN ? RMG_START_CLIFF_COST : 1;
 		}
 	}
-
-	std::vector< std::vector<RMGPoint> > layouts;
 
 	// Six seats and the furthest-from-the-rest search walks the last ones into the corners.
 	if( players < RMG_CIRCLE_PLAYERS )
@@ -3301,10 +3623,16 @@ void RMGLayout::chooseStarts( void )
 	Int farthest = 1;
 	std::vector<Int> walks;
 
+	std::vector<Int> forded;
 	for( UnsignedInt layout = 0; layout < layouts.size(); layout++ )
 	{
 		m_starts = layouts[layout];
-		startWalks( cost, walks );
+		if( river )
+		{
+			forded = cost;
+			priceRiverByFords( forded );
+		}
+		startWalks( river ? forded : cost, walks );
 
 		Int nearLow;
 		spreads[layout] = walkSpread( walks, &nearLow );
@@ -3327,7 +3655,14 @@ void RMGLayout::chooseStarts( void )
 
 	m_starts = layouts[best];
 
-	nudgeStarts( candidates, cost, farthest );
+	if( river )
+	{
+		forded = cost;
+		priceRiverByFords( forded );
+		nudgeStarts( candidates, forded, farthest );
+	}
+	else
+		nudgeStarts( candidates, cost, farthest );
 }
 
 /** How far a layout is from every seat having the same walk to its nearest and second-nearest
@@ -4524,7 +4859,8 @@ Real RMGLayout::massifClearance( Real cellX, Real cellY ) const
 		if( q >= 0.001f )
 		{
 			Real r = sqrtf( a * a + b * b );
-			clearance = r * ( 1.0f - ( 1.0f + RMG_MASSIF_WOBBLE ) / q ) - slopeOut;
+			Real reach = ( 1.0f + RMG_MASSIF_WOBBLE ) * rmgLobeShape( lobe, na / q, nb / q );
+			clearance = r * ( 1.0f - reach / q ) - slopeOut;
 		}
 		if( clearance < nearest )
 			nearest = clearance;
@@ -5989,10 +6325,14 @@ void RMGLayout::gradeTown( Real centreX, Real centreY, const RMGTownPlan& plan,
 	Real fromDown = downStart - RMG_TOWN_GRADE_MARGIN;
 	Real toDown = downEnd + RMG_TOWN_GRADE_MARGIN;
 
+	// a plain map's town is a plate (below), whose rim has more height to ease away
+	const Bool plate = !m_style && !m_skeleton;
+	const Real gradeFade = plate ? RMG_TOWN_GRADE_FADE * RMG_TOWN_PLATE_FADE : RMG_TOWN_GRADE_FADE;
+
 	Real farAcross = (fabsf( fromAcross ) > fabsf( toAcross )) ? fabsf( fromAcross ) : fabsf( toAcross );
 	Real farDown = (fabsf( fromDown ) > fabsf( toDown )) ? fabsf( fromDown ) : fabsf( toDown );
 	Int reach = (Int)(sqrtf( farAcross * farAcross + farDown * farDown )
-							+ RMG_TOWN_GRADE_FADE * ( 1.0f + RMG_TOWN_GRADE_SWING )) + 1;
+							+ gradeFade * ( 1.0f + RMG_TOWN_GRADE_SWING )) + 1;
 
 	Int centreCellX = (Int)(centreX + 0.5f) + RMG_BORDER_CELLS;
 	Int centreCellY = (Int)(centreY + 0.5f) + RMG_BORDER_CELLS;
@@ -6062,6 +6402,34 @@ void RMGLayout::gradeTown( Real centreX, Real centreY, const RMGTownPlan& plan,
 	Real bankLevel = m_waterHeight + RMG_LAKE_BANK;
 	Real siteFade = RMG_TOWN_GRADE_FADE * 0.5f;
 
+	/* A plain map's town stands on a plate: the eased ground inside the grid is pressed toward its
+		own mean, keeping RMG_TOWN_RELIEF_KEEP of the roll. Eased alone, a town on a hillside kept the
+		hill's whole fall, and every lot levelled flat on it stepped down from the one above like a
+		staircase. The walks locked to the money are pressed with the rest; skipped, they stood out of
+		the plate as a ruled bank. */
+	Real plateLevel = 0.0f;
+	if( plate )
+	{
+		Real total = 0.0f;
+		Int count = 0;
+		for( y = top; y <= bottom; y++ )
+		{
+			for( x = left; x <= right; x++ )
+			{
+				Real dx = (Real)(x - RMG_BORDER_CELLS) - centreX;
+				Real dy = (Real)(y - RMG_BORDER_CELLS) - centreY;
+				Real across = dx * cosine + dy * sine;
+				Real down = dy * cosine - dx * sine;
+				if( across < fromAcross || across > toAcross || down < fromDown || down > toDown || underwaterAtCell( x, y ) )
+					continue;
+				total += field[(y - top) * spanX + (x - left)];
+				count++;
+			}
+		}
+		if( count > 0 )
+			plateLevel = total / (Real)count;
+	}
+
 	for( y = centreCellY - reach; y <= centreCellY + reach; y++ )
 	{
 		for( x = centreCellX - reach; x <= centreCellX + reach; x++ )
@@ -6071,7 +6439,7 @@ void RMGLayout::gradeTown( Real centreX, Real centreY, const RMGTownPlan& plan,
 			if( underwaterAtCell( x, y ) )
 				continue;
 			// a locked walk keeps its ground, as it does under a pad
-			if( !m_routeLock.empty() && m_routeLock[cellIndex( x, y )] )
+			if( !plate && !m_routeLock.empty() && m_routeLock[cellIndex( x, y )] )
 				continue;
 
 			Real playX = (Real)(x - RMG_BORDER_CELLS);
@@ -6089,7 +6457,7 @@ void RMGLayout::gradeTown( Real centreX, Real centreY, const RMGTownPlan& plan,
 			else if( down > toDown ) outDown = down - toDown;
 
 			Real outside = sqrtf( outAcross * outAcross + outDown * outDown );
-			Real fade = RMG_TOWN_GRADE_FADE;
+			Real fade = gradeFade;
 			Real fromCentre = sqrtf( dx * dx + dy * dy );
 			if( outside > 0.0f && fromCentre > 0.5f )
 				fade *= 1.0f + RMG_TOWN_GRADE_SWING * ringNoise( m_perm, dx / fromCentre, dy / fromCentre,
@@ -6126,6 +6494,8 @@ void RMGLayout::gradeTown( Real centreX, Real centreY, const RMGTownPlan& plan,
 
 			Real ground = (Real)m_heights[cellIndex( x, y )];
 			Real graded = field[(y - top) * spanX + (x - left)];
+			if( plate )
+				graded = plateLevel + RMG_TOWN_RELIEF_KEEP * ( graded - plateLevel );
 
 			// Averaging in a lake bed must not sink dry ground under the water line.
 			Real lowest = (ground < bankLevel) ? ground : bankLevel;
@@ -7114,6 +7484,16 @@ void RMGLayout::placeTowns( void )
 				found = findSiteNear( middle, middle, 0.0f, middle, plan.m_radius, &site );
 			}
 		}
+		/* A plain map still without a town at its last one takes the smallest plan wherever half its
+			radius is clear, and keeps each building off the bases and the money on its own instead. A
+			crowded six-seat map had no ground the whole grid's radius clear of every pad. */
+		Bool squeezed = FALSE;
+		if( !found && town == towns - 1 && townsPlaced == 0 && !m_style && !m_skeleton )
+		{
+			Real middle = (Real)m_settings.m_playableCells * 0.5f;
+			found = findSiteNear( middle, middle, 0.0f, middle, plan.m_radius * RMG_TOWN_SQUEEZE, &site );
+			squeezed = found;
+		}
 		if( !found )
 			continue;
 		townsPlaced++;
@@ -7218,6 +7598,8 @@ void RMGLayout::placeTowns( void )
 							continue;
 						// nor across a walk to somebody's money or a repaired way out
 						if( lockedWithin( buildingX, buildingY, (Int)RMG_TOWN_LOT_PAD ) )
+							continue;
+						if( squeezed && !siteIsClear( buildingX, buildingY, RMG_TOWN_LOT_BLEND ) )
 							continue;
 
 						// Each building on its own small level, so a street down a slope steps.
@@ -7994,7 +8376,9 @@ void RMGLayout::placeMoney( void )
 	for( UnsignedInt l = 0; l < m_massifLobes.size(); l++ )
 	{
 		const RMGMassifLobe& lobe = m_massifLobes[l];
-		reserveSite( lobe.m_cellX, lobe.m_cellY, lobe.m_major * ( 1.0f + RMG_MASSIF_WOBBLE )
+		Real shapeMost = 1.0f + sqrtf( lobe.m_shapeCos2 * lobe.m_shapeCos2 + lobe.m_shapeSin2 * lobe.m_shapeSin2 )
+			+ sqrtf( lobe.m_shapeCos3 * lobe.m_shapeCos3 + lobe.m_shapeSin3 * lobe.m_shapeSin3 );
+		reserveSite( lobe.m_cellX, lobe.m_cellY, lobe.m_major * ( 1.0f + RMG_MASSIF_WOBBLE ) * shapeMost
 								 + 0.5f * ( RMG_MASSIF_SLOPE_RIM - RMG_MASSIF_RIM ) + RMG_MASSIF_RIM );
 	}
 	placeSupplyAndDerricks();

@@ -14734,8 +14734,8 @@ TEST(the_generator_still_turns_a_seed_into_the_bytes_it_used_to)
 	static const RMGFingerprint theFingerprints[] =
 	{
 		{ 0, 2, 64, 0, 0x19476366 },
-		{ 12345, 4, 96, 0, 0xBF722F94 },
-		{ 7, 8, 128, 0, 0x411EC171 },
+		{ 12345, 4, 96, 0, 0xF924D319 },
+		{ 7, 8, 128, 0, 0xA3DCD668 },
 		{ 7, 4, 200, 1, 0xBFE61244 },
 	};
 	const Int numFingerprints = sizeof(theFingerprints) / sizeof(theFingerprints[0]);

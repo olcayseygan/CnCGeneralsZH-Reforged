@@ -5916,3 +5916,68 @@ bool DX8Wrapper::Device_Is_Ready()
 	// Deliberately not a DX8CALL - a lost device is the answer here, not an error to log.
 	return device->TestCooperativeLevel()==D3D_OK;
 }
+
+#include "Platform/RenderPost.h"
+namespace RenderPost {
+void BeginMain(const Settings &settings) {
+#if !defined(_WIN32)
+	BeginMain(DX8Wrapper::_Get_D3D_Device(), settings);
+#else
+	(void)settings;
+#endif
+}
+unsigned BeginView(bool eligible, float nearPlane, float farPlane, bool reflection) {
+#if !defined(_WIN32)
+    IDirect3DDevice9 *device = DX8Wrapper::_Get_D3D_Device();
+    if (!device) return 0;
+    // Camera::Apply defers VIEW through the wrapper while PROJECTION is immediate.
+    // Commit the canonical camera before native owners snapshot either matrix.
+    DX8Wrapper::Apply_Render_State_Changes();
+    return BeginView(device, eligible, nearPlane, farPlane, reflection);
+#else
+	(void)eligible; (void)nearPlane; (void)farPlane; (void)reflection; return 0;
+#endif
+}
+void EndView(unsigned previous) {
+#if !defined(_WIN32)
+	EndView(DX8Wrapper::_Get_D3D_Device(), previous);
+#else
+	(void)previous;
+#endif
+}
+void FinishScene() {
+#if defined(_WIN32)
+	Direct3D11_Finish_Scene();
+#else
+	FinishScene(DX8Wrapper::_Get_D3D_Device(), false);
+#endif
+}
+void FinishFrame() {
+#if defined(_WIN32)
+	Direct3D11_Finish_Scene();
+#else
+	FinishScene(DX8Wrapper::_Get_D3D_Device(), true);
+#endif
+}
+bool ReplacesLegacyBloom() {
+#if defined(_WIN32)
+	return Direct3D11_Is_Active();
+#else
+	return ReplacesLegacyBloom(DX8Wrapper::_Get_D3D_Device());
+#endif
+}
+void SetSceneStandIn(IDirect3DBaseTexture9 *texture, IDirect3DSurface9 *surface) {
+#if defined(_WIN32)
+	Direct3D11_Set_Scene_Stand_In(texture, surface);
+#else
+	SetSceneStandIn(DX8Wrapper::_Get_D3D_Device(), texture, surface);
+#endif
+}
+void SetGlowDraw(bool enabled) {
+#if defined(_WIN32)
+	Direct3D11_Set_Glow_Draw(enabled);
+#else
+	SetGlowDraw(DX8Wrapper::_Get_D3D_Device(), enabled);
+#endif
+}
+}

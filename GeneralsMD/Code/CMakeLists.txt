@@ -1044,6 +1044,13 @@ endif()
 # ===========================================================================
 # Phase 3 - GameEngine.  ~580 files of game logic; no DX8, no device code.
 # ===========================================================================
+add_library(postprocess STATIC ${WW}/WW3D2/postprocess.cpp ${WW}/WW3D2/postshader.cpp)
+target_include_directories(postprocess PUBLIC ${WW}/WW3D2)
+set_target_properties(postprocess PROPERTIES CXX_STANDARD 17)
+if(TARGET dx11post)
+  target_link_libraries(dx11post PUBLIC postprocess)
+endif()
+
 set(GE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine)
 
 # The source tree is a frozen 2003 snapshot, so a glob cannot go stale the way
@@ -1479,7 +1486,15 @@ if(ZH_PLATFORM_POSIX)
   target_include_directories(posixd3d9 PUBLIC ${ZH_POSIX_D3D9_INCLUDE})
   # A3: with a window the device draws through SDL3 GPU, and compiles its own small programs (the gamma
   # pass) the way the generated ones are compiled.
-  target_link_libraries(posixd3d9 PRIVATE SDL3::SDL3-static sdl3shadercompile engineshader ffshader ffvertex)
+  target_link_libraries(posixd3d9 PRIVATE SDL3::SDL3-static sdl3shadercompile engineshader ffshader ffvertex postprocess)
+
+  add_executable(test_sdl_post ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_post.cpp)
+  set_target_properties(test_sdl_post PROPERTIES CXX_STANDARD 17)
+  target_include_directories(test_sdl_post PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(test_sdl_post PRIVATE posixd3d9 postprocess SDL3::SDL3-static)
+  add_test(NAME test_sdl_post COMMAND test_sdl_post)
+  add_test(NAME test_sdl_post_gpu COMMAND test_sdl_post --gpu)
+  set_tests_properties(test_sdl_post_gpu PROPERTIES SKIP_RETURN_CODE 77 RUN_SERIAL TRUE)
 
   # Depth-format fallback follows the complete scene-depth capability, without requiring a GPU.
   add_executable(sdl_gpu_depth_format_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_gpu_depth_format.cpp)
@@ -2297,6 +2312,13 @@ function(add_lib_test name)
     set_property(GLOBAL APPEND PROPERTY ZH_DEFERRED_TESTS ${name})
   endif()
 endfunction()
+
+foreach(name postprocess postshader)
+  add_executable(test_${name} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_${name}.cpp)
+  target_link_libraries(test_${name} PRIVATE postprocess test_harness)
+  set_target_properties(test_${name} PROPERTIES CXX_STANDARD 17)
+  add_test(NAME test_${name} COMMAND test_${name})
+endforeach()
 
 # Platform/MsvcFloatCasts.h: float-to-unsigned conversions as MSVC computes them.  Built on every
 # platform; on Windows it also holds MSVC's own cast to the same bytes.

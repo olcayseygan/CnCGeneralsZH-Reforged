@@ -45,6 +45,7 @@
 #define POSIXDEVICE9_H
 
 #include "Platform/RenderTypes.h"
+#include "Platform/RenderPost.h"
 #include "Platform/D3D9Posix.h"
 #include "Platform/WaterShoreOverlay.h"
 #include "Platform/WaterHullVisualLayout.h"
@@ -207,6 +208,18 @@ public:
 	RenderResult Create_Gpu_Frame(bool offscreen = false);
 	/// -offscreen's presents, paced at hz a second (0: unpaced); SdlGpuFrame::Set_Offscreen_Presents.
 	void Present_Offscreen(unsigned int hz);
+    void Begin_Post(const RenderPost::Settings &);
+    unsigned Begin_Post_View(bool, float, float, bool);
+    void End_Post_View(unsigned);
+    void Finish_Post(bool);
+    void Release_Post(bool teardown = false);
+    bool Post_Active() const;
+    bool Post_Replaces_Bloom() const;
+    void Post_Stand_In(IDirect3DBaseTexture9 *, IDirect3DSurface9 *);
+    bool Post_Target(IDirect3DSurface9 *, struct SdlTarget &) const;
+    bool Post_Texture(IDirect3DBaseTexture9 *, struct SDL_GPUTexture *&);
+    float Post_Additive_Gain(const struct SdlTarget &) const;
+    void Set_Glow_Draw(bool e) { GlowDraw = e; }
 	SdlGpuFrame * Get_Gpu() const { return Gpu; }
 	SdlResourceMirrors * Get_Mirrors() const { return Mirrors; }
 	/// Draws recorded on the GPU, and the draws refused, by reason.
@@ -366,6 +379,9 @@ protected:
 	std::shared_ptr<SunCapture> Sun;
 	bool SunActive = false, SunFailed = false, SunReady = false;
 	bool SmokeGlow = false;
+	bool GlowDraw = false;
+	struct PostSession;
+	std::shared_ptr<PostSession> Post;
 	unsigned SunCasterEffect = 0;
 	float SunCasterOpacity = 1;
 	bool Sun_Camera_Space() const;

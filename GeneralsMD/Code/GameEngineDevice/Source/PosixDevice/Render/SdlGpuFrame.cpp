@@ -90,6 +90,8 @@ bool Sdl_Gamma_Is_Identity(const uint16_t (*ramp)[256])
 	return true;
 }
 
+static uint64_t next_scene_generation() { static uint64_t generation = 0; return ++generation; }
+
 unsigned int SdlGpuFrame::Target_Format()
 {
 	return BACK_BUFFER_FORMAT;
@@ -148,7 +150,7 @@ SdlGpuFrame::SdlGpuFrame() :
 	PointSampler(NULL)
 {
 	memset(LastConstants,0,sizeof(LastConstants));memset(LastConstantsSize,0,sizeof(LastConstantsSize));
-	memset(ClearPipelines, 0, sizeof(ClearPipelines));
+	SceneGeneration = next_scene_generation();
 	InFlight[0] = InFlight[1] = NULL;
 	// ZH_GPU_FLUSH_LIMIT=<n>: at most n mid-frame flushes in flight (default 3); 0 lets them pile up as before
 	// the ring, which is how the ring's effect is measured.
@@ -224,7 +226,7 @@ SdlGpuFrame::~SdlGpuFrame()
 	Release_Sun_Smoke();
 	Release_Sun_Shadow();
 	if (StreamBuffer != NULL) SDL_ReleaseGPUBuffer(GpuDevice, StreamBuffer);
-	for (int i = 0; i < 8; ++i) if (ClearPipelines[i] != NULL) SDL_ReleaseGPUGraphicsPipeline(GpuDevice, ClearPipelines[i]);
+	for (const auto &entry : ClearPipelines) SDL_ReleaseGPUGraphicsPipeline(GpuDevice, entry.Pipeline);
 	if (ClearVertex != NULL) SDL_ReleaseGPUShader(GpuDevice, ClearVertex);
 	if (ClearPixel != NULL) SDL_ReleaseGPUShader(GpuDevice, ClearPixel);
 	if (Transfer != NULL) SDL_ReleaseGPUTransferBuffer(GpuDevice, Transfer);
@@ -270,6 +272,7 @@ bool SdlGpuFrame::Create_Targets(unsigned int width, unsigned int height)
 	FrontCopy = front;
 	DepthStencil = depth;
 	BackWidth = width;
+	SceneGeneration = next_scene_generation();
 	BackHeight = height;
 	return true;
 }
@@ -543,7 +546,7 @@ void SdlGpuFrame::Invalidate_Water_Snapshots(SDL_GPUTexture *colour, SDL_GPUText
 
 void SdlGpuFrame::Refresh_Water_Snapshots()
 {
-	++WaterFrame;
+	++WaterFrame; ++SceneFrame;
 	for (size_t i = 0; i < WaterSnapshots.size(); ++i) WaterSnapshots[i].ColourReady = WaterSnapshots[i].DepthReady = WaterSnapshots[i].Frozen = false;
 }
 

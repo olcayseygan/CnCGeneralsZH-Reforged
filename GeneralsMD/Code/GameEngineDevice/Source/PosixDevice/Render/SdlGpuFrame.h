@@ -61,6 +61,30 @@ struct SdlTarget
 	uint32_t Height;
 	// Zero retains the scene format; independent depth-only targets name their format.
 	uint32_t DepthFormat = 0;
+	uint32_t ColourFormat = 0;
+};
+
+enum class SdlSceneCapturePhase { OpaqueScene, BeforeTransparent, BeforePost, TerrainOverlay, CloakScene };
+struct SdlSceneCaptureRequest
+{
+	SdlTarget Source = {};
+	uint64_t Frame = 0;
+	SdlSceneCapturePhase Phase = SdlSceneCapturePhase::OpaqueScene;
+	uint64_t Generation = 0; // owner increments on source replacement, resize, or device recreation
+	uint64_t ViewKey = 0; // explicit main-view owner; nested mirror/camera-space draws do not replace it
+	bool Colour = false;
+	bool Depth = false;
+	bool Same_Identity(const SdlSceneCaptureRequest &other) const;
+};
+
+// Consumed synchronously by Record_Native_Draw; no borrowed constant pointer survives the call.
+// The current recorder supports VS slots 0..1 and PS slots 0..3.
+struct SdlNativeUniformBlock
+{
+	unsigned Stage; // 0 vertex, 1 fragment
+	unsigned Slot;
+	const void *Bytes;
+	uint32_t Size;
 };
 
 /// One draw as the flush replays it, everything by value.  The device's resolve fills it.
@@ -93,8 +117,12 @@ struct SdlRecordedDraw
 	float Viewport[6];					///< x, y, width, height, min depth, max depth: as the GPU takes it
 	int32_t Scissor[4];					///< x, y, width, height
 	uint32_t StencilReference;
+	bool FloatBlendFactor = false;
+	float BlendConstants[4] = {};
 	uint32_t BlendFactor;				///< D3DCOLOR
 };
+
+struct SdlNativeDrawPacket { SdlTarget Target; SdlRecordedDraw Draw; const SdlNativeUniformBlock *Blocks; unsigned Count; };
 
 class SdlGpuFrame
 {
@@ -151,6 +179,15 @@ public:
 
 	/// Runs what is recorded into the back buffer.  False when the GPU refused the work.
 	bool Flush();
+	bool Has_Pending_Work() const;
+	// Final owner teardown only: prevents abandoned CPU packets borrowing released resources.
+	void Discard_Pending_Work_For_Teardown();
+	void Fail_Next_Native_Record_For_Test(unsigned count = 1) { NativeRecordRefusalsForTest = count; }
+	uint64_t Scene_Frame() const { return SceneFrame; }
+	uint64_t Scene_Generation() const { return SceneGeneration; }
+	static unsigned Target_Colour_Format(const SdlTarget &target);
+	bool Record_Native_Draw(const SdlTarget &, const SdlRecordedDraw &, const SdlNativeUniformBlock *, unsigned);
+	bool Record_Native_Draw_Batch(const SdlNativeDrawPacket *, unsigned);
 
 	// ---- The batch (A3c).  Offsets are into this batch only: a flush starts the next one empty.
 
@@ -306,7 +343,7 @@ private:
 	bool Record_Passes(struct SDL_GPUCommandBuffer * commands, SDL_GPUBuffer * stream);
 	bool Begin_Pass(struct SDL_GPUCommandBuffer * commands, const SdlTarget & target, bool clear_colour, bool clear_depth,
 		bool clear_stencil, uint32_t argb, float z, uint32_t stencil_value, struct SDL_GPURenderPass ** pass);
-	SDL_GPUGraphicsPipeline * Clear_Pipeline(unsigned int which);
+	SDL_GPUGraphicsPipeline * Clear_Pipeline(unsigned int which, const SdlTarget &destination);
 	void End_Batch();
 	bool Present_Into(struct SDL_GPUCommandBuffer * commands, SDL_GPUTexture * target, unsigned int width,
 		unsigned int height, unsigned int format, const uint16_t (*ramp)[256]);
@@ -413,7 +450,11 @@ private:
 	uint64_t BatchNumber;
 	SDL_GPUShader * ClearVertex;			///< the clear draw's programs, and its pipelines by what it clears
 	SDL_GPUShader * ClearPixel;
-	SDL_GPUGraphicsPipeline * ClearPipelines[8];
+	struct ClearPipelineEntry { unsigned Which, ColourFormat, DepthFormat; SDL_GPUGraphicsPipeline *Pipeline; };
+	std::vector<ClearPipelineEntry> ClearPipelines;
+	uint64_t SceneFrame = 0, SceneGeneration = 0;
+	unsigned NativeRecordRefusalsForTest = 0;
+	void Append_Native_Draw(const SdlTarget &, const SdlRecordedDraw &, const SdlNativeUniformBlock *, unsigned);
 	SDL_GPUBuffer * StreamBuffer;		///< the staging stream on the GPU, grown as needed
 	uint32_t StreamBufferSize;
 	struct SDL_GPUTransferBuffer * Transfer;

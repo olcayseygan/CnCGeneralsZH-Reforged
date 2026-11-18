@@ -22,6 +22,10 @@
 #include "SdlGpuFrame.h"
 #include "sdl3shadercompile.h"
 
+
+#include <limits>
+#include <cmath>
+#include <exception>
 #include <SDL3/SDL.h>
 
 #include <stdio.h>
@@ -136,10 +140,16 @@ void SdlGpuFrame::Clear_Rect(int x, int y, int width, int height, bool colour, b
 
 // Bit 0 colour, bit 1 depth, bit 2 stencil: what the clear draw writes.  Depth and stencil always pass
 // and are replaced; what is not cleared is masked off.
-SDL_GPUGraphicsPipeline * SdlGpuFrame::Clear_Pipeline(unsigned int which)
+SDL_GPUGraphicsPipeline * SdlGpuFrame::Clear_Pipeline(unsigned int which, const SdlTarget &destination)
 {
-	if (ClearPipelines[which] != NULL) {
-		return ClearPipelines[which];
+	const unsigned colourFormat = Target_Colour_Format(destination);
+	const unsigned depthFormat = Target_Depth_Format(destination);
+	const bool hasStencil = depthFormat == SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT
+		|| depthFormat == SDL_GPU_TEXTUREFORMAT_D32_FLOAT_S8_UINT;
+	which &= (destination.Colour ? 1u : 0u) | (destination.Depth ? 2u : 0u) | (hasStencil ? 4u : 0u);
+	for (const ClearPipelineEntry &entry : ClearPipelines) {
+		if (entry.Which == which && entry.ColourFormat == colourFormat && entry.DepthFormat == depthFormat)
+			return entry.Pipeline;
 	}
 	std::string log;
 	if (ClearVertex == NULL) {
@@ -160,7 +170,7 @@ SDL_GPUGraphicsPipeline * SdlGpuFrame::Clear_Pipeline(unsigned int which)
 	}
 	SDL_GPUColorTargetDescription target;
 	SDL_zero(target);
-	target.format = (SDL_GPUTextureFormat)Target_Format();
+	target.format = (SDL_GPUTextureFormat)colourFormat;
 	target.blend_state.enable_color_write_mask = true;
 	target.blend_state.color_write_mask = (which & 1) ? 0xF : 0;
 	SDL_GPUGraphicsPipelineCreateInfo info;
@@ -184,14 +194,14 @@ SDL_GPUGraphicsPipeline * SdlGpuFrame::Clear_Pipeline(unsigned int which)
 	info.depth_stencil_state.compare_mask = 0xFF;
 	info.depth_stencil_state.write_mask = 0xFF;
 	info.target_info.color_target_descriptions = &target;
-	info.target_info.num_color_targets = 1;
-	info.target_info.depth_stencil_format = (SDL_GPUTextureFormat)DepthFormat;
-	info.target_info.has_depth_stencil_target = true;
-	ClearPipelines[which] = SDL_CreateGPUGraphicsPipeline(GpuDevice, &info);
-	if (ClearPipelines[which] == NULL) {
+	info.target_info.num_color_targets = destination.Colour ? 1 : 0;
+	info.target_info.depth_stencil_format = (SDL_GPUTextureFormat)depthFormat;
+	info.target_info.has_depth_stencil_target = destination.Depth != NULL;
+	SDL_GPUGraphicsPipeline *pipeline = SDL_CreateGPUGraphicsPipeline(GpuDevice, &info);
+	if (pipeline == NULL) {
 		fprintf(stderr, "SdlGpuFrame: the clear draw's pipeline: %s\n", SDL_GetError());
-	}
-	return ClearPipelines[which];
+	} else ClearPipelines.push_back({which, colourFormat, depthFormat, pipeline});
+	return pipeline;
 }
 
 void SdlGpuFrame::Record_Draw(const SdlRecordedDraw & draw)
@@ -203,6 +213,82 @@ void SdlGpuFrame::Record_Draw(const SdlRecordedDraw & draw)
 	command.Target = Target_Index();
 	Draws.push_back(draw);
 	Commands.push_back(command);
+}
+
+static bool valid_native_draw(const SdlTarget &target, const SdlRecordedDraw &source,
+	const SdlNativeUniformBlock *blocks, unsigned count)
+{
+	if ((!target.Colour && !target.Depth) || !target.Width || !target.Height || !source.Pipeline
+		|| count > 6 || (count && !blocks) || source.SamplerCount > SdlRecordedDraw::MAXIMUM_SAMPLERS
+		|| source.VertexSamplerCount > SdlRecordedDraw::MAXIMUM_SAMPLERS) return false;
+	if (source.FloatBlendFactor) for (float value : source.BlendConstants) if (!std::isfinite(value)) return false;
+	unsigned used[2] = {};
+	for (unsigned i=0; i<count; ++i) {
+		const SdlNativeUniformBlock &block=blocks[i];
+		if (block.Stage>1 || block.Slot>=(block.Stage ? 4u : 2u) || !block.Bytes || !block.Size
+			|| block.Size>65536 || (used[block.Stage] & (1u<<block.Slot))) return false;
+		used[block.Stage] |= 1u<<block.Slot;
+	}
+	return true;
+}
+
+bool SdlGpuFrame::Record_Native_Draw(const SdlTarget &target, const SdlRecordedDraw &source,
+	const SdlNativeUniformBlock *blocks, unsigned count)
+{
+	const SdlNativeDrawPacket packet = {target, source, blocks, count};
+	return Record_Native_Draw_Batch(&packet, 1);
+}
+
+bool SdlGpuFrame::Record_Native_Draw_Batch(const SdlNativeDrawPacket *packets, unsigned count)
+{
+	if (NativeRecordRefusalsForTest) { --NativeRecordRefusalsForTest; return false; }
+	if (count > 4096 || (count && !packets)) return false;
+	size_t constantSize = ConstantBytes.size();
+	for (unsigned i = 0; i < count; ++i) {
+		const SdlNativeDrawPacket &packet = packets[i];
+		if (!valid_native_draw(packet.Target, packet.Draw, packet.Blocks, packet.Count)) return false;
+		for (unsigned b = 0; b < packet.Count; ++b) {
+			constantSize += size_t(packet.Blocks[b].Size) + STAGING_ALIGNMENT - 1;
+			if (constantSize > std::numeric_limits<uint32_t>::max()) return false;
+		}
+	}
+	if (Commands.size() + count > std::numeric_limits<uint32_t>::max() ||
+		Draws.size() + count > std::numeric_limits<uint32_t>::max() ||
+		Targets.size() + count > std::numeric_limits<uint32_t>::max()) return false;
+	try {
+		// Capacity changes are harmless on refusal. Nothing below the reservation block can allocate.
+		ConstantBytes.reserve(constantSize);
+		Draws.reserve(Draws.size() + count);
+		Commands.reserve(Commands.size() + count);
+		Targets.reserve(Targets.size() + count);
+	} catch (const std::exception &) { return false; }
+	for (unsigned i = 0; i < count; ++i)
+		Append_Native_Draw(packets[i].Target, packets[i].Draw, packets[i].Blocks, packets[i].Count);
+	return true;
+}
+
+void SdlGpuFrame::Append_Native_Draw(const SdlTarget &target, const SdlRecordedDraw &source,
+	const SdlNativeUniformBlock *blocks, unsigned count)
+{
+	SdlRecordedDraw draw=source;
+	draw.VertexConstants=draw.VertexConstantsSize=draw.VertexWaterConstants=draw.VertexWaterConstantsSize=0;
+	draw.PixelConstants=draw.PixelConstantsSize=0;
+	memset(draw.PixelWaterConstants,0,sizeof(draw.PixelWaterConstants));
+	memset(draw.PixelWaterConstantsSize,0,sizeof(draw.PixelWaterConstantsSize));
+	for (unsigned i=0; i<count; ++i) {
+		const SdlNativeUniformBlock &block=blocks[i];
+		const uint32_t offset=Constants(block.Stage,block.Bytes,block.Size,block.Slot);
+		if (!block.Stage && !block.Slot) { draw.VertexConstants=offset; draw.VertexConstantsSize=block.Size; }
+		else if (!block.Stage) { draw.VertexWaterConstants=offset; draw.VertexWaterConstantsSize=block.Size; }
+		else if (!block.Slot) { draw.PixelConstants=offset; draw.PixelConstantsSize=block.Size; }
+		else { draw.PixelWaterConstants[block.Slot-1]=offset; draw.PixelWaterConstantsSize[block.Slot-1]=block.Size; }
+	}
+	const SdlTarget oldTarget=TargetSet ? CurrentTarget : Back_Buffer_Target();
+	const bool oldSet=TargetSet;
+	Set_Target(target);
+	Record_Draw(draw);
+	CurrentTarget=oldTarget;
+	TargetSet=oldSet;
 }
 
 void SdlGpuFrame::Release_After_Batch(SDL_GPUTexture * texture, SDL_GPUBuffer * buffer)
@@ -388,7 +474,7 @@ uint32_t SdlGpuFrame::Target_Index()
 {
 	const SdlTarget target = TargetSet ? CurrentTarget : Back_Buffer_Target();
 	for (size_t i = Targets.size(); i-- > 0; ) {
-		if (Targets[i].Colour == target.Colour && Targets[i].Depth == target.Depth
+		if (Targets[i].ColourFormat == target.ColourFormat && Targets[i].Colour == target.Colour && Targets[i].Depth == target.Depth
 			&& Targets[i].DepthFormat == target.DepthFormat && Targets[i].Width == target.Width && Targets[i].Height == target.Height) {
 			return (uint32_t)i;
 		}
@@ -527,7 +613,7 @@ bool SdlGpuFrame::Record_Passes(SDL_GPUCommandBuffer * commands, SDL_GPUBuffer *
 
 		if (Commands[i].IsRect) {
 			const Command & clear = Commands[i];
-			SDL_GPUGraphicsPipeline * pipeline = Clear_Pipeline((clear.Colour ? 1 : 0) | (clear.Depth ? 2 : 0) | (clear.Stencil ? 4 : 0));
+			SDL_GPUGraphicsPipeline * pipeline = Clear_Pipeline((clear.Colour ? 1 : 0) | (clear.Depth ? 2 : 0) | (clear.Stencil ? 4 : 0), Targets[pass_target]);
 			if (pipeline == NULL) {
 				continue;
 			}
@@ -567,14 +653,15 @@ bool SdlGpuFrame::Record_Passes(SDL_GPUCommandBuffer * commands, SDL_GPUBuffer *
 		if (last == NULL || last->StencilReference != draw.StencilReference) {
 			SDL_SetGPUStencilReference(pass, (Uint8)draw.StencilReference);
 		}
-		if (last == NULL || last->BlendFactor != draw.BlendFactor) {
+		if (last == NULL || last->BlendFactor != draw.BlendFactor || last->FloatBlendFactor != draw.FloatBlendFactor || (draw.FloatBlendFactor && memcmp(last->BlendConstants, draw.BlendConstants, sizeof(draw.BlendConstants)))) {
 			SDL_FColor factor = { (float)((draw.BlendFactor >> 16) & 0xFF) / 255.0f,
 				(float)((draw.BlendFactor >> 8) & 0xFF) / 255.0f, (float)(draw.BlendFactor & 0xFF) / 255.0f,
 				(float)((draw.BlendFactor >> 24) & 0xFF) / 255.0f };
+			if (draw.FloatBlendFactor) factor = {draw.BlendConstants[0], draw.BlendConstants[1], draw.BlendConstants[2], draw.BlendConstants[3]};
 			SDL_SetGPUBlendConstants(pass, factor);
 		}
 		SDL_GPUBuffer * vertices = draw.VertexBuffer != NULL ? draw.VertexBuffer : stream;
-		if (last == NULL || last->VertexBuffer != draw.VertexBuffer || last->VertexOffset != draw.VertexOffset) {
+		if (vertices && (last == NULL || last->VertexBuffer != draw.VertexBuffer || last->VertexOffset != draw.VertexOffset)) {
 			SDL_GPUBufferBinding binding = { vertices, draw.VertexOffset };
 			SDL_BindGPUVertexBuffers(pass, 0, &binding, 1);
 		}
@@ -632,3 +719,20 @@ bool SdlGpuFrame::Record_Passes(SDL_GPUCommandBuffer * commands, SDL_GPUBuffer *
 	}
 	return true;
 }
+
+unsigned int SdlGpuFrame::Target_Colour_Format(const SdlTarget &target)
+{
+	return target.Colour ? (target.ColourFormat ? target.ColourFormat : Target_Format()) : 0;
+}
+
+bool SdlSceneCaptureRequest::Same_Identity(const SdlSceneCaptureRequest &other) const
+{
+	return Source.Colour == other.Source.Colour && Source.Depth == other.Source.Depth
+		&& Source.Width == other.Source.Width && Source.Height == other.Source.Height
+		&& Source.ColourFormat == other.Source.ColourFormat && Source.DepthFormat == other.Source.DepthFormat
+		&& Frame == other.Frame && Phase == other.Phase && Generation == other.Generation && ViewKey == other.ViewKey;
+}
+
+bool SdlGpuFrame::Has_Pending_Work() const { return !Commands.empty() || !Uploads.empty() || !Draws.empty() || !StreamBytes.empty() || !UploadBytes.empty() || !ConstantBytes.empty() || !DeadTextures.empty() || !DeadBuffers.empty(); }
+
+void SdlGpuFrame::Discard_Pending_Work_For_Teardown() { End_Batch(); }

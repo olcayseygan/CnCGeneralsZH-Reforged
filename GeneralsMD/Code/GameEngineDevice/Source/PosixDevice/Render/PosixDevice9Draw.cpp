@@ -762,7 +762,10 @@ bool PosixDevice9::Resolve_Target(SdlTarget &target, std::string &refusal)
 		refusal = "no render target";
 		return false;
 	}
-	if (colour == BackBuffer) {
+	if (Post_Target(colour, target)) {
+        // Explicit main and default-filter stand-ins share the prepared scene.
+    }
+    else if (colour == BackBuffer) {
 		target = Gpu->Back_Buffer_Target();
 	}
 	else {
@@ -1078,9 +1081,19 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		water_states[D3DRS_DESTBLEND] = D3DBLEND_INVSRCALPHA;
 		states = water_states;
 	}
+	const float additive_gain = Post_Additive_Gain(target);
+	const bool additive_glow = GlowDraw && additive_gain != 1.0f && !(FVF & D3DFVF_XYZRHW) &&
+		states[D3DRS_ALPHABLENDENABLE] && states[D3DRS_SRCBLEND] == D3DBLEND_ONE &&
+		states[D3DRS_DESTBLEND] == D3DBLEND_ONE && states[D3DRS_BLENDOP] == D3DBLENDOP_ADD;
+	RenderUInt32 glow_states[RENDER_STATE_COUNT];
+	if (additive_glow) {
+		memcpy(glow_states, states, sizeof(glow_states));
+		glow_states[D3DRS_SRCBLEND] = D3DBLEND_BLENDFACTOR;
+		states = glow_states;
+	}
 	SdlPipelineKey key;
 	if (!Sdl_Pipeline_Key(states, call.Type, vertex_program.Shader, pixel_program->Shader, FVF,
-		target.Colour ? SdlGpuFrame::Target_Format() : 0, Gpu->Target_Depth_Format(target), key, refusal)) {
+		SdlGpuFrame::Target_Colour_Format(target), Gpu->Target_Depth_Format(target), key, refusal)) {
 		Refuse_Draw("the pipeline: " + refusal);
 		return D3D_OK;
 	}
@@ -1090,13 +1103,13 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	draw.Pipeline = Pipelines->Pipeline(key, combiner.ShadowReceiving && pixel_engine == ENGINE_SHADER_NONE);
 	if (!draw.Pipeline && retry_without_sun("pipeline refused")) {
 		if (Sdl_Pipeline_Key(states, call.Type, vertex_program.Shader, pixel_program->Shader, FVF,
-			target.Colour ? SdlGpuFrame::Target_Format() : 0, Gpu->Target_Depth_Format(target), key, refusal))
+			SdlGpuFrame::Target_Colour_Format(target), Gpu->Target_Depth_Format(target), key, refusal))
 			draw.Pipeline = Pipelines->Pipeline(key);
 	}
 	if(!draw.Pipeline && shore_overlay) {
 		shore_overlay=false;pixel_program=legacy_pixel_program;
 		if(Sdl_Pipeline_Key(states,call.Type,vertex_program.Shader,pixel_program->Shader,FVF,
-			target.Colour ? SdlGpuFrame::Target_Format() : 0,Gpu->Target_Depth_Format(target),key,refusal))
+			SdlGpuFrame::Target_Colour_Format(target),Gpu->Target_Depth_Format(target),key,refusal))
 			draw.Pipeline=Pipelines->Pipeline(key);
 	}
 	phases.Mark("pipeline");
@@ -1192,6 +1205,8 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 				: water_draw && texture_stage == 6
 				? (water_depth ? water_depth : Mirrors->White())
 				: (texture != NULL ? Mirrors->Texture(texture, refusal) : Mirrors->White());
+			SDL_GPUTexture *standIn = nullptr;
+			if (Post_Texture(texture, standIn)) draw.Textures[slot] = standIn;
 			phases.Part(0, since);
 			if (water_draw && texture_stage == 14 && (draw.Textures[slot] == NULL
 				|| draw.Textures[slot] == target.Colour || draw.Textures[slot] == target.Depth)) {
@@ -1509,6 +1524,11 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	Gpu->Set_Target(target);
 	draw.StencilReference = RenderStates[D3DRS_STENCILREF] & 0xFF;
 	draw.BlendFactor = RenderStates[D3DRS_BLENDFACTOR];
+    if (additive_glow) {
+        draw.FloatBlendFactor = true;
+        draw.BlendConstants[0] = draw.BlendConstants[1] = draw.BlendConstants[2] = additive_gain;
+        draw.BlendConstants[3] = 1;
+    }
 	Gpu->Record_Draw(draw);
 	if (combiner.ShadowReceiving) {
 		if (pixel_engine == ENGINE_SHADER_NONE) ++SunSolidReceivers;

@@ -1,3 +1,4 @@
+#include "Platform/RenderPost.h"
 /*
 **	Command & Conquer Generals Zero Hour(tm)
 **	Copyright 2025 Electronic Arts Inc.
@@ -2961,6 +2962,7 @@ AGAIN:
 					continue;
 				}
 				couldRender = true;
+				W3DShaderManager::beginMainPostScene();
 				// add the number of verts/polygons drawn before the main scene
 				if (numRenderTargetPolygons || numRenderTargetVertices)
 					Debug_Statistics::Record_DX8_Polys_And_Vertices(numRenderTargetPolygons,numRenderTargetVertices,ShaderClass::_PresetOpaqueShader);
@@ -2979,7 +2981,7 @@ AGAIN:
 				// was finished and before the health bars went over it.  This is the frame that
 				// drew no view at all: without it the scene would sit in the offscreen texture with
 				// the command bar drawn over a black screen.
-				Direct3D11_Finish_Scene();
+				RenderPost::FinishFrame();
 
 				// draw the user interface
 				TheInGameUI->DRAW();

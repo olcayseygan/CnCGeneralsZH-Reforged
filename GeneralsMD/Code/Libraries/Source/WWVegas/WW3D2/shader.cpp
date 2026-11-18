@@ -48,6 +48,7 @@
 #include "dx8wrapper.h"
 #include "dx8caps.h"
 #include "dx11runtime.h"
+#include "Platform/RenderPost.h"
 
 
 bool ShaderClass::ShaderDirty=true;
@@ -433,7 +434,7 @@ void ShaderClass::Apply()
 	ShaderDirty=false;
 
 	if (diff & ShaderClass::MASK_GLOW)
-		Direct3D11_Set_Glow_Draw(Get_Glow() == ShaderClass::GLOW_ENABLE);
+		RenderPost::SetGlowDraw(Get_Glow() == ShaderClass::GLOW_ENABLE);
 
 	// COLOR MASK
 

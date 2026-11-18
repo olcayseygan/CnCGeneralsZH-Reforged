@@ -1,3 +1,4 @@
+#include "Platform/RenderPost.h"
 /*
 **	Command & Conquer Generals Zero Hour(tm)
 **	Copyright 2025 Electronic Arts Inc.
@@ -2883,7 +2884,7 @@ void W3DView::draw( void )
 	tPostChainStart = Clock_Ticks();
 #endif
 	updateScreenDistortions();
-	Direct3D11_Finish_Scene();
+	RenderPost::FinishScene();
 #ifdef DEBUG_LOGGING
 	tPostChainEnd = Clock_Ticks();
 	ThePostChainMS = viewElapsedMS( tPostChainStart, tPostChainEnd );

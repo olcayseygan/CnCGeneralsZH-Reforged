@@ -1,3 +1,4 @@
+#include "Platform/RenderPost.h"
 /*
 **	Command & Conquer Generals Zero Hour(tm)
 **	Copyright 2025 Electronic Arts Inc.
@@ -1299,6 +1300,11 @@ void RTS3DScene::updatePlayerColorPasses(void)
 DECLARE_PERF_TIMER(NonTerrainRender)
 void RTS3DScene::Render(RenderInfoClass & rinfo)
 {
+    float postNear, postFar;
+    rinfo.Camera.Get_Clip_Planes(postNear, postFar);
+    RenderPost::ViewScope postView(m_customPassMode == SCENE_PASS_DEFAULT &&
+        !ShaderClass::Is_Backface_Culling_Inverted() && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE,
+        postNear, postFar, ShaderClass::Is_Backface_Culling_Inverted());
 	// Covers both submission and Flush, including sorted draws. Nested reflections and
 	// custom passes cannot borrow the main view's map or its stencil ownership.
 	SunShadow::SceneScope sunScene(DX8Wrapper::_Get_D3D_Device(),

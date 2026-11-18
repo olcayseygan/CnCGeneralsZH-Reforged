@@ -59,48 +59,7 @@
 
 class DX11DeviceClass;
 
-enum DX11PostEffect
-{
-	// Straight copy, which is what proves the plumbing rather than the shader: with this in the
-	// chain the frame that reaches the screen has been through the offscreen texture and the full
-	// screen pass and has to come out unchanged.
-	DX11_POST_COPY,
-
-	// Edge antialiasing in one pass over the finished world, what the D3D11 frame has against a
-	// jagged edge without multisampling.  A multisampled scene leaves it out of the chain: the
-	// edges are already resolved, and FXAA over them only blurs the textures.
-	DX11_POST_FXAA,
-
-	// Unsharp mask.  The game's textures are 2003 vintage and a 1080p window magnifies them; this
-	// is a taste knob and it is not in the default chain.
-	DX11_POST_SHARPEN,
-
-	// Ambient occlusion off the frame's own depth: the darkening a corner traps, which is what puts
-	// a building on the ground rather than over it.  Reads the depth buffer at t1.
-	DX11_POST_AO,
-
-	// Bright things bleed light, and the scene is kept in half floats so that "bright" means
-	// brighter than white rather than close to it.  Several passes rather than one, and it takes
-	// the frame from half float back to eight bits, so it can only be the first effect in a chain.
-	DX11_POST_BLOOM
-};
-
-// The effects that are one pass over one texture.  Bloom is not one of them and is handled apart.
-const unsigned DX11_POST_SIMPLE_EFFECTS = DX11_POST_BLOOM;
-
-// Room for every effect at once.  A chain longer than the effects that exist repeats one, which is
-// allowed and is how sharpening twice is asked for.
-const unsigned DX11_POST_CHAIN_LIMIT = 4;
-
-// Reads "fxaa", "bloom,fxaa", "copy", "off" or "none".  Returns false and leaves count at zero for
-// a name it does not know and for a chain with bloom anywhere but first, so a misspelt or
-// impossible switch turns the chain off loudly rather than silently drawing something else.
-// Separated from the class so it can be tested without a device.
-bool DX11Post_Parse_Chain(const char * text, DX11PostEffect effects[DX11_POST_CHAIN_LIMIT],
-	unsigned & count);
-
-// The name a parsed effect goes back to, for the report line.
-const char * DX11Post_Effect_Name(DX11PostEffect effect);
+#include "postprocess.h"
 
 // Bloom's threshold and strength in the scene's own units, where one is white, what an additive
 // draw into the scene is multiplied by (DX11BackendClass::Set_Additive_Gain) and how many pairs
@@ -182,25 +141,6 @@ void DX11Post_Set_Atmosphere(const float horizon[3], const float tint[3], float 
 // The radii are fractions of the frame's height, so a circle stays round on a wide screen.  Pull
 // is how far, as a fraction of Radius, the picture is drawn in at its strongest; RingStrength is how
 // far the ring pushes it out at its crest, a fraction of Radius as well.
-struct DX11PostWarp
-{
-	float CentreX;
-	float CentreY;
-	float Radius;
-	float Pull;
-	float RingRadius;
-	float RingWidth;
-	float RingStrength;
-	// The ring is the outline of a dome standing on the ground, not a circle on the glass.  Above
-	// the centre it is the dome's own round silhouette, rising as high as it is wide; below it, it
-	// is the dome's footprint on the ground, which the camera's pitch flattens.  This is how far it
-	// is flattened there: the footprint's depth on screen over its width, one looking straight down.
-	float RingSquash;
-};
-
-// Four blasts on one screen at once is already more than anyone can read.
-const unsigned DX11_POST_WARP_LIMIT = 4;
-
 // The game sets the frame's warps every frame, and a count of zero clears them.  A count past the
 // limit keeps the first four.
 void DX11Post_Set_Warps(const DX11PostWarp * warps, unsigned count);

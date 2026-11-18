@@ -49,4 +49,11 @@ void W3DReachOverlay_Release( void );
 Bool DX11ReachOverlay_Draw( CameraClass &camera, const std::vector< const ReachOverlayField * > &fields );
 void DX11ReachOverlay_Release( void );
 
+#if !defined(_WIN32)
+/** Native distance fields on the explicit terrain-phase depth owner. False retains tiled drawing. */
+Bool SdlReachOverlay_Draw(CameraClass &, const std::vector<const ReachOverlayField *> &fields);
+/** False retains ownership until queued readers submit. */
+Bool SdlReachOverlay_Release();
+#endif
+
 #endif

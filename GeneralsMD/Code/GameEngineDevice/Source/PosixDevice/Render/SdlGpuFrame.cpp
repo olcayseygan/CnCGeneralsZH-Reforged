@@ -27,11 +27,24 @@
 #include <SDL3/SDL.h>
 
 #include <stdio.h>
+#include <array>
+#include <map>
+#include <exception>
 #include <stdlib.h>
 #include <string.h>
 
 // The back buffer's format.  D3D9's X8R8G8B8 and A8R8G8B8 are these bytes in this order.
 static const SDL_GPUTextureFormat BACK_BUFFER_FORMAT = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+
+namespace {
+struct FrameOwnerHooks {
+	std::array<SdlGpuFrame::OwnerReleaseHook, 8> Hooks = {};
+	unsigned Count = 0;
+	bool TearingDown = false;
+};
+// Renderer-owner thread only. External module state never changes the frame's object layout.
+std::map<SdlGpuFrame *, FrameOwnerHooks> NativeOwnerHooks;
+}
 
 // The gamma pass: one triangle over the whole target, and each channel looked up in its ramp.  Written
 // for SDL3's register spaces (sdl3target.h: pixel textures and samplers in space2).  The ramp is read
@@ -209,6 +222,7 @@ SdlGpuFrame::~SdlGpuFrame()
 	if (GpuDevice == NULL) {
 		return;
 	}
+	Release_Owner_Hooks_For_Teardown();
 	for (int i = 0; i < 2; ++i) {
 		if (InFlight[i] != NULL) {
 			SDL_WaitForGPUFences(GpuDevice, true, &InFlight[i], 1);
@@ -1247,4 +1261,53 @@ bool SdlGpuFrame::Capture_Scene_Depth(const SdlTarget &source, SDL_GPUTexture *d
 		return false;
 	}
 	return SerializeSubmits ? Submit(commands) : Submit_Flush(commands);
+}
+
+bool SdlGpuFrame::Register_Owner_Release_Hook(OwnerReleaseHook hook)
+{
+	if (!GpuDevice || !hook) return false;
+	try {
+		FrameOwnerHooks &entry = NativeOwnerHooks[this];
+		if (entry.TearingDown) return false;
+		for (unsigned i = 0; i < entry.Count; ++i) if (entry.Hooks[i] == hook) return true;
+		if (entry.Count == entry.Hooks.size()) return false;
+		entry.Hooks[entry.Count++] = hook;
+		return true;
+	} catch (const std::exception &) { return false; }
+}
+
+void SdlGpuFrame::Unregister_Owner_Release_Hook(OwnerReleaseHook hook)
+{
+	auto found = NativeOwnerHooks.find(this);
+	if (found == NativeOwnerHooks.end()) return;
+	FrameOwnerHooks &entry = found->second;
+	for (unsigned i = 0; i < entry.Count; ++i) if (entry.Hooks[i] == hook) {
+		for (unsigned next = i + 1; next < entry.Count; ++next) entry.Hooks[next - 1] = entry.Hooks[next];
+		entry.Hooks[--entry.Count] = nullptr;
+		break;
+	}
+	if (!entry.Count && !entry.TearingDown) NativeOwnerHooks.erase(found);
+}
+
+void SdlGpuFrame::Release_Owner_Hooks_For_Teardown()
+{
+	auto found = NativeOwnerHooks.find(this);
+	if (found == NativeOwnerHooks.end() || found->second.TearingDown) return;
+	FrameOwnerHooks &entry = found->second;
+	entry.TearingDown = true;
+	const auto hooks = entry.Hooks;
+	const unsigned count = entry.Count;
+	entry.Count = 0; // consume before callbacks can unregister or reenter
+	if (Has_Pending_Work() && !Flush()) Discard_Pending_Work_For_Teardown();
+	for (unsigned i = 0; i < count; ++i) {
+		if (hooks[i](this)) continue;
+		Discard_Pending_Work_For_Teardown();
+		if (!hooks[i](this)) {
+			// A registered callback may retain resources for ordinary refusal, but must release once
+			// final-owner discard removed every CPU reader. Continuing would leave a dangling owner.
+			fprintf(stderr, "SdlGpuFrame: native owner hook refused an empty final teardown\n");
+			std::terminate();
+		}
+	}
+	NativeOwnerHooks.erase(this);
 }

@@ -1481,12 +1481,24 @@ if(ZH_PLATFORM_POSIX)
   # Hazard clouds bridge the scene and SDL device; keep that bridge above the
   # D3D compatibility library so low-level device tests stay independent.
   list(FILTER POSIXD3D9_SOURCES EXCLUDE REGEX "/SdlHazardCloud[^/]*\\.cpp$")
+  list(FILTER POSIXD3D9_SOURCES EXCLUDE REGEX "/SdlReachOverlay[^/]*\\.cpp$")
   add_library(posixd3d9 STATIC ${POSIXD3D9_SOURCES})
   set_target_properties(posixd3d9 PROPERTIES CXX_STANDARD 17)
   target_include_directories(posixd3d9 PUBLIC ${ZH_POSIX_D3D9_INCLUDE})
   # A3: with a window the device draws through SDL3 GPU, and compiles its own small programs (the gamma
   # pass) the way the generated ones are compiled.
   target_link_libraries(posixd3d9 PRIVATE SDL3::SDL3-static sdl3shadercompile engineshader ffshader ffvertex postprocess)
+
+  add_executable(test_sdl_reach ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_reach.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render/SdlReachOverlay.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render/SdlReachOverlayShader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudShader.cpp)
+  set_target_properties(test_sdl_reach PROPERTIES CXX_STANDARD 17)
+  target_include_directories(test_sdl_reach PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
+  target_link_libraries(test_sdl_reach PRIVATE posixd3d9 sdl3shadercompile SDL3::SDL3-static)
+  add_test(NAME test_sdl_reach COMMAND test_sdl_reach)
+  add_test(NAME test_sdl_reach_gpu COMMAND test_sdl_reach --gpu)
+  set_tests_properties(test_sdl_reach_gpu PROPERTIES SKIP_RETURN_CODE 77 RUN_SERIAL TRUE)
 
   add_executable(test_sdl_post ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_post.cpp)
   set_target_properties(test_sdl_post PROPERTIES CXX_STANDARD 17)
@@ -1710,6 +1722,10 @@ if(ZH_PLATFORM_POSIX)
     ${ZH_POSIX_RENDER_DIR}/SdlHazardCloudEmbers.cpp
     ${ZH_POSIX_RENDER_DIR}/SdlHazardCloudShared.cpp
     ${ZH_POSIX_RENDER_DIR}/SdlHazardCloudSharedShader.cpp)
+  target_sources(w3ddevice PRIVATE
+    ${ZH_POSIX_RENDER_DIR}/SdlReachOverlay.cpp
+    ${ZH_POSIX_RENDER_DIR}/SdlReachOverlayShader.cpp
+    ${ZH_POSIX_RENDER_DIR}/SdlReachOverlayAdapter.cpp)
   set_target_properties(w3ddevice PROPERTIES CXX_STANDARD 17)
   target_include_directories(w3ddevice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Stubs ${CMAKE_CURRENT_SOURCE_DIR}/Main

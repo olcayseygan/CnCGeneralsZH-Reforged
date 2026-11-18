@@ -2583,6 +2583,11 @@ void DX11BackendClass::Set_Transform(D3DTRANSFORMSTATETYPE state, const float ma
 		break;
 	}
 	if (held != NULL && memcmp(held, matrix, sizeof(float) * 16) != 0) {
+		// Shadow_Receiving keeps the interface's projection out of the sun, so going between it and
+		// the world's changes the program and not only the constants.
+		if (held == Projection && (Projection[15] != 0.0f) != (matrix[15] != 0.0f)) {
+			PipelineChanged = true;
+		}
 		memcpy(held, matrix, sizeof(float) * 16);
 		// The pixel block reads the view and the projection; the world and the texture transforms
 		// are the vertex block's alone.
@@ -3255,6 +3260,14 @@ bool DX11BackendClass::Shadow_Receiving() const
 	}
 	if ((VertexFormat & D3DFVF_XYZRHW) != 0) {
 		return false;		// already in screen space: the interface, the filters, the darkening quad
+	}
+	// Render2D's identity (the command bar, the menus, the text, the health bars): its pixels come
+	// back out of clip space within a unit of the world's origin, so while the sun's box covered the
+	// map's corner the whole interface took that corner's shadow and smoke.  Nothing clears the
+	// shadow parameters after the world, so this is the line that keeps the interface out.  A
+	// perspective projection has nought in its corner (Compiles_Off_Frame asks the same).
+	if (Projection[15] != 0.0f) {
+		return false;
 	}
 	if (Samples_Current_Target()) {
 		return false;		// the heat haze: a copy of a picture that took its shadows already

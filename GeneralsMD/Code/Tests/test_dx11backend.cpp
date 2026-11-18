@@ -895,6 +895,82 @@ TEST(dx11backend_a_multiply_pass_goes_up_without_the_blast_lights)
 	backend.Shutdown();
 }
 
+// The interface is drawn by Render2D under an identity projection after the world, and the shadow
+// parameters are still set then.  Such a draw must not build a receiving program: its pixels map to
+// the world's origin, and the whole command bar went dark whenever the sun's box covered the map's
+// corner.  Counted in pipelines: the identity draw with the sun's map set and the one without it
+// share a program, and only the perspective draw between them builds a second.
+TEST(dx11backend_the_interface_takes_no_sun_shadow)
+{
+	DX11DeviceClass device;
+	CHECK(device.Create_Offscreen());
+	ID3D11Device * d3d = device.Get_Device();
+
+	DX11BackendClass backend;
+	CHECK(backend.Initialise(&device));
+
+	D3D11_TEXTURE2D_DESC target_description;
+	memset(&target_description, 0, sizeof(target_description));
+	target_description.Width = TARGET_SIZE;
+	target_description.Height = TARGET_SIZE;
+	target_description.MipLevels = 1;
+	target_description.ArraySize = 1;
+	target_description.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+	target_description.SampleDesc.Count = 1;
+	target_description.Usage = D3D11_USAGE_DEFAULT;
+	target_description.BindFlags = D3D11_BIND_RENDER_TARGET;
+
+	ID3D11Texture2D * target = NULL;
+	CHECK(SUCCEEDED(d3d->CreateTexture2D(&target_description, NULL, &target)));
+	ID3D11RenderTargetView * target_view = NULL;
+	CHECK(SUCCEEDED(d3d->CreateRenderTargetView(target, NULL, &target_view)));
+
+	configure_unlit_pass_through(backend);
+	CHECK(backend.Begin_Shadow_Map(64));
+	backend.End_Shadow_Map();
+	backend.Set_Shadow_Parameters(0.001f, 0.5f, 2.0f, 1.0f, 1.0f, 1.0f, 0.0f);
+
+	device.Get_Context()->OMSetRenderTargets(1, &target_view, NULL);
+	backend.Set_Viewport(0, 0, TARGET_SIZE, TARGET_SIZE);
+
+	ID3D11Buffer * vertices = NULL;
+	CHECK(DX11Resource_Create_Vertex_Buffer(d3d, sizeof(QUAD_VERTICES), D3DPOOL_MANAGED, 0,
+		QUAD_VERTICES, &vertices));
+	ID3D11Buffer * indices = NULL;
+	CHECK(DX11Resource_Create_Index_Buffer(d3d, sizeof(QUAD_INDICES), D3DPOOL_MANAGED, 0,
+		QUAD_INDICES, &indices));
+	backend.Set_Stream_Source(vertices, sizeof(BackendVertex), 0);
+	backend.Set_Indices(indices, DXGI_FORMAT_R16_UINT);
+
+	unsigned pipelines = 0;
+	unsigned long long made = 0;
+	unsigned long long refused = 0;
+
+	CHECK(backend.Draw_Indexed_Triangles(6, 0, 0));		// the interface, sun's map set
+	backend.Statistics(pipelines, made, refused);
+	CHECK_EQ(pipelines, 1u);
+
+	static const float PERSPECTIVE[16] = {
+		1.0f, 0.0f, 0.0f, 0.0f,  0.0f, 1.0f, 0.0f, 0.0f,  0.0f, 0.0f, 1.0f, 1.0f,  0.0f, 0.0f, -0.1f, 0.0f };
+	backend.Set_Transform(D3DTS_PROJECTION, PERSPECTIVE);
+	backend.Draw_Indexed_Triangles(6, 0, 0);			// the world: a receiving program of its own
+	backend.Statistics(pipelines, made, refused);	CHECK_EQ(pipelines, 2u);
+
+	float identity[16];
+	set_identity(identity);
+	backend.Set_Transform(D3DTS_PROJECTION, identity);
+	backend.Clear_Shadow_Parameters();
+	CHECK(backend.Draw_Indexed_Triangles(6, 0, 0));		// the interface with no sun's map at all
+	backend.Statistics(pipelines, made, refused);
+	CHECK_EQ(pipelines, 2u);
+
+	indices->Release();
+	vertices->Release();
+	target_view->Release();
+	target->Release();
+	backend.Shutdown();
+}
+
 // The sorted smoke billboards carry a fire's glow in their normals, and the backend adds it to what
 // the stages made.  The quad's normal is (0, 0, 1), so with the glow on the blue channel goes to full
 // and the other two keep the vertex colour; the glow is its own pipeline and turning it off goes

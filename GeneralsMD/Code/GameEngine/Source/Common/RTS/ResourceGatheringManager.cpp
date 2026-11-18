@@ -34,8 +34,10 @@
 
 #include "Common/ActionManager.h"
 #include "Common/GameState.h"
+#include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/Xfer.h"
+#include "GameLogic/AIPlayer.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
@@ -205,6 +207,8 @@ Object *ResourceGatheringManager::findBestSupplyWarehouse( Object *queryObject )
 
 	//Otherwise, search for a good one.
 	Real bestCost = FLT_MAX;
+	// a skirmish AI's flying gatherer keeps away from piles under anti-air guns it knows of
+	AIPlayer *ai = queryObject->getControllingPlayer() ? queryObject->getControllingPlayer()->getAIPlayer() : NULL;
 
 	objectIDListIterator iterator = m_supplyWarehouses.begin();
 	while( iterator != m_supplyWarehouses.end() )
@@ -221,7 +225,8 @@ Object *ResourceGatheringManager::findBestSupplyWarehouse( Object *queryObject )
 			Real distanceSquared;
 			Real currentCost = computeRelativeCost( queryObject, currentWarehouse, &distanceSquared );
 			if( (currentCost < bestCost) && (distanceSquared < maxDistanceSquared) &&
-					!isPileOfAnotherPlayer( queryObject->getControllingPlayer(), currentWarehouse ) )
+					!isPileOfAnotherPlayer( queryObject->getControllingPlayer(), currentWarehouse ) &&
+					!(ai && ai->gathererShunsPile( queryObject, currentWarehouse )) )
 			{
 				bestWarehouse = currentWarehouse;
 				bestCost = currentCost;

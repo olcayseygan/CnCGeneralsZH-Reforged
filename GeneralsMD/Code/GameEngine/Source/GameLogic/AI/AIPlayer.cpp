@@ -4329,11 +4329,24 @@ void AIPlayer::onUnitLost( const Object *obj )
 		killer = killer->getContainedBy();
 	if( runsOwnAI() && !obj->isKindOf( KINDOF_STRUCTURE ) && killer && killer->isKindOf( KINDOF_STRUCTURE ) &&
 			m_player->getRelationship( killer->getTeam() ) == ENEMIES )
-		DEBUG_LOG(("AI DEFLOSS frame %d player %d '%s' worth %.0f to '%s'; team '%s' state %d source %d, %.0f from home\n", TheGameLogic->getFrame(),
-			m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), aiCombatPower( obj ), killer->getTemplate()->getName().str(),
+		DEBUG_LOG(("AI DEFLOSS frame %d player %d '%s' %d worth %.0f to '%s'; team '%s' state %d source %d, %.0f from home, %s\n", TheGameLogic->getFrame(),
+			m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), obj->getID(), aiCombatPower( obj ), killer->getTemplate()->getName().str(),
 			team ? team->getName().str() : "", obj->getAI() ? (Int)obj->getAI()->getCurrentStateID() : -1,
 			obj->getAI() ? (Int)obj->getAI()->getLastCommandSource() : -1,
-			(Real)sqrt( sqr( obj->getPosition()->x - m_baseCenter.x ) + sqr( obj->getPosition()->y - m_baseCenter.y ) )));
+			(Real)sqrt( sqr( obj->getPosition()->x - m_baseCenter.x ) + sqr( obj->getPosition()->y - m_baseCenter.y ) ),
+			observerKnowsAbout( killer, m_player->getPlayerIndex() ) ? "known" : "unseen"));
+	// AI RETREATLOSS: one the retreat pulled out or sent home, killed on the way, and by what
+	const TacticalStep *walked = runsOwnAI() ? findTacticalStep( obj->getID() ) : NULL;
+	if( walked && walked->fallbackFrame != 0 )
+		DEBUG_LOG(("AI RETREATLOSS frame %d player %d '%s' %s %.1f s after leaving (%.0f,%.0f), %.0f from it and %.0f from home, by '%s' %s %s\n",
+			TheGameLogic->getFrame(), m_player->getPlayerIndex(), obj->getTemplate()->getName().str(),
+			walked->fallingBack ? "holding" : "walking home", (TheGameLogic->getFrame() - walked->fallbackFrame) / (Real)LOGICFRAMES_PER_GAME_SECOND,
+			walked->fallbackFrom.x, walked->fallbackFrom.y,
+			(Real)sqrt( sqr( obj->getPosition()->x - walked->fallbackFrom.x ) + sqr( obj->getPosition()->y - walked->fallbackFrom.y ) ),
+			(Real)sqrt( sqr( obj->getPosition()->x - m_baseCenter.x ) + sqr( obj->getPosition()->y - m_baseCenter.y ) ),
+			killer ? killer->getTemplate()->getName().str() : "", killer == NULL ? "nothing" : killer->isKindOf( KINDOF_STRUCTURE ) ? "building" :
+			killer->isKindOf( KINDOF_AIRCRAFT ) ? "aircraft" : killer->isKindOf( KINDOF_PROJECTILE ) ? "shot" : "ground",
+			killer && observerKnowsAbout( killer, m_player->getPlayerIndex() ) ? "known" : "unseen"));
 	// what killed a duty Ambulance, from how far, and whether this AI knew of it
 	if( runsOwnAI() && isDutyAmbulance( obj ) )
 		DEBUG_LOG(("AI AMBULANCE frame %d player %d %d killed by '%s' %.0f away, %s, %s\n", TheGameLogic->getFrame(), m_player->getPlayerIndex(),
@@ -15161,6 +15174,26 @@ void AIPlayer::collectKnownGuns( std::vector<AIKnownGun> *guns ) const
 	guns->insert( guns->end(), m_knownGuns.begin(), m_knownGuns.end() );
 }
 
+/** Whether a gatherer that flies shuns a pile: Medium and up, when the flight from where it is to the pile
+	* crosses a known anti-air gun (gunsOverFlight, the pile itself included).  On Tournament Desert China puts
+	* Gattling Cannons beside the middle docks, and the Air Force's supply Chinooks flew to them under the guns
+	* trip after trip.  The guns are read afresh rather than from collectKnownGuns' frame copy: this is asked in
+	* the object updates, before the AI's own pass, and a copy taken there would be the one the pass reads,
+	* where a save loaded on this frame would read its own.  The same rung lets steerAircraft fly a jet that is
+	* going home on its own round the guns. */
+static const AIRungReal AIR_SHUNS_KNOWN_GUNS = { { 0.0f, 1.0f, 1.0f }, AIKNOB_GATED };
+
+Bool AIPlayer::gathererShunsPile( const Object *gatherer, const Object *pile )
+{
+	if( !gatherer->isKindOf( KINDOF_AIRCRAFT ) || !runsOwnAI() || aiRatingLerp( m_rating, AIR_SHUNS_KNOWN_GUNS ) <= 0.0f )
+		return FALSE;
+	std::vector<AIKnownGun> guns;
+	readKnownGuns( &guns );
+	const Coord3D *from = gatherer->getPosition();
+	const Coord3D *to = pile->getPosition();
+	return gunsOverFlight( guns, from->x, from->y, to->x, to->y ) > 0;
+}
+
 static Bool carriesWeapon( const Object *obj )
 {
 	for( Int slot = PRIMARY_WEAPON; slot < WEAPONSLOT_COUNT; ++slot )
@@ -15341,6 +15374,18 @@ void AIPlayer::steerAircraft( void )
 				!aircraft->isAbleToAttack() || isDutyHelix( aircraft ) || (aircraft->getContain() && aircraft->getContain()->getContainCount() > 0) )
 			continue;
 		const JetAIUpdate *jet = ai->getJetAIUpdate();
+		// on its own way back to land, the straight line from wherever the strike left it: home round the guns.  27
+		// of the 43 jets the Air Force lost to Gattling Cannons in eight Hard matches on Tournament Desert died so
+		if( jet->isReturningForLanding() && aiRatingLerp( m_rating, AIR_SHUNS_KNOWN_GUNS ) > 0.0f )
+		{
+			if( !gunsRead )
+			{
+				collectKnownGuns( &guns );
+				gunsRead = TRUE;
+			}
+			routeHome( aircraft, guns );
+			continue;
+		}
 		const TacticalStep *row = findTacticalStep( aircraft->getID() );
 		if( jet->isOutOfSpecialReloadAmmo() || jet->friend_isTakeoffOrLandingInProgress() ||
 				(row && (row->fallingBack || now < row->leaveAloneUntil)) )
@@ -16795,6 +16840,8 @@ static const Real RANK_RATIO_STEP = 0.25f;
 static const Real RANK_UNHURT = 0.9f;
 /** How near a unit's own goal has to be to where pullOutRanked would send it to count as on its way. */
 static const Real RANK_GOAL_SLACK = 50.0f;
+/** Medium and up leave a hurt ranked unit where it fights while the map shows an enemy reach on it. */
+static const AIRungReal RANK_PULL_WAITS_FOR_CLEAR = { { 0.0f, 1.0f, 1.0f }, AIKNOB_GATED };
 
 Bool AIRetreat_rankPullsOut( Int rank, Real healthFraction, Bool inFight, Real ratio, Real retreatRatio )
 {
@@ -16839,6 +16886,7 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 {
 	const UnsignedInt now = TheGameLogic->getFrame();
 	std::vector<Object *> pulled;
+	Int waitsForClear = -1;		// RANK_PULL_WAITS_FOR_CLEAR, read once a candidate needs it
 	for( DLINK_ITERATOR<Object> objIter = team->iterate_TeamMemberList(); !objIter.done(); objIter.advance() )
 	{
 		Object *obj = objIter.cur();
@@ -16862,6 +16910,18 @@ void AIPlayer::pullOutRanked( Team *team, Bool inFight, Real ratio )
 			continue;
 		const Real health = obj->getBodyModule()->getHealth() / obj->getBodyModule()->getMaxHealth();
 		if( !AIRetreat_rankPullsOut( rank, health, inFight, ratio, getSkillProfile()->m_retreatTtkRatio ) )
+			continue;
+		// one standing inside a reach the map shows for its class fights on where it is, and goes once it is clear.
+		// Walked out hurt, it died on the way: in eight Hard Air Force against China matches on Tournament Desert
+		// 867 of China's pulled veterans and 510 of the Air Force's died within 15 s, nearly all inside 3 s and
+		// 100 feet of where they were pulled, shooting nothing
+		if( waitsForClear < 0 )
+		{
+			waitsForClear = aiRatingLerp( m_rating, RANK_PULL_WAITS_FOR_CLEAR ) > 0.0f && !measuringWithoutTactics() ? 1 : 0;
+			if( waitsForClear )
+				ensureInfluence();
+		}
+		if( waitsForClear && m_influence.enemyAt( obj->getPosition()->x, obj->getPosition()->y, unitMix( obj ) ) > 0.0f )
 			continue;
 		Object *mender = aiFindMender( m_player, obj, CMD_FROM_AI );
 		if( mender == NULL && isAtHome( obj->getPosition() ) )

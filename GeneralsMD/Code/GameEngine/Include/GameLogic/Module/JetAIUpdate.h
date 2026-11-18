@@ -111,6 +111,7 @@ public:
 	virtual Bool isDoingGroundMovement() const;
 	virtual void notifyVictimIsDead();
 	virtual Bool isOutOfSpecialReloadAmmo() const;
+	Bool isReturningForLanding() const;	///< flying back to its airfield on its own, empty or idle too long
 
 	const Coord3D* friend_getProducerLocation() const { return &m_producerLocation; }
 	Real friend_getOutOfAmmoDamagePerSecond() const { return getJetAIUpdateModuleData()->m_outOfAmmoDamagePerSecond; }

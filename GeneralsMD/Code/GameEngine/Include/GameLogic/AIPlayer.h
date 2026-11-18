@@ -365,6 +365,8 @@ public:
  	Bool isSupplySourceSafe( Int minSupplies );
 	/// Is a supply source attacked?
 	Bool isSupplySourceAttacked( void );
+	/// Would a flying gatherer of ours cross a known anti-air gun to reach this pile?
+	Bool gathererShunsPile( const Object *gatherer, const Object *pile );
 
 	Bool isLocationSafe( const Coord3D *pos, const ThingTemplate *tthing);
 

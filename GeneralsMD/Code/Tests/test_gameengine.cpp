@@ -14735,7 +14735,7 @@ TEST(the_generator_still_turns_a_seed_into_the_bytes_it_used_to)
 	{
 		{ 0, 2, 64, 0, 0xE9E74BA7 },
 		{ 12345, 4, 96, 0, 0xCEE6ECA4 },
-		{ 7, 8, 128, 0, 0x85737306 },
+		{ 7, 8, 128, 0, 0xD07136B9 },
 		{ 7, 4, 200, 1, 0xBFE61244 },
 	};
 	const Int numFingerprints = sizeof(theFingerprints) / sizeof(theFingerprints[0]);

@@ -160,6 +160,10 @@ static const Int K_SCRIPT_LIST_DATA_VERSION_1 = 1;
 #define RMG_LAKE_OPEN_MOST		9		///< cells, the widest that disc gets
 #define RMG_LAKE_CLOSE_SHARE	0.25f	///< of that radius, the disc each lake is closed with after, filling its bites
 #define RMG_LAKE_CLOSE_MOST		5		///< cells, the widest that disc gets
+#define RMG_LAKE_FILL_LEAST		0.8f	///< below this share of the ellipse its spread draws (an oval about 1, two blobs on a neck 0.68, a crescent 0.6) a plain map's lake is opened again
+#define RMG_LAKE_REOPEN_SHARE	0.45f	///< of the radius of a disc its size, the disc it is opened with then: a 2 to 1 oval keeps its length
+#define RMG_LAKE_DRY_BELOW		0.2f	///< and under this on 4 pi area over cell edges squared after that (a disc about 0.6, a 3 to 1 oval 0.44) it goes dry
+#define RMG_LAKE_REOPEN_KEEP	0.75f	///< share of its water a reopened lake must keep, or it is a long valley lake and stays as it was
 #define RMG_STREAM_OPEN			2		///< the opening every water mask gets once the stream has joined it
 // A river map's river runs from map edge to map edge, bends and changes width as it goes.
 #define RMG_RIVER_BEND			0.09f	///< of the playable size, the river's long swing off its line
@@ -217,6 +221,7 @@ static const Int K_SCRIPT_LIST_DATA_VERSION_1 = 1;
 	terrace edge is a dock with one corner in the air, and the game will not let a player build
 	beside it either. The pad is flat to its radius and eases back into the terrain over the blend. */
 #define RMG_PAD_RADIUS			5.0f
+#define RMG_PAD_WAY_CLEAR		9		///< four-neighbour cells a plain map's money pad keeps off a carved way: its levelled disc and the way's half width, and two to spare
 #define RMG_PAD_BLEND			10.0f
 #define RMG_PAD_SHORE_KEEP		2.0f	///< cells of beach a pad never touches
 #define RMG_PAD_BLEND_SWING		0.7f	///< share of its width a pad's blend wanders out by
@@ -241,8 +246,8 @@ static const Int K_SCRIPT_LIST_DATA_VERSION_1 = 1;
 #define RMG_TOWN_GRADE_SWING	0.6f	///< share of that the fade's outer edge wanders out by
 #define RMG_TOWN_GRADE_BLUR		9		///< cells either side the ground is averaged over
 #define RMG_TOWN_RELIEF_KEEP	0.6f	///< share of its eased roll a plain map's town plate keeps
-#define RMG_TOWN_TERRACE		6.0f	///< height bytes from one of the plate's terraces to the next
-#define RMG_TOWN_TERRACE_RISE	0.7f	///< share of a terrace's height band its step up takes
+#define RMG_TOWN_TERRACE		5.0f	///< height bytes from one of the plate's terraces to the next
+#define RMG_TOWN_TERRACE_RISE	0.85f	///< share of a terrace's height band its step up takes, so a riser leans back instead of standing
 #define RMG_TOWN_RIM_ROUND		0.6f	///< of the grid's shorter half, the radius its plate's corners round over
 #define RMG_TOWN_RIM_WANDER		7.0f	///< cells the plate's edge wanders in or out by
 #define RMG_TOWN_RIM_CONTOUR	0.5f	///< cells it draws in by for each height byte the ground stands off the plate
@@ -308,6 +313,8 @@ static const Int K_SCRIPT_LIST_DATA_VERSION_1 = 1;
 #define RMG_GORGE_ENDS			0.35f	///< of the floor's width, what a gorge narrows to where it runs out
 #define RMG_MASSIF_ROAD_BANK	4.0f	///< cells over which a ramp's sides ease back into the ground
 #define RMG_MASSIF_ROAD_GRADE	3.0f	///< height bytes a ramp climbs per cell at most
+#define RMG_MASSIF_ROAD_BEND	0.3f	///< of its length, how far a ramp's foot swings toward its base
+#define RMG_MASSIF_ROAD_APART	0.8f	///< cosine of the least angle between two ramps up one lobe, 37 degrees
 #define RMG_MASSIF_ROAD_SIDE	2.0f	///< height bytes per cell a ramp's cut or fill banks out at
 #define RMG_MASSIF_ROAD_WIDEST	8.0f	///< cells a bank may take at most, or a small map's rim is all ramp
 #define RMG_MASSIF_ROCK_CLEAR	20.0f	///< cells round a ramp's middle that no rock stands in
@@ -344,8 +351,19 @@ static const Int K_SCRIPT_LIST_DATA_VERSION_1 = 1;
 #define RMG_ROAD_CREST_REACH	6		///< cells either side a crest or a ridge is read over
 #define RMG_ROAD_CREST_FREE		2		///< height bytes a cell may stand over both sides before it is a crest
 #define RMG_ROAD_CREST			24		///< price of each byte past that
-#define RMG_ROAD_MEANDER		8		///< most a cell's slow noise adds to a step
-#define RMG_ROAD_MEANDER_SCALE	0.045f	///< of the noise per cell: a bend every twenty cells or so
+#define RMG_ROAD_MEANDER		20		///< most a cell's slow noise adds to a step
+#define RMG_ROAD_MEANDER_SCALE	0.025f	///< of the noise per cell: a bend every forty cells or so
+#define RMG_ROAD_SMOOTH			4		///< cells either side the way's points are averaged over
+#define RMG_ROAD_SMOOTH_PASSES	3
+#define RMG_ROAD_SWAY			9.0f	///< cells a way sways to either side of where the search laid it, at most
+#define RMG_ROAD_SWAY_SCALE		0.015f	///< of the sway's noise per cell travelled: a swing every sixty cells or so
+#define RMG_ROAD_SWAY_RISE		4		///< bytes a sway may climb off the line the search laid
+#define RMG_ROAD_SWAY_CREST		3		///< bytes over both sides a sway may stand where the search's line stood lower
+#define RMG_ROAD_SWAY_ROUNDS	4		///< times the sway is averaged again after dropping the stretches that climbed
+#define RMG_ROAD_BOW_SHARE		0.07f	///< of a way's length it bows out to one side at its middle
+#define RMG_ROAD_BOW_MOST		10.0f	///< cells a way bows at most
+#define RMG_ROAD_BOW_BLOCKED	512.0f	///< height a cliff, water or off-map cell counts as when picking the side to bow to
+#define RMG_ROAD_SWAY_EASE		25		///< cells at each end over which the sway eases in
 #define RMG_ROAD_CUT_MOST		20.0f	///< height bytes a cutting takes off a crest the way could not go round
 #define RMG_ROAD_CLIFF			600
 #define RMG_ROAD_WATER			2500
@@ -1198,6 +1216,9 @@ private:
 	void openWater( Int openRadius, Int closeRadius );
 	void trimLakeReach( void );
 	void openEachLake( void );
+	Real lakeRoundness( const std::vector<Int>& cells ) const;
+	Real lakeEllipseFill( const std::vector<Int>& cells ) const;
+	void openLakeCells( const std::vector<Int>& cells, Int radius );
 	void planMassif( void );
 	void shapeMassifLobe( RMGMassifLobe& lobe, Int which ) const;
 	Real massifRim( const RMGMassifLobe& lobe, Real cellX, Real cellY, Real *rimOut ) const;
@@ -1235,6 +1256,8 @@ private:
 	Bool carvePassBetweenCells( Int fromX, Int fromY, Int toX, Int toY, Bool recordRamp,
 															Real protectRadius, Real protectX, Real protectY );
 	Int crestAt( Int index ) const;
+	void smoothRoute( std::vector<Int>& route ) const;
+	Bool roadMoveFits( Int laid, Real movedX, Real movedY ) const;
 	Int roadStepCost( Int from, Int to, Bool diagonal, std::vector<Int>& cellPrice ) const;
 	void applyRouteProfile( const std::vector<Int>& route, Bool recordRamp,
 													Real protectRadius, Real protectX, Real protectY );
@@ -1290,6 +1313,7 @@ private:
 	Bool insideLake( Real cellX, Real cellY, Real *distanceOut ) const;
 	Real distanceToNearestStart( Real cellX, Real cellY ) const;
 	Bool siteIsClear( Real cellX, Real cellY, Real radius ) const;
+	void markWayDistance( void );
 	Bool findSiteNear( Real centreX, Real centreY, Real minRadius, Real maxRadius, Real clearance,
 										 RMGPoint *out ) const;
 	Bool findSiteOnRing( Real centreX, Real centreY, Real targetRadius, Real band, Real clearance,
@@ -1335,6 +1359,8 @@ private:
 	std::vector<RMGSite> m_sites;		///< everything placed so far, with its elbow room
 	std::vector<char> m_routeLock;		///< cells on a walk to somebody's money or a repair's roadway, which pads and buildings leave alone
 	Bool m_lockCarves;					///< cutTowardLevel locks the roadway it cuts: the repairs after the money
+	std::vector<UnsignedByte> m_wayDistance;	///< cells from the nearest carved way, capped (markWayDistance)
+	Bool m_padsKeepOffWays;				///< siteIsClear also keeps RMG_PAD_WAY_CLEAR cells off every carved way
 	std::vector< std::vector<Int> > m_floodQueues;	///< a breadth-first queue a start, kept between floods
 	std::vector<char> m_baseLevelled;	///< cells a base blend has touched
 	std::vector<UnsignedByte> m_baseUnder;	///< and the ground it blended there
@@ -2267,6 +2293,116 @@ void RMGLayout::trimLakeReach( void )
 	}
 }
 
+/** 4 pi area over the length of its cell edges squared for one lake's cells still in m_inLake: a
+	digital disc scores about 0.6, a 3 to 1 oval 0.44, a lake drawn as two blobs on a neck about 0.35. */
+Real RMGLayout::lakeRoundness( const std::vector<Int>& cells ) const
+{
+	static const Int offsetX[4] = { 1, -1, 0, 0 };
+	static const Int offsetY[4] = { 0, 0, 1, -1 };
+	Int area = 0, edges = 0;
+	for( UnsignedInt c = 0; c < cells.size(); c++ )
+	{
+		if( !m_inLake[cells[c]] )
+			continue;
+		area++;
+		Int x = cells[c] % m_width;
+		Int y = cells[c] / m_width;
+		for( Int i = 0; i < 4; i++ )
+		{
+			Int nx = x + offsetX[i];
+			Int ny = y + offsetY[i];
+			if( nx < 0 || ny < 0 || nx >= m_width || ny >= m_height || !m_inLake[cellIndex( nx, ny )] )
+				edges++;
+		}
+	}
+	if( edges == 0 )
+		return 1.0f;
+	return 4.0f * PI * (Real)area / ( (Real)edges * (Real)edges );
+}
+
+/** One lake's cells still in m_inLake over the area of the ellipse with their spread: an oval scores
+	about 1 however ragged its shore, two blobs on a neck about 0.68, a crescent 0.6. */
+Real RMGLayout::lakeEllipseFill( const std::vector<Int>& cells ) const
+{
+	Real area = 0.0f, sumX = 0.0f, sumY = 0.0f;
+	for( UnsignedInt c = 0; c < cells.size(); c++ )
+	{
+		if( !m_inLake[cells[c]] )
+			continue;
+		area += 1.0f;
+		sumX += (Real)( cells[c] % m_width );
+		sumY += (Real)( cells[c] / m_width );
+	}
+	if( area < 1.0f )
+		return 1.0f;
+	const Real meanX = sumX / area, meanY = sumY / area;
+	Real xx = 0.0f, yy = 0.0f, xy = 0.0f;
+	for( UnsignedInt c = 0; c < cells.size(); c++ )
+	{
+		if( !m_inLake[cells[c]] )
+			continue;
+		const Real dx = (Real)( cells[c] % m_width ) - meanX;
+		const Real dy = (Real)( cells[c] / m_width ) - meanY;
+		xx += dx * dx;
+		yy += dy * dy;
+		xy += dx * dy;
+	}
+	xx /= area;
+	yy /= area;
+	xy /= area;
+	const Real spread = xx * yy - xy * xy;
+	if( spread <= 0.0f )
+		return 1.0f;
+	return area / ( 4.0f * PI * sqrtf( spread ) );
+}
+
+/** One lake's cells opened by a disc: what a disc wholly inside the lake can reach stays water. A
+	lake no disc fits in is left as it was; the caller decides about it. */
+void RMGLayout::openLakeCells( const std::vector<Int>& cells, Int radius )
+{
+	std::vector<Int> core;
+	for( UnsignedInt c = 0; c < cells.size(); c++ )
+	{
+		Int x = cells[c] % m_width;
+		Int y = cells[c] / m_width;
+		Bool whole = m_inLake[cells[c]] != 0;
+		for( Int dy = -radius; dy <= radius && whole; dy++ )
+		{
+			for( Int dx = -radius; dx <= radius; dx++ )
+			{
+				if( dx * dx + dy * dy > radius * radius )
+					continue;
+				Int nx = x + dx;
+				Int ny = y + dy;
+				if( nx < 0 || ny < 0 || nx >= m_width || ny >= m_height || !m_inLake[cellIndex( nx, ny )] )
+				{
+					whole = FALSE;
+					break;
+				}
+			}
+		}
+		if( whole )
+			core.push_back( cells[c] );
+	}
+	if( core.empty() )
+		return;
+	std::vector<char> kept( cells.size(), 0 );
+	for( UnsignedInt c = 0; c < cells.size(); c++ )
+	{
+		Int x = cells[c] % m_width;
+		Int y = cells[c] / m_width;
+		for( UnsignedInt k = 0; k < core.size() && !kept[c]; k++ )
+		{
+			Int dx = core[k] % m_width - x;
+			Int dy = core[k] / m_width - y;
+			kept[c] = dx * dx + dy * dy <= radius * radius;
+		}
+	}
+	for( UnsignedInt c = 0; c < cells.size(); c++ )
+		if( !kept[c] )
+			m_inLake[cells[c]] = 0;
+}
+
 /** Each lake opened again with a disc in proportion to its own size. One disc for every lake took
 	the slivers off a pond and left a big lake its arms, since an arm of a big lake is wider than any
 	disc a pond survives. An opening only takes water away, so each lake is opened on its own cells and
@@ -2431,6 +2567,43 @@ void RMGLayout::openEachLake( void )
 		{
 			m_inLake[filled[f]] = 1;
 			seen[filled[f]] = 1;
+		}
+
+		/* A plain map's lake can still come out as two blobs on a neck, a crescent or a body with an
+			arm, where its own disc was too small to open the arm off. Such a lake is opened again with
+			a disc of RMG_LAKE_REOPEN_SHARE of the radius of a disc its size, and one even that
+			leaves under RMG_LAKE_DRY_BELOW goes dry rather than draw as a dumbbell. A lake the disc
+			would take more than a quarter of is long rather than knotted, a lake down a valley, and
+			stays as it was. */
+		if( !m_style )
+		{
+			std::vector<Int> water;
+			for( UnsignedInt c = 0; c < cells.size(); c++ )
+				if( m_inLake[cells[c]] )
+					water.push_back( cells[c] );
+			for( UnsignedInt f = 0; f < filled.size(); f++ )
+				if( m_inLake[filled[f]] )
+					water.push_back( filled[f] );
+			if( lakeEllipseFill( water ) < RMG_LAKE_FILL_LEAST )
+			{
+				Int reopen = (Int)( RMG_LAKE_REOPEN_SHARE * sqrtf( (Real)water.size() / PI ) );
+				if( reopen > 2 * RMG_LAKE_OPEN_MOST )
+					reopen = 2 * RMG_LAKE_OPEN_MOST;
+				openLakeCells( water, reopen );
+				Int kept = 0;
+				for( UnsignedInt c = 0; c < water.size(); c++ )
+					kept += m_inLake[water[c]] ? 1 : 0;
+				if( (Real)kept < RMG_LAKE_REOPEN_KEEP * (Real)water.size() )
+				{
+					for( UnsignedInt c = 0; c < water.size(); c++ )
+						m_inLake[water[c]] = 1;
+				}
+				else if( lakeRoundness( water ) < RMG_LAKE_DRY_BELOW )
+				{
+					for( UnsignedInt c = 0; c < water.size(); c++ )
+						m_inLake[water[c]] = 0;
+				}
+			}
 		}
 
 		for( UnsignedInt c = 0; c < cells.size(); c++ )
@@ -4654,8 +4827,190 @@ Bool RMGLayout::carvePassBetweenCells( Int fromX, Int fromY, Int toX, Int toY, B
 			break;
 	}
 
+	if( plainRoad )
+		smoothRoute( route );
 	applyRouteProfile( route, recordRamp, protectRadius, protectX, protectY );
 	return TRUE;
+}
+
+/** A plain map's way as the search found it is a chain of straight and 45 degree runs. It is drawn
+	again through a running mean of its own points, RMG_ROAD_SMOOTH cells either side in
+	RMG_ROAD_SMOOTH_PASSES passes with its two ends held, which turns each corner into a bend, and
+	rasterised back in half-cell steps so the cells stay joined. A point the mean would move onto
+	a cliff or into water that the search had kept off stays where the search put it. */
+void RMGLayout::smoothRoute( std::vector<Int>& route ) const
+{
+	const Int count = (Int)route.size();
+	if( count < 3 )
+		return;
+	std::vector<Real> pointX( count ), pointY( count ), nextX( count ), nextY( count );
+	for( Int i = 0; i < count; i++ )
+	{
+		pointX[i] = (Real)( route[i] % m_width );
+		pointY[i] = (Real)( route[i] / m_width );
+	}
+	for( Int pass = 0; pass < RMG_ROAD_SMOOTH_PASSES; pass++ )
+	{
+		for( Int i = 0; i < count; i++ )
+		{
+			Int reach = RMG_ROAD_SMOOTH;
+			if( reach > i ) reach = i;
+			if( reach > count - 1 - i ) reach = count - 1 - i;
+			Real sumX = 0.0f, sumY = 0.0f;
+			for( Int j = i - reach; j <= i + reach; j++ )
+			{
+				sumX += pointX[j];
+				sumY += pointY[j];
+			}
+			nextX[i] = sumX / (Real)( 2 * reach + 1 );
+			nextY[i] = sumY / (Real)( 2 * reach + 1 );
+			if( m_passable[cellIndex( (Int)( nextX[i] + 0.5f ), (Int)( nextY[i] + 0.5f ) )] == 0 && m_passable[route[i]] != 0 )
+			{
+				nextX[i] = (Real)( route[i] % m_width );
+				nextY[i] = (Real)( route[i] / m_width );
+			}
+		}
+		pointX.swap( nextX );
+		pointY.swap( nextY );
+	}
+
+	/* A way across open ground the search found no reason to bend still runs ruler-straight, often
+		at 45 degrees. It sways to either side by up to RMG_ROAD_SWAY cells on a slow noise read
+		along its length, eased in over its first and last RMG_ROAD_SWAY_EASE cells so it still
+		meets both ends. The offsets are averaged along the way, and wherever the averaged sway would
+		climb more than RMG_ROAD_SWAY_RISE bytes off the line the search chose, or onto a crest,
+		the sway is dropped over that stretch and the rest averaged again, so a dropped stretch
+		bends back to the search's line instead of jumping to it. */
+	const Real salt = (Real)( ( route[0] + route[count - 1] ) % 211 );
+	std::vector<Real> normalX( count, 0.0f ), normalY( count, 0.0f ), sway( count, 0.0f ), offset( count, 0.0f ), nextOffset( count, 0.0f );
+	std::vector<Real> along( count, 0.0f );
+	Real travelled = 0.0f;
+	for( Int i = 1; i < count - 1; i++ )
+	{
+		travelled += sqrtf( ( pointX[i] - pointX[i - 1] ) * ( pointX[i] - pointX[i - 1] )
+			+ ( pointY[i] - pointY[i - 1] ) * ( pointY[i] - pointY[i - 1] ) );
+		Real tangentX = pointX[i + 1] - pointX[i - 1];
+		Real tangentY = pointY[i + 1] - pointY[i - 1];
+		Real length = sqrtf( tangentX * tangentX + tangentY * tangentY );
+		if( length < 0.01f )
+			continue;
+		normalX[i] = -tangentY / length;
+		normalY[i] = tangentX / length;
+		Real ease = (Real)( ( i < count - 1 - i ) ? i : count - 1 - i ) / (Real)RMG_ROAD_SWAY_EASE;
+		if( ease > 1.0f )
+			ease = 1.0f;
+		sway[i] = RMG_ROAD_SWAY * fadeCurve( ease ) * 1.4f
+			* fractalNoise( m_perm, travelled * RMG_ROAD_SWAY_SCALE + salt, salt * 0.37f, 2 );
+		along[i] = travelled;
+	}
+
+	/* Noise alone can sit near nought for a whole way, so the way also bows as one arc, to
+		whichever side its ground lies lower on. */
+	const Real total = along[count - 2] + 1.0f;
+	Real bow = RMG_ROAD_BOW_SHARE * total;
+	if( bow > RMG_ROAD_BOW_MOST )
+		bow = RMG_ROAD_BOW_MOST;
+	Real sideGround[2] = { 0.0f, 0.0f };
+	for( Int side = 0; side < 2; side++ )
+	{
+		const Real sign = side == 0 ? 1.0f : -1.0f;
+		for( Int i = 1; i < count - 1; i += RMG_ROAD_SMOOTH )
+		{
+			const Real arc = sign * bow * Sin( PI * along[i] / total );
+			const Int arcX = (Int)floorf( pointX[i] + normalX[i] * arc + 0.5f );
+			const Int arcY = (Int)floorf( pointY[i] + normalY[i] * arc + 0.5f );
+			if( !insidePlayable( arcX, arcY ) )
+			{
+				sideGround[side] += RMG_ROAD_BOW_BLOCKED;
+				continue;
+			}
+			const Int cell = cellIndex( arcX, arcY );
+			sideGround[side] += m_passable[cell] != 0 ? (Real)m_heights[cell] : RMG_ROAD_BOW_BLOCKED;
+		}
+	}
+	const Real bowSign = sideGround[0] < sideGround[1] || ( sideGround[0] == sideGround[1] && ( (Int)salt & 1 ) ) ? 1.0f : -1.0f;
+	for( Int i = 1; i < count - 1; i++ )
+		sway[i] += bowSign * bow * Sin( PI * along[i] / total );
+
+	const Int window = 2 * RMG_ROAD_SMOOTH;
+	for( Int round = 0; round < RMG_ROAD_SWAY_ROUNDS; round++ )
+	{
+		offset = sway;
+		for( Int pass = 0; pass < RMG_ROAD_SMOOTH_PASSES; pass++ )
+		{
+			for( Int i = 1; i < count - 1; i++ )
+			{
+				Int reach = window;
+				if( reach > i ) reach = i;
+				if( reach > count - 1 - i ) reach = count - 1 - i;
+				Real sum = 0.0f;
+				for( Int j = i - reach; j <= i + reach; j++ )
+					sum += offset[j];
+				nextOffset[i] = sum / (Real)( 2 * reach + 1 );
+			}
+			offset.swap( nextOffset );
+		}
+		Bool dropped = FALSE;
+		for( Int i = 1; i < count - 1; i++ )
+		{
+			const Int laid = cellIndex( (Int)( pointX[i] + 0.5f ), (Int)( pointY[i] + 0.5f ) );
+			if( roadMoveFits( laid, pointX[i] + normalX[i] * offset[i], pointY[i] + normalY[i] * offset[i] ) )
+				continue;
+			for( Int j = max( 0, i - window ); j <= min( count - 1, i + window ); j++ )
+				sway[j] = 0.0f;
+			dropped = TRUE;
+		}
+		if( !dropped )
+			break;
+	}
+	for( Int i = 1; i < count - 1; i++ )
+	{
+		const Int laid = cellIndex( (Int)( pointX[i] + 0.5f ), (Int)( pointY[i] + 0.5f ) );
+		Real swayX = pointX[i] + normalX[i] * offset[i];
+		Real swayY = pointY[i] + normalY[i] * offset[i];
+		if( roadMoveFits( laid, swayX, swayY ) )
+		{
+			pointX[i] = swayX;
+			pointY[i] = swayY;
+		}
+	}
+
+	std::vector<Int> drawn;
+	drawn.push_back( route[0] );
+	for( Int i = 1; i < count; i++ )
+	{
+		Real dx = pointX[i] - pointX[i - 1];
+		Real dy = pointY[i] - pointY[i - 1];
+		Int steps = (Int)( 2.0f * sqrtf( dx * dx + dy * dy ) ) + 1;
+		for( Int k = 1; k <= steps; k++ )
+		{
+			Real f = (Real)k / (Real)steps;
+			Int cell = cellIndex( (Int)( pointX[i - 1] + dx * f + 0.5f ), (Int)( pointY[i - 1] + dy * f + 0.5f ) );
+			if( cell != drawn.back() )
+				drawn.push_back( cell );
+		}
+	}
+	if( drawn.back() != route[count - 1] )
+		drawn.push_back( route[count - 1] );
+	route.swap( drawn );
+}
+
+/** Whether a way's point may move off the cell the search laid it on: onto open ground, no more
+	than RMG_ROAD_SWAY_RISE bytes higher, and onto a crest or ridge no higher than RMG_ROAD_SWAY_CREST
+	or than the search's own cell. A sway reaches further than the border band is wide, so a point
+	off the playable area does not fit either. */
+Bool RMGLayout::roadMoveFits( Int laid, Real movedX, Real movedY ) const
+{
+	const Int movedCellX = (Int)floorf( movedX + 0.5f );
+	const Int movedCellY = (Int)floorf( movedY + 0.5f );
+	if( !insidePlayable( movedCellX, movedCellY ) )
+		return FALSE;
+	const Int moved = cellIndex( movedCellX, movedCellY );
+	if( moved == laid )
+		return TRUE;
+	if( m_passable[moved] == 0 || (Int)m_heights[moved] - (Int)m_heights[laid] > RMG_ROAD_SWAY_RISE )
+		return FALSE;
+	return crestAt( moved ) <= max( crestAt( laid ), (Int)RMG_ROAD_SWAY_CREST );
 }
 
 /** How far a cell stands over the ground RMG_ROAD_CREST_REACH cells off on both sides, along
@@ -4841,16 +5196,75 @@ void RMGLayout::routeProfile( const std::vector<Int>& route, std::vector<Real>& 
 	/* Where a plain map's way still tops a crest, the saddle it could not go round, it goes through
 		a cutting: no cell stands more than the free rise over the higher of the way RMG_ROAD_CREST_REACH
 		cells back and on, and none is cut deeper than its banks reach. Both bounds move no faster
-		than the profile does, so the cut keeps the grade. */
+		than the profile does, so the cut keeps the grade. A way riding along a ridge, the spur a ramp
+		came down or the bank of a pad's cut, is sunk the same way against the ground the same reach
+		off to either side of it, and the way either side of the sunk stretch eased down to its grade. */
 	if( plainRoad && (Int)profile.size() > 2 * RMG_ROAD_CREST_REACH )
 	{
 		std::vector<Real> before( profile );
 		for( Int i = RMG_ROAD_CREST_REACH; i < (Int)profile.size() - RMG_ROAD_CREST_REACH; i++ )
 		{
 			Real side = max( before[i - RMG_ROAD_CREST_REACH], before[i + RMG_ROAD_CREST_REACH] );
+			const Int x = route[i] % m_width, y = route[i] / m_width;
+			Real tangentX = (Real)( route[i + 2] % m_width - route[i - 2] % m_width );
+			Real tangentY = (Real)( route[i + 2] / m_width - route[i - 2] / m_width );
+			Real length = sqrtf( tangentX * tangentX + tangentY * tangentY );
+			if( length > 0.5f )
+			{
+				Int ax = x + (Int)floorf( -tangentY / length * RMG_ROAD_CREST_REACH + 0.5f );
+				Int ay = y + (Int)floorf( tangentX / length * RMG_ROAD_CREST_REACH + 0.5f );
+				Int bx = 2 * x - ax, by = 2 * y - ay;
+				if( ax >= 0 && ay >= 0 && ax < m_width && ay < m_height && bx >= 0 && by >= 0 && bx < m_width && by < m_height )
+					side = min( side, max( (Real)m_heights[cellIndex( ax, ay )], (Real)m_heights[cellIndex( bx, by )] ) );
+			}
 			Real cap = max( side + (Real)RMG_ROAD_CREST_FREE, before[i] - RMG_ROAD_CUT_MOST );
 			if( profile[i] > cap )
 				profile[i] = cap;
+		}
+		for( UnsignedInt i = 1; i < profile.size(); i++ )
+		{
+			if( profile[i] > profile[i - 1] + maxStep[i] )
+				profile[i] = profile[i - 1] + maxStep[i];
+		}
+		for( Int i = (Int)profile.size() - 2; i >= 0; i-- )
+		{
+			if( profile[i] > profile[i + 1] + maxStep[i + 1] )
+				profile[i] = profile[i + 1] + maxStep[i + 1];
+		}
+	}
+
+	/* Laid again by relayRoads, a cell under something standing cannot move, so it is held at its
+		ground and the way round it graded to it: cut alone, the way kept a step at the edge of a pad
+		it was not allowed into. */
+	if( m_carveKeep )
+	{
+		std::vector<char> held( route.size(), 0 );
+		for( UnsignedInt i = 0; i < route.size(); i++ )
+		{
+			held[i] = (*m_carveKeep)[route[i]] != 0;
+			if( held[i] )
+				profile[i] = (Real)m_heights[route[i]];
+		}
+		for( Int pass = 0; pass < 2; pass++ )
+		{
+			for( UnsignedInt i = 1; i < profile.size(); i++ )
+			{
+				if( held[i] )
+					continue;
+				if( profile[i] > profile[i - 1] + maxStep[i] )
+					profile[i] = profile[i - 1] + maxStep[i];
+				if( profile[i] < profile[i - 1] - maxStep[i] )
+					profile[i] = profile[i - 1] - maxStep[i];
+			}
+			for( Int i = (Int)profile.size() - 2; i >= 0; i-- )
+			{
+				if( held[i] )
+					continue;
+				if( profile[i] > profile[i + 1] + maxStep[i + 1] )
+					profile[i] = profile[i + 1] + maxStep[i + 1];
+				if( profile[i] < profile[i + 1] - maxStep[i + 1] )
+					profile[i] = profile[i + 1] - maxStep[i + 1];
+			}
 		}
 	}
 }
@@ -5075,6 +5489,18 @@ Real RMGLayout::massifClearance( Real cellX, Real cellY ) const
 	reach. A ramp leaves on the base's bearing from the lobe's middle or up to RMG_MASSIF_ROAD_SWING
 	steps of eight degrees off it, where the rim is widest: on a stretch where the rim is a slope
 	already the road is graded into the slope rather than cut through a cliff as a notch. */
+/** How far a massif ramp's centre line stands aside from its bearing at t, 0 at the top and 1 at the
+	foot: nothing at the rim, then a swing that grows with the square, carried straight on past the
+	foot where the road hands back to the ground. */
+static Real rmgRampSwing( Real bend, Real t )
+{
+	if( t <= 0.0f )
+		return 0.0f;
+	if( t <= 1.0f )
+		return bend * t * t;
+	return bend * ( 2.0f * t - 1.0f );
+}
+
 void RMGLayout::carveMassifRamps( void )
 {
 	struct RMGMassifRamp
@@ -5126,6 +5552,8 @@ void RMGLayout::carveMassifRamps( void )
 		planned.push_back( ramp );
 	}
 
+	std::vector<UnsignedInt> carvedLobe;
+	std::vector<Real> carvedX, carvedY;
 	for( UnsignedInt p = 0; p < planned.size(); p++ )
 	{
 		const RMGMassifLobe& lobe = m_massifLobes[planned[p].m_lobe];
@@ -5175,6 +5603,25 @@ void RMGLayout::carveMassifRamps( void )
 			}
 		}
 
+		/* The road leaves the rim square to it and swings toward the base it serves as it comes down,
+			by RMG_MASSIF_ROAD_BEND of its length at the foot, so it reads as a road let down the slope
+			and not a spoke ruled out of the table. */
+		/* Two bases side by side pick nearly the same bearing up the same lobe, and two ramps laid
+			over each other cross in a knot of banks. The second uses the first. */
+		Bool shared = FALSE;
+		for( UnsignedInt c = 0; c < carvedLobe.size() && !shared; c++ )
+			shared = carvedLobe[c] == planned[p].m_lobe && carvedX[c] * ux + carvedY[c] * uy > RMG_MASSIF_ROAD_APART;
+		if( shared )
+			continue;
+		carvedLobe.push_back( planned[p].m_lobe );
+		carvedX.push_back( ux );
+		carvedY.push_back( uy );
+
+		const Real normalX = -uy;
+		const Real normalY = ux;
+		Real towardBase = ( m_starts[i].m_cellX - centreX ) * normalX + ( m_starts[i].m_cellY - centreY ) * normalY;
+		const Real bendSide = ( towardBase >= 0.0f ) ? RMG_MASSIF_ROAD_BEND : -RMG_MASSIF_ROAD_BEND;
+
 		// Out far enough that the climb is a slope a tank takes, and no nearer any base than its ring.
 		Real foot = outer + 12.0f;
 		Real top = inner - 6.0f;
@@ -5185,8 +5632,8 @@ void RMGLayout::carveMassifRamps( void )
 			Bool clear = TRUE;
 			for( UnsignedInt s = 0; s < m_starts.size() && clear; s++ )
 			{
-				Real fx = centreX + ux * foot - m_starts[s].m_cellX;
-				Real fy = centreY + uy * foot - m_starts[s].m_cellY;
+				Real fx = centreX + ux * foot + normalX * bendSide * ( foot - top ) - m_starts[s].m_cellX;
+				Real fy = centreY + uy * foot + normalY * bendSide * ( foot - top ) - m_starts[s].m_cellY;
 				clear = fx * fx + fy * fy >= RMG_BLEND_RADIUS * RMG_BLEND_RADIUS;
 			}
 			if( clear )
@@ -5194,9 +5641,10 @@ void RMGLayout::carveMassifRamps( void )
 		}
 		if( foot <= top )
 			continue;
+		const Real bend = bendSide * ( foot - top );
 
-		Real footX = centreX + ux * foot + (Real)RMG_BORDER_CELLS;
-		Real footY = centreY + uy * foot + (Real)RMG_BORDER_CELLS;
+		Real footX = centreX + ux * foot + normalX * bend + (Real)RMG_BORDER_CELLS;
+		Real footY = centreY + uy * foot + normalY * bend + (Real)RMG_BORDER_CELLS;
 		Real topX = centreX + ux * top + (Real)RMG_BORDER_CELLS;
 		Real topY = centreY + uy * top + (Real)RMG_BORDER_CELLS;
 
@@ -5220,8 +5668,9 @@ void RMGLayout::carveMassifRamps( void )
 		for( Int s = 0; s < profileCount; s++ )
 		{
 			Real along = profileFrom + (Real)s;
-			Int cx = (Int)( centreX + ux * along + (Real)RMG_BORDER_CELLS + 0.5f );
-			Int cy = (Int)( centreY + uy * along + (Real)RMG_BORDER_CELLS + 0.5f );
+			Real aside = rmgRampSwing( bend, ( along - top ) / span );
+			Int cx = (Int)( centreX + ux * along + normalX * aside + (Real)RMG_BORDER_CELLS + 0.5f );
+			Int cy = (Int)( centreY + uy * along + normalY * aside + (Real)RMG_BORDER_CELLS + 0.5f );
 			if( cx < 0 ) cx = 0;
 			if( cy < 0 ) cy = 0;
 			if( cx >= m_width ) cx = m_width - 1;
@@ -5247,19 +5696,26 @@ void RMGLayout::carveMassifRamps( void )
 			graded[s] = ( 2.0f * under + over ) / 3.0f;
 		}
 		// A short running mean takes the crease off both ends of the climb without steepening it.
+		/* The ground under the centre line gets the same mean before the road is laid as an offset
+			over it: read cell by cell along a slanted line, it stepped wherever the line crossed into
+			the next row, and every step came out across the road as a stripe of one-cell bumps. */
 		std::vector<Real> level( profileCount );
+		std::vector<Real> groundMean( profileCount );
 		for( Int s = 0; s < profileCount; s++ )
 		{
 			Real sum = 0.0f;
+			Real groundSum = 0.0f;
 			Int count = 0;
 			for( Int j = s - 2; j <= s + 2; j++ )
 			{
 				if( j < 0 || j >= profileCount )
 					continue;
 				sum += graded[j];
+				groundSum += ground[j];
 				count++;
 			}
 			level[s] = sum / (Real)count;
+			groundMean[s] = groundSum / (Real)count;
 		}
 		Int reach = (Int)( RMG_MASSIF_ROAD_FOOT + RMG_MASSIF_ROAD_WIDEST + 0.25f * span ) + 1;
 		Int loX = (Int)( footX < topX ? footX : topX ) - reach;
@@ -5287,10 +5743,10 @@ void RMGLayout::carveMassifRamps( void )
 				Real px = (Real)x - (Real)RMG_BORDER_CELLS - centreX;
 				Real py = (Real)y - (Real)RMG_BORDER_CELLS - centreY;
 				Real along = px * ux + py * uy;
-				Real across = fabsf( px * uy - py * ux );
 				Real t = ( along - top ) / span;		// 0 at the top, 1 at the foot
 				if( t < -0.25f || t > 1.25f )
 					continue;
+				Real across = fabsf( px * normalX + py * normalY - rmgRampSwing( bend, t ) );
 				Real tc = t < 0.0f ? 0.0f : ( t > 1.0f ? 1.0f : t );
 
 				Real at = along - profileFrom;
@@ -5301,8 +5757,8 @@ void RMGLayout::carveMassifRamps( void )
 				if( f < 0.0f ) f = 0.0f;
 				if( f > 1.0f ) f = 1.0f;
 				Real roadLevel = lerpReal( level[s0], level[s0 + 1], f );
-				Real centreGround = lerpReal( ground[s0], ground[s0 + 1], f );
-				Real cut = fabsf( roadLevel - centreGround );
+				Real centreGround = lerpReal( groundMean[s0], groundMean[s0 + 1], f );
+				Real cut = fabsf( roadLevel - lerpReal( ground[s0], ground[s0 + 1], f ) );
 
 				// The deeper the cut or the higher the fill, the wider its sides, so a bank stands at
 				// one slope the whole way along instead of a wall where the road meets the rim.
@@ -5325,9 +5781,14 @@ void RMGLayout::carveMassifRamps( void )
 
 				/* Where the road only follows the ground it is laid as an offset over the ground
 					beside it, so the strip rolls with its sides. Where it cuts or fills the cliff it is
-					laid level across, so a rim crossing the road at a slant leaves no step in it. */
+					laid level across, so a rim crossing the road at a slant leaves no step in it. A cell
+					of the roadway standing well off the centre line's ground is on such a rim even where
+					the centre line is not, and is laid level too: as an offset it kept the rim's lip as a
+					step. Banks and the ends past the ramp keep the offset, or every bump on them was
+					pulled part way to the road and drew as a pit. */
 				Real here = (Real)m_heights[cellIndex( x, y )];
-				Real work = cut / 6.0f;
+				Real offCentre = ( t >= 0.0f && t <= 1.0f && across <= half ) ? fabsf( here - centreGround ) : 0.0f;
+				Real work = max( cut, offCentre ) / 6.0f;
 				if( work > 1.0f ) work = 1.0f;
 				Real target = lerpReal( here + roadLevel - centreGround, roadLevel, work );
 				Real h = lerpReal( here, target, weight );
@@ -5338,11 +5799,26 @@ void RMGLayout::carveMassifRamps( void )
 		}
 
 		RMGPoint ramp;
-		ramp.m_cellX = centreX + ux * ( foot + top ) * 0.5f;
-		ramp.m_cellY = centreY + uy * ( foot + top ) * 0.5f;
+		ramp.m_cellX = centreX + ux * ( foot + top ) * 0.5f + normalX * rmgRampSwing( bend, 0.5f );
+		ramp.m_cellY = centreY + uy * ( foot + top ) * 0.5f + normalY * rmgRampSwing( bend, 0.5f );
 		m_ramps.push_back( ramp );
-		recordRoad( topX - (Real)RMG_BORDER_CELLS, topY - (Real)RMG_BORDER_CELLS,
-								footX - (Real)RMG_BORDER_CELLS, footY - (Real)RMG_BORDER_CELLS );
+
+		std::vector<Int> cells;
+		for( Real along = top; along <= foot; along += 0.5f )
+		{
+			Real aside = rmgRampSwing( bend, ( along - top ) / span );
+			Int cx = (Int)( centreX + ux * along + normalX * aside + 0.5f ) + RMG_BORDER_CELLS;
+			Int cy = (Int)( centreY + uy * along + normalY * aside + 0.5f ) + RMG_BORDER_CELLS;
+			if( cx < 0 || cy < 0 || cx >= m_width || cy >= m_height )
+				continue;
+			if( cells.empty() || cells.back() != cellIndex( cx, cy ) )
+				cells.push_back( cellIndex( cx, cy ) );
+		}
+		if( cells.size() >= 2 )
+		{
+			m_roads.push_back( cells );
+			m_roadCarved.push_back( FALSE );
+		}
 	}
 
 	buildPassability();
@@ -6620,7 +7096,62 @@ Bool RMGLayout::siteIsClear( Real cellX, Real cellY, Real radius ) const
 			return FALSE;
 	}
 
+	if( m_padsKeepOffWays && !m_wayDistance.empty() )
+	{
+		Int x = (Int)floorf( cellX + 0.5f ) + RMG_BORDER_CELLS;
+		Int y = (Int)floorf( cellY + 0.5f ) + RMG_BORDER_CELLS;
+		if( x >= 0 && y >= 0 && x < m_width && y < m_height && m_wayDistance[cellIndex( x, y )] < RMG_PAD_WAY_CLEAR )
+			return FALSE;
+	}
+
 	return TRUE;
+}
+
+/** Cells from each cell to the nearest carved way, in four-neighbour steps, capped at
+	RMG_PAD_WAY_CLEAR. A money pad levels a disc and holds the ground round what stands on it, so one
+	laid across a way left a 13 to 15 byte step in the way that relayRoads was not allowed to move. */
+void RMGLayout::markWayDistance( void )
+{
+	static const Int offsetX[4] = { 1, -1, 0, 0 };
+	static const Int offsetY[4] = { 0, 0, 1, -1 };
+	m_wayDistance.assign( m_heights.size(), (UnsignedByte)RMG_PAD_WAY_CLEAR );
+	std::vector<Int> frontier, next;
+	for( UnsignedInt r = 0; r < m_roads.size(); r++ )
+	{
+		if( !m_roadCarved[r] )
+			continue;
+		for( UnsignedInt i = 0; i < m_roads[r].size(); i++ )
+		{
+			if( m_wayDistance[m_roads[r][i]] != 0 )
+			{
+				m_wayDistance[m_roads[r][i]] = 0;
+				frontier.push_back( m_roads[r][i] );
+			}
+		}
+	}
+	for( Int step = 1; step < RMG_PAD_WAY_CLEAR && !frontier.empty(); step++ )
+	{
+		next.clear();
+		for( UnsignedInt f = 0; f < frontier.size(); f++ )
+		{
+			Int x = frontier[f] % m_width;
+			Int y = frontier[f] / m_width;
+			for( Int k = 0; k < 4; k++ )
+			{
+				Int nx = x + offsetX[k];
+				Int ny = y + offsetY[k];
+				if( nx < 0 || ny < 0 || nx >= m_width || ny >= m_height )
+					continue;
+				Int cell = cellIndex( nx, ny );
+				if( m_wayDistance[cell] > step )
+				{
+					m_wayDistance[cell] = (UnsignedByte)step;
+					next.push_back( cell );
+				}
+			}
+		}
+		frontier.swap( next );
+	}
 }
 
 void RMGLayout::reserveSite( Real cellX, Real cellY, Real radius )
@@ -7673,6 +8204,9 @@ void RMGLayout::placeSupplyAndDerricks( void )
 	}
 
 	const Int numMoney = (Int)moneyList.size();
+	const Bool plainWays = !m_style && !m_skeleton;
+	if( plainWays )
+		markWayDistance();
 	static const Int theBands[] = { 1, 3, 6, 10 };
 	const Int numBands = sizeof(theBands) / sizeof(theBands[0]);
 
@@ -7688,21 +8222,29 @@ void RMGLayout::placeSupplyAndDerricks( void )
 			Real sy = m_starts[i].m_cellY;
 			Real bearing = outwardBearing( sx, sy ) + money.m_turn;
 
+			/* A plain map's pad first looks along the walk for a site off the carved ways
+				(markWayDistance), and searches as before, ways and all, only when that finds none. */
 			RMGPoint site;
 			Bool found = FALSE;
 			Bool walked = TRUE;
-			for( Int b = 0; b < numBands && !found; b++ )
-				found = findSiteByWalk( walk, owner, lead, i, target, theBands[b], RMG_MONEY_LEAD,
-																money.m_maxLead, bearing, money.m_clearance, &site );
-			if( !found )
-				found = findSiteByWalk( walk, owner, lead, i, target, 16, 1, RMG_MONEY_NO_RIVAL,
-																bearing, money.m_clearance * 0.5f, &site );
-			if( !found )
+			for( Int pass = plainWays ? 0 : 1; pass < 2 && !found; pass++ )
 			{
-				walked = FALSE;
-				found = findSiteOnCompass( sx, sy, money.m_ring, 12.0f, bearing, 3.0f, &site ) ||
-								findSiteNear( sx, sy, money.m_ring - 8.0f, money.m_ring + 20.0f, 2.0f, &site );
+				m_padsKeepOffWays = pass == 0;
+				walked = TRUE;
+				for( Int b = 0; b < numBands && !found; b++ )
+					found = findSiteByWalk( walk, owner, lead, i, target, theBands[b], RMG_MONEY_LEAD,
+																	money.m_maxLead, bearing, money.m_clearance, &site );
+				if( !found )
+					found = findSiteByWalk( walk, owner, lead, i, target, 16, 1, RMG_MONEY_NO_RIVAL,
+																	bearing, money.m_clearance * 0.5f, &site );
+				if( !found && !m_padsKeepOffWays )
+				{
+					walked = FALSE;
+					found = findSiteOnCompass( sx, sy, money.m_ring, 12.0f, bearing, 3.0f, &site ) ||
+									findSiteNear( sx, sy, money.m_ring - 8.0f, money.m_ring + 20.0f, 2.0f, &site );
+				}
 			}
+			m_padsKeepOffWays = FALSE;
 			if( !found )
 				continue;
 
@@ -8992,6 +9534,8 @@ void RMGLayout::build( const RandomMapSettings& settings, Bool skeleton )
 	m_settings = settings;
 	RandomMapGenerator::clampSettings( m_settings );
 	m_lockCarves = FALSE;
+	m_padsKeepOffWays = FALSE;
+	m_wayDistance.clear();
 	m_playable = FALSE;
 	m_roads.clear();
 	m_roadCarved.clear();

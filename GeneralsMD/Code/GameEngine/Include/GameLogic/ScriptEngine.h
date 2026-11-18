@@ -459,6 +459,9 @@ protected:
 	AttackPriorityInfo *findAttackInfo(const AsciiString& name, Bool addIfNotFound);
 
 protected:
+	/// Script passes continue during world freeze; carry game-time phase independently.
+	void updateCountdownTimers( void );
+
 	/// Stuff to execute scripts sequentially
 	typedef std::vector<SequentialScript*> VecSequentialScriptPtr;
 	typedef VecSequentialScriptPtr::iterator VecSequentialScriptPtrIt;
@@ -477,6 +480,7 @@ protected:
 protected:
 	ActionTemplate		m_actionTemplates[ScriptAction::NUM_ITEMS];
 	ConditionTemplate	m_conditionTemplates[Condition::NUM_ITEMS];
+	UnsignedByte m_countdownTimerFrame; ///< game-time hundredths within a retail tick
 	TCounter					m_counters[MAX_COUNTERS];
 	Int								m_numCounters;
 	TFlag							m_flags[MAX_FLAGS];

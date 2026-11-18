@@ -27,6 +27,11 @@ struct CinematicAnimationClockMode
 // Snapshot only on the ordinary client/render path, never from a phase-4 extra picture.
 CinematicAnimationClockMode CinematicCameraModeForClientUpdate();
 
+// Ordinary repeated client frames may consume elapsed time; phase-4 extra pictures
+// retain their existing held clock and never call this admission point.
+bool CinematicAnimationClockFrozen(bool explicitlyFrozen, bool repeatedPicture,
+	const CinematicAnimationClockMode &mode);
+
 inline bool CinematicCameraMovesAllowed(bool paused, bool debugFrozen, bool scriptFrozen)
 {
 	// A world/script freeze deliberately leaves authored camera motion alive. Pause and the

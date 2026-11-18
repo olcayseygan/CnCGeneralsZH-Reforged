@@ -29140,3 +29140,94 @@ TEST(cinematic_camera_fractional_movers_follow_native_rates_at_every_game_speed)
 	}
 	GameSpeed_set(savedSpeed);
 }
+
+TEST(cinematic_camera_animation_clock_preserves_real_freezes_and_other_clock_modes)
+{
+	CinematicAnimationClockMode normal;
+	normal.singlePlayer = true;
+	CHECK(normal.allowsRenderTime());
+	CHECK(!CinematicAnimationClockFrozen(false, true, normal));
+	CHECK(CinematicAnimationClockFrozen(true, true, normal));
+	CHECK(CinematicAnimationClockFrozen(true, false, normal));
+	CHECK(!CinematicAnimationClockFrozen(false, false, normal));
+	// Every exclusion is independently sufficient. Positive and zero picture identities follow
+	// the same policy; there is no special first-frame escape from a genuine freeze.
+	bool CinematicAnimationClockMode::*exclusions[] = {
+		&CinematicAnimationClockMode::network, &CinematicAnimationClockMode::replay,
+		&CinematicAnimationClockMode::headless, &CinematicAnimationClockMode::shell,
+		&CinematicAnimationClockMode::loading, &CinematicAnimationClockMode::fast,
+		&CinematicAnimationClockMode::video, &CinematicAnimationClockMode::capture,
+		&CinematicAnimationClockMode::pictureClock
+	};
+	for (auto exclusion : exclusions)
+	{
+		CinematicAnimationClockMode mode = normal;
+		mode.*exclusion = true;
+		CHECK(!mode.allowsRenderTime());
+		CHECK(CinematicAnimationClockFrozen(false, true, mode));
+		CHECK(!CinematicAnimationClockFrozen(false, false, mode));
+		CHECK(CinematicAnimationClockFrozen(true, false, mode));
+	}
+	CinematicAnimationClockMode inactive;
+	CHECK(!inactive.allowsRenderTime());
+	CHECK(CinematicAnimationClockFrozen(false, true, inactive));
+	CHECK(!CinematicAnimationClockFrozen(false, false, inactive));
+}
+
+TEST(cinematic_camera_animation_clock_advances_repeated_client_frames_without_projection_pulses)
+{
+	const Int renderRates[] = {60, 120, 144};
+	const Int logicRates[] = {15, 20, LOGICFRAMES_PER_SECOND};
+	for (Int speed : PLAYER_GAME_SPEED_PERCENTS)
+	for (Int renderRate : renderRates)
+		for (Int logicRate : logicRates)
+			for (UnsignedInt firstFrame : {0u, 100u})
+			{
+				CinematicAnimationClockMode mode[2];
+				mode[1].singlePlayer = true;
+				UnsignedInt lastFrame = ~0u, previousMs[2] = {0, 0}, sync[2] = {0, 0};
+				double remainder[2] = {0, 0};
+				Int repeats = 0, legacyPulses = 0;
+				for (Int picture = 0; picture <= renderRate * 3; ++picture)
+				{
+					const UnsignedInt frame = firstFrame + (UnsignedInt)((Int64)picture * logicRate / renderRate);
+					const UnsignedInt now = (UnsignedInt)((Int64)picture * 1000 / renderRate);
+					const bool repeated = lastFrame == frame;
+					const double rate = (double)logicRate / LOGICFRAMES_PER_SECOND * speed / 100.0;
+					const UnsignedInt cameraMs = (UnsignedInt)(now * rate + 1.0e-8);
+					if (repeated) ++repeats;
+					for (Int enabled = 0; enabled < 2; ++enabled)
+					{
+						// This is the actual out-of-line guard used by W3DDisplay::draw. Keep the
+						// existing accumulated wall-time algorithm on either side of its decision.
+						if (!CinematicAnimationClockFrozen(false, repeated, mode[enabled]))
+						{
+							remainder[enabled] += (now - previousMs[enabled]) * rate;
+							previousMs[enabled] = now;
+							const UnsignedInt delta = (UnsignedInt)(remainder[enabled] + 1.0e-8);
+							remainder[enabled] -= delta;
+							sync[enabled] += delta;
+						}
+						// A rigid aircraft travels towards the eye, keeping pace vertically with a
+						// moving camera. Its smooth projected centre is fixed. Holding only the
+						// aircraft on a repeated client frame creates a backwards screen-space pulse.
+						Matrix3D mesh(true), cameraInverse(true), viewMesh;
+						mesh.Set_Translation(Vector3(20.0f, -0.3f * sync[enabled], 200.0f - 0.02f * sync[enabled]));
+						cameraInverse.Set_Translation(Vector3(0.0f, 0.3f * cameraMs, 0.0f));
+						Matrix3D::Multiply(cameraInverse, mesh, &viewMesh);
+						const Vector3 centre = viewMesh.Get_Translation();
+						const Real screenY = 180.0f - 180.0f * centre.Y / centre.Z;
+						if (enabled)
+						{
+							CHECK_EQ(sync[enabled], cameraMs);
+							CHECK_NEAR(screenY, 180.0f, 0.0002f);
+						}
+						else if (repeated && screenY < 179.0f) ++legacyPulses;
+					}
+					lastFrame = frame;
+				}
+				CHECK_EQ(repeats > 0, renderRate > logicRate);
+				CHECK_EQ(legacyPulses > 0, renderRate > logicRate);
+				CHECK_EQ(sync[0], sync[1]); // same elapsed duration at the final common boundary
+			}
+}

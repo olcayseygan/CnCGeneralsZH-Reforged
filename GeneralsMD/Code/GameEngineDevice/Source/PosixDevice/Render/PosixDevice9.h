@@ -514,3 +514,6 @@ protected:
 
 // SDL water features require a live native GPU device.
 bool PosixWaterGpuAvailable(IDirect3DDevice9 *device);
+
+// Requires the live SDL GPU draw provider; null/headless devices keep the fallback.
+bool PosixBattleMarksAvailable(IDirect3DDevice9 *device);

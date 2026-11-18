@@ -2067,7 +2067,7 @@ void BaseHeightMapRenderObjClass::clearAllScorches(void)
 //=============================================================================
 Bool BaseHeightMapRenderObjClass::groundMarksOn(void)
 {
-	return TheGlobalData->m_groundMarks && !TheGlobalData->m_classicGraphics && Direct3D11_Present_Is_Enabled();
+	return TheGlobalData->m_groundMarks && !TheGlobalData->m_classicGraphics && DX8Wrapper::Supports_Battle_Marks();
 }
 
 //=============================================================================

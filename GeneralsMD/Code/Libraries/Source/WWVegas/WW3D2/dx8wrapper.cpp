@@ -5916,3 +5916,16 @@ bool DX8Wrapper::Device_Is_Ready()
 	// Deliberately not a DX8CALL - a lost device is the answer here, not an error to log.
 	return device->TestCooperativeLevel()==D3D_OK;
 }
+
+// The battle marks use ordinary fixed-function draws already implemented by SDL GPU.
+#if !defined(_WIN32)
+extern bool PosixBattleMarksAvailable(IDirect3DDevice9 *device);
+#endif
+bool DX8Wrapper::Supports_Battle_Marks(void)
+{
+#if defined(_WIN32)
+	return Direct3D11_Present_Is_Enabled();
+#else
+	return PosixBattleMarksAvailable(_Get_D3D_Device());
+#endif
+}

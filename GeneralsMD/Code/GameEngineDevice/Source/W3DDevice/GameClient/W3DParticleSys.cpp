@@ -28,6 +28,7 @@
 // W3D Particle System implementation
 // Author: Michael S. Booth, November 2001
 
+#include "Platform/RenderPost.h"
 #include "Common/GlobalData.h"
 #include "Lib/Clock.h"
 #include "GameClient/Color.h"
@@ -520,7 +521,7 @@ static void gatherHeatHaze( CameraClass &camera, const std::vector<ParticleSyste
 			++count;
 		}
 	}
-	Direct3D11_Set_Heat_Splats( s_heatSplats.empty() ? NULL : &s_heatSplats[ 0 ], (unsigned)count );
+	RenderPost::SetHeatSplats( s_heatSplats.empty() ? NULL : &s_heatSplats[ 0 ], (unsigned)count );
 }
 
 /** The same for a GPU system, from the spawns it keeps (ParticleSystem::getGpuSample) aged in closed
@@ -2560,7 +2561,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		s_firelightCount = 0;
 		if (TheGlobalData->m_firelight && Direct3D11_Lights_Per_Pixel())
 			gatherFirelights( bbox, m_lastLogicFrameUpdate, m_frameFires, m_frameFireFades );
-		if (TheGlobalData->m_heatHaze && !TheGlobalData->m_classicGraphics && Direct3D11_Present_Is_Enabled())
+		if (TheGlobalData->m_heatHaze && !TheGlobalData->m_classicGraphics && RenderPost::DistortionAvailable())
 			gatherHeatHaze( rinfo.Camera, m_frameFires, m_frameFireFades, m_frameExhausts, m_frameExhaustFades );
 	}
 	// Only a CPU drawn smoke system takes a light (pickSmokeLights); with none, the walk over every

@@ -4617,8 +4617,12 @@ static Real distortionEase( Real x )
 //-------------------------------------------------------------------------------------------------
 void W3DView::updateScreenDistortions( void )
 {
+
 #if defined(_WIN32)
 	DX11PostWarp warps[MAX_SCREEN_DISTORTIONS];
+#else
+	RenderPost::Warp warps[MAX_SCREEN_DISTORTIONS];
+#endif
 	Int warpCount = 0;
 	const Real displayWidth = (Real)TheDisplay->getWidth();
 	const Real displayHeight = (Real)TheDisplay->getHeight();
@@ -4695,7 +4699,7 @@ void W3DView::updateScreenDistortions( void )
 			}
 		}
 
-		DX11PostWarp &warp = warps[warpCount++];
+		auto &warp = warps[warpCount++];
 		warp.CentreX = (Real)centre.x / displayWidth;
 		warp.CentreY = (Real)centre.y / displayHeight;
 		// Zoomed in, a nuke's radius is wider than the screen and the pull moved the whole picture;
@@ -4710,10 +4714,11 @@ void W3DView::updateScreenDistortions( void )
 		warp.RingSquash = squash;
 	}
 	m_distortionCount = kept;
+	#if defined(_WIN32)
 	DX11Post_Set_Warps(warps, (unsigned)warpCount);
-#else
-	m_distortionCount = 0;
-#endif
+	#else
+	RenderPost::SetWarps(warps, (unsigned)warpCount);
+	#endif
 }
 
 //-------------------------------------------------------------------------------------------------

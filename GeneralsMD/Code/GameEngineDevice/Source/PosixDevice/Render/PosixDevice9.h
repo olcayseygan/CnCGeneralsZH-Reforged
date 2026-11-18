@@ -216,6 +216,9 @@ public:
     bool Read_Post_Inputs(SdlSceneCapturePhase, struct SdlPostSceneInputs &);
     void Post_Opaque_Scene(bool);
     void Post_Before_Transparent();
+    void Set_Post_Heat(const float *, unsigned);
+    void Set_Post_Warps(const RenderPost::Warp *, unsigned);
+    bool Post_Distortion_Available() const;
     void Finish_Post(bool);
     void Release_Post(bool teardown = false);
     bool Post_Active() const;

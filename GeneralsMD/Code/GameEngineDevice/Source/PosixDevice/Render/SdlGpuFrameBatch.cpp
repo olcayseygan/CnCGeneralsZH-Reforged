@@ -713,7 +713,7 @@ bool SdlGpuFrame::Record_Passes(SDL_GPUCommandBuffer * commands, SDL_GPUBuffer *
 			SDL_DrawGPUIndexedPrimitives(pass, draw.Count, 1, draw.First, draw.BaseVertex, 0);
 		}
 		else {
-			SDL_DrawGPUPrimitives(pass, draw.Count, 1, draw.First, 0);
+			SDL_DrawGPUPrimitives(pass, draw.Count, draw.InstanceCount ? draw.InstanceCount : 1, draw.First, 0);
 		}
 		last = &draw;
 	}

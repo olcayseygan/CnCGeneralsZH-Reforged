@@ -97,6 +97,7 @@ struct SdlRecordedDraw
 	SDL_GPUBuffer * IndexBuffer;		///< as VertexBuffer, when IndexSize is not 0
 	uint32_t IndexOffset;
 	uint32_t IndexSize;					///< 0 (not indexed), 2 or 4
+	uint32_t InstanceCount;              ///< zero retains the existing single-instance draw
 	uint32_t Count;						///< vertices, or indices
 	uint32_t First;						///< the first vertex, or the first index
 	int32_t BaseVertex;

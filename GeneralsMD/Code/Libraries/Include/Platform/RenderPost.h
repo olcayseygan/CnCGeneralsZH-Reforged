@@ -12,6 +12,12 @@ struct Settings {
     float ClearAlpha = 1; // same main-scene clear alpha used by Begin_Render
     unsigned BlurPasses = 2;
 };
+struct Warp {
+    float CentreX, CentreY, Radius, Pull, RingRadius, RingWidth, RingStrength, RingSquash;
+};
+bool DistortionAvailable();
+void SetWarps(const Warp *, unsigned);
+void SetHeatSplats(const float *, unsigned);
 void BeginMain(const Settings &);
 unsigned BeginView(bool eligible, float nearPlane, float farPlane, bool reflection = false);
 void EndView(unsigned token);
@@ -31,6 +37,9 @@ public:
     ViewScope &operator=(const ViewScope &) = delete;
 };
 #if !defined(_WIN32)
+bool DistortionAvailable(IDirect3DDevice9 *);
+void SetWarps(IDirect3DDevice9 *, const Warp *, unsigned);
+void SetHeatSplats(IDirect3DDevice9 *, const float *, unsigned);
 void BeginMain(IDirect3DDevice9 *, const Settings &);
 unsigned BeginView(IDirect3DDevice9 *, bool, float, float, bool);
 void EndView(IDirect3DDevice9 *, unsigned);

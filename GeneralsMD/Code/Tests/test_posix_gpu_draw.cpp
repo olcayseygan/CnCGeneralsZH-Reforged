@@ -1387,6 +1387,9 @@ int main()
 	CHECK(d3d->CreateDevice(0, D3DDEVTYPE_HAL, NULL, 0, &parameters, &created) == D3D_OK);
 	PosixDevice9 *device = static_cast<PosixDevice9 *>(created);
 
+	CHECK(!PosixClassicWaterSplashesAvailable(NULL));
+	CHECK(!PosixClassicWaterSplashesAvailable(device));
+
 	// Headless first: a draw succeeds and records nothing.
 	ScreenVertex v[6];
 	quad(v, 0, 0, 8, 8, 0.5f, RED);
@@ -1403,6 +1406,7 @@ int main()
 		d3d->Release();
 		return failures != 0 ? 1 : 77;
 	}
+	CHECK(PosixClassicWaterSplashesAvailable(device));
 	check_half_pixel_and_winding(device);
 	check_transformed(device);
 	check_textures(device);

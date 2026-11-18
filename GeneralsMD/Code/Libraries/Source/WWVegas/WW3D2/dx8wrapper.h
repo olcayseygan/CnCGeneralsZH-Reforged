@@ -459,6 +459,7 @@ public:
 	static bool Is_Device_Lost() { return IsDeviceLost; }
 	static bool Is_Initted(void) { return IsInitted; }
 
+	static bool Supports_Classic_Water_Splashes(void); // live renderer capability, independent of options
 	static bool Has_Stencil (void);
 	static void Get_Format_Name(unsigned int format, StringClass *tex_format);
 

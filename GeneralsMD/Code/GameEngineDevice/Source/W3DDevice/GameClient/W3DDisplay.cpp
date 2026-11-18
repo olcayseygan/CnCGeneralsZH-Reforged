@@ -5418,3 +5418,8 @@ static void drawFramerateBar(void)
 	TheDisplay->drawFillRect(1, 1, width, 15, colorToUse);
 	prevTime = now;
 }
+
+Bool W3DDisplay::supportsClassicWaterSplashes(void) const
+{
+	return DX8Wrapper::Supports_Classic_Water_Splashes();
+}

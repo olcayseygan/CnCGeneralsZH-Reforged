@@ -56,6 +56,7 @@
 #include "GameLogic/TerrainLogic.h"
 #include "GameClient/View.h"
 #include "WW3D2/dx11runtime.h"
+#include "WW3D2/dx8wrapper.h"
 #include "W3DDevice/GameClient/W3DAssetManager.h"
 #include "W3DDevice/GameClient/W3DGameClient.h"
 #include "W3DDevice/GameClient/W3DStatusCircle.h"
@@ -205,7 +206,7 @@ void W3DGameClient::structureFell(const Coord3D *pos, Real radius)
 //-------------------------------------------------------------------------------------------------
 void W3DGameClient::splashInWater(const Coord3D *pos, Real radius)
 {
-	if (!TheGlobalData->m_waterSplashes || TheGlobalData->m_classicGraphics || TheGlobalData->m_waterStyle != 0 || !Direct3D11_Present_Is_Enabled())
+	if (!TheGlobalData->m_waterSplashes || TheGlobalData->m_classicGraphics || TheGlobalData->m_waterStyle != 0 || !DX8Wrapper::Supports_Classic_Water_Splashes())
 		return;
 	const Coord3D at = *pos;
 	LOGIC_AFTER_TICK( [=]() { splashInWater( &at, radius ); } );

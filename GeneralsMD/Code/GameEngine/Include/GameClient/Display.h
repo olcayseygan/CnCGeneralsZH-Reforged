@@ -222,6 +222,8 @@ public:
 	void setLetterBoxAspect( Real widthOverHeight ) { m_letterBoxAspect = widthOverHeight; }	///< the picture the bars leave; 16:9 is the game's, and draws nothing on a 16:9 screen
 	virtual const WideChar *getRendererName( void ) const = 0;	///< the graphics API the picture is presented through, for the HUD corner
 
+	virtual Bool supportsClassicWaterSplashes(void) const { return FALSE; }
+
 	virtual void setCinematicText( AsciiString string ) { m_cinematicText = string; }
 	virtual void setCinematicFont( GameFont *font ) { m_cinematicFont = font; }
 	virtual void setCinematicTextFrames( Int frames ) { m_cinematicTextFrames = frames; }

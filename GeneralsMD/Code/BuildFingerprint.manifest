@@ -3007,6 +3007,7 @@ GameEngineDevice/Source/PosixDevice/Render/PosixDevice9.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9.h
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Capture.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Draw.cpp
+GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Lighting.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Resources.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9SunShadow.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Timing.cpp
@@ -3212,6 +3213,7 @@ Libraries/Include/Platform/MsvcFloatCasts.h
 Libraries/Include/Platform/PosixD3D9/d3d9.h
 Libraries/Include/Platform/PosixD3D9/d3d9caps.h
 Libraries/Include/Platform/PosixD3D9/d3d9types.h
+Libraries/Include/Platform/RenderLighting.h
 Libraries/Include/Platform/RenderTypes.h
 Libraries/Include/Platform/RendererName.h
 Libraries/Include/Platform/SleepMilliseconds.h
@@ -4415,6 +4417,7 @@ Tests/test_premain_strings.cpp
 Tests/test_production_input.inc
 Tests/test_registryfile.cpp
 Tests/test_render_hooks.cpp
+Tests/test_renderer_lighting.cpp
 Tests/test_road_buffer.cpp
 Tests/test_score_screen.inc
 Tests/test_sdl_gpu_depth_format.cpp

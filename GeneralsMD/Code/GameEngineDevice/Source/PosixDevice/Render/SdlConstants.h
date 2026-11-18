@@ -125,7 +125,7 @@ inline bool Sdl_Draw_Uniform_Buffers_Supported(bool water_vertex, bool water_pix
 }
 
 /// Shared engine/generated receiver b0 layout. Normal-map and sky fields remain zero;
-/// eligible receivers fill sun/smoke fields; Windows per-pixel light counts remain zero.
+/// eligible receivers fill sun/smoke fields and bounded native dynamic-light packets.
 struct SdlEnginePixelConstants
 {
 	SdlPixelConstants Combiner;

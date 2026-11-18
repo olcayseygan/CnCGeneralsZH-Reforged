@@ -16,6 +16,9 @@
 // One list for declaration, capture and restoration, including shader register banks.
 #define SUN_VALUES(X) \
     X(RenderStates) X(TextureStageStates) X(SamplerStates) X(Transforms) X(Viewport) \
+    X(Headlights) X(HeadlightGain) X(HeadlightCount) X(BlastLights) X(BlastLightCount) \
+    X(StaticLightingAvailable) X(FullEnvironmentLights) X(FullEnvironmentCount) X(FullEnvironmentAmbient) \
+    X(StaticLights) X(StaticLightsEnabled) X(StaticAmbient) \
     X(Material) X(Lights) X(LightsEnabled) X(ClipPlanes) X(StreamOffsets) X(StreamStrides) \
     X(DeclarationIsCurrent) X(FVF) X(VertexShaderConstants) X(PixelShaderConstants) X(SmokeGlow)
 #define SUN_REFS(X) X(DepthStencil) X(Indices) X(Declaration) X(VertexShader) X(PixelShader)
@@ -331,6 +334,51 @@ bool PosixDevice9::Sun_Receiving(int vertexProgram, int pixelProgram, const SdlT
             || destination==D3DBLEND_INVSRCCOLOR) return false;
     }
     return true;
+}
+
+bool PosixDevice9::Commit_Terrain_Lighting()
+{
+    if (!Gpu || SunActive || SunSceneExclusions) return false;
+    SdlTarget target={};std::string error;
+    if (!Resolve_Target(target,error)) return false;
+    auto &policy=TerrainLighting;
+    const bool same=policy.Committed && policy.Scene==SunSceneGeneration && policy.Frame==PresentCount
+        && policy.Colour==target.Colour && policy.Depth==target.Depth && policy.Width==target.Width && policy.Height==target.Height
+        && !std::memcmp(&policy.View,&Transforms[D3DTS_VIEW],sizeof(policy.View))
+        && !std::memcmp(&policy.Projection,&Transforms[D3DTS_PROJECTION],sizeof(policy.Projection))
+        && !std::memcmp(&policy.Viewport,&Viewport,sizeof(Viewport));
+    if (same) return policy.Pixel;
+    policy={};policy.Committed=true;policy.Scene=SunSceneGeneration;policy.Frame=PresentCount;
+    policy.Colour=target.Colour;policy.Depth=target.Depth;policy.Width=target.Width;policy.Height=target.Height;
+    policy.View=Transforms[D3DTS_VIEW];policy.Projection=Transforms[D3DTS_PROJECTION];policy.Viewport=Viewport;
+    policy.Pixel=SunReceiverFailure.empty() && Sun_Receives_Target(target);
+    if (policy.Pixel) {
+        std::memcpy(policy.WorldFromClip,Sun->WorldFromClip,sizeof(policy.WorldFromClip));
+        policy.ShadowViewport[0]=1.0f/Viewport.Width;policy.ShadowViewport[1]=1.0f/Viewport.Height;
+        policy.ShadowViewport[2]=Viewport.X+.5f;policy.ShadowViewport[3]=Viewport.Y+.5f;
+    }
+    return policy.Pixel;
+}
+
+bool PosixDevice9::Terrain_Lighting_Receives(int pixelProgram,const SdlTarget &target) const
+{
+    const auto &policy=TerrainLighting;
+    if (!Gpu || !policy.Committed || !policy.Pixel || policy.Scene!=SunSceneGeneration || policy.Frame!=PresentCount
+        || SunActive || SunSceneExclusions || SunExclusions
+        || !EngineShader_Paints_Ground(static_cast<EngineShaderProgram>(pixelProgram))
+        || !RenderStates[D3DRS_ZENABLE] || RenderStates[D3DRS_FILLMODE]!=D3DFILL_SOLID
+        || (RenderStates[D3DRS_COLORWRITEENABLE]&7u)!=7u) return false;
+    if (RenderStates[D3DRS_ALPHABLENDENABLE]
+        && (RenderStates[D3DRS_SRCBLEND]!=D3DBLEND_SRCALPHA || RenderStates[D3DRS_DESTBLEND]!=D3DBLEND_INVSRCALPHA)) return false;
+    return policy.Colour==target.Colour && policy.Depth==target.Depth && policy.Width==target.Width && policy.Height==target.Height
+        && !std::memcmp(&policy.View,&Transforms[D3DTS_VIEW],sizeof(policy.View))
+        && !std::memcmp(&policy.Projection,&Transforms[D3DTS_PROJECTION],sizeof(policy.Projection))
+        && !std::memcmp(&policy.Viewport,&Viewport,sizeof(Viewport));
+}
+void PosixDevice9::Build_Terrain_Light_View(SdlEnginePixelConstants &constants) const
+{
+    std::memcpy(constants.WorldFromClip,TerrainLighting.WorldFromClip,sizeof(constants.WorldFromClip));
+    std::memcpy(constants.ShadowViewport,TerrainLighting.ShadowViewport,sizeof(constants.ShadowViewport));
 }
 
 void PosixDevice9::Build_Sun_Constants(SdlEnginePixelConstants &constants) const

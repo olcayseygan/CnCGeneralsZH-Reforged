@@ -87,6 +87,7 @@
 #include "ffprobe.h"
 #include "ffshadercache.h"
 #include "dx11runtime.h"
+#include "Platform/RenderLighting.h"
 #include "pot.h"
 #include "wwprofile.h"
 #include "ffactory.h"
@@ -4040,14 +4041,112 @@ void DX8Wrapper::Set_Light(unsigned index,const LightClass &light)
 //! directional lights to produce the lighting.
 /*! 5/27/02 KJM Added shader light environment support
 */
+static D3DLIGHT9 convert_environment_light(const LightEnvironmentClass &environment, int l)
+{
+	D3DLIGHT9 light;
+			memset(&light,0, sizeof(D3DLIGHT9));
+
+			light.Type=D3DLIGHT_DIRECTIONAL;
+			(Vector3&)light.Diffuse=environment.Get_Light_Diffuse(l);
+			Vector3 dir=-environment.Get_Light_Direction(l);
+			light.Direction=(const D3DVECTOR&)(dir);
+
+			// (gth) TODO: put specular into LightEnvironment?  Much work to be done on lights :-)'
+			if (l==0) {
+				light.Specular.r = light.Specular.g = light.Specular.b = 1.0f;
+			}
+
+			if (environment.isPointLight(l)) {
+				light.Type = D3DLIGHT_POINT;
+				(Vector3&)light.Diffuse=environment.getPointDiffuse(l);
+				(Vector3&)light.Ambient=environment.getPointAmbient(l);
+				light.Position = (const D3DVECTOR&)environment.getPointCenter(l);
+				light.Range = environment.getPointOrad(l);
+
+				// Inverse linear light 1/(1+D)
+				double a,b;
+				b = environment.getPointOrad(l);
+				a = environment.getPointIrad(l);
+
+//(gth) CNC3 Generals code for the attenuation factors is causing the lights to over-brighten
+//I'm changing the Attenuation0 parameter to 1.0 to avoid this problem.
+#if 0
+				light.Attenuation0=0.01f;
+#else
+				light.Attenuation0=1.0f;
+#endif
+				if (fabs(a-b)<1e-5)
+					// if the attenuation range is too small assume uniform with cutoff
+					light.Attenuation1=0.0f;
+				else
+					// this will cause the light to drop to half intensity at the first far attenuation
+					light.Attenuation1=(float) 0.1/a;
+
+				light.Attenuation2=8.0f/(b*b);
+			}
+
+	return light;
+}
+
+#if !defined(_WIN32)
+static RenderLighting::VertexEnvironment environment_packet(const LightEnvironmentClass &environment)
+{
+	RenderLighting::VertexEnvironment result = {};
+	result.Count = environment.Get_Light_Count();
+	result.Ambient = DX8Wrapper::Convert_Color(environment.Get_Equivalent_Ambient(),0.0f);
+	for (unsigned i=0;i<result.Count;++i) {
+		const D3DLIGHT9 light=convert_environment_light(environment,i);
+		auto &to=result.Lights[i];
+		to.Type=light.Type==D3DLIGHT_POINT ? RenderLighting::LightType::Point
+			: light.Type==D3DLIGHT_SPOT ? RenderLighting::LightType::Spot : RenderLighting::LightType::Directional;
+		memcpy(to.Diffuse,&light.Diffuse,sizeof(to.Diffuse));
+		memcpy(to.Specular,&light.Specular,sizeof(to.Specular));
+		memcpy(to.Ambient,&light.Ambient,sizeof(to.Ambient));
+		memcpy(to.Position,&light.Position,sizeof(to.Position));
+		memcpy(to.Direction,&light.Direction,sizeof(to.Direction));
+		to.Range=light.Range;to.Falloff=light.Falloff;
+		to.Attenuation[0]=light.Attenuation0;to.Attenuation[1]=light.Attenuation1;to.Attenuation[2]=light.Attenuation2;
+		to.Theta=light.Theta;to.Phi=light.Phi;
+	}
+	return result;
+}
+#endif
+
+#if !defined(_WIN32)
+void DX8Wrapper::Apply_Queued_Light_Environment(const RenderStateStruct &state)
+{
+	render_state.HasLightingEnvironment=state.HasLightingEnvironment;
+	render_state.HasStaticLighting=state.HasStaticLighting;
+	render_state.FullLighting=state.FullLighting;
+	if (state.HasStaticLighting) render_state.StaticLighting=state.StaticLighting;
+	RenderLighting::SetEnvironments(_Get_D3D_Device(),state.FullLighting,
+		state.HasStaticLighting ? &state.StaticLighting : NULL);
+	render_state.HasNativeAmbient=state.HasNativeAmbient;
+	render_state.NativeAmbient=state.NativeAmbient;
+	if (state.HasNativeAmbient) Set_DX8_Render_State(D3DRS_AMBIENT,state.NativeAmbient);
+}
+#endif
+
 void DX8Wrapper::Set_Light_Environment(LightEnvironmentClass* light_env)
 {
 	// Shader light environment support															*
 //	if (Light_Environment && light_env && (*Light_Environment)==(*light_env)) return;
 
 	Light_Environment=light_env;
+#if !defined(_WIN32)
+	RenderLighting::VertexEnvironment full = {}, staticPacket = {};
+	LightEnvironmentClass alternate;
+	const bool hasAlternate = light_env && light_env->Get_Static_Lighting(alternate);
+	if (light_env) full = environment_packet(*light_env);
+	if (hasAlternate) staticPacket = environment_packet(alternate);
+	render_state.HasLightingEnvironment = light_env != NULL;
+	render_state.HasStaticLighting = hasAlternate;
+	render_state.FullLighting = full;
+	render_state.StaticLighting = staticPacket;
+	RenderLighting::SetEnvironments(_Get_D3D_Device(),full,hasAlternate ? &staticPacket : NULL);
+#endif
 
-	if (light_env) 
+	if (light_env)
 	{
 		int light_count = light_env->Get_Light_Count();
 		unsigned int color=Convert_Color(light_env->Get_Equivalent_Ambient(),0.0f);
@@ -4060,50 +4159,11 @@ void DX8Wrapper::Set_Light_Environment(LightEnvironmentClass* light_env)
 #endif
 		}
 
-		D3DLIGHT9 light;		
+		D3DLIGHT9 light;
 		int l;
 		for (l =0;l<light_count;++l) {
-			
-			memset(&light,0, sizeof(D3DLIGHT9));
-			
-			light.Type=D3DLIGHT_DIRECTIONAL;
-			(Vector3&)light.Diffuse=light_env->Get_Light_Diffuse(l);
-			Vector3 dir=-light_env->Get_Light_Direction(l);
-			light.Direction=(const D3DVECTOR&)(dir);
 
-			// (gth) TODO: put specular into LightEnvironment?  Much work to be done on lights :-)'
-			if (l==0) {
-				light.Specular.r = light.Specular.g = light.Specular.b = 1.0f;
-			}
-
-			if (light_env->isPointLight(l)) {
-				light.Type = D3DLIGHT_POINT;
-				(Vector3&)light.Diffuse=light_env->getPointDiffuse(l);
-				(Vector3&)light.Ambient=light_env->getPointAmbient(l);
-				light.Position = (const D3DVECTOR&)light_env->getPointCenter(l);
-				light.Range = light_env->getPointOrad(l);
-				
-				// Inverse linear light 1/(1+D)
-				double a,b;
-				b = light_env->getPointOrad(l);
-				a = light_env->getPointIrad(l);
-
-//(gth) CNC3 Generals code for the attenuation factors is causing the lights to over-brighten
-//I'm changing the Attenuation0 parameter to 1.0 to avoid this problem.				
-#if 0
-				light.Attenuation0=0.01f;
-#else
-				light.Attenuation0=1.0f;
-#endif
-				if (fabs(a-b)<1e-5)
-					// if the attenuation range is too small assume uniform with cutoff
-					light.Attenuation1=0.0f;
-				else
-					// this will cause the light to drop to half intensity at the first far attenuation
-					light.Attenuation1=(float) 0.1/a;
-	
-				light.Attenuation2=8.0f/(b*b);
-			}
+			light=convert_environment_light(*light_env,l);
 
 			Set_Light(l,&light);
 		}
@@ -4118,6 +4178,7 @@ void DX8Wrapper::Set_Light_Environment(LightEnvironmentClass* light_env)
 		}
 	}
 */
+
 }
 
 IDirect3DSurface9 * DX8Wrapper::_Get_DX8_Front_Buffer()
@@ -5915,4 +5976,57 @@ bool DX8Wrapper::Device_Is_Ready()
 	// the four callers ask this before building geometry, which can be a long way from a present.
 	// Deliberately not a DX8CALL - a lost device is the answer here, not an error to log.
 	return device->TestCooperativeLevel()==D3D_OK;
+}
+
+namespace RenderLighting {
+void SetHeadlights(const float *lights, unsigned count, const float gain[3])
+{
+#if defined(_WIN32)
+	Direct3D11_Set_Headlights(lights,count,gain);
+#else
+	SetHeadlights(DX8Wrapper::_Get_D3D_Device(),lights,count,gain);
+#endif
+}
+void SetBlastLights(const float *lights, unsigned count)
+{
+#if defined(_WIN32)
+	Direct3D11_Set_Blast_Lights(lights,count);
+#else
+	SetBlastLights(DX8Wrapper::_Get_D3D_Device(),lights,count);
+#endif
+}
+bool LightsPerPixel()
+{
+#if defined(_WIN32)
+	return Direct3D11_Lights_Per_Pixel();
+#else
+	return LightsPerPixel(DX8Wrapper::_Get_D3D_Device());
+#endif
+}
+bool PrepareTerrainLighting()
+{
+#if defined(_WIN32)
+	return Direct3D11_Lights_Per_Pixel();
+#else
+	return PrepareTerrainLighting(DX8Wrapper::_Get_D3D_Device());
+#endif
+}
+void UseTerrainCpuLighting()
+{
+#if !defined(_WIN32)
+	UseTerrainCpuLighting(DX8Wrapper::_Get_D3D_Device());
+#endif
+}
+}
+
+#if !defined(_WIN32)
+extern bool PosixPerPixelLightingAvailable(IDirect3DDevice9 *device);
+#endif
+bool DX8Wrapper::Supports_Per_Pixel_Lighting(void)
+{
+#if defined(_WIN32)
+	return Direct3D11_Is_Active();
+#else
+	return PosixPerPixelLightingAvailable(_Get_D3D_Device());
+#endif
 }

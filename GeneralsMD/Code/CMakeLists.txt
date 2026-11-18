@@ -1529,6 +1529,15 @@ if(ZH_PLATFORM_POSIX)
 
   # A3c's draws: through the device's D3D9 calls onto this machine's GPU, read back from the back buffer
   # (77 without a GPU).
+  add_executable(test_renderer_lighting ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_renderer_lighting.cpp)
+  set_target_properties(test_renderer_lighting PROPERTIES CXX_STANDARD 17)
+  target_include_directories(test_renderer_lighting PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(test_renderer_lighting PRIVATE w3ddevice ww3d2 posixdevice gameengine SDL3::SDL3-static)
+  add_test(NAME test_renderer_lighting COMMAND test_renderer_lighting)
+  add_test(NAME test_renderer_lighting_gpu COMMAND test_renderer_lighting --gpu)
+  set_tests_properties(test_renderer_lighting_gpu PROPERTIES SKIP_RETURN_CODE 77 RUN_SERIAL TRUE)
+
   add_executable(posix_gpu_draw_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_posix_gpu_draw.cpp)
   set_target_properties(posix_gpu_draw_selfcheck PROPERTIES CXX_STANDARD 17)
   target_include_directories(posix_gpu_draw_selfcheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)

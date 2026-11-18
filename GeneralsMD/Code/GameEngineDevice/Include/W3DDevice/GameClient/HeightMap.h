@@ -158,6 +158,9 @@ protected:
 		DynamicLightInputs lights[MAX_ENABLED_DYNAMIC_LIGHTS];
 	};
 	DynamicLightPass m_lastRelight;	///< compared with memcmp, so only ever written by memset and memcpy
+#if !defined(_WIN32)
+	Bool m_dynamicLightingPerPixel = FALSE; // GPU tiles contain static-only diffuse
+#endif
 	Bool m_lastRelightValid;	///< false once anything has rewritten the vertex buffers since that relight
 
 	/** The map's sun per pixel on Direct3D 11 (TERRAIN_RELIGHT_SAMPLING): the tiles and the 3-way tiles

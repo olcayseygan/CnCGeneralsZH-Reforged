@@ -510,6 +510,9 @@ void SortingRendererClass::Insert_To_Sorting_Pool(SortingNodeStruct* state)
 
 static void Apply_Render_State(RenderStateStruct& render_state)
 {
+#if !defined(_WIN32)
+	DX8Wrapper::Apply_Queued_Light_Environment(render_state);
+#endif
 
 
 
@@ -565,6 +568,13 @@ static void Apply_Render_State(RenderStateStruct& render_state)
 
 static bool Same_Draw_State(const RenderStateStruct& a, const RenderStateStruct& b)
 {
+#if !defined(_WIN32)
+	if (a.HasLightingEnvironment!=b.HasLightingEnvironment || a.HasStaticLighting!=b.HasStaticLighting
+		|| a.HasNativeAmbient!=b.HasNativeAmbient) return false;
+	if (a.HasNativeAmbient && a.NativeAmbient!=b.NativeAmbient) return false;
+	if (a.HasLightingEnvironment && memcmp(&a.FullLighting,&b.FullLighting,sizeof(a.FullLighting))) return false;
+	if (a.HasStaticLighting && memcmp(&a.StaticLighting,&b.StaticLighting,sizeof(a.StaticLighting))) return false;
+#endif
 	if (a.shader.Get_Bits()!=b.shader.Get_Bits() || a.material!=b.material) return false;
 	for (int i=0;i<DX8Wrapper::Get_Current_Caps()->Get_Max_Textures_Per_Pass();++i) {
 		if (a.Textures[i]!=b.Textures[i]) return false;

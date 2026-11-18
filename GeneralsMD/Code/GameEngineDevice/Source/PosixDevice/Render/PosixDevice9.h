@@ -45,6 +45,7 @@
 #define POSIXDEVICE9_H
 
 #include "Platform/RenderTypes.h"
+#include "Platform/RenderLighting.h"
 #include "Platform/D3D9Posix.h"
 #include "Platform/WaterShoreOverlay.h"
 #include "Platform/WaterHullVisualLayout.h"
@@ -208,6 +209,16 @@ public:
 	/// -offscreen's presents, paced at hz a second (0: unpaced); SdlGpuFrame::Set_Offscreen_Presents.
 	void Present_Offscreen(unsigned int hz);
 	SdlGpuFrame * Get_Gpu() const { return Gpu; }
+	void Set_Headlights(const float *lights, unsigned count, const float gain[3]);
+	void Set_Blast_Lights(const float *lights, unsigned count);
+	bool Lights_Per_Pixel();
+	void Set_Light_Environments(const RenderLighting::VertexEnvironment &full, const RenderLighting::VertexEnvironment *staticOnly);
+	bool Static_Lighting_Matches() const;
+	void Build_Light_Constants(struct SdlEnginePixelConstants &constants, bool pointLights = true) const;
+	bool Commit_Terrain_Lighting();
+	void Use_Terrain_Cpu_Lighting() { TerrainLighting.Pixel = false; }
+	bool Terrain_Lighting_Receives(int pixelProgram, const struct SdlTarget &target) const;
+	void Build_Terrain_Light_View(struct SdlEnginePixelConstants &constants) const;
 	SdlResourceMirrors * Get_Mirrors() const { return Mirrors; }
 	/// Draws recorded on the GPU, and the draws refused, by reason.
 	unsigned int Draws_Recorded() const { return DrawsRecorded; }
@@ -260,9 +271,9 @@ public:
 	/// material source naming a colour the vertex does not supply reads the material.  False, with the
 	/// reason, for what the generator does not carry: more lights than it has, table fog, fog from the
 	/// specular alpha.
-	bool Build_Vertex_Description(VertexPipelineDescription &description, std::string *refusal = NULL) const;
+	bool Build_Vertex_Description(VertexPipelineDescription &description, std::string *refusal = NULL, bool staticLights = false) const;
 	/// The two constant blocks, packed to match the descriptions above.
-	void Build_Constants(SdlVertexConstants &vertex, SdlPixelConstants &pixel) const;
+	void Build_Constants(SdlVertexConstants &vertex, SdlPixelConstants &pixel, bool staticLights = false) const;
 	void Build_Water_Constants(const SdlPixelConstants &pixel, SdlWaterPixelConstants &water) const;
 	void Build_Water_Visual_Constants(const SdlWaterPixelConstants &water, SdlWaterVisualPixelConstants &visual) const;
 	bool Water_Foam_History_Available() const;
@@ -490,6 +501,26 @@ protected:
 	D3DMATRIX Transforms[TRANSFORM_COUNT];
 	D3DVIEWPORT9 Viewport;
 	D3DMATERIAL9 Material;
+	struct TerrainLightPolicy {
+		bool Committed = false, Pixel = false;
+		uint64_t Scene = 0, Frame = 0;
+		struct SDL_GPUTexture *Colour = nullptr, *Depth = nullptr;
+		unsigned Width = 0, Height = 0;
+		D3DMATRIX View = {}, Projection = {};
+		D3DVIEWPORT9 Viewport = {};
+		float WorldFromClip[16] = {}, ShadowViewport[4] = {};
+	} TerrainLighting;
+	float Headlights[16][8] = {}, HeadlightGain[3] = {};
+	unsigned HeadlightCount = 0;
+	float BlastLights[32][12] = {};
+	unsigned BlastLightCount = 0;
+	bool StaticLightingAvailable = false;
+	D3DLIGHT9 FullEnvironmentLights[LIGHT_COUNT] = {};
+	unsigned FullEnvironmentCount = 0;
+	RenderUInt32 FullEnvironmentAmbient = 0;
+	D3DLIGHT9 StaticLights[LIGHT_COUNT] = {};
+	bool StaticLightsEnabled[LIGHT_COUNT] = {};
+	RenderUInt32 StaticAmbient = 0;
 	D3DLIGHT9 Lights[LIGHT_COUNT];
 	bool LightsEnabled[LIGHT_COUNT];
 	float ClipPlanes[CLIP_PLANE_COUNT][4];
@@ -514,3 +545,5 @@ protected:
 
 // SDL water features require a live native GPU device.
 bool PosixWaterGpuAvailable(IDirect3DDevice9 *device);
+
+bool PosixPerPixelLightingAvailable(IDirect3DDevice9 *device);

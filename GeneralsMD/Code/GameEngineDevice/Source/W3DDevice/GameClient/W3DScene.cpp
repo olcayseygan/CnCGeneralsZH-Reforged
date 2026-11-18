@@ -35,6 +35,7 @@
 
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////
 #include "Platform/SunShadow.h"
+#include "Platform/RenderLighting.h"
 #include <stdlib.h>
 #include "Lib/Clock.h"
 
@@ -1058,6 +1059,9 @@ void RTS3DScene::renderOneObject(RenderInfoClass &rinfo, RenderObjClass *robj, I
     // added here as well they would light the model twice.
     if( draw && draw->getReceivesDynamicLights() && !Direct3D11_Lights_Per_Pixel() )
     {
+#if !defined(_WIN32)
+		if (DX8Wrapper::Supports_Per_Pixel_Lighting()) lightEnv.Capture_Static_Lighting();
+#endif
 		  // dynamic lights
 		  RefRenderObjListIterator dynaLightIt(&m_dynamicLightList);	
 		  for (dynaLightIt.First(); !dynaLightIt.Is_Done(); dynaLightIt.Next())
@@ -1437,7 +1441,7 @@ void RTS3DScene::Render(RenderInfoClass & rinfo)
 		too.  Client only: the lights are what FX lists put up and nothing in logic reads them. */
 static void handBlastLights(RefRenderObjListClass &dynamicLights, const Vector3 &camera)
 {
-	if (!Direct3D11_Lights_Per_Pixel())
+	if (!RenderLighting::LightsPerPixel())
 		return;
 
 	static std::vector< std::pair<Real, W3DDynamicLight*> > nearest;
@@ -1500,7 +1504,7 @@ static void handBlastLights(RefRenderObjListClass &dynamicLights, const Vector3 
 		slot[8] = lightAmbient.X / base[0]; slot[9] = lightAmbient.Y / base[1]; slot[10] = lightAmbient.Z / base[2];
 		slot[11] = 0.0f;
 	}
-	Direct3D11_Set_Blast_Lights(&lights[0][0], count);
+	RenderLighting::SetBlastLights(&lights[0][0], count);
 }
 
 void RTS3DScene::Customized_Render( RenderInfoClass &rinfo )

@@ -90,6 +90,10 @@ public:
 	*/
 	void					Reset(const Vector3 & object_center,const Vector3 & scene_ambient);
 	void					Add_Light(const LightClass & light);
+	// Captured before dynamic lights; copied with sorted environments. Pre_Render_Update resolves
+	// its own fill/ambient independently, so a later per-draw receiver can select either result.
+	void Capture_Static_Lighting();
+	bool Get_Static_Lighting(LightEnvironmentClass &result) const;
 	void					Pre_Render_Update(const Matrix3D & camera_tm);
 	void					Add_Fill_Light(void);
 	void					Calculate_Fill_Light(void);
@@ -99,7 +103,7 @@ public:
 	** Accessors 
 	*/
 	const Vector3 &	Get_Equivalent_Ambient(void) const			{ return OutputAmbient; }
-	void Set_Output_Ambient(Vector3& oa) { OutputAmbient = oa; }
+	void Set_Output_Ambient(Vector3& oa) { OutputAmbient = oa; HasStaticLighting = false; }
 	int					Get_Light_Count(void) const					{ return LightCount; }
 	const Vector3 &	Get_Light_Direction(int i)	const				{ return InputLights[i].Direction; }
 	const Vector3 &	Get_Light_Diffuse(int i) const				{ return InputLights[i].Diffuse; }	
@@ -123,6 +127,16 @@ public:
 
 	inline bool operator== (const LightEnvironmentClass& that) const
 	{
+		if (HasStaticLighting != that.HasStaticLighting) return false;
+		if (HasStaticLighting) {
+			if (StaticLightCount != that.StaticLightCount || StaticAmbient != that.StaticAmbient) return false;
+			for (int i=0;i<StaticLightCount;++i) {
+				const InputLightStruct &a=StaticLights[i], &b=that.StaticLights[i];
+				if (a.Direction!=b.Direction || a.Diffuse!=b.Diffuse || a.m_point!=b.m_point) return false;
+				if (a.m_point && (a.m_center!=b.m_center || a.m_innerRadius!=b.m_innerRadius || a.m_outerRadius!=b.m_outerRadius
+					|| a.m_ambient!=b.m_ambient || a.m_diffuse!=b.m_diffuse)) return false;
+			}
+		}
 		if (LightCount!=that.LightCount) return false;
 		bool dif=!(ObjectCenter==that.ObjectCenter);
 		dif|=OutputAmbient!=that.OutputAmbient;
@@ -174,6 +188,11 @@ protected:
 
 	Vector3				OutputAmbient;					// scene ambient + lights' ambients
 	OutputLightStruct	OutputLights[MAX_LIGHTS];	// ouput lights
+
+	bool HasStaticLighting = false;
+	int StaticLightCount = 0, StaticInputCount = 0;
+	Vector3 StaticAmbient, StaticInputAmbient;
+	InputLightStruct StaticLights[MAX_LIGHTS], StaticInputs[MAX_LIGHTS];
 
 	InputLightStruct 	FillLight;						// Used to store the calculated fill light
 	float					FillIntensity;					// Used to determine how strong the fill light should be

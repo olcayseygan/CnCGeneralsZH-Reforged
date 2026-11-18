@@ -50,6 +50,7 @@
 
 
 #include "W3DDevice/GameClient/HeightMap.h"
+#include "Platform/RenderLighting.h"
 #include "Lib/Clock.h"
 
 #ifndef USE_FLAT_HEIGHT_MAP // Flat height map uses flattened textures. jba. [3/20/2003]
@@ -1589,7 +1590,27 @@ void HeightMapRenderObjClass::On_Frame_Update(void)
 	// ten-unit steps.  A light lit into the tiles at the moment that turns on stays there until the
 	// tiles are next rebuilt; it only turns on with the shadow map, at the match's first frame or
 	// from the options.
-	const Bool lightsPerPixel = Direct3D11_Lights_Per_Pixel();
+	Bool lightsPerPixel = RenderLighting::PrepareTerrainLighting();
+#if !defined(_WIN32)
+	if (lightsPerPixel && !m_dynamicLightingPerPixel) {
+		// Remove every old baked contribution, including a light already removed from the scene.
+		// The backups contain authored/static diffuse; relighting never changes them.
+		bool restored = (m_vertexBufferTiles && m_vertexBufferBackup) || m_numVertexBufferTiles==0;
+		for (Int tile=0;restored && tile<m_numVertexBufferTiles;++tile) {
+			if (!m_vertexBufferTiles[tile] || !m_vertexBufferBackup[tile]) continue;
+			DX8VertexBufferClass::WriteLockClass lock(m_vertexBufferTiles[tile]);
+			auto *vertices=static_cast<VERTEX_FORMAT *>(lock.Get_Vertex_Array());
+			if (!vertices) { restored=false;continue; }
+			const auto *backup=reinterpret_cast<const VERTEX_FORMAT *>(m_vertexBufferBackup[tile]);
+			for (unsigned v=0;v<m_vertexBufferTiles[tile]->Get_Vertex_Count();++v) vertices[v].diffuse=backup[v].diffuse;
+		}
+		if (!restored) { lightsPerPixel=FALSE;RenderLighting::UseTerrainCpuLighting(); }
+		m_lastRelightValid=false;
+	}
+	if (m_dynamicLightingPerPixel && !lightsPerPixel) m_lastRelightValid=false;
+	m_dynamicLightingPerPixel=lightsPerPixel;
+#endif
+
 
 	for (pDynamicLightsIterator.First(); !pDynamicLightsIterator.Is_Done(); pDynamicLightsIterator.Next())
 	{

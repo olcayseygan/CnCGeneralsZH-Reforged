@@ -10773,6 +10773,14 @@ GUI:OnlineLoginElsewhere
 "Bu hesapla başka bir bilgisayardan giriş yapıldı."
 END
 
+GUI:OnlineCheckingFiles
+"Oyun dosyaları denetleniyor..."
+END
+
+GUI:OnlineLoginFiles
+"Bu dosya oyunla gelen dosya değil:\n\n%ls\n\nOyunu başlatıcıdan yeniden kur ya da o dosyayı sil, sonra yeniden giriş yap."
+END
+
 TOOLTIP:OnlinePlayerInfo
 "\n %d galibiyet/%d mağlubiyet"
 END

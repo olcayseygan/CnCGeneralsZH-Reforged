@@ -25,6 +25,7 @@
 #include "blowfish.h"
 #include "rc4.h"
 #include "sha.h"
+#include "sha256.h"
 #include "md5.h"
 #include "lcw.h"
 #include "rle.h"
@@ -290,6 +291,45 @@ TEST(sha1_result_is_non_destructive)
 	unsigned char expect[20];
 	reference.Result(expect);
 	CHECK_MEM(after, expect, 20);
+}
+
+/* FIPS 180-4's vectors, the million 'a' one fed in uneven pieces so the buffered path is crossed. */
+TEST(sha256_known_vectors)
+{
+	struct { const char *in; const char *out; } cases[] = {
+		{ "", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" },
+		{ "abc", "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" },
+		{ "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
+		  "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1" },
+		{ "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu",
+		  "cf5b16a778af8380036ce59e7b0492370b249b11e8f07a51afac45037afee9d1" },
+	};
+	for (int i = 0; i < 4; ++i)
+	{
+		Sha256 sha;
+		sha.Update(cases[i].in, strlen(cases[i].in));
+		unsigned char digest[32];
+		sha.Final(digest);
+		char hex[65];
+		Sha256::Hex(digest, hex);
+		CHECK_STR(hex, cases[i].out);
+	}
+
+	static char block[1024];		// a piece is at most 1003
+	memset(block, 'a', sizeof(block));
+	Sha256 million;
+	size_t fed = 0;
+	for (size_t piece = 1; fed < 1000000; piece = piece % 997 + 7)
+	{
+		const size_t take = piece < 1000000 - fed ? piece : 1000000 - fed;
+		million.Update(block, take);
+		fed += take;
+	}
+	unsigned char digest[32];
+	million.Final(digest);
+	char hex[65];
+	Sha256::Hex(digest, hex);
+	CHECK_STR(hex, "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0");
 }
 
 TEST(md5_known_vectors)

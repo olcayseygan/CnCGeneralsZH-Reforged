@@ -190,8 +190,10 @@ struct OnlineSession
 	std::string token;
 	UnsignedByte ticket[16];
 	UnsignedInt vip;
-	OnlineMessage pendingAuth;		///< sent once the welcome arrives
+	OnlineMessage pendingAuth;		///< sent once the welcome arrives and the install files are hashed
 	Bool hasPendingAuth;
+	Bool filesSent;					///< this connection has had the install files' hashes (sendFiles)
+	std::string failFile;		///< the last auth.fail{code:files}'s file, cleared with failCode
 	Bool authWaiting;				///< a login, register or resume is out (or pending) with no answer yet
 
 	// where the player is
@@ -277,6 +279,8 @@ struct OnlineSession
 	void peerResponse( const PeerResponse &r );
 	void finishPeerLogin();
 	void loginFailed( DisconnectReason reason );
+	void flushAuth();					///< the pending login, once welcomed and the install files are hashed
+	void sendFiles();					///< files{seq,last,paths[],hashes[]}, once a connection
 	void gameListEntry( const OnlineMessage &m );
 	void resolveHostLeft();
 	void noteCard( const OnlineMessage &m );			///< a line's rating, tier, games and ping under its nick

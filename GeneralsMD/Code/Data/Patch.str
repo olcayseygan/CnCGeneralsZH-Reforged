@@ -4606,6 +4606,14 @@ GUI:OnlineLoginElsewhere
 "This account signed in from another computer."
 END
 
+GUI:OnlineCheckingFiles
+"Checking game files..."
+END
+
+GUI:OnlineLoginFiles
+"This file is not the one the game shipped with:\n\n%ls\n\nReinstall the game from the launcher, or delete that file, then sign in again."
+END
+
 // the online hub's info box when the server sent no message of the day
 GUI:OnlineHubWelcome
 "Welcome to Zero Hour Reforged online."

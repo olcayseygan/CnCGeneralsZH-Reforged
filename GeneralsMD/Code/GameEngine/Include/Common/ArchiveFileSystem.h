@@ -205,6 +205,9 @@ class ArchiveFileSystem : public SubsystemInterface
 	/// alone, or from the fork's own loose copy, so a reskin cannot reach anyone's screen.
 	Bool					isRetailTexture(const Char *filename) const;
 
+	/// Every archive mounted, keyed by the name it was opened under: the install file check hashes them.
+	const ArchiveFileMap&	getArchiveFileMap() const { return m_archiveFileMap; }
+
 protected:
 	/// Run once the retail archives are in and before the Reforged ones go over them: every path under
 	/// Art\Textures or Data\<language>\Art\Textures that EA's archives ship goes back to EA's copy, and a

@@ -22,6 +22,7 @@
 #include "GameNetwork/Online/OnlineConnection.h"
 #include "GameNetwork/Online/OnlineSession.h"
 #include "GameNetwork/GameInfo.h"
+#include "Common/InstallFiles.h"
 #include "GameClient/TankSkin.h"
 #include "Common/MultiplayerSettings.h"
 
@@ -2400,9 +2401,77 @@ TEST(online_hello_says_proto_2)
 	CHECK_EQ( hello.getInt( "exe" ), 0xDEADBEEFll );
 	CHECK_EQ( hello.getInt( "ini" ), 0x12345678ll );
 	CHECK_STR( hello.getString( "ver" ).c_str(), "3.4.1" );
+	CHECK_EQ( hello.getInt( "files" ), 1ll );		// the install files' hashes come before the login
 	std::string line;
 	CHECK( hello.toLine( line ) );
 	CHECK( OnlineHelloLine( 1, 2, NULL ).toLine( line ) );		// no version: an empty one
+}
+
+/* Before the login, every install file's path and sha256 in files lines under 4096 bytes, numbered, the
+	 last marked; once a connection, so a second login on it sends the login alone.  A refusal over a file
+	 names it for the login screen. */
+TEST(online_login_sends_the_install_files_first)
+{
+	std::vector<InstallFile> files;
+	for (int i = 0; i < 300; ++i)
+	{
+		InstallFile f;
+		char path[64];
+		snprintf( path, sizeof(path), "art/textures/a_long_texture_name_number_%03d.tga", i );
+		f.path = path;
+		f.sha256 = std::string( 64, (char)('a' + i % 6) );
+		files.push_back( f );
+	}
+	InstallFiles_setList( files );
+	{
+		AdapterRig rig;
+		BuddyRequest req;
+		memset( &req, 0, sizeof(req) );
+		req.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGIN;
+		strcpy( req.arg.login.email, "tank@example.com" );
+		strcpy( req.arg.login.password, "secret" );
+		rig.buddy->addRequest( req );
+
+		CHECK( rig.sent.size() > 3 );
+		std::vector<std::string> paths, hashes;
+		size_t lines = 0;
+		while (lines < rig.sent.size() && rig.sentType( lines ) == "files")
+		{
+			const OnlineMessage &m = rig.sent[lines];
+			CHECK_EQ( m.getInt( "seq" ), (long long)lines );
+			std::string line;
+			CHECK( m.toLine( line ) );
+			CHECK( line.size() < 4096 );
+			const std::vector<std::string> p = m.getStrings( "paths" ), h = m.getStrings( "hashes" );
+			CHECK_EQ( p.size(), h.size() );
+			paths.insert( paths.end(), p.begin(), p.end() );
+			hashes.insert( hashes.end(), h.begin(), h.end() );
+			++lines;
+			CHECK_EQ( m.getInt( "last", -1 ), lines == rig.sent.size() - 1 ? 1ll : 0ll );
+		}
+		CHECK( lines > 1 );
+		CHECK_EQ( lines, rig.sent.size() - 1 );
+		CHECK_STR( rig.sentType( lines ).c_str(), "login" );
+		CHECK_EQ( paths.size(), files.size() );
+		for (size_t i = 0; i < paths.size() && i < files.size(); ++i)
+		{
+			CHECK_STR( paths[i].c_str(), files[i].path.c_str() );
+			CHECK_STR( hashes[i].c_str(), files[i].sha256.c_str() );
+		}
+
+		rig.feed( "{\"t\":\"auth.fail\",\"code\":\"files\",\"file\":\"art/textures/a_long_texture_name_number_007.tga\"}" );
+		AsciiString file;
+		CHECK_STR( OnlineGetLoginFailure( NULL, &file ).str(), "files" );
+		CHECK_STR( file.str(), "art/textures/a_long_texture_name_number_007.tga" );
+
+		rig.sent.clear();
+		rig.buddy->addRequest( req );
+		CHECK_EQ( rig.sent.size(), (size_t)1 );
+		CHECK_STR( rig.sentType( 0 ).c_str(), "login" );
+		CHECK( OnlineGetLoginFailure( NULL, &file ).isEmpty() );
+		CHECK( file.isEmpty() );
+	}
+	InstallFiles_setList( std::vector<InstallFile>() );		// the other tests log in with none
 }
 
 /* The report names its map for the match history: the folder and file under maps, never the user folder

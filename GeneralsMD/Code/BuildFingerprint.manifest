@@ -1621,6 +1621,7 @@ GameEngine/Include/Common/Handicap.h
 GameEngine/Include/Common/INI.h
 GameEngine/Include/Common/INIException.h
 GameEngine/Include/Common/IgnorePreferences.h
+GameEngine/Include/Common/InstallFiles.h
 GameEngine/Include/Common/JobSystem.h
 GameEngine/Include/Common/KindOf.h
 GameEngine/Include/Common/LadderPreferences.h
@@ -2251,6 +2252,7 @@ GameEngine/Source/Common/INI/INIVideo.cpp
 GameEngine/Source/Common/INI/INIWater.cpp
 GameEngine/Source/Common/INI/INIWeapon.cpp
 GameEngine/Source/Common/INI/INIWebpageURL.cpp
+GameEngine/Source/Common/InstallFiles.cpp
 GameEngine/Source/Common/Language.cpp
 GameEngine/Source/Common/MapObject.cpp
 GameEngine/Source/Common/MessageStream.cpp
@@ -3900,6 +3902,8 @@ Libraries/Source/WWVegas/WWLib/sampler.h
 Libraries/Source/WWVegas/WWLib/search.h
 Libraries/Source/WWVegas/WWLib/sha.cpp
 Libraries/Source/WWVegas/WWLib/sha.h
+Libraries/Source/WWVegas/WWLib/sha256.cpp
+Libraries/Source/WWVegas/WWLib/sha256.h
 Libraries/Source/WWVegas/WWLib/shapeset.h
 Libraries/Source/WWVegas/WWLib/shapipe.cpp
 Libraries/Source/WWVegas/WWLib/shapipe.h

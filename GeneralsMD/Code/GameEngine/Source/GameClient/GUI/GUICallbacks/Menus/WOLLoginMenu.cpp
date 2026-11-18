@@ -1124,9 +1124,16 @@ static void onlineLoginError( const UnicodeString &text )
 static void onlineLoginFailed( Int reason )
 {
 	Int retry = 0;
-	const AsciiString code = OnlineGetLoginFailure( &retry );
+	AsciiString file;
+	const AsciiString code = OnlineGetLoginFailure( &retry, &file );
 	UnicodeString text;
-	if (code == "badlogin" || code == "badtoken")
+	if (code == "files")
+	{
+		UnicodeString name;
+		name.translate( file );
+		text.format( TheGameText->fetch( "GUI:OnlineLoginFiles" ), name.str() );
+	}
+	else if (code == "badlogin" || code == "badtoken")
 		text = TheGameText->fetch( "GUI:OnlineLoginBadBody" );
 	else if (code == "throttled" && retry > 0)
 		text.format( TheGameText->fetch( "GUI:OnlineLoginThrottled" ), retry );
@@ -1514,6 +1521,18 @@ void WOLLoginMenuUpdate( WindowLayout * layout, void *userData)
 		}
 
 		checkLogin();
+	}
+
+	// a login held back until the install files are hashed: the status line says so, and the timeout
+	// starts once the hashes and the login are out
+	static Bool s_checkingFiles = FALSE;
+	const Bool checkingFiles = OnlineIsEnabled() && loginAttemptTime && OnlineIsCheckingFiles();
+	if (checkingFiles)
+		loginAttemptTime = Clock_Milliseconds();
+	if (checkingFiles != s_checkingFiles && !isShuttingDown)
+	{
+		s_checkingFiles = checkingFiles;
+		onlineStatus( checkingFiles ? TheGameText->fetch( "GUI:OnlineCheckingFiles" ) : UnicodeString::TheEmptyString );
 	}
 
 	if (TheGameSpyInfo && !buttonPushed && loginAttemptTime && (loginAttemptTime + loginTimeoutInMS < Clock_Milliseconds()))

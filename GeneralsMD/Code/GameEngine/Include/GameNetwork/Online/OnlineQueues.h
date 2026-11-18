@@ -91,8 +91,11 @@ Bool OnlineGetCounts( Int &players, Int &games, Int &queue );
 Bool OnlineGetServerInfo( AsciiString &name, AsciiString &city, Int &pingMs );
 /* The code of the last login the server refused (auth.fail: badlogin, throttled, expired...), and its
 	 retry in seconds, 0 when it gave none.  Empty when the last login never reached a refusal (the
-	 connection failed), and cleared by the next login. */
-AsciiString OnlineGetLoginFailure( Int *retrySeconds );
+	 connection failed), and cleared by the next login.  `file` gets the install file a "files" refusal names. */
+AsciiString OnlineGetLoginFailure( Int *retrySeconds, AsciiString *file = NULL );
+/* A login waits on the install files' hashes (the first start of a build reads every file): the login
+	 screen says it is checking them. */
+Bool OnlineIsCheckingFiles( void );
 /* Opens an http or https address in the player's browser; FALSE when it is not one or nothing could open
 	 it.  Windows asks the shell; elsewhere the platform layer's hook, SDL_OpenURL, set by SdlGameEngine. */
 Bool OnlineOpenURL( const char *url );

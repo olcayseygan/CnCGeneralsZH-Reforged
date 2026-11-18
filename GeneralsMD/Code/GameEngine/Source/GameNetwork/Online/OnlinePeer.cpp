@@ -25,6 +25,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "Common/GlobalData.h"
+#include "Common/InstallFiles.h"
 #include "Common/MultiplayerSettings.h"
 #include "Common/PlayerTemplate.h"
 #include "Common/UserPreferences.h"
@@ -146,6 +147,7 @@ OnlineSession::OnlineSession() :
 
 void OnlineSession::connectionGone()
 {
+	filesSent = FALSE;		// a server keeps a connection's files with the connection
 	counts.clear();
 	serverInfo.clear();
 	hasServerInfo = FALSE;
@@ -246,6 +248,7 @@ void OnlineSession::beginTest( std::vector<OnlineMessage> *lines )
 	resetUrl.clear();
 	accountUrl.clear();
 	failCode.clear();
+	failFile.clear();
 	failRetry = 0;
 	status = lines ? ONLINE_WELCOMED : ONLINE_OFF;
 }
@@ -302,6 +305,7 @@ OnlineMessage OnlineHelloLine( UnsignedInt exe, UnsignedInt ini, const char *ver
 	OnlineMessage hello;
 	hello.setString( "t", "hello" ).setInt( "exe", exe ).setInt( "ini", ini ).setString( "ver", ver ? ver : "" );
 	hello.setInt( "proto", ONLINE_PROTO );
+	hello.setInt( "files", 1 );		// the install files' hashes come before the login (OnlineSession::sendFiles)
 	return hello;
 }
 
@@ -327,18 +331,73 @@ void OnlineSession::requestAuth( const OnlineMessage &line )
 	m.setInt( "proto", ONLINE_PROTO );
 	authWaiting = TRUE;
 	failCode.clear();
+	failFile.clear();
 	failRetry = 0;
-	if (status == ONLINE_WELCOMED)
-	{
-		send( m );
-		return;
-	}
 	pendingAuth = m;
 	hasPendingAuth = TRUE;
 	if (status == ONLINE_OFF || status == ONLINE_FAILED)
 		dial();
 	if (status == ONLINE_FAILED)
 		loginFailed( DISCONNECT_COULDNOTCONNECT );
+	else
+		flushAuth();
+}
+
+/* The login goes once the welcome is in and the install files are hashed (the first start of a build
+	 reads them all, the login screen says it is checking them meanwhile), right behind their hashes. */
+void OnlineSession::flushAuth()
+{
+	if (!hasPendingAuth || status != ONLINE_WELCOMED || !InstallFiles_ready())
+		return;
+	hasPendingAuth = FALSE;
+	sendFiles();
+	send( pendingAuth );
+}
+
+/* files{seq,last,paths[],hashes[]}: every install file the game reads, path and sha256 at the same index,
+	 cut into lines under 4096 bytes.  A path's length is counted as if every byte were escaped as \uXXXX
+	 where JSON may escape it, so no line can outgrow that however odd a file name. */
+void OnlineSession::sendFiles()
+{
+	if (filesSent)
+		return;
+	filesSent = TRUE;
+	const std::vector<InstallFile> &files = InstallFiles_list();
+	enum { BUDGET = 3900 };		// under 4096 less the line's own keys and seq
+	std::vector<std::string> paths, hashes;
+	size_t bytes = 0;
+	long long seq = 0;
+	for (size_t i = 0; i <= files.size(); ++i)
+	{
+		const Bool end = i == files.size();
+		size_t cost = 0;
+		if (!end)
+		{
+			cost = files[i].sha256.size() + 6;		// two pairs of quotes and two commas
+			for (size_t c = 0; c < files[i].path.size(); ++c)
+			{
+				const unsigned char ch = (unsigned char)files[i].path[c];
+				cost += (ch < 0x20 || ch >= 0x7f || ch == '"' || ch == '\\') ? 6 : 1;
+			}
+		}
+		if (!paths.empty() && (end || bytes + cost > BUDGET))
+		{
+			OnlineMessage m;
+			m.setString( "t", "files" ).setInt( "seq", seq++ ).setInt( "last", end ? 1 : 0 );
+			m.setStrings( "paths", paths ).setStrings( "hashes", hashes );
+			send( m );
+			paths.clear();
+			hashes.clear();
+			bytes = 0;
+		}
+		if (!end)
+		{
+			paths.push_back( files[i].path );
+			hashes.push_back( files[i].sha256 );
+			bytes += cost;
+		}
+	}
+	DEBUG_LOG(("online: files sent, %d in %d lines\n", (Int)files.size(), (Int)seq));
 }
 
 void OnlineSession::pump()
@@ -368,6 +427,8 @@ void OnlineSession::pump()
 			}
 		}
 	}
+
+	flushAuth();		// a login that waited on the install files' hashes
 
 	if (connection && !capture)
 		pingServer();		// tests ping on the welcome alone, so a captured line list stays what the test sent
@@ -669,11 +730,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		m.getObject( "counts", counts );		// none from an older server: cleared
 		hasServerInfo = m.getObject( "server", serverInfo );
 		status = ONLINE_WELCOMED;
-		if (hasPendingAuth)
-		{
-			hasPendingAuth = FALSE;
-			send( pendingAuth );
-		}
+		flushAuth();
 		pingSentMs = 0;		// the first round trip at once
 		pingServer();
 	}
@@ -709,6 +766,7 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		if (code == "already")
 			return;
 		failCode = code;
+		failFile = m.getString( "file" );		// code files: the install file that is not the release's
 		failRetry = (Int)m.getInt( "retry" );
 		Bool wasIn = authed;
 		forgetAccount();
@@ -1528,12 +1586,20 @@ Bool OnlineGetQuickMatchChanceWindow( Real &chanceLo, Real &chanceHi, Int &nextM
 	return s.qmWindow.has( "lo" ) && s.qmWindow.has( "hi" );
 }
 
-AsciiString OnlineGetLoginFailure( Int *retrySeconds )
+AsciiString OnlineGetLoginFailure( Int *retrySeconds, AsciiString *file )
 {
 	const OnlineSession &s = OnlineSession::get();
 	if (retrySeconds)
 		*retrySeconds = s.failRetry > 0 ? s.failRetry : 0;
+	if (file)
+		*file = s.failFile.c_str();
 	return s.failCode.c_str();
+}
+
+Bool OnlineIsCheckingFiles( void )
+{
+	const OnlineSession &s = OnlineSession::get();
+	return s.hasPendingAuth && !InstallFiles_ready();
 }
 
 /* Only a web page: the address comes from the server, and ShellExecute would run a program path or open a

@@ -22,6 +22,7 @@ found and fixed, EA's own, not port damage.**
 - A rare crash right after a busy moment in a match, when two parts of the game looked up the same unit model at once, is gone.
 - On Linux and Steam Deck (Wine/Proton) with no working sound output the game used to crash at startup. It now starts and plays without sound.
 - Coming back to a match after a long time away, or after the graphics driver restarted, no longer crashes the game when you open the quit menu.
+- A custom map whose train or ferry had no track laid out for it crashed the game the moment that transport was sent on its way, a bug as old as EA's release. It now stays where it is and opens its doors.
 - Some Intel and AMD graphics drivers handed the EA logo a picture far smaller than the movie, and copying the frame into it overwrote the game's memory with black pixels: a crash at startup, or a strange one at the first map. The game now refuses such a picture and skips the movie.
 - When the game runs out of memory or meets a bad value deep inside, its crash report now says where.
 

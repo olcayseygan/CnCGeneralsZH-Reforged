@@ -36,9 +36,9 @@
 #   - P with one value changed in the overlay (BalanceReforged.ini's first BuildCost, 1000 to 1001),
 #     which runs through: its INI CRC must differ. That is the INI check being able to fail.
 #
-# The overlay is what ships (P1): Data/INI, Data/Patch.str, Data/Scripts, Data/Turkish,
-# Data/German, Data/Ukrainian, Data/Russian, Data/French, Install_Final.bmp, Art/Textures and Window from
-# Code/Data, and
+# The overlay is what ships (P1): Data/INI, Data/Patch.str, Data/Cursors, Data/Audio, Data/Scripts,
+# Data/Turkish, Data/German, Data/Ukrainian, Data/Russian, Data/French, Install_Final.bmp, Art/Textures,
+# Art/W3D and Window from Code/Data, and
 # the fork's Reforged*.big from
 # GeneralsMD/Run when vendor.sh has fetched them (linked, not copied: 1.65 GB). Both layouts get the
 # same files, so what differs is only where they sit.

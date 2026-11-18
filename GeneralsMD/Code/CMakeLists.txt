@@ -1488,6 +1488,18 @@ if(ZH_PLATFORM_POSIX)
   # pass) the way the generated ones are compiled.
   target_link_libraries(posixd3d9 PRIVATE SDL3::SDL3-static sdl3shadercompile engineshader ffshader ffvertex postprocess)
 
+  if(ZH_PLATFORM_LINUX)
+    add_executable(test_baseline_weather ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_baseline_weather.cpp)
+    set_target_properties(test_baseline_weather PROPERTIES CXX_STANDARD 17)
+    target_include_directories(test_baseline_weather PRIVATE
+      ${WW}/WWLib ${WW}/WWMath ${WW}/WWDebug ${WW}/WW3D2
+      ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+    target_link_libraries(test_baseline_weather PRIVATE w3ddevice ww3d2 posixdevice gameengine SDL3::SDL3-static)
+    add_test(NAME test_baseline_weather COMMAND test_baseline_weather)
+    add_test(NAME test_baseline_weather_gpu COMMAND test_baseline_weather --gpu)
+    set_tests_properties(test_baseline_weather_gpu PROPERTIES SKIP_RETURN_CODE 77 RUN_SERIAL TRUE)
+  endif()
+
   add_executable(test_renderer_atmosphere ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_renderer_atmosphere.cpp)
   set_target_properties(test_renderer_atmosphere PROPERTIES CXX_STANDARD 17)
   target_include_directories(test_renderer_atmosphere PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)

@@ -14733,9 +14733,9 @@ TEST(the_generator_still_turns_a_seed_into_the_bytes_it_used_to)
 	struct RMGFingerprint { Int m_seed, m_players, m_cells, m_style; UnsignedInt m_crc; };
 	static const RMGFingerprint theFingerprints[] =
 	{
-		{ 0, 2, 64, 0, 0x19476366 },
-		{ 12345, 4, 96, 0, 0xF924D319 },
-		{ 7, 8, 128, 0, 0xA3DCD668 },
+		{ 0, 2, 64, 0, 0xE9E74BA7 },
+		{ 12345, 4, 96, 0, 0xCEE6ECA4 },
+		{ 7, 8, 128, 0, 0x85737306 },
 		{ 7, 4, 200, 1, 0xBFE61244 },
 	};
 	const Int numFingerprints = sizeof(theFingerprints) / sizeof(theFingerprints[0]);
@@ -14972,6 +14972,27 @@ TEST(write_the_maps_RMG_DUMP_names)
 		CHECK( out != NULL );
 		fwrite( &preview[0], 1, preview.size(), out );
 		fclose( out );
+
+		// the carved ways too, which the map does not keep: width, count, then each one's length and cells
+		if( settings.m_template.isEmpty() )
+		{
+			std::vector< std::vector<Int> > roads;
+			Int width = 0;
+			RandomMapGenerator::roadCells( settings, roads, &width );
+			file.format( "%s.roads", name );
+			out = fopen( file.str(), "wb" );
+			CHECK( out != NULL );
+			Int count = (Int)roads.size();
+			fwrite( &width, sizeof(Int), 1, out );
+			fwrite( &count, sizeof(Int), 1, out );
+			for( Int r = 0; r < count; r++ )
+			{
+				Int length = (Int)roads[r].size();
+				fwrite( &length, sizeof(Int), 1, out );
+				fwrite( &roads[r][0], sizeof(Int), length, out );
+			}
+			fclose( out );
+		}
 		printf( "  wrote %s.map (%d bytes)\n", name, (Int)map.size() );
 	}
 }

@@ -96,6 +96,12 @@ public:
 		test or a tool tells. A template map's own report (RMGTemplateReport) says the same for it. */
 	static Bool isPlayable( const RandomMapSettings& settings );
 
+	/** Every way the plain or styled generator carved or paved for these settings, as the map cells
+		(y * width + x, border included) along each one in order: the passes and repairs cut between
+		bases and to the money, the massif ramps and the town streets. For the measuring tools; the map
+		itself does not carry the carved ones. */
+	static void roadCells( const RandomMapSettings& settings, std::vector< std::vector<Int> >& roads, Int *mapWidth );
+
 	/** How big a map of this size is for this many players. Every player brings
 		ground with them, so an eight-way game is not eight bases crammed onto a
 		duel map. */

@@ -1,3 +1,4 @@
+#include "SdlSceneContext.h"
 /*
 **	Copyright 2026 İlyas Akın
 **	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
@@ -966,13 +967,37 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	Build_Combiner_Description(combiner);
 	combiner.ShadowReceiving = Sun_Receiving(vertex_engine, pixel_engine, target);
 	combiner.DrawEffect = SunActive ? SunCasterEffect : DRAW_EFFECT_NONE;
+    SDL_GPUTexture *sprite_depth=nullptr;
+    SDL_GPUSampler *sprite_sampler=nullptr;
+    const bool sprite_format=ParticlesAllowed && !SunActive && vertex_engine==ENGINE_SHADER_NONE &&
+        pixel_engine==ENGINE_SHADER_NONE && !(FVF&D3DFVF_XYZRHW) && (FVF&D3DFVF_TEXCOUNT_MASK)>=D3DFVF_TEX2;
+    const auto source_blend=RenderStates[D3DRS_SRCBLEND],destination_blend=RenderStates[D3DRS_DESTBLEND];
+    const bool sprite_blend=RenderStates[D3DRS_ALPHABLENDENABLE] && source_blend!=D3DBLEND_DESTCOLOR &&
+        source_blend!=D3DBLEND_ZERO && destination_blend!=D3DBLEND_SRCCOLOR;
+    if(sprite_format && sprite_blend) {
+        if(FireLookDraw && TextureStageStates[1][D3DTSS_COLOROP]==D3DTOP_DISABLE)
+            combiner.FireLook=source_blend==D3DBLEND_ONE?FIRE_LOOK_COLOUR:FIRE_LOOK_ALPHA;
+        if(SoftParticlesDraw && Sun_Camera_Space()) {
+            SdlMainViewSnapshot depth;
+            if(Read_Soft_Depth(depth) && (sprite_sampler=Samplers->Sampler(SamplerStates[0]))) {
+                sprite_depth=depth.SampledDepth;
+                combiner.SoftParticle=source_blend==D3DBLEND_ONE?SOFT_PARTICLE_COLOUR:SOFT_PARTICLE_ALPHA;
+            }
+        }
+    }
+    const unsigned sprite_fault=(combiner.SoftParticle||combiner.FireLook)?SpriteRefusalForTest:0;
+    if(combiner.SoftParticle||combiner.FireLook) SpriteRefusalForTest=0;
 	combiner.SmokeGlow = SmokeGlow && vertex_engine == ENGINE_SHADER_NONE && pixel_engine == ENGINE_SHADER_NONE
 		&& !RenderStates[D3DRS_LIGHTING] && (FVF & D3DFVF_NORMAL) && !(FVF & D3DFVF_XYZRHW);
 	if (vertex_engine == ENGINE_SHADER_NONE && !Build_Vertex_Description(vertex, &refusal)) {
 		Refuse_Draw(refusal);
 		return D3D_OK;
 	}
-	if (vertex_engine == ENGINE_SHADER_NONE) vertex.SmokeGlow = combiner.SmokeGlow;
+	if (vertex_engine == ENGINE_SHADER_NONE) {
+        vertex.SmokeGlow=combiner.SmokeGlow;
+        vertex.SoftParticle=combiner.SoftParticle!=SOFT_PARTICLE_NONE;
+        vertex.FireLook=combiner.FireLook!=FIRE_LOOK_NONE;
+    }
 	// The dedicated generated water vertex path deliberately avoids arbitrary engine-program
 	// pairing. Only this path may bind native FFT textures to the vertex stage. A sun caster
 	// pass keeps the ordinary vertex program its depth-only pixel variant was made against.
@@ -984,18 +1009,28 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	if (fft_water) WaterPerformanceSettings::Applied().activeFftResolution = Gpu->Ocean_Configuration().resolution;
 	const SdlProgram *fft_vertex = fft_water ? &Programs->Water_Vertex_Program(vertex) : NULL;
 	if (fft_vertex && fft_vertex->Shader == NULL) fft_water = false;
-	const SdlProgram &vertex_program = vertex_engine != ENGINE_SHADER_NONE
-		? Programs->Engine_Vertex_Program(vertex_engine)
-		: fft_water ? *fft_vertex : Programs->Vertex_Program(vertex);
+	const SdlProgram *vertex_program = vertex_engine != ENGINE_SHADER_NONE
+		? &Programs->Engine_Vertex_Program(vertex_engine)
+		: fft_water ? fft_vertex : &Programs->Vertex_Program(vertex);
 	const SdlProgram *pixel_program = SunActive
 		? &Programs->Sun_Pixel_Program(combiner, pixel_engine)
 		: pixel_engine != ENGINE_SHADER_NONE
 			? &Programs->Engine_Pixel_Program(pixel_engine, combiner.PixelPipeline)
 			: &Programs->Pixel_Program(combiner);
+    const auto retry_without_sprites=[&]() {
+        if(!combiner.SoftParticle && !combiner.FireLook) return false;
+        combiner.SoftParticle=SOFT_PARTICLE_NONE; combiner.FireLook=FIRE_LOOK_NONE;
+        vertex.SoftParticle=vertex.FireLook=false; sprite_depth=nullptr;
+        vertex_program=&Programs->Vertex_Program(vertex);
+        pixel_program=&Programs->Pixel_Program(combiner);
+        return vertex_program->Shader && pixel_program->Shader;
+    };
+    if((!vertex_program->Shader || !pixel_program->Shader || (sprite_fault&11)) &&
+        (combiner.SoftParticle||combiner.FireLook)) retry_without_sprites();
 	const auto retry_without_sun = [&](const char *reason) {
 		// Generated receivers add an optional program variant. Ground programs share the
 		// established engine path; their existing source keeps its own failure handling.
-		if (!combiner.ShadowReceiving || pixel_engine != ENGINE_SHADER_NONE || !vertex_program.Shader)
+		if (!combiner.ShadowReceiving || pixel_engine != ENGINE_SHADER_NONE || !vertex_program->Shader)
 			return false;
 		Fail_Sun_Receiver(reason);
 		combiner.ShadowReceiving = false;
@@ -1032,23 +1067,23 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 			}
 		}
 	}
-	if (vertex_program.Shader == NULL || pixel_program->Shader == NULL) {
-		Refuse_Draw(vertex_program.Shader == NULL ? "a vertex program refused" : "a pixel program refused");
+	if (vertex_program->Shader == NULL || pixel_program->Shader == NULL) {
+		Refuse_Draw(vertex_program->Shader == NULL ? "a vertex program refused" : "a pixel program refused");
 		return D3D_OK;
 	}
 	if (pixel_program->SamplerSlots > SdlRecordedDraw::MAXIMUM_SAMPLERS)
 		retry_without_sun("receiver sampler count");
 	if (pixel_program->SamplerSlots > SdlRecordedDraw::MAXIMUM_SAMPLERS
-		|| vertex_program.SamplerSlots > (fft_water ? 4u : 0u)) {
+		|| vertex_program->SamplerSlots > (fft_water ? 4u : 0u)) {
 		Refuse_Draw("more sampler slots than a draw binds");
 		return D3D_OK;
 	}
 	const bool modern_water_pixel=pixel_engine==ENGINE_SHADER_WATER_TRAPEZOID || pixel_engine==ENGINE_SHADER_WATER_RIVER;
 	if(!Sdl_Draw_Uniform_Buffers_Supported(fft_water,modern_water_pixel,
-		vertex_program.UniformBuffers,pixel_program->UniformBuffers))
+		vertex_program->UniformBuffers,pixel_program->UniformBuffers))
 		retry_without_sun("receiver uniform layout");
 	if(!pixel_program->Shader || !Sdl_Draw_Uniform_Buffers_Supported(fft_water,modern_water_pixel,
-		vertex_program.UniformBuffers,pixel_program->UniformBuffers)) {
+		vertex_program->UniformBuffers,pixel_program->UniformBuffers)) {
 		Refuse_Draw("uniform blocks without an explicit draw binding");
 		return D3D_OK;
 	}
@@ -1092,7 +1127,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		states = glow_states;
 	}
 	SdlPipelineKey key;
-	if (!Sdl_Pipeline_Key(states, call.Type, vertex_program.Shader, pixel_program->Shader, FVF,
+	if (!Sdl_Pipeline_Key(states, call.Type, vertex_program->Shader, pixel_program->Shader, FVF,
 		SdlGpuFrame::Target_Colour_Format(target), Gpu->Target_Depth_Format(target), key, refusal)) {
 		Refuse_Draw("the pipeline: " + refusal);
 		return D3D_OK;
@@ -1100,15 +1135,21 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	phases.Mark("target+programs");
 	SdlRecordedDraw draw;
 	memset(&draw, 0, sizeof(draw));
-	draw.Pipeline = Pipelines->Pipeline(key, combiner.ShadowReceiving && pixel_engine == ENGINE_SHADER_NONE);
+	draw.Pipeline = (sprite_fault&4) && (combiner.SoftParticle||combiner.FireLook) ? nullptr :
+        Pipelines->Pipeline(key,combiner.ShadowReceiving && pixel_engine==ENGINE_SHADER_NONE);
+    if(!draw.Pipeline && retry_without_sprites()) {
+        if(Sdl_Pipeline_Key(states,call.Type,vertex_program->Shader,pixel_program->Shader,FVF,
+            SdlGpuFrame::Target_Colour_Format(target),Gpu->Target_Depth_Format(target),key,refusal))
+            draw.Pipeline=Pipelines->Pipeline(key);
+    }
 	if (!draw.Pipeline && retry_without_sun("pipeline refused")) {
-		if (Sdl_Pipeline_Key(states, call.Type, vertex_program.Shader, pixel_program->Shader, FVF,
+		if (Sdl_Pipeline_Key(states, call.Type, vertex_program->Shader, pixel_program->Shader, FVF,
 			SdlGpuFrame::Target_Colour_Format(target), Gpu->Target_Depth_Format(target), key, refusal))
 			draw.Pipeline = Pipelines->Pipeline(key);
 	}
 	if(!draw.Pipeline && shore_overlay) {
 		shore_overlay=false;pixel_program=legacy_pixel_program;
-		if(Sdl_Pipeline_Key(states,call.Type,vertex_program.Shader,pixel_program->Shader,FVF,
+		if(Sdl_Pipeline_Key(states,call.Type,vertex_program->Shader,pixel_program->Shader,FVF,
 			SdlGpuFrame::Target_Colour_Format(target),Gpu->Target_Depth_Format(target),key,refusal))
 			draw.Pipeline=Pipelines->Pipeline(key);
 	}
@@ -1143,7 +1184,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	SDL_GPUTexture *water_background = water_draw && water_colour ? Gpu->Water_Background(target) : NULL;
 	SDL_GPUTexture *water_depth = water_draw ? Gpu->Water_Depth(target) : NULL;
 	bool water_history = water_draw && Water_Foam_History_Available();
-	draw.VertexSamplerCount = vertex_program.SamplerSlots;
+	draw.VertexSamplerCount = vertex_program->SamplerSlots;
 	for (unsigned int slot = 0; slot < draw.VertexSamplerCount && slot < 3; ++slot) {
 		draw.VertexTextures[slot] = Gpu->Ocean_Map(slot * 2);
 		draw.VertexSamplers[slot] = Gpu->Ocean_Sampler();
@@ -1190,6 +1231,11 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 				if (!draw.Textures[slot] || !draw.Samplers[slot]) return D3D_OK;
 				continue;
 			}
+            if(combiner.SoftParticle && texture_stage==7) {
+                draw.Textures[slot]=sprite_depth; draw.Samplers[slot]=sprite_sampler;
+                if(!sprite_depth || !sprite_sampler) return D3D_OK;
+                continue;
+            }
 			if (texture_stage < 0 || texture_stage >= SAMPLER_COUNT || sampler_stage < 0 || sampler_stage >= SAMPLER_COUNT) {
 				Refuse_Draw("a program slot past the device's stages");
 				return D3D_OK;
@@ -1319,7 +1365,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 					if (index < call.MinVertex || index >= call.MinVertex + call.VertexCount) {
 						fprintf(stderr, "PosixDevice9: a draw reads index %u outside MinVertex %u + VertexCount %u (start index %u, "
 							"%u primitives, base vertex %d, programs %s | %s)\n", index, call.MinVertex, call.VertexCount,
-							call.StartIndex, call.PrimitiveCount, call.BaseVertex, vertex_program.Key.c_str(), pixel_program->Key.c_str());
+							call.StartIndex, call.PrimitiveCount, call.BaseVertex, vertex_program->Key.c_str(), pixel_program->Key.c_str());
 						abort();
 					}
 				}
@@ -1401,7 +1447,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		draw.Count = reads;
 	}
 
-	Trace_Draw_If_Asked(call, vertex_program.Key + " | " + pixel_program->Key,
+	Trace_Draw_If_Asked(call, vertex_program->Key + " | " + pixel_program->Key,
 		vertex_buffer, stride);
 	if (Capture_Is_Asked()) {
 		// The signature: both programs' keys, and the pipeline key's bytes (the pipeline's states, formats
@@ -1421,7 +1467,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		for (unsigned int slot = 0; slot < pixel_program->SamplerSlots; ++slot) {
 			sampled |= 1u << pixel_program->SlotTexture[slot];
 		}
-		Capture_Draw(call, vertex_program.Key + " | " + pixel_program->Key + pipeline, stride, reads, sampled,
+		Capture_Draw(call, vertex_program->Key + " | " + pixel_program->Key + pipeline, stride, reads, sampled,
 			target.Width, target.Height);
 	}
 
@@ -1430,13 +1476,13 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	SdlVertexConstants vertex_constants;
 	SdlPixelConstants pixel_constants;
 	Build_Constants(vertex_constants, pixel_constants);
-	if (vertex_program.UniformBuffers != 0 && vertex_engine != ENGINE_SHADER_NONE) {
+	if (vertex_program->UniformBuffers != 0 && vertex_engine != ENGINE_SHADER_NONE) {
 		// A transcribed vertex program reads the engine's own register bank, c0 to c95, as its b0.
 		const uint32_t size = ENGINE_SHADER_CONSTANTS * sizeof(VertexShaderConstants[0]);
 		draw.VertexConstants = Gpu->Constants(0, VertexShaderConstants, size);
 		draw.VertexConstantsSize = size;
 	}
-	else if (vertex_program.UniformBuffers != 0) {
+	else if (vertex_program->UniformBuffers != 0) {
 		draw.VertexConstants = Gpu->Constants(0, &vertex_constants, sizeof(vertex_constants));
 		draw.VertexConstantsSize = sizeof(vertex_constants);
 	}
@@ -1484,11 +1530,18 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		draw.PixelConstants=Gpu->Constants(1,&shore,sizeof(shore));draw.PixelConstantsSize=sizeof(shore);
 	}
 	else if (pixel_program->UniformBuffers != 0
-		&& (pixel_engine != ENGINE_SHADER_NONE || combiner.ShadowReceiving || combiner.DrawEffect)) {
+		&& (pixel_engine != ENGINE_SHADER_NONE || combiner.ShadowReceiving || combiner.DrawEffect || combiner.SoftParticle)) {
 		SdlEnginePixelConstants engine_constants;
 		memset(&engine_constants, 0, sizeof(engine_constants));
 		engine_constants.Combiner = pixel_constants;
 		if (combiner.ShadowReceiving) Build_Sun_Constants(engine_constants);
+        if(combiner.SoftParticle) {
+            const auto &projection=Transforms[D3DTS_PROJECTION];
+            engine_constants.SoftParticleDepth[0]=projection._34*projection._43;
+            engine_constants.SoftParticleDepth[1]=projection._34;
+            engine_constants.SoftParticleDepth[2]=projection._33;
+            engine_constants.SoftParticleDepth[3]=1.0f/12.0f;
+        }
 		if (combiner.DrawEffect) engine_constants.DrawEffectParameters[3] = SunCasterOpacity;
 		draw.PixelConstants = Gpu->Constants(1, &engine_constants, sizeof(engine_constants));
 		draw.PixelConstantsSize = sizeof(engine_constants);

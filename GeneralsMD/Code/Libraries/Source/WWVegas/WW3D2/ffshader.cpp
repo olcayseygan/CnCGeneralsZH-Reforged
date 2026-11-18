@@ -250,10 +250,8 @@ bool CombinerShader_Generate(const CombinerDescription & description, CombinerSh
 	// Its cloak caster needs only ordered coverage, without cosmetic scene resources.
 	if (target == COMBINER_SHADER_TARGET_SDL3_GPU) {
 		CombinerDescription supported = description;
-		// Scene-depth fading and cosmetic refraction still have separate SDL integration work.
-		supported.SoftParticle = SOFT_PARTICLE_NONE;
-		// The fire look's coordinates come out of the Direct3D 11 vertex half, which SDL does not run.
-		supported.FireLook = FIRE_LOOK_NONE;
+        // Sorted native billboards now supply the original width/age payload
+        // and an independently validated pretransparent depth snapshot.
 		if (supported.DrawEffect != DRAW_EFFECT_CLOAK_SHADOW) supported.DrawEffect = DRAW_EFFECT_NONE;
 		// SDL has no heights at t4; its ground keeps the vertex light.
 		supported.PixelPipeline.TerrainRelight = false;
@@ -268,7 +266,7 @@ static bool generate_combiners(const CombinerDescription & description,
 {
 	const bool sdl = target == COMBINER_SHADER_TARGET_SDL3_GPU;
 	if (sdl) target = COMBINER_SHADER_TARGET_D3D11;
-	// Depth-faded particles remain Windows-only until SDL supplies the scene depth at t7.
+	// Native sorted billboards bind the phase-owned scene depth at t7.
 	const bool soft = volumetric && description.SoftParticle != SOFT_PARTICLE_NONE;
 	// SDL accepts only the cloak caster variant; Windows also supplies the cosmetic scene effects.
 	const unsigned effect = (volumetric && description.DrawEffect < DRAW_EFFECT_COUNT)

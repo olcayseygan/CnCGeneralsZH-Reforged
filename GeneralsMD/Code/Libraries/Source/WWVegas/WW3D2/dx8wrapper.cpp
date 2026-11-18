@@ -6009,3 +6009,35 @@ bool PosixRenderer_Capture_Main_View(SdlSceneCapturePhase p,SdlMainViewSnapshot 
     return PosixRenderer_Capture_Main_View(DX8Wrapper::_Get_D3D_Device(),p,s);
 }
 #endif
+
+#include "Platform/RenderParticles.h"
+namespace RenderParticles {
+void AllowEnhancements(bool e) {
+#if defined(_WIN32)
+    Direct3D11_Allow_Soft_Particles(e);
+#else
+    AllowEnhancements(DX8Wrapper::_Get_D3D_Device(),e);
+#endif
+}
+void SetSoftParticles(bool e) {
+#if defined(_WIN32)
+    Direct3D11_Set_Soft_Particles(e);
+#else
+    SetSoftParticles(DX8Wrapper::_Get_D3D_Device(),e);
+#endif
+}
+void SetFireLook(bool e) {
+#if defined(_WIN32)
+    Direct3D11_Set_Fire_Look(e);
+#else
+    SetFireLook(DX8Wrapper::_Get_D3D_Device(),e);
+#endif
+}
+void TakeSceneDepth() {
+#if defined(_WIN32)
+    Direct3D11_Take_Scene_Depth();
+#else
+    TakeSceneDepth(DX8Wrapper::_Get_D3D_Device());
+#endif
+}
+}

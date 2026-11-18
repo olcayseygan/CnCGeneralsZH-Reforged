@@ -209,6 +209,12 @@ public:
 	RenderResult Create_Gpu_Frame(bool offscreen = false);
 	/// -offscreen's presents, paced at hz a second (0: unpaced); SdlGpuFrame::Set_Offscreen_Presents.
 	void Present_Offscreen(unsigned int hz);
+    void Allow_Particle_Enhancements(bool allowed);
+    void Set_Soft_Particles(bool enabled) { SoftParticlesDraw = enabled; }
+    void Set_Fire_Look(bool enabled) { FireLookDraw = enabled; }
+    void Take_Particle_Depth();
+    bool Read_Soft_Depth(struct SdlMainViewSnapshot &);
+    void Refuse_Next_Sprite_For_Test(unsigned flags) { SpriteRefusalForTest = flags; }
     void Begin_Post(const RenderPost::Settings &);
     unsigned Begin_Post_View(bool, float, float, bool);
     void End_Post_View(unsigned);
@@ -385,6 +391,8 @@ protected:
 	bool SunActive = false, SunFailed = false, SunReady = false;
 	bool SmokeGlow = false;
 	bool GlowDraw = false;
+    bool ParticlesAllowed = true, SoftParticlesDraw = false, FireLookDraw = false;
+    unsigned SpriteRefusalForTest = 0;
 	struct PostSession;
 	std::shared_ptr<PostSession> Post;
 	unsigned SunCasterEffect = 0;

@@ -1,3 +1,4 @@
+#include "Platform/RenderParticles.h"
 #include "Platform/RenderPost.h"
 /*
 **	Command & Conquer Generals Zero Hour(tm)
@@ -859,7 +860,7 @@ static void sizeWindowToClient( Int mode, Int width, Int height )
 static void pushDirect3D11PostChain( void )
 {
 	// Classic graphics is the game's own picture, which is what -d3d9 draws: hard edged sprites.
-	Direct3D11_Allow_Soft_Particles( !TheGlobalData->m_classicGraphics );
+	RenderParticles::AllowEnhancements( !TheGlobalData->m_classicGraphics );
 	// and its own looks for the power outage, the EMP and the two stealth states
 	Direct3D11_Allow_Draw_Effects( !TheGlobalData->m_classicGraphics );
 	const AsciiString & requested = TheGlobalData->m_direct3D11PostChain;

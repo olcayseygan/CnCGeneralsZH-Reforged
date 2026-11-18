@@ -1,3 +1,4 @@
+#include "Platform/RenderParticles.h"
 /*
 **	Command & Conquer Generals Zero Hour(tm)
 **	Copyright 2025 Electronic Arts Inc.
@@ -984,9 +985,9 @@ static void Draw_Run(SortingNodeStruct* state,unsigned first_index,unsigned tria
 {
 	Apply_Render_State(state->sorting_state);
 	SunShadow::SetSmokeGlow(DX8Wrapper::_Get_D3D_Device(),state->glow);
-	Direct3D11_Set_Fire_Look(state->fire);
+	RenderParticles::SetFireLook(state->fire);
 	Direct3D11_Set_Emissive(state->emissive);
-	Direct3D11_Set_Soft_Particles(state->quads);
+	RenderParticles::SetSoftParticles(state->quads);
 	Direct3D11_Set_Draw_Effect(state->draw_effect,state->draw_effect_parameters);
 	SunShadow::ReceiverExclusion sunReceivers(DX8Wrapper::_Get_D3D_Device(), state->excludeSunReceivers);
 	SunShadow::CasterEffectScope casterEffect(DX8Wrapper::_Get_D3D_Device(), state->casterEffect);
@@ -1070,9 +1071,9 @@ static void Flush_Sorting_Batch(const TempIndexStruct* entries,unsigned entry_co
 	}
 	Draw_Run(overlapping_nodes[run_class],run_first_index,run_triangles,run_first_vertex,vertex_cursor-run_first_vertex);
 	SunShadow::SetSmokeGlow(DX8Wrapper::_Get_D3D_Device(),false);
-	Direct3D11_Set_Fire_Look(false);
+	RenderParticles::SetFireLook(false);
 	Direct3D11_Set_Emissive(false);
-	Direct3D11_Set_Soft_Particles(false);
+	RenderParticles::SetSoftParticles(false);
 	static const float no_effect[4]={0.0f,0.0f,0.0f,0.0f};
 	Direct3D11_Set_Draw_Effect(0,no_effect);
 
@@ -1106,7 +1107,7 @@ void SortingRendererClass::Flush_Sorting_Pool()
 	// billboards in it takes none.
 	for (unsigned node=0;node<overlapping_node_count;++node) {
 		if (overlapping_nodes[node]->quads) {
-			Direct3D11_Take_Scene_Depth();
+			RenderParticles::TakeSceneDepth();
 			break;
 		}
 	}

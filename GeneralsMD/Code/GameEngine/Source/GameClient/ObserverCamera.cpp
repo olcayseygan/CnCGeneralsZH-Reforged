@@ -32,9 +32,11 @@
 #include "Common/SpecialPower.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Upgrade.h"
+#include "GameClient/ControlBar.h"
 #include "GameClient/Display.h"
 #include "GameClient/Drawable.h"
 #include "GameClient/GameClient.h"
+#include "GameClient/GameText.h"
 #include "GameClient/LookAtXlat.h"
 #include "GameClient/ObserverCamera.h"
 #include "GameLogic/Damage.h"
@@ -126,8 +128,8 @@ static const Real DIRECTOR_WIDE_EXTRA = 200.0f;
 /// the score bar sets this many players' cards and more in two rows: eight in one were 6 pixel text
 /// at 720p
 static const Int CARD_TWO_ROWS_FROM = 5;
-/// the longest a split stays up, from when it opened; a planned one was held 5300 frames on an
-/// eight-player map while pane 0 went from fight to fight beside it
+/// the longest a second fight stays up, from when it came; a planned one was held 5300 frames on an
+/// eight-player map while the director went from fight to fight beside it
 static const UnsignedInt SPLIT_MOST_FRAMES = 18 * LOGICFRAMES_PER_SECOND;
 /// a zoom moving more than this share of itself between two updates is logged as a jump
 static const Real ZOOM_JUMP_SHARE = 0.02f;
@@ -145,86 +147,32 @@ static const Real PLAYER_TOP_SPEED = 4000.0f;
 /// a frame longer than this is a hitch, and is not allowed to throw the camera across the map
 static const UnsignedInt LONGEST_STEP_MILLISECONDS = 100;
 static const Real MILLISECONDS_PER_SECOND = 1000.0f;
-/// -directorrecord: a second fight closer than this to the first shares its ground, and the split
-/// would show one fight twice; the least, raised to the ground a pane's whole picture spans
+/// -directorrecord: a second fight closer than this to the first shares its ground, and the corner
+/// window would show the director's own fight; the least, raised to the ground off the picture
 static const Real SPLIT_APART = 3.0f * DIRECTOR_GATHER_RADIUS;
-/// a split opens only for two fights further apart than either pane's picture is wide, so no ground
-/// shows in both, and closes once they come within this share of that.  A pane zooms out until its
-/// fight fills its circle, one and a half to two and a half times the director's zoom: at 660 apart,
-/// and at one and a half times the director's own picture, about 700, the two panes of a 1v1 showed
-/// one bridge from neighbouring views
+/// a second fight comes only further away than that, and goes once it comes within this share of it
 static const Real SPLIT_SAME_GROUND_SHARE = 2.0f / 3.0f;
-/// the picture splits for a second fight at least this hot, and at least this share of the first
+/// a second fight is taken at least this hot, and at least this share of the first
 static const Real SPLIT_ENTER_HEAT = 2.0f;
 static const Real SPLIT_ENTER_SHARE = 0.5f;
-/// a split is held this long once its panes are all in, and after that while the second fight keeps
-/// this share
+/// it is held through its least hold, and after that while it keeps this share of the first
 static const UnsignedInt SPLIT_HOLD_FRAMES = 6 * LOGICFRAMES_PER_SECOND;
 static const Real SPLIT_STAY_SHARE = 0.25f;
-/// once the picture is whole again it stays whole this long, so it does not flicker between the two
+/// once one goes, the next waits this long, so the window does not flicker between the two
 static const UnsignedInt SPLIT_REST_FRAMES = 4 * LOGICFRAMES_PER_SECOND;
-/// the radar takes this long to slide down off the screen before the panes come, and back after
-/// (the director is a viewer's presentation: every one of its frame counts is wall time, as its seconds are)
-static const UnsignedInt PANE_RADAR_FRAMES = ConvertRetailFramesWall( 12U );
-/// the panes take this long to slide in along the rays, and out again
-static const UnsignedInt PANE_SLIDE_FRAMES = ConvertRetailFramesWall( 15U );
-/// then the gold draws out along the settled lines from where they meet, and the radar's frame round
-/// the map, for this long; it goes back in as long before the panes leave.  Drawn while the panes
-/// slid, the lines were whole before the meeting point was on the screen and nothing was seen to draw
-static const UnsignedInt PANE_DRAW_FRAMES = ConvertRetailFramesWall( 21U );
-static const UnsignedInt PANE_UNDRAW_FRAMES = ConvertRetailFramesWall( 15U );
-/// so a split, once on, stays on this long whatever its fights do, unless its panes come to show
-/// the same ground: a split that went off before its panes were in flashed a pane in and out
-static const UnsignedInt SPLIT_LEAST_FRAMES = PANE_RADAR_FRAMES + PANE_SLIDE_FRAMES + PANE_DRAW_FRAMES + SPLIT_HOLD_FRAMES;
-/// a split the timeline plans opens this long before its fight: at four seconds pane 1 sat on an
-/// empty bridge
+/// a second fight, once on, stays on this long whatever it does, unless it comes to show the
+/// director's own ground: the 12, 15 and 21 retail frames the split screen's radar, panes and lines
+/// took to come in, then the hold (the director is a viewer's presentation: every one of its frame
+/// counts is wall time, as its seconds are)
+static const UnsignedInt SPLIT_LEAST_FRAMES = ConvertRetailFramesWall( 12U ) + ConvertRetailFramesWall( 15U ) + ConvertRetailFramesWall( 21U )
+	+ SPLIT_HOLD_FRAMES;
+/// a second fight the timeline plans comes this long before it begins: at four seconds the window sat
+/// on an empty bridge
 static const UnsignedInt SPLIT_LEAD_FRAMES = 3 * LOGICFRAMES_PER_SECOND;
-/// a match of two, past the opening's split: the picture splits only for a big moment, each player
-/// in a fight of his own, his own fire there at least this hot, far from the other's.  Split whenever
-/// the two were far apart, S1-A1 went to panes and back 40 times in its first 24000 frames, mostly
-/// for a few hits
-static const Real SIDE_SPLIT_ENTER_HEAT = 3.0f;
-/// and, with a timeline, each fight one the scouting pass saw peak at least this hot, twice what is
-/// worth filming at all, and last through the split's least hold.  S1-A1's timeline has five such
-/// pairs in 57700 frames
-static const Real SIDE_SPLIT_PEAK = 8.0f;
-/// such a split is held this long once its panes are in, whatever its fights do, then while both
-/// players fight, up to the most
-static const UnsignedInt SIDE_SPLIT_HOLD_FRAMES = 15 * LOGICFRAMES_PER_SECOND;
-static const UnsignedInt SIDE_SPLIT_LEAST_FRAMES = PANE_RADAR_FRAMES + PANE_SLIDE_FRAMES + PANE_DRAW_FRAMES + SIDE_SPLIT_HOLD_FRAMES;
-static const UnsignedInt SIDE_SPLIT_MOST_FRAMES = 40 * LOGICFRAMES_PER_SECOND;
-/// and after one the picture stays whole at least this long
-static const UnsignedInt SIDE_SPLIT_REST_FRAMES = 120 * LOGICFRAMES_PER_SECOND;
-/// the match opens on every player's base, one pane each, for this long
-static const UnsignedInt PANE_INTRO_FRAMES = 7 * LOGICFRAMES_PER_SECOND;
-/// the gold of a line between panes is a pixel for every this many rows of the picture
+/// the score bar's frame is sized off a gold line a pixel wide for every this many rows of the picture
 static const Real PANE_LINE_ROWS_A_PIXEL = 120.0f;
-/// the soft band of the brand's blue under a line is this many times the gold's width
+/// and off a soft band of the brand's blue this many times that line's width
 static const Int PANE_BAND_LINES = 5;
-/// once the panes are in, a line grows out from the meeting point over this share of the draw, its
-/// band fades in from this share of it, a beat behind; going back runs it all backwards
-static const Real PANE_LINE_DRAWN_BY = 0.75f;
-static const Real PANE_BAND_FROM = 0.35f;
-/// while the panes are held a light runs out along every gold line once in this many logic frames,
-/// taking this many to reach the end
-static const UnsignedInt PANE_SHIMMER_PERIOD = 5 * LOGICFRAMES_PER_SECOND;
-static const UnsignedInt PANE_SHIMMER_FRAMES = ConvertRetailFramesWall( 45U );
-/// a pane's circle is looked for on a grid this fine, a centre every 10 pixels at 1280x720
-static const Int PANE_CIRCLE_COLUMNS = 128;
-static const Int PANE_CIRCLE_ROWS = 72;
-/// a subject fitted into its pane's circle leaves this much of the radius round it
-static const Real PANE_FIT_MARGIN = 0.15f;
-/// a pane never comes closer than the director's own zoom, and never goes further out than this times it
-static const Real PANE_FIT_FARTHEST = 3.0f;
-/// a fight is never fitted as smaller than this across, so two tanks are not filled into a pane
-static const Real PANE_FIT_LEAST_EXTENT = 150.0f;
-/// the opening fits what a player has within this of the middle of it, his base and the army beside it
-static const Real PANE_INTRO_REACH = 500.0f;
-/// how much of the way to a new fit a pane's zoom goes each logic frame, about a second and a half
-static const Real PANE_FIT_FOLLOW = 1.0f - ( LOGICFRAMES_PER_RETAIL_FRAME == 1 ? 1.0f - 0.06f : sqrtf( 1.0f - 0.06f ) );	// a wall-time factor: the rate only, no game speed
-/// how far over a command centre's own height its player's plate hangs: the flags on a GLA palace
-/// stand past it, and zoomed in they ran into the plate
-static const Real PANE_MARK_LIFT = 15.0f;
 /// the scouting pass: a crowd of hits this near a fight still going is more of that fight
 static const Real SCOUT_SAME_FIGHT = 2.0f * DIRECTOR_GATHER_RADIUS;
 /// a fight with no crowd near it for this long is over; its hits stay hot DIRECTOR_HEAT_FRAMES on top
@@ -267,7 +215,7 @@ static const Real OFF_PICTURE_SHARE = 0.4f;
 /// -directorrecord's corner window: how long it takes to slide in or out, which it does in full before
 /// it turns.  Its plate's sizes and its gap to the picture's edges are a 720 row picture's, grown with
 /// the picture's height
-static const UnsignedInt WINDOW_SLIDE_FRAMES = PANE_SLIDE_FRAMES;
+static const UnsignedInt WINDOW_SLIDE_FRAMES = ConvertRetailFramesWall( 15U );
 static const Real WINDOW_ROWS = 720.0f;
 static const Real WINDOW_MARGIN = 16.0f;
 static const Real WINDOW_BORDER = 4.0f;
@@ -307,6 +255,24 @@ static Bool playersPower( const SpecialPowerTemplate *power, const ThingTemplate
 	if( power == NULL )
 		return FALSE;
 	return superweapon || power->getRequiredScience() != SCIENCE_INVALID || ( sourceThing != NULL && sourceThing->isKindOf( KINDOF_STRUCTURE ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The name a player reads for a power.  A SpecialPowerTemplate carries none: the name is on the
+	* command button that fires it, as its picture is (InGameUI's powerButton), else the name of what
+	* fired it.  Empty for a warhead no power sent. */
+//-------------------------------------------------------------------------------------------------
+static UnicodeString powerShownName( const SpecialPowerTemplate *power, const ThingTemplate *sourceThing )
+{
+	if( power != NULL && TheControlBar != NULL )
+	{
+		for( const CommandButton *button = TheControlBar->getCommandButtons(); button != NULL; button = button->getNext() )
+		{
+			if( button->getSpecialPowerTemplate() == power && !button->getTextLabel().isEmpty() )
+				return TheGameText->fetch( button->getTextLabel() );
+		}
+	}
+	return sourceThing != NULL ? sourceThing->getDisplayName() : UnicodeString::TheEmptyString;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -579,8 +545,8 @@ IRegion2D ObserverCamera_windowRect( Int width, Int height, Real progress )
 AsciiString ObserverCamera_formatFilmEvent( const DirectorFilmEvent &event )
 {
 	AsciiString line;
-	line.format( "event %u %s %d %.0f %.0f %s", event.frame, event.type.str(), event.player, event.x, event.y,
-		event.thing.isEmpty() ? "-" : event.thing.str() );
+	line.format( "event %u %s %d %.0f %.0f %s %s", event.frame, event.type.str(), event.player, event.x, event.y,
+		event.thing.isEmpty() ? "-" : event.thing.str(), event.name.isEmpty() ? "-" : event.name.str() );
 	return line;
 }
 
@@ -589,11 +555,36 @@ Bool ObserverCamera_parseFilmEvent( const char *line, DirectorFilmEvent *event )
 {
 	char type[ 32 ];
 	char thing[ 128 ];
-	if( sscanf( line, "event %u %31s %d %f %f %127s", &event->frame, type, &event->player, &event->x, &event->y, thing ) != 6 )
+	Int nameAt = 0;
+	if( sscanf( line, "event %u %31s %d %f %f %127s %n", &event->frame, type, &event->player, &event->x, &event->y, thing, &nameAt ) != 6
+		|| nameAt == 0 )
+		return FALSE;
+	std::string name( line + nameAt );
+	while( !name.empty() && ( name.back() == '\n' || name.back() == '\r' ) )
+		name.pop_back();
+	if( name.empty() )
 		return FALSE;
 	event->type = type;
 	event->thing = thing;
+	event->name = name.c_str();
 	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A name as one field of a line, UTF-8: the hotkey's '&' a button label carries dropped and a line
+	* break made a space, "-" for none. */
+//-------------------------------------------------------------------------------------------------
+AsciiString ObserverCamera_filmName( const UnicodeString &shown )
+{
+	UnicodeString name;
+	for( Int index = 0; index < shown.getLength(); index++ )
+	{
+		const WideChar letter = shown.getCharAt( index );
+		if( letter != u'&' )
+			name.concat( letter == u'\n' || letter == u'\r' || letter == u'\t' ? (WideChar)u' ' : letter );
+	}
+	name.trim();
+	return name.isEmpty() ? AsciiString( "-" ) : AsciiString( WideCharAsUtf8( name.str() ).str() );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -909,336 +900,15 @@ Bool ObserverCamera_secondPlace( const std::vector< DirectorHeat > &hits, const 
 }
 
 //-------------------------------------------------------------------------------------------------
-void ObserverCamera_sideCandidates( const std::vector< DirectorHeat > &hits, const std::vector< PlayerMaskType > &sources,
-	const std::vector< DirectorHeat > &sights, const std::vector< PlayerMaskType > &owners, PlayerMaskType side,
-	std::vector< DirectorHeat > *candidates, Bool *fighting )
-{
-	candidates->clear();
-	for( size_t index = 0; index < hits.size(); index++ )
-		if( ( sources[ index ] & side ) != 0 )
-			candidates->push_back( hits[ index ] );
-	*fighting = !candidates->empty();
-	if( *fighting )
-		return;
-	for( size_t index = 0; index < sights.size(); index++ )
-		if( ( owners[ index ] & side ) != 0 )
-			candidates->push_back( sights[ index ] );
-}
-
-//-------------------------------------------------------------------------------------------------
-Bool ObserverCamera_sidePlaces( const std::vector< DirectorHeat > *dealt, Real apart, Coord2D *places, Real *heats )
-{
-	heats[ 0 ] = heats[ 1 ] = 0.0f;
-	for( Int lead = 0; lead < 2; lead++ )
-	{
-		const Int other = 1 - lead;
-		Coord2D tried[ 2 ];
-		Real triedHeat[ 2 ] = { 0.0f, 0.0f };
-		if( !ObserverCamera_hottestPlace( dealt[ lead ], &tried[ lead ], &triedHeat[ lead ] ) )
-			continue;
-		if( !ObserverCamera_secondPlace( dealt[ other ], tried[ lead ], apart, &tried[ other ], &triedHeat[ other ] ) )
-			continue;
-		if( min( triedHeat[ 0 ], triedHeat[ 1 ] ) <= min( heats[ 0 ], heats[ 1 ] ) )
-			continue;
-		for( Int side = 0; side < 2; side++ )
-		{
-			places[ side ] = tried[ side ];
-			heats[ side ] = triedHeat[ side ];
-		}
-	}
-	return heats[ 0 ] > 0.0f;
-}
-
-//-------------------------------------------------------------------------------------------------
 Bool ObserverCamera_holdSplit( Bool split, Real firstHeat, Real secondHeat, Real apart, Real needed, UnsignedInt framesSince )
 {
-	// two halves showing one fight's ground is no split at all, however new
+	// a window showing the director's own fight is no second fight at all, however new
 	if( apart <= needed * SPLIT_SAME_GROUND_SHARE )
 		return FALSE;
 	if( split )
 		return framesSince < SPLIT_LEAST_FRAMES || ( secondHeat > 0.0f && secondHeat >= firstHeat * SPLIT_STAY_SHARE );
 	return apart > needed && framesSince >= SPLIT_REST_FRAMES && firstHeat > 0.0f && secondHeat >= SPLIT_ENTER_HEAT
 		&& secondHeat >= firstHeat * SPLIT_ENTER_SHARE;
-}
-
-//-------------------------------------------------------------------------------------------------
-Bool ObserverCamera_holdSideSplit( Bool split, Bool opening, Bool big, Int fighting, Real apart, Real needed, UnsignedInt framesSince )
-{
-	if( split && framesSince < ( opening ? SPLIT_LEAST_FRAMES : SIDE_SPLIT_LEAST_FRAMES ) )
-		return TRUE;
-	if( apart <= needed )
-		return FALSE;
-	if( split && opening )
-		return framesSince < ( fighting > 0 ? SPLIT_MOST_FRAMES : 2 * SPLIT_MOST_FRAMES );
-	if( split )
-		return fighting == 2 && framesSince < SIDE_SPLIT_MOST_FRAMES;
-	if( opening )
-		return framesSince >= SPLIT_REST_FRAMES;
-	return big && framesSince >= SIDE_SPLIT_REST_FRAMES;
-}
-
-//-------------------------------------------------------------------------------------------------
-/** How much of a picture half w wide and half h high round its middle a ray sweeping counterclockwise
-	* from 0 has covered by angle degrees.  In each quarter the swept part is a triangle against the near
-	* side until the ray reaches the corner, and the whole quarter less a triangle against the far side
-	* after; the quarters that start upright are the same with the sides swapped. */
-//-------------------------------------------------------------------------------------------------
-static Real sweptArea( Real angle, Real halfWidth, Real halfHeight )
-{
-	const Int quarter = min( (Int)( angle / 90.0f ), 3 );
-	const Real within = ( angle - quarter * 90.0f ) * PI / 180.0f;
-	const Real along = quarter % 2 == 0 ? halfWidth : halfHeight;
-	const Real across = quarter % 2 == 0 ? halfHeight : halfWidth;
-	Real part;
-	if( within <= atan2f( across, along ) )
-		part = 0.5f * along * along * tanf( within );
-	else
-		part = along * across - 0.5f * across * across * tanf( PI * 0.5f - within );
-	return quarter * halfWidth * halfHeight + part;
-}
-
-//-------------------------------------------------------------------------------------------------
-Real ObserverCamera_angleForShare( Real share, Int width, Int height )
-{
-	const Real halfWidth = width * 0.5f;
-	const Real halfHeight = height * 0.5f;
-	const Real wanted = share * 4.0f * halfWidth * halfHeight;
-	Real low = 0.0f;
-	Real high = 360.0f;
-	for( Int step = 0; step < 40; step++ )
-	{
-		const Real tried = ( low + high ) * 0.5f;
-		if( sweptArea( tried, halfWidth, halfHeight ) < wanted )
-			low = tried;
-		else
-			high = tried;
-	}
-	return ( low + high ) * 0.5f;
-}
-
-//-------------------------------------------------------------------------------------------------
-/** Each layout is where its rays would stand on a round picture, where angle and area are one; on the
-	* real picture each ray goes where it covers the same share of it.  Two panes are the diagonal
-	* corner to corner, its upper left half the radar's; four are both diagonals.  Three is a Y, the top
-	* wedge and two below; the odd counts keep a ray straight down, the even ones a pair of opposite
-	* rays.  At a fixed 45 degrees a 16:9 Y gave its top pane 14% of the picture and each of the others
-	* 43%; every pane now has its share, a third of it for three. */
-//-------------------------------------------------------------------------------------------------
-Int ObserverCamera_paneLayout( Int count, Real *rays, Int width, Int height )
-{
-	static const Real two[] = { 45, 225 };
-	static const Real three[] = { 30, 150, 270 };
-	static const Real four[] = { 45, 135, 225, 315 };
-	static const Real five[] = { 54, 126, 198, 270, 342 };
-	static const Real six[] = { 30, 90, 150, 210, 270, 330 };
-	static const Real seven[] = { 12.857f, 64.286f, 115.714f, 167.143f, 218.571f, 270, 321.429f };
-	static const Real eight[] = { 0, 45, 90, 135, 180, 225, 270, 315 };
-	static const Real *layouts[] = { two, three, four, five, six, seven, eight };
-	if( count < 2 )
-		return 0;
-	count = min( count, (Int)OBSERVER_MOST_PANES );
-	for( Int ray = 0; ray < count; ray++ )
-		rays[ ray ] = ObserverCamera_angleForShare( layouts[ count - 2 ][ ray ] / 360.0f, width, height );
-	return count;
-}
-
-//-------------------------------------------------------------------------------------------------
-Int ObserverCamera_paneOf( Real x, Real y, Real originX, Real originY, const Real *rays, Int count )
-{
-	Real angle = atan2f( originY - y, x - originX ) * 180.0f / PI;
-	if( angle < 0.0f )
-		angle += 360.0f;
-	// below the first ray is the far side of the last pane, which wraps round through 0
-	Int pane = count - 1;
-	for( Int ray = 0; ray < count; ray++ )
-	{
-		if( angle >= rays[ ray ] )
-			pane = ray;
-	}
-	return pane;
-}
-
-//-------------------------------------------------------------------------------------------------
-/* paneOf's float angle strays less than two hundredths of a degree from the true one, even on an 8K
-	 picture, for a pixel at least PANE_RUN_CLEARANCE pixels from the meeting point.  A stretch of a row whose true
-	 angle stays more than PANE_RUN_MARGIN degrees off every ray and off the turn's ends all the way along
-	 can therefore take one pixel's pane for all of it.  A stretch that cannot is halved, and one no longer
-	 than PANE_RUN_SHORTEST is asked pixel by pixel. */
-static const double PANE_RUN_MARGIN = 0.05;
-static const double PANE_RUN_CLEARANCE = 2.0;
-static const Int PANE_RUN_SHORTEST = 4;
-
-static double paneRunAngle( double x, double towardsTop, double originX )
-{
-	const double angle = atan2( towardsTop, x - originX ) * 180.0 / 3.14159265358979323846;
-	return angle < 0.0 ? angle + 360.0 : angle;
-}
-
-static Bool paneRunIsOnePane( Int first, Int last, double towardsTop, double originX, const Real *rays, Int count )
-{
-	const double left = first + 0.5;
-	const double right = last + 0.5;
-	if( fabs( towardsTop ) < PANE_RUN_CLEARANCE && right > originX - PANE_RUN_CLEARANCE
-			&& left < originX + PANE_RUN_CLEARANCE )
-		return FALSE;
-	// along a row the angle only ever turns one way, so its ends bound it
-	const double leftAngle = paneRunAngle( left, towardsTop, originX );
-	const double rightAngle = paneRunAngle( right, towardsTop, originX );
-	const double lowest = min( leftAngle, rightAngle ) - PANE_RUN_MARGIN;
-	const double highest = max( leftAngle, rightAngle ) + PANE_RUN_MARGIN;
-	if( lowest <= 0.0 || highest >= 360.0 )
-		return FALSE;
-	for( Int ray = 0; ray < count; ray++ )
-	{
-		if( rays[ ray ] >= lowest && rays[ ray ] <= highest )
-			return FALSE;
-	}
-	return TRUE;
-}
-
-static void addPaneRun( std::vector< ObserverPaneRun > &runs, Int y, Int x0, Int x1, Int pane )
-{
-	if( !runs.empty() && runs.back().y == y && runs.back().x1 == x0 && runs.back().pane == pane )
-	{
-		runs.back().x1 = x1;
-		return;
-	}
-	const ObserverPaneRun run = { y, x0, x1, pane };
-	runs.push_back( run );
-}
-
-static void addPaneRuns( std::vector< ObserverPaneRun > &runs, Int y, Int first, Int last, Real originX, Real originY,
-	const Real *rays, Int count )
-{
-	const Real centreY = (Real)y + 0.5f;
-	const double towardsTop = (double)originY - centreY;
-	if( paneRunIsOnePane( first, last, towardsTop, originX, rays, count ) )
-	{
-		addPaneRun( runs, y, first, last + 1, ObserverCamera_paneOf( (Real)first + 0.5f, centreY, originX, originY, rays, count ) );
-		return;
-	}
-	if( last - first < PANE_RUN_SHORTEST )
-	{
-		for( Int x = first; x <= last; x++ )
-			addPaneRun( runs, y, x, x + 1, ObserverCamera_paneOf( (Real)x + 0.5f, centreY, originX, originY, rays, count ) );
-		return;
-	}
-	const Int middle = ( first + last ) / 2;
-	addPaneRuns( runs, y, first, middle, originX, originY, rays, count );
-	addPaneRuns( runs, y, middle + 1, last, originX, originY, rays, count );
-}
-
-void ObserverCamera_paneRuns( Int width, Int height, Real originX, Real originY, const Real *rays, Int count,
-	std::vector< ObserverPaneRun > &runs )
-{
-	runs.clear();
-	for( Int y = 0; y < height; y++ )
-		addPaneRuns( runs, y, 0, width - 1, originX, originY, rays, count );
-}
-
-//-------------------------------------------------------------------------------------------------
-Coord2D ObserverCamera_paneExitDirection( const Real *rays )
-{
-	const Real away = ( ( rays[ 0 ] + rays[ 1 ] ) * 0.5f + 180.0f ) * PI / 180.0f;
-	Coord2D direction;
-	direction.x = cosf( away );
-	direction.y = -sinf( away );
-	return direction;
-}
-
-//-------------------------------------------------------------------------------------------------
-/** Pane 0 is a wedge of 180 degrees or less, so it holds the whole picture once it holds the four
-	* corners. */
-//-------------------------------------------------------------------------------------------------
-Real ObserverCamera_paneExit( const Real *rays, Int count, Int width, Int height )
-{
-	const Coord2D direction = ObserverCamera_paneExitDirection( rays );
-	const Real cornerX[ 4 ] = { 0.5f, width - 0.5f, 0.5f, width - 0.5f };
-	const Real cornerY[ 4 ] = { 0.5f, 0.5f, height - 0.5f, height - 0.5f };
-	Real inside = 2.0f * ( width + height );
-	Real outside = 0.0f;
-	for( Int step = 0; step < 32; step++ )
-	{
-		const Real tried = ( inside + outside ) * 0.5f;
-		const Real originX = width * 0.5f + direction.x * tried;
-		const Real originY = height * 0.5f + direction.y * tried;
-		Bool whole = TRUE;
-		for( Int corner = 0; corner < 4 && whole; corner++ )
-			whole = ObserverCamera_paneOf( cornerX[ corner ], cornerY[ corner ], originX, originY, rays, count ) == 0;
-		if( whole )
-			inside = tried;
-		else
-			outside = tried;
-	}
-	return inside;
-}
-
-//-------------------------------------------------------------------------------------------------
-/** How far a point is from a ray out of the middle: across to the ray's line, or back to where the
-	* ray starts when the point is behind it. */
-//-------------------------------------------------------------------------------------------------
-static Real distanceToRay( Real x, Real y, Real middleX, Real middleY, Real degrees )
-{
-	const Real angle = degrees * PI / 180.0f;
-	const Real alongX = cosf( angle );
-	const Real alongY = -sinf( angle );
-	const Real fromX = x - middleX;
-	const Real fromY = y - middleY;
-	if( fromX * alongX + fromY * alongY <= 0.0f )
-		return sqrtf( fromX * fromX + fromY * fromY );
-	return fabs( fromX * alongY - fromY * alongX );
-}
-
-//-------------------------------------------------------------------------------------------------
-/** Every pane is a wedge of 180 degrees or less, so the nearest of its edges is one of its two rays,
-	* the screen's four sides or the radar's frame; the grid point furthest from all of them is the
-	* circle's centre. */
-//-------------------------------------------------------------------------------------------------
-void ObserverCamera_paneCircles( const Real *rays, Int count, Int width, Int height, const Coord2D &radarHalf, Real top,
-	Coord2D *centres, Real *radii )
-{
-	const Real middleX = width * 0.5f;
-	const Real middleY = height * 0.5f;
-	for( Int pane = 0; pane < count; pane++ )
-	{
-		radii[ pane ] = 0.0f;
-		centres[ pane ].x = middleX;
-		centres[ pane ].y = middleY;
-	}
-	for( Int row = 0; row < PANE_CIRCLE_ROWS; row++ )
-	{
-		for( Int column = 0; column < PANE_CIRCLE_COLUMNS; column++ )
-		{
-			const Real x = ( column + 0.5f ) * width / PANE_CIRCLE_COLUMNS;
-			const Real y = ( row + 0.5f ) * height / PANE_CIRCLE_ROWS;
-			const Int pane = ObserverCamera_paneOf( x, y, middleX, middleY, rays, count );
-			Real clear = min( min( x, width - x ), min( y - top, height - y ) );
-			clear = min( clear, distanceToRay( x, y, middleX, middleY, rays[ pane ] ) );
-			clear = min( clear, distanceToRay( x, y, middleX, middleY, rays[ ( pane + 1 ) % count ] ) );
-			const Real outX = max( fabs( x - middleX ) - radarHalf.x, 0.0f );
-			const Real outY = max( fabs( y - middleY ) - radarHalf.y, 0.0f );
-			clear = min( clear, sqrtf( outX * outX + outY * outY ) );
-			if( clear > radii[ pane ] )
-			{
-				radii[ pane ] = clear;
-				centres[ pane ].x = x;
-				centres[ pane ].y = y;
-			}
-		}
-	}
-}
-
-//-------------------------------------------------------------------------------------------------
-/** The label's top corners are the first of it to leave the circle going up: they meet it where its
-	* chord is the label's width, and the label hangs from there. */
-//-------------------------------------------------------------------------------------------------
-Real ObserverCamera_paneLabelTop( const Coord2D &centre, Real radius, Real width, Real height )
-{
-	const Real halfWidth = width * 0.5f;
-	if( halfWidth >= radius )
-		return centre.y - height * 0.5f;
-	const Real above = sqrtf( radius * radius - halfWidth * halfWidth );
-	return centre.y - max( above, height * 0.5f );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1351,26 +1021,6 @@ std::vector< Int > ObserverCamera_barShares( const std::vector< Int > &values, I
 }
 
 //-------------------------------------------------------------------------------------------------
-std::vector< Int > ObserverCamera_teamOrder( const std::vector< Int > &teams )
-{
-	std::vector< Int > order;
-	std::vector< Bool > taken( teams.size(), FALSE );
-	for( size_t first = 0; first < teams.size(); first++ )
-	{
-		if( taken[ first ] )
-			continue;
-		for( size_t index = first; index < teams.size(); index++ )
-		{
-			if( teams[ index ] != teams[ first ] )
-				continue;
-			order.push_back( (Int)index );
-			taken[ index ] = TRUE;
-		}
-	}
-	return order;
-}
-
-//-------------------------------------------------------------------------------------------------
 /** The relative luminance of a colour, the way the contrast ratio is defined. */
 //-------------------------------------------------------------------------------------------------
 static Real luminance( Real red, Real green, Real blue )
@@ -1389,7 +1039,7 @@ static Real luminance( Real red, Real green, Real blue )
 static const UnsignedByte BROADCAST_GROUND_RGB[ 3 ] = { 0x0c, 0x12, 0x20 };
 static const Real READABLE_CONTRAST = 4.5f;
 static const Real READABLE_STEP = 0.05f;
-/// zerohour.gg's --gold, the pane lines' colour, and how far from it a player's colour has to be to
+/// zerohour.gg's --gold, the score bar's frame's colour, and how far from it a player's colour has to be to
 /// stand apart from them, summed over the three channels
 static const Int BRAND_GOLD_RGB[ 3 ] = { 0xf2, 0xc2, 0x30 };
 static const Int BRAND_GOLD_NEAR = 100;
@@ -1417,103 +1067,6 @@ Bool ObserverCamera_nearBrandGold( Color color )
 	UnsignedByte red, green, blue, alpha;
 	GameGetColorComponents( color, &red, &green, &blue, &alpha );
 	return abs( red - BRAND_GOLD_RGB[ 0 ] ) + abs( green - BRAND_GOLD_RGB[ 1 ] ) + abs( blue - BRAND_GOLD_RGB[ 2 ] ) <= BRAND_GOLD_NEAR;
-}
-
-//-------------------------------------------------------------------------------------------------
-Real ObserverCamera_extentAround( const std::vector< DirectorHeat > &things, const Coord2D &around, Real reach, Real least )
-{
-	Real farthest = least;
-	for( size_t index = 0; index < things.size(); index++ )
-	{
-		const Real dx = things[ index ].position.x - around.x;
-		const Real dy = things[ index ].position.y - around.y;
-		const Real distance = sqrtf( dx * dx + dy * dy );
-		if( distance <= reach )
-			farthest = max( farthest, distance );
-	}
-	return farthest;
-}
-
-//-------------------------------------------------------------------------------------------------
-/** The eye stands back from what it looks at in a straight line with the zoom, and the ground a
-	* circle on the screen covers with it, so the two measures give the line and the reach wanted is
-	* read off it. */
-//-------------------------------------------------------------------------------------------------
-Real ObserverCamera_zoomForReach( Real zoomA, Real reachA, Real zoomB, Real reachB, Real reach, Real nearest, Real farthest )
-{
-	const Real zoom = zoomA + ( reach - reachA ) * ( zoomB - zoomA ) / ( reachB - reachA );
-	return min( max( zoom, nearest ), farthest );
-}
-
-//-------------------------------------------------------------------------------------------------
-Real ObserverCamera_paneGround( Real screenGround, Real circleGround, Real reach )
-{
-	return screenGround * min( max( reach / circleGround, 1.0f ), PANE_FIT_FARTHEST );
-}
-
-//-------------------------------------------------------------------------------------------------
-/** The wedge from origin between the pane's two rays, cut by the screen: where the rays meet if that
-	* is on the screen, the screen's corners inside the wedge, and where each ray leaves the screen.
-	* A wedge of 180 degrees or less and the screen are both convex, so these are all its corners. */
-//-------------------------------------------------------------------------------------------------
-Int ObserverCamera_panePolygon( const Real *rays, Int count, Int pane, const Coord2D &origin, Int width, Int height,
-	Coord2D *vertices )
-{
-	const Coord2D screen[ 4 ] = { { 0.0f, 0.0f }, { (Real)width, 0.0f }, { (Real)width, (Real)height }, { 0.0f, (Real)height } };
-	Int found = 0;
-	if( count < 2 )
-	{
-		for( Int corner = 0; corner < 4; corner++ )
-			vertices[ found++ ] = screen[ corner ];
-		return found;
-	}
-
-	const Bool originOnScreen = origin.x >= 0.0f && origin.x <= width && origin.y >= 0.0f && origin.y <= height;
-	if( originOnScreen )
-		vertices[ found++ ] = origin;
-	for( Int corner = 0; corner < 4; corner++ )
-	{
-		if( ObserverCamera_paneOf( screen[ corner ].x, screen[ corner ].y, origin.x, origin.y, rays, count ) == pane )
-			vertices[ found++ ] = screen[ corner ];
-	}
-	const Int bounds[ 2 ] = { pane, ( pane + 1 ) % count };
-	for( Int side = 0; side < 2; side++ )
-	{
-		const Real angle = rays[ bounds[ side ] ] * PI / 180.0f;
-		const Real alongX = cosf( angle );
-		const Real alongY = -sinf( angle );
-		// the stretch of the ray inside the screen, as distances along it
-		Real enter = 0.0f;
-		Real leave = 1.0e9f;
-		const Real start[ 2 ] = { origin.x, origin.y };
-		const Real along[ 2 ] = { alongX, alongY };
-		const Real high[ 2 ] = { (Real)width, (Real)height };
-		for( Int axis = 0; axis < 2; axis++ )
-		{
-			if( fabs( along[ axis ] ) < 1.0e-6f )
-			{
-				if( start[ axis ] < 0.0f || start[ axis ] > high[ axis ] )
-					enter = leave + 1.0f;
-				continue;
-			}
-			const Real atLow = ( 0.0f - start[ axis ] ) / along[ axis ];
-			const Real atHigh = ( high[ axis ] - start[ axis ] ) / along[ axis ];
-			enter = max( enter, min( atLow, atHigh ) );
-			leave = min( leave, max( atLow, atHigh ) );
-		}
-		if( enter > leave )
-			continue;
-		if( !originOnScreen )
-		{
-			vertices[ found ].x = origin.x + alongX * enter;
-			vertices[ found ].y = origin.y + alongY * enter;
-			found++;
-		}
-		vertices[ found ].x = origin.x + alongX * leave;
-		vertices[ found ].y = origin.y + alongY * leave;
-		found++;
-	}
-	return found;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1797,28 +1350,6 @@ Real ObserverCamera_easeBetween( Real progress, Real from, Real to )
 }
 
 //-------------------------------------------------------------------------------------------------
-Real ObserverCamera_lineDrawn( Real progress )
-{
-	return ObserverCamera_easeBetween( progress, 0.0f, PANE_LINE_DRAWN_BY );
-}
-
-//-------------------------------------------------------------------------------------------------
-Real ObserverCamera_bandShown( Real progress )
-{
-	return ObserverCamera_easeBetween( progress, PANE_BAND_FROM, 1.0f );
-}
-
-
-//-------------------------------------------------------------------------------------------------
-Real ObserverCamera_shimmerAt( Real frame )
-{
-	const Real into = fmodf( frame, (Real)PANE_SHIMMER_PERIOD );
-	if( into >= (Real)PANE_SHIMMER_FRAMES )
-		return -1.0f;
-	return ObserverCamera_easeBetween( into, 0.0f, (Real)PANE_SHIMMER_FRAMES );
-}
-
-//-------------------------------------------------------------------------------------------------
 Bool ObserverCamera_advanceShowing( std::vector< DirectorShowing > &queue, UnsignedInt frame, UnsignedInt moveFrames, UnsignedInt holdAlone,
 	Bool keepLast )
 {
@@ -1906,9 +1437,7 @@ void ObserverCamera::reset( void )
 	m_heightExtraVelocity = 0.0f;
 	m_lastZoom = 0.0f;
 	m_lastCut = FALSE;
-	m_paneSurvivor = 0;
 	m_spentMoment = -1;
-	m_survivorHandover = FALSE;
 	m_drivenTo.zero();
 	m_lastUpdate = 0;
 	m_directedFrame = 0xFFFFFFFFu;
@@ -1969,55 +1498,13 @@ void ObserverCamera::reset( void )
 	m_winnerFrame = 0;
 	m_fights.clear();
 	m_fightSides.clear();
-	m_fightSources.clear();
-	m_sights.clear();
-	m_sightOwners.clear();
 	m_broadcast.clear();
-	m_broadcastTop = 0.0f;
 	m_screenGround = 0.0f;
-	m_circleGround = 0.0f;
 	m_splitApart = SPLIT_APART;
 	m_split = FALSE;
 	m_splitChanged = 0;
 	m_secondPlace.x = m_secondPlace.y = 0.0f;
-	m_panePhase = PANES_NONE;
-	m_panePhaseStart = 0;
-	m_intro = FALSE;
-	m_introDone = FALSE;
-	m_introGlide = FALSE;
-	m_panesLeftPlace.x = m_panesLeftPlace.y = 0.0f;
-	m_paneCount = 0;
-	m_paneProgress = 0.0f;
-	m_lineProgress = 0.0f;
-	m_paneExit = 0.0f;
-	m_paneBaseZoom = 1.0f;
-	m_paneFitValid = FALSE;
-	m_paneFitFrame = 0;
-	m_radarHalf.x = m_radarHalf.y = 0.0f;
 	m_aimFrom = ViewLocation();
-	m_paneOrigin.x = m_paneOrigin.y = 0.0f;
-	m_cornerRadarSlide = 0.0f;
-	m_radarFrame.lo.x = m_radarFrame.lo.y = m_radarFrame.hi.x = m_radarFrame.hi.y = 0;
-	for( Int pane = 0; pane < OBSERVER_MOST_PANES; pane++ )
-	{
-		m_paneRays[ pane ] = 0.0f;
-		m_panePlayers[ pane ] = NULL;
-		m_paneSubject[ pane ].x = m_paneSubject[ pane ].y = 0.0f;
-		m_paneMark[ pane ].x = m_paneMark[ pane ].y = m_paneMark[ pane ].z = 0.0f;
-		m_paneCentres[ pane ].x = m_paneCentres[ pane ].y = 0.0f;
-		m_paneRadii[ pane ] = 0.0f;
-		m_paneExtent[ pane ] = PANE_FIT_LEAST_EXTENT;
-		m_paneFit[ pane ] = 1.0f;
-		m_paneShifted[ pane ] = 0.0f;
-		m_paneError[ pane ] = 0.0f;
-		m_paneShown[ pane ].x = m_paneShown[ pane ].y = 0.0f;
-		m_paneWorst[ pane ].x = m_paneWorst[ pane ].y = 0.0f;
-		m_paneOutside[ pane ] = 0.0f;
-		m_paneGlide[ pane ] = ViewLocation();
-		m_paneVelocity[ pane ].x = m_paneVelocity[ pane ].y = m_paneVelocity[ pane ].z = 0.0f;
-		m_paneVelocity[ pane ].angle = m_paneVelocity[ pane ].pitch = m_paneVelocity[ pane ].zoom = 0.0f;
-		m_paneView[ pane ] = ViewLocation();
-	}
 	m_mainOffset.x = m_mainOffset.y = 0.0f;
 	m_firstView = ViewLocation();
 	m_drawingPane = 0;
@@ -2089,7 +1576,7 @@ void ObserverCamera::noteSpecialPower( const Player *owner, const Coord3D *from,
 	// and leaves out a unit's own ability
 	if( superweapon || playersPower( power, sourceThing, superweapon ) )
 		noteFilmEvent( frame, superweapon ? "superweapon" : event.looksOnly ? "scan" : "power", owner != NULL ? owner->getPlayerIndex() : -1,
-			target.x, target.y, power != NULL ? power->getName().str() : "-" );
+			target.x, target.y, power != NULL ? power->getName().str() : "-", powerShownName( power, sourceThing ) );
 
 	if( !TheGlobalData->m_directorScoutFile.isEmpty() && !event.looksOnly )
 	{
@@ -2190,7 +1677,7 @@ void ObserverCamera::updateBroadcastMoments( UnsignedInt frame )
 		m_flags[ index ].clear();
 		const DirectorShowing banner = { index, NULL, NULL, FALSE, 0, 0, NULL };
 		m_defeatBanners.push_back( banner );
-		noteFilmEvent( frame, "defeated", index, -1.0f, -1.0f, "-" );
+		noteFilmEvent( frame, "defeated", index, -1.0f, -1.0f, "-", UnicodeString::TheEmptyString );
 		DEBUG_LOG(( "OBSCAM frame %u defeat: player %d '%s' (%s), card struck, collapses at frame %u\n", frame, index,
 			WideCharAsUtf8( player->getPlayerDisplayName().str() ).str(), WideCharAsUtf8( player->getPlayerTemplate()->getDisplayName().str() ).str(),
 			m_collapseFrame[ index ] ));
@@ -2223,7 +1710,8 @@ void ObserverCamera::updateBroadcastMoments( UnsignedInt frame )
 	* has no film to sit beside.  A line waits here until update writes it, since a power is noted from
 	* the logic. */
 //-------------------------------------------------------------------------------------------------
-void ObserverCamera::noteFilmEvent( UnsignedInt frame, const char *type, Int player, Real x, Real y, const char *thing )
+void ObserverCamera::noteFilmEvent( UnsignedInt frame, const char *type, Int player, Real x, Real y, const char *thing,
+	const UnicodeString &name )
 {
 	if( !TheGlobalData->m_directorRecord || !TheGlobalData->m_directorScoutFile.isEmpty() || isReplaying()
 		|| ( m_filmEventsTried && m_filmEvents == NULL ) )
@@ -2235,6 +1723,7 @@ void ObserverCamera::noteFilmEvent( UnsignedInt frame, const char *type, Int pla
 	event.x = x;
 	event.y = y;
 	event.thing = thing;
+	event.name = ObserverCamera_filmName( name );
 	m_filmPending.push_back( ObserverCamera_formatFilmEvent( event ) );
 }
 
@@ -2306,13 +1795,15 @@ void ObserverCamera::scanFilmEvents( UnsignedInt frame )
 			if( obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) )
 				building.push_back( id );
 			else if( std::find( m_filmBuilding.begin(), m_filmBuilding.end(), id ) != m_filmBuilding.end() )
-				noteFilmEvent( frame, "built", player, obj->getPosition()->x, obj->getPosition()->y, obj->getTemplate()->getName().str() );
+				noteFilmEvent( frame, "built", player, obj->getPosition()->x, obj->getPosition()->y, obj->getTemplate()->getName().str(),
+					obj->getTemplate()->getDisplayName() );
 		}
 		if( !dead || obj->getTemplate()->friend_getBuildCost() < FILM_LOST_LEAST_COST )
 			continue;
 		lost.push_back( id );
 		if( std::find( m_filmLost.begin(), m_filmLost.end(), id ) == m_filmLost.end() )
-			noteFilmEvent( frame, "lost", player, obj->getPosition()->x, obj->getPosition()->y, obj->getTemplate()->getName().str() );
+			noteFilmEvent( frame, "lost", player, obj->getPosition()->x, obj->getPosition()->y, obj->getTemplate()->getName().str(),
+				obj->getTemplate()->getDisplayName() );
 	}
 	m_filmBuilding.swap( building );
 	m_filmLost.swap( lost );
@@ -2324,7 +1815,7 @@ void ObserverCamera::scanFilmEvents( UnsignedInt frame )
 			continue;
 		const Int rank = player->getRankLevel();
 		if( m_filmRank[ index ] >= 0 && rank > m_filmRank[ index ] )
-			noteFilmEvent( frame, "rank", player->getPlayerIndex(), -1.0f, -1.0f, "-" );
+			noteFilmEvent( frame, "rank", player->getPlayerIndex(), -1.0f, -1.0f, "-", UnicodeString::TheEmptyString );
 		m_filmRank[ index ] = rank;
 	}
 }
@@ -2824,8 +2315,8 @@ Region2D ObserverCamera::mapRegion( void ) const
 
 //-------------------------------------------------------------------------------------------------
 /** The view looking at look from zoom, at this update's angle, pitch and height, its camera built
-	* now, so the view's own picks and projections answer for that camera before anything draws.  Every
-	* pane camera is placed by asking the view: two cuts that predicted its projection both drew the
+	* now, so the view's own picks and projections answer for that camera before anything draws.  The
+	* director's and the window's cameras are placed by asking the view: two cuts that predicted its projection both drew the
 	* subject off its pixel and the map's edge into the picture. */
 //-------------------------------------------------------------------------------------------------
 void ObserverCamera::aimView( const Coord2D &look, Real zoom )
@@ -2863,160 +2354,8 @@ Coord2D ObserverCamera::placeOnPixel( const Coord2D &subject, const Coord2D &pix
 }
 
 //-------------------------------------------------------------------------------------------------
-/** How far from pixel the view, as it is aimed now, draws subject. */
-//-------------------------------------------------------------------------------------------------
-Real ObserverCamera::pixelError( const Coord2D &subject, const Coord2D &pixel )
-{
-	Coord3D world;
-	world.x = subject.x;
-	world.y = subject.y;
-	world.z = TheTerrainLogic->getGroundHeight( subject.x, subject.y );
-	ICoord2D drawn;
-	TheTacticalView->worldToScreenTriReturn( &world, &drawn );
-	const Real dx = drawn.x - pixel.x;
-	const Real dy = drawn.y - pixel.y;
-	return sqrtf( dx * dx + dy * dy );
-}
-
-//-------------------------------------------------------------------------------------------------
-/** What the pane shows from the view as it is aimed now, its wedge round origin cut by the screen,
-	* picked onto the terrain at every corner: the move of look that brings all of it inside the map.
-	* worst is the ground under the corner furthest past the map and past how far, below zero inside.
-	* A ray that meets no terrain, over the horizon or past the heightmap's overhang, is taken on the
-	* look point's height. */
-//-------------------------------------------------------------------------------------------------
-Coord2D ObserverCamera::mapShift( Int pane, const Coord2D &origin, const Coord2D &look, Coord2D *worst, Real *past )
-{
-	const Int width = TheDisplay->getWidth();
-	const Int height = TheDisplay->getHeight();
-	Coord2D vertices[ 8 ];
-	const Int vertexCount = ObserverCamera_panePolygon( m_paneRays, m_paneCount, pane, origin, width, height, vertices );
-	const Region2D map = mapRegion();
-	const Real lookHeight = TheTerrainLogic->getGroundHeight( look.x, look.y );
-	Coord2D grounds[ 8 ];
-	for( Int vertex = 0; vertex < vertexCount; vertex++ )
-	{
-		ICoord2D at;
-		at.x = min( max( REAL_TO_INT( vertices[ vertex ].x ), 0 ), width - 1 );
-		at.y = min( max( REAL_TO_INT( vertices[ vertex ].y ), 0 ), height - 1 );
-		Coord3D hit;
-		if( !TheTacticalView->screenToTerrain( &at, &hit ) )
-			TheTacticalView->screenToWorldAtZ( &at, &hit, lookHeight );
-		grounds[ vertex ].x = hit.x - look.x;
-		grounds[ vertex ].y = hit.y - look.y;
-		const Real beyond = max( max( map.lo.x - hit.x, hit.x - map.hi.x ), max( map.lo.y - hit.y, hit.y - map.hi.y ) );
-		if( vertex == 0 || beyond > *past )
-		{
-			*past = beyond;
-			worst->x = hit.x;
-			worst->y = hit.y;
-		}
-	}
-	const Coord2D kept = ObserverCamera_keepInMap( look, grounds, vertexCount, map );
-	Coord2D shift;
-	shift.x = kept.x - look.x;
-	shift.y = kept.y - look.y;
-	return shift;
-}
-
-//-------------------------------------------------------------------------------------------------
-/** How far a circle of radius pixels round centre reaches on the ground from subject, the point under
-	* centre, through the view as it is aimed: the nearest of eight points round it, picked on ground. */
-//-------------------------------------------------------------------------------------------------
-static Real reachRound( const Coord2D &subject, const Coord2D &centre, Real radius, Real ground )
-{
-	enum { REACH_POINTS = 8 };
-	Real nearest = 0.0f;
-	for( Int point = 0; point < REACH_POINTS; point++ )
-	{
-		const Real angle = point * 2.0f * PI / REACH_POINTS;
-		ICoord2D at;
-		at.x = REAL_TO_INT( centre.x + radius * cosf( angle ) );
-		at.y = REAL_TO_INT( centre.y + radius * sinf( angle ) );
-		Coord3D hit;
-		TheTacticalView->screenToWorldAtZ( &at, &hit, ground );
-		const Real dx = hit.x - subject.x;
-		const Real dy = hit.y - subject.y;
-		const Real reach = sqrtf( dx * dx + dy * dy );
-		nearest = point == 0 ? reach : min( nearest, reach );
-	}
-	return nearest;
-}
-
-//-------------------------------------------------------------------------------------------------
-/** How far a circle of radius pixels round centre reaches on the ground at zoom, subject put on
-	* centre. */
-//-------------------------------------------------------------------------------------------------
-Real ObserverCamera::groundReach( const Coord2D &subject, const Coord2D &centre, Real radius, Real zoom )
-{
-	placeOnPixel( subject, centre, zoom );
-	return reachRound( subject, centre, radius, TheTerrainLogic->getGroundHeight( subject.x, subject.y ) );
-}
-
-//-------------------------------------------------------------------------------------------------
-/** The highest zoom from nearest up to wanted at which the pane, all in and its subject on its
-	* circle's centre, shows no ground past the map at any corner; nearest when none does.  More ground
-	* shows the higher the camera stands, so it is found by halving. */
-//-------------------------------------------------------------------------------------------------
-Real ObserverCamera::zoomInMap( Int pane, const Coord2D &subject, Real nearest, Real wanted )
-{
-	enum { HALVINGS = 6 };
-	Coord2D middle;
-	middle.x = TheDisplay->getWidth() * 0.5f;
-	middle.y = TheDisplay->getHeight() * 0.5f;
-	Real fits = nearest;
-	Real tried = wanted;
-	Real lowest = nearest;
-	Real highest = wanted;
-	for( Int halving = 0; halving <= HALVINGS; halving++ )
-	{
-		const Coord2D look = placeOnPixel( subject, m_paneCentres[ pane ], tried );
-		Coord2D worst;
-		Real past = 0.0f;
-		mapShift( pane, middle, look, &worst, &past );
-		if( past <= 0.0f )
-		{
-			fits = tried;
-			if( halving == 0 )
-				break;
-			lowest = tried;
-		}
-		else
-		{
-			highest = tried;
-		}
-		tried = ( lowest + highest ) * 0.5f;
-	}
-	return fits;
-}
-
-//-------------------------------------------------------------------------------------------------
-/** The look point for a pane's camera this frame: subject on pixel at zoom, then moved the least that
-	* keeps what the pane shows, its wedge round the meeting point where it is now, inside the map.
-	* What it measured is kept for the log.  The view is left aimed there. */
-//-------------------------------------------------------------------------------------------------
-Coord2D ObserverCamera::placePane( Int pane, const Coord2D &subject, const Coord2D &pixel, Real zoom )
-{
-	Coord2D look = placeOnPixel( subject, pixel, zoom );
-	m_paneShown[ pane ] = subject;
-	m_paneError[ pane ] = pixelError( subject, pixel );
-	const Coord2D shift = mapShift( pane, m_paneOrigin, look, &m_paneWorst[ pane ], &m_paneOutside[ pane ] );
-	m_paneShifted[ pane ] = sqrtf( shift.x * shift.x + shift.y * shift.y );
-	if( m_paneOutside[ pane ] > 0.0f )
-	{
-		look.x += shift.x;
-		look.y += shift.y;
-		aimView( look, zoom );
-		mapShift( pane, m_paneOrigin, look, &m_paneWorst[ pane ], &m_paneOutside[ pane ] );
-	}
-	return look;
-}
-
-//-------------------------------------------------------------------------------------------------
-/** The ground the whole picture spans across its middle row, and the least a split's pane circle
-	* reaches round its centre, at the height of the ground the view looks at, through the camera the
-	* last draw built.  Taken while there are no panes, when the view is the director's own at the zoom
-	* the panes would start from. */
+/** The ground the whole picture spans across its middle row, at the height of the ground the view
+	* looks at, through the camera the last draw built. */
 //-------------------------------------------------------------------------------------------------
 void ObserverCamera::measureScreenGround( void )
 {
@@ -3035,33 +2374,6 @@ void ObserverCamera::measureScreenGround( void )
 	const Real dx = rightGround.x - leftGround.x;
 	const Real dy = rightGround.y - leftGround.y;
 	m_screenGround = sqrtf( dx * dx + dy * dy );
-
-	Real rays[ OBSERVER_MOST_PANES ];
-	const Int count = ObserverCamera_paneLayout( 2, rays, width, height );
-	Coord2D centres[ OBSERVER_MOST_PANES ];
-	Real radii[ OBSERVER_MOST_PANES ];
-	ObserverCamera_paneCircles( rays, count, width, height, m_radarHalf, m_broadcastTop, centres, radii );
-	for( Int pane = 0; pane < count; pane++ )
-	{
-		ICoord2D at;
-		at.x = REAL_TO_INT( centres[ pane ].x );
-		at.y = REAL_TO_INT( centres[ pane ].y );
-		Coord3D under;
-		TheTacticalView->screenToWorldAtZ( &at, &under, ground );
-		const Coord2D subject = { under.x, under.y };
-		const Real reach = reachRound( subject, centres[ pane ], radii[ pane ], ground );
-		m_circleGround = pane == 0 ? reach : min( m_circleGround, reach );
-	}
-}
-
-//-------------------------------------------------------------------------------------------------
-/** The ground a split's pane would span across its middle row with the fight round subject fitted
-	* into its circle, the way fitPanes fits it. */
-//-------------------------------------------------------------------------------------------------
-Real ObserverCamera::paneGround( const Coord2D &subject ) const
-{
-	const Real extent = ObserverCamera_extentAround( m_fights, subject, DIRECTOR_GATHER_RADIUS, PANE_FIT_LEAST_EXTENT );
-	return ObserverCamera_paneGround( m_screenGround, m_circleGround, extent * ( 1.0f + PANE_FIT_MARGIN ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -3272,407 +2584,8 @@ void ObserverCamera::beginWindowPass( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The panes' timeline, on logic frames, which is what each recorded picture is.  A split: the radar
-	* slides down off the screen, the second pane slides in along the diagonal, and it all goes back
-	* the same way when the split ends.  The match opens with a pane a
-	* player, held a few seconds and then slid away to leave pane 0. */
-//-------------------------------------------------------------------------------------------------
-void ObserverCamera::advancePanes( UnsignedInt frame )
-{
-	static const char *const phaseNames[] = { "none", "radar out", "in", "draw", "held", "undraw", "out", "radar in" };
-	PanePhase next = m_panePhase;
-	const UnsignedInt elapsed = frame >= m_panePhaseStart ? frame - m_panePhaseStart : 0;
-	switch( m_panePhase )
-	{
-		case PANES_NONE:
-			if( !m_introDone )
-			{
-				m_introDone = TRUE;
-				Int players = 0;
-				for( Int index = 0; index < ThePlayerList->getPlayerCount() && players < OBSERVER_MOST_PANES; index++ )
-				{
-					const Player *player = ThePlayerList->getNthPlayer( index );
-					if( player->isPlayableSide() && !player->isPlayerObserver() && player->isPlayerActive() )
-						m_panePlayers[ players++ ] = player;
-				}
-				// teammates side by side round the meeting point: a player's team is the first one
-				// before him allied with him both ways
-				std::vector< Int > teams;
-				for( Int pane = 0; pane < players; pane++ )
-				{
-					Int team = pane;
-					for( Int earlier = 0; earlier < pane && team == pane; earlier++ )
-					{
-						const Player *one = m_panePlayers[ pane ];
-						const Player *other = m_panePlayers[ earlier ];
-						if( one->getRelationship( other->getDefaultTeam() ) == ALLIES && other->getRelationship( one->getDefaultTeam() ) == ALLIES )
-							team = teams[ earlier ];
-					}
-					teams.push_back( team );
-				}
-				const std::vector< Int > order = ObserverCamera_teamOrder( teams );
-				const Player *found[ OBSERVER_MOST_PANES ];
-				for( Int pane = 0; pane < players; pane++ )
-					found[ pane ] = m_panePlayers[ order[ pane ] ];
-				for( Int pane = 0; pane < players; pane++ )
-					m_panePlayers[ pane ] = found[ pane ];
-				m_paneCount = ObserverCamera_paneLayout( players, m_paneRays, TheDisplay->getWidth(), TheDisplay->getHeight() );
-				// the opening starts on the first view whole and opens into its panes like a split
-				if( m_paneCount >= 2 )
-				{
-					m_intro = TRUE;
-					next = PANES_RADAR_OUT;
-				}
-			}
-			else if( m_split )
-			{
-				m_paneCount = ObserverCamera_paneLayout( 2, m_paneRays, TheDisplay->getWidth(), TheDisplay->getHeight() );
-				next = PANES_RADAR_OUT;
-			}
-			if( next != PANES_NONE )
-			{
-				m_paneExit = ObserverCamera_paneExit( m_paneRays, m_paneCount, TheDisplay->getWidth(), TheDisplay->getHeight() );
-				m_paneBaseZoom = TheTacticalView->getZoom();
-				m_paneFitValid = FALSE;
-				for( Int pane = 0; pane < OBSERVER_MOST_PANES; pane++ )
-				{
-					m_paneGlide[ pane ] = ViewLocation();
-					m_paneExtent[ pane ] = PANE_FIT_LEAST_EXTENT;
-				}
-			}
-			break;
-		case PANES_RADAR_OUT:
-			// a split that ended before its panes came takes the radar back without bringing them in
-			if( !m_intro && !m_split )
-				next = PANES_RADAR_IN;
-			else if( elapsed >= PANE_RADAR_FRAMES )
-				next = PANES_IN;
-			break;
-		case PANES_IN:
-			if( elapsed >= PANE_SLIDE_FRAMES )
-				next = PANES_DRAW;
-			break;
-		case PANES_DRAW:
-			if( elapsed >= PANE_DRAW_FRAMES )
-				next = PANES_HELD;
-			break;
-		case PANES_HELD:
-			if( m_intro ? elapsed >= PANE_INTRO_FRAMES : !m_split )
-				next = PANES_UNDRAW;
-			// the opening ends on pane 0's base and the director stays there until something happens;
-			// handed whatever sight it had come to meanwhile, it glided over empty ground to another base
-			if( next == PANES_UNDRAW && m_intro && ( !m_placeValid || m_placeKind == PLACE_SIGHT ) )
-			{
-				m_place = m_paneSubject[ 0 ];
-				m_placeKind = PLACE_SIGHT;
-				m_placeHeight = 0.0f;
-				m_placeSince = frame;
-				m_placeValid = TRUE;
-			}
-			break;
-		case PANES_UNDRAW:
-			if( elapsed >= PANE_UNDRAW_FRAMES )
-				next = PANES_OUT;
-			break;
-		case PANES_OUT:
-			if( elapsed >= PANE_SLIDE_FRAMES )
-			{
-				next = PANES_RADAR_IN;
-				m_introGlide = m_intro;
-				// pane 1 fills the screen: from here pane 0 does, with pane 1's camera, which update hands it
-				m_survivorHandover = m_paneSurvivor == 1;
-				m_paneSurvivor = 0;
-			}
-			break;
-		case PANES_RADAR_IN:
-			if( elapsed >= PANE_RADAR_FRAMES )
-			{
-				next = PANES_NONE;
-				m_paneCount = 0;
-				m_intro = FALSE;
-			}
-			break;
-	}
-	if( next != m_panePhase )
-	{
-		DEBUG_LOG(( "OBSCAM frame %u panes %s, %d of them%s\n", frame, phaseNames[ next ], m_paneCount, m_intro ? ", the opening" : "" ));
-		m_panePhase = next;
-		m_panePhaseStart = frame;
-	}
-}
-
-//-------------------------------------------------------------------------------------------------
-/** How far the panes, the corner radar and the lines are into the phase advancePanes left them in, at
-	* the picture's time: the logic frame, or a share of one before it for a -recordfps picture between
-	* two logic frames. */
-//-------------------------------------------------------------------------------------------------
-void ObserverCamera::easePanes( Real at )
-{
-	switch( m_panePhase )
-	{
-		case PANES_NONE:
-			m_paneProgress = 0.0f;
-			m_cornerRadarSlide = 0.0f;
-			break;
-		case PANES_RADAR_OUT:
-			m_paneProgress = 0.0f;
-			m_cornerRadarSlide = ObserverCamera_easeFrames( at, m_panePhaseStart, PANE_RADAR_FRAMES );
-			break;
-		case PANES_IN:
-			m_paneProgress = ObserverCamera_easeFrames( at, m_panePhaseStart, PANE_SLIDE_FRAMES );
-			m_cornerRadarSlide = 1.0f;
-			break;
-		case PANES_DRAW:
-			m_paneProgress = 1.0f;
-			m_cornerRadarSlide = 1.0f;
-			break;
-		case PANES_HELD:
-			m_paneProgress = 1.0f;
-			m_cornerRadarSlide = 1.0f;
-			break;
-		case PANES_UNDRAW:
-			m_paneProgress = 1.0f;
-			m_cornerRadarSlide = 1.0f;
-			break;
-		case PANES_OUT:
-			m_paneProgress = 1.0f - ObserverCamera_easeFrames( at, m_panePhaseStart, PANE_SLIDE_FRAMES );
-			m_cornerRadarSlide = 1.0f;
-			break;
-		case PANES_RADAR_IN:
-			m_paneProgress = 0.0f;
-			m_cornerRadarSlide = 1.0f - ObserverCamera_easeFrames( at, m_panePhaseStart, PANE_RADAR_FRAMES );
-			break;
-	}
-
-	// the gold draws on the panes once they have settled and goes back in before they leave
-	const Real phaseFrames = at >= (Real)m_panePhaseStart ? at - (Real)m_panePhaseStart : 0.0f;
-	m_lineProgress = m_panePhase == PANES_HELD ? 1.0f : 0.0f;
-	if( m_panePhase == PANES_DRAW )
-		m_lineProgress = min( phaseFrames / PANE_DRAW_FRAMES, 1.0f );
-	if( m_panePhase == PANES_UNDRAW )
-		m_lineProgress = 1.0f - min( phaseFrames / PANE_UNDRAW_FRAMES, 1.0f );
-	m_paneOrigin.x = TheDisplay->getWidth() * 0.5f;
-	m_paneOrigin.y = TheDisplay->getHeight() * 0.5f;
-	if( m_paneCount >= 2 )
-	{
-		// pane 1 staying, the meeting point leaves the other way, and a split's two wedges are mirror
-		// images, so the same distance leaves pane 1 holding the whole screen
-		const Coord2D away = ObserverCamera_paneExitDirection( m_paneRays );
-		const Real side = m_paneSurvivor == 1 ? -1.0f : 1.0f;
-		m_paneOrigin.x += side * away.x * ( 1.0f - m_paneProgress ) * m_paneExit;
-		m_paneOrigin.y += side * away.y * ( 1.0f - m_paneProgress ) * m_paneExit;
-	}
-}
-
-//-------------------------------------------------------------------------------------------------
-/** The opening's panes: how far each player's things spread round his fixed subject, his base and
-	* the army beside it. */
-//-------------------------------------------------------------------------------------------------
-void ObserverCamera::updateIntroPlaces( void )
-{
-	std::vector< DirectorHeat > sights[ OBSERVER_MOST_PANES ];
-	for( Object *obj = TheGameLogic->getFirstObject(); obj != NULL; obj = obj->getNextObject() )
-	{
-		const Int cost = obj->getTemplate()->friend_getBuildCost();
-		if( cost <= 0 || obj->isEffectivelyDead() )
-			continue;
-		for( Int pane = 0; pane < m_paneCount; pane++ )
-		{
-			if( obj->getControllingPlayer() != m_panePlayers[ pane ] )
-				continue;
-			DirectorHeat heat;
-			heat.position.x = obj->getPosition()->x;
-			heat.position.y = obj->getPosition()->y;
-			heat.weight = ObserverCamera_sightWeight( cost, obj->isKindOf( KINDOF_STRUCTURE ), FALSE, FALSE ) + 1.0f;
-			sights[ pane ].push_back( heat );
-		}
-	}
-	for( Int pane = 0; pane < m_paneCount; pane++ )
-		m_paneExtent[ pane ] = ObserverCamera_extentAround( sights[ pane ], m_paneSubject[ pane ], PANE_INTRO_REACH, PANE_FIT_LEAST_EXTENT );
-}
-
-//-------------------------------------------------------------------------------------------------
-/** The opening's subjects, fixed for the whole of it: each player's command centre, his start, or
-	* where his things crowd when he has none.  Following the crowd let a pane wander off after the
-	* first units to leave the base.  His plate hangs from the top of the command centre. */
-//-------------------------------------------------------------------------------------------------
-void ObserverCamera::pickIntroBases( void )
-{
-	std::vector< DirectorHeat > sights[ OBSERVER_MOST_PANES ];
-	Bool based[ OBSERVER_MOST_PANES ];
-	for( Int pane = 0; pane < m_paneCount; pane++ )
-		based[ pane ] = FALSE;
-	for( Object *obj = TheGameLogic->getFirstObject(); obj != NULL; obj = obj->getNextObject() )
-	{
-		const Int cost = obj->getTemplate()->friend_getBuildCost();
-		if( obj->isEffectivelyDead() )
-			continue;
-		for( Int pane = 0; pane < m_paneCount; pane++ )
-		{
-			if( obj->getControllingPlayer() != m_panePlayers[ pane ] )
-				continue;
-			if( !based[ pane ] && obj->isKindOf( KINDOF_COMMANDCENTER ) )
-			{
-				based[ pane ] = TRUE;
-				m_paneSubject[ pane ].x = obj->getPosition()->x;
-				m_paneSubject[ pane ].y = obj->getPosition()->y;
-				m_paneMark[ pane ] = *obj->getPosition();
-				m_paneMark[ pane ].z += obj->getGeometryInfo().getMaxHeightAbovePosition() + PANE_MARK_LIFT;
-			}
-			if( cost <= 0 )
-				continue;
-			DirectorHeat heat;
-			heat.position.x = obj->getPosition()->x;
-			heat.position.y = obj->getPosition()->y;
-			heat.weight = ObserverCamera_sightWeight( cost, obj->isKindOf( KINDOF_STRUCTURE ), FALSE, FALSE ) + 1.0f;
-			sights[ pane ].push_back( heat );
-		}
-	}
-	for( Int pane = 0; pane < m_paneCount; pane++ )
-	{
-		if( based[ pane ] )
-			continue;
-		Real heat = 0.0f;
-		ObserverCamera_hottestPlace( sights[ pane ], &m_paneSubject[ pane ], &heat );
-		m_paneMark[ pane ].x = m_paneSubject[ pane ].x;
-		m_paneMark[ pane ].y = m_paneSubject[ pane ].y;
-		m_paneMark[ pane ].z = TheTerrainLogic->getGroundHeight( m_paneSubject[ pane ].x, m_paneSubject[ pane ].y );
-	}
-}
-
-//-------------------------------------------------------------------------------------------------
-/** Each pane's zoom with the panes all in: its subject's spread, fitted into the largest circle its
-	* wedge holds clear of the rays, the screen's edges and the radar's frame.  Never closer than the
-	* director was when the panes came, never more than PANE_FIT_FARTHEST times further out, and never
-	* so far out that the pane shows ground past the map.  It moves towards a new fit a share a logic
-	* frame, and while the panes are held only outwards, so a fight that grows is let out and one that
-	* shrinks does not pump the zoom; the map's limit brings it down whatever the phase. */
-//-------------------------------------------------------------------------------------------------
-void ObserverCamera::fitPanes( UnsignedInt frame )
-{
-	const IRegion2D &radar = m_radarFrame;
-	if( radar.hi.x > radar.lo.x )
-	{
-		m_radarHalf.x = ( radar.hi.x - radar.lo.x ) * 0.5f;
-		m_radarHalf.y = ( radar.hi.y - radar.lo.y ) * 0.5f;
-	}
-	ObserverCamera_paneCircles( m_paneRays, m_paneCount, TheDisplay->getWidth(), TheDisplay->getHeight(), m_radarHalf,
-		m_broadcastTop, m_paneCentres, m_paneRadii );
-
-	Coord2D subjects[ OBSERVER_MOST_PANES ];
-	for( Int pane = 0; pane < m_paneCount; pane++ )
-		subjects[ pane ] = m_paneSubject[ pane ];
-	if( !m_intro )
-	{
-		subjects[ 0 ] = m_panesLeftPlace;
-		subjects[ 1 ] = m_secondPlace;
-		m_paneExtent[ 0 ] = ObserverCamera_extentAround( m_fights, subjects[ 0 ], DIRECTOR_GATHER_RADIUS, PANE_FIT_LEAST_EXTENT );
-		m_paneExtent[ 1 ] = ObserverCamera_extentAround( m_fights, subjects[ 1 ], DIRECTOR_GATHER_RADIUS, PANE_FIT_LEAST_EXTENT );
-	}
-
-	// measured once a logic frame, through the view itself: the circle's reach at the nearest and the
-	// farthest zoom gives the zoom that fits, and a fit is lowered to where the pane shows nothing past
-	// the map, the subject still on its centre; one that has to come down goes down whatever the phase
-	const Bool moves = frame != m_paneFitFrame;
-	if( m_paneFitValid && !moves )
-		return;
-	m_paneFitFrame = frame;
-	const Real farthest = m_paneBaseZoom * PANE_FIT_FARTHEST;
-	for( Int pane = 0; pane < m_paneCount; pane++ )
-	{
-		const Real reach = m_paneExtent[ pane ] * ( 1.0f + PANE_FIT_MARGIN );
-		const Real nearReach = groundReach( subjects[ pane ], m_paneCentres[ pane ], m_paneRadii[ pane ], m_paneBaseZoom );
-		const Real farReach = groundReach( subjects[ pane ], m_paneCentres[ pane ], m_paneRadii[ pane ], farthest );
-		const Real fitted = ObserverCamera_zoomForReach( m_paneBaseZoom, nearReach, farthest, farReach, reach, m_paneBaseZoom, farthest );		const Real wanted = zoomInMap( pane, subjects[ pane ], m_paneBaseZoom, fitted );
-		const Bool mapLowers = wanted < fitted && wanted < m_paneFit[ pane ];
-		if( !m_paneFitValid )
-			m_paneFit[ pane ] = wanted;
-		else if( moves && ( !panesSettled() || wanted > m_paneFit[ pane ] || mapLowers ) )
-			m_paneFit[ pane ] += ( wanted - m_paneFit[ pane ] ) * PANE_FIT_FOLLOW;
-	}
-	m_paneFitValid = TRUE;
-}
-
-//-------------------------------------------------------------------------------------------------
-/** A pane's zoom now: the director's own with no panes, its fit with them all in. */
-//-------------------------------------------------------------------------------------------------
-Real ObserverCamera::paneZoom( Int pane ) const
-{
-	return m_paneBaseZoom + ( m_paneFit[ pane ] - m_paneBaseZoom ) * m_paneProgress;
-}
-
-//-------------------------------------------------------------------------------------------------
-/** Each pane past the first glides to its subject on its own, and its camera sits back from the
-	* subject by the centre of the pane's circle, at the pane's own zoom, so the subject fills the
-	* circle.  While the rays' meeting point slides, the camera sits back by that much more, so the
-	* pane's picture slides with it and is the world on the whole screen, with no edge of a moved
-	* picture to show.  Angle and pitch are the main camera's. */
-//-------------------------------------------------------------------------------------------------
-void ObserverCamera::stepPaneCameras( const ViewLocation &step, Real elapsedSeconds )
-{
-	if( m_paneCount < 2 )
-		return;
-	if( !m_intro )
-		m_paneSubject[ 1 ] = m_secondPlace;
-
-	const Coord3D &at = step.getPosition();
-	for( Int pane = 1; pane < m_paneCount; pane++ )
-	{
-		const Real zoom = paneZoom( pane );
-		ViewLocation subject;
-		subject.init( m_paneSubject[ pane ].x, m_paneSubject[ pane ].y, at.z, step.getAngle(), step.getPitch(), step.getZoom() );
-		if( !m_paneGlide[ pane ].isValid() )
-		{
-			m_paneVelocity[ pane ].x = m_paneVelocity[ pane ].y = m_paneVelocity[ pane ].z = 0.0f;
-			m_paneVelocity[ pane ].angle = m_paneVelocity[ pane ].pitch = m_paneVelocity[ pane ].zoom = 0.0f;
-			m_paneGlide[ pane ] = subject;
-		}
-		else
-		{
-			const ViewLocation glide = ObserverCamera_approach( m_paneGlide[ pane ], subject, elapsedSeconds,
-				DIRECTOR_PAN_SECONDS, DIRECTOR_TOP_SPEED, &m_paneVelocity[ pane ] );
-			m_paneGlide[ pane ].init( glide.getPosition().x, glide.getPosition().y, at.z, step.getAngle(), step.getPitch(), step.getZoom() );
-		}
-
-		// the circle's centre moved with the meeting point; it only ever slides down the screen, away
-		// from the horizon, so the projection holds off the screen too
-		Coord2D pixel;
-		Real radius = 0.0f;
-		getPaneCircle( pane, &pixel, &radius );
-		Coord2D glided;
-		glided.x = m_paneGlide[ pane ].getPosition().x;
-		glided.y = m_paneGlide[ pane ].getPosition().y;
-		const Coord2D camera = placePane( pane, glided, pixel, zoom );
-		m_paneView[ pane ].init( camera.x, camera.y, at.z, step.getAngle(), step.getPitch(), zoom );
-	}
-}
-
-//-------------------------------------------------------------------------------------------------
-/** Where each pane's subject is drawn, the way update and stepPaneCameras put it: pane 0's moves from
-	* the middle of the screen to its circle as the panes come in, every other pane's circle slides
-	* with the meeting point.  Moved with the meeting point as well, pane 0's label hung under its
-	* subject while the panes slid, over the fight it was naming. */
-//-------------------------------------------------------------------------------------------------
-void ObserverCamera::getPaneCircle( Int pane, Coord2D *centre, Real *radius ) const
-{
-	const Real middleX = TheDisplay->getWidth() * 0.5f;
-	const Real middleY = TheDisplay->getHeight() * 0.5f;
-	if( pane == 0 || pane == m_paneSurvivor )
-	{
-		centre->x = middleX + ( m_paneCentres[ pane ].x - middleX ) * m_paneProgress;
-		centre->y = middleY + ( m_paneCentres[ pane ].y - middleY ) * m_paneProgress;
-	}
-	else
-	{
-		centre->x = m_paneCentres[ pane ].x + m_paneOrigin.x - middleX;
-		centre->y = m_paneCentres[ pane ].y + m_paneOrigin.y - middleY;
-	}
-	*radius = m_paneRadii[ pane ];
-}
-
-//-------------------------------------------------------------------------------------------------
-/** A split's two panes show the fights at the director's place and at the second one, and their
-	* sides are every player in the hits within the gather radius of each. */
+/** The corner window's second fight: its sides are every player in the hits within the gather
+	* radius of it. */
 //-------------------------------------------------------------------------------------------------
 PlayerMaskType ObserverCamera::sidesAround( const Coord2D &subject ) const
 {
@@ -3684,27 +2597,7 @@ PlayerMaskType ObserverCamera::sidesAround( const Coord2D &subject ) const
 }
 
 //-------------------------------------------------------------------------------------------------
-PlayerMaskType ObserverCamera::getPaneSides( Int pane ) const
-{
-	return sidesAround( pane == 0 ? m_panesLeftPlace : m_secondPlace );
-}
-
-//-------------------------------------------------------------------------------------------------
-Int ObserverCamera::getIntroPlayerIndex( Int pane ) const
-{
-	return m_panePlayers[ pane ]->getPlayerIndex();
-}
-
-//-------------------------------------------------------------------------------------------------
-void ObserverCamera::beginPanePass( Int pane )
-{
-	TheTacticalView->getLocation( &m_firstView );
-	TheTacticalView->setLocation( &m_paneView[ pane ] );
-	m_drawingPane = pane;
-}
-
-//-------------------------------------------------------------------------------------------------
-void ObserverCamera::endPanePass( void )
+void ObserverCamera::endWindowPass( void )
 {
 	TheTacticalView->setLocation( &m_firstView );
 	m_drawingPane = 0;
@@ -3896,8 +2789,6 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 	std::vector< DirectorHeat > hits;
 	std::vector< DirectorHeat > fights;
 	std::vector< PlayerMaskType > sides;
-	std::vector< PlayerMaskType > sources;
-	std::vector< PlayerMaskType > sightOwners;
 	std::vector< DirectorHeat > sights;
 	for( Object *obj = TheGameLogic->getFirstObject(); obj != NULL; obj = obj->getNextObject() )
 	{
@@ -3915,9 +2806,6 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 			const Bool busy = marching || obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION );
 			heat.weight = ObserverCamera_sightWeight( cost, obj->isKindOf( KINDOF_STRUCTURE ), busy, superweapon );
 			sights.push_back( heat );
-			// a neutral thing with a price, a civilian building, has no player and is nobody's sight
-			const Player *owner = obj->getControllingPlayer();
-			sightOwners.push_back( owner != NULL ? owner->getPlayerMask() : 0 );
 		}
 
 		// a thing with no body module takes no damage, so it has no hits to count
@@ -3933,19 +2821,15 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 		heat.weight = ObserverCamera_hitWeight( cost, obj->isEffectivelyDead(), superweapon, obj->isKindOf( KINDOF_INFANTRY ) );
 		hits.push_back( heat );
 
-		// -directorrecord's split counts only fights, and its labels name who is in them
+		// -directorrecord's second fight counts only fights, and the window's chip names who is in them
 		const PlayerMaskType between = fightSides( obj, body );
 		if( between == 0 )
 			continue;
 		fights.push_back( heat );
 		sides.push_back( between );
-		sources.push_back( body->getLastDamageInfo()->in.m_sourcePlayerMask );
 	}
 	m_fights = fights;
 	m_fightSides = sides;
-	m_fightSources = sources;
-	m_sights = sights;
-	m_sightOwners = sightOwners;
 
 	Coord2D hottest;
 	Real hottestHeat = 0.0f;
@@ -4077,9 +2961,9 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 		const Real heatHere = ObserverCamera_heatAround( hits, m_place, &followed );
 		// the director keeps its own fight while it goes on rather than take the window's; once it is
 		// over the director moves there and the window lets it go
-		const Bool heldByPaneOne = m_split && within( hottest, m_secondPlace, m_splitApart );
+		const Bool heldByWindow = m_split && within( hottest, m_secondPlace, m_splitApart );
 		m_placePeak = max( m_placePeak, heatHere );
-		if( heatHere > 0.0f && ( sameFight( hottest, followed ) || heldByPaneOne || !ObserverCamera_shouldMove( heatHere, hottestHeat, held, m_placePeak ) ) )
+		if( heatHere > 0.0f && ( sameFight( hottest, followed ) || heldByWindow || !ObserverCamera_shouldMove( heatHere, hottestHeat, held, m_placePeak ) ) )
 		{
 			const Real dx = followed.x - m_place.x;
 			const Real dy = followed.y - m_place.y;
@@ -4162,7 +3046,6 @@ Bool ObserverCamera::chooseTarget( const ViewLocation &current, ViewLocation *ta
 	// the main camera is always the whole screen; a second action goes into the corner window
 	if( TheGlobalData->m_directorRecord && m_directing && m_placeScanned == TheGameLogic->getFrame() && m_followed == NO_PLAYER )
 		updateSecondFight();
-	m_panesLeftPlace = place;
 	place = keepInMap( place, current );
 	target->init( place.x, place.y, at.z, current.getAngle(), current.getPitch(), current.getZoom() );
 	return TRUE;
@@ -4209,8 +3092,7 @@ void ObserverCamera::update( UnsignedInt nowMilliseconds )
 
 	// -directorrecord's corner window runs on the logic clock, on what the last scan decided.  What it
 	// decides it decides once a logic frame, -recordfps updating each frame once a picture; the glide
-	// and the window's slide go on at every picture's own time.  The split screen's panes are never
-	// opened (advancePanes is not called), so the picture is always the main camera's alone
+	// and the window's slide go on at every picture's own time
 	m_directing = !TheGlobalData->m_directorRecord || TheGameLogic->getFrame() != m_directedFrame;
 	if( TheGlobalData->m_directorRecord && m_directing )
 	{
@@ -4253,7 +3135,7 @@ void ObserverCamera::update( UnsignedInt nowMilliseconds )
 	const Coord3D &from = current.getPosition();
 	const Real gapX = target.getPosition().x - from.x - ( m_driving ? m_mainOffset.x : 0.0f );
 	const Real gapY = target.getPosition().y - from.y - ( m_driving ? m_mainOffset.y : 0.0f );
-	const Bool cut = !m_introGlide && gapX * gapX + gapY * gapY > CUT_DISTANCE * CUT_DISTANCE;
+	const Bool cut = gapX * gapX + gapY * gapY > CUT_DISTANCE * CUT_DISTANCE;
 	if( !m_heightDriven )
 	{
 		m_heightExtra = 0.0f;
@@ -4281,23 +3163,6 @@ void ObserverCamera::update( UnsignedInt nowMilliseconds )
 	const Coord3D &camera = current.getPosition();
 	ViewLocation subject;
 	subject.init( camera.x + m_mainOffset.x, camera.y + m_mainOffset.y, camera.z, current.getAngle(), current.getPitch(), current.getZoom() );
-	// from the opening's last player to the director's first place is a glide whatever the distance,
-	// on a target kept just inside the cut distance until the real one is
-	if( m_introGlide )
-	{
-		const Real dx = target.getPosition().x - subject.getPosition().x;
-		const Real dy = target.getPosition().y - subject.getPosition().y;
-		const Real distance = sqrtf( dx * dx + dy * dy );
-		const Real glideReach = CUT_DISTANCE * 0.9f;
-		if( distance > glideReach )
-		{
-			const Real share = glideReach / distance;
-			target.init( subject.getPosition().x + dx * share, subject.getPosition().y + dy * share, target.getPosition().z,
-				target.getAngle(), target.getPitch(), target.getZoom() );
-		}
-		else
-			m_introGlide = FALSE;
-	}
 	const Bool player = m_mode == OBSERVER_CAMERA_PLAYER;
 	ViewLocation step = ObserverCamera_approach( subject, target, elapsed / MILLISECONDS_PER_SECOND,
 		player ? PLAYER_PAN_SECONDS : DIRECTOR_PAN_SECONDS, player ? PLAYER_TOP_SPEED : DIRECTOR_TOP_SPEED, &m_velocity );

@@ -315,8 +315,9 @@ TEST(an_events_file_line_reads_back_as_the_event_it_was_written_from)
 	event.x = 1234.4f;
 	event.y = 987.6f;
 	event.thing = "AmericaTankCrusader";
+	event.name = ObserverCamera_filmName( UnicodeString( u"Crusader Tank" ) );
 	const AsciiString line = ObserverCamera_formatFilmEvent( event );
-	CHECK_STR( line.str(), "event 5400 lost 3 1234 988 AmericaTankCrusader" );
+	CHECK_STR( line.str(), "event 5400 lost 3 1234 988 AmericaTankCrusader Crusader Tank" );
 	DirectorFilmEvent read;
 	CHECK( ObserverCamera_parseFilmEvent( line.str(), &read ) );
 	CHECK_EQ( read.frame, 5400u );
@@ -325,13 +326,25 @@ TEST(an_events_file_line_reads_back_as_the_event_it_was_written_from)
 	CHECK_NEAR( read.x, 1234.0f, 0.001f );
 	CHECK_NEAR( read.y, 988.0f, 0.001f );
 	CHECK_STR( read.thing.str(), "AmericaTankCrusader" );
+	CHECK_STR( read.name.str(), "Crusader Tank" );
+	CHECK( ObserverCamera_parseFilmEvent( "event 1 built 2 10 20 ChinaBarracks Barracks\r\n", &read ) );
+	CHECK_STR( read.name.str(), "Barracks" );
 
-	// a player's defeat has no place and no thing
+	// a button's label drops its hotkey marker and its line break; a Turkish name stays UTF-8
+	CHECK_STR( ObserverCamera_filmName( UnicodeString( u"&Neutron\nMissile " ) ).str(), "Neutron Missile" );
+	// "Karisik" with the dotless i and the s cedilla, by number, since the source is not read as UTF-8
+	const WideChar turkish[] = { u'K', u'a', u'r', 0x0131, 0x015F, 0x0131, u'k', 0 };
+	CHECK_STR( ObserverCamera_filmName( UnicodeString( turkish ) ).str(), "Kar\xc4\xb1\xc5\x9f\xc4\xb1k" );
+	CHECK_STR( ObserverCamera_filmName( UnicodeString::TheEmptyString ).str(), "-" );
+
+	// a player's defeat has no place, no thing and no name
 	event.type = "defeated";
 	event.x = event.y = -1.0f;
 	event.thing.clear();
-	CHECK_STR( ObserverCamera_formatFilmEvent( event ).str(), "event 5400 defeated 3 -1 -1 -" );
+	event.name.clear();
+	CHECK_STR( ObserverCamera_formatFilmEvent( event ).str(), "event 5400 defeated 3 -1 -1 - -" );
 	CHECK( !ObserverCamera_parseFilmEvent( "player 0 FactionAmerica FF0000 Bob", &read ) );
+	CHECK( !ObserverCamera_parseFilmEvent( "event 5400 defeated 3 -1 -1 -", &read ) );
 
 	// a map's file name may hold spaces, so its extent is read off the end
 	const AsciiString map = ObserverCamera_formatFilmMap( "maps\\tournament desert\\tournament desert.map", 0.0f, 0.0f, 4000.0f, 3500.0f );
@@ -549,109 +562,6 @@ TEST(the_recording_splits_for_a_second_fight_far_from_the_first_and_never_for_th
 	CHECK( !ObserverCamera_secondPlace( hits, first, 3000.0f, &second, &heat ) );
 }
 
-TEST(the_recording_splits_a_match_of_two_into_a_pane_each_player)
-{
-	const PlayerMaskType sides[ 2 ] = { 1 << 2, 1 << 3 };
-	std::vector< DirectorHeat > hits;
-	std::vector< PlayerMaskType > sources;
-	// one fight at 1000,1000 where both fire, player 0 the hotter there
-	for( Int each = 0; each < 4; each++ )
-	{
-		hits.push_back( directorHit( 1000.0f + each * 20.0f, 1000.0f ) );
-		sources.push_back( sides[ 0 ] );
-	}
-	for( Int each = 0; each < 3; each++ )
-	{
-		hits.push_back( directorHit( 1000.0f, 1020.0f + each * 20.0f ) );
-		sources.push_back( sides[ 1 ] );
-	}
-	// each player's base, his sights while he fires at nothing
-	std::vector< DirectorHeat > sights;
-	std::vector< PlayerMaskType > owners;
-	sights.push_back( directorHit( 500.0f, 4000.0f ) );
-	owners.push_back( sides[ 0 ] );
-	sights.push_back( directorHit( 4000.0f, 500.0f ) );
-	owners.push_back( sides[ 1 ] );
-	Coord2D places[ 2 ];
-	Real heats[ 2 ];
-	Bool fighting[ 2 ];
-	auto pairUp = [ & ]( const std::vector< DirectorHeat > &fights ) -> Bool
-	{
-		std::vector< DirectorHeat > candidates[ 2 ];
-		for( Int side = 0; side < 2; side++ )
-			ObserverCamera_sideCandidates( fights, sources, sights, owners, sides[ side ], &candidates[ side ], &fighting[ side ] );
-		return ObserverCamera_sidePlaces( candidates, 660.0f, places, heats );
-	};
-
-	// before anybody fires, a pane each base
-	const std::vector< DirectorHeat > none;
-	CHECK( pairUp( none ) );
-	CHECK( !fighting[ 0 ] );
-	CHECK_NEAR( places[ 0 ].x, 500.0f, 0.001f );
-	CHECK_NEAR( places[ 1 ].x, 4000.0f, 0.001f );
-
-	// both players in one place is no split
-	CHECK( !pairUp( hits ) );
-	CHECK( fighting[ 0 ] && fighting[ 1 ] );
-	CHECK_NEAR( heats[ 1 ], 0.0f, 0.001f );
-
-	// player 1 also fires far off: player 0's pane keeps the first fight, player 1's takes his other
-	for( Int each = 0; each < 2; each++ )
-	{
-		hits.push_back( directorHit( 3000.0f, 3000.0f + each * 20.0f ) );
-		sources.push_back( sides[ 1 ] );
-	}
-	CHECK( pairUp( hits ) );
-	CHECK_NEAR( places[ 0 ].y, 1000.0f, 0.001f );
-	CHECK_NEAR( places[ 1 ].x, 3000.0f, 0.001f );
-	CHECK_NEAR( heats[ 0 ], 4.0f, 0.001f );
-	CHECK_NEAR( heats[ 1 ], 2.0f, 0.001f );
-
-	// player 0 firing far off instead, and hotter there than player 1 elsewhere: the panes keep their
-	// players, player 1 on the first fight and player 0 on his own far one
-	sources[ 7 ] = sources[ 8 ] = sides[ 0 ];
-	hits.push_back( directorHit( 3000.0f, 3040.0f ) );
-	sources.push_back( sides[ 0 ] );
-	CHECK( pairUp( hits ) );
-	CHECK_NEAR( places[ 0 ].x, 3000.0f, 0.001f );
-	CHECK_NEAR( places[ 1 ].y, 1040.0f, 0.001f );
-	CHECK_NEAR( heats[ 0 ], 3.0f, 0.001f );
-	CHECK_NEAR( heats[ 1 ], 3.0f, 0.001f );
-}
-
-TEST(a_match_of_two_splits_after_its_opening_only_for_a_big_moment)
-{
-	const Real needed = 930.0f;
-	const Real farApart = 1500.0f;
-	const UnsignedInt second = LOGICFRAMES_PER_SECOND;
-	// the opening's split: on after the usual rest whenever the two players are far apart, bases or not
-	CHECK( ObserverCamera_holdSideSplit( FALSE, TRUE, FALSE, 0, farApart, needed, 4 * second ) );
-	CHECK( !ObserverCamera_holdSideSplit( FALSE, TRUE, FALSE, 0, farApart, needed, 3 * second ) );
-	// held through its least whatever, then up to 18 s with a fight and 36 s without
-	CHECK( ObserverCamera_holdSideSplit( TRUE, TRUE, FALSE, 0, 0.0f, needed, 7 * second ) );
-	CHECK( ObserverCamera_holdSideSplit( TRUE, TRUE, FALSE, 0, farApart, needed, 30 * second ) );
-	CHECK( !ObserverCamera_holdSideSplit( TRUE, TRUE, FALSE, 1, farApart, needed, 18 * second ) );
-	CHECK( !ObserverCamera_holdSideSplit( TRUE, TRUE, FALSE, 0, farApart, needed, 36 * second ) );
-
-	// past it, two players merely firing far apart split nothing however long the rest; S1-A1 went to
-	// panes and back every few seconds for it
-	const UnsignedInt rested = 120 * second;
-	CHECK( !ObserverCamera_holdSideSplit( FALSE, FALSE, FALSE, 2, farApart, needed, 600 * second ) );
-	// a big moment splits, but only after a long rest and only for fights far enough apart
-	CHECK( ObserverCamera_holdSideSplit( FALSE, FALSE, TRUE, 2, farApart, needed, rested ) );
-	CHECK( !ObserverCamera_holdSideSplit( FALSE, FALSE, TRUE, 2, farApart, needed, rested - 1 ) );
-	CHECK( !ObserverCamera_holdSideSplit( FALSE, FALSE, TRUE, 2, 900.0f, needed, rested ) );
-	// once on it stays the panes' slide and 15 s whatever the fights do, no 8 s flicker
-	const UnsignedInt least = ConvertRetailFramesWall( 12U + 15U + 21U ) + 15 * second;	// radar, slide and draw in 30 Hz frames, then the hold
-	CHECK( ObserverCamera_holdSideSplit( TRUE, FALSE, FALSE, 0, 0.0f, needed, 8 * second ) );
-	CHECK( ObserverCamera_holdSideSplit( TRUE, FALSE, FALSE, 0, 0.0f, needed, least - 1 ) );
-	CHECK( !ObserverCamera_holdSideSplit( TRUE, FALSE, FALSE, 0, 0.0f, needed, least ) );
-	// then while both players fight, up to 40 s
-	CHECK( ObserverCamera_holdSideSplit( TRUE, FALSE, FALSE, 2, farApart, needed, 30 * second ) );
-	CHECK( !ObserverCamera_holdSideSplit( TRUE, FALSE, FALSE, 1, farApart, needed, 30 * second ) );
-	CHECK( !ObserverCamera_holdSideSplit( TRUE, FALSE, FALSE, 2, farApart, needed, 40 * second ) );
-}
-
 TEST(a_big_moment_wants_fights_the_scouting_pass_saw_peak_hot)
 {
 	std::vector< DirectorMoment > timeline;
@@ -721,11 +631,6 @@ TEST(a_split_wants_its_fights_further_apart_the_more_ground_a_pane_shows)
 	CHECK( ObserverCamera_holdSplit( FALSE, 6.0f, 6.0f, 1700.0f, needed, rested ) );
 	CHECK( ObserverCamera_holdSplit( TRUE, 6.0f, 6.0f, 1200.0f, needed, longHeld ) );
 	CHECK( !ObserverCamera_holdSplit( TRUE, 6.0f, 6.0f, 1050.0f, needed, 15 ) );
-	// a picture 460 across whose pane circle reaches 100: a fight fitted into 172 zooms the pane out
-	// 1.72 times, a smaller one leaves it at the director's zoom, a huge one stops at three times
-	CHECK_NEAR( ObserverCamera_paneGround( 460.0f, 100.0f, 172.0f ), 791.2f, 0.01f );
-	CHECK_NEAR( ObserverCamera_paneGround( 460.0f, 100.0f, 60.0f ), 460.0f, 0.01f );
-	CHECK_NEAR( ObserverCamera_paneGround( 460.0f, 100.0f, 1000.0f ), 1380.0f, 0.01f );
 }
 
 TEST(the_recording_splits_only_beside_a_real_fight)
@@ -742,255 +647,9 @@ TEST(the_recording_splits_only_beside_a_real_fight)
 	CHECK( !ObserverCamera_secondPlace( none, first, 660.0f, &second, &heat ) );
 }
 
-static Real paneArea( const Real *rays, Int count, Int pane, Int width, Int height )
+TEST(a_place_whose_top_leaves_the_map_is_moved_in_by_the_top_alone)
 {
-	const Coord2D middle = { width * 0.5f, height * 0.5f };
-	Coord2D vertices[ 8 ];
-	const Int found = ObserverCamera_panePolygon( rays, count, pane, middle, width, height, vertices );
-	// the polygon's corners come unordered: sort them round the middle of the wedge before the shoelace
-	Coord2D centroid = { 0.0f, 0.0f };
-	for( Int vertex = 0; vertex < found; vertex++ )
-	{
-		centroid.x += vertices[ vertex ].x / found;
-		centroid.y += vertices[ vertex ].y / found;
-	}
-	std::vector< std::pair< Real, Coord2D > > round;
-	for( Int vertex = 0; vertex < found; vertex++ )
-		round.push_back( std::make_pair( atan2f( vertices[ vertex ].y - centroid.y, vertices[ vertex ].x - centroid.x ), vertices[ vertex ] ) );
-	std::sort( round.begin(), round.end(), []( const std::pair< Real, Coord2D > &a, const std::pair< Real, Coord2D > &b ) { return a.first < b.first; } );
-	Real twice = 0.0f;
-	for( size_t vertex = 0; vertex < round.size(); vertex++ )
-	{
-		const Coord2D &a = round[ vertex ].second;
-		const Coord2D &b = round[ ( vertex + 1 ) % round.size() ].second;
-		twice += a.x * b.y - b.x * a.y;
-	}
-	return fabsf( twice ) * 0.5f;
-}
-
-TEST(every_pane_layout_gives_each_pane_an_equal_share_of_a_wide_picture)
-{
-	CHECK_EQ( ObserverCamera_paneLayout( 1, NULL, 1280, 720 ), 0 );
-	const Int sizes[ 2 ][ 2 ] = { { 1280, 720 }, { 2560, 1080 } };
-	for( Int size = 0; size < 2; size++ )
-	{
-		const Int width = sizes[ size ][ 0 ];
-		const Int height = sizes[ size ][ 1 ];
-		for( Int count = 2; count <= OBSERVER_MOST_PANES; count++ )
-		{
-			Real rays[ OBSERVER_MOST_PANES ];
-			CHECK_EQ( ObserverCamera_paneLayout( count, rays, width, height ), count );
-			const Real share = (Real)width * height / count;
-			for( Int ray = 0; ray < count; ray++ )
-			{
-				CHECK( ray == 0 || rays[ ray ] > rays[ ray - 1 ] );
-				// no wedge wider than half the turn, which the polygon and the exit rely on
-				const Real next = ray + 1 < count ? rays[ ray + 1 ] : rays[ 0 ] + 360.0f;
-				CHECK( next - rays[ ray ] <= 180.01f );
-				const Real area = paneArea( rays, count, ray, width, height );
-				CHECK( area > share * 0.95f && area < share * 1.05f );
-			}
-		}
-	}
-	// the old fixed 45 degrees gave a 16:9 Y's top pane 14% of the picture; now its rays leave the
-	// sides 120 rows down, and the bottom ray stays straight down
-	Real rays[ OBSERVER_MOST_PANES ];
-	ObserverCamera_paneLayout( 3, rays, 1280, 720 );
-	CHECK_NEAR( rays[ 0 ], 20.56f, 0.05f );
-	CHECK_NEAR( rays[ 1 ], 159.44f, 0.05f );
-	CHECK_NEAR( rays[ 2 ], 270.0f, 0.05f );
-	// two and four panes run corner to corner
-	ObserverCamera_paneLayout( 4, rays, 2560, 1080 );
-	CHECK_NEAR( rays[ 0 ], atan2f( 540.0f, 1280.0f ) * 180.0f / PI, 0.05f );
-	// more players than panes share the eight
-	CHECK_EQ( ObserverCamera_paneLayout( 12, rays, 1280, 720 ), (Int)OBSERVER_MOST_PANES );
-}
-
-TEST(a_pixel_lies_in_the_wedge_counter_clockwise_of_its_ray)
-{
-	Real rays[ OBSERVER_MOST_PANES ];
-	ObserverCamera_paneLayout( 2, rays, 1280, 720 );
-	// the diagonal corner to corner of 1280x720 drops 56 rows in 100 columns: pane 0 above it on
-	// the left, pane 1 below it
-	CHECK_EQ( ObserverCamera_paneOf( 740.0f, 300.0f, 640.0f, 360.0f, rays, 2 ), 0 );
-	CHECK_EQ( ObserverCamera_paneOf( 740.0f, 308.0f, 640.0f, 360.0f, rays, 2 ), 1 );
-	CHECK_EQ( ObserverCamera_paneOf( 100.0f, 100.0f, 640.0f, 360.0f, rays, 2 ), 0 );
-	CHECK_EQ( ObserverCamera_paneOf( 1200.0f, 700.0f, 640.0f, 360.0f, rays, 2 ), 1 );
-
-	// an X: top, left, bottom, right
-	ObserverCamera_paneLayout( 4, rays, 1280, 720 );
-	CHECK_EQ( ObserverCamera_paneOf( 640.0f, 100.0f, 640.0f, 360.0f, rays, 4 ), 0 );
-	CHECK_EQ( ObserverCamera_paneOf( 100.0f, 360.0f, 640.0f, 360.0f, rays, 4 ), 1 );
-	CHECK_EQ( ObserverCamera_paneOf( 640.0f, 700.0f, 640.0f, 360.0f, rays, 4 ), 2 );
-	CHECK_EQ( ObserverCamera_paneOf( 1200.0f, 360.0f, 640.0f, 360.0f, rays, 4 ), 3 );
-}
-
-TEST(the_pane_runs_put_every_pixel_where_pane_of_puts_it)
-{
-	// the meeting point in the middle, on a pixel's centre row and column, sliding out past a corner,
-	// and on an odd picture, for every layout
-	struct Picture { Int width; Int height; Real originX; Real originY; };
-	const Picture pictures[] = {
-		{ 1280, 720, 640.0f, 360.0f },
-		{ 1280, 720, 640.5f, 360.5f },
-		{ 1280, 720, 1503.37f, -211.81f },
-		{ 333, 217, 101.25f, 160.75f },
-	};
-	std::vector< ObserverPaneRun > runs;
-	for( Int picture = 0; picture < (Int)ARRAY_SIZE( pictures ); picture++ )
-	{
-		const Picture &shape = pictures[ picture ];
-		for( Int count = 2; count <= OBSERVER_MOST_PANES; count++ )
-		{
-			Real rays[ OBSERVER_MOST_PANES ];
-			ObserverCamera_paneLayout( count, rays, shape.width, shape.height );
-			ObserverCamera_paneRuns( shape.width, shape.height, shape.originX, shape.originY, rays, count, runs );
-			Int wrong = 0;
-			Int covered = 0;
-			Int nextY = 0;
-			Int nextX = 0;
-			for( size_t index = 0; index < runs.size(); index++ )
-			{
-				const ObserverPaneRun &run = runs[ index ];
-				if( run.x0 == 0 && run.y == nextY + 1 && nextX == shape.width )
-				{
-					nextY = run.y;
-					nextX = 0;
-				}
-				CHECK( run.y == nextY && run.x0 == nextX && run.x1 > run.x0 );
-				nextX = run.x1;
-				for( Int x = run.x0; x < run.x1; x++ )
-				{
-					const Int pane = ObserverCamera_paneOf( (Real)x + 0.5f, (Real)run.y + 0.5f, shape.originX, shape.originY,
-						rays, count );
-					if( pane != run.pane )
-						wrong++;
-					covered++;
-				}
-			}
-			CHECK_EQ( wrong, 0 );
-			CHECK_EQ( covered, shape.width * shape.height );
-			// a run is a whole stretch of one pane, not a pixel at a time
-			CHECK( (Int)runs.size() < shape.height * ( count + 2 ) );
-		}
-	}
-}
-
-TEST(pane_zero_fills_the_screen_once_the_meeting_point_is_out_far_enough)
-{
-	Real rays[ OBSERVER_MOST_PANES ];
-	ObserverCamera_paneLayout( 2, rays, 1280, 720 );
-	// the diagonal has to clear the bottom right corner, 639.5 by 359.5 from the middle, square to the
-	// diagonal's own slope of 360 over 640: 2 * 639.5 * 359.5 / sqrt( 640^2 + 360^2 )
-	CHECK_NEAR( ObserverCamera_paneExit( rays, 2, 1280, 720 ), 626.6f, 2.0f );
-	const Coord2D away = ObserverCamera_paneExitDirection( rays );
-	CHECK( away.x > 0.0f && away.y > 0.0f );
-}
-
-TEST(a_pane_circle_is_the_largest_its_wedge_holds)
-{
-	Real rays[ OBSERVER_MOST_PANES ];
-	Coord2D centres[ OBSERVER_MOST_PANES ];
-	Real radii[ OBSERVER_MOST_PANES ];
-	const Coord2D noRadar = { 0.0f, 0.0f };
-
-	// two panes: the upper left half is the triangle on the top and left edges and the diagonal, its
-	// circle the incircle, area over half the perimeter: 460800 / 1734.3; pane 1's is its mirror
-	ObserverCamera_paneLayout( 2, rays, 1280, 720 );
-	ObserverCamera_paneCircles( rays, 2, 1280, 720, noRadar, 0.0f, centres, radii );
-	CHECK_NEAR( radii[ 0 ], 265.7f, 8.0f );
-	CHECK_NEAR( centres[ 0 ].x, 265.7f, 15.0f );
-	CHECK_NEAR( centres[ 0 ].y, 265.7f, 15.0f );
-	CHECK_NEAR( radii[ 1 ], radii[ 0 ], 8.0f );
-	CHECK_NEAR( centres[ 0 ].x + centres[ 1 ].x, 1280.0f, 20.0f );
-
-	// both diagonals: the top wedge is the triangle on the whole top edge to the middle, its incircle
-	// 230400 / 1374.3; the left one stands on the left edge, 230400 / 1094.3
-	ObserverCamera_paneLayout( 4, rays, 1280, 720 );
-	ObserverCamera_paneCircles( rays, 4, 1280, 720, noRadar, 0.0f, centres, radii );
-	CHECK_NEAR( radii[ 0 ], 167.6f, 8.0f );
-	CHECK_NEAR( centres[ 0 ].x, 640.0f, 15.0f );
-	CHECK_NEAR( radii[ 1 ], 210.5f, 8.0f );
-	CHECK_NEAR( centres[ 1 ].y, 360.0f, 15.0f );
-	CHECK_NEAR( radii[ 2 ], radii[ 0 ], 8.0f );
-	CHECK_NEAR( radii[ 3 ], radii[ 1 ], 8.0f );
-
-	// a Y: three circles, every one inside the screen
-	ObserverCamera_paneLayout( 3, rays, 1280, 720 );
-	ObserverCamera_paneCircles( rays, 3, 1280, 720, noRadar, 0.0f, centres, radii );
-	for( Int pane = 0; pane < 3; pane++ )
-	{
-		CHECK( radii[ pane ] > 100.0f );
-		CHECK( centres[ pane ].x - radii[ pane ] >= 0.0f && centres[ pane ].x + radii[ pane ] <= 1280.0f );
-		CHECK( centres[ pane ].y - radii[ pane ] >= 0.0f && centres[ pane ].y + radii[ pane ] <= 720.0f );
-		CHECK_EQ( ObserverCamera_paneOf( centres[ pane ].x, centres[ pane ].y, 640.0f, 360.0f, rays, 3 ), pane );
-	}
-
-	// the framed radar in the middle takes room from the two pane circle, which reached its corner
-	ObserverCamera_paneLayout( 2, rays, 1280, 720 );
-	const Coord2D radar = { 150.0f, 100.0f };
-	ObserverCamera_paneCircles( rays, 2, 1280, 720, radar, 0.0f, centres, radii );
-	CHECK( radii[ 0 ] < 255.0f );
-	CHECK( radii[ 0 ] > 150.0f );
-
-	// the score bar's rows at the top are no pane's: the upper circle stays below them
-	ObserverCamera_paneCircles( rays, 2, 1280, 720, noRadar, 90.0f, centres, radii );
-	CHECK( centres[ 0 ].y - radii[ 0 ] >= 90.0f - 6.0f );
-	CHECK( radii[ 0 ] < 258.0f );
-}
-
-TEST(a_pane_label_hangs_as_high_in_its_circle_as_the_circle_holds_it)
-{
-	Coord2D centre;
-	centre.x = 300.0f;
-	centre.y = 400.0f;
-	// 160 wide in a circle of 100: its top corners meet the circle 60 above the centre
-	const Real top = ObserverCamera_paneLabelTop( centre, 100.0f, 160.0f, 20.0f );
-	CHECK_NEAR( top, 340.0f, 0.01f );
-	// its top corners, the first of it to leave the circle, are on it
-	const Real dx = 80.0f;
-	const Real dy = top - centre.y;
-	CHECK( dx * dx + dy * dy <= 100.0f * 100.0f + 0.5f );
-	// too wide to fit at all: across the middle
-	CHECK_NEAR( ObserverCamera_paneLabelTop( centre, 100.0f, 240.0f, 20.0f ), 390.0f, 0.01f );
-	// a chord shorter than the label is tall: across the middle as well
-	CHECK_NEAR( ObserverCamera_paneLabelTop( centre, 100.0f, 198.0f, 40.0f ), 380.0f, 0.01f );
-}
-
-TEST(a_subject_spreads_as_far_as_its_farthest_thing_within_reach)
-{
-	std::vector< DirectorHeat > things;
-	const Coord2D around = { 1000.0f, 1000.0f };
-	CHECK_NEAR( ObserverCamera_extentAround( things, around, 500.0f, 150.0f ), 150.0f, 0.01f );
-	const Real distances[] = { 100.0f, 300.0f, 600.0f };
-	for( Int index = 0; index < 3; index++ )
-	{
-		DirectorHeat thing;
-		thing.position.x = around.x + distances[ index ];
-		thing.position.y = around.y;
-		thing.weight = 1.0f;
-		things.push_back( thing );
-	}
-	CHECK_NEAR( ObserverCamera_extentAround( things, around, 500.0f, 150.0f ), 300.0f, 0.01f );
-}
-
-TEST(a_pane_zooms_out_to_fit_its_subject_and_no_further_than_the_cap)
-{
-	// the view measured a circle reaching 180 at zoom 1.2 and 420 at 2.4: the eye stands back in a
-	// straight line with the zoom from a pivot at 0.3, as W3D's camera does
-	const Real nearest = 1.2f;
-	const Real farthest = 2.4f;
-	// a subject that fits at the director's own zoom is not brought closer
-	CHECK_NEAR( ObserverCamera_zoomForReach( nearest, 180.0f, farthest, 420.0f, 120.0f, nearest, farthest ), 1.2f, 0.0001f );
-	// 300 is half way along the line
-	CHECK_NEAR( ObserverCamera_zoomForReach( nearest, 180.0f, farthest, 420.0f, 300.0f, nearest, farthest ), 1.8f, 0.0001f );
-	// and one too wide for the cap gets the cap
-	CHECK_NEAR( ObserverCamera_zoomForReach( nearest, 180.0f, farthest, 420.0f, 900.0f, nearest, farthest ), 2.4f, 0.0001f );
-}
-
-TEST(a_pane_whose_top_leaves_the_map_is_moved_in_by_the_top_alone)
-{
-	// the ground under a tilted pane's corners: the top reaches three times as far as the bottom, so
+	// the ground under a tilted picture's corners: the top reaches three times as far as the bottom, so
 	// a look point 400 from the far edge shows 200 past it at the top while its middle is on the map
 	const Coord2D corners[ 4 ] = { { -900.0f, 600.0f }, { 900.0f, 600.0f }, { 300.0f, -200.0f }, { -300.0f, -200.0f } };
 	Region2D map;
@@ -1005,33 +664,13 @@ TEST(a_pane_whose_top_leaves_the_map_is_moved_in_by_the_top_alone)
 	CHECK_NEAR( free.y, 1500.0f, 0.001f );
 }
 
-TEST(a_pane_shows_its_wedge_cut_by_the_screen)
-{
-	Real rays[ OBSERVER_MOST_PANES ];
-	ObserverCamera_paneLayout( 3, rays, 1280, 720 );
-	const Coord2D middle = { 640.0f, 360.0f };
-	Coord2D vertices[ 8 ];
-	// a Y's top pane: the meeting point, the two top corners and where its rays leave the two sides,
-	// 240 rows above the middle
-	CHECK_EQ( ObserverCamera_panePolygon( rays, 3, 0, middle, 1280, 720, vertices ), 5 );
-	Bool right = FALSE;
-	Bool left = FALSE;
-	for( Int vertex = 0; vertex < 5; vertex++ )
-	{
-		right = right || ( fabs( vertices[ vertex ].x - 1280.0f ) < 0.5f && fabs( vertices[ vertex ].y - 120.0f ) < 1.0f );
-		left = left || ( fabs( vertices[ vertex ].x ) < 0.5f && fabs( vertices[ vertex ].y - 120.0f ) < 1.0f );
-	}
-	CHECK( right );
-	CHECK( left );
-	// with no panes it is the whole screen
-	CHECK_EQ( ObserverCamera_panePolygon( rays, 1, 0, middle, 1280, 720, vertices ), 4 );
-}
-
-TEST(pane_lines_grow_with_the_picture)
+TEST(the_score_bar_frame_grows_with_the_picture)
 {
 	CHECK_EQ( ObserverCamera_paneLineWidth( 720 ), 6 );
 	CHECK_EQ( ObserverCamera_paneLineWidth( 1080 ), 9 );
 	CHECK_EQ( ObserverCamera_paneLineWidth( 2160 ), 18 );
+	// the band is five golds wide
+	CHECK_EQ( ObserverCamera_paneBandWidth( 720 ), 30 );
 }
 
 static DirectorFightHit fightHit( Real x, Real y, UnsignedInt sides )
@@ -1452,48 +1091,6 @@ TEST(the_score_bar_sets_every_side_in_one_row_and_fits_eight_players)
 	CHECK_EQ( ObserverCamera_fitCount( prefixWidths, 6, 75 ), 6 );
 	CHECK_EQ( ObserverCamera_fitCount( prefixWidths, 6, 16 ), 1 );
 	CHECK_EQ( ObserverCamera_fitCount( prefixWidths, 6, 15 ), 0 );
-
-	// teammates are taken together in the order their teams first appear
-	std::vector< Int > teams;
-	teams.push_back( 0 );
-	teams.push_back( 1 );
-	teams.push_back( 0 );
-	teams.push_back( 2 );
-	teams.push_back( 1 );
-	const std::vector< Int > order = ObserverCamera_teamOrder( teams );
-	const Int expected[] = { 0, 2, 1, 4, 3 };
-	CHECK_EQ( (Int)order.size(), 5 );
-	for( Int index = 0; index < 5; index++ )
-		CHECK_EQ( order[ index ], expected[ index ] );
-}
-
-TEST(the_pane_lines_grow_out_then_their_band_fades_in_and_a_light_runs_along_them)
-{
-	// the line is whole three quarters of the way through its draw, its band only at the end, and
-	// the band has not begun while the line is still short
-	CHECK_NEAR( ObserverCamera_lineDrawn( 0.0f ), 0.0f, 0.0001f );
-	CHECK_NEAR( ObserverCamera_lineDrawn( 0.75f ), 1.0f, 0.0001f );
-	CHECK_NEAR( ObserverCamera_lineDrawn( 1.0f ), 1.0f, 0.0001f );
-	CHECK_NEAR( ObserverCamera_bandShown( 0.3f ), 0.0f, 0.0001f );
-	CHECK( ObserverCamera_lineDrawn( 0.3f ) > 0.2f );
-	CHECK_NEAR( ObserverCamera_bandShown( 1.0f ), 1.0f, 0.0001f );
-	Real last = 0.0f;
-	for( Int step = 0; step <= 20; step++ )
-	{
-		const Real now = ObserverCamera_bandShown( step / 20.0f );
-		CHECK( now >= last );
-		last = now;
-	}
-	// the light runs out over 45 frames at 30 Hz once every five seconds, and is off in between
-	const Real K = (Real)LOGICFRAMES_PER_RETAIL_FRAME;
-	const Real period = (Real)( 5 * LOGICFRAMES_PER_SECOND );
-	CHECK_NEAR( ObserverCamera_shimmerAt( 0 ), 0.0f, 0.0001f );
-	CHECK( ObserverCamera_shimmerAt( 22 * K ) > 0.3f && ObserverCamera_shimmerAt( 22 * K ) < 0.7f );
-	CHECK( ObserverCamera_shimmerAt( 45 * K ) < 0.0f );
-	CHECK( ObserverCamera_shimmerAt( period - 1 ) < 0.0f );
-	CHECK_NEAR( ObserverCamera_shimmerAt( period ), 0.0f, 0.0001f );
-	// the band is five golds wide
-	CHECK_EQ( ObserverCamera_paneBandWidth( 720 ), 30 );
 }
 
 TEST(the_army_bar_cuts_its_whole_width_among_the_sides)

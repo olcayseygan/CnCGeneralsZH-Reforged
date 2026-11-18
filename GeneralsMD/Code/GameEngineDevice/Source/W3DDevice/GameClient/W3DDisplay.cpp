@@ -2884,7 +2884,7 @@ AGAIN:
 						&& m_debugDisplayCallback == NULL && !TheGlobalData->m_loadScreenRender
 						&& !TheGlobalData->m_breakTheMovie && !TheGlobalData->m_disableRender	// takeReadsForRender took nothing
 						&& !TheGlobalData->m_showLanes && !CinemaDirector_hidesHud()
-						&& TheObserverCamera.getDrawnPaneCount() <= 1 && !TheObserverCamera.isWindowDrawn();
+						&& !TheObserverCamera.isWindowDrawn();
 #if defined(_DEBUG) || defined(_INTERNAL)
 					mayOverlap = mayOverlap && !TheGlobalData->m_debugAI && !TheGlobalData->m_debugCamera
 						&& !TheGlobalData->m_showAudioLocations;
@@ -3083,7 +3083,7 @@ AGAIN:
 					saveScreenShot();
 				}
 				captureVideoFrame();
-				// render is all done!  -directorrecord's second fight is for the recording only and is
+				// render is all done!  -directorrecord's corner window is for the recording only and is
 				// never presented: the frame drawn next over it is
 				WW3D::End_Render(!TheObserverCamera.isDrawingSecond());
 
@@ -4563,42 +4563,26 @@ static char s_videoDirectory[_MAX_PATH];
 /* Every picture of the recording is copied off the GPU into a slot of the record its frame is drawn
 	 into, and read back a frame later while the next frame is drawn into the other record: reading the
 	 copy as soon as it is asked for waits for the GPU to finish the frame.  -directorrecord's corner
-	 window (and the panes past the first, which nothing opens any more) is drawn before pane 0 on the
-	 same logic frame and has a slot of its own; the record keeps where the window lay when pane 0 was
-	 drawn, which is what its picture shows. */
+	 window is drawn before the main picture on the same logic frame and has a slot of its own; the
+	 record keeps where the window lay when the main picture was drawn, which is what its picture
+	 shows. */
 enum { VIDEO_RECORDS = 2 };
 enum { VIDEO_PIXEL_BYTES = 4 };		// blue, green, red and a byte nothing reads
 static_assert(VIDEO_RECORDS * OBSERVER_DRAWN_PANES <= DX11_FRAME_COPY_SLOTS,
-	"every pane and the window of both records has a Direct3D 11 slot");
+	"the main picture and the window of both records have a Direct3D 11 slot");
 struct VideoRecord
 {
-	Bool pending;			///< pane 0's copy is made and the frame is still to be written
+	Bool pending;			///< the main picture's copy is made and the frame is still to be written
 	UnsignedInt picture;
 	Bool paneCopied[OBSERVER_DRAWN_PANES];
 	UnsignedInt panePicture[OBSERVER_DRAWN_PANES];
-	Int paneCount;
-	Real paneRays[OBSERVER_MOST_PANES];
-	Coord2D paneOrigin;
-	IRegion2D radarFrame;
-	IRegion2D window;		///< where the corner window's picture lay when pane 0 was drawn, empty for none
+	IRegion2D window;		///< where the corner window's picture lay when the main picture was drawn, empty for none
 	std::vector<IRegion2D> broadcast;
 };
 static VideoRecord s_videoRecords[VIDEO_RECORDS];
 static Int s_videoDrawingRecord = 0;
 static IDirect3DSurface9 *s_videoSystemCopies[VIDEO_RECORDS * OBSERVER_DRAWN_PANES] = { NULL };
 static std::vector<UnsignedByte> s_videoJoined;
-/* the panes' runs are worked out again only when the picture or where its panes lie changes, which is
-	 only while they slide in or out */
-struct VideoPaneShape
-{
-	Int width;
-	Int height;
-	Int count;
-	Coord2D origin;
-	Real rays[OBSERVER_MOST_PANES];
-};
-static VideoPaneShape s_videoPaneRunsShape;
-static std::vector<ObserverPaneRun> s_videoPaneRuns;
 static std::vector<IRegion2D> s_videoRowKept;
 #if defined(_WIN32)
 /* A recording writes no frames to disk: they go down a pipe into ffmpeg as they are drawn.  A whole
@@ -4700,7 +4684,6 @@ static void finishVideo(void)
 		s_videoFramesWritten, s_videoDirectory, videoFramesPerSecond(), s_videoFramesMissed));
 	releaseFrameCopies();
 	std::vector<UnsignedByte>().swap(s_videoJoined);
-	std::vector<ObserverPaneRun>().swap(s_videoPaneRuns);
 
 #if defined(_WIN32)
 	// the end of the pipe is the end of the stream: ffmpeg finishes the movie and exits
@@ -4933,99 +4916,23 @@ static bool keptLeftOf(const IRegion2D &first, const IRegion2D &second)
 	return first.lo.x < second.lo.x;
 }
 
-/** The rectangles that stay pane 0's on row y, the radar's frame and the broadcast's, left to right. */
+/** The broadcast's rectangles on row y, which stay the main picture's, left to right. */
 static void collectRowKept(const VideoRecord &record, Int y)
 {
 	s_videoRowKept.clear();
-	for (size_t index = 0; index <= record.broadcast.size(); ++index)
+	for (size_t index = 0; index < record.broadcast.size(); ++index)
 	{
-		const IRegion2D &region = index < record.broadcast.size() ? record.broadcast[index] : record.radarFrame;
+		const IRegion2D &region = record.broadcast[index];
 		if (y >= region.lo.y && y < region.hi.y && region.lo.x < region.hi.x)
 			s_videoRowKept.push_back(region);
 	}
 	std::sort(s_videoRowKept.begin(), s_videoRowKept.end(), keptLeftOf);
 }
 
-static void copyVideoSpan(UnsignedByte *joined, Int width, const UnsignedByte *pane, Int panePitch, Int y, Int x0, Int x1)
-{
-	if (x1 > x0)
-		memcpy(joined + ((size_t)y * width + x0) * VIDEO_PIXEL_BYTES, pane + (size_t)y * panePitch + (size_t)x0 * VIDEO_PIXEL_BYTES,
-			(size_t)(x1 - x0) * VIDEO_PIXEL_BYTES);
-}
-
-/** -directorrecord's panes joined into pane 0's picture: each pixel is taken from the pane whose wedge
-	* it lies in, a row's stretch of one pane at a time.  A pane's camera already slid its picture with the
-	* rays' meeting point, so the copy is pixel for pixel; moving the pixels instead read past a picture's
-	* edge and smeared it.  Every pane draws the lines and the radar's frame, so a seam needs nothing of its
-	* own.  Pane 0 keeps the framed radar and the broadcast's score bar and labels, which only its draw has.
-	* A pane with no picture of this frame and size stays pane 0's. */
-static void joinVideoPanes(const VideoRecord &record, Int recordIndex, UnsignedByte *joined, Int width, Int height)
-{
-	VideoPaneShape shape = {};
-	shape.width = width;
-	shape.height = height;
-	shape.count = record.paneCount;
-	shape.origin = record.paneOrigin;
-	memcpy(shape.rays, record.paneRays, sizeof(Real) * record.paneCount);
-	if (memcmp(&shape, &s_videoPaneRunsShape, sizeof(shape)) != 0)
-	{
-		s_videoPaneRunsShape = shape;
-		ObserverCamera_paneRuns(width, height, shape.origin.x, shape.origin.y, shape.rays, shape.count, s_videoPaneRuns);
-	}
-
-	const UnsignedByte *panes[OBSERVER_MOST_PANES] = { NULL };
-	Int panePitches[OBSERVER_MOST_PANES] = { 0 };
-	for (Int pane = 1; pane < record.paneCount; ++pane)
-	{
-		if (!record.paneCopied[pane] || record.panePicture[pane] != record.picture)
-			continue;
-		Int paneWidth = 0;
-		Int paneHeight = 0;
-		panes[pane] = mapFrameCopy(videoCopySlot(recordIndex, pane), &paneWidth, &paneHeight, &panePitches[pane]);
-		if (panes[pane] != NULL && (paneWidth != width || paneHeight != height))
-		{
-			unmapFrameCopy(videoCopySlot(recordIndex, pane));
-			panes[pane] = NULL;
-		}
-	}
-
-	Int keptRow = -1;
-	for (size_t index = 0; index < s_videoPaneRuns.size(); ++index)
-	{
-		const ObserverPaneRun &run = s_videoPaneRuns[index];
-		const UnsignedByte *pane = panes[run.pane];
-		if (pane == NULL)
-			continue;
-		if (run.y != keptRow)
-		{
-			keptRow = run.y;
-			collectRowKept(record, run.y);
-		}
-		Int start = run.x0;
-		for (size_t kept = 0; kept < s_videoRowKept.size() && start < run.x1; ++kept)
-		{
-			const IRegion2D &region = s_videoRowKept[kept];
-			if (region.hi.x <= start)
-				continue;
-			if (region.lo.x >= run.x1)
-				break;
-			copyVideoSpan(joined, width, pane, panePitches[run.pane], run.y, start, region.lo.x);
-			start = region.hi.x;
-		}
-		copyVideoSpan(joined, width, pane, panePitches[run.pane], run.y, start, run.x1);
-	}
-
-	for (Int pane = 1; pane < record.paneCount; ++pane)
-	{
-		if (panes[pane] != NULL)
-			unmapFrameCopy(videoCopySlot(recordIndex, pane));
-	}
-}
-
 /** -directorrecord's corner window: its camera's whole picture made OBSERVER_WINDOW_SCALE times smaller,
-	* each pixel the mean of the block it covers, into the window's rectangle.  The plate round it is pane
-	* 0's broadcast and already in the picture, and any broadcast rectangle over the window, a banner,
-	* stays pane 0's.  A window picture not of this frame and size leaves the plate's dark inside. */
+	* each pixel the mean of the block it covers, into the window's rectangle.  The plate round it is the
+	* main picture's broadcast and already in the picture, and any broadcast rectangle over the window, a
+	* banner, stays the main picture's.  A window picture not of this frame and size leaves the plate's dark inside. */
 static void joinVideoWindow(const VideoRecord &record, Int recordIndex, UnsignedByte *joined, Int width, Int height)
 {
 	if (!record.paneCopied[OBSERVER_WINDOW_PANE] || record.panePicture[OBSERVER_WINDOW_PANE] != record.picture)
@@ -5131,7 +5038,7 @@ static Bool writeVideoFrame(const UnsignedByte *pixels, Int width, Int height)
 	return TRUE;
 }
 
-/** The frame held in a record, pane 0's picture with the other panes' wedges taken into it, written out
+/** The frame held in a record, the main picture with the corner window's taken into it, written out
 	* once. */
 static void writeVideoRecord(Int recordIndex)
 {
@@ -5154,13 +5061,11 @@ static void writeVideoRecord(Int recordIndex)
 	const Int rowBytes = width * VIDEO_PIXEL_BYTES;
 	const UnsignedByte *pixels = picture;
 	const Bool window = record.window.hi.x > record.window.lo.x;
-	if (record.paneCount >= 2 || window || pitch != rowBytes)
+	if (window || pitch != rowBytes)
 	{
 		s_videoJoined.resize((size_t)rowBytes * height);
 		for (Int y = 0; y < height; ++y)
 			memcpy(&s_videoJoined[(size_t)y * rowBytes], picture + (size_t)y * pitch, rowBytes);
-		if (record.paneCount >= 2)
-			joinVideoPanes(record, recordIndex, &s_videoJoined[0], width, height);
 		if (window)
 			joinVideoWindow(record, recordIndex, &s_videoJoined[0], width, height);
 		pixels = &s_videoJoined[0];
@@ -5196,7 +5101,7 @@ static void captureVideoFrame(void)
 	// a picture is a logic frame and which of its -recordfps pictures it is
 	const UnsignedInt picture = frame * GameEngine_videoPictures() + GameEngine_videoPicture();
 
-	// -directorrecord's corner window (or a pane past the first): kept for pane 0's draw, the last of this picture
+	// -directorrecord's corner window: kept for the main picture's draw, the last of this picture
 	if (TheObserverCamera.isDrawingSecond())
 	{
 		const Int pane = TheObserverCamera.getDrawingPane();
@@ -5252,10 +5157,6 @@ static void captureVideoFrame(void)
 	}
 	drawing.pending = TRUE;
 	drawing.picture = picture;
-	drawing.paneCount = TheObserverCamera.getDrawnPaneCount();
-	memcpy(drawing.paneRays, TheObserverCamera.getPaneRays(), sizeof(drawing.paneRays));
-	drawing.paneOrigin = TheObserverCamera.getPaneOrigin();
-	drawing.radarFrame = TheObserverCamera.getRadarFrame();
 	drawing.window = TheObserverCamera.getWindowRect();
 	drawing.broadcast = TheObserverCamera.getBroadcast();
 

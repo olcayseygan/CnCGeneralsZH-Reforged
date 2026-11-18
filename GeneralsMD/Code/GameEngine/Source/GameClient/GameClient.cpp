@@ -1096,21 +1096,15 @@ void GameClient::update( void )
 			// LOGIC-THREAD.md phase 3, step 3b: the message stream and the pacer run here, so a
 			// due tick can go to the logic thread when the draw's sync point is done
 			LogicThread::prepareOverlap();
-			/* -directorrecord's panes: every pane past the first is drawn first, for the recording only
-				 and never presented, then the frame everybody sees.  W3D's clock stands still for every
-				 draw after the first on one client frame, so nothing animates twice. */
-			for( Int pane = 1; pane < TheObserverCamera.getDrawnPaneCount(); pane++ )
-			{
-				TheObserverCamera.beginPanePass( pane );
-				TheDisplay->DRAW();
-				TheObserverCamera.endPanePass();
-			}
-			// and the corner window at the lower right, a second action off the picture, the same way
+			/* -directorrecord's corner window at the lower right, a second action off the picture, is
+				 drawn first, for the recording only and never presented, then the frame everybody sees.
+				 W3D's clock stands still for every draw after the first on one client frame, so nothing
+				 animates twice. */
 			if( TheObserverCamera.isWindowDrawn() )
 			{
 				TheObserverCamera.beginWindowPass();
 				TheDisplay->DRAW();
-				TheObserverCamera.endPanePass();
+				TheObserverCamera.endWindowPass();
 			}
 			TheDisplay->DRAW();
 #ifdef DEBUG_LOGGING

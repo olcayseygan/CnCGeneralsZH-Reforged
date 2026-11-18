@@ -1118,14 +1118,11 @@ public:  // ********************************************************************
 	virtual void recordDraw( void ) { }											///< what draw asks of logic, at the sync point (W3DInGameUI)
 	virtual void postDraw( void );													///< Logic which needs to occur after the UI renders
 	/// -directorrecord's broadcast over the director's picture: a score bar along the top with every
-	/// player's name, side, cash and army and the match clock, the armies' tug of war under it, and a
-	/// label in each pane of a split.  Pane 0's draw alone; the recording takes these pixels from it
+	/// player's name, side, cash and army and the match clock, the armies' tug of war under it.  The main
+	/// draw alone; the recording keeps these pixels over the corner window
 	void drawDirectorBroadcast( void );
-	/// the opening's plate over the command centre of the player in the pane being drawn, in every
-	/// pane's own draw
-	void drawDirectorIntroPlate( void );
 	/// the plate round -directorrecord's corner window at the lower right, its chip naming whose power
-	/// or fight it is; the picture inside is the recording's to put in.  Pane 0's draw alone
+	/// or fight it is; the picture inside is the recording's to put in.  The main draw alone
 	void drawDirectorWindow( void );
 
 	//

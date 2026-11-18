@@ -11027,9 +11027,9 @@ static const Color BROADCAST_LINE = GameMakeColor( 0x1f, 0x29, 0x40, 255 );
 static const Color BROADCAST_INK = GameMakeColor( 0xe8, 0xea, 0xf0, 255 );
 static const Color BROADCAST_MUTED = GameMakeColor( 0x8e, 0x97, 0xad, 255 );
 static const Color BROADCAST_GOLD = GameMakeColor( 0xf2, 0xc2, 0x30, 255 );
-/// the score bar's frame is the corner radar's (W3DInGameUI's drawPaneRays and its corner frame): the
-/// brand's blue band as a halo at these strengths, a pixel of the ground a 720 rows and half the pane
-/// lines' gold, on the three sides that are on the screen
+/// the score bar's frame is cut to match the split screen's lines it outlived: the brand's blue band
+/// as a halo at these strengths, a pixel of the ground a 720 rows and half the lines' gold, on the
+/// three sides that are on the screen
 static const UnsignedByte BROADCAST_BAND_RGB[ 3 ] = { 0x80, 0x95, 0xea };
 static const Real BROADCAST_BAND_OUTER_ALPHA = 0.3f;
 static const Real BROADCAST_BAND_INNER_ALPHA = 0.55f;
@@ -11039,7 +11039,6 @@ static const char *const BROADCAST_NUMBERS = "Consolas";
 /// the broadcast's sizes are a 720 row picture's, grown with the picture's height
 static const Real BROADCAST_ROWS = 720.0f;
 static const Int BROADCAST_NAME_POINTS = 11;
-static const Int BROADCAST_COMPACT_POINTS = 8;
 static const Int BROADCAST_SIDE_POINTS = 9;
 static const Int BROADCAST_HEAD_POINTS = 7;
 /// the clock was 16 and the armies' bar 6 rows; both gave up height when the bar was thinned
@@ -11321,13 +11320,10 @@ static const Int BROADCAST_CARD_DETAIL_POINTS[ BROADCAST_CARD_STEPS ] = { 9, 8, 
 static const Real BROADCAST_CARD_PAD[ BROADCAST_CARD_STEPS ] = { 6.0f, 5.0f, 4.0f, 3.0f };
 /// the widest a player's own name may be where the broadcast writes it, in 720 line pixels for a name of
 /// BROADCAST_NAME_POINTS and in proportion at other sizes: a longer one ends in an ellipsis, so one long
-/// name neither widens every card nor runs into the general beside it, past a pane's circle or across
-/// the picture.  A computer player's name is his general and is never cut: "GLA Demolition General" is
-/// 171 at 11 points.  A split's plate holds two names and a "vs" in a circle 265 across; the opening's
-/// holds one; a banner has the picture's middle
+/// name neither widens every card nor runs into the general beside it or across the picture.  A
+/// computer player's name is his general and is never cut: "GLA Demolition General" is 171 at 11
+/// points.  A banner has the picture's middle
 static const Real BROADCAST_CARD_NAME_WIDEST = 140.0f;
-static const Real BROADCAST_PLATE_NAME_WIDEST = 110.0f;
-static const Real BROADCAST_INTRO_NAME_WIDEST = 120.0f;
 static const Real BROADCAST_BANNER_NAME_WIDEST = 210.0f;
 /// the house colour along a card's top
 static const Real BROADCAST_CARD_STRIP = 2.0f;
@@ -11614,7 +11610,7 @@ static UnicodeString windowCapitals( const UnicodeString &text )
 /** -directorrecord's corner window at the lower right: a plate round the picture the recording
 	* shrinks into it (W3DDisplay's joinVideoWindow), its top right corner cut at 45 degrees and a trim
 	* rule along its top, a chip over the picture naming whose power or fight it is, and the highlight
-	* round the picture.  Pane 0's draw alone, like the rest of the broadcast; its rectangles are the
+	* round the picture.  The main draw alone, like the rest of the broadcast; its rectangles are the
 	* broadcast's, so the recording keeps them, and the picture's own rectangle is left to the window. */
 //-------------------------------------------------------------------------------------------------
 void InGameUI::drawDirectorWindow( void )
@@ -11715,9 +11711,7 @@ void InGameUI::drawDirectorWindow( void )
 	* two sides play so the side ahead is the one past it.  A special power a player used, or an upgrade
 	* he bought, drops its icon in a flag from under his card.  A player who loses has his card flash red and struck through, then
 	* it closes while the others slide to where they stand without it, and his banner comes up across
-	* the lower picture; once the match is decided the winner's comes up under the last.  While
-	* a split is up each pane carries a plate in the top of its circle, inside its wedge and clear of
-	* the lines and the radar, naming the fight's players.
+	* the lower picture; once the match is decided the winner's comes up under the last.
 	* Everything is read off the players and their objects; nothing here writes the logic. */
 //-------------------------------------------------------------------------------------------------
 void InGameUI::drawDirectorBroadcast( void )
@@ -11757,7 +11751,6 @@ void InGameUI::drawDirectorBroadcast( void )
 	// cards close one at a time, so the bar is between two layouts at most: with that card and without it
 	const Bool sliding = slide > 0.0f && !settled.empty();
 
-	const Int pad = broadcastPixels( BROADCAST_PAD );
 	const Int rule = broadcastPixels( BROADCAST_RULE );
 	const Int tug = broadcastPixels( BROADCAST_TUG );
 	UnicodeString clockText;
@@ -11773,32 +11766,13 @@ void InGameUI::drawDirectorBroadcast( void )
 	if( sliding )
 		layOutBroadcast( settled, named, "to", clockBox, clockBoxHeight, to );
 
-	// the frame round the bar, the corner radar's own sizes
+	// the frame round the bar
 	const Int screenRows = TheDisplay->getHeight();
 	const Int lineGold = ObserverCamera_paneLineWidth( screenRows );
 	const Int frameGold = max( lineGold / 2, 1 );
 	const Int frameEdge = frameGold + max( REAL_TO_INT( screenRows / BROADCAST_FRAME_EDGE_ROWS_A_PIXEL ), 1 );
 	const Int frameHalo = max( ( ObserverCamera_paneBandWidth( screenRows ) - lineGold ) / 2 - OBSERVER_PANE_LINE_EDGE, 0 ) / 2;
 	const Int frameReach = frameEdge + frameHalo;
-	// while the screen is split the bar goes up off the top, frame and all, as the radar slides down
-	// off the bottom, and comes back down as the radar comes back: the panes have the screen to
-	// themselves.  Everything the bar draws hangs from its layouts' rows, so lifting those lifts it
-	const Int lift = REAL_TO_INT( TheObserverCamera.getCornerRadarSlide() * ( max( from.height, to.height ) + frameReach ) );
-	auto liftLayout = [ lift ]( BroadcastLayout &l )
-	{
-		for( size_t index = 0; index < l.cardTops.size(); index++ )
-			l.cardTops[ index ] -= lift;
-		for( size_t block = 0; block < l.blockHeaderTops.size(); block++ )
-		{
-			l.blockHeaderTops[ block ] -= lift;
-			l.blockCardsTops[ block ] -= lift;
-		}
-		l.tugTop -= lift;
-		l.height -= lift;
-	};
-	liftLayout( from );
-	if( sliding )
-		liftLayout( to );
 	// a card is drawn with the first layout's strings and measures over the first half of a slide and the
 	// second's after: the same strings unless the size or the rows change
 	const BroadcastLayout &face = sliding && slide >= 0.5f ? to : from;
@@ -11873,8 +11847,7 @@ void InGameUI::drawDirectorBroadcast( void )
 		const Int flagWidth = iconWidth + 2 * inset + 2 * edge;
 		const Int flagHeight = iconHeight + 2 * inset + accent;
 		const Int flagLeft = place.left + place.width / 2 + quarter - flagWidth / 2;
-		// a flag goes up with the bar, its own height further so it leaves the screen too
-		const Int flagTop = height + frameReach - flagHeight + REAL_TO_INT( flagHeight * ( drop - TheObserverCamera.getCornerRadarSlide() ) );
+		const Int flagTop = height + frameReach - flagHeight + REAL_TO_INT( flagHeight * drop );
 		if( edge > 0 )
 			TheDisplay->drawFillRect( flagLeft, flagTop, flagWidth, flagHeight, BROADCAST_GOLD );
 		TheDisplay->drawFillRect( flagLeft + edge, flagTop, flagWidth - 2 * edge, flagHeight - accent, BROADCAST_PANEL );
@@ -11907,9 +11880,9 @@ void InGameUI::drawDirectorBroadcast( void )
 
 	if( height > 0 )
 		TheDisplay->drawFillRect( left, 0, barWidth, height, BROADCAST_GROUND );
-	TheDisplay->drawFillRect( clockLeft, -lift, clockBox, clockBoxHeight, BROADCAST_PANEL );
-	TheDisplay->drawFillRect( clockLeft, clockBoxHeight - rule - lift, clockBox, rule, BROADCAST_GOLD );
-	clock->draw( clockLeft + ( clockBox - clockWidth ) / 2, -lift, BROADCAST_INK, BROADCAST_GROUND );
+	TheDisplay->drawFillRect( clockLeft, 0, clockBox, clockBoxHeight, BROADCAST_PANEL );
+	TheDisplay->drawFillRect( clockLeft, clockBoxHeight - rule, clockBox, rule, BROADCAST_GOLD );
+	clock->draw( clockLeft + ( clockBox - clockWidth ) / 2, 0, BROADCAST_INK, BROADCAST_GROUND );
 
 	// block by block: a "vs" before every block but the first of its row, and a team's name and its
 	// armies' total over its cards.  A block in both layouts moves with its cards; one in the first alone,
@@ -12059,10 +12032,8 @@ void InGameUI::drawDirectorBroadcast( void )
 	TheObserverCamera.addBroadcast( bar );
 	for( size_t flag = 0; flag < flagsDrawn.size(); flag++ )
 		TheObserverCamera.addBroadcast( flagsDrawn[ flag ] );
-	const Int barFoot = max( height + frameReach + pad, 0 );
-	TheObserverCamera.setBroadcastTop( (Real)barFoot );
 	static Int loggedHeight = -1;
-	if( !sliding && lift == 0 && height != loggedHeight )
+	if( !sliding && height != loggedHeight )
 	{
 		loggedHeight = height;
 		DEBUG_LOG(( "OBSCAM frame %u score bar %d x %d, %d row(s), size %d (name %d, detail %d points), card %d of %d\n", frame,
@@ -12070,74 +12041,6 @@ void InGameUI::drawDirectorBroadcast( void )
 			from.cardWidth, from.fullCardWidth ));
 	}
 
-	// a split's plate a pane, faded in and out with the panes; the opening's are each pane's own.  The
-	// whole screen has none: the score bar over it already names every side
-	const Real paneShown = TheObserverCamera.getPaneProgress();
-	const Int panes = TheObserverCamera.isIntro() ? 0 : TheObserverCamera.getDrawnPaneCount();
-	DisplayString *versus = broadcastText( "versus", UnicodeString( u"vs" ), BROADCAST_WORDS, broadcastPoints( BROADCAST_SIDE_POINTS ), FALSE );
-	// a team of two or more by its name once, a player alone by his own
-	auto sidesPlate = [ & ]( PlayerMaskType sides ) -> BroadcastPlate
-	{
-		BroadcastPlate plate;
-		for( size_t block = 0; block < from.blockFirst.size(); block++ )
-		{
-			for( Int index = from.blockFirst[ block ]; index < from.blockFirst[ block ] + from.blockSizes[ block ]; index++ )
-			{
-				Player *player = from.players[ index ].player;
-				if( ( player->getPlayerMask() & sides ) == 0 )
-					continue;
-				if( !plate.pieces.empty() )
-				{
-					plate.pieces.push_back( versus );
-					plate.colors.push_back( BROADCAST_MUTED );
-				}
-				const Bool team = from.teamNames[ block ] != NULL;
-				plate.pieces.push_back( team ? broadcastText( "plateteam" + std::to_string( block ), broadcastTeamName( named, from.players[ index ].team ),
-					BROADCAST_WORDS, broadcastPoints( BROADCAST_NAME_POINTS ), TRUE ) : broadcastNameText( "name" + std::to_string( player->getPlayerIndex() ),
-					player, BROADCAST_NAME_POINTS, BROADCAST_PLATE_NAME_WIDEST ) );
-				plate.colors.push_back( team ? BROADCAST_INK : ObserverCamera_readableColor( from.rows[ index ].color ) );
-				if( team )
-					break;
-			}
-		}
-		return plate;
-	};
-	// each plate's sides are logged when they change, so a film's plates can be counted
-	static PlayerMaskType loggedSides[ OBSERVER_MOST_PANES ];
-	auto placePlate = [ & ]( Int slot, PlayerMaskType sides, const BroadcastPlate &plate, Int plateLeft, Int plateTop, Int plateWidth,
-		Int plateHeight, Real shown )
-	{
-		if( sides != loggedSides[ slot ] )
-		{
-			loggedSides[ slot ] = sides;
-			DEBUG_LOG(( "OBSCAM frame %u pane plate %d, %d name(s)%s\n", frame, slot, (Int)( plate.pieces.size() + 1 ) / 2,
-				plate.pieces.size() > 1 ? ", vs" : "" ));
-		}
-		drawBroadcastPlate( plate, plateLeft, plateTop, shown );
-		IRegion2D drawn;
-		drawn.lo.x = plateLeft;
-		drawn.lo.y = plateTop;
-		drawn.hi.x = plateLeft + plateWidth;
-		drawn.hi.y = plateTop + plateHeight;
-		TheObserverCamera.addBroadcast( drawn );
-	};
-	for( Int pane = 0; pane < OBSERVER_MOST_PANES; pane++ )
-	{
-		const PlayerMaskType sides = pane < panes && panes >= 2 ? TheObserverCamera.getPaneSides( pane ) : 0;
-		const BroadcastPlate plate = sidesPlate( sides );
-		if( plate.pieces.empty() )
-		{
-			loggedSides[ pane ] = 0;
-			continue;
-		}
-		Int plateWidth = 0, plateHeight = 0;
-		broadcastPlateSize( plate, &plateWidth, &plateHeight );
-		Coord2D centre;
-		Real radius = 0.0f;
-		TheObserverCamera.getPaneCircle( pane, &centre, &radius );
-		const Int plateTop = REAL_TO_INT( ObserverCamera_paneLabelTop( centre, radius, (Real)plateWidth, (Real)plateHeight ) );
-		placePlate( pane, sides, plate, REAL_TO_INT( centre.x ) - plateWidth / 2, plateTop, plateWidth, plateHeight, paneShown );
-	}
 	// a defeated player's banner across the lower picture, the broadcast's red in its tab, and once the
 	// match is decided the winner's under it in gold.  A banner names the player in his colour, under it
 	// his general or difficulty and his team
@@ -12198,97 +12101,6 @@ void InGameUI::drawDirectorBroadcast( void )
 		const Int winnerFoot = foot + broadcastPixels( BROADCAST_GAP ) + broadcastBannerHeight( title, under );
 		TheObserverCamera.addBroadcast( drawBroadcastBanner( word, BROADCAST_GOLD, BROADCAST_GROUND, title, under, winnerFoot, winnerShown ) );
 	}
-}
-
-//-------------------------------------------------------------------------------------------------
-/** The opening's plate for the pane being drawn, the player's name with a player's side and team under
-	* it, hung just over his command centre and kept inside the pane's circle through the camera drawing that pane, so it stays on the
-	* building as the camera moves, zooms and slides.  Drawn in the pane's own draw it lies on that
-	* pane's picture, and the recording takes it with the pane; held on the screen when the building
-	* goes off it, and faded with the panes. */
-//-------------------------------------------------------------------------------------------------
-void InGameUI::drawDirectorIntroPlate( void )
-{
-	const Real shown = TheObserverCamera.getPaneProgress();
-	if( !TheObserverCamera.isIntro() || shown <= 0.0f )
-		return;
-	const Int pane = TheObserverCamera.getDrawingPane();
-	ICoord2D over;
-	if( TheTacticalView->worldToScreenTriReturn( &TheObserverCamera.getIntroMark( pane ), &over ) == View::WTS_INVALID )
-		return;
-
-	Player *player = ThePlayerList->getNthPlayer( TheObserverCamera.getIntroPlayerIndex( pane ) );
-	const std::string seat = std::to_string( player->getPlayerIndex() );
-	const std::vector< SpectatorStats > players = gatherSpectatorStats( SPECTATOR_STATS[ 0 ], NULL );
-	Coord2D centre;
-	Real radius = 0.0f;
-	TheObserverCamera.getPaneCircle( pane, &centre, &radius );
-
-	// the name on top, and under it, smaller, a player's side and the team he is on: side by side on
-	// one plate they ran past the rays of an eight-pane opening.  A block wider than the pane's circle
-	// steps down through smaller sizes until it fits, or takes the smallest; each size has keys of its
-	// own since a string keeps the font it was made with
-	BroadcastPlate name;
-	BroadcastPlate under;
-	Int nameWidth = 0, nameHeight = 0, underWidth = 0, underHeight = 0;
-	const Int nameSizes[] = { BROADCAST_NAME_POINTS, BROADCAST_SIDE_POINTS, BROADCAST_HEAD_POINTS };
-	const Int underSizes[] = { BROADCAST_SIDE_POINTS, BROADCAST_COMPACT_POINTS, BROADCAST_HEAD_POINTS };
-	const Int sizeCount = ARRAY_SIZE( nameSizes );
-	for( Int step = 0; step < sizeCount; step++ )
-	{
-		const std::string size = std::to_string( step ) + ":";
-		const Int underPoints = broadcastPoints( underSizes[ step ] );
-		name = BroadcastPlate();
-		under = BroadcastPlate();
-		name.pieces.push_back( broadcastNameText( "name" + size + seat, player, nameSizes[ step ], BROADCAST_INTRO_NAME_WIDEST ) );
-		name.colors.push_back( ObserverCamera_readableColor( clientPlayerColor( player ) ) );
-		// an AI called by its general has it on top already; one with a name of its own gets it here
-		if( !broadcastByDifficulty( player ) )
-		{
-			under.pieces.push_back( broadcastText( "side" + size + seat, broadcastSide( player ), BROADCAST_WORDS, underPoints, FALSE ) );
-			under.colors.push_back( BROADCAST_MUTED );
-		}
-		for( size_t index = 0; index < players.size(); index++ )
-		{
-			if( players[ index ].player != player || broadcastTeamSize( players, players[ index ].team ) < 2 )
-				continue;
-			under.pieces.push_back( broadcastText( "introteam" + size + seat, broadcastTeamName( players, players[ index ].team ), BROADCAST_WORDS,
-				underPoints, TRUE ) );
-			under.colors.push_back( BROADCAST_GOLD );
-		}
-		broadcastPlateSize( name, &nameWidth, &nameHeight );
-		underWidth = underHeight = 0;
-		if( !under.pieces.empty() )
-			broadcastPlateSize( under, &underWidth, &underHeight );
-		const Real across = (Real)max( nameWidth, underWidth );
-		const Real down = (Real)( nameHeight + underHeight );
-		if( across * across + down * down <= 4.0f * radius * radius )
-			break;
-	}
-	const Real width = (Real)max( nameWidth, underWidth );
-	const Real height = (Real)( nameHeight + underHeight );
-
-	// hung over the command centre, then pulled in until all of it is inside the pane's circle, so no
-	// ray cuts it and the score bar does not cover it
-	Coord2D middle;
-	middle.x = (Real)over.x;
-	middle.y = over.y - broadcastPixels( BROADCAST_PAD ) - height * 0.5f;
-	const Real room = max( radius - sqrtf( width * width + height * height ) * 0.5f, 0.0f );
-	const Real dx = middle.x - centre.x;
-	const Real dy = middle.y - centre.y;
-	const Real away = sqrtf( dx * dx + dy * dy );
-	if( away > room )
-	{
-		middle.x = centre.x + ( away > 0.0f ? dx / away * room : 0.0f );
-		middle.y = centre.y + ( away > 0.0f ? dy / away * room : 0.0f );
-	}
-	const Int top = min( max( REAL_TO_INT( middle.y - height * 0.5f ), 0 ), (Int)( TheDisplay->getHeight() - height ) );
-	const Int nameLeft = min( max( REAL_TO_INT( middle.x ) - nameWidth / 2, 0 ), (Int)TheDisplay->getWidth() - nameWidth );
-	drawBroadcastPlate( name, nameLeft, top, shown );
-	if( under.pieces.empty() )
-		return;
-	const Int underLeft = min( max( REAL_TO_INT( middle.x ) - underWidth / 2, 0 ), (Int)TheDisplay->getWidth() - underWidth );
-	drawBroadcastPlate( under, underLeft, top + nameHeight, shown );
 }
 
 //-------------------------------------------------------------------------------------------------

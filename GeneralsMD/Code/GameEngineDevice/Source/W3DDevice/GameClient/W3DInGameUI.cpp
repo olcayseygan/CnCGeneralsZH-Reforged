@@ -432,99 +432,6 @@ void W3DInGameUI::reset( void )
 
 static void drawGroundRing( const Coord3D& center, Real radius, UnsignedInt color, Real width );
 
-/// -directorrecord's lines between panes: the brand's gold (zerohour.gg's
-/// --gold, #f2c230) between two edges of its ground (--bg, #0c1220), so they read on snow and on
-/// night maps alike
-static const Color PANE_GOLD = GameMakeColor( 0xf2, 0xc2, 0x30, 255 );
-static const Color PANE_EDGE = GameMakeColor( 0x0c, 0x12, 0x20, 255 );
-/// the band under the lines is the site's text blue, --blue #8095ea, the brand's second colour: a
-/// wide faint layer and a narrower stronger one, fading out along the ray
-static const UnsignedByte PANE_BAND_RGB[ 3 ] = { 0x80, 0x95, 0xea };
-static const Real PANE_BAND_OUTER_ALPHA = 0.3f;
-static const Real PANE_BAND_INNER_ALPHA = 0.55f;
-static const Real PANE_BAND_FAR_SHARE = 0.35f;
-/// the light that runs along the gold: --gold most of the way to white, as wide as the edged line and
-/// this share of its length, fading out to both ends.  At --gold half way to white and the gold's
-/// own width nobody saw it at 720p
-static const UnsignedByte PANE_SHIMMER_RGB[ 3 ] = { 0xff, 0xf6, 0xd8 };
-static const Real PANE_SHIMMER_SHARE = 0.18f;
-
-static Color paneShimmer( UnsignedByte alpha )
-{
-	return GameMakeColor( PANE_SHIMMER_RGB[ 0 ], PANE_SHIMMER_RGB[ 1 ], PANE_SHIMMER_RGB[ 2 ], alpha );
-}
-
-static Color paneBand( Real alpha )
-{
-	return GameMakeColor( PANE_BAND_RGB[ 0 ], PANE_BAND_RGB[ 1 ], PANE_BAND_RGB[ 2 ], (UnsignedByte)REAL_TO_INT( 255.0f * alpha ) );
-}
-
-/** The rays between the panes, from their meeting point out: the dark edge whole from the start, so
-	* the seams read as the panes slide in, and the band and the gold as far as they have drawn out on
-	* the settled panes.  Every ray's band first, then every edge, then the gold, so the gold runs on
-	* unbroken where they meet.  Drawn, a light runs out along the gold now and then. */
-static void drawPaneRays( void )
-{
-	const Real gold = (Real)ObserverCamera_paneLineWidth( TheDisplay->getHeight() );
-	const Real edged = gold + 2 * OBSERVER_PANE_LINE_EDGE;
-	const Real band = (Real)ObserverCamera_paneBandWidth( TheDisplay->getHeight() );
-	const Coord2D origin = TheObserverCamera.getPaneOrigin();
-	const Real *rays = TheObserverCamera.getPaneRays();
-	const Int count = TheObserverCamera.getDrawnPaneCount();
-	const Real progress = TheObserverCamera.getLineProgress();
-	const Real bandShown = ObserverCamera_bandShown( progress );
-	const Real drawn = ObserverCamera_lineDrawn( progress );
-	// the far end is past the farthest corner from the meeting point, wherever that has slid to
-	const Real width = (Real)TheDisplay->getWidth();
-	const Real height = (Real)TheDisplay->getHeight();
-	const Real farX = max( fabsf( origin.x ), fabsf( width - origin.x ) );
-	const Real farY = max( fabsf( origin.y ), fabsf( height - origin.y ) );
-	const Real whole = sqrtf( farX * farX + farY * farY );
-	const Real length = whole * drawn;
-	const Int fromX = REAL_TO_INT( origin.x );
-	const Int fromY = REAL_TO_INT( origin.y );
-	for( Int pass = 0; pass < 4; pass++ )
-	{
-		for( Int ray = 0; ray < count; ray++ )
-		{
-			const Real angle = rays[ ray ] * PI / 180.0f;
-			const Real reach = pass == 2 ? whole : length;
-			const Int toX = REAL_TO_INT( origin.x + cosf( angle ) * reach );
-			const Int toY = REAL_TO_INT( origin.y - sinf( angle ) * reach );
-			if( pass == 0 && bandShown > 0.0f )
-				TheDisplay->drawLine( fromX, fromY, toX, toY, band, paneBand( PANE_BAND_OUTER_ALPHA * bandShown ),
-					paneBand( PANE_BAND_OUTER_ALPHA * bandShown * PANE_BAND_FAR_SHARE ) );
-			else if( pass == 1 && bandShown > 0.0f )
-				TheDisplay->drawLine( fromX, fromY, toX, toY, ( band + edged ) * 0.5f, paneBand( PANE_BAND_INNER_ALPHA * bandShown ),
-					paneBand( PANE_BAND_INNER_ALPHA * bandShown * PANE_BAND_FAR_SHARE ) );
-			else if( pass == 2 )
-				TheDisplay->drawLine( fromX, fromY, toX, toY, edged, PANE_EDGE );
-			else if( pass == 3 && drawn > 0.0f )
-				TheDisplay->drawLine( fromX, fromY, toX, toY, gold, PANE_GOLD );
-		}
-	}
-
-	const Real shimmer = ObserverCamera_shimmerAt( GameEngine_pictureFrame() );
-	if( drawn < 1.0f || shimmer < 0.0f )
-		return;
-	const Real half = length * PANE_SHIMMER_SHARE * 0.5f;
-	const Real middle = length * shimmer;
-	for( Int ray = 0; ray < count; ray++ )
-	{
-		const Real angle = rays[ ray ] * PI / 180.0f;
-		const Real alongX = cosf( angle );
-		const Real alongY = -sinf( angle );
-		const Real start = max( middle - half, 0.0f );
-		const Real end = min( middle + half, length );
-		const Int middleX = REAL_TO_INT( origin.x + alongX * middle );
-		const Int middleY = REAL_TO_INT( origin.y + alongY * middle );
-		TheDisplay->drawLine( REAL_TO_INT( origin.x + alongX * start ), REAL_TO_INT( origin.y + alongY * start ), middleX, middleY, edged,
-			paneShimmer( 0 ), paneShimmer( 255 ) );
-		TheDisplay->drawLine( middleX, middleY, REAL_TO_INT( origin.x + alongX * end ), REAL_TO_INT( origin.y + alongY * end ), edged,
-			paneShimmer( 255 ), paneShimmer( 0 ) );
-	}
-}
-
 //-------------------------------------------------------------------------------------------------
 /** LOGIC-THREAD.md phase 3.  The parts of draw that ask logic what to show (the superweapon clocks,
 	* the guard markers, the world animations' fog, the production list) run here, at the sync point
@@ -592,22 +499,10 @@ void W3DInGameUI::draw( void )
 	// 930 and 1230), and nothing on the list belongs in a shot.  The letterbox is the display's own.
 	if( CinemaDirector_hidesHud() )
 	{
-		const Bool framed = TheObserverCamera.isRadarFramed();
-		IRegion2D noFrame;
-		noFrame.lo.x = noFrame.lo.y = noFrame.hi.x = noFrame.hi.y = 0;
-		TheObserverCamera.setRadarFrame( noFrame );
-
-		// -directorrecord's panes: the rays between them, under the radar, drawn in every pane's draw so
-		// each pane's half of a line's band lies over its own picture.  Kept from pane 0 alone, the band
-		// showed pane 0's ground on the far side of the seam, the black past its map in an eight-pane
-		// opening
-		if( framed )
-			drawPaneRays();
-
 		// the console's 'hidehud showmap=true': the bar is hidden, so its radar window is put in the
 		// corner by hand, where the radar's own pixel maths find it too, and painted.  -directorrecord
 		// never asks for it: a map on the film was one more thing on the screen
-		if( CinemaDirector_showsMap() && !framed && !TheObserverCamera.isDrawingSecond() )
+		if( CinemaDirector_showsMap() && !TheObserverCamera.isDrawingSecond() )
 		{
 			GameWindow *radarWindow = TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:LeftHUD" ) );
 			// W3DLeftHUDDraw paints one pixel inside the window, and the radar keeps the map's shape
@@ -626,15 +521,10 @@ void W3DInGameUI::draw( void )
 			W3DLeftHUDDraw( radarWindow, NULL );
 		}
 
-		// -directorrecord's opening plates, each pane's own, then the score bar and a split's labels over
-		// everything and pane 0's alone like the lines
-		// the replay pass's picture is the moment alone: the episode's cut lays its own band over it
-		if( TheGlobalData->m_directorRecord && !TheObserverCamera.isReplaying() )
-		{
-			drawDirectorIntroPlate();
-			if( !TheObserverCamera.isDrawingSecond() )
-				drawDirectorBroadcast();
-		}
+		// -directorrecord's score bar and corner window over everything, in the main draw alone; the
+		// replay pass's picture is the moment alone: the episode's cut lays its own band over it
+		if( TheGlobalData->m_directorRecord && !TheObserverCamera.isReplaying() && !TheObserverCamera.isDrawingSecond() )
+			drawDirectorBroadcast();
 		return;
 	}
 

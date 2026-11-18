@@ -3217,6 +3217,7 @@ Libraries/Include/Platform/MsvcFloatCasts.h
 Libraries/Include/Platform/PosixD3D9/d3d9.h
 Libraries/Include/Platform/PosixD3D9/d3d9caps.h
 Libraries/Include/Platform/PosixD3D9/d3d9types.h
+Libraries/Include/Platform/RenderEffects.h
 Libraries/Include/Platform/RenderPost.h
 Libraries/Include/Platform/RenderTypes.h
 Libraries/Include/Platform/RendererName.h
@@ -4427,6 +4428,7 @@ Tests/test_premain_strings.cpp
 Tests/test_production_input.inc
 Tests/test_registryfile.cpp
 Tests/test_render_hooks.cpp
+Tests/test_renderer_effects.cpp
 Tests/test_road_buffer.cpp
 Tests/test_score_screen.inc
 Tests/test_sdl_gpu_depth_format.cpp

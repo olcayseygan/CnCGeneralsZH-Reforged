@@ -1,4 +1,5 @@
 #include "Platform/RenderPost.h"
+#include "Platform/RenderEffects.h"
 /*
 **	Command & Conquer Generals Zero Hour(tm)
 **	Copyright 2025 Electronic Arts Inc.
@@ -122,7 +123,7 @@ static Bool theTranslucentPass = FALSE;
 
 static Bool wearsCloak( const Drawable *draw )
 {
-	if( !Direct3D11_Draw_Effects() )
+	if( !RenderEffects::DrawEffectsAvailable() )
 		return FALSE;
 	const StealthLookType look = draw->getStealthDrawnLook();
 	const Real fade = draw->getStealthFade();
@@ -132,11 +133,11 @@ static Bool wearsCloak( const Drawable *draw )
 		if( draw->isKindOf( KINDOF_MINE ) )
 			return FALSE;
 		// a frame that cannot draw the cloak (a screen filter holds the target) draws him by opacity
-		return Direct3D11_Takes_Draw_Effect( DRAW_EFFECT_CLOAK );
+		return RenderEffects::TakesDrawEffect( DRAW_EFFECT_CLOAK );
 	}
 	// revealed fades in the translucent pass so the heat can come up from nothing
 	if( look == STEALTHLOOK_VISIBLE_DETECTED && fade < 0.99f )
-		return Direct3D11_Takes_Draw_Effect( DRAW_EFFECT_REVEALED );
+		return RenderEffects::TakesDrawEffect( DRAW_EFFECT_REVEALED );
 	return FALSE;
 }
 
@@ -803,7 +804,7 @@ void RTS3DScene::renderSpecificDrawables(RenderInfoClass &rinfo, Int numDrawable
 //=============================================================================
 static unsigned chooseDrawEffect( const Drawable *draw, Bool translucentPass, float parameters[4] )
 {
-	if ( !Direct3D11_Draw_Effects() )
+	if ( !RenderEffects::DrawEffectsAvailable() )
 		return DRAW_EFFECT_NONE;
 
 	unsigned effect = DRAW_EFFECT_NONE;
@@ -838,7 +839,7 @@ static unsigned chooseDrawEffect( const Drawable *draw, Bool translucentPass, fl
 
 	// A frame the backend would draw the look in nowhere (a screen filter or a mirror holds the
 	// target, or the device made no copy for the cloak) keeps the heat vision and the tint instead.
-	if ( effect != DRAW_EFFECT_NONE && !Direct3D11_Takes_Draw_Effect( effect ) )
+	if ( effect != DRAW_EFFECT_NONE && !RenderEffects::TakesDrawEffect( effect ) )
 		return DRAW_EFFECT_NONE;
 
 	if ( effect != DRAW_EFFECT_NONE )

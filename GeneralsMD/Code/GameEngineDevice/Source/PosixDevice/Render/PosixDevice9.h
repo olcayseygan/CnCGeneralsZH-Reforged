@@ -220,6 +220,16 @@ public:
     bool Post_Texture(IDirect3DBaseTexture9 *, struct SDL_GPUTexture *&);
     float Post_Additive_Gain(const struct SdlTarget &) const;
     void Set_Glow_Draw(bool e) { GlowDraw = e; }
+    bool Current_Gpu_Target(struct SdlTarget &target, std::string &error) { return Gpu && Resolve_Target(target, error); }
+    void Allow_Model_Effects(bool allowed) { ModelEffectsAllowed = allowed; }
+    bool Model_Effects_Available() const { return Gpu && ModelEffectsAllowed; }
+    bool Takes_Model_Effect(unsigned effect);
+    void Set_Model_Effect(unsigned effect, const float parameters[4]);
+    unsigned Requested_Model_Effect(float parameters[4]) const;
+    unsigned Draw_Model_Effect();
+    SDL_GPUTexture *Model_Colour();
+    bool Build_Model_Constants(struct SdlEnginePixelConstants &, bool receiving);
+    void Refuse_Next_Model_For_Test(unsigned mask) { ModelRefusalForTest |= mask; }
 	SdlGpuFrame * Get_Gpu() const { return Gpu; }
 	SdlResourceMirrors * Get_Mirrors() const { return Mirrors; }
 	/// Draws recorded on the GPU, and the draws refused, by reason.
@@ -380,6 +390,11 @@ protected:
 	bool SunActive = false, SunFailed = false, SunReady = false;
 	bool SmokeGlow = false;
 	bool GlowDraw = false;
+    bool ModelEffectsAllowed = true;
+    unsigned ModelEffect = 0, ModelRefusalForTest = 0;
+    float ModelEffectParameters[4] = {};
+    struct ModelView;
+    bool Read_Model_View(ModelView &);
 	struct PostSession;
 	std::shared_ptr<PostSession> Post;
 	unsigned SunCasterEffect = 0;

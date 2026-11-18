@@ -43,6 +43,7 @@
 //#define ENABLE_STRIPING
 
 #include "Platform/SunShadow.h"
+#include "Platform/RenderEffects.h"
 #include "dx8renderer.h"
 #include "dx8wrapper.h"
 #include "dx8polygonrenderer.h"
@@ -1936,6 +1937,9 @@ void DX8TextureCategoryClass::Render(void)
 		}
 		if (draw_effect != 0) {
 			SunShadow::SetCasterEffect(DX8Wrapper::_Get_D3D_Device(),draw_effect, mesh->Get_Draw_Effect_Parameters());
+#if !defined(_WIN32)
+			RenderEffects::SetDrawEffect(draw_effect, mesh->Get_Draw_Effect_Parameters());
+#endif
 		}
 		// A house colour mesh under the Team Glow option.  Immediate draws only: a sorted one draws later,
 		// after this has been put back, and goes without.
@@ -2001,6 +2005,9 @@ void DX8TextureCategoryClass::Render(void)
 		if (draw_effect != 0) {
 			static const float no_effect[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 			SunShadow::SetCasterEffect(DX8Wrapper::_Get_D3D_Device(),0, no_effect);
+#if !defined(_WIN32)
+			RenderEffects::SetDrawEffect(0, no_effect);
+#endif
 		}
 		if (team_glow) {
 			Direct3D11_Set_Team_Glow(false);

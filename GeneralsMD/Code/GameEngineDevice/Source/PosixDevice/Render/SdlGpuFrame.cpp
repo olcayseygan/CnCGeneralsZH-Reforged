@@ -723,6 +723,22 @@ bool SdlGpuFrame::Resolve_Scene_Depth(SDL_GPUCommandBuffer *commands, SDL_GPUTex
 	return true;
 }
 
+bool SdlGpuFrame::Capture_Scene_Colour(const SdlTarget &source, SDL_GPUTexture *destination)
+{
+    if (!source.Colour || !source.Width || !source.Height || !destination ||
+        destination == source.Colour || destination == source.Depth) return false;
+    if (Has_Pending_Work() && !Flush()) return false;
+    SDL_GPUCommandBuffer *commands = SDL_AcquireGPUCommandBuffer(GpuDevice);
+    if (!commands) return false;
+    SDL_GPUCopyPass *copy = SDL_BeginGPUCopyPass(commands);
+    if (!copy) { SDL_CancelGPUCommandBuffer(commands); return false; }
+    SDL_GPUTextureLocation from = {}, to = {};
+    from.texture = source.Colour; to.texture = destination;
+    SDL_CopyGPUTextureToTexture(copy, &from, &to, source.Width, source.Height, 1, false);
+    SDL_EndGPUCopyPass(copy);
+    return SerializeSubmits ? Submit(commands) : Submit_Flush(commands);
+}
+
 bool SdlGpuFrame::Resize(unsigned int width, unsigned int height, ResizeFailure *failure)
 {
 	if (failure) *failure = RESIZE_NONE;

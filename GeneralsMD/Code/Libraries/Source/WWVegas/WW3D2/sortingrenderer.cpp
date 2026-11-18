@@ -41,6 +41,7 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "Platform/SunShadow.h"
+#include "Platform/RenderEffects.h"
 #include "sortingrenderer.h"
 #include "dx8vertexbuffer.h"
 #include "dx8indexbuffer.h"
@@ -264,7 +265,7 @@ void SortingRendererClass::Insert_Triangles(
 	state->fire=false;
 	state->emissive=_InsertEmissive;
 	state->hard_edge=false;
-	state->draw_effect=Direct3D11_Requested_Draw_Effect(state->draw_effect_parameters);
+	state->draw_effect=RenderEffects::RequestedDrawEffect(state->draw_effect_parameters);
 
 	SortingVertexBufferClass* vertex_buffer=static_cast<SortingVertexBufferClass*>(state->sorting_state.vertex_buffers[0]);
 	WWASSERT(vertex_buffer);
@@ -987,7 +988,7 @@ static void Draw_Run(SortingNodeStruct* state,unsigned first_index,unsigned tria
 	Direct3D11_Set_Fire_Look(state->fire);
 	Direct3D11_Set_Emissive(state->emissive);
 	Direct3D11_Set_Soft_Particles(state->quads);
-	Direct3D11_Set_Draw_Effect(state->draw_effect,state->draw_effect_parameters);
+	RenderEffects::SetDrawEffect(state->draw_effect,state->draw_effect_parameters);
 	SunShadow::ReceiverExclusion sunReceivers(DX8Wrapper::_Get_D3D_Device(), state->excludeSunReceivers);
 	SunShadow::CasterEffectScope casterEffect(DX8Wrapper::_Get_D3D_Device(), state->casterEffect);
 	DX8Wrapper::Draw_Triangles(first_index,triangles,first_vertex,vertex_count);
@@ -1074,7 +1075,7 @@ static void Flush_Sorting_Batch(const TempIndexStruct* entries,unsigned entry_co
 	Direct3D11_Set_Emissive(false);
 	Direct3D11_Set_Soft_Particles(false);
 	static const float no_effect[4]={0.0f,0.0f,0.0f,0.0f};
-	Direct3D11_Set_Draw_Effect(0,no_effect);
+	RenderEffects::SetDrawEffect(0,no_effect);
 
 	tDrawEnd = Clock_Ticks();
 	flush_profile_draw_ms += flushProfileElapsedMS(tCopyEnd, tDrawEnd);

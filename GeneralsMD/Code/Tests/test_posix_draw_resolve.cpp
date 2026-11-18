@@ -336,7 +336,7 @@ static void check_constants(PosixDevice9 *device)
 	CHECK(memcmp(water.HullData,hull_registers[1],sizeof(water.HullData))==0);
 	// The optional foam contour is a distinct tail, never a replacement for the mean hull used
 	// by displacement. Exercise every register, including the twelfth vertex of hull eight.
-	CHECK(sizeof(water)==190*16 && offsetof(SdlWaterPixelConstants,ContactHullData)==100*16);
+	CHECK(sizeof(water)==191*16 && offsetof(SdlWaterPixelConstants,ContactHullData)==100*16);
 	float contact_registers[80][4]={};
 	for(int r=0;r<80;++r)for(int c=0;c<4;++c)contact_registers[r][c]=-float(r*4+c)-0.75f;
 	CHECK(device->SetPixelShaderConstantF(96,&contact_registers[0][0],80)==D3D_OK);
@@ -355,6 +355,10 @@ static void check_constants(PosixDevice9 *device)
 	memset(fill_registers,0,sizeof(fill_registers));fill_registers[0][3]=1;
 	CHECK(device->SetPixelShaderConstantF(90,&fill_registers[0][0],4)==D3D_OK);
 	device->Build_Water_Constants(pixel,water);CHECK(memcmp(water.FoamFillLights,fill_registers,sizeof(fill_registers))==0);
+	const float surface[4]={.2f,.4f,.6f,.8f};
+	CHECK(device->SetPixelShaderConstantF(ModernWaterMaterial::RegisterSurface,surface,1)==D3D_OK);
+	device->Build_Water_Constants(pixel,water);
+	CHECK(memcmp(water.MaterialSurface,surface,16)==0);
 	// Material state has explicit registers between fill lights and contact geometry.
 	// It must survive packing without borrowing light components, and clear on the next draw.
 	const float material[2][4]={{45/255.0f,58/255.0f,11/255.0f,.67f},{1,.8f,1,0}};
@@ -375,7 +379,7 @@ static void check_constants(PosixDevice9 *device)
 	// 186-register native vertex prefix or copying the reserved engine-register gap into metadata.
 	using namespace WaterHullVisualLayout;
 	CHECK(PosixDevice9::PIXEL_SHADER_CONSTANT_COUNT==896);
-	CHECK(sizeof(SdlWaterVisualPixelConstants)==198*16 && offsetof(SdlWaterVisualPixelConstants,VisualHullMeta)==190*16);
+	CHECK(sizeof(SdlWaterVisualPixelConstants)==199*16 && offsetof(SdlWaterVisualPixelConstants,VisualHullMeta)==191*16);
 	CHECK(VertexCommonRegisters==186 && FragmentCommonRegisters==194);
 	CHECK(BlockOffset(0)==0 && BlockOffset(1)==256 && BlockOffset(2)==512);
 	CHECK(BlockRegisters(0)==256 && BlockRegisters(1)==256 && BlockRegisters(2)==192);

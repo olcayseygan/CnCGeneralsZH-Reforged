@@ -569,6 +569,7 @@ void PosixDevice9::Build_Water_Constants(const SdlPixelConstants &pixel_constant
 	memcpy(water.FoamFillLights, PixelShaderConstants[90], sizeof(water.FoamFillLights));
 	memcpy(water.MaterialColor, PixelShaderConstants[ModernWaterMaterial::RegisterColor], sizeof(water.MaterialColor));
 	memcpy(water.MaterialParameters, PixelShaderConstants[ModernWaterMaterial::RegisterParameters], sizeof(water.MaterialParameters));
+	memcpy(water.MaterialSurface, PixelShaderConstants[ModernWaterMaterial::RegisterSurface], sizeof(water.MaterialSurface));
 	if (Water_Foam_History_Available()) {
 		memcpy(water.FoamHistoryArea, PixelShaderConstants[88], sizeof(water.FoamHistoryArea));
 		memcpy(water.FoamHistoryParameters, PixelShaderConstants[89], sizeof(water.FoamHistoryParameters));

@@ -2,12 +2,13 @@
 // Distributed under the repository's GPL-3.0 terms; see LICENSE.md.
 #pragma once
 #include <string>
+#include <cmath>
 
 // Keep the two native float4 declarations identical in C++ and generated HLSL.
 #define MODERN_WATER_MATERIAL_UNIFORMS(X) X(MaterialColor) X(MaterialParameters)
 
 namespace ModernWaterMaterial {
-enum : unsigned { RegisterColor=94, RegisterParameters=95, UniformRegisters=2 };
+enum : unsigned { RegisterColor=94, RegisterParameters=95, RegisterSurface=189, UniformRegisters=2 };
 // c94: display-space RGB, brightness. c95: tint amount, pollution amount, bubbles, reserved.
 // A zero parameter vector preserves the existing clear-water material exactly.
 inline const char *OpticalSource() {
@@ -40,6 +41,41 @@ float3 modernWaterBubbleFilm(float3 colour) {
 }
 float modernWaterBubbleWeight(float pollution,float enabled,float depth) {
     return saturate(pollution)*saturate(enabled)*smoothstep(0.1,1.0,depth);
+}
+)HLSL";
+}
+
+// c189: optional turbidity, added roughness, optical ripple damping and physical wind resistance.
+// Keep these native-only extensions outside the shared D3D11 material uniform block.
+inline float WindGain(float resistance) {
+    if (!std::isfinite(resistance)) return 1.0f;
+    const float response=1.0f-(resistance<0?0:resistance>1?1:resistance);
+    return response*response;
+}
+// The analytic fallback uses the same gain for heights and their physical slopes.
+template<class Sample> inline void ApplyWindGain(Sample &sample,float gain) {
+    sample.height*=gain;sample.dx*=gain;sample.dy*=gain;
+}
+inline const char *WindSource() {
+    return R"HLSL(
+float modernWaterWindGain(float resistance) {
+    float response=1.0-saturate(resistance);
+    return response*response;
+}
+)HLSL";
+}
+inline const char *SurfaceSource() {
+    return R"HLSL(
+float3 modernWaterTurbidTransmission(float3 original,float amount,float path) {
+    if(!(amount>0.0)) return original;
+    return original*exp(-0.30*saturate(amount)*clamp(path,0.0,80.0));
+}
+float3 modernWaterDampedNormal(float3 original,float amount) {
+    if(!(amount>0.0)) return original;
+    return normalize(float3(original.xy*lerp(1.0,0.12,saturate(amount)),original.z));
+}
+float modernWaterSurfaceRoughness(float original,float amount) {
+    return lerp(original,max(original,0.85),saturate(amount));
 }
 )HLSL";
 }

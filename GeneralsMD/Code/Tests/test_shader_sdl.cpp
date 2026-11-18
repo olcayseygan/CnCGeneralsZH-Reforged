@@ -406,6 +406,7 @@ const WaterUniformMember WaterUniformMembers[] = {
     WATER_UNIFORM_MEMBER(FoamFillLights),
     WATER_UNIFORM_MEMBER(MaterialColor),
     WATER_UNIFORM_MEMBER(MaterialParameters),
+    WATER_UNIFORM_MEMBER(MaterialSurface),
     WATER_UNIFORM_MEMBER(ClipFromWorld)
 };
 #undef WATER_COMBINER_MEMBER

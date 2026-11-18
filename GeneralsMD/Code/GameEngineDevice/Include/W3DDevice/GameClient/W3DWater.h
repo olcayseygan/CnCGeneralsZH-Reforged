@@ -362,6 +362,7 @@ protected:
 	};
 	std::vector<ModernOpticalTexture> m_modernOpticalTextures;
 	Bool m_modernHeadingEnabled = FALSE, m_modernCleanEnabled = FALSE;
+	Real m_modernWindGain = 1.0f;
 	Bool cleanWaterApplies(Real level) const;
 	std::vector<WaterOpticalContext::Polygon> m_modernOpticalPolygons;
 	Bool m_modernOpticalPolygonsValid = FALSE;

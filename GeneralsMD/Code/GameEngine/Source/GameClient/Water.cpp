@@ -81,7 +81,7 @@ void loadModernWaterSettings()
 	}
 }
 
-void getModernWaterMaterial(Real color[4], Real parameters[4])
+void getModernWaterMaterial(Real color[4], Real parameters[4], Real surface[4])
 {
 	ModernWaterSettings &settings = modernWaterSettings();
 	const RGBColor &authored = TheWaterTransparency->m_standingWaterColor;
@@ -107,6 +107,12 @@ void getModernWaterMaterial(Real color[4], Real parameters[4])
 	parameters[1] = material.pollution;
 	parameters[2] = material.bubbles ? 1.0f : 0.0f;
 	parameters[3] = 0.0f;
+	if (surface) {
+		surface[0] = material.turbidity;
+		surface[1] = material.surfaceRoughness;
+		surface[2] = material.rippleDamping;
+		surface[3] = material.windResistance;
+	}
 }
 
 // PRIVATE DATA ///////////////////////////////////////////////////////////////////////////////////

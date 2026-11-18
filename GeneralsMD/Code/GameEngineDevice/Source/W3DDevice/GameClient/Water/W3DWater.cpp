@@ -1274,8 +1274,10 @@ void WaterRenderObjClass::setupModernWaterShader(Bool river, Bool heightCorrecti
 	const D3DXVECTOR4 optics(TheWaterTransparency->m_transparentWaterDepth,
 		TheWaterTransparency->m_minWaterOpacity, optical ? 1.0f : 0.0f, heightCorrection && !river ? 1.0f : 0.0f);
 	setModernWaterConstants(6, optics, 1);
-	D3DXVECTOR4 materialColor, materialParameters;
-	getModernWaterMaterial(&materialColor.x, &materialParameters.x);
+	D3DXVECTOR4 materialColor, materialParameters, materialSurface;
+	getModernWaterMaterial(&materialColor.x, &materialParameters.x, &materialSurface.x);
+	if (WaterScreenReflection::Supported())
+		setModernWaterConstants(ModernWaterMaterial::RegisterSurface, materialSurface, 1);
 	if (WaterScreenReflection::Supported())
 		materialParameters.w = WaterScreenReflection::Traces(m_waterReflectionMode) ? 1.0f : 0.0f;
 	setModernWaterConstants(ModernWaterMaterial::RegisterColor, materialColor, 1);
@@ -3251,6 +3253,17 @@ void WaterRenderObjClass::Render(RenderInfoClass & rinfo)
 		Direct3D11_Take_Scene_Depth();
 
 #if ZH_MODERN_WATER
+	Real windGain = 1.0f;
+	if (m_useModernWater && WaterScreenReflection::Supported()) {
+		Real color[4], parameters[4], surface[4];
+		getModernWaterMaterial(color, parameters, surface);
+		windGain = ModernWaterMaterial::WindGain(surface[3]);
+	}
+	if (windGain != m_modernWindGain) {
+		clearModernWaterRenderCaches();
+		m_modernProjectedSamples.clear();
+		m_modernWindGain = windGain;
+	}
 	WaterShoreOverlay::Scope shoreScope(DX8Wrapper::_Get_D3D_Device(),
 		m_useModernWater && m_waterType==WATER_TYPE_0_TRANSLUCENT && m_trapezoidWaterPixelShader &&
 		!TheGlobalData->m_isWorldBuilder && !TheGlobalData->m_usingWaterTrackEditor);
@@ -4770,7 +4783,7 @@ void WaterRenderObjClass::drawModernWaterPatch(const Vector3 points[4], Bool riv
 						p.y / MAP_XY_FACTOR + m_modernHeightBorder, MAP_XY_FACTOR).height;
 					sample.fftDamping = WaterFftGeometry::SafeDamping(hullFreeDamping, terrainDepth);
 					sample.height = sample.damping > 0 ? WaterSurfaceModel::EvaluateBlendedHeight(p.x, p.y, m_modernWaveTime,
-						offshore) * sample.damping : 0;
+						offshore) * sample.damping * m_modernWindGain : 0;
 					if (share) {
 						if (reuseWater) m_modernRenderCaches.samples.Store(key,sample);
 						else if (m_modernProjectedSamples.size()<WaterSurfaceModel::VertexBudget) m_modernProjectedSamples.emplace(key,sample);
@@ -4930,6 +4943,7 @@ void WaterRenderObjClass::drawModernWaterPatch(const Vector3 points[4], Bool riv
 				}
 				vertex->x = p.x;
 				vertex->y = p.y;
+				ModernWaterMaterial::ApplyWindGain(wave, m_modernWindGain);
 				vertex->z = p.z + damping * wave.height;
 				// The flat modern shader uses only alpha for colour/shroud. PRELIT_DIFFUSE passes RGB
 				// through unchanged, so red carries the obstacle profile independently of terrain.

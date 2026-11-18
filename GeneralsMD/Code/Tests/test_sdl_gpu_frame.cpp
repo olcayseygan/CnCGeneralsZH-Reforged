@@ -1927,7 +1927,7 @@ float4 main(float4 position : SV_Position) : SV_Target0
 // deliberately avoids a second C++ implementation of their colour conversion or extinction.
 static void check_gpu_modern_water_material(SdlGpuFrame *frame)
 {
-    const unsigned rows=12,columns=3;
+    const unsigned rows=12,columns=7;
     // display colour/brightness, tint/pollution/bubbles/reserved, path/depth/illumination/face.
     const float fixtures[rows][12]={
         {0,0,0,0, 0,0,0,0, 20,10,1,.6f},
@@ -1953,13 +1953,19 @@ static void check_gpu_modern_water_material(SdlGpuFrame *frame)
     const char *vs="float4 main(uint id:SV_VertexID):SV_Position {return float4(id==1?3.0:-1.0,id==2?3.0:-1.0,0,1);}";
     std::string ps="cbuffer Fixtures:register(b0,space3){float4 F[36];};\n";
     ps+=ModernWaterMaterial::OpticalSource();
+    ps+=ModernWaterMaterial::SurfaceSource();
+    ps+=ModernWaterMaterial::WindSource();
     ps+=R"HLSL(
 float4 main(float4 position:SV_Position):SV_Target0 {
     uint row=(uint)position.y,column=(uint)position.x;
     float4 colour=F[row*3],params=F[row*3+1],context=F[row*3+2];
     if(column==0)return float4(modernWaterMaterialSource(float3(.002,.035,.075),colour,params.x,context.z,context.w),1);
     if(column==1)return float4(modernWaterMaterialTransmission(float3(.8,.8,.8),colour.rgb,params.y,context.x,.5),1);
-    return float4(modernWaterBubbleFilm(colour.rgb),modernWaterBubbleWeight(params.y,params.z,context.y));
+    if(column==2)return float4(modernWaterBubbleFilm(colour.rgb),modernWaterBubbleWeight(params.y,params.z,context.y));
+    if(column==3)return float4(modernWaterTurbidTransmission(float3(.8,.8,.8),params.y,context.x),1);
+    if(column==4)return float4(modernWaterDampedNormal(normalize(float3(.3,.4,1)),params.y),1);
+    if(column==5)return float4(modernWaterSurfaceRoughness(.2,params.y),0,0,1);
+    return float4(modernWaterWindGain(params.y),modernWaterWindGain(1),modernWaterWindGain(0),1);
 })HLSL";
     std::string error;std::vector<unsigned char> spirv;
     bool compiled=SDL3_Compile_HLSL_To_SPIRV(vs,true,spirv,error);CHECK(compiled);if(!compiled)return;
@@ -2002,7 +2008,98 @@ float4 main(float4 position:SV_Position):SV_Target0 {
     CHECK(value(6,1,2)>value(6,1,0) && value(6,1,0)==value(6,1,1));
     CHECK(value(5,2,0)>value(5,2,1) && value(6,2,2)>value(6,2,1));
     CHECK(value(7,2,3)==0 && value(8,2,3)==0 && value(9,2,3)==0 && value(10,2,3)==.8f);
+    for(unsigned c=0;c<3;++c) {
+        CHECK(value(0,3,c)==.8f && value(3,3,c)==.8f); // zero turbidity is identity
+        CHECK(value(5,3,c)>0 && value(5,3,c)<.01f); // submerged detail becomes opaque
+    }
+    CHECK(value(5,4,0)<value(3,4,0) && value(5,4,1)<value(3,4,1));
+    CHECK(value(5,4,2)>value(3,4,2)); // flatter optical normal
+    CHECK(value(3,5,0)==.2f && value(5,5,0)>.7f); // roughness independent of colour
+    CHECK(value(0,6,0)==1.f && std::abs(value(5,6,0)-.04f)<.000001f);
+    CHECK(value(5,6,1)==0.f && value(5,6,2)==1.f); // full calm and zero-resistance identity
     printf("sdl_gpu_frame_selfcheck: Modern material: exact clean/white identity, gray attenuation, red/blue tint and absorption, independent pollution, brightness and bubble gates passed\n");
+}
+
+// Constant, nonzero spectrum texels isolate physical resistance from FFT evolution and
+// lighting. Execute the exact vertex and pixel displacement helpers against a CPU limiter.
+static void check_gpu_material_wind_displacement(SdlGpuFrame *frame)
+{
+    struct Resources {
+        SDL_GPUDevice *device;SDL_GPUShader *vs=nullptr,*ps[2]={};SDL_GPUGraphicsPipeline *pipeline[2]={};
+        SDL_GPUTexture *target=nullptr,*maps[6]={};SDL_GPUSampler *sampler=nullptr;
+        ~Resources(){for(auto *p:pipeline)if(p)SDL_ReleaseGPUGraphicsPipeline(device,p);
+            for(auto *p:ps)if(p)SDL_ReleaseGPUShader(device,p);if(vs)SDL_ReleaseGPUShader(device,vs);
+            for(auto *t:maps)if(t)SDL_ReleaseGPUTexture(device,t);if(target)SDL_ReleaseGPUTexture(device,target);
+            if(sampler)SDL_ReleaseGPUSampler(device,sampler);}
+    } r;r.device=frame->Device();
+    const float texels[6][4]={{.7f,.5f,-.2f,0},{.02f,.03f,.01f,-.01f},{.2f,-.3f,.4f,0},{-.01f,.02f,.03f,.01f},{-.1f,.2f,.1f,0},{.04f,-.01f,.02f,.03f}};
+    std::string error;std::vector<unsigned char> spirv;
+    const char *vs="float4 main(uint id:SV_VertexID):SV_Position{return float4(id==1?3:-1,id==2?3:-1,0,1);}";
+    bool ok=SDL3_Compile_HLSL_To_SPIRV(vs,true,spirv,error);CHECK(ok);if(!ok)return;
+    r.vs=SDL3_Create_Shader(r.device,spirv,true,error);CHECK(r.vs);if(!r.vs)return;
+    SDL_GPUColorTargetDescription colour={};colour.format=SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT;
+    for(unsigned stage=0;stage<2;++stage) {
+        std::string ps=WaterFftSampling::UniformSource("MaterialWind",0,false,true);
+        if(stage)for(unsigned i=8;i<14;++i)ps+="Texture2D Texture"+std::to_string(i)+" : register(t"+std::to_string(i)+");SamplerState Sampler"+std::to_string(i)+" : register(s"+std::to_string(i)+");\n";
+        ps+=stage?WaterFftSampling::PixelSource(WaterFftSpectrum::ForResolution(WaterFftSpectrum::Resolution),false,false,true)
+            :WaterFftSampling::VertexSource(false,false,true);
+        ps+=stage?"float4 main(float4 position:SV_Position):SV_Target0{FftSurface q=fftSurface(float2(0,0),0,0);return float4(position.x<1?q.displacement:q.derivativeX,1);}":
+            "float4 main():SV_Target0{float bow;return float4(fftVertexBowDisplacement(float2(0,0),0,0,bow),1);}";
+        CHECK(SDL3_Shader_Retarget(ps,false));ok=SDL3_Compile_HLSL_To_SPIRV(ps,false,spirv,error);CHECK(ok);
+        if(!ok){printf("material wind physical stage %u: %s\n",stage,error.c_str());return;}
+        r.ps[stage]=SDL3_Create_Shader(r.device,spirv,false,error);CHECK(r.ps[stage]);if(!r.ps[stage])return;
+        SDL_GPUGraphicsPipelineCreateInfo pi={};pi.vertex_shader=r.vs;pi.fragment_shader=r.ps[stage];
+        pi.primitive_type=SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;pi.target_info.color_target_descriptions=&colour;pi.target_info.num_color_targets=1;
+        r.pipeline[stage]=SDL_CreateGPUGraphicsPipeline(r.device,&pi);CHECK(r.pipeline[stage]);if(!r.pipeline[stage])return;
+    }
+    SDL_GPUTextureCreateInfo ti={};ti.type=SDL_GPU_TEXTURETYPE_2D;ti.format=colour.format;
+    ti.width=2;ti.height=ti.layer_count_or_depth=ti.num_levels=1;ti.usage=SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+    r.target=SDL_CreateGPUTexture(r.device,&ti);CHECK(r.target);if(!r.target)return;
+    ti.width=1;ti.usage=SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    for(auto &t:r.maps){t=SDL_CreateGPUTexture(r.device,&ti);CHECK(t);if(!t)return;}
+    SDL_GPUSamplerCreateInfo si={};si.min_filter=si.mag_filter=SDL_GPU_FILTER_NEAREST;si.mipmap_mode=SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+    si.address_mode_u=si.address_mode_v=si.address_mode_w=SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+    r.sampler=SDL_CreateGPUSampler(r.device,&si);CHECK(r.sampler);if(!r.sampler)return;
+    CHECK(frame->Flush());SDL_GPUTransferBufferCreateInfo bi={};bi.usage=SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;bi.size=sizeof(texels);
+    SDL_GPUTransferBuffer *transfer=SDL_CreateGPUTransferBuffer(r.device,&bi);CHECK(transfer);if(!transfer)return;
+    void *mapped=SDL_MapGPUTransferBuffer(r.device,transfer,false);CHECK(mapped);if(!mapped){SDL_ReleaseGPUTransferBuffer(r.device,transfer);return;}
+    memcpy(mapped,texels,sizeof(texels));SDL_UnmapGPUTransferBuffer(r.device,transfer);
+    SDL_GPUCommandBuffer *upload=SDL_AcquireGPUCommandBuffer(r.device);CHECK(upload);if(!upload){SDL_ReleaseGPUTransferBuffer(r.device,transfer);return;}
+    SDL_GPUCopyPass *copy=SDL_BeginGPUCopyPass(upload);CHECK(copy);if(!copy){SDL_CancelGPUCommandBuffer(upload);SDL_ReleaseGPUTransferBuffer(r.device,transfer);return;}
+    for(unsigned i=0;i<6;++i){SDL_GPUTextureTransferInfo from={};from.transfer_buffer=transfer;from.offset=i*16;from.pixels_per_row=from.rows_per_layer=1;
+        SDL_GPUTextureRegion to={};to.texture=r.maps[i];to.w=to.h=to.d=1;SDL_UploadToGPUTexture(copy,&from,&to,false);}
+    SDL_EndGPUCopyPass(copy);CHECK(SDL_SubmitGPUCommandBuffer(upload));SDL_ReleaseGPUTransferBuffer(r.device,transfer);
+    const double raw[3]={(-1.2*texels[0][0]-1.5*texels[2][0]-1.5*texels[4][0])*WaterFftSampling::WorldScale,
+        (-1.2*texels[0][2]-1.5*texels[2][2]-1.5*texels[4][2])*WaterFftSampling::WorldScale,
+        (texels[0][1]+texels[2][1]+texels[4][1])*WaterFftSampling::WorldScale};
+    const double bound[3]={WaterFftGeometry::MaxHorizontalDisplacement/std::sqrt(2.0),
+        WaterFftGeometry::MaxHorizontalDisplacement/std::sqrt(2.0),WaterFftGeometry::MaxVerticalDisplacement};
+    const double rawX[3]={-1.2*texels[1][2]-1.5*texels[3][2]-1.5*texels[5][2],0,texels[1][0]+texels[3][0]+texels[5][0]};
+    for(float resistance:{0.0f,.5f,.8f,1.0f}) {
+        SdlWaterPixelConstants constants={};constants.MaterialSurface[3]=resistance;
+        std::vector<float> results[2];
+        for(unsigned stage=0;stage<2;++stage) {
+            SDL_GPUCommandBuffer *cmd=SDL_AcquireGPUCommandBuffer(r.device);CHECK(cmd);if(!cmd)return;
+            SDL_GPUColorTargetInfo out={};out.texture=r.target;out.load_op=SDL_GPU_LOADOP_DONT_CARE;out.store_op=SDL_GPU_STOREOP_STORE;
+            SDL_GPURenderPass *pass=SDL_BeginGPURenderPass(cmd,&out,1,nullptr);CHECK(pass);if(!pass){SDL_CancelGPUCommandBuffer(cmd);return;}
+            SDL_BindGPUGraphicsPipeline(pass,r.pipeline[stage]);SDL_GPUTextureSamplerBinding bindings[14];
+            for(unsigned i=0;i<(stage?14u:3u);++i)bindings[i]={r.maps[stage?(i<8?0:i-8):i*2],r.sampler};
+            SDL_BindGPUFragmentSamplers(pass,0,bindings,stage?14:3);
+            SDL_PushGPUFragmentUniformData(cmd,0,&constants,sizeof(constants));SDL_DrawGPUPrimitives(pass,3,1,0,0);
+            SDL_EndGPURenderPass(pass);CHECK(SDL_SubmitGPUCommandBuffer(cmd));results[stage]=read_float_targets(frame,&r.target,1,2,1);
+            CHECK(results[stage].size()==8);if(results[stage].size()!=8)return;
+            for(unsigned c=0;c<3;++c) {
+                const double expected=bound[c]*std::tanh(raw[c]*ModernWaterMaterial::WindGain(resistance)/bound[c]);
+                CHECK(std::isfinite(results[stage][c]) && std::abs(results[stage][c]-expected)<.00001);
+                if(resistance==1)CHECK(results[stage][c]==0);
+                const double limited=std::tanh(raw[c]*ModernWaterMaterial::WindGain(resistance)/bound[c]);
+                const double expectedX=rawX[c]*ModernWaterMaterial::WindGain(resistance)*(1-limited*limited);
+                CHECK(std::abs(results[stage][4+c]-(stage?expectedX:expected))<.00001);
+            }
+        }
+        for(unsigned c=0;c<3;++c)CHECK(std::abs(results[0][c]-results[1][c])<.00001);
+    }
+    printf("sdl_gpu_frame_selfcheck: material wind resistance 0/.5/.8/1: production vertex/pixel displacement and pixel derivative match CPU pre-limit gain; full resistance flat\n");
 }
 
 // Executes the exact shared functions called by generated production water; not a whole-frame
@@ -2227,7 +2324,7 @@ static void check_gpu_water_vertex_uniform_order(SdlGpuFrame *frame)
 	const unsigned contactRegister=offsetof(SdlWaterPixelConstants,ContactHullData)/16;
 	const unsigned lastContactRegister=contactRegister+79;
 	const unsigned fillRegister=offsetof(SdlWaterPixelConstants,FoamFillLights)/16;
-	CHECK(contactRegister==100 && fillRegister==180 && sizeof(SdlWaterPixelConstants)==190*16);
+	CHECK(contactRegister==100 && fillRegister==180 && sizeof(SdlWaterPixelConstants)==191*16);
 	std::string block="cbuffer WaterBlock : register(b1,space1) { float4 Water[";
 	block+=std::to_string(sizeof(SdlWaterPixelConstants)/16)+"]; };\n";
 	const std::string output="struct Output { float4 Position:SV_Position; [[vk::location(0)]] float4 Value:TEXCOORD0; };\n";
@@ -2465,7 +2562,7 @@ float4 main(float4 position:SV_Position,[[vk::location(0)]] float4 value:TEXCOOR
 		if(waterRows[row] && state && (x==256 || x==512))armedBoundary+=std::abs(actual-(expected-1024))>100;
 	}
 	CHECK(matched && armedLatest>0 && armedBoundary>0);
-	printf("sdl_gpu_frame_selfcheck: visual hull transport: all704 packet float4s +8 metadata, PS slots0..3, 190-register VS alias and 198-register PS common, queued A/B/zero, non-water, clear, new batch, resize; max error %.9g, armed %u/%u\n",maxError,armedLatest,armedBoundary);
+	printf("sdl_gpu_frame_selfcheck: visual hull transport: all704 packet float4s +8 metadata, PS slots0..3, 191-register VS alias and 199-register PS common, queued A/B/zero, non-water, clear, new batch, resize; max error %.9g, armed %u/%u\n",maxError,armedLatest,armedBoundary);
 }
 
 static void check_gpu_water_visual_query(SdlGpuFrame *frame)
@@ -7040,6 +7137,7 @@ int main()
 	check_gpu_water_opaque_alpha(frame);
 	check_gpu_water_vertex_uniform_order(frame);
 	check_gpu_modern_water_material(frame);
+	check_gpu_material_wind_displacement(frame);
 	check_gpu_water_visual_uniform_order(frame);
 	check_gpu_water_visual_query(frame);
 #if defined(__linux__)

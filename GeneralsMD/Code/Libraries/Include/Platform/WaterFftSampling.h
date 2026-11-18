@@ -47,7 +47,7 @@ inline std::string UniformSource(const char *name,unsigned slot,bool visual_hull
 #define MODERN_WATER_HLSL_UNIFORM(name) "    float4 " #name ";\n"
     source+=MODERN_WATER_MATERIAL_UNIFORMS(MODERN_WATER_HLSL_UNIFORM);
 #undef MODERN_WATER_HLSL_UNIFORM
-    if(sdl) source+="    row_major float4x4 ClipFromWorld;\n";
+    if(sdl) source+="    float4 MaterialSurface;\n    row_major float4x4 ClipFromWorld;\n";
     if(visual_hull) source+="    float4 VisualHullMeta[8];\n";
     source+="};\n";
     if(visual_hull) source+=R"HLSL(
@@ -281,7 +281,7 @@ void fftRawAndShadingSurface(float2 p,float3 lod,out FftSurface physical,out Fft
 }
 )HLSL";
 }
-inline std::string VertexSource(bool waveHeading=false,bool clean=false)
+inline std::string VertexSource(bool waveHeading=false,bool clean=false,bool materialSurface=false)
 {
     std::string source=std::string(R"HLSL(
 Texture2D FftDisplacement0 : register(t0);
@@ -336,6 +336,14 @@ float3 fftVertexDisplacement(float2 p) {return fftVertexDisplacement(p,WaterPara
         const size_t end=source.find("\n}",source.find("float3 fftUnrotatedDisplacement"))+3;
         source.insert(end,HeadingSource(true)+HeadingVertexSource());
     }
+    if(materialSurface) {
+        source=std::string(ModernWaterMaterial::WindSource())+source;
+        const auto replace=[&](const std::string &from,const std::string &to) {
+            for(size_t at=source.find(from);at!=std::string::npos;at=source.find(from,at+to.size())) source.replace(at,from.size(),to);
+        };
+        replace("float3 displacement=fftRawDisplacement(p);","float3 displacement=fftRawDisplacement(p)*modernWaterWindGain(MaterialSurface.w);");
+        replace("fftRawDisplacement(reflected.samplePosition)","fftRawDisplacement(reflected.samplePosition)*modernWaterWindGain(MaterialSurface.w)");
+    }
     return source;
 }
 // Add a water-only wrapper to the generated fixed vertex program. It retains the engine's
@@ -348,7 +356,7 @@ inline bool WrapVertex(std::string &hlsl,bool sdl=false,bool waveHeading=false,b
         || hlsl.find("float2 TexCoord1")==std::string::npos) return false;
     hlsl.replace(at,entry.size(),"Output waterFixedVertex(Input input)");
     hlsl+=UniformSource("WaterVertexParameters",1,false,sdl);
-    hlsl+=VertexSource(waveHeading,clean);
+    hlsl+=VertexSource(waveHeading,clean,sdl);
     hlsl+=WaterWaveCageShader::Source(true);
     hlsl+=R"HLSL(
 Output main(Input input)
@@ -389,7 +397,7 @@ Output main(Input input)
 )HLSL";
     return true;
 }
-inline std::string PixelSource(WaterFftSpectrum::Configuration configuration=WaterFftSpectrum::ForResolution(WaterFftSpectrum::Resolution),bool waveHeading=false,bool clean=false)
+inline std::string PixelSource(WaterFftSpectrum::Configuration configuration=WaterFftSpectrum::ForResolution(WaterFftSpectrum::Resolution),bool waveHeading=false,bool clean=false,bool materialSurface=false)
 {
     std::string source=CommonSource()+WaterBowLift::Source()+WaterVesselWaves::Source()+WaterFftFiltering::Source(configuration,clean)+R"HLSL(
 struct FftSurface {
@@ -595,6 +603,26 @@ void fftRawAndShadingSurface(float2 p,float3 lod,out FftSurface physical,out Fft
         const std::string variance="fftShadingVariance(shadingLod)*";
         source.replace(source.find(variance),variance.size(),
             "(fftShadingVariance(float3(0,shadingLod.yz))+shading.unresolvedSlopeVariance)*");
+    }
+    if(materialSurface) {
+        source=std::string(ModernWaterMaterial::WindSource())+source;
+        source.insert(source.find("FftSurface fftSurface(float2 p,float level,float footprint,"),R"HLSL(
+void fftResistWind(inout FftSurface surface,float gain) {
+    if(gain>=1.0)return;
+    surface.displacement*=gain;
+    surface.derivativeX*=gain;
+    surface.derivativeY*=gain;
+    surface.contactIncident*=gain;
+    surface.incidentCompression=(1.0+surface.derivativeX.x)*(1.0+surface.derivativeY.y)
+        -surface.derivativeX.y*surface.derivativeY.x;
+}
+)HLSL");
+        const auto replace=[&](const std::string &from,const std::string &to) {
+            for(size_t at=source.find(from);at!=std::string::npos;at=source.find(from,at+to.size())) source.replace(at,from.size(),to);
+        };
+        replace("    float reflectionVariance=1.0;","    float windGain=modernWaterWindGain(MaterialSurface.w);\n    fftResistWind(value,windGain);fftResistWind(shading,windGain);\n    float reflectionVariance=1.0;");
+        replace("fftRawAndShadingSurface(reflected.samplePosition,shadingLod,incident,shadingIncident);","fftRawAndShadingSurface(reflected.samplePosition,shadingLod,incident,shadingIncident);\n                fftResistWind(incident,windGain);fftResistWind(shadingIncident,windGain);");
+        replace("reflectionVariance*shadingLimit.z*shadingLimit.z;","reflectionVariance*shadingLimit.z*shadingLimit.z*windGain*windGain;");
     }
     return source;
 }

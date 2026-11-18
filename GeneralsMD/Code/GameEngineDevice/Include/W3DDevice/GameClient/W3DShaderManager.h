@@ -118,6 +118,9 @@ public:
 	/// The Warm Light haze for this frame (levels, sun, shroud), once a frame from
 	/// W3DDisplay::draw before the views render, whatever screen filter is running.
 	static void pushProtoHaze(void);
+#if defined(__linux__)
+    static void invalidateNativePostEnvironment(void);
+#endif
 
 	// Support routines for filter methods.
 	static Bool canRenderToTexture(void) { return (m_oldRenderSurface && m_newRenderSurface);}
@@ -269,5 +272,38 @@ protected:
 	static Bool m_skipRender;
 	static TextureClass *m_fadePatternTexture;	///<shape/pattern of the fade
 };
+
+#if defined(__linux__)
+#include <cstdint>
+// Producer policy is independent of transient post-scene readiness. These pure
+// helpers also let fixtures exercise the decisions without a running game.
+namespace NativePostEnvironmentPolicy {
+enum Haze { None, WarmLight, Weather };
+inline Haze chooseHaze(bool available, bool classic, bool hasMap, bool warmLight,
+    bool weatherActive, bool weatherVisible)
+{
+    return !available || classic || !hasMap ? None
+        : weatherActive && weatherVisible ? Weather : warmLight ? WarmLight : None;
+}
+inline bool atmosphere(bool available, bool classic, bool requested, bool hasMap,
+    bool hasSky, bool authoredSkybox, bool isometric)
+{
+    return available && !classic && requested && hasMap && hasSky && !authoredSkybox && !isometric;
+}
+struct MapEpoch {
+    std::uint64_t Generation = 1;
+    const void *Map = nullptr, *Samples = nullptr;
+    int Width = 0, Height = 0;
+    void invalidate() {
+        if (++Generation == 0) ++Generation;
+        Map = Samples = nullptr; Width = Height = 0;
+    }
+    bool observe(const void *map, const void *samples, int width, int height) {
+        if (Map == map && Samples == samples && Width == width && Height == height) return false;
+        invalidate(); Map = map; Samples = samples; Width = width; Height = height; return true;
+    }
+};
+}
+#endif
 
 #endif //__W3DSHADERMANAGER_H_

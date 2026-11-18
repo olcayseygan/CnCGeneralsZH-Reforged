@@ -1538,7 +1538,7 @@ void RTS3DScene::Customized_Render( RenderInfoClass &rinfo )
 		// Before the frame for the same reason: it has to lie under all of it.  The pass above has just
 		// handed the backend the camera it needs.
 		if (TheGlobalData->m_atmosphere)
-			Direct3D11_Atmosphere_Sky();
+			RenderPost::Sky();
 	}
 
 	Int localPlayerIndex = ThePlayerList ? TheObserverCamera.getShroudPlayerIndex() : 0;

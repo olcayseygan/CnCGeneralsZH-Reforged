@@ -210,6 +210,9 @@ public:
 	/// -offscreen's presents, paced at hz a second (0: unpaced); SdlGpuFrame::Set_Offscreen_Presents.
 	void Present_Offscreen(unsigned int hz);
     void Begin_Post(const RenderPost::Settings &);
+    void Set_Post_Environment(const RenderPost::Environment &);
+    bool Post_Environment_Available() const;
+    void Post_Sky(bool drawSky = true);
     unsigned Begin_Post_View(bool, float, float, bool);
     void End_Post_View(unsigned);
     bool Read_Main_View(struct SdlMainViewSnapshot &, bool, SdlSceneCapturePhase);

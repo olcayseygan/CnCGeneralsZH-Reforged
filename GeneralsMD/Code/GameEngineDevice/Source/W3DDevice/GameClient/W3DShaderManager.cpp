@@ -279,7 +279,7 @@ static GlowTuning glowTuning(void)
 	return tuning;
 }
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__linux__)
 /* The Warm Light option's ground haze (MapLight, DX11Post_Set_Haze).  It lies in the ground below the level most
 	of the map stands on: full at the lowest ground, thinning to nothing PROTO_HAZE_ABOVE_MIDDLE over
 	the median height of the playable cells, never thinner than PROTO_HAZE_MIN_RISE.  The median and
@@ -297,6 +297,35 @@ static const Real PROTO_HAZE_STRENGTH = 0.38f;		// most of the haze colour the l
 static const Real PROTO_HAZE_RELIEF = 60.0f;		// depth at which the haze is at full strength
 static const Real PROTO_HAZE_REACH = 700.0f;		// eye distance at which it stops thickening
 static const Real PROTO_HAZE_COLOUR[3] = { 0.88f, 0.84f, 0.76f };
+
+#if defined(__linux__)
+static RenderPost::Environment s_nativeEnvironment;
+static NativePostEnvironmentPolicy::MapEpoch s_nativeMapEpoch;
+#endif
+static void setGroundHaze(const float colour[3], float top, float thickness, float strength,
+    float reach, float water, const float towardSun[3], float warmth)
+{
+#if defined(_WIN32)
+    DX11Post_Set_Haze(colour, top, thickness, strength, reach, water, towardSun, warmth);
+#else
+    RenderPost::GroundHazeSettings &haze = s_nativeEnvironment.Haze;
+    memcpy(haze.Colour, colour, sizeof(haze.Colour)); haze.Top = top; haze.Thickness = thickness;
+    haze.Strength = strength; haze.Reach = reach; haze.WaterHeight = water;
+    memcpy(haze.TowardSun, towardSun, sizeof(haze.TowardSun)); haze.Warmth = warmth;
+#endif
+}
+static void setAtmosphere(const float horizon[3], const float tint[3], float start, float scale,
+    float strength, float ground, float width, float height, IDirect3DBaseTexture9 *sky)
+{
+#if defined(_WIN32)
+    Direct3D11_Set_Atmosphere(horizon, tint, start, scale, strength, ground, width, height, sky);
+#else
+    RenderPost::AtmosphereSettings &atmosphere = s_nativeEnvironment.Atmosphere;
+    memcpy(atmosphere.Horizon, horizon, sizeof(atmosphere.Horizon)); memcpy(atmosphere.Tint, tint, sizeof(atmosphere.Tint));
+    atmosphere.Start = start; atmosphere.Scale = scale; atmosphere.Strength = strength; atmosphere.Ground = ground;
+    atmosphere.MapSize[0] = width; atmosphere.MapSize[1] = height; s_nativeEnvironment.Sky = sky;
+#endif
+}
 
 /** The median height of the playable cells, every second cell each way, in world units. */
 static Real protoHazeMiddle(WorldHeightMap *map)
@@ -395,7 +424,7 @@ static void pushProtoHazeFrame(void)
 		const Real daylight = (0.299f * objectSun.diffuse.red + 0.587f * objectSun.diffuse.green + 0.114f * objectSun.diffuse.blue - 0.25f) / 0.5f;
 		warmth = max(min(daylight, 1.0f), 0.0f);
 	}
-	DX11Post_Set_Haze(colour, top, rise, strength, PROTO_HAZE_REACH, water, towardSun, warmth);
+	setGroundHaze(colour, top, rise, strength, PROTO_HAZE_REACH, water, towardSun, warmth);
 }
 
 // The fog the terrain draws, through the terrain's own mapping (ShroudTextureShader::set): the
@@ -408,12 +437,22 @@ static void pushShroudFrame(void)
 	{
 		const float shroudRect[4] = { shroud->getDrawOriginX() - shroud->getCellWidth(), shroud->getDrawOriginY() - shroud->getCellHeight(),
 			1.0f / (shroud->getCellWidth() * shroud->getTextureWidth()), 1.0f / (shroud->getCellHeight() * shroud->getTextureHeight()) };
+#if defined(_WIN32)
 		Direct3D11_Set_Haze_Shroud(shroud->getShroudTexture()->Peek_D3D_Base_Texture(), shroudRect);
+#else
+        s_nativeEnvironment.Shroud = shroud->getShroudTexture()->Peek_D3D_Base_Texture();
+        memcpy(s_nativeEnvironment.ShroudRect, shroudRect, sizeof(shroudRect));
+#endif
 	}
 	else
 	{
 		const float wholeRect[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
+#if defined(_WIN32)
 		Direct3D11_Set_Haze_Shroud(NULL, wholeRect);
+#else
+        s_nativeEnvironment.Shroud = NULL;
+        memcpy(s_nativeEnvironment.ShroudRect, wholeRect, sizeof(wholeRect));
+#endif
 	}
 }
 
@@ -424,7 +463,7 @@ static void pushWeatherHaze(void)
 	Real strength;
 	TheSnowManager->getWeatherHaze(colour, &strength);
 	const float up[3] = { 0.0f, 0.0f, 1.0f };
-	DX11Post_Set_Haze(colour, 1.0e5f, 1.0f, strength, PROTO_HAZE_REACH, -1.0e6f, up, 0.0f);
+	setGroundHaze(colour, 1.0e5f, 1.0f, strength, PROTO_HAZE_REACH, -1.0e6f, up, 0.0f);
 }
 
 /* The Atmosphere option (DX11Post_Set_Atmosphere).  The horizon's colour goes by the time of day, scaled by
@@ -445,10 +484,18 @@ static const float ATMOSPHERE_HORIZON[TIME_OF_DAY_COUNT][3] = {
 static void pushAtmosphere(Bool weatherHaze)
 {
 	static Bool s_on = FALSE;
+#if defined(_WIN32)
 	const Bool on = TheGlobalData->m_atmosphere && !TheGlobalData->m_classicGraphics && Direct3D11_Present_Is_Enabled()
 		&& !TheGlobalData->m_drawSkyBox && !TheGlobalData->m_isometricCamera
 		&& TheTerrainRenderObject != NULL && TheTerrainRenderObject->getMap() != NULL
 		&& TheWaterRenderObj != NULL && TheWaterRenderObj->getSkyTexture() != NULL;
+#else
+    const Bool on = NativePostEnvironmentPolicy::atmosphere(RenderPost::EnvironmentAvailable(),
+        TheGlobalData->m_classicGraphics, TheGlobalData->m_atmosphere,
+        TheTerrainRenderObject != NULL && TheTerrainRenderObject->getMap() != NULL,
+        TheWaterRenderObj != NULL && TheWaterRenderObj->getSkyTexture() != NULL,
+        TheGlobalData->m_drawSkyBox, TheGlobalData->m_isometricCamera);
+#endif
 	if (on)
 	{
 		const GlobalData::TerrainLighting &sun = TheGlobalData->m_terrainLighting[TheGlobalData->m_timeOfDay][0];
@@ -473,7 +520,7 @@ static void pushAtmosphere(Bool weatherHaze)
 		// The ground under the focus, at the map's lowest: a height at the focus would pulse the fade as
 		// the camera scrolled over a ridge, and reading the logic's is a read inside the overlap window.
 		WorldHeightMap *map = TheTerrainRenderObject->getMap();
-		Direct3D11_Set_Atmosphere(horizon, tint, ATMOSPHERE_START, ATMOSPHERE_SCALE, ATMOSPHERE_STRENGTH,
+		setAtmosphere(horizon, tint, ATMOSPHERE_START, ATMOSPHERE_SCALE, ATMOSPHERE_STRENGTH,
 			TheTerrainRenderObject->getMinHeight(),
 			(map->getXExtent() - 1 - map->getBorderSizeInline() * 2) * MAP_XY_FACTOR,
 			(map->getYExtent() - 1 - map->getBorderSizeInline() * 2) * MAP_XY_FACTOR, sky->Peek_D3D_Base_Texture());
@@ -481,9 +528,22 @@ static void pushAtmosphere(Bool weatherHaze)
 	else if (s_on)
 	{
 		const float none[3] = { 0.0f, 0.0f, 0.0f };
-		DX11Post_Set_Atmosphere(none, none, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, NULL);
+		#if defined(_WIN32)
+        DX11Post_Set_Atmosphere(none, none, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, NULL);
+#else
+        setAtmosphere(none, none, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, NULL);
+#endif
 	}
 	s_on = on;
+}
+#endif
+
+#if defined(__linux__)
+void W3DShaderManager::invalidateNativePostEnvironment(void)
+{
+    s_nativeMapEpoch.invalidate(); s_nativeEnvironment = {};
+    s_hazeLevelsMap = NULL; s_hazeLevelsData = NULL; s_hazeLevelsWidth = s_hazeLevelsHeight = 0;
+    RenderPost::SetEnvironment(s_nativeEnvironment);
 }
 #endif
 
@@ -509,6 +569,29 @@ void W3DShaderManager::pushProtoHaze(void)
 	pushAtmosphere(weatherHaze);
 	if ((TheGlobalData->m_mapLight || TheGlobalData->m_ambientOcclusion || TheGlobalData->m_atmosphere || weatherHaze) && Direct3D11_Is_Active())
 		pushShroudFrame();
+#elif defined(__linux__)
+    s_nativeEnvironment = {};
+    WorldHeightMap *map = TheTerrainRenderObject != NULL ? TheTerrainRenderObject->getMap() : NULL;
+    if (s_nativeMapEpoch.observe(map, map ? map->getDataPtr() : NULL,
+        map ? map->getXExtent() : 0, map ? map->getYExtent() : 0)) {
+        s_hazeLevelsMap = NULL; s_hazeLevelsData = NULL; s_hazeLevelsWidth = s_hazeLevelsHeight = 0;
+    }
+    if (TheGlobalData == NULL || !map || !RenderPost::EnvironmentAvailable() || TheGlobalData->m_classicGraphics) {
+        RenderPost::SetEnvironment(s_nativeEnvironment); return;
+    }
+    s_nativeEnvironment.MapIdentity = reinterpret_cast<std::uintptr_t>(map);
+    s_nativeEnvironment.MapGeneration = s_nativeMapEpoch.Generation;
+    const Bool weatherActive = TheSnowManager != NULL && TheSnowManager->getWeatherKind() != WEATHER_KIND_NONE;
+    const Bool weatherVisible = TheSnowManager != NULL && TheSnowManager->isVisible();
+    const auto haze = NativePostEnvironmentPolicy::chooseHaze(true, false, true,
+        TheGlobalData->m_mapLight, weatherActive, weatherVisible);
+    if (haze == NativePostEnvironmentPolicy::Weather) pushWeatherHaze();
+    else if (haze == NativePostEnvironmentPolicy::WarmLight) pushProtoHazeFrame();
+    pushAtmosphere(haze == NativePostEnvironmentPolicy::Weather);
+    // AO can need shroud even when neither atmosphere nor haze is enabled.
+    if (TheGlobalData->m_ambientOcclusion || haze != NativePostEnvironmentPolicy::None || s_nativeEnvironment.Atmosphere.Strength > 0)
+        pushShroudFrame();
+    RenderPost::SetEnvironment(s_nativeEnvironment); // copies/AddRefs before returning
 #endif
 }
 
@@ -3172,6 +3255,9 @@ W3DShaderManager::W3DShaderManager(void)
 //=============================================================================
 void W3DShaderManager::init(void)
 {
+#if defined(__linux__)
+    invalidateNativePostEnvironment();
+#endif
 	int i,j;
 
 	D3DSURFACE_DESC desc;
@@ -3245,6 +3331,9 @@ void W3DShaderManager::init(void)
 //=============================================================================
 void W3DShaderManager::shutdown(void)
 {
+#if defined(__linux__)
+    invalidateNativePostEnvironment();
+#endif
 	RenderPost::SetSceneStandIn(NULL, NULL);
 	if (m_newRenderSurface) m_newRenderSurface->Release();
 	if (m_renderTexture) m_renderTexture->Release();

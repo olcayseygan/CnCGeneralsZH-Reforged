@@ -5919,6 +5919,20 @@ bool DX8Wrapper::Device_Is_Ready()
 
 #include "Platform/RenderPost.h"
 namespace RenderPost {
+bool EnvironmentAvailable() {
+#if defined(_WIN32)
+	return Direct3D11_Present_Is_Enabled();
+#else
+	return EnvironmentAvailable(DX8Wrapper::_Get_D3D_Device());
+#endif
+}
+void SetEnvironment(const Environment &environment) {
+#if !defined(_WIN32)
+	SetEnvironment(DX8Wrapper::_Get_D3D_Device(), environment);
+#else
+	(void)environment;
+#endif
+}
 void BeginMain(const Settings &settings) {
 #if !defined(_WIN32)
 	BeginMain(DX8Wrapper::_Get_D3D_Device(), settings);
@@ -5984,6 +5998,13 @@ void SetGlowDraw(bool enabled) {
 
 #include "Platform/RenderPost.h"
 namespace RenderPost {
+void Sky() {
+#if defined(_WIN32)
+	Direct3D11_Atmosphere_Sky();
+#else
+	Sky(DX8Wrapper::_Get_D3D_Device());
+#endif
+}
 void OpaqueScene(bool allowWorldAO) {
 #if defined(_WIN32)
     if (allowWorldAO) Direct3D11_Ambient_Occlusion();

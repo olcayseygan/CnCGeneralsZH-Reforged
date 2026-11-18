@@ -38,6 +38,7 @@
 #include "Platform/WaterSurfaceModel.h"
 #include "Platform/WaterPerformanceSettings.h"
 #include "Platform/ModernWaterMaterial.h"
+#include "Platform/WaterUnderwaterClarity.h"
 #include "Platform/WaterShoreOverlay.h"
 #include "Platform/WaterFoamWindow.h"
 #include "Platform/WaterFoamParticlePolicy.h"
@@ -1278,6 +1279,11 @@ void WaterRenderObjClass::setupModernWaterShader(Bool river, Bool heightCorrecti
 		materialParameters.w = WaterScreenReflection::Traces(m_waterReflectionMode) ? 1.0f : 0.0f;
 	setModernWaterConstants(ModernWaterMaterial::RegisterColor, materialColor, 1);
 	setModernWaterConstants(ModernWaterMaterial::RegisterParameters, materialParameters, 1);
+	if (WaterUnderwaterClarity::Supported()) {
+		const float clarity = TheGlobalData->m_underwaterClarity && !TheGlobalData->m_classicGraphics && !river
+			? WaterUnderwaterClarity::Strength : 0.0f;
+		setModernWaterConstants(WaterUnderwaterClarity::Register, D3DXVECTOR4(clarity, 0, 0, 0), 1);
+	}
 	const RGBColor &ambient = TheGlobalData->m_terrainAmbient[0];
 	const D3DXVECTOR4 hullParameters(river ? 0.0f : float(m_modernHulls.size()), ambient.red, ambient.green, ambient.blue);
 	setModernWaterConstants(7, hullParameters, 1);
@@ -5852,3 +5858,14 @@ void WaterRenderObjClass::renderSkyBody(Matrix3D *mat)
 /* The save's grid data (the snapshot that was here) is WaterGrid::xfer's; W3DTerrainVisual::xfer
 	 still writes it in the same place. */
 
+
+namespace WaterUnderwaterClarity {
+bool Supported()
+{
+#if defined(_WIN32)
+	return false;
+#else
+	return PosixWaterGpuAvailable(DX8Wrapper::_Get_D3D_Device());
+#endif
+}
+}

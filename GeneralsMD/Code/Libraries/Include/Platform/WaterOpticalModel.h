@@ -5,6 +5,7 @@
 
 // Keep the existing shallow-water spectrum and its standing-water path scale in one definition.
 #define WATER_OPTICAL_CONSTANTS(X) X(0.065f, 0.026f, 0.019f, 2.4f, 0.25f, 0.01f, 80.0f, 1.0e20f)
+#define WATER_OPTICAL_CLARITY_CONSTANTS(X) X(2.5f, 5.5f, 0.5f, 1.5f)
 #define WATER_OPTICAL_RAY_CONSTANTS(X) X(0.2f, 0.08f, 2.0f)
 
 // Clear/coastal and river retain their current source; ocean retains the current FFT endpoint.
@@ -24,12 +25,32 @@ WATER_OPTICAL_CONSTANTS(WATER_OPTICAL_CPP_CONSTANTS)
 WATER_OPTICAL_RAY_CONSTANTS(WATER_OPTICAL_RAY_CPP_CONSTANTS)
 #undef WATER_OPTICAL_RAY_CPP_CONSTANTS
 
+#define WATER_OPTICAL_CLARITY_CPP_CONSTANTS(shallow,deep,reliefStart,reliefFull) \
+    constexpr float ClarityShallowDepth=shallow,ClarityMaximumDepth=deep; \
+    constexpr float ClarityReliefStart=reliefStart,ClarityReliefFull=reliefFull;
+WATER_OPTICAL_CLARITY_CONSTANTS(WATER_OPTICAL_CLARITY_CPP_CONSTANTS)
+#undef WATER_OPTICAL_CLARITY_CPP_CONSTANTS
+
 // Comparisons also define a deterministic NaN/Infinity policy in both languages: NaN and negative
 // path/weights become zero, positive infinity saturates, and invalid reference depth uses 0.25.
 inline float Unit(float value) { return value>=0.0f?(std::min)(value,1.0f):0.0f; }
 inline float Path(float value) { return value>=0.0f?(std::min)(value,MaximumFiniteInput):0.0f; }
 inline float ReferenceDepth(float value) {
     return value>=MinimumReferenceDepth?(std::min)(value,MaximumFiniteInput):MinimumReferenceDepth;
+}
+// Only terrain depths classify a shallow shelf. A ship hull or submerged object
+// can shorten the optical ray without turning a broad offshore basin into clear water.
+// The caller supplies the deepest nearby wet terrain at the same water level.
+// Eligibility scales only authored-opacity relaxation; natural extinction stays intact.
+inline float ClarityEligibility(float terrainDepth,float surroundingDepth,float offshore) {
+    if (!(std::abs(terrainDepth)<=MaximumFiniteInput) || !(std::abs(surroundingDepth)<=MaximumFiniteInput)
+        || !(std::abs(offshore)<=MaximumFiniteInput)) return 0.0f;
+    const float depth=Unit(((std::max)(terrainDepth,0.0f)-ClarityShallowDepth)/(ClarityMaximumDepth-ClarityShallowDepth));
+    const float relief=Unit(((std::max)(surroundingDepth-terrainDepth,0.0f)-ClarityReliefStart)
+        /(ClarityReliefFull-ClarityReliefStart));
+    const float depthWeight=1.0f-depth*depth*(3.0f-2.0f*depth);
+    const float shelfWeight=relief*relief*(3.0f-2.0f*relief);
+    return depthWeight*(1.0f+Unit(offshore)*(shelfWeight-1.0f));
 }
 // Positive movement is toward the camera along its normalized view ray. A finer optical surface
 // may correct raster interpolation, but must never pass the actual scene hit or the camera. The
@@ -49,12 +70,12 @@ inline float OffshoreExtinction(float transparentDepth,float minOpacity) {
     const float remaining=(std::max)(1.0f-Unit(minOpacity),MinimumReferenceTransmission);
     return -std::log(remaining)/ReferenceDepth(transparentDepth);
 }
-inline Rgb Transmission(float path,float riverBlend,float offshoreFactor,float referenceDepth,float opacity) {
+inline Rgb Transmission(float path,float riverBlend,float offshoreFactor,float referenceDepth,float opacity,float clarity=0.0f) {
     path=Path(path);
     const float materialPath=path*(StandingPathScale+(1.0f-StandingPathScale)*Unit(riverBlend));
     // Authored opacity describes extinction per physical world distance. Applying the legacy
     // standing-water multiplier to this term a second time would obscure shallow seas too much.
-    const float authored=path*Unit(offshoreFactor)*OffshoreExtinction(referenceDepth,opacity);
+    const float authored=path*Unit(offshoreFactor)*(1.0f-Unit(clarity))*OffshoreExtinction(referenceDepth,opacity);
     return {std::exp(-(std::min)(materialPath*BaseExtinction.r+authored,MaximumExponent)),
         std::exp(-(std::min)(materialPath*BaseExtinction.g+authored,MaximumExponent)),
         std::exp(-(std::min)(materialPath*BaseExtinction.b+authored,MaximumExponent))};
@@ -138,4 +159,24 @@ inline const char *GetHlslSource() {
 #undef WATER_OPTICAL_RAY_HLSL
 #undef WATER_OPTICAL_HLSL
 }
+inline const char *GetClarityHlslSource() {
+#define WATER_OPTICAL_CLARITY_HLSL(shallow,deep,reliefStart,reliefFull) \
+    "static const float WaterOpticalClarityMaximumDepth=" #deep ";\n" \
+    "float WaterOpticalClarityEligibility(float terrainDepth,float surroundingDepth,float offshore) {\n" \
+    " if (!(abs(terrainDepth)<=WaterOpticalMaximumFiniteInput) || !(abs(surroundingDepth)<=WaterOpticalMaximumFiniteInput) || !(abs(offshore)<=WaterOpticalMaximumFiniteInput)) return 0.0;\n" \
+    " float depth=WaterOpticalUnit((max(terrainDepth,0.0)-" #shallow ")/(" #deep "-" #shallow "));\n" \
+    " float relief=WaterOpticalUnit((max(surroundingDepth-terrainDepth,0.0)-" #reliefStart ")/(" #reliefFull "-" #reliefStart "));\n" \
+    " float depthWeight=1.0-depth*depth*(3.0-2.0*depth),shelfWeight=relief*relief*(3.0-2.0*relief);\n" \
+    " return depthWeight*(1.0+WaterOpticalUnit(offshore)*(shelfWeight-1.0)); }\n"
+#define WATER_OPTICAL_CLARITY_TRANSMISSION(red,green,blue,standing,minDepth,minTransmission,maxExponent,maxFinite) \
+    "float3 WaterClarityTransmission(float path,float riverBlend,float offshoreFactor,float referenceDepth,float opacity,float clarity) {\n" \
+    " path=WaterOpticalPath(path); float materialPath=path*(" #standing "+(1.0-" #standing ")*WaterOpticalUnit(riverBlend));\n" \
+    " float authored=path*WaterOpticalUnit(offshoreFactor)*(1.0-WaterOpticalUnit(clarity))*WaterOpticalOffshoreExtinction(referenceDepth,opacity);\n" \
+    " return exp(-min(materialPath*float3(" #red "," #green "," #blue ")+authored,float3(" #maxExponent "," #maxExponent "," #maxExponent "))); }\n"
+    return WATER_OPTICAL_CLARITY_CONSTANTS(WATER_OPTICAL_CLARITY_HLSL)
+        WATER_OPTICAL_CONSTANTS(WATER_OPTICAL_CLARITY_TRANSMISSION);
+#undef WATER_OPTICAL_CLARITY_TRANSMISSION
+#undef WATER_OPTICAL_CLARITY_HLSL
+}
+
 }

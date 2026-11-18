@@ -44,7 +44,7 @@ inline std::string UniformSource(const char *name,unsigned slot,bool visual_hull
 #define MODERN_WATER_HLSL_UNIFORM(name) "    float4 " #name ";\n"
     source+=MODERN_WATER_MATERIAL_UNIFORMS(MODERN_WATER_HLSL_UNIFORM);
 #undef MODERN_WATER_HLSL_UNIFORM
-    if(sdl) source+="    row_major float4x4 ClipFromWorld;\n";
+    if(sdl) source+="    float4 MaterialOptics;\n    row_major float4x4 ClipFromWorld;\n";
     if(visual_hull) source+="    float4 VisualHullMeta[8];\n";
     source+="};\n";
     if(visual_hull) source+=R"HLSL(

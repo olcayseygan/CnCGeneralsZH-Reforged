@@ -2227,7 +2227,7 @@ static void check_gpu_water_vertex_uniform_order(SdlGpuFrame *frame)
 	const unsigned contactRegister=offsetof(SdlWaterPixelConstants,ContactHullData)/16;
 	const unsigned lastContactRegister=contactRegister+79;
 	const unsigned fillRegister=offsetof(SdlWaterPixelConstants,FoamFillLights)/16;
-	CHECK(contactRegister==100 && fillRegister==180 && sizeof(SdlWaterPixelConstants)==190*16);
+	CHECK(contactRegister==100 && fillRegister==180 && sizeof(SdlWaterPixelConstants)==191*16);
 	std::string block="cbuffer WaterBlock : register(b1,space1) { float4 Water[";
 	block+=std::to_string(sizeof(SdlWaterPixelConstants)/16)+"]; };\n";
 	const std::string output="struct Output { float4 Position:SV_Position; [[vk::location(0)]] float4 Value:TEXCOORD0; };\n";

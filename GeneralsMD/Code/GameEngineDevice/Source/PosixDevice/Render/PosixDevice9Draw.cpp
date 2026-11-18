@@ -24,6 +24,7 @@
 // shadow map) are not A3's.  And D3D9's documented initial states, which the draw is the first to read.
 
 #include "PosixDevice9.h"
+#include "Platform/WaterUnderwaterClarity.h"
 #include "PosixResources9.h"
 #include "SdlConstants.h"
 #include "SdlCreationLog.h"
@@ -568,6 +569,7 @@ void PosixDevice9::Build_Water_Constants(const SdlPixelConstants &pixel_constant
 	memcpy(water.FoamFillLights, PixelShaderConstants[90], sizeof(water.FoamFillLights));
 	memcpy(water.MaterialColor, PixelShaderConstants[ModernWaterMaterial::RegisterColor], sizeof(water.MaterialColor));
 	memcpy(water.MaterialParameters, PixelShaderConstants[ModernWaterMaterial::RegisterParameters], sizeof(water.MaterialParameters));
+	memcpy(water.MaterialOptics, PixelShaderConstants[WaterUnderwaterClarity::Register], sizeof(water.MaterialOptics));
 	if (Water_Foam_History_Available()) {
 		memcpy(water.FoamHistoryArea, PixelShaderConstants[88], sizeof(water.FoamHistoryArea));
 		memcpy(water.FoamHistoryParameters, PixelShaderConstants[89], sizeof(water.FoamHistoryParameters));

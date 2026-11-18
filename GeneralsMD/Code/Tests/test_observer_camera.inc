@@ -169,7 +169,92 @@ static DirectorEvent directorEvent( UnsignedInt id, Real weight, Bool superweapo
 	event.until = 2000;
 	event.weight = weight;
 	event.superweapon = superweapon;
+	event.landed = TRUE;
+	event.looksOnly = FALSE;
+	event.landsAt = 0;
+	event.shown = FALSE;
+	event.power = NULL;
+	event.sourceThing = NULL;
 	return event;
+}
+
+TEST(a_power_that_only_looks_never_takes_the_camera)
+{
+	// the owner's rule: a scan never cuts, nor anything that hurts nobody where it is aimed
+	CHECK( ObserverCamera_powerLooksOnly( SPECIAL_SPY_SATELLITE ) );
+	CHECK( ObserverCamera_powerLooksOnly( SPECIAL_RADAR_VAN_SCAN ) );
+	CHECK( ObserverCamera_powerLooksOnly( SPECIAL_SPY_DRONE ) );
+	CHECK( ObserverCamera_powerLooksOnly( SPECIAL_CASH_HACK ) );
+	CHECK( ObserverCamera_powerLooksOnly( SPECIAL_LEAFLET_DROP ) );
+	CHECK( ObserverCamera_powerLooksOnly( SPECIAL_PARADROP_AMERICA ) );
+	// an EMP brings down the aircraft under it
+	CHECK( !ObserverCamera_powerLooksOnly( SPECIAL_EMP_PULSE ) );
+	CHECK( !ObserverCamera_powerLooksOnly( SPECIAL_CARPET_BOMB ) );
+	CHECK( !ObserverCamera_powerLooksOnly( SPECIAL_ARTILLERY_BARRAGE ) );
+	CHECK( !ObserverCamera_powerLooksOnly( SPECIAL_A10_THUNDERBOLT_STRIKE ) );
+	CHECK( !ObserverCamera_powerLooksOnly( SPECIAL_PARTICLE_UPLINK_CANNON ) );
+
+	// a spy satellite over the central battle: the fight round its target lands it no more, with a
+	// timeline or without (S1-A1 special power 3, frame 3603)
+	DirectorEvent scan = directorEvent( 1, 1.0f, FALSE );
+	scan.landed = FALSE;
+	scan.looksOnly = TRUE;
+	CHECK( !ObserverCamera_landsNow( scan, 1100, FALSE, TRUE ) );
+	CHECK( !ObserverCamera_landsNow( scan, 1100, TRUE, TRUE ) );
+	scan.landsAt = 1100;
+	CHECK( !ObserverCamera_landsNow( scan, 1100, TRUE, TRUE ) );
+}
+
+TEST(a_strike_lands_when_the_scout_saw_it_hit_and_without_one_on_a_fight_near_its_target)
+{
+	DirectorEvent strike = directorEvent( 1, 1.0f, FALSE );
+	strike.landed = FALSE;
+	const UnsignedInt preroll = 4 * LOGICFRAMES_PER_SECOND;
+	// the scouting pass saw its bombs fall 20 seconds after the launch: it lands from the pre-roll before
+	strike.landsAt = 1000 + 20 * LOGICFRAMES_PER_SECOND;
+	CHECK( !ObserverCamera_landsNow( strike, strike.landsAt - preroll - 1, TRUE, TRUE ) );
+	CHECK( ObserverCamera_landsNow( strike, strike.landsAt - preroll, TRUE, FALSE ) );
+	// the scouting pass saw it land nowhere: no fight beside its target lands it
+	strike.landsAt = 0;
+	CHECK( !ObserverCamera_landsNow( strike, 1100, TRUE, TRUE ) );
+	// with no timeline a fight near the target is the landing
+	CHECK( !ObserverCamera_landsNow( strike, 1100, FALSE, FALSE ) );
+	CHECK( ObserverCamera_landsNow( strike, 1100, FALSE, TRUE ) );
+}
+
+TEST(a_power_off_the_picture_gets_pane_one_and_a_superweapon_takes_it_from_a_lighter_one)
+{
+	// a particle cannon shown, and an artillery barrage fired the same frame across the base: inside a
+	// split's distance of the cannon it got no pane and was missed, though the cannon's picture did not
+	// reach it
+	std::vector< DirectorEvent > events;
+	events.push_back( directorEvent( 1, 5.0f, TRUE ) );
+	events.push_back( directorEvent( 2, 1.0f, FALSE ) );
+	events[ 1 ].target.x = 3700.0f;
+	const Coord2D place = events[ 0 ].target;
+	const Real screen = 1200.0f;
+	CHECK( ObserverCamera_offPicture( events[ 1 ].target, place, screen ) );
+	CHECK_EQ( ObserverCamera_secondPower( events, 1, 0, place, screen ), 2u );
+	// one on the picture already needs no pane, nor one still to land, nor the one shown
+	events[ 1 ].target.x = 3300.0f;
+	CHECK( !ObserverCamera_offPicture( events[ 1 ].target, place, screen ) );
+	CHECK_EQ( ObserverCamera_secondPower( events, 1, 0, place, screen ), 0u );
+	events[ 1 ].target.x = 3700.0f;
+	events[ 1 ].landed = FALSE;
+	CHECK_EQ( ObserverCamera_secondPower( events, 1, 0, place, screen ), 0u );
+	events[ 1 ].landed = TRUE;
+	CHECK_EQ( ObserverCamera_secondPower( events, 2, 0, events[ 1 ].target, screen ), 1u );
+	// before the picture's ground is measured, the gather radius
+	CHECK( ObserverCamera_offPicture( events[ 1 ].target, place, 0.0f ) );
+	// pane 1 keeps its power against another as big, and gives it up to a superweapon: two strikes
+	// holding the panes left a superweapon fired meanwhile unfilmed until one of them was over
+	events.push_back( directorEvent( 3, 1.0f, FALSE ) );
+	events[ 2 ].target.x = 6000.0f;
+	CHECK_EQ( ObserverCamera_secondPower( events, 1, 0, place, screen ), 3u );
+	CHECK_EQ( ObserverCamera_secondPower( events, 1, 2, place, screen ), 2u );
+	events[ 2 ].weight = 5.0f;
+	events[ 2 ].superweapon = TRUE;
+	CHECK_EQ( ObserverCamera_secondPower( events, 1, 2, place, screen ), 3u );
 }
 
 TEST(the_director_keeps_its_event_when_none_may_be_shown_any_more)
@@ -941,20 +1026,35 @@ TEST(a_special_power_is_worth_filming_only_once_it_hurts_somebody_where_it_was_a
 	ObserverCamera_markLandings( moments, hits, 1950 );
 	CHECK( !ObserverCamera_worthFilming( moments[ 0 ] ) );
 	CHECK( ObserverCamera_worthFilming( moments[ 1 ] ) );
-	// a hit long after the launch is somebody else's
+	CHECK_EQ( moments[ 1 ].last, 1950u );
+	// a hit more than thirty seconds after the launch is somebody else's
 	hits.push_back( fightHit( 2000.0f, 500.0f, 3 ) );
-	ObserverCamera_markLandings( moments, hits, 1800 + 13 * LOGICFRAMES_PER_SECOND );
+	ObserverCamera_markLandings( moments, hits, 1800 + 31 * LOGICFRAMES_PER_SECOND );
 	CHECK( !ObserverCamera_worthFilming( moments[ 0 ] ) );
+	// but a strike flown in from the map's edge lands twenty seconds on, on a building or anything else;
+	// waiting twelve seconds missed it
+	ObserverCamera_markLandings( moments, hits, 1800 + 20 * LOGICFRAMES_PER_SECOND );
+	CHECK( ObserverCamera_worthFilming( moments[ 0 ] ) );
+	CHECK_EQ( moments[ 0 ].last, 1800u + 20 * LOGICFRAMES_PER_SECOND );
+	// and its first hit is its landing, which a later one does not move
+	ObserverCamera_markLandings( moments, hits, 1800 + 25 * LOGICFRAMES_PER_SECOND );
+	CHECK_EQ( moments[ 0 ].last, 1800u + 20 * LOGICFRAMES_PER_SECOND );
 
-	// the filming pass finds the power by its frame and its target, written without decimals
+	// the filming pass finds the power by its frame and its target, written without decimals, and
+	// learns when it lands; a superweapon from its launch
 	Coord2D at;
 	at.x = 2000.4f;
 	at.y = 3000.3f;
-	CHECK( ObserverCamera_powerLands( moments, 1800, at ) );
+	CHECK_EQ( ObserverCamera_powerLandsAt( moments, 1800, at ), 1950u );
 	at.y = 500.0f;
-	CHECK( !ObserverCamera_powerLands( moments, 1800, at ) );
+	CHECK_EQ( ObserverCamera_powerLandsAt( moments, 1800, at ), 1800u + 20 * LOGICFRAMES_PER_SECOND );
 	at.y = 3000.0f;
-	CHECK( !ObserverCamera_powerLands( moments, 1801, at ) );
+	CHECK_EQ( ObserverCamera_powerLandsAt( moments, 1801, at ), 0u );
+	at.y = 5000.0f;
+	CHECK_EQ( ObserverCamera_powerLandsAt( moments, 1800, at ), 1800u );
+	moments[ 0 ].peak = 0.0f;
+	at.y = 500.0f;
+	CHECK_EQ( ObserverCamera_powerLandsAt( moments, 1800, at ), 0u );
 }
 
 TEST(a_hot_fight_the_end_of_the_scouting_run_cut_short_is_still_worth_filming)
@@ -1001,6 +1101,11 @@ TEST(the_director_goes_to_wait_for_a_fight_four_seconds_before_it_starts_superwe
 	// and is passed over where another pane already shows its target, not where it was fired from
 	Coord2D taken = { 7500.0f, 1000.0f };
 	CHECK_EQ( ObserverCamera_prerollMoment( timeline, 1050 - preroll, &taken, 660.0f ), 1 );
+	// a strike that lands twenty seconds after its launch is waited for before it lands, not before
+	// it is fired
+	timeline[ 3 ].last = 1020 + 20 * LOGICFRAMES_PER_SECOND;
+	CHECK_EQ( ObserverCamera_prerollMoment( timeline, 1020 - preroll, NULL, 660.0f ), 0 );
+	CHECK_EQ( ObserverCamera_prerollMoment( timeline, timeline[ 3 ].last - preroll, NULL, 660.0f ), 3 );
 }
 
 TEST(the_director_does_not_wait_for_the_fight_the_other_pane_already_shows)

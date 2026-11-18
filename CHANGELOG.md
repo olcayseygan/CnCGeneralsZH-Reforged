@@ -8,6 +8,12 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## The match film stops missing strikes
+
+- A filmed match (the Bot Cup's camera) missed 21 of the 52 general's powers in one cup match. A carpet bomb or an A-10 strike flies in from the edge of the map and its bombs fall twenty seconds or more after it is called, and the camera gave up on a power that had hit nothing after twelve. It now waits up to thirty seconds, knows from the first run of the match when each strike comes down, and is on the target four seconds before the bombs.
+- A scan never takes the camera, whatever is going on where it looks. A spy satellite over the middle of a battle used to cut away to it as if it were a strike; a radar scan, a spy drone, a cash hack, a leaflet drop, a paradrop or an ambush now only drops its flag under its player's card. The paratroopers' fight takes the camera on its own once it starts.
+- Two powers at once get half the screen each whenever the second lands off the first one's picture. Before, it had to land most of a screen's width further away than that, so an artillery barrage called on the same frame as a superweapon across the same base was in neither half. A superweapon fired while two smaller powers hold both halves takes the second half at once, where it used to wait until one of them was over.
+
 ## Play vs AI online
 
 - The online hub has a PLAY VS AI button under Options. One press starts a 1v1 against a computer player as strong as your AI rating, on a map and seed the server picks. The AI rating is a second rating zerohour.gg keeps beside the ladder's, starting at 0, and the hub shows it left of the button.

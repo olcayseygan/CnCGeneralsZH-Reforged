@@ -259,6 +259,12 @@ static const UnsignedInt CARD_COLLAPSE_FRAMES = ConvertRetailFramesWall( 18U );
 /// was all in for only 51 of them
 static const UnsignedInt WINNER_DELAY_FRAMES = ConvertRetailFramesWall( 24U );
 
+/// a power further than this share of the picture's width of ground from where the director looks is
+/// off its picture, or at its very edge
+static const Real OFF_PICTURE_SHARE = 0.4f;
+
+static Bool within( const Coord2D &a, const Coord2D &b, Real distance );
+
 //-------------------------------------------------------------------------------------------------
 static Bool sameFight( const Coord2D &a, const Coord2D &b )
 {
@@ -403,6 +409,90 @@ Bool ObserverCamera_stayOnEvent( const DirectorEvent *current, const DirectorEve
 UnsignedInt ObserverCamera_eventKeptTo( const DirectorEvent &event, UnsignedInt frame, UnsignedInt more )
 {
 	return min( max( event.until, frame + more ), event.since + EVENT_MOST_FRAMES );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The owner's rule: a scan never cuts.  Nor does any power that hurts nobody where it is aimed: a
+	* paradrop or an ambush brings units whose fight takes the camera on its own once it starts. */
+//-------------------------------------------------------------------------------------------------
+Bool ObserverCamera_powerLooksOnly( SpecialPowerType type )
+{
+	switch( type )
+	{
+		case SPECIAL_SPY_SATELLITE:
+		case SPECIAL_RADAR_VAN_SCAN:
+		case SPECIAL_SPY_DRONE:
+		case SPECIAL_CIA_INTELLIGENCE:
+		case SPECIAL_COMMUNICATIONS_DOWNLOAD:
+		case SPECIAL_CASH_HACK:
+		case SPECIAL_BLACKLOTUS_STEAL_CASH_HACK:
+		case SPECIAL_CASH_BOUNTY:
+		case SPECIAL_LEAFLET_DROP:
+		case EARLY_SPECIAL_LEAFLET_DROP:
+		case SPECIAL_HACKER_DISABLE_BUILDING:
+		case SPECIAL_BLACKLOTUS_DISABLE_VEHICLE_HACK:
+		case SPECIAL_BLACKLOTUS_CAPTURE_BUILDING:
+		case SPECIAL_INFANTRY_CAPTURE_BUILDING:
+		case SPECIAL_DEFECTOR:
+		case SPECIAL_GPS_SCRAMBLER:
+		case SLTH_SPECIAL_GPS_SCRAMBLER:
+		case SPECIAL_DISGUISE_AS_VEHICLE:
+		case SPECIAL_BOOBY_TRAP:
+		case SPECIAL_REPAIR_VEHICLES:
+		case EARLY_SPECIAL_REPAIR_VEHICLES:
+		case SPECIAL_FRENZY:
+		case EARLY_SPECIAL_FRENZY:
+		case SPECIAL_CHANGE_BATTLE_PLANS:
+		case SPECIAL_PARADROP_AMERICA:
+		case INFA_SPECIAL_PARADROP_AMERICA:
+		case SPECIAL_TANK_PARADROP:
+		case SPECIAL_AMBUSH:
+		case SPECIAL_SNEAK_ATTACK:
+		case SPECIAL_CRATE_DROP:
+		case SPECIAL_TERROR_CELL:
+		case SPECIAL_CLEANUP_AREA:
+			return TRUE;
+		default:
+			return FALSE;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ObserverCamera_landsNow( const DirectorEvent &event, UnsignedInt frame, Bool timelineKnown, Bool fightNear )
+{
+	if( event.looksOnly )
+		return FALSE;
+	if( event.landsAt != 0 )
+		return frame + DIRECTOR_PREROLL_FRAMES >= event.landsAt;
+	return !timelineKnown && fightNear;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The gather radius at the least: before the picture's ground is first measured, screenGround is 0. */
+//-------------------------------------------------------------------------------------------------
+Bool ObserverCamera_offPicture( const Coord2D &target, const Coord2D &place, Real screenGround )
+{
+	return !within( target, place, max( DIRECTOR_GATHER_RADIUS, screenGround * OFF_PICTURE_SHARE ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A power only had a pane once it landed further from the shown one than a split's two panes are
+	* apart, which is most of a picture's width again: one fired on a superweapon's frame across the same
+	* base was off the superweapon's picture and inside that distance, and got nothing. */
+//-------------------------------------------------------------------------------------------------
+UnsignedInt ObserverCamera_secondPower( const std::vector< DirectorEvent > &events, UnsignedInt shown, UnsignedInt held,
+	const Coord2D &place, Real screenGround )
+{
+	const DirectorEvent *best = NULL;
+	for( size_t index = 0; index < events.size(); index++ )
+	{
+		const DirectorEvent &event = events[ index ];
+		if( !event.landed || event.id == shown || !ObserverCamera_offPicture( event.target, place, screenGround ) )
+			continue;
+		if( best == NULL || event.weight > best->weight || ( event.weight == best->weight && best->id != held ) )
+			best = &event;
+	}
+	return best != NULL ? best->id : 0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1261,27 +1351,31 @@ void ObserverCamera_markLandings( std::vector< DirectorMoment > &moments, const 
 	for( size_t index = 0; index < moments.size(); index++ )
 	{
 		DirectorMoment &power = moments[ index ];
-		if( !power.power || power.superweapon || power.peak > 0.0f || frame > power.start + EVENT_FRAMES )
+		if( !power.power || power.superweapon || power.peak > 0.0f || frame > power.start + EVENT_MOST_FRAMES )
 			continue;
 		for( size_t hit = 0; hit < hits.size() && power.peak <= 0.0f; hit++ )
-			if( within( hits[ hit ].position, power.target, DIRECTOR_GATHER_RADIUS ) )
-				power.peak = EVENT_WEIGHT;
+		{
+			if( !within( hits[ hit ].position, power.target, DIRECTOR_GATHER_RADIUS ) )
+				continue;
+			power.peak = EVENT_WEIGHT;
+			power.last = frame;
+		}
 	}
 }
 
 //-------------------------------------------------------------------------------------------------
 /** The timeline is written with no decimals, so the scouting pass's target is the one fired on frame
-	* within a unit of at. */
+	* within a unit of at.  A superweapon lands from its launch. */
 //-------------------------------------------------------------------------------------------------
-Bool ObserverCamera_powerLands( const std::vector< DirectorMoment > &timeline, UnsignedInt frame, const Coord2D &at )
+UnsignedInt ObserverCamera_powerLandsAt( const std::vector< DirectorMoment > &timeline, UnsignedInt frame, const Coord2D &at )
 {
 	for( size_t index = 0; index < timeline.size(); index++ )
 	{
 		const DirectorMoment &power = timeline[ index ];
 		if( power.power && power.start == frame && within( power.target, at, 1.0f ) )
-			return ObserverCamera_worthFilming( power );
+			return ObserverCamera_worthFilming( power ) ? max( power.last, power.start ) : 0;
 	}
-	return FALSE;
+	return 0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1303,7 +1397,9 @@ Int ObserverCamera_prerollMoment( const std::vector< DirectorMoment > &timeline,
 	for( size_t index = 0; index < timeline.size(); index++ )
 	{
 		const DirectorMoment &moment = timeline[ index ];
-		if( moment.start <= frame || moment.start > frame + DIRECTOR_PREROLL_FRAMES || !ObserverCamera_worthFilming( moment ) )
+		// a power is waited for when it lands, a strike flown in from the map's edge well after its launch
+		const UnsignedInt begins = moment.power ? max( moment.last, moment.start ) : moment.start;
+		if( begins <= frame || begins > frame + DIRECTOR_PREROLL_FRAMES || !ObserverCamera_worthFilming( moment ) )
 			continue;
 		if( taken != NULL && within( moment.power ? moment.target : moment.place, *taken, apart ) )
 			continue;
@@ -1675,13 +1771,18 @@ void ObserverCamera::noteSpecialPower( const Player *owner, const Coord3D *from,
 	event.target.x = at->x;
 	event.target.y = at->y;
 	event.since = frame;
-	event.until = frame + ( superweapon ? EVENT_SUPERWEAPON_FRAMES : EVENT_FRAMES );
 	event.weight = superweapon ? EVENT_SUPERWEAPON_WEIGHT : EVENT_WEIGHT;
 	event.superweapon = superweapon;
 	// a power that only looks, a spy satellite or a radar scan, hurts nobody and is not filmed: the
-	// director cut to empty ground for every one an Air Force general fired.  The scouting pass knows
-	// which ones land; without it a power waits for its first hit
-	event.landed = superweapon || ObserverCamera_powerLands( m_timeline, frame, event.target );
+	// director cut to empty ground for every one an Air Force general fired, and to a spy satellite
+	// over the central battle in S1-A1.  The scouting pass knows which of the others land and when;
+	// without it a power waits for its first hit
+	event.looksOnly = !superweapon && power != NULL && ObserverCamera_powerLooksOnly( power->getSpecialPowerType() );
+	event.landsAt = event.looksOnly ? 0 : ObserverCamera_powerLandsAt( m_timeline, frame, event.target );
+	event.landed = superweapon || ObserverCamera_landsNow( event, frame, !m_timeline.empty(), FALSE );
+	// one still to land waits for it as long as anything is ever shown
+	event.until = frame + ( superweapon ? EVENT_SUPERWEAPON_FRAMES : event.landed || event.looksOnly ? EVENT_FRAMES : EVENT_MOST_FRAMES );
+	event.shown = FALSE;
 	event.power = power;
 	event.sourceThing = sourceThing;
 	m_events.push_back( event );
@@ -1689,9 +1790,10 @@ void ObserverCamera::noteSpecialPower( const Player *owner, const Coord3D *from,
 	noteFlag( event );
 	if( TheGlobalData->m_directorRecord && power != NULL )
 		DEBUG_LOG(( "OBSCAM frame %u special power %u %s used by player %d at (%.0f,%.0f)%s%s\n", frame, event.id, power->getName().str(),
-			owner->getPlayerIndex(), target.x, target.y, superweapon ? ", superweapon" : "", event.landed ? ", lands" : ", waits for a hit" ));
+			owner->getPlayerIndex(), target.x, target.y, superweapon ? ", superweapon" : "",
+			event.looksOnly ? ", only looks" : event.landed ? ", lands" : event.landsAt != 0 ? ", lands later" : ", waits for a hit" ));
 
-	if( !TheGlobalData->m_directorScoutFile.isEmpty() )
+	if( !TheGlobalData->m_directorScoutFile.isEmpty() && !event.looksOnly )
 	{
 		DirectorMoment moment;
 		moment.start = frame;
@@ -1845,8 +1947,16 @@ void ObserverCamera::dropOldEvents( UnsignedInt frame )
 	size_t kept = 0;
 	for( size_t index = 0; index < m_events.size(); index++ )
 	{
-		if( frame < m_events[ index ].until )
-			m_events[ kept++ ] = m_events[ index ];
+		const DirectorEvent &event = m_events[ index ];
+		if( frame < event.until )
+		{
+			m_events[ kept++ ] = event;
+			continue;
+		}
+		// what the film made of each power, so a run's log counts the ones it missed
+		if( TheGlobalData->m_directorRecord && event.power != NULL && !event.looksOnly )
+			DEBUG_LOG(( "OBSCAM frame %u special power %u %s over: %s\n", frame, event.id, event.power->getName().str(),
+				event.shown ? "shown" : event.landed ? "landed and missed" : "never landed" ));
 	}
 	m_events.resize( kept );
 }
@@ -2405,11 +2515,11 @@ Bool ObserverCamera::updateSplit( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** -directorrecord: two special powers landing far apart at once split the picture, pane 0 on the one
-	* directorPlace shows and pane 1 on the other, at once and however recently the last split went;
-	* the rests and holds keep only fights from splitting too often.  A split already up for a fight
-	* is taken over where it stands.  It goes when either power is over.  TRUE while it decides the
-	* split, which no fight's rule then looks at. */
+/** -directorrecord: two special powers landing off each other's picture at once split the picture,
+	* pane 0 on the one directorPlace shows and pane 1 on the other, at once and however recently the last
+	* split went; the rests and holds keep only fights from splitting too often.  A split already up for
+	* a fight is taken over where it stands.  It goes when either power is over.  TRUE while it decides
+	* the split, which no fight's rule then looks at. */
 //-------------------------------------------------------------------------------------------------
 Bool ObserverCamera::updateEventSplit( void )
 {
@@ -2431,9 +2541,10 @@ Bool ObserverCamera::updateEventSplit( void )
 	if( !m_eventSplit || !m_split )
 	{
 		m_splitApart = splitApart( second->target );
-		DEBUG_LOG(( "OBSCAM frame %u split on for two special powers, pane 0 power %u at (%.0f,%.0f), pane 1 power %u at (%.0f,%.0f), %.0f apart of %.0f needed%s\n",
-			frame, first->id, m_place.x, m_place.y, second->id, second->target.x, second->target.y,
-			sqrtf( distanceSquared( m_place, second->target ) ), m_splitApart, m_split ? ", over the split up" : "" ));
+		DEBUG_LOG(( "OBSCAM frame %u split on for two special powers, pane 0 power %u %s at (%.0f,%.0f), pane 1 power %u %s at (%.0f,%.0f), %.0f apart%s\n",
+			frame, first->id, first->power != NULL ? first->power->getName().str() : "warhead", m_place.x, m_place.y, second->id,
+			second->power != NULL ? second->power->getName().str() : "warhead", second->target.x, second->target.y,
+			sqrtf( distanceSquared( m_place, second->target ) ), m_split ? ", over the split up" : "" ));
 		m_eventSplit = TRUE;
 		m_split = TRUE;
 		m_splitChanged = frame;
@@ -3288,7 +3399,6 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 	// land on his things count, the way only his fights do
 	dropOldEvents( frame );
 	DirectorEvent *best = NULL;
-	std::vector< DirectorEvent * > landed;
 	for( size_t index = 0; index < m_events.size(); index++ )
 	{
 		DirectorEvent &event = m_events[ index ];
@@ -3296,27 +3406,33 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 		if( event.owner != narrowTo && narrowTo != NULL && ObserverCamera_heatAround( sights, event.target, &middle ) <= 0.0f )
 			continue;
 		// hits at the target keep it going: the missiles arriving, the bombs, the fires after
-		if( frame >= event.since + EVENT_LAUNCH_FRAMES && ObserverCamera_heatAround( hits, event.target, &middle ) > 0.0f )
+		if( event.landed && frame >= event.since + EVENT_LAUNCH_FRAMES && ObserverCamera_heatAround( hits, event.target, &middle ) > 0.0f )
 			event.until = ObserverCamera_eventKeptTo( event, frame, EVENT_AFTERMATH_FRAMES );
-		if( !event.landed && ObserverCamera_heatAround( fights, event.target, &middle ) > 0.0f )
+		// one landing late, a strike flown in from the map's edge, is shown from when it lands
+		if( !event.landed && ObserverCamera_landsNow( event, frame, !m_timeline.empty(), ObserverCamera_heatAround( fights, event.target, &middle ) > 0.0f ) )
+		{
 			event.landed = TRUE;
+			event.since = frame;
+			event.until = frame + EVENT_FRAMES;
+			if( TheGlobalData->m_directorRecord && event.power != NULL )
+				DEBUG_LOG(( "OBSCAM frame %u special power %u %s lands\n", frame, event.id, event.power->getName().str() ));
+		}
 		if( !event.landed )
 			continue;
-		landed.push_back( &event );
 		if( best == NULL || event.weight >= best->weight )
 			best = &event;
 	}
 	// a power takes the camera from anything the moment it lands, settled or not: waiting out the
 	// settle, S1-A1 showed special power 3 three seconds after it hit.  Two at once each keep their pane
-	// while both go on, the one shown first in pane 0 and the new one in pane 1; the heavier taking pane
-	// 0 would swap the two panes' pictures
+	// while both go on, the one shown first in pane 0 and the other in pane 1; the heavier taking pane 0
+	// would swap the two panes' pictures
 	const Bool splits = TheGlobalData->m_directorRecord && narrowTo == NULL;
 	DirectorEvent *current = m_placeValid && m_placeKind == PLACE_EVENT ? findEvent( m_placeEvent ) : NULL;
-	DirectorEvent *second = m_eventSplit && current != NULL ? findEvent( m_eventSecond ) : NULL;
+	const Bool split = m_eventSplit && current != NULL && findEvent( m_eventSecond ) != NULL;
 	const Bool bestSplitsOff = splits && current != NULL && best != NULL && best != current
-		&& !within( best->target, current->target, splitApart( best->target ) );
+		&& ObserverCamera_offPicture( best->target, current->target, m_screenGround );
 	DirectorEvent *shown = NULL;
-	if( second != NULL || bestSplitsOff || ObserverCamera_stayOnEvent( current, best ) )
+	if( split || bestSplitsOff || ObserverCamera_stayOnEvent( current, best ) )
 		shown = current;
 	else if( best != NULL )
 	{
@@ -3330,25 +3446,23 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 		m_placeValid = TRUE;
 		shown = best;
 	}
+	const UnsignedInt heldSecond = m_eventSecond;
 	m_eventSecond = 0;
 	if( shown != NULL )
 	{
 		m_place = shown->target;
-		// -directorrecord: another power landing far from it at the same time gets a pane of its own,
-		// whatever keeps fights from splitting
+		shown->shown = TRUE;
+		// -directorrecord: the heaviest other power landing off its picture at the same time gets a pane
+		// of its own, whatever keeps fights from splitting
 		if( splits )
+			m_eventSecond = ObserverCamera_secondPower( m_events, shown->id, heldSecond, m_place, m_screenGround );
+		DirectorEvent *second = findEvent( m_eventSecond );
+		if( second != NULL )
 		{
-			if( second != NULL && within( second->target, m_place, splitApart( second->target ) * SPLIT_SAME_GROUND_SHARE ) )
-				second = NULL;
-			if( second == NULL && bestSplitsOff )
-				second = best;
-			for( size_t index = 0; index < landed.size() && second == NULL; index++ )
-			{
-				DirectorEvent *other = landed[ index ];
-				if( other != shown && !within( other->target, m_place, splitApart( other->target ) ) )
-					second = other;
-			}
-			m_eventSecond = second != NULL ? second->id : 0;
+			second->shown = TRUE;
+			if( heldSecond != 0 && m_eventSecond != heldSecond )
+				DEBUG_LOG(( "OBSCAM frame %u pane 1 to special power %u %s at (%.0f,%.0f)\n", frame, second->id,
+					second->power != NULL ? second->power->getName().str() : "warhead", second->target.x, second->target.y ));
 		}
 		*place = m_place;
 		return TRUE;
@@ -3364,7 +3478,8 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 	// fight that has settled when it is clearly bigger, and from anything for a superweapon's silo
 	if( m_placeValid && m_placeKind == PLACE_UPCOMING )
 	{
-		if( frame < m_timeline[ m_placeMoment ].start )
+		const DirectorMoment &waited = m_timeline[ m_placeMoment ];
+		if( frame < ( waited.power ? max( waited.last, waited.start ) : waited.start ) )
 		{
 			*place = m_place;
 			return TRUE;
@@ -3385,7 +3500,8 @@ Bool ObserverCamera::directorPlace( const Player *narrowTo, Coord2D *place )
 			// a power is waited for where it lands, not where it is fired from
 			const Coord2D &waitAt = moment.power ? moment.target : moment.place;
 			DEBUG_LOG(( "OBSCAM frame %u pre-roll to %s at frame %u (%.0f,%.0f) peak %.1f\n", frame,
-				moment.superweapon ? "superweapon" : moment.power ? "special power" : "fight", moment.start, waitAt.x, waitAt.y, moment.peak ));
+				moment.superweapon ? "superweapon" : moment.power ? "special power" : "fight", moment.power ? max( moment.last, moment.start ) : moment.start,
+				waitAt.x, waitAt.y, moment.peak ));
 			m_place = waitAt;
 			m_placeKind = PLACE_UPCOMING;
 			m_placeHeight = 0.0f;

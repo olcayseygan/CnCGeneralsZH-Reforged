@@ -24,9 +24,10 @@
 // each hit counted by what the thing hit cost and more for a kill or a superweapon, and stays there
 // a while before it looks for a bigger fight.  A special power used anywhere outranks any fight and
 // takes the camera at once: it is shown where it lands until the dust settles, for 30 seconds at the
-// most, a laser followed along its sweep, and two landing far apart at once split a recording's
-// picture a pane each.  Hits on infantry count for a quarter, so a skirmish of riflemen rarely
-// takes the camera from tanks or buildings.  The camera glides between places on a spring and only cuts across
+// most, a laser followed along its sweep, and one landing off the picture while another is shown
+// splits a recording's picture a pane each.  A power that only looks or hurts nobody, a spy
+// satellite, a radar scan, a paradrop, never takes the camera.  Hits on infantry count for a
+// quarter, so a skirmish of riflemen rarely takes the camera from tanks or buildings.  The camera glides between places on a spring and only cuts across
 // most of a map, and stops short of a place that would put ground off the map on the screen.  Over
 // a wide fight it rises above the watcher's own height, which the wheel still moves, and comes back
 // down to it when the camera goes elsewhere or is taken back.  With no fight on it goes round the armies on the
@@ -53,6 +54,7 @@
 
 #include "Common/AsciiString.h"
 #include "Common/GameCommon.h"
+#include "Common/SpecialPowerType.h"
 #include "GameClient/Color.h"
 #include "GameClient/View.h"
 
@@ -90,9 +92,29 @@ struct DirectorEvent
 	Real weight;
 	Bool superweapon;
 	Bool landed;		///< it hurt somebody where it was aimed: a superweapon from the start, any other once a hit is seen there
+	Bool looksOnly;	///< a power that hurts nobody, a scan or a paradrop, which never lands
+	UnsignedInt landsAt;	///< the frame the scouting pass saw its first hit at its target, 0 when it saw none
+	Bool shown;			///< the director's picture or a split's pane has been on it
 	const SpecialPowerTemplate *power;	///< the power used; NULL for a warhead no power sent
 	const ThingTemplate *sourceThing;		///< what it was fired from
 };
+
+/// whether a power of this type only looks or hurts nobody where it is aimed: a spy satellite, a radar
+/// scan, a spy drone, a cash hack, a leaflet drop, a paradrop, an ambush.  Such a power never takes the camera,
+/// whatever fight goes on round its target; its flag still hangs under its player's card
+Bool ObserverCamera_powerLooksOnly( SpecialPowerType type );
+/// whether event, not landed yet, lands on frame: never for a power that only looks; with the frame
+/// the scouting pass saw it hit, from DIRECTOR_PREROLL_FRAMES before it; with no timeline at all, once
+/// a fight is near its target (fightNear).  A power the scouting pass saw land nowhere never does
+Bool ObserverCamera_landsNow( const DirectorEvent &event, UnsignedInt frame, Bool timelineKnown, Bool fightNear );
+/// whether a power landing at target is off the picture the director shows round place: further than
+/// a share of screenGround, the ground the whole picture spans across its middle row
+Bool ObserverCamera_offPicture( const Coord2D &target, const Coord2D &place, Real screenGround );
+/// -directorrecord: the id of the landed power, not shown, landing off the picture round place, that a
+/// split's pane 1 shows beside shown.  The heaviest, so a superweapon fired while two powers hold the
+/// panes takes pane 1 at once; of equals held, the one pane 1 shows now, then the latest.  0 for none
+UnsignedInt ObserverCamera_secondPower( const std::vector< DirectorEvent > &events, UnsignedInt shown, UnsignedInt held,
+	const Coord2D &place, Real screenGround );
 
 /// -directorrecord's broadcast shows some things one at a time from a queue: a special power's or a
 /// bought upgrade's flag under its player's card in the score bar, and a defeated player's banner.
@@ -134,9 +156,9 @@ Real ObserverCamera_easeBetween( Real progress, Real from, Real to );
 /// filming, so the filming pass can be there before it starts.  A fight runs from the scan it was
 /// first hot on, start, to the last, starting at place and last seen at target; peak is its hottest
 /// scan and sides the mask of every player who dealt or took a hit in it.  A special power is a
-/// moment of one frame fired from place at target, peak its weight against other powers; a power
-/// that is not a superweapon has 0 until a hit is seen where it was aimed, so a spy satellite or a
-/// radar scan stays at 0
+/// moment fired on start from place at target, peak its weight against other powers; a power that is
+/// not a superweapon has 0 until a hit is seen where it was aimed, and last is the frame that hit was
+/// seen on, start until then.  A power that only looks is not written down at all
 struct DirectorMoment
 {
 	UnsignedInt start;
@@ -165,12 +187,13 @@ void ObserverCamera_trackFights( std::vector< DirectorMoment > &fights, const st
 /// whether a moment is worth the camera's time: a superweapon, any other special power that hurt
 /// somebody where it was aimed, and a fight that got hot enough and lasted.  The rest fizzled
 Bool ObserverCamera_worthFilming( const DirectorMoment &moment );
-/// the scouting pass's special powers on frame, each scan up to EVENT_FRAMES after its launch: one a
-/// hit of hits lands within the gather radius of the target of has landed
+/// the scouting pass's special powers on frame, each scan up to EVENT_MOST_FRAMES after its launch:
+/// one a hit of hits lands within the gather radius of the target of has landed, on frame.  A strike
+/// flown in from the map's edge lands well after its launch, and twelve seconds missed most of them
 void ObserverCamera_markLandings( std::vector< DirectorMoment > &moments, const std::vector< DirectorFightHit > &hits, UnsignedInt frame );
-/// whether the special power fired on frame at at is one the scouting pass saw land; FALSE for one
-/// it did not see, so a match it did not scout waits for the hits
-Bool ObserverCamera_powerLands( const std::vector< DirectorMoment > &timeline, UnsignedInt frame, const Coord2D &at );
+/// the frame the scouting pass saw the special power fired on frame at at land, 0 for one it did not
+/// see land, so a match it did not scout waits for the hits
+UnsignedInt ObserverCamera_powerLandsAt( const std::vector< DirectorMoment > &timeline, UnsignedInt frame, const Coord2D &at );
 /// whether the timeline has a fight worth filming near place, going on at frame or beginning within
 /// the pre-roll, that lasts to until and peaked at least leastPeak, leaving out any that is also near
 /// besides, the place another pane already shows (NULL for none)
@@ -183,7 +206,7 @@ void ObserverCamera_closeTimeline( std::vector< DirectorMoment > &moments, Unsig
 /// the moment the director goes to wait at on frame: of the moments worth filming that begin within the
 /// pre-roll after frame, a superweapon first, then any other special power, then the hottest fight,
 /// leaving out any within apart of taken, the place another pane already shows (NULL for none).  A
-/// power is waited for where it lands.  -1 for none
+/// power is waited for where and when it lands.  -1 for none
 Int ObserverCamera_prerollMoment( const std::vector< DirectorMoment > &timeline, UnsignedInt frame, const Coord2D *taken, Real apart );
 /// whether the fight going on at place on frame is one the scouting pass saw fizzle, which the
 /// director does not cut to.  FALSE where the pass saw nothing, so a match it did not scout is
@@ -607,7 +630,7 @@ private:
 	Real m_placeHeight;							///< how much higher than the watcher's own the place is watched from
 	Real m_placePeak;								///< the hottest the fight held has been since the director came to it
 	UnsignedInt m_placeEvent;				///< the id of the event the place is, while it is one
-	UnsignedInt m_eventSecond;			///< another event landing far from that one at the same time, 0 for none; the split's pane 1
+	UnsignedInt m_eventSecond;			///< another event landing off that one's picture at the same time, 0 for none; the split's pane 1
 	Bool m_eventSplit;							///< the split up is the two events', which no rest or hold of a fight's split keeps down
 	PlayerMaskType m_eventPaneSides[ 2 ];	///< who used each of those two
 	std::vector< Coord2D > m_seen;	///< the last few sights, oldest first, not gone back to while there is another

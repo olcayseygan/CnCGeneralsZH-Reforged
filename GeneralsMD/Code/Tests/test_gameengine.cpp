@@ -988,6 +988,161 @@ TEST(patch_set_naming_a_missing_weapon_or_armor_is_skipped)
 	}
 }
 
+/* The load-time reskin guard must distinguish authored RemoveModule operations from lost
+   copied behaviors. Its type-based replacement compatibility still applies to every source tag. */
+TEST(reskin_module_guard_requires_successful_tag_provenance)
+{
+	CHECK( bootOnce() );
+	GlobalData *savedGlobals = TheWritableGlobalData;
+	if (!savedGlobals) TheWritableGlobalData = NEW GlobalData;
+	ThingTemplate *owner = newInstance(ThingTemplate);
+	ModuleInfo source;
+	source.addModuleInfo(owner, "DestroyDie", "First", NULL, MODULEINTERFACE_DIE, FALSE);
+	source.addModuleInfo(owner, "DestroyDie", "Second", NULL, MODULEINTERFACE_DIE, FALSE);
+	ModuleInfo have = source;
+	AsciiString removed;
+	CHECK( have.clearModuleDataWithTag("First", removed, TRUE) );
+	CHECK( have.missingInheritedTypes(source.getInheritedModules()).isEmpty() ); // another compatible type remains
+	CHECK( have.clearModuleDataWithTag("Second", removed) ); // accidental loss, not authored
+	CHECK_STR( have.missingInheritedTypes(source.getInheritedModules()).str(), " DestroyDie" );
+	CHECK( !have.clearModuleDataWithTag("Second", removed, TRUE) ); // a missing tag grants nothing
+	CHECK_STR( have.missingInheritedTypes(source.getInheritedModules()).str(), " DestroyDie" );
+
+	// A same-type replacement with another tag remains compatible with the original guard.
+	have.addModuleInfo(owner, "DestroyDie", "Replacement", NULL, MODULEINTERFACE_DIE, FALSE);
+	CHECK( have.missingInheritedTypes(source.getInheritedModules()).isEmpty() );
+	CHECK( have.clearModuleDataWithTag("Replacement", removed) );
+	CHECK_STR( have.missingInheritedTypes(source.getInheritedModules()).str(), " DestroyDie" );
+	owner->deleteInstance();
+	if (!savedGlobals) { delete TheWritableGlobalData; TheWritableGlobalData = NULL; }
+}
+
+TEST(reskin_module_guard_copies_and_revokes_removal_provenance)
+{
+	CHECK( bootOnce() );
+	GlobalData *savedGlobals = TheWritableGlobalData;
+	if (!savedGlobals) TheWritableGlobalData = NEW GlobalData;
+	ThingTemplate *owner = newInstance(ThingTemplate);
+	ModuleInfo source;
+	source.addModuleInfo(owner, "DestroyDie", "Original", NULL, MODULEINTERFACE_DIE, FALSE);
+	ModuleInfo have = source;
+	AsciiString removed;
+	CHECK( have.clearModuleDataWithTag("Original", removed, TRUE) );
+	CHECK( have.missingInheritedTypes(source.getInheritedModules()).isEmpty() );
+	ModuleInfo copied = have;
+	CHECK( copied.missingInheritedTypes(source.getInheritedModules()).isEmpty() );
+	copied.clear();
+	CHECK_STR( copied.missingInheritedTypes(source.getInheritedModules()).str(), " DestroyDie" );
+	CHECK( have.missingInheritedTypes(source.getInheritedModules()).isEmpty() ); // copied metadata is independent
+	have.addModuleInfo(owner, "DestroyDie", "Original", NULL, MODULEINTERFACE_DIE, FALSE);
+	CHECK( have.clearModuleDataWithTag("Original", removed) );
+	CHECK_STR( have.missingInheritedTypes(source.getInheritedModules()).str(), " DestroyDie" ); // re-add revoked exemption
+	owner->deleteInstance();
+	if (!savedGlobals) { delete TheWritableGlobalData; TheWritableGlobalData = NULL; }
+}
+
+TEST(reskin_authored_remove_survives_overrides_but_resets_at_a_new_source)
+{
+	CHECK( bootOnce() );
+	GlobalData *savedGlobals = TheWritableGlobalData;
+	if (!savedGlobals) TheWritableGlobalData = NEW GlobalData;
+	if (!TheModuleFactory) { TheModuleFactory = NEW ModuleFactory; TheModuleFactory->init(); }
+	ThingFactory *savedFactory = TheThingFactory;
+	ThingFactory factory;
+	TheThingFactory = &factory;
+	writeFile(TEST_INI,
+		"Object ReskinRemovalSource\n"
+		"  Body = ActiveBody BodyTag\n    MaxHealth = 100\n  End\n"
+		"  Behavior = DestroyDie RemovedTag\n  End\nEnd\n"
+		"ObjectReskin ReskinRemovalChild ReskinRemovalSource\nEnd\n"
+		"ObjectReskin ReskinRemovalSibling ReskinRemovalSource\nEnd\n");
+	CHECK( loadIni(TEST_INI) );
+	writeFile(TEST_INI,
+		"Object ReskinRemovalChild\n  RemoveModule RemovedTag\n  RemoveModule MissingTag\nEnd\n");
+	INI patch;
+	patch.load(AsciiString(TEST_INI), INI_LOAD_MULTIFILE, NULL);
+	const ThingTemplate *source = factory.findTemplate("ReskinRemovalSource");
+	const ThingTemplate *child = factory.findTemplate("ReskinRemovalChild");
+	const ThingTemplate *sibling = factory.findTemplate("ReskinRemovalSibling");
+	CHECK( source && child && sibling );
+	if (source && child && sibling)
+	{
+		CHECK( child->getMissingReskinBehaviorTypes().isEmpty() );
+		ModuleInfo &siblingModules = const_cast<ModuleInfo&>(sibling->getBehaviorModuleInfo());
+		AsciiString removed;
+		CHECK( siblingModules.clearModuleDataWithTag("RemovedTag", removed) );
+		CHECK_STR( sibling->getMissingReskinBehaviorTypes().str(), " DestroyDie" );
+		writeFile(TEST_INI, "Object ReskinRemovalChild\n  BuildCost = 200\nEnd\n");
+		INI overrideIni;
+		overrideIni.load(AsciiString(TEST_INI), INI_LOAD_CREATE_OVERRIDES, NULL);
+		const ThingTemplate *overridden = static_cast<const ThingTemplate*>(child->getFinalOverride());
+		CHECK( overridden != child );
+		CHECK( overridden->getMissingReskinBehaviorTypes().isEmpty() );
+		CHECK( overridden->friend_getReskinnedFrom() == source );
+		factory.reset();
+		CHECK( child->getMissingReskinBehaviorTypes().isEmpty() );
+
+		const std::vector<ModuleInfo::InheritedModule> original = source->getBehaviorModuleInfo().getInheritedModules();
+		// Talents may add a parent-only behavior after its faction reskins were copied.
+		writeFile(TEST_INI, "Object ReskinRemovalSource\n  AddModule\n    Behavior = DestroyDie LateParentTag\n    End\n  End\nEnd\n");
+		INI latePatch;
+		latePatch.load(AsciiString(TEST_INI), INI_LOAD_MULTIFILE, NULL);
+		CHECK( child->getMissingReskinBehaviorTypes().isEmpty() );
+		CHECK_STR( sibling->getMissingReskinBehaviorTypes().str(), " DestroyDie" ); // actual inherited loss still fails
+
+		ThingTemplate *rebased = newInstance(ThingTemplate);
+		rebased->copyFrom(child);
+		CHECK( rebased->friend_getReskinnedFrom() == NULL );
+		CHECK_STR( rebased->getBehaviorModuleInfo().missingInheritedTypes(original).str(), " DestroyDie" );
+		rebased->setReskinnedFrom(child);
+		CHECK( rebased->getMissingReskinBehaviorTypes().isEmpty() );
+		rebased->deleteInstance();
+		writeFile(TEST_INI, "ObjectReskin ReskinRemovalGrandchild ReskinRemovalChild\nEnd\n");
+		CHECK( loadIni(TEST_INI) );
+		const ThingTemplate *grandchild = factory.findTemplate("ReskinRemovalGrandchild");
+		CHECK( grandchild && grandchild->friend_getReskinnedFrom() == child );
+		if (grandchild)
+			CHECK( grandchild->getMissingReskinBehaviorTypes().isEmpty() );
+	}
+	TheThingFactory = savedFactory;
+	if (!savedGlobals) { delete TheWritableGlobalData; TheWritableGlobalData = NULL; }
+	remove(TEST_INI);
+}
+
+// The parent can gain behaviors in later patches. They were never copied into an
+// already-created reskin, so the startup guard must compare the copy-time snapshot.
+TEST(reskin_later_parent_addition_is_not_an_inherited_obligation)
+{
+	CHECK( bootOnce() );
+	GlobalData *savedGlobals = TheWritableGlobalData;
+	if (!savedGlobals) TheWritableGlobalData = NEW GlobalData;
+	if (!TheModuleFactory) { TheModuleFactory = NEW ModuleFactory; TheModuleFactory->init(); }
+	ThingFactory *savedFactory = TheThingFactory;
+	ThingFactory factory;
+	TheThingFactory = &factory;
+	writeFile(TEST_INI,
+		"Object ReskinLateSource\n  Body = ActiveBody BodyTag\n    MaxHealth = 100\n  End\nEnd\n"
+		"ObjectReskin ReskinLateChild ReskinLateSource\nEnd\n");
+	CHECK( loadIni(TEST_INI) );
+	const ThingTemplate *source = factory.findTemplate("ReskinLateSource");
+	const ThingTemplate *child = factory.findTemplate("ReskinLateChild");
+	CHECK( source && child );
+	writeFile(TEST_INI,
+		"Object ReskinLateSource\n  AddModule\n    Behavior = DestroyDie ParentOnlyTag\n    End\n  End\nEnd\n");
+	INI patch;
+	patch.load(AsciiString(TEST_INI), INI_LOAD_MULTIFILE, NULL);
+	if (source && child)
+	{
+		// An explicit witness for the old live-parent comparison: it sees a missing type.
+		CHECK_STR(child->getBehaviorModuleInfo().missingInheritedTypes(
+			source->getBehaviorModuleInfo().getInheritedModules()).str(), " DestroyDie");
+		CHECK(child->getMissingReskinBehaviorTypes().isEmpty());
+	}
+	TheThingFactory = savedFactory;
+	if (!savedGlobals) { delete TheWritableGlobalData; TheWritableGlobalData = NULL; }
+	remove(TEST_INI);
+}
+
 /* BalanceReforged.ini replaces Tank_ChinaBunker's ModuleTag_05 with a StructureBody.  Where data
 	 gives that tag another module, the type check in ThingTemplate::parseModuleName
 	 threw and stopped the game at start.  The block is skipped now: the template keeps the module it

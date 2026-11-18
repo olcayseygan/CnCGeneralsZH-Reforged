@@ -151,6 +151,13 @@ UpdateSleepTime PointDefenseLaserUpdate::update()
 	if( me->isEffectivelyDead() )
 		return UPDATE_SLEEP_FOREVER;//No more laser fo you.
 
+	// A WeaponTemplate name the weapon store does not know parses to NULL with no word in Release
+	// (INI::parseWeaponTemplate), and every scan then read its range through NULL: a mod's laser
+	// with a misspelt or missing weapon ended the game (crash reports 4036, 3975, 3960, 3939). Such
+	// a laser has nothing to fire, so it stands down; every shipped one names a real weapon.
+	if( !getPointDefenseLaserUpdateModuleData()->m_weaponTemplate )
+		return UPDATE_SLEEP_FOREVER;
+
 	// idle, tracking nothing, until the owner has RequiredUpgrade (Turkiye's AKKOR on the Altay)
 	if( m_requiredUpgrade && !me->getControllingPlayer()->hasUpgradeComplete( m_requiredUpgrade ) )
 		return UPDATE_SLEEP_NONE;

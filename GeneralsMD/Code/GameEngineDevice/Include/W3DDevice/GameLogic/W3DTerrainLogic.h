@@ -79,6 +79,7 @@ protected:
 
 	Real m_mapMinZ;	///< Minimum terrain z value.
 	Real m_mapMaxZ;	///< Maximum terrain z value.
+	Int m_mapBorderSize;	///< The map file's border in cells, logic's own copy: the render object's map is released and swapped on the main thread while a tick runs.
 
 };  // end W3DTerrainLogic
 

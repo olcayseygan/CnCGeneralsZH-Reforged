@@ -100,6 +100,31 @@ void ChallengeGenerals::parseGeneralPersona(INI *ini, void *instance, void *stor
 	ini->initFromINI(store, dataFieldParse);
 }
 
+// The table's catch-all: a persona whose name the file misspells.  A mod's ChallengeMode.ini
+// (Project Raptor) names one GeneraIPersona7, capital I, and stopped the game at start (v4.0.0
+// reports 3897-3899, 4096, 4097).  Its trailing number still says which general it is; a name with
+// none is read into a persona nobody keeps, so the parse stays in step either way.  A field with no
+// "persona" in its name is not one, and is refused as EA refused it.
+void ChallengeGenerals::parseMisnamedPersona(INI *ini, void *instance, void * /*store*/, const void *userData)
+{
+	const char *name = (const char *)userData;
+	Int end = (Int)strlen( name );
+	Bool namesPersona = FALSE;
+	for( Int at = 0; at + 7 <= end && !namesPersona; ++at )
+		namesPersona = strncasecmp( name + at, "persona", 7 ) == 0;
+	if( !namesPersona )
+		throw INI_UNKNOWN_TOKEN;
+	Int digits = end;
+	while( digits > 0 && name[ digits - 1 ] >= '0' && name[ digits - 1 ] <= '9' )
+		--digits;
+	const Int index = digits < end ? atoi( name + digits ) : -1;
+	GeneralPersona unused;
+	GeneralPersona *persona = ( index >= 0 && index < NUM_GENERALS ) ? &((ChallengeGenerals *)instance)->m_position[ index ] : &unused;
+	DEBUG_LOG(( "[LINE: %d in '%s'] unknown persona '%s' read as GeneralPersona%d\n",
+		ini->getLineNum(), ini->getFilename().str(), name, index ));
+	parseGeneralPersona( ini, instance, persona, NULL );
+}
+
 
 const FieldParse ChallengeGenerals::s_fieldParseTable[] = 
 {
@@ -115,7 +140,7 @@ const FieldParse ChallengeGenerals::s_fieldParseTable[] =
 	{ "GeneralPersona9", ChallengeGenerals::parseGeneralPersona, NULL, offsetof( ChallengeGenerals, m_position[9] ) },
 	{ "GeneralPersona10", ChallengeGenerals::parseGeneralPersona, NULL, offsetof( ChallengeGenerals, m_position[10] ) },
 	{ "GeneralPersona11", ChallengeGenerals::parseGeneralPersona, NULL, offsetof( ChallengeGenerals, m_position[11] ) },
-	{ 0, 0, 0, 0 }
+	{ 0, ChallengeGenerals::parseMisnamedPersona, NULL, 0 }	// catch-all, and the end of the table
 };
 
 

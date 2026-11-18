@@ -52,7 +52,8 @@
 //-------------------------------------------------------------------------------------------------
 W3DTerrainLogic::W3DTerrainLogic():
 m_mapMinZ(0),
-m_mapMaxZ(1)
+m_mapMaxZ(1),
+m_mapBorderSize(0)
 {
 	m_mapData = NULL; 
 }  // end W3DTerrainLogic
@@ -91,6 +92,7 @@ void W3DTerrainLogic::reset( void )
 	m_mapDY = 0;
 	m_mapMinZ = 0;
 	m_mapMaxZ = 1;
+	m_mapBorderSize = 0;
 	WorldHeightMap::freeListOfMapObjects();
 }  // end reset
 
@@ -157,6 +159,7 @@ Bool W3DTerrainLogic::loadMap( AsciiString filename , Bool query )
 		// Get the whole map, because we don't know which boundary is active yet
 		m_mapDX=terrainHeightMap->getXExtent();
 		m_mapDY=terrainHeightMap->getYExtent();
+		m_mapBorderSize = terrainHeightMap->getBorderSizeInline();
 
 		// now, get all the boudnaries, and set the current active boundary to boundary 0.
 		m_boundaries = terrainHeightMap->getAllBoundaries();
@@ -255,7 +258,10 @@ void W3DTerrainLogic::getExtentIncludingBorder( Region3D *extent ) const
 	extent->lo.x = 0.0f;
 	extent->lo.y = 0.0f;
 
-	Real border = TheTerrainRenderObject->getMap()->getBorderSizeInline() * MAP_XY_FACTOR;
+	// Logic's own copy, never TheTerrainRenderObject->getMap(): the main thread nulls that while it
+	// releases the terrain's resources (ReleaseResources) or swaps the terrain LOD, and a tick asking
+	// here then read through a null map (crash report 4139, DeliverPayloadAIUpdate::isOffMap).
+	Real border = m_mapBorderSize * MAP_XY_FACTOR;
 	extent->lo.x -= border;
 	extent->lo.y -= border;
 	extent->hi.x = (m_mapDX * MAP_XY_FACTOR)-border;

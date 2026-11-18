@@ -38,6 +38,8 @@
 #include "Common/BitFlags.h"
 #include "Common/STLTypedefs.h"
 
+#include <mutex>
+
 #if defined(_DEBUG) || defined(_INTERNAL)
 	#define SPARSEMATCH_DEBUG
 #else
@@ -104,6 +106,13 @@ private:
 	
 	mutable MatchMap m_bestMatches;
 	//mutable HashMatchMap m_bestHashMatches;
+	/** The cache is filled by const lookups from more than one thread: a model's finder lives in its
+		* template's module data and is asked by the tick (getProjectileLaunchOffset, getBarrelCount,
+		* getPristineBonePositions) while the render beside it, and the logic pool's workers, ask the same
+		* one. Two unlocked inserts left the map with a null child, and the next lookup on the main thread
+		* read through it (crash report 3999, after a tick, in Drawable::flushModelCondition). The answer
+		* is findBestInfoSlow's either way, so the lock changes no result. */
+	mutable std::mutex m_lock;
 
 	//-------------------------------------------------------------------------------------------------
 	// METHODS
@@ -203,34 +212,43 @@ public:
 	SparseMatchFinder& operator=(const SparseMatchFinder& other)
 	{
 		if (this != &other)
+		{
+			std::lock_guard<std::mutex> hold(m_lock);
 			m_bestMatches.clear();
+		}
 		return *this;
 	}
 
 	//-------------------------------------------------------------------------------------------------
 	void clear()
 	{
+		std::lock_guard<std::mutex> hold(m_lock);
 		m_bestMatches.clear();
 	}
 
 	//-------------------------------------------------------------------------------------------------
 	const MATCHABLE* findBestInfo(const std::vector<MATCHABLE>& v, const BITSET& bits) const
 	{
-		typename MatchMap::const_iterator it = m_bestMatches.find(bits);
-
 		const MATCHABLE *first = NULL;
-		if (it != m_bestMatches.end())
 		{
-			first = (*it).second;
+			std::lock_guard<std::mutex> hold(m_lock);
+			typename MatchMap::const_iterator it = m_bestMatches.find(bits);
+			if (it != m_bestMatches.end())
+			{
+				first = (*it).second;
+			}
 		}
 		if (first != NULL) {
 			return first;
 		}
-		
+
+		// unlocked: the scan is pure, so two threads computing the same entry store the same pointer, and a
+		// debug assert below that pumps messages cannot re-enter a held lock
 		const MATCHABLE* info = findBestInfoSlow(v, bits);
 
 		DEBUG_ASSERTCRASH(info != NULL, ("no suitable match for criteria was found!\n"));
 		if (info != NULL) {
+			std::lock_guard<std::mutex> hold(m_lock);
 			m_bestMatches[bits] = info;
 		}
 

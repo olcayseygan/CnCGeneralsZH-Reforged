@@ -93,7 +93,7 @@ Bool OnlineGetServerInfo( AsciiString &name, AsciiString &city, Int &pingMs );
 	 retry in seconds, 0 when it gave none.  Empty when the last login never reached a refusal (the
 	 connection failed), and cleared by the next login.  `file` gets the install file a "files" refusal names. */
 AsciiString OnlineGetLoginFailure( Int *retrySeconds, AsciiString *file = NULL );
-/* A login waits on the install files' hashes (the first start of a build reads every file): the login
+/* A login waits on the install files' hashes (the first start on a machine reads every file): the login
 	 screen says it is checking them. */
 Bool OnlineIsCheckingFiles( void );
 /* Opens an http or https address in the player's browser; FALSE when it is not one or nothing could open

@@ -1217,7 +1217,7 @@ void GameEngine::init( int argc, char *argv[] )
 		// special-case: parse command-line parameters after loading global data
 		parseCommandLine(argc, argv);
 
-		// Online login sends the sha256 of every install file the game reads.  The first start of a build
+		// Online login sends the sha256 of every install file the game reads.  The first start on a machine
 		// reads them all (13.7 GB here), so it runs beside the rest of init; a headless run never signs in.
 		if (!TheGlobalData->m_headless)
 			InstallFiles_start();

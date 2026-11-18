@@ -28,7 +28,6 @@
 #include "Common/FileSystem.h"
 #include "Common/GlobalData.h"
 #include "Common/LocalFileSystem.h"
-#include "BuildFingerprint.h"		// ZH_BUILD_FINGERPRINT: the cache is kept per build, as ModelChecksums.txt is
 #include "sha256.h"
 #include "zhio.h"
 
@@ -81,7 +80,7 @@ Hasher &hasher()
 }
 
 const char *CACHE_FILE = "InstallFiles.txt";
-const int CACHE_FORMAT = 1;
+const int CACHE_FORMAT = 2;
 
 std::string lower( std::string s )
 {
@@ -130,10 +129,12 @@ bool notGameData( const std::string &path )
 	return name == "dx11shaders.cache" || name == "thumbs.db" || name == "desktop.ini" || name == ".ds_store";
 }
 
+/* A format version and nothing of the build: a file's sha256 is the same under every build, so a new
+	 release rereads only the files it changed, not the whole install.  Format 1 carried the fingerprint. */
 std::string cacheHeader()
 {
 	char header[64];
-	snprintf( header, sizeof(header), "InstallFiles %d %08X", CACHE_FORMAT, (unsigned)ZH_BUILD_FINGERPRINT );
+	snprintf( header, sizeof(header), "InstallFiles %d", CACHE_FORMAT );
 	return header;
 }
 
@@ -158,7 +159,7 @@ CacheMap readCache( const std::string &path )
 	if (header != cacheHeader())
 	{
 		fclose( f );
-		return cache;		// another build or format: every file is read again
+		return cache;		// another format: every file is read again
 	}
 	while (fgets( line, sizeof(line), f ))
 	{

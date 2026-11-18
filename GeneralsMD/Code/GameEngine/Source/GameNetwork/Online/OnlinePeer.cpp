@@ -343,7 +343,7 @@ void OnlineSession::requestAuth( const OnlineMessage &line )
 		flushAuth();
 }
 
-/* The login goes once the welcome is in and the install files are hashed (the first start of a build
+/* The login goes once the welcome is in and the install files are hashed (the first start on a machine
 	 reads them all, the login screen says it is checking them meanwhile), right behind their hashes. */
 void OnlineSession::flushAuth()
 {

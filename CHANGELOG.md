@@ -50,6 +50,10 @@ found and fixed, EA's own, not port damage.**
 - Some Intel and AMD graphics drivers handed the EA logo a picture far smaller than the movie, and copying the frame into it overwrote the game's memory with black pixels: a crash at startup, or a strange one at the first map. The game now refuses such a picture and skips the movie.
 - When the game runs out of memory or meets a bad value deep inside, its crash report now says where.
 
+## Jets turn for home after the strike
+
+- A MiG, Raptor, Aurora or Stealth Fighter that had fired its last round turned a quarter of the way round, then flew on straight for a stretch before it turned for home, and that stretch often carried it deeper into the enemy's base and its anti-air. Since 4.0 the jet turned away from the target and then flew on as if lining up a second pass it could never make with empty racks. It now comes round in one sweep and heads home. In a test a MiG struck a tank 1500 out from its airfield. It used to swing 520 past the tank on the far side before turning back; now it swings 190, and it is over its field almost two seconds sooner. It still clears the target by as much as before and does the same damage. A replay recorded before this change, with jets attacking the ground, will not play back the same.
+
 ## Screen and controls
 
 - The command bar and menus no longer go dark now and then, as if a shadow fell over them. The sun's shadows and smoke land only on the battlefield.

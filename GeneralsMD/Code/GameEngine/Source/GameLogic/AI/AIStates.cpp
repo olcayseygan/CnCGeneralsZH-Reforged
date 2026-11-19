@@ -5919,8 +5919,10 @@ Coord3D AIAttackAimAtTargetState::computeAttackRunGoal( Object *source, const We
 	// spends its clip on the frame of its last round, and that used to end the attack there and then:
 	// the break-off never happened, and the flight home went on over the target or turned across it.
 	// It now turns away the moment the last round is gone, wherever that was, and holds the turn until
-	// the target is behind it and the run-out distance away; AIAttackState::update keeps the attack
-	// alive for that.
+	// the target is no longer ahead; AIAttackState::update keeps the attack alive for that. It does not
+	// fly the run-out after it: that is room to come back round for another pass, which an empty jet
+	// never flies, and it took a MiG a quarter turn off and on straight, over the enemy's base, before
+	// it turned for home.
 	const Bool racksEmpty = source->isOutOfAmmo();
 	const Bool clipSpent = weapon->getClipSize() == 0 || weapon->getRemainingAmmo() == 0;
 	const Real distSqr = dx*dx + dy*dy;
@@ -5936,7 +5938,7 @@ Coord3D AIAttackAimAtTargetState::computeAttackRunGoal( Object *source, const We
 	if (breaksOff)
 		m_isRunningOut = TRUE;
 	else if (m_isRunningOut)
-		m_isRunningOut = distSqr < sqr(runOutDist) || (racksEmpty && along > 0.0f);
+		m_isRunningOut = racksEmpty ? along > 0.0f : distSqr < sqr(runOutDist);
 	else if (!racksEmpty && fabs(relAngle) >= aimDelta)
 		m_isRunningOut = AIAttackAim_needsRunOut(along - entryDist, dir->x*dy - dir->y*dx, turnRadius,
 																						 Cos(aimDelta), minRange);

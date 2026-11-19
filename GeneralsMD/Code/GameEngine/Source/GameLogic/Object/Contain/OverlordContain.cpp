@@ -504,6 +504,19 @@ const ContainedItemsList* OverlordContain::getContainedItemsList() const
 }
 
 //-------------------------------------------------------------------------------------------------
+Bool OverlordContain::isContained( const Object *obj ) const
+{
+	// The bunker's men ride in the bunker, so their getContainedBy() is the bunker, not me, while
+	// every exit order names me.  Asked only of my own list, AIUpdateInterface::privateExit refused
+	// them all and Evacuate and the exit buttons did nothing.
+	if( TransportContain::isContained( obj ) )
+		return TRUE;
+
+	ContainModuleInterface *redirect = getRedirectedContain();
+	return redirect != NULL && redirect->isContained( obj );
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool OverlordContain::isEnclosingContainerFor( const Object *obj ) const
 {
 	// All of this redirection stuff makes it so that while I am normally a transport

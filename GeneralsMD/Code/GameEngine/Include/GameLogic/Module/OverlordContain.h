@@ -104,7 +104,8 @@ public:
 	virtual void iterateContained( ContainIterateFunc func, void *userData, Bool reverse );
 	virtual UnsignedInt getContainCount() const;
 	virtual Int getContainMax( void ) const;
-	virtual const ContainedItemsList* getContainedItemsList() const;	
+	virtual const ContainedItemsList* getContainedItemsList() const;
+	virtual Bool isContained( const Object *obj ) const;
 
 	// Friend for our Draw module only.
 	virtual const Object *friend_getRider() const; ///< Damn.  The draw order dependency bug for riders means that our draw module needs to cheat to get around it.

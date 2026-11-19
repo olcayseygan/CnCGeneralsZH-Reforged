@@ -351,7 +351,7 @@ public:
   void setStartShrouded( Bool shrouded ) { m_startShrouded = shrouded; }
 
   // Game speed in percent of retail's pace, one of PLAYER_GAME_SPEED_PERCENTS: the game time each tick
-  // advances.  Only the skirmish lobby and a matched Quick Match (RANKED_GAME_SPEED_PERCENT) set another
+  // advances.  Only the skirmish lobby and a matched Quick Match (RETAIL_GAME_SPEED_PERCENT) set another
   // value than the default; it is not in the options string, and reaches the engine as MSG_NEW_GAME's
   // game speed and the replay as its GS= field.
   Int getGameSpeedPercent( void ) const { return m_gameSpeedPercent; }

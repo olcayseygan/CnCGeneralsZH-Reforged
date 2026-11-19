@@ -14910,7 +14910,7 @@ TOOLTIP:ProRules
 END
 
 TOOLTIP:GameSpeed
-"Wie schnell das Gefecht läuft. 1.0x ist das Originalspiel, 1.5x das Tempo jedes Mehrspielerspiels. Nur das Tempo ändert sich."
+"Wie schnell das Gefecht läuft. 1.0x ist das Originalspiel und das Tempo von LAN-, Ranglisten- und KI-Spielen, 1.5x das der Online-Räume. Nur das Tempo ändert sich."
 END
 
 GUI:GameSpeedMissions

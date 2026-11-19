@@ -16634,7 +16634,7 @@ TOOLTIP:ProRules
 END
 
 TOOLTIP:GameSpeed
-"La vitesse de l'escarmouche : 1.0x est le jeu d'origine, 1.5x la vitesse de toutes les parties multijoueurs. Seul le rythme change."
+"La vitesse de l'escarmouche : 1.0x est le jeu d'origine et la vitesse des parties en LAN, classées et contre l'IA, 1.5x celle des salons en ligne. Seul le rythme change."
 END
 
 GUI:GameSpeedMissions

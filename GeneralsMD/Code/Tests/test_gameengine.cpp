@@ -6533,13 +6533,13 @@ TEST(match_pace_is_frames_per_second_limit_at_every_game_speed)
 
 TEST(ranked_matches_play_retail_pace_and_custom_rooms_stay_native)
 {
-	/* A Quick Match and a Play vs AI match play RANKED_GAME_SPEED_PERCENT, retail's own pace: a game
-	   second is the full LOGICFRAMES_PER_SECOND ticks.  The Quick Match sets it on the room after
-	   enterGame, and the next room's enterGame (host or joiner) puts it back to native, so a custom room
-	   or LAN game after a ranked one still plays NATIVE_GAME_SPEED_PERCENT. */
-	CHECK_EQ( (Int)RANKED_GAME_SPEED_PERCENT, 100 );
-	CHECK( GameSpeed_isAllowed( RANKED_GAME_SPEED_PERCENT ) );
-	GameSpeed_set( RANKED_GAME_SPEED_PERCENT );
+	/* A LAN game, a Quick Match and a Play vs AI match play RETAIL_GAME_SPEED_PERCENT, retail's own
+	   pace: a game second is the full LOGICFRAMES_PER_SECOND ticks.  The Quick Match sets it on the room
+	   after enterGame, and the next room's enterGame (host or joiner) puts it back to native, so a custom
+	   online room after a ranked one still plays NATIVE_GAME_SPEED_PERCENT. */
+	CHECK_EQ( (Int)RETAIL_GAME_SPEED_PERCENT, 100 );
+	CHECK( GameSpeed_isAllowed( RETAIL_GAME_SPEED_PERCENT ) );
+	GameSpeed_set( RETAIL_GAME_SPEED_PERCENT );
 	CHECK_EQ( LOGICFRAMES_PER_GAME_SECOND, (Int)LOGICFRAMES_PER_SECOND );
 	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
 
@@ -6549,8 +6549,8 @@ TEST(ranked_matches_play_retail_pace_and_custom_rooms_stay_native)
 	room.init();
 	room.enterGame();
 	CHECK_EQ( room.getGameSpeedPercent(), (Int)NATIVE_GAME_SPEED_PERCENT );
-	room.setGameSpeedPercent( RANKED_GAME_SPEED_PERCENT );
-	CHECK_EQ( room.getGameSpeedPercent(), (Int)RANKED_GAME_SPEED_PERCENT );
+	room.setGameSpeedPercent( RETAIL_GAME_SPEED_PERCENT );
+	CHECK_EQ( room.getGameSpeedPercent(), (Int)RETAIL_GAME_SPEED_PERCENT );
 	room.reset();		// markAsStagingRoomHost / Joiner: reset, then enterGame
 	room.enterGame();
 	CHECK_EQ( room.getGameSpeedPercent(), (Int)NATIVE_GAME_SPEED_PERCENT );

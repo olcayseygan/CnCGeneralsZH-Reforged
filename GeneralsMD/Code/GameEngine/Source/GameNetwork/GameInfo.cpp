@@ -1511,7 +1511,7 @@ static AsciiString buildGameInfoAsciiString( const GameInfo *game, const AsciiSt
 	concatOptionUnlessZero(optionsString, "TR", game->getTechRespawn());
 	concatOptionUnlessZero(optionsString, "PL", game->getSupplyPileLimit());
 	concatOptionUnlessZero(optionsString, "SH", game->getStartShrouded() ? 1 : 0);
-	// the game speed is not in the string: a network game always plays the native speed, and a skirmish's
+	// the game speed is not in the string: a network game's comes from its kind (LAN, room or Quick Match), and a skirmish's
 	// reaches its replay as the header's GS= field.  Turbo's "TB" key is no longer written
 
 	//add player info for each slot

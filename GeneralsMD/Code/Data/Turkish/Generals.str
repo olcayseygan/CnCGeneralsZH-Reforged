@@ -15910,7 +15910,7 @@ TOOLTIP:ProRules
 END
 
 TOOLTIP:GameSpeed
-"Çatışma ne kadar hızlı oynansın. 1.0x orijinal oyun, dereceli ve YZ'ye karşı maçların hızı; 1.5x de online odaların ve LAN oyunlarının hızı. Tempodan başka hiçbir şey değişmez."
+"Çatışma ne kadar hızlı oynansın. 1.0x orijinal oyun, LAN, dereceli ve YZ'ye karşı maçların hızı; 1.5x de online odaların hızı. Tempodan başka hiçbir şey değişmez."
 END
 
 GUI:GameSpeedMissions

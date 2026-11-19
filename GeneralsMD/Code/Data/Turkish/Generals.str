@@ -10769,8 +10769,56 @@ GUI:OnlineLoginBanned
 "Bu hesap yasaklı."
 END
 
+GUI:OnlineMaintenance
+"Çevrimiçi oyun bakımda. Sonra yeniden dene."
+END
+
+GUI:OnlineMaintenanceUntil
+"Çevrimiçi oyun bakımda. Tahmini dönüş: %s."
+END
+
+GUI:OnlineMaintenanceTitle
+"Bakımda"
+END
+
+GUI:OnlineStartRefused
+"Sunucu oyunu başlatmadı (%s)."
+END
+
+GUI:OnlineNoticeMaintenance
+"BAKIM"
+END
+
+GUI:OnlineNoticeInfo
+"DUYURU"
+END
+
+GUI:OnlineNoticeMaintenanceWords
+"Çevrimiçi oyun bakımda."
+END
+
+GUI:OnlineNoticeBack
+"Dönüş: %s"
+END
+
+GUI:OnlineNoticeUntil
+"Bitiş: %s"
+END
+
 GUI:OnlineLoginElsewhere
 "Bu hesapla başka bir bilgisayardan giriş yapıldı."
+END
+
+GUI:OnlineCheckingFiles
+"Oyun dosyaları denetleniyor..."
+END
+
+GUI:OnlineLoginFiles
+"Bu dosya oyunla gelen dosya değil:\n\n%ls\n\nOyunu başlatıcıdan yeniden kur ya da o dosyayı sil, sonra oyunu yeniden başlatıp giriş yap."
+END
+
+GUI:OnlineLoginFilesNone
+"Sunucu oyun dosyalarını denetleyemedi. Oyunu yeniden başlatıp giriş yap; yine olursa oyunu başlatıcıdan yeniden kur."
 END
 
 TOOLTIP:OnlinePlayerInfo
@@ -15294,7 +15342,7 @@ GUI:FrameRateLimit4
 END
 
 TOOLTIP:FrameRateLimit
-"Maçta saniyede en fazla kaç kare çizileceği. Sınırı düşürürsen ekran kartın daha serin ve sessiz çalışır, oyun da yavaşlamaz. Menüler zaten 60'ta durur."
+"Maçta ve menülerde saniyede en fazla kaç kare çizileceği. Sınırı düşürürsen ekran kartın daha serin ve sessiz çalışır, oyun da yavaşlamaz. Kapalıyken maç makinenin çizebildiği kadar hızlı akar, menüler 60'ta durur."
 END
 
 GUI:ClassicGraphics
@@ -15687,6 +15735,14 @@ END
 
 TOOLTIP:AircraftAltitudeLine
 "Havadaki her uçaktan altındaki yere dümdüz ince bir çizgi iner. Çizginin değdiği yer uçağın asıl yeri, boyu da ne kadar yüksekte uçtuğu. Yerde duran uçakta çizgi olmaz."
+END
+
+GUI:SelectionOutlines
+"Seçim Çizgileri"
+END
+
+TOOLTIP:SelectionOutlines
+"Seçili her birimin altında sahibinin renginde parlayan bir halka, seçili binanın çevresinde de aynı çizgi. Kapalıyken ikisi de çizilmez; emir çizgileri ve tıklanan yerdeki işaretler kalır."
 END
 
 GUI:PlayerColors
@@ -20736,4 +20792,8 @@ END
 
 GUI:OnlineHubCustomExplain_Short
 "Oda kur ya da katıl. %ls sunucusundakilerle sohbet et."
+END
+
+GUI:GroupTrayTraining
+"+%d üretimde"
 END

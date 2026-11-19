@@ -22,8 +22,10 @@
 #include "GameNetwork/Online/OnlineConnection.h"
 #include "GameNetwork/Online/OnlineSession.h"
 #include "GameNetwork/GameInfo.h"
+#include "Common/InstallFiles.h"
 #include "GameClient/TankSkin.h"
 #include "Common/MultiplayerSettings.h"
+#include "Common/GlobalData.h"		// TEXT_LANGUAGE_*
 
 #include <chrono>
 #include <stdio.h>
@@ -764,10 +766,16 @@ TEST(online_adapter_login_waits_for_the_relay)
 	strcpy( req.arg.login.password, "secret" );
 	rig.buddy->addRequest( req );
 
-	CHECK_EQ( rig.sent.size(), (size_t)1 );
-	CHECK_STR( rig.sentType( 0 ).c_str(), "login" );
-	CHECK_STR( rig.sent[0].getString( "email" ).c_str(), "tank@example.com" );
-	CHECK_STR( rig.sent[0].getString( "pass" ).c_str(), "secret" );
+	// no install files hashed here: the list still goes, empty, so the server refuses instead of waiting
+	CHECK_EQ( rig.sent.size(), (size_t)2 );
+	CHECK_STR( rig.sentType( 0 ).c_str(), "files" );
+	CHECK_EQ( rig.sent[0].getInt( "seq", -1 ), 0ll );
+	CHECK_EQ( rig.sent[0].getInt( "last" ), 1ll );
+	CHECK( rig.sent[0].has( "paths" ) && rig.sent[0].getStrings( "paths" ).empty() );
+	CHECK( rig.sent[0].has( "hashes" ) && rig.sent[0].getStrings( "hashes" ).empty() );
+	CHECK_STR( rig.sentType( 1 ).c_str(), "login" );
+	CHECK_STR( rig.sent[1].getString( "email" ).c_str(), "tank@example.com" );
+	CHECK_STR( rig.sent[1].getString( "pass" ).c_str(), "secret" );
 	CHECK( rig.peer->isConnecting() );
 	CHECK( !rig.peer->isConnected() );
 
@@ -806,7 +814,7 @@ TEST(online_adapter_login_waits_for_the_relay)
 	}
 	CHECK( rig.peer->isConnected() );
 	CHECK_EQ( OnlineGetRelayVip(), 0x0A000003u );
-	CHECK_STR( rig.sentType( 1 ).c_str(), "stats.get" );		// our own stats, as GameSpy's login read them
+	CHECK_STR( rig.sentType( 2 ).c_str(), "stats.get" );		// our own stats, as GameSpy's login read them
 }
 
 TEST(online_adapter_login_refusal_and_no_register)
@@ -824,9 +832,10 @@ TEST(online_adapter_login_refusal_and_no_register)
 
 	req.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGIN;
 	rig.buddy->addRequest( req );
-	CHECK_EQ( rig.sent.size(), (size_t)1 );
-	CHECK_STR( rig.sentType( 0 ).c_str(), "login" );
-	CHECK_STR( rig.sent[0].getString( "email" ).c_str(), "tank@example.com" );
+	CHECK_EQ( rig.sent.size(), (size_t)2 );		// the (empty) install file list, then the login
+	CHECK_STR( rig.sentType( 0 ).c_str(), "files" );
+	CHECK_STR( rig.sentType( 1 ).c_str(), "login" );
+	CHECK_STR( rig.sent[1].getString( "email" ).c_str(), "tank@example.com" );
 
 	Int retry = -1;
 	CHECK( OnlineGetLoginFailure( &retry ).isEmpty() );
@@ -844,10 +853,11 @@ TEST(online_adapter_login_refusal_and_no_register)
 	UnsignedByte ticket[16];
 	CHECK( !OnlineGetRelayTicket( ticket ) );
 
-	// a resume with a saved token is the same login
+	// a resume with a saved token is the same login, on the same connection without the list again
 	OnlineResume( "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" );
-	CHECK_STR( rig.sentType( 1 ).c_str(), "resume" );
-	CHECK_EQ( rig.sent[1].getString( "token" ).size(), (size_t)64 );
+	CHECK_EQ( rig.sent.size(), (size_t)3 );
+	CHECK_STR( rig.sentType( 2 ).c_str(), "resume" );
+	CHECK_EQ( rig.sent[2].getString( "token" ).size(), (size_t)64 );
 	CHECK( OnlineGetLoginFailure( &retry ).isEmpty() );		// a new login forgets the last refusal
 
 	rig.feed( "{\"t\":\"auth.fail\",\"code\":\"throttled\",\"retry\":42}" );
@@ -2400,9 +2410,77 @@ TEST(online_hello_says_proto_2)
 	CHECK_EQ( hello.getInt( "exe" ), 0xDEADBEEFll );
 	CHECK_EQ( hello.getInt( "ini" ), 0x12345678ll );
 	CHECK_STR( hello.getString( "ver" ).c_str(), "3.4.1" );
+	CHECK_EQ( hello.getInt( "files" ), 1ll );		// the install files' hashes come before the login
 	std::string line;
 	CHECK( hello.toLine( line ) );
 	CHECK( OnlineHelloLine( 1, 2, NULL ).toLine( line ) );		// no version: an empty one
+}
+
+/* Before the login, every install file's path and sha256 in files lines under 4096 bytes, numbered, the
+	 last marked; once a connection, so a second login on it sends the login alone.  A refusal over a file
+	 names it for the login screen. */
+TEST(online_login_sends_the_install_files_first)
+{
+	std::vector<InstallFile> files;
+	for (int i = 0; i < 300; ++i)
+	{
+		InstallFile f;
+		char path[64];
+		snprintf( path, sizeof(path), "art/textures/a_long_texture_name_number_%03d.tga", i );
+		f.path = path;
+		f.sha256 = std::string( 64, (char)('a' + i % 6) );
+		files.push_back( f );
+	}
+	InstallFiles_setList( files );
+	{
+		AdapterRig rig;
+		BuddyRequest req;
+		memset( &req, 0, sizeof(req) );
+		req.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGIN;
+		strcpy( req.arg.login.email, "tank@example.com" );
+		strcpy( req.arg.login.password, "secret" );
+		rig.buddy->addRequest( req );
+
+		CHECK( rig.sent.size() > 3 );
+		std::vector<std::string> paths, hashes;
+		size_t lines = 0;
+		while (lines < rig.sent.size() && rig.sentType( lines ) == "files")
+		{
+			const OnlineMessage &m = rig.sent[lines];
+			CHECK_EQ( m.getInt( "seq" ), (long long)lines );
+			std::string line;
+			CHECK( m.toLine( line ) );
+			CHECK( line.size() < 4096 );
+			const std::vector<std::string> p = m.getStrings( "paths" ), h = m.getStrings( "hashes" );
+			CHECK_EQ( p.size(), h.size() );
+			paths.insert( paths.end(), p.begin(), p.end() );
+			hashes.insert( hashes.end(), h.begin(), h.end() );
+			++lines;
+			CHECK_EQ( m.getInt( "last", -1 ), lines == rig.sent.size() - 1 ? 1ll : 0ll );
+		}
+		CHECK( lines > 1 );
+		CHECK_EQ( lines, rig.sent.size() - 1 );
+		CHECK_STR( rig.sentType( lines ).c_str(), "login" );
+		CHECK_EQ( paths.size(), files.size() );
+		for (size_t i = 0; i < paths.size() && i < files.size(); ++i)
+		{
+			CHECK_STR( paths[i].c_str(), files[i].path.c_str() );
+			CHECK_STR( hashes[i].c_str(), files[i].sha256.c_str() );
+		}
+
+		rig.feed( "{\"t\":\"auth.fail\",\"code\":\"files\",\"file\":\"art/textures/a_long_texture_name_number_007.tga\"}" );
+		AsciiString file;
+		CHECK_STR( OnlineGetLoginFailure( NULL, &file ).str(), "files" );
+		CHECK_STR( file.str(), "art/textures/a_long_texture_name_number_007.tga" );
+
+		rig.sent.clear();
+		rig.buddy->addRequest( req );
+		CHECK_EQ( rig.sent.size(), (size_t)1 );
+		CHECK_STR( rig.sentType( 0 ).c_str(), "login" );
+		CHECK( OnlineGetLoginFailure( NULL, &file ).isEmpty() );
+		CHECK( file.isEmpty() );
+	}
+	InstallFiles_setList( std::vector<InstallFile>() );		// the other tests log in with none
 }
 
 /* The report names its map for the match history: the folder and file under maps, never the user folder
@@ -2718,4 +2796,179 @@ TEST(online_last_ai_match_id_outlives_the_match)
 	CHECK( verdict.match == OnlineGetLastAIMatchId() );
 	OnlineSession::get().forgetAccount();
 	CHECK( OnlineGetLastAIMatchId().isEmpty() );
+}
+
+/* The server's notice{kind,en,tr,until}: the hello asks for it, it is shown until an info with no words
+	 replaces it or the connection goes, a maintenance with no words still shows, and each change moves the
+	 serial.  The words come in the player's language, the other one when that is empty. */
+TEST(online_notice_parse_and_clear)
+{
+	CHECK_EQ( OnlineHelloLine( 1, 2, "4.1.0" ).getInt( "notice" ), 1ll );
+
+	AdapterRig rig;
+	OnlineNotice n;
+	CHECK( !OnlineGetNotice( n ) );
+	const UnsignedInt first = n.serial;
+
+	rig.feed( "{\"t\":\"notice\",\"kind\":\"info\",\"en\":\"Ladder resets Sunday\",\"tr\":\"Lig pazar s\\u0131f\\u0131rlan\\u0131yor\",\"until\":\"\"}" );
+	CHECK( OnlineGetNotice( n ) );
+	CHECK( !n.maintenance );
+	CHECK_STR( OnlineNoticeWords( n, TEXT_LANGUAGE_ENGLISH ).str(), "Ladder resets Sunday" );
+	CHECK_STR( OnlineNoticeWords( n, TEXT_LANGUAGE_TURKISH ).str(), "Lig pazar s\xC4\xB1" "f\xC4\xB1rlan\xC4\xB1yor" );
+	CHECK_STR( OnlineNoticeWords( n, TEXT_LANGUAGE_GERMAN ).str(), "Ladder resets Sunday" );
+	CHECK( n.serial != first );
+
+	rig.feed( "{\"t\":\"notice\",\"kind\":\"maintenance\",\"en\":\"Deploy\",\"tr\":\"\",\"until\":\"2026-11-18T22:00:00.000Z\"}" );
+	CHECK( OnlineGetNotice( n ) );
+	CHECK( n.maintenance );
+	CHECK_STR( n.until.str(), "2026-11-18T22:00:00.000Z" );
+	CHECK_STR( OnlineNoticeWords( n, TEXT_LANGUAGE_TURKISH ).str(), "Deploy" );		// no Turkish: the English
+
+	const UnsignedInt before = n.serial;
+	rig.feed( "{\"t\":\"notice\",\"kind\":\"maintenance\",\"en\":\"\",\"tr\":\"\",\"until\":\"\"}" );
+	CHECK( OnlineGetNotice( n ) );		// maintenance with no words still shows
+	CHECK( n.maintenance );
+	CHECK( n.serial != before );
+
+	rig.feed( "{\"t\":\"notice\",\"kind\":\"info\",\"en\":\"\",\"tr\":\"\",\"until\":\"\"}" );
+	CHECK( !OnlineGetNotice( n ) );		// an info with no words clears it
+
+	rig.feed( "{\"t\":\"notice\",\"kind\":\"info\",\"en\":\"Hello\",\"tr\":\"Merhaba\"}" );
+	CHECK( OnlineGetNotice( n ) );
+	OnlineSession::get().connectionGone();		// a sign-out or a dropped line takes it down
+	CHECK( !OnlineGetNotice( n ) );
+}
+
+/* until as the server writes it (Node's toISOString, or with an offset) in Unix seconds; anything else is
+	 no time and is shown as the server's own text. */
+TEST(online_notice_until_parses_utc)
+{
+	CHECK_EQ( OnlineParseUtc( "1970-01-01T00:00:00Z" ), 0ll );
+	CHECK_EQ( OnlineParseUtc( "2026-11-18T22:00:00.000Z" ), 1795039200ll );
+	CHECK_EQ( OnlineParseUtc( "2026-11-18T22:00Z" ), 1795039200ll );
+	CHECK_EQ( OnlineParseUtc( "2026-11-19T01:00:00+03:00" ), 1795039200ll );
+	CHECK_EQ( OnlineParseUtc( "2026-11-18T21:30:00-00:30" ), 1795039200ll );
+	CHECK_EQ( OnlineParseUtc( "2024-02-29T12:00:00Z" ), 1709208000ll );
+	CHECK_EQ( OnlineParseUtc( "2026-11-18T22:00:00" ), -1ll );		// no zone
+	CHECK_EQ( OnlineParseUtc( "22:00" ), -1ll );
+	CHECK_EQ( OnlineParseUtc( "2026-13-01T00:00:00Z" ), -1ll );
+	CHECK_EQ( OnlineParseUtc( "2026-11-18T22:00:00Zjunk" ), -1ll );
+	CHECK_EQ( OnlineParseUtc( "" ), -1ll );
+	CHECK_EQ( OnlineParseUtc( NULL ), -1ll );
+}
+
+/* Maintenance: a login refused with its until (the notice's when the line has none), and a new lobby, game,
+	 Quick Match or Play vs AI refused, each handed once to the screen that asked and dropped by the next such
+	 request.  A Quick Match the server empties is maintenance only when the player did not leave himself.
+	 Under maintenance the host waits for the server's game.start before it launches; a start refused for any
+	 reason launches nothing and goes to the staging screen alone. */
+TEST(online_maintenance_refusals)
+{
+	AdapterRig rig;
+	AsciiString until, file;
+
+	// the login
+	BuddyRequest req;
+	memset( &req, 0, sizeof(req) );
+	req.buddyRequestType = BuddyRequest::BUDDYREQUEST_LOGIN;
+	strcpy( req.arg.login.email, "tank@example.com" );
+	strcpy( req.arg.login.password, "secret" );
+	rig.buddy->addRequest( req );
+	rig.feed( "{\"t\":\"auth.fail\",\"code\":\"maintenance\",\"until\":\"2026-11-18T22:00:00.000Z\"}" );
+	CHECK_STR( OnlineGetLoginFailure( NULL, &file, &until ).str(), "maintenance" );
+	CHECK_STR( until.str(), "2026-11-18T22:00:00.000Z" );
+	rig.peerResponses();
+	rig.feed( "{\"t\":\"notice\",\"kind\":\"maintenance\",\"en\":\"\",\"tr\":\"\",\"until\":\"2026-11-18T23:00:00Z\"}" );
+	rig.buddy->addRequest( req );
+	rig.feed( "{\"t\":\"auth.fail\",\"code\":\"maintenance\",\"until\":\"\"}" );
+	OnlineGetLoginFailure( NULL, NULL, &until );
+	CHECK_STR( until.str(), "2026-11-18T23:00:00Z" );		// the notice's
+	CHECK( !OnlineTakeMaintenanceRefusal( until ) );		// a login is the login screen's, not a refusal
+	rig.peerResponses();
+
+	rig.login();
+	const char *const errors[] = { "game.host", "game.join", "qm.join", "room.join" };
+	for (size_t i = 0; i < sizeof(errors) / sizeof(errors[0]); ++i)
+	{
+		char line[128];
+		snprintf( line, sizeof(line), "{\"t\":\"error\",\"for\":\"%s\",\"code\":\"maintenance\"}", errors[i] );
+		rig.feed( line );
+		until.clear();
+		CHECK( OnlineTakeMaintenanceRefusal( until ) );
+		CHECK_STR( until.str(), "2026-11-18T23:00:00Z" );
+		CHECK( !OnlineTakeMaintenanceRefusal( until ) );		// once
+	}
+	rig.peerResponses();
+	rig.feed( "{\"t\":\"error\",\"for\":\"game.host\",\"code\":\"full\"}" );
+	CHECK( !OnlineTakeMaintenanceRefusal( until ) );
+
+	// Play vs AI
+	OnlineRequestAIMatch( "FactionAmerica" );
+	rig.feed( "{\"t\":\"ai.refused\",\"reason\":\"maintenance\"}" );
+	OnlineAIMatch ai;
+	CHECK_EQ( (int)OnlineGetAIMatch( ai ), (int)ONLINE_AI_REFUSED );
+	CHECK_STR( ai.reason.str(), "maintenance" );
+	CHECK( OnlineTakeMaintenanceRefusal( until ) );
+	OnlineRequestAIMatch( "FactionAmerica" );
+	rig.feed( "{\"t\":\"error\",\"for\":\"ai.start\",\"code\":\"maintenance\"}" );
+	CHECK_EQ( (int)OnlineGetAIMatch( ai ), (int)ONLINE_AI_REFUSED );
+	CHECK_STR( ai.reason.str(), "maintenance" );
+	CHECK( OnlineTakeMaintenanceRefusal( until ) );
+
+	// the queue: emptied by the server is maintenance, our own leave is not
+	rig.feed( "{\"t\":\"qm.status\",\"status\":\"left\",\"pool\":0}" );
+	CHECK( OnlineTakeMaintenanceRefusal( until ) );
+	PeerRequest stop;
+	stop.peerRequestType = PeerRequest::PEERREQUEST_STOPQUICKMATCH;
+	rig.peer->addRequest( stop );
+	rig.feed( "{\"t\":\"qm.status\",\"status\":\"searching\",\"pool\":1}" );		// still on its way before our left
+	rig.feed( "{\"t\":\"qm.status\",\"status\":\"left\",\"pool\":0}" );
+	CHECK( !OnlineTakeMaintenanceRefusal( until ) );
+	rig.peerResponses();
+
+	// a new request drops a refusal nobody took
+	rig.feed( "{\"t\":\"error\",\"for\":\"game.join\",\"code\":\"maintenance\"}" );
+	PeerRequest host;
+	host.peerRequestType = PeerRequest::PEERREQUEST_STARTQUICKMATCH;
+	rig.peer->addRequest( host );
+	CHECK( !OnlineTakeMaintenanceRefusal( until ) );
+	rig.peerResponses();
+	rig.sent.clear();
+
+	// the host's start waits on the server under maintenance
+	rig.feed( "{\"t\":\"game.joined\",\"id\":4,\"host\":\"Tank\",\"hostId\":7,\"ids\":[7],\"nicks\":[\"Tank\"]}" );
+	rig.peerResponses();
+	PeerRequest start;
+	start.peerRequestType = PeerRequest::PEERREQUEST_STARTGAME;
+	rig.peer->addRequest( start );
+	CHECK( OnlineIsHostStartWaiting() );
+	rig.feed( "{\"t\":\"error\",\"for\":\"game.start\",\"code\":\"maintenance\"}" );
+	CHECK( !OnlineIsHostStartWaiting() );
+	AsciiString code;
+	CHECK( OnlineTakeStartRefusal( code, until ) );		// the staging screen's alone
+	CHECK_STR( code.str(), "maintenance" );
+	CHECK_STR( until.str(), "2026-11-18T23:00:00Z" );
+	CHECK( !OnlineTakeStartRefusal( code, until ) );
+	CHECK( !OnlineTakeMaintenanceRefusal( until ) );		// no other screen sees it
+	CHECK( rig.peerResponses().empty() );		// nothing launches
+	rig.peer->addRequest( start );
+	rig.feed( "{\"t\":\"error\",\"for\":\"game.start\",\"code\":\"throttled\"}" );		// any refusal lets Start go
+	CHECK( !OnlineIsHostStartWaiting() );
+	CHECK( OnlineTakeStartRefusal( code, until ) );
+	CHECK_STR( code.str(), "throttled" );
+	rig.peer->addRequest( start );
+	CHECK( OnlineIsHostStartWaiting() );
+	rig.feed( "{\"t\":\"game.start\",\"match\":\"m1\",\"ids\":[7],\"nicks\":[\"Tank\"],\"vips\":[167772163]}" );
+	std::vector<PeerResponse> r = rig.peerResponses();
+	CHECK( r.size() == 1 && r[0].peerResponseType == PeerResponse::PEERRESPONSE_GAMESTART );
+	CHECK( !OnlineIsHostStartWaiting() );
+
+	// without maintenance the host launches on its click, as before
+	rig.feed( "{\"t\":\"notice\",\"kind\":\"info\",\"en\":\"\",\"tr\":\"\"}" );
+	rig.feed( "{\"t\":\"game.joined\",\"id\":5,\"host\":\"Tank\",\"hostId\":7,\"ids\":[7],\"nicks\":[\"Tank\"]}" );
+	rig.peerResponses();
+	rig.peer->addRequest( start );
+	CHECK( !OnlineIsHostStartWaiting() );
+	rig.feed( "{\"t\":\"game.start\",\"match\":\"m2\",\"ids\":[7],\"nicks\":[\"Tank\"],\"vips\":[167772163]}" );
+	CHECK( rig.peerResponses().empty() );
 }

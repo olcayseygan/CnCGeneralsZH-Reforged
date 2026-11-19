@@ -8890,6 +8890,10 @@ TEST(random_pool_round_trips_and_plain_random_leaves_out_turkiye)
 	CHECK( !IsValidPlayerTemplatePick( 5 ) );
 	CHECK( IsValidPlayerTemplatePick( PLAYERTEMPLATE_OBSERVER ) );
 	CHECK( IsValidPlayerTemplatePick( 4 ) );
+	// a template with no command center is no seat's army: a saved Civilian computer seat (retail's
+	// number 0) crashed the match start in 4.0.0
+	CHECK( !IsValidPlayerTemplatePick( 0 ) );
+	CHECK( !IsValidPlayerTemplatePick( PlayerTemplateFromSlotField( AsciiString( "0" ) ) ) );
 
 	// the slot string carries a pool as its mask in hex, nine bytes at the widest where the number was eleven
 	CHECK_STR( PlayerTemplateSlotField( pick ).str(), "P9" );
@@ -23313,6 +23317,28 @@ TEST(aircraft_altitude_lines_are_a_check_box_that_starts_on)
 	delete scratch;
 }
 
+TEST(selection_outlines_are_a_check_box_that_starts_on)
+{
+	const OptionDef *def = findOptionDef( "SelectionOutlines" );
+	CHECK( def != NULL );
+	if( def == NULL )
+		return;
+	CHECK_EQ( (Int)def->kind, (Int)OPTION_BOOL );
+	CHECK_EQ( (Int)def->apply, (Int)APPLY_LIVE );
+	CHECK( strstr( def->widgetName, "CheckSelectionOutlines" ) != NULL );
+
+	GlobalData *saved = TheWritableGlobalData;
+	GlobalData *scratch = NEW GlobalData;
+	TheWritableGlobalData = scratch;
+
+	CHECK( scratch->m_selectionOutlines );
+	def->set( 0 );
+	CHECK( !scratch->m_selectionOutlines );
+
+	TheWritableGlobalData = saved;
+	delete scratch;
+}
+
 TEST(high_static_lod_keeps_the_picture_settings)
 {
 	StaticGameLODInfo high;
@@ -27535,6 +27561,7 @@ namespace {
 			m_archiveFileMap[ AsciiString( name ) ] = art;
 		}
 		void mountReforged( ArchiveFile *art, const char *name ) { mountOverRetail( art, AsciiString( name ) ); }
+		void keepRetail( void ) { keepRetailTextures(); }
 	};
 }
 
@@ -27815,6 +27842,131 @@ TEST(reforged_lod_copy_is_drawn_only_when_it_keeps_what_the_logic_reads)
 	std::error_code ignored;
 	std::filesystem::remove( "Art/W3D", ignored );		// only when empty: never someone else's folder
 	std::filesystem::remove( "Art", ignored );
+}
+
+/* A reskin is a texture under a retail name from somewhere the game does not ship it: a loose file,
+	 the user folder, or a stray archive that sorts before TexturesZH.big.  None of them is drawn.  The
+	 stray's copy goes back to EA's, its other extension and its copy in a language folder go, a name of
+	 its own stays; a loose copy loses everywhere but Art\Textures under a name the fork ships. */
+TEST(a_retail_texture_comes_only_from_the_games_own_sources)
+{
+	CHECK( bootOnce() );
+	CHECK( !FileSystem::forkTextures().empty() );
+	if( FileSystem::forkTextures().empty() )
+		return;
+	const std::string fork = *FileSystem::forkTextures().begin();		// e.g. reforgedbaramericacenter.tga
+	const std::string forkStem = fork.substr( 0, fork.rfind( '.' ) );
+	const std::string retailFork = "Art\\Textures\\" + forkStem + ".dds";
+
+	static const char *const stray[] = { "Art\\Textures\\zhrtex_helix.dds", "Art\\Textures\\zhrtex_helix.tga",
+		"Data\\English\\Art\\Textures\\zhrtex_helix.dds", "Art\\Textures\\zhrtex_own.dds", NULL };
+	const std::string strayBytes[] = { "stray helix", "stray tga", "stray localized", "stray own" };
+	const char *const texturesZH[] = { "Art\\Textures\\zhrtex_helix.dds", retailFork.c_str(), NULL };
+	const std::string texturesZHBytes[] = { "retail helix", "retail fork" };
+	static const char *const englishZH[] = { "Data\\English\\Art\\Textures\\zhrtex_gameover.tga", NULL };
+	const std::string englishZHBytes[] = { "retail gameover" };
+	// EA's base game archives sit in the base game's folder; the same names beside the exe are strays,
+	// and W3DEnglishZH.big is no language archive
+	static const char *const german[] = { "Data\\German\\Art\\Textures\\zhrtex_flagge.tga", NULL };
+	const std::string germanBytes[] = { "retail flagge" };
+	static const char *const textures[] = { "Art\\Textures\\zhrtex_flag.dds", NULL };
+	const std::string texturesBytes[] = { "retail flag" };
+	static const char *const strayEnglish[] = { "Data\\English\\Art\\Textures\\zhrtex_flag.dds", NULL };
+	static const char *const strayTextures[] = { "Art\\Textures\\zhrtex_flag.tga", NULL };
+	static const char *const strayW3D[] = { "Data\\W3DEnglish\\Art\\Textures\\zhrtex_helix.dds", NULL };
+	const std::string strayOne[] = { "stray" };
+
+	MountOrderFileSystem fs;
+	fs.m_baseGameDirectory = "ZH_Generals\\";
+	fs.mountRetail( new ServingArchive( stray, strayBytes ), "!skins.big", FALSE );		// sorts first, claims first
+	fs.mountRetail( new ServingArchive( strayEnglish, strayOne ), "English.big", FALSE );
+	fs.mountRetail( new ServingArchive( englishZH, englishZHBytes ), "EnglishZH.big", FALSE );
+	fs.mountRetail( new ServingArchive( strayTextures, strayOne ), "Textures.big", FALSE );
+	fs.mountRetail( new ServingArchive( texturesZH, texturesZHBytes ), "TexturesZH.big", FALSE );
+	fs.mountRetail( new ServingArchive( strayW3D, strayOne ), "W3DEnglishZH.big", FALSE );
+	fs.mountRetail( new ServingArchive( german, germanBytes ), "ZH_Generals\\German.big", FALSE );
+	fs.mountRetail( new ServingArchive( textures, texturesBytes ), "ZH_Generals\\Textures.big", FALSE );
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "art\\textures\\zhrtex_helix.dds" ) ).str(), "!skins.big" );
+	fs.keepRetail();
+
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "data\\english\\art\\textures\\zhrtex_flag.dds" ) ).str(), "" );
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "art\\textures\\zhrtex_flag.tga" ) ).str(), "" );
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "art\\textures\\zhrtex_flag.dds" ) ).str(), "ZH_Generals\\Textures.big" );
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "data\\w3denglish\\art\\textures\\zhrtex_helix.dds" ) ).str(), "" );
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "data\\german\\art\\textures\\zhrtex_flagge.tga" ) ).str(), "ZH_Generals\\German.big" );
+	CHECK( fs.isRetailTexture( "Art/Textures/zhrtex_flagge.dds" ) );
+
+	// only the fork's own archive names mount over retail; a reskin renamed Reforged*.big is not one
+	CHECK( ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedSkins.big" ) ) );
+	CHECK( ArchiveFileSystem::isForkArchive( AsciiString( "C:\\Run\\reforgedusa.BIG" ) ) );
+	CHECK( ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedTurkiye.big" ) ) );
+	CHECK( ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedNeutralG.big" ) ) );
+	CHECK( ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedTextures.big" ) ) );
+	CHECK( ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedTerrain.big" ) ) );
+	CHECK( !ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedZSkins.big" ) ) );
+	CHECK( !ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedNeutral.big" ) ) );
+	CHECK( !ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedNeutralAB.big" ) ) );
+	CHECK( !ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedNormals.big" ) ) );
+	CHECK( !ArchiveFileSystem::isForkArchive( AsciiString( "ReforgedSkins.big.big" ) ) );
+
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "art\\textures\\zhrtex_helix.dds" ) ).str(), "TexturesZH.big" );
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "art\\textures\\zhrtex_helix.tga" ) ).str(), "" );
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "data\\english\\art\\textures\\zhrtex_helix.dds" ) ).str(), "" );
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "data\\english\\art\\textures\\zhrtex_gameover.tga" ) ).str(), "EnglishZH.big" );
+	CHECK_STR( fs.getArchiveFilenameForFile( AsciiString( "art\\textures\\zhrtex_own.dds" ) ).str(), "!skins.big" );
+	CHECK( fs.isRetailTexture( "Art/Textures/ZHRTEX_Helix.tga" ) );
+	CHECK( fs.isRetailTexture( "Art/Textures/zhrtex_gameover.dds" ) );
+	CHECK( !fs.isRetailTexture( "Art/Textures/zhrtex_own.dds" ) );
+	CHECK( !fs.isRetailTexture( "Data/INI/zhrtex_helix.dds" ) );
+
+	const Int LOOSE = 6;
+	const std::string forkPath = "Art/Textures/" + fork, forkOtherPath = "Art/Textures/" + forkStem + ".dds";
+	const char *const loose[LOOSE] = { "Art/Textures/zhrtex_helix.dds", "Art/Textures/zhrtex_helix.tga",
+		"Data/English/Art/Textures/zhrtex_helix.dds", "UserData/Textures/zhrtex_helix.dds", forkPath.c_str(), forkOtherPath.c_str() };
+	const Bool existed[LOOSE] = { FALSE, FALSE, FALSE, FALSE, std::filesystem::exists( loose[4] ), std::filesystem::exists( loose[5] ) };
+	std::filesystem::create_directories( "Art/Textures" );
+	std::filesystem::create_directories( "Data/English/Art/Textures" );
+	std::filesystem::create_directories( "UserData/Textures" );
+	for( Int i = 0; i < LOOSE; ++i )
+	{
+		if( existed[i] )
+			continue;		// a real copy beside the test: read it, never write over it
+		FILE *fp = fopen( loose[i], "wb" );
+		CHECK( fp != NULL );
+		if( fp != NULL )
+		{
+			fputs( "loose", fp );
+			fclose( fp );
+		}
+	}
+
+	ArchiveFileSystem *const before = TheArchiveFileSystem;
+	TheArchiveFileSystem = &fs;
+	TheFileSystem->reset();
+
+	const Int access = File::READ | File::BINARY;
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[0], access ) ) == "retail helix" );		// loose loses to EA's
+	CHECK( !TheFileSystem->doesFileExist( loose[1] ) );		// the .tga the loader would take: no source of the game's
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[1], access ) ).empty() );
+	CHECK( !TheFileSystem->doesFileExist( loose[2] ) );		// the language folder the loader asks first
+	CHECK( !TheFileSystem->doesFileExist( loose[3] ) );		// the user folder
+	FileInfo info;
+	CHECK( !TheFileSystem->getFileInfo( AsciiString( loose[3] ), &info ) );
+	if( !existed[4] )
+		CHECK( readAllAndClose( TheFileSystem->openFile( loose[4], access ) ) == "loose" );		// the fork's own copy
+	CHECK( TheFileSystem->doesFileExist( loose[4] ) );
+	CHECK( readAllAndClose( TheFileSystem->openFile( loose[5], access ) ) == "retail fork" );		// not the name it ships
+
+	TheFileSystem->reset();
+	TheArchiveFileSystem = before;
+	std::error_code ignored;
+	for( Int i = 0; i < LOOSE; ++i )
+		if( !existed[i] )
+			std::filesystem::remove( loose[i], ignored );
+	const char *const folders[] = { "Art/Textures", "Art", "Data/English/Art/Textures", "Data/English/Art", "Data/English", "Data",
+		"UserData/Textures", "UserData" };
+	for( size_t i = 0; i < ARRAY_SIZE( folders ); ++i )
+		std::filesystem::remove( folders[i], ignored );		// only when empty
 }
 
 //////////////////////////////////////////////////////////////////////////////

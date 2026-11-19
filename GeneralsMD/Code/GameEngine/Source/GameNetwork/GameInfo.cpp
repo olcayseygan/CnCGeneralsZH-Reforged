@@ -73,7 +73,11 @@ Bool IsValidPlayerTemplatePick( Int pick )
 {
 	if( pick < PLAYERTEMPLATE_RANDOM_POOL )
 		return pick >= PLAYERTEMPLATE_RANDOM_POOL - (Int)RANDOM_POOL_MASK;
-	return pick >= PLAYERTEMPLATE_MIN && pick < ThePlayerTemplateStore->getPlayerTemplateCount();
+	if( pick < PLAYERTEMPLATE_MIN || pick >= ThePlayerTemplateStore->getPlayerTemplateCount() )
+		return FALSE;
+	// a seat's army has a command center to start from: the civilians (number 0) and the observer's own
+	// template have none, and a Civilian computer seat crashed the match start in 4.0.0
+	return pick < 0 || !ThePlayerTemplateStore->getNthPlayerTemplate( pick )->getStartingBuilding().isEmpty();
 }
 
 Int EncodeRandomPool( UnsignedInt mask )

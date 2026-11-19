@@ -181,6 +181,14 @@ struct OnlineSession
 	Bool pingRefused;				///< the server does not know ping (error{for:ping,code:unknown}): no more this connection
 	std::string failCode;		///< the last auth.fail's code, cleared by the next requestAuth: OnlineGetLoginFailure
 	Int failRetry;					///< its retry, in seconds; 0 when it gave none
+	std::string failUntil;	///< its until (auth.fail{code:maintenance}), as the server wrote it
+	// the server's notice{kind,en,tr,until}: OnlineGetNotice.  Belongs to the connection: an empty one or a
+	// sign-out (connectionGone) clears it
+	std::string noticeKind, noticeEn, noticeTr, noticeUntil;
+	UnsignedInt noticeSerial;	///< moves on whenever the notice changes or goes
+	// a new room, game or match refused with code maintenance, until a screen takes it: OnlineTakeMaintenanceRefusal
+	Bool maintenanceRefused;
+	std::string maintenanceUntil;
 
 	// the account
 	Bool authed;						///< auth.ok arrived
@@ -190,8 +198,10 @@ struct OnlineSession
 	std::string token;
 	UnsignedByte ticket[16];
 	UnsignedInt vip;
-	OnlineMessage pendingAuth;		///< sent once the welcome arrives
+	OnlineMessage pendingAuth;		///< sent once the welcome arrives and the install files are hashed
 	Bool hasPendingAuth;
+	Bool filesSent;					///< this connection has had the install files' hashes (sendFiles)
+	std::string failFile;		///< the last auth.fail{code:files}'s file, cleared with failCode
 	Bool authWaiting;				///< a login, register or resume is out (or pending) with no answer yet
 
 	// where the player is
@@ -199,6 +209,9 @@ struct OnlineSession
 	long long gameId;				///< the staging room, 0 outside one
 	long long joiningGame;	///< game.join sent, game.joined not back yet
 	Bool hosting;
+	Bool hostStartWaiting;	///< the host's game.start went under maintenance: it launches on the server's game.start
+	std::string startRefusal;			///< the code of an error{for:game.start} the host waited on: OnlineTakeStartRefusal
+	std::string startRefusalUntil;	///< its until, else the notice's
 	OnlineMessage hostInfo;	///< CREATESTAGINGROOM's CRCs and ladder, repeated in every game.opts
 	std::string hostNick;
 	long long hostLeftGame;	///< a game removed under a guest: host left, unless game.start follows
@@ -242,6 +255,7 @@ struct OnlineSession
 	// arrived in steady-clock milliseconds
 	OnlineMessage qmWindow;
 	long long qmWindowMs;
+	Bool qmLeaveSent;				///< qm.leave went and no qm.status has answered it yet
 
 	// the account's skins: what it owns (bit n for id n); what it wears is TankSkin_localLoadout
 	UnsignedInt64 skinsOwned;
@@ -277,11 +291,14 @@ struct OnlineSession
 	void peerResponse( const PeerResponse &r );
 	void finishPeerLogin();
 	void loginFailed( DisconnectReason reason );
+	void flushAuth();					///< the pending login, once welcomed and the install files are hashed
+	void sendFiles();					///< files{seq,last,paths[],hashes[]}, once a connection
 	void gameListEntry( const OnlineMessage &m );
 	void resolveHostLeft();
 	void noteCard( const OnlineMessage &m );			///< a line's rating, tier, games and ping under its nick
 	void matched( const OnlineMessage &m );			///< qm.matched as QM_MATCHED
 	void noteSkins( const OnlineMessage &m );		///< auth.ok's or skins.ok's owned[] and skins[]
+	void noteMaintenance( const OnlineMessage &m );	///< a request refused for maintenance, with its until
 	// history (OnlineStats.cpp)
 	void noteHistory( const OnlineMessage &m );			///< an answer under its id and mode
 	void historyRefused( const OnlineMessage &m );	///< error{for:history}: the key it names, else the oldest ask
@@ -292,7 +309,8 @@ private:
 	OnlineSession();
 };
 
-/* The first line on a new connection: the exe and INI CRCs, the version and the protocol (proto 2). */
+/* The first line on a new connection: the exe and INI CRCs, the version and the protocol (proto 2), and
+	 notice:1, which asks the server for its notices. */
 OnlineMessage OnlineHelloLine( UnsignedInt exe, UnsignedInt ini, const char *ver );
 
 /* Bytes a server line's number field holds, for vips and ids. */

@@ -2733,6 +2733,9 @@ void WaterRenderObjClass::update( void )
 //-------------------------------------------------------------------------------------------------
 void WaterRenderObjClass::replaceSkyboxTexture(const AsciiString& oldTexName, const AsciiString& newTextName)
 {
+	if (m_skyBox == NULL)
+		return;	// no new_skybox model in this art (the mod case in render below)
+
 	W3DAssetManager* assetManager = ((W3DAssetManager*)W3DAssetManager::Get_Instance());
 
 	assetManager->replacePrototypeTexture(m_skyBox, oldTexName.str(), newTextName.str());
@@ -3466,7 +3469,9 @@ void WaterRenderObjClass::Render(RenderInfoClass & rinfo)
 	}
 #endif
 
-	if (TheGlobalData && TheGlobalData->m_drawSkyBox)
+	// A mod whose art has no new_skybox model still turns the sky box on (DrawSkyBox, or a map
+	// script), and the draw called through a null model at match start (crash report 4123).
+	if (TheGlobalData && TheGlobalData->m_drawSkyBox && m_skyBox)
 	{	//center skybox around camera
 		Vector3 pos=rinfo.Camera.Get_Position();
 		pos.Z = TheGlobalData->m_skyBoxPositionZ;

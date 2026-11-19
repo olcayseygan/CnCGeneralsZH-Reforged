@@ -263,6 +263,11 @@ void Win32BIGFileSystem::init() {
       }
     }
 
+	// A texture EA ships comes from EA's archive: the plain pass is first-wins alphabetically, so a
+	// stray "!skins.big" beside the exe used to claim every unit texture it carried over TexturesZH.big.
+	// Before the Reforged art, which may still go over them.
+	keepRetailTextures();
+
     // ... except where that costs resolution: a number of the base game's textures were shipped
     // downscaled in TexturesZH.big, and load order alone made those the ones the game uses.
     prioritizeLargerFiles(TGA_DIR_PATH, "TexturesZH.big", "Textures.big");
@@ -470,6 +475,14 @@ Bool Win32BIGFileSystem::loadBigFilesFromDirectory(AsciiString dir, AsciiString 
 			// The fork's art lives beside the exe only.  One in the base game's folder would come in after
 			// init's ordered pass and outrank it under Reforged while Classic ranked it by name.
 			DEBUG_LOG(("Win32BIGFileSystem::loadBigFilesFromDirectory - %s is not beside the exe, left out.\n", (*it).str()));
+			it++;
+			continue;
+		}
+		if (isReforgedArchive(*it) && !ArchiveFileSystem::isForkArchive(*it)) {
+			// The name alone mounts an archive over retail, so a reskin renamed Reforged<anything>.big came
+			// back over TexturesZH.big.  Only the archives the fork ships go in; ReforgedNormals.big, which
+			// nothing has read since 2026-10-06, stays out with the rest.
+			DEBUG_LOG(("Win32BIGFileSystem::loadBigFilesFromDirectory - %s is not one of the fork's archives, left out.\n", (*it).str()));
 			it++;
 			continue;
 		}

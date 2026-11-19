@@ -1411,7 +1411,7 @@ void WOLLobbyMenuUpdate( WindowLayout * layout, void *userData)
 						TheGameSpyInfo->addText(msg, GameSpyColor[GSCOLOR_DEFAULT], NULL);
 					}
 				}
-				else
+				else if (!OnlineShowMaintenanceRefusal())		// maintenance keeps the lobby shut: no retry loop
 				{
 					DEBUG_LOG(("WOLLobbyMenuUpdate() - joining best group room\n"));
 					TheGameSpyInfo->joinBestGroupRoom();
@@ -1505,6 +1505,8 @@ void WOLLobbyMenuUpdate( WindowLayout * layout, void *userData)
 						TheGameSpyInfo->markAsStagingRoomHost();
 						TheGameSpyInfo->setGameOptions();
 					}
+					else
+						OnlineShowMaintenanceRefusal();		// the server takes no new game while it is under maintenance
 				}
 				break;
 			case PeerResponse::PEERRESPONSE_JOINSTAGINGROOM:
@@ -1588,6 +1590,9 @@ void WOLLobbyMenuUpdate( WindowLayout * layout, void *userData)
 							s = TheGameText->fetch("GUI:JoinFailedDefault");
 							break;
 						}
+						AsciiString until;
+						if (OnlineIsEnabled() && OnlineTakeMaintenanceRefusal(until))
+							s = OnlineMaintenanceText(until);
 						GSMessageBoxOk(TheGameText->fetch("GUI:JoinFailedDefault"), s);
 						if (groupRoomToJoin)
 						{

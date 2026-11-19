@@ -564,7 +564,7 @@ GUI:FrameRateLimit4
 END
 
 TOOLTIP:FrameRateLimit
-"The most pictures a second the game draws in a match. A lower limit keeps the graphics card cooler and quieter and does not slow the game down. The menus always stop at 60."
+"The most pictures a second the game draws, in a match and in the menus. A lower limit keeps the graphics card cooler and quieter and does not slow the game down. Off runs a match as fast as the machine draws and holds the menus at 60."
 END
 
 GUI:ClassicGraphics
@@ -965,6 +965,14 @@ END
 
 TOOLTIP:AircraftAltitudeLine
 "A thin line from each aircraft in the air straight down to the ground under it. Where it touches is where the plane really is, and its length is how high it flies. Parked aircraft have none."
+END
+
+GUI:SelectionOutlines
+"Selection Outlines"
+END
+
+TOOLTIP:SelectionOutlines
+"A glowing ring in its owner's color under each selected unit, and the same line around a selected building. Off, neither is drawn; order lines and the marks where you click stay."
 END
 
 GUI:PlayerColors
@@ -4594,8 +4602,56 @@ GUI:OnlineLoginBanned
 "This account is banned."
 END
 
+GUI:OnlineMaintenance
+"Online play is down for maintenance. Try again later."
+END
+
+GUI:OnlineMaintenanceUntil
+"Online play is down for maintenance. It should be back at %s."
+END
+
+GUI:OnlineMaintenanceTitle
+"Under maintenance"
+END
+
+GUI:OnlineStartRefused
+"The server would not start the game (%s)."
+END
+
+GUI:OnlineNoticeMaintenance
+"MAINTENANCE"
+END
+
+GUI:OnlineNoticeInfo
+"NOTICE"
+END
+
+GUI:OnlineNoticeMaintenanceWords
+"Online play is down for maintenance."
+END
+
+GUI:OnlineNoticeBack
+"Back at %s"
+END
+
+GUI:OnlineNoticeUntil
+"Until %s"
+END
+
 GUI:OnlineLoginElsewhere
 "This account signed in from another computer."
+END
+
+GUI:OnlineCheckingFiles
+"Checking game files..."
+END
+
+GUI:OnlineLoginFiles
+"This file is not the one the game shipped with:\n\n%ls\n\nReinstall the game from the launcher, or delete that file, then restart the game and sign in again."
+END
+
+GUI:OnlineLoginFilesNone
+"The server could not check your game files. Restart the game and sign in again; if it happens again, reinstall the game from the launcher."
 END
 
 // the online hub's info box when the server sent no message of the day
@@ -6545,4 +6601,8 @@ END
 
 GUI:OnlineHubCustomExplain_Short
 "Host or join a room. Chat with whoever is on %ls."
+END
+
+GUI:GroupTrayTraining
+"+%d in production"
 END

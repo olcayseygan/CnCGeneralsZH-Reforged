@@ -176,6 +176,8 @@ void RailedTransportAIUpdate::pickAndMoveToInitialLocation( void )
 	DEBUG_ASSERTCRASH( closestPath != INVALID_PATH,
 										 ("No suitable starting waypoint path could be found for '%s'\n",
 										 us->getTemplate()->getName().str()) );
+	if( closestEndWaypoint == NULL )
+		return;
 
 	// follow the waypoint path to its destination end point
 	aiFollowWaypointPath( closestEndWaypoint, CMD_FROM_AI );
@@ -227,10 +229,17 @@ UpdateSleepTime RailedTransportAIUpdate::update( void )
 											 ("RailedTransportAIUpdate: Invalid current path '%s'\n", m_currentPath) );
 
 		// get our target waypoint
-		Waypoint *waypoint = TheTerrainLogic->getWaypointByID( m_path[ m_currentPath ].endWaypointID );
-		
-		// sanity
-		DEBUG_ASSERTCRASH( waypoint, ("RailedTransportAIUpdate: Invalid target waypoint\n") );
+		Waypoint *waypoint = NULL;
+		if( m_currentPath >= 0 && m_currentPath < m_numPaths )
+			waypoint = TheTerrainLogic->getWaypointByID( m_path[ m_currentPath ].endWaypointID );
+
+		// a map without this transport's waypoint paths (or a dropped one) has nowhere to go:
+		// retail read the NULL waypoint here and crashed, stop in place with the dock open
+		if( waypoint == NULL )
+		{
+			setInTransit( FALSE );
+			return UPDATE_SLEEP_NONE;
+		}
 
 		// how far away are we from the target waypoint
 		const Coord3D *start = us->getPosition();
@@ -312,6 +321,12 @@ void RailedTransportAIUpdate::privateExecuteRailedTransport( CommandSourceType c
 
 	// if we've in the process of loading or unloading anything we can't do a transport sequence
 	if( rtdui == NULL || rtdui->isLoadingOrUnloading() )
+		return;
+
+	// no waypoint paths on this map: slot 0 would be an empty path with no waypoints
+	if( m_waypointDataLoaded == FALSE )
+		loadWaypointData();
+	if( m_numPaths == 0 )
 		return;
 
 	// pick the next path

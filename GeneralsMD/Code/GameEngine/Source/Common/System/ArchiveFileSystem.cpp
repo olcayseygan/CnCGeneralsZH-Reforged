@@ -176,6 +176,21 @@ Bool ArchiveFileSystem::reforgedArchiveWanted(const AsciiString& path, Bool clas
 	return !classicGraphics && (isReforgedBaseArt(path) ? hdTextures : detailedModels);
 }
 
+Bool ArchiveFileSystem::isForkArchive(const AsciiString& path)
+{
+	static const char *const named[] = { "ReforgedSkins.big", "ReforgedUSA.big", "ReforgedChina.big", "ReforgedGLA.big",
+		"ReforgedTurkiye.big", "ReforgedTextures.big", "ReforgedTerrain.big" };
+	const char *name = archiveBaseName(path);
+	for (Int i = 0; i < (Int)(sizeof(named) / sizeof(named[0])); ++i) {
+		if (strcasecmp(name, named[i]) == 0) {
+			return TRUE;
+		}
+	}
+	// the map batches, ReforgedNeutralA.big on
+	return strlen(name) == 20 && strncasecmp(name, "ReforgedNeutral", 15) == 0 && isalpha((unsigned char)name[15])
+		&& strcasecmp(name + 16, ".big") == 0;
+}
+
 void ArchiveFileSystem::mountOverRetail(ArchiveFile *archiveFile, const AsciiString& archiveFilename)
 {
 	FilenameList models;
@@ -204,6 +219,139 @@ File * ArchiveFileSystem::openRetailFile(const AsciiString& filename)
 	const AsciiString archiveFilename = getRetailArchiveFilenameForFile(filename);
 	ArchiveFileMap::iterator it = m_archiveFileMap.find(archiveFilename);
 	return it != m_archiveFileMap.end() ? it->second->openFile(filename.str(), File::READ) : NULL;
+}
+
+/// The name of a .tga or .dds asked for in a folder named Textures, lower case and without its
+/// extension; empty for anything else.  The W3D loader tries a .dds before the .tga a model names,
+/// so the extension cannot tell one texture from another.
+static std::string textureStem(const char *filename)
+{
+	const char *leaf = filename, *parent = NULL;
+	for (const char *c = filename; *c; ++c) {
+		if (*c == '\\' || *c == '/') {
+			parent = leaf;
+			leaf = c + 1;
+		}
+	}
+	const char *dot = strrchr(leaf, '.');
+	if (parent == NULL || dot == NULL || leaf - parent != 9 || strncasecmp(parent, "textures", 8) != 0
+		|| (strcasecmp(dot, ".tga") != 0 && strcasecmp(dot, ".dds") != 0)) {
+		return std::string();
+	}
+	std::string stem(leaf, dot);
+	for (size_t i = 0; i < stem.size(); ++i) {
+		stem[i] = (char)tolower((unsigned char)stem[i]);
+	}
+	return stem;
+}
+
+Bool ArchiveFileSystem::isRetailTexture(const Char *filename) const
+{
+	if (m_retailTextures.empty()) {
+		return FALSE;
+	}
+	const std::string stem = textureStem(filename);
+	return !stem.empty() && m_retailTextures.count(stem) != 0;
+}
+
+void ArchiveFileSystem::keepRetailTextures()
+{
+	static const char ART_TEXTURES[] = "art\\textures\\";
+	static const char *const holders[] = { "Textures.big", "TexturesZH.big", "Patch.big", "PatchZH.big" };
+
+	// What EA ships, path by path: Art\Textures from its texture and patch archives, Data\<language>\
+	// Art\Textures from <language>.big and <language>ZH.big for a language EA shipped (so W3DEnglishZH.big
+	// is no language archive).  A Zero Hour archive counts beside the exe, a base game one in the base
+	// game's folder, or beside the exe when the base game was found there (m_baseGameDirectory empty): a
+	// stray English.big beside a Steam install's exe is nobody's.  Where two hold a path, a Zero Hour
+	// archive over a base game one and then the first by name, the order the plain mount gives them.
+	// ponytail: archive names and folders, not contents, say what is EA's; an edited TexturesZH.big, or a
+	// stray in a folder that holds the base game beside the exe, passes as retail.
+	std::map<std::string, AsciiString> shipped;
+	for (Int zeroHour = 1; zeroHour >= 0; --zeroHour) {
+		for (ArchiveFileMap::const_iterator it = m_archiveFileMap.begin(); it != m_archiveFileMap.end(); ++it) {
+			const char *name = archiveBaseName(it->first);
+			const size_t length = strlen(name);
+			const Bool zh = length >= 6 && strcasecmp(name + length - 6, "ZH.big") == 0;
+			if (zh != (zeroHour != 0) || length < 4 || strcasecmp(name + length - 4, ".big") != 0) {
+				continue;
+			}
+			const Bool besideExe = name == it->first.str();
+			const Bool inBaseGame = !m_baseGameDirectory.isEmpty()
+				&& strncasecmp(it->first.str(), m_baseGameDirectory.str(), m_baseGameDirectory.getLength()) == 0;
+			if ((zh || m_baseGameDirectory.isEmpty()) ? !besideExe : !inBaseGame) {
+				continue;
+			}
+			AsciiString directory = ART_TEXTURES;
+			Bool holder = FALSE;
+			for (Int i = 0; i < (Int)(sizeof(holders) / sizeof(holders[0])); ++i) {
+				holder = holder || strcasecmp(name, holders[i]) == 0;
+			}
+			if (!holder) {
+				const std::string language(name, length - (zh ? 6 : 4));
+				if (!FileSystem::isRetailLanguage(language.c_str())) {
+					continue;
+				}
+				directory.format("data\\%s\\%s", language.c_str(), ART_TEXTURES);
+			}
+			FilenameList files;
+			it->second->getFileListInDirectory(AsciiString(""), directory, AsciiString("*"), files, FALSE);
+			for (FilenameListIter f = files.begin(); f != files.end(); ++f) {
+				AsciiString path = *f;
+				path.toLower();
+				shipped.insert(std::make_pair(std::string(path.str()), it->first));
+			}
+		}
+	}
+	m_retailTextures.clear();
+	for (std::map<std::string, AsciiString>::const_iterator it = shipped.begin(); it != shipped.end(); ++it) {
+		m_retailTextures.insert(textureStem(it->first.c_str()));
+	}
+	m_retailTextures.erase(std::string());
+
+	// Every texture folder in the tree: Art\Textures and each Data\<x>\Art\Textures.
+	std::vector< std::pair<std::string, ArchivedDirectoryInfo *> > folders;
+	ArchivedDirectoryInfoMap::iterator art = m_rootDirectory.m_directories.find("art");
+	if (art != m_rootDirectory.m_directories.end()) {
+		ArchivedDirectoryInfoMap::iterator textures = art->second.m_directories.find("textures");
+		if (textures != art->second.m_directories.end()) {
+			folders.push_back(std::make_pair(std::string(ART_TEXTURES), &textures->second));
+		}
+	}
+	ArchivedDirectoryInfoMap::iterator data = m_rootDirectory.m_directories.find("data");
+	if (data != m_rootDirectory.m_directories.end()) {
+		for (ArchivedDirectoryInfoMap::iterator x = data->second.m_directories.begin(); x != data->second.m_directories.end(); ++x) {
+			ArchivedDirectoryInfoMap::iterator xart = x->second.m_directories.find("art");
+			if (xart == x->second.m_directories.end()) {
+				continue;
+			}
+			ArchivedDirectoryInfoMap::iterator textures = xart->second.m_directories.find("textures");
+			if (textures != xart->second.m_directories.end()) {
+				folders.push_back(std::make_pair("data\\" + std::string(x->first.str()) + "\\" + ART_TEXTURES, &textures->second));
+			}
+		}
+	}
+
+	for (size_t i = 0; i < folders.size(); ++i) {
+		ArchivedFileLocationMap &files = folders[i].second->m_files;
+		for (ArchivedFileLocationMap::iterator it = files.begin(); it != files.end(); ) {
+			const std::string path = folders[i].first + it->first.str();
+			std::map<std::string, AsciiString>::const_iterator own = shipped.find(path);
+			if (own != shipped.end()) {
+				if (own->second != it->second) {
+					DEBUG_LOG(("ArchiveFileSystem::keepRetailTextures - %s from %s, not %s\n", path.c_str(), own->second.str(), it->second.str()));
+					it->second = own->second;
+				}
+				++it;
+			} else if (m_retailTextures.count(textureStem(path.c_str())) != 0) {
+				DEBUG_LOG(("ArchiveFileSystem::keepRetailTextures - %s in %s dropped, a retail texture's name\n", path.c_str(), it->second.str()));
+				files.erase(it++);
+			} else {
+				++it;
+			}
+		}
+	}
+	DEBUG_LOG(("ArchiveFileSystem::keepRetailTextures - %d retail texture names\n", (Int)m_retailTextures.size()));
 }
 
 void ArchiveFileSystem::loadIntoDirectoryTree(const ArchiveFile *archiveFile, const AsciiString& archiveFilename, Bool overwrite)

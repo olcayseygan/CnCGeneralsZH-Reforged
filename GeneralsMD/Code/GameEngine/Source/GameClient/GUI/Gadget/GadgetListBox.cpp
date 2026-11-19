@@ -592,7 +592,7 @@ WindowMsgHandledType GadgetListBoxInput( GameWindow *window, UnsignedInt msg,
 				case KEY_DOWN:
 				{
 
-					if( BitTest( mData2, KEY_STATE_DOWN ) )
+					if( BitTest( mData2, KEY_STATE_DOWN ) && list->endPos > 0 )	// an empty list has no row 0
 					{
 
 						if( list->selectPos == -1 )
@@ -643,9 +643,9 @@ WindowMsgHandledType GadgetListBoxInput( GameWindow *window, UnsignedInt msg,
 				case KEY_UP:
 				{
 
-					if( BitTest( mData2, KEY_STATE_DOWN ) )
+					if( BitTest( mData2, KEY_STATE_DOWN ) && list->endPos > 0 )	// an empty list has no row 0
 					{
-	
+
 						if( list->selectPos == -1 )
 						{
 							list->selectPos = 0;
@@ -1298,8 +1298,12 @@ WindowMsgHandledType GadgetListBoxSystem( GameWindow *window, UnsignedInt msg,
 			pos = (ICoord2D *)mData1;
 			TextAndColor *tAndC = (TextAndColor *)mData2;
 
-			if(pos->x >= list->columns || pos->y >= list->listLength || 
-					list->listData[pos->y].cell[pos->x].cellType != LISTBOX_TEXT)
+			// rows from endPos to listLength are allocated but empty, cell NULL: an arrow key on an
+			// empty list selects row 0 and its owner asks for that row's text (v4.0.0 report 4002)
+			if(pos->x < 0 || pos->x >= list->columns || pos->y < 0 || pos->y >= list->endPos ||
+					!list->listData[pos->y].cell ||
+					list->listData[pos->y].cell[pos->x].cellType != LISTBOX_TEXT ||
+					!list->listData[pos->y].cell[pos->x].data)
 			{
 				tAndC->string = UnicodeString::TheEmptyString;
 				tAndC->color = 0;				

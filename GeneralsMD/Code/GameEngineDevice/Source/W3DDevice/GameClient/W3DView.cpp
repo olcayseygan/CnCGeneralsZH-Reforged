@@ -1318,6 +1318,10 @@ const Coord3D& W3DView::get3DCameraPosition() const
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
+// The first picture of a match says where the camera looks, beside GameLogic's CAMERA START line, so a
+// match that opens off the map says so in the log (draw).  reset arms it again for the next match.
+static Bool s_matchFirstDrawLogged = FALSE;
+
 void W3DView::reset( void )
 {
 	View::reset();
@@ -1351,6 +1355,8 @@ void W3DView::reset( void )
 
 	// a blast from the last game must not come back on the first frames of the next one
 	m_distortionCount = 0;
+
+	s_matchFirstDrawLogged = FALSE;	// the next match's first picture logs its camera (draw)
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2539,6 +2545,15 @@ static void hideLockedDrawable( Drawable *draw, Bool hide )
 void W3DView::draw( void )
 {
 	USE_PERF_TIMER(W3DView_drawView)
+	if (!s_matchFirstDrawLogged && this == TheTacticalView && TheGameLogic && TheGameLogic->isInGame()
+		&& !TheGameLogic->isInShellGame() && !TheGameLogic->isLoadingMap() && TheTerrainLogic)
+	{
+		s_matchFirstDrawLogged = TRUE;
+		Region3D extent;
+		TheTerrainLogic->getExtent( &extent );
+		DEBUG_LOG(( "CAMERA FIRST DRAW look point %.1f %.1f, map %.1f %.1f to %.1f %.1f, logic frame %d\n",
+			m_pos.x, m_pos.y, extent.lo.x, extent.lo.y, extent.hi.x, extent.hi.y, TheGameLogic->getFrame() ));
+	}
 	Bool skipRender = false;
 	Bool doExtraRender = false;
 	CustomScenePassModes customScenePassMode  = SCENE_PASS_DEFAULT;
@@ -3495,27 +3510,52 @@ void W3DView::lookAt( const Coord3D *o )
 		// Pos.z is not used, so if we want to look at something off the ground, 
 		// we have to look at the spot on the ground such that the object intersects
 		// with the look at vector in the center of the screen.  jba.
-		Vector3 rayStart,rayEnd;
-		LineSegClass lineseg;
-		CastResultStruct result;
-		Vector3 intersection(0,0,0);
-
-		rayEnd = viewDirectionThrough(*m_3DCamera, 0.0f, 0.0f);
-		rayEnd *= m_3DCamera->Get_Depth();	//adjust length to reach far clip plane
-		rayStart.Set(pos.x, pos.y, pos.z);
-		rayEnd += rayStart;	//get point on far clip plane along ray from camera.
-		lineseg.Set(rayStart,rayEnd);
-
-		RayCollisionTestClass raytest(lineseg,&result);
-
-		if( TheTerrainRenderObject->Cast_Ray(raytest) )
+		//
+		// The sight line is the one this view's own angle and pitch give, as buildCameraTransform turns
+		// the eye about its target.  It used to be m_3DCamera's, which is whatever the last draw left: at
+		// a match's start that is the previous match's or the shell map's camera, and a ray along it from
+		// a raised start waypoint could land anywhere, the map's corner included, which opened the match
+		// on black past the map's edge.  A hit that is not on the map, or no hit, keeps the point itself.
+		Vector3 eye( m_cameraOffset.x, m_cameraOffset.y, m_cameraOffset.z );
+		Matrix3D pitchTransform( Vector3( 1.0f, 0.0f, 0.0f ), getPitch() );
+		Matrix3D angleTransform( Vector3( 0.0f, 0.0f, 1.0f ), getAngle() );
+		pitchTransform.mulVector3( eye );
+		angleTransform.mulVector3( eye );
+		// the scripted pitch, as buildCameraTransform applies it about the target
+		if (m_useRealZoomCam || m_FXPitch > 1.0f)
 		{
-			// get the point of intersection according to W3D
-			pos.x = result.ContactPoint.X;
-			pos.y = result.ContactPoint.Y;
-			
-		}  // end if
-	}			 
+			eye.X /= m_FXPitch;
+			eye.Y /= m_FXPitch;
+		}
+		else
+		{
+			eye.Z *= m_FXPitch;
+		}
+		Vector3 sight = -eye;
+		sight.Normalize();
+		Region3D extent;
+		TheTerrainLogic->getExtent( &extent );
+		if (sight.Z < -0.05f && extent.hi.x > extent.lo.x && extent.hi.y > extent.lo.y)
+		{
+			LineSegClass lineseg;
+			CastResultStruct result;
+			// far enough along the sight to come down past the map's lowest ground
+			const Real length = (o->z - extent.lo.z + MAP_XY_FACTOR) / -sight.Z;
+			const Vector3 rayStart(pos.x, pos.y, pos.z);
+			lineseg.Set(rayStart, rayStart + sight*length);
+
+			RayCollisionTestClass raytest(lineseg,&result);
+
+			if( TheTerrainRenderObject && TheTerrainRenderObject->Cast_Ray(raytest) && !result.StartBad
+				&& result.ContactPoint.X >= extent.lo.x && result.ContactPoint.X <= extent.hi.x
+				&& result.ContactPoint.Y >= extent.lo.y && result.ContactPoint.Y <= extent.hi.y )
+			{
+				// get the point of intersection according to W3D
+				pos.x = result.ContactPoint.X;
+				pos.y = result.ContactPoint.Y;
+			}  // end if
+		}
+	}
 	pos.z = 0;
 	setPosition(&pos);
 	stopDoingScriptedCamera();

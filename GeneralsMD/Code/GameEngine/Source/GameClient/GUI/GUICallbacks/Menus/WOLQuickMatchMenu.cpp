@@ -2600,7 +2600,8 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 					case QM_COULDNOTFINDBOT:
 						// -online: the server would not queue us.  The abandon lock counts down on the button row,
 						// Search disabled under it; a match already holding us or a server error gets the box
-						if (OnlineIsEnabled() && qmLockSeconds() == 0)
+						// maintenance has its own words: the service is closing, not this player's fault
+						if (OnlineIsEnabled() && !OnlineShowMaintenanceRefusal() && qmLockSeconds() == 0)
 							GSMessageBoxOk(TheGameText->fetch("GUI:OnlineTabQuickMatch"), TheGameText->fetch("GUI:QMRefused"));
 						TheGameSpyInfo->addText(TheGameText->fetch("QM:COULDNOTFINDBOT"), GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow);
 						buttonWiden->winEnable( FALSE );
@@ -2617,6 +2618,7 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 						enableOptionsGadgets(TRUE);
 						break;
 					case QM_STOPPED:
+						OnlineShowMaintenanceRefusal();		// maintenance took us out of the queue, unasked
 						TheGameSpyInfo->addText(TheGameText->fetch("QM:STOPPED"), GameSpyColor[GSCOLOR_DEFAULT], quickmatchTextWindow);
 						buttonWiden->winEnable( FALSE );
 						enableOptionsGadgets(TRUE);

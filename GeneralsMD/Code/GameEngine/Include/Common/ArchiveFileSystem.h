@@ -195,8 +195,25 @@ class ArchiveFileSystem : public SubsystemInterface
 	/// off the base art and Detailed Models off the batches, except ReforgedSkins.big, the online skins'
 	/// sheets for both looks, which every setting mounts.
 	static Bool		reforgedArchiveWanted(const AsciiString& path, Bool classicGraphics, Bool hdTextures, Bool detailedModels);
+	/// One of the archives the fork ships, the names the launcher's payload carries: ReforgedSkins,
+	/// ReforgedUSA, ReforgedChina, ReforgedGLA, ReforgedTurkiye, ReforgedNeutral<letter>, ReforgedTextures
+	/// and ReforgedTerrain.  Any other Reforged*.big goes into the tree nowhere, since one mounts over retail.
+	static Bool		isForkArchive(const AsciiString& path);
+
+	/// TRUE for a .tga or .dds asked for in a folder named Textures under a name, extension aside, that
+	/// EA's texture archives hold (keepRetailTextures).  FileSystem serves such a name from the archives
+	/// alone, or from the fork's own loose copy, so a reskin cannot reach anyone's screen.
+	Bool					isRetailTexture(const Char *filename) const;
+
+	/// Every archive mounted, keyed by the name it was opened under: the install file check hashes them.
+	const ArchiveFileMap&	getArchiveFileMap() const { return m_archiveFileMap; }
 
 protected:
+	/// Run once the retail archives are in and before the Reforged ones go over them: every path under
+	/// Art\Textures or Data\<language>\Art\Textures that EA's archives ship goes back to EA's copy, and a
+	/// stray archive's file under a retail texture name is dropped, whatever its extension.  Remembers
+	/// those names for isRetailTexture.
+	void									keepRetailTextures();
 	virtual void					loadIntoDirectoryTree(const ArchiveFile *archiveFile, const AsciiString& archiveFilename, Bool overwrite = FALSE );	///< load the archive file's header information and apply it to the global archive directory tree.
 	void									prioritizeLargerFiles(const AsciiString& directory, const char *inferiorArchive, const char *superiorArchive);	///< where two archives claim the same file in this directory, keep the bigger copy.
 	/// Over everything already in the tree, remembering for each model it takes which archive held it.
@@ -204,6 +221,7 @@ protected:
 
 	ArchiveFileMap m_archiveFileMap;
 	ArchivedFileLocationMap m_retailModels;	///< lower-cased model path -> its archive before mountOverRetail, empty for none
+	std::set<std::string> m_retailTextures;	///< lower-cased names without extension that EA's archives ship as textures
 	ArchivedDirectoryInfo m_rootDirectory;
 };
 

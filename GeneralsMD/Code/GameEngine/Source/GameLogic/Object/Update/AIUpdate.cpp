@@ -239,7 +239,20 @@ static void AIUpdate_traceMove( const Object *obj, const Coord3D& framePos, Bool
 {
 	ThingTemplate *tt = (ThingTemplate *)instance;
 	AIUpdateModuleData *self = tt->friend_getAIModuleInfo();
-	if (!self) 
+	if (!self && ini->getLoadType() == INI_LOAD_MULTIFILE)
+	{
+		/* A patch file's Locomotor line (TalentsReforged.ini) on an object another mod's files built
+			 without an AI module, or on the scratch template ThingFactory parses a patch of a missing
+			 object into, has no set to change.  v4.1.0 report 4205 stopped at start on one; the line is
+			 skipped like the rest of such a patch.  Our own patch files load this way too, so a Debug
+			 build still stops on it: a Locomotor line ahead of a new unit's AIUpdateInterface is ours. */
+		DEBUG_LOG(("[LINE: %d in '%s'] %s has no AI module, its Locomotor line is skipped\n",
+			ini->getLineNum(), ini->getFilename().str(), tt->getName().str()));
+		DEBUG_CRASH(("[LINE: %d in '%s'] %s names a locomotor before any AI module\n",
+			ini->getLineNum(), ini->getFilename().str(), tt->getName().str()));
+		return;
+	}
+	if (!self)
 	{
 		g_LastErrorDump.format("[LINE: %d in '%s'] %s names a locomotor before any AI module\n",
 			ini->getLineNum(), ini->getFilename().str(), tt->getName().str());

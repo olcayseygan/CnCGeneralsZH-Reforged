@@ -174,14 +174,54 @@ void*		W3DVideoBuffer::lock( void )
 		unlock();
 	}
 
-	m_surface = m_texture->Get_Surface_Level();		
+	m_surface = m_texture->Get_Surface_Level();
 
 	if ( m_surface )
 	{
 		mem = m_surface->Lock( (Int*) &m_pitch );
 	}
 
+	// BinkCopyToBuffer writes m_height rows of m_width pixels at m_pitch, trusting the surface to
+	// hold them.  Report 3866 (v4.0.0, Intel UHD 730) locked the EA logo's texture with a pitch of
+	// 16: the 486 rows of 2880 bytes went 10 KB past the pixels in opaque black and over the
+	// surface's own object.  A level too small for the movie is refused, so the frame is skipped
+	// instead of written over the heap.
+	if ( mem != NULL )
+	{
+		SurfaceClass::SurfaceDescription desc;
+		m_surface->Get_Description( desc );
+		const UnsignedInt rowBytes = ( m_xPos + m_width ) * bytesPerPixel( m_format );
+		if ( rowBytes == 0 || m_pitch < rowBytes || desc.Height < m_yPos + m_height )
+		{
+			static Bool reported = FALSE;
+			if ( !reported )
+			{
+				reported = TRUE;
+				DEBUG_LOG(( "W3DVideoBuffer::lock - refused a %ux%u format %d level locked at pitch %u for a %ux%u movie needing %u bytes a row\n",
+					desc.Width, desc.Height, (Int)desc.Format, m_pitch, m_width, m_height, rowBytes ));
+			}
+			unlock();
+			mem = NULL;
+		}
+	}
+
 	return mem;
+}
+
+//============================================================================
+// W3DVideoBuffer::bytesPerPixel
+//============================================================================
+
+UnsignedInt W3DVideoBuffer::bytesPerPixel( VideoBuffer::Type format )
+{
+	switch ( format )
+	{
+		case TYPE_X8R8G8B8:	return 4;
+		case TYPE_R8G8B8:		return 3;
+		case TYPE_R5G6B5:
+		case TYPE_X1R5G5B5:	return 2;
+	}
+	return 0;
 }
 
 //============================================================================

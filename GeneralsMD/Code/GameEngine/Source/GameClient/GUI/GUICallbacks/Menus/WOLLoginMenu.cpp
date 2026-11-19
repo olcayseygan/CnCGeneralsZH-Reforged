@@ -924,6 +924,24 @@ static void onlineStatus( const UnicodeString &text, Bool error = FALSE )
 	DEBUG_LOG(("ONLINE LOGINSTATUS error=%d %s\n", (Int)error, WideCharAsUtf8( text.str() ).str()));
 }
 
+/* A maintenance notice, from the welcome on or -testNotice, says so on the status line under Sign In before
+	 anyone tries, with when the service should be back; the line goes when the notice does. */
+static Bool s_maintenanceShown = FALSE;
+static UnsignedInt s_maintenanceSerial = 0;
+static void onlineMaintenanceLine( void )
+{
+	OnlineNotice notice;
+	const Bool on = OnlineGetNotice( notice ) && notice.maintenance;
+	if (on == s_maintenanceShown && (!on || notice.serial == s_maintenanceSerial))
+		return;
+	if (on)
+		onlineStatus( OnlineMaintenanceText( notice.until ), TRUE );
+	else
+		onlineStatus( UnicodeString::TheEmptyString );
+	s_maintenanceShown = on;
+	s_maintenanceSerial = notice.serial;
+}
+
 /// Sign In's label: what the screen is doing while it cannot be pressed (connecting, signing in), else Sign In
 static void onlineLoginLabel( const char *key )
 {
@@ -1124,9 +1142,20 @@ static void onlineLoginError( const UnicodeString &text )
 static void onlineLoginFailed( Int reason )
 {
 	Int retry = 0;
-	const AsciiString code = OnlineGetLoginFailure( &retry );
+	AsciiString file, until;
+	const AsciiString code = OnlineGetLoginFailure( &retry, &file, &until );
 	UnicodeString text;
-	if (code == "badlogin" || code == "badtoken")
+	if (code == "maintenance")
+		text = OnlineMaintenanceText( until );
+	else if (code == "files" && file.isEmpty())
+		text = TheGameText->fetch( "GUI:OnlineLoginFilesNone" );		// no list reached it, or none was hashed
+	else if (code == "files")
+	{
+		UnicodeString name;
+		name.translate( file );
+		text.format( TheGameText->fetch( "GUI:OnlineLoginFiles" ), name.str() );
+	}
+	else if (code == "badlogin" || code == "badtoken")
 		text = TheGameText->fetch( "GUI:OnlineLoginBadBody" );
 	else if (code == "throttled" && retry > 0)
 		text.format( TheGameText->fetch( "GUI:OnlineLoginThrottled" ), retry );
@@ -1193,7 +1222,9 @@ static void onlineAwaitWelcome( void )
 	if (buttonLogin)
 		buttonLogin->winEnable( TRUE );
 	onlineLoginLabel( "GUI:OnlineSignIn" );
-	onlineLoginError( TheGameText->fetch( "GUI:OnlineCannotReachServer" ) );
+	// -testNotice has no server behind it: the proof shot of the maintenance line wants no box over it
+	if (TheGlobalData->m_testNotice.isEmpty())
+		onlineLoginError( TheGameText->fetch( "GUI:OnlineCannotReachServer" ) );
 }
 
 static GameWindow *loginWindow( const char *name )
@@ -1241,6 +1272,7 @@ static void onlineLoginScreen( void )
 	s_onlineAwaitWelcome = FALSE;
 	s_savedSignIn = FALSE;
 	s_countsShown = FALSE;
+	s_maintenanceShown = FALSE;
 	if (!OnlineIsEnabled())
 		return;
 	UIStyle::onlinePageInit( parentWOLLogin, "GameSpyLoginProfile.wnd", UIStyle::ONLINE_TAB_NONE );
@@ -1414,7 +1446,11 @@ void WOLLoginMenuUpdate( WindowLayout * layout, void *userData)
 	if (s_onlineAwaitWelcome && !buttonPushed && !isShuttingDown)
 		onlineAwaitWelcome();
 	if (!isShuttingDown)
+	{
 		onlineServerPanel();
+		if (OnlineIsEnabled())
+			onlineMaintenanceLine();
+	}
 
 	if (TheShell->isAnimFinished() && !buttonPushed && TheGameSpyPeerMessageQueue)
 	{
@@ -1514,6 +1550,18 @@ void WOLLoginMenuUpdate( WindowLayout * layout, void *userData)
 		}
 
 		checkLogin();
+	}
+
+	// a login held back until the install files are hashed: the status line says so, and the timeout
+	// starts once the hashes and the login are out
+	static Bool s_checkingFiles = FALSE;
+	const Bool checkingFiles = OnlineIsEnabled() && loginAttemptTime && OnlineIsCheckingFiles();
+	if (checkingFiles)
+		loginAttemptTime = Clock_Milliseconds();
+	if (checkingFiles != s_checkingFiles && !isShuttingDown)
+	{
+		s_checkingFiles = checkingFiles;
+		onlineStatus( checkingFiles ? TheGameText->fetch( "GUI:OnlineCheckingFiles" ) : UnicodeString::TheEmptyString );
 	}
 
 	if (TheGameSpyInfo && !buttonPushed && loginAttemptTime && (loginAttemptTime + loginTimeoutInMS < Clock_Milliseconds()))

@@ -1575,6 +1575,7 @@ protected:
 	enum { HUD_CLOCK_POINT_SIZE = 7 };		///< smaller still, and bold: the clock/rate plate is a glance, not a read
 
 	void drawHudOverlay( void );					///< the top right info strip (ShowNetBox), peace time at its end
+	void drawOnlineNotice( void );				///< the online service's notice banner, on every screen, over everything
 	Int hudStripBottom( void ) const;			///< first screen row below that strip, 0 while it is not drawn
 	void drawKickVoteBanner( void );			///< the open vote kick, top middle, while there is one
 	void drawProductionList( void );			///< the production list, cameos on the left above the control bar
@@ -1629,6 +1630,7 @@ protected:
 	const Player *							m_moneyShownPlayer;			///< whose purse that figure is: another one snaps instead of counting
 	UnsignedInt									m_moneyShownMs;					///< wall clock the figure last stepped at
 	UnsignedInt									m_hudDrawCount;					///< rendered frames counted by drawHudOverlay itself
+	Int													m_noticeTop;						///< the first row the online notice may use in a match: under the info strip, peace time and the kick vote plate, as drawHudOverlay laid them out at the sync point
 	UnsignedInt									m_hudLastSampleFrame;		///< m_hudDrawCount the fps sample was last refreshed on
 	UnsignedInt									m_hudLastSampleMs;			///< wall clock of that sample
 	RateReading									m_hudFps;								///< render rate

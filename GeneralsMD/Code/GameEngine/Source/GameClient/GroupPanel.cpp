@@ -13,14 +13,16 @@
 //
 // On the right, while a squad picked by its number is still the selection and has no building in
 // it, a tray between the superweapons and the general's powers: the powers tray's own stepped body
-// at 1.2 (four buttons a row, flush right, a short last row stepping in at the foot) holding one
-// build button for every unit any of the player's factories offers, whose units come out into that
-// squad and into the selection while the squad is still it.  Over it a ledge (<S>ProBuildLedge) as
-// wide as the body, its point hanging off the body's left side with the fold button on it
-// (<S>ProBuildFold, in <S>ProBuildUnfold); the ledge's right end carries the squad's keycap and "xN".
-// Ledge and body are a drawer that starts in, with only the point left at the screen's edge as a
-// notch; a click on it slides the drawer out on the wall clock, a second one back in.  A piece the
-// sheet does not have yet is drawn as a flat fill.
+// at its own size, as the general's powers beside it (four buttons a row, flush right, a short last
+// row stepping in at the foot) holding one build button for every unit any of the player's factories
+// offers, whose units come out into that squad and into the selection while the squad is still it.
+// Over it a ledge (<S>ProBuildLedge) as wide as the body, its point hanging off the body's left side
+// with the fold button on it (<S>ProBuildFold, in <S>ProBuildUnfold); the ledge's right end carries
+// the squad's keycap and "xN", and the run before it "+N in production" for the units still in the
+// factories for that squad.  Ledge and body are a drawer that starts in, with the point and a stretch
+// of the run left at the screen's edge as a notch, "+N" on it; a click anywhere on the notch slides
+// the drawer out on the wall clock, a second one back in.  A piece the sheet does not have yet is
+// drawn as a flat fill.
 //
 // Thread: LOGIC-THREAD.md.  Everything here that reads the logic runs at the render's sync point:
 // GroupPanel_draw from InGameUI::postDraw, which W3DInGameUI::recordDraw runs before the overlap
@@ -60,6 +62,7 @@
 #include "GameClient/Gadget.h"
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/GameFont.h"
+#include "GameClient/GameText.h"
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/Image.h"
@@ -100,9 +103,10 @@ namespace
 	const Real CHIP_POINTS		= 9.0f;		///< "xN" and "+N" on the pictures
 	const Real LEDGE_POINTS		= 8.0f;		///< "xN" on the ledge, about 11 px
 
-	const Real TRAY_SCALE			= 1.2f;		///< the powers tray's pieces at 1.2: 96x84 cells
-	const Real CELL_W					= 96.0f;	///< when the scheme has no tray
-	const Real CELL_H					= 84.0f;
+	const Real TRAY_SCALE			= 1.0f;		///< the powers tray's pieces at their own size: 80x70 cells (1.2 before 2026-11-18)
+	const Real TRAY_MIN_SCALE	= 0.72f;	///< as far as a tray too tall for its room shrinks, the old 1.2 times 0.6
+	const Real CELL_W					= 80.0f;	///< when the scheme has no tray
+	const Real CELL_H					= 70.0f;
 	const Real BUTTON_INSET_X	= 3.0f;		///< a 90x72 build button inside its cell
 	const Real BUTTON_INSET_Y	= 6.0f;
 	const Real LEDGE_LENGTH		= 292.0f;	///< L, the run, R: 1628..1920 in the mockup
@@ -110,9 +114,11 @@ namespace
 	const Real LEDGE_L_W			= 92.0f;
 	const Real LEDGE_R_W			= 64.0f;
 	const Real LEDGE_BODY_Y		= 36.0f;	///< the body's top edge starts here, under the ledge's foot
-	const Real FOLD_X					= 13.0f;	///< the fold button's face, L-local
-	const Real FOLD_Y					= 6.0f;
-	const Real FOLD_W					= 28.0f;
+	const Real FOLD_X					= 6.0f;		///< the fold button's face, L-local, on the plate's 40 rows
+	const Real FOLD_Y					= 2.0f;
+	const Real FOLD_W					= 28.0f;	///< the face's art, drawn FOLD_SCALE times: 36 square
+	const Real FOLD_SCALE			= 1.3f;
+	const Real NOTCH_RUN			= 40.0f;	///< the run past the point that stays out with the drawer in and takes the fold click with it
 	const Real LEDGE_KEY_X		= 7.0f;		///< the key in R's well, R-local
 	const Real LEDGE_KEY_Y		= 11.0f;
 	const Real LEDGE_COUNT_X	= 31.0f;	///< "xN" left-aligned from here, R-local, centred on LEDGE_COUNT_Y
@@ -191,6 +197,7 @@ namespace
 		Int members;
 		Real health, maxHealth;
 		Int coming;									///< Player::countGroupReinforcements
+		Int training;								///< of those, the ones still in a factory's queue (countTraining)
 		Bool fighting;							///< a member fired or was hit inside COMBAT_WINDOW
 		Bool structure;							///< a building is in it: no build tray for it
 		IRegion2D box;							///< the row, set by the draw, taken by a click
@@ -230,6 +237,8 @@ namespace
 	DisplayString *s_comingText[ NUM_HOTKEY_SQUADS ];
 	DisplayString *s_ledgeKeyText = NULL;
 	DisplayString *s_ledgeSizeText = NULL;
+	DisplayString *s_ledgeTrainingText = NULL;		///< "+N in production", GUI:GroupTrayTraining
+	DisplayString *s_ledgeTrainingShort = NULL;		///< "+N", where the long one does not fit
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -577,12 +586,31 @@ static void drawKeycap( const IRegion2D &r, DisplayString *digit, Bool pressed )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The units in `obj`'s queue that MSG_QUEUE_UNIT_FOR_GROUP sent to a squad, added to that squad's
+	* count: the queued half of Player::countGroupReinforcements, without the ones walking.
+	* ponytail: a copy of Player.cpp's countQueuedForSquad, kept here so no logic file changes for a
+	* readout; fold the two together when Player.cpp is touched anyway. */
+//-------------------------------------------------------------------------------------------------
+static void countTraining( Object *obj, void *userData )
+{
+	Int *training = (Int *)userData;
+	const ProductionUpdateInterface *pu = obj->getProductionUpdateInterface();
+	if( pu == NULL )
+		return;
+	for( const ProductionEntry *p = pu->firstProduction(); p; p = pu->nextProduction( p ) )
+		if( p->getProductionType() == PRODUCTION_UNIT && isValidHotkeySquadIndex( p->getReinforcementSquad() ) )
+			training[ p->getReinforcementSquad() ] += p->getProductionQuantityRemaining();
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Each squad's live members, its main type and health, read from the logic's own list. */
 //-------------------------------------------------------------------------------------------------
 static void gatherSquads( Player *player )
 {
 	s_rowCount = 0;
 	std::vector< std::pair< const ThingTemplate *, Int > > types;
+	Int training[ NUM_HOTKEY_SQUADS ] = { 0 };
+	player->iterateObjects( countTraining, training );
 
 	// a frame inside the combat window; a weapon that never fired says 0, a body never hit the future
 	const UnsignedInt now = TheGameLogic->getFrame();
@@ -601,6 +629,7 @@ static void gatherSquads( Player *player )
 		row.health = 0.0f;
 		row.maxHealth = 0.0f;
 		row.coming = 0;
+		row.training = training[ squad ];
 		row.fighting = FALSE;
 		row.structure = FALSE;
 		row.box.lo.x = row.box.lo.y = row.box.hi.x = row.box.hi.y = 0;
@@ -1287,8 +1316,8 @@ static void drawList( void )
 //-------------------------------------------------------------------------------------------------
 /** The ledge over the tray (mockup A2, tray C's ledge), a 3-slice from `left` to `right`: L holds the
 	* point, where the fold button's face sits, the run stretches, and R's well carries the squad's
-	* keycap and "xN".  L is the notch: the whole of it toggles the tray, and it is what stays at the
-	* screen's edge when the tray is in. */
+	* keycap and "xN".  L and the run's first NOTCH_RUN are the notch: the whole of it toggles the tray,
+	* and it is what stays at the screen's edge when the tray is in. */
 //-------------------------------------------------------------------------------------------------
 static void drawLedge( Int top, Int left, Int right, const SquadRow *row )
 {
@@ -1296,14 +1325,14 @@ static void drawLedge( Int top, Int left, Int right, const SquadRow *row )
 	const Int height = pieceH( p.ledgeT, LEDGE_H );
 	const Int leftW = pieceW( p.ledgeL, LEDGE_L_W );
 	const Int rightW = pieceW( p.ledgeR, LEDGE_R_W );
-	const Int foldSize = pieceW( s_trayOpen ? p.fold[ STATE_UP ] : p.unfold[ STATE_UP ], FOLD_W );
+	const Int foldSize = pieceW( s_trayOpen ? p.fold[ STATE_UP ] : p.unfold[ STATE_UP ], FOLD_W, FOLD_SCALE );
 
 	s_ledgeBox.lo.x = left;
 	s_ledgeBox.hi.x = min( right, s_trayEdge );
 	s_ledgeBox.lo.y = top;
 	s_ledgeBox.hi.y = top + height;
 	s_foldBox = s_ledgeBox;
-	s_foldBox.hi.x = left + leftW;
+	s_foldBox.hi.x = min( left + leftW + px( NOTCH_RUN ), s_ledgeBox.hi.x );
 	s_ledgeShown = TRUE;
 	IRegion2D face;
 	face.lo.x = left + px( FOLD_X );
@@ -1350,6 +1379,28 @@ static void drawLedge( Int top, Int left, Int right, const SquadRow *row )
 	}
 	TheDisplay->endBatch2D();
 
+	// the units still in the factories for the squad, right-aligned at the end of what shows of the run:
+	// "+N in production" against R's well with the tray out, "+N" alone on the notch with it in.  Kept inside
+	// the edge by hand, since the clip does not reach the strings
+	if( row != NULL && row->training > 0 )
+	{
+		const Int points = max( REAL_TO_INT( LEDGE_POINTS * TheDisplay->getHeight() / 1080.0f ), 7 );
+		const Int lo = runLo + px( 4.0f ), hi = min( runHi, s_trayEdge ) - px( 6.0f );
+		UnicodeString text;
+		text.format( TheGameText->fetch( "GUI:GroupTrayTraining" ), row->training );
+		DisplayString *training = keptString( s_ledgeTrainingText, text, points );
+		Int trainingW = 0, trainingH = 0;
+		training->getSize( &trainingW, &trainingH );
+		if( trainingW > hi - lo )
+		{
+			text.format( u"+%d", row->training );
+			training = keptString( s_ledgeTrainingShort, text, points );
+			training->getSize( &trainingW, &trainingH );
+		}
+		if( trainingW <= hi - lo )
+			training->draw( hi - trainingW, top + px( LEDGE_COUNT_Y ) - trainingH / 2, SOFT_TEXT, GameMakeColor( 0, 0, 0, 255 ) );
+	}
+
 	// R's well: the squad's key, pressed (the tray is always the chosen squad's), and its size; not
 	// while the well is past the edge, where the clip does not reach the strings
 	if( row == NULL || right > s_trayEdge )
@@ -1371,11 +1422,11 @@ static void drawLedge( Int top, Int left, Int right, const SquadRow *row )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The tray (mockup A2): the powers tray's stepped body at 1.2 under the ledge, four buttons a row
-	* flush right, a short last row stepping in at the foot.  The ledge runs the body's width with its
-	* point hanging off the body's left side, and the two slide as one drawer: in, only the point is
-	* left at the screen's edge, the notch; a click on it slides the drawer out over SLIDE_MS, and a
-	* second click slides it back.
+/** The tray (mockup A2): the powers tray's stepped body at its own size under the ledge, four buttons
+	* a row flush right, a short last row stepping in at the foot.  The ledge runs the body's width with
+	* its point hanging off the body's left side, and the two slide as one drawer: in, the point and
+	* NOTCH_RUN of the run are left at the screen's edge, the notch; a click on it slides the drawer
+	* out over SLIDE_MS, and a second click slides it back.
 	* ponytail: the slide steps where the sync point runs, so a picture drawn again beside the tick
 	* holds the last step; move the windows inside the window too if a fast screen shows it stepping. */
 //-------------------------------------------------------------------------------------------------
@@ -1452,7 +1503,7 @@ static void drawTray( Int top )
 	};
 	while( measure() > floor && columns < min( (Int)TRAY_MAX_COLUMNS, shown ) )
 		columns++;
-	while( measure() > floor && scale > TRAY_SCALE * 0.6f )
+	while( measure() > floor && scale > TRAY_MIN_SCALE )
 		scale *= 0.92f;
 	const Int bodyBottom = measure();
 
@@ -1463,9 +1514,10 @@ static void drawTray( Int top )
 	s_slide = s_trayOpen ? min( s_slide + step, 1.0f ) : max( s_slide - step, 0.0f );
 	const Real eased = s_slide * s_slide * ( 3.0f - 2.0f * s_slide );
 	const Int pointW = pieceW( p.ledgeL, LEDGE_L_W );
+	const Int notchW = pointW + px( NOTCH_RUN );	// what stays out with the drawer in: drawLedge's s_foldBox
 	const Int ledgeLength = max( px( LEDGE_LENGTH ), pointW + columns * cellW + body.openW );
 	s_trayEdge = trayRightEdge();
-	const Int right = s_trayEdge + REAL_TO_INT( ( ledgeLength - pointW ) * ( 1.0f - eased ) + 0.5f );
+	const Int right = s_trayEdge + REAL_TO_INT( ( ledgeLength - notchW ) * ( 1.0f - eased ) + 0.5f );
 
 	// what stands past the edge is cut: off the screen in the full-width Classic bar, but over the
 	// sidebar or the world beside a narrowed HUD area otherwise

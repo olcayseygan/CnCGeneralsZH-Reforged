@@ -32,6 +32,35 @@ found and fixed, EA's own, not port damage.**
 - The film no longer splits the screen, not between players and not between two powers. One camera has the whole picture, and a second power landing off it, or a second fight, plays in a small framed window in the lower right corner with the name and army of whoever called it. Before, the second power had to land most of a screen's width further away than that to get any picture at all, so an artillery barrage called on the same frame as a superweapon across the same base was shown nowhere. A superweapon takes the window from a smaller power at once.
 - A superweapon or strike that neither the camera nor the window caught comes back as an instant replay: the match is played through a third time and the two seconds before the hit and six after it are filmed on their own, with a list of where each one fits into the match film at the next quiet moment.
 
+## Crashes from the 4.0 reports
+
+- The commonest crash of 4.0 was fixed in 4.1; this round closes what the reports left behind.
+- A modded unit with a very detailed model no longer crashes skirmish and online games when it casts a shadow. It casts its shadow normally.
+- A mod that renames or replaces units no longer stops 4.1 at startup with an error about TalentsReforged.ini. The general's talents skip the units the mod doesn't have.
+- A mod whose Generals' Challenge file misspells a general's name (Project Raptor's does) no longer stops the game at startup.
+- A mod whose art has no sky box no longer crashes the moment a match starts on a map that turns the sky on.
+- A modded point-defence laser whose weapon the game cannot find stands idle instead of crashing the match.
+- A skirmish where a saved setting had turned a computer opponent into the Civilians no longer crashes as the match loads. The lobby throws the broken setting away and opens fresh.
+- Pressing an arrow key in an empty list, such as the skirmish map list, no longer crashes the game.
+- A cargo plane, Chinook or gunship checking whether it had flown off the map could crash the game if the terrain's graphics were being rebuilt at that moment. It can't any more.
+- A rare crash right after a busy moment in a match, when two parts of the game looked up the same unit model at once, is gone.
+- On Linux and Steam Deck (Wine/Proton) with no working sound output the game used to crash at startup. It now starts and plays without sound.
+- Coming back to a match after a long time away, or after the graphics driver restarted, no longer crashes the game when you open the quit menu.
+- A custom map whose train or ferry had no track laid out for it crashed the game the moment that transport was sent on its way, a bug as old as EA's release. It now stays where it is and opens its doors.
+- Some Intel and AMD graphics drivers handed the EA logo a picture far smaller than the movie, and copying the frame into it overwrote the game's memory with black pixels: a crash at startup, or a strange one at the first map. The game now refuses such a picture and skips the movie.
+- When the game runs out of memory or meets a bad value deep inside, its crash report now says where.
+
+## Screen and controls
+
+- The command bar and menus no longer go dark now and then, as if a shadow fell over them. The sun's shadows and smoke land only on the battlefield.
+- A new match no longer opens on a black screen with only a corner of the map showing. The camera starts over your base every time.
+- Options, Interface has a Selection Outlines box. Untick it and the glowing rings under your selected units and the line around a selected building are gone; order lines and click markers stay.
+- Units you put on guard go straight from one kill to the next enemy in their circle. They used to take a step back toward the middle of the post, then turn round for the man standing beside them; a Crusader with three Rebels in reach sat for about seven seconds between kills, and now fires again the moment one drops. A guard circle you widened with the mouse wheel is ground to hold: after a fight a unit still inside it stays where it is, where the whole group used to drive back to the one middle spot after every kill. A guard without a widened circle still walks back to its post. A replay recorded before this change will not play back the same.
+- The group build tray shows how many units are still in production for that group, takes a little less of the screen, and its fold tab is wider, so a quick click in a fight lands.
+- Frame Rate Limit now applies in the menus as well as in a match. Pick 144 or 240 and the main menu runs at that rate instead of being stuck at 60; Off still holds the menus at 60, so an idle menu doesn't run your graphics card hot.
+- Reskinned units no longer load. A bright green Helix or glowing red GLA infantry put in as loose files, in your Documents folder or in an extra archive beside the game is ignored, so every player sees the units the game ships. The few textures this version adds of its own are checked when you join a game, and a changed copy is turned away like changed rules.
+- Signing in online now checks every game file the game reads, the archives and the loose art, data and screen files alike. An edited or swapped file stops the sign-in with its name and a word to reinstall from the launcher or delete it and restart, so a reskin never reaches an online match. The first start reads the whole install in the background, and a sign-in pressed meanwhile waits on "Checking game files..."; after that, updates included, only a file that changed is read again.
+
 ## Play vs AI online
 
 - The online hub has a PLAY VS AI button under Options. One press starts a 1v1 against a computer player as strong as your AI rating, on a map and seed the server picks. The AI rating is a second rating zerohour.gg keeps beside the ladder's, starting at 0, and the hub shows it left of the button.
@@ -42,6 +71,7 @@ found and fixed, EA's own, not port damage.**
 
 - The online screens used to be EA's 2003 windows with our labels bolted on. Sign-in, the hub, Quick Match, the custom lobby, the ladder, skins and the player card now stand on the same panel and ruler as the options screen and the rooms, with the same buttons, tabs and seat cards. Five tabs run along the top of every page (Home, Quick Match, Custom games, Ladder, Skins), your line sits at the right end of them with your nick, tier and both ratings, and each page's subtitle names the server you are on, its city and your ping to it, with a ping light.
 - The sign-in screen has a server panel beside the form: players online, open games and players searching for a Quick Match, as they stand now.
+- When the online service goes down for maintenance or has something to say, a plate hangs from the top of the screen in the menus and in your match, in Turkish or English with your game, with the local time it should be back. The sign-in screen says so before you try, and a game, Quick Match or Play vs AI the server turns away says maintenance instead of a bare failure.
 - The hub opens with Play vs AI. Its card shows your AI rating with the rank portrait of its tier, your games and win rate against the computer, and the fixed 1.5x speed. Quick Match has its own card: your ladder rating, your place, your record, how many are in the queue, and a countdown when an abandoned match has locked you out. Custom games lists the open games and the players in them. Under the cards sit your last five matches of both kinds with the opponent, the map, the rating change and how long ago. Sign out is on the button row.
 - Quick Match shows armies as cards by general, with the colours in boxes beside them and your ladder rating next to them. Searching shows a clock and the window of opponents it will accept now as a track, with the next widening counted down. When an opponent is found you see both armies, both ratings and your chance of winning before the three seconds run out. The map stays hidden until the load screen, since ranked maps are generated.
 - The lobby lists games with their ping lights and an Open, Full or Playing chip, puts the chat rooms on tabs with their head counts, and sorts the players by rating. In a game room each human's ladder rating follows his nick.

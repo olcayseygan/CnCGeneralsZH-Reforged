@@ -56,6 +56,9 @@ GameResultsInterface *OnlineCreateGameResults( void );	///< drops EA's results: 
 	 arrived; call it once a frame from the main thread while anything online is up.  Not needed while a
 	 screen polls a queue (getResponse pumps too), but the welcome is waited for before any queue exists. */
 void OnlineUpdate( void );
+/* OnlineUpdate for an open connection only, dialling nothing: GameClient::update calls it every pass, so a
+	 notice or the server's ping is read in a match too, where no online screen pumps. */
+void OnlinePumpIfConnected( void );
 
 enum OnlineStatus
 {
@@ -91,8 +94,50 @@ Bool OnlineGetCounts( Int &players, Int &games, Int &queue );
 Bool OnlineGetServerInfo( AsciiString &name, AsciiString &city, Int &pingMs );
 /* The code of the last login the server refused (auth.fail: badlogin, throttled, expired...), and its
 	 retry in seconds, 0 when it gave none.  Empty when the last login never reached a refusal (the
-	 connection failed), and cleared by the next login. */
-AsciiString OnlineGetLoginFailure( Int *retrySeconds );
+	 connection failed), and cleared by the next login.  `file` gets the install file a "files" refusal names. */
+AsciiString OnlineGetLoginFailure( Int *retrySeconds, AsciiString *file = NULL, AsciiString *until = NULL );
+
+/* The server's notice (notice{kind,en,tr,until}, after the welcome and whenever it changes), shown as a
+	 banner across the top of every screen.  en and tr are UTF-8 and until is as the server wrote it, usually
+	 ISO 8601 in UTC.  FALSE with none: never sent, cleared by one with no words, or the connection gone.
+	 Without one from the server, -testNotice maintenance|info stands in, for a proof shot with no server.
+	 serial moves on with every change. */
+struct OnlineNotice
+{
+	Bool maintenance;					///< kind maintenance; anything else is info
+	AsciiString en, tr;
+	AsciiString until;
+	UnsignedInt serial;
+};
+Bool OnlineGetNotice( OnlineNotice &out );
+/* The notice's words in a TextLanguageType: Turkish for Turkish, English for every other, and the other
+	 language when that one is empty.  Pure, for the test. */
+AsciiString OnlineNoticeWords( const OnlineNotice &notice, Int language );
+/* An ISO 8601 time with its zone (2026-11-18T22:00:00Z, .000Z, +03:00) as Unix seconds; -1 for anything
+	 else.  Pure, for the test. */
+long long OnlineParseUtc( const char *iso );
+/* until as the player reads it: the local time, 22:00 today, the date before it on another day; the text
+	 itself when it is no time this reads; empty for none. */
+UnicodeString OnlineUntilText( const AsciiString &until );
+/* "Online play is down for maintenance", with when it should be back where until says. */
+UnicodeString OnlineMaintenanceText( const AsciiString &until );
+/* A new lobby, game, Quick Match or Play vs AI the server refused with code maintenance (error, qm.status
+	 or ai.refused): TRUE once, with its until, for the screen whose request it was.  The next request of those
+	 kinds drops one nobody took.  The host's start has its own, OnlineTakeStartRefusal. */
+Bool OnlineTakeMaintenanceRefusal( AsciiString &until );
+/* OnlineTakeMaintenanceRefusal in EA's message box, the maintenance sentence in it; FALSE, and no box, when
+	 there was none (or no -online). */
+Bool OnlineShowMaintenanceRefusal( void );
+/* The host's Start went while maintenance is on: the server may refuse the match (error{for:game.start,
+	 code:maintenance}), so the host launches on the server's game.start, which arrives as PEERRESPONSE_GAMESTART
+	 the way a guest's does, and not on its click. */
+Bool OnlineIsHostStartWaiting( void );
+/* That start refused (error{for:game.start}: maintenance, nothost, throttled...): TRUE once, with the code and
+	 until (the notice's when the line has none), for the staging screen that asked. */
+Bool OnlineTakeStartRefusal( AsciiString &code, AsciiString &until );
+/* A login waits on the install files' hashes (the first start on a machine reads every file): the login
+	 screen says it is checking them. */
+Bool OnlineIsCheckingFiles( void );
 /* Opens an http or https address in the player's browser; FALSE when it is not one or nothing could open
 	 it.  Windows asks the shell; elsewhere the platform layer's hook, SDL_OpenURL, set by SdlGameEngine. */
 Bool OnlineOpenURL( const char *url );

@@ -607,6 +607,10 @@ void W3DInGameUI::draw( void )
 	//
 	Display::replay( m_hudOverlayDraw );
 
+	// the online service's notice over every screen, menus and match alike; reads only the session, so it
+	// is drawn here and not recorded at the sync point
+	drawOnlineNotice();
+
 #ifdef EXTENDED_STATS
 	}
 #endif

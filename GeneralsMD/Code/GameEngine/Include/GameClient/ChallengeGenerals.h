@@ -129,6 +129,7 @@ private:
 	GameDifficulty m_currentDifficulty; // the last selected game difficulty for the challenge generals
 
 	static void parseGeneralPersona( INI* ini, void *instance, void *store, const void *userData );
+	static void parseMisnamedPersona( INI* ini, void *instance, void *store, const void *userData );
 
 public:
 	ChallengeGenerals( void );

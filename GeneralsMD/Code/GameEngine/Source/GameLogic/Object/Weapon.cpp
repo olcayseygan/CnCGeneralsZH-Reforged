@@ -3189,7 +3189,10 @@ Bool Weapon::fireWeapon(const Object *source, Object *target, ObjectID* projecti
 		if( !found.empty() )
 			target = found.front();
 	}
-	return privateFireWeapon( source, target, NULL, false, false, 0, projectileID, TRUE );
+	// the rest of a jet's racks goes on the run its first round went on, past the target or inside its
+	// minimum range (AIAttackAimAtTargetState); the missiles steer themselves. Aircraft keep the ranges.
+	const Bool ignoreRanges = isRackClipStarted() && target && !target->isAirborneTarget();
+	return privateFireWeapon( source, target, NULL, false, ignoreRanges, 0, projectileID, TRUE );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -3197,7 +3200,7 @@ Bool Weapon::fireWeapon(const Object *source, Object *target, ObjectID* projecti
 Bool Weapon::fireWeapon(const Object *source, const Coord3D* pos, ObjectID* projectileID)
 {
 	//CRCDEBUG_LOG(("Weapon::fireWeapon() for %s\n", DescribeObject(source).str()));
-	return privateFireWeapon( source, NULL, pos, false, false, 0, projectileID, TRUE );
+	return privateFireWeapon( source, NULL, pos, false, isRackClipStarted(), 0, projectileID, TRUE );
 }
 
 //-------------------------------------------------------------------------------------------------

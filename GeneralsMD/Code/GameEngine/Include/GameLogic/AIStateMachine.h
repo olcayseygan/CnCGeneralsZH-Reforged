@@ -956,7 +956,7 @@ protected:
 	virtual void xfer( Xfer *xfer );
 	virtual void loadPostProcess();
 private:
-	Coord3D computeAttackRunGoal( Object *source, const Weapon *weapon, const Coord3D &targetPos, Real relAngle, Real aimDelta );
+	Coord3D computeAttackRunGoal( Object *source, const Weapon *weapon, const Coord3D &targetPos, Real relAngle, Real &aimDelta );
 
 	const Bool m_isAttackingObject;
 	Bool m_canTurnInPlace;

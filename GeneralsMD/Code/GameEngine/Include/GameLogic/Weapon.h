@@ -726,6 +726,12 @@ public:
 	inline UnsignedInt getRemainingAmmo() const { return (getStatus() == RELOADING_CLIP) ? 0 : m_ammoInClip; }
 	inline WeaponReloadType getReloadType() const { return m_template->getReloadType(); }
 	inline Bool getAutoReloadsClip() const { return m_template->getAutoReloadsClip(); }
+	/// a jet's racks (a clip that only refills at base) with the first round gone and some left: one run fires them all.
+	/// Reads the clip, not getStatus(), which writes m_status and so moves the retail fire cycle (holdToRetailFireCycle).
+	inline Bool isRackClipStarted() const
+	{
+		return getReloadType() == RETURN_TO_BASE_TO_RELOAD && m_ammoInClip > 0 && (Int)m_ammoInClip < getClipSize();
+	}
 	inline Real getAimDelta() const { return m_template->getAimDelta(); }
 	inline Real getScatterRadius() const { return m_template->getScatterRadius(); }
 	inline Real getScatterTargetScalar() const { return m_template->getScatterTargetScalar(); }

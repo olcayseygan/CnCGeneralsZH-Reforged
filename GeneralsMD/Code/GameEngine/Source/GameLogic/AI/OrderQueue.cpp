@@ -176,7 +176,7 @@ void QueuedOrder::xfer( Xfer *xfer )
 }
 
 //-------------------------------------------------------------------------------------------------
-OrderChain::OrderChain( void ) : m_settledFrames( 0 ), m_waitingForRearm( FALSE )
+OrderChain::OrderChain( void ) : m_settledFrames( 0 ), m_waitingForRearm( FALSE ), m_armedThisStep( FALSE )
 {
 }
 
@@ -840,13 +840,46 @@ void OrderQueue::update( Player *owner )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** An order an aircraft needs its racks for, which it waits on through a trip home for ammo. */
+//-------------------------------------------------------------------------------------------------
+static Bool OrderQueue_needsAmmo( GameMessage::Type type )
+{
+	switch( type )
+	{
+		case GameMessage::MSG_DO_ATTACK_OBJECT:
+		case GameMessage::MSG_DO_FORCE_ATTACK_OBJECT:
+		case GameMessage::MSG_DO_FORCE_ATTACK_GROUND:
+		case GameMessage::MSG_DO_ATTACKMOVETO:
+		case GameMessage::MSG_DO_FORMATION_ATTACKMOVETO:
+		case GameMessage::MSG_DO_FORMATION_FORCEATTACK:
+		case GameMessage::MSG_DO_GUARD_POSITION:
+		case GameMessage::MSG_DO_GUARD_OBJECT:
+		case GameMessage::MSG_DO_FORMATION_GUARD:
+		case GameMessage::MSG_DO_WEAPON_AT_OBJECT:
+		case GameMessage::MSG_DO_WEAPON_AT_LOCATION:
+			return TRUE;
+
+		default:
+			return FALSE;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 /** The order in front is over when its target is gone, or once nobody in the chain has been working
-	* on it for a few frames.  An aircraft gone home for ammo is not done with it: the chain waits, and
+	* on it for a few frames.  An aircraft gone home for ammo is not done with an order that needs it
+	* (OrderQueue_needsAmmo): the chain waits, and
 	* sends the order again when the flight is back in the air with a full load, since an ordered
-	* attack on one target does not survive a reload. */
+	* attack on one target does not survive a reload.  A strike with more orders behind it is the
+	* exception: a jet fires its whole racks in one run, so once it has flown the strike armed and come
+	* out of it empty, the strike is over for it and the next order on the list goes out, a move away
+	* included, rather than the strike again after the reload. */
 //-------------------------------------------------------------------------------------------------
 Bool OrderQueue::isStepOver( OrderChain& chain, Player *owner )
 {
+	const GameMessage::Type activeType = chain.m_active.getType();
+	const Bool strikeWithMoreToDo = !chain.m_pending.empty()
+		&& ( activeType == GameMessage::MSG_DO_ATTACK_OBJECT || activeType == GameMessage::MSG_DO_FORCE_ATTACK_OBJECT );
+
 	const ObjectID targetID = chain.m_active.getTargetID();
 	if( targetID != INVALID_ID )
 	{
@@ -873,11 +906,17 @@ Bool OrderQueue::isStepOver( OrderChain& chain, Player *owner )
 		const JetAIUpdate *jet = ai->getJetAIUpdate();
 		if( jet != NULL )
 		{
-			if( jet->friend_isRearming() || obj->isOutOfAmmo() )
+			const Bool dry = jet->friend_isRearming() || obj->isOutOfAmmo();
+			if( dry && OrderQueue_needsAmmo( activeType ) )
 			{
-				anyRearming = TRUE;
+				// emptied on this strike: done with it (see above). Sent out already empty: it waits.
+				if( !( strikeWithMoreToDo && chain.m_armedThisStep && obj->isOutOfAmmo() ) )
+					anyRearming = TRUE;
 				continue;
 			}
+			// a move flown with empty racks is over when it is flown, not flown again after the reload
+			if( !dry )
+				chain.m_armedThisStep = TRUE;
 
 			// a parked aircraft carries its order in its pocket until the wheels are up
 			ObjectID heldTarget = INVALID_ID;
@@ -958,6 +997,7 @@ Bool OrderQueue::advance( OrderChain& chain, Player *owner )
 		chain.m_active = next;
 		chain.m_settledFrames = 0;
 		chain.m_waitingForRearm = FALSE;
+		chain.m_armedThisStep = FALSE;
 		OrderQueue_log( isTerminal( next.getType() ) ? "last order out, a post" : "next order out", chain, owner );
 
 		Coord3D dest;
@@ -978,11 +1018,12 @@ Bool OrderQueue::advance( OrderChain& chain, Player *owner )
 
 //-------------------------------------------------------------------------------------------------
 /** Version Info:
-	* 1: Initial version */
+	* 1: Initial version
+	* 2: m_armedThisStep */
 //-------------------------------------------------------------------------------------------------
 void OrderQueue::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1005,5 +1046,7 @@ void OrderQueue::xfer( Xfer *xfer )
 
 		xfer->xferUnsignedInt( &it->m_settledFrames );
 		xfer->xferBool( &it->m_waitingForRearm );
+		if( version >= 2 )
+			xfer->xferBool( &it->m_armedThisStep );
 	}
 }

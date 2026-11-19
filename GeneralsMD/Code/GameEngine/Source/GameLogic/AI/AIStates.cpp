@@ -1300,16 +1300,33 @@ static Bool isEmptyJetBreakingOff( const Object *source, const Object *victim, S
 	return attackState == AttackStateMachine::AIM_AT_TARGET && source->isOutOfAmmo() && isJetAttackingGround(source, victim);
 }
 
-/// out of range, for the attack machine: a jet flying its break-off turns out of range on purpose
+/**
+ * A jet whose first round of its racks has gone at something on the ground: one run fires them all.
+ * The rest goes whatever the range (Weapon::isRackClipStarted, Weapon::fireWeapon), and whatever the
+ * angle once the jet would otherwise run out (computeAttackRunGoal), since a target swinging out of the
+ * aim cone or inside the minimum range between two rounds used to send the jet round its wide turn for
+ * a second pass with the rest of its racks.
+ */
+static Bool isJetFinishingClip( const Object *source, const Object *victim )
+{
+	const Weapon *weapon = source->getCurrentWeapon();
+	return weapon != NULL && weapon->isRackClipStarted() && isJetAttackingGround(source, victim);
+}
+
+/// out of range, for the attack machine: a jet flying its break-off turns out of range on purpose, and
+/// one finishing its racks fires the rest from wherever it is
 static Bool attackOutOfRangeObject( State *thisState, void* userData )
 {
-	return !isEmptyJetBreakingOff(thisState->getMachineOwner(), thisState->getMachineGoalObject(), thisState->getID()) &&
+	Object *owner = thisState->getMachineOwner();
+	Object *victim = thisState->getMachineGoalObject();
+	return !isEmptyJetBreakingOff(owner, victim, thisState->getID()) && !isJetFinishingClip(owner, victim) &&
 		outOfWeaponRangeObject(thisState, userData);
 }
 
 static Bool attackOutOfRangePosition( State *thisState, void* userData )
 {
-	return !isEmptyJetBreakingOff(thisState->getMachineOwner(), NULL, thisState->getID()) &&
+	Object *owner = thisState->getMachineOwner();
+	return !isEmptyJetBreakingOff(owner, NULL, thisState->getID()) && !isJetFinishingClip(owner, NULL) &&
 		outOfWeaponRangePosition(thisState, userData);
 }
 
@@ -5877,7 +5894,7 @@ Bool AIAttackAim_needsRunOut( Real relX, Real relY, Real turnRadius, Real cosAim
  * the straight chase.
  */
 Coord3D AIAttackAimAtTargetState::computeAttackRunGoal( Object *source, const Weapon *weapon, const Coord3D &targetPos,
-																												Real relAngle, Real aimDelta )
+																												Real relAngle, Real &aimDelta )
 {
 	const Locomotor *loco = source->getAI()->getCurLocomotor();
 	const Object *victim = m_isAttackingObject ? getMachineGoalObject() : NULL;
@@ -5914,7 +5931,10 @@ Coord3D AIAttackAimAtTargetState::computeAttackRunGoal( Object *source, const We
 	// back round on a Scorpion 120 off its wing) broke off before the cone every pass and never fired.
 	// A clip already started is finished first, as EA's jets did: a break-off between two rounds turned
 	// the nose out of the cone before the next, and a Stealth Fighter lining up late on a moving Scorpion
-	// put one missile of two out a pass. An unlimited clip still breaks off by distance.
+	// put one missile of two out a pass. An unlimited clip still breaks off by distance. A jet's racks are
+	// all fired on the run that started them (isJetFinishingClip): a round still in the aim cone waits for
+	// it as before, and only a run-out between two rounds is traded for firing the rest there and then,
+	// which aimDelta, handed back to the aim state, lets through.
 	// A jet whose racks are empty until it lands (the Raptor, the MiG, the Aurora, the Stealth Fighter)
 	// spends its clip on the frame of its last round, and that used to end the attack there and then:
 	// the break-off never happened, and the flight home went on over the target or turned across it.
@@ -5942,6 +5962,14 @@ Coord3D AIAttackAimAtTargetState::computeAttackRunGoal( Object *source, const We
 	else if (!racksEmpty && fabs(relAngle) >= aimDelta)
 		m_isRunningOut = AIAttackAim_needsRunOut(along - entryDist, dir->x*dy - dir->y*dx, turnRadius,
 																						 Cos(aimDelta), minRange);
+
+	// halfway through its racks, a jet that would have to run out and come round for the rest fires it
+	// now at whatever angle instead, and the missiles steer themselves
+	if (m_isRunningOut && !racksEmpty && isJetFinishingClip(source, victim))
+	{
+		m_isRunningOut = FALSE;
+		aimDelta = PI + 0.035f;
+	}
 
 	// -scenario only: the run, frame by frame, which jetbreak.txt reads
 	if (!TheGlobalData->m_scenarioFile.isEmpty())
@@ -6078,7 +6106,7 @@ StateReturnType AIAttackAimAtTargetState::update()
 		Weapon* weapon = source->getCurrentWeapon();
 		Real aimDelta = weapon ? weapon->getAimDelta() : 0.0f;
 		
-		if (aimDelta < REL_THRESH) 
+		if (aimDelta < REL_THRESH)
 		{
 			aimDelta = REL_THRESH;
 		}
@@ -6355,9 +6383,10 @@ StateReturnType AIAttackFireWeaponState::update()
 	// The victim can leave range between the aim and the shot: a vehicle driving off while Jarmen Kell
 	// turns to snipe it. fireWeaponTemplate then refuses the shot, but the round is already off the
 	// clip, so a one-round ability went on cooldown with nothing hit. Back to aiming instead, which
-	// closes the distance. A contained shooter is left alone, its range comes from a fire point.
+	// closes the distance. A contained shooter is left alone, its range comes from a fire point, and so
+	// is a jet finishing its racks, which fires them whatever the range.
 	if (m_att->isAttackingObject() && !weapon->getTemplate()->isLeechRangeWeapon() && !obj->isContained()
-			&& !weapon->isWithinAttackRange(obj, victim))
+			&& !isJetFinishingClip(obj, victim) && !weapon->isWithinAttackRange(obj, victim))
 	{
 		return STATE_FAILURE;
 	}

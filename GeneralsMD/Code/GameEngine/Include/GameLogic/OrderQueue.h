@@ -105,6 +105,7 @@ struct OrderChain
 	std::vector<QueuedOrder>	m_pending;					///< the rest, in the order they were given
 	UnsignedInt							m_settledFrames;		///< how many frames in a row nobody has been working on m_active
 	Bool										m_waitingForRearm;	///< the order stands, but its aircraft have gone home for ammo
+	Bool										m_armedThisStep;		///< an aircraft of the chain has been seen with ammo since m_active went out
 };
 
 typedef std::list<OrderChain> OrderChainList;

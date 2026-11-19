@@ -104,8 +104,10 @@ static_assert( LOGICFRAMES_PER_SECOND == LOGICFRAMES_PER_RETAIL_FRAME * RETAIL_L
 //
 // The speed is chosen per match: TheGameSpeed holds the percent and every value derived from it,
 // and GameSpeed_set changes them between matches. NATIVE_GAME_SPEED_PERCENT is what it holds
-// before any match, what every network game plays and what a save or replay without a speed reads
-// as. TheGameSpeed is constant-initialised to it, so it is valid before any dynamic initialiser
+// before any match, what a custom online room and a LAN game play and what a save or replay without
+// a speed reads as. A ranked Quick Match and a Play vs AI match play RANKED_GAME_SPEED_PERCENT,
+// retail's own pace: every peer of a Quick Match takes it from the matched path that marks the game
+// ranked, never from a preference. TheGameSpeed is constant-initialised to it, so it is valid before any dynamic initialiser
 // runs; a value captured from it once (a namespace const, a function-local static, a ctor of
 // something built at engine start) goes stale at the next speed, which is why nothing is.
 //
@@ -118,6 +120,7 @@ static_assert( LOGICFRAMES_PER_SECOND == LOGICFRAMES_PER_RETAIL_FRAME * RETAIL_L
 // speed may not come down to retail's 30 ticks. At 200 a Real count of 2 retail frames is one tick,
 // so a gain of 1/frames reaches 1 there; the owner took that for the feel of 2.0x.
 #define NATIVE_GAME_SPEED_PERCENT 150
+#define RANKED_GAME_SPEED_PERCENT 100
 static constexpr Int PLAYER_GAME_SPEED_PERCENTS[] = { 100, 125, 150, 200 };
 enum { PLAYER_GAME_SPEED_COUNT = sizeof( PLAYER_GAME_SPEED_PERCENTS ) / sizeof( PLAYER_GAME_SPEED_PERCENTS[ 0 ] ) };
 enum { MAX_LOGICFRAMES_PER_GAME_SECOND = LOGICFRAMES_PER_SECOND };	///< at 100, the slowest; sizes anything indexed by tick in a game second
@@ -145,8 +148,8 @@ constexpr Bool GameSpeed_allAllowedHold()
 			return false;
 	return true;
 }
-static_assert( GameSpeed_allAllowedHold() && GameSpeed_isAllowed( NATIVE_GAME_SPEED_PERCENT ),
-	"every speed in PLAYER_GAME_SPEED_PERCENTS must round alike everywhere and write its own save field, and the native one must be among them" );
+static_assert( GameSpeed_allAllowedHold() && GameSpeed_isAllowed( NATIVE_GAME_SPEED_PERCENT ) && GameSpeed_isAllowed( RANKED_GAME_SPEED_PERCENT ),
+	"every speed in PLAYER_GAME_SPEED_PERCENTS must round alike everywhere and write its own save field, and the native and ranked ones must be among them" );
 
 // Every value derived from the percent, each computed with exactly the expression the compile-time
 // constants used, so the native set is the old constants bit for bit.

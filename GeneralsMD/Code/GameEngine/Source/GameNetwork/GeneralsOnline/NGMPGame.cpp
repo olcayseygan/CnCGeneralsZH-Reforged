@@ -504,7 +504,8 @@ void NGMPGame::launchGame(void)
 	msg->appendIntegerArgument(GAME_INTERNET);
 	msg->appendIntegerArgument(DIFFICULTY_NORMAL);	// not used; there so the speed can go last
 	msg->appendIntegerArgument(0);
-	GameEngine_appendNewGameRates( msg, NATIVE_GAME_SPEED_PERCENT );	// every network game plays the native speed
+	// a Quick Match lobby is ranked and plays retail's pace, every peer told so by the lobby's type
+	GameEngine_appendNewGameRates( msg, m_isQM ? RANKED_GAME_SPEED_PERCENT : NATIVE_GAME_SPEED_PERCENT );
 
 	/* Upstream wrote the player's render cap into m_framesPerSecondLimit here.  In this engine that
 		 field is game speed (GameEngine_matchFramesPerSecond, the room's match fps in parseUserList), so

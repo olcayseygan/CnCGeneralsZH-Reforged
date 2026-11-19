@@ -1463,7 +1463,7 @@ GUI:GameSpeed
 END
 
 TOOLTIP:GameSpeed
-"How fast the skirmish runs. 1.0x is the original game and 1.5x the speed every multiplayer match plays at. Only the pace changes."
+"How fast the skirmish runs. 1.0x is the original game and the speed of ranked and Play vs AI matches, 1.5x the speed of online rooms and LAN games. Only the pace changes."
 END
 
 GUI:GameSpeedMissions
@@ -4903,19 +4903,19 @@ GUI:OnlineVsAIButton
 END
 
 GUI:OnlineAISpeed
-"1.5x speed"
+"1.0x speed"
 END
 
 GUI:OnlineAIRating
-"1.5x speed, AI rating %.2f"
+"1.0x speed, AI rating %.2f"
 END
 
 GUI:OnlineAIRated
-"1.5x speed, AI rating %.2f -> %.2f"
+"1.0x speed, AI rating %.2f -> %.2f"
 END
 
 GUI:OnlineAIUnrated
-"1.5x speed, not rated: %ls"
+"1.0x speed, not rated: %ls"
 END
 
 GUI:OnlineAIGames

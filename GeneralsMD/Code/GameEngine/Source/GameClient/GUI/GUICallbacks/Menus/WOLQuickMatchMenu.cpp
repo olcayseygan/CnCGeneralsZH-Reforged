@@ -2480,6 +2480,9 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 							TheGameSpyGame->setSeed(resp.qmStatus.seed);
 
 							TheGameSpyGame->markGameAsQM();
+							// ranked plays retail's pace; every peer comes through here, and enterGame's reset
+							// put the room back at the native speed a custom room keeps
+							TheGameSpyGame->setGameSpeedPercent(RANKED_GAME_SPEED_PERCENT);
 
 							const LadderInfo *info = getLadderInfo();
 							if (!info)

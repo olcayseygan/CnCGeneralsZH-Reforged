@@ -1600,10 +1600,10 @@ static UnicodeString winsAndLosses( Int wins, Int games )
 	return text;
 }
 
-/// every online game plays the native speed: 1.5x of retail's at 150
+/// the speed a Play vs AI match plays: the ranked one, 1.0x of retail's at 100
 static UnicodeString speedText( void )
 {
-	const Int speed = NATIVE_GAME_SPEED_PERCENT;
+	const Int speed = RANKED_GAME_SPEED_PERCENT;
 	UnicodeString text;
 	if( speed % 10 == 0 )
 		text.format( u"%d.%dx", speed / 100, speed / 10 % 10 );

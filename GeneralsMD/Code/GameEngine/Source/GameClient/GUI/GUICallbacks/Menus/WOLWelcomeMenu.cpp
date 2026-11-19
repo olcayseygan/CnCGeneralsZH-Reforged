@@ -304,7 +304,7 @@ static Bool signedIn( void )
 
 /* The match: slot 0 the player in that army, slot 1 the computer at the server's rating, on the rung
 	 nearest it as -airating seats it, its army, both colours and both start spots drawn from the seed.  The
-	 native speed and tick rate, as a network game.  Built here rather than through -autoskirmish's door so no
+	 ranked speed, retail's pace as a Quick Match plays, and the native tick rate.  Built here rather than through -autoskirmish's door so no
 	 switch of that door reaches a match the server rates.  FALSE, with nothing started, when the map is not
 	 in this game. */
 static Bool startAIMatch( const OnlineAIMatch &ai )
@@ -347,7 +347,7 @@ static Bool startAIMatch( const OnlineAIMatch &ai )
 	TheSkirmishGameInfo->setSlot( 1, computer );
 	TheSkirmishGameInfo->setLocalIP( TheSkirmishGameInfo->getSlot( 0 )->getIP() );
 	TheSkirmishGameInfo->setMap( md->m_fileName );
-	TheSkirmishGameInfo->setGameSpeedPercent( NATIVE_GAME_SPEED_PERCENT );
+	TheSkirmishGameInfo->setGameSpeedPercent( RANKED_GAME_SPEED_PERCENT );
 	TheSkirmishGameInfo->setSeed( ai.seed );
 	TheWritableGlobalData->m_mapName = TheSkirmishGameInfo->getMap();
 	TheSkirmishGameInfo->startGame( 0 );
@@ -358,7 +358,7 @@ static Bool startAIMatch( const OnlineAIMatch &ai )
 	msg->appendIntegerArgument( DIFFICULTY_NORMAL );
 	msg->appendIntegerArgument( 0 );
 	msg->appendIntegerArgument( LOGICFRAMES_PER_SECOND );			// the native tick, whatever -fps says
-	msg->appendIntegerArgument( NATIVE_GAME_SPEED_PERCENT );
+	msg->appendIntegerArgument( RANKED_GAME_SPEED_PERCENT );
 	DEBUG_LOG(("ONLINE AI START match=%s map=%s seed=%d aiRating=%.2f rung=%d army=%d\n", ai.match.str(),
 		md->m_fileName.str(), ai.seed, ai.aiRating, (Int)rung, s_aiArmy));
 	return TRUE;
@@ -685,7 +685,7 @@ static void makeCards( void )
 		"GUI:OnlineOpenGamesLabel", FALSE, WIDE_FACT_WIDTH, 1, customFacts );
 	// the speed every Play vs AI match plays at, startAIMatch's
 	UnicodeString speed;
-	speed.format( u"%d.%dx", NATIVE_GAME_SPEED_PERCENT / 100, NATIVE_GAME_SPEED_PERCENT % 100 / 10 );
+	speed.format( u"%d.%dx", RANKED_GAME_SPEED_PERCENT / 100, RANKED_GAME_SPEED_PERCENT % 100 / 10 );
 	s_cards[ CARD_AI ].factValue[ 2 ]->setText( speed );
 
 	s_cardRecent = hubWindow( "CardRecent" );

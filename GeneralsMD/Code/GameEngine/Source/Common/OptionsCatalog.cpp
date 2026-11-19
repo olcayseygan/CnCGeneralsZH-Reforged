@@ -379,7 +379,8 @@ const OptionDef TheOptionCatalog[] =
 
 	// Game speed for the campaign and the generals' challenge: 1.0x, 1.25x, 1.5x or 2.0x, the game
 	// time each of the same 30 ticks a second advances, set when a mission starts.  The skirmish lobby
-	// has its own combo and a multiplayer match always plays at 1.5x, so this one never touches either.
+	// has its own combo and a network match plays its mode's fixed speed (1.5x in a room or on LAN, 1.0x
+	// ranked and against the AI online), so this one never touches either.
 	// On Options > Interface.
 	{ "MissionGameSpeed",					OPT_WND( "ComboGameSpeedMissions" ), "GUI:GameSpeedMissions",
 		OPTION_ENUM, APPLY_LIVE, 0, MISSION_GAME_SPEED_COUNT - 1,

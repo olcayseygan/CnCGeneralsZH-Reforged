@@ -754,9 +754,11 @@ StateReturnType AIGuardReturnState::onEnter( void )
 	// A circle the player sized with the wheel is the ground to hold, and it can be 800 wide: after
 	// a fight a unit still inside it stays where it is rather than driving back to the one middle
 	// point with the whole group. The first walk to the post after the order is still made, and a
-	// guard without a radius (no wheel, AI, scripts, old replays) goes back as EA's did.
+	// guard without a radius (no wheel, AI, scripts, old replays) goes back as EA's did, and so does
+	// an aircraft: a guarding plane flies back to its post and circles it.
 	const Real radius = getMachineOwner()->getAI()->getGuardRadius();
 	if (!m_stayedAtPost && radius > 0.0f && getGuardMachine()->hasReachedPost()
+			&& !getMachineOwner()->isKindOf(KINDOF_AIRCRAFT)
 			&& getMachineOwner()->getAI()->getGuardTargetType() == GUARDTARGET_LOCATION)
 	{
 		const Coord3D *post = getGuardMachine()->getPositionToGuard();
@@ -797,9 +799,13 @@ void AIGuardReturnState::onExit( StateExitType status )
 		// path and all: EA's return always asked for a path of its own, which threw the old one away.
 		// Left standing, the unit sat at its post still marked as moving, jogging on the spot and
 		// never deploying.
+		// The machine can be torn down with its object, after the AI is gone.
 		AIUpdateInterface *ai = getMachineOwner()->getAI();
-		ai->destroyPath();
-		ai->friend_endingMove();
+		if (ai)
+		{
+			ai->destroyPath();
+			ai->friend_endingMove();
+		}
 		return;
 	}
 	AIInternalMoveToState::onExit( status );

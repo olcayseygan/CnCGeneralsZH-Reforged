@@ -486,6 +486,7 @@ GameSpyStagingRoom::GameSpyStagingRoom()
 
 	m_ladderIP.clear();
 	m_ladderPort = 0;
+	m_isQM = FALSE;		// GameInfo's ctor runs its own reset, not ours
 }
 
 void GameSpyStagingRoom::cleanUpSlotPointers( void )
@@ -1015,4 +1016,8 @@ void GameSpyStagingRoom::reset(void)
 	}
 #endif
 	GameInfo::reset();
+	/* A room is a custom game until the Quick Match marks it, after the enterGame that called this.
+		 Without it the flag outlived the match on TheGameSpyGame, and the next room hosted or joined on
+		 the same sign-in scored as ranked. */
+	m_isQM = FALSE;
 }

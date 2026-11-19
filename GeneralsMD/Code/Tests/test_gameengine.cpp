@@ -158,6 +158,7 @@ static int GetSystemMetrics( int which )
 #include "GameNetwork/NetPacket.h"
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GUIUtil.h"
+#include "GameNetwork/GameSpy/StagingRoomGameInfo.h"
 #include <float.h>
 #include "GameClient/Water.h"
 #include "GameClient/Shadow.h"
@@ -6553,6 +6554,17 @@ TEST(ranked_matches_play_retail_pace_and_custom_rooms_stay_native)
 	room.reset();		// markAsStagingRoomHost / Joiner: reset, then enterGame
 	room.enterGame();
 	CHECK_EQ( room.getGameSpeedPercent(), (Int)NATIVE_GAME_SPEED_PERCENT );
+
+	/* The online room is one object for the whole sign-in.  The Quick Match marks it ranked after its
+	   enterGame, and the next room's reset has to take that back, or a custom game scores as ranked. */
+	GameSpyStagingRoom online;
+	CHECK( !online.isQMGame() );
+	online.enterGame();
+	online.markGameAsQM();
+	CHECK( online.isQMGame() );
+	online.reset();
+	online.enterGame();
+	CHECK( !online.isQMGame() );
 	delete TheWritableGlobalData;
 	TheWritableGlobalData = saved;
 }

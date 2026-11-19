@@ -3432,12 +3432,16 @@ Bool AIPlayer::isPossibleToBuildTeam( TeamPrototype *proto, Bool requireIdleFact
 	{
 		return true;
 	}
-	if (!requireIdleFactory) 
+	if (!requireIdleFactory)
 	{
 		// Doesn't require an idle factory, so we're ok.
 		return true;
 	}
-	return false;
+	// Past the bank target a team waits in a factory's queue like any other buy.  The signature units
+	// (trainDoctrine) queue a rich factory several deep and it is never idle again: a Hard GLA against a
+	// turtle built one team in thirty minutes, sent no wave, and ended on 250,000 with 485 units idle at
+	// home.  A team's orders recruit what already stands idle (queueUnits) before anything is trained.
+	return (Int)m_player->getMoney()->countMoney() >= bankTarget();
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -6165,8 +6169,10 @@ void AIPlayer::queueUnits( void )
 			if (order->isWaitingToBuild())
 			{
 
-				// start the creation of a new unit
-				startTraining( order, team->m_priorityBuild, team->m_team->getName());
+				// start the creation of a new unit; past the bank target in a busy factory's queue too, as
+				// isPossibleToBuildTeam lets the team start: a rich GLA's Arms Dealer stayed queued with the
+				// signature units, and 43 SCUD Launchers its teams were given were never trained
+				startTraining( order, team->m_priorityBuild || (Int)m_player->getMoney()->countMoney() >= bankTarget(), team->m_team->getName());
 			}
 			else
 			{
@@ -10672,13 +10678,32 @@ Object *AIPlayer::homeIntruder( Int *count, std::vector<AIVisibleEnemy> *army ) 
 			continue;
 		if( !obj->isAbleToAttack() || !observerKnowsAbout( obj, m_player->getPlayerIndex() ) )
 			continue;
+		// Two base radii reach a long way on a small map, as far as a turtle's outer ring and the army he
+		// parks at home, and any hit on anything of ours anywhere made that an attack on our base.  A
+		// Hard GLA read its base as under attack from minute three to the end of a turtle match: no
+		// wave, no building, 243,000 in the bank, and 5,213 idle units sent at a Patriot.  So an enemy
+		// standing nearer a start this AI knows an enemy holds than our base center is at his home and
+		// not ours; and a gun standing still outside the base itself, or the crew a Stinger
+		// Site keeps beside it, is his wall and not an attack.  A gun inside the base still counts, and
+		// baseSquatter looks out to one and a half radii on the rung's clock.
+		const Real distSqr = sqr( obj->getPosition()->x - m_baseCenter.x ) + sqr( obj->getPosition()->y - m_baseCenter.y );
+		if( (obj->isKindOf( KINDOF_IMMOBILE ) || obj->testStatus( OBJECT_STATUS_UNSELECTABLE )) && distSqr > sqr( m_baseRadius ) )
+			continue;
+		Bool atHisHome = FALSE;
+		for( Int s = 0; s < MAX_PLAYER_COUNT && !atHisHome; ++s )
+		{
+			Coord3D start;
+			atHisHome = m_startOccupied[ s ] && startAt( s, &start ) &&
+				sqr( obj->getPosition()->x - start.x ) + sqr( obj->getPosition()->y - start.y ) < distSqr;
+		}
+		if( atHisHome )
+			continue;
 		if( count == NULL )
 			return obj;		// only asked whether there is one
 		++*count;
 		if( army )
 			addToVisibleArmy( army, obj->getTemplate(), obj->getControllingPlayer(),
 				INT_TO_REAL( obj->getTemplate()->calcCostToBuild( obj->getControllingPlayer() ) ) );
-		const Real distSqr = sqr( obj->getPosition()->x - m_baseCenter.x ) + sqr( obj->getPosition()->y - m_baseCenter.y );
 		if( nearest == NULL || distSqr < nearestSqr )
 		{
 			nearest = obj;
@@ -13020,9 +13045,12 @@ Real AIPlayer::gunOdds( void ) const
 
 void AIPlayer::recordLoss( const Object *obj )
 {
-	// a fight at home is a fight the base cannot walk away from, and an aircraft dies to anti-air no road shows
+	// a fight in the base is a fight the base cannot walk away from, and an aircraft dies to anti-air no road
+	// shows.  The base itself and not the two radii the home guard answers to: on a small map those reach a
+	// turtle's Fire Base, and a Hard GLA lost 165 units to it, 554 from home, with nothing marked
+	const Coord3D *at = obj->getPosition();
 	if( !runsOwnAI() || !m_baseCenterSet || obj->isKindOf( KINDOF_STRUCTURE ) || obj->isKindOf( KINDOF_AIRCRAFT ) ||
-			obj->isKindOf( KINDOF_PROJECTILE ) || isAtHome( obj->getPosition() ) )
+			obj->isKindOf( KINDOF_PROJECTILE ) || sqr( at->x - m_baseCenter.x ) + sqr( at->y - m_baseCenter.y ) <= sqr( m_baseRadius ) )
 		return;
 	const Real power = aiCombatPower( obj );
 	if( power <= 0.0f )
@@ -13033,7 +13061,6 @@ void AIPlayer::recordLoss( const Object *obj )
 		TheTerrainLogic->getExtent( &extent );
 		m_lossMap.reset( extent.lo.x, extent.lo.y, extent.hi.x - extent.lo.x, extent.hi.y - extent.lo.y, INFLUENCE_CELL_SIZE );
 	}
-	const Coord3D *at = obj->getPosition();
 	m_lossMap.add( at->x, at->y, power );
 	DEBUG_LOG(("AI KILLZONE frame %d player %d lost '%s' worth %.0f at (%.0f,%.0f), %.0f lost round it\n", TheGameLogic->getFrame(),
 		m_player->getPlayerIndex(), obj->getTemplate()->getName().str(), power, at->x, at->y, m_lossMap.lossAround( at->x, at->y, LOSS_READ_RADIUS )));
@@ -17996,6 +18023,11 @@ static const Real RESUME_GOAL_SLACK = 30.0f;
 	* garrisoned warehouse, and stood plinking at it 97 times in four matches.  A gun already walking to
 	* within this of its spot is left to walk. */
 static const Real SHELL_WALK = 200.0f;
+/** ... and a siege gun (isSiegeGun) this far while it waits at home, or while known guns hold the attacks
+	* back (attackBeatsGuns): its team waits at the gathering point, up to three minutes for the guns, and
+	* its SCUD Launchers and Inferno Cannons waited with it, a long walk from any defence and never in reach
+	* of one.  Not one gun fired a shell in 54 matches of the turtle bench. */
+static const Real SIEGE_SHELL_WALK = 1500.0f;
 static const Real SHELL_INSET = 10.0f;
 #define SHELL_MAX_FRAMES ((Real)(60.0f * LOGICFRAMES_PER_GAME_SECOND))
 static const Real SHELL_SPOT_SLACK = 60.0f;
@@ -18013,10 +18045,10 @@ static Bool otherDefenceCovers( const std::vector<KnownDefence> &defences, size_
 }
 
 /** A unit with nothing to shoot goes after the nearest known defence its primary gun outreaches, up to
-	* SHELL_WALK past its range, that it would bring down alone within SHELL_MAX_FRAMES, from a spot inside its
+	* walk past its range, that it would bring down alone within SHELL_MAX_FRAMES, from a spot inside its
 	* range that no other known gun covers.  It walks to that spot first and opens fire from there: told to
 	* attack from afar, it took its own way in and could stop under the next gun.  The defence's index, or -1. */
-static Int shellDefence( const Player *player, Object *obj, Real range, const std::vector<KnownDefence> &defences )
+static Int shellDefence( const Player *player, Object *obj, Real range, Real walk, const std::vector<KnownDefence> &defences )
 {
 	const Coord3D *pos = obj->getPosition();
 	Int best = -1;
@@ -18027,7 +18059,7 @@ static Int shellDefence( const Player *player, Object *obj, Real range, const st
 	{
 		const Coord3D *at = defences[ d ].m_object->getPosition();
 		const Real distSqr = sqr( at->x - pos->x ) + sqr( at->y - pos->y );
-		if( range < defences[ d ].m_reach + DEFENCE_FIGHT_SLACK || distSqr > sqr( range + SHELL_WALK ) || (best >= 0 && distSqr >= bestSqr) )
+		if( range < defences[ d ].m_reach + DEFENCE_FIGHT_SLACK || distSqr > sqr( range + walk ) || (best >= 0 && distSqr >= bestSqr) )
 			continue;
 		// a map lookup, so after the distances: every unit of every seat asked it of every known gun on the map
 		const Real framesToKill = templateFramesToKill( obj->getTemplate(), defences[ d ].m_object->getTemplate(), aiCreditsManual( player ) );
@@ -18142,7 +18174,8 @@ void AIPlayer::holdAtDefences( void )
 			if( defences[ d ].m_object == victim && shellRange >= defences[ d ].m_reach + DEFENCE_FIGHT_SLACK )
 				shelled = (Int)d;
 		if( victim == NULL && !walkingHome && (step == NULL || now >= step->leaveAloneUntil) )
-			shelled = shellDefence( m_player, obj, shellRange, defences );
+			shelled = shellDefence( m_player, obj, shellRange,
+				isSiegeGun( obj ) && (m_gunHoldSince != 0 || isAtHome( pos )) ? SIEGE_SHELL_WALK : SHELL_WALK, defences );
 
 		if( !ai->isMoving() )
 		{

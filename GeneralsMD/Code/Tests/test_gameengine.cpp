@@ -12994,6 +12994,40 @@ TEST(lane_war_times_are_wall_seconds_in_logic_frames)
 	CHECK_EQ( ObjectStatusMaskType::getSingleBitFromName( "UNATTACKABLE" ), (Int)OBJECT_STATUS_UNATTACKABLE );
 }
 
+TEST(lane_war_tiers_cost_what_the_plan_says_and_a_sale_pays_back_half_once_sent)
+{
+	// four income levels of 1000 each, every one paying 67 more a tick, the middle a quarter on top
+	CHECK_EQ( LaneWar_incomeAt( 0, FALSE ), (UnsignedInt)267 );
+	CHECK_EQ( LaneWar_incomeAt( 4, FALSE ), (UnsignedInt)( 267 + 4 * 67 ) );
+	CHECK_EQ( LaneWar_incomeAt( 2, TRUE ), (UnsignedInt)( ( 267 + 2 * 67 ) * 125 / 100 ) );
+	CHECK_EQ( LaneWar_incomeAt( 0, TRUE ), LaneWar_income( TRUE ) );
+	for( Int level = 1; level <= LANEWAR_INCOME_TIERS; ++level )
+		CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_INCOME, level ), 1000 );
+	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_INCOME, LANEWAR_INCOME_TIERS + 1 ), 0 );
+
+	// tech starts at 1, so 2 and 3 are the levels on sale
+	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_TECH, 1 ), 0 );
+	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_TECH, 2 ), 1500 );
+	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_TECH, 3 ), 3000 );
+	CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_TECH, 4 ), 0 );
+
+	CHECK_EQ( LaneWar_refund( 225, FALSE ), 225 );
+	CHECK_EQ( LaneWar_refund( 225, TRUE ), 112 );
+	CHECK_EQ( LaneWar_refund( 900, TRUE ), 450 );
+
+	// the drill's lane verbs keep their numbers in name for the director's order
+	ScenarioAction action;
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "30 lanetier 0 1 2", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_LANETIER );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "30 lanesell 0 0 3 1", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_LANESELL );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "30 lanemove 0 0 3 1 5 2", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_LANEMOVE );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "30 laneupgrade 0 Upgrade_AmericaRangerFlashBangGrenade", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_LANEUPGRADE );
+	CHECK( ScenarioDrill_parseLine( "30 lanemove 0 0 3 1 5", &action ) != SCENARIO_PARSE_OK );
+}
+
 //-------------------------------------------------------------------------------------------------
 /** A ranked Quick Match has no lobby to send a map name: every peer derives the map from the match
 	seed and the seat count alone, so the derivation is pinned here.  A change to it splits two builds

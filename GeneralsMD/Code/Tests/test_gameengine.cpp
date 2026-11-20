@@ -12412,9 +12412,9 @@ TEST(a_seed_generates_the_same_map_bytes_every_single_time)
 //-------------------------------------------------------------------------------------------------
 /** The Lane War map: one ground for every seed and seat count, the seed choosing only its look.
 	Every name the director looks up is in the file, the fortresses and towers belong to their own
-	end's starts, and the plateaus are sealed: walking the cells the pathfinder keeps open (corners
-	spanning under 16 height bytes, inside the boundary) reaches the lane from no plateau, and no
-	plateau from another. */
+	end's starts, a wave copy fits on its pad and walks clear of its own fortress, and the ground is
+	open and soft: no cliff on dry ground, gentle slopes at every edge of play, one walk reaching
+	the lane and every plot, the sea on all four sides and nothing but trees and stones off play. */
 //-------------------------------------------------------------------------------------------------
 static Int RMGLaneObject( const char *name )
 {
@@ -12455,7 +12455,47 @@ static void RMGLaneFlood( Int startX, Int startY, std::vector<char>& reached )
 	}
 }
 
-TEST(the_lane_map_names_what_the_director_needs_and_seals_its_plateaus)
+/// The largest height span of any cell in the playable boundary, and of those within some cells of a rectangle of play.
+struct RMGLaneSlopes
+{
+	Int anywhere, nearPlay;
+};
+
+static RMGLaneSlopes RMGLaneSpans( const std::vector<Int>& rects, Int within )
+{
+	const Int W = theRMGParse.m_width, border = theRMGParse.m_border;
+	RMGLaneSlopes slopes = { 0, 0 };
+	for( Int y = 0; y < theRMGParse.m_boundaryY; y++ )
+	{
+		for( Int x = 0; x < theRMGParse.m_boundaryX; x++ )
+		{
+			const Int at = ( y + border ) * W + x + border;
+			const Int a = theRMGParse.m_heights[at], b = theRMGParse.m_heights[at + 1];
+			const Int c = theRMGParse.m_heights[at + W], d = theRMGParse.m_heights[at + W + 1];
+			const Int span = std::max( std::max( a, b ), std::max( c, d ) ) - std::min( std::min( a, b ), std::min( c, d ) );
+			slopes.anywhere = std::max( slopes.anywhere, span );
+			for( size_t r = 0; r + 3 < rects.size(); r += 4 )
+				if( x + 1 >= rects[r] - within && x <= rects[r + 2] + within && y + 1 >= rects[r + 1] - within && y <= rects[r + 3] + within )
+					slopes.nearPlay = std::max( slopes.nearPlay, span );
+		}
+	}
+	return slopes;
+}
+
+/// Every object neither a waypoint nor named for the director is a tree or a stone.
+static Bool RMGLaneOnlyNature( void )
+{
+	for( Int i = 0; i < (Int)theRMGParse.m_objectNames.size(); i++ )
+	{
+		if( theRMGParse.m_waypointIDs[i] != 0 || !theRMGParse.m_objectScriptNames[i].isEmpty() )
+			continue;
+		if( !theRMGParse.m_objectNames[i].startsWith( "Tree" ) && !theRMGParse.m_objectNames[i].startsWith( "Rock" ) )
+			return FALSE;
+	}
+	return TRUE;
+}
+
+TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 {
 	CHECK( bootOnce() );
 
@@ -12467,13 +12507,15 @@ TEST(the_lane_map_names_what_the_director_needs_and_seals_its_plateaus)
 	RandomMapSettings clamped = settings;
 	RandomMapGenerator::clampSettings( clamped );
 	CHECK_EQ( clamped.m_numPlayers, 6 );
-	CHECK_EQ( clamped.m_playableCells, 316 );
+	CHECK_EQ( clamped.m_playableCells, 332 );
 	CHECK_EQ( clamped.m_seed, 3 );
 
 	/* The layout of 2026-11-20 after the Warcraft III Direct Strike map, in playable cells: a lane 180
-		by 45 from x 68 to 248 and y 69 to 114, fortresses 0.7 of the half-length off the middle (x 158),
-		plots 24 by 16 in a column 20 cells past each end. */
-	const Int laneX0 = 68, laneX1 = 248, laneY0 = 69, laneY1 = 114;
+		by 45 from x 76 to 256 and y 77 to 122, its middle (166, 99.5) the map's, fortresses 0.7 of the
+		half-length off the middle and 19 cells to the low y side, plots 24 by 16 in a column 20 cells
+		past each end, 32 cells of green, beach and sea round the outermost of them. */
+	const Int laneX0 = 76, laneX1 = 256, laneY0 = 77, laneY1 = 122;
+	const Real middleX = 1660.0f, middleY = 995.0f;
 
 	// the same bytes every time, and for any seat count
 	std::vector<char> bytes, again;
@@ -12484,10 +12526,15 @@ TEST(the_lane_map_names_what_the_director_needs_and_seals_its_plateaus)
 
 	parseGeneratedMap( bytes );
 	const Int W = theRMGParse.m_width, border = theRMGParse.m_border;
-	CHECK_EQ( W, 356 );
-	CHECK_EQ( theRMGParse.m_height, 223 );
-	CHECK_EQ( theRMGParse.m_boundaryX, 316 );
-	CHECK_EQ( theRMGParse.m_boundaryY, 183 );
+	CHECK_EQ( W, 372 );
+	CHECK_EQ( theRMGParse.m_height, 239 );
+	CHECK_EQ( theRMGParse.m_boundaryX, 332 );
+	CHECK_EQ( theRMGParse.m_boundaryY, 199 );
+	CHECK_NEAR( 2.0f * middleX, theRMGParse.m_boundaryX * MAP_XY_FACTOR, 0.01f );
+	CHECK_NEAR( 2.0f * middleY, theRMGParse.m_boundaryY * MAP_XY_FACTOR, 0.01f );
+	std::vector<Int> playRects;			// x0, y0, x1, y1 in playable cells: the lane, the plots, the aprons
+	const Int laneRect[4] = { laneX0, laneY0, laneX1, laneY1 };
+	playRects.assign( laneRect, laneRect + 4 );
 
 	// six starts, one a plot, each inside its own area; the ends take turns, seat 1 on the lane's axis
 	static const char *const theAreas[] = { "LaneWar_BuildA1", "LaneWar_BuildB1", "LaneWar_BuildA2", "LaneWar_BuildB2",
@@ -12520,23 +12567,38 @@ TEST(the_lane_map_names_what_the_director_needs_and_seals_its_plateaus)
 		CHECK( at.x > polygon[0].x && at.x < polygon[2].x && at.y > polygon[0].y && at.y < polygon[2].y );
 		CHECK_EQ( (Int)( polygon[2].x - polygon[0].x ), 240 );
 		CHECK_EQ( (Int)( polygon[2].y - polygon[0].y ), 160 );
-		CHECK( ( at.x < 1580.0f ) == ( start % 2 == 0 ) );
+		CHECK( ( at.x < middleX ) == ( start % 2 == 0 ) );
 		CHECK( at.x < laneX0 * MAP_XY_FACTOR || at.x > laneX1 * MAP_XY_FACTOR );
 		if( start < 2 )
 			CHECK( at.y > laneY0 * MAP_XY_FACTOR && at.y < laneY1 * MAP_XY_FACTOR );
+		const Int plotRect[4] = { (Int)( polygon[0].x / MAP_XY_FACTOR ), (Int)( polygon[0].y / MAP_XY_FACTOR ),
+			(Int)( polygon[2].x / MAP_XY_FACTOR ), (Int)( polygon[2].y / MAP_XY_FACTOR ) };
+		playRects.insert( playRects.end(), plotRect, plotRect + 4 );
 	}
 	CHECK( theRMGParse.m_areaNames[6] == theAreas[6] );
 
-	// the spawn anchors behind the fortresses and a linked path each way
+	// the spawn anchors on the middle line and a linked path each way
 	Int spawns = 0, laneA = 0, laneB = 0;
+	Coord3D spawnAt[2];
 	for( Int i = 0; i < (Int)theRMGParse.m_waypointNames.size(); i++ )
-		spawns += theRMGParse.m_waypointNames[i] == "LaneWar_SpawnA" || theRMGParse.m_waypointNames[i] == "LaneWar_SpawnB";
+		for( Int team = 0; team < 2; team++ )
+			if( theRMGParse.m_waypointNames[i] == ( team == 0 ? "LaneWar_SpawnA" : "LaneWar_SpawnB" ) )
+			{
+				spawnAt[team] = theRMGParse.m_waypointPositions[i];
+				spawns++;
+			}
 	for( Int i = 0; i < (Int)theRMGParse.m_waypointLabels.size(); i++ )
 	{
 		laneA += theRMGParse.m_waypointLabels[i] == "LaneWar_LaneA";
 		laneB += theRMGParse.m_waypointLabels[i] == "LaneWar_LaneB";
 	}
 	CHECK_EQ( spawns, 2 );
+	if( spawns != 2 )
+		return;
+	CHECK_NEAR( spawnAt[0].x, 910.0f, 0.5f );
+	CHECK_NEAR( spawnAt[1].x, 2410.0f, 0.5f );
+	CHECK_NEAR( spawnAt[0].y, middleY, 0.5f );
+	CHECK_NEAR( spawnAt[1].y, middleY, 0.5f );
 	CHECK_EQ( laneA, 9 );
 	CHECK_EQ( laneB, 9 );
 	CHECK_EQ( (Int)theRMGParse.m_waypointLinks.size(), 16 );
@@ -12555,70 +12617,111 @@ TEST(the_lane_map_names_what_the_director_needs_and_seals_its_plateaus)
 			continue;
 		CHECK( theRMGParse.m_objectNames[o] == theOwned[i][1] );
 		CHECK( theRMGParse.m_objectOwners[o] == theOwned[i][2] );
-		CHECK_NEAR( theRMGParse.m_objectPositions[o].y, 915.0f, 0.5f );
+		CHECK_NEAR( theRMGParse.m_objectPositions[o].y, i < 2 ? middleY - 190.0f : middleY, 0.5f );
 	}
 	CHECK( RMGLaneObject( "LaneWar_TowerA2" ) < 0 && RMGLaneObject( "LaneWar_MiddleStructure" ) < 0 );
-	const Int fortressA = RMGLaneObject( "LaneWar_FortressA" ), fortressB = RMGLaneObject( "LaneWar_FortressB" );
+	const Int fortress[2] = { RMGLaneObject( "LaneWar_FortressA" ), RMGLaneObject( "LaneWar_FortressB" ) };
 	const Int towerA = RMGLaneObject( "LaneWar_TowerA1" );
-	if( fortressA >= 0 && fortressB >= 0 && towerA >= 0 )
+	if( fortress[0] < 0 || fortress[1] < 0 || towerA < 0 )
+		return;
+	CHECK_NEAR( theRMGParse.m_objectPositions[fortress[0]].x, middleX - 630.0f, 0.5f );
+	CHECK_NEAR( theRMGParse.m_objectPositions[fortress[1]].x, middleX + 630.0f, 0.5f );
+	CHECK_NEAR( theRMGParse.m_objectPositions[towerA].x, middleX - 333.0f, 0.5f );
+
+	/* A wave copy is a plot's 240 by 160 round its spawn anchor. It lies on the lane, between the lane's
+		end and the line of its own fortress, and wholly to one side of the fortress's 180 by 180, two
+		cells clear, so it neither lands off the lane nor walks round its fortress. */
+	for( Int team = 0; team < 2; team++ )
 	{
-		CHECK_NEAR( theRMGParse.m_objectPositions[fortressA].x, 950.0f, 0.5f );
-		CHECK_NEAR( theRMGParse.m_objectPositions[fortressB].x, 2210.0f, 0.5f );
-		CHECK_NEAR( theRMGParse.m_objectPositions[towerA].x, 1580.0f - 333.0f, 0.5f );
+		const Coord3D& fort = theRMGParse.m_objectPositions[fortress[team]];
+		const Real ahead = team == 0 ? 1.0f : -1.0f;
+		CHECK( spawnAt[team].x - 120.0f >= laneX0 * MAP_XY_FACTOR && spawnAt[team].x + 120.0f <= laneX1 * MAP_XY_FACTOR );
+		CHECK( ( fort.x - ( spawnAt[team].x + ahead * 120.0f ) ) * ahead >= -0.5f );
+		CHECK( ( spawnAt[team].y - 80.0f ) - ( fort.y + 90.0f ) >= 2.0f * MAP_XY_FACTOR - 0.5f );
+		const Int apron[4] = { (Int)( fort.x / MAP_XY_FACTOR + 0.5f ) - 10, (Int)( fort.y / MAP_XY_FACTOR + 0.5f ) - 10,
+			(Int)( fort.x / MAP_XY_FACTOR + 0.5f ) + 10, (Int)( fort.y / MAP_XY_FACTOR + 0.5f ) + 10 };
+		playRects.insert( playRects.end(), apron, apron + 4 );
 	}
 
-	// sealed: the lane walks its own 180 by 45 cells and reaches no start, each start only its own 24 by 16
+	// the lane, the aprons and the plots flat at one height, and every one of them in one walk
+	const Int ground = theRMGParse.m_heights[( 99 + border ) * W + 166 + border];
+	Int uneven = 0;
+	for( size_t r = 0; r + 3 < playRects.size(); r += 4 )
+		for( Int y = playRects[r + 1]; y <= playRects[r + 3]; y++ )
+			for( Int x = playRects[r]; x <= playRects[r + 2]; x++ )
+				uneven += theRMGParse.m_heights[( y + border ) * W + x + border] != ground;
+	CHECK_EQ( uneven, 0 );
 	std::vector<char> reached;
-	const Int laneCell = ( 91 + border ) * W + 158 + border;
+	const Int laneCell = ( 99 + border ) * W + 166 + border;
 	RMGLaneFlood( laneCell % W, laneCell / W, reached );
-	Int laneSize = 0;
-	for( size_t i = 0; i < reached.size(); i++ )
-		laneSize += reached[i];
-	CHECK_EQ( laneSize, 180 * 45 );
 	for( Int start = 0; start < 6; start++ )
-		CHECK( reached[startCells[start]] == 0 );
-	for( Int start = 0; start < 6; start++ )
-	{
-		RMGLaneFlood( startCells[start] % W, startCells[start] / W, reached );
-		Int size = 0;
-		for( size_t i = 0; i < reached.size(); i++ )
-			size += reached[i];
-		CHECK_EQ( size, 24 * 16 );
-		CHECK( reached[laneCell] == 0 );
-		for( Int other = 0; other < 6; other++ )
-			CHECK( other == start || reached[startCells[other]] == 0 );
-	}
+		CHECK( reached[startCells[start]] == 1 );
 
-	/* other seeds: the ground in play is the same and stays sealed, water lines both long sides, and
-		over a dozen seeds the theme changes and the sea comes and goes */
+	/* Soft: no cell of the map spans more than 8 height bytes, half the pathfinder's cliff and under
+		the 10 at which the generator calls ground steep (5 world units over a cell, a beach or a lake's
+		bank at its steepest), and within six cells of any edge of play none spans more than 2, a rise of
+		under 8 degrees across a cell. The walls of the first lane map were 18 and more inside one cell. */
+	const RMGLaneSlopes slopes = RMGLaneSpans( playRects, 6 );
+	CHECK( slopes.anywhere <= 8 );
+	CHECK( slopes.nearPlay <= 2 );
+
+	/* Centred: the sea within 24 cells of each of the four edges, about as much of it on every side,
+		and a lake inland along each long side of the lane. */
+	Real sea[4] = { 0, 0, 0, 0 };
+	Int lakes[2] = { 0, 0 };
+	for( Int y = 0; y <= theRMGParse.m_boundaryY; y++ )
+	{
+		for( Int x = 0; x <= theRMGParse.m_boundaryX; x++ )
+		{
+			if( theRMGParse.m_heights[( y + border ) * W + x + border] >= 50 )
+				continue;
+			const Int toEdge[4] = { x, theRMGParse.m_boundaryX - x, y, theRMGParse.m_boundaryY - y };
+			for( Int side = 0; side < 4; side++ )
+				if( toEdge[side] < 24 )
+					sea[side] += 1.0f / (Real)( side < 2 ? theRMGParse.m_boundaryY : theRMGParse.m_boundaryX );
+			if( x > laneX0 && x < laneX1 && std::min( toEdge[2], toEdge[3] ) > 30 )
+				lakes[y < laneY0 ? 0 : 1] += y < laneY0 || y > laneY1;
+		}
+	}
+	const Real fewest = std::min( std::min( sea[0], sea[1] ), std::min( sea[2], sea[3] ) );
+	const Real most = std::max( std::max( sea[0], sea[1] ), std::max( sea[2], sea[3] ) );
+	CHECK( fewest >= 12.0f );
+	CHECK( most <= 1.25f * fewest );
+	CHECK( lakes[0] > 0 && lakes[1] > 0 );
+	CHECK_EQ( theRMGParse.m_numWaterAreas, 1 );
+
+	// nothing off play but trees and stones, and the lane, the plots, the bank and the shore each in a texture of its own
+	CHECK( RMGLaneOnlyNature() );
+	for( Int a = 0; a < 4; a++ )
+		for( Int b = a + 1; b < 4; b++ )
+			CHECK( theRMGParse.m_textureNames[a] != theRMGParse.m_textureNames[b] );
+
+	/* other seeds: the ground in play is the same, as soft and as open, nothing but nature stands off it,
+		and over a dozen seeds the theme changes */
 	const std::vector<UnsignedByte> heights = theRMGParse.m_heights;
 	std::vector<AsciiString> themes;
-	Int islands = 0;
 	for( Int seed = 1; seed <= 12; seed++ )
 	{
 		settings.m_seed = seed;
 		RandomMapGenerator::generate( settings, again );
 		parseGeneratedMap( again );
 		Int differs = 0;
-		for( Int y = laneY0; y <= laneY1; y++ )
-			for( Int x = laneX0; x <= laneX1; x++ )
-				differs += theRMGParse.m_heights[( y + border ) * W + x + border] != heights[( y + border ) * W + x + border];
-		for( Int start = 0; start < 6; start++ )
-			differs += theRMGParse.m_heights[startCells[start]] != heights[startCells[start]];
+		for( size_t r = 0; r + 3 < playRects.size(); r += 4 )
+			for( Int y = playRects[r + 1]; y <= playRects[r + 3]; y++ )
+				for( Int x = playRects[r]; x <= playRects[r + 2]; x++ )
+					differs += theRMGParse.m_heights[( y + border ) * W + x + border] != heights[( y + border ) * W + x + border];
 		CHECK_EQ( differs, 0 );
 		RMGLaneFlood( laneCell % W, laneCell / W, reached );
-		Int size = 0;
-		for( size_t i = 0; i < reached.size(); i++ )
-			size += reached[i];
-		CHECK_EQ( size, 180 * 45 );
-		CHECK( theRMGParse.m_numWaterAreas >= 2 );
-		for( Int area = 0; area < theRMGParse.m_numWaterAreas; area++ )
-			islands += theRMGParse.m_waterPolygons[area].size() == 4;
+		for( Int start = 0; start < 6; start++ )
+			CHECK( reached[startCells[start]] == 1 );
+		const RMGLaneSlopes seedSlopes = RMGLaneSpans( playRects, 6 );
+		CHECK( seedSlopes.anywhere <= 8 );
+		CHECK( seedSlopes.nearPlay <= 2 );
+		CHECK( RMGLaneOnlyNature() );
 		if( std::find( themes.begin(), themes.end(), theRMGParse.m_textureName ) == themes.end() )
 			themes.push_back( theRMGParse.m_textureName );
 	}
 	CHECK( themes.size() >= 3 );
-	CHECK( islands > 0 && islands < 12 );
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -3058,6 +3058,8 @@ GameEngineDevice/Source/PosixDevice/Render/SdlPipelineCache.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlPipelineCache.h
 GameEngineDevice/Source/PosixDevice/Render/SdlPostAtmosphere.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlPostAtmosphere.h
+GameEngineDevice/Source/PosixDevice/Render/SdlPostDistortion.cpp
+GameEngineDevice/Source/PosixDevice/Render/SdlPostDistortion.h
 GameEngineDevice/Source/PosixDevice/Render/SdlPostOcclusion.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlPostOcclusion.h
 GameEngineDevice/Source/PosixDevice/Render/SdlPostProcess.cpp
@@ -4483,10 +4485,12 @@ Tests/test_score_screen.inc
 Tests/test_sdl_ao.cpp
 Tests/test_sdl_atmosphere.cpp
 Tests/test_sdl_classic_foam.cpp
+Tests/test_sdl_distortion.cpp
 Tests/test_sdl_gpu_depth_format.cpp
 Tests/test_sdl_gpu_frame.cpp
 Tests/test_sdl_gpu_particles.cpp
 Tests/test_sdl_gpu_particles_context.cpp
+Tests/test_sdl_heat.cpp
 Tests/test_sdl_input.cpp
 Tests/test_sdl_pipeline_state.cpp
 Tests/test_sdl_platform.cpp

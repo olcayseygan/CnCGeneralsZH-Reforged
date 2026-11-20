@@ -1619,6 +1619,16 @@ if(ZH_PLATFORM_POSIX)
   add_test(NAME test_team_glow COMMAND test_team_glow)
   add_test(NAME test_team_glow_gpu COMMAND test_team_glow --gpu)
   set_tests_properties(test_team_glow_gpu PROPERTIES SKIP_RETURN_CODE 77 RUN_SERIAL TRUE)
+  foreach(_post_test distortion heat)
+    add_executable(test_sdl_${_post_test} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_${_post_test}.cpp)
+    set_target_properties(test_sdl_${_post_test} PROPERTIES CXX_STANDARD 17)
+    target_include_directories(test_sdl_${_post_test} PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+    target_link_libraries(test_sdl_${_post_test} PRIVATE posixd3d9 postprocess SDL3::SDL3-static)
+    add_test(NAME test_sdl_${_post_test} COMMAND test_sdl_${_post_test})
+    add_test(NAME test_sdl_${_post_test}_gpu COMMAND test_sdl_${_post_test} --gpu)
+    set_tests_properties(test_sdl_${_post_test}_gpu PROPERTIES SKIP_RETURN_CODE 77 RUN_SERIAL TRUE)
+  endforeach()
 
   # Depth-format fallback follows the complete scene-depth capability, without requiring a GPU.
   add_executable(sdl_gpu_depth_format_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_gpu_depth_format.cpp)
@@ -3292,7 +3302,8 @@ if(ZH_PLATFORM_POSIX)
   if(APPLE)
     foreach(_zh_test sdl_gpu_frame_selfcheck sdl_program_cache_selfcheck sdl_pipeline_state_selfcheck
                      posix_gpu_draw_selfcheck ffref_gpu_selfcheck ffref_capture_selfcheck
-                     test_sdl_storage_gpu test_sdl_gpu_particles_gpu test_sdl_gpu_particles_context)
+                     test_sdl_storage_gpu test_sdl_gpu_particles_gpu test_sdl_gpu_particles_context
+                     test_sdl_distortion_gpu test_sdl_heat_gpu)
       if(TEST ${_zh_test})
         set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT "SDL_VIDEO_DRIVER=dummy" "ZH_SDL_GPU_METAL_WINDOWLESS=1")
       endif()
@@ -3300,7 +3311,8 @@ if(ZH_PLATFORM_POSIX)
   elseif(ZH_PLATFORM_LINUX)
     foreach(_zh_test sdl_gpu_frame_selfcheck sdl_program_cache_selfcheck sdl_pipeline_state_selfcheck
                      posix_gpu_draw_selfcheck ffref_gpu_selfcheck ffref_capture_selfcheck test_sun_shadow_sorting
-                     test_sdl_storage_gpu test_sdl_gpu_particles_gpu test_sdl_gpu_particles_context)
+                     test_sdl_storage_gpu test_sdl_gpu_particles_gpu test_sdl_gpu_particles_context
+                     test_sdl_distortion_gpu test_sdl_heat_gpu)
       if(TEST ${_zh_test})
         set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen")
       endif()

@@ -14,23 +14,29 @@ struct Settings {
 	unsigned BlurPasses = 2;
 };
 struct GroundHazeSettings {
-    float Colour[3] = {}, Top = 0, Thickness = 1, Strength = 0, Reach = 1, WaterHeight = -1.0e6f;
-    float TowardSun[3] = {0,0,1}, Warmth = 0;
+	float Colour[3] = {}, Top = 0, Thickness = 1, Strength = 0, Reach = 1, WaterHeight = -1.0e6f;
+	float TowardSun[3] = {0,0,1}, Warmth = 0;
 };
 struct AtmosphereSettings {
-    float Horizon[3] = {}, Tint[3] = {1,1,1}, Start = 0, Scale = 1, Strength = 0, Ground = 0, MapSize[2] = {};
+	float Horizon[3] = {}, Tint[3] = {1,1,1}, Start = 0, Scale = 1, Strength = 0, Ground = 0, MapSize[2] = {};
 };
 struct Environment {
-    std::uint64_t MapIdentity = 0, MapGeneration = 0;
-    GroundHazeSettings Haze;
-    AtmosphereSettings Atmosphere;
-    IDirect3DBaseTexture9 *Sky = nullptr, *Shroud = nullptr;
-    float ShroudRect[4] = {0,0,1,1};
+	std::uint64_t MapIdentity = 0, MapGeneration = 0;
+	GroundHazeSettings Haze;
+	AtmosphereSettings Atmosphere;
+	IDirect3DBaseTexture9 *Sky = nullptr, *Shroud = nullptr;
+	float ShroudRect[4] = {0,0,1,1};
 };
 // Copies values and retains texture references; consume once in the following display pass.
 void SetEnvironment(const Environment &);
 bool EnvironmentAvailable(); // stable hardware capability, independent of current scene
 void Sky();
+struct Warp {
+	float CentreX, CentreY, Radius, Pull, RingRadius, RingWidth, RingStrength, RingSquash;
+};
+bool DistortionAvailable();
+void SetWarps(const Warp *, unsigned);
+void SetHeatSplats(const float *, unsigned);
 void BeginMain(const Settings &);
 unsigned BeginView(bool eligible, float nearPlane, float farPlane, bool reflection = false);
 void EndView(unsigned token);
@@ -50,6 +56,9 @@ public:
 	ViewScope &operator=(const ViewScope &) = delete;
 };
 #if !defined(_WIN32)
+bool DistortionAvailable(IDirect3DDevice9 *);
+void SetWarps(IDirect3DDevice9 *, const Warp *, unsigned);
+void SetHeatSplats(IDirect3DDevice9 *, const float *, unsigned);
 void BeginMain(IDirect3DDevice9 *, const Settings &);
 void SetEnvironment(IDirect3DDevice9 *, const Environment &);
 bool EnvironmentAvailable(IDirect3DDevice9 *);

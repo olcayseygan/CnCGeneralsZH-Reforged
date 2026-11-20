@@ -252,6 +252,9 @@ public:
 	void Set_Post_Environment(const RenderPost::Environment &);
 	bool Post_Environment_Available() const;
 	void Post_Sky(bool drawSky = true);
+	void Set_Post_Heat(const float *, unsigned);
+	void Set_Post_Warps(const RenderPost::Warp *, unsigned);
+	bool Post_Distortion_Available() const;
 	SdlGpuFrame * Get_Gpu() const { return Gpu; }
 	SdlResourceMirrors * Get_Mirrors() const { return Mirrors; }
 	/// Draws recorded on the GPU, and the draws refused, by reason.

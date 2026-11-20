@@ -4,6 +4,7 @@
 #include "PosixDevice9.h"
 #include "SdlGpuFrame.h"
 #include "SdlPostProcess.h"
+#include "SdlPostDistortion.h"
 #include "SdlSceneCapture.h"
 #include "SdlSceneContext.h"
 #include "SdlConstants.h"
@@ -14,6 +15,7 @@
 #include "ffshader.h"
 #include "SdlPostAtmosphere.h"
 #include <cstring>
+#include <algorithm>
 #include <SDL3/SDL.h>
 #include <cmath>
 #include <cstdio>
@@ -35,7 +37,9 @@ struct PosixDevice9::PostSession {
     bool EnvironmentFresh = false, EnvironmentCurrent = false, EnvironmentReady = false;
     SdlMainViewSnapshot CurrentView, LastView, ViewStack[8], SoftView;
     bool SoftRequested = false;
-    bool WorldAO = false, Classic = false;
+    bool WorldAO = false, RequestedChain = false, Classic = false;
+    bool HeatPending = false, BlastPending = false;
+    SdlPostDistortion Distortion;
     SdlMainViewSnapshot FoamView;
     uint64_t FoamRefusedKey = 0;
     SdlPostProcess Processor;
@@ -67,12 +71,36 @@ void PosixDevice9::Set_Post_Environment(const RenderPost::Environment &environme
     Post->EnvironmentCurrent = false;
 }
 
+bool PosixDevice9::Post_Distortion_Available() const { return Gpu!=nullptr; }
+void PosixDevice9::Set_Post_Heat(const float *records,unsigned count)
+{
+    if(!Post)return;
+    auto &s=*Post;
+    if(!Post_Active() || !s.RequestedChain || s.Classic || !s.InView || SunActive)return;
+    s.HeatPending=false;
+    SdlMainViewSnapshot main;
+    if(!Read_Main_View(main,false,SdlSceneCapturePhase::OpaqueScene))return;
+    s.HeatPending=s.Distortion.Prepare_Heat(*Gpu,s.Processor,s.Scene,main.Capture,records,count) && count;
+}
+void PosixDevice9::Set_Post_Warps(const RenderPost::Warp *records,unsigned count)
+{
+    if(!Post)return;
+    auto &s=*Post;s.BlastPending=false;
+    if(!Post_Active() || !s.RequestedChain || s.Classic || SunActive || !s.Entered || (!records && count))return;
+    DX11PostWarp warps[DX11_POST_WARP_LIMIT]={};
+    const unsigned copied=std::min(count,DX11_POST_WARP_LIMIT);
+    for(unsigned i=0;i<copied;++i){const auto &from=records[i];auto &to=warps[i];
+        to.CentreX=from.CentreX;to.CentreY=from.CentreY;to.Radius=from.Radius;to.Pull=from.Pull;
+        to.RingRadius=from.RingRadius;to.RingWidth=from.RingWidth;to.RingStrength=from.RingStrength;to.RingSquash=from.RingSquash;}
+    s.BlastPending=s.Distortion.Prepare_Blast_Warps(*Gpu,s.Processor,s.Scene,s.Presentation,s.LastView.Capture,warps,copied) && copied;
+}
 void PosixDevice9::Begin_Post(const RenderPost::Settings &settings)
 {
     if (!Gpu) return;
     if (!Post) Post = std::make_shared<PostSession>(*Gpu);
     if (Post->Routed) Finish_Post(true);
     auto &s = *Post;
+    s.Distortion.Abandon();s.HeatPending=s.BlastPending=false;
     s.InView = s.Entered = false; s.ViewDepth = 0;
     s.CurrentView = {}; s.LastView = {}; s.SoftView = {}; s.SoftRequested = false;
     s.Atmosphere.Abandon(); s.EnvironmentReady = false;
@@ -90,6 +118,7 @@ void PosixDevice9::Begin_Post(const RenderPost::Settings &settings)
     s.Settings = {};
     if (!settings.Classic && !DX11Post_Parse_Chain(settings.Chain, s.Settings.Chain, s.Settings.Count))
         s.Settings.Count = 0;
+    s.RequestedChain=s.Settings.Count!=0;
     if (!s.Settings.Count && (s.WorldAO || (s.EnvironmentCurrent &&
         (s.Environment.Haze.Strength > 0 || s.Environment.Atmosphere.Strength > 0)))) { s.Settings.Count = 1; s.Settings.Chain[0] = DX11_POST_COPY; }
     s.Settings.MainViewKey = ++s.Serial;
@@ -370,12 +399,16 @@ void PosixDevice9::Finish_Post(bool fallback)
     if (!Post_Active()) return;
     const bool normal = !fallback && s.Entered;
     SdlPostSceneInputs inputs;
-    const SdlPostSceneInputs *depth = normal && s.Processor.Needs_BeforePost_Depth() &&
+    const SdlPostSceneInputs *depth = normal && (s.Processor.Needs_BeforePost_Depth() || s.HeatPending) &&
         Read_Post_Inputs(SdlSceneCapturePhase::BeforePost,inputs) ? &inputs : nullptr;
+    if(normal && s.HeatPending)s.Distortion.Apply_Heat(*Gpu,s.Scene,inputs);
     bool finished = normal ? s.Processor.Finish(*Gpu, s.Scene, s.Presentation, depth) :
         s.Processor.Copy_Through(*Gpu, s.Scene, s.Presentation);
+    const bool normalFinished=normal && finished;
     if (!finished && normal) finished = s.Processor.Copy_Through(*Gpu, s.Scene, s.Presentation);
     if (!finished) std::fprintf(stderr, "PosixDevice9: main post finish failed: %s\n", s.Processor.Error().c_str());
+    if(normalFinished && s.BlastPending)s.Distortion.Apply_Blast_Warp(*Gpu,s.Scene,s.Presentation);
+    s.Distortion.Abandon();s.HeatPending=s.BlastPending=false;
     s.Routed = s.InView = false;
     Gpu->Set_Target(s.Presentation);
 }
@@ -387,6 +420,11 @@ void PosixDevice9::Release_Post(bool teardown)
         if (!teardown) return;
         Gpu->Discard_Pending_Work_For_Teardown();
         if (!Post->Atmosphere.Release(*Gpu)) return;
+    }
+    if (!Post->Distortion.Release(*Gpu)) {
+        if(!teardown)return;
+        Gpu->Discard_Pending_Work_For_Teardown();
+        if(!Post->Distortion.Release(*Gpu))return;
     }
     if (!Post->Processor.Release(*Gpu)) {
         if (!teardown) return; // ordinary reset keeps queued borrowers alive
@@ -400,6 +438,9 @@ void PosixDevice9::Release_Post(bool teardown)
     Post.reset();
 }
 namespace RenderPost {
+bool DistortionAvailable(IDirect3DDevice9 *d) { return d && static_cast<PosixDevice9 *>(d)->Post_Distortion_Available(); }
+void SetHeatSplats(IDirect3DDevice9 *d,const float *r,unsigned n) { if(d)static_cast<PosixDevice9 *>(d)->Set_Post_Heat(r,n); }
+void SetWarps(IDirect3DDevice9 *d,const Warp *r,unsigned n) { if(d)static_cast<PosixDevice9 *>(d)->Set_Post_Warps(r,n); }
 void BeginMain(IDirect3DDevice9 *d, const Settings &s) { if (d) static_cast<PosixDevice9 *>(d)->Begin_Post(s); }
 unsigned BeginView(IDirect3DDevice9 *d, bool e, float n, float f, bool r) { return d ? static_cast<PosixDevice9 *>(d)->Begin_Post_View(e,n,f,r) : 0; }
 void EndView(IDirect3DDevice9 *d, unsigned t) { if(d) static_cast<PosixDevice9 *>(d)->End_Post_View(t); }

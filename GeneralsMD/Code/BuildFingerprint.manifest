@@ -2934,6 +2934,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DTreeDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DTruckDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/ParticleGpuShader.h
 GameEngineDevice/Include/W3DDevice/GameClient/ParticleGpuShaderSources.h
+GameEngineDevice/Include/W3DDevice/GameClient/ReachOverlayShaderSources.h
 GameEngineDevice/Include/W3DDevice/GameClient/StructureCollapse.h
 GameEngineDevice/Include/W3DDevice/GameClient/SunShadowCasterCull.h
 GameEngineDevice/Include/W3DDevice/GameClient/TankWheelSpin.h
@@ -3064,6 +3065,11 @@ GameEngineDevice/Source/PosixDevice/Render/SdlPostShader.h
 GameEngineDevice/Source/PosixDevice/Render/SdlPresentMode.h
 GameEngineDevice/Source/PosixDevice/Render/SdlProgramCache.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlProgramCache.h
+GameEngineDevice/Source/PosixDevice/Render/SdlReachOverlay.cpp
+GameEngineDevice/Source/PosixDevice/Render/SdlReachOverlay.h
+GameEngineDevice/Source/PosixDevice/Render/SdlReachOverlayAdapter.cpp
+GameEngineDevice/Source/PosixDevice/Render/SdlReachOverlayShader.cpp
+GameEngineDevice/Source/PosixDevice/Render/SdlReachOverlayShader.h
 GameEngineDevice/Source/PosixDevice/Render/SdlRenderMatrix.h
 GameEngineDevice/Source/PosixDevice/Render/SdlResourceMirror.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlResourceMirror.h
@@ -4477,6 +4483,7 @@ Tests/test_sdl_pipeline_state.cpp
 Tests/test_sdl_platform.cpp
 Tests/test_sdl_post.cpp
 Tests/test_sdl_program_cache.cpp
+Tests/test_sdl_reach.cpp
 Tests/test_sdl_storage.cpp
 Tests/test_selection_priority.inc
 Tests/test_shader_sdl.cpp

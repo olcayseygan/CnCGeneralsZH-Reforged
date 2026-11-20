@@ -336,6 +336,8 @@ void W3DReachOverlay_Release( void )
 	s_baked.clear();
 #ifdef _WIN32
 	DX11ReachOverlay_Release();
+#else
+	SdlReachOverlay_Release(); // refusal retains the native owner until readers can submit
 #endif
 }
 
@@ -359,6 +361,8 @@ void W3DReachOverlay_Draw( CameraClass &camera )
 	Bool drawn = fields.empty();
 #ifdef _WIN32
 	drawn = DX11ReachOverlay_Draw( camera, fields ) || drawn;
+#else
+	drawn = SdlReachOverlay_Draw( camera, fields ) || drawn;
 #endif
 	if( !drawn )
 		drawFixedFunction( fields );

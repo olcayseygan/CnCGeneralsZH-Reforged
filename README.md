@@ -253,8 +253,9 @@ First match wins (`PosixInstallRoot.cpp`, `PosixChooseInstallRoot`):
 |:--|:--|:--|
 | `~/Games/<name>` | yes | yes |
 | `<library>/steamapps/common/<name>` for every Steam library: `~/.local/share/Steam`, `~/.steam/steam`, `~/.steam/root`, Flatpak's `~/.var/app/com.valvesoftware.Steam/.local/share/Steam`, and each library their `libraryfolders.vdf` lists (an SD card's too) | yes | |
+| `<library>/steamapps/common/<name>` for the Mac's own Steam, `~/Library/Application Support/Steam`, and each library its `libraryfolders.vdf` lists (an external drive's too) | | yes |
 | `/Applications/<name>` | | yes |
-| CrossOver and Whisky bottles: `drive_c/Program Files*/` (`EA Games`, `Origin Games`, `Steam/steamapps/common`, `Command & Conquer The First Decade`, or the folder itself) `/<name>` | | yes |
+| CrossOver and Whisky bottles: `drive_c/GOG Games/<name>`, or `drive_c/Program Files*/` (`EA Games`, `Origin Games`, `Steam/steamapps/common`, `GOG Games`, `Command & Conquer The First Decade`, or the folder itself) `/<name>` | | yes |
 
 `<name>` is any of `Command & Conquer Generals Zero Hour`, `Command and Conquer Generals Zero Hour`,
 `Command & Conquer Generals - Zero Hour`, `Command & Conquer(tm) Generals Zero Hour` or `Zero Hour`,

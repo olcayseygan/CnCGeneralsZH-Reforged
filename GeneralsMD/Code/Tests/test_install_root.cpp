@@ -116,6 +116,11 @@ void build()
 	file( card + "/steamapps/common/Command & Conquer Generals/Textures.big" );
 	folder( at( "steamhome/.steam" ) );
 	symlink( at( "steamhome/.local/share/Steam" ).c_str(), at( "steamhome/.steam/steam" ).c_str() );
+	// A Mac's native Steam library, with another library on an external volume.
+	file( at( "machome/Library/Application Support/Steam/steamapps/libraryfolders.vdf" ),
+		("\"libraryfolders\"\n{\n\"1\" {\n\"path\" \"" + at( "macdisk" ) + "\"\n}\n}\n").c_str() );
+	file( at( "macdisk/steamapps/common/Command & Conquer Generals - Zero Hour/INIZH.big" ) );
+	file( at( "macdisk/steamapps/common/Command & Conquer Generals/Textures.big" ) );
 }
 
 std::string registry( const char *name, const std::string &lines )
@@ -191,6 +196,22 @@ TEST(install_folder_validation_and_its_messages)
 	CHECK( PosixInstallCheckMessage( INSTALL_OK, "X" ).empty() );
 	printf( "  no Zero Hour: %s\n", noZeroHour.c_str() );
 	printf( "  no base game: %s\n", noBase.c_str() );
+}
+
+TEST(install_known_places_include_macos_steam_and_external_libraries)
+{
+	const std::vector<std::string> places = PosixKnownInstallPlaces( at( "machome" ) );
+	bool own = false, external = false;
+	for (size_t i = 0; i < places.size(); ++i) {
+		own |= places[i] == at( "machome/Library/Application Support/Steam/steamapps/common/Command & Conquer Generals Zero Hour" );
+		external |= places[i] == at( "macdisk/steamapps/common/Command & Conquer Generals - Zero Hour" );
+	}
+	CHECK(own);
+	CHECK(external);
+	PosixInstallRequest r = request( std::vector<std::string>(), true, "machome", "" );
+	PosixInstallChoice choice;
+	CHECK(PosixChooseInstallRoot(r, choice));
+	CHECK_STR(choice.root.c_str(), real(at("macdisk/steamapps/common/Command & Conquer Generals - Zero Hour")).c_str());
 }
 
 TEST(install_root_precedence)

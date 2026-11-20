@@ -122,7 +122,7 @@ bool holdsBaseGame( const std::string &zeroHour, const std::string &registryFile
 std::vector<std::string> steamLibraries( const std::string &home )
 {
 	static const char *const steamFolders[] = { ".local/share/Steam", ".steam/steam", ".steam/root",
-		".var/app/com.valvesoftware.Steam/.local/share/Steam" };		// the last: Flatpak's Steam
+		".var/app/com.valvesoftware.Steam/.local/share/Steam", "Library/Application Support/Steam" };
 	std::vector<std::string> libraries;
 	std::vector<std::string> seen;		// real paths, so ~/.steam/steam -> ~/.local/share/Steam is one library
 	const auto add = [&]( const std::string &library )
@@ -247,6 +247,8 @@ std::vector<std::string> PosixKnownInstallPlaces( const std::string &home )
 		"Program Files*/EA Games",
 		"Program Files*/Origin Games",
 		"Program Files*/Steam/steamapps/common",
+		"GOG Games",
+		"Program Files*/GOG Games",
 		"Program Files*/Command & Conquer The First Decade",
 		"Program Files*" };
 	for (size_t b = 0; b < sizeof( bottles ) / sizeof( bottles[0] ); ++b)

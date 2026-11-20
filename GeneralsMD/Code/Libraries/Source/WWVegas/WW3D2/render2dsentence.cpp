@@ -84,7 +84,8 @@ Render2DSentenceClass::Render2DSentenceClass (void) :
 	Centered (false),
 	DrawExtents (0, 0, 0, 0),
 	ParseHotKey( false ),
-	useHardWordWrap( false)
+	useHardWordWrap( false),
+	Blank (false)
 {
 	Shader = Render2DClass::Get_Default_Shader ();
 	return ;
@@ -189,6 +190,7 @@ Render2DSentenceClass::Reset_Keeping_Textures (void)
 	Cursor.Set (0, 0);
 	MonoSpaced = false;
 	ParseHotKey = false;
+	Blank = false;
 
 	Release_Pending_Surfaces ();
 	Reset_Sentence_Data ();
@@ -404,6 +406,7 @@ Render2DSentenceClass::Build_Textures (void)
 		//	A surface the device refused holds no text and has no size to make a texture of
 		//
 		if (curr_surface->Peek_D3D_Surface () == NULL) {
+			Blank = true;
 			REF_PTR_RELEASE (curr_surface);
 			continue;
 		}
@@ -441,6 +444,8 @@ Render2DSentenceClass::Build_Textures (void)
 		//
 		if (texture_surface != NULL) {
 			DX8Wrapper::_Copy_DX8_Rects (curr_surface->Peek_D3D_Surface (), NULL, 0, texture_surface->Peek_D3D_Surface (), NULL);
+		} else {
+			Blank = true;
 		}
 		REF_PTR_RELEASE (texture_surface);
 	

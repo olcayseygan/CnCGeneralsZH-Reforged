@@ -166,6 +166,9 @@ public:
 	virtual	void	Reset (void);
 	void				Reset_Keeping_Textures (void);	///< Reset, but the next Build_Textures fills the old text's textures again
 	void				Reset_Polys (void);
+	/// a surface or texture of the last build the device refused (lost or reset under it), so part of
+	/// the text is not drawn until it is built again; Reset clears it
+	bool				Is_Blank (void) const					{ return Blank; }
 
 	FontCharsClass *	Peek_Font( void )						{ return Font; }
 	void	Set_Font( FontCharsClass *font );
@@ -284,7 +287,8 @@ private:
 	bool												IsClippedEnabled;
 	bool												ParseHotKey;
 	bool												useHardWordWrap;
-														
+	bool												Blank;
+
 	uint16 *										LockedPtr;
 	int													LockedStride;
 	TextureClass *							CurTexture;

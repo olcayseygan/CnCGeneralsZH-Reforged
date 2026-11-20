@@ -59,6 +59,7 @@
 #include "W3DDevice/GameClient/W3DDisplayString.h"
 #include "GameClient/GameFont.h"
 #include "GameClient/GlobalLanguage.h"
+#include "WW3D2/dx8wrapper.h"
 
 // DEFINES ////////////////////////////////////////////////////////////////////
 #ifdef _INTERNAL
@@ -221,6 +222,15 @@ void W3DDisplayString::draw( Int x, Int y, Color color, Color dropColor, Int xDr
 	if( TheDisplay )
 		TheDisplay->flushBatch2D();
 
+
+	// text built while the device was lost has no texture and drew nothing; build it again once the
+	// device is back, or it stays blank until its text changes.  Reset, not Reset_Keeping_Textures:
+	// a texture made while lost holds no D3D texture, and filling it again would draw nothing again.
+	if( m_textRenderer.Is_Blank() && DX8Wrapper::Device_Is_Ready() )
+	{
+		m_textRenderer.Reset();
+		m_textChanged = TRUE;
+	}
 
 	// if our font or text has changed we need to build a new sentence
 	if( m_fontChanged || m_textChanged )

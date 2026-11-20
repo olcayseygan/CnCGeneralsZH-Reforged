@@ -19132,3 +19132,11 @@ END
 GUI:RejoinAwayForfeit
 "%ls est parti. La partie est à toi dans %d:%02d s'il ne revient pas."
 END
+
+GUI:RejoinCatchingUp
+"Retour dans la partie %d %%"
+END
+
+GUI:RejoinWaitingForLog
+"En attente du journal de la partie"
+END

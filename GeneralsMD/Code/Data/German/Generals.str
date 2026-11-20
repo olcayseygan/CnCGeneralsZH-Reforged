@@ -16084,3 +16084,11 @@ END
 GUI:RejoinAwayForfeit
 "%ls ist weg. Kommt er nicht zurück, gehört das Spiel in %d:%02d dir."
 END
+
+GUI:RejoinCatchingUp
+"Rückkehr ins Spiel %d %%"
+END
+
+GUI:RejoinWaitingForLog
+"Warten auf das Spielprotokoll"
+END

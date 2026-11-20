@@ -21293,3 +21293,11 @@ END
 GUI:RejoinAwayForfeit
 "%ls oyundan düştü. Geri dönmezse %d:%02d sonra maç senin."
 END
+
+GUI:RejoinCatchingUp
+"Maça dönülüyor %%%d"
+END
+
+GUI:RejoinWaitingForLog
+"Maç kaydı bekleniyor"
+END

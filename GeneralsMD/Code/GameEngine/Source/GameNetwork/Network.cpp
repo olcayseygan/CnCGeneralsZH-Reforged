@@ -766,12 +766,16 @@ Bool Network::feedRejoinFrame()
 		return TRUE;
 	}
 	if (!m_rejoinFeedOpen) {
+		TheGameLogic->showRejoinProgress( 0, TRUE );
 		return TRUE;		// the match is loaded and the log not here yet: no frame runs
 	}
 
 	UnsignedInt acceptFrame = 0;
 	const Bool accepted = m_conMgr->getRejoinAccept( acceptFrame );
 	const UnsignedInt frame = TheGameLogic->getFrame();
+	// the frames played against the room's frame, or against what the log holds until the room names one
+	const UnsignedInt target = accepted ? acceptFrame + 1 : m_rejoinFrame;
+	TheGameLogic->showRejoinProgress( (Int)( (UnsignedInt64)frame * 100 / max( target, (UnsignedInt)1 ) ), FALSE );
 	if (accepted) {
 		const UnsignedInt joinFrame = acceptFrame + 1;		// SEATREJOIN runs on acceptFrame, the seat's frames count from the next
 		if (frame > joinFrame) {
@@ -874,6 +878,7 @@ Bool Network::finishRejoin( UnsignedInt seats, UnsignedInt router )
 	m_nextFrameTime = 0;
 	m_stallStart = 0;
 	m_rejoinFirstOrder = TRUE;
+	TheGameLogic->endRejoinScreen();
 	TheInGameUI->message(UnicodeString(u"%ls"), TheGameText->fetch("Network:BackInMatch").str());
 	DEBUG_LOG(("REJOIN: joining on frame %u as slot %d, run ahead %d\n", frame, getLocalPlayerID(), m_runAhead));
 	return TRUE;

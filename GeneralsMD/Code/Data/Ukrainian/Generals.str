@@ -19060,3 +19060,11 @@ END
 GUI:RejoinAwayForfeit
 "%ls вийшов з гри. Якщо він не повернеться, через %d:%02d перемога твоя."
 END
+
+GUI:RejoinCatchingUp
+"Повернення в матч %d%%"
+END
+
+GUI:RejoinWaitingForLog
+"Очікування запису матчу"
+END

@@ -7102,3 +7102,11 @@ END
 GUI:RejoinAwayForfeit
 "%ls is away. The match is yours in %d:%02d unless they come back."
 END
+
+GUI:RejoinCatchingUp
+"Rejoining match %d%%"
+END
+
+GUI:RejoinWaitingForLog
+"Waiting for the match log"
+END

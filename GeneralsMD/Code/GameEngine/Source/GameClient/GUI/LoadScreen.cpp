@@ -299,6 +299,7 @@ public:
 	void setBadge( Int slot, const Image *badge );
 	void setProgress( Int slot, Int percent );
 	void setLocalProgress( Int percent );
+	void setRejoinProgress( Int percent, Bool waitingForLog );
 
 private:
 	static void drawWindow( GameWindow *window, WinInstanceData *instData );
@@ -365,6 +366,7 @@ private:
 	DisplayString *m_percent;
 	DisplayString *m_waiting;
 	Int m_localPercent;
+	Int m_rejoinShown;				///< the rejoin bar's last value, -1 for the log wait, -2 before the first
 	Bool m_network;
 };
 
@@ -394,6 +396,7 @@ LoadScreenBoard::LoadScreenBoard( void )
 	m_tipAt = 0;
 	m_tipSince = 0;
 	m_localPercent = 0;
+	m_rejoinShown = -2;
 	m_network = FALSE;
 }
 
@@ -1187,6 +1190,24 @@ void LoadScreenBoard::setLocalProgress( Int percent )
 		return;
 	m_localPercent = percent;
 	setPercentLabel( percent );
+}
+
+/** A seat coming back plays the match up to the room's frame behind the board: the wide button fills with
+	* the frames played against the frames to play, or reads that the match's log is still on its way. */
+void LoadScreenBoard::setRejoinProgress( Int percent, Bool waitingForLog )
+{
+	percent = waitingForLog ? 0 : min( max( percent, 0 ), 100 );
+	const Int shown = waitingForLog ? -1 : percent;		// a value the load's own percentages never take
+	if( shown == m_rejoinShown )
+		return;
+	m_rejoinShown = shown;
+	m_localPercent = percent;
+	UnicodeString words;
+	if( waitingForLog )
+		words = TheGameText->fetch( "GUI:RejoinWaitingForLog" );
+	else
+		words.format( TheGameText->fetch( "GUI:RejoinCatchingUp" ), percent );
+	m_percent->setText( UIStyle::capitals( words ) );
 }
 
 void LoadScreenBoard::drawWindow( GameWindow *window, WinInstanceData *instData )
@@ -2705,6 +2726,15 @@ void MultiPlayerLoadScreen::processProgress(Int playerId, Int percentage)
 	m_board->setProgress( playerId, percentage );
 }
 
+/* The match has loaded under the board and the in-game windows came up behind it; the board stays on top
+	 until the seat is back in the room. */
+void MultiPlayerLoadScreen::showRejoin( Int percent, Bool waitingForLog )
+{
+	m_board->setRejoinProgress( percent, waitingForLog );
+	if( m_loadScreen )
+		m_loadScreen->winBringToTop();
+}
+
 // GameSpyLoadScreen Class //////////////////////////////////////////////////
 //-----------------------------------------------------------------------------
 GameSpyLoadScreen::GameSpyLoadScreen( void )
@@ -2766,6 +2796,13 @@ void GameSpyLoadScreen::processProgress(Int playerId, Int percentage)
 		return;
 	}
 	m_board->setProgress( playerId, percentage );
+}
+
+void GameSpyLoadScreen::showRejoin( Int percent, Bool waitingForLog )
+{
+	m_board->setRejoinProgress( percent, waitingForLog );
+	if( m_loadScreen )
+		m_loadScreen->winBringToTop();
 }
 
 // MapTransferLoadScreen Class //////////////////////////////////////////////////

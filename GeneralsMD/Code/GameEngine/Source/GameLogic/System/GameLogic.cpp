@@ -1156,6 +1156,25 @@ void GameLogic::deleteLoadScreen( void )
 }  // end deleteLoadScreen
 
 // ------------------------------------------------------------------------------------------------
+/** A seat coming back (-rejoin) keeps the match's load screen while it plays the match up to the room's
+	* frame: the world is not drawn (m_loadScreenRender), which spares the catch-up the render, and the board's
+	* bar says how far it has come.  Client only: nothing here is read by the simulation. */
+// ------------------------------------------------------------------------------------------------
+void GameLogic::showRejoinProgress( Int percent, Bool waitingForLog )
+{
+	if( m_loadScreen )
+		m_loadScreen->showRejoin( percent, waitingForLog );
+}
+
+void GameLogic::endRejoinScreen( void )
+{
+	if( m_loadScreen == NULL )
+		return;
+	deleteLoadScreen();
+	TheWritableGlobalData->m_loadScreenRender = FALSE;
+}
+
+// ------------------------------------------------------------------------------------------------
 /** startNewGame threw ERROR_CORRUPT_FILE_FORMAT part-way through the map.  Take down what the start
 	* had put up, as a failed save load does, and say why on the menu it was started from. */
 // ------------------------------------------------------------------------------------------------
@@ -2503,6 +2522,9 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		//
 		if( loadingSaveGame == FALSE )
 */
+		// a seat coming back keeps it up until it has caught up with the room (endRejoinScreen)
+		const Bool rejoining = TheNetwork && TheNetwork->isRejoining();
+		if( !rejoining )
 			deleteLoadScreen();
 
 	}
@@ -2612,8 +2634,9 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	// Turn off the UI
 	HideControlBar();
 #endif
-	TheWritableGlobalData->m_loadScreenRender = FALSE;	///< mark to resume rendering as normal
-	
+	if( m_loadScreen == NULL )
+		TheWritableGlobalData->m_loadScreenRender = FALSE;	///< mark to resume rendering as normal
+
 	// if we're in a gamespy game, mark us as playing
 	if (TheGameSpyBuddyMessageQueue && TheGameSpyGame && isInInternetGame())
 	{

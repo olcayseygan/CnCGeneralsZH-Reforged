@@ -46,6 +46,7 @@
 #include "GameLogic/AI.h"
 #include "GameLogic/GameLogic.h"
 #include "GameNetwork/GameInfo.h"
+#include "GameNetwork/NetworkInterface.h"
 
 #include "GameClient/AnimateWindowManager.h"
 #include "GameClient/Display.h"
@@ -1113,6 +1114,12 @@ static void refreshRejoin( void )
 		s_rejoinAsked = FALSE;
 		DEBUG_LOG(("ONLINE WELCOME rejoin=%s\n", info.match.str()));
 		OnlineStartRejoin( info );
+		// the match starts from its log, which a seat in the room sends once the room stands for this one
+		if (TheNetwork && TheNetwork->isRejoining())
+		{
+			s_rejoinAsked = TRUE;
+			setRejoinNote( TheGameText->fetch( "GUI:RejoinWaitingForLog" ), UIStyle::MUTED );
+		}
 	}
 	else if (state == ONLINE_REJOIN_REFUSED)
 	{

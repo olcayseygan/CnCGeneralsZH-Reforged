@@ -202,6 +202,8 @@ public:
 
 	void updateLoadProgress( Int progress );
 	void deleteLoadScreen( void );
+	void showRejoinProgress( Int percent, Bool waitingForLog );	///< the load screen stays up while a seat coming back catches up
+	void endRejoinScreen( void );																	///< the seat is back in the room: the game view again
 	
 	//Kris: Cut setGameLoading() and replaced with setLoadingMap() and setLoadingSave() -- reason: nomenclature
 	//void setGameLoading( Bool loading ) { m_loadingScene = loading; }

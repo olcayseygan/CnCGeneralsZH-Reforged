@@ -442,7 +442,7 @@ static void colour_value(const D3DCOLORVALUE &colour, float out[4])
 void PosixDevice9::Build_Constants(SdlVertexConstants &vertex, SdlPixelConstants &pixel) const
 {
 	memset(&vertex, 0, sizeof(vertex));
-	memset(&pixel, 0, sizeof(pixel));
+	Build_Pixel_Constants(pixel);
 
 	const float *world = &Transforms[D3DTS_WORLD]._11;
 	const float *view = &Transforms[D3DTS_VIEW]._11;
@@ -497,7 +497,11 @@ void PosixDevice9::Build_Constants(SdlVertexConstants &vertex, SdlPixelConstants
 		colour_value(light.Ambient, fields[6]);
 		++slot;
 	}
+}
 
+void PosixDevice9::Build_Pixel_Constants(SdlPixelConstants &pixel) const
+{
+	memset(&pixel, 0, sizeof(pixel));
 	colour_of(RenderStates[D3DRS_TEXTUREFACTOR], pixel.TextureFactor);
 	colour_of(RenderStates[D3DRS_FOGCOLOR], pixel.FogColour);
 	// A whole level, as D3D9 compares it: the program rounds the pixel's alpha to a level first.
@@ -1454,7 +1458,12 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	// The constants, pushed only when they change.
 	SdlVertexConstants vertex_constants;
 	SdlPixelConstants pixel_constants;
-	Build_Constants(vertex_constants, pixel_constants);
+	if (vertex_program->UniformBuffers != 0 && vertex_engine == ENGINE_SHADER_NONE) {
+		Build_Constants(vertex_constants, pixel_constants);
+	} else {
+		// Engine programs read their register bank; shaders without vertex uniforms need no block.
+		Build_Pixel_Constants(pixel_constants);
+	}
 	if (vertex_program->UniformBuffers != 0 && vertex_engine != ENGINE_SHADER_NONE) {
 		// A transcribed vertex program reads the engine's own register bank, c0 to c95, as its b0.
 		const uint32_t size = ENGINE_SHADER_CONSTANTS * sizeof(VertexShaderConstants[0]);

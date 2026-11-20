@@ -9514,9 +9514,18 @@ void InGameUI::postDraw( void )
 					m_superweaponJump[ each ] = line.jump;
 					TheDisplay->drawFillRect( box.lo.x, box.lo.y, box.width(), box.height(), GameMakeColor( 0, 0, 0, 180 ) );
 					TheDisplay->drawOpenRect( box.lo.x, box.lo.y, box.width(), box.height(), 1, GameMakeColor( 0, 0, 0, 255 ) );
-					// the house colour at full strength, ringed in black so a dark one still reads on the plate
+					// the house colour as the units show it, ringed in black.  The player's colour is the
+					// texture's tint, darker than what a lit model gives back (Chocolate is 90,50,20 and its
+					// units read about 234,121,43), so its hue and saturation are kept and its value raised
+					// to 0.9
+					UnsignedByte hr, hg, hb, ha;
+					GameGetColorComponents( line.house, &hr, &hg, &hb, &ha );
+					const Int brightest = max( (Int)hr, max( (Int)hg, (Int)hb ) );
+					const Real lift = brightest > 0 ? 0.9f * 255.0f / brightest : 1.0f;
+					const Color house = GameMakeColor( min( REAL_TO_INT( hr * lift + 0.5f ), 255 ), min( REAL_TO_INT( hg * lift + 0.5f ), 255 ),
+																						 min( REAL_TO_INT( hb * lift + 0.5f ), 255 ), 255 );
 					TheDisplay->drawFillRect( box.lo.x + 1, box.lo.y + 1, swatch + 2, box.height() - 2, GameMakeColor( 0, 0, 0, 255 ) );
-					TheDisplay->drawFillRect( box.lo.x + 2, box.lo.y + 2, swatch, box.height() - 4, line.house | 0xFF000000 );
+					TheDisplay->drawFillRect( box.lo.x + 2, box.lo.y + 2, swatch, box.height() - 4, house );
 					line.info->drawName( seam - pad, y, ink, drop );
 					line.info->drawTime( seam, y, line.ready ? readyInk : ink, drop );
 					y = box.hi.y + pad / 2;

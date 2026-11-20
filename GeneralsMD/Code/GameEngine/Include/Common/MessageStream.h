@@ -686,6 +686,7 @@ public:
 		MSG_DO_AUTO_REPAIR,													///< Every selected unit goes to its own nearest building that mends it (fork)
 		MSG_QUEUE_UNIT_FOR_GROUP,										///< (Int template ID, Int squad 0-9 or -1[, ObjectID factory]) the logic picks a factory, and the unit joins that hotkey squad when it comes out; -1 is no squad, the command bar's unit tabs; a factory (squad -1 only) is the sidebar picker's own pick, dropped if it cannot take the unit (fork)
 		MSG_DO_AIRLIFT_ORDER,												///< (Int special power ID, location, objectID source, then Int template ID, Int count pairs) an airlift power's load, picked in its panel (fork)
+		MSG_LANEWAR_ORDER,													///< (Int LaneWarOrderKind, then its integers: template ID, slot x, slot y to place a unit on the sender's plot) a Lane War purchase, the buy panel's and the bot's (fork)
 
 		MSG_BEGIN_DEBUG_NETWORK_MESSAGES = 1900,		///< network messages that exist only in debug/internal builds. all grouped separately.
 

@@ -51,6 +51,7 @@
 #include "GameClient/MessageBox.h"
 #include "GameClient/GameClient.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/ScriptActions.h"
 #include "GameLogic/VictoryConditions.h"
@@ -197,6 +198,9 @@ void VictoryConditions::update( void )
 		if (p && !m_isDefeated[i] && hasSinglePlayerBeenDefeated(p))
 		{
 			m_isDefeated[i] = true;
+			if ( ISSET(LANEWAR) )
+				DEBUG_LOG(("HEADLESS LANEWAR: frame %u player %d is out, his team's fortress is down\n",
+									 TheGameLogic->getFrame(), (Int)p->getPlayerIndex()));
 			// the score screen's chips and graph ends; written only, nothing in the logic reads it back
 			TheMatchHistory.noteDefeated( p );
 			if (TheGameLogic->getFrame() > 1)
@@ -289,6 +293,9 @@ Bool VictoryConditions::hasSinglePlayerBeenDefeated(Player *player)
 {
 	if (!player)
 		return false;
+
+	if ( ISSET(LANEWAR) )
+		return TheLaneWarDirector->hasLostFortress(player);
 
 	KindOfMaskType mask;
 	mask.set(KINDOF_MP_COUNT_FOR_VICTORY);

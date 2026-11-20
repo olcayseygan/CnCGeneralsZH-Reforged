@@ -105,7 +105,8 @@ enum ScenarioActionType
 	SCENARIO_ACTION_TOPUP,						///< topup <slot> <template> <objects>; from now on, while the world holds fewer objects than that, this line's turn makes one on the road from the seat's start to the map's centre and attack-moves it there
 	SCENARIO_ACTION_AIRLIFT,					///< airlift <slot> <building> <position> <template>:<count>[,<template>:<count>...]; the airlift panel's OK, as MSG_DO_AIRLIFT_ORDER handed to the dispatcher for that seat
 	SCENARIO_ACTION_HEALTH,						///< health <slot> <selector> <percent> [rank]; every match set to that share of its health, and first to that veterancy rank (0-3, in targetSlot) when one is given; outside the command stream, as handover is
-	SCENARIO_ACTION_LANEMARCH					///< lanemarch <slot> <selector> <dx>; the seat's units spawned since its last lanemarch that match, each attack-moving dx (in at.x) along x on its own y, as one formation at its slowest member's speed
+	SCENARIO_ACTION_LANEMARCH,				///< lanemarch <slot> <selector> <dx>; the seat's units spawned since its last lanemarch that match, each attack-moving dx (in at.x) along x on its own y, as one formation at its slowest member's speed
+	SCENARIO_ACTION_LANEPLACE					///< laneplace <slot> <template> <slotX> <slotY>; a Lane War purchase onto the seat's own plot at that grid slot (in at), through LaneWarDirector::placeUnit as MSG_LANEWAR_ORDER is
 };
 
 /// ScenarioAction::atStart when the position is plain numbers
@@ -168,5 +169,11 @@ extern const char *ScenarioDrill_report( void );
 	  radius, and how many frames after the line fired the first and the last of them did.  The last
 	  one's time is the choke probe's number (ROADMAP M0.3). */
 extern void ScenarioDrill_logArrivals( void );
+
+class AIGroup;
+/** Log a wave just sent with AIGroup::groupLaneMarch (the lanemarch verb, the LaneWarDirector) on a
+	  LANEMARCH line, and every 5 game seconds after on HEADLESS LANEMARCH: how many stand, its x span
+	  and the worst drift off the y each member set out on.  Read-only; nothing in the logic reads it. */
+extern void ScenarioDrill_watchLaneMarch( Int slot, const AsciiString &label, AIGroup *group, Real dx );
 
 #endif // __SCENARIODRILL_H_

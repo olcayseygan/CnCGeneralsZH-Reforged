@@ -93,6 +93,7 @@
 #include "GameLogic/CrateSystem.h"
 #include "GameLogic/FPUControl.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/AIUpdate.h"
@@ -477,6 +478,7 @@ void GameLogic::reset( void )
 {
 	m_thingTemplateBuildableOverrides.clear();
 	m_controlBarOverrides.clear();
+	TheLaneWarDirector->reset();
 
 	// a load that failed part way must not hand its stream or heap order to the next one
 	m_loadedRandomPending = FALSE;
@@ -2228,6 +2230,12 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	DEBUG_LOG(("%s", Buf));
 	#endif
 
+	// a Lane War map turns the mode on (LaneWarDirector.h): no starting base, and only the fortresses
+	// decide the match
+	TheLaneWarDirector->newMap( loadingSaveGame );
+	if (TheLaneWarDirector->isActive())
+		TheVictoryConditions->setVictoryConditions(VICTORY_LANEWAR);
+
 	progressCount = LOAD_PROGRESS_LOOP_INITIAL_NETWORK_BUILDINGS;
 	// place initial network buildings/units
 	if (game && !loadingSaveGame)
@@ -2289,7 +2297,8 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 
 
 
-				placeNetworkBuildingsForPlayer(i, slot, player, pt);
+				if (!TheLaneWarDirector->isActive())
+					placeNetworkBuildingsForPlayer(i, slot, player, pt);
 			}
 
 			updateLoadProgress(progressCount++);
@@ -3217,7 +3226,7 @@ void GameLogic::writeMismatchDump( Int numPlayers, UnsignedInt crcFrame )
 		"partition (logic random seed, shroud)",
 		"players (battle plans, skill points, science points, money)",
 		"AI (pathfinder, AI data, AI groups)",
-		"scripts",
+		"scripts (and the Lane War director on a lane map)",
 	};
 	fprintf( fp, "World CRC at the end of each part:\n" );
 	for( Int s = 0; s < CRC_SECTION_COUNT; ++s )
@@ -5474,6 +5483,9 @@ void GameLogic::update( void )
 		 happens on a render pass and making an object has to happen in here, so the two are split. */
 	ControlServer_runCommands();
 
+	// Lane War, after both so a unit put on a plot this frame is held this frame
+	TheLaneWarDirector->update();
+
 	// Note - TerrainLogic update needs to happen after ScriptEngine update, but before object updates.  jba.
 	// This way changes in bridges are noted in the script engine before being cleared in TerrainLogic->update
 	{
@@ -6159,6 +6171,13 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 	marker = "MARKER:TheScriptEngine";
 	xferCRC->xferAsciiString(&marker);
 	xferCRC->xferSnapshot( TheScriptEngine );
+	// only on a Lane War map, so every other game's CRC is what it was
+	if (TheLaneWarDirector->isActive())
+	{
+		marker = "MARKER:TheLaneWarDirector";
+		xferCRC->xferAsciiString(&marker);
+		xferCRC->xferSnapshot( TheLaneWarDirector );
+	}
 	if (recordSnapshot)
 		m_crcSnapshots.setSectionCRC( CRC_SECTION_SCRIPTS, xferCRC->getCRC() );
 	if (isInGameLogicUpdate())
@@ -6779,13 +6798,14 @@ void GameLogic::prepareLogicForObjectLoad( void )
 	* 17: xfer m_supplyPileLimit
 	* 18: xfer the logic random stream and the pathfinder's request queue and flow maps
 	* 19: xfer the AI groups and the AI's group and formation counters (AI::xferGroups)
+	* 20: xfer TheLaneWarDirector
 	*/
 // ------------------------------------------------------------------------------------------------
 void GameLogic::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 19;
+	const XferVersion currentVersion = 20;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -7265,6 +7285,11 @@ void GameLogic::xfer( Xfer *xfer )
 
   if ( version >= 19 )
     TheAI->xferGroups( xfer );
+
+  if ( version >= 20 )
+    xfer->xferSnapshot( TheLaneWarDirector );
+  else if ( xfer->getXferMode() == XFER_LOAD )
+    TheLaneWarDirector->reset();	// a save from before the director plays as it was made, with no director
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------

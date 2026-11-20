@@ -1356,6 +1356,7 @@ Data/Scenarios/jetrunway.txt
 Data/Scenarios/jetsturn.txt
 Data/Scenarios/jetturn.txt
 Data/Scenarios/kargu.txt
+Data/Scenarios/lanewar.txt
 Data/Scenarios/laserdefense.txt
 Data/Scenarios/laserflow.txt
 Data/Scenarios/laserglow.txt
@@ -1866,6 +1867,7 @@ GameEngine/Include/GameLogic/FPUControl.h
 GameEngine/Include/GameLogic/FiringTracker.h
 GameEngine/Include/GameLogic/GameLogic.h
 GameEngine/Include/GameLogic/GhostObject.h
+GameEngine/Include/GameLogic/LaneWarDirector.h
 GameEngine/Include/GameLogic/Locomotor.h
 GameEngine/Include/GameLogic/LocomotorSet.h
 GameEngine/Include/GameLogic/LogicRandomValue.h
@@ -2796,6 +2798,7 @@ GameEngine/Source/GameLogic/System/Damage.cpp
 GameEngine/Source/GameLogic/System/FPUControl.cpp
 GameEngine/Source/GameLogic/System/GameLogic.cpp
 GameEngine/Source/GameLogic/System/GameLogicDispatch.cpp
+GameEngine/Source/GameLogic/System/LaneWarDirector.cpp
 GameEngine/Source/GameLogic/System/RankInfo.cpp
 GameEngine/Source/GameLogic/System/ScenarioDrill.cpp
 GameEngine/Source/GameNetwork/Connection.cpp

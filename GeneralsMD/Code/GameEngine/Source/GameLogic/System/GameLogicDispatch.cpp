@@ -60,6 +60,7 @@
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/ObjectCreationList.h"
@@ -1017,6 +1018,25 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 			DEBUG_LOG(( "TEAM REQUEST: frame %d player %d asks %d, enemy %d at (%.0f,%.0f)\n", getFrame(),
 									thisPlayer->getPlayerIndex(), kind, enemy, pos.x, pos.y ));
 			aiPostTeamRequest( thisPlayer, (AITeamRequestKind)kind, enemy, &pos );
+			break;
+		}
+
+		//---------------------------------------------------------------------------------------------
+		// A Lane War purchase (fork): (Int LaneWarOrderKind, then that kind's integers).  Only integers
+		// count, at most four after the kind; the director checks what they mean
+		case GameMessage::MSG_LANEWAR_ORDER:
+		{
+			if( msg->getArgumentCount() < 1 || msg->getArgumentDataType( 0 ) != ARGUMENTDATATYPE_INTEGER )
+				break;
+			Int args[ 4 ];
+			Int argCount = 0;
+			for( Int i = 1; i < msg->getArgumentCount() && argCount < 4; ++i )
+			{
+				if( msg->getArgumentDataType( i ) != ARGUMENTDATATYPE_INTEGER )
+					break;
+				args[ argCount++ ] = msg->getArgument( i )->integer;
+			}
+			TheLaneWarDirector->onOrder( thisPlayer, msg->getArgument( 0 )->integer, args, argCount );
 			break;
 		}
 

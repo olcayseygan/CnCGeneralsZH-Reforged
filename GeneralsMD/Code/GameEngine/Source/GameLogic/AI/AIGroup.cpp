@@ -2903,6 +2903,34 @@ void AIGroup::groupAttackPosition( const Coord3D *pos, Int maxShotsToFire, Comma
 }
 
 /**
+ * The Lane War wave order, shared by the lanemarch scenario verb and the LaneWarDirector.  The group
+ * becomes one formation, and each member attack-moves dx along x from where it stands, on its own y,
+ * so nothing bends the wave towards one shared point.  A member with a FormationID takes its group's
+ * slowest member speed every time AIMoveToState::onEnter sets it moving, after a fight too, so the
+ * group has to be kept alive rather than destroyed; it lives until its last member leaves it, and a
+ * dead member leaves it, so the wave speeds up to the slowest still standing.
+ */
+void AIGroup::groupLaneMarch( Real dx, Int maxShotsToFire, CommandSourceType cmdSource )
+{
+	groupCreateFormation( cmdSource );
+	for( std::list<Object *>::iterator i = m_memberList.begin(); i != m_memberList.end(); ++i )
+	{
+		Object *obj = *i;
+		AIUpdateInterface *ai = obj->getAI();
+		if( ai == NULL )
+			continue;
+
+		Coord3D goal = *obj->getPosition();
+		goal.x += dx;
+		goal.z = TheTerrainLogic->getGroundHeight( goal.x, goal.y );
+		if( obj->isAbleToAttack() )
+			ai->aiAttackMoveToPosition( &goal, maxShotsToFire, cmdSource );
+		else
+			ai->aiMoveToPosition( &goal, cmdSource );
+	}
+}
+
+/**
  * Attack move to a location
  */
 void AIGroup::groupAttackMoveToPosition( const Coord3D *pos, Int maxShotsToFire, CommandSourceType cmdSource )

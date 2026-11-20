@@ -12622,6 +12622,101 @@ TEST(the_lane_map_names_what_the_director_needs_and_seals_its_plateaus)
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The Lane War director's rules (LaneWarDirector.h), the parts that are plain arithmetic: who sits
+	  where, whose wave a tick sends, who holds the middle, what a tick pays and how long things last. */
+#include "GameLogic/LaneWarDirector.h"
+
+TEST(lane_war_seats_follow_the_starts_and_alternate_the_ends)
+{
+	// start 1 (0) is A's seat 1, start 2 B's seat 1, start 3 A's seat 2, start 6 B's seat 3
+	CHECK_EQ( LaneWar_teamOfStart( 0 ), 0 );
+	CHECK_EQ( LaneWar_seatOfStart( 0 ), 0 );
+	CHECK_EQ( LaneWar_teamOfStart( 1 ), 1 );
+	CHECK_EQ( LaneWar_seatOfStart( 1 ), 0 );
+	CHECK_EQ( LaneWar_teamOfStart( 2 ), 0 );
+	CHECK_EQ( LaneWar_seatOfStart( 2 ), 1 );
+	CHECK_EQ( LaneWar_teamOfStart( 5 ), 1 );
+	CHECK_EQ( LaneWar_seatOfStart( 5 ), 2 );
+}
+
+TEST(lane_war_rotation_takes_seats_in_turn_and_passes_over_empty_ones)
+{
+	const Bool full[ LANEWAR_SEATS ] = { TRUE, TRUE, TRUE };
+	for( UnsignedInt tick = 0; tick < 9; ++tick )
+		CHECK_EQ( LaneWar_seatForTick( full, tick ), (Int)( tick % 3 ) );
+
+	// a lone player spawns on every tick
+	const Bool lone[ LANEWAR_SEATS ] = { FALSE, TRUE, FALSE };
+	for( UnsignedInt tick = 0; tick < 5; ++tick )
+		CHECK_EQ( LaneWar_seatForTick( lone, tick ), 1 );
+
+	// two players alternate, the empty middle seat never comes up
+	const Bool ends[ LANEWAR_SEATS ] = { TRUE, FALSE, TRUE };
+	CHECK_EQ( LaneWar_seatForTick( ends, 0 ), 0 );
+	CHECK_EQ( LaneWar_seatForTick( ends, 1 ), 2 );
+	CHECK_EQ( LaneWar_seatForTick( ends, 2 ), 0 );
+	CHECK_EQ( LaneWar_seatForTick( ends, 3 ), 2 );
+
+	const Bool none[ LANEWAR_SEATS ] = { FALSE, FALSE, FALSE };
+	CHECK_EQ( LaneWar_seatForTick( none, 0 ), -1 );
+	CHECK_EQ( LaneWar_seatForTick( none, 7 ), -1 );
+}
+
+TEST(lane_war_middle_goes_to_the_larger_count_past_the_line_and_pays_a_quarter_more)
+{
+	CHECK_EQ( LaneWar_middleHolder( 0, 0 ), -1 );
+	CHECK_EQ( LaneWar_middleHolder( 3, 3 ), -1 );
+	CHECK_EQ( LaneWar_middleHolder( 1, 0 ), 0 );
+	CHECK_EQ( LaneWar_middleHolder( 4, 9 ), 1 );
+
+	CHECK_EQ( LaneWar_income( FALSE ), (UnsignedInt)267 );
+	CHECK_EQ( LaneWar_income( TRUE ), (UnsignedInt)( 267 + 66 ) );
+	CHECK_EQ( (Int)LANEWAR_START_MONEY, 2000 );
+}
+
+TEST(lane_war_plot_slots_cover_the_footprint_and_never_share)
+{
+	// a Ranger's few units take one slot, a tank of radius 15 two a side, an Overlord's 25 three
+	CHECK_EQ( LaneWar_slotsFor( 0.0f ), 1 );
+	CHECK_EQ( LaneWar_slotsFor( 6.0f ), 1 );
+	CHECK_EQ( LaneWar_slotsFor( 10.0f ), 1 );
+	CHECK_EQ( LaneWar_slotsFor( 10.5f ), 2 );
+	CHECK_EQ( LaneWar_slotsFor( 15.0f ), 2 );
+	CHECK_EQ( LaneWar_slotsFor( 25.0f ), 3 );
+
+	// a 12 by 8 grid: the block has to stay inside it
+	CHECK( LaneWar_blockFits( 0, 0, 1, 12, 8 ) );
+	CHECK( LaneWar_blockFits( 10, 6, 2, 12, 8 ) );
+	CHECK( !LaneWar_blockFits( 11, 6, 2, 12, 8 ) );
+	CHECK( !LaneWar_blockFits( 10, 7, 2, 12, 8 ) );
+	CHECK( !LaneWar_blockFits( -1, 0, 1, 12, 8 ) );
+
+	// two blocks overlap when they share a slot, and touching edges is no overlap
+	CHECK( LaneWar_blocksOverlap( 0, 0, 2, 1, 1, 1 ) );
+	CHECK( LaneWar_blocksOverlap( 3, 3, 1, 2, 2, 2 ) );
+	CHECK( !LaneWar_blocksOverlap( 0, 0, 2, 2, 0, 2 ) );
+	CHECK( !LaneWar_blocksOverlap( 0, 0, 2, 0, 2, 1 ) );
+
+	ScenarioAction action;
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "30 laneplace 0 AmericaTankCrusader 4 2", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_LANEPLACE );
+	CHECK_EQ( (Int)action.at.x, 4 );
+	CHECK_EQ( (Int)action.at.y, 2 );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "30 laneplace 0 AmericaTankCrusader 4 -2", &action ), (Int)SCENARIO_PARSE_BAD_POSITION );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "30 laneplace 0 AmericaTankCrusader 4", &action ), (Int)SCENARIO_PARSE_MISSING_ARGS );
+}
+
+TEST(lane_war_times_are_wall_seconds_in_logic_frames)
+{
+	// wall time, so the logic rate and never the game speed: 30 s and 130 s at any speed
+	CHECK_EQ( LANEWAR_TICK_FRAMES, (UnsignedInt)( 30 * LOGICFRAMES_PER_SECOND ) );
+	CHECK_EQ( LANEWAR_LIFESPAN_FRAMES, (UnsignedInt)( 130 * LOGICFRAMES_PER_SECOND ) );
+
+	// a plot unit's status bit has a name, so a save writes it and an INI can read it
+	CHECK_EQ( ObjectStatusMaskType::getSingleBitFromName( "UNATTACKABLE" ), (Int)OBJECT_STATUS_UNATTACKABLE );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** A ranked Quick Match has no lobby to send a map name: every peer derives the map from the match
 	seed and the seat count alone, so the derivation is pinned here.  A change to it splits two builds
 	that otherwise agree into different maps, which the map CRC then refuses. */

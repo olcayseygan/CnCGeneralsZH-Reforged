@@ -80,6 +80,7 @@ template<> const char* ObjectStatusMaskType::s_bitNameList[] =
 	"IMMOBILE",
 	"DISGUISED",
 	"DEPLOYED",
+	"UNATTACKABLE",
 	NULL
 };
 

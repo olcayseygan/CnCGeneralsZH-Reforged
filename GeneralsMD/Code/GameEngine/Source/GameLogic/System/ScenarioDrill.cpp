@@ -41,6 +41,7 @@
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BehaviorModule.h"
 #include "GameLogic/Module/CreateModule.h"
@@ -276,6 +277,8 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_HEALTH;
 	else if (token == "lanemarch")
 		*action = SCENARIO_ACTION_LANEMARCH;
+	else if (token == "laneplace")
+		*action = SCENARIO_ACTION_LANEPLACE;
 	else
 		return FALSE;
 
@@ -391,6 +394,7 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_AIRLIFT:			return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_HEALTH:			return SCENARIO_TOKENS_STANCE;
 		case SCENARIO_ACTION_LANEMARCH:		return SCENARIO_TOKENS_MOVE;
+		case SCENARIO_ACTION_LANEPLACE:		return SCENARIO_TOKENS_ATTACK;
 	}
 	return SCENARIO_TOKENS_STOP;
 }
@@ -594,6 +598,17 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 			action->at.x = (Real)strtod( text, &end );
 			if (end == text || *end != 0)
 				return SCENARIO_PARSE_BAD_POSITION;
+			break;
+		}
+
+		case SCENARIO_ACTION_LANEPLACE:
+		{
+			// the slot on the seat's own plot grid, whole numbers from its low corner
+			Int slotX, slotY;
+			if (!parseWholeNumber( tokens[ 4 ], &slotX ) || !parseWholeNumber( tokens[ 5 ], &slotY ))
+				return SCENARIO_PARSE_BAD_POSITION;
+			action->at.x = (Real)slotX;
+			action->at.y = (Real)slotY;
 			break;
 		}
 
@@ -1992,12 +2007,38 @@ static Bool executePurchase( const ScenarioAction &action, Player *player )
 	return player->hasScience( science );
 }
 
+void ScenarioDrill_watchLaneMarch( Int slot, const AsciiString &label, AIGroup *group, Real dx )
+{
+	ScenarioLaneMarch march;
+	march.slot = slot;
+	march.selector = label;
+	march.fromFrame = TheGameLogic->getFrame();
+	march.reports = 0;
+
+	Real fastest = 0.0f;
+	const VecObjectID &ids = group->getAllIDs();
+	for (size_t i = 0; i < ids.size(); ++i)
+	{
+		const Object *obj = TheGameLogic->findObjectByID( ids[ i ] );
+		const AIUpdateInterface *ai = obj != NULL ? obj->getAI() : NULL;
+		if (ai == NULL)
+			continue;
+		march.ids.push_back( ids[ i ] );
+		march.laneY.push_back( obj->getPosition()->y );
+		if (ai->getCurLocomotorSpeed() > fastest)
+			fastest = ai->getCurLocomotorSpeed();
+	}
+	theScenarioLaneMarches.push_back( march );
+
+	// out of the log line: getSpeed recomputes a dirty group, which is CRC'd state, and a build
+	// without logging must do the same as one with it
+	const Real speed = group->getSpeed();
+	DEBUG_LOG(("LANEMARCH: frame %u slot %d '%s' x%d by %.0f along x, speed %.2f a frame (fastest member %.2f)\n",
+						 march.fromFrame, slot, label.str(), (Int)march.ids.size(), dx, speed, fastest));
+}
+
 /** lanemarch: the seat's newest wave walks the lane, each unit straight along its own y to dx further
-	  on, fighting what it meets, and none faster than the slowest.  Each member gets its own goal, so
-	  nothing bends the wave towards one shared point.  The speed is the formation's: a unit with a
-	  FormationID takes its group's slowest member speed in AIMoveToState::onEnter, again every time it
-	  sets off after a fight, so the group is kept rather than destroyed and lives until its last member
-	  leaves it.  A dead member leaves too, and the wave speeds up to the slowest still standing. */
+	  on, fighting what it meets, and none faster than the slowest (AIGroup::groupLaneMarch). */
 static Bool executeLaneMarch( const ScenarioAction &action, Player *player )
 {
 	std::vector<ObjectID> &fresh = theScenarioFreshSpawns[ action.slot ];
@@ -2023,41 +2064,8 @@ static Bool executeLaneMarch( const ScenarioAction &action, Player *player )
 		return FALSE;
 	}
 
-	group->groupCreateFormation( CMD_FROM_SCRIPT );
-	const Real speed = group->getSpeed();
-
-	ScenarioLaneMarch march;
-	march.slot = action.slot;
-	march.selector = action.selector;
-	march.fromFrame = TheGameLogic->getFrame();
-	march.reports = 0;
-
-	Real fastest = 0.0f;
-	const VecObjectID &ids = group->getAllIDs();
-	for (size_t i = 0; i < ids.size(); ++i)
-	{
-		Object *obj = TheGameLogic->findObjectByID( ids[ i ] );
-		AIUpdateInterface *ai = obj != NULL ? obj->getAI() : NULL;
-		if (ai == NULL)
-			continue;
-
-		Coord3D goal = *obj->getPosition();
-		goal.x += action.at.x;
-		goal.z = TheTerrainLogic->getGroundHeight( goal.x, goal.y );
-		if (obj->isAbleToAttack())
-			ai->aiAttackMoveToPosition( &goal, SCENARIO_ATTACK_SHOTS, CMD_FROM_SCRIPT );
-		else
-			ai->aiMoveToPosition( &goal, CMD_FROM_SCRIPT );
-
-		march.ids.push_back( ids[ i ] );
-		march.laneY.push_back( goal.y );
-		if (ai->getCurLocomotorSpeed() > fastest)
-			fastest = ai->getCurLocomotorSpeed();
-	}
-	theScenarioLaneMarches.push_back( march );
-
-	DEBUG_LOG(("SCENARIO: frame %d lanemarch slot %d '%s' x%d by %.0f along x, speed %.2f a frame (fastest member %.2f)\n",
-						 action.frame, action.slot, action.selector.str(), (Int)march.ids.size(), action.at.x, speed, fastest));
+	group->groupLaneMarch( action.at.x, SCENARIO_ATTACK_SHOTS, CMD_FROM_SCRIPT );
+	ScenarioDrill_watchLaneMarch( action.slot, action.selector, group, action.at.x );
 	return TRUE;
 }
 
@@ -2306,6 +2314,7 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 		case SCENARIO_ACTION_HANDOVER:
 		case SCENARIO_ACTION_AIRLIFT:
 		case SCENARIO_ACTION_LANEMARCH:
+		case SCENARIO_ACTION_LANEPLACE:
 			ordered = FALSE;		// handled before the group is built
 			break;
 	}
@@ -2560,6 +2569,10 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 
 	if (action.action == SCENARIO_ACTION_LANEMARCH)
 		return executeLaneMarch( action, player );
+
+	if (action.action == SCENARIO_ACTION_LANEPLACE)
+		return TheLaneWarDirector->placeUnit( player, TheThingFactory->findTemplate( action.selector, FALSE ),
+																					(Int)action.at.x, (Int)action.at.y );
 
 	Coord3D position;
 	if (!resolveScenarioPosition( action, &position ))

@@ -43,6 +43,7 @@
 #include "Common/Monitors.h"
 #include "Common/EarlyOptions.h"
 #include "Common/OptionsCatalog.h"
+#include "Platform/RenderPost.h"
 #include "Platform/RenderTeamGlow.h"
 #include "Platform/RenderWaterFoam.h"
 #include "Common/Registry.h"
@@ -3162,6 +3163,11 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 	// Enabling its widget never changes the saved value or retags already loaded meshes.
 	findOptionWidget(*findOptionDef("TeamGlow"))->winEnable(RenderTeamGlow::Available());
 	findOptionWidget(*findOptionDef("WaterFoam"))->winEnable(RenderWaterFoam::Available());
+#endif
+#if defined(__linux__)
+	// The game side of the haze and the atmosphere is built for Linux only so far.
+	findOptionWidget(*findOptionDef("Atmosphere"))->winEnable(RenderPost::EnvironmentAvailable());
+	findOptionWidget(*findOptionDef("MapLight"))->winEnable(RenderPost::EnvironmentAvailable());
 #endif
 
 	// A preset is its own step on the quality slider, whatever step Options.ini kept from a Custom mix,

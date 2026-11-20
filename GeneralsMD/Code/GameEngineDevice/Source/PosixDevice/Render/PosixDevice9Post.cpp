@@ -12,6 +12,7 @@
 #include "Platform/RenderTeamGlow.h"
 #include "Platform/RenderWaterFoam.h"
 #include "ffshader.h"
+#include "SdlPostAtmosphere.h"
 #include <cstring>
 #include <SDL3/SDL.h>
 #include <cmath>
@@ -29,6 +30,9 @@ struct PosixDevice9::ModelView {
 struct PosixDevice9::PostSession {
     explicit PostSession(SdlGpuFrame &frame) : Captures(frame) {}
     SdlSceneCaptureCache Captures;
+    SdlPostAtmosphere Atmosphere;
+    RenderPost::Environment Environment;
+    bool EnvironmentFresh = false, EnvironmentCurrent = false, EnvironmentReady = false;
     SdlMainViewSnapshot CurrentView, LastView, ViewStack[8], SoftView;
     bool SoftRequested = false;
     bool WorldAO = false, Classic = false;
@@ -49,6 +53,20 @@ struct PosixDevice9::PostSession {
     SDL_GPUTexture *StandInCopy = nullptr;
     unsigned CopyWidth = 0, CopyHeight = 0, CopyFormat = 0;
 };
+void PosixDevice9::Set_Post_Environment(const RenderPost::Environment &environment)
+{
+    if (!Gpu) return;
+    if (!Post) Post = std::make_shared<PostSession>(*Gpu);
+    // Invalidate prepared borrowed views before releasing the old packet's COM
+    // references. Already queued draws retain their native readers through batch retirement.
+    Post->Atmosphere.Abandon(); Post->EnvironmentReady = false;
+    IDirect3DBaseTexture9 *sky = Post->Environment.Sky, *shroud = Post->Environment.Shroud;
+    Posix_Bind(sky, environment.Sky); Posix_Bind(shroud, environment.Shroud);
+    Post->Environment = environment; Post->Environment.Sky = sky; Post->Environment.Shroud = shroud;
+    Post->EnvironmentFresh = true;
+    Post->EnvironmentCurrent = false;
+}
+
 void PosixDevice9::Begin_Post(const RenderPost::Settings &settings)
 {
     if (!Gpu) return;
@@ -57,6 +75,9 @@ void PosixDevice9::Begin_Post(const RenderPost::Settings &settings)
     auto &s = *Post;
     s.InView = s.Entered = false; s.ViewDepth = 0;
     s.CurrentView = {}; s.LastView = {}; s.SoftView = {}; s.SoftRequested = false;
+    s.Atmosphere.Abandon(); s.EnvironmentReady = false;
+    s.EnvironmentCurrent = s.EnvironmentFresh && !settings.Classic && s.Environment.MapIdentity && s.Environment.MapGeneration;
+    s.EnvironmentFresh = false;
     ParticlesAllowed = !settings.Classic;
     s.WorldAO = settings.WorldAO && !settings.Classic;
     s.ModelCurrent = {}; s.ModelReadyKey = s.ModelRefusedKey = 0;
@@ -69,7 +90,8 @@ void PosixDevice9::Begin_Post(const RenderPost::Settings &settings)
     s.Settings = {};
     if (!settings.Classic && !DX11Post_Parse_Chain(settings.Chain, s.Settings.Chain, s.Settings.Count))
         s.Settings.Count = 0;
-    if (!s.Settings.Count && s.WorldAO) { s.Settings.Count = 1; s.Settings.Chain[0] = DX11_POST_COPY; }
+    if (!s.Settings.Count && (s.WorldAO || (s.EnvironmentCurrent &&
+        (s.Environment.Haze.Strength > 0 || s.Environment.Atmosphere.Strength > 0)))) { s.Settings.Count = 1; s.Settings.Chain[0] = DX11_POST_COPY; }
     s.Settings.MainViewKey = ++s.Serial;
     // Every actual SDL scene attachment is created with SDL_GPU_SAMPLECOUNT_1.
     // The D3D9 requested multisample option is not an attachment capability.
@@ -143,6 +165,7 @@ unsigned PosixDevice9::Begin_Post_View(bool eligible, float nearPlane, float far
     if (s.Entered && !s.InView) {
         // A second explicit view has its own ownership key; no old phase capture can satisfy it.
         s.Settings.MainViewKey = ++s.Serial;
+        s.Atmosphere.Abandon(); s.EnvironmentReady = false;
         if (s.Routed && !s.Processor.Prepare(*Gpu,s.Presentation,s.Settings,s.Scene)) s.Routed=false;
     }
     view.ViewKey=s.Settings.MainViewKey;
@@ -203,7 +226,51 @@ bool PosixDevice9::Read_Post_Inputs(SdlSceneCapturePhase phase, SdlPostSceneInpu
     inputs.Near=view.Near; inputs.Far=view.Far;
     std::memcpy(inputs.WorldFromClip,view.FullTextureWorldFromClip,sizeof(inputs.WorldFromClip));
     std::memcpy(inputs.ProjectionScale,view.ProjectionScale,sizeof(inputs.ProjectionScale));
+    if (Post->EnvironmentCurrent && Post->Environment.Shroud) {
+        std::string error;
+        inputs.Shroud = Get_Mirrors()->Texture(Post->Environment.Shroud,error);
+        if (!inputs.Shroud) return false;
+        std::memcpy(inputs.ShroudRect,Post->Environment.ShroudRect,sizeof(inputs.ShroudRect));
+    }
     return true;
+}
+void PosixDevice9::Post_Sky(bool drawSky)
+{
+    if (!Post_Active() || !Post->InView || !Post->EnvironmentCurrent) return;
+    PostSession &s = *Post;
+    SdlMainViewSnapshot view;
+    if (!Read_Main_View(view, false, SdlSceneCapturePhase::OpaqueScene) ||
+        view.Target.Colour != s.Scene.Colour || view.Target.Depth != s.Scene.Depth) return;
+    SdlPostGroundHazeSettings haze;
+    std::memcpy(haze.Colour, s.Environment.Haze.Colour, sizeof(haze.Colour));
+    haze.Top = s.Environment.Haze.Top; haze.Thickness = s.Environment.Haze.Thickness;
+    haze.Strength = s.Environment.Haze.Strength; haze.Reach = s.Environment.Haze.Reach;
+    haze.WaterHeight = s.Environment.Haze.WaterHeight; haze.Warmth = s.Environment.Haze.Warmth;
+    std::memcpy(haze.TowardSun, s.Environment.Haze.TowardSun, sizeof(haze.TowardSun));
+    SdlPostAtmosphereSettings atmosphere;
+    std::memcpy(atmosphere.Horizon, s.Environment.Atmosphere.Horizon, sizeof(atmosphere.Horizon));
+    std::memcpy(atmosphere.Tint, s.Environment.Atmosphere.Tint, sizeof(atmosphere.Tint));
+    atmosphere.Start = s.Environment.Atmosphere.Start; atmosphere.Scale = s.Environment.Atmosphere.Scale;
+    atmosphere.Strength = s.Environment.Atmosphere.Strength; atmosphere.Ground = s.Environment.Atmosphere.Ground;
+    std::memcpy(atmosphere.MapSize, s.Environment.Atmosphere.MapSize, sizeof(atmosphere.MapSize));
+    SdlPostAtmosphereViews views;
+    views.MapIdentity = s.Environment.MapIdentity; views.MapGeneration = s.Environment.MapGeneration;
+    std::memcpy(views.ShroudRect, s.Environment.ShroudRect, sizeof(views.ShroudRect));
+    std::string error;
+    auto mirror = [&](IDirect3DBaseTexture9 *source, SdlPostBorrowedView &destination) {
+        if (!source) return true;
+        destination.Texture = Get_Mirrors()->Texture(source,error);
+        if (!destination.Texture) return false;
+        // The retained COM owner identifies the view; native replacement changes
+        // Texture, and the stable device lifetime supplies its generation.
+        destination.Identity = reinterpret_cast<uintptr_t>(source);
+        destination.Generation = Gpu->Device_Generation();
+        return true;
+    };
+    if (!mirror(s.Environment.Sky, views.Sky) || !mirror(s.Environment.Shroud, views.Shroud)) return;
+    s.EnvironmentReady = s.Atmosphere.Prepare(*Gpu, s.Processor, s.Scene, view.Capture,
+        view.FullTextureWorldFromClip, haze, atmosphere, views);
+    if (drawSky && s.EnvironmentReady && atmosphere.Strength > 0) s.Atmosphere.Draw_Sky(*Gpu, s.Scene);
 }
 void PosixDevice9::Post_Opaque_Scene(bool allowWorldAO)
 {
@@ -221,10 +288,20 @@ void PosixDevice9::Post_Before_Transparent()
         SdlMainViewSnapshot depth;
         if (Read_Main_View(depth,true,SdlSceneCapturePhase::BeforeTransparent)) Post->SoftView=depth;
     }
-    if (!Post_Active() || !Post->InView || !Post->Processor.Needs_BeforePost_Depth()) return;
+    if (!Post_Active() || !Post->InView) return;
+    // A haze-only scene also needs preparation when the Atmosphere option did not
+    // request the earlier sky hook. This performs no visible sky draw at strength0.
+    if (Post->EnvironmentCurrent && !Post->EnvironmentReady) Post_Sky(false);
+    const bool chainAO = Post->Processor.Needs_BeforePost_Depth();
+    if (!chainAO && !Post->EnvironmentReady) return;
     SdlPostSceneInputs inputs;
-    if (Read_Post_Inputs(SdlSceneCapturePhase::BeforeTransparent,inputs))
-        Post->Processor.Apply_Chain_AO(*Gpu,Post->Scene,inputs);
+    if (Read_Post_Inputs(SdlSceneCapturePhase::BeforeTransparent, inputs)) {
+        if (chainAO) Post->Processor.Apply_Chain_AO(*Gpu, Post->Scene, inputs);
+        if (Post->EnvironmentReady) {
+            Post->Atmosphere.Apply_Ground_Haze(*Gpu, Post->Scene, inputs);
+            Post->Atmosphere.Apply_Atmosphere(*Gpu, Post->Scene, inputs);
+        }
+    }
 }
 bool PosixDevice9::Read_Model_View(ModelView &view)
 {
@@ -306,6 +383,11 @@ void PosixDevice9::Release_Post(bool teardown)
 {
     if (!Post || !Gpu) return;
     Finish_Post(true);
+    if (!Post->Atmosphere.Release(*Gpu)) {
+        if (!teardown) return;
+        Gpu->Discard_Pending_Work_For_Teardown();
+        if (!Post->Atmosphere.Release(*Gpu)) return;
+    }
     if (!Post->Processor.Release(*Gpu)) {
         if (!teardown) return; // ordinary reset keeps queued borrowers alive
         Gpu->Discard_Pending_Work_For_Teardown();
@@ -313,6 +395,8 @@ void PosixDevice9::Release_Post(bool teardown)
     }
     if (Post->StandInCopy) Gpu->Release_After_Batch(Post->StandInCopy, nullptr);
     if (Post->ModelColour) Gpu->Release_After_Batch(Post->ModelColour, nullptr);
+    Posix_Bind(Post->Environment.Sky, static_cast<IDirect3DBaseTexture9 *>(nullptr));
+    Posix_Bind(Post->Environment.Shroud, static_cast<IDirect3DBaseTexture9 *>(nullptr));
     Post.reset();
 }
 namespace RenderPost {
@@ -543,4 +627,11 @@ bool PosixDevice9::Classic_Water_Foam_Available() const { return Gpu && Gpu->Sup
 namespace RenderWaterFoam {
 bool Available(IDirect3DDevice9 *device) { return device && static_cast<PosixDevice9 *>(device)->Classic_Water_Foam_Available(); }
 bool Ready(IDirect3DDevice9 *device) { return device && static_cast<PosixDevice9 *>(device)->Prepare_Classic_Water_Foam(); }
+}
+
+bool PosixDevice9::Post_Environment_Available() const { return Gpu && Gpu->Supports_Scene_Depth(); }
+namespace RenderPost {
+bool EnvironmentAvailable(IDirect3DDevice9 *d) { return d && static_cast<PosixDevice9 *>(d)->Post_Environment_Available(); }
+void SetEnvironment(IDirect3DDevice9 *d,const Environment &e) { if(d) static_cast<PosixDevice9 *>(d)->Set_Post_Environment(e); }
+void Sky(IDirect3DDevice9 *d) { if(d) static_cast<PosixDevice9 *>(d)->Post_Sky(); }
 }

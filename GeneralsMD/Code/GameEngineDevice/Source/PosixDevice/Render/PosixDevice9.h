@@ -249,6 +249,9 @@ public:
 	struct SDL_GPUTexture *Classic_Water_Depth();
 	bool Build_Main_View_Constants(struct SdlEnginePixelConstants &, bool receiving);
 	void Refuse_Next_Foam_For_Test(unsigned flags) { FoamRefusalForTest = flags; }
+	void Set_Post_Environment(const RenderPost::Environment &);
+	bool Post_Environment_Available() const;
+	void Post_Sky(bool drawSky = true);
 	SdlGpuFrame * Get_Gpu() const { return Gpu; }
 	SdlResourceMirrors * Get_Mirrors() const { return Mirrors; }
 	/// Draws recorded on the GPU, and the draws refused, by reason.

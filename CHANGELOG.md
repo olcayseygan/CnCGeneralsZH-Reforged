@@ -108,6 +108,7 @@ found and fixed, EA's own, not port damage.**
 - On Mac and Linux the Team Glow option is no longer greyed out: team colour on the models glows through the picture's bright range as it does on Windows, from the next map on. It stays off until you tick it, and Classic graphics keeps the plain paint. Thanks to Shin-Aska.
 - On Mac and Linux a defence's range on the ground is the smooth Windows ring in its owner's colour, laid over the terrain itself, in place of the blocky tiles that stepped across the cells. Thanks to Shin-Aska.
 - On Mac and Linux the Water Foam option draws on the Classic water: foam breaks along the shores of ponds and rivers and the banks soften into the ground, as on Windows. Classic graphics keeps EA's water. Thanks to Shin-Aska.
+- On Linux the Atmosphere option paints the sky and fades the far end of the map into the horizon, and Warm Light lays its low haze in the valleys, both under the fog of war as on Windows and with the post chain off too. Classic graphics has neither, and the Mac build does not have them yet. Thanks to Shin-Aska.
 
 ## A dropped player's army stays, and he can come back to it
 

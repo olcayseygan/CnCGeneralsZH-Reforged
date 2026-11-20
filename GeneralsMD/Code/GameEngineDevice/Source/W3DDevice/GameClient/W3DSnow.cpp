@@ -24,6 +24,7 @@
 #include "W3DDevice/GameClient/HeightMap.h"
 #include "W3DDevice/GameClient/W3DShroud.h"
 #include "Common/GlobalData.h"
+#include "W3DDevice/GameClient/W3DShaderManager.h"
 #include "GameClient/View.h"
 #include "GameLogic/ScriptEngine.h"
 #include "WW3D2/dx8wrapper.h"
@@ -197,6 +198,9 @@ void W3DSnowManager::updateIniSettings(void)
 
 void W3DSnowManager::reset( void )
 {
+#if defined(__linux__)
+	W3DShaderManager::invalidateNativePostEnvironment();
+#endif
 	SnowManager::reset();
 }
 

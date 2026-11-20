@@ -125,7 +125,6 @@ static Bool wearsCloak( const Drawable *draw )
 	if( !Direct3D11_Draw_Effects() )
 		return FALSE;
 	const StealthLookType look = draw->getStealthDrawnLook();
-	const Real fade = draw->getStealthFade();
 	if( look == STEALTHLOOK_VISIBLE_FRIENDLY || look == STEALTHLOOK_VISIBLE_FRIENDLY_DETECTED )
 	{
 		// mines force opacity 0 and must not become a lens on the ground
@@ -134,9 +133,10 @@ static Bool wearsCloak( const Drawable *draw )
 		// a frame that cannot draw the cloak (a screen filter holds the target) draws him by opacity
 		return Direct3D11_Takes_Draw_Effect( DRAW_EFFECT_CLOAK );
 	}
-	// revealed fades in the translucent pass so the heat can come up from nothing
-	if( look == STEALTHLOOK_VISIBLE_DETECTED && fade < 0.99f )
-		return Direct3D11_Takes_Draw_Effect( DRAW_EFFECT_REVEALED );
+	// The heat stays in the opaque world for its whole fade (its nothing end is clipped, not
+	// blended).  It used to fade in the translucent pass and move to the opaque one at the top,
+	// and that second program was compiled off the frame on first use: the unit was left out of
+	// the picture for the compile, a blink right after the heat came up.
 	return FALSE;
 }
 
@@ -710,8 +710,12 @@ void RTS3DScene::Visibility_Check(CameraClass * camera)
 								drawInfo->m_flags |= DrawableInfo::ERF_POTENTIAL_OCCLUDER;
 							}
 							else
+							// Not a unit in the cloak's glass: a translucent occludee marks its pixels in the stencil
+							// with no depth, so every building behind it on the screen took it for hidden and the
+							// player colour went down under it, which the glass then showed as a solid block.
 							if (draw->getObjectForDraw().hasObject &&
 									(draw->isKindOf(KINDOF_SCORE) || draw->isKindOf(KINDOF_SCORE_CREATE) || draw->isKindOf(KINDOF_SCORE_DESTROY) || draw->isKindOf(KINDOF_MP_COUNT_FOR_VICTORY)) &&
+									!wearsCloak(draw) &&
 									draw->getObjectForDraw().safeOcclusionFrame <= currentFrame && m_numPotentialOccludees < TheGlobalData->m_maxVisibleOccludeeObjects)
 							{	//object which could be occluded but still needs to be visible.
 								//We process transucent units twice (also in m_translucentObjectsBuffer) because we need to see them when occluded.
@@ -812,8 +816,7 @@ static unsigned chooseDrawEffect( const Drawable *draw, Bool translucentPass, fl
 	const Real fade = draw->getStealthFade();
 	Real strength = 1.0f;
 
-	if ( look == STEALTHLOOK_VISIBLE_DETECTED && !draw->isKindOf( KINDOF_MINE )
-		&& ( translucentPass || fade >= 0.99f ) )
+	if ( look == STEALTHLOOK_VISIBLE_DETECTED && !draw->isKindOf( KINDOF_MINE ) )
 	{
 		effect = DRAW_EFFECT_REVEALED;
 		strength = pulse;
@@ -1196,6 +1199,14 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 		// to grey, the one picture that has to say "not here".  So every translucent mesh in the fog
 		// keeps its full colour, on purpose.
 		Direct3D11_Shroud_Memory();
+		// The Direct3D 11 chain's ambient occlusion (and the haze and atmosphere with it) goes on
+		// here, over the world with every corner in its depth and under everything that blends:
+		// the fire and smoke, which write no depth, and the translucent meshes, which do.  Put on the
+		// finished frame it shaded a fireball by the chimneys and trees behind it; put after the
+		// translucent meshes it read a cloaked unit's glass as corners and drew a dark line round
+		// every ghillie strand and cut-out edge of it.  The glass shows this scene, so it shows the
+		// occlusion and the haze of the ground behind it.
+		Direct3D11_Occlude_Scene();
 		flushTranslucentObjects(rinfo);	//draw all translucent meshes which don't need per-poly sorting.
 	}
 
@@ -1215,10 +1226,6 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 		//don't draw transparent in this mode because they interfere with destination alpha
 		if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
 		{
-			// The Direct3D 11 chain's ambient occlusion goes on here, over the world with every
-			// corner in its depth and under the fire and smoke, which write none: put on the
-			// finished frame it shaded a fireball by the chimneys and trees behind it.
-			Direct3D11_Occlude_Scene();
 			DoParticles(rinfo);	//queue up particles for rendering.
 		}
 

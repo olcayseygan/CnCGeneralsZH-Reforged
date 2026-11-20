@@ -4467,11 +4467,13 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 	Matrix3D::Inverse_Transform_Vector( sunAtOrigin, boxMiddle, &focusInSun );
 	focusInSun.X = WWMath::Floor( focusInSun.X / texelWidth + 0.5f ) * texelWidth;
 	focusInSun.Y = WWMath::Floor( focusInSun.Y / texelWidth + 0.5f ) * texelWidth;
+#ifndef _WIN32
 	/* The map's corner texel in the sun's frame, x right and y up from the top left texel down:
 		 effect_cloak_shadow adds it to the texel it draws, so the cloak's thinned shadow keeps the same
 		 texels as the box steps with the camera. */
 	const Real cornerTexelX = WWMath::Floor( focusInSun.X / texelWidth + 0.5f ) - (Real)( texels / 2 );
 	const Real cornerTexelY = WWMath::Floor( focusInSun.Y / texelWidth + 0.5f ) + (Real)( texels / 2 );
+#endif
 	Vector3 snapped;
 	Matrix3D::Transform_Vector( sunAtOrigin, focusInSun, &snapped );
 	transform.Look_At( snapped + toSun * sunDistance, snapped, 0.0f );
@@ -4604,13 +4606,11 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 			continue;
 		RenderObjClass *robj = s_casters[ c ];
 
-		/* An own stealthed unit's shadow dissolves with its fade, the way the cloak lets the ground
-			 show through its body (effect_cloak_shadow in ffshader.h, which keeps half of w), and once
-			 cloaked it casts none: a share held per texel stood as lit bricks in a dark shadow at close
-			 zoom, where the filter reads a texel or two, and a part drawn some other way (the
-			 Pathfinder's) kept the rest dark.  Leaving the whole caster out holds every part alike.
-			 An enemy coming out of hiding wears the same look, so its shadow comes in with it.  A
-			 render object with no drawable behind it, a ghost or a prop, casts in full. */
+		/* An own stealthed unit in the cloak's glass casts no shadow once its fade is past the middle,
+			 and all of it before (the SDL3 builds, which draw no glass, keep a share through
+			 effect_cloak_shadow in ffshader.h).  An enemy coming out of hiding wears the same look, so
+			 its shadow comes in with it.  A render object with no drawable behind it, a ghost or a
+			 prop, casts in full. */
 		sunInfo.drawEffect = DRAW_EFFECT_NONE;
 		const DrawableInfo *casterInfo = (const DrawableInfo *)robj->Get_User_Data();
 		const Drawable *caster = casterInfo ? casterInfo->m_drawable : NULL;
@@ -4621,17 +4621,19 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 			&& caster->getStealthFade() > 0.001f)
 		{
 #ifdef _WIN32
-			if (caster->getStealthFade() >= 0.999f)
+			/* Whole or nothing, turning at the middle of the fade.  A share of the texels kept through
+				 the fade stood as lit bricks in the shadow at close zoom, where the filter reads a texel
+				 or two. */
+			if (caster->getStealthFade() >= 0.5f)
 				continue;
-			const Real keptShare = 1.0f - caster->getStealthFade();
 #else
 			// the SDL3 builds draw no glass, so the body stays by its opacity and keeps half its shadow
 			const Real keptShare = 1.0f - 0.5f * caster->getStealthFade();
-#endif
 			sunInfo.drawEffect = DRAW_EFFECT_CLOAK_SHADOW;
 			sunInfo.drawEffectParameters[0] = cornerTexelX;
 			sunInfo.drawEffectParameters[1] = cornerTexelY;
 			sunInfo.drawEffectParameters[3] = 2.0f * keptShare;
+#endif
 		}
 
 		robj->Render( sunInfo );

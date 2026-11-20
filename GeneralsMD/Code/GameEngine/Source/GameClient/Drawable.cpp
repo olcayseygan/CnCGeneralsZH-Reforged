@@ -1742,7 +1742,7 @@ void Drawable::updateDrawable( void )
 			// and only a little of it: summed about twice over on a face (ambient plus the lights it
 			// faces), 0.15/-0.2 painted a whole Battlemaster red.  This is a hint on the shaded paint;
 			// an overbright sunlit face mostly clamps it away.
-			static const RGBColor HIT_FLASH_COLOR = { 0.06f, -0.08f, -0.08f };
+			static const RGBColor HIT_FLASH_COLOR = { 0.04f, -0.05f, -0.05f };
 			if( m_selectionFlashEnvelope == NULL )
 				m_selectionFlashEnvelope = newInstance(TintEnvelope);
 			m_selectionFlashEnvelope->play( &HIT_FLASH_COLOR, 0, flashFrames );

@@ -350,6 +350,8 @@ protected:
 	Real m_modernOpticalLevel = 0.0f;
 	struct ModernOpticalTexture {
 		Real level; TextureClass *texture;
+		TextureClass *heading = NULL;
+		Real prevailingRotation = 0.0f, swellStep = 0.0f;
 		TextureClass *waveCage=NULL;
 		std::vector<UnsignedByte> waveCageSupport; // same quantized alpha sampled by the shader
 		std::vector<UnsignedByte> ocean;
@@ -357,6 +359,7 @@ protected:
 		Real oceanExtent=0.0f;
 	};
 	std::vector<ModernOpticalTexture> m_modernOpticalTextures;
+	Bool m_modernHeadingEnabled = FALSE;
 	std::vector<WaterOpticalContext::Polygon> m_modernOpticalPolygons;
 	Bool m_modernOpticalPolygonsValid = FALSE;
 	IDirect3DPixelShader9 *	m_waterPixelShader;		///<D3D pixel shader.

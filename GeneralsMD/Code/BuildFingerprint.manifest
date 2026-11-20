@@ -3274,6 +3274,7 @@ Libraries/Include/Platform/WaterVesselWaves.h
 Libraries/Include/Platform/WaterWaveCage.h
 Libraries/Include/Platform/WaterWaveCageMesh.h
 Libraries/Include/Platform/WaterWaveCageShader.h
+Libraries/Include/Platform/WaterWaveHeading.h
 Libraries/Include/rts/debug.h
 Libraries/Include/rts/profile.h
 Libraries/Lib/.gitignore
@@ -4301,6 +4302,7 @@ Tests/WaterTerrainProofCacheTest.h
 Tests/WaterWaveCageCopyTest.h
 Tests/WaterWaveCageMeshReference.h
 Tests/WaterWaveCageTest.h
+Tests/WaterWaveHeadingTest.h
 Tests/arch_diff/arch_probe.cpp
 Tests/arch_diff/known_differences.txt
 Tests/arch_diff/run_arch_diff.sh
@@ -4448,8 +4450,10 @@ Tests/test_user_data_guard.cpp
 Tests/test_userfolders.cpp
 Tests/test_w3dlayout.cpp
 Tests/test_water_grid.cpp
+Tests/test_water_heading_shader.cpp
 Tests/test_water_preview_preset.cpp
 Tests/test_water_tracks.cpp
+Tests/test_water_wave_heading.cpp
 Tests/test_widechar_crc_gate.cpp
 Tests/test_widechar_file.cpp
 Tests/test_widechar_format.cpp

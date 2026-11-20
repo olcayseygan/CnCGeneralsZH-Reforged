@@ -4749,6 +4749,14 @@ TOOLTIP:WaterRefractionQuality
 "For Modern water. Full distorts the view below the surface. Simple keeps clear water without distortion. Off uses opaque tinted water for better performance. Applied when you Accept."
 END
 
+GUI:MapAwareWaveHeading
+"Map-Aware Waves"
+END
+
+TOOLTIP:MapAwareWaveHeading
+"For Modern water. Swells bend toward the shore, run along channels and drop behind islands, each sea from its own side. Off keeps the waves as they were. Applied when you Accept."
+END
+
 GUI:WaterReflectionDetail
 "Reflection detail"
 END

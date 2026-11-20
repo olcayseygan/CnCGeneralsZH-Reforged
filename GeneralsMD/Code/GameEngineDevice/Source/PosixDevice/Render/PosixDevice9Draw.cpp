@@ -36,6 +36,7 @@
 #include "ffshader.h"
 #include "ffvertex.h"
 #include "Platform/WaterFftSampling.h"
+#include "Platform/WaterWaveHeading.h"
 #include "Platform/WaterPerformanceSettings.h"
 #include "Platform/WaterFoamHistory.h"
 
@@ -979,20 +980,34 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	bool fft_water = fft_requested && Gpu->Prepare_Ocean(PixelShaderConstants[1][0]*WaterFftSampling::TimeScale,
 		WaterPerformanceSettings::Applied().requestedFftResolution);
 	if (fft_water) WaterPerformanceSettings::Applied().activeFftResolution = Gpu->Ocean_Configuration().resolution;
-	const SdlProgram *fft_vertex = fft_water ? &Programs->Water_Vertex_Program(vertex) : NULL;
+	std::string heading_refusal;
+	bool wave_heading = fft_water && PixelShaderConstants[WaterWaveHeading::PrevailingRegister][2]>.5f && Textures[WaterWaveHeading::PixelTextureSlot]
+		&& Mirrors->Texture(Textures[WaterWaveHeading::PixelTextureSlot],heading_refusal);
+	const SdlProgram *fft_vertex = fft_water ? &Programs->Water_Vertex_Program(vertex, wave_heading) : NULL;
+	if (fft_vertex && !fft_vertex->Shader && wave_heading) {
+		wave_heading=false;fft_vertex=&Programs->Water_Vertex_Program(vertex,false);
+	}
 	if (fft_vertex && fft_vertex->Shader == NULL) fft_water = false;
-	const SdlProgram &vertex_program = vertex_engine != ENGINE_SHADER_NONE
-		? Programs->Engine_Vertex_Program(vertex_engine)
-		: fft_water ? *fft_vertex : Programs->Vertex_Program(vertex);
+	const SdlProgram *vertex_program = vertex_engine != ENGINE_SHADER_NONE
+		? &Programs->Engine_Vertex_Program(vertex_engine)
+		: fft_water ? fft_vertex : &Programs->Vertex_Program(vertex);
 	const SdlProgram *pixel_program = SunActive
 		? &Programs->Sun_Pixel_Program(combiner, pixel_engine)
 		: pixel_engine != ENGINE_SHADER_NONE
-			? &Programs->Engine_Pixel_Program(pixel_engine, combiner.PixelPipeline)
+			? &Programs->Engine_Pixel_Program(pixel_engine, combiner.PixelPipeline, wave_heading)
 			: &Programs->Pixel_Program(combiner);
+	const auto retry_without_heading = [&]() {
+		if(!wave_heading)return false;
+		wave_heading=false;
+		vertex_program=&Programs->Water_Vertex_Program(vertex,false);
+		pixel_program=&Programs->Engine_Pixel_Program(pixel_engine,combiner.PixelPipeline,false);
+		return vertex_program->Shader && pixel_program->Shader;
+	};
+	if (!vertex_program->Shader || !pixel_program->Shader) retry_without_heading();
 	const auto retry_without_sun = [&](const char *reason) {
 		// Generated receivers add an optional program variant. Ground programs share the
 		// established engine path; their existing source keeps its own failure handling.
-		if (!combiner.ShadowReceiving || pixel_engine != ENGINE_SHADER_NONE || !vertex_program.Shader)
+		if (!combiner.ShadowReceiving || pixel_engine != ENGINE_SHADER_NONE || !vertex_program->Shader)
 			return false;
 		Fail_Sun_Receiver(reason);
 		combiner.ShadowReceiving = false;
@@ -1029,23 +1044,23 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 			}
 		}
 	}
-	if (vertex_program.Shader == NULL || pixel_program->Shader == NULL) {
-		Refuse_Draw(vertex_program.Shader == NULL ? "a vertex program refused" : "a pixel program refused");
+	if (vertex_program->Shader == NULL || pixel_program->Shader == NULL) {
+		Refuse_Draw(vertex_program->Shader == NULL ? "a vertex program refused" : "a pixel program refused");
 		return D3D_OK;
 	}
 	if (pixel_program->SamplerSlots > SdlRecordedDraw::MAXIMUM_SAMPLERS)
 		retry_without_sun("receiver sampler count");
 	if (pixel_program->SamplerSlots > SdlRecordedDraw::MAXIMUM_SAMPLERS
-		|| vertex_program.SamplerSlots > (fft_water ? 4u : 0u)) {
+		|| vertex_program->SamplerSlots > (fft_water ? 5u : 0u)) {
 		Refuse_Draw("more sampler slots than a draw binds");
 		return D3D_OK;
 	}
 	const bool modern_water_pixel=pixel_engine==ENGINE_SHADER_WATER_TRAPEZOID || pixel_engine==ENGINE_SHADER_WATER_RIVER;
 	if(!Sdl_Draw_Uniform_Buffers_Supported(fft_water,modern_water_pixel,
-		vertex_program.UniformBuffers,pixel_program->UniformBuffers))
+		vertex_program->UniformBuffers,pixel_program->UniformBuffers))
 		retry_without_sun("receiver uniform layout");
 	if(!pixel_program->Shader || !Sdl_Draw_Uniform_Buffers_Supported(fft_water,modern_water_pixel,
-		vertex_program.UniformBuffers,pixel_program->UniformBuffers)) {
+		vertex_program->UniformBuffers,pixel_program->UniformBuffers)) {
 		Refuse_Draw("uniform blocks without an explicit draw binding");
 		return D3D_OK;
 	}
@@ -1079,7 +1094,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		states = water_states;
 	}
 	SdlPipelineKey key;
-	if (!Sdl_Pipeline_Key(states, call.Type, vertex_program.Shader, pixel_program->Shader, FVF,
+	if (!Sdl_Pipeline_Key(states, call.Type, vertex_program->Shader, pixel_program->Shader, FVF,
 		target.Colour ? SdlGpuFrame::Target_Format() : 0, Gpu->Target_Depth_Format(target), key, refusal)) {
 		Refuse_Draw("the pipeline: " + refusal);
 		return D3D_OK;
@@ -1088,14 +1103,19 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	SdlRecordedDraw draw;
 	memset(&draw, 0, sizeof(draw));
 	draw.Pipeline = Pipelines->Pipeline(key, combiner.ShadowReceiving && pixel_engine == ENGINE_SHADER_NONE);
+	if (!draw.Pipeline && retry_without_heading()) {
+		if (Sdl_Pipeline_Key(states, call.Type, vertex_program->Shader, pixel_program->Shader, FVF,
+			target.Colour ? SdlGpuFrame::Target_Format() : 0, Gpu->Target_Depth_Format(target), key, refusal))
+			draw.Pipeline = Pipelines->Pipeline(key);
+	}
 	if (!draw.Pipeline && retry_without_sun("pipeline refused")) {
-		if (Sdl_Pipeline_Key(states, call.Type, vertex_program.Shader, pixel_program->Shader, FVF,
+		if (Sdl_Pipeline_Key(states, call.Type, vertex_program->Shader, pixel_program->Shader, FVF,
 			target.Colour ? SdlGpuFrame::Target_Format() : 0, Gpu->Target_Depth_Format(target), key, refusal))
 			draw.Pipeline = Pipelines->Pipeline(key);
 	}
 	if(!draw.Pipeline && shore_overlay) {
 		shore_overlay=false;pixel_program=legacy_pixel_program;
-		if(Sdl_Pipeline_Key(states,call.Type,vertex_program.Shader,pixel_program->Shader,FVF,
+		if(Sdl_Pipeline_Key(states,call.Type,vertex_program->Shader,pixel_program->Shader,FVF,
 			target.Colour ? SdlGpuFrame::Target_Format() : 0,Gpu->Target_Depth_Format(target),key,refusal))
 			draw.Pipeline=Pipelines->Pipeline(key);
 	}
@@ -1130,17 +1150,19 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	SDL_GPUTexture *water_background = water_draw && water_colour ? Gpu->Water_Background(target) : NULL;
 	SDL_GPUTexture *water_depth = water_draw ? Gpu->Water_Depth(target) : NULL;
 	bool water_history = water_draw && Water_Foam_History_Available();
-	draw.VertexSamplerCount = vertex_program.SamplerSlots;
+	draw.VertexSamplerCount = vertex_program->SamplerSlots;
 	for (unsigned int slot = 0; slot < draw.VertexSamplerCount && slot < 3; ++slot) {
 		draw.VertexTextures[slot] = Gpu->Ocean_Map(slot * 2);
 		draw.VertexSamplers[slot] = Gpu->Ocean_Sampler();
 	}
 
+	bool water_heading=false;
 	// The GPU copies.  Bringing one up to date can flush the batch, which leaves the ones already asked
 	// for marked as used by the batch before: so ask again until a round flushes nothing.
 	for (int round = 0; round < 3; ++round) {
 		const uint64_t batch = Gpu->Batch();
 		++phases.Rounds;
+		water_heading=false;
 		draw.SamplerCount = pixel_program->SamplerSlots;
 		for (unsigned int slot = 0; slot < pixel_program->SamplerSlots; ++slot) {
 			const int texture_stage = pixel_program->SlotTexture[slot];
@@ -1168,6 +1190,21 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 				if (!draw.Textures[slot] || !draw.Samplers[slot]) {
 					Refuse_Draw("smoke receiver binding");
 					return D3D_OK;
+				}
+				continue;
+			}
+			if (water_draw && wave_heading && texture_stage == WaterWaveHeading::PixelTextureSlot) {
+				SDL_GPUTexture *heading=Mirrors->Texture(Textures[WaterWaveHeading::PixelTextureSlot],refusal);
+				if(heading==target.Colour || heading==target.Depth) heading=NULL;
+				RenderUInt32 states[SAMPLER_STATE_COUNT];memcpy(states,SamplerStates[0],sizeof(states));
+				states[D3DSAMP_ADDRESSU]=states[D3DSAMP_ADDRESSV]=D3DTADDRESS_CLAMP;
+				states[D3DSAMP_MINFILTER]=states[D3DSAMP_MAGFILTER]=D3DTEXF_POINT;states[D3DSAMP_MIPFILTER]=D3DTEXF_NONE;
+				draw.Samplers[slot]=Samplers->Sampler(states);draw.Textures[slot]=heading?heading:Mirrors->White();
+				water_heading=heading && draw.Samplers[slot];
+				if(!draw.Textures[slot] || !draw.Samplers[slot])return D3D_OK;
+				if(draw.VertexSamplerCount>WaterWaveHeading::VertexTextureSlot) {
+					draw.VertexTextures[WaterWaveHeading::VertexTextureSlot]=draw.Textures[slot];
+					draw.VertexSamplers[WaterWaveHeading::VertexTextureSlot]=draw.Samplers[slot];
 				}
 				continue;
 			}
@@ -1304,7 +1341,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 					if (index < call.MinVertex || index >= call.MinVertex + call.VertexCount) {
 						fprintf(stderr, "PosixDevice9: a draw reads index %u outside MinVertex %u + VertexCount %u (start index %u, "
 							"%u primitives, base vertex %d, programs %s | %s)\n", index, call.MinVertex, call.VertexCount,
-							call.StartIndex, call.PrimitiveCount, call.BaseVertex, vertex_program.Key.c_str(), pixel_program->Key.c_str());
+							call.StartIndex, call.PrimitiveCount, call.BaseVertex, vertex_program->Key.c_str(), pixel_program->Key.c_str());
 						abort();
 					}
 				}
@@ -1386,7 +1423,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		draw.Count = reads;
 	}
 
-	Trace_Draw_If_Asked(call, vertex_program.Key + " | " + pixel_program->Key,
+	Trace_Draw_If_Asked(call, vertex_program->Key + " | " + pixel_program->Key,
 		vertex_buffer, stride);
 	if (Capture_Is_Asked()) {
 		// The signature: both programs' keys, and the pipeline key's bytes (the pipeline's states, formats
@@ -1406,7 +1443,7 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		for (unsigned int slot = 0; slot < pixel_program->SamplerSlots; ++slot) {
 			sampled |= 1u << pixel_program->SlotTexture[slot];
 		}
-		Capture_Draw(call, vertex_program.Key + " | " + pixel_program->Key + pipeline, stride, reads, sampled,
+		Capture_Draw(call, vertex_program->Key + " | " + pixel_program->Key + pipeline, stride, reads, sampled,
 			target.Width, target.Height);
 	}
 
@@ -1415,13 +1452,13 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	SdlVertexConstants vertex_constants;
 	SdlPixelConstants pixel_constants;
 	Build_Constants(vertex_constants, pixel_constants);
-	if (vertex_program.UniformBuffers != 0 && vertex_engine != ENGINE_SHADER_NONE) {
+	if (vertex_program->UniformBuffers != 0 && vertex_engine != ENGINE_SHADER_NONE) {
 		// A transcribed vertex program reads the engine's own register bank, c0 to c95, as its b0.
 		const uint32_t size = ENGINE_SHADER_CONSTANTS * sizeof(VertexShaderConstants[0]);
 		draw.VertexConstants = Gpu->Constants(0, VertexShaderConstants, size);
 		draw.VertexConstantsSize = size;
 	}
-	else if (vertex_program.UniformBuffers != 0) {
+	else if (vertex_program->UniformBuffers != 0) {
 		draw.VertexConstants = Gpu->Constants(0, &vertex_constants, sizeof(vertex_constants));
 		draw.VertexConstantsSize = sizeof(vertex_constants);
 	}
@@ -1435,6 +1472,9 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		water.SceneParameters[2] = 1.0f / (float)target.Height;
 		water.SceneParameters[3] = water_depth ? 1.0f : 0.0f;
 		water.FftParameters[0] = fft_water ? 1.0f : 0.0f;
+		water.FftParameters[2] = water_heading ? 1.0f : 0.0f;
+		water.FftParameters[3] = water_heading ? PixelShaderConstants[WaterWaveHeading::PrevailingRegister][0] : 0.0f;
+		water.FoamFillLights[3][3] = water_heading ? PixelShaderConstants[WaterWaveHeading::PrevailingRegister][1] : 0.0f;
 		if (!water_history) water.FoamHistoryParameters[0] = 0.0f;
 		if(pixel_program->UniformBuffers==4) {
 			SdlWaterVisualPixelConstants visual;

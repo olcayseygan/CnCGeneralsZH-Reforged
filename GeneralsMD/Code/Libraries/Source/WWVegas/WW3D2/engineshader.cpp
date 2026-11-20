@@ -675,7 +675,7 @@ static bool write_engine_pixel_program(EngineShaderProgram program,
 // SDL map water has a dedicated, explicitly packed uniform block (SdlWaterPixelConstants).
 // Runtime-generated normal detail, terrain depth, refraction and the coloured planar reflection
 // are composed before the existing shore/shroud alpha blend. No additional assets are required.
-static void write_modern_water(std::string &hlsl, bool river, bool sdl = false)
+static void write_modern_water(std::string &hlsl, bool river, bool sdl = false, bool waveHeading = false)
 {
 	const auto quality = sdl ? WaterPerformanceSettings::Applied() : WaterPerformanceSettings::Configuration();
 	hlsl.clear();
@@ -937,7 +937,7 @@ float4 waterMirrorFiltered(float2 uv, int2 size)
 	hlsl += ModernWaterMaterial::OpticalSource();
 	hlsl += ModernWaterMaterial::BubbleSource();
 	hlsl += WaterHullModel::GetHlslSource();
-	hlsl += WaterFftSampling::PixelSource(WaterFftSpectrum::ForResolution(quality.activeFftResolution));
+	hlsl += WaterFftSampling::PixelSource(WaterFftSpectrum::ForResolution(quality.activeFftResolution),waveHeading);
 	hlsl += WaterWaveCageShader::Source(false);
 	char oceanBound[96];
 	snprintf(oceanBound, sizeof(oceanBound), "static const float oceanDisplacementBound = %.9g;\n",
@@ -1621,7 +1621,7 @@ float4 main(Input input) : SV_Target
 }
 
 bool EngineShader_Pixel_Program(EngineShaderProgram program,
-	const PixelPipelineDescription & pipeline, std::string & hlsl, CombinerShaderTarget target)
+	const PixelPipelineDescription & pipeline, std::string & hlsl, CombinerShaderTarget target, bool waveHeading)
 {
 	// As the vertex half: D3D11 only, and SDL3 GPU as the D3D11 text rebound, without the smoke the
 	// SDL3 backend has no map for.
@@ -1633,7 +1633,7 @@ bool EngineShader_Pixel_Program(EngineShaderProgram program,
 	if (target == COMBINER_SHADER_TARGET_SDL3_GPU) {
 #if defined(__linux__)
 		if (modern_water) {
-			write_modern_water(hlsl, program == ENGINE_SHADER_WATER_RIVER, true);
+			write_modern_water(hlsl, program == ENGINE_SHADER_WATER_RIVER, true, waveHeading && program != ENGINE_SHADER_WATER_RIVER);
 			if (!CombinerShader_Append_Pixel_Pipeline(pipeline, hlsl)) return false;
 			hlsl += "    return current;\n}\n";
 			return SDL3_Shader_Retarget(hlsl, false);

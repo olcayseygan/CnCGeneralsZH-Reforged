@@ -18996,6 +18996,14 @@ TOOLTIP:WaterRefractionQuality
 "Modern su için. Tam'da suyun altı dalgayla kırılıp kayar. Basit'te su yine berrak ama altı kırılmaz. Kapalı'da suyun altı görünmez, su düz bir renk alır ve oyun hızlanır. Kabul Et'e basınca uygulanır."
 END
 
+GUI:MapAwareWaveHeading
+"Haritaya Göre Dalga"
+END
+
+TOOLTIP:MapAwareWaveHeading
+"Modern su için. Dalgalar kıyıya döner, kanal boyunca akar, adanın arkasında söner. Her deniz kendi yönünden dalga alır. Kapalıyken dalgalar eskisi gibi kalır. Kabul Et'e basınca uygulanır."
+END
+
 GUI:WaterReflectionDetail
 "Yansıma Ayrıntısı"
 END

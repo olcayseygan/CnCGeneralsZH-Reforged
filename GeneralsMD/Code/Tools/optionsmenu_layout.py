@@ -185,7 +185,8 @@ NEW_CONTROLS = [
     (COMBO,  "ComboBoxWaterFftResolution", None),
     (LABEL,  "LabelWaterRefractionQuality", "GUI:WaterRefractionQuality"),
     (COMBO,  "ComboBoxWaterRefractionQuality", None),
-    (LABEL,  "LabelMSAA",              "GUI:MSAA"),
+    (CHECK,  "CheckMapAwareWaveHeading", "GUI:MapAwareWaveHeading"),
+    (LABEL,  "LabelMSAA",             "GUI:MSAA"),
     (COMBO,  "ComboBoxMSAA",           None),
     (LABEL,  "LabelBloom",             "GUI:Bloom"),
     (COMBO,  "ComboBoxBloom",          None),
@@ -448,7 +449,8 @@ GROUP_LAYOUT = [
     ("PageWater", [
         ("GUI:OptionsGroupModernWater", [
             setting("LabelWaterFftResolution", "ComboBoxWaterFftResolution"),
-            setting("LabelWaterRefractionQuality", "ComboBoxWaterRefractionQuality")]),
+            setting("LabelWaterRefractionQuality", "ComboBoxWaterRefractionQuality"),
+            ("check", "CheckMapAwareWaveHeading")]),
         ("GUI:OptionsGroupReflections", [
             ("check", "CheckWaterReflectionEnabled"),
             setting("LabelWaterReflection", "ComboBoxWaterReflection"),
@@ -1144,7 +1146,8 @@ def selfcheck():
     water_controls = ["LabelWaterFftResolution", "ComboBoxWaterFftResolution",
                       "LabelWaterRefractionQuality", "ComboBoxWaterRefractionQuality",
                       "CheckWaterReflectionEnabled", "LabelWaterReflection", "ComboBoxWaterReflection",
-                      "LabelWaterReflectionDetail", "ComboBoxWaterReflectionDetail"]
+                      "LabelWaterReflectionDetail", "ComboBoxWaterReflectionDetail",
+                      "CheckMapAwareWaveHeading"]
     for name in water_controls:
         control = layout.find(name)
         if not water_page or not control or control not in water_page.children:

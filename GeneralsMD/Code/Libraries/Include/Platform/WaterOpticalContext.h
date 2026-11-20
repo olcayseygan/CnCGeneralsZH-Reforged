@@ -47,6 +47,8 @@ inline std::vector<Interval> Intervals(const std::vector<Polygon>&polygons,
     return result;
 }
 struct Field {
+    std::vector<uint8_t> wet; // exact wet mask, before dry-edge exposure extension
+    std::vector<uint8_t> links; // positive-X bit 1, positive-Y bit 2: complete polygon-covered segments
     std::vector<uint8_t> ocean;
     std::vector<uint8_t> shore;
     std::vector<uint8_t> exposure; // wet region connected to the playable map boundary
@@ -77,8 +79,8 @@ inline bool SamePolygons(const std::vector<Polygon>& a, const std::vector<Polygo
 
 inline bool Build(const uint8_t* heights, int width, int height, int border,
                   float spacing, float heightScale, float level,
-                  const std::vector<Polygon>& polygons, Field& result) {
-    result.ocean.clear(); result.shore.clear(); result.exposure.clear(); result.coast.clear(); result.physicalShore.clear();
+                  const std::vector<Polygon>& polygons, Field& result, bool retainTopology=false) {
+    result.ocean.clear(); result.shore.clear(); result.exposure.clear(); result.coast.clear(); result.physicalShore.clear(); result.wet.clear(); result.links.clear();
     if (!heights || width<2 || height<2 || width>MaxDimension || height>MaxDimension ||
         size_t(width)*height>MaxCells || border<0 || border>(width-2)/2 || border>(height-2)/2 ||
         !std::isfinite(spacing) || spacing<=0 || !std::isfinite(heightScale) || heightScale<=0 ||
@@ -132,6 +134,7 @@ inline bool Build(const uint8_t* heights, int width, int height, int border,
         if (y>0 && (links[n-width]&PositiveY)) seed(x,y-1);
         if (y+1<height && (links[n]&PositiveY)) seed(x,y+1);
     }
+    if(retainTopology){result.wet=wet;result.links=links;}
     result.exposure=result.ocean;
     for(uint8_t &value:result.exposure)value=value?255:0;
     result.coast.assign(count,0);

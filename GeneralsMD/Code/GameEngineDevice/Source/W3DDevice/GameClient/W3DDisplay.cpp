@@ -36,6 +36,7 @@
 static void drawFramerateBar(void);
 
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////
+#include "Platform/RenderEffects.h"
 #include "Platform/RenderParticles.h"
 #include "Platform/RenderPost.h"
 #include <stdlib.h>
@@ -862,7 +863,7 @@ static void pushDirect3D11PostChain( void )
 	// Classic graphics is the game's own picture, which is what -d3d9 draws: hard edged sprites.
 	RenderParticles::AllowEnhancements( !TheGlobalData->m_classicGraphics );
 	// and its own looks for the power outage, the EMP and the two stealth states
-	Direct3D11_Allow_Draw_Effects( !TheGlobalData->m_classicGraphics );
+	RenderEffects::AllowDrawEffects( !TheGlobalData->m_classicGraphics );
 	const AsciiString & requested = TheGlobalData->m_direct3D11PostChain;
 	if( !Direct3D11_Post_Chain( requested.str() ) && !requested.isEmpty() )
 	{

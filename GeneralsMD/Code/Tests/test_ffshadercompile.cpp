@@ -333,8 +333,8 @@ TEST(ffshadercompile_a_soft_particle_fades_into_the_scene_depth_on_d3d11_and_sdl
 
 // Each per-object look is its own program on Direct3D 11, written after the fog and declaring the
 // whole constant block up to its own field, with or without the sun's map.  Only the cloak calls
-// the function that reads the scene's copy at t8.  SDL3 and D3D9 get none of it.
-TEST(ffshadercompile_each_draw_effect_compiles_on_d3d11_only)
+// the function that reads the scene's copy at t8.  SDL3 gets the same looks, D3D9 none of them.
+TEST(ffshadercompile_each_draw_effect_compiles_on_d3d11_and_sdl)
 {
 	D3DCompileFunction compile = load_compiler();
 	for (unsigned shadow = 0; shadow < 2; ++shadow) {
@@ -376,7 +376,10 @@ TEST(ffshadercompile_each_draw_effect_compiles_on_d3d11_only)
 			CHECK(CombinerShader_Generate(description, COMBINER_SHADER_TARGET_SDL3_GPU, sdl));
 			CHECK(CombinerShader_Generate(description, COMBINER_SHADER_TARGET_D3D9, nine));
 			CHECK((sdl.find("current = effect_cloak_shadow(") != std::string::npos) == (effect == DRAW_EFFECT_CLOAK_SHADOW));
-			if (effect != DRAW_EFFECT_CLOAK_SHADOW) CHECK(sdl.find("effect_") == std::string::npos);
+			// SDL takes every look since pull request 251, the cloak reading its own colour copy at
+			// t8 as Direct3D 11 does.  Direct3D 9 still has none.
+			CHECK(sdl.find("current = effect_") != std::string::npos);
+			CHECK((sdl.find("current = effect_cloak(") != std::string::npos) == (effect == DRAW_EFFECT_CLOAK));
 			CHECK(nine.find("effect_") == std::string::npos);
 
 			if (compile != NULL) {

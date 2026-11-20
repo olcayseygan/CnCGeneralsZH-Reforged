@@ -186,6 +186,7 @@ public:
 	bool Register_Owner_Release_Hook(OwnerReleaseHook);
 	void Unregister_Owner_Release_Hook(OwnerReleaseHook);
 	void Release_Owner_Hooks_For_Teardown();
+	bool Capture_Scene_Colour(const SdlTarget &source, SDL_GPUTexture *destination);
 	// Final owner teardown only: prevents abandoned CPU packets borrowing released resources.
 	void Discard_Pending_Work_For_Teardown();
 	void Fail_Next_Native_Record_For_Test(unsigned count = 1) { NativeRecordRefusalsForTest = count; }

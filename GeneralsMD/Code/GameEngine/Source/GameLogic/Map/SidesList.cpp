@@ -632,12 +632,27 @@ void SidesList::prepareForMP_or_Skirmish(void)
 							 lacks ShockWave's Armor, Special Weapons and Salvage generals.  Player::initFromDict then
 							 found no scripts, made the seat human with no AI, and the base stood idle - and the
 							 takeover click handed it to whoever clicked it.  The file's own player for that side
-							 stands in, kept beside the map's, which nearly fill m_skirmishSides. */
+							 stands in, kept beside the map's, which nearly fill m_skirmishSides.
+							 Both shipped .scb files name their players and carry no dict for them, so the faction
+							 comes from the name, Skirmish<side>; without it a general on a base-game map such as
+							 Scorched Earth fell through to the base side's scripts (findSkirmishSideFor), which ask
+							 for ChinaPowerPlant and ChinaSupplyCenter, and its base never earned a credit. */
 						const PlayerTemplate *pt = ThePlayerTemplateStore->findPlayerTemplate(NAMEKEY(static_readPlayerDicts[i].getAsciiString(TheKey_playerFaction)));
+						if (pt == NULL && static_readPlayerNames[i].startsWith("Skirmish")) {
+							const AsciiString side = static_readPlayerNames[i].str() + strlen("Skirmish");
+							for (Int t = 0; t < ThePlayerTemplateStore->getPlayerTemplateCount() && pt == NULL; ++t) {
+								const PlayerTemplate *candidate = ThePlayerTemplateStore->getNthPlayerTemplate(t);
+								if (candidate && candidate->isPlayableSide() && candidate->getSide() == side)
+									pt = candidate;
+							}
+						}
 						if (scripts[i] && pt && pt->isPlayableSide() && findSkirmishSideNamed(pt->getSide(), NULL) == NULL) {
 							DEBUG_LOG(("Skirmish map has no player for %s, using %s from the standard scripts\n", pt->getSide().str(), static_readPlayerNames[i].str()));
+							Dict standIn = static_readPlayerDicts[i];
+							standIn.setAsciiString(TheKey_playerName, static_readPlayerNames[i]);
+							standIn.setAsciiString(TheKey_playerFaction, pt->getName());
 							m_standInSkirmishSides.push_back(SidesInfo());
-							m_standInSkirmishSides.back().init(&static_readPlayerDicts[i]);
+							m_standInSkirmishSides.back().init(&standIn);
 							m_standInSkirmishSides.back().setScriptList(scripts[i]);
 							scripts[i] = NULL;
 						}

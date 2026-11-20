@@ -1,3 +1,4 @@
+#include "Platform/RenderParticles.h"
 #include "PosixDevice9.h"
 #include "SdlGpuFrame.h"
 #include "SdlPostProcess.h"
@@ -12,7 +13,8 @@
 struct PosixDevice9::PostSession {
     explicit PostSession(SdlGpuFrame &frame) : Captures(frame) {}
     SdlSceneCaptureCache Captures;
-    SdlMainViewSnapshot CurrentView, LastView, ViewStack[8];
+    SdlMainViewSnapshot CurrentView, LastView, ViewStack[8], SoftView;
+    bool SoftRequested = false;
     bool WorldAO = false;
     SdlPostProcess Processor;
     SdlPostSettings Settings;
@@ -32,7 +34,8 @@ void PosixDevice9::Begin_Post(const RenderPost::Settings &settings)
     if (Post->Routed) Finish_Post(true);
     auto &s = *Post;
     s.InView = s.Entered = false; s.ViewDepth = 0;
-    s.CurrentView = {}; s.LastView = {};
+    s.CurrentView = {}; s.LastView = {}; s.SoftView = {}; s.SoftRequested = false;
+    ParticlesAllowed = !settings.Classic;
     s.WorldAO = settings.WorldAO && !settings.Classic;
     s.StandInTexture = nullptr; s.StandInSurface = nullptr;
     s.Settings = {};
@@ -159,6 +162,13 @@ void PosixDevice9::Post_Opaque_Scene(bool allowWorldAO)
 }
 void PosixDevice9::Post_Before_Transparent()
 {
+    // Capture at the authoritative phase, before any sorted run can write depth.
+    // A later real billboard batch authorizes borrowing this immutable copy.
+    if (Post) { Post->SoftView = {}; Post->SoftRequested = false; }
+    if (ParticlesAllowed && Post && Post->InView) {
+        SdlMainViewSnapshot depth;
+        if (Read_Main_View(depth,true,SdlSceneCapturePhase::BeforeTransparent)) Post->SoftView=depth;
+    }
     if (!Post_Active() || !Post->InView || !Post->Processor.Needs_BeforePost_Depth()) return;
     SdlPostSceneInputs inputs;
     if (Read_Post_Inputs(SdlSceneCapturePhase::BeforeTransparent,inputs))
@@ -249,4 +259,33 @@ bool PosixRenderer_Main_View(IDirect3DDevice9 *d,SdlMainViewSnapshot &s) {
 }
 bool PosixRenderer_Capture_Main_View(IDirect3DDevice9 *d,SdlSceneCapturePhase p,SdlMainViewSnapshot &s) {
     s={}; return d && static_cast<PosixDevice9 *>(d)->Read_Main_View(s,true,p);
+}
+
+void PosixDevice9::Allow_Particle_Enhancements(bool allowed)
+{
+    ParticlesAllowed=allowed;
+    if (!allowed && Post) { Post->SoftRequested=false; Post->SoftView={}; }
+}
+void PosixDevice9::Take_Particle_Depth()
+{
+    if (!Post || !ParticlesAllowed) return;
+    Post->SoftRequested=true;
+    SdlMainViewSnapshot view;
+    if (!Read_Soft_Depth(view)) Post->SoftRequested=false;
+}
+bool PosixDevice9::Read_Soft_Depth(SdlMainViewSnapshot &view)
+{
+    view={};
+    if (!Post || !ParticlesAllowed || !Post->SoftRequested || !Post->SoftView.SampledDepth) return false;
+    SdlMainViewSnapshot current;
+    if (!Read_Main_View(current,false,SdlSceneCapturePhase::BeforeTransparent)) return false;
+    current.Capture.Depth=true;
+    if (!current.Capture.Same_Identity(Post->SoftView.Capture)) return false;
+    view=Post->SoftView; return true;
+}
+namespace RenderParticles {
+void AllowEnhancements(IDirect3DDevice9 *d,bool e) { if(d) static_cast<PosixDevice9 *>(d)->Allow_Particle_Enhancements(e); }
+void SetSoftParticles(IDirect3DDevice9 *d,bool e) { if(d) static_cast<PosixDevice9 *>(d)->Set_Soft_Particles(e); }
+void SetFireLook(IDirect3DDevice9 *d,bool e) { if(d) static_cast<PosixDevice9 *>(d)->Set_Fire_Look(e); }
+void TakeSceneDepth(IDirect3DDevice9 *d) { if(d) static_cast<PosixDevice9 *>(d)->Take_Particle_Depth(); }
 }

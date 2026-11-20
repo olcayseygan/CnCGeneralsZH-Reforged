@@ -1,3 +1,4 @@
+#include "SdlSceneContext.h"
 /*
 **	Copyright 2026 İlyas Akın
 **	Additional terms under GNU GPL section 7 apply: see LICENSE.md.
@@ -771,9 +772,9 @@ bool PosixDevice9::Resolve_Target(SdlTarget &target, std::string &refusal)
 		return false;
 	}
 	if (Post_Target(colour, target)) {
-        // Explicit main and default-filter stand-ins share the prepared scene.
-    }
-    else if (colour == BackBuffer) {
+		// Explicit main and default-filter stand-ins share the prepared scene.
+	}
+	else if (colour == BackBuffer) {
 		target = Gpu->Back_Buffer_Target();
 	}
 	else {
@@ -974,13 +975,37 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	Build_Combiner_Description(combiner);
 	combiner.ShadowReceiving = Sun_Receiving(vertex_engine, pixel_engine, target);
 	combiner.DrawEffect = SunActive ? SunCasterEffect : DRAW_EFFECT_NONE;
+	SDL_GPUTexture *sprite_depth=nullptr;
+	SDL_GPUSampler *sprite_sampler=nullptr;
+	const bool sprite_format=ParticlesAllowed && !SunActive && vertex_engine==ENGINE_SHADER_NONE &&
+		pixel_engine==ENGINE_SHADER_NONE && !(FVF&D3DFVF_XYZRHW) && (FVF&D3DFVF_TEXCOUNT_MASK)>=D3DFVF_TEX2;
+	const auto source_blend=RenderStates[D3DRS_SRCBLEND],destination_blend=RenderStates[D3DRS_DESTBLEND];
+	const bool sprite_blend=RenderStates[D3DRS_ALPHABLENDENABLE] && source_blend!=D3DBLEND_DESTCOLOR &&
+		source_blend!=D3DBLEND_ZERO && destination_blend!=D3DBLEND_SRCCOLOR;
+	if(sprite_format && sprite_blend) {
+		if(FireLookDraw && TextureStageStates[1][D3DTSS_COLOROP]==D3DTOP_DISABLE)
+			combiner.FireLook=source_blend==D3DBLEND_ONE?FIRE_LOOK_COLOUR:FIRE_LOOK_ALPHA;
+		if(SoftParticlesDraw && Sun_Camera_Space()) {
+			SdlMainViewSnapshot depth;
+			if(Read_Soft_Depth(depth) && (sprite_sampler=Samplers->Sampler(SamplerStates[0]))) {
+				sprite_depth=depth.SampledDepth;
+				combiner.SoftParticle=source_blend==D3DBLEND_ONE?SOFT_PARTICLE_COLOUR:SOFT_PARTICLE_ALPHA;
+			}
+		}
+	}
+	const unsigned sprite_fault=(combiner.SoftParticle||combiner.FireLook)?SpriteRefusalForTest:0;
+	if(combiner.SoftParticle||combiner.FireLook) SpriteRefusalForTest=0;
 	combiner.SmokeGlow = SmokeGlow && vertex_engine == ENGINE_SHADER_NONE && pixel_engine == ENGINE_SHADER_NONE
 		&& !RenderStates[D3DRS_LIGHTING] && (FVF & D3DFVF_NORMAL) && !(FVF & D3DFVF_XYZRHW);
 	if (vertex_engine == ENGINE_SHADER_NONE && !Build_Vertex_Description(vertex, &refusal)) {
 		Refuse_Draw(refusal);
 		return D3D_OK;
 	}
-	if (vertex_engine == ENGINE_SHADER_NONE) vertex.SmokeGlow = combiner.SmokeGlow;
+	if (vertex_engine == ENGINE_SHADER_NONE) {
+		vertex.SmokeGlow=combiner.SmokeGlow;
+		vertex.SoftParticle=combiner.SoftParticle!=SOFT_PARTICLE_NONE;
+		vertex.FireLook=combiner.FireLook!=FIRE_LOOK_NONE;
+	}
 	// The dedicated generated water vertex path deliberately avoids arbitrary engine-program
 	// pairing. Only this path may bind native FFT textures to the vertex stage. A sun caster
 	// pass keeps the ordinary vertex program its depth-only pixel variant was made against.
@@ -1014,6 +1039,16 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		return vertex_program->Shader && pixel_program->Shader;
 	};
 	if (!vertex_program->Shader || !pixel_program->Shader) retry_without_heading();
+	const auto retry_without_sprites=[&]() {
+		if(!combiner.SoftParticle && !combiner.FireLook) return false;
+		combiner.SoftParticle=SOFT_PARTICLE_NONE; combiner.FireLook=FIRE_LOOK_NONE;
+		vertex.SoftParticle=vertex.FireLook=false; sprite_depth=nullptr;
+		vertex_program=&Programs->Vertex_Program(vertex);
+		pixel_program=&Programs->Pixel_Program(combiner);
+		return vertex_program->Shader && pixel_program->Shader;
+	};
+	if((!vertex_program->Shader || !pixel_program->Shader || (sprite_fault&11)) &&
+		(combiner.SoftParticle||combiner.FireLook)) retry_without_sprites();
 	const auto retry_without_sun = [&](const char *reason) {
 		// Generated receivers add an optional program variant. Ground programs share the
 		// established engine path; their existing source keeps its own failure handling.
@@ -1122,11 +1157,17 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	phases.Mark("target+programs");
 	SdlRecordedDraw draw;
 	memset(&draw, 0, sizeof(draw));
-	draw.Pipeline = Pipelines->Pipeline(key, combiner.ShadowReceiving && pixel_engine == ENGINE_SHADER_NONE);
+	draw.Pipeline = (sprite_fault&4) && (combiner.SoftParticle||combiner.FireLook) ? nullptr :
+		Pipelines->Pipeline(key, combiner.ShadowReceiving && pixel_engine == ENGINE_SHADER_NONE);
 	if (!draw.Pipeline && retry_without_heading()) {
 		if (Sdl_Pipeline_Key(states, call.Type, vertex_program->Shader, pixel_program->Shader, FVF,
 			SdlGpuFrame::Target_Colour_Format(target), Gpu->Target_Depth_Format(target), key, refusal))
 			draw.Pipeline = Pipelines->Pipeline(key);
+	}
+	if(!draw.Pipeline && retry_without_sprites()) {
+		if(Sdl_Pipeline_Key(states,call.Type,vertex_program->Shader,pixel_program->Shader,FVF,
+			SdlGpuFrame::Target_Colour_Format(target),Gpu->Target_Depth_Format(target),key,refusal))
+			draw.Pipeline=Pipelines->Pipeline(key);
 	}
 	if (!draw.Pipeline && retry_without_sun("pipeline refused")) {
 		if (Sdl_Pipeline_Key(states, call.Type, vertex_program->Shader, pixel_program->Shader, FVF,
@@ -1232,6 +1273,11 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 				draw.Textures[slot] = fft_water ? Gpu->Ocean_Map(texture_stage - 8) : Mirrors->White();
 				draw.Samplers[slot] = fft_water ? Gpu->Ocean_Sampler() : Samplers->Sampler(SamplerStates[0]);
 				if (!draw.Textures[slot] || !draw.Samplers[slot]) return D3D_OK;
+				continue;
+			}
+			if(combiner.SoftParticle && texture_stage==7) {
+				draw.Textures[slot]=sprite_depth; draw.Samplers[slot]=sprite_sampler;
+				if(!sprite_depth || !sprite_sampler) return D3D_OK;
 				continue;
 			}
 			if (texture_stage < 0 || texture_stage >= SAMPLER_COUNT || sampler_stage < 0 || sampler_stage >= SAMPLER_COUNT) {
@@ -1536,11 +1582,18 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		draw.PixelConstants=Gpu->Constants(1,&shore,sizeof(shore));draw.PixelConstantsSize=sizeof(shore);
 	}
 	else if (pixel_program->UniformBuffers != 0
-		&& (pixel_engine != ENGINE_SHADER_NONE || combiner.ShadowReceiving || combiner.DrawEffect)) {
+		&& (pixel_engine != ENGINE_SHADER_NONE || combiner.ShadowReceiving || combiner.DrawEffect || combiner.SoftParticle)) {
 		SdlEnginePixelConstants engine_constants;
 		memset(&engine_constants, 0, sizeof(engine_constants));
 		engine_constants.Combiner = pixel_constants;
 		if (combiner.ShadowReceiving) Build_Sun_Constants(engine_constants);
+		if(combiner.SoftParticle) {
+			const auto &projection=Transforms[D3DTS_PROJECTION];
+			engine_constants.SoftParticleDepth[0]=projection._34*projection._43;
+			engine_constants.SoftParticleDepth[1]=projection._34;
+			engine_constants.SoftParticleDepth[2]=projection._33;
+			engine_constants.SoftParticleDepth[3]=1.0f/12.0f;
+		}
 		if (combiner.DrawEffect) {
 			engine_constants.DrawEffectParameters[0] = SunCasterCorner[0];
 			engine_constants.DrawEffectParameters[1] = SunCasterCorner[1];
@@ -1580,11 +1633,11 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 	Gpu->Set_Target(target);
 	draw.StencilReference = RenderStates[D3DRS_STENCILREF] & 0xFF;
 	draw.BlendFactor = RenderStates[D3DRS_BLENDFACTOR];
-    if (additive_glow) {
-        draw.FloatBlendFactor = true;
-        draw.BlendConstants[0] = draw.BlendConstants[1] = draw.BlendConstants[2] = additive_gain;
-        draw.BlendConstants[3] = 1;
-    }
+	if (additive_glow) {
+		draw.FloatBlendFactor = true;
+		draw.BlendConstants[0] = draw.BlendConstants[1] = draw.BlendConstants[2] = additive_gain;
+		draw.BlendConstants[3] = 1;
+	}
 	Gpu->Record_Draw(draw);
 	if (combiner.ShadowReceiving) {
 		if (pixel_engine == ENGINE_SHADER_NONE) ++SunSolidReceivers;

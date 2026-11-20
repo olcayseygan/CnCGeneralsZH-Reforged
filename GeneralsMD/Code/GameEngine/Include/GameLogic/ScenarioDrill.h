@@ -106,7 +106,7 @@ enum ScenarioActionType
 	SCENARIO_ACTION_AIRLIFT,					///< airlift <slot> <building> <position> <template>:<count>[,<template>:<count>...]; the airlift panel's OK, as MSG_DO_AIRLIFT_ORDER handed to the dispatcher for that seat
 	SCENARIO_ACTION_HEALTH,						///< health <slot> <selector> <percent> [rank]; every match set to that share of its health, and first to that veterancy rank (0-3, in targetSlot) when one is given; outside the command stream, as handover is
 	SCENARIO_ACTION_LANEMARCH,				///< lanemarch <slot> <selector> <dx>; the seat's units spawned since its last lanemarch that match, each attack-moving dx (in at.x) along x on its own y, as one formation at its slowest member's speed
-	SCENARIO_ACTION_LANEPLACE					///< laneplace <slot> <template> <slotX> <slotY>; a Lane War purchase onto the seat's own plot at that grid slot (in at), through LaneWarDirector::placeUnit as MSG_LANEWAR_ORDER is
+	SCENARIO_ACTION_LANEPLACE					///< laneplace <slot> <template> <column> <row>; a Lane War purchase onto the seat's own plot at that grid slot (in at; column across the plot's front from the left, row back from it), through LaneWarDirector::placeUnit as MSG_LANEWAR_ORDER is
 };
 
 /// ScenarioAction::atStart when the position is plain numbers

@@ -12,10 +12,13 @@
 #     -side 2 FactionAmerica -side 3 FactionChina -seed 1 -maxframes 36000 -scenario lanewar
 #     -logPrefix lanewar_
 #
-# A plot is a grid of 20-unit slots, 12 by 8 on a 240 by 160 plot; laneplace's two numbers are the
-# low corner of the unit's block. Slot 0 is team A's seat 1 (start 1), slot 1 B's seat 1, slot 2
-# A's seat 2, slot 3 B's seat 2. The frames below are this file's 30 Hz frames, which the drill
-# scales by the game speed (6000 here runs on logic frame 4000 at the native 1.5x).
+# A plot is a grid of 20-unit slots in its own frame: it stands upright behind its end of the lane,
+# 240 across its front (the edge towards the lane) and 160 deep, so 12 columns by 8 rows. laneplace's
+# two numbers are the column, counted across the front from the left as the team faces the enemy,
+# and the row, counted back from the front, of the unit's block's front left slot; row 0 leads the
+# wave. Slot 0 is team A's seat 1 (start 1), slot 1 B's seat 1, slot 2 A's seat 2, slot 3 B's seat
+# 2. The frames below are this file's 30 Hz frames, which the drill scales by the game speed (6000
+# here runs on logic frame 4000 at the native 1.5x).
 
 30    laneplace  0  AmericaInfantryRanger   0 3
 30    laneplace  0  AmericaInfantryRanger   0 5

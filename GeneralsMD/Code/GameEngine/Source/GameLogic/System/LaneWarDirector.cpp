@@ -117,7 +117,8 @@ void LaneWarDirector::reset( void )
 	{
 		for( Int s = 0; s < LANEWAR_SEATS; ++s )
 		{
-			m_gridLo[ t ][ s ].x = m_gridLo[ t ][ s ].y = 0.0f;
+			m_plotLo[ t ][ s ].x = m_plotLo[ t ][ s ].y = 0.0f;
+			m_plotHi[ t ][ s ] = m_plotLo[ t ][ s ];
 			m_gridCols[ t ][ s ] = m_gridRows[ t ][ s ] = 0;
 			m_plotAnchor[ t ][ s ].zero();
 			m_seatPlayer[ t ][ s ] = -1;
@@ -156,7 +157,6 @@ void LaneWarDirector::newMap( Bool loadingSaveGame )
 		}
 		m_spawn[ t ] = *spawn->getLocation();
 
-		// the plot's grid: whole slots from the low corner of the area's bounds
 		for( Int s = 0; s < LANEWAR_SEATS; ++s )
 		{
 			name.format( "LaneWar_Build%s%d", TEAM_NAME[ t ], s + 1 );
@@ -176,15 +176,29 @@ void LaneWarDirector::newMap( Bool loadingSaveGame )
 				hi.x = max( hi.x, pt->x );
 				hi.y = max( hi.y, pt->y );
 			}
-			m_gridLo[ t ][ s ].x = (Real)lo.x;
-			m_gridLo[ t ][ s ].y = (Real)lo.y;
-			m_gridCols[ t ][ s ] = ( hi.x - lo.x ) / LANEWAR_SLOT_SIZE;
-			m_gridRows[ t ][ s ] = ( hi.y - lo.y ) / LANEWAR_SLOT_SIZE;
-			m_plotAnchor[ t ][ s ].x = m_gridLo[ t ][ s ].x + 0.5f * m_gridCols[ t ][ s ] * LANEWAR_SLOT_SIZE;
-			m_plotAnchor[ t ][ s ].y = m_gridLo[ t ][ s ].y + 0.5f * m_gridRows[ t ][ s ] * LANEWAR_SLOT_SIZE;
-			m_plotAnchor[ t ][ s ].z = TheTerrainLogic->getGroundHeight( m_plotAnchor[ t ][ s ].x, m_plotAnchor[ t ][ s ].y );
+			m_plotLo[ t ][ s ].x = (Real)lo.x;
+			m_plotLo[ t ][ s ].y = (Real)lo.y;
+			m_plotHi[ t ][ s ].x = (Real)hi.x;
+			m_plotHi[ t ][ s ].y = (Real)hi.y;
 		}
 	}
+
+	/* The plot's grid, whole slots from its front left corner: a plot stands behind its end of the
+		 lane, so its edge towards the lane, its front, faces the enemy end, and the front runs across y.
+		 The anchor a wave copy is laid out round is the grid's middle. */
+	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+		for( Int s = 0; s < LANEWAR_SEATS; ++s )
+		{
+			const Coord2D &lo = m_plotLo[ t ][ s ], &hi = m_plotHi[ t ][ s ];
+			m_gridCols[ t ][ s ] = (Int)( hi.y - lo.y ) / LANEWAR_SLOT_SIZE;
+			m_gridRows[ t ][ s ] = (Int)( hi.x - lo.x ) / LANEWAR_SLOT_SIZE;
+			const Real front = towardEnemy( t );
+			const Coord2D first = LaneWar_slotPlace( lo.x, lo.y, hi.x, hi.y, front, 0, 0, 1 );
+			const Coord2D last = LaneWar_slotPlace( lo.x, lo.y, hi.x, hi.y, front, m_gridCols[ t ][ s ] - 1, m_gridRows[ t ][ s ] - 1, 1 );
+			m_plotAnchor[ t ][ s ].x = 0.5f * ( first.x + last.x );
+			m_plotAnchor[ t ][ s ].y = 0.5f * ( first.y + last.y );
+			m_plotAnchor[ t ][ s ].z = TheTerrainLogic->getGroundHeight( m_plotAnchor[ t ][ s ].x, m_plotAnchor[ t ][ s ].y );
+		}
 	middle->getCenterPoint( &m_middle );
 	m_active = TRUE;
 
@@ -237,10 +251,10 @@ void LaneWarDirector::newMap( Bool loadingSaveGame )
 			}
 	}
 
-	DEBUG_LOG(( "LANEWAR: on; seats A [%d %d %d] B [%d %d %d], fortress A %d B %d, spawn A (%.0f,%.0f) B (%.0f,%.0f), middle x %.0f, plot A1 %dx%d slots from (%.0f,%.0f), first tick at frame %u\n",
+	DEBUG_LOG(( "LANEWAR: on; seats A [%d %d %d] B [%d %d %d], fortress A %d B %d, spawn A (%.0f,%.0f) B (%.0f,%.0f), middle x %.0f, plot A1 %d across by %d deep from (%.0f,%.0f) to (%.0f,%.0f), first tick at frame %u\n",
 							m_seatPlayer[0][0], m_seatPlayer[0][1], m_seatPlayer[0][2], m_seatPlayer[1][0], m_seatPlayer[1][1], m_seatPlayer[1][2],
 							(Int)m_fortress[0], (Int)m_fortress[1], m_spawn[0].x, m_spawn[0].y, m_spawn[1].x, m_spawn[1].y, m_middle.x,
-							m_gridCols[0][0], m_gridRows[0][0], m_gridLo[0][0].x, m_gridLo[0][0].y, m_nextTickFrame ));
+							m_gridCols[0][0], m_gridRows[0][0], m_plotLo[0][0].x, m_plotLo[0][0].y, m_plotHi[0][0].x, m_plotHi[0][0].y, m_nextTickFrame ));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -267,14 +281,26 @@ Real LaneWarDirector::towardEnemy( Int team ) const
 }
 
 //-------------------------------------------------------------------------------------------------
-/// the middle of a size by size block of slots whose low corner is (slotX, slotY)
-Coord3D LaneWarDirector::slotCentre( Int team, Int seat, Int slotX, Int slotY, Int size ) const
+/// the middle of a size by size block of slots whose front left slot is (col, row)
+Coord3D LaneWarDirector::slotCentre( Int team, Int seat, Int col, Int row, Int size ) const
 {
+	const Coord2D &lo = m_plotLo[ team ][ seat ], &hi = m_plotHi[ team ][ seat ];
+	const Coord2D at = LaneWar_slotPlace( lo.x, lo.y, hi.x, hi.y, towardEnemy( team ), col, row, size );
 	Coord3D pos;
-	pos.x = m_gridLo[ team ][ seat ].x + ( slotX + 0.5f * size ) * LANEWAR_SLOT_SIZE;
-	pos.y = m_gridLo[ team ][ seat ].y + ( slotY + 0.5f * size ) * LANEWAR_SLOT_SIZE;
+	pos.x = at.x;
+	pos.y = at.y;
 	pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
 	return pos;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool LaneWarDirector::getPlotBounds( Int team, Int seat, Coord2D *lo, Coord2D *hi ) const
+{
+	if( !m_active || team < 0 || team >= LANEWAR_TEAMS || seat < 0 || seat >= LANEWAR_SEATS )
+		return FALSE;
+	*lo = m_plotLo[ team ][ seat ];
+	*hi = m_plotHi[ team ][ seat ];
+	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -305,7 +331,7 @@ void LaneWarDirector::onOrder( Player *player, Int kind, const Int *args, Int ar
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool LaneWarDirector::placeUnit( Player *player, const ThingTemplate *tmpl, Int slotX, Int slotY )
+Bool LaneWarDirector::placeUnit( Player *player, const ThingTemplate *tmpl, Int col, Int row )
 {
 	const UnsignedInt now = TheGameLogic->getFrame();
 	Int team, seat;
@@ -321,7 +347,7 @@ Bool LaneWarDirector::placeUnit( Player *player, const ThingTemplate *tmpl, Int 
 		const GeometryInfo &geom = tmpl->getTemplateGeometryInfo();
 		size = LaneWar_slotsFor( max( geom.getMajorRadius(), geom.getMinorRadius() ) );
 		cost = tmpl->calcCostToBuild( player );
-		if( !LaneWar_blockFits( slotX, slotY, size, m_gridCols[ team ][ seat ], m_gridRows[ team ][ seat ] ) )
+		if( !LaneWar_blockFits( col, row, size, m_gridCols[ team ][ seat ], m_gridRows[ team ][ seat ] ) )
 			refused = "off the plot";
 		else
 		{
@@ -329,7 +355,7 @@ Bool LaneWarDirector::placeUnit( Player *player, const ThingTemplate *tmpl, Int 
 			{
 				const PlotUnit &u = m_plotUnits[ i ];
 				if( u.team == team && u.seat == seat && TheGameLogic->findObjectByID( u.id ) != NULL
-						&& LaneWar_blocksOverlap( slotX, slotY, size, u.slotX, u.slotY, u.size ) )
+						&& LaneWar_blocksOverlap( col, row, size, u.col, u.row, u.size ) )
 					refused = "slot taken";
 			}
 			if( refused == NULL && (Int)player->getMoney()->countMoney() < cost )
@@ -339,8 +365,8 @@ Bool LaneWarDirector::placeUnit( Player *player, const ThingTemplate *tmpl, Int 
 
 	if( refused != NULL )
 	{
-		DEBUG_LOG(( "LANEWAR PLACE: frame %u player %d '%s' at slot (%d,%d) refused: %s\n", now,
-								player ? (Int)player->getPlayerIndex() : -1, tmpl ? tmpl->getName().str() : "?", slotX, slotY, refused ));
+		DEBUG_LOG(( "LANEWAR PLACE: frame %u player %d '%s' at column %d row %d refused: %s\n", now,
+								player ? (Int)player->getPlayerIndex() : -1, tmpl ? tmpl->getName().str() : "?", col, row, refused ));
 		return FALSE;
 	}
 
@@ -350,7 +376,7 @@ Bool LaneWarDirector::placeUnit( Player *player, const ThingTemplate *tmpl, Int 
 		return FALSE;
 	player->getMoney()->withdraw( (UnsignedInt)cost, FALSE );
 
-	const Coord3D pos = slotCentre( team, seat, slotX, slotY, size );
+	const Coord3D pos = slotCentre( team, seat, col, row, size );
 	obj->setOrientation( towardEnemy( team ) > 0.0f ? 0.0f : PI );
 	obj->setPosition( &pos );
 	for( BehaviorModule **m = obj->getBehaviorModules(); *m; ++m )
@@ -372,14 +398,14 @@ Bool LaneWarDirector::placeUnit( Player *player, const ThingTemplate *tmpl, Int 
 	entry.id = obj->getID();
 	entry.team = team;
 	entry.seat = seat;
-	entry.slotX = slotX;
-	entry.slotY = slotY;
+	entry.col = col;
+	entry.row = row;
 	entry.size = size;
 	m_plotUnits.push_back( entry );
 
-	DEBUG_LOG(( "LANEWAR PLACE: frame %u player %d '%s' at slot (%d,%d) size %d on plot %s%d for %d, %u left\n", now,
-							(Int)player->getPlayerIndex(), tmpl->getName().str(), slotX, slotY, size, TEAM_NAME[ team ], seat + 1,
-							cost, player->getMoney()->countMoney() ));
+	DEBUG_LOG(( "LANEWAR PLACE: frame %u player %d '%s' at column %d row %d size %d on plot %s%d at (%.0f,%.0f) for %d, %u left\n", now,
+							(Int)player->getPlayerIndex(), tmpl->getName().str(), col, row, size, TEAM_NAME[ team ], seat + 1,
+							pos.x, pos.y, cost, player->getMoney()->countMoney() ));
 	return TRUE;
 }
 
@@ -463,8 +489,22 @@ void LaneWarDirector::tick( UnsignedInt now )
 			ThePlayerList->getNthPlayer( m_seatPlayer[ t ][ s ] )->getMoney()->deposit( paid[ t ], FALSE );
 		}
 
-	DEBUG_LOG(( "HEADLESS LANEWAR: frame %u tick %u: past the line A %d B %d, middle %s, paid A %u B %u a player\n",
-							now, m_tickCount, pastLine[ 0 ], pastLine[ 1 ], holder < 0 ? "nobody" : TEAM_NAME[ holder ], paid[ 0 ], paid[ 1 ] ));
+	// a plot's units never leave their slots: the furthest any stands from its own, for the log alone
+	Real drift = 0.0f;
+	for( size_t i = 0; i < m_plotUnits.size(); ++i )
+	{
+		const PlotUnit &u = m_plotUnits[ i ];
+		const Object *obj = TheGameLogic->findObjectByID( u.id );
+		if( obj == NULL )
+			continue;
+		const Coord3D at = slotCentre( u.team, u.seat, u.col, u.row, u.size );
+		const Real dx = obj->getPosition()->x - at.x, dy = obj->getPosition()->y - at.y;
+		drift = max( drift, (Real)sqrt( dx * dx + dy * dy ) );
+	}
+
+	DEBUG_LOG(( "HEADLESS LANEWAR: frame %u tick %u: past the line A %d B %d, middle %s, paid A %u B %u a player, %d plot units, furthest %.1f off its slot\n",
+							now, m_tickCount, pastLine[ 0 ], pastLine[ 1 ], holder < 0 ? "nobody" : TEAM_NAME[ holder ], paid[ 0 ], paid[ 1 ],
+							(Int)m_plotUnits.size(), drift ));
 
 	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
 	{
@@ -480,10 +520,11 @@ void LaneWarDirector::tick( UnsignedInt now )
 
 //-------------------------------------------------------------------------------------------------
 /** The seat's plot, copied onto the team's pad: each plot unit's template at its slot's place
-	  relative to the grid's centre, put down relative to the spawn waypoint.  The plots stand in the
-	  lane's own frame, front towards the enemy, so the offset carries over unturned; each copy faces
-	  the enemy end.  A copy that lands on ground its locomotor cannot use is moved to the nearest that
-	  it can, as a starting unit is. */
+	  relative to the grid's centre, put down relative to the spawn waypoint.  A plot's front, the edge
+	  towards the lane, faces the enemy end as the wave does, so the offset carries over unturned: the
+	  front row leads the wave and column 0 is its left flank.  Each copy faces the enemy end.  A copy
+	  that lands on ground its locomotor cannot use is moved to the nearest that it can, as a starting
+	  unit is. */
 void LaneWarDirector::spawnWave( Int team, Int seat, UnsignedInt now )
 {
 	Player *player = ThePlayerList->getNthPlayer( m_seatPlayer[ team ][ seat ] );
@@ -499,7 +540,7 @@ void LaneWarDirector::spawnWave( Int team, Int seat, UnsignedInt now )
 		if( original == NULL || original->getControllingPlayer() != player )
 			continue;
 
-		const Coord3D at = slotCentre( team, seat, u.slotX, u.slotY, u.size );
+		const Coord3D at = slotCentre( team, seat, u.col, u.row, u.size );
 		Coord3D pos = m_spawn[ team ];
 		pos.x += at.x - m_plotAnchor[ team ][ seat ].x;
 		pos.y += at.y - m_plotAnchor[ team ][ seat ].y;
@@ -535,7 +576,13 @@ void LaneWarDirector::spawnWave( Int team, Int seat, UnsignedInt now )
 		m_copies.push_back( entry );
 	}
 
-	const Real dx = m_spawn[ 1 - team ].x - m_spawn[ team ].x;
+	/* As far as the enemy fortress: the wave's middle walks onto its line, so the rows in front of the
+		 fortress stop at it and fight it and the flanks come up level with it.  The pads stand in front of
+		 the towers, so the distance between them would stop a wave short of the enemy's tower. */
+	Real dx = m_spawn[ 1 - team ].x - m_spawn[ team ].x;
+	const Object *enemyFortress = TheGameLogic->findObjectByID( m_fortress[ 1 - team ] );
+	if( enemyFortress != NULL )
+		dx = enemyFortress->getPosition()->x - m_spawn[ team ].x;
 	const VecObjectID &ids = group->getAllIDs();
 	DEBUG_LOG(( "HEADLESS LANEWAR: frame %u tick %u team %s seat %d (player %d) sends %d\n",
 							now, m_tickCount, TEAM_NAME[ team ], seat + 1, (Int)player->getPlayerIndex(), (Int)ids.size() ));
@@ -599,8 +646,8 @@ void LaneWarDirector::xfer( Xfer *xfer )
 		xfer->xferObjectID( &u.id );
 		xfer->xferInt( &u.team );
 		xfer->xferInt( &u.seat );
-		xfer->xferInt( &u.slotX );
-		xfer->xferInt( &u.slotY );
+		xfer->xferInt( &u.col );
+		xfer->xferInt( &u.row );
 		xfer->xferInt( &u.size );
 	}
 }

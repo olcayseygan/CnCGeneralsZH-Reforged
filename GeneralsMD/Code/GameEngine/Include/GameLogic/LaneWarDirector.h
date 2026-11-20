@@ -23,13 +23,16 @@
 // LaneWar_ build plots, middle area and spawn waypoints, and every other game never sees it.
 //
 // Lane players have no base: no command centre, no workers, nothing to build.  A build plot is a
-// grid of square slots (LANEWAR_SLOT_SIZE), and a unit is bought onto it at a slot through
-// MSG_LANEWAR_ORDER (LANEWAR_ORDER_PLACE), covering as many slots a side as its footprint needs.
-// The plot's units stand at their slots: held, unable to fire, taking no damage, and no weapon may
-// pick them.  None of that leans on the terrain around the plot.  Every 30 wall seconds a spawn tick
-// pays every player and sends one seat's wave from each team, the seats taking turns: the plot's
-// units are copied, template and slot place relative to the grid's centre, onto the team's spawn
-// pad, facing the enemy, and march down the lane as AIGroup::groupLaneMarch sends them.  The copies
+// grid of square slots (LANEWAR_SLOT_SIZE) in the plot's own frame: the plot stands behind its end of
+// the lane, its edge towards the lane is its front, a slot's column counts across that front from the
+// player's left as he faces the enemy, and its row counts back from the front.  A unit is bought onto
+// it at a slot through MSG_LANEWAR_ORDER (LANEWAR_ORDER_PLACE), covering as many slots a side as its
+// footprint needs.  The plot's units stand at their slots: held, unable to fire, taking no damage,
+// and no weapon may pick them.  None of that leans on the terrain around the plot.  Every 30 wall
+// seconds a spawn tick pays every player and sends one seat's wave from each team, the seats taking
+// turns: the plot's units are copied, template and slot place relative to the grid's centre, onto
+// the team's spawn pad with the plot's front row in front, facing the enemy, and march down the lane
+// as AIGroup::groupLaneMarch sends them.  The copies
 // belong to the player and cannot be selected; each dies 130 wall seconds after it spawned.  A team
 // loses when its fortress dies, through VictoryConditions, and nothing else counts.
 //
@@ -58,7 +61,7 @@ enum
 	LANEWAR_MIDDLE_BONUS_PERCENT = 25,		///< on top of the income, for the team holding past the centre line
 	LANEWAR_TICK_SECONDS = 30,						///< wall seconds between spawn ticks, the first one included
 	LANEWAR_LIFESPAN_SECONDS = 130,				///< wall seconds a wave copy lives
-	LANEWAR_SLOT_SIZE = 20,								///< world units a side of one plot slot, two cells; a 240 by 160 plot is 12 by 8
+	LANEWAR_SLOT_SIZE = 20,								///< world units a side of one plot slot, two cells; a plot 240 across its front and 160 deep is 12 columns by 8 rows
 };
 
 #define LANEWAR_TICK_FRAMES ((UnsignedInt)(LANEWAR_TICK_SECONDS * LOGICFRAMES_PER_SECOND))
@@ -67,12 +70,27 @@ enum
 /** What MSG_LANEWAR_ORDER asks for, its first argument; the integers after it depend on it. */
 enum LaneWarOrderKind
 {
-	LANEWAR_ORDER_PLACE = 0,							///< (template id, slot x, slot y): buy that unit onto the sender's plot, its block's low corner at the slot
+	LANEWAR_ORDER_PLACE = 0,							///< (template id, column, row): buy that unit onto the sender's plot, its block's front left slot at that one
 	LANEWAR_ORDER_TIER = 1,								///< (tier): buy an income or tech tier; not built, the buy panel step
 };
 
 /// slots a side a unit of this footprint radius covers, one at least
 extern Int LaneWar_slotsFor( Real radius );
+
+/** Where a slot of a plot lies in the world, the plot standing at x from loX to hiX and y from loY to
+	  hiY with its front towards +x (front +1) or -x (front -1): the middle of the size by size block
+	  whose front left slot is (col, row).  Columns run across the front from the left as one faces
+	  the front, rows back from it, so the same slot is the same place in the wave whichever end the
+	  plot stands at. */
+inline Coord2D LaneWar_slotPlace( Real loX, Real loY, Real hiX, Real hiY, Real front, Int col, Int row, Int size )
+{
+	const Real frontX = front > 0.0f ? hiX : loX;
+	const Real leftY = front > 0.0f ? hiY : loY;
+	Coord2D at;
+	at.x = frontX - front * ( row + 0.5f * size ) * LANEWAR_SLOT_SIZE;
+	at.y = leftY - front * ( col + 0.5f * size ) * LANEWAR_SLOT_SIZE;
+	return at;
+}
 
 /// a block of size by size slots at (x, y) stays inside a grid of cols by rows
 inline Bool LaneWar_blockFits( Int x, Int y, Int size, Int cols, Int rows )
@@ -127,11 +145,15 @@ public:
 	/// MSG_LANEWAR_ORDER from TheCommandList: a LaneWarOrderKind and its integers
 	void onOrder( Player *player, Int kind, const Int *args, Int argCount );
 
-	/** Buy a unit of the template onto the player's own plot with its block's low corner at slot
-		  (x, y): refused unless the player is seated, the template is a unit, the block fits inside
+	/** Buy a unit of the template onto the player's own plot with its block's front left slot at
+		  (col, row): refused unless the player is seated, the template is a unit, the block fits inside
 		  his plot's grid, no unit of his already covers any of its slots and he can pay for it.  The
 		  one entry point for the buy panel, the bot and the scenario verb laneplace. */
-	Bool placeUnit( Player *player, const ThingTemplate *tmpl, Int slotX, Int slotY );
+	Bool placeUnit( Player *player, const ThingTemplate *tmpl, Int col, Int row );
+
+	/** A plot's corners in the world, for the client's slot grid; FALSE off a lane map.  Read once the
+		  map is in: they never change during a match. */
+	Bool getPlotBounds( Int team, Int seat, Coord2D *lo, Coord2D *hi ) const;
 
 protected:
 	virtual void crc( Xfer *xfer );
@@ -149,21 +171,22 @@ private:
 	{
 		ObjectID id;
 		Int team, seat;
-		Int slotX, slotY, size;
+		Int col, row, size;
 	};
 
 	Bool seatOf( const Player *player, Int *team, Int *seat ) const;
 	Real towardEnemy( Int team ) const;
-	Coord3D slotCentre( Int team, Int seat, Int slotX, Int slotY, Int size ) const;
+	Coord3D slotCentre( Int team, Int seat, Int col, Int row, Int size ) const;
 	void expireCopies( UnsignedInt now );
 	void tick( UnsignedInt now );
 	void spawnWave( Int team, Int seat, UnsignedInt now );
 
 	// read from the map on every load, so not saved
 	Bool m_active;
-	Coord2D m_gridLo[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];			///< the low corner of slot (0, 0)
-	Int m_gridCols[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];
-	Int m_gridRows[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];
+	Coord2D m_plotLo[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];			///< the plot's low x, low y corner
+	Coord2D m_plotHi[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];
+	Int m_gridCols[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];				///< slots across the front
+	Int m_gridRows[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];				///< slots from the front back
 	Coord3D m_plotAnchor[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];	///< the grid's centre, what a wave copy is placed relative to
 	Coord3D m_spawn[ LANEWAR_TEAMS ];
 	Coord3D m_middle;

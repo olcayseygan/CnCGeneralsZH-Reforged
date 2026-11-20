@@ -174,6 +174,12 @@ unsigned run_suite(const std::string & root, const char * where)
 	if (file != NULL) file->close();
 	CHECK(is_directory(root + "/Abs/Dir"));
 	CHECK(!is_directory(root + root));
+	// A dot belongs to a directory name too, and an extensionless leaf is still a file.
+	file = files.openFile("Saves.v2\\Slot\\checkpoint", File::WRITE | File::CREATE | File::BINARY);
+	CHECK(file != NULL);
+	if (file != NULL) { CHECK_EQ(file->write("ok", 2), 2); file->close(); }
+	CHECK_STR(read_file(root + "/Saves.v2/Slot/checkpoint").c_str(), "ok");
+	CHECK(!is_directory(root + "/Saves.v2/Slot/checkpoint"));
 	if (sensitive) {
 		// An existing directory in another case is used, not created again beside it.
 		file = files.openFile("save\\SLOT 1\\deep\\other.sav", File::WRITE | File::CREATE | File::TRUNCATE | File::BINARY);

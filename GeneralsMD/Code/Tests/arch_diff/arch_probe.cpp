@@ -36,6 +36,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include "wwmath.h"
 
 #if defined(__aarch64__) || defined(_M_ARM64)
 #include <arm_neon.h>
@@ -203,6 +204,51 @@ static void probe_detround(void)
 }
 #endif
 
+static void probe_wwmath_value(const char *key, float value)
+{
+	// Force actual target instructions rather than compile-time evaluation on the build host.
+	volatile float input = value;
+	const float f = input;
+	char named[128];
+	snprintf(named, sizeof(named), "chop/%s", key);
+	row_l("wwmath-convert", named, WWMath::Float_To_Int_Chop(f));
+	snprintf(named, sizeof(named), "floor/%s", key);
+	row_l("wwmath-convert", named, WWMath::Float_To_Int_Floor(f));
+}
+
+static void probe_wwmath_convert(void)
+{
+	for (unsigned i = 0; i < sizeof(CONVERT_F) / sizeof(CONVERT_F[0]); ++i) {
+		probe_wwmath_value(CONVERT_F[i].key, CONVERT_F[i].v);
+	}
+	// Boundary manifest: signed subnormals, neighbours of one and the int32 limits,
+	// largest finite values, infinities and both NaN signs. These helpers must agree even
+	// where their former shift-based implementation had no defined C++ result.
+	const struct { const char *key; uint32_t bits; } boundaries[] = {
+		{ "+denorm-min", 0x00000001u }, { "-denorm-min", 0x80000001u },
+		{ "+denorm-max", 0x007FFFFFu }, { "-denorm-max", 0x807FFFFFu },
+		{ "below-one", 0x3F7FFFFFu }, { "above-neg-one", 0xBF7FFFFFu },
+		{ "above-one", 0x3F800001u }, { "below-neg-one", 0xBF800001u },
+		{ "above-pos-2^31", 0x4F000001u }, { "below-neg-2^31", 0xCF000001u },
+		{ "+flt-max", 0x7F7FFFFFu }, { "-flt-max", 0xFF7FFFFFu },
+		{ "+inf", 0x7F800000u }, { "-inf", 0xFF800000u },
+		{ "+nan", 0x7FC00000u }, { "-nan", 0xFFC00000u },
+	};
+	for (unsigned i = 0; i < sizeof(boundaries) / sizeof(boundaries[0]); ++i) {
+		float value;
+		memcpy(&value, &boundaries[i].bits, sizeof(value));
+		probe_wwmath_value(boundaries[i].key, value);
+	}
+	uint32_t fingerprint = 2166136261u;
+	for (int quarter = -8192; quarter <= 8192; ++quarter) {
+		volatile float input = quarter * 0.25f;
+		const float value = input;
+		fingerprint = (fingerprint ^ (uint32_t)WWMath::Float_To_Int_Chop(value)) * 16777619u;
+		fingerprint = (fingerprint ^ (uint32_t)WWMath::Float_To_Int_Floor(value)) * 16777619u;
+	}
+	printf("wwmath-convert\tquarter-sweep\t0x%08x\n", fingerprint);
+}
+
 /* ------------------------------------------------------------------ float expressions
  *
  * What E1 is actually about.  -ffp-contract=off is the flag that stops clang folding a*b+c into one
@@ -357,6 +403,7 @@ int main(void)
 {
 	printf("meta\tarch\t%s\n", PROBE_ARCH);
 	probe_convert();
+	probe_wwmath_convert();
 #if defined(PROBE_HAS_DETROUND)
 	probe_detround();
 #endif

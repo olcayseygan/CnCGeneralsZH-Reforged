@@ -170,6 +170,7 @@ TEST(lan_lobby_hears_broadcasts_on_posix)
 
 	// L's lobby announces a game
 	sendAndPump( lUnicast, INADDR_BROADCAST, PORT, "announce", everyone, 4 );
+	if(senderOf(lListener, "announce") != local) printf("broadcast source %08x, selected %08x\n", senderOf(lListener, "announce"), local);
 	CHECK_EQ( senderOf( lListener, "announce" ), local );		// L's own copy: its filter drops it
 	CHECK_EQ( take( aListener, "announce" ), 1 );		// A hears it, once
 	CHECK_EQ( take( lListener, "announce" ), 1 );

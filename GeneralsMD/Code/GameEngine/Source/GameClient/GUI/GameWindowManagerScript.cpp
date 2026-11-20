@@ -154,7 +154,7 @@ const char *WindowStatusNames[] = { "ACTIVE", "TOGGLE", "DRAGABLE", "ENABLED", "
 															"RIGHT_CLICK", "WRAP_CENTERED", "CHECK_LIKE","HOTKEY_TEXT",
 															"USE_OVERLAY_STATES", "NOT_READY", "FLASHING", "ALWAYS_COLOR",
 															"ON_MOUSE_DOWN",
-															"SHORTCUT_BUTTON", "CANCEL_WHEN_DISABLED",
+															"SHORTCUT_BUTTON", "CANCEL_WHEN_DISABLED", "DRAW_DISABLED",
 															NULL };
 
 const char *WindowStyleNames[] = { "PUSHBUTTON",	"RADIOBUTTON",	"CHECKBOX",

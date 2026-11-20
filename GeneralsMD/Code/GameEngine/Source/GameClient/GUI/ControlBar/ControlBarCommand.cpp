@@ -1061,7 +1061,7 @@ void ControlBar::updateContextCommand( void )
 		// whatever is still running below puts its own clock back on
 		//
 		GadgetButtonClearClock( win );
-		win->winClearStatus( WIN_STATUS_CANCEL_WHEN_DISABLED );
+		win->winClearStatus( WIN_STATUS_CANCEL_WHEN_DISABLED | WIN_STATUS_DRAW_DISABLED );
 
 		// the spinning repeat mark: some selected factory builds this unit on repeat
 		const Bool repeating = command->getCommandType() == GUI_COMMAND_UNIT_BUILD &&
@@ -1185,8 +1185,12 @@ void ControlBar::updateContextCommand( void )
 		// reach the button to stop it, and a plain click is refused by the build path below with
 		// the message it already has. Build buttons come back RESTRICTED far more often than
 		// CANT_AFFORD (getCommandAvailability), so testing CANT_AFFORD alone left repeat stuck on.
+		// Enabled, it would draw in full colour, so it is drawn as the disabled button it stands for.
 		if( repeating && ( availability == COMMAND_CANT_AFFORD || availability == COMMAND_RESTRICTED ) )
+		{
 			win->winEnable( TRUE );
+			win->winSetStatus( WIN_STATUS_DRAW_DISABLED );
+		}
 
 		//Determine by the production type of this button, whether or not the created object
 		//will have a veterancy rank
@@ -2564,7 +2568,7 @@ void ControlBar::setCommandTabArrow( Int a, Int slot )
 	GadgetButtonSetBorder( win, GAME_COLOR_UNDEFINED, FALSE );
 	GadgetButtonEnableCheckLike( win, FALSE, FALSE );
 	win->winClearStatus( WIN_STATUS_SHORTCUT_BUTTON | WIN_STATUS_NOT_READY
-		| WIN_STATUS_CANCEL_WHEN_DISABLED | WIN_STATUS_FLASHING );
+		| WIN_STATUS_CANCEL_WHEN_DISABLED | WIN_STATUS_FLASHING | WIN_STATUS_DRAW_DISABLED );
 	// greyed out at an end as EA's always-colour cells are, the picture at 144/255: the grayscale
 	// draw a disabled command cell gets otherwise blackens the key's clear corners and leaves the
 	// white glyph white
@@ -2745,7 +2749,7 @@ void ControlBar::populateCommandTab( Bool full )
 		if( m_commandTab == COMMAND_TAB_BUILDINGS )
 			continue;
 		GadgetButtonClearClock( win );
-		win->winClearStatus( WIN_STATUS_CANCEL_WHEN_DISABLED );
+		win->winClearStatus( WIN_STATUS_CANCEL_WHEN_DISABLED | WIN_STATUS_DRAW_DISABLED );
 		GadgetButtonSetRepeat( win, FALSE );
 		GroupPanel_showAvailability( win, entry->best );
 		GadgetButtonDrawOverlayImage( win, calculateVeterancyOverlayForThing( entry->thing ) );

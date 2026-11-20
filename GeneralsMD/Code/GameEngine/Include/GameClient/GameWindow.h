@@ -188,6 +188,7 @@ enum
 	WIN_STATUS_ON_MOUSE_DOWN			= 0x02000000,		// Pushbutton triggers on mouse down.
 	WIN_STATUS_SHORTCUT_BUTTON		= 0x04000000,   // Oh god... this is a total hack for shortcut buttons to handle rendering text top left corner...
 	WIN_STATUS_CANCEL_WHEN_DISABLED = 0x08000000,  // Queued production may still receive right clicks while buying is disabled.
+	WIN_STATUS_DRAW_DISABLED			= 0x10000000,		// An enabled button drawn as a disabled one: a unit on repeat that cannot be built still takes Ctrl+Alt.
 	// when you edit this, remember to edit WindowStatusNames[]
 
 };

@@ -170,7 +170,8 @@ static void drawButtonText( GameWindow *window, WinInstanceData *instData )
 	text->setWordWrapCentered( BitTest( instData->getStatus(), WIN_STATUS_WRAP_CENTERED ));
 	text->setWordWrap(size.x);
 	// get the right text color
-	if( BitTest( window->winGetStatus(), WIN_STATUS_ENABLED ) == FALSE )
+	if( BitTest( window->winGetStatus(), WIN_STATUS_ENABLED ) == FALSE
+			|| BitTest( window->winGetStatus(), WIN_STATUS_DRAW_DISABLED ) )
 	{
 		textColor = window->winGetDisabledTextColor();
 		dropColor = window->winGetDisabledTextBorderColor();
@@ -191,7 +192,8 @@ static void drawButtonText( GameWindow *window, WinInstanceData *instData )
 	// can be pressed
 	if( BitTest( window->winGetStatus(), WIN_STATUS_SHORTCUT_BUTTON ) )
 	{
-		const Bool enabled = BitTest( window->winGetStatus(), WIN_STATUS_ENABLED );
+		const Bool enabled = BitTest( window->winGetStatus(), WIN_STATUS_ENABLED )
+			&& !BitTest( window->winGetStatus(), WIN_STATUS_DRAW_DISABLED );
 		const Color keyColor = enabled ? GameMakeColor( 255, 210, 60, 255 ) : textColor;
 		// the Red Alert style layout's one badge, the size and place its tabs wear
 		GameFont *sidebarFont = Sidebar_keyFont();
@@ -656,7 +658,9 @@ void W3DGadgetPushButtonImageDrawOne( GameWindow *window,
 		if(BitTest( window->winGetStatus(), WIN_STATUS_USE_OVERLAY_STATES ) )
 		{	
 			//we're using a new drawing system which does "grayscale" disabled buttons using original color artwork.
-			if( !BitTest( window->winGetStatus(), WIN_STATUS_ENABLED ) )
+			// an enabled button marked DRAW_DISABLED is greyed the same way, it only keeps its clicks
+			if( !BitTest( window->winGetStatus(), WIN_STATUS_ENABLED )
+					|| BitTest( window->winGetStatus(), WIN_STATUS_DRAW_DISABLED ) )
 			{
 				if( !BitTest( window->winGetStatus(), WIN_STATUS_NOT_READY ) )
 				{

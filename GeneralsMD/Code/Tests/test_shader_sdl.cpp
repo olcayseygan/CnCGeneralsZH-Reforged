@@ -406,6 +406,7 @@ const WaterUniformMember WaterUniformMembers[] = {
     WATER_UNIFORM_MEMBER(FoamFillLights),
     WATER_UNIFORM_MEMBER(MaterialColor),
     WATER_UNIFORM_MEMBER(MaterialParameters),
+    WATER_UNIFORM_MEMBER(MaterialOptics),
     WATER_UNIFORM_MEMBER(ClipFromWorld)
 };
 #undef WATER_COMBINER_MEMBER
@@ -1513,6 +1514,23 @@ TEST(screen_reflection_modes_are_bounded_and_selected_per_draw)
 	CHECK(MirrorSize(Mirror, 0) == 256 && MirrorSize(Hybrid, 0) == 512);
 }
 #endif // __linux__
+
+TEST(sdl_clarity_uses_only_terrain_and_skips_deep_samples)
+{
+	PixelPipelineDescription pipeline = {}; std::string source;
+	CHECK(EngineShader_Pixel_Program(ENGINE_SHADER_WATER_TRAPEZOID, pipeline, source, COMBINER_SHADER_TARGET_SDL3_GPU));
+	const size_t first=source.find("float waterTerrainClarity("), last=source.find("float terrainWaveAttenuation(", first);
+	CHECK(first!=std::string::npos && last!=std::string::npos && last>first);
+	if (first==std::string::npos || last==std::string::npos || last<=first) return;
+	const std::string helper=source.substr(first,last-first);
+	CHECK(helper.find("terrainDepth>=WaterOpticalClarityMaximumDepth) return 0.0")!=std::string::npos);
+	CHECK(helper.find("directions[i]*80.0")!=std::string::npos);
+	CHECK(helper.find("directions[i]*160.0")!=std::string::npos);
+	CHECK(helper.find("if(nearHeight<baseLevel)")!=std::string::npos);
+	CHECK(helper.find("vesselHullDamping(")==std::string::npos);
+	CHECK(helper.find("scenePosition(")==std::string::npos);
+	CHECK(source.find("waterTerrainClarity(world.xy,baseLevel,surfaceTerrainHeight,offshore)")!=std::string::npos);
+}
 
 TEST(direct3d11_modern_water_source_matches_the_upstream_baseline)
 {

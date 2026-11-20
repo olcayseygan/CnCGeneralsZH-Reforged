@@ -4757,6 +4757,14 @@ TOOLTIP:MapAwareWaveHeading
 "For Modern water. Swells bend toward the shore, run along channels and drop behind islands, each sea from its own side. Off keeps the waves as they were. Applied when you Accept."
 END
 
+GUI:UnderwaterClarity
+"Underwater Clarity"
+END
+
+TOOLTIP:UnderwaterClarity
+"For Modern water. Shallow shelves, reefs and sunken ruins show through the sea. Broad flat seabeds and deep water stay as murky as the map made them. Applied when you Accept."
+END
+
 GUI:WaterReflectionDetail
 "Reflection detail"
 END

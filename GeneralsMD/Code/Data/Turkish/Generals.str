@@ -19004,6 +19004,14 @@ TOOLTIP:MapAwareWaveHeading
 "Modern su için. Dalgalar kıyıya döner, kanal boyunca akar, adanın arkasında söner. Her deniz kendi yönünden dalga alır. Kapalıyken dalgalar eskisi gibi kalır. Kabul Et'e basınca uygulanır."
 END
 
+GUI:UnderwaterClarity
+"Berrak Sığlıklar"
+END
+
+TOOLTIP:UnderwaterClarity
+"Modern su için. Sığ kayalıklar, resifler, batık yıkıntılar suyun altından görünür. Geniş düz deniz dibi ve derin su, haritada nasılsa o kadar bulanık kalır. Kabul Et'e basınca uygulanır."
+END
+
 GUI:WaterReflectionDetail
 "Yansıma Ayrıntısı"
 END

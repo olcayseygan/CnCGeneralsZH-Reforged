@@ -60,6 +60,9 @@ class W3DSnowManager : public SnowManager
 	const void *m_weatherMap;		///< the map m_weatherSandCells was counted on, with its samples: see W3DShaderManager's haze
 	const void *m_weatherMapData;
 	Int m_weatherMapWidth;
+#if defined(__linux__)
+	Int m_weatherMapHeight;
+#endif
 	Int m_weatherSandCells;
 	Int m_weatherCells;
 

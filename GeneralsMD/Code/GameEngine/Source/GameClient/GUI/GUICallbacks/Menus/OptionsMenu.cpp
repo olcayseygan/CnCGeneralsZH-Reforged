@@ -3165,8 +3165,9 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 	findOptionWidget(*findOptionDef("WaterFoam"))->winEnable(RenderWaterFoam::Available());
 #endif
 #if defined(__linux__)
-	// The game side of the haze and the atmosphere is built for Linux only so far.
+	// The game side of the haze, the atmosphere and the weather is built for Linux only so far.
 	findOptionWidget(*findOptionDef("Atmosphere"))->winEnable(RenderPost::EnvironmentAvailable());
+	findOptionWidget(*findOptionDef("Weather"))->winEnable(RenderPost::EnvironmentAvailable());
 	findOptionWidget(*findOptionDef("MapLight"))->winEnable(RenderPost::EnvironmentAvailable());
 #endif
 

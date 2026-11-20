@@ -4384,6 +4384,7 @@ Tests/terrain_golden.txt
 Tests/terrain_grid.h
 Tests/terrain_oracle.cpp
 Tests/test_audio_mix_policy.cpp
+Tests/test_baseline_weather.cpp
 Tests/test_bigfile_extract.py
 Tests/test_bigfilesystem.cpp
 Tests/test_bigfilesystem_stubs.cpp

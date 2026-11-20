@@ -25,6 +25,8 @@
 #include "W3DDevice/GameClient/W3DShroud.h"
 #include "Common/GlobalData.h"
 #include "W3DDevice/GameClient/W3DShaderManager.h"
+#include "Platform/RenderPost.h"
+#include "Platform/SunShadow.h"
 #include "GameClient/View.h"
 #include "GameLogic/ScriptEngine.h"
 #include "WW3D2/dx8wrapper.h"
@@ -61,6 +63,9 @@ W3DSnowManager::W3DSnowManager(void)
 	m_weatherMap=NULL;
 	m_weatherMapData=NULL;
 	m_weatherMapWidth=0;
+#if defined(__linux__)
+	m_weatherMapHeight=0;
+#endif
 	m_weatherSandCells=0;
 	m_weatherCells=0;
 }
@@ -200,6 +205,10 @@ void W3DSnowManager::reset( void )
 {
 #if defined(__linux__)
 	W3DShaderManager::invalidateNativePostEnvironment();
+	m_weatherOn = FALSE; m_weatherKind = WEATHER_KIND_NONE; m_weatherTime = 0.0;
+	m_weatherMap = NULL; m_weatherMapData = NULL; m_weatherMapWidth = m_weatherMapHeight = 0;
+	m_weatherSandCells = m_weatherCells = 0;
+	REF_PTR_RELEASE(m_weatherTextures[0]); REF_PTR_RELEASE(m_weatherTextures[1]);
 #endif
 	SnowManager::reset();
 }
@@ -212,7 +221,12 @@ void W3DSnowManager::update(void)
 	//find current time offset, adjusting for overflow
 	m_time=fmod(m_time,m_fullTimePeriod);
 
+#if defined(__linux__)
+	// Stable capability: weather also updates before any view and with the user post chain off.
+	m_weatherOn = TheGlobalData->m_weatherEffects && !TheGlobalData->m_classicGraphics && RenderPost::EnvironmentAvailable();
+#else
 	m_weatherOn = TheGlobalData->m_weatherEffects && !TheGlobalData->m_classicGraphics && Direct3D11_Present_Is_Enabled();
+#endif
 	if (m_weatherOn)
 		updateWeather();
 	else
@@ -264,11 +278,19 @@ void W3DSnowManager::updateWeather(void)
 	m_weatherTime = fmod(m_weatherTime + WW3D::Get_Frame_Time() / 1000.0, 3600.0);
 
 	WorldHeightMap *map = TheTerrainRenderObject != NULL ? TheTerrainRenderObject->getMap() : NULL;
+#if defined(__linux__)
+	if (map != NULL && (map != m_weatherMap || map->getDataPtr() != m_weatherMapData ||
+		map->getXExtent() != m_weatherMapWidth || map->getYExtent() != m_weatherMapHeight))
+#else
 	if (map != NULL && (map != m_weatherMap || map->getDataPtr() != m_weatherMapData || map->getXExtent() != m_weatherMapWidth))
+#endif
 	{
 		m_weatherMap = map;
 		m_weatherMapData = map->getDataPtr();
 		m_weatherMapWidth = map->getXExtent();
+#if defined(__linux__)
+		m_weatherMapHeight = map->getYExtent();
+#endif
 		map->countSandCells(&m_weatherSandCells, &m_weatherCells);
 		DEBUG_LOG(("WEATHER map is %d sand of %d cells\n", m_weatherSandCells, m_weatherCells));
 	}
@@ -315,11 +337,17 @@ void W3DSnowManager::renderWeather(RenderInfoClass &rinfo)
 
 	// No sun's shadow on what falls: with it every pixel of every quad pays the blocker search, for a
 	// shade nobody could see on a streak.
+#if defined(__linux__)
+	SunShadow::ReceiverExclusion precipitation(DX8Wrapper::_Get_D3D_Device());
+#else
 	Direct3D11_Set_Emissive(true);
+#endif
 	drawWeatherLayer(rinfo, 0, light);
 	if (WEATHER_LAYERS[m_weatherKind][1].texture != NULL)
 		drawWeatherLayer(rinfo, 1, light);
+#if !defined(__linux__)
 	Direct3D11_Set_Emissive(false);
+#endif
 }
 
 void W3DSnowManager::drawWeatherLayer(RenderInfoClass &rinfo, Int layerIndex, Real light)

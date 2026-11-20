@@ -44,6 +44,7 @@
 
 #include "Platform/SunShadow.h"
 #include "Platform/RenderEffects.h"
+#include "Platform/RenderTeamGlow.h"
 #include "dx8renderer.h"
 #include "dx8wrapper.h"
 #include "dx8polygonrenderer.h"
@@ -1950,7 +1951,7 @@ void DX8TextureCategoryClass::Render(void)
 		// after this has been put back, and goes without.
 		const bool team_glow = mesh->Peek_Model()->Get_Flag(MeshGeometryClass::TEAM_GLOW) != 0;
 		if (team_glow) {
-			Direct3D11_Set_Team_Glow(true);
+			RenderTeamGlow::SetDraw(true);
 		}
 
 		if ((!!mesh->Peek_Model()->Get_Flag(MeshGeometryClass::SORT)) && WW3D::Is_Sorting_Enabled()) {
@@ -2015,7 +2016,7 @@ void DX8TextureCategoryClass::Render(void)
 #endif
 		}
 		if (team_glow) {
-			Direct3D11_Set_Team_Glow(false);
+			RenderTeamGlow::SetDraw(false);
 		}
 //--------------------------------------------------------------------
 		if (mesh->Get_ObjectScale() != 1.0f)

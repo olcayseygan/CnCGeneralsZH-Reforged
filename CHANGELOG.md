@@ -105,6 +105,7 @@ found and fixed, EA's own, not port damage.**
 - On Mac and Linux smoke and dust no longer slice into the ground and the buildings they drift through in a hard line; they thin out where they meet them, as on Windows. Fire and explosions take the Windows look as well, the flame curling and burning away as it ages instead of a flat sprite fading out. Classic graphics keeps the old sprites. Thanks to Shin-Aska.
 - On Mac and Linux the GPU Particles setting now does what it does on Windows: particles past the cap go to the graphics card instead of the oldest ones being deleted to make room. The card moves them by the same formulas the Windows build uses, and a system it cannot take stays on the processor as before. Thanks to Shin-Aska.
 - On Mac and Linux a unit hit by an EMP crackles with its arcs again, a building without power takes the Windows outage look, a cloaked unit bends the picture behind it like glass and a detected stealth unit wears the heat shimmer. Classic graphics draws them as before. Thanks to Shin-Aska.
+- On Mac and Linux the Team Glow option is no longer greyed out: team colour on the models glows through the picture's bright range as it does on Windows, from the next map on. It stays off until you tick it, and Classic graphics keeps the plain paint. Thanks to Shin-Aska.
 
 ## A dropped player's army stays, and he can come back to it
 

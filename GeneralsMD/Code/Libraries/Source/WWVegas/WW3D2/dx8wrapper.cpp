@@ -5919,6 +5919,7 @@ bool DX8Wrapper::Device_Is_Ready()
 
 #include "Platform/RenderPost.h"
 #include "Platform/RenderEffects.h"
+#include "Platform/RenderTeamGlow.h"
 namespace RenderPost {
 void BeginMain(const Settings &settings) {
 #if !defined(_WIN32)
@@ -6081,6 +6082,23 @@ unsigned RequestedDrawEffect(float parameters[4]) {
 	return Direct3D11_Requested_Draw_Effect(parameters);
 #else
 	return RequestedDrawEffect(DX8Wrapper::_Get_D3D_Device(),parameters);
+#endif
+}
+}
+
+namespace RenderTeamGlow {
+void SetDraw(bool marked) {
+#if defined(_WIN32)
+	Direct3D11_Set_Team_Glow(marked);
+#else
+	SetDraw(DX8Wrapper::_Get_D3D_Device(),marked);
+#endif
+}
+bool Available() {
+#if defined(_WIN32)
+	return Direct3D11_Present_Is_Enabled();
+#else
+	return Available(DX8Wrapper::_Get_D3D_Device());
 #endif
 }
 }

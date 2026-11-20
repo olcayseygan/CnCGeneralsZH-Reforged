@@ -242,6 +242,8 @@ public:
 	SDL_GPUTexture *Model_Colour();
 	bool Build_Model_Constants(struct SdlEnginePixelConstants &, bool receiving);
 	void Refuse_Next_Model_For_Test(unsigned mask) { ModelRefusalForTest |= mask; }
+	void Set_Team_Glow(bool marked) { TeamGlowDraw = marked; }
+	void Refuse_Next_Team_Glow_For_Test(unsigned mask) { TeamGlowRefusalForTest |= mask; }
 	SdlGpuFrame * Get_Gpu() const { return Gpu; }
 	SdlResourceMirrors * Get_Mirrors() const { return Mirrors; }
 	/// Draws recorded on the GPU, and the draws refused, by reason.
@@ -410,6 +412,8 @@ protected:
 	float ModelEffectParameters[4] = {};
 	struct ModelView;
 	bool Read_Model_View(ModelView &);
+	bool TeamGlowDraw = false, TeamGlowAllowed = false;
+	unsigned TeamGlowRefusalForTest = 0;
 	struct PostSession;
 	std::shared_ptr<PostSession> Post;
 	unsigned SunCasterEffect = 0;

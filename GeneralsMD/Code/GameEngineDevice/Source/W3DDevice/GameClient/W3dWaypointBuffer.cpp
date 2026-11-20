@@ -86,6 +86,7 @@
 
 #include "W3DDevice/GameClient/TerrainTex.h"
 #include "W3DDevice/GameClient/HeightMap.h"
+#include "W3DDevice/GameClient/W3DShroud.h"
 #include "W3DDevice/GameClient/W3DSmoothMotion.h"
 
 #include "Platform/SunShadow.h"
@@ -422,7 +423,11 @@ static const Real ORDER_MARK_WIDTH = 0.6f;
 static const Real ORDER_END_RADIUS = 2.2f;		///< on the last bit of ground a unit is sent to
 static const Real ORDER_JOINT_RADIUS = 1.4f;		///< on a target, and between the points of a shift list
 static const Real ORDER_MARK_LIFT = 0.3f;
+static const Real ORDER_LINE_SHADE_STEP = 5.0f;		///< world units a piece of an order line takes one shroud light over, half a shroud cell
+static const Real ORDER_LINE_SHADE_MATCH = 1.0f / 32.0f;	///< pieces closer in light than this go as one
 enum { ORDER_MARK_SAMPLES = 24 };
+
+static Real shroudLight( Real x, Real y );		///< the shroud's light on the ground there, 0 black to 1 clear
 
 //=============================================================================
 // W3DWaypointBuffer::takeReadsForRender
@@ -525,7 +530,33 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 					Vector3 cut[ 2 ];
 					cut[ 0 ] = points[ 0 ] + along * ( startCut / flat );
 					cut[ 1 ] = points[ 1 ] - along * ( endCut / flat );
-					recordRing( DRAW_ORDER_LINE, 2, cut, color, ORDER_LINE_WIDTH * m_orderWidthScale, ORDER_LINE_OPACITY );
+					// darkened along its length as the ground under it is, black on black shroud: a line is
+					// one colour, so it goes out in pieces ORDER_LINE_SHADE_STEP long or less, and pieces whose
+					// light differs by less than ORDER_LINE_SHADE_MATCH go as one (a line in clear ground is
+					// still a single draw)
+					const Vector3 run = cut[ 1 ] - cut[ 0 ];
+					const Real runFlat = flat - startCut - endCut;
+					const Int pieces = MAX( 1, (Int)ceil( runFlat / ORDER_LINE_SHADE_STEP ) );
+					Real from = 0.0f;
+					Real light = shroudLight( cut[ 0 ].X + run.X * 0.5f / pieces, cut[ 0 ].Y + run.Y * 0.5f / pieces );
+					for( Int k = 1; k <= pieces; ++k )
+					{
+						Real next = light;
+						if( k < pieces )
+						{
+							const Real mid = ( (Real)k + 0.5f ) / (Real)pieces;
+							next = shroudLight( cut[ 0 ].X + run.X * mid, cut[ 0 ].Y + run.Y * mid );
+							if( fabs( next - light ) < ORDER_LINE_SHADE_MATCH )
+								continue;
+						}
+						const Real to = (Real)k / (Real)pieces;
+						Vector3 piece[ 2 ];
+						piece[ 0 ] = cut[ 0 ] + run * from;
+						piece[ 1 ] = cut[ 0 ] + run * to;
+						recordRing( DRAW_ORDER_LINE, 2, piece, color * light, ORDER_LINE_WIDTH * m_orderWidthScale, ORDER_LINE_OPACITY );
+						from = to;
+						light = next;
+					}
 				}
 			}
 
@@ -1492,6 +1523,72 @@ void W3DWaypointBuffer::recordStructureOutline( const Object *obj )
 	recordRingLoop( ground.color );
 }
 
+/** The shroud's light on the ground at x, y, 0 black to 1 clear, as the ground there took it: on
+		Direct3D 11 outside Classic the cubic B-spline over the sixteen cells round it that smooths the
+		soft picture (dx11post's SHROUD_SOFTEN_SHADER_BODY), elsewhere the texture's bilinear filter.
+		Read from the cells logic last wrote, so a cell still easing on Direct3D 11 is a few tenths of a
+		second ahead of the ground under it.
+		ponytail: CPU, one sample a mark; a mark drawn on the sorted list has no stage left to take the
+		soft picture itself, so a ring straddling the shroud's edge goes dark as one. */
+static Real shroudLight( Real x, Real y )
+{
+	W3DShroud *shroud = TheTerrainRenderObject ? TheTerrainRenderObject->getShroud() : NULL;
+	if( shroud == NULL || shroud->getShroudTexture() == NULL )
+		return 1.0f;
+	const Int lastX = shroud->getNumShroudCellsX() - 1;
+	const Int lastY = shroud->getNumShroudCellsY() - 1;
+	if( lastX < 0 || lastY < 0 || shroud->getCellWidth() <= 0.0f || shroud->getCellHeight() <= 0.0f )
+		return 1.0f;
+	// cell centres at a half, the cell's texel a border texel in (ShroudTextureShader::set)
+	const Real fx = ( x - shroud->getDrawOriginX() ) / shroud->getCellWidth() - 0.5f;
+	const Real fy = ( y - shroud->getDrawOriginY() ) / shroud->getCellHeight() - 0.5f;
+	const Int baseX = REAL_TO_INT_FLOOR( fx ), baseY = REAL_TO_INT_FLOOR( fy );
+	const Real s = fx - (Real)baseX, t = fy - (Real)baseY;
+	Real across[ 4 ], down[ 4 ];
+	Int first, taps;
+	if( Direct3D11_Present_Is_Enabled() && !TheGlobalData->m_classicGraphics )
+	{
+		auto spline = []( Real f, Real *w )
+		{
+			const Real g = 1.0f - f, f2 = f * f, f3 = f2 * f;
+			w[ 0 ] = g * g * g / 6.0f;
+			w[ 1 ] = ( 3.0f * f3 - 6.0f * f2 + 4.0f ) / 6.0f;
+			w[ 2 ] = ( -3.0f * f3 + 3.0f * f2 + 3.0f * f + 1.0f ) / 6.0f;
+			w[ 3 ] = f3 / 6.0f;
+		};
+		spline( s, across );
+		spline( t, down );
+		first = -1;
+		taps = 4;
+	}
+	else
+	{
+		across[ 0 ] = 1.0f - s;  across[ 1 ] = s;
+		down[ 0 ] = 1.0f - t;    down[ 1 ] = t;
+		first = 0;
+		taps = 2;
+	}
+	// a tap off the cells reads the texture's border texels, as the soften pass's clamp and the
+	// sampler's do: the border level, written as setShroudLevel writes a cell (floored at the shroud's
+	// alpha, through the shroud colour's green, which getShroudLevel reads back)
+	const Real borderLevel = (Real)MAX( (Int)shroud->getBorderShroudLevel(), (Int)TheGlobalData->m_shroudAlpha ) *
+		(Real)( ( TheGlobalData->m_shroudColor.getAsInt() >> 8 ) & 0xFF ) / 255.0f;
+	Real sum = 0.0f;
+	for( Int j = 0; j < taps; ++j )
+	{
+		const Int cy = baseY + first + j;
+		Real row = 0.0f;
+		for( Int i = 0; i < taps; ++i )
+		{
+			const Int cx = baseX + first + i;
+			const Bool inside = cx >= 0 && cy >= 0 && cx <= lastX && cy <= lastY;
+			row += across[ i ] * ( inside ? (Real)shroud->getShroudLevel( cx, cy ) : borderLevel );
+		}
+		sum += down[ j ] * row;
+	}
+	return MAX( 0.0f, MIN( 1.0f, sum / 255.0f ) );
+}
+
 /** The small ring on an order line's point, flat at the point's height: it is drawn over everything
 		like the line, so a slope under it costs nothing. Closed halfway along its first stretch, as
 		recordRingLoop closes a selection ring, so the two caps meet flush. With a ground it is a
@@ -1515,7 +1612,9 @@ void W3DWaypointBuffer::recordOrderMark( const Vector3& at, Real radius, const V
 	m_cleanPoints.insert( m_cleanPoints.end(), m_ringPoints.begin() + 1, m_ringPoints.end() );
 	m_cleanPoints.push_back( m_ringPoints[ 0 ] );
 	m_cleanPoints.push_back( mid );
-	recordRingPieces( ground ? DRAW_ORDER_MARK : DRAW_ORDER_LINE, color, width, opacity, 0.0f );
+	// darkened as the ground under it is, black on black shroud: drawn on the sorted list after the
+	// terrain's shroud pass, it was full bright on both
+	recordRingPieces( ground ? DRAW_ORDER_MARK : DRAW_ORDER_LINE, color * shroudLight( at.X, at.Y ), width, opacity, 0.0f );
 }
 
 // The click marker and the destination dots on water (W3DInGameUI paints them on land): the same
@@ -1584,7 +1683,8 @@ void W3DWaypointBuffer::takeWaterMarks( void )
 		const Real left = 1.0f - close;
 		const Real radius = ( WATER_MARKER_END_RADIUS + ( WATER_MARKER_START_RADIUS - WATER_MARKER_END_RADIUS ) * left * left * left ) * scale;
 		const Real width = WATER_MARKER_WIDTH * scale;
-		recordOrderMark( at, radius, color, width, fade );
+		recordOrderMark( at, radius, color, width, fade );		// shaded by the shroud there itself
+		const Vector3 arrowColor = color * shroudLight( at.X, at.Y );
 		for( Int k = 0; k < 4; ++k )
 		{
 			const Real spoke = 0.25f * PI + 0.5f * PI * (Real)k;
@@ -1596,7 +1696,7 @@ void W3DWaypointBuffer::takeWaterMarks( void )
 				Vector3 points[ 2 ];
 				points[ 0 ] = tipAt;
 				points[ 1 ].Set( tipAt.X + WATER_MARKER_ARROW_ARM * scale * (Real)cos( arm ), tipAt.Y + WATER_MARKER_ARROW_ARM * scale * (Real)sin( arm ), at.Z );
-				recordRing( DRAW_ORDER_LINE, 2, points, color, width, fade );
+				recordRing( DRAW_ORDER_LINE, 2, points, arrowColor, width, fade );
 			}
 		}
 		if( close >= 1.0f )

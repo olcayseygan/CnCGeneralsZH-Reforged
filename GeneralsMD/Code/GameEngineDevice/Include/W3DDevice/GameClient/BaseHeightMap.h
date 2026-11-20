@@ -406,7 +406,7 @@ public:
 	/// The drawn ground at half cell (x2, y2) of the whole map, border included, in world units: the
 	/// map's own height where both are even, TerrainSubdivide::height between.
 	Real drawnHalfZ(Int x2, Int y2);
-	/// The drawn ground at a world point: the subdivided tiles' triangles, or getDrawHeight's plane.
+	/// The drawn ground at a world point: the tiles' triangles, subdivided or whole cells, on drawnFlip's diagonal.
 	Real getDrawnHeight(Real x, Real y);
 	/// The step in half cells the things on the ground lay their vertices at: 1 subdivided, 2 not.
 	Int drawnStep(void) const { return m_subdivided ? 1 : 2; }

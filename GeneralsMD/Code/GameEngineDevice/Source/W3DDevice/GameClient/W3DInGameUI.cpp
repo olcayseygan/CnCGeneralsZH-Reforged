@@ -69,6 +69,7 @@
 #include "W3DDevice/GameClient/W3DScene.h"
 #include "W3DDevice/GameClient/W3DView.h"
 #include "W3DDevice/GameClient/BaseHeightMap.h"
+#include "W3DDevice/GameClient/W3DShroud.h"
 #include "W3DDevice/Common/W3DConvert.h"
 #include "WW3D2/ww3d.h"
 #include "WW3D2/hanim.h"
@@ -306,6 +307,7 @@ W3DInGameUI::W3DInGameUI()
 	{
 		m_moveHintRenderObj[ i ] = NULL;
 		m_moveHintAnim[ i ] = NULL;
+		m_moveHintShrouded[ i ] = FALSE;
 	}
 
 	m_buildGridCellX = 0;
@@ -330,13 +332,14 @@ W3DInGameUI::~W3DInGameUI()
 }  // end ~W3DInGameUI
 
 // overlayGround ==============================================================
-/** The ground a sheet laid point by point goes on: logic's plane, the drawn ground's own, or the
-	subdivided tiles' triangles when they are on, so a bulge between the samples does not swallow
-	the paint (BaseHeightMapRenderObjClass::getDrawnHeight). */
+/** The ground a sheet laid point by point goes on: the tiles' own triangles, subdivided or not,
+	cut on the diagonal they are drawn with, so neither a bulge between the samples nor the far half
+	of a flipped cell swallows the depth tested paint (BaseHeightMapRenderObjClass::getDrawnHeight).
+	Logic's plane always cuts the same diagonal. */
 //=============================================================================
 static Real overlayGround( Real x, Real y )
 {
-	if( TheTerrainRenderObject && TheTerrainRenderObject->terrainSubdivided() )
+	if( TheTerrainRenderObject )
 		return TheTerrainRenderObject->getDrawnHeight( x, y );
 	return TheTerrainLogic->getGroundHeight( x, y );
 }
@@ -618,17 +621,26 @@ void W3DInGameUI::draw( void )
 }  // end draw
 
 //-------------------------------------------------------------------------------------------------
-// The render state every sheet painted on the ground is drawn with: the build grid, and the wash
-// inside an attack circle.  Alpha blended, untextured, depth tested but never depth written, and
-// PASS_ALWAYS: the sheet lies exactly on the terrain, so anything that compared depth against the
-// terrain would z-fight with it.  Drawing it in the terrain pass and never writing depth means
-// everything drawn after the terrain - buildings, units, trees, the placement ghost itself - covers
-// it, which is what makes it read as paint on the ground.
+// The render state every sheet painted on the ground is drawn with: the build grid, the order rings
+// and markers, and the wash inside an attack circle.  Alpha blended, untextured, never depth
+// written, so everything drawn after the terrain - buildings, units, trees, the placement ghost
+// itself - covers it, which is what makes it read as paint on the ground.
+// The grid and the order marks are depth tested: drawn PASS_ALWAYS they showed through hills and
+// over the bridge decks above them.  They lie on the ground, so each vertex is pulled a few units
+// along its ray to the eye (GroundOverlayQuads::flush): that moves its depth and not its pixel, on
+// every device alike, where a depth bias is a different number on each.  The wash stays
+// PASS_ALWAYS: its quads are a sixth of the circle's radius across and would sink into any bump.
 // This is the bibs' shader with texturing off (see W3DBibBuffer).
-#define SC_GROUND_OVERLAY ( SHADE_CNST(ShaderClass::PASS_ALWAYS, ShaderClass::DEPTH_WRITE_DISABLE, ShaderClass::COLOR_WRITE_ENABLE, ShaderClass::SRCBLEND_SRC_ALPHA, \
+#define SC_GROUND_OVERLAY_DEPTH( depth ) ( SHADE_CNST(depth, ShaderClass::DEPTH_WRITE_DISABLE, ShaderClass::COLOR_WRITE_ENABLE, ShaderClass::SRCBLEND_SRC_ALPHA, \
 	ShaderClass::DSTBLEND_ONE_MINUS_SRC_ALPHA, ShaderClass::FOG_DISABLE, ShaderClass::GRADIENT_MODULATE, ShaderClass::SECONDARY_GRADIENT_DISABLE, ShaderClass::TEXTURING_DISABLE, \
 	ShaderClass::ALPHATEST_DISABLE, ShaderClass::CULL_MODE_DISABLE, \
 	ShaderClass::DETAILCOLOR_DISABLE, ShaderClass::DETAILALPHA_DISABLE) )
+#define SC_GROUND_OVERLAY			SC_GROUND_OVERLAY_DEPTH( ShaderClass::PASS_ALWAYS )
+#define SC_GROUND_OVERLAY_TESTED	SC_GROUND_OVERLAY_DEPTH( ShaderClass::PASS_LEQUAL )
+
+// how far the build grid is pulled to the eye: its lines run ten units between two samples, and a
+// subdivided cell's middle rises up to a unit over them (TerrainSubdivide's CAP)
+static const Real GRID_PULL = 3.0f;
 
 /** rgb plus an alpha given as a float 0..255, clamped - these sheets are all one colour at
 	* a per-vertex strength. */
@@ -649,7 +661,25 @@ static UnsignedInt overlayColor( UnsignedInt rgb, Real alpha )
 class GroundOverlayQuads
 {
 public:
-	GroundOverlayQuads( void ) : m_quads( 0 ) { }
+	GroundOverlayQuads( void ) : m_quads( 0 ), m_pull( 0.0f ), m_shrouded( FALSE ) { }
+
+	/** Set by setGroundOverlayState for the sheet that follows: how far each vertex goes towards
+		* the eye, and the shroud whose texture it is multiplied by when no shroud pass is still to
+		* come (its first texture coordinates, out of the terrain's own mapping: a border texel
+		* first, W3DShaderManager). */
+	void begin( const Vector3 &eye, Real pull, W3DShroud *shroud )
+	{
+		m_eye = eye;
+		m_pull = pull;
+		m_shrouded = shroud != NULL;
+		if( shroud != NULL )
+		{
+			m_shroudOffsetX = shroud->getCellWidth() - shroud->getDrawOriginX();
+			m_shroudOffsetY = shroud->getCellHeight() - shroud->getDrawOriginY();
+			m_shroudScaleX = 1.0f / ( shroud->getCellWidth() * shroud->getTextureWidth() );
+			m_shroudScaleY = 1.0f / ( shroud->getCellHeight() * shroud->getTextureHeight() );
+		}
+	}
 
 	void add( const Vector3 &p0, const Vector3 &p1, const Vector3 &p2, const Vector3 &p3,
 						UnsignedInt c0, UnsignedInt c1, UnsignedInt c2, UnsignedInt c3 )
@@ -667,6 +697,13 @@ public:
 
 	void flush( void );
 
+	/// a different pull for the quads that follow; the ones already added keep theirs
+	void setPull( Real pull )
+	{
+		flush();
+		m_pull = pull;
+	}
+
 private:
 	enum { MAX_QUADS = 512 };
 	struct Vert
@@ -676,6 +713,10 @@ private:
 	};
 	Vert m_verts[ MAX_QUADS * 4 ];
 	Int m_quads;
+	Vector3 m_eye;
+	Real m_pull;
+	Bool m_shrouded;
+	Real m_shroudOffsetX, m_shroudOffsetY, m_shroudScaleX, m_shroudScaleY;
 };
 
 void GroundOverlayQuads::flush( void )
@@ -701,15 +742,24 @@ void GroundOverlayQuads::flush( void )
 			for( Int i = 0; i < 4; ++i, ++vb )
 			{
 				const Vert &src = m_verts[ q * 4 + i ];
-				vb->x = src.pos.X;
-				vb->y = src.pos.Y;
-				vb->z = src.pos.Z;
+				Vector3 pos = src.pos;
+				if( m_pull > 0.0f )
+				{
+					// along the ray to the eye, so the pixel stays where it was and only the depth moves
+					Vector3 toEye = m_eye - pos;
+					const Real distance = toEye.Length();
+					if( distance > 2.0f * m_pull )
+						pos += toEye * ( m_pull / distance );
+				}
+				vb->x = pos.X;
+				vb->y = pos.Y;
+				vb->z = pos.Z;
 				vb->nx = 0.0f;
 				vb->ny = 0.0f;
 				vb->nz = 1.0f;
 				vb->diffuse = src.diffuse;
-				vb->u1 = 0.0f;
-				vb->v1 = 0.0f;
+				vb->u1 = m_shrouded ? ( src.pos.X + m_shroudOffsetX ) * m_shroudScaleX : 0.0f;
+				vb->v1 = m_shrouded ? ( src.pos.Y + m_shroudOffsetY ) * m_shroudScaleY : 0.0f;
 				vb->u2 = 0.0f;
 				vb->v2 = 0.0f;
 			}
@@ -733,15 +783,35 @@ void GroundOverlayQuads::flush( void )
 static GroundOverlayQuads theGroundOverlayQuads;
 
 /** The prelit, untextured, alpha blended state a ground sheet is drawn with.  Set once per sheet,
-	* before any quad is added. */
-static void setGroundOverlayState( void )
+	* before any quad is added.  pull above nought depth tests the sheet, its vertices that far
+	* nearer the eye; shadeByShroud multiplies it by the shroud's texture, the one the ground took.
+	* On Direct3D 11 outside Classic that bind is the eased, smoothed picture (Direct3D11_Set_Shroud),
+	* so the sheet and the ground under it fade together. */
+static void setGroundOverlayState( Real pull, Bool shadeByShroud )
 {
 	static ShaderClass overlayShader( SC_GROUND_OVERLAY );
+	static ShaderClass testedShader( SC_GROUND_OVERLAY_TESTED );
 	VertexMaterialClass *material = VertexMaterialClass::Get_Preset( VertexMaterialClass::PRELIT_DIFFUSE );
 	DX8Wrapper::Set_Material( material );
 	REF_PTR_RELEASE( material );
-	DX8Wrapper::Set_Texture( 0, NULL );
-	DX8Wrapper::Set_Shader( overlayShader );
+	W3DShroud *shroud = ( shadeByShroud && TheTerrainRenderObject ) ? TheTerrainRenderObject->getShroud() : NULL;
+	TextureClass *shroudTexture = ( shroud != NULL ) ? shroud->getShroudTexture() : NULL;
+	if( shroudTexture == NULL )
+		shroud = NULL;
+	DX8Wrapper::Set_Texture( 0, shroudTexture );
+	ShaderClass shader( pull > 0.0f ? testedShader : overlayShader );
+	if( shroud != NULL )
+		shader.Set_Texturing( ShaderClass::TEXTURING_ENABLE );
+	DX8Wrapper::Set_Shader( shader );
+
+	// the eye of the camera drawing this pass, out of the wrapper's own copy of the view (a rotation
+	// and a translation, CameraClass::Apply): -R^T t
+	Matrix4x4 view;
+	DX8Wrapper::Get_Transform( D3DTS_VIEW, view );
+	Vector3 eye;
+	for( Int j = 0; j < 3; ++j )
+		eye[ j ] = -( view[ 0 ][ j ] * view[ 0 ][ 3 ] + view[ 1 ][ j ] * view[ 1 ][ 3 ] + view[ 2 ][ j ] * view[ 2 ][ 3 ] );
+	theGroundOverlayQuads.begin( eye, pull, shroud );
 	// the quads are in world space; the terrain pass has rendered pucks and bridges since its own
 	// identity was set, and the sheet used to inherit whichever of their matrices came last
 	DX8Wrapper::Set_Transform( D3DTS_WORLD, Matrix3D( 1 ) );
@@ -750,7 +820,7 @@ static void setGroundOverlayState( void )
 
 //-------------------------------------------------------------------------------------------------
 /** Draw the pathfinder's own cell grid under the structure sitting on the cursor, and cross out
-	* the cells it cannot go on.  The lines only under GridBuildPlacement; the red cells always.
+	* the cells it cannot go on.  The lines only under GridBuildPlacement; the washed cells always.
 	* GridBuildPlacement snaps a footprint's edges to these very lines
 	* (see snapPlacementToGrid), so being able to see them is the difference between guessing at a
 	* flush row of buildings and laying one out.
@@ -764,16 +834,18 @@ static void setGroundOverlayState( void )
 	* overlay: painted on the ground it is read at a glance, and everything drawn after the terrain
 	* covers it, so a building never has grid lines crawling over its roof.
 	*
-	* "Cannot build" here is the pathfinder cell's own type: water, a cliff, rubble, an existing
-	* structure, plain impassable.  It deliberately does not run the full isLocationLegalToBuild for
-	* every cell - that is a per-structure query (build radius, shroud, supply proximity) and a
-	* couple of hundred of them a frame is not worth it.  The ghost's own red tint already answers
-	* that question for the one spot the cursor is actually on.
+	* "Cannot build" here is what the cell itself says, red for an existing structure or rubble,
+	* striped for the ground: water, a cliff, plain impassable, the band along the map's edge.  It
+	* deliberately does not run the full isLocationLegalToBuild for every cell - that is a
+	* per-structure query (build radius, shroud, supply proximity) and a couple of hundred of them a
+	* frame is not worth it.  The ghost's own red tint already answers that question for the one spot
+	* the cursor is actually on, and the one ground rule no cell can carry alone, a footprint too
+	* steep as a whole, stripes the cells under that ghost (takeBuildGrid).
 	*
 	* The cells are read at the sync point (takeBuildGrid), not here: this runs in the terrain pass,
 	* beside the tick. */
 //-------------------------------------------------------------------------------------------------
-void W3DInGameUI::drawBuildGrid( void )
+void W3DInGameUI::drawBuildGrid( Bool shadeByShroud )
 {
 	if( m_pendingPlaceType == NULL )
 		return;
@@ -831,7 +903,7 @@ void W3DInGameUI::drawBuildGrid( void )
 		}
 	}
 
-	setGroundOverlayState();
+	setGroundOverlayState( GRID_PULL, shadeByShroud );
 
 	GroundOverlayQuads &quads = theGroundOverlayQuads;
 
@@ -866,27 +938,105 @@ void W3DInGameUI::drawBuildGrid( void )
 		}
 	}
 
-	// and a red wash over every cell a structure cannot stand on.  Filling the cell reads at a
-	// glance where an X drawn in thin lines did not.
+	// and a wash over every cell a structure cannot stand on: red where something stands, the game's
+	// own hazard stripes, amber on a dark wash, where the ground itself refuses (takeBuildGrid).  The
+	// two read apart by pattern as well as by colour, so a player who cannot tell red from amber
+	// still can, and the dark between the stripes keeps them on sand and snow, where amber alone
+	// washes out.  Filling the cell reads at a glance where an X drawn in thin lines did not.  Four
+	// triangles round the cell's middle, sampled too: one quad took a diagonal of its own, and on a
+	// cliff cell, the kind most often washed, the other one's half sank metres into the rock under
+	// the depth test.  The middle lies on whichever diagonal the ground took, so the fan follows
+	// both halves.
 	const Real BLOCKED_ALPHA = 0x30;
-	for( iy = 0; iy < GRID_CELLS; ++iy )
+	const UnsignedInt BLOCKED_RGB = 0x00FF3030;
+	const Real GROUND_ALPHA = 0x40;
+	const UnsignedInt GROUND_RGB = 0x00101418;		// near black, a little steel in it, as the order rims
+	const Real STRIPE_ALPHA = 0x70;
+	const UnsignedInt STRIPE_RGB = 0x00FFB000;
+	// where a stripe crosses a cell edge, measured along it: half of every diagonal of the cell is stripe
+	const Real STRIPE_CUT = 2.5f;
+	const Real stripeT = STRIPE_CUT / PATHFIND_CELL_SIZE_F;
+	// The striped cells are mostly cliffs, and a grid line runs half a unit off the terrain's own
+	// vertices, so across a crease it sags up to about a unit and a half under the drawn rock; at a
+	// low camera the grid's pull did not lift that out of the depth test.  They go second, pulled
+	// further.
+	const Real GROUND_PULL = 5.0f;
+	for( Int row = 0; row < 2 * GRID_CELLS; ++row )
 	{
+		// the patch's rows twice over: the red cells, then the striped ones
+		const Int pass = row / GRID_CELLS;
+		iy = row % GRID_CELLS;
+		if( row == GRID_CELLS )
+			quads.setPull( GROUND_PULL );
 		for( ix = 0; ix < GRID_CELLS; ++ix )
 		{
-			if( !m_buildGridBlocked[ iy ][ ix ] )
+			const UnsignedByte wash = m_buildGridBlocked[ iy ][ ix ];
+			if( wash == BUILD_CELL_CLEAR || ( wash == BUILD_CELL_GROUND ) != ( pass == 1 ) )
 				continue;
 
 			if( fade[ iy ][ ix ] <= 0.0f && fade[ iy + 1 ][ ix + 1 ] <= 0.0f )
 				continue;
 
-			quads.add( Vector3( gx[ ix ],     gy[ iy ],     gz[ iy ][ ix ] ),
-								 Vector3( gx[ ix + 1 ], gy[ iy ],     gz[ iy ][ ix + 1 ] ),
-								 Vector3( gx[ ix + 1 ], gy[ iy + 1 ], gz[ iy + 1 ][ ix + 1 ] ),
-								 Vector3( gx[ ix ],     gy[ iy + 1 ], gz[ iy + 1 ][ ix ] ),
-								 overlayColor( 0x00FF3030, BLOCKED_ALPHA * fade[ iy ][ ix ] ),
-								 overlayColor( 0x00FF3030, BLOCKED_ALPHA * fade[ iy ][ ix + 1 ] ),
-								 overlayColor( 0x00FF3030, BLOCKED_ALPHA * fade[ iy + 1 ][ ix + 1 ] ),
-								 overlayColor( 0x00FF3030, BLOCKED_ALPHA * fade[ iy + 1 ][ ix ] ) );
+			const Vector3 corner[ 4 ] =
+			{
+				Vector3( gx[ ix ],     gy[ iy ],     gz[ iy ][ ix ] ),
+				Vector3( gx[ ix + 1 ], gy[ iy ],     gz[ iy ][ ix + 1 ] ),
+				Vector3( gx[ ix + 1 ], gy[ iy + 1 ], gz[ iy + 1 ][ ix + 1 ] ),
+				Vector3( gx[ ix ],     gy[ iy + 1 ], gz[ iy + 1 ][ ix ] )
+			};
+			const Real cornerFade[ 4 ] = { fade[ iy ][ ix ], fade[ iy ][ ix + 1 ], fade[ iy + 1 ][ ix + 1 ], fade[ iy + 1 ][ ix ] };
+			const Real midX = 0.5f * ( gx[ ix ] + gx[ ix + 1 ] ), midY = 0.5f * ( gy[ iy ] + gy[ iy + 1 ] );
+			const Vector3 mid( midX, midY, overlayGround( midX, midY ) + GRID_LIFT );
+			const Real midFade = 0.25f * ( cornerFade[ 0 ] + cornerFade[ 1 ] + cornerFade[ 2 ] + cornerFade[ 3 ] );
+			const Bool ground = wash == BUILD_CELL_GROUND;
+			const UnsignedInt rgb = ground ? GROUND_RGB : BLOCKED_RGB;
+			const Real alpha = ground ? GROUND_ALPHA : BLOCKED_ALPHA;
+			const UnsignedInt midColor = overlayColor( rgb, alpha * midFade );
+			for( Int k = 0; k < 4; ++k )
+			{
+				const Int n = ( k + 1 ) & 3;
+				quads.add( corner[ k ], corner[ n ], mid, mid,
+									 overlayColor( rgb, alpha * cornerFade[ k ] ),
+									 overlayColor( rgb, alpha * cornerFade[ n ] ), midColor, midColor );
+			}
+			if( !ground )
+				continue;
+
+			// The stripes run along x - y, the cell's diagonal from corner 0 to corner 2, so one leaving
+			// a cell at a corner goes on in the cell diagonally past it; each cell also paints the tips
+			// of its two neighbours' stripes that cross its other corners, or every stripe would pinch
+			// to a point there.  Points on an edge go on the ground with its corners; the two either
+			// side of the middle are sampled, as the middle is, being off the edges.
+			auto onEdge = [&]( Int k, Int n, Real t ) -> Vector3
+			{
+				return corner[ k ] + ( corner[ n ] - corner[ k ] ) * t;
+			};
+			auto edgeColor = [&]( Int k, Int n, Real t ) -> UnsignedInt
+			{
+				return overlayColor( STRIPE_RGB, STRIPE_ALPHA * ( cornerFade[ k ] + ( cornerFade[ n ] - cornerFade[ k ] ) * t ) );
+			};
+			const Real half = 0.5f * STRIPE_CUT;
+			const Vector3 right( midX + half, midY - half, overlayGround( midX + half, midY - half ) + GRID_LIFT );
+			const Vector3 left( midX - half, midY + half, overlayGround( midX - half, midY + half ) + GRID_LIFT );
+			const UnsignedInt c0 = edgeColor( 0, 0, 0.0f ), c2 = edgeColor( 2, 2, 0.0f );
+			const UnsignedInt cMid = overlayColor( STRIPE_RGB, STRIPE_ALPHA * midFade );
+			const Vector3 r0 = onEdge( 0, 1, stripeT ), r1 = onEdge( 1, 2, 1.0f - stripeT );
+			const Vector3 l0 = onEdge( 0, 3, stripeT ), l1 = onEdge( 3, 2, 1.0f - stripeT );
+			const UnsignedInt cr0 = edgeColor( 0, 1, stripeT ), cr1 = edgeColor( 1, 2, 1.0f - stripeT );
+			const UnsignedInt cl0 = edgeColor( 0, 3, stripeT ), cl1 = edgeColor( 3, 2, 1.0f - stripeT );
+			quads.add( corner[ 0 ], r0, right, mid, c0, cr0, cMid, cMid );
+			quads.add( mid, right, r1, corner[ 2 ], cMid, cMid, cr1, c2 );
+			quads.add( corner[ 0 ], mid, left, l0, c0, cMid, cMid, cl0 );
+			quads.add( mid, corner[ 2 ], l1, left, cMid, c2, cl1, cMid );
+			// the neighbours' tips, triangles at corners 1 and 3
+			for( Int k = 1; k < 4; k += 2 )
+			{
+				const Int back = ( k + 3 ) & 3, on = ( k + 1 ) & 3;
+				const UnsignedInt ck = edgeColor( k, k, 0.0f );
+				const UnsignedInt cb = edgeColor( k, back, stripeT ), co = edgeColor( k, on, stripeT );
+				quads.add( corner[ k ], onEdge( k, back, stripeT ), onEdge( k, on, stripeT ), corner[ k ],
+									 ck, cb, co, ck );
+			}
 		}
 	}
 
@@ -894,13 +1044,32 @@ void W3DInGameUI::drawBuildGrid( void )
 
 }  // end drawBuildGrid
 
+/** The lowest and highest ground under one footprint's samples (BuildAssistant::iterateFootprint),
+	* the two numbers isLocationLegalToBuild's flatness test compares. */
+struct BuildGridHeightSpan
+{
+	Real loZ, hiZ;
+};
+
+static void buildGridSampleHeight( const Coord3D *at, void *userData )
+{
+	BuildGridHeightSpan *span = (BuildGridHeightSpan *)userData;
+	if( at->z < span->loZ )
+		span->loZ = at->z;
+	if( at->z > span->hiZ )
+		span->hiZ = at->z;
+}
+
 //-------------------------------------------------------------------------------------------------
-/** Which cells of the patch round the ghost drawBuildGrid washes red, read from the pathfinder at
-	* the sync point.  The pathfinder marks every structure the moment it is placed, the enemy's in the
-	* shroud included, so its cells alone drew enemy foundations into the dark: a cell held by
-	* something the local player has no picture of stays clear here, and so does rubble under the
-	* shroud, while a building he still sees standing in the fog after it died is washed from its
-	* ghost.  Water, cliffs and plain impassable ground are the map's own and always show. */
+/** Which cells of the patch round the ghost drawBuildGrid washes, and as what, read at the sync
+	* point.  Red is something standing there.  The pathfinder marks every structure the moment it is
+	* placed, the enemy's in the shroud included, so its cells alone drew enemy foundations into the
+	* dark: a cell held by something the local player has no picture of stays clear here, and so does
+	* rubble under the shroud, while a building he still sees standing in the fog after it died is
+	* washed from its ghost.  Striped is the ground itself, the map's own and always shown: water,
+	* cliffs, plain impassable, the band along the map's edge, and the ghost's own footprint when it is
+	* too steep as a whole or sits on a bridge.  Nothing here is written anywhere; every query is one
+	* the ghost's own legality check already makes on this side. */
 //-------------------------------------------------------------------------------------------------
 void W3DInGameUI::takeBuildGrid( void )
 {
@@ -914,30 +1083,52 @@ void W3DInGameUI::takeBuildGrid( void )
 	Pathfinder *pathfinder = TheAI->pathfinder();
 	const Int me = ThePlayerList->getLocalPlayer()->getPlayerIndex();
 
+	// the map's own refusals, the ones checkSampleBuildLocation makes at every sample: off the
+	// pathfinder's map, inside MinDistFromEdgeOfMapForBuild of the edge, and a cell the pathfinder
+	// calls water, cliff or impassable.  A cell is in the band when either of its grid lines is,
+	// which is exactly where a footprint snapped to that line puts its edge sample.
+	Region3D pathfindExtent, mapExtent;
+	TheTerrainLogic->getMaximumPathfindExtent( &pathfindExtent );
+	TheTerrainLogic->getExtent( &mapExtent );
+	const Real edge = TheGlobalData->m_MinDistFromEdgeOfMapForBuild;
+	// the trainer's build anywhere leaves the ground rules out of the ghost's check, and so out of here
+	const Bool groundRules = BitTest( placementCheckOptions(), BuildAssistant::TERRAIN_RESTRICTIONS );
+
 	for( Int iy = 0; iy < BUILD_GRID_CELLS; ++iy )
 	{
 		for( Int ix = 0; ix < BUILD_GRID_CELLS; ++ix )
 		{
-			const PathfindCell *cell = pathfinder->getCell( LAYER_GROUND, m_buildGridCellX + ix, m_buildGridCellY + iy );
-			Bool blocked = cell != NULL && cell->getType() != PathfindCell::CELL_CLEAR;
+			const Real loX = placementGridLine( m_buildGridCellX + ix ), loY = placementGridLine( m_buildGridCellY + iy );
+			const Real hiX = loX + PATHFIND_CELL_SIZE_F, hiY = loY + PATHFIND_CELL_SIZE_F;
+			Coord3D at;
+			at.x = 0.5f * ( loX + hiX );
+			at.y = 0.5f * ( loY + hiY );
+			at.z = 0.0f;
 
-			if( blocked && cell->getType() == PathfindCell::CELL_OBSTACLE )
+			const PathfindCell *cell = pathfinder->getCell( LAYER_GROUND, m_buildGridCellX + ix, m_buildGridCellY + iy );
+			UnsignedByte wash = BUILD_CELL_CLEAR;
+			if( cell == NULL || !pathfindExtent.isInRegionNoZ( &at ) )
+				wash = BUILD_CELL_GROUND;
+			else if( edge > 0.0f && ( loX < mapExtent.lo.x + edge || hiX > mapExtent.hi.x - edge ||
+																loY < mapExtent.lo.y + edge || hiY > mapExtent.hi.y - edge ) )
+				wash = BUILD_CELL_GROUND;
+			else if( cell->getType() == PathfindCell::CELL_OBSTACLE )
 			{
 				// the cell can still name an object the tick has already destroyed; nothing is left to
 				// hide, and the pathfinder still refuses the cell, so it draws red
 				const Object *obstacle = TheGameLogic->findObjectByID( cell->getObstacleID() );
-				blocked = obstacle == NULL || !BuildAssistant_isHiddenFromLocalPlayer( obstacle );
+				if( obstacle == NULL || !BuildAssistant_isHiddenFromLocalPlayer( obstacle ) )
+					wash = BUILD_CELL_OBJECT;
 			}
-			else if( blocked && cell->getType() == PathfindCell::CELL_RUBBLE )
+			else if( cell->getType() == PathfindCell::CELL_RUBBLE )
 			{
-				Coord3D at;
-				at.x = ( (Real)( m_buildGridCellX + ix ) + 0.5f ) * PATHFIND_CELL_SIZE_F;
-				at.y = ( (Real)( m_buildGridCellY + iy ) + 0.5f ) * PATHFIND_CELL_SIZE_F;
-				at.z = 0.0f;
-				blocked = ThePartitionManager->getShroudStatusForPlayer( me, &at ) != CELLSHROUD_SHROUDED;
+				if( ThePartitionManager->getShroudStatusForPlayer( me, &at ) != CELLSHROUD_SHROUDED )
+					wash = BUILD_CELL_OBJECT;
 			}
+			else if( cell->getType() != PathfindCell::CELL_CLEAR )
+				wash = BUILD_CELL_GROUND;		// water, cliff, plain impassable
 
-			m_buildGridBlocked[ iy ][ ix ] = blocked;
+			m_buildGridBlocked[ iy ][ ix ] = ( wash == BUILD_CELL_GROUND && !groundRules ) ? BUILD_CELL_CLEAR : wash;
 		}
 	}
 
@@ -963,7 +1154,54 @@ void W3DInGameUI::takeBuildGrid( void )
 			for( Int ix = loX; ix <= hiX; ++ix )
 			{
 				if( BuildAssistant_ghostCoversCell( ghosts[ g ], m_buildGridCellX + ix, m_buildGridCellY + iy ) )
-					m_buildGridBlocked[ iy ][ ix ] = TRUE;
+					m_buildGridBlocked[ iy ][ ix ] = BUILD_CELL_OBJECT;
+			}
+		}
+	}
+
+	// What the cells cannot say: a footprint too steep as a whole (AllowedHeightVariationForBuilding
+	// over every sample of it, which a gentle slope fails for a big building and passes for a small
+	// one) and a centre on a bridge's deck.  Judged on each placement ghost where it stands, with the
+	// check's own sampler, so the cells under a ghost the check turned red for the ground are striped
+	// and a green one never is.
+	for( Int i = 0; groundRules && i < TheGlobalData->m_maxLineBuildObjects && m_placeIcon[ i ] != NULL; ++i )
+	{
+		Coord3D at = *m_placeIcon[ i ]->getPosition();
+		const Real angle = m_placeIcon[ i ]->getOrientation();
+		const GeometryInfo &geom = m_pendingPlaceType->getTemplateGeometryInfo();
+
+		BuildGridHeightSpan span;
+		span.loZ = mapExtent.hi.z;		// the check starts its two the wrong way round, as here
+		span.hiZ = mapExtent.lo.z;
+		TheBuildAssistant->iterateFootprint( m_pendingPlaceType, angle, &at, PATHFIND_CELL_SIZE_F,
+																				 buildGridSampleHeight, &span );
+		const Bool steep = span.hiZ - span.loZ > TheGlobalData->m_allowedHeightVariationForBuilding;
+		if( !steep && TheTerrainLogic->getLayerForDestination( &at ) == LAYER_GROUND )
+			continue;
+
+		// stripe every clear cell whose middle the footprint covers, in iterateFootprint's frame: the
+		// major radius along the ghost's own x
+		const Bool box = geom.getGeomType() == GEOMETRY_BOX;
+		const Real reach = geom.getBoundingCircleRadius();
+		const Real halfX = box ? geom.getMajorRadius() : reach;
+		const Real halfY = box ? geom.getMinorRadius() : reach;
+		const Real c = (Real)cos( angle ), s = (Real)sin( angle );
+		const Int loX = max( 0, REAL_TO_INT_FLOOR( (at.x - reach + 0.5f) / PATHFIND_CELL_SIZE_F ) - m_buildGridCellX );
+		const Int loY = max( 0, REAL_TO_INT_FLOOR( (at.y - reach + 0.5f) / PATHFIND_CELL_SIZE_F ) - m_buildGridCellY );
+		const Int hiX = min( BUILD_GRID_CELLS - 1, REAL_TO_INT_FLOOR( (at.x + reach + 0.5f) / PATHFIND_CELL_SIZE_F ) - m_buildGridCellX );
+		const Int hiY = min( BUILD_GRID_CELLS - 1, REAL_TO_INT_FLOOR( (at.y + reach + 0.5f) / PATHFIND_CELL_SIZE_F ) - m_buildGridCellY );
+		for( Int iy = loY; iy <= hiY; ++iy )
+		{
+			for( Int ix = loX; ix <= hiX; ++ix )
+			{
+				if( m_buildGridBlocked[ iy ][ ix ] != BUILD_CELL_CLEAR )
+					continue;
+				const Real dx = placementGridLine( m_buildGridCellX + ix ) + 0.5f * PATHFIND_CELL_SIZE_F - at.x;
+				const Real dy = placementGridLine( m_buildGridCellY + iy ) + 0.5f * PATHFIND_CELL_SIZE_F - at.y;
+				const Bool inside = box ? ( fabs( dx * c + dy * s ) <= halfX && fabs( -dx * s + dy * c ) <= halfY )
+																: ( dx * dx + dy * dy <= reach * reach );
+				if( inside )
+					m_buildGridBlocked[ iy ][ ix ] = BUILD_CELL_GROUND;
 			}
 		}
 	}
@@ -979,7 +1217,7 @@ void W3DInGameUI::takeBuildGrid( void )
 	* Rings rather than one fan from the centre: a fan spans a valley with a single flat triangle,
 	* and the circles worth drawing are big enough to cross one. */
 //-------------------------------------------------------------------------------------------------
-void W3DInGameUI::drawAttackCircleFill( void )
+void W3DInGameUI::drawAttackCircleFill( Bool shadeByShroud )
 {
 	Coord3D center;
 	Real radius;
@@ -1009,7 +1247,7 @@ void W3DInGameUI::drawAttackCircleFill( void )
 		}
 	}
 
-	setGroundOverlayState();
+	setGroundOverlayState( 0.0f, shadeByShroud );
 
 	GroundOverlayQuads &quads = theGroundOverlayQuads;
 	const UnsignedInt fill = overlayColor( FILL_RGB, FILL_ALPHA );
@@ -1043,6 +1281,7 @@ enum { ORDER_RING_SEGMENTS = 16 };		// a dot a few pixels across
 static const UnsignedInt ORDER_RIM_RGB = 0x00101418;	// near black, a little steel in it
 static const Real ORDER_RIM_ALPHA = 0x78;
 static const Real ORDER_MARK_LIFT = 0.35f;				// the build grid's: out of the dirt, not floating
+static const Real ORDER_MARK_PULL = 1.5f;					// towards the eye for the depth test, times the zoom (setGroundOverlayState)
 static const Real ORDER_MARK_MIN_ZOOM = 0.6f;			// widths follow the camera's zoom between these, so
 static const Real ORDER_MARK_MAX_ZOOM = 4.5f;			// a mark keeps about its width on the screen, out to the
 																									// wheel's ceiling near 3.9 (W3DWaypointBuffer's ORDER_MAX_ZOOM_SCALE)
@@ -1074,9 +1313,10 @@ enum { MARKER_SEGMENTS = 32, MARKER_ARROWS = 4, MARKER_DOT_SEGMENTS = 10 };
 /** The order rings' and markers' ground, at the sync point: the terrain heights are logic's, and
 	* drawOrderRings runs in the terrain pass beside the tick.  Each destination dot is sampled at its
 	* own vertices, so one on a slope lies on it; one on a bridge is flat at the deck's height.  A
-	* marker moves every picture, so it takes a plane: its point's height and the slope round it.
-	* ponytail: every dot's ground is sampled again each frame of its fade, 68 heights a dot; keep
-	* the points of a settled dot if a few hundred at once ever show */
+	* marker moves every picture, so it takes a grid of heights over what it covers now: it only
+	* closes from here, so a picture drawn later still lies inside the grid.
+	* ponytail: every dot's ground is sampled again each frame of its fade, 68 heights a dot, and a
+	* marker's 289; keep the points of a settled dot if a few hundred at once ever show */
 //-------------------------------------------------------------------------------------------------
 void W3DInGameUI::takeOrderRings( void )
 {
@@ -1123,42 +1363,72 @@ void W3DInGameUI::takeOrderRings( void )
 		const MoveHintStruct& hint = m_moveHint[ i ];
 		if( hint.bornMs == 0 || now - hint.bornMs >= (UnsignedInt)MOVE_MARKER_MS )
 			continue;
-		OrderMarker mark;
-		mark.rgb = orderKindColor( hint.kind );
-		mark.bornMs = hint.bornMs;
-		mark.slopeX = mark.slopeY = 0.0f;
 		const Real x = hint.pos.x, y = hint.pos.y;
 		if( isOrderMarkOnWater( x, y, NULL ) )
 			continue;		// after the water, on the sorted list (W3DWaypointBuffer::takeWaterMarks)
+		m_orderMarkers.push_back( OrderMarker() );
+		OrderMarker &mark = m_orderMarkers.back();
+		mark.rgb = orderKindColor( hint.kind );
+		mark.bornMs = hint.bornMs;
+		mark.reach = 0.0f;
 		const Real ground = overlayGround( x, y );
 		// a point well over the ground is a bridge's deck: flat there
 		const Bool deck = hint.pos.z > ground + 2.0f;
 		mark.at.Set( x, y, deck ? hint.pos.z : ground );
 		if( !deck )
 		{
-			const Real SLOPE_STEP = 4.0f;
-			mark.slopeX = ( overlayGround( x + SLOPE_STEP, y ) - overlayGround( x - SLOPE_STEP, y ) ) / ( 2.0f * SLOPE_STEP );
-			mark.slopeY = ( overlayGround( x, y + SLOPE_STEP ) - overlayGround( x, y - SLOPE_STEP ) ) / ( 2.0f * SLOPE_STEP );
+			// the ring as wide as it is now, its arrowheads and rim outside it (drawOrderRings)
+			const Real close = MIN( 1.0f, (Real)( now - hint.bornMs ) / MARKER_CLOSE_MS );
+			const Real left = 1.0f - close;
+			const Real radius = MARKER_END_RADIUS + ( MARKER_START_RADIUS - MARKER_END_RADIUS ) * left * left * left;
+			mark.reach = ( radius + MARKER_ARROW_GAP + MARKER_WIDTH + MARKER_ARROW_ARM + 2.0f * MARKER_RIM ) * m_orderMarkScale + 1.0f;
+			const Real step = 2.0f * mark.reach / (Real)( ORDER_MARKER_GRID - 1 );
+			for( Int gy = 0; gy < ORDER_MARKER_GRID; ++gy )
+				for( Int gx = 0; gx < ORDER_MARKER_GRID; ++gx )
+					mark.ground[ gy * ORDER_MARKER_GRID + gx ] = overlayGround( x - mark.reach + gx * step, y - mark.reach + gy * step );
 		}
-		m_orderMarkers.push_back( mark );
 	}
+}
+
+/** The ground under a marker at x, y: its grid's heights, bilinear between the samples, which are
+	* closer than a terrain cell until the camera is pulled most of the way out. */
+static Real markerGround( const Vector3 &at, Real reach, const Real *heights, Int grid, Real x, Real y )
+{
+	if( reach <= 0.0f )
+		return at.Z;
+	const Real step = 2.0f * reach / (Real)( grid - 1 );
+	Real fx = ( x - ( at.X - reach ) ) / step;
+	Real fy = ( y - ( at.Y - reach ) ) / step;
+	fx = MAX( 0.0f, MIN( (Real)( grid - 1 ), fx ) );
+	fy = MAX( 0.0f, MIN( (Real)( grid - 1 ), fy ) );
+	const Int x0 = MIN( grid - 2, REAL_TO_INT_FLOOR( fx ) );
+	const Int y0 = MIN( grid - 2, REAL_TO_INT_FLOOR( fy ) );
+	const Real s = fx - (Real)x0, t = fy - (Real)y0;
+	const Real *row0 = heights + y0 * grid;
+	const Real *row1 = row0 + grid;
+	const Real top = row0[ x0 ] + s * ( row0[ x0 + 1 ] - row0[ x0 ] );
+	const Real bottom = row1[ x0 ] + s * ( row1[ x0 + 1 ] - row1[ x0 ] );
+	return top + t * ( bottom - top );
 }
 
 //-------------------------------------------------------------------------------------------------
 /** One dot under each unit where its order really ends, and the marker where an order was given,
 	* painted on the ground in the terrain pass like the attack circle's wash, so the unit standing in
-	* it is drawn over it.  Rims first, every one of them, then the colours. */
+	* it is drawn over it.  Rims first, every one of them, then the colours.  Depth tested, so a hill or
+	* a bridge deck in front of the point hides it.  Both terrains draw it after their shroud and ask
+	* for shadeByShroud, the shroud's texture multiplied in as the ground took it: soft on Direct3D 11
+	* outside Classic, a texel a cell elsewhere, black on black shroud. */
 //-------------------------------------------------------------------------------------------------
-void W3DInGameUI::drawOrderRings( void )
+void W3DInGameUI::drawOrderRings( Bool shadeByShroud )
 {
 	if( m_orderRingColors.empty() && m_orderMarkers.empty() )
 		return;
-	// not in the water's mirror pass: drawn PASS_ALWAYS they would lie on the reflection, as the order
-	// lines would (W3DWaypointBuffer::drawWaypoints)
+	// not in the water's mirror pass: they would lie on the reflection, as the order lines would
+	// (W3DWaypointBuffer::drawWaypoints)
 	if( ShaderClass::Is_Backface_Culling_Inverted() )
 		return;
 
-	setGroundOverlayState();
+	setGroundOverlayState( ORDER_MARK_PULL * m_orderMarkScale, shadeByShroud );
 
 	// the fade and the marker's closing are worked out here, from this picture's clock: a picture
 	// drawn again beside the tick (phase 4) takes nothing new at the sync point, and anything baked
@@ -1202,7 +1472,7 @@ void W3DInGameUI::drawOrderRings( void )
 			const Real grow = rimPass ? MARKER_RIM * scale : 0.0f;		// the rim is the same shape, this much fatter
 			auto ground = [&]( Real x, Real y ) -> Vector3
 			{
-				return Vector3( x, y, mark.at.Z + mark.slopeX * ( x - mark.at.X ) + mark.slopeY * ( y - mark.at.Y ) + ORDER_MARK_LIFT );
+				return Vector3( x, y, markerGround( mark.at, mark.reach, mark.ground, ORDER_MARKER_GRID, x, y ) + ORDER_MARK_LIFT );
 			};
 			// a straight band from a to b, half as wide as given, grown at both ends by its rim
 			auto band = [&]( Real ax, Real ay, Real bx, Real by, Real half )
@@ -1548,6 +1818,18 @@ void W3DInGameUI::takeMoveHintTransforms( void )
 		if( m_moveHint[ i ].frame == 0 || elapsed > ConvertRetailFrames( 40 ) )
 			continue;
 
+		// EA's ring is a model, lit by nothing the shroud can reach: under black shroud it drew bright
+		// on black ground, so it is left out there.  In fog it keeps EA's look
+		W3DShroud *shroud = TheTerrainRenderObject ? TheTerrainRenderObject->getShroud() : NULL;
+		m_moveHintShrouded[ i ] = FALSE;
+		if( shroud != NULL && shroud->getShroudTexture() != NULL && shroud->getCellWidth() > 0.0f && shroud->getCellHeight() > 0.0f )
+		{
+			const Int cellX = REAL_TO_INT_FLOOR( ( m_moveHint[ i ].pos.x - shroud->getDrawOriginX() ) / shroud->getCellWidth() );
+			const Int cellY = REAL_TO_INT_FLOOR( ( m_moveHint[ i ].pos.y - shroud->getDrawOriginY() ) / shroud->getCellHeight() );
+			if( cellX >= 0 && cellY >= 0 && cellX < shroud->getNumShroudCellsX() && cellY < shroud->getNumShroudCellsY() )
+				m_moveHintShrouded[ i ] = shroud->getShroudLevel( cellX, cellY ) < 16;
+		}
+
 		Matrix3D &transform = m_moveHintTransform[ i ];
 		PathfindLayerEnum layer = TheTerrainLogic->alignOnTerrain( 0, m_moveHint[ i ].pos, true, transform );
 
@@ -1578,7 +1860,7 @@ void W3DInGameUI::drawMoveHints( View *view )
 	{
 		Int elapsed = TheGameClient->getFrame() - m_moveHint[i].frame;
 
-		if( m_moveHint[ i ].frame != 0 && elapsed <= ConvertRetailFrames( 40 ) )
+		if( m_moveHint[ i ].frame != 0 && elapsed <= ConvertRetailFrames( 40 ) && !m_moveHintShrouded[ i ] )
 		{
 			// create render object and add to scene of needed
 			if( m_moveHintRenderObj[ i ] == NULL )

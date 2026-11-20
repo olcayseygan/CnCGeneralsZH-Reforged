@@ -58,11 +58,14 @@
 #include "W3DDevice/GameClient/TerrainTex.h"
 #include "W3DDevice/GameClient/HeightMap.h"
 #include "W3DDevice/GameClient/W3DDynamicLight.h"
+#include "W3DDevice/GameClient/W3DShaderManager.h"
+#include "W3DDevice/GameClient/W3DShroud.h"
 #include "WW3D2/camera.h"
 #include "WW3D2/dx8wrapper.h"
 #include "WW3D2/dx8renderer.h"
 #include "WW3D2/mesh.h"
 #include "WW3D2/meshmdl.h"
+#include "WW3D2/vertmaterial.h"
 
 //-----------------------------------------------------------------------------
 //         Private Data                                                     
@@ -427,7 +430,7 @@ void W3DBibBuffer::removeBibDrawable(DrawableID id)
 //=============================================================================
 /** Draws the bibs.  Uses camera to cull. */
 //=============================================================================
-void W3DBibBuffer::renderBibs()
+void W3DBibBuffer::renderBibs(Bool shadeByShroud)
 {
 
 	loadBibsInVertexAndIndexBuffers();
@@ -435,18 +438,49 @@ void W3DBibBuffer::renderBibs()
 	if (m_curNumBibIndices == 0) {
 		return;
 	}
+	// The pads are prelit and in world space.  They draw right after the bridges and tracks now, under
+	// the ground's sheets, and took whichever matrix and material those left.
+	DX8Wrapper::Set_Transform(D3DTS_WORLD, Matrix3D(1));
+	VertexMaterialClass *material = VertexMaterialClass::Get_Preset(VertexMaterialClass::PRELIT_DIFFUSE);
+	DX8Wrapper::Set_Material(material);
+	REF_PTR_RELEASE(material);
 	// Setup the vertex buffer, shader & texture.
 	DX8Wrapper::Set_Index_Buffer(m_indexBib,0);
 	DX8Wrapper::Set_Vertex_Buffer(m_vertexBib);
 	DX8Wrapper::Set_Shader(detailAlphaShader);
+	// The lower terrain detail lays its shroud down in the ground's base pass, so nothing darkens the
+	// pads after them: the shroud's projection goes in stage 1 and multiplies their colour, as the
+	// water's fallback does, their alpha left as it is.  A second multiplicative pass over the quads
+	// would darken the ground a second time wherever a pad is see-through.
+	W3DShroud *shroud = (shadeByShroud && TheTerrainRenderObject) ? TheTerrainRenderObject->getShroud() : NULL;
+	if (shroud != NULL && shroud->getShroudTexture() != NULL) {
+		DX8Wrapper::Set_Texture(0, m_curNumNormalBibIndices ? m_bibTexture : m_highlightBibTexture);
+		DX8Wrapper::Apply_Render_State_Changes();
+		W3DShaderManager::setTexture(0, shroud->getShroudTexture());
+		W3DShaderManager::setShader(W3DShaderManager::ST_SHROUD_TEXTURE, 1);
+		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_COLORARG2, D3DTA_CURRENT);
+		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_COLOROP, D3DTOP_MODULATE);
+		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_ALPHAARG2, D3DTA_CURRENT);
+		DX8Wrapper::Set_DX8_Texture_Stage_State(1, D3DTSS_ALPHAOP, D3DTOP_SELECTARG2);
+		// the shroud shader compares depth EQUAL for its own pass; the pads never compared it
+		DX8Wrapper::Set_DX8_Render_State(D3DRS_ZFUNC, D3DCMP_ALWAYS);
+	} else {
+		shroud = NULL;
+	}
 	if (m_curNumNormalBibIndices) {
 		DX8Wrapper::Set_Texture(0,m_bibTexture);
 		DX8Wrapper::Draw_Triangles(	0, m_curNumNormalBibIndices/3, 0,	m_curNumNormalBibVertex);
 	}
 	if (m_curNumBibIndices>m_curNumNormalBibIndices) {
 		DX8Wrapper::Set_Texture(0,m_highlightBibTexture);
-		DX8Wrapper::Draw_Triangles(	m_curNumNormalBibIndices, (m_curNumBibIndices-m_curNumNormalBibIndices)/3, 
+		DX8Wrapper::Draw_Triangles(	m_curNumNormalBibIndices, (m_curNumBibIndices-m_curNumNormalBibIndices)/3,
 						m_curNumNormalBibVertex,	m_curNumBibVertices-m_curNumNormalBibVertex);
+	}
+	if (shroud != NULL) {
+		W3DShaderManager::resetShader(W3DShaderManager::ST_SHROUD_TEXTURE);
+		// the stage states and the depth compare went round the wrapper's back
+		ShaderClass::Invalidate();
 	}
 }
 

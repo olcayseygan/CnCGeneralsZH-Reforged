@@ -1433,14 +1433,16 @@ public:
 	/** The pathfinder's build grid under a pending structure.  Public and called from the terrain
 		* renderer rather than from preDraw: it is geometry lying on the ground, and it has to go down
 		* with the terrain so that everything drawn after the terrain covers it. */
-	virtual void drawBuildGrid( void ) { }
+	virtual void drawBuildGrid( Bool shadeByShroud ) { }
 
 	/** The wash inside the attack circle, on the ground for the same reason: the units being swept
 		* up stand on top of it instead of being painted over. */
-	virtual void drawAttackCircleFill( void ) { }
+	virtual void drawAttackCircleFill( Bool shadeByShroud ) { }
 
-	/** The order rings (getOrderRings), on the ground with the terrain so the units stand on them. */
-	virtual void drawOrderRings( void ) { }
+	/** The order rings (getOrderRings), on the ground with the terrain so the units stand on them.
+		* shadeByShroud multiplies these three sheets by the shroud's texture, as the ground under them
+		* was: the terrain draws them after whatever shroud it laid down. */
+	virtual void drawOrderRings( Bool shadeByShroud ) { }
 
 	/// the control socket's "spectator" verb: the camera, the followed player, the fog, and replay
 	/// pause, seek and speed

@@ -102,8 +102,8 @@ public:
 	void clearAllBibs(void);
 	/// Removes highlighting.
 	void removeHighlighting(void);
-	/// Draws the bibs.  
-	void renderBibs();
+	/// Draws the bibs, multiplied by the shroud when no shroud pass follows them (the lower terrain detail).
+	void renderBibs(Bool shadeByShroud = FALSE);
 	/// Called when the view changes, and sort key needs to be recalculated.
 	/// Normally sortKey gets calculated when a bib becomes visible.
 protected:

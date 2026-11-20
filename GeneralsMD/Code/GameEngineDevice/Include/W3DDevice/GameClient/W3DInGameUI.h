@@ -81,17 +81,21 @@ protected:
 	virtual void drawSelectionRegion( void );			///< draw the selection region on screen
 	virtual void drawAttackHints( View *view );		///< draw attack hint visual feedback
 	virtual void drawPlaceAngle( View *view ); 		///< draw place building angle if needed
-	virtual void drawBuildGrid( void );						///< the pathfinder's build grid under a pending structure
-	virtual void drawAttackCircleFill( void );		///< the wash on the ground inside an attack circle
-	virtual void drawOrderRings( void );					///< the dot on each unit's destination and the click markers, in the terrain pass
+	virtual void drawBuildGrid( Bool shadeByShroud );						///< the pathfinder's build grid under a pending structure
+	virtual void drawAttackCircleFill( Bool shadeByShroud );		///< the wash on the ground inside an attack circle
+	virtual void drawOrderRings( Bool shadeByShroud );	///< the dot on each unit's destination and the click markers, in the terrain pass
 	void takeOrderRings( void );									///< their ground and fade, read at the sync point (recordDraw)
 	std::vector< Vector3 > m_orderRingPoints;			///< a destination dot: the rim's and the colour's inside and outside, ORDER_RING_SEGMENTS + 1 of those fours a dot
-	/** A live order marker (InGameUI::createMoveHint) on a plane laid on the ground at the sync point:
-		* it moves every picture, and the ground under a ring a few units across is near enough flat */
+	/** A live order marker (InGameUI::createMoveHint).  It moves every picture and the ground's heights
+		* are logic's, so the ground under it is a grid of heights taken at the sync point and laid over
+		* what it can still cover: depth tested against the hills, a plane up to 60 units across sank
+		* into them. */
+	enum { ORDER_MARKER_GRID = 17 };
 	struct OrderMarker
 	{
 		Vector3 at;									///< the point, on the ground or a bridge's deck; one on water is W3DWaypointBuffer's
-		Real slopeX, slopeY;				///< the ground's rise per unit along x and y round it
+		Real reach;									///< the grid's half width round it; 0 on a deck, flat at at.Z
+		Real ground[ ORDER_MARKER_GRID * ORDER_MARKER_GRID ];	///< [y][x], at.X - reach to at.X + reach
 		UnsignedInt rgb;						///< InGameUI::orderKindColor
 		UnsignedInt bornMs;
 	};
@@ -114,13 +118,15 @@ protected:
 	RenderObjClass *m_moveHintRenderObj[ MAX_MOVE_HINTS ];
 	HAnimClass		 *m_moveHintAnim[ MAX_MOVE_HINTS ];
 	Matrix3D				m_moveHintTransform[ MAX_MOVE_HINTS ];	///< each ring laid on the ground at the sync point (recordDraw)
+	Bool						m_moveHintShrouded[ MAX_MOVE_HINTS ];		///< its point under black shroud then, so it is not drawn
 	void takeMoveHintTransforms( void );
 
 	// the build grid's patch, read at the sync point (recordDraw) and drawn by drawBuildGrid
 	enum { BUILD_GRID_RADIUS = 28, BUILD_GRID_CELLS = BUILD_GRID_RADIUS * 2 + 1 };
 	Int		m_buildGridCellX;		///< the patch's first pathfinder cell
 	Int		m_buildGridCellY;
-	Bool	m_buildGridBlocked[ BUILD_GRID_CELLS ][ BUILD_GRID_CELLS ];	///< [y][x], washed red
+	enum { BUILD_CELL_CLEAR = 0, BUILD_CELL_OBJECT, BUILD_CELL_GROUND };	///< what a cell of the patch is washed as
+	UnsignedByte m_buildGridBlocked[ BUILD_GRID_CELLS ][ BUILD_GRID_CELLS ];	///< [y][x]: red for an object, striped for the ground
 	void takeBuildGrid( void );
 
 	// recordDraw's lists, replayed by draw

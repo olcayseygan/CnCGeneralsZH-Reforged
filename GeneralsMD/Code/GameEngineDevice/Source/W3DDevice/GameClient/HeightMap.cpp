@@ -900,6 +900,12 @@ Int HeightMapRenderObjClass::updateBlock(Int x0, Int y0, Int x1, Int y1,  WorldH
 		if (moved || m_drawnHalfMap != m_map) {
 			refreshDrawnHalf(ax0, ay0, ax1, ay1);
 		}
+	} else if (pMap) {
+		// Whole cells keep the diagonals too: what lies on the ground point by point (getDrawnHeight)
+		// takes the one the tiles cut by, and the map's flip bits are stale beside a foundation.
+		REF_PTR_SET(m_map, pMap);
+		takeDrawnInputs(x0 + pMap->getDrawOrgX() - 1, y0 + pMap->getDrawOrgY() - 1,
+			x1 + pMap->getDrawOrgX() + 1, y1 + pMap->getDrawOrgY() + 1);
 	}
 
 	Int i,j;
@@ -2118,6 +2124,29 @@ void HeightMapRenderObjClass::updateCenter(CameraClass *camera , RefRenderObjLis
 }
 
 //=============================================================================
+/** The sheets painted on the ground: the build grid, the wash inside an attack circle and the order
+	rings and markers.  After the bridges, which the grid and the rings are depth tested against so a
+	deck hides what is under it, and the building pads, which ignore depth and would paint over them.
+	After the shroud pass too, each sheet multiplied by the shroud's own texture (shadeByShroud): left
+	to that pass's multiply, which redraws the ground at EQUAL depth, they came out of the 2026-11-20
+	shots full bright on fog and on black shroud alike.  Every model drawn after the terrain covers
+	them, so the units stand on them.  Not in Modern's mirror. */
+//=============================================================================
+static void drawGroundOverlays(Bool modernFullMirror, Bool shadeByShroud)
+{
+	if (TheInGameUI == NULL || modernFullMirror)
+		return;
+	DX8Wrapper::Set_Texture(0,NULL);
+	DX8Wrapper::Set_Texture(1,NULL);
+	ShaderClass::Invalidate();
+	TheInGameUI->drawBuildGrid(shadeByShroud);
+	TheInGameUI->drawAttackCircleFill(shadeByShroud);
+	TheInGameUI->drawOrderRings(shadeByShroud);
+	DX8Wrapper::Set_Texture(0,NULL);
+	ShaderClass::Invalidate();
+}
+
+//=============================================================================
 // HeightMapRenderObjClass::Render
 //=============================================================================
 /** Renders (draws) the terrain. */
@@ -2435,9 +2464,14 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 		if (TheTerrainTracksRenderObjClassSystem)
 			TheTerrainTracksRenderObjClassSystem->flush();
 
+		// the building pads (PASS_ALWAYS) before the shroud pass, which multiplies them with the ground
+		if (!modernFullMirror)
+			m_bibBuffer->renderBibs();
+
 		// Modern reflects the ground's own shroud too. Classic leaves that ground out and the
 		// water it lands on is already shrouded, so there is no second terrain pass there.
-		if (m_shroud && rinfo.Additional_Pass_Count() && drawGround)
+		const Bool shroudPass = m_shroud && rinfo.Additional_Pass_Count() && drawGround;
+		if (shroudPass)
 		{
 			rinfo.Peek_Additional_Pass(0)->Install_Materials();
 			// The shroud installs its own culling state. Keep it on the same faces as the base.
@@ -2452,30 +2486,20 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 
 		ShaderClass::Invalidate();
 		DX8Wrapper::Apply_Render_State_Changes();
+
+		// over the pads, after the shroud pass, each multiplied by the shroud texture itself
+		drawGroundOverlays(modernFullMirror, shroudPass && !m_disableTextures);
 	}
 	else
-			m_bridgeBuffer->drawBridges(&rinfo.Camera, m_disableTextures, m_stageTwoTexture);
+	{
+		m_bridgeBuffer->drawBridges(&rinfo.Camera, m_disableTextures, m_stageTwoTexture);
+		if (!modernFullMirror)
+			m_bibBuffer->renderBibs();
+		drawGroundOverlays(modernFullMirror, FALSE);
+	}
 
   if ( m_waypointBuffer && !modernFullMirror )
 	  m_waypointBuffer->drawWaypoints(rinfo);
-
-	if (!modernFullMirror)
-		m_bibBuffer->renderBibs();
-
-	// the build grid goes down with the ground it describes: drawn here it is depth tested against
-	// the terrain and covered by everything drawn after it, so it reads as paint on the map rather
-	// than as a wireframe floating over the scene
-	if( TheInGameUI && !modernFullMirror )
-	{
-		TheInGameUI->drawBuildGrid();
-
-		// and the wash inside an attack circle, for the same reason: the units it is sweeping up
-		// have to stand on top of it
-		TheInGameUI->drawAttackCircleFill();
-
-		// and the ring under each unit's destination, so the unit that gets there stands on it
-		TheInGameUI->drawOrderRings();
-	}
 
 	// We do some custom blending, so tell the shader class to reset everything.
 	DX8Wrapper::Set_Texture(0,NULL);

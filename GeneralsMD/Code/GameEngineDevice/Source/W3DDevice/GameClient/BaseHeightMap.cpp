@@ -1043,13 +1043,14 @@ Real BaseHeightMapRenderObjClass::computeDrawnHalfZ(Int x2, Int y2)
 }
 
 //=============================================================================
-/** A cell's diagonal as the drawn ground cuts it (m_drawnFlip while subdivided). */
+/** A cell's diagonal as the drawn ground cuts it: m_drawnFlip, which updateBlock keeps in both
+	shapes.  The map's flip bits only where nothing is kept (the lower terrain detail). */
 //=============================================================================
 Bool BaseHeightMapRenderObjClass::drawnFlip(Int x, Int y)
 {
 	if (m_map == NULL)
 		return FALSE;
-	if (m_subdivided && m_drawnFlipWidth > 0 && x >= 0 && y >= 0 && x < m_drawnFlipWidth) {
+	if (m_drawnFlipWidth > 0 && x >= 0 && y >= 0 && x < m_drawnFlipWidth) {
 		const size_t at = (size_t)y*m_drawnFlipWidth + x;
 		if (at < m_drawnFlip.size())
 			return m_drawnFlip[at] != 0;
@@ -1152,26 +1153,42 @@ void BaseHeightMapRenderObjClass::freeDrawnHalf(void)
 }
 
 //=============================================================================
-/** The drawn ground at any point: the subdivided tiles' own triangles when they are on, else
-	getDrawHeight's.  For what is laid on the ground point by point (the attack circle's wash, the
-	order rings, the build grid), which would otherwise sit on the old plane under a bulge. */
+/** The drawn ground at any point: the tiles' own triangles, subdivided or whole cells, each cut on
+	the diagonal the tiles take (drawnFlip).  getDrawHeight's plane always cuts 0 to 2, so on a
+	flipped cell (a cliff, mostly) half of it lay under the drawn ground.  For what is laid on the
+	ground point by point (the attack circle's wash, the order rings, the build grid). */
 //=============================================================================
 Real BaseHeightMapRenderObjClass::getDrawnHeight(Real x, Real y)
 {
-	if (!m_subdivided || m_map == NULL)
+	if (m_map == NULL)
 		return getDrawHeight(x, y);
-	const Real half = 0.5f * MAP_XY_FACTOR;
-	const Real fx = x / half + 2*m_map->getBorderSizeInline();
-	const Real fy = y / half + 2*m_map->getBorderSizeInline();
+	// the tiles' corners: the half cells subdivided, else the samples
+	const Int per = m_subdivided ? 2 : 1;
+	const Real step = MAP_XY_FACTOR / per;
+	const Real fx = x / step + per*m_map->getBorderSizeInline();
+	const Real fy = y / step + per*m_map->getBorderSizeInline();
 	const Int x2 = REAL_TO_INT_FLOOR(fx);
 	const Int y2 = REAL_TO_INT_FLOOR(fy);
-	if (x2 < 0 || y2 < 0 || x2 >= 2*(m_map->getXExtent()-1) || y2 >= 2*(m_map->getYExtent()-1))
+	if (x2 < 0 || y2 < 0 || x2 >= per*(m_map->getXExtent()-1) || y2 >= per*(m_map->getYExtent()-1))
 		return getDrawHeight(x, y);
 	const Real s = fx - x2, t = fy - y2;
-	const Real z00 = drawnHalfZ(x2, y2), z10 = drawnHalfZ(x2+1, y2);
-	const Real z11 = drawnHalfZ(x2+1, y2+1), z01 = drawnHalfZ(x2, y2+1);
-	// the small quad's cut is its cell's diagonal
-	if (!drawnFlip(x2 >> 1, y2 >> 1)) {
+	Real z00, z10, z11, z01;
+	if (m_subdivided) {
+		z00 = drawnHalfZ(x2, y2);
+		z10 = drawnHalfZ(x2+1, y2);
+		z11 = drawnHalfZ(x2+1, y2+1);
+		z01 = drawnHalfZ(x2, y2+1);
+	} else {
+		const UnsignedByte *data = m_map->getDataPtr();
+		const size_t at = (size_t)y2*m_map->getXExtent() + x2;
+		const size_t up = at + m_map->getXExtent();
+		z00 = MAP_HEIGHT_SCALE*data[at];
+		z10 = MAP_HEIGHT_SCALE*data[at + 1];
+		z11 = MAP_HEIGHT_SCALE*data[up + 1];
+		z01 = MAP_HEIGHT_SCALE*data[up];
+	}
+	// the quad's cut is its cell's diagonal
+	if (!drawnFlip(x2 / per, y2 / per)) {
 		if (s >= t)
 			return z00 + s*(z10 - z00) + t*(z11 - z10);
 		return z00 + t*(z01 - z00) + s*(z11 - z01);

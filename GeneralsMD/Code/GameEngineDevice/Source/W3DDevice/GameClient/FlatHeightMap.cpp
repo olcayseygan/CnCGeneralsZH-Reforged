@@ -654,13 +654,18 @@ void FlatHeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	if (!modernFullMirror)
 		m_waypointBuffer->drawWaypoints(rinfo);
 
+	// the pads, darkened by the shroud the base pass laid down, as the detailed ground's shroud pass
+	// darkens them there
 	if (!modernFullMirror)
-		m_bibBuffer->renderBibs();
+		m_bibBuffer->renderBibs(m_shroud && rinfo.Additional_Pass_Count() && !m_disableTextures);
 
-	// the rings under the units' destinations and the marker where an order landed, which the
-	// detailed ground draws in the same place (HeightMapRenderObjClass::Render)
+	// the rings under the units' destinations and the marker where an order landed, depth tested
+	// against the ground and the bridges as the detailed ground draws them, over the pads.  Its shroud
+	// went in with the base pass above, so they are multiplied by the same shroud texture, which on
+	// Direct3D 11 is the soft picture the ground took (drawGroundOverlays in HeightMap.cpp draws them
+	// before its shroud pass instead)
 	if (TheInGameUI && !modernFullMirror)
-		TheInGameUI->drawOrderRings();
+		TheInGameUI->drawOrderRings(m_shroud && rinfo.Additional_Pass_Count() && !m_disableTextures);
 #endif
 	// We do some custom blending, so tell the shader class to reset everything.
 	DX8Wrapper::Set_Texture(0,NULL);

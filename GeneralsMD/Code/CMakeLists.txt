@@ -1557,7 +1557,7 @@ if(ZH_PLATFORM_POSIX)
   add_test(NAME test_sdl_post_gpu COMMAND test_sdl_post --gpu)
   set_tests_properties(test_sdl_post_gpu PROPERTIES SKIP_RETURN_CODE 77 RUN_SERIAL TRUE)
 
-  add_executable(test_sdl_ao${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_ao.cpp)
+  add_executable(test_sdl_ao ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_sdl_ao.cpp)
   set_target_properties(test_sdl_ao PROPERTIES CXX_STANDARD 17)
   target_include_directories(test_sdl_ao PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
   target_link_libraries(test_sdl_ao PRIVATE posixd3d9 postprocess SDL3::SDL3-static)

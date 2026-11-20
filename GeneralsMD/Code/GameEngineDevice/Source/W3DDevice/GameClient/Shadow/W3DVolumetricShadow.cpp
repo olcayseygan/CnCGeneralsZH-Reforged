@@ -74,6 +74,7 @@
 #include "WW3D2/ffshader.h"
 #include "WW3D2/sortingrenderer.h"
 #include "GameClient/View.h"
+#include "Platform/RenderEffects.h"
 #include "Platform/RenderTypes.h"
 #include "Platform/SunShadow.h"
 #include "Lib/Clock.h"		// Clock_Ticks: QueryPerformanceCounter on Windows, a monotonic clock elsewhere
@@ -4362,13 +4363,9 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 	Bool begun = FALSE;
 	/* The cloak's thinned shadow only goes with a body drawn as glass, asked here because once the
 		 sun's map is bound every look but the shadow's is refused.  A frame a screen filter holds draws
-		 the body by its opacity and casts in full.  The SDL3 builds draw no glass and thin the shadow
-		 anyway, as they did. */
-#ifdef _WIN32
-	const Bool cloakBodiesDrawn = Direct3D11_Takes_Draw_Effect( DRAW_EFFECT_CLOAK );
-#else
-	const Bool cloakBodiesDrawn = TRUE;
-#endif
+		 the body by its opacity and casts in full.  The SDL GPU device draws the glass too, so it asks
+		 the same question. */
+	const Bool cloakBodiesDrawn = RenderEffects::TakesDrawEffect( DRAW_EFFECT_CLOAK );
 	if (TheGlobalData->m_shadowMap && captureShadows && TheTacticalView != NULL)
 	{
 		if (wholeMap && !wholeMapRefused && SunShadow::Begin( DX8Wrapper::_Get_D3D_Device(), SHADOW_MAP_WHOLE_MAP_TEXELS ))

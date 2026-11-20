@@ -54,6 +54,7 @@ CachedFileInputStream::~CachedFileInputStream(void)
 
 Bool CachedFileInputStream::open(AsciiString path)
 {
+	close();
 	File *file=TheFileSystem->openFile(path.str(), File::READ | File::BINARY);
 	m_size = 0;
 
@@ -73,6 +74,7 @@ Bool CachedFileInputStream::open(AsciiString path)
 	else
 	{
 		Int uncompLen = CompressionManager::getUncompressedSize(m_buffer, m_size);
+		if (uncompLen <= 0) { close(); return FALSE; }
 		//DEBUG_LOG(("CachedFileInputStream::open() - file %s is compressed!  It should go from %d to %d\n", path.str(),
 		//	m_size, uncompLen));
 		char *uncompBuffer = NEW char[uncompLen];
@@ -89,6 +91,8 @@ Bool CachedFileInputStream::open(AsciiString path)
 			//DEBUG_LOG(("Decompression failed - using compressed data\n"));
 			// decompression failed.  Maybe we invalidly thought it was compressed?
 			delete[] uncompBuffer;
+			close();
+			return FALSE;
 		}
 	}
 	//if (m_size >= 4)

@@ -48,6 +48,27 @@ int main(void)
 		printf("OK   %-12s %d -> %d bytes\n", name, SRC_LEN, packed_len);
 		free(packed);
 	}
+	// A literal run must fit the caller's capacity, even if the outer header lies.
+	unsigned char malformed[] = {'E','A','R',0,1,0,0,0, 0x10,0xfb,0,0,1, 0xe0,'a','b','c','d',0xfc};
+	unsigned char guarded[8];
+	memset(guarded, 0xa5, sizeof(guarded));
+	if (CompressionManager::decompressData(malformed, sizeof(malformed), guarded + 2, 1) != 0
+			|| guarded[3] != 0xa5) { printf("FAIL RefPack output bound\n"); ++failures; }
+	// Valid four-byte literal stream; every truncated prefix must be rejected.
+	malformed[4] = 4; malformed[12] = 4;
+	for (int size = 8; size < (int)sizeof(malformed); ++size) {
+		if (CompressionManager::decompressData(malformed, size, guarded + 2, 4) != 0) {
+			printf("FAIL RefPack truncated input at %d\n", size); ++failures;
+		}
+	}
+	if (CompressionManager::decompressData(malformed, sizeof(malformed), guarded + 2, 4) != 4
+			|| memcmp(guarded + 2, "abcd", 4) != 0 || guarded[1] != 0xa5 || guarded[6] != 0xa5) {
+		printf("FAIL RefPack bounded literal\n"); ++failures;
+	}
+	unsigned char badReference[] = {'E','A','R',0,3,0,0,0, 0x10,0xfb,0,0,3, 0,0,0xfc};
+	if (CompressionManager::decompressData(badReference, sizeof(badReference), guarded + 2, 4) != 0) {
+		printf("FAIL RefPack reference before output\n"); ++failures;
+	}
 
 	if (failures) { printf("%d codec(s) FAILED\n", failures); return 1; }
 	printf("all codecs OK\n");

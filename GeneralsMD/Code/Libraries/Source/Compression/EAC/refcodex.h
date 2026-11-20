@@ -41,11 +41,7 @@ bool        GCALL REF_is(const void *compresseddata);
 /* Decode Functions */
 
 int        GCALL REF_size(const void *compresseddata);
-#ifdef __cplusplus
-int        GCALL REF_decode(void *dest, const void *compresseddata, int *compressedsize=0);
-#else
-int        GCALL REF_decode(void *dest, const void *compresseddata, int *compressedsize);
-#endif
+int        GCALL REF_decode(void *dest, const void *compresseddata, int *compressedsize, int capacity);
 
 /* Encode Functions */
 

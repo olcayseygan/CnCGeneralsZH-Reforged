@@ -70,116 +70,80 @@ int GCALL REF_size(const void *compresseddata)
 }
 
 
-int GCALL REF_decode(void *dest, const void *compresseddata, int *compressedsize)
+// Both capacities come from the caller, not from the compressed stream.
+int GCALL REF_decode(void *dest, const void *compresseddata, int *compressedsize, int capacity)
 {
-    unsigned char *s;
-    unsigned char *ref;
-    unsigned char *d;
-    unsigned char first;
-    unsigned char second;
-    unsigned char third;
-    unsigned char forth;
-    unsigned int  run;
-    unsigned int  type;
-    int          ulen;
+    if (!dest || !compresseddata || !compressedsize || *compressedsize < 5 || capacity <= 0)
+        return 0;
+    const unsigned char *s = (const unsigned char *)compresseddata;
+    unsigned char *d = (unsigned char *)dest;
+    const unsigned int input = (unsigned int)*compressedsize;
+    unsigned int at = 2, written = 0;
+    const unsigned int type = ((unsigned int)s[0] << 8) | s[1];
+    if (type != 0x10fb && type != 0x11fb && type != 0x90fb && type != 0x91fb)
+        return 0;
+    const unsigned int width = (type & 0x8000) ? 4 : 3;
+    if (type & 0x100) at += width;
+    if (at + width > input) return 0;
+    unsigned int expected = 0;
+    for (unsigned int i = 0; i < width; ++i) expected = (expected << 8) | s[at++];
+    if (expected > (unsigned int)capacity) return 0;
 
-    s = (unsigned char *) compresseddata;
-    d = (unsigned char *) dest;
-    ulen = 0L;
-
-    if (s)
+    while (at < input)
     {
-        type = *s++;
-        type = (type<<8) + *s++;
-
-        if (type&0x8000) /* 4 byte size field */
+        const unsigned int first = s[at++];
+        unsigned int literals = 0, length = 0, distance = 0;
+        bool last = false;
+        if (first < 0x80)
         {
-            if (type&0x100)                       /* skip ulen */
-                s += 4;
-
-            ulen = *s++;
-            ulen = (ulen<<8) + *s++;
-            ulen = (ulen<<8) + *s++;
-            ulen = (ulen<<8) + *s++;
+            if (input - at < 1) return 0;
+            const unsigned int second = s[at++];
+            literals = first & 3;
+            distance = ((first & 0x60) << 3) + second + 1;
+            length = ((first & 0x1c) >> 2) + 3;
+        }
+        else if (first < 0xc0)
+        {
+            if (input - at < 2) return 0;
+            const unsigned int second = s[at++], third = s[at++];
+            literals = second >> 6;
+            distance = ((second & 0x3f) << 8) + third + 1;
+            length = (first & 0x3f) + 4;
+        }
+        else if (first < 0xe0)
+        {
+            if (input - at < 3) return 0;
+            const unsigned int second = s[at++], third = s[at++], fourth = s[at++];
+            literals = first & 3;
+            distance = ((first & 0x10) << 12) + (second << 8) + third + 1;
+            length = ((first & 0x0c) << 6) + fourth + 5;
         }
         else
         {
-            if (type&0x100)                       /* skip ulen */
-                s += 3;
-
-            ulen = *s++;
-            ulen = (ulen<<8) + *s++;
-            ulen = (ulen<<8) + *s++;
+            literals = ((first & 0x1f) << 2) + 4;
+            if (literals > 112) { literals = first & 3; last = true; }
         }
-
-        for (;;)
+        if (literals > input - at || literals > expected - written) return 0;
+        memcpy(d + written, s + at, literals);
+        at += literals;
+        written += literals;
+        if (length)
         {
-            first = *s++;
-            if (!(first&0x80))          /* short form */
-            {
-                second = *s++;
-                run = first&3;
-                while (run--)
-                    *d++ = *s++;
-                ref = d-1 - (((first&0x60)<<3) + second);
-                run = ((first&0x1c)>>2)+3-1;
-                do
-                {
-                    *d++ = *ref++;
-                } while (run--);
-                continue;
+            if (distance > written || length > expected - written) return 0;
+            // Overlapping references deliberately copy forward, as RefPack requires.
+            for (unsigned int i = 0; i < length; ++i) {
+                d[written] = d[written - distance];
+                ++written;
             }
-            if (!(first&0x40))          /* int form */
-            {
-                second = *s++;
-                third = *s++;
-                run = second>>6;
-                while (run--)
-                    *d++ = *s++;
-
-                ref = d-1 - (((second&0x3f)<<8) + third);
-
-                run = (first&0x3f)+4-1;
-                do
-                {
-                    *d++ = *ref++;
-                } while (run--);
-                continue;
-            }
-            if (!(first&0x20))          /* very int form */
-            {
-                second = *s++;
-                third = *s++;
-                forth = *s++;
-                run = first&3;
-                while (run--)
-                    *d++ = *s++;
-
-                ref = d-1 - (((first&0x10)>>4<<16) +  (second<<8) + third);
-
-                run = ((first&0x0c)>>2<<8) + forth + 5-1;
-                do
-                {
-                    *d++ = *ref++;
-                } while (run--);
-                continue;
-            }
-            run = ((first&0x1f)<<2)+4;  /* literal */
-            if (run<=112)
-            {
-                while (run--)
-                    *d++ = *s++;
-                continue;
-            }
-            run = first&3;              /* eof (+0..3 literal) */
-            while (run--)
-                *d++ = *s++;
-            break;
+        }
+        if (last)
+        {
+            if (written != expected) return 0;
+            *compressedsize = (int)at;
+            return (int)written;
         }
     }
-    if (compressedsize)
-        *compressedsize = (int)((char *)s-(char *)compresseddata);
-    return(ulen);
+    return 0; // no terminating command
 }
 
 #endif

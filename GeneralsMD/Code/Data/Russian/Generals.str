@@ -19001,6 +19001,18 @@ Network:WaitingForReconnect
 "Ожидание переподключения %ls (%d:%02d)"
 END
 
+Network:PlayerLostConnection
+"%ls потерял соединение"
+END
+
+Network:PlayerIsBack
+"%ls вернулся"
+END
+
+Network:BackInMatch
+"Снова в игре"
+END
+
 GUI:OnlineRejoinTitle
 "Твой матч ещё идёт"
 END

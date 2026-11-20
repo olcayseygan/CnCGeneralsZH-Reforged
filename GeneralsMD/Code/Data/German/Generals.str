@@ -16025,6 +16025,18 @@ Network:WaitingForReconnect
 "Warten auf die Rückkehr von %ls (%d:%02d)"
 END
 
+Network:PlayerLostConnection
+"%ls hat die Verbindung verloren"
+END
+
+Network:PlayerIsBack
+"%ls ist zurück"
+END
+
+Network:BackInMatch
+"Zurück im Spiel"
+END
+
 GUI:OnlineRejoinTitle
 "Dein Spiel läuft noch"
 END

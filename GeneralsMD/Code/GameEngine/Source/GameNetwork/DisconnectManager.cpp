@@ -40,6 +40,9 @@
 #include "GameNetwork/GameSpy/GSConfig.h"
 #include "GameNetwork/Online/OnlineQueues.h"		// ONLINE_RECONNECT_HOLD_MS
 
+// a seat silent this long reads "Waiting for X to reconnect" on the disconnect screen; keep-alives come every 500 ms
+enum { SILENT_SEAT_WAITING_MS = 2000 };
+
 #ifdef _INTERNAL
 // for occasional debugging...
 //#pragma optimize("", off)
@@ -291,19 +294,22 @@ void DisconnectManager::updateDisconnectStatus(ConnectionManager *conMgr) {
 						DEBUG_LOG(("DisconnectManager::updateDisconnectStatus - not all on same frame\n"));
 					}
 				}
-				/* An online seat held for its player to come back reads as a sentence with minutes and seconds;
-					 the row goes back to its name and countdown once the hold ends. */
-				Bool held = (hold > 0);
-				if (held != m_seatHeld[slot]) {
-					DEBUG_LOG(("DisconnectManager::updateDisconnectStatus - RECONNECT HOLD %s for player %d (translated slot %d), %d ms left\n",
-						held ? "on" : "off", i, slot, (Int)hold));
-					m_seatHeld[slot] = held;
-					if (!held) {
+				/* A seat being waited for reads as a sentence with minutes and seconds: one held while it catches
+					 up, and one gone quiet, counting down to when it leaves the lockstep.  The row goes back to its
+					 name and countdown once it talks again. */
+				const Bool held = (hold > 0);
+				const Bool silent = (TheGlobalData->m_networkSilentPlayerDropTime - newTime) > SILENT_SEAT_WAITING_MS;
+				const Bool waiting = held || silent;
+				if (waiting != m_seatHeld[slot]) {
+					DEBUG_LOG(("DisconnectManager::updateDisconnectStatus - RECONNECT HOLD %s for player %d (translated slot %d), %d ms left, %s\n",
+						waiting ? "on" : "off", i, slot, (Int)newTime, held ? "held" : "silent"));
+					m_seatHeld[slot] = waiting;
+					if (!waiting) {
 						TheDisconnectMenu->setPlayerName(slot, conMgr->getPlayerName(i));
 					}
 				}
-				if (held) {
-					TheDisconnectMenu->setPlayerReconnectTime(slot, conMgr->getPlayerName(i), hold);
+				if (waiting) {
+					TheDisconnectMenu->setPlayerReconnectTime(slot, conMgr->getPlayerName(i), newTime);
 				} else {
 					TheDisconnectMenu->setPlayerTimeoutTime(slot, newTime);
 				}
@@ -502,6 +508,7 @@ void DisconnectManager::nextFrame(UnsignedInt frame, ConnectionManager *conMgr) 
 			DEBUG_LOG(("DisconnectManager::nextFrame - REJOIN player %d is back, playing from frame %d, %d ms after it was readmitted\n",
 				i, m_rejoinFrame[i], (Int)(Clock_Milliseconds() - m_rejoinSince[i])));
 			m_rejoinSince[i] = 0;
+			conMgr->showPlayerLine(i, "Network:PlayerIsBack");
 		}
 	}
 }
@@ -686,9 +693,10 @@ void DisconnectManager::disconnectPlayer(Int slot, ConnectionManager *conMgr) {
 		// Get the disconnecting player off the disconnect window.
 		UnicodeString uname = conMgr->getPlayerName(slot);
 		TheRecorder->logPlayerDisconnect(uname, slot);
-		TheDisconnectMenu->removePlayer(transSlot, uname);
+		const Bool mayComeBack = !isPlayerVotedOut(transSlot, conMgr);		// a timed-out seat can rejoin, a kicked one cannot
+		TheDisconnectMenu->removePlayer(transSlot, uname, mayComeBack);
 
-		PlayerLeaveCode retcode = conMgr->disconnectPlayer(slot);
+		PlayerLeaveCode retcode = conMgr->disconnectPlayer(slot, mayComeBack);
 		DEBUG_ASSERTCRASH((retcode != PLAYERLEAVECODE_UNKNOWN), ("Invalid player leave code"));
 
 		if (retcode == PLAYERLEAVECODE_PACKETROUTER) {

@@ -21234,6 +21234,18 @@ Network:WaitingForReconnect
 "%ls için yeniden bağlantı bekleniyor (%d:%02d)"
 END
 
+Network:PlayerLostConnection
+"%ls bağlantıyı kaybetti"
+END
+
+Network:PlayerIsBack
+"%ls geri döndü"
+END
+
+Network:BackInMatch
+"Maça geri döndün"
+END
+
 GUI:OnlineRejoinTitle
 "Maçın hâlâ sürüyor"
 END

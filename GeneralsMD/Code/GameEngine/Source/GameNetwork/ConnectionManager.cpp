@@ -182,6 +182,7 @@ void ConnectionManager::init()
 		m_rejoinLogFor[i] = FALSE;
 		m_absentSince[i] = 0;
 		m_forfeitSent[i] = FALSE;
+		m_lostShown[i] = FALSE;
 	}
 	m_rejoining = FALSE;
 	m_rejoinAccepted = FALSE;
@@ -570,6 +571,7 @@ void ConnectionManager::readmitPlayer(Int slot, UnsignedInt fromFrame) {
 	m_frameData[slot]->init();
 	m_frameData[slot]->reset();
 	m_lastHeardFrom[slot] = Clock_Milliseconds();
+	m_lostShown[slot] = FALSE;
 	m_fpsAverages[slot] = -1;
 	m_latencyAverages[slot] = 0.0;
 	m_latencyJitters[slot] = 0.0;
@@ -2170,7 +2172,37 @@ void ConnectionManager::doKeepAlive() {
 	}
 }
 
-PlayerLeaveCode ConnectionManager::disconnectPlayer(Int slot) {
+void ConnectionManager::showPlayerLine(Int slot, const char *label) {
+	UnicodeString unicodeName = getPlayerName(slot);
+	if (unicodeName.getLength() == 0) {
+		return;
+	}
+	UnicodeString line;
+	line.format( TheGameText->fetch( label ), unicodeName.str() );
+	AsciiString slotName;
+	slotName.format( "player%d", slot );
+	Player *player = ThePlayerList->findPlayerWithNameKey( TheNameKeyGenerator->nameToKey( slotName ) );
+	if( player )
+		TheInGameUI->playerMessage( player, line );
+	else
+		TheInGameUI->message( UnicodeString( u"%ls" ), line.str() );
+
+	// People are boneheads. Also play a sound
+	static AudioEventRTS leftGameSound("GUIMessageReceived");
+	TheAudio->addAudioEvent(&leftGameSound);
+}
+
+/* A seat that went quiet reads "lost connection" because it can come back; when its side is destroyed after
+	 that (the 5-minute forfeit) it has left for good, and says so then. */
+void ConnectionManager::notePlayerGone(Int slot) {
+	if ((slot < 0) || (slot >= MAX_SLOTS) || !m_lostShown[slot]) {
+		return;
+	}
+	m_lostShown[slot] = FALSE;
+	showPlayerLine(slot, "Network:PlayerLeftGame");
+}
+
+PlayerLeaveCode ConnectionManager::disconnectPlayer(Int slot, Bool mayComeBack) {
 	// Need to do the deletion of the slot's connection and frame data here.
 	PlayerLeaveCode retval = PLAYERLEAVECODE_CLIENT;
 	DEBUG_LOG(("ConnectionManager::disconnectPlayer - disconnecting slot %d on frame %d\n", slot, TheGameLogic->getFrame()));
@@ -2194,22 +2226,9 @@ PlayerLeaveCode ConnectionManager::disconnectPlayer(Int slot) {
 		}
 	}
 
-	UnicodeString unicodeName;
-	unicodeName = getPlayerName(slot);
-	if (unicodeName.getLength() > 0 && m_connections[slot]) {
-		UnicodeString left;
-		left.format( TheGameText->fetch( "Network:PlayerLeftGame" ), unicodeName.str() );
-		AsciiString slotName;
-		slotName.format( "player%d", slot );
-		Player *player = ThePlayerList->findPlayerWithNameKey( TheNameKeyGenerator->nameToKey( slotName ) );
-		if( player )
-			TheInGameUI->playerMessage( player, left );
-		else
-			TheInGameUI->message( UnicodeString( u"%ls" ), left.str() );
-
-		// People are boneheads. Also play a sound
-		static AudioEventRTS leftGameSound("GUIMessageReceived");
-		TheAudio->addAudioEvent(&leftGameSound);
+	if (m_connections[slot]) {
+		showPlayerLine(slot, mayComeBack ? "Network:PlayerLostConnection" : "Network:PlayerLeftGame");
+		m_lostShown[slot] = mayComeBack;
 	}
 
 	if ((m_frameData[slot] != NULL) && (m_frameData[slot]->getIsQuitting() == FALSE)) {

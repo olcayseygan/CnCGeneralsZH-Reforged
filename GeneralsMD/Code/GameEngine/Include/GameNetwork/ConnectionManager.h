@@ -112,7 +112,9 @@ public:
 
 	UnsignedInt getPacketRouterFallbackSlot(Int packetRouterNumber);	///< Returns the slot of the given packet router number in the fallback plan.
 	UnsignedInt getPacketRouterSlot();																///< Returns the current packet router's slot.
-	PlayerLeaveCode disconnectPlayer(Int slot);												///< Disconnect this player immediately.  This should only be called by the disconnect manager.
+	PlayerLeaveCode disconnectPlayer(Int slot, Bool mayComeBack = FALSE);		///< Disconnect this player immediately.  This should only be called by the disconnect manager.
+	void showPlayerLine(Int slot, const char *label);								///< the chat line "label" formatted with the slot's name, with the message sound
+	void notePlayerGone(Int slot);																	///< the seat's side is destroyed: a seat shown as lost now reads as left
 	void disconnectLocalPlayer();																			///< Does whatever is necessary to get TheNetwork to realize that it should be leaving the game now.
 	void quitGame();																									///< Disconnect from the game RIGHT NOW!!  Tell everyone else we are disconnecting.
 
@@ -266,6 +268,7 @@ private:
 	UnsignedInt m_absentSince[MAX_SLOTS];	///< the frame the seat left the lockstep, 0 while it plays
 	Bool m_forfeitSent[MAX_SLOTS];			///< the router sent its forfeit
 	Int m_awayNoticeSeconds;						///< the countdown the last away notice showed, -1 for none
+	Bool m_lostShown[MAX_SLOTS];				///< the seat left the lockstep as "lost connection" and has not been shown leaving for good
 
 	/* Where the keep-alive round has got to.  These were function statics in doKeepAlive, so they
 		 survived across games and across ConnectionManager instances. */

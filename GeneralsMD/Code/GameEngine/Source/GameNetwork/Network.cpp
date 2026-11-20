@@ -58,6 +58,8 @@
 #include "GameLogic/ScriptEngine.h"
 #include "Common/Recorder.h"
 #include "GameClient/MessageBox.h"
+#include "GameClient/GameText.h"
+#include "GameClient/InGameUI.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -872,6 +874,7 @@ Bool Network::finishRejoin( UnsignedInt seats, UnsignedInt router )
 	m_nextFrameTime = 0;
 	m_stallStart = 0;
 	m_rejoinFirstOrder = TRUE;
+	TheInGameUI->message(UnicodeString(u"%ls"), TheGameText->fetch("Network:BackInMatch").str());
 	DEBUG_LOG(("REJOIN: joining on frame %u as slot %d, run ahead %d\n", frame, getLocalPlayerID(), m_runAhead));
 	return TRUE;
 }
@@ -1007,6 +1010,7 @@ void Network::processDestroyPlayerCommand(NetDestroyPlayerCommandMsg *msg)
 		msg->friend_setPlayerIndex(pPlayer->getPlayerIndex());
 		TheCommandList->appendMessage(msg);
 	}
+	m_conMgr->notePlayerGone((Int)playerIndex);
 
 	DEBUG_LOG(("Saw DestroyPlayer from %d about %d for frame %d on frame %d\n", msg->getPlayerID(), msg->getPlayerIndex(),
 		msg->getExecutionFrame(), TheGameLogic->getFrame()));

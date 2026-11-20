@@ -7043,6 +7043,18 @@ Network:WaitingForReconnect
 "Waiting for %ls to reconnect (%d:%02d)"
 END
 
+Network:PlayerLostConnection
+"%ls lost connection"
+END
+
+Network:PlayerIsBack
+"%ls is back"
+END
+
+Network:BackInMatch
+"Back in the match"
+END
+
 GUI:OnlineRejoinTitle
 "Your match is still running"
 END

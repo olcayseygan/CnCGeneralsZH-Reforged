@@ -62,7 +62,7 @@ public:
 	void showChat(UnicodeString text);
 
 	void quitGame();
-	void removePlayer(Int slot, UnicodeString playerName);
+	void removePlayer(Int slot, UnicodeString playerName, Bool mayComeBack);	///< "lost connection" when the seat can rejoin, "has left the game" when not
 	void voteForPlayer(Int slot);
 	void updateVotes(Int slot, Int votes);
 

@@ -303,7 +303,7 @@ void DisconnectMenu::quitGame() {
 	TheNetwork->quitGame();
 }
 
-void DisconnectMenu::removePlayer(Int slot, UnicodeString playerName) {
+void DisconnectMenu::removePlayer(Int slot, UnicodeString playerName, Bool mayComeBack) {
 	hidePlayerControls(slot);
 
 	NameKeyType displayID = TheNameKeyGenerator->nameToKey(m_textDisplayControlName);
@@ -312,7 +312,7 @@ void DisconnectMenu::removePlayer(Int slot, UnicodeString playerName) {
 	UnicodeString text;
 //	UnicodeString name;
 //	name.translate(playerName);
-	text.format(TheGameText->fetch("Network:PlayerLeftGame"), playerName.str());
+	text.format(TheGameText->fetch(mayComeBack ? "Network:PlayerLostConnection" : "Network:PlayerLeftGame"), playerName.str());
 
 	if (displayControl != NULL) {
 		GadgetListBoxAddEntryText(displayControl, text, chatNormalColor, -1, -1);

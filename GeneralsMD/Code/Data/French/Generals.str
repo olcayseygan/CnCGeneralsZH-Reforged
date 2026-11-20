@@ -19073,6 +19073,18 @@ Network:WaitingForReconnect
 "En attente de la reconnexion de %ls (%d:%02d)"
 END
 
+Network:PlayerLostConnection
+"%ls a perdu la connexion"
+END
+
+Network:PlayerIsBack
+"%ls est de retour"
+END
+
+Network:BackInMatch
+"De retour dans la partie"
+END
+
 GUI:OnlineRejoinTitle
 "Ta partie est toujours en cours"
 END

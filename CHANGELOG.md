@@ -67,6 +67,23 @@ found and fixed, EA's own, not port damage.**
 - Frame Rate Limit now applies in the menus as well as in a match. Pick 144 or 240 and the main menu runs at that rate instead of being stuck at 60; Off still holds the menus at 60, so an idle menu doesn't run your graphics card hot.
 - Reskinned units no longer load. A bright green Helix or glowing red GLA infantry put in as loose files, in your Documents folder or in an extra archive beside the game is ignored, so every player sees the units the game ships. The few textures this version adds of its own are checked when you join a game, and a changed copy is turned away like changed rules.
 - Signing in online now checks every game file the game reads, the archives and the loose art, data and screen files alike. An edited or swapped file stops the sign-in with its name and a word to reinstall from the launcher or delete it and restart, so a reskin never reaches an online match. The first start reads the whole install in the background, and a sign-in pressed meanwhile waits on "Checking game files..."; after that, updates included, only a file that changed is read again.
+- The group panel's build tray fills from the left again, in the order the buttons are laid out, and the count digits, the "+N in production" text and the fold chevrons read at a glance. Its tooltip opens beside the button you point at, and a control group you have just made opens the tray at once instead of after you select it again.
+- Skirmish difficulty names (Easy to Insane AI) are translated: Turkish, German, French, Russian and Ukrainian lobbies no longer show them in English. The new Output options and the Turkiye tooltips are translated too.
+- A building's garrison pips under its health bar are bigger, so you can see at far zoom whether a house is manned.
+- Order lines stay solid when the camera is fully zoomed out instead of breaking into dashes, and the ring an order draws is on the ground, under the unit it marks. The attack circle and the attack line also work on a contact you only see on the radar.
+- A seat set to a Custom Selection pool shows "Custom Selection" in the lobby's army box, so the other players can tell a pool was set.
+- Buildings have their contact shadow from the moment they appear, and Ambient Occlusion keeps its full strength at the edge of the screen. Weather's sand no longer lifts the black shroud.
+- Foliage is cleared under a building a mission script or a power creates, the way it is under one you place.
+- Fires near the middle of the view get the light when there are more fires than lights, so the ones you look at are the ones that glow.
+- Text no longer comes back blank after you return from the lock screen or the graphics driver restarts.
+- A save from a game running at another logic rate now says which rate it was made at. A LAN join that is refused says whether the build or the data files differ.
+- The repeat button on a unit that cannot be built right now is greyed.
+- A radar ring no longer hangs on for one frame under a unit that has just walked into sight.
+- Options, Interface has a Hit Flash box, off by default. Tick it and a unit flashes briefly when it is hit.
+- A script timer and a save keep the script's input lock, so a save made in the middle of a cinematic no longer loads with your units free to retaliate.
+- The online Quick Match server no longer crashes when a map pool is empty.
+- Watching a replay no longer reports "out of sync" when nothing is wrong.
+- The computer's fights add up the same way after a load as in the match that was saved. Replays of games with a computer player recorded before this change may not play back.
 
 ## Play vs AI online
 

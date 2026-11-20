@@ -4,14 +4,21 @@
 # logic picks the builder the way it does for a player: with nothing selected, the idle builder
 # nearest the site, and once none is idle the nearest busy one, who takes it after the job in hand.
 # Slot 0 is the local seat, so no -observer.  One dozer, three power plants: the tally at the end
-# reads 3 alive and $7600.  Before the stand-in came back it read 0 and $10000.
+# read 3 alive and $7600 when this was written (2026-09-30), 0 and $10000 before the stand-in came
+# back.  At source d14f8bea (60 Hz logic) it read 2 alive and $8400, one of the three same-frame
+# orders never paid for; that is open in the wrapper's TODO and unchecked at 30 Hz.
+#
+# The frames below are 30 Hz retail frames at retail speed: the logic runs line N on frame
+# N * 100 / game speed at today's 30 Hz, so the tally lands on logic frame 1193 at the native 150
+# and 1790 under -gamespeed 100.  At 60 Hz it was 3580, past the -maxframes 1800 this header used to
+# give.  2400 covers every speed at 30 Hz; a 60 Hz build needs 4800.
 #
 # Nothing here is a world command that bypasses the replay (no spawn), so the replay this run
 # leaves plays back to the same HEADLESS CRC with -replay and no -scenario.
 #
 #   generals.exe -headless -quickstart -noshellmap -multiInstance -noFPSLimit
 #     -randommap 1 2 small -autoskirmish 2 -takeover
-#     -side 0 FactionAmerica -side 1 FactionGLA -seed 1 -maxframes 1800
+#     -side 0 FactionAmerica -side 1 FactionGLA -seed 1 -maxframes 2400
 #     -scenario standinbuild -logPrefix standin_
 #
 # The sites are the open sand in the middle of this map (docs/reference/UI-MAP.md, 700,550).

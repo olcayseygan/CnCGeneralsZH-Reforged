@@ -172,6 +172,7 @@ found and fixed, EA's own, not port damage.**
 ## Smoother light on hills and cliffs
 
 - On Direct3D 11 with the HD textures, the sun now lights the ground pixel by pixel from a smoothed copy of the map's heights. Before, the light ran in straight lines across each tile and you could see the grid of triangles on every slope. Hills and cliffs now shade in one soft sweep, and roads on them take the same light. Bridges, the lower terrain detail, Direct3D 9 and Classic Graphics keep the old light. Looks only; nothing in the match changes.
+- Pulled back, the ground stops looking like wallpaper. A field of grass or sand is one small texture laid down again and again, and from far the same dark tuft and the same bare patch stood in rows across the whole map. Broad stretches of ground are now a shade lighter or darker, a touch warmer or cooler, in soft shapes that never line up with the texture's repeat, so the rows break up. The shading is fixed to the map, so nothing swims when you scroll, the map's overall colour stays where it was, and at the closest zoom the ground looks exactly as before. Same rule as the light above: Direct3D 11 without Classic Graphics, full terrain detail.
 
 ## Ally Aid: fly your teammate an army
 

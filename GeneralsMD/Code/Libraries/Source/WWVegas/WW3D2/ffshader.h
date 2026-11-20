@@ -485,6 +485,56 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 // count, one over the cell size, the map's border in samples and the height of one byte step,
 // TerrainSunDirection the fade per channel and the water's height.
 #define TERRAIN_LIGHT_FLOATS 40
+
+// Seen from far the ground shows its tiles repeating: an HD tile is twenty world units and most
+// texture classes are two or four tiles a side, so the same rock or patch comes back every 40 or 80
+// units across a whole field.  The relit colour is multiplied by a slow world-space value noise
+// that no tile period divides: three octaves of shade at 290, 113 and 41 units on turned lattices,
+// and a warm-cool tilt at 197, mean one.  The shade's spread is about 7% (one standard deviation);
+// all three octaves at an extreme together would reach 30%, which a map almost never shows.  At
+// half this the far ground moved 5% and the rows still read.
+// A pure function of the ground's world position, so nothing crawls when the camera moves.  It
+// fades in by the pixel's distance from the near plane along its ray: nothing nearer than 160,
+// which is the ground under the closest zoom, all of it past 380, so the default zoom has it and
+// the close view keeps EA's picture.  Not by the derivatives of the world position: those are one
+// triangle's plane at a time and would step the fade along every cell's diagonal.  The upper half
+// of the swing clips on ground already near white (snow, pale sand), where the chain saturates.
+// Integer hashes, because a sine hash loses its digits past a few thousand units on some drivers.
+#define TERRAIN_VARIATION_SAMPLING \
+	"float terrain_hash(int2 cell)\n" \
+	"{\n" \
+	"    uint h = asuint(cell.x) * 0x8da6b343u ^ asuint(cell.y) * 0xd8163841u;\n" \
+	"    h ^= h >> 15;\n" \
+	"    h *= 0x2c1b3c6du;\n" \
+	"    h ^= h >> 12;\n" \
+	"    h *= 0x297a2d39u;\n" \
+	"    h ^= h >> 15;\n" \
+	"    return float(h >> 8) * (1.0 / 16777216.0);\n" \
+	"}\n" \
+	"\n" \
+	"float terrain_value_noise(float2 at)\n" \
+	"{\n" \
+	"    float2 cell = floor(at);\n" \
+	"    float2 t = at - cell;\n" \
+	"    t = t * t * (3.0 - 2.0 * t);\n" \
+	"    int2 c = int2(cell);\n" \
+	"    return lerp(lerp(terrain_hash(c), terrain_hash(c + int2(1, 0)), t.x),\n" \
+	"                lerp(terrain_hash(c + int2(0, 1)), terrain_hash(c + int2(1, 1)), t.x), t.y);\n" \
+	"}\n" \
+	"\n" \
+	"float3 terrain_variation(float2 world, float range)\n" \
+	"{\n" \
+	"    float fade = smoothstep(160.0, 380.0, range);\n" \
+	"    float2 a = float2(dot(world, float2(0.866, 0.5)), dot(world, float2(-0.5, 0.866)));\n" \
+	"    float2 b = float2(dot(world, float2(0.423, -0.906)), dot(world, float2(0.906, 0.423)));\n" \
+	"    float n = 0.4 * terrain_value_noise(a / 290.0) + 0.35 * terrain_value_noise(b / 113.0 + 17.3)\n" \
+	"            + 0.25 * terrain_value_noise(a / 41.0 + 53.7);\n" \
+	"    float tilt = terrain_value_noise(b / 197.0 + 91.1) - 0.5;\n" \
+	"    float shade = 1.0 + 0.6 * (n - 0.5) * fade;\n" \
+	"    return shade * (1.0 + 0.08 * tilt * fade * float3(1.0, 0.0, -1.0));\n" \
+	"}\n" \
+	"\n"
+
 #define TERRAIN_RELIGHT_SAMPLING \
 	"Texture2D<float> TerrainHeights : register(t4);\n" \
 	"\n" \
@@ -497,6 +547,7 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 	"                  TerrainHeights.Load(int3(clamp(at.x + 3, 0, last.x), y, 0))) * 255.0;\n" \
 	"}\n" \
 	"\n" \
+	TERRAIN_VARIATION_SAMPLING \
 	"float3 terrain_relight(float4 position, float3 base)\n" \
 	"{\n" \
 	"    float2 ndc = float2(position.x * ShadowViewport.x * 2.0 - 1.0,\n" \
@@ -541,7 +592,8 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 	"        float depth_scale = (1.4 - world.z) / TerrainSunDirection.w;\n" \
 	"        light *= 1.0 - depth_scale * (1.0 - TerrainSunDirection.rgb);\n" \
 	"    }\n" \
-	"    return saturate(light);\n" \
+	"    float4 nearest = mul(float4(ndc, 0.0, 1.0), WorldFromClip);\n" \
+	"    return saturate(light) * terrain_variation(world.xy, length(world.xyz - nearest.xyz / nearest.w));\n" \
 	"}\n" \
 	"\n"
 // The colour every later line reads, put back with the sun in it, first thing in main.

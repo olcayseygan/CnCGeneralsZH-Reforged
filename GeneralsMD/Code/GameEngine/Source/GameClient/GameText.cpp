@@ -61,7 +61,11 @@
 #include "Common/file.h"
 #include "Common/FileSystem.h"
 #include <map>
+#include <mutex>
 #include <string>
+
+/// guards m_noStringList, the one thing fetch writes
+static std::mutex theNoStringLock;
 
 
 #ifdef _INTERNAL
@@ -535,6 +539,7 @@ void GameTextManager::deinit( void )
 
 	m_textCount = 0;
 
+	std::lock_guard<std::mutex> lock( theNoStringLock );
 	NoString *noString = m_noStringList;
 
 	DEBUG_LOG(("\n*** Missing strings ***\n"));
@@ -1434,6 +1439,8 @@ UnicodeString GameTextManager::fetch( const Char *label, Bool *exists )
 		UnicodeString missingString;
 		missingString.format(u"MISSING: '%hs'", label);
 
+		// the logic tick and the main thread beside it both fetch, and both may miss the same label
+		std::lock_guard<std::mutex> lock( theNoStringLock );
 		NoString *noString = m_noStringList;
 
 		while ( noString )

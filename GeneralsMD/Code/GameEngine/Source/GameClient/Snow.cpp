@@ -29,6 +29,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the Game
+#include "Common/LogicThread.h"
 #include "GameClient/Snow.h"
 #include "GameClient/View.h"
 #include "GameLogic/ScriptEngine.h"
@@ -137,8 +138,10 @@ void SnowManager::getWeatherHaze(float colour[3], Real *strength) const
 	*strength = STRENGTHS[m_weatherKind] * (0.299f * red + 0.587f * green + 0.114f * blue);
 }
 
+// a script's Weather action calls this from the tick; the flag is the renderer's, so it waits for the tick's end
 void SnowManager::setVisible(Bool showWeather)
 {
+	LOGIC_AFTER_TICK( [this, showWeather]() { setVisible( showWeather ); } );
 	m_isVisible = showWeather;
 }
 

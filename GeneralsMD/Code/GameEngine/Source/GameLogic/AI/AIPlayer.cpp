@@ -17565,6 +17565,10 @@ static Real fixedGunPower( const Object *obj, Real *reach )
 	return power;
 }
 
+static Bool lowerObjectID( const Object *a, const Object *b );
+
+/** Walked in ObjectID order: the partition's own order differs after a load, and the sums, the armies
+	* and the gun list built here come out of it. */
 void AIPlayer::measureFight( const Coord3D *centre, Bool countHolders, Real *myHealth, Real *myPower,
 														 Real *enemyHealth, Real *enemyPower, std::vector<Real> *enemyGuns, Real *advantage, Real *defencePower )
 {
@@ -17582,10 +17586,14 @@ void AIPlayer::measureFight( const Coord3D *centre, Bool countHolders, Real *myH
 	SimpleObjectIterator *nearby = ThePartitionManager->iterateObjectsInRange(
 			centre, RETREAT_ENGAGEMENT_RADIUS, FROM_CENTER_2D, filters );
 	hold.hold( nearby );
+	std::vector<Object *> met;
 	for( Object *e = nearby->first(); e; e = nearby->next() )
+		if( !e->isKindOf( KINDOF_PROJECTILE ) )
+			met.push_back( e );
+	std::sort( met.begin(), met.end(), lowerObjectID );
+	for( size_t m = 0; m < met.size(); ++m )
 	{
-		if( e->isKindOf( KINDOF_PROJECTILE ) )
-			continue;
+		Object *e = met[ m ];
 		const Bool fixed = e->isKindOf( KINDOF_STRUCTURE ) || e->isKindOf( KINDOF_IMMOBILE );
 
 		if( e->getControllingPlayer() == m_player )

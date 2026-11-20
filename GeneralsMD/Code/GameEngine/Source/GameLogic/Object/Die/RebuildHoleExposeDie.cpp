@@ -44,7 +44,6 @@
 #include "GameLogic/Module/RebuildHoleExposeDie.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/ScriptEngine.h"
-#include "GameClient/SelectionXlat.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -105,22 +104,9 @@ void RebuildHoleExposeDie::onDie( const DamageInfo *damageInfo )
 {
 	if (!isDieApplicable(damageInfo))
 		return;
-  
 
-#if defined(_DEBUG) || defined(_INTERNAL) || defined(_ALLOW_DEBUG_CHEATS_IN_RELEASE)
-  if(TheSelectionTranslator->isHandOfGodSelectionMode())
-  {
-    if ( getObject()->isKindOf( KINDOF_STRUCTURE ) )
-    {
-      if ( damageInfo->in.m_damageType == DAMAGE_UNRESISTABLE )
-        return;
-    }
-  }
-#endif
-
-
-
-
+	/* EA skipped the hole here when a structure died to the hand of god, a debug selection mode.  That
+		 mode is one machine's client state, so the hole stays whatever killed it. */
 
 	const RebuildHoleExposeDieModuleData *modData = getRebuildHoleExposeDieModuleData();
 	Object *us = getObject();

@@ -25,6 +25,7 @@
 
 #include "Common/FileSystem.h"
 #include "Common/GameEngine.h"
+#include "Common/LogicThread.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/PlayerTemplate.h"
@@ -1624,12 +1625,15 @@ void ObserverCamera::noteSuperweaponHit( const Player *owner, const Coord3D *at,
 /** A power used hangs its flag under its player's card when it is the player's, not a unit's: a
 	* superweapon, a general's power one a promotion bought, or one a building fires, the command
 	* centre's spy satellite.  A unit's own ability, a sniper's shot or a hacker's, is none of them.  It
-	* goes ahead of any upgrade still waiting, which a Hard AI buys a dozen of in a minute. */
+	* goes ahead of any upgrade still waiting, which a Hard AI buys a dozen of in a minute.  The logic
+	* calls it from the tick; the flags change after it, on the main thread, since the card draw holds
+	* a pointer into them (getPowerFlag) while a tick runs beside the render. */
 //-------------------------------------------------------------------------------------------------
 void ObserverCamera::noteFlag( const DirectorEvent &event )
 {
 	if( !TheGlobalData->m_directorRecord || !playersPower( event.power, event.sourceThing, event.superweapon ) )
 		return;
+	LOGIC_AFTER_TICK( [this, event]() { noteFlag( event ); } )
 	const Int index = event.owner->getPlayerIndex();
 	const DirectorShowing flag = { index, event.power, event.sourceThing, event.superweapon, 0, 0, NULL };
 	std::vector< DirectorShowing > &flags = m_flags[ index ];
@@ -1640,12 +1644,14 @@ void ObserverCamera::noteFlag( const DirectorEvent &event )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Called from the logic on every machine, like noteSpecialPower, and only adds to the flags. */
+/** Called from the logic on every machine, like noteSpecialPower, and only adds to the flags, after
+	* the tick as noteFlag does. */
 //-------------------------------------------------------------------------------------------------
 void ObserverCamera::noteUpgrade( const Player *owner, const UpgradeTemplate *upgrade )
 {
 	if( !TheGlobalData->m_directorRecord || upgrade->getButtonImage() == NULL )
 		return;
+	LOGIC_AFTER_TICK( [this, owner, upgrade]() { noteUpgrade( owner, upgrade ); } )
 	const Int index = owner->getPlayerIndex();
 	const DirectorShowing flag = { index, NULL, NULL, FALSE, 0, 0, upgrade };
 	m_flags[ index ].push_back( flag );

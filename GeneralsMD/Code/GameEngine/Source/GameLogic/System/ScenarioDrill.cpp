@@ -824,9 +824,14 @@ static Bool selectorMatches( const AsciiString &selector, const Object *obj )
 	return tmpl->getName() == selector;
 }
 
-/** Whether this player owns the object, it matches the selector and it can be given an order at all. */
+/** Whether this player owns the object, it matches the selector and it can be given an order at all.
+	  An order to "*" is an order to the seat's army: the dozer or worker every side starts with would
+	  otherwise walk along into the fight, so a builder only takes an order that names it.  A tally of
+	  "*" still counts it. */
 static Bool isOrderableMatch( const Player *player, const AsciiString &selector, Object *obj )
 {
+	if (selector == SCENARIO_SELECTOR_ALL && obj->isKindOf( KINDOF_DOZER ))
+		return FALSE;
 	return obj->getControllingPlayer() == player && !obj->isEffectivelyDead()
 			&& obj->getAIUpdateInterface() != NULL && selectorMatches( selector, obj );
 }

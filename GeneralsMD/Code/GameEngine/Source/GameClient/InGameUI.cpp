@@ -1750,7 +1750,7 @@ InGameUI::InGameUI()
 	m_productionListTotal = 0;
 	for( Int text = 0; text < 2 * PRODUCTION_LIST_CELLS; text++ )
 		m_productionListText[ text ] = NULL;
-	for( Int text = 0; text < SUPERWEAPON_LIST_CELLS; text++ )
+	for( Int text = 0; text < 2 * SUPERWEAPON_LIST_CELLS; text++ )
 		m_superweaponCellText[ text ] = NULL;
 	m_superweaponMoreText = NULL;
 	m_productionListMoreText = NULL;
@@ -1875,7 +1875,7 @@ InGameUI::~InGameUI()
 	m_broadcastTexts.clear();
 	for( Int text = 0; text < 2 * PRODUCTION_LIST_CELLS; text++ )
 		TheDisplayStringManager->freeDisplayString( m_productionListText[ text ] );
-	for( Int text = 0; text < SUPERWEAPON_LIST_CELLS; text++ )
+	for( Int text = 0; text < 2 * SUPERWEAPON_LIST_CELLS; text++ )
 		TheDisplayStringManager->freeDisplayString( m_superweaponCellText[ text ] );
 	TheDisplayStringManager->freeDisplayString( m_superweaponMoreText );
 	TheDisplayStringManager->freeDisplayString( m_productionListMoreText );
@@ -9127,6 +9127,8 @@ void InGameUI::postDraw( void )
 			SuperweaponInfo *info;	///< its timer, whose strings the Red Alert style rows write into
 			Bool enemy;					///< the local player's enemy's: a red row
 			AsciiString power;	///< the special power's name, "GUI:<power>" its label
+			Int player;					///< its owner's slot in the player list
+			Int count;					///< how many of the owner's buildings this entry stands for
 		};
 		std::vector< ListedSuperweapon > listed;
 
@@ -9246,7 +9248,7 @@ void InGameUI::postDraw( void )
                 const Bool enemy = ThePlayerList->getLocalPlayer()->getRelationship( owningObject->getTeam() ) == ENEMIES;
                 ListedSuperweapon line = { shortcut ? shortcut->getButtonImage() : NULL,
                                            clientColor( info->getColor() ), isReady, readySecs, percent, jump,
-                                           info, enemy, mapIt->first };
+                                           info, enemy, mapIt->first, i, 1 };
                 listed.push_back( line );
                 if (info->getSpecialPowerTemplate()->isSharedNSync())
                   break; // Wow, it is almost too easy!
@@ -9260,6 +9262,35 @@ void InGameUI::postDraw( void )
 					}
 				}
 			}
+		}
+
+		//
+		// Reforged's icons and the sidebar's rows say how many of one superweapon a player has: one entry
+		// a player and power, "xN" for its buildings, the soonest one's clock and charge, ready when any
+		// one is, and a click looks at that one.  Classic lists every building as EA's game did.
+		//
+		if( TheGlobalData->m_hudLayout != HUD_LAYOUT_RETAIL )
+		{
+			std::vector< ListedSuperweapon > merged;
+			for( size_t each = 0; each < listed.size(); each++ )
+			{
+				const ListedSuperweapon &line = listed[ each ];
+				size_t at = 0;
+				while( at < merged.size() && !( merged[ at ].player == line.player && merged[ at ].power.compare( line.power ) == 0 ) )
+					at++;
+				if( at == merged.size() )
+				{
+					merged.push_back( line );
+					continue;
+				}
+				ListedSuperweapon &into = merged[ at ];
+				const Int count = into.count + 1;
+				const Bool sooner = line.ready != into.ready ? line.ready : line.seconds < into.seconds;
+				if( sooner )
+					into = line;
+				into.count = count;
+			}
+			listed.swap( merged );
 		}
 
 		if( !m_superweaponHiddenByScript && !listed.empty() )
@@ -9391,6 +9422,14 @@ void InGameUI::postDraw( void )
 						time = readyText;
 					else
 						time.format( u"%d:%2.2d", line.seconds / 60, line.seconds % 60 );
+					// several of one superweapon: how many, before the clock, where the name's ellipsis
+					// cannot take it
+					if( line.count > 1 )
+					{
+						UnicodeString counted;
+						counted.format( u"x%d  %ls", line.count, time.str() );
+						time = counted;
+					}
 					line.info->setFont( m_superweaponNormalFont, s_fitPoint, TRUE );
 					const UnicodeString full = TheGameText->fetch( label );
 					DisplayString *name = line.info->getNameString();
@@ -9589,6 +9628,16 @@ void InGameUI::postDraw( void )
 				for( Int each = 0; each < cameos; each++ )
 					if( !listed[ each ].ready )
 						drawCellSeconds( m_superweaponCellText[ each ], listed[ each ].seconds, place[ each ], style.plate );
+				// several of one superweapon: "xN" in the top right, as a production cell counts its units
+				for( Int each = 0; each < cameos; each++ )
+				{
+					if( listed[ each ].count <= 1 )
+						continue;
+					UnicodeString count;
+					count.format( u"x%d", listed[ each ].count );
+					HudReadout_draw( cellString( m_superweaponCellText[ SUPERWEAPON_LIST_CELLS + each ], count ), place[ each ],
+													 HUD_READOUT_TOP_RIGHT, GameMakeColor( 255, 255, 255, 255 ), style.plate );
+				}
 				if( more )
 				{
 					UnicodeString rest;

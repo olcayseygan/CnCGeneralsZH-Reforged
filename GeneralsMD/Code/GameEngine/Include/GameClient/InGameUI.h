@@ -1659,7 +1659,7 @@ protected:
 	Int													m_productionListTotal;		///< items coming, shown or not
 	DisplayString *							m_productionListText[ 2 * PRODUCTION_LIST_CELLS ];
 	DisplayString *							m_productionListMoreText;
-	DisplayString *							m_superweaponCellText[ SUPERWEAPON_LIST_CELLS ];
+	DisplayString *							m_superweaponCellText[ 2 * SUPERWEAPON_LIST_CELLS ];	///< each cell's seconds, then each cell's "xN"
 	DisplayString *							m_superweaponMoreText;
 	// where the last draw put the cells and the tabs, for handleHudCellClick; a tab not drawn is empty
 	IRegion2D										m_productionListPlace[ PRODUCTION_LIST_CELLS ];

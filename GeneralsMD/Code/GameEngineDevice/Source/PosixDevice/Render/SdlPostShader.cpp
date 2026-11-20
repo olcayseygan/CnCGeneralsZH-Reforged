@@ -28,6 +28,8 @@ bool Sdl_Post_Pixel_Source(PostShaderProgram program, std::string &hlsl)
     case POST_SHADER_FXAA: case POST_SHADER_SHARPEN: case POST_SHADER_SHARPEN_MULTISAMPLED:
     case POST_SHADER_BLOOM_EXTRACT: case POST_SHADER_BLOOM_BLUR:
     case POST_SHADER_BLOOM_COMPOSITE: case POST_SHADER_BLOOM_COMPOSITE_WIDE:
+    case POST_SHADER_AO: case POST_SHADER_AO_SCENE: case POST_SHADER_WORLD_AO:
+    case POST_SHADER_WORLD_AO_BLUR: case POST_SHADER_WORLD_AO_UPSAMPLE:
         break;
     default: hlsl.clear(); return false;
     }

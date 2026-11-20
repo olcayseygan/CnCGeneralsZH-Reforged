@@ -101,6 +101,7 @@ found and fixed, EA's own, not port damage.**
 - On a Mac the game finds Zero Hour in Steam's own Mac library, and in any other library Steam lists there, an external drive's included, and a GOG copy inside a CrossOver or Whisky bottle. It used to look only where Steam keeps games on Linux and asked for the folder. Thanks to SimonWaldherr.
 - A Mac crash inside the system's own window drawing is gone. Apple's graphics code could hand the game memory it had taken from the system and the game freed it as its own; on a Mac the game now takes and frees ordinary memory the system's way, as Linux already did. Thanks to SimonWaldherr.
 - On Mac and Linux the Modern picture gets the Windows glow: fire, muzzle flashes and team colour stripes past white bloom and fold back through the same tone curve, Internal HDR included, and the Reforged lighting style's grade and local contrast land before the health bars and the interface are drawn, so they keep their colours. Classic graphics looks as it always did. Thanks to Shin-Aska.
+- On Mac and Linux the Ambient Occlusion option works too: the ground darkens at the foot of buildings, walls and cliffs and under the tanks parked against them, put on before the water, the smoke and the fire so none of those take a corner's shade. It works with the post chain off, as it does on Windows. Thanks to Shin-Aska.
 
 ## A dropped player's army stays, and he can come back to it
 

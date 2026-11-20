@@ -1172,6 +1172,7 @@ void GameLogic::endRejoinScreen( void )
 		return;
 	deleteLoadScreen();
 	TheWritableGlobalData->m_loadScreenRender = FALSE;
+	ShowControlBar(FALSE);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -2493,8 +2494,8 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 		sleepMilliseconds( 100 );
 	}
 
-	// if we're in a load game, don't fade yet
-	if( loadingSaveGame == FALSE )
+	// if we're in a load game, don't fade yet; a seat coming back keeps the board up and fades nothing
+	if( loadingSaveGame == FALSE && !( TheNetwork && TheNetwork->isRejoining() ) )
 	{
 		TheTransitionHandler->setGroup("FadeWholeScreen");
 		while(!TheTransitionHandler->isFinished())
@@ -2624,6 +2625,10 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	if(m_gameMode == GAME_SHELL)
 	{
 		HideControlBar();
+	}
+	else if(m_loadScreen)
+	{
+		HideControlBar(TRUE);		// a seat coming back: the bar comes up with the game view (endRejoinScreen)
 	}
 	else
 	{

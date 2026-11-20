@@ -2932,6 +2932,8 @@ GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DTankTruckDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DTracerDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DTreeDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DTruckDraw.h
+GameEngineDevice/Include/W3DDevice/GameClient/ParticleGpuShader.h
+GameEngineDevice/Include/W3DDevice/GameClient/ParticleGpuShaderSources.h
 GameEngineDevice/Include/W3DDevice/GameClient/StructureCollapse.h
 GameEngineDevice/Include/W3DDevice/GameClient/SunShadowCasterCull.h
 GameEngineDevice/Include/W3DDevice/GameClient/TankWheelSpin.h
@@ -3040,6 +3042,11 @@ GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrame.h
 GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrameBatch.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrameSmoke.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlGpuFrameSunShadow.cpp
+GameEngineDevice/Source/PosixDevice/Render/SdlGpuParticles.cpp
+GameEngineDevice/Source/PosixDevice/Render/SdlGpuParticles.h
+GameEngineDevice/Source/PosixDevice/Render/SdlGpuParticlesContext.h
+GameEngineDevice/Source/PosixDevice/Render/SdlGpuStorage.cpp
+GameEngineDevice/Source/PosixDevice/Render/SdlGpuStorage.h
 GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloud.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloudEmbers.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloudEmbers.h
@@ -3128,6 +3135,8 @@ GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudShader.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudSharedModel.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/HazardCloudUnsupported.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/HeightMap.cpp
+GameEngineDevice/Source/W3DDevice/GameClient/ParticleGpuShader.cpp
+GameEngineDevice/Source/W3DDevice/GameClient/SdlGpuParticlesAdapter.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Shaders/MotionBlur.nvv
 GameEngineDevice/Source/W3DDevice/GameClient/Shaders/Trees.nvp
 GameEngineDevice/Source/W3DDevice/GameClient/Shaders/Trees.nvv
@@ -3599,6 +3608,8 @@ Libraries/Source/WWVegas/WW3D2/scene.cpp
 Libraries/Source/WWVegas/WW3D2/scene.h
 Libraries/Source/WWVegas/WW3D2/sdl3shadercompile.cpp
 Libraries/Source/WWVegas/WW3D2/sdl3shadercompile.h
+Libraries/Source/WWVegas/WW3D2/sdl3storage.cpp
+Libraries/Source/WWVegas/WW3D2/sdl3storage.h
 Libraries/Source/WWVegas/WW3D2/sdl3target.h
 Libraries/Source/WWVegas/WW3D2/segline.cpp
 Libraries/Source/WWVegas/WW3D2/segline.h
@@ -4456,11 +4467,14 @@ Tests/test_score_screen.inc
 Tests/test_sdl_ao.cpp
 Tests/test_sdl_gpu_depth_format.cpp
 Tests/test_sdl_gpu_frame.cpp
+Tests/test_sdl_gpu_particles.cpp
+Tests/test_sdl_gpu_particles_context.cpp
 Tests/test_sdl_input.cpp
 Tests/test_sdl_pipeline_state.cpp
 Tests/test_sdl_platform.cpp
 Tests/test_sdl_post.cpp
 Tests/test_sdl_program_cache.cpp
+Tests/test_sdl_storage.cpp
 Tests/test_selection_priority.inc
 Tests/test_shader_sdl.cpp
 Tests/test_smooth_motion.cpp

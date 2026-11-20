@@ -46,6 +46,13 @@
 struct SDL_GPUDevice;
 struct SDL_GPUShader;
 
+// Explicit stages for compute/storage clients. The legacy bool graphics API stays unchanged.
+enum class SDL3_ShaderStage { Vertex, Fragment, Compute };
+bool SDL3_Compile_HLSL_To_SPIRV(const std::string &hlsl, SDL3_ShaderStage stage,
+	std::vector<unsigned char> &spirv, std::string &log);
+bool SDL3_Translate_SPIRV_To_MSL(const std::vector<unsigned char> &spirv, SDL3_ShaderStage stage,
+	std::string &msl, std::string &log);
+
 // False with the compiler's log when glslang refuses the text.  The entry point is main, which is
 // what every generator writes.
 bool SDL3_Compile_HLSL_To_SPIRV(const std::string & hlsl, bool vertex_stage, std::vector<unsigned char> & spirv,

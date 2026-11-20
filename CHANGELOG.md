@@ -103,6 +103,7 @@ found and fixed, EA's own, not port damage.**
 - On Mac and Linux the Modern picture gets the Windows glow: fire, muzzle flashes and team colour stripes past white bloom and fold back through the same tone curve, Internal HDR included, and the Reforged lighting style's grade and local contrast land before the health bars and the interface are drawn, so they keep their colours. Classic graphics looks as it always did. Thanks to Shin-Aska.
 - On Mac and Linux the Ambient Occlusion option works too: the ground darkens at the foot of buildings, walls and cliffs and under the tanks parked against them, put on before the water, the smoke and the fire so none of those take a corner's shade. It works with the post chain off, as it does on Windows. Thanks to Shin-Aska.
 - On Mac and Linux smoke and dust no longer slice into the ground and the buildings they drift through in a hard line; they thin out where they meet them, as on Windows. Fire and explosions take the Windows look as well, the flame curling and burning away as it ages instead of a flat sprite fading out. Classic graphics keeps the old sprites. Thanks to Shin-Aska.
+- On Mac and Linux the GPU Particles setting now does what it does on Windows: particles past the cap go to the graphics card instead of the oldest ones being deleted to make room. The card moves them by the same formulas the Windows build uses, and a system it cannot take stays on the processor as before. Thanks to Shin-Aska.
 
 ## A dropped player's army stays, and he can come back to it
 

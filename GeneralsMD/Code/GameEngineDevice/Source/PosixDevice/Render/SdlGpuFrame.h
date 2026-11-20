@@ -90,7 +90,7 @@ struct SdlNativeUniformBlock
 /// One draw as the flush replays it, everything by value.  The device's resolve fills it.
 struct SdlRecordedDraw
 {
-	enum { MAXIMUM_SAMPLERS = 16, MAXIMUM_UNIFORM_SLOTS = 4, WATER_PIXEL_BLOCKS = 3 };
+	enum { MAXIMUM_SAMPLERS = 16, MAXIMUM_UNIFORM_SLOTS = 4, WATER_PIXEL_BLOCKS = 3, MAXIMUM_VERTEX_STORAGE_BUFFERS = 8 };
 	SDL_GPUGraphicsPipeline * Pipeline;
 	SDL_GPUBuffer * VertexBuffer;		///< a GPU copy, or null for the batch's staging stream
 	uint32_t VertexOffset;				///< bytes into it
@@ -111,6 +111,8 @@ struct SdlRecordedDraw
 	uint32_t SamplerCount;
 	SDL_GPUTexture * Textures[MAXIMUM_SAMPLERS];
 	SDL_GPUSampler * Samplers[MAXIMUM_SAMPLERS];
+	uint32_t VertexStorageCount;
+	SDL_GPUBuffer *VertexStorageBuffers[MAXIMUM_VERTEX_STORAGE_BUFFERS];
 	uint32_t VertexSamplerCount;
 	SDL_GPUTexture * VertexTextures[MAXIMUM_SAMPLERS];
 	SDL_GPUSampler * VertexSamplers[MAXIMUM_SAMPLERS];
@@ -180,6 +182,10 @@ public:
 	/// Runs what is recorded into the back buffer.  False when the GPU refused the work.
 	bool Flush();
 	bool Has_Pending_Work() const;
+	using OwnerReleaseHook = bool (*)(SdlGpuFrame *);
+	bool Register_Owner_Release_Hook(OwnerReleaseHook);
+	void Unregister_Owner_Release_Hook(OwnerReleaseHook);
+	void Release_Owner_Hooks_For_Teardown();
 	// Final owner teardown only: prevents abandoned CPU packets borrowing released resources.
 	void Discard_Pending_Work_For_Teardown();
 	void Fail_Next_Native_Record_For_Test(unsigned count = 1) { NativeRecordRefusalsForTest = count; }
@@ -224,9 +230,9 @@ public:
 	unsigned int Depth_Usage() const;
 	/// Device capability selected at frame creation, including the R32F resolve target.
 	bool Supports_Scene_Depth() const { return DepthSampleable; }
-    // Independent normalized R32 depth: submits existing writers/readers first.
-    // No shared water snapshot or scene attachment is returned to the consumer.
-    bool Capture_Scene_Depth(const SdlTarget &source, SDL_GPUTexture *destination);
+	// Independent normalized R32 depth: submits existing writers/readers first.
+	// No shared water snapshot or scene attachment is returned to the consumer.
+	bool Capture_Scene_Depth(const SdlTarget &source, SDL_GPUTexture *destination);
 
 	/// Flush, then the back buffer to the window through the gamma ramp (null: none, a straight blit).
 	bool Present(const uint16_t (*ramp)[256]);

@@ -494,16 +494,15 @@ void ToggleQuitMenu()
 
 		// if we are watching a cinematic, we need to disable the save/load button
 		// because the save load window doesn't fit in the screen in letterbox mode.
-		if (TheInGameUI->getInputEnabled() == FALSE) {
-			if(buttonSaveLoadWin)
-				buttonSaveLoadWin->winEnable(FALSE);
-			buttonOptionsWin->winEnable(FALSE);
-		} else if (buttonSaveLoadWin)
-		{
-			if(buttonSaveLoadWin)
-				buttonSaveLoadWin->winEnable(TRUE);
-			buttonOptionsWin->winEnable(TRUE);
-		}
+		// A menu built again over its own pause (RecreateQuitMenu, after Options' Accept) finds input
+		// off because of that pause, and came back with Save/Load and Options greyed: what counts is
+		// whether input was on before the pause took it
+		const Bool inputEnabled = TheGameLogic->isGamePaused() ? TheGameLogic->getInputEnabledMemory()
+																													 : TheInGameUI->getInputEnabled();
+		if( buttonSaveLoadWin )
+			buttonSaveLoadWin->winEnable( inputEnabled );
+		if( buttonOptionsWin )
+			buttonOptionsWin->winEnable( inputEnabled );
 
 		// Disable the restart, load, save, etc buttons in network games
 		if ( TheGameLogic->isInMultiplayerGame() || TheGameLogic->isInSkirmishGame() )

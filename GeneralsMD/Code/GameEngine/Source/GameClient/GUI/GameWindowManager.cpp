@@ -1540,6 +1540,12 @@ Int GameWindowManager::winDestroy( GameWindow *window )
 	if( m_grabWindow == window )
 		m_grabWindow = NULL;
 
+	// An open combo box is the lone window, and nothing else let go of it when its menu went: Options'
+	// Accept straight after a pick left the pointer on a freed box, which the next press hit-tested and
+	// sent GGM_CLOSE to.  No GGM_CLOSE here, the box is going anyway
+	if( m_loneWindow == window )
+		m_loneWindow = NULL;
+
 	// a menu closed mid-transition: the transition must not run on the window once it is freed
 	if( TheTransitionHandler )
 		TheTransitionHandler->forgetWindow( window );

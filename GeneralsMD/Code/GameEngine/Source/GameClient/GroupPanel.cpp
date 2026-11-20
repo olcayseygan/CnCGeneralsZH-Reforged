@@ -488,6 +488,11 @@ static void forEachPowerSlot( const std::function<void( GameWindow * )> &each )
 	GameWindow *bar = TheWindowManager->winGetWindowFromId( NULL, barKey );
 	if( bar == NULL || bar->winIsHidden() )
 		return;
+	// the Red Alert style sidebar keeps the tray past the screen's right edge (no powers wing)
+	ICoord2D barAt;
+	bar->winGetScreenPosition( &barAt.x, &barAt.y );
+	if( barAt.x >= (Int)TheDisplay->getWidth() )
+		return;
 	for( Int i = 0; i < slotCount; i++ )
 	{
 		GameWindow *slot = TheWindowManager->winGetWindowFromId( bar, slotKeys[ i ] );

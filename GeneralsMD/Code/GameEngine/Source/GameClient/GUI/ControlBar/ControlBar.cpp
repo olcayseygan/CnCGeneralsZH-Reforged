@@ -6646,7 +6646,13 @@ void ControlBar::arrangeSpecialPowerShortcutGrid( void )
 	m_trayLaidOutFor = tray;
 	if( m_sidebarLayout )
 	{
-		arrangePowersWing();
+		// No wing beside the sidebar (the owner's, 2026-11-20): the powers fire from its Upgrades and
+		// powers tab and from their keys.  The tray stays shown, since the keys and the two-key chords
+		// resolve only while it is (resolveSpecialPowerShortcutSlot) and the tab's cells fire its
+		// buttons (getShownPowerShortcut), but it stands past the screen's right edge, where it draws
+		// nothing and takes no click.  arrangePowersWing is the wing as it was, unused
+		m_specialPowerShortcutParent->winSetPosition( TheDisplay->getWidth() + 16, 0 );
+		m_trayFramePlaced = TRUE;
 		return;
 	}
 

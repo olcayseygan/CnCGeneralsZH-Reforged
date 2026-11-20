@@ -81,9 +81,10 @@ struct FittedLabel
 	Int points, wellW, wellH;
 };
 enum { FITTED_ALIGN_LEFT = -1, FITTED_ALIGN_CENTRE = 0, FITTED_ALIGN_RIGHT = 1 };
-/// draw text in a well, centred unless told, wrapped to its width when asked, shrunk a point at a time until it fits
+/// draw text in a well, centred unless told, wrapped to its width when asked, shrunk a point at a time until it fits;
+/// its black drop shadow at dropAlpha (below 255 only while a window fades in)
 void drawFittedLabel( FittedLabel &label, const UnicodeString &text, Int points, const IRegion2D &well, Color color,
-											Bool wrap, Int align = FITTED_ALIGN_CENTRE );
+											Bool wrap, Int align = FITTED_ALIGN_CENTRE, Int dropAlpha = 255 );
 
 enum ProductionID : Int;
 
@@ -966,6 +967,9 @@ public:
 	/// a press on one of the promotion window's talent plates: buys that card when logic says it can be
 	/// bought; FALSE when the window is no talent plate
 	Bool purchaseTalent( GameWindow *control );
+	/// one step of the promotion window's opening fade (WINFADE, GenExpFade): both panels, the tree and
+	/// the cameos as they will stand, at that alpha; FALSE when the window is not the promotion window
+	Bool drawFadingPurchaseScience( GameWindow *window, Int alpha );
 
 	/** What the promotion window's talent half draws, read off the watched player outside the render
 		* window (ControlBar::update's logic latch and populateTalents), so the draw, which runs while the

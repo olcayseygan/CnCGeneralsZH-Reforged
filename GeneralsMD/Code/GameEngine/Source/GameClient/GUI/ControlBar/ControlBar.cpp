@@ -744,7 +744,7 @@ void ControlBar::populatePurchaseScienceRank( Player *player, const CommandSet *
 // a tooltip and a disabled plate behave like any button's.
 //-------------------------------------------------------------------------------------------------
 void drawFittedLabel( FittedLabel &label, const UnicodeString &text, Int points, const IRegion2D &well, Color color,
-											Bool wrap, Int align )
+											Bool wrap, Int align, Int dropAlpha )
 {
 	if( text.isEmpty() )
 		return;
@@ -772,7 +772,7 @@ void drawFittedLabel( FittedLabel &label, const UnicodeString &text, Int points,
 	Int w, h;
 	label.string->getSize( &w, &h );
 	const Int x = align == FITTED_ALIGN_LEFT ? well.lo.x : ( align == FITTED_ALIGN_RIGHT ? well.hi.x - w : ( well.lo.x + well.hi.x - w ) / 2 );
-	label.string->draw( x, ( well.lo.y + well.hi.y - h ) / 2, color, GameMakeColor( 0, 0, 0, 255 ) );
+	label.string->draw( x, ( well.lo.y + well.hi.y - h ) / 2, color, GameMakeColor( 0, 0, 0, dropAlpha ) );
 }
 
 namespace
@@ -805,6 +805,17 @@ namespace
 	const Int TALENT_NAME_BAND[ 2 ] = { 20, 44 };
 	const Int TALENT_SHORT_BAND[ 2 ] = { 44, 61 };
 	FittedLabel theTalentLabels[ LABEL_COUNT ];
+
+	/// the whole window's opacity: 255 but while the opening fade draws it (fadeTalentWindow)
+	Int theTalentAlpha = 255;
+
+	/// a colour at the window's opacity
+	Color faded( Color color )
+	{
+		UnsignedByte r, g, b, a;
+		GameGetColorComponents( color, &r, &g, &b, &a );
+		return GameMakeColor( r, g, b, (UnsignedByte)( a * theTalentAlpha / 255 ) );
+	}
 
 	/// where the window's design rect lands on the screen
 	struct TalentMap
@@ -866,7 +877,7 @@ namespace
 	void drawTalentLabel( Int which, const UnicodeString &text, Int points, const IRegion2D &well, Color color, Bool wrap,
 												Int align = ALIGN_CENTRE )
 	{
-		drawFittedLabel( theTalentLabels[ which ], text, points, well, color, wrap, align );
+		drawFittedLabel( theTalentLabels[ which ], text, points, well, faded( color ), wrap, align, theTalentAlpha );
 	}
 
 	void drawTalentNothing( GameWindow *window, WinInstanceData *instData )
@@ -888,16 +899,17 @@ namespace
 
 		const ControlBarSchemeManager *schemes = TheControlBar ? TheControlBar->getControlBarSchemeManager() : NULL;
 		const Image *const *art = schemes ? schemes->getTalentImages() : NULL;
+		const Color tint = faded( GameMakeColor( 255, 255, 255, 255 ) );
 		if( art )
-			TheDisplay->drawImage( art[ ControlBarScheme::TALENT_WINDOW ], origin.x, origin.y, origin.x + size.x, origin.y + size.y );
+			TheDisplay->drawImage( art[ ControlBarScheme::TALENT_WINDOW ], origin.x, origin.y, origin.x + size.x, origin.y + size.y, tint );
 		else
 		{
 			// the side's 542 wide painting where it was drawn for, the right half a plain panel
 			const IRegion2D left = map.rect( 0, 0, POWERS_DESIGN_W, TALENT_DESIGN_H );
 			if( window->winGetEnabledImage( 0 ) )
-				TheDisplay->drawImage( window->winGetEnabledImage( 0 ), left.lo.x, left.lo.y, left.hi.x, left.hi.y );
+				TheDisplay->drawImage( window->winGetEnabledImage( 0 ), left.lo.x, left.lo.y, left.hi.x, left.hi.y, tint );
 			const IRegion2D right = map.rect( POWERS_DESIGN_W, 0, TALENT_DESIGN_W, TALENT_DESIGN_H );
-			TheDisplay->drawFillRect( right.lo.x, right.lo.y, right.hi.x - right.lo.x, right.hi.y - right.lo.y, GameMakeColor( 20, 22, 26, 235 ) );
+			TheDisplay->drawFillRect( right.lo.x, right.lo.y, right.hi.x - right.lo.x, right.hi.y - right.lo.y, faded( GameMakeColor( 20, 22, 26, 235 ) ) );
 		}
 
 		// the snapshot only: this runs while the logic tick may be adding sciences to that very player
@@ -920,12 +932,12 @@ namespace
 			const Int *y = theTalentRowY[ i / 2 ], *x = theTalentPlateX[ i % 2 ];
 			const IRegion2D r = map.rect( x[ 0 ], y[ 0 ], x[ 1 ], y[ 1 ] );
 			if( art )
-				TheDisplay->drawImage( art[ ControlBarScheme::TALENT_PLATE + state[ i ] ], r.lo.x, r.lo.y, r.hi.x, r.hi.y );
+				TheDisplay->drawImage( art[ ControlBarScheme::TALENT_PLATE + state[ i ] ], r.lo.x, r.lo.y, r.hi.x, r.hi.y, tint );
 			else
 			{
-				TheDisplay->drawFillRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, fillPlate[ state[ i ] ] );
+				TheDisplay->drawFillRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, faded( fillPlate[ state[ i ] ] ) );
 				TheDisplay->drawOpenRect( r.lo.x, r.lo.y, r.hi.x - r.lo.x, r.hi.y - r.lo.y, 1.0f,
-					state[ i ] == TALENT_WAITING ? gold : GameMakeColor( 90, 94, 100, 255 ) );
+					faded( state[ i ] == TALENT_WAITING ? gold : GameMakeColor( 90, 94, 100, 255 ) ) );
 			}
 		}
 
@@ -936,7 +948,7 @@ namespace
 		{
 			const IRegion2D r = map.rect( theTalentSpineX[ 0 ], nodeY, theTalentSpineX[ 1 ],
 				( theTalentRowY[ reached ][ 0 ] + theTalentRowY[ reached ][ 1 ] ) / 2 );
-			TheDisplay->drawImage( art[ ControlBarScheme::TALENT_SPINE ], r.lo.x, r.lo.y, r.hi.x, r.hi.y );
+			TheDisplay->drawImage( art[ ControlBarScheme::TALENT_SPINE ], r.lo.x, r.lo.y, r.hi.x, r.hi.y, tint );
 		}
 		for( Int row = 0; art && row < TALENT_ROW_COUNT; row++ )
 		{
@@ -946,7 +958,7 @@ namespace
 				if( state[ 2 * row + side ] != TALENT_PICKED )
 					continue;
 				const IRegion2D r = map.rect( theTalentArmX[ side ][ 0 ], cy - TALENT_ARM_HALF_H, theTalentArmX[ side ][ 1 ], cy + TALENT_ARM_HALF_H );
-				TheDisplay->drawImage( art[ ControlBarScheme::TALENT_ARM_LEFT + side ], r.lo.x, r.lo.y, r.hi.x, r.hi.y );
+				TheDisplay->drawImage( art[ ControlBarScheme::TALENT_ARM_LEFT + side ], r.lo.x, r.lo.y, r.hi.x, r.hi.y, tint );
 			}
 		}
 
@@ -957,7 +969,7 @@ namespace
 			const Int cy = ( theTalentRowY[ row ][ 0 ] + theTalentRowY[ row ][ 1 ] ) / 2;
 			const IRegion2D r = map.rect( theTalentNodeX[ 0 ], cy - TALENT_NODE_HALF_H, theTalentNodeX[ 1 ], cy + TALENT_NODE_HALF_H );
 			if( art )
-				TheDisplay->drawImage( art[ ControlBarScheme::TALENT_NODE + rowState ], r.lo.x, r.lo.y, r.hi.x, r.hi.y );
+				TheDisplay->drawImage( art[ ControlBarScheme::TALENT_NODE + rowState ], r.lo.x, r.lo.y, r.hi.x, r.hi.y, tint );
 			const Color c = rowState == TALENT_WAITING ? gold : ( view.hasTree && rank >= row + 6 ? white : plateText[ TALENT_LOCKED ] );
 			drawTalentLabel( LABEL_NODE + row, view.numeral[ row ], REAL_TO_INT( 20 * scale + 0.5f ), r, c, FALSE );
 		}
@@ -1146,6 +1158,51 @@ Bool ControlBar::purchaseTalent( GameWindow *control )
 	m_talentPendingFrame = TheGameLogic->getFrame();
 	populateTalents( player );
 	markUIDirty();
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** EA's WINFADE holds the window hidden while it fades and draws the window's one image over its
+	* whole rect, which here is the left panel's 542 painting stretched across both panels, with the
+	* tree and every cameo popping in once the fade ends.  The promotion window fades as itself instead:
+	* its own draw at the step's alpha, then the children the hidden flag keeps off (the cameos, the
+	* close button, the rank captions) at the same alpha.  A disabled cameo is greyscale in the real
+	* draw, which ignores alpha, so for the fade's few frames it is the same picture darkened. */
+//-------------------------------------------------------------------------------------------------
+Bool ControlBar::drawFadingPurchaseScience( GameWindow *window, Int alpha )
+{
+	if( window == NULL || m_scienceLayout == NULL || window != m_scienceLayout->getFirstWindow() )
+		return FALSE;
+
+	theTalentAlpha = MAX( 0, MIN( alpha, 255 ) );
+	drawTalentWindow( window, window->winGetInstanceData() );
+	for( GameWindow *child = window->winGetChild(); child; child = child->winGetNext() )
+	{
+		if( child->winIsHidden() )
+			continue;
+		ICoord2D pos, size;
+		child->winGetScreenPosition( &pos.x, &pos.y );
+		child->winGetSize( &size.x, &size.y );
+
+		const Image *image = child->winGetEnabledImage( 0 );
+		if( image && BitTest( child->winGetStatus(), WIN_STATUS_IMAGE ) )
+		{
+			const Bool grey = !child->winGetEnabled() && !BitTest( child->winGetStatus(), WIN_STATUS_ALWAYS_COLOR );
+			const UnsignedByte shade = grey ? 128 : 255;
+			TheDisplay->drawImage( image, pos.x, pos.y, pos.x + size.x, pos.y + size.y, faded( GameMakeColor( shade, shade, shade, 255 ) ) );
+		}
+
+		const TextData *data = BitTest( child->winGetStyle(), GWS_STATIC_TEXT ) ? (const TextData *)child->winGetUserData() : NULL;
+		if( data && data->text && data->text->getTextLength() > 0 )
+		{
+			Int w, h;
+			data->text->getSize( &w, &h );
+			const Int x = data->centered ? pos.x + ( size.x - w ) / 2 : pos.x + data->leftMargin;
+			const Int y = data->centeredVertically ? pos.y + ( size.y - h ) / 2 : pos.y + data->topMargin;
+			data->text->draw( x, y, faded( child->winGetEnabledTextColor() ), faded( child->winGetEnabledTextBorderColor() ) );
+		}
+	}
+	theTalentAlpha = 255;
 	return TRUE;
 }
 

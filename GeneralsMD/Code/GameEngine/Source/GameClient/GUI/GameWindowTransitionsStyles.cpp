@@ -696,8 +696,12 @@ void FadeTransition::draw( void )
 {
 	if(!m_win)
 		return;
+	// the promotion window is two panels and a tree over one 542 painting: it fades as itself, unstretched
+	if( m_drawState >= FADETRANSITION_FADE_IN_1 && m_drawState <= FADETRANSITION_FADE_IN_9 && TheControlBar
+			&& TheControlBar->drawFadingPurchaseScience( m_win, 25 * m_drawState ) )
+		return;
 	const Image *image = m_win->winGetEnabledImage(0);
-	switch (m_drawState) 
+	switch (m_drawState)
 	{
 		case FADETRANSITION_FADE_IN_1:
 		{

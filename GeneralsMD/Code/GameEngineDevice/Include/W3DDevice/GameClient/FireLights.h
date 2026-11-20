@@ -20,8 +20,8 @@
 // FILE: FireLights.h
 // The Firelight option: flames as point lights on the ground, walls and units, kept free of the engine
 // so a test can hold the grouping and the cap.  A burning building is a dozen systems, so flames near
-// each other become one light, and the strongest MAX_LIGHTS in view go to the per pixel lights
-// (BLAST_LIGHT_SAMPLING).  Client only: nothing here reads or writes logic.
+// each other become one light, and the MAX_LIGHTS in view that rank highest (strength, nearness to the
+// view's middle, last frame's picks held) go to the per pixel lights (BLAST_LIGHT_SAMPLING).  Client only: nothing here reads or writes logic.
 
 #pragma once
 
@@ -45,6 +45,7 @@ static const float LIFT = 25.0f;						///< over the flames' middle, so the groun
 static const float GAIN = 0.7f;							///< a full fire's light at the surface it faces
 static const float AMBIENT_SHARE = 0.3f;		///< of that, on every surface it reaches whichever way it faces
 static const float RED = 1.0f, GREEN = 0.5f, BLUE = 0.2f;
+static const float KEEP_MARGIN = 1.25f;			///< last frame's picks rank this much higher, so groups near the cap do not swap
 
 /// Weighted sums over a fire's particles: w the weight (brightness x size), then the weighted
 /// position and the weighted square of it.
@@ -105,7 +106,7 @@ inline float flicker(unsigned int frame, float x, float y)
 
 class Gather {
 public:
-	Gather() : m_count(0) {}
+	Gather() : m_count(0), m_keptCount(0) {}
 
 	void clear() { m_count = 0; }
 	int count() const { return m_count; }
@@ -131,30 +132,47 @@ public:
 			m_groups[m_count++] = flames;
 	}
 
-	/// The strongest MAX_LIGHTS whose reach touches the box, into out[MAX_LIGHTS].  Returns how many.
-	int pick(const float center[3], const float extent[3], unsigned int frame, Light *out) const
+	/// The MAX_LIGHTS whose reach touches the box that rank highest, into out[MAX_LIGHTS].  Returns how
+	/// many.  A fire ranks by its strength over one plus its distance from the box's middle in half
+	/// diagonals, so an off screen fire gives way to an equal one in view and ties go to the nearer, and
+	/// a group within MERGE_DISTANCE of one of the last call's picks ranks KEEP_MARGIN higher.
+	int pick(const float center[3], const float extent[3], unsigned int frame, Light *out)
 	{
+		const float halfDiagonal = sqrtf(extent[0] * extent[0] + extent[1] * extent[1]);
+		const float distanceScale = halfDiagonal > 1.0f ? 1.0f / halfDiagonal : 1.0f;
+		float rank[MAX_LIGHTS];
 		int lit = 0;
 		for (int i = 0; i < m_count; ++i) {
 			Light light;
 			if (!makeLight(m_groups[i], frame, light))
 				continue;
-			if (fabsf(light.x - center[0]) > extent[0] + light.reach
-					|| fabsf(light.y - center[1]) > extent[1] + light.reach
+			const float dx = light.x - center[0], dy = light.y - center[1];
+			if (fabsf(dx) > extent[0] + light.reach
+					|| fabsf(dy) > extent[1] + light.reach
 					|| fabsf(light.z - center[2]) > extent[2] + light.reach)
 				continue;
+			float score = light.strength / (1.0f + sqrtf(dx * dx + dy * dy) * distanceScale);
+			if (wasPicked(light))
+				score *= KEEP_MARGIN;
 			int slot = lit;
 			if (lit == MAX_LIGHTS) {
 				slot = 0;
 				for (int j = 1; j < lit; ++j)
-					if (out[j].strength < out[slot].strength)
+					if (rank[j] < rank[slot])
 						slot = j;
-				if (out[slot].strength >= light.strength)
+				if (rank[slot] >= score)
 					continue;
 			} else
 				++lit;
 			out[slot] = light;
+			rank[slot] = score;
 		}
+		for (int i = 0; i < lit; ++i) {
+			m_kept[i][0] = out[i].x;
+			m_kept[i][1] = out[i].y;
+			m_kept[i][2] = out[i].z;
+		}
+		m_keptCount = lit;
 		return lit;
 	}
 
@@ -180,8 +198,20 @@ private:
 		return true;
 	}
 
+	bool wasPicked(const Light &light) const
+	{
+		for (int i = 0; i < m_keptCount; ++i) {
+			const float dx = m_kept[i][0] - light.x, dy = m_kept[i][1] - light.y, dz = m_kept[i][2] - light.z;
+			if (dx * dx + dy * dy + dz * dz < MERGE_DISTANCE * MERGE_DISTANCE)
+				return true;
+		}
+		return false;
+	}
+
 	Flames m_groups[MAX_GROUPS];
 	int m_count;
+	float m_kept[MAX_LIGHTS][3];		///< the last pick's lights, which clear() keeps
+	int m_keptCount;
 };
 
 }	// namespace FireLights

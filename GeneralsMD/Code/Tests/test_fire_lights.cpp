@@ -59,6 +59,52 @@ TEST(the_strongest_fires_take_the_capped_lights)
 		CHECK(lights[i].strength >= weakestKept - 0.001f);
 }
 
+static bool litAt(const Light *lights, int lit, float x, float y)
+{
+	for (int i = 0; i < lit; ++i)
+		if (fabsf(lights[i].x - x) < 1.0f && fabsf(lights[i].y - y) < 1.0f)
+			return true;
+	return false;
+}
+
+TEST(equal_fires_past_the_cap_go_to_the_ones_nearer_the_view_middle)
+{
+	// the far one first: ranked by list order it kept its slot against a tie
+	Gather gather;
+	gather.add(flamesAt(FULL_WEIGHT, 900.0f, 0.0f, 0.0f));
+	for (int k = 0; k < MAX_LIGHTS; ++k)
+		gather.add(flamesAt(FULL_WEIGHT, (float)k * 70.0f - 385.0f, 0.0f, 0.0f));
+	Light lights[MAX_LIGHTS];
+	const int lit = gather.pick(VIEW_CENTER, VIEW_EXTENT, 0, lights);
+	CHECK_EQ(lit, (int)MAX_LIGHTS);
+	CHECK(!litAt(lights, lit, 900.0f, 0.0f));
+}
+
+TEST(a_fire_at_the_cap_keeps_its_light_until_another_beats_it_by_a_margin)
+{
+	Gather gather;
+	Light lights[MAX_LIGHTS];
+	// eleven near the middle take eleven slots every frame; A and B, far out, want the last one
+	struct Frame { float ay, by; } frames[3] = { { 600.0f, -620.0f }, { 630.0f, -600.0f }, { 630.0f, -100.0f } };
+	bool aLit[3], bLit[3];
+	for (int f = 0; f < 3; ++f) {
+		gather.clear();
+		for (int k = 0; k < MAX_LIGHTS - 1; ++k)
+			gather.add(flamesAt(FULL_WEIGHT, (float)k * 70.0f - 350.0f, 0.0f, 0.0f));
+		gather.add(flamesAt(FULL_WEIGHT, 0.0f, frames[f].ay, 0.0f));
+		gather.add(flamesAt(FULL_WEIGHT, 0.0f, frames[f].by, 0.0f));
+		const int lit = gather.pick(VIEW_CENTER, VIEW_EXTENT, (unsigned int)f, lights);
+		CHECK_EQ(lit, (int)MAX_LIGHTS);
+		aLit[f] = litAt(lights, lit, 0.0f, frames[f].ay);
+		bLit[f] = litAt(lights, lit, 0.0f, frames[f].by);
+	}
+	// nearer at first, A takes it; B a little nearer than A next frame is not enough to swap
+	CHECK(aLit[0] && !bLit[0]);
+	CHECK(aLit[1] && !bLit[1]);
+	// B well inside the view is
+	CHECK(bLit[2]);
+}
+
 TEST(a_fire_out_of_reach_of_the_view_is_no_light)
 {
 	Gather gather;

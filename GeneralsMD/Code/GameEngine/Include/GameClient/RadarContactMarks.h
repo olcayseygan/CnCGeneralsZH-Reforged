@@ -48,7 +48,8 @@ struct RadarReconArea
 
 /** A sweep's contacts and recon areas for every player.  Main thread: the logic calls it through callAfterTick. */
 void RadarContactMarks_publish( UnsignedInt sweepFrame, const std::vector<RadarContact> &contacts, const std::vector<RadarReconArea> &areas );
-/// InGameUI::update: reads the logic (outside the logic thread's window), refills the lists below and
+/// GameClient::update, after the drawable walk and before the draw: reads the logic (outside the logic
+/// thread's window), refills the lists below and
 /// lays and animates the ground marks.  The getters and the draw after reset only read what it left,
 /// so a draw beside the tick may call them
 void RadarContactMarks_update( void );

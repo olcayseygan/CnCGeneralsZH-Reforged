@@ -82,6 +82,7 @@
 #include "GameClient/ObserverCamera.h"
 #include "GameClient/ParticleSys.h"
 #include "GameClient/PlaceEventTranslator.h"
+#include "GameClient/RadarContactMarks.h"
 #include "GameClient/RayEffect.h"
 #include "GameClient/SelectionXlat.h"
 #include "GameClient/Shell.h"
@@ -1057,6 +1058,10 @@ void GameClient::update( void )
 		}
 		draw->setShroudForDraw( status, FALSE );
 	}
+
+	// what a Turkiye radar paints in the fog, laid for the draw below from the walk above: from
+	// InGameUI::update, after the draw, a ring stayed one picture under a unit that walked into sight
+	RadarContactMarks_update();
 
 	// update all particle systems
 	if( !freezeTime )

@@ -425,6 +425,7 @@ public:  // ********************************************************************
 	virtual Bool isMessagesOn( void ) { return m_messagesOn; }	///< are the display messages on
 	void freeMessageResources( void );				///< empty the message list
 	Color getMessageColor(Bool altColor) { return (altColor)?m_messageColor2:m_messageColor1; }
+	Int getMessageLinesBottom( void ) const;	///< the foot of the six message lines in the top left, all six up
 	
 	// interface for military style messages
 	virtual void militarySubtitle( const AsciiString& label, Int duration );			// time in milliseconds
@@ -611,7 +612,7 @@ public:  // ********************************************************************
 	void updateAttackCircle( const ICoord2D& pt );
 	Bool issueAttackCircle( void );		///< FALSE when the press never became a drag, so it was an ordinary attack click
 	Int issueAttackLine( const std::vector<Coord3D>& line );	///< enemies the stroke crosses, shared along it across the units that can shoot
-	Bool isAttackListTarget( const Object *obj, const Player *local ) const;	///< would the circle or the attack line take this
+	const Coord3D *attackListSpot( const Object *obj, const Player *local ) const;	///< where the circle or the attack line measures this, NULL when they do not take it
 	void cancelAttackCircle( void ) { m_isAttackCircling = FALSE; }
 	Bool isAttackCircling( void ) const { return m_isAttackCircling; }
 	const ICoord2D& getAttackCircleAnchor( void ) const { return m_attackCircleAnchor; }

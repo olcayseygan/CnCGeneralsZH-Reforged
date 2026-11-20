@@ -3867,7 +3867,6 @@ void InGameUI::update( void )
 	if( TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() )
 		watchDozers();
 	updateSignalMarks();
-	RadarContactMarks_update();	// what a Turkiye radar paints in the fog, on the ground
 	ReachOverlay_update();		// the ground a selected or sited defence hits, drawn on the terrain
 	UnsignedByte r, g, b, a;
 	Int amount;
@@ -4456,6 +4455,19 @@ void InGameUI::drawClassicMessages( void )
 		line.text->draw( x, y, line.color, GameMakeColor( 0, 0, 0, a ) );
 		y += line.text->getFont()->height;
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The foot of the message lines as drawClassicMessages stacks them when all six are up:
+	* MessagePosition's y and six lines of the message font, the language's when it names one.  All
+	* six whether or not they show now, so whatever sits under them does not jump as lines come and
+	* fade (the squad list). */
+//-------------------------------------------------------------------------------------------------
+Int InGameUI::getMessageLinesBottom( void ) const
+{
+	GameFont *font = TheFontLibrary->getFont( m_messageFont,
+		TheGlobalLanguageData->adjustFontSize( m_messagePointSize ), m_messageBold );
+	return m_messagePosition.y + ( font != NULL ? CLASSIC_MESSAGES * font->height : 0 );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -5548,6 +5560,7 @@ Bool InGameUI::addPendingOrderHint( const Object *obj, const std::vector<OrderHi
 				return FALSE;
 			hint.to = orderTargetSpot( target );
 			hint.onObject = TRUE;
+			hint.target = it->target;		// its ring and outline, as once logic has run the order
 		}
 		addOrderHint( hint, previous );
 		return TRUE;
@@ -6443,17 +6456,26 @@ Bool InGameUI::issueAttackCircle( void )
 	}
 
 	std::vector<AttackAssignSlot> targets;
-	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( &center, radius, FROM_CENTER_2D, NULL );
+	// a radar ring is measured where it was painted, up to a sweep behind its unit, so the query
+	// reaches past the circle and each spot is held to the circle itself.
+	// ponytail: a unit that ran further than RING_LAG in one sweep drops out of its ring's circle
+	const Real RING_LAG = 150.0f;
+	ObjectIterator *iter = ThePartitionManager->iterateObjectsInRange( &center, radius + RING_LAG, FROM_CENTER_2D, NULL );
 	MemoryPoolObjectHolder holder( iter );
 	for( Object *obj = iter->first(); obj; obj = iter->next() )
 	{
-		if( !isAttackListTarget( obj, local ) )
+		const Coord3D *spot = attackListSpot( obj, local );
+		if( spot == NULL )
+			continue;
+		const Real dx = spot->x - center.x;
+		const Real dy = spot->y - center.y;
+		if( dx * dx + dy * dy > radius * radius )
 			continue;
 
 		AttackAssignSlot slot;
 		slot.id = obj->getID();
-		slot.x = obj->getPosition()->x;
-		slot.y = obj->getPosition()->y;
+		slot.x = spot->x;
+		slot.y = spot->y;
 		targets.push_back( slot );
 	}
 
@@ -6489,16 +6511,27 @@ Bool InGameUI::issueAttackCircle( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Would the circle or the attack line put this on the target list? */
+/** Where the circle or the attack line measures this, or NULL when it does not go on the target
+	* list.  A unit under the shroud goes on it only as a radar ring the player sees, and is measured
+	* at the ring: its own spot would tell the circle's edge what the fog hides. */
 //-------------------------------------------------------------------------------------------------
-Bool InGameUI::isAttackListTarget( const Object *obj, const Player *local ) const
+const Coord3D *InGameUI::attackListSpot( const Object *obj, const Player *local ) const
 {
 	if( obj->isEffectivelyDead() )
-		return FALSE;
+		return NULL;
 	if( local->getRelationship( obj->getTeam() ) != ENEMIES )
-		return FALSE;
+		return NULL;
+	const Coord3D *spot = obj->getPosition();
 	if( isHiddenByShroud( obj ) )
-		return FALSE;
+	{
+		spot = NULL;
+		const std::vector<RadarContact> &rings = RadarContactMarks_fresh();
+		for( size_t i = 0; i < rings.size() && spot == NULL; ++i )
+			if( rings[ i ].id == obj->getID() )
+				spot = &rings[ i ].pos;
+		if( spot == NULL )
+			return NULL;
+	}
 
 	//
 	// Shroud is only half of invisible. A stealthed tank sitting in ground the player has
@@ -6507,7 +6540,7 @@ Bool InGameUI::isAttackListTarget( const Object *obj, const Player *local ) cons
 	// stealth by dragging a circle over it. Undetected means not in the circle.
 	//
 	if( obj->testStatus( OBJECT_STATUS_STEALTHED ) && !obj->testStatus( OBJECT_STATUS_DETECTED ) )
-		return FALSE;
+		return NULL;
 
 	//
 	// Not everything hostile standing in the circle is something to shoot at.  A shell or a
@@ -6516,7 +6549,9 @@ Bool InGameUI::isAttackListTarget( const Object *obj, const Player *local ) cons
 	// wherever it scans.  Each one that reached the list cost the group a two second stall on a
 	// target that was about to stop existing.
 	//
-	return !obj->isKindOf( KINDOF_PROJECTILE ) && !obj->isKindOf( KINDOF_UNATTACKABLE );
+	if( obj->isKindOf( KINDOF_PROJECTILE ) || obj->isKindOf( KINDOF_UNATTACKABLE ) )
+		return NULL;
+	return spot;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -6569,10 +6604,11 @@ Int InGameUI::issueAttackLine( const std::vector<Coord3D>& line )
 	std::vector<AttackAssignSlot> targets;
 	for( Object *obj = iter->first(); obj; obj = iter->next() )
 	{
-		if( !isAttackListTarget( obj, local ) )
+		// the reach's footprint slack also covers a radar ring left up to a sweep behind its unit
+		const Coord3D *pos = attackListSpot( obj, local );
+		if( pos == NULL )
 			continue;
 
-		const Coord3D *pos = obj->getPosition();
 		const Real allowed = obj->getGeometryInfo().getBoundingCircleRadius() + LINE_TOLERANCE;
 		Real bestDistanceSqr = allowed * allowed;
 		Real along = -1.0f;

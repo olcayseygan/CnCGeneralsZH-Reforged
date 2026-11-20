@@ -282,7 +282,7 @@ TEST(ffshadercompile_the_smoke_glow_is_added_after_the_shade)
 // edge is not clipped hard again.  An additive sprite takes no shadow and still has to declare the
 // whole constant block, whose last field the fade reads; a smoke sprite takes both.  The receiving
 // programs carry the blast lights after the shade.  SDL3 and D3D9 get neither.
-TEST(ffshadercompile_a_soft_particle_fades_into_the_scene_depth_on_d3d11_only)
+TEST(ffshadercompile_a_soft_particle_fades_into_the_scene_depth_on_d3d11_and_sdl)
 {
 	CombinerDescription description;
 	memset(&description, 0, sizeof(description));
@@ -310,7 +310,9 @@ TEST(ffshadercompile_a_soft_particle_fades_into_the_scene_depth_on_d3d11_only)
 	std::string nine;
 	CHECK(CombinerShader_Generate(description, COMBINER_SHADER_TARGET_SDL3_GPU, sdl));
 	CHECK(CombinerShader_Generate(description, COMBINER_SHADER_TARGET_D3D9, nine));
-	CHECK(sdl.find("SceneDepth") == std::string::npos);
+	// SDL takes the soft particles since pull request 244: its sorted billboards bind the scene's
+	// depth at t7 as Direct3D 11 does.  Direct3D 9 still has none.
+	CHECK(sdl.find("SceneDepth") != std::string::npos);
 	CHECK(nine.find("SceneDepth") == std::string::npos);
 
 	description.ShadowReceiving = true;
@@ -435,7 +437,7 @@ TEST(ffshadercompile_the_stealth_pack_round_trips_through_stealth_unpack)
 // fog and the soft fade; an additive one wears away through the colour, a blended one through the
 // alpha.  It declares no constant of its own, so an additive flame with no fade keeps the short
 // block.  SDL3 and D3D9 get none of it.
-TEST(ffshadercompile_a_fire_billboard_burns_on_d3d11_only)
+TEST(ffshadercompile_a_fire_billboard_burns_on_d3d11_and_sdl)
 {
 	CombinerDescription description;
 	memset(&description, 0, sizeof(description));
@@ -469,7 +471,8 @@ TEST(ffshadercompile_a_fire_billboard_burns_on_d3d11_only)
 	std::string nine;
 	CHECK(CombinerShader_Generate(description, COMBINER_SHADER_TARGET_SDL3_GPU, sdl));
 	CHECK(CombinerShader_Generate(description, COMBINER_SHADER_TARGET_D3D9, nine));
-	CHECK(sdl.find("fire_") == std::string::npos);
+	// SDL takes the fire look since pull request 244, its billboards carrying the age and seed in v2.
+	CHECK(sdl.find("fire_") != std::string::npos);
 	CHECK(nine.find("fire_") == std::string::npos);
 
 	D3DCompileFunction compile = load_compiler();

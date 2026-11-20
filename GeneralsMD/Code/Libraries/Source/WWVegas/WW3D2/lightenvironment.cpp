@@ -237,6 +237,9 @@ LightEnvironmentClass::~LightEnvironmentClass(void)
 
 void LightEnvironmentClass::Reset(const Vector3 & object_center,const Vector3 & ambient)
 {
+#if !defined(_WIN32)
+	HasStaticLighting = false;
+#endif
 	LightCount = 0;
 	ObjectCenter = object_center;
 	OutputAmbient = ambient;
@@ -303,8 +306,41 @@ void LightEnvironmentClass::Add_Light(const LightClass & light)
 	}
 }
 
+#if !defined(_WIN32)
+void LightEnvironmentClass::Capture_Static_Lighting()
+{
+	HasStaticLighting = true;
+	StaticLightCount = StaticInputCount = LightCount;
+	StaticAmbient = StaticInputAmbient = OutputAmbient;
+	for (int i=0;i<LightCount;++i) StaticLights[i]=StaticInputs[i]=InputLights[i];
+}
+
+bool LightEnvironmentClass::Get_Static_Lighting(LightEnvironmentClass &result) const
+{
+	if (!HasStaticLighting) return false;
+	result.Reset(ObjectCenter, StaticAmbient);
+	result.LightCount = StaticLightCount;
+	result.FillIntensity = 0; // this snapshot's fill has already been resolved
+	for (int i=0;i<StaticLightCount;++i) result.InputLights[i]=StaticLights[i];
+	return true;
+}
+#endif
+
 void LightEnvironmentClass::Pre_Render_Update(const Matrix3D & camera_tm)
 {
+#if !defined(_WIN32)
+	if (HasStaticLighting) {
+		LightEnvironmentClass alternate;
+		alternate.Reset(ObjectCenter, StaticInputAmbient);
+		alternate.LightCount = StaticInputCount;
+		for (int i=0;i<StaticInputCount;++i) alternate.InputLights[i]=StaticInputs[i];
+		alternate.FillIntensity = FillIntensity;
+		alternate.Pre_Render_Update(camera_tm);
+		StaticLightCount = alternate.LightCount;
+		StaticAmbient = alternate.OutputAmbient;
+		for (int i=0;i<StaticLightCount;++i) StaticLights[i]=alternate.InputLights[i];
+	}
+#endif
 	/*
 	** Calculate and set up the fill light for the object
 	*/

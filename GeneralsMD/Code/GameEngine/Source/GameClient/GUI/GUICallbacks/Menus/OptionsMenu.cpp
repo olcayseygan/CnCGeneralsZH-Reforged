@@ -3167,6 +3167,7 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 	static const char *const worldEffects[] = { "GroundMarks", "WaterSplashes", "StructureCollapse" };
 	for( Int i = 0; i < (Int)( sizeof( worldEffects ) / sizeof( worldEffects[ 0 ] ) ); ++i )
 		findOptionWidget( *findOptionDef( worldEffects[ i ] ) )->winEnable( RenderEffects::WorldEffectsAvailable() );
+	findOptionWidget(*findOptionDef("Firelight"))->winEnable(TheDisplay && TheDisplay->supportsPerPixelLighting());
 #endif
 #if defined(__linux__)
 	// The game side of the haze, the atmosphere and the weather is built for Linux only so far.

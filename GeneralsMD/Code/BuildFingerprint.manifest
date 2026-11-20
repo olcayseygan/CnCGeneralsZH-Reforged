@@ -3022,6 +3022,7 @@ GameEngineDevice/Source/PosixDevice/Render/PosixDevice9.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9.h
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Capture.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Draw.cpp
+GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Lighting.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Post.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Resources.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9SunShadow.cpp
@@ -3255,6 +3256,7 @@ Libraries/Include/Platform/PosixD3D9/d3d9.h
 Libraries/Include/Platform/PosixD3D9/d3d9caps.h
 Libraries/Include/Platform/PosixD3D9/d3d9types.h
 Libraries/Include/Platform/RenderEffects.h
+Libraries/Include/Platform/RenderLighting.h
 Libraries/Include/Platform/RenderParticles.h
 Libraries/Include/Platform/RenderPost.h
 Libraries/Include/Platform/RenderTeamGlow.h
@@ -4478,6 +4480,7 @@ Tests/test_registryfile.cpp
 Tests/test_render_hooks.cpp
 Tests/test_renderer_atmosphere.cpp
 Tests/test_renderer_effects.cpp
+Tests/test_renderer_lighting.cpp
 Tests/test_renderer_particles.cpp
 Tests/test_renderer_water_foam.cpp
 Tests/test_road_buffer.cpp

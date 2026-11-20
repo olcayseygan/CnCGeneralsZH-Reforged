@@ -112,6 +112,7 @@ found and fixed, EA's own, not port damage.**
 - On Linux the Weather option works: rain, blowing sand and snow fall, the trees sway and smoke drifts with the wind, and a weather haze takes over from Warm Light while it lasts. A map with its own snow keeps it, Classic graphics stays clear, and the Mac build waits for its own. Thanks to Shin-Aska.
 - On Mac and Linux a big blast throws its ring through the picture as it does on Windows, bending the battlefield and leaving the health bars and the interface straight, and Heat Haze (its box is still greyed there, `-heathaze` turns it on) makes the air shimmer behind flames, exhausts and beams. Both want a post effect such as Glow on, and Classic graphics has neither. Thanks to Shin-Aska.
 - On Mac and Linux three boxes that sat there doing nothing now work. Battle Marks leaves craters, scorch and tread marks on the ground, Water Splashes throws spray, foam and rings where a shell lands in Classic water, and Collapse sinks a destroyed building into the ground, a big one jolting the camera as it goes. Classic graphics keeps all three off, as on Windows. Thanks to Shin-Aska.
+- On Mac and Linux headlights throw their cones on the ground at night, a blast lights the walls and tanks round it for the moment it burns, and the Firelight box works: fires light what stands near them, pixel by pixel as on Windows. Thanks to Shin-Aska.
 
 ## A dropped player's army stays, and he can come back to it
 

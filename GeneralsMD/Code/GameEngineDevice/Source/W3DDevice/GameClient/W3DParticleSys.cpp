@@ -49,6 +49,7 @@
 #include "WW3D2/dx8wrapper.h"
 #include "WW3D2/dx11runtime.h"
 #include "Platform/SunShadow.h"
+#include "Platform/RenderLighting.h"
 #include "Common/JobSystem.h"
 #include "Common/LogicThread.h"
 #include "GameLogic/GameLogic.h"
@@ -2603,7 +2604,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 	if (!ShaderClass::Is_Backface_Culling_Inverted())
 	{
 		s_firelightCount = 0;
-		if (TheGlobalData->m_firelight && Direct3D11_Lights_Per_Pixel())
+		if (TheGlobalData->m_firelight && RenderLighting::LightsPerPixel())
 			gatherFirelights( bbox, m_lastLogicFrameUpdate, m_frameFires, m_frameFireFades );
 		if (TheGlobalData->m_heatHaze && !TheGlobalData->m_classicGraphics && RenderPost::DistortionAvailable())
 			gatherHeatHaze( rinfo.Camera, m_frameFires, m_frameFireFades, m_frameExhausts, m_frameExhaustFades );

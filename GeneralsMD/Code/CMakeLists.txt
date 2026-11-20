@@ -1676,6 +1676,16 @@ if(ZH_PLATFORM_POSIX)
   add_test(NAME sdl_pipeline_state_selfcheck COMMAND sdl_pipeline_state_selfcheck)
   set_tests_properties(sdl_pipeline_state_selfcheck PROPERTIES SKIP_RETURN_CODE 77)
 
+  # Headlights, blast lights and Firelight per pixel: the light packets headless, the lit pixels with --gpu.
+  add_executable(test_renderer_lighting ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_renderer_lighting.cpp)
+  set_target_properties(test_renderer_lighting PROPERTIES CXX_STANDARD 17)
+  target_include_directories(test_renderer_lighting PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Source/PosixDevice/Render)
+  target_link_libraries(test_renderer_lighting PRIVATE w3ddevice ww3d2 posixdevice gameengine SDL3::SDL3-static)
+  add_test(NAME test_renderer_lighting COMMAND test_renderer_lighting)
+  add_test(NAME test_renderer_lighting_gpu COMMAND test_renderer_lighting --gpu)
+  set_tests_properties(test_renderer_lighting_gpu PROPERTIES SKIP_RETURN_CODE 77 RUN_SERIAL TRUE)
+
   # A3c's draws: through the device's D3D9 calls onto this machine's GPU, read back from the back buffer
   # (77 without a GPU).
   add_executable(posix_gpu_draw_selfcheck ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_posix_gpu_draw.cpp)
@@ -3303,7 +3313,7 @@ if(ZH_PLATFORM_POSIX)
     foreach(_zh_test sdl_gpu_frame_selfcheck sdl_program_cache_selfcheck sdl_pipeline_state_selfcheck
                      posix_gpu_draw_selfcheck ffref_gpu_selfcheck ffref_capture_selfcheck
                      test_sdl_storage_gpu test_sdl_gpu_particles_gpu test_sdl_gpu_particles_context
-                     test_sdl_distortion_gpu test_sdl_heat_gpu)
+                     test_sdl_distortion_gpu test_sdl_heat_gpu test_renderer_lighting_gpu)
       if(TEST ${_zh_test})
         set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT "SDL_VIDEO_DRIVER=dummy" "ZH_SDL_GPU_METAL_WINDOWLESS=1")
       endif()
@@ -3312,7 +3322,7 @@ if(ZH_PLATFORM_POSIX)
     foreach(_zh_test sdl_gpu_frame_selfcheck sdl_program_cache_selfcheck sdl_pipeline_state_selfcheck
                      posix_gpu_draw_selfcheck ffref_gpu_selfcheck ffref_capture_selfcheck test_sun_shadow_sorting
                      test_sdl_storage_gpu test_sdl_gpu_particles_gpu test_sdl_gpu_particles_context
-                     test_sdl_distortion_gpu test_sdl_heat_gpu)
+                     test_sdl_distortion_gpu test_sdl_heat_gpu test_renderer_lighting_gpu)
       if(TEST ${_zh_test})
         set_property(TEST ${_zh_test} APPEND PROPERTY ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen")
       endif()

@@ -1848,8 +1848,8 @@ void ControlBarSchemeManager::drawPainting( ICoord2D offset, Bool foreground )
 	const Int height = TheDisplay->getHeight();
 	const ICoord2D barOffset = offset;
 
-	// The Classic and Reforged layouts (HUD_LAYOUT_RETAIL, HUD_LAYOUT_PLAIN) have no command tabs, and
-	// their painted socket would stand empty over the bar's top.  A scheme whose painting has a NoTabs
+	// The Classic layout (HUD_LAYOUT_RETAIL) has no command tabs, and their painted socket would stand
+	// empty over the bar's top.  A scheme whose painting has a NoTabs
 	// copy (<ImageName>NoTabs, the hud-artist's, rim closed where the socket was) draws that copy.  One
 	// without it has the piece holding the socket drawn round the socket's plate, which leaves the
 	// battlefield showing there; the plate goes to the screen as updateCommandTabButtons seats it

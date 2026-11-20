@@ -174,13 +174,14 @@ enum { HEALTH_BAR_COLORS_COUNT = 2 };
 // GUI:SidebarTab0..3 (Bina, Yükseltmeler ve güçler, Piyade, Araç), GUI:SidebarAll, later GUI:SidebarSell, GUI:SidebarRepair.
 // Two more stand on the Classic bar's own rectangles and only leave pieces off it (the owner's, TODO
 // "HUD Design and Features" 5 and 6), so everything that places windows reads them as Classic:
-// 2 HUD_LAYOUT_RETAIL, shown as "Classic" (0 is shown as "Full" since), no production list, no hero
-// cell, no squad list, the superweapons as named countdowns and the general's powers one column up
-// from the bottom; 3 HUD_LAYOUT_PLAIN, shown as "Reforged", today's bar less the command tabs, the
-// idle column and the signal keys over the radar.  GUI:HudLayout2, GUI:HudLayout3.
+// 2 HUD_LAYOUT_RETAIL, shown as "Classic" (0 is shown as "Full" since), no command tabs and no socket
+// for them, no production list, no hero cell, no squad list, the superweapons as named countdowns and
+// the general's powers one column up from the bottom; 3 HUD_LAYOUT_PLAIN, shown as "Reforged", today's
+// bar, tabs and all, less the production list, the idle column and the signal keys over the radar.
+// GUI:HudLayout2, GUI:HudLayout3.
 enum { HUD_LAYOUT_CLASSIC, HUD_LAYOUT_SIDEBAR, HUD_LAYOUT_RETAIL, HUD_LAYOUT_PLAIN, HUD_LAYOUT_COUNT };
-/// the Classic bar's Buildings, Ground and Aircraft tabs and their painted socket: Full only (the sidebar has its own)
-inline Bool hudLayoutHasCommandTabs( Int layout ) { return layout != HUD_LAYOUT_RETAIL && layout != HUD_LAYOUT_PLAIN; }
+/// the Classic bar's Buildings, Ground and Aircraft tabs and their painted socket: every layout but Classic (the sidebar has its own)
+inline Bool hudLayoutHasCommandTabs( Int layout ) { return layout != HUD_LAYOUT_RETAIL; }
 
 // How wide the in-game interface may spread ("HudWidth", GlobalData m_hudWidth), for either layout: 0 the
 // whole screen, the default; 1 a centred 21:9 area, 2 a centred 16:9 one, so a player on a wider screen

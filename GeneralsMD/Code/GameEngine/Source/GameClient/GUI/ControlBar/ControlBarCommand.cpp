@@ -2071,7 +2071,7 @@ Bool ControlBar::getCommandGridRect( IRegion2D *rect ) const
 //-------------------------------------------------------------------------------------------------
 void ControlBar::toggleCommandTab( Int tab )
 {
-	// the Classic and Reforged layouts (HUD_LAYOUT_RETAIL, HUD_LAYOUT_PLAIN) have no tabs to open
+	// the Classic layout (HUD_LAYOUT_RETAIL) has no tabs to open
 	if( tab < 0 || tab >= COMMAND_TAB_COUNT || !hudLayoutHasCommandTabs( TheGlobalData->m_hudLayout ) )
 		return;
 
@@ -2122,7 +2122,7 @@ void ControlBar::updateCommandTabButtons( void )
 	IRegion2D grid;
 	const Bool haveGrid = getCommandGridRect( &grid );
 	// the sidebar has its own tabs (ControlBarSidebar.h): these hide and close under it, and the
-	// Classic and Reforged layouts have none (drawPainting leaves their socket off the bar too)
+	// Classic layout has none (drawPainting leaves their socket off the bar too)
 	const Bool shown = playing && !m_sidebarLayout && hudLayoutHasCommandTabs( TheGlobalData->m_hudLayout ) && m_contextParent[ CP_MASTER ] != NULL && !m_contextParent[ CP_MASTER ]->winIsHidden()
 		&& !TheInGameUI->isQuitMenuVisible() && ( seated || ( haveGrid && grid.lo.y < (Int)TheDisplay->getHeight() ) );
 

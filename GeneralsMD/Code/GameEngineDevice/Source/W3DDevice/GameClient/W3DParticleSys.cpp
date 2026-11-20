@@ -912,6 +912,50 @@ struct FieldBatch
 
 static std::vector<FieldBatch>			s_fieldBatches;
 
+/** A particle texture by its name's buffer.  Get_Texture copies the name, lowercases it and hashes it,
+	* and the draws asked that once a system every pass.  A system copies its template's name, so the
+	* systems of one template share one buffer; the entry holds a copy of the name, so that buffer can
+	* never be freed and handed to another string while it is the key.  Each entry holds one reference
+	* until the match ends (W3DParticleSystemManager::reset), the way the GPU path holds its slices', so
+	* every pass draws the very texture Get_Texture would have returned: nothing in a match takes a
+	* texture out of the asset manager's table while another reference stands on it, and a lost device
+	* is the texture's own business.  A changed name is another buffer and so another lookup.  The
+	* particle editor's Reload Textures empties the table under the cache, so under -particleEdit every
+	* pass asks the asset manager as before.  Main thread only, as the draws are.  The pointer returned
+	* is borrowed: the caller takes no reference and releases none. */
+struct ParticleTextureEntry
+{
+	AsciiString			name;
+	TextureClass *	texture;
+};
+static std::unordered_map<const char *, ParticleTextureEntry>	s_particleTextures;
+
+static TextureClass *particleTexture( const AsciiString &name )
+{
+	std::unordered_map<const char *, ParticleTextureEntry>::const_iterator known = s_particleTextures.find( name.str() );
+	if (known != s_particleTextures.end())
+		return known->second.texture;
+	TextureClass *texture = W3DDisplay::m_assetManager->Get_Texture( name.str() );
+	if (texture == NULL || TheGlobalData->m_particleEdit)
+	{
+		if (texture)
+			texture->Release_Ref();	// the draw state takes its own; the editor's reload frees the rest
+		return texture;
+	}
+	ParticleTextureEntry entry;
+	entry.name = name;
+	entry.texture = texture;
+	s_particleTextures[ name.str() ] = entry;
+	return texture;
+}
+
+static void releaseParticleTextures( void )
+{
+	for (std::unordered_map<const char *, ParticleTextureEntry>::iterator it = s_particleTextures.begin(); it != s_particleTextures.end(); ++it)
+		it->second.texture->Release_Ref();
+	s_particleTextures.clear();
+}
+
 /** Writes one pass of a chunk and draws it; the index buffer is already set. */
 static void drawFieldPass( const FieldChunk &chunk, const std::vector<unsigned> &colors, const ShaderClass &shader )
 {
@@ -2077,7 +2121,7 @@ static Int collectGroundFields( const AABoxClass &view, CameraClass &sceneCamera
 		s_fieldChunks.push_back( chunk );
 
 		batch.chunkCount = (Int)s_fieldChunks.size() - batch.firstChunk;
-		batch.texture = W3DDisplay::m_assetManager->Get_Texture( draw.texture.str() );
+		batch.texture = particleTexture( draw.texture );
 		s_fieldBatches.push_back( batch );
 	}
 	return laid;
@@ -2121,9 +2165,7 @@ static void drawGroundFields( void )
 		}
 	}
 
-	for (size_t b = 0; b < s_fieldBatches.size(); ++b)
-		s_fieldBatches[ b ].texture->Release_Ref();	// the draw state holds its own reference to the last one
-	s_fieldBatches.clear();
+	s_fieldBatches.clear();	// the textures are the cache's, and the draw state holds its own reference to the last one
 }
 
 W3DParticleSystemManager::W3DParticleSystemManager()
@@ -2197,6 +2239,7 @@ W3DParticleSystemManager::~W3DParticleSystemManager()
 	REF_PTR_RELEASE(m_frameBuffer);
 
 	resetGpuParticles();		// the texture references it holds
+	releaseParticleTextures();
 }
 
 /** A reset can be followed by an update on the same logic frame, so the fires' frame alone would
@@ -2216,6 +2259,7 @@ void W3DParticleSystemManager::reset()
 	m_sunMapCasters.clear();
 	invalidateGroundFields();	// the object IDs it holds belong to the game that ended
 	resetGpuParticles();			// the client frame starts again, and every system is gone
+	releaseParticleTextures();	// the match's textures, let go for the next one's
 }
 
 void W3DParticleSystemManager::invalidateGroundFields(bool fadeIn)
@@ -2539,7 +2583,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		fill.glow = FALSE;
 		fill.fire = sys->getTemplate()->isFireLook();
 		fill.hardEdge = sys->isAttachedToMine();
-		fill.texture =W3DDisplay::m_assetManager->Get_Texture( sys->getParticleTypeName().str() );
+		fill.texture = particleTexture( sys->getParticleTypeName() );
 		PointGroupClass::Reserve_Sorted_Billboards( fill.capacity, &fill.range );
 		m_billboardFills.push_back( fill );
 	}
@@ -2638,7 +2682,6 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 			BillboardFill &fill = m_billboardFills[ nextFill++ ];
 			PointGroupClass::Insert_Sorted_Billboards( &fill.range, fill.drawn, fill.texture, fill.shader, fill.glow != FALSE, fill.fire != FALSE,
 				sys->getTemplate()->isEmissive() != FALSE, fill.hardEdge != FALSE );
-			fill.texture->Release_Ref();	// the draw state took its own reference
 			m_fieldParticleCount += fill.fieldIncrement * fill.drawn;
 			m_onScreenParticleCount += fill.drawn;
 #ifdef DEBUG_LOGGING
@@ -2765,7 +2808,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		if ( count == 0 )
 			continue;	//this system has no particles to render
 
-		TextureClass *texture = W3DDisplay::m_assetManager->Get_Texture( sys->getParticleTypeName().str() );
+		TextureClass *texture = particleTexture( sys->getParticleTypeName() );
 
 		
 		if ( m_streakLine && sys->isUsingStreak() && (count >= 2) ) 
@@ -2773,7 +2816,6 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 			m_streakLine->Reset_Line();
 
 			m_streakLine->Set_Texture( texture );
-			texture->Release_Ref();//release reference since it's held by streakline
 			switch( sys->getShaderType() )
 			{
 				case ParticleSystemInfo::ADDITIVE:
@@ -2821,7 +2863,6 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 			{
 				// render all the systems' particles
 				m_pointGroup->Set_Texture( texture );
-				texture->Release_Ref();//release reference since it's held by pointGroup
 				m_pointGroup->Set_Flag( PointGroupClass::TRANSFORM, true );	// transform to screen space
 
 				switch( sys->getShaderType() )

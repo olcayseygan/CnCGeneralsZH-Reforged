@@ -2836,6 +2836,19 @@ Int parseNetSlot(char *args[], int num)
 	return 2;
 }
 
+/* -rejoin <file>, with the -netgame line the seat was started with the first time: the match is under
+	 way, the seat was dropped from it, and this copy is coming back to it.  It asks the room to take it
+	 back, plays the match from the replay another seat is still writing (its Replays\00000000.rep) up to
+	 the frame the room stops on for it, and joins the network there (Network::startRejoin). */
+Int parseRejoin(char *args[], int num)
+{
+	if (TheWritableGlobalData && num > 1)
+	{
+		TheWritableGlobalData->m_rejoinReplay = args[1];
+	}
+	return 2;
+}
+
 /* -netai <n> puts n AI seats after the -netgame addresses.  Two idle copies play nothing, and a
 	 desync that players meet ten minutes into a match needs a match that is being played: AIs
 	 building, fighting and dying.  An AI runs inside GameLogic on every machine alike, so every copy
@@ -3105,6 +3118,7 @@ static CommandLineParam params[] =
 	{ "-netgame", parseNetGame },
 	{ "-netslot", parseNetSlot },
 	{ "-netai", parseNetAI },
+	{ "-rejoin", parseRejoin },
 	{ "-lanip", parseLanIP },
 	{ "-lanname", parseLanName },
 	{ "-relay", parseRelay },

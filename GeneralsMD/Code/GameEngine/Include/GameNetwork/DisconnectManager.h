@@ -59,6 +59,7 @@ public:
 	void nextFrame(UnsignedInt frame, ConnectionManager *conMgr);
 	Bool allowedToContinue();			///< Allow the next frame to go through?
 	void playerHasAdvancedAFrame(Int slot, UnsignedInt frame); ///< this player has advanced to that frame.
+	void seatRejoining(Int slot, UnsignedInt fromFrame, ConnectionManager *conMgr); ///< a dropped seat is back in from that frame; hold it while it catches up
 
 	void voteForPlayerDisconnect(Int slot, ConnectionManager *conMgr);
 
@@ -84,7 +85,8 @@ protected:
 	Bool allOnSameFrame(ConnectionManager *conMgr); ///< returns true if all players are stuck on the same frame.
 	Bool isLocalPlayerNextPacketRouter(ConnectionManager *conMgr); ///< returns true if the local player is next in line to be the packet router with all the players that have timed out being taken out of the picture.
 	Bool hasPlayerTimedOut(Int slot, ConnectionManager *conMgr); ///< returns true if this player has timed out.
-	time_t reconnectHoldLeft(Int slot, ConnectionManager *conMgr); ///< ms a silent seat of an online match is still held for its player to come back, 0 for none.
+	time_t reconnectHoldLeft(Int slot, ConnectionManager *conMgr); ///< ms a rejoining seat is still held while it catches up, 0 for none.
+	Bool anySeatRejoining() const;
 	time_t timeBeforeDrop(Int slot, ConnectionManager *conMgr, time_t *hold = NULL); ///< ms until this seat times out: the silent drop time or its reconnect hold, whichever is longer.
 	void sendPlayerDestruct(Int slot, ConnectionManager *conMgr); ///< send a destruct player network message.
 	Bool isPlayerVotedOut(Int slot, ConnectionManager *conMgr);	///< returns true if this player has been voted out.
@@ -116,6 +118,8 @@ protected:
 
 	time_t m_playerTimeouts[MAX_SLOTS - 1];
 	Bool m_seatHeld[MAX_SLOTS - 1];		///< the row says "waiting to reconnect" instead of the countdown
+	time_t m_rejoinSince[MAX_SLOTS];	///< by slot: when the seat was readmitted, 0 for none coming back
+	UnsignedInt m_rejoinFrame[MAX_SLOTS];	///< by slot: the first frame it plays again; the hold ends once that frame has run
 	time_t m_packetRouterTimeout;
 
 	DisconnectVoteStruct m_playerVotes[MAX_SLOTS][MAX_SLOTS];

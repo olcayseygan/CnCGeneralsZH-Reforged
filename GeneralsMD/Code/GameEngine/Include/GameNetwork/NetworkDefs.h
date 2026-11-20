@@ -204,6 +204,12 @@ enum NetCommandType {
 	NETCOMMANDTYPE_FILEPROGRESS,
 	NETCOMMANDTYPE_FRAMERESENDREQUEST,
 
+	// A dropped seat coming back (Network::startRejoin).  All three are a NetDestroyPlayerCommandMsg on the
+	// wire, its one number the payload.
+	NETCOMMANDTYPE_REJOINREQUEST,				///< from the seat coming back, to every seat; nobody acks it until the seat is readmitted
+	NETCOMMANDTYPE_REJOINACCEPT,				///< from the packet router to that seat alone: the frame (execution frame), and the seats playing (payload)
+	NETCOMMANDTYPE_SEATREJOIN,					///< from the packet router, frame-synchronized: the seat in the payload plays again from the frame after
+
 	// Disconnect menu command section.
 	NETCOMMANDTYPE_DISCONNECTSTART,
 	NETCOMMANDTYPE_DISCONNECTKEEPALIVE,

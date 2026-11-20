@@ -426,6 +426,9 @@ RecorderClass::RecorderClass()
 	// handleCRCMessage read whatever was on the heap if a CRC arrived first.
 	//
 	m_crcInfo = NULL;
+	m_rejoinFile = NULL;
+	m_rejoinNextFrame = (UnsignedInt)-1;
+	m_rejoinReadPos = 0;
 
 	init(); // just for the heck of it.
 }
@@ -434,6 +437,7 @@ RecorderClass::RecorderClass()
  * Destructor
  */
 RecorderClass::~RecorderClass() {
+	closeRejoinFeed();
 	delete m_crcInfo;
 	m_crcInfo = NULL;
 }
@@ -592,6 +596,15 @@ void RecorderClass::updateRecord()
 			}
 		}
 		msg = msg->next();
+	}
+
+	/* How many frames the file holds whole, rewritten after every frame of a network game: a seat that
+		 lost its game comes back by playing the file up to here (-rejoin, Network::startRejoin), and a seat
+		 that waits on it stands on exactly this frame.  logGameEnd writes the match's length over it. */
+	if (m_file != NULL && TheNetwork != NULL && m_mode == RECORDERMODETYPE_RECORD)
+	{
+		const UnsignedInt held = TheGameLogic->getFrame() + 1;
+		theReplayQueue.writeAt(framesOffset, &held, sizeof(held));
 	}
 }
 
@@ -1399,6 +1412,189 @@ Bool RecorderClass::openPlayback(AsciiString filename, Int &difficulty, Int &ran
 
 	m_currentReplayFilename = filename;
 	return TRUE;
+}
+
+/// the options with the map contents mask after "M=" taken out: it is filled in as the map loads, which the
+/// recording seat had done and the seat coming back has not
+static std::string withoutMapContents( const AsciiString &options )
+{
+	std::string text( options.str() );
+	const size_t at = text.find( "M=" );
+	if (at != std::string::npos && (at == 0 || text[at - 1] == ';') && at + 4 <= text.size())
+		text.erase( at + 2, 2 );
+	return text;
+}
+
+/**
+ * -rejoin.  A copy whose game closed in the middle of a network match comes back by starting the match
+ * as it started the first time, playing it from the replay a seat still in it keeps writing up to the
+ * frame that seat stands on, and joining the network there (Network::startRejoin).  The file is read
+ * beside our own recording, whose FILE is m_file then, and the readers below read m_file, so every read
+ * borrows m_file for the feed's file and hands it back.  Nothing else touches m_file meanwhile: the feed
+ * runs in Network::update, which never runs beside a tick.
+ *
+ * The header is read the way readReplayHeader reads it.  A file of another build or other data is
+ * refused here, before a frame is played: its commands would play another game.
+ */
+Bool RecorderClass::openRejoinFeed( AsciiString path, UnsignedInt &framesHeld )
+{
+	closeRejoinFeed();
+	FILE *file = zh_fopen( path.str(), "rb" );
+	if (file == NULL)
+	{
+		DEBUG_LOG(("REJOIN: cannot open '%s'\n", path.str()));
+		return FALSE;
+	}
+
+	FILE *recording = m_file;
+	m_file = file;
+
+	char genrep[6] = { 0 };
+	time_t startTime = 0;
+	time_t endTime = 0;
+	UnsignedInt frames = 0;
+	Bool flags[2 + MAX_SLOTS];		// desync, quit early, a disconnect per slot
+	WallClockTime when;
+	UnsignedInt versionNumber = 0;
+	UnsignedInt exeCRC = 0;
+	UnsignedInt iniCRC = 0;
+	Int difficulty = 0;
+	Int gameMode = GAME_NONE;
+	Int rankPoints = 0;
+	Int maxFPS = 0;
+	AsciiString options;
+	Bool ok = fread(genrep, 1, 6, file) == 6 && strncmp(genrep, "GENREP", 6) == 0
+		&& fread(&startTime, sizeof(startTime), 1, file) == 1
+		&& fread(&endTime, sizeof(endTime), 1, file) == 1
+		&& fread(&frames, sizeof(frames), 1, file) == 1
+		&& fread(flags, sizeof(Bool), 2 + MAX_SLOTS, file) == 2 + MAX_SLOTS;
+	if (ok)
+	{
+		readUnicodeString();		// the replay's name
+		ok = fread(&when, sizeof(when), 1, file) == 1;
+		readUnicodeString();		// the version
+		readUnicodeString();		// and its build time
+		ok = ok && fread(&versionNumber, sizeof(versionNumber), 1, file) == 1
+			&& fread(&exeCRC, sizeof(exeCRC), 1, file) == 1
+			&& fread(&iniCRC, sizeof(iniCRC), 1, file) == 1;
+	}
+	if (ok)
+	{
+		options = readAsciiString();
+		readAsciiString();		// the slot it was recorded in, which is not ours
+		ok = fread(&difficulty, sizeof(difficulty), 1, file) == 1
+			&& fread(&gameMode, sizeof(gameMode), 1, file) == 1
+			&& fread(&rankPoints, sizeof(rankPoints), 1, file) == 1
+			&& fread(&maxFPS, sizeof(maxFPS), 1, file) == 1;
+	}
+	m_file = recording;
+
+	const Int speed = takeReplayGameSpeed( options );
+	const Int rate = takeReplayLogicRate( options );
+	const char *refusal = NULL;
+	if (!ok)
+		refusal = "the header is cut short";
+	else if (gameMode != GAME_LAN && gameMode != GAME_INTERNET)
+		refusal = "it is no network game";
+	else if (exeCRC != TheGlobalData->m_exeCRC)
+		refusal = "another build recorded it";
+	else if (iniCRC != TheGlobalData->m_iniCRC)
+		refusal = "it was played on other data";
+	else if (rate != LOGICFRAMES_PER_SECOND || !GameSpeed_isAllowed( speed ))
+		refusal = "another logic rate or no game speed";
+	if (refusal != NULL)
+	{
+		DEBUG_LOG(("REJOIN: refused '%s': %s (exe 0x%08X here 0x%08X, ini 0x%08X here 0x%08X, mode %d, %d Hz)\n",
+			path.str(), refusal, exeCRC, TheGlobalData->m_exeCRC, iniCRC, TheGlobalData->m_iniCRC, gameMode, rate));
+		fclose(file);
+		return FALSE;
+	}
+
+	/* The match it records has to be this one: the same slot list, seed, map and options, which a
+		 -netgame line that differs in -seed, -side, -teams or -netai would not give. */
+	AsciiString expected;
+	if (TheLAN != NULL && TheLAN->GetMyGame() != NULL)
+		expected = GameInfoToReplayString( TheLAN->GetMyGame() );
+	else if (TheGameSpyGame != NULL)
+		expected = GameInfoToReplayString( TheGameSpyGame );
+	if (withoutMapContents( expected ) != withoutMapContents( options ))
+	{
+		DEBUG_LOG(("REJOIN: refused '%s': it records another match\n  recorded %s\n  this one %s\n",
+			path.str(), options.str(), expected.str()));
+		fclose(file);
+		return FALSE;
+	}
+
+	m_rejoinFile = file;
+	readRejoinNextFrame();
+	framesHeld = frames;
+	DEBUG_LOG(("REJOIN: '%s' holds frames 0 to %u of a mode %d match at game speed %d, first command on frame %d, options %s\n",
+		path.str(), frames - 1, gameMode, speed, (Int)m_rejoinNextFrame, options.str()));
+	return TRUE;
+}
+
+/// the frame number in front of the next command, or -1 at the end of what is on disk so far; a read
+/// that ran into the end goes back to where it started, for rejoinFramesHeld to try again
+void RecorderClass::readRejoinNextFrame( void )
+{
+	m_rejoinReadPos = ftell(m_rejoinFile);
+	if (fread(&m_rejoinNextFrame, sizeof(m_rejoinNextFrame), 1, m_rejoinFile) != 1)
+	{
+		m_rejoinNextFrame = (UnsignedInt)-1;
+		fseek(m_rejoinFile, m_rejoinReadPos, SEEK_SET);
+	}
+}
+
+Bool RecorderClass::feedRejoinFrame( UnsignedInt frame )
+{
+	if (m_rejoinFile == NULL)
+		return FALSE;
+	if (m_rejoinNextFrame < frame)
+	{
+		// the file is written in frame order, so this is a damaged file or a frame we skipped: either way
+		// the game played here is no longer the recorded one
+		DEBUG_LOG(("REJOIN: a recorded command on frame %u was not played, the feed is on frame %u\n", m_rejoinNextFrame, frame));
+		closeRejoinFeed();
+		return FALSE;
+	}
+
+	FILE *recording = m_file;
+	m_file = m_rejoinFile;
+	while (m_rejoinNextFrame == frame)
+	{
+		appendNextCommand();
+		readRejoinNextFrame();
+	}
+	m_file = recording;
+	return TRUE;
+}
+
+/**
+ * The header's count again.  The seat writing the file goes on for up to a run-ahead after the lost seat
+ * stops sending, and its writer puts the file on disk about once a second, so the count read at the start
+ * can be short of the frame that seat ends up standing on.  The commands written since are picked up too.
+ */
+UnsignedInt RecorderClass::rejoinFramesHeld( void )
+{
+	if (m_rejoinFile == NULL)
+		return 0;
+	UnsignedInt frames = 0;
+	const long at = ftell(m_rejoinFile);
+	fseek(m_rejoinFile, framesOffset, SEEK_SET);
+	if (fread(&frames, sizeof(frames), 1, m_rejoinFile) != 1)
+		frames = 0;
+	fseek(m_rejoinFile, at, SEEK_SET);
+	if (m_rejoinNextFrame == (UnsignedInt)-1)
+		readRejoinNextFrame();
+	return frames;
+}
+
+void RecorderClass::closeRejoinFeed( void )
+{
+	if (m_rejoinFile != NULL)
+		fclose(m_rejoinFile);
+	m_rejoinFile = NULL;
+	m_rejoinNextFrame = (UnsignedInt)-1;
 }
 
 /**

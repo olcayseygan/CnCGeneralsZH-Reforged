@@ -5423,6 +5423,7 @@ Tools/pink_laser.py
 Tools/radar_marks.py
 Tools/recon_marks.py
 Tools/record-dx11-shaders.ps1
+Tools/rejoin_check.py
 Tools/relay/README.md
 Tools/relay/relay.js
 Tools/relay/test.js

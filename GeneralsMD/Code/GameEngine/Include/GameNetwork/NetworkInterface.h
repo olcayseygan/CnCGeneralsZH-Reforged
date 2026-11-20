@@ -126,6 +126,11 @@ public:
 
 	virtual Int  getExecutionFrame() = 0;																			///< Returns the next valid frame for simultaneous command execution.
 
+	/// -rejoin: play the match from this replay, which a seat still in it is writing, up to the frame that
+	/// seat stands on, then join the network there.  FALSE when the replay is refused.
+	virtual Bool startRejoin( AsciiString replayPath ) = 0;
+	virtual Bool isRejoining( void ) = 0;																			///< still playing from that replay
+
 #if defined(_DEBUG) || defined(_INTERNAL)
 	virtual void toggleNetworkOn( void ) = 0;													///< toggle whether or not to send network traffic.
 #endif

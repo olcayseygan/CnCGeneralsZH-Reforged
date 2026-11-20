@@ -73,6 +73,8 @@ DisconnectManager::DisconnectManager()
 			m_playerVotes[i][j].vote = FALSE;
 			m_playerVotes[i][j].frame = 0;
 		}
+		m_rejoinSince[i] = 0;
+		m_rejoinFrame[i] = 0;
 	}
 }
 
@@ -100,8 +102,10 @@ void DisconnectManager::init() {
 	for (i = 0; i < MAX_SLOTS; ++i) {
 		m_disconnectFrames[i] = 0;
 		m_disconnectFramesReceived[i] = FALSE;
+		m_rejoinSince[i] = 0;
+		m_rejoinFrame[i] = 0;
 	}
-	
+
 	m_pingFrame = 0;
 	m_pingsSent = 0;
 	m_pingsRecieved = 0;
@@ -128,11 +132,14 @@ void DisconnectManager::update(ConnectionManager *conMgr) {
 																			 TheGlobalData->m_networkPlayerSilenceTime,
 																			 TheGlobalData->m_networkStallCeilingTime );
 
-		if (verdict != STALL_RUNNING) {
+		/* A seat coming back holds the match while it catches up, and everybody is told why at once
+			 rather than after the stall judgement's silence. */
+		const Bool rejoinWait = anySeatRejoining() && stallMS >= 1000;
+		if (verdict != STALL_RUNNING || rejoinWait) {
 			/* Keep-alives go out for every kind of stall: they are how the other machines learn that
 				 we are still here, and holding them back while we wait would make our own silence the
 				 thing that triggers their disconnect screen. */
-			if (stallNeedsDisconnectScreen( verdict ) && m_disconnectState == DISCONNECTSTATETYPE_SCREENOFF) {
+			if ((stallNeedsDisconnectScreen( verdict ) || rejoinWait) && m_disconnectState == DISCONNECTSTATETYPE_SCREENOFF) {
 				DEBUG_LOG(("DisconnectManager::update - disconnect screen on after %d ms stalled, %d ms of silence: %s\n",
 					stallMS, conMgr->getWorstSilenceMS(), stallVerdictName( verdict ) ));
 				turnOnScreen(conMgr);
@@ -265,9 +272,18 @@ void DisconnectManager::updateDisconnectStatus(ConnectionManager *conMgr) {
 						if (isLocalPlayerNextPacketRouter(conMgr) == TRUE) {
 							DEBUG_LOG(("DisconnectManager::updateDisconnectStatus - local player is next packet router\n"));
 							DEBUG_LOG(("DisconnectManager::updateDisconnectStatus - about to do the disconnect procedure for player %d\n", i));
+							/* A seat that went quiet leaves the lockstep and nothing else: its side stays on the
+								 map as it stood, idle and open to attack, for its player to come back to
+								 (-rejoin).  EA blew it up with a DestroyPlayer on the next frame.  A seat the
+								 room voted out is kicked, and still is. */
+							const Bool votedOut = isPlayerVotedOut(slot, conMgr);
 							sendDisconnectCommand(i, conMgr);
 							disconnectPlayer(i, conMgr);
-							sendPlayerDestruct(i, conMgr);
+							if (votedOut) {
+								sendPlayerDestruct(i, conMgr);
+							} else {
+								DEBUG_LOG(("DisconnectManager::updateDisconnectStatus - player %d timed out; the seat leaves the lockstep and its side stays\n", i));
+							}
 						} else {
 							DEBUG_LOG(("DisconnectManager::updateDisconnectStatus - local player is not the next packet router\n"));
 						}
@@ -479,6 +495,48 @@ void DisconnectManager::nextFrame(UnsignedInt frame, ConnectionManager *conMgr) 
 	m_lastFrame = frame;
 	m_lastFrameTime = Clock_Milliseconds();
 	resetPlayerTimeouts(conMgr);
+
+	// a seat that came back has played its first frame with the room
+	for (Int i = 0; i < MAX_SLOTS; ++i) {
+		if (m_rejoinSince[i] != 0 && frame > m_rejoinFrame[i]) {
+			DEBUG_LOG(("DisconnectManager::nextFrame - REJOIN player %d is back, playing from frame %d, %d ms after it was readmitted\n",
+				i, m_rejoinFrame[i], (Int)(Clock_Milliseconds() - m_rejoinSince[i])));
+			m_rejoinSince[i] = 0;
+		}
+	}
+}
+
+/**
+ * A dropped seat asked to come back and the room took it in (ConnectionManager::readmitPlayer): from
+ * fromFrame on its frames count, and the room waits on them there while it plays the match up to that
+ * frame from a replay.  That can take a minute or more, so the seat is held for it rather than dropped
+ * again at NetworkSilentPlayerDropTime, and the screen says who is coming back.
+ */
+void DisconnectManager::seatRejoining(Int slot, UnsignedInt fromFrame, ConnectionManager *conMgr) {
+	Int transSlot = translatedSlotPosition(slot, conMgr->getLocalPlayerID());
+	if ((slot < 0) || (slot >= MAX_SLOTS) || (transSlot == -1)) {
+		return;
+	}
+	m_rejoinSince[slot] = Clock_Milliseconds();
+	m_rejoinFrame[slot] = fromFrame;
+	m_playerTimeouts[transSlot] = m_rejoinSince[slot];
+	m_disconnectFrames[slot] = 0;
+	m_disconnectFramesReceived[slot] = FALSE;
+	for (Int i = 0; i < MAX_SLOTS; ++i) {
+		m_playerVotes[slot][i].vote = FALSE;
+	}
+	m_seatHeld[transSlot] = FALSE;
+	TheDisconnectMenu->setPlayerName(transSlot, conMgr->getPlayerName(slot));
+	DEBUG_LOG(("DisconnectManager::seatRejoining - REJOIN player %d (translated slot %d) is readmitted from frame %d\n", slot, transSlot, fromFrame));
+}
+
+Bool DisconnectManager::anySeatRejoining() const {
+	for (Int i = 0; i < MAX_SLOTS; ++i) {
+		if (m_rejoinSince[i] != 0) {
+			return TRUE;
+		}
+	}
+	return FALSE;
 }
 
 void DisconnectManager::allCommandsReady(UnsignedInt frame, ConnectionManager *conMgr, Bool waitForPacketRouter) {
@@ -609,6 +667,7 @@ void DisconnectManager::disconnectPlayer(Int slot, ConnectionManager *conMgr) {
 	if ((slot < 0) || (slot >= (MAX_SLOTS))) {
 		return;
 	}
+	m_rejoinSince[slot] = 0;
 
 	if (TheGameInfo)
 	{
@@ -758,26 +817,21 @@ Bool DisconnectManager::hasPlayerTimedOut(Int slot, ConnectionManager *conMgr) {
 	return FALSE;
 }
 
-/* EA dropped a silent seat after NetworkSilentPlayerDropTime, 30 s, whatever the reason it went quiet.  In an
-	 online match the seat is held instead, up to ONLINE_RECONNECT_HOLD_MS of silence: the match stays frozen on
-	 this screen, play goes on by itself the moment the seat's packets come back, and a unanimous vote still
-	 drops the seat at once.  Every peer holds every silent seat on its own clock, without waiting for the
-	 server: the server learns of a lost seat only when its TLS line drops or its relay session has been silent
-	 120 s, too late for a 30 s drop, and the seat that went quiet may be the one that is still playing.  This
-	 only moves when the packet router sends the drop; the drop itself, DestroyPlayer on a frame every peer
-	 runs, is what it always was.  LAN and -netgame are GAME_LAN and get no hold. */
+/* A seat silent for NetworkSilentPlayerDropTime, 30 s, leaves the lockstep and the match goes on without it;
+	 its side stays (updateDisconnectStatus).  Source e27207f4 held a silent online seat 4 minutes on this screen
+	 instead, and the owner turned that down on 2026-11-20: the room should not stand still for somebody who may
+	 not come back.  What is held now is a seat that has come back and is catching up (seatRejoining), up to
+	 ONLINE_RECONNECT_HOLD_MS from its readmission, in every kind of network game.  A unanimous vote still drops
+	 it at once. */
 time_t DisconnectManager::reconnectHoldLeft(Int slot, ConnectionManager *conMgr) {
-	if ((slot == -1) || !TheGameLogic->isInInternetGame()) {
+	if (slot == -1) {
 		return 0;
 	}
-
-	/* Only a seat quiet long enough to be a disconnect (the stall judgement's silence) is held, so a seat that
-		 still talks keeps its row as it was. */
-	time_t silence = Clock_Milliseconds() - m_playerTimeouts[slot];
-	if (silence < (time_t)TheGlobalData->m_networkPlayerSilenceTime) {
+	Int realSlot = untranslatedSlotPosition(slot, conMgr->getLocalPlayerID());
+	if ((realSlot < 0) || (realSlot >= MAX_SLOTS) || (m_rejoinSince[realSlot] == 0)) {
 		return 0;
 	}
-	time_t hold = ONLINE_RECONNECT_HOLD_MS - silence;
+	time_t hold = ONLINE_RECONNECT_HOLD_MS - (Clock_Milliseconds() - m_rejoinSince[realSlot]);
 	return (hold > 0) ? hold : 0;
 }
 

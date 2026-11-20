@@ -56,6 +56,8 @@
 #include "GameNetwork/LANAPICallbacks.h"
 #include "GameNetwork/NAT.h"
 #include "GameNetwork/NetCommandWrapperList.h"
+#include "GameNetwork/NetPacket.h"
+#include "GameNetwork/NetworkInterface.h"
 #include "GameNetwork/NetworkUtil.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/ScriptActions.h"
@@ -175,7 +177,13 @@ void ConnectionManager::init()
 		 the last one would be counted against them. */
 	for (i = 0; i < MAX_SLOTS; ++i) {
 		m_lastHeardFrom[i] = 0;
+		m_rejoinFrameFor[i] = 0;
 	}
+	m_rejoining = FALSE;
+	m_rejoinAccepted = FALSE;
+	m_rejoinAcceptFrame = 0;
+	m_rejoinAcceptSeats = 0;
+	m_rejoinAcceptRouter = 0;
 	m_keepAliveRoundStart = 0;
 	m_keepAliveNextSlot = 0;
 
@@ -291,6 +299,220 @@ void ConnectionManager::destroyGameMessages() {
 }
 
 /**
+ * -rejoin (Network::finishRejoin): the frames this copy is about to play were never on its wire.  The
+ * opening zeroed the first run-ahead's frames for every slot (parseUserList), and a zeroed frame reads as
+ * ready with no orders, so a frame of the ring that lands on one of those would run without the room's.
+ */
+void ConnectionManager::forgetFrames() {
+	for (Int i = 0; i < MAX_SLOTS; ++i) {
+		if (m_frameData[i] != NULL) {
+			m_frameData[i]->reset();
+		}
+	}
+	memset(m_cushionMeasured, 0, sizeof(m_cushionMeasured));
+	m_smallestPacketArrivalCushion = -1;
+	m_resendWatchFrame = 0;
+	m_resendWatchSince = 0;
+	m_resendLastRequest = 0;
+}
+
+/**
+ * The seat coming back asks every seat, over the connections it made at the start like any seat; the seats
+ * that dropped it hold no connection for it any more, so nobody acks it, and Network::feedRejoinFrame asks
+ * again every couple of seconds until the router answers.
+ */
+void ConnectionManager::sendRejoinRequest() {
+	NetDestroyPlayerCommandMsg *msg = newInstance(NetDestroyPlayerCommandMsg);
+	msg->setNetCommandType(NETCOMMANDTYPE_REJOINREQUEST);
+	msg->setPlayerID(m_localSlot);
+	msg->setID(GenerateNextCommandID());
+	msg->setPlayerIndex(m_localSlot);
+	DEBUG_LOG(("ConnectionManager::sendRejoinRequest - REJOIN slot %d asks to come back\n", m_localSlot));
+	sendLocalCommandDirect(msg, allSlotsBut(m_localSlot));
+	msg->detach();
+}
+
+/**
+ * The packet router takes a dropped seat back.  The frame is the router's next execution frame, as a
+ * DestroyPlayer's is, so every seat runs the SEATREJOIN on it.  The seat is told the frame and the room
+ * in a packet of its own, sent straight to its address: the router has no connection to it until then.
+ * A request for a seat still in the lockstep waits for the drop; the seat keeps asking.
+ */
+void ConnectionManager::processRejoinRequest(NetCommandMsg *msg) {
+	const Int slot = (Int)msg->getPlayerID();
+	if ((slot < 0) || (slot >= MAX_SLOTS) || (slot == (Int)m_localSlot) || (m_localSlot != m_packetRouterSlot) || (TheGameInfo == NULL)) {
+		return;
+	}
+	const GameSlot *gameSlot = TheGameInfo->getConstSlot(slot);
+	if ((gameSlot == NULL) || !gameSlot->isHuman()) {
+		return;
+	}
+	if ((m_rejoinFrameFor[slot] == 0) && (m_connections[slot] != NULL)) {
+		DEBUG_LOG(("ConnectionManager::processRejoinRequest - REJOIN slot %d asks to come back but is still in the lockstep\n", slot));
+		return;
+	}
+	/* Taken back on F and played past F + 1: the copy that came back has frames in the room, so a copy asking
+		 now (it died again) cannot be given F.  It waits for the drop like any silent seat and asks afresh. */
+	if ((m_rejoinFrameFor[slot] != 0) && (TheGameLogic->getFrame() > m_rejoinFrameFor[slot] + 1)) {
+		return;
+	}
+
+	if (m_rejoinFrameFor[slot] == 0) {
+		m_rejoinFrameFor[slot] = TheNetwork->getExecutionFrame() + 1;
+		NetDestroyPlayerCommandMsg *seat = newInstance(NetDestroyPlayerCommandMsg);
+		seat->setNetCommandType(NETCOMMANDTYPE_SEATREJOIN);
+		seat->setExecutionFrame(m_rejoinFrameFor[slot]);
+		seat->setPlayerID(m_localSlot);
+		seat->setID(GenerateNextCommandID());
+		seat->setPlayerIndex(slot);
+		DEBUG_LOG(("ConnectionManager::processRejoinRequest - REJOIN slot %d comes back: SEATREJOIN on frame %d, asked on frame %d\n",
+			slot, m_rejoinFrameFor[slot], TheGameLogic->getFrame()));
+		sendLocalCommand(seat);
+		seat->detach();
+	}
+
+	// the seats that play from F + 1: the ones in the lockstep now, and this one
+	UnsignedInt seats = (1u << m_localSlot) | (1u << slot);
+	for (Int i = 0; i < MAX_SLOTS; ++i) {
+		if ((m_connections[i] != NULL) && !m_connections[i]->isQuitting()) {
+			seats |= (1u << i);
+		}
+	}
+	NetDestroyPlayerCommandMsg *accept = newInstance(NetDestroyPlayerCommandMsg);
+	accept->setNetCommandType(NETCOMMANDTYPE_REJOINACCEPT);
+	accept->setExecutionFrame(m_rejoinFrameFor[slot]);
+	accept->setPlayerID(m_localSlot);
+	accept->setID(GenerateNextCommandID());
+	accept->setPlayerIndex(seats);
+	NetCommandRef *ref = NEW_NETCOMMANDREF(accept);
+	ref->setRelay(slotBit(slot));
+	NetPacket *packet = newInstance(NetPacket);
+	packet->init();
+	packet->setAddress(gameSlot->getIP(), gameSlot->getPort());
+	if (packet->addCommand(ref)) {
+		m_transport->queueSend(packet->getAddr(), packet->getPort(), packet->getData(), packet->getLength());
+	}
+	packet->deleteInstance();
+	ref->deleteInstance();
+	accept->detach();
+}
+
+void ConnectionManager::processRejoinAccept(NetCommandMsg *msg) {
+	if (!m_rejoining || m_rejoinAccepted) {
+		return;
+	}
+	m_rejoinAccepted = TRUE;
+	m_rejoinAcceptFrame = msg->getExecutionFrame();
+	m_rejoinAcceptSeats = ((NetDestroyPlayerCommandMsg *)msg)->getPlayerIndex();
+	m_rejoinAcceptRouter = msg->getPlayerID();
+	DEBUG_LOG(("ConnectionManager::processRejoinAccept - REJOIN the room takes this seat back on frame %d, seats 0x%X, router %d\n",
+		m_rejoinAcceptFrame, m_rejoinAcceptSeats, m_rejoinAcceptRouter));
+}
+
+Bool ConnectionManager::getRejoinAccept(UnsignedInt &frame, UnsignedInt &seats, UnsignedInt &router) const {
+	frame = m_rejoinAcceptFrame;
+	seats = m_rejoinAcceptSeats;
+	router = m_rejoinAcceptRouter;
+	return m_rejoinAccepted;
+}
+
+/**
+ * The room as the router described it, on the frame this seat joins: a seat that left meanwhile is let go
+ * without a word on the screen, the router is the router's own, and the fallback plan is what every seat
+ * left of it, the seat coming back at its end (readmitPlayer appends it).
+ */
+void ConnectionManager::takeRejoinAccept(UnsignedInt seats, UnsignedInt router) {
+	for (Int i = 0; i < MAX_SLOTS; ++i) {
+		if ((i == (Int)m_localSlot) || (seats & (1u << i))) {
+			continue;
+		}
+		if (m_frameData[i] != NULL) {
+			m_frameData[i]->deleteInstance();
+			m_frameData[i] = NULL;
+		}
+		if (m_connections[i] != NULL) {
+			DEBUG_LOG(("ConnectionManager::takeRejoinAccept - REJOIN slot %d is not in the room any more\n", i));
+			m_connections[i]->deleteInstance();
+			m_connections[i] = NULL;
+		}
+	}
+	Int kept = 0;
+	for (Int i = 0; i < MAX_SLOTS; ++i) {
+		const Int slot = (Int)m_packetRouterFallback[i];
+		if ((slot >= 0) && (slot < MAX_SLOTS) && (slot != (Int)m_localSlot) && (seats & (1u << slot))) {
+			m_packetRouterFallback[kept++] = slot;
+		}
+	}
+	m_packetRouterFallback[kept++] = m_localSlot;
+	while (kept < MAX_SLOTS) {
+		m_packetRouterFallback[kept++] = -1;
+	}
+	m_packetRouterSlot = router;
+	m_rejoining = FALSE;
+	DEBUG_LOG(("ConnectionManager::takeRejoinAccept - REJOIN seats 0x%X, router %d\n", seats, router));
+}
+
+/**
+ * SEATREJOIN, run by every seat on the same frame F.  The seat plays again from fromFrame, F + 1: frame F's
+ * commands are already on their way to the logic, so the room's first wait on it is fromFrame, where it
+ * stands until the seat has played up to there and sent its frames.  Our own frames from there on go to
+ * it now; the queues that hold them have nobody else to give them to, and a resend request covers the rest.
+ * Nothing in the logic hears of it: the seat's side stood on the map the whole time.
+ */
+void ConnectionManager::readmitPlayer(Int slot, UnsignedInt fromFrame) {
+	if ((slot < 0) || (slot >= MAX_SLOTS) || (slot == (Int)m_localSlot) || (TheGameInfo == NULL)) {
+		return;
+	}
+	GameSlot *gameSlot = TheGameInfo->getSlot(slot);
+	if ((gameSlot == NULL) || !gameSlot->isHuman()) {
+		return;
+	}
+	/* What a seat that left by the quit menu leaves behind goes when its queue empties or on its quit frame,
+		 which differ from seat to seat; every seat starts it afresh here alike. */
+	if (m_frameData[slot] != NULL) {
+		m_frameData[slot]->deleteInstance();
+		m_frameData[slot] = NULL;
+	}
+	if (m_connections[slot] != NULL) {
+		DEBUG_LOG(("ConnectionManager::readmitPlayer - REJOIN slot %d still had a connection, made again\n", slot));
+		m_connections[slot]->deleteInstance();
+		m_connections[slot] = NULL;
+	}
+
+	m_connections[slot] = newInstance(Connection)();
+	m_connections[slot]->init();
+	m_connections[slot]->attachTransport(m_transport);
+	m_connections[slot]->setUser(newInstance(User)(gameSlot->getName(), gameSlot->getIP(), gameSlot->getPort()));
+	m_frameData[slot] = newInstance(FrameDataManager)(FALSE);
+	m_frameData[slot]->init();
+	m_frameData[slot]->reset();
+	m_lastHeardFrom[slot] = Clock_Milliseconds();
+	m_fpsAverages[slot] = -1;
+	m_latencyAverages[slot] = 0.0;
+	m_latencyJitters[slot] = 0.0;
+
+	// to the end of the fallback plan, out of wherever it still stood, as takeRejoinAccept builds it
+	Int end = 0;
+	for (Int i = 0; i < MAX_SLOTS; ++i) {
+		const Int entry = (Int)m_packetRouterFallback[i];
+		if ((entry != -1) && (entry != slot)) {
+			m_packetRouterFallback[end++] = entry;
+		}
+	}
+	if (end < MAX_SLOTS) {
+		m_packetRouterFallback[end++] = slot;
+	}
+	while (end < MAX_SLOTS) {
+		m_packetRouterFallback[end++] = -1;
+	}
+
+	gameSlot->markAsReconnected();
+	m_disconnectManager->seatRejoining(slot, fromFrame, this);
+	DEBUG_LOG(("ConnectionManager::readmitPlayer - REJOIN slot %d is back in the lockstep from frame %d, on frame %d\n", slot, fromFrame, TheGameLogic->getFrame()));
+	sendFrameDataToPlayer(slot, fromFrame);
+}
+
+/**
  * ConnectionManager::doRelay()
  * Takes what the transport received, breaks it into commands, acks and processes each one.  Nothing
  * is passed on any more: every player sends each of its commands to every other player itself.
@@ -360,6 +582,14 @@ void ConnectionManager::doRelay() {
 					 and nobody forwards for anybody. */
 				cmd->setRelay(cmd->getRelay() & slotBit(m_localSlot));
 
+				/* Coming back, the frames on the wire are far ahead of the one played here: left unacked,
+					 they wait in their senders' queues until this seat joins on the frame they belong to. */
+				if (m_rejoining && (IsCommandSynchronized(cmd->getCommand()->getNetCommandType()) ||
+						cmd->getCommand()->getNetCommandType() == NETCOMMANDTYPE_WRAPPER)) {		// a wrapper's pieces put one back together
+					cmd = cmd->getNext();
+					continue;
+				}
+
 				if (CommandRequiresAck(cmd->getCommand())) {
 					ackCommand(cmd, m_localSlot, senderSlot);
 				}
@@ -385,6 +615,10 @@ void ConnectionManager::doRelay() {
 	NetCommandRef *cmd = cmdList->getFirstMessage();
 	while (cmd != NULL) {
 		cmd->setRelay(cmd->getRelay() & slotBit(m_localSlot));
+		if (m_rejoining && IsCommandSynchronized(cmd->getCommand()->getNetCommandType())) {
+			cmd = cmd->getNext();
+			continue;
+		}
 		if (CommandRequiresAck(cmd->getCommand())) {
 			ackCommand(cmd, m_localSlot);
 		}
@@ -416,6 +650,16 @@ Bool ConnectionManager::processNetCommand(NetCommandRef *ref) {
 
 		processAck(msg);
 		return FALSE;
+	}
+
+	// from a seat that left the lockstep, so before the test that ignores such a seat
+	if (msg->getNetCommandType() == NETCOMMANDTYPE_REJOINREQUEST) {
+		processRejoinRequest(msg);
+		return TRUE;
+	}
+	if (msg->getNetCommandType() == NETCOMMANDTYPE_REJOINACCEPT) {
+		processRejoinAccept(msg);
+		return TRUE;
 	}
 
 	if ((m_connections[msg->getPlayerID()] == NULL) && (msg->getPlayerID() != m_localSlot)) {
@@ -1668,6 +1912,7 @@ PlayerLeaveCode ConnectionManager::disconnectPlayer(Int slot) {
 	if ((slot < 0) || (slot >= MAX_SLOTS)) {
 		return PLAYERLEAVECODE_UNKNOWN;
 	}
+	m_rejoinFrameFor[slot] = 0;		// a seat that comes back after this is a new return, on a new frame
 
 	if (TheGameInfo)
 	{

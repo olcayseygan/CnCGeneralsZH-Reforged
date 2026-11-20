@@ -79,6 +79,16 @@ public:
 	void determineRouterFallbackPlan();
 	void zeroFrames(UnsignedInt startingFrame, UnsignedInt numFrames);
 	void destroyGameMessages();
+	void forgetFrames();					///< -rejoin: every slot's frame data back to nothing known, for a match joined far into it
+
+	/* A dropped seat coming back (Network::startRejoin).  The seat asks; the packet router names a frame F
+		 in a frame-synchronized SEATREJOIN, which every seat runs on F (readmitPlayer), and answers the seat
+		 with F; the seat plays the match up to F from a replay and joins on F + 1. */
+	void setRejoining(Bool rejoining) { m_rejoining = rejoining; }	///< the local seat is coming back: frame-synchronized commands wait in the senders' queues, unacked
+	void sendRejoinRequest();
+	Bool getRejoinAccept(UnsignedInt &frame, UnsignedInt &seats, UnsignedInt &router) const;	///< FALSE until the router has answered
+	void takeRejoinAccept(UnsignedInt seats, UnsignedInt router);	///< the room as the router left it: these seats, that router
+	void readmitPlayer(Int slot, UnsignedInt fromFrame);
 //	void createConnections(UnsignedInt numberOfPlayers, UnsignedInt localSlot);
 	void setLocalAddress(UnsignedInt ip, UnsignedInt port);
 	void initTransport();
@@ -177,6 +187,8 @@ private:
 	void processTimeOutGameStart( NetCommandMsg *msg );
 	void processWrapper(NetCommandRef *ref);
 	void processFrameResendRequest(NetFrameResendRequestCommandMsg *msg);
+	void processRejoinRequest(NetCommandMsg *msg);
+	void processRejoinAccept(NetCommandMsg *msg);
 
 	void processFile(NetFileCommandMsg *ref);
 	void processFileAnnounce(NetFileAnnounceCommandMsg *ref);
@@ -225,6 +237,13 @@ private:
 
 	/* Wall clock of the last thing we heard from each player, zero for "nothing yet". */
 	time_t m_lastHeardFrom[MAX_SLOTS];
+
+	Bool m_rejoining;										///< the local seat is coming back and plays from a replay
+	Bool m_rejoinAccepted;
+	UnsignedInt m_rejoinAcceptFrame;		///< F, the frame the room runs SEATREJOIN on
+	UnsignedInt m_rejoinAcceptSeats;		///< the seats playing from F + 1, a bit a slot
+	UnsignedInt m_rejoinAcceptRouter;
+	UnsignedInt m_rejoinFrameFor[MAX_SLOTS];	///< the router's F for a seat it answered, 0 for none
 
 	/* Where the keep-alive round has got to.  These were function statics in doKeepAlive, so they
 		 survived across games and across ConnectionManager instances. */

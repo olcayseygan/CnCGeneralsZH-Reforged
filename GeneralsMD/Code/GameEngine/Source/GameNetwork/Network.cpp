@@ -33,6 +33,7 @@
 
 // USER INCLUDES //////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
+#include <map>
 #include "Lib/Clock.h"
 
 #include "Common/GameEngine.h"
@@ -190,6 +191,9 @@ public:
 
 	Int  getExecutionFrame();																			///< Returns the next valid frame for simultaneous command execution.
 
+	Bool startRejoin( AsciiString replayPath );
+	Bool isRejoining( void ) { return m_rejoinFeeding; }
+
 	// For disconnect blame assignment
 	UnsignedInt getPingFrame();
 	Int getPingsSent();
@@ -208,8 +212,21 @@ protected:
 	void processDestroyPlayerCommand(NetDestroyPlayerCommandMsg *msg);	///< Do what needs to be done when we need to destroy a player.
 	void endOfGameCheck();																				///< Checks to see if its ok to leave this game.  If it is, send the apropriate command to the game logic.
 	Bool timeForNewFrame();
+	Bool feedRejoinFrame();																				///< -rejoin: TRUE while frames still come from the replay
+	Bool finishRejoin( UnsignedInt seats, UnsignedInt router );		///< from here frames come over the network; FALSE when it gave up instead
+	UnsignedInt m_rejoinRequestMS;																///< when the room was last asked to take the seat back
+	Bool m_rejoinFirstOrder;																			///< the next order this seat sends is its first since it came back
+	void abandonRejoin( const char *why );												///< stop playing and quit, never join
+	Bool m_rejoinAbandoned;
 
 	ConnectionManager *m_conMgr;																	///< The connection manager object
+
+	Bool m_rejoinFeeding;																					///< -rejoin: the frames below m_rejoinFrame come from the replay
+	UnsignedInt m_rejoinFrame;																		///< the frame the seat writing the replay stands on
+	UnsignedInt m_rejoinStartMS;
+	std::map<UnsignedInt, UnsignedInt> m_rejoinOwnCRCs;						///< our CRC by the frame it is of, until the recorded one comes
+	Int m_rejoinCRCsCompared;
+	Int m_rejoinCRCsDiffering;
 
 	UnsignedInt m_lastFrame;																			///< The last game logic frame that was processed.
 
@@ -301,7 +318,15 @@ Network::Network()
 	m_frameDataReady = FALSE;
 	m_sawCRCMismatch = FALSE;
 	//
-	
+	m_rejoinFeeding = FALSE;
+	m_rejoinAbandoned = FALSE;
+	m_rejoinFrame = 0;
+	m_rejoinStartMS = 0;
+	m_rejoinRequestMS = 0;
+	m_rejoinFirstOrder = FALSE;
+	m_rejoinCRCsCompared = 0;
+	m_rejoinCRCsDiffering = 0;
+
 	m_conMgr = NULL;
 	m_messageWindow = NULL;
 
@@ -378,6 +403,9 @@ void Network::init()
 	m_nextFrameTime = 0;
 	m_sawCRCMismatch = FALSE;
 	m_checkCRCsThisFrame = FALSE;
+	m_rejoinFeeding = FALSE;
+	m_rejoinAbandoned = FALSE;
+	m_rejoinOwnCRCs.clear();
 
 	DEBUG_LOG(("Network timing values:\n"));
 	DEBUG_LOG(("NetworkFPSHistoryLength: %d\n", TheGlobalData->m_networkFPSHistoryLength));
@@ -511,6 +539,11 @@ void Network::GetCommandsFromCommandList() {
 		next = msg->next();
 		if (isTransferCommand(msg)) { // Is this something we should be sending to the other players?
 			if (m_localStatus == NETLOCALSTATUS_INGAME) {
+				if (m_rejoinFirstOrder && msg->getType() != GameMessage::MSG_LOGIC_CRC) {
+					m_rejoinFirstOrder = FALSE;
+					DEBUG_LOG(("REJOIN: this seat's first order since it came back, %s for frame %d\n",
+						msg->getCommandAsAsciiString().str(), getExecutionFrame()));
+				}
 				m_conMgr->sendLocalGameMessage(msg, getExecutionFrame());
 			}
 			TheCommandList->removeMessage(msg); // This does not destroy msg's prev and next pointers, so they should still be valid.
@@ -613,6 +646,199 @@ Bool Network::noteLogicFrameAdvance()
 }
 
 /**
+ * -rejoin.  The seat lost its game in the middle of the match; the others hold it (the seat hold in
+ * DisconnectManager) and stand on frame m_rejoinFrame, the frame they wait on it for.  This copy started
+ * the match the way it did the first time, and every frame below that one is played from the replay a
+ * seat still in the match is writing, as fast as the engine runs frames: the replay holds every order
+ * every seat gave, as each seat's command list carried it.  No socket is touched meanwhile and nothing
+ * is sent.  On frame m_rejoinFrame the network takes over as if it had played every frame up to it.
+ */
+Bool Network::startRejoin( AsciiString replayPath )
+{
+	if (m_conMgr == NULL) {
+		return FALSE;
+	}
+	UnsignedInt frames = 0;
+	if (!TheRecorder->openRejoinFeed( replayPath, frames ))
+		return FALSE;
+	if (frames < 2) {
+		DEBUG_LOG(("REJOIN: the replay holds %u frames, no match to come back to\n", frames));
+		TheRecorder->closeRejoinFeed();
+		return FALSE;
+	}
+	m_rejoinFeeding = TRUE;
+	m_rejoinFrame = frames;
+	m_rejoinStartMS = Clock_Milliseconds();
+	m_rejoinRequestMS = 0;
+	m_rejoinOwnCRCs.clear();
+	m_rejoinCRCsCompared = 0;
+	m_rejoinCRCsDiffering = 0;
+	m_conMgr->setRejoining( TRUE );
+	DEBUG_LOG(("REJOIN: slot %d comes back; the replay holds frames 0 to %u so far\n", getLocalPlayerID(), m_rejoinFrame - 1));
+	return TRUE;
+}
+
+/**
+ * A frame while coming back: TRUE when it is the replay's, FALSE once it is the network's (finishRejoin
+ * has run and update goes on as for any frame).
+ */
+Bool Network::feedRejoinFrame()
+{
+	// given up: no frame runs until the engine quits
+	if (m_rejoinAbandoned) {
+		return TRUE;
+	}
+
+	/* What the logic and the player put on the list goes nowhere: those frames were played long ago.  Our
+		 own CRCs are kept, to hold the recorded ones of this seat against them. */
+	GameMessage *msg = TheCommandList->getFirstMessage();
+	while (msg != NULL) {
+		GameMessage *next = msg->next();
+		if (isTransferCommand(msg)) {
+			if (msg->getType() == GameMessage::MSG_LOGIC_CRC && msg->getArgumentCount() >= 3) {
+				m_rejoinOwnCRCs[(UnsignedInt)msg->getArgument(2)->integer] = (UnsignedInt)msg->getArgument(0)->integer;
+			}
+			TheCommandList->removeMessage(msg);
+			msg->deleteInstance();
+		}
+		msg = next;
+	}
+
+	// the tick that loads the map, and anything before it, has no recorded frame
+	if (!TheGameLogic->isInMultiplayerGame() || TheGameLogic->isLoadingMap()) {
+		m_frameDataReady = TRUE;
+		return TRUE;
+	}
+
+	/* The room is asked to take the seat back until the router answers with the frame it stops on for it.
+		 The socket is read for that answer; nothing frame-synchronized is filed meanwhile (setRejoining). */
+	m_conMgr->update( FALSE );
+	UnsignedInt acceptFrame = 0;
+	UnsignedInt seats = 0;
+	UnsignedInt router = 0;
+	const Bool accepted = m_conMgr->getRejoinAccept( acceptFrame, seats, router );
+	const UnsignedInt now = Clock_Milliseconds();
+	if (!accepted && (m_rejoinRequestMS == 0 || now - m_rejoinRequestMS > 2000)) {
+		m_conMgr->sendRejoinRequest();
+		m_rejoinRequestMS = now;
+	}
+
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	if (accepted) {
+		const UnsignedInt joinFrame = acceptFrame + 1;		// SEATREJOIN runs on acceptFrame, the seat's frames count from the next
+		if (frame > joinFrame) {
+			abandonRejoin( "the room took the seat back on a frame already played here" );
+			return TRUE;
+		}
+		if (frame == joinFrame) {
+			return !finishRejoin( seats, router );
+		}
+	}
+
+	// the room is still on its way to the frame, or this seat is still catching up to what is written
+	if (frame >= m_rejoinFrame) {
+		const UnsignedInt held = TheRecorder->rejoinFramesHeld();
+		if (held > m_rejoinFrame) {
+			m_rejoinFrame = held;
+		}
+	}
+	if (frame >= m_rejoinFrame) {
+		return TRUE;		// nothing to play yet: no frame runs
+	}
+
+	if (!TheRecorder->feedRejoinFrame( frame )) {
+		abandonRejoin( "the replay no longer fits the frames played" );
+		return TRUE;
+	}
+
+	/* This seat's recorded CRCs against the ones computed here.  A CRC goes out a run-ahead after the frame
+		 it is of, so ours is always in by the time the recorded one is fed. */
+	const Player *local = ThePlayerList->getLocalPlayer();
+	const Int localIndex = (local != NULL) ? local->getPlayerIndex() : -1;
+	for (msg = TheCommandList->getFirstMessage(); msg != NULL; msg = msg->next()) {
+		if (msg->getType() != GameMessage::MSG_LOGIC_CRC || msg->getPlayerIndex() != localIndex || msg->getArgumentCount() < 3) {
+			continue;
+		}
+		const UnsignedInt crcFrame = (UnsignedInt)msg->getArgument(2)->integer;
+		const UnsignedInt recorded = (UnsignedInt)msg->getArgument(0)->integer;
+		std::map<UnsignedInt, UnsignedInt>::iterator own = m_rejoinOwnCRCs.find(crcFrame);
+		if (own == m_rejoinOwnCRCs.end()) {
+			continue;
+		}
+		++m_rejoinCRCsCompared;
+		if (own->second != recorded) {
+			++m_rejoinCRCsDiffering;
+			if (m_rejoinCRCsDiffering <= 5) {
+				DEBUG_LOG(("REJOIN: frame %u computes CRC 0x%08X here, this seat recorded 0x%08X\n", crcFrame, own->second, recorded));
+			}
+		}
+		m_rejoinOwnCRCs.erase(own);
+	}
+
+	m_frameDataReady = TRUE;
+	return TRUE;
+}
+
+/**
+ * The frame the room stands on for this seat, the one after its SEATREJOIN.  The frame data is put back to
+ * nothing known: the ring was never used past the opening's zeroed frames, and a zeroed frame reads as
+ * ready with no orders.  Every frame below this one counts as announced, since the room played them without
+ * this seat; the frames from here to the run-ahead are announced by noteLogicFrameAdvance as the network
+ * update goes on.  What the room sent this seat while it caught up waits unacked in the senders' queues and
+ * comes in now; a resend request covers what does not.
+ */
+Bool Network::finishRejoin( UnsignedInt seats, UnsignedInt router )
+{
+	const UnsignedInt frame = TheGameLogic->getFrame();
+	/* The seat whose replay this is stands on this frame, waiting for ours, or it has played frames this seat
+		 never saw and joining would split the match (an answer meant for an earlier copy of this seat). */
+	const UnsignedInt held = TheRecorder->rejoinFramesHeld();
+	if (held != frame) {
+		DEBUG_LOG(("REJOIN: the replay holds %u frames, the room is not standing on frame %u for this seat\n", held, frame));
+		abandonRejoin( "the room has played on past the frame it took this seat back on" );
+		return FALSE;
+	}
+	TheRecorder->closeRejoinFeed();
+
+	DEBUG_LOG(("REJOIN: played frames 0 to %u in %u ms; %d of this seat's recorded CRCs held against ours, %d differ; %d computed with none recorded\n",
+		frame - 1, Clock_Milliseconds() - m_rejoinStartMS, m_rejoinCRCsCompared, m_rejoinCRCsDiffering, (Int)m_rejoinOwnCRCs.size()));
+	m_rejoinOwnCRCs.clear();
+	// a world that already differs would only be found a run-ahead into the match, by everybody
+	if (m_rejoinCRCsDiffering > 0) {
+		abandonRejoin( "the world played here is not the recorded one" );
+		return FALSE;
+	}
+
+	m_rejoinFeeding = FALSE;
+	m_conMgr->takeRejoinAccept( seats, router );
+	m_conMgr->forgetFrames();
+	m_localStatus = NETLOCALSTATUS_INGAME;
+	m_lastFrame = frame - 1;
+	m_lastFrameCompleted = frame - 1;
+	m_lastExecutionFrame = frame - 1;
+	m_nextFrameTime = 0;
+	m_stallStart = 0;
+	m_rejoinFirstOrder = TRUE;
+	DEBUG_LOG(("REJOIN: joining on frame %u as slot %d, run ahead %d\n", frame, getLocalPlayerID(), m_runAhead));
+	return TRUE;
+}
+
+/**
+ * Coming back failed.  Joining anyway would put a world that differs, or one that is missing orders, into
+ * the room, where it shows as a mismatch for everybody a run-ahead later; so no frame runs any more and
+ * the game quits.  The room goes on holding the seat until its hold runs out.
+ */
+void Network::abandonRejoin( const char *why )
+{
+	DEBUG_LOG(("REJOIN FAILED on frame %u: %s, quitting\n", TheGameLogic->getFrame(), why));
+	m_rejoinFeeding = TRUE;
+	m_rejoinAbandoned = TRUE;
+	m_frameDataReady = FALSE;
+	TheRecorder->closeRejoinFeed();
+	TheGameEngine->setQuitting( TRUE );
+}
+
+/**
  * returns true if all the commands are ready for the given frame.
  */
 Bool Network::AllCommandsReady(UnsignedInt frame) {
@@ -687,6 +913,10 @@ void Network::processFrameSynchronizedNetCommand(NetCommandRef *msg) {
 		processRunAheadCommand(netmsg);
 		DEBUG_LOG(("command to set run ahead to %d and frame rate to %d on frame %d actually executed on frame %d\n", netmsg->getRunAhead(), netmsg->getFrameRate(), netmsg->getExecutionFrame(), TheGameLogic->getFrame()));
 	}
+	else if (cmdMsg->getNetCommandType() == NETCOMMANDTYPE_SEATREJOIN) {
+		// every seat on this one frame: the seat plays again from the next
+		m_conMgr->readmitPlayer( (Int)((NetDestroyPlayerCommandMsg *)cmdMsg)->getPlayerIndex(), TheGameLogic->getFrame() + 1 );
+	}
 	else if (cmdMsg->getNetCommandType() == NETCOMMANDTYPE_DESTROYPLAYER) {
 		NetDestroyPlayerCommandMsg *netmsg = (NetDestroyPlayerCommandMsg *)cmdMsg;
 		processDestroyPlayerCommand(netmsg);
@@ -747,6 +977,10 @@ void Network::update( void )
 		return;
 	}
 #endif
+
+	if (m_rejoinFeeding && feedRejoinFrame()) {
+		return;
+	}
 
 	noteLogicFrameAdvance();
 	GetCommandsFromCommandList(); // Remove commands from TheCommandList and send them to the connection manager.
@@ -821,6 +1055,12 @@ void Network::liteupdate() {
 		return;
 	}
 #endif
+
+	// -rejoin: the socket is left alone until the frame the room stands on, so that what the room sends
+	// meanwhile is read against that frame (processNetCommand drops what is older)
+	if (m_rejoinFeeding) {
+		return;
+	}
 
 	if (m_conMgr != NULL) {
 		if (m_localStatus == NETLOCALSTATUS_PREGAME) {
@@ -1093,13 +1333,18 @@ void Network::voteForPlayerDisconnect(Int slot) {
 
 void Network::updateLoadProgress( Int percent )
 {
-	if (m_conMgr != NULL) {
+	if (m_conMgr != NULL && !m_rejoinFeeding) {
 		m_conMgr->updateLoadProgress( percent );
 	}
 }
 
 void Network::loadProgressComplete( void )
 {
+	// -rejoin: nobody else is loading, the others are far into the match
+	if (m_rejoinFeeding) {
+		TheGameLogic->timeOutGameStart();
+		return;
+	}
 	if (m_conMgr != NULL) {
 		m_conMgr->loadProgressComplete();
 	}
@@ -1107,7 +1352,7 @@ void Network::loadProgressComplete( void )
 
 void Network::sendTimeOutGameStart( void )
 {
-	if (m_conMgr != NULL) {
+	if (m_conMgr != NULL && !m_rejoinFeeding) {
 		m_conMgr->sendTimeOutGameStart();
 	}
 }

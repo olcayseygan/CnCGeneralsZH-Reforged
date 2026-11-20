@@ -816,6 +816,7 @@ GlobalData::GlobalData()
 	m_netGameStarted = FALSE;
 	m_netGameLocalSlot = 0;
 	m_netGameAISlots = 0;
+	m_rejoinReplay.clear(); // a -netgame match starts from frame 0
 	m_lanPlayerName.clear(); // the lobby name comes out of the preferences unless -lanname says otherwise
 	m_relayHost.clear(); // a real LAN unless -relay names a relay
 	m_relayPort = 0;

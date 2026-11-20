@@ -196,6 +196,7 @@ public:
 
 	void setLastFrameInGame( UnsignedInt frame ) { m_lastFrameInGame = frame; }
 	void markAsDisconnected( void ) { m_disconnected = TRUE; }
+	void markAsReconnected( void ) { m_disconnected = FALSE; m_lastFrameInGame = 0; }	///< a dropped seat came back (-rejoin)
 	UnsignedInt lastFrameInGame( void ) const { return m_lastFrameInGame; }
 	Bool disconnected( void ) const { return isHuman() && m_disconnected; }
 

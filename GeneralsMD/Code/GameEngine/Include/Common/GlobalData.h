@@ -575,6 +575,7 @@ public:
 	Bool m_netGameStarted;						///< that -netgame passed its checks and StartAutomatedGame ran, so every seat has this command line
 	Int m_netGameLocalSlot;						///< -netslot <n>: which of those addresses this copy of the game is
 	Int m_netGameAISlots;							///< -netai <n>: that many AI seats after the addresses, at the -aidiff rung
+	AsciiString m_rejoinReplay;				///< -rejoin <file>: the -netgame match is already under way; play it from this replay a seat in it is writing, then join (empty = off)
 	AsciiString m_lanPlayerName;			///< -lanname <name>: the name this copy takes in the LAN lobby (empty = the one in the preferences)
 	AsciiString m_relayHost;					///< -relay <host:port>: the LAN lobby and its games go through this UDP relay (empty = real LAN; Transport.cpp)
 	UnsignedShort m_relayPort;				///< the port of it, 0 when -relay named none

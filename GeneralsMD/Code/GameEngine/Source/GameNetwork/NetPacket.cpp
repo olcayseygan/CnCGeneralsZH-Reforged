@@ -132,6 +132,8 @@ static Bool namesValidSlots(NetCommandMsg *msg)
 			return ((NetDisconnectVoteCommandMsg *)msg)->getSlot() < MAX_SLOTS;
 		case NETCOMMANDTYPE_DISCONNECTPLAYER:
 			return ((NetDisconnectPlayerCommandMsg *)msg)->getDisconnectSlot() < MAX_SLOTS;
+		case NETCOMMANDTYPE_SEATREJOIN:
+			return ((NetDestroyPlayerCommandMsg *)msg)->getPlayerIndex() < MAX_SLOTS;
 		default:
 			return TRUE;
 	}
@@ -188,7 +190,7 @@ NetCommandRef * NetPacket::ConstructNetCommandMsgFromRawData(UnsignedByte *data,
 				msg = readRunAheadMetricsMessage(data, offset);
 			} else if (commandType == NETCOMMANDTYPE_RUNAHEAD) {
 				msg = readRunAheadMessage(data, offset);
-			} else if (commandType == NETCOMMANDTYPE_DESTROYPLAYER) {
+			} else if (commandType == NETCOMMANDTYPE_DESTROYPLAYER || IsRejoinCommand((NetCommandType)commandType)) {
 				msg = readDestroyPlayerMessage(data, offset);
 			} else if (commandType == NETCOMMANDTYPE_KEEPALIVE) {
 				msg = readKeepAliveMessage(data, offset);
@@ -368,6 +370,9 @@ UnsignedInt NetPacket::GetBufferSizeNeededForCommand(NetCommandMsg *msg) {
 		case NETCOMMANDTYPE_RUNAHEAD:
 			return GetRunAheadCommandSize(msg);
 		case NETCOMMANDTYPE_DESTROYPLAYER:
+		case NETCOMMANDTYPE_REJOINREQUEST:
+		case NETCOMMANDTYPE_REJOINACCEPT:
+		case NETCOMMANDTYPE_SEATREJOIN:
 			return GetDestroyPlayerCommandSize(msg);
 		case NETCOMMANDTYPE_KEEPALIVE:
 			return GetKeepAliveCommandSize(msg);
@@ -883,6 +888,9 @@ void NetPacket::FillBufferWithCommand(UnsignedByte *buffer, NetCommandRef *ref) 
 			FillBufferWithRunAheadCommand(buffer, ref);
 			break;
 		case NETCOMMANDTYPE_DESTROYPLAYER:
+		case NETCOMMANDTYPE_REJOINREQUEST:
+		case NETCOMMANDTYPE_REJOINACCEPT:
+		case NETCOMMANDTYPE_SEATREJOIN:
 			FillBufferWithDestroyPlayerCommand(buffer, ref);
 			break;
 		case NETCOMMANDTYPE_KEEPALIVE:
@@ -2126,6 +2134,9 @@ Bool NetPacket::addCommand(NetCommandRef *msg) {
 		case NETCOMMANDTYPE_RUNAHEAD:
 			return addRunAheadCommand(msg);
 		case NETCOMMANDTYPE_DESTROYPLAYER:
+		case NETCOMMANDTYPE_REJOINREQUEST:
+		case NETCOMMANDTYPE_REJOINACCEPT:
+		case NETCOMMANDTYPE_SEATREJOIN:
 			return addDestroyPlayerCommand(msg);
 		case NETCOMMANDTYPE_KEEPALIVE:
 			return addKeepAliveCommand(msg);
@@ -5141,6 +5152,9 @@ NetCommandList * NetPacket::getCommandList() {
 //				DEBUG_LOG(("read run ahead message from player %d for execution on frame %d\n", playerID, frame));
 				break;
 			case NETCOMMANDTYPE_DESTROYPLAYER:
+			case NETCOMMANDTYPE_REJOINREQUEST:
+			case NETCOMMANDTYPE_REJOINACCEPT:
+			case NETCOMMANDTYPE_SEATREJOIN:
 				msg = readDestroyPlayerMessage(m_packet, i);
 //				DEBUG_LOG(("read CRC info message from player %d for execution on frame %d\n", playerID, frame));
 				break;

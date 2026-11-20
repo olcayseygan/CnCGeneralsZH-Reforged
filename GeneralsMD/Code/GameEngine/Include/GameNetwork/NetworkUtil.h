@@ -51,6 +51,7 @@ UnsignedShort GenerateNextCommandID();
 Bool DoesCommandRequireACommandID(NetCommandType type);
 Bool CommandRequiresAck(NetCommandMsg *msg);
 Bool IsCommandSynchronized(NetCommandType type);
+Bool IsRejoinCommand(NetCommandType type);		///< one of the three a dropped seat's return takes, all a NetDestroyPlayerCommandMsg on the wire
 AsciiString GetAsciiNetCommandType(NetCommandType type);
 
 /* What another machine is allowed to put on this disk during a map transfer.  IsSafeTransferPath

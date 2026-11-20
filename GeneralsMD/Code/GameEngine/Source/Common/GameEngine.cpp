@@ -1016,9 +1016,16 @@ static void startAutoNetGame( void )
 	if (TheLAN == NULL)
 		TheLAN = NEW LANAPI();
 
-	TheLAN->StartAutomatedGame( mapName, TheGlobalData->m_fixedSeed, slotIPs, numSlots,
+	const Bool started = TheLAN->StartAutomatedGame( mapName, TheGlobalData->m_fixedSeed, slotIPs, numSlots,
 		TheGlobalData->m_netGameLocalSlot );
 	TheWritableGlobalData->m_netGameStarted = TRUE;
+
+	// a refused replay would start the match from frame 0 against seats that are far into it
+	if (started && TheGlobalData->m_rejoinReplay.isNotEmpty() && !TheNetwork->startRejoin( TheGlobalData->m_rejoinReplay ))
+	{
+		DEBUG_LOG(("-rejoin: cannot come back from '%s', quitting\n", TheGlobalData->m_rejoinReplay.str()));
+		TheGameEngine->setQuitting( TRUE );
+	}
 }
 
 /** -----------------------------------------------------------------------------------------------

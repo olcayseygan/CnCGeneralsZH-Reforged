@@ -165,6 +165,13 @@ public:
 	Bool resumePlayback( AsciiString filename, const PlaybackCursor &cursor );	///< FALSE when the replay will not open again
 	Int getPlaybackFramesPerSecond( void );						///< the logic rate the game was played at, 0 when it was not recorded
 	void stopPlayback();															///< Stops playback.  Its fine to call this even if not playing back a file.
+
+	/// -rejoin: the replay a seat still in the match keeps writing, read beside our own recording up to
+	/// the frame that seat stands on (Network::startRejoin)
+	Bool openRejoinFeed( AsciiString path, UnsignedInt &framesHeld );	///< FALSE for a file that is no replay of a network game of this build
+	Bool feedRejoinFrame( UnsignedInt frame );				///< that frame's recorded commands onto TheCommandList; FALSE when the file no longer fits the frames played
+	UnsignedInt rejoinFramesHeld( void );							///< the header's count of whole frames, read again
+	void closeRejoinFeed( void );
 #if defined _DEBUG || defined _INTERNAL
 	Bool analyzeReplay( AsciiString filename );
 	Bool isAnalysisInProgress( void );
@@ -257,6 +264,11 @@ protected:
 	Int m_originalGameMode; // valid in replays
 
 	UnsignedInt m_nextFrame;												///< The Frame that the next message is to be executed on.  This can be -1.
+
+	FILE *m_rejoinFile;															///< -rejoin's replay, NULL when none is open; init() leaves it alone
+	UnsignedInt m_rejoinNextFrame;										///< the frame of its next command, -1 when none is left
+	long m_rejoinReadPos;															///< where that frame number starts in the file
+	void readRejoinNextFrame( void );
 };
 
 extern RecorderClass *TheRecorder;

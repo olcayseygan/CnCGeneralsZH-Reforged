@@ -22,6 +22,7 @@ Data/Art/Textures/ReforgedHudAmericaCommandBarNoTabs.dds
 Data/Art/Textures/ReforgedHudAmericaPowers.dds
 Data/Art/Textures/ReforgedHudAmericaSidebar.dds
 Data/Art/Textures/ReforgedHudAmericaSidebarStrip.dds
+Data/Art/Textures/ReforgedHudAmericaTabComm.dds
 Data/Art/Textures/ReforgedHudAmericaTabPanel.dds
 Data/Art/Textures/ReforgedHudAmericaTabSolo.dds
 Data/Art/Textures/ReforgedHudAmericaTalents.dds
@@ -31,6 +32,7 @@ Data/Art/Textures/ReforgedHudChinaCommandBarNoTabs.dds
 Data/Art/Textures/ReforgedHudChinaPowers.dds
 Data/Art/Textures/ReforgedHudChinaSidebar.dds
 Data/Art/Textures/ReforgedHudChinaSidebarStrip.dds
+Data/Art/Textures/ReforgedHudChinaTabComm.dds
 Data/Art/Textures/ReforgedHudChinaTabPanel.dds
 Data/Art/Textures/ReforgedHudChinaTabSolo.dds
 Data/Art/Textures/ReforgedHudChinaTalents.dds
@@ -41,6 +43,7 @@ Data/Art/Textures/ReforgedHudGlaCommandBarNoTabs.dds
 Data/Art/Textures/ReforgedHudGlaPowers.dds
 Data/Art/Textures/ReforgedHudGlaSidebar.dds
 Data/Art/Textures/ReforgedHudGlaSidebarStrip.dds
+Data/Art/Textures/ReforgedHudGlaTabComm.dds
 Data/Art/Textures/ReforgedHudGlaTabPanel.dds
 Data/Art/Textures/ReforgedHudGlaTabSolo.dds
 Data/Art/Textures/ReforgedHudGlaTalents.dds
@@ -49,12 +52,14 @@ Data/Art/Textures/ReforgedHudObsCommandBar.dds
 Data/Art/Textures/ReforgedHudObsPieces.dds
 Data/Art/Textures/ReforgedHudObsPlayerWindow.dds
 Data/Art/Textures/ReforgedHudObsSpec.dds
+Data/Art/Textures/ReforgedHudObsTabComm.dds
 Data/Art/Textures/ReforgedHudObsTabPanel.dds
 Data/Art/Textures/ReforgedHudTurkiyeCommandBar.dds
 Data/Art/Textures/ReforgedHudTurkiyeCommandBarNoTabs.dds
 Data/Art/Textures/ReforgedHudTurkiyePowers.dds
 Data/Art/Textures/ReforgedHudTurkiyeSidebar.dds
 Data/Art/Textures/ReforgedHudTurkiyeSidebarStrip.dds
+Data/Art/Textures/ReforgedHudTurkiyeTabComm.dds
 Data/Art/Textures/ReforgedHudTurkiyeTabPanel.dds
 Data/Art/Textures/ReforgedHudTurkiyeTabSolo.dds
 Data/Art/Textures/ReforgedHudTurkiyeTalents.dds

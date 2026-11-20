@@ -412,14 +412,70 @@ static void dressTabRadio( GameWindow *radio )
 	radio->winSetHiliteTextColors(GameMakeColor(242, 194, 48, 255), GameMakeColor(0, 0, 0, 255));
 }
 
+/// a list on the painting: no veil or rule of EA's, the well it stands in is the painting's, and its scroll
+/// bar's arrows, thumb and groove (TAB_TRACK) in the scheme's pieces
+static void dressListbox( GameWindow *listbox )
+{
+	if (listbox == NULL)
+		return;
+	GadgetListBoxSetEnabledColor(listbox, WIN_COLOR_UNDEFINED);
+	GadgetListBoxSetEnabledBorderColor(listbox, WIN_COLOR_UNDEFINED);
+	GadgetListBoxSetHiliteColor(listbox, WIN_COLOR_UNDEFINED);
+	GadgetListBoxSetHiliteBorderColor(listbox, WIN_COLOR_UNDEFINED);
+	GadgetListBoxSetDisabledColor(listbox, WIN_COLOR_UNDEFINED);
+	GadgetListBoxSetDisabledBorderColor(listbox, WIN_COLOR_UNDEFINED);
+
+	GameWindow *slider = GadgetListBoxGetSlider(listbox);
+	if (slider == NULL)
+		return;
+	dressTabButton(GadgetListBoxGetUpButton(listbox), "Up");
+	dressTabButton(GadgetListBoxGetDownButton(listbox), "Down");
+	dressTabButton(GadgetSliderGetThumb(slider), "Thumb");
+	const ControlBarSchemeManager *schemes = TheControlBar->getControlBarSchemeManager();
+	const Image *top = schemes->getTabImage("TrackTop");
+	const Image *bottom = schemes->getTabImage("TrackBottom");
+	const Image *center = schemes->getTabImage("TrackCenter");
+	const Image *smallCenter = schemes->getTabImage("TrackSmall");
+	GadgetSliderSetEnabledImages(slider, top, bottom, center, smallCenter);
+	GadgetSliderSetHiliteImages(slider, top, bottom, center, smallCenter);
+	GadgetSliderSetDisabledImages(slider, top, bottom, center, smallCenter);
+	// gogoGadgetSlider gives a listbox's slider the colour draw whatever its images
+	slider->winSetDrawFunc(TheWindowManager->getVerticalSliderImageDrawFunc());
+}
+
+/// stand a control at lo..hi of the painting, in its texels at 1080 (1379x714), as a share of the window
+static void placeInPanel( GameWindow *control, Int loX, Int loY, Int hiX, Int hiY )
+{
+	if (control == NULL)
+		return;
+	Int width, height, x, y, screenX, screenY, panelX, panelY;
+	theWindow->winGetSize(&width, &height);
+	theWindow->winGetScreenPosition(&panelX, &panelY);
+	control->winGetPosition(&x, &y);
+	control->winGetScreenPosition(&screenX, &screenY);
+	control->winSetPosition(x + panelX + width * loX / 1379 - screenX, y + panelY + height * loY / 714 - screenY);
+	control->winSetSize(width * (hiX - loX) / 1379, height * (hiY - loY) / 714);
+}
+
+/// the painting the page on show stands on: the Communicator's (<TooltipImage>TabComm) with its three wells,
+/// else the In Game page's, or the campaign's (TabSolo) outside a network game
+static void wearPanelPainting( Bool communicator )
+{
+	const ControlBarSchemeManager *schemes = TheControlBar->getControlBarSchemeManager();
+	const Image *panel = schemes->getTabPanelImage();
+	if (theWindow == NULL || panel == NULL)
+		return;
+	const Image *comm = communicator ? schemes->getTabImage("Comm") : NULL;
+	const Image *solo = TheRecorder->isMultiplayer() ? NULL : schemes->getTabImage("Solo");
+	theWindow->winSetEnabledImage(0, comm ? comm : solo ? solo : panel);
+}
+
 /// The Tab screen's controls on the scheme's painting (Tools/hud_command_bar.py tab_panel, TAB_BUTTONS): the
-/// Main Menu, mute and money buttons in the side's pieces, and the campaign's briefing list without EA's
-/// veil and blue rule, standing in the solo painting's one well (y 99..608 of the 714 the window is at
-/// 1080), its scroll bar's arrows, thumb and groove (TAB_TRACK) in the same pieces.
+/// Main Menu, mute and money buttons in the side's pieces, the campaign's briefing list standing in the solo
+/// painting's one well (y 99..608), and the Communicator's buddy list, chat and the line typed into it each in
+/// its well of the TabComm painting (TAB_COMM_WELLS, 6 in), the line without EA's bright frame.
 static void dressForPanel( void )
 {
-	Int width, height;
-	theWindow->winGetSize(&width, &height);
 	dressTabButton(TheWindowManager->winGetWindowFromId(theWindow, NAMEKEY("Diplomacy.wnd:ButtonHide")), "Exit");
 	for (Int i = 0; i < MAX_SLOTS; ++i)
 	{
@@ -433,34 +489,44 @@ static void dressForPanel( void )
 	dressTabRadio(radioButtonBuddies);
 
 	GameWindow *listboxSolo = TheWindowManager->winGetWindowFromId(theWindow, NAMEKEY("Diplomacy.wnd:ListboxSolo"));
-	GadgetListBoxSetEnabledColor(listboxSolo, WIN_COLOR_UNDEFINED);
-	GadgetListBoxSetEnabledBorderColor(listboxSolo, WIN_COLOR_UNDEFINED);
-	GadgetListBoxSetHiliteColor(listboxSolo, WIN_COLOR_UNDEFINED);
-	GadgetListBoxSetHiliteBorderColor(listboxSolo, WIN_COLOR_UNDEFINED);
-	GadgetListBoxSetDisabledColor(listboxSolo, WIN_COLOR_UNDEFINED);
-	GadgetListBoxSetDisabledBorderColor(listboxSolo, WIN_COLOR_UNDEFINED);
-	Int x, y, screenX, screenY, panelX, panelY, listWidth, listHeight;
-	listboxSolo->winGetPosition(&x, &y);
-	listboxSolo->winGetScreenPosition(&screenX, &screenY);
-	theWindow->winGetScreenPosition(&panelX, &panelY);
-	listboxSolo->winGetSize(&listWidth, &listHeight);
-	listboxSolo->winSetPosition(x, y + panelY + height * 99 / 714 - screenY);
-	listboxSolo->winSetSize(listWidth, height * (608 - 99) / 714);
+	dressListbox(listboxSolo);
+	if (listboxSolo)
+	{
+		Int width, height, x, y, screenX, screenY, panelX, panelY, listWidth, listHeight;
+		theWindow->winGetSize(&width, &height);
+		listboxSolo->winGetPosition(&x, &y);
+		listboxSolo->winGetScreenPosition(&screenX, &screenY);
+		theWindow->winGetScreenPosition(&panelX, &panelY);
+		listboxSolo->winGetSize(&listWidth, &listHeight);
+		listboxSolo->winSetPosition(x, y + panelY + height * 99 / 714 - screenY);
+		listboxSolo->winSetSize(listWidth, height * (608 - 99) / 714);
+	}
 
-	GameWindow *slider = GadgetListBoxGetSlider(listboxSolo);
-	dressTabButton(GadgetListBoxGetUpButton(listboxSolo), "Up");
-	dressTabButton(GadgetListBoxGetDownButton(listboxSolo), "Down");
-	dressTabButton(GadgetSliderGetThumb(slider), "Thumb");
-	const ControlBarSchemeManager *schemes = TheControlBar->getControlBarSchemeManager();
-	const Image *top = schemes->getTabImage("TrackTop");
-	const Image *bottom = schemes->getTabImage("TrackBottom");
-	const Image *center = schemes->getTabImage("TrackCenter");
-	const Image *smallCenter = schemes->getTabImage("TrackSmall");
-	GadgetSliderSetEnabledImages(slider, top, bottom, center, smallCenter);
-	GadgetSliderSetHiliteImages(slider, top, bottom, center, smallCenter);
-	GadgetSliderSetDisabledImages(slider, top, bottom, center, smallCenter);
-	// gogoGadgetSlider gives a listbox's slider the colour draw whatever its images
-	slider->winSetDrawFunc(TheWindowManager->getVerticalSliderImageDrawFunc());
+	// the Communicator, only where the sheet has its painting: a scheme without keeps EA's page as it was
+	if (TheControlBar->getControlBarSchemeManager()->getTabImage("Comm") == NULL)
+		return;
+	GameWindow *listboxBuddies = TheWindowManager->winGetWindowFromId(theWindow, NAMEKEY("Diplomacy.wnd:ListboxBuddies"));
+	GameWindow *listboxChat = TheWindowManager->winGetWindowFromId(theWindow, NAMEKEY("Diplomacy.wnd:ListboxBuddyChat"));
+	GameWindow *entry = TheWindowManager->winGetWindowFromId(theWindow, NAMEKEY("Diplomacy.wnd:TextEntryChat"));
+	dressListbox(listboxBuddies);
+	dressListbox(listboxChat);
+	// the page's own window first, over all three wells and clear of Main Menu, or a click on the lists' far
+	// side (their scroll bars) would fall outside it
+	placeInPanel(winBuddies, 8, 88, 1370, 620);
+	placeInPanel(listboxBuddies, 22, 99, 1356, 312);
+	placeInPanel(listboxChat, 22, 334, 1356, 550);
+	if (entry)
+	{
+		GadgetTextEntrySetEnabledColor(entry, WIN_COLOR_UNDEFINED);
+		GadgetTextEntrySetEnabledBorderColor(entry, WIN_COLOR_UNDEFINED);
+		GadgetTextEntrySetHiliteColor(entry, WIN_COLOR_UNDEFINED);
+		GadgetTextEntrySetHiliteBorderColor(entry, WIN_COLOR_UNDEFINED);
+		GadgetTextEntrySetDisabledColor(entry, WIN_COLOR_UNDEFINED);
+		GadgetTextEntrySetDisabledBorderColor(entry, WIN_COLOR_UNDEFINED);
+		entry->winSetHiliteTextColors(GameMakeColor(255, 255, 255, 255), GameMakeColor(0, 0, 0, 255));
+		entry->winSetDrawFunc(TheWindowManager->getTextEntryDrawFunc());
+		placeInPanel(entry, 26, 567, 1352, 613);
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -726,11 +792,13 @@ WindowMsgHandledType DiplomacySystem( GameWindow *window, UnsignedInt msg,
 			{
 				winInGame->winHide(FALSE);
 				winBuddies->winHide(TRUE);
+				wearPanelPainting(FALSE);
 			}
 			else if( controlID == radioButtonBuddiesID)
 			{
 				winInGame->winHide(TRUE);
 				winBuddies->winHide(FALSE);
+				wearPanelPainting(TRUE);
 			}
 
 			for (Int i=0; i<MAX_SLOTS; ++i)

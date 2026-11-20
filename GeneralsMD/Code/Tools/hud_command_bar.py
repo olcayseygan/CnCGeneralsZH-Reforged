@@ -3206,12 +3206,18 @@ TAB_TABLE = (16, TAB_ROWS[0][0] - 6, 1362, TAB_ROWS[-1][1] + 6)
 # Diplomacy.cpp to TAB_HIDE's top left (as a share of the window) so the corner's cut clears its socket
 TAB_HIDE = (1160, 650, 1160 + tab_u(763) - tab_u(671), 650 + tab_u(397) - tab_u(370))
 TAB_COLUMNS = [tab_u(u) for u in (46, 178, 319, 364, 408, 460, 560)]   # between mute, player, side, ping, fps, team, status, money
+# the Communicator page's wells, in the window at 1080, between the titles' top and the table's foot: Diplomacy.cpp
+# dressForPanel stands ListboxBuddies, ListboxBuddyChat and TextEntryChat in them, 6 in from each side (3 for the entry)
+TAB_COMM_WELLS = dict(Buddies=(16, TAB_TITLES[1], 1362, 318), Chat=(16, 328, 1362, 556), Entry=(16, 566, 1362, TAB_TABLE[3]))
 
 
-def tab_panel(side, solo=False):
+def tab_panel(side, solo=False, comm=False):
     """The Tab screen's painting on its sheet, the buttons beside it; solo is the campaign's (<prefix>TabSolo on
     ReforgedHud<Side>TabSolo), where the briefing list stands: the titles' and the table's wells are one, with
-    no bands or rulings for its lines to fall across, and its sheet holds the painting alone."""
+    no bands or rulings for its lines to fall across, and its sheet holds the painting alone.  comm is the online
+    Communicator page's (<prefix>TabComm on ReforgedHud<Side>TabComm): a well for the buddy list, one for the
+    chat and one for the line typed into it (TAB_COMM_WELLS), its sheet the painting alone too."""
+    solo = solo or comm
     look = BAR_LOOKS[side]
     build = look.get("skin", look["build"])
     W, H = TAB_PANEL
@@ -3231,7 +3237,9 @@ def tab_panel(side, solo=False):
               [(10, 10), (W - 11, 10), (W - 11, H - 44), (W - 22, H - 44), (W - 22, H - 22), (W - 44, H - 22), (W - 44, H - 13),
                (10, H - 13)]], (True, False, True, False))
     c = 6 if kind != "rough" else 5
-    if solo:
+    if comm:
+        p.sink([shape(build, *r, c) for r in TAB_COMM_WELLS.values()], 6, 2.5)
+    elif solo:
         p.sink([shape(build, TAB_TITLES[0], TAB_TITLES[1], TAB_TITLES[2], TAB_TABLE[3], c)], 6, 2.5)
     else:
         p.sink([shape(build, *TAB_TITLES, c)], 6, 2.5)
@@ -3454,20 +3462,33 @@ def tab_radio(side, state):
             "RadioR": img.crop((w - e, 0, w, h))}
 
 
-def check_tab(sheet_img, side_name, prefix, solo_img=None):
+def check_tab(sheet_img, side_name, prefix, solo_img=None, comm_img=None):
     """The paintings and the buttons are mapped where the generator put them, each painting opaque along the
-    screen's two edges it stands on, and the rows, the titles and the Main Menu button stand on it."""
+    screen's two edges it stands on, and the rows, the titles and the Main Menu button stand on it; the
+    Communicator's wells are glass, darker than the steel between them."""
     M = read_mapped(side_name, "TabPanel")
     want = {prefix + "TabPanel": (0, 0) + TAB_PANEL}
     if solo_img is not None:
         want[prefix + "TabSolo"] = (0, 0) + TAB_PANEL
+    if comm_img is not None:
+        want[prefix + "TabComm"] = (0, 0) + TAB_PANEL
+        lum = np.asarray(comm_img.convert("L"), np.float32)
+        def middle(img, r):                         # a well's glass: 12 rows across its middle, clear of the lips
+            x0, y0, x1, y1 = r
+            return img[(y0 + y1) // 2 - 6:(y0 + y1) // 2 + 6, x0 + 12:x1 - 12].mean()
+        # against the campaign's one well (or the In Game page's wells) at the same place: the glass darkens down
+        # the page, so a well is held to the glass that stands where it does
+        ref = np.asarray((solo_img or sheet_img).convert("L"), np.float32)
+        for name, r in TAB_COMM_WELLS.items():
+            glass, there = middle(lum, r), middle(ref, r)
+            assert abs(glass - there) < 10, "the Communicator's %s well is %.0f, the glass there %.0f" % (name, glass, there)
     want.update({prefix + name: box for name, box in tab_button_boxes().items()})
     if side_name in SIDES:
         want.update({prefix + name: box for name, box in signal_boxes(side_name).items()})
         want.update({prefix + name: box for name, box in grown_boxes(side_name).items()})
     assert M == want, "ReforgedHud%sTabPanel.ini maps %s, the generator draws %s" % (side_name, sorted(set(M) ^ set(want)) or M, want)
     W, H = TAB_PANEL
-    for img in [sheet_img] + ([solo_img] if solo_img is not None else []):
+    for img in [sheet_img] + [i for i in (solo_img, comm_img) if i is not None]:
         a = np.asarray(img)[..., 3]
         assert (a[0, :W - 60] == 255).all() and (a[:H - 60, 0] == 255).all(), "the Tab screen leaves the screen's edge"
         for x0, y0, x1, y1 in [TAB_TITLES, TAB_TABLE, TAB_HIDE]:
@@ -4547,7 +4568,8 @@ def main():
             made["ReforgedHudHelpbox"] = helpbox = paint_helpbox()
             check_helpbox(helpbox)
             made["ReforgedHudObsTabPanel"] = tab = tab_panel("Observer")
-            check_tab(tab, "Obs", "Helpbox")
+            made["ReforgedHudObsTabComm"] = comm = tab_panel("Observer", comm=True)
+            check_tab(tab, "Obs", "Helpbox", comm_img=comm)
         elif args.talents_only:
             made["ReforgedHud%sTalents" % side] = paint_talents(side)
         else:
@@ -4561,7 +4583,8 @@ def main():
             check_sheet(sheet_img, side, args.ready_glow)
             made["ReforgedHud%sTabPanel" % side] = tab = tab_panel(side)
             made["ReforgedHud%sTabSolo" % side] = solo = tab_panel(side, solo=True)
-            check_tab(tab, side, side + "Pro", solo)
+            made["ReforgedHud%sTabComm" % side] = comm = tab_panel(side, comm=True)
+            check_tab(tab, side, side + "Pro", solo, comm)
         for name, img in made.items():
             img.save(os.path.join(args.out, name + ".png"))
             if args.dds:

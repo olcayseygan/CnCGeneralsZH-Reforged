@@ -403,6 +403,7 @@ static PoolSizeRec sizes[] =
 	{ "JammerUpdate", 32, 32 },
 	{ "RadarCoverageBehavior", 32, 32 },
 	{ "MarkAndRainBehavior", 32, 32 },
+	{ "PieceDamageBehavior", 16, 16 },
 	{ "IdleHackerUpdate", 64, 32 },
 	{ "StealthUpdate", 512, 128 },
 	{ "StealthUpgrade", 256, 32 },

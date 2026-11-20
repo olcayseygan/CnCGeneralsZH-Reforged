@@ -4611,7 +4611,14 @@ void Object::crc( Xfer *xfer )
 			xfer->xferSnapshot( thisWeapon );
 		}
 	}
-	
+
+	// a structure that comes apart (PieceDamageBehavior) adds its pieces' health, since a broken piece
+	// can take the weapons away; nothing else has one, so every other object's CRC is as it was
+	static const NameKeyType key_PieceDamageBehavior = NAMEKEY( "PieceDamageBehavior" );
+	Module *pieces = findModule( key_PieceDamageBehavior );
+	if (pieces)
+		xfer->xferSnapshot( pieces );
+
 }  // end crc
 
 //-------------------------------------------------------------------------------------------------

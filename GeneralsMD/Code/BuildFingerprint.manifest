@@ -1441,6 +1441,8 @@ Data/Scenarios/particles1m_mixed.txt
 Data/Scenarios/particles1m_smoke.txt
 Data/Scenarios/patriotscud.txt
 Data/Scenarios/patriottomahawk.txt
+Data/Scenarios/piecetower.txt
+Data/Scenarios/piecetowerdirect.txt
 Data/Scenarios/powerpropcapture.txt
 Data/Scenarios/reachhills.txt
 Data/Scenarios/reachproof.txt
@@ -2025,6 +2027,7 @@ GameEngine/Include/GameLogic/Module/ParkingPlaceBehavior.h
 GameEngine/Include/GameLogic/Module/ParticleUplinkCannonUpdate.h
 GameEngine/Include/GameLogic/Module/PassengersFireUpgrade.h
 GameEngine/Include/GameLogic/Module/PhysicsUpdate.h
+GameEngine/Include/GameLogic/Module/PieceDamageBehavior.h
 GameEngine/Include/GameLogic/Module/PilotFindVehicleUpdate.h
 GameEngine/Include/GameLogic/Module/PointDefenseLaserUpdate.h
 GameEngine/Include/GameLogic/Module/PoisonedBehavior.h
@@ -2651,6 +2654,7 @@ GameEngine/Source/GameLogic/Object/Create/SupplyWarehouseCreate.cpp
 GameEngine/Source/GameLogic/Object/Create/VeterancyGainCreate.cpp
 GameEngine/Source/GameLogic/Object/Damage/BoneFXDamage.cpp
 GameEngine/Source/GameLogic/Object/Damage/DamageModule.cpp
+GameEngine/Source/GameLogic/Object/Damage/PieceDamageBehavior.cpp
 GameEngine/Source/GameLogic/Object/Damage/TransitionDamageFX.cpp
 GameEngine/Source/GameLogic/Object/Destroy/DestroyModule.cpp
 GameEngine/Source/GameLogic/Object/Die/CreateCrateDie.cpp

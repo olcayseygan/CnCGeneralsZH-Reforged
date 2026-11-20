@@ -979,6 +979,7 @@ public:
 		Int state[ TALENT_SCIENCE_COUNT ];				///< 0 locked, 1 waiting, 2 picked, 3 rejected
 		Int rowState[ TALENT_VIEW_ROWS ];					///< the node: locked, waiting or picked
 		UnicodeString name[ TALENT_SCIENCE_COUNT ];
+		UnicodeString shortLine[ TALENT_SCIENCE_COUNT ];		///< SCIENCE:<card>Short, the gist under the name; empty where no language has one
 		UnicodeString numeral[ TALENT_VIEW_ROWS ];
 		UnicodeString caption, waitingLine, hint, rankLabel, rankText;
 	};

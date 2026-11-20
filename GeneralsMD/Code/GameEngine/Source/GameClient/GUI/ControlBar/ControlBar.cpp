@@ -796,7 +796,14 @@ namespace
 
 	/// the window's own text, one FittedLabel a line
 	enum { LABEL_PLATE = 0, LABEL_NODE = TALENT_SCIENCE_COUNT, LABEL_CAPTION = LABEL_NODE + TALENT_ROW_COUNT,
-				 LABEL_WAITING, LABEL_HINT, LABEL_RANK, LABEL_RANK_NUMERAL, LABEL_COUNT };
+				 LABEL_WAITING, LABEL_HINT, LABEL_RANK, LABEL_RANK_NUMERAL, LABEL_SHORT,
+				 LABEL_COUNT = LABEL_SHORT + TALENT_SCIENCE_COUNT };
+	// a plate with a short line: the name and the gist as one block, each a line its font's height tall
+	// (14 and 10 points, Arial's own leading is the gap between them), centred in the face inside the
+	// bevel (about 9 texels at the sides and foot, the waiting stripe 11 at the top); both from the plate's top
+	const Int TALENT_TEXT_INSET_X = 15;
+	const Int TALENT_NAME_BAND[ 2 ] = { 20, 44 };
+	const Int TALENT_SHORT_BAND[ 2 ] = { 44, 61 };
 	FittedLabel theTalentLabels[ LABEL_COUNT ];
 
 	/// where the window's design rect lands on the screen
@@ -955,13 +962,26 @@ namespace
 			drawTalentLabel( LABEL_NODE + row, view.numeral[ row ], REAL_TO_INT( 20 * scale + 0.5f ), r, c, FALSE );
 		}
 
-		// the cards' names in their plates' wells
+		// the cards' names in their plates' wells, and under each the gist in a smaller, quieter line
+		static const Color shortText[ 4 ] = { GameMakeColor( 84, 88, 94, 255 ), GameMakeColor( 206, 196, 160, 255 ),
+			GameMakeColor( 180, 198, 222, 255 ), GameMakeColor( 140, 138, 132, 255 ) };
 		for( Int i = 0; i < TALENT_SCIENCE_COUNT; i++ )
 		{
 			const Int *y = theTalentRowY[ i / 2 ], *x = theTalentPlateX[ i % 2 ];
-			const IRegion2D well = map.rect( x[ 0 ] + TALENT_FACE_INSET, y[ 0 ] + TALENT_FACE_INSET - 1,
-				x[ 1 ] - TALENT_FACE_INSET, y[ 1 ] - TALENT_FACE_INSET + 1 );
-			drawTalentLabel( LABEL_PLATE + i, view.name[ i ], REAL_TO_INT( 14 * scale + 0.5f ), well, plateText[ state[ i ] ], TRUE );
+			const Int namePoints = REAL_TO_INT( 14 * scale + 0.5f );
+			if( view.shortLine[ i ].isEmpty() )
+			{
+				const IRegion2D well = map.rect( x[ 0 ] + TALENT_FACE_INSET, y[ 0 ] + TALENT_FACE_INSET - 1,
+					x[ 1 ] - TALENT_FACE_INSET, y[ 1 ] - TALENT_FACE_INSET + 1 );
+				drawTalentLabel( LABEL_PLATE + i, view.name[ i ], namePoints, well, plateText[ state[ i ] ], TRUE );
+				continue;
+			}
+			// one line each, shrunk to the band's width rather than wrapped into the other band
+			const Int left = x[ 0 ] + TALENT_TEXT_INSET_X, right = x[ 1 ] - TALENT_TEXT_INSET_X;
+			drawTalentLabel( LABEL_PLATE + i, view.name[ i ], namePoints,
+				map.rect( left, y[ 0 ] + TALENT_NAME_BAND[ 0 ], right, y[ 0 ] + TALENT_NAME_BAND[ 1 ] ), plateText[ state[ i ] ], FALSE );
+			drawTalentLabel( LABEL_SHORT + i, view.shortLine[ i ], REAL_TO_INT( 10 * scale + 0.5f ),
+				map.rect( left, y[ 0 ] + TALENT_SHORT_BAND[ 0 ], right, y[ 0 ] + TALENT_SHORT_BAND[ 1 ] ), shortText[ state[ i ] ], FALSE );
 		}
 
 		// the caption band: TALENTS on its left, the picks still owed in gold on its right; the hint
@@ -1021,6 +1041,7 @@ void ControlBar::initTalentWindows( GameWindow *root )
 		name.format( "GeneralsExpPoints.wnd:ButtonTalent%d%c", i / 2 + 6, 'A' + i % 2 );
 		button->winSetWindowId( NAMEKEY( name ) );
 		button->winSetDrawFunc( drawTalentNothing );
+		button->setTooltipDelay( 0 );		// the card's whole text at once: Mouse.ini's 800 ms wait read as no tooltip at all
 		m_talentWindows[ i ] = button;
 	}
 }
@@ -1055,8 +1076,22 @@ void ControlBar::populateTalents( Player *player )
 		view.state[ i ] = talentState( player, i );
 		UnicodeString description;
 		view.name[ i ].clear();
+		view.shortLine[ i ].clear();
 		if( talents )
+		{
 			TheScienceStore->getNameAndDescription( ( *talents )[ i ], view.name[ i ], description );
+			// SCIENCE_TurkiyeTalent6A's gist is SCIENCE:TurkiyeTalent6AShort; a label no layer has stays off the plate
+			const AsciiString internal = TheScienceStore->getInternalNameForScience( ( *talents )[ i ] );
+			if( internal.startsWith( "SCIENCE_" ) )
+			{
+				AsciiString label;
+				label.format( "SCIENCE:%sShort", internal.str() + 8 );
+				Bool exists = FALSE;
+				const UnicodeString line = TheGameText->fetch( label, &exists );
+				if( exists )
+					view.shortLine[ i ] = line;
+			}
+		}
 		GameWindow *win = m_talentWindows[ i ];
 		if( win )
 			win->winSetTooltip( description );

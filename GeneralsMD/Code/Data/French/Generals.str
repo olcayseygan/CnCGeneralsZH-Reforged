@@ -16617,6 +16617,14 @@ TOOLTIP:Superweapons
 "Combien de superarmes un joueur peut avoir debout. Autoriser : autant qu'il peut en payer. Limiter : une, et quatre pour le Général superarme USA. Pas de superarmes : aucune, sauf pour le Général superarme, qui en garde une. Il fait exception parce que ses superarmes sont ce qu'il obtient en échange d'une armée plus faible. Sans superarmes, chacun, l'ordinateur aussi, peut encore bâtir un silo de missile nucléaire pour y acheter les améliorations de la Chine. Il n'a pas de missile, ni bouton de tir, ni compte à rebours, ni annonce."
 END
 
+GUI:StartShrouded
+"Carte cachée"
+END
+
+TOOLTIP:StartShrouded
+"La carte commence noire pour chaque joueur. Le terrain que votre camp n'a pas vu reste noir jusqu'à ce qu'une de vos unités y arrive, et l'écran de chargement ne montre pas les points de départ. Désactivée, chacun commence avec toute la carte visible sous le brouillard, comme le multijoueur l'a toujours fait."
+END
+
 GUI:UnitLimit
 "Limite d'unités"
 END
@@ -16687,6 +16695,10 @@ END
 
 TOOLTIP:GameSpeed
 "La vitesse de l'escarmouche : 1.0x est le jeu d'origine et la vitesse des parties en LAN, classées et contre l'IA, 1.5x celle des salons en ligne. Seul le rythme change."
+END
+
+TOOLTIP:RoomGameSpeed
+"La vitesse de la partie, choisie par l'hôte. 1.0x est le jeu d'origine et la vitesse de départ d'un salon LAN, 1.5x celle d'un salon en ligne. Seul le rythme change ; les parties classées se jouent toujours en 1.0x."
 END
 
 GUI:GameSpeedMissions

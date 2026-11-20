@@ -1398,6 +1398,14 @@ TOOLTIP:Superweapons
 "How many superweapons a player may have standing. Allow: as many as he can pay for. Limit: one, and four for the USA Superweapon General. No: none at all, except the Superweapon General, who keeps one. He is the exception because his superweapons are what he pays for a weaker army with. Under No anyone, computer players too, may still put up one Nuclear Missile silo to buy China's upgrades in. It has no missile: no launch button, no countdown, no announcement."
 END
 
+GUI:StartShrouded
+"Hidden Map"
+END
+
+TOOLTIP:StartShrouded
+"The map starts black for every player. Ground your side has not seen stays black until one of your units gets there, and the load screen does not give the start spots away. Off, everyone starts with the whole map in view under the fog, the way multiplayer has always played."
+END
+
 GUI:UnitLimit
 "Unit Limit"
 END
@@ -1472,6 +1480,10 @@ END
 
 TOOLTIP:GameSpeed
 "How fast the skirmish runs. 1.0x is the original game and the speed of LAN, ranked and Play vs AI matches, 1.5x the speed of online rooms. Only the pace changes."
+END
+
+TOOLTIP:RoomGameSpeed
+"How fast the match runs, picked by the host. 1.0x is the original game and where a LAN room starts, 1.5x where an online room starts. Only the pace changes; ranked matches always play 1.0x."
 END
 
 GUI:GameSpeedMissions
@@ -6645,4 +6657,380 @@ END
 
 GUI:SaveFromOtherLogicRate
 "This save was made by a version of Reforged whose game logic ran %d times a second. This version runs it %d times a second, so the save cannot be loaded. That version's \"Mission Start\" saves still load and carry the campaign on from that mission's beginning."
+END
+
+SCIENCE:TurkiyeTalent6AShort
+"Buildings 15 percent cheaper"
+END
+
+SCIENCE:TurkiyeTalent6BShort
+"Soldiers 15 percent cheaper"
+END
+
+SCIENCE:TurkiyeTalent7AShort
+"Altay Tanks tougher"
+END
+
+SCIENCE:TurkiyeTalent7BShort
+"UAVs see further"
+END
+
+SCIENCE:TurkiyeTalent8AShort
+"Siper Bunkers tougher"
+END
+
+SCIENCE:TurkiyeTalent8BShort
+"Sungur Gunners tougher"
+END
+
+SCIENCE:TurkiyeTalent9AShort
+"2 more drones in the swarm"
+END
+
+SCIENCE:TurkiyeTalent9BShort
+"4 more soldiers drop"
+END
+
+SCIENCE:TurkiyeTalent10AShort
+"Tayfun hits a wider area"
+END
+
+SCIENCE:TurkiyeTalent10BShort
+"Berets start veteran"
+END
+
+SCIENCE:ChinaTalent6AShort
+"Hackers 40 percent cheaper"
+END
+
+SCIENCE:ChinaTalent6BShort
+"Soldiers 20 percent cheaper"
+END
+
+SCIENCE:ChinaTalent7AShort
+"Battlemasters tougher"
+END
+
+SCIENCE:ChinaTalent7BShort
+"Gattling Tanks tougher"
+END
+
+SCIENCE:ChinaTalent8AShort
+"Bunkers, Cannons tougher"
+END
+
+SCIENCE:ChinaTalent8BShort
+"Infernos tougher and faster"
+END
+
+SCIENCE:ChinaTalent9AShort
+"One more wave of shells"
+END
+
+SCIENCE:ChinaTalent9BShort
+"Mines cover more ground"
+END
+
+SCIENCE:ChinaTalent10AShort
+"Overlords start veteran"
+END
+
+SCIENCE:ChinaTalent10BShort
+"EMP lasts 45 seconds"
+END
+
+SCIENCE:TankTalent7AShort
+"Emperors tougher"
+END
+
+SCIENCE:TankTalent7BShort
+"Dragons, Gattlings tougher"
+END
+
+SCIENCE:TankTalent8AShort
+"Tanks repair out of combat"
+END
+
+SCIENCE:TankTalent8BShort
+"Battlemasters tougher"
+END
+
+SCIENCE:TankTalent10AShort
+"Emperors start elite"
+END
+
+SCIENCE:TankTalent10BShort
+"2 more tanks drop"
+END
+
+SCIENCE:InfantryTalent7AShort
+"Minigunners run faster"
+END
+
+SCIENCE:InfantryTalent7BShort
+"Tank Hunters tougher"
+END
+
+SCIENCE:InfantryTalent8AShort
+"Fortified Bunkers tougher"
+END
+
+SCIENCE:InfantryTalent8BShort
+"Crawlers tougher and faster"
+END
+
+SCIENCE:InfantryTalent10AShort
+"Soldiers heal out of combat"
+END
+
+SCIENCE:InfantryTalent10BShort
+"5 more Minigunners drop"
+END
+
+SCIENCE:NukeTalent7AShort
+"Overlords tougher"
+END
+
+SCIENCE:NukeTalent7BShort
+"Nuke Cannons tougher"
+END
+
+SCIENCE:NukeTalent8AShort
+"Reactors, Bunkers tougher"
+END
+
+SCIENCE:NukeTalent8BShort
+"MiGs tougher"
+END
+
+SCIENCE:NukeTalent10AShort
+"Nuke Cannons start elite"
+END
+
+SCIENCE:NukeTalent10BShort
+"Overlords self-repair"
+END
+
+SCIENCE:AmericaTalent6AShort
+"Vehicles and aircraft cheaper"
+END
+
+SCIENCE:AmericaTalent6BShort
+"Units rank up faster"
+END
+
+SCIENCE:AmericaTalent9AShort
+"One more A-10"
+END
+
+SCIENCE:AmericaTalent9BShort
+"4 more Rangers drop"
+END
+
+SCIENCE:USATalent7AShort
+"Crusaders, Paladins tougher"
+END
+
+SCIENCE:USATalent7BShort
+"Rangers tougher"
+END
+
+SCIENCE:USATalent8AShort
+"Patriots, Fire Bases tougher"
+END
+
+SCIENCE:USATalent8BShort
+"Comanches, Raptors tougher"
+END
+
+SCIENCE:USATalent10AShort
+"Big bombs hit wider"
+END
+
+SCIENCE:USATalent10BShort
+"Vehicles repair out of combat"
+END
+
+SCIENCE:SuperweaponTalent7AShort
+"Aurora Alphas tougher"
+END
+
+SCIENCE:SuperweaponTalent7BShort
+"Humvees, Avengers tougher"
+END
+
+SCIENCE:SuperweaponTalent8AShort
+"EMP Patriots tougher"
+END
+
+SCIENCE:SuperweaponTalent8BShort
+"Tomahawks tougher, faster"
+END
+
+SCIENCE:SuperweaponTalent10AShort
+"Superweapons a quarter off"
+END
+
+SCIENCE:SuperweaponTalent10BShort
+"Defences repair faster"
+END
+
+SCIENCE:LaserTalent7AShort
+"Laser Tanks tougher"
+END
+
+SCIENCE:LaserTalent7BShort
+"Avengers tougher"
+END
+
+SCIENCE:LaserTalent8AShort
+"Laser Turrets tougher"
+END
+
+SCIENCE:LaserTalent8BShort
+"Laser Tanks drive faster"
+END
+
+SCIENCE:LaserTalent10AShort
+"Laser Tanks start veteran"
+END
+
+SCIENCE:LaserTalent10BShort
+"Defences 30 percent cheaper"
+END
+
+SCIENCE:AirForceTalent7AShort
+"Comanches tougher"
+END
+
+SCIENCE:AirForceTalent7BShort
+"King Raptors tougher"
+END
+
+SCIENCE:AirForceTalent8AShort
+"Airfields, Patriots tougher"
+END
+
+SCIENCE:AirForceTalent8BShort
+"Chinooks tougher and faster"
+END
+
+SCIENCE:AirForceTalent10AShort
+"King Raptors start veteran"
+END
+
+SCIENCE:AirForceTalent10BShort
+"Aircraft always self-repair"
+END
+
+SCIENCE:GLATalent6AShort
+"Buildings 20 percent cheaper"
+END
+
+SCIENCE:GLATalent6BShort
+"Infantry run faster"
+END
+
+SCIENCE:GLATalent7AShort
+"Technicals, Buggies faster"
+END
+
+SCIENCE:GLATalent7BShort
+"RPG Troopers tougher"
+END
+
+SCIENCE:GLATalent8AShort
+"Stinger Sites tougher"
+END
+
+SCIENCE:GLATalent8BShort
+"Tougher Scorpion, Marauder"
+END
+
+SCIENCE:GLATalent9AShort
+"4 more Rebels ambush"
+END
+
+SCIENCE:GLATalent9BShort
+"Anthrax Bomb hits wider"
+END
+
+SCIENCE:GLATalent10AShort
+"Scud Storm hits wider"
+END
+
+SCIENCE:GLATalent10BShort
+"Marauders start veteran"
+END
+
+SCIENCE:ToxinTalent7AShort
+"Tractors tougher and faster"
+END
+
+SCIENCE:ToxinTalent7BShort
+"Marauders tougher"
+END
+
+SCIENCE:ToxinTalent8AShort
+"Tunnels tougher"
+END
+
+SCIENCE:ToxinTalent8BShort
+"Launchers tougher, faster"
+END
+
+SCIENCE:ToxinTalent10AShort
+"Scud poison lasts longer"
+END
+
+SCIENCE:ToxinTalent10BShort
+"Tractors start veteran"
+END
+
+SCIENCE:DemolitionTalent7AShort
+"Combat Cycles tougher"
+END
+
+SCIENCE:DemolitionTalent7BShort
+"Bomb Trucks tougher, faster"
+END
+
+SCIENCE:DemolitionTalent8AShort
+"Demo Traps half price"
+END
+
+SCIENCE:DemolitionTalent8BShort
+"Rocket Buggies tougher"
+END
+
+SCIENCE:DemolitionTalent10AShort
+"Scud missiles hit harder"
+END
+
+SCIENCE:DemolitionTalent10BShort
+"Scud Launchers start veteran"
+END
+
+SCIENCE:StealthTalent7AShort
+"Jarmen Kell tougher"
+END
+
+SCIENCE:StealthTalent7BShort
+"Technicals, Buggies tougher"
+END
+
+SCIENCE:StealthTalent8AShort
+"Tunnels, Stingers tougher"
+END
+
+SCIENCE:StealthTalent8BShort
+"Bomb Trucks tougher, faster"
+END
+
+SCIENCE:StealthTalent10AShort
+"Technicals, Buggies hide"
+END
+
+SCIENCE:StealthTalent10BShort
+"Scrambler hides a wider area"
 END

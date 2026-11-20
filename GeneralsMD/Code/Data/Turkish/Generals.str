@@ -15849,6 +15849,14 @@ GUI:SuperweaponsNone
 "Süper Silah Yok"
 END
 
+GUI:StartShrouded
+"Gizli Harita"
+END
+
+TOOLTIP:StartShrouded
+"Harita her oyuncu için kapkara başlar. Tarafınızın görmediği yerler birlikleriniz oraya varana kadar kara kalır, yükleme ekranı da başlangıç noktalarını göstermez. Kapalıyken herkes haritanın tamamını sisin altında görerek başlar, çok oyunculu oyun hep böyle oynandı."
+END
+
 GUI:UnitLimit
 "Birlik Sınırı"
 END
@@ -15919,6 +15927,10 @@ END
 
 TOOLTIP:GameSpeed
 "Çatışma ne kadar hızlı oynansın. 1.0x orijinal oyun, LAN, dereceli ve YZ'ye karşı maçların hızı; 1.5x de online odaların hızı. Tempodan başka hiçbir şey değişmez."
+END
+
+TOOLTIP:RoomGameSpeed
+"Maç ne kadar hızlı oynansın, odayı kuran seçer. 1.0x orijinal oyun ve LAN odasının başladığı hız, 1.5x online odanın başladığı hız. Tempodan başka hiçbir şey değişmez; dereceli maçlar hep 1.0x oynanır."
 END
 
 GUI:GameSpeedMissions
@@ -20836,4 +20848,380 @@ END
 
 GUI:SaveFromOtherLogicRate
 "Bu kayıt, oyun mantığını saniyede %d kez çalıştıran bir Reforged sürümüyle yapılmış. Bu sürüm saniyede %d kez çalıştırıyor, o yüzden kayıt yüklenemez. O sürümün \"Görev Başlangıcı\" kayıtları yine yüklenir ve kampanyayı o görevin başından sürdürür."
+END
+
+SCIENCE:TurkiyeTalent6AShort
+"Binalar yüzde 15 ucuz"
+END
+
+SCIENCE:TurkiyeTalent6BShort
+"Askerler yüzde 15 ucuz"
+END
+
+SCIENCE:TurkiyeTalent7AShort
+"Altay tankları daha sağlam"
+END
+
+SCIENCE:TurkiyeTalent7BShort
+"İHA'lar daha uzağı görür"
+END
+
+SCIENCE:TurkiyeTalent8AShort
+"Siperler daha sağlam"
+END
+
+SCIENCE:TurkiyeTalent8BShort
+"Sungur'lar daha sağlam"
+END
+
+SCIENCE:TurkiyeTalent9AShort
+"Sürüye 2 drone daha"
+END
+
+SCIENCE:TurkiyeTalent9BShort
+"4 asker fazla iner"
+END
+
+SCIENCE:TurkiyeTalent10AShort
+"Tayfun daha geniş vurur"
+END
+
+SCIENCE:TurkiyeTalent10BShort
+"Bereliler tecrübeli çıkar"
+END
+
+SCIENCE:ChinaTalent6AShort
+"Hackerlar yüzde 40 ucuz"
+END
+
+SCIENCE:ChinaTalent6BShort
+"Askerler yüzde 20 ucuz"
+END
+
+SCIENCE:ChinaTalent7AShort
+"Battlemaster'lar daha sağlam"
+END
+
+SCIENCE:ChinaTalent7BShort
+"Gatling Tankları daha sağlam"
+END
+
+SCIENCE:ChinaTalent8AShort
+"Sığınak ve top sağlam"
+END
+
+SCIENCE:ChinaTalent8BShort
+"Toplar sağlam, hızlı"
+END
+
+SCIENCE:ChinaTalent9AShort
+"Bir dalga mermi daha"
+END
+
+SCIENCE:ChinaTalent9BShort
+"Mayınlar daha geniş alana"
+END
+
+SCIENCE:ChinaTalent10AShort
+"Overlordlar tecrübeli çıkar"
+END
+
+SCIENCE:ChinaTalent10BShort
+"EMP 45 saniye sürer"
+END
+
+SCIENCE:TankTalent7AShort
+"Emperorlar daha sağlam"
+END
+
+SCIENCE:TankTalent7BShort
+"Ejder ve Gatling daha sağlam"
+END
+
+SCIENCE:TankTalent8AShort
+"Tank hasar almazsa onarılır"
+END
+
+SCIENCE:TankTalent8BShort
+"Battlemaster'lar daha sağlam"
+END
+
+SCIENCE:TankTalent10AShort
+"Emperorlar seçkin çıkar"
+END
+
+SCIENCE:TankTalent10BShort
+"2 tank fazla iner"
+END
+
+SCIENCE:InfantryTalent7AShort
+"Minigun Erleri hızlı koşar"
+END
+
+SCIENCE:InfantryTalent7BShort
+"Tank Avcıları daha sağlam"
+END
+
+SCIENCE:InfantryTalent8AShort
+"Sığınaklar daha sağlam"
+END
+
+SCIENCE:InfantryTalent8BShort
+"Taşıyıcılar sağlam, hızlı"
+END
+
+SCIENCE:InfantryTalent10AShort
+"Asker hasar almazsa iyileşir"
+END
+
+SCIENCE:InfantryTalent10BShort
+"5 Minigun Eri fazla iner"
+END
+
+SCIENCE:NukeTalent7AShort
+"Overlordlar daha sağlam"
+END
+
+SCIENCE:NukeTalent7BShort
+"Nükleer Toplar daha sağlam"
+END
+
+SCIENCE:NukeTalent8AShort
+"Reaktör ve sığınak sağlam"
+END
+
+SCIENCE:NukeTalent8BShort
+"MiG'ler daha sağlam"
+END
+
+SCIENCE:NukeTalent10AShort
+"Nükleer Toplar seçkin çıkar"
+END
+
+SCIENCE:NukeTalent10BShort
+"Overlord kendini onarır"
+END
+
+SCIENCE:AmericaTalent6AShort
+"Araç ve uçaklar ucuz"
+END
+
+SCIENCE:AmericaTalent6BShort
+"Daha hızlı tecrübe"
+END
+
+SCIENCE:AmericaTalent9AShort
+"Bir A-10 fazla"
+END
+
+SCIENCE:AmericaTalent9BShort
+"4 Ranger fazla iner"
+END
+
+SCIENCE:USATalent7AShort
+"Crusader, Paladin sağlam"
+END
+
+SCIENCE:USATalent7BShort
+"Ranger'lar daha sağlam"
+END
+
+SCIENCE:USATalent8AShort
+"Patriot, Ateş Üssü sağlam"
+END
+
+SCIENCE:USATalent8BShort
+"Comanche, Raptor sağlam"
+END
+
+SCIENCE:USATalent10AShort
+"Büyük bombalar geniş vurur"
+END
+
+SCIENCE:USATalent10BShort
+"Araç hasar almazsa onarılır"
+END
+
+SCIENCE:SuperweaponTalent7AShort
+"Aurora Alpha daha sağlam"
+END
+
+SCIENCE:SuperweaponTalent7BShort
+"Humvee, Avenger sağlam"
+END
+
+SCIENCE:SuperweaponTalent8AShort
+"EMP Patriot'lar sağlam"
+END
+
+SCIENCE:SuperweaponTalent8BShort
+"Tomahawk'lar sağlam, hızlı"
+END
+
+SCIENCE:SuperweaponTalent10AShort
+"Süper silahlar yüzde 25 ucuz"
+END
+
+SCIENCE:SuperweaponTalent10BShort
+"Savunmalar hızlı onarılır"
+END
+
+SCIENCE:LaserTalent7AShort
+"Lazer Tankları sağlam"
+END
+
+SCIENCE:LaserTalent7BShort
+"Avenger'lar daha sağlam"
+END
+
+SCIENCE:LaserTalent8AShort
+"Lazer Kuleleri sağlam"
+END
+
+SCIENCE:LaserTalent8BShort
+"Lazer Tankları hızlı gider"
+END
+
+SCIENCE:LaserTalent10AShort
+"Lazer Tankı tecrübeli çıkar"
+END
+
+SCIENCE:LaserTalent10BShort
+"Savunma yüzde 30 ucuz"
+END
+
+SCIENCE:AirForceTalent7AShort
+"Comanche'lar daha sağlam"
+END
+
+SCIENCE:AirForceTalent7BShort
+"King Raptor'lar sağlam"
+END
+
+SCIENCE:AirForceTalent8AShort
+"Hava Üssü, Patriot sağlam"
+END
+
+SCIENCE:AirForceTalent8BShort
+"Chinook'lar sağlam, hızlı"
+END
+
+SCIENCE:AirForceTalent10AShort
+"King Raptor tecrübeli çıkar"
+END
+
+SCIENCE:AirForceTalent10BShort
+"Uçaklar hep kendini onarır"
+END
+
+SCIENCE:GLATalent6AShort
+"Binalar yüzde 20 ucuz"
+END
+
+SCIENCE:GLATalent6BShort
+"Piyade daha hızlı koşar"
+END
+
+SCIENCE:GLATalent7AShort
+"Pikap ve Cipler hızlı"
+END
+
+SCIENCE:GLATalent7BShort
+"RPG Askerleri sağlam"
+END
+
+SCIENCE:GLATalent8AShort
+"Stinger Mevzileri sağlam"
+END
+
+SCIENCE:GLATalent8BShort
+"Scorpion, Marauder sağlam"
+END
+
+SCIENCE:GLATalent9AShort
+"Pusuya 4 Asi fazla"
+END
+
+SCIENCE:GLATalent9BShort
+"Şarbon daha geniş vurur"
+END
+
+SCIENCE:GLATalent10AShort
+"SCUD Fırtınası geniş vurur"
+END
+
+SCIENCE:GLATalent10BShort
+"Marauder'lar tecrübeli çıkar"
+END
+
+SCIENCE:ToxinTalent7AShort
+"Traktörler sağlam, hızlı"
+END
+
+SCIENCE:ToxinTalent7BShort
+"Marauder'lar daha sağlam"
+END
+
+SCIENCE:ToxinTalent8AShort
+"Tüneller daha sağlam"
+END
+
+SCIENCE:ToxinTalent8BShort
+"SCUD Rampası sağlam, hızlı"
+END
+
+SCIENCE:ToxinTalent10AShort
+"SCUD zehri uzun kalır"
+END
+
+SCIENCE:ToxinTalent10BShort
+"Traktörler tecrübeli çıkar"
+END
+
+SCIENCE:DemolitionTalent7AShort
+"Savaş Motorları sağlam"
+END
+
+SCIENCE:DemolitionTalent7BShort
+"Kamyonlar sağlam, hızlı"
+END
+
+SCIENCE:DemolitionTalent8AShort
+"Tuzaklar yarı fiyatına"
+END
+
+SCIENCE:DemolitionTalent8BShort
+"Roketli Cipler sağlam"
+END
+
+SCIENCE:DemolitionTalent10AShort
+"SCUD füzeleri sert vurur"
+END
+
+SCIENCE:DemolitionTalent10BShort
+"Rampalar tecrübeli çıkar"
+END
+
+SCIENCE:StealthTalent7AShort
+"Jarmen Kell daha sağlam"
+END
+
+SCIENCE:StealthTalent7BShort
+"Pikap ve Cipler sağlam"
+END
+
+SCIENCE:StealthTalent8AShort
+"Tünel ve Stinger sağlam"
+END
+
+SCIENCE:StealthTalent8BShort
+"Kamyonlar sağlam, hızlı"
+END
+
+SCIENCE:StealthTalent10AShort
+"Pikap ve Cipler gizlenir"
+END
+
+SCIENCE:StealthTalent10BShort
+"Karıştırıcı geniş saklar"
 END

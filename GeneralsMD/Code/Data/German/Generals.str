@@ -14893,6 +14893,14 @@ GUI:SuperweaponsNone
 "Keine Superwaffen"
 END
 
+GUI:StartShrouded
+"Verdeckte Karte"
+END
+
+TOOLTIP:StartShrouded
+"Die Karte beginnt für jeden Spieler schwarz. Was deine Seite noch nicht gesehen hat, bleibt schwarz, bis eine deiner Einheiten dort ist, und der Ladebildschirm verrät die Startpunkte nicht. Aus beginnt jeder mit der ganzen Karte unter dem Nebel, wie es im Mehrspieler immer war."
+END
+
 GUI:UnitLimit
 "Einheitenlimit"
 END
@@ -14963,6 +14971,10 @@ END
 
 TOOLTIP:GameSpeed
 "Wie schnell das Gefecht läuft. 1.0x ist das Originalspiel und das Tempo von LAN-, Ranglisten- und KI-Spielen, 1.5x das der Online-Räume. Nur das Tempo ändert sich."
+END
+
+TOOLTIP:RoomGameSpeed
+"Wie schnell das Spiel läuft, vom Gastgeber gewählt. 1.0x ist das Originalspiel und das Starttempo eines LAN-Raums, 1.5x das eines Online-Raums. Nur das Tempo ändert sich; Ranglistenspiele laufen immer mit 1.0x."
 END
 
 GUI:GameSpeedMissions

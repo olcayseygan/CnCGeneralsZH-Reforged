@@ -1,5 +1,7 @@
 #include "test_harness.h"
 #include "Platform/ModernWaterConfig.h"
+#include "Platform/ModernWaterMaterial.h"
+#include "Platform/WaterSurfaceModel.h"
 
 #include <fstream>
 #include <iterator>
@@ -196,4 +198,67 @@ TEST(modern_water_normalized_byte_colors_round_trip_exactly)
     CHECK(ByteColor(-1, 2, .5f) == (Color{0, 255, 128}));
     CHECK_EQ(ColorByte(std::numeric_limits<float>::quiet_NaN()), 0);
     CHECK_EQ(ColorByte(std::numeric_limits<float>::infinity()), 0);
+}
+
+TEST(modern_water_surface_controls_are_optional_independent_and_transactional)
+{
+    Rules rules;
+    std::string error;
+    CHECK(Parse(Changed(" Bubbles = Yes", " Bubbles = Yes\n Turbidity = 0.7\n SurfaceRoughness = 0.65\n RippleDamping = 0.75\n WindResistance = 0.6"), rules, error));
+    Material material = Resolve(rules, Color{50, 75, 50}, "TSWater03.tga");
+    CHECK_NEAR(material.turbidity, .7f, .00001f);
+    CHECK_NEAR(material.surfaceRoughness, .65f, .00001f);
+    CHECK_NEAR(material.rippleDamping, .75f, .00001f);
+    CHECK_NEAR(material.windResistance, .6f, .00001f);
+    CHECK_NEAR(material.pollution, .8f, .00001f);
+    CHECK(material.bubbles);
+    material = Resolve(rules, Color{50, 75, 50}, "Other.tga");
+    CHECK_EQ(material.turbidity, 0.0f);
+    CHECK_EQ(material.surfaceRoughness, 0.0f);
+    CHECK_EQ(material.rippleDamping, 0.0f);
+    CHECK_EQ(material.windResistance, 0.0f);
+    for (const char *field : {"Turbidity", "SurfaceRoughness", "RippleDamping", "WindResistance"}) {
+        for (const char *endpoint : {"0", "1"})
+            CHECK(Parse(Changed(" Bubbles = Yes", std::string(" ") + field + " = " + endpoint), rules, error));
+        for (const char *invalid : {"-0.01", "1.01", "nan", "inf", "0.5junk", "0.5\n "}) {
+            rules = Defaults();
+            std::string assignment = std::string(" ") + field + " = " + invalid;
+            if (std::string(invalid) == "0.5\n ") assignment += std::string(field) + " = 0.4";
+            CHECK(!Parse(Changed(" Bubbles = Yes", assignment), rules, error));
+            CHECK(error.find("line ") == 0);
+            CheckDefaults(rules);
+        }
+    }
+}
+
+TEST(modern_water_wind_response_is_neutral_finite_and_physical)
+{
+    const auto rules=Defaults();
+    for(const auto &material : {Resolve(rules,Color{50,75,50},"TSWater03.tga"),
+        Resolve(rules,Color{255,255,255},"TWWater01.tga")}) {
+        CHECK(material.turbidity==0 && material.surfaceRoughness==0 && material.rippleDamping==0 && material.windResistance==0);
+    }
+    CHECK(ModernWaterMaterial::WindGain(0)==1 && ModernWaterMaterial::WindGain(1)==0);
+    CHECK_NEAR(ModernWaterMaterial::WindGain(.5f),.25f,.000001f);
+    CHECK_NEAR(ModernWaterMaterial::WindGain(.8f),.04f,.000001f);
+    CHECK(ModernWaterMaterial::WindGain(std::numeric_limits<float>::quiet_NaN())==1);
+    CHECK(ModernWaterMaterial::WindGain(-1)==1 && ModernWaterMaterial::WindGain(2)==0);
+}
+
+TEST(modern_water_resisted_analytic_mesh_keeps_height_and_slopes_consistent)
+{
+    for(float resistance:{0.0f,.5f,.8f,1.0f})for(int i=0;i<100;++i) {
+        const float x=i*1.73f,y=i*-.67f,t=i*.3f,gain=ModernWaterMaterial::WindGain(resistance);
+        const WaterSurfaceModel::Sample offshore={.6f,.0003f,-.0002f};
+        const auto original=WaterSurfaceModel::EvaluateBlended(x,y,t,offshore);
+        auto resisted=original;ModernWaterMaterial::ApplyWindGain(resisted,gain);
+        CHECK_NEAR(resisted.height,WaterSurfaceModel::EvaluateBlendedHeight(x,y,t,offshore)*gain,.00001f);
+        const float epsilon=.01f;
+        auto height=[&](float px,float py){const WaterSurfaceModel::Sample local={offshore.height+(px-x)*offshore.dx+(py-y)*offshore.dy,offshore.dx,offshore.dy};
+            return WaterSurfaceModel::EvaluateBlendedHeight(px,py,t,local)*gain;};
+        CHECK_NEAR(resisted.dx,(height(x+epsilon,y)-height(x-epsilon,y))/(2*epsilon),.0004f);
+        CHECK_NEAR(resisted.dy,(height(x,y+epsilon)-height(x,y-epsilon))/(2*epsilon),.0004f);
+        if(resistance==0)CHECK(resisted.height==original.height && resisted.dx==original.dx && resisted.dy==original.dy);
+        if(resistance==1)CHECK(resisted.height==0 && resisted.dx==0 && resisted.dy==0);
+    }
 }

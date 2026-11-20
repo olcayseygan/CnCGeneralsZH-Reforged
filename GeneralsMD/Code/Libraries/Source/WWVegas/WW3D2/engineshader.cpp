@@ -936,9 +936,10 @@ float4 waterMirrorFiltered(float2 uv, int2 size)
 	hlsl += WaterOpticalModel::GetHlslSource();
 	if (sdl) hlsl += WaterOpticalModel::GetClarityHlslSource();
 	hlsl += ModernWaterMaterial::OpticalSource();
+	if (sdl) hlsl += ModernWaterMaterial::SurfaceSource();
 	hlsl += ModernWaterMaterial::BubbleSource();
 	hlsl += WaterHullModel::GetHlslSource();
-	hlsl += WaterFftSampling::PixelSource(WaterFftSpectrum::ForResolution(quality.activeFftResolution),waveHeading);
+	hlsl += WaterFftSampling::PixelSource(WaterFftSpectrum::ForResolution(quality.activeFftResolution),waveHeading,sdl);
 	hlsl += WaterWaveCageShader::Source(false);
 	char oceanBound[96];
 	snprintf(oceanBound, sizeof(oceanBound), "static const float oceanDisplacementBound = %.9g;\n",
@@ -1652,6 +1653,19 @@ float4 main(Input input) : SV_Target
 	} else {
 		hlsl += "    float4 edge = Texture3.Sample(Sampler3, input.TexCoord3);\n";
 		hlsl += "    current = float4(saturate(surface) * edge.rgb, saturate(depth * 2.0) * lerp(input.Diffuse.a * base.a, step(0.001, input.Diffuse.a * base.a), " + std::string(sdl ? "WATER_REFRACTION_QUALITY == 2 ? 1.0 : SceneParameters.x" : "SceneParameters.x") + "));\n";
+	}
+
+	// A ModernWater rule's turbidity, roughness, ripple damping and wind resistance (MaterialSurface,
+	// c189), the SDL text only; all four at zero leave the picture as it was.
+	if (sdl) {
+		const auto replace=[&](const std::string &from,const std::string &to) {for(size_t at=hlsl.find(from);at!=std::string::npos;at=hlsl.find(from,at+to.size()))hlsl.replace(at,from.size(),to);};
+		replace("    float offshore = opticalContext.r","    float materialWindGain=modernWaterWindGain(MaterialSurface.w);\n    float offshore = opticalContext.r");
+		replace("    float3 oceanWave = oceanSurface.xyz;","    float3 oceanWave = oceanSurface.xyz;\n    legacyWave*=materialWindGain;\n    oceanWave*=materialWindGain;\n    oceanSwell.xyz*=materialWindGain;\n    shoreRippleSlope*=materialWindGain;");
+		replace("    float3 waveLightingNormal = resolvedNormal;","    normal=modernWaterDampedNormal(normal,MaterialSurface.z);\n    resolvedNormal=modernWaterDampedNormal(resolvedNormal,MaterialSurface.z);\n    shoreRipple*=lerp(1.0,0.12,saturate(MaterialSurface.z));\n    float3 waveLightingNormal = resolvedNormal;");
+		replace("    float a2 = pow(roughness, 4.0);","    roughness=modernWaterSurfaceRoughness(roughness,MaterialSurface.y);\n    float a2 = pow(roughness, 4.0);");
+		replace("normalize(float3(-swellSlope,1)),offshore)","modernWaterDampedNormal(normalize(float3(-swellSlope,1)),MaterialSurface.z),offshore)");
+		replace("    reflection = lerp(reflection, waterLinear(ssr.colour), ssrWeight);","    reflection = lerp(reflection, waterLinear(ssr.colour), ssrWeight);\n    reflection=lerp(reflection,skyRadiance,saturate(MaterialSurface.y)*0.65);");
+		replace("    float3 body=WaterOpticalBody(scene,transmission,scatter,caustic,SceneParameters.x);","    caustic=lerp(1.0,caustic,materialWindGain);\n    transmission=modernWaterTurbidTransmission(transmission,MaterialSurface.x,length(bottom-opticalWorld));\n    float3 body=WaterOpticalBody(scene,transmission,scatter,caustic,SceneParameters.x);");
 	}
 }
 

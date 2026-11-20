@@ -20,6 +20,7 @@ struct Rule {
     Color replacement = {255, 255, 255};
     float brightness = 1.0f;
     float pollution = 0.0f;
+    float turbidity = 0.0f, surfaceRoughness = 0.0f, rippleDamping = 0.0f, windResistance = 0.0f;
     bool bubbles = false;
     bool enabled = true;
 };
@@ -121,6 +122,7 @@ struct Material {
     Color color = {255, 255, 255};
     float brightness = 1.0f;
     float pollution = 0.0f;
+    float turbidity = 0.0f, surfaceRoughness = 0.0f, rippleDamping = 0.0f, windResistance = 0.0f;
     float tintAmount = 0.0f;
     bool bubbles = false;
     std::string ruleName;
@@ -137,6 +139,10 @@ inline Material Resolve(const Rules &rules, Color mapColor, const std::string &m
         material.color = rule->replacement;
         material.brightness = rule->brightness;
         material.pollution = rule->pollution;
+        material.turbidity = rule->turbidity;
+        material.surfaceRoughness = rule->surfaceRoughness;
+        material.rippleDamping = rule->rippleDamping;
+        material.windResistance = rule->windResistance;
         material.tintAmount = 1.0f;
         material.bubbles = rule->bubbles;
         material.ruleName = rule->name;
@@ -151,7 +157,7 @@ inline Material Resolve(const Rules &rules, Color mapColor, const std::string &m
 inline bool Parse(const std::string &text, Rules &result, std::string &error) {
     enum Section { Outside, InRule, InColors, InTextures } section = Outside;
     enum Field { Colors = 1, Textures = 2, Replacement = 4, Brightness = 8,
-                 Pollution = 16, Bubbles = 32, Enabled = 64 };
+                 Pollution = 16, Bubbles = 32, Enabled = 64, Turbidity = 128, Roughness = 256, Ripple = 512, Wind = 1024 };
     Rules parsed;
     Rule current;
     unsigned fields = 0;
@@ -223,6 +229,10 @@ inline bool Parse(const std::string &text, Rules &result, std::string &error) {
             if (key == "replacementcolor") { field = Replacement; valid = Detail::ReadColor(value, current.replacement); }
             else if (key == "brightness") { field = Brightness; valid = Detail::ReadUnit(value, 0.1f, current.brightness); }
             else if (key == "pollution") { field = Pollution; valid = Detail::ReadUnit(value, 0.0f, current.pollution); }
+            else if (key == "turbidity") { field = Turbidity; valid = Detail::ReadUnit(value, 0.0f, current.turbidity); }
+            else if (key == "surfaceroughness") { field = Roughness; valid = Detail::ReadUnit(value, 0.0f, current.surfaceRoughness); }
+            else if (key == "rippledamping") { field = Ripple; valid = Detail::ReadUnit(value, 0.0f, current.rippleDamping); }
+            else if (key == "windresistance") { field = Wind; valid = Detail::ReadUnit(value, 0.0f, current.windResistance); }
             else if (key == "bubbles") { field = Bubbles; valid = Detail::ReadBool(value, current.bubbles); }
             else if (key == "enabled") { field = Enabled; valid = Detail::ReadBool(value, current.enabled); }
             else return Detail::Fail(error, lineNumber, "unknown field '" + key + "'");

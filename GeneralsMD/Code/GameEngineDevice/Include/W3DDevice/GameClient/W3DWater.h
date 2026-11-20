@@ -360,6 +360,7 @@ protected:
 	};
 	std::vector<ModernOpticalTexture> m_modernOpticalTextures;
 	Bool m_modernHeadingEnabled = FALSE;
+	Real m_modernWindGain = 1.0f;		///< a ModernWater rule's WindResistance as a wave height gain (SDL only)
 	std::vector<WaterOpticalContext::Polygon> m_modernOpticalPolygons;
 	Bool m_modernOpticalPolygonsValid = FALSE;
 	IDirect3DPixelShader9 *	m_waterPixelShader;		///<D3D pixel shader.

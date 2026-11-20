@@ -3252,7 +3252,10 @@ void WaterRenderObjClass::Render(RenderInfoClass & rinfo)
 	unsigned oldModernCoordIndex=0,oldModernTransformFlags=0;
 	unsigned oldModernBaseCoordIndex=0,oldModernBaseTransformFlags=0;
 	Bool oldModernStagesKnown=FALSE;
-	IDirect3DBaseTexture9 *oldModernBed=NULL,*oldModernOptical=NULL,*oldModernFoam=NULL,*oldModernHeading=NULL;
+	IDirect3DBaseTexture9 *oldModernBed=NULL,*oldModernOptical=NULL,*oldModernFoam=NULL;
+#if defined(__linux__)
+	IDirect3DBaseTexture9 *oldModernHeading=NULL;
+#endif
 	if (m_useModernWater) {
 		// The wrapper's own record: under Direct3D 11 the Direct3D 9 device is behind it (Defer_D3D9_State).
 		// Stage 14 is past the wrapper's stages and is set on the device at once.

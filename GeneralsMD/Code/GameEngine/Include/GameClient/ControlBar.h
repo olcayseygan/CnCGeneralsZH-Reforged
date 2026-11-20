@@ -1062,8 +1062,8 @@ public:
 	void showSpecialPowerShortcutInstantly( Player *player );
 
 	void drawSpecialPowerShortcutMultiplierText();
-	/// `win`'s count badge for `command`'s power: the local player's buildings carrying it, "ready/owned" while some charge
-	void setShortcutCountBadge( GameWindow *win, const CommandButton *command ) const;
+	/// `win`'s gold number: how many of `command`'s superweapons are ready, from two up, as retail showed it
+	void setShortcutReadyCount( GameWindow *win, const CommandButton *command ) const;
 	/// the sidebar's General key, shown only while there are points or a talent to spend (ControlBarSidebarLayout.cpp)
 	void updateSidebarGeneralKey( void );
 

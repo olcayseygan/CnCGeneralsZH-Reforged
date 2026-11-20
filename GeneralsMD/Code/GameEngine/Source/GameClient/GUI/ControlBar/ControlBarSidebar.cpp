@@ -2166,6 +2166,8 @@ void Sidebar_update( void )
 			GadgetButtonSetEnabledImage( win, entry.button->getButtonImage() );
 			GadgetButtonSetData( win, (void *)entry.button );
 			fitCameo( i, entry.button->getButtonImage() );
+			// a power's gold ready number goes with the power
+			GadgetButtonSetText( win, UnicodeString() );
 		}
 		win->winClearStatus( WIN_STATUS_CANCEL_WHEN_DISABLED );
 		if( isPower( entry ) )
@@ -2176,8 +2178,9 @@ void Sidebar_update( void )
 			const Bool selectAll = entry.button->getCommandType() == GUI_COMMAND_SELECT_ALL_UNITS_OF_TYPE;
 			Object *holder = selectAll ? powerHolder( player, entry.button ) : NULL;
 			GroupPanel_showAvailability( win, TheControlBar->getPowerCellAvailability( entry.button, holder, win ) );
-			// how many of the power's superweapons there are, as the tray's button shows it
-			TheControlBar->setShortcutCountBadge( win, entry.button );
+			// how many of the power's superweapons are ready, gold, as the tray's button shows it
+			GadgetButtonSetCount( win, 0 );
+			TheControlBar->setShortcutReadyCount( win, entry.button );
 			win->winHide( FALSE );
 			continue;
 		}

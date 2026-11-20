@@ -264,16 +264,12 @@ static DisplayString *badgeString( const UnicodeString &text, GameFont *font )
 
 // drawCountBadge =============================================================
 /** Draw a small number badge in the button's bottom right corner (queued unit
-	* counts, selection sizes), "count/of" when `of` is above it (a power's ready of owned).  One
-	* shared DisplayString serves every button. */
+	* counts, selection sizes).  One shared DisplayString serves every button. */
 //=============================================================================
-static void drawCountBadge( GameWindow *window, Int count, Int of )
+static void drawCountBadge( GameWindow *window, Int count )
 {
 	UnicodeString text;
-	if( of > count )
-		text.format( u"%d/%d", count, of );
-	else
-		text.format( u"%d", count );
+	text.format( u"%d", count );
 	drawBadge( window, text, COUNT_BADGE_DESIGN_POINTS, HUD_READOUT_BOTTOM_RIGHT, GameMakeColor( 255, 255, 255, 255 ) );
 
 }  // end drawCountBadge
@@ -545,8 +541,8 @@ void W3DGadgetPushButtonDraw( GameWindow *window, WinInstanceData *instData )
 			TheDisplay->drawOpenRect(origin.x -1, origin.y - 1, size.x + 2, size.y + 2,1 , pData->colorBorder);
 		}
 
-		if( pData->drawCount > 0 || pData->drawCountOf > 0 )
-			drawCountBadge( window, pData->drawCount, pData->drawCountOf );
+		if( pData->drawCount > 0 )
+			drawCountBadge( window, pData->drawCount );
 
 		if( pData->drawRepeat )
 			drawRepeatMark( window );
@@ -726,8 +722,8 @@ void W3DGadgetPushButtonImageDrawOne( GameWindow *window,
 
 		}
 
-		if( pData->drawCount > 0 || pData->drawCountOf > 0 )
-			drawCountBadge( window, pData->drawCount, pData->drawCountOf );
+		if( pData->drawCount > 0 )
+			drawCountBadge( window, pData->drawCount );
 
 		if( pData->drawRepeat )
 			drawRepeatMark( window );
@@ -992,8 +988,8 @@ void W3DGadgetPushButtonImageDrawThree(GameWindow *window, WinInstanceData *inst
 			TheDisplay->drawOpenRect(start.x - 1, start.y - 1, size.x + 2, size.y + 2, 1, pData->colorBorder);
 		}
 
-		if( pData->drawCount > 0 || pData->drawCountOf > 0 )
-			drawCountBadge( window, pData->drawCount, pData->drawCountOf );
+		if( pData->drawCount > 0 )
+			drawCountBadge( window, pData->drawCount );
 
 		if( pData->drawRepeat )
 			drawRepeatMark( window );

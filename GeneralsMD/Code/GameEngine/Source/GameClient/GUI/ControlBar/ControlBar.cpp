@@ -7389,64 +7389,32 @@ void ControlBar::drawSpecialPowerShortcutMultiplierText()
 		if( command == NULL )
 			continue;
 
-		// How many of its superweapons there are.  EA wrote the ready count into the button's text, which
-		// this fork's buttons draw as the key letter's badge in the top left corner (W3DPushButton), so
-		// it never read as a count; it is the bar's count badge now, the number in the corner a queue's
-		// cameo wears (setShortcutCountBadge).  The text stays cleared as before
-		GadgetButtonSetText( win, UnicodeString() );
-		setShortcutCountBadge( win, command );
+		setShortcutReadyCount( win, command );
 	}
 }
 
-/// what doCountSpecialPowersOwned counts with
-struct ShortcutOwnedCount
-{
-	SpecialPowerType type;
-	Int owned;
-};
-
-/// one of the player's buildings standing that carries the power, as doCountSpecialPowersReady
-/// (Player.cpp) takes them but ready or not; a shared one counts once, its timer being the player's
-static void doCountSpecialPowersOwned( Object *obj, void *userData )
-{
-	ShortcutOwnedCount *count = (ShortcutOwnedCount *)userData;
-	if( obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || obj->testStatus( OBJECT_STATUS_SOLD )
-			|| obj->isEffectivelyDead() || !obj->hasSpecialPower( count->type ) )
-		return;
-	SpecialPowerModuleInterface *module = obj->findSpecialPowerModuleInterface( count->type );
-	if( module == NULL || module->isScriptOnly() )
-		return;
-	if( module->getSpecialPowerTemplate()->isSharedNSync() && count->owned >= 1 )
-		return;
-	count->owned++;
-}
-
 //-------------------------------------------------------------------------------------------------
-/** The power button's badge (the owner's, 2026-11-20): how many of the power's buildings the local
-	* player owns, once he has two, as "2"; "1/2" while not every one is ready, the ready ones first.
-	* None for a single one: a "1" is superfluous (Lorenzen, EA's comment). */
+/** How many of the button's superweapons are ready, as the game shipped it: from two up the number
+	* is the button's text, a "1" being superfluous (Lorenzen, EA's comment), and the shortcut flag
+	* has W3DPushButton draw it as the gold badge in the top left corner, the key letter's look, so it
+	* is set here with the number (setControlCommand takes it off a button with no letter).  Nothing
+	* else writes a power button's text: a key letter there was wiped every frame by EA's code too. */
 //-------------------------------------------------------------------------------------------------
-void ControlBar::setShortcutCountBadge( GameWindow *win, const CommandButton *command ) const
+void ControlBar::setShortcutReadyCount( GameWindow *win, const CommandButton *command ) const
 {
 	const SpecialPowerTemplate *spTemplate = command ? command->getSpecialPowerTemplate() : NULL;
 	Player *player = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
-	if( spTemplate == NULL || player == NULL )
+	Int numReady = 0;
+	if( spTemplate != NULL && player != NULL )
+		numReady = player->countReadyShortcutSpecialPowersOfType( spTemplate->getSpecialPowerType() );
+
+	UnicodeString text;
+	if( numReady > 1 )
 	{
-		GadgetButtonSetCount( win, 0 );
-		return;
+		text.format( u"%d", numReady );
+		win->winSetStatus( WIN_STATUS_SHORTCUT_BUTTON );
 	}
-	ShortcutOwnedCount count = { spTemplate->getSpecialPowerType(), 0 };
-	player->iterateObjects( doCountSpecialPowersOwned, &count );
-	if( count.owned < 2 )
-	{
-		GadgetButtonSetCount( win, 0 );
-		return;
-	}
-	const Int ready = player->countReadyShortcutSpecialPowersOfType( count.type );
-	if( ready < count.owned )
-		GadgetButtonSetCount( win, ready, count.owned );
-	else
-		GadgetButtonSetCount( win, count.owned );
+	GadgetButtonSetText( win, text );
 }
 
 void ControlBar::animateSpecialPowerShortcut( Bool isOn )

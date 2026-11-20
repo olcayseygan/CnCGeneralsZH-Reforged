@@ -3019,6 +3019,7 @@ GameEngineDevice/Source/PosixDevice/Render/PosixDevice9.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9.h
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Capture.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Draw.cpp
+GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Post.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Resources.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9SunShadow.cpp
 GameEngineDevice/Source/PosixDevice/Render/PosixDevice9Timing.cpp
@@ -3047,6 +3048,10 @@ GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloudSharedShader.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlHazardCloudSharedShader.h
 GameEngineDevice/Source/PosixDevice/Render/SdlPipelineCache.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlPipelineCache.h
+GameEngineDevice/Source/PosixDevice/Render/SdlPostProcess.cpp
+GameEngineDevice/Source/PosixDevice/Render/SdlPostProcess.h
+GameEngineDevice/Source/PosixDevice/Render/SdlPostShader.cpp
+GameEngineDevice/Source/PosixDevice/Render/SdlPostShader.h
 GameEngineDevice/Source/PosixDevice/Render/SdlPresentMode.h
 GameEngineDevice/Source/PosixDevice/Render/SdlProgramCache.cpp
 GameEngineDevice/Source/PosixDevice/Render/SdlProgramCache.h
@@ -3225,6 +3230,7 @@ Libraries/Include/Platform/MsvcFloatCasts.h
 Libraries/Include/Platform/PosixD3D9/d3d9.h
 Libraries/Include/Platform/PosixD3D9/d3d9caps.h
 Libraries/Include/Platform/PosixD3D9/d3d9types.h
+Libraries/Include/Platform/RenderPost.h
 Libraries/Include/Platform/RenderTypes.h
 Libraries/Include/Platform/RendererName.h
 Libraries/Include/Platform/SleepMilliseconds.h
@@ -3554,6 +3560,10 @@ Libraries/Source/WWVegas/WW3D2/pointgr.cpp
 Libraries/Source/WWVegas/WW3D2/pointgr.h
 Libraries/Source/WWVegas/WW3D2/polyinfo.cpp
 Libraries/Source/WWVegas/WW3D2/polyinfo.h
+Libraries/Source/WWVegas/WW3D2/postprocess.cpp
+Libraries/Source/WWVegas/WW3D2/postprocess.h
+Libraries/Source/WWVegas/WW3D2/postshader.cpp
+Libraries/Source/WWVegas/WW3D2/postshader.h
 Libraries/Source/WWVegas/WW3D2/pot.cpp
 Libraries/Source/WWVegas/WW3D2/pot.h
 Libraries/Source/WWVegas/WW3D2/predlod.cpp
@@ -4428,6 +4438,8 @@ Tests/test_posix_resources.cpp
 Tests/test_posixlocalfilesystem.cpp
 Tests/test_posixlocalfilesystem_stubs.cpp
 Tests/test_posixpath.cpp
+Tests/test_postprocess.cpp
+Tests/test_postshader.cpp
 Tests/test_premain_strings.cpp
 Tests/test_production_input.inc
 Tests/test_registryfile.cpp
@@ -4439,6 +4451,7 @@ Tests/test_sdl_gpu_frame.cpp
 Tests/test_sdl_input.cpp
 Tests/test_sdl_pipeline_state.cpp
 Tests/test_sdl_platform.cpp
+Tests/test_sdl_post.cpp
 Tests/test_sdl_program_cache.cpp
 Tests/test_selection_priority.inc
 Tests/test_shader_sdl.cpp

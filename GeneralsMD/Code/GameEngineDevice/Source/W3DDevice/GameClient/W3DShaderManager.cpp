@@ -55,6 +55,7 @@
 //
 //-----------------------------------------------------------------------------
 
+#include "Platform/RenderPost.h"
 #include "dx8wrapper.h"
 #include "Lib/Clock.h"
 #include "assetmgr.h"
@@ -513,6 +514,27 @@ void W3DShaderManager::pushProtoHaze(void)
 #endif
 }
 
+/** The SDL3 frame's post chain, opened with the same chain, glow, grade and HDR choices the
+	Direct3D 11 frame takes from the options.  Nothing on Windows. */
+void W3DShaderManager::beginMainPostScene(void)
+{
+#if !defined(_WIN32)
+	if (!TheGlobalData) return;
+	const GlowTuning tuning = glowTuning();
+	RenderPost::Settings settings;
+	settings.Chain = TheGlobalData->m_direct3D11PostChain.str();
+	settings.Classic = TheGlobalData->m_classicGraphics != FALSE;
+	settings.ClearAlpha = TheWaterTransparency->m_minWaterOpacity;
+	settings.BloomThreshold = tuning.threshold; settings.BloomIntensity = tuning.intensity;
+	settings.BloomSaturation = tuning.saturation;
+	settings.AdditiveGain = tuning.additiveGain; settings.BlurPasses = tuning.blurPasses;
+	settings.Grade = TheGlobalData->m_lightingStyle == LIGHTING_STYLE_REFORGED ? 1.0f : 0.0f;
+	settings.Clarity = TheGlobalData->m_lightingStyle == LIGHTING_STYLE_REFORGED ? REFORGED_CLARITY : 0.0f;
+	settings.InternalHDR = TheGlobalData->m_internalHdr != FALSE;
+	RenderPost::BeginMain(settings);
+#endif
+}
+
 /** The fixed-function bloom's strength, which is zero on Direct3D 11: there the post chain's own
 	bloom in dx11post.cpp follows the option instead, and running this one too would stack two
 	glows.  Everywhere else it is the option. */
@@ -532,7 +554,7 @@ static Int fixedFunctionBloomIntensity(void)
 #endif
 		return 0;
 	}
-	return bloomIntensity();
+	return RenderPost::ReplacesLegacyBloom() ? 0 : bloomIntensity();
 }
 
 static void releaseBloomTargets(void)
@@ -726,7 +748,7 @@ Bool ScreenDefaultFilter::postRender(enum FilterModes mode, Coord2D &scrollDelta
 	if (!tex) return false;
 	// Direct3D 11 never left its own scene target (Direct3D11_Set_Scene_Stand_In): there is nothing
 	// to copy back, and the copy would clip the Glow option's fires at white.
-	if (Direct3D11_Is_Active()) return true;
+	if (Direct3D11_Is_Active() || RenderPost::ReplacesLegacyBloom()) return true;
 	if (!set(mode)) return false;
 
 
@@ -3226,7 +3248,7 @@ void W3DShaderManager::init(void)
 //=============================================================================
 void W3DShaderManager::shutdown(void)
 {
-	Direct3D11_Set_Scene_Stand_In(NULL, NULL);
+	RenderPost::SetSceneStandIn(NULL, NULL);
 	if (m_newRenderSurface) m_newRenderSurface->Release();
 	if (m_renderTexture) m_renderTexture->Release();
 	if (m_oldRenderSurface) m_oldRenderSurface->Release();
@@ -3416,7 +3438,7 @@ void W3DShaderManager::startRenderToTexture(Bool sceneStandIn)
 	IDirect3DSurface9 *depthSurface = DX8Wrapper::_Get_Non_MultiSampled_Depth_Buffer();
 	if (depthSurface == NULL) depthSurface = m_oldDepthSurface;
 	if (sceneStandIn)
-		Direct3D11_Set_Scene_Stand_In(m_renderTexture, m_newRenderSurface);
+		RenderPost::SetSceneStandIn(m_renderTexture, m_newRenderSurface);
 	DX8Wrapper::_Set_DX8_Render_Target(m_newRenderSurface,depthSurface);
 	RenderResult hr = D3D_OK;
 	DEBUG_ASSERTCRASH(hr==D3D_OK, ("Set target failed unexpectedly."));
@@ -3476,7 +3498,7 @@ IDirect3DTexture9 *W3DShaderManager::endRenderToTexture(void)
 		return NULL;
 	}
 	DX8Wrapper::_Set_DX8_Render_Target(m_oldRenderSurface,m_oldDepthSurface);	//restore original render target
-	Direct3D11_Set_Scene_Stand_In(NULL, NULL);
+	RenderPost::SetSceneStandIn(NULL, NULL);
 	RenderResult hr = D3D_OK;
 	DEBUG_ASSERTCRASH(hr==D3D_OK, ("Set target failed unexpectedly."));
 	if (hr != D3D_OK)

@@ -168,6 +168,7 @@ PosixDevice9::PosixDevice9(PosixDirect3D9 *adapter, RenderWindow window, const D
 
 PosixDevice9::~PosixDevice9()
 {
+	Release_Post(true);
 	Clear_Sun_Shadow();
 	Sun.reset();
 	Shore_End();
@@ -550,6 +551,7 @@ RenderResult PosixDevice9::Reset(D3DPRESENT_PARAMETERS *parameters)
 	// Restore an active capture before Resize can retire the scene attachments it restores to.
 	bool capture_submitted = true;
 	if (SunActive) End_Sun_Shadow(&capture_submitted);
+	Finish_Post(true);
 	if (!capture_submitted || (Gpu != NULL && !Gpu->Resize(parameters->BackBufferWidth,
 		parameters->BackBufferHeight, &failure))) {
 		const bool presentation_restored = previous_presentation_ready && (Gpu == NULL
@@ -562,6 +564,7 @@ RenderResult PosixDevice9::Reset(D3DPRESENT_PARAMETERS *parameters)
 		return !capture_submitted || !presentation_restored || failure == SdlGpuFrame::RESIZE_FLUSH_FAILED
 			? D3DERR_DEVICELOST : D3DERR_OUTOFVIDEOMEMORY;
 	}
+	Release_Post();
 	Shore_End();
 	Clear_Sun_Shadow();
 	Sun.reset();

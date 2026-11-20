@@ -112,6 +112,7 @@ public:
 
 	// Filter methods
 	static Bool filterPreRender(FilterTypes filter, Bool &skipRender, CustomScenePassModes &scenePassMode); ///< Set up at start of render.  Only applies to screen filter shaders.
+	static void beginMainPostScene(void);
 	static Bool filterPostRender(FilterTypes filter, enum FilterModes mode, Coord2D &scrollDelta, Bool &doExtraRender); ///< Called after render.  Only applies to screen filter shaders.
 	static Bool filterSetup(FilterTypes filter, enum FilterModes mode);
 	/// The Warm Light haze for this frame (levels, sun, shroud), once a frame from

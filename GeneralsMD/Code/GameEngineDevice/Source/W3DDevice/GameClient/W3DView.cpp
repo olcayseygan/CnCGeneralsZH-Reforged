@@ -35,6 +35,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////////////////////////
+#include "Platform/RenderPost.h"
 #include <stdlib.h>
 #include "Lib/Clock.h"
 #if defined(_WIN32)
@@ -2883,7 +2884,7 @@ void W3DView::draw( void )
 	tPostChainStart = Clock_Ticks();
 #endif
 	updateScreenDistortions();
-	Direct3D11_Finish_Scene();
+	RenderPost::FinishScene();
 #ifdef DEBUG_LOGGING
 	tPostChainEnd = Clock_Ticks();
 	ThePostChainMS = viewElapsedMS( tPostChainStart, tPostChainEnd );

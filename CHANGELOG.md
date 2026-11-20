@@ -100,6 +100,7 @@ found and fixed, EA's own, not port damage.**
 - The startup check for reskinned units that lost a piece of their original no longer flags a piece the reskin's own data takes out on purpose with a line naming it. A piece lost without such a line, or added to the original later and missing from the reskin, is still reported. Thanks to Shin-Aska.
 - On a Mac the game finds Zero Hour in Steam's own Mac library, and in any other library Steam lists there, an external drive's included, and a GOG copy inside a CrossOver or Whisky bottle. It used to look only where Steam keeps games on Linux and asked for the folder. Thanks to SimonWaldherr.
 - A Mac crash inside the system's own window drawing is gone. Apple's graphics code could hand the game memory it had taken from the system and the game freed it as its own; on a Mac the game now takes and frees ordinary memory the system's way, as Linux already did. Thanks to SimonWaldherr.
+- On Mac and Linux the Modern picture gets the Windows glow: fire, muzzle flashes and team colour stripes past white bloom and fold back through the same tone curve, Internal HDR included, and the Reforged lighting style's grade and local contrast land before the health bars and the interface are drawn, so they keep their colours. Classic graphics looks as it always did. Thanks to Shin-Aska.
 
 ## A dropped player's army stays, and he can come back to it
 

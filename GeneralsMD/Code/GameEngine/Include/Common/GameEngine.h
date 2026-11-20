@@ -66,9 +66,10 @@ Int GameEngine_matchFramesPerSecond( void );
 
 /** MSG_NEW_GAME's last two arguments, after its mode, difficulty and rank points: the frames a second
 	(GameEngine_matchFramesPerSecond) and the game speed in percent, which GameLogicDispatch hands to
-	GameSpeed_set before the map loads.  A start that appends neither plays the native speed; a custom
-	online room passes NATIVE_GAME_SPEED_PERCENT, a LAN game, Quick Match or Play vs AI match
-	RETAIL_GAME_SPEED_PERCENT, a skirmish its lobby's speed, a mission MissionGameSpeed. */
+	GameSpeed_set before the map loads.  A start that appends neither plays the native speed; a LAN or
+	custom online room passes its host's pick (RETAIL_GAME_SPEED_PERCENT and NATIVE_GAME_SPEED_PERCENT
+	unless he moved it), a Quick Match or Play vs AI match RETAIL_GAME_SPEED_PERCENT, a skirmish its
+	lobby's speed, a mission MissionGameSpeed. */
 class GameMessage;
 void GameEngine_appendNewGameRates( GameMessage *msg, Int gameSpeedPercent );
 

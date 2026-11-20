@@ -138,12 +138,13 @@ RETIRED_PERSONA_HEADING = "StaticTextAIPersona"
 HANDICAP_PREFIX, HANDICAP_TOOLTIP = "ComboBoxHandicap", "TOOLTIP:Handicap"
 HANDICAP_HEADING, HANDICAP_TEXT = "StaticTextHandicap", "GUI:Handicap"
 
-# The skirmish room's game speed, a label and a combo cloned from the tech respawn row's, so they
-# inherit that row's art and lettering; the menu code fills the combo. The network rooms have no
-# speed to pick (a multiplayer match always plays at 1.5x) and take the turbo box out that the
-# previous grid had cloned into them.
+# The game speed, a label and a combo cloned from the tech respawn row's, so they inherit that row's
+# art and lettering; the menu code fills the combo, and in the network rooms only the host may change
+# it. All three rooms take the turbo box out that an earlier grid had cloned into the network ones.
 GAME_SPEED_ROW = (("LabelGameSpeed", "LabelTechRespawn"), ("ComboBoxGameSpeed", "ComboBoxTechRespawn"))
 GAME_SPEED_TEXT, GAME_SPEED_TOOLTIP = "GUI:GameSpeed", "TOOLTIP:GameSpeed"
+# the network rooms' tooltip says the host picks it; the skirmish one talks about a skirmish
+ROOM_GAME_SPEED_TOOLTIP = "TOOLTIP:RoomGameSpeed"
 GAME_SPEED_DROPDOWN = tuple(name for name, _template in GAME_SPEED_ROW)
 RETIRED_TURBO_BOX = "CheckBoxTurbo"
 TABS = ("TabInfo", "TabChat", "TabLobbySettings")
@@ -192,9 +193,13 @@ MATCH_RULES = [("StartingCashLabel", "ComboBoxStartingCash"), ("LabelSuperweapon
                ("LabelIncomeSharing", "ComboBoxIncomeSharing"), ("LabelSupplyPileLimit", "ComboBoxSupplyPileLimit"),
                ("LabelTechRespawn", "ComboBoxTechRespawn")]
 SKIRMISH_RULES = [GAME_SPEED_DROPDOWN] + MATCH_RULES
-NETWORK_RULES = MATCH_RULES[:1] + [("LabelPeaceTime", "ComboBoxPeaceTime")] + MATCH_RULES[1:]
-SKIRMISH_CHECKS = ["CheckBoxUnitLimit"]
-LAN_CHECKS = ["CheckBoxProRules", "CheckBoxUnitLimit"]
+NETWORK_RULES = [GAME_SPEED_DROPDOWN] + MATCH_RULES[:1] + [("LabelPeaceTime", "ComboBoxPeaceTime")] + MATCH_RULES[1:]
+# The Hidden Map box in all three rooms, cloned from the unit limit box so it wears that box's art;
+# the menu code ticks it from the game's start shroud (SH in the options string). It shares the unit
+# limit's row in the skirmish room and opens a row of its own in the network rooms.
+START_SHROUDED = ("CheckBoxStartShrouded", "GUI:StartShrouded", "TOOLTIP:StartShrouded")
+SKIRMISH_CHECKS = ["CheckBoxUnitLimit", START_SHROUDED[0]]
+LAN_CHECKS = ["CheckBoxProRules", "CheckBoxUnitLimit", START_SHROUDED[0]]
 GAMESPY_CHECKS = ["CheckBoxUseStats", "CheckBoxLimitArmies"] + LAN_CHECKS
 
 ROOMS = {
@@ -246,16 +251,31 @@ def draw_data(color, border, image="NoImage"):
 # ---------------------------------------------------------------------------
 
 def add_game_speed_row(layout, menu):
-    """Clone the tech respawn row into the game speed row, once; a second run finds it there."""
+    """Clone the tech respawn row into the game speed row, once; a second run finds it there and
+    only sets the room's tooltip again."""
+    tooltip = GAME_SPEED_TOOLTIP if menu == "SkirmishGameOptionsMenu" else ROOM_GAME_SPEED_TOOLTIP
     for name, template in GAME_SPEED_ROW:
-        if layout.find(name) is not None:
-            continue
-        source = need(layout, template)
-        control = clone(source, "%s.wnd:%s" % (menu, name))
-        if name.startswith("Label"):
-            control.put_prop("TEXT", '"%s"' % GAME_SPEED_TEXT)
-        control.put_prop("TOOLTIPTEXT", '"%s"' % GAME_SPEED_TOOLTIP)
-        layout.root.parent_of(source).children.append(control)
+        control = layout.find(name)
+        if control is None:
+            source = need(layout, template)
+            control = clone(source, "%s.wnd:%s" % (menu, name))
+            if name.startswith("Label"):
+                control.put_prop("TEXT", '"%s"' % GAME_SPEED_TEXT)
+            layout.root.parent_of(source).children.append(control)
+        control.put_prop("TOOLTIPTEXT", '"%s"' % tooltip)
+
+
+def add_start_shrouded_box(layout, menu):
+    """Clone the unit limit box into the Hidden Map box, once; a second run finds it there."""
+    name, text, tooltip = START_SHROUDED
+    if layout.find(name) is not None:
+        return
+    source = need(layout, "CheckBoxUnitLimit")
+    box = clone(source, "%s.wnd:%s" % (menu, name))
+    box.put_prop("TEXT", '"%s"' % text)
+    box.put_prop("TOOLTIPTEXT", '"%s"' % tooltip)
+    parent = layout.root.parent_of(source)
+    parent.children.insert(parent.children.index(source) + 1, box)
 
 
 def remove(layout, names):
@@ -557,10 +577,8 @@ def build(layout, menu):
     add_combo_column(layout, menu, PERSONA_PREFIX, "ComboBoxPlayerTemplate", PERSONA_TOOLTIP)
     add_handicap_column(layout, menu)
     remove(layout, TABS + (RETIRED_PERSONA_HEADING, RETIRED_TURBO_BOX))
-    if menu == "SkirmishGameOptionsMenu":
-        add_game_speed_row(layout, menu)
-    else:
-        remove(layout, GAME_SPEED_DROPDOWN)
+    add_game_speed_row(layout, menu)
+    add_start_shrouded_box(layout, menu)
     container = need(layout, spec["container"])
     add_ruler(layout, menu, container)
     add_seat_windows(layout, menu, container, spec)

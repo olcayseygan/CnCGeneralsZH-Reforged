@@ -127,6 +127,7 @@ static NameKeyType comboBoxGameSpeedID = NAMEKEY_INVALID;
 static NameKeyType comboBoxSuperweaponsID = NAMEKEY_INVALID;
 static NameKeyType comboBoxStartingCashID = NAMEKEY_INVALID;
 static NameKeyType checkBoxUnitLimitID = NAMEKEY_INVALID;
+static NameKeyType checkBoxStartShroudedID = NAMEKEY_INVALID;
 static NameKeyType comboBoxIncomeSharingID = NAMEKEY_INVALID;
 static NameKeyType comboBoxTechRespawnID = NAMEKEY_INVALID;
 static NameKeyType comboBoxSupplyPileLimitID = NAMEKEY_INVALID;
@@ -180,6 +181,7 @@ static GameWindow *textEntryPlayerName = NULL;
 static GameWindow *comboBoxSuperweapons = NULL;
 static GameWindow *comboBoxStartingCash = NULL;
 static GameWindow *checkBoxUnitLimit = NULL;
+static GameWindow *checkBoxStartShrouded = NULL;
 static GameWindow *comboBoxIncomeSharing = NULL;
 static GameWindow *comboBoxTechRespawn = NULL;
 static GameWindow *comboBoxSupplyPileLimit = NULL;
@@ -467,6 +469,7 @@ Bool SkirmishPreferences::write(void)
   setStartingCash( TheSkirmishGameInfo->getStartingCash() );
   setSuperweaponRestriction( TheSkirmishGameInfo->getSuperweaponRestriction() );
   setInt( "UnitLimit", TheSkirmishGameInfo->getUnitLimit() ? 1 : 0 );
+  setInt( "StartShrouded", TheSkirmishGameInfo->getStartShrouded() ? 1 : 0 );
   setInt( "IncomeSharing", TheSkirmishGameInfo->getIncomeSharing() );
   setInt( "TechRespawn", TheSkirmishGameInfo->getTechRespawn() );
   setInt( "SupplyPileLimit", TheSkirmishGameInfo->getSupplyPileLimit() );
@@ -1285,6 +1288,7 @@ void InitSkirmishGameGadgets( void )
   comboBoxSuperweaponsID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:ComboBoxSuperweapons" ) );
   comboBoxStartingCashID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:ComboBoxStartingCash" ) );
   checkBoxUnitLimitID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:CheckBoxUnitLimit" ) );
+  checkBoxStartShroudedID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:CheckBoxStartShrouded" ) );
   comboBoxIncomeSharingID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:ComboBoxIncomeSharing" ) );
   comboBoxTechRespawnID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:ComboBoxTechRespawn" ) );
   comboBoxSupplyPileLimitID = TheNameKeyGenerator->nameToKey( AsciiString( "SkirmishGameOptionsMenu.wnd:ComboBoxSupplyPileLimit" ) );
@@ -1329,7 +1333,12 @@ void InitSkirmishGameGadgets( void )
   DEBUG_ASSERTCRASH(checkBoxUnitLimit, ("Could not find the checkBoxUnitLimit"));
   if ( checkBoxUnitLimit )
     UpdateUnitLimitCheckBox( checkBoxUnitLimit, TheSkirmishGameInfo, TRUE );
-  comboBoxIncomeSharing = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, comboBoxIncomeSharingID );
+  // the Hidden Map box, the same kind of control; it travels as SH, a ranked Quick Match's black start
+  checkBoxStartShrouded = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, checkBoxStartShroudedID );
+  DEBUG_ASSERTCRASH(checkBoxStartShrouded, ("Could not find the checkBoxStartShrouded"));
+  if ( checkBoxStartShrouded )
+    UpdateStartShroudedCheckBox( checkBoxStartShrouded, TheSkirmishGameInfo, TRUE );
+  comboBoxIncomeSharing =TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, comboBoxIncomeSharingID );
   DEBUG_ASSERTCRASH(comboBoxIncomeSharing, ("Could not find the comboBoxIncomeSharing"));
   if ( comboBoxIncomeSharing )
     PopulateIncomeSharingComboBox( comboBoxIncomeSharing, TheSkirmishGameInfo, TRUE );
@@ -1532,6 +1541,8 @@ void updateSkirmishGameOptions( void )
     UpdateSuperweaponComboBox( comboBoxSuperweapons, TheSkirmishGameInfo, TRUE );
   if ( checkBoxUnitLimit )
     UpdateUnitLimitCheckBox( checkBoxUnitLimit, TheSkirmishGameInfo, TRUE );
+  if ( checkBoxStartShrouded )
+    UpdateStartShroudedCheckBox( checkBoxStartShrouded, TheSkirmishGameInfo, TRUE );
   if ( comboBoxIncomeSharing )
     UpdateIncomeSharingComboBox( comboBoxIncomeSharing, TheSkirmishGameInfo, TRUE );
   if ( comboBoxTechRespawn )
@@ -1627,6 +1638,7 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
   TheSkirmishGameInfo->setStartingCash( prefs.getStartingCash() );
   TheSkirmishGameInfo->setSuperweaponRestriction( prefs.getSuperweaponRestriction() );
   TheSkirmishGameInfo->setUnitLimit( prefs.getInt( "UnitLimit", 0 ) != 0 );
+  TheSkirmishGameInfo->setStartShrouded( prefs.getInt( "StartShrouded", 0 ) != 0 );
   TheSkirmishGameInfo->setIncomeSharing( prefs.getInt( "IncomeSharing", INCOME_SHARING_OFF ) );
   TheSkirmishGameInfo->setTechRespawn( prefs.getInt( "TechRespawn", 0 ) );
   TheSkirmishGameInfo->setSupplyPileLimit( prefs.getInt( "SupplyPileLimit", 0 ) );
@@ -1935,6 +1947,11 @@ WindowMsgHandledType SkirmishGameOptionsMenuSystem( GameWindow *window, Unsigned
 				if ( controlID == checkBoxUnitLimitID )
 				{
 					TheSkirmishGameInfo->setUnitLimit( GadgetCheckBoxIsChecked( control ) );
+					break;
+				}
+				if ( controlID == checkBoxStartShroudedID )
+				{
+					TheSkirmishGameInfo->setStartShrouded( GadgetCheckBoxIsChecked( control ) );
 					break;
 				}
 				if ( LobbyTabClicked( (NameKeyType)controlID ) )

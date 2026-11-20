@@ -1051,7 +1051,6 @@ Int parseNoTerrainSubdivide(char *args[], int num)
 	}
 	return 1;
 }
-
 Int parseShadowMapReport(char *args[], int num)
 {
 	if (TheWritableGlobalData)
@@ -2525,6 +2524,17 @@ Int parseSupplyPileLimit(char *args[], int num)
 	return 1;
 }
 
+/* -startshrouded: the skirmish lobby's Hidden Map for an -autoskirmish run, carried the same way as
+	 -incomesharing (SH= in the slot list, so the replay starts black too). */
+Int parseStartShrouded(char *args[], int num)
+{
+	if (TheWritableGlobalData)
+	{
+		TheWritableGlobalData->m_startShrouded = TRUE;
+	}
+	return 1;
+}
+
 /* -gamespeed <percent>: the skirmish lobby's game speed for an -autoskirmish run, in percent of retail's
 	 pace and taken to the nearest of PLAYER_GAME_SPEED_PERCENTS (100, 125, 150, 200).  The game time
 	 each tick advances: the match still ticks LOGICFRAMES_PER_SECOND times a second, its CRC differs per
@@ -3070,6 +3080,7 @@ static CommandLineParam params[] =
 	{ "-techrespawn", parseTechRespawn },
 	{ "-superweapons", parseSuperweapons },
 	{ "-supplypilelimit", parseSupplyPileLimit },
+	{ "-startshrouded", parseStartShrouded },
 	{ "-gamespeed", parseGameSpeed },
 	{ "-startingcash", parseStartingCash },
 	{ "-showlanes", parseShowLanes },

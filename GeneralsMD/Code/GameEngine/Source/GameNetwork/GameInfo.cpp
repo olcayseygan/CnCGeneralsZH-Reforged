@@ -657,7 +657,7 @@ void GameInfo::reset( void )
   m_techRespawn = 0;
   m_supplyPileLimit = 0;
   m_startShrouded = FALSE;
-  m_gameSpeedPercent = PLAYER_GAME_SPEED_PERCENT_DEFAULT;
+  m_gameSpeedPercent = getDefaultGameSpeedPercent();	// the base's from the constructor, the room kind's after
 
 	//
 
@@ -1530,8 +1530,11 @@ static AsciiString buildGameInfoAsciiString( const GameInfo *game, const AsciiSt
 	concatOptionUnlessZero(optionsString, "TR", game->getTechRespawn());
 	concatOptionUnlessZero(optionsString, "PL", game->getSupplyPileLimit());
 	concatOptionUnlessZero(optionsString, "SH", game->getStartShrouded() ? 1 : 0);
-	// the game speed is not in the string: a network game's comes from its kind (LAN, room or Quick Match), and a skirmish's
-	// reaches its replay as the header's GS= field.  Turbo's "TB" key is no longer written
+	// the game speed only when the host moved it off his room kind's own (LAN 1.0x, a custom room 1.5x),
+	// so a room left alone sends the string it always sent.  Not "GS": a replay's header appends that
+	// key after the slot list and takes the last one off again.  Turbo's "TB" key is no longer written
+	const Int gameSpeedPercent = game->getGameSpeedPercent();
+	concatOptionUnlessZero(optionsString, "SP", gameSpeedPercent == game->getDefaultGameSpeedPercent() ? 0 : gameSpeedPercent);
 
 	//add player info for each slot
 	optionsString.concat(slotListID);
@@ -1712,6 +1715,7 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
   Int techRespawn = 0; // the same
   Int supplyPileLimit = 0; // the same
   Bool startShrouded = FALSE; // the same
+  Int gameSpeedPercent = 0; // absent = the room kind's own speed
 
 	Bool sawMap, sawMapCRC, sawMapSize, sawSeed, sawSlotlist, sawUseStats, sawSuperweaponRestriction, sawStartingCash, sawOldFactions;
 	sawMap = sawMapCRC = sawMapSize = sawSeed = sawSlotlist = sawUseStats = sawSuperweaponRestriction = sawStartingCash = sawOldFactions = FALSE;
@@ -1826,6 +1830,18 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
     else if (key.compare("SH") == 0 )
     {
       startShrouded = atoi(val.str()) != 0;
+    }
+    else if (key.compare("SP") == 0 )
+    {
+      // a speed that is not one of ours refuses the string: setGameSpeedPercent would round it to a
+      // neighbour, and this machine would play another speed than the host's
+      gameSpeedPercent = atoi(val.str());
+      if (!GameSpeed_isAllowed(gameSpeedPercent))
+      {
+        optionsOk = FALSE;
+        DEBUG_LOG(("ParseAsciiStringToGameInfo - game speed %d is not one of ours, quitting\n", gameSpeedPercent));
+        break;
+      }
     }
     else if (key.compare("TB") == 0 )
     {
@@ -2199,6 +2215,7 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
     game->setTechRespawn( techRespawn );
     game->setSupplyPileLimit( supplyPileLimit );
     game->setStartShrouded( startShrouded );
+    game->setGameSpeedPercent( gameSpeedPercent != 0 ? gameSpeedPercent : game->getDefaultGameSpeedPercent() );
 
 		return true;
 	}

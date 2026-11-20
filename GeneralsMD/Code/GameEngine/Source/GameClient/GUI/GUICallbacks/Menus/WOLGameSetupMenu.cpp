@@ -238,9 +238,11 @@ static NameKeyType comboBoxPeaceTimeID = NAMEKEY_INVALID;
 static NameKeyType checkBoxLimitArmiesID = NAMEKEY_INVALID;
 static NameKeyType checkBoxUnitLimitID = NAMEKEY_INVALID;
 static NameKeyType checkBoxProRulesID = NAMEKEY_INVALID;
+static NameKeyType checkBoxStartShroudedID = NAMEKEY_INVALID;
 static NameKeyType comboBoxIncomeSharingID = NAMEKEY_INVALID;
 static NameKeyType comboBoxTechRespawnID = NAMEKEY_INVALID;
 static NameKeyType comboBoxSupplyPileLimitID = NAMEKEY_INVALID;
+static NameKeyType comboBoxGameSpeedID = NAMEKEY_INVALID;
 
 // Window Pointers ------------------------------------------------------------------------
 static GameWindow *parentWOLGameSetup = NULL;
@@ -259,9 +261,11 @@ static GameWindow *comboBoxPeaceTime = NULL;
 static GameWindow *checkBoxLimitArmies = NULL;
 static GameWindow *checkBoxUnitLimit = NULL;
 static GameWindow *checkBoxProRules = NULL;
+static GameWindow *checkBoxStartShrouded = NULL;
 static GameWindow *comboBoxIncomeSharing = NULL;
 static GameWindow *comboBoxTechRespawn = NULL;
 static GameWindow *comboBoxSupplyPileLimit = NULL;
+static GameWindow *comboBoxGameSpeed = NULL;
 
 static GameWindow *comboBoxPlayer[MAX_SLOTS] = {NULL,NULL,NULL,NULL,
 																									 NULL,NULL,NULL,NULL };
@@ -395,9 +399,13 @@ static void savePlayerInfo( void )
           pref.setInt( "PeaceTime", TheGameSpyGame->getPeaceTime() );
           pref.setInt( "UnitLimit", TheGameSpyGame->getUnitLimit() ? 1 : 0 );
           pref.setInt( "ProRules", TheGameSpyGame->getProRules() ? 1 : 0 );
+          pref.setInt( "StartShrouded", TheGameSpyGame->getStartShrouded() ? 1 : 0 );
           pref.setInt( "IncomeSharing", TheGameSpyGame->getIncomeSharing() );
           pref.setInt( "TechRespawn", TheGameSpyGame->getTechRespawn() );
           pref.setInt( "SupplyPileLimit", TheGameSpyGame->getSupplyPileLimit() );
+          // a stats game is locked to the native speed and leaves the host's pick for the next custom one
+          if ( !TheGameSpyGame->getUseStats() )
+            pref.setInt( "GameSpeed", TheGameSpyGame->getGameSpeedPercent() );
         }
 				pref.write();
 			}
@@ -963,6 +971,24 @@ static void handleSupplyPileLimitSelection()
   }
 }
 
+static void handleGameSpeedSelection()
+{
+  GameInfo *myGame = TheGameSpyInfo->getCurrentStagingRoom();
+
+  // the same guard as the unit limit box below
+  if (myGame == NULL || comboBoxGameSpeed == NULL || myGame->getGameSpeedPercent() == GameSpeedFromComboBox( comboBoxGameSpeed, myGame ))
+    return;
+
+  myGame->setGameSpeedPercent( GameSpeedFromComboBox( comboBoxGameSpeed, myGame ) );
+  myGame->resetAccepted();
+
+  if (myGame->amIHost())
+  {
+    TheGameSpyInfo->setGameOptions();
+    WOLDisplaySlotList();// Update the accepted button UI
+  }
+}
+
 static void handleProRulesSelection()
 {
   GameInfo *myGame = TheGameSpyInfo->getCurrentStagingRoom();
@@ -972,6 +998,24 @@ static void handleProRulesSelection()
     return;
 
   myGame->setProRules( GadgetCheckBoxIsChecked( checkBoxProRules ) );
+  myGame->resetAccepted();
+
+  if (myGame->amIHost())
+  {
+    TheGameSpyInfo->setGameOptions();
+    WOLDisplaySlotList();// Update the accepted button UI
+  }
+}
+
+static void handleStartShroudedSelection()
+{
+  GameInfo *myGame = TheGameSpyInfo->getCurrentStagingRoom();
+
+  // the same guard as the unit limit box below
+  if (myGame == NULL || checkBoxStartShrouded == NULL || myGame->getStartShrouded() == GadgetCheckBoxIsChecked( checkBoxStartShrouded ))
+    return;
+
+  myGame->setStartShrouded( GadgetCheckBoxIsChecked( checkBoxStartShrouded ) );
   myGame->resetAccepted();
 
   if (myGame->amIHost())
@@ -1313,12 +1357,16 @@ void WOLDisplayGameOptions( void )
     UpdateUnitLimitCheckBox( checkBoxUnitLimit, theGame, superweaponIsTheHostsToPick() );
   if ( checkBoxProRules )
     UpdateProRulesCheckBox( checkBoxProRules, theGame, superweaponIsTheHostsToPick() );
+  if ( checkBoxStartShrouded )
+    UpdateStartShroudedCheckBox( checkBoxStartShrouded, theGame, superweaponIsTheHostsToPick() );
   if ( comboBoxIncomeSharing )
     UpdateIncomeSharingComboBox( comboBoxIncomeSharing, theGame, superweaponIsTheHostsToPick() );
   if ( comboBoxTechRespawn )
     UpdateTechRespawnComboBox( comboBoxTechRespawn, theGame, superweaponIsTheHostsToPick() );
   if ( comboBoxSupplyPileLimit )
     UpdateSupplyPileLimitComboBox( comboBoxSupplyPileLimit, theGame, superweaponIsTheHostsToPick() );
+  if ( comboBoxGameSpeed )
+    UpdateGameSpeedComboBox( comboBoxGameSpeed, theGame, superweaponIsTheHostsToPick() );
 }
 
 
@@ -1424,9 +1472,11 @@ void InitWOLGameGadgets( void )
   checkBoxLimitArmiesID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:CheckBoxLimitArmies"));
   checkBoxUnitLimitID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:CheckBoxUnitLimit"));
   checkBoxProRulesID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:CheckBoxProRules"));
+  checkBoxStartShroudedID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:CheckBoxStartShrouded"));
   comboBoxIncomeSharingID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:ComboBoxIncomeSharing"));
   comboBoxTechRespawnID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:ComboBoxTechRespawn"));
   comboBoxSupplyPileLimitID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:ComboBoxSupplyPileLimit"));
+  comboBoxGameSpeedID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:ComboBoxGameSpeed"));
 	windowMapSelectMapID = TheNameKeyGenerator->nameToKey(AsciiString("WOLMapSelectMenu.wnd:WinMapPreview"));
 
 	NameKeyType staticTextTitleID = NAMEKEY("GameSpyGameOptionsMenu.wnd:StaticTextGameName");
@@ -1465,6 +1515,10 @@ void InitWOLGameGadgets( void )
   DEBUG_ASSERTCRASH(checkBoxProRules, ("Could not find the GameSpyGameOptionsMenu.wnd:CheckBoxProRules" ));
   if ( checkBoxProRules )
     UpdateProRulesCheckBox( checkBoxProRules, TheGameSpyGame, superweaponIsTheHostsToPick() );
+  checkBoxStartShrouded = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, checkBoxStartShroudedID );
+  DEBUG_ASSERTCRASH(checkBoxStartShrouded, ("Could not find the GameSpyGameOptionsMenu.wnd:CheckBoxStartShrouded" ));
+  if ( checkBoxStartShrouded )
+    UpdateStartShroudedCheckBox( checkBoxStartShrouded, TheGameSpyGame, superweaponIsTheHostsToPick() );
   comboBoxIncomeSharing = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, comboBoxIncomeSharingID );
   DEBUG_ASSERTCRASH(comboBoxIncomeSharing, ("Could not find the GameSpyGameOptionsMenu.wnd:ComboBoxIncomeSharing" ));
   if ( comboBoxIncomeSharing )
@@ -1477,6 +1531,10 @@ void InitWOLGameGadgets( void )
   DEBUG_ASSERTCRASH(comboBoxSupplyPileLimit, ("Could not find the GameSpyGameOptionsMenu.wnd:ComboBoxSupplyPileLimit" ));
   if ( comboBoxSupplyPileLimit )
     PopulateSupplyPileLimitComboBox( comboBoxSupplyPileLimit, TheGameSpyGame, superweaponIsTheHostsToPick() );
+  comboBoxGameSpeed = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, comboBoxGameSpeedID );
+  DEBUG_ASSERTCRASH(comboBoxGameSpeed, ("Could not find the GameSpyGameOptionsMenu.wnd:ComboBoxGameSpeed" ));
+  if ( comboBoxGameSpeed )
+    PopulateGameSpeedComboBox( comboBoxGameSpeed, TheGameSpyGame, superweaponIsTheHostsToPick() );
   checkBoxLimitArmies = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, checkBoxLimitArmiesID );
   DEBUG_ASSERTCRASH(windowMap, ("Could not find the GameSpyGameOptionsMenu.wnd:CheckBoxLimitArmies" ));
 
@@ -1650,9 +1708,11 @@ void DeinitWOLGameGadgets( void )
   comboBoxPeaceTime = NULL;
   checkBoxUnitLimit = NULL;
   checkBoxProRules = NULL;
+  checkBoxStartShrouded = NULL;
   comboBoxIncomeSharing = NULL;
   comboBoxTechRespawn = NULL;
   comboBoxSupplyPileLimit = NULL;
+  comboBoxGameSpeed = NULL;
 
 //	GameWindow *staticTextTitle = NULL;
 	for (Int i = 0; i < MAX_SLOTS; i++)
@@ -1746,7 +1806,7 @@ static void onlineStagingScript( void )
 		if (s_optionStep == 0)
 		{
 			const struct { const char *name; GameWindow *box; } boxes[] = {
-				{ "prorules", checkBoxProRules }, { "unitlimit", checkBoxUnitLimit } };
+				{ "prorules", checkBoxProRules }, { "unitlimit", checkBoxUnitLimit }, { "hiddenmap", checkBoxStartShrouded } };
 			for (Int i = 0; i < (Int)ARRAY_SIZE(boxes); ++i)
 			{
 				GameWindow *box = boxes[i].box;
@@ -1759,6 +1819,19 @@ static void onlineStagingScript( void )
 					TheWindowManager->winSendSystemMsg( parentWOLGameSetup, GBM_SELECTED, (WindowMsgData)box, box->winGetWindowId() );
 				}
 				DEBUG_LOG(("ONLINE OPTION %s live=%d on=%d\n", boxes[i].name, (Int)live, (Int)GadgetCheckBoxIsChecked( box )));
+			}
+			// speed<percent>, speed200 say: the game speed box's entry for that percent, as a pick would
+			if (const char *speed = strstr( wanted, "speed" ))
+			{
+				const Int percent = atoi( speed + 5 );
+				const Bool live = comboBoxGameSpeed && comboBoxGameSpeed->winGetEnabled() && !comboBoxGameSpeed->winIsHidden();
+				for (Int i = 0; live && i < GadgetComboBoxGetLength( comboBoxGameSpeed ); ++i)
+					if ((Int)(intptr_t)GadgetComboBoxGetItemData( comboBoxGameSpeed, i ) == percent)
+					{
+						GadgetComboBoxSetSelectedPos( comboBoxGameSpeed, i, TRUE );
+						handleGameSpeedSelection();
+					}
+				DEBUG_LOG(("ONLINE OPTION speed live=%d percent=%d\n", (Int)live, game->getGameSpeedPercent()));
 			}
 			s_optionStep = strstr( wanted, "randommap" ) ? 1 : -1;
 			return;
@@ -1891,9 +1964,12 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 		game->setUnitLimit( !isUsingStats && customPref.getInt( "UnitLimit", 0 ) != 0 );
 		// a recorded stats game is the ranked one, so it plays the tournament list
 		game->setProRules( isUsingStats || customPref.getInt( "ProRules", 1 ) != 0 );
+		// the Hidden Map box; a ranked Quick Match never comes through here and sets its own black start
+		game->setStartShrouded( !isUsingStats && customPref.getInt( "StartShrouded", 0 ) != 0 );
 		game->setIncomeSharing( isUsingStats ? INCOME_SHARING_OFF : customPref.getInt( "IncomeSharing", INCOME_SHARING_OFF ) );
 		game->setTechRespawn( isUsingStats ? 0 : customPref.getInt( "TechRespawn", 0 ) );
 		game->setSupplyPileLimit( isUsingStats ? 0 : customPref.getInt( "SupplyPileLimit", 0 ) );
+		game->setGameSpeedPercent( isUsingStats ? game->getDefaultGameSpeedPercent() : customPref.getInt( "GameSpeed", game->getDefaultGameSpeedPercent() ) );
 		if (isUsingStats)
 			game->setOldFactionsOnly( 0 );
 
@@ -3224,6 +3300,10 @@ WindowMsgHandledType WOLGameSetupMenuSystem( GameWindow *window, UnsignedInt msg
         {
           handleSupplyPileLimitSelection();
         }
+        else if ( controlID == comboBoxGameSpeedID )
+        {
+          handleGameSpeedSelection();
+        }
         else if ( HandleAIPersonaSelection( TheGameSpyInfo->getCurrentStagingRoom(), comboBoxAIPersona, comboBoxAIPersonaID, (NameKeyType)controlID ) )
         {
           TheGameSpyInfo->getCurrentStagingRoom()->resetAccepted();
@@ -3318,6 +3398,12 @@ WindowMsgHandledType WOLGameSetupMenuSystem( GameWindow *window, UnsignedInt msg
 				if ( controlID == checkBoxProRulesID )
 				{
 					handleProRulesSelection();
+					break;
+				}
+
+				if ( controlID == checkBoxStartShroudedID )
+				{
+					handleStartShroudedSelection();
 					break;
 				}
 

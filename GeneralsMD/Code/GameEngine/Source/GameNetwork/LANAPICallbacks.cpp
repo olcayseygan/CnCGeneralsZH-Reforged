@@ -369,9 +369,11 @@ void LANAPI::OnGameStart( void )
       pref.setSuperweaponRestriction( m_currentGame->getSuperweaponRestriction() );
       pref.setInt( "UnitLimit", m_currentGame->getUnitLimit() ? 1 : 0 );
       pref.setInt( "ProRules", m_currentGame->getProRules() ? 1 : 0 );
+      pref.setInt( "StartShrouded", m_currentGame->getStartShrouded() ? 1 : 0 );
       pref.setInt( "IncomeSharing", m_currentGame->getIncomeSharing() );
       pref.setInt( "TechRespawn", m_currentGame->getTechRespawn() );
       pref.setInt( "SupplyPileLimit", m_currentGame->getSupplyPileLimit() );
+      pref.setInt( "GameSpeed", m_currentGame->getGameSpeedPercent() );
       pref.setStartingCash( m_currentGame->getStartingCash() );
     }
 		pref.write();
@@ -440,7 +442,8 @@ void LANAPI::OnGameStart( void )
 		msg->appendIntegerArgument(GAME_LAN);
 		msg->appendIntegerArgument(DIFFICULTY_NORMAL);	// not used; there so the speed can go last
 		msg->appendIntegerArgument(0);
-		GameEngine_appendNewGameRates( msg, RETAIL_GAME_SPEED_PERCENT );	// a LAN game plays retail's pace
+		// the host's pick, from the options string every peer parsed: retail's pace unless he moved it
+		GameEngine_appendNewGameRates( msg, m_currentGame->getGameSpeedPercent() );
 
 		TheWritableGlobalData->m_useFpsLimit = false;
 

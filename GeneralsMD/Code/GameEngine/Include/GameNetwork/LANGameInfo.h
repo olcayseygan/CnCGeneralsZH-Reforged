@@ -87,6 +87,7 @@ public:
 	LANGameSlot* getLANSlot( Int slotNum );							///< Get the slot
 	const LANGameSlot* getConstLANSlot( Int slotNum ) const;							///< Get the slot
 	virtual Int getLocalSlotNum( void ) const;												///< Get the local slot number, or -1 if we're not present
+	virtual Int getDefaultGameSpeedPercent( void ) const { return RETAIL_GAME_SPEED_PERCENT; }	///< a LAN game plays retail's pace unless its host picks another
 	Int getSlotNum( UnicodeString userName );						///< Get the slot number corresponding to a specific user, or -1 if he's not present
 	
 	inline UnsignedInt getLastHeard( void ) { return m_lastHeard; }

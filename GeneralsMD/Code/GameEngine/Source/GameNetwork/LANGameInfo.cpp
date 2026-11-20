@@ -102,6 +102,8 @@ LANGameInfo::LANGameInfo()
 	//
 	for (Int i = 0; i< MAX_SLOTS; ++i)
 		setSlotPointer(i, &m_LANSlot[i]);
+	// GameInfo's constructor reset to its own default, before this class was there to answer
+	setGameSpeedPercent(getDefaultGameSpeedPercent());
 
 	setLocalIP(TheLAN->GetLocalIP());
 }

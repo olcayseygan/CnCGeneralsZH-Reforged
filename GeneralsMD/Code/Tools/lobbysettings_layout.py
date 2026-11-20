@@ -179,6 +179,7 @@ STRINGS = [
     "GUI:SupplyPileLimitFormat",
     "GUI:GameSpeed",
     "TOOLTIP:GameSpeed",
+    "TOOLTIP:RoomGameSpeed",
 ]
 
 

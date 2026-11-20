@@ -126,9 +126,11 @@ static NameKeyType comboBoxStartingCashID = NAMEKEY_INVALID;
 static NameKeyType comboBoxPeaceTimeID = NAMEKEY_INVALID;
 static NameKeyType checkBoxUnitLimitID = NAMEKEY_INVALID;
 static NameKeyType checkBoxProRulesID = NAMEKEY_INVALID;
+static NameKeyType checkBoxStartShroudedID = NAMEKEY_INVALID;
 static NameKeyType comboBoxIncomeSharingID = NAMEKEY_INVALID;
 static NameKeyType comboBoxTechRespawnID = NAMEKEY_INVALID;
 static NameKeyType comboBoxSupplyPileLimitID = NAMEKEY_INVALID;
+static NameKeyType comboBoxGameSpeedID = NAMEKEY_INVALID;
 static NameKeyType windowMapID = NAMEKEY_INVALID;
 // Window Pointers ------------------------------------------------------------------------
 static GameWindow *parentLanGameOptions = NULL;
@@ -143,9 +145,11 @@ static GameWindow *comboBoxStartingCash = NULL;
 static GameWindow *comboBoxPeaceTime = NULL;
 static GameWindow *checkBoxUnitLimit = NULL;
 static GameWindow *checkBoxProRules = NULL;
+static GameWindow *checkBoxStartShrouded = NULL;
 static GameWindow *comboBoxIncomeSharing = NULL;
 static GameWindow *comboBoxTechRespawn = NULL;
 static GameWindow *comboBoxSupplyPileLimit = NULL;
+static GameWindow *comboBoxGameSpeed = NULL;
 static GameWindow *windowMap = NULL;
 
 static GameWindow *comboBoxPlayer[MAX_SLOTS] = {NULL,NULL,NULL,NULL,
@@ -466,7 +470,8 @@ void LANDisableButtons()
 	comboBoxStartingCash->winEnable(false);
 
 	GameWindow *optionalGadgets[] = { comboBoxSuperweapons, comboBoxPeaceTime, checkBoxUnitLimit,
-		checkBoxProRules, comboBoxIncomeSharing, comboBoxTechRespawn, comboBoxSupplyPileLimit };
+		checkBoxProRules, checkBoxStartShrouded, comboBoxIncomeSharing, comboBoxTechRespawn, comboBoxSupplyPileLimit,
+		comboBoxGameSpeed };
 	for (Int i = 0; i < (Int)ARRAY_SIZE(optionalGadgets); ++i)
 	{
 		if (optionalGadgets[i])
@@ -823,6 +828,24 @@ static void handleSupplyPileLimitSelection()
   }
 }
 
+static void handleGameSpeedSelection()
+{
+  LANGameInfo *myGame = TheLAN->GetMyGame();
+
+  // the same guard as income sharing above
+  if (myGame == NULL || comboBoxGameSpeed == NULL || myGame->getGameSpeedPercent() == GameSpeedFromComboBox( comboBoxGameSpeed, myGame ))
+    return;
+
+  myGame->setGameSpeedPercent( GameSpeedFromComboBox( comboBoxGameSpeed, myGame ) );
+  myGame->resetAccepted();
+
+  if (myGame->amIHost() && !s_isIniting)
+  {
+    TheLAN->RequestGameOptions(GenerateGameOptionsString(), true);
+    lanUpdateSlotList(); // Update the accepted button UI
+  }
+}
+
 static void handleProRulesSelection()
 {
   LANGameInfo *myGame = TheLAN->GetMyGame();
@@ -832,6 +855,24 @@ static void handleProRulesSelection()
     return;
 
   myGame->setProRules( GadgetCheckBoxIsChecked( checkBoxProRules ) );
+  myGame->resetAccepted();
+
+  if (myGame->amIHost() && !s_isIniting)
+  {
+    TheLAN->RequestGameOptions(GenerateGameOptionsString(), true);
+    lanUpdateSlotList(); // Update the accepted button UI
+  }
+}
+
+static void handleStartShroudedSelection()
+{
+  LANGameInfo *myGame = TheLAN->GetMyGame();
+
+  // the same guard as the unit limit box below
+  if (myGame == NULL || checkBoxStartShrouded == NULL || myGame->getStartShrouded() == GadgetCheckBoxIsChecked( checkBoxStartShrouded ))
+    return;
+
+  myGame->setStartShrouded( GadgetCheckBoxIsChecked( checkBoxStartShrouded ) );
   myGame->resetAccepted();
 
   if (myGame->amIHost() && !s_isIniting)
@@ -912,9 +953,11 @@ void InitLanGameGadgets( void )
   comboBoxPeaceTimeID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:ComboBoxPeaceTime" ) );
   checkBoxUnitLimitID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:CheckBoxUnitLimit" ) );
   checkBoxProRulesID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:CheckBoxProRules" ) );
+  checkBoxStartShroudedID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:CheckBoxStartShrouded" ) );
   comboBoxIncomeSharingID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:ComboBoxIncomeSharing" ) );
   comboBoxTechRespawnID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:ComboBoxTechRespawn" ) );
   comboBoxSupplyPileLimitID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:ComboBoxSupplyPileLimit" ) );
+  comboBoxGameSpeedID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:ComboBoxGameSpeed" ) );
 	windowMapID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:MapWindow" ) );
 
 	// Initialize the pointers to our gadgets
@@ -957,7 +1000,11 @@ void InitLanGameGadgets( void )
   DEBUG_ASSERTCRASH(checkBoxProRules, ("Could not find the checkBoxProRules"));
 	if (checkBoxProRules)
 		UpdateProRulesCheckBox(checkBoxProRules, TheLAN->GetMyGame(), TheLAN->AmIHost());
-  comboBoxIncomeSharing = TheWindowManager->winGetWindowFromId( parentLanGameOptions, comboBoxIncomeSharingID );
+  checkBoxStartShrouded = TheWindowManager->winGetWindowFromId( parentLanGameOptions, checkBoxStartShroudedID );
+  DEBUG_ASSERTCRASH(checkBoxStartShrouded, ("Could not find the checkBoxStartShrouded"));
+	if (checkBoxStartShrouded)
+		UpdateStartShroudedCheckBox(checkBoxStartShrouded, TheLAN->GetMyGame(), TheLAN->AmIHost());
+  comboBoxIncomeSharing =TheWindowManager->winGetWindowFromId( parentLanGameOptions, comboBoxIncomeSharingID );
   DEBUG_ASSERTCRASH(comboBoxIncomeSharing, ("Could not find the comboBoxIncomeSharing"));
 	if (comboBoxIncomeSharing)
 		PopulateIncomeSharingComboBox(comboBoxIncomeSharing, TheLAN->GetMyGame(), TheLAN->AmIHost());
@@ -969,6 +1016,10 @@ void InitLanGameGadgets( void )
   DEBUG_ASSERTCRASH(comboBoxSupplyPileLimit, ("Could not find the comboBoxSupplyPileLimit"));
 	if (comboBoxSupplyPileLimit)
 		PopulateSupplyPileLimitComboBox(comboBoxSupplyPileLimit, TheLAN->GetMyGame(), TheLAN->AmIHost());
+  comboBoxGameSpeed = TheWindowManager->winGetWindowFromId( parentLanGameOptions, comboBoxGameSpeedID );
+  DEBUG_ASSERTCRASH(comboBoxGameSpeed, ("Could not find the comboBoxGameSpeed"));
+	if (comboBoxGameSpeed)
+		PopulateGameSpeedComboBox(comboBoxGameSpeed, TheLAN->GetMyGame(), TheLAN->AmIHost());
 
 	windowMap = TheWindowManager->winGetWindowFromId( parentLanGameOptions,windowMapID  );
 	DEBUG_ASSERTCRASH(windowMap, ("Could not find the LanGameOptionsMenu.wnd:MapWindow" ));
@@ -1085,9 +1136,11 @@ void DeinitLanGameGadgets( void )
   comboBoxPeaceTime = NULL;
   checkBoxUnitLimit = NULL;
   checkBoxProRules = NULL;
+  checkBoxStartShrouded = NULL;
   comboBoxIncomeSharing = NULL;
   comboBoxTechRespawn = NULL;
   comboBoxSupplyPileLimit = NULL;
+  comboBoxGameSpeed = NULL;
 	windowMap = NULL;
 	for (Int i = 0; i < MAX_SLOTS; i++)
 	{
@@ -1146,9 +1199,11 @@ void LanGameOptionsMenuInit( WindowLayout *layout, void *userData )
     game->setSuperweaponRestriction( pref.getSuperweaponRestriction() );
     game->setUnitLimit( pref.getInt( "UnitLimit", 0 ) != 0 );
     game->setProRules( pref.getInt( "ProRules", 1 ) != 0 );
+    game->setStartShrouded( pref.getInt( "StartShrouded", 0 ) != 0 );
     game->setIncomeSharing( pref.getInt( "IncomeSharing", INCOME_SHARING_OFF ) );
     game->setTechRespawn( pref.getInt( "TechRespawn", 0 ) );
     game->setSupplyPileLimit( pref.getInt( "SupplyPileLimit", 0 ) );
+    game->setGameSpeedPercent( pref.getInt( "GameSpeed", game->getDefaultGameSpeedPercent() ) );
 		AsciiString lowerMap = pref.getPreferredMap();
 		lowerMap.toLower();
 		std::map<AsciiString, MapMetaData>::iterator it = TheMapCache->find(lowerMap);
@@ -1278,12 +1333,16 @@ void updateGameOptions( void )
 			UpdateUnitLimitCheckBox( checkBoxUnitLimit, theGame, TheLAN->AmIHost() );
 		if (checkBoxProRules)
 			UpdateProRulesCheckBox( checkBoxProRules, theGame, TheLAN->AmIHost() );
+		if (checkBoxStartShrouded)
+			UpdateStartShroudedCheckBox( checkBoxStartShrouded, theGame, TheLAN->AmIHost() );
 		if (comboBoxIncomeSharing)
 			UpdateIncomeSharingComboBox( comboBoxIncomeSharing, theGame, TheLAN->AmIHost() );
 		if (comboBoxTechRespawn)
 			UpdateTechRespawnComboBox( comboBoxTechRespawn, theGame, TheLAN->AmIHost() );
 		if (comboBoxSupplyPileLimit)
 			UpdateSupplyPileLimitComboBox( comboBoxSupplyPileLimit, theGame, TheLAN->AmIHost() );
+		if (comboBoxGameSpeed)
+			UpdateGameSpeedComboBox( comboBoxGameSpeed, theGame, TheLAN->AmIHost() );
 	}
 }
 
@@ -1466,6 +1525,10 @@ WindowMsgHandledType LanGameOptionsMenuSystem( GameWindow *window, UnsignedInt m
         {
           handleSupplyPileLimitSelection();
         }
+        else if ( controlID == comboBoxGameSpeedID )
+        {
+          handleGameSpeedSelection();
+        }
         else if ( HandleAIPersonaSelection( myGame, comboBoxAIPersona, comboBoxAIPersonaID, (NameKeyType)controlID ) )
         {
           if (!s_isIniting)
@@ -1552,6 +1615,12 @@ WindowMsgHandledType LanGameOptionsMenuSystem( GameWindow *window, UnsignedInt m
 				if ( controlID == checkBoxProRulesID )
 				{
 					handleProRulesSelection();
+					break;
+				}
+
+				if ( controlID == checkBoxStartShroudedID )
+				{
+					handleStartShroudedSelection();
 					break;
 				}
 

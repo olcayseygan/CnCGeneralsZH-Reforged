@@ -104,10 +104,11 @@ static_assert( LOGICFRAMES_PER_SECOND == LOGICFRAMES_PER_RETAIL_FRAME * RETAIL_L
 //
 // The speed is chosen per match: TheGameSpeed holds the percent and every value derived from it,
 // and GameSpeed_set changes them between matches. NATIVE_GAME_SPEED_PERCENT is what it holds
-// before any match, what a custom online room plays and what a save or replay without a speed reads
-// as. A LAN game, a ranked Quick Match and a Play vs AI match play RETAIL_GAME_SPEED_PERCENT,
-// retail's own pace: every peer of a Quick Match takes it from the matched path that marks the game
-// ranked, and every LAN peer from the LAN start, never from a preference. TheGameSpeed is constant-initialised to it, so it is valid before any dynamic initialiser
+// before any match, where a custom online room starts and what a save or replay without a speed reads
+// as. A LAN room starts at RETAIL_GAME_SPEED_PERCENT, retail's own pace; the host of either room may
+// pick another, and every peer takes it from his options string (SP=). A ranked Quick Match and a
+// Play vs AI match always play retail's: every peer of a Quick Match takes it from the matched path
+// that marks the game ranked, never from a preference. TheGameSpeed is constant-initialised to it, so it is valid before any dynamic initialiser
 // runs; a value captured from it once (a namespace const, a function-local static, a ctor of
 // something built at engine start) goes stale at the next speed, which is why nothing is.
 //

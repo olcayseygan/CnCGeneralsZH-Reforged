@@ -93,6 +93,8 @@ const char *SuperweaponCaption(Int restriction);
 void UpdateUnitLimitCheckBox(GameWindow *checkBox, GameInfo *myGame, Bool hostMayEdit);
 // The Pro Rules check box, the same thing for PR.
 void UpdateProRulesCheckBox(GameWindow *checkBox, GameInfo *myGame, Bool hostMayEdit);
+// The Hidden Map check box, the same thing for SH, the black start a ranked Quick Match also plays.
+void UpdateStartShroudedCheckBox(GameWindow *checkBox, GameInfo *myGame, Bool hostMayEdit);
 
 // The income sharing dropdown, one entry per IncomeSharing in GameInfo.h, travelling as IS.
 void PopulateIncomeSharingComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMayEdit);
@@ -110,6 +112,12 @@ Int TechRespawnFromComboBox(GameWindow *comboBox);
 void PopulateSupplyPileLimitComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMayEdit);
 void UpdateSupplyPileLimitComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMayEdit);
 Int SupplyPileLimitFromComboBox(GameWindow *comboBox);
+
+// The LAN and custom online rooms' game speed dropdown, a percent of retail in each entry's item data,
+// travelling as SP when it is not the room kind's own; no selection reads as that default.
+void PopulateGameSpeedComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMayEdit);
+void UpdateGameSpeedComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMayEdit);
+Int GameSpeedFromComboBox(GameWindow *comboBox, GameInfo *myGame);
 
 // The lobby's own tab strip: one page of host settings, and the window that page covers - the chat
 // log in the two network lobbies, the map info list in the skirmish one.  All three screens share

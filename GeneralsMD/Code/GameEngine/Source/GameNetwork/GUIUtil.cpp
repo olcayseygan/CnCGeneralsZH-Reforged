@@ -598,6 +598,15 @@ void UpdateProRulesCheckBox(GameWindow *checkBox, GameInfo *myGame, Bool hostMay
     GadgetCheckBoxSetChecked( checkBox, proRules );
 }
 
+void UpdateStartShroudedCheckBox(GameWindow *checkBox, GameInfo *myGame, Bool hostMayEdit)
+{
+  checkBox->winEnable( hostMayEdit );
+
+  const Bool shrouded = myGame->getStartShrouded();
+  if ( GadgetCheckBoxIsChecked( checkBox ) != shrouded )
+    GadgetCheckBoxSetChecked( checkBox, shrouded );
+}
+
 // -----------------------------------------------------------------------------
 // Income sharing.  The entries are the IncomeSharing values in order, so an entry's position is
 // its value.
@@ -744,6 +753,58 @@ void UpdateSupplyPileLimitComboBox(GameWindow *comboBox, GameInfo *myGame, Bool 
 Int SupplyPileLimitFromComboBox(GameWindow *comboBox)
 {
   return TechRespawnFromComboBox( comboBox ); // the same read: the selected entry's item data
+}
+
+// -----------------------------------------------------------------------------
+// The network rooms' game speed, PLAYER_GAME_SPEED_PERCENTS as 1.0x, 1.25x, 1.5x, 2.0x of retail: the
+// skirmish room's list, which the host picks from and a joiner sees greyed, following the host.
+void PopulateGameSpeedComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMayEdit)
+{
+  GadgetComboBoxReset(comboBox);
+
+  Color color = comboBox->winGetEnabled() ? comboBox->winGetEnabledTextColor() : comboBox->winGetDisabledTextColor();
+  for ( Int i = 0; i < PLAYER_GAME_SPEED_COUNT; i++ )
+  {
+    const Int speed = PLAYER_GAME_SPEED_PERCENTS[i];
+    UnicodeString text;
+    // one decimal unless the second one counts, as the skirmish room writes them
+    if ( speed % 10 == 0 )
+      text.format( u"%d.%dx", speed / 100, ( speed % 100 ) / 10 );
+    else
+      text.format( u"%d.%02dx", speed / 100, speed % 100 );
+
+    Int newIndex = GadgetComboBoxAddEntry(comboBox, text, color);
+    GadgetComboBoxSetItemData(comboBox, newIndex, (void *)(intptr_t)speed);
+  }
+
+  UpdateGameSpeedComboBox(comboBox, myGame, hostMayEdit);
+}
+
+void UpdateGameSpeedComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMayEdit)
+{
+  comboBox->winEnable( hostMayEdit );
+
+  Int itemCount = GadgetComboBoxGetLength(comboBox);
+  for ( Int index = 0; index < itemCount; index++ )
+  {
+    if ( (Int)(intptr_t)GadgetComboBoxGetItemData(comboBox, index) == myGame->getGameSpeedPercent() )
+    {
+      Int selected = -1;
+      GadgetComboBoxGetSelectedPos( comboBox, &selected );
+      if ( selected != index )
+        GadgetComboBoxSetSelectedPos(comboBox, index, TRUE);
+      return;
+    }
+  }
+}
+
+Int GameSpeedFromComboBox(GameWindow *comboBox, GameInfo *myGame)
+{
+  Int selIndex = -1;
+  GadgetComboBoxGetSelectedPos(comboBox, &selIndex);
+  if ( selIndex < 0 )
+    return myGame->getDefaultGameSpeedPercent();
+  return ClampPlayerGameSpeedPercent( (Int)(intptr_t)GadgetComboBoxGetItemData(comboBox, selIndex) );
 }
 
 // -----------------------------------------------------------------------------

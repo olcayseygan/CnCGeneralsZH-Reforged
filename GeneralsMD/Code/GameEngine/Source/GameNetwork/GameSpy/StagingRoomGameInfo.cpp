@@ -621,8 +621,8 @@ void GameSpyStagingRoom::startGame(Int gameID)
 			}
 		}
 		// what every seat starts under, for online_check.py to set the host's line beside the guest's
-		DEBUG_LOG(("ONLINE OPTIONS prorules=%d unitlimit=%d stats=%d map=%s\n", (Int)getProRules(),
-			(Int)getUnitLimit(), (Int)getUseStats(), getMap().str()));
+		DEBUG_LOG(("ONLINE OPTIONS prorules=%d unitlimit=%d stats=%d speed=%d map=%s\n", (Int)getProRules(),
+			(Int)getUnitLimit(), (Int)getUseStats(), getGameSpeedPercent(), getMap().str()));
 		launchGame();
 		if (TheGameSpyInfo)
 			TheGameSpyInfo->leaveStagingRoom();
@@ -981,7 +981,7 @@ void GameSpyStagingRoom::launchGame( void )
 	msg->appendIntegerArgument(GAME_INTERNET);
 	msg->appendIntegerArgument(DIFFICULTY_NORMAL);	// not used; there so the speed can go last
 	msg->appendIntegerArgument(0);
-	GameEngine_appendNewGameRates( msg, getGameSpeedPercent() );	// native in a custom room, ranked after a Quick Match's match
+	GameEngine_appendNewGameRates( msg, getGameSpeedPercent() );	// the host's pick in a custom room (native unless moved), retail in a Quick Match
 
 	TheWritableGlobalData->m_useFpsLimit = false;
 
@@ -1015,9 +1015,9 @@ void GameSpyStagingRoom::reset(void)
 		}
 	}
 #endif
-	GameInfo::reset();
 	/* A room is a custom game until the Quick Match marks it, after the enterGame that called this.
 		 Without it the flag outlived the match on TheGameSpyGame, and the next room hosted or joined on
-		 the same sign-in scored as ranked. */
+		 the same sign-in scored as ranked.  Before GameInfo::reset, which takes the game speed from it. */
 	m_isQM = FALSE;
+	GameInfo::reset();
 }

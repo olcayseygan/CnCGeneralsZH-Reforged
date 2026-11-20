@@ -351,11 +351,15 @@ public:
   void setStartShrouded( Bool shrouded ) { m_startShrouded = shrouded; }
 
   // Game speed in percent of retail's pace, one of PLAYER_GAME_SPEED_PERCENTS: the game time each tick
-  // advances.  Only the skirmish lobby and a matched Quick Match (RETAIL_GAME_SPEED_PERCENT) set another
-  // value than the default; it is not in the options string, and reaches the engine as MSG_NEW_GAME's
-  // game speed and the replay as its GS= field.
+  // advances.  The skirmish lobby and the LAN and custom online rooms' hosts pick it, a matched Quick
+  // Match sets RETAIL_GAME_SPEED_PERCENT.  The options string carries it as SP=<percent> only when it is
+  // not the room kind's own (getDefaultGameSpeedPercent), so a room left at its default writes what it
+  // always wrote; it reaches the engine as MSG_NEW_GAME's game speed and the replay as its GS= field.
   Int getGameSpeedPercent( void ) const { return m_gameSpeedPercent; }
   void setGameSpeedPercent( Int percent ) { m_gameSpeedPercent = ClampPlayerGameSpeedPercent( percent ); }
+  // The speed a room starts at and an options string without SP= means: native for a skirmish or a
+  // custom online room, retail's for a LAN game and a Quick Match.
+  virtual Int getDefaultGameSpeedPercent( void ) const { return NATIVE_GAME_SPEED_PERCENT; }
 
   Bool hasAIPlayers( void ) const;									///< is any slot held by a computer player?
 
@@ -387,7 +391,7 @@ protected:
   Int m_techRespawn; // minutes before a destroyed tech building comes back, 0 = never
   Int m_supplyPileLimit; // players who may gather from one supply pile at once, 0 = any number
   Bool m_startShrouded; // the map starts black for every player, a ranked Quick Match
-  Int m_gameSpeedPercent; // the skirmish lobby's game speed, PLAYER_GAME_SPEED_PERCENT_DEFAULT elsewhere
+  Int m_gameSpeedPercent; // the lobby's game speed, getDefaultGameSpeedPercent until someone picks another
 };
 
 extern GameInfo *TheGameInfo;

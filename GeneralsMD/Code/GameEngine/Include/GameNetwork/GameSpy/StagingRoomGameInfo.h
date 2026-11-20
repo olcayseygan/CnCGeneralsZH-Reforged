@@ -143,6 +143,8 @@ public:
 	void sendOnlineReport( const char *from );							///< -online: the ladder packet's fields to OnlineSendReport
 	void markGameAsQM( void ) { m_isQM = TRUE; }
 	Bool isQMGame( void ) { return m_isQM; }
+	// a custom room plays the native speed unless its host picks another, a ranked Quick Match retail's
+	virtual Int getDefaultGameSpeedPercent( void ) const { return m_isQM ? RETAIL_GAME_SPEED_PERCENT : NATIVE_GAME_SPEED_PERCENT; }
 
 	virtual void init(void);
 	virtual void resetAccepted(void);															///< Reset the accepted flag on all players

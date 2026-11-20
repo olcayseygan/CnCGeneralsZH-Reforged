@@ -106,7 +106,11 @@ enum ScenarioActionType
 	SCENARIO_ACTION_AIRLIFT,					///< airlift <slot> <building> <position> <template>:<count>[,<template>:<count>...]; the airlift panel's OK, as MSG_DO_AIRLIFT_ORDER handed to the dispatcher for that seat
 	SCENARIO_ACTION_HEALTH,						///< health <slot> <selector> <percent> [rank]; every match set to that share of its health, and first to that veterancy rank (0-3, in targetSlot) when one is given; outside the command stream, as handover is
 	SCENARIO_ACTION_LANEMARCH,				///< lanemarch <slot> <selector> <dx>; the seat's units spawned since its last lanemarch that match, each attack-moving dx (in at.x) along x on its own y, as one formation at its slowest member's speed
-	SCENARIO_ACTION_LANEPLACE					///< laneplace <slot> <template> <column> <row>; a Lane War purchase onto the seat's own plot at that grid slot (in at; column across the plot's front from the left, row back from it), through LaneWarDirector::placeUnit as MSG_LANEWAR_ORDER is
+	SCENARIO_ACTION_LANEPLACE,				///< laneplace <slot> <template> <column> <row>; a Lane War purchase onto the seat's own plot at that grid slot (in at; column across the plot's front from the left, row back from it), through LaneWarDirector::placeUnit as MSG_LANEWAR_ORDER is
+	SCENARIO_ACTION_LANETIER,					///< lanetier <slot> <track> <level>; a Lane War tier, track 0 income and 1 tech, as LANEWAR_ORDER_TIER (the numbers in name)
+	SCENARIO_ACTION_LANESELL,					///< lanesell <slot> <grid> <column> <row>; sell the seat's plot unit on that slot, grid 0 ground and 1 air, as LANEWAR_ORDER_SELL
+	SCENARIO_ACTION_LANEMOVE,					///< lanemove <slot> <grid> <column> <row> <to column> <to row>; move the seat's plot unit, as LANEWAR_ORDER_MOVE
+	SCENARIO_ACTION_LANEUPGRADE				///< laneupgrade <slot> <upgrade>; buy that player upgrade off the seat's Lane War list, as LANEWAR_ORDER_UPGRADE
 };
 
 /// ScenarioAction::atStart when the position is plain numbers

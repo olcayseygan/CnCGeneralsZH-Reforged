@@ -51,6 +51,7 @@
 class Object;
 class Player;
 class ThingTemplate;
+class UpgradeTemplate;
 
 enum
 {
@@ -62,17 +63,37 @@ enum
 	LANEWAR_TICK_SECONDS = 30,						///< wall seconds between spawn ticks, the first one included
 	LANEWAR_LIFESPAN_SECONDS = 130,				///< wall seconds a wave copy lives
 	LANEWAR_SLOT_SIZE = 20,								///< world units a side of one plot slot, two cells; a plot 240 across its front and 160 deep is 12 columns by 8 rows
+	LANEWAR_INCOME_TIERS = 4,							///< income levels a player can buy past the first
+	LANEWAR_INCOME_TIER_PRICE = 1000,			///< each of them
+	LANEWAR_INCOME_TIER_PAYS = 67,				///< more on every tick for each level bought
+	LANEWAR_TECH_TIERS = 3,								///< a player starts on tech tier 1
+	LANEWAR_SELL_SENT_PERCENT = 50,				///< a unit that has gone out in a wave sells back for this share; one that has not, for all of it
 };
 
 #define LANEWAR_TICK_FRAMES ((UnsignedInt)(LANEWAR_TICK_SECONDS * LOGICFRAMES_PER_SECOND))
 #define LANEWAR_LIFESPAN_FRAMES ((UnsignedInt)(LANEWAR_LIFESPAN_SECONDS * LOGICFRAMES_PER_SECOND))
 
-/** What MSG_LANEWAR_ORDER asks for, its first argument; the integers after it depend on it. */
+/** What MSG_LANEWAR_ORDER asks for, its first argument; the integers after it depend on it.  A plot
+	  has two grids, the ground slots (LANEWAR_GRID_GROUND) and behind them the air rows
+	  (LANEWAR_GRID_AIR); an aircraft stands only in the air rows, everything else only on the ground. */
 enum LaneWarOrderKind
 {
-	LANEWAR_ORDER_PLACE = 0,							///< (template id, column, row): buy that unit onto the sender's plot, its block's front left slot at that one
-	LANEWAR_ORDER_TIER = 1,								///< (tier): buy an income or tech tier; not built, the buy panel step
+	LANEWAR_ORDER_PLACE = 0,							///< (template id, column, row): buy that unit onto the sender's plot, its block's front left slot at that one, in the grid its kind takes
+	LANEWAR_ORDER_TIER = 1,								///< (track, level): buy the next level of a track, LANEWAR_TRACK_INCOME or LANEWAR_TRACK_TECH
+	LANEWAR_ORDER_SELL = 2,								///< (grid, column, row): sell the sender's plot unit covering that slot
+	LANEWAR_ORDER_MOVE = 3,								///< (grid, from column, from row, to column, to row): put the sender's plot unit covering the first slot down with its front left slot at the second
+	LANEWAR_ORDER_UPGRADE = 4,						///< (index): buy that entry of LaneWar_upgrades for the sender
 };
+
+enum { LANEWAR_GRID_GROUND = 0, LANEWAR_GRID_AIR = 1, LANEWAR_GRIDS = 2 };
+enum { LANEWAR_TRACK_INCOME = 0, LANEWAR_TRACK_TECH = 1 };
+
+/// what a player on that income level is paid on a tick, the middle's bonus on top when his team holds it
+extern UnsignedInt LaneWar_incomeAt( Int level, Bool holdsMiddle );
+/// what buying that level of a track costs; 0 for a level that cannot be bought
+extern Int LaneWar_tierPrice( Int track, Int level );
+/// what selling a unit bought for cost gives back, whether or not it has gone out in a wave
+inline Int LaneWar_refund( Int cost, Bool sent ) { return sent ? cost * LANEWAR_SELL_SENT_PERCENT / 100 : cost; }
 
 /// slots a side a unit of this footprint radius covers, one at least
 extern Int LaneWar_slotsFor( Real radius );
@@ -121,6 +142,29 @@ extern Int LaneWar_middleHolder( Int pastLineA, Int pastLineB );
 /// what one player is paid on a tick
 extern UnsignedInt LaneWar_income( Bool holdsMiddle );
 
+/** One unit a player may buy: the template his side or general fields, the tech tier (1 to 3) that
+	  unlocks it, and whether it is his one hero.  An aircraft goes on the plot's air rows. */
+struct LaneWarRosterItem
+{
+	const ThingTemplate *thing;
+	Int tier;
+	Bool hero;
+};
+
+enum { LANEWAR_ROSTER_MAX = 48 };
+
+/** The units the player's side offers in Lane War, tier by tier, each resolved to his general's own
+	  template where the general has one (AirF_AmericaInfantryRanger for the Air Force General).  None for a
+	  side outside the mode.  The same table on every machine: it reads the player's side and the
+	  template store and nothing else. */
+extern Int LaneWar_roster( const Player *player, LaneWarRosterItem *out, Int maxItems );
+
+/// the template is the hero of the player's roster
+extern Bool LaneWar_isHero( const Player *player, const ThingTemplate *tmpl );
+
+/// the player upgrades the player's side or general sells in Lane War, as LaneWar_roster resolves units
+extern Int LaneWar_upgrades( const Player *player, const UpgradeTemplate **out, Int maxItems );
+
 //-------------------------------------------------------------------------------------------------
 class LaneWarDirector : public Snapshot
 {
@@ -146,14 +190,64 @@ public:
 	void onOrder( Player *player, Int kind, const Int *args, Int argCount );
 
 	/** Buy a unit of the template onto the player's own plot with its block's front left slot at
-		  (col, row): refused unless the player is seated, the template is a unit, the block fits inside
-		  his plot's grid, no unit of his already covers any of its slots and he can pay for it.  The
-		  one entry point for the buy panel, the bot and the scenario verb laneplace. */
+		  (col, row), on the ground grid or for an aircraft the air rows: refused unless the player is
+		  seated, the template is on his side's roster, its tier is open to him, it is not a second hero,
+		  the block fits inside the grid, no unit of his already covers any of its slots and he can pay
+		  for it.  The one entry point for the buy panel, the bot and the scenario verb laneplace. */
 	Bool placeUnit( Player *player, const ThingTemplate *tmpl, Int col, Int row );
+
+	/** Why placeUnit would refuse that purchase now, NULL when it would not: the same test, asked
+		  without buying, so the HUD's ghost turns red exactly where the logic says no.  `skip` is a plot
+		  unit not to count as in the way (one being moved), INVALID_ID for none. */
+	const char *whyNotPlace( const Player *player, const ThingTemplate *tmpl, Int col, Int row, ObjectID skip = INVALID_ID ) const;
+
+	/// the player's plot unit covering that slot of that grid, -1 for none (an index into getPlotUnits)
+	Int plotUnitAt( const Player *player, Int grid, Int col, Int row ) const;
 
 	/** A plot's corners in the world, for the client's slot grid; FALSE off a lane map.  Read once the
 		  map is in: they never change during a match. */
 	Bool getPlotBounds( Int team, Int seat, Coord2D *lo, Coord2D *hi ) const;
+	/// the same for the plot's air rows; FALSE where the map has none
+	Bool getAirBounds( Int team, Int seat, Coord2D *lo, Coord2D *hi ) const;
+
+	struct PlotUnit
+	{
+		ObjectID id;
+		Int team, seat;
+		Int grid;												///< LANEWAR_GRID_GROUND or LANEWAR_GRID_AIR
+		Int col, row, size;
+		Int cost;												///< what was paid for it
+		Bool sent;											///< it has gone out in a wave at least once
+	};
+
+	// Read only, for the HUD (LaneHud.cpp), which asks at the render's sync point
+	Bool seatOf( const Player *player, Int *team, Int *seat ) const;
+	Int getIncomeLevel( Int team, Int seat ) const { return m_incomeLevel[ team ][ seat ]; }
+	Int getTechLevel( Int team, Int seat ) const { return m_techLevel[ team ][ seat ]; }
+	Int getMiddleHolder( void ) const { return m_middleHolder; }
+	Bool isHeroBought( Int team, Int seat ) const { return m_heroBought[ team ][ seat ]; }
+	/// what the seat is paid on the next tick if the middle stays with whoever holds it now
+	UnsignedInt getIncome( Int team, Int seat ) const { return LaneWar_incomeAt( m_incomeLevel[ team ][ seat ], m_middleHolder == team ); }
+	Int getSeatPlayer( Int team, Int seat ) const { return m_seatPlayer[ team ][ seat ]; }
+	UnsignedInt getTickCount( void ) const { return m_tickCount; }
+	UnsignedInt getNextTickFrame( void ) const { return m_nextTickFrame; }
+	ObjectID getFortress( Int team ) const { return m_fortress[ team ]; }
+	ObjectID getTower( Int team, Int k ) const { return m_tower[ team ][ k ]; }
+	Bool isFortressDown( Int team ) const { return m_fortressDown[ team ]; }
+	const Coord3D *getSpawn( Int team ) const { return &m_spawn[ team ]; }
+	const Coord3D *getMiddle( void ) const { return &m_middle; }
+	Real towardEnemy( Int team ) const;
+	Int getGridCols( Int team, Int seat, Int grid = LANEWAR_GRID_GROUND ) const { return m_gridCols[ team ][ seat ][ grid ]; }
+	Int getGridRows( Int team, Int seat, Int grid = LANEWAR_GRID_GROUND ) const { return m_gridRows[ team ][ seat ][ grid ]; }
+	Bool getGridBounds( Int team, Int seat, Int grid, Coord2D *lo, Coord2D *hi ) const;
+	Coord3D slotCentre( Int team, Int seat, Int grid, Int col, Int row, Int size ) const;
+	const std::vector<PlotUnit> &getPlotUnits( void ) const { return m_plotUnits; }
+	Int getCopyCount( void ) const { return (Int)m_copies.size(); }
+	ObjectID getCopyID( Int i ) const { return m_copies[ i ].id; }
+	/// the grid a unit of this template stands in on a plot
+	static Int gridFor( const ThingTemplate *tmpl );
+	/// the slots a side a unit of this template covers
+	static Int sizeFor( const ThingTemplate *tmpl );
 
 protected:
 	virtual void crc( Xfer *xfer );
@@ -166,28 +260,24 @@ private:
 		ObjectID id;
 		UnsignedInt dieFrame;
 	};
-
-	struct PlotUnit
-	{
-		ObjectID id;
-		Int team, seat;
-		Int col, row, size;
-	};
-
-	Bool seatOf( const Player *player, Int *team, Int *seat ) const;
-	Real towardEnemy( Int team ) const;
-	Coord3D slotCentre( Int team, Int seat, Int col, Int row, Int size ) const;
 	void expireCopies( UnsignedInt now );
+	void refillJets( void );
+	Bool heroCopyAlive( const Player *player ) const;
 	void tick( UnsignedInt now );
 	void spawnWave( Int team, Int seat, UnsignedInt now );
+	Bool buyTier( Player *player, Int track, Int level );
+	Bool sellUnit( Player *player, Int grid, Int col, Int row );
+	Bool moveUnit( Player *player, Int grid, Int fromCol, Int fromRow, Int toCol, Int toRow );
+	Bool buyUpgrade( Player *player, Int index );
+	Bool readGrid( const char *prefix, Int team, Int seat, Int grid );
 
 	// read from the map on every load, so not saved
 	Bool m_active;
-	Coord2D m_plotLo[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];			///< the plot's low x, low y corner
-	Coord2D m_plotHi[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];
-	Int m_gridCols[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];				///< slots across the front
-	Int m_gridRows[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];				///< slots from the front back
-	Coord3D m_plotAnchor[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];	///< the grid's centre, what a wave copy is placed relative to
+	Coord2D m_gridLo[ LANEWAR_TEAMS ][ LANEWAR_SEATS ][ LANEWAR_GRIDS ];		///< a grid's low x, low y corner
+	Coord2D m_gridHi[ LANEWAR_TEAMS ][ LANEWAR_SEATS ][ LANEWAR_GRIDS ];
+	Int m_gridCols[ LANEWAR_TEAMS ][ LANEWAR_SEATS ][ LANEWAR_GRIDS ];			///< slots across the front, 0 for a grid the map lacks
+	Int m_gridRows[ LANEWAR_TEAMS ][ LANEWAR_SEATS ][ LANEWAR_GRIDS ];			///< slots from the front back
+	Coord3D m_plotAnchor[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];	///< the ground grid's centre, what a wave copy is placed relative to
 	Coord3D m_spawn[ LANEWAR_TEAMS ];
 	Coord3D m_middle;
 
@@ -200,6 +290,10 @@ private:
 	UnsignedInt m_tickCount;
 	std::vector<Copy> m_copies;														///< in spawn order, so dieFrame never falls
 	std::vector<PlotUnit> m_plotUnits;										///< in purchase order, which is ObjectID order
+	Int m_incomeLevel[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];		///< 0 to LANEWAR_INCOME_TIERS, bought
+	Int m_techLevel[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];			///< 1 to LANEWAR_TECH_TIERS
+	Bool m_heroBought[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];		///< the seat's one hero is bought, once a match
+	Int m_middleHolder;																		///< the team the last tick found holding the middle, -1 nobody
 };
 
 extern LaneWarDirector *TheLaneWarDirector;

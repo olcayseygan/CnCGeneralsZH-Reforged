@@ -107,6 +107,7 @@
 #include "GameLogic/Module/RebuildHoleBehavior.h"
 #include "GameLogic/Module/TransportContain.h"
 #include "GameLogic/VictoryConditions.h"
+#include "GameLogic/LaneWarDirector.h"
 
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GUIUtil.h"		// the SUPERWEAPONS_ modes the lobby sends
@@ -2980,6 +2981,10 @@ void Player::addSciencePurchasePoints(Int delta)
 //=============================================================================
 Bool Player::attemptToPurchaseScience(ScienceType science)
 {
+	// Lane War has no general's powers: every science purchase is refused, quietly, the AI's included
+	if (TheLaneWarDirector->isActive())
+		return false;
+
 	if (!isCapableOfPurchasingScience(science))
 	{
 		DEBUG_CRASH(("isCapableOfPurchasingScience: need other prereqs/points to purchase, request is ignored!\n"));
@@ -3044,7 +3049,7 @@ void Player::logAIPersonaSummary(void)
 
 Bool Player::isCapableOfPurchasingScience(ScienceType science) const
 {
-	if (science == SCIENCE_INVALID)
+	if (science == SCIENCE_INVALID || TheLaneWarDirector->isActive())
 	{
 		return false;
 	}

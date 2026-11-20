@@ -42,6 +42,7 @@
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/LaneWarDirector.h"
+#include "Common/Upgrade.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BehaviorModule.h"
 #include "GameLogic/Module/CreateModule.h"
@@ -279,6 +280,14 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_LANEMARCH;
 	else if (token == "laneplace")
 		*action = SCENARIO_ACTION_LANEPLACE;
+	else if (token == "lanetier")
+		*action = SCENARIO_ACTION_LANETIER;
+	else if (token == "lanesell")
+		*action = SCENARIO_ACTION_LANESELL;
+	else if (token == "lanemove")
+		*action = SCENARIO_ACTION_LANEMOVE;
+	else if (token == "laneupgrade")
+		*action = SCENARIO_ACTION_LANEUPGRADE;
 	else
 		return FALSE;
 
@@ -395,6 +404,10 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_HEALTH:			return SCENARIO_TOKENS_STANCE;
 		case SCENARIO_ACTION_LANEMARCH:		return SCENARIO_TOKENS_MOVE;
 		case SCENARIO_ACTION_LANEPLACE:		return SCENARIO_TOKENS_ATTACK;
+		case SCENARIO_ACTION_LANETIER:		return SCENARIO_TOKENS_MOVE;
+		case SCENARIO_ACTION_LANESELL:		return SCENARIO_TOKENS_ATTACK;
+		case SCENARIO_ACTION_LANEMOVE:		return SCENARIO_TOKENS_ATTACK + 2;
+		case SCENARIO_ACTION_LANEUPGRADE:	return SCENARIO_TOKENS_STOP;
 	}
 	return SCENARIO_TOKENS_STOP;
 }
@@ -598,6 +611,23 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 			action->at.x = (Real)strtod( text, &end );
 			if (end == text || *end != 0)
 				return SCENARIO_PARSE_BAD_POSITION;
+			break;
+		}
+
+		case SCENARIO_ACTION_LANETIER:
+		case SCENARIO_ACTION_LANESELL:
+		case SCENARIO_ACTION_LANEMOVE:
+		{
+			// the order's integers, kept as written and read again when it runs
+			for (Int t = 3; t < tokensNeededFor( actionType ); ++t)
+			{
+				Int value;
+				if (!parseWholeNumber( tokens[ t ], &value ))
+					return SCENARIO_PARSE_BAD_POSITION;
+				if (t > 3)
+					action->name.concat( ' ' );
+				action->name.concat( tokens[ t ] );
+			}
 			break;
 		}
 
@@ -2315,6 +2345,10 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 		case SCENARIO_ACTION_AIRLIFT:
 		case SCENARIO_ACTION_LANEMARCH:
 		case SCENARIO_ACTION_LANEPLACE:
+		case SCENARIO_ACTION_LANETIER:
+		case SCENARIO_ACTION_LANESELL:
+		case SCENARIO_ACTION_LANEMOVE:
+		case SCENARIO_ACTION_LANEUPGRADE:
 			ordered = FALSE;		// handled before the group is built
 			break;
 	}
@@ -2573,6 +2607,39 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 	if (action.action == SCENARIO_ACTION_LANEPLACE)
 		return TheLaneWarDirector->placeUnit( player, TheThingFactory->findTemplate( action.selector, FALSE ),
 																					(Int)action.at.x, (Int)action.at.y );
+
+	// the other Lane War orders go in as MSG_LANEWAR_ORDER's integers do
+	if (action.action == SCENARIO_ACTION_LANETIER || action.action == SCENARIO_ACTION_LANESELL
+			|| action.action == SCENARIO_ACTION_LANEMOVE || action.action == SCENARIO_ACTION_LANEUPGRADE)
+	{
+		Int args[ 6 ];
+		Int argCount = 0;
+		Int kind = LANEWAR_ORDER_TIER;
+		if (action.action == SCENARIO_ACTION_LANEUPGRADE)
+		{
+			kind = LANEWAR_ORDER_UPGRADE;
+			const UpgradeTemplate *list[ LANEWAR_ROSTER_MAX ];
+			const Int listed = LaneWar_upgrades( player, list, LANEWAR_ROSTER_MAX );
+			args[ argCount++ ] = -1;
+			for (Int i = 0; i < listed; ++i)
+				if (list[ i ]->getUpgradeName() == action.selector)
+					args[ 0 ] = i;
+		}
+		else
+		{
+			kind = action.action == SCENARIO_ACTION_LANESELL ? LANEWAR_ORDER_SELL
+					 : action.action == SCENARIO_ACTION_LANEMOVE ? LANEWAR_ORDER_MOVE : LANEWAR_ORDER_TIER;
+			const char *at = action.name.str();
+			Int value = 0, used = 0;
+			while (argCount < 6 && sscanf( at, "%d%n", &value, &used ) == 1)
+			{
+				args[ argCount++ ] = value;
+				at += used;
+			}
+		}
+		TheLaneWarDirector->onOrder( player, kind, args, argCount );
+		return TRUE;
+	}
 
 	Coord3D position;
 	if (!resolveScenarioPosition( action, &position ))

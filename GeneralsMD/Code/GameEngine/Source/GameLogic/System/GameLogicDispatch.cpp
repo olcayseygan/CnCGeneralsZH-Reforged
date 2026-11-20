@@ -1023,14 +1023,14 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 
 		//---------------------------------------------------------------------------------------------
 		// A Lane War purchase (fork): (Int LaneWarOrderKind, then that kind's integers).  Only integers
-		// count, at most four after the kind; the director checks what they mean
+		// count, at most six after the kind (a move takes five); the director checks what they mean
 		case GameMessage::MSG_LANEWAR_ORDER:
 		{
 			if( msg->getArgumentCount() < 1 || msg->getArgumentDataType( 0 ) != ARGUMENTDATATYPE_INTEGER )
 				break;
-			Int args[ 4 ];
+			Int args[ 6 ];
 			Int argCount = 0;
-			for( Int i = 1; i < msg->getArgumentCount() && argCount < 4; ++i )
+			for( Int i = 1; i < msg->getArgumentCount() && argCount < 6; ++i )
 			{
 				if( msg->getArgumentDataType( i ) != ARGUMENTDATATYPE_INTEGER )
 					break;

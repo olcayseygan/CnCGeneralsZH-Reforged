@@ -111,6 +111,8 @@ bool EngineShader_Paints_Ground(EngineShaderProgram program);
 // Which transcribed programs read the scene's depth copy at t7: the foam water, for how deep the
 // water is under each pixel.  The copy is the soft particles' (DX11BackendClass::Take_Scene_Depth).
 bool EngineShader_Reads_Scene_Depth(EngineShaderProgram program);
+// Ground and classic foam use the same extended b0 layout on native rendering.
+bool EngineShader_Uses_Extended_Pixel_Constants(EngineShaderProgram program);
 
 // The two programs the Modern water style draws with: the plain names, which W3DWater registers
 // only under that style.  Their text reads the water's own constant block and fifteen stages.

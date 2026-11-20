@@ -244,6 +244,11 @@ public:
 	void Refuse_Next_Model_For_Test(unsigned mask) { ModelRefusalForTest |= mask; }
 	void Set_Team_Glow(bool marked) { TeamGlowDraw = marked; }
 	void Refuse_Next_Team_Glow_For_Test(unsigned mask) { TeamGlowRefusalForTest |= mask; }
+	bool Classic_Water_Foam_Available() const;
+	bool Prepare_Classic_Water_Foam();
+	struct SDL_GPUTexture *Classic_Water_Depth();
+	bool Build_Main_View_Constants(struct SdlEnginePixelConstants &, bool receiving);
+	void Refuse_Next_Foam_For_Test(unsigned flags) { FoamRefusalForTest = flags; }
 	SdlGpuFrame * Get_Gpu() const { return Gpu; }
 	SdlResourceMirrors * Get_Mirrors() const { return Mirrors; }
 	/// Draws recorded on the GPU, and the draws refused, by reason.
@@ -402,6 +407,7 @@ public:
 protected:
 	struct SunCapture;
 	std::shared_ptr<SunCapture> Sun;
+	unsigned FoamRefusalForTest = 0;
 	bool SunActive = false, SunFailed = false, SunReady = false;
 	bool SmokeGlow = false;
 	bool GlowDraw = false;

@@ -10,6 +10,7 @@
 #include "SdlRenderMatrix.h"
 #include "Platform/RenderEffects.h"
 #include "Platform/RenderTeamGlow.h"
+#include "Platform/RenderWaterFoam.h"
 #include "ffshader.h"
 #include <cstring>
 #include <SDL3/SDL.h>
@@ -30,7 +31,9 @@ struct PosixDevice9::PostSession {
     SdlSceneCaptureCache Captures;
     SdlMainViewSnapshot CurrentView, LastView, ViewStack[8], SoftView;
     bool SoftRequested = false;
-    bool WorldAO = false;
+    bool WorldAO = false, Classic = false;
+    SdlMainViewSnapshot FoamView;
+    uint64_t FoamRefusedKey = 0;
     SdlPostProcess Processor;
     SdlPostSettings Settings;
     SdlTarget Scene = {}, Presentation = {};
@@ -61,6 +64,7 @@ void PosixDevice9::Begin_Post(const RenderPost::Settings &settings)
     ModelEffect = 0; std::memset(ModelEffectParameters, 0, sizeof(ModelEffectParameters));
     TeamGlowDraw = false;
     TeamGlowAllowed = !settings.Classic; // do not reread TeamGlow: meshes keep their load-time markings
+    s.Classic = settings.Classic; s.FoamView = {}; s.FoamRefusedKey = 0;
     s.StandInTexture = nullptr; s.StandInSurface = nullptr;
     s.Settings = {};
     if (!settings.Classic && !DX11Post_Parse_Chain(settings.Chain, s.Settings.Chain, s.Settings.Count))
@@ -495,4 +499,48 @@ bool Available(IDirect3DDevice9 *d) {
     return frame && SDL_GPUTextureSupportsFormat(frame->Device(), SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT,
         SDL_GPU_TEXTURETYPE_2D, SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER);
 }
+}
+
+bool PosixDevice9::Build_Main_View_Constants(SdlEnginePixelConstants &constants, bool receiving)
+{
+    SdlMainViewSnapshot main;
+    if (!Read_Main_View(main, false, SdlSceneCapturePhase::OpaqueScene)) return false;
+    std::memcpy(constants.WorldFromClip, main.FullTextureWorldFromClip, sizeof(constants.WorldFromClip));
+    if (receiving) {
+        // Preserve the existing shadow's bounded-viewport/half-pixel convention
+        // while cosmetic reconstruction uses full-texture pixel coordinates.
+        float toShadowClip[16] = {}; toShadowClip[0] = float(main.Target.Width) / main.Viewport[2];
+        toShadowClip[5] = float(main.Target.Height) / main.Viewport[3]; toShadowClip[10] = toShadowClip[15] = 1;
+        toShadowClip[12] = (main.Target.Width - 2 * main.Viewport[0] - main.Viewport[2] - 1) / main.Viewport[2];
+        toShadowClip[13] = (2 * main.Viewport[1] + main.Viewport[3] - main.Target.Height + 1) / main.Viewport[3];
+        float folded[16]; multiply(toShadowClip, constants.ShadowFromClip, folded);
+        std::memcpy(constants.ShadowFromClip, folded, sizeof(folded));
+    }
+    constants.ShadowViewport[0] = 1.0f/main.Target.Width; constants.ShadowViewport[1] = 1.0f/main.Target.Height;
+    constants.ShadowViewport[2] = constants.ShadowViewport[3] = 0;
+    return true;
+}
+
+bool PosixDevice9::Prepare_Classic_Water_Foam()
+{
+    SdlMainViewSnapshot main;
+    if (!Post || Post->Classic || !Read_Main_View(main, false, SdlSceneCapturePhase::OpaqueScene)) return false;
+    if (Post->FoamRefusedKey == main.ViewKey) return false;
+    if (FoamRefusalForTest & 1) { FoamRefusalForTest &= ~1u; Post->FoamRefusedKey = main.ViewKey; return false; }
+    if (!Read_Main_View(Post->FoamView, true, SdlSceneCapturePhase::OpaqueScene)) {
+        Post->FoamRefusedKey = main.ViewKey; return false;
+    }
+    return true;
+}
+SDL_GPUTexture *PosixDevice9::Classic_Water_Depth()
+{
+    SdlMainViewSnapshot main;
+    if (!Post || Post->Classic || !Post->FoamView.SampledDepth ||
+        !Read_Main_View(main, false, SdlSceneCapturePhase::OpaqueScene)) return nullptr;
+    return main.Capture.Same_Identity(Post->FoamView.Capture) ? Post->FoamView.SampledDepth : nullptr;
+}
+bool PosixDevice9::Classic_Water_Foam_Available() const { return Gpu && Gpu->Supports_Scene_Depth(); }
+namespace RenderWaterFoam {
+bool Available(IDirect3DDevice9 *device) { return device && static_cast<PosixDevice9 *>(device)->Classic_Water_Foam_Available(); }
+bool Ready(IDirect3DDevice9 *device) { return device && static_cast<PosixDevice9 *>(device)->Prepare_Classic_Water_Foam(); }
 }

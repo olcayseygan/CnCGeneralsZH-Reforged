@@ -44,6 +44,7 @@
 #include "Common/EarlyOptions.h"
 #include "Common/OptionsCatalog.h"
 #include "Platform/RenderTeamGlow.h"
+#include "Platform/RenderWaterFoam.h"
 #include "Common/Registry.h"
 #include "Common/version.h"
 
@@ -3160,6 +3161,7 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 	// This existing next-map option has an actual native HDR provider as well.
 	// Enabling its widget never changes the saved value or retags already loaded meshes.
 	findOptionWidget(*findOptionDef("TeamGlow"))->winEnable(RenderTeamGlow::Available());
+	findOptionWidget(*findOptionDef("WaterFoam"))->winEnable(RenderWaterFoam::Available());
 #endif
 
 	// A preset is its own step on the quality slider, whatever step Options.ini kept from a Custom mix,

@@ -107,6 +107,7 @@ found and fixed, EA's own, not port damage.**
 - On Mac and Linux a unit hit by an EMP crackles with its arcs again, a building without power takes the Windows outage look, a cloaked unit bends the picture behind it like glass and a detected stealth unit wears the heat shimmer. Classic graphics draws them as before. Thanks to Shin-Aska.
 - On Mac and Linux the Team Glow option is no longer greyed out: team colour on the models glows through the picture's bright range as it does on Windows, from the next map on. It stays off until you tick it, and Classic graphics keeps the plain paint. Thanks to Shin-Aska.
 - On Mac and Linux a defence's range on the ground is the smooth Windows ring in its owner's colour, laid over the terrain itself, in place of the blocky tiles that stepped across the cells. Thanks to Shin-Aska.
+- On Mac and Linux the Water Foam option draws on the Classic water: foam breaks along the shores of ponds and rivers and the banks soften into the ground, as on Windows. Classic graphics keeps EA's water. Thanks to Shin-Aska.
 
 ## A dropped player's army stays, and he can come back to it
 

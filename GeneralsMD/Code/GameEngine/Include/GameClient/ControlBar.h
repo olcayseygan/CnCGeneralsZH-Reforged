@@ -1062,6 +1062,8 @@ public:
 	void showSpecialPowerShortcutInstantly( Player *player );
 
 	void drawSpecialPowerShortcutMultiplierText();
+	/// how many of the local player's sources of `command`'s power are ready, 0 below two (a "1" says nothing)
+	Int readyShortcutCount( const CommandButton *command ) const;
 
 	Bool hasAnyShortcutSelection() const;
 

@@ -649,9 +649,10 @@ void ControlBar::layoutSidebar( void )
 		lamp.hi.y = hud.radar.lo.y + size.y;
 		placeWindowAt( m_radarAttackGlowWindow, lamp );
 	}
-	// the General button keeps its own seat; Sat and Onar take the two left of it (Sidebar_layout)
-	wearSidebarKey( SIDEBAR_KEY_GENERAL );
-	placeWindowAt( barWindow( "ButtonGeneral" ), hud.generalButton );
+	// No General button on the sidebar (the owner's, 2026-11-20): the powers fire from the wing and the
+	// W tab, and the General's Powers window opens on Ctrl+G, the Red Alert keys' TOGGLE_PURCHASE_SCIENCE.
+	// Its seat beside Sat and Onar stays empty.  setControlBarSchemeByPlayer hides it the same way
+	hideForSidebar( barWindow( "ButtonGeneral" ) );
 
 	// the power bar stood on end down the sidebar's left edge (W3DPowerDrawV, lane D)
 	GameWindow *power = barWindow( "PowerWindow" );

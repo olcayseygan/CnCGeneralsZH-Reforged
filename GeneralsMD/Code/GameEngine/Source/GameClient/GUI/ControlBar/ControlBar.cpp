@@ -5716,7 +5716,11 @@ void ControlBar::setControlBarSchemeByPlayer(Player *p)
 		showIdleButtons( TRUE );
 		if (buttonGeneral)
 		{
-			buttonGeneral->winHide(FALSE);
+			// the sidebar has no General button (layoutSidebar); restoreClassicWindows brings it back
+			if( m_sidebarLayout )
+				hideForSidebar( buttonGeneral );
+			else
+				buttonGeneral->winHide(FALSE);
 			buttonGeneral->winEnable(TRUE);
 		}
 	}
@@ -5765,7 +5769,11 @@ void ControlBar::setControlBarSchemeByPlayerTemplate( const PlayerTemplate *pt)
 		showIdleButtons( TRUE );
 		if (buttonGeneral)
 		{
-			buttonGeneral->winHide(FALSE);
+			// the sidebar has no General button (layoutSidebar); restoreClassicWindows brings it back
+			if( m_sidebarLayout )
+				hideForSidebar( buttonGeneral );
+			else
+				buttonGeneral->winHide(FALSE);
 			buttonGeneral->winEnable(TRUE);
 		}
 	}
@@ -7359,19 +7367,25 @@ void ControlBar::drawSpecialPowerShortcutMultiplierText()
 		if( command == NULL )
 			continue;
 
-		// the button's text: how many of its superweapons are ready, as the game shipped - a "1" is
-		// superfluous (Lorenzen)
-		UnicodeString text;
-
-		const SpecialPowerTemplate *spTemplate = command->getSpecialPowerTemplate();
-		Int numReady = 0;
-		if( spTemplate )
-			numReady = ThePlayerList->getLocalPlayer()->countReadyShortcutSpecialPowersOfType( spTemplate->getSpecialPowerType() );
-		if( numReady > 1 )
-			text.format( u"%d", numReady );
-
-		GadgetButtonSetText( win, text );
+		// How many of its superweapons are ready, as the game shipped it.  EA wrote the number into the
+		// button's text, which this fork's buttons draw as the key letter's badge in the top left corner
+		// (W3DPushButton), so two Particle Uplinks read as a key "2" or not at all; it is the bar's count
+		// badge now, the number in the corner a queue's cameo wears.  The text stays cleared as before
+		GadgetButtonSetText( win, UnicodeString() );
+		GadgetButtonSetCount( win, readyShortcutCount( command ) );
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+Int ControlBar::readyShortcutCount( const CommandButton *command ) const
+{
+	const SpecialPowerTemplate *spTemplate = command ? command->getSpecialPowerTemplate() : NULL;
+	Player *player = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+	if( spTemplate == NULL || player == NULL )
+		return 0;
+	// a "1" is superfluous (Lorenzen, EA's comment)
+	const Int numReady = player->countReadyShortcutSpecialPowersOfType( spTemplate->getSpecialPowerType() );
+	return numReady > 1 ? numReady : 0;
 }
 
 void ControlBar::animateSpecialPowerShortcut( Bool isOn )

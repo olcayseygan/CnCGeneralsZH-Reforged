@@ -1715,7 +1715,8 @@ void ControlBarArrowTransition::init( GameWindow *win )
 	
 	m_arrowImage = TheControlBar->getArrowImage();
 	GameWindow *twin = TheWindowManager->winGetWindowFromId(NULL, TheNameKeyGenerator->nameToKey("ControlBar.wnd:ButtonGeneral"));
-	if(!twin || !m_arrowImage)
+	// no arrow at a General button that is not there (the Red Alert style sidebar hides it)
+	if(!twin || !m_arrowImage || twin->winIsHidden())
 	{
 		m_isFinished = TRUE;
 		return;

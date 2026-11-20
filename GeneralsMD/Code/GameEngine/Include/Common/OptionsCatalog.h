@@ -172,7 +172,15 @@ enum { HEALTH_BAR_COLORS_COUNT = 2 };
 // bottom (docs/plans/HUD-SIDEBAR-LAYOUT.md).  HudLayoutForScreen (GameClient/Display.h) places it.
 // Strings: GUI:HudLayout, GUI:HudLayout0, GUI:HudLayout1, TOOLTIP:HudLayout; the sidebar's own
 // GUI:SidebarTab0..3 (Bina, Yükseltmeler ve güçler, Piyade, Araç), GUI:SidebarAll, later GUI:SidebarSell, GUI:SidebarRepair.
-enum { HUD_LAYOUT_CLASSIC, HUD_LAYOUT_SIDEBAR, HUD_LAYOUT_COUNT };
+// Two more stand on the Classic bar's own rectangles and only leave pieces off it (the owner's, TODO
+// "HUD Design and Features" 5 and 6), so everything that places windows reads them as Classic:
+// 2 HUD_LAYOUT_RETAIL, shown as "Classic" (0 is shown as "Full" since), no production list, no hero
+// cell, no squad list, the superweapons as named countdowns and the general's powers one column up
+// from the bottom; 3 HUD_LAYOUT_PLAIN, shown as "Reforged", today's bar less the command tabs, the
+// idle column and the signal keys over the radar.  GUI:HudLayout2, GUI:HudLayout3.
+enum { HUD_LAYOUT_CLASSIC, HUD_LAYOUT_SIDEBAR, HUD_LAYOUT_RETAIL, HUD_LAYOUT_PLAIN, HUD_LAYOUT_COUNT };
+/// the Classic bar's Buildings, Ground and Aircraft tabs and their painted socket: Full only (the sidebar has its own)
+inline Bool hudLayoutHasCommandTabs( Int layout ) { return layout != HUD_LAYOUT_RETAIL && layout != HUD_LAYOUT_PLAIN; }
 
 // How wide the in-game interface may spread ("HudWidth", GlobalData m_hudWidth), for either layout: 0 the
 // whole screen, the default; 1 a centred 21:9 area, 2 a centred 16:9 one, so a player on a wider screen

@@ -33,6 +33,7 @@
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
 #include "Common/NameKeyGenerator.h"
+#include "Common/OptionsCatalog.h"
 #include "Common/ThingTemplate.h"
 #include "Common/ThingFactory.h"
 #include "Common/Player.h"
@@ -2070,7 +2071,8 @@ Bool ControlBar::getCommandGridRect( IRegion2D *rect ) const
 //-------------------------------------------------------------------------------------------------
 void ControlBar::toggleCommandTab( Int tab )
 {
-	if( tab < 0 || tab >= COMMAND_TAB_COUNT )
+	// the Classic and Reforged layouts (HUD_LAYOUT_RETAIL, HUD_LAYOUT_PLAIN) have no tabs to open
+	if( tab < 0 || tab >= COMMAND_TAB_COUNT || !hudLayoutHasCommandTabs( TheGlobalData->m_hudLayout ) )
 		return;
 
 	// a structure on the cursor belongs to the bar it was picked from
@@ -2119,8 +2121,9 @@ void ControlBar::updateCommandTabButtons( void )
 	const Bool seated = m_controlBarSchemeManager != NULL && m_controlBarSchemeManager->getCommandTabSeats( seatTab, &seatPlate );
 	IRegion2D grid;
 	const Bool haveGrid = getCommandGridRect( &grid );
-	// the sidebar has its own tabs (ControlBarSidebar.h): these hide and close under it
-	const Bool shown = playing && !m_sidebarLayout && m_contextParent[ CP_MASTER ] != NULL && !m_contextParent[ CP_MASTER ]->winIsHidden()
+	// the sidebar has its own tabs (ControlBarSidebar.h): these hide and close under it, and the
+	// Classic and Reforged layouts have none (drawPainting leaves their socket off the bar too)
+	const Bool shown = playing && !m_sidebarLayout && hudLayoutHasCommandTabs( TheGlobalData->m_hudLayout ) && m_contextParent[ CP_MASTER ] != NULL && !m_contextParent[ CP_MASTER ]->winIsHidden()
 		&& !TheInGameUI->isQuitMenuVisible() && ( seated || ( haveGrid && grid.lo.y < (Int)TheDisplay->getHeight() ) );
 
 	GameWindow *parent = m_commandTabParent;
@@ -2858,8 +2861,9 @@ void ControlBar::updateSignalKeys( void )
 {
 	IRegion2D seat[ SIGNAL_KEYS ], plate;
 	const Bool seated = m_controlBarSchemeManager != NULL && m_controlBarSchemeManager->getSignalSeats( seat, &plate );
-	// the seats are painted on the Classic bar's radar plate, which the sidebar does not have
-	const Bool shown = seated && !m_sidebarLayout && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame()
+	// the seats are painted on the Classic bar's radar plate, which the sidebar does not have; the
+	// Reforged layout (HUD_LAYOUT_PLAIN) leaves them off.  The keys' own hotkeys still signal
+	const Bool shown = seated && !m_sidebarLayout && TheGlobalData->m_hudLayout != HUD_LAYOUT_PLAIN && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame()
 		&& m_contextParent[ CP_MASTER ] != NULL && !m_contextParent[ CP_MASTER ]->winIsHidden()
 		&& !TheInGameUI->isQuitMenuVisible();
 

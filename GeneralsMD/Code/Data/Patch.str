@@ -2171,7 +2171,7 @@ GUI:HudLayout
 END
 
 GUI:HudLayout0
-"Classic"
+"Full"
 END
 
 GUI:HudLayout1
@@ -2179,7 +2179,7 @@ GUI:HudLayout1
 END
 
 TOOLTIP:HudLayout
-"Classic keeps the command bar along the bottom and the game's own keys. Red Alert Style moves building and training into a sidebar down the right, puts the selected units' commands in a strip along the bottom, and takes Red Alert 2's keys where they fit this game: Q W E R for the build tabs, D to deploy, L to sell, K to repair, Z held for waypoints. Each layout keeps its own key changes on the Hotkeys page."
+"Full keeps the command bar along the bottom with everything this version adds, and the game's own keys. Classic is that bar as the original game had it: no production list, no squad list, the superweapons written out as a name and a time, the general's powers in one column climbing the right edge. Reforged is the full bar without the build tabs, the idle unit keys and the signal keys over the minimap. Red Alert Style moves building and training into a sidebar down the right, puts the selected units' commands in a strip along the bottom, and takes Red Alert 2's keys where they fit this game: Q W E R for the build tabs, D to deploy, L to sell, K to repair, Z held for waypoints. The three bottom bars share one set of keys and Red Alert Style keeps its own; change either on the Hotkeys page."
 END
 
 GUI:HudWidth
@@ -7033,6 +7033,14 @@ END
 
 SCIENCE:StealthTalent10BShort
 "Scrambler hides a wider area"
+END
+
+GUI:HudLayout2
+"Classic"
+END
+
+GUI:HudLayout3
+"Reforged"
 END
 
 Network:WaitingForReconnect

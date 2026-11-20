@@ -81,6 +81,7 @@ public:
 	ICoord2D m_position;					///< the position we'll draw it at
 	ICoord2D m_size;							///< the size of the image needed when we draw it
 	Image *m_image;								///< the actual pointer to the mapped image
+	Image *m_imageNoTabs;					///< <ImageName>NoTabs when mapped: the painting without the command tabs' socket, drawn by the layouts that have no command tabs
 
 	// m_layer is where the image will get drawn,  everything in layer 0-2 gets drawn during the forground draw
 	// the layers 3-5 gets drawn during the background draw

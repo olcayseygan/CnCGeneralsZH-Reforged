@@ -57,6 +57,7 @@
 #include "Lib/Clock.h"
 #include "Common/GlobalData.h"
 #include "Common/NameKeyGenerator.h"
+#include "Common/OptionsCatalog.h"
 
 #include "Common/Player.h"
 #include "Common/PlayerTemplate.h"
@@ -260,12 +261,14 @@ ControlBarSchemeImage::ControlBarSchemeImage( void )
 	m_position.x = m_position.y = 0;
 	m_size.x = m_size.y = 0;
 	m_image = NULL;
+	m_imageNoTabs = NULL;
 	m_layer = 0;
 }
 
 ControlBarSchemeImage::~ControlBarSchemeImage( void )
 {
 	m_image = NULL;
+	m_imageNoTabs = NULL;
 }
 
 ControlBarSchemeAnimation::ControlBarSchemeAnimation( void )
@@ -1069,6 +1072,13 @@ void ControlBarSchemeManager::parseImagePart(INI *ini, void *instance, void* /*s
 
 	ControlBarSchemeImage *schemeImage = NEW ControlBarSchemeImage;
 	ini->initFromINI(schemeImage, myFieldParse);
+	// the same painting without the command tabs' socket, for the layouts that have no tabs
+	if( schemeImage->m_image != NULL && TheMappedImageCollection != NULL )
+	{
+		AsciiString noTabs = schemeImage->m_image->getName();
+		noTabs.concat( "NoTabs" );
+		schemeImage->m_imageNoTabs = (Image *)TheMappedImageCollection->findImageByName( noTabs );
+	}
 	((ControlBarScheme*)instance)->addImage(schemeImage);
 
 }
@@ -1838,6 +1848,31 @@ void ControlBarSchemeManager::drawPainting( ICoord2D offset, Bool foreground )
 	const Int height = TheDisplay->getHeight();
 	const ICoord2D barOffset = offset;
 
+	// The Classic and Reforged layouts (HUD_LAYOUT_RETAIL, HUD_LAYOUT_PLAIN) have no command tabs, and
+	// their painted socket would stand empty over the bar's top.  A scheme whose painting has a NoTabs
+	// copy (<ImageName>NoTabs, the hud-artist's, rim closed where the socket was) draws that copy.  One
+	// without it has the piece holding the socket drawn round the socket's plate, which leaves the
+	// battlefield showing there; the plate goes to the screen as updateCommandTabButtons seats it
+	const Bool noTabs = !hudLayoutHasCommandTabs( TheGlobalData->m_hudLayout );
+	Bool plainPainting = FALSE;
+	for( Int layer = first; layer < last && noTabs && !plainPainting; layer++ )
+		for( ControlBarScheme::ControlBarSchemeImageList::const_iterator it = m_currentScheme->m_layer[ layer ].begin();
+				 it != m_currentScheme->m_layer[ layer ].end(); ++it )
+			if( (*it)->m_imageNoTabs != NULL )
+			{
+				plainPainting = TRUE;
+				break;
+			}
+	Int platePiece = -1;
+	IRegion2D plate;
+	IRegion2D seats[ ControlBarScheme::COMMAND_TAB_IMAGE_COUNT ];
+	if( noTabs && !plainPainting && getCommandTabSeats( seats, &plate ) )
+	{
+		const IRegion2D design = plate;
+		platePiece = ControlBarHudPieceForDesignX( 0.5f * ( design.lo.x + design.hi.x ) );
+		ControlBarPanelDesignToScreen( platePiece, &design, width, height, &plate );
+	}
+
 	for( Int p = 0; p < ControlBar::CB_PANEL_COUNT; p++ )
 	{
 		// the left piece holds only the observer's column, which stands against the radar's frame
@@ -1853,28 +1888,61 @@ void ControlBarSchemeManager::drawPainting( ICoord2D offset, Bool foreground )
 		clip.hi.x += offset.x;
 		clip.lo.y += offset.y;
 		clip.hi.y += offset.y;
-		TheDisplay->setClipRegion( &clip );
-		TheDisplay->enableClipping( TRUE );
 
-		for( Int layer = last - 1; layer >= first; layer-- )
+		// the piece's clip, or the four bands of it round the socket's plate: above, left, right, below
+		IRegion2D clips[ 4 ];
+		Int clipCount = 0;
+		if( p == platePiece )
 		{
-			for( ControlBarScheme::ControlBarSchemeImageList::const_iterator it = m_currentScheme->m_layer[ layer ].begin();
-					 it != m_currentScheme->m_layer[ layer ].end(); ++it )
+			const Int px0 = plate.lo.x + offset.x, px1 = plate.hi.x + offset.x;
+			const Int py0 = plate.lo.y + offset.y, py1 = plate.hi.y + offset.y;
+			const Int bands[ 4 ][ 4 ] =
 			{
-				const ControlBarSchemeImage *schemeImage = *it;
-				if( schemeImage->m_image == NULL )
+				{ clip.lo.x, clip.lo.y, clip.hi.x, min( py0, clip.hi.y ) },
+				{ clip.lo.x, max( py0, clip.lo.y ), min( px0, clip.hi.x ), min( py1, clip.hi.y ) },
+				{ max( px1, clip.lo.x ), max( py0, clip.lo.y ), clip.hi.x, min( py1, clip.hi.y ) },
+				{ clip.lo.x, max( py1, clip.lo.y ), clip.hi.x, clip.hi.y },
+			};
+			for( Int b = 0; b < 4; b++ )
+			{
+				if( bands[ b ][ 2 ] <= bands[ b ][ 0 ] || bands[ b ][ 3 ] <= bands[ b ][ 1 ] )
 					continue;
-				IRegion2D design, rect;
-				design.lo.x = REAL_TO_INT_FLOOR( schemeImage->m_position.x * toDesignX );
-				design.lo.y = REAL_TO_INT_FLOOR( schemeImage->m_position.y * toDesignY );
-				design.hi.x = REAL_TO_INT_CEIL( ( schemeImage->m_position.x + schemeImage->m_size.x ) * toDesignX );
-				design.hi.y = REAL_TO_INT_CEIL( ( schemeImage->m_position.y + schemeImage->m_size.y ) * toDesignY );
-				ControlBarPanelDesignToScreen( p, &design, width, height, &rect );
-				TheDisplay->drawImage( schemeImage->m_image, rect.lo.x + offset.x, rect.lo.y + offset.y,
-															 rect.hi.x + offset.x, rect.hi.y + offset.y );
+				clips[ clipCount ].lo.x = bands[ b ][ 0 ];
+				clips[ clipCount ].lo.y = bands[ b ][ 1 ];
+				clips[ clipCount ].hi.x = bands[ b ][ 2 ];
+				clips[ clipCount ].hi.y = bands[ b ][ 3 ];
+				clipCount++;
 			}
 		}
-		TheDisplay->enableClipping( FALSE );
+		else
+			clips[ clipCount++ ] = clip;
+
+		for( Int c = 0; c < clipCount; c++ )
+		{
+			TheDisplay->setClipRegion( &clips[ c ] );
+			TheDisplay->enableClipping( TRUE );
+
+			for( Int layer = last - 1; layer >= first; layer-- )
+			{
+				for( ControlBarScheme::ControlBarSchemeImageList::const_iterator it = m_currentScheme->m_layer[ layer ].begin();
+						 it != m_currentScheme->m_layer[ layer ].end(); ++it )
+				{
+					const ControlBarSchemeImage *schemeImage = *it;
+					if( schemeImage->m_image == NULL )
+						continue;
+					IRegion2D design, rect;
+					design.lo.x = REAL_TO_INT_FLOOR( schemeImage->m_position.x * toDesignX );
+					design.lo.y = REAL_TO_INT_FLOOR( schemeImage->m_position.y * toDesignY );
+					design.hi.x = REAL_TO_INT_CEIL( ( schemeImage->m_position.x + schemeImage->m_size.x ) * toDesignX );
+					design.hi.y = REAL_TO_INT_CEIL( ( schemeImage->m_position.y + schemeImage->m_size.y ) * toDesignY );
+					ControlBarPanelDesignToScreen( p, &design, width, height, &rect );
+					const Image *painting = noTabs && schemeImage->m_imageNoTabs != NULL ? schemeImage->m_imageNoTabs : schemeImage->m_image;
+					TheDisplay->drawImage( painting, rect.lo.x + offset.x, rect.lo.y + offset.y,
+																 rect.hi.x + offset.x, rect.hi.y + offset.y );
+				}
+			}
+			TheDisplay->enableClipping( FALSE );
+		}
 	}
 
 	// the radar window travels with the bar, so its frame needs no offset

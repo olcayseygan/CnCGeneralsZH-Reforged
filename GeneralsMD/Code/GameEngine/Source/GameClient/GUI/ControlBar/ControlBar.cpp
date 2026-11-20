@@ -5678,11 +5678,14 @@ void ControlBar::showIdleButtons( Bool show )
 		NAMEKEY( "ControlBar.wnd:ButtonIdleAircraft" ),
 		NAMEKEY( "ControlBar.wnd:ButtonSelectArmy" ),
 	};
+	// the Reforged layout (HUD_LAYOUT_PLAIN) keeps EA's idle worker key and leaves the fork's idle
+	// column off: the infantry, vehicle and aircraft keys and the army key
+	const Bool plain = TheGlobalData != NULL && TheGlobalData->m_hudLayout == HUD_LAYOUT_PLAIN;
 	for( Int i = 0; i < 5; i++ )
 	{
 		GameWindow *win = TheWindowManager->winGetWindowFromId( NULL, ids[ i ] );
 		if( win )
-			win->winHide( !show );
+			win->winHide( !show || ( plain && i > 0 ) );
 	}
 }
 
@@ -6559,6 +6562,13 @@ static void drawPowersWingSlot( const ControlBar::TraySlot *slot, Int x0, Int y0
 	}
 }
 
+/// the Classic tray's powers to a row: the Classic layout (HUD_LAYOUT_RETAIL) stands them in one column
+/// climbing from the bottom.  Only the picture: the two-key chords still read them three to a group
+static Int powerTrayColumns( void )
+{
+	return TheGlobalData != NULL && TheGlobalData->m_hudLayout == HUD_LAYOUT_RETAIL ? 1 : SPECIAL_POWER_SHORTCUT_COLS;
+}
+
 static void drawPowerTraySlot( GameWindow *window, WinInstanceData *instData )
 {
 	const ControlBar::TraySlot *slot = (const ControlBar::TraySlot *)window->winGetUserData();
@@ -6669,9 +6679,9 @@ void ControlBar::arrangeSpecialPowerShortcutGrid( void )
 			shown[ count++ ] = slotIndex;
 	}
 
-	const Int cols = SPECIAL_POWER_SHORTCUT_COLS;
+	const Int cols = powerTrayColumns();
 	const Int rows = ( count + cols - 1 ) / cols;
-	Int rowLength[ MAX_SPECIAL_POWER_SHORTCUTS / SPECIAL_POWER_SHORTCUT_COLS + 2 ];
+	Int rowLength[ MAX_SPECIAL_POWER_SHORTCUTS + 1 ];
 	for( Int r = 0; r <= rows; r++ )
 		rowLength[ r ] = r < rows ? MIN( cols, count - r * cols ) : 0;
 
@@ -6761,9 +6771,9 @@ void ControlBar::powerTrayMetrics( const Image *const *tray, ICoord2D *origin, I
 	*top = edgeTop ? REAL_TO_INT_CEIL( edgeTop->getImageHeight() * k ) : 0;
 	*foot = edgeFoot ? REAL_TO_INT_CEIL( edgeFoot->getImageHeight() * k ) : 0;
 
-	const Int cols = SPECIAL_POWER_SHORTCUT_COLS;
+	const Int cols = powerTrayColumns();
 	const Int rows = ( MAX_SPECIAL_POWER_SHORTCUTS + cols - 1 ) / cols;
-	*bottom = TheDisplay->getHeight() - REAL_TO_INT( ( 1080 - POWER_TRAY_FOOT_Y ) * k );
+	*bottom =TheDisplay->getHeight() - REAL_TO_INT( ( 1080 - POWER_TRAY_FOOT_Y ) * k );
 	HudLayoutRects hud;
 	getHudLayoutRects( &hud );
 	origin->x = hud.play.hi.x - powerTrayClosingEdge( hud, *left ) - cols * cell->x - *left;

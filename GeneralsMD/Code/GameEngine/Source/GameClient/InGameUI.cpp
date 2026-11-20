@@ -9127,6 +9127,7 @@ void InGameUI::postDraw( void )
 			SuperweaponInfo *info;	///< its timer, whose strings the Red Alert style rows write into
 			Bool enemy;					///< the local player's enemy's: a red row
 			AsciiString power;	///< the special power's name, "GUI:<power>" its label
+			Color house;				///< its owner's house colour as his units wear it (the Classic layout's swatch)
 		};
 		std::vector< ListedSuperweapon > listed;
 
@@ -9246,7 +9247,8 @@ void InGameUI::postDraw( void )
                 const Bool enemy = ThePlayerList->getLocalPlayer()->getRelationship( owningObject->getTeam() ) == ENEMIES;
                 ListedSuperweapon line = { shortcut ? shortcut->getButtonImage() : NULL,
                                            clientColor( info->getColor() ), isReady, readySecs, percent, jump,
-                                           info, enemy, mapIt->first };
+                                           info, enemy, mapIt->first,
+                                           clientPlayerColor( owningObject->getControllingPlayer() ) };
                 listed.push_back( line );
                 if (info->getSpecialPowerTemplate()->isSharedNSync())
                   break; // Wow, it is almost too easy!
@@ -9461,6 +9463,66 @@ void InGameUI::postDraw( void )
 					rest.format( u"+%d", (Int)listed.size() - rows );
 					drawHudTab( style.tabUp, m_superweaponTab, -1, cellString( m_superweaponMoreText, rest ) );
 				}
+			}
+			else if( TheGlobalData->m_hudLayout == HUD_LAYOUT_RETAIL )
+			{
+				//
+				// The Classic layout writes them out as EA did: a line each down the right edge from under
+				// the info strip, the power's name right-aligned to a seam and the time left, or "Ready",
+				// after it.  Light letters with a black drop on a dark plate, whatever the owner's colour:
+				// a dark red one was lost on desert ground, so the colour is only a swatch at the plate's
+				// left end.  A click on a line looks at your own building, as a cell's does.
+				// ponytail: past SUPERWEAPON_LIST_CELLS lines the rest are not listed (your own come first);
+				// a "+N" line if a match ever has more than twelve
+				//
+				const Int rows = min( (Int)listed.size(), (Int)SUPERWEAPON_LIST_CELLS );
+				const Int point = max( REAL_TO_INT( 12 * rects.scale + 0.5f ), 6 );
+				const Int pad = max( REAL_TO_INT( 4 * rects.scale + 0.5f ), 2 );
+				const UnicodeString readyText = TheGameText->fetch( "GUI:SidebarSuperweaponReady" );
+				Int timeW = 0;
+				for( Int each = 0; each < rows; each++ )
+				{
+					const ListedSuperweapon &line = listed[ each ];
+					AsciiString label;
+					label.format( "GUI:%s", line.power.str() );
+					UnicodeString time;
+					if( line.ready )
+						time = readyText;
+					else
+						time.format( u"%d:%2.2d", line.seconds / 60, line.seconds % 60 );
+					line.info->setFont( m_superweaponNormalFont, point, TRUE );
+					line.info->setText( TheGameText->fetch( label ), time );
+					timeW = max( timeW, line.info->getTimeString()->getWidth() );
+				}
+
+				const Int right = rects.play.hi.x - 2 * pad;
+				const Int seam = right - timeW;
+				Int y = max( hudStripBottom(), TheUIRect().y ) + stripPixels( SUPERWEAPON_TRAY_DROP );
+				const Color drop = GameMakeColor( 0, 0, 0, 255 );
+				const Color ink = GameMakeColor( 240, 244, 246, 255 );
+				const Color readyInk = GameMakeColor( 255, 226, 120, 255 );
+				const Int swatch = max( REAL_TO_INT( 5 * rects.scale + 0.5f ), 3 );
+				for( Int each = 0; each < rows; each++ )
+				{
+					const ListedSuperweapon &line = listed[ each ];
+					const Int h = (Int)line.info->getHeight();
+					IRegion2D &box = m_superweaponPlace[ each ];
+					box.lo.x = seam - 2 * pad - line.info->getNameString()->getWidth() - swatch - pad;
+					box.hi.x = right + pad;
+					box.lo.y = y - 1;
+					box.hi.y = y + h + 1;
+					m_superweaponJump[ each ] = line.jump;
+					TheDisplay->drawFillRect( box.lo.x, box.lo.y, box.width(), box.height(), GameMakeColor( 0, 0, 0, 180 ) );
+					TheDisplay->drawOpenRect( box.lo.x, box.lo.y, box.width(), box.height(), 1, GameMakeColor( 0, 0, 0, 255 ) );
+					// the house colour at full strength, ringed in black so a dark one still reads on the plate
+					TheDisplay->drawFillRect( box.lo.x + 1, box.lo.y + 1, swatch + 2, box.height() - 2, GameMakeColor( 0, 0, 0, 255 ) );
+					TheDisplay->drawFillRect( box.lo.x + 2, box.lo.y + 2, swatch, box.height() - 4, line.house | 0xFF000000 );
+					line.info->drawName( seam - pad, y, ink, drop );
+					line.info->drawTime( seam, y, line.ready ? readyInk : ink, drop );
+					y = box.hi.y + pad / 2;
+				}
+				m_superweaponCells = rows;
+				rackPlateTop = y + rackPx( RACK_TRAY_GAP );
 			}
 			else
 			{
@@ -12934,6 +12996,10 @@ void InGameUI::drawProductionList( void )
 	m_productionListTab = noHudTab();
 	m_heroCell = noHudTab();
 	if( !TheGameLogic->isInGame() || TheGameLogic->isInShellGame() )
+		return;
+
+	// the Classic layout (HUD_LAYOUT_RETAIL) has neither the list nor the hero's cell over it
+	if( TheGlobalData->m_hudLayout == HUD_LAYOUT_RETAIL )
 		return;
 
 	// a watcher has no queue of his own

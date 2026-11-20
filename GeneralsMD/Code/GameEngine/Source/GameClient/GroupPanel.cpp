@@ -1644,9 +1644,10 @@ void GroupPanel_draw( Int rightTop )
 		return;
 	}
 
-	// a watcher, a replay and a hidden command bar (cinematics) get neither half
+	// a watcher, a replay, a hidden command bar (cinematics) and the Classic layout get neither half
 	Player *player = ThePlayerList->getLocalPlayer();
 	if( player == NULL || !player->isPlayerActive() || TheGameLogic->isInReplayGame() || TheInGameUI->isQuitMenuVisible()
+			|| TheGlobalData->m_hudLayout == HUD_LAYOUT_RETAIL
 			|| controlBarTop( ControlBar::CB_PANEL_LEFT ) >= (Int)TheDisplay->getHeight() )
 	{
 		hidePanel();

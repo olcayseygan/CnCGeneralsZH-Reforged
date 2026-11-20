@@ -604,7 +604,8 @@ const OptionDef TheOptionCatalog[] =
 		get_m_healthBarColors, set_m_healthBarColors },
 
 	// Where the in-game interface sits: 0 Classic, the bar along the bottom, 1 the Red Alert style
-	// sidebar down the right with a command strip under the world (docs/plans/HUD-SIDEBAR-LAYOUT.md).
+	// sidebar down the right with a command strip under the world (docs/plans/HUD-SIDEBAR-LAYOUT.md),
+	// 2 and 3 the Classic bar with pieces left off (HUD_LAYOUT_RETAIL, HUD_LAYOUT_PLAIN).
 	// Read as the bar is laid out, so Accept builds the shell and the bar again, in a match too.
 	// Every menu is fitted; MenuLayout, HudScale and the old InterfaceStyle are gone for good.  The
 	// layout brings its keys too, Classic's or Red Alert's (set_m_hudLayout); HotkeyScheme was a row of

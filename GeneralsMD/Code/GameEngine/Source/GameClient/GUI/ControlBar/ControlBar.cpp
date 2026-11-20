@@ -6589,9 +6589,18 @@ static void drawPowerTraySlot( GameWindow *window, WinInstanceData *instData )
 		drawPowersWingSlot( slot, x0, y0, x1, y1 );
 		return;
 	}
-	// the Classic layout's column is bare (arrangeSpecialPowerShortcutGrid)
+	// The Classic layout's column has no tray steel (arrangeSpecialPowerShortcutGrid): each button wears
+	// retail's own frame, SATraySmall, the slot's insets round it, drawn past the slot, which is the
+	// button alone so a click beside it reaches the map
 	if( powerTrayColumns() == 1 )
+	{
+		static const Image *frame = NULL;
+		if( frame == NULL && TheMappedImageCollection != NULL )
+			frame = TheMappedImageCollection->findImageByName( "SATraySmall" );
+		if( frame != NULL )
+			TheDisplay->drawImage( frame, x0 - slot->edgeLeft, y0 - slot->edgeTop, x1 + slot->edgeRight, y1 + slot->edgeBottom );
 		return;
+	}
 
 	const Image *const *tray = TheControlBar->getControlBarSchemeManager()->getPowerTray();
 	if( tray == NULL )
@@ -6677,6 +6686,30 @@ void ControlBar::arrangeSpecialPowerShortcutGrid( void )
 	getHudLayoutRects( &hud );
 	const Int closing = bare ? 0 : powerTrayClosingEdge( hud, left );
 	const Int right = hud.play.hi.x - closing;
+	// The bare column's buttons each wear retail's frame, SATraySmall: GenPowersShortcutBar<side>.wnd's
+	// ButtonParent is 48x41 at 800x600 with its button at 1,7, 39x27, so the frames stack edge to edge
+	// at the buttons' scale and the pitch is a frame.  The frame (the column's own parent) runs from the
+	// screen's top so a long column's top button stays inside it
+	Int frameL = 0, frameT = 0;
+	if( bare )
+	{
+		GameWindow *first = NULL;
+		for( Int each = 0; each < MAX_SPECIAL_POWER_SHORTCUTS && first == NULL; each++ )
+			if( m_trayLaidOutMask & ( 1u << each ) )
+				first = m_specialPowerShortcutButtons[ each ];
+		if( first != NULL )
+		{
+			Int bw0, bh0;
+			first->winGetSize( &bw0, &bh0 );
+			const Real sx = bw0 / 39.0f, sy = bh0 / 27.0f;
+			frameL = REAL_TO_INT( 1.0f * sx + 0.5f );
+			frameT = REAL_TO_INT( 7.0f * sy + 0.5f );
+			cell.x = REAL_TO_INT( 48.0f * sx + 0.5f );
+			cell.y = REAL_TO_INT( 41.0f * sy + 0.5f );
+		}
+		origin.x = right - cell.x;
+		origin.y = 0;
+	}
 	if( !m_trayFramePlaced )
 	{
 		m_specialPowerShortcutParent->winSetPosition( origin.x, origin.y );
@@ -6733,14 +6766,20 @@ void ControlBar::arrangeSpecialPowerShortcutGrid( void )
 		if( bare )
 		{
 			// the bare column's slot is its button and nothing more, so a click between two buttons
-			// reaches the map: the button centred in its cell, the slot round it
-			screen.lo.x += ( cell.x - bw ) / 2;
-			screen.lo.y += ( cell.y - bh ) / 2;
+			// reaches the map: the button where retail's frame holds it, the slot round the button.
+			// The frame is drawn round the slot (drawPowerTraySlot), its insets kept in the edges
+			screen.lo.x += frameL;
+			screen.lo.y += frameT;
 			screen.hi.x = screen.lo.x + bw;
 			screen.hi.y = screen.lo.y + bh;
 			slot.cell.lo.x = slot.cell.lo.y = 0;
 			slot.cell.hi.x = bw;
 			slot.cell.hi.y = bh;
+			slot.edgeLeft = frameL;
+			slot.edgeTop = frameT;
+			slot.edgeRight = cell.x - frameL - bw;
+			slot.edgeBottom = cell.y - frameT - bh;
+			slot.stepRight = slot.stepBelow = 0;
 		}
 
 		slotWin->winSetPosition( screen.lo.x - origin.x, screen.lo.y - origin.y );

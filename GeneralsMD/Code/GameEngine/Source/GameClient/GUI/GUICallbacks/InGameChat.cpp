@@ -256,8 +256,8 @@ Bool handleInGameSlashCommands(UnicodeString uText)
 static void sendTeamRequest( const UnicodeString &line )
 {
 	static const struct { const WideChar *word; Int kind; } COMMANDS[] = {
-		{ u"help", AIREQ_HELP }, { u"yardim", AIREQ_HELP }, { u"yardım", AIREQ_HELP },
-		{ u"attack", AIREQ_ATTACK }, { u"saldir", AIREQ_ATTACK }, { u"saldır", AIREQ_ATTACK },
+		{ u"help", AIREQ_HELP }, { u"yardim", AIREQ_HELP }, { u"yard\u0131m", AIREQ_HELP },
+		{ u"attack", AIREQ_ATTACK }, { u"saldir", AIREQ_ATTACK }, { u"sald\u0131r", AIREQ_ATTACK },
 		{ u"money", AIREQ_MONEY }, { u"para", AIREQ_MONEY } };
 	for( Int c = 0; c < (Int)( sizeof( COMMANDS ) / sizeof( COMMANDS[ 0 ] ) ); ++c )
 	{

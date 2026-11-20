@@ -1184,6 +1184,39 @@ void GameLogic::refuseCorruptMap( void )
 }  // end refuseCorruptMap
 
 // ------------------------------------------------------------------------------------------------
+/** A map object whose originalOwner reads "StartOwner:1,3,5" belongs to the playable player standing
+	on the first of those start positions (1-based, Player_N_Start) that anybody holds, or to the
+	neutral player when none is. A map cannot name a lobby slot for an object, since which slot takes
+	which start is chosen in the lobby; the random map generator's Lane War map owns each team's
+	fortress and towers this way. The start positions are in the game setup every machine and the
+	replay agree on, and the player list is walked in its own order, so every machine picks the same
+	player. A load with no game setup (a map opened on its own) has no seats, and the map's own sides
+	would answer for start 1, so every such object goes neutral then. NULL for any other owner string. */
+// ------------------------------------------------------------------------------------------------
+static Team *teamForStartOwner( const AsciiString& owner, Bool seated )
+{
+	static const char prefix[] = "StartOwner:";
+	if( !owner.startsWith( prefix ) )
+		return NULL;
+
+	for( const char *at = owner.str() + sizeof(prefix) - 1; seated && *at; )
+	{
+		const Int start = atoi( at ) - 1;
+		for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
+		{
+			Player *player = ThePlayerList->getNthPlayer( i );
+			if( player && player->isPlayableSide() && player->getMpStartIndex() == start )
+				return player->getDefaultTeam();
+		}
+		while( *at && *at != ',' )
+			++at;
+		if( *at == ',' )
+			++at;
+	}
+	return ThePlayerList->getNeutralPlayer()->getDefaultTeam();
+}
+
+// ------------------------------------------------------------------------------------------------
 /** Entry point for starting a new game, the engine is already in clean state at this
 	* point and ready to load up with all the data */
 // ------------------------------------------------------------------------------------------------
@@ -2137,7 +2170,9 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 			// Get the team information
 			DEBUG_ASSERTCRASH(pMapObj->getProperties()->getType(TheKey_originalOwner) == Dict::DICT_ASCIISTRING, ("unit %s has no original owner specified (obsolete map file)\n",pMapObj->getName().str()));
 			AsciiString originalOwner = pMapObj->getProperties()->getAsciiString(TheKey_originalOwner);
-			Team *team = ThePlayerList->validateTeam(originalOwner);
+			Team *team = teamForStartOwner(originalOwner, game != NULL);
+			if (team == NULL)
+				team = ThePlayerList->validateTeam(originalOwner);
 
 			// create new object in the world
 			Object *obj = TheThingFactory->newObject( thingTemplate, team ); //, OBJECT_STATUS_LOADING_FROM_MAP );

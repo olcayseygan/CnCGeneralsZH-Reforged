@@ -827,6 +827,18 @@ static const RMGStyle theStyles[] =
 };
 static const Int RMG_STYLE_COUNT = sizeof(theStyles) / sizeof(theStyles[0]);
 
+/** The Lane War map (RMGLayout::buildLane) is a style past the table: "-randommap <seed> lane", named
+	"RMG_v<version>_<seed>_6p_316c_lane". Its ground has no size or player count of its own, so
+	clampSettings pins both; the seed picks only its look. */
+static const Int RMG_STYLE_LANE = RMG_STYLE_COUNT + 1;
+
+static const char *rmgStyleName( Int style )
+{
+	if( style == RMG_STYLE_LANE )
+		return "lane";
+	return style > 0 && style <= RMG_STYLE_COUNT ? theStyles[style - 1].m_name : "";
+}
+
 /* How many tiles each ground image above holds and how many across, as every shipped map that uses
 	it declares it in its BlendTileData (MapsZH.big and the base game's maps.big agree on every one).
 	WorldHeightMap's readTexClass loads a width by width block of the image only when the class asks
@@ -946,6 +958,16 @@ struct RMGObject
 	Int m_waypointID;		///< 0 for anything that is not a waypoint
 	Int m_flags;			///< MapObject's own flags; the road ones are the only ones used here
 	AsciiString m_pathLabel;	///< a waypoint on a skirmish approach path: "Center3", "Flank1" ...
+	AsciiString m_objectName;	///< the name a script or the Lane War director finds it by; empty for most
+	AsciiString m_owner;		///< originalOwner, "StartOwner:1,3,5" for a seat's own (GameLogic.cpp); empty: neutral, "team"
+};
+
+/** A named trigger area that is not water, in playable cells: the Lane War map's build plateaus and
+	middle. */
+struct RMGArea
+{
+	AsciiString m_name;
+	std::vector<RMGPoint> m_polygon;
 };
 
 /** A road is two objects in a row carrying MapObject's road flags, which W3DRoadBuffer pairs up as
@@ -1199,6 +1221,7 @@ public:
 	std::vector<RMGMassifLobe> m_massifLobes;	///< a massif map's high ground, one or two tables
 	std::vector<RMGObject> m_objects;
 	std::vector< std::pair<Int, Int> > m_waypointLinks;	///< waypointID to waypointID, for WaypointsList
+	std::vector<RMGArea> m_areas;		///< named areas past the lakes and the base perimeters (buildLane)
 
 	/// The blend table the BlendTileData chunk carries; entry 0 is the "no blend" default.
 	struct RMGBlend
@@ -1214,6 +1237,7 @@ public:
 	std::vector<RMGBlend> m_blends;
 
 private:
+	void buildLane( void );
 	void placeBowlStarts( void );
 	Real bowlRimAt( Real unitX, Real unitY ) const;
 	Real bowlHeight( Real cellX, Real cellY, Real noise ) const;
@@ -8633,20 +8657,20 @@ void RMGLayout::placeSupplyAndDerricks( void )
 	buildings come off a list walked in order down each street with gaps left in it. Anything that
 	would land in a lake is dropped where it is laid rather than kept out by making the town smaller,
 	so a town on a bank keeps its shape and loses the street that ran into the water. */
+/* Two rows of frontage, because a street has two sides and a town where every building is the
+	same one is a warehouse estate. The list is walked in order along a street so neighbours
+	differ, and each town starts at a different place in it. The lane map's ruins take from it too. */
+static const char *theStreetNames[] =
+{
+	"StanApartment01", "StanSmallRetail01", "StanHotel01", "StanConvenienceStore01",
+	"StanApartment02", "StanSmallRetail02", "StanRestaurant01", "StanSmallRetail03",
+	"AsianRetailStore01", "AsianOffice01", "AsianHotel01", "AsianBank",
+	"AsianRetailStore02", "CivilianHighrise01", "AsianArcade", "CivilianHighrise02"
+};
+static const Int numStreetNames = sizeof(theStreetNames) / sizeof(theStreetNames[0]);
+
 void RMGLayout::placeTowns( void )
 {
-	/* Two rows of frontage, because a street has two sides and a town where every building is the
-		same one is a warehouse estate. The list is walked in order along a street so neighbours
-		differ, and each town starts at a different place in it. */
-	static const char *theStreetNames[] =
-	{
-		"StanApartment01", "StanSmallRetail01", "StanHotel01", "StanConvenienceStore01",
-		"StanApartment02", "StanSmallRetail02", "StanRestaurant01", "StanSmallRetail03",
-		"AsianRetailStore01", "AsianOffice01", "AsianHotel01", "AsianBank",
-		"AsianRetailStore02", "CivilianHighrise01", "AsianArcade", "CivilianHighrise02"
-	};
-	const Int numStreetNames = sizeof(theStreetNames) / sizeof(theStreetNames[0]);
-
 	Int buildingID = 1;
 	// Two at the least: one town on a map is a landmark, two are a place the fight moves between.
 	Int towns = m_settings.m_numPlayers / 2;
@@ -9716,6 +9740,492 @@ void RMGLayout::clearLockedGround( void )
 }
 
 //-----------------------------------------------------------------------------
+// The Lane War map
+//-----------------------------------------------------------------------------
+
+/* Lane War (docs/plans/LANE-MODE.md in the wrapper) plays on this map, built here rather than in
+	WorldBuilder so that a change to it is a change to code. Its layout follows the Warcraft III
+	Direct Strike map and is the same for every seed; the seed picks only the look round it. Below, x
+	runs along the lane and y across it, in playable cells of 10 world units, and every figure comes
+	from the constants after this comment (rmgLaneShape works out the rest), so the layout can be
+	reshaped there without touching the code that lays it.
+
+	One straight lane, RMG_LANE_LENGTH by RMG_LANE_WIDTH, flat at RMG_LANE_FLOOR, mirror symmetric
+	about its middle. Team A holds the west end and team B the east. On the lane's middle line each
+	team has its fortress RMG_LANE_FORTRESS_AT of the half-length from the middle, its tower
+	RMG_LANE_TOWER_AT of it (RMG_LANE_TOWERS 2 puts two at the lane's edges instead), and its spawn
+	anchor behind the fortress, halfway between the fortress's back and the lane's end. Across the
+	middle runs a band of two hedge rows with a path between, painted in the ground and no obstacle.
+	Past each lane end, RMG_LANE_PLOT_GAP cells of green away, stands a column of three build plots,
+	one a seat, each RMG_LANE_PLOT_ALONG by RMG_LANE_PLOT_ACROSS: seat 1's on the lane's axis, seat
+	2's below it and seat 3's above, the column spanning RMG_LANE_PLOT_COLUMN lane widths. A plot
+	stands at RMG_LANE_PLATEAU, the ground off the lane (the bank) at RMG_LANE_BANK give or take
+	RMG_LANE_BANK_SWING next to play and rising into hills further off. Every step between the bank
+	and play is at least 18 bytes inside one cell, and a cell whose corners span 16 bytes or more is
+	CELL_CLIFF to the pathfinder (WorldHeightMapData.cpp), so the lane is walled in, each plot is
+	ringed by cliff with no ramp, and nothing walks between a plot, the bank and the lane.
+
+	The seed picks the theme (one of theBiomes as a plain map's seed picks it, with its hour and snow,
+	or one time in five the twilight style's palette), whether the ground stands as an island in a sea,
+	a row of ponds or one long lake along each long side, how wooded and stony the bank is (the woods
+	keep to the long sides) and whether ruins stand on it. Nothing stands on the lane or a plot but what
+	is named below.
+
+	The start positions alternate between the ends, so a 1v1 on starts 1 and 2 faces itself down the
+	lane: start 1 is A's seat 1, start 2 is B's seat 1, start 3 A's seat 2 and so on. The names the
+	director looks up:
+
+	LaneWar_BuildA1 to A3, B1 to B3      trigger areas, each the top of one plot; Player_N_Start
+	                                     stands in the middle of its own (1 in A1, 2 in B1, 3 in A2,
+	                                     4 in B2, 5 in A3, 6 in B3)
+	LaneWar_MiddleArea                   trigger area, RMG_LANE_MIDDLE_RADIUS round the lane's middle
+	LaneWar_SpawnA, LaneWar_SpawnB       waypoints, each team's spawn anchor
+	LaneWar_LaneA, LaneWar_LaneB         waypoint path labels: A's runs from just ahead of its fortress
+	                                     to B's fortress, B's back the other way, a waypoint every
+	                                     RMG_LANE_PATH_STEP cells (LaneWar_LaneA_01 on), each linked to
+	                                     the next
+	LaneWar_FortressA, LaneWar_FortressB objects owned "StartOwner:1,3,5" and "StartOwner:2,4,6"
+	LaneWar_TowerA1, LaneWar_TowerB1     objects owned the same way (A2 and B2 with two towers, 1 at the
+	                                     lane's low y edge)
+	LaneWar_MiddleStructure              object, neutral, only when RMG_LANE_MIDDLE_TEMPLATE names one
+
+	An owner string of that shape gives the object to whoever holds the first of those starts that is
+	taken, or to the neutral player when none is (teamForStartOwner, GameLogic.cpp). The fortress and
+	towers are stand-ins until the mode has objects of its own: GermanCastle and GuardTower. */
+#define RMG_LANE_SEATS			6
+#define RMG_LANE_LENGTH			180		///< cells from one end of the lane to the other
+#define RMG_LANE_WIDTH			45		///< and across it
+#define RMG_LANE_FORTRESS_AT	0.70f	///< a fortress's distance from the middle, a share of half the lane
+#define RMG_LANE_FORTRESS_HALF	9.0f	///< cells from its middle to its back, GermanCastle's footprint
+#define RMG_LANE_TOWER_AT		0.37f	///< a tower's distance from the middle, the same way
+#define RMG_LANE_TOWERS			1		///< a team's towers: 1 on the middle line, 2 at the lane's edges
+#define RMG_LANE_TOWER_INSET	3.0f	///< cells a tower at an edge stands in from it
+static const char *const RMG_LANE_MIDDLE_TEMPLATE = NULL;	///< a structure in the middle (TechOilRefinery, say), or none
+#define RMG_LANE_MIDDLE_RADIUS	20.0f	///< cells, the middle area
+#define RMG_LANE_MIDDLE_SIDES	16
+#define RMG_LANE_BAND_ROW		3		///< cells along the lane a hedge row of the centre band takes
+#define RMG_LANE_BAND_PATH		6		///< and the path between the two rows
+#define RMG_LANE_PATH_STEP		15.0f	///< cells between two waypoints of a lane path
+#define RMG_LANE_PLOT_GAP		20		///< cells of green between a lane's end and its team's plots
+#define RMG_LANE_PLOT_ALONG		24		///< a plot's cells along x
+#define RMG_LANE_PLOT_ACROSS	16		///< and across
+#define RMG_LANE_PLOT_COLUMN	3		///< the plot column spans this many lane widths
+#define RMG_LANE_MARGIN			24		///< cells from the outermost play to the playable edge: room for an island's shore
+#define RMG_LANE_FLOOR			60		///< height bytes of the lane
+#define RMG_LANE_BANK			84		///< of the ground off it, on average next to play
+#define RMG_LANE_BANK_SWING		6.0f	///< bytes the bank wanders either side of that
+#define RMG_LANE_HILLS			40.0f	///< bytes the bank's hills rise at most, times twice the hill noise
+#define RMG_LANE_HILL_REACH		12		///< cells off play over which the hills come up
+#define RMG_LANE_PLATEAU		124		///< of a plot's top
+#define RMG_LANE_WATER			50		///< of every water surface, under the lane so no sea can flood it
+#define RMG_LANE_WATER_BED		38		///< of a pond's or the sea's bed
+#define RMG_LANE_SHORE			16		///< cells over which an island falls from the bank to the sea's bed
+#define RMG_LANE_WATER_OFF		18		///< cells from a lane edge to the middle line of the water along it
+#define RMG_LANE_PROP_CLEAR		2		///< cells a tree or stone keeps off play's cliff
+#define RMG_LANE_RUIN_STEP		14		///< cells between the sites a ruin may take
+#define RMG_LANE_RUIN_PAD		3		///< cells either side a ruin levels
+
+/// Everything the constants above put somewhere, in playable cells; vertices at the integers.
+struct RMGLaneShape
+{
+	Int m_playX, m_playY;				///< playable cells
+	Int m_laneX0, m_laneX1, m_laneY0, m_laneY1;	///< the lane's corner vertices
+	Int m_plotX0[2];					///< the west vertex of team A's plots and of team B's
+	Int m_plotY0[3];					///< the low y vertex of seat 1's, 2's and 3's
+	Real m_middleX, m_middleY;			///< the lane's middle
+	Real m_half;						///< half its length
+};
+
+static RMGLaneShape rmgLaneShape( void )
+{
+	RMGLaneShape s;
+	s.m_half = 0.5f * (Real)RMG_LANE_LENGTH;
+	const Int column = RMG_LANE_PLOT_COLUMN * RMG_LANE_WIDTH;
+	s.m_playX = 2 * ( RMG_LANE_MARGIN + RMG_LANE_PLOT_ALONG + RMG_LANE_PLOT_GAP ) + RMG_LANE_LENGTH;
+	s.m_playY = column + 2 * RMG_LANE_MARGIN;
+	s.m_laneX0 = RMG_LANE_MARGIN + RMG_LANE_PLOT_ALONG + RMG_LANE_PLOT_GAP;
+	s.m_laneX1 = s.m_laneX0 + RMG_LANE_LENGTH;
+	s.m_laneY0 = ( s.m_playY - RMG_LANE_WIDTH ) / 2;
+	s.m_laneY1 = s.m_laneY0 + RMG_LANE_WIDTH;
+	s.m_plotX0[0] = RMG_LANE_MARGIN;
+	s.m_plotX0[1] = s.m_laneX1 + RMG_LANE_PLOT_GAP;
+	s.m_plotY0[0] = s.m_laneY0 + ( RMG_LANE_WIDTH - RMG_LANE_PLOT_ACROSS ) / 2;
+	s.m_plotY0[1] = s.m_plotY0[0] - ( column - RMG_LANE_PLOT_ACROSS ) / 2;
+	s.m_plotY0[2] = s.m_plotY0[0] + ( column - RMG_LANE_PLOT_ACROSS ) / 2;
+	s.m_middleX = 0.5f * (Real)( s.m_laneX0 + s.m_laneX1 );
+	s.m_middleY = 0.5f * (Real)( s.m_laneY0 + s.m_laneY1 );
+	return s;
+}
+
+/// One lane seed in five wears the twilight style's palette instead of its biome.
+static Bool rmgLaneTwilight( Int seed )
+{
+	return hashCell( (UnsignedInt)seed + 51007U, 0, 0 ) % 5U == 0;
+}
+
+void RMGLayout::buildLane( void )
+{
+	m_style = NULL;
+	m_styleScale = 1.0f;
+	m_skeleton = FALSE;
+	m_type = &theMapTypes[RMG_MAP_PLAINS];
+	/* The theme: one of the four biomes as a plain map's seed picks them (rmgBiomeFor, and its hour and
+		snow with it), or one time in five the twilight style's palette and hour. */
+	const UnsignedInt seed = (UnsignedInt)m_settings.m_seed;
+	m_biome = &theBiomes[rmgBiomeFor( m_settings.m_seed )];
+	m_timeOfDay = rmgTimeOfDayFor( m_settings.m_seed );
+	m_snowy = rmgSnowsOn( m_settings.m_seed );
+	if( rmgLaneTwilight( m_settings.m_seed ) )
+	{
+		m_biome = &theStyles[0].m_biome;
+		m_timeOfDay = theStyles[0].m_timeOfDay;
+		m_snowy = FALSE;
+	}
+	seedPermutation( m_settings.m_seed, m_perm );
+	m_sites.clear();
+	const RMGLaneShape shape = rmgLaneShape();
+	m_width = shape.m_playX + 2 * RMG_BORDER_CELLS;
+	m_height = shape.m_playY + 2 * RMG_BORDER_CELLS;
+	m_waterHeight = (Real)RMG_LANE_WATER;
+	m_playable = TRUE;
+	m_starts.clear();
+	m_objects.clear();
+	m_waypointLinks.clear();
+	m_lakes.clear();
+	m_areas.clear();
+	const Int cells = m_width * m_height;
+	m_inLake.assign( cells, 0 );
+
+	/* A vertex is lane, plot or bank, and a bank vertex knows how many cells it stands off the nearest
+		vertex in play (Chebyshev, capped). Next to play the bank wanders RMG_LANE_BANK_SWING either side
+		of RMG_LANE_BANK, so its step down to the lane and up to a plot stays a cliff whatever the seed;
+		further off its hills come up. */
+	enum { LANE_BANK = 0, LANE_FLOOR, LANE_PLOT };
+	std::vector<char> kind( cells, LANE_BANK );
+	std::vector<Int> offPlay( cells, RMG_LANE_HILL_REACH );
+	for( Int y = 0; y < m_height; y++ )
+	{
+		for( Int x = 0; x < m_width; x++ )
+		{
+			const Int px = x - RMG_BORDER_CELLS, py = y - RMG_BORDER_CELLS, i = cellIndex( x, y );
+			for( Int area = 0; area <= RMG_LANE_SEATS; area++ )
+			{
+				// area 0 is the lane, 1 to 6 the plots of starts 1 to 6
+				const Int x0 = area == 0 ? shape.m_laneX0 : shape.m_plotX0[( area - 1 ) & 1];
+				const Int y0 = area == 0 ? shape.m_laneY0 : shape.m_plotY0[( area - 1 ) >> 1];
+				const Int x1 = area == 0 ? shape.m_laneX1 : x0 + RMG_LANE_PLOT_ALONG;
+				const Int y1 = area == 0 ? shape.m_laneY1 : y0 + RMG_LANE_PLOT_ACROSS;
+				const Int dx = px < x0 ? x0 - px : px > x1 ? px - x1 : 0;
+				const Int dy = py < y0 ? y0 - py : py > y1 ? py - y1 : 0;
+				const Int off = dx > dy ? dx : dy;
+				if( off == 0 )
+					kind[i] = (char)( area == 0 ? LANE_FLOOR : LANE_PLOT );
+				if( off < offPlay[i] )
+					offPlay[i] = off;
+			}
+		}
+	}
+
+	/* An island seed lets the bank fall into a sea over the last RMG_LANE_SHORE cells to the playable
+		edge and past it; RMG_LANE_MARGIN keeps that fall well clear of play. The sea is one water area
+		over the whole map, its surface under the lane. */
+	const Bool island = hashCell( seed + 51001U, 0, 3 ) % 2U == 0;
+	m_heights.assign( cells, (UnsignedByte)RMG_LANE_BANK );
+	for( Int y = 0; y < m_height; y++ )
+	{
+		for( Int x = 0; x < m_width; x++ )
+		{
+			const Int i = cellIndex( x, y );
+			Real height;
+			if( kind[i] == LANE_FLOOR )
+				height = (Real)RMG_LANE_FLOOR;
+			else if( kind[i] == LANE_PLOT )
+				height = (Real)RMG_LANE_PLATEAU;
+			else
+			{
+				const Real swing = fractalNoise( m_perm, (Real)x * 0.05f, (Real)y * 0.05f, 4 );
+				const Real hill = fractalNoise( m_perm, (Real)x * 0.03f + 31.7f, (Real)y * 0.03f + 17.3f, 3 );
+				const Real reach = (Real)offPlay[i] / (Real)RMG_LANE_HILL_REACH;
+				height = (Real)RMG_LANE_BANK + RMG_LANE_BANK_SWING * swing + RMG_LANE_HILLS * reach * ( hill > 0.0f ? 2.0f * hill : 0.0f );
+				if( island )
+				{
+					const Int px = x - RMG_BORDER_CELLS, py = y - RMG_BORDER_CELLS;
+					const Int edge = std::min( std::min( px, py ), std::min( shape.m_playX - px, shape.m_playY - py ) );
+					const Real fall = rmgUnit( (Real)edge / (Real)RMG_LANE_SHORE );
+					const Real shore = (Real)RMG_LANE_WATER_BED + ( height - (Real)RMG_LANE_WATER_BED ) * fall * fall * ( 3.0f - 2.0f * fall );
+					if( shore < height )
+						height = shore;
+					if( height < (Real)RMG_LANE_WATER )
+						m_inLake[i] = 1;
+				}
+				if( height > 250.0f )
+					height = 250.0f;
+			}
+			m_heights[i] = (UnsignedByte)(Int)( height + 0.5f );
+		}
+	}
+	if( island )
+	{
+		RMGLake sea;
+		sea.m_cellX = shape.m_middleX;
+		sea.m_cellY = shape.m_middleY;
+		const Real reach = (Real)RMG_BORDER_CELLS;
+		const RMGPoint corners[4] = { { -reach, -reach }, { shape.m_playX + reach, -reach },
+			{ shape.m_playX + reach, shape.m_playY + reach }, { -reach, shape.m_playY + reach } };
+		sea.m_polygon.assign( corners, corners + 4 );
+		m_lakes.push_back( sea );
+	}
+
+	/* Water along both long sides, the seed's choice of a row of ponds or one long lake a side, each an
+		oval sunk to RMG_LANE_WATER_BED with its bank easing down to it. Every oval keeps three cells off
+		play, and the area's outline lies just past the waterline. */
+	auto addWater = [&]( Real centreX, Real centreY, Real radiusX, Real radiusY )
+	{
+		const Real rim = 1.4f;
+		for( Int y = (Int)( centreY - rim * radiusY ) - 1; y <= (Int)( centreY + rim * radiusY ) + 1; y++ )
+		{
+			for( Int x = (Int)( centreX - rim * radiusX ) - 1; x <= (Int)( centreX + rim * radiusX ) + 1; x++ )
+			{
+				const Int mx = x + RMG_BORDER_CELLS, my = y + RMG_BORDER_CELLS;
+				if( mx < 0 || my < 0 || mx >= m_width || my >= m_height || offPlay[cellIndex( mx, my )] < 3 )
+					continue;
+				const Real ux = ( (Real)x - centreX ) / radiusX, uy = ( (Real)y - centreY ) / radiusY;
+				const Real t = sqrtf( ux * ux + uy * uy );
+				if( t >= rim )
+					continue;
+				const Int i = cellIndex( mx, my );
+				const Real eased = t <= 1.0f ? 0.0f : ( t - 1.0f ) / ( rim - 1.0f );
+				const Real height = (Real)RMG_LANE_WATER_BED + ( (Real)m_heights[i] - (Real)RMG_LANE_WATER_BED ) * eased;
+				if( height < (Real)m_heights[i] )
+					m_heights[i] = (UnsignedByte)(Int)( height + 0.5f );
+				if( m_heights[i] < RMG_LANE_WATER )
+					m_inLake[i] = 1;
+			}
+		}
+		RMGLake lake;
+		lake.m_cellX = centreX;
+		lake.m_cellY = centreY;
+		for( Int point = 0; point < 24; point++ )
+		{
+			const Real angle = 2.0f * PI * point / 24.0f;
+			const RMGPoint at = { centreX + 1.2f * radiusX * Cos( angle ), centreY + 1.2f * radiusY * Sin( angle ) };
+			lake.m_polygon.push_back( at );
+		}
+		m_lakes.push_back( lake );
+	};
+	const Bool ponds = hashCell( seed + 51001U, 0, 4 ) % 2U == 0;
+	for( Int side = 0; side < 2; side++ )
+	{
+		const Real waterY = side == 0 ? (Real)( shape.m_laneY0 - RMG_LANE_WATER_OFF ) : (Real)( shape.m_laneY1 + RMG_LANE_WATER_OFF );
+		if( !ponds )
+		{
+			addWater( shape.m_middleX + ( hashUnit( seed + 51009U, side, 0 ) - 0.5f ) * 20.0f, waterY,
+				0.30f * (Real)RMG_LANE_LENGTH + 10.0f * hashUnit( seed + 51009U, side, 1 ), 6.0f + 2.0f * hashUnit( seed + 51009U, side, 2 ) );
+			continue;
+		}
+		const Int count = 4 + (Int)( hashCell( seed + 51009U, side, 3 ) % 3U );
+		for( Int p = 0; p < count; p++ )
+		{
+			const Real along = ( (Real)p + 0.5f ) / (Real)count;
+			const Real radius = 4.5f + 2.5f * hashUnit( seed + 51011U, side, p );
+			addWater( (Real)shape.m_laneX0 + 20.0f + along * (Real)( RMG_LANE_LENGTH - 40 ),
+				waterY + ( hashUnit( seed + 51013U, side, p ) - 0.5f ) * 4.0f, radius * ( 1.0f + 0.4f * hashUnit( seed + 51015U, side, p ) ), radius );
+		}
+	}
+
+	/* Ruins on some seeds: a street's buildings, one to a site on a coarse grid over the bank, each on
+		ground levelled to its mean, dry and far enough off play that the levelling never touches a cliff
+		into it. Nothing walks there; they are something to look at past the lane's edge. */
+	Int propID = 1;
+	AsciiString uniqueID;
+	const Bool ruins = hashCell( seed + 51001U, 0, 2 ) % 3U == 0;
+	for( Int y = RMG_BORDER_CELLS; ruins && y < RMG_BORDER_CELLS + shape.m_playY; y += RMG_LANE_RUIN_STEP )
+	{
+		for( Int x = RMG_BORDER_CELLS; x < RMG_BORDER_CELLS + shape.m_playX; x += RMG_LANE_RUIN_STEP )
+		{
+			const UnsignedInt hash = hashCell( seed + 51005U, x, y );
+			if( offPlay[cellIndex( x, y )] < RMG_LANE_RUIN_PAD + 3 || hash % 4U != 0 )
+				continue;
+			Int sum = 0, count = 0, lowest = 255;
+			for( Int dy = -RMG_LANE_RUIN_PAD; dy <= RMG_LANE_RUIN_PAD; dy++ )
+				for( Int dx = -RMG_LANE_RUIN_PAD; dx <= RMG_LANE_RUIN_PAD; dx++, count++ )
+				{
+					sum += heightAtCell( x + dx, y + dy );
+					lowest = std::min( lowest, (Int)heightAtCell( x + dx, y + dy ) );
+				}
+			if( lowest < RMG_LANE_WATER + 8 )
+				continue;
+			for( Int dy = -RMG_LANE_RUIN_PAD; dy <= RMG_LANE_RUIN_PAD; dy++ )
+				for( Int dx = -RMG_LANE_RUIN_PAD; dx <= RMG_LANE_RUIN_PAD; dx++ )
+					m_heights[cellIndex( x + dx, y + dy )] = (UnsignedByte)( sum / count );
+			const Real cellX = (Real)( x - RMG_BORDER_CELLS ), cellY = (Real)( y - RMG_BORDER_CELLS );
+			uniqueID.format( "Prop %d", propID++ );
+			addObject( theStreetNames[( hash >> 4 ) % (UnsignedInt)numStreetNames], uniqueID.str(), cellX, cellY,
+				snapAngle45( (Real)( ( hash >> 12 ) % 8U ) * PI * 0.25f ) );
+			reserveSite( cellX, cellY, (Real)RMG_LANE_RUIN_PAD + 1.0f );
+		}
+	}
+
+	/* Dirt on the lane with the centre band's two hedge rows in the biome's grass across it, sand on
+		the plots and down at the water, the biome's ground on the bank and rock down every step. */
+	m_terrain.assign( cells, (UnsignedByte)RMG_TERRAIN_GRASS );
+	m_passable.assign( cells, 0 );
+	const Int bandNear = RMG_LANE_BAND_PATH / 2, bandFar = bandNear + RMG_LANE_BAND_ROW;
+	for( Int y = 0; y + 1 < m_height; y++ )
+	{
+		for( Int x = 0; x + 1 < m_width; x++ )
+		{
+			const Int i = cellIndex( x, y );
+			const Int k = kind[i];
+			const Bool oneKind = kind[cellIndex( x + 1, y )] == k && kind[cellIndex( x, y + 1 )] == k && kind[cellIndex( x + 1, y + 1 )] == k;
+			const Int fromMiddle = abs( 2 * ( x - RMG_BORDER_CELLS ) + 1 - 2 * (Int)shape.m_middleX ) / 2;
+			const Int lowest = std::min( std::min( (Int)heightAtCell( x, y ), (Int)heightAtCell( x + 1, y ) ),
+				std::min( (Int)heightAtCell( x, y + 1 ), (Int)heightAtCell( x + 1, y + 1 ) ) );
+			if( !oneKind || spanBytes( x, y ) > RMG_STEEP_BYTES )
+				m_terrain[i] = (UnsignedByte)RMG_TERRAIN_ROCK;
+			else if( k == LANE_FLOOR )
+				m_terrain[i] = (UnsignedByte)( fromMiddle >= bandNear && fromMiddle < bandFar ? RMG_TERRAIN_GRASS : RMG_TERRAIN_DIRT );
+			else if( k == LANE_PLOT || lowest < RMG_LANE_WATER + 4 )
+				m_terrain[i] = (UnsignedByte)RMG_TERRAIN_SAND;
+
+			const Bool inside = x >= RMG_BORDER_CELLS && y >= RMG_BORDER_CELLS && x < RMG_BORDER_CELLS + shape.m_playX
+				&& y < RMG_BORDER_CELLS + shape.m_playY;
+			m_passable[i] = inside && cellSpanWorld( x, y ) <= RMG_CLIFF_WORLD_SPAN && !underwaterAtCell( x, y ) ? 1 : 0;
+		}
+	}
+
+	/* Trees and stones on the dry bank inside the playable edge, never within RMG_LANE_PROP_CLEAR of
+		play. How wooded and how stony the seed rolls; a slow noise field gathers the trees into woods,
+		and the woods keep to the long sides, thinning out over the green round the lane's ends. */
+	const Real woods = ( 0.04f + 0.14f * hashUnit( seed + 51001U, 0, 0 ) ) * m_biome->m_treeShare;
+	const Real stones = 0.01f + 0.04f * hashUnit( seed + 51001U, 0, 1 );
+	for( Int y = RMG_BORDER_CELLS; y < RMG_BORDER_CELLS + shape.m_playY; y++ )
+	{
+		for( Int x = RMG_BORDER_CELLS; x < RMG_BORDER_CELLS + shape.m_playX; x++ )
+		{
+			if( offPlay[cellIndex( x, y )] <= RMG_LANE_PROP_CLEAR || offPlay[cellIndex( x + 1, y + 1 )] <= RMG_LANE_PROP_CLEAR )
+				continue;
+			if( m_heights[cellIndex( x, y )] < RMG_LANE_WATER + 6 || m_heights[cellIndex( x + 1, y + 1 )] < RMG_LANE_WATER + 6 )
+				continue;
+			const UnsignedInt hash = hashCell( seed + 51003U, x, y );
+			const Real roll = (Real)( hash % 1024U ) / 1024.0f;
+			const Real cellX = (Real)( x - RMG_BORDER_CELLS ) + 0.5f, cellY = (Real)( y - RMG_BORDER_CELLS ) + 0.5f;
+			const Bool longSide = cellX > (Real)shape.m_laneX0 && cellX < (Real)shape.m_laneX1;
+			const Real wood = fractalNoise( m_perm, (Real)x * 0.06f + 7.1f, (Real)y * 0.06f + 3.9f, 3 ) + ( longSide ? 0.25f : -0.1f );
+			const char *templateName = NULL;
+			if( roll < woods * ( wood > 0.0f ? 3.0f * wood : 0.0f ) )
+				templateName = m_biome->m_trees[( hash >> 10 ) % (UnsignedInt)RMG_BIOME_TREES];
+			else if( roll > 1.0f - stones )
+				templateName = m_biome->m_rocks[( hash >> 10 ) % (UnsignedInt)RMG_BIOME_ROCKS];
+			if( templateName == NULL || !siteIsClear( cellX, cellY, 0.5f ) )
+				continue;
+			uniqueID.format( "Prop %d", propID++ );
+			addObject( templateName, uniqueID.str(), cellX, cellY, (Real)( ( hash >> 14 ) % 8U ) * PI * 0.25f );
+		}
+	}
+
+	Int waypointID = 1;
+	auto addWaypoint = [&]( const AsciiString& name, const AsciiString& label, Real cellX, Real cellY ) -> Int
+	{
+		RMGObject waypoint;
+		waypoint.m_templateName = "*Waypoints/Waypoint";
+		waypoint.m_uniqueID = name;
+		waypoint.m_worldX = cellX * MAP_XY_FACTOR;
+		waypoint.m_worldY = cellY * MAP_XY_FACTOR;
+		waypoint.m_angle = 0.0f;
+		waypoint.m_waypointID = waypointID++;
+		waypoint.m_flags = 0;
+		waypoint.m_pathLabel = label;
+		m_objects.push_back( waypoint );
+		return waypoint.m_waypointID;
+	};
+	auto addStructure = [&]( const char *templateName, const AsciiString& name, const AsciiString& owner, Real cellX,
+		Real cellY, Real angle )
+	{
+		addObject( templateName, name.str(), cellX, cellY, angle );
+		m_objects.back().m_objectName = name;
+		m_objects.back().m_owner = owner;
+	};
+
+	AsciiString name, label;
+	for( Int start = 0; start < RMG_LANE_SEATS; start++ )
+	{
+		const Int team = start & 1, seat = start >> 1;
+		const Real x0 = (Real)shape.m_plotX0[team], y0 = (Real)shape.m_plotY0[seat];
+		const Real x1 = x0 + RMG_LANE_PLOT_ALONG, y1 = y0 + RMG_LANE_PLOT_ACROSS;
+		RMGPoint centre = { 0.5f * ( x0 + x1 ), 0.5f * ( y0 + y1 ) };
+		m_starts.push_back( centre );
+		name.format( "Player_%d_Start", start + 1 );
+		addWaypoint( name, AsciiString::TheEmptyString, centre.m_cellX, centre.m_cellY );
+
+		RMGArea area;
+		area.m_name.format( "LaneWar_Build%c%d", 'A' + team, seat + 1 );
+		const RMGPoint corners[4] = { { x0, y0 }, { x1, y0 }, { x1, y1 }, { x0, y1 } };
+		area.m_polygon.assign( corners, corners + 4 );
+		m_areas.push_back( area );
+	}
+
+	const Real middleX = shape.m_middleX, middleY = shape.m_middleY;
+	for( Int team = 0; team < 2; team++ )
+	{
+		const char side = (char)( 'A' + team );
+		const Real ahead = team == 0 ? 1.0f : -1.0f;		// towards the other end
+		const Real fortressX = middleX - ahead * RMG_LANE_FORTRESS_AT * shape.m_half;
+		const Real enemyFortressX = middleX + ahead * RMG_LANE_FORTRESS_AT * shape.m_half;
+		const Real laneEnd = middleX - ahead * shape.m_half;
+		const Real spawnX = 0.5f * ( laneEnd + fortressX - ahead * RMG_LANE_FORTRESS_HALF );
+		AsciiString owner;
+		owner.format( "StartOwner:%d,%d,%d", team + 1, team + 3, team + 5 );
+
+		name.format( "LaneWar_Spawn%c", side );
+		addWaypoint( name, AsciiString::TheEmptyString, spawnX, middleY );
+
+		// from just ahead of the team's own fortress to the other one, which is the last point
+		label.format( "LaneWar_Lane%c", side );
+		const Real firstX = fortressX + ahead * ( RMG_LANE_FORTRESS_HALF + 3.0f );
+		Int previous = 0, point = 0;
+		for( Real along = 0.0f; ; along += RMG_LANE_PATH_STEP )
+		{
+			const Bool last = along > fabsf( enemyFortressX - firstX ) - 0.5f * RMG_LANE_PATH_STEP;
+			name.format( "%s_%02d", label.str(), ++point );
+			const Int id = addWaypoint( name, label, last ? enemyFortressX : firstX + ahead * along, middleY );
+			if( previous != 0 )
+				m_waypointLinks.push_back( std::make_pair( previous, id ) );
+			previous = id;
+			if( last )
+				break;
+		}
+
+		const Real facing = team == 0 ? 0.0f : PI;
+		name.format( "LaneWar_Fortress%c", side );
+		addStructure( "GermanCastle", name, owner, fortressX, middleY, facing );
+		const Real towerX = middleX - ahead * RMG_LANE_TOWER_AT * shape.m_half;
+		for( Int tower = 0; tower < RMG_LANE_TOWERS; tower++ )
+		{
+			name.format( "LaneWar_Tower%c%d", side, tower + 1 );
+			const Real towerY = RMG_LANE_TOWERS == 1 ? middleY
+				: tower == 0 ? (Real)shape.m_laneY0 + RMG_LANE_TOWER_INSET : (Real)shape.m_laneY1 - RMG_LANE_TOWER_INSET;
+			addStructure( "GuardTower", name, owner, towerX, towerY, facing );
+		}
+	}
+
+	if( RMG_LANE_MIDDLE_TEMPLATE != NULL )
+		addStructure( RMG_LANE_MIDDLE_TEMPLATE, AsciiString( "LaneWar_MiddleStructure" ), AsciiString::TheEmptyString, middleX, middleY, 0.0f );
+
+	RMGArea middle;
+	middle.m_name = "LaneWar_MiddleArea";
+	for( Int point = 0; point < RMG_LANE_MIDDLE_SIDES; point++ )
+	{
+		const Real angle = 2.0f * PI * point / RMG_LANE_MIDDLE_SIDES;
+		const RMGPoint at = { middleX + RMG_LANE_MIDDLE_RADIUS * Cos( angle ), middleY + RMG_LANE_MIDDLE_RADIUS * Sin( angle ) };
+		middle.m_polygon.push_back( at );
+	}
+	m_areas.push_back( middle );
+
+	buildBlends();
+}
+
+//-----------------------------------------------------------------------------
 // The whole layout
 //-----------------------------------------------------------------------------
 
@@ -9739,6 +10249,13 @@ void RMGLayout::build( const RandomMapSettings& settings, Bool skeleton )
 	m_roads.clear();
 	m_roadCarved.clear();
 	m_carveKeep = NULL;
+
+	if( m_settings.m_style == RMG_STYLE_LANE )
+	{
+		buildLane();
+		restoreFPMode( callersFPMode );
+		return;
+	}
 
 	/* The seed picks what kind of map this is and what it is made of, apart from each other, so a
 		river can run through snow as well as through grass. Neither depends on the player count:
@@ -9936,11 +10453,11 @@ static void writeNeutralObject( MapChunkWriter& w, const RMGObject& object )
 		w.dictInt( "objectInitialHealth", 100 );
 		w.dictBool( "objectEnabled", TRUE );
 		w.dictBool( "objectIndestructible", FALSE );
-		w.dictBool( "objectUnsellable", FALSE );
+		w.dictBool( "objectUnsellable", !object.m_owner.isEmpty() );	// a seat's fortress is not its to sell
 		w.dictBool( "objectPowered", TRUE );
 		w.dictBool( "objectRecruitableAI", TRUE );
-		w.dictAsciiString( "objectName", "" );
-		w.dictAsciiString( "originalOwner", "team" );
+		w.dictAsciiString( "objectName", object.m_objectName.str() );
+		w.dictAsciiString( "originalOwner", object.m_owner.isEmpty() ? "team" : object.m_owner.str() );
 		w.dictAsciiString( "uniqueID", object.m_uniqueID.str() );
 		w.dictAsciiString( "objectLayer", "" );
 		w.dictBool( "objectSelectable", TRUE );
@@ -10052,7 +10569,7 @@ static void writePolygonTriggers( MapChunkWriter& w, const RMGLayout& layout )
 		if( (Int)layout.m_lakes[i].m_polygon.size() >= 3 )
 			written++;
 	}
-	written += 2 * (Int)layout.m_starts.size();
+	written += 2 * (Int)layout.m_starts.size() + (Int)layout.m_areas.size();
 
 	w.openChunk( "PolygonTriggers", K_TRIGGERS_VERSION_4 );
 		w.writeInt( written );
@@ -10122,6 +10639,24 @@ static void writePolygonTriggers( MapChunkWriter& w, const RMGLayout& layout )
 					w.writeInt( (Int)((centre.m_cellY + radius * Sin( angle )) * MAP_XY_FACTOR + 0.5f) );
 					w.writeInt( 0 );
 				}
+			}
+		}
+
+		for( UnsignedInt i = 0; i < layout.m_areas.size(); i++ )
+		{
+			const RMGArea& area = layout.m_areas[i];
+			w.writeAsciiString( area.m_name.str() );
+			w.writeAsciiString( "" );			// layer
+			w.writeInt( id++ );					// trigger id
+			w.writeByte( 0 );					// not water
+			w.writeByte( 0 );					// not a river
+			w.writeInt( 0 );					// river start
+			w.writeInt( (Int)area.m_polygon.size() );
+			for( UnsignedInt point = 0; point < area.m_polygon.size(); point++ )
+			{
+				w.writeInt( (Int)(area.m_polygon[point].m_cellX * MAP_XY_FACTOR + 0.5f) );
+				w.writeInt( (Int)(area.m_polygon[point].m_cellY * MAP_XY_FACTOR + 0.5f) );
+				w.writeInt( 0 );
 			}
 		}
 	w.closeChunk();
@@ -10302,8 +10837,18 @@ void RandomMapGenerator::clampSettings( RandomMapSettings& settings )
 	if( settings.m_numPlayers < MIN_PLAYERS ) settings.m_numPlayers = MIN_PLAYERS;
 	if( settings.m_numPlayers > MAX_PLAYERS ) settings.m_numPlayers = MAX_PLAYERS;
 
-	if( settings.m_style < 0 || settings.m_style > RMG_STYLE_COUNT )
+	if( settings.m_style < 0 || settings.m_style > RMG_STYLE_LANE )
 		settings.m_style = 0;
+
+	// one ground whatever the size or seat count asked for; the seed picks its look
+	if( settings.m_style == RMG_STYLE_LANE )
+	{
+		settings.m_numPlayers = RMG_LANE_SEATS;
+		settings.m_playableCells = rmgLaneShape().m_playX;
+		settings.m_template.clear();
+		settings.m_templateCRC = 0;
+		return;
+	}
 
 	/* A template replaces the style. It has to be a shipped map's "maps\<name>\<name>.map", the
 		shape the map's name can carry, and installed here; the CRC comes off the installed file
@@ -10369,10 +10914,10 @@ void RandomMapGenerator::clampSettings( RandomMapSettings& settings )
 
 Int RandomMapGenerator::styleNamed( const char *name )
 {
-	for( Int i = 0; i < RMG_STYLE_COUNT; i++ )
+	for( Int style = 1; style <= RMG_STYLE_LANE; style++ )
 	{
-		if( AsciiString( name ).compareNoCase( theStyles[i].m_name ) == 0 )
-			return i + 1;
+		if( AsciiString( name ).compareNoCase( rmgStyleName( style ) ) == 0 )
+			return style;
 	}
 	return 0;
 }
@@ -10536,8 +11081,8 @@ static void writeLayout( const RMGLayout& layout, std::vector<char>& mapBytes )
 		w.writeInt( height );
 		w.writeInt( RMG_BORDER_CELLS );
 		w.writeInt( 1 );					// one boundary
-		w.writeInt( layout.m_settings.m_playableCells );
-		w.writeInt( layout.m_settings.m_playableCells );
+		w.writeInt( width - 2 * RMG_BORDER_CELLS );	// the playable cells; the lane map's are not square
+		w.writeInt( height - 2 * RMG_BORDER_CELLS );
 		w.writeInt( dataSize );
 		w.writeBytes( &layout.m_heights[0], dataSize );
 	w.closeChunk();
@@ -10789,7 +11334,9 @@ void RandomMapGenerator::generatePreview( const RandomMapSettings& settings,
 	static const UnsignedByte theStartColour[3] = { 240, 240, 240 };
 	static const UnsignedByte theCliffColour[3] = { 58, 54, 50 };
 
-	Real playable = (Real)layout.m_settings.m_playableCells;
+	// the longer side across the picture; the lane map's short one leaves black below it
+	const Int playableX = layout.m_width - 2 * RMG_BORDER_CELLS, playableY = layout.m_height - 2 * RMG_BORDER_CELLS;
+	Real playable = (Real)( playableX > playableY ? playableX : playableY );
 	Real cellsPerPixel = playable / (Real)pixels;
 
 	for( Int row = 0; row < pixels; row++ )
@@ -10801,6 +11348,13 @@ void RandomMapGenerator::generatePreview( const RandomMapSettings& settings,
 			Int cellX = (Int)((Real)column * cellsPerPixel) + RMG_BORDER_CELLS;
 			Int cellY = (Int)((Real)row * cellsPerPixel) + RMG_BORDER_CELLS;
 
+			if( cellX >= RMG_BORDER_CELLS + playableX || cellY >= RMG_BORDER_CELLS + playableY )
+			{
+				tgaBytes.push_back( 0 );
+				tgaBytes.push_back( 0 );
+				tgaBytes.push_back( 0 );
+				continue;
+			}
 			if( cellX >= layout.m_width ) cellX = layout.m_width - 1;
 			if( cellY >= layout.m_height ) cellY = layout.m_height - 1;
 
@@ -10884,7 +11438,7 @@ static void generatedMapPathsFor( const RandomMapSettings& clamped, AsciiString&
 	AsciiString name;
 	name.format( "RMG_v%d_%d_%dp_%dc%s%s", RANDOM_MAP_GENERATOR_VERSION, clamped.m_seed,
 							 clamped.m_numPlayers, clamped.m_playableCells, clamped.m_style > 0 ? "_" : "",
-							 clamped.m_style > 0 ? theStyles[clamped.m_style - 1].m_name : "" );
+							 rmgStyleName( clamped.m_style ) );
 
 	// a template map: "_t<the template's CRC>_<its name>", the name last because it may hold anything
 	AsciiString token;
@@ -11179,7 +11733,9 @@ static const char *rulesFor( const AsciiString& path, Int *sizeOut )
 		folder.removeLastChar();
 
 	RandomMapSettings settings;
-	if( !settingsFromGeneratedPath( folder, settings ) || settings.m_style != 0 )
+	if( !settingsFromGeneratedPath( folder, settings ) || ( settings.m_style != 0 && settings.m_style != RMG_STYLE_LANE ) )
+		return NULL;
+	if( settings.m_style == RMG_STYLE_LANE && rmgLaneTwilight( settings.m_seed ) )
 		return NULL;
 	if( !settings.m_template.isEmpty() )
 	{

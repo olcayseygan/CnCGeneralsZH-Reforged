@@ -12029,6 +12029,13 @@ struct RMGParse
 	std::vector<Coord3D> m_objectPositions;
 	std::vector<Real> m_objectAngles;
 	std::vector<Int> m_objectFlags;				///< the road flags, for the objects that carry them
+	std::vector<AsciiString> m_objectScriptNames;	///< each object's objectName, empty for most
+	std::vector<AsciiString> m_objectOwners;	///< and its originalOwner
+	std::vector<AsciiString> m_waypointLabels;	///< and its waypointPathLabel1, empty off a path
+	std::vector<Int> m_waypointIDs;				///< and its waypointID, 0 for anything not a waypoint
+	std::vector<AsciiString> m_areaNames;		///< the lane map's named areas
+	std::vector< std::vector<Coord3D> > m_areaPolygons;
+	std::vector< std::pair<Int, Int> > m_waypointLinks;	///< WaypointsList, from and to
 
 	RMGParse() :
 		m_width(0), m_height(0), m_border(0), m_boundaryX(0), m_boundaryY(0), m_dataSize(0),
@@ -12193,9 +12200,9 @@ static Bool RMGParseWaterAreas( DataChunkInput &file, DataChunkInfo *info, void 
 		file.readAsciiString();							// layer
 		file.readInt();									// trigger id
 
-		// the lakes are water; the skirmish base areas round every start are not
+		// the lakes are water; the skirmish base areas round every start and the lane map's areas are not
 		const Bool water = file.readByte() == 1;
-		CHECK( water || name.startsWith( "InnerPerimeter" ) || name.startsWith( "OuterPerimeter" ) );
+		CHECK( water || name.startsWith( "InnerPerimeter" ) || name.startsWith( "OuterPerimeter" ) || name.startsWith( "LaneWar_" ) );
 		file.readByte();								// not a river
 		file.readInt();									// river start
 
@@ -12219,6 +12226,11 @@ static Bool RMGParseWaterAreas( DataChunkInput &file, DataChunkInfo *info, void 
 		{
 			theRMGParse.m_numWaterAreas++;
 			theRMGParse.m_waterPolygons.push_back( polygon );
+		}
+		else if( name.startsWith( "LaneWar_" ) )
+		{
+			theRMGParse.m_areaNames.push_back( name );
+			theRMGParse.m_areaPolygons.push_back( polygon );
 		}
 	}
 	return TRUE;
@@ -12266,6 +12278,10 @@ static Bool RMGParseObject( DataChunkInput &file, DataChunkInfo *info, void * )
 	theRMGParse.m_objectPositions.push_back( loc );
 	theRMGParse.m_objectAngles.push_back( angle );
 	theRMGParse.m_objectFlags.push_back( flags );
+	theRMGParse.m_objectScriptNames.push_back( d.getAsciiString( NAMEKEY( "objectName" ) ) );
+	theRMGParse.m_objectOwners.push_back( d.getAsciiString( NAMEKEY( "originalOwner" ) ) );
+	theRMGParse.m_waypointLabels.push_back( d.getAsciiString( NAMEKEY( "waypointPathLabel1" ) ) );
+	theRMGParse.m_waypointIDs.push_back( d.getType( NAMEKEY( "waypointID" ) ) == Dict::DICT_INT ? d.getInt( NAMEKEY( "waypointID" ) ) : 0 );
 
 	// the start waypoints; the approach paths' waypoints carry a path label and are not starts
 	if( d.getType( NAMEKEY( "waypointID" ) ) == Dict::DICT_INT && d.getType( NAMEKEY( "waypointPathLabel1" ) ) != Dict::DICT_ASCIISTRING )
@@ -12277,6 +12293,18 @@ static Bool RMGParseObject( DataChunkInput &file, DataChunkInfo *info, void * )
 	{
 		theRMGParse.m_pathWaypointNames.push_back( d.getAsciiString( NAMEKEY( "waypointName" ) ) );
 		theRMGParse.m_pathWaypointPositions.push_back( loc );
+	}
+	return TRUE;
+}
+
+static Bool RMGParseWaypointLinks( DataChunkInput &file, DataChunkInfo *info, void * )
+{
+	const Int count = file.readInt();
+	for( Int i = 0; i < count; i++ )
+	{
+		const Int from = file.readInt();
+		const Int to = file.readInt();
+		theRMGParse.m_waypointLinks.push_back( std::make_pair( from, to ) );
 	}
 	return TRUE;
 }
@@ -12302,6 +12330,7 @@ static void parseGeneratedMap( std::vector<char>& bytes )
 	input.registerParser( AsciiString( "SidesList" ), AsciiString::TheEmptyString, RMGParseSides );
 	input.registerParser( AsciiString( "ObjectsList" ), AsciiString::TheEmptyString, RMGParseObjects );
 	input.registerParser( AsciiString( "PolygonTriggers" ), AsciiString::TheEmptyString, RMGParseWaterAreas );
+	input.registerParser( AsciiString( "WaypointsList" ), AsciiString::TheEmptyString, RMGParseWaypointLinks );
 	input.registerParser( AsciiString( "GlobalLighting" ), AsciiString::TheEmptyString, RMGParseLighting );
 
 	CHECK( input.parse( NULL ) == TRUE );
@@ -12378,6 +12407,218 @@ TEST(a_seed_generates_the_same_map_bytes_every_single_time)
 	settings.m_seed = 12346;
 	RandomMapGenerator::generate( settings, other );
 	CHECK( other.size() != first.size() || memcmp( &other[0], &first[0], first.size() ) != 0 );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The Lane War map: one ground for every seed and seat count, the seed choosing only its look.
+	Every name the director looks up is in the file, the fortresses and towers belong to their own
+	end's starts, and the plateaus are sealed: walking the cells the pathfinder keeps open (corners
+	spanning under 16 height bytes, inside the boundary) reaches the lane from no plateau, and no
+	plateau from another. */
+//-------------------------------------------------------------------------------------------------
+static Int RMGLaneObject( const char *name )
+{
+	for( Int i = 0; i < (Int)theRMGParse.m_objectScriptNames.size(); i++ )
+		if( theRMGParse.m_objectScriptNames[i] == name )
+			return i;
+	return -1;
+}
+
+/// The cells walked from (startX, startY), map cells, eight ways as the pathfinder steps.
+static void RMGLaneFlood( Int startX, Int startY, std::vector<char>& reached )
+{
+	const Int W = theRMGParse.m_width, H = theRMGParse.m_height, border = theRMGParse.m_border;
+	reached.assign( W * H, 0 );
+	auto open = [&]( Int x, Int y ) -> Bool
+	{
+		if( x < border || y < border || x >= border + theRMGParse.m_boundaryX || y >= border + theRMGParse.m_boundaryY )
+			return FALSE;
+		const Int a = theRMGParse.m_heights[y * W + x], b = theRMGParse.m_heights[y * W + x + 1];
+		const Int c = theRMGParse.m_heights[( y + 1 ) * W + x], d = theRMGParse.m_heights[( y + 1 ) * W + x + 1];
+		const Int lo = std::min( std::min( a, b ), std::min( c, d ) ), hi = std::max( std::max( a, b ), std::max( c, d ) );
+		return hi - lo < 16;
+	};
+	if( !open( startX, startY ) )
+		return;
+	std::vector<Int> queue( 1, startY * W + startX );
+	reached[startY * W + startX] = 1;
+	for( size_t head = 0; head < queue.size(); head++ )
+	{
+		const Int x = queue[head] % W, y = queue[head] / W;
+		for( Int dy = -1; dy <= 1; dy++ )
+			for( Int dx = -1; dx <= 1; dx++ )
+				if( ( dx || dy ) && !reached[( y + dy ) * W + x + dx] && open( x + dx, y + dy ) )
+				{
+					reached[( y + dy ) * W + x + dx] = 1;
+					queue.push_back( ( y + dy ) * W + x + dx );
+				}
+	}
+}
+
+TEST(the_lane_map_names_what_the_director_needs_and_seals_its_plateaus)
+{
+	CHECK( bootOnce() );
+
+	RandomMapSettings settings;
+	settings.m_style = RandomMapGenerator::styleNamed( "lane" );
+	CHECK( settings.m_style != 0 );
+	settings.m_seed = 3;
+	settings.m_numPlayers = 2;
+	RandomMapSettings clamped = settings;
+	RandomMapGenerator::clampSettings( clamped );
+	CHECK_EQ( clamped.m_numPlayers, 6 );
+	CHECK_EQ( clamped.m_playableCells, 316 );
+	CHECK_EQ( clamped.m_seed, 3 );
+
+	/* The layout of 2026-11-20 after the Warcraft III Direct Strike map, in playable cells: a lane 180
+		by 45 from x 68 to 248 and y 69 to 114, fortresses 0.7 of the half-length off the middle (x 158),
+		plots 24 by 16 in a column 20 cells past each end. */
+	const Int laneX0 = 68, laneX1 = 248, laneY0 = 69, laneY1 = 114;
+
+	// the same bytes every time, and for any seat count
+	std::vector<char> bytes, again;
+	RandomMapGenerator::generate( settings, bytes );
+	settings.m_numPlayers = 6;
+	RandomMapGenerator::generate( settings, again );
+	CHECK( bytes.size() > 0 && bytes.size() == again.size() && memcmp( &bytes[0], &again[0], bytes.size() ) == 0 );
+
+	parseGeneratedMap( bytes );
+	const Int W = theRMGParse.m_width, border = theRMGParse.m_border;
+	CHECK_EQ( W, 356 );
+	CHECK_EQ( theRMGParse.m_height, 223 );
+	CHECK_EQ( theRMGParse.m_boundaryX, 316 );
+	CHECK_EQ( theRMGParse.m_boundaryY, 183 );
+
+	// six starts, one a plot, each inside its own area; the ends take turns, seat 1 on the lane's axis
+	static const char *const theAreas[] = { "LaneWar_BuildA1", "LaneWar_BuildB1", "LaneWar_BuildA2", "LaneWar_BuildB2",
+		"LaneWar_BuildA3", "LaneWar_BuildB3", "LaneWar_MiddleArea" };
+	CHECK_EQ( (Int)theRMGParse.m_areaNames.size(), 7 );
+	std::vector<Int> startCells;
+	for( Int start = 0; start < 6; start++ )
+	{
+		AsciiString wanted;
+		wanted.format( "Player_%d_Start", start + 1 );
+		Int found = -1;
+		for( Int i = 0; i < (Int)theRMGParse.m_waypointNames.size(); i++ )
+			if( theRMGParse.m_waypointNames[i] == wanted )
+				found = i;
+		CHECK( found >= 0 );
+		if( found < 0 )
+			return;
+		const Coord3D& at = theRMGParse.m_waypointPositions[found];
+		startCells.push_back( ( (Int)( at.y / MAP_XY_FACTOR ) + border ) * W + (Int)( at.x / MAP_XY_FACTOR ) + border );
+
+		Int area = -1;
+		for( Int i = 0; i < (Int)theRMGParse.m_areaNames.size(); i++ )
+			if( theRMGParse.m_areaNames[i] == theAreas[start] )
+				area = i;
+		CHECK( area >= 0 );
+		if( area < 0 )
+			return;
+		const std::vector<Coord3D>& polygon = theRMGParse.m_areaPolygons[area];
+		CHECK_EQ( (Int)polygon.size(), 4 );
+		CHECK( at.x > polygon[0].x && at.x < polygon[2].x && at.y > polygon[0].y && at.y < polygon[2].y );
+		CHECK_EQ( (Int)( polygon[2].x - polygon[0].x ), 240 );
+		CHECK_EQ( (Int)( polygon[2].y - polygon[0].y ), 160 );
+		CHECK( ( at.x < 1580.0f ) == ( start % 2 == 0 ) );
+		CHECK( at.x < laneX0 * MAP_XY_FACTOR || at.x > laneX1 * MAP_XY_FACTOR );
+		if( start < 2 )
+			CHECK( at.y > laneY0 * MAP_XY_FACTOR && at.y < laneY1 * MAP_XY_FACTOR );
+	}
+	CHECK( theRMGParse.m_areaNames[6] == theAreas[6] );
+
+	// the spawn anchors behind the fortresses and a linked path each way
+	Int spawns = 0, laneA = 0, laneB = 0;
+	for( Int i = 0; i < (Int)theRMGParse.m_waypointNames.size(); i++ )
+		spawns += theRMGParse.m_waypointNames[i] == "LaneWar_SpawnA" || theRMGParse.m_waypointNames[i] == "LaneWar_SpawnB";
+	for( Int i = 0; i < (Int)theRMGParse.m_waypointLabels.size(); i++ )
+	{
+		laneA += theRMGParse.m_waypointLabels[i] == "LaneWar_LaneA";
+		laneB += theRMGParse.m_waypointLabels[i] == "LaneWar_LaneB";
+	}
+	CHECK_EQ( spawns, 2 );
+	CHECK_EQ( laneA, 9 );
+	CHECK_EQ( laneB, 9 );
+	CHECK_EQ( (Int)theRMGParse.m_waypointLinks.size(), 16 );
+
+	// the structures, named and owned by their end's starts: a fortress and one tower a team, no middle
+	static const char *const theOwned[][3] =
+	{
+		{ "LaneWar_FortressA", "GermanCastle", "StartOwner:1,3,5" }, { "LaneWar_FortressB", "GermanCastle", "StartOwner:2,4,6" },
+		{ "LaneWar_TowerA1", "GuardTower", "StartOwner:1,3,5" }, { "LaneWar_TowerB1", "GuardTower", "StartOwner:2,4,6" },
+	};
+	for( Int i = 0; i < 4; i++ )
+	{
+		const Int o = RMGLaneObject( theOwned[i][0] );
+		CHECK( o >= 0 );
+		if( o < 0 )
+			continue;
+		CHECK( theRMGParse.m_objectNames[o] == theOwned[i][1] );
+		CHECK( theRMGParse.m_objectOwners[o] == theOwned[i][2] );
+		CHECK_NEAR( theRMGParse.m_objectPositions[o].y, 915.0f, 0.5f );
+	}
+	CHECK( RMGLaneObject( "LaneWar_TowerA2" ) < 0 && RMGLaneObject( "LaneWar_MiddleStructure" ) < 0 );
+	const Int fortressA = RMGLaneObject( "LaneWar_FortressA" ), fortressB = RMGLaneObject( "LaneWar_FortressB" );
+	const Int towerA = RMGLaneObject( "LaneWar_TowerA1" );
+	if( fortressA >= 0 && fortressB >= 0 && towerA >= 0 )
+	{
+		CHECK_NEAR( theRMGParse.m_objectPositions[fortressA].x, 950.0f, 0.5f );
+		CHECK_NEAR( theRMGParse.m_objectPositions[fortressB].x, 2210.0f, 0.5f );
+		CHECK_NEAR( theRMGParse.m_objectPositions[towerA].x, 1580.0f - 333.0f, 0.5f );
+	}
+
+	// sealed: the lane walks its own 180 by 45 cells and reaches no start, each start only its own 24 by 16
+	std::vector<char> reached;
+	const Int laneCell = ( 91 + border ) * W + 158 + border;
+	RMGLaneFlood( laneCell % W, laneCell / W, reached );
+	Int laneSize = 0;
+	for( size_t i = 0; i < reached.size(); i++ )
+		laneSize += reached[i];
+	CHECK_EQ( laneSize, 180 * 45 );
+	for( Int start = 0; start < 6; start++ )
+		CHECK( reached[startCells[start]] == 0 );
+	for( Int start = 0; start < 6; start++ )
+	{
+		RMGLaneFlood( startCells[start] % W, startCells[start] / W, reached );
+		Int size = 0;
+		for( size_t i = 0; i < reached.size(); i++ )
+			size += reached[i];
+		CHECK_EQ( size, 24 * 16 );
+		CHECK( reached[laneCell] == 0 );
+		for( Int other = 0; other < 6; other++ )
+			CHECK( other == start || reached[startCells[other]] == 0 );
+	}
+
+	/* other seeds: the ground in play is the same and stays sealed, water lines both long sides, and
+		over a dozen seeds the theme changes and the sea comes and goes */
+	const std::vector<UnsignedByte> heights = theRMGParse.m_heights;
+	std::vector<AsciiString> themes;
+	Int islands = 0;
+	for( Int seed = 1; seed <= 12; seed++ )
+	{
+		settings.m_seed = seed;
+		RandomMapGenerator::generate( settings, again );
+		parseGeneratedMap( again );
+		Int differs = 0;
+		for( Int y = laneY0; y <= laneY1; y++ )
+			for( Int x = laneX0; x <= laneX1; x++ )
+				differs += theRMGParse.m_heights[( y + border ) * W + x + border] != heights[( y + border ) * W + x + border];
+		for( Int start = 0; start < 6; start++ )
+			differs += theRMGParse.m_heights[startCells[start]] != heights[startCells[start]];
+		CHECK_EQ( differs, 0 );
+		RMGLaneFlood( laneCell % W, laneCell / W, reached );
+		Int size = 0;
+		for( size_t i = 0; i < reached.size(); i++ )
+			size += reached[i];
+		CHECK_EQ( size, 180 * 45 );
+		CHECK( theRMGParse.m_numWaterAreas >= 2 );
+		for( Int area = 0; area < theRMGParse.m_numWaterAreas; area++ )
+			islands += theRMGParse.m_waterPolygons[area].size() == 4;
+		if( std::find( themes.begin(), themes.end(), theRMGParse.m_textureName ) == themes.end() )
+			themes.push_back( theRMGParse.m_textureName );
+	}
+	CHECK( themes.size() >= 3 );
+	CHECK( islands > 0 && islands < 12 );
 }
 
 //-------------------------------------------------------------------------------------------------

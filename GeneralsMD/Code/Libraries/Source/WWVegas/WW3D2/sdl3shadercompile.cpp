@@ -182,7 +182,26 @@ SDL_GPUShader * SDL3_Create_Shader(SDL_GPUDevice * device, const std::vector<uns
 	// shadercross leaves an error from its start-up (it looks for libraries it may not need) where a
 	// later failure that sets none would report it.  Cleared, so a refusal says its own reason.
 	SDL_ClearError();
-	SDL_GPUShader * shader = SDL_ShaderCross_CompileGraphicsShaderFromSPIRV(device, &info, &resources, 0);
+	SDL_GPUShader *shader = NULL;
+	if (SDL_GetGPUShaderFormats(device) & SDL_GPU_SHADERFORMAT_MSL) {
+		// shadercross re-reflects MSL and ignores the supplied binding counts. In
+		// particular, Load-only textures have no sampler variables, so SDL binds
+		// none of their images. Use our actual slot extents for Metal as on Vulkan.
+		std::string msl;
+		if (!SDL3_Translate_SPIRV_To_MSL(spirv, vertex_stage, msl, log)) return NULL;
+		// Match the engine FP contract: physical water must be identical across shader variants.
+		msl = "#pragma clang fp contract(off) reassociate(off)\n"+msl;
+		SDL_GPUShaderCreateInfo create = {};
+		create.code = (const Uint8 *)msl.c_str(); create.code_size = msl.size()+1;
+		// All input entry points here are main, cleansed by SPIRV-Cross to main0.
+		create.entrypoint = "main0"; create.format = SDL_GPU_SHADERFORMAT_MSL;
+		create.stage = vertex_stage ? SDL_GPU_SHADERSTAGE_VERTEX : SDL_GPU_SHADERSTAGE_FRAGMENT;
+		create.num_samplers = resources.num_samplers;
+		create.num_uniform_buffers = resources.num_uniform_buffers;
+		shader = SDL_CreateGPUShader(device, &create);
+	} else {
+		shader = SDL_ShaderCross_CompileGraphicsShaderFromSPIRV(device, &info, &resources, 0);
+	}
 	if (shader == NULL) {
 		log = SDL_GetError();
 		if (log.empty()) log = "refused, and neither SDL nor SDL_shadercross said why";

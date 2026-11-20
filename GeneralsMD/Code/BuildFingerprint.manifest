@@ -2946,6 +2946,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/W3DAssetManagerExposed.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DBibBuffer.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DBridgeBuffer.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DBufferManager.h
+GameEngineDevice/Include/W3DDevice/GameClient/W3DCinematicCamera.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DCustomEdging.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DCustomScene.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DDebugDisplay.h
@@ -4395,6 +4396,7 @@ Tests/test_bigfilesystem_stubs.cpp
 Tests/test_binkvideo.cpp
 Tests/test_camera_behavior.inc
 Tests/test_cinema.inc
+Tests/test_cinematic_camera.cpp
 Tests/test_clock.cpp
 Tests/test_compression.cpp
 Tests/test_crash_reporting.cpp

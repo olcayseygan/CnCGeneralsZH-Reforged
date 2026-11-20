@@ -2493,6 +2493,9 @@ add_lib_test(test_foliage_placement)
 target_include_directories(test_foliage_placement PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
 add_lib_test(test_fire_lights)
 target_include_directories(test_fire_lights PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
+# W3DDevice/GameClient/W3DCinematicCamera.h: a scripted camera drawn between its whole steps.
+add_lib_test(test_cinematic_camera)
+target_include_directories(test_cinematic_camera PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
 
 add_lib_test(test_hazard_cloud_policy)
 set_target_properties(test_hazard_cloud_policy PROPERTIES CXX_STANDARD 17)

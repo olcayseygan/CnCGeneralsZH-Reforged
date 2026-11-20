@@ -65,6 +65,8 @@ static void drawFramerateBar(void);
 #include "ffprobe.h"
 #include "ffshadercache.h"
 #include "dx11runtime.h"
+#include "W3DDevice/GameClient/W3DCinematicCamera.h"
+#include "Common/Recorder.h"
 #include "Common/PerfTimer.h"
 #include "Common/JobSystem.h"
 #include "Common/FileSystem.h"
@@ -2523,6 +2525,25 @@ static void takeReadsForRender( Bool renders )
 	if (TheWaterRenderObj) TheWaterRenderObj->takeReadsForRender();
 #endif
 	static_cast<W3DParticleSystemManager *>( TheParticleSystemManager )->takeReadsForRender();
+}
+
+CinematicAnimationClockMode CinematicCameraModeForClientUpdate()
+{
+	CinematicAnimationClockMode mode;
+	if (!TheGameLogic || !TheGlobalData) return mode;
+	mode.singlePlayer = TheGameLogic->isInGame() && TheGameLogic->isInSinglePlayerGame();
+	mode.network = TheNetwork != NULL || TheGameLogic->isInMultiplayerGame();
+	mode.replay = TheGameLogic->isInReplayGame()
+		|| (TheRecorder && TheRecorder->getMode() == RECORDERMODETYPE_PLAYBACK);
+	mode.headless = TheGlobalData->m_headless;
+	mode.shell = TheGameLogic->isInShellGame();
+	mode.loading = TheGlobalData->m_loadScreenRender || TheGameLogic->isLoadingMap()
+		|| TheGameLogic->isLoadingSave() || TheGameLogic->isClearingGameData();
+	mode.fast = TheGlobalData->m_turbo || (TheScriptEngine && TheScriptEngine->isTimeFast());
+	mode.video = TheGlobalData->m_videoEndFrame > 0 || GameEngine_isVideoFrame();
+	mode.capture = TheGlobalData->m_screenShotFrame > 0 || s_screenShotPending;
+	mode.pictureClock = GameEngine_videoPictures() > 1;
+	return mode;
 }
 
 void W3DDisplay::draw( void )

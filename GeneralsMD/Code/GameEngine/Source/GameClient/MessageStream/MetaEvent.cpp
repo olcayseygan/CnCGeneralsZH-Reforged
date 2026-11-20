@@ -53,6 +53,7 @@
 #include "GameClient/HotKey.h"
 #include "GameClient/HotkeyScheme.h"
 #include "GameClient/MetaEvent.h"
+#include "GameClient/LaneHud.h"
 
 #include "GameLogic/GameLogic.h" // for TheGameLogic->getFrame()
 
@@ -713,7 +714,9 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
 				( keyState & KEY_STATE_DOWN ) && !( keyState & KEY_STATE_AUTOREPEAT ) &&
 				TheGameClient->getFrame() >= 1 && !( TheShell && TheShell->isShellActive() ) )
 		{
-			TheMessageStream->appendMessage( GameMessage::MSG_META_CAMERA_RESET );
+			// on a Lane War map Home is the way back to the player's own plot
+			TheMessageStream->appendMessage( LaneHud_isShowing() ? GameMessage::MSG_META_VIEW_COMMAND_CENTER
+																													: GameMessage::MSG_META_CAMERA_RESET );
 			disp = DESTROY_MESSAGE;
 		}
 

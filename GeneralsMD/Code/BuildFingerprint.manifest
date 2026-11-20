@@ -1378,6 +1378,7 @@ Data/Scenarios/jetsturn.txt
 Data/Scenarios/jetturn.txt
 Data/Scenarios/kargu.txt
 Data/Scenarios/lanewar.txt
+Data/Scenarios/lanewar_buy.txt
 Data/Scenarios/laserdefense.txt
 Data/Scenarios/laserflow.txt
 Data/Scenarios/laserglow.txt
@@ -1822,6 +1823,8 @@ GameEngine/Include/GameClient/InGameUI.h
 GameEngine/Include/GameClient/KeyDefs.h
 GameEngine/Include/GameClient/KeyDownInfo.h
 GameEngine/Include/GameClient/Keyboard.h
+GameEngine/Include/GameClient/LaneHud.h
+GameEngine/Include/GameClient/LaneHudLayout.h
 GameEngine/Include/GameClient/LanguageFilter.h
 GameEngine/Include/GameClient/Line2D.h
 GameEngine/Include/GameClient/LoadScreen.h
@@ -2512,6 +2515,7 @@ GameEngine/Source/GameClient/GroupPanel.cpp
 GameEngine/Source/GameClient/InGameUI.cpp
 GameEngine/Source/GameClient/Input/Keyboard.cpp
 GameEngine/Source/GameClient/Input/Mouse.cpp
+GameEngine/Source/GameClient/LaneHud.cpp
 GameEngine/Source/GameClient/LanguageFilter.cpp
 GameEngine/Source/GameClient/Line2D.cpp
 GameEngine/Source/GameClient/MapUtil.cpp
@@ -4417,6 +4421,7 @@ Tests/test_install_guard.sh
 Tests/test_install_root.cpp
 Tests/test_install_textures.cpp
 Tests/test_lan_broadcast.cpp
+Tests/test_lanehud.cpp
 Tests/test_linux_portable.sh
 Tests/test_load_screen.inc
 Tests/test_macos_app.sh

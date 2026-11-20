@@ -2012,6 +2012,8 @@ void Sidebar_update( void )
 			Sidebar_hide();
 		return;
 	}
+	// the General key, only while there is something to spend
+	TheControlBar->updateSidebarGeneralKey();
 	Player *player = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
 	if( !s_shown || !boxAlive() || player == NULL || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame() )
 	{

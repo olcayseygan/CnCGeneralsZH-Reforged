@@ -649,9 +649,13 @@ void ControlBar::layoutSidebar( void )
 		lamp.hi.y = hud.radar.lo.y + size.y;
 		placeWindowAt( m_radarAttackGlowWindow, lamp );
 	}
-	// No General button on the sidebar (the owner's, 2026-11-20): the powers fire from the wing and the
-	// W tab, and the General's Powers window opens on Ctrl+G, the Red Alert keys' TOGGLE_PURCHASE_SCIENCE.
-	// Its seat beside Sat and Onar stays empty.  setControlBarSchemeByPlayer hides it the same way
+	// The General button only while there is something to spend (the owner's, 2026-11-20): the powers
+	// fire from the wing and the W tab, so the key stands in its seat beside Sat and Onar, its star
+	// flashing (getStarImage), only while the player has points or a talent pick waiting, and a click
+	// opens the General's Powers window as Ctrl+G does.  updateSidebarGeneralKey shows and hides it;
+	// setControlBarSchemeByPlayer hides it as this does
+	wearSidebarKey( SIDEBAR_KEY_GENERAL );
+	placeWindowAt( barWindow( "ButtonGeneral" ), hud.generalButton );
 	hideForSidebar( barWindow( "ButtonGeneral" ) );
 
 	// the power bar stood on end down the sidebar's left edge (W3DPowerDrawV, lane D)
@@ -840,6 +844,24 @@ void ControlBar::layoutSidebar( void )
 	// the tabs, the cameos and the arrows (lane C), then the radar into its box
 	Sidebar_layout( hud );
 	fitRadarToMap( TRUE );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The sidebar's General key in its seat while the local player has science points or a talent pick
+	* waiting, gone otherwise (layoutSidebar placed it and put it on the hidden list, so the Classic bar
+	* gets it back whatever this left it as).  Called from Sidebar_update, the client pass. */
+//-------------------------------------------------------------------------------------------------
+void ControlBar::updateSidebarGeneralKey( void )
+{
+	if( !m_sidebarLayout )
+		return;
+	GameWindow *win = barWindow( "ButtonGeneral" );
+	Player *player = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+	if( win == NULL || player == NULL )
+		return;
+	const Bool spend = player->getSciencePurchasePoints() > 0 || player->hasTalentWaiting();
+	if( spend == win->winIsHidden() )
+		win->winHide( !spend );
 }
 
 //-------------------------------------------------------------------------------------------------

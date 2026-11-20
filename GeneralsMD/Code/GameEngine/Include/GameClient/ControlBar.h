@@ -1064,6 +1064,8 @@ public:
 	void drawSpecialPowerShortcutMultiplierText();
 	/// how many of the local player's sources of `command`'s power are ready, 0 below two (a "1" says nothing)
 	Int readyShortcutCount( const CommandButton *command ) const;
+	/// the sidebar's General key, shown only while there are points or a talent to spend (ControlBarSidebarLayout.cpp)
+	void updateSidebarGeneralKey( void );
 
 	Bool hasAnyShortcutSelection() const;
 

@@ -6589,6 +6589,9 @@ static void drawPowerTraySlot( GameWindow *window, WinInstanceData *instData )
 		drawPowersWingSlot( slot, x0, y0, x1, y1 );
 		return;
 	}
+	// the Classic layout's column is bare (arrangeSpecialPowerShortcutGrid)
+	if( powerTrayColumns() == 1 )
+		return;
 
 	const Image *const *tray = TheControlBar->getControlBarSchemeManager()->getPowerTray();
 	if( tray == NULL )
@@ -6663,11 +6666,16 @@ void ControlBar::arrangeSpecialPowerShortcutGrid( void )
 	ICoord2D origin, cell;
 	Int left, top, foot, bottom;
 	powerTrayMetrics( tray, &origin, &cell, &left, &top, &foot, &bottom );
+	// The Classic layout's column is bare, as retail's was: the buttons on the battlefield in the
+	// tray's cells, no steel round them and none closing the column off
+	const Bool bare = powerTrayColumns() == 1;
+	if( bare )
+		left = top = foot = 0;
 	// the world's right edge: the HudWidth area's, the screen's at Full.  Short of the screen's edge
 	// the tray is closed there by an edge of its own, and the cells stand that much further in
 	HudLayoutRects hud;
 	getHudLayoutRects( &hud );
-	const Int closing = powerTrayClosingEdge( hud, left );
+	const Int closing = bare ? 0 : powerTrayClosingEdge( hud, left );
 	const Int right = hud.play.hi.x - closing;
 	if( !m_trayFramePlaced )
 	{

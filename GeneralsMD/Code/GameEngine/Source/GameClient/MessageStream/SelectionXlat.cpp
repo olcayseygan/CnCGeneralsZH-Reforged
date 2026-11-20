@@ -1338,6 +1338,7 @@ GameMessageDisposition SelectionTranslator::translateGameMessage(const GameMessa
 			if ( isValidHotkeySquadIndex( group ) )
 			{
 				DEBUG_LOG(("META: create team %d\n",group));
+				GroupPanel_squadChosen( group );	// the group panel's build tray opens for the squad just made, as a pick by its number does
 				// Assign selected items to a group
 				GameMessage *newmsg = TheMessageStream->appendMessage((GameMessage::Type)(GameMessage::MSG_CREATE_TEAM0 + group));
 				m_pendingSquad[ group ].clear();

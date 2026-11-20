@@ -73,4 +73,9 @@ void GroupPanel_showAvailability( GameWindow *button, CommandAvailability availa
 	* factory picker): only its queue counts, and it rides on each message as a third argument. */
 void GroupPanel_queueUnit( const ThingTemplate *thing, Int squad, ObjectID factory = INVALID_ID );
 
+/** Where the bar's build card of `cardSize` goes when `anchor` is one of the build tray's buttons:
+	* left of the tray at the button's height, kept on the screen.  FALSE, `at` untouched, for any
+	* other window.  ControlBar::populateBuildTooltipLayout asks it every time it places the card. */
+Bool GroupPanel_buildTooltipPosition( GameWindow *anchor, const ICoord2D *cardSize, ICoord2D *at );
+
 #endif // __GROUPPANEL_H__

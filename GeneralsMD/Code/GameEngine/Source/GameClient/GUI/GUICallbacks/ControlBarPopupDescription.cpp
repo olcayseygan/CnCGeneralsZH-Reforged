@@ -92,6 +92,7 @@
 #include "GameClient/MetaEvent.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/ControlBarScheme.h"
+#include "GameClient/GroupPanel.h"
 #include "GameClient/DisplayStringManager.h"
 #include "GameLogic/AI.h"
 #include "GameLogic/Armor.h"
@@ -1406,6 +1407,9 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 		}
 		else if( isSidebarLayout() )
 			cardAt.y = hud.strip.lo.y - REAL_TO_INT( 6 * k ) - cardHeight;	// no cell to lean on: over the strip
+		// a build tray button's card stands beside the tray, here and on every refill of a dirty bar
+		const ICoord2D cardSize = { size.x, cardHeight };
+		GroupPanel_buildTooltipPosition( anchor, &cardSize, &cardAt );
 		cardAt.y = max( 0, min( cardAt.y, hud.screen.hi.y - cardHeight ) );
 		parent->winSetPosition( cardAt.x, cardAt.y );
 

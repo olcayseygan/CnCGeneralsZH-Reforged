@@ -69,6 +69,7 @@
 #include "GameClient/InGameUI.h"
 #include "GameClient/Keyboard.h"
 #include "GameClient/Mouse.h"
+#include "GameClient/WindowLayout.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Squad.h"
@@ -100,8 +101,9 @@ namespace
 	const Real HEALTH_Y				= 52.0f;	///< the health bar, cell-local, as wide as the picture
 	const Real HEALTH_H				= 4.0f;
 	const Real KEY_POINTS			= 9.0f;		///< the key's digit, about 12 px
-	const Real CHIP_POINTS		= 9.0f;		///< "xN" and "+N" on the pictures
-	const Real LEDGE_POINTS		= 8.0f;		///< "xN" on the ledge, about 11 px
+	const Real CHIP_POINTS		= 9.0f;		///< "xN" and "+N" on the pictures, and the ledge's "xN"
+	const Real TRAINING_POINTS	= 10.0f;	///< the ledge's "+N in production", about 14 px
+	const Real TRAINING_MARGIN	= 14.0f;	///< kept clear between it and R's well or the screen's edge
 
 	const Real TRAY_SCALE			= 1.0f;		///< the powers tray's pieces at their own size: 80x70 cells (1.2 before 2026-11-18)
 	const Real TRAY_MIN_SCALE	= 0.72f;	///< as far as a tray too tall for its room shrinks, the old 1.2 times 0.6
@@ -118,7 +120,7 @@ namespace
 	const Real FOLD_Y					= 2.0f;
 	const Real FOLD_W					= 28.0f;	///< the face's art, drawn FOLD_SCALE times: 36 square
 	const Real FOLD_SCALE			= 1.3f;
-	const Real NOTCH_RUN			= 40.0f;	///< the run past the point that stays out with the drawer in and takes the fold click with it
+	const Real NOTCH_RUN			= 52.0f;	///< the run past the point that stays out with the drawer in and takes the fold click with it; room for "+NN" off the edge
 	const Real LEDGE_KEY_X		= 7.0f;		///< the key in R's well, R-local
 	const Real LEDGE_KEY_Y		= 11.0f;
 	const Real LEDGE_COUNT_X	= 31.0f;	///< "xN" left-aligned from here, R-local, centred on LEDGE_COUNT_Y
@@ -137,9 +139,6 @@ namespace
 		TRAY_MAX_COLUMNS	= 6,
 		MAX_BUTTONS				= 40,		///< build buttons the tray holds
 	};
-
-	/// the list's room starts this far down the screen, under the six message lines in the top left
-	const Real LIST_TOP_SHARE = 0.22f;
 
 	/// how long a squad picked by its key keeps the tray open before its selection is checked against
 	/// it: a squad a key made a moment ago reaches the logic a frame, or a network delay, later
@@ -920,9 +919,23 @@ static void drawNothing( GameWindow *window, WinInstanceData *instData )
 {
 }
 
+/// the bar's build card; ControlBar::populateBuildTooltipLayout puts it beside the tray
+/// (GroupPanel_buildTooltipPosition) every time it fills it, so a refill does not take it back over the radar
 static void buildTooltip( GameWindow *window, WinInstanceData *instData, UnsignedInt mouse )
 {
 	TheControlBar->showBuildTooltipLayout( window );
+}
+
+Bool GroupPanel_buildTooltipPosition( GameWindow *anchor, const ICoord2D *cardSize, ICoord2D *at )
+{
+	if( anchor == NULL || !panelAlive() || anchor->winGetParent() != s_panel )
+		return FALSE;
+	ICoord2D tray, button;
+	s_panel->winGetScreenPosition( &tray.x, &tray.y );
+	anchor->winGetScreenPosition( &button.x, &button.y );
+	at->x = max( tray.x - px( 6.0f ) - cardSize->x, 0 );
+	at->y = max( min( button.y, (Int)TheDisplay->getHeight() - cardSize->y ), 0 );
+	return TRUE;
 }
 
 static WindowMsgHandledType panelSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )
@@ -1112,7 +1125,7 @@ static void drawList( void )
 
 	const Pieces &p = pieces();
 	const Int screenH = (Int)TheDisplay->getHeight();
-	Int top = REAL_TO_INT( screenH * LIST_TOP_SHARE );
+	Int top = TheInGameUI->getMessageLinesBottom() + px( LIST_CLEARANCE );
 	Int bottom = 0;
 
 	//
@@ -1380,12 +1393,13 @@ static void drawLedge( Int top, Int left, Int right, const SquadRow *row )
 	TheDisplay->endBatch2D();
 
 	// the units still in the factories for the squad, right-aligned at the end of what shows of the run:
-	// "+N in production" against R's well with the tray out, "+N" alone on the notch with it in.  Kept inside
-	// the edge by hand, since the clip does not reach the strings
+	// "+N in production" against R's well with the tray out, "+N" alone on the notch with it in, white on
+	// a black shadow as the counts are, so it reads on the blue steel in a fight.  Kept inside the edge by
+	// hand, since the clip does not reach the strings
 	if( row != NULL && row->training > 0 )
 	{
-		const Int points = max( REAL_TO_INT( LEDGE_POINTS * TheDisplay->getHeight() / 1080.0f ), 7 );
-		const Int lo = runLo + px( 4.0f ), hi = min( runHi, s_trayEdge ) - px( 6.0f );
+		const Int points = max( REAL_TO_INT( TRAINING_POINTS * TheDisplay->getHeight() / 1080.0f ), 7 );
+		const Int lo = runLo + px( 4.0f ), hi = min( runHi, s_trayEdge ) - px( TRAINING_MARGIN );
 		UnicodeString text;
 		text.format( TheGameText->fetch( "GUI:GroupTrayTraining" ), row->training );
 		DisplayString *training = keptString( s_ledgeTrainingText, text, points );
@@ -1398,7 +1412,7 @@ static void drawLedge( Int top, Int left, Int right, const SquadRow *row )
 			training->getSize( &trainingW, &trainingH );
 		}
 		if( trainingW <= hi - lo )
-			training->draw( hi - trainingW, top + px( LEDGE_COUNT_Y ) - trainingH / 2, SOFT_TEXT, GameMakeColor( 0, 0, 0, 255 ) );
+			training->draw( hi - trainingW, top + px( LEDGE_COUNT_Y ) - trainingH / 2, CHIP_TEXT, GameMakeColor( 0, 0, 0, 255 ) );
 	}
 
 	// R's well: the squad's key, pressed (the tray is always the chosen squad's), and its size; not
@@ -1415,7 +1429,8 @@ static void drawLedge( Int top, Int left, Int right, const SquadRow *row )
 	drawKeycap( key, keptString( s_ledgeKeyText, text, max( REAL_TO_INT( KEY_POINTS * TheDisplay->getHeight() / 1080.0f ), 7 ) ), TRUE );
 
 	text.format( u"x%d", row->members );
-	DisplayString *size = keptString( s_ledgeSizeText, text, max( REAL_TO_INT( LEDGE_POINTS * TheDisplay->getHeight() / 1080.0f ), 7 ) );
+	// the list's "xN" size, unshrunk: the ledge has its room whatever the list's count
+	DisplayString *size = keptString( s_ledgeSizeText, text, max( REAL_TO_INT( CHIP_POINTS * TheDisplay->getHeight() / 1080.0f ), 7 ) );
 	Int sizeW = 0, sizeH = 0;
 	size->getSize( &sizeW, &sizeH );
 	size->draw( runHi + px( LEDGE_COUNT_X ), top + px( LEDGE_COUNT_Y ) - sizeH / 2, CHIP_TEXT, GameMakeColor( 0, 0, 0, 255 ) );
@@ -1523,19 +1538,17 @@ static void drawTray( Int top )
 	// sidebar or the world beside a narrowed HUD area otherwise
 	IRegion2D clip = { { 0, 0 }, { s_trayEdge, (Int)TheDisplay->getHeight() } };
 
-	// cells in the tray's order (place counted in from the edge); a row reads left to right, flush right
+	// cell i is button i, its place counted in from the edge (drawStepTray's order): a row starts at the
+	// edge and runs inward, the mockup's order (experiments/group-panel/mockups/A2.png), the short last
+	// row stepping in at the foot
 	IRegion2D cells[ MAX_BUTTONS ];
-	Int cellOf[ MAX_BUTTONS ];
 	for( Int i = 0; i < shown; i++ )
 	{
-		const Int rowIndex = i / columns, inRow = i % columns;
-		const Int rowLength = min( columns, shown - rowIndex * columns );
-		const Int each = rowIndex * columns + ( rowLength - 1 - inRow );
-		cellOf[ i ] = each;
-		cells[ each ].hi.x = right - ( rowLength - 1 - inRow ) * cellW;
-		cells[ each ].lo.x = cells[ each ].hi.x - cellW;
-		cells[ each ].lo.y = bodyTop + body.footH + rowIndex * cellH;
-		cells[ each ].hi.y = cells[ each ].lo.y + cellH;
+		const Int rowIndex = i / columns, place = i % columns;
+		cells[ i ].hi.x = right - place * cellW;
+		cells[ i ].lo.x = cells[ i ].hi.x - cellW;
+		cells[ i ].lo.y = bodyTop + body.footH + rowIndex * cellH;
+		cells[ i ].hi.y = cells[ i ].lo.y + cellH;
 	}
 
 	// all the way in, the body is past the edge: only the notch is drawn and nothing takes a click
@@ -1592,7 +1605,7 @@ static void drawTray( Int top )
 			continue;
 		// a button is a window the clip does not cut: one crossing an edge inside the screen waits until
 		// the slide brings it clear; off the screen's own edge it slides out as before
-		const IRegion2D &cell = cells[ cellOf[ i < shown ? i : 0 ] ];
+		const IRegion2D &cell = cells[ i < shown ? i : 0 ];
 		if( i >= shown || ( cell.hi.x > s_trayEdge && s_trayEdge < (Int)TheDisplay->getWidth() ) )
 		{
 			button->winHide( TRUE );

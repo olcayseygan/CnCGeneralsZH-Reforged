@@ -45,9 +45,49 @@ class BuildListInfo;
 // this header used to compile only behind whoever happened to include Team.h first
 class TeamPrototype;
 class TeamTemplateInfo;
-struct AIAbilityButton;
 struct StampShape;
 class ProductionUpdateInterface;
+class AIPlayer;
+
+/** The buttons of a unit's own the skirmish AI presses (AIPlayer::doAbilities), sorted by what rule weighs
+	* them.  Read off the command set and the weapon sets, so a unit the data gives such a button needs no
+	* line here; the special powers go by their enum, the few whose rule is known. */
+enum AIAbilityKind
+{
+	AIABILITY_LASER,		///< a special that puts the unit on its laser-guided missiles at one vehicle (Missile Defender, Sungur)
+	AIABILITY_SHOT,			///< a weapon only a button fires, at an object (Jarmen Kell's snipe)
+	AIABILITY_AREA,			///< ... at a spot on the ground (rocket pods, Kargu, the fire wall, contaminate)
+	AIABILITY_WALKUP,		///< a special the unit walks up to a target to do (charges, TNT, hacks, Designate), or sabotage
+	AIABILITY_TOGGLE,		///< a weapon switch (the flashbang, neutron shells, the Scud's warheads)
+	AIABILITY_SUICIDE,	///< a weapon fired at nothing that ends the unit (the bomb truck, the Demo general's suicide)
+	AIABILITY_DETONATE,	///< the remote charges' trigger, a special at nothing (Burton, the Demo general's Kell)
+	AIABILITY_HACK,			///< a special at a vehicle in reach, no walk (Black Lotus's vehicle hack)
+	AIABILITY_KIND_COUNT
+};
+
+struct AIAbilityButton
+{
+	const CommandButton *button;
+	Int kind;										///< AIAbilityKind
+	Int index;									///< the button's slot in its command set
+	WeaponSlotType slot;				///< the button's weapon slot, for a weapon
+	SpecialPowerType power;			///< the button's special power, for a special
+};
+
+/// the unit's buttons the AI has a rule for, kept per template and command set; none for a structure
+std::vector<AIAbilityButton> AIAbility_buttonsOf(const Object *obj);
+
+/** The on-the-spot button rules, for a unit of player's, which aiOrNull runs when an AIPlayer owns it.  Each
+	* orders the button and returns TRUE when it pays.  With no AIPlayer the AI's own extras are left out: the
+	* foreign dozer's prize in the shot, the anti-air look of an aircraft's volley.  victim is the unit's own
+	* target or NULL; rung is the AI's unit-abilities rung, below 2 keeping the volley on the victim. */
+Bool AIAbility_laser(const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim);
+Bool AIAbility_shot(const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim, Int rung);
+Bool AIAbility_area(const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim, Int rung);
+Bool AIAbility_toggle(const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim);
+Bool AIAbility_suicide(const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim);
+Bool AIAbility_detonate(const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim);
+Bool AIAbility_hack(const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim);
 
 /// the skirmish scripts send this team at the enemy at some point, rather than keeping it home on guard
 Bool aiTeamAttacks(const TeamTemplateInfo *info);
@@ -217,7 +257,11 @@ struct KnownDefence
 class AIPlayer : public MemoryPoolObject,
 								 public Snapshot
 {
-	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE( AIPlayer, "AIPlayer"  )		
+	MEMORY_POOL_GLUE_WITH_USERLOOKUP_CREATE( AIPlayer, "AIPlayer"  )
+
+	// the two rules whose AI-only extras read the seat's map and its foreign-tech wish
+	friend Bool AIAbility_shot(const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim, Int rung);
+	friend Bool AIAbility_area(const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim, Int rung);
 
 public:
 

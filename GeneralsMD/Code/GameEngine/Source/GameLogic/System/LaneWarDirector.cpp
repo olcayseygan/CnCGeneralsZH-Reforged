@@ -27,21 +27,26 @@
 
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
+#include "Common/ActionManager.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
+#include "Common/SpecialPower.h"
 #include "Common/Team.h"
 #include "Common/ThingFactory.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Upgrade.h"
 #include "Common/Xfer.h"
+#include "GameClient/ControlBar.h"
 #include "GameLogic/AI.h"
 #include "GameLogic/AIPathfind.h"
+#include "GameLogic/AIPlayer.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/JetAIUpdate.h"
+#include "GameLogic/Module/SpecialAbilityUpdate.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PolygonTrigger.h"
@@ -179,6 +184,7 @@ namespace
 		{ "ChinaVehicleInfernoCannon",					2, FALSE, NULL, "Tank" },
 		{ "ChinaVehicleListeningOutpost",				2, FALSE, NULL, NULL },
 		{ "ChinaVehicleHelix",									2, FALSE, NULL, NULL },
+		{ "ChinaInfantryHacker",								2, FALSE, NULL, NULL },
 		{ "ChinaJetMIG",												2, FALSE, NULL, NULL },
 		{ "ChinaTankOverlord",									3, FALSE, NULL, "Tank Infa" },
 		{ "Tank_ChinaTankEmperor",							3, FALSE, "Tank", NULL },
@@ -198,6 +204,7 @@ namespace
 		{ "GLAVehicleQuadCannon",								1, FALSE, NULL, NULL },
 		{ "GLAVehicleToxinTruck",								1, FALSE, NULL, NULL },
 		{ "GLAInfantryAngryMobNexus",						2, FALSE, NULL, NULL },
+		{ "GLAInfantryHijacker",								2, FALSE, NULL, NULL },
 		{ "GLATankMarauder",										2, FALSE, NULL, "Slth" },
 		{ "GLAVehicleRocketBuggy",							2, FALSE, NULL, NULL },
 		{ "GLAVehicleBombTruck",								2, FALSE, NULL, NULL },
@@ -390,6 +397,148 @@ Int LaneWar_upgrades( const Player *player, const UpgradeTemplate **out, Int max
 }
 
 //-------------------------------------------------------------------------------------------------
+Bool LaneWar_abilityDefaultOn( Int commandType, Int powerType )
+{
+	if( commandType == GUI_COMMAND_HACK_INTERNET || commandType == GUICOMMANDMODE_SABOTAGE_BUILDING
+			|| commandType == GUICOMMANDMODE_CONVERT_TO_CARBOMB )
+		return FALSE;
+	if( commandType == GUI_COMMAND_SPECIAL_POWER )
+		return powerType != SPECIAL_INFANTRY_CAPTURE_BUILDING && powerType != SPECIAL_BLACKLOTUS_CAPTURE_BUILDING
+				&& powerType != SPECIAL_BLACKLOTUS_STEAL_CASH_HACK;
+	return TRUE;
+}
+
+static Bool toggleBefore( const LaneWarAbilityToggle &t, Int player, Int templateID, Int slot )
+{
+	if( t.player != player )
+		return t.player < player;
+	if( t.templateID != templateID )
+		return t.templateID < templateID;
+	return t.slot < slot;
+}
+
+void LaneWar_setAbilityToggle( std::vector<LaneWarAbilityToggle> &list, Int player, Int templateID, Int slot, Bool on, Bool defaultOn )
+{
+	size_t at = 0;
+	while( at < list.size() && toggleBefore( list[ at ], player, templateID, slot ) )
+		++at;
+	const Bool found = at < list.size() && list[ at ].player == player && list[ at ].templateID == templateID && list[ at ].slot == slot;
+	if( (on != 0) == (defaultOn != 0) )
+	{
+		if( found )
+			list.erase( list.begin() + at );
+		return;
+	}
+	if( found )
+	{
+		list[ at ].on = on != 0;
+		return;
+	}
+	LaneWarAbilityToggle toggle;
+	toggle.player = player;
+	toggle.templateID = templateID;
+	toggle.slot = slot;
+	toggle.on = on != 0;
+	list.insert( list.begin() + at, toggle );
+}
+
+Bool LaneWar_abilityToggleOn( const std::vector<LaneWarAbilityToggle> &list, Int player, Int templateID, Int slot, Bool defaultOn )
+{
+	for( size_t i = 0; i < list.size(); ++i )
+		if( list[ i ].player == player && list[ i ].templateID == templateID && list[ i ].slot == slot )
+			return list[ i ].on;
+	return defaultOn;
+}
+
+Bool LaneWar_abilityOrderArgsOk( const Int *args, Int argCount )
+{
+	return argCount >= 3 && args[ 0 ] >= 0 && args[ 0 ] <= 0xFFFF && args[ 1 ] >= 0 && args[ 1 ] < MAX_COMMANDS_PER_SET
+			&& ( args[ 2 ] == 0 || args[ 2 ] == 1 );
+}
+
+/// a special a wave unit walks up to an enemy to do (LaneWarDirector::walkUp)
+static Bool isWalkUpPower( Int power )
+{
+	return power == SPECIAL_TIMED_CHARGES || power == SPECIAL_REMOTE_CHARGES || power == SPECIAL_TANKHUNTER_TNT_ATTACK
+			|| power == SPECIAL_HACKER_DISABLE_BUILDING || power == SPECIAL_BLACKLOTUS_CAPTURE_BUILDING
+			|| power == SPECIAL_BLACKLOTUS_STEAL_CASH_HACK || power == SPECIAL_INFANTRY_CAPTURE_BUILDING;
+}
+
+static Int specialPowerOf( const CommandButton *button )
+{
+	const SpecialPowerTemplate *power = button->getCommandType() == GUI_COMMAND_SPECIAL_POWER ? button->getSpecialPowerTemplate() : NULL;
+	return power ? (Int)power->getSpecialPowerType() : (Int)SPECIAL_INVALID;
+}
+
+/// a walk-up button: a special at an enemy that the unit walks to, or the hijack and sabotage orders
+static Bool isWalkUpButton( const CommandButton *button )
+{
+	const Int type = button->getCommandType();
+	if( type == GUICOMMANDMODE_HIJACK_VEHICLE || type == GUICOMMANDMODE_SABOTAGE_BUILDING )
+		return TRUE;
+	return ( button->getOptions() & NEED_TARGET_ENEMY_OBJECT ) && isWalkUpPower( specialPowerOf( button ) );
+}
+
+/** The abilities in one command set: what the AI's rules weigh (AIAbility_buttonsOf) and the walk-ups,
+	  read off the INI alone.  No movement order, upgrade or mine clearing, nothing only a script presses,
+	  and no special with nothing to aim at in a lane (the booby trap, the disguise, the Helix's bomb). */
+static Int abilitiesOfSet( const ThingTemplate *tmpl, const CommandSet *set, LaneWarAbility *out, Int maxItems )
+{
+	if( tmpl == NULL || set == NULL || tmpl->isKindOf( KINDOF_STRUCTURE ) )
+		return 0;
+	Int count = 0;
+	for( Int i = 0; i < MAX_COMMANDS_PER_SET && count < maxItems; ++i )
+	{
+		const CommandButton *button = set->getCommandButton( i );
+		if( button == NULL || ( button->getOptions() & SCRIPT_ONLY ) )
+			continue;
+		const Int type = button->getCommandType();
+		const Int power = specialPowerOf( button );
+		Int kind = -1;
+		switch( type )
+		{
+			case GUI_COMMAND_FIRE_WEAPON:
+				if( ( button->getOptions() & USES_MINE_CLEARING_WEAPONSET ) == 0
+						&& ( AIAbility_slotIsManual( tmpl, button->getWeaponSlot() ) || AIAbility_slotIsSuicide( tmpl, button->getWeaponSlot() ) ) )
+					kind = LANEWAR_ABILITY_WEAPON;
+				break;
+			case GUI_COMMAND_SPECIAL_POWER:
+				if( ( button->getOptions() & NEED_TARGET_ENEMY_OBJECT ) && ( isWalkUpPower( power )
+						|| power == SPECIAL_MISSILE_DEFENDER_LASER_GUIDED_MISSILES || power == SPECIAL_BLACKLOTUS_DISABLE_VEHICLE_HACK ) )
+					kind = LANEWAR_ABILITY_POWER;
+				break;
+			case GUI_COMMAND_SWITCH_WEAPON:
+				if( button->getWeaponSlot() != PRIMARY_WEAPON )
+					kind = LANEWAR_ABILITY_SWITCH;
+				break;
+			case GUICOMMANDMODE_HIJACK_VEHICLE:
+			case GUICOMMANDMODE_SABOTAGE_BUILDING:
+			case GUICOMMANDMODE_CONVERT_TO_CARBOMB:
+			case GUI_COMMAND_HACK_INTERNET:
+				kind = LANEWAR_ABILITY_COMMAND;
+				break;
+			default:
+				break;
+		}
+		if( kind < 0 )
+			continue;
+		out[ count ].button = button;
+		out[ count ].slot = i;
+		out[ count ].kind = kind;
+		out[ count ].defaultOn = LaneWar_abilityDefaultOn( type, power );
+		++count;
+	}
+	return count;
+}
+
+Int LaneWar_abilitiesOf( const ThingTemplate *tmpl, LaneWarAbility *out, Int maxItems )
+{
+	if( tmpl == NULL )
+		return 0;
+	return abilitiesOfSet( tmpl, TheCommandStore->findCommandSet( tmpl->friend_getCommandSetString() ), out, maxItems );
+}
+
+//-------------------------------------------------------------------------------------------------
 LaneWarDirector::LaneWarDirector( void )
 {
 	reset();
@@ -426,6 +575,7 @@ void LaneWarDirector::reset( void )
 	m_copies.clear();
 	m_plotUnits.clear();
 	m_middleHolder = -1;
+	m_abilityToggles.clear();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -693,6 +843,9 @@ void LaneWarDirector::onOrder( Player *player, Int kind, const Int *args, Int ar
 			if( argCount >= 1 )
 				done = buyUpgrade( player, args[ 0 ] );
 			break;
+		case LANEWAR_ORDER_ABILITY:
+			done = setAbility( player, args, argCount );
+			break;
 		default:
 			DEBUG_LOG(( "LANEWAR ORDER: frame %u player %d kind %d with %d arguments is no order\n",
 									now, player->getPlayerIndex(), kind, argCount ));
@@ -924,6 +1077,259 @@ Bool LaneWarDirector::buyUpgrade( Player *player, Int index )
 }
 
 //-------------------------------------------------------------------------------------------------
+/// one of a template's abilities switched on or off for the sender's wave units, kept only where it differs from the default
+Bool LaneWarDirector::setAbility( Player *player, const Int *args, Int argCount )
+{
+	Int team, seat;
+	const Bool argsOk = LaneWar_abilityOrderArgsOk( args, argCount );
+	const ThingTemplate *tmpl = argsOk ? TheThingFactory->findByTemplateID( (UnsignedShort)args[ 0 ] ) : NULL;
+	const LaneWarAbility *ability = NULL;
+	LaneWarAbility list[ LANEWAR_ABILITIES_MAX ];
+	const Int listed = LaneWar_abilitiesOf( tmpl, list, LANEWAR_ABILITIES_MAX );
+	for( Int i = 0; i < listed && ability == NULL; ++i )
+		if( list[ i ].slot == args[ 1 ] )
+			ability = &list[ i ];
+	const char *refused = NULL;
+	if( !m_active || !seatOf( player, &team, &seat ) )
+		refused = "not seated in a lane game";
+	else if( !argsOk )
+		refused = "bad arguments";
+	else if( tmpl == NULL )
+		refused = "no such template";
+	else if( ability == NULL )
+		refused = "not one of its abilities";
+
+	DEBUG_LOG(( "LANEWAR ABILITY: frame %u player %d '%s' slot %d '%s' %s%s%s\n", TheGameLogic->getFrame(),
+							player ? (Int)player->getPlayerIndex() : -1, tmpl ? tmpl->getName().str() : "?", argCount >= 2 ? args[ 1 ] : -1,
+							ability ? ability->button->getName().str() : "?", argCount >= 3 && args[ 2 ] == 1 ? "on" : "off",
+							refused ? ", refused: " : ability && ability->defaultOn == ( args[ 2 ] == 1 ) ? ", the default" : "", refused ? refused : "" ));
+	if( refused != NULL )
+		return FALSE;
+
+	LaneWar_setAbilityToggle( m_abilityToggles, player->getPlayerIndex(), args[ 0 ], args[ 1 ], args[ 2 ] == 1, ability->defaultOn );
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool LaneWarDirector::isAbilityOn( Int player, const ThingTemplate *tmpl, Int slot ) const
+{
+	LaneWarAbility list[ LANEWAR_ABILITIES_MAX ];
+	const Int listed = LaneWar_abilitiesOf( tmpl, list, LANEWAR_ABILITIES_MAX );
+	for( Int i = 0; i < listed; ++i )
+		if( list[ i ].slot == slot )
+			return LaneWar_abilityToggleOn( m_abilityToggles, player, tmpl->getTemplateID(), slot, list[ i ].defaultOn );
+	return FALSE;
+}
+
+/** A live button of a wave unit, which an upgrade may have put in another command set than its template's:
+	  the switch of the template's button that is the same one, else that button's default.  The detonator
+	  goes with the charges it sets off and the primary switch back with the slot switched to, so both are on. */
+Bool LaneWarDirector::buttonOn( Int player, const ThingTemplate *tmpl, const CommandButton *button ) const
+{
+	const Int type = button->getCommandType();
+	if( type == GUI_COMMAND_SWITCH_WEAPON && button->getWeaponSlot() == PRIMARY_WEAPON )
+		return TRUE;
+	if( type == GUI_COMMAND_SPECIAL_POWER && ( button->getOptions() & NEED_TARGET_ENEMY_OBJECT ) == 0 )
+		return TRUE;
+	LaneWarAbility list[ LANEWAR_ABILITIES_MAX ];
+	const Int listed = LaneWar_abilitiesOf( tmpl, list, LANEWAR_ABILITIES_MAX );
+	for( Int i = 0; i < listed; ++i )
+		if( list[ i ].button == button )
+			return LaneWar_abilityToggleOn( m_abilityToggles, player, tmpl->getTemplateID(), list[ i ].slot, list[ i ].defaultOn );
+	return LaneWar_abilityDefaultOn( type, specialPowerOf( button ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Send the unit on towards the enemy fortress of its owner's team, on its own line, as groupLaneMarch
+	  did; nothing for a unit already level with it. */
+void LaneWarDirector::march( Object *obj, Int team )
+{
+	AIUpdateInterface *ai = obj->getAI();
+	if( ai == NULL )
+		return;
+	const Object *fortress = TheGameLogic->findObjectByID( m_fortress[ 1 - team ] );
+	Coord3D goal = *obj->getPosition();
+	goal.x = fortress != NULL ? fortress->getPosition()->x : m_spawn[ 1 - team ].x;
+	if( ( goal.x - obj->getPosition()->x ) * towardEnemy( team ) <= (Real)LANEWAR_SLOT_SIZE )
+		return;
+	goal.z = TheTerrainLogic->getGroundHeight( goal.x, goal.y );
+	if( obj->isAbleToAttack() )
+		ai->aiAttackMoveToPosition( &goal, NO_MAX_SHOTS_LIMIT, CMD_FROM_SCRIPT );
+	else
+		ai->aiMoveToPosition( &goal, CMD_FROM_SCRIPT );
+}
+
+//-------------------------------------------------------------------------------------------------
+/// what a walk-up goes for first: the enemy's tower, then his fortress, then any other building, then a vehicle
+static Int walkUpRank( const Object *target, const ObjectID *towers, ObjectID fortress )
+{
+	if( target->getID() == towers[ 0 ] || target->getID() == towers[ 1 ] )
+		return 0;
+	if( target->getID() == fortress )
+		return 1;
+	if( target->isKindOf( KINDOF_STRUCTURE ) )
+		return 2;
+	if( target->isKindOf( KINDOF_VEHICLE ) )
+		return 3;
+	return -1;
+}
+
+/// another wave unit of the same player is on its way into the target
+Bool LaneWarDirector::enteredByAnother( const Object *obj, const Object *target ) const
+{
+	for( size_t i = 0; i < m_copies.size(); ++i )
+	{
+		Object *other = TheGameLogic->findObjectByID( m_copies[ i ].id );
+		AIUpdateInterface *ai = other != NULL && other != obj ? other->getAI() : NULL;
+		if( ai != NULL && other->getControllingPlayer() == obj->getControllingPlayer() && !ai->isIdle() && ai->getGoalObject() == target )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+/** The lane's walk-up rule, in place of the skirmish AI's weighing of a base: within the leash (twice the
+	  reach the special starts from, capped, and never under what the unit sees), the first enemy it may do it
+	  to, buildings before vehicles in walkUpRank's order and by ObjectID inside a rank.  Charges, TNT, the
+	  building hack, the captures and sabotage go for buildings; TNT and the timed charge for vehicles too,
+	  where the remote one waits on a tank that drives off; the hijack for vehicles alone. */
+Bool LaneWarDirector::walkUp( Object *obj, const CommandButton *button, Int enemyTeam )
+{
+	const Int type = button->getCommandType();
+	const Bool hijack = type == GUICOMMANDMODE_HIJACK_VEHICLE;
+	const Bool sabotage = type == GUICOMMANDMODE_SABOTAGE_BUILDING;
+	const Int power = specialPowerOf( button );
+	const SpecialAbilityUpdate *update = power != SPECIAL_INVALID ? obj->findSpecialAbilityUpdate( (SpecialPowerType)power ) : NULL;
+	AIUpdateInterface *ai = obj->getAI();
+	if( !hijack && !sabotage && ( update == NULL || !AIAbility_specialReady( obj, button ) ) )
+		return FALSE;
+	// a hijacker or a saboteur on its way in has its target already
+	if( ( hijack || sabotage ) && !ai->isIdle() && ai->getGoalObject() != NULL )
+		return FALSE;
+	if( AIAbility_besideOwnCharge( obj ) )
+		return FALSE;
+
+	const Real start = update != NULL ? min( update->getStartAbilityRange(), 2000.0f ) : 0.0f;
+	const Real leash = max( 2.0f * start, obj->getVisionRange() );
+	const Bool buildings = !hijack;
+	const Bool vehicles = hijack || power == SPECIAL_TIMED_CHARGES || power == SPECIAL_TANKHUNTER_TNT_ATTACK;
+	std::vector<Object *> targets;
+	AIAbility_enemiesNear( obj->getControllingPlayer(), obj->getPosition(), leash, &targets );
+	for( Int rank = 0; rank < 4; ++rank )
+	{
+		if( rank < 3 ? !buildings : !vehicles )
+			continue;
+		for( size_t t = 0; t < targets.size(); ++t )
+		{
+			Object *target = targets[ t ];
+			if( walkUpRank( target, m_tower[ enemyTeam ], m_fortress[ enemyTeam ] ) != rank || target->testStatus( OBJECT_STATUS_UNATTACKABLE ) )
+				continue;
+			if( power == SPECIAL_HACKER_DISABLE_BUILDING && target->isDisabled() )
+				continue;		// already off
+			if( ( hijack || sabotage ) && enteredByAnother( obj, target ) )
+				continue;		// one hijacker a tank: the second walks there for nothing
+			if( !button->isValidObjectTarget( obj, target ) )
+				continue;
+			const Bool can = hijack ? TheActionManager->canHijackVehicle( obj, target, CMD_FROM_AI )
+										 : sabotage ? TheActionManager->canSabotageBuilding( obj, target, CMD_FROM_AI )
+										 : TheActionManager->canDoSpecialPowerAtObject( obj, target, CMD_FROM_AI, button->getSpecialPowerTemplate(), button->getOptions() );
+			if( !can )
+				continue;
+			DEBUG_LOG(( "LANEWAR ABILITY USE: frame %u player %d '%s' %d walk-up '%s' at '%s' %d, leash %.0f\n", TheGameLogic->getFrame(),
+									(Int)obj->getControllingPlayer()->getPlayerIndex(), obj->getTemplate()->getName().str(), (Int)obj->getID(),
+									button->getName().str(), target->getTemplate()->getName().str(), (Int)target->getID(), leash ));
+			if( hijack )
+				ai->aiEnter( target, CMD_FROM_AI );
+			else
+				obj->doCommandButtonAtObject( button, target, CMD_FROM_AI );
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The wave units' own buttons, each copy looked at every half game second on its own frame of the
+	  stride (ObjectID and frame, no state).  The skirmish AI's on-the-spot rules go first, at the rung that
+	  weighs every target in reach, then the walk-ups, the remote charges before the rest; only what the
+	  owner's switches leave on.  A copy taken by the enemy (the hijack) marches again for its taker, and
+	  one standing idle short of the enemy fortress marches on. */
+void LaneWarDirector::useAbilities( UnsignedInt now )
+{
+	const UnsignedInt stride = (UnsignedInt)max( 1, (Int)( LOGICFRAMES_PER_GAME_SECOND / 2 ) );
+	for( size_t i = 0; i < m_copies.size(); ++i )
+	{
+		Copy &copy = m_copies[ i ];
+		if( ( (UnsignedInt)copy.id + now ) % stride != 0 )
+			continue;
+		Object *obj = TheGameLogic->findObjectByID( copy.id );
+		AIUpdateInterface *ai = obj != NULL ? obj->getAI() : NULL;
+		if( ai == NULL || obj->isEffectivelyDead() || obj->isContained() || obj->isDisabled() )
+			continue;
+		Player *player = obj->getControllingPlayer();
+		Int team, seat;
+		if( !seatOf( player, &team, &seat ) )
+			continue;
+		const Int me = player->getPlayerIndex();
+		if( copy.owner != me )
+		{
+			const Bool taken = copy.owner >= 0;
+			copy.owner = me;
+			if( taken )
+			{
+				DEBUG_LOG(( "LANEWAR ABILITY: frame %u '%s' %d is player %d's now and marches for team %s\n", now,
+										obj->getTemplate()->getName().str(), (Int)obj->getID(), me, TEAM_NAME[ team ] ));
+				march( obj, team );
+				continue;
+			}
+		}
+		if( AIAbility_unitBusy( obj ) )
+			continue;
+
+		Object *victim = ai->getCurrentVictim();
+		if( victim != NULL && ( victim->isEffectivelyDead() || player->getRelationship( victim->getTeam() ) != ENEMIES ) )
+			victim = NULL;
+		const ThingTemplate *tmpl = obj->getTemplate();
+		Bool used = FALSE;
+		const std::vector<AIAbilityButton> buttons = AIAbility_buttonsOf( obj );
+		for( size_t b = 0; b < buttons.size() && !used; ++b )
+		{
+			const AIAbilityButton &entry = buttons[ b ];
+			if( entry.kind == AIABILITY_WALKUP || !buttonOn( me, tmpl, entry.button ) )
+				continue;
+			switch( entry.kind )
+			{
+				case AIABILITY_LASER:			used = AIAbility_laser( player, NULL, obj, entry, victim ); break;
+				case AIABILITY_SHOT:			used = AIAbility_shot( player, NULL, obj, entry, victim, 2 ); break;
+				case AIABILITY_AREA:			used = AIAbility_area( player, NULL, obj, entry, victim, 2 ); break;
+				case AIABILITY_TOGGLE:		used = AIAbility_toggle( player, NULL, obj, entry, victim ); break;
+				case AIABILITY_SUICIDE:		used = AIAbility_suicide( player, NULL, obj, entry, victim ); break;
+				case AIABILITY_DETONATE:	used = AIAbility_detonate( player, NULL, obj, entry, victim ); break;
+				case AIABILITY_HACK:			used = AIAbility_hack( player, NULL, obj, entry, victim ); break;
+				default:									break;
+			}
+			if( used )
+				DEBUG_LOG(( "LANEWAR ABILITY USE: frame %u player %d '%s' %d on the spot '%s' slot %d, victim '%s' %d\n", now, me,
+										tmpl->getName().str(), (Int)obj->getID(), entry.button->getName().str(), entry.index,
+										victim ? victim->getTemplate()->getName().str() : "none", victim ? (Int)victim->getID() : 0 ));
+		}
+
+		LaneWarAbility list[ LANEWAR_ABILITIES_MAX ];
+		const Int listed = used ? 0 : abilitiesOfSet( tmpl, TheCommandStore->findCommandSet( obj->getCommandSetString() ), list, LANEWAR_ABILITIES_MAX );
+		for( Int pass = 0; pass < 2 && !used; ++pass )
+			for( Int a = 0; a < listed && !used; ++a )
+			{
+				const CommandButton *button = list[ a ].button;
+				if( ( specialPowerOf( button ) == SPECIAL_REMOTE_CHARGES ) != ( pass == 0 ) || !isWalkUpButton( button ) || !buttonOn( me, tmpl, button ) )
+					continue;
+				used = walkUp( obj, button, 1 - team );
+			}
+
+		if( !used && ai->isIdle() )
+			march( obj, team );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 void LaneWarDirector::update( void )
 {
 	if( !m_active )
@@ -945,6 +1351,8 @@ void LaneWarDirector::update( void )
 	}
 	if( m_fortressDown[ 0 ] || m_fortressDown[ 1 ] )
 		return;
+
+	useAbilities( now );
 
 	if( now >= m_nextTickFrame )
 	{
@@ -1151,6 +1559,7 @@ void LaneWarDirector::spawnWave( Int team, Int seat, UnsignedInt now )
 		Copy entry;
 		entry.id = copy->getID();
 		entry.dieFrame = now + LANEWAR_LIFESPAN_FRAMES;
+		entry.owner = player->getPlayerIndex();
 		m_copies.push_back( entry );
 	}
 
@@ -1188,10 +1597,11 @@ void LaneWarDirector::crc( Xfer *xfer )
 /** Version 1: the seats, the fortresses and towers, the tick clock, the copies with their death frames and the
 	  plot units with their slots.  The grids, pads and middle come from the map on every load.
 	  Version 2: each plot unit's grid, price and whether it has gone out; each seat's income and tech
-	  level and whether its hero is bought; the team holding the middle. */
+	  level and whether its hero is bought; the team holding the middle.
+	  Version 3: each copy's owner, and the players' ability switches. */
 void LaneWarDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1215,6 +1625,10 @@ void LaneWarDirector::xfer( Xfer *xfer )
 	{
 		xfer->xferObjectID( &m_copies[ i ].id );
 		xfer->xferUnsignedInt( &m_copies[ i ].dieFrame );
+		if( version >= 3 )
+			xfer->xferInt( &m_copies[ i ].owner );
+		else
+			m_copies[ i ].owner = -1;		// taken as whoever holds it the first time it is looked at
 	}
 
 	count = (UnsignedInt)m_plotUnits.size();
@@ -1254,5 +1668,21 @@ void LaneWarDirector::xfer( Xfer *xfer )
 				xfer->xferBool( &m_heroBought[ t ][ s ] );
 			}
 		xfer->xferInt( &m_middleHolder );
+	}
+
+	if( version >= 3 )
+	{
+		count = (UnsignedInt)m_abilityToggles.size();
+		xfer->xferUnsignedInt( &count );
+		if( xfer->getXferMode() == XFER_LOAD )
+			m_abilityToggles.resize( count );
+		for( UnsignedInt i = 0; i < count; ++i )
+		{
+			LaneWarAbilityToggle &t = m_abilityToggles[ i ];
+			xfer->xferInt( &t.player );
+			xfer->xferInt( &t.templateID );
+			xfer->xferInt( &t.slot );
+			xfer->xferBool( &t.on );
+		}
 	}
 }

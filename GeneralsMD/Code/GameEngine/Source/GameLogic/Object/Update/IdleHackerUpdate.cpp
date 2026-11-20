@@ -28,6 +28,7 @@
 #include "Common/Player.h"
 #include "Common/Xfer.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/ObjectIter.h"
 #include "GameLogic/PartitionManager.h"
@@ -105,8 +106,10 @@ UpdateSleepTime IdleHackerUpdate::update( void )
 	const UnsignedInt now = TheGameLogic->getFrame();
 
 	// Checked every frame: an order that keeps the hacker busy for a single frame still resets the clock.
+	// A Lane War hacker is a wave copy, whose Internet hack is its player's switch (LaneWarDirector);
+	// one standing idle at the enemy fortress's line would otherwise start hacking for money.
 	if( me->getControllingPlayer()->getPlayerType() != PLAYER_HUMAN || me->isContained() || me->isEffectivelyDead() || !ai->isIdle() ||
-			ai->getHackInternetAIInterface()->isHeldByPlayer() )
+			ai->getHackInternetAIInterface()->isHeldByPlayer() || TheLaneWarDirector->isActive() )
 	{
 		m_idleSinceFrame = now;
 		return UPDATE_SLEEP_NONE;

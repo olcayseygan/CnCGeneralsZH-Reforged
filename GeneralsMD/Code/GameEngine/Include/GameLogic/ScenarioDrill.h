@@ -110,7 +110,8 @@ enum ScenarioActionType
 	SCENARIO_ACTION_LANETIER,					///< lanetier <slot> <track> <level>; a Lane War tier, track 0 income and 1 tech, as LANEWAR_ORDER_TIER (the numbers in name)
 	SCENARIO_ACTION_LANESELL,					///< lanesell <slot> <grid> <column> <row>; sell the seat's plot unit on that slot, grid 0 ground and 1 air, as LANEWAR_ORDER_SELL
 	SCENARIO_ACTION_LANEMOVE,					///< lanemove <slot> <grid> <column> <row> <to column> <to row>; move the seat's plot unit, as LANEWAR_ORDER_MOVE
-	SCENARIO_ACTION_LANEUPGRADE				///< laneupgrade <slot> <upgrade>; buy that player upgrade off the seat's Lane War list, as LANEWAR_ORDER_UPGRADE
+	SCENARIO_ACTION_LANEUPGRADE,			///< laneupgrade <slot> <upgrade>; buy that player upgrade off the seat's Lane War list, as LANEWAR_ORDER_UPGRADE
+	SCENARIO_ACTION_LANEABILITY				///< laneability <slot> <template> <buttonSlot> <0|1>; switch the seat's wave units of that template off or on for the button in that command set slot (from 0, the INI's number less one), as LANEWAR_ORDER_ABILITY (slot and switch in at)
 };
 
 /// ScenarioAction::atStart when the position is plain numbers

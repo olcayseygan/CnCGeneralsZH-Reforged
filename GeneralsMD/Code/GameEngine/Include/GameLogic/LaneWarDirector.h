@@ -33,7 +33,9 @@
 // turns: the plot's units are copied, template and slot place relative to the grid's centre, onto
 // the team's spawn pad with the plot's front row in front, facing the enemy, and march down the lane
 // as AIGroup::groupLaneMarch sends them.  The copies
-// belong to the player and cannot be selected; each dies 130 wall seconds after it spawned.  A team
+// belong to the player and cannot be selected; each dies 130 wall seconds after it spawned.  A copy
+// presses its own buttons on the skirmish AI's rules, as far as its player's switches let it
+// (LANEWAR_ORDER_ABILITY), and one left standing short of the enemy fortress marches on.  A team
 // loses when its fortress dies, through VictoryConditions, and nothing else counts.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,6 +50,7 @@
 #include "Common/Snapshot.h"
 #include <vector>
 
+class CommandButton;
 class Object;
 class Player;
 class ThingTemplate;
@@ -83,7 +86,53 @@ enum LaneWarOrderKind
 	LANEWAR_ORDER_SELL = 2,								///< (grid, column, row): sell the sender's plot unit covering that slot
 	LANEWAR_ORDER_MOVE = 3,								///< (grid, from column, from row, to column, to row): put the sender's plot unit covering the first slot down with its front left slot at the second
 	LANEWAR_ORDER_UPGRADE = 4,						///< (index): buy that entry of LaneWar_upgrades for the sender
+	LANEWAR_ORDER_ABILITY = 5,						///< (template id, button slot, on): the sender's wave units of that template use that button (1) or leave it (0); the slot is an entry of LaneWar_abilitiesOf
 };
+
+/** A wave unit's button the director presses by itself (LaneWarDirector::useAbilities), read off the
+	  template's own command set.  A weapon switch pair lists only its non-primary slot, and the remote
+	  charges' detonator goes with the planting; both of those and the primary switch are always on. */
+enum LaneWarAbilityKind
+{
+	LANEWAR_ABILITY_WEAPON,								///< a weapon only a button fires, or the one that ends the unit
+	LANEWAR_ABILITY_POWER,								///< a special at an enemy: the laser lock, the charges, TNT, the hacks, the captures
+	LANEWAR_ABILITY_SWITCH,								///< a weapon switch onto that slot
+	LANEWAR_ABILITY_COMMAND,							///< hijack, sabotage, car bomb, the Internet hack
+};
+
+struct LaneWarAbility
+{
+	const CommandButton *button;
+	Int slot;															///< the button's index in the command set from 0 (the INI's number less one), the toggle's key
+	Int kind;															///< LaneWarAbilityKind
+	Bool defaultOn;
+};
+
+enum { LANEWAR_ABILITIES_MAX = 8 };
+
+/// the template's abilities in its own command set, in slot order; none for a structure
+extern Int LaneWar_abilitiesOf( const ThingTemplate *tmpl, LaneWarAbility *out, Int maxItems );
+/** On unless a player switches it off: building captures and the money buttons (the cash hack, the
+	  Internet hack, sabotage) and the car bomb start off.  A GUICommandType and, for a special, its
+	  SpecialPowerType. */
+extern Bool LaneWar_abilityDefaultOn( Int commandType, Int powerType );
+
+/// one player's switch of one template's button away from its default
+struct LaneWarAbilityToggle
+{
+	Int player;
+	Int templateID;
+	Int slot;
+	Bool on;
+};
+
+/** Set a switch in a list kept sorted by player, template and slot: a switch back to the default drops
+	  the entry, so the list holds only what differs. */
+extern void LaneWar_setAbilityToggle( std::vector<LaneWarAbilityToggle> &list, Int player, Int templateID, Int slot, Bool on, Bool defaultOn );
+/// the switch in the list, or defaultOn where there is none
+extern Bool LaneWar_abilityToggleOn( const std::vector<LaneWarAbilityToggle> &list, Int player, Int templateID, Int slot, Bool defaultOn );
+/// LANEWAR_ORDER_ABILITY's integers hold together before any template is looked up
+extern Bool LaneWar_abilityOrderArgsOk( const Int *args, Int argCount );
 
 enum { LANEWAR_GRID_GROUND = 0, LANEWAR_GRID_AIR = 1, LANEWAR_GRIDS = 2 };
 enum { LANEWAR_TRACK_INCOME = 0, LANEWAR_TRACK_TECH = 1 };
@@ -248,6 +297,8 @@ public:
 	static Int gridFor( const ThingTemplate *tmpl );
 	/// the slots a side a unit of this template covers
 	static Int sizeFor( const ThingTemplate *tmpl );
+	/// the player's wave units of the template use the button in that slot of its command set (LaneWar_abilitiesOf)
+	Bool isAbilityOn( Int player, const ThingTemplate *tmpl, Int slot ) const;
 
 protected:
 	virtual void crc( Xfer *xfer );
@@ -259,8 +310,15 @@ private:
 	{
 		ObjectID id;
 		UnsignedInt dieFrame;
+		Int owner;											///< the player index it last marched for; a hijacked copy marches again for its taker
 	};
 	void expireCopies( UnsignedInt now );
+	void useAbilities( UnsignedInt now );
+	Bool buttonOn( Int player, const ThingTemplate *tmpl, const CommandButton *button ) const;
+	Bool walkUp( Object *obj, const CommandButton *button, Int team );
+	Bool enteredByAnother( const Object *obj, const Object *target ) const;
+	void march( Object *obj, Int team );
+	Bool setAbility( Player *player, const Int *args, Int argCount );
 	void refillJets( void );
 	Bool heroCopyAlive( const Player *player ) const;
 	void tick( UnsignedInt now );
@@ -294,6 +352,7 @@ private:
 	Int m_techLevel[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];			///< 1 to LANEWAR_TECH_TIERS
 	Bool m_heroBought[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];		///< the seat's one hero is bought, once a match
 	Int m_middleHolder;																		///< the team the last tick found holding the middle, -1 nobody
+	std::vector<LaneWarAbilityToggle> m_abilityToggles;					///< the players' switches away from LaneWar_abilityDefaultOn, sorted
 };
 
 extern LaneWarDirector *TheLaneWarDirector;

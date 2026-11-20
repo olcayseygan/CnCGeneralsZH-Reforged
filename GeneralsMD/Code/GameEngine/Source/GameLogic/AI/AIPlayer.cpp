@@ -37,6 +37,7 @@
 #include "Common/GlobalData.h"
 #include "Common/PerfTimer.h"
 #include "Common/Player.h"
+#include "GameLogic/LaneWarDirector.h"
 #include "Common/PlayerTemplate.h"
 #include "Common/SpecialPower.h"
 #include "Common/Team.h" 
@@ -6823,7 +6824,8 @@ void AIPlayer::update( void )
 	// its base, its attacks and its superweapon by the map script, which is the whole of its difficulty:
 	// run on top of that, Kwai's $30000 stood three nuclear silos a minute into the match.  So is a
 	// skirmish seat on a map that scripts it: an Art of Defense GLA left its wave paths for a base.
-	if( runsOwnAI() )
+	// A Lane War seat has no base and its units are the director's wave copies, which it alone drives.
+	if( runsOwnAI() && !TheLaneWarDirector->isActive() )
 	{
 		AI_PHASE( AIP_SCOUT,   doScouting() );					// Keep one unit looking at the map.
 		AI_PHASE( AIP_RETREAT, doRetreats() );					// Break off the fights we are losing.
@@ -19889,10 +19891,17 @@ static void logAbility( const AIPlayer *ai, const Player *player, const Object *
 		target ? target->getTemplate()->getName().str() : "ground", target ? target->getID() : INVALID_ID, at->x, at->y, why ));
 }
 
+// the statics above, for a caller with no AIPlayer (LaneWarDirector's wave units)
+Bool AIAbility_unitBusy( const Object *obj ) { return obj->testStatus( OBJECT_STATUS_IS_USING_ABILITY ) || aiAbilityWeaponHeld( obj ); }
+void AIAbility_enemiesNear( const Player *player, const Coord3D *at, Real radius, std::vector<Object *> *out ) { abilityEnemiesNear( player, at, radius, out ); }
+Bool AIAbility_specialReady( Object *obj, const CommandButton *button ) { return abilitySpecialReady( obj, button ); }
+Bool AIAbility_slotIsManual( const ThingTemplate *tmpl, WeaponSlotType slot ) { return slotIsManualAnywhere( tmpl, slot ); }
+Bool AIAbility_slotIsSuicide( const ThingTemplate *tmpl, WeaponSlotType slot ) { return slotIsSuicide( tmpl, slot ); }
+
 //----------------------------------------------------------------------------------------------------------
 Bool AIPlayer::abilityUnitBusy( const Object *obj ) const
 {
-	if( obj->testStatus( OBJECT_STATUS_IS_USING_ABILITY ) || aiAbilityWeaponHeld( obj ) )
+	if( AIAbility_unitBusy( obj ) )
 		return TRUE;
 	const ObjectID id = obj->getID();
 	if( id == m_capturerID || id == m_hijackerID || isDutyHelix( obj ) || isDutyAmbulance( obj ) ||
@@ -20190,6 +20199,8 @@ static Bool besideOwnCharge( const Object *obj )
 	}
 	return FALSE;
 }
+
+Bool AIAbility_besideOwnCharge( const Object *obj ) { return besideOwnCharge( obj ); }
 
 /** An enemy vehicle the hero's guns can hurt has the hero as its target.  Black Lotus, who has no gun, is never
 	* better off standing. */

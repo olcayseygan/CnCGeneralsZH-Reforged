@@ -1,0 +1,68 @@
+# Lane War abilities proof: every wave unit presses its own buttons, on the skirmish AI's rules and
+# the lane's walk-up rule, as far as its player's switches let it. Team A fields the units with a
+# button (Burton, Missile Defenders, Tank Hunters, Black Lotus, a Hacker, a Dragon, Jarmen Kell,
+# Hijackers), team B nothing but Crusaders. Read the LANEWAR ABILITY USE lines, the LANEWAR ABILITY
+# lines for the switches and for a hijacked Crusader marching for its taker, and the IDLEHACKER lines
+# (there should be none: a plot's hacker is held and must not hack for money).
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 6 -takeover -side 0 FactionAmerica -side 1 FactionAmerica
+#     -side 2 FactionChina -side 3 FactionAmerica -side 4 FactionGLA -side 5 FactionAmerica
+#     -seed 1 -maxframes 21000 -scenario laneabilities -logPrefix laneabilities_
+#
+# laneabilities_off.txt is the same match with every one of those buttons switched off. Slots 0, 2
+# and 4 are team A's three seats, 1, 3 and 5 team B's. A laneability line is <slot> <template>
+# <command set slot> <0|1>; the slot is the button's place in the unit's own command set counted
+# from 0, the INI's number less one (Black Lotus's cash hack is the INI's 5, so 4 here). The
+# frames are this file's 30 Hz frames, which the drill scales by the game speed (15000 here is logic
+# frame 10000 at the native 1.5x). Nothing is ordered after 15000, so a save taken past logic frame
+# 10000 and loaded again plays the rest as the whole run does.
+
+# USA: Burton (knife, timed and remote charges) and three Missile Defenders (the laser lock)
+30    laneplace  0  AmericaInfantryColonelBurton    6 0
+30    laneplace  0  AmericaInfantryMissileDefender  0 0
+30    laneplace  0  AmericaInfantryMissileDefender  1 0
+30    laneplace  0  AmericaInfantryMissileDefender  2 0
+# China: Black Lotus (the vehicle hack; the cash hack switched on, with nothing in the lane to take it
+# from) and Tank Hunters (TNT); then tech 2 for a Hacker (the building hack) and a Dragon (the fire wall)
+30    laneplace  2  ChinaInfantryBlackLotus         6 0
+30    laneplace  2  ChinaInfantryTankHunter         0 0
+30    laneplace  2  ChinaInfantryTankHunter         1 0
+30    laneability 2 ChinaInfantryBlackLotus         4 1
+# GLA: Jarmen Kell (the snipe), then tech 2 for Hijackers
+30    laneplace  4  GLAInfantryJarmenKell           6 0
+# team B: Crusaders, more as the money comes
+30    laneplace  1  AmericaTankCrusader             0 0
+30    laneplace  1  AmericaTankCrusader             3 0
+30    laneplace  3  AmericaTankCrusader             0 0
+30    laneplace  3  AmericaTankCrusader             3 0
+30    laneplace  5  AmericaTankCrusader             0 0
+30    laneplace  5  AmericaTankCrusader             3 0
+# refused: no such ability slot, a template with none, a switch that is no switch
+30    laneability 0 AmericaInfantryMissileDefender  9 0
+30    laneability 0 AmericaTankCrusader             1 0
+# tech 2 and the second wave of buys; a line already done or not yet affordable is refused and logged
+6000  lanetier   2  1 2
+6000  lanetier   4  1 2
+6000  laneplace  1  AmericaTankCrusader             6 0
+6000  laneplace  3  AmericaTankCrusader             6 0
+6000  laneplace  5  AmericaTankCrusader             6 0
+9000  lanetier   2  1 2
+9000  lanetier   4  1 2
+9000  laneplace  2  ChinaInfantryHacker             3 0
+9000  laneplace  4  GLAInfantryHijacker             0 0
+9000  laneplace  4  GLAInfantryHijacker             1 0
+9000  laneplace  1  AmericaTankCrusader             9 0
+9000  laneplace  3  AmericaTankCrusader             9 0
+9000  laneplace  5  AmericaTankCrusader             9 0
+12000 lanetier   2  1 2
+12000 lanetier   4  1 2
+12000 laneplace  2  ChinaInfantryHacker             3 0
+12000 laneplace  2  ChinaTankDragon                 8 0
+12000 laneplace  4  GLAInfantryHijacker             0 0
+12000 laneplace  4  GLAInfantryHijacker             1 0
+15000 laneplace  2  ChinaInfantryHacker             3 0
+15000 laneplace  2  ChinaTankDragon                 8 0
+15000 laneplace  4  GLAInfantryHijacker             0 0
+15000 laneplace  4  GLAInfantryHijacker             1 0
+15000 laneplace  4  GLAInfantryHijacker             2 0

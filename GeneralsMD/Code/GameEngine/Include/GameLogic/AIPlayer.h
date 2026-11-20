@@ -89,6 +89,18 @@ Bool AIAbility_suicide(const Player *player, AIPlayer *aiOrNull, Object *obj, co
 Bool AIAbility_detonate(const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim);
 Bool AIAbility_hack(const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim);
 
+/// the unit is in the middle of one of its buttons: a special walking up or under way, or a weapon locked for a shot
+Bool AIAbility_unitBusy(const Object *obj);
+/// enemies the player knows of within radius of a point, projectiles left out, in ObjectID order
+void AIAbility_enemiesNear(const Player *player, const Coord3D *at, Real radius, std::vector<Object *> *out);
+/// the special the button fires is charged and allowed
+Bool AIAbility_specialReady(Object *obj, const CommandButton *button);
+/// a charge of the unit's own, remote or timed, lies inside its blast: it gets clear before any new order
+Bool AIAbility_besideOwnCharge(const Object *obj);
+/// a slot of any of the template's weapon sets that only a button fires, or that goes off where the unit stands
+Bool AIAbility_slotIsManual(const ThingTemplate *tmpl, WeaponSlotType slot);
+Bool AIAbility_slotIsSuicide(const ThingTemplate *tmpl, WeaponSlotType slot);
+
 /// the skirmish scripts send this team at the enemy at some point, rather than keeping it home on guard
 Bool aiTeamAttacks(const TeamTemplateInfo *info);
 

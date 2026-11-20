@@ -13028,6 +13028,65 @@ TEST(lane_war_tiers_cost_what_the_plan_says_and_a_sale_pays_back_half_once_sent)
 	CHECK( ScenarioDrill_parseLine( "30 lanemove 0 0 3 1 5", &action ) != SCENARIO_PARSE_OK );
 }
 
+TEST(lane_war_abilities_start_on_but_the_captures_and_money_and_a_switch_holds_only_what_differs)
+{
+	// the owner's list of 2026-11-20: building captures and money abilities start off, the car bomb too
+	CHECK( !LaneWar_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_INFANTRY_CAPTURE_BUILDING ) );
+	CHECK( !LaneWar_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_BLACKLOTUS_CAPTURE_BUILDING ) );
+	CHECK( !LaneWar_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_BLACKLOTUS_STEAL_CASH_HACK ) );
+	CHECK( !LaneWar_abilityDefaultOn( GUI_COMMAND_HACK_INTERNET, SPECIAL_INVALID ) );
+	CHECK( !LaneWar_abilityDefaultOn( GUICOMMANDMODE_SABOTAGE_BUILDING, SPECIAL_INVALID ) );
+	CHECK( !LaneWar_abilityDefaultOn( GUICOMMANDMODE_CONVERT_TO_CARBOMB, SPECIAL_INVALID ) );
+	CHECK( LaneWar_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_BLACKLOTUS_DISABLE_VEHICLE_HACK ) );
+	CHECK( LaneWar_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_TANKHUNTER_TNT_ATTACK ) );
+	CHECK( LaneWar_abilityDefaultOn( GUI_COMMAND_SPECIAL_POWER, SPECIAL_HACKER_DISABLE_BUILDING ) );
+	CHECK( LaneWar_abilityDefaultOn( GUICOMMANDMODE_HIJACK_VEHICLE, SPECIAL_INVALID ) );
+	CHECK( LaneWar_abilityDefaultOn( GUI_COMMAND_FIRE_WEAPON, SPECIAL_INVALID ) );
+	CHECK( LaneWar_abilityDefaultOn( GUI_COMMAND_SWITCH_WEAPON, SPECIAL_INVALID ) );
+
+	// a switch away from the default is kept, sorted by player, template and slot; back to it drops it
+	std::vector<LaneWarAbilityToggle> list;
+	LaneWar_setAbilityToggle( list, 2, 40, 3, FALSE, TRUE );
+	LaneWar_setAbilityToggle( list, 0, 90, 1, TRUE, FALSE );
+	LaneWar_setAbilityToggle( list, 2, 40, 1, FALSE, TRUE );
+	LaneWar_setAbilityToggle( list, 0, 90, 1, TRUE, FALSE );		// the same again: no second entry
+	CHECK_EQ( (Int)list.size(), 3 );
+	CHECK_EQ( list[ 0 ].player, 0 );
+	CHECK_EQ( list[ 1 ].slot, 1 );
+	CHECK_EQ( list[ 2 ].slot, 3 );
+	CHECK( !LaneWar_abilityToggleOn( list, 2, 40, 3, TRUE ) );
+	CHECK( LaneWar_abilityToggleOn( list, 0, 90, 1, FALSE ) );
+	CHECK( LaneWar_abilityToggleOn( list, 1, 40, 3, TRUE ) );			// another player keeps the default
+	CHECK( !LaneWar_abilityToggleOn( list, 2, 41, 3, FALSE ) );
+	LaneWar_setAbilityToggle( list, 2, 40, 3, TRUE, TRUE );
+	CHECK_EQ( (Int)list.size(), 2 );
+	CHECK( LaneWar_abilityToggleOn( list, 2, 40, 3, TRUE ) );
+	LaneWar_setAbilityToggle( list, 2, 40, 1, TRUE, FALSE );			// on where the default is off: kept as on
+	CHECK_EQ( (Int)list.size(), 2 );
+	CHECK( LaneWar_abilityToggleOn( list, 2, 40, 1, FALSE ) );
+
+	// the order's integers: template id, a command set slot, and the switch as 0 or 1
+	const Int good[ 3 ] = { 12, 1, 0 };
+	CHECK( LaneWar_abilityOrderArgsOk( good, 3 ) );
+	CHECK( !LaneWar_abilityOrderArgsOk( good, 2 ) );
+	const Int badId[ 3 ] = { -1, 1, 1 };
+	const Int bigId[ 3 ] = { 0x10000, 1, 1 };
+	const Int badSlot[ 3 ] = { 12, MAX_COMMANDS_PER_SET, 1 };
+	const Int badSwitch[ 3 ] = { 12, 1, 2 };
+	CHECK( !LaneWar_abilityOrderArgsOk( badId, 3 ) );
+	CHECK( !LaneWar_abilityOrderArgsOk( bigId, 3 ) );
+	CHECK( !LaneWar_abilityOrderArgsOk( badSlot, 3 ) );
+	CHECK( !LaneWar_abilityOrderArgsOk( badSwitch, 3 ) );
+	CHECK_EQ( (Int)LANEWAR_ORDER_ABILITY, 5 );
+
+	ScenarioAction action;
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "30 laneability 0 ChinaInfantryTankHunter 1 0", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_LANEABILITY );
+	CHECK_EQ( (Int)action.at.x, 1 );
+	CHECK_EQ( (Int)action.at.y, 0 );
+	CHECK( ScenarioDrill_parseLine( "30 laneability 0 ChinaInfantryTankHunter 1 2", &action ) != SCENARIO_PARSE_OK );
+}
+
 //-------------------------------------------------------------------------------------------------
 /** A ranked Quick Match has no lobby to send a map name: every peer derives the map from the match
 	seed and the seat count alone, so the derivation is pinned here.  A change to it splits two builds

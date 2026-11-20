@@ -288,6 +288,8 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_LANEMOVE;
 	else if (token == "laneupgrade")
 		*action = SCENARIO_ACTION_LANEUPGRADE;
+	else if (token == "laneability")
+		*action = SCENARIO_ACTION_LANEABILITY;
 	else
 		return FALSE;
 
@@ -408,6 +410,7 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_LANESELL:		return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_LANEMOVE:		return SCENARIO_TOKENS_ATTACK + 2;
 		case SCENARIO_ACTION_LANEUPGRADE:	return SCENARIO_TOKENS_STOP;
+		case SCENARIO_ACTION_LANEABILITY:	return SCENARIO_TOKENS_ATTACK;
 	}
 	return SCENARIO_TOKENS_STOP;
 }
@@ -639,6 +642,17 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 				return SCENARIO_PARSE_BAD_POSITION;
 			action->at.x = (Real)slotX;
 			action->at.y = (Real)slotY;
+			break;
+		}
+
+		case SCENARIO_ACTION_LANEABILITY:
+		{
+			// the button's command set slot and the switch, 0 off or 1 on
+			Int slot, on;
+			if (!parseWholeNumber( tokens[ 4 ], &slot ) || !parseWholeNumber( tokens[ 5 ], &on ) || on > 1)
+				return SCENARIO_PARSE_BAD_POSITION;
+			action->at.x = (Real)slot;
+			action->at.y = (Real)on;
 			break;
 		}
 
@@ -2349,6 +2363,7 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 		case SCENARIO_ACTION_LANESELL:
 		case SCENARIO_ACTION_LANEMOVE:
 		case SCENARIO_ACTION_LANEUPGRADE:
+		case SCENARIO_ACTION_LANEABILITY:
 			ordered = FALSE;		// handled before the group is built
 			break;
 	}
@@ -2607,6 +2622,14 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 	if (action.action == SCENARIO_ACTION_LANEPLACE)
 		return TheLaneWarDirector->placeUnit( player, TheThingFactory->findTemplate( action.selector, FALSE ),
 																					(Int)action.at.x, (Int)action.at.y );
+
+	if (action.action == SCENARIO_ACTION_LANEABILITY)
+	{
+		const ThingTemplate *tmpl = TheThingFactory->findTemplate( action.selector, FALSE );
+		const Int args[ 3 ] = { tmpl ? (Int)tmpl->getTemplateID() : -1, (Int)action.at.x, (Int)action.at.y };
+		TheLaneWarDirector->onOrder( player, LANEWAR_ORDER_ABILITY, args, 3 );
+		return TRUE;
+	}
 
 	// the other Lane War orders go in as MSG_LANEWAR_ORDER's integers do
 	if (action.action == SCENARIO_ACTION_LANETIER || action.action == SCENARIO_ACTION_LANESELL

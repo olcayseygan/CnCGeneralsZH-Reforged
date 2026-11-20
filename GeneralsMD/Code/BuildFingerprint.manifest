@@ -1377,6 +1377,8 @@ Data/Scenarios/jetrunway.txt
 Data/Scenarios/jetsturn.txt
 Data/Scenarios/jetturn.txt
 Data/Scenarios/kargu.txt
+Data/Scenarios/laneabilities.txt
+Data/Scenarios/laneabilities_off.txt
 Data/Scenarios/lanewar.txt
 Data/Scenarios/lanewar_buy.txt
 Data/Scenarios/laserdefense.txt

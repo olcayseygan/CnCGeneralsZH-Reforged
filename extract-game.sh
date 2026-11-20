@@ -48,8 +48,25 @@ else
   target=$DEFAULT_TARGET
   confirm "Extract to \"$target\"?" || fail "cancelled; name a target as the second argument."
 fi
+# Retail data must stay outside this source checkout, even if the chosen path uses a symlink. Checked on
+# the nearest folder that exists before anything is made, so a refused run leaves no empty folder, and
+# again once the target is real, for a path that climbs back with "..".
+repo=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
+refuse_inside_repo() {
+  case "$1/" in
+    "$repo/"*) fail "choose a target outside the source checkout (for example $DEFAULT_TARGET)." ;;
+  esac
+}
+existing=$target
+rest=
+while [ ! -d "$existing" ]; do
+  rest="/$(basename "$existing")$rest"
+  existing=$(dirname "$existing")
+done
+refuse_inside_repo "$(CDPATH= cd "$existing" && pwd -P)$rest"
 mkdir -p "$target"
-target=$(cd "$target" && pwd)
+target=$(CDPATH= cd "$target" && pwd -P)
+refuse_inside_repo "$target"
 
 # Scratch space beside the target: a DVD's worth of files would not fit a RAM-backed /tmp.
 work=$(mktemp -d "$(dirname "$target")/.extract-game.XXXXXX")
@@ -57,7 +74,7 @@ trap 'rm -rf "$work"' EXIT
 
 # --- the medium's files ---
 if [ -d "$source" ]; then
-  tree=$(cd "$source" && pwd)
+  tree=$(CDPATH= cd "$source" && pwd -P)
 else
   say "unpacking $source"
   tree="$work/iso"
@@ -73,22 +90,22 @@ fi
 
 # InstallShield keeps the files in cabinets, one folder per component group; merged, the groups give back
 # the installed tree.
-mapfile -t headers < <(find "$tree" -type f -iname 'data1.hdr')
-if [ ${#headers[@]} -gt 0 ]; then
+have_headers=
+while IFS= read -r -d '' header; do
   command -v unshield >/dev/null 2>&1 || fail "this is an InstallShield medium; install unshield (sudo apt-get install unshield)."
   merged="$work/merged"
   mkdir -p "$merged"
-  for header in "${headers[@]}"; do
-    say "unpacking the InstallShield cabinets beside $header"
-    groups="$work/groups"
-    rm -rf "$groups"
-    unshield -d "$groups" x "$header" >/dev/null || fail "unshield could not unpack \"$header\"."
-    for group in "$groups"/*/; do
-      cp -a "$group." "$merged/"
-    done
+  say "unpacking the InstallShield cabinets beside $header"
+  groups="$work/groups"
+  rm -rf "$groups"
+  unshield -d "$groups" x "$header" >/dev/null || fail "unshield could not unpack \"$header\"."
+  for group in "$groups"/*/; do
+    [ -d "$group" ] || continue
+    cp -a "$group." "$merged/"
   done
-  tree=$merged
-fi
+  have_headers=1
+done < <(find "$tree" -type f -iname 'data1.hdr' -print0)
+[ -z "$have_headers" ] || tree=$merged
 
 # --- find each game by the archive it is known by ---
 find_root() {
@@ -102,7 +119,7 @@ generals=$(find_root 'Textures.big' || true)
 if [ -z "$generals" ] && [ -n "$zero_hour" ] && [ -d "$source" ]; then
   for beside in "$zero_hour/../Command & Conquer Generals" "$zero_hour/../Command & Conquer(tm) Generals"; do
     if [ -d "$beside" ] && [ -n "$(find "$beside" -maxdepth 1 -type f -iname 'Textures.big' -print -quit)" ]; then
-      generals=$(cd "$beside" && pwd)
+      generals=$(CDPATH= cd "$beside" && pwd -P)
       break
     fi
   done

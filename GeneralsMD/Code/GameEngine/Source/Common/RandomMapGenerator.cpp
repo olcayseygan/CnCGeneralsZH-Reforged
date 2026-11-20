@@ -9762,8 +9762,7 @@ void RMGLayout::clearLockedGround( void )
 	something it would have to walk round: its spawn anchor therefore stands in front of its own tower,
 	the copy's back RMG_LANE_PAD_GAP cells clear of the tower's front, and a wave meets neither its
 	fortress nor its tower on the way out. The tower covers the pad, as the old pad behind the fortress
-	was covered. Across the middle runs a band of two hedge rows with a path between, painted in the
-	ground and no obstacle. Past each lane end, RMG_LANE_PLOT_GAP cells of green away, stands a column
+	was covered. Past each lane end, RMG_LANE_PLOT_GAP cells of green away, stands a column
 	of three build plots, one a seat, each RMG_LANE_PLOT_ALONG along the lane by RMG_LANE_PLOT_ACROSS
 	across it, upright like the plots at the ends of the Direct Strike map: seat 1's on the lane's axis,
 	seat 2's below it and seat 3's above, RMG_LANE_PLOT_PITCH cells apart. A plot's edge towards the
@@ -9772,16 +9771,17 @@ void RMGLayout::clearLockedGround( void )
 	The lane and the plots are flat at RMG_LANE_GROUND, and nothing walls them in: the director holds
 	a plot's units where they were bought and sends a wave straight down its lines, so the terrain
 	keeps nobody anywhere. Round them lies RMG_LANE_FLAT_RING cells of level ground, then the bank
-	rolls up into low hills over RMG_LANE_HILL_REACH cells. The field is an island in open sea: its
-	coast lies RMG_LANE_REACH_END cells round the plots and RMG_LANE_REACH_MIDDLE round the middle of
-	the lane, where the woods are, wandering RMG_LANE_REACH_SWING either way on a slow noise field, and
-	the ground falls from it into the sea over RMG_LANE_BEACH cells. There are no lakes. The map is
-	16:9. No cell spans a cliff anywhere on dry ground.
+	rolls up into low hills over RMG_LANE_HILL_REACH cells. The field is an island in open sea, after
+	the Direct Strike minimap: a rounded blob round the lane and both plot columns whose coast wanders
+	on two noise fields per seed, a slow one for its shape and a quicker one for its bays and capes. A
+	light beach RMG_LANE_SAND cells wide and more runs round it, the ground falls from it into the sea
+	over RMG_LANE_BEACH cells, and a shallow shelf RMG_LANE_SHELF cells wide lies off it before the
+	bed drops. There are no lakes. The map is 16:9, with RMG_LANE_SEA_END cells behind each plot column
+	so the camera sees the whole island in open water. No cell spans a cliff anywhere on dry ground.
 
-	The ground has a palette of its own per theme (theLaneGrounds), so the lane, the plots, the bank
-	and the shore read apart in every one: the class order is bank, shore, lane and plot, and the
-	centre band takes the plot's ground. The edges of the lane and of the plots wander out over the
-	level ring on a noise field, never in. The seed picks the theme (one of theBiomes as a plain map's
+	The lane and the plots wear the theme's own ground like the rest of the island; only the beach and
+	the worn ground round each fortress and tower are painted apart (theLaneGrounds); a plot is marked by nothing but the slot grid the client draws
+	on it in the theme's own line colour (LaneGridColours). The seed picks the theme (one of theBiomes as a plain map's
 	seed picks it, with its hour and snow, or one time in five the twilight style's palette at dusk),
 	the coast and how wooded and stony the bank is; the trees gather into patches, more of them along
 	the long sides. Trees and stones are all that stand on the bank, never on the beach; nothing stands
@@ -9795,6 +9795,8 @@ void RMGLayout::clearLockedGround( void )
 	                                     stands in the middle of its own (1 in A1, 2 in B1, 3 in A2,
 	                                     4 in B2, 5 in A3, 6 in B3)
 	LaneWar_MiddleArea                   trigger area, RMG_LANE_MIDDLE_RADIUS round the lane's middle
+	LaneWar_AirA1 to A3, B1 to B3        trigger areas, each seat's air zone: as wide as its plot,
+	                                     RMG_LANE_AIR_DEPTH deep, RMG_LANE_AIR_GAP behind the plot's back
 	LaneWar_SpawnA, LaneWar_SpawnB       waypoints, each team's spawn anchor
 	LaneWar_LaneA, LaneWar_LaneB         waypoint path labels: A's runs from just ahead of its fortress
 	                                     to B's fortress, B's back the other way, a waypoint every
@@ -9821,27 +9823,34 @@ void RMGLayout::clearLockedGround( void )
 static const char *const RMG_LANE_MIDDLE_TEMPLATE = NULL;	///< a structure in the middle (TechOilRefinery, say), or none
 #define RMG_LANE_MIDDLE_RADIUS	20.0f	///< cells, the middle area
 #define RMG_LANE_MIDDLE_SIDES	16
-#define RMG_LANE_BAND_ROW		5		///< cells along the lane a hedge row of the centre band takes
-#define RMG_LANE_BAND_PATH		6		///< and the path between the two rows
 #define RMG_LANE_PATH_STEP		15.0f	///< cells between two waypoints of a lane path
 #define RMG_LANE_PLOT_GAP		14		///< cells of green between a lane's end and the front of its team's plots
 #define RMG_LANE_PLOT_ALONG		16		///< a plot's cells along the lane, front to back
 #define RMG_LANE_PLOT_ACROSS	24		///< and across it, the width of its front
 #define RMG_LANE_PLOT_PITCH		34		///< cells between the middles of two neighbouring plots of a column
-#define RMG_LANE_SEA_END		40		///< cells from the back of a plot column to the playable edge: green, beach and sea
+#define RMG_LANE_AIR_GAP		2		///< cells between a plot's back and its air zone, one slot of LANEWAR_SLOT_SIZE
+#define RMG_LANE_AIR_DEPTH		4		///< cells an air zone runs back from there, two slots; it is as wide as its plot
+#define RMG_LANE_WEAR_FORTRESS	8.0f	///< cells past a fortress's footprint the ground round it is worn, at most
+#define RMG_LANE_WEAR_TOWER		5.0f	///< and past a tower's
+#define RMG_LANE_SEA_END		111		///< cells from the back of a plot column to the playable edge: green, beach and sea (an odd height keeps the lane's 45 in the middle)
 #define RMG_LANE_GROUND			64		///< height bytes of the lane, the plots and the level ring round them
 #define RMG_LANE_FLAT_RING		3		///< cells of level ground round all of those
-#define RMG_LANE_PAINT_WANDER	4.0f	///< cells the lane's ground reaches out past its edge at most, on a noise field; a plot's half that
 #define RMG_LANE_HILLS			22.0f	///< bytes the bank's hills rise at most
 #define RMG_LANE_HILL_REACH		14.0f	///< cells over which they come up, off play and off the beach
 #define RMG_LANE_WATER			50		///< of every water surface, under the ground so no sea can flood it
 #define RMG_LANE_WATER_BED		38		///< of the sea's bed
-#define RMG_LANE_REACH_END		20.0f	///< cells from the plots to the coast, on average
-#define RMG_LANE_REACH_MIDDLE	55.0f	///< and from the middle of the lane, where the woods are
-#define RMG_LANE_REACH_SWING	14.0f	///< cells the coast wanders either side of that, on a slow noise field
-#define RMG_LANE_REACH_LEAST	16.0f	///< and never nearer play than this: the level ring and a whole beach
+#define RMG_LANE_CORE_ROUND		30.0f	///< cells, the radius of the corners of the island's core round play
+#define RMG_LANE_REACH_MEAN		14.0f	///< cells from the core to the coast on the seed's thinnest island, on average
+#define RMG_LANE_REACH_SEED		14.0f	///< and how much more a seed may add to that
+#define RMG_LANE_REACH_SWING	34.0f	///< cells the coast wanders either side on the slow field, the island's shape
+#define RMG_LANE_BAY_SWING		14.0f	///< and on the quick one, its bays and capes
+#define RMG_LANE_REACH_LEAST	16.0f	///< never nearer the plots than this: the level ring and a whole beach
+#define RMG_LANE_REACH_MOST		44.0f	///< never further out than this, so the sea round it stays wide
 #define RMG_LANE_SEA_LEAST		14.0f	///< cells of sea inside every playable edge at least
-#define RMG_LANE_BEACH			8.0f	///< cells over which the ground falls from the coast to the bed
+#define RMG_LANE_BEACH			8.0f	///< cells over which the ground rises from the waterline to the bank
+#define RMG_LANE_SAND			6.0f	///< cells of beach in from the waterline at least, up to 3 more on a noise field
+#define RMG_LANE_SHELF			10.0f	///< cells of shallow water off the waterline, a few bytes deep, before the bed drops
+#define RMG_LANE_DROP			6.0f	///< and the cells over which it drops to the bed
 #define RMG_LANE_PROP_CLEAR		3		///< cells a tree or stone keeps off play
 
 /// Everything the constants above put somewhere, in playable cells; vertices at the integers.
@@ -9850,6 +9859,7 @@ struct RMGLaneShape
 	Int m_playX, m_playY;				///< playable cells, 16:9
 	Int m_laneX0, m_laneX1, m_laneY0, m_laneY1;	///< the lane's corner vertices
 	Int m_plotX0[2];					///< the west vertex of team A's plots and of team B's
+	Int m_airX0[2];						///< and of their air zones, behind the plots
 	Int m_plotY0[3];					///< the low y vertex of seat 1's, 2's and 3's
 	Real m_middleX, m_middleY;			///< the lane's middle
 	Real m_half;						///< half its length
@@ -9870,6 +9880,8 @@ static RMGLaneShape rmgLaneShape( void )
 	s.m_laneY1 = s.m_laneY0 + RMG_LANE_WIDTH;
 	s.m_plotX0[0] = RMG_LANE_SEA_END;
 	s.m_plotX0[1] = s.m_laneX1 + RMG_LANE_PLOT_GAP;
+	s.m_airX0[0] = s.m_plotX0[0] - RMG_LANE_AIR_GAP - RMG_LANE_AIR_DEPTH;
+	s.m_airX0[1] = s.m_plotX0[1] + RMG_LANE_PLOT_ALONG + RMG_LANE_AIR_GAP;
 	s.m_plotY0[0] = s.m_laneY0 + ( RMG_LANE_WIDTH - RMG_LANE_PLOT_ACROSS ) / 2;
 	s.m_plotY0[1] = s.m_plotY0[0] - RMG_LANE_PLOT_PITCH;
 	s.m_plotY0[2] = s.m_plotY0[0] + RMG_LANE_PLOT_PITCH;
@@ -9885,41 +9897,13 @@ static RMGLaneShape rmgLaneShape( void )
 	return s;
 }
 
-/** Each vertex's distance to the nearest one marked in seeds, in thirds of a cell: the two-pass
-	3-4 chamfer, in whole numbers so every machine gets the same field. Unreached vertices keep a
-	large number. */
-static std::vector<Int> rmgChamferDistance( const std::vector<char>& seeds, Int W, Int H )
+/// The larger of a and b, rounded over the last k either side of where they cross, so a coast held off play by it bends instead of kinking.
+static Real rmgSoftMax( Real a, Real b, Real k )
 {
-	const Int unreached = 1 << 20;
-	std::vector<Int> d( W * H, unreached );
-	for( Int i = 0; i < W * H; i++ )
-		if( seeds[i] )
-			d[i] = 0;
-	for( Int y = 0; y < H; y++ )
-		for( Int x = 0; x < W; x++ )
-		{
-			Int& here = d[y * W + x];
-			if( x > 0 ) here = std::min( here, d[y * W + x - 1] + 3 );
-			if( y > 0 )
-			{
-				here = std::min( here, d[( y - 1 ) * W + x] + 3 );
-				if( x > 0 ) here = std::min( here, d[( y - 1 ) * W + x - 1] + 4 );
-				if( x + 1 < W ) here = std::min( here, d[( y - 1 ) * W + x + 1] + 4 );
-			}
-		}
-	for( Int y = H - 1; y >= 0; y-- )
-		for( Int x = W - 1; x >= 0; x-- )
-		{
-			Int& here = d[y * W + x];
-			if( x + 1 < W ) here = std::min( here, d[y * W + x + 1] + 3 );
-			if( y + 1 < H )
-			{
-				here = std::min( here, d[( y + 1 ) * W + x] + 3 );
-				if( x + 1 < W ) here = std::min( here, d[( y + 1 ) * W + x + 1] + 4 );
-				if( x > 0 ) here = std::min( here, d[( y + 1 ) * W + x - 1] + 4 );
-			}
-		}
-	return d;
+	const Real d = a - b;
+	if( d >= k ) return a;
+	if( d <= -k ) return b;
+	return b + ( d + k ) * ( d + k ) / ( 4.0f * k );
 }
 
 /// One lane seed in five wears the twilight style's palette instead of its biome.
@@ -9928,49 +9912,63 @@ static Bool rmgLaneTwilight( Int seed )
 	return hashCell( (UnsignedInt)seed + 51007U, 0, 0 ) % 5U == 0;
 }
 
-/* The lane map's ground, a palette per theme in place of the biome's own four, picked so the lane,
-	the plots and the bank read apart from each other at a glance: on the biome's palette the winter
-	plots were snow on snow, the twilight lane wore the bank's sand, the centre band vanished on both and
-	the desert lane read as grey concrete. Classes in the biome's order, used as bank, shore, lane and
-	plot; the rest of the biome (stones, light) stays its own, and so do the trees unless a row names
-	its own. Every texture is in theTextureSheets with the tile count the shipped maps declare.
+/* The lane map's ground, a palette per theme in place of the biome's own four. The bank is the whole
+	island, the lane and the plots included (the owner's rule of 2026-11-20); the shore is a light sand
+	in every theme but winter's so a beach rings the island (on the desert, the steppe and at twilight
+	the old shore was the bank's own colour); the third class is the worn ground round the fortresses
+	and towers, dirt and gravel, packed sand or slush, the lane's own ground before that rule (winter's
+	was frozen golden sand, slush now). The fourth, the plots' ground before it, is painted nowhere.
+	The rest of the biome (stones, light) stays its own, and so do the trees unless a row names its
+	own. Every texture is in theTextureSheets with the tile count the shipped maps declare.
 
-	The winter lane was DirtSnowType1, grey slush that showed a seam at every tile and barely parted
-	from the snow round it; it is the golden frozen ground of SandMediumType9Snow now. The temperate
-	woods drop TreeDogwood1, whose white blossom read as snow from above. */
+	The temperate woods drop TreeDogwood1, whose white blossom read as snow from above, and
+	TreeFir01B, whose PTFir01 is a snowed-on fir; TreeMaple1's dull grey crown gave way to TreeOak05
+	with them.
+
+	A plot's slot grid takes its line colour from the theme (LaneGridColours): pale on the dark grass
+	and on the dusk ground, a deep shade of the ground on the light sand, dirt and snow, the plot's
+	outline stronger than the lines between its slots. Black lines on every theme were lost on the
+	darker grounds. */
 struct RMGLaneGround
 {
 	const char *m_textures[RMG_TERRAIN_COUNT];
 	UnsignedByte m_previewColours[RMG_TERRAIN_COUNT][3];
 	const char *m_trees[RMG_BIOME_TREES];		///< NULL first: the biome's own
+	UnsignedByte m_gridColour[3];				///< the slot grid's lines
+	UnsignedByte m_gridAlpha[2];				///< between the slots and round the plot
 };
 
 static const RMGLaneGround theLaneGrounds[RMG_BIOME_COUNT + 1] =
 {
-	{	// temperate: dark grass, grey sand, brown gravel, pale sand plots, green woods
-		{ "GrassType1", "SandLargeType1", "DirtType1", "SandLargeType3Light" },
-		{ { 86, 122, 62 }, { 177, 155, 132 }, { 125, 107, 88 }, { 238, 219, 158 } },
-		{ "TreeOak01", "TreeMaple1", "TreeOak02", "TreeFir01B" }
+	{	// temperate: dark grass, cream beach, brown gravel round the walls, green oaks, straw lines
+		{ "GrassType1", "SandMediumType13", "DirtType1", "SandLargeType3Light" },
+		{ { 86, 122, 62 }, { 247, 231, 195 }, { 125, 107, 88 }, { 238, 219, 158 } },
+		{ "TreeOak01", "TreeOak05", "TreeOak02", "TreeOak06" },
+		{ 234, 230, 172 }, { 0x60, 0x98 }
 	},
-	{	// desert: yellow sand, wet sand, tan pebbled dirt, red gravel plots
-		{ "SandLargeType2", "SandType3wet", "DirtMediumType10", "DirtType3" },
-		{ { 237, 203, 129 }, { 168, 138, 88 }, { 191, 161, 107 }, { 116, 86, 60 } },
-		{ NULL, NULL, NULL, NULL }
+	{	// desert: yellow sand, cream beach, packed pebbled dirt round the walls, umber lines
+		{ "SandLargeType2", "SandMediumType13", "DirtMediumType10", "DirtType3" },
+		{ { 237, 203, 129 }, { 247, 231, 195 }, { 191, 161, 107 }, { 116, 86, 60 } },
+		{ NULL, NULL, NULL, NULL },
+		{ 92, 60, 28 }, { 0x68, 0xA0 }
 	},
-	{	// winter: snow, frozen mud at the water, frozen golden ground, cleared grass plots
-		{ "SnowType1", "DirtMediumType15Snow", "SandMediumType9Snow", "GrassLargeType1Snow" },
-		{ { 222, 226, 230 }, { 236, 236, 235 }, { 207, 173, 112 }, { 148, 150, 107 } },
-		{ NULL, NULL, NULL, NULL }
+	{	// winter: snow, frozen mud at the water, slush round the walls, slate lines
+		{ "SnowType1", "DirtMediumType15Snow", "DirtSnowType1", "GrassLargeType1Snow" },
+		{ { 222, 226, 230 }, { 236, 236, 235 }, { 140, 132, 122 }, { 148, 150, 107 } },
+		{ NULL, NULL, NULL, NULL },
+		{ 52, 72, 104 }, { 0x60, 0x98 }
 	},
-	{	// steppe: golden ground, grassy sand, red-brown gravel, olive grass plots
-		{ "DirtMediumType8", "SandMediumType7Grassy", "DirtType2", "GrassMediumType21" },
-		{ { 206, 174, 120 }, { 194, 167, 108 }, { 122, 88, 59 }, { 126, 123, 69 } },
-		{ NULL, NULL, NULL, NULL }
+	{	// steppe: golden ground, pale beach, red-brown gravel round the walls, dark earth lines
+		{ "DirtMediumType8", "SandLargeType3Light", "DirtType2", "GrassMediumType21" },
+		{ { 206, 174, 120 }, { 238, 219, 158 }, { 122, 88, 59 }, { 126, 123, 69 } },
+		{ NULL, NULL, NULL, NULL },
+		{ 80, 52, 30 }, { 0x68, 0xA0 }
 	},
-	{	// twilight: its tan dirt, its sand, red gravel, cream sand plots
-		{ "DirtMediumType10", "SandMediumType6", "DirtType3", "SandMediumType13" },
-		{ { 191, 161, 107 }, { 206, 177, 123 }, { 116, 86, 60 }, { 247, 231, 195 } },
-		{ NULL, NULL, NULL, NULL }
+	{	// twilight: its tan dirt, pale beach, red gravel round the walls, lavender lines that read at dusk
+		{ "DirtMediumType10", "SandLargeType3Light", "DirtType3", "SandMediumType13" },
+		{ { 191, 161, 107 }, { 238, 219, 158 }, { 116, 86, 60 }, { 247, 231, 195 } },
+		{ NULL, NULL, NULL, NULL },
+		{ 214, 206, 238 }, { 0x58, 0x90 }
 	},
 };
 
@@ -10038,10 +10036,10 @@ void RMGLayout::buildLane( void )
 
 	/* A vertex is play (the lane or a plot) or bank, and a bank vertex knows how many cells it stands
 		off the nearest vertex in play (Chebyshev, capped). Area 0 is the lane, 1 to 6 the plots of
-		starts 1 to 6. */
+		starts 1 to 6 and 7 to 12 their air zones, which are flat and level with them as well. */
 	enum { LANE_BANK = 0, LANE_FLOOR, LANE_PLOT };
-	const Int areas = RMG_LANE_SEATS + 1, offCap = 64;
-	Int areaX0[RMG_LANE_SEATS + 1], areaY0[RMG_LANE_SEATS + 1], areaX1[RMG_LANE_SEATS + 1], areaY1[RMG_LANE_SEATS + 1];
+	const Int areas = 2 * RMG_LANE_SEATS + 1, offCap = 64;
+	Int areaX0[2 * RMG_LANE_SEATS + 1], areaY0[2 * RMG_LANE_SEATS + 1], areaX1[2 * RMG_LANE_SEATS + 1], areaY1[2 * RMG_LANE_SEATS + 1];
 	for( Int area = 0; area < areas; area++ )
 	{
 		if( area == 0 )
@@ -10050,6 +10048,14 @@ void RMGLayout::buildLane( void )
 			areaY0[area] = shape.m_laneY0;
 			areaX1[area] = shape.m_laneX1;
 			areaY1[area] = shape.m_laneY1;
+		}
+		else if( area > RMG_LANE_SEATS )
+		{
+			const Int start = area - RMG_LANE_SEATS - 1;
+			areaX0[area] = shape.m_airX0[start & 1];
+			areaY0[area] = shape.m_plotY0[start >> 1];
+			areaX1[area] = areaX0[area] + RMG_LANE_AIR_DEPTH;
+			areaY1[area] = areaY0[area] + RMG_LANE_PLOT_ACROSS;
 		}
 		else
 		{
@@ -10072,80 +10078,98 @@ void RMGLayout::buildLane( void )
 				const Int dy = py < areaY0[area] ? areaY0[area] - py : py > areaY1[area] ? py - areaY1[area] : 0;
 				const Int off = dx > dy ? dx : dy;
 				if( off == 0 && kind[i] != LANE_PLOT )
-					kind[i] = (char)( area >= 1 && area <= RMG_LANE_SEATS ? LANE_PLOT : LANE_FLOOR );
+					kind[i] = (char)( area >= 1 ? LANE_PLOT : LANE_FLOOR );
 				if( off < offPlay[i] )
 					offPlay[i] = off;
 			}
 		}
 	}
 
-	/* The island. A vertex is land while it lies nearer play (rmgChamferDistance, a round distance, so
-		the rectangles of play give no corner to the coast) than the reach, which runs from
-		RMG_LANE_REACH_END round the plots to RMG_LANE_REACH_MIDDLE along the middle of the lane and
-		wanders RMG_LANE_REACH_SWING either way on a slow noise field for its bays and capes, never
-		nearer play than RMG_LANE_REACH_LEAST and never within RMG_LANE_SEA_LEAST of the playable edge.
-		Sea the border cannot reach is a pond and is filled in. Every noise is read off the lattice,
-		whose zero lines once left the first map's hills flat along its low x and low y edges. */
-	std::vector<char> inPlay( cells ), land( cells, 0 );
-	for( Int i = 0; i < cells; i++ )
-		inPlay[i] = (char)( kind[i] != LANE_BANK );
-	const std::vector<Int> toPlay = rmgChamferDistance( inPlay, m_width, m_height );
+	/* The island, a blob round play after the Direct Strike minimap. Its core is a rectangle round the
+		lane and both plot columns, its corners rounded by RMG_LANE_CORE_ROUND and the whole grown just
+		enough for each round corner to pass through a plot's corner. The coast lies a reach off the
+		core's edge, measured straight out from it, and the reach wanders on two noise fields per seed,
+		a slow one for the island's shape and a quicker one for its bays and capes, both read on a
+		curve outside the core so they move the coast along the long sides as much as round the ends.
+		Each ray out of the core crosses the coast once, so the land is one island with no pond in it.
+
+		The reach keeps RMG_LANE_REACH_LEAST off the plots and the lane's ends, a little more on the
+		quick field so a held coast still wanders, and may cut into the core beside the lane, where the
+		core stands wide of it, down to that much off the lane's edge. It never passes
+		RMG_LANE_REACH_MOST, nor RMG_LANE_SEA_LEAST off the playable edge. The coast is a distance in
+		cells, positive inland, continuous everywhere a beach or a hill reads it, so the waterline is a
+		smooth curve with no staircase on the diagonals. Every noise is read off the lattice, whose zero
+		lines once left the first map's hills flat along its low x and low y edges. */
+	const Real bend = RMG_LANE_CORE_ROUND, grow = bend * ( 1.0f - 0.70710678f );
+	const Real coreX = shape.m_middleX - (Real)shape.m_airX0[0] + grow;
+	const Real coreY = std::max( shape.m_middleY - (Real)shape.m_plotY0[1],
+		(Real)( shape.m_plotY0[2] + RMG_LANE_PLOT_ACROSS ) - shape.m_middleY ) + grow;
+	const Real innerX = coreX - bend, innerY = coreY - bend;
+	const Real besideLaneCut = coreY - 0.5f * (Real)RMG_LANE_WIDTH;		// the core's edge to the lane's, beside it
+	// each long side's mean reach is the seed's own, so one island is fat below and thin above and the next the other way
+	const Real lowReach = RMG_LANE_REACH_MEAN + RMG_LANE_REACH_SEED * hashUnit( seed + 51011U, 0, 0 );
+	const Real highReach = RMG_LANE_REACH_MEAN + RMG_LANE_REACH_SEED * hashUnit( seed + 51011U, 0, 1 );
+	const Real probe = bend + 20.0f;		// cells out from the inner rectangle the noise is read at
+	std::vector<Real> coast( cells );
 	for( Int y = 0; y < m_height; y++ )
 	{
 		for( Int x = 0; x < m_width; x++ )
 		{
-			const Int px = x - RMG_BORDER_CELLS, py = y - RMG_BORDER_CELLS, i = cellIndex( x, y );
-			const Real edge = (Real)std::min( std::min( px, py ), std::min( shape.m_playX - px, shape.m_playY - py ) );
-			const Real fromMiddle = fabsf( (Real)px - shape.m_middleX );
-			const Real woods = fadeCurve( rmgUnit( ( shape.m_half + 0.5f * (Real)RMG_LANE_PLOT_GAP - fromMiddle ) / ( 0.5f * shape.m_half ) ) );
-			Real reach = RMG_LANE_REACH_END + ( RMG_LANE_REACH_MIDDLE - RMG_LANE_REACH_END ) * woods
-				+ RMG_LANE_REACH_SWING * fractalNoise( m_perm, (Real)x * 0.021f + 5.3f, (Real)y * 0.021f + 9.1f, 3 );
-			reach = std::max( reach, RMG_LANE_REACH_LEAST );
-			land[i] = (char)( std::min( reach - (Real)toPlay[i] / 3.0f, edge - RMG_LANE_SEA_LEAST ) > 0.0f );
-		}
-	}
-	{
-		std::vector<char> open( cells, 0 );
-		std::vector<Int> queue;
-		for( Int y = 0; y < m_height; y++ )
-			for( Int x = 0; x < m_width; x++ )
-				if( ( x == 0 || y == 0 || x == m_width - 1 || y == m_height - 1 ) && !land[cellIndex( x, y )] )
-				{
-					open[cellIndex( x, y )] = 1;
-					queue.push_back( cellIndex( x, y ) );
-				}
-		for( size_t head = 0; head < queue.size(); head++ )
-		{
-			const Int x = queue[head] % m_width, y = queue[head] / m_width;
-			const Int nx[4] = { x - 1, x + 1, x, x }, ny[4] = { y, y, y - 1, y + 1 };
-			for( Int k = 0; k < 4; k++ )
+			const Int px = x - RMG_BORDER_CELLS, py = y - RMG_BORDER_CELLS;
+			const Real rx = (Real)px - shape.m_middleX, ry = (Real)py - shape.m_middleY;
+			const Real sx = rx < 0.0f ? -1.0f : 1.0f, sy = ry < 0.0f ? -1.0f : 1.0f;
+			const Real qx = fabsf( rx ) - innerX, qy = fabsf( ry ) - innerY;
+
+			// the signed distance to the core, the way straight out of it and the inner rectangle's point it leaves from
+			Real core, nx, ny, baseX, baseY;
+			if( qx > 0.0f || qy > 0.0f )
 			{
-				if( nx[k] < 0 || ny[k] < 0 || nx[k] >= m_width || ny[k] >= m_height )
-					continue;
-				const Int n = cellIndex( nx[k], ny[k] );
-				if( !land[n] && !open[n] )
-				{
-					open[n] = 1;
-					queue.push_back( n );
-				}
+				const Real ox = std::max( qx, 0.0f ), oy = std::max( qy, 0.0f );
+				const Real out = sqrtf( ox * ox + oy * oy );
+				core = out - bend;
+				nx = sx * ox / out;
+				ny = sy * oy / out;
+				baseX = sx * std::min( fabsf( rx ), innerX );
+				baseY = sy * std::min( fabsf( ry ), innerY );
 			}
+			else if( qx >= qy )
+			{
+				core = qx - bend;
+				nx = sx;
+				ny = 0.0f;
+				baseX = sx * innerX;
+				baseY = ry;
+			}
+			else
+			{
+				core = qy - bend;
+				nx = 0.0f;
+				ny = sy;
+				baseX = rx;
+				baseY = sy * innerY;
+			}
+
+			const Real noiseX = shape.m_middleX + baseX + probe * nx, noiseY = shape.m_middleY + baseY + probe * ny;
+			const Real shapeNoise = fractalNoise( m_perm, noiseX * 0.011f + 41.3f, noiseY * 0.011f + 27.9f, 3 );
+			const Real bayNoise = fractalNoise( m_perm, noiseX * 0.035f + 13.7f, noiseY * 0.035f + 52.1f, 2 );
+			// beside the lane a bay may come in to the lane's own least; the cut eases in over 40 cells,
+			// as a quicker one squeezed the beach into one steep cell where it held the coast
+			const Real beside = ny == 0.0f ? 0.0f : rmgUnit( ( shape.m_half + 8.0f - fabsf( baseX ) ) / 40.0f );
+			const Real least = RMG_LANE_REACH_LEAST - beside * besideLaneCut + 4.0f + 5.0f * bayNoise;
+			const Real meanReach = 0.5f * ( lowReach + highReach ) + 0.5f * ( highReach - lowReach ) * ny;
+			Real reach = meanReach + RMG_LANE_REACH_SWING * shapeNoise + RMG_LANE_BAY_SWING * bayNoise;
+			reach = std::min( rmgSoftMax( reach, least, 6.0f ), RMG_LANE_REACH_MOST );
+
+			const Real edge = (Real)std::min( std::min( px, py ), std::min( shape.m_playX - px, shape.m_playY - py ) );
+			coast[cellIndex( x, y )] = std::min( reach - core, edge - RMG_LANE_SEA_LEAST );
 		}
-		for( Int i = 0; i < cells; i++ )
-			land[i] = (char)!open[i];
 	}
-	// cells inland from the coast, below nought out at sea
-	std::vector<char> wet( cells );
-	for( Int i = 0; i < cells; i++ )
-		wet[i] = (char)!land[i];
-	const std::vector<Int> toSea = rmgChamferDistance( wet, m_width, m_height );
-	const std::vector<Int> toLand = rmgChamferDistance( land, m_width, m_height );
-	std::vector<Real> coast( cells );
-	for( Int i = 0; i < cells; i++ )
-		coast[i] = land[i] ? (Real)toSea[i] / 3.0f : -(Real)toLand[i] / 3.0f;
 
 	/* Play and the ring round it are level at RMG_LANE_GROUND. Past the ring the bank rolls up into low
-		hills, which settle again towards the coast, and the ground falls from the coast into the sea
-		over RMG_LANE_BEACH cells. */
+		hills, which settle again towards the coast. The beach rises from just over the water at the
+		coast to the bank over RMG_LANE_BEACH cells; off it a shelf RMG_LANE_SHELF cells wide lies one
+		to five bytes under the water, through which the sand shows, and the bed drops past it to
+		RMG_LANE_WATER_BED over RMG_LANE_DROP cells. */
 	m_heights.assign( cells, (UnsignedByte)RMG_LANE_GROUND );
 	for( Int y = 0; y < m_height; y++ )
 	{
@@ -10159,8 +10183,15 @@ void RMGLayout::buildLane( void )
 				const Real offRing = fadeCurve( rmgUnit( (Real)( offPlay[i] - RMG_LANE_FLAT_RING ) / RMG_LANE_HILL_REACH ) );
 				const Real inland = fadeCurve( rmgUnit( ( coast[i] - RMG_LANE_BEACH ) / RMG_LANE_HILL_REACH ) );
 				height += RMG_LANE_HILLS * hill * offRing * inland;
-				const Real beach = fadeCurve( rmgUnit( ( coast[i] + 4.0f ) / ( RMG_LANE_BEACH + 4.0f ) ) );
-				height = (Real)RMG_LANE_WATER_BED + ( height - (Real)RMG_LANE_WATER_BED ) * beach;
+				const Real shore = (Real)RMG_LANE_WATER + 0.5f;
+				if( coast[i] >= 0.0f )
+					height = shore + ( height - shore ) * fadeCurve( rmgUnit( coast[i] / RMG_LANE_BEACH ) );
+				else
+				{
+					const Real shelf = (Real)RMG_LANE_WATER - 1.0f, foot = (Real)RMG_LANE_WATER - 5.0f;
+					height = shelf - ( shelf - foot ) * fadeCurve( rmgUnit( -coast[i] / RMG_LANE_SHELF ) )
+						- ( foot - (Real)RMG_LANE_WATER_BED ) * fadeCurve( rmgUnit( ( -coast[i] - RMG_LANE_SHELF ) / RMG_LANE_DROP ) );
+				}
 			}
 			m_heights[i] = (UnsignedByte)(Int)( height + 0.5f );
 		}
@@ -10174,47 +10205,46 @@ void RMGLayout::buildLane( void )
 	sea.m_polygon.assign( corners, corners + 4 );
 	m_lakes.push_back( sea );
 
-	/* Bank everywhere, a strip of shore at the water that comes and goes on a noise field so the coast
-		wears no drawn ring, the lane's ground on the lane with its edge wandering up to
-		RMG_LANE_PAINT_WANDER cells out over the bank, the centre band's two hedge rows across it in the
-		plot's ground (the one that parts from the lane in every theme; the bank's vanished on the
-		winter snow), and the plots in their own, their edges wandering half as far. Nothing is painted
-		inside an edge, so the whole lane and every whole plot wear their ground; the slot grid is the
-		client's to draw. The blends soften every edge. */
+	/* The theme's own ground everywhere, the lane and the plots included (the owner's rule of
+		2026-11-20: no ground of their own, no centre band; a plot shows only the slot grid the client
+		draws over it, LaneGridColours), and a beach of the shore's light sand from the waterline in
+		RMG_LANE_SAND cells and up to three more on a noise field so the coast wears no drawn ring. The
+		blends soften its edge.
+
+		Round each fortress and tower the ground is worn, as under a building that has stood there a
+		long time: the theme's trampled class (theLaneGrounds' third, dirt and gravel, packed sand,
+		slush) under the footprint and out to RMG_LANE_WEAR_FORTRESS or RMG_LANE_WEAR_TOWER past it,
+		always worn by the walls and thinning outwards on a quick noise field, so its edge is ragged
+		and the outer half patchy. */
 	Int propID = 1;
 	AsciiString uniqueID;
 	m_terrain.assign( cells, (UnsignedByte)RMG_TERRAIN_GRASS );
 	m_passable.assign( cells, 0 );
-	const Int bandNear = RMG_LANE_BAND_PATH / 2, bandFar = bandNear + RMG_LANE_BAND_ROW;
+	const Real wornX[4] = { shape.m_fortressX[0], shape.m_fortressX[1], shape.m_towerX[0], shape.m_towerX[1] };
+	const Real wornHalf[4] = { RMG_LANE_FORTRESS_HALF, RMG_LANE_FORTRESS_HALF, RMG_LANE_TOWER_HALF, RMG_LANE_TOWER_HALF };
+	const Real wornReach[4] = { RMG_LANE_WEAR_FORTRESS, RMG_LANE_WEAR_FORTRESS, RMG_LANE_WEAR_TOWER, RMG_LANE_WEAR_TOWER };
 	for( Int y = 0; y + 1 < m_height; y++ )
 	{
 		for( Int x = 0; x + 1 < m_width; x++ )
 		{
 			const Int i = cellIndex( x, y );
-			const Real cx = (Real)( x - RMG_BORDER_CELLS ) + 0.5f, cy = (Real)( y - RMG_BORDER_CELLS ) + 0.5f;
-			Real offLane = 1000.0f, offPlot = 1000.0f;
-			for( Int area = 0; area < areas; area++ )
-			{
-				const Real dx = std::max( std::max( (Real)areaX0[area] - cx, cx - (Real)areaX1[area] ), 0.0f );
-				const Real dy = std::max( std::max( (Real)areaY0[area] - cy, cy - (Real)areaY1[area] ), 0.0f );
-				const Real off = sqrtf( dx * dx + dy * dy );
-				Real& nearest = area == 0 ? offLane : offPlot;
-				if( off < nearest )
-					nearest = off;
-			}
-			const Real wander = 0.5f + 0.5f * fractalNoise( m_perm, (Real)x * 0.11f + 3.3f, (Real)y * 0.11f + 8.8f, 2 );
-			const Real plotWander = 0.5f + 0.5f * fractalNoise( m_perm, (Real)x * 0.13f + 12.6f, (Real)y * 0.13f + 4.2f, 2 );
 			const Real shoreWander = 0.5f + 0.5f * fractalNoise( m_perm, (Real)x * 0.07f + 21.4f, (Real)y * 0.07f + 15.9f, 2 );
-			const Int fromMiddle = abs( 2 * ( x - RMG_BORDER_CELLS ) + 1 - 2 * (Int)shape.m_middleX ) / 2;
-			const Bool inBand = fromMiddle >= bandNear && fromMiddle < bandFar;
-			const Int lowest = std::min( std::min( (Int)heightAtCell( x, y ), (Int)heightAtCell( x + 1, y ) ),
-				std::min( (Int)heightAtCell( x, y + 1 ), (Int)heightAtCell( x + 1, y + 1 ) ) );
-			if( offPlot < 0.5f + 0.5f * RMG_LANE_PAINT_WANDER * plotWander )
-				m_terrain[i] = (UnsignedByte)RMG_TERRAIN_ROCK;
-			else if( offLane < 0.5f + RMG_LANE_PAINT_WANDER * wander )
-				m_terrain[i] = (UnsignedByte)( inBand ? RMG_TERRAIN_ROCK : RMG_TERRAIN_DIRT );
-			else if( (Real)lowest < (Real)RMG_LANE_WATER + 5.0f * shoreWander )
+			const Real cellCoast = 0.25f * ( coast[i] + coast[cellIndex( x + 1, y )] + coast[cellIndex( x, y + 1 )] + coast[cellIndex( x + 1, y + 1 )] );
+			if( cellCoast < RMG_LANE_SAND + 3.0f * shoreWander )
 				m_terrain[i] = (UnsignedByte)RMG_TERRAIN_SAND;
+
+			const Real cx = (Real)( x - RMG_BORDER_CELLS ) + 0.5f, cy = (Real)( y - RMG_BORDER_CELLS ) + 0.5f;
+			for( Int s = 0; s < 4; s++ )
+			{
+				const Real dx = std::max( fabsf( cx - wornX[s] ) - wornHalf[s], 0.0f );
+				const Real dy = std::max( fabsf( cy - shape.m_middleY ) - wornHalf[s], 0.0f );
+				const Real wear = 1.0f - sqrtf( dx * dx + dy * dy ) / wornReach[s];
+				if( wear <= 0.0f )
+					continue;
+				const Real patch = fractalNoise( m_perm, (Real)x * 0.23f + 71.9f, (Real)y * 0.23f + 33.1f, 2 );
+				if( wear + 0.6f * patch > 0.45f )
+					m_terrain[i] = (UnsignedByte)RMG_TERRAIN_DIRT;
+			}
 
 			const Bool inside = x >= RMG_BORDER_CELLS && y >= RMG_BORDER_CELLS && x < RMG_BORDER_CELLS + shape.m_playX
 				&& y < RMG_BORDER_CELLS + shape.m_playY;
@@ -10349,6 +10379,22 @@ void RMGLayout::buildLane( void )
 		middle.m_polygon.push_back( at );
 	}
 	m_areas.push_back( middle );
+
+	/* Behind each plot, away from the enemy, a gap of RMG_LANE_AIR_GAP cells (one slot) and then the
+		seat's air zone, RMG_LANE_AIR_DEPTH cells (two slots) deep and as wide as the plot, where the
+		director puts its aircraft: LaneWar_AirA1 to A3 and B1 to B3, after the middle area so the build
+		areas and the middle keep their places in the list. */
+	for( Int start = 0; start < RMG_LANE_SEATS; start++ )
+	{
+		const Int team = start & 1, seat = start >> 1;
+		const Real x0 = (Real)shape.m_airX0[team], y0 = (Real)shape.m_plotY0[seat];
+		const Real x1 = x0 + RMG_LANE_AIR_DEPTH, y1 = y0 + RMG_LANE_PLOT_ACROSS;
+		RMGArea air;
+		air.m_name.format( "LaneWar_Air%c%d", 'A' + team, seat + 1 );
+		const RMGPoint corners[4] = { { x0, y0 }, { x1, y0 }, { x1, y1 }, { x0, y1 } };
+		air.m_polygon.assign( corners, corners + 4 );
+		m_areas.push_back( air );
+	}
 
 	buildBlends();
 }
@@ -10811,6 +10857,12 @@ static const RMGHourLight theHourLights[4] =
 	{ { 0.34f, 0.42f, 0.80f }, { 0.34f, 0.40f, 0.58f }, { -0.43f, 0.43f, -0.80f }, FALSE },	// night
 };
 
+/** The twilight lane's evening, which is dusk rather than the golden hour above: the sun just down,
+	a dim violet light from low in the west and a blue sky filling the shadows, so the style's warm
+	sand reads as evening and not as late afternoon. */
+static const RMGHourLight theLaneDusk =
+	{ { 0.80f, 0.92f, 1.70f }, { 0.60f, 0.56f, 0.78f }, { 0.86f, -0.30f, -0.42f }, FALSE };
+
 static void writeTintedLight( MapChunkWriter& w, const Real *ambient, const Real *diffuse,
 															const RMGHourLight& hour, const Real *biomeSun )
 {
@@ -10830,13 +10882,15 @@ static void writeTintedLight( MapChunkWriter& w, const Real *ambient, const Real
 	WorldInfo weather. */
 static void writeGlobalLighting( MapChunkWriter& w, const RMGBiome& biome, TimeOfDay current )
 {
+	// the twilight lane's own palette (rmgLaneBiome) is lit at dusk
+	const Bool dusk = &biome == rmgLaneBiome( RMG_BIOME_COUNT );
 	w.openChunk( "GlobalLighting", K_LIGHTING_VERSION_3 );
 		w.writeInt( current );
 
 		Int timeOfDay, light, channel;
 		for( timeOfDay = 0; timeOfDay < 4; timeOfDay++ )
 		{
-			const RMGHourLight& hour = theHourLights[timeOfDay];
+			const RMGHourLight& hour = dusk && timeOfDay == TIME_OF_DAY_EVENING - TIME_OF_DAY_FIRST ? theLaneDusk : theHourLights[timeOfDay];
 			writeTintedLight( w, biome.m_terrainAmbient, biome.m_terrainDiffuse, hour, biome.m_sunDirection );
 			writeTintedLight( w, biome.m_objectAmbient, biome.m_objectDiffuse, hour, biome.m_sunDirection );
 
@@ -11665,6 +11719,19 @@ static Bool settingsFromGeneratedPath( const AsciiString& path, RandomMapSetting
 			&& clamped.m_style == settingsOut.m_style
 			&& clamped.m_template == settingsOut.m_template
 			&& clamped.m_templateCRC == settingsOut.m_templateCRC;
+}
+
+Bool LaneGridColours( const AsciiString& mapPath, UnsignedInt *lineARGB, UnsignedInt *edgeARGB )
+{
+	RandomMapSettings settings;
+	if( !settingsFromGeneratedPath( mapPath, settings ) || settings.m_style != RMG_STYLE_LANE )
+		return FALSE;
+	const RMGLaneGround& ground = theLaneGrounds[rmgLaneTwilight( settings.m_seed ) ? RMG_BIOME_COUNT : rmgBiomeFor( settings.m_seed )];
+	const UnsignedInt rgb = ( (UnsignedInt)ground.m_gridColour[0] << 16 ) | ( (UnsignedInt)ground.m_gridColour[1] << 8 )
+		| (UnsignedInt)ground.m_gridColour[2];
+	*lineARGB = rgb | ( (UnsignedInt)ground.m_gridAlpha[0] << 24 );
+	*edgeARGB = rgb | ( (UnsignedInt)ground.m_gridAlpha[1] << 24 );
+	return TRUE;
 }
 
 Bool generatedMapTemplate( const AsciiString& path, AsciiString& templatePathOut )

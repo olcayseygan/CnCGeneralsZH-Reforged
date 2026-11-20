@@ -142,6 +142,11 @@ extern Bool stageRandomMap( const RandomMapSettings& settings, AsciiString& mapP
 	calls it when its seat count changes. FALSE when the path is not a generated map. */
 extern Bool restageRandomMap( const AsciiString& path, Int numPlayers, AsciiString& mapPathOut );
 
+/** The colours, ARGB, a Lane War plot's slot grid is drawn in on the lane map at this path: its
+	lines between slots and its outline, picked per theme to read on the theme's own ground. FALSE
+	when the path is not a generated lane map. Client side only; nothing in the simulation reads it. */
+extern Bool LaneGridColours( const AsciiString& mapPath, UnsignedInt *lineARGB, UnsignedInt *edgeARGB );
+
 /** Is this the path of a generated map or its preview, or the map.ini beside a
 	map that snows? The settings are in the name, which is what lets a replay, a
 	save or a joining machine rebuild the same bytes from the name alone. A name

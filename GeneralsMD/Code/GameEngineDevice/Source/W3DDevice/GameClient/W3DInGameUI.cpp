@@ -35,6 +35,8 @@
 #include "Common/BuildAssistant.h"
 #include "Common/GameEngine.h"
 #include "Common/GlobalData.h"
+#include "Common/RandomMapGenerator.h"
+#include "GameLogic/PolygonTrigger.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/Radar.h"
@@ -897,10 +899,12 @@ void W3DInGameUI::drawBuildGrid( void )
 
 //-------------------------------------------------------------------------------------------------
 /** The slot grid of every Lane War build plot (LaneWarDirector), painted on the ground in the
-	* terrain pass like the build grid, so a unit standing in a slot stands on top of it.  The lines are
-	* black at a low alpha, a deeper shade of the plot's own ground whatever the theme, and the plot's
-	* outline is heavier than the lines between its slots.  Nothing else marks a plot.  The bounds come
-	* from the director, which sets them at the map's load and never beside a tick. */
+	* terrain pass like the build grid, so a unit standing in a slot stands on top of it.  The plot wears
+	* the island's own ground, so the lines take the lane map theme's colour (LaneGridColours), pale on
+	* dark ground and a deep shade on light, and the plot's outline is stronger than the lines between
+	* its slots.  Nothing else marks a plot.  The bounds come
+	* from the director, which sets them at the map's load and never beside a tick.  Each seat's air zone
+	* behind its plot gets the same grid, its bounds read off the map's LaneWar_Air trigger areas. */
 //-------------------------------------------------------------------------------------------------
 void W3DInGameUI::drawLanePlotGrids( void )
 {
@@ -910,16 +914,56 @@ void W3DInGameUI::drawLanePlotGrids( void )
 	const Real SLOT = (Real)LANEWAR_SLOT_SIZE;
 	const Real LINE_HALF_WIDTH = 0.6f, EDGE_HALF_WIDTH = 1.2f;
 	const Real LIFT = 0.35f;	// as the build grid's
-	const UnsignedInt LINE = overlayColor( 0x00000000, 0x40 ), EDGE = overlayColor( 0x00000000, 0x70 );
+
+	/* Read off the map once a map: the theme's own line colour from its name (black on anything else),
+		and the seats' air zones, LaneWar_AirA1 to B3, from its trigger areas (static map data, never the
+		simulation's), which get the same grid as the plots. */
+	enum { MAX_AIR_ZONES = LANEWAR_TEAMS * LANEWAR_SEATS };
+	static AsciiString s_colourMap;
+	static UnsignedInt s_line = overlayColor( 0x00000000, 0x40 ), s_edge = overlayColor( 0x00000000, 0x70 );
+	static Coord2D s_airLo[ MAX_AIR_ZONES ], s_airHi[ MAX_AIR_ZONES ];
+	static Int s_airZones = 0;
+	if( TheGlobalData != NULL && s_colourMap != TheGlobalData->m_mapName )
+	{
+		s_colourMap = TheGlobalData->m_mapName;
+		if( !LaneGridColours( s_colourMap, &s_line, &s_edge ) )
+		{
+			s_line = overlayColor( 0x00000000, 0x40 );
+			s_edge = overlayColor( 0x00000000, 0x70 );
+		}
+		s_airZones = 0;
+		for( const PolygonTrigger *trigger = PolygonTrigger::getFirstPolygonTrigger(); trigger != NULL && s_airZones < MAX_AIR_ZONES;
+				 trigger = trigger->getNext() )
+		{
+			if( !trigger->getTriggerName().startsWith( "LaneWar_Air" ) || trigger->getNumPoints() < 3 )
+				continue;
+			Coord2D &lo = s_airLo[ s_airZones ], &hi = s_airHi[ s_airZones ];
+			lo.x = hi.x = (Real)trigger->getPoint( 0 )->x;
+			lo.y = hi.y = (Real)trigger->getPoint( 0 )->y;
+			for( Int p = 1; p < trigger->getNumPoints(); ++p )
+			{
+				lo.x = min( lo.x, (Real)trigger->getPoint( p )->x );
+				lo.y = min( lo.y, (Real)trigger->getPoint( p )->y );
+				hi.x = max( hi.x, (Real)trigger->getPoint( p )->x );
+				hi.y = max( hi.y, (Real)trigger->getPoint( p )->y );
+			}
+			++s_airZones;
+		}
+	}
+	const UnsignedInt LINE = s_line, EDGE = s_edge;
 
 	setGroundOverlayState();
 	GroundOverlayQuads &quads = theGroundOverlayQuads;
-	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+	for( Int r = 0; r < LANEWAR_TEAMS * LANEWAR_SEATS + s_airZones; ++r )
 	{
-		for( Int s = 0; s < LANEWAR_SEATS; ++s )
 		{
 			Coord2D lo, hi;
-			if( !TheLaneWarDirector->getPlotBounds( t, s, &lo, &hi ) )
+			if( r >= LANEWAR_TEAMS * LANEWAR_SEATS )
+			{
+				lo = s_airLo[ r - LANEWAR_TEAMS * LANEWAR_SEATS ];
+				hi = s_airHi[ r - LANEWAR_TEAMS * LANEWAR_SEATS ];
+			}
+			else if( !TheLaneWarDirector->getPlotBounds( r / LANEWAR_SEATS, r % LANEWAR_SEATS, &lo, &hi ) )
 				continue;
 			// lines every slot from the low corner; the director counts from the front left, which gives
 			// the same lines while a plot is whole slots a side, as every generated one is

@@ -12520,6 +12520,8 @@ struct RMGLaneIsland
 	Real fewestSea;			///< over the four sides, the mean count of wet vertices within 24 of the edge
 	Int inlandWater;		///< wet vertices no walk through the wet reaches from the map's edge
 	Int coastSwing[2];		///< over the lane's length, how far the first dry row from the top and from the bottom wanders
+	Int seaMargin;			///< the fewest vertices between any dry one and the playable edge
+	std::vector<Int> outline;	///< the first dry row from the top and from the bottom at every x over the lane
 };
 
 static RMGLaneIsland RMGLaneCoast( Int laneX0, Int laneX1 )
@@ -12541,6 +12543,12 @@ static RMGLaneIsland RMGLaneCoast( Int laneX0, Int laneX1 )
 					sea[side] += 1.0f / (Real)( side < 2 ? BY : BX );
 		}
 	island.fewestSea = std::min( std::min( sea[0], sea[1] ), std::min( sea[2], sea[3] ) );
+	island.seaMargin = std::min( BX, BY );
+	for( Int y = 0; y <= BY; y++ )
+		for( Int x = 0; x <= BX; x++ )
+			if( !wet( x + border, y + border ) )
+				island.seaMargin = std::min( island.seaMargin, std::min( std::min( x, BX - x ), std::min( y, BY - y ) ) );
+	island.outline.clear();
 
 	std::vector<char> seen( W * H, 0 );
 	std::vector<Int> queue;
@@ -12574,6 +12582,7 @@ static RMGLaneIsland RMGLaneCoast( Int laneX0, Int laneX1 )
 			Int depth = 0;
 			while( depth < BY && wet( x + border, border + ( side == 0 ? depth : BY - depth ) ) )
 				depth++;
+			island.outline.push_back( depth );
 			nearest = std::min( nearest, depth );
 			furthest = std::max( furthest, depth );
 		}
@@ -12594,15 +12603,15 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 	RandomMapSettings clamped = settings;
 	RandomMapGenerator::clampSettings( clamped );
 	CHECK_EQ( clamped.m_numPlayers, 6 );
-	CHECK_EQ( clamped.m_playableCells, 500 );
+	CHECK_EQ( clamped.m_playableCells, 642 );
 	CHECK_EQ( clamped.m_seed, 3 );
 
-	/* The layout of the night of 2026-11-20, in playable cells on a 16:9 field of 500 by 281: a lane
-		360 by 45 from x 70 to 430 and y 118 to 163, its middle (250, 140.5) the map's, the fortresses 0.7
-		and the towers 0.37 of the half-length off the middle, all on the middle line, plots 16 along by
-		24 across in a column 14 cells past each end, 40 cells of green, beach and sea behind them. */
-	const Int laneX0 = 70, laneX1 = 430, laneY0 = 118, laneY1 = 163;
-	const Real middleX = 2500.0f, middleY = 1405.0f;
+	/* The layout of the night of 2026-11-20, in playable cells on a 16:9 field of 642 by 361: a lane
+		360 by 45 from x 141 to 501 and y 158 to 203, its middle (321, 180.5) the map's, the fortresses
+		0.7 and the towers 0.37 of the half-length off the middle, all on the middle line, plots 16 along
+		by 24 across in a column 14 cells past each end, 111 cells of green, beach and sea behind them. */
+	const Int laneX0 = 141, laneX1 = 501, laneY0 = 158, laneY1 = 203;
+	const Real middleX = 3210.0f, middleY = 1805.0f;
 
 	// the same bytes every time, and for any seat count
 	std::vector<char> bytes, again;
@@ -12613,10 +12622,10 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 
 	parseGeneratedMap( bytes );
 	const Int W = theRMGParse.m_width, border = theRMGParse.m_border;
-	CHECK_EQ( W, 540 );
-	CHECK_EQ( theRMGParse.m_height, 321 );
-	CHECK_EQ( theRMGParse.m_boundaryX, 500 );
-	CHECK_EQ( theRMGParse.m_boundaryY, 281 );
+	CHECK_EQ( W, 682 );
+	CHECK_EQ( theRMGParse.m_height, 401 );
+	CHECK_EQ( theRMGParse.m_boundaryX, 642 );
+	CHECK_EQ( theRMGParse.m_boundaryY, 361 );
 	CHECK_NEAR( 2.0f * middleX, theRMGParse.m_boundaryX * MAP_XY_FACTOR, 0.01f );
 	CHECK_NEAR( 2.0f * middleY, theRMGParse.m_boundaryY * MAP_XY_FACTOR, 0.01f );
 	std::vector<Int> playRects;			// x0, y0, x1, y1 in playable cells: the lane, the plots
@@ -12626,7 +12635,7 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 	// six starts, one a plot, each inside its own area; the ends take turns, seat 1 on the lane's axis
 	static const char *const theAreas[] = { "LaneWar_BuildA1", "LaneWar_BuildB1", "LaneWar_BuildA2", "LaneWar_BuildB2",
 		"LaneWar_BuildA3", "LaneWar_BuildB3", "LaneWar_MiddleArea" };
-	CHECK_EQ( (Int)theRMGParse.m_areaNames.size(), 7 );
+	CHECK_EQ( (Int)theRMGParse.m_areaNames.size(), 13 );
 	std::vector<Int> startCells;
 	for( Int start = 0; start < 6; start++ )
 	{
@@ -12661,6 +12670,30 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 		const Int plotRect[4] = { (Int)( polygon[0].x / MAP_XY_FACTOR ), (Int)( polygon[0].y / MAP_XY_FACTOR ),
 			(Int)( polygon[2].x / MAP_XY_FACTOR ), (Int)( polygon[2].y / MAP_XY_FACTOR ) };
 		playRects.insert( playRects.end(), plotRect, plotRect + 4 );
+
+		/* its air zone behind it, away from the enemy: one slot (20) of gap from the plot's back, then two
+			slots (40) deep and as wide as the plot, and flat with it (playRects) */
+		AsciiString airName;
+		airName.format( "LaneWar_Air%c%d", 'A' + start % 2, start / 2 + 1 );
+		Int air = -1;
+		for( Int i = 0; i < (Int)theRMGParse.m_areaNames.size(); i++ )
+			if( theRMGParse.m_areaNames[i] == airName )
+				air = i;
+		CHECK( air >= 0 );
+		if( air < 0 )
+			return;
+		const std::vector<Coord3D>& airPolygon = theRMGParse.m_areaPolygons[air];
+		CHECK_EQ( (Int)airPolygon.size(), 4 );
+		CHECK_EQ( (Int)( airPolygon[2].x - airPolygon[0].x ), 40 );
+		CHECK_NEAR( airPolygon[0].y, polygon[0].y, 0.5f );
+		CHECK_NEAR( airPolygon[2].y, polygon[2].y, 0.5f );
+		if( start % 2 == 0 )
+			CHECK_NEAR( polygon[0].x - airPolygon[2].x, 20.0f, 0.5f );
+		else
+			CHECK_NEAR( airPolygon[0].x - polygon[2].x, 20.0f, 0.5f );
+		const Int airRect[4] = { (Int)( airPolygon[0].x / MAP_XY_FACTOR ), (Int)( airPolygon[0].y / MAP_XY_FACTOR ),
+			(Int)( airPolygon[2].x / MAP_XY_FACTOR ), (Int)( airPolygon[2].y / MAP_XY_FACTOR ) };
+		playRects.insert( playRects.end(), airRect, airRect + 4 );
 	}
 	CHECK( theRMGParse.m_areaNames[6] == theAreas[6] );
 
@@ -12731,7 +12764,7 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 	}
 
 	// the lane and the plots flat at one height, and every one of them in one walk
-	const Int ground = theRMGParse.m_heights[( 140 + border ) * W + 250 + border];
+	const Int ground = theRMGParse.m_heights[( 180 + border ) * W + 321 + border];
 	Int uneven = 0;
 	for( size_t r = 0; r + 3 < playRects.size(); r += 4 )
 		for( Int y = playRects[r + 1]; y <= playRects[r + 3]; y++ )
@@ -12739,7 +12772,7 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 				uneven += theRMGParse.m_heights[( y + border ) * W + x + border] != ground;
 	CHECK_EQ( uneven, 0 );
 	std::vector<char> reached;
-	const Int laneCell = ( 140 + border ) * W + 250 + border;
+	const Int laneCell = ( 180 + border ) * W + 321 + border;
 	RMGLaneFlood( laneCell % W, laneCell / W, reached );
 	for( Int start = 0; start < 6; start++ )
 		CHECK( reached[startCells[start]] == 1 );
@@ -12755,22 +12788,27 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 	/* An island in open sea: water within 24 cells of each of the four edges, at least 12 cells of it
 		on every side, no water inland (every wet vertex one walk through the wet from the map's edge), and
 		a coast that wanders, the island's top and bottom edges over the lane's length lying at least 8
-		cells nearer the map's edge in one place than in another, where the first build's ran straight. */
+		cells nearer the map's edge in one place than in another, where the first build's ran straight.
+		At least 50 cells of open sea round all of it, so a wide camera sees the whole island in water. */
 	RMGLaneIsland island = RMGLaneCoast( laneX0, laneX1 );
 	CHECK( island.fewestSea >= 12.0f );
 	CHECK_EQ( island.inlandWater, 0 );
 	CHECK( island.coastSwing[0] >= 8 && island.coastSwing[1] >= 8 );
+	CHECK( island.seaMargin >= 50 );
+	const std::vector<Int> outline = island.outline;
 	CHECK_EQ( theRMGParse.m_numWaterAreas, 1 );
 	CHECK( RMGLanePropsDry() );
 
-	// nothing off play but trees and stones, and the lane, the plots, the bank and the shore each in a texture of its own
+	// nothing off play but trees and stones, and the four ground classes each in a texture of its own (only the bank and the shore are painted)
 	CHECK( RMGLaneOnlyNature() );
 	for( Int a = 0; a < 4; a++ )
 		for( Int b = a + 1; b < 4; b++ )
 			CHECK( theRMGParse.m_textureNames[a] != theRMGParse.m_textureNames[b] );
 
 	/* other seeds: the ground in play is the same, as soft and as open, nothing but nature stands off it,
-		and over a dozen seeds the theme changes */
+		the island's outline is its own (its long sides lie on average 2 cells or more from seed 3's,
+		where the first islands were one capsule for every seed), and over a dozen seeds the theme
+		changes */
 	const std::vector<UnsignedByte> heights = theRMGParse.m_heights;
 	std::vector<AsciiString> themes;
 	for( Int seed = 1; seed <= 12; seed++ )
@@ -12795,10 +12833,37 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 		island = RMGLaneCoast( laneX0, laneX1 );
 		CHECK( island.fewestSea >= 12.0f );
 		CHECK_EQ( island.inlandWater, 0 );
+		CHECK( island.seaMargin >= 50 );
+		if( seed != 3 && island.outline.size() == outline.size() )
+		{
+			Int apart = 0;
+			for( size_t k = 0; k < outline.size(); k++ )
+				apart += abs( island.outline[k] - outline[k] );
+			CHECK( apart >= 2 * (Int)outline.size() );
+		}
 		if( std::find( themes.begin(), themes.end(), theRMGParse.m_textureName ) == themes.end() )
 			themes.push_back( theRMGParse.m_textureName );
 	}
 	CHECK( themes.size() >= 3 );
+
+	/* The plots wear the island's ground, so the slot grid takes the theme's line colour off the map's
+		name: seed 5 is temperate's pale lines, seed 6 twilight's, seed 3 desert's dark ones, every one
+		visible, and a name that is not a lane map gets none. */
+	UnsignedInt line[3], edge[3];
+	const Int gridSeeds[3] = { 5, 6, 3 };
+	for( Int k = 0; k < 3; k++ )
+	{
+		AsciiString path;
+		path.format( "Maps\\RMG_v%d_%d_6p_642c_lane\\RMG_v%d_%d_6p_642c_lane.map", RANDOM_MAP_GENERATOR_VERSION, gridSeeds[k],
+			RANDOM_MAP_GENERATOR_VERSION, gridSeeds[k] );
+		CHECK( LaneGridColours( path, &line[k], &edge[k] ) );
+		CHECK( ( line[k] >> 24 ) >= 0x40 && ( edge[k] >> 24 ) > ( line[k] >> 24 ) );
+		CHECK_EQ( line[k] & 0x00FFFFFF, edge[k] & 0x00FFFFFF );
+	}
+	CHECK( ( line[0] & 0x00FFFFFF ) != ( line[1] & 0x00FFFFFF ) && ( line[0] & 0x00FFFFFF ) != ( line[2] & 0x00FFFFFF ) );
+	AsciiString plain;
+	plain.format( "Maps\\RMG_v%d_5_2p_64c\\RMG_v%d_5_2p_64c.map", RANDOM_MAP_GENERATOR_VERSION, RANDOM_MAP_GENERATOR_VERSION );
+	CHECK( !LaneGridColours( plain, &line[0], &edge[0] ) );
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -9476,7 +9476,11 @@ void InGameUI::postDraw( void )
 				// line looks at your own building, as a cell's does.
 				//
 				Int startX = (Int)( m_superweaponPosition.x * TheDisplay->getWidth() );
+				// never under the info strip at the top (the clock, the rates, the net box): while it is up the
+				// list starts below its foot, as the icon tray does, and from InGameUI.ini's place otherwise
 				Int startY = (Int)( m_superweaponPosition.y * TheDisplay->getHeight() );
+				if( hudStripBottom() > 0 )
+					startY = max( startY, hudStripBottom() + stripPixels( SUPERWEAPON_TRAY_DROP ) );
 				const Int bottomMargin = (Int)( (Real)TheTacticalView->getHeight() * 0.82f );
 				const Color bgColor = GameMakeColor( 0, 0, 0, 255 );
 				const Real flashFrames = m_superweaponFlashDuration;

@@ -91,6 +91,7 @@ found and fixed, EA's own, not port damage.**
 - A damaged or deliberately broken map or game file packed with one of EA's two oldest compression schemes could make the game write past the end of the memory set aside for it, the lengths in its header taken on trust. The game now checks them and refuses the file. Thanks to SimonWaldherr.
 - Typing `yardım` or `saldır` in chat, with the Turkish dotless i, now asks your computer allies for help or an attack on Windows. The Windows build had read those two words in the wrong alphabet and never matched them; only the plain `yardim` and `saldir` worked. Thanks to SimonWaldherr.
 - A Linux or Mac game can join a Windows player's network game. The Mac and Linux builds left out this version's own unit models and the Turkiye voices, so they counted 8894 models where Windows counts 9199, and every Windows host refused them as running different rules. Both now ship with the game. Thanks to polyfloyd.
+- A mission whose script asked whether a radio line had finished before playing it could cut to its next scene as the line began, the old answer still standing. Playing a line now starts its wait afresh, and the other lines keep theirs. Thanks to Shin-Aska.
 
 ## A dropped player's army stays, and he can come back to it
 

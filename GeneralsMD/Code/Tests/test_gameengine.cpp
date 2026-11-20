@@ -6565,6 +6565,18 @@ TEST(ranked_matches_play_retail_pace_and_custom_rooms_stay_native)
 	online.reset();
 	online.enterGame();
 	CHECK( !online.isQMGame() );
+
+	/* The room kind's own speed is what an options string without SP= means.  A custom room's host
+	   picks another; the next room's reset puts it back, and a Quick Match room's own is retail's. */
+	CHECK_EQ( online.getDefaultGameSpeedPercent(), (Int)NATIVE_GAME_SPEED_PERCENT );
+	online.setGameSpeedPercent( 200 );
+	online.reset();
+	CHECK_EQ( online.getGameSpeedPercent(), (Int)NATIVE_GAME_SPEED_PERCENT );
+	online.enterGame();
+	online.markGameAsQM();
+	CHECK_EQ( online.getDefaultGameSpeedPercent(), (Int)RETAIL_GAME_SPEED_PERCENT );
+	online.reset();		// clears the QM flag before it asks for the default
+	CHECK_EQ( online.getGameSpeedPercent(), (Int)NATIVE_GAME_SPEED_PERCENT );
 	delete TheWritableGlobalData;
 	TheWritableGlobalData = saved;
 }
@@ -23374,13 +23386,16 @@ TEST(hit_flash_is_a_check_box_that_starts_off_and_lights_only_fresh_hits)
 	delete scratch;
 
 	const UnsignedInt never = 0xffffffff;
-	CHECK( !Drawable_hitFlashDue( never, never, 100, 6 ) );		// never hit
-	CHECK( !Drawable_hitFlashDue( never, 90, 100, 6 ) );		// a stamp in the future is no hit
-	CHECK( Drawable_hitFlashDue( 100, never, 100, 6 ) );		// hit this tick
-	CHECK( Drawable_hitFlashDue( 98, 90, 100, 6 ) );				// hit during a catch-up pass
-	CHECK( !Drawable_hitFlashDue( 100, 100, 101, 6 ) );			// already answered
-	CHECK( !Drawable_hitFlashDue( 40, never, 100, 6 ) );		// old stamp seen first after a load or a mid-match tick
-	CHECK( !Drawable_hitFlashDue( 94, never, 100, 6 ) );		// as old as the flash itself
+	CHECK( !Drawable_hitFlashDue( never, never, 100, 6, 18 ) );		// never hit
+	CHECK( !Drawable_hitFlashDue( never, 90, 100, 6, 18 ) );		// a stamp in the future is no hit
+	CHECK( Drawable_hitFlashDue( 100, never, 100, 6, 18 ) );		// hit this tick
+	CHECK( Drawable_hitFlashDue( 98, 70, 100, 6, 18 ) );				// hit during a catch-up pass
+	CHECK( !Drawable_hitFlashDue( 100, 100, 101, 6, 18 ) );			// already answered
+	CHECK( !Drawable_hitFlashDue( 40, never, 100, 6, 18 ) );		// old stamp seen first after a load or a mid-match tick
+	CHECK( !Drawable_hitFlashDue( 94, never, 100, 6, 18 ) );		// as old as the flash itself
+	CHECK( !Drawable_hitFlashDue( 110, 100, 110, 6, 18 ) );			// restamp inside the cooldown stays dark
+	CHECK( Drawable_hitFlashDue( 118, 100, 118, 6, 18 ) );			// the first hit after it lights
+	CHECK( !Drawable_hitFlashDue( 110, 100, 118, 6, 18 ) );			// a hit skipped in the cooldown is stale by its end
 }
 
 TEST(aircraft_altitude_lines_are_a_check_box_that_starts_on)
@@ -27162,6 +27177,29 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 	AsciiString atNative = picked;
 	atNative.concat( RecorderClass::replayLogicRateField( NATIVE_GAME_SPEED_PERCENT ) );
 	CHECK_EQ( RecorderClass::takeReplayGameSpeed( atNative ), (Int)NATIVE_GAME_SPEED_PERCENT );
+
+	/* A network room's game speed rides as SP=, written only when the host moved it off the room
+	   kind's own, so a room left at its default sends and records the string it always did.  A replay
+	   header's GS= comes off last and leaves SP= for the parser. */
+	CHECK( strstr( picked.str(), "SP=" ) == NULL );
+	host.setGameSpeedPercent( 200 );
+	const AsciiString sped = GameInfoOptionsString( &host, mapPath, 0 );
+	host.setGameSpeedPercent( host.getDefaultGameSpeedPercent() );
+	CHECK( strstr( sped.str(), "SP=200;" ) != NULL );
+	CHECK( ParseAsciiStringToGameInfo( &guest, sped ) );
+	CHECK_EQ( guest.getGameSpeedPercent(), 200 );
+	CHECK( ParseAsciiStringToGameInfo( &guest, picked ) );	// the host put it back
+	CHECK_EQ( guest.getGameSpeedPercent(), guest.getDefaultGameSpeedPercent() );
+	CHECK_STR( GameInfoOptionsString( &host, mapPath, 0 ).str(), picked.str() );
+	AsciiString spedRecorded = sped;
+	spedRecorded.concat( RecorderClass::replayLogicRateField( 200 ) );
+	CHECK_EQ( RecorderClass::takeReplayGameSpeed( spedRecorded ), 200 );
+	CHECK_EQ( RecorderClass::takeReplayLogicRate( spedRecorded ), (Int)LOGICFRAMES_PER_SECOND );
+	CHECK_STR( spedRecorded.str(), sped.str() );
+	// a speed no build offers refuses the string rather than playing a neighbour of the host's
+	std::string oddSpeed = odd.str();
+	oddSpeed.insert( oddSpeed.find( ";S=H" ) + 1, "SP=130;" );
+	CHECK( !ParseAsciiStringToGameInfo( &guest, AsciiString( oddSpeed.c_str() ) ) );
 
 	// the host's answer to a guest's request
 	GameSlot *asker = host.getSlot( 0 );

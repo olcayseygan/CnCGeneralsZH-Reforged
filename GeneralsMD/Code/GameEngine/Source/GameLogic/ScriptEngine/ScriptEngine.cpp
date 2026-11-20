@@ -483,6 +483,7 @@ void ScriptEngine::addConditionTemplateInfo( Template *actionTemplate)
 //-------------------------------------------------------------------------------------------------
 ScriptEngine::ScriptEngine():
 m_scriptNameCacheValid(FALSE),
+m_countdownTimerFrame(0),
 m_numCounters(0),
 m_numFlags(0),
 m_callingTeam(NULL),
@@ -5329,6 +5330,7 @@ void ScriptEngine::reset( void )
 	m_groupsByName.clear();
 
 	m_numCounters = 1;
+	m_countdownTimerFrame = 0;
 	m_numAttackInfo = 1;
 	m_numFlags = 1;
 	m_endGameTimer = -1;
@@ -5494,6 +5496,7 @@ void ScriptEngine::newMap( void )
 	m_groupsByName.clear();
 
 	m_numCounters = 1;
+	m_countdownTimerFrame = 0;
 	Int i;
 	for (i=0; i<MAX_COUNTERS; i++) {
 		m_counters[i].value = 0;
@@ -5697,6 +5700,25 @@ const char *ScriptEngine::getProfileReport( void ) { return ""; }
 #define SEQ_ADD(c,n)
 #endif
 
+void ScriptEngine::updateCountdownTimers( void )
+{
+	// Scripts continue during FREEZE_TIME, so carry their own game-time phase instead of
+	// deriving it from the world's frozen frame. Preserve retail-tick crossing semantics.
+	const Int denominator = 100 * LOGICFRAMES_PER_RETAIL_FRAME;
+	const Int phase = m_countdownTimerFrame;
+	const Int retailTicks = (phase + GAME_SPEED_PERCENT + denominator - 1) / denominator
+		- (phase + denominator - 1) / denominator;
+	m_countdownTimerFrame = (UnsignedByte)((phase + GAME_SPEED_PERCENT) % denominator);
+	for (Int i = 1; i < m_numCounters; ++i) {
+		TCounter &counter = m_counters[i];
+		counter.valueBeforeTick = counter.value;
+		if (counter.isCountdownTimer && counter.value >= 0)
+			counter.value = max(-1, counter.value - retailTicks);
+		counter.valueAfterTick = counter.value;
+		counter.countdownFrame = TheGameLogic->getFrame();
+	}
+}
+
 void ScriptEngine::update( void )
 {
 	USE_PERF_TIMER(ScriptEngine)
@@ -5779,33 +5801,8 @@ void ScriptEngine::update( void )
 		TheScriptConditions->update();
 	}
 	SCRIPT_PHASE_END( SCRIPT_PHASE_CONDITIONS );
-	// Update any countdown timers.  They count retail 30 Hz frames of game time, because maps compare
-	// a running timer's value with numbers written for 30 Hz ("timer < 1700").  This frame's share is
-	// the retail frames whose start falls inside it: at the retail rate one a frame, at twice it one
-	// every other frame (the even ones), and at a game speed above the wall's sometimes two.
+	updateCountdownTimers();
 	Int i;
-	const UnsignedInt frameNow = TheGameLogic->getFrame();
-	const Int retailTicks = (Int)( ( (UnsignedInt64)( frameNow + 1 ) * RETAIL_LOGICFRAMES_PER_SECOND + LOGICFRAMES_PER_GAME_SECOND - 1 ) / LOGICFRAMES_PER_GAME_SECOND
-		- ( (UnsignedInt64)frameNow * RETAIL_LOGICFRAMES_PER_SECOND + LOGICFRAMES_PER_GAME_SECOND - 1 ) / LOGICFRAMES_PER_GAME_SECOND );
-	// Note - counters start at 1.  0 means not assigned.
-	for (i=1; i<m_numCounters; i++) {
-		m_counters[i].valueBeforeTick = m_counters[i].value;
-	}
-	for (Int tick = 0; tick < retailTicks; ++tick) {
-		for (i=1; i<m_numCounters; i++) {
-			if (m_counters[i].isCountdownTimer) {
-				// If counter has any time left, decrement.  Counters go to -1 and stop.
-				if (m_counters[i].value >= 0) {
-					m_counters[i].value--;
-				}
-			}
-		}
-	}
-	// what this tick's countdown passed over, for an EQUAL condition (evaluateCounter)
-	for (i=1; i<m_numCounters; i++) {
-		m_counters[i].valueAfterTick = m_counters[i].value;
-		m_counters[i].countdownFrame = frameNow;
-	}
 
 	// Evaluate the scripts.
 	SCRIPT_PHASE_BEGIN();
@@ -9200,6 +9197,7 @@ void ScriptEngine::setGlobalDifficulty( GameDifficulty difficulty )
 	* 4: current music track info
 	* 5: add ChooseVictimAlwaysUsesNormal
 	* 6: m_inputHeldByScript (fork)
+	* 7: countdown timers' retail-tick phase, kept through a world freeze (fork)
 	*/
 // ------------------------------------------------------------------------------------------------
 void ScriptEngine::xfer( Xfer *xfer )
@@ -9207,7 +9205,7 @@ void ScriptEngine::xfer( Xfer *xfer )
 	Int i;
 
 	// version
-	const XferVersion currentVersion = 6;
+	const XferVersion currentVersion = 7;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -9684,6 +9682,18 @@ void ScriptEngine::xfer( Xfer *xfer )
 		xfer->xferBool(&m_inputHeldByScript);
 	else
 		m_inputHeldByScript = FALSE;
+
+	if (version >= 7)
+	{
+		xfer->xferUnsignedByte(&m_countdownTimerFrame);
+		if (m_countdownTimerFrame >= 100 * LOGICFRAMES_PER_RETAIL_FRAME)
+			throw SC_INVALID_DATA;
+	}
+	else
+	{
+		// Older saves have no independent timer phase; start deterministically at phase zero.
+		m_countdownTimerFrame = 0;
+	}
 
 	if( xfer->getXferMode() == XFER_LOAD ) {
 		// We are doing a load.  If there is no fade active, do a black fade in to start.

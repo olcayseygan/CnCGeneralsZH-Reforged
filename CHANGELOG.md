@@ -92,6 +92,7 @@ found and fixed, EA's own, not port damage.**
 - Typing `yardım` or `saldır` in chat, with the Turkish dotless i, now asks your computer allies for help or an attack on Windows. The Windows build had read those two words in the wrong alphabet and never matched them; only the plain `yardim` and `saldir` worked. Thanks to SimonWaldherr.
 - A Linux or Mac game can join a Windows player's network game. The Mac and Linux builds left out this version's own unit models and the Turkiye voices, so they counted 8894 models where Windows counts 9199, and every Windows host refused them as running different rules. Both now ship with the game. Thanks to polyfloyd.
 - A mission whose script asked whether a radio line had finished before playing it could cut to its next scene as the line began, the old answer still standing. Playing a line now starts its wait afresh, and the other lines keep theirs. Thanks to Shin-Aska.
+- A mission countdown keeps its pace while a cinematic freezes the world. At 1.25x and up the timer took its share of the frame the world stopped on, again every frame the cutscene ran, so it ran at 1x or 2x until the scene ended, whichever the frozen frame happened to hold. It now counts on at the game's speed, and a save keeps where it was between two ticks. Thanks to Shin-Aska.
 
 ## A dropped player's army stays, and he can come back to it
 

@@ -28768,3 +28768,263 @@ TEST(tab_order_skips_what_the_screen_hides_both_ways)
 	lone.pop_back();
 	CHECK( findTabStop( lone.begin(), lone.end(), 2, tabStopShown ) == lone.end() );
 }
+
+#include "Common/XferLoad.h"
+#include "Common/XferSave.h"
+#include "Common/GameState.h"
+#include "GameLogic/ScriptActions.h"
+#include "GameLogic/ScriptConditions.h"
+#include "../Stubs/NullAudioManager.h"
+
+namespace
+{
+class CountdownTestWorld : public GameLogic
+{
+public:
+	void setFrame(UnsignedInt frame)
+	{
+		// The world frame is private. Use its real snapshot entry point to set only that first
+		// field, then stop before loading a world; no production setter or layout assumptions.
+		struct FrameLoaded {};
+		class FrameLoad : public XferLoad
+		{
+		public:
+			explicit FrameLoad(UnsignedInt value) : frame(value) {}
+			void xferVersion(XferVersion *, XferVersion) override {}
+			void xferUnsignedInt(UnsignedInt *value) override { *value = frame; throw FrameLoaded(); }
+			UnsignedInt frame;
+		} load(frame);
+		try { GameLogic::xfer(&load); }
+		catch (const FrameLoaded &) {}
+		CHECK_EQ(getFrame(), frame);
+	}
+};
+
+struct CountdownTestContext
+{
+	GameLogic *savedLogic = TheGameLogic;
+	SidesList *savedSides = TheSidesList;
+	ScriptActionsInterface *savedActions = TheScriptActions;
+	ScriptConditionsInterface *savedConditions = TheScriptConditions;
+	GameEngine *savedEngine = TheGameEngine;
+	Int savedSpeed = GAME_SPEED_PERCENT;
+	SidesList sides;
+	CountdownTestWorld *world;
+	CountdownTestContext()
+	{
+		// Like the other empty-world fixtures, retain GameLogic: its destructor owns shared globals.
+		static CountdownTestWorld *emptyWorld = NEW CountdownTestWorld;
+		world = emptyWorld;
+		TheGameLogic = world;
+		TheSidesList = &sides;
+		TheScriptActions = NULL;
+		TheScriptConditions = NULL;
+		TheGameEngine = NULL;
+		GameSpeed_set(100);
+	}
+	~CountdownTestContext()
+	{
+		TheGameLogic = savedLogic;
+		TheSidesList = savedSides;
+		TheScriptActions = savedActions;
+		TheScriptConditions = savedConditions;
+		TheGameEngine = savedEngine;
+		GameSpeed_set(savedSpeed);
+	}
+};
+
+class CountdownTestEngine : public ScriptEngine
+{
+public:
+	CountdownTestEngine() { reset(); }
+	void tick() { updateCountdownTimers(); }
+	void endingPass()
+	{
+		ScriptEngine *saved = TheScriptEngine;
+		TheScriptEngine = this;
+		m_firstUpdate = FALSE;
+		m_endGameTimer = 0;
+		m_fade = FADE_NONE;
+		update();
+		m_endGameTimer = -1;
+		TheScriptEngine = saved;
+	}
+	void transfer(Xfer *xfer) { ScriptEngine::xfer(xfer); }
+	void seed(Int value)
+	{
+		m_numCounters = 4;
+		m_counters[1].value = value;
+		m_counters[1].isCountdownTimer = TRUE;
+		m_counters[2].value = 123;
+		m_counters[2].isCountdownTimer = FALSE;
+		m_counters[3].value = -5;
+		m_counters[3].isCountdownTimer = TRUE;
+	}
+    Bool equal(Int value)
+    {
+        ConditionTemplate &type = m_conditionTemplates[Condition::COUNTER];
+        type.m_numParameters = 3;
+        type.m_parameters[0] = Parameter::COUNTER;
+        type.m_parameters[1] = Parameter::COMPARISON;
+        type.m_parameters[2] = Parameter::INT;
+        ScriptEngine *saved = TheScriptEngine;
+        TheScriptEngine = this;
+        Condition *condition = newInstance(Condition)(Condition::COUNTER);
+        condition->getParameter(0)->friend_setInt(1);
+        condition->getParameter(1)->friend_setInt(Parameter::EQUAL);
+        condition->getParameter(2)->friend_setInt(value);
+        const Bool result = evaluateCounter(condition);
+        condition->deleteInstance();
+        TheScriptEngine = saved;
+        return result;
+    }
+	Int remaining() const { return m_counters[1].value; }
+	void checkOtherCounters() const
+	{
+		CHECK_EQ(m_counters[2].value, 123);
+		CHECK_EQ(m_counters[3].value, -5);
+	}
+};
+
+}
+
+TEST(script_countdown_timers_preserve_game_speed_and_frozen_world_phase)
+{
+    CHECK(bootOnce());
+    CountdownTestContext context;
+    for (Int speed : PLAYER_GAME_SPEED_PERCENTS) {
+        GameSpeed_set(speed);
+        for (UnsignedInt frozenFrame = 0; frozenFrame < 3; ++frozenFrame) {
+            context.world->setFrame(frozenFrame);
+            CountdownTestEngine engine;
+            engine.seed(1000);
+            for (Int pass = 0; pass < LOGICFRAMES_PER_SECOND; ++pass) {
+                if (frozenFrame == 2) context.world->setFrame(pass);
+                engine.tick();
+            }
+            CHECK_EQ(engine.remaining(), 1000 - (RETAIL_LOGICFRAMES_PER_SECOND * speed + 99) / 100);
+            engine.checkOtherCounters();
+        }
+        CountdownTestEngine engine;
+        engine.seed(1000);
+        for (UnsignedInt pass = 0; pass < 64; ++pass) {
+            const UnsignedInt frame = pass < 8 ? pass : pass < 32 ? 8 : pass < 56 ? 9 : pass - 46;
+            context.world->setFrame(frame);
+            engine.tick();
+            CHECK_EQ(engine.remaining(), 1000 - (Int)(((pass + 1) * speed + 99) / 100));
+        }
+        engine.reset(); engine.seed(0); engine.tick();
+        CHECK_EQ(engine.remaining(), -1);
+        for (Int pass = 0; pass < 8; ++pass) engine.tick();
+        CHECK_EQ(engine.remaining(), -1);
+        engine.checkOtherCounters();
+        for (Int map = 0; map < 2; ++map) {
+            if (map) engine.newMap(); else engine.reset();
+            engine.seed(10); engine.tick();
+            CHECK_EQ(engine.remaining(), 10 - (speed + 99) / 100);
+        }
+        engine.reset(); engine.seed(10); engine.endingPass();
+        CHECK_EQ(engine.remaining(), 10);
+        engine.tick();
+        CHECK_EQ(engine.remaining(), 10 - (speed + 99) / 100);
+    }
+}
+
+TEST(script_countdown_timer_equality_covers_every_crossing_at_every_speed)
+{
+    CHECK(bootOnce());
+    CountdownTestContext context;
+    for (Int speed : PLAYER_GAME_SPEED_PERCENTS) {
+        GameSpeed_set(speed);
+        CountdownTestEngine engine;
+        engine.seed(100);
+        Bool seen[100] = {};
+        for (UnsignedInt pass = 0; engine.remaining() >= 0; ++pass) {
+            context.world->setFrame(pass < 4 ? pass : 4); // equality also holds while world time is frozen
+            engine.tick();
+            for (Int target = 0; target < 100; ++target)
+                seen[target] = seen[target] || engine.equal(target);
+        }
+        for (Int target = 0; target < 100; ++target) CHECK(seen[target]);
+        engine.seed(10); engine.tick();
+        const Int crossed = engine.remaining() + 1;
+        if (speed > 100) {
+            // A newly assigned value must invalidate a previous tick's skipped-value comparison.
+            engine.seed(20);
+            CHECK(!engine.equal(crossed));
+        }
+    }
+}
+
+TEST(script_countdown_timer_snapshot_preserves_phase_and_loads_older_saves)
+{
+	CHECK(bootOnce());
+	CountdownTestContext context;
+	context.world->setFrame(0);
+	const char *path = "test_script_timer_save_tmp.bin";
+	for (Int speed : PLAYER_GAME_SPEED_PERCENTS)
+	for (Int phase = 0; phase < 4; ++phase)
+	{
+		GameSpeed_set(speed);
+		CountdownTestEngine original;
+		original.seed(100);
+		for (Int pass = 0; pass < phase; ++pass) original.tick();
+		XferSave save;
+		save.open(AsciiString(path));
+		original.transfer(&save);
+		save.close();
+		CountdownTestEngine restored;
+		XferLoad load;
+		load.setOptions(XO_NO_POST_PROCESSING);
+		load.open(AsciiString(path));
+		restored.transfer(&load);
+		load.close();
+		for (Int pass = 0; pass < 9; ++pass)
+		{
+			original.tick();
+			restored.tick();
+			CHECK_EQ(restored.remaining(), original.remaining());
+		}
+	}
+	GameSpeed_set(125);
+	// v7 appends only the subframe byte to the v6 snapshot. A v6 save deterministically starts
+	// with phase zero; an invalid v7 phase is rejected rather than stopping every timer forever.
+	FILE *file = fopen(path, "rb");
+	CHECK(file != NULL);
+	if (!file) return;
+	fseek(file, 0, SEEK_END);
+	const long size = ftell(file);
+	rewind(file);
+	std::vector<UnsignedByte> bytes(size);
+	CHECK_EQ(fread(bytes.data(), 1, bytes.size(), file), bytes.size());
+	fclose(file);
+	CHECK(bytes.size() > 2 && bytes.front() == 7);
+	for (Int legacy = 0; legacy < 2; ++legacy)
+	{
+		bytes.front() = legacy ? 6 : 7;
+		bytes.back() = 100 * LOGICFRAMES_PER_RETAIL_FRAME;
+		file = fopen(path, "wb");
+		CHECK(file != NULL);
+		if (!file) return;
+		const size_t length = bytes.size() - (legacy ? 1 : 0);
+		CHECK_EQ(fwrite(bytes.data(), 1, length, file), length);
+		fclose(file);
+		CountdownTestEngine restored;
+		XferLoad load;
+		load.setOptions(XO_NO_POST_PROCESSING);
+		load.open(AsciiString(path));
+		Bool rejected = FALSE;
+		try { restored.transfer(&load); }
+		catch (SaveCode error) { rejected = error == SC_INVALID_DATA; CHECK(rejected); }
+		catch (...) { CHECK(FALSE); }
+		load.close();
+		CHECK_EQ(rejected, !legacy);
+		if (legacy && !rejected)
+		{
+			const Int before = restored.remaining();
+			restored.tick();
+			CHECK_EQ(restored.remaining(), before - 2);
+		}
+	}
+	remove(path);
+}

@@ -175,8 +175,8 @@ enum { HEALTH_BAR_COLORS_COUNT = 2 };
 // Two more stand on the Classic bar's own rectangles and only leave pieces off it (the owner's, TODO
 // "HUD Design and Features" 5 and 6), so everything that places windows reads them as Classic:
 // 2 HUD_LAYOUT_RETAIL, shown as "Classic" (0 is shown as "Full" since), no command tabs and no socket
-// for them, no production list, no hero cell, no squad list, the superweapons as named countdowns and
-// the general's powers one column up from the bottom; 3 HUD_LAYOUT_PLAIN, shown as "Reforged", today's
+// for them, no signal keys over the radar, no production list, no hero cell, no squad list, EA's own
+// superweapon countdowns and the general's powers one column up from the bottom; 3 HUD_LAYOUT_PLAIN, shown as "Reforged", today's
 // bar, tabs and all, less the production list, the idle column and the signal keys over the radar.
 // GUI:HudLayout2, GUI:HudLayout3.
 enum { HUD_LAYOUT_CLASSIC, HUD_LAYOUT_SIDEBAR, HUD_LAYOUT_RETAIL, HUD_LAYOUT_PLAIN, HUD_LAYOUT_COUNT };

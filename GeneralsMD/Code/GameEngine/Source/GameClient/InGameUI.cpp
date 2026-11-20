@@ -9127,7 +9127,6 @@ void InGameUI::postDraw( void )
 			SuperweaponInfo *info;	///< its timer, whose strings the Red Alert style rows write into
 			Bool enemy;					///< the local player's enemy's: a red row
 			AsciiString power;	///< the special power's name, "GUI:<power>" its label
-			Color house;				///< its owner's house colour as his units wear it (the Classic layout's swatch)
 		};
 		std::vector< ListedSuperweapon > listed;
 
@@ -9247,8 +9246,7 @@ void InGameUI::postDraw( void )
                 const Bool enemy = ThePlayerList->getLocalPlayer()->getRelationship( owningObject->getTeam() ) == ENEMIES;
                 ListedSuperweapon line = { shortcut ? shortcut->getButtonImage() : NULL,
                                            clientColor( info->getColor() ), isReady, readySecs, percent, jump,
-                                           info, enemy, mapIt->first,
-                                           clientPlayerColor( owningObject->getControllingPlayer() ) };
+                                           info, enemy, mapIt->first };
                 listed.push_back( line );
                 if (info->getSpecialPowerTemplate()->isSharedNSync())
                   break; // Wow, it is almost too easy!
@@ -9267,14 +9265,15 @@ void InGameUI::postDraw( void )
 		if( !m_superweaponHiddenByScript && !listed.empty() )
 		{
 			// the local player's own first, then everyone else's, each soonest first: twelve cells and a
-			// "+N" must never leave your own nuke behind the tag
-			std::stable_sort( listed.begin(), listed.end(), []( const ListedSuperweapon &a, const ListedSuperweapon &b )
-				{
-					const Bool ownA = a.jump != INVALID_ID, ownB = b.jump != INVALID_ID;
-					if( ownA != ownB )
-						return ownA;
-					return a.ready != b.ready ? a.ready : a.seconds < b.seconds;
-				} );
+			// "+N" must never leave your own nuke behind the tag.  The Classic layout keeps EA's order
+			if( TheGlobalData->m_hudLayout != HUD_LAYOUT_RETAIL )
+				std::stable_sort( listed.begin(), listed.end(), []( const ListedSuperweapon &a, const ListedSuperweapon &b )
+					{
+						const Bool ownA = a.jump != INVALID_ID, ownB = b.jump != INVALID_ID;
+						if( ownA != ownB )
+							return ownA;
+						return a.ready != b.ready ? a.ready : a.seconds < b.seconds;
+					} );
 
 			const HudCellStyle style = hudCellStyle();
 			const HudLayoutRects rects = hudRects();
@@ -9467,71 +9466,74 @@ void InGameUI::postDraw( void )
 			else if( TheGlobalData->m_hudLayout == HUD_LAYOUT_RETAIL )
 			{
 				//
-				// The Classic layout writes them out as EA did: a line each down the right edge from under
-				// the info strip, the power's name right-aligned to a seam and the time left, or "Ready",
-				// after it.  Light letters with a black drop on a dark plate, whatever the owner's colour:
-				// a dark red one was lost on desert ground, so the colour is only a swatch at the plate's
-				// left end.  A click on a line looks at your own building, as a cell's does.
-				// ponytail: past SUPERWEAPON_LIST_CELLS lines the rest are not listed (your own come first);
-				// a "+N" line if a match ever has more than twelve
+				// The Classic layout draws them as EA's game did, the 1.04 code with only its loop over
+				// the players read off `listed` (gathered in EA's order, players then powers, and left
+				// unsorted for this layout): from SuperweaponCountdownPosition in InGameUI.ini down, a line
+				// each, "Name: " right-aligned to that x and "m:ss" after it, in the owner's colour on a
+				// black drop.  A charged one goes to the ready font and, with a flash duration, blinks
+				// between its owner's colour and SuperweaponCountdownFlashColor; past 82% of the view's
+				// height a single "..." stands for the rest.  The one thing EA did not have: a click on a
+				// line looks at your own building, as a cell's does.
 				//
-				const Int rows = min( (Int)listed.size(), (Int)SUPERWEAPON_LIST_CELLS );
-				const Int point = max( REAL_TO_INT( 12 * rects.scale + 0.5f ), 6 );
-				const Int pad = max( REAL_TO_INT( 4 * rects.scale + 0.5f ), 2 );
-				const UnicodeString readyText = TheGameText->fetch( "GUI:SidebarSuperweaponReady" );
-				Int timeW = 0;
-				for( Int each = 0; each < rows; each++ )
+				Int startX = (Int)( m_superweaponPosition.x * TheDisplay->getWidth() );
+				Int startY = (Int)( m_superweaponPosition.y * TheDisplay->getHeight() );
+				const Int bottomMargin = (Int)( (Real)TheTacticalView->getHeight() * 0.82f );
+				const Color bgColor = GameMakeColor( 0, 0, 0, 255 );
+				const Real flashFrames = m_superweaponFlashDuration;
+				Int rows = 0;
+				for( Int each = 0; each < (Int)listed.size(); each++ )
 				{
 					const ListedSuperweapon &line = listed[ each ];
+					SuperweaponInfo *info = line.info;
+					if( startY >= bottomMargin )
+					{
+						UnicodeString ellipsis;
+						ellipsis.format( u"..." );
+						info->setText( ellipsis, ellipsis );
+						info->setFont( m_superweaponReadyFont, m_superweaponNormalPointSize, m_superweaponNormalBold );
+						info->drawTime( startX, startY, m_superweaponFlashColor, bgColor );
+						break;
+					}
+
+					if( line.ready )
+						info->setFont( m_superweaponReadyFont, m_superweaponReadyPointSize, m_superweaponReadyBold );
+					else
+						info->setFont( m_superweaponNormalFont, m_superweaponNormalPointSize, m_superweaponNormalBold );
 					AsciiString label;
 					label.format( "GUI:%s", line.power.str() );
-					UnicodeString time;
-					if( line.ready )
-						time = readyText;
-					else
-						time.format( u"%d:%2.2d", line.seconds / 60, line.seconds % 60 );
-					line.info->setFont( m_superweaponNormalFont, point, TRUE );
-					line.info->setText( TheGameText->fetch( label ), time );
-					timeW = max( timeW, line.info->getTimeString()->getWidth() );
-				}
+					UnicodeString name, time;
+					name.format( u"%ls: ", TheGameText->fetch( label ).str() );
+					time.format( u"%d:%2.2d", line.seconds / 60, line.seconds % 60 );
+					info->setText( name, time );
 
-				const Int right = rects.play.hi.x - 2 * pad;
-				const Int seam = right - timeW;
-				Int y = max( hudStripBottom(), TheUIRect().y ) + stripPixels( SUPERWEAPON_TRAY_DROP );
-				const Color drop = GameMakeColor( 0, 0, 0, 255 );
-				const Color ink = GameMakeColor( 240, 244, 246, 255 );
-				const Color readyInk = GameMakeColor( 255, 226, 120, 255 );
-				const Int swatch = max( REAL_TO_INT( 5 * rects.scale + 0.5f ), 3 );
-				for( Int each = 0; each < rows; each++ )
-				{
-					const ListedSuperweapon &line = listed[ each ];
-					const Int h = (Int)line.info->getHeight();
-					IRegion2D &box = m_superweaponPlace[ each ];
-					box.lo.x = seam - 2 * pad - line.info->getNameString()->getWidth() - swatch - pad;
-					box.hi.x = right + pad;
-					box.lo.y = y - 1;
-					box.hi.y = y + h + 1;
-					m_superweaponJump[ each ] = line.jump;
-					TheDisplay->drawFillRect( box.lo.x, box.lo.y, box.width(), box.height(), GameMakeColor( 0, 0, 0, 180 ) );
-					TheDisplay->drawOpenRect( box.lo.x, box.lo.y, box.width(), box.height(), 1, GameMakeColor( 0, 0, 0, 255 ) );
-					// the house colour as the units show it, ringed in black.  The player's colour is the
-					// texture's tint, darker than what a lit model gives back (Chocolate is 90,50,20 and its
-					// units read about 234,121,43), so its hue and saturation are kept and its value raised
-					// to 0.9
-					UnsignedByte hr, hg, hb, ha;
-					GameGetColorComponents( line.house, &hr, &hg, &hb, &ha );
-					const Int brightest = max( (Int)hr, max( (Int)hg, (Int)hb ) );
-					const Real lift = brightest > 0 ? 0.9f * 255.0f / brightest : 1.0f;
-					const Color house = GameMakeColor( min( REAL_TO_INT( hr * lift + 0.5f ), 255 ), min( REAL_TO_INT( hg * lift + 0.5f ), 255 ),
-																						 min( REAL_TO_INT( hb * lift + 0.5f ), 255 ), 255 );
-					TheDisplay->drawFillRect( box.lo.x + 1, box.lo.y + 1, swatch + 2, box.height() - 2, GameMakeColor( 0, 0, 0, 255 ) );
-					TheDisplay->drawFillRect( box.lo.x + 2, box.lo.y + 2, swatch, box.height() - 4, house );
-					line.info->drawName( seam - pad, y, ink, drop );
-					line.info->drawTime( seam, y, line.ready ? readyInk : ink, drop );
-					y = box.hi.y + pad / 2;
+					Color color = 0;		// 0: drawName and drawTime take the owner's colour
+					if( line.ready && flashFrames != 0.0f )
+					{
+						if( TheGameLogic->getFrame() >= m_superweaponLastFlashFrame + (Int)flashFrames )
+						{
+							m_superweaponUsedFlashColor = !m_superweaponUsedFlashColor;
+							m_superweaponLastFlashFrame = TheGameLogic->getFrame();
+						}
+						color = m_superweaponUsedFlashColor ? 0 : m_superweaponFlashColor;
+					}
+					info->drawName( startX, startY, color, bgColor );
+					info->drawTime( startX, startY, color, bgColor );
+
+					const Int h = (Int)info->getHeight();
+					if( rows < SUPERWEAPON_LIST_CELLS )
+					{
+						IRegion2D &box = m_superweaponPlace[ rows ];
+						box.lo.x = startX - info->getNameString()->getWidth();
+						box.hi.x = startX + info->getTimeString()->getWidth();
+						box.lo.y = startY;
+						box.hi.y = startY + h;
+						m_superweaponJump[ rows ] = line.jump;
+						rows++;
+					}
+					startY += h;
 				}
 				m_superweaponCells = rows;
-				rackPlateTop = y + rackPx( RACK_TRAY_GAP );
+				rackPlateTop = startY + rackPx( RACK_TRAY_GAP );
 			}
 			else
 			{

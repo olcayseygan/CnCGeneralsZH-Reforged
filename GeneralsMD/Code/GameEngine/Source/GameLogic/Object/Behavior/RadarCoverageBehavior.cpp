@@ -315,6 +315,41 @@ Bool RadarCoverageBehavior::classifies( void ) const
 }
 
 //-------------------------------------------------------------------------------------------------
+/** Looser than isTracked on purpose: a ring is up to a sweep old, so a unit that stopped since, or
+	* drove up to slack out of the circle, may still show one.  An OR over the sources, order-free. */
+/*static*/ Bool RadarCoverageBehavior::mayShowContact( const Player *player, const Object *obj, Real slack )
+{
+	if( isHidden( obj ) )
+		return FALSE;
+	for( const RadarCoverageBehavior *radar = s_first; radar; radar = radar->m_next )
+	{
+		const Object *src = radar->getObject();
+		if( !serves( src->getControllingPlayer(), player ) )
+			continue;
+		if( radar->getRadarCoverageBehaviorModuleData()->m_paintsTargetOnly )
+		{
+			if( radar->paintedTarget() == obj )
+				return TRUE;
+			continue;
+		}
+		const Real radius = radar->reach();
+		if( radius <= 0.0f )
+			continue;
+		const Real dx = obj->getPosition()->x - src->getPosition()->x;
+		const Real dy = obj->getPosition()->y - src->getPosition()->y;
+		if( dx * dx + dy * dy <= ( radius + slack ) * ( radius + slack ) )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/*static*/ UnsignedInt RadarCoverageBehavior::sweepFrames( void )
+{
+	return RADAR_SWEEP_FRAMES;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Walks the object list in its own order and the players in index order, so every machine builds
 	* the same list, though only the client reads it: the logic keeps nothing of a sweep. */
 //-------------------------------------------------------------------------------------------------

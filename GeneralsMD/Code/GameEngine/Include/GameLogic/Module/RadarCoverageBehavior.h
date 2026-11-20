@@ -81,6 +81,14 @@ public:
 		* target.  Says nothing of the fog or of whose side it is on; the caller asks those. */
 	static Bool isTracked( const Player *player, const Object *obj );
 
+	/** Could this unit be one of the player's radar rings: not hidden by stealth, and a working source
+		* of the player's or an ally's paints it or reaches within slack of where it stands.  Logic state
+		* only, no fog, so every machine answers alike; the cheat witness asks it (witnessBlindOrder). */
+	static Bool mayShowContact( const Player *player, const Object *obj, Real slack );
+
+	/// frames between sweeps, the most a ring the client draws can lag its unit
+	static UnsignedInt sweepFrames( void );
+
 	/** GameLogic::update, after the partition manager: every RADAR_SWEEP_FRAMES, hands the client
 		* each player's tracked enemies standing in fog and the live SeesStationary areas
 		* (GameClient/RadarContactMarks.h).  Keeps nothing. */

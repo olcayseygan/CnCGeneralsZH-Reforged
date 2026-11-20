@@ -179,6 +179,7 @@ static Object *pickRepairBuilder( Player *player, const Object *target )
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/OCLSpecialPower.h"
 #include "GameLogic/Module/OpenContain.h"
+#include "GameLogic/Module/RadarCoverageBehavior.h"
 #include "GameLogic/Module/ProductionUpdate.h"
 #include "GameLogic/Module/SpecialPowerModule.h"
 #include "GameLogic/ScriptActions.h"
@@ -595,17 +596,22 @@ static void makeObjectHeroic( Object *obj, void *userData )
 	* playable link keeps well under a second. */
 static const Int BLIND_ORDER_CLICK_WINDOW_FRAMES = LOGICFRAMES_PER_SECOND;
 
+/// the target's top speed, distance a frame, 0 for anything that does not drive
+static Real BlindOrder_targetSpeed( const Object *target )
+{
+	const AIUpdateInterface *ai = target->getAI();
+	if( ai && ai->getCurLocomotor() )
+		return ai->getCurLocomotor()->getMaxSpeedForCondition( BODY_PRISTINE );
+	return 0.0f;
+}
+
 /** Could the issuer have seen the target when the order was clicked?  The order executes a run-ahead
 	* after the click, and in that time the target can have walked out of sight.  So any cell the issuer
 	* has in sight within the distance the target covers in BLIND_ORDER_CLICK_WINDOW_FRAMES, plus a
 	* cell, counts as seen. */
 static Bool BlindOrder_targetWasInReach( const Object *target, Int playerIndex )
 {
-	Real speed = 0.0f;
-	const AIUpdateInterface *ai = target->getAI();
-	if( ai && ai->getCurLocomotor() )
-		speed = ai->getCurLocomotor()->getMaxSpeedForCondition( BODY_PRISTINE );		// distance a frame
-
+	const Real speed = BlindOrder_targetSpeed( target );
 	const Real cellSize = ThePartitionManager->getCellSize();
 	const Real reach = cellSize + speed * (Real)BLIND_ORDER_CLICK_WINDOW_FRAMES;
 	const Int cells = (Int)ceilf( reach / cellSize );
@@ -624,6 +630,16 @@ static Bool BlindOrder_targetWasInReach( const Object *target, Int playerIndex )
 	return FALSE;
 }
 
+/** Could the issuer have clicked the target's radar ring?  The client offers a fogged enemy to an
+	* attack only as a ring from the last sweep (InGameUI::attackListSpot), so the ring is up to a sweep
+	* plus a run-ahead older than the order; the target can have driven that far out of the circle. */
+static Bool BlindOrder_targetOnRadar( const Object *target, const Player *issuer )
+{
+	const Real slack = BlindOrder_targetSpeed( target )
+		* (Real)( RadarCoverageBehavior::sweepFrames() + BLIND_ORDER_CLICK_WINDOW_FRAMES );
+	return RadarCoverageBehavior::mayShowContact( issuer, target, slack );
+}
+
 //-------------------------------------------------------------------------------------------------
 /** The cheat witness's half of an order: one that names an enemy object the issuer could not have
 	* seen when clicking it.  The client draws an enemy only while it is in sight or, for a structure,
@@ -635,7 +651,8 @@ static Bool BlindOrder_targetWasInReach( const Object *target, Int playerIndex )
 	* on an order at a tank parked beside the enemy's command centre, across a map nobody had scouted.
 	* What it asks is Object::isUnknownTo, the logic's own "neither in sight nor remembered" (ally
 	* sight and reveals included, a passenger never unknown), and then whether the target can have
-	* been in sight a run-ahead earlier.  Never getShroudedStatus, whose "ever seen" each machine's
+	* been in sight a run-ahead earlier, or on the issuer's radar as a ring the attack circle offers
+	* (BlindOrder_targetOnRadar).  Never getShroudedStatus, whose "ever seen" each machine's
 	* drawing notes differently.  Detection only: it decides nothing and is no part of the CRC.
 	* ponytail: a target with no sight anywhere near it, so the hack it catches shows armies and bases
 	* across the map, not a unit a screen past the edge of sight. */
@@ -673,7 +690,8 @@ void GameLogic::witnessBlindOrder( const GameMessage *msg, const Player *issuer 
 			|| ( target->getContain() && target->getContain()->isGarrisonable() ) )
 		return;
 
-	if( target->isUnknownTo( index ) && !BlindOrder_targetWasInReach( target, index ) )
+	if( target->isUnknownTo( index ) && !BlindOrder_targetWasInReach( target, index )
+			&& !BlindOrder_targetOnRadar( target, issuer ) )
 	{
 		++m_blindOrders[ index ];
 		DEBUG_LOG(( "CHEATWITNESS: frame %d, player %d ordered %s at object %d, out of its sight\n", m_frame, index,

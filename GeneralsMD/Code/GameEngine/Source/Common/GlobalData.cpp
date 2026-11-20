@@ -1271,6 +1271,7 @@ GlobalData::GlobalData()
 	m_showNetBox = FALSE;
 	m_minimapSize = 100;
 	m_showEmptyBuildingPips = TRUE;
+	m_hitFlash = FALSE;
 	m_workersReturnToSupply = TRUE;
 	m_archiveReplays = TRUE;
 

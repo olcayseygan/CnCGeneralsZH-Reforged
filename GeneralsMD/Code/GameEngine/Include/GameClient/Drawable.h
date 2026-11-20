@@ -120,6 +120,11 @@ extern Real Drawable_pipScale( Real uiScale, Real zoom );
 extern Bool Drawable_emptySeatsShow( Bool isStructure, Bool isGarrisonable, Bool isHealContain,
 																		 Bool showEmptyBuildingPips );
 
+///< whether a body's last damage frame is a hit this drawable has not flashed for yet and is recent
+///< enough to show (within window frames of now); a stale stamp seen first after a load or after the
+///< Hit Flash box is ticked mid-match stays dark
+extern Bool Drawable_hitFlashDue( UnsignedInt hitFrame, UnsignedInt seenHitFrame, UnsignedInt now, UnsignedInt window );
+
 ///< whether these disabled flags mean the health bar is drawn blue instead of the owner's colour
 extern Bool Drawable_disabledShowsBlueHealthBar( DisabledMaskType disabledFlags );
 
@@ -863,6 +868,7 @@ private:
 	// note, these are lazily allocated!
 	TintEnvelope*		m_selectionFlashEnvelope;	///< used for selection flash, works WITH m_colorTintEnvelope
 	Bool						m_orderFlash;							///< lit red as an order's target, set at the sync point (Drawable_flashOrderTargets)
+	UnsignedInt			m_hitFlashFrame;					///< the body's last damage frame the Hit Flash option has answered (Drawable_hitFlashDue)
 	TintEnvelope*		m_colorTintEnvelope;			///< house color flashing, etc... works WITH m_selectionFlashEnvelope
 																//   this used to use m_ambientLight... but this replaces it
 																//   int most places. It works harder to change the drawable's

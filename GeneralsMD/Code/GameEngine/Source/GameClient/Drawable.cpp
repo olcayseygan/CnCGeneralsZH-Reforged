@@ -794,6 +794,7 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 	m_iconInfo = NULL;								// lazily allocate!
 	m_selectionFlashEnvelope = NULL;	// lazily allocate!
 	m_orderFlash = FALSE;
+	m_hitFlashFrame = 0xffffffff;			// ActiveBody's "never hit" stamp
 	m_colorTintEnvelope = NULL;				// lazily allocate!
 
 	initStaticImages();
@@ -1697,6 +1698,24 @@ void Drawable::updateDrawable( void )
 
 	if (m_colorTintEnvelope)
 	  m_colorTintEnvelope->update(); // defector fx, disable fx, etc...
+
+	// Hit Flash: the body stamps the frame it last took damage (healing does not stamp it), and a new
+	// stamp lights the drawable through the selection flash's envelope.  Read here, outside the render
+	// window, like the dead check above; the logic never sees the option.
+	if( TheGlobalData->m_hitFlash && obj )
+	{
+		const BodyModuleInterface *body = obj->getBodyModule();
+		const UnsignedInt hitFrame = body ? body->getLastDamageTimestamp() : 0xffffffff;
+		const UnsignedInt flashFrames = LOGICFRAMES_PER_SECOND / 5;	// a fifth of a wall second: the client walk runs once a tick
+		if( Drawable_hitFlashDue( hitFrame, m_hitFlashFrame, now, flashFrames ) && !obj->isEffectivelyDead() )
+		{
+			static const RGBColor HIT_FLASH_COLOR = { 0.7f, 0.18f, 0.1f };
+			if( m_selectionFlashEnvelope == NULL )
+				m_selectionFlashEnvelope = newInstance(TintEnvelope);
+			m_selectionFlashEnvelope->play( &HIT_FLASH_COLOR, 0, flashFrames );
+		}
+		m_hitFlashFrame = hitFrame;
+	}
 
 	if (m_selectionFlashEnvelope)
 		m_selectionFlashEnvelope->update(); // selection flashing
@@ -4130,6 +4149,17 @@ Bool Drawable_emptySeatsShow( Bool isStructure, Bool isGarrisonable, Bool isHeal
 }
 
 // ------------------------------------------------------------------------------------------------
+Bool Drawable_hitFlashDue( UnsignedInt hitFrame, UnsignedInt seenHitFrame, UnsignedInt now, UnsignedInt window )
+{
+	// ActiveBody's "never hit" stamp is 0xffffffff, in the future of every frame
+	if( hitFrame == seenHitFrame || hitFrame > now )
+		return FALSE;
+	// a hit older than the flash itself is one this drawable never saw happen: the first look after a
+	// load, or after the box was ticked mid-match, finds every old stamp and lights nothing
+	return now - hitFrame < window;
+}
+
+// ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 Int Drawable_pipPixel( Real uiScale )
 {
@@ -4196,7 +4226,16 @@ namespace
 // ------------------------------------------------------------------------------------------------
 Int Drawable::loadPips( const IRegion2D *healthBarRegion, Bool draw ) const
 {
-	const Real s = Drawable_pipScale( TheUIScale(), TheTacticalView->getZoom() );
+	//
+	// a building's row is half as big again: under a house's wide bar the 6 pixel chips of a Troop
+	// Crawler read as a speck and players missed that it was garrisoned. The same masks and the same
+	// zoom curve, only a larger pixel, so pulled back to twice the default camera a seat is still a
+	// 5 pixel chip with a fill where a vehicle's has already turned to dots.
+	//
+	const Object *obj = getObject();
+	const Real STRUCTURE_PIP_SCALE = 1.5f;
+	const Real s = Drawable_pipScale( TheUIScale(), TheTacticalView->getZoom() )
+		* ( obj && obj->isKindOf( KINDOF_STRUCTURE ) ? STRUCTURE_PIP_SCALE : 1.0f );
 	const Int e = pipLen( 1, s, 1 );		// the edge
 	const Int gap = pipLen( 2, s, 1 );
 	const Int c = pipLen( 6, s, 2 );		// a seat's side

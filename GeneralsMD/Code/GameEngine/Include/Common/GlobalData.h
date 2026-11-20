@@ -497,6 +497,7 @@ public:
 	Bool m_showNetBox;					///< the player's own switch for the top right info strip (InGameUI::drawHudOverlay)
 	Int m_minimapSize;					///< percent of its own size the radar is drawn at, growing up from the bar's corner (ControlBar::fitRadarToMap); 100 = as the bar has it
 	Bool m_showEmptyBuildingPips;		///< the row of empty slots over a building nobody is in
+	Bool m_hitFlash;					///< a struck unit or building lights up for a blink (Drawable::updateDrawable); client only, logic never reads it
 	Bool m_workersReturnToSupply;		///< a worker that finishes a build job goes back to the dock it left
 	Bool m_archiveReplays;					///< keep a timestamped copy of every replay, instead of only the last one
 	Int m_bloomIntensity;				///< Glow strength in percent, 0 = off; the renderer derives the rest

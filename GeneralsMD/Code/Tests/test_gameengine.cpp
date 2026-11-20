@@ -17460,6 +17460,26 @@ TEST(replay_crc_queue_aligns_to_either_kind_of_network_recording)
 	CHECK_EQ( 0x22222222, desync.readCRCFor( 0x22222222 ) );		// decided once: nothing shifts later
 }
 
+/** A recorded CRC ahead of its computed one waits, and one whose partner never comes stays counted,
+	 which is what the end of a playback logs (finishReplayCRCs). */
+TEST(replay_crc_parked_ahead_of_its_partner_is_counted_until_taken)
+{
+	CRCInfo info;
+	CHECK( info.mustParkRecorded() );
+	info.parkRecorded( 0x11111111 );
+	info.parkRecorded( 0x22222222 );
+	CHECK_EQ( 2, info.parkedRecordedCount() );
+
+	UnsignedInt parked = 0;
+	CHECK( !info.takeParkedRecorded( parked ) );		// nothing computed yet to pair with
+	info.addCRC( 0x11111111 );
+	CHECK( info.takeParkedRecorded( parked ) );
+	CHECK_EQ( 0x11111111, parked );
+	CHECK_EQ( 0x11111111, info.readCRCFor( parked ) );
+	CHECK_EQ( 1, info.parkedRecordedCount() );			// its partner never came
+	CHECK( !info.takeParkedRecorded( parked ) );
+}
+
 
 /** The build queue strip has nine buttons, and that is the production cap: a shift-click that
 	 would overshoot stops at nine, and so does the factory itself (INI MaxQueueEntries, default 9). */
@@ -23334,6 +23354,35 @@ TEST(empty_building_slots_are_a_check_box_that_starts_on)
 	delete scratch;
 }
 
+TEST(hit_flash_is_a_check_box_that_starts_off_and_lights_only_fresh_hits)
+{
+	const OptionDef *def = findOptionDef( "HitFlash" );
+	CHECK( def != NULL );
+	if( def == NULL )
+		return;
+	CHECK_EQ( (Int)def->kind, (Int)OPTION_BOOL );
+	CHECK_EQ( (Int)def->apply, (Int)APPLY_LIVE );
+	CHECK( strstr( def->widgetName, "CheckHitFlash" ) != NULL );
+
+	GlobalData *saved = TheWritableGlobalData;
+	GlobalData *scratch = NEW GlobalData;
+	TheWritableGlobalData = scratch;
+	CHECK( !scratch->m_hitFlash );
+	def->set( 1 );
+	CHECK( scratch->m_hitFlash );
+	TheWritableGlobalData = saved;
+	delete scratch;
+
+	const UnsignedInt never = 0xffffffff;
+	CHECK( !Drawable_hitFlashDue( never, never, 100, 6 ) );		// never hit
+	CHECK( !Drawable_hitFlashDue( never, 90, 100, 6 ) );		// a stamp in the future is no hit
+	CHECK( Drawable_hitFlashDue( 100, never, 100, 6 ) );		// hit this tick
+	CHECK( Drawable_hitFlashDue( 98, 90, 100, 6 ) );				// hit during a catch-up pass
+	CHECK( !Drawable_hitFlashDue( 100, 100, 101, 6 ) );			// already answered
+	CHECK( !Drawable_hitFlashDue( 40, never, 100, 6 ) );		// old stamp seen first after a load or a mid-match tick
+	CHECK( !Drawable_hitFlashDue( 94, never, 100, 6 ) );		// as old as the flash itself
+}
+
 TEST(aircraft_altitude_lines_are_a_check_box_that_starts_on)
 {
 	const OptionDef *def = findOptionDef( "AircraftAltitudeLine" );
@@ -26591,6 +26640,47 @@ TEST(countdown_timer_equality_holds_for_every_value_it_passes)
 		CHECK( hit[ target ] );
 	// at a game speed above the wall's the plain compare alone would miss some
 	CHECK_EQ( skipped, LOGICFRAMES_PER_GAME_SECOND < RETAIL_LOGICFRAMES_PER_SECOND * LOGICFRAMES_PER_RETAIL_FRAME ? TRUE : FALSE );
+}
+
+/* What an earlier script in the same pass does to a timer that passed its number this tick.  Pausing
+	 leaves the value, so a later "timer == n" still holds, as a one-step tick's plain compare would.  An
+	 adjust moves the window with the value: the old number no longer holds, the shifted one does.  A
+	 set, or another frame, ends it. */
+TEST(countdown_timer_equality_survives_pause_and_follows_adjust_in_the_same_pass)
+{
+	const UnsignedInt FRAME = 77;
+	TCounter timer;
+	timer.isCountdownTimer = TRUE;
+	timer.valueBeforeTick = 301;
+	timer.value = 299;
+	timer.valueAfterTick = 299;
+	timer.countdownFrame = FRAME;
+	CHECK( ScriptEngine_countdownEquals( timer, 300, FRAME ) );
+	CHECK( !ScriptEngine_countdownEquals( timer, 300, FRAME + 1 ) );	// only on the tick it passed
+
+	TCounter paused = timer;
+	paused.isCountdownTimer = FALSE;		// STOP_TIMER earlier in the pass
+	CHECK( ScriptEngine_countdownEquals( paused, 300, FRAME ) );
+	CHECK( ScriptEngine_countdownEquals( paused, 299, FRAME ) );
+
+	TCounter adjusted = timer;
+	ScriptEngine_adjustCountdown( adjusted, 30 );		// ADD_TO_MSEC_TIMER earlier in the pass
+	CHECK_EQ( adjusted.value, 329 );
+	CHECK( ScriptEngine_countdownEquals( adjusted, 330, FRAME ) );
+	CHECK( !ScriptEngine_countdownEquals( adjusted, 300, FRAME ) );
+	ScriptEngine_adjustCountdown( adjusted, -30 );
+	CHECK( ScriptEngine_countdownEquals( adjusted, 300, FRAME ) );
+
+	TCounter set = timer;
+	set.value = 1000;		// SET_TIMER / SET_COUNTER earlier in the pass
+	CHECK( !ScriptEngine_countdownEquals( set, 300, FRAME ) );
+
+	TCounter plain;		// a counter that never counts down has no window
+	plain.isCountdownTimer = FALSE;
+	plain.value = plain.valueBeforeTick = plain.valueAfterTick = 5;
+	plain.countdownFrame = FRAME;
+	CHECK( !ScriptEngine_countdownEquals( plain, 4, FRAME ) );
+	CHECK( ScriptEngine_countdownEquals( plain, 5, FRAME ) );
 }
 
 TEST(retail_helpers_carry_the_game_speed_and_are_the_identity_at_100)

@@ -160,6 +160,7 @@ OPTION_BOOL_ACCESSORS( m_selectionOutlines )
 OPTION_BOOL_ACCESSORS( m_showNetBox )
 OPTION_INT_ACCESSORS( m_minimapSize )
 OPTION_BOOL_ACCESSORS( m_showEmptyBuildingPips )
+OPTION_BOOL_ACCESSORS( m_hitFlash )
 OPTION_BOOL_ACCESSORS( m_useShadowVolumesForSkins )
 OPTION_BOOL_ACCESSORS( m_shadowsForProjectiles )
 OPTION_BOOL_ACCESSORS( m_shadowsForProps )
@@ -671,6 +672,14 @@ const OptionDef TheOptionCatalog[] =
 	{ "EmptyBuildingPips",				OPT_WND( "CheckEmptyBuildingPips" ), "GUI:EmptyBuildingPips",
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_showEmptyBuildingPips, set_m_showEmptyBuildingPips },
+
+	// A unit or building that takes damage lights up red for a blink, through the selection flash's
+	// envelope (Drawable::updateDrawable watches the body's last damage frame).  Off by default, as
+	// every row the fork adds.  Client only: logic never reads it, so two players in one match can
+	// differ.  Not a graphics look, so Classic Graphics leaves it alone and it has no quality row.
+	{ "HitFlash",									OPT_WND( "CheckHitFlash" ), "GUI:HitFlash",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_hitFlash, set_m_hitFlash },
 
 	// Which language the words are in.  English is the string table the game shipped with, and every
 	// other entry is a translation laid over it, so a line the translation lacks stays English.  The

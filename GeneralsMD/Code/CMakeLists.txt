@@ -2931,6 +2931,8 @@ if(Python3_Interpreter_FOUND)
   endif()
   add_test(NAME bigfile_selfcheck
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/bigfile.py selfcheck)
+  add_test(NAME bigfile_extract_selfcheck
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tests/test_bigfile_extract.py)
   # Tools/artpack.py is the only guard on a rebuilt model batch, which the INI checksum no longer
   # covers; its selfcheck builds a model that breaks each rule and checks it is refused.
   add_test(NAME artpack_selfcheck

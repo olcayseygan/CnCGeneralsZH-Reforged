@@ -29,9 +29,18 @@ under Run/ override archives anyway and are the easier route for one file.
 """
 
 import fnmatch
+import ntpath
 import os
+import shutil
 import struct
 import sys
+
+
+def _read_exact(f, size):
+    data = f.read(size)
+    if len(data) != size:
+        raise ValueError("archive ends inside the index")
+    return data
 
 
 def _read_index(f):
@@ -39,11 +48,18 @@ def _read_index(f):
     magic = f.read(4)
     if magic != b"BIGF":
         raise ValueError("not a BIG archive (magic is %r, expected b'BIGF')" % magic)
-    f.read(4)                                             # archive size, unused
-    (count,) = struct.unpack(">I", f.read(4))
-    f.seek(0x10)
+    _read_exact(f, 4)                                     # archive size, unused
+    count, _data_start = struct.unpack(">II", _read_exact(f, 8))
+    index_pos = f.tell()
+    f.seek(0, os.SEEK_END)
+    archive_size = f.tell()
+    f.seek(index_pos)
+    if count > (archive_size - 16) // 9:
+        raise ValueError("member count exceeds archive size")
     for _ in range(count):
-        offset, size = struct.unpack(">II", f.read(8))
+        offset, size = struct.unpack(">II", _read_exact(f, 8))
+        if offset > archive_size or size > archive_size - offset:
+            raise ValueError("member data extends beyond the archive")
         name = bytearray()
         while True:
             ch = f.read(1)
@@ -53,6 +69,28 @@ def _read_index(f):
                 break
             name += ch
         yield name.decode("latin-1"), offset, size
+
+
+def _member_parts(path):
+    portable = path.replace("\\", "/")
+    parts = portable.split("/")
+    if (portable.startswith("/") or ntpath.splitdrive(portable)[0]
+            or any(p in ("", ".", "..") or ":" in p for p in parts)):
+        raise ValueError("unsafe archive member path: %r" % path)
+    return parts
+
+
+def _member_dest(root, parts):
+    """Where a member already checked by _member_parts goes, its folders made."""
+    # ponytail: checked, then opened, so a link put in between still redirects the write;
+    # nothing else edits the output folder while the tool runs. dir_fd and O_NOFOLLOW if it ever does.
+    dest = root
+    for part in parts:
+        dest = os.path.join(dest, part)
+        if os.path.islink(dest) or getattr(os.path, "isjunction", lambda _: False)(dest):
+            raise ValueError("linked extraction path: %s" % dest)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    return dest
 
 
 def _matches(path, pattern):
@@ -81,20 +119,22 @@ def cmd_extract(archive, pattern=None, outdir=None):
         outdir = os.path.splitext(os.path.basename(archive))[0]
     written = 0
     with open(archive, "rb") as f:
-        for path, offset, size in list(_read_index(f)):
-            if not _matches(path, pattern):
-                continue
-            dest = os.path.join(outdir, path.replace("\\", os.sep))
-            parent = os.path.dirname(dest)
-            if parent:
-                os.makedirs(parent, exist_ok=True)
+        # Validate the entire selected index before creating any member files.
+        entries = [(path, _member_parts(path), offset, size)
+                   for path, offset, size in _read_index(f) if _matches(path, pattern)]
+        root = os.path.realpath(outdir)
+        os.makedirs(root, exist_ok=True)
+        for path, parts, offset, size in entries:
             f.seek(offset)
-            data = f.read(size)
-            if len(data) != size:
-                raise ValueError("%s: wanted %d bytes, archive had %d" % (path, size, len(data)))
-            with open(dest, "wb") as out:
-                out.write(data)
-            print(dest)
+            with open(_member_dest(root, parts), "wb") as out:
+                remaining = size
+                while remaining:
+                    data = f.read(min(remaining, 1024 * 1024))
+                    if not data:
+                        raise ValueError("%s: truncated member" % path)
+                    out.write(data)
+                    remaining -= len(data)
+            print(os.path.join(outdir, *parts))
             written += 1
     print("%d file(s) written" % written)
 
@@ -135,7 +175,7 @@ def write_archive(archive, members):
         assert out.tell() == index_size, (out.tell(), index_size)
         for _stored, full, _off, _size in placed:
             with open(full, "rb") as src:
-                out.write(src.read())
+                shutil.copyfileobj(src, out, 1024 * 1024)
     print("%s: %d file(s), %d bytes" % (archive, len(placed), total))
 
 

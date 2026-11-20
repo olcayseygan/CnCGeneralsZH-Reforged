@@ -6127,6 +6127,13 @@ unsigned RequestedDrawEffect(float parameters[4]) {
 	return RequestedDrawEffect(DX8Wrapper::_Get_D3D_Device(),parameters);
 #endif
 }
+bool WorldEffectsAvailable() {
+#if defined(_WIN32)
+	return Direct3D11_Present_Is_Enabled();
+#else
+	return WorldEffectsAvailable(DX8Wrapper::_Get_D3D_Device());
+#endif
+}
 }
 
 namespace RenderTeamGlow {

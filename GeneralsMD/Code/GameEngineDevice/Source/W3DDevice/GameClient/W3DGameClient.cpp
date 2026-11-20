@@ -55,7 +55,7 @@
 #include "GameLogic/Object.h"
 #include "GameLogic/TerrainLogic.h"
 #include "GameClient/View.h"
-#include "WW3D2/dx11runtime.h"
+#include "Platform/RenderEffects.h"
 #include "W3DDevice/GameClient/W3DAssetManager.h"
 #include "W3DDevice/GameClient/W3DGameClient.h"
 #include "W3DDevice/GameClient/W3DStatusCircle.h"
@@ -193,7 +193,7 @@ void W3DGameClient::structureFell(const Coord3D *pos, Real radius)
 	// a big one jolts the camera on top of what its FX shakes, a step under a nuke's kick; a barracks or
 	// a tower does not.  Not under Classic or Direct3D 9, which keep the old shake.
 	const Real JOLT_FROM_RADIUS = 40.0f;
-	if (radius >= JOLT_FROM_RADIUS && TheTacticalView && !TheGlobalData->m_classicGraphics && Direct3D11_Present_Is_Enabled())
+	if (radius >= JOLT_FROM_RADIUS && TheTacticalView && !TheGlobalData->m_classicGraphics && RenderEffects::WorldEffectsAvailable())
 		TheTacticalView->shake(pos, View::SHAKE_STRONG);
 }
 
@@ -205,7 +205,7 @@ void W3DGameClient::structureFell(const Coord3D *pos, Real radius)
 //-------------------------------------------------------------------------------------------------
 void W3DGameClient::splashInWater(const Coord3D *pos, Real radius)
 {
-	if (!TheGlobalData->m_waterSplashes || TheGlobalData->m_classicGraphics || TheGlobalData->m_waterStyle != 0 || !Direct3D11_Present_Is_Enabled())
+	if (!TheGlobalData->m_waterSplashes || TheGlobalData->m_classicGraphics || TheGlobalData->m_waterStyle != 0 || !RenderEffects::WorldEffectsAvailable())
 		return;
 	const Coord3D at = *pos;
 	LOGIC_AFTER_TICK( [=]() { splashInWater( &at, radius ); } );
@@ -264,7 +264,7 @@ void W3DGameClient::splashInWater(const Coord3D *pos, Real radius)
 //-------------------------------------------------------------------------------------------------
 void W3DGameClient::structureCollapsing(Drawable *draw, Real height)
 {
-	if (TheGlobalData->m_classicGraphics || !Direct3D11_Present_Is_Enabled() || W3DDisplay::m_3DScene == NULL)
+	if (TheGlobalData->m_classicGraphics || !RenderEffects::WorldEffectsAvailable() || W3DDisplay::m_3DScene == NULL)
 		return;
 	// a slab of foundation or a mine's stub has nothing to go down
 	const Real MIN_HEIGHT = 8.0f;

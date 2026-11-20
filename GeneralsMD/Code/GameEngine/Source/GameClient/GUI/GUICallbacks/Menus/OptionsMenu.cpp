@@ -43,6 +43,7 @@
 #include "Common/Monitors.h"
 #include "Common/EarlyOptions.h"
 #include "Common/OptionsCatalog.h"
+#include "Platform/RenderEffects.h"
 #include "Platform/RenderPost.h"
 #include "Platform/RenderTeamGlow.h"
 #include "Platform/RenderWaterFoam.h"
@@ -3163,6 +3164,9 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 	// Enabling its widget never changes the saved value or retags already loaded meshes.
 	findOptionWidget(*findOptionDef("TeamGlow"))->winEnable(RenderTeamGlow::Available());
 	findOptionWidget(*findOptionDef("WaterFoam"))->winEnable(RenderWaterFoam::Available());
+	static const char *const worldEffects[] = { "GroundMarks", "WaterSplashes", "StructureCollapse" };
+	for( Int i = 0; i < (Int)( sizeof( worldEffects ) / sizeof( worldEffects[ 0 ] ) ); ++i )
+		findOptionWidget( *findOptionDef( worldEffects[ i ] ) )->winEnable( RenderEffects::WorldEffectsAvailable() );
 #endif
 #if defined(__linux__)
 	// The game side of the haze, the atmosphere and the weather is built for Linux only so far.

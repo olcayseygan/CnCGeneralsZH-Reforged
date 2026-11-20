@@ -615,6 +615,7 @@ unsigned RequestedDrawEffect(IDirect3DDevice9 *d, float p[4]) {
     if(d) return static_cast<PosixDevice9 *>(d)->Requested_Model_Effect(p);
     std::memset(p,0,4*sizeof(float)); return DRAW_EFFECT_NONE;
 }
+bool WorldEffectsAvailable(IDirect3DDevice9 *d) { return d && static_cast<PosixDevice9 *>(d)->Get_Gpu(); }
 }
 
 namespace RenderTeamGlow {

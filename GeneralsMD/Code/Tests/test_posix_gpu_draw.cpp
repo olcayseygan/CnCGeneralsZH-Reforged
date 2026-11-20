@@ -42,6 +42,7 @@
 #include "SdlSunShadowDebug.h"
 #include "Platform/SunShadow.h"
 #include "Platform/SunSmoke.h"
+#include "Platform/RenderEffects.h"
 #include "../Libraries/Source/WWVegas/WW3D2/ffshader.h"
 #include "Platform/EngineShaderName.h"
 
@@ -1552,6 +1553,10 @@ int main()
 	CHECK(d3d->CreateDevice(0, D3DDEVTYPE_HAL, NULL, 0, &parameters, &created) == D3D_OK);
 	PosixDevice9 *device = static_cast<PosixDevice9 *>(created);
 
+	// Battle marks, water splashes and the collapse want a live GPU frame, not a device alone.
+	CHECK(!RenderEffects::WorldEffectsAvailable(static_cast<IDirect3DDevice9 *>(NULL)));
+	CHECK(!RenderEffects::WorldEffectsAvailable(device));
+
 	// Headless first: a draw succeeds and records nothing.
 	ScreenVertex v[6];
 	quad(v, 0, 0, 8, 8, 0.5f, RED);
@@ -1568,6 +1573,7 @@ int main()
 		d3d->Release();
 		return failures != 0 ? 1 : 77;
 	}
+	CHECK(RenderEffects::WorldEffectsAvailable(device));
 	check_half_pixel_and_winding(device);
 	check_transformed(device);
 	check_textures(device);

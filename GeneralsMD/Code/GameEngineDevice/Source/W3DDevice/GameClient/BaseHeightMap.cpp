@@ -88,6 +88,7 @@
 #include "W3DDevice/GameClient/W3DShroud.h"
 #include "GameLogic/GameLogic.h"
 #include "WW3D2/dx8wrapper.h"
+#include "Platform/RenderEffects.h"
 #include "WW3D2/light.h"
 #include "WW3D2/scene.h"
 #include "WW3D2/ww3d.h"
@@ -2084,7 +2085,7 @@ void BaseHeightMapRenderObjClass::clearAllScorches(void)
 //=============================================================================
 Bool BaseHeightMapRenderObjClass::groundMarksOn(void)
 {
-	return TheGlobalData->m_groundMarks && !TheGlobalData->m_classicGraphics && Direct3D11_Present_Is_Enabled();
+	return TheGlobalData->m_groundMarks && !TheGlobalData->m_classicGraphics && RenderEffects::WorldEffectsAvailable();
 }
 
 //=============================================================================

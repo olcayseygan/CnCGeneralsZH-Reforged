@@ -584,7 +584,9 @@ def selfcheck():
         with open(path, "rb") as fp:
             tracked = fp.read().decode("latin-1")
         layout = wndlayout.parse(tracked)
-        if layout.text() != tracked:
+        # WND writers use CRLF; Git checkouts may use LF. Compare all content, including final newlines.
+        lf = tracked.replace("\r\n", "\n")
+        if layout.text().replace("\r\n", "\n") != lf:
             problems.append("%s.wnd does not round trip through wndlayout.py" % menu)
         for name in LOOKUPS[menu] + new_names(spec):
             if layout.find(name) is None:
@@ -593,7 +595,7 @@ def selfcheck():
         if stale:
             problems.append("%s.wnd: %d windows not authored at 1920x1080, %s first" % (menu, len(stale), stale[0]))
         try:
-            if build(wndlayout.parse(tracked), menu, kit).text() != tracked:
+            if build(wndlayout.parse(tracked), menu, kit).text().replace("\r\n", "\n") != lf:
                 problems.append("%s.wnd is not what online_layout.py writes; regenerate it" % menu)
         except (KeyError, ValueError) as error:
             problems.append("%s.wnd no longer builds: %s" % (menu, error))

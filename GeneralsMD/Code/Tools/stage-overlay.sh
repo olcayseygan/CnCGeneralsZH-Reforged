@@ -24,8 +24,10 @@
 #
 # The shipped overlay, from generals' Windows post-build list (CMakeLists.txt) less what package.bat
 # leaves out, as P1 inferred it (to be confirmed against upstream's release tooling):
-#   Data/INI/, Data/Patch.str, Data/Cursors/, Data/Scripts/, Data/Turkish/, Data/German/, Data/Ukrainian/, Data/Russian/,
-#   Data/French/, Install_Final.bmp, Art/Textures/, Window/
+#   Data/INI/, Data/Patch.str, Data/Cursors/, Data/Audio/, Data/Scripts/, Data/Turkish/, Data/German/,
+#   Data/Ukrainian/, Data/Russian/, Data/French/, Install_Final.bmp, Art/Textures/, Art/W3D/, Window/
+# A folder the post-build list gains has to be added here too: Art/W3D is in the multiplayer INI CRC
+# (GameEngine.cpp's checksumModels), and an overlay without it was refused by every Windows player.
 # and the fork's art archives, Reforged*.big from the Run folder when vendor.sh has fetched them,
 # LINKED here (1.65 GB): the bundle step copies them through the links.
 # --dev stages the development-only folders instead, Scenarios/ and Cinema/ (-scenario, -cinema),
@@ -74,6 +76,8 @@ else
 	find "$out/Data/INI" -type f -exec perl -pi -e 's/(?<!\r)\n/\r\n/' {} +
 	copy Patch.str Data/Patch.str
 	copy Cursors Data/Cursors
+	# the Turkiye units' voices VoiceReforged.ini names, opened loose; in no checksum
+	copy Audio Data/Audio
 	copy Scripts Data/Scripts
 	copy Turkish Data/Turkish
 	copy German Data/German
@@ -82,6 +86,8 @@ else
 	copy French Data/French
 	copy Install_Final.bmp Install_Final.bmp
 	copy Art/Textures Art/Textures
+	# the fork's own models: their names and bytes are in the multiplayer INI CRC
+	copy Art/W3D Art/W3D
 	copy Window Window
 	if [ -n "$run" ] && [ -d "$run" ]; then
 		for big in "$run"/Reforged*.big; do

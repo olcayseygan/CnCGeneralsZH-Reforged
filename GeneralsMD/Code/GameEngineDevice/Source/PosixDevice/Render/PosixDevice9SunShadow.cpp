@@ -157,14 +157,22 @@ void PosixDevice9::Set_Sun_Caster_Effect(unsigned effect, const float parameters
     // Cosmetic scene effects need their own capture path. This pass implements only the
     // Windows cloak's shadow coverage, independently of Direct3D11_Draw_Effects().
     SunCasterEffect = SunActive && effect==DRAW_EFFECT_CLOAK_SHADOW ? effect : DRAW_EFFECT_NONE;
-    SunCasterOpacity = parameters && std::isfinite(parameters[3]) ? std::max(0.0f,std::min(1.0f,parameters[3])) : 1.0f;
+    // w is twice the share of texels kept (W3DVolumetricShadow.cpp), so 2 is the whole shadow.
+    SunCasterOpacity = parameters && std::isfinite(parameters[3]) ? std::max(0.0f,std::min(2.0f,parameters[3])) : 1.0f;
+    // xy is the map's corner texel (effect_cloak_shadow), which keeps the noise on the world as the box steps.
+    for (int i = 0; i < 2; ++i)
+        SunCasterCorner[i] = parameters && std::isfinite(parameters[i]) ? parameters[i] : 0.0f;
 }
 
 void PosixDevice9::Get_Sun_Caster_Effect(unsigned &effect, float parameters[4]) const
 {
     effect = SunActive ? SunCasterEffect : DRAW_EFFECT_NONE;
     std::fill(parameters, parameters + 4, 0.0f);
-    if (effect != DRAW_EFFECT_NONE) parameters[3] = SunCasterOpacity;
+    if (effect != DRAW_EFFECT_NONE) {
+        parameters[0] = SunCasterCorner[0];
+        parameters[1] = SunCasterCorner[1];
+        parameters[3] = SunCasterOpacity;
+    }
 }
 
 bool PosixDevice9::Read_Sun_Shadow(std::vector<float> &depth)

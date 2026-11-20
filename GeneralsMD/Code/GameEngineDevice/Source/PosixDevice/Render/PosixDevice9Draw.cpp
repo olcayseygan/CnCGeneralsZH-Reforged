@@ -1474,7 +1474,11 @@ RenderResult PosixDevice9::Gpu_Draw(const DrawCall &call)
 		memset(&engine_constants, 0, sizeof(engine_constants));
 		engine_constants.Combiner = pixel_constants;
 		if (combiner.ShadowReceiving) Build_Sun_Constants(engine_constants);
-		if (combiner.DrawEffect) engine_constants.DrawEffectParameters[3] = SunCasterOpacity;
+		if (combiner.DrawEffect) {
+			engine_constants.DrawEffectParameters[0] = SunCasterCorner[0];
+			engine_constants.DrawEffectParameters[1] = SunCasterCorner[1];
+			engine_constants.DrawEffectParameters[3] = SunCasterOpacity;
+		}
 		draw.PixelConstants = Gpu->Constants(1, &engine_constants, sizeof(engine_constants));
 		draw.PixelConstantsSize = sizeof(engine_constants);
 	}

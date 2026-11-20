@@ -657,24 +657,50 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 // The per-object looks (CombinerDescription::DrawEffect), Direct3D 11 only, declared after the
 // whole block above: DrawEffectParameters is its last field.  x is seconds on the wall clock, y a
 // strength (the detector's pulse for the two stealth looks), z a seed from the object's id so two
-// buildings do not flicker in step, w the object's own opacity for the cloak.  The surface is taken
+// buildings do not flicker in step.  The two stealth looks take z as the object's foot in world z
+// and w packed, stealth_unpack's fade + 2 * over paint + 4 * front + 16 * height in whole
+// world units (chooseDrawEffect in W3DScene.cpp packs it).  The surface is taken
 // back to the world through WorldFromClip the way the headlights take it, and faces the eye.  The
 // cloak reads the scene as it stood before the translucent objects went in, at t8, by pixel.
 #define DRAW_EFFECT_CONSTANTS \
 	"    float4 DrawEffectParameters;\n"
 
-// Ordered cloak coverage reads only the caster opacity; it needs no scene texture.
+// The stealth looks' w, as stealth_unpack reads it: height in whole world units (at least 1), the
+// front (STEALTH_FRONT_*), whether the heat's far end is paint, and the fade 0 to 1.  Every part
+// below 16 but the height, so a float keeps the fade to a 4000 unit height.
+enum
+{
+	STEALTH_FRONT_WIND = 0,		///< coming out of the cloak, own or an enemy out of hiding
+	STEALTH_FRONT_SWEEP = 1,	///< the heat a detector shows
+	STEALTH_FRONT_RIPPLE = 2	///< going into the cloak
+};
+
+inline float CombinerShader_Pack_Stealth(int height, int front, bool paint, float fade)
+{
+	if (height < 1) height = 1;
+	if (front < 0) front = 0;
+	if (front > 2) front = 2;
+	if (!(fade > 0.0f)) fade = 0.0f;
+	if (fade > 1.0f) fade = 1.0f;
+	return 16.0f * (float)height + 4.0f * (float)front + (paint ? 2.0f : 0.0f) + fade;
+}
+
+// The cloak's coverage in the sun's map reads only the caster's numbers; it needs no scene texture.
 #define CLOAK_SHADOW_SAMPLING \
 	"/* Own stealthed unit drawn into the sun's map.  A depth map holds a caster or not, so the\n" \
-	"   cloaked one keeps a share of its texels, an ordered four by four pattern, and the receiving\n" \
-	"   filter, which averages a square of taps over several texels, turns that share into a shadow\n" \
-	"   that strength.  Half the stealth opacity: a quarter to a half, breathing with the body. */\n" \
+	"   cloaked one keeps a share of its texels and the receiving filter, which averages a square of\n" \
+	"   taps over several texels, turns that share into a shadow that strength.  w is twice the\n" \
+	"   share: all of it as the fade starts, nothing at its end, where the caster is left out of\n" \
+	"   the map whole.  Which texels stay is interleaved\n" \
+	"   gradient noise on the texel's place in the world (xy, the box's corner in texels, the map's\n" \
+	"   y running down), not an ordered four by four pattern, whose lit square grid showed inside\n" \
+	"   the shadow at close zoom while the share moved; a texel turns once and holds still as the\n" \
+	"   box steps with the camera. */\n" \
 	"float4 effect_cloak_shadow(float4 current, float4 position)\n" \
 	"{\n" \
-	"    uint2 cell = uint2(position.xy) & 3u;\n" \
-	"    uint bayer = ((cell.x ^ cell.y) & 1u) * 8u + (cell.y & 1u) * 4u\n" \
-	"        + (((cell.x ^ cell.y) >> 1) & 1u) * 2u + ((cell.y >> 1) & 1u);\n" \
-	"    clip(DrawEffectParameters.w * 0.5 - ((float)bayer + 0.5) / 16.0);\n" \
+	"    float2 texel = floor(position.xy) * float2(1.0, -1.0) + DrawEffectParameters.xy;\n" \
+	"    float keep = frac(52.9829189 * frac(dot(texel, float2(0.06711056, 0.00583715))));\n" \
+	"    clip(DrawEffectParameters.w * 0.5 - keep);\n" \
 	"    return current;\n" \
 	"}\n" \
 	"\n"
@@ -766,33 +792,89 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 	"    return current;\n" \
 	"}\n" \
 	"\n" \
-	"/* Own stealthed unit, seen through like thick bent glass, and the bend is what you find it by.\n" \
+	"/* The stealth fades' shape, for the cloak and the heat alike.  w is stealth_unpack's pack: the\n" \
+	"   fade, whether the far end of a heat fade is the unit's own paint rather than nothing, the\n" \
+	"   front (0 wind, 1 sweep, 2 ripple) and the unit's height; z is its foot. */\n" \
+	"void stealth_unpack(out float fade, out float paint, out float look, out float height)\n" \
+	"{\n" \
+	"    float w = DrawEffectParameters.w;\n" \
+	"    height = floor(w / 16.0);\n" \
+	"    w -= height * 16.0;\n" \
+	"    look = floor(w / 4.0);\n" \
+	"    w -= look * 4.0;\n" \
+	"    paint = step(1.5, w);\n" \
+	"    fade = saturate(w - 2.0 * paint);\n" \
+	"}\n" \
+	"\n" \
+	"/* When a pixel turns during a fade, 0 first and 1 last.  Wind, a unit coming out of its cloak:\n" \
+	"   two sizes of noise stretched along a fixed wind and blown down it, so the paint comes back in\n" \
+	"   streaks that drift.  Sweep, the heat: the height up the unit, foot to top, with a little noise\n" \
+	"   so the line is not ruled.  Ripple, a unit going into its cloak: broad slow blobs leaning\n" \
+	"   bottom up.  All in world units and slow, so nothing fizzes. */\n" \
+	"float stealth_front(float3 world, float t, float look, float height)\n" \
+	"{\n" \
+	"    float rise = saturate((world.z - DrawEffectParameters.z) / max(height, 1.0));\n" \
+	"    float front = 0.0;\n" \
+	"    if (look < 0.5) {\n" \
+	"        float along = dot(world, float3(0.83, 0.47, 0.30));\n" \
+	"        float3 q = float3(along * 0.05 - t * 0.7, dot(world.xy, float2(-0.49, 0.87)) * 0.16, world.z * 0.16);\n" \
+	"        float n = 0.65 * effect_noise(q) + 0.35 * effect_noise(q * 2.7 + 11.3);\n" \
+	"        front = (n - 0.2) * 1.65 + (rise - 0.5) * 0.25;\n" \
+	"    } else if (look < 1.5) {\n" \
+	"        front = rise * 0.88 + 0.12 * effect_noise(world * 0.21 + float3(0.0, 0.0, -t * 0.8));\n" \
+	"    } else {\n" \
+	"        front = 0.7 * effect_noise(world * 0.07 + float3(t * 0.15, 0.0, t * 0.1)) + 0.3 * rise;\n" \
+	"    }\n" \
+	"    return saturate(front);\n" \
+	"}\n" \
+	"\n" \
+	"/* The fade read against the front: state 0 is the near end, 1 the far end, edge the band round\n" \
+	"   the front and ahead how far past it the fade stands.  The fade is stretched by the band so\n" \
+	"   both ends draw no edge. */\n" \
+	"void stealth_edge(float front, float fade, float width, float soft, out float state, out float edge, out float ahead)\n" \
+	"{\n" \
+	"    ahead = fade * (1.0 + 2.0 * width) - width - front;\n" \
+	"    state = smoothstep(-soft, soft, ahead);\n" \
+	"    edge = saturate(1.0 - abs(ahead) / width);\n" \
+	"    edge *= edge;\n" \
+	"}\n" \
+	"\n" \
+	"/* Own stealthed unit, seen through like thin bent glass, and the bend is what you find it by.\n" \
 	"   Each face leans the scene behind it the way its normal leans on the screen, so faces turned\n" \
 	"   different ways show the ground shifted by different amounts and the body's shape reads even\n" \
 	"   over plain sand; a slow, broad ripple swims over that and bends a flat wall across its face.\n" \
 	"   The reach is three world units in pixels at the pixel's depth, never under 5 pixels at 1080\n" \
-	"   so a unit at play zoom still visibly distorts, never over 4% of the screen.  The ripple is\n" \
-	"   low frequency in the world and slow, so nothing fizzes in motion.  In play the bend alone\n" \
-	"   left a squad barely there, so the glass also leans toward a cool mid grey, 12% face on and\n" \
-	"   about three quarters at the outline, where a soldier's round body has most of its faces and\n" \
-	"   a building's flat walls have few: a haze rather than a white edge, darkening bright ground as\n" \
-	"   much as it lifts dark ground.  The unit's own paint is mixed in by the game's stealth opacity,\n" \
-	"   so the 2003 breath goes solid at the top of the pulse and back to glass at the bottom.  At\n" \
-	"   the solid end the output is that paint, no bend and no mute, so going invisible matches the\n" \
-	"   frame before.  Glass is the bent scene with alpha 1: dropping alpha showed the unbent ground through a ghost, and\n" \
-	"   meshes this program does not dress (additive glows, a refused scene copy) keep the stealth\n" \
-	"   opacity.  The bend eases off as the paint comes back, full at the glass end of the pulse.  Detected (the strength is never below 0.6\n" \
-	"   then), the whole body beats amber as well as its edge: a big flat building has almost no\n" \
+	"   so a unit at play zoom still visibly distorts, never over 4% of the screen, and the bend\n" \
+	"   itself never over 2.5%.  Where the bent sample jumps away from what is straight behind (a\n" \
+	"   bright roof trim pulled down over a soldier's shoulders read as a painted patch) the glass\n" \
+	"   leans back to the straight sample.  Only a breath of cool grey, 3% face on and a thin rim\n" \
+	"   at the outline: the glass is the refraction.  The fade is a front (stealth_front) crossing\n" \
+	"   the body, own paint behind it and glass ahead.  Going in it is the ripple: a wide soft front\n" \
+	"   through a grey veil half the scene, bending the scene in rings, no bright edge.  Coming out\n" \
+	"   it is the wind: a quick front with a thin, dim, faintly warm edge the bloom only just\n" \
+	"   catches.  At fade 0 the output is the paint, so going\n" \
+	"   invisible matches the frame before.  A mesh that blends by its own alpha (a ghillie card, a\n" \
+	"   yard emblem) is asked with two more in y and keeps that alpha, so it is glass in its own\n" \
+	"   shape.  Any other is the bent scene with alpha 1: dropping alpha\n" \
+	"   showed the unbent ground through a ghost, and meshes this program does not dress (additive\n" \
+	"   glows, a refused scene copy) keep the stealth opacity.  Detected (the strength is never below\n" \
+	"   0.6 then), the whole body beats amber as well as its edge: a big flat building has almost no\n" \
 	"   edge facing away from the eye, and with the beat on the rim alone it only turned tan. */\n" \
 	"float4 effect_cloak(float4 current, float4 position)\n" \
 	"{\n" \
 	"    float3 world; float3 surface; float facing;\n" \
 	"    effect_surface(position, world, surface, facing);\n" \
 	"    float t = DrawEffectParameters.x;\n" \
-	"    float detected = DrawEffectParameters.y;\n" \
-	"    float solid = saturate(DrawEffectParameters.w);\n" \
-	"    float haze = 1.0 - solid;\n" \
-	"    float rim = pow(1.0 - facing, 2.0);\n" \
+	"    float own_alpha = step(1.5, DrawEffectParameters.y);\n" \
+	"    float detected = DrawEffectParameters.y - 2.0 * own_alpha;\n" \
+	"    float fade; float paint; float look; float height;\n" \
+	"    stealth_unpack(fade, paint, look, height);\n" \
+	"    float going = step(1.5, look);\n" \
+	"    float width = lerp(0.06, 0.22, going);\n" \
+	"    float glass_on; float edge; float ahead;\n" \
+	"    stealth_edge(1.0 - stealth_front(world, t, look, height), fade, width, lerp(0.5, 0.8, going) * width, glass_on, edge, ahead);\n" \
+	"    float wave = going * edge * sin(ahead * 45.0 - t * 7.0);\n" \
+	"    float rim = pow(1.0 - facing, 3.0);\n" \
 	"    float swim_x = effect_noise(world * 0.09 + float3(t * 0.35, t * 0.2, t * 0.45)) - 0.5;\n" \
 	"    float swim_y = effect_noise(world * 0.09 + float3(7.3 - t * 0.3, 2.1, t * 0.4)) - 0.5;\n" \
 	"    float2 screen = 1.0 / ShadowViewport.xy;\n" \
@@ -804,21 +886,24 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 	"    float world_per_pixel = max(length(up), 1e-4);\n" \
 	"    float2 lean = float2(dot(surface, right), -dot(surface, up)) / world_per_pixel;\n" \
 	"    float reach = clamp(3.0 / world_per_pixel, 0.005 * screen.y, 0.04 * screen.y);\n" \
-	"    float2 bend = (lean * 0.8 + float2(swim_x, swim_y) * 1.2) * reach * saturate(2.0 * haze);\n" \
+	"    float2 bend = (lean * 0.8 + float2(swim_x, swim_y) * 1.2) * reach * (glass_on + 2.5 * wave);\n" \
+	"    bend *= min(1.0, 0.025 * screen.y / max(length(bend), 1e-4));\n" \
 	"    int2 at = int2(clamp(position.xy + bend, float2(0.0, 0.0), screen - 1.0));\n" \
+	"    float3 straight = SceneColour.Load(int3(int2(position.xy), 0)).rgb;\n" \
 	"    float3 behind = SceneColour.Load(int3(at, 0)).rgb;\n" \
+	"    behind = lerp(behind, straight, 0.2 + 0.6 * saturate(length(behind - straight) * 1.5));\n" \
+	"    float3 glass = lerp(behind, float3(0.62, 0.66, 0.72), 0.03 + 0.3 * rim);\n" \
 	"    float grey = dot(current.rgb, float3(0.299, 0.587, 0.114));\n" \
-	"    float3 muted = lerp(grey.xxx, current.rgb, 0.7);\n" \
-	"    float3 painted = lerp(muted, current.rgb, solid);\n" \
-	"    float3 glass = lerp(behind, painted, solid);\n" \
-	"    glass = lerp(glass, float3(0.52, 0.55, 0.59), haze * (0.12 + 0.65 * rim));\n" \
+	"    float3 veil = lerp(lerp(grey.xxx, current.rgb, 0.4), behind, 0.5);\n" \
+	"    glass = lerp(lerp(current.rgb, veil, going * saturate(2.0 * glass_on)), glass, saturate(glass_on * (1.0 + going) - going));\n" \
+	"    glass += edge * (1.0 - going) * float3(0.66, 0.74, 0.70);\n" \
 	"    float found = step(0.01, detected);\n" \
 	"    float beat = 0.55 + 0.45 * sin(t * 6.0);\n" \
 	"    float3 amber = float3(1.0, 0.55, 0.15);\n" \
 	"    float lum = dot(glass, float3(0.299, 0.587, 0.114));\n" \
 	"    glass = lerp(glass, amber * (0.3 + lum), found * (0.25 + 0.3 * beat)) + found * (rim * 1.2 + 0.18) * beat * amber;\n" \
 	"    current.rgb = glass;\n" \
-	"    current.a = 1.0;\n" \
+	"    current.a = lerp(1.0, current.a, own_alpha);\n" \
 	"    return current;\n" \
 	"}\n" \
 	"\n" \
@@ -827,24 +912,30 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 	"   yellow that stops short of white, so bright paint keeps its detail and the shape reads; the\n" \
 	"   outline burns, and one slow broad sweep climbs it.  Each\n" \
 	"   sweep of the detector (the strength, one at the sweep and falling after) brightens all of\n" \
-	"   it.  No fine lines: drawn a few pixels high, a zoomed out unit turned them into stripes. */\n" \
+	"   it.  No fine lines: drawn a few pixels high, a zoomed out unit turned them into stripes.\n" \
+	"   The heat comes and goes by the sweep, rising from the foot behind a warm band just past\n" \
+	"   white.  Its far end is the unit's own paint when it is leaving or entering plain sight, and\n" \
+	"   otherwise nothing: those pixels are clipped, so the heat builds out of thin air. */\n" \
 	"float4 effect_revealed(float4 current, float4 position)\n" \
 	"{\n" \
 	"    float3 world; float3 surface; float facing;\n" \
 	"    effect_surface(position, world, surface, facing);\n" \
 	"    float t = DrawEffectParameters.x;\n" \
 	"    float pulse = DrawEffectParameters.y;\n" \
+	"    float fade; float paint; float look; float height;\n" \
+	"    stealth_unpack(fade, paint, look, height);\n" \
 	"    float heat = saturate(dot(current.rgb, float3(0.299, 0.587, 0.114)) * 1.05 + 0.06);\n" \
 	"    float3 ramp = lerp(float3(0.30, 0.04, 0.02), float3(0.95, 0.40, 0.08), smoothstep(0.0, 0.55, heat));\n" \
 	"    ramp = lerp(ramp, float3(0.95, 0.66, 0.32), smoothstep(0.55, 1.0, heat));\n" \
 	"    float rim = pow(1.0 - facing, 2.0);\n" \
 	"    float sweep = smoothstep(0.9, 1.0, sin(world.z * 0.06 - t * 1.8));\n" \
 	"    float gain = 0.6 + 0.35 * pulse;\n" \
-	"    float mix = saturate(DrawEffectParameters.w);\n" \
 	"    float3 heatRgb = ramp * gain + float3(1.0, 0.40, 0.12) * (rim * 0.9 + sweep * 0.35) * gain;\n" \
-	"    current.rgb = heatRgb;\n" \
-	"    if (mix < 0.999)\n" \
-	"        current.a *= mix;\n" \
+	"    float shown; float edge; float ahead;\n" \
+	"    stealth_edge(stealth_front(world, t, look, height), fade, 0.09, 0.0225, shown, edge, ahead);\n" \
+	"    current.rgb = lerp(current.rgb * paint, heatRgb, shown) + edge * float3(1.1, 0.52, 0.2);\n" \
+	"    if (paint < 0.5)\n" \
+	"        clip(max(shown - 0.5, edge - 0.3));\n" \
 	"    return current;\n" \
 	"}\n" \
 	"\n" \

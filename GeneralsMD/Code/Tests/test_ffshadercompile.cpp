@@ -32,6 +32,7 @@
 #include "ffshader.h"
 
 #include <d3dcommon.h>
+#include <math.h>
 #include <string.h>
 #include <windows.h>
 
@@ -359,8 +360,13 @@ TEST(ffshadercompile_each_draw_effect_compiles_on_d3d11_only)
 			CHECK(fog < call);
 			CHECK((eleven.find("current = effect_cloak(") != std::string::npos) == (effect == DRAW_EFFECT_CLOAK));
 			if (effect == DRAW_EFFECT_CLOAK) {
-				// solid=1 must be the unit's own paint, or cloak-in pops to a muted body
-				CHECK(eleven.find("lerp(muted, current.rgb, solid)") != std::string::npos);
+				// fade 0 must be the unit's own paint, or cloak-in pops to glass: both mixes start at it
+				CHECK(eleven.find("glass = lerp(lerp(current.rgb, veil, going * saturate(2.0 * glass_on)), glass,") != std::string::npos);
+			}
+			if (effect == DRAW_EFFECT_CLOAK || effect == DRAW_EFFECT_REVEALED) {
+				// both stealth looks fade by the shared front, not by a mix
+				CHECK(eleven.find("stealth_unpack(fade, paint, look, height)") != std::string::npos);
+				CHECK(eleven.find("stealth_edge(") != std::string::npos);
 			}
 
 			std::string sdl;
@@ -379,6 +385,50 @@ TEST(ffshadercompile_each_draw_effect_compiles_on_d3d11_only)
 	if (compile == NULL) {
 		printf("  d3dcompiler_47.dll not present, skipping the compile\n");
 	}
+}
+
+// The stealth looks' w packed as chooseDrawEffect packs it comes back out of stealth_unpack's own
+// arithmetic, done here in float as the GPU does it, at every height up to the 4000 cap.  The
+// program text is checked for those same lines, so the copy below cannot drift from the shader.
+TEST(ffshadercompile_the_stealth_pack_round_trips_through_stealth_unpack)
+{
+	CombinerDescription description;
+	memset(&description, 0, sizeof(description));
+	description.StageCount = 1;
+	description.Stages[0] = one_stage(D3DTOP_MODULATE, D3DTA_TEXTURE, D3DTA_DIFFUSE,
+		D3DTOP_MODULATE, D3DTA_TEXTURE, D3DTA_DIFFUSE, 0, true);
+	description.DrawEffect = DRAW_EFFECT_REVEALED;
+	std::string eleven;
+	CHECK(CombinerShader_Generate(description, COMBINER_SHADER_TARGET_D3D11, eleven));
+	CHECK(eleven.find("    height = floor(w / 16.0);\n    w -= height * 16.0;\n"
+		"    look = floor(w / 4.0);\n    w -= look * 4.0;\n    paint = step(1.5, w);\n"
+		"    fade = saturate(w - 2.0 * paint);\n") != std::string::npos);
+
+	static const int heights[] = { 1, 7, 13, 60, 200, 1000, 4000 };
+	static const float fades[] = { 0.0f, 0.001f, 0.25f, 0.5f, 0.999f, 1.0f };
+	for (int h = 0; h < (int)(sizeof(heights) / sizeof(heights[0])); ++h) {
+		for (int front = STEALTH_FRONT_WIND; front <= STEALTH_FRONT_RIPPLE; ++front) {
+			for (int paint = 0; paint < 2; ++paint) {
+				for (int f = 0; f < (int)(sizeof(fades) / sizeof(fades[0])); ++f) {
+					float w = CombinerShader_Pack_Stealth(heights[h], front, paint != 0, fades[f]);
+					const float height = floorf(w / 16.0f);
+					w -= height * 16.0f;
+					const float look = floorf(w / 4.0f);
+					w -= look * 4.0f;
+					const float painted = (w >= 1.5f) ? 1.0f : 0.0f;
+					float fade = w - 2.0f * painted;
+					fade = fade < 0.0f ? 0.0f : (fade > 1.0f ? 1.0f : fade);
+					CHECK_EQ((int)height, heights[h]);
+					CHECK_EQ((int)look, front);
+					CHECK_EQ((int)painted, paint);
+					CHECK_NEAR(fade, fades[f], 0.005f);
+				}
+			}
+		}
+	}
+	// out of range parts are held in their fields rather than spilling into the next one
+	CHECK_EQ((int)floorf(CombinerShader_Pack_Stealth(0, 5, true, 3.0f) / 16.0f), 1);
+	CHECK_NEAR(CombinerShader_Pack_Stealth(2, -1, false, -1.0f), 32.0f, 0.0001f);
 }
 
 // A fire billboard bends its coordinates before the stages sample and burns after them, before the

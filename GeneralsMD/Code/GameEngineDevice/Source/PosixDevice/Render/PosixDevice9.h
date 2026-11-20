@@ -368,6 +368,7 @@ protected:
 	bool SmokeGlow = false;
 	unsigned SunCasterEffect = 0;
 	float SunCasterOpacity = 1;
+	float SunCasterCorner[2] = {0, 0};	///< the sun map's corner texel, so the cloak's noise stays on the world
 	bool Sun_Camera_Space() const;
 	bool Sun_Target(struct SdlTarget &target) const;
 	unsigned SunExclusions = 0;

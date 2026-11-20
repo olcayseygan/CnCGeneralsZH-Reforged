@@ -111,6 +111,27 @@
 #define VERY_TRANSPARENT_MATERIAL_PASS_OPACITY (0.001f)
 #define MATERIAL_PASS_OPACITY_FADE_SCALAR (0.8f)
 
+// m_stealthFade runs straight at these, on the wall clock, and the shader's front gives it its
+// shape: into stealth (glass or heat coming) a little slow so the ripple reads, out of it quick,
+// since a unit coming out is usually firing.  Not the detector pulse's scalar above.
+#define STEALTH_FADE_IN_SECONDS (0.6f)
+#define STEALTH_FADE_OUT_SECONDS (0.3f)
+// How long a detected enemy's heat holds once the logic hides it again, bridging a detector's
+// sweeps (Drawable::draw).
+#define STEALTH_HEAT_GRACE_SECONDS (0.3f)
+
+// Direct3D 11 outside Classic draws a stealth change as a fade; Direct3D 9, Classic and the SDL3 builds
+// (which draw no cloak body, only its shadow) have no cloak shader to fade with and hide and show at
+// once, as in 2003.
+static Bool stealthFadesByShader( void )
+{
+#ifdef _WIN32
+	return TheGlobalData && TheGlobalData->m_direct3D11 && !TheGlobalData->m_classicGraphics;
+#else
+	return FALSE;
+#endif
+}
+
 static const char *TheDrawableIconNames[] = 
 {
 	"DefaultHeal",
@@ -569,7 +590,7 @@ void Drawable::takeLookForDraw( void )
 	look.stealthLook = m_stealthLook;
 	look.stealthDrawnLook = m_stealthDrawnLook;
 	look.stealthFade = m_stealthFade;
-	look.stealthSolid = getStealthSolid();
+	look.stealthOverPaint = m_stealthOverPaint;
 	look.secondMaterialPassOpacity = m_secondMaterialPassOpacity;
 	look.effectiveOpacity = getEffectiveOpacity();
 	look.tintStatus = m_tintStatus;
@@ -676,7 +697,7 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 	m_lookForDraw.stealthLook = STEALTHLOOK_NONE;
 	m_lookForDraw.stealthDrawnLook = STEALTHLOOK_NONE;
 	m_lookForDraw.stealthFade = 0.0f;
-	m_lookForDraw.stealthSolid = 1.0f;
+	m_lookForDraw.stealthOverPaint = FALSE;
 	m_lookForDraw.secondMaterialPassOpacity = 0.0f;
 	m_lookForDraw.effectiveOpacity = 1.0f;
 	m_lookForDraw.tintStatus = 0;
@@ -689,6 +710,8 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 	m_stealthLook = STEALTHLOOK_NONE;
 	m_stealthDrawnLook = STEALTHLOOK_NONE;
 	m_stealthFade = 0.0f;
+	m_stealthOverPaint = FALSE;
+	m_stealthHeatHeld = 0.0f;
 
 	m_flashCount = 0;
 
@@ -1412,7 +1435,9 @@ const Vector3 * Drawable::getSelectionColor( void )	const
 	if( LogicThread::isInsideWindow() )
 		return m_lookForDraw.hasSelectionColor ? &m_lookForDraw.selectionColor : NULL;
 	// the target of the local player's order, lit for a blip (Drawable_flashOrderTargets)
-	static const Vector3 ORDER_FLASH_RED( 1.0f, 0.05f, 0.02f );
+	// summed into every scene light and the ambient like the Hit Flash: red comes from taking green and
+	// blue away, since a positive tint on all three only pushes a bright target toward white
+	static const Vector3 ORDER_FLASH_RED( 0.5f, -0.6f, -0.6f );
 	if( m_orderFlash )
 		return &ORDER_FLASH_RED;
 	if (m_selectionFlashEnvelope)
@@ -1540,6 +1565,7 @@ void Drawable::imitateStealthLook( Drawable& otherDraw )
   m_stealthLook = otherDraw.getStealthLook();
   m_stealthDrawnLook = otherDraw.getStealthDrawnLook();
   m_stealthFade = otherDraw.getStealthFade();
+  m_stealthOverPaint = otherDraw.getStealthOverPaint();
   m_secondMaterialPassOpacity = otherDraw.getSecondMaterialPassOpacity();
 
 }
@@ -1707,14 +1733,21 @@ void Drawable::updateDrawable( void )
 		const BodyModuleInterface *body = obj->getBodyModule();
 		const UnsignedInt hitFrame = body ? body->getLastDamageTimestamp() : 0xffffffff;
 		const UnsignedInt flashFrames = LOGICFRAMES_PER_SECOND / 5;	// a fifth of a wall second: the client walk runs once a tick
-		if( Drawable_hitFlashDue( hitFrame, m_hitFlashFrame, now, flashFrames ) && !obj->isEffectivelyDead() )
+		const UnsignedInt cooldownFrames = LOGICFRAMES_PER_SECOND * 3 / 5;	// at most one flash every 0.6 wall seconds
+		if( Drawable_hitFlashDue( hitFrame, m_hitFlashFrame, now, flashFrames, cooldownFrames ) && !obj->isEffectivelyDead() )
 		{
-			static const RGBColor HIT_FLASH_COLOR = { 0.7f, 0.18f, 0.1f };
+			// W3DScene adds this to every scene light's diffuse and to the ambient, so it lands three or
+			// four times over: a positive green and blue brightened every channel and a struck tan tank
+			// clamped to white.  Red reads by taking green and blue away, as Frenzy's infantry tint does,
+			// and only a little of it: summed about twice over on a face (ambient plus the lights it
+			// faces), 0.15/-0.2 painted a whole Battlemaster red.  This is a hint on the shaded paint;
+			// an overbright sunlit face mostly clamps it away.
+			static const RGBColor HIT_FLASH_COLOR = { 0.06f, -0.08f, -0.08f };
 			if( m_selectionFlashEnvelope == NULL )
 				m_selectionFlashEnvelope = newInstance(TintEnvelope);
 			m_selectionFlashEnvelope->play( &HIT_FLASH_COLOR, 0, flashFrames );
+			m_hitFlashFrame = hitFrame;
 		}
-		m_hitFlashFrame = hitFrame;
 	}
 
 	if (m_selectionFlashEnvelope)
@@ -3206,6 +3239,13 @@ void Drawable::setStealthLook(StealthLookType look)
 			case STEALTHLOOK_NONE:
 				m_hiddenByStealth = false;
 				m_secondMaterialPassOpacity = 0.0f;
+				// An enemy dropping its cloak out of hiding (it fired) comes in as one's own unit leaves
+				// its cloak: glass at once, the front then crossing it to paint, instead of popping in.
+				if( wasHidden && previous == STEALTHLOOK_INVISIBLE && stealthFadesByShader() && !isKindOf( KINDOF_MINE ) )
+				{
+					m_stealthDrawnLook = STEALTHLOOK_VISIBLE_FRIENDLY;
+					m_stealthFade = 1.0f;
+				}
 				break;
 
 			case STEALTHLOOK_VISIBLE_FRIENDLY:
@@ -3273,10 +3313,7 @@ void Drawable::setStealthLook(StealthLookType look)
 				// to fade with, so they hide at once as they did in 2003.  The D3D11 path keeps
 				// drawing while draw() eases the fade out.
 				{
-					const Bool shaderFade = TheGlobalData
-						&& TheGlobalData->m_direct3D11
-						&& !TheGlobalData->m_classicGraphics;
-					if( ( previous == STEALTHLOOK_NONE && m_stealthFade <= 0.0f ) || !shaderFade )
+					if( ( previous == STEALTHLOOK_NONE && m_stealthFade <= 0.0f ) || !stealthFadesByShader() )
 					{
 						m_hiddenByStealth = true;
 						m_stealthDrawnLook = STEALTHLOOK_INVISIBLE;
@@ -3289,6 +3326,14 @@ void Drawable::setStealthLook(StealthLookType look)
 		}
 
 		m_stealthLook = look;
+
+		// the heat's far end: the paint while plain sight is either end of the fade, else nothing
+		if( look == STEALTHLOOK_NONE )
+			m_stealthOverPaint = TRUE;
+		else if( look == STEALTHLOOK_VISIBLE_DETECTED )
+			m_stealthOverPaint = ( previous == STEALTHLOOK_NONE );
+		else if( look == STEALTHLOOK_INVISIBLE )
+			m_stealthOverPaint = FALSE;
 
 		if( look != STEALTHLOOK_INVISIBLE && look != STEALTHLOOK_NONE && look != STEALTHLOOK_DISGUISED_ENEMY )
 		{
@@ -3317,6 +3362,7 @@ void Drawable::draw( View *view )
 	static UnsignedInt fadeFrame = ~0;
 	static UnsignedInt fadeLastMs = 0;
 	static Real fadeScalar = MATERIAL_PASS_OPACITY_FADE_SCALAR;
+	static Real fadeSeconds = 0.0f;
 
 	if ( fadeFrame != TheGameClient->getFrame() )
 	{
@@ -3332,6 +3378,7 @@ void Drawable::draw( View *view )
 			steps = 4.0f;		// a level load must not fade everything out at once
 
 		fadeScalar = powf( MATERIAL_PASS_OPACITY_FADE_SCALAR, steps );
+		fadeSeconds = steps / 30.0f;
 	}
 
   if ( testTintStatus( TINT_STATUS_FRENZY ) == FALSE )
@@ -3348,17 +3395,30 @@ void Drawable::draw( View *view )
 		const Bool wantEffect = ( m_stealthLook == STEALTHLOOK_VISIBLE_FRIENDLY
 			|| m_stealthLook == STEALTHLOOK_VISIBLE_FRIENDLY_DETECTED
 			|| m_stealthLook == STEALTHLOOK_VISIBLE_DETECTED );
+		// A detector's first sweep can mark a unit for a few frames and the next one again a moment
+		// later: the heat came up, went out and came back.  Heat the logic hides again holds where it
+		// is for STEALTH_HEAT_GRACE_SECONDS before it fades, so the next sweep finds it still drawn.
+		// Deliberate, and Direct3D 11 only (the others hide at once): a unit the logic hid shows its
+		// heat at most that grace plus the fade out longer.
+		const Bool heatGrace = !wantEffect && m_stealthLook == STEALTHLOOK_INVISIBLE
+			&& m_stealthDrawnLook == STEALTHLOOK_VISIBLE_DETECTED && m_stealthFade > 0.0f
+			&& m_stealthHeatHeld < STEALTH_HEAT_GRACE_SECONDS;
 		if( wantEffect )
 		{
 			m_stealthDrawnLook = m_stealthLook;
-			m_stealthFade = 1.0f - ( 1.0f - m_stealthFade ) * fadeScalar;
-			if( m_stealthFade > 0.999f )
+			m_stealthHeatHeld = 0.0f;
+			m_stealthFade += fadeSeconds / STEALTH_FADE_IN_SECONDS;
+			if( m_stealthFade > 1.0f )
 				m_stealthFade = 1.0f;
+		}
+		else if( heatGrace )
+		{
+			m_stealthHeatHeld += fadeSeconds;
 		}
 		else
 		{
-			m_stealthFade *= fadeScalar;
-			if( m_stealthFade <= VERY_TRANSPARENT_MATERIAL_PASS_OPACITY )
+			m_stealthFade -= fadeSeconds / STEALTH_FADE_OUT_SECONDS;
+			if( m_stealthFade <= 0.0f )
 			{
 				m_stealthFade = 0.0f;
 				m_stealthDrawnLook = m_stealthLook;
@@ -3374,8 +3434,10 @@ void Drawable::draw( View *view )
 	if (m_hidden || m_hiddenByStealth || getFullyObscuredByShroud())
 		return;	// my, that was easy
 
+	// a detected enemy's heat fading back into hiding casts nothing either
 	if ( getObject() && !getObject()->isEffectivelyDead() )
-		setShadowsEnabled( m_stealthLook != STEALTHLOOK_VISIBLE_DETECTED );
+		setShadowsEnabled( m_stealthLook != STEALTHLOOK_VISIBLE_DETECTED
+			&& !( m_stealthDrawnLook == STEALTHLOOK_VISIBLE_DETECTED && m_stealthFade > 0.0f ) );
 
 
 
@@ -4149,14 +4211,20 @@ Bool Drawable_emptySeatsShow( Bool isStructure, Bool isGarrisonable, Bool isHeal
 }
 
 // ------------------------------------------------------------------------------------------------
-Bool Drawable_hitFlashDue( UnsignedInt hitFrame, UnsignedInt seenHitFrame, UnsignedInt now, UnsignedInt window )
+Bool Drawable_hitFlashDue( UnsignedInt hitFrame, UnsignedInt flashedHitFrame, UnsignedInt now, UnsignedInt window,
+													 UnsignedInt cooldown )
 {
 	// ActiveBody's "never hit" stamp is 0xffffffff, in the future of every frame
-	if( hitFrame == seenHitFrame || hitFrame > now )
+	if( hitFrame == flashedHitFrame || hitFrame > now )
 		return FALSE;
 	// a hit older than the flash itself is one this drawable never saw happen: the first look after a
 	// load, or after the box was ticked mid-match, finds every old stamp and lights nothing
-	return now - hitFrame < window;
+	if( now - hitFrame >= window )
+		return FALSE;
+	// under steady fire the body restamps every shot, and answering each one kept a tank red nine
+	// frames in ten: a hit inside the cooldown of the last flash stays dark (a never or future stamp
+	// there is no last flash)
+	return flashedHitFrame > now || now - flashedHitFrame >= cooldown;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -7601,6 +7669,8 @@ void Drawable::xfer( Xfer *xfer )
 		m_stealthLook = STEALTHLOOK_NONE;
 		m_stealthDrawnLook = STEALTHLOOK_NONE;
 		m_stealthFade = 0.0f;
+		m_stealthOverPaint = FALSE;
+		m_stealthHeatHeld = 0.0f;
 		// Also, need to update the hidden status for all sub-modules.
 		if (m_hidden || m_hiddenByStealth) {
 			updateHiddenStatus();

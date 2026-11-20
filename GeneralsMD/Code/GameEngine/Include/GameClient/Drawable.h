@@ -120,10 +120,11 @@ extern Real Drawable_pipScale( Real uiScale, Real zoom );
 extern Bool Drawable_emptySeatsShow( Bool isStructure, Bool isGarrisonable, Bool isHealContain,
 																		 Bool showEmptyBuildingPips );
 
-///< whether a body's last damage frame is a hit this drawable has not flashed for yet and is recent
-///< enough to show (within window frames of now); a stale stamp seen first after a load or after the
-///< Hit Flash box is ticked mid-match stays dark
-extern Bool Drawable_hitFlashDue( UnsignedInt hitFrame, UnsignedInt seenHitFrame, UnsignedInt now, UnsignedInt window );
+///< whether a body's last damage frame is a hit this drawable has not flashed for yet, recent enough
+///< to show (within window frames of now) and at least cooldown frames after the hit that lit the last
+///< flash; a stale stamp seen first after a load or after the Hit Flash box is ticked mid-match stays dark
+extern Bool Drawable_hitFlashDue( UnsignedInt hitFrame, UnsignedInt flashedHitFrame, UnsignedInt now, UnsignedInt window,
+																	UnsignedInt cooldown );
 
 ///< whether these disabled flags mean the health bar is drawn blue instead of the owner's colour
 extern Bool Drawable_disabledShowsBlueHealthBar( DisabledMaskType disabledFlags );
@@ -455,21 +456,9 @@ public:
 	StealthLookType getStealthLook() const { return LogicThread::isInsideWindow() ? m_lookForDraw.stealthLook : m_stealthLook; }
 	StealthLookType getStealthDrawnLook() const { return LogicThread::isInsideWindow() ? m_lookForDraw.stealthDrawnLook : m_stealthDrawnLook; }
 	Real getStealthFade() const { return LogicThread::isInsideWindow() ? m_lookForDraw.stealthFade : m_stealthFade; }
-	// 1 is own paint with no bend, the stealth floor (about a half) is glass.  Cloak-in fade 0
-	// is solid.  The mix goes to that floor so the first frames still have travel while the
-	// pulse has not left 1.0; once faded, the 2003 breath owns it.  Decloak: fade 1 is the
-	// pulse, fade 0 is solid.  The shader keeps coverage: this is the mix, not alpha.
-	Real getStealthSolid() const
-	{
-		if( LogicThread::isInsideWindow() )
-			return m_lookForDraw.stealthSolid;
-		const Real breath = getEffectiveOpacity();
-		const Real fade = getStealthFade();
-		if( getStealthLook() == STEALTHLOOK_NONE )
-			return breath + ( 1.0f - breath ) * ( 1.0f - fade );
-		const Real dest = m_stealthOpacity + ( breath - m_stealthOpacity ) * fade;
-		return 1.0f - fade * ( 1.0f - dest );
-	}
+	// Whether the far end of the heat's fade is the unit's own paint (it is leaving or entering
+	// plain sight) rather than nothing (it is going back into hiding or came out of it).
+	Bool getStealthOverPaint() const { return LogicThread::isInsideWindow() ? m_lookForDraw.stealthOverPaint : m_stealthOverPaint; }
 
 	void updateDrawableClipStatus( UnsignedInt shotsRemaining, UnsignedInt maxShots, WeaponSlotType slot ); ///< This will do the show/hide work if ProjectileBoneFeedbackEnabled is set.
 	void updateDrawableSupplyStatus( Int maxSupply, Int currentSupply ); ///< This will do visual feedback on Supplies carried
@@ -591,7 +580,7 @@ public:
 		StealthLookType	stealthLook;
 		StealthLookType	stealthDrawnLook;
 		Real						stealthFade;
-		Real						stealthSolid;
+		Bool						stealthOverPaint;
 		Real						secondMaterialPassOpacity;
 		Real						effectiveOpacity;
 		UnsignedInt			tintStatus;
@@ -868,7 +857,7 @@ private:
 	// note, these are lazily allocated!
 	TintEnvelope*		m_selectionFlashEnvelope;	///< used for selection flash, works WITH m_colorTintEnvelope
 	Bool						m_orderFlash;							///< lit red as an order's target, set at the sync point (Drawable_flashOrderTargets)
-	UnsignedInt			m_hitFlashFrame;					///< the body's last damage frame the Hit Flash option has answered (Drawable_hitFlashDue)
+	UnsignedInt			m_hitFlashFrame;					///< the body's damage frame that lit the last Hit Flash (Drawable_hitFlashDue)
 	TintEnvelope*		m_colorTintEnvelope;			///< house color flashing, etc... works WITH m_selectionFlashEnvelope
 																//   this used to use m_ambientLight... but this replaces it
 																//   int most places. It works harder to change the drawable's
@@ -928,6 +917,8 @@ private:
 	StealthLookType m_stealthLook;
 	StealthLookType m_stealthDrawnLook;	///< look the shader is fading, while m_stealthLook is the target
 	Real m_stealthFade;									///< 0 invisible / 1 fully the drawn look
+	Bool m_stealthOverPaint;						///< getStealthOverPaint: the heat fades to or from the paint
+	Real m_stealthHeatHeld;							///< seconds a hidden-again unit's heat has held (STEALTH_HEAT_GRACE_SECONDS)
 
 	Int m_flashCount;           ///< number of times to flash the drawable
 	Color m_flashColor;					///< color to flash the drawable

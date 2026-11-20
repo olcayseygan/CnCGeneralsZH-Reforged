@@ -4360,6 +4360,15 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 	const UnsignedInt chosenTexels = (SHADOW_MAP_TEXELS / 2) << TheGlobalData->m_shadowQuality;
 	UnsignedInt texels = chosenTexels;
 	Bool begun = FALSE;
+	/* The cloak's thinned shadow only goes with a body drawn as glass, asked here because once the
+		 sun's map is bound every look but the shadow's is refused.  A frame a screen filter holds draws
+		 the body by its opacity and casts in full.  The SDL3 builds draw no glass and thin the shadow
+		 anyway, as they did. */
+#ifdef _WIN32
+	const Bool cloakBodiesDrawn = Direct3D11_Takes_Draw_Effect( DRAW_EFFECT_CLOAK );
+#else
+	const Bool cloakBodiesDrawn = TRUE;
+#endif
 	if (TheGlobalData->m_shadowMap && captureShadows && TheTacticalView != NULL)
 	{
 		if (wholeMap && !wholeMapRefused && SunShadow::Begin( DX8Wrapper::_Get_D3D_Device(), SHADOW_MAP_WHOLE_MAP_TEXELS ))
@@ -4458,6 +4467,11 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 	Matrix3D::Inverse_Transform_Vector( sunAtOrigin, boxMiddle, &focusInSun );
 	focusInSun.X = WWMath::Floor( focusInSun.X / texelWidth + 0.5f ) * texelWidth;
 	focusInSun.Y = WWMath::Floor( focusInSun.Y / texelWidth + 0.5f ) * texelWidth;
+	/* The map's corner texel in the sun's frame, x right and y up from the top left texel down:
+		 effect_cloak_shadow adds it to the texel it draws, so the cloak's thinned shadow keeps the same
+		 texels as the box steps with the camera. */
+	const Real cornerTexelX = WWMath::Floor( focusInSun.X / texelWidth + 0.5f ) - (Real)( texels / 2 );
+	const Real cornerTexelY = WWMath::Floor( focusInSun.Y / texelWidth + 0.5f ) + (Real)( texels / 2 );
 	Vector3 snapped;
 	Matrix3D::Transform_Vector( sunAtOrigin, focusInSun, &snapped );
 	transform.Look_At( snapped + toSun * sunDistance, snapped, 0.0f );
@@ -4590,20 +4604,34 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 			continue;
 		RenderObjClass *robj = s_casters[ c ];
 
-		/* An own stealthed unit casts only a share of its shadow, breathing with its fade, the way
-			 the cloak lets the ground show through its body (effect_cloak_shadow in ffshader.h).  A
+		/* An own stealthed unit's shadow dissolves with its fade, the way the cloak lets the ground
+			 show through its body (effect_cloak_shadow in ffshader.h, which keeps half of w), and once
+			 cloaked it casts none: a share held per texel stood as lit bricks in a dark shadow at close
+			 zoom, where the filter reads a texel or two, and a part drawn some other way (the
+			 Pathfinder's) kept the rest dark.  Leaving the whole caster out holds every part alike.
+			 An enemy coming out of hiding wears the same look, so its shadow comes in with it.  A
 			 render object with no drawable behind it, a ghost or a prop, casts in full. */
 		sunInfo.drawEffect = DRAW_EFFECT_NONE;
 		const DrawableInfo *casterInfo = (const DrawableInfo *)robj->Get_User_Data();
 		const Drawable *caster = casterInfo ? casterInfo->m_drawable : NULL;
-		if (caster && SunShadow::CasterEffects(DX8Wrapper::_Get_D3D_Device())
+		if (caster && cloakBodiesDrawn && SunShadow::CasterEffects(DX8Wrapper::_Get_D3D_Device())
 			&& (caster->getStealthDrawnLook() == STEALTHLOOK_VISIBLE_FRIENDLY
 				|| caster->getStealthDrawnLook() == STEALTHLOOK_VISIBLE_FRIENDLY_DETECTED)
 			&& !caster->isKindOf( KINDOF_MINE )
 			&& caster->getStealthFade() > 0.001f)
 		{
+#ifdef _WIN32
+			if (caster->getStealthFade() >= 0.999f)
+				continue;
+			const Real keptShare = 1.0f - caster->getStealthFade();
+#else
+			// the SDL3 builds draw no glass, so the body stays by its opacity and keeps half its shadow
+			const Real keptShare = 1.0f - 0.5f * caster->getStealthFade();
+#endif
 			sunInfo.drawEffect = DRAW_EFFECT_CLOAK_SHADOW;
-			sunInfo.drawEffectParameters[3] = caster->getStealthSolid();
+			sunInfo.drawEffectParameters[0] = cornerTexelX;
+			sunInfo.drawEffectParameters[1] = cornerTexelY;
+			sunInfo.drawEffectParameters[3] = 2.0f * keptShare;
 		}
 
 		robj->Render( sunInfo );

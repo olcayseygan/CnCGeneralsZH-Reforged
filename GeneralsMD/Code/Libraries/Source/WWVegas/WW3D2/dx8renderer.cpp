@@ -1926,16 +1926,21 @@ void DX8TextureCategoryClass::Render(void)
 		// The object's look on the Direct3D 11 frame (RTS3DScene::renderOneObject picks it), for this
 		// mesh's draws only.  A sorted mesh draws later, from the sorting pool, which keeps the look
 		// with its triangles (SortingRendererClass::Insert_Triangles), and on Linux its sun shadow
-		// coverage too.  The cloak writes alpha 1 (effect_cloak), so a mesh that blends by its own
-		// alpha (the Stealth General's yard emblem, a campfire card, a well's water) would come out
-		// as a solid quad; it draws without the look, as under -d3d9.  The whole mesh goes: one that
-		// mixes opaque polygons with a blended card loses the glass on its opaque ones too.
+		// coverage too.  The cloak writes alpha 1 (effect_cloak) over an opaque mesh.  A mesh that
+		// blends by its own alpha (the Stealth General's yard emblem, a campfire card, a well's water,
+		// the Pathfinder's ghillie cards) came out as a solid quad that way, and left out of the look
+		// it stood as a solid house-colour block on the glass body, a sorted mesh taking no stealth
+		// opacity either; it keeps the look and its own alpha instead, asked by two more in y.
 		unsigned draw_effect = mesh->Get_Draw_Effect();
+		const float * draw_effect_parameters = mesh->Get_Draw_Effect_Parameters();
+		float own_alpha_parameters[4];
 		if (draw_effect == DRAW_EFFECT_CLOAK && mesh->Is_Alpha()) {
-			draw_effect = DRAW_EFFECT_NONE;
+			memcpy(own_alpha_parameters, draw_effect_parameters, sizeof(own_alpha_parameters));
+			own_alpha_parameters[1] += 2.0f;
+			draw_effect_parameters = own_alpha_parameters;
 		}
 		if (draw_effect != 0) {
-			SunShadow::SetCasterEffect(DX8Wrapper::_Get_D3D_Device(),draw_effect, mesh->Get_Draw_Effect_Parameters());
+			SunShadow::SetCasterEffect(DX8Wrapper::_Get_D3D_Device(),draw_effect, draw_effect_parameters);
 		}
 		// A house colour mesh under the Team Glow option.  Immediate draws only: a sorted one draws later,
 		// after this has been put back, and goes without.

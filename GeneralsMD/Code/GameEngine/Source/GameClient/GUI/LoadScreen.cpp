@@ -522,6 +522,10 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 	// a ranked Quick Match, and any match on a generated map, gives a player neither the map nor any
 	// start spot, his own included, so the board never tells where the game put anyone
 	const Bool mapHidden = ( game->getStartShrouded() || isGeneratedMapPath( game->getMap() ) ) && !seeAll;
+	// a seat coming back to a match under way sees the sides and colours the match is played with, and no
+	// bar on a card: the others are not loading, they are in the match (the wide button carries the catch-up)
+	const Bool rejoining = TheNetwork && TheNetwork->isRejoining();
+	const Bool realSides = seeAll || rejoining;
 
 	// a card a player, in the order the lobby lists them.  Someone watching from this screen without a
 	// seat (an -observer match) is a watcher too, under the name the skirmish room would have given
@@ -546,19 +550,19 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 
 		BoardCard card;
 		card.slot = i;
-		const Int colorIndex = seeAll ? slot->getColor() : slot->getApparentColor();
+		const Int colorIndex = realSides ? slot->getColor() : slot->getApparentColor();
 		card.color = TheMultiplayerSettings->getColor( colorIndex )->getColor();
 		card.nameColor = UIStyle::readable( card.color );
 		card.team = 0;
 		card.column = 0;
 		card.startSpot = mapHidden ? -1 : seeAll ? slot->getStartPos() : slot->getApparentStartPos();
-		card.percent = cardBars && slot->isHuman() ? 0 : -1;
+		card.percent = cardBars && slot->isHuman() && !rejoining ? 0 : -1;
 		card.mirrored = FALSE;
 		card.badge = NULL;
 		card.emblem = NULL;
 		card.crest = NULL;
 		card.disc = NULL;
-		const Int sideIndex = seeAll ? slot->getPlayerTemplate() : slot->getApparentPlayerTemplate();
+		const Int sideIndex = realSides ? slot->getPlayerTemplate() : slot->getApparentPlayerTemplate();
 		UnicodeString army = TheGameText->fetch( "GUI:Random" );
 		if( sideIndex >= 0 )
 		{

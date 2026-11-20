@@ -17058,7 +17058,7 @@ GUI:HudLayout
 END
 
 GUI:HudLayout0
-"Complète"
+"Reforged"
 END
 
 GUI:HudLayout1
@@ -17066,7 +17066,7 @@ GUI:HudLayout1
 END
 
 TOOLTIP:HudLayout
-"Complète garde la barre de commande en bas, avec tout ce que cette version ajoute, et les touches du jeu. Classique montre cette barre comme dans le jeu d'origine : pas d'onglets de construction, pas de touches de signal au-dessus de la minicarte, pas de liste de production, pas de liste des escouades, les superarmes écrites en nom et en temps, les pouvoirs du général en une colonne qui monte du bas le long du bord droit. Reforged est la barre complète, onglets de construction compris, sans la liste de production, les touches des unités inactives et les touches de signal au-dessus de la minicarte. Style Red Alert place la construction et l'entraînement dans une barre latérale à droite, les ordres des unités sélectionnées dans une bande en bas, et reprend les touches de Red Alert 2 là où elles conviennent à ce jeu : Q W E R pour les onglets de construction, D pour déployer, L pour vendre, K pour réparer, Z maintenu pour les points de passage. Les trois barres du bas partagent les mêmes touches et Style Red Alert garde les siennes ; les deux se changent dans la page Raccourcis."
+"Reforged garde la barre de commande en bas avec tout ce que cette version ajoute : onglets de construction, touches de signal au-dessus de la minicarte, liste de production, liste des escouades et son plateau de production, bouton du héros, icônes des superarmes et pouvoirs du général dans un plateau. Classique montre cette barre comme dans le jeu d'origine, sans rien de tout cela : les superarmes écrites en nom et en temps, les pouvoirs du général en une colonne qui monte du bas le long du bord droit. Style Red Alert place la construction et l'entraînement dans une barre latérale à droite, les ordres des unités sélectionnées dans une bande en bas, et reprend les touches de Red Alert 2 là où elles conviennent à ce jeu : Q W E R pour les onglets de construction, D pour déployer, L pour vendre, K pour réparer, Z maintenu pour les points de passage. Reforged et Classique partagent les touches du jeu et Style Red Alert garde les siennes ; les deux se changent dans la page Raccourcis."
 END
 
 GUI:HudWidth
@@ -19067,10 +19067,6 @@ END
 
 GUI:HudLayout2
 "Classique"
-END
-
-GUI:HudLayout3
-"Reforged"
 END
 
 Network:WaitingForReconnect

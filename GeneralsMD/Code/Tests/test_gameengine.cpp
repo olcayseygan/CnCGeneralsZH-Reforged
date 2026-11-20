@@ -11453,10 +11453,17 @@ TEST(hud_layout_and_width_round_trip_through_options_ini)
 	pref[ AsciiString( "HudLayout" ) ] = AsciiString( "7" );
 	pref[ AsciiString( "HudWidth" ) ] = AsciiString( "9" );
 	loadOptionsFromPreferences( pref );
-	CHECK_EQ( TheGlobalData->m_hudLayout, HUD_LAYOUT_COUNT - 1 );
+	// a layout past the list (the plain one was 3 for an afternoon) is the default bar, not the last one
+	CHECK_EQ( TheGlobalData->m_hudLayout, (Int)HUD_LAYOUT_CLASSIC );
 	CHECK_EQ( TheGlobalData->m_hudWidth, HUD_WIDTH_COUNT - 1 );
-	// the last layout is a Classic bar with pieces left off, which keeps the Classic keys
 	CHECK_EQ( TheGlobalData->m_hotkeyScheme, (Int)HOTKEY_SCHEME_CLASSIC );
+	CHECK_EQ( (Int)HUD_LAYOUT_COUNT, 3 );
+	pref[ AsciiString( "HudLayout" ) ] = AsciiString( "3" );
+	loadOptionsFromPreferences( pref );
+	CHECK_EQ( TheGlobalData->m_hudLayout, (Int)HUD_LAYOUT_CLASSIC );
+	pref[ AsciiString( "HudLayout" ) ] = AsciiString( "2" );
+	loadOptionsFromPreferences( pref );
+	CHECK_EQ( TheGlobalData->m_hudLayout, (Int)HUD_LAYOUT_RETAIL );
 
 	// the menu's Accept goes through the same setter
 	layout->set( HUD_LAYOUT_CLASSIC );
@@ -11465,18 +11472,16 @@ TEST(hud_layout_and_width_round_trip_through_options_ini)
 	CHECK_EQ( TheGlobalData->m_hotkeyScheme, (Int)HOTKEY_SCHEME_RED_ALERT );
 	layout->set( HUD_LAYOUT_RETAIL );
 	CHECK_EQ( TheGlobalData->m_hotkeyScheme, (Int)HOTKEY_SCHEME_CLASSIC );
-	layout->set( HUD_LAYOUT_PLAIN );
-	CHECK_EQ( TheGlobalData->m_hotkeyScheme, (Int)HOTKEY_SCHEME_CLASSIC );
 
-	// both stand on the Classic bar's rectangles
-	HudLayoutRects classic, retail, plain;
-	HudLayoutForScreen( 1920, 1080, HUD_LAYOUT_CLASSIC, HUD_WIDTH_FULL, &classic );
+	// Classic stands on the Reforged bar's rectangles, and only Reforged has the command tabs
+	HudLayoutRects reforged, retail;
+	HudLayoutForScreen( 1920, 1080, HUD_LAYOUT_CLASSIC, HUD_WIDTH_FULL, &reforged );
 	HudLayoutForScreen( 1920, 1080, HUD_LAYOUT_RETAIL, HUD_WIDTH_FULL, &retail );
-	HudLayoutForScreen( 1920, 1080, HUD_LAYOUT_PLAIN, HUD_WIDTH_FULL, &plain );
 	CHECK_EQ( retail.layout, (Int)HUD_LAYOUT_CLASSIC );
-	CHECK_EQ( plain.layout, (Int)HUD_LAYOUT_CLASSIC );
-	CHECK_EQ( retail.play.hi.x, classic.play.hi.x );
-	CHECK_EQ( plain.play.hi.y, classic.play.hi.y );
+	CHECK_EQ( retail.play.hi.x, reforged.play.hi.x );
+	CHECK_EQ( retail.play.hi.y, reforged.play.hi.y );
+	CHECK( hudLayoutHasCommandTabs( HUD_LAYOUT_CLASSIC ) );
+	CHECK( !hudLayoutHasCommandTabs( HUD_LAYOUT_RETAIL ) );
 
 	delete TheWritableGlobalData;
 	TheWritableGlobalData = saved;

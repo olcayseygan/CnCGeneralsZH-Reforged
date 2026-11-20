@@ -16818,7 +16818,7 @@ GUI:HudLayout
 END
 
 GUI:HudLayout0
-"Tam"
+"Reforged"
 END
 
 GUI:HudLayout1
@@ -16826,7 +16826,7 @@ GUI:HudLayout1
 END
 
 TOOLTIP:HudLayout
-"Tam, komuta çubuğunu altta, bu sürümün eklediği her şeyle ve oyunun kendi tuşlarıyla tutar. Klasik, aynı çubuğun ilk oyundaki hâlidir: yapım sekmeleri, mini haritanın üstündeki işaret tuşları, üretim listesi ve takım listesi yok, süper silahlar ad ve süre olarak yazılır, generalin güçleri sağ kenarda tek sütunda aşağıdan yukarı dizilir. Reforged, yapım sekmeleri yerinde duran tam çubuğun üretim listesi, boştaki birim tuşları ve mini haritanın üstündeki işaret tuşları olmadan hâlidir. Red Alert tarzı bina ve birim üretimini sağdaki yan panele taşır, seçili birimlerin komutlarını alttaki şeride koyar ve Red Alert 2'nin tuşlarını bu oyuna uyduğu yerde alır: yapım sekmeleri için Q W E R, konuşlanmak için D, satmak için L, onarmak için K, ara noktalar için basılı Z. Alttaki üç çubuk aynı tuşları paylaşır, Red Alert tarzı kendi tuşlarını tutar; ikisi de Kısayollar sayfasında değişir."
+"Reforged, komuta çubuğunu altta, bu sürümün eklediği her şeyle tutar: yapım sekmeleri, mini haritanın üstündeki işaret tuşları, üretim listesi, takım listesi ve üretim tepsisi, kahraman tuşu, süper silah simgeleri ve tepsideki general güçleri. Klasik, aynı çubuğun ilk oyundaki hâlidir, bunların hiçbiri yok: süper silahlar ad ve süre olarak yazılır, generalin güçleri sağ kenarda tek sütunda aşağıdan yukarı dizilir. Red Alert tarzı bina ve birim üretimini sağdaki yan panele taşır, seçili birimlerin komutlarını alttaki şeride koyar ve Red Alert 2'nin tuşlarını bu oyuna uyduğu yerde alır: yapım sekmeleri için Q W E R, konuşlanmak için D, satmak için L, onarmak için K, ara noktalar için basılı Z. Reforged ve Klasik oyunun kendi tuşlarını paylaşır, Red Alert tarzı kendi tuşlarını tutar; ikisi de Kısayollar sayfasında değişir."
 END
 
 GUI:HudWidth
@@ -21228,10 +21228,6 @@ END
 
 GUI:HudLayout2
 "Klasik"
-END
-
-GUI:HudLayout3
-"Reforged"
 END
 
 Network:WaitingForReconnect

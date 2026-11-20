@@ -13040,9 +13040,8 @@ void InGameUI::drawProductionList( void )
 	const Int foot = radarFrameTop() - stripPixels( PRODUCTION_LIST_LIFT ) - style.production.footH;
 	m_heroCell = drawHeroCell( style, foot - style.cellH, m_hero );
 	// the Red Alert style sidebar's cameos wear their own queue's clocks and counts; the hero's cell
-	// stays, over the selection card (radarFrameTop).  The plain Reforged layout (HUD_LAYOUT_PLAIN)
-	// keeps the hero's cell and leaves the list off
-	if( m_productionListCount == 0 || sidebarLayoutOn() || TheGlobalData->m_hudLayout == HUD_LAYOUT_PLAIN )
+	// stays, over the selection card (radarFrameTop)
+	if( m_productionListCount == 0 || sidebarLayoutOn() )
 		return;
 
 	// a cell wearing an "x5" stands for five.  Only a full list leaves anything out, and the tab

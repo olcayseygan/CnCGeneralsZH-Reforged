@@ -605,7 +605,8 @@ const OptionDef TheOptionCatalog[] =
 
 	// Where the in-game interface sits: 0 Classic, the bar along the bottom, 1 the Red Alert style
 	// sidebar down the right with a command strip under the world (docs/plans/HUD-SIDEBAR-LAYOUT.md),
-	// 2 and 3 the Classic bar with pieces left off (HUD_LAYOUT_RETAIL, HUD_LAYOUT_PLAIN).
+	// 2 the same bar with the fork's pieces left off (HUD_LAYOUT_RETAIL, shown as Classic; 0 is shown
+	// as Reforged).
 	// Read as the bar is laid out, so Accept builds the shell and the bar again, in a match too.
 	// Every menu is fitted; MenuLayout, HudScale and the old InterfaceStyle are gone for good.  The
 	// layout brings its keys too, Classic's or Red Alert's (set_m_hudLayout); HotkeyScheme was a row of
@@ -1037,7 +1038,12 @@ static Int parseOptionValue( const OptionDef& def, const AsciiString& stored )
 		return on ? 1 : 0;
 	}
 
-	return clampOptionValue( def, atoi( stored.str() ) );
+	// a layout gone from the list (the plain Reforged one was 3 for an afternoon) is the default bar,
+	// not whichever layout happens to be last
+	const Int number = atoi( stored.str() );
+	if( strcmp( def.iniKey, "HudLayout" ) == 0 && ( number < def.lo || number > def.hi ) )
+		return def.lo;
+	return clampOptionValue( def, number );
 }
 
 //-----------------------------------------------------------------------------

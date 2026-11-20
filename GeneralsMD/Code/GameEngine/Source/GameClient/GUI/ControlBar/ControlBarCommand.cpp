@@ -2862,10 +2862,9 @@ void ControlBar::updateSignalKeys( void )
 	IRegion2D seat[ SIGNAL_KEYS ], plate;
 	const Bool seated = m_controlBarSchemeManager != NULL && m_controlBarSchemeManager->getSignalSeats( seat, &plate );
 	// the seats are painted on the Classic bar's radar plate, which the sidebar does not have; the
-	// Classic and Reforged layouts (HUD_LAYOUT_RETAIL, HUD_LAYOUT_PLAIN) leave them off, plate and all.
-	// The keys' own hotkeys still signal
-	const Bool shown = seated && !m_sidebarLayout && TheGlobalData->m_hudLayout != HUD_LAYOUT_PLAIN
-		&& TheGlobalData->m_hudLayout != HUD_LAYOUT_RETAIL && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame()
+	// Classic layout (HUD_LAYOUT_RETAIL) leaves them off, plate and all.  The keys' own hotkeys still
+	// signal
+	const Bool shown = seated && !m_sidebarLayout && TheGlobalData->m_hudLayout != HUD_LAYOUT_RETAIL && TheGameLogic->isInGame() && !TheGameLogic->isInShellGame()
 		&& m_contextParent[ CP_MASTER ] != NULL && !m_contextParent[ CP_MASTER ]->winIsHidden()
 		&& !TheInGameUI->isQuitMenuVisible();
 

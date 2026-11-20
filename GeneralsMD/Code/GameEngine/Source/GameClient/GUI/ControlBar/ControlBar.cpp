@@ -5678,14 +5678,11 @@ void ControlBar::showIdleButtons( Bool show )
 		NAMEKEY( "ControlBar.wnd:ButtonIdleAircraft" ),
 		NAMEKEY( "ControlBar.wnd:ButtonSelectArmy" ),
 	};
-	// the Reforged layout (HUD_LAYOUT_PLAIN) keeps EA's idle worker key and leaves the fork's idle
-	// column off: the infantry, vehicle and aircraft keys and the army key
-	const Bool plain = TheGlobalData != NULL && TheGlobalData->m_hudLayout == HUD_LAYOUT_PLAIN;
 	for( Int i = 0; i < 5; i++ )
 	{
 		GameWindow *win = TheWindowManager->winGetWindowFromId( NULL, ids[ i ] );
 		if( win )
-			win->winHide( !show || ( plain && i > 0 ) );
+			win->winHide( !show );
 	}
 }
 

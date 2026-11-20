@@ -773,71 +773,16 @@ void ControlBar::layoutSidebar( void )
 	if( !m_multiSelectTiles.empty() )
 		layoutMultiSelectTiles( (Int)m_multiSelectTiles.size() );
 
-	//
-	// The beacon key in a row on the strip, from x 1100 at 1920.  A 4:3 strip has no room left beside
-	// the commands, so there the row stands above the strip's right end.
-	//
-	// ponytail: above the strip it may meet the superweapon timers' lowest row; phase 4 tunes 4:3 and 5:4
-	// No idle keys on the sidebar (the owner's, 2026-11-20): the worker, infantry, vehicle and aircraft
-	// keys and the army key are hidden, their hotkeys the command map's; the beacon key keeps the row.
-	// setControlBarSchemeByPlayer's showIdleButtons hides them the same way
-	static const char *const idleNames[] =
+	// No idle keys and no beacon key on the sidebar (the owner's, 2026-11-20): the worker, infantry,
+	// vehicle and aircraft keys, the army key and the beacon key are hidden, their hotkeys the command
+	// map's.  setControlBarSchemeByPlayer's showIdleButtons hides the idle ones the same way
+	static const char *const keyNames[] =
 	{
-		"ButtonIdleWorker", "ButtonIdleInfantry", "ButtonIdleVehicle", "ButtonIdleAircraft", "ButtonSelectArmy"
-	};
-	for( Int i = 0; i < (Int)( sizeof( idleNames ) / sizeof( idleNames[ 0 ] ) ); i++ )
-		hideForSidebar( barWindow( idleNames[ i ] ) );
-	static const char *const rowNames[] =
-	{
+		"ButtonIdleWorker", "ButtonIdleInfantry", "ButtonIdleVehicle", "ButtonIdleAircraft", "ButtonSelectArmy",
 		"ButtonPlaceBeacon"
 	};
-	enum { ROW_COUNT = sizeof( rowNames ) / sizeof( rowNames[ 0 ] ) };
-	// 36 high at 1080, centred on the strip, and as wide as its own art makes it (Reforged's 54x35
-	// comes to 56, retail's 34x24 to 51)
-	GameWindow *row[ ROW_COUNT ];
-	Int rowW[ ROW_COUNT ];
-	Int count = 0;
-	const Int size = MAX( 8, REAL_TO_INT( 36 * hud.scale + 0.5f ) );
-	const Int gap = hud.stripButtons[ 1 ].lo.x - hud.stripButtons[ 0 ].hi.x;
-	Int need = 0;
-	for( Int i = 0; i < ROW_COUNT; i++ )
-	{
-		GameWindow *win = barWindow( rowNames[ i ] );
-		ICoord2D extent = { 0, 0 };
-		if( win != NULL )
-			win->winGetSize( &extent.x, &extent.y );
-		// a scheme without a seat for one of them sizes it to nothing (ControlBarScheme::init)
-		if( win == NULL || extent.x <= 0 || extent.y <= 0 )
-			continue;
-		const Image *art = GadgetButtonGetEnabledImage( win );
-		if( art != NULL && art->getImageWidth() > 0 && art->getImageHeight() > 0 )
-			rowW[ count ] = ( size * art->getImageWidth() + art->getImageHeight() / 2 ) / art->getImageHeight();
-		else
-			rowW[ count ] = size * extent.x / extent.y;
-		need += ( count > 0 ? gap : 0 ) + rowW[ count ];
-		row[ count++ ] = win;
-	}
-	ICoord2D rowAt;
-	if( hud.stripSpare.width() >= need )
-	{
-		rowAt.x = MIN( MAX( hud.area.lo.x + REAL_TO_INT( 1100 * hud.scale ), hud.stripSpare.lo.x ), hud.stripSpare.hi.x - need );
-		rowAt.y = hud.strip.lo.y + ( hud.strip.height() - size ) / 2;
-	}
-	else
-	{
-		rowAt.x = hud.play.hi.x - gap - need;
-		rowAt.y = hud.strip.lo.y - gap - size;
-	}
-	for( Int i = 0; i < count; i++ )
-	{
-		IRegion2D cell;
-		cell.lo.x = rowAt.x;
-		cell.lo.y = rowAt.y;
-		cell.hi.x = cell.lo.x + rowW[ i ];
-		cell.hi.y = cell.lo.y + size;
-		placeWindowAt( row[ i ], cell );
-		rowAt.x = cell.hi.x + gap;
-	}
+	for( Int i = 0; i < (Int)( sizeof( keyNames ) / sizeof( keyNames[ 0 ] ) ); i++ )
+		hideForSidebar( barWindow( keyNames[ i ] ) );
 
 	// what the sidebar has no place for
 	static const char *const hiddenNames[] =

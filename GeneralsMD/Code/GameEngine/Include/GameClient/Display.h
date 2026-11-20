@@ -407,7 +407,6 @@ struct HudLayoutRects
 	IRegion2D strip;
 	IRegion2D stripButtons[ HUD_STRIP_BUTTONS ];	///< 60x48, the art's own size, at x 8 + 64i, y 1024 (ButtonCommand01..14 in order, to 900)
 	IRegion2D stripClock;							///< 96x48, right edge 4 short of the strip's (1500,1024 at 1920)
-	IRegion2D stripSpare;							///< the strip between the last button and the clock, 8 clear of both (908..1492, y 1024..1072 at 1920): idle, SelectArmy, PlaceBeacon
 
 	// the selection card rising from the strip's top edge at area's left: 0,896 470x120 (its bounds)
 	IRegion2D card;

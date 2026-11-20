@@ -227,9 +227,6 @@ void HudLayoutForScreen( Int screenWidth, Int screenHeight, Int layout, Int hudW
 	for( Int i = 0; i < HUD_STRIP_BUTTONS; ++i )
 		m.areaBottom( &out->stripButtons[ i ], 8.0f + 64.0f * i, 1024, HUD_CAMEO_ART_W, HUD_CAMEO_ART_H );
 	setRegion( &out->stripClock, m.crx( 1500 ), m.by( 1024 ), m.crx( 1596 ), m.by( 1072 ) );
-	setRegion( &out->stripSpare, m.ax( 908 ), m.by( 1024 ), m.crx( 1492 ), m.by( 1072 ) );
-	if( out->stripSpare.hi.x < out->stripSpare.lo.x )
-		out->stripSpare.hi.x = out->stripSpare.lo.x;
 
 	// the selection card
 	// welded to the strip: its foot is the strip's top, its left the area's

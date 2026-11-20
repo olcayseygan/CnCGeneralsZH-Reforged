@@ -21409,9 +21409,6 @@ TEST(hud_layout_rects_tile_the_screen)
 	CHECK_EQ( r.stripButtons[ 0 ].width(), HUD_CAMEO_ART_W );
 	CHECK_EQ( r.stripButtons[ 0 ].height(), HUD_CAMEO_ART_H );
 	CHECK_EQ( r.stripClock.lo.x, 1500 );
-	CHECK_EQ( r.stripSpare.lo.x, 908 );
-	CHECK_EQ( r.stripSpare.lo.y, 1024 );
-	CHECK_EQ( r.stripSpare.hi.y, 1072 );
 	CHECK_EQ( r.card.lo.x, 0 );
 	CHECK_EQ( r.card.lo.y, 896 );
 	CHECK_EQ( r.card.hi.x, 470 );
@@ -21558,9 +21555,6 @@ TEST(hud_layout_rects_tile_the_screen)
 				strip[ n++ ] = &r.stripButtons[ i ];
 			strip[ n++ ] = &r.stripClock;
 			checkHudCells( strip, n, r.strip );
-			CHECK( hudRegionInside( r.stripSpare, r.strip ) );
-			CHECK( r.stripSpare.lo.x >= r.stripButtons[ HUD_STRIP_BUTTONS - 1 ].hi.x );
-			CHECK( r.stripSpare.hi.x <= r.stripClock.lo.x );
 
 			// the card welded to the strip: the medallion and the label plate side by side in it, the
 			// portrait and the rank in the medallion, the name, the groove and the tray on the plate, the

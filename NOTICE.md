@@ -43,6 +43,8 @@ right to use them (LICENSE.md, additional terms). They appear here only to say w
   their added lines are marked, and hunks backported from upstream SDL are named in each patch's header.
 - **FreeType** is used under the GNU GPL (version 2 or later) option of its dual licence.
 - **FFmpeg** is built under LGPL-2.1-or-later only: its build scripts refuse GPL or non-free configurations.
+- **mbedTLS**, which carries the online service's TLS, is used under the Apache License 2.0 option of its dual
+  licence (Apache-2.0 or GPL-2.0-or-later).
 
 ## Game data
 

@@ -29,6 +29,7 @@
 #include "PosixResources9.h"
 #include "SdlCreationLog.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 namespace {

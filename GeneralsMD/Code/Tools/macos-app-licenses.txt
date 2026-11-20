@@ -20,6 +20,7 @@ glyphrasteriser       game
 installroot           game
 milesaudio            game
 milesaudiomanager     game
+onlineconnection      game
 posixd3d9             game
 posixdevice           game
 sdl3shadercompile     game
@@ -50,6 +51,7 @@ spirv-cross-glsl      spirv-cross
 spirv-cross-msl       spirv-cross
 miniaudio             miniaudio
 gamespy               gamespy
+mbedtls               mbedtls
 
 # compiled into another library
 + zlib                # Compression/ZLib, inside libcompression

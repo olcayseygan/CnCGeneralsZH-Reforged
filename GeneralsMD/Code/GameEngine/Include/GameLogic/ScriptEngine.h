@@ -104,6 +104,28 @@ inline Bool ScriptEngine_countdownPassed( Int valueBefore, Int valueAfter, Int t
 	return target > valueAfter && target < valueBefore;
 }
 
+/** "counter == target" for evaluateCounter on frame.  A countdown also holds on the tick it passed
+	target, as long as nothing has set it since.  Pausing it later in the pass does not take that back
+	(the value stays, so the plain compare would not either), and an adjust moves the window with the
+	value (ScriptEngine_adjustCountdown).  A plain counter never steps, so its window is empty. */
+inline Bool ScriptEngine_countdownEquals( const TCounter &counter, Int target, UnsignedInt frame )
+{
+	if( counter.value == target )
+		return TRUE;
+	return counter.countdownFrame == frame && counter.value == counter.valueAfterTick
+		&& ScriptEngine_countdownPassed( counter.valueBeforeTick, counter.valueAfterTick, target );
+}
+
+/** Adds frames to a timer and shifts this tick's countdown window with it, so the crossing reads as if
+	the timer had held the adjusted value all along; a later "timer == n" this pass then agrees with the
+	plain compare a one-step tick would give. */
+inline void ScriptEngine_adjustCountdown( TCounter &counter, Int frames )
+{
+	counter.value += frames;
+	counter.valueBeforeTick += frames;
+	counter.valueAfterTick += frames;
+}
+
 struct TFlag
 {
 	Bool value;

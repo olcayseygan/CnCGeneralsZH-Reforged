@@ -5286,13 +5286,14 @@ void Player::crc( Xfer *xfer )
 	* 10: The vision spies (fork).
 	* 11: m_attackedFrame, which the skirmish AI's base-under-attack test reads (fork).
 	* 12: m_radarJammedUntilFrame, an enemy's electronic blinding (fork).
+	* 13: m_logicalRetaliationModeEnabled (fork).
 	*/
 // ------------------------------------------------------------------------------------------------
 void Player::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 12;
+	const XferVersion currentVersion = 13;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -5870,6 +5871,12 @@ void Player::xfer( Xfer *xfer )
 		xfer->xferUnsignedInt( &m_radarJammedUntilFrame );
 	else
 		m_radarJammedUntilFrame = 0;
+
+	// the retaliation switch as logic last set it; while a mission's script holds input (saved by the
+	// ScriptEngine) update() does not sync it from the options, so a save inside a cinematic keeps it
+	// off.  An older save has none and keeps the init value, which update() syncs within a second.
+	if( version >= 13 )
+		xfer->xferBool( &m_logicalRetaliationModeEnabled );
 
 }  // end xfer
 

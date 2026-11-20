@@ -6591,17 +6591,10 @@ Bool ScriptEngine::evaluateCounter( Condition *pCondition )
 		case Parameter::LESS_THAN: return m_counters[counterNdx].value < value;
 		case Parameter::LESS_EQUAL: return m_counters[counterNdx].value <= value;
 		case Parameter::EQUAL:
-		{
 			/* A countdown timer steps two retail frames on some ticks at a game speed above the wall's,
 				 so "timer == 300" would never see 300.  It also holds on the tick the countdown passed the
 				 number, as long as nothing has set the timer since.  A plain counter is untouched. */
-			const TCounter &counter = m_counters[counterNdx];
-			if (counter.value == value)
-				return true;
-			return counter.isCountdownTimer && counter.countdownFrame == TheGameLogic->getFrame()
-				&& counter.value == counter.valueAfterTick
-				&& ScriptEngine_countdownPassed( counter.valueBeforeTick, counter.valueAfterTick, value );
-		}
+			return ScriptEngine_countdownEquals( m_counters[counterNdx], value, TheGameLogic->getFrame() );
 		case Parameter::GREATER_EQUAL: return m_counters[counterNdx].value >= value;
 		case Parameter::GREATER: return m_counters[counterNdx].value > value;
 		case Parameter::NOT_EQUAL: return m_counters[counterNdx].value != value;
@@ -7086,12 +7079,12 @@ void ScriptEngine::adjustTimer( ScriptAction *pAction, Bool millisecondTimer, Bo
 		Real value = pAction->getParameter(0)->getReal();
 		if (!add)
 			value = -value;
-		m_counters[counterNdx].value += retailTimerFrames(value);
+		ScriptEngine_adjustCountdown( m_counters[counterNdx], retailTimerFrames(value) );
 	} else {
 		Int value = pAction->getParameter(0)->getInt();
 		if (!add)
 			value = -value;
-		m_counters[counterNdx].value += value;
+		ScriptEngine_adjustCountdown( m_counters[counterNdx], value );
 	}
 }
 
@@ -9192,6 +9185,7 @@ void ScriptEngine::setGlobalDifficulty( GameDifficulty difficulty )
 	* 3: Added m_objectsShouldReceiveDifficultyBonus (JKMCD)
 	* 4: current music track info
 	* 5: add ChooseVictimAlwaysUsesNormal
+	* 6: m_inputHeldByScript (fork)
 	*/
 // ------------------------------------------------------------------------------------------------
 void ScriptEngine::xfer( Xfer *xfer )
@@ -9199,7 +9193,7 @@ void ScriptEngine::xfer( Xfer *xfer )
 	Int i;
 
 	// version
-	const XferVersion currentVersion = 5;
+	const XferVersion currentVersion = 6;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -9669,6 +9663,13 @@ void ScriptEngine::xfer( Xfer *xfer )
 	{
 		m_ChooseVictimAlwaysUsesNormal = false;
 	}
+
+	// a save taken inside a cinematic keeps the player's input held, or the retaliation switch
+	// (Player::update) is free again on load; an older save has none and reads as free
+	if (version >= 6)
+		xfer->xferBool(&m_inputHeldByScript);
+	else
+		m_inputHeldByScript = FALSE;
 
 	if( xfer->getXferMode() == XFER_LOAD ) {
 		// We are doing a load.  If there is no fade active, do a black fade in to start.

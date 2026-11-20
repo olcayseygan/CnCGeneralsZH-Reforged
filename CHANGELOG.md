@@ -99,6 +99,7 @@ found and fixed, EA's own, not port damage.**
 - The original Generals campaigns speak their briefings again. EA's load screen played the narrator at a set point of the mission movie, and the code that did it had been cut, so the voice never came. It starts at that point once more, or as the load screen opens when the movie is missing or turned off for a slow machine, plays once per mission and stays quiet with voices muted. Zero Hour's training mission names a briefing voice too and now plays it. Thanks to Shin-Aska.
 - The startup check for reskinned units that lost a piece of their original no longer flags a piece the reskin's own data takes out on purpose with a line naming it. A piece lost without such a line, or added to the original later and missing from the reskin, is still reported. Thanks to Shin-Aska.
 - On a Mac the game finds Zero Hour in Steam's own Mac library, and in any other library Steam lists there, an external drive's included, and a GOG copy inside a CrossOver or Whisky bottle. It used to look only where Steam keeps games on Linux and asked for the folder. Thanks to SimonWaldherr.
+- A Mac crash inside the system's own window drawing is gone. Apple's graphics code could hand the game memory it had taken from the system and the game freed it as its own; on a Mac the game now takes and frees ordinary memory the system's way, as Linux already did. Thanks to SimonWaldherr.
 
 ## A dropped player's army stays, and he can come back to it
 

@@ -132,6 +132,12 @@ void PosixIMEManager::startOrStopTextInput( void )
 	}
 }
 
+void PosixIMEManager::refreshTextInputArea( void )
+{
+	if (m_textInputOn && m_window != NULL && m_disabled == 0)
+		startOrStopTextInput();
+}
+
 void PosixIMEManager::endComposition( void )
 {
 	m_composing = FALSE;

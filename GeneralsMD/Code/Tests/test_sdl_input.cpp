@@ -371,9 +371,14 @@ class RecordingIME : public PosixIMEManager
 {
 public:
 	std::vector<WideChar> sent;
+	Int areaX = 10, areaY = 20, areaWidth = 300, areaHeight = 24, areaQueries = 0;
 protected:
 	virtual void sendChar( GameWindow *, WideChar ch ) { sent.push_back( ch ); }
-	virtual void windowArea( GameWindow *, Int &x, Int &y, Int &width, Int &height ) { x = 10; y = 20; width = 300; height = 24; }
+	virtual void windowArea( GameWindow *, Int &x, Int &y, Int &width, Int &height )
+	{
+		x = areaX; y = areaY; width = areaWidth; height = areaHeight;
+		++areaQueries;
+	}
 };
 
 GameWindow *const aTextField = reinterpret_cast<GameWindow *>( 0x1000 );	// never dereferenced: windowArea is stood in for
@@ -387,6 +392,7 @@ RecordingIME *theRecordingIME( void )
 		TheIMEManager = ime;
 	}
 	ime->sent.clear();
+	ime->areaX = 10; ime->areaY = 20; ime->areaWidth = 300; ime->areaHeight = 24; ime->areaQueries = 0;
 	return ime;
 }
 
@@ -409,6 +415,15 @@ void pushEditing( const char *utf8, int start )
 	event.edit.text = utf8;
 	event.edit.start = start;
 	event.edit.length = 0;
+	SDL_PushEvent( &event );
+}
+
+void pushWindowGeometry( SDL_EventType type, SDL_WindowID windowID )
+{
+	SDL_Event event;
+	SDL_zero( event );
+	event.type = type;
+	event.window.windowID = windowID;
 	SDL_PushEvent( &event );
 }
 
@@ -512,6 +527,78 @@ TEST(the_composition_and_its_cursor_come_from_text_editing)
 	pump();
 	CHECK( !ime->isComposing() );
 	CHECK_EQ( ime->getCandidateCount(), 0 );	// the platform draws the candidates
+	ime->detatch();
+}
+
+TEST(window_geometry_changes_refresh_the_candidate_rect_without_ending_composition)
+{
+	CHECK( start() );
+	SdlInput_install();
+	RecordingIME *ime = theRecordingIME();
+	ime->attach( aTextField );
+	pushEditing( "\xE3\x81\xAB\xE3\x81\xBB", 1 );	// an active Japanese composition
+	pump();
+	const SDL_EventType changes[] = { SDL_EVENT_WINDOW_RESIZED, SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED,
+		SDL_EVENT_WINDOW_DISPLAY_CHANGED, SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED };
+	for (unsigned int index = 0; index < sizeof(changes) / sizeof(changes[0]); ++index)
+	{
+		// Stand in for the text field's current layout after each kind of geometry change.
+		ime->areaX += 11;
+		ime->areaY += 7;
+		ime->areaWidth -= 10;
+		ime->areaHeight += 2;
+		const Int queries = ime->areaQueries;
+		pushWindowGeometry( changes[index], SDL_GetWindowID( theWindow ) );
+		pump();
+		SDL_Rect area;
+		CHECK( SDL_GetTextInputArea( theWindow, &area, NULL ) );
+		CHECK( ime->areaQueries > queries );
+		CHECK_EQ( area.x, ime->areaX );
+		CHECK_EQ( area.y, ime->areaY );
+		CHECK_EQ( area.w, ime->areaWidth );
+		CHECK_EQ( area.h, ime->areaHeight );
+		CHECK( SDL_TextInputActive( theWindow ) );
+		CHECK( ime->isAttachedTo( aTextField ) && ime->isComposing() );
+		UnicodeString composition;
+		ime->getCompositionString( composition );
+		CHECK( composition.getLength() == 2 && composition.getCharAt( 0 ) == 0x306B && composition.getCharAt( 1 ) == 0x307B );
+		CHECK_EQ( ime->getCompositionCursorPosition(), 1 );
+	}
+	const Int queries = ime->areaQueries;
+	pushWindowGeometry( SDL_EVENT_WINDOW_DISPLAY_CHANGED, SDL_GetWindowID( theWindow ) + 1000 );
+	pump();
+	CHECK_EQ( ime->areaQueries, queries );	// another window cannot move this field's candidates
+
+	SDL_StopTextInput( theWindow );
+	pushWindowGeometry( SDL_EVENT_WINDOW_RESIZED, SDL_GetWindowID( theWindow ) );
+	pump();
+	CHECK( !SDL_TextInputActive( theWindow ) );
+	CHECK_EQ( ime->areaQueries, queries );	// a stopped native session is never restarted by geometry
+	ime->detatch();
+}
+
+TEST(candidate_rect_refresh_does_not_activate_disabled_or_detached_input)
+{
+	CHECK( start() );
+	SdlInput_install();
+	RecordingIME *ime = theRecordingIME();
+	ime->detatch();
+	const Int detachedQueries = ime->areaQueries;
+	ime->refreshTextInputArea();
+	pushWindowGeometry( SDL_EVENT_WINDOW_RESIZED, SDL_GetWindowID( theWindow ) );
+	pump();
+	CHECK_EQ( ime->areaQueries, detachedQueries );
+	CHECK( !SDL_TextInputActive( theWindow ) );
+
+	ime->attach( aTextField );
+	ime->disable();
+	const Int disabledQueries = ime->areaQueries;
+	ime->refreshTextInputArea();
+	pushWindowGeometry( SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED, SDL_GetWindowID( theWindow ) );
+	pump();
+	CHECK_EQ( ime->areaQueries, disabledQueries );
+	CHECK( !SDL_TextInputActive( theWindow ) && !ime->isEnabled() );
+	ime->enable();
 	ime->detatch();
 }
 

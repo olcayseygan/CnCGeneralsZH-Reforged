@@ -29028,3 +29028,64 @@ TEST(script_countdown_timer_snapshot_preserves_phase_and_loads_older_saves)
 	}
 	remove(path);
 }
+
+#include "GameClient/LoadScreen.h"
+
+class BriefingVoiceTestAudio : public NullAudioManager
+{
+public:
+	Bool enabled = TRUE;
+	Real volume = 1.0f;
+	Int plays = 0;
+	AsciiString played;
+	Bool isOn(AudioAffect) const override { return enabled; }
+	Real getVolume(AudioAffect) override { return volume; }
+	void friend_forcePlayAudioEventRTS(const AudioEventRTS *event) override
+	{ ++plays; played = event->getEventName(); }
+};
+
+TEST(original_generals_briefing_voice_starts_once_at_movie_cue_or_fallback)
+{
+	CHECK(bootOnce());
+	BriefingVoiceTestAudio audio;
+	AudioEventRTS voice("BriefingUSA01");
+	CampaignBriefingVoice playback;
+	playback.update(audio, voice, 254, FALSE);
+	CHECK_EQ(audio.plays, 0);
+	playback.update(audio, voice, 256, FALSE); // a skipped movie frame still crosses the cue
+	playback.update(audio, voice, 300, FALSE);
+	playback.update(audio, voice, 0, TRUE); // movie completion must not replay it
+	CHECK_EQ(audio.plays, 1);
+	CHECK_STR(audio.played.str(), "BriefingUSA01");
+	for (Int path = 0; path < 3; ++path) // minimum-spec, missing movie, buffer failure share fallback
+	{
+		playback.reset();
+		playback.update(audio, voice, 0, TRUE);
+		playback.update(audio, voice, 0, TRUE);
+		CHECK_EQ(audio.plays, path + 2);
+	}
+}
+
+TEST(original_generals_briefing_voice_respects_empty_muted_and_cancelled_loads)
+{
+	CHECK(bootOnce());
+	BriefingVoiceTestAudio audio;
+	CampaignBriefingVoice playback;
+	playback.update(audio, AudioEventRTS(), 300, FALSE); // stock Zero Hour movie owns its audio
+	playback.update(audio, AudioEventRTS("NoSound"), 0, TRUE);
+	CHECK_EQ(audio.plays, 0);
+	AudioEventRTS voice("BriefingGLA01");
+	for (Int muted = 0; muted < 2; ++muted)
+	{
+		playback.reset(); audio.enabled = muted != 0; audio.volume = muted ? 0.0f : 1.0f;
+		playback.update(audio, voice, 255, FALSE);
+		audio.enabled = TRUE; audio.volume = 1.0f;
+		playback.update(audio, voice, 300, FALSE); // unmuting later does not start a surprise voice
+		CHECK_EQ(audio.plays, 0);
+	}
+	playback.reset(); playback.cancel();
+	playback.update(audio, voice, 0, TRUE); // focus loss/quit must not start a fallback voice
+	CHECK_EQ(audio.plays, 0);
+	playback.reset(); playback.update(audio, voice, 0, TRUE);
+	CHECK_EQ(audio.plays, 1);
+}

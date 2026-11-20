@@ -1474,6 +1474,26 @@ void LoadScreenBoard::drawMatch( void )
 
 // SinglePlayerLoadScreen Class ///////////////////////////////////////////////
 //-----------------------------------------------------------------------------
+void CampaignBriefingVoice::update(AudioManager &audio, const AudioEventRTS &voice,
+	Int movieFrame, Bool skipMovie)
+{
+	// Frame 255 is EA's authored external-voice cue. Zero Hour missions name no voice.
+	if (m_attempted || voice.getEventName().isEmpty()
+		|| voice.getEventName().compareNoCase("NoSound") == 0 || (!skipMovie && movieFrame < 255))
+		return;
+	m_attempted = TRUE;
+	if (audio.isOn(AudioAffect_Speech) && audio.getVolume(AudioAffect_Speech) > 0.0f)
+		audio.friend_forcePlayAudioEventRTS(&voice);
+}
+
+void SinglePlayerLoadScreen::startBriefingAudio(const Mission &mission, Int movieFrame, Bool skipMovie)
+{
+	if (TheGameEngine->getQuitting() || !TheGameEngine->isActive())
+		m_briefingVoice.cancel();
+	else
+		m_briefingVoice.update(*TheAudio, mission.m_briefingVoice, movieFrame, skipMovie);
+}
+
 SinglePlayerLoadScreen::SinglePlayerLoadScreen( void )
 {
 	//Added By Sadullah Nader
@@ -1690,6 +1710,7 @@ void SinglePlayerLoadScreen::moveWindows( Int frame )
  
 void SinglePlayerLoadScreen::init( GameInfo *game )
 {
+	m_briefingVoice.reset();
 	//No music in SinglePlayerLoadScreen
 
 	// create the layout of the load screen
@@ -1808,6 +1829,7 @@ void SinglePlayerLoadScreen::init( GameInfo *game )
 	m_videoStream = TheVideoPlayer->open( TheCampaignManager->getCurrentMission()->m_movieLabel );
 	if ( m_videoStream == NULL )
 	{
+		startBriefingAudio(*mission, 0, TRUE);
 		m_percent->winHide(TRUE);
 		return;
 	}
@@ -1825,6 +1847,7 @@ void SinglePlayerLoadScreen::init( GameInfo *game )
 		if ( m_videoStream )
 			m_videoStream->close();
 		m_videoStream = NULL;
+		startBriefingAudio(*mission, 0, TRUE);
 
 		return;
 	}
@@ -1858,6 +1881,7 @@ void SinglePlayerLoadScreen::init( GameInfo *game )
 
 // PULLED FROM THE MISSION DISK
 //			moveWindows( m_videoStream->frameIndex());
+			startBriefingAudio(*mission, m_videoStream->frameIndex());
 
 			m_videoStream->frameNext();
 
@@ -1882,6 +1906,8 @@ void SinglePlayerLoadScreen::init( GameInfo *game )
 			TheDisplay->draw();
 		}
 
+		// A short/failed movie may finish before its cue. The once guard prevents a replay.
+		startBriefingAudio(*mission, 0, TRUE);
 		// let the background image show through
 		m_videoStream->close();
 		m_videoStream = NULL;
@@ -1891,6 +1917,7 @@ void SinglePlayerLoadScreen::init( GameInfo *game )
 	else
 	{
 		// if we're min spec'ed don't play a movie
+		startBriefingAudio(*mission, 0, TRUE);
 		
 		Int delay = mission->m_voiceLength * 1000;
 		Int begin = Clock_Milliseconds();
@@ -1920,6 +1947,7 @@ void SinglePlayerLoadScreen::init( GameInfo *game )
 
 void SinglePlayerLoadScreen::reset( void )
 {
+ m_briefingVoice.cancel();
  setLoadScreen(NULL);
  m_progressBar = NULL;
 }

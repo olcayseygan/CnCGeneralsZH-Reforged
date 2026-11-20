@@ -45,9 +45,106 @@ static bool aligned( const void *p )
 	return ((uintptr_t)p % __STDCPP_DEFAULT_NEW_ALIGNMENT__) == 0;
 }
 
+static bool zeroed( const void *p, size_t size )
+{
+	if (p == NULL)
+		return false;
+	const unsigned char *bytes = (const unsigned char *)p;
+	for (size_t i = 0; i < size; ++i)
+		if (bytes[i] != 0)
+			return false;
+	return true;
+}
+
+namespace {
+unsigned pool_constructions = 0, pool_destructions = 0, abstract_constructions = 0;
+bool fail_pool_constructor = false;
+struct ConstructorFailure {};
+
+class PoolAllocationProbe : public MemoryPoolObject
+{
+	MEMORY_POOL_GLUE_WITH_EXPLICIT_CREATE(PoolAllocationProbe, "PoolAllocationProbe", 2, 2)
+public:
+	PoolAllocationProbe() : Value(0x12345678)
+	{
+		++pool_constructions;
+		if (fail_pool_constructor) throw ConstructorFailure();
+	}
+	static void *Forbidden_Plain_New() { return new PoolAllocationProbe; }
+	static MemoryPool *Pool() { return getClassMemoryPool(); }
+	unsigned Value;
+};
+PoolAllocationProbe::~PoolAllocationProbe() { ++pool_destructions; }
+
+class AbstractAllocationProbe : public MemoryPoolObject
+{
+	MEMORY_POOL_GLUE_ABC(AbstractAllocationProbe)
+public:
+	AbstractAllocationProbe() { ++abstract_constructions; }
+	static void *Forbidden_Plain_New() { return new AbstractAllocationProbe; }
+	static void *Forbidden_Tagged_New() { return newInstance(AbstractAllocationProbe); }
+};
+AbstractAllocationProbe::~AbstractAllocationProbe() {}
+
+class MissingGlueProbe : public MemoryPoolObject
+{
+public:
+	static void *Forbidden_Inherited_New() { return MemoryPoolObject::operator new(sizeof(MissingGlueProbe)); }
+private:
+	MemoryPool *getObjectMemoryPool() { return NULL; }
+};
+
+void expect_allocation_bug(const char *path, void *(*allocate)())
+{
+	bool caught = false;
+	try { allocate(); }
+	catch (ErrorCode error) { caught = error == ERROR_BUG; }
+	catch (...) {}
+	if (!caught) printf("Pool allocation path '%s' did not throw ERROR_BUG\n", path);
+	CHECK(caught);
+}
+
+void check_pool_allocation_contract()
+{
+	// The class allocation functions must throw even if the debug diagnostic is disabled or
+	// dismissed. Calling the inherited raw form also avoids constructing an object at null.
+	expect_allocation_bug("inherited without glue", &MissingGlueProbe::Forbidden_Inherited_New);
+	expect_allocation_bug("abstract plain", &AbstractAllocationProbe::Forbidden_Plain_New);
+	expect_allocation_bug("abstract tagged", &AbstractAllocationProbe::Forbidden_Tagged_New);
+	expect_allocation_bug("concrete plain", &PoolAllocationProbe::Forbidden_Plain_New);
+	CHECK(pool_constructions == 0 && abstract_constructions == 0);
+
+	MemoryPool *pool = PoolAllocationProbe::Pool();
+	const Int used = pool->getUsedBlockCount();
+	void *raw = pool->allocateBlock("allocation contract selfcheck");
+	CHECK(raw != NULL && zeroed(raw, sizeof(PoolAllocationProbe)));
+	CHECK(pool->getUsedBlockCount() == used + 1);
+	pool->freeBlock(raw);
+	CHECK(pool->getUsedBlockCount() == used);
+
+	PoolAllocationProbe *object = newInstance(PoolAllocationProbe);
+	CHECK(object != NULL && object->Value == 0x12345678);
+	CHECK(pool->getUsedBlockCount() == used + 1);
+	object->deleteInstance();
+	CHECK(pool->getUsedBlockCount() == used && pool_destructions == 1);
+
+	// Matching placement delete must return the pool block when construction throws.
+	fail_pool_constructor = true;
+	bool caught = false;
+	try { newInstance(PoolAllocationProbe); }
+	catch (const ConstructorFailure &) { caught = true; }
+	catch (...) {}
+	fail_pool_constructor = false;
+	CHECK(caught);
+	CHECK(pool->getUsedBlockCount() == used);
+	CHECK(pool_constructions == 2 && pool_destructions == 1);
+}
+} // namespace
+
 int main( void )
 {
 	initMemoryManager();
+	check_pool_allocation_contract();
 
 	// Every size a small object comes in, and some past the memory manager's sub-pools.
 	static const size_t sizes[] = { 1, 2, 3, 4, 5, 7, 8, 12, 16, 20, 24, 28, 32, 40, 48, 64, 100, 128,
@@ -84,6 +181,11 @@ void JobSystem::noteWorkerAllocation() {}
 void getExecutableDirectory( char *buf, size_t size, Bool ) { if (size > 0) buf[0] = 0; }	// no pool-size override
 #ifdef ALLOW_DEBUG_UTILS
 DEBUG_EXTERN_C void DebugInit( int ) {}
+#endif
+#ifdef DEBUG_CRASHING
+// Model dismissing the diagnostic: forbidden allocation still has to throw afterwards.
+DEBUG_EXTERN_C char *TheCurrentIgnoreCrashPtr = NULL;
+DEBUG_EXTERN_C void DebugCrash( const char *, ... ) {}
 #endif
 DEBUG_EXTERN_C void ReleaseCrash( const char *reason ) { fprintf( stderr, "ReleaseCrash: %s\n", reason ); abort(); }	// a corrupt block header
 #ifdef DEBUG_LOGGING

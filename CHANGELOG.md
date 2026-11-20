@@ -94,6 +94,7 @@ found and fixed, EA's own, not port damage.**
 - A mission whose script asked whether a radio line had finished before playing it could cut to its next scene as the line began, the old answer still standing. Playing a line now starts its wait afresh, and the other lines keep theirs. Thanks to Shin-Aska.
 - A mission countdown keeps its pace while a cinematic freezes the world. At 1.25x and up the timer took its share of the frame the world stopped on, again every frame the cutscene ran, so it ran at 1x or 2x until the scene ended, whichever the frozen frame happened to hold. It now counts on at the game's speed, and a save keeps where it was between two ticks. Thanks to Shin-Aska.
 - The original Generals campaigns speak their briefings again. EA's load screen played the narrator at a set point of the mission movie, and the code that did it had been cut, so the voice never came. It starts at that point once more, or as the load screen opens when the movie is missing or turned off for a slow machine, plays once per mission and stays quiet with voices muted. Zero Hour's training mission names a briefing voice too and now plays it. Thanks to Shin-Aska.
+- The startup check for reskinned units that lost a piece of their original no longer flags a piece the reskin's own data takes out on purpose with a line naming it. A piece lost without such a line, or added to the original later and missing from the reskin, is still reported. Thanks to Shin-Aska.
 
 ## A dropped player's army stays, and he can come back to it
 

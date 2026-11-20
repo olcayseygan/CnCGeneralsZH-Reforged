@@ -275,8 +275,15 @@ private:
 
 	};
 	std::vector<Nugget> m_info;
+	std::vector<AsciiString> m_explicitlyRemovedTags; ///< successful authored RemoveModule operations; diagnostic provenance only
 
 public:
+
+	struct InheritedModule
+	{
+		AsciiString name;
+		AsciiString tag;
+	}; ///< diagnostic identity only; never owns ModuleData
 
 	ModuleInfo() { }
 
@@ -330,7 +337,8 @@ public:
 
 	void clear() 
 	{ 
-		m_info.clear(); 
+		m_info.clear();
+		m_explicitlyRemovedTags.clear();
 	}
 
 	void setCopiedFromDefault(Bool v)
@@ -339,7 +347,10 @@ public:
 			m_info[i].copiedFromDefault = v;
 	}
 
-	Bool clearModuleDataWithTag(const AsciiString& tagToClear, AsciiString& clearedModuleNameOut);
+	Bool clearModuleDataWithTag(const AsciiString& tagToClear, AsciiString& clearedModuleNameOut, Bool authoredRemoval = FALSE);
+	void clearExplicitRemovals() { m_explicitlyRemovedTags.clear(); }
+	std::vector<InheritedModule> getInheritedModules() const;
+	AsciiString missingInheritedTypes(const std::vector<InheritedModule>& source) const; ///< type-compatible replacements remain valid; only explicitly removed source tags are exempt
 	Bool clearCopiedFromDefaultEntries(Int interfaceMask, const AsciiString &name, const ThingTemplate *fullTemplate );
 	Bool clearAiModuleInfo();
 };
@@ -648,6 +659,12 @@ public:
 	void setCopiedFromDefault();
 
 	void setReskinnedFrom(const ThingTemplate* tt) { DEBUG_ASSERTCRASH(m_reskinnedFrom == NULL, ("should be null")); m_reskinnedFrom = tt; }
+	/// against the source's modules as they stand now, so a fix made to the source after the copy
+	/// that the reskin never got is still reported; only tags the reskin itself removed are exempt
+	AsciiString getMissingReskinBehaviorTypes() const
+	{
+		return m_reskinnedFrom ? m_behaviorModuleInfo.missingInheritedTypes(m_reskinnedFrom->m_behaviorModuleInfo.getInheritedModules()) : AsciiString();
+	}
 	const ThingTemplate* friend_getReskinnedFrom() const { return m_reskinnedFrom; }	///< port defect 34's load-time check
 
 	Bool isPrerequisite() const { return m_isPrerequisite; }
@@ -704,7 +721,7 @@ protected:
 
   static void parseMaxSimultaneous(INI *ini, void *instance, void *store, const void *userData);
 
-	Bool removeModuleInfo(const AsciiString& moduleToRemove, AsciiString& clearedModuleNameOut);
+	Bool removeModuleInfo(const AsciiString& moduleToRemove, AsciiString& clearedModuleNameOut, Bool authoredRemoval = FALSE);
 
 private:
 	static const FieldParse s_objectFieldParseTable[];		///< the parse table

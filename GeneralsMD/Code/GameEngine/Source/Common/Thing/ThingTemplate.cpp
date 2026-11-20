@@ -383,12 +383,16 @@ void ModuleInfo::addModuleInfo(ThingTemplate *thingTemplate,
 
 #endif
 
+	// Reintroducing the tag starts a new obligation: a later accidental loss must not inherit
+	// the exemption from an earlier authored removal.
+	for (std::vector<AsciiString>::iterator it = m_explicitlyRemovedTags.begin(); it != m_explicitlyRemovedTags.end(); )
+		if (*it == moduleTag) it = m_explicitlyRemovedTags.erase(it); else ++it;
 	m_info.push_back(Nugget(name, moduleTag, data, interfaceMask, inheritable, overrideableByLikeKind));
 
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool ModuleInfo::clearModuleDataWithTag(const AsciiString& tagToClear, AsciiString& clearedModuleNameOut) 
+Bool ModuleInfo::clearModuleDataWithTag(const AsciiString& tagToClear, AsciiString& clearedModuleNameOut, Bool authoredRemoval)
 { 
 	Bool cleared = false;
 
@@ -410,7 +414,42 @@ Bool ModuleInfo::clearModuleDataWithTag(const AsciiString& tagToClear, AsciiStri
 			++it;
 		}
 	}
+	if (cleared && authoredRemoval)
+		m_explicitlyRemovedTags.push_back(tagToClear);
 	return cleared;
+}
+
+
+// Source tags identify what was deliberately removed, while type names preserve the existing
+// replacement compatibility. In particular, removing one of two same-type source modules does
+// not excuse an unintended loss of the other when no compatible module remains.
+std::vector<ModuleInfo::InheritedModule> ModuleInfo::getInheritedModules() const
+{
+	std::vector<InheritedModule> result;
+	for (const Nugget& module : m_info)
+		result.push_back({module.first, module.m_moduleTag});
+	return result;
+}
+
+AsciiString ModuleInfo::missingInheritedTypes(const std::vector<InheritedModule>& source) const
+{
+	AsciiString missing;
+	for (const InheritedModule& wanted : source)
+	{
+		Bool found = FALSE;
+		for (const Nugget& have : m_info)
+			if (have.first == wanted.name) { found = TRUE; break; }
+		if (found) continue;
+		Bool removed = FALSE;
+		for (const AsciiString& tag : m_explicitlyRemovedTags)
+			if (tag == wanted.tag) { removed = TRUE; break; }
+		if (!removed)
+		{
+			missing.concat(" ");
+			missing.concat(wanted.name);
+		}
+	}
+	return missing;
 }
 
 
@@ -827,7 +866,7 @@ void ThingTemplate::parseRemoveModule(INI *ini, void *instance, void *store, con
 	// A tag that is not there is already removed. Installs outside Steam carry other copies of EA's
 	// data, and a missing tag in one of them stopped the game at start (FixesReforged.ini,
 	// SupW_AuroraFuelAirBomb ModuleTag_03).
-	if (!self->removeModuleInfo(modToRemove, removedModuleName))
+	if (!self->removeModuleInfo(modToRemove, removedModuleName, TRUE))
 		DEBUG_LOG(("[LINE: %d - FILE: '%s'] RemoveModule %s was not found for %s; skipped.\n",
 			ini->getLineNum(), ini->getFilename().str(), modToRemove, self->getName().str()));
 
@@ -949,7 +988,7 @@ void ThingTemplate::OverrideableByLikeKind(INI *ini, void *instance, void *store
 //-------------------------------------------------------------------------------------------------
 /** Remove the module whose tag matches moduleToRemove. */
 //-------------------------------------------------------------------------------------------------
-Bool ThingTemplate::removeModuleInfo(const AsciiString& moduleToRemove, AsciiString& clearedModuleNameOut)
+Bool ThingTemplate::removeModuleInfo(const AsciiString& moduleToRemove, AsciiString& clearedModuleNameOut, Bool authoredRemoval)
 {
 	Bool removed = false;
 
@@ -957,17 +996,17 @@ Bool ThingTemplate::removeModuleInfo(const AsciiString& moduleToRemove, AsciiStr
 	// if we return false, we should leave this unmodified.
 	//clearedModuleNameOut.clear();
 
-	if (m_behaviorModuleInfo.clearModuleDataWithTag(moduleToRemove, clearedModuleNameOut))
+	if (m_behaviorModuleInfo.clearModuleDataWithTag(moduleToRemove, clearedModuleNameOut, authoredRemoval))
 	{
 		DEBUG_ASSERTCRASH(!removed, ("Hmm, multiple removed in ThingTemplate::removeModuleInfo, should this be possible?"));
 		removed = true;
 	}
-	if (m_drawModuleInfo.clearModuleDataWithTag(moduleToRemove, clearedModuleNameOut))
+	if (m_drawModuleInfo.clearModuleDataWithTag(moduleToRemove, clearedModuleNameOut, authoredRemoval))
 	{
 		DEBUG_ASSERTCRASH(!removed, ("Hmm, multiple removed in ThingTemplate::removeModuleInfo, should this be possible?"));
 		removed = true;
 	}
-	if (m_clientUpdateModuleInfo.clearModuleDataWithTag(moduleToRemove, clearedModuleNameOut))
+	if (m_clientUpdateModuleInfo.clearModuleDataWithTag(moduleToRemove, clearedModuleNameOut, authoredRemoval))
 	{
 		DEBUG_ASSERTCRASH(!removed, ("Hmm, multiple removed in ThingTemplate::removeModuleInfo, should this be possible?"));
 		removed = true;
@@ -1393,6 +1432,13 @@ void ThingTemplate::copyFrom(const ThingTemplate* that)
 	AsciiString name = this->m_nameString;
 
 	*this = *that;
+
+	// copyFrom starts a new ObjectReskin (normal override assignment does not): the copy answers to
+	// its immediate source, and the RemoveModule lines the source wrote are not the copy's own.
+	m_reskinnedFrom = NULL;
+	m_behaviorModuleInfo.clearExplicitRemovals();
+	m_drawModuleInfo.clearExplicitRemovals();
+	m_clientUpdateModuleInfo.clearExplicitRemovals();
 
 	this->m_nextThingTemplate = next;
 	this->m_templateID = id;

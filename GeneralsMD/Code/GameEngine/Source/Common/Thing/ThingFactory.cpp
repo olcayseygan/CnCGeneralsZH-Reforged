@@ -664,7 +664,10 @@ static void checkLocomotors( ThingTemplate *first )
 	 Technical reskins lost their AI, physics, contain and die modules, and the first AI that recruited one
 	 crashed.  Each reskin missing one of its source's behaviour modules (by module name) is logged,
 	 "ReskinCheck: <name> lacks ...", whichever build, for Tests/run_locomotor_check.sh to read, and is a
-	 DEBUG_CRASH in a debug build. */
+	 DEBUG_CRASH in a debug build. A module whose tag the reskin's own RemoveModule took out is exempt;
+	 a loss with no such line, or a RemoveModule naming a tag that was not there, is still reported.
+	 The source is read as it stands after every patch, so a fix to the source in place that the reskin
+	 did not get is reported too. */
 //-------------------------------------------------------------------------------------------------
 static void checkReskins( ThingTemplate *first )
 {
@@ -675,20 +678,7 @@ static void checkReskins( ThingTemplate *first )
 		if( source == NULL )
 			continue;
 		++reskins;
-		const ModuleInfo &have = t->getBehaviorModuleInfo(), &want = source->getBehaviorModuleInfo();
-		AsciiString missing;
-		for( Int i = 0; i < want.getCount(); ++i )
-		{
-			const AsciiString name = want.getNthName( i );
-			Bool found = FALSE;
-			for( Int j = 0; j < have.getCount() && !found; ++j )
-				found = have.getNthName( j ) == name;
-			if( !found )
-			{
-				missing.concat( " " );
-				missing.concat( name );
-			}
-		}
+		const AsciiString missing = t->getMissingReskinBehaviorTypes();
 		if( missing.isEmpty() )
 			continue;
 		++lacking;

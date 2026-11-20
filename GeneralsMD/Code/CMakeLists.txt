@@ -2534,8 +2534,13 @@ target_sources(test_terrain_golden PRIVATE ${TESTS}/test_gameengine_stubs.cpp)
 if(ZH_PLATFORM_POSIX)
   target_link_libraries(test_terrain_golden PRIVATE posixdevice w3ddevice)
 endif()
+# Without ZH_GAME_DATA it reads Run/ (ZH bigs loose, the base game's in ZH_Generals/), where any
+# checkout the game plays from has the maps; build.bat never sets ZH_GAME_DATA, so the test used to
+# skip on every ctest run.  It still skips when Run/ holds no MapsZH.big or ZH_Generals/maps.big.
 if(ZH_GAME_DATA)
   set_tests_properties(test_terrain_golden PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${ZH_GAME_DATA}")
+else()
+  set_tests_properties(test_terrain_golden PROPERTIES ENVIRONMENT "ZH_DATA_DIR=${CMAKE_CURRENT_SOURCE_DIR}/../Run")
 endif()
 # T1c (defect 17): the water grid's step, moved to the top of each logic frame, against the original
 # code's output under EA's one-pass-per-frame loop (Tests/water_grid_oracle.cpp), under catch-up too.

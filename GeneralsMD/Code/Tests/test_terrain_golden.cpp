@@ -26,8 +26,9 @@
  * and requires every line to match.  So it checks the moved parse, the moved maths, and - against the
  * oracle's own chunk walker - the engine's chunk reading, in one comparison.
  *
- * Needs ZH_DATA_DIR (a folder holding zerohour/ and generals/, read only - rule 9: nothing here starts
- * the engine, it only reads archives).  Without it: "skip", 77, which ctest reports as Skipped.
+ * Needs ZH_DATA_DIR (a folder holding zerohour/ and generals/, or GeneralsMD/Run/ with its ZH_Generals/,
+ * read only - rule 9: nothing here starts the engine, it only reads archives).  Without it, or without
+ * the two map archives in it: "skip", 77, which ctest reports as Skipped.
  *
  * What it does not show: that the simulation asks these functions (that is W3DTerrainLogic on
  * Windows, and the portable terrain logic off it); anything about bridges (T1b) or the water grid.
@@ -147,6 +148,33 @@ int main( void )
 		printf( "skip: no game data (ZH_DATA_DIR)\n" );
 		return 77;
 	}
+	/* Two layouts: an install's zerohour/ and generals/, or GeneralsMD/Run/, where the Zero Hour bigs sit
+		 loose and the base game's in ZH_Generals/ (what ctest points at when ZH_GAME_DATA is not set). */
+	std::string zhPrefix = "zerohour/", genPrefix = "generals/";
+	{
+		const std::string root( dir );
+		FILE *probe = fopen( (root + "/zerohour/MapsZH.big").c_str(), "rb" );
+		if (probe == NULL)
+		{
+			zhPrefix = "";
+			genPrefix = "ZH_Generals/";
+			probe = fopen( (root + "/MapsZH.big").c_str(), "rb" );
+			FILE *base = fopen( (root + "/ZH_Generals/maps.big").c_str(), "rb" );
+			if (base != NULL)
+				fclose( base );
+			else if (probe != NULL)
+			{
+				fclose( probe );
+				probe = NULL;
+			}
+		}
+		if (probe == NULL)
+		{
+			printf( "skip: no MapsZH.big and maps.big under %s\n", dir );
+			return 77;
+		}
+		fclose( probe );
+	}
 	initMemoryManager();
 	/* The moved BlendTileData parser reads TheGlobalData->m_use3WayTerrainBlends (it only clears the extra
 		 blend indexes, which nothing here samples); in the game a GlobalData always exists, so the test
@@ -185,7 +213,12 @@ int main( void )
 	{
 		const std::string &key = expected[m].first;
 		const size_t bar = key.find( '|' );
-		const std::string archive = std::string( dir ) + "/" + key.substr( 0, bar );
+		std::string archive = key.substr( 0, bar );
+		if (archive.compare( 0, 9, "zerohour/" ) == 0)
+			archive = zhPrefix + archive.substr( 9 );
+		else if (archive.compare( 0, 9, "generals/" ) == 0)
+			archive = genPrefix + archive.substr( 9 );
+		archive = std::string( dir ) + "/" + archive;
 		const std::vector<unsigned char> packed = readBigEntry( archive, key.substr( bar + 1 ) );
 		if (packed.empty())
 		{

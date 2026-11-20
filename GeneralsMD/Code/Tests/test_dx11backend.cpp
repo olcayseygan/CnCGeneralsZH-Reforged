@@ -35,6 +35,7 @@
 #include "Platform/WaterConstants.h"
 
 #include <math.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <chrono>
@@ -1950,6 +1951,204 @@ TEST(dx11backend_skinned_shadow_casters_write_the_depth_the_cpu_skinned_draws_wr
 	CHECK(edge <= EDGE_TEXELS_ALLOWED);
 	CHECK(widest <= DEPTH_LEVELS_ALLOWED);
 
+	indices->Release();
+	vertices->Release();
+	backend.Shutdown();
+}
+
+static unsigned covered_texels(const std::vector<unsigned> & depths)
+{
+	unsigned covered = 0;
+	for (size_t texel = 0; texel < depths.size(); ++texel) {
+		if (depths[texel] != 0x00ffffff) {
+			++covered;
+		}
+	}
+	return covered;
+}
+
+// An alpha tested caster (a tree's leaves, a fence) drawn instanced has to cut the same texels out
+// of the sun's map as the generated program's alpha test does, to the bit: the tilted quad of the
+// rigid test, twice, under a texture whose alphas sit either side of the material's 0x60 reference,
+// 0x5f and 0x60 among them, so a reference off by a level or a comparison the wrong way round shows.
+TEST(dx11backend_alpha_tested_shadow_casters_cut_the_texels_the_old_draws_cut)
+{
+	static const unsigned ALPHA_SIZE = 4;
+
+	DX11DeviceClass device;
+	CHECK(device.Create_Offscreen());
+	ID3D11Device * d3d = device.Get_Device();
+
+	DX11BackendClass backend;
+	CHECK(backend.Initialise(&device));
+	configure_unlit_pass_through(backend);
+
+	float sun[16];
+	set_identity(sun);
+	sun[0] = 0.5f;
+	sun[5] = 0.5f;
+	sun[10] = 0.1f;
+	backend.Set_Transform(D3DTS_PROJECTION, sun);
+
+	float worlds[2][16];
+	const float angles[2] = { 0.5236f, -1.1f };
+	const float moves[2][3] = { { 0.3f, -0.2f, 2.75f }, { -0.45f, 0.35f, 3.1f } };
+	for (unsigned copy = 0; copy < 2; ++copy) {
+		set_identity(worlds[copy]);
+		worlds[copy][0] = cosf(angles[copy]);
+		worlds[copy][1] = sinf(angles[copy]);
+		worlds[copy][4] = -sinf(angles[copy]);
+		worlds[copy][5] = cosf(angles[copy]);
+		worlds[copy][12] = moves[copy][0];
+		worlds[copy][13] = moves[copy][1];
+		worlds[copy][14] = moves[copy][2];
+	}
+
+	// The tilted quad, with the whole texture across it.
+	BackendVertex vertices_data[4];
+	memcpy(vertices_data, QUAD_VERTICES, sizeof(vertices_data));
+	const float depths_at[4] = { 0.37f, 1.91f, 4.13f, 2.59f };
+	const float corners[4][2] = { { 0.0f, 0.0f }, { 0.0f, 1.0f }, { 1.0f, 1.0f }, { 1.0f, 0.0f } };
+	for (unsigned index = 0; index < 4; ++index) {
+		vertices_data[index].Position[0] *= 1.3f;
+		vertices_data[index].Position[1] *= 0.9f;
+		vertices_data[index].Position[2] = depths_at[index];
+		vertices_data[index].TexCoord0[0] = corners[index][0];
+		vertices_data[index].TexCoord0[1] = corners[index][1];
+	}
+	ID3D11Buffer * vertices = NULL;
+	CHECK(DX11Resource_Create_Vertex_Buffer(d3d, sizeof(vertices_data), D3DPOOL_MANAGED, 0,
+		vertices_data, &vertices));
+	ID3D11Buffer * indices = NULL;
+	CHECK(DX11Resource_Create_Index_Buffer(d3d, sizeof(QUAD_INDICES), D3DPOOL_MANAGED, 0,
+		QUAD_INDICES, &indices));
+
+	// Sixteen texels, white, each its own alpha: kept at and above 0x60, cut below it.
+	static const unsigned char ALPHAS[ALPHA_SIZE * ALPHA_SIZE] = {
+		0xff, 0x00, 0x60, 0x5f,
+		0x5f, 0x60, 0x00, 0xff,
+		0x80, 0x40, 0xff, 0x00,
+		0x00, 0xff, 0x61, 0x5e };
+	unsigned texels[ALPHA_SIZE * ALPHA_SIZE];
+	for (unsigned texel = 0; texel < ALPHA_SIZE * ALPHA_SIZE; ++texel) {
+		texels[texel] = ((unsigned)ALPHAS[texel] << 24) | 0x00ffffff;
+	}
+	D3D11_TEXTURE2D_DESC texture_description;
+	memset(&texture_description, 0, sizeof(texture_description));
+	texture_description.Width = ALPHA_SIZE;
+	texture_description.Height = ALPHA_SIZE;
+	texture_description.MipLevels = 1;
+	texture_description.ArraySize = 1;
+	texture_description.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+	texture_description.SampleDesc.Count = 1;
+	texture_description.Usage = D3D11_USAGE_IMMUTABLE;
+	texture_description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	D3D11_SUBRESOURCE_DATA texture_data;
+	texture_data.pSysMem = texels;
+	texture_data.SysMemPitch = ALPHA_SIZE * sizeof(unsigned);
+	texture_data.SysMemSlicePitch = 0;
+	ID3D11Texture2D * texture = NULL;
+	CHECK(SUCCEEDED(d3d->CreateTexture2D(&texture_description, &texture_data, &texture)));
+	ID3D11ShaderResourceView * texture_view = NULL;
+	CHECK(SUCCEEDED(d3d->CreateShaderResourceView(texture, NULL, &texture_view)));
+
+	// What renderShadowMap sets for the pass, and an alpha tested material's shader: stage 0's alpha
+	// times the opaque diffuse, tested against 0x60, both faces drawn.
+	backend.Set_Render_State(D3DRS_COLORWRITEENABLE, 0);
+	backend.Set_Render_State(D3DRS_ZENABLE, D3DZB_TRUE);
+	backend.Set_Render_State(D3DRS_ZWRITEENABLE, TRUE);
+	backend.Set_Render_State(D3DRS_ZFUNC, D3DCMP_LESSEQUAL);
+	backend.Set_Render_State(D3DRS_CULLMODE, D3DCULL_NONE);
+	backend.Set_Render_State(D3DRS_ALPHATESTENABLE, TRUE);
+	backend.Set_Render_State(D3DRS_ALPHAREF, 0x60);
+	backend.Set_Render_State(D3DRS_ALPHAFUNC, D3DCMP_GREATEREQUAL);
+	backend.Set_Texture_Stage_State(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
+	backend.Set_Texture_Stage_State(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+	backend.Set_Texture_Stage_State(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE);
+	backend.Set_Sampler_State(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+	backend.Set_Sampler_State(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+	backend.Set_Sampler_State(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+	backend.Set_Sampler_State(0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
+	backend.Set_Sampler_State(0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+	backend.Set_Texture(0, texture_view);
+
+	CHECK(backend.Begin_Shadow_Map(64));
+	backend.Set_Stream_Source(vertices, sizeof(BackendVertex), 0);
+	backend.Set_Indices(indices, DXGI_FORMAT_R16_UINT);
+	for (unsigned copy = 0; copy < 2; ++copy) {
+		backend.Set_Transform(D3DTS_WORLD, worlds[copy]);
+		CHECK(backend.Draw_Indexed_Triangles(6, 0, 0));
+	}
+	backend.End_Shadow_Map();
+	std::vector<unsigned> old_depths;
+	read_shadow_depths(device, backend, old_depths);
+
+	float rows[2][12];
+	for (unsigned copy = 0; copy < 2; ++copy) {
+		for (unsigned row = 0; row < 3; ++row) {
+			for (unsigned column = 0; column < 4; ++column) {
+				rows[copy][row * 4 + column] = worlds[copy][column * 4 + row];
+			}
+		}
+	}
+	const float * const instance_rows[2] = { rows[0], rows[1] };
+	const unsigned first_bones[2] = { 0, 0 };
+	DX11BackendClass::ShadowCasterRun run;
+	run.Kind = DX11BackendClass::SHADOW_CASTER_ALPHA_TESTED;
+	run.Vertices = vertices;
+	run.Stride = sizeof(BackendVertex);
+	run.TextureOffset = (unsigned)offsetof(BackendVertex, TexCoord0);
+	run.Indices = indices;
+	run.StartIndex = 0;
+	run.IndexCount = 6;
+	run.BaseVertex = 0;
+	run.Strip = false;
+	run.CullMode = D3DCULL_NONE;
+	run.DepthFunction = D3DCMP_LESSEQUAL;
+	run.FirstInstance = 0;
+	run.InstanceCount = 2;
+
+	// The instanced draw, the cull and depth test left somewhere else first, as in the rigid test.
+	backend.Set_Render_State(D3DRS_CULLMODE, D3DCULL_CW);
+	backend.Set_Render_State(D3DRS_ZFUNC, D3DCMP_ALWAYS);
+	CHECK(backend.Begin_Shadow_Map(64));
+	CHECK(backend.Upload_Shadow_Casters(instance_rows, first_bones, 2, NULL, 0));
+	CHECK(backend.Draw_Shadow_Casters(&run, 1));
+	backend.End_Shadow_Map();
+	std::vector<unsigned> lean_depths;
+	read_shadow_depths(device, backend, lean_depths);
+
+	// The same quads opaque, which says the alpha test cut something rather than nothing or all.
+	run.Kind = DX11BackendClass::SHADOW_CASTER_RIGID;
+	run.TextureOffset = 0;
+	CHECK(backend.Begin_Shadow_Map(64));
+	CHECK(backend.Upload_Shadow_Casters(instance_rows, first_bones, 2, NULL, 0));
+	CHECK(backend.Draw_Shadow_Casters(&run, 1));
+	backend.End_Shadow_Map();
+	std::vector<unsigned> opaque_depths;
+	read_shadow_depths(device, backend, opaque_depths);
+
+	const unsigned covered = covered_texels(old_depths);
+	const unsigned opaque = covered_texels(opaque_depths);
+	printf("  %u of %u texels covered, %u opaque\n", covered, (unsigned)old_depths.size(), opaque);
+	CHECK(covered > 0);
+	CHECK(covered < opaque);
+
+	CHECK_EQ(lean_depths.size(), old_depths.size());
+	unsigned differing = 0;
+	for (size_t texel = 0; texel < old_depths.size() && texel < lean_depths.size(); ++texel) {
+		if (old_depths[texel] != lean_depths[texel]) {
+			++differing;
+		}
+	}
+	if (differing != 0) {
+		printf("  %u texels differ\n", differing);
+	}
+	CHECK_EQ(differing, 0u);
+
+	backend.Set_Texture(0, NULL);
+	texture_view->Release();
+	texture->Release();
 	indices->Release();
 	vertices->Release();
 	backend.Shutdown();

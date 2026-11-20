@@ -847,6 +847,77 @@ TEST(dx11post_internal_hdr_keeps_colour_past_white_and_moves_nothing_under_it)
 	CHECK_EQ(offFire, frame_blue(fixture, 8.0f, 4.0f, 1.6f, true));
 }
 
+// Blue, green and red of one flat grey frame through the chain, the back buffer's own order.
+static void frame_colour(DeviceFixture & fixture, float level, int colour[3])
+{
+	fixture.Get_Post().Begin_Frame();
+	CHECK(clear_scene(fixture.Get_Device(), fixture.Get_Post(), level));
+	CHECK(fixture.Get_Post().Run_Chain());
+	unsigned pitch = 0;
+	unsigned char * result = read_back_buffer(fixture.Get_Device(), pitch);
+	CHECK(result != NULL);
+	for (unsigned channel = 0; channel < 3; ++channel) {
+		colour[channel] = (result != NULL)
+			? pixel_channel(result, pitch, SURFACE_SIZE / 2, SURFACE_SIZE / 2, channel) : -1;
+	}
+	delete [] result;
+}
+
+static int level_gap(int a, int b) { return (a > b) ? a - b : b - a; }
+
+TEST(dx11post_full_grade_holds_black_white_and_the_pivot_and_bends_the_rest)
+{
+	DeviceFixture fixture;
+	if (!fixture.Create()) {
+		printf("skip: no Direct3D 11 device on this machine\n");
+		return;
+	}
+
+	const DX11PostEffect chain[] = { DX11_POST_BLOOM };
+	fixture.Get_Post().Set_Chain(chain, 1);
+
+	// Black, the grade's pivot grey (under the tone curve's knee, so it reaches the grade as 0.28),
+	// a shade under it, a light over it, and four times white, which the curve brings to white.
+	const float levels[5] = { 0.0f, 0.28f, 0.15f, 0.6f, 4.0f };
+	int off[5][3];
+	int on[5][3];
+	for (unsigned index = 0; index < 5; ++index) {
+		frame_colour(fixture, levels[index], off[index]);
+	}
+	DX11Post_Set_Grade(1.0f);
+	for (unsigned index = 0; index < 5; ++index) {
+		frame_colour(fixture, levels[index], on[index]);
+	}
+	DX11Post_Set_Grade(0.0f);
+
+	// The S turns about black, white and the pivot, so red and green stay where they were.  Blue
+	// takes the split toning alone, the shade pushed cool and the light warm by five hundredths of
+	// how far each is from the pivot: a few levels at black and white, none at the pivot.
+	const unsigned BLACK = 0, PIVOT = 1, SHADE = 2, LIGHT = 3, WHITE = 4;
+	for (unsigned channel = 0; channel < 3; ++channel) {
+		CHECK(level_gap(off[PIVOT][channel], on[PIVOT][channel]) <= 1);
+	}
+	for (unsigned channel = 1; channel < 3; ++channel) {
+		CHECK(level_gap(off[BLACK][channel], on[BLACK][channel]) <= 1);
+		CHECK(level_gap(off[WHITE][channel], on[WHITE][channel]) <= 1);
+	}
+	CHECK(level_gap(off[BLACK][CHANNEL_BLUE], on[BLACK][CHANNEL_BLUE]) <= 10);
+	CHECK(level_gap(off[WHITE][CHANNEL_BLUE], on[WHITE][CHANNEL_BLUE]) <= 10);
+	CHECK_EQ(0, off[BLACK][CHANNEL_RED]);
+	CHECK_EQ(255, off[WHITE][CHANNEL_RED]);
+
+	// And it is not a grade that does nothing: the shade sinks and the light rises.
+	CHECK(on[SHADE][CHANNEL_RED] < off[SHADE][CHANNEL_RED] - 2);
+	CHECK(on[LIGHT][CHANNEL_RED] > off[LIGHT][CHANNEL_RED] + 2);
+
+	// Back to nought is the ungraded frame to the bit.
+	int again[3];
+	frame_colour(fixture, levels[LIGHT], again);
+	for (unsigned channel = 0; channel < 3; ++channel) {
+		CHECK_EQ(off[LIGHT][channel], again[channel]);
+	}
+}
+
 TEST(dx11post_bloom_spreads_light_past_the_pixels_that_carry_it)
 {
 	DeviceFixture fixture;

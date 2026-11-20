@@ -6728,14 +6728,30 @@ void ControlBar::arrangeSpecialPowerShortcutGrid( void )
 		slot.cell.hi.x = slot.edgeLeft + cell.x;
 		slot.cell.hi.y = slot.edgeTop + cell.y;
 
+		Int bw, bh;
+		button->winGetSize( &bw, &bh );
+		if( bare )
+		{
+			// the bare column's slot is its button and nothing more, so a click between two buttons
+			// reaches the map: the button centred in its cell, the slot round it
+			screen.lo.x += ( cell.x - bw ) / 2;
+			screen.lo.y += ( cell.y - bh ) / 2;
+			screen.hi.x = screen.lo.x + bw;
+			screen.hi.y = screen.lo.y + bh;
+			slot.cell.lo.x = slot.cell.lo.y = 0;
+			slot.cell.hi.x = bw;
+			slot.cell.hi.y = bh;
+		}
+
 		slotWin->winSetPosition( screen.lo.x - origin.x, screen.lo.y - origin.y );
 		slotWin->winSetSize( screen.hi.x - screen.lo.x, screen.hi.y - screen.lo.y );
 		slotWin->winSetUserData( &slot );
 		slotWin->winSetDrawFunc( drawPowerTraySlot );
 
-		Int bw, bh;
-		button->winGetSize( &bw, &bh );
-		button->winSetPosition( slot.edgeLeft + ( cell.x - bw ) / 2, slot.edgeTop + ( cell.y - bh ) / 2 );
+		if( bare )
+			button->winSetPosition( 0, 0 );
+		else
+			button->winSetPosition( slot.edgeLeft + ( cell.x - bw ) / 2, slot.edgeTop + ( cell.y - bh ) / 2 );
 	}
 }
 

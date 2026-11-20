@@ -2300,13 +2300,14 @@ def page_arrow_pieces(side_name):
             for d in ("Next", "Prev") for state in COMMAND_TAB_STATES}
 
 
-def key_piece(side_name, w, h, state, glyph_polys, corner=1, glyph_scale=1.0):
+def key_piece(side_name, w, h, state, glyph_polys, corner=1, glyph_scale=1.0, build=None, open_colour=None, lit_k=1.0):
     """A key in the tabs' family, w x h: a dark rim, the squad key's bezel in the side's build, a dark glass face
     and a flat glyph (raised and ink polygons in a 22 box round (11, 11)) filling the face's height times
     glyph_scale.  '' up, 'H' under the pointer, 'P' down (lit in the side's open colour, the glyph dark),
-    'I' disabled.  corner scales the corners."""
+    'I' disabled.  corner scales the corners; build, open_colour and lit_k (the lit face's brightness) default
+    to the side's."""
     look = BAR_LOOKS[side_name]
-    build = look["build"]
+    build = build or look["build"]
     edge = MOUNT_GLYPH_BUILD.get(build, build)
     o = 32
     p = Painter(w + 2 * o, h + 2 * o)
@@ -2330,9 +2331,9 @@ def key_piece(side_name, w, h, state, glyph_polys, corner=1, glyph_scale=1.0):
         return m.resize((w, h), Image.BOX)
 
     if down:                                    # open: the face lit, a brighter bar along its foot, scanlines
-        lit = np.asarray(COMMAND_TAB_OPEN[side_name], np.float32)
+        lit = np.asarray(open_colour or COMMAND_TAB_OPEN[side_name], np.float32)
         yy = np.arange(h, dtype=np.float32)[:, None, None]
-        ramp = 0.62 + 0.5 * (yy - i) / (h - 2 * i)
+        ramp = (0.62 + 0.5 * (yy - i) / (h - 2 * i)) * lit_k
         rgb = np.broadcast_to(lit * ramp * np.where(yy % 2 == 0, 0.9, 1.0), (h, w, 3)).copy()
         rgb[int(h - i - 3):int(h - i)] = np.minimum(lit * 1.25 + 60, 255)
         layer = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
@@ -3262,6 +3263,9 @@ def tab_panel(side, solo=False):
             put(sheet_img, tab_button(side, kind, state), boxes["Tab" + kind + state])
     for name, piece in tab_track(side).items():
         put(sheet_img, piece, boxes["Tab" + name])
+    for state in TAB_STATES:
+        for name, piece in tab_radio(side, state).items():
+            put(sheet_img, piece, boxes["Tab" + name + state])
     if side in SIDES:                           # the smoke signals' plate and keys share the side's sheet
         boxes = signal_boxes(side)
         for name, piece in signal_pieces(side).items():
@@ -3370,6 +3374,11 @@ def tab_button_boxes():
     for name, (w, h) in TAB_TRACK.items():
         boxes["Tab" + name] = (TAB_TRACK_X, y, TAB_TRACK_X + w, y + h)
         y += h + 4
+    for i, state in enumerate(TAB_STATES):          # the online tabs' pieces, a state a row
+        x, y = TAB_RADIO_X, 4 + (TAB_RADIO_H + 5) * i
+        for name, w in (("RadioL", TAB_RADIO_END), ("RadioC", TAB_RADIO_MID), ("RadioR", TAB_RADIO_END)):
+            boxes["Tab" + name + state] = (x, y, x + w, y + TAB_RADIO_H)
+            x += w + 4
     return boxes
 
 
@@ -3422,6 +3431,27 @@ def tab_track(side):
     return {"TrackTop": groove.crop((0, 0, w, 8)), "TrackBottom": groove.crop((0, h - 8, w, h)),
             "TrackCenter": Image.fromarray(np.repeat(middle, 16, axis=0), "RGBA"),
             "TrackSmall": Image.fromarray(np.repeat(middle, 2, axis=0), "RGBA")}
+
+
+# The two tabs over the online Tab screen (Diplomacy.wnd RadioButtonInGame and RadioButtonBuddies, shown when the
+# player is signed in): the command tabs' family (key_piece) at a tab's size, in the panel's build, the code's text
+# on the face.  The radio button draws three pieces, the ends at their own width and the middle repeated between,
+# so each state is one tab drawn wide and cut: L and R its ends, C its middle made even across.  Up (''), under
+# the pointer (H), the open tab (P, lit in the side's colour, dimmed so the code's white text reads) and D.
+TAB_RADIO_H = tab_u(34) - tab_u(10)             # 43 at 1080
+TAB_RADIO_END, TAB_RADIO_MID = 16, 8
+TAB_RADIO_X = 1932                              # the pieces' column on the TabPanel sheet
+TAB_RADIO_OPEN_K = 0.55
+TAB_RADIO_OBS_OPEN = (118, 126, 138)            # the observer's open tab: lit graphite, no side's colour
+
+
+def tab_radio(side, state):
+    look = BAR_LOOKS[side]
+    w, h, e, m = 96, TAB_RADIO_H, TAB_RADIO_END, TAB_RADIO_MID
+    img = key_piece(side, w, h, "I" if state == "D" else state, ([], []), build=look.get("skin", look["build"]),
+                    open_colour=COMMAND_TAB_OPEN.get(side, TAB_RADIO_OBS_OPEN), lit_k=TAB_RADIO_OPEN_K)
+    return {"RadioL": img.crop((0, 0, e, h)), "RadioC": even(img.crop(((w - m) // 2, 0, (w + m) // 2, h)), 1),
+            "RadioR": img.crop((w - e, 0, w, h))}
 
 
 def check_tab(sheet_img, side_name, prefix, solo_img=None):

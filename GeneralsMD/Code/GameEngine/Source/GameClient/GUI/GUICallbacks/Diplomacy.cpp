@@ -387,6 +387,31 @@ static void dressTabButton( GameWindow *button, const char *piece )
 	GadgetButtonSetDisabledImage(button, schemes->getTabImage(name.str()));
 }
 
+/// one of the online Tab screen's two tabs (a radio button: the ends at their width, the middle repeated) in the
+/// scheme's pieces, <TooltipImage>TabRadio{L,C,R}{,H,P,D}: up, under the pointer, open (the radio's selected
+/// images, hilite 3 to 5) and disabled, the label gold under the pointer as the command tabs' glyphs are
+static void dressTabRadio( GameWindow *radio )
+{
+	const ControlBarSchemeManager *schemes = TheControlBar->getControlBarSchemeManager();
+	if (radio == NULL || schemes->getTabImage("RadioL") == NULL)	// a sheet without the pieces keeps EA's
+		return;
+	static const char *const ENDS[ 3 ] = { "L", "C", "R" };
+	AsciiString name;
+	for (Int i = 0; i < 3; ++i)
+	{
+		name.format("Radio%s", ENDS[i]);
+		radio->winSetEnabledImage(i, schemes->getTabImage(name.str()));
+		name.format("Radio%sH", ENDS[i]);
+		radio->winSetHiliteImage(i, schemes->getTabImage(name.str()));
+		name.format("Radio%sP", ENDS[i]);
+		radio->winSetHiliteImage(i + 3, schemes->getTabImage(name.str()));
+		name.format("Radio%sD", ENDS[i]);
+		radio->winSetDisabledImage(i, schemes->getTabImage(name.str()));
+	}
+	radio->winSetEnabledTextColors(GameMakeColor(255, 255, 255, 255), GameMakeColor(0, 0, 0, 255));
+	radio->winSetHiliteTextColors(GameMakeColor(242, 194, 48, 255), GameMakeColor(0, 0, 0, 255));
+}
+
 /// The Tab screen's controls on the scheme's painting (Tools/hud_command_bar.py tab_panel, TAB_BUTTONS): the
 /// Main Menu, mute and money buttons in the side's pieces, and the campaign's briefing list without EA's
 /// veil and blue rule, standing in the solo painting's one well (y 99..608 of the 714 the window is at
@@ -404,6 +429,8 @@ static void dressForPanel( void )
 		dressTabButton(buttonMoneyPlus[i], "Square");
 		dressTabButton(buttonMoneySend[i], "Send");
 	}
+	dressTabRadio(radioButtonInGame);
+	dressTabRadio(radioButtonBuddies);
 
 	GameWindow *listboxSolo = TheWindowManager->winGetWindowFromId(theWindow, NAMEKEY("Diplomacy.wnd:ListboxSolo"));
 	GadgetListBoxSetEnabledColor(listboxSolo, WIN_COLOR_UNDEFINED);

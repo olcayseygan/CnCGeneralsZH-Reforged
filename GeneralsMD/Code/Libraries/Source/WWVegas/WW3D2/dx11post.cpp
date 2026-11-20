@@ -626,20 +626,24 @@ static const char * const WORLD_AO_SHADER_BODY =
 	"    reach *= min(1.0, AO_MOST_PIXELS / reach.y);\n"
 	"    float turn = frac(52.9829189 * frac(dot(input.Position.xy, float2(0.06711056, 0.00583715)))) * 6.2831853;\n"
 	"    float closed = 0.0;\n"
+	"    float counted = 0.0;\n"
 	"    for (int tap = 0; tap < AO_TAPS; ++tap)\n"
 	"    {\n"
 	"        float angle = turn + 2.39996 * (float)tap;\n"
 	"        float along = ((float)tap + 0.5) / (float)AO_TAPS;\n"
-	// A tap off the frame knows nothing and closes nothing.  Given the edge's depth instead, a tap above
-	// the frame stood over ground that recedes that way, and the whole top of the frame went dark.
+	// A tap off the frame knows nothing, so it is left out of the sum and out of the count it is divided
+	// by.  Given the edge's depth instead, a tap above the frame stood over ground that recedes that way,
+	// and the whole top of the frame went dark; counted as open sky, a unit's shade halved at an edge
+	// and quartered in a corner.
 	"        int2 at = texel + int2(float2(cos(angle), sin(angle)) * reach * along);\n"
 	"        if (any(at < 0) || any(at >= int2(TexelSize.zw))) continue;\n"
+	"        counted += 1.0;\n"
 	"        float3 to = world_of(at) - here;\n"
 	"        float squared = dot(to, to);\n"
 	"        float fade = saturate(1.0 - squared / (AO_RADIUS * AO_RADIUS));\n"
 	"        closed += fade * fade * saturate(dot(to, facing) * rsqrt(squared + 0.01) - AO_BIAS);\n"
 	"    }\n"
-	"    float kept = saturate(1.0 - AO_STRENGTH * closed / (float)AO_TAPS);\n"
+	"    float kept = saturate(1.0 - AO_STRENGTH * closed / max(counted, 1.0));\n"
 	// The fog the terrain draws, as the haze reads it: under the shroud nothing, in the fog little.
 	"    float lit = lerp(1.0, WorldAoShroud.SampleLevel(Sampler, (here.xy - HazeShroudRect.xy) * HazeShroudRect.zw, 0.0).g, HazeSun.z);\n"
 	"    return float4(lerp(1.0, kept, lit * lit * lit), distance_along, 0.0, 0.0);\n"

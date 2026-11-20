@@ -8,8 +8,7 @@
 // right, a soft "+N" in its top right for the units still being built for it or walking to it, and
 // the squad's health in the power bar's colours along the cell's foot.  A squad whose units shot or
 // were hit in the last few seconds has its picture blink red inside the rim, a translucent fill.  The
-// Red Alert style layout mirrors it onto the open world's right edge, against the sidebar, over the
-// superweapon rows.
+// Red Alert style layout and Classic have neither the list nor the tray; the squads' keys work there.
 //
 // On the right, while a squad picked by its number is still the selection and has no building in
 // it, a tray between the superweapons and the general's powers: the powers tray's own stepped body
@@ -488,11 +487,6 @@ static void forEachPowerSlot( const std::function<void( GameWindow * )> &each )
 	GameWindow *bar = TheWindowManager->winGetWindowFromId( NULL, barKey );
 	if( bar == NULL || bar->winIsHidden() )
 		return;
-	// the Red Alert style sidebar keeps the tray past the screen's right edge (no powers wing)
-	ICoord2D barAt;
-	bar->winGetScreenPosition( &barAt.x, &barAt.y );
-	if( barAt.x >= (Int)TheDisplay->getWidth() )
-		return;
 	for( Int i = 0; i < slotCount; i++ )
 	{
 		GameWindow *slot = TheWindowManager->winGetWindowFromId( bar, slotKeys[ i ] );
@@ -518,22 +512,20 @@ static Int rightTrayFloor( void )
 		floor = min( floor, at.y - stripPixels( FLOOR_GAP ) );
 	};
 
-	// in the sidebar layout the general's button is up in the sidebar, not on the world's right edge
 	static NameKeyType generalKey = TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ButtonGeneral" );
-	if( !TheControlBar->isSidebarLayout() )
-		standOn( TheWindowManager->winGetWindowFromId( NULL, generalKey ) );
+	standOn( TheWindowManager->winGetWindowFromId( NULL, generalKey ) );
 	forEachPowerSlot( standOn );
 	return floor;
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The edge the build tray stands on: the HUD area's right (HudWidth), or in the Red Alert style
-	* layout the open world's, left of the sidebar.  Nothing of the drawer shows past it. */
+/** The edge the build tray stands on: the HUD area's right (HudWidth).  Nothing of the drawer shows
+	* past it.  The Red Alert style sidebar has no panel (GroupPanel_draw). */
 //-------------------------------------------------------------------------------------------------
 static void hudRects( HudLayoutRects *r )
 {
 	HudLayoutForScreen( (Int)TheDisplay->getWidth(), (Int)TheDisplay->getHeight(),
-		TheControlBar->isSidebarLayout() ? HUD_LAYOUT_SIDEBAR : HUD_LAYOUT_CLASSIC, TheGlobalData->m_hudWidth, r );
+		HUD_LAYOUT_CLASSIC, TheGlobalData->m_hudWidth, r );
 }
 
 static Int trayRightEdge( void )
@@ -1135,34 +1127,15 @@ static void drawList( void )
 	Int top = TheInGameUI->getMessageLinesBottom() + px( LIST_CLEARANCE );
 	Int bottom = 0;
 
-	//
-	// The sidebar layout stands the list on the open world's right edge, against the sidebar (the
-	// plan's), mirrored: its open side left.  Down from under the build tray's notch to over the
-	// superweapon rows at their tallest, the six named rows InGameUI stacks from superweaponRow and the
-	// "+N" tab over them, since how many it draws is not known here.
-	// ponytail: ten squads beside six superweapon rows overrun that room even at the list's smallest;
-	// reading InGameUI's real row count would give it back
-	//
-	const Bool sidebar = TheControlBar->isSidebarLayout();
-	Int edge = 0;		// the side the list stands against: the screen's left, or the open world's right
-	if( sidebar )
-	{
-		enum { SIDEBAR_SUPERWEAPON_ROWS = 6 };	// InGameUI.cpp's
-		HudLayoutRects r;
-		hudRects( &r );
-		edge = r.play.hi.x;
-		top = r.powersWindow.lo.y + px( LEDGE_H ) + px( LIST_CLEARANCE );
-		bottom = r.superweaponRow.hi.y - ( SIDEBAR_SUPERWEAPON_ROWS - 1 ) * r.superweaponRowPitch
-			- r.superweaponRow.height() - px( PRODUCTION_TAB_H ) - px( LIST_CLEARANCE );
-	}
-	else
-		bottom = radarFrameTop() - stripPixels( PRODUCTION_LIFT ) - stripPixels( PRODUCTION_ROOM )
-			- px( PRODUCTION_TAB_H ) - px( LIST_CLEARANCE );
+	// against the screen's left edge, down to over the production list (the Red Alert style sidebar has
+	// no list, GroupPanel_draw)
+	const Int edge = 0;
+	bottom = radarFrameTop() - stripPixels( PRODUCTION_LIFT ) - stripPixels( PRODUCTION_ROOM )
+		- px( PRODUCTION_TAB_H ) - px( LIST_CLEARANCE );
 	const Int room = max( bottom - top, 1 );
 
 	// the production tray's pieces (InGameUI.cpp hudCellStyle) laid going down, as the superweapons'
-	// are: the powers tray's top edge over the first cell, its foot under the last, the open side right,
-	// or left against the sidebar
+	// are: the powers tray's top edge over the first cell, its foot under the last, the open side right
 	const Image *const *tray = TheControlBar->getControlBarSchemeManager()->getPowerTray();
 	Tray body = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0 };
 	if( tray != NULL && tray[ ControlBarScheme::TRAY_CELL ] != NULL )
@@ -1179,13 +1152,6 @@ static void drawList( void )
 			0, 0, 0
 		};
 		body = pieced;
-		if( sidebar )
-		{
-			// the tray's own left edge and corners, as the build tray beside it wears them
-			body.open = tray[ ControlBarScheme::TRAY_EDGE_LEFT ];
-			body.cornerFoot = tray[ ControlBarScheme::TRAY_CORNER_TL ];
-			body.cornerUncovered = tray[ ControlBarScheme::TRAY_CORNER_BL ];
-		}
 	}
 
 	// the cell at `s`, and the edges as thick against it as the tray's are against its cell piece
@@ -1213,7 +1179,7 @@ static void drawList( void )
 		s = max( s * 0.95f, 0.4f );
 
 	const Int height = measure( s );
-	s_listBox.lo.x = sidebar ? edge - cellW - body.openW : edge;
+	s_listBox.lo.x = edge;
 	s_listBox.hi.x = s_listBox.lo.x + cellW + body.openW;
 	s_listBox.lo.y = top + max( ( room - height ) / 2, 0 );
 	s_listBox.hi.y = s_listBox.lo.y + height;
@@ -1222,7 +1188,7 @@ static void drawList( void )
 	for( Int r = 0; r < s_rowCount; r++ )
 	{
 		IRegion2D &c = cells[ r ];
-		c.lo.x = sidebar ? edge - cellW : edge;
+		c.lo.x = edge;
 		c.hi.x = c.lo.x + cellW;
 		c.lo.y = s_listBox.lo.y + body.footH + r * cellH;
 		c.hi.y = c.lo.y + cellH;
@@ -1234,7 +1200,7 @@ static void drawList( void )
 
 	TheDisplay->beginBatch2D();
 	if( body.cell != NULL )
-		drawStepTray( body, cells, s_rowCount, 1, sidebar ? -1 : 1, -1 );
+		drawStepTray( body, cells, s_rowCount, 1, 1, -1 );
 	else
 		drawSteel( s_listBox );
 	TheDisplay->endBatch2D();
@@ -1484,15 +1450,7 @@ static void drawTray( Int top )
 	}
 
 	const Int shown = min( (Int)s_buildables.size(), (Int)MAX_BUTTONS );
-	Int floor = rightTrayFloor();
-	if( TheControlBar->isSidebarLayout() )
-	{
-		// the superweapon timers climb from the world's bottom right there
-		// ponytail: kept over the lowest row only; InGameUI's row count would lift it over a stack of them
-		HudLayoutRects r;
-		hudRects( &r );
-		floor = min( floor, r.superweaponRow.lo.y - stripPixels( FLOOR_GAP ) );
-	}
+	const Int floor = rightTrayFloor();
 	const Int bodyTop = top + px( LEDGE_BODY_Y );	// the body's top edge, under the ledge's foot
 
 	Int barW = 0, barH = 0;
@@ -1640,10 +1598,11 @@ void GroupPanel_draw( Int rightTop )
 		return;
 	}
 
-	// a watcher, a replay, a hidden command bar (cinematics) and the Classic layout get neither half
+	// a watcher, a replay, a hidden command bar (cinematics), the Classic layout and the Red Alert style
+	// sidebar get neither half; the squads' keys are the command map's and work without it
 	Player *player = ThePlayerList->getLocalPlayer();
 	if( player == NULL || !player->isPlayerActive() || TheGameLogic->isInReplayGame() || TheInGameUI->isQuitMenuVisible()
-			|| TheGlobalData->m_hudLayout == HUD_LAYOUT_RETAIL
+			|| TheGlobalData->m_hudLayout == HUD_LAYOUT_RETAIL || TheControlBar->isSidebarLayout()
 			|| controlBarTop( ControlBar::CB_PANEL_LEFT ) >= (Int)TheDisplay->getHeight() )
 	{
 		hidePanel();
@@ -1668,15 +1627,6 @@ void GroupPanel_draw( Int rightTop )
 		s_chosenSquad = -1;
 	s_shownSquad = isValidHotkeySquadIndex( s_chosenSquad ) && !chosenHasStructure() ? s_chosenSquad : -1;
 	selectArrivals( player );
-
-	// the sidebar layout has no rack plate over the world's right edge to hang from: the tray starts
-	// level with the general's powers window, against the sidebar
-	if( TheControlBar->isSidebarLayout() )
-	{
-		HudLayoutRects r;
-		hudRects( &r );
-		rightTop = r.powersWindow.lo.y;
-	}
 
 	drawList();
 	drawTray( rightTop );

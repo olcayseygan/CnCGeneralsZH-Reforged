@@ -774,18 +774,26 @@ void ControlBar::layoutSidebar( void )
 		layoutMultiSelectTiles( (Int)m_multiSelectTiles.size() );
 
 	//
-	// The idle keys, the army key and the beacon key in a row on the strip, from x 1100 at 1920.  A 4:3
-	// strip has no room left beside the commands, so there the row stands above the strip's right end.
+	// The beacon key in a row on the strip, from x 1100 at 1920.  A 4:3 strip has no room left beside
+	// the commands, so there the row stands above the strip's right end.
 	//
 	// ponytail: above the strip it may meet the superweapon timers' lowest row; phase 4 tunes 4:3 and 5:4
+	// No idle keys on the sidebar (the owner's, 2026-11-20): the worker, infantry, vehicle and aircraft
+	// keys and the army key are hidden, their hotkeys the command map's; the beacon key keeps the row.
+	// setControlBarSchemeByPlayer's showIdleButtons hides them the same way
+	static const char *const idleNames[] =
+	{
+		"ButtonIdleWorker", "ButtonIdleInfantry", "ButtonIdleVehicle", "ButtonIdleAircraft", "ButtonSelectArmy"
+	};
+	for( Int i = 0; i < (Int)( sizeof( idleNames ) / sizeof( idleNames[ 0 ] ) ); i++ )
+		hideForSidebar( barWindow( idleNames[ i ] ) );
 	static const char *const rowNames[] =
 	{
-		"ButtonIdleWorker", "ButtonIdleInfantry", "ButtonIdleVehicle", "ButtonIdleAircraft", "ButtonSelectArmy", "ButtonPlaceBeacon"
+		"ButtonPlaceBeacon"
 	};
 	enum { ROW_COUNT = sizeof( rowNames ) / sizeof( rowNames[ 0 ] ) };
-	// each 36 high at 1080, centred on the strip, and as wide as its own art makes it (Reforged's 54x35
-	// comes to 56, retail's 34x24 to 51), the commands' gap between them: six to 356, which a 16:10
-	// strip still has room for
+	// 36 high at 1080, centred on the strip, and as wide as its own art makes it (Reforged's 54x35
+	// comes to 56, retail's 34x24 to 51)
 	GameWindow *row[ ROW_COUNT ];
 	Int rowW[ ROW_COUNT ];
 	Int count = 0;

@@ -5681,7 +5681,10 @@ void ControlBar::showIdleButtons( Bool show )
 	for( Int i = 0; i < 5; i++ )
 	{
 		GameWindow *win = TheWindowManager->winGetWindowFromId( NULL, ids[ i ] );
-		if( win )
+		// the Red Alert style sidebar has no idle keys (layoutSidebar); restoreClassicWindows brings them back
+		if( win && show && m_sidebarLayout )
+			hideForSidebar( win );
+		else if( win )
 			win->winHide( !show );
 	}
 }

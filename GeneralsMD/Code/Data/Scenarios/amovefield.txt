@@ -1,0 +1,28 @@
+# A player's attack-move across a field with enemies on the way: ten Crusaders from seat 0's start to
+# seat 1's on Twilight Flame, through three knots of China's units. playerattackmove is a right click's
+# order (CMD_FROM_PLAYER), the one the leash, the retaliation and the rest of AIAttackMoveToState's
+# player rules apply to; a script's attackmove takes another branch.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -maxframes 3000
+#     -scenario amovefield -logPrefix amovefield_ [-tracemove <id>]
+#
+# Read HEADLESS ARRIVE (how many reached seat 1's start and when) and the tallies (what each side lost).
+
+30    spawn      0  AmericaTankCrusader          10  start0:350:0      45
+
+30    spawn      1  ChinaTankBattleMaster         2  1000 3500         50
+30    spawn      1  ChinaInfantryRedguard         4  1050 3560         20
+30    spawn      1  ChinaTankBattleMaster         2  1350 3850         50
+30    spawn      1  ChinaInfantryTankHunter       3  1400 3800         20
+30    spawn      1  ChinaTankBattleMaster         2  1600 4100         50
+
+60    playerattackmove 0  AmericaTankCrusader         start1
+60    arrive     0  AmericaTankCrusader          start1 300
+
+60    tally      0  AmericaTankCrusader
+60    tally      1  *
+2900  tally      0  AmericaTankCrusader
+2900  tally      1  ChinaTank*
+2900  tally      1  ChinaInfantry*

@@ -36,6 +36,7 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/ThingFactory.h"
+#include "Common/ThingSort.h"
 #include "Common/ThingTemplate.h"
 #include "Common/Xfer.h"
 #include "Common/XferCRC.h"
@@ -699,6 +700,13 @@ public:
 
 		Relationship r = m_obj->getRelationship(objOther);
 		if (r != ENEMIES)
+			return false;
+
+		// Debris and hulks (EditorSorting DEBRIS) belong to the side that lost them and have a body, so
+		// they passed as enemies, and the pick by time to kill (pickBestTarget) rated a one-health
+		// Overlord barrel above every tank: an Aurora on attack-move chased one round the map at
+		// supersonic speed and bombed it. They are still there to force-fire at.
+		if (objOther->getTemplate()->getEditorSorting() == ES_DEBRIS)
 			return false;
 
 		return true;

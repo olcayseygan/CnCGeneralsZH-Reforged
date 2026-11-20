@@ -47,6 +47,7 @@
 #include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/Module/JetAIUpdate.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -2390,74 +2391,19 @@ Real Locomotor::calcTurnCircle(const Object* obj, Real* entryDist) const
 
 //-------------------------------------------------------------------------------------------------
 /**
-	Which way a jet turns to break off from a target relX ahead of it and relY to its left, in its own
-	frame: +1 left, -1 right. Both hard turns are flown frame by frame the way flyJet flies them, from
-	the yaw rate the jet already has, eased towards the full maxRate by yawAccel a frame, at the speed it
-	has now, for long enough to roll out of a full bank one way and into one the other and then turn half
-	round; the one that passes the target wider is taken, a tie the one away from it. That is not always
-	the turn away: rolling out of a bank takes half a second, and a jet that let its last round go
-	banked hard towards a target ahead of its wing goes over it reversing, where carrying on round
-	passes it by most of a turn circle (test_gameengine has the numbers). The heading turns by the
-	series of cos and sin to the third power, plain arithmetic that every machine does alike, and a
-	few hundredths of a radian a frame are far inside its accuracy. No Object involved, so
-	test_gameengine links straight to it.
+	A jet flying home on its own (JetAIUpdate::isFlyingHome: racks empty, sent home, idle too long, or
+	back to where its dead airfield was) turns back as hard as its wings let it. Its turn rate does not fall off with speed, so it
+	turns at its TurnRate from the first frame, EA's own rate, and the turn bleeds its speed down to the
+	corner speed at the full pull of its wings, where that rate gives the tightest circle there is. The
+	owner saw a Raptor fire and then swing a wide 90 before it headed home, and an Aurora fly on most of
+	a screen past its bomb: the falloff at cruise had doubled EA's circle, and a quarter turn grew to
+	six times EA's at the Aurora's supersonic speed. The roll into the bank still takes
+	JET_BANK_EASE_FRAMES, so it is a hard break turn, not a pivot.
 */
-Real Locomotor_jetBreakOffSide( Real relX, Real relY, Real speed, Real yawRate, Real maxRate, Real yawAccel )
+static Bool isJetTurningHome( const Object *obj )
 {
-	const Real away = (relY > 0.0f) ? -1.0f : 1.0f;
-	if (maxRate <= 0.0f || yawAccel <= 0.0f)
-		return away;
-
-	const Int MAX_FRAMES = 10 * LOGICFRAMES_PER_GAME_SECOND;
-	Real frames = 2.0f * maxRate / yawAccel + PI / maxRate;
-	const Int count = (frames < MAX_FRAMES) ? (Int)frames + 1 : MAX_FRAMES;
-
-	Real best = -1.0f;
-	Real bestSide = away;
-	for (Int i = 0; i < 2; ++i)
-	{
-		const Real side = (i == 0) ? away : -away;
-		Real x = 0.0f, y = 0.0f, hx = 1.0f, hy = 0.0f, rate = yawRate;
-		Real closest = relX*relX + relY*relY;
-		for (Int frame = 0; frame < count; ++frame)
-		{
-			Real change = side * maxRate - rate;
-			if (change > yawAccel)
-				change = yawAccel;
-			else if (change < -yawAccel)
-				change = -yawAccel;
-			rate += change;
-
-			const Real c = 1.0f - 0.5f * rate * rate;
-			const Real s = rate - rate * rate * rate / 6.0f;
-			const Real nx = hx * c - hy * s;
-			hy = hy * c + hx * s;
-			hx = nx;
-			x += speed * hx;
-			y += speed * hy;
-
-			const Real distSqr = sqr(relX - x) + sqr(relY - y);
-			if (distSqr < closest)
-				closest = distSqr;
-		}
-		if (closest > best)
-		{
-			best = closest;
-			bestSide = side;
-		}
-	}
-	return bestSide;
-}
-
-//-------------------------------------------------------------------------------------------------
-Real Locomotor::calcJetBreakOffSide(const Object* obj, Real relX, Real relY) const
-{
-	if (!isJet(obj))
-		return (relY > 0.0f) ? -1.0f : 1.0f;
-	const Coord3D *vel = obj->getPhysics()->getVelocity();
-	const Real speed = sqrt(sqr(vel->x) + sqr(vel->y));
-	const Real maxRate = getJetMaxYawRate(obj->getBodyModule()->getDamageState(), speed);
-	return Locomotor_jetBreakOffSide(relX, relY, speed, m_yawRate, maxRate, maxRate / JET_BANK_EASE_FRAMES);
+	const JetAIUpdate *jet = obj->getAI()->getJetAIUpdate();
+	return jet != NULL && jet->isFlyingHome();
 }
 
 
@@ -2765,7 +2711,7 @@ void Locomotor::moveTowardsPositionJet(Object* obj, PhysicsBehavior *physics, co
 
 	const Coord3D *vel = physics->getVelocity();
 	Real speed = sqrt(sqr(vel->x) + sqr(vel->y));
-	Real maxRate = getJetMaxYawRate(bdt, speed);
+	Real maxRate = getJetMaxYawRate(bdt, isJetTurningHome(obj) ? 0.0f : speed);
 	if (error != 0.0f && maxRate > 0.0f)
 	{
 		Real radius = speed / maxRate;
@@ -2802,7 +2748,8 @@ void Locomotor::flyJet(Object* obj, PhysicsBehavior *physics, Real headingError,
 	BodyDamageType bdt = obj->getBodyModule()->getDamageState();
 	const Coord3D *vel = physics->getVelocity();
 	Real speed = sqrt(sqr(vel->x) + sqr(vel->y));
-	Real maxRate = getJetMaxYawRate(bdt, speed);
+	const Bool home = isJetTurningHome(obj);
+	Real maxRate = getJetMaxYawRate(bdt, home ? 0.0f : speed);
 
 	Real rate = easeYaw(headingError, maxRate, maxRate / JET_BANK_EASE_FRAMES);
 	if (rate != 0.0f)
@@ -2829,13 +2776,18 @@ void Locomotor::flyJet(Object* obj, PhysicsBehavior *physics, Real headingError,
 		Real share = fabs(rate) / maxRate;
 		if (share > 1.0f)
 			share = 1.0f;
-		Real turnSpeed = goalSpeed * (1.0f - JET_TURN_SPEED_LOSS * share);
+		// flying home the turn bleeds down to the corner speed, and does so from a supersonic run too
+		// (isJetTurningHome)
+		Real turnSpeed = home ? goalSpeed - (goalSpeed - getJetCornerSpeed(bdt)) * share :
+														goalSpeed * (1.0f - JET_TURN_SPEED_LOSS * share);
 		if (turnSpeed < minSpeed)
 			turnSpeed = minSpeed;
 		if (turnSpeed < goalSpeed)
 			goalSpeed = turnSpeed;
 		Real pull = speed * fabs(rate);
-		if (decel < pull && !coasting)
+		if (home && pull > getJetPull(bdt))
+			pull = getJetPull(bdt);
+		if (decel < pull && (!coasting || home))
 			decel = pull;
 	}
 

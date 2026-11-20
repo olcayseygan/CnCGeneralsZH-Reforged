@@ -1287,19 +1287,6 @@ static Bool isJetAttackingGround( const Object *source, const Object *victim )
 	return loco != NULL && loco->isJet(source) && source->isAboveTerrain() && !(victim && victim->isAirborneTarget());
 }
 
-//----------------------------------------------------------------------------------------------------------
-/**
- * A jet that has just put its last round into something on the ground and is still in the aim state: it
- * is flying its break-off (computeAttackRunGoal), and the aim state ends the attack once it is clear. Its
- * empty racks would otherwise end the attack on the frame of that round, before the break-off began:
- * AIAttackState::update leaves at once on an empty weapon set, an object attack fails cannotPossiblyAttackObject
- * since an empty weapon estimates no damage, and turning away takes the target out of range.
- */
-static Bool isEmptyJetBreakingOff( const Object *source, const Object *victim, StateID attackState )
-{
-	return attackState == AttackStateMachine::AIM_AT_TARGET && source->isOutOfAmmo() && isJetAttackingGround(source, victim);
-}
-
 /**
  * A jet whose first round of its racks has gone at something on the ground: one run fires them all.
  * The rest goes whatever the range (Weapon::isRackClipStarted, Weapon::fireWeapon), and whatever the
@@ -1313,21 +1300,18 @@ static Bool isJetFinishingClip( const Object *source, const Object *victim )
 	return weapon != NULL && weapon->isRackClipStarted() && isJetAttackingGround(source, victim);
 }
 
-/// out of range, for the attack machine: a jet flying its break-off turns out of range on purpose, and
-/// one finishing its racks fires the rest from wherever it is
+/// out of range, for the attack machine: a jet finishing its racks fires the rest from wherever it is
 static Bool attackOutOfRangeObject( State *thisState, void* userData )
 {
 	Object *owner = thisState->getMachineOwner();
 	Object *victim = thisState->getMachineGoalObject();
-	return !isEmptyJetBreakingOff(owner, victim, thisState->getID()) && !isJetFinishingClip(owner, victim) &&
-		outOfWeaponRangeObject(thisState, userData);
+	return !isJetFinishingClip(owner, victim) && outOfWeaponRangeObject(thisState, userData);
 }
 
 static Bool attackOutOfRangePosition( State *thisState, void* userData )
 {
 	Object *owner = thisState->getMachineOwner();
-	return !isEmptyJetBreakingOff(owner, NULL, thisState->getID()) && !isJetFinishingClip(owner, NULL) &&
-		outOfWeaponRangePosition(thisState, userData);
+	return !isJetFinishingClip(owner, NULL) && outOfWeaponRangePosition(thisState, userData);
 }
 
 /**
@@ -1339,7 +1323,7 @@ static Bool cannotPossiblyAttackObject( State *thisState, void* userData )
 	Object *obj = thisState->getMachineOwner();
 	Object *victim = thisState->getMachineGoalObject();
 
-	if (obj && victim && !isEmptyJetBreakingOff(obj, victim, thisState->getID()))
+	if (obj && victim)
 	{
 		if( !obj->isAbleToAttack() )
 		{
@@ -5936,14 +5920,9 @@ Coord3D AIAttackAimAtTargetState::computeAttackRunGoal( Object *source, const We
 	// it as before, and only a run-out between two rounds is traded for firing the rest there and then,
 	// which aimDelta, handed back to the aim state, lets through.
 	// A jet whose racks are empty until it lands (the Raptor, the MiG, the Aurora, the Stealth Fighter)
-	// spends its clip on the frame of its last round, and that used to end the attack there and then:
-	// the break-off never happened, and the flight home went on over the target or turned across it.
-	// It now turns away the moment the last round is gone, wherever that was, and holds the turn until
-	// the target is no longer ahead; AIAttackState::update keeps the attack alive for that. It does not
-	// fly the run-out after it: that is room to come back round for another pass, which an empty jet
-	// never flies, and it took a MiG a quarter turn off and on straight, over the enemy's base, before
-	// it turned for home.
-	const Bool racksEmpty = source->isOutOfAmmo();
+	// ends the attack on the frame of its last round and its flight home turns it back from there
+	// (AIAttackState::update, Locomotor::flyJet). From 4.0 it flew a break-off away from the target
+	// first, a quarter turn the owner saw as a wide 90 before the jet came round for home.
 	const Bool clipSpent = weapon->getClipSize() == 0 || weapon->getRemainingAmmo() == 0;
 	const Real distSqr = dx*dx + dy*dy;
 	const Real along = dx*dir->x + dy*dir->y;
@@ -5952,20 +5931,20 @@ Coord3D AIAttackAimAtTargetState::computeAttackRunGoal( Object *source, const We
 	Real reach = weapon->getAttackRange(source) + source->getGeometryInfo().getBoundingSphereRadius();
 	if (victim)
 		reach += victim->getGeometryInfo().getBoundingSphereRadius();
-	const Bool breaksOff = !m_isRunningOut && (racksEmpty ? along > 0.0f :
-												 clipSpent && fabs(relAngle) < aimDelta && breakOffDist < reach && distSqr < sqr(breakOffDist));
+	const Bool breaksOff = !m_isRunningOut && clipSpent && fabs(relAngle) < aimDelta && breakOffDist < reach &&
+												 distSqr < sqr(breakOffDist);
 
 	if (breaksOff)
 		m_isRunningOut = TRUE;
 	else if (m_isRunningOut)
-		m_isRunningOut = racksEmpty ? along > 0.0f : distSqr < sqr(runOutDist);
-	else if (!racksEmpty && fabs(relAngle) >= aimDelta)
+		m_isRunningOut = distSqr < sqr(runOutDist);
+	else if (fabs(relAngle) >= aimDelta)
 		m_isRunningOut = AIAttackAim_needsRunOut(along - entryDist, dir->x*dy - dir->y*dx, turnRadius,
 																						 Cos(aimDelta), minRange);
 
 	// halfway through its racks, a jet that would have to run out and come round for the rest fires it
 	// now at whatever angle instead, and the missiles steer themselves
-	if (m_isRunningOut && !racksEmpty && isJetFinishingClip(source, victim))
+	if (m_isRunningOut && isJetFinishingClip(source, victim))
 	{
 		m_isRunningOut = FALSE;
 		aimDelta = PI + 0.035f;
@@ -5983,20 +5962,10 @@ Coord3D AIAttackAimAtTargetState::computeAttackRunGoal( Object *source, const We
 		return targetPos;
 
 	// still facing the target: turn away from it, to the side it is not on; once it is behind, hold the
-	// heading until there is room to come back round. With the racks empty the side is the one whose turn,
-	// flown from the bank the jet is already in, passes the target wider (Locomotor_jetBreakOffSide), and
-	// the goal is put well round on it so the turn is flown hard that way.
+	// heading until there is room to come back round.
 	Coord3D goal = *pos;
 	const Real dist = sqrt(distSqr);
-	if (along > 0.0f && dist > 0.0f && racksEmpty)
-	{
-		const Real side = loco->calcJetBreakOffSide(source, along, dir->x*dy - dir->y*dx);
-		const Real COS_BREAK = -0.5f;					// 120 degrees round from the nose
-		const Real SIN_BREAK = 0.8660254f;
-		goal.x += (dir->x*COS_BREAK - side*dir->y*SIN_BREAK) * runOutDist;
-		goal.y += (dir->y*COS_BREAK + side*dir->x*SIN_BREAK) * runOutDist;
-	}
-	else if (along > 0.0f && dist > 0.0f)
+	if (along > 0.0f && dist > 0.0f)
 	{
 		goal.x -= dx / dist * runOutDist;
 		goal.y -= dy / dist * runOutDist;
@@ -6127,17 +6096,11 @@ StateReturnType AIAttackAimAtTargetState::update()
 		}
 		else
 		{
+			// a jet whose last round just went has nothing left to aim: its flight home takes over
+			if (source->isOutOfAmmo())
+				return STATE_FAILURE;
 			const Coord3D &targetPos = m_isAttackingObject ? *victim->getPosition() : *getMachineGoalPosition();
 			sourceAI->setLocomotorGoalPositionExplicit(computeAttackRunGoal(source, weapon, targetPos, relAngle, aimDelta));
-			// A jet with its racks empty is only still here to fly its break-off, and the attack ends with it.
-			// Nothing is shot any more, so nothing takes it for a jet that is attacking: an Aurora stays
-			// supersonic and hard to hit while it is, and the run's end gave that up as soon as the bomb went.
-			if (source->isOutOfAmmo())
-			{
-				source->clearStatus( MAKE_OBJECT_STATUS_MASK2( OBJECT_STATUS_IS_ATTACKING, OBJECT_STATUS_IS_AIMING_WEAPON ) );
-				source->clearModelConditionState( MODELCONDITION_ATTACKING );
-				return m_isRunningOut ? STATE_CONTINUE : STATE_FAILURE;
-			}
 		}
 
 		if (fabs(relAngle) < aimDelta /*&& !m_preAttackFrames*/ )
@@ -6807,14 +6770,11 @@ StateReturnType AIAttackState::update()
 	Object* source = getMachineOwner();
 	
 	// if all of our weapons are out of ammo, can't attack.
-	// (this can happen for units which never auto-reload, like the Raptor)
-	// ... except to fly the break-off of the run that emptied them (isEmptyJetBreakingOff), which is all
-	// the attack has left to do, so nothing below it applies
+	// (this can happen for units which never auto-reload, like the Raptor, whose flight home then turns
+	// it back at once: JetAIUpdate's return and Locomotor::flyJet's hard turn)
 	if (source->isOutOfAmmo() && !source->isKindOf(KINDOF_PROJECTILE))
 	{
-		if (!isEmptyJetBreakingOff(source, getMachineGoalObject(), m_attackMachine->getCurrentStateID()))
-			return STATE_FAILURE;
-		return CONVERT_SLEEP_TO_CONTINUE(m_attackMachine->updateStateMachine());
+		return STATE_FAILURE;
 	}
 
 	if (m_isAttackingObject)

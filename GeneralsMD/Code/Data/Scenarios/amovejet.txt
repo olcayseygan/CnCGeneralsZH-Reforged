@@ -1,0 +1,27 @@
+# A player's attack-move with jets: two Raptors and an Aurora over an American airfield on Golden
+# Oasis, sent 1400 north over a line of China's tanks. They should fly out, strike what they find on
+# the way, and turn for home when their racks are empty, not orbit or wander over the enemy.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Golden Oasis\Golden Oasis.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -maxframes 2400
+#     -scenario amovejet -logPrefix amovejet_ [-tracemove <id>]
+#
+# SCENARIO SHOT for every round; the tallies for what the line lost and whether the jets came home.
+
+30    spawn      0  AmericaAirfield              1   2520 3370
+30    spawn      0  AmericaPowerPlant            1   1950 3380
+
+30    spawn      1  ChinaTankBattleMaster        1   2200 2400
+30    spawn      1  ChinaTankBattleMaster        1   2840 2300
+30    spawn      1  ChinaTankOverlord            1   2200 2000
+30    spawn      1  GLATankScorpion              1   2840 2000
+
+30    spawn      0  AmericaJetRaptor             2   2300 3150   80
+30    spawn      0  AmericaJetAurora             1   2700 3150
+
+60    playerattackmove 0  AmericaJet*                  2520 1900
+
+60    tally      1  *
+2350  tally      0  AmericaJet*
+2350  tally      1  *

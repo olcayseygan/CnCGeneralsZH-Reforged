@@ -1,0 +1,35 @@
+# A strike and the flight home: three jets spawned over an American airfield on Golden Oasis, each sent
+# at its own tank about 1300 north. What is measured is the turn after the last round: how far the jet
+# flies on past the moment it fires before it is pointed home, and how wide the turn is.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Golden Oasis\Golden Oasis.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -maxframes 1800
+#     -scenario jetreturn -logPrefix jetreturn_ -tracemove <jet id>
+#
+# Object ids on seed 7: Raptor 510, Aurora 511, Stealth Fighter 512. One -tracemove a run, one jet a
+# trace. SCENARIO SHOT gives the frame of each round, MOVETRACE the position and heading every frame;
+# the wrapper's experiments/proofs/2026-11-20/jet-return/turn.py reads the two.
+#
+# 2026-11-20, logic frames from the last round (30 a wall second): pointed home within 20 degrees /
+# flown on past the firing point / width of the turn. Before (break-off, speed falloff): Raptor
+# 55 / 159 / 217, Aurora 109 / 968 / 662, Stealth 32 / 122 / 135. After (straight home, hard turn):
+# Raptor 30 / 95 / 85, Aurora 46 / 367 / 402, Stealth 21 / 75 / 57.
+
+30    spawn      0  AmericaAirfield              1   2520 3370
+30    spawn      0  AmericaPowerPlant            1   1950 3380
+
+30    spawn      1  ChinaTankOverlord            1   2200 2000
+30    spawn      1  ChinaTankBattleMaster        1   2520 2150
+30    spawn      1  GLATankScorpion              1   2840 2000
+
+30    spawn      0  AmericaJetRaptor             1   2200 3150
+30    spawn      0  AmericaJetAurora             1   2520 3150
+30    spawn      0  AmericaJetStealthFighter     1   2840 3150
+
+60    attack     0  AmericaJetRaptor             1  ChinaTankOverlord
+60    attack     0  AmericaJetAurora             1  ChinaTankBattleMaster
+60    attack     0  AmericaJetStealthFighter     1  GLATankScorpion
+
+1750  tally      0  AmericaJet*
+1750  tally      1  *

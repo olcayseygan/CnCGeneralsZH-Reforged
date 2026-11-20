@@ -1256,6 +1256,8 @@ Data/Scenarios/altstyles.txt
 Data/Scenarios/ambulanceclean.txt
 Data/Scenarios/ambulancegiveup.txt
 Data/Scenarios/ambulanceguard.txt
+Data/Scenarios/amovefield.txt
+Data/Scenarios/amovejet.txt
 Data/Scenarios/artillery.txt
 Data/Scenarios/aurorablast.txt
 Data/Scenarios/aurorafog.txt
@@ -1356,6 +1358,7 @@ Data/Scenarios/jetbreak_film.txt
 Data/Scenarios/jetcircuit.txt
 Data/Scenarios/jetcrash.txt
 Data/Scenarios/jetpass.txt
+Data/Scenarios/jetreturn.txt
 Data/Scenarios/jetrunway.txt
 Data/Scenarios/jetsturn.txt
 Data/Scenarios/jetturn.txt

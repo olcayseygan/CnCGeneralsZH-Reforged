@@ -20,6 +20,7 @@
 
 #include "SdlGpuFrame.h"
 #include "SdlGpuDepthFormat.h"
+#include "SdlPresentMode.h"
 #include "sdl3shadercompile.h"
 #include "Platform/WaterFftSpectrum.h"
 #include "Platform/WaterPerformanceSettings.h"
@@ -127,6 +128,8 @@ SdlGpuFrame::SdlGpuFrame() :
 	NextTickNs(0),
 	GpuDevice(NULL),
 	Window(NULL),
+	VSync(true),
+	PresentationKnown(true),
 	BackBuffer(NULL),
 	DepthStencil(NULL),
 	FrontCopy(NULL),
@@ -199,6 +202,29 @@ SdlGpuFrame * SdlGpuFrame::Create(RenderWindow window, unsigned int width, unsig
 		return NULL;
 	}
 	return frame;
+}
+
+bool SdlGpuFrame::Configure_Presentation(bool vsync)
+{
+	if (Window == NULL)
+		return true;
+	const bool immediate_supported = !vsync
+		&& SDL_WindowSupportsGPUPresentMode(GpuDevice, Window, SDL_GPU_PRESENTMODE_IMMEDIATE);
+	const SDL_GPUPresentMode mode = Sdl_Choose_Present_Mode(vsync, immediate_supported);
+	const bool selected_vsync = mode == SDL_GPU_PRESENTMODE_VSYNC;
+	if (PresentationKnown && VSync == selected_vsync)
+		return true;
+	PresentationKnown = false;
+	SDL_GPUPresentMode applied = mode;
+	if (!Sdl_Apply_Present_Mode(mode, [this](SDL_GPUPresentMode candidate) {
+		return SDL_SetGPUSwapchainParameters(GpuDevice, Window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, candidate);
+	}, applied))
+		return false;
+	VSync = applied == SDL_GPU_PRESENTMODE_VSYNC;
+	PresentationKnown = true;
+	if (applied != mode)
+		fprintf(stderr, "SdlGpuFrame: immediate presentation unavailable; restored VSync\n");
+	return true;
 }
 
 SdlGpuFrame::~SdlGpuFrame()

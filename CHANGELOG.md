@@ -87,6 +87,7 @@ found and fixed, EA's own, not port damage.**
 - The online Quick Match server no longer crashes when a map pool is empty.
 - Watching a replay no longer reports "out of sync" when nothing is wrong.
 - The computer's fights add up the same way after a load as in the match that was saved. Replays of games with a computer player recorded before this change may not play back.
+- On Mac and Linux the vertical sync box now does what it says. The picture was held to the monitor's refresh whether it was ticked or not; off, as it is by default, it now runs free as it does on Windows, and on it waits for the monitor. Thanks to SimonWaldherr.
 
 ## A dropped player's army stays, and he can come back to it
 

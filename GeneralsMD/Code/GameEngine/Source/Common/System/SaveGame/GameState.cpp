@@ -1008,7 +1008,30 @@ Bool GameState::refuseUnloadableSave( const SaveGameInfo &saveGameInfo )
 
 	DEBUG_LOG(( "GameState - refused a save with GameState version %d at %d ticks a game second, this build loads %d at a game speed's 30, 24, 20 or 15 (%d Hz)\n",
 							saveGameInfo.version, saveGameInfo.logicFramesPerSecond, GAME_STATE_VERSION, (Int)LOGICFRAMES_PER_SECOND ));
-	MessageBoxOk( TheGameText->fetch( "GUI:Error" ), TheGameText->fetch( "GUI:SaveFromOlderGame" ), NULL );
+
+	// A block this build reads, refused only for its ticks a game second, came from a build at the
+	// other logic rate (retail's 30 or twice it): the one some player speed turns into those ticks.
+	Int savedRate = 0;
+	if( saveGameInfo.version >= 5 && saveGameInfo.logicFramesPerSecond > 0 && saveGameInfo.logicFramesPerSecond < 1000 )
+	{
+		for( Int i = 0; i < PLAYER_GAME_SPEED_COUNT && savedRate == 0; ++i )
+		{
+			const Int scaled = saveGameInfo.logicFramesPerSecond * PLAYER_GAME_SPEED_PERCENTS[ i ];
+			const Int rate = scaled / 100;
+			if( rate * 100 == scaled && rate != LOGICFRAMES_PER_SECOND
+					&& ( rate == RETAIL_LOGICFRAMES_PER_SECOND || rate == 2 * RETAIL_LOGICFRAMES_PER_SECOND ) )
+				savedRate = rate;
+		}
+	}
+
+	if( savedRate != 0 )
+	{
+		UnicodeString msg;
+		msg.format( TheGameText->fetch( "GUI:SaveFromOtherLogicRate" ), savedRate, (Int)LOGICFRAMES_PER_SECOND );
+		MessageBoxOk( TheGameText->fetch( "GUI:Error" ), msg, NULL );
+	}
+	else
+		MessageBoxOk( TheGameText->fetch( "GUI:Error" ), TheGameText->fetch( "GUI:SaveFromOlderGame" ), NULL );
 	return TRUE;
 
 }  // end refuseUnloadableSave

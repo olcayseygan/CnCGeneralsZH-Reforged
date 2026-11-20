@@ -268,6 +268,8 @@ void LANAPI::handleRequestJoin( LANMessage *msg, UnsignedInt senderIP )
 					msg->GameToJoin.exeCRC, TheGlobalData->m_exeCRC));
 				reply.LANMessageType = LANMessage::MSG_JOIN_DENY;
 				reply.GameNotJoined.reason = LANAPIInterface::RET_CRC_MISMATCH;
+				reply.GameNotJoined.dataTag = LAN_JOIN_DENY_DATA_TAG;
+				reply.GameNotJoined.dataMatch = dataMatch;
 				reply.GameNotJoined.gameIP = m_localIP;
 				reply.GameNotJoined.playerIP = senderIP;
 				canJoin = false;
@@ -474,6 +476,7 @@ void LANAPI::handleJoinDeny( LANMessage *msg, UnsignedInt senderIP )
 	{
 		if (m_pendingAction == ACT_JOIN) // Are we trying to join?
 		{
+			m_joinDenyDataMatch = (msg->GameNotJoined.dataTag == LAN_JOIN_DENY_DATA_TAG) ? msg->GameNotJoined.dataMatch : GAMEDATA_MATCHES;
 			OnGameJoin(msg->GameNotJoined.reason, LookupGame(UnicodeString(msg->GameNotJoined.gameName)));
 			m_pendingAction = ACT_NONE;
 			m_expiration = 0;

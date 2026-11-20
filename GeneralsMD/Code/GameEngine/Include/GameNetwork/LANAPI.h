@@ -262,6 +262,7 @@ protected:
 	UnsignedInt					m_expiration;						///< When should we give up on our action?
 	UnsignedInt					m_actionTimeout;
 	UnsignedInt					m_directConnectRemoteIP;///< The IP address of the game we are direct connecting to.
+	Int									m_joinDenyDataMatch;		///< GameDataMatchResult of the last JOIN_DENY when the host said, else 0 (GAMEDATA_MATCHES)
 
 	// Resend timer ---------------------------------------------------------------------------
 	UnsignedInt					m_lastResendTime; // in ms
@@ -431,6 +432,11 @@ struct LANMessage
 			UnsignedInt gameIP;
 			UnsignedInt playerIP;
 			LANAPIInterface::ReturnType reason;
+			/* Which half differs on RET_CRC_MISMATCH, a GameDataMatchResult, valid only beside
+				 LAN_JOIN_DENY_DATA_TAG: an older host leaves both as stack bytes, an older joiner reads
+				 only the reason before them, so either side of the pair keeps its bare "mismatch". */
+			UnsignedInt dataTag;
+			Int dataMatch;
 		} GameNotJoined;
 
 		// Accept is sent with SET_ACCEPT
@@ -495,6 +501,9 @@ static_assert(offsetof(LANMessage, GameToJoin.iniCRC) == 42, "LANMessage::GameTo
 static_assert(offsetof(LANMessage, GameToJoin.serial) == 46, "LANMessage::GameToJoin.serial");
 static_assert(offsetof(LANMessage, GameJoined.slotPosition) == 76, "LANMessage::GameJoined.slotPosition");
 static_assert(offsetof(LANMessage, GameNotJoined.reason) == 76, "LANMessage::GameNotJoined.reason");
+static_assert(offsetof(LANMessage, GameNotJoined.dataTag) == 80, "LANMessage::GameNotJoined.dataTag follows the reason");
+static_assert(offsetof(LANMessage, GameNotJoined.dataMatch) == 84, "LANMessage::GameNotJoined.dataMatch");
+static const UnsignedInt LAN_JOIN_DENY_DATA_TAG = 0x4744524Du;	///< marks GameNotJoined.dataMatch as written; a stack byte pattern will not hit it
 static_assert(offsetof(LANMessage, Accept.isAccepted) == 68, "LANMessage::Accept.isAccepted");
 static_assert(offsetof(LANMessage, MapStatus.hasMap) == 72, "LANMessage::MapStatus.hasMap");
 static_assert(offsetof(LANMessage, Chat.chatType) == 68, "LANMessage::Chat.chatType");

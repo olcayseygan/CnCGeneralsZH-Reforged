@@ -87,6 +87,8 @@ static FileWriteQueue theReplayQueue;
 	 and playback) clears it, so a skirmish, a LAN game or a replay watched later never goes out under it. */
 static std::string theOnlineMatch;
 
+static void finishReplayCRCs(CRCInfo *crcInfo);
+
 template <typename T> static void replayWrite(const T &value)
 {
 	theReplayQueue.write(&value, sizeof(value));
@@ -475,6 +477,7 @@ void RecorderClass::reset() {
 	m_fileName.clear();
 
 	// the playback that owned it is over; playbackFile makes a fresh one for the next
+	finishReplayCRCs(m_crcInfo);
 	delete m_crcInfo;
 	m_crcInfo = NULL;
 
@@ -1103,12 +1106,65 @@ UnsignedInt CRCInfo::readCRCFor(UnsignedInt recorded)
 	return readCRC();
 }
 
+/// compare one recorded CRC with the front of the computed queue
+static void compareReplayCRC(CRCInfo *crcInfo, UnsignedInt newCRC)
+{
+	const Bool aligning = (crcInfo->getAlignment() == CRCInfo::ALIGN_PENDING);
+	UnsignedInt playbackCRC = crcInfo->readCRCFor(newCRC);
+	if (aligning)
+	{
+		// say which kind of recording this was, so a reader of the log can tell (Recorder.h)
+		const CRCInfo::Alignment how = crcInfo->getAlignment();
+		DEBUG_LOG(("Replay CRCs: %s\n", how == CRCInfo::ALIGN_FROM_FRAME_0 ? "recorded from frame 0"
+			: how == CRCInfo::ALIGN_FRAME_0_MISSING ? "legacy: frame 0 missing"
+			: "neither alignment fits the first recorded CRC"));
+	}
+	//DEBUG_LOG(("RecorderClass::handleCRCMessage() - Comparing CRCs of %8.8X/%8.8X\n", newCRC, playbackCRC));
+	if (TheGameLogic->getFrame() > 0 && newCRC != playbackCRC && !crcInfo->sawCRCMismatch())
+	{
+		crcInfo->setSawCRCMismatch();
+
+		/* The DEBUG_CRASH below is compiled out of a release build, so a replay that played back a
+			 different game than the one that was recorded used to do it in complete silence.  Say so in
+			 the log, which release builds do write. */
+		DEBUG_LOG(("Replay has gone out of sync on frame %d: recorded %8.8X, played back %8.8X\n",
+			TheGameLogic->getFrame(), newCRC, playbackCRC));
+
+		//Kris: Patch 1.01 November 10, 2003 (integrated changes from Matt Campbell)
+		// Since we don't seem to have any *visible* desyncs when replaying games, but get this warning
+		// virtually every replay, the assumption is our CRC checking is faulty.  Since we're at the
+		// tail end of patch season, let's just disable the message, and hope the users believe the
+		// problem is fixed. -MDC 3/20/2003
+		//TheInGameUI->message("GUI:CRCMismatch");
+		DEBUG_CRASH(("Replay has gone out of sync!  All bets are off!\nRecorded:%8.8X Played back:%8.8X\nFrame:%d",
+			newCRC, playbackCRC, TheGameLogic->getFrame()));
+	}
+}
+
+/** A playback is over: compare what parked CRCs now have a partner and say how many never got one,
+	* which a playback that stopped short of its recording leaves and nothing else reports. */
+static void finishReplayCRCs(CRCInfo *crcInfo)
+{
+	if (crcInfo == NULL)
+		return;
+	UnsignedInt parked;
+	while (TheGameLogic != NULL && crcInfo->takeParkedRecorded(parked))
+		compareReplayCRC(crcInfo, parked);
+	if (crcInfo->parkedRecordedCount() > 0)
+		DEBUG_LOG(("Replay CRCs: %d recorded CRCs never compared, no computed CRC came for them\n",
+			crcInfo->parkedRecordedCount()));
+}
+
 void RecorderClass::handleCRCMessage(UnsignedInt newCRC, Int playerIndex, Bool fromPlayback)
 {
 	if (fromPlayback)
 	{
 		//DEBUG_LOG(("RecorderClass::handleCRCMessage() - Adding CRC of %X from %d to m_crcInfo\n", newCRC, playerIndex));
 		m_crcInfo->addCRC(newCRC);
+		// a recorded CRC that got here first is compared now (CRCInfo::mustParkRecorded)
+		UnsignedInt parked;
+		while (m_crcInfo->takeParkedRecorded(parked))
+			compareReplayCRC(m_crcInfo, parked);
 		return;
 	}
 
@@ -1121,36 +1177,13 @@ void RecorderClass::handleCRCMessage(UnsignedInt newCRC, Int playerIndex, Bool f
 		samePlayer = TRUE;
 	if (samePlayer || (localPlayerIndex < 0))
 	{
-		const Bool aligning = (m_crcInfo->getAlignment() == CRCInfo::ALIGN_PENDING);
-		UnsignedInt playbackCRC = m_crcInfo->readCRCFor(newCRC);
-		if (aligning)
-		{
-			// say which kind of recording this was, so a reader of the log can tell (Recorder.h)
-			const CRCInfo::Alignment how = m_crcInfo->getAlignment();
-			DEBUG_LOG(("Replay CRCs: %s\n", how == CRCInfo::ALIGN_FROM_FRAME_0 ? "recorded from frame 0"
-				: how == CRCInfo::ALIGN_FRAME_0_MISSING ? "legacy: frame 0 missing"
-				: "neither alignment fits the first recorded CRC"));
-		}
-		//DEBUG_LOG(("RecorderClass::handleCRCMessage() - Comparing CRCs of %8.8X/%8.8X from %d\n", newCRC, playbackCRC, playerIndex));
-		if (TheGameLogic->getFrame() > 0 && newCRC != playbackCRC && !m_crcInfo->sawCRCMismatch())
-		{
-			m_crcInfo->setSawCRCMismatch();
-
-			/* The DEBUG_CRASH below is compiled out of a release build, so a replay that played back a
-				 different game than the one that was recorded used to do it in complete silence.  Say so in
-				 the log, which release builds do write. */
-			DEBUG_LOG(("Replay has gone out of sync on frame %d: recorded %8.8X, played back %8.8X\n",
-				TheGameLogic->getFrame(), newCRC, playbackCRC));
-
-			//Kris: Patch 1.01 November 10, 2003 (integrated changes from Matt Campbell)
-			// Since we don't seem to have any *visible* desyncs when replaying games, but get this warning
-			// virtually every replay, the assumption is our CRC checking is faulty.  Since we're at the
-			// tail end of patch season, let's just disable the message, and hope the users believe the
-			// problem is fixed. -MDC 3/20/2003
-			//TheInGameUI->message("GUI:CRCMismatch");
-			DEBUG_CRASH(("Replay has gone out of sync!  All bets are off!\nRecorded:%8.8X Played back:%8.8X\nFrame:%d",
-				newCRC, playbackCRC, TheGameLogic->getFrame()));
-		}
+		/* Its computed CRC may still be on the message stream: a pass that ran two frames had no client
+			 pass between them.  Compared against the empty queue it read 0, set the one-shot flag on a
+			 false mismatch and left the two streams a step apart for the rest of the playback. */
+		if (m_crcInfo->mustParkRecorded())
+			m_crcInfo->parkRecorded(newCRC);
+		else
+			compareReplayCRC(m_crcInfo, newCRC);
 		return;
 	}
 
@@ -1346,6 +1379,7 @@ Bool RecorderClass::openPlayback(AsciiString filename, Int &difficulty, Int &ran
 	}
 #endif
 
+	finishReplayCRCs(m_crcInfo);
 	delete m_crcInfo;		// a replay started without a reset in between would leak the last one
 	m_crcInfo = NEW CRCInfo;
 	m_crcInfo->setLocalPlayer(header.localPlayerIndex);

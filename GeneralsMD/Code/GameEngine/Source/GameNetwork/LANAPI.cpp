@@ -89,6 +89,7 @@ LANAPI::LANAPI( void ) : m_transport(NULL)
 	m_name = u""; // safe default?
 	m_pendingAction = ACT_NONE;
 	m_expiration = 0;
+	m_joinDenyDataMatch = 0;
 	m_localIP = 0;
 	m_inLobby = true;
 	m_isInLANMenu = TRUE;

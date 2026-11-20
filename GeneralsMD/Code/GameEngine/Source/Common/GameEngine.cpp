@@ -1267,7 +1267,7 @@ void GameEngine::init( int argc, char *argv[] )
 
 
 		initSubsystem(TheScienceStore,"TheScienceStore", MSGNEW("GameEngineSubsystem") ScienceStore(), &xferCRC, "Data\\INI\\Default\\Science.ini", "Data\\INI\\Science.ini");
-		// New sciences only: a name EA already defined stops the load
+		// A name EA already defined is edited in place and only the fields written here change; a new name is added
 		ini.load( AsciiString( "Data\\INI\\ScienceReforged.ini" ), INI_LOAD_MULTIFILE, &xferCRC );
 		initSubsystem(TheMultiplayerSettings,"TheMultiplayerSettings", MSGNEW("GameEngineSubsystem") MultiplayerSettings(), &xferCRC, "Data\\INI\\Default\\Multiplayer.ini", "Data\\INI\\Multiplayer.ini");
 		// The fork's player colours, after EA's eight
@@ -2841,8 +2841,11 @@ static void updateHeadlessRun( void )
 
 	/* Except that a run with a control socket open is not unattended at all - somebody is driving
 		 it from the other end, and tearing the process down the moment a match is decided takes the
-		 socket with it.  Whoever is driving says when it ends, by sending "quit". */
-	if (TheGlobalData->m_controlPort > 0)
+		 socket with it.  Whoever is driving says when it ends, by sending "quit".  A -maxframes on the
+		 same command line is an end the driver asked for, so that one still fires (a seated -control
+		 run given -maxframes 1020 played on to frame 71641); a decision still does not. */
+	const Bool controlled = TheGlobalData->m_controlPort > 0;
+	if (controlled && TheGlobalData->m_maxGameFrames <= 0)
 		return;
 
 	/* -directorrecord films one match.  A replay that runs out, or a match that ends some other way
@@ -2850,7 +2853,7 @@ static void updateHeadlessRun( void )
 		 finishes the movie. */
 	static Bool directorRecordSawMatch = FALSE;
 	const Bool scouting = !TheGlobalData->m_directorScoutFile.isEmpty();
-	if ((TheGlobalData->m_directorRecord || scouting) && !TheGameEngine->getQuitting())
+	if (!controlled && (TheGlobalData->m_directorRecord || scouting) && !TheGameEngine->getQuitting())
 	{
 		const Bool inMatch = TheGameLogic->isInGame() && !TheGameLogic->isInShellGame();
 		// -directorreplays ends past its last replay, or as soon as its match went another way than the film's
@@ -2959,7 +2962,7 @@ static void updateHeadlessRun( void )
 	if (maxGameFrames > 0)
 		maxGameFrames += frameLimitOvershoot();		// a test's overshoot: 0 for every real run
 
-	const char *why = GameEngine_headlessRunResult( frame, TheVictoryConditions->getEndFrame(),
+	const char *why = GameEngine_headlessRunResult( frame, controlled ? 0 : TheVictoryConditions->getEndFrame(),
 																									maxGameFrames );
 	if (why == NULL)
 		return;

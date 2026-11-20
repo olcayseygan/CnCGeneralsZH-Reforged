@@ -94,11 +94,29 @@ public:
 	};
 	Alignment getAlignment(void) const { return m_alignment; }
 
+	/**
+	 * A recorded CRC that arrived before the computed one it pairs with waits here.  A drawn playback
+	 * that runs frames g and g+1 in one pass has no client pass between them, so frame g's computed
+	 * CRC is still on the message stream when frame g+1 executes the recorded one.
+	 */
+	Bool mustParkRecorded(void) const { return m_data.empty() || !m_recorded.empty(); }
+	void parkRecorded(UnsignedInt recorded) { m_recorded.push_back(recorded); }
+	Bool takeParkedRecorded(UnsignedInt &recorded)
+	{
+		if (m_recorded.empty() || m_data.empty())
+			return FALSE;
+		recorded = m_recorded.front();
+		m_recorded.pop_front();
+		return TRUE;
+	}
+	Int parkedRecordedCount(void) const { return (Int)m_recorded.size(); }
+
 protected:
 
 	Bool m_sawCRCMismatch;
 	Alignment m_alignment;
 	std::list<UnsignedInt> m_data;
+	std::list<UnsignedInt> m_recorded;	///< recorded CRCs waiting for their computed one
 	UnsignedInt m_localPlayer;
 };
 

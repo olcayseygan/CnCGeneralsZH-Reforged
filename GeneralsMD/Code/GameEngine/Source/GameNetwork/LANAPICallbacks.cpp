@@ -48,6 +48,7 @@
 #include "GameClient/MessageBox.h"
 #include "GameLogic/GameLogic.h"
 #include "GameNetwork/FileTransfer.h"
+#include "GameNetwork/GameDataMatch.h"
 #include "GameNetwork/LANAPICallbacks.h"
 #include "GameNetwork/NetworkUtil.h"
 
@@ -727,7 +728,13 @@ void LANAPI::OnGameJoin( ReturnType ret, LANGameInfo *theGame )
 		/// @todo: re-enable lobby controls?  Error msgs?
 		UnicodeString title, body;
 		title = TheGameText->fetch("LAN:JoinFailed");
-		body = getErrorStringFromReturnType(ret);
+		// a refused join names the half that differs when the host said which (an older host does not)
+		if (ret == RET_CRC_MISMATCH && m_joinDenyDataMatch == GAMEDATA_EXE_DIFFERS)
+			body = TheGameText->fetch("GUI:JoinFailedDifferentBuild");
+		else if (ret == RET_CRC_MISMATCH && m_joinDenyDataMatch == GAMEDATA_INI_DIFFERS)
+			body = TheGameText->fetch("GUI:JoinFailedDifferentData");
+		else
+			body = getErrorStringFromReturnType(ret);
 		MessageBoxOk(title, body, NULL);
 	}
 }

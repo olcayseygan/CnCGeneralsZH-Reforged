@@ -16,7 +16,7 @@
 // One list for declaration, capture and restoration, including shader register banks.
 #define SUN_VALUES(X) \
     X(RenderStates) X(TextureStageStates) X(SamplerStates) X(Transforms) X(Viewport) \
-    X(Headlights) X(HeadlightGain) X(HeadlightCount) X(BlastLights) X(BlastLightCount) \
+    X(HemiAmbient) X(Headlights) X(HeadlightGain) X(HeadlightCount) X(BlastLights) X(BlastLightCount) \
     X(StaticLightingAvailable) X(FullEnvironmentLights) X(FullEnvironmentCount) X(FullEnvironmentAmbient) \
     X(StaticLights) X(StaticLightsEnabled) X(StaticAmbient) \
     X(Material) X(Lights) X(LightsEnabled) X(ClipPlanes) X(StreamOffsets) X(StreamStrides) \

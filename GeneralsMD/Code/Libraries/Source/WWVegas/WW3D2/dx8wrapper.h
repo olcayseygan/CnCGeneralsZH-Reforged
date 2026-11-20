@@ -466,6 +466,7 @@ public:
 	static bool Is_Initted(void) { return IsInitted; }
 
 	static bool Supports_Per_Pixel_Lighting(void);
+	static bool Supports_Hemispheric_Ambient(void);
 	static bool Has_Stencil (void);
 	static void Get_Format_Name(unsigned int format, StringClass *tex_format);
 

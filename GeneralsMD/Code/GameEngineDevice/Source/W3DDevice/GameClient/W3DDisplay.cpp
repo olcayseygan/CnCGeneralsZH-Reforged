@@ -5432,3 +5432,8 @@ Bool W3DDisplay::supportsPerPixelLighting(void) const
 {
 	return DX8Wrapper::Supports_Per_Pixel_Lighting();
 }
+
+Bool W3DDisplay::supportsHemisphericAmbient(void) const
+{
+	return DX8Wrapper::Supports_Hemispheric_Ambient();
+}

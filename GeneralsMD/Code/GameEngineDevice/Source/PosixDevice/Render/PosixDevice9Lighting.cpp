@@ -95,3 +95,10 @@ void SetEnvironments(IDirect3DDevice9 *d,const VertexEnvironment &full,const Ver
 }
 bool PosixPerPixelLightingAvailable(IDirect3DDevice9 *device)
 { return device && static_cast<PosixDevice9 *>(device)->Get_Gpu(); }
+
+namespace RenderLighting {
+void SetHemiAmbient(IDirect3DDevice9 *device, bool enabled)
+{ if (device) static_cast<PosixDevice9 *>(device)->Set_Hemi_Ambient(enabled); }
+}
+bool PosixHemisphericAmbientAvailable(IDirect3DDevice9 *device)
+{ return device && static_cast<PosixDevice9 *>(device)->Get_Gpu(); }

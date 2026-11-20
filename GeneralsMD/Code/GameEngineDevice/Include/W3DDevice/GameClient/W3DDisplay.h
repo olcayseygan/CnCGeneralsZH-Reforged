@@ -134,6 +134,7 @@ public:
 	virtual const WideChar *getRendererName(void) const;
 
 	virtual Bool supportsPerPixelLighting(void) const;
+	virtual Bool supportsHemisphericAmbient(void) const;
 
 	virtual void toggleLetterBox(void);	///<enabled letter-boxed display
 	virtual void enableLetterBox(Bool enable);	///<forces letter-boxed display on/off

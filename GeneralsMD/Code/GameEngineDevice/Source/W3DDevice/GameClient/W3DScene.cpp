@@ -44,6 +44,7 @@
 #include "Common/PerfTimer.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
+#include "Common/ThingTemplate.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/GameLogic.h"
 #include "GameClient/Drawable.h"
@@ -789,8 +790,8 @@ void RTS3DScene::renderSpecificDrawables(RenderInfoClass &rinfo, Int numDrawable
 
 //=============================================================================
 /** Which of the Direct3D 11 frame's own looks a drawable wears this frame, and its four numbers
-	* (DRAW_EFFECT_SAMPLING in ffshader.h): seconds, strength, a seed from the drawable's id and the
-	* drawable's opacity.  The object's half is the sync point's copy (Drawable::getObjectForDraw);
+	* (DRAW_EFFECT_SAMPLING in ffshader.h): seconds, strength, a seed from the drawable's id and one;
+	* the two stealth looks take the foot and a pack in the last two instead.  The object's half is the sync point's copy (Drawable::getObjectForDraw);
 	* nothing here goes back into the logic.  None under -d3d9, -headless or Classic graphics, where the heat
 	* vision pass and the disabled tint draw what they always drew.
 	*
@@ -809,7 +810,6 @@ static unsigned chooseDrawEffect( const Drawable *draw, Bool translucentPass, fl
 	const StealthLookType look = draw->getStealthDrawnLook();
 	const Real pulse = draw->getSecondMaterialPassOpacity();
 	const Real fade = draw->getStealthFade();
-	Real opacity = draw->getStealthSolid();
 	Real strength = 1.0f;
 
 	if ( look == STEALTHLOOK_VISIBLE_DETECTED && !draw->isKindOf( KINDOF_MINE )
@@ -817,7 +817,6 @@ static unsigned chooseDrawEffect( const Drawable *draw, Bool translucentPass, fl
 	{
 		effect = DRAW_EFFECT_REVEALED;
 		strength = pulse;
-		opacity = fade;
 	}
 	else if ( translucentPass && wearsCloak( draw )
 		&& look != STEALTHLOOK_VISIBLE_DETECTED )
@@ -846,7 +845,24 @@ static unsigned chooseDrawEffect( const Drawable *draw, Bool translucentPass, fl
 		parameters[0] = (float)( WW3D::Get_Sync_Time() % 3600000u ) * 0.001f;
 		parameters[1] = strength;
 		parameters[2] = (float)fmod( (double)draw->getID() * 0.6180339887, 1.0 );
-		parameters[3] = opacity;
+		parameters[3] = 1.0f;
+	}
+	if ( effect == DRAW_EFFECT_CLOAK || effect == DRAW_EFFECT_REVEALED )
+	{
+		// stealth_unpack in ffshader.h: the foot in z, and in w the fade, the heat's far end being
+		// paint, the front and the height it climbs, the geometry's with a margin for roofs and masts
+		// over it, in whole units.  The heat sweeps; the cloak ripples going in and blows away in the
+		// wind coming out, which is also how an enemy firing out of hiding comes in.
+		const StealthLookType target = draw->getStealthLook();
+		Int front = STEALTH_FRONT_SWEEP;
+		if ( effect == DRAW_EFFECT_CLOAK )
+			front = ( target == STEALTHLOOK_VISIBLE_FRIENDLY || target == STEALTHLOOK_VISIBLE_FRIENDLY_DETECTED )
+				? STEALTH_FRONT_RIPPLE : STEALTH_FRONT_WIND;
+		const Real geometry = draw->getTemplate()->getTemplateGeometryInfo().getMaxHeightAbovePosition();
+		const Int height = clamp( 1, REAL_TO_INT_CEIL( geometry * 1.3f ), 4000 );
+		const Bool overPaint = effect == DRAW_EFFECT_REVEALED && draw->getStealthOverPaint();
+		parameters[2] = draw->getPositionForDraw()->z;
+		parameters[3] = CombinerShader_Pack_Stealth( height, front, overPaint != FALSE, (float)fade );
 	}
 	return effect;
 }
@@ -1174,7 +1190,14 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 	WW3D::Render_And_Clear_Static_Sort_Lists(rinfo);	//draws things like water
 
 	if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
+	{
+		// The fog's memory look greys a pixel by the ground under it, so it goes down before the
+		// translucent meshes: drawn after them it drained the placement ghost's red over black shroud
+		// to grey, the one picture that has to say "not here".  So every translucent mesh in the fog
+		// keeps its full colour, on purpose.
+		Direct3D11_Shroud_Memory();
 		flushTranslucentObjects(rinfo);	//draw all translucent meshes which don't need per-poly sorting.
+	}
 
 	{
 		USE_PERF_TIMER(translucentRender)
@@ -2081,6 +2104,12 @@ void RTS3DScene::flushTranslucentObjects(RenderInfoClass & rinfo)
 			draw = ((DrawableInfo *)robj->Get_User_Data())->m_drawable;
 
 			rinfo.alphaOverride = draw->getEffectiveOpacity();
+			// The cloak writes alpha 1 over an opaque mesh, so the opacity only reaches the meshes it
+			// leaves out (additive glows) and an unsorted blended one, which keeps its own alpha
+			// (dx8renderer.cpp); at the stealth opacity they stood as a patch on the glass body, so
+			// they thin to a sixth with the fade.  A sorted mesh takes no opacity at all.
+			if ( wearsCloak( draw ) && draw->getStealthDrawnLook() != STEALTHLOOK_VISIBLE_DETECTED )
+				rinfo.alphaOverride *= 1.0f - 0.85f * draw->getStealthFade();
 
 			theTranslucentPass = TRUE;
 			renderOneObject(rinfo, robj, localPlayerIndex);//WW3D::Render(*robj,rinfo);

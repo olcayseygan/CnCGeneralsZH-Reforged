@@ -506,7 +506,9 @@ void W3DShaderManager::pushProtoHaze(void)
 	}
 	s_hazed = weatherHaze || TheGlobalData->m_mapLight;
 	pushAtmosphere(weatherHaze);
-	if ((TheGlobalData->m_mapLight || TheGlobalData->m_ambientOcclusion || TheGlobalData->m_atmosphere || weatherHaze) && Direct3D11_Is_Active())
+	// Outside Classic the fog's memory look reads it too (W3DShroud::pushDirect3D11).
+	if ((TheGlobalData->m_mapLight || TheGlobalData->m_ambientOcclusion || TheGlobalData->m_atmosphere || weatherHaze
+			|| !TheGlobalData->m_classicGraphics) && Direct3D11_Is_Active())
 		pushShroudFrame();
 #endif
 }

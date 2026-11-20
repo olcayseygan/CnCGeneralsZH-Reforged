@@ -22,6 +22,7 @@
 #include "dx11resource.h"
 #include "dx11runtime.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <string>
@@ -921,6 +922,91 @@ static const char * const ATMOSPHERE_SHADER_BODY =
 	"    return float4(haze_along(ray.z / max(reach, 0.0001)) * lerp(lit, 1.0, closing), max(amount, closing));\n"
 	"}\n";
 
+// The shroud's three programs (Soften_Shroud, Shroud_Memory_Scene).  First the easing, a texel a
+// cell: Source is the terrain's shroud texture as logic last wrote it, Extra the level each cell
+// showed last frame, and each channel moves toward the texture's by BlurDirection.x of the gap
+// (one less the decay over the frame's seconds) but never by less than BlurDirection.y (the frame's
+// share of a whole swing), so a change runs out in a few tenths of a second whatever the frame rate
+// and lands exactly.  Sixteen bits a channel, so a slow frame rate's small steps are not lost.
+static const char * const SHROUD_EASE_SHADER_BODY =
+	"float4 main(VertexOutput input) : SV_TARGET\n"
+	"{\n"
+	"    int3 texel = int3(input.Position.xy, 0);\n"
+	"    float4 wanted = Source.Load(texel);\n"
+	"    float4 held = Extra.Load(texel);\n"
+	"    float4 gap = wanted - held;\n"
+	"    float4 step = min(abs(gap), max(abs(gap) * BlurDirection.x, BlurDirection.y));\n"
+	"    return held + sign(gap) * step;\n"
+	"}\n";
+
+// Then the eased cells up to BlurDirection.x texels a cell through a cubic B-spline over the
+// sixteen round each texel, which is about a gaussian of 0.58 cells: the fog's edge is a round ramp
+// with no step in its slope, where the texture's own bilinear filter drew a straight one cell ramp
+// that turned a corner at every cell and showed the grid as a staircase.  The spline is centred, as
+// the bilinear ramp was, so the edge sits where the logic puts it.  It never overshoots, so clear
+// ground stays at one and shrouded at nought.
+static const char * const SHROUD_SOFTEN_SHADER_BODY =
+	"float4 spline(float f)\n"
+	"{\n"
+	"    float g = 1.0 - f;\n"
+	"    float f2 = f * f;\n"
+	"    float f3 = f2 * f;\n"
+	"    return float4(g * g * g, 3.0 * f3 - 6.0 * f2 + 4.0, -3.0 * f3 + 3.0 * f2 + 3.0 * f + 1.0, f3) / 6.0;\n"
+	"}\n"
+	"\n"
+	"float4 main(VertexOutput input) : SV_TARGET\n"
+	"{\n"
+	"    float2 at = input.Position.xy / BlurDirection.x - 0.5;\n"
+	"    float2 base = floor(at);\n"
+	"    float4 across = spline(at.x - base.x);\n"
+	"    float4 down = spline(at.y - base.y);\n"
+	"    int2 last = int2(TexelSize.zw) - 1;\n"
+	"    float4 sum = 0.0;\n"
+	"    for (int y = 0; y < 4; ++y)\n"
+	"    {\n"
+	"        float4 row = 0.0;\n"
+	"        for (int x = 0; x < 4; ++x)\n"
+	"            row += across[x] * Source.Load(int3(clamp(int2(base) + int2(x - 1, y - 1), int2(0, 0), last), 0));\n"
+	"        sum += down[y] * row;\n"
+	"    }\n"
+	"    return saturate(sum);\n"
+	"}\n";
+
+// Last the memory, blended over the scene target by its alpha at the haze's moment, before the haze:
+// ground and the ghosts of buildings in the fog are what the player last saw, and they read as that
+// when most of their colour has gone and they sit a little darker and cooler than the shroud's
+// multiply alone leaves them.  How far into the fog a pixel lies is its light (t2, the soft picture
+// the terrain multiplied by, so the two edges are one) between clear and the fog's level
+// (BlurDirection.x); under the shroud it is black already and stays so.  Source is a copy of the
+// scene, Extra the depth.  Sky and anything in sight take nothing, so their samples are untouched.
+static const char * const SHROUD_MEMORY_SHADER_BODY =
+	"cbuffer MemoryConstants : register(b1)\n"
+	"{\n"
+	"    row_major float4x4 WorldFromClip : packoffset(c15);\n"
+	"    float4 HazeSun : packoffset(c19);\n"
+	"    float4 HazeShroudRect : packoffset(c20);\n"
+	"};\n"
+	"Texture2D Shroud : register(t2);\n"
+	"static const float MEMORY_GREY = 0.7;\n"
+	"static const float MEMORY_DIM = 0.88;\n"
+	"static const float3 MEMORY_TINT = float3(0.94, 0.98, 1.06);\n"
+	"\n"
+	"float4 main(VertexOutput input) : SV_TARGET\n"
+	"{\n"
+	"    float raw = Extra.Load(int3(input.Position.xy, 0)).r;\n"
+	"    if (raw >= 0.99999 || HazeSun.z <= 0.0) return float4(0.0, 0.0, 0.0, 0.0);\n"
+	"    float2 ndc = float2(input.Texture.x * 2.0 - 1.0, 1.0 - input.Texture.y * 2.0);\n"
+	"    float4 world = mul(float4(ndc, raw, 1.0), WorldFromClip);\n"
+	"    float2 here = world.xy / world.w;\n"
+	"    float lit = Shroud.SampleLevel(Sampler, (here - HazeShroudRect.xy) * HazeShroudRect.zw, 0.0).g;\n"
+	"    float memory = saturate((1.0 - lit) / max(1.0 - BlurDirection.x, 0.0001));\n"
+	"    if (memory <= 0.0) return float4(0.0, 0.0, 0.0, 0.0);\n"
+	"    float3 scene = Source.Load(int3(input.Position.xy, 0)).rgb;\n"
+	"    float grey = dot(scene, float3(0.299, 0.587, 0.114));\n"
+	"    float3 recalled = lerp(scene, grey * MEMORY_TINT, MEMORY_GREY) * MEMORY_DIM;\n"
+	"    return float4(recalled, memory);\n"
+	"}\n";
+
 // The bright pass, downsampling as it goes: four taps of the full size frame averaged into one
 // quarter size texel, then the threshold taken off its brightest channel.  What survives is the
 // amount by which something was brighter than white, which is a quantity an eight bit scene target
@@ -1343,6 +1429,15 @@ DX11PostProcessClass::DX11PostProcessClass()
 	, HazeShroudView(NULL)
 	, AtmosphereRefused(false)
 	, WorldAoRefused(false)
+	, ShroudRefused(false)
+	, ShroudHeldIndex(0)
+	, ShroudCellsWidth(0)
+	, ShroudCellsHeight(0)
+	, ShroudScale(1)
+	, ShroudSettle(0.0f)
+	, ShroudFogLight(-1.0f)
+	, ShroudFogged(true)
+	, ShroudRemembered(false)
 	, HeatSplatBuffer(NULL)
 	, HeatSplatView(NULL)
 	, HeatSplatVertexShader(NULL)
@@ -1354,6 +1449,9 @@ DX11PostProcessClass::DX11PostProcessClass()
 	memset(&HeatTarget, 0, sizeof(HeatTarget));
 	memset(HazeWorldFromClip, 0, sizeof(HazeWorldFromClip));
 	memset(WorldAoShaders, 0, sizeof(WorldAoShaders));
+	memset(ShroudShaders, 0, sizeof(ShroudShaders));
+	memset(ShroudHeld, 0, sizeof(ShroudHeld));
+	memset(&ShroudSoft, 0, sizeof(ShroudSoft));
 	memset(AtmosphereShaders, 0, sizeof(AtmosphereShaders));
 	memset(WorldAoTargets, 0, sizeof(WorldAoTargets));
 	memset(WorldAoProjection, 0, sizeof(WorldAoProjection));
@@ -1396,6 +1494,11 @@ void DX11PostProcessClass::Shutdown()
 {
 	Release_Targets();
 	Release_Heat_Haze();
+	Release_Shroud();
+	for (unsigned index = 0; index < SHROUD_PROGRAMS; ++index) {
+		release_interface(reinterpret_cast<IUnknown **>(&ShroudShaders[index]));
+	}
+	ShroudRefused = false;
 	HeatSplats.clear();
 	HeatHazeRefused = false;
 	HazeShroudView = NULL;
@@ -1746,6 +1849,7 @@ void DX11PostProcessClass::Open_Frame()
 {
 	Occluded = false;
 	Hazed = false;
+	ShroudRemembered = false;
 }
 
 bool DX11PostProcessClass::Wants_Atmosphere_Programs() const
@@ -2028,6 +2132,194 @@ bool DX11PostProcessClass::Occlude_Scene(ID3D11ShaderResourceView * depth)
 	pass.SourceHeight = Height;
 	Draw_Pass(pass);
 	Occluded = true;
+	return true;
+}
+
+// The soft picture's texels a cell, and the most texels it may have on a side: four is ten world
+// units a texel at the game's forty unit cells, a terrain cell, and a 1024 cell map would want 4096.
+static const unsigned SHROUD_SOFT_SCALE = 4;
+static const unsigned SHROUD_SOFT_MOST = 4096;
+static const DXGI_FORMAT SHROUD_FORMAT = DXGI_FORMAT_R16G16B16A16_UNORM;
+// The easing: the decay's time constant, the floor that ends a whole swing in this long, and how long
+// after the last write the passes keep running, which is past the longest swing the two allow.
+static const float SHROUD_EASE_SECONDS = 0.1f;
+static const float SHROUD_SWING_SECONDS = 0.4f;
+static const float SHROUD_SETTLE_SECONDS = 0.6f;
+
+void DX11PostProcessClass::Release_Shroud()
+{
+	Release_Target(ShroudHeld[0]);
+	Release_Target(ShroudHeld[1]);
+	Release_Target(ShroudSoft);
+	ShroudCellsWidth = 0;
+	ShroudCellsHeight = 0;
+	ShroudSettle = 0.0f;
+	ShroudFogLight = -1.0f;
+}
+
+bool DX11PostProcessClass::Wants_Shroud_Programs() const
+{
+	return ShroudShaders[SHROUD_PROGRAMS - 1] == NULL && !ShroudRefused && ShadersReady;
+}
+
+const char * DX11PostProcessClass::Shroud_Program_Source(unsigned index) const
+{
+	static const std::string sources[SHROUD_PROGRAMS] = {
+		std::string(PIXEL_SHADER_PROLOGUE) + SHROUD_EASE_SHADER_BODY,
+		std::string(PIXEL_SHADER_PROLOGUE) + SHROUD_SOFTEN_SHADER_BODY,
+		std::string(PIXEL_SHADER_PROLOGUE) + SHROUD_MEMORY_SHADER_BODY
+	};
+	return sources[index].c_str();
+}
+
+void DX11PostProcessClass::Load_Shroud_Program(unsigned index, const void * bytecode, SIZE_T size)
+{
+	if (bytecode == NULL || FAILED(Device->Get_Device()->CreatePixelShader(bytecode, size, NULL,
+			&ShroudShaders[index]))) {
+		ShroudShaders[index] = NULL;
+		ShroudRefused = true;
+	}
+}
+
+ID3D11ShaderResourceView * DX11PostProcessClass::Soften_Shroud(ID3D11ShaderResourceView * cells,
+	float seconds, bool written, float fog_light, bool fogged)
+{
+	ShroudFogLight = -1.0f;
+	// Off (Classic, a map going, a device reset): the pictures go, and the next map's levels start
+	// where its logic has them rather than easing out of the last map's.
+	if (cells == NULL) {
+		Release_Shroud();
+		return NULL;
+	}
+	if (!ShadersReady || ShroudRefused || ShroudShaders[SHROUD_PROGRAMS - 1] == NULL) {
+		return NULL;
+	}
+
+	ID3D11Resource * resource = NULL;
+	cells->GetResource(&resource);
+	ID3D11Texture2D * texture = NULL;
+	if (resource == NULL || FAILED(resource->QueryInterface(__uuidof(ID3D11Texture2D), (void **)&texture))) {
+		release_interface(reinterpret_cast<IUnknown **>(&resource));
+		return NULL;
+	}
+	D3D11_TEXTURE2D_DESC description;
+	texture->GetDesc(&description);
+	texture->Release();
+	resource->Release();
+
+	// A new map's grid, or the first call: new pictures, and the levels start where logic has them.
+	bool fresh = false;
+	if (ShroudSoft.Texture == NULL || description.Width != ShroudCellsWidth || description.Height != ShroudCellsHeight) {
+		Release_Shroud();
+		const unsigned side = (description.Width > description.Height) ? description.Width : description.Height;
+		unsigned scale = SHROUD_SOFT_SCALE;
+		while (scale > 1 && side * scale > SHROUD_SOFT_MOST) {
+			--scale;
+		}
+		if (!Create_Target(ShroudHeld[0], description.Width, description.Height, SHROUD_FORMAT)
+				|| !Create_Target(ShroudHeld[1], description.Width, description.Height, SHROUD_FORMAT)
+				|| !Create_Target(ShroudSoft, description.Width * scale, description.Height * scale, SHROUD_FORMAT)) {
+			Release_Shroud();
+			return NULL;
+		}
+		ShroudCellsWidth = description.Width;
+		ShroudCellsHeight = description.Height;
+		ShroudScale = scale;
+		ShroudHeldIndex = 0;
+		fresh = true;
+	}
+
+	ShroudFogLight = fog_light;
+	if (written || fresh) {
+		ShroudSettle = SHROUD_SETTLE_SECONDS;
+	}
+	// The last fogged cell cleared still eases out over the settle; after it every texel is one.
+	ShroudFogged = fogged || ShroudSettle > 0.0f;
+	if (ShroudSettle <= 0.0f) {
+		return ShroudSoft.Resource;
+	}
+	if (seconds < 0.0f) {
+		seconds = 0.0f;
+	}
+	ShroudSettle -= seconds;
+
+	ID3D11DeviceContext * context = Device->Get_Context();
+	ID3D11RenderTargetView * saved_target = NULL;
+	ID3D11DepthStencilView * saved_depth = NULL;
+	context->OMGetRenderTargets(1, &saved_target, &saved_depth);
+	D3D11_VIEWPORT saved_viewport;
+	UINT saved_viewports = 1;
+	context->RSGetViewports(&saved_viewports, &saved_viewport);
+
+	PassSetup pass;
+	memset(&pass, 0, sizeof(pass));
+	pass.Shader = ShroudShaders[0];
+	pass.Source = cells;
+	pass.Extra = ShroudHeld[ShroudHeldIndex].Resource;
+	pass.Destination = ShroudHeld[1 - ShroudHeldIndex].View;
+	pass.DestinationWidth = ShroudCellsWidth;
+	pass.DestinationHeight = ShroudCellsHeight;
+	pass.SourceWidth = ShroudCellsWidth;
+	pass.SourceHeight = ShroudCellsHeight;
+	pass.BlurX = fresh ? 1.0f : 1.0f - expf(-seconds / SHROUD_EASE_SECONDS);
+	pass.BlurY = fresh ? 1.0f : seconds / SHROUD_SWING_SECONDS;
+	Draw_Pass(pass);
+	ShroudHeldIndex = 1 - ShroudHeldIndex;
+
+	memset(&pass, 0, sizeof(pass));
+	pass.Shader = ShroudShaders[1];
+	pass.Source = ShroudHeld[ShroudHeldIndex].Resource;
+	pass.Destination = ShroudSoft.View;
+	pass.DestinationWidth = ShroudCellsWidth * ShroudScale;
+	pass.DestinationHeight = ShroudCellsHeight * ShroudScale;
+	pass.SourceWidth = ShroudCellsWidth;
+	pass.SourceHeight = ShroudCellsHeight;
+	pass.BlurX = static_cast<float>(ShroudScale);
+	Draw_Pass(pass);
+
+	context->OMSetRenderTargets(1, &saved_target, saved_depth);
+	if (saved_viewports == 1) {
+		context->RSSetViewports(1, &saved_viewport);
+	}
+	release_interface(reinterpret_cast<IUnknown **>(&saved_target));
+	release_interface(reinterpret_cast<IUnknown **>(&saved_depth));
+	return ShroudSoft.Resource;
+}
+
+bool DX11PostProcessClass::Shroud_Memory_Scene(ID3D11ShaderResourceView * depth,
+	const float world_from_clip[16])
+{
+	// No fog anywhere (an observer with it off, a map revealed): a copy of the scene for nothing.
+	if (ShroudFogLight < 0.0f || !ShroudFogged || ShroudRemembered || Resolved || !ShadersReady || HazeShroudSource == NULL
+			|| ShroudShaders[2] == NULL || SceneTarget.View == NULL || Device->Get_Scene_View() != SceneTarget.View) {
+		return false;
+	}
+	// The pass reads the colour it blends over, so it reads a copy, as Occlude_Scene does.
+	if (SceneCopy.Texture == NULL
+			&& !Create_Target(SceneCopy, Width, Height, TargetsAreFloat ? FLOAT_FORMAT : EIGHT_BIT_FORMAT)) {
+		Release_Target(SceneCopy);
+		return false;
+	}
+	DX11Resource_Copy_Readable(Device->Get_Context(), SceneCopy.Texture, SceneTarget.Texture);
+	memcpy(HazeWorldFromClip, world_from_clip, sizeof(HazeWorldFromClip));
+	// Read and left for the haze, which comes after in the same frame and takes it for good.
+	HazeShroudView = HazeShroudSource;
+
+	PassSetup pass;
+	memset(&pass, 0, sizeof(pass));
+	pass.Shader = ShroudShaders[2];
+	pass.Source = SceneCopy.Resource;
+	pass.Extra = depth;
+	pass.Blend = true;
+	pass.World = true;
+	pass.Destination = SceneTarget.View;
+	pass.DestinationWidth = Width;
+	pass.DestinationHeight = Height;
+	pass.SourceWidth = Width;
+	pass.SourceHeight = Height;
+	pass.BlurX = ShroudFogLight;
+	Draw_Pass(pass);
+	ShroudRemembered = true;
 	return true;
 }
 

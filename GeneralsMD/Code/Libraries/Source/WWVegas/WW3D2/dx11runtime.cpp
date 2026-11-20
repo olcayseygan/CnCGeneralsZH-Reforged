@@ -571,14 +571,26 @@ void Direct3D11_Mark_Surface_Dirty(struct IDirect3DSurface9 * surface)
 static struct IDirect3DBaseTexture9 * SceneStandInTexture = NULL;
 static struct IDirect3DSurface9 * SceneStandInSurface = NULL;
 
+// Direct3D11_Set_Shroud's texture while its soft picture stands: every bind of it, a stage's or the
+// haze's, takes the picture instead of the copy a texel a cell.
+static struct IDirect3DBaseTexture9 * ShroudTexture = NULL;
+
+// The copy of the texture, or the soft shroud for the shroud's texture.
+static ID3D11ShaderResourceView * mirror_or_soft_shroud(struct IDirect3DBaseTexture9 * texture)
+{
+	if (texture == NULL) {
+		return NULL;
+	}
+	ID3D11ShaderResourceView * const soft = (texture == ShroudTexture) ? Post.Soft_Shroud() : NULL;
+	return (soft != NULL) ? soft : DX11Texture_Mirror(Device.Get_Device(), Device.Get_Context(), texture);
+}
+
 void Direct3D11_Mirror_Texture(unsigned stage, struct IDirect3DBaseTexture9 * texture)
 {
 	if (!Active) {
 		return;
 	}
-	ID3D11ShaderResourceView * view = texture == NULL
-		? NULL
-		: DX11Texture_Mirror(Device.Get_Device(), Device.Get_Context(), texture);
+	ID3D11ShaderResourceView * view = mirror_or_soft_shroud(texture);
 	if (texture != NULL && texture == SceneStandInTexture) {
 		Backend.Set_Scene_Stand_In(view);
 	}
@@ -591,9 +603,54 @@ void Direct3D11_Set_Haze_Shroud(struct IDirect3DBaseTexture9 * texture, const fl
 	if (!Active) {
 		return;
 	}
-	DX11Post_Set_Haze_Shroud(texture == NULL
-		? NULL
-		: DX11Texture_Mirror(Device.Get_Device(), Device.Get_Context(), texture), rect);
+	DX11Post_Set_Haze_Shroud(mirror_or_soft_shroud(texture), rect);
+}
+
+// The shroud's three programs out of the backend's cache, or compiled into it.  Nothing once loaded or
+// refused.
+static void load_shroud_programs()
+{
+	if (!Post.Wants_Shroud_Programs()) {
+		return;
+	}
+	for (unsigned index = 0; index < DX11PostProcessClass::SHROUD_PROGRAMS; ++index) {
+		std::vector<unsigned char> code;
+		if (Backend.Compile_Pixel_Program(Post.Shroud_Program_Source(index), "dx11shroud", code) && !code.empty()) {
+			Post.Load_Shroud_Program(index, &code[0], code.size());
+		} else {
+			Post.Load_Shroud_Program(index, NULL, 0);
+		}
+	}
+}
+
+void Direct3D11_Prepare_Shroud()
+{
+	if (Active) {
+		load_shroud_programs();
+	}
+}
+
+void Direct3D11_Set_Shroud(struct IDirect3DBaseTexture9 * texture, float seconds, bool written, float fog_light,
+	bool fogged)
+{
+	ShroudTexture = NULL;
+	if (!Active) {
+		return;
+	}
+	if (texture == NULL) {
+		Post.Soften_Shroud(NULL, 0.0f, false, -1.0f, true);
+		return;
+	}
+	// Built at the map's load (Direct3D11_Prepare_Shroud); here only when the Classic setting went
+	// off in a match.
+	load_shroud_programs();
+	ID3D11ShaderResourceView * const cells = DX11Texture_Mirror(Device.Get_Device(), Device.Get_Context(), texture);
+	if (Post.Soften_Shroud(cells, seconds, written, fog_light, fogged) != NULL) {
+		ShroudTexture = texture;
+	}
+	// The passes bound their own targets, programs and states on the context, and the picture the
+	// stages may still hold was a target a moment ago.
+	Backend.Forget_Bindings();
 }
 
 void Direct3D11_Set_Atmosphere(const float horizon[3], const float tint[3], float start, float scale,
@@ -858,6 +915,8 @@ void Direct3D11_Occlude_Scene()
 	}
 	float world_from_clip[16];
 	if (Backend.Scene_World_From_Clip(world_from_clip)) {
+		// The fog's memory look first, so the haze lies over ground already drained of its colour.
+		drew = Post.Shroud_Memory_Scene(Device.Get_Depth_Texture(), world_from_clip) || drew;
 		drew = Post.Haze_Scene(Device.Get_Depth_Texture(), world_from_clip) || drew;
 		drew = Post.Atmosphere_Scene(Device.Get_Depth_Texture(), world_from_clip) || drew;
 	}
@@ -911,6 +970,21 @@ void Direct3D11_Ambient_Occlusion()
 	float projection_y = 0.0f;
 	Backend.Scene_Projection_Scale(projection_x, projection_y);
 	if (Post.World_Occlude_Scene(Device.Get_Depth_Texture(), world_from_clip, projection_x, projection_y)) {
+		Backend.Resume_Scene();
+	}
+}
+
+void Direct3D11_Shroud_Memory()
+{
+	if (!Active || !Backend.Draws_Into_Scene()) {
+		return;
+	}
+	float world_from_clip[16];
+	if (!Backend.Scene_World_From_Clip(world_from_clip)) {
+		return;
+	}
+	Backend.Resolve_Scene_Depth();
+	if (Post.Shroud_Memory_Scene(Device.Get_Depth_Texture(), world_from_clip)) {
 		Backend.Resume_Scene();
 	}
 }

@@ -44,6 +44,7 @@
 #include "WW3D2/textureloader.h"
 #include "Common/GlobalData.h"
 #include "GameLogic/PartitionManager.h"
+#include "WW3D2/dx11runtime.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -133,6 +134,10 @@ void W3DShroud::init(WorldHeightMap *pMap, Real worldCellSizeX, Real worldCellSi
 	DEBUG_ASSERTCRASH( m_pSrcTexture == NULL, ("ReAcquire of existing shroud textures"));
 	DEBUG_ASSERTCRASH( pMap != NULL, ("Shroud init with NULL WorldHeightMap"));
 
+	// The soft shroud's programs while the map loads, not on the match's first frame.
+	if (!TheGlobalData->m_classicGraphics)
+		Direct3D11_Prepare_Shroud();
+
 	Int dstTextureWidth=0;
 	Int dstTextureHeight=0;
 	m_cellWidth=worldCellSizeX;
@@ -205,6 +210,7 @@ void W3DShroud::init(WorldHeightMap *pMap, Real worldCellSizeX, Real worldCellSi
 	//clear entire texture to black
 	memset(m_srcTextureData,0,m_srcTexturePitch*srcHeight);
 	m_cellsWritten = TRUE;
+	m_fogCellCount = m_numCellsX*m_numCellsY;
 
 #if defined(_DEBUG) || defined(_INTERNAL)
 	if (TheGlobalData && TheGlobalData->m_fogOfWarOn)
@@ -232,6 +238,9 @@ void W3DShroud::reset()
 	if (shroudHasNoDevice())
 		return;
 
+	// Direct3D 11's soft picture goes with the map, so the next one's starts from its own cells.
+	Direct3D11_Set_Shroud(NULL, 0.0f, false, 0.0f, true);
+
 	//Free old shroud data since it may no longer fit new map.
 	if (m_pSrcTexture)
 		m_pSrcTexture->Release();
@@ -249,6 +258,8 @@ void W3DShroud::reset()
 ///Release any resources that can't survive a D3D device reset.
 void W3DShroud::ReleaseResources(void)
 {
+	// Direct3D 11 binds its soft picture for this texture by its address; the address goes with it.
+	Direct3D11_Set_Shroud(NULL, 0.0f, false, 0.0f, true);
 	REF_PTR_RELEASE (m_pDstTexture);
 }
 
@@ -375,7 +386,10 @@ void W3DShroud::setShroudLevel(Int x, Int y, W3DShroudLevel level, Bool textureO
 //				bluepixel -= redpixel;
 //			}
 
-			*texel = ( ((bluepixel&0xf8) >> 3) | ((greenpixel&0xfc)<<3) | ((redpixel&0xf8)<<8));
+			// clear is level 255 and nothing else, whose texel is white whatever the shroud's colour
+			const UnsignedShort written = ( ((bluepixel&0xf8) >> 3) | ((greenpixel&0xfc)<<3) | ((redpixel&0xf8)<<8));
+			m_fogCellCount += (*texel == 0xFFFF) - (written == 0xFFFF);
+			*texel = written;
 		}
 		return;
 	}
@@ -428,6 +442,7 @@ void W3DShroud::fillShroudData(W3DShroudLevel level)
 	}
 
 	m_cellsWritten = TRUE;
+	m_fogCellCount = (pixel == 0xFFFF) ? 0 : m_numCellsX*m_numCellsY;
 	UnsignedShort *ptr=(UnsignedShort *)m_srcTextureData;
 	Int pitch = m_srcTexturePitch >> 1;	//2 bytes per pointer increment
 	for (y=0; y<m_numCellsY; y++)
@@ -740,7 +755,10 @@ void W3DShroud::render(CameraClass *cam)
 	// and a Direct3D 11 compare of every row on every pass, and an observer's never changes.  A written
 	// pass still copies every cell, so the Direct3D 11 row compare sends only the rows that changed.
 	if (!m_cellsWritten && !m_clearDstTexture)
+	{
+		pushDirect3D11(FALSE);
 		return;
+	}
 	m_cellsWritten = FALSE;
 
 	//Update video memory texture with sysmem copy
@@ -768,6 +786,25 @@ void W3DShroud::render(CameraClass *cam)
 	}
 
 	REF_PTR_RELEASE (pDestSurface);
+	pushDirect3D11(TRUE);
+}
+
+//-----------------------------------------------------------------------------
+/** On Direct3D 11 outside Classic every bind of the texture takes a picture made from it on the GPU:
+	each cell eased toward what logic last wrote over a few tenths of a second of wall time, then
+	smoothed to four texels a cell, and ground in the fog drained of most of its colour
+	(Direct3D11_Set_Shroud).  Render side only: logic's cells and this texture are what they were.
+	Classic and -d3d9 draw the texture as EA did, a texel a cell. */
+void W3DShroud::pushDirect3D11(Bool written)
+{
+	const UnsignedInt now = Clock_Milliseconds();
+	const Real seconds = (m_lastPushMs != 0) ? (Real)(now - m_lastPushMs) / 1000.0f : 0.0f;
+	m_lastPushMs = now;
+	const Bool soft = !TheGlobalData->m_classicGraphics && m_pDstTexture != NULL;
+	// fogged: some cell is below clear, so the memory look has ground to grey (the black border round
+	// the map takes nothing from it)
+	Direct3D11_Set_Shroud(soft ? m_pDstTexture->Peek_D3D_Base_Texture() : NULL, seconds, written != FALSE,
+		(Real)TheGlobalData->m_fogAlpha / 255.0f, m_fogCellCount > 0);
 }
 
 #define FOG_INTERPOLATION_RATE	(255.0f/1000.0f)	//take one second to go from black to fully lit.

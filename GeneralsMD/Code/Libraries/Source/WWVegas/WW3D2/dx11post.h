@@ -289,6 +289,29 @@ public:
 	void Compile_World_Ao_Programs();
 	static const unsigned WORLD_AO_PROGRAMS = 3;
 
+	// The shroud outside Classic (Direct3D11_Set_Shroud).  Soften_Shroud takes the view of the
+	// terrain's shroud texture, a texel a cell, and keeps two pictures of its own: the level each cell
+	// shows, eased toward the texture's over a few tenths of a second of wall time, and that smoothed
+	// up to SHROUD_SOFT_SCALE texels a cell, which it returns and which binds wherever the texture
+	// would.  Seconds is the wall time since the last call, written whether the texture changed since.
+	// Nothing draws once the levels have settled; the last picture stands.  A null cells view turns it
+	// off.  The caller binds its target and viewport again, and forgets its bindings, afterwards.
+	// Fog_light is the fogged cell's level (FogAlpha over 255) for Shroud_Memory_Scene, fogged whether
+	// any cell is below clear: with none, once the levels settle, the memory pass has nothing to grey.
+	ID3D11ShaderResourceView * Soften_Shroud(ID3D11ShaderResourceView * cells, float seconds,
+		bool written, float fog_light, bool fogged);
+	// The soft picture while Soften_Shroud last succeeded, else null.
+	ID3D11ShaderResourceView * Soft_Shroud() const { return ShroudFogLight >= 0.0f ? ShroudSoft.Resource : NULL; }
+	// Ground in the fog drained toward grey and dimmed a little, out of the depth given, at the haze's
+	// moment and under its terms.  Needs the soft picture this frame.  False when it drew nothing.
+	bool Shroud_Memory_Scene(ID3D11ShaderResourceView * depth, const float world_from_clip[16]);
+	// Its three programs (the easing, the smoothing, the memory) come through the backend's cache as the
+	// haze's do.
+	static const unsigned SHROUD_PROGRAMS = 3;
+	bool Wants_Shroud_Programs() const;
+	const char * Shroud_Program_Source(unsigned index) const;
+	void Load_Shroud_Program(unsigned index, const void * bytecode, SIZE_T size);
+
 	// -heathaze, a prototype.  The flames' splats for this frame (Direct3D11_Set_Heat_Splats has the
 	// layout); Heat_Haze_Scene then draws each into a half size target of screen shifts, added up,
 	// and puts a copy of the scene back into the scene target read through them.  Once a frame,
@@ -447,6 +470,26 @@ private:
 	ID3D11PixelShader * WorldAoShaders[WORLD_AO_PROGRAMS];
 	float WorldAoProjection[4];
 	bool WorldAoRefused;
+	// Soften_Shroud's: its programs, the eased levels a texel a cell (two, read one and write the
+	// other), the smoothed picture, the cell grid they were made for, how many texels a cell the
+	// picture has, the seconds left before the levels stop moving, and the fog's level, below nought
+	// while there is no picture.  Released with the device, not with the frame's targets, so a resize
+	// keeps them.
+	void Release_Shroud();
+	ID3D11PixelShader * ShroudShaders[SHROUD_PROGRAMS];
+	bool ShroudRefused;
+	Target ShroudHeld[2];
+	Target ShroudSoft;
+	unsigned ShroudHeldIndex;
+	unsigned ShroudCellsWidth;
+	unsigned ShroudCellsHeight;
+	unsigned ShroudScale;
+	float ShroudSettle;
+	float ShroudFogLight;
+	// The picture holds fog: a cell below clear, or levels still easing out of one.
+	bool ShroudFogged;
+	// Shroud_Memory_Scene ran this frame.
+	bool ShroudRemembered;
 	// -heathaze: the splats waiting for the next Heat_Haze_Scene, the half size shift target (made
 	// with the program, released with the other targets), the splat buffer the vertex program reads,
 	// its programs and its additive blend.  Refused once means never tried again.

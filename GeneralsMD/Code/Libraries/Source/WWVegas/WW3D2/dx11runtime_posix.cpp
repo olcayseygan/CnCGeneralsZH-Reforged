@@ -61,6 +61,8 @@ DX11BufferTwinClass * Direct3D11_Twin_Vertex_Buffer(unsigned, bool) { return NUL
 DX11BufferTwinClass * Direct3D11_Twin_Index_Buffer(unsigned, bool) { return NULL; }
 void Direct3D11_Mirror_Texture(unsigned, struct IDirect3DBaseTexture9 *) {}
 void Direct3D11_Set_Haze_Shroud(struct IDirect3DBaseTexture9 *, const float [4]) {}
+void Direct3D11_Set_Shroud(struct IDirect3DBaseTexture9 *, float, bool, float, bool) {}
+void Direct3D11_Prepare_Shroud() {}
 void Direct3D11_Set_Atmosphere(const float [3], const float [3], float, float, float, float, float, float, struct IDirect3DBaseTexture9 *) {}
 void Direct3D11_Atmosphere_Sky() {}
 
@@ -104,6 +106,7 @@ unsigned Direct3D11_Requested_Draw_Effect(float parameters[4])
 }
 void Direct3D11_Occlude_Scene() {}
 void Direct3D11_Ambient_Occlusion() {}
+void Direct3D11_Shroud_Memory() {}
 void Direct3D11_Set_Glow_Draw(bool) {}
 void Direct3D11_Set_Scene_Stand_In(struct IDirect3DBaseTexture9 *, struct IDirect3DSurface9 *) {}
 

@@ -119,6 +119,19 @@ void Direct3D11_Mirror_Texture(unsigned stage, struct IDirect3DBaseTexture9 * te
 // terrain's world to texture mapping (DX11Post_Set_Haze_Shroud).  Null reads everything as in sight.
 void Direct3D11_Set_Haze_Shroud(struct IDirect3DBaseTexture9 * texture, const float rect[4]);
 
+// The terrain's shroud texture outside Classic, once a frame after the shroud's copy went up
+// (DX11PostProcessClass::Soften_Shroud): each cell eases toward what logic wrote over a few tenths of a
+// second of wall time and the cells are smoothed into a picture four texels a cell, which every bind of
+// this texture takes from then on, the haze's included; ground in the fog then takes the memory look
+// (Shroud_Memory_Scene).  Seconds is the wall time since the last call, written whether the copy
+// changed since, fog_light the fogged cell's level over 255, fogged whether any cell is below clear (no
+// memory pass once none is and the picture has settled).  Null puts the plain copy back.
+void Direct3D11_Set_Shroud(struct IDirect3DBaseTexture9 * texture, float seconds, bool written, float fog_light,
+	bool fogged);
+// Its programs, out of dx11shaders.cache or compiled, while a map loads (W3DShroud::init): left to the
+// match's first frame, three compiles on the spot froze it for 300 to 400 ms.
+void Direct3D11_Prepare_Shroud();
+
 // The Atmosphere option's fade and sky for this frame (DX11Post_Set_Atmosphere), with the sky's D3D9
 // texture.  Strength zero is no pass.
 void Direct3D11_Set_Atmosphere(const float horizon[3], const float tint[3], float start, float scale,
@@ -306,6 +319,12 @@ void Direct3D11_Occlude_Scene();
 // is down and before the water.  The chain's own occlusion stands down for the frame.  -d3d9, Classic
 // graphics, -headless and the SDL3 port draw nothing here.
 void Direct3D11_Ambient_Occlusion();
+
+// The fog's memory look (DX11PostProcessClass::Shroud_Memory_Scene), called after the water and before
+// the translucent meshes: it greys every pixel by the ground under it, and a translucent mesh drawn
+// first, the placement ghost above all, lost its red over black shroud with the ground.
+// Direct3D11_Occlude_Scene's own call then finds it done.
+void Direct3D11_Shroud_Memory();
 
 // Whether the draws that follow take the Glow option's additive gain (DX11BackendClass::
 // Set_Glow_Draw).  ShaderClass::Apply sends it from the shader's GLOW_ENABLE bit.

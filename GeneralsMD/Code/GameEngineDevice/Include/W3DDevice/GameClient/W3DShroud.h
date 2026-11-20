@@ -102,6 +102,7 @@ public:
 	void setShroudLevel(Int x, Int y, W3DShroudLevel,Bool textureOnly=FALSE);
 	void setShroudFilter(Bool enable);	///<turns on bilinear filtering of shroud cells.
 	void setBorderShroudLevel(W3DShroudLevel level);	///<color that will appear in unused border terrain.
+	W3DShroudLevel getBorderShroudLevel(void) const { return m_boderShroudLevel; }	///<the level setBorderShroudLevel last set
 	Real	getDrawOriginX(void)	{return m_drawOriginX;}	///<returns ws origin of first pixel in shroud texture.			
 	Real	getDrawOriginY(void)	{return m_drawOriginY;}	///<returns ws origin of first pixel in shroud texture.			
 
@@ -130,6 +131,9 @@ protected:
 	void interpolateFogLevels(RenderRect *rect);		///<fade current fog levels to actual logic side levels.
 	void fillBorderShroudData(W3DShroudLevel level, SurfaceClass* pDestSurface);	///<fill the destination texture with a known value
 	Bool m_cellsWritten = TRUE;					///<a cell was written since render last copied them up
+	Int m_fogCellCount = 0;						///<cells whose texel is not clear white, kept where a texel is written
+	UnsignedInt m_lastPushMs = 0;				///<wall clock of the last pushDirect3D11, nought before the first
+	void pushDirect3D11(Bool written);			///<the soft, eased shroud on Direct3D 11 outside Classic
 };
 
 #endif	//__W3DSHROUD_H_

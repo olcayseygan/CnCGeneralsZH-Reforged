@@ -25617,6 +25617,12 @@ TEST(scenario_parses_the_order_lines)
 	CHECK_EQ( action.atStart, 0 );
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "240 respond 0 *", &action ), (Int)SCENARIO_PARSE_MISSING_ARGS );
 
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "48 lanemarch 1 * -1570", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_LANEMARCH );
+	CHECK_NEAR( action.at.x, -1570.0f, 0.01f );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "48 lanemarch 1 * east", &action ), (Int)SCENARIO_PARSE_BAD_POSITION );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "48 lanemarch 1 *", &action ), (Int)SCENARIO_PARSE_MISSING_ARGS );
+
 	CHECK_EQ( (Int)ScenarioDrill_parseLine( "200 shiftpower 0 * 1 AmericaSupplyCenter SpecialAbilityBlackLotusCaptureBuilding",
 																					 &action ), (Int)SCENARIO_PARSE_OK );
 	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_SHIFTPOWER );

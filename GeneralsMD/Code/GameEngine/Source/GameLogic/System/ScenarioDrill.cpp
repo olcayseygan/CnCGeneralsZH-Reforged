@@ -274,6 +274,8 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_AIRLIFT;
 	else if (token == "health")
 		*action = SCENARIO_ACTION_HEALTH;
+	else if (token == "lanemarch")
+		*action = SCENARIO_ACTION_LANEMARCH;
 	else
 		return FALSE;
 
@@ -388,6 +390,7 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_HANDOVER:		return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_AIRLIFT:			return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_HEALTH:			return SCENARIO_TOKENS_STANCE;
+		case SCENARIO_ACTION_LANEMARCH:		return SCENARIO_TOKENS_MOVE;
 	}
 	return SCENARIO_TOKENS_STOP;
 }
@@ -583,6 +586,17 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 				return SCENARIO_PARSE_BAD_COUNT;
 			break;
 
+		case SCENARIO_ACTION_LANEMARCH:
+		{
+			// how far along x each unit goes from where it stands, negative for west
+			const char *text = tokens[ 4 ].str();
+			char *end = NULL;
+			action->at.x = (Real)strtod( text, &end );
+			if (end == text || *end != 0)
+				return SCENARIO_PARSE_BAD_POSITION;
+			break;
+		}
+
 		case SCENARIO_ACTION_GIVEMONEY:
 			if (!parseWholeNumber( tokens[ 3 ], &action->targetSlot ))
 				return SCENARIO_PARSE_BAD_SLOT;
@@ -697,10 +711,31 @@ struct ScenarioResponse
 static const Real SCENARIO_RESPOND_AIM = 0.26f;	// 15 degrees
 static std::vector<ScenarioResponse> theScenarioResponses;
 
+/// per seat, what its spawn lines made since its last lanemarch took them: the wave that lanemarch
+/// sends, so a survivor of an older wave of the same template is not ordered again
+static std::map<Int, std::vector<ObjectID> > theScenarioFreshSpawns;
+
+/** One lanemarch line: the units it sent and the y each was told to hold, read every
+	  SCENARIO_LANEMARCH_REPORT_FRAMES for the HEADLESS LANEMARCH line.  Read-only. */
+struct ScenarioLaneMarch
+{
+	Int slot;
+	AsciiString selector;
+	UnsignedInt fromFrame;
+	Int reports;
+	std::vector<ObjectID> ids;
+	std::vector<Real> laneY;
+};
+#define SCENARIO_LANEMARCH_REPORT_FRAMES ((UnsignedInt)(5 * LOGICFRAMES_PER_GAME_SECOND))
+static const Int SCENARIO_LANEMARCH_MAX_REPORTS = 30;
+static std::vector<ScenarioLaneMarch> theScenarioLaneMarches;
+
 static void resetScenario( void )
 {
 	theScenarioArrivals.clear();
 	theScenarioResponses.clear();
+	theScenarioFreshSpawns.clear();
+	theScenarioLaneMarches.clear();
 	theScenarioActions.clear();
 	theScenarioTopups.clear();
 	theScenarioCursor = 0;
@@ -1064,8 +1099,12 @@ static Bool executeSpawn( const ScenarioAction &action, Player *player, const Co
 			}
 		}
 
-		if (spawnOne( action, tmpl, team, &pos ))
+		Object *obj = spawnOne( action, tmpl, team, &pos );
+		if (obj != NULL)
+		{
+			theScenarioFreshSpawns[ action.slot ].push_back( obj->getID() );
 			++made;
+		}
 	}
 
 	theScenarioUnitsSpawned += made;
@@ -1953,6 +1992,117 @@ static Bool executePurchase( const ScenarioAction &action, Player *player )
 	return player->hasScience( science );
 }
 
+/** lanemarch: the seat's newest wave walks the lane, each unit straight along its own y to dx further
+	  on, fighting what it meets, and none faster than the slowest.  Each member gets its own goal, so
+	  nothing bends the wave towards one shared point.  The speed is the formation's: a unit with a
+	  FormationID takes its group's slowest member speed in AIMoveToState::onEnter, again every time it
+	  sets off after a fight, so the group is kept rather than destroyed and lives until its last member
+	  leaves it.  A dead member leaves too, and the wave speeds up to the slowest still standing. */
+static Bool executeLaneMarch( const ScenarioAction &action, Player *player )
+{
+	std::vector<ObjectID> &fresh = theScenarioFreshSpawns[ action.slot ];
+	std::vector<ObjectID> untaken;
+	AIGroup *group = TheAI->createGroup();
+	for (size_t i = 0; i < fresh.size(); ++i)
+	{
+		Object *obj = TheGameLogic->findObjectByID( fresh[ i ] );
+		if (obj == NULL || obj->isEffectivelyDead())
+			continue;
+		if (isOrderableMatch( player, action.selector, obj ))
+			group->add( obj );
+		else
+			untaken.push_back( fresh[ i ] );
+	}
+	fresh.swap( untaken );
+
+	if (group->isEmpty())
+	{
+		TheAI->destroyGroup( group );
+		DEBUG_LOG(("SCENARIO: frame %d lanemarch: slot %d spawned nothing matching '%s' since its last lanemarch\n",
+							 action.frame, action.slot, action.selector.str()));
+		return FALSE;
+	}
+
+	group->groupCreateFormation( CMD_FROM_SCRIPT );
+	const Real speed = group->getSpeed();
+
+	ScenarioLaneMarch march;
+	march.slot = action.slot;
+	march.selector = action.selector;
+	march.fromFrame = TheGameLogic->getFrame();
+	march.reports = 0;
+
+	Real fastest = 0.0f;
+	const VecObjectID &ids = group->getAllIDs();
+	for (size_t i = 0; i < ids.size(); ++i)
+	{
+		Object *obj = TheGameLogic->findObjectByID( ids[ i ] );
+		AIUpdateInterface *ai = obj != NULL ? obj->getAI() : NULL;
+		if (ai == NULL)
+			continue;
+
+		Coord3D goal = *obj->getPosition();
+		goal.x += action.at.x;
+		goal.z = TheTerrainLogic->getGroundHeight( goal.x, goal.y );
+		if (obj->isAbleToAttack())
+			ai->aiAttackMoveToPosition( &goal, SCENARIO_ATTACK_SHOTS, CMD_FROM_SCRIPT );
+		else
+			ai->aiMoveToPosition( &goal, CMD_FROM_SCRIPT );
+
+		march.ids.push_back( ids[ i ] );
+		march.laneY.push_back( goal.y );
+		if (ai->getCurLocomotorSpeed() > fastest)
+			fastest = ai->getCurLocomotorSpeed();
+	}
+	theScenarioLaneMarches.push_back( march );
+
+	DEBUG_LOG(("SCENARIO: frame %d lanemarch slot %d '%s' x%d by %.0f along x, speed %.2f a frame (fastest member %.2f)\n",
+						 action.frame, action.slot, action.selector.str(), (Int)march.ids.size(), action.at.x, speed, fastest));
+	return TRUE;
+}
+
+/** Every SCENARIO_LANEMARCH_REPORT_FRAMES, where each lanemarch wave is: how many stand, the x of its
+	  rearmost and its foremost, and how far the worst of them has strayed off the y it was sent along.
+	  A depth that holds says nobody outran the slowest; a small drift says each kept its own line. */
+static void updateLaneMarches( UnsignedInt now )
+{
+	for (size_t m = 0; m < theScenarioLaneMarches.size(); ++m)
+	{
+		ScenarioLaneMarch &march = theScenarioLaneMarches[ m ];
+		if (march.reports >= SCENARIO_LANEMARCH_MAX_REPORTS || now <= march.fromFrame
+				|| (now - march.fromFrame) % SCENARIO_LANEMARCH_REPORT_FRAMES != 0)
+			continue;
+
+		Int alive = 0;
+		Real minX = 0.0f, maxX = 0.0f, drift = 0.0f;
+		for (size_t i = 0; i < march.ids.size(); ++i)
+		{
+			const Object *obj = TheGameLogic->findObjectByID( march.ids[ i ] );
+			if (obj == NULL || obj->isEffectivelyDead())
+				continue;
+			const Coord3D *pos = obj->getPosition();
+			if (alive == 0 || pos->x < minX)
+				minX = pos->x;
+			if (alive == 0 || pos->x > maxX)
+				maxX = pos->x;
+			const Real off = (Real)fabs( pos->y - march.laneY[ i ] );
+			if (off > drift)
+				drift = off;
+			++alive;
+		}
+		if (alive == 0)
+		{
+			march.reports = SCENARIO_LANEMARCH_MAX_REPORTS;
+			continue;
+		}
+
+		++march.reports;
+		DEBUG_LOG(("HEADLESS LANEMARCH: frame %u (+%u) slot %d '%s' from %u: %d of %d alive, x %.0f..%.0f depth %.0f, worst y drift %.0f\n",
+							 now, now - march.fromFrame, march.slot, march.selector.str(), march.fromFrame,
+							 alive, (Int)march.ids.size(), minX, maxX, maxX - minX, drift));
+	}
+}
+
 static Bool executeOrder( const ScenarioAction &action, Player *player, const Coord3D &dest )
 {
 	if (action.action == SCENARIO_ACTION_SHIFTUPGRADE)
@@ -2155,6 +2305,7 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 		case SCENARIO_ACTION_TOPUP:
 		case SCENARIO_ACTION_HANDOVER:
 		case SCENARIO_ACTION_AIRLIFT:
+		case SCENARIO_ACTION_LANEMARCH:
 			ordered = FALSE;		// handled before the group is built
 			break;
 	}
@@ -2407,6 +2558,9 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 		return TRUE;
 	}
 
+	if (action.action == SCENARIO_ACTION_LANEMARCH)
+		return executeLaneMarch( action, player );
+
 	Coord3D position;
 	if (!resolveScenarioPosition( action, &position ))
 		return FALSE;
@@ -2477,6 +2631,7 @@ void ScenarioDrill_tick( void )
 	// before the file test, because an arrive typed down the control socket has no file behind it
 	updateArrivals( now );
 	updateResponses( now );
+	updateLaneMarches( now );
 
 	if (TheGlobalData->m_scenarioFile.isEmpty())
 		return;

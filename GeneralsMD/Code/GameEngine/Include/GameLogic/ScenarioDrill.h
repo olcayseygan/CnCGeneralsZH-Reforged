@@ -104,7 +104,8 @@ enum ScenarioActionType
 	SCENARIO_ACTION_HANDOVER,					///< handover <slot> <selector> <position> <targetSlot>; the match nearest the position goes to that seat through setTeam, as a capture does, and each upgrade module's state before and after is logged
 	SCENARIO_ACTION_TOPUP,						///< topup <slot> <template> <objects>; from now on, while the world holds fewer objects than that, this line's turn makes one on the road from the seat's start to the map's centre and attack-moves it there
 	SCENARIO_ACTION_AIRLIFT,					///< airlift <slot> <building> <position> <template>:<count>[,<template>:<count>...]; the airlift panel's OK, as MSG_DO_AIRLIFT_ORDER handed to the dispatcher for that seat
-	SCENARIO_ACTION_HEALTH						///< health <slot> <selector> <percent> [rank]; every match set to that share of its health, and first to that veterancy rank (0-3, in targetSlot) when one is given; outside the command stream, as handover is
+	SCENARIO_ACTION_HEALTH,						///< health <slot> <selector> <percent> [rank]; every match set to that share of its health, and first to that veterancy rank (0-3, in targetSlot) when one is given; outside the command stream, as handover is
+	SCENARIO_ACTION_LANEMARCH					///< lanemarch <slot> <selector> <dx>; the seat's units spawned since its last lanemarch that match, each attack-moving dx (in at.x) along x on its own y, as one formation at its slowest member's speed
 };
 
 /// ScenarioAction::atStart when the position is plain numbers
@@ -135,7 +136,7 @@ struct ScenarioAction
 	ScenarioActionType action;
 	Int slot;											///< the seat, the same number -side takes; not an index into ThePlayerList
 	AsciiString selector;					///< a template name, or "*" for everything that seat owns
-	Coord2D at;										///< spawn, move, attackmove and arrive target, or the offset from atStart
+	Coord2D at;										///< spawn, move, attackmove and arrive target, or the offset from atStart; lanemarch's dx in x
 	Int atStart;									///< the start position at is measured from, SCENARIO_NO_START for none
 	Int count;										///< how many to spawn; for tally, how many should be standing, -1 for no opinion
 	Real spacing;									///< how far apart to spawn them, in world units

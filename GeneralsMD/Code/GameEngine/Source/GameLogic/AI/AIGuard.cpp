@@ -254,7 +254,8 @@ Bool AIGuardMachine::lookForInnerTarget(void)
 	PartitionFilterRelationship					f5(owner, PartitionFilterRelationship::ALLOW_NEUTRAL);
 	PartitionFilterPossibleToEnter			f6(owner, CMD_FROM_AI);
 	PartitionFilterPossibleToHijack			f7(owner, CMD_FROM_AI);
-	PartitionFilterFreeOfFog						filterFogged(owner->getControllingPlayer()->getPlayerIndex());
+	// in sight, or tracked in the fog by a radar of its player's or an ally's (isTracked, logic only)
+	PartitionFilterFreeOfFog						filterFogged(owner->getControllingPlayer()->getPlayerIndex(), owner->getControllingPlayer());
 
 	PartitionFilter *filters[16];
 	Int count = 0;
@@ -288,7 +289,8 @@ Bool AIGuardMachine::lookForInnerTarget(void)
 
 	filters[count++] = &filterMapStatus;
 	// A guard used to lock onto enemies standing in fog, which every other auto-target refuses
-	// (getNextMoodTarget's UNFOGGED). It picks from what its player can see now.
+	// (getNextMoodTarget's UNFOGGED). It picks from what its player can see now, and from what its
+	// player's radar tracks in the fog: the ring the player sees, the guard answers.
 	// Aircraft keep EA's rule: a guarding plane flies to the post and circles it, so it sees only
 	// its own sight radius of a circle that can be 800 wide, and an enemy at the edge was never
 	// taken. It reveals whatever it flies at anyway.

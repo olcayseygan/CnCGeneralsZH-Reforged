@@ -365,7 +365,7 @@ static Object *TunnelNetworkScan(Object *owner)
 		PartitionFilterRelationship					f1(owner, PartitionFilterRelationship::ALLOW_ENEMIES);
 		PartitionFilterPossibleToAttack			f2(ATTACK_NEW_TARGET, owner, CMD_FROM_AI);
 		PartitionFilterSameMapStatus				filterMapStatus(owner);
-		PartitionFilterFreeOfFog						filterFogged(owner->getControllingPlayer()->getPlayerIndex());
+		PartitionFilterFreeOfFog						filterFogged(owner->getControllingPlayer()->getPlayerIndex(), owner->getControllingPlayer());
 
 		PartitionFilter *filters[16];
 		Int count = 0;
@@ -373,7 +373,7 @@ static Object *TunnelNetworkScan(Object *owner)
 		filters[count++] = &f1;
 		filters[count++] = &f2;
 		filters[count++] = &filterMapStatus;
-		filters[count++] = &filterFogged;	// guard picks what its player can see, as every other auto-target does
+		filters[count++] = &filterFogged;	// what its player can see, or its radar tracks in the fog
 
 		Real visionRange = AITNGuardMachine::getStdGuardRange(owner);
 

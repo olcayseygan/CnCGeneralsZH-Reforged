@@ -8,8 +8,8 @@
 // right, a soft "+N" in its top right for the units still being built for it or walking to it, and
 // the squad's health in the power bar's colours along the cell's foot.  A squad whose units shot or
 // were hit in the last few seconds has its picture blink red inside the rim, a translucent fill.  The
-// Red Alert style layout mirrors it onto the open world's right edge, against the sidebar, between the
-// general's powers wing and the superweapon rows.
+// Red Alert style layout mirrors it onto the open world's right edge, against the sidebar, over the
+// superweapon rows.
 //
 // On the right, while a squad picked by its number is still the selection and has no building in
 // it, a tray between the superweapons and the general's powers: the powers tray's own stepped body
@@ -1137,12 +1137,11 @@ static void drawList( void )
 
 	//
 	// The sidebar layout stands the list on the open world's right edge, against the sidebar (the
-	// plan's), mirrored: its open side left.  Down from under the build tray's notch and the general's
-	// powers wing, whichever reaches lower, to over the superweapon rows at their tallest, the six
-	// named rows InGameUI stacks from superweaponRow and the "+N" tab over them, since how many it
-	// draws is not known here.
-	// ponytail: ten squads beside a seven-power wing and six superweapon rows overrun that room even
-	// at the list's smallest; reading InGameUI's real row count would give it back
+	// plan's), mirrored: its open side left.  Down from under the build tray's notch to over the
+	// superweapon rows at their tallest, the six named rows InGameUI stacks from superweaponRow and the
+	// "+N" tab over them, since how many it draws is not known here.
+	// ponytail: ten squads beside six superweapon rows overrun that room even at the list's smallest;
+	// reading InGameUI's real row count would give it back
 	//
 	const Bool sidebar = TheControlBar->isSidebarLayout();
 	Int edge = 0;		// the side the list stands against: the screen's left, or the open world's right
@@ -1152,15 +1151,7 @@ static void drawList( void )
 		HudLayoutRects r;
 		hudRects( &r );
 		edge = r.play.hi.x;
-		Int wingFoot = r.powersWindow.lo.y + px( LEDGE_H );
-		forEachPowerSlot( [ &wingFoot ]( GameWindow *slot )
-		{
-			Int x, y, w, h;
-			slot->winGetScreenPosition( &x, &y );
-			slot->winGetSize( &w, &h );
-			wingFoot = max( wingFoot, y + h );
-		} );
-		top = wingFoot + px( LIST_CLEARANCE );
+		top = r.powersWindow.lo.y + px( LEDGE_H ) + px( LIST_CLEARANCE );
 		bottom = r.superweaponRow.hi.y - ( SIDEBAR_SUPERWEAPON_ROWS - 1 ) * r.superweaponRowPitch
 			- r.superweaponRow.height() - px( PRODUCTION_TAB_H ) - px( LIST_CLEARANCE );
 	}

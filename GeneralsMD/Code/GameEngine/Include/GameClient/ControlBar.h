@@ -1279,7 +1279,6 @@ protected:
 	enum { POWER_TRAY_FOOT_Y = 790 };							///< at 1080, where the tray stands: the top of the general's tab
 	void powerTrayMetrics( const Image *const *tray, ICoord2D *origin, ICoord2D *cell,
 												 Int *left, Int *top, Int *foot, Int *bottom );	///< see arrangeSpecialPowerShortcutGrid
-	void arrangePowersWing( void );								///< the sidebar's: the powers flush on its left edge, level with the radar
 
 	void fitRadarToMap( Bool fromLayout );				///< the radar window, its frame and its blocker take the map's shape; see layoutPanels
 	Real m_radarFitWidth, m_radarFitHeight;				///< the map extent fitRadarToMap last fitted to
@@ -1481,8 +1480,7 @@ public:
 		IRegion2D cell;
 		Int edgeLeft, edgeTop, edgeBottom;
 		Int stepRight, stepBelow;
-		Int edgeRight;		///< the outer edge, only where the tray stops short of the screen's edge (the sidebar, a HudWidth area)
-		Bool wing;				///< the sidebar's powers wing: edgeRight is the joint against the sidebar, edgeTop the column's cap, edgeBottom its foot, the Sidebar_image pieces drawn
+		Int edgeRight;		///< the outer edge, only where the tray stops short of the screen's edge (a HudWidth area)
 	};
 protected:
 	TraySlot m_traySlot[ MAX_SPECIAL_POWER_SHORTCUTS ];

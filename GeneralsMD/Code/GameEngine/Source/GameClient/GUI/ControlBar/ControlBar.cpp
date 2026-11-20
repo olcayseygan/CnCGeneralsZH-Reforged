@@ -6375,10 +6375,6 @@ void ControlBar::drawTransitionHandler( void )
 //		m_transitionHandler->draw();
 }
 
-/// each power button's size before the sidebar's wing fitted it to a cell, put back for the Classic tray
-static ICoord2D s_powerButtonSize[ MAX_SPECIAL_POWER_SHORTCUTS ];
-static Bool s_powerButtonResized[ MAX_SPECIAL_POWER_SHORTCUTS ];
-
 void ControlBar::initSpecialPowershortcutBar( Player *player)
 {
 	LOGIC_CENSUS( CENSUS_CONTROLBAR );
@@ -6436,8 +6432,6 @@ void ControlBar::initSpecialPowershortcutBar( Player *player)
 	// a new layout: the stepped tray's frame is placed by the first arrangement under a scheme with a tray
 	m_trayLaidOutMask = TRAY_NOT_LAID_OUT;
 	m_trayFramePlaced = FALSE;
-	for( Int fresh = 0; fresh < MAX_SPECIAL_POWER_SHORTCUTS; fresh++ )
-		s_powerButtonResized[ fresh ] = FALSE;	// these buttons are new, at the layout's own size
 
 	tempName = layoutName;
 	tempName.concat(":ButtonCommand%d");
@@ -6507,66 +6501,6 @@ static const Image *mirroredPowerTrayPiece( const char *piece, const Image *stan
 	return image != NULL ? image : standIn;
 }
 
-/// a Sidebar_image piece of the powers wing, or the scheme's tray piece standing in for it
-static const Image *powersWingPiece( const char *piece, const Image *const *tray, Int standIn )
-{
-	const Image *image = Sidebar_image( piece );
-	if( image == NULL && tray != NULL )
-		image = tray[ standIn ];
-	return image;
-}
-
-/// `image` tiled down ly..hy at its own height scaled by k
-// ponytail: the last tile is squashed into what is left rather than cut; a UV-cropping drawImage if it shows
-static void drawTiledDown( const Image *image, Int lx, Int ly, Int hx, Int hy, Real k )
-{
-	if( image == NULL || hx <= lx || hy <= ly )
-		return;
-	const Int tile = MAX( 1, REAL_TO_INT_CEIL( image->getImageHeight() * k ) );
-	for( Int y = ly; y < hy; y += tile )
-		TheDisplay->drawImage( image, lx, y, hx, MIN( hy, y + tile ) );
-}
-
-/** One slot of the sidebar's powers wing (TraySlot::wing): the cell, the column's cap and foot, the
-	* outer left edge and its corners, and the joint against the sidebar, from the side's Sidebar_image
-	* pieces, the scheme's tray pieces standing in for any the sheet lacks. */
-static void drawPowersWingSlot( const ControlBar::TraySlot *slot, Int x0, Int y0, Int x1, Int y1 )
-{
-	const Image *const *tray = TheControlBar->getControlBarSchemeManager()->getPowerTray();
-	HudLayoutRects hud;
-	TheControlBar->getHudLayoutRects( &hud );
-	const Real k = hud.scale;
-	const Int l = slot->edgeLeft, t = slot->edgeTop, b = slot->edgeBottom, r = slot->edgeRight;
-
-	const Image *cell = powersWingPiece( "PowersCell", tray, ControlBarScheme::TRAY_CELL );
-	if( cell )
-		TheDisplay->drawImage( cell, x0, y0, x1, y1 );
-	const Image *cap = powersWingPiece( "PowersTop", tray, ControlBarScheme::TRAY_EDGE_TOP );
-	if( cap && t > 0 )
-		TheDisplay->drawImage( cap, x0, y0 - t, x1, y0 );
-	const Image *foot = powersWingPiece( "PowersBottom", tray, ControlBarScheme::TRAY_EDGE_BOTTOM );
-	if( foot && b > 0 )
-		TheDisplay->drawImage( foot, x0, y1, x1, y1 + b );
-	if( l > 0 )
-	{
-		drawTiledDown( powersWingPiece( "PowersEdge", tray, ControlBarScheme::TRAY_EDGE_LEFT ), x0 - l, y0, x0, y1, k );
-		const Image *cornerTop = powersWingPiece( "PowersCornerTop", tray, ControlBarScheme::TRAY_CORNER_TL );
-		if( cornerTop && t > 0 )
-			TheDisplay->drawImage( cornerTop, x0 - l, y0 - t, x0, y0 );
-		const Image *cornerBottom = powersWingPiece( "PowersCornerBottom", tray, ControlBarScheme::TRAY_CORNER_BL );
-		if( cornerBottom && b > 0 )
-			TheDisplay->drawImage( cornerBottom, x0 - l, y1, x0, y1 + b );
-	}
-	// the seam against the sidebar, the column's whole height cap to foot
-	if( r > 0 )
-	{
-		const Image *joint = Sidebar_image( "PowersJoint" );
-		if( joint == NULL )
-			joint = mirroredPowerTrayPiece( "EdgeRight", tray ? tray[ ControlBarScheme::TRAY_EDGE_LEFT ] : NULL );
-		drawTiledDown( joint, x1, y0 - t, x1 + r, y1 + b, k );
-	}
-}
-
 /// the Classic tray's powers to a row: the Classic layout (HUD_LAYOUT_RETAIL) stands them in one column
 /// climbing from the bottom.  Only the picture: the two-key chords still read them three to a group
 static Int powerTrayColumns( void )
@@ -6584,11 +6518,6 @@ static void drawPowerTraySlot( GameWindow *window, WinInstanceData *instData )
 	window->winGetScreenPosition( &x, &y );
 	const Int x0 = x + slot->cell.lo.x, y0 = y + slot->cell.lo.y;
 	const Int x1 = x + slot->cell.hi.x, y1 = y + slot->cell.hi.y;
-	if( slot->wing )
-	{
-		drawPowersWingSlot( slot, x0, y0, x1, y1 );
-		return;
-	}
 
 	const Image *const *tray = TheControlBar->getControlBarSchemeManager()->getPowerTray();
 	if( tray == NULL )
@@ -6650,19 +6579,12 @@ void ControlBar::arrangeSpecialPowerShortcutGrid( void )
 		// powers tab and from their keys.  The tray stays shown, since the keys and the two-key chords
 		// resolve only while it is (resolveSpecialPowerShortcutSlot) and the tab's cells fire its
 		// buttons (getShownPowerShortcut), but it stands past the screen's right edge, where it draws
-		// nothing and takes no click.  arrangePowersWing is the wing as it was, unused
+		// nothing and takes no click
 		m_specialPowerShortcutParent->winSetPosition( TheDisplay->getWidth() + 16, 0 );
 		m_trayFramePlaced = TRUE;
 		return;
 	}
 
-	// the wing's buttons were sized to its cells; the Classic tray takes them as the layout made them
-	for( Int each = 0; each < MAX_SPECIAL_POWER_SHORTCUTS; each++ )
-	{
-		if( s_powerButtonResized[ each ] && m_specialPowerShortcutButtons[ each ] != NULL )
-			m_specialPowerShortcutButtons[ each ]->winSetSize( s_powerButtonSize[ each ].x, s_powerButtonSize[ each ].y );
-		s_powerButtonResized[ each ] = FALSE;
-	}
 	if( tray == NULL )
 		return;
 
@@ -6707,7 +6629,6 @@ void ControlBar::arrangeSpecialPowerShortcutGrid( void )
 		const Bool innermost = place == rowLength[ row ] - 1;
 
 		TraySlot &slot = m_traySlot[ i ];
-		slot.wing = FALSE;
 		slot.edgeLeft = innermost ? left : 0;
 		slot.edgeTop = covered ? 0 : top;
 		slot.edgeBottom = row == 0 ? foot : 0;
@@ -6811,108 +6732,6 @@ void ControlBar::powerTrayMetrics( const Image *const *tray, ICoord2D *origin, I
 	getHudLayoutRects( &hud );
 	origin->x = hud.play.hi.x - powerTrayClosingEdge( hud, *left ) - cols * cell->x - *left;
 	origin->y = *bottom - *foot - rows * cell->y - *top;
-}
-
-//-------------------------------------------------------------------------------------------------
-/** The sidebar's powers wing (the owner's, 2026-11-15): the general's powers as part of the sidebar,
-	* flush on its left edge with a joint piece on the seam, the top on the radar box's top, 78x64 cells
-	* at 1080 holding a 70x56 button 4 in, the power art's 60x48 shape, one column or, past
-	* POWERS_WING_ONE_COLUMN powers, two, the rows going down.  Slot i is
-	* row i / columns and place i % columns counted out from the sidebar, the order the chords read, so a
-	* short last row is short on the outside.  Each slot window is its cell and the pieces that close it:
-	* the column's cap on the first row, its foot where the column ends, the outer edge on a row's
-	* outermost cell and the joint on the column against the sidebar. */
-//-------------------------------------------------------------------------------------------------
-void ControlBar::arrangePowersWing( void )
-{
-	// a column of seven reaches 520 at 1080, so seven powers stand without an odd cell beside them; past
-	// that two columns of six hold MAX_SPECIAL_POWER_SHORTCUTS
-
-	enum { POWERS_WING_ONE_COLUMN = 7, POWERS_WING_ROWS = 7 };
-	HudLayoutRects hud;
-	getHudLayoutRects( &hud );
-	const Real k = hud.scale;
-	const Int cellW = REAL_TO_INT( 78 * k + 0.5f );
-	const Int cellH = REAL_TO_INT( 64 * k + 0.5f );
-	const Int margin = MAX( 2, REAL_TO_INT( 4 * k + 0.5f ) );
-	const Int piece = MAX( 1, REAL_TO_INT( 8 * k + 0.5f ) );		// joint, edge, cap and foot are 8 at 1080
-	const Int seam = hud.sidebar.lo.x;
-	const Int topY = hud.radar.lo.y;
-
-	ICoord2D origin;
-	origin.x = seam - piece - 2 * cellW - piece;
-	origin.y = topY;
-	if( !m_trayFramePlaced )
-	{
-		m_specialPowerShortcutParent->winSetPosition( origin.x, origin.y );
-		m_specialPowerShortcutParent->winSetSize( seam - origin.x, piece + POWERS_WING_ROWS * cellH + piece );
-		m_trayFramePlaced = TRUE;
-	}
-
-	Int shown[ MAX_SPECIAL_POWER_SHORTCUTS ];
-	Int count = 0;
-	for( Int slotIndex = 0; slotIndex < MAX_SPECIAL_POWER_SHORTCUTS; slotIndex++ )
-		if( m_trayLaidOutMask & ( 1u << slotIndex ) )
-			shown[ count++ ] = slotIndex;
-
-	const Int cols = count > POWERS_WING_ONE_COLUMN ? 2 : 1;
-	for( Int i = 0; i < count; i++ )
-	{
-		GameWindow *slotWin = m_specialPowerShortcutButtonParents[ shown[ i ] ];
-		GameWindow *button = m_specialPowerShortcutButtons[ shown[ i ] ];
-		if( slotWin == NULL || button == NULL )
-			continue;
-		const Int row = i / cols, place = i % cols;
-		const Bool below = i + cols < count;				// the column goes on under this cell
-		const Bool outermost = place == cols - 1 || i + 1 >= count;
-
-		TraySlot &slot = m_traySlot[ i ];
-		slot.wing = TRUE;
-		slot.edgeLeft = outermost ? piece : 0;
-		slot.edgeTop = row == 0 ? piece : 0;
-		slot.edgeBottom = below ? 0 : piece;
-		slot.edgeRight = place == 0 ? piece : 0;
-		slot.stepRight = slot.stepBelow = 0;
-
-		IRegion2D cell;
-		cell.hi.x = seam - piece - place * cellW;
-		cell.lo.x = cell.hi.x - cellW;
-		cell.lo.y = topY + piece + row * cellH;
-		cell.hi.y = cell.lo.y + cellH;
-		IRegion2D screen;
-		screen.lo.x = cell.lo.x - slot.edgeLeft;
-		screen.hi.x = cell.hi.x + slot.edgeRight;
-		screen.lo.y = cell.lo.y - slot.edgeTop;
-		screen.hi.y = cell.hi.y + slot.edgeBottom;
-		slot.cell.lo.x = slot.edgeLeft;
-		slot.cell.lo.y = slot.edgeTop;
-		slot.cell.hi.x = slot.edgeLeft + cellW;
-		slot.cell.hi.y = slot.edgeTop + cellH;
-
-		slotWin->winSetPosition( screen.lo.x - origin.x, screen.lo.y - origin.y );
-		slotWin->winSetSize( screen.hi.x - screen.lo.x, screen.hi.y - screen.lo.y );
-		slotWin->winSetUserData( &slot );
-		slotWin->winSetDrawFunc( drawPowerTraySlot );
-
-		// the button inside its cell at the power art's 60x48, a margin all round; the Classic size kept
-		// for later
-		Int bw, bh;
-		button->winGetSize( &bw, &bh );
-		if( !s_powerButtonResized[ shown[ i ] ] )
-		{
-			s_powerButtonSize[ shown[ i ] ].x = bw;
-			s_powerButtonSize[ shown[ i ] ].y = bh;
-			s_powerButtonResized[ shown[ i ] ] = TRUE;
-		}
-		IRegion2D room = slot.cell;
-		room.lo.x += margin;
-		room.lo.y += margin;
-		room.hi.x -= margin;
-		room.hi.y -= margin;
-		const IRegion2D fit = HudFitAspect( room, HUD_CAMEO_ART_W, HUD_CAMEO_ART_H );
-		button->winSetSize( fit.width(), fit.height() );
-		button->winSetPosition( fit.lo.x, fit.lo.y );
-	}
 }
 
 //-------------------------------------------------------------------------------------------------

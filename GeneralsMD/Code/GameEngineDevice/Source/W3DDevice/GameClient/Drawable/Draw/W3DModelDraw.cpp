@@ -1971,8 +1971,10 @@ void W3DModelDraw::setHidden(Bool hidden)
 
 	if (m_shadow)
 		m_shadow->enableShadowRender(!hidden);
+	if (m_contactShadow)
+		m_contactShadow->enableShadowRender(!hidden);
 
-	m_shadowEnabled = hidden;
+	m_shadowEnabled = !hidden;	// EA stored it inverted, so a model swap after an unhide dropped the shadows
 
 	if (m_terrainDecal)
 		m_terrainDecal->enableShadowRender(!hidden);
@@ -2231,6 +2233,8 @@ void W3DModelDraw::setShadowsEnabled(Bool enable)
 {
 	if (m_shadow)
 		m_shadow->enableShadowRender(enable);
+	if (m_contactShadow)
+		m_contactShadow->enableShadowRender(enable);
 	m_shadowEnabled = enable;
 }
 
@@ -4088,7 +4092,11 @@ void W3DModelDraw::setModelState(const ModelConditionInfo* newState)
 					m_shadow->enableShadowRender(FALSE);
 				m_shadowEnabled = FALSE;
 			}
-			
+
+			// the patch under a structure; nukeCurrentRender took the old model's, so this one is sized
+			// to the new box, and it reads the hidden state just set
+			allocateContactShadow();
+
 			//
 			// set the transform for the new model to that we saved before, we do this so that the
 			// model transition is smooth and will immediately appear at the same orientation and location

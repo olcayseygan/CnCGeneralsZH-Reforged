@@ -729,6 +729,15 @@ void ModelConditionInfo::validateCachedBones(RenderObjClass* robj, Real scale) c
 	{
 		if (!doSingleBoneName(robj, *it, m_pristineBones))
 		{
+#ifdef DEBUG_CRASHING
+			// a rubble model need not carry the bones the standing one is asked for (the Lane War
+			// tower's PIECEnn, which only the living tower's pieces look up)
+			Bool rubble = FALSE;
+			for (size_t c = 0; c < m_conditionsYesVec.size(); ++c)
+				rubble = rubble || m_conditionsYesVec[c].test(MODELCONDITION_RUBBLE);
+			if (rubble)
+				continue;
+#endif
 			// DO crash here, since we specifically requested this bone for this model
 			DEBUG_CRASH(("*** ASSET ERROR: public bone '%s' (and variations thereof) not found in model %s!\n",it->str(),m_modelName.str()));
 		}
@@ -5077,6 +5086,12 @@ void W3DModelDraw::applySubObjectVec()
 		{
 			if (!hideShowSubObject(m_renderObject, it->subObjName.str(), it->hide))
 			{
+#ifdef DEBUG_CRASHING
+				// an order outlives the model it was given for, and a rubble model need not have the
+				// parts the standing one had (a broken PieceDamageBehavior piece on LWTOWER_R)
+				if (getDrawable()->getModelConditionFlags().test(MODELCONDITION_RUBBLE))
+					continue;
+#endif
 				DEBUG_CRASH(("*** ASSET ERROR: SubObject %s not found (%s)!\n",it->subObjName.str(),getDrawable()->getTemplate()->getName().str()));
 			}
 		}

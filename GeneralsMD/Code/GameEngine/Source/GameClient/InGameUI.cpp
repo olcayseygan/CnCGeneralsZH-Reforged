@@ -244,6 +244,9 @@ struct HudTray
 	const Image *cornerUncovered;		///< the open side's corner at the far side
 	const Image *step;							///< open side by far side, in a short row's cell where it meets the longer
 	Int openW, footH, uncoveredH;		///< each edge's thickness at the cells' scale
+	const Image *close;							///< down the screen side, openW thick, where a tray closes there too (the superweapons')
+	const Image *closeFoot;					///< its corner at the foot
+	const Image *closeUncovered;		///< and at the far side
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -278,6 +281,19 @@ static const Image *mirroredTrayPiece( const char *prefix, const char *piece, co
 	name.format( "%sProTray%s", prefix, piece );
 	const Image *image = TheMappedImageCollection->findImageByName( name );
 	return image != NULL ? image : standIn;
+}
+
+/// a house colour as the player's units show it: the colour is the texture's tint, darker than what a
+/// lit model gives back (Chocolate is 90,50,20 and its units read about 234,121,43), so its hue and
+/// saturation are kept and its value raised to 0.9, opaque
+static Color readableHouseColor( Color house )
+{
+	UnsignedByte r, g, b, a;
+	GameGetColorComponents( house, &r, &g, &b, &a );
+	const Int brightest = max( (Int)r, max( (Int)g, (Int)b ) );
+	const Real lift = brightest > 0 ? 0.9f * 255.0f / brightest : 1.0f;
+	return GameMakeColor( min( REAL_TO_INT( r * lift + 0.5f ), 255 ), min( REAL_TO_INT( g * lift + 0.5f ), 255 ),
+												min( REAL_TO_INT( b * lift + 0.5f ), 255 ), 255 );
 }
 
 /// the edges as thick, against the cell, as the powers tray's are against its cell
@@ -458,7 +474,12 @@ static HudCellStyle hudCellStyle( void )
 		tray[ ControlBarScheme::TRAY_CORNER_TL ],
 		tray[ ControlBarScheme::TRAY_CORNER_BL ],
 		mirroredTrayPiece( prefix, "StepDown", tray[ ControlBarScheme::TRAY_STEP ] ),
-		0, 0, 0
+		0, 0, 0,
+		// closed on the screen side as well, the left edge and its corners mirrored, so its steel stands
+		// whole against the screen's edge rather than running off it
+		mirroredTrayPiece( prefix, "EdgeRight", tray[ ControlBarScheme::TRAY_EDGE_LEFT ] ),
+		mirroredTrayPiece( prefix, "CornerTopRight", tray[ ControlBarScheme::TRAY_CORNER_TL ] ),
+		mirroredTrayPiece( prefix, "CornerBottomRight", tray[ ControlBarScheme::TRAY_CORNER_BL ] )
 	};
 	style.production = production;
 	style.superweapon = superweapon;
@@ -528,6 +549,18 @@ static void drawHudTray( const HudTray &tray, const IRegion2D *cells, Int count,
 			piece( tray.foot, c.lo.x, footLo, c.hi.x, footHi );
 			if( innermost )
 				piece( tray.cornerFoot, openLo, footLo, openHi, footHi );
+		}
+		// a tray closed on the screen side too: its edge down every row's outermost cell, cornered at the
+		// foot and the far side.  The caller leaves openW free between the cells and the screen's edge
+		if( place == 0 && tray.close != NULL )
+		{
+			const Int closeLo = openSide > 0 ? c.lo.x - tray.openW : c.hi.x;
+			const Int closeHi = closeLo + tray.openW;
+			piece( tray.close, closeLo, c.lo.y, closeHi, c.hi.y );
+			if( row == 0 )
+				piece( tray.closeFoot, closeLo, footLo, closeHi, footHi );
+			if( !covered )
+				piece( tray.closeUncovered, closeLo, farLo, closeHi, farHi );
 		}
 	}
 }
@@ -9105,6 +9138,7 @@ void InGameUI::postDraw( void )
   //  IMPORTANT: Don't bail out of this block early just because you don't 
   //  want to display the timers -- Eva still needs to be checked
 	m_superweaponCells = 0;		// nothing drawn is nothing to click
+	m_classicSuperweaponLines.clear();
 	m_superweaponTab = noHudTab();
 	// the spectator's rack hangs under the superweapon tray when there is one
 	Int rackPlateTop = max( hudStripBottom(), TheUIRect().y ) + stripPixels( RACK_NO_TRAY_DROP );
@@ -9472,8 +9506,10 @@ void InGameUI::postDraw( void )
 				// each, "Name: " right-aligned to that x and "m:ss" after it, in the owner's colour on a
 				// black drop.  A charged one goes to the ready font and, with a flash duration, blinks
 				// between its owner's colour and SuperweaponCountdownFlashColor; past 82% of the view's
-				// height a single "..." stands for the rest.  The one thing EA did not have: a click on a
-				// line looks at your own building, as a cell's does.
+				// height a single "..." stands for the rest.  What EA did not have: a click on a line
+				// looks at your own building, as a cell's does; the owner's colour is the one his units
+				// show (readableHouseColor), a dark house colour being lost on sand; and the lines are
+				// drawn by drawHudOverlay, after the world's health bars, which went over them.
 				//
 				Int startX = (Int)( m_superweaponPosition.x * TheDisplay->getWidth() );
 				// never under the info strip at the top (the clock, the rates, the net box): while it is up the
@@ -9482,7 +9518,6 @@ void InGameUI::postDraw( void )
 				if( hudStripBottom() > 0 )
 					startY = max( startY, hudStripBottom() + stripPixels( SUPERWEAPON_TRAY_DROP ) );
 				const Int bottomMargin = (Int)( (Real)TheTacticalView->getHeight() * 0.82f );
-				const Color bgColor = GameMakeColor( 0, 0, 0, 255 );
 				const Real flashFrames = m_superweaponFlashDuration;
 				Int rows = 0;
 				for( Int each = 0; each < (Int)listed.size(); each++ )
@@ -9495,7 +9530,8 @@ void InGameUI::postDraw( void )
 						ellipsis.format( u"..." );
 						info->setText( ellipsis, ellipsis );
 						info->setFont( m_superweaponReadyFont, m_superweaponNormalPointSize, m_superweaponNormalBold );
-						info->drawTime( startX, startY, m_superweaponFlashColor, bgColor );
+						const ClassicSuperweaponLine more = { info, startX, startY, m_superweaponFlashColor, TRUE };
+						m_classicSuperweaponLines.push_back( more );
 						break;
 					}
 
@@ -9510,7 +9546,7 @@ void InGameUI::postDraw( void )
 					time.format( u"%d:%2.2d", line.seconds / 60, line.seconds % 60 );
 					info->setText( name, time );
 
-					Color color = 0;		// 0: drawName and drawTime take the owner's colour
+					Color color = readableHouseColor( clientColor( info->getColor() ) );
 					if( line.ready && flashFrames != 0.0f )
 					{
 						if( TheGameLogic->getFrame() >= m_superweaponLastFlashFrame + (Int)flashFrames )
@@ -9518,10 +9554,11 @@ void InGameUI::postDraw( void )
 							m_superweaponUsedFlashColor = !m_superweaponUsedFlashColor;
 							m_superweaponLastFlashFrame = TheGameLogic->getFrame();
 						}
-						color = m_superweaponUsedFlashColor ? 0 : m_superweaponFlashColor;
+						if( !m_superweaponUsedFlashColor )
+							color = m_superweaponFlashColor;
 					}
-					info->drawName( startX, startY, color, bgColor );
-					info->drawTime( startX, startY, color, bgColor );
+					const ClassicSuperweaponLine drawn = { info, startX, startY, color, FALSE };
+					m_classicSuperweaponLines.push_back( drawn );
 
 					const Int h = (Int)info->getHeight();
 					if( rows < SUPERWEAPON_LIST_CELLS )
@@ -9548,7 +9585,8 @@ void InGameUI::postDraw( void )
 				// from the tray
 				const Int cameoW = style.cameoW;
 				const Int cameoH = style.cameoH;
-				const Int right = rects.play.hi.x;
+				// the cells stand the tray's closing edge in from the screen's edge (drawHudTray)
+				const Int right = rects.play.hi.x - ( style.superweapon.close != NULL ? style.superweapon.openW : 0 );
 				const Int top = max( hudStripBottom(), TheUIRect().y ) + stripPixels( SUPERWEAPON_TRAY_DROP ) + style.superweapon.footH;
 				const Bool more = (Int)listed.size() > SUPERWEAPON_LIST_CELLS;
 				const Int cameos = more ? SUPERWEAPON_LIST_CELLS : (Int)listed.size();
@@ -12289,6 +12327,16 @@ void InGameUI::drawHudOverlay( void )
 	// the online notice stands under whatever of this the frame shows; laid out here, at the sync point,
 	// because the notice draws inside the overlap window, where peace time and the vote are not to be read
 	m_noticeTop = 0;
+
+	// the Classic layout's superweapon lines postDraw laid out, here so the health bars go under them
+	const Color drop = GameMakeColor( 0, 0, 0, 255 );
+	for( size_t each = 0; each < m_classicSuperweaponLines.size(); each++ )
+	{
+		const ClassicSuperweaponLine &line = m_classicSuperweaponLines[ each ];
+		if( !line.timeOnly )
+			line.info->drawName( line.x, line.y, line.color, drop );
+		line.info->drawTime( line.x, line.y, line.color, drop );
+	}
 
 	// only once a real game is under way - not in the shell, and not on the menu's background map
 	if( !TheGameLogic->isInGame() || TheGameLogic->isInShellGame() )

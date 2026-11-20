@@ -1669,6 +1669,15 @@ protected:
 	IRegion2D										m_heroCell;								///< the hero's cell over the queue, empty when not drawn
 	IRegion2D										m_superweaponPlace[ SUPERWEAPON_LIST_CELLS ];
 	ObjectID										m_superweaponJump[ SUPERWEAPON_LIST_CELLS ];	///< the building a click looks at, INVALID_ID for none
+	/// the Classic layout's superweapon lines: laid out by postDraw, drawn by drawHudOverlay, over the health bars
+	struct ClassicSuperweaponLine
+	{
+		SuperweaponInfo *info;
+		Int x, y;
+		Color color;
+		Bool timeOnly;		///< the "..." that stands for the lines past the margin
+	};
+	std::vector< ClassicSuperweaponLine >	m_classicSuperweaponLines;
 	Int													m_superweaponCells;				///< cells drawn
 	IRegion2D										m_superweaponTab;
 	UnsignedInt									m_hudCellPass;						///< client passes, counted by update()

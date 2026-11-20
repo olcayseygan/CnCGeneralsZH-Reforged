@@ -164,9 +164,10 @@ static Bool isReadyCount( const UnicodeString &text )
 
 // drawReadyCountBadge ========================================================
 /** How many of a power's superweapons are ready, gold on the readout's dark plate in the button's
-	* top left corner: bold at READY_COUNT_DESIGN_POINTS times the bar's scale, and a point smaller
-	* until it is no taller than half the button and no wider than half of it, so the picture still
-	* shows round it at every size the powers draw at. */
+	* top left corner: Arial bold at READY_COUNT_DESIGN_POINTS times the bar's scale, whatever font
+	* the button's window carries (the sidebar's code-made cells carry none and drew it in a serif),
+	* and a point smaller until it is no taller and no wider than three fifths of the button, so the
+	* picture still shows round it at every size the powers draw at. */
 //=============================================================================
 static void drawReadyCountBadge( GameWindow *window, const UnicodeString &text, Color color )
 {
@@ -177,13 +178,15 @@ static void drawReadyCountBadge( GameWindow *window, const UnicodeString &text, 
 	cell.hi.x = cell.lo.x + size.x;
 	cell.hi.y = cell.lo.y + size.y;
 
-	GameFont *font = getBadgeFont( window, READY_COUNT_DESIGN_POINTS );
+	const Int points = max( REAL_TO_INT_FLOOR( READY_COUNT_DESIGN_POINTS * ControlBarHudScale() ), BADGE_LEAST_POINTS );
+	GameFont *font = TheFontLibrary->getFont( AsciiString( "Arial" ), points, TRUE );
 	DisplayString *badge = badgeString( text, font );
 	if( badge == NULL )
 		return;
 	Int w = 0, h = 0;
 	badge->getSize( &w, &h );
-	while( font != NULL && font->pointSize > BADGE_LEAST_POINTS && ( h > size.y / 2 || w > size.x / 2 ) )
+	const Int roomW = size.x * 3 / 5, roomH = size.y * 3 / 5;
+	while( font != NULL && font->pointSize > BADGE_LEAST_POINTS && ( h > roomH || w > roomW ) )
 	{
 		font = TheFontLibrary->getFont( font->nameString, font->pointSize - 1, TRUE );
 		badge = badgeString( text, font );

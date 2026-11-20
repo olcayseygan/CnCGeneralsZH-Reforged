@@ -112,7 +112,8 @@ if ! grep -q "^License: LGPL version 2.1 or later$" configure.log; then
   exit 1
 fi
 
-jobs=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
+. "$(CDPATH= cd "$(dirname "$0")" && pwd)/build-jobs.sh"
+jobs=$(zh_resolve_build_jobs "${ZH_BUILD_JOBS:-${CMAKE_BUILD_PARALLEL_LEVEL:-auto}}") || exit 2
 if ! make -j"$jobs" > make.log 2>&1; then
   tail -30 make.log >&2
   exit 1

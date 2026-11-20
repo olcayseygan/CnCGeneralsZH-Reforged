@@ -74,6 +74,14 @@ if [ "$(lower "$CONFIG")" = clean ]; then
 fi
 [ -n "$CONFIG" ] || CONFIG="$DEFAULT_CONFIG"
 
+# Use a bounded automatic worker count unless the caller selects one. ctest stays serial unless the
+# caller asks for more (a number, or auto): it has always run one test at a time.
+. "$SRC/Tools/build-jobs.sh"
+BUILD_JOBS=$(zh_resolve_build_jobs "${ZH_BUILD_JOBS:-${CMAKE_BUILD_PARALLEL_LEVEL:-auto}}") || exit 2
+TEST_JOBS=$(zh_resolve_test_jobs "${ZH_TEST_JOBS:-${CTEST_PARALLEL_LEVEL:-1}}" "$BUILD_JOBS") || exit 2
+export ZH_BUILD_JOBS="$BUILD_JOBS" CMAKE_BUILD_PARALLEL_LEVEL="$BUILD_JOBS"
+export ZH_TEST_JOBS="$TEST_JOBS" CTEST_PARALLEL_LEVEL="$TEST_JOBS"
+
 RUNTESTS=
 TARGET=
 if [ "$(lower "$ARG2")" = test ]; then

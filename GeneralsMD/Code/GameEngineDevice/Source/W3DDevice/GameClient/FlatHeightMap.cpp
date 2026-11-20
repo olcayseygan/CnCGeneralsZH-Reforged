@@ -661,6 +661,10 @@ void FlatHeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	// detailed ground draws in the same place (HeightMapRenderObjClass::Render)
 	if (TheInGameUI && !modernFullMirror)
 		TheInGameUI->drawOrderRings();
+
+	// and the Lane War plots' slot grid, as the detailed ground draws it, never into a water mirror
+	if (TheInGameUI && !ShaderClass::Is_Backface_Culling_Inverted())
+		TheInGameUI->drawLanePlotGrids();
 #endif
 	// We do some custom blending, so tell the shader class to reset everything.
 	DX8Wrapper::Set_Texture(0,NULL);

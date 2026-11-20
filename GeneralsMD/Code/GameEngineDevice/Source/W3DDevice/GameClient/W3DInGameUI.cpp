@@ -45,6 +45,7 @@
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/GhostObject.h"
+#include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/Module/AIUpdate.h"
@@ -893,6 +894,72 @@ void W3DInGameUI::drawBuildGrid( void )
 	quads.flush();
 
 }  // end drawBuildGrid
+
+//-------------------------------------------------------------------------------------------------
+/** The slot grid of every Lane War build plot (LaneWarDirector), painted on the ground in the
+	* terrain pass like the build grid, so a unit standing in a slot stands on top of it.  The lines are
+	* black at a low alpha, a deeper shade of the plot's own ground whatever the theme, and the plot's
+	* outline is heavier than the lines between its slots.  Nothing else marks a plot.  The bounds come
+	* from the director, which sets them at the map's load and never beside a tick. */
+//-------------------------------------------------------------------------------------------------
+void W3DInGameUI::drawLanePlotGrids( void )
+{
+	if( TheLaneWarDirector == NULL || !TheLaneWarDirector->isActive() || TheTerrainLogic == NULL )
+		return;
+
+	const Real SLOT = (Real)LANEWAR_SLOT_SIZE;
+	const Real LINE_HALF_WIDTH = 0.6f, EDGE_HALF_WIDTH = 1.2f;
+	const Real LIFT = 0.35f;	// as the build grid's
+	const UnsignedInt LINE = overlayColor( 0x00000000, 0x40 ), EDGE = overlayColor( 0x00000000, 0x70 );
+
+	setGroundOverlayState();
+	GroundOverlayQuads &quads = theGroundOverlayQuads;
+	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+	{
+		for( Int s = 0; s < LANEWAR_SEATS; ++s )
+		{
+			Coord2D lo, hi;
+			if( !TheLaneWarDirector->getPlotBounds( t, s, &lo, &hi ) )
+				continue;
+			// lines every slot from the low corner; the director counts from the front left, which gives
+			// the same lines while a plot is whole slots a side, as every generated one is
+			const Int slotsX = REAL_TO_INT_FLOOR( ( hi.x - lo.x ) / SLOT + 0.5f );
+			const Int slotsY = REAL_TO_INT_FLOOR( ( hi.y - lo.y ) / SLOT + 0.5f );
+
+			// lines along y, one quad a slot so each follows the ground
+			for( Int k = 0; k <= slotsX; ++k )
+			{
+				const Bool edge = k == 0 || k == slotsX;
+				const Real x = min( lo.x + k * SLOT, hi.x ), w = edge ? EDGE_HALF_WIDTH : LINE_HALF_WIDTH;
+				const UnsignedInt c = edge ? EDGE : LINE;
+				for( Int j = 0; j < slotsY; ++j )
+				{
+					const Real y0 = lo.y + j * SLOT, y1 = min( y0 + SLOT, hi.y );
+					const Real z0 = overlayGround( x, y0 ) + LIFT, z1 = overlayGround( x, y1 ) + LIFT;
+					quads.add( Vector3( x - w, y0, z0 ), Vector3( x + w, y0, z0 ), Vector3( x + w, y1, z1 ), Vector3( x - w, y1, z1 ),
+										 c, c, c, c );
+				}
+			}
+
+			// and along x
+			for( Int k = 0; k <= slotsY; ++k )
+			{
+				const Bool edge = k == 0 || k == slotsY;
+				const Real y = min( lo.y + k * SLOT, hi.y ), w = edge ? EDGE_HALF_WIDTH : LINE_HALF_WIDTH;
+				const UnsignedInt c = edge ? EDGE : LINE;
+				for( Int j = 0; j < slotsX; ++j )
+				{
+					const Real x0 = lo.x + j * SLOT, x1 = min( x0 + SLOT, hi.x );
+					const Real z0 = overlayGround( x0, y ) + LIFT, z1 = overlayGround( x1, y ) + LIFT;
+					quads.add( Vector3( x0, y - w, z0 ), Vector3( x1, y - w, z1 ), Vector3( x1, y + w, z1 ), Vector3( x0, y + w, z0 ),
+										 c, c, c, c );
+				}
+			}
+		}
+	}
+	quads.flush();
+
+}  // end drawLanePlotGrids
 
 //-------------------------------------------------------------------------------------------------
 /** Which cells of the patch round the ghost drawBuildGrid washes red, read from the pathfinder at

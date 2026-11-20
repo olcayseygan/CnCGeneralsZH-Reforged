@@ -2469,6 +2469,11 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	{
 		TheInGameUI->drawBuildGrid();
 
+		// and the slot grid of each Lane War build plot, which its units stand on; it is there all the
+		// time, so it stays out of the classic water's mirror, which draws no ground under it
+		if( !ShaderClass::Is_Backface_Culling_Inverted() )
+			TheInGameUI->drawLanePlotGrids();
+
 		// and the wash inside an attack circle, for the same reason: the units it is sweeping up
 		// have to stand on top of it
 		TheInGameUI->drawAttackCircleFill();

@@ -178,6 +178,7 @@ namespace
 		const Image *edgeRight, *cornerTopRight, *cornerBottomRight;	///< the production tray's, <S>ProTray*
 		const Image *key, *keyPressed;
 		const Image *ledgeL, *ledgeT, *ledgeR;
+		const Image *ledgeLFolded;	///< L with its chevrons pointing out, for the tray in; only a sheet whose L has them
 		const Image *fold[ STATE_COUNT ], *unfold[ STATE_COUNT ];
 		const Image *stepDown;	///< <S>ProTrayStepDown, the tray's short row
 	};
@@ -321,6 +322,7 @@ static const Pieces &pieces( void )
 	s_pieces.ledgeL = findPiece( prefix, "ProBuildLedgeL" );
 	s_pieces.ledgeT = findPiece( prefix, "ProBuildLedgeT" );
 	s_pieces.ledgeR = findPiece( prefix, "ProBuildLedgeR" );
+	s_pieces.ledgeLFolded = findPiece( prefix, "ProBuildLedgeLFolded" );
 	for( Int i = 0; i < STATE_COUNT; i++ )
 	{
 		name.format( "ProBuildFold%s", STATES[ i ] );
@@ -1365,7 +1367,8 @@ static void drawLedge( Int top, Int left, Int right, const SquadRow *row )
 	const Int runLo = s_ledgeBox.lo.x + leftW, runHi = right - rightW;
 	if( p.ledgeL != NULL && p.ledgeT != NULL && p.ledgeR != NULL )
 	{
-		drawPiece( p.ledgeL, s_ledgeBox.lo.x, top, runLo, top + height );
+		const Image *pointPiece = !s_trayOpen && p.ledgeLFolded != NULL ? p.ledgeLFolded : p.ledgeL;
+		drawPiece( pointPiece, s_ledgeBox.lo.x, top, runLo, top + height );
 		drawPiece( p.ledgeT, runLo, top, runHi, top + height );
 		drawPiece( p.ledgeR, runHi, top, right, top + height );
 	}

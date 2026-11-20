@@ -83,7 +83,7 @@ void GadgetButtonClearClock( GameWindow *g );	//Takes the clock back off, see Ga
 void GadgetButtonDrawInverseClock( GameWindow *g, Int percent, Color color ); //Darkens the remaining portion.
 void GadgetButtonDrawOverlayImage( GameWindow *g, const Image *image );
 void GadgetButtonSetBorder( GameWindow *g, Color color, Bool drawBorder = TRUE );
-void GadgetButtonSetCount( GameWindow *g, Int count );
+void GadgetButtonSetCount( GameWindow *g, Int count, Int of = 0 );	///< "count", or "count/of" when of is above it
 void GadgetButtonSetRepeat( GameWindow *g, Bool repeat );
 void GadgetButtonSetData(GameWindow *g, void *data);
 void *GadgetButtonGetData(GameWindow *g);

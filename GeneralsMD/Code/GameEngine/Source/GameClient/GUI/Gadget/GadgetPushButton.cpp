@@ -610,15 +610,17 @@ PushButtonData * getNewPushButtonData( void )
 	p->drawBorder = FALSE;
 	p->drawClock = NO_CLOCK;
 	p->drawCount = 0;
+	p->drawCountOf = 0;
 	p->drawRepeat = FALSE;
 	p->overlayImage = NULL;
 	return p;
 }
 
 // GadgetButtonSetCount =======================================================
-/** Set the number badge drawn in the button's bottom right corner, 0 for none */
+/** Set the number badge drawn in the button's bottom right corner, 0 for none; with `of` above
+	* `count` it reads "count/of", shown even at a count of 0 */
 //=============================================================================
-void GadgetButtonSetCount( GameWindow *g, Int count )
+void GadgetButtonSetCount( GameWindow *g, Int count, Int of )
 {
 	if( g == NULL )
 		return;
@@ -629,6 +631,7 @@ void GadgetButtonSetCount( GameWindow *g, Int count )
 		pData = getNewPushButtonData();
 	}
 	pData->drawCount = count;
+	pData->drawCountOf = of;
 	g->winSetUserData(pData);
 }
 

@@ -7389,25 +7389,64 @@ void ControlBar::drawSpecialPowerShortcutMultiplierText()
 		if( command == NULL )
 			continue;
 
-		// How many of its superweapons are ready, as the game shipped it.  EA wrote the number into the
-		// button's text, which this fork's buttons draw as the key letter's badge in the top left corner
-		// (W3DPushButton), so two Particle Uplinks read as a key "2" or not at all; it is the bar's count
-		// badge now, the number in the corner a queue's cameo wears.  The text stays cleared as before
+		// How many of its superweapons there are.  EA wrote the ready count into the button's text, which
+		// this fork's buttons draw as the key letter's badge in the top left corner (W3DPushButton), so
+		// it never read as a count; it is the bar's count badge now, the number in the corner a queue's
+		// cameo wears (setShortcutCountBadge).  The text stays cleared as before
 		GadgetButtonSetText( win, UnicodeString() );
-		GadgetButtonSetCount( win, readyShortcutCount( command ) );
+		setShortcutCountBadge( win, command );
 	}
 }
 
+/// what doCountSpecialPowersOwned counts with
+struct ShortcutOwnedCount
+{
+	SpecialPowerType type;
+	Int owned;
+};
+
+/// one of the player's buildings standing that carries the power, as doCountSpecialPowersReady
+/// (Player.cpp) takes them but ready or not; a shared one counts once, its timer being the player's
+static void doCountSpecialPowersOwned( Object *obj, void *userData )
+{
+	ShortcutOwnedCount *count = (ShortcutOwnedCount *)userData;
+	if( obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || obj->testStatus( OBJECT_STATUS_SOLD )
+			|| obj->isEffectivelyDead() || !obj->hasSpecialPower( count->type ) )
+		return;
+	SpecialPowerModuleInterface *module = obj->findSpecialPowerModuleInterface( count->type );
+	if( module == NULL || module->isScriptOnly() )
+		return;
+	if( module->getSpecialPowerTemplate()->isSharedNSync() && count->owned >= 1 )
+		return;
+	count->owned++;
+}
+
 //-------------------------------------------------------------------------------------------------
-Int ControlBar::readyShortcutCount( const CommandButton *command ) const
+/** The power button's badge (the owner's, 2026-11-20): how many of the power's buildings the local
+	* player owns, once he has two, as "2"; "1/2" while not every one is ready, the ready ones first.
+	* None for a single one: a "1" is superfluous (Lorenzen, EA's comment). */
+//-------------------------------------------------------------------------------------------------
+void ControlBar::setShortcutCountBadge( GameWindow *win, const CommandButton *command ) const
 {
 	const SpecialPowerTemplate *spTemplate = command ? command->getSpecialPowerTemplate() : NULL;
 	Player *player = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
 	if( spTemplate == NULL || player == NULL )
-		return 0;
-	// a "1" is superfluous (Lorenzen, EA's comment)
-	const Int numReady = player->countReadyShortcutSpecialPowersOfType( spTemplate->getSpecialPowerType() );
-	return numReady > 1 ? numReady : 0;
+	{
+		GadgetButtonSetCount( win, 0 );
+		return;
+	}
+	ShortcutOwnedCount count = { spTemplate->getSpecialPowerType(), 0 };
+	player->iterateObjects( doCountSpecialPowersOwned, &count );
+	if( count.owned < 2 )
+	{
+		GadgetButtonSetCount( win, 0 );
+		return;
+	}
+	const Int ready = player->countReadyShortcutSpecialPowersOfType( count.type );
+	if( ready < count.owned )
+		GadgetButtonSetCount( win, ready, count.owned );
+	else
+		GadgetButtonSetCount( win, count.owned );
 }
 
 void ControlBar::animateSpecialPowerShortcut( Bool isOn )

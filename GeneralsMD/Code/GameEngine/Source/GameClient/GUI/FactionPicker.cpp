@@ -842,6 +842,18 @@ static void closePicker( Bool restoreFocus )
 	s_leftOut.clear();
 }
 
+/** The box's Random line carries the seat's pool in its item data and says which in its text, so
+	* every seat in the room, not only whoever opens the screen, reads a Custom Selection pool as one.
+	* The box's own text is the line's, copied on every selection of it. */
+static void setRandomLine( GameWindow *combo, Int line, Int pick )
+{
+	GadgetComboBoxSetItemData( combo, line, (void *)(intptr_t)pick );
+	GameWindow *listBox = GadgetComboBoxGetListBox( combo );
+	Color color;
+	GadgetListBoxGetTextAndColor( listBox, &color, line, 0 );
+	GadgetListBoxAddEntryText( listBox, TheGameText->fetch( pick < PLAYERTEMPLATE_RANDOM_POOL ? "GUI:FactionPickCustom" : "GUI:Random" ), color, line, 0 );
+}
+
 /** The pick goes in through the box: its line selected and the room told, as a pick from its list
 	* was.  A Random rides on the box's Random line, whose item data carries the pool. */
 static void confirm( void )
@@ -864,7 +876,8 @@ static void confirm( void )
 		const Int data = (Int)(intptr_t)GadgetComboBoxGetItemData( combo, line );
 		if( data != pick && !( IsRandomPlayerTemplate( pick ) && IsRandomPlayerTemplate( data ) ) )
 			continue;
-		GadgetComboBoxSetItemData( combo, line, (void *)(intptr_t)pick );
+		if( IsRandomPlayerTemplate( pick ) )
+			setRandomLine( combo, line, pick );
 		GadgetComboBoxSetSelectedPos( combo, line, TRUE );
 		// the list only reports a change of line, and Random to a Random pool is none
 		TheWindowManager->winSendSystemMsg( combo->winGetOwner(), GCM_SELECTED, (WindowMsgData)combo, 0 );
@@ -1135,7 +1148,7 @@ void FactionPickerSyncRandom( GameWindow *combo, Int pick )
 	{
 		if( IsRandomPlayerTemplate( (Int)(intptr_t)GadgetComboBoxGetItemData( combo, line ) ) )
 		{
-			GadgetComboBoxSetItemData( combo, line, (void *)(intptr_t)pick );
+			setRandomLine( combo, line, pick );
 			return;
 		}
 	}

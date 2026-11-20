@@ -15677,6 +15677,14 @@ TOOLTIP:EmptyBuildingPips
 "İçinde kimse olmayan binanın üstündeki boş yuva sırası, örneğin Tünel Ağının üstündeki on yuva. Kapalıyken bina yuvalarını yalnızca içinde biri varken gösterir."
 END
 
+GUI:HitFlash
+"Vuruş Parlaması"
+END
+
+TOOLTIP:HitFlash
+"Hasar alan birim ya da bina bir anlığına kırmızı parlar, neyin vurulduğunu görürsün."
+END
+
 GUI:ArchiveReplays
 "Tekrarları Arşivle"
 END
@@ -20796,4 +20804,36 @@ END
 
 GUI:GroupTrayTraining
 "+%d üretimde"
+END
+
+GUI:SlotEasyAI
+"Kolay YZ"
+END
+
+GUI:SlotMediumAI
+"Orta YZ"
+END
+
+GUI:SlotHardAI
+"Zor YZ"
+END
+
+GUI:SlotBrutalAI
+"Acımasız YZ"
+END
+
+GUI:SlotViciousAI
+"Gaddar YZ"
+END
+
+GUI:SlotSavageAI
+"Vahşi YZ"
+END
+
+GUI:SlotInsaneAI
+"Çılgın YZ"
+END
+
+GUI:SaveFromOtherLogicRate
+"Bu kayıt, oyun mantığını saniyede %d kez çalıştıran bir Reforged sürümüyle yapılmış. Bu sürüm saniyede %d kez çalıştırıyor, o yüzden kayıt yüklenemez. O sürümün \"Görev Başlangıcı\" kayıtları yine yüklenir ve kampanyayı o görevin başından sürdürür."
 END

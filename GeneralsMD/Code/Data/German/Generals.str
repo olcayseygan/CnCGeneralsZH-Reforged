@@ -1082,7 +1082,51 @@ TOOLTIP:ProviderType
 END
 
 TOOLTIP:SpeakerType
-"Wähle deine Lautsprecherkonfiguration"
+"Wie die Geräusche des Schlachtfelds um dich herum verteilt werden. Mit Kopfhörern bekommt jedes Ohr seine eigene Verzögerung und seinen eigenen Klang, sodass du ein Geräusch hinter oder neben dir auch dort hörst. 5.1 und 7.1 verteilen sie auf Surround-Lautsprecher; unter Linux und macOS laufen sie in Stereo. Wird nach Klick auf Annehmen angewendet."
+END
+
+GUI:OptionsGroupOutput
+"Ausgabe"
+END
+
+GUI:AudioDevice
+"Ausgabegerät"
+END
+
+TOOLTIP:AudioDevice
+"Die Lautsprecher oder Kopfhörer, über die das Spiel läuft. Standard folgt Windows und wechselt mit, wenn du ein Headset ansteckst. Wird nach Klick auf Annehmen angewendet."
+END
+
+GUI:AudioDeviceDefault
+"Standard"
+END
+
+GUI:SpeakerType
+"Lautsprecher-Setup"
+END
+
+GUI:SpeakerType0
+"Stereo-Lautsprecher"
+END
+
+GUI:SpeakerType1
+"Kopfhörer"
+END
+
+GUI:SpeakerType2
+"5.1 Surround"
+END
+
+GUI:SpeakerType3
+"7.1 Surround"
+END
+
+GUI:MuteInBackground
+"Im Hintergrund stumm"
+END
+
+TOOLTIP:MuteInBackground
+"Schaltet das Spiel stumm, solange ein anderes Fenster im Vordergrund ist. Aus: Das Spiel bleibt hinter einem Browser oder auf einem zweiten Monitor hörbar."
 END
 
 TOOLTIP:Resolution
@@ -14649,6 +14693,14 @@ TOOLTIP:EmptyBuildingPips
 "Die Reihe leerer Plätze über einem Gebäude ohne Insassen, etwa die zehn über einem Tunnelsystem. Aus zeigt ein Gebäude seine Plätze nur, solange jemand darin ist."
 END
 
+GUI:HitFlash
+"Trefferblitz"
+END
+
+TOOLTIP:HitFlash
+"Eine Einheit oder ein Gebäude, das Schaden nimmt, leuchtet kurz rot auf, damit man sieht, worauf geschossen wird."
+END
+
 GUI:ArchiveReplays
 "Replays archivieren"
 END
@@ -15771,4 +15823,184 @@ END
 
 TOOLTIP:WaterReflection
 "Für modernes Wasser, wenn Szenenreflexionen aktiviert sind. Klassisch nutzt die Originalreflexionen. SSR spiegelt sichtbare Bildschirminhalte. Hybrid kombiniert beides und ist die Standardeinstellung. Wird nach Klick auf Annehmen angewendet."
+END
+
+GUI:SlotEasyAI
+"Leichte KI"
+END
+
+GUI:SlotMediumAI
+"Mittlere KI"
+END
+
+GUI:SlotHardAI
+"Schwere KI"
+END
+
+GUI:SlotBrutalAI
+"Brutale KI"
+END
+
+GUI:SlotViciousAI
+"Gnadenlose KI"
+END
+
+GUI:SlotSavageAI
+"Wilde KI"
+END
+
+GUI:SlotInsaneAI
+"Wahnsinnige KI"
+END
+
+CONTROLBAR:ToolTipTurkiyeInfantryMehmetcik
+"Linieninfanterie und der Eröffnungszug: Mit einem Beobachtertrupp und ein, zwei Cobras gewinnen sie die ersten Minuten. Räumt und hält Gebäude."
+END
+
+CONTROLBAR:ToolTipTurkiyeInfantryAlpagu
+"Kniet nieder, setzt eine Kamikazedrohne ab und fliegt sie bis 350 hinaus, wo sie sich auf Infanterie und leichte Fahrzeuge stürzt. Er selbst sieht nur 200 weit: Darüber hinaus muss ein Beobachter oder ein Radarturm das Ziel finden. Schwach gegen Panzer und Gebäude. Stirbt ein Feind, den deine Augen sehen, in seiner Reichweite, startet er 6 Sekunden lang um die Hälfte schneller. Neben einem Siper reicht er ein Zehntel weiter."
+END
+
+CONTROLBAR:ToolTipTurkiyeInfantrySpotter
+"Sieht 500 weit und kämpft kaum. Billig: Ein verlorener Trupp kostet wenig, also nimm zwei mit. Stell ihn auf einen Hügel, dann kann die Artillerie dahinter schießen."
+END
+
+CONTROLBAR:ToolTipTurkiyeVehicleFirtina
+"Das Geschütz fürs Mittelspiel. Feuert eine schwere Granate mit großem Explosionsradius bis 600 und sieht 100 weit: Zum Zielen braucht sie einen Beobachtertrupp oder eine Bayraktar, zum Treffen einen Siper oder ein Radar nahe am Ziel. Stirbt ein Feind, den deine Augen sehen, in ihrer Reichweite, feuert sie 6 Sekunden lang um die Hälfte schneller und genau ins Ziel. Neben einem Siper reicht sie ein Zehntel weiter."
+END
+
+CONTROLBAR:ToolTipTurkiyeVehicleSakarya
+"Feuert eine Salve aus sechs Raketen auf eine große Fläche bis 500 und lädt dann 14 Sekunden nach. Braucht einen Beobachter. Stirbt ein Feind, den deine Augen sehen, in seiner Reichweite, lädt er 6 Sekunden lang um die Hälfte schneller nach und trifft genau ins Ziel. Neben einem Siper reicht er ein Zehntel weiter."
+END
+
+CONTROLBAR:ToolTipTurkiyeTankKoral
+"Fahrzeug für elektronische Kampfführung: Feindliche Drohnen und Beobachter im Umkreis von 400 werden blind, Lenkraketen verlieren ihre Zielerfassung, und sein Strahl legt feindliche Gebäude aus 400 lahm."
+END
+
+CONTROLBAR:ToolTipTurkiyeVehicleBayraktar
+"Schwebt dort, wohin sie geschickt wird, sieht 550 weit und trägt einen eigenen Radarkreis von 450: Allein reicht sie der Artillerie zum Zielen und Treffen. Leichte Munition."
+END
+
+CONTROLBAR:ToolTipTurkiyeRadarTower
+"Das Langstreckenradar der Basis: Sieht 500 weit und hält die Radarerfassung im Umkreis von 1000. Erforscht Zielklassifizierung und schaltet den Alpagu-Operator frei. Verbraucht Strom."
+END
+
+CONTROLBAR:ToolTipTurkiyeSiper
+"Grabenbunker für fünf Infanteristen, dort ausgehoben, wo die Pioniere stehen, und vorgeschobener Radarposten: Radarerfassung im Umkreis von 400. Heb einen vor der Firtina-Linie aus. Mehmetcik darin halten Infanterie auf, Sungur-Schützen halten Panzer auf. Firtina, Sakarya und Alpagu im Umkreis von 400 reichen ein Zehntel weiter."
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceEarlyWarning
+"Jedes türkische Radar reicht ein Viertel weiter: Kommandozentrale, Radarturm, Siper, Bayraktar und Akinci."
+END
+
+SCIENCE:TurkiyeMobileRadar
+"Vorgeschobenes Radar"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceMobileRadar
+"Der Radarkreis jedes Siper reicht um die Hälfte weiter, von 400 auf 600."
+END
+
+UPGRADE:TurkiyeMpt76
+"MPT-76-Gewehre"
+END
+
+CONTROLBAR:UpgradeTurkiyeMpt76
+"MPT-76-&Gewehre"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeMpt76
+"Mehmetcik-Schützen tragen das MPT-76 im Kaliber 7,62: 11 Schaden pro Schuss statt 8 und 150 Reichweite statt 120."
+END
+
+UPGRADE:TurkiyeCbrn
+"ABC-Schutzausrüstung"
+END
+
+CONTROLBAR:UpgradeTurkiyeCbrn
+"&ABC-Schutzausrüstung"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeCbrn
+"Schutzanzüge und Masken für Mehmetcik, Sungur, Alpagu, Beobachtertrupps und den Maroon Beret: Gift, Strahlung und Anthrax können ihnen nichts mehr anhaben."
+END
+
+UPGRADE:TurkiyeSelfProtection
+"Selbstschutzsystem"
+END
+
+CONTROLBAR:UpgradeTurkiyeSelfProtection
+"&Selbstschutzsystem"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeSelfProtection
+"Bayraktar, Akinci und Kizilelma tragen Täuschkörper und Zusatzpanzerung. Die Täuschkörper lenken drei von zehn Raketen ab."
+END
+
+UPGRADE:TurkiyeFortification
+"Befestigung"
+END
+
+CONTROLBAR:UpgradeTurkiyeFortification
+"&Befestigung"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeFortification
+"Alle Basisgebäude und Hisar-Batterien halten ein Viertel mehr Schaden aus, bevor sie fallen."
+END
+
+UPGRADE:TurkiyeExportContracts
+"Exportverträge"
+END
+
+CONTROLBAR:UpgradeTurkiyeExportContracts
+"&Exportverträge"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeExportContracts
+"Ausländische Käufer für die Erzeugnisse der Fabriken. Jedes Nachschubzentrum zahlt alle 2 Sekunden 30 statt 20, jeder Große Basar 35."
+END
+
+UPGRADE:TurkiyeWarheads
+"Heimische Gefechtsköpfe"
+END
+
+CONTROLBAR:UpgradeTurkiyeWarheads
+"Heimische &Gefechtsköpfe"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeWarheads
+"Gefechtsköpfe aus türkischer Fertigung: ein Viertel mehr Schaden für Firtina, Sakarya, die Kanone des Altay, die Raketen von Alpagu und Sungur, die Munition der Bayraktar, die Bombe der Akinci und die Raketen der Kizilelma."
+END
+
+UPGRADE:TurkiyeAltaySarp
+"SARP-Waffenstation"
+END
+
+CONTROLBAR:UpgradeTurkiyeAltaySarp
+"SA&RP-Waffenstation"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeAltaySarp
+"Dieser Altay bekommt ein fernbedientes 12,7-mm-MG auf den Turm, gegen Infanterie. Die Hauptkanone bleibt für die Fahrzeuge."
+END
+
+UPGRADE:TurkiyeKirpiRepairKit
+"Feldreparatursatz"
+END
+
+CONTROLBAR:UpgradeTurkiyeKirpiRepairKit
+"Feld&reparatursatz"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeKirpiRepairKit
+"Dieser Kirpi hat eine Reparaturmannschaft an Bord: Fahrzeuge im Umkreis von 150 erhalten 10 Lebenspunkte pro Sekunde zurück."
+END
+
+UPGRADE:TurkiyeForwardRadar
+"Vorgeschobenes Radar"
+END
+
+CONTROLBAR:ToolTipTurkiyeKapalicarsi
+"Der Markt der Türkei und ihr Wirtschaftsgebäude. Zahlt 20 alle 2 Sekunden und verkauft Exportverträge, die das Einkommen jedes Nachschubzentrums und jedes Großen Basars erhöhen. \n \n Benötigt: Fabrik"
 END

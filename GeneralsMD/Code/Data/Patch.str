@@ -907,6 +907,14 @@ TOOLTIP:EmptyBuildingPips
 "The row of empty slots over a building with nobody inside, like the ten over a Tunnel Network. Off, a building shows its slots only while someone is in it."
 END
 
+GUI:HitFlash
+"Hit Flash"
+END
+
+TOOLTIP:HitFlash
+"A unit or building that takes damage lights up red for a moment, so you see what is being shot at."
+END
+
 GUI:ArchiveReplays
 "Archive Replays"
 END
@@ -6605,4 +6613,36 @@ END
 
 GUI:GroupTrayTraining
 "+%d in production"
+END
+
+GUI:SlotEasyAI
+"Easy AI"
+END
+
+GUI:SlotMediumAI
+"Medium AI"
+END
+
+GUI:SlotHardAI
+"Hard AI"
+END
+
+GUI:SlotBrutalAI
+"Brutal AI"
+END
+
+GUI:SlotViciousAI
+"Vicious AI"
+END
+
+GUI:SlotSavageAI
+"Savage AI"
+END
+
+GUI:SlotInsaneAI
+"Insane AI"
+END
+
+GUI:SaveFromOtherLogicRate
+"This save was made by a version of Reforged whose game logic ran %d times a second. This version runs it %d times a second, so the save cannot be loaded. That version's \"Mission Start\" saves still load and carry the campaign on from that mission's beginning."
 END

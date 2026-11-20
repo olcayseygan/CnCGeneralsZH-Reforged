@@ -1194,7 +1194,51 @@ TOOLTIP:ProviderType
 END
 
 TOOLTIP:SpeakerType
-"Choisissez la configuration de vos haut-parleurs."
+"Comment les sons du champ de bataille se placent autour de vous. Au casque, chaque oreille reçoit son propre décalage et son propre timbre : un son derrière ou à côté de vous s'entend de là. 5.1 et 7.1 les répartissent sur des enceintes surround ; sous Linux et macOS, ils sont joués en stéréo. Appliqué quand vous cliquez sur Accepter."
+END
+
+GUI:OptionsGroupOutput
+"Sortie"
+END
+
+GUI:AudioDevice
+"Périphérique de sortie"
+END
+
+TOOLTIP:AudioDevice
+"Les haut-parleurs ou le casque par lesquels le jeu sort le son. « Par défaut » suit Windows et bascule avec lui quand vous branchez un casque. Appliqué quand vous cliquez sur Accepter."
+END
+
+GUI:AudioDeviceDefault
+"Par défaut"
+END
+
+GUI:SpeakerType
+"Type d'enceintes"
+END
+
+GUI:SpeakerType0
+"Enceintes stéréo"
+END
+
+GUI:SpeakerType1
+"Casque"
+END
+
+GUI:SpeakerType2
+"Surround 5.1"
+END
+
+GUI:SpeakerType3
+"Surround 7.1"
+END
+
+GUI:MuteInBackground
+"Muet en arrière-plan"
+END
+
+TOOLTIP:MuteInBackground
+"Coupe le son du jeu quand une autre fenêtre a le focus. Désactivé, le jeu reste audible derrière un navigateur ou sur un second écran."
 END
 
 TOOLTIP:LANPlayer
@@ -16325,6 +16369,14 @@ TOOLTIP:EmptyBuildingPips
 "La rangée de places vides au-dessus d'un bâtiment inoccupé, comme les dix au-dessus d'un Réseau de tunnels. Désactivé, un bâtiment ne montre ses places que quand quelqu'un est dedans."
 END
 
+GUI:HitFlash
+"Éclair d'impact"
+END
+
+TOOLTIP:HitFlash
+"Une unité ou un bâtiment qui subit des dégâts s'éclaire en rouge un instant, pour voir ce qui est pris pour cible."
+END
+
 GUI:ArchiveReplays
 "Archiver les rediffusions"
 END
@@ -18046,7 +18098,7 @@ CONTROLBAR:ConstructTurkiyeInfantryMehmetcik
 END
 
 CONTROLBAR:ToolTipTurkiyeInfantryMehmetcik
-"Infanterie de ligne. Nettoie et tient les bâtiments."
+"Infanterie de ligne et coup d'ouverture : avec une équipe d'observation et un ou deux Cobra, ils gagnent les premières minutes. Nettoie et tient les bâtiments."
 END
 
 OBJECT:TurkiyeInfantryEngineer
@@ -18073,6 +18125,10 @@ CONTROLBAR:ToolTipTurkiyeInfantrySungur
 "Infanterie lance-missiles contre les chars et les avions."
 END
 
+CONTROLBAR:ToolTipTurkiyeInfantryAlpagu
+"S'agenouille, pose un drone kamikaze et l'envoie jusqu'à 350, où il plonge sur l'infanterie et les véhicules légers. Lui ne voit qu'à 200 : au-delà, un observateur ou une tour radar doit trouver la cible. Faible contre les chars et les bâtiments. Quand un ennemi vu par vos yeux meurt à sa portée, il lance moitié plus vite pendant 6 secondes. À côté d'un Siper, il porte un dixième plus loin."
+END
+
 OBJECT:TurkiyeInfantrySpotter
 "Équipe d'observation"
 END
@@ -18082,7 +18138,7 @@ CONTROLBAR:ConstructTurkiyeInfantrySpotter
 END
 
 CONTROLBAR:ToolTipTurkiyeInfantrySpotter
-"Voit à 500 et se bat à peine. Elle ne peut pas se cacher, alors gardez-la hors de portée. Placez-la sur une colline et l'artillerie derrière elle peut tirer."
+"Voit à 500 et se bat à peine. Bon marché : en perdre une coûte peu, alors amenez-en deux. Placez-la sur une colline et l'artillerie derrière elle peut tirer."
 END
 
 OBJECT:TurkiyeInfantryMaroonBeret
@@ -18166,7 +18222,7 @@ CONTROLBAR:ConstructTurkiyeVehicleFirtina
 END
 
 CONTROLBAR:ToolTipTurkiyeVehicleFirtina
-"Tire un obus lourd à large souffle jusqu'à 600 et voit à 100 : il lui faut un observateur, un drone ou une tour radar pour viser."
+"Le canon du milieu de partie. Tire un obus lourd à large souffle jusqu'à 600 et voit à 100 : il lui faut une équipe d'observation ou un Bayraktar pour viser, et un Siper ou un radar près de la cible pour toucher. Quand un ennemi vu par vos yeux meurt à sa portée, il tire moitié plus vite, en plein dans le mille, pendant 6 secondes. À côté d'un Siper, il porte un dixième plus loin."
 END
 
 OBJECT:TurkiyeVehicleSakarya
@@ -18178,7 +18234,7 @@ CONTROLBAR:ConstructTurkiyeVehicleSakarya
 END
 
 CONTROLBAR:ToolTipTurkiyeVehicleSakarya
-"Tire une salve de six roquettes sur une large zone jusqu'à 500, puis recharge pendant 12 secondes. Il lui faut un observateur."
+"Tire une salve de six roquettes sur une large zone jusqu'à 500, puis recharge pendant 14 secondes. Il lui faut un observateur. Quand un ennemi vu par vos yeux meurt à sa portée, il recharge moitié plus vite et frappe en plein dans le mille pendant 6 secondes. À côté d'un Siper, il porte un dixième plus loin."
 END
 
 OBJECT:TurkiyeTankKoral
@@ -18190,7 +18246,7 @@ CONTROLBAR:ConstructTurkiyeTankKoral
 END
 
 CONTROLBAR:ToolTipTurkiyeTankKoral
-"Véhicule de guerre électronique ; son rayon met les bâtiments ennemis hors service à 400."
+"Véhicule de guerre électronique : les drones et observateurs ennemis à moins de 400 deviennent aveugles, les missiles guidés perdent leur accrochage, et son rayon met les bâtiments ennemis hors service à 400."
 END
 
 OBJECT:TurkiyeVehicleBayraktar
@@ -18202,7 +18258,7 @@ CONTROLBAR:ConstructTurkiyeVehicleBayraktar
 END
 
 CONTROLBAR:ToolTipTurkiyeVehicleBayraktar
-"Reste en vol stationnaire là où on l'envoie et voit à 550, le meilleur œil de l'artillerie. Munitions légères."
+"Reste en vol stationnaire là où on l'envoie, voit à 550 et porte son propre cercle radar de 450 : à lui seul, il suffit à l'artillerie pour viser et toucher. Munitions légères."
 END
 
 OBJECT:TurkiyeVehicleGokbey
@@ -18250,7 +18306,7 @@ CONTROLBAR:ConstructTurkiyeRadarTower
 END
 
 CONTROLBAR:ToolTipTurkiyeRadarTower
-"Œil fixe : voit à 500 pour l'artillerie. Consomme de l'énergie. Une cible."
+"Le radar longue portée de la base : voit à 500 et maintient l'accrochage radar à 1000 autour de lui. Recherche la Classification des cibles et débloque l'opérateur Alpagu. Consomme de l'énergie."
 END
 
 OBJECT:TurkiyeSiper
@@ -18262,7 +18318,7 @@ CONTROLBAR:ConstructTurkiyeSiper
 END
 
 CONTROLBAR:ToolTipTurkiyeSiper
-"Bunker-tranchée pour cinq fantassins, creusé là où se tient le génie. Des Mehmetcik à l'intérieur repoussent l'infanterie, des tireurs Sungur repoussent les chars."
+"Bunker-tranchée pour cinq fantassins, creusé là où se tient le génie, et poste radar avancé : accrochage radar à 400 autour de lui. Creusez-en un devant la ligne de Firtina. Des Mehmetcik à l'intérieur repoussent l'infanterie, des tireurs Sungur repoussent les chars. Les Firtina, Sakarya et Alpagu à moins de 400 portent un dixième plus loin."
 END
 
 OBJECT:TurkiyeLandMine
@@ -18398,7 +18454,7 @@ SCIENCE:TurkiyeEarlyWarning
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceEarlyWarning
-"Chaque radar turc porte un quart plus loin : Quartier général, tour radar, Koral, Akinci et radar mobile."
+"Chaque radar turc porte un quart plus loin : Quartier général, tour radar, Siper, Bayraktar et Akinci."
 END
 
 UPGRADE:TurkiyeEarlyWarning
@@ -18426,11 +18482,11 @@ GUI:HudReconSiha
 END
 
 SCIENCE:TurkiyeMobileRadar
-"Radar mobile"
+"Radar avancé"
 END
 
 CONTROLBAR:ToolTipTurkiyeScienceMobileRadar
-"L'usine produit le radar mobile, un camion radar qui couvre 900 autour de lui tant qu'il est à l'arrêt."
+"Le cercle radar de chaque Siper porte moitié plus loin, de 400 à 600."
 END
 
 OBJECT:TurkiyeVehicleMobileRadar
@@ -18577,6 +18633,106 @@ CONTROLBAR:ToolTipUpgradeTurkiyeSiperReinforced
 "Béton et couverture : chaque Siper encaisse moitié plus avant de tomber."
 END
 
+UPGRADE:TurkiyeMpt76
+"Fusils MPT-76"
+END
+
+CONTROLBAR:UpgradeTurkiyeMpt76
+"&Fusils MPT-76"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeMpt76
+"Les fusiliers Mehmetcik portent le MPT-76 en 7,62 : 11 dégâts par balle au lieu de 8, et 150 de portée au lieu de 120."
+END
+
+UPGRADE:TurkiyeCbrn
+"Kit NRBC"
+END
+
+CONTROLBAR:UpgradeTurkiyeCbrn
+"Kit &NRBC"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeCbrn
+"Combinaisons et masques de protection pour les Mehmetcik, Sungur, Alpagu, équipes d'observation et le Béret bordeaux : toxines, radiations et anthrax glissent sur eux."
+END
+
+UPGRADE:TurkiyeSelfProtection
+"Système d'autoprotection"
+END
+
+CONTROLBAR:UpgradeTurkiyeSelfProtection
+"Système d'&autoprotection"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeSelfProtection
+"Le Bayraktar, l'Akinci et le Kizilelma emportent des leurres thermiques et un blindage supplémentaire. Les leurres détournent trois missiles sur dix."
+END
+
+UPGRADE:TurkiyeFortification
+"Fortification"
+END
+
+CONTROLBAR:UpgradeTurkiyeFortification
+"&Fortification"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeFortification
+"Chaque bâtiment de la base et chaque batterie Hisar encaisse un quart de dégâts en plus avant de tomber."
+END
+
+UPGRADE:TurkiyeExportContracts
+"Contrats d'exportation"
+END
+
+CONTROLBAR:UpgradeTurkiyeExportContracts
+"&Contrats d'exportation"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeExportContracts
+"Des acheteurs étrangers pour la production des usines. Chaque Dépôt de ravitaillement rapporte 30 toutes les 2 secondes au lieu de 20, chaque Grand Bazar 35."
+END
+
+UPGRADE:TurkiyeWarheads
+"Ogives nationales"
+END
+
+CONTROLBAR:UpgradeTurkiyeWarheads
+"&Ogives nationales"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeWarheads
+"Ogives de fabrication turque : un quart de dégâts en plus pour le Firtina, le Sakarya, le canon de l'Altay, les missiles de l'Alpagu et du Sungur, les munitions du Bayraktar, la bombe de l'Akinci et les missiles du Kizilelma."
+END
+
+UPGRADE:TurkiyeAltaySarp
+"Tourelle téléopérée SARP"
+END
+
+CONTROLBAR:UpgradeTurkiyeAltaySarp
+"Tourelle téléopérée SA&RP"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeAltaySarp
+"Cet Altay reçoit sur sa tourelle une mitrailleuse téléopérée de 12,7 mm contre l'infanterie. Le canon principal garde les véhicules."
+END
+
+UPGRADE:TurkiyeKirpiRepairKit
+"Kit de réparation de campagne"
+END
+
+CONTROLBAR:UpgradeTurkiyeKirpiRepairKit
+"Kit de &réparation de campagne"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeKirpiRepairKit
+"Ce Kirpi transporte une équipe de réparation : les véhicules à moins de 150 regagnent 10 points de vie par seconde."
+END
+
+UPGRADE:TurkiyeForwardRadar
+"Radar avancé"
+END
+
 UPGRADE:TurkiyeThermal
 "Viseurs thermiques"
 END
@@ -18682,7 +18838,7 @@ CONTROLBAR:ConstructTurkiyeKapalicarsi
 END
 
 CONTROLBAR:ToolTipTurkiyeKapalicarsi
-"Le marché noir de la Turquie. Rapporte 20 toutes les 2 secondes et vend des Contre-mesures pour le Bayraktar, l'Akinci et le Kizilelma, et des Chaussures renforcées pour le génie. \n \n Nécessite : Usine"
+"Le marché de la Turquie et son bâtiment économique. Rapporte 20 toutes les 2 secondes et vend les Contrats d'exportation, qui augmentent le revenu de chaque Dépôt de ravitaillement et de chaque Grand Bazar. \n \n Nécessite : Usine"
 END
 
 CONTROLBAR:ToolTipTurkiyeKarguBase
@@ -18867,4 +19023,32 @@ END
 
 TOOLTIP:WaterReflection
 "Pour l’eau moderne lorsque les reflets de scène sont activés. Classique utilise les reflets d’origine. SSR reflète le contenu visible à l’écran. Hybride combine les deux et est le mode par défaut. Appliqué quand vous cliquez sur Accepter."
+END
+
+GUI:SlotEasyAI
+"IA facile"
+END
+
+GUI:SlotMediumAI
+"IA moyenne"
+END
+
+GUI:SlotHardAI
+"IA difficile"
+END
+
+GUI:SlotBrutalAI
+"IA brutale"
+END
+
+GUI:SlotViciousAI
+"IA impitoyable"
+END
+
+GUI:SlotSavageAI
+"IA sauvage"
+END
+
+GUI:SlotInsaneAI
+"IA démente"
 END

@@ -229,6 +229,13 @@ struct OnlineSession
 	std::string resultLine;	///< the last ONLINE RATED / ONLINE UNRATED line logged
 	OnlineMessage result;		///< the last rated or unrated line itself
 	Bool relayTicketFresh;	///< a match.hold for us carried a new relay ticket, not yet taken: OnlineTakeRelayTicket
+	// a dropped match the others still play: the sign-in's match.rejoinable, then the answer to match.rejoin
+	OnlineMessage rejoinable;	///< empty for none: OnlineGetRejoinable
+	long long rejoinableMs;	///< when it arrived, OnlineNowMs
+	UnsignedInt rejoinSerial;
+	Int rejoinState;				///< OnlineRejoinState
+	OnlineMessage rejoinOk;	///< the match.rejoin.ok not yet taken
+	std::string rejoinRefusal;	///< the match.refused code not yet taken
 
 	// what the server says about players, and who is in the room the screens show
 	std::map<std::string, OnlineCard> cards;		///< by OnlineNickKey

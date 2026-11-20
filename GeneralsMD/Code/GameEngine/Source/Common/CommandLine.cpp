@@ -2849,6 +2849,27 @@ Int parseRejoin(char *args[], int num)
 	return 2;
 }
 
+/// -onlinerejoin: the online hub presses Rejoin by itself once its card offers a match, for online_check.py
+Int parseOnlineRejoin(char *args[], int num)
+{
+	if (TheWritableGlobalData)
+	{
+		TheWritableGlobalData->m_onlineAutoRejoin = TRUE;
+	}
+	return 1;
+}
+
+/// -rejoinfrom <slot>: -rejoin with the replay that seat sends over the network, as an online rejoin gets it
+Int parseRejoinFrom(char *args[], int num)
+{
+	if (TheWritableGlobalData && num > 1)
+	{
+		const Int slot = atoi(args[1]);
+		TheWritableGlobalData->m_rejoinFromSlot = (slot >= 0 && slot < MAX_SLOTS) ? slot : -1;
+	}
+	return 2;
+}
+
 /* -netai <n> puts n AI seats after the -netgame addresses.  Two idle copies play nothing, and a
 	 desync that players meet ten minutes into a match needs a match that is being played: AIs
 	 building, fighting and dying.  An AI runs inside GameLogic on every machine alike, so every copy
@@ -3119,6 +3140,8 @@ static CommandLineParam params[] =
 	{ "-netslot", parseNetSlot },
 	{ "-netai", parseNetAI },
 	{ "-rejoin", parseRejoin },
+	{ "-rejoinfrom", parseRejoinFrom },
+	{ "-onlinerejoin", parseOnlineRejoin },
 	{ "-lanip", parseLanIP },
 	{ "-lanname", parseLanName },
 	{ "-relay", parseRelay },

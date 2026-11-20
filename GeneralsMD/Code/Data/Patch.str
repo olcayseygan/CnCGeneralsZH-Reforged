@@ -7042,3 +7042,51 @@ END
 Network:WaitingForReconnect
 "Waiting for %ls to reconnect (%d:%02d)"
 END
+
+GUI:OnlineRejoinTitle
+"Your match is still running"
+END
+
+GUI:OnlineRejoinCustom
+"Custom game"
+END
+
+GUI:OnlineRejoinElapsed
+"Playing for %d:%02d"
+END
+
+GUI:OnlineRejoinPlaying
+"Playing"
+END
+
+GUI:OnlineRejoinAway
+"Away"
+END
+
+GUI:OnlineRejoin
+"Rejoin"
+END
+
+GUI:OnlineRejoinExplain
+"The others play on. Your army is where you left it."
+END
+
+GUI:OnlineRejoinWaiting
+"Asking the server..."
+END
+
+GUI:OnlineRejoinRefusedCrc
+"This match started on another build of the game and cannot be rejoined from this one."
+END
+
+GUI:OnlineRejoinRefusedRelay
+"Still connecting to the relay. Try again in a moment."
+END
+
+GUI:OnlineRejoinRefused
+"This match can no longer be rejoined."
+END
+
+GUI:RejoinAwayForfeit
+"%ls is away. The match is yours in %d:%02d unless they come back."
+END

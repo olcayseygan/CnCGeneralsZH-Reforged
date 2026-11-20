@@ -21233,3 +21233,51 @@ END
 Network:WaitingForReconnect
 "%ls için yeniden bağlantı bekleniyor (%d:%02d)"
 END
+
+GUI:OnlineRejoinTitle
+"Maçın hâlâ sürüyor"
+END
+
+GUI:OnlineRejoinCustom
+"Özel oyun"
+END
+
+GUI:OnlineRejoinElapsed
+"%d:%02d süredir oynanıyor"
+END
+
+GUI:OnlineRejoinPlaying
+"Oynuyor"
+END
+
+GUI:OnlineRejoinAway
+"Bağlı değil"
+END
+
+GUI:OnlineRejoin
+"Maça dön"
+END
+
+GUI:OnlineRejoinExplain
+"Diğerleri oynamaya devam ediyor. Ordun bıraktığın yerde."
+END
+
+GUI:OnlineRejoinWaiting
+"Sunucuya soruluyor..."
+END
+
+GUI:OnlineRejoinRefusedCrc
+"Bu maç oyunun başka bir sürümüyle başladı, bu sürümle maça dönülemez."
+END
+
+GUI:OnlineRejoinRefusedRelay
+"Aktarma sunucusuna hâlâ bağlanılıyor. Birazdan yeniden dene."
+END
+
+GUI:OnlineRejoinRefused
+"Bu maça artık dönülemez."
+END
+
+GUI:RejoinAwayForfeit
+"%ls oyundan düştü. Geri dönmezse %d:%02d sonra maç senin."
+END

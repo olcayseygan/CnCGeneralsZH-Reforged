@@ -19000,3 +19000,51 @@ END
 Network:WaitingForReconnect
 "Ожидание переподключения %ls (%d:%02d)"
 END
+
+GUI:OnlineRejoinTitle
+"Твой матч ещё идёт"
+END
+
+GUI:OnlineRejoinCustom
+"Своя игра"
+END
+
+GUI:OnlineRejoinElapsed
+"Идёт %d:%02d"
+END
+
+GUI:OnlineRejoinPlaying
+"В игре"
+END
+
+GUI:OnlineRejoinAway
+"Отключён"
+END
+
+GUI:OnlineRejoin
+"Вернуться"
+END
+
+GUI:OnlineRejoinExplain
+"Остальные играют дальше. Твоя армия там, где ты её оставил."
+END
+
+GUI:OnlineRejoinWaiting
+"Запрос к серверу..."
+END
+
+GUI:OnlineRejoinRefusedCrc
+"Матч начат на другой версии игры, с этой в него не вернуться."
+END
+
+GUI:OnlineRejoinRefusedRelay
+"Соединение с ретранслятором ещё не готово. Попробуй через пару секунд."
+END
+
+GUI:OnlineRejoinRefused
+"В этот матч уже не вернуться."
+END
+
+GUI:RejoinAwayForfeit
+"%ls вышел из игры. Если он не вернётся, через %d:%02d победа твоя."
+END

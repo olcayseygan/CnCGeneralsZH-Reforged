@@ -191,7 +191,7 @@ public:
 
 	Int  getExecutionFrame();																			///< Returns the next valid frame for simultaneous command execution.
 
-	Bool startRejoin( AsciiString replayPath );
+	Bool startRejoin( AsciiString replayPath, Int logSlot, RejoinStartMatch startMatch );
 	Bool isRejoining( void ) { return m_rejoinFeeding; }
 
 	// For disconnect blame assignment
@@ -213,6 +213,10 @@ protected:
 	void endOfGameCheck();																				///< Checks to see if its ok to leave this game.  If it is, send the apropriate command to the game logic.
 	Bool timeForNewFrame();
 	Bool feedRejoinFrame();																				///< -rejoin: TRUE while frames still come from the replay
+	Bool openRejoinFeed();
+	Bool m_rejoinFeedOpen;																				///< the replay is open: on this disk from the start, or once the room sent it
+	RejoinStartMatch m_rejoinStartMatch;
+	AsciiString m_rejoinPath;
 	Bool finishRejoin( UnsignedInt seats, UnsignedInt router );		///< from here frames come over the network; FALSE when it gave up instead
 	UnsignedInt m_rejoinRequestMS;																///< when the room was last asked to take the seat back
 	Bool m_rejoinFirstOrder;																			///< the next order this seat sends is its first since it came back
@@ -320,6 +324,8 @@ Network::Network()
 	//
 	m_rejoinFeeding = FALSE;
 	m_rejoinAbandoned = FALSE;
+	m_rejoinFeedOpen = FALSE;
+	m_rejoinStartMatch = NULL;
 	m_rejoinFrame = 0;
 	m_rejoinStartMS = 0;
 	m_rejoinRequestMS = 0;
@@ -646,35 +652,66 @@ Bool Network::noteLogicFrameAdvance()
 }
 
 /**
- * -rejoin.  The seat lost its game in the middle of the match; the others hold it (the seat hold in
- * DisconnectManager) and stand on frame m_rejoinFrame, the frame they wait on it for.  This copy started
- * the match the way it did the first time, and every frame below that one is played from the replay a
- * seat still in the match is writing, as fast as the engine runs frames: the replay holds every order
- * every seat gave, as each seat's command list carried it.  No socket is touched meanwhile and nothing
- * is sent.  On frame m_rejoinFrame the network takes over as if it had played every frame up to it.
+ * Coming back to a seat.  The seat lost its game in the middle of the match and the room dropped it from
+ * the lockstep, its side kept, and played on.  This copy asks the room back in (feedRejoinFrame); the
+ * packet router names a frame F that every seat takes it back on (SEATREJOIN), and the room stands on F + 1
+ * until it has caught up.  Every frame up to F is played here from the replay of a seat still in the match,
+ * on this disk (-rejoin) or sent by that seat when it stands on F + 1 (-rejoinfrom, online), as fast as the
+ * engine runs frames: the replay holds every order every seat gave, as each seat's command list carried it.
+ * Nothing frame-synchronized is filed meanwhile, and nothing of ours is sent but the request.  On F + 1 the
+ * network takes over as if it had played every frame up to it (finishRejoin).
  */
-Bool Network::startRejoin( AsciiString replayPath )
+Bool Network::startRejoin( AsciiString replayPath, Int logSlot, RejoinStartMatch startMatch )
 {
 	if (m_conMgr == NULL) {
 		return FALSE;
 	}
-	UnsignedInt frames = 0;
-	if (!TheRecorder->openRejoinFeed( replayPath, frames ))
-		return FALSE;
-	if (frames < 2) {
-		DEBUG_LOG(("REJOIN: the replay holds %u frames, no match to come back to\n", frames));
-		TheRecorder->closeRejoinFeed();
-		return FALSE;
+	m_rejoinFeedOpen = FALSE;
+	m_rejoinFrame = 0;
+	m_rejoinStartMatch = startMatch;
+	m_rejoinPath = replayPath;
+	TheRecorder->noteRejoinMatch();
+	if (logSlot >= MAX_SLOTS) {
+		// the replay is on this disk already: a -rejoin test of one machine
+		if (!openRejoinFeed()) {
+			return FALSE;
+		}
 	}
 	m_rejoinFeeding = TRUE;
-	m_rejoinFrame = frames;
 	m_rejoinStartMS = Clock_Milliseconds();
 	m_rejoinRequestMS = 0;
 	m_rejoinOwnCRCs.clear();
 	m_rejoinCRCsCompared = 0;
 	m_rejoinCRCsDiffering = 0;
-	m_conMgr->setRejoining( TRUE );
-	DEBUG_LOG(("REJOIN: slot %d comes back; the replay holds frames 0 to %u so far\n", getLocalPlayerID(), m_rejoinFrame - 1));
+	m_conMgr->setRejoining( TRUE, logSlot, logSlot < MAX_SLOTS ? replayPath : AsciiString::TheEmptyString );
+	DEBUG_LOG(("REJOIN: slot %d comes back, the replay %s\n", getLocalPlayerID(),
+		logSlot < MAX_SLOTS ? "to come from the room" : "on this disk"));
+	return TRUE;
+}
+
+/// the replay into the feed; a match not started yet is started from it (startMatch)
+Bool Network::openRejoinFeed()
+{
+	UnsignedInt frames = 0;
+	if (!TheRecorder->openRejoinFeed( m_rejoinPath, frames, m_rejoinStartMatch == NULL )) {
+		return FALSE;
+	}
+	if (frames < 2) {
+		DEBUG_LOG(("REJOIN: the replay holds %u frames, no match to come back to\n", frames));
+		TheRecorder->closeRejoinFeed();
+		return FALSE;
+	}
+	m_rejoinFeedOpen = TRUE;
+	m_rejoinFrame = frames;
+	DEBUG_LOG(("REJOIN: the replay holds frames 0 to %u\n", frames - 1));
+	if (m_rejoinStartMatch != NULL) {
+		Int speed = 0;
+		const AsciiString options = TheRecorder->getRejoinOptions( speed );
+		if (!m_rejoinStartMatch( options, speed )) {
+			DEBUG_LOG(("REJOIN: the match the replay records could not be started\n"));
+			return FALSE;
+		}
+	}
 	return TRUE;
 }
 
@@ -704,25 +741,34 @@ Bool Network::feedRejoinFrame()
 		msg = next;
 	}
 
+	/* The room is asked to take the seat back, again every two seconds until the seat joins: the router
+		 that answered may drop before its frame, and its successor answers with another.  The socket is read
+		 for the answers, the room's own account of itself (REJOINROOM) and the log; nothing frame-synchronized
+		 is filed meanwhile (setRejoining). */
+	m_conMgr->update( FALSE );
+	const UnsignedInt now = Clock_Milliseconds();
+	if (m_rejoinRequestMS == 0 || now - m_rejoinRequestMS > 2000) {
+		m_conMgr->sendRejoinRequest();
+		m_rejoinRequestMS = now;
+	}
+
+	// the log from the room, once the room stands on this seat's frame and its seat has sent it
+	if (!m_rejoinFeedOpen && m_conMgr->hasRejoinLogArrived() && !openRejoinFeed()) {
+		abandonRejoin( "the replay the room sent is no replay of this match" );
+		return TRUE;
+	}
+
 	// the tick that loads the map, and anything before it, has no recorded frame
 	if (!TheGameLogic->isInMultiplayerGame() || TheGameLogic->isLoadingMap()) {
 		m_frameDataReady = TRUE;
 		return TRUE;
 	}
-
-	/* The room is asked to take the seat back until the router answers with the frame it stops on for it.
-		 The socket is read for that answer; nothing frame-synchronized is filed meanwhile (setRejoining). */
-	m_conMgr->update( FALSE );
-	UnsignedInt acceptFrame = 0;
-	UnsignedInt seats = 0;
-	UnsignedInt router = 0;
-	const Bool accepted = m_conMgr->getRejoinAccept( acceptFrame, seats, router );
-	const UnsignedInt now = Clock_Milliseconds();
-	if (!accepted && (m_rejoinRequestMS == 0 || now - m_rejoinRequestMS > 2000)) {
-		m_conMgr->sendRejoinRequest();
-		m_rejoinRequestMS = now;
+	if (!m_rejoinFeedOpen) {
+		return TRUE;		// the match is loaded and the log not here yet: no frame runs
 	}
 
+	UnsignedInt acceptFrame = 0;
+	const Bool accepted = m_conMgr->getRejoinAccept( acceptFrame );
 	const UnsignedInt frame = TheGameLogic->getFrame();
 	if (accepted) {
 		const UnsignedInt joinFrame = acceptFrame + 1;		// SEATREJOIN runs on acceptFrame, the seat's frames count from the next
@@ -731,6 +777,13 @@ Bool Network::feedRejoinFrame()
 			return TRUE;
 		}
 		if (frame == joinFrame) {
+			// the room as it took the seat back, which follows the answer
+			UnsignedInt roomFrame = 0;
+			UnsignedInt seats = 0;
+			UnsignedInt router = 0;
+			if (!m_conMgr->getRejoinRoom( roomFrame, seats, router )) {
+				return TRUE;
+			}
 			return !finishRejoin( seats, router );
 		}
 	}
@@ -988,6 +1041,8 @@ void Network::update( void )
 		if (m_localStatus == NETLOCALSTATUS_INGAME) {
 			m_conMgr->updateRunAhead(m_runAhead, m_frameRate, m_didSelfSlug, getExecutionFrame());
 			m_didSelfSlug = FALSE;
+			m_conMgr->sendPendingRejoinLog();
+			m_conMgr->updateAbsentSeats();
 		}
 		//m_conMgr->update(); // Do the priority thing, packetize thing. This also calls the Transport::update function.
 									 // depacketizes the incoming packets and puts them on the Network command list.
@@ -1056,8 +1111,7 @@ void Network::liteupdate() {
 	}
 #endif
 
-	// -rejoin: the socket is left alone until the frame the room stands on, so that what the room sends
-	// meanwhile is read against that frame (processNetCommand drops what is older)
+	// coming back: feedRejoinFrame pumps the socket itself, holding back what is frame-synchronized
 	if (m_rejoinFeeding) {
 		return;
 	}

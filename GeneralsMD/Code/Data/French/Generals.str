@@ -19072,3 +19072,51 @@ END
 Network:WaitingForReconnect
 "En attente de la reconnexion de %ls (%d:%02d)"
 END
+
+GUI:OnlineRejoinTitle
+"Ta partie est toujours en cours"
+END
+
+GUI:OnlineRejoinCustom
+"Partie personnalisée"
+END
+
+GUI:OnlineRejoinElapsed
+"En cours depuis %d:%02d"
+END
+
+GUI:OnlineRejoinPlaying
+"En jeu"
+END
+
+GUI:OnlineRejoinAway
+"Déconnecté"
+END
+
+GUI:OnlineRejoin
+"Rejoindre"
+END
+
+GUI:OnlineRejoinExplain
+"Les autres continuent. Ton armée est là où tu l'as laissée."
+END
+
+GUI:OnlineRejoinWaiting
+"Demande au serveur..."
+END
+
+GUI:OnlineRejoinRefusedCrc
+"Cette partie a démarré sur une autre version du jeu et ne peut pas être rejointe avec celle-ci."
+END
+
+GUI:OnlineRejoinRefusedRelay
+"La connexion au relais n'est pas encore prête. Réessaie dans un instant."
+END
+
+GUI:OnlineRejoinRefused
+"Cette partie ne peut plus être rejointe."
+END
+
+GUI:RejoinAwayForfeit
+"%ls est parti. La partie est à toi dans %d:%02d s'il ne revient pas."
+END

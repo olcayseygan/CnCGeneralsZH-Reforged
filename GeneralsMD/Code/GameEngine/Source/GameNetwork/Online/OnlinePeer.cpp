@@ -31,8 +31,17 @@
 #include "Common/UserPreferences.h"
 #include "Common/version.h"
 #include "GameClient/TankSkin.h"
+#include "Lib/WideCharFns.h"
+#include "Common/FileSystem.h"
+#include "Common/GameEngine.h"
+#include "Common/MessageStream.h"
+#include "Common/RandomValue.h"
+#include "Common/Recorder.h"
+#include "GameLogic/GameLogic.h"
 #include "GameNetwork/GameInfo.h"
+#include "GameNetwork/GameSpy/StagingRoomGameInfo.h"
 #include "GameNetwork/GameSpy/ThreadUtils.h"
+#include "GameNetwork/NetworkInterface.h"
 #include "GameNetwork/Online/OnlineSession.h"
 #include "zhio.h"
 
@@ -139,7 +148,7 @@ OnlineSession &OnlineSession::get()
 
 OnlineSession::OnlineSession() :
 	connection( NULL ), capture( NULL ), status( ONLINE_OFF ), relayPort( 0 ), testMode( FALSE ), failRetry( 0 ),
-	noticeSerial( 0 ), maintenanceRefused( FALSE ), relayTicketFresh( FALSE ), cardSerial( 0 ), ladderState( ONLINE_LADDER_FAILED ), armiesState( ONLINE_LADDER_FAILED ), historySerial( 0 ), revealing( FALSE ),
+	noticeSerial( 0 ), maintenanceRefused( FALSE ), relayTicketFresh( FALSE ), rejoinSerial( 0 ), cardSerial( 0 ), ladderState( ONLINE_LADDER_FAILED ), armiesState( ONLINE_LADDER_FAILED ), historySerial( 0 ), revealing( FALSE ),
 	revealSerial( 0 ), aiVerdictSerial( 0 ), peer( NULL ), buddy( NULL ), ps( NULL )
 {
 	connectionGone();
@@ -220,6 +229,13 @@ void OnlineSession::forgetAccount()
 	aiWonMatch.clear();
 	aiSentMatch.clear();
 	aiVerdict.clear();
+	if (!rejoinable.fields().empty())
+		++rejoinSerial;
+	rejoinable.clear();		// the next account hears its own at its sign-in
+	rejoinableMs = 0;
+	rejoinState = ONLINE_REJOIN_IDLE;
+	rejoinOk.clear();
+	rejoinRefusal.clear();
 }
 
 void OnlineSession::pingServer()
@@ -598,6 +614,8 @@ static void playerResponse( OnlineSession &s, Int type, RoomType roomType, long 
 	if (s.peer)
 		s.peer->addResponse( r );
 }
+
+static void noteRejoiningSeat( UnsignedInt was, UnsignedInt vip );		// below, with the rejoin
 
 static void rememberVips( OnlineSession &s, const OnlineMessage &m )
 {
@@ -1205,6 +1223,13 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 	}
 	else if (t == "rated" || t == "unrated")
 	{
+		// the match the hub offers for a rejoin is over
+		if (!rejoinable.fields().empty() && m.getString( "match" ) == rejoinable.getString( "match" ))
+		{
+			rejoinable.clear();
+			++rejoinSerial;
+			return;		// not the score screen's: we were not in it at its end
+		}
 		result = m;
 		// what the end-to-end check greps; the numbers as the server spelled them
 		const OnlineValue *delta = m.find( "delta" ), *rating = m.find( "rating" );
@@ -1264,11 +1289,57 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		DEBUG_LOG(("ONLINE %s player=%lld vip=%u seconds=%d match=%s%s\n", t == "match.hold" ? "HOLD" : "RESUME", player,
 			(UnsignedInt)m.getInt( "vip" ), (Int)m.getInt( "seconds" ), match.c_str(), match == matchId ? "" : " (not ours)"));
 	}
+	else if (t == "match.rejoinable")
+	{
+		// match.rejoinable{match, ranked, map, players[{id, nick, side, present}], elapsed, logPeer}: after the
+		// sign-in, a match we dropped out of that the others still play; the hub shows its card
+		rejoinable = m;
+		rejoinableMs = OnlineNowMs();
+		++rejoinSerial;
+		rejoinState = ONLINE_REJOIN_IDLE;
+		rejoinOk.clear();
+		rejoinRefusal.clear();
+		DEBUG_LOG(("ONLINE REJOINABLE match=%s elapsed=%lld logPeer=%lld\n", m.getString( "match" ).c_str(),
+			m.getInt( "elapsed" ), m.getInt( "logPeer" )));
+	}
+	else if (t == "match.rejoin.ok" && rejoinState == ONLINE_REJOIN_WAITING && m.getString( "match" ) == rejoinable.getString( "match" ))
+	{
+		// back in the seat on the server: the match is ours again, its seats at the addresses it gives
+		rejoinOk = m;
+		rejoinState = ONLINE_REJOIN_READY;
+		matchId = m.getString( "match" );
+		rememberVips( *this, m );
+		rejoinable.clear();
+		++rejoinSerial;
+		DEBUG_LOG(("ONLINE REJOIN OK match=%s me=%lld logPeer=%lld\n", matchId.c_str(), m.getInt( "me" ), m.getInt( "logPeer" )));
+	}
+	else if (t == "match.rejoining")
+	{
+		// match.rejoining{match, player, vip, was}: a player of our match is coming back from the lobby, at vip
+		if (!matchId.empty() && m.getString( "match" ) == matchId && m.getInt( "player" ) && m.getInt( "vip" ))
+		{
+			vips[m.getInt( "player" )] = (UnsignedInt)m.getInt( "vip" );
+			noteRejoiningSeat( (UnsignedInt)m.getInt( "was" ), (UnsignedInt)m.getInt( "vip" ) );
+		}
+		DEBUG_LOG(("ONLINE REJOINING player=%lld vip=%u was=%u match=%s\n", m.getInt( "player" ), (UnsignedInt)m.getInt( "vip" ),
+			(UnsignedInt)m.getInt( "was" ), m.getString( "match" ).c_str()));
+	}
 	else if (t == "match.refused")
 	{
-		// match.refused{match, code}: a rejoin this build cannot make (crc: another exe or INI set).  Only a
-		// rejoin asks, and this client does not rejoin yet: the line is logged, nothing else.
-		DEBUG_LOG(("ONLINE REJOIN REFUSED match=%s code=%s\n", m.getString( "match" ).c_str(), m.getString( "code" ).c_str()));
+		// match.refused{match, code}: the answer to our match.rejoin (crc, settled, nomatch, norelay).  A match
+		// that is over, or holds no seat of ours, leaves the hub's card with it
+		const std::string code = m.getString( "code" );
+		DEBUG_LOG(("ONLINE REJOIN REFUSED match=%s code=%s\n", m.getString( "match" ).c_str(), code.c_str()));
+		if (rejoinState == ONLINE_REJOIN_WAITING && m.getString( "match" ) == rejoinable.getString( "match" ))
+		{
+			rejoinState = ONLINE_REJOIN_REFUSED;
+			rejoinRefusal = code.empty() ? "unknown" : code;
+			if (code == "settled" || code == "nomatch")
+			{
+				rejoinable.clear();
+				++rejoinSerial;
+			}
+		}
 	}
 	else if (t == "notice")
 	{
@@ -1690,6 +1761,276 @@ Bool OnlineTakeRelayTicket( UnsignedByte out[16] )
 	s.relayTicketFresh = FALSE;
 	memcpy( out, s.ticket, sizeof(s.ticket) );
 	return TRUE;
+}
+
+Bool OnlineGetRejoinable( OnlineRejoinable &out )
+{
+	const OnlineSession &s = OnlineSession::get();
+	out.serial = s.rejoinSerial;
+	out.players.clear();
+	const OnlineMessage &m = s.rejoinable;
+	if (!OnlineIsEnabled() || !s.authed || m.getString( "match" ).empty())
+		return FALSE;
+	out.match = m.getString( "match" ).c_str();
+	out.ranked = m.getBool( "ranked" );
+	out.map = m.getString( "map" ).c_str();
+	out.logPeer = m.getInt( "logPeer" );
+	const long long elapsed = m.getInt( "elapsed" ) + (OnlineNowMs() - s.rejoinableMs) / 1000;
+	out.elapsedSeconds = elapsed < 0 ? 0 : elapsed > INT_MAX ? INT_MAX : (Int)elapsed;
+	const std::vector<OnlineMessage> players = m.getObjects( "players" );
+	for (size_t i = 0; i < players.size() && i < (size_t)MAX_SLOTS; ++i)
+	{
+		OnlineRejoinSeat seat;
+		seat.id = players[i].getInt( "id" );
+		seat.nick = players[i].getString( "nick" ).c_str();
+		seat.side = seatSide( players[i].getInt( "side", -1 ) );
+		seat.present = players[i].getBool( "present" );
+		out.players.push_back( seat );
+	}
+	return TRUE;
+}
+
+void OnlineRequestRejoin( void )
+{
+	OnlineSession &s = OnlineSession::get();
+	s.rejoinOk.clear();
+	s.rejoinRefusal.clear();
+	if (!s.authed)
+	{
+		s.rejoinState = ONLINE_REJOIN_REFUSED;
+		s.rejoinRefusal = "signedout";
+		return;
+	}
+	if (s.rejoinable.getString( "match" ).empty())
+	{
+		s.rejoinState = ONLINE_REJOIN_REFUSED;
+		s.rejoinRefusal = "none";
+		return;
+	}
+	s.rejoinState = ONLINE_REJOIN_WAITING;
+	OnlineMessage m;
+	m.setString( "t", "match.rejoin" ).setString( "match", s.rejoinable.getString( "match" ) );
+	s.send( m );
+}
+
+OnlineRejoinState OnlineGetRejoin( RejoinInfo &out, AsciiString &refusal )
+{
+	OnlineSession &s = OnlineSession::get();
+	const OnlineRejoinState state = (OnlineRejoinState)s.rejoinState;
+	refusal.clear();
+	if (state == ONLINE_REJOIN_REFUSED)
+	{
+		refusal = s.rejoinRefusal.c_str();
+		s.rejoinState = ONLINE_REJOIN_IDLE;
+	}
+	else if (state == ONLINE_REJOIN_READY)
+	{
+		const OnlineMessage &m = s.rejoinOk;
+		out = RejoinInfo();
+		out.match = m.getString( "match" ).c_str();
+		out.ranked = m.getBool( "ranked" );
+		out.ids = m.getInts( "ids" );
+		const std::vector<std::string> nicks = m.getStrings( "nicks" ), skins = m.getStrings( "skins" );
+		for (size_t i = 0; i < nicks.size(); ++i)
+			out.nicks.push_back( nicks[i].c_str() );
+		for (size_t i = 0; i < skins.size(); ++i)
+			out.skins.push_back( skins[i].c_str() );
+		const std::vector<long long> v = m.getInts( "vips" ), sides = m.getInts( "sides" ), colors = m.getInts( "colors" );
+		for (size_t i = 0; i < v.size(); ++i)
+			out.vips.push_back( (UnsignedInt)v[i] );
+		for (size_t i = 0; i < sides.size(); ++i)
+			out.sides.push_back( seatSide( sides[i] ) );
+		for (size_t i = 0; i < colors.size(); ++i)
+			out.colors.push_back( seatColor( colors[i] ) );
+		const long long me = m.getInt( "me", -1 );
+		out.me = me >= 0 && me < (long long)out.ids.size() ? (Int)me : -1;
+		out.exe = (UnsignedInt)m.getInt( "exe" );
+		out.ini = (UnsignedInt)m.getInt( "ini" );
+		out.logPeer = m.getInt( "logPeer" );
+		const long long elapsed = m.getInt( "elapsed" );
+		out.elapsedSeconds = elapsed < 0 ? 0 : elapsed > INT_MAX ? INT_MAX : (Int)elapsed;
+		out.seed = (Int)(UnsignedInt)m.getInt( "seed" );
+		out.map = m.getString( "map" ).c_str();
+		out.opts = m.getString( "opts" ).c_str();
+		s.rejoinOk.clear();
+		s.rejoinState = ONLINE_REJOIN_IDLE;
+	}
+	return state;
+}
+
+/* The game side of a rejoin.  The seat comes back the way -rejoinfrom does (Network::startRejoin): its
+	 network is up from the start with the match's seats at their relay vips, it asks the room back in, and the
+	 seat whose account is logPeer sends its replay once the room stands on the frame it takes this seat back
+	 for.  Nothing starts the match here: the replay names it, slot list, map, seed and options as every seat
+	 recorded them, and rejoinStartMatch starts it from there when the replay is in, then the network plays it
+	 up to that frame and joins.  The seats, and so this seat's slot, come from the server's line until then:
+	 a Quick Match seats its players in game.start's order with nothing between them, a custom game's slot
+	 list is the host's options string (opts). */
+static RejoinInfo s_rejoin;
+static UnicodeString s_rejoinSeats[MAX_SLOTS];		///< the human seats the network was built with, by slot, empty for none
+
+/// the human seats of TheGameSpyGame by slot, nicks as the server keys them
+static void rejoinSeatLayout( UnicodeString seats[MAX_SLOTS] )
+{
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		GameSpyGameSlot *slot = TheGameSpyGame->getGameSpySlot( i );
+		seats[i] = (slot != NULL && slot->isHuman()) ? slot->getName() : UnicodeString::TheEmptyString;
+	}
+}
+
+/// every human seat at the vip the server gave its player now, matched by nick, and ours as the local one
+static void placeRejoinSeats( void )
+{
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		GameSpyGameSlot *slot = TheGameSpyGame->getGameSpySlot( i );
+		if (slot == NULL || !slot->isHuman())
+			continue;
+		AsciiString nick;
+		nick.translate( slot->getName() );
+		for (size_t j = 0; j < s_rejoin.nicks.size() && j < s_rejoin.vips.size(); ++j)
+		{
+			if (OnlineNickKey( s_rejoin.nicks[j].str() ) == OnlineNickKey( nick.str() ))
+			{
+				slot->setIP( s_rejoin.vips[j] );
+				slot->setPort( 8888 );
+				break;
+			}
+		}
+	}
+	TheGameSpyGame->setLocalIP( s_rejoin.vips[s_rejoin.me] );
+}
+
+/// Network's call once the replay is in: the match it records, at the seats' vips of now
+static Bool rejoinStartMatch( const AsciiString &options, Int gameSpeedPercent )
+{
+	TheGameSpyGame->enterGame();
+	if (!ParseAsciiStringToGameInfo( TheGameSpyGame, options ))
+		return FALSE;
+	/* The network was built on the server's seats; the match is built on the recorded ones.  A seat in another
+		 slot would send its orders as another player and wait on another seat's frames. */
+	UnicodeString recorded[MAX_SLOTS];
+	rejoinSeatLayout( recorded );
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		if (OnlineNickKey( WideCharAsUtf8( recorded[i].str() ).str() ) != OnlineNickKey( WideCharAsUtf8( s_rejoinSeats[i].str() ).str() ))
+		{
+			DEBUG_LOG(("ONLINE REJOIN slot %d is '%s' in the replay and '%s' on the server's line\n", i,
+				WideCharAsUtf8( recorded[i].str() ).str(), WideCharAsUtf8( s_rejoinSeats[i].str() ).str()));
+			return FALSE;
+		}
+	}
+	if (s_rejoin.opts.isEmpty())
+		TheGameSpyGame->markGameAsQM();
+	TheGameSpyGame->setGameSpeedPercent( gameSpeedPercent );
+	placeRejoinSeats();
+	TheGameSpyGame->setGameInProgress( TRUE );
+
+	TheWritableGlobalData->m_pendingFile = TheGameSpyGame->getMap();
+	GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_NEW_GAME );
+	msg->appendIntegerArgument( GAME_INTERNET );
+	msg->appendIntegerArgument( DIFFICULTY_NORMAL );
+	msg->appendIntegerArgument( 0 );
+	GameEngine_appendNewGameRates( msg, gameSpeedPercent );
+	TheWritableGlobalData->m_useFpsLimit = false;
+	InitRandom( TheGameSpyGame->getSeed() );
+	DEBUG_LOG(("ONLINE REJOIN MATCH map=%s seed=%d speed=%d slot=%d\n", TheGameSpyGame->getMap().str(),
+		TheGameSpyGame->getSeed(), gameSpeedPercent, TheGameSpyGame->getLocalSlotNum()));
+	return TRUE;
+}
+
+void OnlineStartRejoin( const RejoinInfo &info )
+{
+	DEBUG_LOG(("ONLINE REJOIN START match=%s me=%d seats=%d logPeer=%lld\n", info.match.str(), info.me,
+		(Int)info.ids.size(), info.logPeer));
+	if (TheGameSpyGame == NULL || info.me < 0 || info.me >= (Int)info.vips.size() || info.me >= (Int)info.nicks.size())
+		return;
+	s_rejoin = info;
+
+	TheGameSpyGame->enterGame();
+	if (info.opts.isNotEmpty())
+	{
+		ParseAsciiStringToGameInfo( TheGameSpyGame, info.opts );
+	}
+	else
+	{
+		for (Int i = 0; i < MAX_SLOTS; ++i)
+		{
+			GameSpyGameSlot *slot = TheGameSpyGame->getGameSpySlot( i );
+			if (i >= (Int)info.nicks.size())
+			{
+				slot->setState( SLOT_CLOSED );
+				continue;
+			}
+			UnicodeString name;
+			name.translate( info.nicks[i] );
+			slot->setState( SLOT_PLAYER, name, i < (Int)info.vips.size() ? info.vips[i] : 0 );
+		}
+	}
+	placeRejoinSeats();
+	rejoinSeatLayout( s_rejoinSeats );
+
+	// the seat the server picked to send us the match so far
+	Int logSlot = MAX_SLOTS;
+	for (size_t j = 0; j < info.ids.size() && j < info.nicks.size(); ++j)
+	{
+		if (info.ids[j] != info.logPeer)
+			continue;
+		for (Int i = 0; i < MAX_SLOTS; ++i)
+		{
+			GameSpyGameSlot *slot = TheGameSpyGame->getGameSpySlot( i );
+			AsciiString nick;
+			nick.translate( slot->getName() );
+			if (slot->isHuman() && OnlineNickKey( nick.str() ) == OnlineNickKey( info.nicks[j].str() ))
+				logSlot = i;
+		}
+	}
+	if (logSlot >= MAX_SLOTS)
+	{
+		DEBUG_LOG(("ONLINE REJOIN no seat holds logPeer=%lld\n", info.logPeer));
+		return;
+	}
+
+	if (TheNetwork != NULL)
+	{
+		delete TheNetwork;
+		TheNetwork = NULL;
+	}
+	TheNetwork = NetworkInterface::createNetwork();
+	TheNetwork->init();
+	TheNetwork->setLocalAddress( info.vips[info.me], 8888 );
+	TheNetwork->initTransport();
+	TheNetwork->parseUserList( TheGameSpyGame );
+
+	AsciiString path;
+	TheFileSystem->createDirectory( TheRecorder->getReplayDir() );
+	path.format( "%srejoin.rep", TheRecorder->getReplayDir().str() );
+	if (!TheNetwork->startRejoin( path, logSlot, rejoinStartMatch ))
+	{
+		delete TheNetwork;
+		TheNetwork = NULL;
+		return;
+	}
+	DEBUG_LOG(("ONLINE REJOIN asking the room: slot=%d log from slot=%d\n", TheGameSpyGame->getLocalSlotNum(), logSlot));
+}
+
+/* match.rejoining: a player of our match comes back at a new relay vip.  His seat left the lockstep, so it has
+	 no connection here; the slot's address is what SEATREJOIN makes the new one to, what the router answers,
+	 and what a REJOINREQUEST has to come from (ConnectionManager::processRejoinRequest). */
+static void noteRejoiningSeat( UnsignedInt was, UnsignedInt vip )
+{
+	if (TheNetwork == NULL || TheGameInfo == NULL || was == 0 || vip == 0)
+		return;
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		GameSlot *slot = TheGameInfo->getSlot( i );
+		if (slot != NULL && slot->isHuman() && slot->getIP() == was)
+		{
+			slot->setIP( vip );
+			DEBUG_LOG(("ONLINE REJOINING slot=%d now at %u\n", i, vip));
+		}
+	}
 }
 
 AsciiString OnlineGetLastAIMatchId( void )

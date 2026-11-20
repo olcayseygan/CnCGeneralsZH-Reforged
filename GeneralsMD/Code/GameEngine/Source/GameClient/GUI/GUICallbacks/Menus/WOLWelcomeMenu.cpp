@@ -486,6 +486,27 @@ static Int s_cardsLock = 0;					///< the Quick Match lock's seconds the card las
 static UnsignedInt s_recentSerial = 0;		///< OnlineGetHistorySerial as the rows were last built
 static Bool s_recentStale = TRUE;				///< new strings: build the rows whatever the serial says
 
+/* A match the player dropped out of that the others still play (the sign-in's match.rejoinable): the
+	 recent matches' card shows it instead, its players in two columns, with Rejoin at its foot. */
+enum { REJOIN_ROWS = 8, REJOIN_COLUMN_ROWS = 4 };
+static GameWindow *buttonRejoin = NULL;
+static NameKeyType buttonRejoinID = NAMEKEY_INVALID;
+static Bool s_rejoinShown = FALSE;				///< the card is the match still running
+static Bool s_rejoinAsked = FALSE;				///< match.rejoin is out
+static Bool s_rejoinStale = TRUE;				///< new strings: build the rows whatever the serial says
+static UnsignedInt s_rejoinSerial = 0;
+static Int s_rejoinSecond = -1;					///< the elapsed seconds the line last showed
+static UnicodeString s_rejoinHead;				///< mode and map, before the elapsed time
+static DisplayString *s_rejoinTitle = NULL;
+static DisplayString *s_rejoinLine = NULL;		///< mode, map, how long it has run
+static DisplayString *s_rejoinNote = NULL;		///< what the others do, a wait or a refusal
+static Color s_rejoinNoteColor = 0;
+static DisplayString *s_rejoinChip[ REJOIN_ROWS ];
+static DisplayString *s_rejoinNick[ REJOIN_ROWS ];
+static DisplayString *s_rejoinSide[ REJOIN_ROWS ];
+static Bool s_rejoinPresent[ REJOIN_ROWS ];
+static Int s_rejoinRows = 0;
+
 static std::vector<DisplayString *> s_strings;		///< every string the cards made, freed together
 
 static DisplayString *hubString( GameFont *font )
@@ -505,6 +526,11 @@ static void freeHubStrings( void )
 	memset( s_recent, 0, sizeof( s_recent ) );
 	s_recentTitle = s_recentLine = s_motdTitle = NULL;
 	s_recentRows = 0;
+	memset( s_rejoinChip, 0, sizeof( s_rejoinChip ) );
+	memset( s_rejoinNick, 0, sizeof( s_rejoinNick ) );
+	memset( s_rejoinSide, 0, sizeof( s_rejoinSide ) );
+	s_rejoinTitle = s_rejoinLine = s_rejoinNote = NULL;
+	s_rejoinRows = 0;
 }
 
 /// a layout's points on the cards: UIStyle's size at 16:9 and wider, shrunk with the fitted board at 4:3
@@ -643,6 +669,43 @@ static void drawRecent( Int x, Int y, Int w )
 	}
 }
 
+/// the left of the card that Rejoin leaves free: the button's 300 and its 24 inset, and 24 more between
+static Int rejoinRoom( Int w )
+{
+	return w - UIStyle::px( 24.0f + 300.0f + 24.0f + 24.0f );
+}
+
+/// the match still running, on the recent matches' card: heading, mode and map with how long it has run,
+/// then each seat with a chip saying whether it plays on, in two columns of four, and the note at the foot
+static void drawRejoin( Int x, Int y, Int w, Int h )
+{
+	const Int left = x + UIStyle::px( 24.0f );
+	UIStyle::heading( s_rejoinTitle, left, y + UIStyle::px( 20.0f ) );
+	s_rejoinLine->draw( left, y + UIStyle::px( 58.0f ), UIStyle::INK, UIStyle::SHADOW );
+	TheDisplay->drawFillRect( left, y + UIStyle::px( 92.0f ), w - UIStyle::px( 48.0f ), 1, UIStyle::GRID );
+	const Int rowTop = y + UIStyle::px( 102.0f );
+	const Int rowHeight = UIStyle::px( 34.0f );
+	const Int columnWidth = rejoinRoom( w ) / 2;
+	for (Int r = 0; r < s_rejoinRows; ++r)
+	{
+		const Int cellX = left + ( r / REJOIN_COLUMN_ROWS ) * columnWidth;
+		const Int top = rowTop + ( r % REJOIN_COLUMN_ROWS ) * rowHeight;
+		Int cw, ch;
+		s_rejoinChip[ r ]->getSize( &cw, &ch );
+		const Int chipHeight = ch + UIStyle::tallPx( 5.0f ) + UIStyle::tallPx( 4.0f );
+		const Int chipWidth = UIStyle::chip( s_rejoinChip[ r ], cellX, top + ( rowHeight - chipHeight ) / 2,
+			s_rejoinPresent[ r ] ? UIStyle::ACTIVE : UIStyle::MUTED, UIStyle::FRAME );
+		const Int nickX = cellX + chipWidth + UIStyle::px( 10.0f );
+		drawCell( s_rejoinNick[ r ], nickX, top, rowHeight, s_rejoinPresent[ r ] ? UIStyle::INK : UIStyle::MUTED );
+		Int nw, nh;
+		s_rejoinNick[ r ]->getSize( &nw, &nh );
+		drawCell( s_rejoinSide[ r ], nickX + nw + UIStyle::px( 8.0f ), top, rowHeight, UIStyle::MUTED );
+	}
+	Int nw, nh;
+	s_rejoinNote->getSize( &nw, &nh );
+	s_rejoinNote->draw( left, y + h - UIStyle::px( 24.0f ) - nh, s_rejoinNoteColor, UIStyle::SHADOW );
+}
+
 /// every card's draw: the card's box, then what it holds
 static void drawHubCard( GameWindow *window, WinInstanceData *instData )
 {
@@ -657,7 +720,9 @@ static void drawHubCard( GameWindow *window, WinInstanceData *instData )
 		if (s_cards[ c ].window == window)
 			drawModeCard( s_cards[ c ], x, y, w );
 	}
-	if (window == s_cardRecent)
+	if (window == s_cardRecent && s_rejoinShown)
+		drawRejoin( x, y, w, h );
+	else if (window == s_cardRecent)
 		drawRecent( x, y, w );
 	if (window == s_cardMOTD)
 		UIStyle::heading( s_motdTitle, x + UIStyle::px( 24.0f ), y + UIStyle::px( 20.0f ) );
@@ -699,6 +764,17 @@ static void makeCards( void )
 	for (Int r = 0; r < RECENT_ROWS; ++r)
 		for (Int c = 0; c < CELL_COUNT; ++c)
 			s_recent[ r ][ c ] = hubString( c == CELL_CHIP ? chipFont() : bodyFont() );
+	s_rejoinTitle = hubString( headingFont() );
+	s_rejoinTitle->setText( UIStyle::fitKey( "GUI:OnlineRejoinTitle", headingFont(), w - UIStyle::px( 48.0f ) ) );
+	s_rejoinLine = hubString( bodyFont() );
+	s_rejoinNote = hubString( bodyFont() );
+	for (Int r = 0; r < REJOIN_ROWS; ++r)
+	{
+		s_rejoinChip[ r ] = hubString( chipFont() );
+		s_rejoinNick[ r ] = hubString( bodyFont() );
+		s_rejoinSide[ r ] = hubString( bodyFont() );
+	}
+	s_rejoinStale = TRUE;
 	// the cells on this screen, each edge rounded once so the row keeps its width; the result column
 	// as wide as its widest chip (Turkish's loss outgrows "Loss"), the extra taken from the map's
 	Real at = 0.0f;
@@ -925,6 +1001,140 @@ static void refreshRecent( void )
 	}
 }
 
+static void setRejoinNote( const UnicodeString &text, Color color )
+{
+	s_rejoinNoteColor = color;
+	Int w = 0, h = 0;
+	if (s_cardRecent)
+		s_cardRecent->winGetSize( &w, &h );
+	s_rejoinNote->setText( UIStyle::fitText( text, bodyFont(), rejoinRoom( w ) ) );
+}
+
+/// a match.refused code in words
+static UnicodeString rejoinRefusalText( const AsciiString &code )
+{
+	if (code == "crc")
+		return TheGameText->fetch( "GUI:OnlineRejoinRefusedCrc" );
+	if (code == "norelay")
+		return TheGameText->fetch( "GUI:OnlineRejoinRefusedRelay" );
+	return TheGameText->fetch( "GUI:OnlineRejoinRefused" );
+}
+
+/// the match still running: the card's rows when the offer changes, its clock every second, Rejoin's
+/// answer as it comes (the match goes to OnlineStartRejoin, a refusal onto the card or into a box when the
+/// match went with it)
+static void pressRejoin( void );
+
+static void refreshRejoin( void )
+{
+	if (s_strings.empty())
+		return;
+	OnlineRejoinable offer;
+	const Bool offered = OnlineGetRejoinable( offer );
+	// -onlinerejoin: Rejoin pressed for a script, once, the moment the card offers it
+	if (offered && TheGlobalData->m_onlineAutoRejoin && !s_rejoinAsked)
+	{
+		TheWritableGlobalData->m_onlineAutoRejoin = FALSE;
+		DEBUG_LOG(("ONLINE REJOIN PRESS match=%s\n", offer.match.str()));
+		pressRejoin();
+	}
+	if (s_rejoinStale || offer.serial != s_rejoinSerial)
+	{
+		s_rejoinStale = FALSE;
+		s_rejoinSerial = offer.serial;
+		s_rejoinSecond = -1;
+		Int w = 0, h = 0;
+		if (s_cardRecent)
+			s_cardRecent->winGetSize( &w, &h );
+		GameFont *body = bodyFont();
+		UnicodeString map;
+		if (offer.ranked || offer.map.isEmpty())
+			map = TheGameText->fetch( "GUI:Random" );		// a Quick Match's map is made from its seed
+		else if (const MapMetaData *md = TheMapCache ? TheMapCache->findMap( offer.map ) : NULL)
+			map = md->m_displayName;
+		else
+		{
+			AsciiString stem = offer.map;
+			const char *slash = strrchr( stem.str(), '\\' );
+			stem = slash ? AsciiString( slash + 1 ) : stem;
+			if (stem.endsWithNoCase( ".map" ))
+				for (Int i = 0; i < 4; ++i)
+					stem.removeLastChar();
+			map.translate( stem );
+		}
+		s_rejoinHead.format( u"%ls \x00B7 %ls \x00B7 ",
+			TheGameText->fetch( offer.ranked ? "GUI:OnlineQuickMatchLabel" : "GUI:OnlineRejoinCustom" ).str(), map.str() );
+		const Int column = rejoinRoom( w ) / 2;
+		s_rejoinRows = min( (Int)offer.players.size(), (Int)REJOIN_ROWS );
+		for (Int r = 0; r < s_rejoinRows; ++r)
+		{
+			const OnlineRejoinSeat &seat = offer.players[ r ];
+			s_rejoinPresent[ r ] = seat.present;
+			s_rejoinChip[ r ]->setText( TheGameText->fetch( seat.present ? "GUI:OnlineRejoinPlaying" : "GUI:OnlineRejoinAway" ) );
+			Int chipWidth, chipHeight;
+			s_rejoinChip[ r ]->getSize( &chipWidth, &chipHeight );
+			const Int room = column - chipWidth - 2 * UIStyle::tallPx( 8.0f ) - UIStyle::px( 10.0f + 8.0f + 12.0f );
+			const PlayerTemplate *pt = seat.side >= 0 && ThePlayerTemplateStore ? ThePlayerTemplateStore->getNthPlayerTemplate( seat.side ) : NULL;
+			const UnicodeString side = pt ? pt->getDisplayName() : TheGameText->fetch( "GUI:Random" );
+			// the nick has the room the side's words leave, at most two thirds of it
+			s_rejoinSide[ r ]->setText( UIStyle::fitText( side, body, room / 3 ) );
+			Int sideWidth, sideHeight;
+			s_rejoinSide[ r ]->getSize( &sideWidth, &sideHeight );
+			s_rejoinNick[ r ]->setText( UIStyle::fitName( UnicodeString( MultiByteToWideCharSingleLine( seat.nick.str() ).c_str() ),
+				body, room - sideWidth ) );
+		}
+		if (!s_rejoinAsked)
+			setRejoinNote( TheGameText->fetch( "GUI:OnlineRejoinExplain" ), UIStyle::MUTED );
+	}
+	if (offered && offer.elapsedSeconds != s_rejoinSecond)
+	{
+		s_rejoinSecond = offer.elapsedSeconds;
+		UnicodeString elapsed;
+		elapsed.format( TheGameText->fetch( "GUI:OnlineRejoinElapsed" ), offer.elapsedSeconds / 60, offer.elapsedSeconds % 60 );
+		Int w = 0, h = 0;
+		if (s_cardRecent)
+			s_cardRecent->winGetSize( &w, &h );
+		UnicodeString line = s_rejoinHead;
+		line.concat( elapsed );
+		s_rejoinLine->setText( UIStyle::fitText( line, bodyFont(), w - UIStyle::px( 48.0f ) ) );
+	}
+	s_rejoinShown = offered;
+	if (buttonRejoin)
+	{
+		buttonRejoin->winHide( !offered );
+		buttonRejoin->winEnable( offered && !s_rejoinAsked && !s_joiningRoom && !s_aiAsked );
+	}
+
+	RejoinInfo info;
+	AsciiString refusal;
+	const OnlineRejoinState state = OnlineGetRejoin( info, refusal );
+	if (state == ONLINE_REJOIN_READY)
+	{
+		s_rejoinAsked = FALSE;
+		DEBUG_LOG(("ONLINE WELCOME rejoin=%s\n", info.match.str()));
+		OnlineStartRejoin( info );
+	}
+	else if (state == ONLINE_REJOIN_REFUSED)
+	{
+		s_rejoinAsked = FALSE;
+		if (OnlineGetRejoinable( offer ))
+			setRejoinNote( rejoinRefusalText( refusal ), UIStyle::INK );
+		else
+			GSMessageBoxOk( TheGameText->fetch( "GUI:GSErrorTitle" ), rejoinRefusalText( refusal ) );
+	}
+}
+
+static void pressRejoin( void )
+{
+	if (s_rejoinAsked)
+		return;
+	s_rejoinAsked = TRUE;
+	setRejoinNote( TheGameText->fetch( "GUI:OnlineRejoinWaiting" ), UIStyle::MUTED );
+	if (buttonRejoin)
+		buttonRejoin->winEnable( FALSE );
+	OnlineRequestRejoin();
+}
+
 /// whether joinBestGroupRoom sends a join: no room held, and a room besides Quick Match's channel to
 /// pick.  Otherwise it bails or raises its own failure box, and no answer ever comes.
 // ponytail: mirrors the pick in PeerDefs.cpp joinBestGroupRoom; a Bool return from it would retire this copy
@@ -1035,6 +1245,15 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 	buttonPlayAI = hubWindow( "ButtonPlayVsAI", &buttonPlayAIID );
 	GameWindow *buttonSignOut = hubWindow( "ButtonSignOut", &buttonSignOutID );
 	listboxInfo = hubWindow( "InfoListbox" );
+	// shown while the server offers a match still running (refreshRejoin)
+	buttonRejoin = hubWindow( "ButtonRejoin", &buttonRejoinID );
+	if (buttonRejoin)
+	{
+		buttonRejoin->winSetEnabledTextColors( UIStyle::ACTIVE, UIStyle::SHADOW );
+		buttonRejoin->winHide( TRUE );
+	}
+	s_rejoinShown = FALSE;
+	s_rejoinAsked = FALSE;
 
 	// the master's frame: the tabs with Home open, the header over the panel, the cards behind the buttons
 	UIStyle::onlinePageInit( parentWOLWelcome, "WOLWelcomeMenu.wnd", UIStyle::ONLINE_TAB_HOME );
@@ -1139,6 +1358,7 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 void WOLWelcomeMenuShutdown( WindowLayout *layout, void *userData )
 {
 	listboxInfo = NULL;
+	buttonRejoin = NULL;
 
 	if (TheFirewallHelper != NULL) {
 		delete TheFirewallHelper;
@@ -1295,6 +1515,7 @@ void WOLWelcomeMenuUpdate( WindowLayout * layout, void *userData)
 			applyControls();
 			refreshCards();
 			refreshRecent();
+			refreshRejoin();
 		}
 
 		// -online scripting: once per process, the click a player would make next.  -quickmatch opens Quick
@@ -1439,6 +1660,10 @@ WindowMsgHandledType WOLWelcomeMenuSystem( GameWindow *window, UnsignedInt msg,
 				else if (controlID == buttonPlayAIID)
 				{
 					pressPlay();
+				}
+				else if (controlID == buttonRejoinID)
+				{
+					pressRejoin();
 				}
 				break;
 			}// case GBM_SELECTED:

@@ -429,6 +429,7 @@ RecorderClass::RecorderClass()
 	m_rejoinFile = NULL;
 	m_rejoinNextFrame = (UnsignedInt)-1;
 	m_rejoinReadPos = 0;
+	m_rejoinGameSpeed = 0;
 
 	init(); // just for the heck of it.
 }
@@ -1414,6 +1415,23 @@ Bool RecorderClass::openPlayback(AsciiString filename, Int &difficulty, Int &ran
 	return TRUE;
 }
 
+/// the slot list and options of the network match under way, as startRecording writes them
+static AsciiString thisMatchOptions( void )
+{
+	if (TheLAN != NULL && TheLAN->GetMyGame() != NULL)
+		return GameInfoToReplayString( TheLAN->GetMyGame() );
+	if (TheGameSpyGame != NULL)
+		return GameInfoToReplayString( TheGameSpyGame );
+	return AsciiString::TheEmptyString;
+}
+
+/// The match as it stands before its start draws the random sides, colours and start spots, which is how
+/// every seat recorded it: a replay that arrives once the match has loaded is held against this.
+void RecorderClass::noteRejoinMatch( void )
+{
+	m_rejoinMatch = thisMatchOptions();
+}
+
 /// the options with the map contents mask after "M=" taken out: it is filled in as the map loads, which the
 /// recording seat had done and the seat coming back has not
 static std::string withoutMapContents( const AsciiString &options )
@@ -1436,7 +1454,21 @@ static std::string withoutMapContents( const AsciiString &options )
  * The header is read the way readReplayHeader reads it.  A file of another build or other data is
  * refused here, before a frame is played: its commands would play another game.
  */
-Bool RecorderClass::openRejoinFeed( AsciiString path, UnsignedInt &framesHeld )
+void RecorderClass::flushRecording( void )
+{
+	if (m_file != NULL && m_mode == RECORDERMODETYPE_RECORD)
+		theReplayQueue.flush();
+}
+
+AsciiString RecorderClass::getRecordingPath( void )
+{
+	AsciiString path;
+	if (m_file != NULL && m_mode == RECORDERMODETYPE_RECORD && m_fileName.isNotEmpty())
+		path.format("%s%s", getReplayDir().str(), m_fileName.str());
+	return path;
+}
+
+Bool RecorderClass::openRejoinFeed( AsciiString path, UnsignedInt &framesHeld, Bool checkMatch )
 {
 	closeRejoinFeed();
 	FILE *file = zh_fopen( path.str(), "rb" );
@@ -1512,12 +1544,8 @@ Bool RecorderClass::openRejoinFeed( AsciiString path, UnsignedInt &framesHeld )
 
 	/* The match it records has to be this one: the same slot list, seed, map and options, which a
 		 -netgame line that differs in -seed, -side, -teams or -netai would not give. */
-	AsciiString expected;
-	if (TheLAN != NULL && TheLAN->GetMyGame() != NULL)
-		expected = GameInfoToReplayString( TheLAN->GetMyGame() );
-	else if (TheGameSpyGame != NULL)
-		expected = GameInfoToReplayString( TheGameSpyGame );
-	if (withoutMapContents( expected ) != withoutMapContents( options ))
+	const AsciiString expected = m_rejoinMatch.isNotEmpty() ? m_rejoinMatch : thisMatchOptions();
+	if (checkMatch && withoutMapContents( expected ) != withoutMapContents( options ))
 	{
 		DEBUG_LOG(("REJOIN: refused '%s': it records another match\n  recorded %s\n  this one %s\n",
 			path.str(), options.str(), expected.str()));
@@ -1526,6 +1554,8 @@ Bool RecorderClass::openRejoinFeed( AsciiString path, UnsignedInt &framesHeld )
 	}
 
 	m_rejoinFile = file;
+	m_rejoinOptions = options;
+	m_rejoinGameSpeed = speed;
 	readRejoinNextFrame();
 	framesHeld = frames;
 	DEBUG_LOG(("REJOIN: '%s' holds frames 0 to %u of a mode %d match at game speed %d, first command on frame %d, options %s\n",

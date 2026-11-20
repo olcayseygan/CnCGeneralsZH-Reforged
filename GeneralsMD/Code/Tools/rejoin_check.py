@@ -4,18 +4,23 @@ Two copies play a -netgame match as net_check.py starts it, each with a user dat
 each writes its own replay. At --kill-at frames copy --rejoiner is killed outright, as a crash or a
 closed window would end it. The room waits out the disconnect screen (NetworkSilentPlayerDropTime), the
 router drops the seat from the lockstep without destroying its side, and the match goes on. Once the
-others pass --rejoin-at the copy is started again with the same line plus -rejoin <a survivor's replay>:
-it asks the room back in, the router names a frame, every seat stops on the frame after it, the copy plays
-the match up to there from the replay and joins, and everyone plays on. Every copy is pressed Ctrl+A, X,
-S, X the whole time and stops at -maxframes' frame with a HEADLESS CRC AT LIMIT line.
+others pass --rejoin-at the copy is started again with the same line plus -rejoinfrom <a survivor's slot>
+(--log net, the default, the way an online rejoin gets the match) or -rejoin <that survivor's replay file>
+(--log file): it asks the room back in, the router names a frame, every seat stops on the frame after it,
+the survivor sends its replay, the copy plays the match up to there and joins, and everyone plays on. Every
+copy is pressed Ctrl+A, X, S, X the whole time and stops at -maxframes' frame with a HEADLESS CRC AT LIMIT
+line.
 
     python rejoin_check.py                               # slot 1 killed at 30 s, back once the room passes 60 s
     python rejoin_check.py --kill-at 1800 --rejoin-at 3600 --frames 6000
-    python rejoin_check.py --rejoiner 0 --each "-headless"    # the packet router goes and comes back
+    python rejoin_check.py --rejoiner 0 --each=-headless     # the packet router goes and comes back
+    python rejoin_check.py --copies 3 --each=-headless       # three seats
+    python rejoin_check.py --forfeit --each=-headless        # nobody comes back: the side left forfeits after 5 minutes
 
 PASS needs the CRC at the limit the same on every copy that finished, no CRC mismatch in any log, none of
 the rejoined copy's recorded CRCs differing from the ones it computed, the seat dropped with its side kept
-(no DestroyPlayer in a survivor's log) and taken back (a REJOIN ... is back line).
+(no DestroyPlayer in a survivor's log) and taken back (a REJOIN ... is back line). With --forfeit it needs
+the router's FORFEIT line and the DestroyPlayer it sends on every survivor instead.
 """
 
 import argparse
@@ -30,7 +35,7 @@ from control_client import ControlError
 import net_check
 
 LIMIT_LINE = re.compile(r"HEADLESS CRC AT LIMIT: (0x[0-9A-F]{8}) at frame (\d+)")
-SHOWN = ("REJOIN", "RECONNECT HOLD", "timed out; the seat leaves", "Saw DestroyPlayer", "disconnect screen on")
+SHOWN = ("REJOIN", "RECONNECT HOLD", "timed out; the seat leaves", "Saw DestroyPlayer", "disconnect screen on", "FORFEIT")
 DROP_TIMEOUT_SECONDS = 180.0
 
 
@@ -44,8 +49,14 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--rejoin-at", type=int, default=60 * net_check.LOGIC_FPS, help="the others' frame when it starts again")
     parser.add_argument("--frames", type=int, default=120 * net_check.LOGIC_FPS, help="-maxframes for every copy")
     parser.add_argument("--each", default="", help="extra switches for every copy")
+    parser.add_argument("--log", choices=("net", "file"), default="net", help="where the copy coming back gets the match from")
+    parser.add_argument("--forfeit", action="store_true", help="never start the copy again; play on past the 5 minute forfeit")
     parser.add_argument("--tag", default="rejoin")
-    return parser.parse_args()
+    arguments = parser.parse_args()
+    if arguments.forfeit:
+        # the drop (30 s of silence) and then 5 minutes of the room playing, and a little over
+        arguments.frames = max(arguments.frames, arguments.kill_at + (30 + 5 * 60 + 20) * net_check.LOGIC_FPS)
+    return arguments
 
 
 def copy_line(arguments: argparse.Namespace, slot: int, tag: str) -> list:
@@ -127,17 +138,25 @@ def main() -> int:
         print("REJOIN CHECK: the room stood on %s, played on without the seat %.0f s after the kill, now %s"
               % (stood, time.monotonic() - killed_at, frames))
 
-        replay = os.path.join(folders[source], "Replays", "00000000.rep")
-        line = copy_line(arguments, arguments.rejoiner, tag_back) + ["-rejoin", replay]
-        back = start(line, folders[arguments.rejoiner])
         began = time.monotonic()
-        room.games[arguments.rejoiner] = net_check.connect(net_check.FIRST_CONTROL_PORT + arguments.rejoiner, arguments.copies)
-        print("REJOIN CHECK: slot %d started again with -rejoin %s" % (arguments.rejoiner, replay))
+        if not arguments.forfeit:
+            if arguments.log == "net":
+                coming_back = ["-rejoinfrom", str(source)]
+            else:
+                coming_back = ["-rejoin", os.path.join(folders[source], "Replays", "00000000.rep")]
+            back = start(copy_line(arguments, arguments.rejoiner, tag_back) + coming_back, folders[arguments.rejoiner])
+            room.games[arguments.rejoiner] = net_check.connect(net_check.FIRST_CONTROL_PORT + arguments.rejoiner, arguments.copies)
+            print("REJOIN CHECK: slot %d started again with %s" % (arguments.rejoiner, " ".join(coming_back)))
 
         paused = None
         resumed = None
         last = room.frames()
         while min(last.values()) < arguments.frames:
+            # a forfeit decides the match, and a decided network match drops to the shell soon after
+            if arguments.forfeit and any("Saw DestroyPlayer" in line for line in
+                                         read_log(os.path.join(run, "%s%d_DebugLogFile.txt" % (arguments.tag, others[0])))):
+                time.sleep(2.0)
+                break
             try:
                 frames = room.press()
             except (OSError, ControlError):
@@ -158,7 +177,7 @@ def main() -> int:
             except (OSError, ControlError):
                 pass
         deadline = time.monotonic() + net_check.QUIT_GRACE_SECONDS
-        for process in list(processes.values()) + [back]:
+        for process in list(processes.values()) + ([back] if back else []):
             try:
                 process.wait(max(0.0, deadline - time.monotonic()))
             except subprocess.TimeoutExpired:
@@ -181,6 +200,7 @@ def main() -> int:
     destroyed = 0
     kept = 0
     returned = 0
+    forfeited = 0
     for name, path in logs.items():
         lines = read_log(path)
         found = [match for match in (LIMIT_LINE.search(line) for line in lines) if match]
@@ -199,12 +219,17 @@ def main() -> int:
                 destroyed += "Saw DestroyPlayer" in line
                 kept += "timed out; the seat leaves" in line
                 returned += "REJOIN player %d is back" % arguments.rejoiner in line
-    finished = [name for name in logs if name != "slot %d" % arguments.rejoiner]
+                forfeited += "FORFEIT slot %d" % arguments.rejoiner in line
+    finished = [name for name in logs if name != "slot %d" % arguments.rejoiner and (name != back_name or not arguments.forfeit)]
     agreed = all(name in limits for name in finished) and len(set(limits[name] for name in finished)) == 1
-    passed = agreed and mismatches == 0 and differ == 0 and destroyed == 0 and returned > 0
-    print("REJOIN CHECK: %s (CRCs at the limit %s, %d mismatches, %s rejoin CRCs differing, side kept on drop: %s, DestroyPlayer seen %d, back: %s)"
+    if arguments.forfeit:
+        passed = mismatches == 0 and forfeited == 1 and destroyed == len(others)
+    else:
+        passed = agreed and mismatches == 0 and differ == 0 and destroyed == 0 and returned == len(others)
+    print("REJOIN CHECK: %s (CRCs at the limit %s, %d mismatches, %s rejoin CRCs differing, side kept on drop: %s, "
+          "DestroyPlayer seen %d, back on %d of %d, forfeit sent %d)"
           % ("PASS" if passed else "FAIL", "agree" if agreed else "DISAGREE " + str(limits), mismatches, differ,
-             "yes" if kept else "no drop line", destroyed, "yes" if returned else "no"))
+             "yes" if kept else "no drop line", destroyed, returned, len(others), forfeited))
     return 0 if passed else 1
 
 

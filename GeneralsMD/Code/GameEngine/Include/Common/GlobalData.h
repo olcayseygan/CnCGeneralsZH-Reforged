@@ -576,6 +576,8 @@ public:
 	Int m_netGameLocalSlot;						///< -netslot <n>: which of those addresses this copy of the game is
 	Int m_netGameAISlots;							///< -netai <n>: that many AI seats after the addresses, at the -aidiff rung
 	AsciiString m_rejoinReplay;				///< -rejoin <file>: the -netgame match is already under way; play it from this replay a seat in it is writing, then join (empty = off)
+	Int m_rejoinFromSlot;							///< -rejoinfrom <slot>: the same, with the replay sent by that seat over the network (-1 = off)
+	Bool m_onlineAutoRejoin;						///< -onlinerejoin: press the online hub's Rejoin once its card offers a match
 	AsciiString m_lanPlayerName;			///< -lanname <name>: the name this copy takes in the LAN lobby (empty = the one in the preferences)
 	AsciiString m_relayHost;					///< -relay <host:port>: the LAN lobby and its games go through this UDP relay (empty = real LAN; Transport.cpp)
 	UnsignedShort m_relayPort;				///< the port of it, 0 when -relay named none

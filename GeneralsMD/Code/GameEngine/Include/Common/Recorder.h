@@ -168,7 +168,12 @@ public:
 
 	/// -rejoin: the replay a seat still in the match keeps writing, read beside our own recording up to
 	/// the frame that seat stands on (Network::startRejoin)
-	Bool openRejoinFeed( AsciiString path, UnsignedInt &framesHeld );	///< FALSE for a file that is no replay of a network game of this build
+	/// FALSE for a file that is no replay of a network game of this build, or, with checkMatch, of another match
+	Bool openRejoinFeed( AsciiString path, UnsignedInt &framesHeld, Bool checkMatch = TRUE );
+	void noteRejoinMatch( void );											///< this match's slot list now, before its start randomizes it, for openRejoinFeed
+	AsciiString getRejoinOptions( Int &gameSpeedPercent ) const { gameSpeedPercent = m_rejoinGameSpeed; return m_rejoinOptions; }	///< the feed's slot list and options, HZ= and GS= cut off
+	void flushRecording( void );												///< what is recorded so far onto the disk, for a seat coming back
+	AsciiString getRecordingPath( void );								///< the file being recorded, empty when none is
 	Bool feedRejoinFrame( UnsignedInt frame );				///< that frame's recorded commands onto TheCommandList; FALSE when the file no longer fits the frames played
 	UnsignedInt rejoinFramesHeld( void );							///< the header's count of whole frames, read again
 	void closeRejoinFeed( void );
@@ -268,6 +273,9 @@ protected:
 	FILE *m_rejoinFile;															///< -rejoin's replay, NULL when none is open; init() leaves it alone
 	UnsignedInt m_rejoinNextFrame;										///< the frame of its next command, -1 when none is left
 	long m_rejoinReadPos;															///< where that frame number starts in the file
+	AsciiString m_rejoinOptions;
+	Int m_rejoinGameSpeed;
+	AsciiString m_rejoinMatch;												///< noteRejoinMatch's slot list, empty for none
 	void readRejoinNextFrame( void );
 };
 

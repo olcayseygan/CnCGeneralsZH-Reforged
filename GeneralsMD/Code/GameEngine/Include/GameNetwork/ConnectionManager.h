@@ -84,11 +84,17 @@ public:
 	/* A dropped seat coming back (Network::startRejoin).  The seat asks; the packet router names a frame F
 		 in a frame-synchronized SEATREJOIN, which every seat runs on F (readmitPlayer), and answers the seat
 		 with F; the seat plays the match up to F from a replay and joins on F + 1. */
-	void setRejoining(Bool rejoining) { m_rejoining = rejoining; }	///< the local seat is coming back: frame-synchronized commands wait in the senders' queues, unacked
+	/// the local seat is coming back: frame-synchronized commands wait in the senders' queues, unacked; the
+	/// log is asked of logSlot and written to logPath (MAX_SLOTS: none, the replay is on this disk)
+	void setRejoining(Bool rejoining, Int logSlot = MAX_SLOTS, AsciiString logPath = AsciiString::TheEmptyString);
 	void sendRejoinRequest();
-	Bool getRejoinAccept(UnsignedInt &frame, UnsignedInt &seats, UnsignedInt &router) const;	///< FALSE until the router has answered
+	Bool getRejoinAccept(UnsignedInt &frame) const;		///< FALSE until the router has answered
+	Bool getRejoinRoom(UnsignedInt &frame, UnsignedInt &seats, UnsignedInt &router) const;	///< FALSE until the room has taken the seat back
+	Bool hasRejoinLogArrived() const { return m_rejoinLogArrived; }
 	void takeRejoinAccept(UnsignedInt seats, UnsignedInt router);	///< the room as the router left it: these seats, that router
 	void readmitPlayer(Int slot, UnsignedInt fromFrame);
+	void sendPendingRejoinLog();				///< the log asked of us, once we stand on the frame the room took the seat back for
+	void updateAbsentSeats();						///< a side whose every enemy has been away 5 minutes wins; the router sends the forfeit
 //	void createConnections(UnsignedInt numberOfPlayers, UnsignedInt localSlot);
 	void setLocalAddress(UnsignedInt ip, UnsignedInt port);
 	void initTransport();
@@ -189,6 +195,10 @@ private:
 	void processFrameResendRequest(NetFrameResendRequestCommandMsg *msg);
 	void processRejoinRequest(NetCommandMsg *msg);
 	void processRejoinAccept(NetCommandMsg *msg);
+	void processRejoinRoom(NetCommandMsg *msg);
+	void processRejoinLog(NetCommandMsg *msg);
+	void sendPlayerForfeit(Int slot);
+	void sendRejoinRoom(Int slot, UnsignedInt fromFrame);
 
 	void processFile(NetFileCommandMsg *ref);
 	void processFileAnnounce(NetFileAnnounceCommandMsg *ref);
@@ -241,9 +251,21 @@ private:
 	Bool m_rejoining;										///< the local seat is coming back and plays from a replay
 	Bool m_rejoinAccepted;
 	UnsignedInt m_rejoinAcceptFrame;		///< F, the frame the room runs SEATREJOIN on
-	UnsignedInt m_rejoinAcceptSeats;		///< the seats playing from F + 1, a bit a slot
-	UnsignedInt m_rejoinAcceptRouter;
+	Bool m_rejoinRoomTaken;							///< REJOINROOM came: the room as it took the seat back
+	UnsignedInt m_rejoinRoomFrame;
+	UnsignedInt m_rejoinRoomSeats;			///< the seats playing from F + 1, a bit a slot
+	UnsignedInt m_rejoinRoomRouter;
+	Int m_rejoinLogSlot;								///< the seat the log is asked of, MAX_SLOTS for none
+	AsciiString m_rejoinLogPath;				///< where it is written
+	Bool m_rejoinLogArrived;
 	UnsignedInt m_rejoinFrameFor[MAX_SLOTS];	///< the router's F for a seat it answered, 0 for none
+	Bool m_rejoinLogFor[MAX_SLOTS];			///< the seat asked us for its log
+	Int m_rejoinLogTo;									///< the seat our log goes to, -1 for none
+	UnsignedInt m_rejoinLogAtFrame;			///< once we stand on this frame
+	UnsignedInt m_packetFromAddr;				///< the address of the packet doRelay is reading, 0 outside it
+	UnsignedInt m_absentSince[MAX_SLOTS];	///< the frame the seat left the lockstep, 0 while it plays
+	Bool m_forfeitSent[MAX_SLOTS];			///< the router sent its forfeit
+	Int m_awayNoticeSeconds;						///< the countdown the last away notice showed, -1 for none
 
 	/* Where the keep-alive round has got to.  These were function statics in doKeepAlive, so they
 		 survived across games and across ConnectionManager instances. */

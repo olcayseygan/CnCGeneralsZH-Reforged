@@ -1020,11 +1020,24 @@ static void startAutoNetGame( void )
 		TheGlobalData->m_netGameLocalSlot );
 	TheWritableGlobalData->m_netGameStarted = TRUE;
 
-	// a refused replay would start the match from frame 0 against seats that are far into it
-	if (started && TheGlobalData->m_rejoinReplay.isNotEmpty() && !TheNetwork->startRejoin( TheGlobalData->m_rejoinReplay ))
+	/* -rejoin <file> plays the match from a replay on this disk, -rejoinfrom <slot> from the one that seat
+		 sends once the room has taken this seat back.  A refused replay would start the match from frame 0
+		 against seats that are far into it. */
+	if (started && (TheGlobalData->m_rejoinReplay.isNotEmpty() || TheGlobalData->m_rejoinFromSlot >= 0))
 	{
-		DEBUG_LOG(("-rejoin: cannot come back from '%s', quitting\n", TheGlobalData->m_rejoinReplay.str()));
-		TheGameEngine->setQuitting( TRUE );
+		AsciiString path = TheGlobalData->m_rejoinReplay;
+		Int from = MAX_SLOTS;
+		if (TheGlobalData->m_rejoinFromSlot >= 0)
+		{
+			from = TheGlobalData->m_rejoinFromSlot;
+			TheFileSystem->createDirectory( TheRecorder->getReplayDir() );
+			path.format( "%srejoin.rep", TheRecorder->getReplayDir().str() );
+		}
+		if (!TheNetwork->startRejoin( path, from ))
+		{
+			DEBUG_LOG(("-rejoin: cannot come back from '%s', quitting\n", path.str()));
+			TheGameEngine->setQuitting( TRUE );
+		}
 	}
 }
 

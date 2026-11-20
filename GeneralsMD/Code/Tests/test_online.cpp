@@ -2768,6 +2768,92 @@ TEST(online_match_hold_relay_ticket)
 	CHECK( !OnlineTakeRelayTicket( ticket ) );
 }
 
+/* match.rejoinable gives the hub its card; Rejoin sends match.rejoin for it, and match.rejoin.ok comes out
+	 once as a RejoinInfo and makes the match ours.  A refusal that the match is over takes the card with it,
+	 one about the build leaves it; a result for the match takes it too, and a sign-out forgets it. */
+TEST(online_rejoin_card_and_answer)
+{
+	AdapterRig rig;
+	rig.login();
+	OnlineRejoinable offer;
+	RejoinInfo info;
+	AsciiString refusal;
+	CHECK( !OnlineGetRejoinable( offer ) );
+	const char *rejoinable = "{\"t\":\"match.rejoinable\",\"match\":\"m1\",\"ranked\":true,\"map\":\"\",\"elapsed\":720,\"logPeer\":9,"
+		"\"players\":[{\"id\":9,\"nick\":\"Kim\",\"side\":-1,\"present\":true},{\"id\":7,\"nick\":\"tank\",\"side\":999,\"present\":false}]}";
+	rig.feed( rejoinable );
+	CHECK( OnlineGetRejoinable( offer ) );
+	CHECK_STR( offer.match.str(), "m1" );
+	CHECK( offer.ranked );
+	CHECK( offer.elapsedSeconds >= 720 && offer.elapsedSeconds <= 721 );
+	CHECK_EQ( offer.logPeer, 9LL );
+	CHECK_EQ( offer.players.size(), (size_t)2 );
+	if (offer.players.size() == 2)
+	{
+		CHECK_STR( offer.players[0].nick.str(), "Kim" );
+		CHECK( offer.players[0].present );
+		CHECK( !offer.players[1].present );
+		CHECK_EQ( offer.players[1].side, -1 );		// past the templates: random
+	}
+	CHECK_EQ( (int)OnlineGetRejoin( info, refusal ), (int)ONLINE_REJOIN_IDLE );
+
+	// the build: refused, the card stays
+	rig.sent.clear();
+	OnlineRequestRejoin();
+	CHECK_EQ( rig.sent.size(), (size_t)1 );
+	if (rig.sent.size() == 1)
+	{
+		CHECK_STR( rig.sent[0].type().c_str(), "match.rejoin" );
+		CHECK_STR( rig.sent[0].getString( "match" ).c_str(), "m1" );
+	}
+	CHECK_EQ( (int)OnlineGetRejoin( info, refusal ), (int)ONLINE_REJOIN_WAITING );
+	rig.feed( "{\"t\":\"match.refused\",\"match\":\"other\",\"code\":\"crc\"}" );		// not ours: still waiting
+	CHECK_EQ( (int)OnlineGetRejoin( info, refusal ), (int)ONLINE_REJOIN_WAITING );
+	rig.feed( "{\"t\":\"match.refused\",\"match\":\"m1\",\"code\":\"crc\"}" );
+	CHECK_EQ( (int)OnlineGetRejoin( info, refusal ), (int)ONLINE_REJOIN_REFUSED );
+	CHECK_STR( refusal.str(), "crc" );
+	CHECK_EQ( (int)OnlineGetRejoin( info, refusal ), (int)ONLINE_REJOIN_IDLE );		// handed out once
+	CHECK( OnlineGetRejoinable( offer ) );
+
+	// back in: the seats, our new vip, the setup, and the match is ours
+	OnlineRequestRejoin();
+	rig.feed( "{\"t\":\"match.rejoin.ok\",\"match\":\"m1\",\"ranked\":true,\"ids\":[9,7],\"nicks\":[\"Kim\",\"tank\"],"
+		"\"vips\":[167772169,167772300],\"me\":1,\"exe\":1,\"ini\":2,\"logPeer\":9,\"elapsed\":725,\"seed\":42,"
+		"\"sides\":[-1,999],\"colors\":[-1,-1]}" );
+	CHECK_EQ( (int)OnlineGetRejoin( info, refusal ), (int)ONLINE_REJOIN_READY );
+	CHECK_STR( info.match.str(), "m1" );
+	CHECK_EQ( info.me, 1 );
+	CHECK_EQ( info.ids.size(), (size_t)2 );
+	CHECK_EQ( info.vips.size(), (size_t)2 );
+	if (info.vips.size() == 2)
+		CHECK_EQ( info.vips[1], 167772300u );
+	CHECK_EQ( info.seed, 42 );
+	CHECK_EQ( info.logPeer, 9LL );
+	CHECK_EQ( info.sides.size(), (size_t)2 );
+	if (info.sides.size() == 2)
+		CHECK_EQ( info.sides[1], -1 );
+	CHECK_STR( OnlineSession::get().matchId.c_str(), "m1" );
+	CHECK( !OnlineGetRejoinable( offer ) );		// the card goes: we are in it
+	CHECK_EQ( (int)OnlineGetRejoin( info, refusal ), (int)ONLINE_REJOIN_IDLE );
+
+	// over while offered: a settled refusal, or the match's result, takes the card
+	rig.feed( rejoinable );
+	OnlineRequestRejoin();
+	rig.feed( "{\"t\":\"match.refused\",\"match\":\"m1\",\"code\":\"settled\"}" );
+	CHECK_EQ( (int)OnlineGetRejoin( info, refusal ), (int)ONLINE_REJOIN_REFUSED );
+	CHECK( !OnlineGetRejoinable( offer ) );
+	rig.feed( rejoinable );
+	rig.feed( "{\"t\":\"unrated\",\"match\":\"m1\",\"reason\":\"stalled\"}" );
+	CHECK( !OnlineGetRejoinable( offer ) );
+	OnlineRequestRejoin();		// nothing offered: refused here, nothing sent
+	CHECK_EQ( (int)OnlineGetRejoin( info, refusal ), (int)ONLINE_REJOIN_REFUSED );
+	CHECK_STR( refusal.str(), "none" );
+
+	rig.feed( rejoinable );
+	OnlineSession::get().forgetAccount();
+	CHECK( !OnlineGetRejoinable( offer ) );
+}
+
 /* qm.matched's opponents carry their seat's side and colour, clamped as a seat clamps them. */
 TEST(online_reveal_opponents_carry_side_and_color)
 {

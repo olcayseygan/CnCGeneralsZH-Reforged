@@ -167,6 +167,7 @@ Bool DoesCommandRequireACommandID(NetCommandType type) {
 			(type == NETCOMMANDTYPE_DISCONNECTFRAME) ||
 			(type == NETCOMMANDTYPE_DISCONNECTSCREENOFF) ||
 			(type == NETCOMMANDTYPE_FRAMERESENDREQUEST) ||
+			(type == NETCOMMANDTYPE_REJOINLOG) ||
 			IsRejoinCommand(type))
 	{
 		return TRUE;
@@ -175,7 +176,8 @@ Bool DoesCommandRequireACommandID(NetCommandType type) {
 }
 
 Bool IsRejoinCommand(NetCommandType type) {
-	return (type == NETCOMMANDTYPE_REJOINREQUEST) || (type == NETCOMMANDTYPE_REJOINACCEPT) || (type == NETCOMMANDTYPE_SEATREJOIN);
+	return (type == NETCOMMANDTYPE_REJOINREQUEST) || (type == NETCOMMANDTYPE_REJOINACCEPT) || (type == NETCOMMANDTYPE_SEATREJOIN) ||
+		(type == NETCOMMANDTYPE_REJOINROOM);
 }
 
 /**
@@ -202,7 +204,9 @@ Bool CommandRequiresAck(NetCommandMsg *msg) {
 			(msg->getNetCommandType() == NETCOMMANDTYPE_DISCONNECTSCREENOFF) ||
 			(msg->getNetCommandType() == NETCOMMANDTYPE_FRAMERESENDREQUEST) ||
 			(msg->getNetCommandType() == NETCOMMANDTYPE_REJOINREQUEST) ||		// resent until the seat is readmitted
-			(msg->getNetCommandType() == NETCOMMANDTYPE_SEATREJOIN))
+			(msg->getNetCommandType() == NETCOMMANDTYPE_SEATREJOIN) ||
+			(msg->getNetCommandType() == NETCOMMANDTYPE_REJOINROOM) ||
+			(msg->getNetCommandType() == NETCOMMANDTYPE_REJOINLOG))
 	{
 		return TRUE;
 	}
@@ -290,6 +294,10 @@ AsciiString GetAsciiNetCommandType(NetCommandType type) {
 		s.set("NETCOMMANDTYPE_REJOINACCEPT");
 	} else if (type == NETCOMMANDTYPE_SEATREJOIN) {
 		s.set("NETCOMMANDTYPE_SEATREJOIN");
+	} else if (type == NETCOMMANDTYPE_REJOINROOM) {
+		s.set("NETCOMMANDTYPE_REJOINROOM");
+	} else if (type == NETCOMMANDTYPE_REJOINLOG) {
+		s.set("NETCOMMANDTYPE_REJOINLOG");
 	} else {
 		s.set("UNKNOWN");
 	}

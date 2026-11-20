@@ -60,6 +60,7 @@ public:
 	Bool allowedToContinue();			///< Allow the next frame to go through?
 	void playerHasAdvancedAFrame(Int slot, UnsignedInt frame); ///< this player has advanced to that frame.
 	void seatRejoining(Int slot, UnsignedInt fromFrame, ConnectionManager *conMgr); ///< a dropped seat is back in from that frame; hold it while it catches up
+	UnsignedInt seatRejoiningFrom(Int slot) const { return (slot >= 0 && slot < MAX_SLOTS && m_rejoinSince[slot] != 0) ? m_rejoinFrame[slot] : 0; }	///< 0 unless readmitted and not played yet
 
 	void voteForPlayerDisconnect(Int slot, ConnectionManager *conMgr);
 

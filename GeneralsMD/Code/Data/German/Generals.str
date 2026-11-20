@@ -16024,3 +16024,51 @@ END
 Network:WaitingForReconnect
 "Warten auf die Rückkehr von %ls (%d:%02d)"
 END
+
+GUI:OnlineRejoinTitle
+"Dein Spiel läuft noch"
+END
+
+GUI:OnlineRejoinCustom
+"Eigenes Spiel"
+END
+
+GUI:OnlineRejoinElapsed
+"Läuft seit %d:%02d"
+END
+
+GUI:OnlineRejoinPlaying
+"Spielt"
+END
+
+GUI:OnlineRejoinAway
+"Getrennt"
+END
+
+GUI:OnlineRejoin
+"Zurück ins Spiel"
+END
+
+GUI:OnlineRejoinExplain
+"Die anderen spielen weiter. Deine Armee steht, wo du sie verlassen hast."
+END
+
+GUI:OnlineRejoinWaiting
+"Frage beim Server an..."
+END
+
+GUI:OnlineRejoinRefusedCrc
+"Dieses Spiel lief mit einer anderen Version und kann mit dieser nicht fortgesetzt werden."
+END
+
+GUI:OnlineRejoinRefusedRelay
+"Die Verbindung zum Relay steht noch nicht. Versuch es gleich noch einmal."
+END
+
+GUI:OnlineRejoinRefused
+"Diesem Spiel kann man nicht mehr beitreten."
+END
+
+GUI:RejoinAwayForfeit
+"%ls ist weg. Kommt er nicht zurück, gehört das Spiel in %d:%02d dir."
+END

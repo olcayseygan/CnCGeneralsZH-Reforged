@@ -126,9 +126,14 @@ public:
 
 	virtual Int  getExecutionFrame() = 0;																			///< Returns the next valid frame for simultaneous command execution.
 
-	/// -rejoin: play the match from this replay, which a seat still in it is writing, up to the frame that
-	/// seat stands on, then join the network there.  FALSE when the replay is refused.
-	virtual Bool startRejoin( AsciiString replayPath ) = 0;
+	/// Come back to a seat the room dropped: ask the room back in, play the match from a replay a seat still
+	/// in it wrote up to the frame the room stops on for us, then join the network there.  logSlot is the seat
+	/// to ask for that replay, written to replayPath when it comes; MAX_SLOTS when replayPath is on this disk
+	/// already.  startMatch, when given, starts the match from the replay's options once it is here (online:
+	/// nothing has started it); without it the match is started already and the replay has to be of it.
+	/// FALSE when a replay on this disk is refused.
+	typedef Bool (*RejoinStartMatch)( const AsciiString &options, Int gameSpeedPercent );
+	virtual Bool startRejoin( AsciiString replayPath, Int logSlot = MAX_SLOTS, RejoinStartMatch startMatch = NULL ) = 0;
 	virtual Bool isRejoining( void ) = 0;																			///< still playing from that replay
 
 #if defined(_DEBUG) || defined(_INTERNAL)

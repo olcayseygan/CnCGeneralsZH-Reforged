@@ -142,6 +142,11 @@ def card_button(box):
     return (left + 24, top + 326, width - 48, ROW_HEIGHT)
 
 
+# Rejoin, at the recent matches' foot on the right: the card is the match still running while the server
+# offers one (WOLWelcomeMenu.cpp), and the button shows only then
+HUB_REJOIN = (HUB_RECENT[0] + HUB_RECENT[2] - 24 - 300, HUB_RECENT[1] + HUB_RECENT[3] - 24 - ROW_HEIGHT, 300, ROW_HEIGHT)
+
+
 # The player card's two tabs under its head, a page tab's look: QUICK MATCH 147 / HIZLI MAC 105 and
 # VS AI 54 / BILGISAYARA KARSI 208 in Arial at 21 px, plus 22 each side
 CARD_TABS = [(CARD[0] + 24, CARD[1] + 158, 192, TAB_HEIGHT), (CARD[0] + 224, CARD[1] + 158, 252, TAB_HEIGHT)]
@@ -202,11 +207,12 @@ SCREENS = {
         framed=[("ButtonHolder", FRAME, CLEAR, CLEAR)],
         adds=[button("ButtonPlayVsAI", "ButtonQuickMatch", card_button(HUB_CARDS[0]), "GUI:OnlineHubPlay"),
               button("ButtonSignOut", "ButtonBack", RIGHT, "GUI:OnlineHubSignOut"),
-              listbox("ListboxRecent", "InfoListbox", inset(HUB_RECENT))],
+              listbox("ListboxRecent", "InfoListbox", inset(HUB_RECENT)),
+              button("ButtonRejoin", "ButtonQuickMatch", HUB_REJOIN, "GUI:OnlineRejoin")],
         place={"ButtonQuickMatch": card_button(HUB_CARDS[1]), "ButtonCustomMatch": card_button(HUB_CARDS[2]),
                "InfoListbox": inset(HUB_MOTD), "ButtonBack": BACK, "ButtonMyInfo": SECOND_RIGHT},
         aligned=[],
-        hide=["ButtonOptions", "ButtonBuddies", "PlayerInfoParent"]),
+        hide=["ButtonOptions", "ButtonBuddies", "PlayerInfoParent", "ButtonRejoin"]),
 
     "WOLQuickMatchMenu": dict(
         panel="SubParent", home="SubParent", title="StaticTextTitle", title_text="GUI:OnlineTabQuickMatch",

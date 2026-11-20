@@ -387,6 +387,71 @@ OnlineSkinsState OnlineGetSkins( UnsignedInt64 &owned, AsciiString &error );
 enum { ONLINE_RECONNECT_HOLD_MS = 4 * 60 * 1000 };
 Bool OnlineTakeRelayTicket( UnsignedByte out[16] );
 
+/* A match this account dropped out of that the others still play, kept bound to the account by the
+	 server until it settles.  OnlineGetRejoinable reads the sign-in's match.rejoinable{match, ranked, map,
+	 players[{id, nick, side, present}], elapsed, logPeer} for the hub's card; FALSE when none came, or once
+	 the match was rated, unrated or refused as settled.  map is a custom game's map path, empty for a Quick
+	 Match (made from the seed); side is the seat's Quick Match pick, -1 random or unknown; elapsedSeconds
+	 counts on from the line's arrival.  serial moves with every change.
+	 OnlineRequestRejoin sends match.rejoin{match} for it; OnlineGetRejoin reads the answer, WAITING while it
+	 is out, then READY with match.rejoin.ok as a RejoinInfo, or REFUSED with match.refused's code (crc,
+	 settled, nomatch, norelay; signedout with no line, none with no match offered), each handed out once,
+	 after which it reads IDLE.  READY also makes the match the session's own (reports, replays, holds). */
+struct OnlineRejoinSeat
+{
+	long long id;
+	AsciiString nick;
+	Int side;
+	Bool present;		///< still in the match: no report, no leave
+};
+struct OnlineRejoinable
+{
+	AsciiString match;
+	Bool ranked;
+	AsciiString map;
+	std::vector<OnlineRejoinSeat> players;
+	Int elapsedSeconds;
+	long long logPeer;		///< a present player's account id, the one to fetch the match so far from
+	UnsignedInt serial;
+};
+Bool OnlineGetRejoinable( OnlineRejoinable &out );
+
+/* match.rejoin.ok as the game takes it: the seats in game.start's order, this one at me with its new relay
+	 vip, the build the match started on, and its setup (seed, sides, colors, skins for a Quick Match; map and
+	 opts, the host's game options string, for a custom game).  vips are the server's numbers, as game.start's. */
+struct RejoinInfo
+{
+	AsciiString match;
+	Bool ranked;
+	std::vector<long long> ids;
+	std::vector<AsciiString> nicks;
+	std::vector<UnsignedInt> vips;
+	Int me;
+	UnsignedInt exe, ini;
+	long long logPeer;
+	Int elapsedSeconds;
+	Int seed;
+	std::vector<Int> sides, colors;		///< clamped as a Quick Match seat's
+	std::vector<AsciiString> skins;		///< each seat's "K1.3", empty for none
+	AsciiString map, opts;
+
+	RejoinInfo() : ranked( FALSE ), me( -1 ), exe( 0 ), ini( 0 ), logPeer( 0 ), elapsedSeconds( 0 ), seed( 0 ) {}
+};
+enum OnlineRejoinState
+{
+	ONLINE_REJOIN_IDLE,
+	ONLINE_REJOIN_WAITING,
+	ONLINE_REJOIN_READY,
+	ONLINE_REJOIN_REFUSED,
+};
+void OnlineRequestRejoin( void );
+OnlineRejoinState OnlineGetRejoin( RejoinInfo &out, AsciiString &refusal );
+
+/* The game side of a rejoin: load the match info describes, fetch its frames from logPeer and catch up
+	 while the others wait.  The hub calls it once with match.rejoin.ok's info.  A stub that only logs until
+	 the netcode lands (OnlinePeer.cpp). */
+void OnlineStartRejoin( const RejoinInfo &info );
+
 /* The server's verdict on the match the last game.start or qm.matched named: rated (delta, rating, or
 	 before and after, which give the same two) or unrated (reason).  FALSE until it arrives. */
 Bool OnlineGetMatchResult( Bool &rated, Real &delta, Real &rating, AsciiString &reason );

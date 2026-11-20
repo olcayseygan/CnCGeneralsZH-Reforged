@@ -352,6 +352,7 @@ W3DGrassBuffer::W3DGrassBuffer(BaseHeightMapRenderObjClass *terrain) :
 	m_terrain(terrain),
 	m_classifiedMap(NULL),
 	m_anyFoliage(FALSE),
+	m_seenObjectID(INVALID_ID),
 	m_width(0),
 	m_height(0),
 	m_border(0),
@@ -443,6 +444,7 @@ void W3DGrassBuffer::takeGrid(const W3DGrassBuffer &from)
 	clear();
 	m_classifiedMap = from.m_classifiedMap;
 	m_anyFoliage = from.m_anyFoliage;
+	m_seenObjectID = from.m_seenObjectID;
 	m_cells = from.m_cells;
 	m_chunkFar = from.m_chunkFar;
 	m_width = from.m_width;
@@ -456,6 +458,7 @@ void W3DGrassBuffer::clear(void)
 {
 	m_classifiedMap = NULL;
 	m_anyFoliage = FALSE;
+	m_seenObjectID = INVALID_ID;
 	m_cells.clear();
 	m_chunkFar.clear();
 	m_width = m_height = m_border = m_chunksX = m_chunksY = 0;
@@ -830,14 +833,31 @@ void W3DGrassBuffer::clearFootprint(const Coord3D *pos, const GeometryInfo &geom
 
 void W3DGrassBuffer::clearStructures(void)
 {
+	clearStructuresFrom(INVALID_ID);
+}
+
+/** BuildAssistant tells the terrain of a player's placement, and nothing tells it of a structure a
+	script, an OCL or a reinforcement made, so those kept the grass under them.  Logic's IDs only rise,
+	so a counter that moved is the only sign worth a walk, and the walk clears only the newer ones. */
+void W3DGrassBuffer::clearNewStructures(void)
+{
+	if (m_cells.empty() || TheGameLogic == NULL || TheGameLogic->getObjectIDCounter() == m_seenObjectID) {
+		return;
+	}
+	clearStructuresFrom(m_seenObjectID);
+}
+
+void W3DGrassBuffer::clearStructuresFrom(ObjectID first)
+{
 	if (m_cells.empty() || TheGameLogic == NULL) {
 		return;
 	}
 	for (Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject()) {
-		if (obj->isKindOf(KINDOF_STRUCTURE)) {
+		if (obj->getID() >= first && obj->isKindOf(KINDOF_STRUCTURE)) {
 			clearFootprint(obj->getPosition(), obj->getGeometryInfo(), obj->getOrientation());
 		}
 	}
+	m_seenObjectID = TheGameLogic->getObjectIDCounter();
 }
 
 void W3DGrassBuffer::dirtyCells(Int loX, Int loY, Int hiX, Int hiY)

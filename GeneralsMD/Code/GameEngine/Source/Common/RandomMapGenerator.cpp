@@ -9801,14 +9801,14 @@ void RMGLayout::clearLockedGround( void )
 	LaneWar_MiddleStructure              object, neutral, only when RMG_LANE_MIDDLE_TEMPLATE names one
 
 	An owner string of that shape gives the object to whoever holds the first of those starts that is
-	taken, or to the neutral player when none is (teamForStartOwner, GameLogic.cpp). The fortress and
-	towers are stand-ins until the mode has objects of its own: GermanCastle and GuardTower. */
+	taken, or to the neutral player when none is (teamForStartOwner, GameLogic.cpp). The fortress is
+	LaneWarFortress and a tower LaneWarWatchTower (FixesReforged.ini). */
 #define RMG_LANE_SEATS			6
 #define RMG_LANE_LENGTH			180		///< cells from one end of the lane to the other
 #define RMG_LANE_WIDTH			45		///< and across it
 #define RMG_LANE_FORTRESS_AT	0.70f	///< a fortress's distance from the middle, a share of half the lane
-#define RMG_LANE_FORTRESS_HALF	9.0f	///< cells from its middle to its back, GermanCastle's footprint
-#define RMG_LANE_FORTRESS_OFF	19.0f	///< cells off the middle line: half a plot across (8), the footprint and two cells between
+#define RMG_LANE_FORTRESS_HALF	7.0f	///< cells from its middle to its back, LaneWarFortress's 140 by 140 footprint
+#define RMG_LANE_FORTRESS_OFF	19.0f	///< cells off the middle line: half a plot across (8), the footprint and four cells between
 #define RMG_LANE_APRON			10		///< cells of flat ground from a fortress's middle to the apron's edge
 #define RMG_LANE_PAD_BACK		3		///< cells between the lane's end and the back of a wave copy
 #define RMG_LANE_TOWER_AT		0.37f	///< a tower's distance from the middle, the same way
@@ -10324,14 +10324,14 @@ void RMGLayout::buildLane( void )
 
 		const Real facing = team == 0 ? 0.0f : PI;
 		name.format( "LaneWar_Fortress%c", side );
-		addStructure( "GermanCastle", name, owner, fortressX, shape.m_fortressY, facing );
+		addStructure( "LaneWarFortress", name, owner, fortressX, shape.m_fortressY, facing );
 		const Real towerX = middleX - ahead * RMG_LANE_TOWER_AT * shape.m_half;
 		for( Int tower = 0; tower < RMG_LANE_TOWERS; tower++ )
 		{
 			name.format( "LaneWar_Tower%c%d", side, tower + 1 );
 			const Real towerY = RMG_LANE_TOWERS == 1 ? middleY
 				: tower == 0 ? (Real)shape.m_laneY0 + RMG_LANE_TOWER_INSET : (Real)shape.m_laneY1 - RMG_LANE_TOWER_INSET;
-			addStructure( "GuardTower", name, owner, towerX, towerY, facing );
+			addStructure( "LaneWarWatchTower", name, owner, towerX, towerY, facing );
 		}
 	}
 

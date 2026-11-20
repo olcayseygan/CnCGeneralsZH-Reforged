@@ -6606,3 +6606,11 @@ END
 GUI:GroupTrayTraining
 "+%d in production"
 END
+
+OBJECT:LaneWarFortress
+"Fortress"
+END
+
+OBJECT:LaneWarWatchTower
+"Watch Tower"
+END

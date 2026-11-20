@@ -288,18 +288,6 @@ Bool LaneWarDirector::hasLostFortress( const Player *player ) const
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool LaneWarDirector::isObjective( const Object *obj ) const
-{
-	if( !m_active || obj == NULL )
-		return FALSE;
-	const ObjectID id = obj->getID();
-	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
-		if( id == m_fortress[ t ] || id == m_tower[ t ][ 0 ] || id == m_tower[ t ][ 1 ] )
-			return TRUE;
-	return FALSE;
-}
-
-//-------------------------------------------------------------------------------------------------
 void LaneWarDirector::onOrder( Player *player, Int kind, const Int *args, Int argCount )
 {
 	if( !m_active || player == NULL )

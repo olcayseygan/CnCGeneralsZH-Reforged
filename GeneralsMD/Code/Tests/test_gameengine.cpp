@@ -12606,8 +12606,8 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 	// the structures, named and owned by their end's starts: a fortress and one tower a team, no middle
 	static const char *const theOwned[][3] =
 	{
-		{ "LaneWar_FortressA", "GermanCastle", "StartOwner:1,3,5" }, { "LaneWar_FortressB", "GermanCastle", "StartOwner:2,4,6" },
-		{ "LaneWar_TowerA1", "GuardTower", "StartOwner:1,3,5" }, { "LaneWar_TowerB1", "GuardTower", "StartOwner:2,4,6" },
+		{ "LaneWar_FortressA", "LaneWarFortress", "StartOwner:1,3,5" }, { "LaneWar_FortressB", "LaneWarFortress", "StartOwner:2,4,6" },
+		{ "LaneWar_TowerA1", "LaneWarWatchTower", "StartOwner:1,3,5" }, { "LaneWar_TowerB1", "LaneWarWatchTower", "StartOwner:2,4,6" },
 	};
 	for( Int i = 0; i < 4; i++ )
 	{
@@ -12629,7 +12629,7 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 	CHECK_NEAR( theRMGParse.m_objectPositions[towerA].x, middleX - 333.0f, 0.5f );
 
 	/* A wave copy is a plot's 240 by 160 round its spawn anchor. It lies on the lane, between the lane's
-		end and the line of its own fortress, and wholly to one side of the fortress's 180 by 180, two
+		end and the line of its own fortress, and wholly to one side of the fortress's 140 by 140, two
 		cells clear, so it neither lands off the lane nor walks round its fortress. */
 	for( Int team = 0; team < 2; team++ )
 	{
@@ -12637,7 +12637,7 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 		const Real ahead = team == 0 ? 1.0f : -1.0f;
 		CHECK( spawnAt[team].x - 120.0f >= laneX0 * MAP_XY_FACTOR && spawnAt[team].x + 120.0f <= laneX1 * MAP_XY_FACTOR );
 		CHECK( ( fort.x - ( spawnAt[team].x + ahead * 120.0f ) ) * ahead >= -0.5f );
-		CHECK( ( spawnAt[team].y - 80.0f ) - ( fort.y + 90.0f ) >= 2.0f * MAP_XY_FACTOR - 0.5f );
+		CHECK( ( spawnAt[team].y - 80.0f ) - ( fort.y + 70.0f ) >= 2.0f * MAP_XY_FACTOR - 0.5f );
 		const Int apron[4] = { (Int)( fort.x / MAP_XY_FACTOR + 0.5f ) - 10, (Int)( fort.y / MAP_XY_FACTOR + 0.5f ) - 10,
 			(Int)( fort.x / MAP_XY_FACTOR + 0.5f ) + 10, (Int)( fort.y / MAP_XY_FACTOR + 0.5f ) + 10 };
 		playRects.insert( playRects.end(), apron, apron + 4 );

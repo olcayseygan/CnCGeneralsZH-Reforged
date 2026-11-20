@@ -124,11 +124,6 @@ public:
 	/// VictoryConditions under VICTORY_LANEWAR: the player's team has lost its fortress
 	Bool hasLostFortress( const Player *player ) const;
 
-	/** A fortress or tower of the lane.  Auto-acquire takes it as a target whatever its template: the
-		  stand-ins the map uses today are empty civilian garrisons, which every unit passes by as
-		  insignificant (PartitionFilterInsignificantBuildings).  Read-only. */
-	Bool isObjective( const Object *obj ) const;
-
 	/// MSG_LANEWAR_ORDER from TheCommandList: a LaneWarOrderKind and its integers
 	void onOrder( Player *player, Int kind, const Int *args, Int argCount );
 

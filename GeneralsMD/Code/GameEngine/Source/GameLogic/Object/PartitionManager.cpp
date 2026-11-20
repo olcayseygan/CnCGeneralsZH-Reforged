@@ -69,7 +69,6 @@
 
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/GameLogic.h"
-#include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
@@ -6734,8 +6733,7 @@ Bool PartitionManager::JobQueryGuard::refused( void ) const
 Bool PartitionFilterInsignificantBuildings::allow( Object *other )
 {
 	if (other->isStructure()) {
-		// a Lane War fortress or tower is what the waves are for, whatever stands in for it
-		if (other->isNonFactionStructure() && !m_allowInsignificant && !TheLaneWarDirector->isObjective(other)) {
+		if (other->isNonFactionStructure() && !m_allowInsignificant) {
 			ContainModuleInterface *cmi = other->getContain();
 			if (cmi) {
 				if (!cmi->isGarrisonable() || cmi->getContainCount() == 0) {

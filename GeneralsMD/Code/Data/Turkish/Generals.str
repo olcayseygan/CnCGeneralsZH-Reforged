@@ -20797,3 +20797,11 @@ END
 GUI:GroupTrayTraining
 "+%d üretimde"
 END
+
+OBJECT:LaneWarFortress
+"Kale"
+END
+
+OBJECT:LaneWarWatchTower
+"Gözetleme Kulesi"
+END

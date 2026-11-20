@@ -9,7 +9,7 @@
 #
 #   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
 #     -randommap 3 lane -autoskirmish 4 -takeover -side 0 FactionAmerica -side 1 FactionChina
-#     -side 2 FactionAmerica -side 3 FactionChina -seed 1 -maxframes 27000 -scenario lanewar
+#     -side 2 FactionAmerica -side 3 FactionChina -seed 1 -maxframes 36000 -scenario lanewar
 #     -logPrefix lanewar_
 #
 # A plot is a grid of 20-unit slots, 12 by 8 on a 240 by 160 plot; laneplace's two numbers are the

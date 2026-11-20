@@ -87,14 +87,14 @@ public:
 
 
 private:
-	enum DrawKind { DRAW_PUCK, DRAW_LINE, DRAW_OUTPOST_LINE, DRAW_OUTLINE_WHITE, DRAW_OUTLINE_RED, DRAW_RING, DRAW_RING_GLOW, DRAW_ORDER_LINE };
+	enum DrawKind { DRAW_PUCK, DRAW_LINE, DRAW_OUTPOST_LINE, DRAW_OUTLINE_WHITE, DRAW_OUTLINE_RED, DRAW_RING, DRAW_RING_GLOW, DRAW_ORDER_LINE, DRAW_ORDER_MARK };
 	struct WaypointDraw
 	{
 		DrawKind kind;
 		Bool orderHint;		///< not in the water's mirror pass
 		Int first;
 		Int count;
-		Vector3 color;		///< DRAW_RING, DRAW_RING_GLOW and DRAW_ORDER_LINE only: colour, ribbon width and opacity
+		Vector3 color;		///< DRAW_RING, DRAW_RING_GLOW, DRAW_ORDER_LINE and DRAW_ORDER_MARK only: colour, ribbon width and opacity
 		Real width;
 		Real opacity;
 	};
@@ -120,7 +120,9 @@ private:
 	void recordRingLine( Int count, const Vector3 *points, const Vector3& color, Real alpha = 1.0f, Bool withGlow = TRUE, Bool withLine = TRUE );
 	void addSelectionCircle( const Coord3D& pos, Real radius, PathfindLayerEnum layer, const Vector3& color, Real pulse );
 	void recordStructureOutline( const Object *obj );	///< a selected building's line round its footprint
-	void recordOrderMark( const Vector3& at, Real radius, const Vector3& color, Real width, Real opacity );	///< a ring of order line round a point: an end or joint, or a mark on water
+	///< a ring of order line round a point: an end or joint, or a mark on water; with a ground, a target's ring riding it, depth tested
+	void recordOrderMark( const Vector3& at, Real radius, const Vector3& color, Real width, Real opacity, const SelectionCircle *ground = NULL );
+	Bool orderTargetRing( ObjectID id, SelectionCircle& ring ) const;	///< the ground round a unit an order is aimed at, FALSE for a building, an aircraft or a hidden model
 	void takeWaterMarks( void );											///< the click marker and destination dots on water, after the water
 	TextureClass *rimTexture( void );									///< the ribbon's colour between two dark rims, made on first use
 	TextureClass *m_rimTexture;
@@ -143,6 +145,7 @@ private:
 	std::vector<Bool> m_runUsed;							///< already joined into a loop
 	std::vector<Vector3> m_loopPoints;
 	Real m_ringWidthScale;
+	Real m_orderWidthScale;		///< the order lines' and marks': the same zoom, out to the farthest the camera goes
 
 	std::vector<WaypointDraw> m_draws;		///< this picture's pucks and lines, in the order they render
 	std::vector<Vector3> m_drawPoints;

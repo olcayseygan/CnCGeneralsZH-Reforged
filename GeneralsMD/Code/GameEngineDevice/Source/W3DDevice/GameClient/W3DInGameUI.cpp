@@ -1044,7 +1044,8 @@ static const UnsignedInt ORDER_RIM_RGB = 0x00101418;	// near black, a little ste
 static const Real ORDER_RIM_ALPHA = 0x78;
 static const Real ORDER_MARK_LIFT = 0.35f;				// the build grid's: out of the dirt, not floating
 static const Real ORDER_MARK_MIN_ZOOM = 0.6f;			// widths follow the camera's zoom between these, so
-static const Real ORDER_MARK_MAX_ZOOM = 2.5f;			// a mark keeps about its width on the screen
+static const Real ORDER_MARK_MAX_ZOOM = 4.5f;			// a mark keeps about its width on the screen, out to the
+																									// wheel's ceiling near 3.9 (W3DWaypointBuffer's ORDER_MAX_ZOOM_SCALE)
 
 // Each unit's own destination: a dot on its rim, a point and not a circle. Rings the size of the
 // body drew a grid of ghost selection rings over a group's formation and drowned the click marker

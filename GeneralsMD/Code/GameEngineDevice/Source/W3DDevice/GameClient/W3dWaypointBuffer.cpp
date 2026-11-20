@@ -125,6 +125,7 @@ W3DWaypointBuffer::W3DWaypointBuffer(void)
 	m_rimTexture = NULL;
 	m_linesUsed = 0;
 	m_ringWidthScale = 1.0f;
+	m_orderWidthScale = 1.0f;
 
 
   setDefaultLineStyle();
@@ -163,7 +164,7 @@ void W3DWaypointBuffer::queueLine( const WaypointDraw& draw, Vector3 *points )
 	m_linePoolKinds[ m_linesUsed ] = draw.kind;
 	SegmentedLineClass *line = m_linePool[ m_linesUsed++ ];
 	setLineStyle( line, draw.kind );		// a pooled line may have been an outline last frame
-	if( draw.kind == DRAW_RING || draw.kind == DRAW_RING_GLOW || draw.kind == DRAW_ORDER_LINE )
+	if( draw.kind == DRAW_RING || draw.kind == DRAW_RING_GLOW || draw.kind == DRAW_ORDER_LINE || draw.kind == DRAW_ORDER_MARK )
 	{
 		line->Set_Color( draw.color );
 		line->Set_Width( draw.width );
@@ -199,7 +200,7 @@ void W3DWaypointBuffer::queueLine( const WaypointDraw& draw, Vector3 *points )
 void W3DWaypointBuffer::renderQueuedLines( RenderInfoClass &rinfo )
 {
 	// a selection ring or an order line is paint like a building's outline, and takes no light either
-	auto isOutline = [this]( Int i ) { return m_linePoolKinds[ i ] == DRAW_OUTLINE_WHITE || m_linePoolKinds[ i ] == DRAW_OUTLINE_RED || m_linePoolKinds[ i ] == DRAW_RING || m_linePoolKinds[ i ] == DRAW_RING_GLOW || m_linePoolKinds[ i ] == DRAW_ORDER_LINE; };
+	auto isOutline = [this]( Int i ) { return m_linePoolKinds[ i ] == DRAW_OUTLINE_WHITE || m_linePoolKinds[ i ] == DRAW_OUTLINE_RED || m_linePoolKinds[ i ] == DRAW_RING || m_linePoolKinds[ i ] == DRAW_RING_GLOW || m_linePoolKinds[ i ] == DRAW_ORDER_LINE || m_linePoolKinds[ i ] == DRAW_ORDER_MARK; };
 
 	for( Int i = 0; i < m_linesUsed; ++i )
 		if( !isOutline( i ) )
@@ -284,16 +285,18 @@ TextureClass *W3DWaypointBuffer::rimTexture( void )
 
 void W3DWaypointBuffer::setLineStyle( SegmentedLineClass *line, DrawKind kind )
 {
-	if( kind == DRAW_ORDER_LINE )
+	if( kind == DRAW_ORDER_LINE || kind == DRAW_ORDER_MARK )
 	{
 		// An order's line and the small ring on its end, in the order's colour on the dark rim: alpha
 		// blended paint, where the blue additive laser before it flared on dark ground and vanished on
 		// snow. Still drawn over everything, so a line into a building's door or across a ridge stays
-		// whole, and on the sorted list after the ground (queueLine)
+		// whole, and on the sorted list after the ground (queueLine). The ring round a unit the order is
+		// aimed at lies on the ground under it and is depth tested, so the model stands in front of it
 		line->Set_Texture( rimTexture() );
 		line->Set_Texture_Mapping_Mode( SegLineRendererClass::UNIFORM_WIDTH_TEXTURE_MAP );
 		ShaderClass lineShader = ShaderClass::_PresetAlphaShader;
-		lineShader.Set_Depth_Compare( ShaderClass::PASS_ALWAYS );
+		if( kind == DRAW_ORDER_LINE )
+			lineShader.Set_Depth_Compare( ShaderClass::PASS_ALWAYS );
 		line->Set_Shader( lineShader );
 		line->Set_Width( 1.0f );
 		line->Set_Color( Vector3( 1.0f, 1.0f, 1.0f ) );
@@ -394,6 +397,7 @@ void W3DWaypointBuffer::drawWaypoints(RenderInfoClass &rinfo)
 			case DRAW_RING:
 			case DRAW_RING_GLOW:
 			case DRAW_ORDER_LINE:
+			case DRAW_ORDER_MARK:
 				queueLine( *it, points );
 				break;
 			case DRAW_OUTPOST_LINE:
@@ -445,15 +449,25 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 	// shift list short of the last. The hints are rebuilt off the units every frame, so a ring on a
 	// target follows it. The line stops at the rings either end rather than running through them. A
 	// ring means a place the player clicked (InGameUI::orderHintShowsMark): several units' own ends
-	// bunched somewhere else end bare
+	// bunched somewhere else end bare. A unit it is aimed at wears its ring on the ground round its
+	// feet instead, under the model (orderTargetRing), and the line runs to that ring
 	{
-		const Real markScale = MAX( 1.0f, m_ringWidthScale );		// zoomed out the marks keep their size on the screen
+		const Real markScale = MAX( 1.0f, m_orderWidthScale );		// zoomed out the marks keep their size on the screen
+		const Real markHalf = 0.5f * ORDER_MARK_WIDTH * m_orderWidthScale;
+		auto targetRing = [&]( const InGameUI::OrderHint& hint, SelectionCircle& ring ) -> Bool
+		{
+			return hint.onObject && orderTargetRing( hint.target, ring );
+		};
 		auto markRadius = [&]( const InGameUI::OrderHint& hint ) -> Real
 		{
 			if( !InGameUI::orderHintShowsMark( hint ) )
 				return 0.0f;
-			return ( hint.mark == InGameUI::ORDER_MARK_FLAG ? ORDER_END_RADIUS : ORDER_JOINT_RADIUS ) * markScale + 0.5f * ORDER_MARK_WIDTH * m_ringWidthScale;
+			SelectionCircle ring;
+			if( targetRing( hint, ring ) )
+				return ring.r + markHalf;
+			return ( hint.mark == InGameUI::ORDER_MARK_FLAG ? ORDER_END_RADIUS : ORDER_JOINT_RADIUS ) * markScale + markHalf;
 		};
+		std::vector< std::pair<ObjectID, UnsignedInt> > ringedTargets;
 		const std::vector<InGameUI::OrderHint>& hints = TheInGameUI->getOrderHints();
 		for( std::vector<InGameUI::OrderHint>::const_iterator it = hints.begin(); it != hints.end(); ++it )
 		{
@@ -468,6 +482,14 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 			Vector3 points[ 2 ];
 			points[ 0 ].Set( it->from.x, it->from.y, max( it->from.z, TheTerrainLogic->getGroundHeight( it->from.x, it->from.y ) ) );
 			points[ 1 ].Set( it->to.x, it->to.y, max( it->to.z, TheTerrainLogic->getGroundHeight( it->to.x, it->to.y ) ) );
+			// a unit at either end: the middle of its ring on the ground, not the spot over its top
+			SelectionCircle fromRing, toRing;
+			const Bool fromOnRing = orderTargetRing( it->fromTarget, fromRing );
+			const Bool toOnRing = targetRing( *it, toRing );
+			if( fromOnRing )
+				points[ 0 ].Set( fromRing.x, fromRing.y, ringGroundZ( fromRing, fromRing.x, fromRing.y ) );
+			if( toOnRing )
+				points[ 1 ].Set( toRing.x, toRing.y, ringGroundZ( toRing, toRing.x, toRing.y ) );
 
 			// Order Lines off in the options takes away a plain one-point order's line and nothing else:
 			// the ring at its end still shows where the order lands. A unit with more than one place to
@@ -492,6 +514,8 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 						}
 					}
 				}
+				if( fromOnRing )
+					startCut = MAX( startCut, fromRing.r + markHalf );		// never out of the middle of a unit
 				const Real endCut = markRadius( *it );
 				const Real dx = points[ 1 ].X - points[ 0 ].X, dy = points[ 1 ].Y - points[ 0 ].Y;
 				const Real flat = (Real)sqrt( dx * dx + dy * dy );
@@ -501,16 +525,27 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 					Vector3 cut[ 2 ];
 					cut[ 0 ] = points[ 0 ] + along * ( startCut / flat );
 					cut[ 1 ] = points[ 1 ] - along * ( endCut / flat );
-					recordRing( DRAW_ORDER_LINE, 2, cut, color, ORDER_LINE_WIDTH * m_ringWidthScale, ORDER_LINE_OPACITY );
+					recordRing( DRAW_ORDER_LINE, 2, cut, color, ORDER_LINE_WIDTH * m_orderWidthScale, ORDER_LINE_OPACITY );
 				}
 			}
 
 			if( !InGameUI::orderHintShowsMark( *it ) )
 				continue;
+			if( toOnRing )
+			{
+				// a group on one target draws its ring once, not one over another for every attacker
+				const std::pair<ObjectID, UnsignedInt> ringed( it->target, rgb );
+				if( std::find( ringedTargets.begin(), ringedTargets.end(), ringed ) == ringedTargets.end() )
+				{
+					ringedTargets.push_back( ringed );
+					recordOrderMark( points[ 1 ], toRing.r, color, ORDER_MARK_WIDTH * m_orderWidthScale, 1.0f, &toRing );
+				}
+				continue;
+			}
 			Vector3 mark = points[ 1 ];
 			mark.Z += ORDER_MARK_LIFT;
 			recordOrderMark( mark, ( it->mark == InGameUI::ORDER_MARK_FLAG ? ORDER_END_RADIUS : ORDER_JOINT_RADIUS ) * markScale, color,
-											 ORDER_MARK_WIDTH * m_ringWidthScale, 1.0f );
+											 ORDER_MARK_WIDTH * m_orderWidthScale, 1.0f );
 		}
 		// the lines stay queued: the rally and placement pucks below would flush them into the
 		// terrain pass, under the buildings (see queueLine)
@@ -917,6 +952,11 @@ static const Int RING_MAX_LINE_POINTS = 120;	///< under the line's 128-point chu
 static const Real RING_MIN_ZOOM_SCALE = 0.3f;	///< widths and the lift follow the camera's height, so a line keeps
 static const Real RING_MAX_ZOOM_SCALE = 3.0f;	///< about the same width on the screen at any zoom, between these two
 static const Real RING_JOIN_TOLERANCE = 0.25f;	///< two runs whose crossing points are this close are one corner of the outline
+// The order lines and marks follow the zoom all the way out: the wheel's ceiling is MaxCameraHeight
+// 310 times ZOOM_OUT_LIMIT_FACTOR 2.9 over CameraHeight 232, a zoom near 3.9, and held at the rings'
+// 3.0 a ribbon came out under two pixels there, its colour under one, and broke into dashes
+static const Real ORDER_MAX_ZOOM_SCALE = 4.5f;
+static const Real ORDER_TARGET_GAP = 1.0f;		///< a target's ring outside the selection ring a unit of one's own wears, times the zoom scale
 
 // an attack order's pulse: copies of the outline rising off the ground and fading (recordRingLoop)
 static const Int PULSE_COUNT = 2;
@@ -933,6 +973,7 @@ static const Real STRUCTURE_MARGIN = 6.0f;
 void W3DWaypointBuffer::takeRingView( void )
 {
 	m_ringWidthScale = MAX( RING_MIN_ZOOM_SCALE, MIN( RING_MAX_ZOOM_SCALE, TheTacticalView->getZoom() ) );
+	m_orderWidthScale = MAX( RING_MIN_ZOOM_SCALE, MIN( ORDER_MAX_ZOOM_SCALE, TheTacticalView->getZoom() ) );
 	const Coord3D& eye = TheTacticalView->get3DCameraPosition();
 	m_ringCamera.Set( eye.x, eye.y, eye.z );
 }
@@ -1261,6 +1302,34 @@ void W3DWaypointBuffer::addSelectionCircle( const Coord3D& pos, Real radius, Pat
 	m_circles.push_back( c );
 }
 
+/** The ground round a unit an order is aimed at, where the order's ring goes: the selection ring's
+		circle at the model's drawn position, a little outside it. A ring over the unit's top, drawn over
+		everything, covered the model. A building keeps the end its hint gave it (its outline, or over the
+		roof), an aircraft in the air the spot over it, and so does a unit whose model is not drawn. */
+Bool W3DWaypointBuffer::orderTargetRing( ObjectID id, SelectionCircle& c ) const
+{
+	const Object *obj = ( id != INVALID_ID ) ? TheGameLogic->findObjectByID( id ) : NULL;
+	if( obj == NULL || obj->isEffectivelyDead() || obj->isContained() || obj->isKindOf( KINDOF_STRUCTURE ) || obj->isAirborneTarget() )
+		return FALSE;
+	const Drawable *draw = obj->getDrawable();
+	if( draw == NULL || draw->isDrawableEffectivelyHidden() )
+		return FALSE;
+
+	Coord3D pos = *draw->getPosition();
+	if( TheSmoothMotionActive && TheSmoothMotionAlpha < 1.0f )
+		draw->getSmoothMotionPosition( TheSmoothMotionAlpha, &pos );
+	c.x = pos.x;
+	c.y = pos.y;
+	c.r = MAX( RING_MIN_RADIUS, MIN( RING_MAX_RADIUS, obj->getGeometryInfo().getBoundingCircleRadius() + RING_MARGIN ) )
+			+ ORDER_TARGET_GAP * m_orderWidthScale;
+	c.layer = obj->getLayer();
+	c.color.Set( 1.0f, 1.0f, 1.0f );
+	c.pulse = -1.0f;
+	Real waterZ = 0.0f;
+	c.waterZ = TheTerrainLogic->isUnderwater( c.x, c.y, &waterZ ) ? waterZ : -1.0e9f;
+	return TRUE;
+}
+
 /** The owner's colour at full brightness: the brightest channel at one, the hue kept. A grey seat
 		comes out white, a navy one bright blue. */
 Vector3 W3DWaypointBuffer::ringColor( const Player *owner )
@@ -1425,16 +1494,20 @@ void W3DWaypointBuffer::recordStructureOutline( const Object *obj )
 
 /** The small ring on an order line's point, flat at the point's height: it is drawn over everything
 		like the line, so a slope under it costs nothing. Closed halfway along its first stretch, as
-		recordRingLoop closes a selection ring, so the two caps meet flush. */
-void W3DWaypointBuffer::recordOrderMark( const Vector3& at, Real radius, const Vector3& color, Real width, Real opacity )
+		recordRingLoop closes a selection ring, so the two caps meet flush. With a ground it is a
+		target's ring instead (orderTargetRing): every point on the ground as a selection ring's, a
+		point every RING_STEP, and depth tested, so the unit stands in front of it. */
+void W3DWaypointBuffer::recordOrderMark( const Vector3& at, Real radius, const Vector3& color, Real width, Real opacity, const SelectionCircle *ground )
 {
 	// a point every two units round a large one, so the click marker's opening ring shows no facets
-	const Int samples = MAX( (Int)ORDER_MARK_SAMPLES, (Int)ceil( 2.0f * PI * radius / 2.0f ) );
+	const Real step = ground ? RING_STEP : 2.0f;
+	const Int samples = MAX( (Int)ORDER_MARK_SAMPLES, (Int)ceil( 2.0f * PI * radius / step ) );
 	m_ringPoints.clear();
 	for( Int k = 0; k < samples; ++k )
 	{
 		const Real a = 2.0f * PI * k / samples;
-		m_ringPoints.push_back( Vector3( at.X + radius * (Real)Cos( a ), at.Y + radius * (Real)Sin( a ), at.Z ) );
+		const Real x = at.X + radius * (Real)Cos( a ), y = at.Y + radius * (Real)Sin( a );
+		m_ringPoints.push_back( Vector3( x, y, ground ? ringGroundZ( *ground, x, y ) : at.Z ) );
 	}
 	const Vector3 mid = ( m_ringPoints[ 0 ] + m_ringPoints[ 1 ] ) * 0.5f;
 	m_cleanPoints.clear();
@@ -1442,7 +1515,7 @@ void W3DWaypointBuffer::recordOrderMark( const Vector3& at, Real radius, const V
 	m_cleanPoints.insert( m_cleanPoints.end(), m_ringPoints.begin() + 1, m_ringPoints.end() );
 	m_cleanPoints.push_back( m_ringPoints[ 0 ] );
 	m_cleanPoints.push_back( mid );
-	recordRingPieces( DRAW_ORDER_LINE, color, width, opacity, 0.0f );
+	recordRingPieces( ground ? DRAW_ORDER_MARK : DRAW_ORDER_LINE, color, width, opacity, 0.0f );
 }
 
 // The click marker and the destination dots on water (W3DInGameUI paints them on land): the same
@@ -1450,7 +1523,7 @@ void W3DWaypointBuffer::recordOrderMark( const Vector3& at, Real radius, const V
 // ribbon's width takes in its rims (rimTexture: colour in the middle half), so it is the land band
 // plus a rim either side, or the water marks came out a third as bold with no dark edge
 static const Real WATER_MARK_MIN_ZOOM = 0.6f;
-static const Real WATER_MARK_MAX_ZOOM = 2.5f;
+static const Real WATER_MARK_MAX_ZOOM = 4.5f;		///< W3DInGameUI's ORDER_MARK_MAX_ZOOM
 static const Real WATER_MARK_LIFT = 0.35f;
 static const Real WATER_LAND_RIM = 0.4f;							///< W3DInGameUI's MARKER_RIM, ORDER_DOT_RIM
 static const Real WATER_DOT_RADIUS = 0.75f;						///< with a ribbon twice as wide, a disc of the land dot's 1.1 and its rim
@@ -1475,7 +1548,7 @@ void W3DWaypointBuffer::takeWaterMarks( void )
 	if( CinemaDirector_hidesHud() )
 		return;
 	const UnsignedInt now = Clock_Milliseconds();
-	const Real scale = MAX( WATER_MARK_MIN_ZOOM, MIN( WATER_MARK_MAX_ZOOM, m_ringWidthScale ) );
+	const Real scale = MAX( WATER_MARK_MIN_ZOOM, MIN( WATER_MARK_MAX_ZOOM, m_orderWidthScale ) );
 	auto colorOf = []( InGameUI::OrderHintKind kind )
 	{
 		const UnsignedInt rgb = InGameUI::orderKindColor( kind );

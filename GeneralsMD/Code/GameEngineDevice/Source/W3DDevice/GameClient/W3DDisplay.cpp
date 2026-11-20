@@ -4533,6 +4533,11 @@ static void saveScreenShot(void)
 	if (!writeFrameBMP(pathname))
 		return;
 
+	// a -cinema list takes its shots back to back, and the note stays up for seconds, so with the
+	// HUD on every shot after the first carried the one before it in its picture
+	if (!TheGlobalData->m_cinemaScript.isEmpty())
+		return;
+
 	UnicodeString ufileName;
 	ufileName.translate(leafname);
 	TheInGameUI->message(TheGameText->fetch("GUI:ScreenCapture"), ufileName.str());

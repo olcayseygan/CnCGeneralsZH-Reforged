@@ -297,23 +297,15 @@ Int CompressionManager::decompressData( void *srcVoid, Int srcLen, void *destVoi
 
 	CompressionType compType = getCompressionType(src, srcLen);
 
-	if (compType == COMPRESSION_BTREE)
+	if (compType == COMPRESSION_BTREE || compType == COMPRESSION_HUFF)
 	{
+		Int expected = 0;
+		memcpy(&expected, src + 4, sizeof(expected));
+		if (expected <= 0 || expected > destLen) return 0;
 		Int slen = srcLen - 8;
-		Int ret = BTREE_decode(dest, src+8, &slen);
-		if (ret)
-			return ret;
-		else
-			return 0;
-	}
-	if (compType == COMPRESSION_HUFF)
-	{
-		Int slen = srcLen - 8;
-		Int ret = HUFF_decode(dest, src+8, &slen);
-		if (ret)
-			return ret;
-		else
-			return 0;
+		const Int result = compType == COMPRESSION_BTREE ? BTREE_decode(dest, src + 8, &slen, expected)
+			: HUFF_decode(dest, src + 8, &slen, expected);
+		return result == expected ? result : 0;
 	}
 	if (compType == COMPRESSION_REFPACK)
 	{

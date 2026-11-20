@@ -228,6 +228,7 @@ struct OnlineSession
 	std::string replayAnswered;	///< the match of the last replay.ok or replay.err
 	std::string resultLine;	///< the last ONLINE RATED / ONLINE UNRATED line logged
 	OnlineMessage result;		///< the last rated or unrated line itself
+	Bool relayTicketFresh;	///< a match.hold for us carried a new relay ticket, not yet taken: OnlineTakeRelayTicket
 
 	// what the server says about players, and who is in the room the screens show
 	std::map<std::string, OnlineCard> cards;		///< by OnlineNickKey

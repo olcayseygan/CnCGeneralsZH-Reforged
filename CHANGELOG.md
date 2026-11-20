@@ -85,6 +85,10 @@ found and fixed, EA's own, not port damage.**
 - Watching a replay no longer reports "out of sync" when nothing is wrong.
 - The computer's fights add up the same way after a load as in the match that was saved. Replays of games with a computer player recorded before this change may not play back.
 
+## A dropped player gets four minutes to come back
+
+- A player whose connection drops in an online match is no longer thrown out after 30 seconds. Everyone freezes on the same moment and the disconnect screen reads "Waiting for Tank to reconnect (3:44)", counting down from four minutes. If his game is still running and his connection comes back, play picks up by itself where it stopped: in testing a player frozen for a full minute came back to a match that went on to a rated result with no desync. A vote from everyone else still drops him at once, Quit Game still works, and LAN games keep the old 30 seconds.
+
 ## Play vs AI online
 
 - The online hub has a PLAY VS AI button under Options. One press starts a 1v1 against a computer player as strong as your AI rating, on a map and seed the server picks. The AI rating is a second rating zerohour.gg keeps beside the ladder's, starting at 0, and the hub shows it left of the button.

@@ -139,7 +139,7 @@ OnlineSession &OnlineSession::get()
 
 OnlineSession::OnlineSession() :
 	connection( NULL ), capture( NULL ), status( ONLINE_OFF ), relayPort( 0 ), testMode( FALSE ), failRetry( 0 ),
-	noticeSerial( 0 ), maintenanceRefused( FALSE ), cardSerial( 0 ), ladderState( ONLINE_LADDER_FAILED ), armiesState( ONLINE_LADDER_FAILED ), historySerial( 0 ), revealing( FALSE ),
+	noticeSerial( 0 ), maintenanceRefused( FALSE ), relayTicketFresh( FALSE ), cardSerial( 0 ), ladderState( ONLINE_LADDER_FAILED ), armiesState( ONLINE_LADDER_FAILED ), historySerial( 0 ), revealing( FALSE ),
 	revealSerial( 0 ), aiVerdictSerial( 0 ), peer( NULL ), buddy( NULL ), ps( NULL )
 {
 	connectionGone();
@@ -244,6 +244,7 @@ void OnlineSession::beginTest( std::vector<OnlineMessage> *lines )
 	disconnect();
 	capture = lines;
 	matchId.clear();
+	relayTicketFresh = FALSE;
 	reportedMatch.clear();
 	replayedMatch.clear();
 	quickMatch.clear();
@@ -719,6 +720,8 @@ void OnlineSession::noteMaintenance( const OnlineMessage &m )
 void OnlineSession::dispatch( const OnlineMessage &m )
 {
 	const std::string t = m.type();
+	if (t == "game.start" || t == "qm.matched")
+		relayTicketFresh = FALSE;		// a new match: the last one's relay ticket is over
 
 	// the server's liveness check, answered before anything else
 	if (t == "ping")
@@ -1243,6 +1246,30 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 			noteMaintenance( m );
 		DEBUG_LOG(("ONLINE AI REFUSED reason=%s\n", aiRefusal.c_str()));
 	}
+	else if (t == "match.hold" || t == "match.resume")
+	{
+		// match.hold{match, player, until, seconds, vip}: the server lost the line or the relay session of account
+		// `player` in our match and keeps its seat; match.resume{match, player, vip}: it is back.  The game holds a
+		// silent seat on its own clock (DisconnectManager), so for another seat these are a log line.  Our own
+		// copy of a hold may carry a fresh relay ticket: the relay forgot us, and the ticket opens it again
+		// (OnlineTakeRelayTicket).  A line for another match is late news from the last one.
+		const std::string match = m.getString( "match" );
+		const long long player = m.getInt( "player" );
+		UnsignedByte fresh[16];
+		if (!matchId.empty() && match == matchId && t == "match.hold" && player == id && hexTicket( m.getString( "ticket" ), fresh ))
+		{
+			memcpy( ticket, fresh, sizeof(ticket) );
+			relayTicketFresh = TRUE;
+		}
+		DEBUG_LOG(("ONLINE %s player=%lld vip=%u seconds=%d match=%s%s\n", t == "match.hold" ? "HOLD" : "RESUME", player,
+			(UnsignedInt)m.getInt( "vip" ), (Int)m.getInt( "seconds" ), match.c_str(), match == matchId ? "" : " (not ours)"));
+	}
+	else if (t == "match.refused")
+	{
+		// match.refused{match, code}: a rejoin this build cannot make (crc: another exe or INI set).  Only a
+		// rejoin asks, and this client does not rejoin yet: the line is logged, nothing else.
+		DEBUG_LOG(("ONLINE REJOIN REFUSED match=%s code=%s\n", m.getString( "match" ).c_str(), m.getString( "code" ).c_str()));
+	}
 	else if (t == "notice")
 	{
 		// notice{kind, en, tr, until}: the banner across the top of the screen; no words in either language
@@ -1653,6 +1680,16 @@ Int OnlineGetQuickMatchLockSeconds( void )
 		return 0;
 	const long long left = s.qmLockUntilMs - OnlineNowMs();
 	return left <= 0 ? 0 : (Int)((left + 999) / 1000);		// a lock in its last fraction of a second still reads 1
+}
+
+Bool OnlineTakeRelayTicket( UnsignedByte out[16] )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (!OnlineIsEnabled() || !s.relayTicketFresh)
+		return FALSE;
+	s.relayTicketFresh = FALSE;
+	memcpy( out, s.ticket, sizeof(s.ticket) );
+	return TRUE;
 }
 
 AsciiString OnlineGetLastAIMatchId( void )

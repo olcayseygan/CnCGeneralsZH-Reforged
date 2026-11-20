@@ -55,6 +55,7 @@ public:
 
 	void setPlayerName(Int playerNum, UnicodeString name);
 	void setPlayerTimeoutTime(Int playerNum, time_t newTime);
+	void setPlayerReconnectTime(Int playerNum, UnicodeString name, time_t msLeft);	///< "Waiting for <name> to reconnect (m:ss)" in place of the name and countdown
 	void setPacketRouterTimeoutTime(time_t newTime);
 
 	void sendChat(UnicodeString text);

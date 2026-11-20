@@ -38,6 +38,7 @@
 #include "GameNetwork/NetworkUtil.h"
 #include "GameNetwork/GameSpy/PingThread.h"
 #include "GameNetwork/GameSpy/GSConfig.h"
+#include "GameNetwork/Online/OnlineQueues.h"		// ONLINE_RECONNECT_HOLD_MS
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -64,6 +65,7 @@ DisconnectManager::DisconnectManager()
 	m_packetRouterTimeout = 0;
 	for( i = 0; i < MAX_SLOTS -1; ++i) {
 		m_playerTimeouts[i] = 0;
+		m_seatHeld[i] = FALSE;
 	}
 
 	for( i = 0; i < MAX_SLOTS; ++i) {
@@ -228,7 +230,8 @@ void DisconnectManager::updateDisconnectStatus(ConnectionManager *conMgr) {
 			Int slot = translatedSlotPosition(i, conMgr->getLocalPlayerID());
 			if (slot != -1) {
 				time_t curTime = Clock_Milliseconds();
-				time_t newTime = TheGlobalData->m_networkSilentPlayerDropTime - (curTime - m_playerTimeouts[slot]);
+				time_t hold = 0;
+				time_t newTime = timeBeforeDrop(slot, conMgr, &hold);
 
 // if someone is more than 2/3 timed out, lets get our frame numbers sync'd up.  Also if someone is voted out
 // lets do the same thing.
@@ -272,7 +275,22 @@ void DisconnectManager::updateDisconnectStatus(ConnectionManager *conMgr) {
 						DEBUG_LOG(("DisconnectManager::updateDisconnectStatus - not all on same frame\n"));
 					}
 				}
-				TheDisconnectMenu->setPlayerTimeoutTime(slot, newTime);
+				/* An online seat held for its player to come back reads as a sentence with minutes and seconds;
+					 the row goes back to its name and countdown once the hold ends. */
+				Bool held = (hold > 0);
+				if (held != m_seatHeld[slot]) {
+					DEBUG_LOG(("DisconnectManager::updateDisconnectStatus - RECONNECT HOLD %s for player %d (translated slot %d), %d ms left\n",
+						held ? "on" : "off", i, slot, (Int)hold));
+					m_seatHeld[slot] = held;
+					if (!held) {
+						TheDisconnectMenu->setPlayerName(slot, conMgr->getPlayerName(i));
+					}
+				}
+				if (held) {
+					TheDisconnectMenu->setPlayerReconnectTime(slot, conMgr->getPlayerName(i), hold);
+				} else {
+					TheDisconnectMenu->setPlayerTimeoutTime(slot, newTime);
+				}
 			}
 		}
 	}
@@ -510,6 +528,7 @@ void DisconnectManager::populateDisconnectScreen(ConnectionManager *conMgr) {
 		Int slot = translatedSlotPosition(i, conMgr->getLocalPlayerID());
 		if (slot != -1) {
 			TheDisconnectMenu->setPlayerName(slot, name);
+			m_seatHeld[slot] = FALSE;
 
 			Int numVotes = countVotesForPlayer(i);
 			TheDisconnectMenu->updateVotes(slot, numVotes);
@@ -727,17 +746,48 @@ Bool DisconnectManager::isLocalPlayerNextPacketRouter(ConnectionManager *conMgr)
 	return FALSE;
 }
 
-Bool DisconnectManager::hasPlayerTimedOut(Int slot) {
+Bool DisconnectManager::hasPlayerTimedOut(Int slot, ConnectionManager *conMgr) {
 	if (slot == -1) {
 		return FALSE;
 	}
 
-	time_t newTime = TheGlobalData->m_networkSilentPlayerDropTime - (Clock_Milliseconds() - m_playerTimeouts[slot]);
-	if (newTime <= 0) {
+	if (timeBeforeDrop(slot, conMgr) <= 0) {
 		return TRUE;
 	}
 
 	return FALSE;
+}
+
+/* EA dropped a silent seat after NetworkSilentPlayerDropTime, 30 s, whatever the reason it went quiet.  In an
+	 online match the seat is held instead, up to ONLINE_RECONNECT_HOLD_MS of silence: the match stays frozen on
+	 this screen, play goes on by itself the moment the seat's packets come back, and a unanimous vote still
+	 drops the seat at once.  Every peer holds every silent seat on its own clock, without waiting for the
+	 server: the server learns of a lost seat only when its TLS line drops or its relay session has been silent
+	 120 s, too late for a 30 s drop, and the seat that went quiet may be the one that is still playing.  This
+	 only moves when the packet router sends the drop; the drop itself, DestroyPlayer on a frame every peer
+	 runs, is what it always was.  LAN and -netgame are GAME_LAN and get no hold. */
+time_t DisconnectManager::reconnectHoldLeft(Int slot, ConnectionManager *conMgr) {
+	if ((slot == -1) || !TheGameLogic->isInInternetGame()) {
+		return 0;
+	}
+
+	/* Only a seat quiet long enough to be a disconnect (the stall judgement's silence) is held, so a seat that
+		 still talks keeps its row as it was. */
+	time_t silence = Clock_Milliseconds() - m_playerTimeouts[slot];
+	if (silence < (time_t)TheGlobalData->m_networkPlayerSilenceTime) {
+		return 0;
+	}
+	time_t hold = ONLINE_RECONNECT_HOLD_MS - silence;
+	return (hold > 0) ? hold : 0;
+}
+
+time_t DisconnectManager::timeBeforeDrop(Int slot, ConnectionManager *conMgr, time_t *hold) {
+	time_t left = TheGlobalData->m_networkSilentPlayerDropTime - (Clock_Milliseconds() - m_playerTimeouts[slot]);
+	time_t held = reconnectHoldLeft(slot, conMgr);
+	if (hold) {
+		*hold = held;
+	}
+	return (held > 0 && held > left) ? held : left;		// no hold leaves the countdown free to go below 0, where the drop fires
 }
 
 // this function assumes that we are the packet router. (or at least that 
@@ -797,7 +847,7 @@ Bool DisconnectManager::isPlayerInGame(Int slot, ConnectionManager *conMgr) {
 		return FALSE;
 	}
 	
-	if (hasPlayerTimedOut(slot) == TRUE) {
+	if (hasPlayerTimedOut(slot, conMgr) == TRUE) {
 		return FALSE;
 	}
 

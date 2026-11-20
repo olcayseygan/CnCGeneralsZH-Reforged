@@ -213,6 +213,12 @@ void Transport::pumpRelay( void )
 	const UnsignedInt now = Clock_Milliseconds();
 	if (s_relay.vip && now - s_relay.lastHello >= RELAY_KEEPALIVE_MS)
 		relaySendHello();
+	// -online: the relay forgot us mid-match and the server's match.hold brought a new ticket; hello with it now
+	if (s_relay.authed && OnlineTakeRelayTicket( s_relay.ticket ))
+	{
+		DEBUG_LOG(("Transport: a new relay ticket from the server, saying hello again\n"));
+		relaySendHello();
+	}
 
 	unsigned char buf[RELAY_MAX_PACKET];
 	sockaddr_in from;
@@ -225,6 +231,9 @@ void Transport::pumpRelay( void )
 		if (buf[2] == RELAY_WELCOME && len >= RELAY_WELCOME_SIZE)
 		{
 			const UnsignedInt vip = get32( buf + 11 );
+			// a new session after the first (the relay took us back): answered at once, as connectRelay answers the
+			// first, since the relay forwards nothing to a session until it hears it
+			const Bool rewelcome = s_relay.vip && memcmp( s_relay.session, buf + 3, RELAY_SESSION_BYTES ) != 0;
 			memcpy( s_relay.session, buf + 3, RELAY_SESSION_BYTES );
 			// The lobby already announced the first one; a relay that forgot us and had given it away moves us
 			DEBUG_ASSERTLOG( !s_relay.vip || vip == s_relay.vip, ("Transport: the relay moved us from %d.%d.%d.%d to %d.%d.%d.%d, peers will not find us\n",
@@ -235,6 +244,8 @@ void Transport::pumpRelay( void )
 				s_relay.vip = vip;
 				s_relay.wantVip = vip;	// every later HELLO asks for it back
 			}
+			if (rewelcome)
+				relaySendHello();
 		}
 		else if (buf[2] == RELAY_DATA && len > RELAY_DATA_IN_HEADER && len - RELAY_DATA_IN_HEADER <= MAX_NETWORK_MESSAGE_LEN)
 		{

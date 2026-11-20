@@ -16016,3 +16016,7 @@ END
 CONTROLBAR:ToolTipTurkiyeKapalicarsi
 "Der Markt der Türkei und ihr Wirtschaftsgebäude. Zahlt 20 alle 2 Sekunden und verkauft Exportverträge, die das Einkommen jedes Nachschubzentrums und jedes Großen Basars erhöhen. \n \n Benötigt: Fabrik"
 END
+
+Network:WaitingForReconnect
+"Warten auf die Rückkehr von %ls (%d:%02d)"
+END

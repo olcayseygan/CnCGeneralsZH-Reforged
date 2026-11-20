@@ -21225,3 +21225,7 @@ END
 SCIENCE:StealthTalent10BShort
 "Karıştırıcı geniş saklar"
 END
+
+Network:WaitingForReconnect
+"%ls için yeniden bağlantı bekleniyor (%d:%02d)"
+END

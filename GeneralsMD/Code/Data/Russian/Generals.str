@@ -18992,3 +18992,7 @@ END
 GUI:SlotInsaneAI
 "Безумный ИИ"
 END
+
+Network:WaitingForReconnect
+"Ожидание переподключения %ls (%d:%02d)"
+END

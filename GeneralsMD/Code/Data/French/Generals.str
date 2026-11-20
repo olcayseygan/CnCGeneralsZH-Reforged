@@ -19064,3 +19064,7 @@ END
 GUI:SlotInsaneAI
 "IA démente"
 END
+
+Network:WaitingForReconnect
+"En attente de la reconnexion de %ls (%d:%02d)"
+END

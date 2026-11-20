@@ -163,6 +163,23 @@ void DisconnectMenu::setPlayerTimeoutTime(Int playerNum, time_t newTime) {
 	}
 }
 
+void DisconnectMenu::setPlayerReconnectTime(Int playerNum, UnicodeString name, time_t msLeft) {
+	if (m_playerNameTextControlNames[playerNum] == NULL)
+		return;
+	Int seconds = (Int)((msLeft + 999) / 1000);		// the last fraction of a second still reads 0:01
+	UnicodeString text;
+	text.format(TheGameText->fetch("Network:WaitingForReconnect"), name.str(), seconds / 60, seconds % 60);
+
+	GameWindow *control = TheWindowManager->winGetWindowFromId(NULL, TheNameKeyGenerator->nameToKey(m_playerNameTextControlNames[playerNum]));
+	if (control != NULL) {
+		GadgetStaticTextSetText(control, text);
+	}
+	control = TheWindowManager->winGetWindowFromId(NULL, TheNameKeyGenerator->nameToKey(m_playerTimeoutTextControlNames[playerNum]));
+	if (control != NULL) {
+		GadgetStaticTextSetText(control, UnicodeString(u""));
+	}
+}
+
 void DisconnectMenu::showPlayerControls(Int slot) {
 	if (m_playerNameTextControlNames[slot] == NULL)
 		return;

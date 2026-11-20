@@ -83,7 +83,9 @@ protected:
 	void recalculatePacketRouterIndex(ConnectionManager *conMgr);
 	Bool allOnSameFrame(ConnectionManager *conMgr); ///< returns true if all players are stuck on the same frame.
 	Bool isLocalPlayerNextPacketRouter(ConnectionManager *conMgr); ///< returns true if the local player is next in line to be the packet router with all the players that have timed out being taken out of the picture.
-	Bool hasPlayerTimedOut(Int slot); ///< returns true if this player has timed out.
+	Bool hasPlayerTimedOut(Int slot, ConnectionManager *conMgr); ///< returns true if this player has timed out.
+	time_t reconnectHoldLeft(Int slot, ConnectionManager *conMgr); ///< ms a silent seat of an online match is still held for its player to come back, 0 for none.
+	time_t timeBeforeDrop(Int slot, ConnectionManager *conMgr, time_t *hold = NULL); ///< ms until this seat times out: the silent drop time or its reconnect hold, whichever is longer.
 	void sendPlayerDestruct(Int slot, ConnectionManager *conMgr); ///< send a destruct player network message.
 	Bool isPlayerVotedOut(Int slot, ConnectionManager *conMgr);	///< returns true if this player has been voted out.
 	Bool isPlayerInGame(Int slot, ConnectionManager *conMgr); ///< returns true if the player has neither timed out or been voted out.
@@ -113,6 +115,7 @@ protected:
 	time_t m_lastKeepAliveSendTime;
 
 	time_t m_playerTimeouts[MAX_SLOTS - 1];
+	Bool m_seatHeld[MAX_SLOTS - 1];		///< the row says "waiting to reconnect" instead of the countdown
 	time_t m_packetRouterTimeout;
 
 	DisconnectVoteStruct m_playerVotes[MAX_SLOTS][MAX_SLOTS];

@@ -18992,3 +18992,7 @@ END
 GUI:SlotInsaneAI
 "Божевільний ШІ"
 END
+
+Network:WaitingForReconnect
+"Очікування перепідключення %ls (%d:%02d)"
+END

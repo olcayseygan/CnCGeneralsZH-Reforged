@@ -2745,6 +2745,29 @@ TEST(online_quick_match_lock_seconds)
 	CHECK_EQ( OnlineGetQuickMatchLockSeconds(), 0 );
 }
 
+/* Our own copy of match.hold with a ticket hands the ticket to the relay once; another seat's hold, a
+	 hold for another match and a resume hand nothing, and the next match drops a ticket nobody took. */
+TEST(online_match_hold_relay_ticket)
+{
+	AdapterRig rig;
+	rig.login();
+	rig.feed( "{\"t\":\"game.start\",\"match\":\"m1\",\"ids\":[7,9],\"vips\":[167772163,167772169]}" );
+	UnsignedByte ticket[16];
+	const char *mine = "{\"t\":\"match.hold\",\"match\":\"m1\",\"player\":7,\"vip\":167772163,\"seconds\":240,\"ticket\":\"ffeeddccbbaa99887766554433221100\"}";
+	rig.feed( "{\"t\":\"match.hold\",\"match\":\"m1\",\"player\":9,\"vip\":167772169,\"seconds\":240,\"ticket\":\"ffeeddccbbaa99887766554433221100\"}" );
+	rig.feed( "{\"t\":\"match.hold\",\"match\":\"old\",\"player\":7,\"vip\":167772163,\"seconds\":240,\"ticket\":\"ffeeddccbbaa99887766554433221100\"}" );
+	rig.feed( "{\"t\":\"match.resume\",\"match\":\"m1\",\"player\":7,\"vip\":167772163}" );
+	CHECK( !OnlineTakeRelayTicket( ticket ) );
+	rig.feed( mine );
+	CHECK( OnlineTakeRelayTicket( ticket ) );
+	CHECK_EQ( (int)ticket[0], 0xff );
+	CHECK_EQ( (int)ticket[15], 0x00 );
+	CHECK( !OnlineTakeRelayTicket( ticket ) );
+	rig.feed( mine );
+	rig.feed( "{\"t\":\"game.start\",\"match\":\"m2\"}" );
+	CHECK( !OnlineTakeRelayTicket( ticket ) );
+}
+
 /* qm.matched's opponents carry their seat's side and colour, clamped as a seat clamps them. */
 TEST(online_reveal_opponents_carry_side_and_color)
 {

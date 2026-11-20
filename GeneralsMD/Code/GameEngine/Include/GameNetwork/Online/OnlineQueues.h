@@ -378,6 +378,15 @@ void OnlineRequestSkins( void );
 void OnlineSaveSkins( UnsignedInt64 wear );
 OnlineSkinsState OnlineGetSkins( UnsignedInt64 &owned, AsciiString &error );
 
+/* A seat of an online match that went silent is held for its player to come back instead of dropped after
+	 NetworkSilentPlayerDropTime: the match stays frozen on the disconnect screen, at most this long counted
+	 from the seat's last packet, and a unanimous vote still drops it at once (DisconnectManager).  The
+	 server's match.hold and match.resume about other seats are only logged: each peer holds a silent seat on
+	 its own clock.  OnlineTakeRelayTicket: TRUE once when a match.hold naming us carried a new relay ticket
+	 (the relay lost our session while our line stayed up), which Transport::pumpRelay sends in a HELLO_AUTH. */
+enum { ONLINE_RECONNECT_HOLD_MS = 4 * 60 * 1000 };
+Bool OnlineTakeRelayTicket( UnsignedByte out[16] );
+
 /* The server's verdict on the match the last game.start or qm.matched named: rated (delta, rating, or
 	 before and after, which give the same two) or unrated (reason).  FALSE until it arrives. */
 Bool OnlineGetMatchResult( Bool &rated, Real &delta, Real &rating, AsciiString &reason );

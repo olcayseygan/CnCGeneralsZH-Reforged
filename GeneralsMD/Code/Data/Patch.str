@@ -7034,3 +7034,7 @@ END
 SCIENCE:StealthTalent10BShort
 "Scrambler hides a wider area"
 END
+
+Network:WaitingForReconnect
+"Waiting for %ls to reconnect (%d:%02d)"
+END

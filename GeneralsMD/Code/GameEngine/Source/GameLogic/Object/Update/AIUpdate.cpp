@@ -263,6 +263,20 @@ static void AIUpdate_traceMove( const Object *obj, const Coord3D& framePos, Bool
 	LocomotorSetType set = (LocomotorSetType)INI::scanIndexList(ini->getNextToken(), TheLocomotorSetNames);
 	if (!self->m_locomotorTemplates[set].empty())
 	{
+		if (ini->getLoadType() == INI_LOAD_MULTIFILE)
+		{
+			/* TalentsReforged.ini adds SET_NORMAL_UPGRADED to objects retail leaves without one (the
+				 Rocket Buggy, the Demolitions Bomb Truck, the Inferno Cannon).  Base files from a repack or
+				 another mod that already give the object that set stopped v4.1.0 and v4.2.0 at start; the
+				 line is skipped and the object keeps the set its own files gave it.  On EA's files the set
+				 is empty here, so nothing changes there.  A Debug build still stops: one of our own patch
+				 lines naming a set twice (an ObjectReskin sharing its source's AI data) is ours to fix. */
+			DEBUG_LOG(("[LINE: %d in '%s'] %s already has locomotor set %s; the line is skipped\n",
+				ini->getLineNum(), ini->getFilename().str(), tt->getName().str(), TheLocomotorSetNames[set]));
+			DEBUG_CRASH(("[LINE: %d in '%s'] %s states locomotor set %s twice\n",
+				ini->getLineNum(), ini->getFilename().str(), tt->getName().str(), TheLocomotorSetNames[set]));
+			return;
+		}
 		if (ini->getLoadType() != INI_LOAD_CREATE_OVERRIDES)
 		{
 			g_LastErrorDump.format("[LINE: %d in '%s'] %s states locomotor set %s twice\n",

@@ -68,6 +68,7 @@
 #include "Common/RandomValue.h"
 #include "Common/GameCommon.h"
 #include "GameLogic/Damage.h"
+#include "GameLogic/Locomotor.h"
 #include "GameNetwork/RankPointValue.h"
 #include "GameClient/ChromaKeyboard.h"
 #include "GameClient/MetaEvent.h"
@@ -1297,6 +1298,83 @@ TEST(patch_of_a_missing_object_is_skipped)
 		TheWritableGlobalData = NULL;
 	}
 }
+
+/* TalentsReforged.ini gives GLAVehicleRocketBuggy a SET_NORMAL_UPGRADED.  Repacks whose base files
+	 already gave it one threw "states locomotor set SET_NORMAL_UPGRADED twice" and stopped v4.2.0 at
+	 start.  The patch line is skipped now: the object keeps the set its own files gave it, and the next
+	 line still applies.  A Debug build stops on the DEBUG_CRASH by design, so the test is Release only. */
+#if !defined(DEBUG_CRASHING)
+TEST(patch_locomotor_set_the_object_already_has_is_skipped)
+{
+	CHECK( bootOnce() );
+
+	GlobalData *savedGlobals = TheWritableGlobalData;
+	if( savedGlobals == NULL )
+		TheWritableGlobalData = NEW GlobalData;
+	if( TheModuleFactory == NULL )
+	{
+		TheModuleFactory = NEW ModuleFactory;
+		TheModuleFactory->init();
+	}
+	if( TheThingFactory == NULL )
+		TheThingFactory = NEW ThingFactory;
+	if( TheLocomotorStore == NULL )
+		TheLocomotorStore = NEW LocomotorStore;	// left up: templates below keep pointers into it
+
+	writeFile( TEST_INI,
+		"Locomotor LocoSetProbeA\r\n"
+		"  Speed = 10\r\n"
+		"End\r\n"
+		"Locomotor LocoSetProbeB\r\n"
+		"  Speed = 20\r\n"
+		"End\r\n"
+		"Object LocoSetProbe\r\n"
+		"  Behavior = AIUpdateInterface ModuleTag_AI\r\n"
+		"  End\r\n"
+		"  Locomotor = SET_NORMAL LocoSetProbeA\r\n"
+		"  Locomotor = SET_NORMAL_UPGRADED LocoSetProbeA\r\n"
+		"End\r\n" );
+	CHECK( loadIni( TEST_INI ) );
+
+	writeFile( TEST_INI,
+		"Object LocoSetProbe\r\n"
+		"  Locomotor = SET_NORMAL_UPGRADED LocoSetProbeB\r\n"
+		"  Locomotor = SET_WANDER LocoSetProbeB\r\n"
+		"End\r\n" );
+	Bool threw = FALSE;
+	try
+	{
+		INI patch;
+		patch.load( AsciiString( TEST_INI ), INI_LOAD_MULTIFILE, NULL );
+	}
+	catch( ... )
+	{
+		threw = TRUE;
+	}
+	CHECK( threw == FALSE );
+
+	const LocomotorTemplate *a = TheLocomotorStore->findLocomotorTemplate( NAMEKEY( "LocoSetProbeA" ) );
+	const LocomotorTemplate *b = TheLocomotorStore->findLocomotorTemplate( NAMEKEY( "LocoSetProbeB" ) );
+	CHECK( a != NULL && b != NULL );
+	ThingTemplate *probe = const_cast<ThingTemplate *>( TheThingFactory->findTemplate( "LocoSetProbe" ) );
+	AIUpdateModuleData *ai = probe ? probe->friend_getAIModuleInfo() : NULL;
+	CHECK( ai != NULL );
+	if( ai != NULL )
+	{
+		CHECK( ai->m_locomotorTemplates[LOCOMOTORSET_NORMAL_UPGRADED].size() == 1
+			&& ai->m_locomotorTemplates[LOCOMOTORSET_NORMAL_UPGRADED][0] == a );
+		CHECK( ai->m_locomotorTemplates[LOCOMOTORSET_WANDER].size() == 1
+			&& ai->m_locomotorTemplates[LOCOMOTORSET_WANDER][0] == b );
+	}
+
+	remove( TEST_INI );
+	if( savedGlobals == NULL )
+	{
+		delete TheWritableGlobalData;
+		TheWritableGlobalData = NULL;
+	}
+}
+#endif
 
 /* FixesReforged.ini gives every China Command Center the Nuke_ and Early_ carpet bombers.  With data that
 	 has no such special powers the module kept a NULL template, and placing the start building faulted in

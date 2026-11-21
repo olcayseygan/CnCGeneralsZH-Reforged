@@ -9766,7 +9766,11 @@ void RMGLayout::clearLockedGround( void )
 	of three build plots, one a seat, each RMG_LANE_PLOT_ALONG along the lane by RMG_LANE_PLOT_ACROSS
 	across it, upright like the plots at the ends of the Direct Strike map: seat 1's on the lane's axis,
 	seat 2's below it and seat 3's above, RMG_LANE_PLOT_PITCH cells apart. A plot's edge towards the
-	lane is its front, and the director lays the wave copy out with that edge forward.
+	lane is its front, and the director lays the wave copy out with that edge forward. Every unit
+	stands on it, jets included; the air zones that once lay behind each plot are gone (the owner's
+	rule of 2026-11-21), and the plot is twice as deep for it, 12 slots across by 16 back. It grew
+	along the lane rather than across so the wave copy keeps its 24 cells on the 45-cell lane and
+	goes round the fortress as before, and a deep plot fills the side camera's wide frame.
 
 	The lane and the plots are flat at RMG_LANE_GROUND, and nothing walls them in: the director holds
 	a plot's units where they were bought and sends a wave straight down its lines, so the terrain
@@ -9795,8 +9799,6 @@ void RMGLayout::clearLockedGround( void )
 	                                     stands in the middle of its own (1 in A1, 2 in B1, 3 in A2,
 	                                     4 in B2, 5 in A3, 6 in B3)
 	LaneWar_MiddleArea                   trigger area, RMG_LANE_MIDDLE_RADIUS round the lane's middle
-	LaneWar_AirA1 to A3, B1 to B3        trigger areas, each seat's air zone: as wide as its plot,
-	                                     RMG_LANE_AIR_DEPTH deep, RMG_LANE_AIR_GAP behind the plot's back
 	LaneWar_SpawnA, LaneWar_SpawnB       waypoints, each team's spawn anchor
 	LaneWar_LaneA, LaneWar_LaneB         waypoint path labels: A's runs from just ahead of its fortress
 	                                     to B's fortress, B's back the other way, a waypoint every
@@ -9825,15 +9827,13 @@ static const char *const RMG_LANE_MIDDLE_TEMPLATE = NULL;	///< a structure in th
 #define RMG_LANE_MIDDLE_SIDES	16
 #define RMG_LANE_PATH_STEP		15.0f	///< cells between two waypoints of a lane path
 #define RMG_LANE_PLOT_GAP		14		///< cells of green between a lane's end and the front of its team's plots
-#define RMG_LANE_PLOT_ALONG		16		///< a plot's cells along the lane, front to back
-#define RMG_LANE_PLOT_ACROSS	24		///< and across it, the width of its front
+#define RMG_LANE_PLOT_ALONG		32		///< a plot's cells along the lane, front to back: 16 slots of LANEWAR_SLOT_SIZE
+#define RMG_LANE_PLOT_ACROSS	24		///< and across it, the width of its front: 12 slots
 #define RMG_LANE_PLOT_PITCH		34		///< cells between the middles of two neighbouring plots of a column
-#define RMG_LANE_AIR_GAP		2		///< cells between a plot's back and its air zone, one slot of LANEWAR_SLOT_SIZE
-#define RMG_LANE_AIR_DEPTH		4		///< cells an air zone runs back from there, two slots; it is as wide as its plot
 #define RMG_LANE_WEAR_FORTRESS	8.0f	///< cells past a fortress's footprint the ground round it is worn, at most
 #define RMG_LANE_WEAR_TOWER		5.0f	///< and past a tower's
 #define RMG_LANE_WEAR_FRINGE	0.35f	///< the share of that past which the worn ground only freckles the bank
-#define RMG_LANE_SEA_END		111		///< cells from the back of a plot column to the playable edge: green, beach and sea (an odd height keeps the lane's 45 in the middle)
+#define RMG_LANE_SEA_END		95		///< cells from the back of a plot column to the playable edge: green, beach and sea (an odd height keeps the lane's 45 in the middle); 111 before the plot grew 16 cells deeper, so the map stays 642 by 361
 #define RMG_LANE_GROUND			64		///< height bytes of the lane, the plots and the level ring round them
 #define RMG_LANE_FLAT_RING		3		///< cells of level ground round all of those
 #define RMG_LANE_RING_WANDER	4.0f	///< and up to this many more on a slow noise field, so the hills' foot is no ruled line
@@ -9845,7 +9845,7 @@ static const char *const RMG_LANE_MIDDLE_TEMPLATE = NULL;	///< a structure in th
 #define RMG_LANE_CORE_SIDE		9.0f	///< cells the island's core stands off the plots' outer edges, across the lane
 #define RMG_LANE_CORE_ROUND		50.0f	///< cells, the core's rounded ends across the island
 #define RMG_LANE_END_ROUND		55.0f	///< and along it, so an end is a half ellipse round its plot column
-#define RMG_LANE_TIP_REACH		26.0f	///< the reach straight off an end at most, which keeps 50 cells of sea past the tip
+#define RMG_LANE_TIP_REACH		20.0f	///< the reach straight off an end at most, which keeps 50 cells of sea past the tip (26 while the plot column stood 10 cells further in)
 #define RMG_LANE_REACH_MEAN		14.0f	///< cells from the core to the coast on the seed's thinnest island, on average
 #define RMG_LANE_REACH_SEED		14.0f	///< and how much more a seed may add to that
 #define RMG_LANE_REACH_SWING	34.0f	///< cells the coast wanders either side on the slow field, the island's shape
@@ -9865,7 +9865,6 @@ struct RMGLaneShape
 	Int m_playX, m_playY;				///< playable cells, 16:9
 	Int m_laneX0, m_laneX1, m_laneY0, m_laneY1;	///< the lane's corner vertices
 	Int m_plotX0[2];					///< the west vertex of team A's plots and of team B's
-	Int m_airX0[2];						///< and of their air zones, behind the plots
 	Int m_plotY0[3];					///< the low y vertex of seat 1's, 2's and 3's
 	Real m_middleX, m_middleY;			///< the lane's middle
 	Real m_half;						///< half its length
@@ -9886,8 +9885,6 @@ static RMGLaneShape rmgLaneShape( void )
 	s.m_laneY1 = s.m_laneY0 + RMG_LANE_WIDTH;
 	s.m_plotX0[0] = RMG_LANE_SEA_END;
 	s.m_plotX0[1] = s.m_laneX1 + RMG_LANE_PLOT_GAP;
-	s.m_airX0[0] = s.m_plotX0[0] - RMG_LANE_AIR_GAP - RMG_LANE_AIR_DEPTH;
-	s.m_airX0[1] = s.m_plotX0[1] + RMG_LANE_PLOT_ALONG + RMG_LANE_AIR_GAP;
 	s.m_plotY0[0] = s.m_laneY0 + ( RMG_LANE_WIDTH - RMG_LANE_PLOT_ACROSS ) / 2;
 	s.m_plotY0[1] = s.m_plotY0[0] - RMG_LANE_PLOT_PITCH;
 	s.m_plotY0[2] = s.m_plotY0[0] + RMG_LANE_PLOT_PITCH;
@@ -10050,10 +10047,10 @@ void RMGLayout::buildLane( void )
 
 	/* A vertex is play (the lane or a plot) or bank, and a bank vertex knows how many cells it stands
 		off the nearest vertex in play (Chebyshev, capped). Area 0 is the lane, 1 to 6 the plots of
-		starts 1 to 6 and 7 to 12 their air zones, which are flat and level with them as well. */
+		starts 1 to 6. */
 	enum { LANE_BANK = 0, LANE_FLOOR, LANE_PLOT };
-	const Int areas = 2 * RMG_LANE_SEATS + 1, offCap = 64;
-	Int areaX0[2 * RMG_LANE_SEATS + 1], areaY0[2 * RMG_LANE_SEATS + 1], areaX1[2 * RMG_LANE_SEATS + 1], areaY1[2 * RMG_LANE_SEATS + 1];
+	const Int areas = RMG_LANE_SEATS + 1, offCap = 64;
+	Int areaX0[RMG_LANE_SEATS + 1], areaY0[RMG_LANE_SEATS + 1], areaX1[RMG_LANE_SEATS + 1], areaY1[RMG_LANE_SEATS + 1];
 	for( Int area = 0; area < areas; area++ )
 	{
 		if( area == 0 )
@@ -10062,14 +10059,6 @@ void RMGLayout::buildLane( void )
 			areaY0[area] = shape.m_laneY0;
 			areaX1[area] = shape.m_laneX1;
 			areaY1[area] = shape.m_laneY1;
-		}
-		else if( area > RMG_LANE_SEATS )
-		{
-			const Int start = area - RMG_LANE_SEATS - 1;
-			areaX0[area] = shape.m_airX0[start & 1];
-			areaY0[area] = shape.m_plotY0[start >> 1];
-			areaX1[area] = areaX0[area] + RMG_LANE_AIR_DEPTH;
-			areaY1[area] = areaY0[area] + RMG_LANE_PLOT_ACROSS;
 		}
 		else
 		{
@@ -10102,7 +10091,7 @@ void RMGLayout::buildLane( void )
 	/* The island, a blob round play after the Direct Strike minimap. Its core is a rectangle round the
 		lane and both plot columns, RMG_LANE_CORE_SIDE off the plots' outer edges, whose ends are half
 		ellipses RMG_LANE_END_ROUND along the lane by RMG_LANE_CORE_ROUND across, set so that each passes
-		through the outer corner of its column's last air zone. The ends were the corners of a rectangle
+		through the outer corner of its column's last plot. The ends were the corners of a rectangle
 		rounded by 30 once, and a coast held off the plots there ran straight down the whole column; an
 		ellipse bulges past the column's middle and comes in at its corners, so the end is round. The
 		coast lies a reach off the core's edge, measured straight out from it, and the reach wanders on
@@ -10121,7 +10110,7 @@ void RMGLayout::buildLane( void )
 		staircase on the diagonals. Every noise is read off the lattice, whose zero lines once left the
 		first map's hills flat along its low x and low y edges. */
 	const Real bendX = RMG_LANE_END_ROUND, bendY = RMG_LANE_CORE_ROUND;
-	const Real columnX = shape.m_middleX - (Real)shape.m_airX0[0];
+	const Real columnX = shape.m_middleX - (Real)shape.m_plotX0[0];
 	const Real columnY = std::max( shape.m_middleY - (Real)shape.m_plotY0[1],
 		(Real)( shape.m_plotY0[2] + RMG_LANE_PLOT_ACROSS ) - shape.m_middleY );
 	const Real coreY = columnY + RMG_LANE_CORE_SIDE, innerY = coreY - bendY;
@@ -10436,22 +10425,6 @@ void RMGLayout::buildLane( void )
 		middle.m_polygon.push_back( at );
 	}
 	m_areas.push_back( middle );
-
-	/* Behind each plot, away from the enemy, a gap of RMG_LANE_AIR_GAP cells (one slot) and then the
-		seat's air zone, RMG_LANE_AIR_DEPTH cells (two slots) deep and as wide as the plot, where the
-		director puts its aircraft: LaneWar_AirA1 to A3 and B1 to B3, after the middle area so the build
-		areas and the middle keep their places in the list. */
-	for( Int start = 0; start < RMG_LANE_SEATS; start++ )
-	{
-		const Int team = start & 1, seat = start >> 1;
-		const Real x0 = (Real)shape.m_airX0[team], y0 = (Real)shape.m_plotY0[seat];
-		const Real x1 = x0 + RMG_LANE_AIR_DEPTH, y1 = y0 + RMG_LANE_PLOT_ACROSS;
-		RMGArea air;
-		air.m_name.format( "LaneWar_Air%c%d", 'A' + team, seat + 1 );
-		const RMGPoint corners[4] = { { x0, y0 }, { x1, y0 }, { x1, y1 }, { x0, y1 } };
-		air.m_polygon.assign( corners, corners + 4 );
-		m_areas.push_back( air );
-	}
 
 	buildBlends();
 }

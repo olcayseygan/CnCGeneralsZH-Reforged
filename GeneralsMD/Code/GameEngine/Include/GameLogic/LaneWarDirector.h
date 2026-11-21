@@ -38,10 +38,10 @@
 // (LANEWAR_ORDER_ABILITY), and one left standing short of the enemy fortress marches on.  A team
 // loses when its fortress dies, through VictoryConditions, and nothing else counts.
 //
-// Fixed-wing jets stand on the air rows behind the plot and do not march.  A wave's jet copies join
+// Fixed-wing jets stand on the plot's grid like any unit but do not march.  A wave's jet copies join
 // their seat's squadron, which waits off the map behind its own end with nothing of it on the map.
 // When the two teams' fronts are about to meet, the squadron's rearmed jets fly in line abreast, as
-// the air rows lay them out, straight along the lane to the meeting point, strike, and fly back off
+// their slots lay them out, straight along the lane to the meeting point, strike, and fly back off
 // the map, where they reload and wait for the next clash until shot down or their lifespan is up.
 // Helicopters stand on the ground grid and march with the wave.
 //
@@ -73,7 +73,7 @@ enum
 	LANEWAR_TICK_SECONDS = 45,						///< wall seconds between two spawn ticks
 	LANEWAR_FIRST_TICK_SECONDS = 90,			///< wall seconds from the start to the first spawn tick, time to fill the plots
 	LANEWAR_LIFESPAN_SECONDS = 130,				///< wall seconds a wave copy lives
-	LANEWAR_SLOT_SIZE = 20,								///< world units a side of one plot slot, two cells; a plot 240 across its front and 160 deep is 12 columns by 8 rows
+	LANEWAR_SLOT_SIZE = 20,								///< world units a side of one plot slot, two cells; a plot 240 across its front and 320 deep is 12 columns by 16 rows
 	LANEWAR_INCOME_TIERS = 4,							///< income levels a player can buy past the first
 	LANEWAR_INCOME_TIER_PRICE = 1000,			///< each of them
 	LANEWAR_INCOME_TIER_PAYS = 100,				///< more on every tick for each level bought, back in ten ticks
@@ -100,9 +100,8 @@ enum
 extern Bool LaneWar_strikeDue( Real gap, Real mySpeed, Real enemySpeed, Real parkBehind, Real jetSpeed, Real *meetAhead );
 
 /** What MSG_LANEWAR_ORDER asks for, its first argument; the integers after it depend on it.  A plot
-	  has two grids, the ground slots (LANEWAR_GRID_GROUND) and behind them the air rows
-	  (LANEWAR_GRID_AIR); a fixed-wing jet stands only in the air rows, everything else, helicopters
-	  included, only on the ground (LaneWarDirector::isJet). */
+	  has one grid, LANEWAR_GRID_GROUND, and every unit stands on it, jets included; the grid argument
+	  some orders carry is always that one (the air rows that were the second grid are gone). */
 enum LaneWarOrderKind
 {
 	LANEWAR_ORDER_PLACE = 0,							///< (template id, column, row): buy that unit onto the sender's plot, its block's front left slot at that one, in the grid its kind takes
@@ -173,7 +172,7 @@ extern Bool LaneWar_abilityToggleOn( const std::vector<LaneWarAbilityToggle> &li
 /// LANEWAR_ORDER_ABILITY's integers hold together before any template is looked up
 extern Bool LaneWar_abilityOrderArgsOk( const Int *args, Int argCount );
 
-enum { LANEWAR_GRID_GROUND = 0, LANEWAR_GRID_AIR = 1, LANEWAR_GRIDS = 2 };
+enum { LANEWAR_GRID_GROUND = 0, LANEWAR_GRIDS = 1 };
 enum { LANEWAR_TRACK_INCOME = 0, LANEWAR_TRACK_TECH = 1 };
 
 /// what a player on that income level is paid on a tick, the middle's bonus on top when his team holds it
@@ -231,7 +230,7 @@ extern Int LaneWar_middleHolder( Int pastLineA, Int pastLineB );
 extern UnsignedInt LaneWar_income( Bool holdsMiddle );
 
 /** One unit a player may buy: the template his side or general fields, the tech tier (1 to 3) that
-	  unlocks it, and whether it is his one hero.  A jet goes on the plot's air rows. */
+	  unlocks it, and whether it is his one hero. */
 struct LaneWarRosterItem
 {
 	const ThingTemplate *thing;
@@ -278,7 +277,7 @@ public:
 	void onOrder( Player *player, Int kind, const Int *args, Int argCount );
 
 	/** Buy a unit of the template onto the player's own plot with its block's front left slot at
-		  (col, row), on the ground grid or for an aircraft the air rows: refused unless the player is
+		  (col, row) on its grid: refused unless the player is
 		  seated, the template is on his side's roster, its tier is open to him, it is not a second hero,
 		  the block fits inside the grid, no unit of his already covers any of its slots and he can pay
 		  for it.  The one entry point for the buy panel, the bot and the scenario verb laneplace. */
@@ -295,14 +294,12 @@ public:
 	/** A plot's corners in the world, for the client's slot grid; FALSE off a lane map.  Read once the
 		  map is in: they never change during a match. */
 	Bool getPlotBounds( Int team, Int seat, Coord2D *lo, Coord2D *hi ) const;
-	/// the same for the plot's air rows; FALSE where the map has none
-	Bool getAirBounds( Int team, Int seat, Coord2D *lo, Coord2D *hi ) const;
 
 	struct PlotUnit
 	{
 		ObjectID id;
 		Int team, seat;
-		Int grid;												///< LANEWAR_GRID_GROUND or LANEWAR_GRID_AIR
+		Int grid;												///< LANEWAR_GRID_GROUND
 		Int col, row, size;
 		Int cost;												///< what was paid for it
 		Bool sent;											///< it has gone out in a wave at least once
@@ -355,10 +352,8 @@ public:
 	Int getCopyCount( void ) const { return (Int)m_copies.size(); }
 	ObjectID getCopyID( Int i ) const { return m_copies[ i ].id; }
 	/** A fixed-wing jet: an aircraft not made at a helipad and with no helicopter locomotor.  Only a jet
-		  stands on the air rows and strikes from off the map; a helicopter walks with the wave. */
+		  strikes from off the map; a helicopter walks with the wave. */
 	static Bool isJet( const ThingTemplate *tmpl );
-	/// the grid a unit of this template stands in on a plot
-	static Int gridFor( const ThingTemplate *tmpl );
 	/// the slots a side a unit of this template covers
 	static Int sizeFor( const ThingTemplate *tmpl );
 	/// the player's wave units of the template use the button in that slot of its command set (LaneWar_abilitiesOf)
@@ -401,7 +396,7 @@ private:
 		ObjectID id;										///< INVALID_ID while parked
 		const ThingTemplate *thing;
 		Int team, seat;
-		Int col, row;										///< its air row slot, its place in the line abreast
+		Int col, row;										///< its plot slot, its place in the line abreast
 		Int state;
 		UnsignedInt dieFrame;
 		UnsignedInt stateFrame;					///< parked: the frame it is rearmed; out: the frame it took off

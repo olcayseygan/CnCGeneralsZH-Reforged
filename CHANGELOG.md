@@ -8,6 +8,12 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Direct Strike plots twice as deep, jets on the plot
+
+- Your plot holds twice what it did: 12 slots across by 16 deep instead of 8 deep, 192 slots in all. It grew back from the lane, so your wave still walks out as wide as before and the side camera shows the plot across the screen.
+- The two air rows behind the plot are gone. A jet goes on the plot like any other unit, in any slot it fits. It still never marches: its copy waits off the map with your squadron and strikes when the fronts are about to meet. Jets you place in the same row fly in line, and one placed further back takes off further back. Computer seats put their jets at the back of the plot.
+- Direct Strike replays and saves recorded before this change will not play back.
+
 ## Direct Strike waves leave from behind the fortress
 
 - A wave now appears behind its own fortress, with the fortress between it and the lane, and marches out past the fortress and the watch tower. It used to appear in front of the tower. An enemy that wants to sit on your spawn has to get past both first. The walk to the enemy fortress is 90 cells longer.

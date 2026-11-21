@@ -637,8 +637,7 @@ void LaneWarDirector::reset( void )
 //-------------------------------------------------------------------------------------------------
 /** A seat's grid from the map's area of that name, its bounds and whole slots from its front left
 	  corner: a plot stands behind its end of the lane, so its edge towards the lane, its front, faces
-	  the enemy end, and the front runs across y.  The air rows behind it are the same shape.  FALSE
-	  where the map has no such area. */
+	  the enemy end, and the front runs across y.  FALSE where the map has no such area. */
 Bool LaneWarDirector::readGrid( const char *prefix, Int team, Int seat, Int grid )
 {
 	AsciiString name;
@@ -694,13 +693,10 @@ void LaneWarDirector::newMap( Bool loadingSaveGame )
 				reset();
 				return;
 			}
-			// the air rows behind the plot; a map from before them has none, and no aircraft can be bought
-			readGrid( "LaneWar_Air", t, s, LANEWAR_GRID_AIR );
 		}
 	}
 
-	// the anchor a wave copy is laid out round is the ground grid's middle; the air rows keep their
-	// place behind it in the wave
+	// the anchor a wave copy is laid out round is the grid's middle
 	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
 		for( Int s = 0; s < LANEWAR_SEATS; ++s )
 		{
@@ -766,11 +762,11 @@ void LaneWarDirector::newMap( Bool loadingSaveGame )
 	}
 
 	const Coord2D &plotLo = m_gridLo[ 0 ][ 0 ][ LANEWAR_GRID_GROUND ], &plotHi = m_gridHi[ 0 ][ 0 ][ LANEWAR_GRID_GROUND ];
-	DEBUG_LOG(( "LANEWAR: on; seats A [%d %d %d] B [%d %d %d], fortress A %d B %d, spawn A (%.0f,%.0f) B (%.0f,%.0f), middle x %.0f, plot A1 %d across by %d deep from (%.0f,%.0f) to (%.0f,%.0f), air rows %d by %d, first tick at frame %u\n",
+	DEBUG_LOG(( "LANEWAR: on; seats A [%d %d %d] B [%d %d %d], fortress A %d B %d, spawn A (%.0f,%.0f) B (%.0f,%.0f), middle x %.0f, plot A1 %d across by %d deep from (%.0f,%.0f) to (%.0f,%.0f), first tick at frame %u\n",
 							m_seatPlayer[0][0], m_seatPlayer[0][1], m_seatPlayer[0][2], m_seatPlayer[1][0], m_seatPlayer[1][1], m_seatPlayer[1][2],
 							(Int)m_fortress[0], (Int)m_fortress[1], m_spawn[0].x, m_spawn[0].y, m_spawn[1].x, m_spawn[1].y, m_middle.x,
 							m_gridCols[0][0][LANEWAR_GRID_GROUND], m_gridRows[0][0][LANEWAR_GRID_GROUND], plotLo.x, plotLo.y, plotHi.x, plotHi.y,
-							m_gridCols[0][0][LANEWAR_GRID_AIR], m_gridRows[0][0][LANEWAR_GRID_AIR], m_nextTickFrame ));
+							m_nextTickFrame ));
 
 	// what each seat's army can buy, so a log says which general fielded what
 	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
@@ -843,11 +839,6 @@ Bool LaneWarDirector::getPlotBounds( Int team, Int seat, Coord2D *lo, Coord2D *h
 	return getGridBounds( team, seat, LANEWAR_GRID_GROUND, lo, hi );
 }
 
-Bool LaneWarDirector::getAirBounds( Int team, Int seat, Coord2D *lo, Coord2D *hi ) const
-{
-	return getGridBounds( team, seat, LANEWAR_GRID_AIR, lo, hi );
-}
-
 //-------------------------------------------------------------------------------------------------
 /// the template's normal locomotors, the first AI module's
 static const LocomotorTemplateVector *normalLocomotors( const ThingTemplate *tmpl )
@@ -914,11 +905,6 @@ static Object *airTargetFor( const Object *jet, const Region3D &map )
 		}
 	}
 	return best;
-}
-
-Int LaneWarDirector::gridFor( const ThingTemplate *tmpl )
-{
-	return isJet( tmpl ) ? LANEWAR_GRID_AIR : LANEWAR_GRID_GROUND;
 }
 
 /// the footprint's widest extent in whole slots
@@ -1029,10 +1015,8 @@ const char *LaneWarDirector::whyNotPlace( const Player *player, const ThingTempl
 	if( item->hero && skip == INVALID_ID && m_heroBought[ team ][ seat ] )
 		return "the hero is bought once";
 
-	const Int grid = gridFor( tmpl );
+	const Int grid = LANEWAR_GRID_GROUND;
 	const Int size = sizeFor( tmpl );
-	if( m_gridCols[ team ][ seat ][ grid ] <= 0 )
-		return "no air rows on this map";
 	if( !LaneWar_blockFits( col, row, size, m_gridCols[ team ][ seat ][ grid ], m_gridRows[ team ][ seat ][ grid ] ) )
 		return "off the plot";
 	for( size_t i = 0; i < m_plotUnits.size(); ++i )
@@ -1105,15 +1089,14 @@ Bool LaneWarDirector::placeUnit( Player *player, const ThingTemplate *tmpl, Int 
 	const char *refused = whyNotPlace( player, tmpl, col, row );
 	if( refused != NULL )
 	{
-		DEBUG_LOG(( "LANEWAR PLACE: frame %u player %d '%s' at column %d row %d of the %s refused: %s\n", now,
-								player ? (Int)player->getPlayerIndex() : -1, tmpl ? tmpl->getName().str() : "?", col, row,
-								gridFor( tmpl ) == LANEWAR_GRID_AIR ? "air rows" : "ground", refused ));
+		DEBUG_LOG(( "LANEWAR PLACE: frame %u player %d '%s' at column %d row %d refused: %s\n", now,
+								player ? (Int)player->getPlayerIndex() : -1, tmpl ? tmpl->getName().str() : "?", col, row, refused ));
 		return FALSE;
 	}
 
 	Int team, seat;
 	seatOf( player, &team, &seat );
-	const Int grid = gridFor( tmpl );
+	const Int grid = LANEWAR_GRID_GROUND;
 	const Int size = sizeFor( tmpl );
 	const Int cost = tmpl->calcCostToBuild( player );
 	Team *owner = player->getDefaultTeam();
@@ -1155,9 +1138,9 @@ Bool LaneWarDirector::placeUnit( Player *player, const ThingTemplate *tmpl, Int 
 		m_heroBought[ team ][ seat ] = TRUE;
 	TheLaneWarStats->onPlace( player, tmpl, cost );
 
-	DEBUG_LOG(( "LANEWAR PLACE: frame %u player %d '%s' at column %d row %d size %d on plot %s%d %s at (%.0f,%.0f) for %d, %u left\n", now,
+	DEBUG_LOG(( "LANEWAR PLACE: frame %u player %d '%s' at column %d row %d size %d on plot %s%d%s at (%.0f,%.0f) for %d, %u left\n", now,
 							(Int)player->getPlayerIndex(), tmpl->getName().str(), col, row, size, TEAM_NAME[ team ], seat + 1,
-							grid == LANEWAR_GRID_AIR ? "air rows" : "ground", pos.x, pos.y, cost, player->getMoney()->countMoney() ));
+							isJet( tmpl ) ? ", a jet" : "", pos.x, pos.y, cost, player->getMoney()->countMoney() ));
 	return TRUE;
 }
 
@@ -2075,8 +2058,8 @@ Bool LaneWarDirector::frontOf( Int team, Real *x, Real *speed ) const
 
 //-------------------------------------------------------------------------------------------------
 /** The seat's rearmed parked jets take off together when LaneWar_strikeDue says so.  Each is made anew
-	  off the map on its air row slot's line across the lane, its row a slot further back as on the
-	  plot, a second copy of the same slot one air grid's depth behind the first, and the lot
+	  off the map on its plot slot's line across the lane, each row a slot further back as on the
+	  plot, a second copy of the same slot one plot's depth behind the first, and the lot
 	  attack-moves straight along the lane to the meeting point at the slowest one's speed
 	  (AIGroup::groupLaneMarch), striking what it meets there. */
 void LaneWarDirector::launchJets( Int team, Int seat, UnsignedInt now )
@@ -2108,9 +2091,9 @@ void LaneWarDirector::launchJets( Int team, Int seat, UnsignedInt now )
 
 	Player *player = ThePlayerList->getNthPlayer( m_seatPlayer[ team ][ seat ] );
 	Team *owner = player->getDefaultTeam();
-	const Coord2D &airLo = m_gridLo[ team ][ seat ][ LANEWAR_GRID_AIR ], &airHi = m_gridHi[ team ][ seat ][ LANEWAR_GRID_AIR ];
-	const Real airFront = toward > 0.0f ? airHi.x : airLo.x;
-	const Real airDepth = airHi.x - airLo.x;
+	const Coord2D &plotLo = m_gridLo[ team ][ seat ][ LANEWAR_GRID_GROUND ], &plotHi = m_gridHi[ team ][ seat ][ LANEWAR_GRID_GROUND ];
+	const Real plotFront = toward > 0.0f ? plotHi.x : plotLo.x;
+	const Real plotDepth = plotHi.x - plotLo.x;
 	AIGroup *group = TheAI->createGroup();
 	for( size_t i = 0; i < m_jets.size(); ++i )
 	{
@@ -2122,9 +2105,9 @@ void LaneWarDirector::launchJets( Int team, Int seat, UnsignedInt now )
 			stack += m_jets[ j ].team == team && m_jets[ j ].seat == seat && m_jets[ j ].col == jet.col && m_jets[ j ].row == jet.row
 							 && m_jets[ j ].state == JET_OUT && m_jets[ j ].stateFrame == now;
 
-		const Coord3D at = slotCentre( team, seat, LANEWAR_GRID_AIR, jet.col, jet.row, sizeFor( jet.thing ) );
+		const Coord3D at = slotCentre( team, seat, LANEWAR_GRID_GROUND, jet.col, jet.row, sizeFor( jet.thing ) );
 		Coord3D pos;
-		pos.x = park + ( at.x - airFront ) - toward * (Real)stack * airDepth;
+		pos.x = park + ( at.x - plotFront ) - toward * (Real)stack * plotDepth;
 		pos.y = m_spawn[ team ].y + at.y - m_plotAnchor[ team ][ seat ].y;
 		pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
 
@@ -2631,6 +2614,9 @@ void LaneWarDirector::xfer( Xfer *xfer )
 			xfer->xferInt( &u.grid );
 			xfer->xferInt( &u.cost );
 			xfer->xferBool( &u.sent );
+			// a save from before the air rows went names grid 1 for a jet; there is one grid now
+			if( u.grid < 0 || u.grid >= LANEWAR_GRIDS )
+				u.grid = LANEWAR_GRID_GROUND;
 		}
 		else
 		{

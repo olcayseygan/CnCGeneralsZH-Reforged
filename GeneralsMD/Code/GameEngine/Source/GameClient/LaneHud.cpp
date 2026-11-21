@@ -410,7 +410,7 @@ static Bool slotUnder( const Coord3D &world, Int grid, Int size, Int *col, Int *
 	return TRUE;
 }
 
-/// the player's plot unit under a world point, on either grid; -1 for none
+/// the player's plot unit under a world point; -1 for none
 static Int plotUnitUnder( const Coord3D &world )
 {
 	for( Int grid = 0; grid < LANEWAR_GRIDS; ++grid )
@@ -973,8 +973,8 @@ static void drawTop( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** A seat's frame: its colour, what it is paid, what its plot is worth, and the plot itself small,
-	* its air rows above it.  Held Tab lays these out for every other seat; the pointer over a plot on
+/** A seat's frame: its colour, what it is paid, what its plot is worth, and the plot itself small.
+	* Held Tab lays these out for every other seat; the pointer over a plot on
 	* the strip map raises one under the plate. */
 //-------------------------------------------------------------------------------------------------
 static void drawPlotFrame( const LaneHudBox &b, Int team, Int seat )
@@ -997,34 +997,23 @@ static void drawPlotFrame( const LaneHudBox &b, Int team, Int seat )
 	drawText( pay, priceFont(), glass.x + pxs( 9 ), glass.y + pxs( 4 ), pxs( 24 ), INCOME );
 	drawText( money( army ), bodyFont(), glass.x + pxs( 9 ), glass.y + pxs( 30 ), pxs( 20 ), PRICE );
 
-	// the plot to scale, front at the bottom, the air rows behind it above
+	// the plot to scale, front at the bottom
 	const Int cols = TheLaneWarDirector->getGridCols( team, seat, LANEWAR_GRID_GROUND );
 	const Int rows = TheLaneWarDirector->getGridRows( team, seat, LANEWAR_GRID_GROUND );
-	const Int airCols = TheLaneWarDirector->getGridCols( team, seat, LANEWAR_GRID_AIR );
-	const Int airRows = TheLaneWarDirector->getGridRows( team, seat, LANEWAR_GRID_AIR );
 	if( cols <= 0 || rows <= 0 )
 		return;
 	const Int roomW = glass.w / 2, roomH = glass.h - pxs( 6 );
-	const Int cell = max( 1, min( pxs( 3 ), min( roomW / max( cols, airCols ), roomH / ( rows + airRows + 1 ) ) ) );
+	const Int cell = max( 1, min( pxs( 3 ), min( roomW / cols, roomH / rows ) ) );
 	const Int right = glass.x + glass.w - pxs( 4 );
 	const Int bottom = glass.y + glass.h - pxs( 3 );
 	const Color owner = playerColor( team, seat );
-	const LaneHudBox ground = LaneHud_box( right - cols * cell, bottom - rows * cell, cols * cell, rows * cell );
-	TheDisplay->drawFillRect( ground.x, ground.y, ground.w, ground.h, PLOT_FILL );
-	TheDisplay->drawOpenRect( ground.x - 1, ground.y - 1, ground.w + 2, ground.h + 2, 1.0f, UIStyle::withAlpha( owner, 160 ) );
-	LaneHudBox air = LaneHud_box( 0, 0, 0, 0 );
-	if( airCols > 0 && airRows > 0 )
-	{
-		air = LaneHud_box( right - airCols * cell, ground.y - cell - airRows * cell, airCols * cell, airRows * cell );
-		TheDisplay->drawFillRect( air.x, air.y, air.w, air.h, GameMakeColor( 110, 170, 255, 70 ) );
-	}
+	const LaneHudBox g = LaneHud_box( right - cols * cell, bottom - rows * cell, cols * cell, rows * cell );
+	TheDisplay->drawFillRect( g.x, g.y, g.w, g.h, PLOT_FILL );
+	TheDisplay->drawOpenRect( g.x - 1, g.y - 1, g.w + 2, g.h + 2, 1.0f, UIStyle::withAlpha( owner, 160 ) );
 	for( size_t i = 0; i < units.size(); ++i )
 	{
 		const LaneWarDirector::PlotUnit &u = units[ i ];
 		if( u.team != team || u.seat != seat )
-			continue;
-		const LaneHudBox &g = u.grid == LANEWAR_GRID_AIR ? air : ground;
-		if( g.w <= 0 )
 			continue;
 		const Int x = g.x + u.col * cell, y = g.y + g.h - ( u.row + u.size ) * cell;
 		TheDisplay->drawFillRect( x, y, u.size * cell, u.size * cell, owner );
@@ -1207,7 +1196,7 @@ static void drawCards( void )
 			const Int price = thing->calcCostToBuild( s_player );
 			const LaneHudBox box = locked ? s_layout.cards[ card ] : risen( s_layout.cards[ card ] );
 			drawCard( box, thing->getButtonImage(), price, locked || cash < price, FALSE, FALSE, s_armed == thing && !s_dragging,
-				LaneWarDirector::gridFor( thing ) == LANEWAR_GRID_AIR );
+				LaneWarDirector::isJet( thing ) );
 			tip( box, thing->getDisplayName() );
 		}
 		++card;
@@ -1462,7 +1451,7 @@ static void drawHeld( void )
 			? LaneHud_box( mouse->x + pxs( 20 ), mouse->y + pxs( 20 ), pxs( 60 ), pxs( 70 ) )
 			: LaneHud_box( mouse->x + pxs( 24 ), mouse->y - pxs( 44 ), pxs( 115 ), pxs( 133 ) );
 		drawCard( c, s_armed->getButtonImage(), overPlot ? -1 : s_armed->calcCostToBuild( s_player ), FALSE, FALSE, s_dragCard == HERO_CARD, FALSE,
-			LaneWarDirector::gridFor( s_armed ) == LANEWAR_GRID_AIR );
+			LaneWarDirector::isJet( s_armed ) );
 	}
 
 	// an infantry card over a plot unit that carries men: the unit green with room, red without
@@ -1814,7 +1803,7 @@ void LaneHud_preDraw( void )
 	{
 		Target &t = s_target;
 		t.thing = thing;
-		t.grid = LaneWarDirector::gridFor( thing );
+		t.grid = LANEWAR_GRID_GROUND;
 		t.size = LaneWarDirector::sizeFor( thing );
 		if( slotUnder( world, t.grid, t.size, &t.col, &t.row, &t.onPlot ) )
 		{
@@ -1911,19 +1900,12 @@ static void turnToLane( void )
 	LaneHud_turnToLane( s_team );
 }
 
-/// the camera to the middle of the player's own plot, its ground grid and the air rows behind it, turned to the lane
+/// the camera to the middle of the player's own plot, turned to the lane
 static void lookAtPlot( void )
 {
-	Coord2D lo, hi, airLo, airHi;
+	Coord2D lo, hi;
 	if( !TheLaneWarDirector->getPlotBounds( s_team, s_seat, &lo, &hi ) )
 		return;
-	if( TheLaneWarDirector->getAirBounds( s_team, s_seat, &airLo, &airHi ) )
-	{
-		lo.x = min( lo.x, airLo.x );
-		lo.y = min( lo.y, airLo.y );
-		hi.x = max( hi.x, airHi.x );
-		hi.y = max( hi.y, airHi.y );
-	}
 	Coord3D at;
 	at.x = 0.5f * ( lo.x + hi.x );
 	at.y = 0.5f * ( lo.y + hi.y );
@@ -2091,8 +2073,7 @@ Bool LaneHud_press( const ICoord2D *mouse, Bool right )
 	{
 		Int col, row;
 		Bool onGrid;
-		const Int grid = LaneWarDirector::gridFor( s_armed );
-		if( slotUnder( world, grid, LaneWarDirector::sizeFor( s_armed ), &col, &row, &onGrid ) && onGrid )
+		if( slotUnder( world, LANEWAR_GRID_GROUND, LaneWarDirector::sizeFor( s_armed ), &col, &row, &onGrid ) && onGrid )
 		{
 			sendOrder( LANEWAR_ORDER_PLACE, s_armed->getTemplateID(), col, row );
 			// the hero goes once; anything else stays armed while the money lasts (preDraw drops it)
@@ -2149,7 +2130,7 @@ void LaneHud_release( const ICoord2D *mouse )
 		Int col, row;
 		Bool onGrid;
 		if( !overHud( mouse ) && TheTacticalView->screenToTerrain( mouse, &world )
-				&& slotUnder( world, LaneWarDirector::gridFor( thing ), LaneWarDirector::sizeFor( thing ), &col, &row, &onGrid ) && onGrid )
+				&& slotUnder( world, LANEWAR_GRID_GROUND, LaneWarDirector::sizeFor( thing ), &col, &row, &onGrid ) && onGrid )
 			sendOrder( LANEWAR_ORDER_PLACE, thing->getTemplateID(), col, row );
 		dropHeld();
 		return;

@@ -122,10 +122,10 @@ namespace
 		return reach;
 	}
 
-	/// artillery and the long guns at the back, the other vehicles in front, infantry and helicopters between
+	/// artillery, the long guns and the jets (which never march) at the back, the other vehicles in front, infantry and helicopters between
 	Int roleOf( const ThingTemplate *tmpl )
 	{
-		if( reachOf( tmpl ) >= BACK_RANGE )
+		if( LaneWarDirector::isJet( tmpl ) || reachOf( tmpl ) >= BACK_RANGE )
 			return LANEWAR_BOT_BACK;
 		if( tmpl->isKindOf( KINDOF_VEHICLE ) && !tmpl->isKindOf( KINDOF_AIRCRAFT ) )
 			return LANEWAR_BOT_FRONT;
@@ -162,11 +162,10 @@ namespace
 		  whose own slots count as free and whose price is already paid. */
 	Bool findSlot( const View &v, const ThingTemplate *tmpl, Int role, Int *col, Int *row, Bool onlyBand = FALSE, ObjectID skip = INVALID_ID )
 	{
-		const Int grid = LaneWarDirector::gridFor( tmpl );
+		const Int grid = LANEWAR_GRID_GROUND;
 		const Int size = LaneWarDirector::sizeFor( tmpl );
 		Int rows[ SLOTS_MAX ], cols[ SLOTS_MAX ], inBand;
-		const Int rowCount = LaneWarBot_rowOrder( grid == LANEWAR_GRID_AIR ? LANEWAR_BOT_FRONT : role,
-																							v.director->getGridRows( v.team, v.seat, grid ), size, rows, SLOTS_MAX, &inBand );
+		const Int rowCount = LaneWarBot_rowOrder( role, v.director->getGridRows( v.team, v.seat, grid ), size, rows, SLOTS_MAX, &inBand );
 		const Int colCount = LaneWarBot_columnOrder( v.director->getGridCols( v.team, v.seat, grid ), size, cols, SLOTS_MAX );
 		const Int tries = ( onlyBand ? inBand : rowCount ) * colCount;
 		for( Int k = 0; k < tries; ++k )
@@ -192,7 +191,7 @@ namespace
 	Bool inRoleBand( const View &v, Int grid, Int role, Int size, Int row )
 	{
 		Int rows[ SLOTS_MAX ], inBand;
-		LaneWarBot_rowOrder( grid == LANEWAR_GRID_AIR ? LANEWAR_BOT_FRONT : role, v.director->getGridRows( v.team, v.seat, grid ),
+		LaneWarBot_rowOrder( role, v.director->getGridRows( v.team, v.seat, grid ),
 												 size, rows, SLOTS_MAX, &inBand );
 		for( Int k = 0; k < inBand; ++k )
 			if( rows[ k ] == row )
@@ -469,7 +468,7 @@ namespace
 		{
 			const LaneWarDirector::PlotUnit &u = units[ i ];
 			const Object *obj = u.team == v.team && u.seat == v.seat && u.grid == LANEWAR_GRID_GROUND ? TheGameLogic->findObjectByID( u.id ) : NULL;
-			if( obj == NULL || LaneWar_isHero( v.player, obj->getTemplate() ) )
+			if( obj == NULL || LaneWar_isHero( v.player, obj->getTemplate() ) || LaneWarDirector::isJet( obj->getTemplate() ) )
 				continue;
 			const Real trade = tradeOf( v, obj->getTemplate(), (Real)max( u.cost, 1 ), isSuicide( obj->getTemplate() ) );
 			if( worst < 0 || trade < worstTrade )

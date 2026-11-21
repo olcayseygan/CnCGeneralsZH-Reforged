@@ -12607,8 +12607,8 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 
 	/* The layout of the night of 2026-11-20, in playable cells on a 16:9 field of 642 by 361: a lane
 		360 by 45 from x 141 to 501 and y 158 to 203, its middle (321, 180.5) the map's, the fortresses
-		0.7 and the towers 0.37 of the half-length off the middle, all on the middle line, plots 16 along
-		by 24 across in a column 14 cells past each end, 111 cells of green, beach and sea behind them. */
+		0.7 and the towers 0.37 of the half-length off the middle, all on the middle line, plots 32 along
+		by 24 across in a column 14 cells past each end, 95 cells of green, beach and sea behind them. */
 	const Int laneX0 = 141, laneX1 = 501, laneY0 = 158, laneY1 = 203;
 	const Real middleX = 3210.0f, middleY = 1805.0f;
 
@@ -12634,7 +12634,7 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 	// six starts, one a plot, each inside its own area; the ends take turns, seat 1 on the lane's axis
 	static const char *const theAreas[] = { "LaneWar_BuildA1", "LaneWar_BuildB1", "LaneWar_BuildA2", "LaneWar_BuildB2",
 		"LaneWar_BuildA3", "LaneWar_BuildB3", "LaneWar_MiddleArea" };
-	CHECK_EQ( (Int)theRMGParse.m_areaNames.size(), 13 );
+	CHECK_EQ( (Int)theRMGParse.m_areaNames.size(), 7 );
 	std::vector<Int> startCells;
 	for( Int start = 0; start < 6; start++ )
 	{
@@ -12660,7 +12660,7 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 		const std::vector<Coord3D>& polygon = theRMGParse.m_areaPolygons[area];
 		CHECK_EQ( (Int)polygon.size(), 4 );
 		CHECK( at.x > polygon[0].x && at.x < polygon[2].x && at.y > polygon[0].y && at.y < polygon[2].y );
-		CHECK_EQ( (Int)( polygon[2].x - polygon[0].x ), 160 );		// turned: 16 cells along the lane, 24 across
+		CHECK_EQ( (Int)( polygon[2].x - polygon[0].x ), 320 );		// turned: 32 cells along the lane, 24 across, 16 rows by 12 columns
 		CHECK_EQ( (Int)( polygon[2].y - polygon[0].y ), 240 );
 		CHECK( ( at.x < middleX ) == ( start % 2 == 0 ) );
 		CHECK( at.x < laneX0 * MAP_XY_FACTOR || at.x > laneX1 * MAP_XY_FACTOR );
@@ -12670,29 +12670,11 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 			(Int)( polygon[2].x / MAP_XY_FACTOR ), (Int)( polygon[2].y / MAP_XY_FACTOR ) };
 		playRects.insert( playRects.end(), plotRect, plotRect + 4 );
 
-		/* its air zone behind it, away from the enemy: one slot (20) of gap from the plot's back, then two
-			slots (40) deep and as wide as the plot, and flat with it (playRects) */
+		// no air zone behind it any more: every unit, jets included, stands on the plot
 		AsciiString airName;
 		airName.format( "LaneWar_Air%c%d", 'A' + start % 2, start / 2 + 1 );
-		Int air = -1;
 		for( Int i = 0; i < (Int)theRMGParse.m_areaNames.size(); i++ )
-			if( theRMGParse.m_areaNames[i] == airName )
-				air = i;
-		CHECK( air >= 0 );
-		if( air < 0 )
-			return;
-		const std::vector<Coord3D>& airPolygon = theRMGParse.m_areaPolygons[air];
-		CHECK_EQ( (Int)airPolygon.size(), 4 );
-		CHECK_EQ( (Int)( airPolygon[2].x - airPolygon[0].x ), 40 );
-		CHECK_NEAR( airPolygon[0].y, polygon[0].y, 0.5f );
-		CHECK_NEAR( airPolygon[2].y, polygon[2].y, 0.5f );
-		if( start % 2 == 0 )
-			CHECK_NEAR( polygon[0].x - airPolygon[2].x, 20.0f, 0.5f );
-		else
-			CHECK_NEAR( airPolygon[0].x - polygon[2].x, 20.0f, 0.5f );
-		const Int airRect[4] = { (Int)( airPolygon[0].x / MAP_XY_FACTOR ), (Int)( airPolygon[0].y / MAP_XY_FACTOR ),
-			(Int)( airPolygon[2].x / MAP_XY_FACTOR ), (Int)( airPolygon[2].y / MAP_XY_FACTOR ) };
-		playRects.insert( playRects.end(), airRect, airRect + 4 );
+			CHECK( theRMGParse.m_areaNames[i] != airName );
 	}
 	CHECK( theRMGParse.m_areaNames[6] == theAreas[6] );
 
@@ -12714,8 +12696,8 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 	CHECK_EQ( spawns, 2 );
 	if( spawns != 2 )
 		return;
-	CHECK_NEAR( spawnAt[0].x, middleX - 1440.0f, 0.5f );
-	CHECK_NEAR( spawnAt[1].x, middleX + 1440.0f, 0.5f );
+	CHECK_NEAR( spawnAt[0].x, middleX - 1520.0f, 0.5f );
+	CHECK_NEAR( spawnAt[1].x, middleX + 1520.0f, 0.5f );
 	CHECK_NEAR( spawnAt[0].y, middleY, 0.5f );
 	CHECK_NEAR( spawnAt[1].y, middleY, 0.5f );
 	CHECK_EQ( laneA, 17 );
@@ -12748,7 +12730,7 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 	CHECK_NEAR( theRMGParse.m_objectPositions[tower[0]].x, middleX - 666.0f, 0.5f );
 	CHECK_NEAR( theRMGParse.m_objectPositions[tower[1]].x, middleX + 666.0f, 0.5f );
 
-	/* A wave copy is a plot turned onto the lane, 160 along and 240 across, round its spawn anchor. It
+	/* A wave copy is a plot turned onto the lane, 320 along and 240 across, round its spawn anchor. It
 		lies on the lane, wholly behind its own fortress, two cells clear of the fortress's 140 by 140, so
 		the fortress stands between the pad and the lane; and the fortress leaves the wave room to pass
 		it, more than ten cells of open lane either side. */
@@ -12756,9 +12738,9 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 	{
 		const Coord3D& own = theRMGParse.m_objectPositions[fortress[team]];
 		const Real ahead = team == 0 ? 1.0f : -1.0f;
-		CHECK( spawnAt[team].x - 80.0f >= laneX0 * MAP_XY_FACTOR && spawnAt[team].x + 80.0f <= laneX1 * MAP_XY_FACTOR );
+		CHECK( spawnAt[team].x - 160.0f >= laneX0 * MAP_XY_FACTOR && spawnAt[team].x + 160.0f <= laneX1 * MAP_XY_FACTOR );
 		CHECK( spawnAt[team].y - 120.0f >= laneY0 * MAP_XY_FACTOR && spawnAt[team].y + 120.0f <= laneY1 * MAP_XY_FACTOR );
-		CHECK( ( ( own.x - ahead * 70.0f ) - ( spawnAt[team].x + ahead * 80.0f ) ) * ahead >= 2.0f * MAP_XY_FACTOR );
+		CHECK( ( ( own.x - ahead * 70.0f ) - ( spawnAt[team].x + ahead * 160.0f ) ) * ahead >= 2.0f * MAP_XY_FACTOR );
 		CHECK( own.y - 70.0f - laneY0 * MAP_XY_FACTOR > 100.0f && laneY1 * MAP_XY_FACTOR - ( own.y + 70.0f ) > 100.0f );
 		CHECK( ( theRMGParse.m_objectPositions[tower[team]].x - own.x ) * ahead > 0.0f );
 	}
@@ -13273,7 +13255,7 @@ TEST(lane_war_bot_plan_follows_the_rating_and_looks_for_room_from_the_middle)
 		every |= 1 << rows[ i ];
 	CHECK_EQ( every, ( 1 << 7 ) - 1 );
 	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_FRONT, 2, 3, rows, 16, &inBand ), 0 );
-	// the two air rows: a jet tries row 0, then row 1
+	// a grid two rows deep: a 1-slot block tries row 0, then row 1
 	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_FRONT, 2, 1, rows, 16, &inBand ), 2 );
 	CHECK_EQ( inBand, 1 );
 	CHECK_EQ( rows[ 1 ], 1 );

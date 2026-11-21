@@ -539,21 +539,25 @@ void WaterRenderObjClass::takeWaterPolygonsForDraw(void)
 	addSkirtSeas();
 }
 
+enum { SKIRT_SEA_LEFT, SKIRT_SEA_RIGHT, SKIRT_SEA_BOTTOM, SKIRT_SEA_TOP };
+
 /** The sea past the heightmap's edge, over the land drawn there (TerrainSkirt).  Every side of a
-	sea's polygon that runs along the map's border band (anywhere from the playable edge out) gets a
-	strip out to the skirt's rim at the side's own level, and a point in one of its corners a square,
-	as polygons of their own after the authored ones.  The water stopped dead in a ruler line along the
-	edge on Tournament Island.  Nothing moves an authored point, so the water inside the map is the
-	polygon's exactly; rivers keep their banks.  The skirt takes its sea floor from these strips alone
+	sea's polygon that runs along the map's border band (anywhere from the playable edge out) and faces
+	out of it, of a polygon that reaches the heightmap's edge, gets strips out to the skirt's rim at the
+	side's own level, only where the heightmap's edge lies under that level (addSkirtSeaRuns), and a
+	corner of the heightmap with sea on past both its edges a square (addSkirtSeaCorners), as polygons
+	of their own after the authored ones.  The water stopped dead in a ruler line along the edge on
+	Tournament Island.  Nothing moves an authored point, so the water inside the map is the polygon's
+	exactly; rivers keep their banks.  The skirt takes its sea floor from these strips alone
 	(getSkirtSeaLevel), so no sea floor lies dry, and is built again when they change. */
 void WaterRenderObjClass::addSkirtSeas(void)
 {
 	m_skirtSeasFirst = m_waterPolygonsForDraw.size();
+	m_skirtSeaRuns.clear();
 	WorldHeightMap *map = TheTerrainRenderObject ? TheTerrainRenderObject->getMap() : NULL;
 	if (map == NULL || map->getXExtent() < 2 || map->getYExtent() < 2)
 		return;
 	const Int SNAP = (map->getBorderSize() + 2)*MAP_XY_FACTOR;	// a point this near the heightmap's edge is in the border band
-	const Int REACH = (Int)TerrainSkirt::REACH;
 	const Int lowX = -map->getBorderSize()*MAP_XY_FACTOR, highX = (map->getXExtent() - 1 - map->getBorderSize())*MAP_XY_FACTOR;
 	const Int lowY = -map->getBorderSize()*MAP_XY_FACTOR, highY = (map->getYExtent() - 1 - map->getBorderSize())*MAP_XY_FACTOR;
 	const size_t authored = m_waterPolygonsForDraw.size();
@@ -564,60 +568,33 @@ void WaterRenderObjClass::addSkirtSeas(void)
 		const std::vector<ICoord3D> points = m_waterPolygonsForDraw[p].points;
 		const uintptr_t owner = m_waterPolygonsForDraw[p].owner;
 		double area = 0.0;	// the strips wind the way their polygon does
+		Int minX = points[0].x, maxX = points[0].x, minY = points[0].y, maxY = points[0].y;
 		for (size_t i = 0; i < points.size(); ++i) {
 			const ICoord3D &a = points[i], &b = points[(i + 1) % points.size()];
 			area += (double)a.x*b.y - (double)b.x*a.y;
+			minX = min(minX, a.x); maxX = max(maxX, a.x);
+			minY = min(minY, a.y); maxY = max(maxY, a.y);
 		}
-		std::vector<ICoord3D> strips;	// four corners a strip, counter-clockwise
+		// Only a sea that reaches the heightmap's edge itself goes on past it: a lake in the border band
+		// sent channels of water out through the land.
+		const Bool reachesLeft = minX <= lowX + MAP_XY_FACTOR, reachesRight = maxX >= highX - MAP_XY_FACTOR;
+		const Bool reachesBottom = minY <= lowY + MAP_XY_FACTOR, reachesTop = maxY >= highY - MAP_XY_FACTOR;
+		const Int winding = area > 0.0 ? 1 : -1;
 		for (size_t i = 0; i < points.size(); ++i) {
 			const ICoord3D &a = points[i], &b = points[(i + 1) % points.size()];
-			ICoord3D out[4] = { a, b, b, a };
-			Bool along = TRUE;
-			if (a.x <= lowX + SNAP && b.x <= lowX + SNAP) { out[2].x = out[3].x = lowX - REACH; }
-			else if (a.x >= highX - SNAP && b.x >= highX - SNAP) { out[2].x = out[3].x = highX + REACH; }
-			else if (a.y <= lowY + SNAP && b.y <= lowY + SNAP) { out[2].y = out[3].y = lowY - REACH; }
-			else if (a.y >= highY - SNAP && b.y >= highY - SNAP) { out[2].y = out[3].y = highY + REACH; }
-			else along = FALSE;
-			if (along)
-				strips.insert(strips.end(), out, out + 4);
-			const Bool left = a.x <= lowX + SNAP, right = a.x >= highX - SNAP;
-			const Bool bottom = a.y <= lowY + SNAP, top = a.y >= highY - SNAP;
-			if ((left || right) && (bottom || top)) {
-				const Int farX = left ? lowX - REACH : highX + REACH, farY = bottom ? lowY - REACH : highY + REACH;
-				ICoord3D corner[4] = { a, a, a, a };
-				corner[1].x = farX;
-				corner[2].x = farX; corner[2].y = farY;
-				corner[3].y = farY;
-				strips.insert(strips.end(), corner, corner + 4);
-			}
-		}
-		for (size_t s = 0; s + 3 < strips.size(); s += 4) {
-			WaterPolygonForDraw sea;
-			sea.river = FALSE;
-			sea.riverStart = 0;
-			sea.owner = ~owner - added++;	// no polygon's address: the bow foam keys its patches by owner
-			sea.points.assign(strips.begin() + s, strips.begin() + s + 4);
-			double quadArea = 0.0;
-			for (Int i = 0; i < 4; ++i) {
-				const ICoord3D &a = sea.points[i], &b = sea.points[(i + 1) % 4];
-				quadArea += (double)a.x*b.y - (double)b.x*a.y;
-			}
-			if (quadArea == 0.0)
-				continue;
-			if ((quadArea > 0.0) != (area > 0.0))
-				std::swap(sea.points[1], sea.points[3]);
-			Real minX = 1.0e9f, minY = 1.0e9f, maxX = -1.0e9f, maxY = -1.0e9f;
-			for (Int i = 0; i < 4; ++i) {
-				minX = min(minX, (Real)sea.points[i].x); maxX = max(maxX, (Real)sea.points[i].x);
-				minY = min(minY, (Real)sea.points[i].y); maxY = max(maxY, (Real)sea.points[i].y);
-			}
-			sea.center.x = 0.5f*(minX + maxX);
-			sea.center.y = 0.5f*(minY + maxY);
-			sea.center.z = 0.0f;
-			sea.radius = 0.5f*sqrtf((maxX - minX)*(maxX - minX) + (maxY - minY)*(maxY - minY));
-			m_waterPolygonsForDraw.push_back(std::move(sea));
+			// the side's outward normal: a side facing back into the polygon (the far shore of a sea
+			// along the edge) would lay a strip over the water it already has
+			const Int normalX = winding*(b.y - a.y), normalY = -winding*(b.x - a.x);
+			Int edge;
+			if (reachesLeft && normalX < 0 && a.x <= lowX + SNAP && b.x <= lowX + SNAP) edge = SKIRT_SEA_LEFT;
+			else if (reachesRight && normalX > 0 && a.x >= highX - SNAP && b.x >= highX - SNAP) edge = SKIRT_SEA_RIGHT;
+			else if (reachesBottom && normalY < 0 && a.y <= lowY + SNAP && b.y <= lowY + SNAP) edge = SKIRT_SEA_BOTTOM;
+			else if (reachesTop && normalY > 0 && a.y >= highY - SNAP && b.y >= highY - SNAP) edge = SKIRT_SEA_TOP;
+			else continue;
+			addSkirtSeaRuns(a, b, edge, winding, owner, &added);
 		}
 	}
+	addSkirtSeaCorners(&added);
 	double sum = 0.0;
 	for (size_t p = m_skirtSeasFirst; p < m_waterPolygonsForDraw.size(); ++p)
 		for (const ICoord3D &point : m_waterPolygonsForDraw[p].points)
@@ -626,6 +603,128 @@ void WaterRenderObjClass::addSkirtSeas(void)
 		m_skirtSeasSum = sum;
 		TheTerrainRenderObject->invalidateSkirt();
 	}
+}
+
+/** A side's strips past the heightmap's edge: one for each stretch of it over edge samples lower than
+	the water, so a polygon drawn wide under dry ground (Golden Oasis' south, 7% of it wet) carries no
+	sea out over the land. */
+void WaterRenderObjClass::addSkirtSeaRuns(const ICoord3D &a, const ICoord3D &b, Int edge, Int winding, uintptr_t owner, uintptr_t *added)
+{
+	WorldHeightMap *map = TheTerrainRenderObject->getMap();
+	const UnsignedByte *data = map->getDataPtr();
+	if (data == NULL)
+		return;
+	const Int w = map->getXExtent(), h = map->getYExtent(), border = map->getBorderSize();
+	const Bool alongX = edge == SKIRT_SEA_BOTTOM || edge == SKIRT_SEA_TOP;
+	const Int ua = alongX ? a.x : a.y, ub = alongX ? b.x : b.y;
+	if (ua == ub)
+		return;
+	const Int REACH = (Int)TerrainSkirt::REACH;
+	const Int CELL = (Int)MAP_XY_FACTOR;
+	const Int HALF_CELL = CELL/2;
+	const Int lowU = min(ua, ub), highU = max(ua, ub);
+	const Int first = (Int)ceilf((Real)lowU/CELL), last = (Int)floorf((Real)highU/CELL);
+	const Int samples = alongX ? w : h;
+	auto pointAt = [&](Int u) {
+		const Real t = (Real)(u - ua)/(Real)(ub - ua);
+		ICoord3D p;
+		p.x = REAL_TO_INT_FLOOR(a.x + (b.x - a.x)*t + 0.5f);
+		p.y = REAL_TO_INT_FLOOR(a.y + (b.y - a.y)*t + 0.5f);
+		p.z = REAL_TO_INT_FLOOR(a.z + (b.z - a.z)*t + 0.5f);
+		return p;
+	};
+	Int runStart = 0;
+	Bool inRun = FALSE;
+	for (Int s = first; s <= last + 1; ++s) {
+		Bool wet = FALSE;
+		if (s <= last) {
+			const Int cell = max(0, min(samples - 1, s + border));
+			const Int index = edge == SKIRT_SEA_BOTTOM ? cell : (edge == SKIRT_SEA_TOP ? (h - 1)*w + cell
+				: (edge == SKIRT_SEA_LEFT ? cell*w : cell*w + w - 1));
+			wet = data[index]*MAP_HEIGHT_SCALE < (Real)pointAt(s*CELL).z;
+		}
+		if (wet && !inRun) {
+			runStart = s;
+			inRun = TRUE;
+		} else if (!wet && inRun) {
+			inRun = FALSE;
+			const Int start = max(lowU, runStart*CELL - HALF_CELL), end = min(highU, (s - 1)*CELL + HALF_CELL);
+			if (end <= start)
+				continue;
+			const ICoord3D near0 = pointAt(start), near1 = pointAt(end);
+			ICoord3D quad[4] = { near0, near1, near1, near0 };
+			if (edge == SKIRT_SEA_LEFT) quad[2].x = quad[3].x = -border*CELL - REACH;
+			else if (edge == SKIRT_SEA_RIGHT) quad[2].x = quad[3].x = (w - 1 - border)*CELL + REACH;
+			else if (edge == SKIRT_SEA_BOTTOM) quad[2].y = quad[3].y = -border*CELL - REACH;
+			else quad[2].y = quad[3].y = (h - 1 - border)*CELL + REACH;
+			addSkirtSeaQuad(quad, winding, owner, added);
+			SkirtSeaRun run = { edge, start, end, near0.z, near1.z, winding, owner };
+			m_skirtSeaRuns.push_back(run);
+		}
+	}
+}
+
+/** A square past each corner of the heightmap whose two edges both carry sea on to it, at the level of
+	the run along the lower edge.  Tournament Island's corners stood bare between two seas. */
+void WaterRenderObjClass::addSkirtSeaCorners(uintptr_t *added)
+{
+	WorldHeightMap *map = TheTerrainRenderObject->getMap();
+	const Int border = map->getBorderSize();
+	const Int REACH = (Int)TerrainSkirt::REACH;
+	const Int CELL = (Int)MAP_XY_FACTOR;
+	const Int SNAP = (border + 2)*CELL;
+	const Int lowX = -border*CELL, highX = (map->getXExtent() - 1 - border)*CELL;
+	const Int lowY = -border*CELL, highY = (map->getYExtent() - 1 - border)*CELL;
+	for (Int corner = 0; corner < 4; ++corner) {
+		const Bool right = (corner & 1) != 0, top = (corner & 2) != 0;
+		const SkirtSeaRun *across = NULL, *beside = NULL;	// along the bottom or top edge, and the left or right
+		for (const SkirtSeaRun &run : m_skirtSeaRuns) {
+			if (run.edge == (top ? SKIRT_SEA_TOP : SKIRT_SEA_BOTTOM) && (right ? run.end >= highX - SNAP : run.start <= lowX + SNAP))
+				across = &run;
+			if (run.edge == (right ? SKIRT_SEA_RIGHT : SKIRT_SEA_LEFT) && (top ? run.end >= highY - SNAP : run.start <= lowY + SNAP))
+				beside = &run;
+		}
+		if (across == NULL || beside == NULL)
+			continue;
+		ICoord3D quad[4];
+		const Int x = right ? across->end : across->start, y = top ? beside->end : beside->start;
+		const Int farX = right ? highX + REACH : lowX - REACH, farY = top ? highY + REACH : lowY - REACH;
+		const Int z = right ? across->endZ : across->startZ;
+		quad[0].x = x;    quad[0].y = y;    quad[0].z = z;
+		quad[1].x = farX; quad[1].y = y;    quad[1].z = z;
+		quad[2].x = farX; quad[2].y = farY; quad[2].z = z;
+		quad[3].x = x;    quad[3].y = farY; quad[3].z = z;
+		addSkirtSeaQuad(quad, across->winding, across->owner, added);
+	}
+}
+
+/** One strip or square as a polygon of the draw copy, wound as the polygon it came from. */
+void WaterRenderObjClass::addSkirtSeaQuad(const ICoord3D quad[4], Int winding, uintptr_t owner, uintptr_t *added)
+{
+	WaterPolygonForDraw sea;
+	sea.river = FALSE;
+	sea.riverStart = 0;
+	sea.owner = ~owner - (*added)++;	// no polygon's address: the bow foam keys its patches by owner
+	sea.points.assign(quad, quad + 4);
+	double quadArea = 0.0;
+	for (Int i = 0; i < 4; ++i) {
+		const ICoord3D &a = sea.points[i], &b = sea.points[(i + 1) % 4];
+		quadArea += (double)a.x*b.y - (double)b.x*a.y;
+	}
+	if (quadArea == 0.0)
+		return;
+	if ((quadArea > 0.0) != (winding > 0))
+		std::swap(sea.points[1], sea.points[3]);
+	Real minX = 1.0e9f, minY = 1.0e9f, maxX = -1.0e9f, maxY = -1.0e9f;
+	for (Int i = 0; i < 4; ++i) {
+		minX = min(minX, (Real)sea.points[i].x); maxX = max(maxX, (Real)sea.points[i].x);
+		minY = min(minY, (Real)sea.points[i].y); maxY = max(maxY, (Real)sea.points[i].y);
+	}
+	sea.center.x = 0.5f*(minX + maxX);
+	sea.center.y = 0.5f*(minY + maxY);
+	sea.center.z = 0.0f;
+	sea.radius = 0.5f*sqrtf((maxX - minX)*(maxX - minX) + (maxY - minY)*(maxY - minY));
+	m_waterPolygonsForDraw.push_back(std::move(sea));
 }
 
 Real WaterRenderObjClass::getSkirtSeaLevel(Real x, Real y) const

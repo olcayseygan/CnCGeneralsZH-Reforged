@@ -324,6 +324,7 @@ BaseHeightMapRenderObjClass::BaseHeightMapRenderObjClass(void)
 	m_skirtStale = TRUE;
 	m_skirtFadePending = FALSE;
 	m_skirtFadeMirrored = FALSE;
+	m_skirtBackdropPending = FALSE;
 	m_skirtShrouded = FALSE;
 	m_disableTextures = false;
 	TheTerrainRenderObject = this;
@@ -3274,19 +3275,41 @@ void BaseHeightMapRenderObjClass::loadPostProcess( void )
 // The skirt: the ground past the heightmap's last sample (TerrainSkirt.h)
 //=============================================================================
 
-// Quads a chunk holds at most, in rows of this many: one 16-bit index buffer covers every chunk.
+// Quads a chunk holds at most, in rows of this many: one 16-bit index buffer covers every chunk, and
+// its blend layers, up to all but one of TerrainSkirt::MOST_LAYERS a quad.
 static const Int SKIRT_CHUNK = 32;
+static const Int SKIRT_CHUNK_QUADS = SKIRT_CHUNK*SKIRT_CHUNK*(TerrainSkirt::MOST_LAYERS - 1);
 
 void BaseHeightMapRenderObjClass::freeSkirt(void)
 {
-	for (size_t i = 0; i < m_skirtChunks.size(); i++)
+	for (size_t i = 0; i < m_skirtChunks.size(); i++) {
 		REF_PTR_RELEASE(m_skirtChunks[i].vertices);
+		REF_PTR_RELEASE(m_skirtChunks[i].blendVertices);
+	}
 	m_skirtChunks.clear();
 	m_skirtVisible.clear();
 	m_skirtFadePending = FALSE;
 	REF_PTR_RELEASE(m_skirtIndices);
 	REF_PTR_RELEASE(m_skirtTexture);
 	m_skirtStale = TRUE;
+}
+
+/// A vertex buffer holding these skirt vertices; NULL when the device would not lock it.
+DX8VertexBufferClass *BaseHeightMapRenderObjClass::makeSkirtVertices(const std::vector<VERTEX_FORMAT> &verts)
+{
+	DX8VertexBufferClass *buffer = NEW_REF(DX8VertexBufferClass, (DX8_VERTEX_FORMAT, (Int)verts.size(), DX8VertexBufferClass::USAGE_DEFAULT));
+	Bool written = FALSE;
+	{
+		DX8VertexBufferClass::WriteLockClass lock(buffer);
+		VERTEX_FORMAT *dst = (VERTEX_FORMAT*)lock.Get_Vertex_Array();
+		if (dst != NULL) {
+			memcpy(dst, &verts[0], verts.size()*sizeof(VERTEX_FORMAT));
+			written = TRUE;
+		}
+	}
+	if (!written)
+		REF_PTR_RELEASE(buffer);
+	return buffer;
 }
 
 Real BaseHeightMapRenderObjClass::skirtHeight(Int x, Int y, const SkirtEdge &edge, Bool sink)
@@ -3311,6 +3334,13 @@ Real BaseHeightMapRenderObjClass::skirtHeight(Int x, Int y, const SkirtEdge &edg
 	if (edge.water[ring] > INVALID_WATER_HEIGHT)
 		return TerrainSkirt::seaHeight(edgeZ, edge.blurred[ring], edge.water[ring], outside);
 	const Real share = edge.seaShare[ring];
+#if !ZH_MODERN_WATER
+	// No sea is drawn past the edge on this build (getSkirtSeaLevel), so ground going out from under the
+	// water level climbs out of it to a shore rather than lying dry below it.
+	const Real shore = TheGlobalData->m_waterPositionZ + TerrainSkirt::SHORE_RISE;
+	if (edgeZ < shore)
+		return max(land, edgeZ + (shore - edgeZ)*TerrainSkirt::smooth(outside/TerrainSkirt::PROFILE_RAMP));
+#endif
 	if (share <= 0.0f)
 		return land;
 	return TerrainSkirt::coastHeight(land, TerrainSkirt::seaHeight(edgeZ, edge.blurred[ring], edge.seaZ, outside), share, edge.seaZ);
@@ -3324,7 +3354,11 @@ the terrain atlas the tiles use; the lower detail, which never builds that atlas
 texture of the edge's own classes. */
 void BaseHeightMapRenderObjClass::buildSkirt(void)
 {
-	freeSkirt();	// stale until it is all built: a return on the way tries again at the next draw
+	// A return on the way leaves no skirt until something marks it stale again (initHeightData, the
+	// light, the sea past the edge, a device reset through ReleaseResources): tried every frame, a
+	// texture that could not be made was made again every frame.
+	freeSkirt();
+	m_skirtStale = FALSE;
 	if (m_map == NULL || m_map->getDataPtr() == NULL || m_map->getXExtent() < 4 || m_map->getYExtent() < 4)
 		return;
 	const Bool atlas = hasTerrainAtlas();
@@ -3337,7 +3371,7 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 	const Int border = m_map->getBorderSizeInline();
 
 	// The edge as one ring: blurred round the corners, the level of the sea the water draws past each
-	// sample (its strips, WaterRenderObjClass::addSkirtSeas, asked a cell out, from the render's own
+	// sample (its strips, WaterRenderObjClass::addSkirtSeas, asked SEA_PROBE cells out, from the render's own
 	// copy of the water areas), the mean of its land alone and the highest sea.  Sea floor goes only
 	// where those strips are, so none lies dry.  One mean over land and sea pulled a sea edge up into hills.
 	SkirtEdge edge;
@@ -3355,7 +3389,8 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 			ring[i] = data[y*w + x]*MAP_HEIGHT_SCALE;
 			Real waterZ = INVALID_WATER_HEIGHT;
 			if (TheWaterRenderObj) {
-				const Int outX = x == 0 ? -1 : (x == w-1 ? 1 : 0), outY = y == 0 ? -1 : (y == h-1 ? 1 : 0);
+				const Int step = TerrainSkirt::SEA_PROBE;
+				const Int outX = x == 0 ? -step : (x == w-1 ? step : 0), outY = y == 0 ? -step : (y == h-1 ? step : 0);
 				waterZ = TheWaterRenderObj->getSkirtSeaLevel((x + outX - border)*MAP_XY_FACTOR, (y + outY - border)*MAP_XY_FACTOR);
 			}
 			edge.water[i] = waterZ;
@@ -3384,10 +3419,12 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 			for (Int s = -tileReach; s <= (h-1)/2 + tileReach; s++) {
 				if (t > 0 && t < (w-1)/2 - 1 && s > 0 && s < (h-1)/2 - 1)
 					continue;	// not within a tile of the edge, where the skirt's quads start
-				Int key, across, down, sourceTile;
-				m_map->getSkirtTile(t, s, &key, &across, &down, &sourceTile);
-				if (sourceTile >= 0 && std::find(keys.begin(), keys.end(), key) == keys.end())
-					keys.push_back(key);
+				WorldHeightMap::SkirtLayer layers[TerrainSkirt::MOST_LAYERS];
+				float alpha[TerrainSkirt::MOST_LAYERS][4];
+				const Int count = m_map->getSkirtLayers(t, s, layers, alpha);
+				for (Int l = 0; l < count; l++)
+					if (layers[l].sourceTile >= 0 && std::find(keys.begin(), keys.end(), layers[l].key) == keys.end())
+						keys.push_back(layers[l].key);
 			}
 		TerrainTextureClass *flat = m_map->getSkirtFlatTexture(keys, FLAT_TILE_PIXELS, origins, &flatSide);
 		if (flat == NULL)
@@ -3405,13 +3442,37 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 	const Int reach = TerrainSkirt::CELLS;	// even, so the quads below start on the even grid
 	const Int loX = -reach, loY = -reach;
 	const Int hiX = w-1 + reach, hiY = h-1 + reach;
-	std::vector<VERTEX_FORMAT> verts;
+	std::vector<VERTEX_FORMAT> verts, blendVerts;
 	verts.reserve(SKIRT_CHUNK*SKIRT_CHUNK*4);
-	Int totalQuads = 0;
+	blendVerts.reserve(SKIRT_CHUNK_QUADS*4);
+	Int totalQuads = 0, totalBlendQuads = 0;
+
+	// a layer's corners in whichever texture the skirt draws from
+	auto layerUV = [&](const WorldHeightMap::SkirtLayer &layer, float u[4], float v[4]) {
+		if (atlas) {
+			m_map->getSkirtLayerUV(layer, u, v);
+			return;
+		}
+		float minU = 0.0f, minV = 0.0f, maxU = 0.0f, maxV = 0.0f;
+		const size_t at = std::find(keys.begin(), keys.end(), layer.key) - keys.begin();
+		if (layer.sourceTile >= 0 && at < keys.size()) {
+			// the block's rows run down the texture as the tiles run up the world (updateSkirt)
+			const Int width = m_map->getSkirtKeyWidth(layer.key);
+			minU = (Real)(origins[at].x + layer.across*FLAT_TILE_PIXELS)/flatSide;
+			minV = (Real)(origins[at].y + (width - 1 - layer.down)*FLAT_TILE_PIXELS)/flatSide;
+			maxU = minU + (Real)FLAT_TILE_PIXELS/flatSide;
+			maxV = minV + (Real)FLAT_TILE_PIXELS/flatSide;
+		}
+		for (Int k = 0; k < 4; k++) {
+			u[k] = minU + layer.cornerS[k]*(maxU - minU);
+			v[k] = maxV - layer.cornerT[k]*(maxV - minV);
+		}
+	};
 
 	for (Int chunkY = loY; chunkY < hiY; chunkY += 2*SKIRT_CHUNK)
 		for (Int chunkX = loX; chunkX < hiX; chunkX += 2*SKIRT_CHUNK) {
 			verts.clear();
+			blendVerts.clear();
 			Vector3 low(1.0e9f, 1.0e9f, 1.0e9f), high(-1.0e9f, -1.0e9f, -1.0e9f);
 			for (Int qy = chunkY; qy < chunkY + 2*SKIRT_CHUNK && qy < hiY; qy += 2)
 				for (Int qx = chunkX; qx < chunkX + 2*SKIRT_CHUNK && qx < hiX; qx += 2) {
@@ -3426,24 +3487,12 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 						const Int dy = cornerY[k] < 0 ? -cornerY[k] : (cornerY[k] > h-1 ? cornerY[k]-(h-1) : 0);
 						outside[k] = sqrtf((Real)(dx*dx + dy*dy))*MAP_XY_FACTOR;
 					}
-					float minU = 0.0f, minV = 0.0f, maxU = 0.0f, maxV = 0.0f;
-					if (atlas) {
-						m_map->getSkirtTileUV(qx/2, qy/2, &minU, &minV, &maxU, &maxV);
-					} else {
-						Int key, across, down, sourceTile;
-						m_map->getSkirtTile(qx/2, qy/2, &key, &across, &down, &sourceTile);
-						const size_t at = std::find(keys.begin(), keys.end(), key) - keys.begin();
-						if (sourceTile >= 0 && at < keys.size()) {
-							// the block's rows run down the texture as the tiles run up the world (updateSkirt)
-							const Int width = m_map->getSkirtKeyWidth(key);
-							minU = (Real)(origins[at].x + across*FLAT_TILE_PIXELS)/flatSide;
-							minV = (Real)(origins[at].y + (width - 1 - down)*FLAT_TILE_PIXELS)/flatSide;
-							maxU = minU + (Real)FLAT_TILE_PIXELS/flatSide;
-							maxV = minV + (Real)FLAT_TILE_PIXELS/flatSide;
-						}
-					}
-					const float cornerU[4] = { minU, maxU, maxU, minU };
-					const float cornerV[4] = { maxV, maxV, minV, minV };
+					WorldHeightMap::SkirtLayer layers[TerrainSkirt::MOST_LAYERS];
+					float alpha[TerrainSkirt::MOST_LAYERS][4];
+					const Int layerCount = m_map->getSkirtLayers(qx/2, qy/2, layers, alpha);
+					float cornerU[4], cornerV[4];
+					layerUV(layers[0], cornerU, cornerV);
+					VERTEX_FORMAT lit[4];
 					for (Int k = 0; k < 4; k++) {
 						const Int x = cornerX[k], y = cornerY[k];
 						VERTEX_FORMAT v;
@@ -3463,6 +3512,7 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 							const Int b = REAL_TO_INT((v.diffuse & 0xff)*shade[2]);
 							v.diffuse = (min(r, 255) << 16) | (min(g, 255) << 8) | min(b, 255);
 						}
+						lit[k] = v;
 						// the alpha is how far into the horizon's colour drawSkirt's fade pass takes it
 						const Real keep = TerrainSkirt::fade(outside[k]);
 						v.diffuse = (v.diffuse & 0x00ffffff) | ((UnsignedInt)REAL_TO_INT((1.0f - keep)*255.0f) << 24);
@@ -3473,45 +3523,61 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 						low.Update_Min(Vector3(v.x, v.y, v.z));
 						high.Update_Max(Vector3(v.x, v.y, v.z));
 					}
+					// the layers laid over it where patches meet, in order: the same light, their share for alpha
+					for (Int l = 1; l < layerCount; l++) {
+						if (layers[l].sourceTile < 0)
+							continue;
+						float overU[4], overV[4];
+						layerUV(layers[l], overU, overV);
+						for (Int k = 0; k < 4; k++) {
+							VERTEX_FORMAT laid = lit[k];
+							laid.diffuse = (lit[k].diffuse & 0x00ffffff) | ((UnsignedInt)REAL_TO_INT(alpha[l][k]*255.0f) << 24);
+							laid.u1 = laid.u2 = overU[k];
+							laid.v1 = laid.v2 = overV[k];
+							blendVerts.push_back(laid);
+						}
+					}
 				}
 			if (verts.empty())
 				continue;
 			SkirtChunk chunk;
 			chunk.quads = (Int)verts.size()/4;
+			chunk.blendQuads = (Int)blendVerts.size()/4;
 			chunk.low = low - Vector3(1.0f, 1.0f, 1.0f);
 			chunk.high = high + Vector3(1.0f, 1.0f, 1.0f);
-			chunk.vertices = NEW_REF(DX8VertexBufferClass, (DX8_VERTEX_FORMAT, chunk.quads*4, DX8VertexBufferClass::USAGE_DEFAULT));
-			{
-				DX8VertexBufferClass::WriteLockClass lock(chunk.vertices);
-				VERTEX_FORMAT *dst = (VERTEX_FORMAT*)lock.Get_Vertex_Array();
-				if (dst == NULL) {	// a device that went away; the next draw after the reset builds it again
-					REF_PTR_RELEASE(chunk.vertices);
-					freeSkirt();
-					return;
-				}
-				memcpy(dst, &verts[0], verts.size()*sizeof(VERTEX_FORMAT));
+			chunk.vertices = makeSkirtVertices(verts);
+			chunk.blendVertices = chunk.blendQuads > 0 ? makeSkirtVertices(blendVerts) : NULL;
+			if (chunk.vertices == NULL || (chunk.blendQuads > 0 && chunk.blendVertices == NULL)) {
+				// a device that went away; its reset marks the skirt stale
+				REF_PTR_RELEASE(chunk.vertices);
+				REF_PTR_RELEASE(chunk.blendVertices);
+				freeSkirt();
+				m_skirtStale = FALSE;
+				return;
 			}
 			m_skirtChunks.push_back(chunk);
 			totalQuads += chunk.quads;
+			totalBlendQuads += chunk.blendQuads;
 		}
 
-	m_skirtIndices = NEW_REF(DX8IndexBufferClass, (SKIRT_CHUNK*SKIRT_CHUNK*6));
+	m_skirtIndices = NEW_REF(DX8IndexBufferClass, (SKIRT_CHUNK_QUADS*6));
 	{
 		DX8IndexBufferClass::WriteLockClass lock(m_skirtIndices);
 		UnsignedShort *ib = lock.Get_Index_Array();
 		if (ib == NULL) {
 			freeSkirt();
+			m_skirtStale = FALSE;
 			return;
 		}
 		// cut as the tiles cut an unflipped cell (allocateTileBuffers)
-		for (Int i = 0; i < SKIRT_CHUNK*SKIRT_CHUNK*4; i += 4) {
+		for (Int i = 0; i < SKIRT_CHUNK_QUADS*4; i += 4) {
 			ib[0] = i;	ib[1] = i+2;	ib[2] = i+3;
 			ib[3] = i;	ib[4] = i+1;	ib[5] = i+2;
 			ib += 6;
 		}
 	}
-	m_skirtStale = FALSE;
-	DEBUG_LOG(("TERRAIN SKIRT: %d quads in %d chunks, %d cells past the edge\n", totalQuads, (Int)m_skirtChunks.size(), reach));
+	DEBUG_LOG(("TERRAIN SKIRT: %d quads in %d chunks, %d blended where patches meet, %d cells past the edge\n",
+		totalQuads, (Int)m_skirtChunks.size(), totalBlendQuads, reach));
 }
 
 /** The horizon's colour the skirt's rim fades into, under the border's shroud as drawSkirt's shroud
@@ -3539,6 +3605,8 @@ void BaseHeightMapRenderObjClass::drawSkirt(RenderInfoClass &rinfo)
 	m_skirtVisible.clear();
 	m_skirtFadeMirrored = modernFullMirror;
 	m_skirtFadePending = TRUE;
+	if (!modernFullMirror)
+		m_skirtBackdropPending = TRUE;
 	if (m_skirtStale)
 		buildSkirt();
 	if (m_skirtChunks.empty() || m_skirtIndices == NULL)
@@ -3596,6 +3664,45 @@ void BaseHeightMapRenderObjClass::drawSkirt(RenderInfoClass &rinfo)
 	if (passes > 0)
 		W3DShaderManager::resetShader(st);
 
+	// Where two patches meet, the second laid over the first by its share in the vertex alpha, with the
+	// road program the map's three-way blend tiles take (HeightMapRenderObjClass::renderExtraBlendTiles).
+	Bool anyBlend = FALSE;
+	for (size_t i = 0; i < visible.size() && !anyBlend; i++)
+		anyBlend = m_skirtChunks[visible[i]].blendQuads > 0;
+	if (anyBlend) {
+		W3DShaderManager::ShaderTypes blendShader = W3DShaderManager::ST_ROAD_BASE;
+		if (TheGlobalData->m_useLightMap && doCloud)
+			blendShader = W3DShaderManager::ST_ROAD_BASE_NOISE12;
+		else if (TheGlobalData->m_useLightMap)
+			blendShader = W3DShaderManager::ST_ROAD_BASE_NOISE2;
+		else if (doCloud)
+			blendShader = W3DShaderManager::ST_ROAD_BASE_NOISE1;
+		ShaderClass::Invalidate();
+		ShaderClass layered = ShaderClass::_PresetOpaqueShader;
+		layered.Set_Depth_Mask(ShaderClass::DEPTH_WRITE_DISABLE);
+		if (modernFullMirror)
+			layered.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
+		DX8Wrapper::Set_Shader(layered);
+		DX8Wrapper::Set_Index_Buffer(m_skirtIndices, 0);
+		W3DShaderManager::setTexture(0, texture);
+		W3DShaderManager::setTexture(1, m_stageTwoTexture);
+		W3DShaderManager::setTexture(2, m_stageThreeTexture);
+		const Int blendPasses = W3DShaderManager::getShaderPasses(blendShader);
+		for (Int pass = 0; pass < blendPasses; pass++) {
+			W3DShaderManager::setShader(blendShader, pass);
+			for (size_t i = 0; i < visible.size(); i++) {
+				const SkirtChunk &chunk = m_skirtChunks[visible[i]];
+				if (chunk.blendQuads == 0)
+					continue;
+				DX8Wrapper::Set_Vertex_Buffer(chunk.blendVertices);
+				DX8Wrapper::Draw_Triangles(0, chunk.blendQuads*2, 0, chunk.blendQuads*4);
+			}
+		}
+		if (blendPasses > 0)
+			W3DShaderManager::resetShader(blendShader);
+		DX8Wrapper::Set_Index_Buffer(m_skirtIndices, 0);
+	}
+
 	// the shroud texture's border texel, which its clamp carries out over all of it
 	TextureClass *shroudTexture = m_shroud ? m_shroud->getShroudTexture() : NULL;
 	m_skirtShrouded = shroudTexture && rinfo.Additional_Pass_Count();
@@ -3629,12 +3736,10 @@ void BaseHeightMapRenderObjClass::drawSkirt(RenderInfoClass &rinfo)
 /** The skirt's chunks drawn by drawSkirt this frame once more, into the rim's colour by their vertex
 alpha (TerrainSkirt::fade), over the ground and any sea on it, lifted clear of both (FADE_LIFT).  So the rim
 meets the void past it, which takes the same colour below, and not a black one that read as a black sky over
-it.  Then, in the tactical view only, the same colour over every pixel nothing drew (its depth still
-the clear's), so the void past the rim is that colour and the frame's clear stays black for the load
-and score screens and anything round the view.  Once a drawSkirt; WaterRenderObjClass::Render calls
-it after the water.  Not under the Atmosphere option, whose own fade closes on its haze colour by the
-rim (DX11Post_Set_Atmosphere_Edge) and whose sky fills the void: a rim colour under the border's shroud
-beside it stood out as dark slivers along the far crests. */
+it (drawSkirtBackdrop).  Once a drawSkirt; WaterRenderObjClass::Render calls it after the water.  Not
+under the Atmosphere option, whose own fade closes on its haze colour by the rim
+(DX11Post_Set_Atmosphere_Edge): a rim colour under the border's shroud beside it stood out as dark
+slivers along the far crests. */
 void BaseHeightMapRenderObjClass::drawSkirtFade(void)
 {
 	if (!m_skirtFadePending)
@@ -3673,23 +3778,38 @@ void BaseHeightMapRenderObjClass::drawSkirtFade(void)
 		DX8Wrapper::Set_Transform(D3DTS_WORLD, Transform);
 		ShaderClass::Invalidate();
 	}
-	if (!m_skirtFadeMirrored && TheTacticalView != NULL) {
-		ShaderClass backdrop(ShaderClass::_PresetOpaqueSolidShader);
-		backdrop.Set_Depth_Compare(ShaderClass::PASS_LEQUAL);
-		backdrop.Set_Depth_Mask(ShaderClass::DEPTH_WRITE_DISABLE);
-		DX8Wrapper::Set_Material(m_vertexMaterialClass);	// prelit: the quad's own colour
-		DX8Wrapper::Set_Texture(0, NULL);
-		DX8Wrapper::Set_Texture(1, NULL);
-		DX8Wrapper::Set_Shader(backdrop);
-		DX8Wrapper::Apply_Render_State_Changes();
-		if (DX8Wrapper::getBackBufferFormat() == WW3D_FORMAT_A8R8G8B8)
-			DX8Wrapper::Set_DX8_Render_State(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_BLUE|D3DCOLORWRITEENABLE_GREEN|D3DCOLORWRITEENABLE_RED);
-		W3DShaderManager::drawViewport(DX8Wrapper::Convert_Color(rim, 1.0f), 1.0f);
-		ShaderClass::Invalidate();
-	}
 	const unsigned UNKNOWN_STATE = 0x12345678;	// what Invalidate_Cached_Render_States leaves
 	if (oldTextureFactor != UNKNOWN_STATE)
 		DX8Wrapper::Set_DX8_Render_State(D3DRS_TEXTUREFACTOR, oldTextureFactor);
+	DX8Wrapper::Set_DX8_Render_State(D3DRS_COLORWRITEENABLE, oldColourWrites);
+}
+
+/** The rim's colour over every pixel of the tactical view nothing drew (its depth still the clear's),
+so the void past the rim is that colour and the frame's clear stays black for the load and score
+screens and anything round the view.  RTS3DScene::Flush calls it once the opaque world is in and before
+the sorted lists, so no translucent draw over the void (the water, a low sorted effect) is painted out.
+Not in a mirror, and not under the Atmosphere option, whose sky fills the void. */
+void BaseHeightMapRenderObjClass::drawSkirtBackdrop(void)
+{
+	if (!m_skirtBackdropPending)
+		return;
+	m_skirtBackdropPending = FALSE;
+	if (W3DShaderManager::isAtmosphereDrawn() || TheTacticalView == NULL)
+		return;
+	DWORD oldColourWrites = D3DCOLORWRITEENABLE_RED|D3DCOLORWRITEENABLE_GREEN|D3DCOLORWRITEENABLE_BLUE|D3DCOLORWRITEENABLE_ALPHA;
+	DX8Wrapper::_Get_D3D_Device()->GetRenderState(D3DRS_COLORWRITEENABLE, &oldColourWrites);	// as drawSkirtFade
+	ShaderClass backdrop(ShaderClass::_PresetOpaqueSolidShader);
+	backdrop.Set_Depth_Compare(ShaderClass::PASS_LEQUAL);
+	backdrop.Set_Depth_Mask(ShaderClass::DEPTH_WRITE_DISABLE);
+	DX8Wrapper::Set_Material(m_vertexMaterialClass);	// prelit: the quad's own colour
+	DX8Wrapper::Set_Texture(0, NULL);
+	DX8Wrapper::Set_Texture(1, NULL);
+	DX8Wrapper::Set_Shader(backdrop);
+	DX8Wrapper::Apply_Render_State_Changes();
+	if (DX8Wrapper::getBackBufferFormat() == WW3D_FORMAT_A8R8G8B8)
+		DX8Wrapper::Set_DX8_Render_State(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_BLUE|D3DCOLORWRITEENABLE_GREEN|D3DCOLORWRITEENABLE_RED);
+	W3DShaderManager::drawViewport(DX8Wrapper::Convert_Color(getSkirtRimColour(), 1.0f), 1.0f);
+	ShaderClass::Invalidate();
 	DX8Wrapper::Set_DX8_Render_State(D3DRS_COLORWRITEENABLE, oldColourWrites);
 }
 

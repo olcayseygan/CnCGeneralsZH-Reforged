@@ -243,6 +243,7 @@ public:
 	W3DShroud *getShroud()	{return m_shroud;}
 	Vector3 getSkirtRimColour(void);	///< what the land past the map ends in, and the void past it in the tactical view
 	void drawSkirtFade(void);	///< the land past the map into the rim's colour, after the water; once a drawSkirt
+	void drawSkirtBackdrop(void);	///< the rim's colour over the void in the tactical view, before the translucent lists; once a drawSkirt
 	void invalidateSkirt(void) { m_skirtStale = TRUE; }	///< built again at its next draw: the sea over it moved
 	W3DBridgeBuffer *getBridgeBuffer()	{return m_bridgeBuffer;}
 	void updateShorelineTiles(Int minX, Int minY, Int maxX, Int maxY, WorldHeightMap *pMap);	///<figure out which tiles on this map cross water plane
@@ -496,8 +497,11 @@ protected:
 	{
 		DX8VertexBufferClass *vertices;
 		Int quads;
+		DX8VertexBufferClass *blendVertices;	///< the layer laid over where two patches meet, its share in the alpha; NULL for none
+		Int blendQuads;
 		Vector3 low, high;
 	};
+	DX8VertexBufferClass *makeSkirtVertices(const std::vector<VERTEX_FORMAT> &verts);
 	std::vector<SkirtChunk> m_skirtChunks;
 	DX8IndexBufferClass *m_skirtIndices;	///< quad after quad, shared by every chunk
 	/** What the skirt is textured from without the terrain atlas, which the lower terrain detail never
@@ -507,6 +511,7 @@ protected:
 	std::vector<Int> m_skirtVisible;	///< the chunks drawSkirt drew last, which drawSkirtFade draws again
 	Bool m_skirtFadePending;	///< drawSkirt drew and drawSkirtFade has not yet
 	Bool m_skirtFadeMirrored;	///< that drawSkirt was into Modern's mirror, both sides
+	Bool m_skirtBackdropPending;	///< drawSkirt drew into the tactical view and drawSkirtBackdrop has not yet
 	Bool m_skirtShrouded;	///< that drawSkirt laid the border's shroud over it
 	/// The edge as buildSkirt reads it: the ring blurred, the level of the sea drawn past each sample
 	/// (INVALID_WATER_HEIGHT for none), that blurred into a share, the land's mean and the highest sea.

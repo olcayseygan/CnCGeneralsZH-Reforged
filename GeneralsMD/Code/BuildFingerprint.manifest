@@ -1362,6 +1362,7 @@ Data/Scenarios/glowbase.txt
 Data/Scenarios/glowfight.txt
 Data/Scenarios/glowmicrowave.txt
 Data/Scenarios/gpu1m_battle.txt
+Data/Scenarios/groupqueue.txt
 Data/Scenarios/guardair.txt
 Data/Scenarios/guardradius.txt
 Data/Scenarios/guardshields.txt

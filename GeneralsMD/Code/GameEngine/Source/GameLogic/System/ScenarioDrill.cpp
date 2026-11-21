@@ -298,6 +298,8 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_LANEUNITUPGRADE;
 	else if (token == "lanecash")
 		*action = SCENARIO_ACTION_LANECASH;
+	else if (token == "groupqueue")
+		*action = SCENARIO_ACTION_GROUPQUEUE;
 	else
 		return FALSE;
 
@@ -423,6 +425,7 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_LANEGARRISON:	return SCENARIO_TOKENS_ATTACK + 1;
 		case SCENARIO_ACTION_LANEUNITUPGRADE:	return SCENARIO_TOKENS_ATTACK + 1;
 		case SCENARIO_ACTION_LANECASH:		return SCENARIO_TOKENS_STOP;
+		case SCENARIO_ACTION_GROUPQUEUE:	return SCENARIO_TOKENS_MOVE;
 	}
 	return SCENARIO_TOKENS_STOP;
 }
@@ -470,6 +473,7 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 	switch (actionType)
 	{
 		case SCENARIO_ACTION_TOPUP:
+		case SCENARIO_ACTION_GROUPQUEUE:
 			if (!parseWholeNumber( tokens[ 4 ], &action->count ) || action->count < 1)
 				return SCENARIO_PARSE_BAD_COUNT;
 			break;
@@ -2427,6 +2431,7 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 		case SCENARIO_ACTION_POWER:
 		case SCENARIO_ACTION_PRODUCE:
 		case SCENARIO_ACTION_REPEAT:
+		case SCENARIO_ACTION_GROUPQUEUE:
 		case SCENARIO_ACTION_GIVEMONEY:
 		case SCENARIO_ACTION_TALLY:
 		case SCENARIO_ACTION_RESPOND:
@@ -2542,6 +2547,31 @@ static Bool executeRepeat( const ScenarioAction &action, Player *player )
 
 	DEBUG_LOG(("SCENARIO: frame %d repeat slot %d '%s' %d '%s' %s\n", action.frame, action.slot,
 						 action.selector.str(), building->getID(), action.targetSelector.str(), action.name.str()));
+	return TRUE;
+}
+
+/** A command bar unit tab's click, count times: MSG_QUEUE_UNIT_FOR_GROUP with squad -1 onto the message
+	  stream, as ControlBarCommand sends it, so the dispatcher picks the factory with the shortest queue,
+	  the replay records it and a network match sends it on.  Only the local player can click. */
+static Bool executeGroupQueue( const ScenarioAction &action, Player *player )
+{
+	const ThingTemplate *made = TheThingFactory->findTemplate( action.selector );
+	if (player != ThePlayerList->getLocalPlayer() || made == NULL)
+	{
+		DEBUG_LOG(("SCENARIO: frame %d groupqueue: slot %d is not the local player, or '%s' is no template\n",
+							 action.frame, action.slot, action.selector.str()));
+		return FALSE;
+	}
+
+	for (Int i = 0; i < action.count; ++i)
+	{
+		GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_QUEUE_UNIT_FOR_GROUP );
+		msg->appendIntegerArgument( made->getTemplateID() );
+		msg->appendIntegerArgument( -1 );
+	}
+
+	DEBUG_LOG(("SCENARIO: frame %d groupqueue slot %d '%s' x%d squad -1\n", action.frame, action.slot,
+						 action.selector.str(), action.count));
 	return TRUE;
 }
 
@@ -2803,6 +2833,9 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 
 	if (action.action == SCENARIO_ACTION_REPEAT)
 		return executeRepeat( action, player );
+
+	if (action.action == SCENARIO_ACTION_GROUPQUEUE)
+		return executeGroupQueue( action, player );
 
 	if (action.action == SCENARIO_ACTION_GIVEMONEY)
 		return executeGiveMoney( action, player );

@@ -115,7 +115,8 @@ enum ScenarioActionType
 	SCENARIO_ACTION_LANEGARRISON,			///< lanegarrison <slot> <template> <grid> <column> <row>; buy that infantryman into the seat's plot unit on that slot, as LANEWAR_ORDER_GARRISON
 	SCENARIO_ACTION_LANEUNITUPGRADE,	///< laneunitupgrade <slot> <upgrade> <grid> <column> <row>; buy that object upgrade on the seat's plot unit on that slot, its button found in the unit's command set, as LANEWAR_ORDER_UNIT_UPGRADE
 	SCENARIO_ACTION_LANECASH,					///< lanecash <slot> <amount>; the seat is paid that much, a test's shortcut past the ticks
-	SCENARIO_ACTION_LANEABILITY				///< laneability <slot> <template> <buttonSlot> <0|1>; switch the seat's wave units of that template off or on for the button in that command set slot (from 0, the INI's number less one), as LANEWAR_ORDER_ABILITY (slot and switch in at)
+	SCENARIO_ACTION_LANEABILITY,			///< laneability <slot> <template> <buttonSlot> <0|1>; switch the seat's wave units of that template off or on for the button in that command set slot (from 0, the INI's number less one), as LANEWAR_ORDER_ABILITY (slot and switch in at)
+	SCENARIO_ACTION_GROUPQUEUE				///< groupqueue <slot> <template> <count>; a command bar unit tab's click that many times, as MSG_QUEUE_UNIT_FOR_GROUP with squad -1 onto the message stream, the logic picking the factory
 };
 
 /// ScenarioAction::atStart when the position is plain numbers

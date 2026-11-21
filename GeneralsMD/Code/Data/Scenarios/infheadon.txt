@@ -16,12 +16,18 @@
 # alone takes 1096, 1171 and 874, so the whole crossing, block depth included, costs 60 to 116
 # frames on the last man. No run sent one side over alone, so how much of that is the meeting is
 # not separated.
+#
+# Golden Oasis only: a -randommap has no bridge here and refuses most spawns as off the map. The Red
+# Guard block stood at 1471,1859 with spacing 18 until 2026-11-21, where 11 of its 36 cells are
+# OBSTACLE (west and south-east of it); it moved to 1535,1815 with spacing
+# 16, which lands 36 of 36, and the Americans walk to that point instead. The 2026-10-04 numbers
+# above are from the old block.
 
 30    spawn       0  AmericaInfantryRanger           24  2043 1136  18
 30    spawn       0  AmericaInfantryMissileDefender  12  2123 1136  18
-30    spawn       0  ChinaInfantryRedguard           36  1471 1859  18
-60    playermove  0  AmericaInfantry*                1471 1859
+30    spawn       0  ChinaInfantryRedguard           36  1535 1815  16
+60    playermove  0  AmericaInfantry*                1535 1815
 60    playermove  0  ChinaInfantryRedguard           2043 1136
-60    arrive      0  AmericaInfantryRanger           1471 1859 200
-60    arrive      0  AmericaInfantryMissileDefender  1471 1859 200
+60    arrive      0  AmericaInfantryRanger           1535 1815 200
+60    arrive      0  AmericaInfantryMissileDefender  1535 1815 200
 60    arrive      0  ChinaInfantryRedguard           2043 1136 200

@@ -12938,8 +12938,8 @@ TEST(lane_war_middle_goes_to_the_larger_count_past_the_line_and_pays_a_quarter_m
 	CHECK_EQ( LaneWar_middleHolder( 1, 0 ), 0 );
 	CHECK_EQ( LaneWar_middleHolder( 4, 9 ), 1 );
 
-	CHECK_EQ( LaneWar_income( FALSE ), (UnsignedInt)267 );
-	CHECK_EQ( LaneWar_income( TRUE ), (UnsignedInt)( 267 + 66 ) );
+	CHECK_EQ( LaneWar_income( FALSE ), (UnsignedInt)400 );
+	CHECK_EQ( LaneWar_income( TRUE ), (UnsignedInt)( 400 + 100 ) );
 	CHECK_EQ( (Int)LANEWAR_START_MONEY, 2000 );
 }
 
@@ -13010,8 +13010,10 @@ TEST(lane_war_plot_front_faces_the_lane_and_leads_the_wave)
 
 TEST(lane_war_times_are_wall_seconds_in_logic_frames)
 {
-	// wall time, so the logic rate and never the game speed: 30 s and 130 s at any speed
-	CHECK_EQ( LANEWAR_TICK_FRAMES, (UnsignedInt)( 30 * LOGICFRAMES_PER_SECOND ) );
+	// wall time, so the logic rate and never the game speed: a tick every 45 s, the first at 90 s, a
+	// copy living 130 s, at any speed
+	CHECK_EQ( LANEWAR_TICK_FRAMES, (UnsignedInt)( 45 * LOGICFRAMES_PER_SECOND ) );
+	CHECK_EQ( LANEWAR_FIRST_TICK_FRAMES, (UnsignedInt)( 90 * LOGICFRAMES_PER_SECOND ) );
 	CHECK_EQ( LANEWAR_LIFESPAN_FRAMES, (UnsignedInt)( 130 * LOGICFRAMES_PER_SECOND ) );
 
 	// a plot unit's status bit has a name, so a save writes it and an INI can read it
@@ -13047,10 +13049,10 @@ TEST(lane_war_jets_take_off_when_the_meeting_is_no_further_than_their_flight)
 
 TEST(lane_war_tiers_cost_what_the_plan_says_and_a_sale_pays_back_half_once_sent)
 {
-	// four income levels of 1000 each, every one paying 67 more a tick, the middle a quarter on top
-	CHECK_EQ( LaneWar_incomeAt( 0, FALSE ), (UnsignedInt)267 );
-	CHECK_EQ( LaneWar_incomeAt( 4, FALSE ), (UnsignedInt)( 267 + 4 * 67 ) );
-	CHECK_EQ( LaneWar_incomeAt( 2, TRUE ), (UnsignedInt)( ( 267 + 2 * 67 ) * 125 / 100 ) );
+	// four income levels of 1000 each, every one paying 100 more a tick, the middle a quarter on top
+	CHECK_EQ( LaneWar_incomeAt( 0, FALSE ), (UnsignedInt)400 );
+	CHECK_EQ( LaneWar_incomeAt( 4, FALSE ), (UnsignedInt)( 400 + 4 * 100 ) );
+	CHECK_EQ( LaneWar_incomeAt( 2, TRUE ), (UnsignedInt)( ( 400 + 2 * 100 ) * 125 / 100 ) );
 	CHECK_EQ( LaneWar_incomeAt( 0, TRUE ), LaneWar_income( TRUE ) );
 	for( Int level = 1; level <= LANEWAR_INCOME_TIERS; ++level )
 		CHECK_EQ( LaneWar_tierPrice( LANEWAR_TRACK_INCOME, level ), 1000 );

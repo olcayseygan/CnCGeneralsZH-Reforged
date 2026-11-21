@@ -8,6 +8,11 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Direct Strike waves every 45 seconds
+
+- Waves now go out every 45 seconds instead of every 30, a team's seats still taking turns, and the first leaves a minute and a half into the match instead of half a minute, so there is time to fill the plot before anything marches. Income comes on the same ticks and adds up to the same 533 a minute as before: 400 a tick, and 100 more a tick for each income level, which still earns back its 1000 in seven and a half minutes.
+- Direct Strike replays recorded before this change will not play back.
+
 ## A loaded game plays on the way it was saved
 
 A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a different game: a Lane War match saved at the 7:46 mark split from the straight run within half a second, and a plain skirmish did the same. Three things were missing from the save. Where every unit stood and was heading on the movement grid was rebuilt from positions on load, so units held in place came back blocking cells they had left. A hijacker sitting in a captured vehicle was put back on the map as if he were standing beside it, and when the car died he never looked around again. And whether a hit on your unit calls its neighbours in was forgotten until the first second of play turned it back on. All three are in the save now. The same Lane War save ends on the same checksum as the run that never stopped, 21000 frames in, and the skirmish one matches at 3000. Older saves still load and behave as before.

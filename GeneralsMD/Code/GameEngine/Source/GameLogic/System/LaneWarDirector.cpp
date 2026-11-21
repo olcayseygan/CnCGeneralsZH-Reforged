@@ -725,7 +725,7 @@ void LaneWarDirector::newMap( Bool loadingSaveGame )
 			m_seatPlayer[ LaneWar_teamOfStart( start ) ][ LaneWar_seatOfStart( start ) ] = i;
 	}
 
-	m_nextTickFrame = TheGameLogic->getFrame() + LANEWAR_TICK_FRAMES;
+	m_nextTickFrame = TheGameLogic->getFrame() + LANEWAR_FIRST_TICK_FRAMES;
 
 	if( !loadingSaveGame )
 	{

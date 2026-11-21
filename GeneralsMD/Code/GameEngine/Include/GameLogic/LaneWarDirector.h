@@ -68,14 +68,15 @@ enum
 	LANEWAR_TEAMS = 2,										///< team A starts on the odd starts (1, 3, 5), team B on the even
 	LANEWAR_SEATS = 3,										///< seats a team; seat N of a team stands on its Nth start
 	LANEWAR_START_MONEY = 2000,						///< every player's cash when the match starts
-	LANEWAR_INCOME = 267,									///< paid to every player on every spawn tick
+	LANEWAR_INCOME = 400,									///< paid to every player on every spawn tick: 533 a minute, as 267 every 30 seconds was
 	LANEWAR_MIDDLE_BONUS_PERCENT = 25,		///< on top of the income, for the team holding past the centre line
-	LANEWAR_TICK_SECONDS = 30,						///< wall seconds between spawn ticks, the first one included
+	LANEWAR_TICK_SECONDS = 45,						///< wall seconds between two spawn ticks
+	LANEWAR_FIRST_TICK_SECONDS = 90,			///< wall seconds from the start to the first spawn tick, time to fill the plots
 	LANEWAR_LIFESPAN_SECONDS = 130,				///< wall seconds a wave copy lives
 	LANEWAR_SLOT_SIZE = 20,								///< world units a side of one plot slot, two cells; a plot 240 across its front and 160 deep is 12 columns by 8 rows
 	LANEWAR_INCOME_TIERS = 4,							///< income levels a player can buy past the first
 	LANEWAR_INCOME_TIER_PRICE = 1000,			///< each of them
-	LANEWAR_INCOME_TIER_PAYS = 67,				///< more on every tick for each level bought
+	LANEWAR_INCOME_TIER_PAYS = 100,				///< more on every tick for each level bought, back in ten ticks
 	LANEWAR_TECH_TIERS = 3,								///< a player starts on tech tier 1
 	LANEWAR_SELL_SENT_PERCENT = 50,				///< a unit that has gone out in a wave sells back for this share; one that has not, for all of it
 	LANEWAR_JET_PARK_MARGIN = 100,				///< world units past the map's border, behind his own end, where a player's jets wait
@@ -86,6 +87,7 @@ enum
 };
 
 #define LANEWAR_TICK_FRAMES ((UnsignedInt)(LANEWAR_TICK_SECONDS * LOGICFRAMES_PER_SECOND))
+#define LANEWAR_FIRST_TICK_FRAMES ((UnsignedInt)(LANEWAR_FIRST_TICK_SECONDS * LOGICFRAMES_PER_SECOND))
 #define LANEWAR_LIFESPAN_FRAMES ((UnsignedInt)(LANEWAR_LIFESPAN_SECONDS * LOGICFRAMES_PER_SECOND))
 #define LANEWAR_STRIKE_FRAMES ((UnsignedInt)(LANEWAR_STRIKE_SECONDS * LOGICFRAMES_PER_GAME_SECOND))
 #define LANEWAR_JET_REARM_FRAMES ((UnsignedInt)(LANEWAR_JET_REARM_SECONDS * LOGICFRAMES_PER_GAME_SECOND))

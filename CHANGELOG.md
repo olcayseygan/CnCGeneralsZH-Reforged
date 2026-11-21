@@ -8,6 +8,11 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Direct Strike fortresses and towers last three times as long
+
+- The fortress has 12000 health instead of 4000 and the watch tower 4000 instead of 1200. Their armour is the same, so every weapon needs three times the hits to bring them down. In a test a six-Paladin army that used to raze the fortress 55 seconds after the tower fell now takes two minutes over it.
+- Direct Strike replays recorded before this change will not play back.
+
 ## Direct Strike waves every 45 seconds
 
 - Waves now go out every 45 seconds instead of every 30, a team's seats still taking turns, and the first leaves a minute and a half into the match instead of half a minute, so there is time to fill the plot before anything marches. Income comes on the same ticks and adds up to the same 533 a minute as before: 400 a tick, and 100 more a tick for each income level, which still earns back its 1000 in seven and a half minutes.

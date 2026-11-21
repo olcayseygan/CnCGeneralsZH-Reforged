@@ -33,10 +33,13 @@
 #include "GameClient/LaneWarEndScreen.h"
 
 #include "Common/GameEngine.h"
+#include "Common/GlobalData.h"
 #include "Common/MessageStream.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 #include "Common/PlayerTemplate.h"
+#include "Common/RandomValue.h"
+#include "Common/Recorder.h"
 #include "Common/ThingTemplate.h"
 #include "GameClient/ChallengeGenerals.h"
 #include "GameClient/Color.h"
@@ -46,9 +49,13 @@
 #include "GameClient/GameText.h"
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/Image.h"
+#include "GameClient/LaneHud.h"
 #include "GameClient/Mouse.h"
+#include "GameClient/Shell.h"
 #include "GameClient/UIStyle.h"
 #include "GameClient/View.h"
+#include "GameNetwork/GameInfo.h"
+#include "GameNetwork/GUIUtil.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/LaneWarStats.h"
@@ -102,7 +109,7 @@ const Int VIGNETTE_BANDS = 8;
 const Int VIGNETTE_DEPTH_SHARE = 4;		///< a quarter of the screen's height in from each edge
 const Real BACKS_ALPHA = 0.75f;
 const Real KEY_DIM_ALPHA = 0.4f;				///< a key not wired yet
-const Real TICK_ALPHA = 0.6f, FIVE_MINUTE_ALPHA = 0.35f;
+const Real TICK_ALPHA = 0.6f, MARK_LINE_ALPHA = 0.35f;
 const Real PLATE_LIP = 2.0f, LOCAL_FRAME_LINE = 1.0f, HEALTH_LINE = 2.0f;
 
 // fonts
@@ -150,7 +157,7 @@ const Real TIMELINE_SLICE_END = 24.0f, TIMELINE_PLOT_INSET = 8.0f;
 const Real PLOT_LEFT = 152.0f, PLOT_RIGHT = 1792.0f;
 const Real TIMELINE_GLYPH_X = 126.0f, TIMELINE_GLYPH_SIZE = 18.0f, MIDDLE_GLYPH_Y = 781.0f, FORTRESS_GLYPH_Y = 852.0f;
 const Real TICK_TOP = 900.0f, TICK_BOTTOM = 904.0f;
-const Real FIVE_MINUTE_TOP = 752.0f, FIVE_MINUTE_BOTTOM = 890.0f, FIVE_MINUTE_LABEL_Y = 896.0f;
+const Real MARK_LINE_TOP = 752.0f, MARK_LINE_BOTTOM = 890.0f, MARK_LABEL_Y = 896.0f;	///< the time marks
 const Real MIDDLE_Y = 790.0f, MIDDLE_REACH = 34.0f;
 const Int MIDDLE_COLUMN_SECONDS = 2;
 const Real HEALTH_FULL_Y = 836.0f, HEALTH_ZERO_Y = 886.0f;
@@ -568,14 +575,16 @@ void drawTimeline( void )
 	drawGlyph( piece( s_localPrefix, PIECE_MIDDLE ), TIMELINE_GLYPH_X, MIDDLE_GLYPH_Y, TIMELINE_GLYPH_SIZE, TIME_GREY );
 	drawGlyph( piece( s_localPrefix, PIECE_FORTRESS ), TIMELINE_GLYPH_X, FORTRESS_GLYPH_Y, TIMELINE_GLYPH_SIZE, TIME_GREY );
 
-	// the foot: a tick every spawn tick, a faint line and the time every five minutes
-	const UnsignedInt tickFrames = LANEWAR_TICK_FRAMES, fiveMinutes = 300 * LOGICFRAMES_PER_SECOND;
+	// the foot: a tick every spawn tick, then a faint line and the time every mark, a minute apart under
+	// ten minutes, five under half an hour and ten after that
+	const UnsignedInt tickFrames = LANEWAR_TICK_FRAMES, minute = 60 * LOGICFRAMES_PER_SECOND;
+	const UnsignedInt markFrames = s_endFrame < 10 * minute ? minute : s_endFrame < 30 * minute ? 5 * minute : 10 * minute;
 	for( UnsignedInt f = tickFrames; f < s_endFrame; f += tickFrames )
 		fill( timelineX( f ), TICK_TOP, timelineX( f ) + 1.0f, TICK_BOTTOM, withAlpha( TIME_GREY, TICK_ALPHA ) );
-	for( UnsignedInt f = fiveMinutes; f < s_endFrame; f += fiveMinutes )
+	for( UnsignedInt f = markFrames; f < s_endFrame; f += markFrames )
 	{
-		fill( timelineX( f ), FIVE_MINUTE_TOP, timelineX( f ) + 1.0f, FIVE_MINUTE_BOTTOM, withAlpha( 0xFFFFFFFF, FIVE_MINUTE_ALPHA ) );
-		drawText( clockText( (Int)( f / LOGICFRAMES_PER_SECOND ) ), TICK_FONT, bx( timelineX( f ) ), by( FIVE_MINUTE_LABEL_Y ), TIME_GREY, 0 );
+		fill( timelineX( f ), MARK_LINE_TOP, timelineX( f ) + 1.0f, MARK_LINE_BOTTOM, withAlpha( 0xFFFFFFFF, MARK_LINE_ALPHA ) );
+		drawText( clockText( (Int)( f / LOGICFRAMES_PER_SECOND ) ), TICK_FONT, bx( timelineX( f ) ), by( MARK_LABEL_Y ), TIME_GREY, 0 );
 	}
 
 	// the middle: our share past the line above the gold line in blue, theirs below in red, in columns
@@ -645,8 +654,73 @@ Bool overKey( Int k, const ICoord2D *mouse )
 	return mouse->x >= bx( KEY_X[ k ] ) && mouse->x < bx( KEY_X[ k ] + KEY_W ) && mouse->y >= by( KEY_TOP ) && mouse->y < by( KEY_BOTTOM );
 }
 
-/// rematch and replay are drawn and wait for their wiring; only the menu key leaves today
-Bool keyLive( Int k ) { return k == KEY_MENU; }
+Bool watchingReplay( void ) { return TheRecorder->getMode() == RECORDERMODETYPE_PLAYBACK; }
+
+/// the replay the Replay key plays: the one being watched again, else the match just recorded
+AsciiString replayToWatch( void )
+{
+	if( watchingReplay() )
+		return TheRecorder->getCurrentReplayFilename();
+	if( TheRecorder->getMode() != RECORDERMODETYPE_RECORD )
+		return AsciiString::TheEmptyString;
+	AsciiString file = TheRecorder->getLastReplayFileName();
+	file.concat( TheRecorder->getReplayExtention() );
+	return file;
+}
+
+/// a replay has no rematch; every other match does, a skirmish here and a network game in its room
+Bool keyLive( Int k )
+{
+	if( k == KEY_REPLAY )
+		return replayToWatch().isNotEmpty();
+	if( k == KEY_REMATCH )
+		return !watchingReplay() && ( TheGameLogic->isInMultiplayerGame() || ( TheGameLogic->isInSkirmishGame() && TheSkirmishGameInfo != NULL ) );
+	return TRUE;
+}
+
+/// the match ended where it stands, for what the key does next; the recording closed first so it can be played
+void endMatchHere( void )
+{
+	if( TheRecorder->getMode() == RECORDERMODETYPE_RECORD )
+		TheRecorder->stopRecording();
+	TheGameLogic->clearGameData( FALSE );
+	TheGameEngine->setQuitting( FALSE );
+}
+
+void watchReplay( void )
+{
+	const AsciiString file = replayToWatch();
+	endMatchHere();
+	if( !TheRecorder->playbackFile( file ) )
+		TheShell->showShell();
+}
+
+/** The same seats, armies and colours on a fresh island, as the room's Start builds it (the skirmish
+	* menu's reallyDoStart); a network game goes back to its room, where the host starts the next one. */
+void rematch( void )
+{
+	if( TheGameLogic->isInMultiplayerGame() )
+	{
+		TheMessageStream->appendMessage( GameMessage::MSG_CLEAR_GAME_DATA );
+		return;
+	}
+	const Int gameSpeedPercent = TheSkirmishGameInfo->getGameSpeedPercent();
+	endMatchHere();
+	if( !SetDirectStrikeMap( TheSkirmishGameInfo ) )
+	{
+		TheShell->showShell();
+		return;
+	}
+	FitDirectStrikeRoom( TheSkirmishGameInfo );
+	TheSkirmishGameInfo->setSeed( TheGlobalData->m_fixedSeed >= 0 ? TheGlobalData->m_fixedSeed : (Int)Clock_Milliseconds() );
+	TheWritableGlobalData->m_mapName = TheSkirmishGameInfo->getMap();
+	InitRandom( TheSkirmishGameInfo->getSeed() );
+	GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_NEW_GAME );
+	msg->appendIntegerArgument( GAME_SKIRMISH );
+	msg->appendIntegerArgument( DIFFICULTY_NORMAL );
+	msg->appendIntegerArgument( 0 );
+	GameEngine_appendNewGameRates( msg, gameSpeedPercent );
+}
 
 void drawKeys( void )
 {
@@ -772,8 +846,9 @@ void LaneWarEndScreen_preDraw( void )
 		{
 			s_cameraMoved = TRUE;
 			const Coord3D at = fortress != NULL ? *fortress->getPosition() : *TheLaneWarDirector->getSpawn( fallen );
-			// orient FALSE keeps the side-on angle over the lane; only the ground point moves and the
-			// camera comes in a little
+			// side-on to the lane with our end on the left (a watcher's is team A's), held through the
+			// move by orient FALSE, and in a little
+			LaneHud_turnToLane( s_ourTeam );
 			TheTacticalView->moveCameraTo( &at, (Int)FINALE_CAMERA_MS, 0, FALSE, FINALE_CAMERA_EASE_MS, FINALE_CAMERA_EASE_MS );
 			TheTacticalView->zoomCamera( TheTacticalView->getZoom() * FINALE_ZOOM, (Int)FINALE_CAMERA_MS, FINALE_CAMERA_EASE_MS,
 																	 FINALE_CAMERA_EASE_MS );
@@ -873,11 +948,17 @@ Bool LaneWarEndScreen_press( const ICoord2D *mouse, Bool right )
 		s_resultsOpen = TRUE;
 		return TRUE;
 	}
-	if( !s_left && overKey( KEY_MENU, mouse ) )
+	for( Int k = 0; k < KEYS && !s_left; ++k )
 	{
-		// the quit menu's Exit without its surrender: the match is decided
+		if( !keyLive( k ) || !overKey( k, mouse ) )
+			continue;
 		s_left = TRUE;
-		TheMessageStream->appendMessage( GameMessage::MSG_CLEAR_GAME_DATA );
+		if( k == KEY_REPLAY )
+			watchReplay();
+		else if( k == KEY_REMATCH )
+			rematch();
+		else
+			TheMessageStream->appendMessage( GameMessage::MSG_CLEAR_GAME_DATA );	// the quit menu's Exit without its surrender
 	}
 	return TRUE;
 }

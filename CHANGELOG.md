@@ -12,7 +12,8 @@ found and fixed, EA's own, not port damage.**
 
 - A Direct Strike match no longer ends on the frame the fortress dies. The fortress gets five game seconds to come down while the camera slides over and in on it, still from the side, the fall runs in slow motion in a skirmish and the edges of the screen darken. Only then is the match decided, and the result waits until the last piece of the ruin has settled, so you see the whole fall.
 - The stock Victory and Defeat windows and the score screen are gone from Direct Strike. The result is dealt as one card over two card backs, your general with Victory or Defeat and the match's length, and a moment later the results screen lays out a tall card for every player in his own side's colours: his general, the unit that killed most for him, and seven numbers (waves sent, units placed, money earned and spent, kills, damage to towers and fortress, time held past the middle). Under them a timeline shows who held the middle and both fortresses' health through the match, with the moment each tower fell.
-- Back to Menu leaves for the screen the match was started from. Rematch and Watch Replay are drawn but not wired yet.
+- If the second fortress falls while the first is still coming down, both teams are out and the match is a draw. Before, the team whose fortress fell second won anyway.
+- Rematch starts the same seats, armies and colours again on a new island; in a LAN or online game it takes everyone back to the room. Watch Replay plays the match you just finished from its first frame. Back to Menu leaves for the screen the match was started from.
 - Older Direct Strike replays and saves no longer play back: the match record is part of every check the game makes.
 
 ## Direct Strike with every general

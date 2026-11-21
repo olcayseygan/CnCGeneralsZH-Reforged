@@ -1890,9 +1890,14 @@ void LaneHud_draw( void )
 	* enemy on the right, as the strip map draws it.  The view's angle 0 looks along +y with +x to the
 	* right (a world heading h is angle h - 90 degrees, W3DView's rotateCameraTowardPosition), so the team
 	* whose enemy lies towards -x is turned half round.  Pitch and zoom stay as they are. */
+void LaneHud_turnToLane( Int team )
+{
+	TheTacticalView->setAngle( TheLaneWarDirector->towardEnemy( team ) > 0.0f ? 0.0f : PI );
+}
+
 static void turnToLane( void )
 {
-	TheTacticalView->setAngle( TheLaneWarDirector->towardEnemy( s_team ) > 0.0f ? 0.0f : PI );
+	LaneHud_turnToLane( s_team );
 }
 
 /// the camera to the middle of the player's own plot, its ground grid and the air rows behind it, turned to the lane

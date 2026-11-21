@@ -77,11 +77,15 @@ ROW_PITCH = ROW_HEIGHT + 6
 COLUMNS_RIGHT = SEAT_RIGHT - (ROW_HEIGHT - CONTROL_HEIGHT) // 2
 GAP = 8
 
-# The skirmish room holds every seat the game has (MAX_SLOTS, NetworkDefs.h) on its eight rows: the
-# first row is always the local player's, and the seven under it scroll over the rest with a scroll
-# bar at the cards' right, the buttons and track of the room's own list boxes (a seat's dropdown
-# lists, whose art the layout copies). Its cards stop short of the bar; the network rooms keep eight.
+# The skirmish room holds every seat the game has (MAX_SLOTS, NetworkDefs.h). It has no chat, so its
+# rows run down to the foot of the rules page, as many as fit (SKIRMISH_SEAT_ROWS, cloned from the
+# eighth); the first row is always the local player's, and the rows under it scroll over the rest
+# with a scroll bar at the cards' right, the buttons and track of the room's own list boxes (a seat's
+# dropdown lists, whose art the layout copies). Its cards stop short of the bar; the network rooms
+# keep eight rows and no bar.
 SCROLL_WIDTH, SCROLL_BUTTON_HEIGHT = 21, 22
+SEAT_ROW_PREFIXES = ("ComboBoxPlayer", "ComboBoxColor", "ComboBoxPlayerTemplate", "ComboBoxTeam",
+                     "ComboBoxAIPersona", "ComboBoxHandicap")
 SEAT_SCROLL_UP, SEAT_SCROLL_DOWN, SEAT_SCROLL_SLIDER = "ButtonSeatScrollUp", "ButtonSeatScrollDown", "SliderSeatScroll"
 SEAT_SCROLL = (SEAT_SCROLL_UP, SEAT_SCROLL_DOWN, SEAT_SCROLL_SLIDER)
 SEAT_SCROLL_ART = "ComboBoxTeam1"
@@ -107,6 +111,7 @@ CHECK_WIDTH = 228
 SPOT = 28
 
 UNDER_SEATS_BOTTOM = 916
+SKIRMISH_SEAT_ROWS = (PAGE_BOTTOM - ROW_TOP - ROW_HEIGHT) // ROW_PITCH + 1
 BUTTON_TOP, BUTTON_HEIGHT = 932, 56
 BACK_WIDTH, BUDDIES_WIDTH = 300, 260
 EMOTE_WIDTH = 64
@@ -216,7 +221,8 @@ GAMESPY_CHECKS = ["CheckBoxUseStats", "CheckBoxLimitArmies"] + LAN_CHECKS
 ROOMS = {
     "SkirmishGameOptionsMenu": dict(container="SubParent", rule="Line", title="StaticTextTitle",
                                     columns=SEAT_COLUMNS, rules=SKIRMISH_RULES, checks=SKIRMISH_CHECKS,
-                                    row_pitch=ROW_PITCH, row_height=ROW_HEIGHT, seat_right=SCROLL_SEAT_RIGHT),
+                                    row_pitch=ROW_PITCH, row_height=ROW_HEIGHT, seat_right=SCROLL_SEAT_RIGHT,
+                                    seat_rows=SKIRMISH_SEAT_ROWS),
     "LanGameOptionsMenu": dict(container="GadgetParent", rule="LINE", title="StaticTextTitle",
                                columns=SEAT_COLUMNS, rules=NETWORK_RULES, checks=LAN_CHECKS,
                                row_pitch=ROW_PITCH, row_height=ROW_HEIGHT, chat="ListboxChatWindowLanGame"),
@@ -367,15 +373,31 @@ def add_ruler(layout, menu, container):
     ruler.set_prop("ENABLEDDRAWDATA", draw_data((0, 0, 0, 255), (0, 0, 0, 255), RULER_IMAGE))
 
 
+def seat_rows(spec):
+    return spec.get("seat_rows", SEAT_COUNT)
+
+
+def add_seat_rows(layout, menu, spec):
+    """The skirmish room's rows past the eighth: each seat control cloned from the eighth row's, once,
+    next to it in its container; place_seats puts them on their rows."""
+    for prefix in SEAT_ROW_PREFIXES:
+        source = need(layout, "%s%d" % (prefix, SEAT_COUNT - 1))
+        container = layout.root.parent_of(source)
+        for seat in range(SEAT_COUNT, seat_rows(spec)):
+            if layout.find("%s%d" % (prefix, seat)) is None:
+                container.children.insert(container.children.index(source),
+                                          clone(source, "%s.wnd:%s%d" % (menu, prefix, seat)))
+
+
 def add_seat_windows(layout, menu, container, spec):
     """One card, bar and two swatches a seat, put at the front of the container so they draw under
     the seat's controls. The game draws the swatches' check box frame itself."""
     remove(layout, ["%s%d" % (kind, seat) for kind in SEAT_WINDOWS + RETIRED_SEAT_WINDOWS
-                    for seat in range(SEAT_COUNT)])
+                    for seat in range(seat_rows(spec))])
     template = need(layout, spec["container"])
     named = lambda kind, seat: "%s.wnd:%s%d" % (menu, kind, seat)
     added = {kind: [] for kind in SEAT_WINDOWS}
-    for seat in range(SEAT_COUNT):
+    for seat in range(seat_rows(spec)):
         for kind in SEAT_WINDOWS:
             card = kind == "SeatCard"
             added[kind].append(plain_window(template, named(kind, seat), False,
@@ -401,7 +423,8 @@ def place_seats(layout, spec, seat_zero_player):
     pitch, height = spec["row_pitch"], spec["row_height"]
     seat_right = spec.get("seat_right", SEAT_RIGHT)
     right = columns_right(spec)
-    for seat in range(SEAT_COUNT):
+    rows = seat_rows(spec)
+    for seat in range(rows):
         top = ROW_TOP + seat * pitch
         need(layout, "SeatCard%d" % seat).place(INNER_LEFT, top, seat_right - INNER_LEFT, height)
         need(layout, "SeatBar%d" % seat).place(INNER_LEFT, top, BAR_WIDTH, height)
@@ -424,7 +447,7 @@ def place_seats(layout, spec, seat_zero_player):
                 span = COLUMN_LEFT - left
             heading.place(left - TEXT_NUDGE, HEADER_TOP, span, HEADER_HEIGHT)
             left_align(heading)
-        for seat in range(SEAT_COUNT):
+        for seat in range(rows):
             top = ROW_TOP + seat * pitch
             for prefix in prefixes:
                 name = "%s%d" % (prefix, seat)
@@ -440,7 +463,7 @@ def place_seats(layout, spec, seat_zero_player):
         left += width + (6 if prefixes[0] in SWATCHES else GAP)
     if min(widths) <= 0 or left - GAP != right:
         raise ValueError("seat columns %s do not fill the seat table to %d" % (widths, right))
-    return ROW_TOP + (SEAT_COUNT - 1) * pitch + height
+    return ROW_TOP + (rows - 1) * pitch + height
 
 
 def statement(window, key):
@@ -452,7 +475,7 @@ def statement(window, key):
 
 
 def place_seat_scroll(layout, menu, container, spec):
-    """The skirmish room's scroll bar beside the seven rows under the local player's: an up and a
+    """The skirmish room's scroll bar beside the rows under the local player's: an up and a
     down button and the track between them where a list box puts its own, wearing the art of a
     seat's dropdown list. The buttons start from Back's and the track from the online lobby's chat
     slider, once; every run sets their art and place. The menu code sets the range."""
@@ -483,7 +506,7 @@ def place_seat_scroll(layout, menu, container, spec):
     pitch, height = spec["row_pitch"], spec["row_height"]
     left = spec["seat_right"] + 6
     top = ROW_TOP + pitch
-    bottom = ROW_TOP + (SEAT_COUNT - 1) * pitch + height
+    bottom = ROW_TOP + (seat_rows(spec) - 1) * pitch + height
     need(layout, SEAT_SCROLL_UP).place(left, top, SCROLL_WIDTH, SCROLL_BUTTON_HEIGHT)
     need(layout, SEAT_SCROLL_DOWN).place(left, bottom - SCROLL_BUTTON_HEIGHT, SCROLL_WIDTH, SCROLL_BUTTON_HEIGHT)
     slider.place(left, top + SCROLL_BUTTON_HEIGHT + 1, SCROLL_WIDTH, bottom - top - 2 * SCROLL_BUTTON_HEIGHT - 2)
@@ -640,6 +663,7 @@ def build(layout, menu):
     widen(layout)
     add_combo_column(layout, menu, PERSONA_PREFIX, "ComboBoxPlayerTemplate", PERSONA_TOOLTIP)
     add_handicap_column(layout, menu)
+    add_seat_rows(layout, menu, spec)
     remove(layout, TABS + (RETIRED_PERSONA_HEADING, RETIRED_TURBO_BOX))
     add_game_speed_row(layout, menu)
     add_start_shrouded_box(layout, menu)
@@ -675,7 +699,7 @@ def overlaps(container):
     found = []
     for index, (name, (left, top, right, bottom)) in enumerate(visible):
         for other, (other_left, other_top, other_right, other_bottom) in visible[index + 1:]:
-            pair = sorted((name.rstrip("01234567"), other.rstrip("01234567")))
+            pair = sorted((name.rstrip("0123456789"), other.rstrip("0123456789")))
             if pair == ["ComboBoxPlayer", "StaticTextPlayer"] and name[-1] == other[-1]:
                 continue
             if left < other_right and other_left < right and top < other_bottom and other_top < bottom:
@@ -692,10 +716,13 @@ def selfcheck():
         layout = wndlayout.parse(tracked)
         names = list(NAMED) + [spec["container"], spec["title"]]
         for _heading, prefixes, _width in spec["columns"]:
-            names += ["%s%d" % (prefix, seat) for prefix in prefixes for seat in range(SEAT_COUNT)
+            names += ["%s%d" % (prefix, seat) for prefix in prefixes for seat in range(seat_rows(spec))
                       if not (seat == 0 and prefix == "ComboBoxPlayer" and menu == "SkirmishGameOptionsMenu")]
         per_seat = NAMED_PER_SEAT + (NAMED_NETWORK_PER_SEAT if "chat" in spec else [])
+        # a map has at most eight start spots, however many rows the room has
         names += ["%s%d" % (prefix, seat) for prefix in per_seat for seat in range(SEAT_COUNT)]
+        names += ["%s%d" % (prefix, seat) for prefix in NAMED_PER_SEAT if prefix != "ButtonMapStartPosition"
+                  for seat in range(SEAT_COUNT, seat_rows(spec))]
         if "chat" not in spec:
             names += NAMED_SKIRMISH
         for rule in spec["rules"]:

@@ -102,7 +102,8 @@ static Bool showsAll( const ComboBoxData *comboData, WinInstanceData *listInstDa
 // pitches, so it ends on the foot of a row below instead of halfway down one, as long as that stays
 // within its room; a list that already fills the room stops at the room's foot.  One that does not
 // fit below opens upwards when it fits above, its top on the top of a row there, and *up says so.
-// A list that scrolls keeps its own height, whole rows only, and opens down.
+// A list that scrolls keeps its own height, whole rows only, and opens down unless only the room
+// above holds it (the skirmish room's lowest seats, whose lists ran off the screen's foot).
 static Int dropDownHeight( const ComboBoxData *comboData, WinInstanceData *listInstData, Int lines, Bool scrolls,
 													 Bool *up = NULL )
 {
@@ -124,6 +125,8 @@ static Int dropDownHeight( const ComboBoxData *comboData, WinInstanceData *listI
 				*up = TRUE;
 		}
 	}
+	else if( pitch > 0 && height > comboData->dropDownRoom && height <= comboData->dropDownRoomAbove && up )
+		*up = TRUE;
 	return height;
 }
 

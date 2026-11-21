@@ -1273,8 +1273,9 @@ static void handleSupplyPileLimitSelection()
 }
 
 // The seat table ------------------------------------------------------------------------------
-// The layout has eight rows and the room seats MAX_SLOTS. The first row is always the local
-// player's; the seven under it show the seats from seatScroll + 1 on, moved by the scroll bar
+// The layout has fourteen rows (as many as reach the rules page's foot, lobbyroom_layout.py) and the
+// room seats MAX_SLOTS. The first row is always the local player's; the rows under it show the
+// seats from seatScroll + 1 on, moved by the scroll bar
 // beside them. The seat arrays above stay indexed by seat, as every slot loop and the GUIUtil
 // functions they are handed expect: bindSeatRows points a seat's entries at the row that shows it
 // and leaves every other seat's NULL, the way a seat past a stock layout's rows always was.
@@ -1341,6 +1342,31 @@ static void captureSeatRows( void )
 		w.team = comboBoxTeam[ row ];								w.teamID = comboBoxTeamID[ row ];
 		w.persona = comboBoxAIPersona[ row ];				w.personaID = comboBoxAIPersonaID[ row ];
 		w.handicap = comboBoxHandicap[ row ];				w.handicapID = comboBoxHandicapID[ row ];
+	}
+
+	// The rows run down to the foot of the rules page, so a lower seat's list has no room under it:
+	// each box's list stays inside the seat table, opening upwards where only the room above holds it
+	if ( seatRowCount > 1 )
+	{
+		Int x, tableTop, tableBottom, width, height;
+		seatRows[ 0 ].color->winGetScreenPosition( &x, &tableTop );
+		seatRows[ seatRowCount - 1 ].color->winGetScreenPosition( &x, &tableBottom );
+		seatRows[ seatRowCount - 1 ].color->winGetSize( &width, &height );
+		tableBottom += height;
+		for ( Int row = 0; row < seatRowCount; ++row )
+		{
+			GameWindow *combos[] = { seatRows[ row ].player, seatRows[ row ].color, seatRows[ row ].army,
+				seatRows[ row ].team, seatRows[ row ].persona, seatRows[ row ].handicap };
+			for ( Int c = 0; c < (Int)ARRAY_SIZE( combos ); ++c )
+			{
+				if ( !combos[ c ] )
+					continue;
+				Int top;
+				combos[ c ]->winGetScreenPosition( &x, &top );
+				combos[ c ]->winGetSize( &width, &height );
+				GadgetComboBoxSetDropDownPitch( combos[ c ], 1, tableBottom - ( top + height ), top - tableTop );
+			}
+		}
 	}
 
 	// a layout from before the scroll bar keeps its rows on their own seats

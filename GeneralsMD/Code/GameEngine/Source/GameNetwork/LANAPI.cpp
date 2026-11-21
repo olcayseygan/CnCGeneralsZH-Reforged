@@ -996,15 +996,31 @@ void LANAPI::RequestHasMap( void )
 
 void LANAPI::RequestChat( UnicodeString message, ChatType format )
 {
-	LANMessage msg;
-	fillInLANMessage( &msg );
-	WideCharNCpy(msg.Chat.gameName, (m_currentGame)?m_currentGame->getName().str():u"", g_lanGameNameLength);
-	msg.Chat.gameName[g_lanGameNameLength] = 0;
-	msg.LANMessageType = LANMessage::MSG_CHAT;
-	msg.Chat.chatType = format;
-	WideCharNCpy(msg.Chat.message, message.str(), g_lanMaxChatLength);
-	msg.Chat.message[g_lanMaxChatLength] = 0;
-	sendMessage(&msg);
+	// a chat packet holds g_lanMaxChatLength characters and the entry takes 128, so a long line goes out as
+	// several packets, each cut at a space; every build, older ones too, reads each as an ordinary line
+	const WideChar *rest = message.str();
+	Int left = message.getLength();
+	do
+	{
+		const Int take = LANChatPiece(rest, left);
+		LANMessage msg;
+		fillInLANMessage( &msg );
+		WideCharNCpy(msg.Chat.gameName, (m_currentGame)?m_currentGame->getName().str():u"", g_lanGameNameLength);
+		msg.Chat.gameName[g_lanGameNameLength] = 0;
+		msg.LANMessageType = LANMessage::MSG_CHAT;
+		msg.Chat.chatType = format;
+		WideCharNCpy(msg.Chat.message, rest, take);
+		msg.Chat.message[take] = 0;
+		sendMessage(&msg);
+
+		rest += take;
+		left -= take;
+		while (left > 0 && *rest == u' ')
+		{
+			++rest;
+			--left;
+		}
+	} while (left > 0);
 
 	OnChat(m_name, m_localIP, message, format);
 }

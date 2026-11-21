@@ -9851,6 +9851,21 @@ TEST(an_overlong_chat_line_keeps_its_length_instead_of_wrapping_to_a_short_one)
 	ref->deleteInstance();
 }
 
+/* A LAN room's chat entry takes 128 characters and a chat packet 100, so the host saw a guest's long
+	 line cut at the hundredth.  RequestChat now sends it in pieces, each cut at a space. */
+TEST(a_long_lan_chat_line_goes_out_in_pieces_cut_at_spaces)
+{
+	std::u16string line;
+	while( (Int)line.size() < 120 )
+		line += u"word ";
+	CHECK_EQ( LANChatPiece( line.c_str(), 40 ), 40 );
+	const Int first = LANChatPiece( line.c_str(), (Int)line.size() );
+	CHECK( first <= g_lanMaxChatLength && first > g_lanMaxChatLength - 5 );
+	CHECK( line[ first ] == u' ' );
+	const std::u16string solid( 130, u'x' );
+	CHECK_EQ( LANChatPiece( solid.c_str(), (Int)solid.size() ), g_lanMaxChatLength );
+}
+
 /* addCommand's own guard against a null reference sat below the line that followed it, so the one
 	 call it exists to survive was the one call that crashed. */
 TEST(adding_a_null_command_to_a_packet_is_refused_not_followed)

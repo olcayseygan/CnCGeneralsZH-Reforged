@@ -52,6 +52,18 @@ static const Int g_lanHostNameLength = 1;
 static const Int g_lanGameNameLength = 16; // reduced length because of game option length
 static const Int g_lanGameNameReservedLength = 16; // save N wchars for ID info
 static const Int g_lanMaxChatLength = 100;
+
+/// how much of a chat line's `left` characters at `text` the next packet carries: all of it when it fits, else up
+/// to the last space inside g_lanMaxChatLength, or a hard cut when the first g_lanMaxChatLength hold no space
+inline Int LANChatPiece( const WideChar *text, Int left )
+{
+	if( left <= g_lanMaxChatLength )
+		return left;
+	for( Int take = g_lanMaxChatLength; take > 0; --take )
+		if( text[ take ] == u' ' )
+			return take;
+	return g_lanMaxChatLength;
+}
 /* The game options go out in parts: a 32-seat room's string is several times what one datagram
 	 holds.  g_lanOptionsPartLength is what one LANMessage carries (its fixed fields and the two part
 	 bytes come off the packet), m_lanMaxOptionsLength the whole string, g_lanOptionsParts of those. */

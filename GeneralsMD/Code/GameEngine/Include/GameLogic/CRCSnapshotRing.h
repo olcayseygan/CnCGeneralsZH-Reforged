@@ -44,6 +44,11 @@ struct CRCObjectEntry
 	UnsignedInt m_runningCRC;				///< world CRC after this object was folded in
 	Real m_x, m_y, m_z;							///< where it was, to read the dump without cross-referencing
 	Real m_health;
+	/* Read for the dump only, never folded into the CRC: velocity and a DeliverPayload plane's state are
+		 not in Object::crc, and the v4.0.0 napalm split (3863 3865 3880-3882) ran jets at 3x speed on one
+		 side with every position still agreeing on the first wrong tick. */
+	Real m_vx, m_vy, m_vz;						///< physics velocity, 0 with no PhysicsBehavior
+	Int m_payloadState;							///< DeliverPayloadStateMachine's current state id, -1 when not delivering
 };
 
 /* Every object's running CRC can agree and the world CRC still differ (the v3.2.0 reports 1127/1134,
@@ -108,6 +113,7 @@ public:
 	void beginSnapshot( UnsignedInt frame );										///< start filling the next slot
 	void addObject( UnsignedInt id, UnsignedInt runningCRC,
 									Real x, Real y, Real z, Real health );				///< record one object's running CRC
+	void setLastObjectMotion( Real vx, Real vy, Real vz, Int payloadState );	///< velocity and payload state of the object addObject just recorded
 	void setSectionCRC( CRCSection section, UnsignedInt runningCRC );	///< record the world CRC at a section's end
 	void addPlayer( UnsignedInt money, Int skillPoints, Int sciencePurchasePoints );	///< record the next player's numbers
 	void endSnapshot( UnsignedInt totalCRC, UnsignedInt randomSeed );	///< close the slot being filled

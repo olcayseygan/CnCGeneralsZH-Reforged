@@ -339,6 +339,8 @@ public:
 	const Coord3D* getMoveToPos() const { return &m_moveToPos; }
 	UnsignedInt getDoorDelay() const { return getDeliverPayloadAIUpdateModuleData()->m_doorDelay; }
 	Bool isDeliveringPayload() const { return m_deliverPayloadStateMachine != NULL; }
+	/// the delivery's current state id for the CRC mismatch dump, -1 when not delivering
+	Int getDeliverPayloadStateID() const { return m_deliverPayloadStateMachine ? (Int)m_deliverPayloadStateMachine->getCurrentStateID() : -1; }
 	const ThingTemplate* getPutInContainerTemplateViaModuleData() const;
 
 	Real getAllowedDistanceToTarget() const { return m_data.m_distToTarget; }

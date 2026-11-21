@@ -88,8 +88,23 @@ void CRCSnapshotRing::addObject( UnsignedInt id, UnsignedInt runningCRC,
 	entry.m_y = y;
 	entry.m_z = z;
 	entry.m_health = health;
+	entry.m_vx = entry.m_vy = entry.m_vz = 0.0f;
+	entry.m_payloadState = -1;
 
 	m_snapshots[ m_writeSlot ].m_objects.push_back( entry );
+}
+
+//-------------------------------------------------------------------------------------------------
+void CRCSnapshotRing::setLastObjectMotion( Real vx, Real vy, Real vz, Int payloadState )
+{
+	if( m_writeSlot < 0 || m_snapshots[ m_writeSlot ].m_objects.empty() )
+		return;
+
+	CRCObjectEntry &entry = m_snapshots[ m_writeSlot ].m_objects.back();
+	entry.m_vx = vx;
+	entry.m_vy = vy;
+	entry.m_vz = vz;
+	entry.m_payloadState = payloadState;
 }
 
 //-------------------------------------------------------------------------------------------------

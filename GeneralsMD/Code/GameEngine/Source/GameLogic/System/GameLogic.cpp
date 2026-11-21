@@ -98,6 +98,7 @@
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/AIUpdate.h"
+#include "GameLogic/Module/DeliverPayloadAIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/DestroyModule.h"
@@ -3288,16 +3289,16 @@ void GameLogic::writeMismatchDump( Int numPlayers, UnsignedInt crcFrame )
 	fprintf( fp, "\n" );
 
 	fprintf( fp, "Diff this section against another player's file; the first differing running CRC is the object that diverged.\n\n" );
-	fprintf( fp, "%6s %8s %10s %12s %12s %12s %10s  %s\n",
-		"index", "objectID", "runningCRC", "x", "y", "z", "health", "template" );
+	fprintf( fp, "%6s %8s %10s %12s %12s %12s %10s %10s %10s %10s %7s  %s\n",
+		"index", "objectID", "runningCRC", "x", "y", "z", "health", "vx", "vy", "vz", "payload", "template" );
 
 	for( size_t i = 0; i < snap->m_objects.size(); ++i )
 	{
 		const CRCObjectEntry &e = snap->m_objects[i];
 		Object *obj = findObjectByID( (ObjectID)e.m_id );
 		const char *templateName = obj ? obj->getTemplate()->getName().str() : "<destroyed since>";
-		fprintf( fp, "%6d %8d 0x%8.8X %12.4f %12.4f %12.4f %10.3f  %s\n",
-			i, e.m_id, e.m_runningCRC, e.m_x, e.m_y, e.m_z, e.m_health, templateName );
+		fprintf( fp, "%6d %8d 0x%8.8X %12.4f %12.4f %12.4f %10.3f %10.4f %10.4f %10.4f %7d  %s\n",
+			i, e.m_id, e.m_runningCRC, e.m_x, e.m_y, e.m_z, e.m_health, e.m_vx, e.m_vy, e.m_vz, e.m_payloadState, templateName );
 	}
 
 	fprintf( fp, "\nOther retained CRC frames:\n" );
@@ -6136,6 +6137,13 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 			BodyModuleInterface *body = obj->getBodyModule();
 			m_crcSnapshots.addObject( (UnsignedInt)obj->getID(), xferCRC->getCRC(),
 																pos->x, pos->y, pos->z, body->getHealth() );
+			// read only, for the dump's rows; neither goes into the CRC
+			static const NameKeyType key_DeliverPayloadAIUpdate = NAMEKEY( "DeliverPayloadAIUpdate" );
+			const PhysicsBehavior *physics = obj->getPhysics();
+			const Coord3D *vel = physics ? physics->getVelocity() : NULL;
+			const DeliverPayloadAIUpdate *payload = (const DeliverPayloadAIUpdate *)obj->findUpdateModule( key_DeliverPayloadAIUpdate );
+			m_crcSnapshots.setLastObjectMotion( vel ? vel->x : 0.0f, vel ? vel->y : 0.0f, vel ? vel->z : 0.0f,
+																					payload ? payload->getDeliverPayloadStateID() : -1 );
 		}
 	}
 	// the rest only observe the running CRC: each section's end goes in the ring as well (CRCSection)

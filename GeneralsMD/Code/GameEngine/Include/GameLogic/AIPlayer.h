@@ -592,7 +592,7 @@ protected:
 	void buyMoneyUnits(void);
 	Int moneyUnitRoom(void) const;	///< how many more money units this player's army and internet centers carry
 	Bool hasEnoughMoneyUnitsFor(TeamPrototype *proto) const;	///< this team is all hackers and there is no room for more
-	Bool placeNear(const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, Bool walkOutward, Coord3D *spotOnly = NULL, Bool homeOnly = FALSE);	///< the nearest legal, safe spot by the ground from center, queued for a dozer, or only written to spotOnly. walkOutward keeps searching further out as the near ground fills; homeOnly holds any building to the base's edge as staysHome holds its own
+	Bool placeNear(const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, Bool walkOutward, Coord3D *spotOnly = NULL, Bool homeOnly = FALSE, Real homeReachScale = 1.0f);	///< the nearest legal, safe spot by the ground from center, queued for a dozer, or only written to spotOnly. walkOutward keeps searching further out as the near ground fills; homeOnly holds any building to the base's edge as staysHome holds its own; homeReachScale over 1 stretches that edge and its rings, past the base only on the side away from the enemy
 	Bool queueExtraFactory(Object *dozer, KindOfType kind, Bool doctrine = FALSE);	///< one more of this factory, beside a held expansion or around the base, once the ones standing fall behind their queues; the doctrine's without waiting for that
 	Bool holdsExtraFactory(const ThingTemplate *tmpl);	///< a factory of a kind already standing or going up, while the ones standing keep up with their queues
 	const ThingTemplate *nextBaseDefense(Object *dozer);	///< the base defence off this dozer's buttons that the base has fewest of, NULL for none

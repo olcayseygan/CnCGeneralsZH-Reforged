@@ -15,6 +15,7 @@ found and fixed, EA's own, not port damage.**
 ## The computer builds superweapons like a turtle does
 
 - A Hard computer waited for its twelfth finished defence before its first superweapon and then stopped at two, while a player behind his walls put up five and wiped it in one push; the levels above Hard asked for even more guns per superweapon, so they built fewer still. Every level now pays four defences for each one, and once the first stands the computer adds another whenever the bank holds its price. In twelve four-player Hard matches on Twilight Flame all 48 computers put one up, the first at a median of 3.8 minutes, and held a median of three by the end, ten at most. Easy and Medium still build the one their scripts ask for.
+- A computer walled into a small corner of the map had nowhere to put one: on the turtle bench a GLA computer asked for its SCUD Storm up to 300 times a match, sat on 108,000, and was told there was no room every time. When nothing fits inside the base, a superweapon may now go up to half again as far out, behind the base and never on the side facing you. The same GLA computer on Hard now has its SCUD Storm up two and a half minutes in, in two of its three bench matches; at the levels above Hard its walled-in base still finds no room.
 - Replays with a computer player recorded before this change will not play back.
 
 ## Computer allies give up as a team

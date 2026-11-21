@@ -1236,6 +1236,9 @@ static const Int BUILD_EXPANSIONS_PER_FRAME = 512 / LOGICFRAMES_PER_RETAIL_FRAME
 	* over ten Brutal matches on Twilight Flame the drop zones asked for fell from 87 to 13 and the
 	* Scud Storms from 46 to 6, with the money in the bank and no room to put them. */
 static const Real BASE_EDGE_REACH = 2.0f;
+/** ... and how far past that a superweapon may go once nothing inside it fits (buildAsap), behind the base
+	* only: 3.5 base radii, and its rings stretched alike. */
+static const Real SUPERWEAPON_REACH_SCALE = 1.75f;
 
 /** What a computer buys for itself and can only keep at home: the buildings that pay out on a timer,
 	* the superweapons and the tech building they wait on.  The search for room used to walk outward
@@ -9517,6 +9520,12 @@ void AIPlayer::buildAsap( const ThingTemplate *tmpl )
 	}
 	if( placeNear( tmpl, &spot, 0.0f, FALSE ) )
 		return;
+	// A walled-in base has no room for one inside its edge: on the 128-cell turtle bench a Hard GLA asked
+	// 69 to 300 times a match, every ask "has no room for 'GLAScudStorm' within 726 of its base", with
+	// 108,000 in the bank, and never built one.  The superweapon alone may then go out to
+	// SUPERWEAPON_REACH_SCALE times the edge, behind the base and never towards the enemy.
+	if( tmpl->isKindOf( KINDOF_FS_SUPERWEAPON ) && placeNear( tmpl, &spot, 0.0f, FALSE, NULL, FALSE, SUPERWEAPON_REACH_SCALE ) )
+		return;
 
 	/* A superweapon's footprint rarely fits one of placeNear's tries in a grown base, so the request
 		 goes down behind the base anyway and the dozer's flood search looks for the room, no further
@@ -10085,7 +10094,7 @@ Bool AIPlayer::holdsExtraFactory( const ThingTemplate *tmpl )
 	* distance it reached in m_placementRing, so the search moves out across calls instead of giving
 	* up at the opening base, and goes back to the middle once the flood runs out of ground. */
 //----------------------------------------------------------------------------------------------------------
-Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, Bool walkOutward, Coord3D *spotOnly, Bool homeOnly )
+Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real innerRadius, Bool walkOutward, Coord3D *spotOnly, Bool homeOnly, Real homeReachScale )
 {
 	const Real structureRadius = tmpl->getTemplateGeometryInfo().getBoundingCircleRadius();
 	const Real placeAngle = tmpl->getPlacementViewAngle();
@@ -10093,10 +10102,16 @@ Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real
 	// A building that stays home does not walk outward, and leaves the ring the others have reached
 	// alone: it tries every ring that can still be inside the base's edge, on every call.
 	const Bool home = homeOnly || staysHome( tmpl );
-	const Real homeReachSqr = sqr( BASE_EDGE_REACH * m_baseRadius );
-	const Int rings = home ? HOME_PLACEMENT_RINGS : PLACEMENT_RINGS;
+	const Bool stretched = home && homeReachScale > 1.0f;
+	const Real homeReachSqr = sqr( BASE_EDGE_REACH * ( stretched ? homeReachScale : 1.0f ) * m_baseRadius );
+	const Int rings = home ? ( stretched ? REAL_TO_INT_CEIL( HOME_PLACEMENT_RINGS * homeReachScale ) : HOME_PLACEMENT_RINGS ) : PLACEMENT_RINGS;
 	if( home )
 		walkOutward = FALSE;
+	// a stretched edge reaches past the base only behind it: a spot further towards the enemy than the
+	// base's own edge stays refused, so the extra room is never the ground the enemy comes over
+	Coord3D enemyWay;
+	enemyWay.zero();
+	const Bool behindOnly = stretched && m_baseCenterSet && enemyDirection( &enemyWay );
 
 	// as far as the outermost ring reached, by the ground with half again for the way round; the
 	// outward walk goes as far as the ground does
@@ -10134,6 +10149,8 @@ Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real
 		if( sqr( pos.x - center->x ) + sqr( pos.y - center->y ) < innerSqr )
 			continue;
 		if( home && sqr( pos.x - m_baseCenter.x ) + sqr( pos.y - m_baseCenter.y ) > homeReachSqr )
+			continue;
+		if( behindOnly && ( pos.x - m_baseCenter.x ) * enemyWay.x + ( pos.y - m_baseCenter.y ) * enemyWay.y > m_baseRadius )
 			continue;
 		// the square inside the footprint's circle; the corners of the circle's own square stick out
 		// past a building's corners and turned away spots that fit
@@ -10174,7 +10191,7 @@ Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real
 		m_placementRing = 0;		// every spot the ground holds was looked at: back to the middle
 	if( home )
 		DEBUG_LOG(("AI ECONOMY frame %d player %d has no room for '%s' within %.0f of its base, %d in the bank\n", TheGameLogic->getFrame(),
-			m_player->getPlayerIndex(), tmpl->getName().str(), BASE_EDGE_REACH * m_baseRadius, m_player->getMoney()->countMoney()));
+			m_player->getPlayerIndex(), tmpl->getName().str(), BASE_EDGE_REACH * ( stretched ? homeReachScale : 1.0f ) * m_baseRadius, m_player->getMoney()->countMoney()));
 	return FALSE;
 }
 

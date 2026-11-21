@@ -863,7 +863,7 @@ static const RMGTextureSheet theTextureSheets[] =
 	// the lane map's own (theLaneGrounds)
 	{ "SandLargeType3Light", 36, 6 },	{ "DirtType3", 4, 2 },				{ "DirtMediumType15Snow", 16, 4 },
 	{ "GrassLargeType1Snow", 36, 6 },	{ "GrassMediumType21", 16, 4 },		{ "SandMediumType13", 16, 4 },
-	{ "SandMediumType9Snow", 16, 4 },
+	{ "SandMediumType9Snow", 16, 4 },	{ "SnowType6", 16, 4 },
 };
 
 static void rmgTextureSheet( const char *name, Int& tiles, Int& width )
@@ -9832,14 +9832,20 @@ static const char *const RMG_LANE_MIDDLE_TEMPLATE = NULL;	///< a structure in th
 #define RMG_LANE_AIR_DEPTH		4		///< cells an air zone runs back from there, two slots; it is as wide as its plot
 #define RMG_LANE_WEAR_FORTRESS	8.0f	///< cells past a fortress's footprint the ground round it is worn, at most
 #define RMG_LANE_WEAR_TOWER		5.0f	///< and past a tower's
+#define RMG_LANE_WEAR_FRINGE	0.35f	///< the share of that past which the worn ground only freckles the bank
 #define RMG_LANE_SEA_END		111		///< cells from the back of a plot column to the playable edge: green, beach and sea (an odd height keeps the lane's 45 in the middle)
 #define RMG_LANE_GROUND			64		///< height bytes of the lane, the plots and the level ring round them
 #define RMG_LANE_FLAT_RING		3		///< cells of level ground round all of those
+#define RMG_LANE_RING_WANDER	4.0f	///< and up to this many more on a slow noise field, so the hills' foot is no ruled line
 #define RMG_LANE_HILLS			22.0f	///< bytes the bank's hills rise at most
-#define RMG_LANE_HILL_REACH		14.0f	///< cells over which they come up, off play and off the beach
+#define RMG_LANE_HILL_REACH		14.0f	///< cells over which they come up off the beach
+#define RMG_LANE_HILL_FOOT		24.0f	///< and off the level ring round play, gentler, so a low sun draws no edge along the lane
 #define RMG_LANE_WATER			50		///< of every water surface, under the ground so no sea can flood it
 #define RMG_LANE_WATER_BED		38		///< of the sea's bed
-#define RMG_LANE_CORE_ROUND		30.0f	///< cells, the radius of the corners of the island's core round play
+#define RMG_LANE_CORE_SIDE		9.0f	///< cells the island's core stands off the plots' outer edges, across the lane
+#define RMG_LANE_CORE_ROUND		50.0f	///< cells, the core's rounded ends across the island
+#define RMG_LANE_END_ROUND		55.0f	///< and along it, so an end is a half ellipse round its plot column
+#define RMG_LANE_TIP_REACH		26.0f	///< the reach straight off an end at most, which keeps 50 cells of sea past the tip
 #define RMG_LANE_REACH_MEAN		14.0f	///< cells from the core to the coast on the seed's thinnest island, on average
 #define RMG_LANE_REACH_SEED		14.0f	///< and how much more a seed may add to that
 #define RMG_LANE_REACH_SWING	34.0f	///< cells the coast wanders either side on the slow field, the island's shape
@@ -9917,9 +9923,14 @@ static Bool rmgLaneTwilight( Int seed )
 	in every theme but winter's so a beach rings the island (on the desert, the steppe and at twilight
 	the old shore was the bank's own colour); the third class is the worn ground round the fortresses
 	and towers, dirt and gravel, packed sand or slush, the lane's own ground before that rule (winter's
-	was frozen golden sand, slush now). The fourth, the plots' ground before it, is painted nowhere.
-	The rest of the biome (stones, light) stays its own, and so do the trees unless a row names its
-	own. Every texture is in theTextureSheets with the tile count the shipped maps declare.
+	was frozen golden sand, slush now). The fourth, the plots' ground before it, is painted nowhere,
+	except in winter (m_bankMix), where it is a second snow laid in slow patches over the first.
+	Winter's bank was SnowType1, a sheet of four tiles whose green-flecked mottle repeated every two
+	cells and read as a woven grid from the plan camera, and its slush hardly showed on that mottle;
+	the bank is the six by six SnowLargeType1 now, broken up by the specked SnowType6, and the grey
+	slush stands out on the plain white. The rest of the biome (stones, light) stays its own, and so
+	do the trees unless a row names its own. Every texture is in theTextureSheets with the tile count
+	the shipped maps declare.
 
 	The temperate woods drop TreeDogwood1, whose white blossom read as snow from above, and
 	TreeFir01B, whose PTFir01 is a snowed-on fir; TreeMaple1's dull grey crown gave way to TreeOak05
@@ -9936,6 +9947,7 @@ struct RMGLaneGround
 	const char *m_trees[RMG_BIOME_TREES];		///< NULL first: the biome's own
 	UnsignedByte m_gridColour[3];				///< the slot grid's lines
 	UnsignedByte m_gridAlpha[2];				///< between the slots and round the plot
+	Bool m_bankMix;								///< the fourth class is a second bank ground, laid in patches over the first
 };
 
 static const RMGLaneGround theLaneGrounds[RMG_BIOME_COUNT + 1] =
@@ -9944,31 +9956,31 @@ static const RMGLaneGround theLaneGrounds[RMG_BIOME_COUNT + 1] =
 		{ "GrassType1", "SandMediumType13", "DirtType1", "SandLargeType3Light" },
 		{ { 86, 122, 62 }, { 247, 231, 195 }, { 125, 107, 88 }, { 238, 219, 158 } },
 		{ "TreeOak01", "TreeOak05", "TreeOak02", "TreeOak06" },
-		{ 234, 230, 172 }, { 0x60, 0x98 }
+		{ 234, 230, 172 }, { 0x60, 0x98 }, FALSE
 	},
 	{	// desert: yellow sand, cream beach, packed pebbled dirt round the walls, umber lines
 		{ "SandLargeType2", "SandMediumType13", "DirtMediumType10", "DirtType3" },
 		{ { 237, 203, 129 }, { 247, 231, 195 }, { 191, 161, 107 }, { 116, 86, 60 } },
 		{ NULL, NULL, NULL, NULL },
-		{ 92, 60, 28 }, { 0x68, 0xA0 }
+		{ 92, 60, 28 }, { 0x68, 0xA0 }, FALSE
 	},
-	{	// winter: snow, frozen mud at the water, slush round the walls, slate lines
-		{ "SnowType1", "DirtMediumType15Snow", "DirtSnowType1", "GrassLargeType1Snow" },
-		{ { 222, 226, 230 }, { 236, 236, 235 }, { 140, 132, 122 }, { 148, 150, 107 } },
+	{	// winter: two snows in patches, frozen mud at the water, slush round the walls, slate lines
+		{ "SnowLargeType1", "DirtMediumType15Snow", "DirtSnowType1", "SnowType6" },
+		{ { 236, 238, 240 }, { 236, 236, 235 }, { 140, 132, 122 }, { 226, 228, 230 } },
 		{ NULL, NULL, NULL, NULL },
-		{ 52, 72, 104 }, { 0x60, 0x98 }
+		{ 52, 72, 104 }, { 0x60, 0x98 }, TRUE
 	},
 	{	// steppe: golden ground, pale beach, red-brown gravel round the walls, dark earth lines
 		{ "DirtMediumType8", "SandLargeType3Light", "DirtType2", "GrassMediumType21" },
 		{ { 206, 174, 120 }, { 238, 219, 158 }, { 122, 88, 59 }, { 126, 123, 69 } },
 		{ NULL, NULL, NULL, NULL },
-		{ 80, 52, 30 }, { 0x68, 0xA0 }
+		{ 80, 52, 30 }, { 0x68, 0xA0 }, FALSE
 	},
 	{	// twilight: its tan dirt, pale beach, red gravel round the walls, lavender lines that read at dusk
 		{ "DirtMediumType10", "SandLargeType3Light", "DirtType3", "SandMediumType13" },
 		{ { 191, 161, 107 }, { 238, 219, 158 }, { 116, 86, 60 }, { 247, 231, 195 } },
 		{ NULL, NULL, NULL, NULL },
-		{ 214, 206, 238 }, { 0x58, 0x90 }
+		{ 214, 206, 238 }, { 0x58, 0x90 }, FALSE
 	},
 };
 
@@ -10009,15 +10021,17 @@ void RMGLayout::buildLane( void )
 		snow with it), or one time in five the twilight style's palette at dusk. The style itself is lit
 		for the afternoon, under which the twilight lane read as a plain sunny day. */
 	const UnsignedInt seed = (UnsignedInt)m_settings.m_seed;
-	m_biome = rmgLaneBiome( rmgBiomeFor( m_settings.m_seed ) );
+	Int theme = rmgBiomeFor( m_settings.m_seed );
 	m_timeOfDay = rmgTimeOfDayFor( m_settings.m_seed );
 	m_snowy = rmgSnowsOn( m_settings.m_seed );
 	if( rmgLaneTwilight( m_settings.m_seed ) )
 	{
-		m_biome = rmgLaneBiome( RMG_BIOME_COUNT );
+		theme = RMG_BIOME_COUNT;
 		m_timeOfDay = TIME_OF_DAY_EVENING;
 		m_snowy = FALSE;
 	}
+	m_biome = rmgLaneBiome( theme );
+	const RMGLaneGround& ground = theLaneGrounds[theme];
 	seedPermutation( m_settings.m_seed, m_perm );
 	m_sites.clear();
 	const RMGLaneShape shape = rmgLaneShape();
@@ -10086,30 +10100,38 @@ void RMGLayout::buildLane( void )
 	}
 
 	/* The island, a blob round play after the Direct Strike minimap. Its core is a rectangle round the
-		lane and both plot columns, its corners rounded by RMG_LANE_CORE_ROUND and the whole grown just
-		enough for each round corner to pass through a plot's corner. The coast lies a reach off the
-		core's edge, measured straight out from it, and the reach wanders on two noise fields per seed,
-		a slow one for the island's shape and a quicker one for its bays and capes, both read on a
-		curve outside the core so they move the coast along the long sides as much as round the ends.
-		Each ray out of the core crosses the coast once, so the land is one island with no pond in it.
+		lane and both plot columns, RMG_LANE_CORE_SIDE off the plots' outer edges, whose ends are half
+		ellipses RMG_LANE_END_ROUND along the lane by RMG_LANE_CORE_ROUND across, set so that each passes
+		through the outer corner of its column's last air zone. The ends were the corners of a rectangle
+		rounded by 30 once, and a coast held off the plots there ran straight down the whole column; an
+		ellipse bulges past the column's middle and comes in at its corners, so the end is round. The
+		coast lies a reach off the core's edge, measured straight out from it, and the reach wanders on
+		two noise fields per seed, a slow one for the island's shape and a quicker one for its bays and
+		capes, both read on a curve outside the core so they move the coast along the long sides as much
+		as round the ends. Each ray out of the core crosses the coast once, so the land is one island
+		with no pond in it: inside an elliptical end a ray leaves the ellipse's middle, keeps its way out
+		and gains core distance evenly along it.
 
 		The reach keeps RMG_LANE_REACH_LEAST off the plots and the lane's ends, a little more on the
 		quick field so a held coast still wanders, and may cut into the core beside the lane, where the
 		core stands wide of it, down to that much off the lane's edge. It never passes
-		RMG_LANE_REACH_MOST, nor RMG_LANE_SEA_LEAST off the playable edge. The coast is a distance in
-		cells, positive inland, continuous everywhere a beach or a hill reads it, so the waterline is a
-		smooth curve with no staircase on the diagonals. Every noise is read off the lattice, whose zero
-		lines once left the first map's hills flat along its low x and low y edges. */
-	const Real bend = RMG_LANE_CORE_ROUND, grow = bend * ( 1.0f - 0.70710678f );
-	const Real coreX = shape.m_middleX - (Real)shape.m_airX0[0] + grow;
-	const Real coreY = std::max( shape.m_middleY - (Real)shape.m_plotY0[1],
-		(Real)( shape.m_plotY0[2] + RMG_LANE_PLOT_ACROSS ) - shape.m_middleY ) + grow;
-	const Real innerX = coreX - bend, innerY = coreY - bend;
+		RMG_LANE_REACH_MOST, less towards RMG_LANE_TIP_REACH as the way out turns along the lane, nor
+		RMG_LANE_SEA_LEAST off the playable edge. The coast is a distance in cells, positive inland,
+		continuous everywhere a beach or a hill reads it, so the waterline is a smooth curve with no
+		staircase on the diagonals. Every noise is read off the lattice, whose zero lines once left the
+		first map's hills flat along its low x and low y edges. */
+	const Real bendX = RMG_LANE_END_ROUND, bendY = RMG_LANE_CORE_ROUND;
+	const Real columnX = shape.m_middleX - (Real)shape.m_airX0[0];
+	const Real columnY = std::max( shape.m_middleY - (Real)shape.m_plotY0[1],
+		(Real)( shape.m_plotY0[2] + RMG_LANE_PLOT_ACROSS ) - shape.m_middleY );
+	const Real coreY = columnY + RMG_LANE_CORE_SIDE, innerY = coreY - bendY;
+	const Real cornerV = ( columnY - innerY ) / bendY;
+	const Real innerX = columnX - bendX * sqrtf( 1.0f - cornerV * cornerV );	// the column's corner on the ellipse
 	const Real besideLaneCut = coreY - 0.5f * (Real)RMG_LANE_WIDTH;		// the core's edge to the lane's, beside it
 	// each long side's mean reach is the seed's own, so one island is fat below and thin above and the next the other way
 	const Real lowReach = RMG_LANE_REACH_MEAN + RMG_LANE_REACH_SEED * hashUnit( seed + 51011U, 0, 0 );
 	const Real highReach = RMG_LANE_REACH_MEAN + RMG_LANE_REACH_SEED * hashUnit( seed + 51011U, 0, 1 );
-	const Real probe = bend + 20.0f;		// cells out from the inner rectangle the noise is read at
+	const Real probe = 20.0f;		// cells out from the core's edge the noise is read at
 	std::vector<Real> coast( cells );
 	for( Int y = 0; y < m_height; y++ )
 	{
@@ -10120,45 +10142,51 @@ void RMGLayout::buildLane( void )
 			const Real sx = rx < 0.0f ? -1.0f : 1.0f, sy = ry < 0.0f ? -1.0f : 1.0f;
 			const Real qx = fabsf( rx ) - innerX, qy = fabsf( ry ) - innerY;
 
-			// the signed distance to the core, the way straight out of it and the inner rectangle's point it leaves from
-			Real core, nx, ny, baseX, baseY;
+			/* the signed distance to the core, the way straight out of it and the core's edge where that
+				way crosses it. Past the inner rectangle the distance is the ellipse's level over its
+				gradient, exact on both long and short sides and close round the end. */
+			Real core, nx, ny, edgeX, edgeY;
 			if( qx > 0.0f || qy > 0.0f )
 			{
 				const Real ox = std::max( qx, 0.0f ), oy = std::max( qy, 0.0f );
-				const Real out = sqrtf( ox * ox + oy * oy );
-				core = out - bend;
-				nx = sx * ox / out;
-				ny = sy * oy / out;
-				baseX = sx * std::min( fabsf( rx ), innerX );
-				baseY = sy * std::min( fabsf( ry ), innerY );
+				const Real u = ox / bendX, v = oy / bendY;
+				const Real level = sqrtf( u * u + v * v );
+				const Real gx = u / bendX, gy = v / bendY, slope = sqrtf( gx * gx + gy * gy );
+				core = ( level - 1.0f ) * level / slope;
+				nx = sx * gx / slope;
+				ny = sy * gy / slope;
+				edgeX = sx * ( std::min( fabsf( rx ), innerX ) + ox / level );
+				edgeY = sy * ( std::min( fabsf( ry ), innerY ) + oy / level );
 			}
-			else if( qx >= qy )
+			else if( qx - bendX >= qy - bendY )
 			{
-				core = qx - bend;
+				core = qx - bendX;
 				nx = sx;
 				ny = 0.0f;
-				baseX = sx * innerX;
-				baseY = ry;
+				edgeX = sx * ( innerX + bendX );
+				edgeY = ry;
 			}
 			else
 			{
-				core = qy - bend;
+				core = qy - bendY;
 				nx = 0.0f;
 				ny = sy;
-				baseX = rx;
-				baseY = sy * innerY;
+				edgeX = rx;
+				edgeY = sy * ( innerY + bendY );
 			}
 
-			const Real noiseX = shape.m_middleX + baseX + probe * nx, noiseY = shape.m_middleY + baseY + probe * ny;
+			const Real noiseX = shape.m_middleX + edgeX + probe * nx, noiseY = shape.m_middleY + edgeY + probe * ny;
 			const Real shapeNoise = fractalNoise( m_perm, noiseX * 0.011f + 41.3f, noiseY * 0.011f + 27.9f, 3 );
 			const Real bayNoise = fractalNoise( m_perm, noiseX * 0.035f + 13.7f, noiseY * 0.035f + 52.1f, 2 );
 			// beside the lane a bay may come in to the lane's own least; the cut eases in over 40 cells,
-			// as a quicker one squeezed the beach into one steep cell where it held the coast
-			const Real beside = ny == 0.0f ? 0.0f : rmgUnit( ( shape.m_half + 8.0f - fabsf( baseX ) ) / 40.0f );
+			// as a quicker one squeezed the beach into one steep cell where it held the coast, and is
+			// gone by the start of an end
+			const Real beside = ny == 0.0f ? 0.0f : rmgUnit( ( std::min( shape.m_half + 8.0f, innerX ) - std::min( fabsf( rx ), innerX ) ) / 40.0f );
 			const Real least = RMG_LANE_REACH_LEAST - beside * besideLaneCut + 4.0f + 5.0f * bayNoise;
 			const Real meanReach = 0.5f * ( lowReach + highReach ) + 0.5f * ( highReach - lowReach ) * ny;
+			const Real most = RMG_LANE_REACH_MOST - ( RMG_LANE_REACH_MOST - RMG_LANE_TIP_REACH ) * nx * nx;
 			Real reach = meanReach + RMG_LANE_REACH_SWING * shapeNoise + RMG_LANE_BAY_SWING * bayNoise;
-			reach = std::min( rmgSoftMax( reach, least, 6.0f ), RMG_LANE_REACH_MOST );
+			reach = std::min( rmgSoftMax( reach, least, 6.0f ), most );
 
 			const Real edge = (Real)std::min( std::min( px, py ), std::min( shape.m_playX - px, shape.m_playY - py ) );
 			coast[cellIndex( x, y )] = std::min( reach - core, edge - RMG_LANE_SEA_LEAST );
@@ -10169,7 +10197,15 @@ void RMGLayout::buildLane( void )
 		hills, which settle again towards the coast. The beach rises from just over the water at the
 		coast to the bank over RMG_LANE_BEACH cells; off it a shelf RMG_LANE_SHELF cells wide lies one
 		to five bytes under the water, through which the sand shows, and the bed drops past it to
-		RMG_LANE_WATER_BED over RMG_LANE_DROP cells. */
+		RMG_LANE_WATER_BED over RMG_LANE_DROP cells.
+
+		The ring is RMG_LANE_FLAT_RING wide plus up to RMG_LANE_RING_WANDER more on a slow noise field,
+		and the hills come up off it over RMG_LANE_HILL_FOOT cells, not the beach's 14. As wide
+		everywhere and that quick, the rise began at one distance all along the lane and reached 10
+		degrees seven cells out, and under the twilight's low sun the lit lane met the shaded bank in
+		a ruled crease down each of its edges; over 24 cells the bank tilts 6 degrees at most. It stays
+		measured in cell steps: straight distance reaches further into the rise across a plot's corner
+		and steepened the ground there past what the slope test allows near play. */
 	m_heights.assign( cells, (UnsignedByte)RMG_LANE_GROUND );
 	for( Int y = 0; y < m_height; y++ )
 	{
@@ -10180,7 +10216,9 @@ void RMGLayout::buildLane( void )
 			if( kind[i] == LANE_BANK )
 			{
 				const Real hill = 0.5f + 0.5f * fractalNoise( m_perm, (Real)x * 0.035f + 31.7f, (Real)y * 0.035f + 17.3f, 3 );
-				const Real offRing = fadeCurve( rmgUnit( (Real)( offPlay[i] - RMG_LANE_FLAT_RING ) / RMG_LANE_HILL_REACH ) );
+				const Real ring = (Real)RMG_LANE_FLAT_RING + RMG_LANE_RING_WANDER
+					* rmgUnit( 0.5f + 0.9f * fractalNoise( m_perm, (Real)x * 0.06f + 63.1f, (Real)y * 0.06f + 9.7f, 2 ) );
+				const Real offRing = fadeCurve( rmgUnit( ( (Real)offPlay[i] - ring ) / RMG_LANE_HILL_FOOT ) );
 				const Real inland = fadeCurve( rmgUnit( ( coast[i] - RMG_LANE_BEACH ) / RMG_LANE_HILL_REACH ) );
 				height += RMG_LANE_HILLS * hill * offRing * inland;
 				const Real shore = (Real)RMG_LANE_WATER + 0.5f;
@@ -10214,8 +10252,18 @@ void RMGLayout::buildLane( void )
 		Round each fortress and tower the ground is worn, as under a building that has stood there a
 		long time: the theme's trampled class (theLaneGrounds' third, dirt and gravel, packed sand,
 		slush) under the footprint and out to RMG_LANE_WEAR_FORTRESS or RMG_LANE_WEAR_TOWER past it,
-		always worn by the walls and thinning outwards on a quick noise field, so its edge is ragged
-		and the outer half patchy. */
+		that reach wandering a third either way on a slow noise field so the patch is no rounded
+		square. Inside the last RMG_LANE_WEAR_FRINGE of it the ground is worn solid, a little ragged on
+		a quick field; past that it only freckles the bank, a lone cell on a hash, thinner outwards and
+		out to a sixth past the reach. The renderer blends two grounds across one cell, so a solid patch
+		had an edge of whole cells, straight and diagonal steps that read as blocks from close; a lone
+		worn cell draws as a soft spot, and a fringe of them fades the edge out over several. Freckles
+		sit only on every third cell each way: two closer than that put opposite corners on the cell
+		between, which settleTerrainForBlends fills, and a dense fringe filled into a bigger solid patch
+		with the same blocky edge.
+
+		In winter (m_bankMix) a second snow lies in slow patches over the bank, kept off the worn ground
+		and its fringe, where it would take the slush's edge. */
 	Int propID = 1;
 	AsciiString uniqueID;
 	m_terrain.assign( cells, (UnsignedByte)RMG_TERRAIN_GRASS );
@@ -10223,26 +10271,35 @@ void RMGLayout::buildLane( void )
 	const Real wornX[4] = { shape.m_fortressX[0], shape.m_fortressX[1], shape.m_towerX[0], shape.m_towerX[1] };
 	const Real wornHalf[4] = { RMG_LANE_FORTRESS_HALF, RMG_LANE_FORTRESS_HALF, RMG_LANE_TOWER_HALF, RMG_LANE_TOWER_HALF };
 	const Real wornReach[4] = { RMG_LANE_WEAR_FORTRESS, RMG_LANE_WEAR_FORTRESS, RMG_LANE_WEAR_TOWER, RMG_LANE_WEAR_TOWER };
+	const Real fringeOut = 1.0f / 6.0f;		// the freckles reach this share of the reach past it
 	for( Int y = 0; y + 1 < m_height; y++ )
 	{
 		for( Int x = 0; x + 1 < m_width; x++ )
 		{
 			const Int i = cellIndex( x, y );
+			if( ground.m_bankMix && fractalNoise( m_perm, (Real)x * 0.045f + 87.3f, (Real)y * 0.045f + 45.6f, 3 ) > 0.08f )
+				m_terrain[i] = (UnsignedByte)RMG_TERRAIN_ROCK;
 			const Real shoreWander = 0.5f + 0.5f * fractalNoise( m_perm, (Real)x * 0.07f + 21.4f, (Real)y * 0.07f + 15.9f, 2 );
 			const Real cellCoast = 0.25f * ( coast[i] + coast[cellIndex( x + 1, y )] + coast[cellIndex( x, y + 1 )] + coast[cellIndex( x + 1, y + 1 )] );
 			if( cellCoast < RMG_LANE_SAND + 3.0f * shoreWander )
 				m_terrain[i] = (UnsignedByte)RMG_TERRAIN_SAND;
 
 			const Real cx = (Real)( x - RMG_BORDER_CELLS ) + 0.5f, cy = (Real)( y - RMG_BORDER_CELLS ) + 0.5f;
+			const Real outline = 1.0f + 0.33f * fractalNoise( m_perm, (Real)x * 0.09f + 5.3f, (Real)y * 0.09f + 61.7f, 2 );
+			const Real patch = fractalNoise( m_perm, (Real)x * 0.23f + 71.9f, (Real)y * 0.23f + 33.1f, 2 );
+			// a freckle only on every third cell each way, so no two share a neighbour and get filled in between
+			const Real speck = x % 3 == 0 && y % 3 == 0 ? (Real)( hashCell( seed + 51013U, x, y ) % 1024U ) / 1024.0f : 1.0f;
 			for( Int s = 0; s < 4; s++ )
 			{
 				const Real dx = std::max( fabsf( cx - wornX[s] ) - wornHalf[s], 0.0f );
 				const Real dy = std::max( fabsf( cy - shape.m_middleY ) - wornHalf[s], 0.0f );
-				const Real wear = 1.0f - sqrtf( dx * dx + dy * dy ) / wornReach[s];
-				if( wear <= 0.0f )
+				const Real wear = 1.0f - sqrtf( dx * dx + dy * dy ) / ( wornReach[s] * outline );
+				if( wear <= -fringeOut - 0.25f )
 					continue;
-				const Real patch = fractalNoise( m_perm, (Real)x * 0.23f + 71.9f, (Real)y * 0.23f + 33.1f, 2 );
-				if( wear + 0.6f * patch > 0.45f )
+				if( m_terrain[i] == RMG_TERRAIN_ROCK )
+					m_terrain[i] = (UnsignedByte)RMG_TERRAIN_GRASS;
+				const Real fringe = rmgUnit( ( wear + fringeOut ) / ( RMG_LANE_WEAR_FRINGE + fringeOut ) );
+				if( wear + 0.15f * patch > RMG_LANE_WEAR_FRINGE || speck < 0.8f * fringe )
 					m_terrain[i] = (UnsignedByte)RMG_TERRAIN_DIRT;
 			}
 

@@ -12810,6 +12810,27 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 		changes */
 	const std::vector<UnsignedByte> heights = theRMGParse.m_heights;
 	std::vector<AsciiString> themes;
+	/* The ends are round: the island reaches further out to sea on the lane's axis than level with
+		the plot columns' outer edges (y 134 and 226), by RMG_LANE_END_ROUND's ellipse, 11.8 cells on
+		average over seeds 1 to 12. The core with corners rounded over 30 cells that came before
+		it ran the coast straight down the column, 4.2 cells. */
+	Real roundness = 0.0f;
+	auto endBulge = [&]()
+	{
+		const Int W2 = theRMGParse.m_width, BX = theRMGParse.m_boundaryX, b = theRMGParse.m_border;
+		auto firstDry = [&]( Int row, Int from ) -> Int
+		{
+			for( Int k = 0; k <= BX; k++ )
+				if( theRMGParse.m_heights[( row + b ) * W2 + ( from == 0 ? k : BX - k ) + b] >= 50 )
+					return k;
+			return BX;
+		};
+		Real bulge = 0.0f;
+		for( Int from = 0; from < 2; from++ )
+			bulge += 0.5f * (Real)( firstDry( 134, from ) + firstDry( 226, from ) ) - (Real)firstDry( 180, from );
+		return 0.5f * bulge;
+	};
+	roundness += endBulge();
 	for( Int seed = 1; seed <= 12; seed++ )
 	{
 		settings.m_seed = seed;
@@ -12833,6 +12854,8 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 		CHECK( island.fewestSea >= 12.0f );
 		CHECK_EQ( island.inlandWater, 0 );
 		CHECK( island.seaMargin >= 50 );
+		if( seed != 3 )
+			roundness += endBulge();
 		if( seed != 3 && island.outline.size() == outline.size() )
 		{
 			Int apart = 0;
@@ -12844,6 +12867,8 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 			themes.push_back( theRMGParse.m_textureName );
 	}
 	CHECK( themes.size() >= 3 );
+	printf( "  lane island ends bulge %.1f cells on average\n", roundness / 12.0f );
+	CHECK( roundness / 12.0f >= 9.0f );
 
 	/* The plots wear the island's ground, so the slot grid takes the theme's line colour off the map's
 		name: seed 5 is temperate's pale lines, seed 6 twilight's, seed 3 desert's dark ones, every one

@@ -910,7 +910,8 @@ static unsigned chooseDrawEffect( const Drawable *draw, Bool translucentPass, fl
 	if ( look == STEALTHLOOK_VISIBLE_DETECTED && !draw->isKindOf( KINDOF_MINE ) )
 	{
 		effect = DRAW_EFFECT_REVEALED;
-		strength = pulse;
+		// a structure is asked with two more (effect_revealed): it keeps most of its paint
+		strength = pulse + ( draw->isKindOf( KINDOF_STRUCTURE ) ? 2.0f : 0.0f );
 	}
 	else if ( translucentPass && wearsCloak( draw )
 		&& look != STEALTHLOOK_VISIBLE_DETECTED )
@@ -954,7 +955,10 @@ static unsigned chooseDrawEffect( const Drawable *draw, Bool translucentPass, fl
 				? STEALTH_FRONT_RIPPLE : STEALTH_FRONT_WIND;
 		const Real geometry = draw->getTemplate()->getTemplateGeometryInfo().getMaxHeightAbovePosition();
 		const Int height = clamp( 1, REAL_TO_INT_CEIL( geometry * 1.3f ), 4000 );
-		const Bool overPaint = effect == DRAW_EFFECT_REVEALED && draw->getStealthOverPaint();
+		// The paint bit: for the heat, its far end is paint; for the cloak, a unit that keeps a ghost
+		// of its paint over the glass (effect_cloak), since its bend alone is a few pixels at play zoom.
+		const Bool overPaint = effect == DRAW_EFFECT_REVEALED ? draw->getStealthOverPaint()
+			: !draw->isKindOf( KINDOF_STRUCTURE );
 		parameters[2] = draw->getPositionForDraw()->z;
 		parameters[3] = CombinerShader_Pack_Stealth( height, front, overPaint != FALSE, (float)fade );
 	}

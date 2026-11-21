@@ -12994,6 +12994,33 @@ TEST(lane_war_times_are_wall_seconds_in_logic_frames)
 	CHECK_EQ( ObjectStatusMaskType::getSingleBitFromName( "UNATTACKABLE" ), (Int)OBJECT_STATUS_UNATTACKABLE );
 }
 
+TEST(lane_war_jets_take_off_when_the_meeting_is_no_further_than_their_flight)
+{
+	Real ahead = -1.0f;
+	// fronts 1000 apart closing at 1 and 1 a frame meet in 500 frames, 500 ahead of my front; jets
+	// 2500 behind it at 10 a frame need 300 frames to be there: not yet
+	CHECK( !LaneWar_strikeDue( 1000.0f, 1.0f, 1.0f, 2500.0f, 10.0f, &ahead ) );
+	CHECK_NEAR( ahead, 500.0f, 0.001f );
+	// 500 apart: they meet in 250 frames, 250 ahead, and the jets need 275: go
+	CHECK( LaneWar_strikeDue( 500.0f, 1.0f, 1.0f, 2500.0f, 10.0f, &ahead ) );
+	CHECK_NEAR( ahead, 250.0f, 0.001f );
+	// a front standing still is met where it stands: 200 frames off, 300 of flight
+	CHECK( LaneWar_strikeDue( 400.0f, 0.0f, 2.0f, 3000.0f, 10.0f, &ahead ) );
+	CHECK_NEAR( ahead, 0.0f, 0.001f );
+	// fronts in contact strike now, halfway between them, moving or not and with no jet speed known
+	CHECK( LaneWar_strikeDue( (Real)LANEWAR_STRIKE_CONTACT_GAP, 0.0f, 0.0f, 5000.0f, 0.0f, &ahead ) );
+	CHECK_NEAR( ahead, 0.5f * LANEWAR_STRIKE_CONTACT_GAP, 0.001f );
+	CHECK( LaneWar_strikeDue( -30.0f, 1.0f, 1.0f, 5000.0f, 10.0f, &ahead ) );
+	CHECK_NEAR( ahead, 0.0f, 0.001f );
+	// apart and standing, or backing off, there is nothing to meet
+	CHECK( !LaneWar_strikeDue( 600.0f, 0.0f, 0.0f, 100.0f, 10.0f, &ahead ) );
+	CHECK( !LaneWar_strikeDue( 600.0f, -2.0f, -1.0f, 100.0f, 10.0f, &ahead ) );
+
+	// a strike and a rearm are game time, the lifespan stays wall time
+	CHECK_EQ( LANEWAR_STRIKE_FRAMES, (UnsignedInt)( 30 * LOGICFRAMES_PER_GAME_SECOND ) );
+	CHECK_EQ( LANEWAR_JET_REARM_FRAMES, (UnsignedInt)( 15 * LOGICFRAMES_PER_GAME_SECOND ) );
+}
+
 TEST(lane_war_tiers_cost_what_the_plan_says_and_a_sale_pays_back_half_once_sent)
 {
 	// four income levels of 1000 each, every one paying 67 more a tick, the middle a quarter on top

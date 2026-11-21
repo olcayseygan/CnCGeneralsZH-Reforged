@@ -13,11 +13,13 @@
 # bought: a Ranger for 225, then Burton for the seat's one hero
 30    laneplace  0  AmericaInfantryRanger         0 0
 30    laneplace  0  AmericaInfantryColonelBurton  6 0
-# refused: slot taken, tier locked, another side's unit, an aircraft on a locked tier
+# refused: slot taken, tier locked, another side's unit, a jet (air rows) and a helicopter (ground
+# grid, since helicopters march with the wave) on a locked tier
 30    laneplace  0  AmericaInfantryRanger         0 0
 30    laneplace  0  AmericaTankPaladin            2 0
 30    laneplace  0  ChinaTankOverlord             4 0
 30    laneplace  0  AmericaJetRaptor              0 0
+30    laneplace  0  AmericaVehicleComanche        2 0
 # refused: the hero once a match, the hero not for sale, too dear, not the next level, an upgrade too dear
 30    laneplace  0  AmericaInfantryColonelBurton  8 0
 30    lanesell   0  0 6 0

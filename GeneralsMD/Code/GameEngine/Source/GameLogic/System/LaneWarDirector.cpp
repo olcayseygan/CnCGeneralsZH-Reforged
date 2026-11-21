@@ -40,12 +40,14 @@
 #include "GameLogic/AI.h"
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/AIPlayer.h"
+#include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/JetAIUpdate.h"
+#include "GameLogic/Module/PhysicsUpdate.h"
 #include "GameLogic/Module/SpecialAbilityUpdate.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Object.h"
@@ -131,6 +133,28 @@ Int LaneWar_slotsFor( Real radius )
 }
 
 //-------------------------------------------------------------------------------------------------
+/* The strike rule.  Both waves march at their slowest member's speed, so the meeting is a straight
+	 line problem: the gap closes at the two fronts' speeds added, and the jets need their flight from
+	 the park to the meeting point.  They take off when the meeting is no further off than that flight,
+	 so they come in as the fronts touch.  Fronts already in contact, or standing still, get the strike
+	 at once if they are close enough to be fighting, and none otherwise. */
+Bool LaneWar_strikeDue( Real gap, Real mySpeed, Real enemySpeed, Real parkBehind, Real jetSpeed, Real *meetAhead )
+{
+	mySpeed = max( mySpeed, 0.0f );
+	enemySpeed = max( enemySpeed, 0.0f );
+	if( gap <= (Real)LANEWAR_STRIKE_CONTACT_GAP )
+	{
+		*meetAhead = 0.5f * max( gap, 0.0f );
+		return TRUE;
+	}
+	const Real closing = mySpeed + enemySpeed;
+	if( closing <= 0.0f || jetSpeed <= 0.0f )
+		return FALSE;
+	*meetAhead = gap * mySpeed / closing;
+	return gap / closing <= ( parkBehind + *meetAhead ) / jetSpeed;
+}
+
+//-------------------------------------------------------------------------------------------------
 /* The roster.  A side's units by tech tier: tier 1 is what its barracks and factory make without a
 	 tech building, tier 2 what a Strategy Center, Propaganda Center or Palace (or a general's power)
 	 opens and the aircraft, tier 3 the side's heaviest.  Units only: no defence, mine or structure.
@@ -139,8 +163,8 @@ Int LaneWar_slotsFor( Real radius )
 	 general fields "<tag>_<name>" where that template exists, the base one otherwise.  `only` names
 	 the generals that have it (Base for the plain side), `except` those that do not, as the generals'
 	 own factories offer them; an entry whose name is already a general's own template carries the
-	 one general it belongs to in `only`.  The jets are in: in Lane War a wave jet never runs dry
-	 (LaneWarDirector::refillJets). */
+	 one general it belongs to in `only`.  The jets are in: they strike from off the map and reload
+	 there (LaneWarDirector::updateJets). */
 namespace
 {
 	struct RosterEntry
@@ -576,6 +600,7 @@ void LaneWarDirector::reset( void )
 	m_plotUnits.clear();
 	m_middleHolder = -1;
 	m_abilityToggles.clear();
+	m_jets.clear();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -775,9 +800,43 @@ Bool LaneWarDirector::getAirBounds( Int team, Int seat, Coord2D *lo, Coord2D *hi
 }
 
 //-------------------------------------------------------------------------------------------------
+/// the template's normal locomotors, the first AI module's
+static const LocomotorTemplateVector *normalLocomotors( const ThingTemplate *tmpl )
+{
+	const ModuleInfo &modules = tmpl->getBehaviorModuleInfo();
+	for( Int m = 0; m < modules.getCount(); ++m )
+	{
+		const ModuleData *data = modules.getNthData( m );
+		if( data != NULL && data->isAiModuleData() )
+			return static_cast< const AIUpdateModuleData * >( data )->findLocomotorTemplateVector( LOCOMOTORSET_NORMAL );
+	}
+	return NULL;
+}
+
+Bool LaneWarDirector::isJet( const ThingTemplate *tmpl )
+{
+	if( tmpl == NULL || !tmpl->isKindOf( KINDOF_AIRCRAFT ) || tmpl->isKindOf( KINDOF_PRODUCED_AT_HELIPAD ) )
+		return FALSE;
+	const LocomotorTemplateVector *set = normalLocomotors( tmpl );
+	for( size_t i = 0; set != NULL && i < set->size(); ++i )
+		if( ( *set )[ i ]->getAppearance() == LOCO_HOVER )
+			return FALSE;		// a helicopter's locomotor (Locomotor::isHelicopter)
+	return TRUE;
+}
+
+/// a jet of this template's top speed at full health, a frame
+static Real jetSpeedOf( const ThingTemplate *tmpl )
+{
+	Real fastest = 0.0f;
+	const LocomotorTemplateVector *set = normalLocomotors( tmpl );
+	for( size_t i = 0; set != NULL && i < set->size(); ++i )
+		fastest = max( fastest, ( *set )[ i ]->getMaxSpeed() );
+	return fastest * tmpl->getSpeedScale();
+}
+
 Int LaneWarDirector::gridFor( const ThingTemplate *tmpl )
 {
-	return tmpl != NULL && tmpl->isKindOf( KINDOF_AIRCRAFT ) ? LANEWAR_GRID_AIR : LANEWAR_GRID_GROUND;
+	return isJet( tmpl ) ? LANEWAR_GRID_AIR : LANEWAR_GRID_GROUND;
 }
 
 /// the footprint's widest extent in whole slots
@@ -906,8 +965,9 @@ Bool LaneWarDirector::placeUnit( Player *player, const ThingTemplate *tmpl, Int 
 	const char *refused = whyNotPlace( player, tmpl, col, row );
 	if( refused != NULL )
 	{
-		DEBUG_LOG(( "LANEWAR PLACE: frame %u player %d '%s' at column %d row %d refused: %s\n", now,
-								player ? (Int)player->getPlayerIndex() : -1, tmpl ? tmpl->getName().str() : "?", col, row, refused ));
+		DEBUG_LOG(( "LANEWAR PLACE: frame %u player %d '%s' at column %d row %d of the %s refused: %s\n", now,
+								player ? (Int)player->getPlayerIndex() : -1, tmpl ? tmpl->getName().str() : "?", col, row,
+								gridFor( tmpl ) == LANEWAR_GRID_AIR ? "air rows" : "ground", refused ));
 		return FALSE;
 	}
 
@@ -1353,6 +1413,7 @@ void LaneWarDirector::update( void )
 		return;
 
 	useAbilities( now );
+	updateJets( now );
 
 	if( now >= m_nextTickFrame )
 	{
@@ -1387,10 +1448,9 @@ void LaneWarDirector::expireCopies( UnsignedInt now )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Lane War has no airfield.  A jet's clip that must go home to reload (Raptor, MiG, Aurora, the
-	  Stealth Fighter) is refilled here the frame it runs dry, before the object walk, so its JetAIUpdate
-	  never sees it empty and never turns for a runway that is not there: a wave jet strafes down the
-	  lane for its whole life.  Copies only; a plot's jets are held and never fire. */
+/** Lane War has no airfield or helipad.  A wave helicopter's clip that must go home to reload is
+	  refilled here the frame it runs dry, before the object walk, so it never turns for a pad that is
+	  not there.  Copies only; the jets reload off the map (updateJets), and a plot's units never fire. */
 void LaneWarDirector::refillJets( void )
 {
 	Weapon::StatusPeek peek;	// asking must not move a weapon's fire cycle (Weapon::getStatus)
@@ -1409,6 +1469,267 @@ void LaneWarDirector::refillJets( void )
 			}
 		}
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A wave's jet copy joins its seat's squadron parked and rearmed, whatever the rest of it is doing,
+	  and goes with the next strike the seat flies.  Its lifespan runs from this tick, as a copy's does. */
+void LaneWarDirector::joinSquadron( const PlotUnit &u, UnsignedInt now )
+{
+	const Object *original = TheGameLogic->findObjectByID( u.id );
+	Jet jet;
+	jet.id = INVALID_ID;
+	jet.thing = original->getTemplate();
+	jet.team = u.team;
+	jet.seat = u.seat;
+	jet.col = u.col;
+	jet.row = u.row;
+	jet.state = JET_PARKED;
+	jet.dieFrame = now + LANEWAR_LIFESPAN_FRAMES;
+	jet.stateFrame = now;
+	jet.health = 0.0f;
+	jet.veterancy = 0;
+	jet.strikes = 0;
+	m_jets.push_back( jet );
+	DEBUG_LOG(( "HEADLESS LANEWAR JET: frame %u '%s' of %s%d joins its squadron off the map, %d jets in all squadrons\n", now,
+							jet.thing->getName().str(), TEAM_NAME[ u.team ], u.seat + 1, (Int)m_jets.size() ));
+}
+
+//-------------------------------------------------------------------------------------------------
+/// the x past the map's border behind the team's own end, where its jets wait
+Real LaneWarDirector::parkX( Int team ) const
+{
+	Region3D ext;
+	TheTerrainLogic->getExtentIncludingBorder( &ext );
+	return towardEnemy( team ) > 0.0f ? ext.lo.x - (Real)LANEWAR_JET_PARK_MARGIN : ext.hi.x + (Real)LANEWAR_JET_PARK_MARGIN;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The team's front: the x of its wave copy furthest down the lane towards the enemy, the first in
+	  spawn order on a tie, and how fast that one closes on him a frame.  FALSE with none out. */
+Bool LaneWarDirector::frontOf( Int team, Real *x, Real *speed ) const
+{
+	const Real toward = towardEnemy( team );
+	Bool found = FALSE;
+	for( size_t i = 0; i < m_copies.size(); ++i )
+	{
+		const Object *obj = TheGameLogic->findObjectByID( m_copies[ i ].id );
+		Int t, s;
+		if( obj == NULL || obj->isEffectivelyDead() || obj->isContained() || !seatOf( obj->getControllingPlayer(), &t, &s ) || t != team )
+			continue;
+		if( found && obj->getPosition()->x * toward <= *x * toward )
+			continue;
+		found = TRUE;
+		*x = obj->getPosition()->x;
+		const PhysicsBehavior *physics = obj->getPhysics();
+		*speed = physics != NULL ? physics->getVelocity()->x * toward : 0.0f;
+	}
+	return found;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The seat's rearmed parked jets take off together when LaneWar_strikeDue says so.  Each is made anew
+	  off the map on its air row slot's line across the lane, its row a slot further back as on the
+	  plot, a second copy of the same slot one air grid's depth behind the first, and the lot
+	  attack-moves straight along the lane to the meeting point at the slowest one's speed
+	  (AIGroup::groupLaneMarch), striking what it meets there. */
+void LaneWarDirector::launchJets( Int team, Int seat, UnsignedInt now )
+{
+	Real jetSpeed = 0.0f;
+	Int ready = 0;
+	for( size_t i = 0; i < m_jets.size(); ++i )
+	{
+		const Jet &jet = m_jets[ i ];
+		if( jet.team != team || jet.seat != seat || jet.state != JET_PARKED || now < jet.stateFrame )
+			continue;
+		const Real speed = jetSpeedOf( jet.thing );
+		jetSpeed = ready == 0 ? speed : min( jetSpeed, speed );
+		++ready;
+	}
+	if( ready == 0 )
+		return;
+
+	Real myX = 0.0f, mySpeed = 0.0f, enemyX = 0.0f, enemySpeed = 0.0f;
+	if( !frontOf( team, &myX, &mySpeed ) || !frontOf( 1 - team, &enemyX, &enemySpeed ) )
+		return;
+	const Real toward = towardEnemy( team );
+	const Real park = parkX( team );
+	const Real gap = ( enemyX - myX ) * toward;
+	Real meetAhead = 0.0f;
+	if( !LaneWar_strikeDue( gap, mySpeed, enemySpeed, ( myX - park ) * toward, jetSpeed, &meetAhead ) )
+		return;
+	const Real strikeX = myX + toward * meetAhead;
+
+	Player *player = ThePlayerList->getNthPlayer( m_seatPlayer[ team ][ seat ] );
+	Team *owner = player->getDefaultTeam();
+	const Coord2D &airLo = m_gridLo[ team ][ seat ][ LANEWAR_GRID_AIR ], &airHi = m_gridHi[ team ][ seat ][ LANEWAR_GRID_AIR ];
+	const Real airFront = toward > 0.0f ? airHi.x : airLo.x;
+	const Real airDepth = airHi.x - airLo.x;
+	AIGroup *group = TheAI->createGroup();
+	for( size_t i = 0; i < m_jets.size(); ++i )
+	{
+		Jet &jet = m_jets[ i ];
+		if( jet.team != team || jet.seat != seat || jet.state != JET_PARKED || now < jet.stateFrame )
+			continue;
+		Int stack = 0;
+		for( size_t j = 0; j < i; ++j )
+			stack += m_jets[ j ].team == team && m_jets[ j ].seat == seat && m_jets[ j ].col == jet.col && m_jets[ j ].row == jet.row
+							 && m_jets[ j ].state == JET_OUT && m_jets[ j ].stateFrame == now;
+
+		const Coord3D at = slotCentre( team, seat, LANEWAR_GRID_AIR, jet.col, jet.row, sizeFor( jet.thing ) );
+		Coord3D pos;
+		pos.x = park + ( at.x - airFront ) - toward * (Real)stack * airDepth;
+		pos.y = m_spawn[ team ].y + at.y - m_plotAnchor[ team ][ seat ].y;
+		pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+
+		Object *obj = TheThingFactory->newObject( jet.thing, owner );
+		if( obj == NULL )
+			continue;
+		obj->setOrientation( toward > 0.0f ? 0.0f : PI );
+		obj->setPosition( &pos );
+		for( BehaviorModule **m = obj->getBehaviorModules(); *m; ++m )
+		{
+			CreateModuleInterface *create = (*m)->getCreate();
+			if( create )
+				create->onBuildComplete();
+		}
+		obj->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_UNSELECTABLE ) );
+		owner->setActive();
+
+		// born flying at its own height and at full speed, as a payload plane comes in
+		AIUpdateInterface *ai = obj->getAI();
+		JetAIUpdate *jetAI = ai ? ai->getJetAIUpdate() : NULL;
+		if( jetAI != NULL )
+		{
+			jetAI->friend_setAllowAirLoco( TRUE );
+			ai->chooseLocomotorSet( LOCOMOTORSET_NORMAL );
+		}
+		Locomotor *loco = ai ? ai->getCurLocomotor() : NULL;
+		PhysicsBehavior *physics = obj->getPhysics();
+		if( loco != NULL )
+		{
+			pos.z += loco->getPreferredHeight();
+			obj->setPosition( &pos );
+			if( physics != NULL )
+			{
+				Coord3D force = *obj->getUnitDirectionVector2D();
+				const Real factor = loco->getMaxSpeedForCondition( obj->getBodyModule()->getDamageState() ) * physics->getMass();
+				force.x *= factor;
+				force.y *= factor;
+				force.z = 0.0f;
+				physics->applyMotiveForce( &force );
+			}
+		}
+		BodyModuleInterface *body = obj->getBodyModule();
+		if( body != NULL && jet.health > 0.0f && jet.health < body->getHealth() )
+			body->internalChangeHealth( jet.health - body->getHealth() );
+		if( jet.veterancy > 0 && obj->getExperienceTracker() != NULL )
+			obj->getExperienceTracker()->setVeterancyLevel( (VeterancyLevel)jet.veterancy, FALSE );
+
+		group->add( obj );
+		jet.id = obj->getID();
+		jet.state = JET_OUT;
+		jet.stateFrame = now;
+		++jet.strikes;
+		DEBUG_LOG(( "HEADLESS LANEWAR JET: frame %u '%s' %d of %s%d takes off on its strike %d from (%.0f,%.0f), health %.0f of %.0f\n", now,
+								jet.thing->getName().str(), (Int)jet.id, TEAM_NAME[ team ], seat + 1, jet.strikes, pos.x, pos.y,
+								body ? body->getHealth() : 0.0f, body ? body->getMaxHealth() : 0.0f ));
+	}
+
+	DEBUG_LOG(( "HEADLESS LANEWAR JET: frame %u %s%d strikes with %d jets at x %.0f: fronts %s x %.0f and %s x %.0f, gap %.0f, closing %.2f and %.2f a frame, jets %.2f a frame\n",
+							now, TEAM_NAME[ team ], seat + 1, (Int)group->getAllIDs().size(), strikeX, TEAM_NAME[ team ], myX, TEAM_NAME[ 1 - team ], enemyX,
+							gap, mySpeed, enemySpeed, jetSpeed ));
+	if( group->isEmpty() )
+	{
+		TheAI->destroyGroup( group );
+		return;
+	}
+	group->groupLaneMarch( strikeX - park, NO_MAX_SHOTS_LIMIT, CMD_FROM_SCRIPT );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The squadrons, every frame.  A jet whose lifespan is up dies wherever it is, and one shot down
+	  leaves its squadron.  One out on a strike turns for home once its clip is spent, its pass is flown,
+	  its own AI turns it home, or LANEWAR_STRIKE_FRAMES are up; one flying home parks the moment it is
+	  past the map's border, keeping its health and rank, and is rearmed LANEWAR_JET_REARM_FRAMES later.
+	  Every half game second each seat's rearmed jets are asked whether a strike is due. */
+void LaneWarDirector::updateJets( UnsignedInt now )
+{
+	if( m_jets.empty() )
+		return;
+
+	Region3D ext;
+	TheTerrainLogic->getExtentIncludingBorder( &ext );
+	size_t kept = 0;
+	for( size_t i = 0; i < m_jets.size(); ++i )
+	{
+		Jet jet = m_jets[ i ];
+		Object *obj = jet.state == JET_PARKED ? NULL : TheGameLogic->findObjectByID( jet.id );
+		if( jet.state != JET_PARKED && ( obj == NULL || obj->isEffectivelyDead() ) )
+		{
+			DEBUG_LOG(( "HEADLESS LANEWAR JET: frame %u '%s' %d of %s%d shot down on its strike %d\n", now, jet.thing->getName().str(),
+									(Int)jet.id, TEAM_NAME[ jet.team ], jet.seat + 1, jet.strikes ));
+			continue;
+		}
+		if( now >= jet.dieFrame )
+		{
+			if( obj != NULL )
+				obj->kill();
+			DEBUG_LOG(( "HEADLESS LANEWAR JET: frame %u '%s' of %s%d lifespan ended %s after %d strikes\n", now, jet.thing->getName().str(),
+									TEAM_NAME[ jet.team ], jet.seat + 1, obj != NULL ? "in the air" : "parked", jet.strikes ));
+			continue;
+		}
+
+		AIUpdateInterface *ai = obj != NULL ? obj->getAI() : NULL;
+		JetAIUpdate *jetAI = ai != NULL ? ai->getJetAIUpdate() : NULL;
+		if( jet.state == JET_OUT && ai != NULL )
+		{
+			const char *why = jetAI != NULL && jetAI->isOutOfSpecialReloadAmmo() ? "its clip spent"
+											: jetAI != NULL && jetAI->isGoingHomeOnItsOwn() ? "its own AI turned it home"
+											: ai->isIdle() ? "its pass flown"
+											: now >= jet.stateFrame + LANEWAR_STRIKE_FRAMES ? "the strike's time up" : NULL;
+			if( why != NULL )
+			{
+				Coord3D home = *obj->getPosition();
+				home.x = parkX( jet.team ) - towardEnemy( jet.team ) * (Real)LANEWAR_JET_PARK_MARGIN;
+				home.z = TheTerrainLogic->getGroundHeight( home.x, home.y );
+				// off the map, as a payload plane leaves it (HeadOffMapState)
+				if( ai->getCurLocomotor() != NULL )
+				{
+					ai->getCurLocomotor()->setAllowInvalidPosition( TRUE );
+					ai->getCurLocomotor()->setUltraAccurate( TRUE );
+				}
+				ai->aiMoveToPosition( &home, CMD_FROM_SCRIPT );
+				jet.state = JET_HOME;
+				jet.stateFrame = now;
+				DEBUG_LOG(( "HEADLESS LANEWAR JET: frame %u '%s' %d of %s%d heads home from (%.0f,%.0f) after strike %d, %s\n", now,
+										jet.thing->getName().str(), (Int)jet.id, TEAM_NAME[ jet.team ], jet.seat + 1, obj->getPosition()->x,
+										obj->getPosition()->y, jet.strikes, why ));
+			}
+		}
+		else if( jet.state == JET_HOME && !ext.isInRegionNoZ( obj->getPosition() ) )
+		{
+			jet.health = obj->getBodyModule() != NULL ? obj->getBodyModule()->getHealth() : 0.0f;
+			jet.veterancy = obj->getExperienceTracker() != NULL ? (Int)obj->getExperienceTracker()->getVeterancyLevel() : 0;
+			DEBUG_LOG(( "HEADLESS LANEWAR JET: frame %u '%s' %d of %s%d parks off the map at x %.0f after strike %d, health %.0f, rearmed at frame %u\n", now,
+									jet.thing->getName().str(), (Int)jet.id, TEAM_NAME[ jet.team ], jet.seat + 1, obj->getPosition()->x, jet.strikes,
+									jet.health, now + LANEWAR_JET_REARM_FRAMES ));
+			TheGameLogic->destroyObject( obj );
+			jet.id = INVALID_ID;
+			jet.state = JET_PARKED;
+			jet.stateFrame = now + LANEWAR_JET_REARM_FRAMES;
+		}
+		m_jets[ kept++ ] = jet;
+	}
+	m_jets.resize( kept );
+
+	const UnsignedInt stride = (UnsignedInt)max( 1, (Int)( LOGICFRAMES_PER_GAME_SECOND / 2 ) );
+	if( now % stride != 0 )
+		return;
+	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+		for( Int s = 0; s < LANEWAR_SEATS; ++s )
+			if( m_seatPlayer[ t ][ s ] >= 0 )
+				launchJets( t, s, now );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1514,6 +1835,11 @@ void LaneWarDirector::spawnWave( Int team, Int seat, UnsignedInt now )
 			continue;
 		}
 		u.sent = TRUE;
+		if( isJet( original->getTemplate() ) )
+		{
+			joinSquadron( u, now );
+			continue;
+		}
 
 		const Coord3D at = slotCentre( team, seat, u.grid, u.col, u.row, u.size );
 		Coord3D pos = m_spawn[ team ];
@@ -1544,7 +1870,7 @@ void LaneWarDirector::spawnWave( Int team, Int seat, UnsignedInt now )
 			copy->setPosition( &pos );
 		}
 
-		// a jet is born taxiing, waiting for a runway; a wave jet is born flying at its own height
+		// a JetAIUpdate (the Comanche's) is born taxiing, waiting for a runway; a wave copy is born flying
 		JetAIUpdate *jet = ai ? ai->getJetAIUpdate() : NULL;
 		if( jet != NULL )
 		{
@@ -1598,10 +1924,11 @@ void LaneWarDirector::crc( Xfer *xfer )
 	  plot units with their slots.  The grids, pads and middle come from the map on every load.
 	  Version 2: each plot unit's grid, price and whether it has gone out; each seat's income and tech
 	  level and whether its hero is bought; the team holding the middle.
-	  Version 3: each copy's owner, and the players' ability switches. */
+	  Version 3: each copy's owner, and the players' ability switches.
+	  Version 4: the squadrons' jets. */
 void LaneWarDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 3;
+	XferVersion currentVersion = 4;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1685,4 +2012,41 @@ void LaneWarDirector::xfer( Xfer *xfer )
 			xfer->xferBool( &t.on );
 		}
 	}
+
+	if( version >= 4 )
+	{
+		count = (UnsignedInt)m_jets.size();
+		xfer->xferUnsignedInt( &count );
+		if( xfer->getXferMode() == XFER_LOAD )
+			m_jets.resize( count );
+		for( UnsignedInt i = 0; i < count; ++i )
+		{
+			Jet &jet = m_jets[ i ];
+			xfer->xferObjectID( &jet.id );
+			AsciiString name = jet.thing != NULL ? jet.thing->getName() : AsciiString::TheEmptyString;
+			xfer->xferAsciiString( &name );
+			if( xfer->getXferMode() == XFER_LOAD )
+				jet.thing = TheThingFactory->findTemplate( name, FALSE );
+			xfer->xferInt( &jet.team );
+			xfer->xferInt( &jet.seat );
+			xfer->xferInt( &jet.col );
+			xfer->xferInt( &jet.row );
+			xfer->xferInt( &jet.state );
+			xfer->xferUnsignedInt( &jet.dieFrame );
+			xfer->xferUnsignedInt( &jet.stateFrame );
+			xfer->xferReal( &jet.health );
+			xfer->xferInt( &jet.veterancy );
+			xfer->xferInt( &jet.strikes );
+		}
+		if( xfer->getXferMode() == XFER_LOAD )
+		{
+			size_t kept = 0;
+			for( size_t i = 0; i < m_jets.size(); ++i )
+				if( m_jets[ i ].thing != NULL )
+					m_jets[ kept++ ] = m_jets[ i ];
+			m_jets.resize( kept );
+		}
+	}
+	else
+		m_jets.clear();
 }

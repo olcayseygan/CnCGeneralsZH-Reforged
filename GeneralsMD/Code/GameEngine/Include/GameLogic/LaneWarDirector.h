@@ -38,6 +38,13 @@
 // (LANEWAR_ORDER_ABILITY), and one left standing short of the enemy fortress marches on.  A team
 // loses when its fortress dies, through VictoryConditions, and nothing else counts.
 //
+// Fixed-wing jets stand on the air rows behind the plot and do not march.  A wave's jet copies join
+// their seat's squadron, which waits off the map behind its own end with nothing of it on the map.
+// When the two teams' fronts are about to meet, the squadron's rearmed jets fly in line abreast, as
+// the air rows lay them out, straight along the lane to the meeting point, strike, and fly back off
+// the map, where they reload and wait for the next clash until shot down or their lifespan is up.
+// Helicopters stand on the ground grid and march with the wave.
+//
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #pragma once
@@ -71,14 +78,28 @@ enum
 	LANEWAR_INCOME_TIER_PAYS = 67,				///< more on every tick for each level bought
 	LANEWAR_TECH_TIERS = 3,								///< a player starts on tech tier 1
 	LANEWAR_SELL_SENT_PERCENT = 50,				///< a unit that has gone out in a wave sells back for this share; one that has not, for all of it
+	LANEWAR_JET_PARK_MARGIN = 100,				///< world units past the map's border, behind his own end, where a player's jets wait
+	LANEWAR_STRIKE_CONTACT_GAP = 250,			///< two fronts this close along the lane are fighting already: a strike goes now
+	LANEWAR_STRIKE_SECONDS = 30,					///< game seconds a strike may last before its jets are called home
+	LANEWAR_JET_REARM_SECONDS = 15,				///< game seconds a parked jet takes to reload before it can strike again
 };
 
 #define LANEWAR_TICK_FRAMES ((UnsignedInt)(LANEWAR_TICK_SECONDS * LOGICFRAMES_PER_SECOND))
 #define LANEWAR_LIFESPAN_FRAMES ((UnsignedInt)(LANEWAR_LIFESPAN_SECONDS * LOGICFRAMES_PER_SECOND))
+#define LANEWAR_STRIKE_FRAMES ((UnsignedInt)(LANEWAR_STRIKE_SECONDS * LOGICFRAMES_PER_GAME_SECOND))
+#define LANEWAR_JET_REARM_FRAMES ((UnsignedInt)(LANEWAR_JET_REARM_SECONDS * LOGICFRAMES_PER_GAME_SECOND))
+
+/** Whether a player's parked jets take off now for the coming clash.  `gap` is how far apart his team's
+	  front and the enemy's stand along the lane, `mySpeed` and `enemySpeed` how fast each front closes on
+	  the other a frame, `parkBehind` how far his jets wait behind his own front, `jetSpeed` the slowest
+	  jet's a frame.  Due when the fronts are in contact, or when they will meet no later than the jets
+	  can be there; *meetAhead is then how far in front of his front they meet. */
+extern Bool LaneWar_strikeDue( Real gap, Real mySpeed, Real enemySpeed, Real parkBehind, Real jetSpeed, Real *meetAhead );
 
 /** What MSG_LANEWAR_ORDER asks for, its first argument; the integers after it depend on it.  A plot
 	  has two grids, the ground slots (LANEWAR_GRID_GROUND) and behind them the air rows
-	  (LANEWAR_GRID_AIR); an aircraft stands only in the air rows, everything else only on the ground. */
+	  (LANEWAR_GRID_AIR); a fixed-wing jet stands only in the air rows, everything else, helicopters
+	  included, only on the ground (LaneWarDirector::isJet). */
 enum LaneWarOrderKind
 {
 	LANEWAR_ORDER_PLACE = 0,							///< (template id, column, row): buy that unit onto the sender's plot, its block's front left slot at that one, in the grid its kind takes
@@ -192,7 +213,7 @@ extern Int LaneWar_middleHolder( Int pastLineA, Int pastLineB );
 extern UnsignedInt LaneWar_income( Bool holdsMiddle );
 
 /** One unit a player may buy: the template his side or general fields, the tech tier (1 to 3) that
-	  unlocks it, and whether it is his one hero.  An aircraft goes on the plot's air rows. */
+	  unlocks it, and whether it is his one hero.  A jet goes on the plot's air rows. */
 struct LaneWarRosterItem
 {
 	const ThingTemplate *thing;
@@ -293,6 +314,9 @@ public:
 	const std::vector<PlotUnit> &getPlotUnits( void ) const { return m_plotUnits; }
 	Int getCopyCount( void ) const { return (Int)m_copies.size(); }
 	ObjectID getCopyID( Int i ) const { return m_copies[ i ].id; }
+	/** A fixed-wing jet: an aircraft not made at a helipad and with no helicopter locomotor.  Only a jet
+		  stands on the air rows and strikes from off the map; a helicopter walks with the wave. */
+	static Bool isJet( const ThingTemplate *tmpl );
 	/// the grid a unit of this template stands in on a plot
 	static Int gridFor( const ThingTemplate *tmpl );
 	/// the slots a side a unit of this template covers
@@ -312,6 +336,23 @@ private:
 		UnsignedInt dieFrame;
 		Int owner;											///< the player index it last marched for; a hijacked copy marches again for its taker
 	};
+	enum { JET_PARKED, JET_OUT, JET_HOME };
+	/** A wave's jet copy.  Parked, nothing of it is on the map: it is only this entry, so it cannot be
+		  seen, picked, hit or see, and it reloads by being made anew.  Out, it flies its strike; home, it
+		  flies back off the map to park again. */
+	struct Jet
+	{
+		ObjectID id;										///< INVALID_ID while parked
+		const ThingTemplate *thing;
+		Int team, seat;
+		Int col, row;										///< its air row slot, its place in the line abreast
+		Int state;
+		UnsignedInt dieFrame;
+		UnsignedInt stateFrame;					///< parked: the frame it is rearmed; out: the frame it took off
+		Real health;										///< what it had when it last parked, 0 for full
+		Int veterancy;
+		Int strikes;										///< strikes it has flown
+	};
 	void expireCopies( UnsignedInt now );
 	void useAbilities( UnsignedInt now );
 	Bool buttonOn( Int player, const ThingTemplate *tmpl, const CommandButton *button ) const;
@@ -320,6 +361,12 @@ private:
 	void march( Object *obj, Int team );
 	Bool setAbility( Player *player, const Int *args, Int argCount );
 	void refillJets( void );
+	/// a wave's jet copy waits off the map with its seat's squadron instead of marching
+	void joinSquadron( const PlotUnit &u, UnsignedInt now );
+	void updateJets( UnsignedInt now );
+	void launchJets( Int team, Int seat, UnsignedInt now );
+	Bool frontOf( Int team, Real *x, Real *speed ) const;
+	Real parkX( Int team ) const;
 	Bool heroCopyAlive( const Player *player ) const;
 	void tick( UnsignedInt now );
 	void spawnWave( Int team, Int seat, UnsignedInt now );
@@ -353,6 +400,7 @@ private:
 	Bool m_heroBought[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];		///< the seat's one hero is bought, once a match
 	Int m_middleHolder;																		///< the team the last tick found holding the middle, -1 nobody
 	std::vector<LaneWarAbilityToggle> m_abilityToggles;					///< the players' switches away from LaneWar_abilityDefaultOn, sorted
+	std::vector<Jet> m_jets;																	///< every seat's squadron, in the order its copies joined
 };
 
 extern LaneWarDirector *TheLaneWarDirector;

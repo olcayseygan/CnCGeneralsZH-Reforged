@@ -19897,6 +19897,10 @@ void AIAbility_enemiesNear( const Player *player, const Coord3D *at, Real radius
 Bool AIAbility_specialReady( Object *obj, const CommandButton *button ) { return abilitySpecialReady( obj, button ); }
 Bool AIAbility_slotIsManual( const ThingTemplate *tmpl, WeaponSlotType slot ) { return slotIsManualAnywhere( tmpl, slot ); }
 Bool AIAbility_slotIsSuicide( const ThingTemplate *tmpl, WeaponSlotType slot ) { return slotIsSuicide( tmpl, slot ); }
+Real AIMatchup_templates( const ThingTemplate *mine, const ThingTemplate *theirs, Real myCost, Real theirCost )
+{
+	return aiMatchupScore( templateFramesToKill( mine, theirs ), templateFramesToKill( theirs, mine ), myCost, theirCost );
+}
 
 //----------------------------------------------------------------------------------------------------------
 Bool AIPlayer::abilityUnitBusy( const Object *obj ) const

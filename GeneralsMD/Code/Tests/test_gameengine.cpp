@@ -13185,6 +13185,92 @@ TEST(lane_war_cargo_orders_name_the_plot_unit_and_what_goes_on_it)
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The Lane War bot's plan (LaneWarBot.h): one curve of the AI rating through the lobby's four levels,
+	  when it wants its income and tech, and where on a plot it looks for room first. */
+#include "GameLogic/LaneWarBot.h"
+
+TEST(lane_war_bot_plan_follows_the_rating_and_looks_for_room_from_the_middle)
+{
+	LaneWarBotPlan easy, medium, hard, brutal, between, past;
+	LaneWarBot_planAt( 0.0f, &easy );
+	LaneWarBot_planAt( 15.0f, &medium );
+	LaneWarBot_planAt( 30.0f, &hard );
+	LaneWarBot_planAt( 45.0f, &brutal );
+	LaneWarBot_planAt( 37.5f, &between );
+	LaneWarBot_planAt( 60.0f, &past );
+
+	// the four lobby levels are points on the curve: Easy and Medium buy no income and open tier 2 on
+	// ticks 12 and 4, Hard its first income level on tick 10, Brutal its second on tick 14
+	CHECK( !LaneWarBot_wantsTier( easy, LANEWAR_TRACK_INCOME, 1, 100 ) );
+	CHECK( !LaneWarBot_wantsTier( easy, LANEWAR_TRACK_TECH, 2, 11 ) );
+	CHECK( LaneWarBot_wantsTier( easy, LANEWAR_TRACK_TECH, 2, 12 ) );
+	CHECK( !LaneWarBot_wantsTier( easy, LANEWAR_TRACK_TECH, 3, 100 ) );
+	CHECK( !LaneWarBot_wantsTier( medium, LANEWAR_TRACK_INCOME, 1, 100 ) );
+	CHECK( !LaneWarBot_wantsTier( medium, LANEWAR_TRACK_TECH, 2, 3 ) );
+	CHECK( LaneWarBot_wantsTier( medium, LANEWAR_TRACK_TECH, 2, 4 ) );
+	CHECK( !LaneWarBot_wantsTier( hard, LANEWAR_TRACK_INCOME, 1, 9 ) );
+	CHECK( LaneWarBot_wantsTier( hard, LANEWAR_TRACK_INCOME, 1, 10 ) );
+	CHECK( !LaneWarBot_wantsTier( hard, LANEWAR_TRACK_INCOME, 2, 100 ) );
+	CHECK( !LaneWarBot_wantsTier( brutal, LANEWAR_TRACK_INCOME, 2, 13 ) );
+	CHECK( LaneWarBot_wantsTier( brutal, LANEWAR_TRACK_INCOME, 2, 14 ) );
+	CHECK( !LaneWarBot_wantsTier( brutal, LANEWAR_TRACK_INCOME, 5, 100 ) );
+	CHECK( !LaneWarBot_wantsTier( brutal, LANEWAR_TRACK_TECH, 1, 100 ) );
+	CHECK_EQ( (Int)easy.stepFrames, 6 * LOGICFRAMES_PER_SECOND );
+	CHECK_EQ( (Int)brutal.stepFrames, LOGICFRAMES_PER_SECOND );
+	CHECK( !easy.saves && medium.saves );
+	CHECK_NEAR( easy.counterWeight, 0.0f, 1e-6f );
+	CHECK_NEAR( hard.counterWeight, 1.0f, 1e-6f );
+
+	// between two levels a number lies between theirs; past Brutal the plan keeps coming earlier and quicker
+	CHECK( between.techTick[ 1 ] < hard.techTick[ 1 ] && between.techTick[ 1 ] > brutal.techTick[ 1 ] );
+	CHECK( past.incomeTick[ 1 ] < brutal.incomeTick[ 1 ] );
+	CHECK( past.techTick[ 1 ] < brutal.techTick[ 1 ] );
+	CHECK( past.stepFrames < brutal.stepFrames );
+	CHECK( past.jitter < brutal.jitter );
+
+	// a higher rating never wants a tier later, never decides slower, never weighs the enemy less or the dice more
+	for( Real r = -15.0f; r < 90.0f; r += 0.5f )
+	{
+		LaneWarBotPlan lo, hi;
+		LaneWarBot_planAt( r, &lo );
+		LaneWarBot_planAt( r + 0.5f, &hi );
+		Bool ordered = hi.stepFrames <= lo.stepFrames && hi.heroTick <= lo.heroTick && hi.jetTick <= lo.jetTick
+									 && hi.extrasTick <= lo.extrasTick && hi.counterWeight >= lo.counterWeight && hi.jitter <= lo.jitter;
+		for( Int k = 0; k < LANEWAR_INCOME_TIERS; ++k )
+			ordered = ordered && hi.incomeTick[ k ] <= lo.incomeTick[ k ];
+		for( Int k = 0; k < LANEWAR_TECH_TIERS - 1; ++k )
+			ordered = ordered && hi.techTick[ k ] <= lo.techTick[ k ];
+		CHECK( ordered );
+	}
+
+	// an 8-row plot and a 2-slot tank: front from row 0 back, artillery from row 6 forward, the rest from row 2
+	Int rows[ 16 ];
+	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_FRONT, 8, 2, rows, 16 ), 7 );
+	CHECK_EQ( rows[ 0 ], 0 );
+	CHECK_EQ( rows[ 6 ], 6 );
+	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_BACK, 8, 2, rows, 16 ), 7 );
+	CHECK_EQ( rows[ 0 ], 6 );
+	CHECK_EQ( rows[ 6 ], 0 );
+	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_MIDDLE, 8, 2, rows, 16 ), 7 );
+	CHECK_EQ( rows[ 0 ], 2 );
+	CHECK_EQ( rows[ 1 ], 3 );
+	CHECK_EQ( rows[ 2 ], 1 );
+	CHECK_EQ( rows[ 6 ], 6 );
+	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_FRONT, 2, 3, rows, 16 ), 0 );
+
+	// 12 columns and a 2-slot block: 5, 4, 6, 3, 7 ... every one of 0 to 10 once
+	Int cols[ 16 ];
+	CHECK_EQ( LaneWarBot_columnOrder( 12, 2, cols, 16 ), 11 );
+	CHECK_EQ( cols[ 0 ], 5 );
+	CHECK_EQ( cols[ 1 ], 4 );
+	CHECK_EQ( cols[ 2 ], 6 );
+	Int seen = 0;
+	for( Int i = 0; i < 11; ++i )
+		seen |= 1 << cols[ i ];
+	CHECK_EQ( seen, ( 1 << 11 ) - 1 );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** A ranked Quick Match has no lobby to send a map name: every peer derives the map from the match
 	seed and the seat count alone, so the derivation is pinned here.  A change to it splits two builds
 	that otherwise agree into different maps, which the map CRC then refuses. */

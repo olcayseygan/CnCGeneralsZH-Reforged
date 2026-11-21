@@ -8,6 +8,12 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Direct Strike computers build their own plots
+
+- A computer seat in Direct Strike now plays its plot the way you do. Between its own waves it buys units and sets them down, tanks in the front rows and artillery and anti-air at the back. Its general's hero goes down once. When money is left over it sends jets into the air rows, and later it ranks up and upgrades its best units. A harder computer reads what the other team has on its plots and buys against it, more anti-air against jets and more anti-armour against tanks.
+- How well it plays follows the AI rating, not four fixed levels. Easy takes six seconds over each choice and keeps 600 in the bank. Brutal decides every second, opens the tech tiers sooner, buys income once the match has settled and spends everything it has. Every rating between them plays its own point on that curve, and a rating past Brutal carries it on. Against Easy, Hard and Brutal each won 7 of 8 computer-against-computer matches; between Hard and Brutal the sides and seats on the map still decide more than the rating does.
+- Direct Strike replays with a computer seat recorded before this change will not play back.
+
 ## Direct Strike gets its own door
 
 - Solo Play has a Direct Strike button under Skirmish. It opens a room of its own: team 1's three seats down the left and team 2's down the right, facing each other the way the loading screen shows a match, each card with its player or computer, its difficulty, its army, colour and handicap, and the army's crest or the general's face on the outside edge. Up to three against three, America, China and GLA with their generals.

@@ -42,6 +42,7 @@
 #include "GameLogic/AIPlayer.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LaneWarBot.h"
 #include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
@@ -1748,6 +1749,7 @@ void LaneWarDirector::update( void )
 	updateJets( now );
 	if( now % ( LANEWAR_CARGO_LOG_SECONDS * LOGICFRAMES_PER_SECOND ) == 0 )
 		logCargo( now );
+	LaneWarBot_update( this, now );		// the computer seats spend, through onOrder as a player does
 
 	if( now >= m_nextTickFrame )
 	{

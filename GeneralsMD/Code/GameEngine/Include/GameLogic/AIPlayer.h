@@ -100,6 +100,9 @@ Bool AIAbility_besideOwnCharge(const Object *obj);
 /// a slot of any of the template's weapon sets that only a button fires, or that goes off where the unit stands
 Bool AIAbility_slotIsManual(const ThingTemplate *tmpl, WeaponSlotType slot);
 Bool AIAbility_slotIsSuicide(const ThingTemplate *tmpl, WeaponSlotType slot);
+/** One template against another money for money, aiMatchupScore of the two frames to kill: 0.5 an even
+	* trade, towards 1 the more mine wins for its price, 0 when mine cannot hurt it (the Lane War bot's pick). */
+Real AIMatchup_templates(const ThingTemplate *mine, const ThingTemplate *theirs, Real myCost, Real theirCost);
 
 /// the skirmish scripts send this team at the enemy at some point, rather than keeping it home on guard
 Bool aiTeamAttacks(const TeamTemplateInfo *info);

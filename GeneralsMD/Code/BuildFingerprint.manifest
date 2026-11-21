@@ -1922,6 +1922,7 @@ GameEngine/Include/GameLogic/FPUControl.h
 GameEngine/Include/GameLogic/FiringTracker.h
 GameEngine/Include/GameLogic/GameLogic.h
 GameEngine/Include/GameLogic/GhostObject.h
+GameEngine/Include/GameLogic/LaneWarBot.h
 GameEngine/Include/GameLogic/LaneWarDirector.h
 GameEngine/Include/GameLogic/Locomotor.h
 GameEngine/Include/GameLogic/LocomotorSet.h
@@ -2854,6 +2855,7 @@ GameEngine/Source/GameLogic/System/Damage.cpp
 GameEngine/Source/GameLogic/System/FPUControl.cpp
 GameEngine/Source/GameLogic/System/GameLogic.cpp
 GameEngine/Source/GameLogic/System/GameLogicDispatch.cpp
+GameEngine/Source/GameLogic/System/LaneWarBot.cpp
 GameEngine/Source/GameLogic/System/LaneWarDirector.cpp
 GameEngine/Source/GameLogic/System/RankInfo.cpp
 GameEngine/Source/GameLogic/System/ScenarioDrill.cpp

@@ -31,6 +31,7 @@ Data/Art/Textures/ReforgedGuardCentre.tga
 Data/Art/Textures/ReforgedGuardRing.tga
 Data/Art/Textures/ReforgedGuardShield.tga
 Data/Art/Textures/ReforgedHudAmericaCommandBar.dds
+Data/Art/Textures/ReforgedHudAmericaLane.dds
 Data/Art/Textures/ReforgedHudAmericaPowers.dds
 Data/Art/Textures/ReforgedHudAmericaSidebar.dds
 Data/Art/Textures/ReforgedHudAmericaSidebarStrip.dds
@@ -39,6 +40,7 @@ Data/Art/Textures/ReforgedHudAmericaTabSolo.dds
 Data/Art/Textures/ReforgedHudAmericaTalents.dds
 Data/Art/Textures/ReforgedHudBlankTexture.tga
 Data/Art/Textures/ReforgedHudChinaCommandBar.dds
+Data/Art/Textures/ReforgedHudChinaLane.dds
 Data/Art/Textures/ReforgedHudChinaPowers.dds
 Data/Art/Textures/ReforgedHudChinaSidebar.dds
 Data/Art/Textures/ReforgedHudChinaSidebarStrip.dds
@@ -48,6 +50,7 @@ Data/Art/Textures/ReforgedHudChinaTalents.dds
 Data/Art/Textures/ReforgedHudControlButtons.dds
 Data/Art/Textures/ReforgedHudDisconnectWindow.dds
 Data/Art/Textures/ReforgedHudGlaCommandBar.dds
+Data/Art/Textures/ReforgedHudGlaLane.dds
 Data/Art/Textures/ReforgedHudGlaPowers.dds
 Data/Art/Textures/ReforgedHudGlaSidebar.dds
 Data/Art/Textures/ReforgedHudGlaSidebarStrip.dds
@@ -1198,12 +1201,14 @@ Data/INI/MappedImages/HandCreated/ReforgedFactionPicker.ini
 Data/INI/MappedImages/HandCreated/ReforgedForceAttack.ini
 Data/INI/MappedImages/HandCreated/ReforgedGuardShield.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaCommandBar.ini
+Data/INI/MappedImages/HandCreated/ReforgedHudAmericaLane.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaPowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaSidebar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaTabPanel.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaTalents.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudBlankTexture.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudChinaCommandBar.ini
+Data/INI/MappedImages/HandCreated/ReforgedHudChinaLane.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudChinaPowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudChinaSidebar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudChinaTabPanel.ini
@@ -1211,6 +1216,7 @@ Data/INI/MappedImages/HandCreated/ReforgedHudChinaTalents.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudControlButtons.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudDisconnectWindow.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudGlaCommandBar.ini
+Data/INI/MappedImages/HandCreated/ReforgedHudGlaLane.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudGlaPowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudGlaSidebar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudGlaTabPanel.ini

@@ -55,6 +55,7 @@
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
 #include "W3DDevice/GameClient/W3DWater.h"
 #include "W3DDevice/GameClient/HeightMap.h"
+#include "W3DDevice/GameClient/TerrainSkirt.h"
 #include "W3DDevice/GameClient/W3DShroud.h"
 #include "W3DDevice/GameClient/W3DWaterTracks.h"
 #include "W3DDevice/GameClient/W3DAssetManager.h"
@@ -526,6 +527,85 @@ void WaterRenderObjClass::takeWaterPolygonsForDraw(void)
 		polygon.points.reserve(trigger->getNumPoints());
 		for (Int i=0;i<trigger->getNumPoints();++i) polygon.points.push_back(*trigger->getPoint(i));
 		m_waterPolygonsForDraw.push_back(std::move(polygon));
+	}
+	addSkirtSeas();
+}
+
+/** The sea past the heightmap's edge, over the land drawn there (TerrainSkirt).  Every side of a
+	sea's polygon that runs along the heightmap's edge gets a strip out to the skirt's rim at the side's
+	own level, and a point in one of its corners a square, as polygons of their own after the authored
+	ones.  The water stopped dead in a ruler line along the edge on Tournament Island.  Nothing moves
+	an authored point, so the water inside the map is the polygon's exactly; rivers keep their banks. */
+void WaterRenderObjClass::addSkirtSeas(void)
+{
+	WorldHeightMap *map = TheTerrainRenderObject ? TheTerrainRenderObject->getMap() : NULL;
+	if (map == NULL || map->getXExtent() < 2 || map->getYExtent() < 2)
+		return;
+	const Int SNAP = 2*MAP_XY_FACTOR;	// a point this near the edge lies on it
+	const Int REACH = (Int)TerrainSkirt::REACH;
+	const Int lowX = -map->getBorderSize()*MAP_XY_FACTOR, highX = (map->getXExtent() - 1 - map->getBorderSize())*MAP_XY_FACTOR;
+	const Int lowY = -map->getBorderSize()*MAP_XY_FACTOR, highY = (map->getYExtent() - 1 - map->getBorderSize())*MAP_XY_FACTOR;
+	const size_t authored = m_waterPolygonsForDraw.size();
+	uintptr_t added = 0;
+	for (size_t p = 0; p < authored; ++p) {
+		if (m_waterPolygonsForDraw[p].river || m_waterPolygonsForDraw[p].points.size() < 3)
+			continue;
+		const std::vector<ICoord3D> points = m_waterPolygonsForDraw[p].points;
+		const uintptr_t owner = m_waterPolygonsForDraw[p].owner;
+		double area = 0.0;	// the strips wind the way their polygon does
+		for (size_t i = 0; i < points.size(); ++i) {
+			const ICoord3D &a = points[i], &b = points[(i + 1) % points.size()];
+			area += (double)a.x*b.y - (double)b.x*a.y;
+		}
+		std::vector<ICoord3D> strips;	// four corners a strip, counter-clockwise
+		for (size_t i = 0; i < points.size(); ++i) {
+			const ICoord3D &a = points[i], &b = points[(i + 1) % points.size()];
+			ICoord3D out[4] = { a, b, b, a };
+			Bool along = TRUE;
+			if (a.x <= lowX + SNAP && b.x <= lowX + SNAP) { out[2].x = out[3].x = lowX - REACH; }
+			else if (a.x >= highX - SNAP && b.x >= highX - SNAP) { out[2].x = out[3].x = highX + REACH; }
+			else if (a.y <= lowY + SNAP && b.y <= lowY + SNAP) { out[2].y = out[3].y = lowY - REACH; }
+			else if (a.y >= highY - SNAP && b.y >= highY - SNAP) { out[2].y = out[3].y = highY + REACH; }
+			else along = FALSE;
+			if (along)
+				strips.insert(strips.end(), out, out + 4);
+			const Bool left = a.x <= lowX + SNAP, right = a.x >= highX - SNAP;
+			const Bool bottom = a.y <= lowY + SNAP, top = a.y >= highY - SNAP;
+			if ((left || right) && (bottom || top)) {
+				const Int farX = left ? lowX - REACH : highX + REACH, farY = bottom ? lowY - REACH : highY + REACH;
+				ICoord3D corner[4] = { a, a, a, a };
+				corner[1].x = farX;
+				corner[2].x = farX; corner[2].y = farY;
+				corner[3].y = farY;
+				strips.insert(strips.end(), corner, corner + 4);
+			}
+		}
+		for (size_t s = 0; s + 3 < strips.size(); s += 4) {
+			WaterPolygonForDraw sea;
+			sea.river = FALSE;
+			sea.riverStart = 0;
+			sea.owner = ~owner - added++;	// no polygon's address: the bow foam keys its patches by owner
+			sea.points.assign(strips.begin() + s, strips.begin() + s + 4);
+			double quadArea = 0.0;
+			for (Int i = 0; i < 4; ++i) {
+				const ICoord3D &a = sea.points[i], &b = sea.points[(i + 1) % 4];
+				quadArea += (double)a.x*b.y - (double)b.x*a.y;
+			}
+			if (quadArea == 0.0)
+				continue;
+			if ((quadArea > 0.0) != (area > 0.0))
+				std::swap(sea.points[1], sea.points[3]);
+			Real minX = 1.0e9f, minY = 1.0e9f, maxX = -1.0e9f, maxY = -1.0e9f;
+			for (Int i = 0; i < 4; ++i) {
+				minX = min(minX, (Real)sea.points[i].x); maxX = max(maxX, (Real)sea.points[i].x);
+				minY = min(minY, (Real)sea.points[i].y); maxY = max(maxY, (Real)sea.points[i].y);
+			}
+			sea.center.x = 0.5f*(minX + maxX);
+			sea.center.y = 0.5f*(minY + maxY);
+			sea.center.z = 0.0f;
+			sea.radius = 0.5f*sqrtf((maxX - minX)*(maxX - minX) + (maxY - minY)*(maxY - minY));
+			m_waterPolygonsForDraw.push_back(std::move(sea));
+		}
 	}
 }
 
@@ -3468,6 +3548,10 @@ void WaterRenderObjClass::Render(RenderInfoClass & rinfo)
 		m_modernRenderCamera=NULL;
 	}
 #endif
+
+	// the land past the map into the rim's colour, over any sea drawn on it
+	if (TheTerrainRenderObject)
+		TheTerrainRenderObject->drawSkirtFade();
 
 	// A mod whose art has no new_skybox model still turns the sky box on (DrawSkyBox, or a map
 	// script), and the draw called through a null model at match start (crash report 4123).

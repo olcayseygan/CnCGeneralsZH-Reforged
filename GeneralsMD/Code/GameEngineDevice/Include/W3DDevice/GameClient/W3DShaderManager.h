@@ -117,6 +117,9 @@ public:
 	/// The Warm Light haze for this frame (levels, sun, shroud), once a frame from
 	/// W3DDisplay::draw before the views render, whatever screen filter is running.
 	static void pushProtoHaze(void);
+	/// The horizon's colour at this time of day under the map's own light: the Atmosphere's fade,
+	/// and what the land past the map fades into on any device.
+	static void getHorizonColour(float rgb[3]);
 
 	// Support routines for filter methods.
 	static Bool canRenderToTexture(void) { return (m_oldRenderSurface && m_newRenderSurface);}

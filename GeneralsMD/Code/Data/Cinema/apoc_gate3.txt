@@ -1,0 +1,51 @@
+# Apocalypse first look, second pass (2026-11-22): gate 3 from inside the clearing, looking out along
+# the trail toward spawn 3 (2105,120), same frame by day and by night. Same match as apoc_first:
+# -randommap 7 4 normal apocalypse -autoskirmish 4 -seed 7 -observer. Zombies fight on this trail and at
+# the supply centre an AI built just outside the gate (1810,790).
+
+# --- day ---
+128.0 cut 1830 800 1.3 180 -6
+128.5 shot
+129.0 cut 1880 640 0.7 180 8
+129.5 shot
+132.0 cut 1830 800 1.3 180 -6
+132.5 shot
+133.0 cut 1880 640 0.7 180 8
+133.5 shot
+150.0 cut 1830 800 1.3 180 -6
+150.5 shot
+151.0 cut 1810 790 0.6 180 8
+151.5 shot
+154.0 cut 1830 800 1.3 180 -6
+154.5 shot
+155.0 cut 1810 790 0.6 180 8
+155.5 shot
+158.0 cut 1830 800 1.3 180 -6
+158.5 shot
+159.0 cut 1810 790 0.6 180 8
+159.5 shot
+
+# --- night ---
+240.0 cut 1830 800 1.3 180 -6
+240.5 shot
+241.0 cut 1880 640 0.7 180 8
+241.5 shot
+246.0 cut 1830 800 1.3 180 -6
+246.5 shot
+247.0 cut 1810 790 0.6 180 8
+247.5 shot
+252.0 cut 1830 800 1.3 180 -6
+252.5 shot
+253.0 cut 1880 640 0.7 180 8
+253.5 shot
+258.0 cut 1830 800 1.3 180 -6
+258.5 shot
+259.0 cut 1810 790 0.6 180 8
+259.5 shot
+264.0 cut 1830 800 1.3 180 -6
+264.5 shot
+265.0 cut 1880 640 0.7 180 8
+265.5 shot
+268.0 cut 1810 790 0.6 180 8
+268.5 shot
+270.0 end

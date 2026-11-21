@@ -570,6 +570,17 @@ void OnlineSession::gameListEntry( const OnlineMessage &m )
 	r.stagingRoom.maxPlayers = (Int)m.getInt( "maxp", MAX_SLOTS );
 	r.stagingRoom.useStats = TRUE;
 	r.stagingRoomPlayerNames[0] = m.getString( "host" );
+	// a host sits in its staging room, out of the chat room, so the list's ping column reads its card from here
+	if (m.has( "hostPing" ) && !m.getString( "host" ).empty())
+	{
+		OnlineCard &card = cards[OnlineNickKey( m.getString( "host" ) )];
+		const long long ping = m.getInt( "hostPing" );
+		if (card.ping != ping || !card.serial)
+		{
+			card.ping = ping;
+			card.serial = ++cardSerial;
+		}
+	}
 
 	OnlineMessage o;
 	const std::string opts = m.getString( "opts" );

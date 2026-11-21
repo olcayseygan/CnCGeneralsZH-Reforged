@@ -233,6 +233,9 @@ public:
 	virtual void fillInLANMessage( LANMessage *msg );																	///< Fill in default params
 	virtual void checkMOTD( void );
 
+	/// the last round trip to the room's player at ip in ms, -1 while none came back in the last few seconds
+	Int getPeerPing( UnsignedInt ip ) const;
+
 	/// -netgame: build a game out of a slot list handed to us and start it, with no lobby traffic
 	Bool StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedInt *slotIPs,
 													 Int numSlots, Int localSlot );
@@ -300,6 +303,16 @@ protected:
 	std::map<UnsignedInt64, OptionsAssembly>	m_optionsAssembly;
 	AsciiString					m_assembledOptions;	///< the whole options string of the message being handled
 
+	/// a room's round trips: every second a PING to each other human seat, its PONG timed on return
+	struct PeerPing
+	{
+		Int ms;
+		UnsignedInt heard;	///< Clock_Milliseconds of the PONG
+	};
+	std::map<UnsignedInt, PeerPing>	m_peerPing;		///< by IP
+	UnsignedInt					m_lastPingTime;
+	void pingRoom( UnsignedInt now );
+
 protected:
 	void sendMessage(LANMessage *msg, UnsignedInt ip = 0); // Convenience function
 	void sendOptions(LANMessage *msg, const AsciiString& options, UnsignedInt ip = 0);	///< a GAME_ANNOUNCE or GAME_OPTIONS, the options in as many parts as they take
@@ -364,6 +377,10 @@ struct LANMessage
 		MSG_INACTIVE,						///< I've alt-tabbed out.  Unaccept me cause I'm a poo-flinging monkey.
 
 		MSG_REQUEST_GAME_INFO,	///< For direct connect, get the game info from a specific IP Address
+
+		// A room's round trips, appended: an older build logs them as unknown and drops them
+		MSG_PING,								///< Send this stamp back to me.
+		MSG_PONG,								///< Your stamp, back.
 
 		MSG_MAX
 	} LANMessageType;
@@ -464,6 +481,12 @@ struct LANMessage
 			char options[g_lanOptionsPartLength+1];
 		} GameOptions;
 
+		// Ping is sent with PING, and the same stamp comes back with PONG
+		struct
+		{
+			UnsignedInt stamp;		///< the sender's Clock_Milliseconds when it sent the PING
+		} Ping;
+
 	};
 };
 #pragma pack(pop)
@@ -498,6 +521,7 @@ static_assert(offsetof(LANMessage, GameNotJoined.reason) == 76, "LANMessage::Gam
 static_assert(offsetof(LANMessage, Accept.isAccepted) == 68, "LANMessage::Accept.isAccepted");
 static_assert(offsetof(LANMessage, MapStatus.hasMap) == 72, "LANMessage::MapStatus.hasMap");
 static_assert(offsetof(LANMessage, Chat.chatType) == 68, "LANMessage::Chat.chatType");
+static_assert(offsetof(LANMessage, Ping.stamp) == 34, "LANMessage::Ping.stamp");
 static_assert(offsetof(LANMessage, Chat.message) == 72, "LANMessage::Chat.message");
 static_assert(offsetof(LANMessage, GameOptions.optionsPart) == 34, "LANMessage::GameOptions.optionsPart");
 static_assert(offsetof(LANMessage, GameOptions.options) == 36, "LANMessage::GameOptions.options");

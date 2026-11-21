@@ -44,6 +44,7 @@
 #include "GameClient/Mouse.h"
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GUIUtil.h"
+#include "GameNetwork/LANAPICallbacks.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/GameSpy/StagingRoomGameInfo.h"
 #include "GameNetwork/Online/OnlineQueues.h"
@@ -122,6 +123,7 @@ namespace
 	DisplayString *s_chatNames[ CHAT_LINES ];
 	DisplayString *s_chatTexts[ CHAT_LINES ];
 	DisplayString *s_inputText = NULL;
+	Int s_chatScroll = 0;	///< entries the log is scrolled back from the newest
 
 	//-----------------------------------------------------------------------------------------------
 	GameWindow *named( const char *what, Int seat = -1 )
@@ -259,9 +261,8 @@ namespace
 	/// a remote human's round trip in ms, -1 while nobody has measured one
 	Int seatPing( Int slot )
 	{
-		// ponytail: a LAN room measures no ping and a LAN answers in a few ms; four bars until it does
 		if( s_room == ROOM_LAN )
-			return 0;
+			return TheLAN != NULL ? TheLAN->getPeerPing( seat( slot )->getIP() ) : -1;
 		GameSpyStagingRoom *room = TheGameSpyInfo != NULL ? TheGameSpyInfo->getCurrentStagingRoom() : NULL;
 		GameSpyGameSlot *player = room != NULL ? room->getGameSpySlot( slot ) : NULL;
 		if( player == NULL )
@@ -487,14 +488,15 @@ namespace
 		text( note, ISLAND_CHIP_NOTE_EM, 822, 238, TEXT_GREY );
 	}
 
-	/// a chat string of the line `line`, clipped to the panel's glass
-	DisplayString *chatString( DisplayString **strings, Int line, const UnicodeString &s, GameFont *f, IRegion2D *glass )
+	/// a chat string of the line `line`, wrapped at `wrap` pixels and clipped to the panel's glass
+	DisplayString *chatString( DisplayString **strings, Int line, const UnicodeString &s, GameFont *f, IRegion2D *glass, Int wrap )
 	{
 		DisplayString *&string = strings[ line ];
 		if( string == NULL )
 			string = TheDisplayStringManager->newDisplayString();
 		if( string->getFont() != f )
 			string->setFont( f );
+		string->setWordWrap( wrap );
 		if( string->getText().compare( s ) != 0 )
 			string->setText( s );
 		string->setClipRegion( glass );
@@ -512,7 +514,8 @@ namespace
 		return -1;
 	}
 
-	/// the log's lines, newest at the foot: "[name] message" in the sender's colour and white, anything else dim
+	/// the log's entries, newest at the foot unless scrolled back: "[name] message" in the sender's
+	/// colour and white, the message wrapped beside the name; anything else dim, wrapped to the glass
 	void drawChatLog( void )
 	{
 		const DirectStrikeRect chat = DirectStrikeLobby_chat();
@@ -526,32 +529,38 @@ namespace
 		glass.hi.x = screenX( chat.x1 - GLASS );
 		glass.hi.y = screenY( chat.y1 - GLASS );
 		GameFont *f = font( CHAT_EM );
-		const Int h = px( CHAT_EM * 2 ), gap = px( CHAT_NAME_GAP );
-		Real y = chat.y1 - GLASS - DSLOBBY_CHAT_LINE;
+		const Int gap = px( CHAT_NAME_GAP ), step = px( DSLOBBY_CHAT_LINE ), width = glass.hi.x - glass.lo.x;
+		const Int entries = GadgetListBoxGetNumEntries( log );
+		s_chatScroll = max( 0, min( s_chatScroll, entries - 1 ) );
+		Int bottom = screenY( chat.y1 - GLASS - DSLOBBY_CHAT_LINE / 2 );
 		Int line = 0;
-		for( Int row = GadgetListBoxGetNumEntries( log ) - 1; row >= 0 && line < CHAT_LINES && screenY( y ) + h / 2 > glass.lo.y; --row, ++line, y -= DSLOBBY_CHAT_LINE )
+		for( Int row = entries - 1 - s_chatScroll; row >= 0 && line < CHAT_LINES && bottom > glass.lo.y; --row, ++line )
 		{
 			Color color = TEXT_WHITE;
 			const UnicodeString entry = GadgetListBoxGetTextAndColor( log, &color, row, 0 );
-			const Int top = screenY( y ) - h / 2;
-			Int nameW = 0, nameH = 0;
 			const Int close = senderEnd( entry );
-			if( close < 0 )
+			Int nameW = 0, nameH = 0, textW = 0, textH = 0;
+			UnicodeString message = entry;
+			DisplayString *who = NULL;
+			if( close >= 0 )
 			{
-				DisplayString *all = chatString( s_chatTexts, line, entry, f, &glass );
-				all->getSize( &nameW, &nameH );
-				all->draw( glass.lo.x, top + ( h - nameH ) / 2, TEXT_DIM, TEXT_SHADOW );
-				continue;
+				UnicodeString name;
+				for( Int i = 1; i < close; ++i )
+					name.concat( entry.getCharAt( i ) );
+				message.set( entry.str() + close + 2 );
+				who = chatString( s_chatNames, line, name, f, &glass, 0 );
+				who->getSize( &nameW, &nameH );
+				nameW += gap;
 			}
-			UnicodeString name, message;
-			for( Int i = 1; i < close; ++i )
-				name.concat( entry.getCharAt( i ) );
-			message.set( entry.str() + close + 2 );
-			DisplayString *who = chatString( s_chatNames, line, name, f, &glass );
-			who->getSize( &nameW, &nameH );
-			who->draw( glass.lo.x, top + ( h - nameH ) / 2, color, TEXT_SHADOW );
-			DisplayString *what = chatString( s_chatTexts, line, message, f, &glass );
-			what->draw( glass.lo.x + nameW + gap, top + ( h - nameH ) / 2, TEXT_WHITE, TEXT_SHADOW );
+			DisplayString *what = chatString( s_chatTexts, line, message, f, &glass, width - nameW );
+			what->getSize( &textW, &textH );
+			// one line takes `step`, every wrapped line under it the font's own height
+			const Int lineH = f->height;
+			const Int top = bottom - textH - ( step - lineH ) / 2;
+			if( who != NULL )
+				who->draw( glass.lo.x, top, color, TEXT_SHADOW );
+			what->draw( glass.lo.x + nameW, top, who != NULL ? TEXT_WHITE : TEXT_DIM, TEXT_SHADOW );
+			bottom -= textH + step - lineH;
 		}
 	}
 
@@ -828,6 +837,14 @@ namespace
 		}
 		if( msg == GWM_LEFT_UP )
 			return MSG_HANDLED;
+		if( ( msg == GWM_WHEEL_UP || msg == GWM_WHEEL_DOWN ) && s_game != NULL && isNetwork() )
+		{
+			Real x, y;
+			DirectStrike_toDesign( s_frame, (Short)( mData1 & 0xFFFF ), (Short)( ( mData1 >> 16 ) & 0xFFFF ), &x, &y );
+			if( DirectStrikeLobby_chat().contains( x, y ) )
+				s_chatScroll += msg == GWM_WHEEL_UP ? 1 : -1;
+			return MSG_HANDLED;
+		}
 		return s_roomInput != NULL ? s_roomInput( window, msg, mData1, mData2 ) : MSG_IGNORED;
 	}
 }
@@ -876,6 +893,7 @@ void DirectStrikeLobby_detach( void )
 	if( s_inputText != NULL )
 		TheDisplayStringManager->freeDisplayString( s_inputText );
 	s_inputText = NULL;
+	s_chatScroll = 0;
 	s_parent = NULL;
 	s_game = NULL;
 	s_roomDraw = NULL;

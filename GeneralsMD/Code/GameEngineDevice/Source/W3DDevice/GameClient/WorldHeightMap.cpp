@@ -1223,6 +1223,34 @@ Bool WorldHeightMap::getUVData(Int xIndex, Int yIndex, float U[4], float V[4], B
 #endif
 }
 
+void WorldHeightMap::getSkirtTileUV(Int tileX, Int tileY, float *minU, float *minV, float *maxU, float *maxV)
+{
+	*minU = *minV = *maxU = *maxV = 0.0f;
+	if (m_tileNdxes == NULL || m_width < 2 || m_height < 2)
+		return;
+	Int cellX = 2*tileX, cellY = 2*tileY;
+	if (cellX < 0) cellX = 0;
+	if (cellY < 0) cellY = 0;
+	if (cellX > m_width-2) cellX = m_width-2;
+	if (cellY > m_height-2) cellY = m_height-2;
+	Int baseNdx = m_tileNdxes[cellY*m_width + cellX] >> 2;
+	// WorldBuilder lays a class as firstTile + (x/2 % width) + width*(y/2 % width), so carry that on
+	for (Int i = 0; i < m_numTextureClasses; i++) {
+		const TXTextureClass &tc = m_textureClasses[i];
+		if (tc.firstTile < 0 || tc.width <= 0 || baseNdx < tc.firstTile || baseNdx >= tc.firstTile + tc.numTiles)
+			continue;
+		const Int across = ((tileX % tc.width) + tc.width) % tc.width;
+		const Int down = ((tileY % tc.width) + tc.width) % tc.width;
+		const Int tile = tc.firstTile + across + tc.width*down;
+		if (tile < tc.firstTile + tc.numTiles)
+			baseNdx = tile;
+		break;
+	}
+	if (baseNdx < 0 || baseNdx >= NUM_SOURCE_TILES)
+		return;
+	getUVForNdx(baseNdx << 2, minU, minV, maxU, maxV, TRUE);
+}
+
 /** getUVForTileIndex - Gets the texture coordinates to use.  See getTerrainTexture.
 		ndx is the index into the linear height array.
 		tileNdx is the index into the texture tiles array.

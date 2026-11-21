@@ -103,6 +103,7 @@
 #include "W3DDevice/GameClient/W3DSmudge.h"
 #include "W3DDevice/GameClient/W3DSnow.h"
 #include "W3DDevice/GameClient/TerrainSubdivide.h"
+#include "W3DDevice/GameClient/TerrainSkirt.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -167,6 +168,7 @@ Int BaseHeightMapRenderObjClass::freeMapResources(void)
 #ifdef DO_SCORCH
 	freeScorchBuffers();
 #endif
+	freeSkirt();
 	REF_PTR_RELEASE(m_vertexMaterialClass);
 	REF_PTR_RELEASE(m_stageZeroTexture);
 	REF_PTR_RELEASE(m_stageOneTexture);
@@ -315,6 +317,8 @@ BaseHeightMapRenderObjClass::BaseHeightMapRenderObjClass(void)
 	m_drawnHalfHeight = 0;
 	m_drawnHalfMap = NULL;
 	m_drawnFlipWidth = 0;
+	m_skirtIndices = NULL;
+	m_skirtStale = TRUE;
 	m_disableTextures = false;
 	TheTerrainRenderObject = this;
 	m_treeBuffer = NULL; 
@@ -1740,6 +1744,7 @@ Int BaseHeightMapRenderObjClass::initHeightData(Int x, Int y, WorldHeightMap *pM
 		s_logicHeights.copyFrom(pMap);
 	m_staticDiffuseStale = true;
 	m_terrainContentVersion++;
+	m_skirtStale = TRUE;
 
 	if (m_shroud)
 		m_shroud->init(m_map,TheGlobalData->m_partitionCellSize,TheGlobalData->m_partitionCellSize);
@@ -2628,6 +2633,7 @@ void BaseHeightMapRenderObjClass::staticLightingChanged( void )
 	m_needFullUpdate = true;
 	m_staticDiffuseStale = true;	// before the roads below ask for theirs
 	m_terrainContentVersion++;
+	m_skirtStale = TRUE;	// its light is baked in
 
 	// Cause the scorches to get updated with new lighting.
 	m_scorchesInBuffer = 0; // If we just allocated the buffers, we got no scorches in the buffer.
@@ -3235,4 +3241,245 @@ void BaseHeightMapRenderObjClass::loadPostProcess( void )
 		m_grassBuffer->clearStructures();
 	}
 }  // end loadPostProcess
+
+//=============================================================================
+// The skirt: the ground past the heightmap's last sample (TerrainSkirt.h)
+//=============================================================================
+
+// Quads a chunk holds at most, in rows of this many: one 16-bit index buffer covers every chunk.
+static const Int SKIRT_CHUNK = 32;
+
+void BaseHeightMapRenderObjClass::freeSkirt(void)
+{
+	for (size_t i = 0; i < m_skirtChunks.size(); i++)
+		REF_PTR_RELEASE(m_skirtChunks[i].vertices);
+	m_skirtChunks.clear();
+	REF_PTR_RELEASE(m_skirtIndices);
+	m_skirtStale = TRUE;
+}
+
+Real BaseHeightMapRenderObjClass::skirtHeight(Int x, Int y, const std::vector<Real> &blurred, Real mean, Bool sink)
+{
+	const Int w = m_map->getXExtent();
+	const Int h = m_map->getYExtent();
+	const UnsignedByte *data = m_map->getDataPtr();
+	if (x > 0 && y > 0 && x < w-1 && y < h-1)
+		return data[y*w + x]*MAP_HEIGHT_SCALE - (sink ? TerrainSkirt::SINK : 0.0f);
+	const Int cx = x < 0 ? 0 : (x > w-1 ? w-1 : x);
+	const Int cy = y < 0 ? 0 : (y > h-1 ? h-1 : y);
+	const Real edge = data[cy*w + cx]*MAP_HEIGHT_SCALE;
+	const Real dx = (Real)(x - cx), dy = (Real)(y - cy);
+	const Real outside = sqrtf(dx*dx + dy*dy)*MAP_XY_FACTOR;
+	const Int ring = TerrainSkirt::ringIndex(cx, cy, w, h);
+	const Real soft = (ring >= 0 && ring < (Int)blurred.size()) ? blurred[ring] : edge;
+	const Int border = m_map->getBorderSizeInline();
+	return TerrainSkirt::height(edge, soft, mean, outside, (x - border)*MAP_XY_FACTOR, (y - border)*MAP_XY_FACTOR);
+}
+
+/** The skirt's vertices, every quad two cells a side on the map's even grid so each carries one
+whole tile of the terrain texture.  It starts a cell inside the map, sunk under it there, and ends
+where the fade has taken all its light; the light is the whole static light, sun included, baked
+the way doTheLight bakes the tiles', and the fade multiplies it. */
+void BaseHeightMapRenderObjClass::buildSkirt(void)
+{
+	freeSkirt();
+	m_skirtStale = FALSE;
+	if (m_map == NULL || m_map->getDataPtr() == NULL || m_map->getXExtent() < 4 || m_map->getYExtent() < 4)
+		return;
+	if (m_map->getTerrainTexture() == NULL)	// lays the tiles out, which getSkirtTileUV reads
+		return;
+
+	const Int w = m_map->getXExtent();
+	const Int h = m_map->getYExtent();
+	const UnsignedByte *data = m_map->getDataPtr();
+	const Int border = m_map->getBorderSizeInline();
+
+	// the edge as one ring, blurred round the corners, and its mean
+	std::vector<Real> ring(TerrainSkirt::ringLength(w, h), 0.0f);
+	Real sum = 0.0f;
+	for (Int y = 0; y < h; y++)
+		for (Int x = 0; x < w; x += (y == 0 || y == h-1) ? 1 : w-1) {
+			const Int i = TerrainSkirt::ringIndex(x, y, w, h);
+			if (i < 0)
+				continue;
+			ring[i] = data[y*w + x]*MAP_HEIGHT_SCALE;
+			sum += ring[i];
+		}
+	const Real mean = sum/(Real)ring.size();
+	const std::vector<Real> blurred = TerrainSkirt::blurRing(ring);
+
+	Vector3 lightRay[MAX_GLOBAL_LIGHTS];
+	for (Int l = 0; l < TheGlobalData->m_numGlobalLights; l++) {
+		const Coord3D *lightPos = &TheGlobalData->m_terrainLightPos[l];
+		lightRay[l].Set(-lightPos->x, -lightPos->y, -lightPos->z);
+	}
+
+	const Int reach = TerrainSkirt::CELLS;	// even, so the quads below start on the even grid
+	const Int loX = -reach, loY = -reach;
+	const Int hiX = w-1 + reach, hiY = h-1 + reach;
+	std::vector<VERTEX_FORMAT> verts;
+	verts.reserve(SKIRT_CHUNK*SKIRT_CHUNK*4);
+	Int totalQuads = 0;
+
+	for (Int chunkY = loY; chunkY < hiY; chunkY += 2*SKIRT_CHUNK)
+		for (Int chunkX = loX; chunkX < hiX; chunkX += 2*SKIRT_CHUNK) {
+			verts.clear();
+			Vector3 low(1.0e9f, 1.0e9f, 1.0e9f), high(-1.0e9f, -1.0e9f, -1.0e9f);
+			for (Int qy = chunkY; qy < chunkY + 2*SKIRT_CHUNK && qy < hiY; qy += 2)
+				for (Int qx = chunkX; qx < chunkX + 2*SKIRT_CHUNK && qx < hiX; qx += 2) {
+					if (qx >= 1 && qx+2 <= w-2 && qy >= 1 && qy+2 <= h-2)
+						continue;	// under the map, a cell or more from its edge
+					const Int cornerX[4] = { qx, qx+2, qx+2, qx };
+					const Int cornerY[4] = { qy, qy, qy+2, qy+2 };
+					Real outside[4];
+					Bool lit = FALSE;
+					for (Int k = 0; k < 4; k++) {
+						const Int dx = cornerX[k] < 0 ? -cornerX[k] : (cornerX[k] > w-1 ? cornerX[k]-(w-1) : 0);
+						const Int dy = cornerY[k] < 0 ? -cornerY[k] : (cornerY[k] > h-1 ? cornerY[k]-(h-1) : 0);
+						outside[k] = sqrtf((Real)(dx*dx + dy*dy))*MAP_XY_FACTOR;
+						if (outside[k] < TerrainSkirt::REACH)
+							lit = TRUE;
+					}
+					if (!lit)
+						continue;	// past the rim, as black as the clear colour
+					float minU, minV, maxU, maxV;
+					m_map->getSkirtTileUV(qx/2, qy/2, &minU, &minV, &maxU, &maxV);
+					const float cornerU[4] = { minU, maxU, maxU, minU };
+					const float cornerV[4] = { maxV, maxV, minV, minV };
+					for (Int k = 0; k < 4; k++) {
+						const Int x = cornerX[k], y = cornerY[k];
+						VERTEX_FORMAT v;
+						v.x = (x - border)*MAP_XY_FACTOR;
+						v.y = (y - border)*MAP_XY_FACTOR;
+						v.z = skirtHeight(x, y, blurred, mean, TRUE);
+						const Vector3 l2r(2*MAP_XY_FACTOR, 0, skirtHeight(x+1, y, blurred, mean, FALSE) - skirtHeight(x-1, y, blurred, mean, FALSE));
+						const Vector3 n2f(0, 2*MAP_XY_FACTOR, skirtHeight(x, y+1, blurred, mean, FALSE) - skirtHeight(x, y-1, blurred, mean, FALSE));
+						Vector3 normal;
+						Vector3::Normalized_Cross_Product(l2r, n2f, &normal);
+						doTheLight(&v, lightRay, &normal, NULL, 0, FALSE);
+						const Real keep = TerrainSkirt::fade(outside[k]);
+						const UnsignedInt c = v.diffuse;
+						v.diffuse = REAL_TO_INT(((c >> 16) & 0xff)*keep) << 16 | REAL_TO_INT(((c >> 8) & 0xff)*keep) << 8 | REAL_TO_INT((c & 0xff)*keep);
+						// one texture: the second stage reads the same texel at no blend
+						v.u1 = v.u2 = cornerU[k];
+						v.v1 = v.v2 = cornerV[k];
+						verts.push_back(v);
+						low.Update_Min(Vector3(v.x, v.y, v.z));
+						high.Update_Max(Vector3(v.x, v.y, v.z));
+					}
+				}
+			if (verts.empty())
+				continue;
+			SkirtChunk chunk;
+			chunk.quads = (Int)verts.size()/4;
+			chunk.low = low - Vector3(1.0f, 1.0f, 1.0f);
+			chunk.high = high + Vector3(1.0f, 1.0f, 1.0f);
+			chunk.vertices = NEW_REF(DX8VertexBufferClass, (DX8_VERTEX_FORMAT, chunk.quads*4, DX8VertexBufferClass::USAGE_DEFAULT));
+			{
+				DX8VertexBufferClass::WriteLockClass lock(chunk.vertices);
+				VERTEX_FORMAT *dst = (VERTEX_FORMAT*)lock.Get_Vertex_Array();
+				if (dst == NULL) {	// a device that went away; the next draw after the reset builds it again
+					REF_PTR_RELEASE(chunk.vertices);
+					freeSkirt();
+					return;
+				}
+				memcpy(dst, &verts[0], verts.size()*sizeof(VERTEX_FORMAT));
+			}
+			m_skirtChunks.push_back(chunk);
+			totalQuads += chunk.quads;
+		}
+
+	m_skirtIndices = NEW_REF(DX8IndexBufferClass, (SKIRT_CHUNK*SKIRT_CHUNK*6));
+	{
+		DX8IndexBufferClass::WriteLockClass lock(m_skirtIndices);
+		UnsignedShort *ib = lock.Get_Index_Array();
+		if (ib == NULL) {
+			freeSkirt();
+			return;
+		}
+		// cut as the tiles cut an unflipped cell (allocateTileBuffers)
+		for (Int i = 0; i < SKIRT_CHUNK*SKIRT_CHUNK*4; i += 4) {
+			ib[0] = i;	ib[1] = i+2;	ib[2] = i+3;
+			ib[3] = i;	ib[4] = i+1;	ib[5] = i+2;
+			ib += 6;
+		}
+	}
+	DEBUG_LOG(("TERRAIN SKIRT: %d quads in %d chunks, %d cells past the edge\n", totalQuads, (Int)m_skirtChunks.size(), reach));
+}
+
+void BaseHeightMapRenderObjClass::drawSkirt(RenderInfoClass &rinfo)
+{
+	// not into either water's mirror: the skirt has no water of its own to reflect it in
+	if (m_map == NULL || m_disableTextures || Is_Hidden() || ShaderClass::Is_Backface_Culling_Inverted())
+		return;
+	if (m_skirtStale)
+		buildSkirt();
+	if (m_skirtChunks.empty() || m_skirtIndices == NULL)
+		return;
+	TextureClass *atlas = m_map->getTerrainTexture();
+	if (atlas == NULL)
+		return;
+
+	const FrustumClass &frustum = rinfo.Camera.Get_Frustum();
+	static std::vector<Int> visible;
+	visible.clear();
+	for (size_t i = 0; i < m_skirtChunks.size(); i++) {
+		AABoxClass box;
+		box.Init(MinMaxAABoxClass(m_skirtChunks[i].low, m_skirtChunks[i].high));
+		if (CollisionMath::Overlap_Test(frustum, box) != CollisionMath::OUTSIDE)
+			visible.push_back((Int)i);
+	}
+	if (visible.empty())
+		return;
+
+	// the ground's own base program, the cloud and light maps included, as HeightMapRenderObjClass::Render picks it
+	const Bool doCloud = TheGlobalData->m_useCloudMap && TheGlobalData->m_timeOfDay != TIME_OF_DAY_NIGHT;
+	W3DShaderManager::ShaderTypes st = W3DShaderManager::ST_TERRAIN_BASE;
+	if (TheGlobalData->m_useLightMap && doCloud)
+		st = W3DShaderManager::ST_TERRAIN_BASE_NOISE12;
+	else if (TheGlobalData->m_useLightMap)
+		st = W3DShaderManager::ST_TERRAIN_BASE_NOISE2;
+	else if (doCloud)
+		st = W3DShaderManager::ST_TERRAIN_BASE_NOISE1;
+
+	DX8Wrapper::Set_Transform(D3DTS_WORLD, Transform);	// the ground's, so what draws after it finds it as it was
+	DX8Wrapper::Set_Material(m_vertexMaterialClass);
+	DX8Wrapper::Set_Shader(m_shaderClass);
+	W3DShaderManager::setTexture(0, atlas);
+	W3DShaderManager::setTexture(1, atlas);
+	W3DShaderManager::setTexture(2, m_stageTwoTexture);
+	W3DShaderManager::setTexture(3, m_stageThreeTexture);
+	DX8Wrapper::Set_Index_Buffer(m_skirtIndices, 0);
+
+	const Int passes = W3DShaderManager::getShaderPasses(st);
+	for (Int pass = 0; pass < passes; pass++) {
+		W3DShaderManager::setShader(st, pass);
+		for (size_t i = 0; i < visible.size(); i++) {
+			const SkirtChunk &chunk = m_skirtChunks[visible[i]];
+			DX8Wrapper::Set_Vertex_Buffer(chunk.vertices);
+			DX8Wrapper::Draw_Triangles(0, chunk.quads*2, 0, chunk.quads*4);
+		}
+	}
+	if (passes > 0)
+		W3DShaderManager::resetShader(st);
+
+	// the shroud texture's border texel, which its clamp carries out over all of it
+	TextureClass *shroudTexture = m_shroud ? m_shroud->getShroudTexture() : NULL;
+	if (shroudTexture && rinfo.Additional_Pass_Count()) {
+		W3DShaderManager::setTexture(0, shroudTexture);
+		W3DShaderManager::setShader(W3DShaderManager::ST_SHROUD_TEXTURE, 0);
+		DX8Wrapper::Set_Index_Buffer(m_skirtIndices, 0);
+		for (size_t i = 0; i < visible.size(); i++) {
+			const SkirtChunk &chunk = m_skirtChunks[visible[i]];
+			DX8Wrapper::Set_Vertex_Buffer(chunk.vertices);
+			DX8Wrapper::Draw_Triangles(0, chunk.quads*2, 0, chunk.quads*4);
+		}
+		W3DShaderManager::resetShader(W3DShaderManager::ST_SHROUD_TEXTURE);
+	}
+
+	DX8Wrapper::Set_Texture(0, NULL);
+	DX8Wrapper::Set_Texture(1, NULL);
+	m_stageTwoTexture->restore();
+	ShaderClass::Invalidate();
+}
 

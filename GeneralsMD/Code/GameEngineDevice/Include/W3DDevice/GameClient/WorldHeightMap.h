@@ -253,6 +253,10 @@ public:  // tile and texture info.
 	TextureClass *getEdgeTerrainTexture(void); //< generates if needed and returns blend edge texture
 	/// UV mapping data for a cell to map into the terrain texture.  Returns true if the textures had to be stretched for cliffs.
 	Bool getUVData(Int xIndex, Int yIndex, float U[4], float V[4], Bool fullTile);
+	/** The whole tile of the terrain texture that source tile (tileX, tileY), two cells a side and
+		counted over the whole map, would carry if the map went on past its edge: the nearest edge
+		cell's texture class in its own repeat.  The skirt past the heightmap draws with it. */
+	void getSkirtTileUV(Int tileX, Int tileY, float *minU, float *minV, float *maxU, float *maxV);
 
 	Bool getExtraAlphaUVData(Int xIndex, Int yIndex, float U[4], float V[4], UnsignedByte alpha[4], Bool *flip, Bool *cliff);
 	Int getExtraBlendUVGeneration(void) const { return m_extraBlendUVGeneration; }	///< changes when getExtraAlphaUVData's answers can

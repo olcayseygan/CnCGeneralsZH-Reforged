@@ -455,6 +455,13 @@ void W3DShroud::fillBorderShroudData(W3DShroudLevel level, SurfaceClass* pDestSu
 	Int x,y;
 	UnsignedShort pixel;
 
+	// The border was black.  It is lit a little now, darker than ground in the fog (FogAlpha 127), so it
+	// still reads as out of bounds; the clamp carries the same texel over the ground drawn past the map
+	// (TerrainSkirt.h), and the two meet without a line.  A script that clears the border asks for
+	// more and gets it.
+	const W3DShroudLevel BORDER_SHROUD_FLOOR = 96;
+	if (level < BORDER_SHROUD_FLOOR)
+		level = BORDER_SHROUD_FLOOR;
 	if (level < TheGlobalData->m_shroudAlpha)
 		level = TheGlobalData->m_shroudAlpha;
 

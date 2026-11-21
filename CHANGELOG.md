@@ -8,6 +8,11 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Land past the edge of the map
+
+- Pull the camera out over a corner of the map and the ground now carries on where the black void used to start. It rises into low hills, wears the textures of the map's own edge, and fades to black about 1600 units out, so there is no line where it stops. It is only a picture: nothing can go there, and the game itself does not know it exists.
+- The out-of-bounds strip round the playable map is no longer solid black. It sits a shade darker than ground in the fog, so you can see the terrain under it and still tell where the map ends. A map script that clears the border still clears it.
+
 ## Direct Strike plots twice as deep, jets on the plot
 
 - Your plot holds twice what it did: 12 slots across by 16 deep instead of 8 deep, 192 slots in all. It grew back from the lane, so your wave still walks out as wide as before and the side camera shows the plot across the screen.

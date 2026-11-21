@@ -19136,3 +19136,851 @@ END
 GUI:RejoinWaitingForLog
 "En attente du journal de la partie"
 END
+
+GUI:LegacySound
+"Son d'origine"
+END
+
+TOOLTIP:ArmorStructure
+"Bâtiment"
+END
+
+TOOLTIP:UpgradesHint
+"(sans → avec)"
+END
+
+OBJECT:TurkiyeInfantryAlpagu
+"Opérateur Alpagu"
+END
+
+CONTROLBAR:ConstructTurkiyeInfantryAlpagu
+"&Opérateur Alpagu"
+END
+
+CONTROLBAR:TurkiyeBeretDesignate
+"&Désigner la cible"
+END
+
+CONTROLBAR:ToolTipTurkiyeBeretDesignate
+"Maintient un fin faisceau de désignation sur un véhicule ou un bâtiment. Un TB2 le survole et, après 4 secondes, largue une munition Kemankeş qui plane jusqu'à la cible et plonge dessus ; il garde le faisceau jusqu'à l'impact. Il ne peut pas se cacher tant qu'il désigne, et le déplacer pendant les 4 premières secondes annule la frappe. \n Recharge : 1:00"
+END
+
+CONTROLBAR:TurkiyeBeretKarguSwarm
+"Essaim &Kargu"
+END
+
+CONTROLBAR:ToolTipTurkiyeBeretKarguSwarm
+"S'agenouille, détache trois drones kamikazes Kargu de son dos un par un et les pose à sa gauche, devant lui et à sa droite. Ils décollent ensemble et plongent l'un après l'autre sur un point situé entre 75 et 350. \n Recharge : 0:45"
+END
+
+SCIENCE:TurkiyeAllyAid
+"Aide aux alliés"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceAllyAid
+"Choisissez des soldats et des véhicules que vous pourriez construire à l'instant, payez-les, et des avions cargo les acheminent. Désignez un allié et ils atterrissent chez lui. Un avion emporte huit soldats ou deux véhicules pour 500 de plus, quatre avions au maximum, et un avion abattu perd sa cargaison. \n \n Déployé depuis : Quartier général"
+END
+
+CONTROLBAR:TurkiyeAllyAid
+"&Aide aux alliés"
+END
+
+CONTROLBAR:TooltipTurkiyeAllyAid
+"Aide aux alliés \n Recharge : 4:00"
+END
+
+SCIENCE:TurkiyeTalent6A
+"Bâtiments moins chers"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent6A
+"Chaque bâtiment coûte 15 pour cent de moins, tant qu'il vous reste un Quartier général, une Caserne, une Usine ou un Génie de combat."
+END
+
+SCIENCE:TurkiyeTalent6B
+"Infanterie moins chère"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent6B
+"Chaque soldat coûte 15 pour cent de moins, Génie de combat et Béret bordeaux compris, tant qu'il vous reste un Quartier général, une Caserne, une Usine ou un Génie de combat."
+END
+
+SCIENCE:TurkiyeTalent7A
+"Blindage Altay"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent7A
+"Les chars Altay encaissent un cinquième de dégâts en plus avant de mourir, de 620 à 744. Se cumule avec la Coque renforcée."
+END
+
+SCIENCE:TurkiyeTalent7B
+"Optique des drones"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent7B
+"Les drones Bayraktar et Akinci voient un quart plus loin : le Bayraktar de 550 à 688, l'Akinci de 400 à 500."
+END
+
+SCIENCE:TurkiyeTalent8A
+"Remparts Siper"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent8A
+"Les bunkers Siper tiennent 30 pour cent plus longtemps, de 1500 à 1950. Se cumule avec le Siper renforcé."
+END
+
+SCIENCE:TurkiyeTalent8B
+"Gilets Sungur"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent8B
+"Les tireurs Sungur encaissent un quart de dégâts en plus avant de mourir, de 160 à 200."
+END
+
+SCIENCE:TurkiyeTalent9A
+"Essaim de drones +2"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent9A
+"L'Essaim de drones envoie 2 drones de plus."
+END
+
+SCIENCE:TurkiyeTalent9B
+"Débarquement Gokbey +4"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent9B
+"Le Débarquement Gokbey dépose 4 soldats de plus."
+END
+
+SCIENCE:TurkiyeTalent10A
+"Tayfun élargi"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent10A
+"Le missile Tayfun frappe une zone un quart plus large."
+END
+
+SCIENCE:TurkiyeTalent10B
+"Bérets aguerris"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent10B
+"Les Bérets bordeaux sortent de la Caserne en vétérans."
+END
+
+SCIENCE:ChinaTalent6A
+"Technopirates bon marché"
+END
+
+SCIENCE:ChinaTalent6B
+"Infanterie moins chère"
+END
+
+SCIENCE:ChinaTalent7A
+"Blindage Battlemaster"
+END
+
+SCIENCE:ChinaTalent7B
+"Blindage Gattling"
+END
+
+SCIENCE:ChinaTalent8A
+"Défenses renforcées"
+END
+
+SCIENCE:ChinaTalent8B
+"Moteur Napacanon"
+END
+
+SCIENCE:ChinaTalent9A
+"Barrage d'artillerie +12"
+END
+
+SCIENCE:ChinaTalent9B
+"Mines à fragmentation larges"
+END
+
+SCIENCE:ChinaTalent10A
+"Overlords aguerris"
+END
+
+SCIENCE:ChinaTalent10B
+"EMP prolongée"
+END
+
+SCIENCE:TankTalent7A
+"Blindage Emperor"
+END
+
+SCIENCE:TankTalent7B
+"Blindage Dragon et Gattling"
+END
+
+SCIENCE:TankTalent8A
+"Réparations de terrain"
+END
+
+SCIENCE:TankTalent8B
+"Blindage Battlemaster"
+END
+
+SCIENCE:TankTalent10A
+"Emperors d'élite"
+END
+
+SCIENCE:TankTalent10B
+"Largage de chars +2"
+END
+
+SCIENCE:InfantryTalent7A
+"Mitrailleurs rapides"
+END
+
+SCIENCE:InfantryTalent7B
+"Gilets antichars"
+END
+
+SCIENCE:InfantryTalent8A
+"Murs fortifiés"
+END
+
+SCIENCE:InfantryTalent8B
+"Blindage de Crawler"
+END
+
+SCIENCE:InfantryTalent10A
+"Soins de terrain"
+END
+
+SCIENCE:InfantryTalent10B
+"Largage d'infanterie +5"
+END
+
+SCIENCE:NukeTalent7A
+"Blindage Overlord"
+END
+
+SCIENCE:NukeTalent7B
+"Blindage du canon nucléaire"
+END
+
+SCIENCE:NukeTalent8A
+"Blindage du réacteur"
+END
+
+SCIENCE:NukeTalent8B
+"Blindage MiG"
+END
+
+SCIENCE:NukeTalent10A
+"Canons nucléaires d'élite"
+END
+
+SCIENCE:NukeTalent10B
+"Réparation d'Overlord"
+END
+
+SCIENCE:AmericaTalent6A
+"Matériel moins cher"
+END
+
+SCIENCE:AmericaTalent6B
+"Exercices de combat"
+END
+
+SCIENCE:AmericaTalent9A
+"Thunderbolt supplémentaire"
+END
+
+SCIENCE:AmericaTalent9B
+"Rangers supplémentaires"
+END
+
+SCIENCE:USATalent7A
+"Blindage lourd"
+END
+
+SCIENCE:USATalent7B
+"Gilet pare-balles"
+END
+
+SCIENCE:USATalent8A
+"Défenses renforcées"
+END
+
+SCIENCE:USATalent8B
+"Cellules renforcées"
+END
+
+SCIENCE:USATalent10A
+"Souffle élargi"
+END
+
+SCIENCE:USATalent10B
+"Réparation de terrain"
+END
+
+SCIENCE:SuperweaponTalent7A
+"Cellule Alpha"
+END
+
+SCIENCE:SuperweaponTalent7B
+"Escorte blindée"
+END
+
+SCIENCE:SuperweaponTalent8A
+"Blindage Patriot EMP"
+END
+
+SCIENCE:SuperweaponTalent8B
+"Révision Tomahawk"
+END
+
+SCIENCE:SuperweaponTalent10A
+"Superarmes moins chères"
+END
+
+SCIENCE:SuperweaponTalent10B
+"Équipes de réparation"
+END
+
+SCIENCE:LaserTalent7A
+"Blindage du char laser"
+END
+
+SCIENCE:LaserTalent7B
+"Blindage Vengeur"
+END
+
+SCIENCE:LaserTalent8A
+"Blindage de tourelle"
+END
+
+SCIENCE:LaserTalent8B
+"Moteurs du char laser"
+END
+
+SCIENCE:LaserTalent10A
+"Équipages aguerris"
+END
+
+SCIENCE:LaserTalent10B
+"Défenses moins chères"
+END
+
+SCIENCE:AirForceTalent7A
+"Blindage Comanche"
+END
+
+SCIENCE:AirForceTalent7B
+"Blindage King Raptor"
+END
+
+SCIENCE:AirForceTalent8A
+"Base aérienne renforcée"
+END
+
+SCIENCE:AirForceTalent8B
+"Révision Chinook"
+END
+
+SCIENCE:AirForceTalent10A
+"Pilotes aguerris"
+END
+
+SCIENCE:AirForceTalent10B
+"Réparation de cellule"
+END
+
+SCIENCE:GLATalent6A
+"Construction de récupération"
+END
+
+SCIENCE:GLATalent6B
+"Pas légers"
+END
+
+SCIENCE:GLATalent9A
+"Embuscade élargie"
+END
+
+SCIENCE:GLATalent9B
+"Peste élargie"
+END
+
+SCIENCE:GLATalent7A
+"Moteurs réglés"
+END
+
+SCIENCE:GLATalent7B
+"Gilets RPG"
+END
+
+SCIENCE:GLATalent8A
+"Stingers enterrés"
+END
+
+SCIENCE:GLATalent8B
+"Blindage de ferraille"
+END
+
+SCIENCE:GLATalent10A
+"Pluie de Scuds"
+END
+
+SCIENCE:GLATalent10B
+"Équipages aguerris"
+END
+
+SCIENCE:ToxinTalent7A
+"Révision du tracteur"
+END
+
+SCIENCE:ToxinTalent7B
+"Blindage Maraudeur"
+END
+
+SCIENCE:ToxinTalent8A
+"Tunnels profonds"
+END
+
+SCIENCE:ToxinTalent8B
+"Révision du lanceur"
+END
+
+SCIENCE:ToxinTalent10A
+"Toxines persistantes"
+END
+
+SCIENCE:ToxinTalent10B
+"Conducteurs aguerris"
+END
+
+SCIENCE:DemolitionTalent7A
+"Motos blindées"
+END
+
+SCIENCE:DemolitionTalent7B
+"Révision du camion piégé"
+END
+
+SCIENCE:DemolitionTalent8A
+"Pièges bon marché"
+END
+
+SCIENCE:DemolitionTalent8B
+"Blindage de buggy"
+END
+
+SCIENCE:DemolitionTalent10A
+"Ogives plus lourdes"
+END
+
+SCIENCE:DemolitionTalent10B
+"Lanceurs aguerris"
+END
+
+SCIENCE:StealthTalent7A
+"Gilet de Kell"
+END
+
+SCIENCE:StealthTalent7B
+"Blindage de Raider"
+END
+
+SCIENCE:StealthTalent8A
+"Bunkers cachés"
+END
+
+SCIENCE:StealthTalent8B
+"Révision du camion piégé"
+END
+
+SCIENCE:StealthTalent10A
+"Raiders camouflés"
+END
+
+SCIENCE:StealthTalent10B
+"Brouilleur élargi"
+END
+
+SCIENCE:TurkiyeTalent6AShort
+"Bâtiments 15 pour cent moins chers"
+END
+
+SCIENCE:TurkiyeTalent6BShort
+"Soldats 15 pour cent moins chers"
+END
+
+SCIENCE:TurkiyeTalent7AShort
+"Chars Altay plus solides"
+END
+
+SCIENCE:TurkiyeTalent7BShort
+"Les drones voient plus loin"
+END
+
+SCIENCE:TurkiyeTalent8AShort
+"Bunkers Siper plus solides"
+END
+
+SCIENCE:TurkiyeTalent8BShort
+"Tireurs Sungur plus solides"
+END
+
+SCIENCE:TurkiyeTalent9AShort
+"2 drones de plus dans l'essaim"
+END
+
+SCIENCE:TurkiyeTalent9BShort
+"4 soldats de plus débarquent"
+END
+
+SCIENCE:TurkiyeTalent10AShort
+"Le Tayfun frappe plus large"
+END
+
+SCIENCE:TurkiyeTalent10BShort
+"Bérets vétérans dès la sortie"
+END
+
+SCIENCE:ChinaTalent6AShort
+"Technopirates 40 pour cent moins chers"
+END
+
+SCIENCE:ChinaTalent6BShort
+"Soldats 20 pour cent moins chers"
+END
+
+SCIENCE:ChinaTalent7AShort
+"Battlemasters plus solides"
+END
+
+SCIENCE:ChinaTalent7BShort
+"Chars Gattling plus solides"
+END
+
+SCIENCE:ChinaTalent8AShort
+"Bunkers, canons plus solides"
+END
+
+SCIENCE:ChinaTalent8BShort
+"Napacanons plus solides et rapides"
+END
+
+SCIENCE:ChinaTalent9AShort
+"Une vague d'obus de plus"
+END
+
+SCIENCE:ChinaTalent9BShort
+"Mines sur plus de terrain"
+END
+
+SCIENCE:ChinaTalent10AShort
+"Overlords vétérans dès la sortie"
+END
+
+SCIENCE:ChinaTalent10BShort
+"EMP de 45 secondes"
+END
+
+SCIENCE:TankTalent7AShort
+"Emperors plus solides"
+END
+
+SCIENCE:TankTalent7BShort
+"Dragons, Gattlings plus solides"
+END
+
+SCIENCE:TankTalent8AShort
+"Chars réparés hors combat"
+END
+
+SCIENCE:TankTalent8BShort
+"Battlemasters plus solides"
+END
+
+SCIENCE:TankTalent10AShort
+"Emperors élite dès la sortie"
+END
+
+SCIENCE:TankTalent10BShort
+"2 chars de plus largués"
+END
+
+SCIENCE:InfantryTalent7AShort
+"Mitrailleurs plus rapides"
+END
+
+SCIENCE:InfantryTalent7BShort
+"Tueurs de chars plus solides"
+END
+
+SCIENCE:InfantryTalent8AShort
+"Bunkers fortifiés plus solides"
+END
+
+SCIENCE:InfantryTalent8BShort
+"Crawlers plus solides et rapides"
+END
+
+SCIENCE:InfantryTalent10AShort
+"Soldats soignés hors combat"
+END
+
+SCIENCE:InfantryTalent10BShort
+"5 mitrailleurs de plus largués"
+END
+
+SCIENCE:NukeTalent7AShort
+"Overlords plus solides"
+END
+
+SCIENCE:NukeTalent7BShort
+"Canons nucléaires plus solides"
+END
+
+SCIENCE:NukeTalent8AShort
+"Réacteurs, bunkers plus solides"
+END
+
+SCIENCE:NukeTalent8BShort
+"MiG plus solides"
+END
+
+SCIENCE:NukeTalent10AShort
+"Canons nucléaires élite dès la sortie"
+END
+
+SCIENCE:NukeTalent10BShort
+"Overlords se réparent seuls"
+END
+
+SCIENCE:AmericaTalent6AShort
+"Véhicules et avions moins chers"
+END
+
+SCIENCE:AmericaTalent6BShort
+"Les unités montent en grade plus vite"
+END
+
+SCIENCE:AmericaTalent9AShort
+"Un A-10 de plus"
+END
+
+SCIENCE:AmericaTalent9BShort
+"4 Rangers de plus largués"
+END
+
+SCIENCE:USATalent7AShort
+"Crusaders, Paladins plus solides"
+END
+
+SCIENCE:USATalent7BShort
+"Rangers plus solides"
+END
+
+SCIENCE:USATalent8AShort
+"Patriots, positions de tir plus solides"
+END
+
+SCIENCE:USATalent8BShort
+"Comanches, Raptors plus solides"
+END
+
+SCIENCE:USATalent10AShort
+"Grosses bombes plus larges"
+END
+
+SCIENCE:USATalent10BShort
+"Véhicules réparés hors combat"
+END
+
+SCIENCE:SuperweaponTalent7AShort
+"Aurora Alpha plus solides"
+END
+
+SCIENCE:SuperweaponTalent7BShort
+"Hum-Vees, Vengeurs plus solides"
+END
+
+SCIENCE:SuperweaponTalent8AShort
+"Patriots EMP plus solides"
+END
+
+SCIENCE:SuperweaponTalent8BShort
+"Tomahawks plus solides et rapides"
+END
+
+SCIENCE:SuperweaponTalent10AShort
+"Superarmes un quart moins chères"
+END
+
+SCIENCE:SuperweaponTalent10BShort
+"Défenses réparées plus vite"
+END
+
+SCIENCE:LaserTalent7AShort
+"Chars laser plus solides"
+END
+
+SCIENCE:LaserTalent7BShort
+"Vengeurs plus solides"
+END
+
+SCIENCE:LaserTalent8AShort
+"Tourelles laser plus solides"
+END
+
+SCIENCE:LaserTalent8BShort
+"Chars laser plus rapides"
+END
+
+SCIENCE:LaserTalent10AShort
+"Chars laser vétérans dès la sortie"
+END
+
+SCIENCE:LaserTalent10BShort
+"Défenses 30 pour cent moins chères"
+END
+
+SCIENCE:AirForceTalent7AShort
+"Comanches plus solides"
+END
+
+SCIENCE:AirForceTalent7BShort
+"King Raptors plus solides"
+END
+
+SCIENCE:AirForceTalent8AShort
+"Aérodromes, Patriots plus solides"
+END
+
+SCIENCE:AirForceTalent8BShort
+"Chinooks plus solides et rapides"
+END
+
+SCIENCE:AirForceTalent10AShort
+"King Raptors vétérans dès la sortie"
+END
+
+SCIENCE:AirForceTalent10BShort
+"Avions toujours autoréparés"
+END
+
+SCIENCE:GLATalent6AShort
+"Bâtiments 20 pour cent moins chers"
+END
+
+SCIENCE:GLATalent6BShort
+"Infanterie plus rapide"
+END
+
+SCIENCE:GLATalent7AShort
+"Jeeps, Buggys plus rapides"
+END
+
+SCIENCE:GLATalent7BShort
+"Soldats RPG plus solides"
+END
+
+SCIENCE:GLATalent8AShort
+"Sites Stingers plus solides"
+END
+
+SCIENCE:GLATalent8BShort
+"Scorpion, Maraudeur plus solides"
+END
+
+SCIENCE:GLATalent9AShort
+"4 Rebelles de plus en embuscade"
+END
+
+SCIENCE:GLATalent9BShort
+"La bombe Anthrax frappe plus large"
+END
+
+SCIENCE:GLATalent10AShort
+"Scuds multiples frappent plus large"
+END
+
+SCIENCE:GLATalent10BShort
+"Maraudeurs vétérans dès la sortie"
+END
+
+SCIENCE:ToxinTalent7AShort
+"Tracteurs plus solides et rapides"
+END
+
+SCIENCE:ToxinTalent7BShort
+"Maraudeurs plus solides"
+END
+
+SCIENCE:ToxinTalent8AShort
+"Tunnels plus solides"
+END
+
+SCIENCE:ToxinTalent8BShort
+"Lanceurs plus solides et rapides"
+END
+
+SCIENCE:ToxinTalent10AShort
+"Le poison des Scuds dure plus"
+END
+
+SCIENCE:ToxinTalent10BShort
+"Tracteurs vétérans dès la sortie"
+END
+
+SCIENCE:DemolitionTalent7AShort
+"Motos de combat plus solides"
+END
+
+SCIENCE:DemolitionTalent7BShort
+"Camions piégés plus solides et rapides"
+END
+
+SCIENCE:DemolitionTalent8AShort
+"Pièges explosifs à moitié prix"
+END
+
+SCIENCE:DemolitionTalent8BShort
+"Buggys lance-roquettes plus solides"
+END
+
+SCIENCE:DemolitionTalent10AShort
+"Missiles Scud plus puissants"
+END
+
+SCIENCE:DemolitionTalent10BShort
+"Lanceurs Scud vétérans dès la sortie"
+END
+
+SCIENCE:StealthTalent7AShort
+"Jarmen Kell plus solide"
+END
+
+SCIENCE:StealthTalent7BShort
+"Jeeps, Buggys plus solides"
+END
+
+SCIENCE:StealthTalent8AShort
+"Tunnels, Stingers plus solides"
+END
+
+SCIENCE:StealthTalent8BShort
+"Camions piégés plus solides et rapides"
+END
+
+SCIENCE:StealthTalent10AShort
+"Jeeps, Buggys camouflés"
+END
+
+SCIENCE:StealthTalent10BShort
+"Le brouilleur masque plus large"
+END
+
+GUI:QMMapNotBuilt
+"Votre jeu n'a pas pu construire la carte de cette partie, la partie a donc été annulée."
+END

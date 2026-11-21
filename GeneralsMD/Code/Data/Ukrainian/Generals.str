@@ -19064,3 +19064,863 @@ END
 GUI:RejoinWaitingForLog
 "Очікування запису матчу"
 END
+
+GUI:MasterVolume
+"Загальна гучність"
+END
+
+GUI:OptionsGroupMusic
+"Музика"
+END
+
+GUI:DynamicMusic
+"Музика йде за боєм"
+END
+
+GUI:LegacySound
+"Класичний звук"
+END
+
+TOOLTIP:ArmorStructure
+"Будівля"
+END
+
+TOOLTIP:UpgradesHint
+"(без нього → з ним)"
+END
+
+OBJECT:TurkiyeInfantryAlpagu
+"Оператор Alpagu"
+END
+
+CONTROLBAR:ConstructTurkiyeInfantryAlpagu
+"Оператор &Alpagu"
+END
+
+CONTROLBAR:TurkiyeBeretDesignate
+"&Позначити ціль"
+END
+
+CONTROLBAR:ToolTipTurkiyeBeretDesignate
+"Тримає тонкий лазерний промінь на техніці чи будівлі. Над ним пролітає TB2 і за 4 секунди скидає боєприпас Kemankeş, який планує до цілі й пікірує на неї; промінь тримається до влучання. Поки він підсвічує, сховатися не може, а якщо зрушити його в перші 4 секунди, удар скасовується. \n Перезарядка: 1:00"
+END
+
+CONTROLBAR:TurkiyeBeretKarguSwarm
+"Рій &Kargu"
+END
+
+CONTROLBAR:ToolTipTurkiyeBeretKarguSwarm
+"Стає на коліно, по одному знімає зі спини три дрони-камікадзе Kargu й ставить їх ліворуч, спереду й праворуч від себе. Вони злітають разом і по черзі пікірують на точку в 75-350 від нього. \n Перезарядка: 0:45"
+END
+
+SCIENCE:TurkiyeAllyAid
+"Допомога союзнику"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceAllyAid
+"Оберіть солдатів і техніку, які можна збудувати просто зараз, сплатіть за них, і транспортні літаки доставлять їх. Вкажіть на союзника, і вони приземляться як його. Літак везе вісім солдатів або дві машини за 500 зверху, не більше чотирьох літаків, а збитий літак втрачає вантаж. \n \n Застосування з: Штаб"
+END
+
+CONTROLBAR:TurkiyeAllyAid
+"&Допомога союзнику"
+END
+
+CONTROLBAR:TooltipTurkiyeAllyAid
+"Допомога союзнику \n Перезарядка: 4:00"
+END
+
+SCIENCE:TurkiyeTalent6A
+"Дешеві будівлі"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent6A
+"Кожна будівля коштує на 15 відсотків дешевше, поки у вас лишився Штаб, Казарми, Завод або Бойовий інженер."
+END
+
+SCIENCE:TurkiyeTalent6B
+"Дешева піхота"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent6B
+"Кожен солдат коштує на 15 відсотків дешевше, включно з Бойовими інженерами та Maroon Beret, поки у вас лишився Штаб, Казарми, Завод або Бойовий інженер."
+END
+
+SCIENCE:TurkiyeTalent7A
+"Броня Altay"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent7A
+"Танки Altay витримують на п'яту частину більше шкоди, з 620 до 744. Складається з Посиленим корпусом."
+END
+
+SCIENCE:TurkiyeTalent7B
+"Оптика БПЛА"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent7B
+"БПЛА Bayraktar і Akinci бачать на чверть далі: Bayraktar з 550 до 688, Akinci з 400 до 500."
+END
+
+SCIENCE:TurkiyeTalent8A
+"Вали Siper"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent8A
+"Бункери Siper стоять на 30 відсотків довше, з 1500 до 1950. Складається з Укріпленим Siper."
+END
+
+SCIENCE:TurkiyeTalent8B
+"Жилети Sungur"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent8B
+"Гранатометники Sungur витримують на чверть більше шкоди, з 160 до 200."
+END
+
+SCIENCE:TurkiyeTalent9A
+"Рій БПЛА +2"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent9A
+"Рій БПЛА відправляє на 2 дрони більше."
+END
+
+SCIENCE:TurkiyeTalent9B
+"Десант Gokbey +4"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent9B
+"Десант Gokbey висаджує на 4 солдати більше."
+END
+
+SCIENCE:TurkiyeTalent10A
+"Широкий Tayfun"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent10A
+"Ракета Tayfun вражає площу на чверть ширшу."
+END
+
+SCIENCE:TurkiyeTalent10B
+"Досвідчені Berets"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent10B
+"Maroon Beret виходять з Казарм ветеранами."
+END
+
+SCIENCE:ChinaTalent6A
+"Дешеві хакери"
+END
+
+SCIENCE:ChinaTalent6B
+"Дешева піхота"
+END
+
+SCIENCE:ChinaTalent7A
+"Броня Battlemaster"
+END
+
+SCIENCE:ChinaTalent7B
+"Броня Gattling"
+END
+
+SCIENCE:ChinaTalent8A
+"Міцна оборона"
+END
+
+SCIENCE:ChinaTalent8B
+"Привід Inferno"
+END
+
+SCIENCE:ChinaTalent9A
+"Артобстріл +12"
+END
+
+SCIENCE:ChinaTalent9B
+"Широкі касетні міни"
+END
+
+SCIENCE:ChinaTalent10A
+"Досвідчені Overlord"
+END
+
+SCIENCE:ChinaTalent10B
+"Довгий ЕМІ"
+END
+
+SCIENCE:TankTalent7A
+"Броня Emperor"
+END
+
+SCIENCE:TankTalent7B
+"Броня Dragon і Gattling"
+END
+
+SCIENCE:TankTalent8A
+"Польовий ремонт"
+END
+
+SCIENCE:TankTalent8B
+"Броня Battlemaster"
+END
+
+SCIENCE:TankTalent10A
+"Елітні Emperor"
+END
+
+SCIENCE:TankTalent10B
+"Десант танків +2"
+END
+
+SCIENCE:InfantryTalent7A
+"Швидкі мініганери"
+END
+
+SCIENCE:InfantryTalent7B
+"Жилети мисливців"
+END
+
+SCIENCE:InfantryTalent8A
+"Укріплені стіни"
+END
+
+SCIENCE:InfantryTalent8B
+"Броня Crawler"
+END
+
+SCIENCE:InfantryTalent10A
+"Польові перев'язки"
+END
+
+SCIENCE:InfantryTalent10B
+"Десант піхоти +5"
+END
+
+SCIENCE:NukeTalent7A
+"Броня Overlord"
+END
+
+SCIENCE:NukeTalent7B
+"Броня ядерної гармати"
+END
+
+SCIENCE:NukeTalent8A
+"Захист реактора"
+END
+
+SCIENCE:NukeTalent8B
+"Броня MiG"
+END
+
+SCIENCE:NukeTalent10A
+"Елітні ядерні гармати"
+END
+
+SCIENCE:NukeTalent10B
+"Ремонт Overlord"
+END
+
+SCIENCE:AmericaTalent6A
+"Дешева техніка"
+END
+
+SCIENCE:AmericaTalent6B
+"Бойова підготовка"
+END
+
+SCIENCE:AmericaTalent9A
+"Зайвий Thunderbolt"
+END
+
+SCIENCE:AmericaTalent9B
+"Зайві Ranger"
+END
+
+SCIENCE:USATalent7A
+"Важка броня"
+END
+
+SCIENCE:USATalent7B
+"Бронежилети"
+END
+
+SCIENCE:USATalent8A
+"Міцна оборона"
+END
+
+SCIENCE:USATalent8B
+"Посилені планери"
+END
+
+SCIENCE:USATalent10A
+"Ширший вибух"
+END
+
+SCIENCE:USATalent10B
+"Польовий ремонт"
+END
+
+SCIENCE:SuperweaponTalent7A
+"Планер Alpha"
+END
+
+SCIENCE:SuperweaponTalent7B
+"Броньований ескорт"
+END
+
+SCIENCE:SuperweaponTalent8A
+"Броня ЕМІ-Patriot"
+END
+
+SCIENCE:SuperweaponTalent8B
+"Ремонт Tomahawk"
+END
+
+SCIENCE:SuperweaponTalent10A
+"Дешева суперзброя"
+END
+
+SCIENCE:SuperweaponTalent10B
+"Ремонтні бригади"
+END
+
+SCIENCE:LaserTalent7A
+"Броня лазерного танка"
+END
+
+SCIENCE:LaserTalent7B
+"Броня Avenger"
+END
+
+SCIENCE:LaserTalent8A
+"Броня веж"
+END
+
+SCIENCE:LaserTalent8B
+"Двигуни лазерного танка"
+END
+
+SCIENCE:LaserTalent10A
+"Досвідчені екіпажі"
+END
+
+SCIENCE:LaserTalent10B
+"Дешева оборона"
+END
+
+SCIENCE:AirForceTalent7A
+"Броня Comanche"
+END
+
+SCIENCE:AirForceTalent7B
+"Броня King Raptor"
+END
+
+SCIENCE:AirForceTalent8A
+"Міцний аеродром"
+END
+
+SCIENCE:AirForceTalent8B
+"Ремонт Chinook"
+END
+
+SCIENCE:AirForceTalent10A
+"Досвідчені льотчики"
+END
+
+SCIENCE:AirForceTalent10B
+"Ремонт планера"
+END
+
+SCIENCE:GLATalent6A
+"Будівництво зі сміття"
+END
+
+SCIENCE:GLATalent6B
+"Легка хода"
+END
+
+SCIENCE:GLATalent9A
+"Більша засідка"
+END
+
+SCIENCE:GLATalent9B
+"Ширша чума"
+END
+
+SCIENCE:GLATalent7A
+"Тюнінг двигунів"
+END
+
+SCIENCE:GLATalent7B
+"Жилети РПГ"
+END
+
+SCIENCE:GLATalent8A
+"Закопані Stinger"
+END
+
+SCIENCE:GLATalent8B
+"Саморобна броня"
+END
+
+SCIENCE:GLATalent10A
+"Злива SCUD"
+END
+
+SCIENCE:GLATalent10B
+"Досвідчені екіпажі"
+END
+
+SCIENCE:ToxinTalent7A
+"Ремонт тягачів"
+END
+
+SCIENCE:ToxinTalent7B
+"Броня Marauder"
+END
+
+SCIENCE:ToxinTalent8A
+"Глибокі тунелі"
+END
+
+SCIENCE:ToxinTalent8B
+"Ремонт установок"
+END
+
+SCIENCE:ToxinTalent10A
+"Стійкі токсини"
+END
+
+SCIENCE:ToxinTalent10B
+"Досвідчені водії"
+END
+
+SCIENCE:DemolitionTalent7A
+"Броньовані мотоцикли"
+END
+
+SCIENCE:DemolitionTalent7B
+"Ремонт вантажівок-бомб"
+END
+
+SCIENCE:DemolitionTalent8A
+"Дешеві пастки"
+END
+
+SCIENCE:DemolitionTalent8B
+"Броня багі"
+END
+
+SCIENCE:DemolitionTalent10A
+"Важчі боєголовки"
+END
+
+SCIENCE:DemolitionTalent10B
+"Досвідчені установки"
+END
+
+SCIENCE:StealthTalent7A
+"Жилет Kell"
+END
+
+SCIENCE:StealthTalent7B
+"Броня Raider"
+END
+
+SCIENCE:StealthTalent8A
+"Приховані бункери"
+END
+
+SCIENCE:StealthTalent8B
+"Ремонт вантажівок-бомб"
+END
+
+SCIENCE:StealthTalent10A
+"Замасковані Raider"
+END
+
+SCIENCE:StealthTalent10B
+"Широкий Scrambler"
+END
+
+SCIENCE:TurkiyeTalent6AShort
+"Будівлі дешевші на 15 відсотків"
+END
+
+SCIENCE:TurkiyeTalent6BShort
+"Солдати дешевші на 15 відсотків"
+END
+
+SCIENCE:TurkiyeTalent7AShort
+"Танки Altay міцніші"
+END
+
+SCIENCE:TurkiyeTalent7BShort
+"БПЛА бачать далі"
+END
+
+SCIENCE:TurkiyeTalent8AShort
+"Бункери Siper міцніші"
+END
+
+SCIENCE:TurkiyeTalent8BShort
+"Гранатометники Sungur міцніші"
+END
+
+SCIENCE:TurkiyeTalent9AShort
+"На 2 дрони більше в рої"
+END
+
+SCIENCE:TurkiyeTalent9BShort
+"Десантуються 4 солдати"
+END
+
+SCIENCE:TurkiyeTalent10AShort
+"Tayfun б'є ширше"
+END
+
+SCIENCE:TurkiyeTalent10BShort
+"Berets виходять ветеранами"
+END
+
+SCIENCE:ChinaTalent6AShort
+"Хакери дешевші на 40 відсотків"
+END
+
+SCIENCE:ChinaTalent6BShort
+"Солдати дешевші на 20 відсотків"
+END
+
+SCIENCE:ChinaTalent7AShort
+"Battlemaster міцніші"
+END
+
+SCIENCE:ChinaTalent7BShort
+"Танки Gattling міцніші"
+END
+
+SCIENCE:ChinaTalent8AShort
+"Бункери, гармати міцніші"
+END
+
+SCIENCE:ChinaTalent8BShort
+"Inferno міцніші й швидші"
+END
+
+SCIENCE:ChinaTalent9AShort
+"Ще одна хвиля снарядів"
+END
+
+SCIENCE:ChinaTalent9BShort
+"Міни вкривають більше землі"
+END
+
+SCIENCE:ChinaTalent10AShort
+"Overlord виходять ветеранами"
+END
+
+SCIENCE:ChinaTalent10BShort
+"ЕМІ триває 45 секунд"
+END
+
+SCIENCE:TankTalent7AShort
+"Emperor міцніші"
+END
+
+SCIENCE:TankTalent7BShort
+"Dragon, Gattling міцніші"
+END
+
+SCIENCE:TankTalent8AShort
+"Танки лагодяться поза боєм"
+END
+
+SCIENCE:TankTalent8BShort
+"Battlemaster міцніші"
+END
+
+SCIENCE:TankTalent10AShort
+"Emperor виходять елітними"
+END
+
+SCIENCE:TankTalent10BShort
+"Ще 2 танки десантуються"
+END
+
+SCIENCE:InfantryTalent7AShort
+"Мініганери біжать швидше"
+END
+
+SCIENCE:InfantryTalent7BShort
+"Мисливці на танки міцніші"
+END
+
+SCIENCE:InfantryTalent8AShort
+"Укріплені бункери міцніші"
+END
+
+SCIENCE:InfantryTalent8BShort
+"Crawler міцніші й швидші"
+END
+
+SCIENCE:InfantryTalent10AShort
+"Солдати лікуються поза боєм"
+END
+
+SCIENCE:InfantryTalent10BShort
+"Ще 5 мініганерів десантуються"
+END
+
+SCIENCE:NukeTalent7AShort
+"Overlord міцніші"
+END
+
+SCIENCE:NukeTalent7BShort
+"Ядерні гармати міцніші"
+END
+
+SCIENCE:NukeTalent8AShort
+"Реактори, бункери міцніші"
+END
+
+SCIENCE:NukeTalent8BShort
+"MiG міцніші"
+END
+
+SCIENCE:NukeTalent10AShort
+"Ядерні гармати виходять елітними"
+END
+
+SCIENCE:NukeTalent10BShort
+"Overlord лагодяться самі"
+END
+
+SCIENCE:AmericaTalent6AShort
+"Техніка й авіація дешевші"
+END
+
+SCIENCE:AmericaTalent6BShort
+"Юніти ростуть у званні швидше"
+END
+
+SCIENCE:AmericaTalent9AShort
+"Ще один A-10"
+END
+
+SCIENCE:AmericaTalent9BShort
+"Десантуються 4 Ranger"
+END
+
+SCIENCE:USATalent7AShort
+"Crusader, Paladin міцніші"
+END
+
+SCIENCE:USATalent7BShort
+"Ranger міцніші"
+END
+
+SCIENCE:USATalent8AShort
+"Patriot, вогневі бази міцніші"
+END
+
+SCIENCE:USATalent8BShort
+"Comanche, Raptor міцніші"
+END
+
+SCIENCE:USATalent10AShort
+"Великі бомби б'ють ширше"
+END
+
+SCIENCE:USATalent10BShort
+"Техніка лагодиться поза боєм"
+END
+
+SCIENCE:SuperweaponTalent7AShort
+"Aurora Alpha міцніші"
+END
+
+SCIENCE:SuperweaponTalent7BShort
+"Humvee, Avenger міцніші"
+END
+
+SCIENCE:SuperweaponTalent8AShort
+"ЕМІ-Patriot міцніші"
+END
+
+SCIENCE:SuperweaponTalent8BShort
+"Tomahawk міцніші й швидші"
+END
+
+SCIENCE:SuperweaponTalent10AShort
+"Суперзброя дешевша на чверть"
+END
+
+SCIENCE:SuperweaponTalent10BShort
+"Оборона лагодиться швидше"
+END
+
+SCIENCE:LaserTalent7AShort
+"Лазерні танки міцніші"
+END
+
+SCIENCE:LaserTalent7BShort
+"Avenger міцніші"
+END
+
+SCIENCE:LaserTalent8AShort
+"Лазерні вежі міцніші"
+END
+
+SCIENCE:LaserTalent8BShort
+"Лазерні танки швидші"
+END
+
+SCIENCE:LaserTalent10AShort
+"Лазерні танки виходять ветеранами"
+END
+
+SCIENCE:LaserTalent10BShort
+"Оборона дешевша на 30 відсотків"
+END
+
+SCIENCE:AirForceTalent7AShort
+"Comanche міцніші"
+END
+
+SCIENCE:AirForceTalent7BShort
+"King Raptor міцніші"
+END
+
+SCIENCE:AirForceTalent8AShort
+"Аеродроми, Patriot міцніші"
+END
+
+SCIENCE:AirForceTalent8BShort
+"Chinook міцніші й швидші"
+END
+
+SCIENCE:AirForceTalent10AShort
+"King Raptor виходять ветеранами"
+END
+
+SCIENCE:AirForceTalent10BShort
+"Літаки завжди лагодяться самі"
+END
+
+SCIENCE:GLATalent6AShort
+"Будівлі дешевші на 20 відсотків"
+END
+
+SCIENCE:GLATalent6BShort
+"Піхота бігає швидше"
+END
+
+SCIENCE:GLATalent7AShort
+"Technical, багі швидші"
+END
+
+SCIENCE:GLATalent7BShort
+"Стрільці РПГ міцніші"
+END
+
+SCIENCE:GLATalent8AShort
+"Позиції Stinger міцніші"
+END
+
+SCIENCE:GLATalent8BShort
+"Scorpion, Marauder міцніші"
+END
+
+SCIENCE:GLATalent9AShort
+"У засідку ще 4 повстанці"
+END
+
+SCIENCE:GLATalent9BShort
+"Бомба з сибіркою б'є ширше"
+END
+
+SCIENCE:GLATalent10AShort
+"SCUD Storm б'є ширше"
+END
+
+SCIENCE:GLATalent10BShort
+"Marauder виходять ветеранами"
+END
+
+SCIENCE:ToxinTalent7AShort
+"Тягачі міцніші й швидші"
+END
+
+SCIENCE:ToxinTalent7BShort
+"Marauder міцніші"
+END
+
+SCIENCE:ToxinTalent8AShort
+"Тунелі міцніші"
+END
+
+SCIENCE:ToxinTalent8BShort
+"Установки міцніші й швидші"
+END
+
+SCIENCE:ToxinTalent10AShort
+"Отрута SCUD тримається довше"
+END
+
+SCIENCE:ToxinTalent10BShort
+"Тягачі виходять ветеранами"
+END
+
+SCIENCE:DemolitionTalent7AShort
+"Бойові мотоцикли міцніші"
+END
+
+SCIENCE:DemolitionTalent7BShort
+"Вантажівки-бомби міцніші й швидші"
+END
+
+SCIENCE:DemolitionTalent8AShort
+"Пастки за півціни"
+END
+
+SCIENCE:DemolitionTalent8BShort
+"Ракетні багі міцніші"
+END
+
+SCIENCE:DemolitionTalent10AShort
+"Ракети SCUD б'ють сильніше"
+END
+
+SCIENCE:DemolitionTalent10BShort
+"Установки SCUD виходять ветеранами"
+END
+
+SCIENCE:StealthTalent7AShort
+"Jarmen Kell міцніший"
+END
+
+SCIENCE:StealthTalent7BShort
+"Technical, багі міцніші"
+END
+
+SCIENCE:StealthTalent8AShort
+"Тунелі, Stinger міцніші"
+END
+
+SCIENCE:StealthTalent8BShort
+"Вантажівки-бомби міцніші й швидші"
+END
+
+SCIENCE:StealthTalent10AShort
+"Technical, багі маскуються"
+END
+
+SCIENCE:StealthTalent10BShort
+"Scrambler приховує більшу зону"
+END
+
+GUI:QMMapNotBuilt
+"Ваша гра не змогла побудувати карту цього матчу, тому матч скасовано."
+END

@@ -16088,3 +16088,1487 @@ END
 GUI:RejoinWaitingForLog
 "Warten auf das Spielprotokoll"
 END
+
+GUI:AmbientVolume
+"Umgebungslautstärke"
+END
+
+GUI:MasterVolume
+"Gesamtlautstärke"
+END
+
+GUI:OptionsGroupMusic
+"Musik"
+END
+
+GUI:DynamicMusic
+"Musik folgt dem Kampf"
+END
+
+GUI:LegacySound
+"Klassischer Sound"
+END
+
+TOOLTIP:ArmorStructure
+"Gebäude"
+END
+
+TOOLTIP:UpgradesHint
+"(ohne → mit)"
+END
+
+TOOLTIP:BioStrategyLong_Turkiye
+"Die Türkei tötet aus der Ferne, sieht aber nicht selbst: Ihre Artillerie schießt 600 weit und sieht 100 weit, also muss ein Beobachtertrupp, eine Drohne oder ein Radarturm das Ziel finden"
+END
+
+GUI:BioFeatures_Turkiye
+"Weitreichende Artillerie, kurze Sicht \n Pioniere heben Siper-Bunker an der Front aus \n Beobachtertrupps, Drohnen und Radartürme zeigen den Geschützen das Ziel"
+END
+
+OBJECT:TurkiyeInfantryMehmetcik
+"Mehmetcik-Schütze"
+END
+
+CONTROLBAR:ConstructTurkiyeInfantryMehmetcik
+"&Mehmetcik-Schütze"
+END
+
+OBJECT:TurkiyeInfantryEngineer
+"Pioniere"
+END
+
+CONTROLBAR:ConstructTurkiyeInfantryEngineer
+"&Pioniere"
+END
+
+CONTROLBAR:ToolTipTurkiyeInfantryEngineer
+"Baut und repariert Gebäude. Infanterie: kann überrollt und erschossen werden."
+END
+
+OBJECT:TurkiyeInfantrySungur
+"Sungur-Schütze"
+END
+
+CONTROLBAR:ConstructTurkiyeInfantrySungur
+"&Sungur-Schütze"
+END
+
+CONTROLBAR:ToolTipTurkiyeInfantrySungur
+"Raketeninfanterie gegen Panzer und Flugzeuge."
+END
+
+OBJECT:TurkiyeInfantryAlpagu
+"Alpagu-Operator"
+END
+
+CONTROLBAR:ConstructTurkiyeInfantryAlpagu
+"&Alpagu-Operator"
+END
+
+OBJECT:TurkiyeInfantrySpotter
+"Beobachtertrupp"
+END
+
+CONTROLBAR:ConstructTurkiyeInfantrySpotter
+"&Beobachtertrupp"
+END
+
+OBJECT:TurkiyeInfantryMaroonBeret
+"Maroon Beret"
+END
+
+CONTROLBAR:ConstructTurkiyeInfantryMaroonBeret
+"Maroon &Beret"
+END
+
+CONTROLBAR:ToolTipTurkiyeInfantryMaroonBeret
+"Spezialkräfte. Getarnt, sieht 350 weit für die Artillerie, markiert Ziele mit dem Laser für eine Kampfdrohne und schickt Kargu-Drohnen aus seinem Rucksack."
+END
+
+CONTROLBAR:TurkiyeBeretDesignate
+"&Ziel markieren"
+END
+
+CONTROLBAR:ToolTipTurkiyeBeretDesignate
+"Hält einen dünnen Zielstrahl auf ein Fahrzeug oder Gebäude. Eine TB2 fliegt über ihn und wirft nach 4 Sekunden eine Kemankeş-Munition ab, die heranschwebt und sich darauf stürzt; der Strahl bleibt, bis sie trifft. Solange er markiert, kann er sich nicht verstecken, und bewegt man ihn in den ersten 4 Sekunden, wird der Angriff abgebrochen. \n Aufladezeit: 1:00"
+END
+
+CONTROLBAR:TurkiyeBeretKarguSwarm
+"Kargu-&Schwarm"
+END
+
+CONTROLBAR:ToolTipTurkiyeBeretKarguSwarm
+"Kniet nieder, nimmt drei Kargu-Kamikazedrohnen eins nach dem anderen vom Rücken und stellt sie links, vor und rechts von sich ab. Sie steigen gemeinsam auf und stürzen sich nacheinander auf einen Punkt 75 bis 350 weit entfernt. \n Aufladezeit: 0:45"
+END
+
+OBJECT:TurkiyeVehicleSupplyTruck
+"Nachschublaster"
+END
+
+CONTROLBAR:ConstructTurkiyeVehicleSupplyTruck
+"Nachschub&laster"
+END
+
+CONTROLBAR:ToolTipTurkiyeVehicleSupplyTruck
+"Bringt Nachschub zum Nachschubzentrum."
+END
+
+OBJECT:TurkiyeVehicleCobra
+"Cobra-Aufklärer"
+END
+
+CONTROLBAR:ConstructTurkiyeVehicleCobra
+"&Cobra-Aufklärer"
+END
+
+CONTROLBAR:ToolTipTurkiyeVehicleCobra
+"Schnelles, zerbrechliches Fahrzeug mit Maschinengewehr und Platz für fünf Infanteristen. Sieht 250 weit, zu kurz, um die Artillerie aus der Ferne einzuweisen."
+END
+
+OBJECT:TurkiyeVehicleKirpi
+"Kirpi-Transportpanzer"
+END
+
+CONTROLBAR:ConstructTurkiyeVehicleKirpi
+"&Kirpi-Transportpanzer"
+END
+
+CONTROLBAR:ToolTipTurkiyeVehicleKirpi
+"Gepanzerter Mannschaftstransporter für fünf Infanteristen."
+END
+
+OBJECT:TurkiyeTankAltay
+"Altay-Panzer"
+END
+
+CONTROLBAR:ConstructTurkiyeTankAltay
+"&Altay-Panzer"
+END
+
+CONTROLBAR:ToolTipTurkiyeTankAltay
+"Kampfpanzer, das einzige Fahrzeug mit Direktfeuer in der türkischen Fabrik."
+END
+
+OBJECT:TurkiyeVehicleKorkut
+"Korkut-Flugabwehr"
+END
+
+CONTROLBAR:ConstructTurkiyeVehicleKorkut
+"K&orkut-Flugabwehr"
+END
+
+CONTROLBAR:ToolTipTurkiyeVehicleKorkut
+"Flugabwehr: Zwillingskanonen bis 350 gegen Flugzeuge. Kann nicht auf den Boden schießen."
+END
+
+OBJECT:TurkiyeVehicleFirtina
+"Firtina-Haubitze"
+END
+
+CONTROLBAR:ConstructTurkiyeVehicleFirtina
+"&Firtina-Haubitze"
+END
+
+OBJECT:TurkiyeVehicleSakarya
+"Sakarya-Raketenwerfer"
+END
+
+CONTROLBAR:ConstructTurkiyeVehicleSakarya
+"&Sakarya-Raketenwerfer"
+END
+
+OBJECT:TurkiyeTankKoral
+"Koral-Elektronikkampf"
+END
+
+CONTROLBAR:ConstructTurkiyeTankKoral
+"Ko&ral-Elektronikkampf"
+END
+
+OBJECT:TurkiyeVehicleBayraktar
+"Bayraktar-Drohne"
+END
+
+CONTROLBAR:ConstructTurkiyeVehicleBayraktar
+"&Bayraktar-Drohne"
+END
+
+OBJECT:TurkiyeVehicleGokbey
+"Gokbey-Hubschrauber"
+END
+
+CONTROLBAR:ConstructTurkiyeVehicleGokbey
+"&Gokbey-Hubschrauber"
+END
+
+CONTROLBAR:ToolTipTurkiyeVehicleGokbey
+"Transporthubschrauber für fünf Infanteristen."
+END
+
+OBJECT:TurkiyeJetAkinci
+"Akinci-Drohne"
+END
+
+CONTROLBAR:ConstructTurkiyeJetAkinci
+"&Akinci-Drohne"
+END
+
+CONTROLBAR:ToolTipTurkiyeJetAkinci
+"Schwere bewaffnete Drohne. Stirbt unter Flugabwehr."
+END
+
+OBJECT:TurkiyeJetKizilelma
+"Kizilelma-Jäger"
+END
+
+CONTROLBAR:ConstructTurkiyeJetKizilelma
+"&Kizilelma-Jäger"
+END
+
+CONTROLBAR:ToolTipTurkiyeJetKizilelma
+"Jagdbomber: Seine Raketen treffen Flugzeuge und Bodenziele gleichermaßen."
+END
+
+OBJECT:TurkiyeRadarTower
+"Radarturm"
+END
+
+CONTROLBAR:ConstructTurkiyeRadarTower
+"&Radarturm"
+END
+
+OBJECT:TurkiyeSiper
+"Siper-Bunker"
+END
+
+CONTROLBAR:ConstructTurkiyeSiper
+"Sip&er-Bunker"
+END
+
+OBJECT:TurkiyeLandMine
+"Minenfeld"
+END
+
+CONTROLBAR:ConstructTurkiyeLandMine
+"&Minenfeld"
+END
+
+CONTROLBAR:ToolTipTurkiyeLandMine
+"Eine im Boden vergrabene Ladung. Braucht den Minensatz."
+END
+
+UPGRADE:TurkiyeExtendedRange
+"Erweiterte Reichweite"
+END
+
+CONTROLBAR:UpgradeTurkiyeExtendedRange
+"&Erweiterte Reichweite"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeExtendedRange
+"Firtina und Sakarya schießen 15 Prozent weiter."
+END
+
+UPGRADE:TurkiyePrecisionGuidance
+"Trägheitslenkung"
+END
+
+CONTROLBAR:UpgradeTurkiyePrecisionGuidance
+"&Trägheitslenkung"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyePrecisionGuidance
+"Raketen, die außerhalb der Radarabdeckung abgefeuert werden, treffen zwei von fünf Mal statt einmal."
+END
+
+UPGRADE:TurkiyeArmorPack
+"Verstärkte Wanne"
+END
+
+CONTROLBAR:UpgradeTurkiyeArmorPack
+"Verstärkte &Wanne"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeArmorPack
+"Kirpi und Altay erhalten 20 Prozent mehr Lebenspunkte."
+END
+
+UPGRADE:TurkiyeMineKit
+"Minensatz"
+END
+
+CONTROLBAR:UpgradeTurkiyeMineKit
+"&Minensatz"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeMineKit
+"Pioniere können Minen legen."
+END
+
+OBJECT:TurkiyeCommandCenter
+"Hauptquartier"
+END
+
+CONTROLBAR:ConstructTurkiyeCommandCenter
+"&Hauptquartier"
+END
+
+OBJECT:TurkiyePowerPlant
+"Kraftwerk"
+END
+
+CONTROLBAR:ConstructTurkiyePowerPlant
+"&Kraftwerk"
+END
+
+OBJECT:TurkiyeBarracks
+"Kaserne"
+END
+
+CONTROLBAR:ConstructTurkiyeBarracks
+"&Kaserne"
+END
+
+OBJECT:TurkiyeWarFactory
+"Fabrik"
+END
+
+CONTROLBAR:ConstructTurkiyeWarFactory
+"&Fabrik"
+END
+
+OBJECT:TurkiyeAirfield
+"Flugfeld"
+END
+
+CONTROLBAR:ConstructTurkiyeAirfield
+"&Flugfeld"
+END
+
+OBJECT:TurkiyeSupplyCenter
+"Nachschubzentrum"
+END
+
+CONTROLBAR:ConstructTurkiyeSupplyCenter
+"&Nachschubzentrum"
+END
+
+OBJECT:TurkiyePatriotBattery
+"Hisar-Batterie"
+END
+
+CONTROLBAR:ConstructTurkiyePatriotBattery
+"H&isar-Batterie"
+END
+
+SCIENCE:TurkiyeLaserDesignation
+"Laserzielmarkierung"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceLaserDesignation
+"Beobachtertrupps und Bayraktars markieren, was sie angreifen. Ein markiertes Ziel zählt überall als innerhalb der Radarabdeckung, sodass jede radargelenkte Rakete es im Visier behält."
+END
+
+UPGRADE:TurkiyeLaserDesignation
+"Laserzielmarkierung"
+END
+
+SCIENCE:TurkiyeEarlyWarning
+"Frühwarnung"
+END
+
+UPGRADE:TurkiyeEarlyWarning
+"Frühwarnung"
+END
+
+SCIENCE:TurkiyeUavRecon
+"Drohnenaufklärung"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceUavRecon
+"Eine Drohne kreist 30 Sekunden über dem Zielgebiet und meldet jede feindliche Einheit darin, ob sie steht oder fährt, und was sie ist. Der Nebel bleibt, aber das Gebiet zählt als Radarabdeckung. \n \n Einsatz von: Hauptquartier"
+END
+
+CONTROLBAR:TurkiyeUavRecon
+"&Drohnenaufklärung"
+END
+
+CONTROLBAR:TooltipTurkiyeUavRecon
+"Drohnenaufklärung \n Aufladezeit: 2:00"
+END
+
+OBJECT:TurkiyeVehicleMobileRadar
+"Mobiles Radar"
+END
+
+CONTROLBAR:ConstructTurkiyeVehicleMobileRadar
+"&Mobiles Radar"
+END
+
+CONTROLBAR:ToolTipTurkiyeVehicleMobileRadar
+"Ein Radar auf Rädern: Stehend deckt es 900 im Umkreis ab, fahrend nichts. Keine Waffe. \n \n Benötigt: Mobiles Radar (Rang 3)"
+END
+
+SCIENCE:TurkiyeAkinciAesa
+"Akinci-AESA"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceAkinciAesa
+"Das Radar der Akinci reicht 1000 statt 750 weit."
+END
+
+UPGRADE:TurkiyeAkinciAesa
+"Akinci-AESA"
+END
+
+SCIENCE:TurkiyeSwarmMunition
+"Drohnenschwarm 1"
+END
+
+SCIENCE:TurkiyeSwarmMunition2
+"Drohnenschwarm 2"
+END
+
+SCIENCE:TurkiyeSwarmMunition3
+"Drohnenschwarm 3"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceSwarmMunition
+"Kreisende Munition kreist über der gewählten Stelle, und jede stürzt sich auf das teuerste Ziel, das sie findet: eine auf Stufe 1, drei auf Stufe 2, fünf auf Stufe 3. \n \n Einsatz von: Hauptquartier"
+END
+
+CONTROLBAR:TurkiyeSwarmMunition
+"Drohnensch&warm"
+END
+
+CONTROLBAR:TooltipTurkiyeSwarmMunition
+"Drohnenschwarm \n Aufladezeit: 3:00"
+END
+
+SCIENCE:TurkiyeElectronicBlinding
+"Elektronische Kampfführung"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceElectronicBlinding
+"Jeder Feind mit einem Gebäude im Zielgebiet verliert 30 Sekunden lang sein Radar, und das Gebiet bleibt ebenso lange gestört: Feindliche Drohnen und Beobachter darin sehen nichts, und Lenkraketen, die es durchqueren, verlieren ihre Zielerfassung. \n \n Einsatz von: Hauptquartier"
+END
+
+CONTROLBAR:TurkiyeElectronicBlinding
+"Elektronische &Kampfführung"
+END
+
+CONTROLBAR:TooltipTurkiyeElectronicBlinding
+"Elektronische Kampfführung \n Aufladezeit: 4:00"
+END
+
+SCIENCE:TurkiyeSatelliteGuidance
+"Satellitenlenkung"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceSatelliteGuidance
+"45 Sekunden lang zählt die ganze Karte als türkische Radarabdeckung: Jede radargelenkte Rakete behält ihre Zielerfassung, und sich bewegende Feinde zeigen sich im Nebel. \n \n Einsatz von: Hauptquartier"
+END
+
+CONTROLBAR:TurkiyeSatelliteGuidance
+"Sa&tellitenlenkung"
+END
+
+CONTROLBAR:TooltipTurkiyeSatelliteGuidance
+"Satellitenlenkung \n Aufladezeit: 5:00"
+END
+
+SCIENCE:TurkiyeTayfun
+"Tayfun-Rakete"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceTayfun
+"Eine ballistische Tayfun-Rakete schlägt auf dem Ziel ein. Innerhalb der Radarabdeckung trifft sie immer; außerhalb landet sie einmal von fünf auf dem Punkt und verfehlt ihn sonst weit. \n \n Einsatz von: Hauptquartier"
+END
+
+CONTROLBAR:TurkiyeTayfun
+"&Tayfun-Rakete"
+END
+
+CONTROLBAR:TooltipTurkiyeTayfun
+"Tayfun-Rakete \n Aufladezeit: 4:00"
+END
+
+UPGRADE:TurkiyeTargetClassification
+"Zielklassifizierung"
+END
+
+CONTROLBAR:UpgradeTurkiyeTargetClassification
+"&Zielklassifizierung"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeTargetClassification
+"Radarkontakte zeigen, was sie sind: Infanterie, Fahrzeug, Flugabwehr, Artillerie, Luftfahrzeug oder Verteidigung."
+END
+
+UPGRADE:TurkiyeAkkor
+"AKKOR-Schutzsystem"
+END
+
+CONTROLBAR:UpgradeTurkiyeAkkor
+"AKKOR-&Schutzsystem"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeAkkor
+"Jeder Altay trägt eine Abfangladung, die alle drei Sekunden eine anfliegende Rakete oder einen Raketenwerfer-Treffer zerreißt."
+END
+
+UPGRADE:TurkiyeGokdogan
+"Gokdogan-Raketen"
+END
+
+CONTROLBAR:UpgradeTurkiyeGokdogan
+"Gokdogan-&Raketen"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeGokdogan
+"Kizilelma-Jäger feuern die Gokdogan: 360 Reichweite statt 280, 130 Schaden statt 100."
+END
+
+UPGRADE:TurkiyeSiperReinforced
+"Verstärkter Siper"
+END
+
+CONTROLBAR:UpgradeTurkiyeSiperReinforced
+"Ver&stärkter Siper"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeSiperReinforced
+"Beton und Überdeckung: Jeder Siper hält die Hälfte mehr aus, bevor er fällt."
+END
+
+UPGRADE:TurkiyeThermal
+"Wärmebildgeräte"
+END
+
+CONTROLBAR:UpgradeTurkiyeThermal
+"&Wärmebildgeräte"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeThermal
+"Beobachtertrupps sehen bis 650 und Cobras bis 320, und beide entdecken getarnte Einheiten."
+END
+
+UPGRADE:TurkiyeFuelCell
+"Brennstoffzelle"
+END
+
+CONTROLBAR:UpgradeTurkiyeFuelCell
+"&Brennstoffzelle"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeFuelCell
+"Die Bayraktar bleibt doppelt so lange über dem Ziel, mit doppelt so viel Munition."
+END
+
+UPGRADE:TurkiyeSwarmSoftware
+"Schwarmsoftware"
+END
+
+CONTROLBAR:UpgradeTurkiyeSwarmSoftware
+"Schwarm&software"
+END
+
+CONTROLBAR:ToolTipUpgradeTurkiyeSwarmSoftware
+"Die Munition der Bayraktar wählt ihr Ziel selbst: den teuersten Feind in Reichweite."
+END
+
+SCIENCE:TurkiyeRapidDeployment
+"Gokbey-Landung 1"
+END
+
+SCIENCE:TurkiyeRapidDeployment2
+"Gokbey-Landung 2"
+END
+
+SCIENCE:TurkiyeRapidDeployment3
+"Gokbey-Landung 3"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceRapidDeployment
+"Mehmetcik-Schützen und Sungur-Schützen springen per Fallschirm ab, wohin du zeigst: sechs auf Stufe 1, zehn auf Stufe 2, vierzehn und ein Kirpi auf Stufe 3. \n \n Einsatz von: Hauptquartier"
+END
+
+CONTROLBAR:TurkiyeRapidDeployment
+"Gokbey-&Landung"
+END
+
+CONTROLBAR:TooltipTurkiyeRapidDeployment
+"Gokbey-Landung \n Aufladezeit: 3:00"
+END
+
+SCIENCE:TurkiyeAllyAid
+"Bündnishilfe"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceAllyAid
+"Wähle Soldaten und Fahrzeuge, die du gerade bauen könntest, bezahle sie, und Transportflugzeuge fliegen sie ein. Zeige auf einen Verbündeten, und sie landen bei ihm. Ein Flugzeug trägt acht Soldaten oder zwei Fahrzeuge für 500 mehr, höchstens vier Flugzeuge, und ein abgeschossenes Flugzeug verliert seine Fracht. \n \n Einsatz von: Hauptquartier"
+END
+
+CONTROLBAR:TurkiyeAllyAid
+"&Bündnishilfe"
+END
+
+CONTROLBAR:TooltipTurkiyeAllyAid
+"Bündnishilfe \n Aufladezeit: 4:00"
+END
+
+SCIENCE:TurkiyeCommandoRaid
+"Kommandoeinsatz"
+END
+
+CONTROLBAR:ToolTipTurkiyeScienceCommandoRaid
+"Ein Maroon Beret und zwei Beobachtertrupps springen per Fallschirm ab, wohin du zeigst: Augen und Ladungen hinter den feindlichen Linien. \n \n Einsatz von: Hauptquartier"
+END
+
+CONTROLBAR:TurkiyeCommandoRaid
+"Komman&doeinsatz"
+END
+
+CONTROLBAR:TooltipTurkiyeCommandoRaid
+"Kommandoeinsatz \n Aufladezeit: 5:00"
+END
+
+OBJECT:TurkiyeKarguBase
+"Kargu-Drohnenbasis"
+END
+
+CONTROLBAR:ConstructTurkiyeKarguBase
+"&Kargu-Drohnenbasis"
+END
+
+OBJECT:TurkiyeHarekatMerkezi
+"Einsatzzentrale"
+END
+
+CONTROLBAR:ConstructTurkiyeHarekatMerkezi
+"&Einsatzzentrale"
+END
+
+CONTROLBAR:ToolTipTurkiyeHarekatMerkezi
+"Das Technologiegebäude der Türkei. Die ganze Armee kämpft jeweils unter einem Schlachtplan: Bombardement, Suchen und Zerstören oder Haltet die Linie. Erforscht Fortgeschrittenes Training und Chemieschutzanzüge und schaltet die Kargu-Drohnenbasis, den Sakarya, den Koral, die Akinci und den Maroon Beret frei. \n \n Benötigt: Fabrik oder Flugfeld \n Energie benötigt: 2"
+END
+
+OBJECT:TurkiyeKapalicarsi
+"Großer Basar"
+END
+
+CONTROLBAR:ConstructTurkiyeKapalicarsi
+"&Großer Basar"
+END
+
+CONTROLBAR:ToolTipTurkiyeKarguBase
+"Schickt einen Schwarm aus sechzehn Kamikazedrohnen an eine beliebige Stelle der Karte. Jede jagt eines der wertvollsten Ziele im Kreis und stürzt sich darauf; verstreute Armeen leiden am meisten. Sie steigen bis zur Decke und kommen wie Scud-Raketen herunter, und nichts kann sie unterwegs abschießen. \n \n Benötigt: Einsatzzentrale \n Energie benötigt: 10 \n Aufladezeit: 5:00"
+END
+
+CONTROLBAR:TurkiyeKarguSwarm
+"&Kargu-Schwarm"
+END
+
+CONTROLBAR:TooltipTurkiyeKarguSwarm
+"Kargu-Schwarm \n Aufladezeit: 5:00"
+END
+
+GUI:SuperweaponTurkiyeKarguSwarm
+"Kargu-Schwarm"
+END
+
+SCIENCE:TurkiyeTalent6A
+"Günstigere Gebäude"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent6A
+"Jedes Gebäude kostet 15 Prozent weniger, solange du noch ein Hauptquartier, eine Kaserne, eine Fabrik oder Pioniere hast."
+END
+
+SCIENCE:TurkiyeTalent6B
+"Günstigere Infanterie"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent6B
+"Jeder Soldat kostet 15 Prozent weniger, Pioniere und der Maroon Beret eingeschlossen, solange du noch ein Hauptquartier, eine Kaserne, eine Fabrik oder Pioniere hast."
+END
+
+SCIENCE:TurkiyeTalent7A
+"Altay-Panzerung"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent7A
+"Altay-Panzer halten ein Fünftel mehr Schaden aus, bevor sie sterben, 620 auf 744. Addiert sich mit der Verstärkten Wanne."
+END
+
+SCIENCE:TurkiyeTalent7B
+"Drohnenoptik"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent7B
+"Bayraktar- und Akinci-Drohnen sehen ein Viertel weiter: die Bayraktar 550 auf 688, die Akinci 400 auf 500."
+END
+
+SCIENCE:TurkiyeTalent8A
+"Siper-Wälle"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent8A
+"Siper-Bunker halten 30 Prozent länger stand, 1500 auf 1950. Addiert sich mit dem Verstärkten Siper."
+END
+
+SCIENCE:TurkiyeTalent8B
+"Sungur-Westen"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent8B
+"Sungur-Schützen halten ein Viertel mehr Schaden aus, bevor sie sterben, 160 auf 200."
+END
+
+SCIENCE:TurkiyeTalent9A
+"Drohnenschwarm +2"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent9A
+"Der Drohnenschwarm schickt 2 Drohnen mehr."
+END
+
+SCIENCE:TurkiyeTalent9B
+"Gokbey-Landung +4"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent9B
+"Die Gokbey-Landung setzt 4 Soldaten mehr ab."
+END
+
+SCIENCE:TurkiyeTalent10A
+"Breiter Tayfun"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent10A
+"Die Tayfun-Rakete trifft eine um ein Viertel größere Fläche."
+END
+
+SCIENCE:TurkiyeTalent10B
+"Erfahrene Baretts"
+END
+
+CONTROLBAR:ToolTipTurkiyeTalent10B
+"Maroon Berets verlassen die Kaserne als Veteranen."
+END
+
+SCIENCE:ChinaTalent6A
+"Günstige Hacker"
+END
+
+SCIENCE:ChinaTalent6B
+"Günstigere Infanterie"
+END
+
+SCIENCE:ChinaTalent7A
+"Battlemaster-Panzerung"
+END
+
+SCIENCE:ChinaTalent7B
+"Gatling-Panzerung"
+END
+
+SCIENCE:ChinaTalent8A
+"Gehärtete Verteidigung"
+END
+
+SCIENCE:ChinaTalent8B
+"Inferno-Antrieb"
+END
+
+SCIENCE:ChinaTalent9A
+"Artillerie-Sperrfeuer +12"
+END
+
+SCIENCE:ChinaTalent9B
+"Breite Streuminen"
+END
+
+SCIENCE:ChinaTalent10A
+"Erfahrene Overlords"
+END
+
+SCIENCE:ChinaTalent10B
+"Langer EMP"
+END
+
+SCIENCE:TankTalent7A
+"Emperor-Panzerung"
+END
+
+SCIENCE:TankTalent7B
+"Drachen- und Gatling-Panzerung"
+END
+
+SCIENCE:TankTalent8A
+"Feldreparaturen"
+END
+
+SCIENCE:TankTalent8B
+"Battlemaster-Panzerung"
+END
+
+SCIENCE:TankTalent10A
+"Elite-Emperors"
+END
+
+SCIENCE:TankTalent10B
+"Panzerabwurf +2"
+END
+
+SCIENCE:InfantryTalent7A
+"Schnelle Minigunner"
+END
+
+SCIENCE:InfantryTalent7B
+"Panzerjäger-Westen"
+END
+
+SCIENCE:InfantryTalent8A
+"Befestigte Mauern"
+END
+
+SCIENCE:InfantryTalent8B
+"Crawler-Panzerung"
+END
+
+SCIENCE:InfantryTalent10A
+"Feldverband"
+END
+
+SCIENCE:InfantryTalent10B
+"Infanterieabwurf +5"
+END
+
+SCIENCE:NukeTalent7A
+"Overlord-Panzerung"
+END
+
+SCIENCE:NukeTalent7B
+"Atomkanonen-Panzerung"
+END
+
+SCIENCE:NukeTalent8A
+"Reaktorabschirmung"
+END
+
+SCIENCE:NukeTalent8B
+"MiG-Panzerung"
+END
+
+SCIENCE:NukeTalent10A
+"Elite-Atomkanonen"
+END
+
+SCIENCE:NukeTalent10B
+"Overlord-Reparatur"
+END
+
+SCIENCE:AmericaTalent6A
+"Günstigere Technik"
+END
+
+SCIENCE:AmericaTalent6B
+"Gefechtsdrill"
+END
+
+SCIENCE:AmericaTalent9A
+"Zusätzlicher Thunderbolt"
+END
+
+SCIENCE:AmericaTalent9B
+"Zusätzliche Ranger"
+END
+
+SCIENCE:USATalent7A
+"Schwere Panzerung"
+END
+
+SCIENCE:USATalent7B
+"Körperpanzerung"
+END
+
+SCIENCE:USATalent8A
+"Gehärtete Verteidigung"
+END
+
+SCIENCE:USATalent8B
+"Verstärkte Zellen"
+END
+
+SCIENCE:USATalent10A
+"Breitere Detonation"
+END
+
+SCIENCE:USATalent10B
+"Feldreparatur"
+END
+
+SCIENCE:SuperweaponTalent7A
+"Alpha-Rumpf"
+END
+
+SCIENCE:SuperweaponTalent7B
+"Gepanzerte Eskorte"
+END
+
+SCIENCE:SuperweaponTalent8A
+"EMP-Patriot-Panzerung"
+END
+
+SCIENCE:SuperweaponTalent8B
+"Tomahawk-Überholung"
+END
+
+SCIENCE:SuperweaponTalent10A
+"Günstigere Superwaffen"
+END
+
+SCIENCE:SuperweaponTalent10B
+"Reparaturtrupps"
+END
+
+SCIENCE:LaserTalent7A
+"Laserpanzer-Panzerung"
+END
+
+SCIENCE:LaserTalent7B
+"Avenger-Panzerung"
+END
+
+SCIENCE:LaserTalent8A
+"Turmpanzerung"
+END
+
+SCIENCE:LaserTalent8B
+"Laserpanzer-Motoren"
+END
+
+SCIENCE:LaserTalent10A
+"Veteranen-Besatzungen"
+END
+
+SCIENCE:LaserTalent10B
+"Günstigere Verteidigung"
+END
+
+SCIENCE:AirForceTalent7A
+"Comanche-Panzerung"
+END
+
+SCIENCE:AirForceTalent7B
+"King-Raptor-Panzerung"
+END
+
+SCIENCE:AirForceTalent8A
+"Gehärtetes Flugfeld"
+END
+
+SCIENCE:AirForceTalent8B
+"Chinook-Überholung"
+END
+
+SCIENCE:AirForceTalent10A
+"Veteranen-Piloten"
+END
+
+SCIENCE:AirForceTalent10B
+"Rumpfreparatur"
+END
+
+SCIENCE:GLATalent6A
+"Schrottbau"
+END
+
+SCIENCE:GLATalent6B
+"Leichte Schritte"
+END
+
+SCIENCE:GLATalent9A
+"Größerer Hinterhalt"
+END
+
+SCIENCE:GLATalent9B
+"Breitere Seuche"
+END
+
+SCIENCE:GLATalent7A
+"Frisierte Motoren"
+END
+
+SCIENCE:GLATalent7B
+"RPG-Westen"
+END
+
+SCIENCE:GLATalent8A
+"Eingegrabene Stinger"
+END
+
+SCIENCE:GLATalent8B
+"Schrottpanzerung"
+END
+
+SCIENCE:GLATalent10A
+"Scud-Sperrfeuer"
+END
+
+SCIENCE:GLATalent10B
+"Veteranen-Besatzungen"
+END
+
+SCIENCE:ToxinTalent7A
+"Traktor-Überholung"
+END
+
+SCIENCE:ToxinTalent7B
+"Marauder-Panzerung"
+END
+
+SCIENCE:ToxinTalent8A
+"Tiefe Tunnel"
+END
+
+SCIENCE:ToxinTalent8B
+"Werfer-Überholung"
+END
+
+SCIENCE:ToxinTalent10A
+"Anhaltende Toxine"
+END
+
+SCIENCE:ToxinTalent10B
+"Veteranen-Fahrer"
+END
+
+SCIENCE:DemolitionTalent7A
+"Gepanzerte Motorräder"
+END
+
+SCIENCE:DemolitionTalent7B
+"Bombenlaster-Überholung"
+END
+
+SCIENCE:DemolitionTalent8A
+"Billige Fallen"
+END
+
+SCIENCE:DemolitionTalent8B
+"Buggy-Panzerung"
+END
+
+SCIENCE:DemolitionTalent10A
+"Schwerere Sprengköpfe"
+END
+
+SCIENCE:DemolitionTalent10B
+"Veteranen-Werfer"
+END
+
+SCIENCE:StealthTalent7A
+"Kells Weste"
+END
+
+SCIENCE:StealthTalent7B
+"Raider-Panzerung"
+END
+
+SCIENCE:StealthTalent8A
+"Versteckte Bunker"
+END
+
+SCIENCE:StealthTalent8B
+"Bombenlaster-Überholung"
+END
+
+SCIENCE:StealthTalent10A
+"Getarnte Raider"
+END
+
+SCIENCE:StealthTalent10B
+"Breiterer Störsender"
+END
+
+SCIENCE:TurkiyeTalent6AShort
+"Gebäude 15 Prozent billiger"
+END
+
+SCIENCE:TurkiyeTalent6BShort
+"Soldaten 15 Prozent billiger"
+END
+
+SCIENCE:TurkiyeTalent7AShort
+"Altay-Panzer robuster"
+END
+
+SCIENCE:TurkiyeTalent7BShort
+"Drohnen sehen weiter"
+END
+
+SCIENCE:TurkiyeTalent8AShort
+"Siper-Bunker robuster"
+END
+
+SCIENCE:TurkiyeTalent8BShort
+"Sungur-Schützen robuster"
+END
+
+SCIENCE:TurkiyeTalent9AShort
+"2 Drohnen mehr im Schwarm"
+END
+
+SCIENCE:TurkiyeTalent9BShort
+"4 Soldaten mehr landen"
+END
+
+SCIENCE:TurkiyeTalent10AShort
+"Tayfun trifft größere Fläche"
+END
+
+SCIENCE:TurkiyeTalent10BShort
+"Baretts starten als Veteranen"
+END
+
+SCIENCE:ChinaTalent6AShort
+"Hacker 40 Prozent billiger"
+END
+
+SCIENCE:ChinaTalent6BShort
+"Soldaten 20 Prozent billiger"
+END
+
+SCIENCE:ChinaTalent7AShort
+"Battlemaster robuster"
+END
+
+SCIENCE:ChinaTalent7BShort
+"Gatling-Panzer robuster"
+END
+
+SCIENCE:ChinaTalent8AShort
+"Bunker, Kanonen robuster"
+END
+
+SCIENCE:ChinaTalent8BShort
+"Infernos robuster und schneller"
+END
+
+SCIENCE:ChinaTalent9AShort
+"Eine Granatenwelle mehr"
+END
+
+SCIENCE:ChinaTalent9BShort
+"Minen decken mehr Fläche"
+END
+
+SCIENCE:ChinaTalent10AShort
+"Overlords starten als Veteranen"
+END
+
+SCIENCE:ChinaTalent10BShort
+"EMP hält 45 Sekunden"
+END
+
+SCIENCE:TankTalent7AShort
+"Emperors robuster"
+END
+
+SCIENCE:TankTalent7BShort
+"Drachen, Gatlings robuster"
+END
+
+SCIENCE:TankTalent8AShort
+"Panzer reparieren abseits des Kampfs"
+END
+
+SCIENCE:TankTalent8BShort
+"Battlemaster robuster"
+END
+
+SCIENCE:TankTalent10AShort
+"Emperors starten als Elite"
+END
+
+SCIENCE:TankTalent10BShort
+"2 Panzer mehr landen"
+END
+
+SCIENCE:InfantryTalent7AShort
+"Minigunner laufen schneller"
+END
+
+SCIENCE:InfantryTalent7BShort
+"Panzerjäger robuster"
+END
+
+SCIENCE:InfantryTalent8AShort
+"Befestigte Bunker robuster"
+END
+
+SCIENCE:InfantryTalent8BShort
+"Crawler robuster und schneller"
+END
+
+SCIENCE:InfantryTalent10AShort
+"Soldaten heilen abseits des Kampfs"
+END
+
+SCIENCE:InfantryTalent10BShort
+"5 Minigunner mehr landen"
+END
+
+SCIENCE:NukeTalent7AShort
+"Overlords robuster"
+END
+
+SCIENCE:NukeTalent7BShort
+"Atomkanonen robuster"
+END
+
+SCIENCE:NukeTalent8AShort
+"Reaktoren, Bunker robuster"
+END
+
+SCIENCE:NukeTalent8BShort
+"MiGs robuster"
+END
+
+SCIENCE:NukeTalent10AShort
+"Atomkanonen starten als Elite"
+END
+
+SCIENCE:NukeTalent10BShort
+"Overlords reparieren sich selbst"
+END
+
+SCIENCE:AmericaTalent6AShort
+"Fahrzeuge, Flugzeuge billiger"
+END
+
+SCIENCE:AmericaTalent6BShort
+"Einheiten steigen schneller auf"
+END
+
+SCIENCE:AmericaTalent9AShort
+"Ein A-10 mehr"
+END
+
+SCIENCE:AmericaTalent9BShort
+"4 Ranger mehr landen"
+END
+
+SCIENCE:USATalent7AShort
+"Crusader, Paladine robuster"
+END
+
+SCIENCE:USATalent7BShort
+"Ranger robuster"
+END
+
+SCIENCE:USATalent8AShort
+"Patriots, Feuerbasen robuster"
+END
+
+SCIENCE:USATalent8BShort
+"Comanches, Raptors robuster"
+END
+
+SCIENCE:USATalent10AShort
+"Große Bomben treffen breiter"
+END
+
+SCIENCE:USATalent10BShort
+"Fahrzeuge reparieren abseits des Kampfs"
+END
+
+SCIENCE:SuperweaponTalent7AShort
+"Aurora Alphas robuster"
+END
+
+SCIENCE:SuperweaponTalent7BShort
+"Humvees, Avengers robuster"
+END
+
+SCIENCE:SuperweaponTalent8AShort
+"EMP-Patriots robuster"
+END
+
+SCIENCE:SuperweaponTalent8BShort
+"Tomahawks robuster, schneller"
+END
+
+SCIENCE:SuperweaponTalent10AShort
+"Superwaffen ein Viertel billiger"
+END
+
+SCIENCE:SuperweaponTalent10BShort
+"Verteidigung repariert schneller"
+END
+
+SCIENCE:LaserTalent7AShort
+"Laserpanzer robuster"
+END
+
+SCIENCE:LaserTalent7BShort
+"Avengers robuster"
+END
+
+SCIENCE:LaserTalent8AShort
+"Lasertürme robuster"
+END
+
+SCIENCE:LaserTalent8BShort
+"Laserpanzer fahren schneller"
+END
+
+SCIENCE:LaserTalent10AShort
+"Laserpanzer starten als Veteranen"
+END
+
+SCIENCE:LaserTalent10BShort
+"Verteidigung 30 Prozent billiger"
+END
+
+SCIENCE:AirForceTalent7AShort
+"Comanches robuster"
+END
+
+SCIENCE:AirForceTalent7BShort
+"King Raptors robuster"
+END
+
+SCIENCE:AirForceTalent8AShort
+"Flugfelder, Patriots robuster"
+END
+
+SCIENCE:AirForceTalent8BShort
+"Chinooks robuster, schneller"
+END
+
+SCIENCE:AirForceTalent10AShort
+"King Raptors starten als Veteranen"
+END
+
+SCIENCE:AirForceTalent10BShort
+"Flugzeuge reparieren sich immer selbst"
+END
+
+SCIENCE:GLATalent6AShort
+"Gebäude 20 Prozent billiger"
+END
+
+SCIENCE:GLATalent6BShort
+"Infanterie läuft schneller"
+END
+
+SCIENCE:GLATalent7AShort
+"Technicals, Buggys schneller"
+END
+
+SCIENCE:GLATalent7BShort
+"RPG-Soldaten robuster"
+END
+
+SCIENCE:GLATalent8AShort
+"Stinger-Stellungen robuster"
+END
+
+SCIENCE:GLATalent8BShort
+"Scorpion, Marauder robuster"
+END
+
+SCIENCE:GLATalent9AShort
+"4 Rebellen mehr im Hinterhalt"
+END
+
+SCIENCE:GLATalent9BShort
+"Anthrax-Bombe trifft breiter"
+END
+
+SCIENCE:GLATalent10AShort
+"Scud-Sturm trifft breiter"
+END
+
+SCIENCE:GLATalent10BShort
+"Marauder starten als Veteranen"
+END
+
+SCIENCE:ToxinTalent7AShort
+"Traktoren robuster und schneller"
+END
+
+SCIENCE:ToxinTalent7BShort
+"Marauder robuster"
+END
+
+SCIENCE:ToxinTalent8AShort
+"Tunnel robuster"
+END
+
+SCIENCE:ToxinTalent8BShort
+"Werfer robuster, schneller"
+END
+
+SCIENCE:ToxinTalent10AShort
+"Scud-Gift hält länger"
+END
+
+SCIENCE:ToxinTalent10BShort
+"Traktoren starten als Veteranen"
+END
+
+SCIENCE:DemolitionTalent7AShort
+"Kampfmotorräder robuster"
+END
+
+SCIENCE:DemolitionTalent7BShort
+"Bombenlaster robuster, schneller"
+END
+
+SCIENCE:DemolitionTalent8AShort
+"Sprengfallen halber Preis"
+END
+
+SCIENCE:DemolitionTalent8BShort
+"Raketen-Buggys robuster"
+END
+
+SCIENCE:DemolitionTalent10AShort
+"Scud-Raketen schlagen härter"
+END
+
+SCIENCE:DemolitionTalent10BShort
+"Scud-Werfer starten als Veteranen"
+END
+
+SCIENCE:StealthTalent7AShort
+"Jarmen Kell robuster"
+END
+
+SCIENCE:StealthTalent7BShort
+"Technicals, Buggys robuster"
+END
+
+SCIENCE:StealthTalent8AShort
+"Tunnel, Stinger robuster"
+END
+
+SCIENCE:StealthTalent8BShort
+"Bombenlaster robuster, schneller"
+END
+
+SCIENCE:StealthTalent10AShort
+"Technicals, Buggys getarnt"
+END
+
+SCIENCE:StealthTalent10BShort
+"Scrambler tarnt größere Fläche"
+END
+
+GUI:QMMapNotBuilt
+"Dein Spiel konnte die Karte dieser Partie nicht aufbauen, deshalb wurde die Partie abgebrochen."
+END

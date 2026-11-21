@@ -7374,3 +7374,7 @@ END
 GUI:LaneEndReplay
 "Watch replay"
 END
+
+GUI:QMMapNotBuilt
+"Your game could not build this match's map, so the match was called off."
+END

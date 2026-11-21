@@ -97,6 +97,7 @@ MSS_API_LIST
 #undef MSS_API
 
 void AILCALL MA_AIL_ex_offline_mix(void);
+void AILCALL MA_AIL_ex_set_mix_frame_rate(S32 framesPerSecond);
 void AILCALL MA_AIL_ex_mix_to_frame(S32 logicFrame);
 void AILCALL MA_AIL_ex_capture_length(S32 *frames, S32 *rate);
 
@@ -116,6 +117,11 @@ void AILCALL AIL_ex_offline_mix(void)
 	}
 	g_offline = true;
 	MA_AIL_ex_offline_mix();
+}
+
+void AILCALL AIL_ex_set_mix_frame_rate(S32 framesPerSecond)
+{
+	MA_AIL_ex_set_mix_frame_rate(framesPerSecond);
 }
 
 void AILCALL AIL_ex_mix_to_frame(S32 logicFrame)

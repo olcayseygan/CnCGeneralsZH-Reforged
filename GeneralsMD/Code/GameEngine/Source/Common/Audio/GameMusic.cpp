@@ -302,7 +302,20 @@ void MusicManager::addAudioEvent( AudioEventRTS *eventToAdd )
 		eventToAdd->generatePlayInfo();
 	}
 
-	if (m_issuing)
+	// A mission script's change (doMusicTrackChange) asked for a fade out, a fade in or both: its
+	// track rises over the old one's fall the way ours does.  Only in a match the logic clock moves,
+	// since the rise steps on it; the load screen, the shell and the score screen keep EA's start.
+	const Bool scriptFade = !m_issuing && (m_fadingOut || eventToAdd->getShouldFade())
+		&& TheGameLogic != NULL && TheGameLogic->isInGame() && !TheGameLogic->isLoadingMap()
+		&& !TheGameLogic->isInShellGame();
+	m_fadingOut = FALSE;
+	if (scriptFade)
+	{
+		m_fadeStart = TheGameLogic->getFrame();
+		m_fadeTarget = eventToAdd->getVolume();
+		eventToAdd->setVolume( FADE_FLOOR );
+	}
+	if (m_issuing || scriptFade)
 	{
 		m_fadeEvent = eventToAdd;
 		m_fadeHandle = eventToAdd->getPlayingHandle();
@@ -319,6 +332,8 @@ void MusicManager::removeAudioEvent( AudioHandle eventToRemove )
 		m_heldStop = eventToRemove;
 		return;
 	}
+	if (!m_issuing && eventToRemove == AHSV_StopTheMusicFade)
+		m_fadingOut = TRUE;
 	stopTrack( eventToRemove );
 }
 
@@ -327,7 +342,10 @@ void MusicManager::removeAudioEvent( AudioHandle eventToRemove )
 void MusicManager::releaseHeldStop( void )
 {
 	if (m_stopHeld)
+	{
+		m_fadingOut = m_heldStop == AHSV_StopTheMusicFade;
 		stopTrack( m_heldStop );
+	}
 	m_stopHeld = FALSE;
 	m_inControl = FALSE;
 	m_mood = MOOD_CALM;
@@ -350,6 +368,7 @@ void MusicManager::startMatch( void )
 	m_fadeHandle = AHSV_Error;
 	m_fadeStart = 0;
 	m_fadeTarget = 1.0f;
+	m_fadingOut = FALSE;
 	m_lastLogFrame = 0;
 	for (Int i = 0; i < MOOD_COUNT; ++i)
 		m_pick[i] = 0;
@@ -486,6 +505,7 @@ void MusicManager::update( void )
 {
 	if (m_stopHeld)
 		releaseHeldStop();
+	m_fadingOut = FALSE;		// a fading stop pairs only with a play in the same pass
 
 	const Bool match = TheGameLogic != NULL && TheGameLogic->isInGame() && !TheGameLogic->isLoadingMap();
 	const UnsignedInt now = match ? TheGameLogic->getFrame() : 0;

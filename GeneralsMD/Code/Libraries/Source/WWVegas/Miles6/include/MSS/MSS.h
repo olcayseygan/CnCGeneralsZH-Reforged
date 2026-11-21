@@ -276,13 +276,16 @@ S32       AILCALL AIL_ex_start_capture(const char *pathname);
 void      AILCALL AIL_ex_stop_capture(void);
 
 /* The logic clock's mix, for -wav.  AIL_ex_offline_mix, called before AIL_startup, opens no audio
-   device: the mix moves only when AIL_ex_mix_to_frame asks it to, logicFrame * rate / 60 frames from
-   the start, so a capture holds exactly the sound of the logic frames it spans however fast or slow
-   the run went.  Nothing is heard meanwhile.  AIL_ex_capture_length reports what the last finished
+   device: the mix moves only when AIL_ex_mix_to_frame asks it to, logicFrame * rate / framesPerSecond
+   frames from the start, so a capture holds exactly the sound of the logic frames it spans however
+   fast or slow the run went.  framesPerSecond is what AIL_ex_set_mix_frame_rate last set, 60 until
+   it is called; the game passes its logic rate.  Nothing is heard meanwhile.
+   AIL_ex_capture_length reports what the last finished
    capture wrote, in frames at its rate; the XAudio2 backend does not count and says zero.
    ZH_WAV_XAUDIO2 in the environment leaves the run on XAudio2 instead, recording its master in real
    time (miles_dispatch.cpp). */
 void      AILCALL AIL_ex_offline_mix(void);
+void      AILCALL AIL_ex_set_mix_frame_rate(S32 framesPerSecond);
 void      AILCALL AIL_ex_mix_to_frame(S32 logicFrame);
 void      AILCALL AIL_ex_capture_length(S32 *frames, S32 *rate);
 

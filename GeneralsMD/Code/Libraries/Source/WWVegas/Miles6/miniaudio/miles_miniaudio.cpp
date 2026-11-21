@@ -1412,17 +1412,26 @@ void AILCALL AIL_ex_offline_mix(void)
 	g_engine.offline = true;
 }
 
-// The logic runs 60 frames a second of game time (LOGICFRAMES_PER_SECOND in the game's GameCommon.h,
-// which this library cannot see: keep the two equal), whatever the wall clock does.  Each target is
-// computed from the absolute frame, so the remainders of a rate 60 does not divide never add up:
-// frames a to b always mix (b - a) * rate / 60, give or take one sample.
+// Logic frames a second of wall time, which this library cannot see: the game passes its
+// LOGICFRAMES_PER_SECOND (GameCommon.h) through AIL_ex_set_mix_frame_rate.  60 until then.
+static long long g_mixFramesPerSecond = 60;
+
+void AILCALL AIL_ex_set_mix_frame_rate(S32 framesPerSecond)
+{
+	if (framesPerSecond > 0) {
+		g_mixFramesPerSecond = framesPerSecond;
+	}
+}
+
+// Each target is computed from the absolute frame, whatever the wall clock does, so the remainders
+// of a rate the frame rate does not divide never add up: frames a to b always mix
+// (b - a) * rate / g_mixFramesPerSecond, give or take one sample.
 void AILCALL AIL_ex_mix_to_frame(S32 logicFrame)
 {
-	const long long LOGIC_FRAMES_PER_SECOND = 60;
 	if (!g_engine.offline || !g_engine.deviceReady) {
 		return;
 	}
-	const long long target = (long long)logicFrame * g_engine.deviceRate / LOGIC_FRAMES_PER_SECOND;
+	const long long target = (long long)logicFrame * g_engine.deviceRate / g_mixFramesPerSecond;
 	// The first call, and a logic clock that went back (a new match starts at frame 0), place the mix
 	// rather than make it play the difference.
 	if (!g_engine.mixAnchored || target < g_engine.mixedFrames) {

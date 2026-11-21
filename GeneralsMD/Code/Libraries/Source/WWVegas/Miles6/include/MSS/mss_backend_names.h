@@ -80,6 +80,7 @@
 #define AIL_ex_start_capture                 MSS_BACKEND_NAME(AIL_ex_start_capture)
 #define AIL_ex_stop_capture                  MSS_BACKEND_NAME(AIL_ex_stop_capture)
 #define AIL_ex_offline_mix                   MSS_BACKEND_NAME(AIL_ex_offline_mix)
+#define AIL_ex_set_mix_frame_rate            MSS_BACKEND_NAME(AIL_ex_set_mix_frame_rate)
 #define AIL_ex_mix_to_frame                  MSS_BACKEND_NAME(AIL_ex_mix_to_frame)
 #define AIL_ex_capture_length                MSS_BACKEND_NAME(AIL_ex_capture_length)
 #define AIL_ex_set_3D_linear_falloff         MSS_BACKEND_NAME(AIL_ex_set_3D_linear_falloff)

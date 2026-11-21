@@ -174,6 +174,7 @@ class MusicManager
 		AudioHandle m_fadeHandle;			///< its handle: the copy is only touched while the device still has it
 		UnsignedInt m_fadeStart;
 		Real m_fadeTarget;
+		Bool m_fadingOut;							///< a fading stop went through since the last update: the next play rises
 		Int m_pick[MOOD_COUNT];				///< steps through each mood's tracks in turn
 		UnsignedInt m_lastLogFrame;
 };

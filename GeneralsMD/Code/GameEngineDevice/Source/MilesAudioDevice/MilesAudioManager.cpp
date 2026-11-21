@@ -574,9 +574,8 @@ static void updateSoundCapture( void )
 		return;
 
 	const UnsignedInt frame = TheGameLogic->getFrame();
-	// AIL_ex_mix_to_frame counts in sixtieths of a second (MSS.h), so the frame goes in as that many
-	static_assert( 60 % LOGICFRAMES_PER_SECOND == 0, "AIL_ex_mix_to_frame takes sixtieths of a second" );
-	AIL_ex_mix_to_frame((S32)(frame * (60 / LOGICFRAMES_PER_SECOND)));
+	// The mix counts logic frames at the rate AIL_ex_set_mix_frame_rate gave it (openDevice).
+	AIL_ex_mix_to_frame((S32)frame);
 
 	if (finished || !TheGameLogic->isInGame() || TheGameLogic->isInShellGame())
 		return;
@@ -1846,7 +1845,10 @@ void MilesAudioManager::openDevice( void )
 	// -wav records from a mix the logic clock moves (updateSoundCapture), so the run plays no sound
 	// and needs no audio device.
 	if (TheGlobalData->m_wavEndFrame > 0)
+	{
 		AIL_ex_offline_mix();
+		AIL_ex_set_mix_frame_rate(LOGICFRAMES_PER_SECOND);
+	}
 	AIL_startup();
 	Int retval = 0;
 

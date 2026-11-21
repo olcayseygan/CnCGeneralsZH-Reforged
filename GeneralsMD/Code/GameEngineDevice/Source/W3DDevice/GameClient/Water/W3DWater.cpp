@@ -540,16 +540,19 @@ void WaterRenderObjClass::takeWaterPolygonsForDraw(void)
 }
 
 /** The sea past the heightmap's edge, over the land drawn there (TerrainSkirt).  Every side of a
-	sea's polygon that runs along the heightmap's edge gets a strip out to the skirt's rim at the side's
-	own level, and a point in one of its corners a square, as polygons of their own after the authored
-	ones.  The water stopped dead in a ruler line along the edge on Tournament Island.  Nothing moves
-	an authored point, so the water inside the map is the polygon's exactly; rivers keep their banks. */
+	sea's polygon that runs along the map's border band (anywhere from the playable edge out) gets a
+	strip out to the skirt's rim at the side's own level, and a point in one of its corners a square,
+	as polygons of their own after the authored ones.  The water stopped dead in a ruler line along the
+	edge on Tournament Island.  Nothing moves an authored point, so the water inside the map is the
+	polygon's exactly; rivers keep their banks.  The skirt takes its sea floor from these strips alone
+	(getSkirtSeaLevel), so no sea floor lies dry, and is built again when they change. */
 void WaterRenderObjClass::addSkirtSeas(void)
 {
+	m_skirtSeasFirst = m_waterPolygonsForDraw.size();
 	WorldHeightMap *map = TheTerrainRenderObject ? TheTerrainRenderObject->getMap() : NULL;
 	if (map == NULL || map->getXExtent() < 2 || map->getYExtent() < 2)
 		return;
-	const Int SNAP = 2*MAP_XY_FACTOR;	// a point this near the edge lies on it
+	const Int SNAP = (map->getBorderSize() + 2)*MAP_XY_FACTOR;	// a point this near the heightmap's edge is in the border band
 	const Int REACH = (Int)TerrainSkirt::REACH;
 	const Int lowX = -map->getBorderSize()*MAP_XY_FACTOR, highX = (map->getXExtent() - 1 - map->getBorderSize())*MAP_XY_FACTOR;
 	const Int lowY = -map->getBorderSize()*MAP_XY_FACTOR, highY = (map->getYExtent() - 1 - map->getBorderSize())*MAP_XY_FACTOR;
@@ -615,6 +618,31 @@ void WaterRenderObjClass::addSkirtSeas(void)
 			m_waterPolygonsForDraw.push_back(std::move(sea));
 		}
 	}
+	double sum = 0.0;
+	for (size_t p = m_skirtSeasFirst; p < m_waterPolygonsForDraw.size(); ++p)
+		for (const ICoord3D &point : m_waterPolygonsForDraw[p].points)
+			sum = sum*1.000003 + point.x*3.0 + point.y*7.0 + point.z*11.0;
+	if (sum != m_skirtSeasSum) {
+		m_skirtSeasSum = sum;
+		TheTerrainRenderObject->invalidateSkirt();
+	}
+}
+
+Real WaterRenderObjClass::getSkirtSeaLevel(Real x, Real y) const
+{
+	Real level = INVALID_WATER_HEIGHT;
+	for (size_t p = m_skirtSeasFirst; p < m_waterPolygonsForDraw.size(); ++p) {
+		const std::vector<ICoord3D> &points = m_waterPolygonsForDraw[p].points;
+		Bool inside = FALSE;	// even-odd over the strip's four sides
+		for (size_t i = 0, j = points.size() - 1; i < points.size(); j = i++) {
+			const Real xi = (Real)points[i].x, yi = (Real)points[i].y, xj = (Real)points[j].x, yj = (Real)points[j].y;
+			if ((yi > y) != (yj > y) && x < xi + (xj - xi)*(y - yi)/(yj - yi))
+				inside = !inside;
+		}
+		if (inside && (Real)points[0].z > level)
+			level = (Real)points[0].z;
+	}
+	return level;
 }
 
 void WaterRenderObjClass::takeMotionReadsForRender(void)
@@ -670,6 +698,11 @@ void WaterRenderObjClass::takeReadsForRender(void)
 		}
 		m_modernObjectsForDraw.emplace((UnsignedInt)object->getID(),read);
 	}
+}
+#else
+Real WaterRenderObjClass::getSkirtSeaLevel(Real, Real) const
+{
+	return INVALID_WATER_HEIGHT;	// no draw copy of the polygons to extend: the skirt stays land
 }
 #endif
 

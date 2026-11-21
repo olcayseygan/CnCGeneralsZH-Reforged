@@ -1232,22 +1232,20 @@ void WorldHeightMap::getSkirtTile(Int tileX, Int tileY, Int *key, Int *across, I
 	if (m_tileNdxes == NULL || m_width < 2 || m_height < 2)
 		return;
 	Int cellX, cellY;
-	const Bool past = TerrainSkirt::patchCell(tileX, tileY, m_width, m_height, &cellX, &cellY);
+	const unsigned patch = TerrainSkirt::patchCell(tileX, tileY, m_width, m_height, &cellX, &cellY);
 	Int baseNdx = m_tileNdxes[cellY*m_width + cellX] >> 2;
 	if (baseNdx < 0 || baseNdx >= NUM_SOURCE_TILES)
 		return;
 	*sourceTile = baseNdx;
 	*key = -(baseNdx + 1);	// a tile in no class stands alone
-	// WorldBuilder lays a class as firstTile + (x/2 % width) + width*(y/2 % width): carry that on over
-	// the map's own cells, and scatter the class's tiles past the edge (TerrainSkirt::scatterTile)
+	// WorldBuilder lays a class as firstTile + (x/2 % width) + width*(y/2 % width): carry that on,
+	// the block moved whole by its patch past the edge (TerrainSkirt::scatterTile)
 	for (Int i = 0; i < m_numTextureClasses; i++) {
 		const TXTextureClass &tc = m_textureClasses[i];
 		if (tc.firstTile < 0 || tc.width <= 0 || baseNdx < tc.firstTile || baseNdx >= tc.firstTile + tc.numTiles)
 			continue;
-		Int a = ((tileX % tc.width) + tc.width) % tc.width;
-		Int d = ((tileY % tc.width) + tc.width) % tc.width;
-		if (past)
-			TerrainSkirt::scatterTile(tileX, tileY, tc.width, &a, &d);
+		Int a, d;
+		TerrainSkirt::scatterTile(tileX, tileY, tc.width, patch, &a, &d);
 		const Int tile = tc.firstTile + a + tc.width*d;
 		if (tile < tc.firstTile + tc.numTiles && tile < NUM_SOURCE_TILES && tc.width*tc.width <= tc.numTiles) {
 			*key = i;

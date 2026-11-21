@@ -49,9 +49,14 @@ TEST(past_a_sea_edge_it_stays_under_the_water)
 
 TEST(a_coast_mixes_land_and_sea_by_the_sea_share)
 {
-	CHECK_EQ(coastHeight(80.0f, 10.0f, 0.0f), 80.0f);
-	CHECK_EQ(coastHeight(80.0f, 10.0f, 1.0f), 10.0f);
-	CHECK_NEAR(coastHeight(80.0f, 10.0f, 0.5f), 45.0f, 1e-4f);
+	const float waterZ = 20.0f;
+	CHECK_EQ(coastHeight(80.0f, 10.0f, 0.0f, waterZ), 80.0f);
+	CHECK_NEAR(coastHeight(80.0f, 10.0f, 0.5f, waterZ), 45.0f, 1e-4f);
+	// no sea strip over it, so lowered land stops just over the water instead of a dry trench...
+	CHECK_NEAR(coastHeight(80.0f, 10.0f, 1.0f, waterZ), waterZ + SHORE_RISE, 1e-4f);
+	CHECK_NEAR(coastHeight(80.0f, 10.0f, 0.9f, waterZ), waterZ + SHORE_RISE, 1e-4f);
+	// ...and land already lower than that is left where it is
+	CHECK_EQ(coastHeight(15.0f, 10.0f, 0.5f, waterZ), 15.0f);
 	// the sea flag blurred along the ring turns over a coast, never in one step
 	std::vector<float> sea(60, 0.0f);
 	for (int i = 30; i < 60; ++i)
@@ -72,47 +77,86 @@ TEST(the_hills_have_no_steps)
 	}
 }
 
-TEST(a_tile_past_the_edge_takes_its_texture_from_a_wandering_edge_cell)
+TEST(a_tile_past_the_edge_takes_its_texture_from_its_patch)
 {
 	const int w = 129, h = 97;
 	int x = 0, y = 0;
-	CHECK(!patchCell(10, 20, w, h, &x, &y));
+	// on the map, and right beside its edge, a tile is the map's own
+	CHECK_EQ(patchCell(10, 20, w, h, &x, &y), 0u);
 	CHECK_EQ(x, 20);
 	CHECK_EQ(y, 40);
-	// straight out from the bottom edge the cell it reads moves, where the nearest cell stayed put
-	int first = -1, moved = 0;
-	for (int s = -1; s >= -80; --s)
+	CHECK_EQ(patchCell(30, -1, w, h, &x, &y), 0u);
+	CHECK_EQ(x, 60);
+	CHECK_EQ(y, 0);
+	// from the third tile out (the edge carried on no further) straight out from the bottom edge the
+	// cell it reads changes from patch to patch, and a patch reads one cell, along the edge and never
+	// deeper in than PATCH_SHIFT
+	unsigned lastPatch = 0;
+	int lastX = -1, lastY = -1, patches = 0, moved = 0;
+	for (int s = -3; s >= -80; --s)
 	{
-		CHECK(patchCell(30, s, w, h, &x, &y));
+		const unsigned patch = patchCell(30, s, w, h, &x, &y);
+		CHECK(patch != 0u);
 		CHECK(x >= 0 && x <= w - 2);
-		CHECK(y >= 0 && y <= h - 2);
-		if (first < 0)
-			first = x;
-		else if (x != first)
-			moved++;
+		CHECK(y >= 0 && y <= PATCH_SHIFT);
+		if (patch == lastPatch)
+		{
+			CHECK_EQ(x, lastX);
+			CHECK_EQ(y, lastY);
+		}
+		else
+		{
+			patches++;
+			if (x != lastX)
+				moved++;
+		}
+		lastPatch = patch;
+		lastX = x;
+		lastY = y;
 	}
-	CHECK(moved > 20);
+	CHECK(patches >= 4);
+	CHECK(moved >= 3);
 }
 
-TEST(a_class_past_the_edge_scatters_its_tiles)
+TEST(a_patch_keeps_its_class_whole_and_moves_the_block)
 {
-	// every tile of a 4 wide class turns up, and not in the map's repeating order
 	const int width = 4;
-	int seen[width * width] = {0};
-	int inOrder = 0;
-	for (int t = 0; t < 64; ++t)
+	int a = -1, d = -1;
+	// patch 0 is the map's own order
+	scatterTile(13, -6, width, 0u, &a, &d);
+	CHECK_EQ(a, 1);
+	CHECK_EQ(d, 2);
+	// inside one patch, neighbours are the class's neighbours
+	int shifted = 0;
+	for (unsigned patch = 1; patch < 40; ++patch)
 	{
-		int a = -1, d = -1;
-		scatterTile(t, -9, width, &a, &d);
-		CHECK(a >= 0 && a < width && d >= 0 && d < width);
-		if (a >= 0 && a < width && d >= 0 && d < width)
-			seen[a + width * d]++;
-		if (a == t % width)
-			inOrder++;
+		int a1 = -1, d1 = -1, a2 = -1, d2 = -1;
+		scatterTile(20, -30, width, patch * 2654435761u, &a1, &d1);
+		scatterTile(21, -30, width, patch * 2654435761u, &a2, &d2);
+		CHECK_EQ(a2, (a1 + 1) % width);
+		CHECK_EQ(d2, d1);
+		if (a1 != 0 || d1 != ((-30 % width) + width) % width)
+			shifted++;
 	}
-	for (int i = 0; i < width * width; ++i)
-		CHECK(seen[i] > 0);
-	CHECK(inOrder < 32);
+	CHECK(shifted > 20);
+}
+
+TEST(the_baked_shade_is_the_maps_and_averages_one)
+{
+	// the same hash as the shader's terrain_hash: the cell (0, 0) hashes to nought, (1, 0) does not
+	CHECK_EQ(variationHash(0, 0), 0.0f);
+	CHECK(variationHash(1, 0) > 0.0f && variationHash(1, 0) < 1.0f);
+	double sum = 0.0;
+	const int samples = 4000;
+	for (int i = 0; i < samples; ++i)
+	{
+		float rgb[3];
+		variation(-2000.0f + 37.3f * i, 900.0f - 23.9f * i, rgb);
+		for (int c = 0; c < 3; ++c)
+			CHECK(rgb[c] > 0.6f && rgb[c] < 1.4f);
+		sum += rgb[1];
+	}
+	CHECK_NEAR(sum / samples, 1.0, 0.05);
 }
 
 TEST(the_light_is_whole_near_the_map_and_gone_at_the_rim)

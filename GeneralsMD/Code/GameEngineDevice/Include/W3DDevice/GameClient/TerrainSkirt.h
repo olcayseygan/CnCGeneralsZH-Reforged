@@ -25,7 +25,8 @@
 // starts on the edge sample's own height, slides over to a blur of the edge round it, then to the
 // mean of the edge's land, and low hills grow out of that.  Past an edge under water it stays sea
 // floor under the water instead (seaHeight), and a coast mixes the two.  Toward the rim it fades
-// into the horizon's colour, which is also the frame's clear colour, so it ends in what lies past it.
+// into the horizon's colour, which drawSkirtFade also lays over the void past it in the tactical view,
+// so it ends in what lies past it.
 // Nothing here knows the engine: test_terrain_skirt includes it bare.
 
 #pragma once
@@ -57,12 +58,15 @@ namespace TerrainSkirt
 	const float LEVEL_RAMP = 450.0f;	///< 900 carried the edge's own ridges out as long parallel ribs
 	/// Samples either way along the edge the blur averages.
 	const int PROFILE_RADIUS = 12;
-	/** How far, in map cells, a tile past the edge wanders from the edge cell it takes its texture from:
-		this much at the edge, and this share of its own distance out more beyond it.  A patch is about
-		PATCH_TILES tiles across. */
-	const float PATCH_SHIFT = 12.0f;
-	const float PATCH_SPREAD = 0.4f;
+	/** The texture past the edge (patchCell).  Beside the edge, a band PATCH_NEAR tiles deep give or
+		take half carries the edge on as it is.  Past it the ground is patches about PATCH_TILES tiles
+		across, each one texture class, taken from the edge near the patch's centre and moved along the
+		edge by up to PATCH_SHIFT cells plus PATCH_SPREAD of the centre's distance out, in cells; never
+		further in than PATCH_SHIFT. */
+	const float PATCH_NEAR = 1.5f;
 	const float PATCH_TILES = 12.0f;
+	const float PATCH_SHIFT = 12.0f;
+	const float PATCH_SPREAD = 0.6f;
 	/** The skirt starts a cell inside the map and goes under it there, edge samples included, by this
 		much, world units, so the subdivided ground's edge, which bends between its samples, never opens
 		a crack onto the clear colour and the skirt's long quads never poke up through the first cell. */
@@ -109,36 +113,118 @@ namespace TerrainSkirt
 		return cell < 0 ? 0 : (cell > last ? last : cell);
 	}
 
+	inline int cellsOut(int cell, int last)
+	{
+		return cell < 0 ? -cell : (cell > last ? cell - last : 0);
+	}
+
 	/** The map cell (the tile's lower left, on a width by height heightmap) a tile takes its texture
-		from, and whether the tile lies past the edge.  A tile on the map takes its own.  One past the
-		edge takes an edge cell near it, moved by a slow noise that wanders further the further out the
-		tile is (PATCH_SHIFT, PATCH_SPREAD) and clamped back onto the map, so it lands along the edge or
-		some cells in.  The straight nearest cell carried each edge cell out to the rim as a stripe,
-		grass and rock side by side down the whole skirt. */
-	inline bool patchCell(int tileX, int tileY, int width, int height, int *cellX, int *cellY)
+		from, and the patch it lies in: 0 for a tile on the map or in the band that carries the edge on,
+		which keep the map's own order, and otherwise a hash that is the same over the whole patch.  The
+		patches are the tiles nearest each of a grid of centres jittered by a hash, so their borders run
+		every way.  The straight nearest cell carried each edge cell out to the rim as a stripe, grass and
+		rock side by side down the whole skirt. */
+	inline unsigned patchCell(int tileX, int tileY, int width, int height, int *cellX, int *cellY)
 	{
 		const int x = 2 * tileX, y = 2 * tileY;
 		*cellX = clampCell(x, width - 2);
 		*cellY = clampCell(y, height - 2);
-		if (*cellX == x && *cellY == y)
-			return false;
-		const int outX = x > *cellX ? x - *cellX : *cellX - x;
-		const int outY = y > *cellY ? y - *cellY : *cellY - y;
-		const float reach = PATCH_SHIFT + PATCH_SPREAD * (float)(outX > outY ? outX : outY);
-		const float shiftX = (valueNoise(tileX / PATCH_TILES, tileY / PATCH_TILES) - 0.5f) * 2.0f * reach;
-		const float shiftY = (valueNoise(tileX / PATCH_TILES + 71.0f, tileY / PATCH_TILES - 37.0f) - 0.5f) * 2.0f * reach;
-		*cellX = clampCell(*cellX + (int)floorf(shiftX + 0.5f), width - 2);
-		*cellY = clampCell(*cellY + (int)floorf(shiftY + 0.5f), height - 2);
-		return true;
+		const int out = cellsOut(x, width - 2) > cellsOut(y, height - 2) ? cellsOut(x, width - 2) : cellsOut(y, height - 2);
+		if (out == 0 || out < 2.0f * PATCH_NEAR * (0.5f + valueNoise(tileX / 5.0f, tileY / 5.0f)))
+			return 0;
+		const int px = (int)floorf(tileX / PATCH_TILES), py = (int)floorf(tileY / PATCH_TILES);
+		float best = 1.0e30f, centreX = 0.0f, centreY = 0.0f;
+		int bestX = px, bestY = py;
+		for (int j = py - 1; j <= py + 1; ++j)
+			for (int i = px - 1; i <= px + 1; ++i)
+			{
+				const float cx = (i + lattice(i, j)) * PATCH_TILES, cy = (j + lattice(i + 31, j - 17)) * PATCH_TILES;
+				const float d = (cx - tileX) * (cx - tileX) + (cy - tileY) * (cy - tileY);
+				if (d < best)
+				{
+					best = d;
+					centreX = cx;
+					centreY = cy;
+					bestX = i;
+					bestY = j;
+				}
+			}
+		const int cx = (int)floorf(2.0f * centreX + 0.5f), cy = (int)floorf(2.0f * centreY + 0.5f);
+		const int outX = cellsOut(cx, width - 2), outY = cellsOut(cy, height - 2);
+		const float along = (lattice(bestX + 5, bestY + 9) - 0.5f) * 2.0f
+			* (PATCH_SHIFT + PATCH_SPREAD * (float)(outX > outY ? outX : outY));
+		const int inward = (int)(lattice(bestX - 3, bestY + 11) * PATCH_SHIFT);
+		int sx = clampCell(cx, width - 2), sy = clampCell(cy, height - 2);
+		// along the edge the tile lies past, a little in from it; past a corner, along one of the two
+		const bool alongX = cellsOut(y, height - 2) > 0 && (cellsOut(x, width - 2) == 0 || lattice(bestX, bestY - 7) < 0.5f);
+		if (alongX)
+		{
+			sx += (int)floorf(along + 0.5f);
+			sy = y < 0 ? inward : height - 2 - inward;
+		}
+		else
+		{
+			sy += (int)floorf(along + 0.5f);
+			sx = x < 0 ? inward : width - 2 - inward;
+		}
+		*cellX = clampCell(sx, width - 2);
+		*cellY = clampCell(sy, height - 2);
+		unsigned patch = (unsigned)bestX * 2654435761u ^ (unsigned)bestY * 40503u;
+		return patch == 0 ? 1u : patch;
 	}
 
-	/** Which tile of a texture class `width` tiles square a tile past the edge wears, across and down:
-		a hash of the tile, where the map lays the class out in order.  In order, a rock class laid the
-		same block of tiles again every `width` tiles out to the rim, rows of the same boulders. */
-	inline void scatterTile(int tileX, int tileY, int width, int *across, int *down)
+	/** Which tile of a texture class `width` tiles square a tile wears, across and down: the map's own
+		order, as WorldBuilder lays it, with the whole block moved by its patch (patchCell).  So a patch
+		keeps the class's picture whole and the seams fall only where patches meet; the same block again
+		every `width` tiles out to the rim laid rows of the same boulders. */
+	inline void scatterTile(int tileX, int tileY, int width, unsigned patch, int *across, int *down)
 	{
-		*across = (int)(lattice(tileX, tileY) * 65535.0f) % width;
-		*down = (int)(lattice(tileX + 7919, tileY - 104729) * 65535.0f) % width;
+		const int shiftX = patch == 0 ? 0 : (int)((patch >> 3) % (unsigned)width);
+		const int shiftY = patch == 0 ? 0 : (int)((patch >> 11) % (unsigned)width);
+		*across = ((tileX + shiftX) % width + width) % width;
+		*down = ((tileY + shiftY) % width + width) % width;
+	}
+
+	/// terrain_variation's hash (ffshader.h TERRAIN_VARIATION_SAMPLING), 0 to 1, bit for bit.
+	inline float variationHash(int x, int y)
+	{
+		unsigned h = (unsigned)x * 0x8da6b343u ^ (unsigned)y * 0xd8163841u;
+		h ^= h >> 15;
+		h *= 0x2c1b3c6du;
+		h ^= h >> 12;
+		h *= 0x297a2d39u;
+		h ^= h >> 15;
+		return (float)(h >> 8) * (1.0f / 16777216.0f);
+	}
+
+	inline float variationNoise(float x, float y)
+	{
+		const float fx = floorf(x), fy = floorf(y);
+		const int ix = (int)fx, iy = (int)fy;
+		float tx = x - fx, ty = y - fy;
+		tx = tx * tx * (3.0f - 2.0f * tx);
+		ty = ty * ty * (3.0f - 2.0f * ty);
+		const float top = variationHash(ix, iy) + (variationHash(ix + 1, iy) - variationHash(ix, iy)) * tx;
+		const float bottom = variationHash(ix, iy + 1) + (variationHash(ix + 1, iy + 1) - variationHash(ix, iy + 1)) * tx;
+		return top + (bottom - top) * ty;
+	}
+
+	/** The ground's slow shade and warm-cool tilt at a world point, as terrain_variation multiplies the
+		map's light under the sun per pixel, fully faded in (the skirt is never under the closest zoom's
+		ground).  Baked into the skirt's vertices under the same mode, or the skirt stood a tone apart
+		from the map's edge. */
+	inline void variation(float worldX, float worldY, float rgb[3])
+	{
+		const float ax = worldX * 0.866f + worldY * 0.5f, ay = worldX * -0.5f + worldY * 0.866f;
+		const float bx = worldX * 0.423f + worldY * -0.906f, by = worldX * 0.906f + worldY * 0.423f;
+		const float n = 0.4f * variationNoise(ax / 290.0f, ay / 290.0f)
+			+ 0.35f * variationNoise(bx / 113.0f + 17.3f, by / 113.0f + 17.3f)
+			+ 0.25f * variationNoise(ax / 41.0f + 53.7f, ay / 41.0f + 53.7f);
+		const float tilt = variationNoise(bx / 197.0f + 91.1f, by / 197.0f + 91.1f) - 0.5f;
+		const float shade = 1.0f + 0.6f * (n - 0.5f);
+		rgb[0] = shade * (1.0f + 0.08f * tilt);
+		rgb[1] = shade;
+		rgb[2] = shade * (1.0f - 0.08f * tilt);
 	}
 
 	/// Value noise on a lattice turned by the angle whose cosine and sine are c and s, cells a wavelength wide.
@@ -182,12 +268,19 @@ namespace TerrainSkirt
 		return edge + (floorZ - edge) * smooth(outside / PROFILE_RAMP);
 	}
 
-	/** The two heights mixed by the share of sea along the edge round the point (blurRing of 1 for
-		an edge sample under water, 0 for land), so a coast turns from one into the other over the blur
-		and no wall stands where the edge goes into the water. */
-	inline float coastHeight(float land, float sea, float seaShare)
+	/// How far over the water a coast beside a sea strip comes down to, world units.
+	const float SHORE_RISE = 2.0f;
+
+	/** Land beside the sea past the edge (no sea strip over it): the two heights mixed by the share of
+		sea along the edge round the point (blurRing of 1 for an edge sample with sea past it, 0 for
+		land), so a coast turns from one into the other over the blur and no wall stands where the edge
+		goes into the water, but never under the water's level, which has no water drawn over it here:
+		low land stays as it is, and lowered land stops just over the water as a beach, not a dry trench. */
+	inline float coastHeight(float land, float sea, float seaShare, float waterZ)
 	{
-		return land + (sea - land) * seaShare;
+		const float mixed = land + (sea - land) * seaShare;
+		const float floorZ = land < waterZ + SHORE_RISE ? land : waterZ + SHORE_RISE;
+		return mixed > floorZ ? mixed : floorZ;
 	}
 
 	/// What share of its own colour a point `outside` units past the edge keeps against the horizon's: 1 near the map, 0 at the rim.

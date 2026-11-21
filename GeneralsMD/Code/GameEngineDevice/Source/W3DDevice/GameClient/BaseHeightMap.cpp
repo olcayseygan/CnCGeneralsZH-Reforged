@@ -3307,10 +3307,13 @@ Real BaseHeightMapRenderObjClass::skirtHeight(Int x, Int y, const SkirtEdge &edg
 		return edgeZ;
 	const Int border = m_map->getBorderSizeInline();
 	const Real land = TerrainSkirt::height(edgeZ, edge.blurred[ring], edge.landMean, outside, (x - border)*MAP_XY_FACTOR, (y - border)*MAP_XY_FACTOR);
+	// under a sea strip, all sea floor; beside one, land that goes down to the water and no further
+	if (edge.water[ring] > INVALID_WATER_HEIGHT)
+		return TerrainSkirt::seaHeight(edgeZ, edge.blurred[ring], edge.water[ring], outside);
 	const Real share = edge.seaShare[ring];
 	if (share <= 0.0f)
 		return land;
-	return TerrainSkirt::coastHeight(land, TerrainSkirt::seaHeight(edgeZ, edge.blurred[ring], edge.seaZ, outside), share);
+	return TerrainSkirt::coastHeight(land, TerrainSkirt::seaHeight(edgeZ, edge.blurred[ring], edge.seaZ, outside), share, edge.seaZ);
 }
 
 /** The skirt's vertices, every quad two cells a side on the map's even grid so each carries one
@@ -3321,8 +3324,7 @@ the terrain atlas the tiles use; the lower detail, which never builds that atlas
 texture of the edge's own classes. */
 void BaseHeightMapRenderObjClass::buildSkirt(void)
 {
-	freeSkirt();
-	m_skirtStale = FALSE;
+	freeSkirt();	// stale until it is all built: a return on the way tries again at the next draw
 	if (m_map == NULL || m_map->getDataPtr() == NULL || m_map->getXExtent() < 4 || m_map->getYExtent() < 4)
 		return;
 	const Bool atlas = hasTerrainAtlas();
@@ -3334,14 +3336,14 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 	const UnsignedByte *data = m_map->getDataPtr();
 	const Int border = m_map->getBorderSizeInline();
 
-	// The edge as one ring: blurred round the corners, which of it is under water (the client's water
-	// areas, asked at the nearest playable point, where a sea's polygon is sure to be), the mean of
-	// its land alone and the sea's level.  One mean over land and sea pulled a sea edge up into hills.
+	// The edge as one ring: blurred round the corners, the level of the sea the water draws past each
+	// sample (its strips, WaterRenderObjClass::addSkirtSeas, asked a cell out, from the render's own
+	// copy of the water areas), the mean of its land alone and the highest sea.  Sea floor goes only
+	// where those strips are, so none lies dry.  One mean over land and sea pulled a sea edge up into hills.
 	SkirtEdge edge;
 	const Int ringSize = TerrainSkirt::ringLength(w, h);
 	std::vector<Real> ring(ringSize, 0.0f), sea(ringSize, 0.0f);
-	const Real playW = (w - 1 - 2*border)*MAP_XY_FACTOR;
-	const Real playH = (h - 1 - 2*border)*MAP_XY_FACTOR;
+	edge.water.assign(ringSize, INVALID_WATER_HEIGHT);
 	Real landSum = 0.0f;
 	Int landCount = 0;
 	edge.seaZ = 0.0f;
@@ -3353,12 +3355,11 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 			ring[i] = data[y*w + x]*MAP_HEIGHT_SCALE;
 			Real waterZ = INVALID_WATER_HEIGHT;
 			if (TheWaterRenderObj) {
-				Real px = (x - border)*MAP_XY_FACTOR, py = (y - border)*MAP_XY_FACTOR;
-				px = px < 0.0f ? 0.0f : (px > playW ? playW : px);
-				py = py < 0.0f ? 0.0f : (py > playH ? playH : py);
-				waterZ = TheWaterRenderObj->getWaterHeight(px, py);
+				const Int outX = x == 0 ? -1 : (x == w-1 ? 1 : 0), outY = y == 0 ? -1 : (y == h-1 ? 1 : 0);
+				waterZ = TheWaterRenderObj->getSkirtSeaLevel((x + outX - border)*MAP_XY_FACTOR, (y + outY - border)*MAP_XY_FACTOR);
 			}
-			if (waterZ > INVALID_WATER_HEIGHT && ring[i] < waterZ) {
+			edge.water[i] = waterZ;
+			if (waterZ > INVALID_WATER_HEIGHT) {
 				sea[i] = 1.0f;
 				if (waterZ > edge.seaZ)
 					edge.seaZ = waterZ;
@@ -3400,6 +3401,7 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 		lightRay[l].Set(-lightPos->x, -lightPos->y, -lightPos->z);
 	}
 
+	const Bool varied = sunPerPixelBaked();
 	const Int reach = TerrainSkirt::CELLS;	// even, so the quads below start on the even grid
 	const Int loX = -reach, loY = -reach;
 	const Int hiX = w-1 + reach, hiY = h-1 + reach;
@@ -3453,6 +3455,14 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 						Vector3 normal;
 						Vector3::Normalized_Cross_Product(l2r, n2f, &normal);
 						doTheLight(&v, lightRay, &normal, NULL, 0, FALSE);
+						if (varied) {	// the shade the map's own pixels take beside it (TerrainSkirt::variation)
+							float shade[3];
+							TerrainSkirt::variation(v.x, v.y, shade);
+							const Int r = REAL_TO_INT(((v.diffuse >> 16) & 0xff)*shade[0]);
+							const Int g = REAL_TO_INT(((v.diffuse >> 8) & 0xff)*shade[1]);
+							const Int b = REAL_TO_INT((v.diffuse & 0xff)*shade[2]);
+							v.diffuse = (min(r, 255) << 16) | (min(g, 255) << 8) | min(b, 255);
+						}
 						// the alpha is how far into the horizon's colour drawSkirt's fade pass takes it
 						const Real keep = TerrainSkirt::fade(outside[k]);
 						v.diffuse = (v.diffuse & 0x00ffffff) | ((UnsignedInt)REAL_TO_INT((1.0f - keep)*255.0f) << 24);
@@ -3500,6 +3510,7 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 			ib += 6;
 		}
 	}
+	m_skirtStale = FALSE;
 	DEBUG_LOG(("TERRAIN SKIRT: %d quads in %d chunks, %d cells past the edge\n", totalQuads, (Int)m_skirtChunks.size(), reach));
 }
 
@@ -3524,6 +3535,10 @@ void BaseHeightMapRenderObjClass::drawSkirt(RenderInfoClass &rinfo)
 	m_skirtFadePending = FALSE;
 	if (m_map == NULL || m_disableTextures || Is_Hidden() || (ShaderClass::Is_Backface_Culling_Inverted() && !modernFullMirror))
 		return;
+	// from here the fade owes at least the void's colour, whatever of the skirt is in view
+	m_skirtVisible.clear();
+	m_skirtFadeMirrored = modernFullMirror;
+	m_skirtFadePending = TRUE;
 	if (m_skirtStale)
 		buildSkirt();
 	if (m_skirtChunks.empty() || m_skirtIndices == NULL)
@@ -3607,48 +3622,74 @@ void BaseHeightMapRenderObjClass::drawSkirt(RenderInfoClass &rinfo)
 
 	// The fade waits for the water, which draws a sea over the skirt (WaterRenderObjClass::addSkirtSeas)
 	// and would stand bright to the rim over a fade laid under it.  The mirror has no water in it.
-	m_skirtFadeMirrored = modernFullMirror;
-	m_skirtFadePending = TRUE;
 	if (modernFullMirror || TheWaterRenderObj == NULL)
 		drawSkirtFade();
 }
 
 /** The skirt's chunks drawn by drawSkirt this frame once more, into the rim's colour by their vertex
 alpha (TerrainSkirt::fade), over the ground and any sea on it, lifted clear of both (FADE_LIFT).  So the rim
-meets the clear colour, which is the same colour, and not a black void that read as a black sky over
-it.  Once a drawSkirt; WaterRenderObjClass::Render calls it after the water. */
+meets the void past it, which takes the same colour below, and not a black one that read as a black sky over
+it.  Then, in the tactical view only, the same colour over every pixel nothing drew (its depth still
+the clear's), so the void past the rim is that colour and the frame's clear stays black for the load
+and score screens and anything round the view.  Once a drawSkirt; WaterRenderObjClass::Render calls
+it after the water.  Not under the Atmosphere option, whose own fade closes on its haze colour by the
+rim (DX11Post_Set_Atmosphere_Edge) and whose sky fills the void: a rim colour under the border's shroud
+beside it stood out as dark slivers along the far crests. */
 void BaseHeightMapRenderObjClass::drawSkirtFade(void)
 {
 	if (!m_skirtFadePending)
 		return;
 	m_skirtFadePending = FALSE;
-	if (m_skirtChunks.empty() || m_skirtIndices == NULL || m_skirtVisible.empty())
+	if (W3DShaderManager::isAtmosphereDrawn())
 		return;
 	const Vector3 rim = getSkirtRimColour();
-	ShaderClass fadeShader(ShaderClass::_PresetAlphaSolidShader);
-	if (m_skirtFadeMirrored)
-		fadeShader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
-	Matrix3D lifted(Transform);
-	lifted.Adjust_Z_Translation(TerrainSkirt::FADE_LIFT);
-	DX8Wrapper::Set_Transform(D3DTS_WORLD, lifted);
-	DX8Wrapper::Set_Material(m_vertexMaterialClass);
-	DX8Wrapper::Set_Texture(0, NULL);
-	DX8Wrapper::Set_Texture(1, NULL);
-	DX8Wrapper::Set_Shader(fadeShader);
-	DX8Wrapper::Apply_Render_State_Changes();
-	DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_COLORARG2, D3DTA_TFACTOR);
-	DX8Wrapper::Set_DX8_Render_State(D3DRS_TEXTUREFACTOR, DX8Wrapper::Convert_Color(rim, 1.0f));
-	const unsigned oldColourWrites = DX8Wrapper::Get_DX8_Render_State(D3DRS_COLORWRITEENABLE);	// the water's, after it
-	if (DX8Wrapper::getBackBufferFormat() == WW3D_FORMAT_A8R8G8B8)
-		DX8Wrapper::Set_DX8_Render_State(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_BLUE|D3DCOLORWRITEENABLE_GREEN|D3DCOLORWRITEENABLE_RED);
-	DX8Wrapper::Set_Index_Buffer(m_skirtIndices, 0);
-	for (size_t i = 0; i < m_skirtVisible.size(); i++) {
-		const SkirtChunk &chunk = m_skirtChunks[m_skirtVisible[i]];
-		DX8Wrapper::Set_Vertex_Buffer(chunk.vertices);
-		DX8Wrapper::Draw_Triangles(0, chunk.quads*2, 0, chunk.quads*4);
+	// The device's: the wrapper's record of this state can be its unknown marker, whose bits written back
+	// left only alpha writing and the whole -d3d9 frame its clear colour.
+	DWORD oldColourWrites = D3DCOLORWRITEENABLE_RED|D3DCOLORWRITEENABLE_GREEN|D3DCOLORWRITEENABLE_BLUE|D3DCOLORWRITEENABLE_ALPHA;
+	DX8Wrapper::_Get_D3D_Device()->GetRenderState(D3DRS_COLORWRITEENABLE, &oldColourWrites);
+	const unsigned oldTextureFactor = DX8Wrapper::Get_DX8_Render_State(D3DRS_TEXTUREFACTOR);
+	if (!m_skirtChunks.empty() && m_skirtIndices != NULL && !m_skirtVisible.empty()) {
+		ShaderClass fadeShader(ShaderClass::_PresetAlphaSolidShader);
+		if (m_skirtFadeMirrored)
+			fadeShader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
+		Matrix3D lifted(Transform);
+		lifted.Adjust_Z_Translation(TerrainSkirt::FADE_LIFT);
+		DX8Wrapper::Set_Transform(D3DTS_WORLD, lifted);
+		DX8Wrapper::Set_Material(m_vertexMaterialClass);
+		DX8Wrapper::Set_Texture(0, NULL);
+		DX8Wrapper::Set_Texture(1, NULL);
+		DX8Wrapper::Set_Shader(fadeShader);
+		DX8Wrapper::Apply_Render_State_Changes();
+		DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_COLORARG2, D3DTA_TFACTOR);
+		DX8Wrapper::Set_DX8_Render_State(D3DRS_TEXTUREFACTOR, DX8Wrapper::Convert_Color(rim, 1.0f));
+		if (DX8Wrapper::getBackBufferFormat() == WW3D_FORMAT_A8R8G8B8)
+			DX8Wrapper::Set_DX8_Render_State(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_BLUE|D3DCOLORWRITEENABLE_GREEN|D3DCOLORWRITEENABLE_RED);
+		DX8Wrapper::Set_Index_Buffer(m_skirtIndices, 0);
+		for (size_t i = 0; i < m_skirtVisible.size(); i++) {
+			const SkirtChunk &chunk = m_skirtChunks[m_skirtVisible[i]];
+			DX8Wrapper::Set_Vertex_Buffer(chunk.vertices);
+			DX8Wrapper::Draw_Triangles(0, chunk.quads*2, 0, chunk.quads*4);
+		}
+		DX8Wrapper::Set_Transform(D3DTS_WORLD, Transform);
+		ShaderClass::Invalidate();
 	}
+	if (!m_skirtFadeMirrored && TheTacticalView != NULL) {
+		ShaderClass backdrop(ShaderClass::_PresetOpaqueSolidShader);
+		backdrop.Set_Depth_Compare(ShaderClass::PASS_LEQUAL);
+		backdrop.Set_Depth_Mask(ShaderClass::DEPTH_WRITE_DISABLE);
+		DX8Wrapper::Set_Material(m_vertexMaterialClass);	// prelit: the quad's own colour
+		DX8Wrapper::Set_Texture(0, NULL);
+		DX8Wrapper::Set_Texture(1, NULL);
+		DX8Wrapper::Set_Shader(backdrop);
+		DX8Wrapper::Apply_Render_State_Changes();
+		if (DX8Wrapper::getBackBufferFormat() == WW3D_FORMAT_A8R8G8B8)
+			DX8Wrapper::Set_DX8_Render_State(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_BLUE|D3DCOLORWRITEENABLE_GREEN|D3DCOLORWRITEENABLE_RED);
+		W3DShaderManager::drawViewport(DX8Wrapper::Convert_Color(rim, 1.0f), 1.0f);
+		ShaderClass::Invalidate();
+	}
+	const unsigned UNKNOWN_STATE = 0x12345678;	// what Invalidate_Cached_Render_States leaves
+	if (oldTextureFactor != UNKNOWN_STATE)
+		DX8Wrapper::Set_DX8_Render_State(D3DRS_TEXTUREFACTOR, oldTextureFactor);
 	DX8Wrapper::Set_DX8_Render_State(D3DRS_COLORWRITEENABLE, oldColourWrites);
-	DX8Wrapper::Set_Transform(D3DTS_WORLD, Transform);
-	ShaderClass::Invalidate();
 }
 

@@ -3677,15 +3677,19 @@ void Object::onVeterancyLevelChanged( VeterancyLevel oldLevel, VeterancyLevel ne
 		getControllingPlayer()->getPlayerIndex(), getTemplate()->getName().str(),
 		TheVeterancyNames[oldLevel], TheVeterancyNames[newLevel], getExperienceTracker()->getCurrentExperience()));
 
+	// The body scales its max health to the new level first: a MaxHealthUpgrade that
+	// updateUpgradeModules applies here already multiplies its health by the new level's bonus, so
+	// scaling after it counted the bonus twice (a unit veteran at creation, built after a talent
+	// health card, had 1.44 times the card's health).
+	BodyModuleInterface* body = getBodyModule();
+	if (body)
+		body->onVeterancyLevelChanged( oldLevel, newLevel, provideFeedback );
+
 	updateUpgradeModules();
 
 	const UpgradeTemplate* up = TheUpgradeCenter->findVeterancyUpgrade(newLevel);
 	if (up)
 		giveUpgrade(up);
-
-	BodyModuleInterface* body = getBodyModule();
-	if (body)
-		body->onVeterancyLevelChanged( oldLevel, newLevel, provideFeedback );
 
 	// Whether the promotion shows is simply whether this watcher can see the unit.  The rule used
 	// to be spelled out here as "mine, or not stealthed, or detected, or disguised", which reads

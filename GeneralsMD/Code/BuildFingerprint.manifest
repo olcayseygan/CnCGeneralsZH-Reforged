@@ -1863,6 +1863,7 @@ GameEngine/Include/GameClient/KeyDownInfo.h
 GameEngine/Include/GameClient/Keyboard.h
 GameEngine/Include/GameClient/LaneHud.h
 GameEngine/Include/GameClient/LaneHudLayout.h
+GameEngine/Include/GameClient/LaneWarEndScreen.h
 GameEngine/Include/GameClient/LanguageFilter.h
 GameEngine/Include/GameClient/Line2D.h
 GameEngine/Include/GameClient/LoadScreen.h
@@ -2555,6 +2556,7 @@ GameEngine/Source/GameClient/InGameUI.cpp
 GameEngine/Source/GameClient/Input/Keyboard.cpp
 GameEngine/Source/GameClient/Input/Mouse.cpp
 GameEngine/Source/GameClient/LaneHud.cpp
+GameEngine/Source/GameClient/LaneWarEndScreen.cpp
 GameEngine/Source/GameClient/LanguageFilter.cpp
 GameEngine/Source/GameClient/Line2D.cpp
 GameEngine/Source/GameClient/MapUtil.cpp
@@ -2867,9 +2869,9 @@ GameEngine/Source/GameLogic/System/GameLogic.cpp
 GameEngine/Source/GameLogic/System/GameLogicDispatch.cpp
 GameEngine/Source/GameLogic/System/LaneWarBot.cpp
 GameEngine/Source/GameLogic/System/LaneWarDirector.cpp
+GameEngine/Source/GameLogic/System/LaneWarStats.cpp
 GameEngine/Source/GameLogic/System/RankInfo.cpp
 GameEngine/Source/GameLogic/System/ScenarioDrill.cpp
-GameEngine/Source/GameLogic/System/LaneWarStats.cpp
 GameEngine/Source/GameNetwork/Connection.cpp
 GameEngine/Source/GameNetwork/ConnectionManager.cpp
 GameEngine/Source/GameNetwork/CushionMetrics.cpp

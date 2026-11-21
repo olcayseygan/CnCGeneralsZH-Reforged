@@ -6675,3 +6675,47 @@ GUI:LaneDiplomacy
 "Diplomacy"
 END
 
+GUI:LaneEndTeamWins
+"Team %d wins"
+END
+
+GUI:LaneEndDraw
+"Draw"
+END
+
+GUI:LaneEndWaves
+"Waves"
+END
+
+GUI:LaneEndUnits
+"Units"
+END
+
+GUI:LaneEndEarned
+"Earned"
+END
+
+GUI:LaneEndSpent
+"Spent"
+END
+
+GUI:LaneEndKills
+"Kills"
+END
+
+GUI:LaneEndDamage
+"Damage"
+END
+
+GUI:LaneEndMiddle
+"Middle held"
+END
+
+GUI:LaneEndRematch
+"Rematch"
+END
+
+GUI:LaneEndReplay
+"Watch replay"
+END
+

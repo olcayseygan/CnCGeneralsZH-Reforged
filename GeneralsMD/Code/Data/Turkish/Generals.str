@@ -20866,3 +20866,47 @@ GUI:LaneDiplomacy
 "Diplomasi"
 END
 
+GUI:LaneEndTeamWins
+"%d. takım kazandı"
+END
+
+GUI:LaneEndDraw
+"Berabere"
+END
+
+GUI:LaneEndWaves
+"Dalga"
+END
+
+GUI:LaneEndUnits
+"Birlik"
+END
+
+GUI:LaneEndEarned
+"Kazanılan"
+END
+
+GUI:LaneEndSpent
+"Harcanan"
+END
+
+GUI:LaneEndKills
+"Öldürülen"
+END
+
+GUI:LaneEndDamage
+"Hasar"
+END
+
+GUI:LaneEndMiddle
+"Ortayı tuttu"
+END
+
+GUI:LaneEndRematch
+"Rövanş"
+END
+
+GUI:LaneEndReplay
+"Tekrarı izle"
+END
+

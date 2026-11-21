@@ -46,6 +46,7 @@
 #include "GameClient/PlaceEventTranslator.h"
 
 #include "GameClient/LaneHud.h"
+#include "GameClient/LaneWarEndScreen.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
 
@@ -164,7 +165,8 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 		case GameMessage::MSG_RAW_MOUSE_RIGHT_DOUBLE_CLICK:
 		{
 			m_cellRightClickTaken = FALSE;
-			if( LaneHud_press( &msg->getArgument(0)->pixel, TRUE )
+			if( LaneWarEndScreen_press( &msg->getArgument(0)->pixel, TRUE )
+					|| LaneHud_press( &msg->getArgument(0)->pixel, TRUE )
 					|| TheInGameUI->handleSpectatorRackClick( &msg->getArgument(0)->pixel, FALSE )
 					|| TheInGameUI->handleHudCellClick( &msg->getArgument(0)->pixel, TRUE ) )
 			{
@@ -220,7 +222,8 @@ GameMessageDisposition PlaceEventTranslator::translateGameMessage(const GameMess
 			// the production and superweapon cells lie over the world, not in a window: take a press on
 			// one before placement, and long before selection makes a move order of it.  Ctrl cancels
 			m_cellClickTaken = FALSE;
-			if( LaneHud_press( &msg->getArgument(0)->pixel, FALSE )
+			if( LaneWarEndScreen_press( &msg->getArgument(0)->pixel, FALSE )
+					|| LaneHud_press( &msg->getArgument(0)->pixel, FALSE )
 					|| TheInGameUI->handleSpectatorRackClick( &msg->getArgument(0)->pixel, TRUE )
 					|| TheInGameUI->handleHudCellClick( &msg->getArgument(0)->pixel, TheKeyboard->isCtrl() ) )
 			{

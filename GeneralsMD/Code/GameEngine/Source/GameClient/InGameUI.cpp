@@ -111,6 +111,7 @@
 #include "GameClient/GlobalLanguage.h"
 #include "GameClient/GroupPanel.h"
 #include "GameClient/LaneHud.h"
+#include "GameClient/LaneWarEndScreen.h"
 #include "GameClient/AirliftPanel.h"
 #include "GameClient/UIStyle.h"
 
@@ -3797,6 +3798,8 @@ void InGameUI::preDraw( void )
 
 	// a Lane War unit riding the pointer to its plot slot
 	LaneHud_preDraw();
+	// and a decided Lane War match's end, read here at the sync point
+	LaneWarEndScreen_preDraw();
 
 	// handle radius-cursors, if any
 	handleRadiusCursor();
@@ -9507,8 +9510,9 @@ void InGameUI::postDraw( void )
 	// a player's squad list on the left, and the picked squad's build tray where a watcher's rack hangs
 	GroupPanel_draw( rackPlateTop );
 
-	// a Lane War map's own HUD, in the command bar's place
+	// a Lane War map's own HUD, in the command bar's place, and over it the match's end
 	LaneHud_draw();
+	LaneWarEndScreen_draw();
 
 	// an airlift power's load being picked, over everything else at its spot
 	AirliftPanel_draw();

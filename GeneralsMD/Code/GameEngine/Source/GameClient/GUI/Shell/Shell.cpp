@@ -725,6 +725,13 @@ void Shell::doPush( AsciiString layoutFile )
 	newScreen = TheWindowManager->winCreateLayout( layoutFile );
 	DEBUG_ASSERTCRASH( newScreen != NULL, ("Shell unable to load pending push layout\n") );
 
+	// a layout that will not load (a mod's broken ScoreScreen.wnd at match end) pushes nothing
+	if( newScreen == NULL )
+	{
+		DEBUG_LOG(( "Shell::doPush - could not load '%s', nothing pushed\n", layoutFile.str() ));
+		return;
+	}
+
 	// link screen to the top
 	linkScreen( newScreen );
 

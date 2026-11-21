@@ -392,6 +392,12 @@ static void pushProtoHazeFrame(void)
 			s_hazeLevelRise = max(protoHazeMiddle(map) + PROTO_HAZE_ABOVE_MIDDLE - low, PROTO_HAZE_MIN_RISE);
 			s_hazeLevelTop = low + s_hazeLevelRise;
 			s_hazeLevelWater = -1.0e6f;
+			// An accepted logic read inside the render window, left out of the LOGICTHREAD WINDOW census on
+			// purpose (LOGIC-THREAD.md phase 3).  The list is linked by the map load and unlinked by
+			// TerrainLogic::reset, neither of which runs beside the render, so the walk never meets a link
+			// changing.  The one write a tick makes is TerrainLogic::setWaterHeight's setPoint, an aligned
+			// Int z put in place: this read takes the old height or the new, and the haze keeps it for the
+			// map either way, since a script's water change never re-keyed it.  It runs once a map.
 			for (const PolygonTrigger *area = PolygonTrigger::getFirstPolygonTrigger(); area; area = area->getNext())
 			{
 				if (!area->isWaterArea() || area->getNumPoints() < 3)

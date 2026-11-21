@@ -620,6 +620,7 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 	m_clientWorkQueued = FALSE;
 	m_transformPending = FALSE;
 	m_renderPending = FALSE;
+	m_doomed = FALSE;
 
 	// Added By Sadullah Nader
 	// Initialization missing and needed
@@ -6140,7 +6141,10 @@ void Drawable::flushModelCondition( Bool onDemand ) const
 		return;
 	}
 	// a shell another drawable's work reaches before its own turn in the flush: the render objects
-	// come first, as they did in the constructor
+	// come first, as they did in the constructor; one the same tick destroyed keeps its states unapplied
+	// and is deleted at the flush unbuilt (doPendingClientWork)
+	if (m_renderPending && m_doomed)
+		return;
 	if (m_renderPending)
 		const_cast<Drawable*>(this)->buildRenderObjects();
 	LogicThread::census( onDemand ? LogicThread::CENSUS_ON_DEMAND_FLUSH : LogicThread::CENSUS_MODEL_CONDITION );
@@ -6195,6 +6199,11 @@ void Drawable::flushModelCondition( Bool onDemand ) const
 //-------------------------------------------------------------------------------------------------
 void Drawable::doPendingClientWork( Bool onDemand )
 {
+	// a shell the same tick destroyed is never drawn: a bone read on it (a queued FX, a death effect at
+	// its bones) finds no render object, which every draw module answers as no bones, rather than
+	// building one for flushDestroyedDrawables to delete
+	if (m_renderPending && m_doomed)
+		return;
 	if (m_renderPending)
 		buildRenderObjects();
 	if (m_isModelDirty || !m_pendingSteps.empty())

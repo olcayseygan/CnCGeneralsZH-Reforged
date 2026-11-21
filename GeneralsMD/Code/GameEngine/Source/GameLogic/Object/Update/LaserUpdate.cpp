@@ -296,10 +296,21 @@ void LaserUpdate::initLaser( const Object *parent, const Object *target, const C
 
 		// the parent's drawable as the object holds it: initLaser runs in the tick, which does not look
 		// drawables up in the client's table (LOGIC-THREAD.md M8).  Nor does it read a bone off a render
-		// object the tick has not caught up yet (phase 3): the beam starts at the drawable, and its own
-		// client update moves it to the bone before the first frame that draws it.
+		// object the tick has not caught up yet (phase 3): the beam starts at the drawable, and the flush
+		// after the tick, once the parent's deferred work has posed its model, moves it and the muzzle flare
+		// to the bone.  Not the client update: a pass frozen by a pause or a script skips that and drew the
+		// first beam from the drawable's centre until time ran.  This laser is deleted after the effects
+		// even if the tick destroyed it, so `this` holds at the call.
 		if( LogicThread::defersEffects() && m_parentBoneName.isNotEmpty() && parent->getDrawable() )
+		{
 			m_startPos = *parent->getDrawable()->getPosition();
+			LogicThread::callAfterTick( [this]() {
+				updateStartPos();
+				ParticleSystem *flare = TheParticleSystemManager->findParticleSystem( m_particleSystemID );
+				if( flare )
+					flare->setPosition( &m_startPos );
+			} );
+		}
 		else
 			updateStartPos( parent->getDrawable() );
 	}

@@ -416,7 +416,7 @@ public:
 	DrawableID getID( void ) const;																			///< return this drawable's unique ID
 
 	void friend_bindToObject( Object *obj ); ///< bind this drawable to an object ID. for use ONLY by GameLogic!
-	void friend_forgetObject( void ) { m_object = NULL; }	///< GameClient::destroyDrawable, for a deletion that waits for the flush
+	void friend_forgetObject( void ) { m_object = NULL; m_doomed = TRUE; }	///< GameClient::destroyDrawable, for a deletion that waits for the flush
 	void setIndicatorColor(Color color);
 	void refreshIndicatorColor( void );			///< re-apply the last colour asked for, under whatever scheme is on now
 	
@@ -974,6 +974,7 @@ private:
 	mutable Bool m_clientWorkQueued;		///< this drawable's ID is in the list flushPendingClientWork walks
 	Bool m_transformPending;						///< the tick moved it; the draw modules have not been told
 	Bool m_renderPending;								///< made in a tick: the draw modules have not built their render objects
+	Bool m_doomed;											///< destroyed in a tick, deleted at its flush (friend_forgetObject)
 	Int m_clipFeedbackSlots;						///< the draw modules' getProjectileClipFeedbackSlots, or'd at creation
 	struct PendingStep
 	{

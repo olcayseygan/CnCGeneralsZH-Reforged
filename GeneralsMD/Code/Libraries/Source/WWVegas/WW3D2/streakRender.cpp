@@ -36,6 +36,7 @@
 #include "Vector3i.h"
 #include "random.h"
 #include "v3_rnd.h"
+#include <vector>
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -1411,6 +1412,255 @@ void StreakRendererClass::RenderStreak
 
 	DX8Wrapper::Set_Transform(D3DTS_VIEW,view);
 
+}
+
+/*
+** The Reforged look's streak (StreakLineClass::Set_Smooth).  RenderStreak above makes each segment's
+** two edges planes through the eye and puts a joint's vertices on the line where neighbouring planes
+** meet, so a joint whose segments turn hard on the screen, or a segment pointing at the camera, throws
+** its vertices off the line, and a turn past a right angle on the screen swaps the edges and draws a
+** bow tie.  And every particle is a corner.  MissileExhaust gives each point a sideways speed of
+** its own, so its line zigzags from one point to the next, and the Reforged data feeds it every frame
+** where EA fed it every second one, which halved the spacing and doubled every corner.
+**
+** This draws one plain ribbon.  The points are eased once against their neighbours (1 2 1), which
+** takes the point-to-point zigzag out and leaves the bend of the flight, then a centripetal Catmull-Rom
+** curve runs through them, STREAK_SMOOTH_STEPS samples a segment.  Each sample puts two vertices its
+** width either side of the curve, square to the curve and to the eye, the half width RenderStreak
+** gives a point.  No vertex is further than that from the curve, so nothing can spike, and neighbours
+** share their vertices, so a joint has no gap and no fold.  A side that would turn over where the
+** curve points straight at the eye keeps the way it faced, so the strip does not twist there.
+**
+** The oldest point fades to nothing, which W3DParticleSys.cpp's zeroed RGBAArray[0] always meant to
+** do: it is written after the colours were copied, so EA's streak ends in a square cut.  Width,
+** colour and the texture's V (EA's odd/even personality) run straight between two particles.
+*/
+#define STREAK_SMOOTH_STEPS				4			// curve samples a particle segment
+#define STREAK_SMOOTH_MAX_SAMPLES	2048		// 4096 vertices, well inside a 16-bit index
+#define STREAK_SMOOTH_MIN_GAP2		1.0e-4f	// squared: closer points have no direction, the newer stands for both
+
+struct SmoothStreakPoint
+{
+	Vector3	Pos;		// eye space
+	Vector4	Color;
+	float		Width;
+	float		V;
+};
+
+// the knot gap of a centripetal curve, the square root of the distance; never 0
+static float smoothStreakKnot(const Vector3 &a, const Vector3 &b)
+{
+	return MAX(sqrtf(sqrtf((b - a).Length2())), 1.0e-3f);
+}
+
+// Barry and Goldman's pyramid for a centripetal Catmull-Rom segment from p1 (t1) to p2 (t2), t0 = 0
+static Vector3 smoothStreakCurve(const Vector3 &p0, const Vector3 &p1, const Vector3 &p2, const Vector3 &p3,
+	float t1, float t2, float t3, float t)
+{
+	const Vector3 a1 = p0 * ((t1 - t) / t1) + p1 * (t / t1);
+	const Vector3 a2 = p1 * ((t2 - t) / (t2 - t1)) + p2 * ((t - t1) / (t2 - t1));
+	const Vector3 a3 = p2 * ((t3 - t) / (t3 - t2)) + p3 * ((t - t2) / (t3 - t2));
+	const Vector3 b1 = a1 * ((t2 - t) / t2) + a2 * (t / t2);
+	const Vector3 b2 = a2 * ((t3 - t) / (t3 - t1)) + a3 * ((t - t1) / (t3 - t1));
+	return b1 * ((t2 - t) / (t2 - t1)) + b2 * ((t - t1) / (t2 - t1));
+}
+
+void StreakRendererClass::RenderSmoothStreak
+(
+	RenderInfoClass & rinfo,
+	const Matrix3D & transform,
+	unsigned int num_points,
+	Vector3 * points,
+	Vector4 * colors,
+	float * widths,
+	const SphereClass & obj_sphere,
+	unsigned int *personalities
+)
+{
+	if (num_points < 2)
+		return;
+
+	Matrix4x4 view;
+	DX8Wrapper::Get_Transform(D3DTS_VIEW,view);
+	Matrix3D view2(	view[0].X,view[0].Y,view[0].Z,view[0].W,
+							view[1].X,view[1].Y,view[1].Z,view[1].W,
+							view[2].X,view[2].Y,view[2].Z,view[2].W);
+	Matrix3D modelview;
+	modelview.mul(view2, transform);
+
+	// kept between calls for their capacity; the particle draw runs on the main thread only
+	static std::vector<SmoothStreakPoint> s_points;
+	static std::vector<SmoothStreakPoint> s_eased;
+	static std::vector<SmoothStreakPoint> s_samples;
+
+	s_points.clear();
+	for (unsigned int i = 0; i < num_points; ++i)
+	{
+		SmoothStreakPoint p;
+		Matrix3D::Transform_Vector(modelview, points[i], &p.Pos);
+		p.Color = colors[i];
+		p.Width = widths[i];
+		p.V = personalities ? (float)(personalities[i] & 1) : 0.0f;
+		if (!s_points.empty() && (p.Pos - s_points.back().Pos).Length2() < STREAK_SMOOTH_MIN_GAP2)
+			s_points.back() = p;
+		else
+			s_points.push_back(p);
+	}
+	const unsigned int n = (unsigned int)s_points.size();
+	if (n < 2)
+		return;
+
+	// ease the inner points against their neighbours; the two ends stay where the particles are
+	s_eased = s_points;
+	for (unsigned int i = 1; i + 1 < n; ++i)
+	{
+		s_eased[i].Pos = (s_points[i - 1].Pos + s_points[i].Pos * 2.0f + s_points[i + 1].Pos) * 0.25f;
+		s_eased[i].Width = (s_points[i - 1].Width + s_points[i].Width * 2.0f + s_points[i + 1].Width) * 0.25f;
+	}
+
+	unsigned int steps = STREAK_SMOOTH_STEPS;
+	while (steps > 1 && (n - 1) * steps + 1 > STREAK_SMOOTH_MAX_SAMPLES)
+		--steps;
+	const unsigned int sampleCount = MIN((n - 1) * steps + 1, (unsigned int)STREAK_SMOOTH_MAX_SAMPLES);
+	s_samples.resize(sampleCount);
+	unsigned int m = 0;
+	for (unsigned int seg = 0; seg + 1 < n && m + steps < sampleCount; ++seg)
+	{
+		const SmoothStreakPoint &from = s_eased[seg];
+		const SmoothStreakPoint &to = s_eased[seg + 1];
+		const Vector3 &p1 = from.Pos;
+		const Vector3 &p2 = to.Pos;
+		// past either end the curve goes on straight
+		const Vector3 p0 = seg > 0 ? s_eased[seg - 1].Pos : p1 * 2.0f - p2;
+		const Vector3 p3 = seg + 2 < n ? s_eased[seg + 2].Pos : p2 * 2.0f - p1;
+		const float t1 = smoothStreakKnot(p0, p1);
+		const float t2 = t1 + smoothStreakKnot(p1, p2);
+		const float t3 = t2 + smoothStreakKnot(p2, p3);
+		for (unsigned int s = 0; s < steps; ++s)
+		{
+			const float u = (float)s / (float)steps;
+			SmoothStreakPoint &out = s_samples[m++];
+			out.Pos = s == 0 ? p1 : smoothStreakCurve(p0, p1, p2, p3, t1, t2, t3, t1 + u * (t2 - t1));
+			out.Color = from.Color + (to.Color - from.Color) * u;
+			out.Width = from.Width + (to.Width - from.Width) * u;
+			out.V = from.V + (to.V - from.V) * u;
+		}
+	}
+	s_samples[m++] = s_eased[n - 1];
+
+	// the tail end fades out; a multiplying streak (none ships) would go black instead, so it keeps its colour
+	if (Shader.Get_Dst_Blend_Func() != ShaderClass::DSTBLEND_SRC_COLOR)
+		s_samples[0].Color.Set(0.0f, 0.0f, 0.0f, 0.0f);
+
+	// Enable sorting if sorting has not been disabled and line is translucent and alpha testing is not enabled.
+	const bool sorting = (!Is_Sorting_Disabled()) && (Shader.Get_Dst_Blend_Func() != ShaderClass::DSTBLEND_ZERO && Shader.Get_Alpha_Test() == ShaderClass::ALPHATEST_DISABLE);
+	ShaderClass shader = Shader;
+	shader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
+	shader.Set_Primary_Gradient(ShaderClass::GRADIENT_MODULATE);
+	shader.Set_Texturing(Texture ? ShaderClass::TEXTURING_ENABLE : ShaderClass::TEXTURING_DISABLE);
+
+	VertexMaterialClass *mat = VertexMaterialClass::Get_Preset(VertexMaterialClass::PRELIT_DIFFUSE);
+	DX8Wrapper::Set_Material(mat);
+	REF_PTR_RELEASE(mat);
+
+	Matrix4x4 identity(true);
+	DX8Wrapper::Set_Transform(D3DTS_WORLD,identity);
+	DX8Wrapper::Set_Transform(D3DTS_VIEW,identity);
+
+	const unsigned int vnum = m * 2;
+	const unsigned int triangles = (m - 1) * 2;
+	DynamicVBAccessClass Verts((sorting?BUFFER_TYPE_DYNAMIC_SORTING:BUFFER_TYPE_DYNAMIC_DX8),dynamic_fvf_type,vnum);
+	{
+		DynamicVBAccessClass::WriteLockClass Lock(&Verts);
+		unsigned char *vb = (unsigned char*)Lock.Get_Formatted_Vertex_Array();
+		const FVFInfoClass& fvfinfo = Verts.FVF_Info();
+		const unsigned verticesOffset = fvfinfo.Get_Location_Offset();
+		const unsigned diffuseOffset = fvfinfo.Get_Diffuse_Offset();
+		const unsigned textureOffset = fvfinfo.Get_Tex_Offset(0);
+		const unsigned vbSize = fvfinfo.Get_FVF_Size();
+
+		// a sample's side, square to the curve and to the eye; false where the curve points at the eye
+		struct SideOf
+		{
+			static bool get(const std::vector<SmoothStreakPoint> &samples, unsigned int count, unsigned int i, Vector3 &side)
+			{
+				const Vector3 tangent = samples[i + 1 < count ? i + 1 : i].Pos - samples[i > 0 ? i - 1 : i].Pos;
+				Vector3::Cross_Product(tangent, samples[i].Pos, &side);
+				const float sideLength2 = side.Length2();
+				if (sideLength2 <= tangent.Length2() * samples[i].Pos.Length2() * 1.0e-6f)
+					return false;
+				side *= 1.0f / sqrtf(sideLength2);
+				return true;
+			}
+		};
+		// samples at the tail before the first good side take that side, so a streak flying at the camera
+		// does not twist its oldest quad round an arbitrary seed
+		Vector3 lastSide(1.0f, 0.0f, 0.0f);
+		for (unsigned int i = 0; i < m; ++i)
+		{
+			Vector3 first;
+			if (SideOf::get(s_samples, m, i, first))
+			{
+				lastSide = first;
+				break;
+			}
+		}
+		for (unsigned int i = 0; i < m; ++i)
+		{
+			const SmoothStreakPoint &sample = s_samples[i];
+			Vector3 side;
+			if (SideOf::get(s_samples, m, i, side))
+			{
+				if (Vector3::Dot_Product(side, lastSide) < 0.0f)
+					side = -side;
+				lastSide = side;
+			}
+			else
+			{
+				side = lastSide;	// pointing at the eye: the side it had
+			}
+
+			const unsigned int argb = DX8Wrapper::Convert_Color_Clamp(sample.Color);
+			for (int edge = 0; edge < 2; ++edge)
+			{
+				Vector3 *vertex = reinterpret_cast<Vector3 *>(vb + verticesOffset);
+				*vertex = sample.Pos + side * (edge == 0 ? sample.Width : -sample.Width);
+				*reinterpret_cast<unsigned int *>(vb + diffuseOffset) = argb;
+				Vector2 *texture = reinterpret_cast<Vector2 *>(vb + textureOffset);
+				texture->U = (float)edge;
+				texture->V = sample.V;
+				vb += vbSize;
+			}
+		}
+	}
+
+	DynamicIBAccessClass ib_access((sorting?BUFFER_TYPE_DYNAMIC_SORTING:BUFFER_TYPE_DYNAMIC_DX8),triangles*3);
+	{
+		DynamicIBAccessClass::WriteLockClass lock(&ib_access);
+		unsigned short* inds = lock.Get_Index_Array();
+		for (unsigned int i = 0; i + 1 < m; ++i)
+		{
+			const unsigned short top = (unsigned short)(i * 2);
+			*inds++ = top;
+			*inds++ = top + 1;
+			*inds++ = top + 2;
+			*inds++ = top + 1;
+			*inds++ = top + 3;
+			*inds++ = top + 2;
+		}
+	}
+
+	DX8Wrapper::Set_Index_Buffer(ib_access,0);
+	DX8Wrapper::Set_Vertex_Buffer(Verts);
+	DX8Wrapper::Set_Texture(0,Texture);
+	DX8Wrapper::Set_Shader(shader);
+
+	if (sorting)
+		SortingRendererClass::Insert_Triangles(obj_sphere,0,triangles,0,vnum);
+	else
+		DX8Wrapper::Draw_Triangles(0,triangles,0,vnum);
+
+	DX8Wrapper::Set_Transform(D3DTS_VIEW,view);
 }
 
 /////////////////////////////////////////////////////////////////////////////

@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2025-2026 by Olcay Seygan for Zero Hour Reforged; see the git history.
 // Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 /*********************************************************************************
@@ -126,6 +127,10 @@ class StreakLineClass : public RenderObjClass
 		void					Set_Disable_Sorting(int onoff);
 		void					Set_End_Caps(int onoff);
 
+		// true draws the per-point streak as StreakRendererClass::RenderSmoothStreak's eased, joined ribbon
+		// (the Reforged look); false is EA's RenderStreak
+		void					Set_Smooth(bool onoff)	{ Smooth = onoff; }
+
 		/////////////////////////////////////////////////////////////////////////////
 		// Render Object Interface - Cloning and Identification
 		/////////////////////////////////////////////////////////////////////////////
@@ -194,6 +199,8 @@ class StreakLineClass : public RenderObjClass
 
 		// Normalized screen area - used for LOD purposes
 		float								NormalizedScreenArea;
+
+		bool								Smooth;	// Set_Smooth
 
 	// Per-point location array
 	//ShareBufferClass<Vector3> *PointLocations;	

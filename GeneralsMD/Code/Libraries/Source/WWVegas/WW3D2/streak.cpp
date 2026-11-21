@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2025-2026 by Olcay Seygan for Zero Hour Reforged; see the git history.
 // Modified 2026 by İlyas Akın for the macOS/Linux port; see NOTICE.md and the git history.
 
 /***********************************************************************************************
@@ -58,7 +59,8 @@ static SegLineRendererClass _LineRenderer;
 
 StreakLineClass::StreakLineClass(void) :
 		MaxSubdivisionLevels(0),
-		NormalizedScreenArea(0.0f)
+		NormalizedScreenArea(0.0f),
+		Smooth(false)
 {
 		Personalities = NULL;
 
@@ -67,6 +69,7 @@ StreakLineClass::StreakLineClass(void) :
 StreakLineClass::StreakLineClass(const StreakLineClass & src) :
 		MaxSubdivisionLevels(src.MaxSubdivisionLevels),
 		NormalizedScreenArea(src.NormalizedScreenArea),
+		Smooth(src.Smooth),
 		PointLocations(src.PointLocations),
 		PointColors(src.PointColors),
 		PointWidths(src.PointWidths),
@@ -84,6 +87,7 @@ StreakLineClass & StreakLineClass::operator = (const StreakLineClass &that)
 
 		MaxSubdivisionLevels = that.MaxSubdivisionLevels;
 		NormalizedScreenArea = that.NormalizedScreenArea;
+		Smooth = that.Smooth;
 		PointLocations = that.PointLocations;
 		PointColors = that.PointColors;
 		PointWidths = that.PointWidths;
@@ -679,6 +683,12 @@ void StreakLineClass::Render_Streak_Line(RenderInfoClass & rinfo)
 //		&(PointLocations[0]),
 //		bounding_sphere
 //		);
+	if (Smooth)
+	{
+		StreakRenderer.RenderSmoothStreak(rinfo, Transform, PointLocations.Count(), &(PointLocations[0]),
+			&(PointColors[0]), &(PointWidths[0]), bounding_sphere, Personalities);
+		return;
+	}
 	StreakRenderer.RenderStreak(
 		rinfo,
 		Transform,

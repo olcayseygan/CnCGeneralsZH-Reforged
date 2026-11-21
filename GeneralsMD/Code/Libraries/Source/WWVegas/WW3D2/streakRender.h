@@ -15,6 +15,7 @@
 **	You should have received a copy of the GNU General Public License
 **	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+// Modified 2025-2026 by Olcay Seygan for Zero Hour Reforged; see the git history.
 
 /***********************************************************************************************
  ***              C O N F I D E N T I A L  ---  W E S T W O O D  S T U D I O S               ***
@@ -129,6 +130,17 @@ public:
 								const SphereClass & obj_sphere);
 
 	void	RenderStreak(	RenderInfoClass & rinfo,
+								const Matrix3D & transform,
+								unsigned int point_count,
+								Vector3 * points,
+								Vector4 * colors,
+								float * widths,
+								const SphereClass & obj_sphere,
+								unsigned int *personalities);
+
+	// The Reforged look's streak: the same points eased and run through a curve, drawn as one joined
+	// ribbon facing the eye (streakRender.cpp has why).  Same arguments as RenderStreak.
+	void	RenderSmoothStreak(	RenderInfoClass & rinfo,
 								const Matrix3D & transform,
 								unsigned int point_count,
 								Vector3 * points,

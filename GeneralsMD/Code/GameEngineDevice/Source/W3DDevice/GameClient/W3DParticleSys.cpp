@@ -2797,7 +2797,7 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 				stealthFadeParticle( sys->getShaderType(), fade, RGBAArray[count].X, RGBAArray[count].Y, RGBAArray[count].Z, RGBAArray[count].W );
 
 			angleArray[count] = floatToByteAsMsvc( p->getAngle() * 255.0f / (2.0f * PI) );
-			
+
 			if (++count == MAX_POINTS_PER_GROUP)
 			{
 #ifdef DEBUG_LOGGING
@@ -2813,9 +2813,14 @@ void W3DParticleSystemManager::doParticles(RenderInfoClass &rinfo)
 		TextureClass *texture = particleTexture( sys->getParticleTypeName() );
 
 		
-		if ( m_streakLine && sys->isUsingStreak() && (count >= 2) ) 
+		if ( m_streakLine && sys->isUsingStreak() && (count >= 2) )
 		{
 			m_streakLine->Reset_Line();
+
+			// The Reforged look draws the streak smooth (StreakRendererClass::RenderSmoothStreak, streakRender.cpp
+			// has why), on both devices; Classic keeps EA's.  The head stays on the newest particle: pulled back
+			// toward the smooth-motion model it left a gap behind the rocket's nozzle (2026-11-21 proof).
+			m_streakLine->Set_Smooth( !TheGlobalData->m_classicGraphics );
 
 			m_streakLine->Set_Texture( texture );
 			switch( sys->getShaderType() )

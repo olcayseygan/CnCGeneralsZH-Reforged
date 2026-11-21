@@ -1798,6 +1798,9 @@ GameEngine/Include/GameClient/Credits.h
 GameEngine/Include/GameClient/DIKeyCodes.h
 GameEngine/Include/GameClient/DebugDisplay.h
 GameEngine/Include/GameClient/Diplomacy.h
+GameEngine/Include/GameClient/DirectStrikeLayout.h
+GameEngine/Include/GameClient/DirectStrikeLobby.h
+GameEngine/Include/GameClient/DirectStrikeTheme.h
 GameEngine/Include/GameClient/DisconnectMenu.h
 GameEngine/Include/GameClient/Display.h
 GameEngine/Include/GameClient/DisplayString.h
@@ -2423,6 +2426,8 @@ GameEngine/Source/GameClient/ChromaKeyboard.cpp
 GameEngine/Source/GameClient/CinemaDirector.cpp
 GameEngine/Source/GameClient/Color.cpp
 GameEngine/Source/GameClient/Credits.cpp
+GameEngine/Source/GameClient/DirectStrikeLobby.cpp
+GameEngine/Source/GameClient/DirectStrikeTheme.cpp
 GameEngine/Source/GameClient/Display.cpp
 GameEngine/Source/GameClient/DisplayString.cpp
 GameEngine/Source/GameClient/DisplayStringManager.cpp

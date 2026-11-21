@@ -20834,6 +20834,38 @@ GUI:GameModeDirectStrike
 "Direct Strike"
 END
 
+GUI:DirectStrikeIslandNote
+"Her maçta yeni bir ada"
+END
+
+GUI:DirectStrikeStart
+"BAŞLAT"
+END
+
+GUI:DirectStrikeReady
+"HAZIR"
+END
+
+GUI:DirectStrikeEasy
+"Kolay"
+END
+
+GUI:DirectStrikeMedium
+"Orta"
+END
+
+GUI:DirectStrikeHard
+"Zor"
+END
+
+GUI:DirectStrikeBrutal
+"Acımasız"
+END
+
+GUI:Munkee
+""
+END
+
 OBJECT:LaneWarFortress
 "Kale"
 END

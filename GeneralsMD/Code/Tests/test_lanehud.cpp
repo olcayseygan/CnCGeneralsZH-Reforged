@@ -2,6 +2,7 @@
 
 #include "test_harness.h"
 
+#include "GameClient/DirectStrikeLayout.h"
 #include "GameClient/LaneHudLayout.h"
 
 static bool overlap( const LaneHudBox &a, const LaneHudBox &b )
@@ -187,4 +188,100 @@ TEST(lanehud_a_wider_screen_keeps_the_sizes_and_keeps_the_hud_centred)
 	CHECK_EQ( wide.map.w, full.map.w );
 	CHECK_EQ( wide.diplomacy.x + wide.diplomacy.w, 2560 - 224 );
 	CHECK_EQ( wide.plotFrame[ 0 ].x + wide.plotFrame[ 0 ].w, 2560 - 8 );
+}
+
+// The Direct Strike lobby, GameClient/DirectStrikeLayout.h: README-lobby.md's rects on the design's 1920x1080
+
+static bool within( const DirectStrikeRect &in, const DirectStrikeRect &out )
+{
+	return in.x0 >= out.x0 && in.y0 >= out.y0 && in.x1 <= out.x1 && in.y1 <= out.y1;
+}
+
+static bool meet( const DirectStrikeRect &a, const DirectStrikeRect &b )
+{
+	return a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+}
+
+static const DirectStrikeRect DESIGN = { 0, 0, 1920, 1080 };
+
+TEST(dslobby_the_frame_scales_by_the_short_side_and_centres)
+{
+	const DirectStrikeFrame small = DirectStrike_frame( 1280, 720 );
+	CHECK( small.k > 0.666f && small.k < 0.667f );
+	CHECK_EQ( small.ox, 0 );
+	CHECK_EQ( small.oy, 0 );
+	const DirectStrikeFrame wide = DirectStrike_frame( 2560, 1080 );
+	CHECK_EQ( wide.ox, 320 );
+	CHECK_EQ( wide.oy, 0 );
+	const LaneHudBox card = DirectStrike_box( wide, DirectStrikeLobby_card( 0 ) );
+	CHECK_EQ( card.x, 320 + 80 );
+	CHECK_EQ( card.w, 600 );
+	float x, y;
+	DirectStrike_toDesign( small, 640, 360, &x, &y );
+	CHECK( x > 959.9f && x < 960.1f && y > 539.9f && y < 540.1f );
+}
+
+TEST(dslobby_team_two_is_team_ones_mirror_and_its_lamps_face_the_middle)
+{
+	for( int row = 0; row < DSLOBBY_ROWS; ++row )
+	{
+		const int left = DirectStrikeLobby_slot( 0, row ), right = DirectStrikeLobby_slot( 1, row );
+		CHECK_EQ( DirectStrikeLobby_team( left ), 0 );
+		CHECK_EQ( DirectStrikeLobby_team( right ), 1 );
+		CHECK_EQ( DirectStrikeLobby_row( right ), row );
+		const DirectStrikeRect a = DirectStrikeLobby_card( left ), b = DirectStrikeLobby_card( right );
+		for( int part = 0; part < DSSEAT_PARTS; ++part )
+		{
+			const DirectStrikeRect p = DirectStrikeLobby_part( left, (DirectStrikeSeatPart)part );
+			const DirectStrikeRect q = DirectStrikeLobby_part( right, (DirectStrikeSeatPart)part );
+			CHECK( within( p, a ) && within( q, b ) );
+			CHECK_EQ( p.x0 - a.x0, b.x1 - q.x1 );
+			CHECK_EQ( p.y0, q.y0 );
+			for( int other = 0; other < part; ++other )
+				CHECK( !meet( p, DirectStrikeLobby_part( left, (DirectStrikeSeatPart)other ) ) );
+		}
+		CHECK( DirectStrikeLobby_part( left, DSSEAT_LAMP ).x0 > DirectStrikeLobby_part( left, DSSEAT_PORTRAIT ).x1 );
+		CHECK( DirectStrikeLobby_part( right, DSSEAT_LAMP ).x1 < DirectStrikeLobby_part( right, DSSEAT_PORTRAIT ).x0 );
+		CHECK( !meet( a, DirectStrikeLobby_islandPanel() ) && !meet( b, DirectStrikeLobby_islandPanel() ) );
+		CHECK( !meet( a, DirectStrikeLobby_chat() ) && !meet( b, DirectStrikeLobby_chat() ) );
+	}
+}
+
+TEST(dslobby_every_open_list_stays_on_the_screen_and_holds_its_rows)
+{
+	const DirectStrikeRect middle[] =
+	{
+		DirectStrikeLobby_title(), DirectStrikeLobby_islandChip(), DirectStrikeLobby_chat(),
+		DirectStrikeLobby_chatInput(), DirectStrikeLobby_send(), DirectStrikeLobby_back(), DirectStrikeLobby_start(),
+	};
+	for( int i = 0; i < (int)( sizeof( middle ) / sizeof( middle[ 0 ] ) ); ++i )
+		for( int j = 0; j < i; ++j )
+			CHECK( !meet( middle[ i ], middle[ j ] ) );
+	for( int slot = 0; slot < DSLOBBY_SEATS; ++slot )
+	{
+		const DirectStrikeRect seats = DirectStrikeLobby_seatList( slot );
+		CHECK( within( seats, DESIGN ) );
+		for( int row = 0; row < DSLOBBY_SEAT_ROWS; ++row )
+			CHECK( within( DirectStrikeLobby_seatRow( slot, row ), seats ) );
+
+		const DirectStrikeRect picker = DirectStrikeLobby_picker( slot );
+		const DirectStrikeRect chip = DirectStrikeLobby_part( slot, DSSEAT_ARMY );
+		CHECK( within( picker, DESIGN ) );
+		CHECK( !meet( picker, chip ) );
+		if( DirectStrikeLobby_row( slot ) != 1 )
+			CHECK_EQ( DirectStrikeLobby_team( slot ) == 0 ? picker.x1 : picker.x0, DirectStrikeLobby_team( slot ) == 0 ? chip.x1 : chip.x0 );
+		CHECK( within( DirectStrikeLobby_pickerRandom( slot ), picker ) );
+		for( int column = 0; column < DSLOBBY_ARMY_COLUMNS; ++column )
+			for( int tile = 0; tile < DSLOBBY_ARMY_TILES; ++tile )
+			{
+				const DirectStrikeRect t = DirectStrikeLobby_pickerTile( slot, column, tile );
+				CHECK( within( t, picker ) );
+				CHECK( !meet( t, DirectStrikeLobby_pickerRandom( slot ) ) );
+			}
+
+		const DirectStrikeRect colors = DirectStrikeLobby_colorList( slot, 8 );
+		CHECK( within( colors, DESIGN ) );
+		for( int c = 0; c < 8; ++c )
+			CHECK( within( DirectStrikeLobby_colorCell( slot, 8, c ), colors ) );
+	}
 }

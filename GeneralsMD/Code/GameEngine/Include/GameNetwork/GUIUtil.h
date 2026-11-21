@@ -206,18 +206,10 @@ Bool SetDirectStrikeMap(GameInfo *game);
 // limit, peace time, income sharing, the tech and supply rules, Pro Rules) go off.  TRUE when it
 // changed anything, so a network host sends the options again.
 Bool FitDirectStrikeRoom(GameInfo *game);
-// The room's look, by the names every staging room's layout shares (SkirmishGameOptionsMenu,
-// LanGameOptionsMenu, WOLGameSetupMenu): team 1's three seat cards down the left and team 2's down the
-// right, facing each other as on the load screen, each with its seat, army, colour and handicap
-// boxes inside and the side's crest or general's face at the outer edge; the island's name between
-// them; the title Direct Strike.  The map preview and Select Map, the rules page, the team boxes and
-// seats 7 and 8 are hidden.  It only moves and hides, so a room calls it after every slot list repaint.
+// The room's look (SkirmishGameOptionsMenu, LanGameOptionsMenu, WOLGameSetupMenu): the Direct Strike
+// lobby over the room's layout, DirectStrikeLobby.h, its three seat cards a team facing each other.  A
+// room calls it after every slot list repaint; ShutdownLobbySeatVisuals takes it off.
 void LayoutDirectStrikeRoom(GameWindow *parent, const char *layoutFilename, const GameInfo *game);
-// The first cut's two calls, which the online room was written against: the layout above on
-// TheGameInfo, and a team box of Team 1 and Team 2 (hidden by the layout, the seat being the team).
-// ponytail: drop both once WOLGameSetupMenu.cpp calls LayoutDirectStrikeRoom itself
-void HideForDirectStrike(GameWindow *parent, const char *layoutFilename);
-void PopulateDirectStrikeTeamComboBox(Int comboBox, GameWindow *comboArray[]);
 // Create Game's question, which mode the room is for: Classic or Direct Strike, and Cancel
 void AskGameMode(void (*classic)(void), void (*directStrike)(void));
 

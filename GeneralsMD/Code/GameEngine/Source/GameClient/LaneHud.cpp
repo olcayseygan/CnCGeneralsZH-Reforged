@@ -32,9 +32,9 @@
 // each plot unit's drawable, so the board draws no health bar or pips over its pieces.
 //
 // Art: hud-artist's v4 pieces (experiments/proofs/2026-11-20/lane-hud-art/README-v4.md in the
-// wrapper) are looked up as <Prefix>Lane<Piece>{,H,P,I} (AmericaProLaneCard, GLAProLaneTier2P), and
-// the menu keys as the sidebar's <Prefix>SidebarKeyMenu.  A piece not in the data yet is a flat fill,
-// so the art drops in without a code change.
+// wrapper), and the look every Direct Strike screen shares, come from DirectStrikeTheme: the pieces by
+// name, the flat stand-ins where one is missing, the type and the shapes.  A piece not in the data yet
+// is a flat fill, so the art drops in without a code change.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,6 +42,7 @@
 
 #include "GameClient/LaneHud.h"
 #include "GameClient/LaneHudLayout.h"
+#include "GameClient/DirectStrikeTheme.h"
 
 #include "Common/GlobalData.h"
 #include "Common/MessageStream.h"
@@ -65,6 +66,7 @@
 #include "GameClient/GUICallbacks.h"
 #include "GameClient/Image.h"
 #include "GameClient/InGameUI.h"
+#include "GameClient/LaneWarEndScreen.h"
 #include "GameClient/Line2D.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/UIStyle.h"
@@ -77,32 +79,21 @@
 
 #include <vector>
 
+using namespace DirectStrikeTheme;
+
 namespace
 {
-	// flat stand-ins until the side's pieces are in the data, and what no piece draws
-	const Color PLATE						= GameMakeColor( 22, 27, 33, 228 );
-	const Color PLATE_EDGE			= GameMakeColor( 92, 106, 120, 255 );
-	const Color PLATE_LIT				= GameMakeColor( 140, 152, 166, 255 );
-	const Color WELL						= GameMakeColor( 8, 11, 14, 235 );
-	const Color KEY_FACE				= GameMakeColor( 36, 44, 54, 240 );
-	const Color KEY_FACE_HOT		= GameMakeColor( 52, 64, 78, 245 );
-	const Color KEY_FACE_LIT		= GameMakeColor( 40, 96, 74, 250 );
-	const Color GREYED					= GameMakeColor( 0, 0, 0, 150 );
+	// the HUD's own colours; the flat stand-ins and the shared ones are DirectStrikeTheme's
 	const Color DIM							= GameMakeColor( 140, 140, 140, 255 );	///< an image drawn through it: about the README's luminance times 0.55
 	const Color LANE_GROUND			= GameMakeColor( 128, 112, 78, 255 );
 	const Color LANE_EDGE				= GameMakeColor( 58, 52, 40, 255 );
 	const Color PLOT_FILL				= GameMakeColor( 40, 46, 40, 255 );
 	const Color VIEW_BOX				= GameMakeColor( 240, 240, 240, 230 );
-	const Color LEGAL						= GameMakeColor( 80, 230, 110, 255 );
 	const Color BLOCKED					= GameMakeColor( 240, 60, 45, 255 );
-	const Color PRICE						= GameMakeColor( 255, 214, 90, 255 );
 	const Color INCOME					= GameMakeColor( 110, 230, 110, 255 );
 	const Color AMBER						= GameMakeColor( 240, 170, 50, 255 );
-	const Color WHITE						= GameMakeColor( 240, 242, 246, 255 );
 	const Color DOWN						= GameMakeColor( 70, 70, 70, 255 );
-	const Color CARD_FACE				= GameMakeColor( 30, 36, 44, 245 );
 
-	enum { TEXT_POOL = 256 };
 	enum { ABILITY_ART_ROWS = 6 };		///< rows the AbilitiesPanel piece's glass holds
 	enum { NO_CARD = -1, HERO_CARD = -2 };
 	enum { LANEHUD_STRIP_JETS = 64 };		///< jets in the air the strip map marks, six seats' squadrons with room
@@ -182,18 +173,6 @@ namespace
 
 	// the tooltip the draw found under the pointer, drawn last
 	UnicodeString s_tip;
-
-	DisplayString *s_pool[ TEXT_POOL ];
-	Int s_poolUsed = 0;
-
-	// the side's pieces, found by name once a side
-	AsciiString s_piecePrefix;
-	struct Piece
-	{
-		AsciiString name;
-		const Image *image;
-	};
-	std::vector<Piece> s_pieces;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -221,38 +200,10 @@ static LaneHudBox grow( const LaneHudBox &b, Int by )
 	return LaneHud_box( b.x - by, b.y - by, b.w + 2 * by, b.h + 2 * by );
 }
 
-/// a string of the pool, set to text in font; the pool starts over every draw
-static DisplayString *pooled( const UnicodeString &text, GameFont *font )
-{
-	if( s_poolUsed >= TEXT_POOL )
-		return NULL;
-	DisplayString *&s = s_pool[ s_poolUsed++ ];
-	if( s == NULL )
-		s = TheDisplayStringManager->newDisplayString();
-	if( s->getFont() != font )
-		s->setFont( font );
-	if( s->getText().compare( text ) != 0 )
-		s->setText( text );
-	return s;
-}
-
-/// text at x (align -1 from x, 0 centred on x, +1 ending at x), centred down the band y..y+h; its width
-static Int drawText( const UnicodeString &text, GameFont *font, Int x, Int y, Int h, Color color, Int align = -1 )
-{
-	DisplayString *s = pooled( text, font );
-	if( s == NULL )
-		return 0;
-	Int w = 0, th = 0;
-	s->getSize( &w, &th );
-	const Int lx = align < 0 ? x : align == 0 ? x - w / 2 : x - w;
-	s->draw( lx, y + ( h - th ) / 2, color, UIStyle::SHADOW );
-	return w;
-}
-
-static GameFont *smallFont( void ) { return UIStyle::readableFont( UIStyle::TEXT_SMALL, TRUE ); }
-static GameFont *bodyFont( void ) { return UIStyle::readableFont( UIStyle::TEXT_BODY, TRUE ); }
-static GameFont *priceFont( void ) { return UIStyle::readableFont( UIStyle::TEXT_STRONG, TRUE ); }
-static GameFont *bigFont( void ) { return UIStyle::readableFont( UIStyle::TEXT_TITLE, TRUE ); }
+static GameFont *smallFont( void ) { return hudFont( UIStyle::TEXT_SMALL ); }
+static GameFont *bodyFont( void ) { return hudFont( UIStyle::TEXT_BODY ); }
+static GameFont *priceFont( void ) { return hudFont( UIStyle::TEXT_STRONG ); }
+static GameFont *bigFont( void ) { return hudFont( UIStyle::TEXT_TITLE ); }
 
 static UnicodeString label( const char *key )
 {
@@ -285,87 +236,10 @@ static void tip( const LaneHudBox &b, const UnicodeString &text )
 			s_tip.concat( *c );
 }
 
-//-------------------------------------------------------------------------------------------------
-/** The side's prefix for its pieces, as the sidebar's: AmericaPro, ChinaPro, GLAPro.  Turkiye and a
-	* watcher take America's. */
-//-------------------------------------------------------------------------------------------------
-static AsciiString sidePrefix( void )
+/// the side whose art the HUD wears: the seated player's, America's for a watcher
+static Side hudSide( void )
 {
-	const AsciiString side = s_player != NULL ? s_player->getSide() : AsciiString( "America" );
-	if( side.startsWith( "China" ) )
-		return AsciiString( "ChinaPro" );
-	if( side.startsWith( "GLA" ) )
-		return AsciiString( "GLAPro" );
-	return AsciiString( "AmericaPro" );
-}
-
-/// <Prefix><piece>, looked up once a side
-static const Image *findPiece( const char *piece )
-{
-	const AsciiString prefix = sidePrefix();
-	if( prefix != s_piecePrefix )
-	{
-		s_piecePrefix = prefix;
-		s_pieces.clear();
-	}
-	AsciiString name;
-	name.format( "%s%s", prefix.str(), piece );
-	for( size_t i = 0; i < s_pieces.size(); ++i )
-		if( s_pieces[ i ].name == name )
-			return s_pieces[ i ].image;
-	Piece found;
-	found.name = name;
-	found.image = TheMappedImageCollection->findImageByName( name );
-	s_pieces.push_back( found );
-	return found.image;
-}
-
-/// <Prefix><piece><state>, falling back to the piece without its state; NULL while the data lacks it
-static const Image *art( const char *piece, const char *state = "" )
-{
-	if( *state != 0 )
-	{
-		AsciiString withState;
-		withState.format( "%s%s", piece, state );
-		const Image *image = findPiece( withState.str() );
-		if( image != NULL )
-			return image;
-	}
-	return findPiece( piece );
-}
-
-static const char *stateOf( Bool hot, Bool lit, Bool disabled )
-{
-	return lit ? "P" : disabled ? "I" : hot ? "H" : "";
-}
-
-static void drawArt( const Image *image, const LaneHudBox &b, Color tint = 0xFFFFFFFF )
-{
-	TheDisplay->drawImage( image, b.x, b.y, b.x + b.w, b.y + b.h, tint );
-}
-
-/// a flat plate
-static void plate( const LaneHudBox &b )
-{
-	TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, PLATE );
-	TheDisplay->drawFillRect( b.x + 1, b.y + 1, b.w - 2, 1, PLATE_LIT );
-	TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, PLATE_EDGE );
-}
-
-/// a key in its side's art or flat: lit when its mode is on, brighter under the pointer
-static void key( const LaneHudBox &b, const char *piece, Bool lit, Bool disabled = FALSE )
-{
-	const Bool hot = !disabled && inside( b, mousePos() );
-	const Image *image = art( piece, stateOf( hot, lit, disabled ) );
-	if( image != NULL )
-	{
-		drawArt( image, b );
-		return;
-	}
-	TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, lit ? KEY_FACE_LIT : hot ? KEY_FACE_HOT : KEY_FACE );
-	TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, hot || lit ? UIStyle::EDGE_LIT : PLATE_EDGE );
-	if( disabled )
-		TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, GREYED );
+	return sideOf( s_player != NULL ? s_player->getSide() : AsciiString( "America" ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -381,10 +255,10 @@ static void line( Real x0, Real y0, Real x1, Real y1, const LaneHudBox &b, Color
 /// the padlock: TabLock, or a body and a shackle
 static void lockMark( const LaneHudBox &b )
 {
-	const Image *image = art( "LaneTabLock" );
+	const Image *image = art( LANE_TAB_LOCK );
 	if( image != NULL )
 	{
-		drawArt( image, b );
+		drawImage( image, b );
 		return;
 	}
 	TheDisplay->drawFillRect( b.x, b.y + b.h / 2, b.w, b.h - b.h / 2, WHITE );
@@ -394,10 +268,10 @@ static void lockMark( const LaneHudBox &b )
 /// the green check: Done, or two strokes
 static void doneMark( const LaneHudBox &b )
 {
-	const Image *image = art( "LaneDone" );
+	const Image *image = art( LANE_DONE );
 	if( image != NULL )
 	{
-		drawArt( image, b );
+		drawImage( image, b );
 		return;
 	}
 	line( 0.15f, 0.55f, 0.4f, 0.8f, b, LEGAL, 3.0f );
@@ -407,10 +281,10 @@ static void doneMark( const LaneHudBox &b )
 /// a jet: AirMark, or a flat arrowhead
 static void airMark( const LaneHudBox &b )
 {
-	const Image *image = art( "LaneAirMark" );
+	const Image *image = art( LANE_AIR_MARK );
 	if( image != NULL )
 	{
-		drawArt( image, b );
+		drawImage( image, b );
 		return;
 	}
 	line( 0.5f, 0.05f, 0.1f, 0.9f, b, WHITE );
@@ -427,10 +301,10 @@ static void boltGlyph( const LaneHudBox &b )
 
 static void incomeGlyph( const LaneHudBox &b )
 {
-	const Image *image = art( "LaneIncomeIcon" );
+	const Image *image = art( LANE_INCOME_ICON );
 	if( image != NULL )
 	{
-		drawArt( image, b );
+		drawImage( image, b );
 		return;
 	}
 	for( Int i = 0; i < 3; ++i )
@@ -614,8 +488,9 @@ static void outline( const ICoord2D corner[ 4 ], Color color )
 }
 
 //-------------------------------------------------------------------------------------------------
-/** Who sits where and whether the HUD is up: a lane map, a match, not the shell.  The local player
-	* seated on a plot gets the whole HUD and the command bar goes; a watcher gets the top plate. */
+/** Who sits where and whether the HUD is up: a lane map, a match, not the shell, not under the end
+	* screen.  The local player seated on a plot gets the whole HUD and the command bar goes; a watcher
+	* gets the top plate. */
 //-------------------------------------------------------------------------------------------------
 static Bool refreshShowing( void )
 {
@@ -623,7 +498,7 @@ static Bool refreshShowing( void )
 	s_seated = FALSE;
 	s_player = NULL;
 	if( TheLaneWarDirector == NULL || !TheLaneWarDirector->isActive() || !TheGameLogic->isInGame()
-			|| TheGameLogic->isInShellGame() || TheGameLogic->getFrame() == 0 )
+			|| TheGameLogic->isInShellGame() || TheGameLogic->getFrame() == 0 || LaneWarEndScreen_isShowing() )
 		return FALSE;
 
 	LaneHud_layout( (Int)TheDisplay->getWidth(), (Int)TheDisplay->getHeight(), &s_layout );
@@ -771,13 +646,13 @@ static LaneHudBox stripRect( const StripFrame &f, Real lx, Real ly, Real hx, Rea
 }
 
 /// a fortress or tower mark: its piece tinted, or a square
-static void stripMark( const StripFrame &f, const Coord3D &at, const char *piece, Int size, Color tint )
+static void stripMark( const StripFrame &f, const Coord3D &at, Piece piece, Int size, Color tint )
 {
 	const ICoord2D p = toStrip( f, at.x, at.y );
 	const LaneHudBox b = LaneHud_box( p.x - size / 2, p.y - size / 2, size, size );
 	const Image *image = art( piece );
 	if( image != NULL )
-		drawArt( image, b, tint );
+		drawImage( image, b, tint );
 	else
 	{
 		TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, tint );
@@ -837,16 +712,16 @@ static void drawStripMap( void )
 			{
 				s_towerAt[ t ][ k ] = *tower->getPosition();
 				s_towerKnown[ t ][ k ] = TRUE;
-				stripMark( f, s_towerAt[ t ][ k ], "LaneMapTower", pxs( 10 ), tint );
+				stripMark( f, s_towerAt[ t ][ k ], LANE_MAP_TOWER, pxs( 10 ), tint );
 			}
 			else if( id != INVALID_ID && s_towerKnown[ t ][ k ] )
-				stripMark( f, s_towerAt[ t ][ k ], "LaneMapTower", pxs( 10 ), DOWN );
+				stripMark( f, s_towerAt[ t ][ k ], LANE_MAP_TOWER, pxs( 10 ), DOWN );
 		}
 		const Object *fortress = TheGameLogic->findObjectByID( TheLaneWarDirector->getFortress( t ) );
 		if( fortress != NULL )
 		{
 			const Bool down = fortress->isEffectivelyDead() || TheLaneWarDirector->isFortressDown( t );
-			stripMark( f, *fortress->getPosition(), "LaneMapFortress", pxs( 16 ), down ? DOWN : tint );
+			stripMark( f, *fortress->getPosition(), LANE_MAP_FORTRESS, pxs( 16 ), down ? DOWN : tint );
 		}
 	}
 
@@ -878,9 +753,9 @@ static void drawStripMap( void )
 		const Player *owner = jetOwner[ j ] >= 0 ? ThePlayerList->getNthPlayer( jetOwner[ j ] ) : NULL;
 		const Color tint = owner ? UIStyle::readable( owner->getPlayerColor() ) : UIStyle::INK;
 		const LaneHudBox b = LaneHud_box( p.x - mark / 2, p.y - mark / 2, mark, mark );
-		const Image *image = art( "LaneAirMark" );
+		const Image *image = art( LANE_AIR_MARK );
 		if( image != NULL )
-			drawArt( image, b, tint );
+			drawImage( image, b, tint );
 		else
 			TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, tint );
 	}
@@ -914,21 +789,6 @@ static void drawStripMap( void )
 	}
 }
 
-/// a chip of the floating top: its side's piece, or a card's flat face with its glass 5 in
-static void chip( const LaneHudBox &b, const char *piece )
-{
-	const Image *image = art( piece );
-	if( image != NULL )
-	{
-		drawArt( image, b );
-		return;
-	}
-	TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, CARD_FACE );
-	TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, PLATE_EDGE );
-	const Int in = pxs( 5 );
-	TheDisplay->drawFillRect( b.x + in, b.y + in, b.w - 2 * in, b.h - 2 * in, WELL );
-}
-
 /** A ring cut by angle where the YourRing piece is missing: the arc of mean radius r and the width
 	* given, from `from` degrees clockwise from 12 o'clock through `sweep`, drawn in short thick strokes. */
 static void arc( Int cx, Int cy, Real r, Real width, Real from, Real sweep, Color color )
@@ -958,11 +818,11 @@ static void disc( Int cx, Int cy, Int r, Color color )
 static void drawMoney( void )
 {
 	const LaneHudBox &m = s_layout.money;
-	chip( m, "LaneMoneyChip" );
+	chip( m, LANE_MONEY_CHIP );
 	const LaneHudBox coin = LaneHud_box( m.x + pxs( 11 ), m.y + pxs( 19 ), pxs( 28 ), pxs( 28 ) );
-	const Image *coinArt = art( "LaneCoin" );
+	const Image *coinArt = art( LANE_COIN );
 	if( coinArt != NULL )
-		drawArt( coinArt, coin );
+		drawImage( coinArt, coin );
 	else
 	{
 		disc( coin.x + coin.w / 2, coin.y + coin.h / 2, coin.w / 2, PRICE );
@@ -988,7 +848,7 @@ static void drawMoney( void )
 static void drawYourWave( void )
 {
 	const LaneHudBox &b = s_layout.yourWave;
-	chip( b, "LaneYourChip" );
+	chip( b, LANE_YOUR_CHIP );
 	const Int tick = (Int)TheLaneWarDirector->getTickCount();
 	Int ahead = -1, seats = 0;
 	for( Int k = 0; k < LANEWAR_SEATS; ++k )
@@ -1007,11 +867,11 @@ static void drawYourWave( void )
 	const Real r = 9.5f * s_layout.scale, width = max( 2.0f, 3.0f * s_layout.scale );
 	const Color track = GameMakeColor( 34, 40, 48, 255 );
 	// README-v6: the whole piece as the track, then the piece tinted and cut to the wedge still to wait
-	const Image *ring = art( "LaneYourRing" );
+	const Image *ring = art( LANE_YOUR_RING );
 	const LaneHudBox rb = LaneHud_box( cx - pxs( 12 ), cy - pxs( 12 ), pxs( 24 ), pxs( 24 ) );
 	if( ring != NULL )
 	{
-		drawArt( ring, rb, track );
+		drawImage( ring, rb, track );
 		if( share > 0.0f )
 			TheDisplay->drawImageWedge( ring, rb.x, rb.y, rb.x + rb.w, rb.y + rb.h, 0.0f, 360.0f * share, own );
 	}
@@ -1031,11 +891,11 @@ static void drawYourWave( void )
 static void drawWaveBar( void )
 {
 	const LaneHudBox &b = s_layout.waveBar;
-	chip( b, "LaneBarChip" );
+	chip( b, LANE_BAR_CHIP );
 	// the groove 4 in, the fills 1 inside its rim
 	const Int in = pxs( 4 );
 	const LaneHudBox groove = LaneHud_box( b.x + in, b.y + in, b.w - 2 * in, b.h - 2 * in );
-	if( art( "LaneBarChip" ) == NULL )
+	if( art( LANE_BAR_CHIP ) == NULL )
 		TheDisplay->drawFillRect( groove.x, groove.y, groove.w, groove.h, GameMakeColor( 34, 40, 48, 255 ) );
 	const LaneHudBox fills = LaneHud_box( groove.x + 1, groove.y + 1, groove.w - 2, groove.h - 2 );
 	const Real f = min( 1.0f, (Real)secondsToTick() / (Real)LANEWAR_TICK_SECONDS );
@@ -1058,7 +918,7 @@ static void drawWaveBar( void )
 static void drawCountdown( void )
 {
 	const LaneHudBox &c = s_layout.countdown;
-	chip( c, "LaneCountChip" );
+	chip( c, LANE_COUNT_CHIP );
 	// the chip's 36 px is 24 at 720, short of the title face the readable floor grows there
 	GameFont *font = bigFont()->height <= c.h - pxs( 6 ) ? bigFont() : priceFont();
 	drawText( clockText( secondsToTick() ), font, c.x + c.w / 2, c.y, c.h, WHITE, 0 );
@@ -1070,7 +930,7 @@ static void drawTop( void )
 	const LaneHudLayout &l = s_layout;
 	if( s_seated )
 		drawMoney();
-	chip( l.map, "LaneLaneChip" );
+	chip( l.map, LANE_LANE_CHIP );
 	drawStripMap();
 	if( s_seated )
 		drawYourWave();
@@ -1078,10 +938,10 @@ static void drawTop( void )
 	drawCountdown();
 
 	// the menu keys
-	const struct { const LaneHudBox *box; const char *piece; const char *tipKey; } KEYS[ 2 ] =
+	const struct { const LaneHudBox *box; Piece piece; const char *tipKey; } KEYS[ 2 ] =
 	{
-		{ &l.menu, "SidebarKeyMenu", "GUI:LaneMenu" },
-		{ &l.diplomacy, "SidebarKeyDiplomacy", "GUI:LaneDiplomacy" },
+		{ &l.menu, SIDEBAR_KEY_MENU, "GUI:LaneMenu" },
+		{ &l.diplomacy, SIDEBAR_KEY_DIPLOMACY, "GUI:LaneDiplomacy" },
 	};
 	for( Int k = 0; k < 2; ++k )
 	{
@@ -1108,9 +968,9 @@ static void drawTop( void )
 //-------------------------------------------------------------------------------------------------
 static void drawPlotFrame( const LaneHudBox &b, Int team, Int seat )
 {
-	const Image *frame = art( "LaneEnemyPlotFrame" );
+	const Image *frame = art( LANE_ENEMY_PLOT_FRAME );
 	if( frame != NULL )
-		drawArt( frame, b );
+		drawImage( frame, b );
 	else
 		plate( b );
 	const LaneHudBox glass = LaneHud_box( b.x + pxs( 5 ), b.y + pxs( 5 ), b.w - pxs( 10 ), b.h - pxs( 10 ) );
@@ -1211,10 +1071,10 @@ static LaneHudBox cardPart( const LaneHudBox &card, Int x0, Int y0, Int x1, Int 
 	* check when it is done.  `dim` greys the picture; `lit` rings the card that is armed. */
 static void drawCard( const LaneHudBox &c, const Image *picture, Int price, Bool dim, Bool done, Bool hero, Bool lit, Bool air )
 {
-	const Image *frame = art( hero ? "LaneCardHero" : "LaneCard" );
+	const Image *frame = art( hero ? LANE_CARD_HERO : LANE_CARD );
 	const LaneHudBox well = cardPart( c, 5, 5, 95, 77 ), band = cardPart( c, 8, 84, 92, 108 );
 	if( frame != NULL )
-		drawArt( frame, c );
+		drawImage( frame, c );
 	else
 	{
 		TheDisplay->drawFillRect( c.x, c.y, c.w, c.h, CARD_FACE );
@@ -1225,7 +1085,7 @@ static void drawCard( const LaneHudBox &c, const Image *picture, Int price, Bool
 	if( picture != NULL )
 	{
 		const LaneHudBox p = cardPart( c, 7, 7, 93, 76 );
-		drawArt( picture, p, dim ? DIM : 0xFFFFFFFF );
+		drawImage( picture, p, dim ? DIM : 0xFFFFFFFF );
 	}
 	if( air )
 		airMark( cardPart( c, 8, 56, 26, 74 ) );
@@ -1272,11 +1132,10 @@ static void drawTierKeys( void )
 	for( Int t = 0; t < LANEHUD_TIERS; ++t )
 	{
 		const LaneHudBox &b = s_layout.tiers[ t ];
-		AsciiString piece;
-		piece.format( "LaneTier%d", t + 1 );
+		const Piece piece = (Piece)( LANE_TIER1 + t );
 		const Bool locked = t + 1 > tech;
-		key( b, piece.str(), !locked && s_tab == t, locked );
-		const Bool flat = art( piece.str() ) == NULL;
+		key( b, piece, !locked && s_tab == t, locked );
+		const Bool flat = art( piece ) == NULL;
 		if( locked )
 		{
 			const Int price = LaneWar_tierPrice( LANEWAR_TRACK_TECH, t + 1 );
@@ -1348,7 +1207,7 @@ static void drawCards( void )
 static void drawDeck( void )
 {
 	const LaneHudBox &d = s_layout.deck;
-	const Image *back = art( "LaneCardBack" );
+	const Image *back = art( LANE_CARD_BACK );
 	LaneHudBox top = d;
 	for( Int k = 0; k < 3; ++k )
 	{
@@ -1356,7 +1215,7 @@ static void drawDeck( void )
 		const Int step = REAL_TO_INT( 3.0f * s_layout.scale + 0.5f );
 		top = LaneHud_box( d.x + step * k, d.y + step * ( 2 - k ), d.w, d.h );
 		if( back != NULL )
-			drawArt( back, top );
+			drawImage( back, top );
 		else
 		{
 			TheDisplay->drawFillRect( top.x, top.y, top.w, top.h, CARD_FACE );
@@ -1425,8 +1284,8 @@ static void drawUpgrades( void )
 static void drawAbilitiesKey( void )
 {
 	const LaneHudBox &b = s_layout.abilitiesKey;
-	key( b, "LaneAbilitiesKey", s_abilitiesOpen );
-	if( art( "LaneAbilitiesKey" ) == NULL )
+	key( b, LANE_ABILITIES_KEY, s_abilitiesOpen );
+	if( art( LANE_ABILITIES_KEY ) == NULL )
 		boltGlyph( b );
 	tip( b, label( "GUI:LaneAbilities" ) );
 }
@@ -1472,19 +1331,17 @@ static void gatherAbilities( void )
 	* the image collection the first time a side asks.  NULL while the piece is missing. */
 static const Image *panelSlice( Int part )
 {
-	static const char *const NAMES[ 3 ] = { "LaneAbilitiesPanelHead", "LaneAbilitiesPanelRow", "LaneAbilitiesPanelFoot" };
+	const Piece piece = (Piece)( LANE_ABILITIES_PANEL_HEAD + part );
 	// rows of the piece at 1080: an 8 pixel edge, six glass rows of 48, an 8 pixel edge
 	static const Int FROM[ 3 ] = { 0, 104, 248 }, TO[ 3 ] = { 56, 152, 304 }, HEIGHT = 304;
-	const Image *made = art( NAMES[ part ] );
+	const Image *made = art( piece );
 	if( made != NULL )
 		return made;
-	const Image *whole = art( "LaneAbilitiesPanel" );
+	const Image *whole = art( LANE_ABILITIES_PANEL );
 	if( whole == NULL || BitTest( whole->getStatus(), IMAGE_STATUS_ROTATED_90_CLOCKWISE ) )
 		return NULL;
 	Image *slice = newInstance( Image );
-	AsciiString name;
-	name.format( "%s%s", sidePrefix().str(), NAMES[ part ] );
-	slice->setName( name );
+	slice->setName( pieceName( piece ) );
 	slice->setFilename( whole->getFilename() );
 	slice->setTextureWidth( whole->getTextureSize()->x );
 	slice->setTextureHeight( whole->getTextureSize()->y );
@@ -1499,16 +1356,16 @@ static const Image *panelSlice( Int part )
 	size.y = whole->getImageHeight() * ( TO[ part ] - FROM[ part ] ) / HEIGHT;
 	slice->setImageSize( &size );
 	TheMappedImageCollection->addImage( slice );
-	s_pieces.clear();		// findPiece kept the name as missing
+	forgetPieces();		// the theme kept the name as missing
 	return slice;
 }
 
 static void drawToggle( const LaneHudBox &b, Bool on )
 {
-	const Image *image = art( on ? "LaneToggleOn" : "LaneToggleOff" );
+	const Image *image = art( on ? LANE_TOGGLE_ON : LANE_TOGGLE_OFF );
 	if( image != NULL )
 	{
-		drawArt( image, b );
+		drawImage( image, b );
 		return;
 	}
 	TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, on ? KEY_FACE_LIT : WELL );
@@ -1526,18 +1383,18 @@ static void drawAbilities( void )
 	const LaneHudLayout &l = s_layout;
 	const Int rows = max( (Int)ABILITY_ART_ROWS, s_rowCount );
 	const LaneHudBox panel = LaneHud_abilitiesPanel( l, rows );
-	const Image *panelArt = art( "LaneAbilitiesPanel" );
+	const Image *panelArt = art( LANE_ABILITIES_PANEL );
 	const Image *head = panelSlice( 0 ), *middle = panelSlice( 1 ), *foot = panelSlice( 2 );
 	if( panelArt != NULL && rows == ABILITY_ART_ROWS )
-		drawArt( panelArt, panel );
+		drawImage( panelArt, panel );
 	else if( head != NULL && middle != NULL && foot != NULL )
 	{
 		// more rows than the art's six: its head, one glass row repeated, its foot
 		const Int end = l.abilityPad + l.abilityRowH;
-		drawArt( head, LaneHud_box( panel.x, panel.y, panel.w, end ) );
+		drawImage( head, LaneHud_box( panel.x, panel.y, panel.w, end ) );
 		for( Int r = 1; r < rows - 1; ++r )
-			drawArt( middle, LaneHud_box( panel.x, panel.y + l.abilityPad + r * l.abilityRowH, panel.w, l.abilityRowH ) );
-		drawArt( foot, LaneHud_box( panel.x, panel.y + panel.h - end, panel.w, end ) );
+			drawImage( middle, LaneHud_box( panel.x, panel.y + l.abilityPad + r * l.abilityRowH, panel.w, l.abilityRowH ) );
+		drawImage( foot, LaneHud_box( panel.x, panel.y + panel.h - end, panel.w, end ) );
 	}
 	else
 	{
@@ -1554,9 +1411,9 @@ static void drawAbilities( void )
 			TheDisplay->drawFillRect( box.x, box.y, box.w, box.h, GameMakeColor( 255, 255, 255, 18 ) );
 		const LaneHudBox cameo = LaneHud_at( box, l.abilityCameo ), icon = LaneHud_at( box, l.abilityIcon );
 		if( row.thing->getButtonImage() != NULL )
-			drawArt( row.thing->getButtonImage(), cameo );
+			drawImage( row.thing->getButtonImage(), cameo );
 		if( row.ability.button->getButtonImage() != NULL )
-			drawArt( row.ability.button->getButtonImage(), icon, on ? 0xFFFFFFFF : DIM );
+			drawImage( row.ability.button->getButtonImage(), icon, on ? 0xFFFFFFFF : DIM );
 		drawToggle( LaneHud_at( box, l.abilityToggle ), on );
 		tip( cameo, row.thing->getDisplayName() );
 		tip( LaneHud_box( icon.x, box.y, box.x + box.w - icon.x, box.h ), TheGameText->fetch( row.ability.button->getTextLabel() ) );
@@ -1616,7 +1473,7 @@ static void drawHeld( void )
 			const LaneWarDirector::PlotUnit::Passenger &p = units[ i ].passengers[ s_passenger ];
 			const LaneHudBox c = LaneHud_box( mouse->x + pxs( 12 ), mouse->y - pxs( 30 ), pxs( 44 ), pxs( 36 ) );
 			if( p.thing->getButtonImage() != NULL )
-				drawArt( p.thing->getButtonImage(), c );
+				drawImage( p.thing->getButtonImage(), c );
 			if( inside( s_layout.hand, mouse ) )
 			{
 				const LaneHudBox &h = s_layout.hand;
@@ -1793,7 +1650,7 @@ static void drawCluster( void )
 			const Bool can = up.available && !up.owned && cash >= up.price;
 			chipFace( b, can );
 			if( up.upgrade->getButtonImage() != NULL )
-				drawArt( up.upgrade->getButtonImage(), picture, up.owned || can ? 0xFFFFFFFF : DIM );
+				drawImage( up.upgrade->getButtonImage(), picture, up.owned || can ? 0xFFFFFFFF : DIM );
 			chipPrice( b, up.owned ? 0 : up.price, can );
 			if( !up.owned && !up.available )
 				TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, GREYED );
@@ -1806,7 +1663,7 @@ static void drawCluster( void )
 			const Bool can = price > 0 && cash >= price;
 			chipFace( b, TRUE );
 			if( !( s_passengerOf == u.id && s_passenger == chip.value ) && p.thing->getButtonImage() != NULL )
-				drawArt( p.thing->getButtonImage(), picture );
+				drawImage( p.thing->getButtonImage(), picture );
 			if( p.veterancy > 0 )
 				chevrons( LaneHud_box( b.x + b.w * 3 / 5, b.y, b.w * 2 / 5, b.h / 2 ), p.veterancy, PRICE );
 			chipPrice( b, price, can );
@@ -2000,7 +1857,7 @@ void LaneHud_preDraw( void )
 //-------------------------------------------------------------------------------------------------
 void LaneHud_draw( void )
 {
-	s_poolUsed = 0;
+	begin( hudSide(), s_layout.scale );
 	s_tip.clear();
 	if( !s_showing )
 		return;

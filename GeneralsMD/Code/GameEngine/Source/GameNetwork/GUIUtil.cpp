@@ -58,6 +58,7 @@
 #include "GameClient/MessageBox.h"
 #include "GameNetwork/LANAPICallbacks.h" // for acceptTrueColor, etc
 #include "GameClient/ChallengeGenerals.h"
+#include "GameClient/DirectStrikeLobby.h"
 #include "GameClient/FactionPicker.h"
 #include "Lib/Clock.h"
 #include "Common/RandomMapGenerator.h"
@@ -1602,219 +1603,9 @@ Bool FitDirectStrikeRoom(GameInfo *game)
 	return changed;
 }
 
-/* The room as the load screen lays a match out: team 1's three seat cards down the left, team 2's down
-	 the right, facing each other, each card with its seat's own boxes in place and the side's crest or
-	 the general's face at its outer edge, the island's name in the middle between them.  Positions are
-	 on the rooms' 1920x1080 design (the layouts' creation resolution) and land through the room's own
-	 parent window, so they scale with it as the layout's rectangles do.  The boxes keep their widths:
-	 a combo box draws its list from its own rectangle. */
-enum
-{
-	DS_CARD_W = 640, DS_CARD_H = 112, DS_CARD_GAP = 12, DS_CARD_TOP = 196,
-	DS_LEFT_X = 124, DS_RIGHT_X = 1796 - DS_CARD_W,
-	DS_EDGE = 16, DS_EMBLEM = 88, DS_INSET = 12, DS_ROW2 = 48,
-	DS_BAR_W = 8, DS_HEADING_Y = 158, DS_MIDDLE_Y = 300,
-};
-
-static GameWindow *theDirectStrikeRoot = NULL;			///< the room's parent, 1920x1080 on the design
-static const GameInfo *theDirectStrikeGame = NULL;
-static GameWinDrawFunc theDirectStrikeCardDraw = NULL;	///< a seat card's own draw, which the crest goes over
-
-/// a design position on the room's screen, through its parent window
-static void designToScreen(Int x, Int y, Int *sx, Int *sy)
-{
-	Int rx, ry, rw, rh;
-	theDirectStrikeRoot->winGetScreenPosition(&rx, &ry);
-	theDirectStrikeRoot->winGetSize(&rw, &rh);
-	*sx = rx + REAL_TO_INT(x * (Real)rw / 1920.0f);
-	*sy = ry + REAL_TO_INT(y * (Real)rh / 1080.0f);
-}
-
-static void placeAt(GameWindow *win, Int x, Int y)
-{
-	if (win == NULL)
-		return;
-	Int sx, sy, px = 0, py = 0;
-	designToScreen(x, y, &sx, &sy);
-	if (GameWindow *up = win->winGetParent())
-		up->winGetScreenPosition(&px, &py);
-	win->winSetPosition(sx - px, sy - py);
-}
-
-static void sizeTo(GameWindow *win, Int w, Int h)
-{
-	if (win == NULL)
-		return;
-	Int x0, y0, x1, y1;
-	designToScreen(0, 0, &x0, &y0);
-	designToScreen(w, h, &x1, &y1);
-	win->winSetSize(x1 - x0, y1 - y0);
-}
-
-/// the side's crest or the general's face, as the load screen picks it (LoadScreen.cpp, sideEmblem)
-static const Image *directStrikeEmblem(Int pick)
-{
-	const PlayerTemplate *side = pick >= 0 ? ThePlayerTemplateStore->getNthPlayerTemplate(pick) : NULL;
-	if (side == NULL)
-		return NULL;	// Random, which shows nothing until the match deals it
-	const GeneralPersona *general = TheChallengeGenerals->getGeneralByTemplateName(side->getName());
-	if (general && general->getBioPortraitSmall())
-		return general->getBioPortraitSmall();
-	const AsciiString base = side->getBaseSide();
-	if (base.compareNoCase("USA") == 0)
-		return TheMappedImageCollection->findImageByName("SAFactionLogo144_US");
-	if (base.compareNoCase("China") == 0)
-		return TheMappedImageCollection->findImageByName("SNFactionLogo144_China");
-	if (base.compareNoCase("GLA") == 0)
-		return TheMappedImageCollection->findImageByName("SUFactionLogo144_GLA");
-	return side->getGeneralImage();
-}
-
-static void drawDirectStrikeCard(GameWindow *window, WinInstanceData *instData)
-{
-	if (theDirectStrikeCardDraw)
-		theDirectStrikeCardDraw(window, instData);
-	Int seat = -1;
-	for (Int i = 0; i < DIRECT_STRIKE_SEATS && seat < 0; ++i)
-		if (theSeatCard[i] == window)
-			seat = i;
-	if (seat < 0 || theDirectStrikeGame == NULL)
-		return;
-	const GameSlot *slot = theDirectStrikeGame->getConstSlot(seat);
-	const Image *emblem = slot && slot->isOccupied() ? directStrikeEmblem(slot->getPlayerTemplate()) : NULL;
-	if (emblem == NULL)
-		return;
-	const Bool left = directStrikeTeamOfSeat(seat) == 0;
-	const Int cardX = left ? DS_LEFT_X : DS_RIGHT_X;
-	const Int top = DS_CARD_TOP + (seat / 2) * (DS_CARD_H + DS_CARD_GAP);
-	const Int x = left ? cardX + DS_EDGE : cardX + DS_CARD_W - DS_EDGE - DS_EMBLEM;
-	Int x0, y0, x1, y1;
-	designToScreen(x, top + DS_INSET, &x0, &y0);
-	designToScreen(x + DS_EMBLEM, top + DS_INSET + DS_EMBLEM, &x1, &y1);
-	TheDisplay->drawImage(emblem, x0, y0, x1, y1);
-}
-
 void LayoutDirectStrikeRoom(GameWindow *parent, const char *layoutFilename, const GameInfo *game)
 {
-	theDirectStrikeRoot = parent;
-	theDirectStrikeGame = game;
-	if (parent == NULL)
-		return;
-	struct Named
-	{
-		GameWindow *operator()(const char *layout, GameWindow *root, const char *what, Int seat = -1) const
-		{
-			AsciiString full;
-			if (seat < 0)
-				full.format("%s:%s", layout, what);
-			else
-				full.format("%s:%s%d", layout, what, seat);
-			return TheWindowManager->winGetWindowFromId(root, NAMEKEY(full));
-		}
-	} find;
-
-	// what the mode has no use for: the map and its choice, the rules, the record's reset, the team
-	// boxes (the seat is the team), the seats past six and the old column headings
-	static const char *const roomWindows[] =
-	{
-		"PageLobbySettings", "MapWindow", "StaticTextMapPreview", "ButtonSelectMap", "ButtonReset",
-		"StaticTextColor", "StaticTextTeam", "StaticTextHandicap",
-	};
-	for (Int k = 0; k < (Int)ARRAY_SIZE(roomWindows); ++k)
-		if (GameWindow *win = find(layoutFilename, parent, roomWindows[k]))
-			win->winHide(TRUE);
-	static const char *const rowWindows[] =
-	{
-		"SeatCard", "SeatBar", "SeatSwatch", "SeatTeam", "ComboBoxPlayer", "ComboBoxAIPersona", "ComboBoxTeam",
-		"ComboBoxHandicap", "ComboBoxColor", "ComboBoxPlayerTemplate", "ButtonAccept",
-	};
-	for (Int i = 0; i < MAX_SLOTS; ++i)
-		for (Int k = 0; k < (Int)ARRAY_SIZE(rowWindows); ++k)
-		{
-			const Bool gone = i >= DIRECT_STRIKE_SEATS || strcmp(rowWindows[k], "ComboBoxTeam") == 0
-				|| strcmp(rowWindows[k], "SeatTeam") == 0 || strcmp(rowWindows[k], "SeatSwatch") == 0;
-			if (gone)
-				if (GameWindow *win = find(layoutFilename, parent, rowWindows[k], i))
-					win->winHide(TRUE);
-		}
-
-	if (GameWindow *title = find(layoutFilename, parent, "StaticTextTitle"))
-		GadgetStaticTextSetText(title, TheGameText->fetch("GUI:DirectStrike"));
-	// the two headings over the columns: the old Players and Army headings, relabelled
-	const char *const headings[] = { "StaticTextPlayers", "StaticTextFaction" };
-	for (Int team = 0; team < 2; ++team)
-	{
-		if (GameWindow *heading = find(layoutFilename, parent, headings[team]))
-		{
-			UnicodeString text;
-			text.format(TheGameText->fetch("GUI:DirectStrikeTeam"), team + 1);
-			GadgetStaticTextSetText(heading, text);
-			placeAt(heading, (team == 0 ? DS_LEFT_X : DS_RIGHT_X) + DS_EDGE, DS_HEADING_Y);
-		}
-	}
-	// the island's name between the teams, centred on the screen's middle
-	if (GameWindow *mapName = find(layoutFilename, parent, "TextEntryMapDisplay"))
-	{
-		Int w, h, sx, sy, px = 0, py = 0;
-		mapName->winGetSize(&w, &h);
-		designToScreen(960, DS_MIDDLE_Y, &sx, &sy);
-		if (GameWindow *up = mapName->winGetParent())
-			up->winGetScreenPosition(&px, &py);
-		mapName->winSetPosition(sx - w / 2 - px, sy - py);
-	}
-
-	for (Int seat = 0; seat < DIRECT_STRIKE_SEATS; ++seat)
-	{
-		const Bool left = directStrikeTeamOfSeat(seat) == 0;
-		const Int cardX = left ? DS_LEFT_X : DS_RIGHT_X;
-		const Int top = DS_CARD_TOP + (seat / 2) * (DS_CARD_H + DS_CARD_GAP);
-		const Int cx = left ? cardX + DS_EDGE + DS_EMBLEM + DS_INSET : cardX + DS_INSET;
-		const Int row1 = top + DS_INSET, row2 = top + DS_INSET + DS_ROW2;
-
-		GameWindow *card = find(layoutFilename, parent, "SeatCard", seat);
-		placeAt(card, cardX, top);
-		sizeTo(card, DS_CARD_W, DS_CARD_H);
-		if (card && card->winGetDrawFunc() != drawDirectStrikeCard)
-		{
-			theDirectStrikeCardDraw = card->winGetDrawFunc();
-			card->winSetDrawFunc(drawDirectStrikeCard);
-		}
-		GameWindow *bar = find(layoutFilename, parent, "SeatBar", seat);
-		placeAt(bar, left ? cardX : cardX + DS_CARD_W - DS_BAR_W, top);
-		sizeTo(bar, DS_BAR_W, DS_CARD_H);
-
-		// the skirmish room's own seat is a name box, not a seat combo
-		GameWindow *who = find(layoutFilename, parent, "ComboBoxPlayer", seat);
-		if (who == NULL && seat == 0)
-			who = find(layoutFilename, parent, "TextEntryPlayerName");
-		placeAt(who, cx, row1);
-		placeAt(find(layoutFilename, parent, "ComboBoxAIPersona", seat), cx + 150, row1);
-		placeAt(find(layoutFilename, parent, "ComboBoxHandicap", seat), cx + 344, row1);
-		placeAt(find(layoutFilename, parent, "ComboBoxPlayerTemplate", seat), cx, row2);
-		placeAt(find(layoutFilename, parent, "ComboBoxColor", seat), cx + 350, row2);
-	}
-}
-
-void HideForDirectStrike(GameWindow *parent, const char *layoutFilename)
-{
-	LayoutDirectStrikeRoom(parent, layoutFilename, TheGameInfo);
-}
-
-void PopulateDirectStrikeTeamComboBox(Int comboBox, GameWindow *comboArray[])
-{
-	GameWindow *combo = comboArray[comboBox];
-	if (combo == NULL)
-		return;
-	GadgetComboBoxReset(combo);
-	const Color color = TheMultiplayerSettings->getColor(PLAYERTEMPLATE_RANDOM)->getColor();
-	for (Int team = 0; team < 2; ++team)
-	{
-		AsciiString label;
-		label.format("Team:%d", team + 1);
-		const Int row = GadgetComboBoxAddEntry(combo, TheGameText->fetch(label), color);
-		GadgetComboBoxSetItemData(combo, row, (void *)(intptr_t)team);
-	}
-	GadgetComboBoxSetSelectedPos(combo, 0);
+	DirectStrikeLobby_attach(parent, layoutFilename, game);
 }
 
 // Yes is Classic, No is Direct Strike; MessageBox.wnd's buttons take the mode names
@@ -1828,6 +1619,34 @@ void AskGameMode(void (*classic)(void), void (*directStrike)(void))
 		GadgetButtonSetText(yes, TheGameText->fetch("GUI:GameModeClassic"));
 	if (GameWindow *no = TheWindowManager->winGetWindowFromId(box, NAMEKEY("MessageBox.wnd:ButtonNo")))
 		GadgetButtonSetText(no, TheGameText->fetch("GUI:GameModeDirectStrike"));
+
+	// EA's layout puts Yes's right edge a pixel past No's left; the three spread over the box with
+	// equal gaps, Yes's margin from the box kept on both sides
+	static const char *const keys[] = { "MessageBox.wnd:ButtonYes", "MessageBox.wnd:ButtonNo", "MessageBox.wnd:ButtonCancel" };
+	GameWindow *buttons[ARRAY_SIZE(keys)];
+	Int widths = 0;
+	for (Int i = 0; i < (Int)ARRAY_SIZE(keys); ++i)
+	{
+		buttons[i] = TheWindowManager->winGetWindowFromId(box, NAMEKEY(keys[i]));
+		if (buttons[i] == NULL || buttons[i]->winGetParent() == NULL)
+			return;
+		Int w, h;
+		buttons[i]->winGetSize(&w, &h);
+		widths += w;
+	}
+	Int boxW, boxH, margin, y;
+	buttons[0]->winGetParent()->winGetSize(&boxW, &boxH);
+	buttons[0]->winGetPosition(&margin, &y);
+	const Int gap = (boxW - 2 * margin - widths) / ((Int)ARRAY_SIZE(keys) - 1);
+	Int x = margin;
+	for (Int i = 0; i < (Int)ARRAY_SIZE(keys); ++i)
+	{
+		Int w, h, oldX, oldY;
+		buttons[i]->winGetSize(&w, &h);
+		buttons[i]->winGetPosition(&oldX, &oldY);
+		buttons[i]->winSetPosition(x, oldY);
+		x += w + gap;
+	}
 }
 
 /* The online room's seats name each human with his ladder rating after the nick, MUTED, read from the
@@ -1980,8 +1799,7 @@ void ShutdownLobbySeatVisuals(void)
 {
 	detachSeatRatings();
 	FactionPickerDetach();
-	theDirectStrikeRoot = NULL;
-	theDirectStrikeGame = NULL;
+	DirectStrikeLobby_detach();
 	for (Int i = 0; i < MAX_SLOTS; ++i)
 		theSeatCard[i] = theSeatBar[i] = theSeatSwatch[i] = theSeatTeam[i] = NULL;
 }

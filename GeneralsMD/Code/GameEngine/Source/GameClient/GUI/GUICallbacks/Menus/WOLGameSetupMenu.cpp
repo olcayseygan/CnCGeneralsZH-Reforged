@@ -1055,30 +1055,6 @@ static void setRoomTitle( void )
 	GadgetStaticTextSetText(title, text);
 }
 
-/// Each seat's ping light onto its seat card, which LayoutDirectStrikeRoom moved: at the card's top on the
-/// inner side, away from the crest at the outer edge (team 1's seats are the even ones, on the left).
-static void placeDirectStrikePings( void )
-{
-	enum { DIRECT_STRIKE_SEATS = 6 };
-	for (Int i = 0; i < DIRECT_STRIKE_SEATS; ++i)
-	{
-		AsciiString name;
-		name.format("GameSpyGameOptionsMenu.wnd:SeatCard%d", i);
-		GameWindow *card = TheWindowManager->winGetWindowFromId(parentWOLGameSetup, NAMEKEY(name));
-		GameWindow *ping = genericPingWindow[i];
-		if (card == NULL || ping == NULL || ping->winGetParent() == NULL)
-			continue;
-		Int cardX, cardY, cardW, cardH, pingW, pingH, parentX, parentY;
-		card->winGetScreenPosition(&cardX, &cardY);
-		card->winGetSize(&cardW, &cardH);
-		ping->winGetSize(&pingW, &pingH);
-		ping->winGetParent()->winGetScreenPosition(&parentX, &parentY);
-		const Int margin = pingH / 2;
-		const Int x = i % 2 == 0 ? cardX + cardW - pingW - margin : cardX + margin;
-		ping->winSetPosition(x - parentX, cardY + margin - parentY);
-	}
-}
-
 /// The army box as the room's mode offers it: Direct Strike leaves Turkiye and the observer out.
 static void populateArmyBox( Int i, GameInfo *game, Bool allowObservers )
 {
@@ -1407,12 +1383,10 @@ void WOLDisplaySlotList( void )
 	UpdateAIPersonaComboBoxes( game, comboBoxAIPersona );
 	UpdateHandicapComboBoxes( game, comboBoxHandicap, comboBoxTeam );
 	UpdateLobbySeatVisuals( game );
-	// the two teams facing each other, as in the skirmish and LAN rooms; chat, accept, ping and kick stay the room's
+	// the two teams facing each other, as in the skirmish and LAN rooms; chat, accept and kick stay the
+	// room's, driven from the lobby's seat cards
 	if (s_directStrike)
-	{
 		LayoutDirectStrikeRoom(parentWOLGameSetup, "GameSpyGameOptionsMenu.wnd", game);
-		placeDirectStrikePings();
-	}
 
 	WOLDisplayGameOptions();
 

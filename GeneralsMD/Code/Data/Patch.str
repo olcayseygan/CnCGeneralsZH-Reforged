@@ -6643,6 +6643,38 @@ GUI:GameModeDirectStrike
 "Direct Strike"
 END
 
+GUI:DirectStrikeIslandNote
+"A new island every match"
+END
+
+GUI:DirectStrikeStart
+"START"
+END
+
+GUI:DirectStrikeReady
+"READY"
+END
+
+GUI:DirectStrikeEasy
+"Easy"
+END
+
+GUI:DirectStrikeMedium
+"Medium"
+END
+
+GUI:DirectStrikeHard
+"Hard"
+END
+
+GUI:DirectStrikeBrutal
+"Brutal"
+END
+
+GUI:Munkee
+""
+END
+
 OBJECT:LaneWarFortress
 "Fortress"
 END

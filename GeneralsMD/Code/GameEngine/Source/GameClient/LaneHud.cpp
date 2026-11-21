@@ -18,18 +18,23 @@
 
 // FILE: LaneHud.cpp //////////////////////////////////////////////////////////////////////////////
 //
-// The Lane War HUD.  Where its boxes stand is LaneHudLayout.h; what is in them is read from
-// TheLaneWarDirector, the players and their money.
+// The Lane War HUD, the owner's card hand of 2026-11-21.  Where its boxes stand is LaneHudLayout.h;
+// what is in them is read from TheLaneWarDirector, the players and their money.  The HUD carries no
+// words: money, income, prices and countdowns are numbers, everything else a picture, a colour or a
+// shape, and a name shows only in the tooltip under the pointer.
 //
 // Thread: LOGIC-THREAD.md.  LaneHud_draw runs from InGameUI::postDraw and LaneHud_preDraw from
 // InGameUI::preDraw, both at the render's sync point, and the presses come on the input path, which
 // runs there too; so the director, the objects and the money are read here as GroupPanel reads its
-// squads.  Nothing here writes the logic: a purchase, a sale, a tier, an upgrade and a move go out as
-// MSG_LANEWAR_ORDER and LaneWarDirector checks each again (whyNotPlace is the same test the ghost
-// is tinted by).
+// squads.  Nothing here writes the logic: a purchase, a sale, a tier, an upgrade, a move and an
+// ability switch go out as MSG_LANEWAR_ORDER and LaneWarDirector checks each again (whyNotPlace is
+// the same test the ghost is tinted by).  The one thing written outside the HUD is a client flag on
+// each plot unit's drawable, so the board draws no health bar or pips over its pieces.
 //
-// Plates: the side's art is looked up as <Side>ProLane<Piece> (AmericaProLaneBuy, GlaProLaneTop) and
-// a piece the sheets do not have yet is a flat fill, so the art drops in without a code change.
+// Art: hud-artist's v4 pieces (experiments/proofs/2026-11-20/lane-hud-art/README-v4.md in the
+// wrapper) are looked up as <Prefix>Lane<Piece>{,H,P,I} (AmericaProLaneCard, GLAProLaneTier2P), and
+// the menu keys as the sidebar's <Prefix>SidebarKeyMenu.  A piece not in the data yet is a flat fill,
+// so the art drops in without a code change.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -74,46 +79,86 @@
 
 namespace
 {
-	// flat stand-ins until the side's plates exist, and what no plate draws
+	// flat stand-ins until the side's pieces are in the data, and what no piece draws
 	const Color PLATE						= GameMakeColor( 22, 27, 33, 228 );
 	const Color PLATE_EDGE			= GameMakeColor( 92, 106, 120, 255 );
 	const Color PLATE_LIT				= GameMakeColor( 140, 152, 166, 255 );
+	const Color WELL						= GameMakeColor( 8, 11, 14, 235 );
 	const Color KEY_FACE				= GameMakeColor( 36, 44, 54, 240 );
 	const Color KEY_FACE_HOT		= GameMakeColor( 52, 64, 78, 245 );
 	const Color KEY_FACE_LIT		= GameMakeColor( 40, 96, 74, 250 );
 	const Color GREYED					= GameMakeColor( 0, 0, 0, 150 );
+	const Color DIM							= GameMakeColor( 140, 140, 140, 255 );	///< an image drawn through it: about the README's luminance times 0.55
 	const Color LANE_GROUND			= GameMakeColor( 128, 112, 78, 255 );
 	const Color LANE_EDGE				= GameMakeColor( 58, 52, 40, 255 );
-	const Color MIDDLE_BAND			= GameMakeColor( 62, 98, 54, 255 );
 	const Color PLOT_FILL				= GameMakeColor( 40, 46, 40, 255 );
 	const Color VIEW_BOX				= GameMakeColor( 240, 240, 240, 230 );
 	const Color LEGAL						= GameMakeColor( 80, 230, 110, 255 );
 	const Color BLOCKED					= GameMakeColor( 240, 60, 45, 255 );
 	const Color PRICE						= GameMakeColor( 255, 214, 90, 255 );
+	const Color INCOME					= GameMakeColor( 110, 230, 110, 255 );
+	const Color AMBER						= GameMakeColor( 240, 170, 50, 255 );
+	const Color WHITE						= GameMakeColor( 240, 242, 246, 255 );
 	const Color DOWN						= GameMakeColor( 70, 70, 70, 255 );
+	const Color CARD_FACE				= GameMakeColor( 30, 36, 44, 245 );
 
-	enum { TAB_UPGRADES = 3 };
 	enum { TEXT_POOL = 256 };
+	enum { ABILITY_ART_ROWS = 6 };		///< rows the AbilitiesPanel piece's glass holds
+	enum { NO_CARD = -1, HERO_CARD = -2 };
 
 	LaneHudLayout s_layout;
 	Bool s_showing = FALSE;
 	Bool s_seated = FALSE;
 	Int s_team = 0, s_seat = 0;
 	Player *s_player = NULL;
-	Int s_tab = 0;
-
-	// what the cells held at the last draw, for the press that comes after it
-	const ThingTemplate *s_cellThing[ LANEHUD_CELLS ];
-	const UpgradeTemplate *s_cellUpgrade[ LANEHUD_CELLS ];
-	Int s_cellUpgradeIndex[ LANEHUD_CELLS ];
-	const ThingTemplate *s_hero = NULL;
-
-	// the modes: a unit armed for placing, a plot unit picked up, sell, the abilities panel
-	const ThingTemplate *s_armed = NULL;
-	ObjectID s_moving = INVALID_ID;
-	Int s_moveGrid = 0, s_moveCol = 0, s_moveRow = 0;
-	Bool s_sellMode = FALSE;
+	Int s_tab = 0;													///< the tier the hand shows, 0 to 2
+	Bool s_upgradesOpen = FALSE;
 	Bool s_abilitiesOpen = FALSE;
+	Bool s_scoreboard = FALSE;							///< Tab held
+
+	// what the last draw showed, for the press that comes after it
+	const ThingTemplate *s_cardThing[ LANEHUD_CARDS ];
+	const ThingTemplate *s_hero = NULL;
+	Int s_upgradeCount = 0;									///< cards in the open deck, the income tier first
+	Int s_upgradeIndex[ LANEHUD_UPGRADE_CELLS ];	///< each card's entry of LaneWar_upgrades, -1 for the income tier
+	struct AbilityRow
+	{
+		const ThingTemplate *thing;
+		LaneWarAbility ability;
+	};
+	AbilityRow s_rows[ LANEHUD_ABILITY_ROWS ];
+	Int s_rowCount = 0;
+
+	// held: a card armed (by a click, or riding the pointer while the button is down), a plot unit picked up
+	const ThingTemplate *s_armed = NULL;
+	Bool s_dragging = FALSE;								///< the card's press is still down
+	Int s_dragCard = NO_CARD;								///< the hand slot it came from, HERO_CARD for the hero
+	LaneHudBox s_pressBox;									///< let go inside it, the press was a click: the card stays armed
+	ObjectID s_moving = INVALID_ID;
+
+	// the plot unit the pointer rests on, and its row of chips floating over it: kept while the pointer is in the row
+	ObjectID s_clusterUnit = INVALID_ID;
+	LaneHudBox s_clusterBox;						///< the row and the gap down to the unit
+	LaneHudBox s_clusterRow;						///< the chips alone
+	enum ChipKind { CHIP_RANK, CHIP_UPGRADE, CHIP_PASSENGER, CHIP_ROOM };
+	struct Chip
+	{
+		Int kind;
+		LaneHudBox box;
+		Int value;												///< the upgrade's command set slot, the passenger's index
+	};
+	enum { CLUSTER_CHIPS = 16 };
+	Chip s_chips[ CLUSTER_CHIPS ];
+	Int s_chipCount = 0;
+
+	// a passenger chip pressed and riding the pointer: let go on the hand, that passenger is sold
+	ObjectID s_passengerOf = INVALID_ID;
+	Int s_passenger = -1;
+
+	// an infantry card held over a plot unit that carries men: in it, if it has room
+	Int s_garrisonIndex = -1;
+	Bool s_garrisonRoom = FALSE;
+	Int s_moveGrid = 0, s_moveCol = 0, s_moveRow = 0;
 
 	/// where the armed or picked up unit would go, worked out from the pointer at the sync point
 	struct Target
@@ -129,18 +174,23 @@ namespace
 	DrawableID s_ghost = INVALID_DRAWABLE_ID;
 	const ThingTemplate *s_ghostOf = NULL;
 
-	// the plot unit under the pointer in sell mode, -1 for none
-	Int s_sellHover = -1;
+	// where the last draw put each seat's plot on the strip map, for the hover
+	LaneHudBox s_stripPlot[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];
+
+	// the tooltip the draw found under the pointer, drawn last
+	UnicodeString s_tip;
 
 	DisplayString *s_pool[ TEXT_POOL ];
 	Int s_poolUsed = 0;
 
-	enum Piece { PIECE_TOP, PIECE_MIDDLE, PIECE_ENEMY, PIECE_MAP, PIECE_BUY, PIECE_ECONOMY, PIECE_PANEL, PIECE_TAB, PIECE_TAB_ON,
-		PIECE_CELL, PIECE_KEY, PIECE_KEY_ON, PIECE_COUNT };
-	const char *const PIECE_NAME[ PIECE_COUNT ] = { "Top", "Middle", "Enemy", "Map", "Buy", "Economy", "Panel", "Tab", "TabOn",
-		"Cell", "Key", "KeyOn" };
+	// the side's pieces, found by name once a side
 	AsciiString s_piecePrefix;
-	const Image *s_pieces[ PIECE_COUNT ];
+	struct Piece
+	{
+		AsciiString name;
+		const Image *image;
+	};
+	std::vector<Piece> s_pieces;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -150,13 +200,22 @@ namespace
 /// a 1080 length at this screen's height, one pixel at least
 static Int pxs( Real at1080 )
 {
-	const Int v = REAL_TO_INT( at1080 * s_layout.scale + 0.5f );
-	return v < 1 ? 1 : v;
+	return LaneHud_px( at1080, s_layout.scale );
 }
 
 static Bool inside( const LaneHudBox &b, const ICoord2D *p )
 {
 	return b.contains( p->x, p->y );
+}
+
+static const ICoord2D *mousePos( void )
+{
+	return &TheMouse->getMouseStatus()->pos;
+}
+
+static LaneHudBox grow( const LaneHudBox &b, Int by )
+{
+	return LaneHud_box( b.x - by, b.y - by, b.w + 2 * by, b.h + 2 * by );
 }
 
 /// a string of the pool, set to text in font; the pool starts over every draw
@@ -187,9 +246,9 @@ static Int drawText( const UnicodeString &text, GameFont *font, Int x, Int y, In
 	return w;
 }
 
-static GameFont *smallFont( void ) { return UIStyle::readableFont( UIStyle::TEXT_SMALL ); }
-static GameFont *bodyFont( void ) { return UIStyle::readableFont( UIStyle::TEXT_BODY ); }
-static GameFont *strongFont( void ) { return UIStyle::readableFont( UIStyle::TEXT_STRONG, TRUE ); }
+static GameFont *smallFont( void ) { return UIStyle::readableFont( UIStyle::TEXT_SMALL, TRUE ); }
+static GameFont *bodyFont( void ) { return UIStyle::readableFont( UIStyle::TEXT_BODY, TRUE ); }
+static GameFont *priceFont( void ) { return UIStyle::readableFont( UIStyle::TEXT_STRONG, TRUE ); }
 static GameFont *bigFont( void ) { return UIStyle::readableFont( UIStyle::TEXT_TITLE, TRUE ); }
 
 static UnicodeString label( const char *key )
@@ -204,70 +263,178 @@ static UnicodeString money( Int amount )
 	return text;
 }
 
+static UnicodeString clockText( Int seconds )
+{
+	UnicodeString text;
+	text.format( u"%d:%02d", seconds / 60, seconds % 60 );
+	return text;
+}
+
+/// the tooltip for this draw, when the pointer is over the box
+static void tip( const LaneHudBox &b, const UnicodeString &text )
+{
+	if( !inside( b, mousePos() ) || text.isEmpty() )
+		return;
+	// a command button's label carries its hotkey as '&'
+	s_tip.clear();
+	for( const WideChar *c = text.str(); *c != 0; ++c )
+		if( *c != u'&' )
+			s_tip.concat( *c );
+}
+
 //-------------------------------------------------------------------------------------------------
-/** The side's prefix for its plates, as GroupPanel's: America, China, Gla. */
+/** The side's prefix for its pieces, as the sidebar's: AmericaPro, ChinaPro, GLAPro.  Turkiye and a
+	* watcher take America's. */
 //-------------------------------------------------------------------------------------------------
 static AsciiString sidePrefix( void )
 {
 	const AsciiString side = s_player != NULL ? s_player->getSide() : AsciiString( "America" );
 	if( side.startsWith( "China" ) )
-		return AsciiString( "China" );
+		return AsciiString( "ChinaPro" );
 	if( side.startsWith( "GLA" ) )
-		return AsciiString( "Gla" );
-	return AsciiString( "America" );
+		return AsciiString( "GLAPro" );
+	return AsciiString( "AmericaPro" );
 }
 
-static const Image *piece( Piece which )
+/// <Prefix><piece>, looked up once a side
+static const Image *findPiece( const char *piece )
 {
 	const AsciiString prefix = sidePrefix();
 	if( prefix != s_piecePrefix )
 	{
 		s_piecePrefix = prefix;
-		for( Int i = 0; i < PIECE_COUNT; ++i )
-		{
-			AsciiString name;
-			name.format( "%sProLane%s", prefix.str(), PIECE_NAME[ i ] );
-			s_pieces[ i ] = TheMappedImageCollection->findImageByName( name );
-		}
+		s_pieces.clear();
 	}
-	return s_pieces[ which ];
+	AsciiString name;
+	name.format( "%s%s", prefix.str(), piece );
+	for( size_t i = 0; i < s_pieces.size(); ++i )
+		if( s_pieces[ i ].name == name )
+			return s_pieces[ i ].image;
+	Piece found;
+	found.name = name;
+	found.image = TheMappedImageCollection->findImageByName( name );
+	s_pieces.push_back( found );
+	return found.image;
 }
 
-/// a box in its side's plate, or the flat stand-in
-static void plate( const LaneHudBox &b, Piece which )
+/// <Prefix><piece><state>, falling back to the piece without its state; NULL while the data lacks it
+static const Image *art( const char *piece, const char *state = "" )
 {
-	const Image *art = piece( which );
-	if( art != NULL )
+	if( *state != 0 )
 	{
-		TheDisplay->drawImage( art, b.x, b.y, b.x + b.w, b.y + b.h );
-		return;
+		AsciiString withState;
+		withState.format( "%s%s", piece, state );
+		const Image *image = findPiece( withState.str() );
+		if( image != NULL )
+			return image;
 	}
+	return findPiece( piece );
+}
+
+static const char *stateOf( Bool hot, Bool lit, Bool disabled )
+{
+	return lit ? "P" : disabled ? "I" : hot ? "H" : "";
+}
+
+static void drawArt( const Image *image, const LaneHudBox &b, Color tint = 0xFFFFFFFF )
+{
+	TheDisplay->drawImage( image, b.x, b.y, b.x + b.w, b.y + b.h, tint );
+}
+
+/// a flat plate
+static void plate( const LaneHudBox &b )
+{
 	TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, PLATE );
 	TheDisplay->drawFillRect( b.x + 1, b.y + 1, b.w - 2, 1, PLATE_LIT );
 	TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, PLATE_EDGE );
 }
 
-/// a key: lit when its mode is on, brighter under the pointer
-static void keyFace( const LaneHudBox &b, Bool lit, Bool enabled = TRUE )
+/// a key in its side's art or flat: lit when its mode is on, brighter under the pointer
+static void key( const LaneHudBox &b, const char *piece, Bool lit, Bool disabled = FALSE )
 {
-	const Image *art = piece( lit ? PIECE_KEY_ON : PIECE_KEY );
-	const ICoord2D *mouse = &TheMouse->getMouseStatus()->pos;
-	const Bool hot = enabled && inside( b, mouse );
-	if( art != NULL )
-		TheDisplay->drawImage( art, b.x, b.y, b.x + b.w, b.y + b.h );
-	else
+	const Bool hot = !disabled && inside( b, mousePos() );
+	const Image *image = art( piece, stateOf( hot, lit, disabled ) );
+	if( image != NULL )
 	{
-		TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, lit ? KEY_FACE_LIT : hot ? KEY_FACE_HOT : KEY_FACE );
-		TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, hot || lit ? UIStyle::EDGE_LIT : PLATE_EDGE );
+		drawArt( image, b );
+		return;
 	}
-	if( !enabled )
+	TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, lit ? KEY_FACE_LIT : hot ? KEY_FACE_HOT : KEY_FACE );
+	TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, hot || lit ? UIStyle::EDGE_LIT : PLATE_EDGE );
+	if( disabled )
 		TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, GREYED );
 }
 
-static void keyLabel( const LaneHudBox &b, const UnicodeString &text, Color color = UIStyle::INK )
+//-------------------------------------------------------------------------------------------------
+// Glyphs drawn in lines where a piece is missing
+//-------------------------------------------------------------------------------------------------
+
+static void line( Real x0, Real y0, Real x1, Real y1, const LaneHudBox &b, Color c, Real width = 2.0f )
 {
-	GameFont *font = bodyFont();
-	drawText( UIStyle::fitText( text, font, b.w - pxs( 8 ) ), font, b.x + b.w / 2, b.y, b.h, color, 0 );
+	TheDisplay->drawLine( b.x + REAL_TO_INT( x0 * b.w ), b.y + REAL_TO_INT( y0 * b.h ), b.x + REAL_TO_INT( x1 * b.w ),
+		b.y + REAL_TO_INT( y1 * b.h ), width, c );
+}
+
+/// the padlock: TabLock, or a body and a shackle
+static void lockMark( const LaneHudBox &b )
+{
+	const Image *image = art( "LaneTabLock" );
+	if( image != NULL )
+	{
+		drawArt( image, b );
+		return;
+	}
+	TheDisplay->drawFillRect( b.x, b.y + b.h / 2, b.w, b.h - b.h / 2, WHITE );
+	TheDisplay->drawOpenRect( b.x + b.w / 4, b.y, b.w / 2, b.h / 2 + 1, 2.0f, WHITE );
+}
+
+/// the green check: Done, or two strokes
+static void doneMark( const LaneHudBox &b )
+{
+	const Image *image = art( "LaneDone" );
+	if( image != NULL )
+	{
+		drawArt( image, b );
+		return;
+	}
+	line( 0.15f, 0.55f, 0.4f, 0.8f, b, LEGAL, 3.0f );
+	line( 0.4f, 0.8f, 0.85f, 0.2f, b, LEGAL, 3.0f );
+}
+
+/// a jet: AirMark, or a flat arrowhead
+static void airMark( const LaneHudBox &b )
+{
+	const Image *image = art( "LaneAirMark" );
+	if( image != NULL )
+	{
+		drawArt( image, b );
+		return;
+	}
+	line( 0.5f, 0.05f, 0.1f, 0.9f, b, WHITE );
+	line( 0.5f, 0.05f, 0.9f, 0.9f, b, WHITE );
+	line( 0.1f, 0.6f, 0.9f, 0.6f, b, WHITE );
+}
+
+static void boltGlyph( const LaneHudBox &b )
+{
+	line( 0.6f, 0.15f, 0.35f, 0.55f, b, PRICE, 3.0f );
+	line( 0.35f, 0.55f, 0.62f, 0.5f, b, PRICE, 3.0f );
+	line( 0.62f, 0.5f, 0.4f, 0.88f, b, PRICE, 3.0f );
+}
+
+static void incomeGlyph( const LaneHudBox &b )
+{
+	const Image *image = art( "LaneIncomeIcon" );
+	if( image != NULL )
+	{
+		drawArt( image, b );
+		return;
+	}
+	for( Int i = 0; i < 3; ++i )
+		TheDisplay->drawFillRect( b.x + b.w / 8, b.y + b.h * ( 5 - i ) / 7, b.w * 3 / 8, b.h / 8, PRICE );
+	line( 0.72f, 0.85f, 0.72f, 0.2f, b, INCOME, 3.0f );
+	line( 0.72f, 0.2f, 0.56f, 0.4f, b, INCOME, 3.0f );
+	line( 0.72f, 0.2f, 0.88f, 0.4f, b, INCOME, 3.0f );
 }
 
 static Color playerColor( Int team, Int seat )
@@ -292,21 +459,49 @@ static Color teamColor( Int team )
 	return UIStyle::MUTED;
 }
 
+/// a seat's name and what it is paid, for a tooltip
+static UnicodeString seatTip( Int team, Int seat )
+{
+	Player *p = seatPlayer( team, seat );
+	if( p == NULL )
+		return UnicodeString::TheEmptyString;
+	UnicodeString text;
+	text.format( u"%s  +%u", p->getPlayerDisplayName().str(), TheLaneWarDirector->getIncome( team, seat ) );
+	return text;
+}
+
 static void sendOrder( Int kind, Int a, Int b = -1, Int c = -1, Int d = -1, Int e = -1 )
 {
 	GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_LANEWAR_ORDER );
 	msg->appendIntegerArgument( kind );
 	const Int args[] = { a, b, c, d, e };
-	const Int count = kind == LANEWAR_ORDER_UPGRADE ? 1 : kind == LANEWAR_ORDER_TIER ? 2 : kind == LANEWAR_ORDER_MOVE ? 5 : 3;
+	// a sale or a rank takes a fourth integer only for a passenger
+	Int count = kind == LANEWAR_ORDER_UPGRADE ? 1 : kind == LANEWAR_ORDER_TIER ? 2 : kind == LANEWAR_ORDER_MOVE ? 5 : 3;
+	if( kind == LANEWAR_ORDER_GARRISON || kind == LANEWAR_ORDER_UNIT_UPGRADE
+			|| ( ( kind == LANEWAR_ORDER_SELL || kind == LANEWAR_ORDER_VETERANCY ) && d >= 0 ) )
+		count = 4;
 	for( Int i = 0; i < count; ++i )
 		msg->appendIntegerArgument( args[ i ] );
 }
 
-static void dropModes( void )
+static void dropHeld( void )
 {
 	s_armed = NULL;
+	s_dragging = FALSE;
+	s_dragCard = NO_CARD;
 	s_moving = INVALID_ID;
-	s_sellMode = FALSE;
+	s_passengerOf = INVALID_ID;
+	s_passenger = -1;
+}
+
+static Int localMoney( void )
+{
+	return s_player ? (Int)s_player->getMoney()->countMoney() : 0;
+}
+
+static Int techLevel( void )
+{
+	return TheLaneWarDirector->getTechLevel( s_team, s_seat );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -355,17 +550,33 @@ static Int plotUnitUnder( const Coord3D &world )
 	return -1;
 }
 
+/// the abilities panel as the last draw sized it
+static LaneHudBox abilitiesPanel( void )
+{
+	return LaneHud_abilitiesPanel( s_layout, max( (Int)ABILITY_ART_ROWS, s_rowCount ) );
+}
+
 static Bool overHud( const ICoord2D *mouse )
 {
 	const LaneHudLayout &l = s_layout;
-	if( inside( l.top, mouse ) || inside( l.middle, mouse ) || inside( l.map, mouse ) )
+	if( inside( l.map, mouse ) || inside( l.waveBar, mouse ) || inside( l.countdown, mouse ) || inside( l.menu, mouse ) || inside( l.diplomacy, mouse ) )
 		return TRUE;
-	if( s_seated && ( inside( l.buy, mouse ) || inside( l.economy, mouse ) || ( s_abilitiesOpen && inside( l.abilities, mouse ) ) ) )
+	if( s_seated && ( inside( l.money, mouse ) || inside( l.yourWave, mouse ) ) )
 		return TRUE;
-	for( Int i = 0; i < LANEHUD_ENEMY_BOXES; ++i )
-		if( inside( l.enemy[ i ], mouse ) )
+	if( !s_seated )
+		return FALSE;
+	for( Int t = 0; t < LANEHUD_TIERS; ++t )
+		if( inside( l.tiers[ t ], mouse ) )
 			return TRUE;
-	return FALSE;
+	if( inside( l.hand, mouse ) || inside( l.deck, mouse ) || inside( l.abilitiesKey, mouse ) )
+		return TRUE;
+	if( s_upgradesOpen )
+		for( Int c = 0; c < s_upgradeCount; ++c )
+			if( inside( LaneHud_upgradeCell( l, s_upgradeCount, c ), mouse ) )
+				return TRUE;
+	if( s_abilitiesOpen && inside( abilitiesPanel(), mouse ) )
+		return TRUE;
+	return s_clusterUnit != INVALID_ID && s_chipCount > 0 && inside( s_clusterRow, mouse );
 }
 
 /// the four corners of a block of slots on screen, FALSE when one is off it
@@ -401,7 +612,7 @@ static void outline( const ICoord2D corner[ 4 ], Color color )
 
 //-------------------------------------------------------------------------------------------------
 /** Who sits where and whether the HUD is up: a lane map, a match, not the shell.  The local player
-	* seated on a plot gets the whole HUD and the command bar goes; a watcher gets the read-only half. */
+	* seated on a plot gets the whole HUD and the command bar goes; a watcher gets the top plate. */
 //-------------------------------------------------------------------------------------------------
 static Bool refreshShowing( void )
 {
@@ -430,11 +641,24 @@ static void keepClassicBarDown( void )
 		HideControlBar( TRUE );
 }
 
+/// every plot unit's drawable shows no health bar, pips, rank or status icons: the board's pieces
+static void hidePlotUnitIcons( void )
+{
+	const std::vector<LaneWarDirector::PlotUnit> &units = TheLaneWarDirector->getPlotUnits();
+	for( size_t i = 0; i < units.size(); ++i )
+	{
+		Object *obj = TheGameLogic->findObjectByID( units[ i ].id );
+		Drawable *draw = obj != NULL ? obj->getDrawable() : NULL;
+		if( draw != NULL )
+			draw->setIconUIHidden( TRUE );
+	}
+}
+
 //-------------------------------------------------------------------------------------------------
-// The top band: each team's wave order, the countdown, the player's own turn
+// The top plate: money and income, the strip map, the wave clock
 //-------------------------------------------------------------------------------------------------
 
-/// the seat of a team whose wave went or goes on that tick, -1 for none
+/// the seat of a team whose wave goes out on that tick, -1 for none
 static Int seatOnTick( Int team, Int tick )
 {
 	if( tick < 0 )
@@ -445,29 +669,6 @@ static Int seatOnTick( Int team, Int tick )
 	return LaneWar_seatForTick( occupied, (UnsignedInt)tick );
 }
 
-/** A seat's chip: its colour down the left and its name, then under it the chip's word (Last, Now,
-	* Next) on the left and the seat's income on the right. */
-static void seatChip( const LaneHudBox &b, Int labelY, Int labelH, const char *word, Int team, Int seat, Bool now )
-{
-	TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, KEY_FACE );
-	TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, now ? 2.0f : 1.0f, now ? UIStyle::ACTIVE : PLATE_EDGE );
-	GameFont *font = smallFont();
-	Player *p = seat >= 0 ? seatPlayer( team, seat ) : NULL;
-	if( p == NULL )
-	{
-		drawText( UnicodeString( u"-" ), font, b.x + b.w / 2, b.y, b.h, UIStyle::MUTED, 0 );
-		drawText( label( word ), font, b.x + b.w / 2, labelY, labelH, UIStyle::MUTED, 0 );
-		return;
-	}
-	const Int stripe = pxs( 5 );
-	TheDisplay->drawFillRect( b.x + 1, b.y + 1, stripe, b.h - 2, playerColor( team, seat ) );
-	drawText( UIStyle::fitName( p->getPlayerDisplayName(), font, b.w - stripe - pxs( 8 ) ), font, b.x + stripe + pxs( 4 ), b.y, b.h, UIStyle::INK );
-	UnicodeString pay;
-	pay.format( u"+%u", TheLaneWarDirector->getIncome( team, seat ) );
-	const Int payW = drawText( pay, font, b.x + b.w - pxs( 2 ), labelY, labelH, PRICE, 1 );
-	drawText( UIStyle::fitText( label( word ), font, b.w - payW - pxs( 8 ) ), font, b.x + pxs( 2 ), labelY, labelH, UIStyle::MUTED );
-}
-
 /// wall seconds to the next spawn tick, rounded up
 static Int secondsToTick( void )
 {
@@ -476,149 +677,6 @@ static Int secondsToTick( void )
 	return next > frame ? (Int)( ( next - frame + LOGICFRAMES_PER_SECOND - 1 ) / LOGICFRAMES_PER_SECOND ) : 0;
 }
 
-/// three chips a team (the wave before, the wave out now, the next) and the countdown between them
-static void drawTop( void )
-{
-	const LaneHudLayout &l = s_layout;
-	plate( l.top, PIECE_TOP );
-
-	const Int tick = (Int)TheLaneWarDirector->getTickCount();
-	const Int ownTeam = s_team, enemyTeam = 1 - s_team;
-	const Int chipW = pxs( 104 ), chipH = pxs( 28 ), gap = pxs( 4 );
-	const Int chipY = l.top.y + pxs( 3 );
-	const Int labelY = chipY + chipH;
-	const Int labelH = l.top.y + l.top.h - labelY;
-	const char *const ORDER[ 3 ] = { "GUI:LaneLast", "GUI:LaneNow", "GUI:LaneNext" };
-	for( Int side = 0; side < 2; ++side )
-	{
-		const Int team = side == 0 ? ownTeam : enemyTeam;
-		const Int x0 = side == 0 ? l.top.x + pxs( 6 ) : l.top.x + l.top.w - pxs( 6 ) - 3 * chipW - 2 * gap;
-		for( Int k = 0; k < 3; ++k )
-		{
-			LaneHudBox chip = LaneHud_box( x0 + k * ( chipW + gap ), chipY, chipW, chipH );
-			seatChip( chip, labelY, labelH, ORDER[ k ], team, seatOnTick( team, tick - 2 + k ), k == 1 );
-		}
-	}
-
-	UnicodeString clock;
-	clock.format( u"%d:%02d", secondsToTick() / 60, secondsToTick() % 60 );
-	drawText( clock, bigFont(), l.top.x + l.top.w / 2, l.top.y, l.top.h, UIStyle::INK, 0 );
-}
-
-/// the player's own turn on the left half, who holds the middle on the right
-static void drawMiddle( void )
-{
-	const LaneHudLayout &l = s_layout;
-	plate( l.middle, PIECE_MIDDLE );
-	const Int half = l.middle.w / 2;
-	if( s_seated )
-	{
-		const Int tick = (Int)TheLaneWarDirector->getTickCount();
-		Int ahead = -1;
-		for( Int k = 0; k < LANEWAR_SEATS && ahead < 0; ++k )
-			if( seatOnTick( s_team, tick + k ) == s_seat )
-				ahead = k;
-		UnicodeString turn;
-		if( ahead == 0 )
-			turn = label( "GUI:LaneYourWaveNext" );
-		else if( ahead > 0 )
-			turn.format( label( "GUI:LaneYourWaveIn" ).str(), secondsToTick() + ahead * LANEWAR_TICK_SECONDS );
-		drawText( UIStyle::fitText( turn, smallFont(), half - pxs( 12 ) ), smallFont(), l.middle.x + half / 2, l.middle.y, l.middle.h,
-			ahead == 0 ? UIStyle::ACTIVE : UIStyle::INK, 0 );
-	}
-
-	const Int holder = TheLaneWarDirector->getMiddleHolder();
-	UnicodeString text;
-	Color color = UIStyle::MUTED;
-	if( holder < 0 )
-		text = label( "GUI:LaneMiddleNobody" );
-	else
-	{
-		text.format( label( holder == s_team ? "GUI:LaneMiddleYours" : "GUI:LaneMiddleTheirs" ).str(), (Int)LANEWAR_MIDDLE_BONUS_PERCENT );
-		color = holder == s_team ? UIStyle::ACTIVE : BLOCKED;
-	}
-	TheDisplay->drawFillRect( l.middle.x + half, l.middle.y + 1, pxs( 5 ), l.middle.h - 2, holder < 0 ? UIStyle::MUTED : teamColor( holder ) );
-	drawText( UIStyle::fitText( text, smallFont(), half - pxs( 16 ) ), smallFont(), l.middle.x + half + half / 2, l.middle.y, l.middle.h, color, 0 );
-}
-
-//-------------------------------------------------------------------------------------------------
-// What a seat's next wave holds: one picture per kind of unit on its plot, in the order bought, with
-// the count in its corner.  A grid to scale would give a unit four pixels in a box this short.
-//-------------------------------------------------------------------------------------------------
-static void drawMiniUnits( const LaneHudBox &area, Int team, Int seat )
-{
-	enum { MINI_ROWS = 2 };
-	const Int side = ( area.h - pxs( 2 ) ) / MINI_ROWS;
-	const Int perRow = max( 1, area.w / side );
-	const ThingTemplate *kinds[ MINI_ROWS * 16 ];
-	Int counts[ MINI_ROWS * 16 ];
-	const Int most = min( perRow * MINI_ROWS, (Int)ARRAY_SIZE( kinds ) );
-	Int used = 0;
-	const std::vector<LaneWarDirector::PlotUnit> &units = TheLaneWarDirector->getPlotUnits();
-	for( size_t i = 0; i < units.size(); ++i )
-	{
-		const LaneWarDirector::PlotUnit &u = units[ i ];
-		const Object *obj = u.team == team && u.seat == seat ? TheGameLogic->findObjectByID( u.id ) : NULL;
-		if( obj == NULL )
-			continue;
-		Int k = 0;
-		while( k < used && kinds[ k ] != obj->getTemplate() )
-			++k;
-		if( k == used )
-		{
-			if( used == most )
-				continue;
-			kinds[ used ] = obj->getTemplate();
-			counts[ used++ ] = 0;
-		}
-		++counts[ k ];
-	}
-
-	const Color owner = playerColor( team, seat );
-	for( Int k = 0; k < used; ++k )
-	{
-		const Int x = area.x + ( k % perRow ) * side, y = area.y + ( k / perRow ) * ( side + pxs( 2 ) );
-		const Image *picture = kinds[ k ]->getButtonImage();
-		if( picture != NULL )
-			TheDisplay->drawImage( picture, x + 1, y + 1, x + side - 1, y + side - 1 );
-		else
-			TheDisplay->drawFillRect( x + 1, y + 1, side - 2, side - 2, PLOT_FILL );
-		TheDisplay->drawOpenRect( x, y, side, side, 1.0f, owner );
-		if( counts[ k ] > 1 )
-		{
-			UnicodeString count;
-			count.format( u"%d", counts[ k ] );
-			drawText( count, smallFont(), x + side - pxs( 2 ), y + side / 2, side / 2, UIStyle::INK, 1 );
-		}
-	}
-}
-
-static void drawEnemies( void )
-{
-	const LaneHudLayout &l = s_layout;
-	const Int team = 1 - s_team;
-	Int box = 0;
-	for( Int seat = 0; seat < LANEWAR_SEATS && box < LANEHUD_ENEMY_BOXES; ++seat )
-	{
-		Player *p = seatPlayer( team, seat );
-		if( p == NULL )
-			continue;
-		const LaneHudBox &b = l.enemy[ box++ ];
-		plate( b, PIECE_ENEMY );
-		const Int headH = pxs( 20 );
-		TheDisplay->drawFillRect( b.x + 1, b.y + 1, pxs( 5 ), headH, playerColor( team, seat ) );
-		GameFont *font = smallFont();
-		UnicodeString pay;
-		pay.format( u"+%u  T%d", TheLaneWarDirector->getIncome( team, seat ), TheLaneWarDirector->getTechLevel( team, seat ) );
-		const Int payW = drawText( pay, font, b.x + b.w - pxs( 4 ), b.y + 1, headH, PRICE, 1 );
-		drawText( UIStyle::fitName( p->getPlayerDisplayName(), font, b.w - payW - pxs( 16 ) ), font, b.x + pxs( 9 ), b.y + 1, headH, UIStyle::INK );
-		drawMiniUnits( LaneHud_box( b.x + pxs( 4 ), b.y + headH + pxs( 2 ), b.w - pxs( 8 ), b.h - headH - pxs( 4 ) ), team, seat );
-	}
-}
-
-//-------------------------------------------------------------------------------------------------
-// The strip map: the lane and the plots behind each end, squeezed across to fit, own end on the left
-//-------------------------------------------------------------------------------------------------
 struct StripFrame
 {
 	Real x0, x1, y0, y1;	///< the world it shows
@@ -678,8 +736,8 @@ static Coord3D fromStrip( const StripFrame &f, const ICoord2D *p )
 	return w;
 }
 
-/// a rectangle of the world on the strip map, cut to the lane's box
-static void stripRect( const StripFrame &f, Real lx, Real ly, Real hx, Real hy, Color fill, Color edge, Int least = 0 )
+/// a rectangle of the world on the strip map, cut to the lane's box; where it went, empty when off it
+static LaneHudBox stripRect( const StripFrame &f, Real lx, Real ly, Real hx, Real hy, Color fill, Color edge, Int least = 0 )
 {
 	const LaneHudBox &lane = s_layout.lane;
 	ICoord2D a = toStrip( f, lx, ly ), b = toStrip( f, hx, hy );
@@ -701,77 +759,73 @@ static void stripRect( const StripFrame &f, Real lx, Real ly, Real hx, Real hy, 
 	x1 = min( x1, lane.x + lane.w );
 	y1 = min( y1, lane.y + lane.h );
 	if( x1 <= x0 || y1 <= y0 )
-		return;
+		return LaneHud_box( 0, 0, 0, 0 );
 	if( fill != 0 )
 		TheDisplay->drawFillRect( x0, y0, x1 - x0, y1 - y0, fill );
 	if( edge != 0 )
 		TheDisplay->drawOpenRect( x0, y0, x1 - x0, y1 - y0, 1.0f, edge );
+	return LaneHud_box( x0, y0, x1 - x0, y1 - y0 );
 }
 
-static void healthBar( Int x, Int y, Int w, Int h, const Object *obj, Color color )
+/// a fortress or tower mark: its piece tinted, or a square
+static void stripMark( const StripFrame &f, const Coord3D &at, const char *piece, Int size, Color tint )
 {
-	TheDisplay->drawFillRect( x, y, w, h, GameMakeColor( 0, 0, 0, 200 ) );
+	const ICoord2D p = toStrip( f, at.x, at.y );
+	const LaneHudBox b = LaneHud_box( p.x - size / 2, p.y - size / 2, size, size );
+	const Image *image = art( piece );
+	if( image != NULL )
+		drawArt( image, b, tint );
+	else
+	{
+		TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, tint );
+		TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, GameMakeColor( 0, 0, 0, 255 ) );
+	}
+}
+
+static Real healthShare( const Object *obj )
+{
 	const BodyModuleInterface *body = obj ? obj->getBodyModule() : NULL;
 	if( body == NULL || obj->isEffectivelyDead() || body->getMaxHealth() <= 0.0f )
-		return;
-	const Real share = body->getHealth() / body->getMaxHealth();
-	TheDisplay->drawFillRect( x + 1, y + 1, REAL_TO_INT( ( w - 2 ) * share ), h - 2, color );
+		return 0.0f;
+	return body->getHealth() / body->getMaxHealth();
 }
 
 static void drawStripMap( void )
 {
 	const LaneHudLayout &l = s_layout;
-	plate( l.map, PIECE_MAP );
+	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+		for( Int s = 0; s < LANEWAR_SEATS; ++s )
+			s_stripPlot[ t ][ s ] = LaneHud_box( 0, 0, 0, 0 );
 	StripFrame f;
 	if( !stripFrame( &f ) )
 		return;
 	const LaneHudBox &lane = l.lane;
 	TheDisplay->drawFillRect( lane.x, lane.y, lane.w, lane.h, LANE_GROUND );
 
-	// the plots at the ends, the middle band
+	// the plots at the ends, each in its player's colour
 	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
 		for( Int s = 0; s < LANEWAR_SEATS; ++s )
 		{
 			Coord2D lo, hi;
-			if( TheLaneWarDirector->getPlotBounds( t, s, &lo, &hi ) )
-				stripRect( f, lo.x, lo.y, hi.x, hi.y, PLOT_FILL, UIStyle::withAlpha( playerColor( t, s ), 200 ) );
+			if( TheLaneWarDirector->getSeatPlayer( t, s ) >= 0 && TheLaneWarDirector->getPlotBounds( t, s, &lo, &hi ) )
+				s_stripPlot[ t ][ s ] = stripRect( f, lo.x, lo.y, hi.x, hi.y, PLOT_FILL, UIStyle::withAlpha( playerColor( t, s ), 220 ) );
 		}
-	const Real band = ( f.x1 - f.x0 ) * 0.02f;
-	const Coord3D *middle = TheLaneWarDirector->getMiddle();
-	stripRect( f, middle->x - band, f.y0, middle->x + band, f.y1, MIDDLE_BAND, 0 );
 	TheDisplay->drawOpenRect( lane.x, lane.y, lane.w, lane.h, 1.0f, LANE_EDGE );
 
-	// fortresses and towers in their team's colour; a tower down is a dark square, a fortress down crossed
-	const Int towerSize = pxs( 7 );
-	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
-	{
-		const Color tint = teamColor( t );
-		for( Int k = 0; k < 2; ++k )
-		{
-			const ObjectID id = TheLaneWarDirector->getTower( t, k );
-			if( id == INVALID_ID )
-				continue;
-			const Object *tower = TheGameLogic->findObjectByID( id );
-			const Bool up = tower != NULL && !tower->isEffectivelyDead();
-			if( up )
-			{
-				const Coord3D *at = tower->getPosition();
-				stripRect( f, at->x - 16, at->y - 16, at->x + 16, at->y + 16, tint, GameMakeColor( 0, 0, 0, 255 ), towerSize );
-			}
-		}
-		const Object *fortress = TheGameLogic->findObjectByID( TheLaneWarDirector->getFortress( t ) );
-		if( fortress != NULL )
-		{
-			const Coord3D *at = fortress->getPosition();
-			const Bool down = fortress->isEffectivelyDead() || TheLaneWarDirector->isFortressDown( t );
-			stripRect( f, at->x - 70, at->y - 70, at->x + 70, at->y + 70, down ? DOWN : tint, GameMakeColor( 0, 0, 0, 255 ), pxs( 12 ) );
-		}
-	}
-	// a tower that is gone, where the map put it, as a dark outline: found by its last place the
-	// director knows nothing of, so the outline stands where the live one stood at the last draw
+	// the centre line, dashed: gold while nobody holds the middle, the holder's colour while one does
+	const Coord3D *middle = TheLaneWarDirector->getMiddle();
+	const Int holder = TheLaneWarDirector->getMiddleHolder();
+	const Int mx = toStrip( f, middle->x, middle->y ).x;
+	const Int dash = pxs( 3 );
+	for( Int y = lane.y + pxs( 6 ); y < lane.y + lane.h; y += 2 * dash )
+		TheDisplay->drawFillRect( mx - 1, y, holder < 0 ? 2 : 3, min( dash, lane.y + lane.h - y ), holder < 0 ? PRICE : teamColor( holder ) );
+
+	// fortresses and towers in their team's colour; a tower down is grey where it last stood
 	static Coord3D s_towerAt[ LANEWAR_TEAMS ][ 2 ];
 	static Bool s_towerKnown[ LANEWAR_TEAMS ][ 2 ];
 	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+	{
+		const Color tint = teamColor( t );
 		for( Int k = 0; k < 2; ++k )
 		{
 			const ObjectID id = TheLaneWarDirector->getTower( t, k );
@@ -780,13 +834,18 @@ static void drawStripMap( void )
 			{
 				s_towerAt[ t ][ k ] = *tower->getPosition();
 				s_towerKnown[ t ][ k ] = TRUE;
+				stripMark( f, s_towerAt[ t ][ k ], "LaneMapTower", pxs( 10 ), tint );
 			}
 			else if( id != INVALID_ID && s_towerKnown[ t ][ k ] )
-			{
-				const Coord3D &at = s_towerAt[ t ][ k ];
-				stripRect( f, at.x - 16, at.y - 16, at.x + 16, at.y + 16, DOWN, BLOCKED, towerSize );
-			}
+				stripMark( f, s_towerAt[ t ][ k ], "LaneMapTower", pxs( 10 ), DOWN );
 		}
+		const Object *fortress = TheGameLogic->findObjectByID( TheLaneWarDirector->getFortress( t ) );
+		if( fortress != NULL )
+		{
+			const Bool down = fortress->isEffectivelyDead() || TheLaneWarDirector->isFortressDown( t );
+			stripMark( f, *fortress->getPosition(), "LaneMapFortress", pxs( 16 ), down ? DOWN : tint );
+		}
+	}
 
 	// the wave copies, a dot each in their owner's colour
 	const Int dot = max( 2, pxs( 4 ) );
@@ -818,269 +877,595 @@ static void drawStripMap( void )
 			TheDisplay->drawLine( ca.x, ca.y, cb.x, cb.y, 1.0f, VIEW_BOX );
 	}
 
-	// the two fortresses' health over the lane, the player's own on the left
-	const Int barY = l.map.y + pxs( 5 ), barH = max( 4, lane.y - l.map.y - pxs( 9 ) ), barW = lane.w / 3;
+	// the fortresses' health along the well's top, each from its own end: ours green, amber when low; theirs amber
+	const Int barY = lane.y + pxs( 2 ), barH = pxs( 3 ), most = lane.w / 2 - pxs( 4 );
 	for( Int side = 0; side < 2; ++side )
 	{
 		const Int team = side == 0 ? s_team : 1 - s_team;
-		const Object *fortress = TheGameLogic->findObjectByID( TheLaneWarDirector->getFortress( team ) );
-		healthBar( side == 0 ? lane.x : lane.x + lane.w - barW, barY, barW, barH, fortress, teamColor( team ) );
+		const Real share = healthShare( TheGameLogic->findObjectByID( TheLaneWarDirector->getFortress( team ) ) );
+		const Int w = REAL_TO_INT( most * share );
+		const Color color = side == 0 && share > 0.6f ? INCOME : AMBER;
+		TheDisplay->drawFillRect( side == 0 ? lane.x + pxs( 2 ) : lane.x + lane.w - pxs( 2 ) - w, barY, w, barH, color );
 	}
 }
 
-//-------------------------------------------------------------------------------------------------
-// The buy panel: the tier tabs and the upgrades, fifteen cells, the hero beside them
-//-------------------------------------------------------------------------------------------------
-static Int localMoney( void )
+/// a chip of the floating top: its side's piece, or a card's flat face with its glass 5 in
+static void chip( const LaneHudBox &b, const char *piece )
 {
-	return s_player ? (Int)s_player->getMoney()->countMoney() : 0;
-}
-
-static Int techLevel( void )
-{
-	return TheLaneWarDirector->getTechLevel( s_team, s_seat );
-}
-
-/// a cell: the picture, its price at the foot, greyed when it cannot be bought now
-static void drawCell( const LaneHudBox &c, const Image *picture, Int price, Bool can, Bool lit, const UnicodeString &stamp )
-{
-	keyFace( c, lit );
-	const Int pad = pxs( 3 );
-	const Int footH = pxs( 20 );
-	if( picture != NULL )
-		TheDisplay->drawImage( picture, c.x + pad, c.y + pad, c.x + c.w - pad, c.y + c.h - footH );
-	TheDisplay->drawFillRect( c.x + 1, c.y + c.h - footH, c.w - 2, footH - 1, GameMakeColor( 0, 0, 0, 170 ) );
-	if( price >= 0 )
-		drawText( UIStyle::fitText( money( price ), smallFont(), c.w - 4, UIStyle::grouped( price ) ), smallFont(), c.x + c.w - 2,
-			c.y + c.h - footH, footH, can ? PRICE : UIStyle::MUTED, 1 );
-	if( !can )
-		TheDisplay->drawFillRect( c.x, c.y, c.w, c.h - footH, GREYED );
-	if( !stamp.isEmpty() )
-		drawText( stamp, smallFont(), c.x + c.w / 2, c.y, c.h - footH, UIStyle::INK, 0 );
-}
-
-static void drawBuy( void )
-{
-	const LaneHudLayout &l = s_layout;
-	plate( l.buy, PIECE_BUY );
-	const Int cash = localMoney();
-	const Int tech = techLevel();
-
-	// the tabs: a locked tier says so with its price
-	for( Int t = 0; t < LANEHUD_TABS; ++t )
+	const Image *image = art( piece );
+	if( image != NULL )
 	{
-		const LaneHudBox &b = l.tabs[ t ];
-		const Image *art = piece( s_tab == t ? PIECE_TAB_ON : PIECE_TAB );
-		if( art != NULL )
-			TheDisplay->drawImage( art, b.x, b.y, b.x + b.w, b.y + b.h );
-		else
-		{
-			const Color text = UIStyle::tab( b.x, b.y, b.w, b.h, TRUE, s_tab == t, inside( b, &TheMouse->getMouseStatus()->pos ) );
-			(void)text;
-		}
-		UnicodeString name;
-		if( t == TAB_UPGRADES )
-			name = label( "GUI:LaneUpgrades" );
-		else
-			name.format( label( "GUI:LaneTier" ).str(), t + 1 );
-		const Bool locked = t != TAB_UPGRADES && t + 1 > tech;
-		keyLabel( b, name, locked ? UIStyle::MUTED : s_tab == t ? UIStyle::ACTIVE : UIStyle::INK );
+		drawArt( image, b );
+		return;
 	}
+	TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, CARD_FACE );
+	TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, PLATE_EDGE );
+	const Int in = pxs( 5 );
+	TheDisplay->drawFillRect( b.x + in, b.y + in, b.w - 2 * in, b.h - 2 * in, WELL );
+}
 
-	for( Int c = 0; c < LANEHUD_CELLS; ++c )
+/** A ring cut by angle: the arc of mean radius r and the width given, from `from` degrees clockwise
+	* from 12 o'clock through `sweep` (negative goes anticlockwise), drawn in short thick strokes.
+	* ponytail: strokes, not the YourRing piece through a wedge clip; a triangle fan with its UVs if the strokes show. */
+static void arc( Int cx, Int cy, Real r, Real width, Real from, Real sweep, Color color )
+{
+	const Int steps = max( 1, REAL_TO_INT( fabs( sweep ) / 4.0f + 0.5f ) );
+	const Real toRad = PI / 180.0f;
+	Real a0 = from * toRad;
+	for( Int i = 1; i <= steps; ++i )
 	{
-		s_cellThing[ c ] = NULL;
-		s_cellUpgrade[ c ] = NULL;
-		s_cellUpgradeIndex[ c ] = -1;
+		const Real a1 = ( from + sweep * i / steps ) * toRad;
+		TheDisplay->drawLine( cx + REAL_TO_INT( r * sinf( a0 ) ), cy - REAL_TO_INT( r * cosf( a0 ) ),
+			cx + REAL_TO_INT( r * sinf( a1 ) ), cy - REAL_TO_INT( r * cosf( a1 ) ), width, color );
+		a0 = a1;
 	}
+}
 
-	UnicodeString info;
-	Color infoColor = UIStyle::INK;
-	const ICoord2D *mouse = &TheMouse->getMouseStatus()->pos;
-
-	if( s_tab == TAB_UPGRADES )
+static void disc( Int cx, Int cy, Int r, Color color )
+{
+	for( Int dy = -r; dy <= r; ++dy )
 	{
-		const UpgradeTemplate *list[ LANEWAR_ROSTER_MAX ];
-		const Int count = LaneWar_upgrades( s_player, list, LANEWAR_ROSTER_MAX );
-		for( Int i = 0; i < count && i < LANEHUD_CELLS; ++i )
-		{
-			const UpgradeTemplate *u = list[ i ];
-			const Int price = u->calcCostToBuild( s_player );
-			const Bool done = s_player->hasUpgradeComplete( u );
-			s_cellUpgrade[ i ] = u;
-			s_cellUpgradeIndex[ i ] = i;
-			drawCell( l.cells[ i ], u->getButtonImage(), done ? -1 : price, !done && cash >= price, FALSE,
-								done ? label( "GUI:LaneOwned" ) : UnicodeString::TheEmptyString );
-			if( inside( l.cells[ i ], mouse ) )
-			{
-				info = TheGameText->fetch( u->getDisplayNameLabel() );
-				if( !done )
-				{
-					info.concat( u"  " );
-					info.concat( money( price ) );
-				}
-			}
-		}
+		const Int half = REAL_TO_INT( sqrtf( (Real)( r * r - dy * dy ) ) );
+		TheDisplay->drawFillRect( cx - half, cy + dy, 2 * half + 1, 1, color );
 	}
+}
+
+/// the money chip: the side's coin, the money, and what the next tick pays behind a rising chevron
+static void drawMoney( void )
+{
+	const LaneHudBox &m = s_layout.money;
+	chip( m, "LaneMoneyChip" );
+	const LaneHudBox coin = LaneHud_box( m.x + pxs( 11 ), m.y + pxs( 19 ), pxs( 28 ), pxs( 28 ) );
+	const Image *coinArt = art( "LaneCoin" );
+	if( coinArt != NULL )
+		drawArt( coinArt, coin );
 	else
 	{
-		LaneWarRosterItem roster[ LANEWAR_ROSTER_MAX ];
-		const Int count = LaneWar_roster( s_player, roster, LANEWAR_ROSTER_MAX );
-		Int cell = 0;
-		const Bool locked = s_tab + 1 > tech;
-		for( Int i = 0; i < count; ++i )
-		{
-			if( roster[ i ].hero || roster[ i ].tier != s_tab + 1 || cell >= LANEHUD_CELLS )
-				continue;
-			const ThingTemplate *thing = roster[ i ].thing;
-			const Int price = thing->calcCostToBuild( s_player );
-			s_cellThing[ cell ] = thing;
-			drawCell( l.cells[ cell ], thing->getButtonImage(), price, !locked && cash >= price, s_armed == thing, UnicodeString::TheEmptyString );
-			if( inside( l.cells[ cell ], mouse ) )
-			{
-				info = thing->getDisplayName();
-				info.concat( u"  " );
-				info.concat( money( price ) );
-			}
-			++cell;
-		}
+		disc( coin.x + coin.w / 2, coin.y + coin.h / 2, coin.w / 2, PRICE );
+		drawText( UnicodeString( u"$" ), bodyFont(), coin.x + coin.w / 2, coin.y, coin.h, GameMakeColor( 90, 64, 10, 255 ), 0 );
+	}
+	const Int moneyW = drawText( UIStyle::grouped( localMoney() ), bigFont(), m.x + pxs( 45 ), m.y + pxs( 18 ), pxs( 28 ), WHITE );
 
-		// a locked tier: the foot is the key that buys it, when it is the next one
+	// the chevron is the plus; it keeps clear of a long figure
+	const Int cx = max( m.x + pxs( 133 ), m.x + pxs( 45 ) + moneyW + pxs( 10 ) ), cy = m.y + pxs( 24 );
+	const Color green = GameMakeColor( 110, 220, 90, 255 );
+	TheDisplay->drawLine( cx - pxs( 4 ), cy + pxs( 2 ), cx, cy - pxs( 3 ), 2.0f, green );
+	TheDisplay->drawLine( cx, cy - pxs( 3 ), cx + pxs( 4 ), cy + pxs( 2 ), 2.0f, green );
+	UnicodeString pay;
+	pay.format( u"%u", TheLaneWarDirector->getIncome( s_team, s_seat ) );
+	drawText( pay, bodyFont(), cx + pxs( 7 ), m.y + pxs( 17 ), pxs( 16 ), green );
+
+	UnicodeString level;
+	level.format( label( "GUI:LaneIncome" ).str(), TheLaneWarDirector->getIncomeLevel( s_team, s_seat ), (Int)LANEWAR_INCOME_TIERS );
+	tip( m, level );
+}
+
+/// the your-wave chip: a ring in the player's colour running down his wait, his dot, and the countdown
+static void drawYourWave( void )
+{
+	const LaneHudBox &b = s_layout.yourWave;
+	chip( b, "LaneYourChip" );
+	const Int tick = (Int)TheLaneWarDirector->getTickCount();
+	Int ahead = -1, seats = 0;
+	for( Int k = 0; k < LANEWAR_SEATS; ++k )
+	{
+		if( TheLaneWarDirector->getSeatPlayer( s_team, k ) >= 0 )
+			++seats;
+		if( ahead < 0 && seatOnTick( s_team, tick + k ) == s_seat )
+			ahead = k;
+	}
+	if( ahead < 0 || seats == 0 )
+		return;
+	const Int left = secondsToTick() + ahead * LANEWAR_TICK_SECONDS;
+	const Real share = min( 1.0f, (Real)left / (Real)( seats * LANEWAR_TICK_SECONDS ) );
+	const Int cx = b.x + pxs( 22 ), cy = b.y + pxs( 33 );
+	const Color own = playerColor( s_team, s_seat );
+	const Real r = 9.5f * s_layout.scale, width = max( 2.0f, 3.0f * s_layout.scale );
+	const Color track = GameMakeColor( 34, 40, 48, 255 );
+	const Image *ring = art( "LaneYourRing" );
+	if( ring != NULL )
+		drawArt( ring, LaneHud_box( cx - pxs( 12 ), cy - pxs( 12 ), pxs( 24 ), pxs( 24 ) ), track );
+	else
+		arc( cx, cy, r, width, 0.0f, 360.0f, track );
+	if( share > 0.0f )
+		arc( cx, cy, r, width, 0.0f, 360.0f * share, own );
+	disc( cx, cy, pxs( 4 ), own );
+	drawText( clockText( left ), priceFont(), b.x + pxs( 40 ), cy - pxs( 10 ), pxs( 20 ), GameMakeColor( 242, 194, 48, 255 ) );
+}
+
+/** The wave bar under the lane: each team's next wave in its seat's colour, ours filling from the
+	* left and theirs from the right, each (1 - f) of its half, meeting at the gold middle tick as the
+	* waves go out; f is the share of the tick still to run.  The pointer over a half names that seat. */
+static void drawWaveBar( void )
+{
+	const LaneHudBox &b = s_layout.waveBar;
+	chip( b, "LaneBarChip" );
+	// the groove 4 in, the fills 1 inside its rim
+	const Int in = pxs( 4 );
+	const LaneHudBox groove = LaneHud_box( b.x + in, b.y + in, b.w - 2 * in, b.h - 2 * in );
+	if( art( "LaneBarChip" ) == NULL )
+		TheDisplay->drawFillRect( groove.x, groove.y, groove.w, groove.h, GameMakeColor( 34, 40, 48, 255 ) );
+	const LaneHudBox fills = LaneHud_box( groove.x + 1, groove.y + 1, groove.w - 2, groove.h - 2 );
+	const Real f = min( 1.0f, (Real)secondsToTick() / (Real)LANEWAR_TICK_SECONDS );
+	const Int tick = (Int)TheLaneWarDirector->getTickCount();
+	const Int half = fills.w / 2;
+	for( Int side = 0; side < 2; ++side )
+	{
+		const Int team = side == 0 ? s_team : 1 - s_team;
+		const Int next = seatOnTick( team, tick );
+		if( next < 0 )
+			continue;
+		const Int w = REAL_TO_INT( half * ( 1.0f - f ) );
+		TheDisplay->drawFillRect( side == 0 ? fills.x : fills.x + fills.w - w, fills.y, w, fills.h, playerColor( team, next ) );
+		tip( LaneHud_box( side == 0 ? b.x : b.x + b.w / 2, b.y, b.w / 2, b.h ), seatTip( team, next ) );
+	}
+	TheDisplay->drawFillRect( fills.x + half - 1, b.y + pxs( 3 ), 2, pxs( 8 ), GameMakeColor( 242, 194, 48, 255 ) );
+}
+
+/// the countdown to the next spawn tick, in its own chip under the bar
+static void drawCountdown( void )
+{
+	const LaneHudBox &c = s_layout.countdown;
+	chip( c, "LaneCountChip" );
+	// the chip's 36 px is 24 at 720, short of the title face the readable floor grows there
+	GameFont *font = bigFont()->height <= c.h - pxs( 6 ) ? bigFont() : priceFont();
+	drawText( clockText( secondsToTick() ), font, c.x + c.w / 2, c.y, c.h, WHITE, 0 );
+}
+
+/// the floating top: each chip stands on its own rect
+static void drawTop( void )
+{
+	const LaneHudLayout &l = s_layout;
+	if( s_seated )
+		drawMoney();
+	chip( l.map, "LaneLaneChip" );
+	drawStripMap();
+	if( s_seated )
+		drawYourWave();
+	drawWaveBar();
+	drawCountdown();
+
+	// the menu keys
+	const struct { const LaneHudBox *box; const char *piece; const char *tipKey; } KEYS[ 2 ] =
+	{
+		{ &l.menu, "SidebarKeyMenu", "GUI:LaneMenu" },
+		{ &l.diplomacy, "SidebarKeyDiplomacy", "GUI:LaneDiplomacy" },
+	};
+	for( Int k = 0; k < 2; ++k )
+	{
+		const LaneHudBox &b = *KEYS[ k ].box;
+		const Bool flat = art( KEYS[ k ].piece ) == NULL;
+		key( b, KEYS[ k ].piece, FALSE );
+		if( flat && k == 0 )
+			for( Int i = 0; i < 3; ++i )
+				line( 0.38f, 0.3f + 0.2f * i, 0.62f, 0.3f + 0.2f * i, b, WHITE );
+		else if( flat )
+		{
+			const LaneHudBox bubble = LaneHud_box( b.x + b.w * 3 / 8, b.y + b.h / 4, b.w / 4, b.h * 2 / 5 );
+			TheDisplay->drawOpenRect( bubble.x, bubble.y, bubble.w, bubble.h, 2.0f, WHITE );
+			line( 0.44f, 0.65f, 0.42f, 0.82f, b, WHITE );
+		}
+		tip( b, label( KEYS[ k ].tipKey ) );
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A seat's frame: its colour, what it is paid, what its plot is worth, and the plot itself small,
+	* its air rows above it.  Held Tab lays these out for every other seat; the pointer over a plot on
+	* the strip map raises one under the plate. */
+//-------------------------------------------------------------------------------------------------
+static void drawPlotFrame( const LaneHudBox &b, Int team, Int seat )
+{
+	const Image *frame = art( "LaneEnemyPlotFrame" );
+	if( frame != NULL )
+		drawArt( frame, b );
+	else
+		plate( b );
+	const LaneHudBox glass = LaneHud_box( b.x + pxs( 5 ), b.y + pxs( 5 ), b.w - pxs( 10 ), b.h - pxs( 10 ) );
+	TheDisplay->drawFillRect( glass.x, glass.y, pxs( 3 ), glass.h, playerColor( team, seat ) );
+
+	Int army = 0;
+	const std::vector<LaneWarDirector::PlotUnit> &units = TheLaneWarDirector->getPlotUnits();
+	for( size_t i = 0; i < units.size(); ++i )
+		if( units[ i ].team == team && units[ i ].seat == seat )
+			army += units[ i ].cost;
+	UnicodeString pay;
+	pay.format( u"+%u", TheLaneWarDirector->getIncome( team, seat ) );
+	drawText( pay, priceFont(), glass.x + pxs( 9 ), glass.y + pxs( 4 ), pxs( 24 ), INCOME );
+	drawText( money( army ), bodyFont(), glass.x + pxs( 9 ), glass.y + pxs( 30 ), pxs( 20 ), PRICE );
+
+	// the plot to scale, front at the bottom, the air rows behind it above
+	const Int cols = TheLaneWarDirector->getGridCols( team, seat, LANEWAR_GRID_GROUND );
+	const Int rows = TheLaneWarDirector->getGridRows( team, seat, LANEWAR_GRID_GROUND );
+	const Int airCols = TheLaneWarDirector->getGridCols( team, seat, LANEWAR_GRID_AIR );
+	const Int airRows = TheLaneWarDirector->getGridRows( team, seat, LANEWAR_GRID_AIR );
+	if( cols <= 0 || rows <= 0 )
+		return;
+	const Int roomW = glass.w / 2, roomH = glass.h - pxs( 6 );
+	const Int cell = max( 1, min( pxs( 3 ), min( roomW / max( cols, airCols ), roomH / ( rows + airRows + 1 ) ) ) );
+	const Int right = glass.x + glass.w - pxs( 4 );
+	const Int bottom = glass.y + glass.h - pxs( 3 );
+	const Color owner = playerColor( team, seat );
+	const LaneHudBox ground = LaneHud_box( right - cols * cell, bottom - rows * cell, cols * cell, rows * cell );
+	TheDisplay->drawFillRect( ground.x, ground.y, ground.w, ground.h, PLOT_FILL );
+	TheDisplay->drawOpenRect( ground.x - 1, ground.y - 1, ground.w + 2, ground.h + 2, 1.0f, UIStyle::withAlpha( owner, 160 ) );
+	LaneHudBox air = LaneHud_box( 0, 0, 0, 0 );
+	if( airCols > 0 && airRows > 0 )
+	{
+		air = LaneHud_box( right - airCols * cell, ground.y - cell - airRows * cell, airCols * cell, airRows * cell );
+		TheDisplay->drawFillRect( air.x, air.y, air.w, air.h, GameMakeColor( 110, 170, 255, 70 ) );
+	}
+	for( size_t i = 0; i < units.size(); ++i )
+	{
+		const LaneWarDirector::PlotUnit &u = units[ i ];
+		if( u.team != team || u.seat != seat )
+			continue;
+		const LaneHudBox &g = u.grid == LANEWAR_GRID_AIR ? air : ground;
+		if( g.w <= 0 )
+			continue;
+		const Int x = g.x + u.col * cell, y = g.y + g.h - ( u.row + u.size ) * cell;
+		TheDisplay->drawFillRect( x, y, u.size * cell, u.size * cell, owner );
+	}
+}
+
+static void drawScoreboard( void )
+{
+	const LaneHudLayout &l = s_layout;
+	Int frame = 0;
+	for( Int pass = 0; pass < 2; ++pass )
+	{
+		const Int team = pass == 0 ? 1 - s_team : s_team;
+		for( Int seat = 0; seat < LANEWAR_SEATS && frame < LANEHUD_PLOT_FRAMES; ++seat )
+		{
+			if( TheLaneWarDirector->getSeatPlayer( team, seat ) < 0 || ( s_seated && team == s_team && seat == s_seat ) )
+				continue;
+			drawPlotFrame( l.plotFrame[ frame ], team, seat );
+			tip( l.plotFrame[ frame ], seatTip( team, seat ) );
+			++frame;
+		}
+	}
+}
+
+/// the pointer over a seat's plot on the strip map: its frame under the wave bar, beside the countdown
+static void drawStripHover( void )
+{
+	const ICoord2D *mouse = mousePos();
+	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+		for( Int s = 0; s < LANEWAR_SEATS; ++s )
+		{
+			if( s_stripPlot[ t ][ s ].w <= 0 || !inside( grow( s_stripPlot[ t ][ s ], 1 ), mouse ) )
+				continue;
+			const LaneHudBox &bar = s_layout.waveBar, &count = s_layout.countdown;
+			const Int w = s_layout.plotFrame[ 0 ].w, h = s_layout.plotFrame[ 0 ].h;
+			const Int x = mouse->x < count.x + count.w / 2 ? max( bar.x, count.x - pxs( 10 ) - w ) : count.x + count.w + pxs( 10 );
+			drawPlotFrame( LaneHud_box( x, bar.y + bar.h + pxs( 8 ), w, h ), t, s );
+			s_tip = seatTip( t, s );
+			return;
+		}
+}
+
+//-------------------------------------------------------------------------------------------------
+// The hand: tier keys, the hero's card, the tier's cards, the upgrades deck, the abilities key
+//-------------------------------------------------------------------------------------------------
+
+/// a part of a card, in the art's 100x116 frame
+static LaneHudBox cardPart( const LaneHudBox &card, Int x0, Int y0, Int x1, Int y1 )
+{
+	const Int lx = card.x + card.w * x0 / 100, ly = card.y + card.h * y0 / 116;
+	return LaneHud_box( lx, ly, card.x + card.w * x1 / 100 - lx, card.y + card.h * y1 / 116 - ly );
+}
+
+/** A card: its frame (gold for the hero), the picture, and in the band under it the price, or the
+	* check when it is done.  `dim` greys the picture; `lit` rings the card that is armed. */
+static void drawCard( const LaneHudBox &c, const Image *picture, Int price, Bool dim, Bool done, Bool hero, Bool lit, Bool air )
+{
+	const Image *frame = art( hero ? "LaneCardHero" : "LaneCard" );
+	const LaneHudBox well = cardPart( c, 5, 5, 95, 77 ), band = cardPart( c, 8, 84, 92, 108 );
+	if( frame != NULL )
+		drawArt( frame, c );
+	else
+	{
+		TheDisplay->drawFillRect( c.x, c.y, c.w, c.h, CARD_FACE );
+		TheDisplay->drawFillRect( well.x, well.y, well.w, well.h, WELL );
+		TheDisplay->drawFillRect( band.x, band.y, band.w, band.h, WELL );
+		TheDisplay->drawOpenRect( c.x, c.y, c.w, c.h, hero ? 2.0f : 1.0f, hero ? PRICE : PLATE_EDGE );
+	}
+	if( picture != NULL )
+	{
+		const LaneHudBox p = cardPart( c, 7, 7, 93, 76 );
+		drawArt( picture, p, dim ? DIM : 0xFFFFFFFF );
+	}
+	if( air )
+		airMark( cardPart( c, 8, 56, 26, 74 ) );
+	if( done )
+		doneMark( cardPart( c, 40, 86, 60, 106 ) );
+	else if( price >= 0 )
+	{
+		// at 720 the readable face overruns a $1,500 band; the dollar goes first
+		UnicodeString text = money( price );
+		Int w = 0, h = 0;
+		DisplayString *measure = pooled( text, priceFont() );
+		if( measure != NULL )
+			measure->getSize( &w, &h );
+		if( w > band.w )
+			text = UIStyle::grouped( price );
+		drawText( text, priceFont(), band.x + band.w / 2, band.y, band.h, dim ? UIStyle::MUTED : PRICE, 0 );
+	}
+	if( lit )
+		TheDisplay->drawOpenRect( c.x - 1, c.y - 1, c.w + 2, c.h + 2, 2.0f, UIStyle::ACTIVE );
+}
+
+/// the card standing under the pointer rises; nothing rises while a card or a unit is held
+static LaneHudBox risen( const LaneHudBox &c )
+{
+	const ICoord2D *mouse = mousePos();
+	const Int rise = pxs( LANEHUD_CARD_RISE );
+	if( s_dragging || s_moving != INVALID_ID || !inside( LaneHud_box( c.x, c.y - rise, c.w, c.h + rise ), mouse ) )
+		return c;
+	return LaneHud_box( c.x, c.y - rise, c.w, c.h );
+}
+
+/// the tier the hand shows: the one picked, or a locked one under the pointer, greyed
+static Int shownTier( void )
+{
+	for( Int t = 0; t < LANEHUD_TIERS; ++t )
+		if( t + 1 > techLevel() && inside( s_layout.tiers[ t ], mousePos() ) )
+			return t;
+	return s_tab;
+}
+
+static void drawTierKeys( void )
+{
+	const Int tech = techLevel(), cash = localMoney();
+	for( Int t = 0; t < LANEHUD_TIERS; ++t )
+	{
+		const LaneHudBox &b = s_layout.tiers[ t ];
+		AsciiString piece;
+		piece.format( "LaneTier%d", t + 1 );
+		const Bool locked = t + 1 > tech;
+		key( b, piece.str(), !locked && s_tab == t, locked );
+		const Bool flat = art( piece.str() ) == NULL;
 		if( locked )
 		{
-			const Int price = LaneWar_tierPrice( LANEWAR_TRACK_TECH, tech + 1 );
-			const Bool next = s_tab + 1 == tech + 1;
-			keyFace( l.info, FALSE, next && cash >= price );
-			UnicodeString unlock;
-			unlock.format( label( "GUI:LaneUnlock" ).str(), tech + 1, price );
-			keyLabel( l.info, next ? unlock : label( "GUI:LaneLocked" ), next ? PRICE : UIStyle::MUTED );
-			info.clear();
+			const Int price = LaneWar_tierPrice( LANEWAR_TRACK_TECH, t + 1 );
+			const Bool next = t + 1 == tech + 1 && cash >= price;
+			// the lock in the key and its price beside it, outside: a key at 720 is narrower than "$3,000"
+			lockMark( LaneHud_box( b.x + ( b.w - pxs( 14 ) ) / 2, b.y + ( b.h - pxs( 16 ) ) / 2, pxs( 14 ), pxs( 16 ) ) );
+			drawText( money( price ), smallFont(), b.x - pxs( 6 ), b.y, b.h, next ? PRICE : UIStyle::MUTED, 1 );
+			if( next && inside( b, mousePos() ) )
+				TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, PRICE );
 		}
+		else if( flat )
+		{
+			const WideChar *const MARKS[ 3 ] = { u"I", u"II", u"III" };
+			drawText( UnicodeString( MARKS[ t ] ), priceFont(), b.x + b.w / 2, b.y, b.h, s_tab == t ? UIStyle::ACTIVE : WHITE, 0 );
+		}
+		UnicodeString name;
+		name.format( label( "GUI:LaneTier" ).str(), t + 1 );
+		tip( b, name );
 	}
+}
 
-	// the hero, once a match
+/// the hero's card: bought once a match, then greyed with the check
+static void drawHero( void )
+{
 	s_hero = NULL;
-	{
-		LaneWarRosterItem roster[ LANEWAR_ROSTER_MAX ];
-		const Int count = LaneWar_roster( s_player, roster, LANEWAR_ROSTER_MAX );
-		for( Int i = 0; i < count && s_hero == NULL; ++i )
-			if( roster[ i ].hero )
-				s_hero = roster[ i ].thing;
-	}
-	const LaneHudBox &h = l.hero;
-	if( s_hero != NULL )
-	{
-		const Bool bought = TheLaneWarDirector->isHeroBought( s_team, s_seat );
-		const Int price = s_hero->calcCostToBuild( s_player );
-		keyFace( h, s_armed == s_hero );
-		const Int headH = pxs( 22 ), footH = pxs( 22 );
-		drawText( label( "GUI:LaneHero" ), smallFont(), h.x + h.w / 2, h.y + 1, headH, UIStyle::ACTIVE, 0 );
-		const Image *picture = s_hero->getButtonImage();
-		if( picture != NULL )
-		{
-			const Int pw = h.w - pxs( 8 ), ph = pw * picture->getImageHeight() / max( 1, (Int)picture->getImageWidth() );
-			const Int py = h.y + headH + ( h.h - headH - footH - ph ) / 2;
-			TheDisplay->drawImage( picture, h.x + pxs( 4 ), py, h.x + pxs( 4 ) + pw, py + ph );
-			if( bought || cash < price )
-				TheDisplay->drawFillRect( h.x + pxs( 4 ), py, pw, ph, GREYED );
-		}
-		drawText( bought ? label( "GUI:LaneHeroPlaced" ) : money( price ), smallFont(), h.x + h.w / 2, h.y + h.h - footH, footH,
-							bought ? UIStyle::ACTIVE : cash >= price ? PRICE : UIStyle::MUTED, 0 );
-		if( inside( h, mouse ) )
-			info = s_hero->getDisplayName();
-	}
-
-	// the foot: the unit under the pointer, or what the mode does
-	if( !( s_tab != TAB_UPGRADES && s_tab + 1 > tech ) )
-	{
-		if( info.isEmpty() && s_armed != NULL )
-		{
-			info = label( "GUI:LanePlaceHint" );
-			infoColor = UIStyle::MUTED;
-		}
-		else if( info.isEmpty() && s_sellMode )
-		{
-			info = label( "GUI:LaneSellHint" );
-			infoColor = UIStyle::MUTED;
-		}
-		drawText( UIStyle::fitText( info, bodyFont(), l.info.w - pxs( 8 ) ), bodyFont(), l.info.x + pxs( 4 ), l.info.y, l.info.h, infoColor );
-	}
+	LaneWarRosterItem roster[ LANEWAR_ROSTER_MAX ];
+	const Int count = LaneWar_roster( s_player, roster, LANEWAR_ROSTER_MAX );
+	for( Int i = 0; i < count && s_hero == NULL; ++i )
+		if( roster[ i ].hero )
+			s_hero = roster[ i ].thing;
+	if( s_hero == NULL || ( s_dragging && s_dragCard == HERO_CARD ) )
+		return;
+	const Bool bought = TheLaneWarDirector->isHeroBought( s_team, s_seat );
+	const Int price = s_hero->calcCostToBuild( s_player );
+	const LaneHudBox c = bought ? s_layout.hero : risen( s_layout.hero );
+	drawCard( c, s_hero->getButtonImage(), price, bought || localMoney() < price, bought, TRUE, s_armed == s_hero, FALSE );
+	tip( c, s_hero->getDisplayName() );
 }
 
-//-------------------------------------------------------------------------------------------------
-// The economy box and its keys
-//-------------------------------------------------------------------------------------------------
-static void drawEconomy( void )
+static void drawCards( void )
 {
-	const LaneHudLayout &l = s_layout;
-	plate( l.economy, PIECE_ECONOMY );
+	const Int tier = shownTier();
+	const Bool locked = tier + 1 > techLevel();
 	const Int cash = localMoney();
-	drawText( money( cash ), bigFont(), l.money.x + pxs( 6 ), l.money.y, l.money.h, PRICE );
-	UnicodeString pay;
-	pay.format( label( "GUI:LanePerWave" ).str(), TheLaneWarDirector->getIncome( s_team, s_seat ) );
-	drawText( pay, bodyFont(), l.money.x + l.money.w - pxs( 6 ), l.money.y, l.money.h, UIStyle::INK, 1 );
-
-	// income tier: level, the next one's price and what it adds
-	const Int level = TheLaneWarDirector->getIncomeLevel( s_team, s_seat );
-	const LaneHudBox &income = l.keys[ LANEHUD_KEY_INCOME ];
-	const Bool maxed = level >= LANEWAR_INCOME_TIERS;
-	const Int price = LaneWar_tierPrice( LANEWAR_TRACK_INCOME, level + 1 );
-	keyFace( income, FALSE, !maxed && cash >= price );
-	UnicodeString line1, line2;
-	line1.format( label( "GUI:LaneIncome" ).str(), level, (Int)LANEWAR_INCOME_TIERS );
-	if( maxed )
-		line2 = label( "GUI:LaneMax" );
-	else
-		line2.format( u"%s  +%d", money( price ).str(), (Int)LANEWAR_INCOME_TIER_PAYS );
-	const Int half = income.h / 2;
-	drawText( line1, bodyFont(), income.x + income.w / 2, income.y + pxs( 2 ), half, UIStyle::INK, 0 );
-	drawText( line2, smallFont(), income.x + income.w / 2, income.y + half - pxs( 2 ), half, maxed ? UIStyle::MUTED : PRICE, 0 );
-
-	keyFace( l.keys[ LANEHUD_KEY_SELL ], s_sellMode );
-	keyLabel( l.keys[ LANEHUD_KEY_SELL ], label( "GUI:LaneSell" ) );
-	keyFace( l.keys[ LANEHUD_KEY_ABILITIES ], s_abilitiesOpen );
-	keyLabel( l.keys[ LANEHUD_KEY_ABILITIES ], label( "GUI:LaneAbilities" ) );
-	const char *const KEYS[ 4 ] = { "GUI:LanePlot", "GUI:LaneLane", "GUI:LaneMenu", "GUI:LaneDiplomacy" };
-	for( Int k = 0; k < 4; ++k )
+	for( Int c = 0; c < LANEHUD_CARDS; ++c )
+		s_cardThing[ c ] = NULL;
+	LaneWarRosterItem roster[ LANEWAR_ROSTER_MAX ];
+	const Int count = LaneWar_roster( s_player, roster, LANEWAR_ROSTER_MAX );
+	Int card = 0;
+	for( Int i = 0; i < count && card < LANEHUD_CARDS; ++i )
 	{
-		keyFace( l.keys[ LANEHUD_KEY_PLOT + k ], FALSE );
-		keyLabel( l.keys[ LANEHUD_KEY_PLOT + k ], label( KEYS[ k ] ) );
+		if( roster[ i ].hero || roster[ i ].tier != tier + 1 )
+			continue;
+		const ThingTemplate *thing = roster[ i ].thing;
+		s_cardThing[ card ] = thing;
+		if( !( s_dragging && s_dragCard == card ) )
+		{
+			const Int price = thing->calcCostToBuild( s_player );
+			const LaneHudBox box = locked ? s_layout.cards[ card ] : risen( s_layout.cards[ card ] );
+			drawCard( box, thing->getButtonImage(), price, locked || cash < price, FALSE, FALSE, s_armed == thing && !s_dragging,
+				LaneWarDirector::gridFor( thing ) == LANEWAR_GRID_AIR );
+			tip( box, thing->getDisplayName() );
+		}
+		++card;
 	}
 }
 
-//-------------------------------------------------------------------------------------------------
-/** The abilities panel.  Empty on purpose: the job that fills it puts each roster unit's abilities
-	* here as on/off toggles the wave units obey.  `inner` is the panel under its title; a click inside
-	* it reaches abilitiesPanelClick, which returns TRUE when it used the click. */
-//-------------------------------------------------------------------------------------------------
-static void abilitiesPanelDraw( const LaneHudBox &inner )
+/// the deck: three backs, the top one showing the next income tier and its price
+static void drawDeck( void )
 {
-	(void)inner;
+	const LaneHudBox &d = s_layout.deck;
+	const Image *back = art( "LaneCardBack" );
+	LaneHudBox top = d;
+	for( Int k = 0; k < 3; ++k )
+	{
+		// README-v4: the copies at +0,+6, +3,+3 and +6,+0, the top one last
+		const Int step = REAL_TO_INT( 3.0f * s_layout.scale + 0.5f );
+		top = LaneHud_box( d.x + step * k, d.y + step * ( 2 - k ), d.w, d.h );
+		if( back != NULL )
+			drawArt( back, top );
+		else
+		{
+			TheDisplay->drawFillRect( top.x, top.y, top.w, top.h, CARD_FACE );
+			TheDisplay->drawOpenRect( top.x, top.y, top.w, top.h, 1.0f, k == 2 && ( s_upgradesOpen || inside( d, mousePos() ) ) ? UIStyle::EDGE_LIT : PLATE_EDGE );
+		}
+	}
+	incomeGlyph( cardPart( top, 18, 14, 82, 68 ) );
+	const Int level = TheLaneWarDirector->getIncomeLevel( s_team, s_seat );
+	const LaneHudBox band = cardPart( top, 8, 84, 92, 108 );
+	if( level >= LANEWAR_INCOME_TIERS )
+		doneMark( cardPart( top, 40, 86, 60, 106 ) );
+	else
+	{
+		const Int price = LaneWar_tierPrice( LANEWAR_TRACK_INCOME, level + 1 );
+		drawText( money( price ), priceFont(), band.x + band.w / 2, band.y, band.h, localMoney() >= price ? PRICE : UIStyle::MUTED, 0 );
+	}
+	if( s_upgradesOpen )
+		TheDisplay->drawOpenRect( top.x - 1, top.y - 1, top.w + 2, top.h + 2, 2.0f, UIStyle::ACTIVE );
+	tip( d, label( "GUI:LaneUpgrades" ) );
 }
 
-static Bool abilitiesPanelClick( const LaneHudBox &inner, const ICoord2D *mouse )
+/// the open deck: the income tier first, then the side's upgrades, each a card with its price or the check
+static void drawUpgrades( void )
 {
-	(void)inner;
-	(void)mouse;
-	return FALSE;
+	s_upgradeCount = 0;
+	if( !s_upgradesOpen )
+		return;
+	const UpgradeTemplate *list[ LANEWAR_ROSTER_MAX ];
+	const Int listed = LaneWar_upgrades( s_player, list, LANEWAR_ROSTER_MAX );
+	s_upgradeCount = min( 1 + listed, (Int)LANEHUD_UPGRADE_CELLS );
+	const Int cash = localMoney();
+	for( Int i = 0; i < s_upgradeCount; ++i )
+	{
+		const LaneHudBox c = LaneHud_upgradeCell( s_layout, s_upgradeCount, i );
+		if( i == 0 )
+		{
+			s_upgradeIndex[ 0 ] = -1;
+			const Int level = TheLaneWarDirector->getIncomeLevel( s_team, s_seat );
+			const Bool maxed = level >= LANEWAR_INCOME_TIERS;
+			const Int price = LaneWar_tierPrice( LANEWAR_TRACK_INCOME, level + 1 );
+			drawCard( c, NULL, maxed ? -1 : price, !maxed && cash < price, maxed, FALSE, FALSE, FALSE );
+			incomeGlyph( cardPart( c, 18, 14, 82, 68 ) );
+			UnicodeString pays;
+			pays.format( u"+%d", (Int)LANEWAR_INCOME_TIER_PAYS );
+			const LaneHudBox well = cardPart( c, 5, 62, 95, 77 );
+			if( !maxed )
+				drawText( pays, bodyFont(), well.x + well.w - pxs( 2 ), well.y, well.h, INCOME, 1 );
+			UnicodeString name;
+			name.format( label( "GUI:LaneIncome" ).str(), level, (Int)LANEWAR_INCOME_TIERS );
+			tip( c, name );
+			continue;
+		}
+		const UpgradeTemplate *u = list[ i - 1 ];
+		s_upgradeIndex[ i ] = i - 1;
+		const Bool done = s_player->hasUpgradeComplete( u );
+		const Int price = u->calcCostToBuild( s_player );
+		drawCard( c, u->getButtonImage(), price, done || cash < price, done, FALSE, FALSE, FALSE );
+		tip( c, TheGameText->fetch( u->getDisplayNameLabel() ) );
+	}
 }
 
-static LaneHudBox abilitiesInner( void )
+static void drawAbilitiesKey( void )
 {
-	const LaneHudBox &b = s_layout.abilities;
-	const Int headH = pxs( 34 );
-	return LaneHud_box( b.x + pxs( 8 ), b.y + headH, b.w - pxs( 16 ), b.h - headH - pxs( 8 ) );
+	const LaneHudBox &b = s_layout.abilitiesKey;
+	key( b, "LaneAbilitiesKey", s_abilitiesOpen );
+	if( art( "LaneAbilitiesKey" ) == NULL )
+		boltGlyph( b );
+	tip( b, label( "GUI:LaneAbilities" ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The abilities panel: one row a roster unit's button the director presses, the unit's picture, the
+	* button's and its switch.  A click on the row turns it; the order goes out as LANEWAR_ORDER_ABILITY
+	* and the switch shows what the logic holds, read here at the sync point. */
+//-------------------------------------------------------------------------------------------------
+static void gatherAbilities( void )
+{
+	s_rowCount = 0;
+	LaneWarRosterItem roster[ LANEWAR_ROSTER_MAX ];
+	const Int count = LaneWar_roster( s_player, roster, LANEWAR_ROSTER_MAX );
+	for( Int i = 0; i < count; ++i )
+	{
+		LaneWarAbility list[ LANEWAR_ABILITIES_MAX ];
+		const Int listed = LaneWar_abilitiesOf( roster[ i ].thing, list, LANEWAR_ABILITIES_MAX );
+		for( Int k = 0; k < listed && s_rowCount < LANEHUD_ABILITY_ROWS; ++k )
+		{
+			s_rows[ s_rowCount ].thing = roster[ i ].thing;
+			s_rows[ s_rowCount ].ability = list[ k ];
+			++s_rowCount;
+		}
+	}
+}
+
+static void drawToggle( const LaneHudBox &b, Bool on )
+{
+	const Image *image = art( on ? "LaneToggleOn" : "LaneToggleOff" );
+	if( image != NULL )
+	{
+		drawArt( image, b );
+		return;
+	}
+	TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, on ? KEY_FACE_LIT : WELL );
+	TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, on ? UIStyle::ACTIVE : PLATE_EDGE );
+	const Int knob = b.h - pxs( 6 );
+	const Int kx = on ? b.x + b.w - pxs( 3 ) - knob : b.x + pxs( 3 );
+	TheDisplay->drawFillRect( kx, b.y + pxs( 3 ), knob, knob, on ? WHITE : UIStyle::MUTED );
 }
 
 static void drawAbilities( void )
 {
 	if( !s_abilitiesOpen )
 		return;
-	const LaneHudBox &b = s_layout.abilities;
-	plate( b, PIECE_PANEL );
-	drawText( label( "GUI:LaneAbilities" ), strongFont(), b.x + pxs( 10 ), b.y + pxs( 2 ), pxs( 30 ), UIStyle::ACTIVE );
-	UIStyle::rule( b.x + pxs( 8 ), b.y + pxs( 32 ), b.w - pxs( 16 ) );
-	abilitiesPanelDraw( abilitiesInner() );
+	gatherAbilities();
+	const LaneHudLayout &l = s_layout;
+	const Int rows = max( (Int)ABILITY_ART_ROWS, s_rowCount );
+	const LaneHudBox panel = LaneHud_abilitiesPanel( l, rows );
+	const Image *panelArt = rows == ABILITY_ART_ROWS ? art( "LaneAbilitiesPanel" ) : NULL;
+	if( panelArt != NULL )
+		drawArt( panelArt, panel );
+	else
+	{
+		plate( panel );
+		TheDisplay->drawFillRect( panel.x + l.abilityPad, panel.y + l.abilityPad, panel.w - 2 * l.abilityPad, panel.h - 2 * l.abilityPad, WELL );
+	}
+	const Int playerIndex = s_player->getPlayerIndex();
+	for( Int r = 0; r < s_rowCount; ++r )
+	{
+		const AbilityRow &row = s_rows[ r ];
+		const LaneHudBox box = LaneHud_abilityRow( l, rows, r );
+		const Bool on = TheLaneWarDirector->isAbilityOn( playerIndex, row.thing, row.ability.slot );
+		if( inside( box, mousePos() ) )
+			TheDisplay->drawFillRect( box.x, box.y, box.w, box.h, GameMakeColor( 255, 255, 255, 18 ) );
+		const LaneHudBox cameo = LaneHud_at( box, l.abilityCameo ), icon = LaneHud_at( box, l.abilityIcon );
+		if( row.thing->getButtonImage() != NULL )
+			drawArt( row.thing->getButtonImage(), cameo );
+		if( row.ability.button->getButtonImage() != NULL )
+			drawArt( row.ability.button->getButtonImage(), icon, on ? 0xFFFFFFFF : DIM );
+		drawToggle( LaneHud_at( box, l.abilityToggle ), on );
+		tip( cameo, row.thing->getDisplayName() );
+		tip( LaneHud_box( icon.x, box.y, box.x + box.w - icon.x, box.h ), TheGameText->fetch( row.ability.button->getTextLabel() ) );
+	}
 }
 
 Bool LaneHud_abilitiesPanelIsOpen( void )
@@ -1091,34 +1476,308 @@ Bool LaneHud_abilitiesPanelIsOpen( void )
 void LaneHud_abilitiesPanelSetOpen( Bool open )
 {
 	s_abilitiesOpen = open;
+	if( open )
+		s_upgradesOpen = FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
-// Over the world: the target block's outline, green or red, and in sell mode the unit under the
-// pointer with what it would bring back
+// What rides the pointer: a dragged card, the target block over the world, and a plot unit carried
+// over the hand with what selling it brings back
 //-------------------------------------------------------------------------------------------------
-static void drawWorldMarks( void )
+static void drawHeld( void )
 {
+	const ICoord2D *mouse = mousePos();
 	ICoord2D corner[ 4 ];
 	if( s_target.on && s_target.onPlot && blockOnScreen( s_target.grid, s_target.col, s_target.row, s_target.size, corner ) )
 		outline( corner, s_target.legal ? LEGAL : BLOCKED );
 
-	if( s_sellMode && s_sellHover >= 0 && s_sellHover < (Int)TheLaneWarDirector->getPlotUnits().size() )
+	if( s_dragging && s_armed != NULL )
 	{
-		const LaneWarDirector::PlotUnit &u = TheLaneWarDirector->getPlotUnits()[ s_sellHover ];
-		const Object *obj = TheGameLogic->findObjectByID( u.id );
-		if( obj != NULL && blockOnScreen( u.grid, u.col, u.row, u.size, corner ) )
-		{
-			const Bool hero = LaneWar_isHero( s_player, obj->getTemplate() );
-			outline( corner, hero ? BLOCKED : PRICE );
-			UnicodeString text;
-			if( !hero )
-				text.format( label( "GUI:LaneRefund" ).str(), LaneWar_refund( u.cost, u.sent ) );
-			const ICoord2D *mouse = &TheMouse->getMouseStatus()->pos;
-			if( !text.isEmpty() )
-				drawText( text, bodyFont(), mouse->x + pxs( 18 ), mouse->y - pxs( 26 ), pxs( 24 ), PRICE );
-		}
+		// over the plot the card shrinks below and right of the pointer, so the ghost and its outline stay in sight
+		const Bool overPlot = ( s_target.on && s_target.onPlot ) || s_garrisonIndex >= 0;
+		const LaneHudBox c = overPlot
+			? LaneHud_box( mouse->x + pxs( 20 ), mouse->y + pxs( 20 ), pxs( 60 ), pxs( 70 ) )
+			: LaneHud_box( mouse->x + pxs( 24 ), mouse->y - pxs( 44 ), pxs( 115 ), pxs( 133 ) );
+		drawCard( c, s_armed->getButtonImage(), overPlot ? -1 : s_armed->calcCostToBuild( s_player ), FALSE, FALSE, s_dragCard == HERO_CARD, FALSE,
+			LaneWarDirector::gridFor( s_armed ) == LANEWAR_GRID_AIR );
 	}
+
+	// an infantry card over a plot unit that carries men: the unit green with room, red without
+	const std::vector<LaneWarDirector::PlotUnit> &units = TheLaneWarDirector->getPlotUnits();
+	if( s_garrisonIndex >= 0 && s_garrisonIndex < (Int)units.size() )
+	{
+		const LaneWarDirector::PlotUnit &u = units[ s_garrisonIndex ];
+		if( blockOnScreen( u.grid, u.col, u.row, u.size, corner ) )
+			outline( corner, s_garrisonRoom ? LEGAL : BLOCKED );
+	}
+
+	// a passenger carried off his unit: his picture at the pointer, and over the hand what he sells for
+	if( s_passengerOf != INVALID_ID )
+	{
+		for( size_t i = 0; i < units.size(); ++i )
+		{
+			if( units[ i ].id != s_passengerOf || s_passenger < 0 || s_passenger >= (Int)units[ i ].passengers.size() )
+				continue;
+			const LaneWarDirector::PlotUnit::Passenger &p = units[ i ].passengers[ s_passenger ];
+			const LaneHudBox c = LaneHud_box( mouse->x + pxs( 12 ), mouse->y - pxs( 30 ), pxs( 44 ), pxs( 36 ) );
+			if( p.thing->getButtonImage() != NULL )
+				drawArt( p.thing->getButtonImage(), c );
+			if( inside( s_layout.hand, mouse ) )
+			{
+				const LaneHudBox &h = s_layout.hand;
+				TheDisplay->drawOpenRect( h.x, h.y, h.w, h.h, 2.0f, PRICE );
+				UnicodeString refund;
+				refund.format( u"+%s", money( LaneWar_refund( p.cost, units[ i ].sent ) + LaneWar_refund( p.veterancyPaid, units[ i ].sent ) ).str() );
+				drawText( refund, bigFont(), mouse->x + pxs( 60 ), mouse->y - pxs( 34 ), pxs( 30 ), PRICE );
+			}
+		}
+		return;
+	}
+
+	if( s_moving == INVALID_ID || !inside( s_layout.hand, mouse ) )
+		return;
+	for( size_t i = 0; i < units.size(); ++i )
+	{
+		if( units[ i ].id != s_moving )
+			continue;
+		const Object *obj = TheGameLogic->findObjectByID( s_moving );
+		const Bool hero = obj != NULL && LaneWar_isHero( s_player, obj->getTemplate() );
+		const LaneHudBox &h = s_layout.hand;
+		TheDisplay->drawOpenRect( h.x, h.y, h.w, h.h, 2.0f, hero ? BLOCKED : PRICE );
+		if( !hero )
+		{
+			// everything selling it pays back: the unit, its ranks, its upgrades and its passengers
+			UnicodeString refund;
+			refund.format( u"+%s", money( TheLaneWarDirector->getSellValue( (Int)i ) ).str() );
+			drawText( refund, bigFont(), mouse->x + pxs( 18 ), mouse->y - pxs( 34 ), pxs( 30 ), PRICE );
+		}
+		return;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The row of chips over the plot unit the pointer rests on: for now the rank chip, the next rank's
+	* chevrons and its price, a click buying it (LANEWAR_ORDER_VETERANCY), the check at Heroic.  The
+	* unit's own upgrades and its passengers join this row as the director gains them. */
+//-------------------------------------------------------------------------------------------------
+static Int clusterIndex( void )
+{
+	const std::vector<LaneWarDirector::PlotUnit> &units = TheLaneWarDirector->getPlotUnits();
+	for( size_t i = 0; i < units.size(); ++i )
+		if( units[ i ].id == s_clusterUnit )
+			return (Int)i;
+	return -1;
+}
+
+/// which unit the row stands over: the one under the pointer, or the last one while the pointer is in its row
+static void refreshCluster( const ICoord2D *mouse )
+{
+	if( s_armed != NULL || s_moving != INVALID_ID )
+	{
+		s_clusterUnit = INVALID_ID;
+		return;
+	}
+	if( s_clusterUnit != INVALID_ID && clusterIndex() >= 0 && inside( s_clusterBox, mouse ) )
+		return;
+	s_clusterUnit = INVALID_ID;
+	Coord3D world;
+	if( overHud( mouse ) || !TheTacticalView->screenToTerrain( mouse, &world ) )
+		return;
+	const Int index = plotUnitUnder( world );
+	if( index >= 0 )
+		s_clusterUnit = TheLaneWarDirector->getPlotUnits()[ index ].id;
+}
+
+/// the screen point over a plot unit's block: its middle across and its top edge
+static Bool overUnit( const LaneWarDirector::PlotUnit &u, Int *cx, Int *top )
+{
+	ICoord2D corner[ 4 ];
+	if( !blockOnScreen( u.grid, u.col, u.row, u.size, corner ) )
+		return FALSE;
+	*top = corner[ 0 ].y;
+	*cx = 0;
+	for( Int i = 0; i < 4; ++i )
+	{
+		*top = min( *top, (Int)corner[ i ].y );
+		*cx += corner[ i ].x;
+	}
+	*cx /= 4;
+	return TRUE;
+}
+
+/// a chip's face, as a card's: lit under the pointer when it can be pressed
+static void chipFace( const LaneHudBox &b, Bool live )
+{
+	TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, CARD_FACE );
+	TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, live && inside( b, mousePos() ) ? UIStyle::EDGE_LIT : PLATE_EDGE );
+}
+
+/// a chip's price band, or the check when there is nothing left to buy
+static void chipPrice( const LaneHudBox &b, Int price, Bool can )
+{
+	const LaneHudBox band = LaneHud_box( b.x, b.y + b.h * 3 / 5, b.w, b.h * 2 / 5 );
+	if( price <= 0 )
+		doneMark( LaneHud_box( b.x + b.w / 2 - pxs( 8 ), band.y, pxs( 16 ), pxs( 16 ) ) );
+	else
+		drawText( UIStyle::grouped( price ), smallFont(), b.x + b.w / 2, band.y, band.h, can ? PRICE : UIStyle::MUTED, 0 );
+}
+
+/// rank chevrons, `count` of them stacked in the chip's top
+static void chevrons( const LaneHudBox &b, Int count, Color color )
+{
+	const LaneHudBox glyph = LaneHud_box( b.x + b.w / 4, b.y + pxs( 3 ), b.w / 2, b.h / 2 );
+	for( Int k = 0; k < count; ++k )
+	{
+		const Real y = 0.15f + 0.25f * k;
+		line( 0.1f, y, 0.5f, y + 0.25f, glyph, color );
+		line( 0.5f, y + 0.25f, 0.9f, y, glyph, color );
+	}
+}
+
+/** The row over the plot unit the pointer rests on, calm and wordless: its rank chip (the next rank's
+	* chevrons and price, the check at Heroic), a chip for each upgrade on its own command set (price,
+	* the check once owned, greyed where another one rules it out), then a chip a passenger (his picture
+	* and his next rank's price) and an empty outline for each place still free. */
+static void drawCluster( void )
+{
+	s_clusterBox = s_clusterRow = LaneHud_box( 0, 0, 0, 0 );
+	s_chipCount = 0;
+	const Int index = s_clusterUnit != INVALID_ID ? clusterIndex() : -1;
+	if( index < 0 )
+		return;
+	const LaneWarDirector::PlotUnit &u = TheLaneWarDirector->getPlotUnits()[ index ];
+	Int cx, top;
+	if( !overUnit( u, &cx, &top ) )
+		return;
+
+	// what the row holds
+	LaneWarDirector::UnitUpgrade upgrades[ 6 ];
+	const Int upgradeCount = TheLaneWarDirector->getUnitUpgrades( index, upgrades, 6 );
+	Int used = 0, most = 0;
+	TheLaneWarDirector->getPassengerRoom( index, &used, &most );
+	const Int passengers = (Int)u.passengers.size();
+	const Int room = max( 0, min( most - used, (Int)CLUSTER_CHIPS - 1 - upgradeCount - passengers ) );
+	s_chips[ s_chipCount++ ].kind = CHIP_RANK;
+	for( Int k = 0; k < upgradeCount; ++k, ++s_chipCount )
+	{
+		s_chips[ s_chipCount ].kind = CHIP_UPGRADE;
+		s_chips[ s_chipCount ].value = k;
+	}
+	for( Int p = 0; p < passengers && s_chipCount < CLUSTER_CHIPS; ++p, ++s_chipCount )
+	{
+		s_chips[ s_chipCount ].kind = CHIP_PASSENGER;
+		s_chips[ s_chipCount ].value = p;
+	}
+	for( Int r = 0; r < room; ++r, ++s_chipCount )
+		s_chips[ s_chipCount ].kind = CHIP_ROOM;
+
+	// a chip holds a four-figure price in the readable face, which does not shrink with the screen
+	const Int size = max( pxs( 44 ), smallFont()->height * 5 / 2 ), gap = pxs( 4 );
+	const Int rowW = s_chipCount * size + ( s_chipCount - 1 ) * gap;
+	s_clusterRow = LaneHud_box( cx - rowW / 2, top - pxs( 8 ) - size, rowW, size );
+	s_clusterBox = LaneHud_box( s_clusterRow.x - pxs( 6 ), s_clusterRow.y - pxs( 6 ), s_clusterRow.w + pxs( 12 ), top - s_clusterRow.y + pxs( 10 ) );
+
+	const Int cash = localMoney();
+	for( Int c = 0; c < s_chipCount; ++c )
+	{
+		Chip &chip = s_chips[ c ];
+		chip.box = LaneHud_box( s_clusterRow.x + c * ( size + gap ), s_clusterRow.y, size, size );
+		const LaneHudBox &b = chip.box;
+		const LaneHudBox picture = LaneHud_box( b.x + pxs( 3 ), b.y + pxs( 3 ), b.w - pxs( 6 ), b.h * 3 / 5 - pxs( 3 ) );
+		if( chip.kind == CHIP_RANK )
+		{
+			const Int price = TheLaneWarDirector->getNextVeterancyPrice( index );
+			const Bool can = price > 0 && cash >= price;
+			chipFace( b, can );
+			chevrons( b, min( 3, u.veterancy + ( price > 0 ? 1 : 0 ) ), can ? PRICE : UIStyle::MUTED );
+			chipPrice( b, price, can );
+		}
+		else if( chip.kind == CHIP_UPGRADE )
+		{
+			const LaneWarDirector::UnitUpgrade &up = upgrades[ chip.value ];
+			const Bool can = up.available && !up.owned && cash >= up.price;
+			chipFace( b, can );
+			if( up.upgrade->getButtonImage() != NULL )
+				drawArt( up.upgrade->getButtonImage(), picture, up.owned || can ? 0xFFFFFFFF : DIM );
+			chipPrice( b, up.owned ? 0 : up.price, can );
+			if( !up.owned && !up.available )
+				TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, GREYED );
+			tip( b, TheGameText->fetch( up.upgrade->getDisplayNameLabel() ) );
+		}
+		else if( chip.kind == CHIP_PASSENGER )
+		{
+			const LaneWarDirector::PlotUnit::Passenger &p = u.passengers[ chip.value ];
+			const Int price = TheLaneWarDirector->getNextPassengerVeterancyPrice( index, chip.value );
+			const Bool can = price > 0 && cash >= price;
+			chipFace( b, TRUE );
+			if( !( s_passengerOf == u.id && s_passenger == chip.value ) && p.thing->getButtonImage() != NULL )
+				drawArt( p.thing->getButtonImage(), picture );
+			if( p.veterancy > 0 )
+				chevrons( LaneHud_box( b.x + b.w * 3 / 5, b.y, b.w * 2 / 5, b.h / 2 ), p.veterancy, PRICE );
+			chipPrice( b, price, can );
+			tip( b, p.thing->getDisplayName() );
+		}
+		else
+			TheDisplay->drawOpenRect( b.x + pxs( 4 ), b.y + pxs( 4 ), b.w - pxs( 8 ), b.h - pxs( 8 ), 1.0f, PLATE_EDGE );
+	}
+}
+
+/** A press in the row: the rank chip buys the next rank, an upgrade chip its upgrade, a passenger
+	* chip his next rank by its price band and otherwise picks him up to be dragged onto the hand. */
+static Bool pressCluster( const ICoord2D *mouse )
+{
+	const Int index = s_clusterUnit != INVALID_ID ? clusterIndex() : -1;
+	if( index < 0 || s_chipCount == 0 || !inside( s_clusterRow, mouse ) )
+		return FALSE;
+	const LaneWarDirector::PlotUnit &u = TheLaneWarDirector->getPlotUnits()[ index ];
+	for( Int c = 0; c < s_chipCount; ++c )
+	{
+		const Chip &chip = s_chips[ c ];
+		if( !inside( chip.box, mouse ) )
+			continue;
+		if( chip.kind == CHIP_RANK && TheLaneWarDirector->getNextVeterancyPrice( index ) > 0 )
+			sendOrder( LANEWAR_ORDER_VETERANCY, u.grid, u.col, u.row );
+		else if( chip.kind == CHIP_UPGRADE )
+		{
+			LaneWarDirector::UnitUpgrade upgrades[ 6 ];
+			const Int count = TheLaneWarDirector->getUnitUpgrades( index, upgrades, 6 );
+			if( chip.value < count && upgrades[ chip.value ].available && !upgrades[ chip.value ].owned )
+				sendOrder( LANEWAR_ORDER_UNIT_UPGRADE, u.grid, u.col, u.row, upgrades[ chip.value ].slot );
+		}
+		else if( chip.kind == CHIP_PASSENGER )
+		{
+			const Bool onPrice = mouse->y >= chip.box.y + chip.box.h * 3 / 5;
+			if( onPrice && TheLaneWarDirector->getNextPassengerVeterancyPrice( index, chip.value ) > 0 )
+				sendOrder( LANEWAR_ORDER_VETERANCY, u.grid, u.col, u.row, chip.value );
+			else if( !onPrice )
+			{
+				s_passengerOf = u.id;
+				s_passenger = chip.value;
+			}
+		}
+		return TRUE;
+	}
+	return TRUE;
+}
+
+static void drawTip( void )
+{
+	if( s_tip.isEmpty() || s_dragging || s_moving != INVALID_ID )
+		return;
+	GameFont *font = bodyFont();
+	DisplayString *s = pooled( s_tip, font );
+	if( s == NULL )
+		return;
+	Int w = 0, h = 0;
+	s->getSize( &w, &h );
+	const ICoord2D *mouse = mousePos();
+	const Int pad = pxs( 5 );
+	Int x = mouse->x + pxs( 14 ), y = mouse->y - h - 2 * pad - pxs( 6 );
+	x = min( x, (Int)TheDisplay->getWidth() - w - 2 * pad - 1 );
+	y = max( y, 0 );
+	TheDisplay->drawFillRect( x, y, w + 2 * pad, h + 2 * pad, GameMakeColor( 10, 12, 16, 235 ) );
+	TheDisplay->drawOpenRect( x, y, w + 2 * pad, h + 2 * pad, 1.0f, PLATE_EDGE );
+	s->draw( x + pad, y + pad, WHITE, UIStyle::SHADOW );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1143,19 +1802,25 @@ static void destroyGhost( void )
 void LaneHud_preDraw( void )
 {
 	s_target.on = FALSE;
-	s_sellHover = -1;
-	if( !refreshShowing() || !s_seated )
+	s_garrisonIndex = -1;
+	if( !refreshShowing() )
 	{
-		if( !s_showing )
-		{
-			dropModes();
-			s_abilitiesOpen = FALSE;
-			s_tab = 0;
-		}
+		dropHeld();
+		s_abilitiesOpen = s_upgradesOpen = s_scoreboard = FALSE;
+		s_clusterUnit = INVALID_ID;
+		s_tab = 0;
+		destroyGhost();
+		return;
+	}
+	hidePlotUnitIcons();
+	if( !s_seated )
+	{
 		destroyGhost();
 		return;
 	}
 	keepClassicBarDown();
+	if( s_tab + 1 > techLevel() )
+		s_tab = techLevel() - 1;
 
 	// a picked up unit that has gone, an armed unit the player can no longer pay for or a hero now bought
 	const Object *moving = s_moving != INVALID_ID ? TheGameLogic->findObjectByID( s_moving ) : NULL;
@@ -1163,9 +1828,14 @@ void LaneHud_preDraw( void )
 		s_moving = INVALID_ID;
 	if( s_armed != NULL && ( localMoney() < s_armed->calcCostToBuild( s_player )
 			|| ( LaneWar_isHero( s_player, s_armed ) && TheLaneWarDirector->isHeroBought( s_team, s_seat ) ) ) )
+	{
 		s_armed = NULL;
+		s_dragging = FALSE;
+		s_dragCard = NO_CARD;
+	}
 
-	const ICoord2D *mouse = &TheMouse->getMouseStatus()->pos;
+	const ICoord2D *mouse = mousePos();
+	refreshCluster( mouse );
 	Coord3D world;
 	const ThingTemplate *thing = s_armed != NULL ? s_armed : moving != NULL ? moving->getTemplate() : NULL;
 	if( thing != NULL && !overHud( mouse ) && TheTacticalView->screenToTerrain( mouse, &world ) )
@@ -1181,8 +1851,22 @@ void LaneHud_preDraw( void )
 			t.at = t.onPlot ? TheLaneWarDirector->slotCentre( s_team, s_seat, t.grid, t.col, t.row, t.size ) : world;
 		}
 	}
-	if( s_sellMode && !overHud( mouse ) && TheTacticalView->screenToTerrain( mouse, &world ) )
-		s_sellHover = plotUnitUnder( world );
+
+	// an infantry card over one of the player's units that carries men goes in it, not onto a slot
+	s_garrisonIndex = -1;
+	if( s_armed != NULL && s_armed->isKindOf( KINDOF_INFANTRY ) && !overHud( mouse ) && TheTacticalView->screenToTerrain( mouse, &world ) )
+	{
+		const Int index = plotUnitUnder( world );
+		Int used = 0, most = 0;
+		if( index >= 0 )
+			TheLaneWarDirector->getPassengerRoom( index, &used, &most );
+		if( most > 0 )
+		{
+			s_garrisonIndex = index;
+			s_garrisonRoom = used < most && localMoney() >= s_armed->calcCostToBuild( s_player );
+			s_target.on = FALSE;
+		}
+	}
 
 	if( !s_target.on )
 	{
@@ -1213,18 +1897,27 @@ void LaneHud_preDraw( void )
 void LaneHud_draw( void )
 {
 	s_poolUsed = 0;
+	s_tip.clear();
 	if( !s_showing )
 		return;
 	drawTop();
-	drawMiddle();
-	drawEnemies();
-	drawStripMap();
-	if( !s_seated )
-		return;
-	drawBuy();
-	drawEconomy();
-	drawAbilities();
-	drawWorldMarks();
+	if( s_scoreboard )
+		drawScoreboard();
+	else
+		drawStripHover();
+	if( s_seated )
+	{
+		drawTierKeys();
+		drawHero();
+		drawCards();
+		drawDeck();
+		drawAbilitiesKey();
+		drawUpgrades();
+		drawAbilities();
+		drawCluster();
+		drawHeld();
+	}
+	drawTip();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1244,78 +1937,98 @@ static void lookAtPlot( void )
 	TheTacticalView->lookAt( &at );
 }
 
-static Bool pressBuy( const ICoord2D *mouse )
+/// a card or the hero pressed: armed and riding the pointer until the button comes up; pressed again, put back
+static void pickCard( const ThingTemplate *thing, Int slot, const LaneHudBox &box )
 {
-	const LaneHudLayout &l = s_layout;
-	for( Int t = 0; t < LANEHUD_TABS; ++t )
-		if( inside( l.tabs[ t ], mouse ) )
-		{
-			s_tab = t;
-			return TRUE;
-		}
-
-	const Int tech = techLevel();
-	if( s_tab != TAB_UPGRADES && s_tab + 1 > tech && inside( l.info, mouse ) )
+	s_moving = INVALID_ID;
+	if( s_armed == thing )
 	{
-		if( s_tab + 1 == tech + 1 )
-			sendOrder( LANEWAR_ORDER_TIER, LANEWAR_TRACK_TECH, tech + 1 );
-		return TRUE;
+		dropHeld();
+		return;
 	}
-
-	for( Int c = 0; c < LANEHUD_CELLS; ++c )
-	{
-		if( !inside( l.cells[ c ], mouse ) )
-			continue;
-		if( s_cellUpgrade[ c ] != NULL )
-			sendOrder( LANEWAR_ORDER_UPGRADE, s_cellUpgradeIndex[ c ] );
-		else if( s_cellThing[ c ] != NULL && s_tab + 1 <= tech )
-		{
-			s_armed = s_armed == s_cellThing[ c ] ? NULL : s_cellThing[ c ];
-			s_moving = INVALID_ID;
-			s_sellMode = FALSE;
-		}
-		return TRUE;
-	}
-
-	if( inside( l.hero, mouse ) && s_hero != NULL && !TheLaneWarDirector->isHeroBought( s_team, s_seat ) )
-	{
-		s_armed = s_armed == s_hero ? NULL : s_hero;
-		s_moving = INVALID_ID;
-		s_sellMode = FALSE;
-	}
-	return TRUE;
+	s_armed = thing;
+	s_dragging = TRUE;
+	s_dragCard = slot;
+	s_pressBox = grow( box, pxs( LANEHUD_CARD_RISE ) );
 }
 
-static Bool pressEconomy( const ICoord2D *mouse )
+/// a press on the bottom row or the panels over it; TRUE when it was on one of them
+static Bool pressRow( const ICoord2D *mouse )
 {
 	const LaneHudLayout &l = s_layout;
-	if( inside( l.keys[ LANEHUD_KEY_INCOME ], mouse ) )
+	if( s_upgradesOpen )
+		for( Int c = 0; c < s_upgradeCount; ++c )
+		{
+			if( !inside( LaneHud_upgradeCell( l, s_upgradeCount, c ), mouse ) )
+				continue;
+			if( s_upgradeIndex[ c ] < 0 )
+			{
+				const Int level = TheLaneWarDirector->getIncomeLevel( s_team, s_seat );
+				if( level < LANEWAR_INCOME_TIERS )
+					sendOrder( LANEWAR_ORDER_TIER, LANEWAR_TRACK_INCOME, level + 1 );
+			}
+			else
+				sendOrder( LANEWAR_ORDER_UPGRADE, s_upgradeIndex[ c ] );
+			return TRUE;
+		}
+	if( s_abilitiesOpen && inside( abilitiesPanel(), mouse ) )
 	{
-		const Int level = TheLaneWarDirector->getIncomeLevel( s_team, s_seat );
-		if( level < LANEWAR_INCOME_TIERS )
-			sendOrder( LANEWAR_ORDER_TIER, LANEWAR_TRACK_INCOME, level + 1 );
+		const Int rows = max( (Int)ABILITY_ART_ROWS, s_rowCount );
+		for( Int r = 0; r < s_rowCount; ++r )
+			if( inside( LaneHud_abilityRow( l, rows, r ), mouse ) )
+			{
+				const AbilityRow &row = s_rows[ r ];
+				const Bool on = TheLaneWarDirector->isAbilityOn( s_player->getPlayerIndex(), row.thing, row.ability.slot );
+				sendOrder( LANEWAR_ORDER_ABILITY, row.thing->getTemplateID(), row.ability.slot, on ? 0 : 1 );
+			}
+		return TRUE;
 	}
-	else if( inside( l.keys[ LANEHUD_KEY_SELL ], mouse ) )
+
+	const Int tech = techLevel();
+	for( Int t = 0; t < LANEHUD_TIERS; ++t )
 	{
-		const Bool on = !s_sellMode;
-		dropModes();
-		s_sellMode = on;
+		if( !inside( l.tiers[ t ], mouse ) )
+			continue;
+		if( t + 1 <= tech )
+			s_tab = t;
+		else if( t + 1 == tech + 1 && localMoney() >= LaneWar_tierPrice( LANEWAR_TRACK_TECH, t + 1 ) )
+		{
+			sendOrder( LANEWAR_ORDER_TIER, LANEWAR_TRACK_TECH, t + 1 );
+			s_tab = t;
+		}
+		return TRUE;
 	}
-	else if( inside( l.keys[ LANEHUD_KEY_ABILITIES ], mouse ) )
-		s_abilitiesOpen = !s_abilitiesOpen;
-	else if( inside( l.keys[ LANEHUD_KEY_PLOT ], mouse ) )
-		lookAtPlot();
-	else if( inside( l.keys[ LANEHUD_KEY_LANE ], mouse ) )
+
+	const Int rise = pxs( LANEHUD_CARD_RISE );
+	const LaneHudBox heroReach = LaneHud_box( l.hero.x, l.hero.y - rise, l.hero.w, l.hero.h + rise );
+	if( inside( heroReach, mouse ) )
 	{
-		Coord3D at = *TheLaneWarDirector->getMiddle();
-		at.z = TheTerrainLogic->getGroundHeight( at.x, at.y );
-		TheTacticalView->lookAt( &at );
+		if( s_hero != NULL && !TheLaneWarDirector->isHeroBought( s_team, s_seat ) )
+			pickCard( s_hero, HERO_CARD, l.hero );
+		return TRUE;
 	}
-	else if( inside( l.keys[ LANEHUD_KEY_MENU ], mouse ) )
-		TheMessageStream->appendMessage( GameMessage::MSG_META_OPTIONS );
-	else if( inside( l.keys[ LANEHUD_KEY_DIPLOMACY ], mouse ) )
-		TheMessageStream->appendMessage( GameMessage::MSG_META_DIPLOMACY );
-	return TRUE;
+	for( Int c = 0; c < LANEHUD_CARDS; ++c )
+	{
+		const LaneHudBox reach = LaneHud_box( l.cards[ c ].x, l.cards[ c ].y - rise, l.cards[ c ].w, l.cards[ c ].h + rise );
+		if( !inside( reach, mouse ) )
+			continue;
+		if( s_cardThing[ c ] != NULL && s_tab + 1 <= tech )
+			pickCard( s_cardThing[ c ], c, l.cards[ c ] );
+		return TRUE;
+	}
+
+	if( inside( l.deck, mouse ) )
+	{
+		s_upgradesOpen = !s_upgradesOpen;
+		s_abilitiesOpen = FALSE;
+		return TRUE;
+	}
+	if( inside( l.abilitiesKey, mouse ) )
+	{
+		LaneHud_abilitiesPanelSetOpen( !s_abilitiesOpen );
+		return TRUE;
+	}
+	return FALSE;
 }
 
 Bool LaneHud_press( const ICoord2D *mouse, Bool right )
@@ -1326,13 +2039,23 @@ Bool LaneHud_press( const ICoord2D *mouse, Bool right )
 
 	if( right )
 	{
-		// a right press takes back whatever is armed, and is the HUD's over any of its boxes
-		const Bool armed = s_armed != NULL || s_moving != INVALID_ID || s_sellMode || s_abilitiesOpen;
-		dropModes();
-		s_abilitiesOpen = FALSE;
-		return armed || overHud( mouse );
+		// a right press takes back whatever is held or open, and is the HUD's over any of its boxes
+		const Bool held = s_armed != NULL || s_moving != INVALID_ID || s_upgradesOpen || s_abilitiesOpen;
+		dropHeld();
+		s_upgradesOpen = s_abilitiesOpen = FALSE;
+		return held || overHud( mouse );
 	}
 
+	if( inside( l.menu, mouse ) )
+	{
+		TheMessageStream->appendMessage( GameMessage::MSG_META_OPTIONS );
+		return TRUE;
+	}
+	if( inside( l.diplomacy, mouse ) )
+	{
+		TheMessageStream->appendMessage( GameMessage::MSG_META_DIPLOMACY );
+		return TRUE;
+	}
 	if( inside( l.map, mouse ) )
 	{
 		StripFrame f;
@@ -1346,23 +2069,28 @@ Bool LaneHud_press( const ICoord2D *mouse, Bool right )
 	if( !s_seated )
 		return overHud( mouse );
 
-	if( s_abilitiesOpen && inside( l.abilities, mouse ) )
+	// a unit carried by clicks put down on the hand: sold
+	if( s_moving != INVALID_ID && inside( l.hand, mouse ) )
 	{
-		abilitiesPanelClick( abilitiesInner(), mouse );
+		LaneHud_release( mouse );
 		return TRUE;
 	}
-	if( inside( l.buy, mouse ) )
-		return pressBuy( mouse );
-	if( inside( l.economy, mouse ) )
-		return pressEconomy( mouse );
-	if( overHud( mouse ) )
+	if( pressCluster( mouse ) || pressRow( mouse ) || overHud( mouse ) )
 		return TRUE;
 
 	// the world
 	Coord3D world;
 	if( !TheTacticalView->screenToTerrain( mouse, &world ) )
-		return s_armed != NULL || s_moving != INVALID_ID || s_sellMode;
+		return s_armed != NULL || s_moving != INVALID_ID;
 
+	if( s_armed != NULL && s_garrisonIndex >= 0 )
+	{
+		// an armed infantry card clicked onto a unit that carries men: one more man in it
+		const LaneWarDirector::PlotUnit &u = TheLaneWarDirector->getPlotUnits()[ s_garrisonIndex ];
+		if( s_garrisonRoom )
+			sendOrder( LANEWAR_ORDER_GARRISON, u.grid, u.col, u.row, s_armed->getTemplateID() );
+		return TRUE;
+	}
 	if( s_armed != NULL )
 	{
 		Int col, row;
@@ -1373,7 +2101,7 @@ Bool LaneHud_press( const ICoord2D *mouse, Bool right )
 			sendOrder( LANEWAR_ORDER_PLACE, s_armed->getTemplateID(), col, row );
 			// the hero goes once; anything else stays armed while the money lasts (preDraw drops it)
 			if( LaneWar_isHero( s_player, s_armed ) )
-				s_armed = NULL;
+				dropHeld();
 		}
 		return TRUE;
 	}
@@ -1384,18 +2112,9 @@ Bool LaneHud_press( const ICoord2D *mouse, Bool right )
 		return TRUE;
 	}
 
+	// a press on one of the player's own plot units picks it up: let go on a free slot it moves there,
+	// on the hand it is sold, where it was it rides the pointer until the next click
 	const Int index = plotUnitUnder( world );
-	if( s_sellMode )
-	{
-		if( index >= 0 )
-		{
-			const LaneWarDirector::PlotUnit &u = TheLaneWarDirector->getPlotUnits()[ index ];
-			sendOrder( LANEWAR_ORDER_SELL, u.grid, u.col, u.row );
-		}
-		return TRUE;
-	}
-
-	// a press on one of the player's own plot units picks it up; letting go elsewhere puts it there
 	if( index >= 0 )
 	{
 		const LaneWarDirector::PlotUnit &u = TheLaneWarDirector->getPlotUnits()[ index ];
@@ -1403,6 +2122,7 @@ Bool LaneHud_press( const ICoord2D *mouse, Bool right )
 		s_moveGrid = u.grid;
 		s_moveCol = u.col;
 		s_moveRow = u.row;
+		s_upgradesOpen = s_abilitiesOpen = FALSE;
 		return TRUE;
 	}
 	return FALSE;
@@ -1411,11 +2131,66 @@ Bool LaneHud_press( const ICoord2D *mouse, Bool right )
 //-------------------------------------------------------------------------------------------------
 void LaneHud_release( const ICoord2D *mouse )
 {
-	if( !s_showing || !s_seated || s_moving == INVALID_ID )
+	if( !s_showing || !s_seated )
+		return;
+
+	// a card let go: back where it was pressed is a click and it stays armed; on the plot it is bought there
+	if( s_dragging )
+	{
+		s_dragging = FALSE;
+		const ThingTemplate *thing = s_armed;
+		if( thing == NULL || inside( s_pressBox, mouse ) )
+			return;
+		if( s_garrisonIndex >= 0 )
+		{
+			const LaneWarDirector::PlotUnit &u = TheLaneWarDirector->getPlotUnits()[ s_garrisonIndex ];
+			if( s_garrisonRoom )
+				sendOrder( LANEWAR_ORDER_GARRISON, u.grid, u.col, u.row, thing->getTemplateID() );
+			dropHeld();
+			return;
+		}
+		Coord3D world;
+		Int col, row;
+		Bool onGrid;
+		if( !overHud( mouse ) && TheTacticalView->screenToTerrain( mouse, &world )
+				&& slotUnder( world, LaneWarDirector::gridFor( thing ), LaneWarDirector::sizeFor( thing ), &col, &row, &onGrid ) && onGrid )
+			sendOrder( LANEWAR_ORDER_PLACE, thing->getTemplateID(), col, row );
+		dropHeld();
+		return;
+	}
+
+	// a passenger let go on the hand is sold, anywhere else he stays where he is
+	if( s_passengerOf != INVALID_ID )
+	{
+		const std::vector<LaneWarDirector::PlotUnit> &units = TheLaneWarDirector->getPlotUnits();
+		for( size_t i = 0; i < units.size(); ++i )
+			if( units[ i ].id == s_passengerOf && inside( s_layout.hand, mouse ) )
+				sendOrder( LANEWAR_ORDER_SELL, units[ i ].grid, units[ i ].col, units[ i ].row, s_passenger );
+		s_passengerOf = INVALID_ID;
+		s_passenger = -1;
+		return;
+	}
+
+	if( s_moving == INVALID_ID )
 		return;
 	const Object *obj = TheGameLogic->findObjectByID( s_moving );
+	if( obj == NULL )
+	{
+		s_moving = INVALID_ID;
+		return;
+	}
+
+	// on the hand: sold, the hero excepted, who is never for sale
+	if( inside( s_layout.hand, mouse ) )
+	{
+		if( !LaneWar_isHero( s_player, obj->getTemplate() ) )
+			sendOrder( LANEWAR_ORDER_SELL, s_moveGrid, s_moveCol, s_moveRow );
+		s_moving = INVALID_ID;
+		return;
+	}
+
 	Coord3D world;
-	if( obj == NULL || overHud( mouse ) || !TheTacticalView->screenToTerrain( mouse, &world ) )
+	if( overHud( mouse ) || !TheTacticalView->screenToTerrain( mouse, &world ) )
 		return;
 	Int col, row;
 	Bool onGrid;
@@ -1434,9 +2209,9 @@ Bool LaneHud_escape( void )
 {
 	if( !s_showing )
 		return FALSE;
-	const Bool any = s_armed != NULL || s_moving != INVALID_ID || s_sellMode || s_abilitiesOpen;
-	dropModes();
-	s_abilitiesOpen = FALSE;
+	const Bool any = s_armed != NULL || s_moving != INVALID_ID || s_upgradesOpen || s_abilitiesOpen;
+	dropHeld();
+	s_upgradesOpen = s_abilitiesOpen = FALSE;
 	return any;
 }
 
@@ -1447,4 +2222,10 @@ Bool LaneHud_viewHome( void )
 		return FALSE;
 	lookAtPlot();
 	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+void LaneHud_holdScoreboard( Bool held )
+{
+	s_scoreboard = held;
 }

@@ -18,12 +18,15 @@
 
 // FILE: LaneHudLayout.h //////////////////////////////////////////////////////////////////////////
 //
-// Where the Lane War HUD's boxes stand on a screen (LaneHud.cpp draws them).  Authored at 1920x1080
-// and scaled by the screen's height: a box against the left edge keeps its distance from it, one
-// against the right edge from that, and the top band and the strip map stay centred.  The mode is
-// laid out for 16:9 and wider only (the owner's call, 2026-11-20): a squarer screen gets the same
-// boxes by its height, and the strip map may meet the panels beside it there.  Plain integers and no
-// engine headers, so test_lanehud checks it alone.
+// Where the Lane War HUD's boxes stand on a screen (LaneHud.cpp draws them): the owner's concept C of
+// 2026-11-21, a hand of cards.  At the top centre float the money chip, the lane chip with the strip
+// map and the your-wave chip, with the wave bar and the countdown under the lane; along the bottom stand
+// the tier keys, the hero's gold card, the tier's cards in a flat row, the upgrades deck and the
+// abilities key; the upgrades row and the abilities panel open over the deck.  Authored at 1920x1080
+// (hud-artist's README-v4.md for the bottom, README-v6.md option B for the top) and scaled by the screen's
+// height: the top chips and the bottom row stay centred, the menu keys keep their distance from the
+// right edge.  16:9 and wider only (the owner's call, 2026-11-20).  Plain integers and no engine
+// headers, so test_lanehud checks it alone.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,42 +43,35 @@ struct LaneHudBox
 
 enum
 {
-	LANEHUD_ENEMY_BOXES = 3,
-	LANEHUD_TABS = 4,				///< the three tiers and the upgrades
-	LANEHUD_CELL_COLUMNS = 5,
-	LANEHUD_CELL_ROWS = 3,
-	LANEHUD_CELLS = LANEHUD_CELL_COLUMNS * LANEHUD_CELL_ROWS,
-	LANEHUD_ECONOMY_KEYS = 7,	///< income tier, sell, abilities; then plot, lane, menu, diplomacy
-};
-
-enum LaneHudEconomyKey
-{
-	LANEHUD_KEY_INCOME,
-	LANEHUD_KEY_SELL,
-	LANEHUD_KEY_ABILITIES,
-	LANEHUD_KEY_PLOT,
-	LANEHUD_KEY_LANE,
-	LANEHUD_KEY_MENU,
-	LANEHUD_KEY_DIPLOMACY,
+	LANEHUD_TIERS = 3,
+	LANEHUD_CARDS = 8,							///< a tier's units; no side fields more than eight in one
+	LANEHUD_UPGRADE_CELLS = 13,			///< the income tier and the most upgrades a side or general sells
+	LANEHUD_ABILITY_ROWS = 16,			///< one a roster unit's button the director presses; the art holds six, more grow the panel up
+	LANEHUD_PLOT_FRAMES = 5,				///< the other seats of a 3v3
+	LANEHUD_CARD_RISE = 12,					///< at 1080: a card under the pointer stands this much higher
 };
 
 struct LaneHudLayout
 {
 	float scale;												///< the screen's height over 1080
-	LaneHudBox top;											///< the wave order and the countdown
-	LaneHudBox middle;									///< who holds the middle, under the top band
-	LaneHudBox enemy[ LANEHUD_ENEMY_BOXES ];	///< each enemy's plot, down the right edge
-	LaneHudBox map;											///< the strip map's panel
-	LaneHudBox lane;										///< the lane inside it, 8 to 1
-	LaneHudBox buy;
-	LaneHudBox tabs[ LANEHUD_TABS ];
-	LaneHudBox cells[ LANEHUD_CELLS ];
-	LaneHudBox hero;										///< the side's hero, bought once a match, beside the cells
-	LaneHudBox info;										///< the buy panel's foot: the unit under the pointer
-	LaneHudBox economy;
-	LaneHudBox money;										///< the economy box's first row
-	LaneHudBox keys[ LANEHUD_ECONOMY_KEYS ];
-	LaneHudBox abilities;								///< the abilities panel, over the economy box, when open
+	LaneHudBox money;										///< the money chip: coin, money, income
+	LaneHudBox map;											///< the lane chip
+	LaneHudBox lane;										///< its glass, where the strip map is drawn
+	LaneHudBox yourWave;								///< the your-wave chip: the player's own turn
+	LaneHudBox waveBar;									///< the bar chip under the lane: each team's next wave filling to the middle
+	LaneHudBox countdown;								///< the countdown chip under the bar
+	LaneHudBox menu, diplomacy;					///< top right
+	LaneHudBox tiers[ LANEHUD_TIERS ];	///< the tier keys, I over II over III
+	LaneHudBox hero;										///< the hero's gold card, bought once a match
+	LaneHudBox cards[ LANEHUD_CARDS ];
+	LaneHudBox hand;										///< the hero and the cards with their rise: where a plot unit dragged back is sold
+	LaneHudBox deck;										///< the upgrades, a stack that opens on a click
+	LaneHudBox abilitiesKey;
+	LaneHudBox upgradeRow;							///< the open deck's row of cards, the most it holds, its right end on the deck's
+	int abilitiesRight, abilitiesBottom, abilitiesWidth;	///< the abilities panel grows up from here by its rows
+	int abilityRowH, abilityPad;
+	LaneHudBox abilityCameo, abilityIcon, abilityToggle;	///< inside a row, from its corner
+	LaneHudBox plotFrame[ LANEHUD_PLOT_FRAMES ];	///< Tab held: every other seated player, down the right edge
 };
 
 inline LaneHudBox LaneHud_box( int x, int y, int w, int h )
@@ -112,44 +108,87 @@ inline LaneHudBox LaneHud_inside( const LaneHudBox &parent, float x0, float y0, 
 	return LaneHud_box( lx, ly, hx - lx, hy - ly );
 }
 
+inline int LaneHud_px( float at1080, float s )
+{
+	const int v = (int)( at1080 * s + 0.5f );
+	return v < 1 ? 1 : v;
+}
+
 inline void LaneHud_layout( int width, int height, LaneHudLayout *out )
 {
 	const float s = (float)height / 1080.0f;
 	out->scale = s;
-	out->top = LaneHud_place( 580, 0, 1340, 60, 0, width, height );
-	out->middle = LaneHud_place( 700, 60, 1220, 88, 0, width, height );
-	for( int i = 0; i < LANEHUD_ENEMY_BOXES; ++i )
-		out->enemy[ i ] = LaneHud_place( 1700, 100.0f + 88.0f * i, 1912, 180.0f + 88.0f * i, 1, width, height );
 
-	out->buy = LaneHud_place( 0, 744, 560, 1080, -1, width, height );
-	for( int t = 0; t < LANEHUD_TABS; ++t )
-		out->tabs[ t ] = LaneHud_inside( out->buy, 8.0f + 137.0f * t, 6, 8.0f + 137.0f * t + 133.0f, 46, s );
-	for( int c = 0; c < LANEHUD_CELLS; ++c )
-	{
-		const int col = c % LANEHUD_CELL_COLUMNS, row = c / LANEHUD_CELL_COLUMNS;
-		const float x0 = 8.0f + 88.0f * col, y0 = 52.0f + 82.0f * row;
-		out->cells[ c ] = LaneHud_inside( out->buy, x0, y0, x0 + 84.0f, y0 + 78.0f, s );
-	}
-	out->hero = LaneHud_inside( out->buy, 452, 52, 552, 294, s );
-	out->info = LaneHud_inside( out->buy, 8, 300, 552, 330, s );
+	// the top: floating chips like the cards, no plate behind them (README-v6, the owner's option B)
+	out->money = LaneHud_place( 505, 8, 705, 74, 0, width, height );
+	out->map = LaneHud_place( 715, 8, 1205, 74, 0, width, height );
+	out->lane = LaneHud_inside( out->map, 5, 5, 485, 61, s );
+	out->yourWave = LaneHud_place( 1215, 8, 1311, 74, 0, width, height );
+	out->waveBar = LaneHud_place( 715, 82, 1205, 96, 0, width, height );
+	out->countdown = LaneHud_place( 918, 104, 1002, 140, 0, width, height );
+	out->menu = LaneHud_place( 1770, 8, 1840, 40, 1, width, height );
+	out->diplomacy = LaneHud_place( 1844, 8, 1914, 40, 1, width, height );
 
-	out->economy = LaneHud_place( 1360, 880, 1920, 1080, 1, width, height );
-	out->money = LaneHud_inside( out->economy, 8, 6, 552, 56, s );
-	out->keys[ LANEHUD_KEY_INCOME ] = LaneHud_inside( out->economy, 8, 62, 276, 124, s );
-	out->keys[ LANEHUD_KEY_SELL ] = LaneHud_inside( out->economy, 284, 62, 414, 124, s );
-	out->keys[ LANEHUD_KEY_ABILITIES ] = LaneHud_inside( out->economy, 422, 62, 552, 124, s );
-	for( int k = 0; k < 4; ++k )
-		out->keys[ LANEHUD_KEY_PLOT + k ] = LaneHud_inside( out->economy, 8.0f + 137.0f * k, 132, 8.0f + 137.0f * k + 131.0f, 192, s );
-	out->abilities = LaneHud_place( 1360, 452, 1920, 872, 1, width, height );
+	// the bottom row, centred: tier keys, hero, eight cards, the deck, the abilities key
+	const float left = 353.0f, handY = 958.0f;
+	for( int t = 0; t < LANEHUD_TIERS; ++t )
+		out->tiers[ t ] = LaneHud_place( left, 966.0f + 34.0f * t, left + 68.0f, 996.0f + 34.0f * t, 0, width, height );
+	out->hero = LaneHud_place( left + 80.0f, handY, left + 180.0f, handY + 116.0f, 0, width, height );
+	for( int c = 0; c < LANEHUD_CARDS; ++c )
+		out->cards[ c ] = LaneHud_place( left + 196.0f + 106.0f * c, handY, left + 296.0f + 106.0f * c, handY + 116.0f, 0, width, height );
+	out->hand = LaneHud_place( left + 72.0f, handY - LANEHUD_CARD_RISE - 4.0f, left + 1046.0f, 1080, 0, width, height );
+	out->deck = LaneHud_place( left + 1054.0f, handY, left + 1154.0f, handY + 116.0f, 0, width, height );
+	out->abilitiesKey = LaneHud_place( left + 1170.0f, 994, left + 1214.0f, 1038, 0, width, height );
 
-	// the strip map: 744 across at 1080, at the bottom between the buy panel and the economy box
-	const int mapW = (int)( 744.0f * s + 0.5f );
-	const int pad = (int)( 6.0f * s + 0.5f ) > 2 ? (int)( 6.0f * s + 0.5f ) : 2;
-	const int laneW = mapW - 2 * pad;
-	const int laneH = laneW / 8;
-	const int mapH = laneH + 2 * pad + (int)( 18.0f * s + 0.5f );
-	out->map = LaneHud_box( ( width - mapW ) / 2, height - mapH, mapW, mapH );
-	out->lane = LaneHud_box( out->map.x + pad, out->map.y + out->map.h - pad - laneH, laneW, laneH );
+	// the open deck: a row of cards over the hand, its right end on the deck's (whose top copy sits 6 right)
+	const float deckRight = left + 1160.0f, upgradeLeft = deckRight - 106.0f * LANEHUD_UPGRADE_CELLS + 6.0f;
+	out->upgradeRow = LaneHud_place( upgradeLeft, 822, deckRight, 938, 0, width, height );
+	const int rowRight = out->upgradeRow.x + out->upgradeRow.w;		// the cells step from its right end in whole pixels
+	out->upgradeRow.x = rowRight - LANEHUD_UPGRADE_CELLS * LaneHud_px( 106, s ) + LaneHud_px( 106, s ) - LaneHud_px( 100, s );
+	out->upgradeRow.w = rowRight - out->upgradeRow.x;
+
+	// the abilities panel, its right edge 33 past the abilities key's and its foot over the row
+	const LaneHudBox key = out->abilitiesKey;
+	out->abilitiesRight = key.x + key.w + LaneHud_px( 33, s );
+	out->abilitiesBottom = LaneHud_px( 950, s );
+	out->abilitiesWidth = LaneHud_px( 192, s );
+	out->abilityPad = LaneHud_px( 8, s );
+	out->abilityRowH = LaneHud_px( 48, s );
+	out->abilityCameo = LaneHud_box( LaneHud_px( 6, s ), LaneHud_px( 4, s ), LaneHud_px( 50, s ), LaneHud_px( 40, s ) );
+	out->abilityIcon = LaneHud_box( LaneHud_px( 62, s ), LaneHud_px( 4, s ), LaneHud_px( 50, s ), LaneHud_px( 40, s ) );
+	out->abilityToggle = LaneHud_box( LaneHud_px( 124, s ), LaneHud_px( 13, s ), LaneHud_px( 44, s ), LaneHud_px( 22, s ) );
+
+	// Tab held: a frame a seat down the right edge, under the menu keys
+	for( int i = 0; i < LANEHUD_PLOT_FRAMES; ++i )
+		out->plotFrame[ i ] = LaneHud_place( 1700, 48.0f + 88.0f * i, 1912, 128.0f + 88.0f * i, 1, width, height );
+}
+
+/// the open deck's card i of count, the row's right end on the deck's
+inline LaneHudBox LaneHud_upgradeCell( const LaneHudLayout &l, int count, int i )
+{
+	const int stride = LaneHud_px( 106, l.scale ), w = LaneHud_px( 100, l.scale );
+	const int right = l.upgradeRow.x + l.upgradeRow.w;
+	return LaneHud_box( right - ( count - i ) * stride + ( stride - w ), l.upgradeRow.y, w, l.upgradeRow.h );
+}
+
+/// the abilities panel holding that many rows (six fill the art's glass)
+inline LaneHudBox LaneHud_abilitiesPanel( const LaneHudLayout &l, int rows )
+{
+	const int h = 2 * l.abilityPad + rows * l.abilityRowH;
+	return LaneHud_box( l.abilitiesRight - l.abilitiesWidth, l.abilitiesBottom - h, l.abilitiesWidth, h );
+}
+
+/// a row of the panel, the glass's width
+inline LaneHudBox LaneHud_abilityRow( const LaneHudLayout &l, int rows, int row )
+{
+	const LaneHudBox panel = LaneHud_abilitiesPanel( l, rows );
+	return LaneHud_box( panel.x + l.abilityPad, panel.y + l.abilityPad + row * l.abilityRowH, panel.w - 2 * l.abilityPad, l.abilityRowH );
+}
+
+/// a box inside a row (abilityCameo, abilityIcon, abilityToggle) on the screen
+inline LaneHudBox LaneHud_at( const LaneHudBox &row, const LaneHudBox &part )
+{
+	return LaneHud_box( row.x + part.x, row.y + part.y, part.w, part.h );
 }
 
 #endif // __LANEHUDLAYOUT_H_

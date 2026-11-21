@@ -727,7 +727,8 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 	m_drawableFullyObscuredByShroud = false;
 
   m_receivesDynamicLights = TRUE; // a good default... overridden by one of my draw modules if at all
-	
+	m_iconUIHidden = FALSE;
+
 	// allocate any modules we need to, we should keep
 	// this at or near the end of the drawable construction so that we have
 	// all the valid data about the thing when we create the module
@@ -3972,6 +3973,10 @@ void Drawable::drawIconUI( void )
 		 -directorrecord keeps the health bar alone: a cup film has to show who is losing a fight. */
 	const Bool barOnly = CinemaDirector_hidesHud();
 	if( barOnly && !TheGlobalData->m_directorRecord )
+		return;
+
+	// a Lane War plot unit is a piece on a board: the board shows nothing over it
+	if( m_iconUIHidden )
 		return;
 
 	if( TheGameLogic->getDrawIconUI() && (TheScriptEngine->getFade()==ScriptEngine::FADE_NONE) )

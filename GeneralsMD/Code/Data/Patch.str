@@ -6615,38 +6615,6 @@ OBJECT:LaneWarWatchTower
 "Watch Tower"
 END
 
-GUI:LaneLast
-"Last"
-END
-
-GUI:LaneNow
-"Now"
-END
-
-GUI:LaneNext
-"Next"
-END
-
-GUI:LaneYourWaveIn
-"Your wave in %d s"
-END
-
-GUI:LaneYourWaveNext
-"Your wave goes next"
-END
-
-GUI:LaneMiddleNobody
-"Middle: nobody"
-END
-
-GUI:LaneMiddleYours
-"Middle: yours, +%d%% income"
-END
-
-GUI:LaneMiddleTheirs
-"Middle: theirs, +%d%% to them"
-END
-
 GUI:LaneTier
 "Tier %d"
 END
@@ -6655,52 +6623,12 @@ GUI:LaneUpgrades
 "Upgrades"
 END
 
-GUI:LaneUnlock
-"Unlock tier %d: $%d"
-END
-
-GUI:LaneLocked
-"Locked"
-END
-
-GUI:LaneOwned
-"Owned"
-END
-
-GUI:LaneHero
-"Hero"
-END
-
-GUI:LaneHeroPlaced
-"On the plot"
-END
-
 GUI:LaneIncome
 "Income %d/%d"
 END
 
-GUI:LanePerWave
-"+%d a wave"
-END
-
-GUI:LaneMax
-"Max"
-END
-
-GUI:LaneSell
-"Sell"
-END
-
 GUI:LaneAbilities
 "Abilities"
-END
-
-GUI:LanePlot
-"Plot"
-END
-
-GUI:LaneLane
-"Lane"
 END
 
 GUI:LaneMenu
@@ -6711,14 +6639,3 @@ GUI:LaneDiplomacy
 "Diplomacy"
 END
 
-GUI:LaneRefund
-"Sell for $%d"
-END
-
-GUI:LanePlaceHint
-"Left click places, right click stops"
-END
-
-GUI:LaneSellHint
-"Click a unit on your plot to sell it"
-END

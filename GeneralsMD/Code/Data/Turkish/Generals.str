@@ -20806,38 +20806,6 @@ OBJECT:LaneWarWatchTower
 "Gözetleme Kulesi"
 END
 
-GUI:LaneLast
-"Önceki"
-END
-
-GUI:LaneNow
-"Şimdi"
-END
-
-GUI:LaneNext
-"Sıradaki"
-END
-
-GUI:LaneYourWaveIn
-"Dalgan %d sn sonra"
-END
-
-GUI:LaneYourWaveNext
-"Sıradaki dalga senin"
-END
-
-GUI:LaneMiddleNobody
-"Orta: kimsede"
-END
-
-GUI:LaneMiddleYours
-"Orta: sizde, gelire +%d%%"
-END
-
-GUI:LaneMiddleTheirs
-"Orta: düşmanda, onlara +%d%%"
-END
-
 GUI:LaneTier
 "Kademe %d"
 END
@@ -20846,52 +20814,12 @@ GUI:LaneUpgrades
 "Geliştirmeler"
 END
 
-GUI:LaneUnlock
-"Kademe %d açılır: $%d"
-END
-
-GUI:LaneLocked
-"Kilitli"
-END
-
-GUI:LaneOwned
-"Alındı"
-END
-
-GUI:LaneHero
-"Kahraman"
-END
-
-GUI:LaneHeroPlaced
-"Alanda"
-END
-
 GUI:LaneIncome
 "Gelir %d/%d"
 END
 
-GUI:LanePerWave
-"Dalga başına +%d"
-END
-
-GUI:LaneMax
-"Tavan"
-END
-
-GUI:LaneSell
-"Sat"
-END
-
 GUI:LaneAbilities
 "Yetenekler"
-END
-
-GUI:LanePlot
-"Alan"
-END
-
-GUI:LaneLane
-"Koridor"
 END
 
 GUI:LaneMenu
@@ -20902,14 +20830,3 @@ GUI:LaneDiplomacy
 "Diplomasi"
 END
 
-GUI:LaneRefund
-"$%d karşılığında sat"
-END
-
-GUI:LanePlaceHint
-"Sol tık yerleştirir, sağ tık bırakır"
-END
-
-GUI:LaneSellHint
-"Satmak için alanındaki bir birime tıkla"
-END

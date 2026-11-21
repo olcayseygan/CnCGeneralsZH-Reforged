@@ -785,7 +785,10 @@ public:
   
   Bool getReceivesDynamicLights( void ) { return LogicThread::isInsideWindow() ? m_lookForDraw.receivesDynamicLights : m_receivesDynamicLights; };
   void setReceivesDynamicLights( Bool set ) { m_receivesDynamicLights = set; };
-  
+
+	/// no health bar, pips, rank or status icons over it: a Lane War plot unit (LaneHud_preDraw sets it at the sync point)
+	void setIconUIHidden( Bool hidden ) { m_iconUIHidden = hidden; }
+
   //---------------------------------------------------------------------------------
   // Stuff for overriding ambient sound
   const AudioEventInfo * getBaseSoundAmbientInfo() const; //< Possible starting point if only some parameters are customized
@@ -960,6 +963,7 @@ private:
   Bool m_ambientSoundEnabledFromScript;
 
   Bool m_receivesDynamicLights;
+	Bool m_iconUIHidden;					///< drawIconUI draws nothing for it; client only, never saved
 
 #ifdef DIRTY_CONDITION_FLAGS
 	mutable Bool m_isModelDirty;				///< if true, must call replaceModelConditionState() before drawing or accessing drawmodule info

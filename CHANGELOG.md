@@ -90,6 +90,7 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - There is no map to pick. Every match is played on a new island built from a fresh seed the moment you press Start, and the seed rides in the map's name, so the replay builds the same island again. The rules a lane game has no use for (starting cash, superweapons, unit cap, income sharing, the tech and supply rules, game speed) are gone from the room, and the island never turns up in the Skirmish, LAN or online map lists.
 - Create Game on the LAN screen asks Classic or Direct Strike first. A Direct Strike room plays by the same rules, the host's machine picks the seed when the room opens and every machine builds the island from it, and the game list marks the room "Direct Strike" for anyone deciding where to join. Each card's ping bars come from a real round trip to that machine, measured every second; a LAN room used to measure nothing at all. A long chat line wraps inside the panel instead of running off its edge, and the mouse wheel over the chat scrolls back through it. A LAN chat packet holds 100 characters while the chat box takes 128, so everyone else saw a long line cut off at the hundredth; it now goes out in pieces cut at a space and arrives whole, on older builds too.
 - Online works the same way. Host a custom game and it asks Classic or Direct Strike; the room is the same screen as the LAN one, chat between the teams, a ready lamp and ping bars on every card, kick through the seat's own list, and the island is built from the seed the host's room carries. Direct Strike games online are never rated, so a lane match can't move your place on the ladder.
+- The Classic / Direct Strike question when you host a game now has its three buttons apart, with every label inside its button.
 
 ## Direct Strike towers and fortresses break where they are hit
 
@@ -221,6 +222,7 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - On Mac and Linux three boxes that sat there doing nothing now work. Battle Marks leaves craters, scorch and tread marks on the ground, Water Splashes throws spray, foam and rings where a shell lands in Classic water, and Collapse sinks a destroyed building into the ground, a big one jolting the camera as it goes. Classic graphics keeps all three off, as on Windows. Thanks to Shin-Aska.
 - On Mac and Linux headlights throw their cones on the ground at night, a blast lights the walls and tanks round it for the moment it burns, and the Firelight box works: fires light what stands near them, pixel by pixel as on Windows. Thanks to Shin-Aska.
 - On Mac and Linux Sky And Ground Light works: a model's tops take more of the sky's light and its undersides less, as on Windows. Off, or under Classic graphics, the light is what it was. Thanks to Shin-Aska.
+- Custom maps that carry their own name file now show their real name in the map list instead of MISSING.
 
 ## A dropped player's army stays, and he can come back to it
 

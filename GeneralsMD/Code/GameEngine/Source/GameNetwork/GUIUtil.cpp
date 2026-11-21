@@ -1788,32 +1788,60 @@ void AskGameMode(void (*classic)(void), void (*directStrike)(void))
 	if (GameWindow *no = TheWindowManager->winGetWindowFromId(box, NAMEKEY("MessageBox.wnd:ButtonNo")))
 		GadgetButtonSetText(no, TheGameText->fetch("GUI:GameModeDirectStrike"));
 
-	// EA's layout puts Yes's right edge a pixel past No's left; the three spread over the box with
-	// equal gaps, Yes's margin from the box kept on both sides
+	// EA's layout puts Yes's right edge a pixel past No's left, and "DIRECT STRIKE" is wider than its
+	// 90-point button, so the labels ran into each other even once the buttons were apart.  Every
+	// button takes the widest label plus a button height for its end caps, the box widens about its
+	// centre to hold that row with Yes's margin as the gap, and the three spread over it
 	static const char *const keys[] = { "MessageBox.wnd:ButtonYes", "MessageBox.wnd:ButtonNo", "MessageBox.wnd:ButtonCancel" };
+	const Int count = (Int)ARRAY_SIZE(keys);
 	GameWindow *buttons[ARRAY_SIZE(keys)];
-	Int widths = 0;
-	for (Int i = 0; i < (Int)ARRAY_SIZE(keys); ++i)
+	Int widest = 0;
+	for (Int i = 0; i < count; ++i)
 	{
 		buttons[i] = TheWindowManager->winGetWindowFromId(box, NAMEKEY(keys[i]));
 		if (buttons[i] == NULL || buttons[i]->winGetParent() == NULL)
 			return;
 		Int w, h;
 		buttons[i]->winGetSize(&w, &h);
-		widths += w;
+		widest = max(widest, w);
+		if (DisplayString *label = buttons[i]->winGetInstanceData()->getTextDisplayString())
+		{
+			Int textW, textH;
+			label->getSize(&textW, &textH);
+			widest = max(widest, textW + h);
+		}
 	}
+	GameWindow *panel = buttons[0]->winGetParent();
 	Int boxW, boxH, margin, y;
-	buttons[0]->winGetParent()->winGetSize(&boxW, &boxH);
+	panel->winGetSize(&boxW, &boxH);
 	buttons[0]->winGetPosition(&margin, &y);
-	const Int gap = (boxW - 2 * margin - widths) / ((Int)ARRAY_SIZE(keys) - 1);
+	const Int rowW = 2 * margin + count * widest + (count - 1) * margin;
+	if (rowW > boxW)
+	{
+		const Int grow = rowW - boxW;
+		Int panelX, panelY;
+		panel->winGetPosition(&panelX, &panelY);
+		panel->winSetPosition(panelX - grow / 2, panelY);
+		panel->winSetSize(rowW, boxH);
+		// the title, the body and the header band stretch with it; the buttons are sized below
+		for (GameWindow *child = panel->winGetChild(); child; child = child->winGetNext())
+		{
+			Int w, h;
+			child->winGetSize(&w, &h);
+			child->winSetSize(w + grow, h);
+		}
+		boxW = rowW;
+	}
+	const Int gap = (boxW - 2 * margin - count * widest) / (count - 1);
 	Int x = margin;
-	for (Int i = 0; i < (Int)ARRAY_SIZE(keys); ++i)
+	for (Int i = 0; i < count; ++i)
 	{
 		Int w, h, oldX, oldY;
 		buttons[i]->winGetSize(&w, &h);
 		buttons[i]->winGetPosition(&oldX, &oldY);
+		buttons[i]->winSetSize(widest, h);
 		buttons[i]->winSetPosition(x, oldY);
-		x += w + gap;
+		x += widest + gap;
 	}
 }
 

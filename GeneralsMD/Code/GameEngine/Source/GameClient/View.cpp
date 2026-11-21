@@ -119,9 +119,11 @@ View::~View()
 }
 
 // The wheel may bring the camera this much of GameData.ini's MinCameraHeight down to the ground:
-// 120 becomes 90.  A view setting, so it lives here and not in GameData.ini, which every machine in
-// a network game has to agree on byte for byte.  It only shows less of the map, never more.
-#define CLOSEST_ZOOM_FACTOR (0.75f)
+// 120 becomes 150 (it was 0.75, a floor of 90, until the owner's 2026-11-22 look at six stills).
+// A view setting, so it lives here and not in GameData.ini, which every machine in a network game
+// has to agree on byte for byte.  Above 1 it stops the wheel before EA's own floor; it never lets
+// the camera out past the ceiling, and setDefaultView keeps a map's ceiling at least this high.
+#define CLOSEST_ZOOM_FACTOR (1.25f)
 
 void View::init( void )
 {
@@ -165,9 +167,9 @@ View *View::prependViewToList( View *list )
 // zoom key does; a caller driving this from a render frame passes the fraction of a logic
 // frame that has actually gone by, so the zoom rate stops depending on the frame rate.
 //
-// EA's step was 10 world units.  The reachable band is 90 (MinCameraHeight * CLOSEST_ZOOM_FACTOR)
-// to about 900 (MaxCameraHeight * ZOOM_OUT_LIMIT_FACTOR), so crossing it would take about 80
-// notches - a whole wheel's travel to go from the ground to the whole map.  60 puts it at about 14,
+// EA's step was 10 world units.  The reachable band is 150 (MinCameraHeight * CLOSEST_ZOOM_FACTOR)
+// to about 900 (MaxCameraHeight * ZOOM_OUT_LIMIT_FACTOR), so crossing it would take about 75
+// notches - a whole wheel's travel to go from the ground to the whole map.  60 puts it at about 12,
 // in both interfaces: Classic kept EA's 10 and its owner found it slow.
 #define ZOOM_STEP_HEIGHT (60.0f)
 

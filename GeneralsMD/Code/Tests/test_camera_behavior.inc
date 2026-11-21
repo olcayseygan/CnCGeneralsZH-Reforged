@@ -65,6 +65,7 @@ public:
 	void setZoomToHeight(Real height) { setHeightAboveGround(height); }
 	void setZoomToDefault() { setHeightAboveGround(-1.0f); }
 	void setZoomToMax() { setHeightAboveGround(-2.0f); }
+	Real closestHeight() const { return m_minHeightAboveGround; }
 	void scrollBy(Coord2D *delta) { last = *delta; ++samples; }
 	Drawable *pickDrawable(const ICoord2D*, Bool, PickType) { return NULL; }
 	Int iterateDrawablesInRegion(IRegion2D*, Bool (*)(Drawable*, void*), void*) { return 0; }
@@ -460,6 +461,19 @@ TEST(a_match_opens_300_over_the_ground_in_both_interfaces)
 		f.view.setZoomToStart(FALSE);
 		CHECK_NEAR(f.view.getHeightAboveGround(), -2.0f, 0.001f);
 	}
+}
+
+TEST(the_closest_zoom_stops_150_over_the_ground)
+{
+	CHECK(bootOnce());
+	CameraInputFixture f;
+	// retail GameData.ini's MinCameraHeight, which the INI checksum keeps at 120
+	f.global->m_minCameraHeight = 120.0f;
+	f.view.init();
+	CHECK_NEAR(f.view.closestHeight(), 150.0f, 0.001f);
+	// still under where a match opens and under the map's own ceiling
+	CHECK(f.view.closestHeight() < 300.0f);
+	CHECK(f.view.closestHeight() < f.global->m_maxCameraHeight);
 }
 
 TEST(scroll_speed_follows_the_zoom_in_both_interfaces)

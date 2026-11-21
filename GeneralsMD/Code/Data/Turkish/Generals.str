@@ -10677,10 +10677,6 @@ GUI:OnlineLoginName
 "E-posta veya Kullanıcı Adı"
 END
 
-GUI:OnlineLoginTitle
-"ZERO HOUR REFORGED ÇEVRİMİÇİ"
-END
-
 GUI:OnlineSignIn
 "GİRİŞ"
 END
@@ -10694,27 +10690,15 @@ GUI:OnlineKeepSignedIn
 END
 
 TOOLTIP:OnlineKeepSignedIn
-"Bu bilgisayarda oturumun açık kalır. Şifren hiçbir yere kaydedilmez"
+"Şifren hiçbir yere kaydedilmez"
 END
 
 TOOLTIP:OnlineNeedsLauncher
-"Çevrimiçi oyun başlatıcıdan açılır: orada Çevrimiçi'ye girip Çevrimiçi oyna'ya basın"
-END
-
-GUI:OnlineLoginHelp
-"zerohour.gg hesabınla giriş yap: e-postan ya da kullanıcı adın, bir de şifren."
-END
-
-GUI:OnlineLoginHelpRegister
-"Hesabın yok mu? Hesap Oluştur kayıt sayfasını tarayıcında açar."
-END
-
-GUI:OnlineLoginHelpReset
-"Şifreni mi unuttun? Şifremi Unuttum sıfırlama sayfasını tarayıcında açar."
+"Çevrimiçi oyunu başlatıcıdan aç"
 END
 
 GUI:OnlineLoginSavedToken
-"Kayıtlı oturumun kullanılacak, şifre gerekmiyor."
+"Kayıtlı oturum"
 END
 
 GUI:OnlineSigningIn
@@ -10825,9 +10809,6 @@ TOOLTIP:OnlinePlayerInfo
 "\n %d galibiyet/%d mağlubiyet"
 END
 
-GUI:OnlineHubWelcome
-"Zero Hour Reforged çevrimiçine hoş geldin."
-END
 
 TOOLTIP:OnlineStagingPlayerInfo
 "\n Ping: %d ms \n %d galibiyet/%d mağlubiyet \n %d bağlantı kopması \n Favori ordu: %ls"
@@ -15942,7 +15923,7 @@ TOOLTIP:GameSpeed
 END
 
 TOOLTIP:RoomGameSpeed
-"Maç ne kadar hızlı oynansın, odayı kuran seçer. 1.0x orijinal oyun ve LAN odasının başladığı hız, 1.5x online odanın başladığı hız. Tempodan başka hiçbir şey değişmez; dereceli maçlar hep 1.0x oynanır."
+"Maç hızı, odayı kuran seçer"
 END
 
 GUI:GameSpeedMissions
@@ -18893,7 +18874,7 @@ GUI:LobbyPresets
 END
 
 TOOLTIP:LobbyPresets
-"Büyük bir oyunun koltuklarını tek tıkla doldur: senin koltuğun aynı kalır, bilgisayarlar ve takımlar kurulur"
+"Tüm koltukları bilgisayar ve takımlarla doldur"
 END
 
 GUI:SkirmishPresetGroup
@@ -19208,22 +19189,6 @@ TOOLTIP:WaterReflection
 "Sahne Yansıması açıkken Modern su için. Orijinal, oyunun eski yansımasını kullanır. SSR ekranda gördüğün her şeyi yansıtır. Hibrit ikisini birleştirir, varsayılan da bu. Kabul Et'e basınca uygulanır."
 END
 
-GUI:QMSearchTime
-"Rakip aranıyor: %d:%02d"
-END
-
-GUI:QMSearchTimePool
-"Rakip aranıyor: %d:%02d, sırada %d kişi var"
-END
-
-GUI:QMStartsIn
-"Maç %d saniyeye başlıyor"
-END
-
-GUI:QMOpponentFound
-"Rakip bulundu: %ls"
-END
-
 GUI:QMAnOpponent
 "bilinmeyen oyuncu"
 END
@@ -19340,21 +19305,6 @@ GUI:OnlineVsAIButton
 "YAPAY ZEKÂYA KARŞI"
 END
 
-GUI:OnlineAISpeed
-"1.0x hız"
-END
-
-GUI:OnlineAIRating
-"1.0x hız, YZ puanı %.2f"
-END
-
-GUI:OnlineAIRated
-"1.0x hız, YZ puanı %.2f -> %.2f"
-END
-
-GUI:OnlineAIUnrated
-"1.0x hız, puanlanmadı: %ls"
-END
 
 GUI:OnlineAIGames
 "%d maç · %%%d galibiyet"
@@ -19548,13 +19498,6 @@ GUI:OnlineUnrated_cancelled
 "Puana sayılmadı: maç iptal oldu."
 END
 
-GUI:OnlineSendingResultsTitle
-"Sonuçlar Gönderiliyor"
-END
-
-GUI:OnlineSendingResults
-"Maç sonucu ve tekrarı gönderiliyor. Lütfen bekleyin, oyunu kapatmayın."
-END
 
 GUI:Talents
 "YETENEKLER"
@@ -20464,17 +20407,11 @@ GUI:OnlineLoginInQuickMatch
 "Hızlı maçta"
 END
 
-GUI:OnlineLoginLauncher
-"Sunucuyu başlatıcı seçer: sen orada başkasını seçmedikçe ping'i en düşük olanı."
-END
 
 GUI:OnlineLoginHeading
 "Giriş yap"
 END
 
-GUI:OnlineLoginKeepHint
-"Şifren hiçbir yere kaydedilmez"
-END
 
 GUI:OnlineLoginFailed
 "Giriş yapılamadı"
@@ -20484,9 +20421,6 @@ GUI:OnlineLoginBadBody
 "E-posta, kullanıcı adı ya da şifre yanlış. Kontrol edip yeniden dene."
 END
 
-GUI:OnlineLoginBrowser
-"İkisi de zerohour.gg'yi tarayıcında açar."
-END
 
 // merkez
 GUI:OnlineHubVsAITitle
@@ -20494,16 +20428,13 @@ GUI:OnlineHubVsAITitle
 END
 
 GUI:OnlineHubVsAILead
-"Lige sayılmaz · bilgisayara karşı"
+"Lige sayılmaz"
 END
 
 GUI:OnlineHubRecord
 "G–M"
 END
 
-GUI:OnlineHubVsAIExplain
-"Rastgele resmi 1v1 haritası. Bilgisayar senin puanınla oynar; kazanırsan puan artar, kaybedersen düşer."
-END
 
 GUI:OnlineHubPlay
 "OYNA"
@@ -20517,9 +20448,6 @@ GUI:OnlineHubInQueue
 "Sırada"
 END
 
-GUI:OnlineHubQuickMatchExplain
-"Lig puanına yakın bir rakip, maç için üretilen bir haritada. Sonuç ligdeki yerini değiştirir."
-END
 
 GUI:OnlineHubFindMatch
 "MAÇ ARA"
@@ -20530,11 +20458,7 @@ GUI:OnlineHubCustomTitle
 END
 
 GUI:OnlineHubCustomLead
-"Lige sayılmaz · 2-8 oyuncu"
-END
-
-GUI:OnlineHubCustomExplain
-"Kendi kurallarınla oda kur ya da birine katıl. %ls sunucusundaki herkesle sohbet et."
+"Lige sayılmaz · 2-8"
 END
 
 GUI:OnlineHubBrowse
@@ -20565,9 +20489,6 @@ GUI:OnlineHubFrom
 "%ls duyurusu"
 END
 
-GUI:OnlineHubMotd3
-"Lig ve tüm maçlar zerohour.gg'de."
-END
 
 GUI:OnlineHubMyCard
 "KARTIM"
@@ -20639,10 +20560,6 @@ GUI:OnlineCardArmyUsaAir
 END
 
 // lig
-GUI:OnlineLadderSub
-"Tüm sunucular, tek lig"
-END
-
 GUI:OnlineLadderPage
 "%d–%d. sıralar"
 END
@@ -20713,9 +20630,6 @@ GUI:OnlineLobbyRoomCount
 "%ls %d"
 END
 
-GUI:OnlineLobbySay
-"%ls odasına bir şey yaz"
-END
 
 GUI:OnlineLobbyJoin
 "KATIL"
@@ -20730,9 +20644,6 @@ GUI:QMRandomArmy
 "Rastgele ordu"
 END
 
-GUI:QMRandomHint
-"On ikiden biri, maç başlarken çekilir"
-END
 
 GUI:QMNoGeneral
 "Generalsiz"
@@ -20754,29 +20665,18 @@ GUI:QMSearching
 "Rakip aranıyor"
 END
 
-GUI:QMWindow
-"Aralık"
-END
-
 GUI:QMWindowValue
-"100 maçta %d ile %d arası yeneceğin rakipler"
+"Kazanma şansı %d-%d%%"
 END
 
 GUI:QMWidens
-"%d ile %d arasına %d:%02d sonra açılır"
-END
-
-GUI:QMWidenCap
-"%d ile %d arasında durur"
+"%d:%02d sonra genişler"
 END
 
 GUI:QMYourPicks
 "Seçimlerin"
 END
 
-GUI:QMPicksHint
-"Değiştirmek için aramayı durdur."
-END
 
 GUI:QMStop
 "DURDUR"
@@ -20838,7 +20738,7 @@ GUI:OnlineScoreSubRanked
 END
 
 GUI:OnlineScoreSubAI
-"Bilgisayara karşı · %ls · %ls · lige sayılmaz"
+"Bilgisayara karşı · %ls · %ls"
 END
 
 GUI:OnlineScoreSending
@@ -20846,11 +20746,11 @@ GUI:OnlineScoreSending
 END
 
 GUI:OnlineScoreConfirmed
-"Sonuç iki oyuncu tarafından onaylandı. Tekrar zerohour.gg'de saklandı."
+"Sonuç onaylandı"
 END
 
 GUI:OnlineScoreAISaved
-"Hesabına kaydedildi. Sıradaki bilgisayarın puanı: %ls."
+"Sıradaki bilgisayar: %ls"
 END
 
 GUI:OnlineScoreAIHeld
@@ -20865,13 +20765,6 @@ GUI:OnlineScorePlayAgain
 "YENİDEN OYNA"
 END
 
-GUI:OnlineScoreHow
-"Bilgisayar puanı nasıl değişir"
-END
-
-GUI:OnlineScoreHow1
-"Bilgisayarı yenersen bilgisayar puanın artar, kaybedersen düşer. Sıradaki bilgisayar yeni puanla oynar. Lig puanın yalnızca hızlı maçta değişir."
-END
 
 // skinler
 GUI:OnlineSkinsOwned
@@ -20937,17 +20830,11 @@ GUI:QMQueueHere
 "%d kişi daha %ls sunucusunda arıyor"
 END
 
-GUI:QMGeneratedLine
-"Her maç, yalnızca o maç için üretilen bir haritada oynanır. İkiniz de haritayı daha önce görmediniz."
-END
 
 GUI:QMNewMap
 "Yeni harita"
 END
 
-GUI:QMMapGenerated
-"Yalnızca bu maç için üretildi. İkiniz de bu haritayı oynamadınız."
-END
 
 GUI:QMCheckingMap
 "Harita rakibinle doğrulanıyor"
@@ -20958,7 +20845,7 @@ GUI:QMRefused
 END
 
 GUI:OnlineLobbyEmpty
-"%ls sunucusunda açık oyun yok. Bir tane kur."
+"Açık oyun yok"
 END
 
 GUI:OnlineLobbyJoining
@@ -21026,18 +20913,6 @@ GUI:OnlineScoreNoAnswer
 "Sunucu henüz yanıt vermedi. Sonuç zerohour.gg'de görünecek."
 END
 
-// merkez kartlarının paragrafları, tam metin sığmadığında (UIStyle::fitKey, "<etiket>_Short")
-GUI:OnlineHubVsAIExplain_Short
-"Resmi 1v1 haritası. Kazanırsan puanın artar, kaybedersen düşer."
-END
-
-GUI:OnlineHubQuickMatchExplain_Short
-"Puanına yakın bir rakip, üretilen bir haritada. Lige sayılır."
-END
-
-GUI:OnlineHubCustomExplain_Short
-"Oda kur ya da katıl. %ls sunucusundakilerle sohbet et."
-END
 
 GUI:GroupTrayTraining
 "+%d üretimde"
@@ -21495,9 +21370,6 @@ GUI:OnlineRejoin
 "Maça dön"
 END
 
-GUI:OnlineRejoinExplain
-"Diğerleri oynamaya devam ediyor. Ordun bıraktığın yerde."
-END
 
 GUI:OnlineRejoinWaiting
 "Sunucuya soruluyor..."

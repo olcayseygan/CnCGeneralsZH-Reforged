@@ -16698,7 +16698,7 @@ TOOLTIP:GameSpeed
 END
 
 TOOLTIP:RoomGameSpeed
-"La vitesse de la partie, choisie par l'hôte. 1.0x est le jeu d'origine et la vitesse de départ d'un salon LAN, 1.5x celle d'un salon en ligne. Seul le rythme change ; les parties classées se jouent toujours en 1.0x."
+"Vitesse de la partie, choisie par l'hôte"
 END
 
 GUI:GameSpeedMissions
@@ -19107,10 +19107,6 @@ END
 
 GUI:OnlineRejoin
 "Rejoindre"
-END
-
-GUI:OnlineRejoinExplain
-"Les autres continuent. Ton armée est là où tu l'as laissée."
 END
 
 GUI:OnlineRejoinWaiting

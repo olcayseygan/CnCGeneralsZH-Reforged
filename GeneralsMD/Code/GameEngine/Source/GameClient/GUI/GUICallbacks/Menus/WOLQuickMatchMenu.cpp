@@ -736,8 +736,6 @@ static void drawArmyPanel( GameWindow *window, WinInstanceData * )
 				TheDisplay->drawImage( s_randomImage, r.lo.x + qpx( 16 ), r.lo.y + qpx( 15 ), r.lo.x + qpx( 40 ), r.lo.y + qpx( 37 ) );
 			DisplayString *title = words.get( name, word( "GUI:QMRandomArmy" ), qpx( 260 ) );
 			put( title, r.lo.x + qpx( 54 ), r.lo.y + (cardHeight - heightOf( title )) / 2, UIStyle::INK );
-			DisplayString *hint = words.get( body, word( "GUI:QMRandomHint" ), cardWidth - qpx( 340 ) );
-			put( hint, r.lo.x + qpx( 320 ), r.lo.y + (cardHeight - heightOf( hint )) / 2, UIStyle::MUTED );
 			continue;
 		}
 		const Image *logo = s_cardImage[card];
@@ -780,7 +778,7 @@ static void drawColorPanel( GameWindow *window, WinInstanceData * )
 	}
 }
 
-/// picking, the side box: the ladder standing, the players searching here, and why there are no maps
+/// picking, the side box: the ladder standing and the players searching here
 static void drawLadderPanel( GameWindow *window, WinInstanceData * )
 {
 	Int x, y, width, height;
@@ -814,8 +812,6 @@ static void drawLadderPanel( GameWindow *window, WinInstanceData * )
 		UIStyle::fact( words.get( body, word( LABEL[fact] ), inner / 2 ), words.get( body, value, inner / 2 ),
 			left, y + qpx( 240.0f + fact * 52.0f ), inner, qpx( 52 ) );
 	}
-	// every ranked match is on a map generated from its seed, so there is no pool to veto
-	put( words.get( body, word( "GUI:QMGeneratedLine" ), 0, inner ), left, y + qpx( 420 ), UIStyle::MUTED );
 }
 
 /// searching: the clock, the players searching here, and the window of win chances on a 0 to 100 scale
@@ -849,12 +845,11 @@ static void drawSearchPanel( GameWindow *window, WinInstanceData * )
 	const Int left = x + qpx( 120 ), scale = width - qpx( 240 );
 	TheDisplay->drawFillRect( left, y + qpx( 320 ), scale, 1, UIStyle::GRID );
 	const Int lo = REAL_TO_INT( chanceLo + 0.5f ), hi = REAL_TO_INT( chanceHi + 0.5f );
-	put( words.get( body, word( "GUI:QMWindow" ), scale ), left, y + qpx( 358 ), UIStyle::MUTED );
 	text.format( word( "GUI:QMWindowValue" ), lo, hi );
-	put( words.get( body, text, scale ), left, y + qpx( 392 ), UIStyle::INK );
+	put( words.get( body, text, scale ), left, y + qpx( 358 ), UIStyle::INK );
 
 	// the band taken now in EDGE over the next step's, FRAME marks where widening stops
-	const Int top = y + qpx( 470 ), tall = qpx( 24 );
+	const Int top = y + qpx( 436 ), tall = qpx( 24 );
 	const Int nextLo = max( QM_WINDOW_WIDEST_LOW, lo - QM_WINDOW_STEP ), nextHi = min( QM_WINDOW_WIDEST_HIGH, hi + QM_WINDOW_STEP );
 	TheDisplay->drawFillRect( left, top, scale, tall, UIStyle::GRID );
 	if (nextMs >= 0)
@@ -862,8 +857,8 @@ static void drawSearchPanel( GameWindow *window, WinInstanceData * )
 			UIStyle::withAlpha( UIStyle::EDGE, 110 ) );
 	TheDisplay->drawFillRect( left + scale * lo / 100, top, scale * (hi - lo) / 100, tall, UIStyle::EDGE );
 	const Int mark = max( 1, qpx( 2 ) );
-	TheDisplay->drawFillRect( left + scale * QM_WINDOW_WIDEST_LOW / 100 - mark / 2, y + qpx( 462 ), mark, qpx( 40 ), UIStyle::FRAME );
-	TheDisplay->drawFillRect( left + scale * QM_WINDOW_WIDEST_HIGH / 100 - mark / 2, y + qpx( 462 ), mark, qpx( 40 ), UIStyle::FRAME );
+	TheDisplay->drawFillRect( left + scale * QM_WINDOW_WIDEST_LOW / 100 - mark / 2, y + qpx( 428 ), mark, qpx( 40 ), UIStyle::FRAME );
+	TheDisplay->drawFillRect( left + scale * QM_WINDOW_WIDEST_HIGH / 100 - mark / 2, y + qpx( 428 ), mark, qpx( 40 ), UIStyle::FRAME );
 	// the scale's numbers: the ends and the widest MUTED, the window's own edges INK in their place
 	const Int number[] = { 0, QM_WINDOW_WIDEST_LOW, lo, hi, QM_WINDOW_WIDEST_HIGH, 100 };
 	for (Int each = 0; each < 6; ++each)
@@ -872,21 +867,19 @@ static void drawSearchPanel( GameWindow *window, WinInstanceData * )
 		if (!edge && (number[each] == lo || number[each] == hi))
 			continue;
 		text.format( u"%d", number[each] );
-		put( words.get( body, text ), left + scale * number[each] / 100, y + qpx( 500 ), edge ? UIStyle::INK : UIStyle::MUTED,
+		put( words.get( body, text ), left + scale * number[each] / 100, y + qpx( 466 ), edge ? UIStyle::INK : UIStyle::MUTED,
 			QM_MIDDLE );
 	}
 
-	// the next widening and its track, and where widening stops
+	// the next widening and its track
 	const Int half = qpx( 420 );
 	if (nextMs >= 0)
 	{
 		const Int seconds = (nextMs + 999) / 1000;
-		text.format( word( "GUI:QMWidens" ), nextLo, nextHi, seconds / 60, seconds % 60 );
-		put( words.get( body, text, half ), left, y + qpx( 582 ), UIStyle::MUTED );
-		UIStyle::track( left, y + qpx( 620 ), half, qpx( 10 ), 1.0f - nextMs / (Real)QM_WINDOW_STEP_MS );
+		text.format( word( "GUI:QMWidens" ), seconds / 60, seconds % 60 );
+		put( words.get( body, text, half ), left, y + qpx( 548 ), UIStyle::MUTED );
+		UIStyle::track( left, y + qpx( 586 ), half, qpx( 10 ), 1.0f - nextMs / (Real)QM_WINDOW_STEP_MS );
 	}
-	text.format( word( "GUI:QMWidenCap" ), QM_WINDOW_WIDEST_LOW, QM_WINDOW_WIDEST_HIGH );
-	put( words.get( body, text, half ), left + scale, y + qpx( 582 ), UIStyle::MUTED, QM_RIGHT );
 }
 
 /// searching, the side box: the picks, locked, and the ladder rating
@@ -926,8 +919,6 @@ static void drawPicksPanel( GameWindow *window, WinInstanceData * )
 	standing.concat( me.tierName );
 	UIStyle::fact( words.get( body, word( "GUI:Ladder" ), inner / 3 ), words.get( body, standing, inner / 2 ), left, top,
 		inner, row );
-
-	put( words.get( body, word( "GUI:QMPicksHint" ), 0, inner ), left, top + row + qpx( 24 ), UIStyle::MUTED );
 }
 
 /// a seat on the found page
@@ -1049,7 +1040,6 @@ static void drawFound( QMWords &words )
 	const Int textX = mapX + qpx( 300 ), textWidth = mapWidth - qpx( 324 );
 	UIStyle::heading( words.get( s_face[QM_FACE_SECTION], word( "GUI:OnlineMapLabel" ), textWidth ), textX, mapY + qpx( 34 ) );
 	put( words.get( s_face[QM_FACE_HEADING], word( "GUI:QMNewMap" ), textWidth ), textX, mapY + qpx( 74 ), UIStyle::INK );
-	put( words.get( bodyFont(), word( "GUI:QMMapGenerated" ), 0, textWidth ), textX, mapY + qpx( 122 ), UIStyle::MUTED );
 
 	// one wide button filling with EDGE as the load screen's bar fills
 	const Int barX = UIStyle::boardX( UIStyle::ROOM_INSET ), barY = UIStyle::boardY( UIStyle::ROOM_BUTTON_TOP );

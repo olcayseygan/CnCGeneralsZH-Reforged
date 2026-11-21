@@ -63,7 +63,7 @@ const Real SCORE_STRIP_MAX = 120.0f;				///< and no taller than this under its l
 const Real SCORE_STRIP_BANDS = 48.0f;				///< the strip's bands never less: its marker lanes go first, then the strip
 
 /// -online, after a Quick Match or Play vs AI: the rating card under the two seat cards (both are 1v1),
-/// over the chat or the box on how the AI rating moves, which keep the chat's place from SCORE_CHAT_TOP
+/// over the chat's place from SCORE_CHAT_TOP
 const Real SCORE_RATING_TOP = 362.0f;
 const Real SCORE_RATING_BOTTOM = 590.0f;
 

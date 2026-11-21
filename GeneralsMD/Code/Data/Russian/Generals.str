@@ -16738,7 +16738,7 @@ TOOLTIP:GameSpeed
 END
 
 TOOLTIP:RoomGameSpeed
-"Скорость матча, её выбирает хозяин комнаты. 1.0x — исходная игра и начальная скорость LAN-комнаты, 1.5x — онлайн-комнаты. Меняется только темп; рейтинговые матчи всегда идут на 1.0x."
+"Скорость матча, её выбирает хозяин"
 END
 
 GUI:GameSpeedMissions
@@ -19035,10 +19035,6 @@ END
 
 GUI:OnlineRejoin
 "Вернуться"
-END
-
-GUI:OnlineRejoinExplain
-"Остальные играют дальше. Твоя армия там, где ты её оставил."
 END
 
 GUI:OnlineRejoinWaiting

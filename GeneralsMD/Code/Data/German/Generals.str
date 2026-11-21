@@ -14974,7 +14974,7 @@ TOOLTIP:GameSpeed
 END
 
 TOOLTIP:RoomGameSpeed
-"Wie schnell das Spiel läuft, vom Gastgeber gewählt. 1.0x ist das Originalspiel und das Starttempo eines LAN-Raums, 1.5x das eines Online-Raums. Nur das Tempo ändert sich; Ranglistenspiele laufen immer mit 1.0x."
+"Spieltempo, vom Gastgeber gewählt"
 END
 
 GUI:GameSpeedMissions
@@ -16059,10 +16059,6 @@ END
 
 GUI:OnlineRejoin
 "Zurück ins Spiel"
-END
-
-GUI:OnlineRejoinExplain
-"Die anderen spielen weiter. Deine Armee steht, wo du sie verlassen hast."
 END
 
 GUI:OnlineRejoinWaiting

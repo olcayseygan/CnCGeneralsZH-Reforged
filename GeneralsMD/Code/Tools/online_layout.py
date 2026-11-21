@@ -126,11 +126,15 @@ def inset(box, top=56, side=14):
 #   place     every visible window's rectangle, (left, top, width, height) at 1080
 #   labels    a kept gadget's new label: (name, string key)
 #   hide      what the design drops, kept for the lookups
-LOGIN_SIGN_IN = (1100, TOP, 696, BOTTOM - TOP)
-LOGIN_SERVER = (MAIN[0], TOP, 952, BOTTOM - TOP)
-HUB_CARDS = [(124, TOP, 544, 398), (692, TOP, 540, 398), (1256, TOP, 540, 398)]
-HUB_RECENT = (MAIN[0], 622, MAIN[1], BOTTOM - 622)
-HUB_MOTD = (SIDE[0], 622, SIDE[1], BOTTOM - 622)
+# the login's two panels end under Create Account and Forgot Password, the hub's cards under their buttons
+LOGIN_HEIGHT = 500
+LOGIN_SIGN_IN = (1100, TOP, 696, LOGIN_HEIGHT)
+LOGIN_SERVER = (MAIN[0], TOP, 952, LOGIN_HEIGHT)
+HUB_CARD_HEIGHT, HUB_CARD_BUTTON = 320, 240
+HUB_CARDS = [(124, TOP, 544, HUB_CARD_HEIGHT), (692, TOP, 540, HUB_CARD_HEIGHT), (1256, TOP, 540, HUB_CARD_HEIGHT)]
+HUB_LOWER = TOP + HUB_CARD_HEIGHT + 24
+HUB_RECENT = (MAIN[0], HUB_LOWER, MAIN[1], BOTTOM - HUB_LOWER)
+HUB_MOTD = (SIDE[0], HUB_LOWER, SIDE[1], BOTTOM - HUB_LOWER)
 QM_MAPS = (SIDE[0], TOP, SIDE[1], BOTTOM - TOP)
 LOBBY_GAMES = (MAIN[0], TOP, MAIN[1], 404)
 LOBBY_PLAYERS = (SIDE[0], TOP, SIDE[1], BOTTOM - TOP)
@@ -139,7 +143,7 @@ LOBBY_PLAYERS = (SIDE[0], TOP, SIDE[1], BOTTOM - TOP)
 def card_button(box):
     """A hub card's button across its foot, 24 in from its edges as the mockup's."""
     left, top, width, height = box
-    return (left + 24, top + 326, width - 48, ROW_HEIGHT)
+    return (left + 24, top + HUB_CARD_BUTTON, width - 48, ROW_HEIGHT)
 
 
 # Rejoin, at the recent matches' foot on the right: the card is the match still running while the server
@@ -173,23 +177,19 @@ SCREENS = {
                   ("CheckBoxRememberInfo", "GadgetParent"), ("ButtonLogin", "GadgetParent"),
                   ("ButtonCreateAccount", "GadgetParent"), ("ButtonTOS", "GadgetParent")],
         # the account field's list drops over the fields under it, and EA's terms popup over all of them
-        above=[("ComboBoxEmail", "StaticTextBrowser"), ("ParentTOS", "ComboBoxEmail")],
+        above=[("ComboBoxEmail", "StaticTextStatus"), ("ParentTOS", "ComboBoxEmail")],
         boxes=[("PanelServer", LOGIN_SERVER, False)],
         framed=[("PanelSignIn", LOGIN_SIGN_IN, PANEL, FRAME_COLOR)],
         # the server's counts are drawn in code between its heading and the message of the day
         adds=[text("StaticTextServer", "StaticTextPassword", (138, 226, 900, 32), body=False),
-              text("StaticTextMOTD", "StaticTextPassword", (138, 412, 900, 300)),
-              text("StaticTextLauncher", "StaticTextPassword", (138, 860, 900, 32), label="GUI:OnlineLoginLauncher"),
+              text("StaticTextMOTD", "StaticTextPassword", (138, 412, 900, 270)),
               text("StaticTextSignIn", "StaticTextPassword", (1114, 226, 668, 32), body=False,
                    label="GUI:OnlineLoginHeading"),
-              text("StaticTextHelp", "StaticTextPassword", (1114, 266, 668, 80)),
-              text("StaticTextKeepHint", "StaticTextPassword", (1152, 590, 620, 28), label="GUI:OnlineLoginKeepHint"),
-              text("StaticTextStatus", "StaticTextPassword", (1114, 704, 668, 28)),
-              text("StaticTextBrowser", "StaticTextPassword", (1114, 822, 668, 28), label="GUI:OnlineLoginBrowser")],
-        place={"StaticTextEmail": (1114, 356, 668, 28), "ComboBoxEmail": (1124, 386, 648, 44),
-               "StaticTextPassword": (1114, 456, 668, 28), "TextEntryPassword": (1124, 486, 648, 44),
-               "CheckBoxRememberInfo": (1124, 556, 648, 32), "ButtonLogin": (1124, 642, 648, ROW_HEIGHT),
-               "ButtonCreateAccount": (1124, 762, 316, 40), "ButtonTOS": (1456, 762, 316, 40),
+              text("StaticTextStatus", "StaticTextPassword", (1114, 584, 668, 28))],
+        place={"StaticTextEmail": (1114, 266, 668, 28), "ComboBoxEmail": (1124, 296, 648, 44),
+               "StaticTextPassword": (1114, 366, 668, 28), "TextEntryPassword": (1124, 396, 648, 44),
+               "CheckBoxRememberInfo": (1124, 466, 648, 32), "ButtonLogin": (1124, 522, 648, ROW_HEIGHT),
+               "ButtonCreateAccount": (1124, 642, 316, 40), "ButtonTOS": (1456, 642, 316, 40),
                "ButtonBack": BACK},
         aligned=["StaticTextEmail", "StaticTextPassword"],
         hide=["ParentESRB", "ComboBoxLoginName", "StaticTextLoginName", "WinAge"]),

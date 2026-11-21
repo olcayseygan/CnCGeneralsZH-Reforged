@@ -1495,7 +1495,7 @@ TOOLTIP:GameSpeed
 END
 
 TOOLTIP:RoomGameSpeed
-"How fast the match runs, picked by the host. 1.0x is the original game and where a LAN room starts, 1.5x where an online room starts. Only the pace changes; ranked matches always play 1.0x."
+"Match speed, picked by the host"
 END
 
 GUI:GameSpeedMissions
@@ -4288,7 +4288,7 @@ GUI:LobbyPresets
 END
 
 TOOLTIP:LobbyPresets
-"Fill the seats for a big game in one click: you keep your seat, the computers and teams are set for you"
+"Fill every seat with computers and teams"
 END
 
 GUI:SkirmishPresetGroup
@@ -4689,11 +4689,7 @@ GUI:OnlineLoginName
 "Email or Nickname"
 END
 
-// the online login screen under -online: its title, buttons, help text and status line
-GUI:OnlineLoginTitle
-"ZERO HOUR REFORGED ONLINE"
-END
-
+// the online login screen under -online: its buttons and status line
 GUI:OnlineSignIn
 "SIGN IN"
 END
@@ -4707,27 +4703,15 @@ GUI:OnlineKeepSignedIn
 END
 
 TOOLTIP:OnlineKeepSignedIn
-"Stays signed in on this computer. Your password is never stored"
+"Your password is never stored"
 END
 
 TOOLTIP:OnlineNeedsLauncher
-"Online play starts from the launcher: open Online there and press Play online"
-END
-
-GUI:OnlineLoginHelp
-"Sign in with your zerohour.gg account: your email or your nickname, and your password."
-END
-
-GUI:OnlineLoginHelpRegister
-"No account yet? Create Account opens the sign-up page in your browser."
-END
-
-GUI:OnlineLoginHelpReset
-"Forgot your password? Forgot Password opens the reset page in your browser."
+"Start online play from the launcher"
 END
 
 GUI:OnlineLoginSavedToken
-"Your saved sign-in will be used. No password needed."
+"Saved sign-in"
 END
 
 GUI:OnlineSigningIn
@@ -4832,11 +4816,6 @@ END
 
 GUI:OnlineLoginFilesNone
 "The server could not check your game files. Restart the game and sign in again; if it happens again, reinstall the game from the launcher."
-END
-
-// the online hub's info box when the server sent no message of the day
-GUI:OnlineHubWelcome
-"Welcome to Zero Hour Reforged online."
 END
 
 // EA's lobby and staging-room player tooltips without "Region:", which -online never knows
@@ -4961,22 +4940,6 @@ TOOLTIP:WaterReflection
 "For Modern water when Scene reflections is on. Legacy uses the original reflections. SSR reflects visible screen content. Hybrid combines both and is the default. Applied when you Accept."
 END
 
-GUI:QMSearchTime
-"Searching for an opponent: %d:%02d"
-END
-
-GUI:QMSearchTimePool
-"Searching for an opponent: %d:%02d, %d in the queue"
-END
-
-GUI:QMStartsIn
-"Match starts in %d"
-END
-
-GUI:QMOpponentFound
-"Opponent found: %ls"
-END
-
 GUI:QMAnOpponent
 "unknown player"
 END
@@ -5089,25 +5052,9 @@ GUI:OnlineSkinsRefused
 "zerohour.gg refused that pick, so your skins stay as they were. Open this screen again to see what your account holds."
 END
 
-// Play vs AI on the online hub: the button, the speed and AI rating beside it, and why a match did not start
+// Play vs AI on the online hub: the button, and why a match did not start
 GUI:OnlineVsAIButton
 "PLAY VS AI"
-END
-
-GUI:OnlineAISpeed
-"1.0x speed"
-END
-
-GUI:OnlineAIRating
-"1.0x speed, AI rating %.2f"
-END
-
-GUI:OnlineAIRated
-"1.0x speed, AI rating %.2f -> %.2f"
-END
-
-GUI:OnlineAIUnrated
-"1.0x speed, not rated: %ls"
 END
 
 GUI:OnlineAIGames
@@ -5301,14 +5248,6 @@ END
 
 GUI:OnlineUnrated_cancelled
 "Not rated: the match was called off."
-END
-
-GUI:OnlineSendingResultsTitle
-"Sending Results"
-END
-
-GUI:OnlineSendingResults
-"The match result and replay are being sent. Please wait, and do not close the game."
 END
 
 // The general's ranks past EA's five, named the way the first five are (EA's 6 to 8 were joke names
@@ -6274,16 +6213,8 @@ GUI:OnlineLoginInQuickMatch
 "In Quick Match"
 END
 
-GUI:OnlineLoginLauncher
-"The launcher picks the server, the nearest by ping unless you choose another there."
-END
-
 GUI:OnlineLoginHeading
 "Sign in"
-END
-
-GUI:OnlineLoginKeepHint
-"Your password is never stored"
 END
 
 GUI:OnlineLoginFailed
@@ -6294,25 +6225,17 @@ GUI:OnlineLoginBadBody
 "Wrong email, nickname or password. Check them and try again."
 END
 
-GUI:OnlineLoginBrowser
-"Both open zerohour.gg in your browser."
-END
-
 // hub
 GUI:OnlineHubVsAITitle
 "Play vs AI"
 END
 
 GUI:OnlineHubVsAILead
-"Unranked · against the computer"
+"Unranked"
 END
 
 GUI:OnlineHubRecord
 "W–L"
-END
-
-GUI:OnlineHubVsAIExplain
-"Random official 1v1 map. The computer plays at your AI rating; a win raises it, a loss lowers it."
 END
 
 GUI:OnlineHubPlay
@@ -6327,10 +6250,6 @@ GUI:OnlineHubInQueue
 "In queue"
 END
 
-GUI:OnlineHubQuickMatchExplain
-"One opponent near your ladder rating, on a map generated for the match. The result moves you on the ladder."
-END
-
 GUI:OnlineHubFindMatch
 "FIND MATCH"
 END
@@ -6340,11 +6259,7 @@ GUI:OnlineHubCustomTitle
 END
 
 GUI:OnlineHubCustomLead
-"Unranked · 2 to 8 players"
-END
-
-GUI:OnlineHubCustomExplain
-"Host a room with your own rules or join one. Chat with whoever is on %ls."
+"Unranked · 2-8"
 END
 
 GUI:OnlineHubBrowse
@@ -6373,10 +6288,6 @@ END
 
 GUI:OnlineHubFrom
 "From %ls"
-END
-
-GUI:OnlineHubMotd3
-"The ladder and every match are on zerohour.gg."
 END
 
 GUI:OnlineHubMyCard
@@ -6449,10 +6360,6 @@ GUI:OnlineCardArmyUsaAir
 END
 
 // ladder
-GUI:OnlineLadderSub
-"Every server, one ladder"
-END
-
 GUI:OnlineLadderPage
 "Ranks %d–%d"
 END
@@ -6523,10 +6430,6 @@ GUI:OnlineLobbyRoomCount
 "%ls %d"
 END
 
-GUI:OnlineLobbySay
-"Say something to %ls"
-END
-
 GUI:OnlineLobbyJoin
 "JOIN"
 END
@@ -6538,10 +6441,6 @@ END
 // Quick Match page
 GUI:QMRandomArmy
 "Random army"
-END
-
-GUI:QMRandomHint
-"One of the twelve, drawn when the match starts"
 END
 
 GUI:QMNoGeneral
@@ -6564,28 +6463,17 @@ GUI:QMSearching
 "Searching for an opponent"
 END
 
-GUI:QMWindow
-"Window"
-END
-
+// the search's chance window as a format: "%%" is the percent sign
 GUI:QMWindowValue
-"Opponents you would beat %d to %d times in 100"
+"Win chance %d-%d%%"
 END
 
 GUI:QMWidens
-"Widens to %d to %d in %d:%02d"
-END
-
-GUI:QMWidenCap
-"Stops widening at %d to %d"
+"Widens in %d:%02d"
 END
 
 GUI:QMYourPicks
 "Your picks"
-END
-
-GUI:QMPicksHint
-"Stop the search to change them."
 END
 
 GUI:QMStop
@@ -6648,7 +6536,7 @@ GUI:OnlineScoreSubRanked
 END
 
 GUI:OnlineScoreSubAI
-"Play vs AI · %ls · %ls · not on the ladder"
+"Play vs AI · %ls · %ls"
 END
 
 GUI:OnlineScoreSending
@@ -6656,11 +6544,11 @@ GUI:OnlineScoreSending
 END
 
 GUI:OnlineScoreConfirmed
-"Result confirmed by both players. Replay stored on zerohour.gg."
+"Result confirmed"
 END
 
 GUI:OnlineScoreAISaved
-"Saved to your account. The next computer plays at %ls."
+"Next AI: %ls"
 END
 
 GUI:OnlineScoreAIHeld
@@ -6673,14 +6561,6 @@ END
 
 GUI:OnlineScorePlayAgain
 "PLAY AGAIN"
-END
-
-GUI:OnlineScoreHow
-"How the AI rating moves"
-END
-
-GUI:OnlineScoreHow1
-"A win against the computer raises your AI rating and a loss lowers it. The next computer plays at the new number. Your ladder rating moves only in Quick Match."
 END
 
 // skins
@@ -6747,16 +6627,8 @@ GUI:QMQueueHere
 "%d others are searching on %ls"
 END
 
-GUI:QMGeneratedLine
-"Every match is played on a map made for it alone, so neither of you has seen it before."
-END
-
 GUI:QMNewMap
 "New map"
-END
-
-GUI:QMMapGenerated
-"Made for this match alone. Neither of you has played it."
 END
 
 GUI:QMCheckingMap
@@ -6768,7 +6640,7 @@ GUI:QMRefused
 END
 
 GUI:OnlineLobbyEmpty
-"No open games on %ls. Host one."
+"No open games"
 END
 
 GUI:OnlineLobbyJoining
@@ -6834,19 +6706,6 @@ END
 
 GUI:OnlineScoreNoAnswer
 "The server has not answered yet. The result will show on zerohour.gg."
-END
-
-// the hub card paragraphs where the whole text does not fit (UIStyle::fitKey, "<label>_Short")
-GUI:OnlineHubVsAIExplain_Short
-"Official 1v1 map. A win raises your AI rating, a loss lowers it."
-END
-
-GUI:OnlineHubQuickMatchExplain_Short
-"One opponent near your rating on a generated map. Counts for the ladder."
-END
-
-GUI:OnlineHubCustomExplain_Short
-"Host or join a room. Chat with whoever is on %ls."
 END
 
 GUI:GroupTrayTraining
@@ -7303,10 +7162,6 @@ END
 
 GUI:OnlineRejoin
 "Rejoin"
-END
-
-GUI:OnlineRejoinExplain
-"The others play on. Your army is where you left it."
 END
 
 GUI:OnlineRejoinWaiting

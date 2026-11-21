@@ -421,7 +421,6 @@ static void layoutLadderTable( OnlineLadderState state, Int offset, const std::v
 	const Int tableWidth = table.hi.x - table.lo.x;
 	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
 	addBox( table.lo.x, table.lo.y, tableWidth, table.hi.y - table.lo.y );
-	addWords( TheGameText->fetch( "GUI:OnlineLadderSub" ), UIStyle::sectionFont(), table.lo.x + inset, table.lo.y + down( 20.0f ), UIStyle::ACTIVE );
 	const Int shown = min( (Int)rows.size(), (Int)LADDER_PAGE );
 	if (state == ONLINE_LADDER_READY && shown > 0)
 	{

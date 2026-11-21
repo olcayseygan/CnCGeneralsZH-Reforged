@@ -710,8 +710,7 @@ static void placeGameList( void )
 		s_gameHeads[ head ]->setFont( body );
 		s_gameHeads[ head ]->setText( UIStyle::fitKey( HEAD_KEY[ head ], body, max( columnWidth - 2 * UIStyle::tallPx( CELL_PAD ), 1 ) ) );
 	}
-	UnicodeString empty;
-	empty.format( TheGameText->fetch( "GUI:OnlineLobbyEmpty" ), LobbyServerLabel().str() );
+	const UnicodeString empty = TheGameText->fetch( "GUI:OnlineLobbyEmpty" );
 	s_noGames = TheDisplayStringManager->newDisplayString();
 	s_noGames->setFont( body );
 	s_noGames->setText( UIStyle::fitText( empty, body, max( width - 2 * UIStyle::tallPx( CELL_PAD ), 1 ) ) );

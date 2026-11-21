@@ -724,7 +724,7 @@ void PopulateLobbyPlayerListbox(void)
 
 //-------------------------------------------------------------------------------------------------
 // The page in the online pages' frame (ONLINE-UI-REDESIGN.md, "Custom games"): the header, the two
-// boxes' headings, the chat rooms as tabs over the chat, the chat entry's hint
+// boxes' headings, the chat rooms as tabs over the chat
 //-------------------------------------------------------------------------------------------------
 enum LobbyText
 {
@@ -732,7 +732,6 @@ enum LobbyText
 	TEXT_GAMES_COUNT,		///< "12 open"
 	TEXT_PLAYERS,				///< "In General"
 	TEXT_PLAYERS_COUNT,
-	TEXT_SAY,						///< the chat entry's hint while it is empty
 	TEXT_COUNT
 };
 enum { MAX_ROOM_TABS = 8 };
@@ -746,7 +745,6 @@ static Int s_roomTabsShown = 0;
 static GameWinDrawFunc s_gadgetParentDraw = NULL;
 static GameWinDrawFunc s_panelGamesDraw = NULL;
 static GameWinDrawFunc s_panelPlayersDraw = NULL;
-static GameWinDrawFunc s_chatEntryDraw = NULL;
 
 /// a chat room's name; the online server's one room (OnlinePeer.cpp's "Lobby") is the design's General
 static UnicodeString roomName( const GameSpyGroupRoom &room )
@@ -930,28 +928,6 @@ static void drawPanelPlayers( GameWindow *window, WinInstanceData *instData )
 	drawBoxHeading( window, s_text[ TEXT_PLAYERS ], s_text[ TEXT_PLAYERS_COUNT ] );
 }
 
-/// the chat entry, and while it is empty "Say something to General" MUTED where its text starts
-static void drawChatEntry( GameWindow *window, WinInstanceData *instData )
-{
-	if (s_chatEntryDraw)
-		s_chatEntryDraw( window, instData );
-	DisplayString *hint = s_text[ TEXT_SAY ];
-	if (!hint || !GadgetTextEntryGetText( window ).isEmpty())
-		return;
-	const GameSpyGroupRoom *room = currentRoom();
-	if (!room)
-		return;
-	UnicodeString words;
-	words.format( TheGameText->fetch( "GUI:OnlineLobbySay" ), roomName( *room ).str() );
-	hint->setText( words );
-	Int x, y, width, height, w, h;
-	window->winGetScreenPosition( &x, &y );
-	window->winGetSize( &width, &height );
-	hint->getSize( &w, &h );
-	// W3DTextEntry starts its text seven pixels in; the hint stands a little after the caret
-	hint->draw( x + 7 + UIStyle::tallPx( 8.0f ), y + ( height - h ) / 2, UIStyle::MUTED, UIStyle::SHADOW );
-}
-
 /// puts draw over a window's own; a second init on the same layout keeps the first capture, or the
 /// hook would call itself
 static void hookDraw( GameWindow *window, GameWinDrawFunc &saved, GameWinDrawFunc draw )
@@ -1000,7 +976,6 @@ static void initLobbyLook( void )
 	hookDraw( lobbyWindow( "GadgetParent" ), s_gadgetParentDraw, drawGadgetParent );
 	hookDraw( lobbyWindow( "PanelGames" ), s_panelGamesDraw, drawPanelGames );
 	hookDraw( lobbyWindow( "PanelPlayers" ), s_panelPlayersDraw, drawPanelPlayers );
-	hookDraw( textEntryChat, s_chatEntryDraw, drawChatEntry );
 
 	// the player list: a line a row, the page's columns, the page's rows
 	if (listboxLobbyPlayers)
@@ -1012,8 +987,7 @@ static void initLobbyLook( void )
 
 	freeLobbyText();
 	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
-	GameFont *const faces[ TEXT_COUNT ] = { UIStyle::sectionFont(), body, UIStyle::sectionFont(), body,
-		textEntryChat ? textEntryChat->winGetFont() : body };
+	GameFont *const faces[ TEXT_COUNT ] = { UIStyle::sectionFont(), body, UIStyle::sectionFont(), body };
 	for (Int each = 0; each < TEXT_COUNT; ++each)
 	{
 		s_text[ each ] = TheDisplayStringManager->newDisplayString();

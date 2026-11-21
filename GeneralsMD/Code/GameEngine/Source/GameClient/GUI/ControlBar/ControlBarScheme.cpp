@@ -700,14 +700,24 @@ void ControlBarScheme::init(void)
 		GadgetButtonSetDisabledImage(win, m_buddyButtonDisabled);
 		placeSchemeWindow( win, m_chatUL, m_chatLR, resMultiplier );
 	}
+	// The fork's left column reads options, last alert, idle worker, chat.  The Classic layout puts the
+	// idle worker under options where the original game had it, and the alert key below it (issue
+	// #232); EA's own schemes already stand them that way round and are left alone.
+	const Bool swapWorkerAndBeacon = TheGlobalData->m_hudLayout == HUD_LAYOUT_RETAIL
+		&& m_workerLR.x > m_workerUL.x && m_beaconLR.x > m_beaconUL.x && m_workerUL.y > m_beaconUL.y;
+	const ICoord2D &workerUL = swapWorkerAndBeacon ? m_beaconUL : m_workerUL;
+	const ICoord2D &workerLR = swapWorkerAndBeacon ? m_beaconLR : m_workerLR;
+	const ICoord2D &beaconUL = swapWorkerAndBeacon ? m_workerUL : m_beaconUL;
+	const ICoord2D &beaconLR = swapWorkerAndBeacon ? m_workerLR : m_beaconLR;
+
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ButtonIdleWorker" ) );
-	if(win)	
+	if(win)
 	{
 		GadgetButtonSetEnabledImage(win, m_idleWorkerButtonEnable);
 		GadgetButtonSetHiliteImage(win, m_idleWorkerButtonHightlited);
 		GadgetButtonSetHiliteSelectedImage(win, m_idleWorkerButtonPushed);
 		GadgetButtonSetDisabledImage(win, m_idleWorkerButtonDisabled);
-		placeSchemeWindow( win, m_workerUL, m_workerLR, resMultiplier );
+		placeSchemeWindow( win, workerUL, workerLR, resMultiplier );
 	}
 
 	//
@@ -763,7 +773,7 @@ void ControlBarScheme::init(void)
 		GadgetButtonSetHiliteImage(win, m_beaconButtonHightlited);
 		GadgetButtonSetHiliteSelectedImage(win, m_beaconButtonPushed);
 		GadgetButtonSetDisabledImage(win, m_beaconButtonDisabled);
-		placeSchemeWindow( win, m_beaconUL, m_beaconLR, resMultiplier );
+		placeSchemeWindow( win, beaconUL, beaconLR, resMultiplier );
 	}
 
 	win= TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:MoneyDisplay" ) );

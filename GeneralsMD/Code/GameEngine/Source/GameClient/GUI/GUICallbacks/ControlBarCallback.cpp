@@ -676,7 +676,8 @@ WindowMsgHandledType ControlBarSystem( GameWindow *window, UnsignedInt msg,
 			}
 			else if( controlID == buttonIdleWorker || controlID == buttonIdleInfantry || controlID == buttonIdleVehicle || controlID == buttonIdleAircraft )
 			{
-				// the Next Idle keys' cycle, camera left alone; Shift takes every idle one of the kind
+				// the Next Idle keys' cycle, camera left alone but for the worker's on Classic
+				// (selectNextIdleWorker); Shift takes every idle one of the kind
 				HideQuitMenu( );
 				KindOfMaskType mustBeSet, mustBeClear;
 				InGameUI::idleUnitKinds( controlID == buttonIdleWorker ? GameMessage::MSG_META_SELECT_NEXT_IDLE_WORKER
@@ -685,6 +686,8 @@ WindowMsgHandledType ControlBarSystem( GameWindow *window, UnsignedInt msg,
 																 : GameMessage::MSG_META_SELECT_NEXT_IDLE_AIRCRAFT, &mustBeSet, &mustBeClear );
 				if( TheKeyboard->isShift() )
 					TheInGameUI->selectAllIdleUnits( mustBeSet, mustBeClear );
+				else if( controlID == buttonIdleWorker )
+					TheInGameUI->selectNextIdleWorker();
 				else
 					TheInGameUI->selectNextIdleUnit( mustBeSet, mustBeClear );
 			}

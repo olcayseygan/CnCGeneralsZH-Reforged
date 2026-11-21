@@ -1316,7 +1316,7 @@ public:  // ********************************************************************
 	virtual void addIdleWorker( Object *obj );
 	void addIdleWorkerFor( Object *obj, Int playerIndex );	///< addIdleWorker with the owner read at the call
 	virtual void removeIdleWorker( Object *obj, Int playerNumber );
-	virtual Object *selectNextIdleWorker( void );	///< what it selected, NULL with no idle worker; never moves the camera
+	virtual Object *selectNextIdleWorker( void );	///< what it selected, NULL with no idle worker; the camera goes to it on the Classic layout only, as in the original game
 	Object *selectNextIdleUnit( KindOfMaskType mustBeSet, KindOfMaskType mustBeClear );	///< the same cycle for fighting units of those kinds standing with no order; what it selected, or NULL
 	Int selectAllIdleUnits( KindOfMaskType mustBeSet, KindOfMaskType mustBeClear );	///< every one that cycle visits at once, the camera left alone; how many
 	static Bool isIdleCombatUnit( const Object *obj );	///< the local player's fighting unit standing with no order

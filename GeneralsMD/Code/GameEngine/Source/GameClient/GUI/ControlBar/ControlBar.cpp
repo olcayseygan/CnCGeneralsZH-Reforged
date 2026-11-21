@@ -5678,6 +5678,9 @@ void ControlBar::showIdleButtons( Bool show )
 		NAMEKEY( "ControlBar.wnd:ButtonIdleAircraft" ),
 		NAMEKEY( "ControlBar.wnd:ButtonSelectArmy" ),
 	};
+	// the Classic layout (HUD_LAYOUT_RETAIL) keeps the original game's worker key alone: no select
+	// army or idle infantry, vehicle and aircraft column (issue #232); their hotkeys still work
+	const Bool classic = TheGlobalData->m_hudLayout == HUD_LAYOUT_RETAIL;
 	for( Int i = 0; i < 5; i++ )
 	{
 		GameWindow *win = TheWindowManager->winGetWindowFromId( NULL, ids[ i ] );
@@ -5685,7 +5688,7 @@ void ControlBar::showIdleButtons( Bool show )
 		if( win && show && m_sidebarLayout )
 			hideForSidebar( win );
 		else if( win )
-			win->winHide( !show );
+			win->winHide( !show || ( classic && i > 0 ) );
 	}
 }
 

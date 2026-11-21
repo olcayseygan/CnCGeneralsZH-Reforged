@@ -1453,8 +1453,6 @@ void RandomMapTabInit(const char *layoutFilename, GameWindow *parent, GameWindow
 	theListTabs[1] = randomTabWindow("RadioButtonUserMaps");
 	theMapListWindow = randomTabWindow("ListboxMap");
 	theTemplateList = randomTabWindow("ListboxRandomTemplate");
-	theRandomTab->winSetDrawFunc(DrawMapListTab);
-	theRandomTab->winEnable(allowed);
 
 	theRandomPanel.clear();
 	theRandomPanel.push_back(randomTabWindow("StaticTextRandomTemplate"));
@@ -1463,9 +1461,27 @@ void RandomMapTabInit(const char *layoutFilename, GameWindow *parent, GameWindow
 	for (Int size = 0; size < RANDOM_MAP_SIZE_COUNT; ++size)
 	{
 		theSizeButtons[size] = randomTabWindow("RadioButtonRandomSize", size);
-		theSizeButtons[size]->winSetDrawFunc(DrawMapListTab);
 		theRandomPanel.push_back(theSizeButtons[size]);
 	}
+
+	// a layout without the tab (EA's own, or a mod's loose copy beating ours): the picker works as
+	// retail's did, Official and Unofficial only
+	Bool complete = theRandomTab && theListTabs[0] && theListTabs[1] && theMapListWindow;
+	for (size_t i = 0; i < theRandomPanel.size(); ++i)
+		complete = complete && theRandomPanel[i] != NULL;
+	if (!complete)
+	{
+		DEBUG_LOG(("RandomMapTabInit: %s has no Random tab; the picker offers shipped maps only\n", layoutFilename));
+		if (theRandomTab)
+			theRandomTab->winHide(TRUE);
+		RandomMapTabShutdown();
+		return;
+	}
+
+	theRandomTab->winSetDrawFunc(DrawMapListTab);
+	theRandomTab->winEnable(allowed);
+	for (Int size = 0; size < RANDOM_MAP_SIZE_COUNT; ++size)
+		theSizeButtons[size]->winSetDrawFunc(DrawMapListTab);
 
 	UserPreferences pref;
 	pref.load(theRandomMapPrefsFile);

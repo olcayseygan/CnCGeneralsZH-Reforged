@@ -2643,6 +2643,12 @@ set_source_files_properties(${TESTS}/test_miles_effects.cpp PROPERTIES COMPILE_D
 target_include_directories(test_miles_effects PRIVATE ${WW}/Miles6/include ${WW}/WWLib ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
 target_link_libraries(test_miles_effects PRIVATE test_harness miniaudio)
 add_test(NAME test_miles_effects COMMAND test_miles_effects)
+
+# What each of the twelve armies can buy in Direct Strike, pinned: two headless 3v3 lane matches from
+# Run/, every seat's roster line against the script's lists.  Skipped (77) without the game's data.
+add_test(NAME lane_roster_check
+         COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File ${TESTS}/run_lane_roster_check.ps1 -Exe $<TARGET_FILE:generals>)
+set_tests_properties(lane_roster_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
 endif()  # ZH_PLATFORM_WINDOWS - device and codec smoke tests
 
 if(ZH_PLATFORM_POSIX)

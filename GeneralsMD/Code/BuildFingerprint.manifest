@@ -4391,6 +4391,7 @@ Tests/replay_wide_oracle.cpp
 Tests/run_data_gone_check.sh
 Tests/run_generals_smoke.sh
 Tests/run_ini_crlf_check.sh
+Tests/run_lane_roster_check.ps1
 Tests/run_locomotor_check.sh
 Tests/run_net_check.sh
 Tests/run_replay_check.sh

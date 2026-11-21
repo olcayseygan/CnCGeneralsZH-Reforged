@@ -152,6 +152,7 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - Starting a second match in the same session could crash on its first frame, a model reading a unit that no longer existed. It doesn't now.
 - A control bar layout that fails to load says so and closes cleanly, where it used to crash at startup. A missing score screen layout no longer crashes the end of a match either.
 - Opening the map list in a LAN room crashed the game when the screen it loaded had no Random tab, which ours has had since v3.6.0 at least, so an older or modded copy of it was being read. The list now opens with Official and Unofficial maps only.
+- One player's Radeon RX 9070 XT at 4K refused the game its graphics five starts in a row, each one ending on the "make sure DirectX is installed" message. The driver answers "device lost" when another program or the driver itself is holding the screen for a moment, and the game gave up on that first answer. It now keeps asking for a few seconds before it does.
 - The launcher shows the state of your install even when a folder inside the Generals folder can't be read. A downloaded file that antivirus removed before it was installed is reported as that, and fetched again on the next Install. A connection that drops during the launcher's own update counts as your network failing, not as a launcher fault.
 
 ## Long matches keep a short log

@@ -928,13 +928,34 @@ bool DX8Wrapper::Create_Device(void)
 		);
 	}
 
+	// DEVICELOST from CreateDevice is the display being held, not the device being refused: another
+	// program's exclusive fullscreen, a mode or HDR switch, the driver settling after a restart.  It
+	// passes, so ask again for a few seconds before giving up on the start (an RX 9070 XT at
+	// 3840x2160 failed five starts in a row on the first answer).
+	int lost_retries = 0;
+	for (; hr == D3DERR_DEVICELOST && lost_retries < 12; ++lost_retries)
+	{
+		ThreadClass::Sleep_Ms(250);
+		hr=D3DInterface->CreateDevice
+		(
+			CurRenderDevice,
+			WW3D_DEVTYPE,
+			_Hwnd,
+			Vertex_Processing_Behavior,
+			&_PresentParameters,
+			&D3DDevice
+		);
+	}
+
 	if (Render_Failed(hr))
 	{
-		Note_Device_Failure("adapter %d '%s': CreateDevice %s (0x%08X), %ux%u back buffer format %d depth %d behaviour 0x%X",
+		// the retries and whether the Direct3D 11 swap chain already holds the window tell a display
+		// held by another program from one this start keeps for itself
+		Note_Device_Failure("adapter %d '%s': CreateDevice %s (0x%08X), %ux%u back buffer format %d depth %d behaviour 0x%X, %d retries, dx11 %s",
 			CurRenderDevice, CurrentAdapterIdentifier.Description, Get_D3D_Error_String(hr), (unsigned)hr,
 			_PresentParameters.BackBufferWidth, _PresentParameters.BackBufferHeight,
 			(int)_PresentParameters.BackBufferFormat, (int)_PresentParameters.AutoDepthStencilFormat,
-			(unsigned)Vertex_Processing_Behavior);
+			(unsigned)Vertex_Processing_Behavior, lost_retries, Direct3D11_Is_Active() ? "active" : "off");
 
 		// The device selection may fail because the device lied that it supports 32 bit zbuffer with 16 bit
 		// display. This happens at least on Voodoo2.

@@ -13188,7 +13188,7 @@ TEST(lane_war_cargo_orders_name_the_plot_unit_and_what_goes_on_it)
 
 //-------------------------------------------------------------------------------------------------
 /** The Lane War bot's plan (LaneWarBot.h): one curve of the AI rating through the lobby's four levels,
-	  when it wants its income and tech, and where on a plot it looks for room first. */
+	  when it wants its income and tech, moves and sells, and where on a plot it looks for room first. */
 #include "GameLogic/LaneWarBot.h"
 
 TEST(lane_war_bot_plan_follows_the_rating_and_looks_for_room_from_the_middle)
@@ -13201,20 +13201,15 @@ TEST(lane_war_bot_plan_follows_the_rating_and_looks_for_room_from_the_middle)
 	LaneWarBot_planAt( 37.5f, &between );
 	LaneWarBot_planAt( 60.0f, &past );
 
-	// the four lobby levels are points on the curve: Easy and Medium buy no income and open tier 2 on
-	// ticks 12 and 4, Hard its first income level on tick 10, Brutal its second on tick 14
-	CHECK( !LaneWarBot_wantsTier( easy, LANEWAR_TRACK_INCOME, 1, 100 ) );
+	// the four lobby levels are points on the curve: no level buys income, which never pays back inside
+	// a match; Easy opens tier 2 on tick 12 and Medium on tick 4
+	for( Int level = 1; level <= LANEWAR_INCOME_TIERS; ++level )
+		CHECK( !LaneWarBot_wantsTier( brutal, LANEWAR_TRACK_INCOME, level, 100 ) && !LaneWarBot_wantsTier( easy, LANEWAR_TRACK_INCOME, level, 100 ) );
 	CHECK( !LaneWarBot_wantsTier( easy, LANEWAR_TRACK_TECH, 2, 11 ) );
 	CHECK( LaneWarBot_wantsTier( easy, LANEWAR_TRACK_TECH, 2, 12 ) );
 	CHECK( !LaneWarBot_wantsTier( easy, LANEWAR_TRACK_TECH, 3, 100 ) );
-	CHECK( !LaneWarBot_wantsTier( medium, LANEWAR_TRACK_INCOME, 1, 100 ) );
 	CHECK( !LaneWarBot_wantsTier( medium, LANEWAR_TRACK_TECH, 2, 3 ) );
 	CHECK( LaneWarBot_wantsTier( medium, LANEWAR_TRACK_TECH, 2, 4 ) );
-	CHECK( !LaneWarBot_wantsTier( hard, LANEWAR_TRACK_INCOME, 1, 9 ) );
-	CHECK( LaneWarBot_wantsTier( hard, LANEWAR_TRACK_INCOME, 1, 10 ) );
-	CHECK( !LaneWarBot_wantsTier( hard, LANEWAR_TRACK_INCOME, 2, 100 ) );
-	CHECK( !LaneWarBot_wantsTier( brutal, LANEWAR_TRACK_INCOME, 2, 13 ) );
-	CHECK( LaneWarBot_wantsTier( brutal, LANEWAR_TRACK_INCOME, 2, 14 ) );
 	CHECK( !LaneWarBot_wantsTier( brutal, LANEWAR_TRACK_INCOME, 5, 100 ) );
 	CHECK( !LaneWarBot_wantsTier( brutal, LANEWAR_TRACK_TECH, 1, 100 ) );
 	CHECK_EQ( (Int)easy.stepFrames, 6 * LOGICFRAMES_PER_SECOND );
@@ -13225,7 +13220,6 @@ TEST(lane_war_bot_plan_follows_the_rating_and_looks_for_room_from_the_middle)
 
 	// between two levels a number lies between theirs; past Brutal the plan keeps coming earlier and quicker
 	CHECK( between.techTick[ 1 ] < hard.techTick[ 1 ] && between.techTick[ 1 ] > brutal.techTick[ 1 ] );
-	CHECK( past.incomeTick[ 1 ] < brutal.incomeTick[ 1 ] );
 	CHECK( past.techTick[ 1 ] < brutal.techTick[ 1 ] );
 	CHECK( past.stepFrames < brutal.stepFrames );
 	CHECK( past.jitter < brutal.jitter );
@@ -13237,7 +13231,8 @@ TEST(lane_war_bot_plan_follows_the_rating_and_looks_for_room_from_the_middle)
 		LaneWarBot_planAt( r, &lo );
 		LaneWarBot_planAt( r + 0.5f, &hi );
 		Bool ordered = hi.stepFrames <= lo.stepFrames && hi.heroTick <= lo.heroTick && hi.jetTick <= lo.jetTick
-									 && hi.extrasTick <= lo.extrasTick && hi.counterWeight >= lo.counterWeight && hi.jitter <= lo.jitter;
+									 && hi.extrasTick <= lo.extrasTick && hi.moveTick <= lo.moveTick && hi.sellTick <= lo.sellTick
+									 && hi.counterWeight >= lo.counterWeight && hi.jitter <= lo.jitter;
 		for( Int k = 0; k < LANEWAR_INCOME_TIERS; ++k )
 			ordered = ordered && hi.incomeTick[ k ] <= lo.incomeTick[ k ];
 		for( Int k = 0; k < LANEWAR_TECH_TIERS - 1; ++k )
@@ -13245,20 +13240,42 @@ TEST(lane_war_bot_plan_follows_the_rating_and_looks_for_room_from_the_middle)
 		CHECK( ordered );
 	}
 
-	// an 8-row plot and a 2-slot tank: front from row 0 back, artillery from row 6 forward, the rest from row 2
-	Int rows[ 16 ];
-	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_FRONT, 8, 2, rows, 16 ), 7 );
+	// Easy never moves or sells; Brutal moves from tick 1 and sells from tick 6
+	CHECK( easy.moveTick >= (Real)LANEWAR_BOT_NEVER_TICK && easy.sellTick >= (Real)LANEWAR_BOT_NEVER_TICK );
+	CHECK_NEAR( brutal.moveTick, 1.0f, 1e-6f );
+	CHECK_NEAR( brutal.sellTick, 6.0f, 1e-6f );
+
+	// an 8-row plot in three bands, rows 0-2, 3-4 and 5-7, and a 2-slot block: the front band from the
+	// front, the back band from the back, the middle band from its front, then the rows nearest the band
+	Int rows[ 16 ], inBand;
+	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_FRONT, 8, 2, rows, 16, &inBand ), 7 );
+	CHECK_EQ( inBand, 3 );
 	CHECK_EQ( rows[ 0 ], 0 );
+	CHECK_EQ( rows[ 2 ], 2 );
+	CHECK_EQ( rows[ 3 ], 3 );
 	CHECK_EQ( rows[ 6 ], 6 );
-	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_BACK, 8, 2, rows, 16 ), 7 );
+	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_BACK, 8, 2, rows, 16, &inBand ), 7 );
+	CHECK_EQ( inBand, 2 );		// a 2-deep block's front row can stand on 5 or 6
 	CHECK_EQ( rows[ 0 ], 6 );
+	CHECK_EQ( rows[ 1 ], 5 );
+	CHECK_EQ( rows[ 2 ], 4 );
 	CHECK_EQ( rows[ 6 ], 0 );
-	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_MIDDLE, 8, 2, rows, 16 ), 7 );
-	CHECK_EQ( rows[ 0 ], 2 );
-	CHECK_EQ( rows[ 1 ], 3 );
-	CHECK_EQ( rows[ 2 ], 1 );
-	CHECK_EQ( rows[ 6 ], 6 );
-	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_FRONT, 2, 3, rows, 16 ), 0 );
+	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_MIDDLE, 8, 2, rows, 16, &inBand ), 7 );
+	CHECK_EQ( inBand, 2 );
+	CHECK_EQ( rows[ 0 ], 3 );
+	CHECK_EQ( rows[ 1 ], 4 );
+	CHECK_EQ( rows[ 2 ], 5 );
+	CHECK_EQ( rows[ 3 ], 2 );
+	CHECK_EQ( rows[ 6 ], 0 );
+	Int every = 0;
+	for( Int i = 0; i < 7; ++i )
+		every |= 1 << rows[ i ];
+	CHECK_EQ( every, ( 1 << 7 ) - 1 );
+	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_FRONT, 2, 3, rows, 16, &inBand ), 0 );
+	// the two air rows: a jet tries row 0, then row 1
+	CHECK_EQ( LaneWarBot_rowOrder( LANEWAR_BOT_FRONT, 2, 1, rows, 16, &inBand ), 2 );
+	CHECK_EQ( inBand, 1 );
+	CHECK_EQ( rows[ 1 ], 1 );
 
 	// 12 columns and a 2-slot block: 5, 4, 6, 3, 7 ... every one of 0 to 10 once
 	Int cols[ 16 ];

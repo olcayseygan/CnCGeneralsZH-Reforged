@@ -59,15 +59,17 @@ namespace
 	};
 
 	const PlanRow STEP_SECONDS	= { { 6.0f, 3.0f, 2.0f, 1.0f },			0.5f, 12.0f };
-	/* An income level pays 67 a tick for its 1000, back in 15 ticks, and the first batch of bot matches
-		 ended in 4 to 10 minutes, 8 to 20 ticks: the plan that bought all four early (Brutal then) lost to
-		 the one that bought none.  So income comes late and only on the upper levels, and the stronger plans
-		 differ in the tech they open, how well they pick and how little money they leave idle. */
+	/* An income level pays 100 a tick for its 1000, back in 10 ticks, and every seat starts on 2000 and
+		 is paid 400 a tick; bot matches on 30 second ticks lasted about 18 ticks, and 45 second ticks are
+		 not measured yet.
+		 A unit bought goes out in every wave after it, so money held is the worst buy there is: the
+		 stronger plans differ in how little they leave idle, how well they pick, and how early they tidy
+		 and sell.  Income does not pay back in time. */
 	const PlanRow RESERVE				= { { 600.0f, 300.0f, 100.0f, 0.0f },	0.0f, 800.0f };
 	const PlanRow INCOME_TICK[ LANEWAR_INCOME_TIERS ] =
 	{
-		{ { NO_TICK, NO_TICK, 10.0f, 8.0f },		0.0f, NO_TICK },
-		{ { NO_TICK, NO_TICK, NO_TICK, 14.0f },	0.0f, NO_TICK },
+		{ { NO_TICK, NO_TICK, NO_TICK, NO_TICK },	0.0f, NO_TICK },
+		{ { NO_TICK, NO_TICK, NO_TICK, NO_TICK },	0.0f, NO_TICK },
 		{ { NO_TICK, NO_TICK, NO_TICK, NO_TICK },	0.0f, NO_TICK },
 		{ { NO_TICK, NO_TICK, NO_TICK, NO_TICK },	0.0f, NO_TICK },
 	};
@@ -79,6 +81,8 @@ namespace
 	const PlanRow HERO_TICK			= { { 6.0f, 3.0f, 2.0f, 1.0f },			0.0f, NO_TICK };
 	const PlanRow JET_TICK			= { { NO_TICK, 10.0f, 6.0f, 5.0f },		0.0f, NO_TICK };
 	const PlanRow EXTRAS_TICK		= { { NO_TICK, 12.0f, 8.0f, 6.0f },		0.0f, NO_TICK };
+	const PlanRow MOVE_TICK			= { { NO_TICK, 6.0f, 3.0f, 1.0f },		0.0f, NO_TICK };
+	const PlanRow SELL_TICK			= { { NO_TICK, 16.0f, 10.0f, 6.0f },	0.0f, NO_TICK };
 	const PlanRow COUNTER				= { { 0.0f, 0.5f, 1.0f, 1.0f },			0.0f, 1.0f };
 	const PlanRow JITTER				= { { 1.0f, 0.3f, 0.1f, 0.05f },		0.0f, 1.0f };
 	const Real SAVES_FROM_COUNTER = 0.25f;		///< a seat that weighs the enemy this much (Easy to Medium's midpoint) saves
@@ -98,6 +102,10 @@ namespace
 	const Int FEW_UNITS = 2;						///< with fewer units on the plot a seat buys units before anything else
 	const Real FRONT_SHARE = 0.5f;			///< of the plot's value the plan wants in front units
 	const Real BACK_RANGE = 220.0f;			///< a weapon reaching this far puts a unit in the back rows
+	const Real PLOT_BEFORE_TIER = 2.0f;	///< a tier or the hero waits until the plot is worth this many times its price
+	const Int WAIT_REACH = 300;					///< a dearer pick is waited for only when this much more would buy it, under a tick's pay
+	const Real SELL_BELOW = 0.35f;			///< a unit trading worse than this against the enemy plots is dead weight
+	const Real SELL_MARGIN = 0.2f;			///< ... sold only for a roster unit trading this much better
 	const Int SLOTS_MAX = 64;
 	const Int UNIT_UPGRADES_MAX = 32;		///< more than a command set has buttons
 
@@ -149,29 +157,47 @@ namespace
 		Real enemyValue;
 	};
 
-	/// the first free block for the template on the seat's plot, its role's rows first and the middle columns first
-	Bool findSlot( const View &v, const ThingTemplate *tmpl, Int role, Int *col, Int *row )
+	/** The first free block for the template on the seat's plot.  Its role's band comes first, filled a
+		  column at a time from the middle outwards so the band fills in depth before it widens, then the
+		  other rows a row at a time.  `onlyBand` looks in the band alone; `skip` is a unit being moved,
+		  whose own slots count as free and whose price is already paid. */
+	Bool findSlot( const View &v, const ThingTemplate *tmpl, Int role, Int *col, Int *row, Bool onlyBand = FALSE, ObjectID skip = INVALID_ID )
 	{
 		const Int grid = LaneWarDirector::gridFor( tmpl );
 		const Int size = LaneWarDirector::sizeFor( tmpl );
-		Int rows[ SLOTS_MAX ], cols[ SLOTS_MAX ];
+		Int rows[ SLOTS_MAX ], cols[ SLOTS_MAX ], inBand;
 		const Int rowCount = LaneWarBot_rowOrder( grid == LANEWAR_GRID_AIR ? LANEWAR_BOT_FRONT : role,
-																							v.director->getGridRows( v.team, v.seat, grid ), size, rows, SLOTS_MAX );
+																							v.director->getGridRows( v.team, v.seat, grid ), size, rows, SLOTS_MAX, &inBand );
 		const Int colCount = LaneWarBot_columnOrder( v.director->getGridCols( v.team, v.seat, grid ), size, cols, SLOTS_MAX );
-		for( Int r = 0; r < rowCount; ++r )
-			for( Int c = 0; c < colCount; ++c )
+		const Int tries = ( onlyBand ? inBand : rowCount ) * colCount;
+		for( Int k = 0; k < tries; ++k )
+		{
+			const Bool banded = k < inBand * colCount;
+			const Int r = banded ? k % inBand : inBand + ( k - inBand * colCount ) / colCount;
+			const Int c = banded ? k / inBand : ( k - inBand * colCount ) % colCount;
+			const char *why = v.director->whyNotPlace( v.player, tmpl, cols[ c ], rows[ r ], skip );
+			// money is the caller's to weigh; only the room counts here
+			if( why == NULL || strcmp( why, "too dear" ) == 0 )
 			{
-				const char *why = v.director->whyNotPlace( v.player, tmpl, cols[ c ], rows[ r ] );
-				// money is the caller's to weigh; only the room counts here
-				if( why == NULL || strcmp( why, "too dear" ) == 0 )
-				{
-					*col = cols[ c ];
-					*row = rows[ r ];
-					return TRUE;
-				}
-				if( strcmp( why, "slot taken" ) != 0 && strcmp( why, "off the plot" ) != 0 )
-					return FALSE;		// tier, roster, hero: no slot will do
+				*col = cols[ c ];
+				*row = rows[ r ];
+				return TRUE;
 			}
+			if( strcmp( why, "slot taken" ) != 0 && strcmp( why, "off the plot" ) != 0 )
+				return FALSE;		// tier, roster, hero: no slot will do
+		}
+		return FALSE;
+	}
+
+	/// whether a unit of the role and size standing with its front row at `row` stands in its role's band
+	Bool inRoleBand( const View &v, Int grid, Int role, Int size, Int row )
+	{
+		Int rows[ SLOTS_MAX ], inBand;
+		LaneWarBot_rowOrder( grid == LANEWAR_GRID_AIR ? LANEWAR_BOT_FRONT : role, v.director->getGridRows( v.team, v.seat, grid ),
+												 size, rows, SLOTS_MAX, &inBand );
+		for( Int k = 0; k < inBand; ++k )
+			if( rows[ k ] == row )
+				return TRUE;
 		return FALSE;
 	}
 
@@ -186,11 +212,30 @@ namespace
 		return sum / v.enemyValue;
 	}
 
+	/// whether one of the template's weapon slots ends the unit when it hits
+	Bool isSuicide( const ThingTemplate *tmpl )
+	{
+		for( Int slot = 0; slot < WEAPONSLOT_COUNT; ++slot )
+			if( AIAbility_slotIsSuicide( tmpl, (WeaponSlotType)slot ) )
+				return TRUE;
+		return FALSE;
+	}
+
+	/** counterOf, held to an even trade for a unit that ends itself to hit: the matchup prices one blast
+		  as a kill, and in the lane most of them die before they reach anything */
+	Real tradeOf( const View &v, const ThingTemplate *tmpl, Real cost, Bool suicide )
+	{
+		const Real counter = counterOf( v, tmpl, cost );
+		return suicide ? min( counter, 0.5f ) : counter;
+	}
+
 	void order( View &v, Int kind, const Int *args, Int count, const char *what, const char *name, Int price )
 	{
-		DEBUG_LOG(( "LANEWAR BOT: frame %u tick %u player %d rating %.2f %s '%s' for %d with %d, %d units on the plot worth %.0f, %.0f of it in front\n",
-								v.now, v.tick, (Int)v.player->getPlayerIndex(), v.plan->rating, what, name, price, v.money, v.units,
-								v.value, v.frontValue ));
+		// where it goes: a placement's column and row, a move's new ones, a sale's old ones
+		const Int at = kind == LANEWAR_ORDER_PLACE ? 1 : kind == LANEWAR_ORDER_MOVE ? 3 : kind == LANEWAR_ORDER_SELL ? 1 : -1;
+		DEBUG_LOG(( "LANEWAR BOT: frame %u tick %u player %d rating %.2f %s '%s' for %d at %d %d with %d, %d units on the plot worth %.0f, %.0f of it in front\n",
+								v.now, v.tick, (Int)v.player->getPlayerIndex(), v.plan->rating, what, name, price, at >= 0 ? args[ at ] : -1,
+								at >= 0 ? args[ at + 1 ] : -1, v.money, v.units, v.value, v.frontValue ));
 		v.director->onOrder( v.player, kind, args, count );
 	}
 
@@ -208,7 +253,7 @@ namespace
 		{
 			const ThingTemplate *thing;
 			Int cost, role, col, row, size;
-			Bool suicide;		///< it ends itself to hit: the matchup prices one blast as a kill, and in the lane most die before they reach
+			Bool suicide;
 		};
 		Pick picks[ LANEWAR_ROSTER_MAX ];
 		Int count = 0;
@@ -223,9 +268,7 @@ namespace
 			p.cost = tmpl->calcCostToBuild( v.player );
 			p.role = roleOf( tmpl );
 			p.size = LaneWarDirector::sizeFor( tmpl );
-			p.suicide = FALSE;
-			for( Int slot = 0; slot < WEAPONSLOT_COUNT; ++slot )
-				p.suicide = p.suicide || AIAbility_slotIsSuicide( tmpl, (WeaponSlotType)slot );
+			p.suicide = isSuicide( tmpl );
 			if( p.cost <= 0|| !findSlot( v, tmpl, p.role, &p.col, &p.row ) )
 				continue;
 			densest = max( densest, (Real)p.cost / (Real)( p.size * p.size ) );
@@ -243,7 +286,7 @@ namespace
 			// the judgement grows with the rating: none of it at Easy, where the dice alone pick
 			Real score = GameLogicRandomValueReal( 0.0f, plan.jitter );
 			if( plan.counterWeight > 0.0f )
-				score += plan.counterWeight * ( p.suicide ? min( counterOf( v, p.thing, (Real)p.cost ), 0.5f ) : counterOf( v, p.thing, (Real)p.cost ) );
+				score += plan.counterWeight * tradeOf( v, p.thing, (Real)p.cost, p.suicide );
 			if( ( p.role == LANEWAR_BOT_FRONT ) == ( frontShare < FRONT_SHARE ) )
 				score += 0.2f * plan.counterWeight;
 			if( densest > 0.0f )
@@ -260,8 +303,9 @@ namespace
 			}
 		}
 
-		// a plan that saves waits for its pick, until its own wave is about to go
-		const Int chosen = plan.saves && !v.waveSoon && v.units >= FEW_UNITS ? best : bestAffordable;
+		// a plan that saves waits for a pick within a tick's pay, until its own wave is about to go
+		const Bool waits = plan.saves && !v.waveSoon && v.units >= FEW_UNITS && best >= 0 && picks[ best ].cost <= v.spend + WAIT_REACH;
+		const Int chosen = waits ? best : bestAffordable;
 		if( chosen < 0 )
 			return FALSE;
 		const Pick &p = picks[ chosen ];
@@ -290,6 +334,8 @@ namespace
 			if( !findSlot( v, tmpl, LANEWAR_BOT_MIDDLE, &col, &row ) )
 				return FALSE;
 			const Int cost = tmpl->calcCostToBuild( v.player );
+			if( v.value < PLOT_BEFORE_TIER * (Real)cost )
+				return FALSE;
 			if( cost > v.money )
 			{
 				*waiting = TRUE;
@@ -383,6 +429,76 @@ namespace
 		return FALSE;
 	}
 
+	/** One ground unit standing outside its role's band, the first in purchase order, moved into the band
+		  where a slot has come free there (a sale, or the band was full when it was bought).  Moves cost
+		  nothing. */
+	Bool moveIntoBand( View &v )
+	{
+		const std::vector<LaneWarDirector::PlotUnit> &units = v.director->getPlotUnits();
+		for( size_t i = 0; i < units.size(); ++i )
+		{
+			const LaneWarDirector::PlotUnit &u = units[ i ];
+			const Object *obj = u.team == v.team && u.seat == v.seat && u.grid == LANEWAR_GRID_GROUND ? TheGameLogic->findObjectByID( u.id ) : NULL;
+			if( obj == NULL )
+				continue;
+			const Int role = roleOf( obj->getTemplate() );
+			Int col, row;
+			if( inRoleBand( v, u.grid, role, u.size, u.row ) || !findSlot( v, obj->getTemplate(), role, &col, &row, TRUE, u.id ) )
+				continue;
+			const Int args[ 5 ] = { u.grid, u.col, u.row, col, row };
+			order( v, LANEWAR_ORDER_MOVE, args, 5, "moves", obj->getTemplate()->getName().str(), 0 );
+			return TRUE;
+		}
+		return FALSE;
+	}
+
+	/** The ground unit that trades worst against the enemy plots, sold when the roster has one that trades
+		  clearly better and the seat can pay for it with the refund.  The hero is never for sale. */
+	Bool sellDeadWeight( View &v )
+	{
+		if( v.enemyValue <= 0.0f )
+			return FALSE;
+		const std::vector<LaneWarDirector::PlotUnit> &units = v.director->getPlotUnits();
+		Int worst = -1;
+		Real worstTrade = 0.0f;
+		for( size_t i = 0; i < units.size(); ++i )
+		{
+			const LaneWarDirector::PlotUnit &u = units[ i ];
+			const Object *obj = u.team == v.team && u.seat == v.seat && u.grid == LANEWAR_GRID_GROUND ? TheGameLogic->findObjectByID( u.id ) : NULL;
+			if( obj == NULL || LaneWar_isHero( v.player, obj->getTemplate() ) )
+				continue;
+			const Real trade = tradeOf( v, obj->getTemplate(), (Real)max( u.cost, 1 ), isSuicide( obj->getTemplate() ) );
+			if( worst < 0 || trade < worstTrade )
+			{
+				worst = (Int)i;
+				worstTrade = trade;
+			}
+		}
+		if( worst < 0 || worstTrade >= SELL_BELOW )
+			return FALSE;
+		const LaneWarDirector::PlotUnit &u = units[ worst ];
+		const Int refund = LaneWar_refund( u.cost, u.sent );
+
+		LaneWarRosterItem roster[ LANEWAR_ROSTER_MAX ];
+		const Int listed = LaneWar_roster( v.player, roster, LANEWAR_ROSTER_MAX );
+		Real bestTrade = 0.0f;
+		for( Int i = 0; i < listed; ++i )
+		{
+			const ThingTemplate *tmpl = roster[ i ].thing;
+			const Int cost = tmpl->calcCostToBuild( v.player );
+			if( roster[ i ].hero || LaneWarDirector::isJet( tmpl ) || roster[ i ].tier > v.director->getTechLevel( v.team, v.seat )
+					|| cost <= 0 || cost > v.spend + refund )
+				continue;
+			bestTrade = max( bestTrade, tradeOf( v, tmpl, (Real)cost, isSuicide( tmpl ) ) );
+		}
+		if( bestTrade < worstTrade + SELL_MARGIN )
+			return FALSE;
+		const Object *obj = TheGameLogic->findObjectByID( u.id );
+		const Int args[ 3 ] = { u.grid, u.col, u.row };
+		order( v, LANEWAR_ORDER_SELL, args, 3, "sells", obj->getTemplate()->getName().str(), refund );
+		return TRUE;
+	}
+
 	/// the plot's next step the plan wants on a track, bought when the seat can pay; *saving when it cannot yet
 	Bool buyTier( View &v, Int track, Bool *saving )
 	{
@@ -390,6 +506,8 @@ namespace
 		if( !LaneWarBot_wantsTier( *v.plan, track, level, v.tick ) )
 			return FALSE;
 		const Int price = LaneWar_tierPrice( track, level );
+		if( v.value < PLOT_BEFORE_TIER * (Real)price )
+			return FALSE;
 		if( price > v.money )
 		{
 			*saving = TRUE;
@@ -401,9 +519,42 @@ namespace
 		return TRUE;
 	}
 
-	/// one decision of one seat: at most one purchase.  It sees the enemy plots as they stood before this
-	/// frame's decisions, the first `seen` plot units, so no seat reads a purchase made beside its own.
-	void step( LaneWarDirector *director, Player *player, Int team, Int seat, const LaneWarBotPlan &plan, UnsignedInt now, size_t seen )
+	/// an enemy plot unit or passenger as every seat saw it before this frame's decisions
+	struct Sighting
+	{
+		Int team;
+		Enemy enemy;
+	};
+
+	/// what is on the plots now, units and passengers, in purchase order
+	void sightPlots( const LaneWarDirector *director, std::vector<Sighting> *out )
+	{
+		out->clear();
+		const std::vector<LaneWarDirector::PlotUnit> &units = director->getPlotUnits();
+		for( size_t i = 0; i < units.size(); ++i )
+		{
+			const LaneWarDirector::PlotUnit &u = units[ i ];
+			const Object *obj = TheGameLogic->findObjectByID( u.id );
+			if( obj == NULL )
+				continue;
+			Sighting s;
+			s.team = u.team;
+			s.enemy.thing = obj->getTemplate();
+			s.enemy.cost = (Real)max( u.cost, 1 );
+			out->push_back( s );
+			for( size_t m = 0; m < u.passengers.size(); ++m )
+			{
+				s.enemy.thing = u.passengers[ m ].thing;
+				s.enemy.cost = (Real)max( u.passengers[ m ].cost, 1 );
+				out->push_back( s );
+			}
+		}
+	}
+
+	/// one decision of one seat: at most one order.  It sees the enemy plots as they stood before this
+	/// frame's decisions, `sighted`, so no seat reads a purchase or a sale made beside its own.
+	void step( LaneWarDirector *director, Player *player, Int team, Int seat, const LaneWarBotPlan &plan, UnsignedInt now,
+						 const std::vector<Sighting> &sighted )
 	{
 		View v;
 		v.director = director;
@@ -445,22 +596,17 @@ namespace
 				if( u.grid == LANEWAR_GRID_GROUND )
 					v.slotsUsed += u.size * u.size;
 			}
-			else if( u.team != team && i < seen )
-			{
-				Enemy e;
-				e.thing = obj->getTemplate();
-				e.cost = (Real)max( u.cost, 1 );
-				v.enemies.push_back( e );
-				v.enemyValue += e.cost;
-				for( size_t m = 0; m < u.passengers.size(); ++m )
-				{
-					e.thing = u.passengers[ m ].thing;
-					e.cost = (Real)max( u.passengers[ m ].cost, 1 );
-					v.enemies.push_back( e );
-					v.enemyValue += e.cost;
-				}
-			}
 		}
+		for( size_t i = 0; i < sighted.size(); ++i )
+			if( sighted[ i ].team != team )
+			{
+				v.enemies.push_back( sighted[ i ].enemy );
+				v.enemyValue += sighted[ i ].enemy.cost;
+			}
+
+		// a unit the plot's own rows have room for again goes back to them first, for nothing
+		if( plan.moveTick < NO_TICK && (Real)v.tick >= plan.moveTick && moveIntoBand( v ) )
+			return;
 
 		// the economy and the tech the plan wants by now come first, once the plot has something on it
 		Bool saving = FALSE;
@@ -481,6 +627,10 @@ namespace
 			if( saving && plan.saves )
 				return;
 		}
+
+		// late on, a unit that trades badly against what the enemy fields makes room for one that does not
+		if( plan.sellTick < NO_TICK && (Real)v.tick >= plan.sellTick && sellDeadWeight( v ) )
+			return;
 
 		// a jet when the money would buy two, then the ground
 		Int wanted = 0;
@@ -522,6 +672,8 @@ void LaneWarBot_planAt( Real rating, LaneWarBotPlan *plan )
 	plan->heroTick = planNumber( HERO_TICK, rating );
 	plan->jetTick = planNumber( JET_TICK, rating );
 	plan->extrasTick = planNumber( EXTRAS_TICK, rating );
+	plan->moveTick = planNumber( MOVE_TICK, rating );
+	plan->sellTick = planNumber( SELL_TICK, rating );
 	plan->counterWeight = planNumber( COUNTER, rating );
 	plan->jitter = planNumber( JITTER, rating );
 	plan->saves = plan->counterWeight >= SAVES_FROM_COUNTER;
@@ -539,27 +691,29 @@ Bool LaneWarBot_wantsTier( const LaneWarBotPlan &plan, Int track, Int level, Uns
 }
 
 //-------------------------------------------------------------------------------------------------
-Int LaneWarBot_rowOrder( Int role, Int rows, Int size, Int *out, Int maxItems )
+Int LaneWarBot_rowOrder( Int role, Int rows, Int size, Int *out, Int maxItems, Int *inBand )
 {
+	*inBand = 0;
 	const Int last = rows - size;		// the furthest back a block's front row can stand
 	if( last < 0 )
 		return 0;
-	const Int start = role == LANEWAR_BOT_FRONT ? 0 : role == LANEWAR_BOT_BACK ? last : min( last, rows / 3 );
+	const Int third = ( rows + 1 ) / 3;
+	const Int bandFirst = role == LANEWAR_BOT_FRONT ? 0 : role == LANEWAR_BOT_BACK ? rows - third : third;
+	const Int bandEnd = role == LANEWAR_BOT_FRONT ? third : role == LANEWAR_BOT_BACK ? rows : rows - third;
+	// a block too deep for its band still starts in it, as far back as it fits
+	const Int lo = min( bandFirst, last ), hi = max( lo + 1, min( bandEnd, last + 1 ) );
+
 	Int count = 0;
-	// from the role's row outwards, towards the back first for the middle
-	for( Int d = 0; count < maxItems && d <= last; ++d )
+	for( Int k = 0; k < hi - lo && count < maxItems; ++k )
+		out[ count++ ] = role == LANEWAR_BOT_BACK ? hi - 1 - k : lo + k;
+	*inBand = count;
+	// then the rest, nearest the band first, the back side first on a tie
+	for( Int d = 1; count < maxItems && d <= last; ++d )
 	{
-		const Int back = start + d, front = start - d;
-		if( role == LANEWAR_BOT_BACK )
-		{
-			if( front >= 0 )
-				out[ count++ ] = front;
-			continue;
-		}
-		if( back <= last )
-			out[ count++ ] = back;
-		if( role == LANEWAR_BOT_MIDDLE && d > 0 && front >= 0 && count < maxItems )
-			out[ count++ ] = front;
+		if( hi - 1 + d <= last )
+			out[ count++ ] = hi - 1 + d;
+		if( lo - d >= 0 && count < maxItems )
+			out[ count++ ] = lo - d;
 	}
 	return count;
 }
@@ -590,7 +744,8 @@ void LaneWarBot_update( LaneWarDirector *director, UnsignedInt now )
 		 always decided seven frames after player 3 and had the last look at his plot before each wave.
 		 With the same army on both sides at the same rating, the seat that looked last won 36 of 48 as
 		 China and 12 of 48 as GLA; deciding together, 9 of 24 and 12 of 24. */
-	const size_t seen = director->getPlotUnits().size();
+	std::vector<Sighting> sighted;
+	Bool sightedYet = FALSE;
 	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
 		for( Int s = 0; s < LANEWAR_SEATS; ++s )
 		{
@@ -601,7 +756,11 @@ void LaneWarBot_update( LaneWarDirector *director, UnsignedInt now )
 				continue;
 			LaneWarBotPlan plan;
 			LaneWarBot_planAt( ai->getAIRating(), &plan );
-			if( now % max( plan.stepFrames, 1u ) == 0 )
-				step( director, player, t, s, plan, now, seen );
+			if( now % max( plan.stepFrames, 1u ) != 0 )
+				continue;
+			if( !sightedYet )
+				sightPlots( director, &sighted );
+			sightedYet = TRUE;
+			step( director, player, t, s, plan, now, sighted );
 		}
 }

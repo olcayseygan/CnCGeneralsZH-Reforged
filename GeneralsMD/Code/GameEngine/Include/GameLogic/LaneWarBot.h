@@ -52,6 +52,8 @@ struct LaneWarBotPlan
 	Real heroTick;
 	Real jetTick;
 	Real extrasTick;																///< ranks, unit upgrades and player upgrades
+	Real moveTick;																	///< from which tick it moves a unit that stands outside its role's rows back into them
+	Real sellTick;																	///< ... sells a unit that trades badly against the enemy plots for a better one
 	Real counterWeight;															///< how much the enemy plots' mix decides a pick, 0 not at all, 1 wholly
 	Real jitter;																		///< the random share of a pick
 	Bool saves;																			///< waits for what it wants rather than spending on something else
@@ -67,10 +69,12 @@ extern void LaneWarBot_planAt( Real rating, LaneWarBotPlan *plan );
 extern Bool LaneWarBot_wantsTier( const LaneWarBotPlan &plan, Int track, Int level, UnsignedInt tick );
 
 /** The rows a unit of `size` slots tries, best first, for its role in a grid `rows` deep (row 0 is the
-	  front): a front unit from the front back, a back one from the back forward, the rest from a third
-	  of the way back.  Returns how many it wrote. */
+	  front).  The grid splits in three bands, the front and back thirds and the middle between them, and
+	  a role's own band comes first: the front from the front back, the back from the back forward, the
+	  middle from its front.  Then the other rows, nearest the band first.  Returns how many it wrote;
+	  *inBand is how many of them lie in the role's band. */
 enum { LANEWAR_BOT_FRONT, LANEWAR_BOT_MIDDLE, LANEWAR_BOT_BACK };
-extern Int LaneWarBot_rowOrder( Int role, Int rows, Int size, Int *out, Int maxItems );
+extern Int LaneWarBot_rowOrder( Int role, Int rows, Int size, Int *out, Int maxItems, Int *inBand );
 /// the columns a block of `size` tries in a grid `cols` across, from the middle outwards, left first
 extern Int LaneWarBot_columnOrder( Int cols, Int size, Int *out, Int maxItems );
 

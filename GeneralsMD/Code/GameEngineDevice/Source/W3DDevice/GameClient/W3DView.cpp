@@ -1907,12 +1907,15 @@ void W3DView::update(void)
 	Real scriptedCameraStepMS = (Real)CAMERA_STEP_MSEC;
 	// a recorded picture steps on its logic frame's last picture (above), so its steps are counted there
 	Int scriptedSteps = pictureClock ? pictureScriptedSteps : ( stepTime ? 1 : 0 );
-	if (scriptedRate != 1.0f && !pictureClock)
+	// a frozen pan while a video records keeps one step a call (stepTime is forced on above): the encode
+	// runs slower than the wall, and the wall's time would hand each picture several steps
+	const Bool recordedFrozenPan = isTimeFrozen() && !isCameraMovementFinished() && GameEngine_isVideoFrame();
+	if (!pictureClock && !recordedFrozenPan)
 	{
-		/* As many steps as the scaled time holds, so a fast game speed under a slow picture rate keeps up
-			 (200 percent at 40 pictures is 1.5 steps a picture), up to a few a picture; what is left past
-			 that is dropped down to one step, so a backlog never plays a later move too fast. */
-		const Int MAX_SCRIPTED_STEPS_A_PICTURE = 4;
+		/* As many steps as the scaled time holds, at every rate, 1.0 included (20 ticks a second, a frozen
+			 pan), so a fast game speed under a slow picture rate keeps up (200 percent at 12 pictures is 5
+			 steps a picture).  No cap on the steps: waypointElapsedMs is held to 100 ms above, which is
+			 what keeps a hitch's backlog from playing a later move too fast. */
 		// a retail frame exactly (33.3 ms), not the gate's whole 33, so a pan ends with the script's timers
 		const Real RETAIL_STEP_MS = 1000.0f / (Real)RETAIL_LOGICFRAMES_PER_SECOND;
 		static Real scriptedStepMs = 0.0f;
@@ -1920,13 +1923,11 @@ void W3DView::update(void)
 			scriptedStepMs = 0.0f;
 		scriptedStepMs += waypointElapsedMs * scriptedRate;
 		scriptedSteps = 0;
-		while (scriptedStepMs >= RETAIL_STEP_MS && scriptedSteps < MAX_SCRIPTED_STEPS_A_PICTURE)
+		while (scriptedStepMs >= RETAIL_STEP_MS)
 		{
 			scriptedStepMs -= RETAIL_STEP_MS;
 			++scriptedSteps;
 		}
-		if (scriptedStepMs > RETAIL_STEP_MS)
-			scriptedStepMs = RETAIL_STEP_MS;
 		scriptedCameraPhase = scriptedStepMs / RETAIL_STEP_MS;
 		scriptedCameraStepMS = RETAIL_STEP_MS;
 	}
@@ -2333,7 +2334,7 @@ void W3DView::update(void)
 		&& !(isTimeFrozen() && !isCameraMovementFinished());
 	m_cinematicCameraClockTime = nowCameraStepTime;
 	m_cinematicCameraClockPhase = CinematicCameraProgress::clamp(scriptedCameraPhase);
-	// Preserve the active clock's exact interval: scaled steps use 1000/30, the legacy gate uses 33.
+	// Preserve the active clock's exact interval: wall clock steps use 1000/30, a recorded picture's phase 33.
 	m_cinematicCameraClockRate = scriptedRate * CAMERA_STEP_MSEC / scriptedCameraStepMS;
 
 	// (gth) C&C3 if m_isCameraSlaved then force the camera to update each frame

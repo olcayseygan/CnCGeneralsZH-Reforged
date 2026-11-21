@@ -76,6 +76,7 @@ static void drawFramerateBar(void);
 
 #include "GameClient/Drawable.h"
 #include "W3DDevice/GameClient/W3DSmoothMotion.h"
+#include "W3DDevice/GameClient/Module/W3DFractureDraw.h"
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
 #include "GameLogic/Object.h"
 #include "GameClient/Keyboard.h"		// TheKeyboard; on Windows WinMain.h brought it too
@@ -2898,6 +2899,9 @@ AGAIN:
 			// After the smooth motion, so a lamp's light sits where its model is drawn this frame.
 			if (primaryW3DView && primaryW3DView->get3DCamera())
 				W3DModelDraw::lightHeadlights(primaryW3DView->get3DCamera()->Get_Position());
+
+			// A fractured structure's fall and dust, seen or not, before any view draws it.
+			W3DFractureDraw::updateAll();
 
 			// Once a frame and before any view draws, so a script's blur or black and white filter
 			// does not cost the haze its levels and shroud the way pushing it from the default filter did.

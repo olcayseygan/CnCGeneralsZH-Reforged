@@ -8,6 +8,10 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Direct Strike towers and fortresses break where they are hit
+
+- The Watch Tower and the fortress come apart piece by piece. Each shell knocks out the chunks where it lands, as wide as its blast, and never a chunk whose loss would leave the rest hanging in the air. At zero health a tower stands half a second while the death blast clears, then falls away from whoever killed it, and the ruin stays where it landed, a piece left over a hole dropping onto the ground under it. A fall nobody was watching still lands and throws its dust on time, the mouse picks the structure by what is left of it, and a save keeps every hole and every ruin lying the way it fell.
+
 ## The computer stops paying for guns it has already seen
 
 - The Air Force General's supply Chinooks flew to the middle docks on Tournament Desert under China's Gattling Cannons, trip after trip, and in 16 Hard matches against China 564 of them were shot down by buildings, 465 by Gattlings. A Medium or Hard computer's Chinook now passes over a pile whose flight crosses an anti-air gun it knows about and gathers from another. Over the same 16 matches it lost 190, and the Air Force won 7 where it had won 5.

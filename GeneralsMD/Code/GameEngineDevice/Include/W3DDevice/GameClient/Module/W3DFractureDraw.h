@@ -25,6 +25,8 @@
 // it landed (FractureCore.h) and throws them as debris; at zero health the whole structure comes down
 // by its baked collapse, or by a plain fall when it has none, and the fragments lie as its ruin.
 // Client only: the logic says where a hit landed (Drawable::reactToImpact) and nothing goes back.
+// The pick follows the fragments' boxes, a save keeps the holes (the drawable's xfer) and the intact
+// model's stencil shadow goes once the fragments stand in for it.
 
 #pragma once
 
@@ -70,6 +72,8 @@ public:
 	virtual void reactToGeometryChange( void ) { }
 	virtual void reactToImpact( const Coord3D &pos, Real radius, const Coord3D *source );
 
+	/// Once a frame before the views draw (W3DDisplay::draw): what falls, falls on the screen or off it.
+	static void updateAll( void );
 	/// Every fractured structure's fragments into the sun's depth map (W3DVolumetricShadowManager).
 	static void renderShadowCasters( RenderInfoClass &sunInfo );
 	/// TRUE for a drawable whose fall this module draws, which the Collapse option then leaves alone.
@@ -77,7 +81,12 @@ public:
 
 private:
 
-	FractureRenderObjClass *m_fracture;		///< made at the first hit or the death
+	Bool makeFracture( void );
+
+	FractureRenderObjClass *m_fracture;						///< made at the first hit or the death
+	std::vector<unsigned char> m_loadedStanding;	///< a load's holes, until the fragments are made
+	Int m_loadedWay;															///< and the baked way it fell, -1 for none
+	Bool m_loaded;																///< dead in a loaded save: the ruin it shows fell before it
 
 };
 

@@ -244,3 +244,30 @@ TEST(fracture_lwcollapse_track_blends_and_rests)
 	CHECK( parseCollapses( &b[0], b.size(), 2, ways ) );
 	CHECK_EQ( 1, (int)ways.size() );
 }
+
+/// A ruin piece over air drops onto what is under it, and the one resting on it comes down with it.
+TEST(fracture_a_ruin_piece_over_air_drops_and_takes_its_load_with_it)
+{
+	const Box pieces[4] =
+	{
+		{ { 0, 0, 0 }, { 10, 10, 4 } },				// on the ground
+		{ { 0, 0, 4 }, { 10, 10, 8 } },				// on the first
+		{ { 20, 0, 9 }, { 30, 10, 12 } },			// 9 units of air under it
+		{ { 22, 2, 12 }, { 28, 8, 14 } },			// on the third
+	};
+	const std::vector<Box> boxes( pieces, pieces + 4 );
+	const std::vector<float> ground( 4, 0.0f );
+	std::vector<float> gaps;
+	dropGaps( boxes, ground, 1.5f, 0.5f, gaps );
+	CHECK_NEAR( 0.0f, gaps[0], 1e-6f );
+	CHECK_NEAR( 0.0f, gaps[1], 1e-6f );
+	CHECK_NEAR( 9.0f, gaps[2], 1e-6f );
+	CHECK_NEAR( 9.0f, gaps[3], 1e-6f );
+	std::vector<float> higher( 4, 8.0f );		// ground up to 1 unit under the third: it stays
+	dropGaps( boxes, higher, 1.5f, 0.5f, gaps );
+	CHECK_NEAR( 0.0f, gaps[2], 1e-6f );
+	CHECK_NEAR( 0.0f, gaps[3], 1e-6f );
+	const Box corner[2] = { { { 0, 0, 0 }, { 10, 10, 4 } }, { { 9.8f, 0, 6 }, { 20, 10, 8 } } };		// a sliver across: not held
+	dropGaps( std::vector<Box>( corner, corner + 2 ), std::vector<float>( 2, 0.0f ), 1.5f, 0.5f, gaps );
+	CHECK_NEAR( 6.0f, gaps[1], 1e-6f );
+}

@@ -331,6 +331,51 @@ inline bool trackPose( const Collapse &c, unsigned fragment, float frame, float 
 	return true;
 }
 
+/// A box in the world, as a piece of the ruin lies.
+struct Box { float low[3], high[3]; };
+
+/** How far each piece of a ruin falls to rest on what is under it: lowest first, a piece is held by the
+	ground under it (ground[i]) or by a lower box reaching at least inset across it on both axes, at
+	that box's top or its own foot, whichever is lower; one with more than minGap of air below it drops
+	by that much, and the pieces above it see it where it lands.  Boxes: a piece held by a neighbour's
+	corner it does not touch stays where it is, never sinks.  0 for a piece that stays. */
+inline void dropGaps( const std::vector<Box> &boxes, const std::vector<float> &ground, float minGap, float inset,
+	std::vector<float> &gaps )
+{
+	struct Order
+	{
+		float z;
+		unsigned i;
+		bool operator<( const Order &o ) const { return z < o.z || ( z == o.z && i < o.i ); }
+	};
+	std::vector<Order> order( boxes.size() );
+	for( size_t i = 0; i < boxes.size(); ++i )
+	{
+		order[i].z = boxes[i].low[2];
+		order[i].i = (unsigned)i;
+	}
+	std::sort( order.begin(), order.end() );
+	gaps.assign( boxes.size(), 0.0f );
+	std::vector<Box> landed( boxes );
+	for( size_t k = 0; k < order.size(); ++k )
+	{
+		Box &p = landed[order[k].i];
+		float support = ground[order[k].i];
+		for( size_t j = 0; j < k && p.low[2] - support > minGap; ++j )
+		{
+			const Box &q = landed[order[j].i];
+			if( q.high[0] - inset > p.low[0] && q.low[0] + inset < p.high[0] && q.high[1] - inset > p.low[1] && q.low[1] + inset < p.high[1] )
+				support = std::max( support, std::min( q.high[2], p.low[2] ) );
+		}
+		const float gap = p.low[2] - support;
+		if( gap <= minGap )
+			continue;
+		gaps[order[k].i] = gap;
+		p.low[2] -= gap;
+		p.high[2] -= gap;
+	}
+}
+
 /// How many standing fragments reach the ground through standing neighbours.
 inline unsigned supportedCount( const Asset &a, const std::vector<unsigned char> &standing,
 	std::vector<unsigned> &queue, std::vector<unsigned char> &seen )

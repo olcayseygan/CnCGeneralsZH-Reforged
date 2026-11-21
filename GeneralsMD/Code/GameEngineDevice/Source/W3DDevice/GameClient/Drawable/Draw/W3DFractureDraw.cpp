@@ -62,6 +62,8 @@
 #include "WW3D2/vertmaterial.h"
 #include "WW3D2/w3d_file.h"
 #include "WW3D2/w3d_util.h"
+#include "WWMath/colmath.h"
+#include "WWMath/lineseg.h"
 #include "WWMath/quat.h"
 
 namespace {
@@ -75,7 +77,12 @@ const Real STEP = 1.0f / 60.0f;			// game seconds a physics step
 const Int MAX_STEPS = 120;					// a picture's worth at most
 const Real DEBRIS_LIES = 6.0f;			// game seconds a knocked out fragment lies before it goes into the ground
 const Real DEBRIS_SINKS = 1.5f;
-const Real FALL_SECONDS = 8.0f;			// a plain collapse is over by then, settled or not
+const Real FALL_SECONDS = 8.0f;			// a plain collapse is over by then, settled or not; a baked one that long past its track
+const Real COLLAPSE_DELAY = 0.5f;		// game seconds the structure stands after the death, so the death flash's glare has passed
+const Real DROP_GAP = 1.5f;					// a piece of the ruin with more air than this under its box falls the rest of the way
+const Real SUPPORT_INSET = 0.5f;			// how far two boxes have to overlap across before one holds the other up
+const Real NO_REST_Z = -1e30f;
+const Real LONG_AGO = 1000.0f;				// game seconds: a death this far back has long finished falling
 const Real GROUND_FOLLOW_HEIGHT = 20.0f;	// a baked fragment this far down to the model's foot lies on the ground under it
 const Real BOUNDS_MARGIN = 150.0f;		// how far past the model debris and the fall may reach, for the culling box (the tower's diagonal falls throw 146)
 const Real DUST_VOLUME = 6.0f;			// a fragment at least this big raises dust where it comes down
@@ -131,9 +138,38 @@ struct Shared
 	std::vector<TextureClass *> textures, damaged;	///< per material; damaged is the D sheet the damaged models wear
 	std::vector<ShaderClass> shaders;
 	VertexMaterialClass *material;
+	Int users;																			///< structures drawn from it now
 };
 
 std::vector<Shared *> s_shared;
+
+/// Every buffer and texture of the files no structure draws from any more.
+void freeUnusedShared( void )
+{
+	size_t kept = 0;
+	for( size_t i = 0; i < s_shared.size(); ++i )
+	{
+		Shared *s = s_shared[i];
+		if( !s->ok || s->users > 0 )
+		{
+			s_shared[kept++] = s;
+			continue;
+		}
+		for( size_t c = 0; c < s->chunks.size(); ++c )
+		{
+			REF_PTR_RELEASE( s->chunks[c].vertices );
+			REF_PTR_RELEASE( s->chunks[c].all );
+		}
+		for( size_t m = 0; m < s->textures.size(); ++m )
+		{
+			REF_PTR_RELEASE( s->textures[m] );
+			REF_PTR_RELEASE( s->damaged[m] );
+		}
+		REF_PTR_RELEASE( s->material );
+		delete s;
+	}
+	s_shared.resize( kept );
+}
 
 /// Art/W3D/<name><extension> whole, from a loose file or an archive.
 Bool readFile( const AsciiString &name, const char *extension, std::vector<unsigned char> &out )
@@ -368,6 +404,7 @@ Shared *sharedFor( const AsciiString &name )
 	Shared *s = NEW Shared;
 	s->name = name;
 	s->material = NULL;
+	s->users = 0;
 	s->ok = load( *s );
 	s_shared.push_back( s );
 	return s->ok ? s : NULL;
@@ -414,17 +451,22 @@ public:
 
 	virtual RenderObjClass *Clone( void ) const { return NULL; }		///< never copied: a ghost copies the model
 	virtual void Render( RenderInfoClass &rinfo );
-	virtual bool Cast_Ray( RayCollisionTestClass &raytest ) { return m_model && m_model->Cast_Ray( raytest ); }
+	virtual bool Cast_Ray( RayCollisionTestClass &raytest );
 	virtual void Get_Obj_Space_Bounding_Sphere( SphereClass &sphere ) const;
 	virtual void Get_Obj_Space_Bounding_Box( AABoxClass &box ) const;
 
 	void follow( RenderObjClass *model );		///< the W3DModelDraw's model as it stands this frame
 	void hit( const Coord3D &pos, Real radius );
 	void heardFrom( const Coord3D &source ) { m_hasSource = TRUE; m_source.Set( source.x, source.y, source.z ); }	///< who fired the last hit
-	void collapse( void );
-	void beforeRender( void );									///< outside the draw: index buffers, the ruin, dust
+	void collapse( Bool over );									///< over: it fell before a load, straight to the ruin
+	void tick( void );													///< every frame, seen or not: what moves, the ruin, dust
+	void beforeRender( void );									///< outside the draw: the look and the index buffers
 	Bool isCollapsing( void ) const { return m_collapsing; }
 	void renderCaster( RenderInfoClass &sunInfo );
+	/// What a save keeps: the fragments standing, or at the death those that stood, and the way it fell.
+	const std::vector<unsigned char> &standingSet( void ) const { return m_collapsing ? m_present : m_standing; }
+	Int collapseWay( void ) const { return m_collapse ? m_way : -1; }
+	void restore( const std::vector<unsigned char> &standing, Int way );		///< a load's, before anything moves
 
 private:
 
@@ -441,6 +483,7 @@ private:
 		Bool landed;
 		Vector3 offset;					///< a gun's turn at the death, folded into the bake
 		Matrix3x3 turn;
+		Real restZ;							///< a ruin piece dropped onto what is under it: its centroid's height there; NO_REST_Z otherwise
 	};
 
 	struct Group
@@ -451,7 +494,11 @@ private:
 
 	void computeSlots( void );
 	Matrix3D fragmentWorld( unsigned fragment ) const { return m_slotWorld[m_shared->slotOf[fragment]]; }
+	Matrix3D movingWorld( const Moving &m ) const;
+	Bool castRayAt( RayCollisionTestClass &raytest, unsigned fragment, const Matrix3D &world ) const;
+	Moving still( unsigned fragment, const Matrix3D &world ) const;		///< a fragment as it is, not moving yet
 	void launch( unsigned fragment, const Vector3 &from );
+	Bool dropUnsupported( Real now );
 	void step( Real now );
 	void stepTrack( Moving &m, Real now );
 	void stepFall( Moving &m, Real dt, Real now );
@@ -464,6 +511,7 @@ private:
 
 	Shared *m_shared;
 	const Fracture::Collapse *m_collapse;		///< the way down it takes, chosen at the death; NULL: a plain fall
+	Int m_way;															///< its index, or a load's before the death is replayed; -1 none
 	Vector3 m_source;
 	Bool m_hasSource;
 	Drawable *m_drawable;
@@ -474,6 +522,7 @@ private:
 	std::vector<unsigned char> m_standing, m_kept, m_present;
 	std::vector<DX8IndexBufferClass *> m_standingIndices;		///< per chunk
 	std::vector<DX8VertexBufferClass *> m_ruinVertices;			///< per chunk, once baked
+	std::vector<Matrix3D> m_ruinPose;												///< per fragment, once baked: where it lies, model space
 	std::vector<Group> m_groups;
 	std::vector<Moving> m_moving;
 	std::vector<Vector3> m_dust;
@@ -481,15 +530,16 @@ private:
 	Vector3 m_pileOrigin;
 	Real m_now, m_deathTime, m_removedVolume;
 	Int m_dustLeft;
-	Bool m_dirty, m_collapsing, m_settled, m_ruin, m_damagedLook;
+	Bool m_dirty, m_collapsing, m_dropped, m_settled, m_ruin, m_damagedLook;
 };
 
 //-------------------------------------------------------------------------------------------------
 FractureRenderObjClass::FractureRenderObjClass( Shared *shared, Drawable *drawable, const std::vector<AsciiString> &gunBones ) :
-	m_shared( shared ), m_collapse( NULL ), m_source( 0, 0, 0 ), m_hasSource( FALSE ), m_drawable( drawable ), m_model( NULL ), m_root( true ), m_pileOrigin( 0, 0, 0 ),
+	m_shared( shared ), m_collapse( NULL ), m_way( -1 ), m_source( 0, 0, 0 ), m_hasSource( FALSE ), m_drawable( drawable ), m_model( NULL ), m_root( true ), m_pileOrigin( 0, 0, 0 ),
 	m_now( -1.0f ), m_deathTime( 0.0f ), m_removedVolume( 0.0f ), m_dustLeft( MAX_DUST ), m_dirty( TRUE ),
-	m_collapsing( FALSE ), m_settled( FALSE ), m_ruin( FALSE ), m_damagedLook( FALSE )
+	m_collapsing( FALSE ), m_dropped( FALSE ), m_settled( FALSE ), m_ruin( FALSE ), m_damagedLook( FALSE )
 {
+	++shared->users;
 	const size_t count = shared->asset.fragments.size();
 	m_standing.assign( count, 1 );
 	m_kept.assign( count, 0 );
@@ -512,6 +562,85 @@ FractureRenderObjClass::~FractureRenderObjClass()
 		REF_PTR_RELEASE( m_standingIndices[c] );
 	for( size_t c = 0; c < m_ruinVertices.size(); ++c )
 		REF_PTR_RELEASE( m_ruinVertices[c] );
+	--m_shared->users;
+	freeUnusedShared();
+}
+
+//-------------------------------------------------------------------------------------------------
+void FractureRenderObjClass::restore( const std::vector<unsigned char> &standing, Int way )
+{
+	const Fracture::Asset &a = m_shared->asset;
+	if( m_collapsing || standing.size() != a.fragments.size() )
+		return;		// a save from another cut of the art: whole, as version 1 loaded
+	m_way = way;
+	m_removedVolume = 0.0f;
+	for( size_t i = 0; i < standing.size(); ++i )
+	{
+		m_standing[i] = standing[i] || m_kept[i] ? 1 : 0;
+		if( !m_standing[i] )
+			m_removedVolume += a.fragments[i].volume;
+	}
+	m_dirty = TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Matrix3D FractureRenderObjClass::movingWorld( const Moving &m ) const
+{
+	const Fracture::Fragment &f = m_shared->asset.fragments[m.fragment];
+	return Matrix3D( m.rot, m.pos - m.rot * Vector3( f.centroid[0], f.centroid[1], f.centroid[2] ) );
+}
+
+//-------------------------------------------------------------------------------------------------
+FractureRenderObjClass::Moving FractureRenderObjClass::still( unsigned fragment, const Matrix3D &world ) const
+{
+	const Fracture::Fragment &f = m_shared->asset.fragments[fragment];
+	Moving m;
+	m.fragment = fragment;
+	m.pos = world * Vector3( f.centroid[0], f.centroid[1], f.centroid[2] );
+	m.rot = Matrix3x3( world );
+	m.velocity.Set( 0, 0, 0 );
+	m.spin.Set( 0, 0, 0 );
+	m.start = m_now;
+	m.restedAt = -1.0f;
+	m.track = FALSE;
+	m.fromHit = FALSE;
+	m.landed = FALSE;
+	m.offset.Set( 0, 0, 0 );
+	m.turn.Make_Identity();
+	m.restZ = NO_REST_Z;
+	return m;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool FractureRenderObjClass::castRayAt( RayCollisionTestClass &raytest, unsigned fragment, const Matrix3D &world ) const
+{
+	const Fracture::Fragment &f = m_shared->asset.fragments[fragment];
+	Matrix3D inverse;
+	world.Get_Orthogonal_Inverse( inverse );
+	const LineSegClass ray( raytest.Ray, inverse );		// a rigid move keeps the fraction along the ray
+	const Vector3 low( f.boxMin[0], f.boxMin[1], f.boxMin[2] ), high( f.boxMax[0], f.boxMax[1], f.boxMax[2] );
+	const AABoxClass box( ( low + high ) * 0.5f, ( high - low ) * 0.5f );
+	return CollisionMath::Collide( ray, box, raytest.Result );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The pick: the boxes of the fragments as they are now, standing, falling or lying in the ruin, so a
+	hole is not there to click on and the ruin is.  The debris a hit threw is not the structure's. */
+//-------------------------------------------------------------------------------------------------
+bool FractureRenderObjClass::Cast_Ray( RayCollisionTestClass &raytest )
+{
+	if( m_model == NULL || ( Get_Collision_Type() & raytest.CollisionType ) == 0 || raytest.Result->StartBad )
+		return false;		// as MeshClass::Cast_Ray: the rubble model's type is none, so the ruin hides nobody
+	computeSlots();
+	Bool hit = FALSE;
+	const std::vector<unsigned char> &shown = m_ruin ? m_present : m_standing;
+	for( size_t i = 0; i < shown.size(); ++i )
+		if( shown[i] && castRayAt( raytest, (unsigned)i, m_ruin ? m_root * m_ruinPose[i] : fragmentWorld( (unsigned)i ) ) )
+			hit = TRUE;
+	for( size_t k = 0; k < m_moving.size(); ++k )
+		if( !m_moving[k].fromHit && castRayAt( raytest, m_moving[k].fragment, movingWorld( m_moving[k] ) ) )
+			hit = TRUE;
+	return hit != FALSE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -570,12 +699,8 @@ void FractureRenderObjClass::computeSlots( void )
 //-------------------------------------------------------------------------------------------------
 void FractureRenderObjClass::launch( unsigned fragment, const Vector3 &from )
 {
-	const Fracture::Fragment &f = m_shared->asset.fragments[fragment];
-	const Matrix3D world = fragmentWorld( fragment );
-	Moving m;
-	m.fragment = fragment;
-	m.pos = world * Vector3( f.centroid[0], f.centroid[1], f.centroid[2] );
-	m.rot = Matrix3x3( world );
+	Moving m = still( fragment, fragmentWorld( fragment ) );
+	m.fromHit = TRUE;
 	Vector3 out = m.pos - m_root.Get_Translation();
 	out.Z = 0.0f;
 	if( out.Length2() < 1e-4f )
@@ -587,13 +712,6 @@ void FractureRenderObjClass::launch( unsigned fragment, const Vector3 &from )
 	m.velocity = out * GameClientRandomValueReal( 12.0f, 35.0f ) + away * 8.0f;
 	m.velocity.Z += GameClientRandomValueReal( 8.0f, 25.0f );
 	m.spin = randomAxis() * GameClientRandomValueReal( 2.0f, 7.0f );
-	m.start = m_now;
-	m.restedAt = -1.0f;
-	m.track = FALSE;
-	m.fromHit = TRUE;
-	m.landed = FALSE;
-	m.offset.Set( 0, 0, 0 );
-	m.turn.Make_Identity();
 	m_moving.push_back( m );
 }
 
@@ -664,19 +782,27 @@ void FractureRenderObjClass::hit( const Coord3D &pos, Real radius )
 /** Zero health: everything still standing comes down, by the baked collapse when there is one,
 	otherwise by a plain fall onto what stays (the fragments on the ground). */
 //-------------------------------------------------------------------------------------------------
-void FractureRenderObjClass::collapse( void )
+void FractureRenderObjClass::collapse( Bool over )
 {
 	if( m_collapsing )
 		return;
 	m_collapsing = TRUE;
 	m_now = gameSeconds();
-	m_deathTime = m_now;
+	m_deathTime = m_now + COLLAPSE_DELAY;
+	if( over )
+	{
+		// a load of a ruin: the fall is past its end at the first step, and raises no dust
+		m_deathTime = m_now - LONG_AGO;
+		m_dustLeft = 0;
+	}
 	computeSlots();
 	if( !m_shared->collapses.empty() )
 	{
-		// it falls away from whoever fired last; not known, the first way baked
+		// it falls away from whoever fired last; not known, the first way baked; loaded, the way it fell
 		size_t way = 0;
-		if( m_hasSource )
+		if( m_way >= 0 && m_way < (Int)m_shared->collapses.size() )
+			way = (size_t)m_way;
+		else if( m_hasSource )
 		{
 			Vector3 away = m_root.Get_Translation() - m_source;
 			away.Z = 0.0f;
@@ -688,6 +814,7 @@ void FractureRenderObjClass::collapse( void )
 			}
 		}
 		m_collapse = &m_shared->collapses[way];
+		m_way = (Int)way;
 	}
 	const Fracture::Asset &a = m_shared->asset;
 	m_present = m_standing;
@@ -703,18 +830,7 @@ void FractureRenderObjClass::collapse( void )
 		const Fracture::Fragment &f = a.fragments[i];
 		const Vector3 centroid( f.centroid[0], f.centroid[1], f.centroid[2] );
 		const Matrix3D world = fragmentWorld( (unsigned)i );
-		Moving m;
-		m.fragment = (unsigned)i;
-		m.pos = world * centroid;
-		m.rot = Matrix3x3( world );
-		m.restedAt = -1.0f;
-		m.fromHit = FALSE;
-		m.landed = FALSE;
-		m.offset.Set( 0, 0, 0 );
-		m.turn.Make_Identity();
-		m.velocity.Set( 0, 0, 0 );
-		m.spin.Set( 0, 0, 0 );
-		m.start = m_now;
+		Moving m = still( (unsigned)i, world );
 		if( m_collapse )
 		{
 			if( m_collapse->tracks[i].count == 0 )
@@ -739,7 +855,7 @@ void FractureRenderObjClass::collapse( void )
 			m.velocity = out * 0.6f + Vector3( GameClientRandomValueReal( -4.0f, 4.0f ), GameClientRandomValueReal( -4.0f, 4.0f ),
 				GameClientRandomValueReal( 0.0f, 6.0f ) );
 			m.spin = randomAxis() * GameClientRandomValueReal( 0.5f, 3.0f );
-			m.start = m_now + GameClientRandomValueReal( 0.0f, 0.3f ) + 0.25f * ( f.centroid[2] / top );
+			m.start = m_deathTime + GameClientRandomValueReal( 0.0f, 0.3f ) + 0.25f * ( f.centroid[2] / top );
 		}
 		m_standing[i] = 0;
 		m_moving.push_back( m );
@@ -825,6 +941,21 @@ void FractureRenderObjClass::stepFall( Moving &m, Real dt, Real now )
 		m.rot = Matrix3x3( m.spin / rate, rate * dt ) * m.rot;
 		m.rot.Re_Orthogonalize();
 	}
+	if( m.restZ != NO_REST_Z )
+	{
+		// a ruin piece dropping onto what lies under it: straight down, no bounce
+		if( m.pos.Z > m.restZ )
+			return;
+		m.pos.Z = m.restZ;
+		m.velocity.Set( 0, 0, 0 );
+		m.restedAt = now;
+		if( f.volume >= DUST_VOLUME && m_dustLeft > 0 )
+		{
+			--m_dustLeft;
+			m_dust.push_back( m.pos );
+		}
+		return;
+	}
 	// its lowest box corner against the ground and the rubble under it
 	Real lowest = 1e30f;
 	for( Int corner = 0; corner < 8; ++corner )
@@ -859,6 +990,81 @@ void FractureRenderObjClass::stepFall( Moving &m, Real dt, Real now )
 	m.restedAt = now;
 	if( !m.fromHit )
 		pileOn( m.fragment, m.pos );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The baked fall is over.  It was baked from the whole structure, so a piece of it that came to rest
+	on a fragment a hit had knocked out before the death, or a stump that stood on one, hangs in the
+	air: such a piece falls the rest of the way, onto the ground or onto what came down under it
+	(Fracture::dropGaps).  TRUE when something drops. */
+//-------------------------------------------------------------------------------------------------
+Bool FractureRenderObjClass::dropUnsupported( Real now )
+{
+	if( TheTerrainRenderObject == NULL )
+		return FALSE;
+	const Fracture::Asset &a = m_shared->asset;
+	std::vector<Int> movingOf;					// per piece: in m_moving, or -1 for a stump
+	std::vector<unsigned> fragmentOf;
+	std::vector<Fracture::Box> boxes;
+	std::vector<float> ground;
+	computeSlots();
+	for( size_t i = 0; i < a.fragments.size() + m_moving.size(); ++i )
+	{
+		Int moving = -1;
+		unsigned fragment = (unsigned)i;
+		if( i >= a.fragments.size() )
+		{
+			moving = (Int)( i - a.fragments.size() );
+			fragment = m_moving[moving].fragment;
+			if( m_moving[moving].fromHit )
+				continue;
+		}
+		else if( !m_standing[i] )
+			continue;
+		const Matrix3D world = moving < 0 ? fragmentWorld( fragment ) : movingWorld( m_moving[moving] );
+		const Fracture::Fragment &f = a.fragments[fragment];
+		Vector3 low( 1e30f, 1e30f, 1e30f ), high( -1e30f, -1e30f, -1e30f );
+		for( Int corner = 0; corner < 8; ++corner )
+		{
+			const Vector3 c = world * Vector3( corner & 1 ? f.boxMax[0] : f.boxMin[0], corner & 2 ? f.boxMax[1] : f.boxMin[1],
+				corner & 4 ? f.boxMax[2] : f.boxMin[2] );
+			low.Update_Min( c );
+			high.Update_Max( c );
+		}
+		const Fracture::Box box = { { low.X, low.Y, low.Z }, { high.X, high.Y, high.Z } };
+		Real under = -1e30f;
+		for( Int corner = 0; corner < 4; ++corner )
+			under = std::max( under, TheTerrainRenderObject->getDrawHeight( corner & 1 ? high.X : low.X, corner & 2 ? high.Y : low.Y ) );
+		movingOf.push_back( moving );
+		fragmentOf.push_back( fragment );
+		boxes.push_back( box );
+		ground.push_back( under );
+	}
+	std::vector<float> gaps;
+	Fracture::dropGaps( boxes, ground, DROP_GAP, SUPPORT_INSET, gaps );
+	Int count = 0;
+	for( size_t p = 0; p < gaps.size(); ++p )
+	{
+		if( gaps[p] <= 0.0f )
+			continue;
+		++count;
+		if( movingOf[p] < 0 )
+		{
+			m_standing[fragmentOf[p]] = 0;
+			m_moving.push_back( still( fragmentOf[p], fragmentWorld( fragmentOf[p] ) ) );
+			m_dirty = TRUE;
+		}
+		Moving &m = movingOf[p] < 0 ? m_moving.back() : m_moving[movingOf[p]];
+		m.track = FALSE;
+		m.velocity.Set( 0, 0, 0 );
+		m.spin.Set( 0, 0, 0 );
+		m.start = now;
+		m.restedAt = -1.0f;
+		m.restZ = m.pos.Z - gaps[p];
+	}
+	DEBUG_LOG( ( "FRACTURE DROP %s frame %d: %d of %d pieces had nothing under them\n", m_shared->name.str(),
+		(Int)TheGameLogic->getFrame(), count, (Int)boxes.size() ) );
+	return count > 0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -907,9 +1113,17 @@ void FractureRenderObjClass::step( Real now )
 		Bool settled = TRUE;
 		for( size_t i = 0; i < m_moving.size() && settled; ++i )
 			settled = m_moving[i].fromHit || m_moving[i].restedAt >= 0.0f;
-		if( m_collapse )
-			settled = settled || ( now - m_deathTime ) * m_collapse->fps >= (Real)m_collapse->frames;
-		m_settled = settled || now - m_deathTime > FALL_SECONDS;
+		const Real track = m_collapse ? (Real)m_collapse->frames / (Real)m_collapse->fps : 0.0f;
+		if( m_collapse && !m_dropped )
+		{
+			settled = settled || now - m_deathTime >= track;
+			if( settled )
+			{
+				m_dropped = TRUE;
+				settled = !dropUnsupported( now );
+			}
+		}
+		m_settled = settled || now - m_deathTime > track + FALL_SECONDS;
 	}
 }
 
@@ -976,17 +1190,18 @@ void FractureRenderObjClass::bakeRuin( void )
 	size_t kept = 0;
 	for( size_t k = 0; k < m_moving.size(); ++k )
 	{
-		const Moving &m = m_moving[k];
+		Moving &m = m_moving[k];
 		if( m.fromHit )
 		{
 			m_moving[kept++] = m;
 			continue;
 		}
-		const Fracture::Fragment &f = a.fragments[m.fragment];
-		const Vector3 centroid( f.centroid[0], f.centroid[1], f.centroid[2] );
-		local[m.fragment] = rootInverse * Matrix3D( m.rot, m.pos - m.rot * centroid );
+		if( m.restZ != NO_REST_Z )
+			m.pos.Z = m.restZ;		// the time ran out on a drop: where it was going
+		local[m.fragment] = rootInverse * movingWorld( m );
 	}
 	m_moving.resize( kept );
+	m_ruinPose = local;
 	for( size_t c = 0; c < m_shared->chunks.size(); ++c )
 	{
 		DX8VertexBufferClass *vb = NEW_REF( DX8VertexBufferClass, ( DX8_FVF_XYZNUV1, (unsigned short)m_shared->chunks[c].vertexCount ) );
@@ -1026,10 +1241,21 @@ void FractureRenderObjClass::beforeRender( void )
 		const ModelConditionFlags &flags = m_drawable->getModelConditionFlags();
 		m_damagedLook = flags.test( MODELCONDITION_DAMAGED ) || flags.test( MODELCONDITION_REALLY_DAMAGED ) || flags.test( MODELCONDITION_RUBBLE );
 	}
-	if( m_settled && !m_ruin )
-		bakeRuin();
 	if( m_dirty )
 		rebuild();
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Every frame, on the screen or off it, so a fall nobody watched lands at its own time and its dust
+	rises then, not when the camera comes back. */
+//-------------------------------------------------------------------------------------------------
+void FractureRenderObjClass::tick( void )
+{
+	if( m_moving.empty() && ( !m_collapsing || m_ruin ) )
+		return;		// nothing moves
+	step( gameSeconds() );
+	if( m_settled && !m_ruin )
+		bakeRuin();
 	if( !m_dust.empty() && TheParticleSystemManager )
 	{
 		const ParticleSystemTemplate *dust = TheParticleSystemManager->findTemplate( DUST_SYSTEM );
@@ -1106,7 +1332,7 @@ void FractureRenderObjClass::Render( RenderInfoClass &rinfo )
 {
 	// the scene leaves out a drawable the shroud fully hides (its ghost draws the model as last seen)
 	// and shades a fogged one with its shroud pass, so the fragments are shown exactly as the model was
-	step( gameSeconds() );
+	step( gameSeconds() );		// between ticks, so the fall is as smooth as the frame
 	if( m_dirty )
 		rebuild();		// a hit after the last draw module pass: the model is hidden already
 	computeSlots();
@@ -1122,13 +1348,29 @@ void FractureRenderObjClass::Render( RenderInfoClass &rinfo )
 		drawGeometry( TRUE );
 		SunShadow::SetCasterEffect( DX8Wrapper::_Get_D3D_Device(), 0, NO_EFFECT );
 	}
-	// the shroud's and the heat vision's passes, over the same triangles
+	// the shroud's and the heat vision's passes, over the same triangles, with the drawable's opacity and
+	// glow on them as a mesh takes them (MeshClass::Render)
 	for( Int i = 0; i < rinfo.Additional_Pass_Count(); ++i )
 	{
 		MaterialPassClass *pass = rinfo.Peek_Additional_Pass( i );
+		VertexMaterialClass *material = pass->Peek_Material();
+		const Bool opacity = material && rinfo.materialPassAlphaOverride != 1.0f;
+		const Bool emissive = material && rinfo.materialPassEmissiveOverride != 1.0f;
+		const float oldOpacity = material ? material->Get_Opacity() : 1.0f;
+		Vector3 oldEmissive( 0, 0, 0 );
+		if( material )
+			material->Get_Emissive( &oldEmissive );
+		if( opacity )
+			material->Set_Opacity( rinfo.materialPassAlphaOverride );
+		if( emissive )
+			material->Set_Emissive( rinfo.materialPassEmissiveOverride * oldEmissive );
 		pass->Install_Materials();
 		drawGeometry( FALSE );
 		pass->UnInstall_Materials();
+		if( opacity )
+			material->Set_Opacity( oldOpacity );
+		if( emissive )
+			material->Set_Emissive( oldEmissive );
 	}
 }
 
@@ -1173,19 +1415,22 @@ void W3DFractureDrawModuleData::buildFieldParse( MultiIniFieldParse &p )
 
 //-------------------------------------------------------------------------------------------------
 W3DFractureDraw::W3DFractureDraw( Thing *thing, const ModuleData *moduleData ) : DrawModule( thing, moduleData ),
-	m_fracture( NULL )
+	m_fracture( NULL ), m_loadedWay( -1 ), m_loaded( FALSE )
 {
 	if( !TheGlobalData->m_headless )		// nothing is drawn: no hit needs to reach it
 		getDrawable()->setTakesImpacts();
-	s_modules.push_back( this );
 }
 
 //-------------------------------------------------------------------------------------------------
+/** A drawable made in a tick builds its modules on the logic thread, so the list of the fractured
+	ones is written only where the fragments are made and freed, on the main thread (a drawable that
+	dies in a tick is deleted at the flush). */
+//-------------------------------------------------------------------------------------------------
 W3DFractureDraw::~W3DFractureDraw( void )
 {
-	s_modules.erase( std::remove( s_modules.begin(), s_modules.end(), this ), s_modules.end() );
 	if( m_fracture )
 	{
+		s_modules.erase( std::remove( s_modules.begin(), s_modules.end(), this ), s_modules.end() );
 		m_fracture->Remove();
 		REF_PTR_RELEASE( m_fracture );
 	}
@@ -1203,19 +1448,50 @@ static RenderObjClass *modelOf( Drawable *draw )
 void W3DFractureDraw::doDrawModule( const Matrix3D *transformMtx )
 {
 	Drawable *draw = getDrawable();
-	if( m_fracture == NULL && draw->getModelConditionFlags().test( MODELCONDITION_RUBBLE ) && W3DDisplay::m_3DScene )
+	const Bool rubble = draw->getModelConditionFlags().test( MODELCONDITION_RUBBLE );
+	if( m_fracture == NULL && ( rubble || !m_loadedStanding.empty() ) && makeFracture() )
 	{
-		// dead without a hit that reached the client (a map that starts with it in ruins, a load):
-		// the collapse plays from the whole structure
-		const Coord3D at = *draw->getPosition();
-		reactToImpact( at, -1.0f, NULL );
+		// a load's holes, or dead without a hit that reached the client (a map that starts with it in
+		// ruins, a kill with no blast): a fall the client saw before a load is over, any other plays
+		m_fracture->restore( m_loadedStanding, m_loadedWay );
+		if( rubble )
+			m_fracture->collapse( m_loaded );
 	}
+	m_loadedStanding.clear();
+	m_loadedWay = -1;
 	if( m_fracture == NULL )
 		return;
 	m_fracture->follow( modelOf( draw ) );
-	if( draw->getModelConditionFlags().test( MODELCONDITION_RUBBLE ) )
-		m_fracture->collapse();
+	if( rubble )
+		m_fracture->collapse( FALSE );
+	if( m_fracture->isCollapsing() && !SunShadow::OwnsSceneShadows( DX8Wrapper::_Get_D3D_Device() ) )
+	{
+		// the stencil volumes (-d3d9, Classic) have no caster for the fragments: a holed structure keeps
+		// the intact model's shadow, a fallen one has none rather than the standing tower's
+		for( DrawModule **dm = draw->getDrawModulesNonDirty(); *dm; ++dm )
+			if( (*dm)->getObjectDrawInterface() )
+				(*dm)->setShadowsEnabled( FALSE );
+	}
 	m_fracture->beforeRender();
+}
+
+//-------------------------------------------------------------------------------------------------
+/// The fragments in the model's place, from its pose now.  FALSE with nothing drawn or no art.
+Bool W3DFractureDraw::makeFracture( void )
+{
+	if( m_fracture )
+		return TRUE;
+	if( TheGlobalData->m_headless || W3DDisplay::m_3DScene == NULL || W3DDisplay::m_assetManager == NULL )
+		return FALSE;
+	Shared *shared = sharedFor( getW3DFractureDrawModuleData()->m_fractureFile );
+	RenderObjClass *model = modelOf( getDrawable() );
+	if( shared == NULL || model == NULL )
+		return FALSE;
+	m_fracture = NEW_REF( FractureRenderObjClass, ( shared, getDrawable(), getW3DFractureDrawModuleData()->m_gunBones ) );
+	m_fracture->follow( model );
+	W3DDisplay::m_3DScene->Add_Render_Object( m_fracture );
+	s_modules.push_back( this );
+	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1230,19 +1506,13 @@ void W3DFractureDraw::setFullyObscuredByShroud( Bool fullyObscured )
 //-------------------------------------------------------------------------------------------------
 void W3DFractureDraw::reactToImpact( const Coord3D &pos, Real radius, const Coord3D *source )
 {
-	if( TheGlobalData->m_headless || W3DDisplay::m_3DScene == NULL || W3DDisplay::m_assetManager == NULL )
-		return;		// nothing is drawn
-	if( m_fracture == NULL )
+	if( !makeFracture() )
+		return;
+	if( !m_loadedStanding.empty() )
 	{
-		Shared *shared = sharedFor( getW3DFractureDrawModuleData()->m_fractureFile );
-		if( shared == NULL )
-			return;
-		RenderObjClass *model = modelOf( getDrawable() );
-		if( model == NULL )
-			return;
-		m_fracture = NEW_REF( FractureRenderObjClass, ( shared, getDrawable(), getW3DFractureDrawModuleData()->m_gunBones ) );
-		m_fracture->follow( model );
-		W3DDisplay::m_3DScene->Add_Render_Object( m_fracture );
+		m_fracture->restore( m_loadedStanding, m_loadedWay );		// a hit before the first picture after a load
+		m_loadedStanding.clear();
+		m_loadedWay = -1;
 	}
 	if( source )
 		m_fracture->heardFrom( *source );
@@ -1252,7 +1522,15 @@ void W3DFractureDraw::reactToImpact( const Coord3D &pos, Real radius, const Coor
 	// moment the camera comes back
 	const Object *obj = getDrawable()->getObject();
 	if( obj && obj->isEffectivelyDead() )
-		m_fracture->collapse();
+		m_fracture->collapse( FALSE );
+}
+
+//-------------------------------------------------------------------------------------------------
+void W3DFractureDraw::updateAll( void )
+{
+	for( size_t i = 0; i < s_modules.size(); ++i )
+		if( s_modules[i]->m_fracture )
+			s_modules[i]->m_fracture->tick();
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1266,9 +1544,10 @@ void W3DFractureDraw::renderShadowCasters( RenderInfoClass &sunInfo )
 //-------------------------------------------------------------------------------------------------
 Bool W3DFractureDraw::stagesCollapse( const Drawable *draw )
 {
-	for( size_t i = 0; i < s_modules.size(); ++i )
-		if( s_modules[i]->getDrawable() == draw )
-			return sharedFor( s_modules[i]->getW3DFractureDrawModuleData()->m_fractureFile ) != NULL;
+	static const NameKeyType key = NAMEKEY( "W3DFractureDraw" );
+	for( const DrawModule **dm = draw->getDrawModules(); *dm; ++dm )
+		if( (*dm)->getModuleNameKey() == key )
+			return sharedFor( ( (const W3DFractureDraw *)*dm )->getW3DFractureDrawModuleData()->m_fractureFile ) != NULL;
 	return FALSE;
 }
 
@@ -1281,19 +1560,50 @@ void W3DFractureDraw::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 /** Xfer method
 	* Version Info:
-	* 1: Initial version.  The holes are the client's look and are not saved: a loaded game shows the
-	*    structure whole until its next hit. */
+	* 1: Initial version.  The holes were not saved: a loaded game showed the structure whole.
+	* 2: The holes, one byte a fragment, 1 standing (none before the first hit), then the baked way it
+	*    fell (-1 standing).  The client's look only, written by the client's draw module: no logic
+	*    reads it and the CRC never sees it. */
 // ------------------------------------------------------------------------------------------------
 void W3DFractureDraw::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 1;
+	const Int MOST_FRAGMENTS = 65536;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 	DrawModule::xfer( xfer );
+	if( version < 2 )
+		return;
+	std::vector<unsigned char> standing = m_loadedStanding;		// loaded and not drawn since
+	Int way = m_loadedWay;
+	if( xfer->getXferMode() != XFER_LOAD && m_fracture )
+	{
+		standing = m_fracture->standingSet();
+		way = m_fracture->collapseWay();
+	}
+	Int count = (Int)standing.size();
+	xfer->xferInt( &count );
+	if( count < 0 || count > MOST_FRAGMENTS )
+	{
+		DEBUG_CRASH( ( "W3DFractureDraw::xfer - %d fragments, expected 0 to %d", count, MOST_FRAGMENTS ) );
+		throw XFER_INVALID_PARAMETERS;
+	}
+	standing.resize( count );
+	if( count > 0 )
+		xfer->xferUser( &standing[0], count );
+	xfer->xferInt( &way );
+	if( xfer->getXferMode() == XFER_LOAD )
+	{
+		m_loadedStanding.swap( standing );
+		m_loadedWay = way;
+	}
 }
 
 // ------------------------------------------------------------------------------------------------
 void W3DFractureDraw::loadPostProcess( void )
 {
 	DrawModule::loadPostProcess();
+	// dead in the save: its fall was over, or would have been, before the load
+	const Object *obj = getDrawable()->getObject();
+	m_loaded = obj && obj->isEffectivelyDead();
 }

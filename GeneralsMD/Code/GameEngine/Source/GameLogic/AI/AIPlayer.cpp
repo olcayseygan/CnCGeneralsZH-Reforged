@@ -1964,13 +1964,42 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
  	const LegalBuildCode enemyCheck = TheBuildAssistant->isLocationLegalToBuild( &pos, bldgPlan, angle,
 																								 BuildAssistant::NO_ENEMY_OBJECT_OVERLAP,
 																								 dozer, m_player );
- 	if( enemyCheck != LBC_OK ) {
+	// isLocationLegalToBuild runs the supply border and the map edge tests under every option set, so a spot that
+	// was only too near its own pile or off the playable ground failed this enemy test too and was given up before
+	// the search below could move it.  A China turtle-bench seat lost its only supply centre request that way
+	// twice a match and never earned ("legal build code 6 on the enemy test" at (129,143)); an America one lost
+	// its power plant and War Factory, whose plan spots lay off the map ("legal build code 1" at (-89,1072) and
+	// (-86,906)).  Only an object in the way gives the spot up here (isLocationClearOfObjects answers
+	// LBC_GENERIC_FAILURE for one when no feedback is asked, LBC_OBJECTS_IN_THE_WAY when it is), or Pro Rules'
+	// clearance from an enemy building; the terrain, map edge and supply border codes go on to the search.
+	const Bool enemyInTheWay = enemyCheck == LBC_OBJECTS_IN_THE_WAY || enemyCheck == LBC_GENERIC_FAILURE ||
+		enemyCheck == LBC_TOO_CLOSE_TO_ENEMY;
+ 	if( enemyInTheWay ) {
 		// If there's enemy units or structures, don't build/rebuild.
 		TheTerrainVisual->removeAllBibs();	// isLocationLegalToBuild adds bib feedback, turn it off.  jba.
 		DEBUG_LOG(( "AI GIVEUP frame %d '%s': legal build code %d on the enemy test\n", TheGameLogic->getFrame(),
 			bldgPlan->getName().str(), (Int)enemyCheck ));
 		giveUpOnSpot(info, "an enemy on the site");
 		return NULL;
+	}
+	if( enemyCheck != LBC_OK )
+		TheTerrainVisual->removeAllBibs();	// the supply border test drew its bib
+	// A plan spot off the playable ground (the build list moved with a start near the map's edge) gives the search
+	// below no ground to walk from: it starts at the nearest point inside the edge, its footprint clear of it.
+	if( enemyCheck == LBC_RESTRICTED_TERRAIN && runsOwnAI() )
+	{
+		Region3D bounds;
+		TheTerrainLogic->getMaximumPathfindExtent( &bounds );
+		const Real margin = bldgPlan->getTemplateGeometryInfo().getBoundingCircleRadius() + 2 * PATHFIND_CELL_SIZE_F;
+		const Coord3D before = pos;
+		pos.x = clamp( bounds.lo.x + margin, pos.x, bounds.hi.x - margin );
+		pos.y = clamp( bounds.lo.y + margin, pos.y, bounds.hi.y - margin );
+		if( pos.x != before.x || pos.y != before.y )
+		{
+			pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+			DEBUG_LOG(( "AI BUILD frame %d '%s' plan spot (%.0f,%.0f) lies off the map: searching from (%.0f,%.0f)\n",
+				TheGameLogic->getFrame(), bldgPlan->getName().str(), before.x, before.y, pos.x, pos.y ));
+		}
 	}
 
 	// validate the the position to build at is valid

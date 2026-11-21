@@ -102,6 +102,7 @@ public:
 	void setShroudLevel(Int x, Int y, W3DShroudLevel,Bool textureOnly=FALSE);
 	void setShroudFilter(Bool enable);	///<turns on bilinear filtering of shroud cells.
 	void setBorderShroudLevel(W3DShroudLevel level);	///<color that will appear in unused border terrain.
+	static W3DShroudLevel defaultBorderShroudLevel(void);	///< the border's level at a map's start: half dark, not black
 	W3DShroudLevel getBorderShroudLevel(void) const { return m_boderShroudLevel; }	///<the level setBorderShroudLevel last set
 	Real	getDrawOriginX(void)	{return m_drawOriginX;}	///<returns ws origin of first pixel in shroud texture.			
 	Real	getDrawOriginY(void)	{return m_drawOriginY;}	///<returns ws origin of first pixel in shroud texture.			

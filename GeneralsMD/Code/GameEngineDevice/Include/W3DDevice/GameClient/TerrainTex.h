@@ -35,9 +35,11 @@
 
 //#define DO_8STAGE_TERRAIN_PASS		//optimized terrain rendering for Nvidia based cards
 
+#include <vector>
 #include "WW3D2/texture.h"
 #include "WWMath/matrix3d.h"
 #include "Common/AsciiString.h"
+#include "Lib/BaseType.h"
 
 class WorldHeightMap;
 #define TILE_OFFSET 8
@@ -61,6 +63,8 @@ public:
 public:
 	int update(WorldHeightMap *htMap); ///< Sets the pixels, and returns the actual height of the texture.
 	Bool updateFlat(WorldHeightMap *htMap, Int xCell, Int yCell, Int cellWidth, Int pixelsPerCell); ///< Sets the pixels.
+	/// Lays each key's block of tiles at its origin (WorldHeightMap::getSkirtFlatTexture).
+	Bool updateSkirt(WorldHeightMap *htMap, const std::vector<Int> &keys, const std::vector<ICoord2D> &origins, Int tilePixels);
 	void setLOD(Int LOD);
 };
 

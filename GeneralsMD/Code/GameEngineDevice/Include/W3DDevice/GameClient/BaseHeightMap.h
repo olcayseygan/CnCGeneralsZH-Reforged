@@ -241,6 +241,8 @@ public:
 	void removeTerrainBibHighlighting(void);
 
 	W3DShroud *getShroud()	{return m_shroud;}
+	Vector3 getSkirtRimColour(void);	///< what the land past the map ends in, the frame's clear colour
+	void drawSkirtFade(void);	///< the land past the map into the rim's colour, after the water; once a drawSkirt
 	W3DBridgeBuffer *getBridgeBuffer()	{return m_bridgeBuffer;}
 	void updateShorelineTiles(Int minX, Int minY, Int maxX, Int maxY, WorldHeightMap *pMap);	///<figure out which tiles on this map cross water plane
 	void updateShorelineTile(Int X, Int Y, Int Border, WorldHeightMap *pMap);	///<figure out which tiles on this map cross water plane
@@ -497,11 +499,28 @@ protected:
 	};
 	std::vector<SkirtChunk> m_skirtChunks;
 	DX8IndexBufferClass *m_skirtIndices;	///< quad after quad, shared by every chunk
+	/** What the skirt is textured from without the terrain atlas, which the lower terrain detail never
+		builds: the edge's texture classes alone, small (WorldHeightMap::getSkirtFlatTexture). */
+	TextureClass *m_skirtTexture;
 	Bool m_skirtStale;
+	std::vector<Int> m_skirtVisible;	///< the chunks drawSkirt drew last, which drawSkirtFade draws again
+	Bool m_skirtFadePending;	///< drawSkirt drew and drawSkirtFade has not yet
+	Bool m_skirtFadeMirrored;	///< that drawSkirt was into Modern's mirror, both sides
+	Bool m_skirtShrouded;	///< that drawSkirt laid the border's shroud over it
+	/// The edge as buildSkirt reads it: the ring blurred, its share of sea, the land's mean and the sea's level.
+	struct SkirtEdge
+	{
+		std::vector<Real> blurred;
+		std::vector<Real> seaShare;
+		Real landMean;
+		Real seaZ;
+	};
 	void buildSkirt(void);
 	void freeSkirt(void);
-	Real skirtHeight(Int x, Int y, const std::vector<Real> &blurred, Real mean, Bool sink);	///< world z at sample (x, y) of the whole map, which may lie past its edge
-	/// Draws the skirt with the ground's base program and then its shroud; both terrain details call it.
+	Real skirtHeight(Int x, Int y, const SkirtEdge &edge, Bool sink);	///< world z at sample (x, y) of the whole map, which may lie past its edge
+	/// Whether the ground draws from the terrain atlas, which the skirt then shares (the full detail).
+	virtual Bool hasTerrainAtlas(void) const { return FALSE; }
+	/// Draws the skirt with the ground's base program and then its shroud, its fade left for drawSkirtFade; both terrain details call it.
 	void drawSkirt(RenderInfoClass &rinfo);
 	void initDestAlphaLUT(void);	///<initialize water depth LUT stored in m_destAlphaTexture
 	void renderShoreLines(CameraClass *pCamera);	///<re-render parts of terrain that need custom blending into water edge

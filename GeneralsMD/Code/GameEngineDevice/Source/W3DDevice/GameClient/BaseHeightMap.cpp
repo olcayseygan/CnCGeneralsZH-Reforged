@@ -51,6 +51,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <algorithm>
 #include <assetmgr.h>
 #include <texture.h>
 #include <tri.h>
@@ -319,7 +320,11 @@ BaseHeightMapRenderObjClass::BaseHeightMapRenderObjClass(void)
 	m_drawnHalfMap = NULL;
 	m_drawnFlipWidth = 0;
 	m_skirtIndices = NULL;
+	m_skirtTexture = NULL;
 	m_skirtStale = TRUE;
+	m_skirtFadePending = FALSE;
+	m_skirtFadeMirrored = FALSE;
+	m_skirtShrouded = FALSE;
 	m_disableTextures = false;
 	TheTerrainRenderObject = this;
 	m_treeBuffer = NULL; 
@@ -747,7 +752,7 @@ void BaseHeightMapRenderObjClass::reset(void)
 
 	if (m_shroud)
 	{	m_shroud->reset();
-		m_shroud->setBorderShroudLevel((W3DShroudLevel)TheGlobalData->m_shroudAlpha);	//assume border is always black at start.
+		m_shroud->setBorderShroudLevel(W3DShroud::defaultBorderShroudLevel());	// half dark at start, see there
 	}
 }
 
@@ -2342,6 +2347,7 @@ namespace
 
 void BaseHeightMapRenderObjClass::refreshStaticDiffuseInputs(void)
 {
+	const Bool firstWalk = m_staticDiffuseInputs.empty();
 	StaticDiffuseInputWalk walk(m_staticDiffuseInputs);
 
 	const Int numLights = TheGlobalData->m_numGlobalLights;
@@ -2380,6 +2386,8 @@ void BaseHeightMapRenderObjClass::refreshStaticDiffuseInputs(void)
 		return;
 
 	m_terrainContentVersion++;
+	if (!firstWalk)
+		m_skirtStale = TRUE;	// the light it baked moved; a first walk only learns what it was built with
 	m_staticDiffuseInputs.resize(walk.pos);
 	const size_t cells = (size_t)shape[0]*shape[1];
 	if (++m_staticDiffuseGeneration == 0 || m_staticDiffuseCells.size() != cells) {
@@ -3274,39 +3282,51 @@ void BaseHeightMapRenderObjClass::freeSkirt(void)
 	for (size_t i = 0; i < m_skirtChunks.size(); i++)
 		REF_PTR_RELEASE(m_skirtChunks[i].vertices);
 	m_skirtChunks.clear();
+	m_skirtVisible.clear();
+	m_skirtFadePending = FALSE;
 	REF_PTR_RELEASE(m_skirtIndices);
+	REF_PTR_RELEASE(m_skirtTexture);
 	m_skirtStale = TRUE;
 }
 
-Real BaseHeightMapRenderObjClass::skirtHeight(Int x, Int y, const std::vector<Real> &blurred, Real mean, Bool sink)
+Real BaseHeightMapRenderObjClass::skirtHeight(Int x, Int y, const SkirtEdge &edge, Bool sink)
 {
 	const Int w = m_map->getXExtent();
 	const Int h = m_map->getYExtent();
 	const UnsignedByte *data = m_map->getDataPtr();
-	if (x > 0 && y > 0 && x < w-1 && y < h-1)
+	// every sample of the map, its edge included, is the map's own and sunk under it
+	if (x >= 0 && y >= 0 && x <= w-1 && y <= h-1)
 		return data[y*w + x]*MAP_HEIGHT_SCALE - (sink ? TerrainSkirt::SINK : 0.0f);
 	const Int cx = x < 0 ? 0 : (x > w-1 ? w-1 : x);
 	const Int cy = y < 0 ? 0 : (y > h-1 ? h-1 : y);
-	const Real edge = data[cy*w + cx]*MAP_HEIGHT_SCALE;
+	const Real edgeZ = data[cy*w + cx]*MAP_HEIGHT_SCALE;
 	const Real dx = (Real)(x - cx), dy = (Real)(y - cy);
 	const Real outside = sqrtf(dx*dx + dy*dy)*MAP_XY_FACTOR;
 	const Int ring = TerrainSkirt::ringIndex(cx, cy, w, h);
-	const Real soft = (ring >= 0 && ring < (Int)blurred.size()) ? blurred[ring] : edge;
+	if (ring < 0 || ring >= (Int)edge.blurred.size())
+		return edgeZ;
 	const Int border = m_map->getBorderSizeInline();
-	return TerrainSkirt::height(edge, soft, mean, outside, (x - border)*MAP_XY_FACTOR, (y - border)*MAP_XY_FACTOR);
+	const Real land = TerrainSkirt::height(edgeZ, edge.blurred[ring], edge.landMean, outside, (x - border)*MAP_XY_FACTOR, (y - border)*MAP_XY_FACTOR);
+	const Real share = edge.seaShare[ring];
+	if (share <= 0.0f)
+		return land;
+	return TerrainSkirt::coastHeight(land, TerrainSkirt::seaHeight(edgeZ, edge.blurred[ring], edge.seaZ, outside), share);
 }
 
 /** The skirt's vertices, every quad two cells a side on the map's even grid so each carries one
 whole tile of the terrain texture.  It starts a cell inside the map, sunk under it there, and ends
 where the fade has taken all its light; the light is the whole static light, sun included, baked
-the way doTheLight bakes the tiles', and the fade multiplies it. */
+the way doTheLight bakes the tiles', and the fade multiplies it.  The full detail textures it from
+the terrain atlas the tiles use; the lower detail, which never builds that atlas, from a small
+texture of the edge's own classes. */
 void BaseHeightMapRenderObjClass::buildSkirt(void)
 {
 	freeSkirt();
 	m_skirtStale = FALSE;
 	if (m_map == NULL || m_map->getDataPtr() == NULL || m_map->getXExtent() < 4 || m_map->getYExtent() < 4)
 		return;
-	if (m_map->getTerrainTexture() == NULL)	// lays the tiles out, which getSkirtTileUV reads
+	const Bool atlas = hasTerrainAtlas();
+	if (atlas && m_map->getTerrainTexture() == NULL)	// lays the tiles out, which getSkirtTileUV reads
 		return;
 
 	const Int w = m_map->getXExtent();
@@ -3314,19 +3334,65 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 	const UnsignedByte *data = m_map->getDataPtr();
 	const Int border = m_map->getBorderSizeInline();
 
-	// the edge as one ring, blurred round the corners, and its mean
-	std::vector<Real> ring(TerrainSkirt::ringLength(w, h), 0.0f);
-	Real sum = 0.0f;
+	// The edge as one ring: blurred round the corners, which of it is under water (the client's water
+	// areas, asked at the nearest playable point, where a sea's polygon is sure to be), the mean of
+	// its land alone and the sea's level.  One mean over land and sea pulled a sea edge up into hills.
+	SkirtEdge edge;
+	const Int ringSize = TerrainSkirt::ringLength(w, h);
+	std::vector<Real> ring(ringSize, 0.0f), sea(ringSize, 0.0f);
+	const Real playW = (w - 1 - 2*border)*MAP_XY_FACTOR;
+	const Real playH = (h - 1 - 2*border)*MAP_XY_FACTOR;
+	Real landSum = 0.0f;
+	Int landCount = 0;
+	edge.seaZ = 0.0f;
 	for (Int y = 0; y < h; y++)
 		for (Int x = 0; x < w; x += (y == 0 || y == h-1) ? 1 : w-1) {
 			const Int i = TerrainSkirt::ringIndex(x, y, w, h);
 			if (i < 0)
 				continue;
 			ring[i] = data[y*w + x]*MAP_HEIGHT_SCALE;
-			sum += ring[i];
+			Real waterZ = INVALID_WATER_HEIGHT;
+			if (TheWaterRenderObj) {
+				Real px = (x - border)*MAP_XY_FACTOR, py = (y - border)*MAP_XY_FACTOR;
+				px = px < 0.0f ? 0.0f : (px > playW ? playW : px);
+				py = py < 0.0f ? 0.0f : (py > playH ? playH : py);
+				waterZ = TheWaterRenderObj->getWaterHeight(px, py);
+			}
+			if (waterZ > INVALID_WATER_HEIGHT && ring[i] < waterZ) {
+				sea[i] = 1.0f;
+				if (waterZ > edge.seaZ)
+					edge.seaZ = waterZ;
+			} else {
+				landSum += ring[i];
+				landCount++;
+			}
 		}
-	const Real mean = sum/(Real)ring.size();
-	const std::vector<Real> blurred = TerrainSkirt::blurRing(ring);
+	edge.landMean = landCount > 0 ? landSum/(Real)landCount : edge.seaZ - TerrainSkirt::SEA_MARGIN;
+	edge.blurred = TerrainSkirt::blurRing(ring);
+	edge.seaShare = TerrainSkirt::blurRing(sea);
+
+	// Without the atlas: the keys (texture classes) the skirt's tiles come from, laid into a small
+	// texture at 32 pixels a tile, 16 a cell, twice what the lower detail gives a cell of the map.
+	const Int FLAT_TILE_PIXELS = 32;
+	std::vector<Int> keys;
+	std::vector<ICoord2D> origins;
+	Int flatSide = 1;
+	if (!atlas) {
+		const Int tileReach = TerrainSkirt::CELLS/2;
+		for (Int t = -tileReach; t <= (w-1)/2 + tileReach; t++)
+			for (Int s = -tileReach; s <= (h-1)/2 + tileReach; s++) {
+				if (t > 0 && t < (w-1)/2 - 1 && s > 0 && s < (h-1)/2 - 1)
+					continue;	// not within a tile of the edge, where the skirt's quads start
+				Int key, across, down, sourceTile;
+				m_map->getSkirtTile(t, s, &key, &across, &down, &sourceTile);
+				if (sourceTile >= 0 && std::find(keys.begin(), keys.end(), key) == keys.end())
+					keys.push_back(key);
+			}
+		TerrainTextureClass *flat = m_map->getSkirtFlatTexture(keys, FLAT_TILE_PIXELS, origins, &flatSide);
+		if (flat == NULL)
+			return;
+		m_skirtTexture = flat;
+	}
 
 	Vector3 lightRay[MAX_GLOBAL_LIGHTS];
 	for (Int l = 0; l < TheGlobalData->m_numGlobalLights; l++) {
@@ -3351,19 +3417,29 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 						continue;	// under the map, a cell or more from its edge
 					const Int cornerX[4] = { qx, qx+2, qx+2, qx };
 					const Int cornerY[4] = { qy, qy, qy+2, qy+2 };
+					// square to the corners, all the rim's colour past the round reach, under the corner seas
 					Real outside[4];
-					Bool lit = FALSE;
 					for (Int k = 0; k < 4; k++) {
 						const Int dx = cornerX[k] < 0 ? -cornerX[k] : (cornerX[k] > w-1 ? cornerX[k]-(w-1) : 0);
 						const Int dy = cornerY[k] < 0 ? -cornerY[k] : (cornerY[k] > h-1 ? cornerY[k]-(h-1) : 0);
 						outside[k] = sqrtf((Real)(dx*dx + dy*dy))*MAP_XY_FACTOR;
-						if (outside[k] < TerrainSkirt::REACH)
-							lit = TRUE;
 					}
-					if (!lit)
-						continue;	// past the rim, as black as the clear colour
-					float minU, minV, maxU, maxV;
-					m_map->getSkirtTileUV(qx/2, qy/2, &minU, &minV, &maxU, &maxV);
+					float minU = 0.0f, minV = 0.0f, maxU = 0.0f, maxV = 0.0f;
+					if (atlas) {
+						m_map->getSkirtTileUV(qx/2, qy/2, &minU, &minV, &maxU, &maxV);
+					} else {
+						Int key, across, down, sourceTile;
+						m_map->getSkirtTile(qx/2, qy/2, &key, &across, &down, &sourceTile);
+						const size_t at = std::find(keys.begin(), keys.end(), key) - keys.begin();
+						if (sourceTile >= 0 && at < keys.size()) {
+							// the block's rows run down the texture as the tiles run up the world (updateSkirt)
+							const Int width = m_map->getSkirtKeyWidth(key);
+							minU = (Real)(origins[at].x + across*FLAT_TILE_PIXELS)/flatSide;
+							minV = (Real)(origins[at].y + (width - 1 - down)*FLAT_TILE_PIXELS)/flatSide;
+							maxU = minU + (Real)FLAT_TILE_PIXELS/flatSide;
+							maxV = minV + (Real)FLAT_TILE_PIXELS/flatSide;
+						}
+					}
 					const float cornerU[4] = { minU, maxU, maxU, minU };
 					const float cornerV[4] = { maxV, maxV, minV, minV };
 					for (Int k = 0; k < 4; k++) {
@@ -3371,15 +3447,15 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 						VERTEX_FORMAT v;
 						v.x = (x - border)*MAP_XY_FACTOR;
 						v.y = (y - border)*MAP_XY_FACTOR;
-						v.z = skirtHeight(x, y, blurred, mean, TRUE);
-						const Vector3 l2r(2*MAP_XY_FACTOR, 0, skirtHeight(x+1, y, blurred, mean, FALSE) - skirtHeight(x-1, y, blurred, mean, FALSE));
-						const Vector3 n2f(0, 2*MAP_XY_FACTOR, skirtHeight(x, y+1, blurred, mean, FALSE) - skirtHeight(x, y-1, blurred, mean, FALSE));
+						v.z = skirtHeight(x, y, edge, TRUE);
+						const Vector3 l2r(2*MAP_XY_FACTOR, 0, skirtHeight(x+1, y, edge, FALSE) - skirtHeight(x-1, y, edge, FALSE));
+						const Vector3 n2f(0, 2*MAP_XY_FACTOR, skirtHeight(x, y+1, edge, FALSE) - skirtHeight(x, y-1, edge, FALSE));
 						Vector3 normal;
 						Vector3::Normalized_Cross_Product(l2r, n2f, &normal);
 						doTheLight(&v, lightRay, &normal, NULL, 0, FALSE);
+						// the alpha is how far into the horizon's colour drawSkirt's fade pass takes it
 						const Real keep = TerrainSkirt::fade(outside[k]);
-						const UnsignedInt c = v.diffuse;
-						v.diffuse = REAL_TO_INT(((c >> 16) & 0xff)*keep) << 16 | REAL_TO_INT(((c >> 8) & 0xff)*keep) << 8 | REAL_TO_INT((c & 0xff)*keep);
+						v.diffuse = (v.diffuse & 0x00ffffff) | ((UnsignedInt)REAL_TO_INT((1.0f - keep)*255.0f) << 24);
 						// one texture: the second stage reads the same texel at no blend
 						v.u1 = v.u2 = cornerU[k];
 						v.v1 = v.v2 = cornerV[k];
@@ -3427,21 +3503,37 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 	DEBUG_LOG(("TERRAIN SKIRT: %d quads in %d chunks, %d cells past the edge\n", totalQuads, (Int)m_skirtChunks.size(), reach));
 }
 
+/** The horizon's colour the skirt's rim fades into, under the border's shroud as drawSkirt's shroud
+pass leaves it: black where a script shrouds the border, the whole horizon where it clears it.  No map,
+no skirt, and black as the clear always was. */
+Vector3 BaseHeightMapRenderObjClass::getSkirtRimColour(void)
+{
+	if (m_map == NULL)
+		return Vector3(0.0f, 0.0f, 0.0f);
+	float horizon[3];
+	W3DShaderManager::getHorizonColour(horizon);
+	const Real light = (m_skirtShrouded && m_shroud) ? m_shroud->getBorderShroudLevel()/255.0f : 1.0f;
+	return Vector3(horizon[0]*light, horizon[1]*light, horizon[2]*light);
+}
+
 void BaseHeightMapRenderObjClass::drawSkirt(RenderInfoClass &rinfo)
 {
-	// not into either water's mirror: the skirt has no water of its own to reflect it in
-	if (m_map == NULL || m_disableTextures || Is_Hidden() || ShaderClass::Is_Backface_Culling_Inverted())
+	// Into Modern's coloured mirror both sides, as the tiles go (a coast's skirt shows in the water);
+	// never into Classic's, which leaves the ground out.
+	const Bool modernFullMirror = TheWaterRenderObj && TheWaterRenderObj->isModernFullMirror();
+	m_skirtFadePending = FALSE;
+	if (m_map == NULL || m_disableTextures || Is_Hidden() || (ShaderClass::Is_Backface_Culling_Inverted() && !modernFullMirror))
 		return;
 	if (m_skirtStale)
 		buildSkirt();
 	if (m_skirtChunks.empty() || m_skirtIndices == NULL)
 		return;
-	TextureClass *atlas = m_map->getTerrainTexture();
-	if (atlas == NULL)
+	TextureClass *texture = hasTerrainAtlas() ? m_map->getTerrainTexture() : m_skirtTexture;
+	if (texture == NULL)
 		return;
 
 	const FrustumClass &frustum = rinfo.Camera.Get_Frustum();
-	static std::vector<Int> visible;
+	std::vector<Int> &visible = m_skirtVisible;
 	visible.clear();
 	for (size_t i = 0; i < m_skirtChunks.size(); i++) {
 		AABoxClass box;
@@ -3464,9 +3556,15 @@ void BaseHeightMapRenderObjClass::drawSkirt(RenderInfoClass &rinfo)
 
 	DX8Wrapper::Set_Transform(D3DTS_WORLD, Transform);	// the ground's, so what draws after it finds it as it was
 	DX8Wrapper::Set_Material(m_vertexMaterialClass);
-	DX8Wrapper::Set_Shader(m_shaderClass);
-	W3DShaderManager::setTexture(0, atlas);
-	W3DShaderManager::setTexture(1, atlas);
+	// the frame's alpha stays the clear's deep-water opacity under the sea drawn over the skirt, as the tiles leave it
+	if (DX8Wrapper::getBackBufferFormat() == WW3D_FORMAT_A8R8G8B8)
+		DX8Wrapper::Set_DX8_Render_State(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_BLUE|D3DCOLORWRITEENABLE_GREEN|D3DCOLORWRITEENABLE_RED);
+	ShaderClass skirtShader(m_shaderClass);
+	if (modernFullMirror)
+		skirtShader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
+	DX8Wrapper::Set_Shader(skirtShader);
+	W3DShaderManager::setTexture(0, texture);
+	W3DShaderManager::setTexture(1, texture);
 	W3DShaderManager::setTexture(2, m_stageTwoTexture);
 	W3DShaderManager::setTexture(3, m_stageThreeTexture);
 	DX8Wrapper::Set_Index_Buffer(m_skirtIndices, 0);
@@ -3485,9 +3583,14 @@ void BaseHeightMapRenderObjClass::drawSkirt(RenderInfoClass &rinfo)
 
 	// the shroud texture's border texel, which its clamp carries out over all of it
 	TextureClass *shroudTexture = m_shroud ? m_shroud->getShroudTexture() : NULL;
-	if (shroudTexture && rinfo.Additional_Pass_Count()) {
+	m_skirtShrouded = shroudTexture && rinfo.Additional_Pass_Count();
+	if (m_skirtShrouded) {
 		W3DShaderManager::setTexture(0, shroudTexture);
 		W3DShaderManager::setShader(W3DShaderManager::ST_SHROUD_TEXTURE, 0);
+		if (modernFullMirror) {	// the shroud installs its own culling; keep it on the base's faces
+			DX8Wrapper::Apply_Render_State_Changes();
+			DX8Wrapper::Set_DX8_Render_State(D3DRS_CULLMODE, D3DCULL_NONE);
+		}
 		DX8Wrapper::Set_Index_Buffer(m_skirtIndices, 0);
 		for (size_t i = 0; i < visible.size(); i++) {
 			const SkirtChunk &chunk = m_skirtChunks[visible[i]];
@@ -3500,6 +3603,52 @@ void BaseHeightMapRenderObjClass::drawSkirt(RenderInfoClass &rinfo)
 	DX8Wrapper::Set_Texture(0, NULL);
 	DX8Wrapper::Set_Texture(1, NULL);
 	m_stageTwoTexture->restore();
+	ShaderClass::Invalidate();
+
+	// The fade waits for the water, which draws a sea over the skirt (WaterRenderObjClass::addSkirtSeas)
+	// and would stand bright to the rim over a fade laid under it.  The mirror has no water in it.
+	m_skirtFadeMirrored = modernFullMirror;
+	m_skirtFadePending = TRUE;
+	if (modernFullMirror || TheWaterRenderObj == NULL)
+		drawSkirtFade();
+}
+
+/** The skirt's chunks drawn by drawSkirt this frame once more, into the rim's colour by their vertex
+alpha (TerrainSkirt::fade), over the ground and any sea on it, lifted clear of both (FADE_LIFT).  So the rim
+meets the clear colour, which is the same colour, and not a black void that read as a black sky over
+it.  Once a drawSkirt; WaterRenderObjClass::Render calls it after the water. */
+void BaseHeightMapRenderObjClass::drawSkirtFade(void)
+{
+	if (!m_skirtFadePending)
+		return;
+	m_skirtFadePending = FALSE;
+	if (m_skirtChunks.empty() || m_skirtIndices == NULL || m_skirtVisible.empty())
+		return;
+	const Vector3 rim = getSkirtRimColour();
+	ShaderClass fadeShader(ShaderClass::_PresetAlphaSolidShader);
+	if (m_skirtFadeMirrored)
+		fadeShader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
+	Matrix3D lifted(Transform);
+	lifted.Adjust_Z_Translation(TerrainSkirt::FADE_LIFT);
+	DX8Wrapper::Set_Transform(D3DTS_WORLD, lifted);
+	DX8Wrapper::Set_Material(m_vertexMaterialClass);
+	DX8Wrapper::Set_Texture(0, NULL);
+	DX8Wrapper::Set_Texture(1, NULL);
+	DX8Wrapper::Set_Shader(fadeShader);
+	DX8Wrapper::Apply_Render_State_Changes();
+	DX8Wrapper::Set_DX8_Texture_Stage_State(0, D3DTSS_COLORARG2, D3DTA_TFACTOR);
+	DX8Wrapper::Set_DX8_Render_State(D3DRS_TEXTUREFACTOR, DX8Wrapper::Convert_Color(rim, 1.0f));
+	const unsigned oldColourWrites = DX8Wrapper::Get_DX8_Render_State(D3DRS_COLORWRITEENABLE);	// the water's, after it
+	if (DX8Wrapper::getBackBufferFormat() == WW3D_FORMAT_A8R8G8B8)
+		DX8Wrapper::Set_DX8_Render_State(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_BLUE|D3DCOLORWRITEENABLE_GREEN|D3DCOLORWRITEENABLE_RED);
+	DX8Wrapper::Set_Index_Buffer(m_skirtIndices, 0);
+	for (size_t i = 0; i < m_skirtVisible.size(); i++) {
+		const SkirtChunk &chunk = m_skirtChunks[m_skirtVisible[i]];
+		DX8Wrapper::Set_Vertex_Buffer(chunk.vertices);
+		DX8Wrapper::Draw_Triangles(0, chunk.quads*2, 0, chunk.quads*4);
+	}
+	DX8Wrapper::Set_DX8_Render_State(D3DRS_COLORWRITEENABLE, oldColourWrites);
+	DX8Wrapper::Set_Transform(D3DTS_WORLD, Transform);
 	ShaderClass::Invalidate();
 }
 

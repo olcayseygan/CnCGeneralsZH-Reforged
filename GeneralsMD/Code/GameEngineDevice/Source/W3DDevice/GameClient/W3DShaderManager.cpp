@@ -68,6 +68,7 @@
 #include "W3DDevice/GameClient/W3DCustomScene.h"
 #include "W3DDevice/GameClient/W3DSmudge.h"
 #include "W3DDevice/GameClient/W3DWater.h"
+#include "W3DDevice/GameClient/TerrainSkirt.h"
 #include "GameClient/View.h"
 #include "GameClient/Snow.h"
 #include "GameClient/CommandXlat.h"
@@ -474,12 +475,6 @@ static const Real ATMOSPHERE_START = 500.0f;		// the least eye distance the fade
 static const Real ATMOSPHERE_SCALE = 2200.0f;		// how far past it the fade takes to reach about two thirds
 static const Real ATMOSPHERE_STRENGTH = 0.85f;		// the most of the horizon's colour the far ground takes
 static const Real ATMOSPHERE_SKY_FLOOR = 0.7f;		// a night's sky keeps this much, or the stars go
-static const float ATMOSPHERE_HORIZON[TIME_OF_DAY_COUNT][3] = {
-	{ 0.72f, 0.80f, 0.90f },	// invalid, as afternoon
-	{ 0.80f, 0.80f, 0.84f },	// morning
-	{ 0.72f, 0.80f, 0.90f },	// afternoon
-	{ 0.80f, 0.58f, 0.44f },	// evening
-	{ 0.07f, 0.10f, 0.18f } };	// night
 
 static void pushAtmosphere(Bool weatherHaze)
 {
@@ -503,11 +498,9 @@ static void pushAtmosphere(Bool weatherHaze)
 			min(sun.ambient.blue + sun.diffuse.blue, 1.0f) };
 		float horizon[3];
 		float tint[3];
+		W3DShaderManager::getHorizonColour(horizon);
 		for (Int i = 0; i < 3; ++i)
-		{
-			horizon[i] = ATMOSPHERE_HORIZON[TheGlobalData->m_timeOfDay][i] * light[i];
 			tint[i] = max(light[i], ATMOSPHERE_SKY_FLOOR);
-		}
 		if (weatherHaze)
 		{
 			Real strength;
@@ -524,6 +517,9 @@ static void pushAtmosphere(Bool weatherHaze)
 			TheTerrainRenderObject->getMinHeight(),
 			(map->getXExtent() - 1 - map->getBorderSizeInline() * 2) * MAP_XY_FACTOR,
 			(map->getYExtent() - 1 - map->getBorderSizeInline() * 2) * MAP_XY_FACTOR, sky->Peek_D3D_Base_Texture());
+#if defined(_WIN32)
+		DX11Post_Set_Atmosphere_Edge(map->getBorderSizeInline() * MAP_XY_FACTOR, TerrainSkirt::REACH);
+#endif
 	}
 	else if (s_on)
 	{
@@ -546,6 +542,22 @@ void W3DShaderManager::invalidateNativePostEnvironment(void)
 	RenderPost::SetEnvironment(s_nativeEnvironment);
 }
 #endif
+
+static const float HORIZON_BY_TIME_OF_DAY[TIME_OF_DAY_COUNT][3] = {
+	{ 0.72f, 0.80f, 0.90f },	// invalid, as afternoon
+	{ 0.80f, 0.80f, 0.84f },	// morning
+	{ 0.72f, 0.80f, 0.90f },	// afternoon
+	{ 0.80f, 0.58f, 0.44f },	// evening
+	{ 0.07f, 0.10f, 0.18f } };	// night
+
+void W3DShaderManager::getHorizonColour(float rgb[3])
+{
+	const GlobalData::TerrainLighting &sun = TheGlobalData->m_terrainLighting[TheGlobalData->m_timeOfDay][0];
+	const float light[3] = { min(sun.ambient.red + sun.diffuse.red, 1.0f), min(sun.ambient.green + sun.diffuse.green, 1.0f),
+		min(sun.ambient.blue + sun.diffuse.blue, 1.0f) };
+	for (Int i = 0; i < 3; ++i)
+		rgb[i] = HORIZON_BY_TIME_OF_DAY[TheGlobalData->m_timeOfDay][i] * light[i];
+}
 
 void W3DShaderManager::pushProtoHaze(void)
 {

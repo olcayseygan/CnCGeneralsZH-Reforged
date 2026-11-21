@@ -295,6 +295,7 @@ protected:
 	};
 	std::vector<WaterPolygonForDraw> m_waterPolygonsForDraw;
 	void takeWaterPolygonsForDraw(void);
+	void addSkirtSeas(void);	///< the sea on past the heightmap's edge, over the land drawn there
 	void takeMotionReadsForRender(void);
 	void synchronizeWaterReflection(void);
 #endif

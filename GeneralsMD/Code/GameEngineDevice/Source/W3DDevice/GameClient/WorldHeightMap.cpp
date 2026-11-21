@@ -53,6 +53,7 @@
 #include "W3DDevice/GameClient/TileData.h"
 #include "W3DDevice/GameClient/HeightMap.h"
 #include "W3DDevice/GameClient/TerrainTex.h"
+#include "W3DDevice/GameClient/TerrainSkirt.h"
 #include "W3DDevice/GameClient/W3DShadow.h"
 
 #include "Common/file.h"
@@ -1223,32 +1224,94 @@ Bool WorldHeightMap::getUVData(Int xIndex, Int yIndex, float U[4], float V[4], B
 #endif
 }
 
-void WorldHeightMap::getSkirtTileUV(Int tileX, Int tileY, float *minU, float *minV, float *maxU, float *maxV)
+void WorldHeightMap::getSkirtTile(Int tileX, Int tileY, Int *key, Int *across, Int *down, Int *sourceTile)
 {
-	*minU = *minV = *maxU = *maxV = 0.0f;
+	*key = -1;
+	*across = *down = 0;
+	*sourceTile = -1;
 	if (m_tileNdxes == NULL || m_width < 2 || m_height < 2)
 		return;
-	Int cellX = 2*tileX, cellY = 2*tileY;
-	if (cellX < 0) cellX = 0;
-	if (cellY < 0) cellY = 0;
-	if (cellX > m_width-2) cellX = m_width-2;
-	if (cellY > m_height-2) cellY = m_height-2;
+	Int cellX, cellY;
+	const Bool past = TerrainSkirt::patchCell(tileX, tileY, m_width, m_height, &cellX, &cellY);
 	Int baseNdx = m_tileNdxes[cellY*m_width + cellX] >> 2;
-	// WorldBuilder lays a class as firstTile + (x/2 % width) + width*(y/2 % width), so carry that on
+	if (baseNdx < 0 || baseNdx >= NUM_SOURCE_TILES)
+		return;
+	*sourceTile = baseNdx;
+	*key = -(baseNdx + 1);	// a tile in no class stands alone
+	// WorldBuilder lays a class as firstTile + (x/2 % width) + width*(y/2 % width): carry that on over
+	// the map's own cells, and scatter the class's tiles past the edge (TerrainSkirt::scatterTile)
 	for (Int i = 0; i < m_numTextureClasses; i++) {
 		const TXTextureClass &tc = m_textureClasses[i];
 		if (tc.firstTile < 0 || tc.width <= 0 || baseNdx < tc.firstTile || baseNdx >= tc.firstTile + tc.numTiles)
 			continue;
-		const Int across = ((tileX % tc.width) + tc.width) % tc.width;
-		const Int down = ((tileY % tc.width) + tc.width) % tc.width;
-		const Int tile = tc.firstTile + across + tc.width*down;
-		if (tile < tc.firstTile + tc.numTiles)
-			baseNdx = tile;
+		Int a = ((tileX % tc.width) + tc.width) % tc.width;
+		Int d = ((tileY % tc.width) + tc.width) % tc.width;
+		if (past)
+			TerrainSkirt::scatterTile(tileX, tileY, tc.width, &a, &d);
+		const Int tile = tc.firstTile + a + tc.width*d;
+		if (tile < tc.firstTile + tc.numTiles && tile < NUM_SOURCE_TILES && tc.width*tc.width <= tc.numTiles) {
+			*key = i;
+			*across = a;
+			*down = d;
+			*sourceTile = tile;
+		}
 		break;
 	}
-	if (baseNdx < 0 || baseNdx >= NUM_SOURCE_TILES)
+}
+
+Int WorldHeightMap::getSkirtKeyWidth(Int key)
+{
+	if (key >= 0 && key < m_numTextureClasses && m_textureClasses[key].width > 0)
+		return m_textureClasses[key].width;
+	return 1;
+}
+
+void WorldHeightMap::getSkirtTileUV(Int tileX, Int tileY, float *minU, float *minV, float *maxU, float *maxV)
+{
+	*minU = *minV = *maxU = *maxV = 0.0f;
+	Int key, across, down, sourceTile;
+	getSkirtTile(tileX, tileY, &key, &across, &down, &sourceTile);
+	if (sourceTile < 0)
 		return;
-	getUVForNdx(baseNdx << 2, minU, minV, maxU, maxV, TRUE);
+	getUVForNdx(sourceTile << 2, minU, minV, maxU, maxV, TRUE);
+}
+
+TerrainTextureClass *WorldHeightMap::getSkirtFlatTexture(const std::vector<Int> &keys, Int tilePixels, std::vector<ICoord2D> &origins, Int *side)
+{
+	// each key a block of its class's tiles, on shelves, a few pixels apart for the mips
+	const Int PAD = 4;
+	origins.assign(keys.size(), ICoord2D());
+	for (*side = 64; *side <= 2048; *side *= 2) {
+		Int x = 0, y = 0, shelf = 0;
+		Bool fits = TRUE;
+		for (size_t i = 0; i < keys.size() && fits; i++) {
+			const Int block = getSkirtKeyWidth(keys[i])*tilePixels;
+			if (x + block > *side) {
+				x = 0;
+				y += shelf + PAD;
+				shelf = 0;
+			}
+			if (x + block > *side || y + block > *side) {
+				fits = FALSE;
+				break;
+			}
+			origins[i].x = x;
+			origins[i].y = y;
+			x += block + PAD;
+			if (block > shelf)
+				shelf = block;
+		}
+		if (fits)
+			break;
+	}
+	if (*side > 2048)
+		return NULL;
+	TerrainTextureClass *texture = MSGNEW("WorldHeightMap_getSkirtFlatTexture") TerrainTextureClass(*side, *side);
+	if (!texture->updateSkirt(this, keys, origins, tilePixels)) {
+		REF_PTR_RELEASE(texture);
+		return NULL;
+	}
+	return texture;
 }
 
 /** getUVForTileIndex - Gets the texture coordinates to use.  See getTerrainTexture.

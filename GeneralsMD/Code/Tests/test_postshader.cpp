@@ -24,6 +24,7 @@
 // HAZE was subsequently reviewed for optional water-surface blending (2026-11-15).
 // The four bloom baselines come independently from upstream 419d88bee dx11post.cpp (2026-11-17).
 // WORLD_AO takes main's edge normalisation (ffb8a5fa1), read from main 3989c3e60 dx11post.cpp.
+// ATMOSPHERE takes the terrain skirt's closing over the land past the map (MapSize.zw), reviewed 2026-11-22.
 #include "test_harness.h"
 #include "postshader.h"
 
@@ -56,7 +57,7 @@ TEST(postshader_sources_match_reviewed_program_baselines)
 		{ POST_SHADER_WORLD_AO_UPSAMPLE, 2478, UINT64_C(803955814330322769) },
 		{ POST_SHADER_HAZE, 4062, UINT64_C(10236842732324706847) },
 		{ POST_SHADER_SKY, 2547, UINT64_C(15455093490457882870) },
-		{ POST_SHADER_ATMOSPHERE, 3352, UINT64_C(6521191355011135268) },
+		{ POST_SHADER_ATMOSPHERE, 3475, UINT64_C(17240489725174463235) },
 		{ POST_SHADER_BLOOM_EXTRACT, 2172, UINT64_C(8169773055433301573) },
 		{ POST_SHADER_BLOOM_BLUR, 1840, UINT64_C(15383801789143368049) },
 		{ POST_SHADER_BLOOM_COMPOSITE, 1982, UINT64_C(17820278394050563199) },

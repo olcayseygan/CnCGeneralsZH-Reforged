@@ -459,6 +459,62 @@ Bool TerrainTextureClass::updateFlat(WorldHeightMap *htMap, Int xCell, Int yCell
 }
 
 //=============================================================================
+// TerrainTextureClass::updateSkirt
+//=============================================================================
+/** Each key's tiles into its block, written as updateFlat writes a map's cells: a tile's first row
+of data is its bottom, and a class's tile `down` rows up its repeat sits that many tiles up the
+block. */
+//=============================================================================
+Bool TerrainTextureClass::updateSkirt(WorldHeightMap *htMap, const std::vector<Int> &keys, const std::vector<ICoord2D> &origins, Int tilePixels)
+{
+	if (Peek_D3D_Texture() == NULL || keys.size() != origins.size()) {
+		return false;
+	}
+	IDirect3DSurface9 *surface_level;
+	D3DSURFACE_DESC surface_desc;
+	D3DLOCKED_RECT locked_rect;
+	DX8_ErrorCode(Peek_D3D_Texture()->GetSurfaceLevel(0, &surface_level));
+	DX8_ErrorCode(surface_level->GetDesc(&surface_desc));
+	if (surface_desc.Format != D3DFMT_A1R5G5B5) {
+		surface_level->Release();
+		return false;
+	}
+	DX8_ErrorCode(surface_level->LockRect(&locked_rect, NULL, 0));
+	const Int pixelBytes = 2;
+	for (size_t i = 0; i < keys.size(); i++) {
+		const Int width = htMap->getSkirtKeyWidth(keys[i]);
+		for (Int down = 0; down < width; down++) {
+			for (Int across = 0; across < width; across++) {
+				Int tile = keys[i] >= 0 ? htMap->m_textureClasses[keys[i]].firstTile + across + width*down : -(keys[i] + 1);
+				if (tile < 0 || tile >= NUM_SOURCE_TILES || htMap->m_sourceTiles[tile] == NULL
+						|| !htMap->m_sourceTiles[tile]->hasRGBDataForWidth(tilePixels)) {
+					continue;
+				}
+				const UnsignedByte *pBGR = htMap->m_sourceTiles[tile]->getRGBDataForWidth(tilePixels);
+				for (Int row = 0; row < tilePixels; row++) {
+					const Int y = origins[i].y + (width - 1 - down)*tilePixels + (tilePixels - 1 - row);
+					const Int x = origins[i].x + across*tilePixels;
+					if (y < 0 || y >= (Int)surface_desc.Height || x + tilePixels > (Int)surface_desc.Width) {
+						pBGR += tilePixels*TILE_BYTES_PER_PIXEL;
+						continue;
+					}
+					UnsignedByte *pDst = ((UnsignedByte*)locked_rect.pBits) + y*locked_rect.Pitch + x*pixelBytes;
+					for (Int col = 0; col < tilePixels; col++) {
+						*((Short*)pDst) = 0x8000 + ((pBGR[2]>>3)<<10) + ((pBGR[1]>>3)<<5) + (pBGR[0]>>3);
+						pDst += pixelBytes;
+						pBGR += TILE_BYTES_PER_PIXEL;
+					}
+				}
+			}
+		}
+	}
+	surface_level->UnlockRect();
+	surface_level->Release();
+	DX8_ErrorCode(D3DXFilterTexture(Peek_D3D_Texture(), NULL, 0, D3DX_FILTER_BOX));
+	return true;
+}
+
+//=============================================================================
 // TerrainTextureClass::Apply
 //=============================================================================
 /** Sets the texture as the current D3D texture, and does some custom setup

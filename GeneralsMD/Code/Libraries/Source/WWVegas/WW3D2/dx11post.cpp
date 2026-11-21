@@ -191,8 +191,14 @@ void DX11Post_Set_Haze_Shroud(ID3D11ShaderResourceView * view, const float rect[
 static float AtmosphereHorizon[3] = { 0.0f, 0.0f, 0.0f };
 static float AtmosphereTint[3] = { 0.0f, 0.0f, 0.0f };
 static float AtmosphereFade[4] = { 0.0f, 1.0f, 0.0f, 0.0f };
-static float AtmosphereMapSize[2] = { 0.0f, 0.0f };
+static float AtmosphereMapSize[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 static ID3D11ShaderResourceView * AtmosphereSky = NULL;
+
+void DX11Post_Set_Atmosphere_Edge(float border, float reach)
+{
+	AtmosphereMapSize[2] = border;
+	AtmosphereMapSize[3] = reach;
+}
 
 void DX11Post_Set_Atmosphere(const float horizon[3], const float tint[3], float start, float scale,
 	float strength, float ground, float map_width, float map_height, ID3D11ShaderResourceView * sky)

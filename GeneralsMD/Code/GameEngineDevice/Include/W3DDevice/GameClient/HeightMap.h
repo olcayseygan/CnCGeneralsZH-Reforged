@@ -177,6 +177,7 @@ protected:
 public:
 	virtual Bool sunPerPixelBaked(void) const { return m_sunPerPixel; }
 protected:
+	virtual Bool hasTerrainAtlas(void) const { return TRUE; }
 
 	/** Each cell drawn as two by two smaller ones (m_subdivided, TerrainSubdivide.h): nine vertices a
 		cell in place of four, their heights off the samples' Catmull-Rom patch held near the cell's

@@ -257,6 +257,14 @@ public:  // tile and texture info.
 		counted over the whole map, would carry if the map went on past its edge: the nearest edge
 		cell's texture class in its own repeat.  The skirt past the heightmap draws with it. */
 	void getSkirtTileUV(Int tileX, Int tileY, float *minU, float *minV, float *maxU, float *maxV);
+	/** The same tile as a key (the texture class, or minus one less the source tile for a tile in no
+		class), the tile's place in it, across and down, and the source tile; -1 for none. */
+	void getSkirtTile(Int tileX, Int tileY, Int *key, Int *across, Int *down, Int *sourceTile);
+	Int getSkirtKeyWidth(Int key);	///< tiles a side of a key's block: the class's width, 1 for a lone tile
+	/** A small texture of those keys' blocks, every tile tilePixels a side, for the skirt under the
+		lower terrain detail, which never builds the terrain atlas: origins gets each block's upper left
+		pixel and side the texture's side.  NULL when there is no device. */
+	TerrainTextureClass *getSkirtFlatTexture(const std::vector<Int> &keys, Int tilePixels, std::vector<ICoord2D> &origins, Int *side);
 
 	Bool getExtraAlphaUVData(Int xIndex, Int yIndex, float U[4], float V[4], UnsignedByte alpha[4], Bool *flip, Bool *cliff);
 	Int getExtraBlendUVGeneration(void) const { return m_extraBlendUVGeneration; }	///< changes when getExtraAlphaUVData's answers can

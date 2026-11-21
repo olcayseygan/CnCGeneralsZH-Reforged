@@ -2981,7 +2981,9 @@ AGAIN:
 		{
 			USE_PERF_TIMER(BigAssRenderLoop)
 			static Bool couldRender = true;
-			if ((TheGlobalData->m_breakTheMovie == FALSE) && (TheGlobalData->m_disableRender == false) && WW3D::Begin_Render( true, true, Vector3( 0.0f, 0.0f, 0.0f ), TheWaterTransparency->m_minWaterOpacity ) == WW3D_ERROR_OK)		
+			// past the land drawn round the map nothing draws, and the clear is what that land fades into
+			const Vector3 clearColour = TheTerrainRenderObject ? TheTerrainRenderObject->getSkirtRimColour() : Vector3(0.0f, 0.0f, 0.0f);
+			if ((TheGlobalData->m_breakTheMovie == FALSE) && (TheGlobalData->m_disableRender == false) && WW3D::Begin_Render( true, true, clearColour, TheWaterTransparency->m_minWaterOpacity ) == WW3D_ERROR_OK)		
 			{
 				
 				if(TheGlobalData->m_loadScreenRender == TRUE)

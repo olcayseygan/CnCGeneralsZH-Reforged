@@ -187,7 +187,7 @@ TextureClass *	W3DAssetManager::Get_Texture
 	//Just call the base implementation after adjusting reduction to deal
 	//with our special types.
 
-	if (filename && *filename && strncasecmp(filename,"ZHC",3) == 0)
+	if (TankSkin_houseColorPart(filename))
 		allow_reduction = false;	//don't allow reduction on our infantry textures.
 
 	return WW3DAssetManager::Get_Texture(	filename, 
@@ -410,9 +410,11 @@ static Bool skinSheetExists(const char *sheet)
 //---------------------------------------------------------------------
 /** Every sheet robj draws that skin `skin` pairs with a replacement (SkinsReforged.ini) is swapped
 	for it, on robj's own meshes, when the replacement is on disk.  The table pairs both the rebuilt
-	models' sheets and retail's, each with a sheet painted on its own layout, and the house colour
-	sheets (ZHC*) never take one, so the team colour still shows.  A missing replacement, or its
-	archive shut under Classic Graphics, costs the look, never the model. */
+	models' sheets and retail's, each with a sheet painted on its own layout.  A house colour sheet
+	(ZHC*, an infantryman's whole body) swaps only where the table names it, for a copy that keeps the
+	ZHC name after its prefix (TankSkin_houseColorPart), so Recolor_Asset after this still puts the
+	team colour on it.  A missing replacement, or its archive shut under Classic Graphics, costs the
+	look, never the model. */
 void W3DAssetManager::applySkin(RenderObjClass *robj, Int skin)
 {
 	if (robj->Class_ID() == RenderObjClass::CLASSID_HLOD)
@@ -440,7 +442,7 @@ void W3DAssetManager::applySkin(RenderObjClass *robj, Int skin)
 		TextureClass *oldTex = material->Peek_Texture(i);
 		REF_PTR_RELEASE(material);	// the mesh keeps its own reference to oldTex
 		const char *sheet = oldTex ? oldTex->Get_Texture_Name().Peek_Buffer() : NULL;
-		if (sheet == NULL || strncasecmp(sheet, "ZHC", 3) == 0)
+		if (sheet == NULL)
 			continue;
 		const char *skinSheet = TankSkin_replacementSheet(skin, sheet);
 		if (skinSheet == NULL || !skinSheetExists(skinSheet))
@@ -791,10 +793,13 @@ TextureClass * W3DAssetManager::Recolor_Texture_One_Time(TextureClass *texture, 
 	}
 	newsurf->Copy(0,0,0,0,desc.Width,desc.Height,oldsurf);
 
-	if (*(name+3) == 'D' || *(name+3) == 'd')
+	// ZHCD or ZHCA, read past a skin's prefix (SkinThx_ZHCA_UIWorker)
+	const char *house = TankSkin_houseColorPart(name);
+	const char kind = house ? house[3] : 0;
+	if (kind == 'D' || kind == 'd')
 		Remap_Palette(newsurf,color, true, false );	//texture only contains a palette stored in top row.
 	else
-	if (*(name+3) == 'A' || *(name+3) == 'a')
+	if (kind == 'A' || kind == 'a')
 		Remap_Palette(newsurf,color, false, true );	//texture only contains a palette stored in top row.
 
 	TextureClass * newtex=NEW_REF(TextureClass,(newsurf,(MipCountType)texture->Get_Mip_Level_Count()));
@@ -1069,7 +1074,7 @@ int W3DAssetManager::Recolor_Mesh(RenderObjClass *robj, const int color)
 	for (i=0; i<material->Texture_Count(); i++)
 	{
 		oldtex=material->Peek_Texture(i);
-		if (strncasecmp(oldtex->Get_Texture_Name(),"ZHC", 3) == 0)
+		if (TankSkin_houseColorPart(oldtex->Get_Texture_Name()))
 		{	//This texture needs to be adjusted for housecolor
 			newtex=Recolor_Texture(oldtex,color);
 			if (newtex)
@@ -1336,7 +1341,7 @@ static Bool getMeshColorMethods(MeshClass *mesh, Bool &vertexColor, Bool &textur
 	MaterialInfoClass *material = mesh->Get_Material_Info();
 	if (material)
 	{	for (int j=0; j<material->Texture_Count(); j++)
-			if (strncasecmp(material->Peek_Texture(j)->Get_Texture_Name(),"ZHC",3) == 0)
+			if (TankSkin_houseColorPart(material->Peek_Texture(j)->Get_Texture_Name()))
 			{	textureColor = true;
 				break;
 			}

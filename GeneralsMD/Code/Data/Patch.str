@@ -5158,6 +5158,14 @@ SKIN:EarnedBugHunter
 "BUG HUNTER BADGE"
 END
 
+SKIN:SpecialThanks
+"SPECIAL THANKS"
+END
+
+SKIN:EarnedSpecialThanks
+"SPECIAL THANKS"
+END
+
 SKIN:UnitUsaDozer
 "USA Dozer"
 END

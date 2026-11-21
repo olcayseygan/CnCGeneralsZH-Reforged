@@ -27739,7 +27739,8 @@ TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 	CHECK( TankSkin_describe( 16, unit, unitLabel, label ) && unit == "USADozer" && label == "SKIN:BugHunter" );
 	CHECK( TankSkin_describe( 17, unit, unitLabel, label ) && unit == "ChinaDozer" && unitLabel == "SKIN:UnitChinaDozer" );
 	CHECK( TankSkin_describe( 16, unit, unitLabel, label ) && unitLabel == "SKIN:UnitUsaDozer" );	// two dozers, two names
-	CHECK( !TankSkin_describe( 18, unit, unitLabel, label ) );
+	CHECK( TankSkin_describe( 18, unit, unitLabel, label ) && unit == "Worker" && unitLabel == "OBJECT:Worker" && label == "SKIN:SpecialThanks" );
+	CHECK( !TankSkin_describe( 19, unit, unitLabel, label ) );
 	// how each is earned, the line under a locked card: a code, the supporter grade or a higher one, the badge
 	static const char *const grades[] = { "Iron", "Bronze", "Silver", "Gold", "Emerald", "Reforged" };
 	for( Int id = 1; id <= 3; ++id )
@@ -27753,8 +27754,30 @@ TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 	}
 	CHECK_STR( TankSkin_earnedBy( 16 ).str(), "SKIN:EarnedBugHunter" );
 	CHECK_STR( TankSkin_earnedBy( 17 ).str(), "SKIN:EarnedBugHunter" );
-	CHECK( TankSkin_earnedBy( 18 ).isEmpty() );
+	CHECK_STR( TankSkin_earnedBy( 18 ).str(), "SKIN:EarnedSpecialThanks" );
+	CHECK( TankSkin_earnedBy( 19 ).isEmpty() );
 	CHECK( !TankSkin_describe( 40, unit, unitLabel, label ) );
+
+	// Special Thanks (18), the GLA Worker, the one rare look; his body is a house colour sheet, and its
+	// copy keeps the ZHC part so the team colour still goes on
+	for( Int id = 1; id <= 17; ++id )
+		CHECK( !TankSkin_isRare( id ) );
+	CHECK( TankSkin_isRare( 18 ) );
+	CHECK( !TankSkin_isRare( 40 ) );
+	CHECK_EQ( TankSkin_forModel( (SkinLoadout)1 << 18, "uiwrkr_skn" ), 18 );
+	CHECK_EQ( TankSkin_forModel( (SkinLoadout)1 << 18, "UIWrkr_CmBk" ), 0 );
+	CHECK_STR( TankSkin_replacementSheet( 18, "ZHCA_UIWorker.tga" ), "SkinThx_ZHCA_UIWorker.tga" );
+	CHECK_STR( TankSkin_replacementSheet( 18, "zhca_uiworker_r.dds" ), "SkinThx_ZHCA_UIWorker_R.tga" );
+	CHECK_STR( TankSkin_replacementSheet( 18, "CTCrateBoxes_R.tga" ), "SkinThx_CTCrateBoxes_R.tga" );
+	CHECK( TankSkin_replacementSheet( 18, "ZHCA_UIGLAUpgKit.tga" ) == NULL );
+	CHECK_STR( TankSkin_houseColorPart( "ZHCA_UIWorker.tga" ), "ZHCA_UIWorker.tga" );
+	CHECK_STR( TankSkin_houseColorPart( "SkinThx_ZHCA_UIWorker_R.tga" ), "ZHCA_UIWorker_R.tga" );
+	CHECK_STR( TankSkin_houseColorPart( "skinthx_zhcd_x.tga" ), "zhcd_x.tga" );
+	static const char *const uncoloured[] = { "SkinThx_CTCrateBoxes.tga", "Skin1K_AVCrusader_R.tga", "SkinSup1C_avchinook.tga",
+		"AVCrusader_R.tga", "Skin_", "XZHCA_UIWorker.tga", "" };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( uncoloured ); ++i )
+		CHECK( TankSkin_houseColorPart( uncoloured[i] ) == NULL );
+	CHECK( TankSkin_houseColorPart( NULL ) == NULL );
 
 	CHECK( TankSkin_setLocalLoadout( "1 2 3" ) == all );
 	CHECK( TankSkin_localLoadout() == all );

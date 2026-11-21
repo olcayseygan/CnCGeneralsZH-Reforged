@@ -61,4 +61,12 @@ Bool TankSkin_describe( Int id, AsciiString &unit, AsciiString &unitLabel, Ascii
 	* grade, a badge); empty for an id the table lacks or one that names none. */
 AsciiString TankSkin_earnedBy( Int id );
 
+/// TRUE for skin `id` marked Rare, the one of a kind the Skins screen draws in gold
+Bool TankSkin_isRare( Int id );
+
+/** The house colour part of a sheet's name, or NULL: the name itself for one of EA's ZHC sheets
+	* (ZHCA_UIWorker.tga), the part after the skin's prefix for a skin's copy of one
+	* (SkinThx_ZHCA_UIWorker.tga), which takes the team colour the same way. */
+const char *TankSkin_houseColorPart( const char *sheet );
+
 #endif

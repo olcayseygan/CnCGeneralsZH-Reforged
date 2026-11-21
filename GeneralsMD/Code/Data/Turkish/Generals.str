@@ -19406,6 +19406,14 @@ SKIN:EarnedBugHunter
 "HATA AVCISI ROZETİ"
 END
 
+SKIN:SpecialThanks
+"ÖZEL TEŞEKKÜR"
+END
+
+SKIN:EarnedSpecialThanks
+"ÖZEL TEŞEKKÜR"
+END
+
 SKIN:UnitUsaDozer
 "ABD Dozeri"
 END

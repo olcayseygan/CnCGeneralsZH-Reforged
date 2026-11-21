@@ -718,6 +718,7 @@ static const struct { const char *unit; const char *templateName; const char *ca
 	{ "SupplyTruck", "ChinaVehicleSupplyTruck", "SNSupplyTruck", SKIN_SIDE_CHINA },
 	{ "ChinaDozer", "ChinaVehicleDozer", "SNDozer", SKIN_SIDE_CHINA },
 	{ "Scorpion", "GLATankScorpion", "SUScorpion", SKIN_SIDE_GLA },
+	{ "Worker", "GLAInfantryWorker", "SUWorker", SKIN_SIDE_GLA },
 };
 static const Int SKIN_UNKNOWN = (Int)ARRAY_SIZE( SKIN_UNITS );
 
@@ -727,6 +728,37 @@ static const Color SKIN_HOUSE = GameMakeColor( 0x2a, 0x6e, 0xd8, 0xff );
 static const Real SKIN_CARD_TURN = 0.06f;
 /// a card's ground, near black, so the model carries it
 static const Color SKIN_CARD_GROUND = GameMakeColor( 0x09, 0x0b, 0x13, 0xff );
+/// a rare look's gold, the score screen's winner (UIStyle::GOLD) between two darker lines, and the
+/// gold a locked one wears
+static const Color SKIN_RARE_DARK = GameMakeColor( 0x8a, 0x66, 0x14, 0xff );
+static const Color SKIN_RARE_LOCKED = GameMakeColor( 0xa8, 0x8a, 0x3a, 0xff );
+
+/// the button edge's three lines in gold round a rare look
+static void rareEdge( Int x, Int y, Int width, Int height )
+{
+	TheDisplay->drawOpenRect( x, y, width, height, 1.0f, SKIN_RARE_DARK );
+	TheDisplay->drawOpenRect( x + 1, y + 1, width - 2, height - 2, 1.0f, UIStyle::GOLD );
+	TheDisplay->drawOpenRect( x + 2, y + 2, width - 4, height - 4, 1.0f, SKIN_RARE_DARK );
+}
+
+/// a five-pointed star, its points on a circle of size across centred in the size-square box at x, y
+static void drawRareStar( Int x, Int y, Int size, Color color )
+{
+	const Real cx = x + size * 0.5f, cy = y + size * 0.52f, r = size * 0.5f;
+	const Real stroke = (Real)max( 2, size / 8 );
+	Real px[5], py[5];
+	for (Int i = 0; i < 5; ++i)
+	{
+		const Real a = -1.5707963f + i * 1.2566371f;		// from the top, a fifth of a turn apart
+		px[i] = cx + r * cosf( a );
+		py[i] = cy + r * sinf( a );
+	}
+	for (Int i = 0; i < 5; ++i)
+	{
+		const Int j = ( i + 2 ) % 5;
+		TheDisplay->drawLine( (Int)px[i], (Int)py[i], (Int)px[j], (Int)py[j], stroke, color );
+	}
+}
 
 void WOLSkinsScreenOpen( void )
 {
@@ -840,6 +872,12 @@ static void drawSkinsHero( void )
 	const Real turns = (Real)fmod( seconds / 12.0, 1.0 );
 	TheDisplay->drawModelPreview( AsciiString( SKIN_UNITS[ row.known ].templateName ), s_skinFocus, SKIN_HOUSE,
 		s_hero.lo.x, s_hero.lo.y, s_hero.hi.x - s_hero.lo.x, s_hero.hi.y - s_hero.lo.y, turns, !s_heroOwned );
+	if (TankSkin_isRare( s_skinFocus ))
+	{
+		rareEdge( s_hero.lo.x, s_hero.lo.y, s_hero.hi.x - s_hero.lo.x, s_hero.hi.y - s_hero.lo.y );
+		const Int mark = across( 26.0f );
+		drawRareStar( s_hero.lo.x + across( 12.0f ), s_hero.lo.y + down( 12.0f ), mark, s_heroOwned ? UIStyle::GOLD : SKIN_RARE_LOCKED );
+	}
 }
 
 static Bool hovered( GameWindow *window, WinInstanceData *instData )
@@ -960,13 +998,17 @@ static void drawSkinChoice( GameWindow *window, WinInstanceData *instData )
 	if (picture > down( 24.0f ) && row->known < SKIN_UNKNOWN)
 		TheDisplay->drawModelPreview( AsciiString( SKIN_UNITS[ row->known ].templateName ), choice->id, SKIN_HOUSE,
 			x + 2, y + 2, width - 4, picture - 3, SKIN_CARD_TURN, !choice->owned, TRUE );
+	// a rare look in gold, the focus's blue edge inside it
+	const Bool rare = TankSkin_isRare( choice->id );
+	if (rare)
+		rareEdge( x, y, width, height );
 	if (choice->id == s_skinFocus)
-		UIStyle::edge( x, y, width, height );
-	else
+		UIStyle::edge( x + ( rare ? 3 : 0 ), y + ( rare ? 3 : 0 ), width - ( rare ? 6 : 0 ), height - ( rare ? 6 : 0 ) );
+	else if (!rare)
 		TheDisplay->drawOpenRect( x, y, width, height, 1.0f, UIStyle::FRAME );
 
 	// the state in the corner: a tick on the look the unit wears (or is picked to), a padlock on one
-	// the account lacks
+	// the account lacks; a rare look's star in the other
 	const Int mark = across( 18.0f );
 	const Int markX = x + width - across( 8.0f ) - mark;
 	const Int markY = y + down( 8.0f );
@@ -974,8 +1016,12 @@ static void drawSkinChoice( GameWindow *window, WinInstanceData *instData )
 		drawTick( markX, markY, mark, row->pick == row->worn ? UIStyle::ACTIVE : UIStyle::EDGE_LIT );
 	else if (!choice->owned)
 		drawPadlock( markX, markY, mark );
+	if (rare)
+		drawRareStar( x + across( 8.0f ), markY, mark, choice->owned ? UIStyle::GOLD : SKIN_RARE_LOCKED );
 
-	name->draw( x + across( 10.0f ), y + picture + down( 8.0f ), !choice->owned ? UIStyle::MUTED : hovered( window, instData ) ? UIStyle::ACTIVE : UIStyle::INK, UIStyle::SHADOW );
+	const Color ink = rare ? ( choice->owned ? UIStyle::GOLD : SKIN_RARE_LOCKED )
+		: !choice->owned ? UIStyle::MUTED : hovered( window, instData ) ? UIStyle::ACTIVE : UIStyle::INK;
+	name->draw( x + across( 10.0f ), y + picture + down( 8.0f ), ink, UIStyle::SHADOW );
 }
 
 /// a filter's box: the three-line edge on the one in force, its label ACTIVE then or under the mouse
@@ -1293,7 +1339,9 @@ static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const Asci
 		const Int buttonTop = f.bottom - down( 24.0f ) - down( 56.0f );
 		const Int nameBand = down( 48.0f );
 		const Int nameTop = buttonTop - down( 8.0f ) - nameBand;
-		addWords( UIStyle::fitText( name, title, rightInner ), title, rightLeft, nameTop, focus->owned ? UIStyle::INK : UIStyle::MUTED, ALIGN_LEFT, nameBand );
+		const Color nameInk = TankSkin_isRare( focus->id ) ? ( focus->owned ? UIStyle::GOLD : SKIN_RARE_LOCKED )
+			: focus->owned ? UIStyle::INK : UIStyle::MUTED;
+		addWords( UIStyle::fitText( name, title, rightInner ), title, rightLeft, nameTop, nameInk, ALIGN_LEFT, nameBand );
 		s_hero.lo.x = f.rightX + across( 8.0f );
 		s_hero.lo.y = f.top + down( 8.0f );
 		s_hero.hi.x = f.rightX + f.rightWidth - across( 8.0f );

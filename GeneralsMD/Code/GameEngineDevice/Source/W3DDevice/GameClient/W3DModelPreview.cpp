@@ -259,9 +259,16 @@ PreviewModel makeModel(const AsciiString &templateName, Int skin, Color house)
 		for (Int s = 0; s < robj->Get_Num_Sub_Objects(); ++s)
 		{
 			RenderObjClass *sub = robj->Get_Sub_Object(s);
-			if (!sub->Is_Hidden())
+			const AABoxClass &box = sub->Get_Bounding_Box();
+			// a part whose animation buries it, as an infantryman's stance puts the crate he carries and
+			// his mine detector 1392 units under the ground: drawn out of sight there, and framing it
+			// shrank the worker to a speck
+			const Bool buried = box.Center.Z + box.Extent.Z < -1.0f;
+			if (buried && !sub->Is_Hidden())
+				DEBUG_LOG(("MODELPREVIEW: '%s' part '%s' buried at %.1f, left out of the frame\n", templateName.str(),
+					sub->Get_Name(), box.Center.Z + box.Extent.Z));
+			if (!sub->Is_Hidden() && !buried)
 			{
-				const AABoxClass &box = sub->Get_Bounding_Box();
 				shown.push_back(box);
 				sub->Add_Ref();
 				shownParts.push_back(sub);

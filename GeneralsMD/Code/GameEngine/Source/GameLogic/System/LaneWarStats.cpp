@@ -144,11 +144,12 @@ UnsignedInt LaneWarStats::getEndFrame( void ) const
 	return end;
 }
 
-/** Out on the end frame: the team whose collapse ran out first, or both when they ran out together.
-	  A fortress that falls while the other one is still coming down does not take its team out. */
+/** Out on the end frame: every team whose fortress fell before it.  The end frame is the first fall's
+	  collapse run out, so a fortress that falls while the other one is still coming down takes its team
+	  out too, and the match is a draw. */
 static Bool outBy( UnsignedInt downFrame, UnsignedInt end )
 {
-	return downFrame != 0 && downFrame + LANEWAR_COLLAPSE_FRAMES <= end;
+	return downFrame != 0 && downFrame < end;
 }
 
 Int LaneWarStats::getWinner( void ) const

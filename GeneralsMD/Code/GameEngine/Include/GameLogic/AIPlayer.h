@@ -671,7 +671,7 @@ protected:
 	void logEngage(const char *cause, const std::vector<Object *> &units);	///< AI ENGAGE: what goes out, and how it weighs against the army it remembers
 	Bool refuseHold(Team *team, const char *why, Bool logIt);	///< FALSE, after logging the team holdTeamForWave lets go
 	Bool holdReinforcement(Object *obj);	///< a top-up for a team out on the map waits for the next wave instead of walking out alone
-	void rememberEnemies(void);					///< bring the seen-enemy ledger up to date with what is in sight now
+	void rememberEnemies(Bool scanned = FALSE);	///< bring the seen-enemy ledger up to date with what is in sight now; scanned: scanEnemies already ran this frame
 	void rememberedArmy(std::vector<AIVisibleEnemy> *army) const;	///< the ledger, one entry a kind, weighed by combat power
 	void sendWaveThroughTunnels(AIGroup *wave, const Coord3D *center, Waypoint *way);	///< whoever can goes by tunnel when the path is the long way round
 
@@ -1059,6 +1059,12 @@ protected:
 		Bool				stealth;		///< it can go invisible
 	};
 	std::map<ObjectID, SeenEnemy> m_seenEnemies;
+	/** The enemies in sight on a ledger turn, with their owners' indices: scanEnemies fills it, on a worker in
+		* lookAllSeats, and rememberEnemies writes it into the ledger on the logic thread, since a map node is a pool
+		* allocation.  Cleared, never shrunk, so a job grows it only past its largest turn.  Frame-local, not saved. */
+	std::vector< std::pair<Object *, Int> > m_seenScan;
+	void scanEnemies(void);											///< rememberEnemies' reading of the world, into m_seenScan
+	static void scanJob(Int index, void *context);
 	void answerArmy(void);	///< train the answer to the biggest part of the remembered enemy army nothing of ours answers
 
 	/** The fist: one unit picked because the army it remembers has no answer to it, built from the idle

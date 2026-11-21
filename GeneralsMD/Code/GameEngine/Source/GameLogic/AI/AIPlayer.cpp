@@ -4198,8 +4198,9 @@ static void addToArmy( std::vector<AIVisibleEnemy> *army, const Object *obj )
 /** Write down every enemy unit in sight, and cross off the ones it has looked for and not found.  Only
 	* what observerKnowsAbout allows, so the ledger is what a player would know from his own screen. */
 //-------------------------------------------------------------------------------------------------
-void AIPlayer::rememberEnemies( void )
+void AIPlayer::scanEnemies( void )
 {
+	m_seenScan.clear();
 	const Int me = m_player->getPlayerIndex();
 	const UnsignedInt now = TheGameLogic->getFrame();
 	if( !runsOwnAI() || (now + computeUpdatePhase( me, LEDGER_RATE )) % LEDGER_RATE != 0 )
@@ -4224,16 +4225,38 @@ void AIPlayer::rememberEnemies( void )
 							obj->isKindOf( KINDOF_PROJECTILE ) || !obj->isKindOf( KINDOF_CAN_ATTACK ) ||
 							!observerKnowsAbout( obj, me ) || aiCombatPower( obj ) <= 0.0f )
 						continue;
-					SeenEnemy &row = m_seenEnemies[ obj->getID() ];
-					row.tmpl = obj->getTemplate();
-					row.owner = p->getPlayerIndex();
-					row.seen = now;
-					row.pos = *obj->getPosition();
-					row.stealth = obj->getStatusBits().test( OBJECT_STATUS_CAN_STEALTH );
+					m_seenScan.push_back( std::make_pair( obj, p->getPlayerIndex() ) );
 				}
 			}
 		}
 	}
+}
+
+/*static*/ void AIPlayer::scanJob( Int index, void *context )
+{
+	( (AIPlayer **)context )[ index ]->scanEnemies();
+}
+
+void AIPlayer::rememberEnemies( Bool scanned )
+{
+	const Int me = m_player->getPlayerIndex();
+	const UnsignedInt now = TheGameLogic->getFrame();
+	if( !runsOwnAI() || (now + computeUpdatePhase( me, LEDGER_RATE )) % LEDGER_RATE != 0 )
+		return;
+	if( !scanned )
+		scanEnemies();
+
+	for( size_t s = 0; s < m_seenScan.size(); ++s )
+	{
+		const Object *obj = m_seenScan[ s ].first;
+		SeenEnemy &row = m_seenEnemies[ obj->getID() ];
+		row.tmpl = obj->getTemplate();
+		row.owner = m_seenScan[ s ].second;
+		row.seen = now;
+		row.pos = *obj->getPosition();
+		row.stealth = obj->getStatusBits().test( OBJECT_STATUS_CAN_STEALTH );
+	}
+	m_seenScan.clear();
 
 	for( std::map<ObjectID, SeenEnemy>::iterator it = m_seenEnemies.begin(); it != m_seenEnemies.end(); )
 	{
@@ -18119,11 +18142,14 @@ void AIPlayer::holdAtDefences( void )
 	if( !edgeTurnNow() )
 		return;
 	AI_SUB_START( holdStart );
-	std::vector<KnownDefence> defences;
-	if( m_lookDefencesFrame == now + 1 )
-		defences.swap( m_lookDefences );
-	else
-		collectKnownDefences( m_player, &defences );
+	// read in place, never swapped out: a swap left the look an empty vector to grow again on a worker
+	// every edge turn, a pool allocation inside the job (THREADING-ROADMAP 1.1)
+	const std::vector<KnownDefence> &defences = m_lookDefences;
+	if( m_lookDefencesFrame != now + 1 )
+	{
+		m_lookDefences.clear();
+		collectKnownDefences( m_player, &m_lookDefences );
+	}
 	if( defences.empty() )
 		return;
 	std::vector<Real> edgeRatios( defences.size(), -1.0f );		// the fight at each one's edge, measured once a look
@@ -20903,6 +20929,10 @@ void AIPlayer::doAbilities( void )
 	* the turn's shapes, which every seat stamping on that round shares. */
 void AIPlayer::prepareLook( void )
 {
+	// room the jobs fill without the pool, taken here on the logic thread; a no-op after the first look.
+	// ponytail: fixed floors, a 32-seat late game may still grow past them once or twice a match
+	m_seenScan.reserve( 512 );
+	m_lookDefences.reserve( 128 );
 	if( !measuringWithoutTactics() )
 		prepareInfluence();
 }
@@ -20916,7 +20946,7 @@ void AIPlayer::look( void )
 	// every seat weighs every player's standing on the same frame, each walking the whole world: side by side
 	if( isSkirmishAI() && now % AI_INCOME_BONUS_FRAMES == 0 )
 		stepIncomeBonus();
-	rememberEnemies();
+	// the ledger was written between the forks (lookAllSeats)
 	if( !measuringWithoutTactics() )
 	{
 		stampInfluenceTurn();
@@ -20955,6 +20985,11 @@ void AIPlayer::look( void )
 		ai->prepareLook();
 		seats[ count++ ] = ai;
 	}
+	// the ledger's reading side by side, its writing (map nodes, pool allocations) in seat order, then the look
+	// that stamps from it: what each seat's ledger holds when its look runs is what one pass made
+	JobSystem::parallel_for( count, 1, scanJob, seats );
+	for( Int i = 0; i < count; ++i )
+		seats[ i ]->rememberEnemies( TRUE );
 	JobSystem::parallel_for( count, 1, lookJob, seats );
 #ifdef DEBUG_LOGGING
 	aiPhaseEnd( AIP_LOOK );

@@ -1392,25 +1392,54 @@ void AISkirmishPlayer::doSurrender( void )
 	m_player->iterateObjects( tallyForSurrender, &mine );
 	mine.value += bankForSurrender( m_player );
 
+	// A seat is lost when its side is: seven Easy seats against one player with 180 tanks each weighed
+	// itself alone, and all seven said GG by frame 23800 before a shot was fired.  So the worth set
+	// against the enemy is this seat's plus every living ally's, and the enemy's is the strongest
+	// enemy side, an enemy plus his own living allies (in a free-for-all that is one player, as before).
+	Player *counted[ MAX_PLAYER_COUNT ];
+	Int64 worth[ MAX_PLAYER_COUNT ];
+	Bool isEnemy[ MAX_PLAYER_COUNT ];
+	Int numCounted = 0;
 	Int64 strongestEnemy = 0;
-	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
+	Int64 ourSide = mine.value;
+	for( Int i = 0; i < ThePlayerList->getPlayerCount() && numCounted < MAX_PLAYER_COUNT; ++i )
 	{
 		Player *other = ThePlayerList->getNthPlayer( i );
 		if( other == m_player || !other->isPlayableSide() || other->isPlayerObserver() )
 			continue;
-		if( m_player->getRelationship( other->getDefaultTeam() ) != ENEMIES )
+		const Relationship rel = m_player->getRelationship( other->getDefaultTeam() );
+		if( rel != ENEMIES && rel != ALLIES )
 			continue;
 		if( TheVictoryConditions->hasSinglePlayerBeenDefeated( other ) )
 			continue;
 		SurrenderTally theirs = { 0, 0 };
 		other->iterateObjects( tallyForSurrender, &theirs );
 		theirs.value += bankForSurrender( other );
-		if( theirs.value > strongestEnemy )
+		if( rel == ALLIES )
+			ourSide += theirs.value;
+		else if( theirs.value > strongestEnemy )
 			strongestEnemy = theirs.value;
+		counted[ numCounted ] = other;
+		worth[ numCounted ] = theirs.value;
+		isEnemy[ numCounted ] = rel == ENEMIES;
+		++numCounted;
+	}
+	Int64 enemySide = 0;
+	for( Int e = 0; e < numCounted; ++e )
+	{
+		if( !isEnemy[ e ] )
+			continue;
+		Int64 side = worth[ e ];
+		for( Int f = 0; f < numCounted; ++f )
+			if( f != e && isEnemy[ f ] && counted[ e ]->getRelationship( counted[ f ]->getDefaultTeam() ) == ALLIES )
+				side += worth[ f ];
+		if( side > enemySide )
+			enemySide = side;
 	}
 
+	// out of builders is this seat's own end: what is left goes to an ally either way
 	const Bool cannotRebuild = !m_player->hasAnyBuildFacility() && mine.builders == 0 && mine.value < strongestEnemy;
-	const Bool outweighed = mine.value * 100 < strongestEnemy * aiRatingLerp( m_rating, SURRENDER_WORTH_PERCENT );
+	const Bool outweighed = ourSide * 100 < enemySide * aiRatingLerp( m_rating, SURRENDER_WORTH_PERCENT );
 	if( !cannotRebuild && !outweighed )
 	{
 		m_hopelessSinceFrame = 0;
@@ -1424,8 +1453,8 @@ void AISkirmishPlayer::doSurrender( void )
 	if( now - m_hopelessSinceFrame < (UnsignedInt)( aiRatingLerp( m_rating, SURRENDER_HOLD_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ) )
 		return;
 
-	DEBUG_LOG(( "AI GG player %d frame %u worth %lld enemy %lld rebuild %d\n", (Int)m_player->getPlayerIndex(),
-		now, (long long)mine.value, (long long)strongestEnemy, (Int)!cannotRebuild ));
+	DEBUG_LOG(( "AI GG player %d frame %u worth %lld side %lld enemy %lld enemies %lld rebuild %d\n", (Int)m_player->getPlayerIndex(),
+		now, (long long)mine.value, (long long)ourSide, (long long)strongestEnemy, (long long)enemySide, (Int)!cannotRebuild ));
 	TheInGameUI->chatMessage( m_player, UnicodeString( u"GG" ) );
 	m_surrenderFrame = now + 2 * LOGICFRAMES_PER_GAME_SECOND;
 }

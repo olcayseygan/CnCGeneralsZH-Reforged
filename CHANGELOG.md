@@ -8,6 +8,11 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Computer allies give up as a team
+
+- A computer weighed only itself before typing GG, so allied Easy seats facing one strong player each saw a lost match and gave up unfought; seven Easy seats against one player given 180 tanks were all gone before a shot was fired. A computer now sets its whole team's worth against the strongest enemy team. In ten matches of two allied Easy seats against one computer at a rating of 4200, three seats gave up, each with its team under a fifth of the enemy's worth.
+- Replays with a computer player recorded before this change will not play back.
+
 ## Supporter and Bug Hunter skins
 
 - Backing the project now shows on your supply line. A supporter's Chinook and China Supply Truck wear a gunmetal hull with metal lines that climb with what you gave in total: Iron, Bronze, Silver, Gold, Emerald with green inlay, and at the top Reforged, gold on platinum with navy pinstripes. Every general's Chinook takes it, the Air Force General's Combat Chinook included, and so does the truck, its burnt hull and the pieces it throws when it dies. Your team colour stays on the trim, the crates keep their own paint, and a unit wears one grade at a time.

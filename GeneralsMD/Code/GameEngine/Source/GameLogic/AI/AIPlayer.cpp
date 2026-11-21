@@ -1772,8 +1772,12 @@ Bool AIPlayer::reachableFromBase( const Coord3D *pos )
 	* builder takes a priority entry whatever its rebuild count says.  An entry of the map's own plan
 	* waits out the rebuild delay and lets the rest of the list go first. */
 // ------------------------------------------------------------------------------------------------
-static void giveUpOnSpot( BuildListInfo *info )
+static void giveUpOnSpot( BuildListInfo *info, const char *why )
 {
+	// silent until 2026-11-21: a China turtle-bench seat's supply centre request at (129,143) went at frame 806
+	// and again at 4912 and it never earned a credit; this line says which spot went and why
+	DEBUG_LOG(( "AI GIVEUP frame %d '%s' at (%.0f,%.0f), %s, %s\n", TheGameLogic->getFrame(), info->getTemplateName().str(),
+		info->getLocation()->x, info->getLocation()->y, why, info->isPriorityBuild() ? "request blanked" : "plan entry waits" ));
 	if( info->isPriorityBuild() )
 		info->setTemplateName( AsciiString::TheEmptyString );
 	else
@@ -1909,7 +1913,7 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 {
 	// A site given up here lately is left alone until its wait runs out.
 	if (runsOwnAI() && spotCooling(info->getLocation())) {
-		giveUpOnSpot(info);
+		giveUpOnSpot(info, "site cooling after a cancel");
 		return NULL;
 	}
 	// Find a dozer.
@@ -1957,12 +1961,15 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 		return NULL;
 	}
 	Real angle = info->getAngle();
- 	if( TheBuildAssistant->isLocationLegalToBuild( &pos, bldgPlan, angle,
+ 	const LegalBuildCode enemyCheck = TheBuildAssistant->isLocationLegalToBuild( &pos, bldgPlan, angle,
 																								 BuildAssistant::NO_ENEMY_OBJECT_OVERLAP,
-																								 dozer, m_player ) != LBC_OK ) {
+																								 dozer, m_player );
+ 	if( enemyCheck != LBC_OK ) {
 		// If there's enemy units or structures, don't build/rebuild.
 		TheTerrainVisual->removeAllBibs();	// isLocationLegalToBuild adds bib feedback, turn it off.  jba.
-		giveUpOnSpot(info);
+		DEBUG_LOG(( "AI GIVEUP frame %d '%s': legal build code %d on the enemy test\n", TheGameLogic->getFrame(),
+			bldgPlan->getName().str(), (Int)enemyCheck ));
+		giveUpOnSpot(info, "an enemy on the site");
 		return NULL;
 	}
 
@@ -2062,6 +2069,7 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 				if (valid) break;
 			}
 			const Bool searchUnfinished = !valid && m_buildSearchNext < (Int)m_buildSearchCells.size();
+			const Int cellsWalked = (Int)m_buildSearchCells.size();
 			if (!searchUnfinished) {
 				m_buildSearchCells.clear();		// found, or every reachable cell tried: the next search starts over
 			}
@@ -2070,7 +2078,9 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 				if (searchUnfinished) {
 					m_buildDelay = 1;		// try again next frame; doBaseBuilding leaves any value >= 1 alone
 				} else {
-					giveUpOnSpot(info);
+					DEBUG_LOG(( "AI GIVEUP frame %d '%s': the dozer's search walked %d cells, home %d, none legal and safe\n",
+						TheGameLogic->getFrame(), bldgPlan->getName().str(), cellsWalked, (Int)home ));
+					giveUpOnSpot(info, "no spot in the dozer's search");
 				}
 				return NULL;
 			}

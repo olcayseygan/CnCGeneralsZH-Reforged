@@ -395,6 +395,8 @@ static void doLoadGame( void )
 	// get selected game info
 	AvailableGameInfo *selectedGameInfo = getSelectedSaveFileInfo( listboxGames );
 	DEBUG_ASSERTCRASH( selectedGameInfo, ("doLoadGame: No selected game info found\n") );
+	if( selectedGameInfo == NULL )
+		return;
 
 	// when loading a game we also close the quit/esc menu for the user when in-game
 	if( TheShell->isShellActive() == FALSE )
@@ -714,20 +716,20 @@ WindowMsgHandledType SaveLoadMenuSystem( GameWindow *window, UnsignedInt msg,
 				if( controlID == buttonDeleteConfirm )
 				{
 
-					// which item is selected in the game listbox
-					Int selected;
-					GadgetListBoxGetSelected( listboxGames, &selected );
-					AvailableGameInfo *selectedGameInfo;
-					selectedGameInfo = (AvailableGameInfo *)GadgetListBoxGetItemData( listboxGames, selected );
+					// which item is selected in the game listbox: none (or the "new save" row) has no
+					// item data, and v4.1.0 read its filename off null here
+					AvailableGameInfo *selectedGameInfo = getSelectedSaveFileInfo( listboxGames );
+					if( selectedGameInfo )
+					{
+						// construct path to filename
+						AsciiString filepath = TheGameState->getFilePathInSaveDirectory(selectedGameInfo->filename);
 
-					// construct path to filename
-					AsciiString filepath = TheGameState->getFilePathInSaveDirectory(selectedGameInfo->filename);
+						// delete the file
+						zh_remove( filepath.str() );
 
-					// delete the file
-					zh_remove( filepath.str() );
-					
-					// repopulate the listbox
-					TheGameState->populateSaveGameListbox( listboxGames, currentLayoutType );
+						// repopulate the listbox
+						TheGameState->populateSaveGameListbox( listboxGames, currentLayoutType );
+					}
 
 				}  // end if
 
@@ -797,9 +799,13 @@ WindowMsgHandledType SaveLoadMenuSystem( GameWindow *window, UnsignedInt msg,
 
 					// save the game
 					AsciiString filename;
+					UnicodeString desc;
 					if( selectedGameInfo )
+					{
 						filename = selectedGameInfo->filename;
-					TheGameState->saveGame( filename, selectedGameInfo->saveGameInfo.description, fileType );
+						desc = selectedGameInfo->saveGameInfo.description;
+					}
+					TheGameState->saveGame( filename, desc, fileType );
 
 /*
 					// set the description text entry field to default value

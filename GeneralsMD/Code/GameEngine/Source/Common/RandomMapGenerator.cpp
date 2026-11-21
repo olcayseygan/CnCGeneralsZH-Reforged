@@ -832,10 +832,16 @@ static const Int RMG_STYLE_COUNT = sizeof(theStyles) / sizeof(theStyles[0]);
 	clampSettings pins both; the seed picks only its look. */
 static const Int RMG_STYLE_LANE = RMG_STYLE_COUNT + 1;
 
+/** The Apocalypse map (RMGLayout::buildApocalypse), a second style past the table: "-randommap <seed>
+	<players> [size] apocalypse". Any player count; the seed picks the look and the gates' bearing. */
+static const Int RMG_STYLE_APOCALYPSE = RMG_STYLE_COUNT + 2;
+
 static const char *rmgStyleName( Int style )
 {
 	if( style == RMG_STYLE_LANE )
 		return "lane";
+	if( style == RMG_STYLE_APOCALYPSE )
+		return "apocalypse";
 	return style > 0 && style <= RMG_STYLE_COUNT ? theStyles[style - 1].m_name : "";
 }
 
@@ -1242,6 +1248,7 @@ public:
 
 private:
 	void buildLane( void );
+	void buildApocalypse( void );
 	void placeBowlStarts( void );
 	Real bowlRimAt( Real unitX, Real unitY ) const;
 	Real bowlHeight( Real cellX, Real cellY, Real noise ) const;
@@ -10430,6 +10437,275 @@ void RMGLayout::buildLane( void )
 }
 
 //-----------------------------------------------------------------------------
+// The Apocalypse map
+//-----------------------------------------------------------------------------
+
+/* Apocalypse plays on this map: every seat starts in one walled clearing in the middle and the dead
+	walk in from the map's edges without end (ApocalypseDirector.h). The clearing is flat at
+	RMG_APOC_GROUND. A ring of cliff RMG_APOC_WALL_HEIGHT bytes high stands round it, its line
+	wandering a few cells on a noise field, broken by a gate on each spawn bearing, so whatever comes
+	in comes through a gate the players can hold. Past the wall the belt rolls up into wooded hills,
+	and a trail with no tree or stone on it runs straight out from every gate to its spawn at the
+	playable edge, so the dead never get stuck in a wood on their way in.
+
+	The starts ring the middle, half a gate's step off the gates' bearings, each with a supply dock
+	behind it towards the wall; an oil derrick stands in the middle and a small supply pile outside
+	each gate beside its trail, worth a sortie. The names the director looks up:
+
+	Apocalypse_Centre               waypoint, the middle, where every new zombie walks
+	Apocalypse_Spawn_1 to _N        waypoints, one at the playable edge on each gate's bearing */
+#define RMG_APOC_GROUND			60		///< height bytes of the clearing
+#define RMG_APOC_START_PER_SEAT	6.75f	///< cells of start ring radius a seat, so neighbours stand about 42 apart
+#define RMG_APOC_START_LEAST	28.0f	///< and never nearer the middle than this
+#define RMG_APOC_DOCK_OUT		20.0f	///< cells from a start to its dock, straight out
+#define RMG_APOC_WALL_OUT		38.0f	///< cells from the start ring to the wall's inner foot
+#define RMG_APOC_WALL_FACE		2.0f	///< cells each face of the wall takes
+#define RMG_APOC_WALL_TOP		3.0f	///< cells across its top
+#define RMG_APOC_WALL_HEIGHT	40.0f	///< bytes it stands over the clearing, 25 world units: a cliff on both faces
+#define RMG_APOC_WALL_WOBBLE	3.0f	///< cells its line wanders in and out
+#define RMG_APOC_GATE_HALF		7.0f	///< cells from a gate's middle to each of its posts
+#define RMG_APOC_BELT_LEAST		50.0f	///< cells of belt past the wall at the least
+#define RMG_APOC_HILLS			26.0f	///< bytes the belt's hills rise at most
+#define RMG_APOC_HILL_REACH		24.0f	///< cells over which they come up off the wall
+#define RMG_APOC_TRAIL			7.0f	///< cells either side of a gate's line kept clear of trees and stones
+#define RMG_APOC_SPAWN_IN		8.0f	///< cells a spawn stands in from the playable edge, past the director's spread
+#define RMG_APOC_PILE_OUT		14.0f	///< cells from the wall's outer foot to a gate's pile
+#define RMG_APOC_PILE_ASIDE		10.0f	///< and off its trail
+#define RMG_APOC_GATES_MOST		6
+
+static Real rmgApocalypseStartRing( Int players )
+{
+	return std::max( RMG_APOC_START_LEAST, RMG_APOC_START_PER_SEAT * (Real)players );
+}
+
+/// gates, one spawn each: four, six past four seats
+static Int rmgApocalypseGates( Int players )
+{
+	return players > 4 ? RMG_APOC_GATES_MOST : 4;
+}
+
+static Real rmgApocalypseWallThickness( void )
+{
+	return 2.0f * RMG_APOC_WALL_FACE + RMG_APOC_WALL_TOP;
+}
+
+/// the least playable cells that hold the clearing, the wall and a belt past it
+static Int rmgApocalypseLeastCells( Int players )
+{
+	const Real reach = rmgApocalypseStartRing( players ) + RMG_APOC_WALL_OUT + RMG_APOC_WALL_WOBBLE
+		+ rmgApocalypseWallThickness() + RMG_APOC_BELT_LEAST;
+	return 2 * (Int)ceilf( reach );
+}
+
+void RMGLayout::buildApocalypse( void )
+{
+	m_style = NULL;
+	m_styleScale = 1.0f;
+	m_skeleton = FALSE;
+	m_type = &theMapTypes[RMG_MAP_PLAINS];
+	m_biome = &theBiomes[rmgBiomeFor( m_settings.m_seed )];
+	// the director runs its own night over the map's hour, so the hour is never the map's own night
+	m_timeOfDay = rmgTimeOfDayFor( m_settings.m_seed );
+	if( m_timeOfDay == TIME_OF_DAY_NIGHT )
+		m_timeOfDay = TIME_OF_DAY_AFTERNOON;
+	m_snowy = rmgSnowsOn( m_settings.m_seed );
+	const UnsignedInt seed = (UnsignedInt)m_settings.m_seed;
+	seedPermutation( m_settings.m_seed, m_perm );
+
+	const Int players = m_settings.m_numPlayers, gates = rmgApocalypseGates( players );
+	const Real half = 0.5f * (Real)m_settings.m_playableCells;
+	m_width = m_settings.m_playableCells + 2 * RMG_BORDER_CELLS;
+	m_height = m_width;
+	m_waterHeight = 0.0f;		// no water anywhere
+	m_playable = TRUE;
+	m_starts.clear();
+	m_objects.clear();
+	m_waypointLinks.clear();
+	m_lakes.clear();
+	m_areas.clear();
+	m_sites.clear();
+	m_routeLock.clear();
+	const Int cells = m_width * m_height;
+	m_inLake.assign( cells, 0 );
+
+	const Real startRing = rmgApocalypseStartRing( players );
+	const Real wallRing = startRing + RMG_APOC_WALL_OUT, thick = rmgApocalypseWallThickness();
+	const Real turn = 2.0f * PI * hashUnit( seed + 61001U, 0, 0 );
+	Real gateX[RMG_APOC_GATES_MOST], gateY[RMG_APOC_GATES_MOST];
+	for( Int g = 0; g < gates; g++ )
+	{
+		const Real angle = turn + 2.0f * PI * (Real)g / (Real)gates;
+		gateX[g] = Cos( angle );
+		gateY[g] = Sin( angle );
+	}
+
+	// cells past the wall's inner foot, from the middle at (dx, dy); its line wanders on the bearing
+	auto pastWall = [&]( Real dx, Real dy ) -> Real
+	{
+		const Real r = sqrtf( dx * dx + dy * dy );
+		const Real ux = r > 0.0f ? dx / r : 1.0f, uy = r > 0.0f ? dy / r : 0.0f;
+		return r - wallRing - RMG_APOC_WALL_WOBBLE * fractalNoise( m_perm, ux * 2.3f + 17.1f, uy * 2.3f + 5.3f, 2 );
+	};
+	// the gate whose line out of the middle (dx, dy) lies nearest, and how far across from it; -1 for none ahead
+	auto gateOf = [&]( Real dx, Real dy, Real *across ) -> Int
+	{
+		Int best = -1;
+		Real least = 1.0e9f;
+		for( Int g = 0; g < gates; g++ )
+		{
+			if( dx * gateX[g] + dy * gateY[g] <= 0.0f )
+				continue;
+			const Real off = fabsf( dx * gateY[g] - dy * gateX[g] );
+			if( off < least )
+			{
+				least = off;
+				best = g;
+			}
+		}
+		*across = least;
+		return best;
+	};
+	auto inWall = [&]( Real d, Int gate, Real across ) -> Bool
+	{
+		return d > 0.0f && d < thick && !( gate >= 0 && across < RMG_APOC_GATE_HALF );
+	};
+
+	// the clearing flat, the wall up out of it, the belt's hills coming up past the wall
+	m_heights.assign( cells, (UnsignedByte)RMG_APOC_GROUND );
+	for( Int y = 0; y < m_height; y++ )
+	{
+		for( Int x = 0; x < m_width; x++ )
+		{
+			const Real dx = (Real)( x - RMG_BORDER_CELLS ) - half, dy = (Real)( y - RMG_BORDER_CELLS ) - half;
+			const Real d = pastWall( dx, dy );
+			if( d <= 0.0f )
+				continue;
+			Real across;
+			const Int gate = gateOf( dx, dy, &across );
+			Real height = (Real)RMG_APOC_GROUND;
+			if( inWall( d, gate, across ) )
+				height += RMG_APOC_WALL_HEIGHT * rmgUnit( std::min( d, thick - d ) / RMG_APOC_WALL_FACE );
+			const Real hill = 0.5f + 0.5f * fractalNoise( m_perm, (Real)x * 0.03f + 31.7f, (Real)y * 0.03f + 17.3f, 3 );
+			height += RMG_APOC_HILLS * hill * fadeCurve( rmgUnit( ( d - thick ) / RMG_APOC_HILL_REACH ) );
+			m_heights[cellIndex( x, y )] = (UnsignedByte)(Int)( height + 0.5f );
+		}
+	}
+
+	Int waypointID = 1;
+	auto addWaypoint = [&]( const AsciiString& name, Real cellX, Real cellY )
+	{
+		RMGObject waypoint;
+		waypoint.m_templateName = "*Waypoints/Waypoint";
+		waypoint.m_uniqueID = name;
+		waypoint.m_worldX = cellX * MAP_XY_FACTOR;
+		waypoint.m_worldY = cellY * MAP_XY_FACTOR;
+		waypoint.m_angle = 0.0f;
+		waypoint.m_waypointID = waypointID++;
+		waypoint.m_flags = 0;
+		m_objects.push_back( waypoint );
+	};
+
+	AsciiString name;
+	for( Int i = 0; i < players; i++ )
+	{
+		const Real angle = turn + PI / (Real)gates + 2.0f * PI * (Real)i / (Real)players;
+		const Real ux = Cos( angle ), uy = Sin( angle );
+		const RMGPoint start = { half + startRing * ux, half + startRing * uy };
+		m_starts.push_back( start );
+		name.format( "Player_%d_Start", i + 1 );
+		addWaypoint( name, start.m_cellX, start.m_cellY );
+		name.format( "SupplyDock %d", i + 1 );
+		addObject( "SupplyDock", name.str(), half + ( startRing + RMG_APOC_DOCK_OUT ) * ux,
+			half + ( startRing + RMG_APOC_DOCK_OUT ) * uy, angle + PI );
+	}
+	addObject( "TechOilDerrick", "Derrick 1", half, half, 0.0f );
+	addWaypoint( AsciiString( "Apocalypse_Centre" ), half, half );
+	for( Int g = 0; g < gates; g++ )
+	{
+		// on the gate's line, RMG_APOC_SPAWN_IN short of the playable edge
+		const Real reach = ( half - RMG_APOC_SPAWN_IN ) / std::max( fabsf( gateX[g] ), fabsf( gateY[g] ) );
+		name.format( "Apocalypse_Spawn_%d", g + 1 );
+		addWaypoint( name, half + reach * gateX[g], half + reach * gateY[g] );
+
+		const Real out = wallRing + RMG_APOC_WALL_WOBBLE + thick + RMG_APOC_PILE_OUT;
+		const Real aside = ( g & 1 ) ? -RMG_APOC_PILE_ASIDE : RMG_APOC_PILE_ASIDE;
+		const Real pileX = half + out * gateX[g] - aside * gateY[g], pileY = half + out * gateY[g] + aside * gateX[g];
+		flattenPad( pileX, pileY, RMG_PILE_PAD, RMG_PILE_BLEND );
+		reserveSite( pileX, pileY, RMG_PILE_PAD + 2.0f );
+		name.format( "SupplyPile %d", g + 1 );
+		addObject( "SupplyPileSmall", name.str(), pileX, pileY, 0.0f );
+	}
+
+	/* The clearing's own ground with a worn patch in the middle, the wall in rock, the belt's ground
+		with patches of the second class and a worn trail down each gate's line. */
+	m_terrain.assign( cells, (UnsignedByte)RMG_TERRAIN_GRASS );
+	m_passable.assign( cells, 0 );
+	for( Int y = 0; y + 1 < m_height; y++ )
+	{
+		for( Int x = 0; x + 1 < m_width; x++ )
+		{
+			const Int i = cellIndex( x, y );
+			const Real dx = (Real)( x - RMG_BORDER_CELLS ) + 0.5f - half, dy = (Real)( y - RMG_BORDER_CELLS ) + 0.5f - half;
+			const Real d = pastWall( dx, dy );
+			Real across;
+			const Int gate = gateOf( dx, dy, &across );
+			const Real wander = fractalNoise( m_perm, (Real)x * 0.09f + 5.3f, (Real)y * 0.09f + 61.7f, 2 );
+			UnsignedByte terrainClass = RMG_TERRAIN_GRASS;
+			if( d <= 0.0f )
+			{
+				if( sqrtf( dx * dx + dy * dy ) < 12.0f + 4.0f * wander )
+					terrainClass = RMG_TERRAIN_DIRT;
+			}
+			else if( gate >= 0 && across < 2.5f + 1.5f * wander )
+				terrainClass = RMG_TERRAIN_DIRT;
+			else if( fractalNoise( m_perm, (Real)x * 0.05f + 87.3f, (Real)y * 0.05f + 45.6f, 3 ) > 0.3f )
+				terrainClass = RMG_TERRAIN_SAND;
+			const Bool cliff = cellSpanWorld( x, y ) > RMG_CLIFF_WORLD_SPAN;
+			if( cliff || inWall( d, gate, across ) )
+				terrainClass = RMG_TERRAIN_ROCK;
+			m_terrain[i] = terrainClass;
+			m_passable[i] = insidePlayable( x, y ) && !cliff ? 1 : 0;
+		}
+	}
+
+	// trees and stones in the belt only, never on a trail, a cliff or a pile's pad
+	const Real woods = ( 0.12f + 0.12f * hashUnit( seed + 61003U, 0, 0 ) ) * m_biome->m_treeShare;
+	const Real strays = 0.006f * m_biome->m_treeShare;
+	const Real stones = 0.004f + 0.006f * hashUnit( seed + 61003U, 0, 1 );
+	Int propID = 1;
+	AsciiString uniqueID;
+	for( Int y = RMG_BORDER_CELLS; y < RMG_BORDER_CELLS + m_settings.m_playableCells; y++ )
+	{
+		for( Int x = RMG_BORDER_CELLS; x < RMG_BORDER_CELLS + m_settings.m_playableCells; x++ )
+		{
+			if( !m_passable[cellIndex( x, y )] )
+				continue;
+			const Real cellX = (Real)( x - RMG_BORDER_CELLS ) + 0.5f, cellY = (Real)( y - RMG_BORDER_CELLS ) + 0.5f;
+			const Real dx = cellX - half, dy = cellY - half;
+			if( pastWall( dx, dy ) < thick + 3.0f )
+				continue;
+			Real across;
+			if( gateOf( dx, dy, &across ) >= 0 && across < RMG_APOC_TRAIL )
+				continue;
+			const UnsignedInt hash = hashCell( seed + 61005U, x, y );
+			const Real roll = (Real)( hash % 1024U ) / 1024.0f;
+			const Real patch = fractalNoise( m_perm, (Real)x * 0.05f + 7.1f, (Real)y * 0.05f + 3.9f, 3 );
+			const char *templateName = NULL;
+			if( roll < ( patch > 0.05f ? woods : strays ) )
+				templateName = m_biome->m_trees[( hash >> 10 ) % (UnsignedInt)RMG_BIOME_TREES];
+			else if( roll > 1.0f - stones )
+				templateName = m_biome->m_rocks[( hash >> 10 ) % (UnsignedInt)RMG_BIOME_ROCKS];
+			if( templateName == NULL || !siteIsClear( cellX, cellY, 0.5f ) )
+				continue;
+			uniqueID.format( "Prop %d", propID++ );
+			addObject( templateName, uniqueID.str(), cellX, cellY, (Real)( ( hash >> 14 ) % 8U ) * PI * 0.25f );
+		}
+	}
+
+	buildBlends();
+}
+
+//-----------------------------------------------------------------------------
 // The whole layout
 //-----------------------------------------------------------------------------
 
@@ -10457,6 +10733,12 @@ void RMGLayout::build( const RandomMapSettings& settings, Bool skeleton )
 	if( m_settings.m_style == RMG_STYLE_LANE )
 	{
 		buildLane();
+		restoreFPMode( callersFPMode );
+		return;
+	}
+	if( m_settings.m_style == RMG_STYLE_APOCALYPSE )
+	{
+		buildApocalypse();
 		restoreFPMode( callersFPMode );
 		return;
 	}
@@ -11049,8 +11331,21 @@ void RandomMapGenerator::clampSettings( RandomMapSettings& settings )
 	if( settings.m_numPlayers < MIN_PLAYERS ) settings.m_numPlayers = MIN_PLAYERS;
 	if( settings.m_numPlayers > MAX_PLAYERS ) settings.m_numPlayers = MAX_PLAYERS;
 
-	if( settings.m_style < 0 || settings.m_style > RMG_STYLE_LANE )
+	if( settings.m_style < 0 || settings.m_style > RMG_STYLE_APOCALYPSE )
 		settings.m_style = 0;
+
+	// the ground grows with the seats: never smaller than the walled clearing and a belt round it
+	if( settings.m_style == RMG_STYLE_APOCALYPSE )
+	{
+		settings.m_template.clear();
+		settings.m_templateCRC = 0;
+		if( settings.m_playableCells <= 0 )
+			settings.m_playableCells = cellsFor( RANDOM_MAP_SIZE_NORMAL, settings.m_numPlayers );
+		const Int least = rmgApocalypseLeastCells( settings.m_numPlayers );
+		if( settings.m_playableCells < least ) settings.m_playableCells = least;
+		if( settings.m_playableCells > maxCellsFor( settings.m_numPlayers ) ) settings.m_playableCells = maxCellsFor( settings.m_numPlayers );
+		return;
+	}
 
 	// one ground whatever the size or seat count asked for; the seed picks its look
 	if( settings.m_style == RMG_STYLE_LANE )
@@ -11126,7 +11421,7 @@ void RandomMapGenerator::clampSettings( RandomMapSettings& settings )
 
 Int RandomMapGenerator::styleNamed( const char *name )
 {
-	for( Int style = 1; style <= RMG_STYLE_LANE; style++ )
+	for( Int style = 1; style <= RMG_STYLE_APOCALYPSE; style++ )
 	{
 		if( AsciiString( name ).compareNoCase( rmgStyleName( style ) ) == 0 )
 			return style;
@@ -11958,7 +12253,8 @@ static const char *rulesFor( const AsciiString& path, Int *sizeOut )
 		folder.removeLastChar();
 
 	RandomMapSettings settings;
-	if( !settingsFromGeneratedPath( folder, settings ) || ( settings.m_style != 0 && settings.m_style != RMG_STYLE_LANE ) )
+	if( !settingsFromGeneratedPath( folder, settings )
+			|| ( settings.m_style != 0 && settings.m_style != RMG_STYLE_LANE && settings.m_style != RMG_STYLE_APOCALYPSE ) )
 		return NULL;
 	if( settings.m_style == RMG_STYLE_LANE && rmgLaneTwilight( settings.m_seed ) )
 		return NULL;

@@ -183,6 +183,11 @@ void VictoryConditions::update( void )
 			}
 		}
 
+		// in Apocalypse the seats are one alliance from the start and the dead are no player here, so
+		// the match is decided only once nobody is left standing
+		if (ISSET(APOCALYPSE) && alive != NULL)
+			multipleAlliances = true;
+
 		if (!multipleAlliances)
 		{
 			m_singleAllianceRemaining = true; // don't check again

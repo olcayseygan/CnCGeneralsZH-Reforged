@@ -285,6 +285,9 @@ Data/Art/Textures/TRWarFac_RoofD.tga
 Data/Art/Textures/TRWarFac_RoofE.tga
 Data/Art/Textures/TRWarFac_Rubble.tga
 Data/Art/Textures/TRWarFac_Scorch.tga
+Data/Art/Textures/ZBZomb.tga
+Data/Art/Textures/ZBZombB.tga
+Data/Art/Textures/ZBZombR.tga
 Data/Art/Textures/ZHCA_TRA400M.tga
 Data/Art/Textures/ZHCA_TRA400M_D.tga
 Data/Art/Textures/ZHCA_TRALPAGU.tga
@@ -664,6 +667,12 @@ Data/Art/W3D/TRWARFAC_DR.W3D
 Data/Art/W3D/TRWARFAC_E.W3D
 Data/Art/W3D/TRWARFAC_R.W3D
 Data/Art/W3D/TRWARFAC_SC.W3D
+Data/Art/W3D/ZBZBRT_SKN.W3D
+Data/Art/W3D/ZBZOMB_ATA.W3D
+Data/Art/W3D/ZBZOMB_SKN.W3D
+Data/Art/W3D/ZBZOMB_STA.W3D
+Data/Art/W3D/ZBZOMB_WKA.W3D
+Data/Art/W3D/ZBZRUN_SKN.W3D
 Data/Audio/Sounds/iaknata.wav
 Data/Audio/Sounds/iaknatb.wav
 Data/Audio/Sounds/iaknatc.wav
@@ -1207,6 +1216,7 @@ Data/Cursors/ReforgedWaypoint.ani
 Data/French/Generals.str
 Data/German/Generals.str
 Data/INI/AIDataReforged.ini
+Data/INI/ApocalypseReforged.ini
 Data/INI/BalanceReforged.ini
 Data/INI/CampaignReforged.ini
 Data/INI/CommandSetReforged.ini
@@ -1924,6 +1934,7 @@ GameEngine/Include/GameLogic/AIPlayer.h
 GameEngine/Include/GameLogic/AISkirmishPlayer.h
 GameEngine/Include/GameLogic/AIStateMachine.h
 GameEngine/Include/GameLogic/AITNGuard.h
+GameEngine/Include/GameLogic/ApocalypseDirector.h
 GameEngine/Include/GameLogic/Armor.h
 GameEngine/Include/GameLogic/ArmorSet.h
 GameEngine/Include/GameLogic/CRCSnapshotRing.h
@@ -2866,6 +2877,7 @@ GameEngine/Source/GameLogic/ScriptEngine/ScriptConditions.cpp
 GameEngine/Source/GameLogic/ScriptEngine/ScriptEngine.cpp
 GameEngine/Source/GameLogic/ScriptEngine/Scripts.cpp
 GameEngine/Source/GameLogic/ScriptEngine/VictoryConditions.cpp
+GameEngine/Source/GameLogic/System/ApocalypseDirector.cpp
 GameEngine/Source/GameLogic/System/CRCSnapshotRing.cpp
 GameEngine/Source/GameLogic/System/CaveSystem.cpp
 GameEngine/Source/GameLogic/System/CrateSystem.cpp

@@ -44,6 +44,7 @@ enum VictoryType
 	VICTORY_NOBUILDINGS = 1,
 	VICTORY_NOUNITS = 2,
 	VICTORY_LANEWAR = 4,		///< Lane War: a player is out when his team's fortress dies, and nothing else counts (fork)
+	VICTORY_APOCALYPSE = 8,	///< Apocalypse: the allied seats standing do not win; the match ends when the last of them falls (fork)
 };
 
 /**

@@ -93,6 +93,7 @@
 #include "GameLogic/CrateSystem.h"
 #include "GameLogic/FPUControl.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/ApocalypseDirector.h"
 #include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/LaneWarStats.h"
 #include "GameLogic/Locomotor.h"
@@ -482,6 +483,7 @@ void GameLogic::reset( void )
 	m_controlBarOverrides.clear();
 	TheLaneWarDirector->reset();
 	TheLaneWarStats->reset();
+	TheApocalypseDirector->reset();
 
 	// a load that failed part way must not hand its stream or heap order to the next one
 	m_loadedRandomPending = FALSE;
@@ -2258,6 +2260,11 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	TheLaneWarDirector->newMap( loadingSaveGame );
 	if (TheLaneWarDirector->isActive())
 		TheVictoryConditions->setVictoryConditions(VICTORY_LANEWAR);
+
+	// an Apocalypse map turns that mode on (ApocalypseDirector.h): the seats lose together, the dead never
+	TheApocalypseDirector->newMap( loadingSaveGame );
+	if (TheApocalypseDirector->isActive())
+		TheVictoryConditions->setVictoryConditions(VICTORY_NOUNITS | VICTORY_NOBUILDINGS | VICTORY_APOCALYPSE);
 
 	progressCount = LOAD_PROGRESS_LOOP_INITIAL_NETWORK_BUILDINGS;
 	// place initial network buildings/units
@@ -5557,6 +5564,7 @@ void GameLogic::update( void )
 	// Lane War, after both so a unit put on a plot this frame is held this frame
 	TheLaneWarDirector->update();
 	TheLaneWarStats->update();
+	TheApocalypseDirector->update();
 
 	// Note - TerrainLogic update needs to happen after ScriptEngine update, but before object updates.  jba.
 	// This way changes in bridges are noted in the script engine before being cleared in TerrainLogic->update
@@ -6260,6 +6268,13 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 		xferCRC->xferAsciiString(&marker);
 		xferCRC->xferSnapshot( TheLaneWarStats );
 	}
+	// only on an Apocalypse map, the same way
+	if (TheApocalypseDirector->isActive())
+	{
+		marker = "MARKER:TheApocalypseDirector";
+		xferCRC->xferAsciiString(&marker);
+		xferCRC->xferSnapshot( TheApocalypseDirector );
+	}
 	if (recordSnapshot)
 		m_crcSnapshots.setSectionCRC( CRC_SECTION_SCRIPTS, xferCRC->getCRC() );
 	if (isInGameLogicUpdate())
@@ -6882,13 +6897,14 @@ void GameLogic::prepareLogicForObjectLoad( void )
 	* 19: xfer the AI groups and the AI's group and formation counters (AI::xferGroups)
 	* 20: xfer TheLaneWarDirector
 	* 21: xfer TheLaneWarStats
+	* 22: xfer TheApocalypseDirector
 	*/
 // ------------------------------------------------------------------------------------------------
 void GameLogic::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 21;
+	const XferVersion currentVersion = 22;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -7378,6 +7394,11 @@ void GameLogic::xfer( Xfer *xfer )
     xfer->xferSnapshot( TheLaneWarStats );
   else if ( xfer->getXferMode() == XFER_LOAD )
     TheLaneWarStats->reset();	// a lane save from before the record starts counting from the load
+
+  if ( version >= 22 )
+    xfer->xferSnapshot( TheApocalypseDirector );
+  else if ( xfer->getXferMode() == XFER_LOAD )
+    TheApocalypseDirector->reset();	// a save from before the mode plays as it was made
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------

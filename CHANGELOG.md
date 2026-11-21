@@ -8,6 +8,10 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Apocalypse, a survival map (prototype)
+
+- A new random map kind for any number of players: everyone starts together in a clearing in the middle, walled in by cliffs with four gates (six past four players), supply right behind every base and a pile outside each gate for whoever dares a sortie. The dead walk in from the edges of the map without end and go for whatever of yours is nearest. You lose together when the last of your buildings and units falls; they never run out. They come as red-skinned Zombies, fast Runners that come at night, and hulking Brutes. Day gives you room to build, dusk thickens the waves, and night brings runners and brutes in waves twice the size, under a red sky with every building's night lights on. Each dawn hands the next day back, and each new day the dead come one rank tougher. In a two-player test the first six and a half minutes sent 1,085 of them and the bases killed 1,060.
+
 ## The computer builds superweapons like a turtle does
 
 - A Hard computer waited for its twelfth finished defence before its first superweapon and then stopped at two, while a player behind his walls put up five and wiped it in one push; the levels above Hard asked for even more guns per superweapon, so they built fewer still. Every level now pays four defences for each one, and once the first stands the computer adds another whenever the bank holds its price. In twelve four-player Hard matches on Twilight Flame all 48 computers put one up, the first at a median of 3.8 minutes, and held a median of three by the end, ten at most. Easy and Medium still build the one their scripts ask for.

@@ -221,6 +221,11 @@ if(MSVC)
   # sources in a single project and was the long pole.  /FS above is what makes this
   # safe - the PDB writes are serialized in the compilers.
   add_compile_options(/MP)
+  # /bigobj: an unoptimised x64 object keeps every inline function and template it instantiates as a
+  # COMDAT section of its own, and Debug's Tests/test_water_grid.cpp went past the 65,279 sections a
+  # plain COFF object can hold (C1128).  It only widens the section index in the object format, so
+  # the code and the Release objects are the same with it.
+  add_compile_options(/bigobj)
   # There is no /arch:SSE2 here and none is needed: x64 has no x87 code generation at all, so
   # every float is computed at its declared width and every machine gets the same bits.  That is
   # what the 32-bit build had to ask for explicitly, and why it pinned the x87 precision control.

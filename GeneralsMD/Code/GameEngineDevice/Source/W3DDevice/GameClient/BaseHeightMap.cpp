@@ -529,6 +529,7 @@ void BaseHeightMapRenderObjClass::ReleaseResources(void)
 void BaseHeightMapRenderObjClass::ReAcquireResources(void)
 {
 	W3DShaderManager::init();	//reaquire resources which may be needed by custom shaders
+	m_skirtStale = TRUE;	// ReleaseResources freed it with the map's resources
 
 	if (TheWaterRenderObj)
 		TheWaterRenderObj->ReAcquireResources();
@@ -3316,10 +3317,13 @@ Real BaseHeightMapRenderObjClass::skirtHeight(Int x, Int y, const SkirtEdge &edg
 	const Real share = edge.seaShare[ring];
 #if !ZH_MODERN_WATER
 	// No sea is drawn past the edge on this build (getSkirtSeaLevel), so ground going out from under the
-	// water level climbs out of it to a shore rather than lying dry below it.
-	const Real shore = TheGlobalData->m_waterPositionZ + TerrainSkirt::SHORE_RISE;
-	if (edgeZ < shore)
-		return max(land, edgeZ + (shore - edgeZ)*TerrainSkirt::smooth(outside/TerrainSkirt::PROFILE_RAMP));
+	// edge's water climbs out of it to a shore straight away rather than lying dry below it.
+	if (ring < (Int)edge.shore.size() && edge.shore[ring] > INVALID_WATER_HEIGHT) {
+		const Real SHORE_RAMP = 2*MAP_XY_FACTOR;
+		const Real shore = edge.shore[ring] + TerrainSkirt::SHORE_RISE;
+		if (edgeZ < shore)
+			return max(land, edgeZ + (shore - edgeZ)*TerrainSkirt::smooth(outside/SHORE_RAMP));
+	}
 #endif
 	if (share <= 0.0f)
 		return land;
@@ -3335,7 +3339,7 @@ texture of the edge's own classes. */
 void BaseHeightMapRenderObjClass::buildSkirt(void)
 {
 	// A return on the way leaves no skirt until something marks it stale again (initHeightData, the
-	// light, the sea past the edge, a device reset through ReleaseResources): tried every frame, a
+	// light, the sea past the edge, a device reset through ReAcquireResources): tried every frame, a
 	// texture that could not be made was made again every frame.
 	freeSkirt();
 	m_skirtStale = FALSE;
@@ -3358,6 +3362,7 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 	const Int ringSize = TerrainSkirt::ringLength(w, h);
 	std::vector<Real> ring(ringSize, 0.0f), sea(ringSize, 0.0f);
 	edge.water.assign(ringSize, INVALID_WATER_HEIGHT);
+	edge.shore.assign(ringSize, INVALID_WATER_HEIGHT);
 	Real landSum = 0.0f;
 	Int landCount = 0;
 	edge.seaZ = 0.0f;
@@ -3374,6 +3379,14 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 				waterZ = TheWaterRenderObj->getSkirtSeaLevel((x + outX - border)*MAP_XY_FACTOR, (y + outY - border)*MAP_XY_FACTOR);
 			}
 			edge.water[i] = waterZ;
+#if !ZH_MODERN_WATER
+			if (TheWaterRenderObj) {	// the polygons, read here at build time on this build
+				const Real playableX = (Real)((w - 1 - 2*border)*MAP_XY_FACTOR), playableY = (Real)((h - 1 - 2*border)*MAP_XY_FACTOR);
+				const Real px = max(0.0f, min(playableX, (x - border)*MAP_XY_FACTOR));
+				const Real py = max(0.0f, min(playableY, (y - border)*MAP_XY_FACTOR));
+				edge.shore[i] = TheWaterRenderObj->getWaterHeight(px, py);
+			}
+#endif
 			if (waterZ > INVALID_WATER_HEIGHT) {
 				sea[i] = 1.0f;
 				if (waterZ > edge.seaZ)

@@ -2763,7 +2763,8 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 			TheTerrainLogic->getExtent(&r);
 			if (!r.isInRegionNoZ(&pos))
 				pos = TheTerrainLogic->findClosestEdgePoint(&pos);
-			const ThingTemplate *thing = TheThingFactory->findTemplate( thisPlayer->getPlayerTemplate()->getBeaconTemplate() );
+			const PlayerTemplate *beaconOwnerTemplate = thisPlayer->getPlayerTemplate();
+			const ThingTemplate *thing = beaconOwnerTemplate ? TheThingFactory->findTemplate( beaconOwnerTemplate->getBeaconTemplate() ) : NULL;
 			if (thing && !TheVictoryConditions->hasSinglePlayerBeenDefeated(thisPlayer))
 			{
 				Int count;
@@ -3000,10 +3001,12 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 				for (VecObjectID::const_iterator it = selectedObjects.begin(); it != selectedObjects.end(); ++it)
 				{
 					Object *beacon = findObjectByID(*it);
-					if (beacon)
+					// the selection can hold a civilian's or a neutral thing, whose player has no template and no beacon
+					const PlayerTemplate *beaconOwnerTemplate = beacon ? beacon->getControllingPlayer()->getPlayerTemplate() : NULL;
+					if (beaconOwnerTemplate)
 					{
-						const ThingTemplate *thing = TheThingFactory->findTemplate( beacon->getControllingPlayer()->getPlayerTemplate()->getBeaconTemplate() );
-						if (thing->isEquivalentTo(beacon->getTemplate()))
+						const ThingTemplate *thing = TheThingFactory->findTemplate( beaconOwnerTemplate->getBeaconTemplate() );
+						if (thing && thing->isEquivalentTo(beacon->getTemplate()))
 						{
 							if (beacon->getControllingPlayer() == thisPlayer)
 							{

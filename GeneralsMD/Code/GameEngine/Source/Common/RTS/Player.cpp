@@ -2485,7 +2485,8 @@ void Player::transferAssetsFromThat(Player *that)
 	std::list<Object *> objsToTransfer;
 
 	// let's not transfer beacons
-	const ThingTemplate *beaconTemplate = TheThingFactory->findTemplate( that->getPlayerTemplate()->getBeaconTemplate() );
+	const PlayerTemplate *thatTemplate = that->getPlayerTemplate();
+	const ThingTemplate *beaconTemplate = thatTemplate ? TheThingFactory->findTemplate( thatTemplate->getBeaconTemplate() ) : NULL;
 
 	// transfer all his units.
 	for (PlayerTeamList::iterator it = that->m_playerTeamPrototypes.begin(); 

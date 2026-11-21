@@ -146,6 +146,7 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - Skirmish, LAN and online matches against a computer above Hard (Brutal and up) crashed a minute or two in, on every machine in the match at the same moment: about 35 reports from some 25 installs. The raiding party grew past the room kept for eight raiders and wrote over the computer's own notes. Such a computer now keeps at most eight raiders.
 - A unit still riding in a transport, tunnel or garrison that had already been deleted could crash the game later: when loading a save in the middle of a match, when leaving for the menu after the score screen, when a map script changed the playable area, and in a tunnel network fight. Gone.
 - A transport, garrison or Angry Mob nexus whose starting passengers name a unit the game's data doesn't have now comes out empty instead of stopping the game. Mods ran into this.
+- Taking down a beacon while something neutral was selected crashed a long network match, both seats at once.
 
 ## Long matches keep a short log
 

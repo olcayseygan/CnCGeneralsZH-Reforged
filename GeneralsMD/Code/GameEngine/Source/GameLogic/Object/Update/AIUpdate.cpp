@@ -1362,7 +1362,8 @@ UpdateSleepTime AIUpdateInterface::update( void )
 	{
 		Object *me = getObject();
 		Object *tunnel = me->getContainedBy();
-		if (tunnel != NULL && tunnel->getContain()->isTunnelContain())
+		// what holds it can have no contain module (v4.2.0, frame 30495); Object::onDestroy asks the same
+		if (tunnel != NULL && tunnel->getContain() != NULL && tunnel->getContain()->isTunnelContain())
 		{
 			Object *exit = me->getControllingPlayer()->getTunnelSystem()->findTunnelNear( &m_tunnelTripGoal, me );
 			privateExit( exit != NULL ? exit : tunnel, CMD_FROM_AI );

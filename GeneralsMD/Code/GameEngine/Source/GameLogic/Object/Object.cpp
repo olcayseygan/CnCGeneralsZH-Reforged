@@ -3200,7 +3200,8 @@ void Object::friend_notifyOfNewMapBoundary(void)
 {
 	// A rider of an enclosing container stays out of the world the way OpenContain took it out:
 	// registering it put a garrison's occupants back in reach of every splash weapon.
-	const Bool enclosed = m_containedBy && m_containedBy->getContain()->isEnclosingContainerFor( this );
+	const Bool enclosed = m_containedBy && m_containedBy->getContain()
+		&& m_containedBy->getContain()->isEnclosingContainerFor( this );
 	if( !enclosed )
 		ThePartitionManager->registerObject(this);
 	TheRadar->addObject(this);

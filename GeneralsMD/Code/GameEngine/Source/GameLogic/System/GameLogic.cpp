@@ -2936,6 +2936,20 @@ void GameLogic::processDestroyList( void )
 
 		currentObject->removeFromList(&m_objList);//remove from object list
 
+		/* Nobody may still name a container that is about to be freed.  The container's onDelete lets
+			 go of everyone on its list, but a rider can name it without being on it (a Helix's portable,
+			 a list parked while the damage went out, a save whose two halves disagree), and that rider's
+			 own destruction or the next map-border change then read the freed container: the reset and
+			 setActiveBoundary crashes.  Only a pointer that would dangle is touched. */
+		if( currentObject->getContain() )
+		{
+			for( Object *rider = m_objList; rider; rider = rider->getNextObject() )
+			{
+				if( rider->getContainedBy() == currentObject )
+					rider->friend_setContainedBy( NULL );
+			}
+		}
+
 		// remove object from lookup table
 		removeObjectFromLookupTable( currentObject );
 

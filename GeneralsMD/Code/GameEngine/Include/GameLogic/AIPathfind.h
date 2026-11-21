@@ -544,6 +544,7 @@ public:
 	Int getZone(void) {return m_zone;}
 	void setZone(Int zone) {m_zone = zone;}
 	void applyZone(void); // Propagates m_zone to all cells.
+	void xferZones( Xfer *xfer );	///< m_zone and the zone each cell reads (PathfindZoneManager::xfer)
 	void getStartCellIndex(ICoord2D *start) {*start = m_startCell;}
 	void getEndCellIndex(ICoord2D *end) {*end = m_endCell;}
 
@@ -703,6 +704,8 @@ public:
 	Bool getInteractsWithBridge(void) const {return m_interactsWithBridge;}
 	void setInteractsWithBridge(Bool interacts) {m_interactsWithBridge = interacts;}
 
+	void xfer( Xfer *xfer );		///< the block as it stands, tables included (PathfindZoneManager::xfer)
+
 protected:
 	void allocateZones(void);
 	void freeZones(void);
@@ -759,6 +762,14 @@ public:
 	Bool stepRebuild( Int cellBudget );
 	Bool isRebuilding( void ) const { return m_build.phase != BUILD_IDLE; }
 
+	/* The zones as the game has them, a pass in progress included, and when the next pass is due.  A
+		 load used to classify the map, put every structure back on it and zone that, then wait ten
+		 seconds for a pass: the zones it answered with in between were not the game's.  map, layers and
+		 bounds are the pathfinder's own. */
+	void xfer( Xfer *xfer, PathfindCell **map, PathfindLayer layers[], const IRegion2D &bounds );
+	/// an object's own post-process that touches a structure marks the zones dirty: the save says when
+	void loadPostProcess( void );
+
 	zoneStorageType getEffectiveZone(LocomotorSurfaceTypeMask acceptableSurfaces, Bool crusher, zoneStorageType zone) const;
 	zoneStorageType getEffectiveTerrainZone(zoneStorageType zone) const;
 
@@ -794,8 +805,8 @@ private:
 	void freeBuildZones( void );
 
 	/* Everything the pass in progress writes, apart from the cells' other zone slot: its own tables
-		 and zone blocks, swapped with the ones in use when it is done.  Never saved; a loaded game
-		 classifies the map and does the whole pass at once. */
+		 and zone blocks, swapped with the ones in use when it is done.  Saved only while a pass runs
+		 (xfer); the diagnostics never. */
 	struct Rebuild
 	{
 		BuildPhase phase;
@@ -838,6 +849,9 @@ private:
 	// UnsignedShort 32768 doubled to 0 and the loop never ended.
 	UnsignedInt		m_maxZone;								///< Max zone used.
 	UnsignedInt		m_nextFrameToCalculateZones;		///< WHen should I recalculate, next?.
+	UnsignedInt		m_loadedNextFrameToCalculateZones;	///< the save's, put back by loadPostProcess
+	Bool					m_nextFrameFromSave;
+	Int						m_loadedNumChanged;		///< the save's m_build.numChanged, put back by loadPostProcess
 	UnsignedInt		m_zonesAllocated;
 	zoneStorageType *m_groundCliffZones;
 	zoneStorageType *m_groundWaterZones;

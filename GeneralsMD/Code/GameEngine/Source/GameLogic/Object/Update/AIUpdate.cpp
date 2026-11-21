@@ -7995,12 +7995,13 @@ void AIUpdateInterface::crc( Xfer *x )
 	* 20: the aggressive stance
 	* 21: the player's orders held until the exit path is done
 	* 22: the auto garrison search
-	* 23: the stuck ladder's state, the closest-path retry flag and the compact group goal */
+	* 23: the stuck ladder's state, the closest-path retry flag and the compact group goal
+	* 24: the crowd scan kept between looks */
 // ------------------------------------------------------------------------------------------------
 void AIUpdateInterface::xfer( Xfer *xfer )
 {
   // version
-  const XferVersion currentVersion = 23;
+  const XferVersion currentVersion = 24;
   XferVersion version = currentVersion;
   xfer->xferVersion( &version, currentVersion );
  
@@ -8379,6 +8380,41 @@ void AIUpdateInterface::xfer( Xfer *xfer )
 		xfer->xferUnsignedInt(&m_rescueCool);
 		xfer->xferBool(&m_retryPath);
 		xfer->xferBool(&m_compactGoal);
+	}
+
+	if (version >= 24)
+	{
+		// The neighbour scan crowdSteer reuses between its staggered looks.  Without it every loaded
+		// unit looked on its first crowd frame, where the game that was saved read the copy.  An
+		// invalid copy is never read (the next frame scans) and its fields were never set, so only a
+		// valid one is written.
+		CrowdScan &s = m_crowdScan;
+		xfer->xferBool(&s.valid);
+	}
+	if (version >= 24 && m_crowdScan.valid)
+	{
+		CrowdScan &s = m_crowdScan;
+		xfer->xferReal(&s.sep);
+		xfer->xferObjectID(&s.blocker);
+		xfer->xferObjectID(&s.joiner);
+		xfer->xferReal(&s.joinerSide);
+		xfer->xferReal(&s.joinerR);
+		xfer->xferBool(&s.giveWay);
+		xfer->xferReal(&s.giveWayLat);
+		xfer->xferInt(&s.rank);
+		xfer->xferBool(&s.touching);
+		xfer->xferBool(&s.crossing);
+		xfer->xferInt(&s.nearCount);
+		if (s.nearCount < 0 || s.nearCount > CROWD_SCAN_NEAR_MAX)
+			throw SC_INVALID_DATA;
+		for (Int n = 0; n < s.nearCount; ++n)
+		{
+			xfer->xferReal(&s.nearLat[n]);
+			xfer->xferReal(&s.nearR[n]);
+		}
+		xfer->xferBool(&s.packAny);
+		xfer->xferReal(&s.packLo);
+		xfer->xferReal(&s.packHi);
 	}
 
 }  // end xfer

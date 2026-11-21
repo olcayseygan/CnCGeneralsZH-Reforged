@@ -2941,9 +2941,52 @@ void ZoneBlock::allocateZones(void)
 }
 
 
+/* A damaged save is refused here rather than read past the end of a table: getEffectiveZone takes
+	 an entry below m_numZones back down by m_firstZone and indexes the next table with it. */
+void ZoneBlock::xfer( Xfer *xfer )
+{
+	xfer->xferICoord2D( &m_cellOrigin );
+	xfer->xferUnsignedShort( &m_firstZone );
+	xfer->xferUnsignedShort( &m_numZones );
+	xfer->xferBool( &m_interactsWithBridge );
+	xfer->xferBool( &m_markedPassable );
+	UnsignedShort allocated = m_zonesAllocated;
+	Bool tables = m_groundCliffZones != NULL;
+	xfer->xferUnsignedShort( &allocated );
+	xfer->xferBool( &tables );
+	if (xfer->getXferMode() == XFER_LOAD)
+	{
+		if ((m_numZones >= 2 && (!tables || allocated <= m_numZones)) || (tables && allocated == 0))
+			throw SC_INVALID_DATA;
+		freeZones();
+		m_zonesAllocated = allocated;
+		if (tables)
+		{
+			m_groundCliffZones = MSGNEW("PathfindZoneInfo") zoneStorageType[allocated];
+			m_groundWaterZones = MSGNEW("PathfindZoneInfo") zoneStorageType[allocated];
+			m_groundRubbleZones = MSGNEW("PathfindZoneInfo") zoneStorageType[allocated];
+			m_crusherZones = MSGNEW("PathfindZoneInfo") zoneStorageType[allocated];
+		}
+	}
+	if (!tables)
+		return;
+	zoneStorageType *t[4] = { m_groundCliffZones, m_groundWaterZones, m_groundRubbleZones, m_crusherZones };
+	for (Int k = 0; k < 4; ++k)
+	{
+		xfer->xferUser( t[k], allocated * sizeof(zoneStorageType) );
+		if (xfer->getXferMode() == XFER_LOAD && m_numZones >= 2)
+			for (Int i = 0; i < m_numZones; ++i)
+				if (t[k][i] < m_firstZone || t[k][i] >= m_firstZone + m_numZones)
+					throw SC_INVALID_DATA;
+	}
+}
+
 //------------------------  PathfindZoneManager  -------------------------------
-PathfindZoneManager::PathfindZoneManager() : m_maxZone(0), 
-m_nextFrameToCalculateZones(0), 
+PathfindZoneManager::PathfindZoneManager() : m_maxZone(0),
+m_nextFrameToCalculateZones(0),
+m_loadedNextFrameToCalculateZones(0),
+m_nextFrameFromSave(FALSE),
+m_loadedNumChanged(0),
 m_groundCliffZones(NULL), 
 m_groundWaterZones(NULL), 
 m_groundRubbleZones(NULL), 
@@ -3087,6 +3130,7 @@ void PathfindZoneManager::allocateBlocks(const IRegion2D &globalBounds)
 
 void PathfindZoneManager::reset(void)  ///< Called when the map is reset.
 {
+	m_nextFrameFromSave = FALSE;
 	freeZones();
 	freeBuildZones();
 	freeBlocks();
@@ -3523,6 +3567,180 @@ Bool PathfindZoneManager::stepRebuild( Int cellBudget )
 		}
 	}
 	return swapped;
+}
+
+/* One zone table: count entries, each an index into a table of the same length. */
+static void xferZoneTable( Xfer *xfer, zoneStorageType *&table, UnsignedInt count )
+{
+	if (xfer->getXferMode() == XFER_LOAD)
+	{
+		delete [] table;
+		table = MSGNEW("PathfindZoneInfo") zoneStorageType[count];
+	}
+	xfer->xferUser( table, count * sizeof(zoneStorageType) );
+	if (xfer->getXferMode() == XFER_LOAD)
+		for (UnsignedInt i = 0; i < count; ++i)
+			if (table[i] >= count)
+				throw SC_INVALID_DATA;
+}
+
+/* The cells' zones in one slot, ground only (the layers keep theirs, PathfindLayer::xferZones), down
+	 the columns as they lie in memory. */
+static void xferCellZones( Xfer *xfer, PathfindCell **map, const IRegion2D &bounds, Int slot )
+{
+	const Int height = bounds.hi.y - bounds.lo.y + 1;
+	std::vector<zoneStorageType> zones( (size_t)( bounds.hi.x - bounds.lo.x + 1 ) * height );
+	size_t n = 0;
+	if (xfer->getXferMode() == XFER_SAVE)
+		for (Int i = bounds.lo.x; i <= bounds.hi.x; ++i)
+			for (Int j = bounds.lo.y; j <= bounds.hi.y; ++j)
+				zones[n++] = map[i][j].getZoneIn(slot);
+	xfer->xferUser( &zones[0], (Int)( zones.size() * sizeof(zoneStorageType) ) );
+	if (xfer->getXferMode() == XFER_LOAD)
+		for (Int i = bounds.lo.x; i <= bounds.hi.x; ++i)
+			for (Int j = bounds.lo.y; j <= bounds.hi.y; ++j)
+				map[i][j].setZoneIn(slot, zones[n++]);
+}
+
+void PathfindZoneManager::xfer( Xfer *xfer, PathfindCell **map, PathfindLayer layers[], const IRegion2D &bounds )
+{
+	const Bool load = xfer->getXferMode() == XFER_LOAD;
+
+	ICoord2D extent = m_zoneBlockExtent;
+	xfer->xferICoord2D( &extent );
+	if (map == NULL || extent.x != m_zoneBlockExtent.x || extent.y != m_zoneBlockExtent.y)
+		throw SC_INVALID_DATA;
+
+	xfer->xferUnsignedInt( &m_nextFrameToCalculateZones );
+	if (load)
+	{
+		m_loadedNextFrameToCalculateZones = m_nextFrameToCalculateZones;
+		m_nextFrameFromSave = TRUE;
+	}
+	Int slot = PathfindCell::s_zoneSlot;
+	xfer->xferInt( &slot );
+	if (slot != 0 && slot != 1)
+		throw SC_INVALID_DATA;
+	PathfindCell::s_zoneSlot = slot;
+
+	// the zones in use
+	xfer->xferUnsignedInt( &m_maxZone );
+	UnsignedInt allocated = m_zonesAllocated;
+	xfer->xferUnsignedInt( &allocated );
+	if (load)
+	{
+		if (allocated > MAX_RAW_ZONES || m_maxZone >= allocated)
+			throw SC_INVALID_DATA;
+		m_zonesAllocated = allocated;
+	}
+	xferZoneTable( xfer, m_groundCliffZones, allocated );
+	xferZoneTable( xfer, m_groundWaterZones, allocated );
+	xferZoneTable( xfer, m_groundRubbleZones, allocated );
+	xferZoneTable( xfer, m_terrainZones, allocated );
+	xferZoneTable( xfer, m_crusherZones, allocated );
+	xferZoneTable( xfer, m_hierarchicalZones, allocated );
+	Int x, y;
+	for (x = 0; x < m_zoneBlockExtent.x; ++x)
+		for (y = 0; y < m_zoneBlockExtent.y; ++y)
+			m_zoneBlocks[x][y].xfer( xfer );
+	xferCellZones( xfer, map, bounds, slot );
+	for (Int i = 0; i <= LAYER_LAST; ++i)
+		layers[i].xferZones( xfer );
+
+	// the pass in progress, if one is: it carries on from the column it had reached
+	Rebuild &b = m_build;
+	Int phase = b.phase;
+	xfer->xferInt( &phase );
+	if (phase < BUILD_IDLE || phase > BUILD_HIERARCHY)
+		throw SC_INVALID_DATA;
+	if (load)
+		b.phase = (BuildPhase)phase;
+	if (phase == BUILD_IDLE)
+		return;
+
+	if (load)
+	{
+		b.slot = 1 - slot;
+		b.map = map;
+		b.layers = layers;
+		b.bounds = bounds;
+		b.xCount = m_zoneBlockExtent.x;
+		b.yCount = m_zoneBlockExtent.y;
+		b.frames = 0;
+		b.ticks = 0;
+		b.worstTicks = 0;
+	}
+	xfer->xferInt( &b.cursor );
+	xfer->xferUnsignedInt( &b.maxZone );
+	for (Int i = 0; i <= LAYER_LAST; ++i)
+		xfer->xferInt( &b.layerZone[i] );
+	xfer->xferInt( &b.numChanged );
+	if (load)
+	{
+		const Bool byBlock = phase == BUILD_RAW || phase == BUILD_BLOCKS;
+		const Int lo = byBlock ? 0 : bounds.lo.x;
+		const Int hi = byBlock ? b.xCount - 1 : bounds.hi.x;
+		if (b.cursor < lo || b.cursor > hi || b.maxZone > MAX_RAW_ZONES ||
+				b.numChanged < 0 || b.numChanged > Rebuild::MAX_CHANGED)
+			throw SC_INVALID_DATA;
+		m_loadedNumChanged = b.numChanged;
+	}
+	for (Int i = 0; i < b.numChanged; ++i)
+	{
+		xfer->xferInt( &b.changed[i].lo.x );
+		xfer->xferInt( &b.changed[i].lo.y );
+		xfer->xferInt( &b.changed[i].hi.x );
+		xfer->xferInt( &b.changed[i].hi.y );
+	}
+	xferCellZones( xfer, map, bounds, 1 - slot );
+	for (x = 0; x < m_zoneBlockExtent.x; ++x)
+		for (y = 0; y < m_zoneBlockExtent.y; ++y)
+			b.zoneBlocks[x][y].xfer( xfer );
+
+	if (load)
+	{
+		b.equivalency.resize( MAX_RAW_ZONES );
+		b.collapsed.resize( MAX_RAW_ZONES );
+	}
+	if (phase == BUILD_RAW)
+	{
+		// the merges so far; the ids past maxZone are still their own, as beginRebuild left them
+		if (load)
+			for (Int i = 0; i < MAX_RAW_ZONES; ++i)
+				b.equivalency[i] = (zoneStorageType)i;
+		if (b.maxZone > 0)
+			xfer->xferUser( &b.equivalency[0], (Int)( b.maxZone * sizeof(zoneStorageType) ) );
+	}
+	else
+	{
+		if (phase == BUILD_COLLAPSE)
+			xfer->xferUser( &b.collapsed[0], (Int)( MAX_RAW_ZONES * sizeof(Int) ) );
+		UnsignedInt buildAllocated = b.zonesAllocated;
+		xfer->xferUnsignedInt( &buildAllocated );
+		if (load)
+		{
+			if (buildAllocated > MAX_RAW_ZONES || b.maxZone >= buildAllocated)
+				throw SC_INVALID_DATA;
+			b.zonesAllocated = buildAllocated;
+		}
+		xferZoneTable( xfer, b.groundCliffZones, buildAllocated );
+		xferZoneTable( xfer, b.groundWaterZones, buildAllocated );
+		xferZoneTable( xfer, b.groundRubbleZones, buildAllocated );
+		xferZoneTable( xfer, b.terrainZones, buildAllocated );
+		xferZoneTable( xfer, b.crusherZones, buildAllocated );
+		xferZoneTable( xfer, b.hierarchicalZones, buildAllocated );
+	}
+}
+
+void PathfindZoneManager::loadPostProcess( void )
+{
+	if (!m_nextFrameFromSave)
+		return;
+	m_nextFrameFromSave = FALSE;
+	m_nextFrameToCalculateZones = m_loadedNextFrameToCalculateZones;
+	// a footprint an object's post-process touched joined the pass's list; the saved game had no such entry
+	if (m_build.phase != BUILD_IDLE)
+		m_build.numChanged = m_loadedNumChanged;
 }
 
 
@@ -4342,6 +4560,33 @@ void PathfindLayer::applyZone( void )
 			cell->setZone(m_zone);
 		}
 	}
+}
+
+/**
+ * m_zone and the zone every cell reads, impassable ones included.  The layer is laid out by the map
+ * and its bridges, so a load has the same cells.
+ */
+void PathfindLayer::xferZones( Xfer *xfer )
+{
+	xfer->xferInt( &m_zone );
+	const Int count = m_layerCells ? m_width * m_height : 0;
+	Int saved = count;
+	xfer->xferInt( &saved );
+	if (saved != count)
+		throw SC_INVALID_DATA;
+	if (count == 0)
+		return;
+	std::vector<zoneStorageType> zones( count );
+	Int i, j, n = 0;
+	if (xfer->getXferMode() == XFER_SAVE)
+		for (i = 0; i < m_width; i++)
+			for (j = 0; j < m_height; j++)
+				zones[n++] = m_layerCells[i][j].getZone();
+	xfer->xferUser( &zones[0], count * (Int)sizeof(zoneStorageType) );
+	if (xfer->getXferMode() == XFER_LOAD)
+		for (i = 0; i < m_width; i++)
+			for (j = 0; j < m_height; j++)
+				m_layerCells[i][j].setZone( zones[n++] );
 }
 
 
@@ -13952,12 +14197,15 @@ PathfindCell *Pathfinder::getUnitCell( Int layer, Int x, Int y )
 	*		 itself back in the cells under it, and that is not the map the game had: a unit held on a plot
 	*		 keeps the cells it stood in when it was taken, a unit that drove through another's cells leaves
 	*		 the last one in, a sniped hull keeps the goal its AI last set.  The loaded game pathed round
-	*		 another crowd from its first frame and played a different match. */
+	*		 another crowd from its first frame and played a different match.
+	* 3: The zones, a zone pass in progress and the frame the next one is due (PathfindZoneManager::xfer).
+	*		 A load zoned the bare map and patched each structure in, and answered every "is there a path"
+	*		 from those for up to ten seconds, where the game that was saved still had its own. */
 void Pathfinder::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 3;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 	if (version < 2)
@@ -13993,8 +14241,19 @@ void Pathfinder::xfer( Xfer *xfer )
 	xfer->xferUnsignedInt( &count );
 	if (xfer->getXferMode() == XFER_LOAD)
 	{
-		const UnsignedInt mapCells = (UnsignedInt)((m_extent.hi.x - m_extent.lo.x + 1) * (m_extent.hi.y - m_extent.lo.y + 1));
-		if (count > mapCells * LAYER_LAST)
+		// one entry a cell, and only a cell getUnitCell hands out (impassable layer cells are NULL), so a
+		// damaged count is refused before it sizes the vector
+		UnsignedInt unitCells = 0;
+		for (Int layer = LAYER_GROUND; layer <= LAYER_LAST; ++layer)
+		{
+			if (layer != LAYER_GROUND && !m_layers[layer].hasCells())
+				continue;
+			for (Int y = m_extent.lo.y; y <= m_extent.hi.y; ++y)
+				for (Int x = m_extent.lo.x; x <= m_extent.hi.x; ++x)
+					if (getUnitCell(layer, x, y) != NULL)
+						++unitCells;
+		}
+		if (count > unitCells)
 			throw SC_INVALID_DATA;
 		m_unitCells.resize( count );
 	}
@@ -14014,6 +14273,9 @@ void Pathfinder::xfer( Xfer *xfer )
 			throw SC_INVALID_DATA;
 	}
 
+	if (version >= 3)
+		m_zoneManager.xfer( xfer, m_map, m_layers, m_extent );
+
 	if (xfer->getXferMode() == XFER_LOAD)
 		m_unitMapFromSave = TRUE;
 	else
@@ -14026,6 +14288,8 @@ void Pathfinder::xfer( Xfer *xfer )
 	* with all of that, and the save's cells back in. */
 void Pathfinder::loadPostProcess( void )
 {
+	m_zoneManager.loadPostProcess();
+
 	if (!m_unitMapFromSave)
 		return;
 	m_unitMapFromSave = FALSE;

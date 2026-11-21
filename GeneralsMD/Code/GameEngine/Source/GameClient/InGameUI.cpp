@@ -9692,7 +9692,12 @@ void InGameUI::postDraw( void )
 				UnsignedInt readyFrame = TheGameLogic->getFrame();
 				if (framesLeft > 0)
 					readyFrame += ConvertRetailFrames( framesLeft );	// script timers count retail frames of game time
-				Int readySecs = ControlBar_secondsFromFrames( (Real)(readyFrame - TheGameLogic->getFrame()) );
+				// at the rate the match is paced to, not the one measured over the last second: that one
+				// wanders a frame or two either way (and far down after a load), and a countdown divided by
+				// it jumps a second or runs backwards.  The pacer's own rate, a cinematic's slower one included
+				// (GameEngine_missionTimeRate's), so the clock keeps real seconds under held input too
+				Int readySecs = ControlBar_secondsFromFramesAt( (Real)(readyFrame - TheGameLogic->getFrame()),
+						GameEngine_cinematicFramesPerSecond( TheGameEngine->getFramesPerSecondLimit(), GameEngine_isPacingCinematic() ) );
 				if ( (info->isCountdown && readySecs != info->timestamp) || (!info->isCountdown && framesLeft != info->timestamp) )
 				{
 					if (!readySecs && info->isCountdown)

@@ -290,6 +290,8 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_LANEUPGRADE;
 	else if (token == "laneability")
 		*action = SCENARIO_ACTION_LANEABILITY;
+	else if (token == "lanevet")
+		*action = SCENARIO_ACTION_LANEVET;
 	else
 		return FALSE;
 
@@ -411,6 +413,7 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_LANEMOVE:		return SCENARIO_TOKENS_ATTACK + 2;
 		case SCENARIO_ACTION_LANEUPGRADE:	return SCENARIO_TOKENS_STOP;
 		case SCENARIO_ACTION_LANEABILITY:	return SCENARIO_TOKENS_ATTACK;
+		case SCENARIO_ACTION_LANEVET:			return SCENARIO_TOKENS_ATTACK;
 	}
 	return SCENARIO_TOKENS_STOP;
 }
@@ -620,9 +623,13 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 		case SCENARIO_ACTION_LANETIER:
 		case SCENARIO_ACTION_LANESELL:
 		case SCENARIO_ACTION_LANEMOVE:
+		case SCENARIO_ACTION_LANEVET:
 		{
-			// the order's integers, kept as written and read again when it runs
-			for (Int t = 3; t < tokensNeededFor( actionType ); ++t)
+			// the order's integers, kept as written and read again when it runs; a sale and a rank take
+			// a passenger's index after the slot
+			const Bool passenger = actionType == SCENARIO_ACTION_LANESELL || actionType == SCENARIO_ACTION_LANEVET;
+			const Int last = passenger && count > tokensNeededFor( actionType ) ? tokensNeededFor( actionType ) + 1 : tokensNeededFor( actionType );
+			for (Int t = 3; t < last; ++t)
 			{
 				Int value;
 				if (!parseWholeNumber( tokens[ t ], &value ))
@@ -2364,6 +2371,7 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 		case SCENARIO_ACTION_LANEMOVE:
 		case SCENARIO_ACTION_LANEUPGRADE:
 		case SCENARIO_ACTION_LANEABILITY:
+		case SCENARIO_ACTION_LANEVET:
 			ordered = FALSE;		// handled before the group is built
 			break;
 	}
@@ -2633,7 +2641,8 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 
 	// the other Lane War orders go in as MSG_LANEWAR_ORDER's integers do
 	if (action.action == SCENARIO_ACTION_LANETIER || action.action == SCENARIO_ACTION_LANESELL
-			|| action.action == SCENARIO_ACTION_LANEMOVE || action.action == SCENARIO_ACTION_LANEUPGRADE)
+			|| action.action == SCENARIO_ACTION_LANEMOVE || action.action == SCENARIO_ACTION_LANEUPGRADE
+			|| action.action == SCENARIO_ACTION_LANEVET)
 	{
 		Int args[ 6 ];
 		Int argCount = 0;
@@ -2651,7 +2660,8 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 		else
 		{
 			kind = action.action == SCENARIO_ACTION_LANESELL ? LANEWAR_ORDER_SELL
-					 : action.action == SCENARIO_ACTION_LANEMOVE ? LANEWAR_ORDER_MOVE : LANEWAR_ORDER_TIER;
+					 : action.action == SCENARIO_ACTION_LANEMOVE ? LANEWAR_ORDER_MOVE
+					 : action.action == SCENARIO_ACTION_LANEVET ? LANEWAR_ORDER_VETERANCY : LANEWAR_ORDER_TIER;
 			const char *at = action.name.str();
 			Int value = 0, used = 0;
 			while (argCount < 6 && sscanf( at, "%d%n", &value, &used ) == 1)

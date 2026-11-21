@@ -13114,6 +13114,27 @@ TEST(lane_war_abilities_start_on_but_the_captures_and_money_and_a_switch_holds_o
 	CHECK( ScenarioDrill_parseLine( "30 laneability 0 ChinaInfantryTankHunter 1 2", &action ) != SCENARIO_PARSE_OK );
 }
 
+TEST(lane_war_ranks_cost_a_half_three_quarters_and_all_of_the_unit)
+{
+	// a Crusader bought for 900: Veteran 450, Elite 675, Heroic 900, nothing past Heroic or for Regular
+	CHECK_EQ( LaneWar_veterancyPrice( 900, LEVEL_VETERAN ), 450 );
+	CHECK_EQ( LaneWar_veterancyPrice( 900, LEVEL_ELITE ), 675 );
+	CHECK_EQ( LaneWar_veterancyPrice( 900, LEVEL_HEROIC ), 900 );
+	CHECK_EQ( LaneWar_veterancyPrice( 900, LEVEL_HEROIC + 1 ), 0 );
+	CHECK_EQ( LaneWar_veterancyPrice( 900, LEVEL_REGULAR ), 0 );
+	// a Ranger's 225 rounds down: 112 and 168
+	CHECK_EQ( LaneWar_veterancyPrice( 225, LEVEL_VETERAN ), 112 );
+	CHECK_EQ( LaneWar_veterancyPrice( 225, LEVEL_ELITE ), 168 );
+	CHECK_EQ( (Int)LANEWAR_ORDER_VETERANCY, 6 );
+
+	ScenarioAction action;
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "30 lanevet 0 0 3 1", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_LANEVET );
+	CHECK_STR( action.name.str(), "0 3 1" );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "30 lanevet 0 0 3 1 2", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_STR( action.name.str(), "0 3 1 2" );
+}
+
 //-------------------------------------------------------------------------------------------------
 /** A ranked Quick Match has no lobby to send a map name: every peer derives the map from the match
 	seed and the seat count alone, so the derivation is pinned here.  A change to it splits two builds

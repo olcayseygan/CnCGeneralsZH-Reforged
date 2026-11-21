@@ -34,7 +34,14 @@
 60    lanemove   0  0 3 0 6 0
 60    lanemove   0  1 3 0 0 0
 30    laneplace  1  ChinaInfantryRedguard         0 0
-# tick 0 sends the Ranger and Burton; the Ranger sells for half now
+# ranks on the moved Ranger: Veteran for half its 225, Elite for three quarters, Heroic for all of it,
+# then refused, already Heroic; a rank on an empty slot is refused too
+90    lanevet    0  0 3 0
+90    lanevet    0  0 3 0
+90    lanevet    0  0 3 0
+90    lanevet    0  0 3 0
+90    lanevet    0  0 9 7
+# tick 0 sends the Ranger, its copy at Heroic, and Burton; the Ranger and its ranks sell for half now
 1500  lanesell   0  0 3 0
 # an income level, then the Flashbang upgrade from what the ticks paid
 4200  lanetier   0  0 1

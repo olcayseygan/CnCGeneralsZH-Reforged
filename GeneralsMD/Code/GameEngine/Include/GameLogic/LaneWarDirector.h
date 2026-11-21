@@ -108,7 +108,19 @@ enum LaneWarOrderKind
 	LANEWAR_ORDER_MOVE = 3,								///< (grid, from column, from row, to column, to row): put the sender's plot unit covering the first slot down with its front left slot at the second
 	LANEWAR_ORDER_UPGRADE = 4,						///< (index): buy that entry of LaneWar_upgrades for the sender
 	LANEWAR_ORDER_ABILITY = 5,						///< (template id, button slot, on): the sender's wave units of that template use that button (1) or leave it (0); the slot is an entry of LaneWar_abilitiesOf
+	LANEWAR_ORDER_VETERANCY = 6,					///< (grid, column, row[, passenger]): raise the sender's plot unit covering that slot one rank; its wave copies go out at it
 };
+
+/// what each rank costs on top of a unit bought for `cost`, as a share of it: Veteran, Elite, Heroic
+enum
+{
+	LANEWAR_VETERAN_PERCENT = 50,
+	LANEWAR_ELITE_PERCENT = 75,
+	LANEWAR_HEROIC_PERCENT = 100,
+};
+
+/// what raising a unit bought for `cost` to that rank costs (1 Veteran, 2 Elite, 3 Heroic); 0 for any other rank
+extern Int LaneWar_veterancyPrice( Int cost, Int level );
 
 /** A wave unit's button the director presses by itself (LaneWarDirector::useAbilities), read off the
 	  template's own command set.  A weapon switch pair lists only its non-primary slot, and the remote
@@ -288,6 +300,8 @@ public:
 		Int col, row, size;
 		Int cost;												///< what was paid for it
 		Bool sent;											///< it has gone out in a wave at least once
+		Int veterancy;									///< the rank bought for its wave copies, 0 Regular to 3 Heroic; the plot unit itself shows none
+		Int veterancyPaid;							///< what those ranks cost
 	};
 
 	// Read only, for the HUD (LaneHud.cpp), which asks at the render's sync point
@@ -323,6 +337,9 @@ public:
 	static Int sizeFor( const ThingTemplate *tmpl );
 	/// the player's wave units of the template use the button in that slot of its command set (LaneWar_abilitiesOf)
 	Bool isAbilityOn( Int player, const ThingTemplate *tmpl, Int slot ) const;
+	/// the plot unit's (an index into getPlotUnits) rank and what the next one costs, 0 at Heroic
+	Int getVeterancy( Int plotIndex ) const { return m_plotUnits[ plotIndex ].veterancy; }
+	Int getNextVeterancyPrice( Int plotIndex ) const { return LaneWar_veterancyPrice( m_plotUnits[ plotIndex ].cost, m_plotUnits[ plotIndex ].veterancy + 1 ); }
 
 protected:
 	virtual void crc( Xfer *xfer );
@@ -374,6 +391,7 @@ private:
 	Bool sellUnit( Player *player, Int grid, Int col, Int row );
 	Bool moveUnit( Player *player, Int grid, Int fromCol, Int fromRow, Int toCol, Int toRow );
 	Bool buyUpgrade( Player *player, Int index );
+	Bool buyVeterancy( Player *player, const Int *args, Int argCount );
 	Bool readGrid( const char *prefix, Int team, Int seat, Int grid );
 
 	// read from the map on every load, so not saved

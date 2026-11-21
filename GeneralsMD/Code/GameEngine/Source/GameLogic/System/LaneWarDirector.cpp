@@ -125,6 +125,14 @@ Int LaneWar_tierPrice( Int track, Int level )
 }
 
 //-------------------------------------------------------------------------------------------------
+Int LaneWar_veterancyPrice( Int cost, Int level )
+{
+	const Int percent = level == LEVEL_VETERAN ? LANEWAR_VETERAN_PERCENT : level == LEVEL_ELITE ? LANEWAR_ELITE_PERCENT
+										: level == LEVEL_HEROIC ? LANEWAR_HEROIC_PERCENT : 0;
+	return cost * percent / 100;
+}
+
+//-------------------------------------------------------------------------------------------------
 /// the footprint's widest extent, rounded up to whole slots; a Ranger takes one, a Crusader two
 Int LaneWar_slotsFor( Real radius )
 {
@@ -905,6 +913,9 @@ void LaneWarDirector::onOrder( Player *player, Int kind, const Int *args, Int ar
 		case LANEWAR_ORDER_ABILITY:
 			done = setAbility( player, args, argCount );
 			break;
+		case LANEWAR_ORDER_VETERANCY:
+			done = buyVeterancy( player, args, argCount );
+			break;
 		default:
 			DEBUG_LOG(( "LANEWAR ORDER: frame %u player %d kind %d with %d arguments is no order\n",
 									now, player->getPlayerIndex(), kind, argCount ));
@@ -1010,6 +1021,8 @@ Bool LaneWarDirector::placeUnit( Player *player, const ThingTemplate *tmpl, Int 
 	entry.size = size;
 	entry.cost = cost;
 	entry.sent = FALSE;
+	entry.veterancy = LEVEL_REGULAR;
+	entry.veterancyPaid = 0;
 	m_plotUnits.push_back( entry );
 	if( LaneWar_isHero( player, tmpl ) )
 		m_heroBought[ team ][ seat ] = TRUE;
@@ -1070,13 +1083,14 @@ Bool LaneWarDirector::sellUnit( Player *player, Int grid, Int col, Int row )
 								TheGameLogic->getFrame(), (Int)player->getPlayerIndex(), col, row ));
 		return FALSE;
 	}
-	const Int refund = LaneWar_refund( u.cost, u.sent );
+	// every part of what was paid comes back under the unit's rule
+	const Int refund = LaneWar_refund( u.cost, u.sent ) + LaneWar_refund( u.veterancyPaid, u.sent );
 	m_plotUnits.erase( m_plotUnits.begin() + index );
 	TheGameLogic->destroyObject( obj );
 	player->getMoney()->deposit( (UnsignedInt)refund, FALSE );
-	DEBUG_LOG(( "LANEWAR SELL: frame %u player %d '%s' at column %d row %d, bought for %d, %s, back %d, %u now\n",
+	DEBUG_LOG(( "LANEWAR SELL: frame %u player %d '%s' at column %d row %d, bought for %d and ranked for %d, %s, back %d, %u now\n",
 							TheGameLogic->getFrame(), (Int)player->getPlayerIndex(), obj->getTemplate()->getName().str(), u.col, u.row,
-							u.cost, u.sent ? "has gone out" : "never out", refund, player->getMoney()->countMoney() ));
+							u.cost, u.veterancyPaid, u.sent ? "has gone out" : "never out", refund, player->getMoney()->countMoney() ));
 	return TRUE;
 }
 
@@ -1133,6 +1147,40 @@ Bool LaneWarDirector::buyUpgrade( Player *player, Int index )
 
 	player->getMoney()->withdraw( (UnsignedInt)price, FALSE );
 	player->addUpgrade( upgrade, UPGRADE_STATUS_COMPLETE );
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** (grid, column, row[, passenger]): the plot unit covering that slot goes up one rank, Regular to
+	  Veteran to Elite to Heroic, for LaneWar_veterancyPrice of what it was bought for.  Only its wave
+	  copies wear it; the plot unit itself keeps no rank, so the grid shows none. */
+Bool LaneWarDirector::buyVeterancy( Player *player, const Int *args, Int argCount )
+{
+	const Int grid = argCount >= 3 ? args[ 0 ] : -1;
+	const Int index = grid >= 0 && grid < LANEWAR_GRIDS ? plotUnitAt( player, grid, args[ 1 ], args[ 2 ] ) : -1;
+	const Int passenger = argCount >= 4 ? args[ 3 ] : -1;
+	PlotUnit *u = index >= 0 ? &m_plotUnits[ index ] : NULL;
+	const Int price = u != NULL ? LaneWar_veterancyPrice( u->cost, u->veterancy + 1 ) : 0;
+	const char *refused = NULL;
+	if( u == NULL )
+		refused = "none of his units there";
+	else if( passenger >= 0 )
+		refused = "no such passenger";
+	else if( u->veterancy >= LEVEL_HEROIC )
+		refused = "already Heroic";
+	else if( (Int)player->getMoney()->countMoney() < price )
+		refused = "too dear";
+
+	const Object *obj = u != NULL ? TheGameLogic->findObjectByID( u->id ) : NULL;
+	DEBUG_LOG(( "LANEWAR VETERANCY: frame %u player %d '%s' at column %d row %d to rank %d for %d %s%s\n", TheGameLogic->getFrame(),
+							player ? (Int)player->getPlayerIndex() : -1, obj ? obj->getTemplate()->getName().str() : "?", argCount >= 2 ? args[ 1 ] : -1,
+							argCount >= 3 ? args[ 2 ] : -1, u ? u->veterancy + 1 : -1, price, refused ? "refused: " : "bought", refused ? refused : "" ));
+	if( refused != NULL )
+		return FALSE;
+
+	player->getMoney()->withdraw( (UnsignedInt)price, FALSE );
+	++u->veterancy;
+	u->veterancyPaid += price;
 	return TRUE;
 }
 
@@ -1488,7 +1536,7 @@ void LaneWarDirector::joinSquadron( const PlotUnit &u, UnsignedInt now )
 	jet.dieFrame = now + LANEWAR_LIFESPAN_FRAMES;
 	jet.stateFrame = now;
 	jet.health = 0.0f;
-	jet.veterancy = 0;
+	jet.veterancy = u.veterancy;
 	jet.strikes = 0;
 	m_jets.push_back( jet );
 	DEBUG_LOG(( "HEADLESS LANEWAR JET: frame %u '%s' of %s%d joins its squadron off the map, %d jets in all squadrons\n", now,
@@ -1859,6 +1907,12 @@ void LaneWarDirector::spawnWave( Int team, Int seat, UnsignedInt now )
 				create->onBuildComplete();
 		}
 		copy->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_UNSELECTABLE ) );
+		if( u.veterancy > LEVEL_REGULAR && copy->getExperienceTracker() != NULL )
+		{
+			copy->getExperienceTracker()->setVeterancyLevel( (VeterancyLevel)u.veterancy, FALSE );
+			DEBUG_LOG(( "HEADLESS LANEWAR: frame %u '%s' %d goes out at rank %d\n", now, copy->getTemplate()->getName().str(),
+									(Int)copy->getID(), (Int)copy->getVeterancyLevel() ));
+		}
 		owner->setActive();
 		TheAI->pathfinder()->addObjectToPathfindMap( copy );
 
@@ -1925,10 +1979,11 @@ void LaneWarDirector::crc( Xfer *xfer )
 	  Version 2: each plot unit's grid, price and whether it has gone out; each seat's income and tech
 	  level and whether its hero is bought; the team holding the middle.
 	  Version 3: each copy's owner, and the players' ability switches.
-	  Version 4: the squadrons' jets. */
+	  Version 4: the squadrons' jets.
+	  Version 5: each plot unit's rank and what it cost. */
 void LaneWarDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 4;
+	XferVersion currentVersion = 5;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -1982,6 +2037,16 @@ void LaneWarDirector::xfer( Xfer *xfer )
 			u.grid = LANEWAR_GRID_GROUND;
 			u.cost = 0;
 			u.sent = TRUE;
+		}
+		if( version >= 5 )
+		{
+			xfer->xferInt( &u.veterancy );
+			xfer->xferInt( &u.veterancyPaid );
+		}
+		else
+		{
+			u.veterancy = LEVEL_REGULAR;
+			u.veterancyPaid = 0;
 		}
 	}
 

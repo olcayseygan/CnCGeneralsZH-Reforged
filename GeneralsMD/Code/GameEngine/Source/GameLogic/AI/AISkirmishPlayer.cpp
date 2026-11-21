@@ -46,6 +46,7 @@
 #include "GameClient/InGameUI.h"
 #include "GameLogic/VictoryConditions.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/AISkirmishPlayer.h"
 #include "GameLogic/SidesList.h"
@@ -1361,7 +1362,8 @@ extern const AIRungInt SURRENDER_HOLD_SECONDS    = { { 30, 45, 60 }, AIKNOB_OPEN
  */
 void AISkirmishPlayer::doSurrender( void )
 {
-	if( m_player->isPlayerDead() )
+	// a Direct Strike team loses only when its fortress falls; worth says nothing there
+	if( m_player->isPlayerDead() || TheLaneWarDirector->isActive() )
 		return;
 
 	const UnsignedInt now = TheGameLogic->getFrame();

@@ -42,7 +42,6 @@
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/Mouse.h"
-#include "GameLogic/LaneWarDirector.h"
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GUIUtil.h"
 #include "GameNetwork/LANAPICallbacks.h"
@@ -55,7 +54,7 @@ using namespace DirectStrikeTheme;
 namespace
 {
 	enum Room { ROOM_SKIRMISH, ROOM_LAN, ROOM_ONLINE, ROOM_COUNT };
-	enum List { LIST_NONE, LIST_SEAT, LIST_ARMY, LIST_COLOR };
+	enum List { LIST_NONE, LIST_SEAT, LIST_ARMY, LIST_COLOR, LIST_SIZE };
 
 	/// each room's layout and its chat log; the skirmish room has none
 	struct RoomNames
@@ -103,7 +102,7 @@ namespace
 	const Real ISLAND_EM = TYPE_NAME, ISLAND_NOTE_EM = TYPE_BODY, ISLAND_CHIP_EM = TYPE_LABEL, ISLAND_CHIP_NOTE_EM = TYPE_PRICE;
 	const Real ISLAND_NAME_BELOW = 20, ISLAND_NOTE_BELOW = 46;		///< the caption's middles under the island picture
 	const Real ISLAND_CHIP_TEXT_X = 822, ISLAND_CHIP_NAME_Y = 30, ISLAND_CHIP_NOTE_Y = 56;
-	const Real RULE_EM = TYPE_BODY, SLIM_MARK_IN = 6;
+	const Real SLIM_MARK_IN = 6;
 	const Real LIST_TEXT = 20, LIST_AI_TEXT = 58;
 	const Real TILE_PICTURE_X = 32, TILE_PICTURE_Y = 6, TILE_PICTURE = 72;	///< the 64 picture with the well's 4 round it
 	const Real TILE_NAME_X = 68, TILE_NAME_Y = 92;
@@ -489,31 +488,39 @@ namespace
 	}
 
 	//-----------------------------------------------------------------------------------------------
-	/// the match rules strip: how many a side, the starting cash, the wave tick and the first wave
-	void drawRules( void )
+	/// the seats a team has that are not closed, as the team size chip reads them
+	Int teamSize( Int team )
 	{
-		Int sides[ DSLOBBY_TEAMS ] = { 0, 0 };
-		for( Int slot = 0; slot < DSLOBBY_SEATS; ++slot )
-			if( seat( slot ) != NULL && seat( slot )->isOccupied() )
-				++sides[ DirectStrikeLobby_team( slot ) ];
-		UnicodeString rules[ DSLOBBY_RULES ];
-		rules[ 0 ].format( TheGameText->fetch( "GUI:DirectStrikeRuleTeams" ), sides[ 0 ], sides[ 1 ] );
-		rules[ 1 ].format( TheGameText->fetch( "GUI:DirectStrikeRuleMoney" ), (Int)LANEWAR_START_MONEY );
-		rules[ 2 ].format( TheGameText->fetch( "GUI:DirectStrikeRuleWave" ), (Int)LANEWAR_TICK_SECONDS );
-		rules[ 3 ].format( TheGameText->fetch( "GUI:DirectStrikeRuleFirst" ), (Int)LANEWAR_FIRST_TICK_SECONDS / 60, (Int)LANEWAR_FIRST_TICK_SECONDS % 60 );
-		for( Int i = 0; i < DSLOBBY_RULES; ++i )
+		Int size = 0;
+		for( Int row = 0; row < DSLOBBY_ROWS; ++row )
 		{
-			const DirectStrikeRect r = DirectStrikeLobby_rule( isNetwork(), i );
-			dropdown( boxOf( r ), "", TRUE );
-			text( rules[ i ], RULE_EM, ( r.x0 + r.x1 ) * 0.5f, middleOf( r ), TEXT_WHITE, 0 );
+			const GameSlot *s = seat( DirectStrikeLobby_slot( team, row ) );
+			if( s != NULL && s->getState() != SLOT_CLOSED )
+				++size;
 		}
+		return size;
+	}
+
+	UnicodeString sizeLabel( Int first, Int second )
+	{
+		UnicodeString label;
+		label.format( TheGameText->fetch( "GUI:DirectStrikeTeamSize" ), first, second );
+		return label;
+	}
+
+	/// the team size chip: the host's dropdown, a field for everyone else
+	void drawSize( void )
+	{
+		const DirectStrikeRect r = DirectStrikeLobby_size();
+		const char *state = amHost() ? chipState( r, LIST_SIZE, -1 ) : "";
+		dropdown( boxOf( r ), state, !amHost() );
+		text( sizeLabel( teamSize( 0 ), teamSize( 1 ) ), NAME_EM, r.x0 + CONTENT_INSET, middleOf( r ), faceText( state ), -1, faceShadow( state ) );
 	}
 
 	void drawIsland( void )
 	{
 		const UnicodeString name = TheGameText->fetch( "GUI:DirectStrikeMap" );
 		const UnicodeString note = TheGameText->fetch( "GUI:DirectStrikeIslandNote" );
-		drawRules();
 		if( !isNetwork() )
 		{
 			panel( boxOf( DirectStrikeLobby_islandPanel() ) );
@@ -645,6 +652,7 @@ namespace
 	void drawKeys( void )
 	{
 		key( boxOf( DirectStrikeLobby_back() ), LOBBY_BACK, FALSE );
+		drawSize();
 		const char *state = startState();
 		threeSlice( boxOf( DirectStrikeLobby_start() ), BUTTON_L, BUTTON_C, BUTTON_R, state );
 		const UnicodeString label = TheGameText->fetch( isNetwork() && !amHost() ? "GUI:DirectStrikeReady" : "GUI:DirectStrikeStart" );
@@ -680,6 +688,22 @@ namespace
 			}
 			text( TheGameText->fetch( SEAT_LABELS[ row ] ), CHIP_EM, x, middleOf( r ), hot ? TEXT_GOLD : TEXT_WHITE );
 			if( seatPick( row ) == current )
+				drawImage( art( LOBBY_CHECK ), iconAt( list.x1 - CHECK_INSET, r, CHECK, CHECK ) );
+		}
+	}
+
+	void drawSizeList( void )
+	{
+		const DirectStrikeRect list = DirectStrikeLobby_sizeList();
+		panel( boxOf( list ) );
+		for( Int row = 0; row < DSLOBBY_SIZES; ++row )
+		{
+			const DirectStrikeRect r = DirectStrikeLobby_sizeRow( row );
+			const Bool hot = pointerIn( r );
+			if( hot )
+				drawHover( boxOf( r ) );
+			text( sizeLabel( row + 1, row + 1 ), CHIP_EM, list.x0 + LIST_TEXT, middleOf( r ), hot ? TEXT_GOLD : TEXT_WHITE );
+			if( teamSize( 0 ) == row + 1 && teamSize( 1 ) == row + 1 )
 				drawImage( art( LOBBY_CHECK ), iconAt( list.x1 - CHECK_INSET, r, CHECK, CHECK ) );
 		}
 	}
@@ -765,6 +789,8 @@ namespace
 			drawPicker( s_listSlot );
 		else if( s_list == LIST_COLOR )
 			drawColorList( s_listSlot );
+		else if( s_list == LIST_SIZE )
+			drawSizeList();
 	}
 
 	//-----------------------------------------------------------------------------------------------
@@ -778,6 +804,25 @@ namespace
 				return;
 			}
 		DEBUG_LOG(( "DIRECTSTRIKE LOBBY no line with data %d in window %d\n", data, combo->winGetWindowId() ));
+	}
+
+	/// a team size of `size` a side: rows past it close and rows within it open, on both teams, through each seat's
+	/// own box so a network room sends it as a seat change; a seat inside the size keeps whoever holds it, and a
+	/// human outside it is left seated, since closing them would be a kick
+	void chooseSize( Int size )
+	{
+		for( Int slot = 0; slot < DSLOBBY_SEATS; ++slot )
+		{
+			const GameSlot *s = seat( slot );
+			GameWindow *combo = slot != localSlot() && s != NULL ? named( "ComboBoxPlayer", slot ) : NULL;
+			if( combo == NULL )
+				continue;
+			const Bool within = DirectStrikeLobby_row( slot ) < size;
+			if( !within && !s->isHuman() && s->getState() != SLOT_CLOSED )
+				choose( combo, SLOT_CLOSED );
+			else if( within && s->getState() == SLOT_CLOSED )
+				choose( combo, SLOT_OPEN );
+		}
 	}
 
 	void press( const char *button )
@@ -796,6 +841,13 @@ namespace
 
 	void pickFromList( List list, Int slot, Real x, Real y )
 	{
+		if( list == LIST_SIZE )
+		{
+			for( Int row = 0; row < DSLOBBY_SIZES; ++row )
+				if( DirectStrikeLobby_sizeRow( row ).contains( x, y ) )
+					chooseSize( row + 1 );
+			return;
+		}
 		if( list == LIST_SEAT )
 		{
 			for( Int row = 0; row < DSLOBBY_SEAT_ROWS; ++row )
@@ -846,6 +898,11 @@ namespace
 			press( "ButtonStart" );
 		else if( isNetwork() && DirectStrikeLobby_send().contains( x, y ) )
 			sendChat();
+		else if( amHost() && DirectStrikeLobby_size().contains( x, y ) )
+		{
+			s_list = LIST_SIZE;
+			return;
+		}
 		for( Int slot = 0; slot < DSLOBBY_SEATS; ++slot )
 		{
 			if( seat( slot ) == NULL )

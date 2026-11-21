@@ -277,27 +277,28 @@ TEST(dslobby_the_block_is_centred_and_its_columns_share_top_and_foot)
 	CHECK_EQ( DirectStrikeLobby_card( DirectStrikeLobby_slot( 0, DSLOBBY_ROWS - 1 ) ).y1, DirectStrikeLobby_start().y1 );
 	CHECK_EQ( DirectStrikeLobby_card( DirectStrikeLobby_slot( 1, DSLOBBY_ROWS - 1 ) ).y1, DirectStrikeLobby_back().y1 );
 	CHECK_EQ( DirectStrikeLobby_island().y1 + 70.0f, DirectStrikeLobby_islandPanel().y1 );
-	for( int network = 0; network < 2; ++network )
-		for( int rule = 0; rule < DSLOBBY_RULES; ++rule )
-		{
-			CHECK( within( DirectStrikeLobby_rule( network != 0, rule ), DirectStrikeLobby_rules( network != 0 ) ) );
-			if( rule > 0 )
-				CHECK( !meet( DirectStrikeLobby_rule( network != 0, rule ), DirectStrikeLobby_rule( network != 0, rule - 1 ) ) );
-		}
+	CHECK_EQ( DirectStrikeLobby_islandPanel().y1 + DSLOBBY_ROW_GAP, DirectStrikeLobby_start().y0 );
+	CHECK_EQ( DirectStrikeLobby_chatInput().y1 + DSLOBBY_ROW_GAP, DirectStrikeLobby_start().y0 );
+	CHECK_EQ( DirectStrikeLobby_size().y1, DirectStrikeLobby_start().y1 );
+	CHECK_EQ( DirectStrikeLobby_start().x1, DirectStrikeLobby_islandPanel().x1 );
 }
 
 TEST(dslobby_every_open_list_stays_on_the_screen_and_holds_its_rows)
 {
 	const DirectStrikeRect offline[] =
 	{
-		DirectStrikeLobby_title(), DirectStrikeLobby_islandPanel(), DirectStrikeLobby_rules( false ),
-		DirectStrikeLobby_back(), DirectStrikeLobby_start(),
+		DirectStrikeLobby_title(), DirectStrikeLobby_islandPanel(), DirectStrikeLobby_back(), DirectStrikeLobby_size(),
+		DirectStrikeLobby_start(),
 	};
 	const DirectStrikeRect network[] =
 	{
-		DirectStrikeLobby_title(), DirectStrikeLobby_islandChip(), DirectStrikeLobby_rules( true ), DirectStrikeLobby_chat(),
-		DirectStrikeLobby_chatInput(), DirectStrikeLobby_send(), DirectStrikeLobby_back(), DirectStrikeLobby_start(),
+		DirectStrikeLobby_title(), DirectStrikeLobby_islandChip(), DirectStrikeLobby_chat(), DirectStrikeLobby_chatInput(),
+		DirectStrikeLobby_send(), DirectStrikeLobby_back(), DirectStrikeLobby_size(), DirectStrikeLobby_start(),
 	};
+	CHECK( within( DirectStrikeLobby_sizeList(), DESIGN ) );
+	CHECK( !meet( DirectStrikeLobby_sizeList(), DirectStrikeLobby_size() ) );
+	for( int row = 0; row < DSLOBBY_SIZES; ++row )
+		CHECK( within( DirectStrikeLobby_sizeRow( row ), DirectStrikeLobby_sizeList() ) );
 	for( int i = 0; i < (int)( sizeof( offline ) / sizeof( offline[ 0 ] ) ); ++i )
 		for( int j = 0; j < i; ++j )
 			CHECK( !meet( offline[ i ], offline[ j ] ) );

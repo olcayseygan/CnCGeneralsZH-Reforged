@@ -6647,20 +6647,8 @@ GUI:DirectStrikeIslandNote
 "A new island every match"
 END
 
-GUI:DirectStrikeRuleTeams
+GUI:DirectStrikeTeamSize
 "%d v %d"
-END
-
-GUI:DirectStrikeRuleMoney
-"Start $%d"
-END
-
-GUI:DirectStrikeRuleWave
-"Wave %ds"
-END
-
-GUI:DirectStrikeRuleFirst
-"First %d:%02d"
 END
 
 GUI:DirectStrikeStart

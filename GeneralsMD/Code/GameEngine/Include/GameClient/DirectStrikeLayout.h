@@ -118,9 +118,9 @@ enum
 	DSLOBBY_TOP = DSLOBBY_TITLE_TOP + DSLOBBY_TITLE_H + DSLOBBY_TITLE_GAP,		///< the team heads' and the centre column's top
 	DSLOBBY_BOTTOM = DSLOBBY_TOP + DSLOBBY_COLUMN_H,	///< a full column's foot and the start key's
 	DSLOBBY_KEY_H = 72,
-	DSLOBBY_RULES = 4,					///< the match rules strip's chips: teams, starting cash, wave tick, first wave
-	DSLOBBY_RULE_GAP = 8,
 	DSLOBBY_ROW_GAP = 12,				///< between the centre column's parts
+	DSLOBBY_SIZE_W = 136,				///< the team size chip between the back and start keys
+	DSLOBBY_SIZES = 3,					///< its list: 1 v 1, 2 v 2, 3 v 3
 };
 
 /// the part of a seat card, README-lobby.md "The seat card"
@@ -205,34 +205,25 @@ inline DirectStrikeRect DirectStrikeLobby_part( int slot, DirectStrikeSeatPart p
 	return DirectStrike_rect( card.x0 + DSLOBBY_CARD_W - p[ 2 ], card.y0 + p[ 1 ], card.x0 + DSLOBBY_CARD_W - p[ 0 ], card.y0 + p[ 3 ] );
 }
 
-/// the back and start keys at the centre column's foot, level with a full team column's
+/// the keys row at the centre column's foot, level with a full team column's: back, the team size chip, start
 inline DirectStrikeRect DirectStrikeLobby_back( void ) { return DirectStrike_rect( 700, DSLOBBY_BOTTOM - DSLOBBY_KEY_H, 772, DSLOBBY_BOTTOM ); }
-inline DirectStrikeRect DirectStrikeLobby_start( void ) { return DirectStrike_rect( 788, DSLOBBY_BOTTOM - DSLOBBY_KEY_H, 1220, DSLOBBY_BOTTOM ); }
-
-/// the match rules strip: four chips across the centre column, under the island offline and under the island
-/// chip in a network room
-inline DirectStrikeRect DirectStrikeLobby_rules( bool network )
+inline DirectStrikeRect DirectStrikeLobby_size( void )
 {
-	const float y = network ? DSLOBBY_TOP + 80.0f + DSLOBBY_ROW_GAP : DSLOBBY_BOTTOM - DSLOBBY_KEY_H - DSLOBBY_ROW_GAP - 48.0f;
-	return DirectStrike_rect( 700, y, 1220, y + 48 );
+	return DirectStrike_rect( 784, DSLOBBY_BOTTOM - DSLOBBY_KEY_H, 784 + DSLOBBY_SIZE_W, DSLOBBY_BOTTOM );
+}
+inline DirectStrikeRect DirectStrikeLobby_start( void )
+{
+	return DirectStrike_rect( 784 + DSLOBBY_SIZE_W + DSLOBBY_ROW_GAP, DSLOBBY_BOTTOM - DSLOBBY_KEY_H, 1220, DSLOBBY_BOTTOM );
 }
 
-inline DirectStrikeRect DirectStrikeLobby_rule( bool network, int index )
-{
-	const DirectStrikeRect strip = DirectStrikeLobby_rules( network );
-	const float w = ( strip.x1 - strip.x0 - ( DSLOBBY_RULES - 1 ) * DSLOBBY_RULE_GAP ) / DSLOBBY_RULES;
-	const float x = strip.x0 + (float)index * ( w + DSLOBBY_RULE_GAP );
-	return DirectStrike_rect( x, strip.y0, x + w, strip.y1 );
-}
-
-// offline: the island panel, the picture and its caption, down to the rules strip
+// offline: the island panel, the picture and its caption, down to the keys row
 inline DirectStrikeRect DirectStrikeLobby_islandPanel( void )
 {
-	return DirectStrike_rect( 700, DSLOBBY_TOP, 1220, DirectStrikeLobby_rules( false ).y0 - DSLOBBY_ROW_GAP );
+	return DirectStrike_rect( 700, DSLOBBY_TOP, 1220, DSLOBBY_BOTTOM - DSLOBBY_KEY_H - DSLOBBY_ROW_GAP );
 }
-inline DirectStrikeRect DirectStrikeLobby_island( void ) { return DirectStrike_rect( 810, DSLOBBY_TOP + 14, 1110, DSLOBBY_TOP + 314 ); }
+inline DirectStrikeRect DirectStrikeLobby_island( void ) { return DirectStrike_rect( 780, DSLOBBY_TOP + 14, 1140, DSLOBBY_TOP + 374 ); }
 
-// a network room: the island chip, the rules, the chat, its input and the send key
+// a network room: the island chip, the chat, its input and the send key
 inline DirectStrikeRect DirectStrikeLobby_islandChip( void ) { return DirectStrike_rect( 700, DSLOBBY_TOP, 1220, DSLOBBY_TOP + 80 ); }
 inline DirectStrikeRect DirectStrikeLobby_islandSmall( void ) { return DirectStrike_rect( 710, DSLOBBY_TOP + 10, 806, DSLOBBY_TOP + 70 ); }
 inline DirectStrikeRect DirectStrikeLobby_chatInput( void )
@@ -247,7 +238,7 @@ inline DirectStrikeRect DirectStrikeLobby_send( void )
 }
 inline DirectStrikeRect DirectStrikeLobby_chat( void )
 {
-	return DirectStrike_rect( 700, DirectStrikeLobby_rules( true ).y1 + DSLOBBY_ROW_GAP, 1220, DirectStrikeLobby_chatInput().y0 - DSLOBBY_ROW_GAP );
+	return DirectStrike_rect( 700, DirectStrikeLobby_islandChip().y1 + DSLOBBY_ROW_GAP, 1220, DirectStrikeLobby_chatInput().y0 - DSLOBBY_ROW_GAP );
 }
 
 enum
@@ -286,6 +277,20 @@ inline DirectStrikeRect DirectStrikeLobby_seatList( int slot, unsigned slim = 0,
 inline DirectStrikeRect DirectStrikeLobby_seatRow( int slot, int row, unsigned slim = 0, bool lights = true )
 {
 	const DirectStrikeRect list = DirectStrikeLobby_seatList( slot, slim, lights );
+	const float y = list.y0 + DSLOBBY_LIST_PAD + DSLOBBY_LIST_ROW * (float)row;
+	return DirectStrike_rect( list.x0 + DSLOBBY_LIST_PAD, y, list.x1 - DSLOBBY_LIST_PAD, y + DSLOBBY_LIST_ROW );
+}
+
+/// the host's team size list under its chip, and its row for `size` - 1
+inline DirectStrikeRect DirectStrikeLobby_sizeList( void )
+{
+	const DirectStrikeRect chip = DirectStrikeLobby_size();
+	return DirectStrikeLobby_dropBelow( chip, chip.x1 - chip.x0, 2.0f * DSLOBBY_LIST_PAD + DSLOBBY_SIZES * DSLOBBY_LIST_ROW, false );
+}
+
+inline DirectStrikeRect DirectStrikeLobby_sizeRow( int row )
+{
+	const DirectStrikeRect list = DirectStrikeLobby_sizeList();
 	const float y = list.y0 + DSLOBBY_LIST_PAD + DSLOBBY_LIST_ROW * (float)row;
 	return DirectStrike_rect( list.x0 + DSLOBBY_LIST_PAD, y, list.x1 - DSLOBBY_LIST_PAD, y + DSLOBBY_LIST_ROW );
 }

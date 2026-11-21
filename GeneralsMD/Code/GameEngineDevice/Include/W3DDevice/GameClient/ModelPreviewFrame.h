@@ -63,6 +63,48 @@ inline float fitDistance(float radius, float tanHalf)
 	return radius * sqrtf(1.0f + tanHalf * tanHalf) / tanHalf;
 }
 
+/// where the eye goes for fitPoints: the aim point moved across the view by centerX, centerY, and the
+/// eye that far back from it along the view axis
+struct Fit
+{
+	float centerX, centerY, distance;
+};
+
+/** The tightest frame round a set of points, for a model seen at one angle rather than every angle
+	* its turn sweeps.  x and y are each point across the view (right, up), d toward the eye, all from
+	* the aim point; tanX and tanY the view's half spans on the view plane.  The first held points set
+	* the centre and project inside heldShare of the half spans; the rest (a rotor's disc) only inside
+	* looseShare, so a thin wide part can poke out a little rather than shrink the body. */
+inline Fit fitPoints(const float *x, const float *y, const float *d, int count, int held,
+	float tanX, float tanY, float heldShare, float looseShare)
+{
+	Fit f = { 0.0f, 0.0f, 0.0f };
+	if (count <= 0)
+		return f;
+	if (held <= 0 || held > count)
+		held = count;
+	float minX = x[0], maxX = x[0], minY = y[0], maxY = y[0];
+	for (int i = 1; i < held; ++i)
+	{
+		minX = x[i] < minX ? x[i] : minX;
+		maxX = x[i] > maxX ? x[i] : maxX;
+		minY = y[i] < minY ? y[i] : minY;
+		maxY = y[i] > maxY ? y[i] : maxY;
+	}
+	f.centerX = 0.5f * (minX + maxX);
+	f.centerY = 0.5f * (minY + maxY);
+	// a point at depth d toward the eye projects at offset / (distance - d)
+	for (int i = 0; i < count; ++i)
+	{
+		const float share = i < held ? heldShare : looseShare;
+		const float dx = fabsf(x[i] - f.centerX) / (tanX * share);
+		const float dy = fabsf(y[i] - f.centerY) / (tanY * share);
+		const float need = d[i] + (dx > dy ? dx : dy);
+		f.distance = need > f.distance ? need : f.distance;
+	}
+	return f;
+}
+
 /// a projected point (normalised device coordinates, y up) in screen pixels over a whole-screen viewport
 inline void ndcToPixel(float ndcX, float ndcY, float screenW, float screenH, float *px, float *py)
 {

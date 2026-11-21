@@ -228,11 +228,13 @@ public:
 	/** One unit model drawn live inside a rectangle of a shell screen, over whatever 2D was drawn
 		* before it: the object template's draw module model with the skin (0 the default paint) and the
 		* house colour (0 none), standing on a steel plate, turned by turns of a full circle about its
-		* up axis (the caller drives it from the wall clock), x, y, w, h in screen pixels, dimmed when
-		* dim.  The model is framed by its bounding sphere so it never leaves the rectangle.  The models
-		* stay cached between calls; freeModelPreviews releases them and the scene, for a screen that
-		* closes. */
-	virtual void drawModelPreview( const AsciiString &templateName, Int skin, Color house, Int x, Int y, Int w, Int h, Real turns, Bool dim ) {}
+		* up axis (the caller drives it from the wall clock), x, y, w, h in screen pixels, darkened when
+		* dim (the model, nothing round it).  Turning, the model is framed by what its body sweeps so it
+		* never leaves the rectangle; still, a card's picture at one fixed turn, it has no plate, is seen
+		* from a little higher, leaves its rotors out and is framed tight round its body at that turn.
+		* A turning model's rotor discs may poke a little past the rectangle.  The models stay cached between calls;
+		* freeModelPreviews releases them and the scene, for a screen that closes. */
+	virtual void drawModelPreview( const AsciiString &templateName, Int skin, Color house, Int x, Int y, Int w, Int h, Real turns, Bool dim, Bool still = FALSE ) {}
 	virtual void freeModelPreviews( void ) {}
 
 	virtual void setCinematicText( AsciiString string ) { m_cinematicText = string; }

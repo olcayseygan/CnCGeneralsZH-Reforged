@@ -95,6 +95,31 @@ TEST(model_preview_square_panel_keeps_a_square_square)
 	CHECK(x1 - x0 > 10.0f);
 }
 
+TEST(model_preview_fitted_points_fill_the_panel)
+{
+	// a long low body seen from three quarters, and one wide thin disc over it
+	const float x[] = { -30, 30, -28, 28, 5, -5, 0, 44 };
+	const float y[] = { -6, 4, 9, -9, 12, -12, 3, 14 };
+	const float d[] = { 8, -8, 3, -3, 10, -10, 0, 2 };
+	const int count = 8, held = 7;
+	const float tanX = 0.36f * 1.5f, tanY = 0.36f;
+	const Fit f = fitPoints(x, y, d, count, held, tanX, tanY, 0.9f, 1.1f);
+	float widest = 0.0f;
+	for (int i = 0; i < count; ++i)
+	{
+		const float px = fabsf(x[i] - f.centerX) / (f.distance - d[i]) / tanX;
+		const float py = fabsf(y[i] - f.centerY) / (f.distance - d[i]) / tanY;
+		const float share = i < held ? 0.9f : 1.1f;
+		CHECK(px <= share + 1e-4f);
+		CHECK(py <= share + 1e-4f);
+		const float most = (px > py ? px : py) / share;
+		widest = most > widest ? most : widest;
+	}
+	CHECK_NEAR(widest, 1.0f, 1e-4f);		// something touches its edge: the frame is tight
+	CHECK_NEAR(f.centerX, 0.0f, 1e-4f);		// the held points' middle, not the disc's
+	CHECK_NEAR(f.centerY, 0.0f, 1e-4f);
+}
+
 TEST(model_preview_framed_sphere_stays_in_the_panel)
 {
 	const float W = 1920, H = 1080, X = 100, Y = 100, PW = 300, PH = 500, T = 0.3f;

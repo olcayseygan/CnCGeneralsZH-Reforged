@@ -678,8 +678,6 @@ struct SkinChoice
 	GameWindow *button;			///< the card, a push button
 	Int id;									///< 0 for Default
 	Bool owned;
-	DisplayString *chip;		///< Worn, Picked not saved, Owned or Not owned
-	Color chipColor;
 };
 struct SkinRow
 {
@@ -711,23 +709,23 @@ static Bool s_heroOwned = TRUE;
 enum { SKIN_SIDE_USA, SKIN_SIDE_CHINA, SKIN_SIDE_GLA, SKIN_SIDE_COUNT };
 static const char *const SKIN_SIDE_KEY[ SKIN_SIDE_COUNT ] = { "GUI:OnlineSkinsSideUsa", "GUI:OnlineSkinsSideChina", "GUI:OnlineSkinsSideGla" };
 /// each unit SkinsReforged.ini dresses, in the list's order: the object template whose model is drawn,
-/// its cameo, side and kind; a unit missing here goes last with its name alone and no model
-static const struct { const char *unit; const char *templateName; const char *cameo; Int side; const char *kind; } SKIN_UNITS[] =
+/// its cameo and side; a unit missing here goes last with its name alone and no model
+static const struct { const char *unit; const char *templateName; const char *cameo; Int side; } SKIN_UNITS[] =
 {
-	{ "Crusader", "AmericaTankCrusader", "SACLeopard", SKIN_SIDE_USA, "GUI:OnlineSkinsUsaTank" },
-	{ "Chinook", "AmericaVehicleChinook", "SAChinook", SKIN_SIDE_USA, "GUI:OnlineSkinsUsaHelicopter" },
-	{ "USADozer", "AmericaVehicleDozer", "SACDozer", SKIN_SIDE_USA, "GUI:OnlineSkinsUsaVehicle" },
-	{ "Battlemaster", "ChinaTankBattleMaster", "SNBattlemaster", SKIN_SIDE_CHINA, "GUI:OnlineSkinsChinaTank" },
-	{ "SupplyTruck", "ChinaVehicleSupplyTruck", "SNSupplyTruck", SKIN_SIDE_CHINA, "GUI:OnlineSkinsChinaVehicle" },
-	{ "ChinaDozer", "ChinaVehicleDozer", "SNDozer", SKIN_SIDE_CHINA, "GUI:OnlineSkinsChinaVehicle" },
-	{ "Scorpion", "GLATankScorpion", "SUScorpion", SKIN_SIDE_GLA, "GUI:OnlineSkinsGlaTank" },
+	{ "Crusader", "AmericaTankCrusader", "SACLeopard", SKIN_SIDE_USA },
+	{ "Chinook", "AmericaVehicleChinook", "SAChinook", SKIN_SIDE_USA },
+	{ "USADozer", "AmericaVehicleDozer", "SACDozer", SKIN_SIDE_USA },
+	{ "Battlemaster", "ChinaTankBattleMaster", "SNBattlemaster", SKIN_SIDE_CHINA },
+	{ "SupplyTruck", "ChinaVehicleSupplyTruck", "SNSupplyTruck", SKIN_SIDE_CHINA },
+	{ "ChinaDozer", "ChinaVehicleDozer", "SNDozer", SKIN_SIDE_CHINA },
+	{ "Scorpion", "GLATankScorpion", "SUScorpion", SKIN_SIDE_GLA },
 };
 static const Int SKIN_UNKNOWN = (Int)ARRAY_SIZE( SKIN_UNITS );
 
 /// the house colour the models wear, -modelpreview's blue
 static const Color SKIN_HOUSE = GameMakeColor( 0x2a, 0x6e, 0xd8, 0xff );
-/// a card's model at a fixed turn, the front right toward the eye, where the platform's turn starts
-static const Real SKIN_CARD_TURN = 0.0f;
+/// a card's model at a fixed turn: the front quarter toward the eye, so the side and the roof show
+static const Real SKIN_CARD_TURN = 0.06f;
 /// a card's ground, near black, so the model carries it
 static const Color SKIN_CARD_GROUND = GameMakeColor( 0x09, 0x0b, 0x13, 0xff );
 
@@ -809,7 +807,7 @@ static void cardPlace( Int slot, Int shown, const SkinsFrame &f, Int &x, Int &y,
 {
 	const Int columns = cardColumns( f );
 	const Int lines = max( 2, ( shown + columns - 1 ) / columns );
-	const Int top = f.top + down( 128.0f );
+	const Int top = f.top + down( 88.0f );
 	const Int room = f.bottom - down( 20.0f ) - top;
 	const Int gap = down( 12.0f );
 	width = cardWidth( f );
@@ -937,9 +935,30 @@ static void drawSkinUnit( GameWindow *window, WinInstanceData *instData )
 	}
 }
 
+/// a tick in a size-square box at x, y: the button edge's chrome, a dark plate under a bright stroke
+static void drawTick( Int x, Int y, Int size, Color color )
+{
+	TheDisplay->drawFillRect( x, y, size, size, UIStyle::PANEL );
+	TheDisplay->drawOpenRect( x, y, size, size, 1.0f, UIStyle::EDGE );
+	const Real stroke = (Real)max( 2, size / 7 );
+	TheDisplay->drawLine( x + size * 2 / 10, y + size * 5 / 10, x + size * 4 / 10, y + size * 3 / 4, stroke, color );
+	TheDisplay->drawLine( x + size * 4 / 10, y + size * 3 / 4, x + size * 8 / 10, y + size * 1 / 4, stroke, color );
+}
+
+/// a padlock in a size-square box at x, y: a shackle over a solid body, in the muted ink
+static void drawPadlock( Int x, Int y, Int size, Color color = UIStyle::MUTED )
+{
+	TheDisplay->drawFillRect( x, y, size, size, UIStyle::PANEL );
+	const Int bodyTop = y + size * 9 / 20;
+	const Int shackle = size / 2;
+	const Real stroke = (Real)max( 2, size / 9 );
+	TheDisplay->drawOpenRect( x + ( size - shackle ) / 2, y + size / 8, shackle, bodyTop - y - size / 8 + 2, stroke, color );
+	TheDisplay->drawFillRect( x + size / 6, bodyTop, size - size / 3, size - ( bodyTop - y ) - size / 10, color );
+}
+
 /** A look's card, drawn over its push button: the model on a near-black ground at a fixed turn,
-	* dimmed where the account lacks the look; the three-line edge on the look in focus; its name
-	* (MUTED when locked, ACTIVE under the mouse) and its chip at the foot. */
+	* darkened where the account lacks the look; the three-line edge on the look in focus; a tick or a
+	* padlock in the corner; its name (MUTED when locked, ACTIVE under the mouse) at the foot. */
 static void drawSkinChoice( GameWindow *window, WinInstanceData *instData )
 {
 	const SkinRow *row = NULL;
@@ -960,31 +979,32 @@ static void drawSkinChoice( GameWindow *window, WinInstanceData *instData )
 	window->winGetScreenPosition( &x, &y );
 	window->winGetSize( &width, &height );
 	DisplayString *name = buttonWords( window, instData );
-	Int nameWidth, nameHeight, chipWidth = 0, chipHeight = 0;
+	Int nameWidth, nameHeight;
 	name->getSize( &nameWidth, &nameHeight );
-	if (choice->chip)
-	{
-		choice->chip->getSize( &chipWidth, &chipHeight );
-		chipHeight += UIStyle::tallPx( 9.0f );		// the chip's own 5 over and 4 under its label
-	}
-	const Int words = down( 10.0f ) + nameHeight + down( 6.0f ) + chipHeight + down( 10.0f );
-	const Int picture = height - words;
+	const Int picture = height - nameHeight - 2 * down( 8.0f );
 
 	TheDisplay->drawFillRect( x, y, width, height, UIStyle::PANEL );
 	if (picture > 2)
 		TheDisplay->drawFillRect( x + 1, y + 1, width - 2, picture - 1, SKIN_CARD_GROUND );
 	if (picture > down( 24.0f ) && row->known < SKIN_UNKNOWN)
 		TheDisplay->drawModelPreview( AsciiString( SKIN_UNITS[ row->known ].templateName ), choice->id, SKIN_HOUSE,
-			x + 2, y + 2, width - 4, picture - 3, SKIN_CARD_TURN, !choice->owned );
+			x + 2, y + 2, width - 4, picture - 3, SKIN_CARD_TURN, !choice->owned, TRUE );
 	if (choice->id == s_skinFocus)
 		UIStyle::edge( x, y, width, height );
 	else
 		TheDisplay->drawOpenRect( x, y, width, height, 1.0f, UIStyle::FRAME );
 
-	const Int inset = across( 10.0f );
-	name->draw( x + inset, y + picture + down( 10.0f ), !choice->owned ? UIStyle::MUTED : hovered( window, instData ) ? UIStyle::ACTIVE : UIStyle::INK, UIStyle::SHADOW );
-	if (choice->chip)
-		UIStyle::chip( choice->chip, x + inset, y + height - down( 10.0f ) - chipHeight, choice->chipColor, UIStyle::FRAME );
+	// the state in the corner: a tick on the look the unit wears (or is picked to), a padlock on one
+	// the account lacks
+	const Int mark = across( 18.0f );
+	const Int markX = x + width - across( 8.0f ) - mark;
+	const Int markY = y + down( 8.0f );
+	if (choice->id == row->pick)
+		drawTick( markX, markY, mark, row->pick == row->worn ? UIStyle::ACTIVE : UIStyle::EDGE_LIT );
+	else if (!choice->owned)
+		drawPadlock( markX, markY, mark );
+
+	name->draw( x + across( 10.0f ), y + picture + down( 8.0f ), !choice->owned ? UIStyle::MUTED : hovered( window, instData ) ? UIStyle::ACTIVE : UIStyle::INK, UIStyle::SHADOW );
 }
 
 /// a filter's box: the three-line edge on the one in force, its label ACTIVE then or under the mouse
@@ -1047,7 +1067,7 @@ static void createSkinsGadgets( void )
 		size_t r = 0;
 		while (r < s_skinRows.size() && s_skinRows[r].unit.compareNoCase( unit ) != 0)
 			++r;
-		SkinChoice choice = { NULL, id, FALSE, NULL, UIStyle::MUTED };
+		SkinChoice choice = { NULL, id, FALSE };
 		if (r == s_skinRows.size())
 		{
 			SkinRow row;
@@ -1063,7 +1083,7 @@ static void createSkinsGadgets( void )
 				if (unit.compareNoCase( SKIN_UNITS[u].unit ) == 0)
 					row.known = u;
 			row.count = NULL;
-			SkinChoice none = { NULL, 0, TRUE, NULL, UIStyle::MUTED };
+			SkinChoice none = { NULL, 0, TRUE };
 			row.choices.push_back( none );
 			s_skinRows.push_back( row );
 		}
@@ -1115,18 +1135,16 @@ static void createSkinsGadgets( void )
 		}
 	}
 
-	// the filter, right of the collected count on its line: All, Owned, Locked
+	// the filter at the title line's right end: All, Owned, Locked
 	const Int inset = across( 20.0f );
 	const Int filterGap = across( 8.0f );
-	UnicodeString collected = TheGameText->fetch( "GUI:OnlineSkinsCollected" );
-	collected.concat( u" 77 / 77" );
-	const Int filterWidth = min( across( 130.0f ),
-		( f.midWidth - 2 * inset - measure( collected, body ) - across( 16.0f ) - 2 * filterGap ) / FILTER_COUNT );
+	// 260 kept at the left for the unit's name and its count
+	const Int filterWidth = min( across( 130.0f ), ( f.midWidth - 2 * inset - across( 260.0f ) - 2 * filterGap ) / FILTER_COUNT );
 	static const char *const FILTER_KEY[ FILTER_COUNT ] = { "GUI:OnlineSkinsAll", "GUI:OnlineSkinsOwned", "GUI:OnlineSkinsFilterLocked" };
 	for (Int i = 0; i < FILTER_COUNT; ++i)
 	{
 		const Int x = f.midX + f.midWidth - inset - ( FILTER_COUNT - i ) * filterWidth - ( FILTER_COUNT - 1 - i ) * filterGap;
-		buttonFilter[i] = WOLMakeButtonLike( parentWindow, buttonBack, x, f.top + down( 60.0f ), filterWidth, down( 34.0f ), FILTER_KEY[i] );
+		buttonFilter[i] = WOLMakeButtonLike( parentWindow, buttonBack, x, f.top + down( 15.0f ), filterWidth, down( 34.0f ), FILTER_KEY[i] );
 		if (buttonFilter[i])
 		{
 			buttonFilter[i]->winSetFont( body );
@@ -1187,7 +1205,6 @@ static void destroySkinsGadgets( void )
 		{
 			if (s_skinRows[r].choices[c].button)
 				TheWindowManager->winDestroy( s_skinRows[r].choices[c].button );
-			freeWords( s_skinRows[r].choices[c].chip );
 		}
 	}
 	const Bool hadRows = !s_skinRows.empty();
@@ -1211,15 +1228,13 @@ static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const Asci
 	const SkinsFrame f = skinsFrame();
 	const Int height = f.bottom - f.top;
 	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
-	GameFont *smallFont = UIStyle::readableFont( UIStyle::TEXT_SMALL );
 	GameFont *title = UIStyle::titleFont( 16 );
-	const Int chipRoom = cardWidth( f ) - 2 * across( 10.0f ) - 2 * across( 8.0f );
 
 	addBox( f.listX, f.top, f.listWidth, height );
 	addBox( f.midX, f.top, f.midWidth, height );
 	addBox( f.rightX, f.top, f.rightWidth, height );
 
-	// every look's state and chip, every unit's count; a side's heading over its first unit
+	// every look's state, every unit's count; a side's heading over its first unit
 	Int side = -1;
 	for (size_t r = 0; r < s_skinRows.size(); ++r)
 	{
@@ -1230,12 +1245,6 @@ static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const Asci
 			SkinChoice &choice = row.choices[c];
 			choice.owned = choice.id == 0 || (owned & ((SkinLoadout)1 << choice.id)) != 0;
 			have += choice.owned ? 1 : 0;
-			const Bool picked = choice.id == row.pick;
-			const char *chip = picked ? ( choice.id == row.worn ? "GUI:OnlineSkinsWorn" : "GUI:OnlineSkinsUnsaved" )
-				: choice.owned ? "GUI:OnlineSkinsOwned" : "GUI:OnlineSkinsLocked";
-			freeWords( choice.chip );
-			choice.chip = newWords( UIStyle::fitText( TheGameText->fetch( chip ), UIStyle::chipFont(), chipRoom ), UIStyle::chipFont() );
-			choice.chipColor = picked ? UIStyle::ACTIVE : UIStyle::MUTED;
 		}
 		UnicodeString count = number( have );
 		count.concat( u" / " );
@@ -1259,33 +1268,31 @@ static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const Asci
 	if (focus)
 		s_skinFocus = focus->id;
 
-	// the middle: the unit's name and kind, the collected count and the filter, the bar, the cards
+	// the middle: the unit's name and its owned count left of the filter, the bar, the cards
 	const Int inset = across( 20.0f );
 	const Int inner = f.midWidth - 2 * inset;
 	const Int midLeft = f.midX + inset;
-	Int have = 0;
 	if (row)
 	{
-		const Int titleWidth = addWords( UIStyle::fitName( row->name, title, inner ), title, midLeft, f.top + down( 10.0f ), UIStyle::INK, ALIGN_LEFT, down( 44.0f ) );
-		const Int kindRoom = inner - titleWidth - across( 14.0f );
-		if (row->known < SKIN_UNKNOWN && kindRoom > 0)
-			addWords( UIStyle::fitText( TheGameText->fetch( SKIN_UNITS[ row->known ].kind ), body, kindRoom ), body,
-				midLeft + titleWidth + across( 14.0f ), f.top + down( 10.0f ), UIStyle::MUTED, ALIGN_LEFT, down( 44.0f ) );
-
+		Int have = 0;
 		for (size_t c = 0; c < row->choices.size(); ++c)
 			have += row->choices[c].owned ? 1 : 0;
 		const Int looks = (Int)row->choices.size();
-		const Int collectedWidth = addWords( TheGameText->fetch( "GUI:OnlineSkinsCollected" ), body, midLeft, f.top + down( 60.0f ), UIStyle::MUTED, ALIGN_LEFT, down( 34.0f ) );
 		UnicodeString count = number( have );
 		count.concat( u" / " );
 		count.concat( number( looks ) );
-		addWords( count, body, midLeft + collectedWidth + across( 8.0f ), f.top + down( 60.0f ), UIStyle::INK, ALIGN_LEFT, down( 34.0f ) );
+		Int filterLeft = f.midX + f.midWidth - inset, filterTop;
+		if (buttonFilter[0])
+			buttonFilter[0]->winGetScreenPosition( &filterLeft, &filterTop );
+		const Int room = filterLeft - across( 16.0f ) - midLeft - measure( count, body ) - across( 14.0f );
+		const Int titleWidth = addWords( UIStyle::fitName( row->name, title, room ), title, midLeft, f.top + down( 10.0f ), UIStyle::INK, ALIGN_LEFT, down( 44.0f ) );
+		addWords( count, body, midLeft + titleWidth + across( 14.0f ), f.top + down( 10.0f ), UIStyle::MUTED, ALIGN_LEFT, down( 44.0f ) );
 
 		// the bar: a segment a look, the owned ones lit
 		const Int segmentGap = across( 4.0f );
 		const Int segment = ( inner - ( looks - 1 ) * segmentGap ) / max( 1, looks );
 		for (Int i = 0; i < looks; ++i)
-			addPiece( PIECE_FILL, midLeft + i * ( segment + segmentGap ), f.top + down( 104.0f ), segment, max( 2, down( 10.0f ) ),
+			addPiece( PIECE_FILL, midLeft + i * ( segment + segmentGap ), f.top + down( 64.0f ), segment, max( 2, down( 10.0f ) ),
 				i < have ? UIStyle::EDGE : UIStyle::GRID );
 	}
 
@@ -1317,7 +1324,7 @@ static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const Asci
 		}
 	}
 
-	// the platform: the button at its foot, the words over it, the model in what is left at the top
+	// the platform: the button at its foot, the look's name over it, the model in all the rest
 	const Int pad = across( 24.0f );
 	const Int rightLeft = f.rightX + pad;
 	const Int rightInner = f.rightWidth - 2 * pad;
@@ -1327,52 +1334,25 @@ static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const Asci
 		if (focus->id)
 			TankSkin_describe( focus->id, unit, unitLabel, label );
 		const UnicodeString name = TheGameText->fetch( label.isEmpty() ? "GUI:OnlineSkinsDefault" : label.str() );
-		const AsciiString earned = focus->id ? TankSkin_earnedBy( focus->id ) : AsciiString::TheEmptyString;
-		const Bool unsaved = focus->id == row->pick && row->pick != row->worn;
-		const char *own = unsaved ? "GUI:OnlineSkinsOwnPicked" : focus->id == 0 ? "GUI:OnlineSkinsOwnDefault"
-			: focus->owned ? "GUI:OnlineSkinsOwnYes" : "GUI:OnlineSkinsOwnNo";
-
-		// stacked from 0, then moved down so they end over the button
-		const size_t first = s_pieces.size();
-		Int y = 0;
-		struct Stack
-		{
-			static void add( Int &y, const UnicodeString &text, GameFont *font, Int x, Int wrap, Color color )
-			{
-				if (text.isEmpty())
-					return;
-				addWords( text, font, x, y, color, ALIGN_LEFT, 0, wrap );
-				y += s_pieces.back().height;
-			}
-		};
-		Stack::add( y, UIStyle::fitText( name, title, rightInner ), title, rightLeft, 0, focus->owned ? UIStyle::INK : UIStyle::MUTED );
-		y += down( 14.0f );
-		Stack::add( y, UIStyle::fitKey( "GUI:OnlineSkinsHowEarned", UIStyle::sectionFont(), rightInner ), UIStyle::sectionFont(), rightLeft, 0, UIStyle::ACTIVE );
-		y += down( 6.0f );
-		Stack::add( y, TheGameText->fetch( earned.isEmpty() ? "GUI:OnlineSkinsEarnedDefault" : earned.str() ), body, rightLeft, rightInner, UIStyle::INK );
-		Stack::add( y, TheGameText->fetch( own ), body, rightLeft, rightInner, UIStyle::MUTED );
-		y += down( 14.0f );
-		Stack::add( y, UIStyle::fitKey( "GUI:OnlineSkinsWho", UIStyle::sectionFont(), rightInner ), UIStyle::sectionFont(), rightLeft, 0, UIStyle::ACTIVE );
-		y += down( 6.0f );
-		Stack::add( y, TheGameText->fetch( "GUI:OnlineSkinsWho1" ), smallFont, rightLeft, rightInner, UIStyle::MUTED );
-
 		const Int buttonTop = f.bottom - down( 24.0f ) - down( 56.0f );
-		const Int wordsTop = max( f.top + down( 16.0f ), buttonTop - down( 16.0f ) - y );
-		for (size_t i = first; i < s_pieces.size(); ++i)
-			s_pieces[i].y += wordsTop;
-		s_hero.lo.x = rightLeft;
-		s_hero.lo.y = f.top + down( 12.0f );
-		s_hero.hi.x = rightLeft + rightInner;
-		s_hero.hi.y = wordsTop - down( 8.0f );
+		const Int nameBand = down( 48.0f );
+		const Int nameTop = buttonTop - down( 8.0f ) - nameBand;
+		addWords( UIStyle::fitText( name, title, rightInner ), title, rightLeft, nameTop, focus->owned ? UIStyle::INK : UIStyle::MUTED, ALIGN_LEFT, nameBand );
+		s_hero.lo.x = f.rightX + across( 8.0f );
+		s_hero.lo.y = f.top + down( 8.0f );
+		s_hero.hi.x = f.rightX + f.rightWidth - across( 8.0f );
+		s_hero.hi.y = nameTop;
 		s_heroOwned = focus->owned;
 
 		if (buttonAction)
 		{
+			// a look the account lacks: what earns it, as the button's label; the button opens the site
+			const AsciiString earned = TankSkin_earnedBy( focus->id );
 			const char *action;
 			Bool live;
 			if (!focus->owned)
 			{
-				action = "GUI:OnlineSkinsOpenSite";
+				action = earned.isEmpty() ? "GUI:OnlineSkinsOpenSite" : earned.str();
 				live = OnlineGetAccountUrl().isNotEmpty();
 			}
 			else if (focus->id == row->pick)

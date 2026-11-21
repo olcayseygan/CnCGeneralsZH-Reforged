@@ -5178,36 +5178,37 @@ SKIN:BugHunter
 "BUG HUNTER"
 END
 
+// the Skins page's button on a look the account lacks, which opens zerohour.gg
 SKIN:EarnedCode
-"Redeem a code at zerohour.gg"
+"REDEEM A CODE"
 END
 
 SKIN:EarnedIron
-"For Iron supporters or higher"
+"IRON SUPPORTER"
 END
 
 SKIN:EarnedBronze
-"For Bronze supporters or higher"
+"BRONZE SUPPORTER"
 END
 
 SKIN:EarnedSilver
-"For Silver supporters or higher"
+"SILVER SUPPORTER"
 END
 
 SKIN:EarnedGold
-"For Gold supporters or higher"
+"GOLD SUPPORTER"
 END
 
 SKIN:EarnedEmerald
-"For Emerald supporters or higher"
+"EMERALD SUPPORTER"
 END
 
 SKIN:EarnedReforged
-"For Reforged supporters"
+"REFORGED SUPPORTER"
 END
 
 SKIN:EarnedBugHunter
-"Comes with the Bug Hunter badge"
+"BUG HUNTER BADGE"
 END
 
 SKIN:UnitUsaDozer
@@ -6683,56 +6684,12 @@ GUI:OnlineScoreHow1
 END
 
 // skins
-GUI:OnlineSkinsUsaTank
-"USA tank"
-END
-
-GUI:OnlineSkinsChinaTank
-"China tank"
-END
-
-GUI:OnlineSkinsGlaTank
-"GLA tank"
-END
-
-GUI:OnlineSkinsUsaHelicopter
-"USA aircraft"
-END
-
-GUI:OnlineSkinsUsaVehicle
-"USA vehicle"
-END
-
-GUI:OnlineSkinsChinaVehicle
-"China vehicle"
-END
-
-GUI:OnlineSkinsWorn
-"Worn"
-END
-
 GUI:OnlineSkinsOwned
 "Owned"
 END
 
-GUI:OnlineSkinsLocked
-"Not owned"
-END
-
-GUI:OnlineSkinsUnsaved
-"Not saved"
-END
-
 GUI:OnlineSkinsOpenSite
 "OPEN ZEROHOUR.GG"
-END
-
-GUI:OnlineSkinsWho
-"Who sees them"
-END
-
-GUI:OnlineSkinsWho1
-"Everyone in your Quick Match and custom games. LAN and skirmish games never show a skin."
 END
 
 GUI:OnlineSkinsPending
@@ -6756,40 +6713,12 @@ GUI:OnlineSkinsSideGla
 "GLA"
 END
 
-GUI:OnlineSkinsCollected
-"Collected"
-END
-
 GUI:OnlineSkinsAll
 "All"
 END
 
 GUI:OnlineSkinsFilterLocked
 "Locked"
-END
-
-GUI:OnlineSkinsHowEarned
-"How it is earned"
-END
-
-GUI:OnlineSkinsEarnedDefault
-"Comes with the game"
-END
-
-GUI:OnlineSkinsOwnDefault
-"Every player has it."
-END
-
-GUI:OnlineSkinsOwnYes
-"It is on your account."
-END
-
-GUI:OnlineSkinsOwnNo
-"Not on your account yet."
-END
-
-GUI:OnlineSkinsOwnPicked
-"Picked. Save to wear it in your next match."
 END
 
 GUI:OnlineSkinsWear

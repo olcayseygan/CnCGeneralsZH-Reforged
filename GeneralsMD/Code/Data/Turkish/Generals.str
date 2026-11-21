@@ -19425,35 +19425,35 @@ SKIN:BugHunter
 END
 
 SKIN:EarnedCode
-"zerohour.gg'de bir kod kullan"
+"KOD KULLAN"
 END
 
 SKIN:EarnedIron
-"Demir ve üstü destekçiler için"
+"DEMİR DESTEKÇİ"
 END
 
 SKIN:EarnedBronze
-"Bronz ve üstü destekçiler için"
+"BRONZ DESTEKÇİ"
 END
 
 SKIN:EarnedSilver
-"Gümüş ve üstü destekçiler için"
+"GÜMÜŞ DESTEKÇİ"
 END
 
 SKIN:EarnedGold
-"Altın ve üstü destekçiler için"
+"ALTIN DESTEKÇİ"
 END
 
 SKIN:EarnedEmerald
-"Zümrüt ve üstü destekçiler için"
+"ZÜMRÜT DESTEKÇİ"
 END
 
 SKIN:EarnedReforged
-"Reforged destekçiler için"
+"REFORGED DESTEKÇİ"
 END
 
 SKIN:EarnedBugHunter
-"Hata Avcısı rozetiyle gelir"
+"HATA AVCISI ROZETİ"
 END
 
 SKIN:UnitUsaDozer
@@ -20874,57 +20874,13 @@ GUI:OnlineScoreHow1
 END
 
 // skinler
-GUI:OnlineSkinsUsaTank
-"ABD tankı"
-END
-
-GUI:OnlineSkinsChinaTank
-"Çin tankı"
-END
-
-GUI:OnlineSkinsGlaTank
-"GLA tankı"
-END
-
-GUI:OnlineSkinsUsaHelicopter
-"ABD hava aracı"
-END
-
-GUI:OnlineSkinsUsaVehicle
-"ABD aracı"
-END
-
-GUI:OnlineSkinsChinaVehicle
-"Çin aracı"
-END
-
-GUI:OnlineSkinsWorn
-"Giyili"
-END
-
 GUI:OnlineSkinsOwned
 "Sende var"
-END
-
-GUI:OnlineSkinsLocked
-"Sende yok"
-END
-
-GUI:OnlineSkinsUnsaved
-"Kaydedilmedi"
 END
 
 
 GUI:OnlineSkinsOpenSite
 "ZEROHOUR.GG'Yİ AÇ"
-END
-
-GUI:OnlineSkinsWho
-"Kim görür"
-END
-
-GUI:OnlineSkinsWho1
-"Hızlı maç ve özel oyunlardaki herkes. LAN ve çatışma oyunları skin göstermez."
 END
 
 GUI:OnlineSkinsPending
@@ -20947,40 +20903,12 @@ GUI:OnlineSkinsSideGla
 "GLA"
 END
 
-GUI:OnlineSkinsCollected
-"Toplanan"
-END
-
 GUI:OnlineSkinsAll
 "Tümü"
 END
 
 GUI:OnlineSkinsFilterLocked
 "Kilitli"
-END
-
-GUI:OnlineSkinsHowEarned
-"Nasıl kazanılır"
-END
-
-GUI:OnlineSkinsEarnedDefault
-"Oyunla gelir"
-END
-
-GUI:OnlineSkinsOwnDefault
-"Her oyuncuda var."
-END
-
-GUI:OnlineSkinsOwnYes
-"Hesabında var."
-END
-
-GUI:OnlineSkinsOwnNo
-"Henüz hesabında yok."
-END
-
-GUI:OnlineSkinsOwnPicked
-"Seçildi. Sonraki maçında giymek için kaydet."
 END
 
 GUI:OnlineSkinsWear

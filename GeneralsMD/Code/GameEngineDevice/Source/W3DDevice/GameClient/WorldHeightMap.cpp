@@ -1224,37 +1224,54 @@ Bool WorldHeightMap::getUVData(Int xIndex, Int yIndex, float U[4], float V[4], B
 #endif
 }
 
-void WorldHeightMap::getSkirtTile(Int tileX, Int tileY, Int *key, Int *across, Int *down, Int *sourceTile)
+void WorldHeightMap::fillSkirtLayer(Int tileX, Int tileY, Int cellX, Int cellY, unsigned patch, SkirtLayer *layer)
 {
-	*key = -1;
-	*across = *down = 0;
-	*sourceTile = -1;
-	if (m_tileNdxes == NULL || m_width < 2 || m_height < 2)
-		return;
-	Int cellX, cellY;
-	const unsigned patch = TerrainSkirt::patchCell(tileX, tileY, m_width, m_height, &cellX, &cellY);
+	layer->key = -1;
+	layer->across = layer->down = 0;
+	layer->sourceTile = -1;
+	const float squareS[4] = { 0.0f, 1.0f, 1.0f, 0.0f }, squareT[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
+	memcpy(layer->cornerS, squareS, sizeof(squareS));
+	memcpy(layer->cornerT, squareT, sizeof(squareT));
 	Int baseNdx = m_tileNdxes[cellY*m_width + cellX] >> 2;
 	if (baseNdx < 0 || baseNdx >= NUM_SOURCE_TILES)
 		return;
-	*sourceTile = baseNdx;
-	*key = -(baseNdx + 1);	// a tile in no class stands alone
+	layer->sourceTile = baseNdx;
+	layer->key = -(baseNdx + 1);	// a tile in no class stands alone
 	// WorldBuilder lays a class as firstTile + (x/2 % width) + width*(y/2 % width): carry that on,
-	// the block moved whole by its patch past the edge (TerrainSkirt::scatterTile)
+	// the block moved and turned whole by its patch past the edge (TerrainSkirt::scatterTile)
 	for (Int i = 0; i < m_numTextureClasses; i++) {
 		const TXTextureClass &tc = m_textureClasses[i];
 		if (tc.firstTile < 0 || tc.width <= 0 || baseNdx < tc.firstTile || baseNdx >= tc.firstTile + tc.numTiles)
 			continue;
 		Int a, d;
-		TerrainSkirt::scatterTile(tileX, tileY, tc.width, patch, &a, &d);
+		float s[4], t[4];
+		TerrainSkirt::scatterTile(tileX, tileY, tc.width, patch, &a, &d, s, t);
 		const Int tile = tc.firstTile + a + tc.width*d;
 		if (tile < tc.firstTile + tc.numTiles && tile < NUM_SOURCE_TILES && tc.width*tc.width <= tc.numTiles) {
-			*key = i;
-			*across = a;
-			*down = d;
-			*sourceTile = tile;
+			layer->key = i;
+			layer->across = a;
+			layer->down = d;
+			layer->sourceTile = tile;
+			memcpy(layer->cornerS, s, sizeof(s));
+			memcpy(layer->cornerT, t, sizeof(t));
 		}
 		break;
 	}
+}
+
+Int WorldHeightMap::getSkirtLayers(Int tileX, Int tileY, SkirtLayer *layers, float (*alpha)[4])
+{
+	layers[0].key = -1;
+	layers[0].sourceTile = -1;
+	for (Int k = 0; k < 4; k++)
+		alpha[0][k] = 1.0f;
+	if (m_tileNdxes == NULL || m_width < 2 || m_height < 2)
+		return 1;
+	TerrainSkirt::PatchLayer patches[TerrainSkirt::MOST_LAYERS];
+	const Int count = TerrainSkirt::tileLayers(tileX, tileY, m_width, m_height, patches, alpha);
+	for (Int l = 0; l < count; l++)
+		fillSkirtLayer(tileX, tileY, patches[l].cellX, patches[l].cellY, patches[l].patch, &layers[l]);
+	return count;
 }
 
 Int WorldHeightMap::getSkirtKeyWidth(Int key)
@@ -1264,14 +1281,15 @@ Int WorldHeightMap::getSkirtKeyWidth(Int key)
 	return 1;
 }
 
-void WorldHeightMap::getSkirtTileUV(Int tileX, Int tileY, float *minU, float *minV, float *maxU, float *maxV)
+void WorldHeightMap::getSkirtLayerUV(const SkirtLayer &layer, float u[4], float v[4])
 {
-	*minU = *minV = *maxU = *maxV = 0.0f;
-	Int key, across, down, sourceTile;
-	getSkirtTile(tileX, tileY, &key, &across, &down, &sourceTile);
-	if (sourceTile < 0)
-		return;
-	getUVForNdx(sourceTile << 2, minU, minV, maxU, maxV, TRUE);
+	float minU = 0.0f, minV = 0.0f, maxU = 0.0f, maxV = 0.0f;
+	if (layer.sourceTile >= 0)
+		getUVForNdx(layer.sourceTile << 2, &minU, &minV, &maxU, &maxV, TRUE);
+	for (Int k = 0; k < 4; k++) {	// t runs up the world and down the texture
+		u[k] = minU + layer.cornerS[k]*(maxU - minU);
+		v[k] = maxV - layer.cornerT[k]*(maxV - minV);
+	}
 }
 
 TerrainTextureClass *WorldHeightMap::getSkirtFlatTexture(const std::vector<Int> &keys, Int tilePixels, std::vector<ICoord2D> &origins, Int *side)

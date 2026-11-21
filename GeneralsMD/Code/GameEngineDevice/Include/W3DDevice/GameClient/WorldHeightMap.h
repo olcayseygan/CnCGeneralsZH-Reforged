@@ -253,13 +253,23 @@ public:  // tile and texture info.
 	TextureClass *getEdgeTerrainTexture(void); //< generates if needed and returns blend edge texture
 	/// UV mapping data for a cell to map into the terrain texture.  Returns true if the textures had to be stretched for cliffs.
 	Bool getUVData(Int xIndex, Int yIndex, float U[4], float V[4], Bool fullTile);
-	/** The whole tile of the terrain texture that source tile (tileX, tileY), two cells a side and
-		counted over the whole map, would carry if the map went on past its edge: the nearest edge
-		cell's texture class in its own repeat.  The skirt past the heightmap draws with it. */
-	void getSkirtTileUV(Int tileX, Int tileY, float *minU, float *minV, float *maxU, float *maxV);
-	/** The same tile as a key (the texture class, or minus one less the source tile for a tile in no
-		class), the tile's place in it, across and down, and the source tile; -1 for none. */
-	void getSkirtTile(Int tileX, Int tileY, Int *key, Int *across, Int *down, Int *sourceTile);
+	/** One texture layer of a tile of the skirt past the heightmap (TerrainSkirt::tileLayers): its key
+		(the texture class, or minus one less the source tile for a tile in no class), the tile's place
+		in that key's block, across and down, the source tile (-1 for none), and where the tile's four
+		corners fall in it, s across and t up. */
+	struct SkirtLayer
+	{
+		Int key, across, down, sourceTile;
+		float cornerS[4], cornerT[4];
+	};
+	/** The layers skirt tile (tileX, tileY), two cells a side and counted over the whole map, wears, up
+		to TerrainSkirt::MOST_LAYERS: the first under the rest, each with how much of it lies over those
+		before it at the four corners.  Returns how many. */
+	Int getSkirtLayers(Int tileX, Int tileY, SkirtLayer *layers, float (*alpha)[4]);
+	/// A layer's four corners in the terrain texture.
+	void getSkirtLayerUV(const SkirtLayer &layer, float u[4], float v[4]);
+	/// A skirt layer from the cell its texture class comes from and its patch (getSkirtLayers).
+	void fillSkirtLayer(Int tileX, Int tileY, Int cellX, Int cellY, unsigned patch, SkirtLayer *layer);
 	Int getSkirtKeyWidth(Int key);	///< tiles a side of a key's block: the class's width, 1 for a lone tile
 	/** A small texture of those keys' blocks, every tile tilePixels a side, for the skirt under the
 		lower terrain detail, which never builds the terrain atlas: origins gets each block's upper left

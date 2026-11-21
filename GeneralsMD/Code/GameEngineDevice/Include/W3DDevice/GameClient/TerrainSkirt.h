@@ -58,21 +58,29 @@ namespace TerrainSkirt
 	const float LEVEL_RAMP = 450.0f;	///< 900 carried the edge's own ridges out as long parallel ribs
 	/// Samples either way along the edge the blur averages.
 	const int PROFILE_RADIUS = 12;
-	/** The texture past the edge (patchCell).  Beside the edge, a band PATCH_NEAR tiles deep give or
+	/** The texture past the edge (tileLayers).  Beside the edge, a band PATCH_NEAR tiles deep give or
 		take half carries the edge on as it is.  Past it the ground is patches about PATCH_TILES tiles
 		across, each one texture class, taken from the edge near the patch's centre and moved along the
 		edge by up to PATCH_SHIFT cells plus PATCH_SPREAD of the centre's distance out, in cells; never
-		further in than PATCH_SHIFT. */
+		further in than PATCH_SHIFT.  Neighbours blend over 2 PATCH_BLEND tiles along borders wandering by
+		PATCH_WOBBLE tiles on a PATCH_WOBBLE_SIZE lattice. */
 	const float PATCH_NEAR = 1.5f;
 	const float PATCH_TILES = 12.0f;
 	const float PATCH_SHIFT = 12.0f;
 	const float PATCH_SPREAD = 0.6f;
+	const float PATCH_BLEND = 1.5f;
+	const float PATCH_WOBBLE = 1.5f;
+	const float PATCH_WOBBLE_SIZE = 3.0f;
 	/** The skirt starts a cell inside the map and goes under it there, edge samples included, by this
 		much, world units, so the subdivided ground's edge, which bends between its samples, never opens
 		a crack onto the clear colour and the skirt's long quads never poke up through the first cell. */
 	const float SINK = 4.0f;
 	/// Past an edge under water the sea floor stays at least this far below the water, world units.
 	const float SEA_MARGIN = 6.0f;
+	/** How many cells out from an edge sample the sea past it is asked for: past the side of a polygon
+		drawn a little outside the heightmap.  One cell fell short of Tournament Island's west side at
+		x -715, so its whole west skirt stood as land and its hills came up through the sea. */
+	const int SEA_PROBE = 8;
 	/** How far over the skirt its fade into the rim's colour is laid, world units: over the sea on it
 		and its waves too, which write depth above the floor.  The fade is too slow to show the shift. */
 	const float FADE_LIFT = 40.0f;
@@ -118,71 +126,263 @@ namespace TerrainSkirt
 		return cell < 0 ? -cell : (cell > last ? cell - last : 0);
 	}
 
-	/** The map cell (the tile's lower left, on a width by height heightmap) a tile takes its texture
-		from, and the patch it lies in: 0 for a tile on the map or in the band that carries the edge on,
-		which keep the map's own order, and otherwise a hash that is the same over the whole patch.  The
-		patches are the tiles nearest each of a grid of centres jittered by a hash, so their borders run
-		every way.  The straight nearest cell carried each edge cell out to the rim as a stripe, grass and
-		rock side by side down the whole skirt. */
-	inline unsigned patchCell(int tileX, int tileY, int width, int height, int *cellX, int *cellY)
+	/** One texture layer of a skirt tile: the map cell (lower left, on a width by height heightmap) its
+		texture class comes from, and its patch, 0 for the map's own order from the nearest cell and
+		otherwise a hash that is the same over the whole patch. */
+	struct PatchLayer
 	{
-		const int x = 2 * tileX, y = 2 * tileY;
-		*cellX = clampCell(x, width - 2);
-		*cellY = clampCell(y, height - 2);
-		const int out = cellsOut(x, width - 2) > cellsOut(y, height - 2) ? cellsOut(x, width - 2) : cellsOut(y, height - 2);
-		if (out == 0 || out < 2.0f * PATCH_NEAR * (0.5f + valueNoise(tileX / 5.0f, tileY / 5.0f)))
-			return 0;
-		const int px = (int)floorf(tileX / PATCH_TILES), py = (int)floorf(tileY / PATCH_TILES);
-		float best = 1.0e30f, centreX = 0.0f, centreY = 0.0f;
-		int bestX = px, bestY = py;
-		for (int j = py - 1; j <= py + 1; ++j)
-			for (int i = px - 1; i <= px + 1; ++i)
-			{
-				const float cx = (i + lattice(i, j)) * PATCH_TILES, cy = (j + lattice(i + 31, j - 17)) * PATCH_TILES;
-				const float d = (cx - tileX) * (cx - tileX) + (cy - tileY) * (cy - tileY);
-				if (d < best)
-				{
-					best = d;
-					centreX = cx;
-					centreY = cy;
-					bestX = i;
-					bestY = j;
-				}
-			}
-		const int cx = (int)floorf(2.0f * centreX + 0.5f), cy = (int)floorf(2.0f * centreY + 0.5f);
+		unsigned patch;
+		int cellX, cellY;
+	};
+
+	/// One of the jittered grid of patch centres, in tiles, and its place in the grid.
+	struct PatchSite
+	{
+		int i, j;
+		float x, y;
+	};
+
+	/// Tiles outside the heightmap's tiles (0 to width/2 across), the larger of the two ways.
+	inline float tilesOutside(float x, float y, int width, int height)
+	{
+		const float highX = (width - 2) * 0.5f + 1.0f, highY = (height - 2) * 0.5f + 1.0f;
+		const float outX = x < 0.0f ? -x : (x > highX ? x - highX : 0.0f);
+		const float outY = y < 0.0f ? -y : (y > highY ? y - highY : 0.0f);
+		return outX > outY ? outX : outY;
+	}
+
+	/// Below nought inside the band that carries the edge on in the map's own order, above it past.
+	inline float bandField(float x, float y, int width, int height)
+	{
+		return tilesOutside(x, y, width, height) - PATCH_NEAR * (0.5f + valueNoise(x / 5.0f, y / 5.0f));
+	}
+
+	/// The centre of the patch in grid cell (i, j), in tiles, jittered by a hash.
+	inline PatchSite patchSite(int i, int j)
+	{
+		PatchSite site;
+		site.i = i;
+		site.j = j;
+		site.x = (i + lattice(i, j)) * PATCH_TILES;
+		site.y = (j + lattice(i + 31, j - 17)) * PATCH_TILES;
+		return site;
+	}
+
+	/** The grid cells either way round a tile's own whose centres can take a share of its corners: a
+		centre two cells off is at least 24 tiles away, past any nearest centre plus the blend. */
+	const int SITE_SEARCH = 2;
+	const int SITE_COUNT = (2 * SITE_SEARCH + 1) * (2 * SITE_SEARCH + 1);
+	/// The most layers one point of the skirt mixes (pointShares).
+	const int POINT_LAYERS = 3;
+	/** The most layers one skirt tile wears, each laid over those before it: its corners' together.  A
+		tile that dropped one its neighbour kept would cut a seam between them. */
+	const int MOST_LAYERS = 6;
+
+	inline unsigned siteHash(const PatchSite &site)
+	{
+		const unsigned patch = (unsigned)site.i * 2654435761u ^ (unsigned)site.j * 40503u;
+		return patch == 0 ? 1u : patch;
+	}
+
+	/** The cell a patch reads: from the edge its centre lies past (or, over the map, nearest), a little
+		in from it, moved along the edge by up to PATCH_SHIFT plus PATCH_SPREAD of the centre's distance
+		out; past a corner, along one of the two.  The centre alone decides, so a patch is one picture on
+		every tile it covers; decided by the tile, a patch over a corner's diagonal changed class across it. */
+	inline PatchLayer siteLayer(const PatchSite &site, int width, int height)
+	{
+		const int cx = (int)floorf(2.0f * site.x + 0.5f), cy = (int)floorf(2.0f * site.y + 0.5f);
 		const int outX = cellsOut(cx, width - 2), outY = cellsOut(cy, height - 2);
-		const float along = (lattice(bestX + 5, bestY + 9) - 0.5f) * 2.0f
+		const float along = (lattice(site.i + 5, site.j + 9) - 0.5f) * 2.0f
 			* (PATCH_SHIFT + PATCH_SPREAD * (float)(outX > outY ? outX : outY));
-		const int inward = (int)(lattice(bestX - 3, bestY + 11) * PATCH_SHIFT);
+		const int inward = (int)(lattice(site.i - 3, site.j + 11) * PATCH_SHIFT);
 		int sx = clampCell(cx, width - 2), sy = clampCell(cy, height - 2);
-		// along the edge the tile lies past, a little in from it; past a corner, along one of the two
-		const bool alongX = cellsOut(y, height - 2) > 0 && (cellsOut(x, width - 2) == 0 || lattice(bestX, bestY - 7) < 0.5f);
+		const int toX = sx < width - 2 - sx ? sx : width - 2 - sx, toY = sy < height - 2 - sy ? sy : height - 2 - sy;
+		const bool alongX = outX == 0 && outY == 0 ? toY < toX : outY > 0 && (outX == 0 || lattice(site.i, site.j - 7) < 0.5f);
 		if (alongX)
 		{
 			sx += (int)floorf(along + 0.5f);
-			sy = y < 0 ? inward : height - 2 - inward;
+			sy = 2 * sy < height - 2 ? inward : height - 2 - inward;
 		}
 		else
 		{
 			sy += (int)floorf(along + 0.5f);
-			sx = x < 0 ? inward : width - 2 - inward;
+			sx = 2 * sx < width - 2 ? inward : width - 2 - inward;
 		}
-		*cellX = clampCell(sx, width - 2);
-		*cellY = clampCell(sy, height - 2);
-		unsigned patch = (unsigned)bestX * 2654435761u ^ (unsigned)bestY * 40503u;
-		return patch == 0 ? 1u : patch;
+		PatchLayer layer;
+		layer.patch = siteHash(site);
+		layer.cellX = clampCell(sx, width - 2);
+		layer.cellY = clampCell(sy, height - 2);
+		return layer;
 	}
 
-	/** Which tile of a texture class `width` tiles square a tile wears, across and down: the map's own
-		order, as WorldBuilder lays it, with the whole block moved by its patch (patchCell).  So a patch
-		keeps the class's picture whole and the seams fall only where patches meet; the same block again
-		every `width` tiles out to the rim laid rows of the same boulders. */
-	inline void scatterTile(int tileX, int tileY, int width, unsigned patch, int *across, int *down)
+	/** Each of `count` patch centres' share at point (x, y), in tiles, into `shares`, and the band's after
+		them.  The band takes the whole edge line and fades out across its field over 2 PATCH_BLEND tiles.
+		A centre takes more of what the band leaves the nearer it is to the nearest one, nothing once it is
+		2 PATCH_BLEND tiles further, measured from the point moved by up to PATCH_WOBBLE so the borders
+		wander.  Then every share gives up the POINT_LAYERS + 1st largest, so no point mixes more than
+		POINT_LAYERS and none jumps.  The point alone decides, so every tile round a corner takes the same
+		mix there and three patches meet as softly as two. */
+	inline void pointShares(float x, float y, int width, int height, const PatchSite *sites, int count, float *shares)
+	{
+		const float band = 1.0f - smooth(0.5f + 0.5f * bandField(x, y, width, height) / PATCH_BLEND)
+			* smooth(tilesOutside(x, y, width, height));
+		const float movedX = x + (valueNoise(x / PATCH_WOBBLE_SIZE + 7.1f, y / PATCH_WOBBLE_SIZE - 3.3f) - 0.5f) * 2.0f * PATCH_WOBBLE;
+		const float movedY = y + (valueNoise(x / PATCH_WOBBLE_SIZE - 5.7f, y / PATCH_WOBBLE_SIZE + 2.9f) - 0.5f) * 2.0f * PATCH_WOBBLE;
+		float nearest = 1.0e30f;
+		for (int s = 0; s < count; ++s)
+		{
+			const float dx = sites[s].x - movedX, dy = sites[s].y - movedY;
+			shares[s] = sqrtf(dx * dx + dy * dy);
+			nearest = shares[s] < nearest ? shares[s] : nearest;
+		}
+		float sum = 0.0f;
+		for (int s = 0; s < count; ++s)
+		{
+			shares[s] = 1.0f - smooth((shares[s] - nearest) / (2.0f * PATCH_BLEND));
+			sum += shares[s];
+		}
+		for (int s = 0; s < count; ++s)
+			shares[s] *= (1.0f - band) / sum;
+		shares[count] = band;
+		float largest[POINT_LAYERS + 1];
+		for (int l = 0; l <= POINT_LAYERS; ++l)
+			largest[l] = 0.0f;
+		for (int s = 0; s <= count; ++s)
+			for (int l = 0; l <= POINT_LAYERS; ++l)
+				if (shares[s] > largest[l])
+				{
+					for (int m = POINT_LAYERS; m > l; --m)
+						largest[m] = largest[m - 1];
+					largest[l] = shares[s];
+					break;
+				}
+		const float cut = largest[POINT_LAYERS];
+		sum = 0.0f;
+		for (int s = 0; s <= count; ++s)
+		{
+			shares[s] = shares[s] > cut ? shares[s] - cut : 0.0f;
+			sum += shares[s];
+		}
+		for (int s = 0; s <= count; ++s)
+			shares[s] /= sum;
+	}
+
+	/** The texture past the edge: the layers a tile wears, the first under the rest, and how much of
+		each over those before it (alpha) at the tile's four corners, (x, y), (x+1, y), (x+1, y+1),
+		(x, y+1).  Beside the edge a band PATCH_NEAR tiles deep give or take half carries the edge on as it
+		is; past it the ground is patches about PATCH_TILES tiles across, the tiles nearest each of a grid
+		of centres jittered by a hash, each one texture class, blending into one another over a few tiles
+		(pointShares) as the map's own blend tiles do.  Two layers a tile cut a hard edge wherever a third
+		patch came near, as grass rectangles with stair-step corners in the rock.  The layers go in one
+		order every tile keeps, the band then by patch, so two tiles laying different sets agree along
+		the side they share.  Returns how many, the band alone on the map. */
+	inline int tileLayers(int tileX, int tileY, int width, int height, PatchLayer layers[MOST_LAYERS], float alpha[MOST_LAYERS][4])
+	{
+		PatchLayer band;
+		band.patch = 0;
+		band.cellX = clampCell(2 * tileX, width - 2);
+		band.cellY = clampCell(2 * tileY, height - 2);
+		layers[0] = band;
+		for (int k = 0; k < 4; ++k)
+			alpha[0][k] = 1.0f;
+		const float centreX = tileX + 0.5f, centreY = tileY + 0.5f;
+		if (tilesOutside(centreX, centreY, width, height) <= 0.0f)
+			return 1;
+		PatchSite sites[SITE_COUNT];
+		const int cellI = (int)floorf(centreX / PATCH_TILES), cellJ = (int)floorf(centreY / PATCH_TILES);
+		int count = 0;
+		for (int j = cellJ - SITE_SEARCH; j <= cellJ + SITE_SEARCH; ++j)
+			for (int i = cellI - SITE_SEARCH; i <= cellI + SITE_SEARCH; ++i)
+				sites[count++] = patchSite(i, j);
+		// the band's share last, after the centres'
+		const float cornerX[4] = { (float)tileX, tileX + 1.0f, tileX + 1.0f, (float)tileX };
+		const float cornerY[4] = { (float)tileY, (float)tileY, tileY + 1.0f, tileY + 1.0f };
+		float shares[4][SITE_COUNT + 1];
+		float most[SITE_COUNT + 1] = {};
+		for (int k = 0; k < 4; ++k)
+		{
+			pointShares(cornerX[k], cornerY[k], width, height, sites, count, shares[k]);
+			for (int s = 0; s <= SITE_COUNT; ++s)
+				most[s] = shares[k][s] > most[s] ? shares[k][s] : most[s];
+		}
+		int chosen[SITE_COUNT + 1];
+		int layerCount = 0;
+		for (int s = 0; s <= SITE_COUNT; ++s)
+			if (most[s] > 0.0f)
+				chosen[layerCount++] = s;
+		while (layerCount > MOST_LAYERS)	// the least taken goes
+		{
+			int least = 0;
+			for (int l = 1; l < layerCount; ++l)
+				least = most[chosen[l]] < most[chosen[least]] ? l : least;
+			chosen[least] = chosen[--layerCount];
+		}
+		unsigned order[SITE_COUNT + 1];
+		for (int l = 0; l < layerCount; ++l)
+			order[l] = chosen[l] == SITE_COUNT ? 0u : siteHash(sites[chosen[l]]);
+		for (int l = 1; l < layerCount; ++l)
+			for (int m = l; m > 0 && order[m] < order[m - 1]; --m)
+			{
+				const unsigned key = order[m];
+				order[m] = order[m - 1];
+				order[m - 1] = key;
+				const int index = chosen[m];
+				chosen[m] = chosen[m - 1];
+				chosen[m - 1] = index;
+			}
+		// each layer over those before it so every corner comes out at its shares
+		float below[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+		for (int l = 0; l < layerCount; ++l)
+		{
+			layers[l] = chosen[l] == SITE_COUNT ? band : siteLayer(sites[chosen[l]], width, height);
+			for (int k = 0; k < 4; ++k)
+			{
+				const float share = shares[k][chosen[l]];
+				below[k] += share;
+				alpha[l][k] = below[k] > 0.0f ? share / below[k] : 1.0f;
+			}
+		}
+		return layerCount;
+	}
+
+	/** Which tile of a texture class `width` tiles square a tile wears, across and down, and where each
+		of its four corners (as tileLayers orders them) falls in that tile, s across and t up, 0 or 1:
+		the map's own order, as WorldBuilder lays it, with the whole block moved by its patch and turned a
+		quarter some times, mirrored or not.  So a patch keeps the class's picture whole and the seams fall
+		only where patches meet; the same block again every `width` tiles out to the rim laid rows of the
+		same boulders, and moved alone it laid the same chevrons in rows patch after patch. */
+	inline void scatterTile(int tileX, int tileY, int width, unsigned patch, int *across, int *down, float cornerS[4], float cornerT[4])
 	{
 		const int shiftX = patch == 0 ? 0 : (int)((patch >> 3) % (unsigned)width);
 		const int shiftY = patch == 0 ? 0 : (int)((patch >> 11) % (unsigned)width);
-		*across = ((tileX + shiftX) % width + width) % width;
-		*down = ((tileY + shiftY) % width + width) % width;
+		const unsigned turn = patch == 0 ? 0u : (patch >> 19) & 7u;
+		const int blockX = ((tileX + shiftX) % width + width) % width;
+		const int blockY = ((tileY + shiftY) % width + width) % width;
+		float turnedX[4], turnedY[4];
+		float lowX = 1.0e30f, lowY = 1.0e30f;
+		for (int k = 0; k < 4; ++k)
+		{
+			float x = (float)(blockX + (k == 1 || k == 2 ? 1 : 0)), y = (float)(blockY + (k >= 2 ? 1 : 0));
+			if (turn & 4u)
+				x = width - x;
+			for (unsigned r = 0; r < (turn & 3u); ++r)
+			{
+				const float t = x;
+				x = y;
+				y = width - t;
+			}
+			turnedX[k] = x;
+			turnedY[k] = y;
+			lowX = x < lowX ? x : lowX;
+			lowY = y < lowY ? y : lowY;
+		}
+		*across = (int)lowX;
+		*down = (int)lowY;
+		for (int k = 0; k < 4; ++k)
+		{
+			cornerS[k] = turnedX[k] - lowX;
+			cornerT[k] = turnedY[k] - lowY;
+		}
 	}
 
 	/// terrain_variation's hash (ffshader.h TERRAIN_VARIATION_SAMPLING), 0 to 1, bit for bit.
@@ -212,14 +412,16 @@ namespace TerrainSkirt
 	/** The ground's slow shade and warm-cool tilt at a world point, as terrain_variation multiplies the
 		map's light under the sun per pixel, fully faded in (the skirt is never under the closest zoom's
 		ground).  Baked into the skirt's vertices under the same mode, or the skirt stood a tone apart
-		from the map's edge. */
+		from the map's edge.  The 41 unit octave stays at its mean: a 20 unit vertex grid only aliased it
+		into blotches. */
 	inline void variation(float worldX, float worldY, float rgb[3])
 	{
 		const float ax = worldX * 0.866f + worldY * 0.5f, ay = worldX * -0.5f + worldY * 0.866f;
 		const float bx = worldX * 0.423f + worldY * -0.906f, by = worldX * 0.906f + worldY * 0.423f;
+		const float FINE_OCTAVE_MEAN = 0.25f * 0.5f;
 		const float n = 0.4f * variationNoise(ax / 290.0f, ay / 290.0f)
 			+ 0.35f * variationNoise(bx / 113.0f + 17.3f, by / 113.0f + 17.3f)
-			+ 0.25f * variationNoise(ax / 41.0f + 53.7f, ay / 41.0f + 53.7f);
+			+ FINE_OCTAVE_MEAN;
 		const float tilt = variationNoise(bx / 197.0f + 91.1f, by / 197.0f + 91.1f) - 0.5f;
 		const float shade = 1.0f + 0.6f * (n - 0.5f);
 		rgb[0] = shade * (1.0f + 0.08f * tilt);

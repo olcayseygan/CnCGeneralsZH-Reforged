@@ -77,68 +77,185 @@ TEST(the_hills_have_no_steps)
 	}
 }
 
+// What each layer of a tile comes to at corner k once all are laid, keyed by patch (the band is 0).
+static void cornerWeights(const PatchLayer *layers, float alpha[MOST_LAYERS][4], int count, int k, unsigned *patch, float *weight)
+{
+	for (int l = 0; l < count; ++l)
+	{
+		float w = alpha[l][k];
+		for (int m = l + 1; m < count; ++m)
+			w *= 1.0f - alpha[m][k];
+		patch[l] = layers[l].patch;
+		weight[l] = w;
+	}
+}
+
+// The layer a tile shows most of, over its four corners.
+static PatchLayer mainLayer(int x, int y, int w, int h)
+{
+	PatchLayer layers[MOST_LAYERS];
+	float alpha[MOST_LAYERS][4];
+	const int count = tileLayers(x, y, w, h, layers, alpha);
+	float total[MOST_LAYERS] = {};
+	for (int k = 0; k < 4; ++k)
+	{
+		unsigned patch[MOST_LAYERS];
+		float weight[MOST_LAYERS];
+		cornerWeights(layers, alpha, count, k, patch, weight);
+		for (int l = 0; l < count; ++l)
+			total[l] += weight[l];
+	}
+	int best = 0;
+	for (int l = 1; l < count; ++l)
+		best = total[l] > total[best] ? l : best;
+	return layers[best];
+}
+
 TEST(a_tile_past_the_edge_takes_its_texture_from_its_patch)
 {
 	const int w = 129, h = 97;
-	int x = 0, y = 0;
-	// on the map, and right beside its edge, a tile is the map's own
-	CHECK_EQ(patchCell(10, 20, w, h, &x, &y), 0u);
-	CHECK_EQ(x, 20);
-	CHECK_EQ(y, 40);
-	CHECK_EQ(patchCell(30, -1, w, h, &x, &y), 0u);
-	CHECK_EQ(x, 60);
-	CHECK_EQ(y, 0);
-	// from the third tile out (the edge carried on no further) straight out from the bottom edge the
+	PatchLayer layers[MOST_LAYERS];
+	float alpha[MOST_LAYERS][4];
+	// on the map a tile is the map's own, and along the edge line the band takes it all
+	CHECK_EQ(tileLayers(10, 20, w, h, layers, alpha), 1);
+	CHECK_EQ(layers[0].patch, 0u);
+	CHECK_EQ(layers[0].cellX, 20);
+	CHECK_EQ(layers[0].cellY, 40);
+	for (int x = 0; x < 64; ++x)
+	{
+		const int count = tileLayers(x, -1, w, h, layers, alpha);
+		unsigned patch[MOST_LAYERS];
+		float weight[MOST_LAYERS];
+		for (int k = 2; k < 4; ++k)
+		{
+			cornerWeights(layers, alpha, count, k, patch, weight);
+			for (int l = 0; l < count; ++l)
+				CHECK_NEAR(weight[l], patch[l] == 0u ? 1.0f : 0.0f, 1e-5f);
+		}
+	}
+	// from the fourth tile out (the edge carried on no further) straight out from the bottom edge the
 	// cell it reads changes from patch to patch, and a patch reads one cell, along the edge and never
 	// deeper in than PATCH_SHIFT
 	unsigned lastPatch = 0;
 	int lastX = -1, lastY = -1, patches = 0, moved = 0;
-	for (int s = -3; s >= -80; --s)
+	for (int s = -4; s >= -80; --s)
 	{
-		const unsigned patch = patchCell(30, s, w, h, &x, &y);
-		CHECK(patch != 0u);
-		CHECK(x >= 0 && x <= w - 2);
-		CHECK(y >= 0 && y <= PATCH_SHIFT);
-		if (patch == lastPatch)
+		const PatchLayer base = mainLayer(30, s, w, h);
+		CHECK(base.patch != 0u);
+		CHECK(base.cellX >= 0 && base.cellX <= w - 2);
+		CHECK(base.cellY >= 0 && base.cellY <= PATCH_SHIFT);
+		if (base.patch == lastPatch)
 		{
-			CHECK_EQ(x, lastX);
-			CHECK_EQ(y, lastY);
+			CHECK_EQ(base.cellX, lastX);
+			CHECK_EQ(base.cellY, lastY);
 		}
 		else
 		{
 			patches++;
-			if (x != lastX)
+			if (base.cellX != lastX)
 				moved++;
 		}
-		lastPatch = patch;
-		lastX = x;
-		lastY = y;
+		lastPatch = base.patch;
+		lastX = base.cellX;
+		lastY = base.cellY;
 	}
 	CHECK(patches >= 4);
 	CHECK(moved >= 3);
 }
 
-TEST(a_patch_keeps_its_class_whole_and_moves_the_block)
+// The weight of `patch` at corner k of a tile, 0 if it wears none of it.
+static float weightOf(unsigned patch, const unsigned *patches, const float *weights, int count)
+{
+	for (int l = 0; l < count; ++l)
+		if (patches[l] == patch)
+			return weights[l];
+	return 0.0f;
+}
+
+TEST(patches_blend_where_they_meet_and_agree_on_either_side)
+{
+	// At a corner two tiles share, each tile's own layers come to the same mix, however many patches
+	// meet there and whichever each tile lays, so the blend has no seam; and the mix is often well
+	// between, so no border is cut hard.  Past a corner of the map too.
+	const int w = 129, h = 97;
+	int compared = 0, between = 0, mismatched = 0, three = 0;
+	for (int y = -70; y < 10; ++y)
+		for (int x = -70; x < 80; ++x)
+		{
+			if (tilesOutside(x + 0.5f, y + 0.5f, w, h) <= 0.0f)
+				continue;
+			PatchLayer layersA[MOST_LAYERS], layersB[MOST_LAYERS];
+			float alphaA[MOST_LAYERS][4], alphaB[MOST_LAYERS][4];
+			const int countA = tileLayers(x, y, w, h, layersA, alphaA);
+			three += countA >= 3;
+			// the right neighbour shares corners 1, 2 as its 0, 3; the one above corners 3, 2 as its 0, 1
+			for (int side = 0; side < 2; ++side)
+			{
+				const int nx = side == 0 ? x + 1 : x, ny = side == 0 ? y : y + 1;
+				if (tilesOutside(nx + 0.5f, ny + 0.5f, w, h) <= 0.0f)
+					continue;
+				const int countB = tileLayers(nx, ny, w, h, layersB, alphaB);
+				const int mine[2][2] = { { 1, 2 }, { 3, 2 } }, theirs[2][2] = { { 0, 3 }, { 0, 1 } };
+				for (int c = 0; c < 2; ++c)
+				{
+					unsigned patchA[MOST_LAYERS], patchB[MOST_LAYERS];
+					float weightA[MOST_LAYERS], weightB[MOST_LAYERS];
+					cornerWeights(layersA, alphaA, countA, mine[side][c], patchA, weightA);
+					cornerWeights(layersB, alphaB, countB, theirs[side][c], patchB, weightB);
+					bool same = true;
+					for (int l = 0; l < countA; ++l)
+					{
+						same = same && fabsf(weightA[l] - weightOf(patchA[l], patchB, weightB, countB)) < 1e-4f;
+						between += weightA[l] > 0.2f && weightA[l] < 0.8f;
+					}
+					for (int l = 0; l < countB; ++l)
+						same = same && fabsf(weightB[l] - weightOf(patchB[l], patchA, weightA, countA)) < 1e-4f;
+					compared++;
+					mismatched += !same;				}
+			}
+		}
+	CHECK(compared > 10000);
+	CHECK_EQ(mismatched, 0);
+	CHECK(between > 500);
+	CHECK(three > 50);
+}
+
+TEST(a_patch_keeps_its_class_whole_and_turns_the_block)
 {
 	const int width = 4;
 	int a = -1, d = -1;
-	// patch 0 is the map's own order
-	scatterTile(13, -6, width, 0u, &a, &d);
+	float s[4], t[4];
+	// patch 0 is the map's own order, upright
+	scatterTile(13, -6, width, 0u, &a, &d, s, t);
 	CHECK_EQ(a, 1);
 	CHECK_EQ(d, 2);
-	// inside one patch, neighbours are the class's neighbours
-	int shifted = 0;
+	const float squareS[4] = { 0.0f, 1.0f, 1.0f, 0.0f }, squareT[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
+	for (int k = 0; k < 4; ++k)
+	{
+		CHECK_EQ(s[k], squareS[k]);
+		CHECK_EQ(t[k], squareT[k]);
+	}
+	// inside one patch the corner two neighbours share is one point of the class's picture, however
+	// the block is turned, and the turns differ from patch to patch
+	int turned = 0;
 	for (unsigned patch = 1; patch < 40; ++patch)
 	{
 		int a1 = -1, d1 = -1, a2 = -1, d2 = -1;
-		scatterTile(20, -30, width, patch * 2654435761u, &a1, &d1);
-		scatterTile(21, -30, width, patch * 2654435761u, &a2, &d2);
-		CHECK_EQ(a2, (a1 + 1) % width);
-		CHECK_EQ(d2, d1);
-		if (a1 != 0 || d1 != ((-30 % width) + width) % width)
-			shifted++;
+		float s1[4], t1[4], s2[4], t2[4];
+		scatterTile(20, -30, width, patch * 2654435761u, &a1, &d1, s1, t1);
+		scatterTile(21, -30, width, patch * 2654435761u, &a2, &d2, s2, t2);
+		const int left[2] = { 1, 2 }, right[2] = { 0, 3 };
+		for (int k = 0; k < 2; ++k)
+		{
+			const int x1 = ((int)(a1 + s1[left[k]])) % width, y1 = ((int)(d1 + t1[left[k]])) % width;
+			const int x2 = ((int)(a2 + s2[right[k]])) % width, y2 = ((int)(d2 + t2[right[k]])) % width;
+			CHECK_EQ(x1, x2);
+			CHECK_EQ(y1, y2);
+		}
+		if (s1[0] != 0.0f || t1[0] != 0.0f || s1[1] != 1.0f)
+			turned++;
 	}
-	CHECK(shifted > 20);
+	CHECK(turned > 20);
 }
 
 TEST(the_baked_shade_is_the_maps_and_averages_one)

@@ -100,6 +100,7 @@
 #include "GameClient/TerrainVisual.h"	
 #include "GameClient/CinemaDirector.h"
 #include "GameClient/ControlBar.h"
+#include "Common/MessageBoxFlags.h"	// MessageBoxWrapper and its flags
 #include "GameClient/Display.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/LookAtXlat.h"
@@ -9793,8 +9794,20 @@ void InGameUI::createControlBar( void )
 {
 
 	TheWindowManager->winCreateFromScript( AsciiString("ControlBar.wnd") );
+
+	// winCreateFromScript hands back nothing for a missing file and destroys the whole tree when one
+	// child fails to parse, and everything after this (ControlBar::init first) stands on the bar's
+	// parent.  v4.1.0 died on that null in HideControlBar at every launch of one install, with no line
+	// saying which; say it, and stop with a message instead of an access violation.
+	if( TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( "ControlBar.wnd:ControlBarParent" ) ) == NULL )
+	{
+		DEBUG_LOG(( "InGameUI::createControlBar - Window\\ControlBar.wnd built no ControlBar.wnd:ControlBarParent (missing, or a window in it failed to parse)\n" ));
+		MessageBoxWrapper( "The command bar's layout (Window\\ControlBar.wnd) could not be read.\n\nRepair the game in the launcher, or remove any mod files from the game folder.", "Command & Conquer Generals Zero Hour", MSGBOX_OK | MSGBOX_TASKMODAL | MSGBOX_ICONERROR );
+		_exit(1);
+	}
+
 	HideControlBar();
-/*	
+/*
 	// hide all windows created from this layout
 	GameWindow *window = TheWindowManager->winGetWindowList();
 	for( ; window; window = window->winGetPrev() )

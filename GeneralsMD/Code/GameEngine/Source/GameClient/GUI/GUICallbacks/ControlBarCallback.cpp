@@ -792,25 +792,27 @@ void HideControlBar( Bool immediate )
 		Int id = (Int)TheNameKeyGenerator->nameToKey(AsciiString("ControlBar.wnd:ControlBarParent"));
 		GameWindow *window = TheWindowManager->winGetWindowFromId(NULL, id);
 
+		// No ControlBarParent when ControlBar.wnd did not build (InGameUI::createControlBar says why);
+		// winHide on it read address 8 at startup.
 		if (window)
 		{
 #ifdef SLIDE_LETTERBOX
-				TheTacticalView->setHeight((Int)(TheDisplay->getHeight() * 0.80f)); 
+				TheTacticalView->setHeight((Int)(TheDisplay->getHeight() * 0.80f));
 #else
 				TheTacticalView->setHeight(TheDisplay->getHeight());
 #endif
-		}
-		if (immediate || (TheControlBar && TheControlBar->isSidebarLayout()))
-		{
-			window->winHide(TRUE);
-			if(TheControlBar)
-				TheControlBar->hideSpecialPowerShortcut();
-	
-		}
-		else
-		{
-			TheControlBar->m_animateWindowManager->reverseAnimateWindow();
-			TheControlBar->animateSpecialPowerShortcut(FALSE);
+			if (immediate || (TheControlBar && TheControlBar->isSidebarLayout()))
+			{
+				window->winHide(TRUE);
+				if(TheControlBar)
+					TheControlBar->hideSpecialPowerShortcut();
+
+			}
+			else if (TheControlBar && TheControlBar->m_animateWindowManager)
+			{
+				TheControlBar->m_animateWindowManager->reverseAnimateWindow();
+				TheControlBar->animateSpecialPowerShortcut(FALSE);
+			}
 		}
 
 		//Always get rid of the purchase science screen!

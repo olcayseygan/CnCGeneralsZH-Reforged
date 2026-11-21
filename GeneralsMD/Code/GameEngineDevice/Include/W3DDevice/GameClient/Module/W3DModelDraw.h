@@ -275,6 +275,9 @@ typedef std::vector<ModelConditionInfo> ModelConditionVector;
 //typedef std::hash_map< TransitionSig, ModelConditionInfo, std::hash<TransitionSig>, std::equal_to<TransitionSig> > TransitionMap;
 typedef std::map< TransitionSig, ModelConditionInfo, std::less<TransitionSig> > TransitionMap;
 
+/// a ShowSubObject or HideSubObject line on one model, every level of detail and the bones below; FALSE when nothing has the name
+Bool hideShowSubObject(RenderObjClass *fullObject, const char *name, Bool hide);
+
 //-------------------------------------------------------------------------------------------------
 // this is more efficient and also helps solve a projectile-launch-offset problem for double-upgraded
 // technicals. it is not within risk, however, and WILL NOT WORK if the attach-to-module is animated

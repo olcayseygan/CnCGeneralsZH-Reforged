@@ -3036,8 +3036,8 @@ static void doHideShowBoneSubObjs(Bool state, Int numSubObjects, Int boneIdx, Re
 	it, and on a model of one level, every retail one, that is all.  A model with levels of detail
 	carries the part once a level, and the first copy is the coarsest level's, so every copy takes the
 	order there, or an upgrade's pods would come and go as the camera zooms.  FALSE when nothing has
-	the name. */
-static Bool hideShowSubObject(RenderObjClass *fullObject, const char *name, Bool hide)
+	the name.  The skins screen's preview (W3DModelPreview.cpp) applies a default state's list with it. */
+Bool hideShowSubObject(RenderObjClass *fullObject, const char *name, Bool hide)
 {
 	Int objIndex;
 	RenderObjClass *subObj = fullObject->Get_Sub_Object_By_Name(name, &objIndex);

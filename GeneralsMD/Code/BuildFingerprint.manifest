@@ -2914,6 +2914,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/FoliagePlacement.h
 GameEngineDevice/Include/W3DDevice/GameClient/GpuParticles.h
 GameEngineDevice/Include/W3DDevice/GameClient/GroundMarks.h
 GameEngineDevice/Include/W3DDevice/GameClient/HeightMap.h
+GameEngineDevice/Include/W3DDevice/GameClient/ModelPreviewFrame.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DDebrisDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DDefaultDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DDependencyModelDraw.h
@@ -3187,6 +3188,7 @@ GameEngineDevice/Source/W3DDevice/GameClient/W3DGameClient.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DGranny.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DGrassBuffer.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DInGameUI.cpp
+GameEngineDevice/Source/W3DDevice/GameClient/W3DModelPreview.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DMouse.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DParticleSys.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DPoly.cpp
@@ -4461,6 +4463,7 @@ Tests/test_miles_effects.cpp
 Tests/test_miles_miniaudio.cpp
 Tests/test_milesaudiomanager.cpp
 Tests/test_minimap_input.inc
+Tests/test_model_preview.cpp
 Tests/test_modern_water_config.cpp
 Tests/test_msvc_float_casts.cpp
 Tests/test_observer_camera.inc

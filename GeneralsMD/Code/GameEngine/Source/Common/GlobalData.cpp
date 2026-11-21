@@ -836,6 +836,8 @@ GlobalData::GlobalData()
 	m_quickMatchOnStart = FALSE;
 	m_onlineLoginOnStart = FALSE;
 	m_testNotice.clear();
+	m_modelPreview.clear();
+	m_modelPreviewSkin = 0;
 	m_lanLobbyOnStart = FALSE;
 	m_skirmishLobbyOnStart = FALSE;
 	m_optionsMenuOnStart = FALSE;

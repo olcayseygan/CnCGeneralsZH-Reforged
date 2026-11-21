@@ -1,0 +1,526 @@
+/*
+**	Command & Conquer Generals Zero Hour(tm)
+**	Copyright 2025 Electronic Arts Inc.
+**
+**	This program is free software: you can redistribute it and/or modify
+**	it under the terms of the GNU General Public License as published by
+**	the Free Software Foundation, either version 3 of the License, or
+**	(at your option) any later version.
+**
+**	This program is distributed in the hope that it will be useful,
+**	but WITHOUT ANY WARRANTY; without even the implied warranty of
+**	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+**	GNU General Public License for more details.
+**
+**	You should have received a copy of the GNU General Public License
+**	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+// Modified 2026 by Olcay Seygan for Zero Hour Reforged; see the git history.
+
+// W3DModelPreview.cpp: Display::drawModelPreview on W3D, one unit model drawn live inside a
+// rectangle of a shell screen (the skins screen).
+//
+// The 3D cursor is the precedent (W3DMouse::draw): a scene of its own and a camera of its own,
+// rendered after the interface with the depth cleared, which the interface does not use.  The
+// rectangle is an off-centre view plane over the whole screen (ModelPreviewFrame.h), since the
+// camera's viewport never reaches Direct3D 11.  There is no scissor, so the model is framed by the
+// sphere round everything it sweeps turning about its own up axis, which it cannot leave at any turn.
+//
+// The model is what a Drawable of the template draws in its default state: every W3DModelDraw kind
+// of draw module the Drawable would make (the same MinLODRequired filter), each made by the asset
+// manager with the skin and the house colour as W3DModelDraw makes it, with what that module hides
+// hidden: the state's Hide/ShowSubObject lines, its muzzle flashes and every headlight beam, and its
+// state's first animation looping (a Chinook's rotors).  It stands on a low octagonal steel plate with
+// a line in the house colour, drawn as 2D triangles projected through the same camera before the
+// model, so the model always stands over it.
+//
+// No GameLogic: no Object, no Drawable, nothing from the logic frame or its random stream.  The
+// asset manager and the module data's state lookup are the render's to call (the tick parks the
+// render before it touches either).
+
+#include "W3DDevice/GameClient/W3DDisplay.h"
+#include "W3DDevice/GameClient/W3DAssetManager.h"
+#include "W3DDevice/GameClient/Module/W3DModelDraw.h"
+#include "W3DDevice/GameClient/ModelPreviewFrame.h"
+#include "Common/GameLOD.h"
+#include "Common/GlobalData.h"
+#include "Common/ThingFactory.h"
+#include "Common/ThingTemplate.h"
+#include "Common/ModuleFactory.h"
+#include "WW3D2/ww3d.h"
+#include "WW3D2/scene.h"
+#include "WW3D2/camera.h"
+#include "WW3D2/light.h"
+#include "WW3D2/hlod.h"
+#include "WW3D2/hanim.h"
+#include "WW3D2/render2d.h"
+#include "WW3D2/dx11runtime.h"
+
+#include <math.h>
+#include <string.h>
+#include <vector>
+
+namespace {
+
+const float PREVIEW_TAN_HALF = 0.36f;			// about 40 degrees across the rectangle's narrower side
+const float PREVIEW_MARGIN = 1.06f;				// the framed sphere a little larger than the model's
+const float PREVIEW_ELEVATION = 0.38f;		// the eye about 22 degrees above the plate
+const float PREVIEW_YAW = -0.70f;					// from the front right of a model facing +X at turn 0
+const size_t PREVIEW_MOST_MODELS = 16;		// models kept for a screen that draws several at once
+
+/* The preview's own light, the same every time: retail GameData.ini's afternoon object lights (sun,
+	 sky fill, back fill), not the table the last map wrote, which a night or snow match leaves behind. */
+struct PreviewLight
+{
+	float diffuse[3];
+	float direction[3];
+};
+const float PREVIEW_AMBIENT[3] = { 56.0f / 255.0f, 52.0f / 255.0f, 44.0f / 255.0f };
+const PreviewLight PREVIEW_LIGHTS[] =
+{
+	{ { 1.0f, 1.0f, 1.0f },																	{ -0.81f, 0.38f, -0.45f } },
+	{ { 60.0f / 255.0f, 60.0f / 255.0f, 80.0f / 255.0f },	{ 0.79f, 0.62f, 0.0f } },
+	{ { 30.0f / 255.0f, 30.0f / 255.0f, 20.0f / 255.0f },	{ 0.81f, -0.48f, -0.34f } },
+};
+const Int PREVIEW_LIGHT_COUNT = sizeof(PREVIEW_LIGHTS) / sizeof(PREVIEW_LIGHTS[0]);
+
+struct PreviewModel
+{
+	AsciiString templateName;
+	Int skin;
+	Color house;
+	std::vector<RenderObjClass *> parts;	// one a draw module; empty when the template has no model
+	Vector3 center;										// the middle of what it sweeps turning: on its up axis, its box's middle height
+	float radius;											// the sphere round that holding all of it at any turn
+	float footprint;									// how far from the axis it reaches sideways
+	float body;												// the plate's size: its body round the axis, long guns left out
+	Bool drawn;												// one draw went through whole (Direct3D 11 compiles a new program off the frame)
+};
+
+SimpleSceneClass *s_scene = NULL;
+CameraClass *s_camera = NULL;
+LightClass *s_lights[PREVIEW_LIGHT_COUNT] = { NULL };
+std::vector<PreviewModel> s_models;				// most recently used last
+
+Bool isNoModel(const AsciiString &name)
+{
+	return name.isEmpty() || name.compareNoCase("None") == 0;
+}
+
+// hide every part on a bone, every level of detail, as WeaponBarrelInfo::setMuzzleFlashHidden does
+void hidePartsOnBone(RenderObjClass *robj, Int bone)
+{
+	if (robj->Class_ID() == RenderObjClass::CLASSID_HLOD)
+	{
+		HLodClass *hlod = (HLodClass *)robj;
+		for (Int lod = 0; lod < hlod->Get_LOD_Count(); ++lod)
+			for (Int i = 0; i < hlod->Get_Lod_Model_Count(lod); ++i)
+				if (hlod->Get_Lod_Model_Bone(lod, i) == bone)
+					hlod->Peek_Lod_Model(lod, i)->Set_Hidden(true);
+		return;
+	}
+	RenderObjClass *child = robj->Get_Sub_Object_On_Bone(0, bone);
+	if (child)
+	{
+		child->Set_Hidden(true);
+		child->Release_Ref();
+	}
+}
+
+// what the real draw module hides on a new model: the state's own list, the muzzle flashes, the headlight beams
+void hideLikeTheDrawModule(RenderObjClass *robj, const ModelConditionInfo *state)
+{
+	for (std::vector<ModelConditionInfo::HideShowSubObjInfo>::const_iterator it = state->m_hideShowVec.begin(); it != state->m_hideShowVec.end(); ++it)
+		hideShowSubObject(robj, it->subObjName.str(), it->hide);
+
+	// validateWeaponBarrelInfo's names (MUZZLEFX01 to 99, or the name alone), without its caches,
+	// which are the tick's
+	char buffer[256];
+	for (Int slot = 0; slot < WEAPONSLOT_COUNT; ++slot)
+	{
+		const AsciiString &flash = state->m_weaponMuzzleFlashName[slot];
+		if (flash.isEmpty())
+			continue;
+		Int bone = robj->Get_Bone_Index(flash.str());
+		if (bone > 0)
+			hidePartsOnBone(robj, bone);
+		for (Int i = 1; i <= 99; ++i)
+		{
+			snprintf(buffer, sizeof(buffer), "%s%02d", flash.str(), i);
+			bone = robj->Get_Bone_Index(buffer);
+			if (bone > 0)
+				hidePartsOnBone(robj, bone);
+		}
+	}
+
+	for (Int i = 0; i < robj->Get_Num_Sub_Objects(); ++i)
+	{
+		RenderObjClass *part = robj->Get_Sub_Object(i);
+		if (strstr(part->Get_Name(), "HEADLIGHT"))
+			part->Set_Hidden(true);
+		part->Release_Ref();
+	}
+}
+
+// one draw module's default state, made and dressed as W3DModelDraw makes it; NULL when it draws nothing
+RenderObjClass *makePart(const ThingTemplate *tmpl, const ModelConditionInfo *state, Int skin, Color house)
+{
+	RenderObjClass *robj = W3DDisplay::m_assetManager->Create_Render_Obj(state->m_modelName.str(), tmpl->getAssetScale(), house, NULL, NULL, skin);
+	if (robj == NULL)
+		return NULL;
+
+	hideLikeTheDrawModule(robj, state);
+
+	// the state's first animation, looping: a soldier's stance, a Chinook's rotors
+	if (!state->m_animations.empty())
+	{
+		HAnimClass *anim = W3DDisplay::m_assetManager->Get_HAnim(state->m_animations.front().getName().str());
+		if (anim)
+		{
+			robj->Set_Animation(anim, 0, RenderObjClass::ANIM_MODE_LOOP);
+			anim->Release_Ref();
+		}
+	}
+
+	// the top level of detail always: a new HLodClass holds its coarsest
+	if (robj->Class_ID() == RenderObjClass::CLASSID_HLOD)
+		((HLodClass *)robj)->Set_LOD_Level(((HLodClass *)robj)->Get_LOD_Count() - 1);
+	robj->Set_Ignore_LOD_Cost(true);
+	robj->Set_Force_Visible(true);
+	return robj;
+}
+
+PreviewModel makeModel(const AsciiString &templateName, Int skin, Color house)
+{
+	PreviewModel m;
+	m.templateName = templateName;
+	m.skin = skin;
+	m.house = house;
+	m.center.Set(0, 0, 0);
+	m.radius = 1.0f;
+	m.footprint = 1.0f;
+	m.body = 1.0f;
+	m.drawn = FALSE;
+
+	const ThingTemplate *tmpl = TheThingFactory ? TheThingFactory->findTemplate(templateName, FALSE) : NULL;
+	if (tmpl == NULL)
+	{
+		DEBUG_LOG(("MODELPREVIEW: no template '%s'\n", templateName.str()));
+		return m;
+	}
+
+	// every draw module a Drawable of it would make (Drawable's constructor), the W3DModelDraw kinds drawn
+	Vector3 lo(0, 0, 0), hi(0, 0, 0);
+	const ModuleInfo &mi = tmpl->getDrawModuleInfo();
+	for (Int i = 0; i < mi.getCount(); ++i)
+	{
+		const ModuleData *mdd = mi.getNthData(i);
+		if (mdd == NULL)
+			continue;
+		if (TheGlobalData->m_useDrawModuleLOD && TheGameLODManager
+				&& mdd->getMinimumRequiredGameLOD() > TheGameLODManager->getStaticLODLevel())
+			continue;
+		const W3DModelDrawModuleData *md = mdd->getAsW3DModelDrawModuleData();
+		if (md == NULL)
+			continue;
+		ModelConditionFlags empty;
+		const ModelConditionInfo *state = md->findBestInfo(empty);
+		if (state == NULL || isNoModel(state->m_modelName))
+			continue;
+		RenderObjClass *robj = makePart(tmpl, state, skin, house);
+		if (robj == NULL)
+		{
+			DEBUG_LOG(("MODELPREVIEW: '%s' has no model '%s'\n", templateName.str(), state->m_modelName.str()));
+			continue;
+		}
+
+		// what shows, not the whole art: the model's box takes in its hidden parts too (the supply
+		// truck's reaches 85 units forward, three times its body), so the visible parts' own boxes,
+		// posed at the origin
+		Vector3 partLo(0, 0, 0), partHi(0, 0, 0);
+		Bool any = FALSE;
+		robj->Set_Transform(Matrix3D(true));
+		robj->Update_Sub_Object_Transforms();
+		for (Int s = 0; s < robj->Get_Num_Sub_Objects(); ++s)
+		{
+			RenderObjClass *sub = robj->Get_Sub_Object(s);
+			if (!sub->Is_Hidden())
+			{
+				const AABoxClass &box = sub->Get_Bounding_Box();
+				if (!any)
+				{
+					partLo = box.Center - box.Extent;
+					partHi = box.Center + box.Extent;
+					any = TRUE;
+				}
+				else
+				{
+					partLo.Update_Min(box.Center - box.Extent);
+					partHi.Update_Max(box.Center + box.Extent);
+				}
+			}
+			sub->Release_Ref();
+		}
+		if (!any)
+		{
+			AABoxClass box;
+			robj->Get_Obj_Space_Bounding_Box(box);
+			partLo = box.Center - box.Extent;
+			partHi = box.Center + box.Extent;
+		}
+		if (m.parts.empty())
+		{
+			lo = partLo;
+			hi = partHi;
+		}
+		else
+		{
+			lo.Update_Min(partLo);
+			hi.Update_Max(partHi);
+		}
+		m.parts.push_back(robj);
+		DEBUG_LOG(("MODELPREVIEW: '%s' skin %d part '%s' box (%.1f,%.1f,%.1f) to (%.1f,%.1f,%.1f)\n", templateName.str(), skin,
+			state->m_modelName.str(), partLo.X, partLo.Y, partLo.Z, partHi.X, partHi.Y, partHi.Z));
+	}
+	if (m.parts.empty())
+	{
+		DEBUG_LOG(("MODELPREVIEW: nothing to draw for '%s'\n", templateName.str()));
+		return m;
+	}
+
+	// It turns about its own origin, the upright the game turns it about, so what it sweeps is a
+	// cylinder round that axis: its box's farthest corner sideways, its box's height.  The bounding
+	// sphere's centre sits well off the axis on a long barrel (a Crusader's 15 units forward), and
+	// turning about that centre left the hull off its plate.
+	const float farX = WWMath::Max(fabsf(lo.X), fabsf(hi.X));
+	const float farY = WWMath::Max(fabsf(lo.Y), fabsf(hi.Y));
+	m.footprint = WWMath::Max(sqrtf(farX * farX + farY * farY), 0.5f);
+	// the body round the axis: the box's nearer end each way, mirrored, which leaves out a gun
+	// reaching far forward (the Crusader's box runs -15 to +45 on X, its hull about 15 each way)
+	const float nearX = WWMath::Max(WWMath::Min(fabsf(lo.X), fabsf(hi.X)), 0.0f);
+	const float nearY = WWMath::Max(WWMath::Min(fabsf(lo.Y), fabsf(hi.Y)), 0.0f);
+	m.body = WWMath::Max(sqrtf(nearX * nearX + nearY * nearY), 0.25f * m.footprint);
+	const float halfHeight = 0.5f * (hi.Z - lo.Z);
+	m.center.Set(0.0f, 0.0f, 0.5f * (hi.Z + lo.Z));
+	m.radius = sqrtf(m.footprint * m.footprint + halfHeight * halfHeight);
+
+	DEBUG_LOG(("MODELPREVIEW: '%s' skin %d, %d parts, swept radius %.1f, body %.1f\n", templateName.str(), skin,
+		(Int)m.parts.size(), m.footprint, m.body));
+	return m;
+}
+
+void releaseModel(PreviewModel &m)
+{
+	for (size_t i = 0; i < m.parts.size(); ++i)
+		REF_PTR_RELEASE(m.parts[i]);
+	m.parts.clear();
+}
+
+PreviewModel *findModel(const AsciiString &templateName, Int skin, Color house)
+{
+	for (size_t i = 0; i < s_models.size(); ++i)
+	{
+		if (s_models[i].skin == skin && s_models[i].house == house && s_models[i].templateName == templateName)
+		{
+			if (i + 1 < s_models.size())
+			{
+				PreviewModel used = s_models[i];
+				s_models.erase(s_models.begin() + i);
+				s_models.push_back(used);
+			}
+			return &s_models.back();
+		}
+	}
+	// ponytail: an evicted look's munged prototype and recoloured sheets stay until freeModelPreviews
+	// (or the next reset) releases unused assets; bounded by the screen's looks in one house colour
+	if (s_models.size() >= PREVIEW_MOST_MODELS)
+	{
+		releaseModel(s_models.front());
+		s_models.erase(s_models.begin());
+	}
+	s_models.push_back(makeModel(templateName, skin, house));
+	return &s_models.back();
+}
+
+void makeScene()
+{
+	if (s_scene)
+		return;
+	s_scene = NEW_REF(SimpleSceneClass, ());
+	s_camera = NEW_REF(CameraClass, ());
+
+	s_scene->Set_Ambient_Light(Vector3(PREVIEW_AMBIENT[0], PREVIEW_AMBIENT[1], PREVIEW_AMBIENT[2]));
+	for (Int i = 0; i < PREVIEW_LIGHT_COUNT; ++i)
+	{
+		const PreviewLight &l = PREVIEW_LIGHTS[i];
+		s_lights[i] = NEW_REF(LightClass, (LightClass::DIRECTIONAL));
+		s_lights[i]->Set_Ambient(Vector3(0, 0, 0));
+		s_lights[i]->Set_Diffuse(Vector3(l.diffuse[0], l.diffuse[1], l.diffuse[2]));
+		s_lights[i]->Set_Specular(Vector3(0, 0, 0));
+		// as W3DDisplay::setTimeOfDay places the world's: the light's Z axis is its direction
+		Matrix3D mtx;
+		mtx.Set(Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(l.direction[0], l.direction[1], l.direction[2]), Vector3(0, 0, 0));
+		s_lights[i]->Set_Transform(mtx);
+		s_scene->Add_Render_Object(s_lights[i]);
+	}
+}
+
+UnsignedInt scaleColor(UnsignedInt argb, float k)
+{
+	UnsignedInt r = (UnsignedInt)((float)((argb >> 16) & 0xff) * k);
+	UnsignedInt g = (UnsignedInt)((float)((argb >> 8) & 0xff) * k);
+	UnsignedInt b = (UnsignedInt)((float)(argb & 0xff) * k);
+	if (r > 255) r = 255;
+	if (g > 255) g = 255;
+	if (b > 255) b = 255;
+	return (argb & 0xff000000) | (r << 16) | (g << 8) | b;
+}
+
+// draws Direct3D 11 has left out so far while a program compiled off the frame; nought on Direct3D 9
+unsigned long long drawsWaited()
+{
+	unsigned shipped = 0, held = 0, offFrame = 0;
+	double longest = 0.0;
+	unsigned long long waited = 0;
+	Direct3D11_Program_Statistics(shipped, held, offFrame, longest, waited);
+	return waited;
+}
+
+}	// namespace
+
+// W3DDisplay::drawModelPreview ===============================================
+//=============================================================================
+void W3DDisplay::drawModelPreview( const AsciiString &templateName, Int skin, Color house, Int x, Int y, Int w, Int h, Real turns, Bool dim )
+{
+	if( isRecording() ) { record( [=]() { drawModelPreview( templateName, skin, house, x, y, w, h, turns, dim ); } ); return; }
+	if( w <= 0 || h <= 0 || m_assetManager == NULL || templateName.isEmpty() )
+		return;
+
+	makeScene();
+	PreviewModel *model = findModel( templateName, skin, house );
+
+	// what the 2D layer is holding goes down first, under the model
+	flush2D();
+
+	if( !model->parts.empty() )
+	{
+		const float W = (float)getWidth();
+		const float H = (float)getHeight();
+		const ModelPreviewFrame::ViewPlane plane = ModelPreviewFrame::forPanel( W, H, (float)x, (float)y, (float)w, (float)h, PREVIEW_TAN_HALF );
+
+		// the plate: an octagon round the model's body, a little wider, never past what its turn sweeps
+		// (a barrel past the edge reads better than a hull on a plate twice its size)
+		const float plateRadius = WWMath::Min( model->body * 1.25f, model->footprint * 0.9f );
+		const float plateThick = plateRadius * 0.10f;
+
+		// the sphere round everything the turn sweeps, the plate included
+		const float frameRadius = PREVIEW_MARGIN * WWMath::Max( model->radius,
+			sqrtf( plateRadius * plateRadius + (model->center.Z + plateThick) * (model->center.Z + plateThick) ) );
+		const Vector3 target( 0.0f, 0.0f, model->center.Z );
+		const float distance = ModelPreviewFrame::fitDistance( frameRadius, PREVIEW_TAN_HALF );
+		const Vector3 eye = target + distance * Vector3( cosf( PREVIEW_YAW ) * cosf( PREVIEW_ELEVATION ),
+			sinf( PREVIEW_YAW ) * cosf( PREVIEW_ELEVATION ), sinf( PREVIEW_ELEVATION ) );
+
+		Matrix3D cameraTransform;
+		cameraTransform.Look_At( eye, target, 0.0f );
+		s_camera->Set_Transform( cameraTransform );
+		s_camera->Set_View_Plane( Vector2( plane.minX, plane.minY ), Vector2( plane.maxX, plane.maxY ) );
+		s_camera->Set_Clip_Planes( WWMath::Max( distance - frameRadius * 1.5f, 0.5f ), distance + frameRadius * 1.5f );
+
+		const float angle = (float)turns * 2.0f * WWMATH_PI;
+		Matrix3D modelTransform( true );
+		modelTransform.Rotate_Z( angle );
+		for( size_t i = 0; i < model->parts.size(); ++i )
+			model->parts[ i ]->Set_Transform( modelTransform );
+
+		// Until the model has drawn whole once, no plate and no dim: on Direct3D 11 a new program is
+		// compiled off the frame and its draws are left out meanwhile, and a plate standing empty for
+		// those frames looks broken.  The model pops in, the plate with it on the next frame.
+		if( model->drawn )
+		{
+			// the plate, through the camera; the 2D renderer's triangles are drawn in the order added, so
+			// the sides first and the top over them hides the far ones from this height
+			const UnsignedInt steel = 0xFF3B4148;
+			const UnsignedInt line = house != 0 ? ( (UnsignedInt)house | 0xFF000000 ) : 0xFF8A929C;
+			Vector2 top[8], bottom[8], inner[8];
+			for( Int i = 0; i < 8; ++i )
+			{
+				const float a = angle + ( (float)i + 0.5f ) * WWMATH_PI / 4.0f;
+				Vector3 ndc;
+				s_camera->Project( ndc, Vector3( plateRadius * cosf( a ), plateRadius * sinf( a ), 0.0f ) );
+				ModelPreviewFrame::ndcToPixel( ndc.X, ndc.Y, W, H, &top[i].X, &top[i].Y );
+				s_camera->Project( ndc, Vector3( plateRadius * cosf( a ), plateRadius * sinf( a ), -plateThick ) );
+				ModelPreviewFrame::ndcToPixel( ndc.X, ndc.Y, W, H, &bottom[i].X, &bottom[i].Y );
+				s_camera->Project( ndc, Vector3( 0.84f * plateRadius * cosf( a ), 0.84f * plateRadius * sinf( a ), 0.0f ) );
+				ModelPreviewFrame::ndcToPixel( ndc.X, ndc.Y, W, H, &inner[i].X, &inner[i].Y );
+			}
+			Vector3 ndc;
+			Vector2 middle;
+			s_camera->Project( ndc, Vector3( 0.0f, 0.0f, 0.0f ) );
+			ModelPreviewFrame::ndcToPixel( ndc.X, ndc.Y, W, H, &middle.X, &middle.Y );
+
+			const Vector2 noUV( 0.0f, 0.0f );
+			if( setup2D( NULL, FALSE ) )
+				m_2DRender->Enable_Texturing( FALSE );
+			for( Int i = 0; i < 8; ++i )
+			{
+				// a side lit by how far it faces the eye's way round
+				const float a = angle + ( (float)i + 1.0f ) * WWMATH_PI / 4.0f;
+				const float facing = cosf( a - PREVIEW_YAW );
+				const UnsignedInt side = scaleColor( steel, 0.55f + 0.35f * ( facing > 0.0f ? facing : 0.0f ) );
+				const Int j = ( i + 1 ) % 8;
+				m_2DRender->Add_Tri( top[i], top[j], bottom[j], noUV, noUV, noUV, side );
+				m_2DRender->Add_Tri( top[i], bottom[j], bottom[i], noUV, noUV, noUV, side );
+			}
+			for( Int i = 0; i < 8; ++i )
+				m_2DRender->Add_Tri( middle, top[i], top[( i + 1 ) % 8], noUV, noUV, noUV, steel );
+			for( Int i = 0; i < 8; ++i )
+			{
+				m_2DRender->Add_Line( top[i], top[( i + 1 ) % 8], 1.0f, 0xFF6C747E );
+				m_2DRender->Add_Line( inner[i], inner[( i + 1 ) % 8], 2.0f, line );
+			}
+			finish2D();
+			flush2D();
+		}
+
+		// on Direct3D 11 the world's shadow receiving stays on after it, and this perspective draw
+		// would sample the shell map's sun map
+		Direct3D11_Clear_Shadow_Parameters();
+
+		const unsigned long long waitedBefore = drawsWaited();
+		for( size_t i = 0; i < model->parts.size(); ++i )
+			s_scene->Add_Render_Object( model->parts[ i ] );
+		WW3D::Render( s_scene, s_camera, false, true );
+		for( size_t i = 0; i < model->parts.size(); ++i )
+			s_scene->Remove_Render_Object( model->parts[ i ] );
+		if( drawsWaited() == waitedBefore )
+			model->drawn = TRUE;
+	}
+
+	if( dim && ( model->drawn || model->parts.empty() ) )
+		drawFillRect( x, y, w, h, 0xA0101418 );
+
+}  // end drawModelPreview
+
+// W3DDisplay::freeModelPreviews ==============================================
+/** the preview's models, lights, camera and scene, for a screen that closes and for shutdown; and the
+	* skinned, recoloured prototypes and sheets the models made, which nothing else holds, so nothing of
+	* the previews stays behind for a match that follows */
+//=============================================================================
+void W3DDisplay::freeModelPreviews( void )
+{
+	const Bool hadModels = !s_models.empty();
+	for( size_t i = 0; i < s_models.size(); ++i )
+		releaseModel( s_models[i] );
+	s_models.clear();
+	if( s_scene )
+		s_scene->Remove_All_Render_Objects();
+	for( Int i = 0; i < PREVIEW_LIGHT_COUNT; ++i )
+		REF_PTR_RELEASE( s_lights[i] );
+	REF_PTR_RELEASE( s_camera );
+	REF_PTR_RELEASE( s_scene );
+
+	if( hadModels && m_assetManager )
+		m_assetManager->Release_Unused_Assets();
+
+}  // end freeModelPreviews

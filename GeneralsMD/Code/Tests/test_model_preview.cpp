@@ -1,0 +1,116 @@
+/*
+**	Command & Conquer Generals Zero Hour(tm)
+**	Copyright 2025 Electronic Arts Inc.
+**
+**	This program is free software: you can redistribute it and/or modify
+**	it under the terms of the GNU General Public License as published by
+**	the Free Software Foundation, either version 3 of the License, or
+**	(at your option) any later version.
+**
+**	This program is distributed in the hope that it will be useful,
+**	but WITHOUT ANY WARRANTY; without even the implied warranty of
+**	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+**	GNU General Public License for more details.
+**
+**	You should have received a copy of the GNU General Public License
+**	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+// Modified 2026 by Olcay Seygan for Zero Hour Reforged; see the git history.
+
+// test_model_preview.cpp: the model preview's off-centre frustum (W3DDevice/GameClient/ModelPreviewFrame.h),
+// through WWMath's Init_Perspective the way CameraClass::Update_Frustum builds it: the rectangle's
+// corners land on its pixels, a square stays square on a wide screen, and a sphere framed by
+// fitDistance stays inside the rectangle.
+
+#include "test_harness.h"
+
+#include "W3DDevice/GameClient/ModelPreviewFrame.h"
+#include "matrix4.h"
+
+#include <math.h>
+
+using namespace ModelPreviewFrame;
+
+namespace {
+
+const float ZNEAR = 2.0f;
+const float ZFAR = 500.0f;
+
+Matrix4x4 projectionFor(const ViewPlane &v)
+{
+	Matrix4x4 m;
+	m.Init_Perspective(v.minX * ZNEAR, v.maxX * ZNEAR, v.minY * ZNEAR, v.maxY * ZNEAR, ZNEAR, ZFAR);
+	return m;
+}
+
+// a camera space point (looking down -Z) to screen pixels, as CameraClass::Project divides it
+void toPixel(const Matrix4x4 &m, const Vector3 &p, float w, float h, float *px, float *py)
+{
+	const Vector4 c = m * p;
+	ndcToPixel(c.X / c.W, c.Y / c.W, w, h, px, py);
+}
+
+}	// namespace
+
+TEST(model_preview_panel_corners_land_on_the_panel)
+{
+	// an off-centre, non-square panel on a 16:9 screen
+	const float W = 1920, H = 1080, X = 1250, Y = 210, PW = 520, PH = 640, T = 0.36f;
+	const ViewPlane v = forPanel(W, H, X, Y, PW, PH, T);
+	const Matrix4x4 m = projectionFor(v);
+
+	// the narrower side (width) spans 2T on the view plane, the height in proportion
+	const float hx = T, hy = T * PH / PW;
+	const float depth = 37.0f;
+	float px, py;
+	toPixel(m, Vector3(-hx * depth, hy * depth, -depth), W, H, &px, &py);
+	CHECK_NEAR(px, X, 0.01f);
+	CHECK_NEAR(py, Y, 0.01f);
+	toPixel(m, Vector3(hx * depth, -hy * depth, -depth), W, H, &px, &py);
+	CHECK_NEAR(px, X + PW, 0.01f);
+	CHECK_NEAR(py, Y + PH, 0.01f);
+	// the view axis goes through the panel's middle
+	toPixel(m, Vector3(0, 0, -depth), W, H, &px, &py);
+	CHECK_NEAR(px, X + PW / 2, 0.01f);
+	CHECK_NEAR(py, Y + PH / 2, 0.01f);
+
+	// the whole screen's corners stay the screen's: NDC -1 and +1 at the view plane's ends
+	Vector4 c = m * Vector3(v.minX * depth, v.minY * depth, -depth);
+	CHECK_NEAR(c.X / c.W, -1.0f, 1e-4f);
+	CHECK_NEAR(c.Y / c.W, -1.0f, 1e-4f);
+	c = m * Vector3(v.maxX * depth, v.maxY * depth, -depth);
+	CHECK_NEAR(c.X / c.W, 1.0f, 1e-4f);
+	CHECK_NEAR(c.Y / c.W, 1.0f, 1e-4f);
+}
+
+TEST(model_preview_square_panel_keeps_a_square_square)
+{
+	const float W = 2560, H = 1080;	// 21:9, so a frustum stretched to the screen would show it
+	const ViewPlane v = forPanel(W, H, 300, 500, 400, 400, 0.4f);
+	const Matrix4x4 m = projectionFor(v);
+	float x0, y0, x1, y1;
+	toPixel(m, Vector3(-3, -3, -20), W, H, &x0, &y0);
+	toPixel(m, Vector3(3, 3, -20), W, H, &x1, &y1);
+	CHECK_NEAR(x1 - x0, y0 - y1, 0.01f);
+	CHECK(x1 - x0 > 10.0f);
+}
+
+TEST(model_preview_framed_sphere_stays_in_the_panel)
+{
+	const float W = 1920, H = 1080, X = 100, Y = 100, PW = 300, PH = 500, T = 0.3f;
+	const ViewPlane v = forPanel(W, H, X, Y, PW, PH, T);
+	const Matrix4x4 m = projectionFor(v);
+	const float r = 12.0f;
+	const float d = fitDistance(r, T);
+	// the sphere's silhouette edge sideways: the tangent point from the eye
+	const float s = r / d;					// sine of the half angle the sphere fills
+	const float c = sqrtf(1.0f - s * s);
+	const float tx = r * c, tz = -d + r * s;	// tangent point on the x axis side, camera space
+	float px, py;
+	toPixel(m, Vector3(tx, 0, tz), W, H, &px, &py);
+	CHECK_NEAR(px, X + PW, 0.05f);			// just touches the narrow side
+	toPixel(m, Vector3(-tx, 0, tz), W, H, &px, &py);
+	CHECK_NEAR(px, X, 0.05f);
+	toPixel(m, Vector3(0, tx, tz), W, H, &px, &py);
+	CHECK(py > Y);							// the long side has room
+}

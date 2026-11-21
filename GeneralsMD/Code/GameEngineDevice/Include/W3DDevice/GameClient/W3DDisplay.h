@@ -136,6 +136,9 @@ public:
 	virtual Bool supportsPerPixelLighting(void) const;
 	virtual Bool supportsHemisphericAmbient(void) const;
 
+	virtual void drawModelPreview( const AsciiString &templateName, Int skin, Color house, Int x, Int y, Int w, Int h, Real turns, Bool dim );	///< W3DModelPreview.cpp
+	virtual void freeModelPreviews( void );
+
 	virtual void toggleLetterBox(void);	///<enabled letter-boxed display
 	virtual void enableLetterBox(Bool enable);	///<forces letter-boxed display on/off
 

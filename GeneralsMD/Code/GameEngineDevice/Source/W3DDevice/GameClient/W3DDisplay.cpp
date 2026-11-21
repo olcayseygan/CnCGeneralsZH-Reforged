@@ -93,6 +93,7 @@ static void drawFramerateBar(void);
 #include "GameClient/GraphDraw.h"
 #include "GameClient/Line2D.h"
 #include "GameClient/Mouse.h"
+#include "GameClient/Shell.h"
 #include "GameClient/ObserverCamera.h"
 #include "GameClient/CinemaDirector.h"
 #include "GameClient/GlobalLanguage.h"
@@ -495,6 +496,7 @@ static unsigned long long s_pacingPictures = 0;
 
 W3DDisplay::~W3DDisplay()
 {
+	freeModelPreviews();
 	W3DParticleSystemManager::releaseCloudResources();
 	W3DParticleSystemManager::releaseGpuResources();
 	// R1: how each captured model was treated per tick, for the snap rules' tuning.
@@ -1395,6 +1397,9 @@ void W3DDisplay::reset( void )
 	m_3DScene->Destroy_Iterator(sceneIter);
 
 	m_isClippedEnabled = FALSE;
+
+	// a preview's models hold their prototypes; the next draw makes them again
+	freeModelPreviews();
 
 	// release any unused assets from W3D
 	/// @todo really need that "scene abstraction", having this stuff in the display is icky
@@ -3012,6 +3017,20 @@ AGAIN:
 
 				// draw the user interface
 				TheInGameUI->DRAW();
+
+				// -modelpreview: the skins screen's model over the shell, three squares along the foot, one
+				// turn in 12 s: the default paint, the skin, the skin dimmed (a look the account lacks)
+				if( TheGlobalData->m_modelPreview.isNotEmpty() && TheShell && TheShell->isShellActive() )
+				{
+					const Int side = getHeight() / 3;
+					const Int left = getWidth() - 3 * side - getHeight() / 20;
+					const Int top = getHeight() - side - getHeight() / 20;
+					const Real turns = (Real)fmod( (double)Clock_Ticks() / (double)Clock_Ticks_Per_Second() / 12.0, 1.0 );
+					const Color house = GameMakeColor( 0x2a, 0x6e, 0xd8, 0xff );
+					drawModelPreview( TheGlobalData->m_modelPreview, 0, house, left, top, side, side, turns, FALSE );
+					drawModelPreview( TheGlobalData->m_modelPreview, TheGlobalData->m_modelPreviewSkin, house, left + side, top, side, side, turns, FALSE );
+					drawModelPreview( TheGlobalData->m_modelPreview, TheGlobalData->m_modelPreviewSkin, house, left + 2 * side, top, side, side, turns, TRUE );
+				}
 #ifdef DEBUG_LOGGING
 				tUIEnd = Clock_Ticks();
 				TheSceneDrawMS = w3dElapsedMS( tSceneStart, tSceneEnd );

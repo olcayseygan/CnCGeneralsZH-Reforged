@@ -2527,6 +2527,9 @@ target_include_directories(test_wwmath PRIVATE ${WW}/WWLib ${WW}/WWSaveLoad ${WW
 # R1, smooth motion: W3DSmoothMotion.h's blend and verdicts, header-only over WWMath.
 add_lib_test(test_smooth_motion wwmath wwlib wwsaveload wwdebug)
 target_include_directories(test_smooth_motion PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include ${WW}/WWLib)
+# W3DDevice/GameClient/ModelPreviewFrame.h: the skins screen's model preview framed in its rectangle.
+add_lib_test(test_model_preview wwmath wwlib wwsaveload wwdebug)
+target_include_directories(test_model_preview PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include ${WW}/WWLib)
 
 add_lib_test(test_wwlib wwlib wwmath wwsaveload wwdebug)
 target_include_directories(test_wwlib PRIVATE ${WW}/WWLib ${WW}/WWMath ${WW}/WWSaveLoad ${WW}/Wwutil)

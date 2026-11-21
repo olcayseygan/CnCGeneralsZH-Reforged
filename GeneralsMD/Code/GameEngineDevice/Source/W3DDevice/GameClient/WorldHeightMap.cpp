@@ -509,6 +509,10 @@ Bool WorldHeightMap::ParseLightingDataChunk(DataChunkInput &file, DataChunkInfo 
 
 		// The tables were filled from the file just now, so this is always the map's own numbers it
 		// rebalances, however many maps came before.
+		// WorldBuilder reads its maps through this function and writes these same tables back into the
+		// .map, and the CMake port does not build it.  If it is ever built again it must skip this block
+		// (force LIGHTING_STYLE_CLASSIC in its GlobalData): otherwise it saves the rebalanced lights into
+		// the map, and the game rebalances them a second time on every load.
 		if (TheGlobalData->m_lightingStyle == LIGHTING_STYLE_REFORGED) {
 			const Int tod = TheGlobalData->m_timeOfDay;
 			const GlobalData::TerrainLighting before = TheGlobalData->m_terrainObjectsLighting[tod][0];

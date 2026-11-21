@@ -2272,6 +2272,17 @@ void TerrainShader2Stage::updateNoise1(D3DXMATRIX *destMatrix,D3DXMATRIX *curVie
 	delta = m_curTick-delta;
 	m_xOffset += m_xSlidePerSecond*delta/1000;
 	m_yOffset += m_ySlidePerSecond*delta/1000;
+	/* -turbo: W3D's clock follows the wall, and a turbo run draws a varying number of pictures at a
+		 varying pace before its shot, so the clouds' shadow stood somewhere else at the same logic frame on
+		 every run (tree-check, 2026-10-30).  Place them by the logic frame instead, the game time it holds,
+		 so two turbo shots of one frame match.  Still not the paced shot's place. */
+	if (TheGlobalData && TheGlobalData->m_turbo && TheGameLogic)
+	{
+		const Real gameSeconds = (Real)TheGameLogic->getFrame() * MSEC_PER_LOGICFRAME_REAL
+			* ( (Real)GAME_SPEED_PERCENT / 100.0f ) / 1000.0f;
+		m_xOffset = fmodf( m_xSlidePerSecond * gameSeconds, 1.0f );
+		m_yOffset = fmodf( m_ySlidePerSecond * gameSeconds, 1.0f );
+	}
 
 
 	//m_xOffset += m_xSlidePerSecond*delta/500;

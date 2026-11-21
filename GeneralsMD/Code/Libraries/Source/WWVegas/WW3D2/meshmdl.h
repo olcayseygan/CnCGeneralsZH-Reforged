@@ -226,6 +226,9 @@ public:
 	// data is being shared, break the link!)
 	/////////////////////////////////////////////////////////////////////////////////////
 	void							Make_Geometry_Unique();
+	// MeshGeometryClass::Scale moves the vertices, so a skin's bind pose in the shadow skin source is
+	// the old size: upload it again on the next depth pass
+	void							Scale(const Vector3 &sc) { MeshGeometryClass::Scale(sc); ShadowSkinSourceOffset = -1; }
 	void							Make_UV_Array_Unique(int pass=0,int stage=0);
 	void							Make_Color_Array_Unique(int array_index=0);
 

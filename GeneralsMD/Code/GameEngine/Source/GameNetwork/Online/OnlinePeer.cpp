@@ -149,7 +149,7 @@ OnlineSession &OnlineSession::get()
 OnlineSession::OnlineSession() :
 	connection( NULL ), capture( NULL ), status( ONLINE_OFF ), relayPort( 0 ), testMode( FALSE ), failRetry( 0 ),
 	noticeSerial( 0 ), maintenanceRefused( FALSE ), relayTicketFresh( FALSE ), rejoinSerial( 0 ), cardSerial( 0 ), ladderState( ONLINE_LADDER_FAILED ), armiesState( ONLINE_LADDER_FAILED ), historySerial( 0 ), revealing( FALSE ),
-	revealSerial( 0 ), aiVerdictSerial( 0 ), peer( NULL ), buddy( NULL ), ps( NULL )
+	revealSerial( 0 ), aiSpeed( 100 ), aiVerdictSerial( 0 ), peer( NULL ), buddy( NULL ), ps( NULL )
 {
 	connectionGone();
 	forgetAccount();
@@ -338,6 +338,7 @@ OnlineMessage OnlineHelloLine( UnsignedInt exe, UnsignedInt ini, const char *ver
 	hello.setInt( "proto", ONLINE_PROTO );
 	hello.setInt( "files", 1 );		// the install files' hashes come before the login (OnlineSession::sendFiles)
 	hello.setInt( "notice", 1 );	// the server's notices and maintenance, after the welcome and on every change
+	hello.setInt( "speedask", 1 );	// a Quick Match's faster pick may be put to us (qm.matched speedAsk)
 	return hello;
 }
 
@@ -696,6 +697,7 @@ void OnlineSession::matched( const OnlineMessage &m )
 	r.qmStatus.status = QM_MATCHED;
 	r.qmStatus.seed = (Int)m.getInt( "seed" );
 	r.qmStatus.mapIdx = (Int)m.getInt( "mapIdx" );
+	r.qmStatus.speed = OnlineMatchSpeed( m.getInt( "speed", 100 ) );		// qm.speed's when an ask settled it
 	const std::vector<std::string> nicks = m.getStrings( "nicks" );
 	const std::vector<long long> v = m.getInts( "vips" ), sides = m.getInts( "sides" ), colors = m.getInts( "colors" );
 	const std::vector<std::string> skins = m.getStrings( "skins" );		// each seat's "K1.3", as its account wears them
@@ -1147,16 +1149,26 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		const std::vector<OnlineMessage> opponents = m.getObjects( "opponents" );
 		for (size_t i = 0; i < opponents.size(); ++i)
 			noteCard( opponents[i] );
-		if (m.has( "revealMs" ))
+		/* A server that reveals first launches with game.start revealMs later; one that puts a faster pick to
+			 the slower player (speedAsk to him, speedWait to the other) launches only after its qm.speed, with or
+			 without a reveal. */
+		if (m.has( "revealMs" ) || m.has( "speedAsk" ) || m.has( "speedWait" ))
 		{
-			// a server that reveals first launches with game.start revealMs later
 			reveal = m;
 			revealing = TRUE;
 			++revealSerial;
-			DEBUG_LOG(("ONLINE REVEAL match=%s revealMs=%d\n", matchId.c_str(), (Int)m.getInt( "revealMs" )));
+			DEBUG_LOG(("ONLINE REVEAL match=%s revealMs=%d speed=%d ask=%d wait=%d\n", matchId.c_str(),
+				(Int)m.getInt( "revealMs" ), (Int)m.getInt( "speed", 100 ), (Int)m.getInt( "speedAsk" ), (Int)m.getInt( "speedWait" )));
 		}
 		else
 			matched( m );
+	}
+	else if (t == "qm.speed" && revealing && m.getString( "match" ) == reveal.getString( "match" ))
+	{
+		// the ask is settled: the speed game.start plays, and the reveal's countdown starts again from here
+		reveal.setInt( "speed", OnlineMatchSpeed( m.getInt( "speed", 100 ) ) ).setInt( "speedFinal", 1 );
+		++revealSerial;
+		DEBUG_LOG(("ONLINE SPEED match=%s speed=%d\n", m.getString( "match" ).c_str(), (Int)reveal.getInt( "speed" )));
 	}
 	else if (t == "stats")
 	{
@@ -1624,6 +1636,7 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 					maps.push_back( (long long)i );
 			m.setString( "t", "qm.join" ).setInts( "maps", maps );
 			m.setInt( "side", req.QM.side ).setInt( "color", req.QM.color );
+			m.setInt( "speed", OnlineMatchSpeed( req.QM.speed ) );
 			s.send( m );
 		}
 		return;
@@ -1852,6 +1865,7 @@ OnlineRejoinState OnlineGetRejoin( RejoinInfo &out, AsciiString &refusal )
 		out.seed = (Int)(UnsignedInt)m.getInt( "seed" );
 		out.map = m.getString( "map" ).c_str();
 		out.opts = m.getString( "opts" ).c_str();
+		out.speed = m.has( "speed" ) ? OnlineMatchSpeed( m.getInt( "speed" ) ) : 0;
 		s.rejoinOk.clear();
 		s.rejoinState = ONLINE_REJOIN_IDLE;
 	}
@@ -1923,6 +1937,9 @@ static Bool rejoinStartMatch( const AsciiString &options, Int gameSpeedPercent )
 	}
 	if (s_rejoin.opts.isEmpty())
 		TheGameSpyGame->markGameAsQM();
+	// the speed the server set the match up with (a Quick Match's settled pick), over the replay's own
+	if (s_rejoin.speed)
+		gameSpeedPercent = s_rejoin.speed;
 	TheGameSpyGame->setGameSpeedPercent( gameSpeedPercent );
 	placeRejoinSeats();
 	TheGameSpyGame->setGameInProgress( TRUE );
@@ -2223,7 +2240,15 @@ OnlineSkinsState OnlineGetSkins( UnsignedInt64 &owned, AsciiString &error )
 	return s.authed ? (OnlineSkinsState)s.skinsState : ONLINE_SKINS_FAILED;
 }
 
-void OnlineRequestAIMatch( const AsciiString &army )
+Int OnlineMatchSpeed( long long percent )
+{
+	for (Int i = 0; i < PLAYER_GAME_SPEED_COUNT; ++i)
+		if (percent == PLAYER_GAME_SPEED_PERCENTS[i])
+			return PLAYER_GAME_SPEED_PERCENTS[i];
+	return RETAIL_GAME_SPEED_PERCENT;
+}
+
+void OnlineRequestAIMatch( const AsciiString &army, Int speed )
 {
 	OnlineSession &s = OnlineSession::get();
 	s.aiReady.clear();
@@ -2241,6 +2266,7 @@ void OnlineRequestAIMatch( const AsciiString &army )
 	OnlineMessage m;
 	m.setString( "t", "ai.start" ).setString( "army", army.str() );
 	m.setInt( "exe", TheGlobalData ? TheGlobalData->m_exeCRC : 0 ).setInt( "ini", TheGlobalData ? TheGlobalData->m_iniCRC : 0 );
+	m.setInt( "speed", OnlineMatchSpeed( speed ) );
 	s.send( m );
 }
 
@@ -2252,6 +2278,7 @@ OnlineAIMatchState OnlineGetAIMatch( OnlineAIMatch &out )
 	out.aiRating = 0.0f;
 	out.map.clear();
 	out.seed = 0;
+	out.speed = RETAIL_GAME_SPEED_PERCENT;
 	out.reason.clear();
 	if (state == ONLINE_AI_READY)
 	{
@@ -2261,6 +2288,8 @@ OnlineAIMatchState OnlineGetAIMatch( OnlineAIMatch &out )
 		out.aiRating = (Real)s.aiReady.getNumber( "aiRating" );
 		out.map = s.aiReady.getString( "map" ).c_str();
 		out.seed = (Int)(UnsignedInt)s.aiReady.getInt( "seed" );
+		// the server's clamp of what ai.start asked; a server from before echoes none and plays retail's pace
+		out.speed = s.aiSpeed = OnlineMatchSpeed( s.aiReady.getInt( "speed", RETAIL_GAME_SPEED_PERCENT ) );
 		s.aiReady.clear();
 	}
 	else if (state == ONLINE_AI_REFUSED)
@@ -2304,7 +2333,7 @@ void OnlineSendAIResult( const OnlineAIResult &r )
 	stats.setInt( "structuresKilled", r.structuresKilled ).setInt( "moneyEarned", r.moneyEarned );
 	OnlineMessage m;
 	m.setString( "t", "ai.result" ).setString( "matchId", s.aiMatch ).setString( "result", r.won ? "win" : "loss" );
-	m.setInt( "seconds", seconds ).setInt( "endFrame", r.endFrame ).setInt( "blind", r.blind );
+	m.setInt( "seconds", seconds ).setInt( "endFrame", r.endFrame ).setInt( "blind", r.blind ).setInt( "speed", s.aiSpeed );
 	m.setString( "playerArmy", r.playerArmy.str() ).setString( "aiArmy", r.aiArmy.str() ).setObject( "stats", stats );
 	s.send( m );
 	DEBUG_LOG(("ONLINE AI RESULT match=%s result=%s seconds=%lld endFrame=%d blind=%d army=%s ai=%s units=%d/%d/%d"

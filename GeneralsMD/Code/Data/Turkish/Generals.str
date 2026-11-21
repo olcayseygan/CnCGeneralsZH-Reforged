@@ -15919,7 +15919,7 @@ TOOLTIP:ProRules
 END
 
 TOOLTIP:GameSpeed
-"Çatışma ne kadar hızlı oynansın. 1.0x orijinal oyun, LAN, dereceli ve YZ'ye karşı maçların hızı; 1.5x de online odaların hızı. Tempodan başka hiçbir şey değişmez."
+"Çatışma ne kadar hızlı oynansın. 1.0x orijinal oyun ve LAN maçlarının hızı, 1.5x de online odaların hızı. Dereceli ve YZ'ye karşı maçlar, maçtan önce seçilen hızda oynanır. Tempodan başka hiçbir şey değişmez."
 END
 
 TOOLTIP:RoomGameSpeed
@@ -20700,6 +20700,26 @@ END
 
 GUI:QMStartsBanner
 "MAÇ %d SANİYE SONRA BAŞLIYOR"
+END
+
+GUI:QMSpeedBanner
+"%s HIZINDA OYNANSIN MI?"
+END
+
+GUI:QMSpeedAsk
+"%s, %s hızında oynamak istiyor. Kabul ediyor musun?\n\n%d sn içinde reddedilecek"
+END
+
+GUI:QMSpeedWaiting
+"%s oyuncusunun %s hızını kabul etmesi bekleniyor"
+END
+
+GUI:QMSpeedAccepted
+"Kabul edildi, %s hızında oynanacak"
+END
+
+GUI:QMSpeedDeclined
+"Reddedildi, %s hızında oynanacak"
 END
 
 // oda

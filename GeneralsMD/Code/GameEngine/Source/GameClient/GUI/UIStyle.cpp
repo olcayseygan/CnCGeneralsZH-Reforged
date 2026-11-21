@@ -26,6 +26,10 @@
 #include "GameClient/UIStyle.h"
 #include "Common/GlobalData.h"
 #include "Common/NameKeyGenerator.h"
+#include "Common/PlayerTemplate.h"
+#include "Common/ThingFactory.h"
+#include "Common/ThingTemplate.h"
+#include "GameClient/ChallengeGenerals.h"
 #include "GameClient/Display.h"
 #include "GameClient/DisplayString.h"
 #include "GameClient/DisplayStringManager.h"
@@ -760,6 +764,54 @@ const Image *tierImage( RatingTier tier, const AsciiString &side )
 {
 	const Int rank = tierRank( tier );
 	return rank < 0 ? NULL : rankImage( side.isEmpty() ? AsciiString( "Random" ) : side, rank );
+}
+
+const Image *armyPortrait( const PlayerTemplate *army )
+{
+	if( army == NULL )
+		return NULL;
+	const GeneralPersona *persona = TheChallengeGenerals ? TheChallengeGenerals->getGeneralByTemplateName( army->getName() ) : NULL;
+	if( persona && persona->getBioPortraitLarge() )
+		return persona->getBioPortraitLarge();
+	const AsciiString hqName = army->getStartingBuilding();
+	const ThingTemplate *hq = TheThingFactory && hqName.isNotEmpty() ? TheThingFactory->findTemplate( hqName, FALSE ) : NULL;
+	if( hq && hq->getSelectedPortraitImage() )
+		return hq->getSelectedPortraitImage();
+	if( hq && hq->getButtonImage() )
+		return hq->getButtonImage();
+	return army->getGeneralImage() ? army->getGeneralImage() : army->getSideIconImage();
+}
+
+void coverImage( const Image *image, Int x, Int y, Int width, Int height, const IRegion2D *within )
+{
+	if( image == NULL || width <= 0 || height <= 0 || image->getImageWidth() <= 0 || image->getImageHeight() <= 0 )
+		return;
+	const Real scale = max( (Real)width / image->getImageWidth(), (Real)height / image->getImageHeight() );
+	const Int drawnWidth = max( width, REAL_TO_INT( image->getImageWidth() * scale + 0.5f ) );
+	const Int drawnHeight = max( height, REAL_TO_INT( image->getImageHeight() * scale + 0.5f ) );
+	const Int left = x - ( drawnWidth - width ) / 2;
+	const Int top = y - ( drawnHeight - height ) / 4;
+	IRegion2D box;
+	box.lo.x = x;
+	box.lo.y = y;
+	box.hi.x = x + width;
+	box.hi.y = y + height;
+	if( within )
+	{
+		box.lo.x = max( box.lo.x, within->lo.x );
+		box.lo.y = max( box.lo.y, within->lo.y );
+		box.hi.x = min( box.hi.x, within->hi.x );
+		box.hi.y = min( box.hi.y, within->hi.y );
+	}
+	if( box.hi.x > box.lo.x && box.hi.y > box.lo.y )
+	{
+		TheDisplay->setClipRegion( &box );
+		TheDisplay->drawImage( image, left, top, left + drawnWidth, top + drawnHeight );
+	}
+	if( within )
+		TheDisplay->setClipRegion( const_cast<IRegion2D *>( within ) );
+	else
+		TheDisplay->enableClipping( FALSE );
 }
 
 /// the languages that write a decimal comma; every one the game has but English

@@ -186,6 +186,7 @@ struct OnlineReport
 	AsciiString map;							///< the map's path as the game holds it (a generated one's is under the user folder);
 																///< only maps\<folder>\<file> goes up, for the match history, and nothing when that is
 																///< over 255 bytes or not UTF-8
+	Int speed;										///< the game speed the match played, percent of retail
 
 	OnlineReport();
 };
@@ -293,9 +294,22 @@ struct OnlineMatchReveal
 	Int revealMs;
 	Bool hasChance;						///< qm.matched carried chance (an older server does not)
 	Real chance;							///< the local player's win chance, 0 to 1
+	/* The match speed, percent of retail: qm.matched's speed (100 from an older server), then qm.speed's.
+		 When the picks differ the slower player is asked (speedAsk, the faster pick) while the faster one waits
+		 (speedWait); speedFinal says qm.speed came, after which the reveal's countdown starts again. */
+	Int speed;
+	Int speedAsk;							///< the speed this player is asked to accept, 0 for none
+	Int speedWait;						///< the speed the opponent is asked to accept, 0 for none
+	Bool speedFinal;
 	UnsignedInt serial;
 };
 Bool OnlineGetMatchReveal( OnlineMatchReveal &out );
+/* The asked player's answer, qm.speedok{match, ok}.  The server declines by itself SPEED_ASK_MS after
+	 qm.matched, so a box left open past ONLINE_SPEED_ASK_MS closes as a decline. */
+enum { ONLINE_SPEED_ASK_MS = 15000 };
+void OnlineAnswerSpeedAsk( Bool ok );
+/// a speed off the wire: one of PLAYER_GAME_SPEED_PERCENTS, anything else (or none) retail's 100
+Int OnlineMatchSpeed( long long percent );
 
 /* The band of win chances the search accepts now, from the last qm.status's window: chanceLo and
 	 chanceHi in percentage points, 0 to 100 (45 to 55 at join, 30 to 70 at the widest), not ratings and
@@ -434,8 +448,9 @@ struct RejoinInfo
 	std::vector<Int> sides, colors;		///< clamped as a Quick Match seat's
 	std::vector<AsciiString> skins;		///< each seat's "K1.3", empty for none
 	AsciiString map, opts;
+	Int speed;		///< the match's game speed as the server set it up, 0 from a server that sends none
 
-	RejoinInfo() : ranked( FALSE ), me( -1 ), exe( 0 ), ini( 0 ), logPeer( 0 ), elapsedSeconds( 0 ), seed( 0 ) {}
+	RejoinInfo() : ranked( FALSE ), me( -1 ), exe( 0 ), ini( 0 ), logPeer( 0 ), elapsedSeconds( 0 ), seed( 0 ), speed( 0 ) {}
 };
 enum OnlineRejoinState
 {
@@ -457,13 +472,13 @@ void OnlineStartRejoin( const RejoinInfo &info );
 Bool OnlineGetMatchResult( Bool &rated, Real &delta, Real &rating, AsciiString &reason );
 
 /* Play vs AI, a 1v1 skirmish the server rates on a scale of its own (the card's aiRating).
-	 OnlineRequestAIMatch sends ai.start{army, exe, ini}; OnlineGetAIMatch reads the answer and hands it out
+	 OnlineRequestAIMatch sends ai.start{army, exe, ini, speed}; OnlineGetAIMatch reads the answer and hands it out
 	 once: READY with ai.ready's match, the AI seat's rating and the map and seed the server picked, then
 	 the match is live; or REFUSED with ai.refused's reason ("build": this exe or its data is not the
 	 release's), "unavailable" from a server without it and "signedout" when the login went.
 	 While live, OnlineSendAITick sends ai.tick{match, frame} every ONLINE_AI_TICK_SECONDS of wall time and
 	 OnlineSendAIResult sends ai.result{match, result, seconds since ai.ready, endFrame, blind, playerArmy,
-	 aiArmy, stats{...}} once, which ends it.  OnlineDropAIMatch ends it with nothing sent (it could not start).  A win's recording goes up
+	 aiArmy, speed, stats{...}} once, which ends it.  OnlineDropAIMatch ends it with nothing sent (it could not start).  A win's recording goes up
 	 as a Quick Match's does: OnlineClaimAIMatch as it starts, OnlineSendReplay as it closes, and a loss's
 	 is never sent.  A logout ends it too; the server settles a match it never heard the end of.
 	 OnlineGetAIVerdict reads the last ai.rated{before, after, games}, or ai.unrated{reason} or a result's
@@ -483,9 +498,10 @@ struct OnlineAIMatch
 	Real aiRating;
 	AsciiString map;
 	Int seed;
+	Int speed;						///< the speed ai.ready echoed, 100 from an older server
 	AsciiString reason;		///< REFUSED only
 };
-void OnlineRequestAIMatch( const AsciiString &army );
+void OnlineRequestAIMatch( const AsciiString &army, Int speed = 100 );
 OnlineAIMatchState OnlineGetAIMatch( OnlineAIMatch &out );
 Bool OnlineIsAIMatchLive( void );
 void OnlineDropAIMatch( void );

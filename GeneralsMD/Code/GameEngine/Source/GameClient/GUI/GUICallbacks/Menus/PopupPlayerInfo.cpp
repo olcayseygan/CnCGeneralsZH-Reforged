@@ -1600,18 +1600,6 @@ static UnicodeString winsAndLosses( Int wins, Int games )
 	return text;
 }
 
-/// the speed a Play vs AI match plays: retail's, 1.0x at 100
-static UnicodeString speedText( void )
-{
-	const Int speed = RETAIL_GAME_SPEED_PERCENT;
-	UnicodeString text;
-	if( speed % 10 == 0 )
-		text.format( u"%d.%dx", speed / 100, speed / 10 % 10 );
-	else
-		text.format( u"%d.%02dx", speed / 100, speed % 100 );
-	return text;
-}
-
 static void layOutCard( Int width )
 {
 	s_cardDirty = FALSE;
@@ -1662,8 +1650,8 @@ static void layOutCard( Int width )
 		whereLeft, at( 82 ), at( 27 ), UIStyle::MUTED );
 	cardBox( 1, at( 144 ), width - 2, max( 1, at( 2 ) ), UIStyle::FRAME );
 
-	// the tab's four figures: the rating with its tier, then games with the record and the win rate,
-	// with the speed after them on vs AI and the ladder place before them on Quick Match
+	// the tab's figures: the rating with its tier, then games with the record and the win rate, with the
+	// ladder place before them on Quick Match (vs AI has three: each match plays the speed its player picked)
 	Int wins = -1;
 	Int games = -1;
 	if( ai && card.hasAIRating )
@@ -1698,12 +1686,7 @@ static void layOutCard( Int width )
 	under[ gamesAt ] = winsAndLosses( wins, games );
 	label[ gamesAt + 1 ] = TheGameText->fetch( "GUI:OnlineWinRateLabel" );
 	value[ gamesAt + 1 ] = games > 0 ? UIStyle::percentText( UIStyle::percent( wins, games ) ) : none;
-	if( ai )
-	{
-		label[ 3 ] = TheGameText->fetch( "GUI:OnlineSpeedLabel" );
-		value[ 3 ] = speedText();
-	}
-	else
+	if( !ai )
 	{
 		label[ 1 ] = TheGameText->fetch( "GUI:OnlinePlaceLabel" );
 		if( card.rank > 0 )

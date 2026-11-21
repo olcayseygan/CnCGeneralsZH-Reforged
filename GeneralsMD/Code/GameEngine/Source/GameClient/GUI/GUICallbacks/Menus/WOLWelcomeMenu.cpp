@@ -84,6 +84,7 @@
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/DisplayStringManager.h"
 #include "Common/QuickmatchPreferences.h"
+#include "GameNetwork/GUIUtil.h"
 #include "GameNetwork/GeneralsOnline/OnlineBridge.h"
 #include "GameNetwork/WOLBrowser/WebBrowser.h"
 
@@ -111,7 +112,15 @@ static GameWindow *buttonBack = NULL;
 static GameWindow *buttonQuickMatch = NULL;
 static GameWindow *buttonLobby = NULL;
 static GameWindow *buttonPlayAI = NULL;
+static GameWindow *comboBoxAISpeed = NULL;		///< the speed ai.start asks for
 static GameWindow *listboxInfo = NULL;
+
+/// the speed Play vs AI asks for, kept as Quick Match keeps its own
+static Int aiGameSpeed( void )
+{
+	QuickMatchPreferences pref;
+	return OnlineMatchSpeed( pref.getInt( "AIGameSpeed", RETAIL_GAME_SPEED_PERCENT ) );
+}
 
 /// the hub's own window by its name in the master, and its id
 static GameWindow *hubWindow( const char *name, NameKeyType *id = NULL )
@@ -297,7 +306,7 @@ static Bool signedIn( void )
 
 /* The match: slot 0 the player in that army, slot 1 the computer at the server's rating, on the rung
 	 nearest it as -airating seats it, its army, both colours and both start spots drawn from the seed.  The
-	 ranked speed, retail's pace as a Quick Match plays, and the native tick rate.  Built here rather than through -autoskirmish's door so no
+	 speed ai.ready echoed (the player's pick, retail's pace from an older server), and the native tick rate.  Built here rather than through -autoskirmish's door so no
 	 switch of that door reaches a match the server rates.  FALSE, with nothing started, when the map is not
 	 in this game. */
 static Bool startAIMatch( const OnlineAIMatch &ai )
@@ -340,7 +349,7 @@ static Bool startAIMatch( const OnlineAIMatch &ai )
 	TheSkirmishGameInfo->setSlot( 1, computer );
 	TheSkirmishGameInfo->setLocalIP( TheSkirmishGameInfo->getSlot( 0 )->getIP() );
 	TheSkirmishGameInfo->setMap( md->m_fileName );
-	TheSkirmishGameInfo->setGameSpeedPercent( RETAIL_GAME_SPEED_PERCENT );
+	TheSkirmishGameInfo->setGameSpeedPercent( ai.speed );
 	TheSkirmishGameInfo->setSeed( ai.seed );
 	TheWritableGlobalData->m_mapName = TheSkirmishGameInfo->getMap();
 	TheSkirmishGameInfo->startGame( 0 );
@@ -351,9 +360,9 @@ static Bool startAIMatch( const OnlineAIMatch &ai )
 	msg->appendIntegerArgument( DIFFICULTY_NORMAL );
 	msg->appendIntegerArgument( 0 );
 	msg->appendIntegerArgument( LOGICFRAMES_PER_SECOND );			// the native tick, whatever -fps says
-	msg->appendIntegerArgument( RETAIL_GAME_SPEED_PERCENT );
-	DEBUG_LOG(("ONLINE AI START match=%s map=%s seed=%d aiRating=%.2f rung=%d army=%d\n", ai.match.str(),
-		md->m_fileName.str(), ai.seed, ai.aiRating, (Int)rung, s_aiArmy));
+	msg->appendIntegerArgument( ai.speed );
+	DEBUG_LOG(("ONLINE AI START match=%s map=%s seed=%d aiRating=%.2f rung=%d army=%d speed=%d\n", ai.match.str(),
+		md->m_fileName.str(), ai.seed, ai.aiRating, (Int)rung, s_aiArmy, ai.speed));
 	return TRUE;
 }
 
@@ -363,7 +372,7 @@ void WOLPlayVsAI( void )
 		return;
 	s_aiArmy = quickMatchArmy();
 	const PlayerTemplate *army = s_aiArmy >= 0 ? ThePlayerTemplateStore->getNthPlayerTemplate( s_aiArmy ) : NULL;
-	OnlineRequestAIMatch( army ? army->getName() : AsciiString( "Random" ) );
+	OnlineRequestAIMatch( army ? army->getName() : AsciiString( "Random" ), aiGameSpeed() );
 	s_aiAsked = TRUE;
 }
 
@@ -734,10 +743,7 @@ static void makeCards( void )
 		"GUI:OnlineHubQuickMatchLead", "GUI:OnlineLadderRatingLabel", TRUE, FACT_WIDTH, 3, qmFacts );
 	makeCard( s_cards[ CARD_CUSTOM ], "CardCustom", "GUI:OnlineHubCustomTitle", "GUI:OnlineHubCustomLead",
 		"GUI:OnlineOpenGamesLabel", FALSE, WIDE_FACT_WIDTH, 1, customFacts );
-	// the speed every Play vs AI match plays at, startAIMatch's
-	UnicodeString speed;
-	speed.format( u"%d.%dx", RETAIL_GAME_SPEED_PERCENT / 100, RETAIL_GAME_SPEED_PERCENT % 100 / 10 );
-	s_cards[ CARD_AI ].factValue[ 2 ]->setText( speed );
+	// the Speed fact's value is the master's ComboBoxGameSpeed, over its place
 
 	s_cardRecent = hubWindow( "CardRecent" );
 	s_cardMOTD = hubWindow( "CardMOTD" );
@@ -805,16 +811,16 @@ static void makeCards( void )
 	* 1280x720 and at 4:3 the readable floor grows the body face past what the room holds). */
 static void setCardStatus( HubCard &card, const UnicodeString &text )
 {
+	card.status->setFont( bodyFont() );
+	card.status->setText( text );
+	if (text.isEmpty())
+		return;
 	std::vector<GameFont *> faces( 1, bodyFont() );
 	for (Int points = hubPoints( UIStyle::TEXT_BODY ); ; ++points)
 	{
 		GameFont *face = UIStyle::font( points );
 		if (face == NULL || face->height >= faces[ 0 ]->height)
 			break;
-	card.status->setFont( bodyFont() );
-	card.status->setText( text );
-	if (text.isEmpty())
-		return;
 		faces.insert( faces.begin() + 1, face );		// largest of the smaller sizes first
 	}
 	for (size_t i = 0; i < faces.size(); ++i)
@@ -1250,6 +1256,13 @@ void WOLWelcomeMenuInit( WindowLayout *layout, void *userData )
 		buttonPlayAI->winSetEnabledTextColors( UIStyle::ACTIVE, UIStyle::SHADOW );
 		buttonPlayAI->winHide( !OnlineIsEnabled() );
 	}
+	// Play vs AI's speed in the value's place of its card's Speed fact
+	comboBoxAISpeed = hubWindow( "ComboBoxGameSpeed" );
+	if (comboBoxAISpeed)
+	{
+		PopulatePlayerGameSpeedComboBox( comboBoxAISpeed, aiGameSpeed() );
+		comboBoxAISpeed->winHide( !OnlineIsEnabled() );
+	}
 	if (buttonSignOut)
 		buttonSignOut->winHide( !OnlineIsEnabled() );
 	s_aiRefusal.clear();
@@ -1588,6 +1601,18 @@ WindowMsgHandledType WOLWelcomeMenuSystem( GameWindow *window, UnsignedInt msg,
 
 				return MSG_HANDLED;
 			}//case GWM_INPUT_FOCUS:
+
+		case GCM_SELECTED:
+			{
+				// Play vs AI's speed, kept for the next Play and the score screen's Play again
+				if ((GameWindow *)mData1 == comboBoxAISpeed)
+				{
+					QuickMatchPreferences pref;
+					pref.setInt( "AIGameSpeed", PlayerGameSpeedFromComboBox( comboBoxAISpeed, RETAIL_GAME_SPEED_PERCENT ) );
+					pref.write();
+				}
+				break;
+			}
 
 		case GBM_SELECTED:
 			{

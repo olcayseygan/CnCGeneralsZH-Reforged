@@ -854,6 +854,7 @@ void GameSpyStagingRoom::sendOnlineReport( const char *from )
 	report.sawDesync = TheNetwork->sawCRCMismatch();
 	report.surrendered = FALSE;		// a surrender is a defeat here, and the winner already says so
 	report.map = getMap();				// a Quick Match's generated map: the server never learns its name otherwise
+	report.speed = getGameSpeedPercent();
 	report.winningTeam = -1;
 	report.numPlayers = 0;
 	Int teamsLeft = 0;
@@ -981,7 +982,7 @@ void GameSpyStagingRoom::launchGame( void )
 	msg->appendIntegerArgument(GAME_INTERNET);
 	msg->appendIntegerArgument(DIFFICULTY_NORMAL);	// not used; there so the speed can go last
 	msg->appendIntegerArgument(0);
-	GameEngine_appendNewGameRates( msg, getGameSpeedPercent() );	// the host's pick in a custom room (native unless moved), retail in a Quick Match
+	GameEngine_appendNewGameRates( msg, getGameSpeedPercent() );	// the host's pick in a custom room (native unless moved), the server's settled one in a Quick Match
 
 	TheWritableGlobalData->m_useFpsLimit = false;
 

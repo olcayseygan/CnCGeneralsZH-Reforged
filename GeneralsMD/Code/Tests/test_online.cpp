@@ -1284,6 +1284,84 @@ TEST(online_adapter_quick_match_reveal_waits_for_game_start)
 	CHECK( kim.hasRating && kim.rating == 31 );
 }
 
+/* The match speed: qm.join carries the pick; an old server's qm.matched
+	 plays 100; the faster pick waits on the ask with no reveal, qm.speed settles it and game.start plays it;
+	 the asked one answers with qm.speedok; Play vs AI plays ai.ready's echo, 100 when there is none. */
+TEST(online_adapter_match_speed)
+{
+	AdapterRig rig;
+	rig.login();
+	CHECK_EQ( OnlineHelloLine( 1, 2, "4.1.0" ).getInt( "speedask" ), 1ll );
+
+	PeerRequest qm;
+	qm.peerRequestType = PeerRequest::PEERREQUEST_STARTQUICKMATCH;
+	qm.qmMaps.push_back( true );
+	qm.QM.side = -1;
+	qm.QM.color = -1;
+	qm.QM.speed = 150;
+	rig.peer->addRequest( qm );
+	CHECK( !rig.sent.empty() && rig.sent[0].getInt( "speed" ) == 150 );
+	qm.QM.speed = 175;		// not one of ours
+	rig.peer->addRequest( qm );
+	CHECK( rig.sent.size() == 2 && rig.sent[1].getInt( "speed" ) == 100 );
+
+	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"s1\",\"seed\":1,\"mapIdx\":0,\"nicks\":[\"Tank\",\"Kim\"],\"ids\":[7,9],\"vips\":[1,2]}" );
+	std::vector<PeerResponse> r = rig.peerResponses();
+	CHECK( r.size() == 1 && r[0].qmStatus.status == QM_MATCHED && r[0].qmStatus.speed == 100 );
+
+	// the faster pick: no reveal, yet nothing launches until the ask is settled and game.start comes
+	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"s2\",\"seed\":1,\"mapIdx\":0,\"nicks\":[\"Tank\",\"Kim\"],\"ids\":[7,9],\"vips\":[1,2],"
+		"\"speed\":100,\"speedWait\":150,\"opponents\":[{\"nick\":\"Kim\",\"rating\":31,\"tier\":\"major\"}]}" );
+	CHECK( rig.peerResponses().empty() );
+	OnlineMatchReveal rev;
+	CHECK( OnlineGetMatchReveal( rev ) );
+	CHECK( rev.speed == 100 && rev.speedWait == 150 && rev.speedAsk == 0 && !rev.speedFinal );
+	const UnsignedInt serial = rev.serial;
+	rig.sent.clear();
+	OnlineAnswerSpeedAsk( TRUE );		// not asked: nothing goes
+	CHECK( rig.sent.empty() );
+	rig.feed( "{\"t\":\"qm.speed\",\"match\":\"other\",\"speed\":150}" );		// another match's
+	CHECK( OnlineGetMatchReveal( rev ) && !rev.speedFinal );
+	rig.feed( "{\"t\":\"qm.speed\",\"match\":\"s2\",\"speed\":150}" );
+	CHECK( OnlineGetMatchReveal( rev ) && rev.speedFinal && rev.speed == 150 && rev.serial != serial );
+	rig.feed( "{\"t\":\"game.start\",\"match\":\"s2\",\"ids\":[7,9],\"nicks\":[\"Tank\",\"Kim\"],\"vips\":[1,2]}" );
+	r = rig.peerResponses();
+	CHECK( r.size() == 1 && r[0].qmStatus.status == QM_MATCHED && r[0].qmStatus.speed == 150 );
+
+	// the slower pick is asked, and answers
+	rig.feed( "{\"t\":\"qm.matched\",\"match\":\"s3\",\"seed\":1,\"mapIdx\":0,\"nicks\":[\"Tank\",\"Kim\"],\"ids\":[7,9],\"vips\":[1,2],"
+		"\"speed\":100,\"speedAsk\":200,\"revealMs\":3000}" );
+	CHECK( OnlineGetMatchReveal( rev ) && rev.speedAsk == 200 && rev.speedWait == 0 );
+	rig.sent.clear();
+	OnlineAnswerSpeedAsk( FALSE );
+	CHECK( rig.sent.size() == 1 && rig.sentType( 0 ) == "qm.speedok" && rig.sent[0].getString( "match" ) == "s3"
+		&& rig.sent[0].getInt( "ok", -1 ) == 0 );
+	rig.feed( "{\"t\":\"qm.speed\",\"match\":\"s3\",\"speed\":100}" );
+	rig.sent.clear();
+	OnlineAnswerSpeedAsk( TRUE );		// settled: too late
+	CHECK( rig.sent.empty() );
+	rig.feed( "{\"t\":\"game.start\",\"match\":\"s3\",\"ids\":[7,9],\"nicks\":[\"Tank\",\"Kim\"],\"vips\":[1,2]}" );
+	r = rig.peerResponses();
+	CHECK( r.size() == 1 && r[0].qmStatus.speed == 100 );
+
+	// Play vs AI
+	OnlineAIMatch ai;
+	rig.sent.clear();
+	OnlineRequestAIMatch( "Random", 125 );
+	CHECK( rig.sent.size() == 1 && rig.sent[0].getInt( "speed" ) == 125 );
+	rig.feed( "{\"t\":\"ai.ready\",\"matchId\":\"a1\",\"aiRating\":5,\"map\":\"maps\\\\a\\\\a.map\",\"seed\":3,\"speed\":125}" );
+	CHECK( OnlineGetAIMatch( ai ) == ONLINE_AI_READY && ai.speed == 125 );
+	rig.sent.clear();
+	OnlineAIResult result;
+	result.endFrame = 10;
+	OnlineSendAIResult( result );
+	CHECK( rig.sent.size() == 1 && rig.sent[0].getInt( "speed" ) == 125 );
+	OnlineRequestAIMatch( "Random", 200 );
+	rig.feed( "{\"t\":\"ai.ready\",\"matchId\":\"a2\",\"aiRating\":5,\"map\":\"maps\\\\a\\\\a.map\",\"seed\":3}" );		// an older server
+	CHECK( OnlineGetAIMatch( ai ) == ONLINE_AI_READY && ai.speed == 100 );
+	OnlineDropAIMatch();
+}
+
 TEST(online_adapter_ping_ratings_stats_and_ladder)
 {
 	AdapterRig rig;

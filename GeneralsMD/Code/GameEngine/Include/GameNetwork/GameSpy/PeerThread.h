@@ -160,6 +160,7 @@ public:
 			Int NAT;
 			UnsignedInt exeCRC;
 			UnsignedInt iniCRC;
+			Int speed;		// -online: the preferred game speed, percent of retail
 		} QM;
 
 		struct
@@ -361,6 +362,7 @@ public:
 			Int color[MAX_SLOTS]; // when matched
 			Int nat[MAX_SLOTS];
 			UnsignedInt64 skins[MAX_SLOTS]; // when matched: each seat's SkinLoadout (TankSkin.h)
+			Int speed; // when matched, -online: the match's game speed, percent of retail
 		} qmStatus;
 	};
 };

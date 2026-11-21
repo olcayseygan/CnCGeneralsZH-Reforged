@@ -1491,7 +1491,7 @@ GUI:GameSpeed
 END
 
 TOOLTIP:GameSpeed
-"How fast the skirmish runs. 1.0x is the original game and the speed of LAN, ranked and Play vs AI matches, 1.5x the speed of online rooms. Only the pace changes."
+"How fast the skirmish runs. 1.0x is the original game and the speed of LAN matches, 1.5x the speed of online rooms. Ranked and Play vs AI play the speed picked before the match. Only the pace changes."
 END
 
 TOOLTIP:RoomGameSpeed
@@ -6498,6 +6498,26 @@ END
 
 GUI:QMStartsBanner
 "MATCH STARTS IN %d"
+END
+
+GUI:QMSpeedBanner
+"PLAY AT %s?"
+END
+
+GUI:QMSpeedAsk
+"%s wants to play at %s. Accept?\n\nDeclining in %d s"
+END
+
+GUI:QMSpeedWaiting
+"Waiting for %s to accept %s"
+END
+
+GUI:QMSpeedAccepted
+"Accepted, playing at %s"
+END
+
+GUI:QMSpeedDeclined
+"Declined, playing at %s"
 END
 
 // room

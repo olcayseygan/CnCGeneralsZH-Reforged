@@ -281,6 +281,7 @@ struct OnlineSession
 	std::string aiRefusal;	///< the ai.refused reason not yet taken
 	std::string aiMatch;		///< the match taken from ai.ready, until its ai.result goes
 	long long aiReadyMs;		///< when that ai.ready arrived, in steady-clock milliseconds
+	Int aiSpeed;						///< the speed that match plays, ai.ready's echo; its ai.result says it again
 	long long aiTickMs;			///< when the last ai.tick went
 	std::string aiWonMatch;	///< the match whose ai.result said win: only its replay goes up
 	std::string aiSentMatch;	///< the match of the last ai.result sent, kept after aiMatch clears: OnlineGetLastAIMatchId

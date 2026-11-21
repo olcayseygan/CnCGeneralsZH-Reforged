@@ -83,10 +83,9 @@ static const Real PAD = 16.0f;
 static const Real POOL_ICON = 96.0f;
 static const Real SIDE_TICK = 26.0f;
 static const Real SIDE_TICK_GAP = 14.0f;
-static const Real MAX_PORTRAIT_SCALE = 4.0f;	// a 64 px side logo blown up past this is only blur
+static const Real MAX_PORTRAIT_SCALE = 4.0f;	// a 120 px Command Center portrait blown up past this is only blur
 static const Int POOL_DIM_ALPHA = 190;
 static const Int HOVER_ALPHA = 80;				///< the EDGE blue over a tile or the scroll thumb under the mouse
-static const char *const PICKER_IMAGE_PREFIX = "FactionPicker";	// a template's own picture here, FactionPickerFactionTurkiye
 
 struct PickerCell
 {
@@ -349,13 +348,10 @@ static void buildCells( void )
 				if( candidates[ n ] == pick )
 					cell.poolBit = (Int)n;
 			}
-			// a retail general has the challenge screen's pictures of him; a side has its logo, unless a
-			// picture is mapped for this screen alone (Turkiye borrows America's logo everywhere else)
+			// a retail general has the challenge screen's pictures of him; a side its Command Center
+			// (UIStyle::armyPortrait), Turkiye's own TRCameoCommandCenter_L included
 			const GeneralPersona *persona = TheChallengeGenerals->getGeneralByTemplateName( pt->getName() );
-			AsciiString ownImage( PICKER_IMAGE_PREFIX );
-			ownImage.concat( pt->getName() );
-			const Image *own = TheMappedImageCollection->findImageByName( ownImage );
-			const Image *logo = own ? own : ( pt->getGeneralImage() ? pt->getGeneralImage() : pt->getSideIconImage() );
+			const Image *logo = UIStyle::armyPortrait( pt );
 			cell.icon = persona && persona->getBioPortraitSmall() ? persona->getBioPortraitSmall() : logo;
 			cell.portrait = persona && persona->getBioPortraitLarge() ? persona->getBioPortraitLarge() : logo;
 			if( !pt->getTooltip().isEmpty() )
@@ -593,8 +589,10 @@ static void drawCellPicture( const PickerCell &cell, const IRegion2D &box )
 	inner.lo.y += inset;
 	inner.hi.x -= inset;
 	inner.hi.y -= inset;
+	// square, as the generals' faces are: a Command Center's 5:4 loses its sides (clipIfCut's clip kept)
 	if( cell.icon )
-		drawFitted( cell.icon, inner, 100.0f );
+		UIStyle::coverImage( cell.icon, inner.lo.x, inner.lo.y, boxWidth( inner ), boxHeight( inner ),
+			TheDisplay->isClippingEnabled() ? &s_gridBox : NULL );
 	else
 		drawCentred( cell.label, box, UIStyle::INK );
 }

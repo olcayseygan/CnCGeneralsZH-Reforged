@@ -118,6 +118,10 @@ Int SupplyPileLimitFromComboBox(GameWindow *comboBox);
 void PopulateGameSpeedComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMayEdit);
 void UpdateGameSpeedComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMayEdit);
 Int GameSpeedFromComboBox(GameWindow *comboBox, GameInfo *myGame);
+UnicodeString GameSpeedText(Int percent);	///< 1.0x, 1.25x, 1.5x, 2.0x
+// Quick Match's and Play vs AI's preferred speed: the same list, the player's own pick
+void PopulatePlayerGameSpeedComboBox(GameWindow *comboBox, Int percent);
+Int PlayerGameSpeedFromComboBox(GameWindow *comboBox, Int fallback);
 
 // The lobby's own tab strip: one page of host settings, and the window that page covers - the chat
 // log in the two network lobbies, the map info list in the skirmish one.  All three screens share

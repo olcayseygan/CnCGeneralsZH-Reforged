@@ -39,6 +39,7 @@ class GameFont;
 class DisplayString;
 class GameWindow;
 class Image;
+class PlayerTemplate;
 struct OnlinePlayerInfo;
 
 namespace UIStyle
@@ -226,6 +227,14 @@ namespace UIStyle
 	const Image *rankImage( const AsciiString &side, Int rank );
 	/// a tier's portrait for side; NULL for unranked, who shows none
 	const Image *tierImage( RatingTier tier, const AsciiString &side );
+	/** An army's picture: a general's Generals' Challenge portrait (BioPortraitLarge, PAAirGen), else
+		* the selected portrait of the army's StartingBuilding, the Command Center (SAComCentr_L), else its
+		* button, else the army's logo; NULL for none. */
+	const Image *armyPortrait( const PlayerTemplate *army );
+	/// image scaled to cover the box, keeping its shape, the overflow cut off: sideways evenly, from the
+	/// top a quarter of it, so a portrait keeps its head.  within, when given, is a clip the caller holds:
+	/// the picture stays inside it too, and it is the clip again afterwards (else clipping goes off)
+	void coverImage( const Image *image, Int x, Int y, Int width, Int height, const IRegion2D *within = NULL );
 	/// a rating to two decimals, the language's way: 22.70, and 22,70 in Turkish, German, French,
 	/// Russian and Ukrainian; sign puts a + before a rise, for a change.  Never "-0.00".
 	UnicodeString ratingTextIn( Real rating, Bool sign, Int language );

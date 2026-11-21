@@ -131,7 +131,7 @@ GameSpyPSMessageQueueInterface *OnlineCreatePSQueue( void )
 
 OnlineReport::OnlineReport() :
 	seed( 0 ), endFrame( 0 ), winningTeam( -1 ), sawDesync( FALSE ), sawGameEnd( FALSE ), disconEnd( FALSE ),
-	surrendered( FALSE ), duration( 0 ), numPlayers( 0 ), numCrcOdd( 0 )
+	surrendered( FALSE ), duration( 0 ), numPlayers( 0 ), numCrcOdd( 0 ), speed( RETAIL_GAME_SPEED_PERCENT )
 {
 	for (Int i = 0; i < MAX_SLOTS; ++i)
 	{
@@ -155,6 +155,7 @@ Bool OnlineSendReport( const OnlineReport &report )
 	m.setBool( "disconEnd", report.disconEnd != 0 ).setBool( "surrendered", report.surrendered != 0 );
 	m.setInt( "duration", report.duration );
 	m.setInt( "hz", LOGICFRAMES_PER_SECOND );	// logic frames a second, so the server can turn endFrame into time
+	m.setInt( "speed", report.speed );			// the server settles a match unrated whose speed is not the one it set
 	std::vector<long long> discon;
 	std::vector<std::string> side;
 	std::vector<long long> blind;
@@ -561,9 +562,16 @@ Bool OnlineGetMatchReveal( OnlineMatchReveal &out )
 	out.revealMs = 0;
 	out.hasChance = FALSE;
 	out.chance = 0.0f;
+	out.speed = RETAIL_GAME_SPEED_PERCENT;
+	out.speedAsk = out.speedWait = 0;
+	out.speedFinal = FALSE;
 	out.serial = s.revealSerial;
 	if (!s.revealing)
 		return FALSE;
+	out.speed = OnlineMatchSpeed( s.reveal.getInt( "speed", RETAIL_GAME_SPEED_PERCENT ) );
+	out.speedAsk = s.reveal.has( "speedAsk" ) ? OnlineMatchSpeed( s.reveal.getInt( "speedAsk" ) ) : 0;
+	out.speedWait = s.reveal.has( "speedWait" ) ? OnlineMatchSpeed( s.reveal.getInt( "speedWait" ) ) : 0;
+	out.speedFinal = s.reveal.getInt( "speedFinal" ) != 0;
 	const std::vector<OnlineMessage> got = s.reveal.getObjects( "opponents" );
 	for (size_t i = 0; i < got.size(); ++i)
 		out.opponents.push_back( ladderRow( got[i] ) );
@@ -573,6 +581,17 @@ Bool OnlineGetMatchReveal( OnlineMatchReveal &out )
 	out.hasChance = chance && chance->kind == OnlineValue::NUMBER;
 	out.chance = (Real)s.reveal.getNumber( "chance" );
 	return TRUE;
+}
+
+void OnlineAnswerSpeedAsk( Bool ok )
+{
+	OnlineSession &s = OnlineSession::get();
+	if (!s.revealing || !s.reveal.has( "speedAsk" ) || s.reveal.getInt( "speedFinal" ) != 0)
+		return;		// no ask open: the reveal went, or the server settled it already
+	OnlineMessage m;
+	m.setString( "t", "qm.speedok" ).setString( "match", s.reveal.getString( "match" ) ).setInt( "ok", ok ? 1 : 0 );
+	s.send( m );
+	DEBUG_LOG(("ONLINE SPEED ANSWER match=%s ok=%d\n", s.reveal.getString( "match" ).c_str(), ok ? 1 : 0));
 }
 
 static const char *const HISTORY_MODES[] = { "all", "qm", "ai" };		// by OnlineHistoryMode

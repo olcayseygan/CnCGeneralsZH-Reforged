@@ -766,18 +766,48 @@ void PopulateGameSpeedComboBox(GameWindow *comboBox, GameInfo *myGame, Bool host
   for ( Int i = 0; i < PLAYER_GAME_SPEED_COUNT; i++ )
   {
     const Int speed = PLAYER_GAME_SPEED_PERCENTS[i];
-    UnicodeString text;
-    // one decimal unless the second one counts, as the skirmish room writes them
-    if ( speed % 10 == 0 )
-      text.format( u"%d.%dx", speed / 100, ( speed % 100 ) / 10 );
-    else
-      text.format( u"%d.%02dx", speed / 100, speed % 100 );
-
-    Int newIndex = GadgetComboBoxAddEntry(comboBox, text, color);
+    Int newIndex = GadgetComboBoxAddEntry(comboBox, GameSpeedText( speed ), color);
     GadgetComboBoxSetItemData(comboBox, newIndex, (void *)(intptr_t)speed);
   }
 
   UpdateGameSpeedComboBox(comboBox, myGame, hostMayEdit);
+}
+
+UnicodeString GameSpeedText(Int percent)
+{
+  UnicodeString text;
+  // one decimal unless the second one counts, as the skirmish room writes them
+  if ( percent % 10 == 0 )
+    text.format( u"%d.%dx", percent / 100, ( percent % 100 ) / 10 );
+  else
+    text.format( u"%d.%02dx", percent / 100, percent % 100 );
+  return text;
+}
+
+// The speed a player prefers for a match the server sets up (Quick Match, Play vs AI): the same list,
+// always his to pick, percent selected without a selection message.
+void PopulatePlayerGameSpeedComboBox(GameWindow *comboBox, Int percent)
+{
+  GadgetComboBoxReset(comboBox);
+  const Color color = comboBox->winGetEnabledTextColor();
+  for ( Int i = 0; i < PLAYER_GAME_SPEED_COUNT; i++ )
+  {
+    const Int speed = PLAYER_GAME_SPEED_PERCENTS[i];
+    const Int row = GadgetComboBoxAddEntry(comboBox, GameSpeedText( speed ), color);
+    GadgetComboBoxSetItemData(comboBox, row, (void *)(intptr_t)speed);
+    if ( speed == percent )
+      GadgetComboBoxSetSelectedPos(comboBox, row, TRUE);
+  }
+}
+
+Int PlayerGameSpeedFromComboBox(GameWindow *comboBox, Int fallback)
+{
+  Int selIndex = -1;
+  if ( comboBox )
+    GadgetComboBoxGetSelectedPos(comboBox, &selIndex);
+  if ( selIndex < 0 )
+    return fallback;
+  return ClampPlayerGameSpeedPercent( (Int)(intptr_t)GadgetComboBoxGetItemData(comboBox, selIndex) );
 }
 
 void UpdateGameSpeedComboBox(GameWindow *comboBox, GameInfo *myGame, Bool hostMayEdit)

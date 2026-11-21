@@ -30,6 +30,7 @@
 #include "Common/AudioEventRTS.h"
 
 #include "GameClient/GadgetListBox.h"
+#include "GameClient/GadgetStaticText.h"
 #include "GameClient/GameText.h"
 #include "GameClient/MessageBox.h"
 #include "GameClient/ShellHooks.h"
@@ -151,6 +152,20 @@ void RaiseGSMessageBox( void )
 		return;
 
 	messageBoxWindow->winBringToTop();
+}
+
+GameWindow *GSMessageBoxWindow( void )
+{
+	return messageBoxWindow;
+}
+
+void GSMessageBoxSetText( const UnicodeString &message )
+{
+	if (!messageBoxWindow)
+		return;
+	GameWindow *text = TheWindowManager->winGetWindowFromId( messageBoxWindow, NAMEKEY( "MessageBox.wnd:StaticTextMessage" ) );
+	if (text)
+		GadgetStaticTextSetText( text, message );
 }
 
 // Overlay screens -------------------------------------

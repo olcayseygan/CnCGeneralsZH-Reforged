@@ -16,9 +16,9 @@ Nothing EA named goes. A window the design drops is kept HIDDEN, so every lookup
 still finds it; the windows this script adds are boxes the code draws in (Panel*, Card*), static
 texts the code writes into, and the buttons and lists the design names (ButtonPlayVsAI,
 ButtonSignOut, ListboxRecent, ButtonSelectAllMaps, ButtonSelectNoMaps, the player card's TabQuickMatch
-and TabAI). Every gadget keeps EA's
-art: new ones are clones of a gadget in the same file, only rectangles, names, labels and the
-panels' colours change. The callbacks still carry their own placements from before; they are
+and TabAI, the two ComboBoxGameSpeed of Play vs AI and Quick Match). Every gadget keeps EA's
+art: new ones are clones of a gadget in the same file (the hub's combo, on a screen with none, of
+Quick Match's ComboBoxSide), only rectangles, names, labels and the panels' colours change. The callbacks still carry their own placements from before; they are
 rewritten on top of these layouts.
 
     python online_layout.py <retail Menus dir> <Menus dir out>
@@ -107,6 +107,13 @@ def listbox(name, template, rect):
     return dict(name=name, template=template, rect=rect, puts={}, drops=("TOOLTIPTEXT",), align=False, beside=True)
 
 
+def combo(name, rect, donor=None):
+    """A shown combo box cloned from Quick Match's ComboBoxSide, last in home so its list drops over the
+    gadgets under it. A screen without a combo of its own (the hub) takes the tracked Quick Match master's."""
+    return dict(name=name, template="ComboBoxSide", donor=donor, rect=rect, puts={"STATUS": "ENABLED+IMAGE"},
+                drops=("TOOLTIPTEXT",), align=False, beside=False)
+
+
 def inset(box, top=56, side=14):
     """A list inside a box: the box's heading band over it, the box's padding round it."""
     left, y, width, height = box
@@ -144,6 +151,13 @@ def card_button(box):
     """A hub card's button across its foot, 24 in from its edges as the mockup's."""
     left, top, width, height = box
     return (left + 24, top + HUB_CARD_BUTTON, width - 48, ROW_HEIGHT)
+
+
+# The match speed picked before a server-made match, in the value's place of a fact: Play vs AI's third
+# (WOLWelcomeMenu.cpp: facts 190 wide, 24 in from the card's right, rows of 36 from 106), and a fourth
+# under Quick Match's ladder box (WOLQuickMatchMenu.cpp drawLadderPanel: rows of 52 from 240, 24 in)
+HUB_AI_SPEED = (HUB_CARDS[0][0] + HUB_CARDS[0][2] - 24 - 110, HUB_CARDS[0][1] + 106 + 2 * 36 + 2, 110, 32)
+QM_SPEED = (SIDE[0] + SIDE[1] - 24 - 160, TOP + 240 + 3 * 52 + 6, 160, 40)
 
 
 # Rejoin, at the recent matches' foot on the right: the card is the match still running while the server
@@ -208,7 +222,8 @@ SCREENS = {
         adds=[button("ButtonPlayVsAI", "ButtonQuickMatch", card_button(HUB_CARDS[0]), "GUI:OnlineHubPlay"),
               button("ButtonSignOut", "ButtonBack", RIGHT, "GUI:OnlineHubSignOut"),
               listbox("ListboxRecent", "InfoListbox", inset(HUB_RECENT)),
-              button("ButtonRejoin", "ButtonQuickMatch", HUB_REJOIN, "GUI:OnlineRejoin")],
+              button("ButtonRejoin", "ButtonQuickMatch", HUB_REJOIN, "GUI:OnlineRejoin"),
+              combo("ComboBoxGameSpeed", HUB_AI_SPEED, donor="WOLQuickMatchMenu")],
         place={"ButtonQuickMatch": card_button(HUB_CARDS[1]), "ButtonCustomMatch": card_button(HUB_CARDS[2]),
                "InfoListbox": inset(HUB_MOTD), "ButtonBack": BACK, "ButtonMyInfo": SECOND_RIGHT},
         aligned=[],
@@ -226,12 +241,14 @@ SCREENS = {
         framed=[],
         # EA's own tooltips for these two, which its ZH layout had dropped with the buttons
         adds=[button("ButtonSelectAllMaps", "ButtonBack", (1280, 846, 238, 40), "GUI:QMAll", "TOOLTIP:SelectAll"),
-              button("ButtonSelectNoMaps", "ButtonBack", (1534, 846, 238, 40), "GUI:QMNone", "TOOLTIP:SelectNone")],
+              button("ButtonSelectNoMaps", "ButtonBack", (1534, 846, 238, 40), "GUI:QMNone", "TOOLTIP:SelectNone"),
+              combo("ComboBoxGameSpeed", QM_SPEED)],
         place={"ListBoxMapSelect": (1280, 334, 492, 480), "ButtonBack": BACK, "ButtonWiden": BESIDE_WIDE,
                "ButtonStart": WIDE_BUTTON, "ButtonStop": WIDE_BUTTON},
         aligned=[],
-        # Stop shares Search's place and shows while a search runs
-        hide=["ButtonStop", "ButtonOptions", "ButtonBuddies", "ListboxQuickMatch", "StaticTextMatchingProgress",
+        # Stop shares Search's place and shows while a search runs; the map list, hidden at init since ranked
+        # maps are generated, leaves the ladder box to the speed
+        hide=["ButtonStop", "ListBoxMapSelect", "ButtonOptions", "ButtonBuddies", "ListboxQuickMatch", "StaticTextMatchingProgress",
               "ParentOptions", "ParentStats", "ComboBoxLadder", "ComboBoxMaxDisconnects", "ComboBoxMaxPing",
               "ComboBoxNumPlayers", "ComboBoxSide", "ComboBoxColor"]),
 
@@ -491,7 +508,8 @@ def build(layout, menu, kit):
     for add in spec["adds"]:
         window = layout.find(add["name"])
         if window is None:
-            template = room.need(layout, add["template"])
+            donor = wndlayout.load(os.path.join(MENUS, add["donor"] + ".wnd")) if add.get("donor") else layout
+            template = room.need(donor, add["template"])
             window = clone(template, named(menu, add["name"]))
             window.children = []
             (layout.root.parent_of(template) if add["beside"] else home).children.append(window)

@@ -43,6 +43,8 @@ void GSMessageBoxOk(UnicodeString titleString,UnicodeString bodyString, GameWinM
 void GSMessageBoxOkCancel(UnicodeString title, UnicodeString message, GameWinMsgBoxFunc okFunc, GameWinMsgBoxFunc cancelFunc);	///< Display a Message box with Ok/Cancel buttons and track it
 void GSMessageBoxYesNo(UnicodeString title, UnicodeString message, GameWinMsgBoxFunc yesFunc, GameWinMsgBoxFunc noFunc);	///< Display a Message box with Yes/No buttons and track it
 void RaiseGSMessageBox( void );		///< Bring GS message box to the foreground (if we transition screens while a message box is up)
+GameWindow *GSMessageBoxWindow( void );	///< the GS message box up now, NULL for none (a later box replaces an earlier one)
+void GSMessageBoxSetText( const UnicodeString &message );	///< new words in the box that is up, a countdown's
 
 enum GSOverlayType
 {

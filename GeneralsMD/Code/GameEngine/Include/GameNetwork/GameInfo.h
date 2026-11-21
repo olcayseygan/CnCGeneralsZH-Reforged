@@ -465,9 +465,13 @@ Int HandicapFromSlotField( const char *field );
 // An AI seat's rating off its rung's anchor (-airating) goes after the handicap, persona and handicap
 // then written out in full: C<rung>,color,tmpl,start,team,persona,handicap,rating.  Only such a seat
 // writes it, so every other string stays the one it was, and an older parser stops at the handicap.
-// It is whole hundredths (1250 is 12.50, -1000 is -10.00).  Absent, or past AI_RATING_LIMIT either way,
+// It is the Elo in whole hundredths (125000 is 1250.00, 220000 Brutal's 2200).  Absent, or past AI_RATING_LIMIT either way,
 // is AI_RATING_NONE: the rung's anchor.
 Int AIRatingFromSlotField( const char *field );
+// A seat's rating in hundredths as a save before Elo wrote it (SkirmishGameInfo xfer 14 and 15): an old
+// level above Hard comes back as that level, anything else at the same strength (aiRatingOfLegacySave);
+// AI_RATING_NONE stays none.
+Int AIRatingFromLegacySlot( Int hundredths );
 
 // A guest's "Handicap=<n>" request reaching the host.  TRUE when the slot list has to go round again,
 // which it does for a pick that does not fit in the options string as well: the guest's box has to
@@ -496,7 +500,8 @@ UnicodeString SlotStateName( SlotState state );
 /// the same, for a seat at a rating (hundredths): a Hard seat at one of the levels above Hard is called by that level
 UnicodeString SlotStateName( SlotState state, Int aiRating );
 
-// The levels above Hard are not rungs: each is a Hard seat at a rating of its own, in hundredths, so
+// The levels above Hard are not rungs: each is a Hard seat at an Elo of its own (Brutal 2200, Vicious
+// 2600, Savage 3400, Insane 4200), in hundredths, so
 // the slot string, saves and replays already carry them.  The player slot box offers them after Hard,
 // and a line's item data is its pick: a SlotState, or one of these ratings, which no state reaches.
 enum { AI_LEVELS_ABOVE_HARD = 4 };

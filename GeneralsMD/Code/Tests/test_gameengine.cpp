@@ -2774,7 +2774,8 @@ TEST(skirmish_ai_earnings_by_rung_percent)
 	/* a computer: the derrick's 1000 is 1500, a truckload of 75 banks 112, the odd half dropped */
 	CHECK_EQ( EarnedAmount( 1000, 150 ), 1500u );
 	CHECK_EQ( EarnedAmount( 75, 150 ), 112u );
-	/* a rating of 1000 earns about 4300 percent; a million times that would wrap 32 bits */
+	/* the furthest rating, AI_RATING_LIMIT's 32000, earns about 1660 percent (1000 on the scale before Elo
+		 earned 4300); a million times 4300 would wrap 32 bits */
 	CHECK_EQ( EarnedAmount( 1000000, 4300 ), 43000000u );
 }
 
@@ -8994,6 +8995,19 @@ TEST(online_ratings_tiers_and_rank_portraits)
 	CHECK_EQ( UIStyle::ratingTier( 5.0f, 5 ), UIStyle::TIER_SERGEANT );
 	CHECK_EQ( UIStyle::ratingTier( -3.0f, 10 ), UIStyle::TIER_PRIVATE );
 	CHECK_NEAR( UIStyle::tierStart( UIStyle::TIER_CAPTAIN ), 15.0f, 0.0001f );
+	// the AI rating is an Elo, whole, on the same tiers: Easy's 800 private, Medium's 1300 captain,
+	// Hard's 1800 general, and the ladder's own tiers untouched by it
+	CHECK( UIStyle::eloText( 1213.33f ) == UnicodeString( u"1213" ) );
+	CHECK( UIStyle::eloText( 12.5f, TRUE ) == UnicodeString( u"+13" ) );
+	CHECK( UIStyle::eloText( -0.4f, TRUE ) == UnicodeString( u"0" ) );
+	CHECK( UIStyle::eloText( -12.0f, TRUE ) == UnicodeString( u"-12" ) );
+	CHECK_EQ( UIStyle::aiRatingTier( 800.0f, 5 ), UIStyle::TIER_PRIVATE );
+	CHECK_EQ( UIStyle::aiRatingTier( 1300.0f, 5 ), UIStyle::TIER_CAPTAIN );
+	CHECK_EQ( UIStyle::aiRatingTier( 1299.0f, 5 ), UIStyle::TIER_LIEUTENANT );
+	CHECK_EQ( UIStyle::aiRatingTier( 1800.0f, 5 ), UIStyle::TIER_GENERAL );
+	CHECK_EQ( UIStyle::aiRatingTier( 2200.0f, 4 ), UIStyle::TIER_UNRANKED );
+	CHECK_NEAR( UIStyle::aiTierStart( UIStyle::TIER_CAPTAIN ), 1300.0f, 0.0001f );
+	CHECK_NEAR( UIStyle::aiTierStart( UIStyle::TIER_GENERAL ), 1800.0f, 0.0001f );
 	CHECK_STR( UIStyle::tierKey( UIStyle::TIER_LIEUTENANT ), "lieutenant" );
 	CHECK_STR( UIStyle::tierKey( UIStyle::TIER_UNRANKED ), "unranked" );
 
@@ -13430,12 +13444,13 @@ TEST(lane_war_cargo_orders_name_the_plot_unit_and_what_goes_on_it)
 TEST(lane_war_bot_plan_follows_the_rating_and_looks_for_room_from_the_middle)
 {
 	LaneWarBotPlan easy, medium, hard, brutal, between, past;
-	LaneWarBot_planAt( 0.0f, &easy );
-	LaneWarBot_planAt( 15.0f, &medium );
-	LaneWarBot_planAt( 30.0f, &hard );
-	LaneWarBot_planAt( 45.0f, &brutal );
-	LaneWarBot_planAt( 37.5f, &between );
-	LaneWarBot_planAt( 60.0f, &past );
+	LaneWarBot_planAt( AI_RATING_EASY, &easy );
+	LaneWarBot_planAt( AI_RATING_MEDIUM, &medium );
+	LaneWarBot_planAt( AI_RATING_HARD, &hard );
+	LaneWarBot_planAt( AI_RATING_BRUTAL, &brutal );
+	LaneWarBot_planAt( 2000.0f, &between );
+	LaneWarBot_planAt( 2600.0f, &past );
+	CHECK_EQ( AILevelAboveHardRating[ 0 ], aiRatingToHundredths( AI_RATING_BRUTAL ) );	// the lobby's Brutal is the plan's fourth level
 
 	// the four lobby levels are points on the curve: no level buys income, which never pays back inside
 	// a match; Easy opens tier 2 on tick 12 and Medium on tick 4
@@ -13461,11 +13476,11 @@ TEST(lane_war_bot_plan_follows_the_rating_and_looks_for_room_from_the_middle)
 	CHECK( past.jitter < brutal.jitter );
 
 	// a higher rating never wants a tier later, never decides slower, never weighs the enemy less or the dice more
-	for( Real r = -15.0f; r < 90.0f; r += 0.5f )
+	for( Real r = 300.0f; r < 3800.0f; r += 10.0f )
 	{
 		LaneWarBotPlan lo, hi;
 		LaneWarBot_planAt( r, &lo );
-		LaneWarBot_planAt( r + 0.5f, &hi );
+		LaneWarBot_planAt( r + 10.0f, &hi );
 		Bool ordered = hi.stepFrames <= lo.stepFrames && hi.heroTick <= lo.heroTick && hi.jetTick <= lo.jetTick
 									 && hi.extrasTick <= lo.extrasTick && hi.moveTick <= lo.moveTick && hi.sellTick <= lo.sellTick
 									 && hi.counterWeight >= lo.counterWeight && hi.jitter <= lo.jitter;
@@ -18826,10 +18841,11 @@ static Real aiProfileField( const AIDifficultyProfile &profile, const FieldParse
 	return field->parse == INI::parseReal ? *(const Real *)at : INT_TO_REAL( *(const Int *)at );
 }
 
-/** A seat's rating reads every rung-keyed knob off one curve through Easy's value at 0 and Hard's at 30
-	 (aiKnobAt).  At 0 and 30 it has to be the rung to the bit, or every replay of the rung stops playing
-	 back; Medium is wherever the curve passes at 15.  Past either end there is no edge: 100 and -10 are
-	 ratings, and every knob stays a finite number that means something. */
+/** A seat's rating, an Elo, reads every rung-keyed knob off one curve through Easy's value at 800 and
+	 Hard's at 1800 (aiKnobAt).  At 800 and 1800 it has to be the rung to the bit, or every replay of the
+	 rung stops playing back; Medium is wherever the curve passes at 1300.  Past either end there is no
+	 edge: 4133.33 and 466.67 (100 and -10 on the scale before Elo) are ratings, and every knob stays a
+	 finite number that means something. */
 TEST(an_ai_rating_is_easy_and_hard_at_their_anchors_and_one_curve_through_and_past_them)
 {
 	TAiData data;
@@ -18843,37 +18859,73 @@ TEST(an_ai_rating_is_easy_and_hard_at_their_anchors_and_one_curve_through_and_pa
 		CHECK_EQ( (Int)i, (Int)aiSkillOfRating( aiRatingOfSkill( (AISkillLevel)i ) ) );
 
 	// no edge on the scale: only an Int's guard far past any ladder
-	CHECK_EQ( 100.0f, aiRatingClamp( 100.0f ) );
-	CHECK_EQ( -10.0f, aiRatingClamp( -10.0f ) );
-	CHECK_EQ( AI_RATING_LIMIT, aiRatingClamp( 5000.0f ) );
-	// NaN is Easy, and its hundredths 0 on every machine
+	CHECK_EQ( 4200.0f, aiRatingClamp( 4200.0f ) );
+	CHECK_EQ( -500.0f, aiRatingClamp( -500.0f ) );
+	CHECK_EQ( AI_RATING_LIMIT, aiRatingClamp( 50000.0f ) );
+	CHECK_EQ( -AI_RATING_LIMIT, aiRatingClamp( -50000.0f ) );
+	// NaN is Easy, and its hundredths Easy's on every machine
 	const Real notANumber = std::numeric_limits<Real>::quiet_NaN();
 	CHECK_EQ( AI_RATING_EASY, aiRatingClamp( notANumber ) );
-	CHECK_EQ( 0, aiRatingToHundredths( notANumber ) );
+	CHECK_EQ( 80000, aiRatingToHundredths( notANumber ) );
 
-	// the ladder shows two decimals; a seat carries whole hundredths either side of 0
-	CHECK_EQ( 1234, aiRatingToHundredths( 12.34f ) );
-	CHECK_EQ( 1234, aiRatingToHundredths( aiRatingFromHundredths( 1234 ) ) );
+	// a seat carries whole hundredths either side of 0, the furthest of them well inside an Int
+	CHECK_EQ( 123456, aiRatingToHundredths( 1234.56f ) );
+	CHECK_EQ( 123456, aiRatingToHundredths( aiRatingFromHundredths( 123456 ) ) );
 	CHECK_EQ( -1050, aiRatingToHundredths( -10.5f ) );
 	CHECK_EQ( -1050, aiRatingToHundredths( aiRatingFromHundredths( -1050 ) ) );
-	CHECK_EQ( 10000, aiRatingToHundredths( 100.0f ) );
-	CHECK_EQ( AI_RATING_HARD, aiRatingFromHundredths( 3000 ) );
-	CHECK_EQ( 100000, aiRatingToHundredths( 5000.0f ) );
+	CHECK_EQ( 420000, aiRatingToHundredths( 4200.0f ) );
+	CHECK_EQ( AI_RATING_HARD, aiRatingFromHundredths( 180000 ) );
+	CHECK_EQ( 500000, aiRatingToHundredths( 5000.0f ) );
+	CHECK_EQ( 3200000, aiRatingToHundredths( 50000.0f ) );
 
-	// every Real and Int knob: finite and not negative far either way, the same value either side of 0,
+	// the scale before Elo maps on straight, each anchor onto its own to the bit, and back
+	CHECK_EQ( AI_RATING_EASY, aiRatingOfLegacy( 0.0f ) );
+	CHECK_EQ( AI_RATING_MEDIUM, aiRatingOfLegacy( 15.0f ) );
+	CHECK_EQ( AI_RATING_HARD, aiRatingOfLegacy( 30.0f ) );
+	CHECK_EQ( 2300.0f, aiRatingOfLegacy( 45.0f ) );		// the old Brutal, a little over today's 2200
+	CHECK_NEAR( 4133.33f, aiRatingOfLegacy( 100.0f ), 0.01f );
+	CHECK_NEAR( 466.67f, aiRatingOfLegacy( -10.0f ), 0.01f );
+	CHECK_EQ( AI_RATING_LIMIT, aiRatingOfLegacy( 1000.0f ) );		// the old guard is past the new one
+	// a save from before: an old level loads as that level, an anchor as its anchor, the rest straight
+	CHECK_EQ( AI_RATING_BRUTAL, aiRatingOfLegacySave( 45.0f ) );
+	CHECK_EQ( AI_RATING_VICIOUS, aiRatingOfLegacySave( 60.0f ) );
+	CHECK_EQ( AI_RATING_SAVAGE, aiRatingOfLegacySave( 90.0f ) );
+	CHECK_EQ( AI_RATING_INSANE, aiRatingOfLegacySave( 120.0f ) );
+	CHECK_EQ( AI_RATING_HARD, aiRatingOfLegacySave( 30.0f ) );
+	CHECK_EQ( AI_RATING_EASY, aiRatingOfLegacySave( 0.0f ) );
+	CHECK_EQ( aiRatingOfLegacy( 45.01f ), aiRatingOfLegacySave( 45.01f ) );
+	CHECK_NEAR( 1213.33f, aiRatingOfLegacySave( 12.4f ), 0.01f );
+	CHECK_EQ( AI_RATING_EASY, aiRatingOfLegacySave( notANumber ) );
+	CHECK_EQ( AI_RATING_LIMIT, aiRatingOfLegacySave( 1000.0f ) );
+	// the slot's hundredths through the same gate SkirmishGameInfo::xfer reads an old save with
+	for( Int i = 0; i < AI_LEVELS_ABOVE_HARD; ++i )
+	{
+		static const Int OLD_LEVEL[ AI_LEVELS_ABOVE_HARD ] = { 4500, 6000, 9000, 12000 };
+		CHECK_EQ( AILevelAboveHardRating[ i ], AIRatingFromLegacySlot( OLD_LEVEL[ i ] ) );
+	}
+	CHECK_EQ( 180000, AIRatingFromLegacySlot( 3000 ) );
+	CHECK_EQ( 130000, AIRatingFromLegacySlot( 1500 ) );
+	CHECK_EQ( 230100, AIRatingFromLegacySlot( 4503 ) );
+	CHECK_EQ( AI_RATING_NONE, AIRatingFromLegacySlot( AI_RATING_NONE ) );
+	CHECK( WideCharCmp( SlotStateName( SLOT_BRUTAL_AI, AIRatingFromLegacySlot( 6000 ) ).str(), u"Vicious AI" ) == 0 );
+	CHECK_EQ( 15.0f, aiRatingToLegacy( AI_RATING_MEDIUM ) );
+	CHECK_EQ( 30.0f, aiRatingToLegacy( AI_RATING_HARD ) );
+
+	// every Real and Int knob: finite and not negative far either way, the same value either side of Easy,
 	// and the old Medium against the new one for the record
-	printf( "  knob                          Easy    Medium(old)  at 15      Hard     at 60      at 100     at -10\n" );
+	printf( "  knob                          Easy    Medium(old)  at 1300    Hard     at 2800    at 4133    at 467\n" );
 	const AIDifficultyProfile &easy = data.m_skill[ AISKILL_EASY ];
 	const AIDifficultyProfile &medium = data.m_skill[ AISKILL_MEDIUM ];
 	const AIDifficultyProfile &hard = data.m_skill[ AISKILL_BRUTAL ];
-	static const Real FAR_RATINGS[] = { -1000.0f, -100.0f, -10.0f, 0.5f, 7.5f, 15.0f, 22.5f, 45.0f, 60.0f, 100.0f, 1000.0f };
+	static const Real FAR_RATINGS[] = { -32000.0f, -2500.0f, 466.67f, 816.67f, 1050.0f, 1300.0f, 1550.0f, 2200.0f, 2600.0f, 3400.0f,
+		4133.33f, 4200.0f, 32000.0f };
 	AIDifficultyProfile at15, at60, at100, atMinus10, justOver, justUnder;
-	aiRatingProfile( 15.0f, data.m_skill, &at15 );
-	aiRatingProfile( 60.0f, data.m_skill, &at60 );
-	aiRatingProfile( 100.0f, data.m_skill, &at100 );
-	aiRatingProfile( -10.0f, data.m_skill, &atMinus10 );
-	aiRatingProfile( 0.001f, data.m_skill, &justOver );
-	aiRatingProfile( -0.001f, data.m_skill, &justUnder );
+	aiRatingProfile( 1300.0f, data.m_skill, &at15 );
+	aiRatingProfile( 2800.0f, data.m_skill, &at60 );
+	aiRatingProfile( 4133.33f, data.m_skill, &at100 );
+	aiRatingProfile( 466.67f, data.m_skill, &atMinus10 );
+	aiRatingProfile( 800.01f, data.m_skill, &justOver );
+	aiRatingProfile( 799.99f, data.m_skill, &justUnder );
 	for( const FieldParse *field = aiSkillLevelFields(); field->token != NULL; ++field )
 	{
 		if( field->parse == INI::parseBool )
@@ -18893,8 +18945,8 @@ TEST(an_ai_rating_is_easy_and_hard_at_their_anchors_and_one_curve_through_and_pa
 	}
 
 	// past Hard a falling knob keeps falling and a rising one keeps rising; a share nears 1 and stays under
-	AIDifficultyProfile at45;
-	aiRatingProfile( 45.0f, data.m_skill, &at45 );
+	AIDifficultyProfile at45;		// Brutal
+	aiRatingProfile( AI_RATING_BRUTAL, data.m_skill, &at45 );
 	CHECK( hard.m_decisionIntervalSeconds > at45.m_decisionIntervalSeconds && at45.m_decisionIntervalSeconds > at100.m_decisionIntervalSeconds );
 	CHECK( at100.m_decisionIntervalSeconds > 0.0f );
 	CHECK( hard.m_minAttackPower < at45.m_minAttackPower && at45.m_minAttackPower < at100.m_minAttackPower );
@@ -18924,52 +18976,53 @@ TEST(an_ai_rating_is_easy_and_hard_at_their_anchors_and_one_curve_through_and_pa
 	CHECK( atMinus10.m_buildDelayScale > easy.m_buildDelayScale );
 
 	// the curves themselves: a falling one hits Hard exactly and never 0, a rising share nears 1, Hard's 0
-	// is a straight line to it, a gated one is off below 7.5 and passes Medium at 15
-	CHECK_EQ( 1.5f, aiKnobAt( 30.0f, 7.0f, 3.0f, 1.5f, AIKNOB_OPEN ) );
-	CHECK_NEAR( 7.0f / ( 1.0f + ( 7.0f / 1.5f - 1.0f ) * 0.5f ), aiKnobAt( 15.0f, 7.0f, 3.0f, 1.5f, AIKNOB_OPEN ), 1.0e-5f );
-	CHECK( aiKnobAt( 1000.0f, 7.0f, 3.0f, 1.5f, AIKNOB_OPEN ) > 0.0f );
-	CHECK( aiKnobAt( -10.0f, 7.0f, 3.0f, 1.5f, AIKNOB_OPEN ) > 7.0f );
-	CHECK( aiKnobAt( 100.0f, 0.0f, 0.35f, 0.5f, AIKNOB_SHARE ) < 1.0f );
-	CHECK( aiKnobAt( 100.0f, 0.0f, 0.35f, 0.5f, AIKNOB_SHARE ) > 0.5f );
-	CHECK_EQ( 0.0f, aiKnobAt( -10.0f, 0.0f, 0.35f, 0.5f, AIKNOB_SHARE ) );
-	CHECK( aiKnobAt( -10.0f, 0.5f, 0.75f, 1.0f, AIKNOB_SHARE ) < 0.5f );
-	CHECK( aiKnobAt( -10.0f, 0.5f, 0.75f, 1.0f, AIKNOB_SHARE ) > 0.0f );
-	CHECK( aiKnobAt( -10.0f, 1.0f, 0.5f, 0.25f, AIKNOB_SHARE ) <= 1.0f );
-	CHECK_EQ( 1.0f, aiKnobAt( 60.0f, 0.5f, 0.75f, 1.0f, AIKNOB_SHARE ) );
-	CHECK_EQ( 1.0f, aiKnobAt( 15.0f, 2.0f, 1.0f, 0.0f, AIKNOB_OPEN ) );
-	CHECK_EQ( 0.0f, aiKnobAt( 100.0f, 2.0f, 1.0f, 0.0f, AIKNOB_OPEN ) );
-	CHECK_EQ( 0.0f, aiKnobAt( 7.49f, 0.0f, 6000.0f, 4000.0f, AIKNOB_GATED ) );
-	CHECK_EQ( 6000.0f, aiKnobAt( 15.0f, 0.0f, 6000.0f, 4000.0f, AIKNOB_GATED ) );
-	CHECK( aiKnobAt( 100.0f, 0.0f, 6000.0f, 4000.0f, AIKNOB_GATED ) < 4000.0f );
-	CHECK( aiKnobAt( 100.0f, 0.0f, 6000.0f, 4000.0f, AIKNOB_GATED ) > 0.0f );
+	// is a straight line to it, a gated one is off below 1050 and passes Medium at 1300
+	CHECK_EQ( 1.5f, aiKnobAt( 1800.0f, 7.0f, 3.0f, 1.5f, AIKNOB_OPEN ) );
+	CHECK_NEAR( 7.0f / ( 1.0f + ( 7.0f / 1.5f - 1.0f ) * 0.5f ), aiKnobAt( 1300.0f, 7.0f, 3.0f, 1.5f, AIKNOB_OPEN ), 1.0e-5f );
+	CHECK( aiKnobAt( 32000.0f, 7.0f, 3.0f, 1.5f, AIKNOB_OPEN ) > 0.0f );
+	CHECK( aiKnobAt( 466.67f, 7.0f, 3.0f, 1.5f, AIKNOB_OPEN ) > 7.0f );
+	CHECK( aiKnobAt( 4133.33f, 0.0f, 0.35f, 0.5f, AIKNOB_SHARE ) < 1.0f );
+	CHECK( aiKnobAt( 4133.33f, 0.0f, 0.35f, 0.5f, AIKNOB_SHARE ) > 0.5f );
+	CHECK_EQ( 0.0f, aiKnobAt( 466.67f, 0.0f, 0.35f, 0.5f, AIKNOB_SHARE ) );
+	CHECK( aiKnobAt( 466.67f, 0.5f, 0.75f, 1.0f, AIKNOB_SHARE ) < 0.5f );
+	CHECK( aiKnobAt( 466.67f, 0.5f, 0.75f, 1.0f, AIKNOB_SHARE ) > 0.0f );
+	CHECK( aiKnobAt( 466.67f, 1.0f, 0.5f, 0.25f, AIKNOB_SHARE ) <= 1.0f );
+	CHECK_EQ( 1.0f, aiKnobAt( 2600.0f, 0.5f, 0.75f, 1.0f, AIKNOB_SHARE ) );
+	CHECK_EQ( 1.0f, aiKnobAt( 1300.0f, 2.0f, 1.0f, 0.0f, AIKNOB_OPEN ) );
+	CHECK_EQ( 0.0f, aiKnobAt( 4133.33f, 2.0f, 1.0f, 0.0f, AIKNOB_OPEN ) );
+	CHECK_EQ( 0.0f, aiKnobAt( 1049.9f, 0.0f, 6000.0f, 4000.0f, AIKNOB_GATED ) );
+	CHECK_EQ( 6000.0f, aiKnobAt( 1300.0f, 0.0f, 6000.0f, 4000.0f, AIKNOB_GATED ) );
+	CHECK( aiKnobAt( 4133.33f, 0.0f, 6000.0f, 4000.0f, AIKNOB_GATED ) < 4000.0f );
+	CHECK( aiKnobAt( 4133.33f, 0.0f, 6000.0f, 4000.0f, AIKNOB_GATED ) > 0.0f );
 	static const AIRungInt CENTERS = { { 3, 4, 6 }, AIKNOB_OPEN };
-	CHECK_EQ( 3, aiRatingLerp( 0.0f, CENTERS ) );
-	CHECK_EQ( 5, aiRatingLerp( 15.0f, CENTERS ) );		// 4.5 rounds up
-	CHECK_EQ( 6, aiRatingLerp( 30.0f, CENTERS ) );
-	CHECK_EQ( 13, aiRatingLerp( 100.0f, CENTERS ) );		// 3 + 3 * 100 / 30
-	CHECK_EQ( 2, aiRatingLerp( -10.0f, CENTERS ) );		// 3 / (1 + 10 / 30)
+	CHECK_EQ( 3, aiRatingLerp( 800.0f, CENTERS ) );
+	CHECK_EQ( 5, aiRatingLerp( 1300.0f, CENTERS ) );		// 4.5 rounds up
+	CHECK_EQ( 6, aiRatingLerp( 1800.0f, CENTERS ) );
+	CHECK_EQ( 13, aiRatingLerp( 4133.33f, CENTERS ) );		// 3 + 3 * 3333.33 / 1000
+	CHECK_EQ( 2, aiRatingLerp( 466.67f, CENTERS ) );		// 3 / (1 + 333.33 / 1000)
 
-	// a Bool reads its nearest rung, so it flips at 7.5 or 22.5 and holds past the ends
+	// a Bool reads its nearest rung, so it flips at 1050 or 1550 and holds past the ends
 	CHECK( !easy.m_retreatIndividualUnits && medium.m_retreatIndividualUnits );
-	aiRatingProfile( 7.49f, data.m_skill, &out );
+	aiRatingProfile( 1049.9f, data.m_skill, &out );
 	CHECK( !out.m_retreatIndividualUnits );
-	aiRatingProfile( 7.5f, data.m_skill, &out );
+	aiRatingProfile( 1050.0f, data.m_skill, &out );
 	CHECK( out.m_retreatIndividualUnits );
 	CHECK( !medium.m_massBeforeAttacking && hard.m_massBeforeAttacking );
-	aiRatingProfile( 22.49f, data.m_skill, &out );
+	aiRatingProfile( 1549.9f, data.m_skill, &out );
 	CHECK( !out.m_massBeforeAttacking );
-	aiRatingProfile( 22.5f, data.m_skill, &out );
+	aiRatingProfile( 1550.0f, data.m_skill, &out );
 	CHECK( out.m_massBeforeAttacking );
 	CHECK( at100.m_massBeforeAttacking && !atMinus10.m_retreatIndividualUnits );
-	CHECK_EQ( (Int)AISKILL_EASY, (Int)aiSkillOfRating( 7.49f ) );
-	CHECK_EQ( (Int)AISKILL_MEDIUM, (Int)aiSkillOfRating( 7.5f ) );
-	CHECK_EQ( (Int)AISKILL_MEDIUM, (Int)aiSkillOfRating( 22.49f ) );
-	CHECK_EQ( (Int)AISKILL_BRUTAL, (Int)aiSkillOfRating( 22.5f ) );
-	CHECK_EQ( (Int)AISKILL_BRUTAL, (Int)aiSkillOfRating( 100.0f ) );
-	CHECK_EQ( (Int)AISKILL_EASY, (Int)aiSkillOfRating( -10.0f ) );
-	CHECK( !aiRatingReaches( 7.49f, AISKILL_MEDIUM ) );
-	CHECK( aiRatingReaches( 7.5f, AISKILL_MEDIUM ) );
-	CHECK( !aiRatingReaches( 15.0f, AISKILL_BRUTAL ) );
+	CHECK_EQ( (Int)AISKILL_EASY, (Int)aiSkillOfRating( 1049.9f ) );
+	CHECK_EQ( (Int)AISKILL_MEDIUM, (Int)aiSkillOfRating( 1050.0f ) );
+	CHECK_EQ( (Int)AISKILL_MEDIUM, (Int)aiSkillOfRating( 1549.9f ) );
+	CHECK_EQ( (Int)AISKILL_BRUTAL, (Int)aiSkillOfRating( 1550.0f ) );
+	CHECK_EQ( (Int)AISKILL_BRUTAL, (Int)aiSkillOfRating( 4200.0f ) );
+	CHECK_EQ( (Int)AISKILL_EASY, (Int)aiSkillOfRating( 466.67f ) );
+	CHECK_EQ( (Int)AISKILL_EASY, (Int)aiSkillOfRating( 0.0f ) );		// the old Easy anchor is far below Easy now
+	CHECK( !aiRatingReaches( 1049.9f, AISKILL_MEDIUM ) );
+	CHECK( aiRatingReaches( 1050.0f, AISKILL_MEDIUM ) );
+	CHECK( !aiRatingReaches( 1300.0f, AISKILL_BRUTAL ) );
 
 	// the slot field carries hundredths, negative ones too; only past the guard is it none
 	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( NULL ) );
@@ -18978,8 +19031,9 @@ TEST(an_ai_rating_is_easy_and_hard_at_their_anchors_and_one_curve_through_and_pa
 	CHECK_EQ( -1000, AIRatingFromSlotField( "-1000" ) );
 	CHECK_EQ( 0, AIRatingFromSlotField( "0" ) );
 	CHECK_EQ( 1234, AIRatingFromSlotField( "1234" ) );
-	CHECK_EQ( 10000, AIRatingFromSlotField( "10000" ) );
-	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( "100001" ) );
+	CHECK_EQ( 420000, AIRatingFromSlotField( "420000" ) );		// Insane
+	CHECK_EQ( 3200000, AIRatingFromSlotField( "3200000" ) );
+	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( "3200001" ) );
 	// past an Int: atoi saturated on Windows and truncated elsewhere, 4294967396 truncating to 100
 	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( "4294967396" ) );
 	CHECK_EQ( AI_RATING_NONE, AIRatingFromSlotField( "-4294967396" ) );
@@ -18998,9 +19052,9 @@ static const char *aiKnobFormName( Real e, Real m, Real h, AIKnobForm form, Real
 		if( h < m && h > 0.0f )
 		{
 			*k = ( AI_RATING_HARD - AI_RATING_MEDIUM ) / ( m / h - 1.0f );
-			return "GATED off below 7.5, falls Medium to Hard";
+			return "GATED off below 1050, falls Medium to Hard";
 		}
-		return "GATED off below 7.5, then Medium to Hard";
+		return "GATED off below 1050, then Medium to Hard";
 	}
 	if( e == h )
 		return "flat";
@@ -19026,8 +19080,8 @@ static const char *aiKnobFormName( Real e, Real m, Real h, AIKnobForm form, Real
 	return "OPEN falls towards 0";
 }
 
-static const Int CURVE_SAMPLES = 221;		// -10 to 100 by a half
-static Real aiCurveRating( Int i ) { return -10.0f + 0.5f * INT_TO_REAL( i ); }
+static const Int CURVE_SAMPLES = 221;		// 466.67 to 4133.33 Elo by 16.67, the scale before Elo's -10 to 100 by a half
+static Real aiCurveRating( Int i ) { return aiRatingOfLegacy( -10.0f + 0.5f * INT_TO_REAL( i ) ); }
 
 static void writeCurve( FILE *fp, Bool *first, const char *name, const char *source, const char *type, const char *form,
 	Real e, Real m, Real h, Real k, const Real *samples )
@@ -19045,16 +19099,16 @@ static void writeCurve( FILE *fp, Bool *first, const char *name, const char *sou
 	*first = FALSE;
 }
 
-/** Every table of three outside the profile (aiRatingTables): Easy's and Hard's own values at 0 and 30, a
-	 finite number not under 0 anywhere.  With ZH_AI_CURVES_JSON naming a file, every knob of the profile and
-	 every table is written there as JSON, sampled from -10 to 100 by a half through the game's own code, for
-	 the chart of the curves. */
+/** Every table of three outside the profile (aiRatingTables): Easy's and Hard's own values at 800 and 1800,
+	 a finite number not under 0 anywhere.  With ZH_AI_CURVES_JSON naming a file, every knob of the profile and
+	 every table is written there as JSON, sampled from 466.67 to 4133.33 Elo (-10 to 100 by a half on the
+	 scale before Elo) through the game's own code, for the chart of the curves; k is in Elo. */
 TEST(every_rated_table_is_its_rows_at_the_ends_and_the_curves_can_be_written_out)
 {
 	Int count = 0;
 	const AIRatingTable *tables = aiRatingTables( &count );
 	CHECK( count > 50 );
-	static const Real FAR_RATINGS[] = { -1000.0f, -10.0f, 15.0f, 100.0f, 1000.0f };
+	static const Real FAR_RATINGS[] = { -32000.0f, 466.67f, 1300.0f, 4133.33f, 4200.0f, 32000.0f };
 	for( Int t = 0; t < count; ++t )
 	{
 		const AIRatingTable &table = tables[ t ];
@@ -19997,7 +20051,7 @@ TEST(the_ai_ambulance_pulls_back_when_hit_and_is_not_rebought_at_once)
 	CHECK( !AIAmbulance_waitsAt( 50.0f, 110.0f, 80.0f ) );
 	CHECK( AIAmbulance_waitsAt( -20.0f, 90.0f, 80.0f ) );
 
-	// Hard waits a minute and a half, Easy twice as long, and a rating of 15 two minutes on the curve
+	// Hard waits a minute and a half, Easy twice as long, and Medium's 1300 two minutes on the curve
 	// between them (180 / (1 + 0.5))
 	CHECK( !AIAmbulance_rebuyWaits( 1000, 0, AI_RATING_HARD ) );
 	CHECK( AIAmbulance_rebuyWaits( 1000, 900, AI_RATING_HARD ) );
@@ -21075,7 +21129,7 @@ TEST(a_cash_hoard_shortens_the_wait_but_only_so_far)
 		CHECK_EQ( frames, aiScaledBuildDelay( frames, data.m_skill[ AISKILL_BRUTAL ].m_buildDelayScale ) );
 	CHECK_EQ( 450, aiScaledBuildDelay( 300, data.m_skill[ AISKILL_EASY ].m_buildDelayScale ) );
 	AIDifficultyProfile at100;
-	aiRatingProfile( 100.0f, data.m_skill, &at100 );
+	aiRatingProfile( 4133.33f, data.m_skill, &at100 );
 	CHECK( aiScaledBuildDelay( 300, at100.m_buildDelayScale ) < 180 );
 	CHECK_EQ( 1, aiScaledBuildDelay( 1, 0.1f ) );		// never under a frame
 	CHECK_EQ( 0, aiScaledBuildDelay( 0, 1.5f ) );			// no delay stays none
@@ -21085,10 +21139,10 @@ TEST(a_cash_hoard_shortens_the_wait_but_only_so_far)
 	CHECK_EQ( 1, aiRatingLerp( AI_RATING_EASY, rising ) );
 	CHECK_EQ( 3, aiRatingLerp( AI_RATING_HARD, rising ) );
 	CHECK_EQ( 2, aiRatingLerp( AI_RATING_MEDIUM, rising ) );
-	CHECK_EQ( 8, aiRatingLerp( 100.0f, rising ) );
+	CHECK_EQ( 8, aiRatingLerp( 4133.33f, rising ) );
 	const AIRungInt flat = { { 2, 2, 2 }, AIKNOB_OPEN };
-	CHECK_EQ( 2, aiRatingLerp( 100.0f, flat ) );
-	CHECK_EQ( 2, aiRatingLerp( -10.0f, flat ) );
+	CHECK_EQ( 2, aiRatingLerp( 4133.33f, flat ) );
+	CHECK_EQ( 2, aiRatingLerp( 466.67f, flat ) );
 	CHECK( data.m_skill[ AISKILL_MEDIUM ].m_cashHoardThreshold > 0 );
 	CHECK( data.m_skill[ AISKILL_BRUTAL ].m_cashHoardThreshold <
 				 data.m_skill[ AISKILL_MEDIUM ].m_cashHoardThreshold );
@@ -21679,7 +21733,7 @@ TEST(every_ai_rung_is_named_the_same_way_as_every_other)
 			CHECK( WideCharCmp( SlotStateName( rungs[a] ).str(), SlotStateName( rungs[b] ).str() ) != 0 );
 }
 
-/* The four levels above Hard are Hard seats at ratings 45, 60, 90 and 120.  The slot box's item data
+/* The four levels above Hard are Hard seats at Elo 2200, 2600, 3400 and 4200.  The slot box's item data
 	 holds a SlotState or one of those ratings, so they must never meet; a Hard seat at one of them goes
 	 by that level's name and comes back to that line, and any other rating stays plain Hard. */
 TEST(levels_above_hard_are_hard_seats_with_names_of_their_own)
@@ -21692,17 +21746,32 @@ TEST(levels_above_hard_are_hard_seats_with_names_of_their_own)
 		if (i > 0)
 			CHECK( rating > AILevelAboveHardRating[i - 1] );
 	}
-	CHECK( WideCharCmp( SlotStateName( SLOT_BRUTAL_AI, 6000 ).str(), u"Vicious AI" ) == 0 );
-	CHECK( WideCharCmp( SlotStateName( SLOT_BRUTAL_AI, 5000 ).str(), u"Hard AI" ) == 0 );
-	CHECK( WideCharCmp( SlotStateName( SLOT_MED_AI, 6000 ).str(), u"Medium AI" ) == 0 );
+	CHECK_EQ( AILevelAboveHardRating[0], 220000 );
+	CHECK_EQ( AILevelAboveHardRating[1], 260000 );
+	CHECK_EQ( AILevelAboveHardRating[2], 340000 );
+	CHECK_EQ( AILevelAboveHardRating[3], 420000 );
+	CHECK( WideCharCmp( SlotStateName( SLOT_BRUTAL_AI, 220000 ).str(), u"Brutal AI" ) == 0 );
+	CHECK( WideCharCmp( SlotStateName( SLOT_BRUTAL_AI, 260000 ).str(), u"Vicious AI" ) == 0 );
+	CHECK( WideCharCmp( SlotStateName( SLOT_BRUTAL_AI, 340000 ).str(), u"Savage AI" ) == 0 );
+	CHECK( WideCharCmp( SlotStateName( SLOT_BRUTAL_AI, 500000 ).str(), u"Hard AI" ) == 0 );
+	CHECK( WideCharCmp( SlotStateName( SLOT_BRUTAL_AI, 6000 ).str(), u"Hard AI" ) == 0 );		// the old Vicious is no level now
+	CHECK( WideCharCmp( SlotStateName( SLOT_MED_AI, 260000 ).str(), u"Medium AI" ) == 0 );
+	// every level is a Hard seat, and the field carries it
+	for (Int i = 0; i < AI_LEVELS_ABOVE_HARD; ++i)
+	{
+		CHECK_EQ( (Int)AISKILL_BRUTAL, (Int)aiSkillOfRating( aiRatingFromHundredths( AILevelAboveHardRating[i] ) ) );
+		AsciiString field;
+		field.format( "%d", AILevelAboveHardRating[i] );
+		CHECK_EQ( AILevelAboveHardRating[i], AIRatingFromSlotField( field.str() ) );
+	}
 
 	// picking the level seats Hard at its rating under its name, and the seat finds its line again
 	GameSlot slot;
-	SlotApplyPick( &slot, 6000 );
+	SlotApplyPick( &slot, 260000 );
 	CHECK_EQ( (Int)slot.getState(), (Int)SLOT_BRUTAL_AI );
-	CHECK_EQ( slot.getAIRating(), 6000 );
+	CHECK_EQ( slot.getAIRating(), 260000 );
 	CHECK( WideCharCmp( slot.getName().str(), u"Vicious AI" ) == 0 );
-	CHECK_EQ( SlotPickOf( &slot ), 6000 );
+	CHECK_EQ( SlotPickOf( &slot ), 260000 );
 
 	// back to plain Hard drops the rating and the name, though the state does not change
 	SlotApplyPick( &slot, SLOT_BRUTAL_AI );
@@ -21711,17 +21780,17 @@ TEST(levels_above_hard_are_hard_seats_with_names_of_their_own)
 	CHECK_EQ( SlotPickOf( &slot ), (Int)SLOT_BRUTAL_AI );
 
 	// a rating set by itself, as the slot string and a save do, renames the seat too
-	slot.setAIRating( 12000 );
+	slot.setAIRating( 420000 );
 	CHECK( WideCharCmp( slot.getName().str(), u"Insane AI" ) == 0 );
 
-	// a Hard seat at a rating that is not a level (-airating 50) is Hard in the box
-	slot.setAIRating( 5000 );
+	// a Hard seat at a rating that is not a level (-airating 5000) is Hard in the box
+	slot.setAIRating( 500000 );
 	CHECK( WideCharCmp( slot.getName().str(), u"Hard AI" ) == 0 );
 	CHECK_EQ( SlotPickOf( &slot ), (Int)SLOT_BRUTAL_AI );
 
 	// a name of its own (-seatname) is left alone
 	slot.setName( UnicodeString( u"Bot" ) );
-	slot.setAIRating( 4500 );
+	slot.setAIRating( 220000 );
 	CHECK( WideCharCmp( slot.getName().str(), u"Bot" ) == 0 );
 
 	SlotApplyPick( &slot, SLOT_EASY_AI );

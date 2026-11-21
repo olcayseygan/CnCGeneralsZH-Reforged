@@ -35,9 +35,10 @@ param(
 	[string] $Difficulty = "brutal",
 	# rung for the odd-numbered slots; empty means the same as -Difficulty, so a rung plays itself
 	[string] $Difficulty2 = "",
-	# AI rating for every slot on the online ladder's scale, Easy 0 and Hard 30 with no edge either
-	# way (100 and -10 are ratings), fractions kept to the hundredth, over -Difficulty; NaN (the
-	# default) leaves the rung's own
+	# AI rating for every slot as an Elo: Easy 800, Medium 1300, Hard 1800, and the lobby's Brutal
+	# 2200, Vicious 2600, Savage 3400 and Insane 4200, with no edge either way (5000 and 500 are
+	# ratings), fractions kept to the hundredth, over -Difficulty; NaN (the default) leaves the
+	# rung's own. A rating r on the scale before Elo (0, 15, 30) is 800 + r * 1000 / 30
 	[double] $Rating = [double]::NaN,
 	# rating for the odd-numbered slots, over -Difficulty2; NaN means the same as -Rating
 	[double] $Rating2 = [double]::NaN,

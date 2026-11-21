@@ -382,7 +382,7 @@ public:
 		* independent axes: the rung says how well, the role says what.  See AI-ROADMAP.md D6/D8. */
 	AISkillLevel getAISkillLevel(void) const {return m_skillLevel;}
 	void setAISkillLevel(AISkillLevel level) {m_skillLevel = level; m_rating = aiRatingOfSkill(level); refreshRatedProfile();}	///< the rung at its anchor rating
-	/** The seat's rating on the online ladder's scale, Easy 0 and Hard 30 and no edge between or past
+	/** The seat's rating on the Elo scale, Easy 800 and Hard 1800 and no edge between or past
 		* them, which every rung-keyed knob is read at; the rung follows it as the nearest one.  Setting it
 		* holds it to AI_RATING_LIMIT, an Int's guard and no gameplay edge. */
 	Real getAIRating(void) const {return m_rating;}

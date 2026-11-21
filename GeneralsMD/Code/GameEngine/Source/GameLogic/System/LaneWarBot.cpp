@@ -45,12 +45,14 @@
 
 namespace
 {
-	/** The plan's numbers at the lobby's four levels, Easy, Medium, Hard and Brutal at ratings 0, 15, 30
-		  and 45, and how far a rating outside them may carry each.  Between two levels a number runs on a
-		  straight line, and past the end ones on the line of the nearest pair, so above Brutal the economy
-		  and the tech keep coming earlier and the decisions faster. */
+	/** The plan's numbers at the lobby's four levels, Easy, Medium, Hard and Brutal at Elo 800, 1300,
+		  1800 and 2200, and how far a rating outside them may carry each.  Between two levels a number runs
+		  on a straight line, and past the end ones on the line of the nearest pair, so above Brutal the
+		  economy and the tech keep coming earlier and the decisions faster.  Brutal's anchor is its own
+		  rating, so Vicious, Savage and Insane (2600, 3400, 4200) sit 2, 4 and 6 of its steps past Hard,
+		  where they sat on the scale before Elo, and play the plan they played. */
 	const Real NO_TICK = (Real)LANEWAR_BOT_NEVER_TICK;
-	const Real ANCHOR_RATING[ 4 ] = { AI_RATING_EASY, AI_RATING_MEDIUM, AI_RATING_HARD, AI_RATING_HARD + ( AI_RATING_HARD - AI_RATING_MEDIUM ) };
+	const Real ANCHOR_RATING[ 4 ] = { AI_RATING_EASY, AI_RATING_MEDIUM, AI_RATING_HARD, AI_RATING_BRUTAL };
 
 	struct PlanRow
 	{

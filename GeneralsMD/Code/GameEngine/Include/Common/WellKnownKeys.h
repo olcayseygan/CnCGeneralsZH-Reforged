@@ -912,8 +912,8 @@ DEFINE_KEY(skirmishAIPersonality)
 /**
 	Which: Player Properties
 	Type: Int
-	Usage: (optional) this computer player's rating in whole hundredths, AI_RATING_EASY to
-	       AI_RATING_HARD on the online ladder's scale, which every rung-keyed knob is read at;
+	Usage: (optional) this computer player's Elo in whole hundredths (Easy 800, Medium 1300,
+	       Hard 1800, Brutal 2200 and up), which every rung-keyed knob is read at;
 	       absent when it is its rung's anchor, so a seat without
 	       -airating has the dict it always had.
 */

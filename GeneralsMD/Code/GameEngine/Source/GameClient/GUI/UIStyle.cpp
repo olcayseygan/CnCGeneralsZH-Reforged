@@ -41,6 +41,7 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GlobalLanguage.h"
 #include "GameClient/Image.h"
+#include "GameLogic/AI.h"
 #include "GameNetwork/GameSpy/GSConfig.h"
 #include "GameNetwork/GameSpy/PeerDefs.h"
 #include "GameNetwork/Online/OnlineQueues.h"
@@ -698,6 +699,16 @@ RatingTier ratingTier( Real rating, Int games )
 	return TIER_PRIVATE;
 }
 
+RatingTier aiRatingTier( Real elo, Int games )
+{
+	return ratingTier( aiRatingToLegacy( elo ), games );
+}
+
+Real aiTierStart( RatingTier tier )
+{
+	return aiRatingOfLegacy( tierStart( tier ) );
+}
+
 RatingTier playerTier( const OnlinePlayerInfo &info )
 {
 	for( Int tier = 0; tier < TIER_COUNT; tier++ )
@@ -836,6 +847,16 @@ UnicodeString ratingTextIn( Real rating, Bool sign, Int language )
 UnicodeString ratingText( Real rating, Bool sign )
 {
 	return ratingTextIn( rating, sign, TheGlobalData->m_textLanguage );
+}
+
+UnicodeString eloText( Real elo, Bool sign )
+{
+	const Int whole = (Int)floor( elo + 0.5 );
+	AsciiString text;
+	text.format( sign && whole > 0 ? "+%d" : "%d", whole );
+	UnicodeString wide;
+	wide.translate( text );
+	return wide;
 }
 
 Int percent( Int part, Int whole )
@@ -1127,7 +1148,7 @@ static void drawPlayerLine( Int right )
 		const UnicodeString none( u"\x2013" );		// an en dash for a number nobody sent
 		t[ HEADER_TIER ]->setText( OnlineTierName( tierKey( playerTier( info ) ) ) );
 		t[ HEADER_LADDER_VALUE ]->setText( info.hasRating ? ratingText( info.exactRating ) : none );
-		t[ HEADER_AI_VALUE ]->setText( info.hasAIRating ? ratingText( info.aiRating ) : none );
+		t[ HEADER_AI_VALUE ]->setText( info.hasAIRating ? eloText( info.aiRating ) : none );
 		Int rest = 3 * gap + 2 * space;
 		for( Int each = HEADER_TIER; each <= HEADER_AI_VALUE; each++ )
 		{

@@ -27,6 +27,7 @@
 #include "Common/MultiplayerSettings.h"
 #include "Common/PlayerTemplate.h"
 #include "GameClient/GameText.h"
+#include "GameLogic/AI.h"
 #include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/Online/OnlineSession.h"
 #include "zhio.h"
@@ -719,6 +720,9 @@ OnlineLadderState OnlineGetHistory( Int id, OnlineHistoryMode mode, OnlineHistor
 		r.map = rows[i].getString( "map" ).c_str();
 		r.opponent = rows[i].getString( "opponent" ).c_str();
 		r.opponentRating = (Real)rows[i].getNumber( "opponentRating" );
+		// the bot's strength is on the engine's scale before Elo; the AI's figures are Elo now
+		if (r.ai)
+			r.opponentRating = aiRatingOfLegacy( r.opponentRating );
 		r.playerArmy = rows[i].getString( "playerArmy" ).c_str();
 		r.opponentArmy = rows[i].getString( "opponentArmy" ).c_str();
 		r.seconds = (Int)rows[i].getInt( "seconds" );

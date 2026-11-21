@@ -1621,7 +1621,7 @@ static void layOutCard( Int width )
 	GameFont *section = UIStyle::sectionFont();
 	GameFont *figure = UIStyle::titleFont( UIStyle::TEXT_TITLE );
 	const UIStyle::RatingTier ladderTier = UIStyle::playerTier( card );
-	const UIStyle::RatingTier aiTier = UIStyle::ratingTier( card.aiRating, card.hasAIRating ? card.aiGames : -1 );
+	const UIStyle::RatingTier aiTier = UIStyle::aiRatingTier( card.aiRating, card.hasAIRating ? card.aiGames : -1 );
 
 	// the head: the portrait of his ladder tier, the nick, where he is, both ratings at the right and
 	// the two-pixel rule closing it.  An unranked player has EA's new player's portrait here.
@@ -1630,7 +1630,7 @@ static void layOutCard( Int width )
 		portrait = TheMappedImageCollection->findImageByName( "NewPlayer" );
 	cardBox( at( 24 ) - 1, at( 24 ) - 1, at( 96 ) + 2, at( 96 ) + 2, UIStyle::FRAME, TRUE );
 	cardPicture( portrait, at( 24 ), at( 24 ), at( 96 ) );
-	ratingSummary( aiTier, side, "GUI:OnlineAIRatingLabel", card.hasAIRating ? UIStyle::ratingText( card.aiRating ) : none,
+	ratingSummary( aiTier, side, "GUI:OnlineAIRatingLabel", card.hasAIRating ? UIStyle::eloText( card.aiRating ) : none,
 		CARD_WIDTH - 24.0f );
 	const Int ratingsLeft = ratingSummary( ladderTier, side, "GUI:OnlineLadderRatingLabel",
 		card.hasRating ? UIStyle::ratingText( card.exactRating ) : none, CARD_WIDTH - 330.0f );
@@ -1674,7 +1674,7 @@ static void layOutCard( Int width )
 	const Int gamesAt = ai ? 1 : 2;
 	label[ 0 ] = TheGameText->fetch( ai ? "GUI:OnlineAIRatingLabel" : "GUI:OnlineLadderRatingLabel" );
 	if( ai ? card.hasAIRating : card.hasRating )
-		value[ 0 ] = UIStyle::ratingText( ai ? card.aiRating : card.exactRating );
+		value[ 0 ] = ai ? UIStyle::eloText( card.aiRating ) : UIStyle::ratingText( card.exactRating );
 	else
 		value[ 0 ] = none;
 	under[ 0 ] = OnlineTierName( AsciiString( UIStyle::tierKey( ai ? aiTier : ladderTier ) ) );
@@ -1790,7 +1790,7 @@ static void layOutCard( Int width )
 			cardWords( none, body, at( 424 ), top, height, UIStyle::MUTED );
 
 		if( ai )
-			cardWords( UIStyle::ratingText( match.opponentRating ), body, at( 624 ), top, height, UIStyle::INK );
+			cardWords( UIStyle::eloText( match.opponentRating ), body, at( 624 ), top, height, UIStyle::INK );
 		else
 		{
 			// the opponent's nick, then his rating MUTED after it

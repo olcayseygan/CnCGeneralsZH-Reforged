@@ -304,7 +304,7 @@ static Bool signedIn( void )
 	return TheGameSpyInfo && TheGameSpyInfo->getLocalProfileID() != 0 && !TheGameSpyInfo->isDisconnectedAfterGameStart( NULL );
 }
 
-/* The match: slot 0 the player in that army, slot 1 the computer at the server's rating, on the rung
+/* The match: slot 0 the player in that army, slot 1 the computer at the bot's Elo (OnlineGetAIMatch), on the rung
 	 nearest it as -airating seats it, its army, both colours and both start spots drawn from the seed.  The
 	 speed ai.ready echoed (the player's pick, retail's pace from an older server), and the native tick rate.  Built here rather than through -autoskirmish's door so no
 	 switch of that door reaches a match the server rates.  FALSE, with nothing started, when the map is not
@@ -858,9 +858,9 @@ static void refreshCards( void )
 	UnicodeString text;
 
 	HubCard &ai = s_cards[ CARD_AI ];
-	const UIStyle::RatingTier aiTier = UIStyle::ratingTier( info.aiRating, info.hasAIRating ? info.aiGames : -1 );
+	const UIStyle::RatingTier aiTier = UIStyle::aiRatingTier( info.aiRating, info.hasAIRating ? info.aiGames : -1 );
 	ai.portrait = UIStyle::tierImage( aiTier, side );
-	ai.figure->setText( info.hasAIRating ? UIStyle::ratingText( info.aiRating ) : none );
+	ai.figure->setText( info.hasAIRating ? UIStyle::eloText( info.aiRating ) : none );
 	ai.tier->setText( OnlineTierName( UIStyle::tierKey( aiTier ) ) );
 	ai.factValue[ 0 ]->setText( info.hasAIRating ? UIStyle::grouped( info.aiGames ) : none );
 	ai.factValue[ 1 ]->setText( info.hasAIRating && info.aiGames > 0
@@ -946,7 +946,7 @@ static void refreshRecent( void )
 		cell[ CELL_CHIP ]->setText( TheGameText->fetch( row.won ? "GUI:OnlineWinLabel" : "GUI:OnlineLossLabel" ) );
 		cell[ CELL_MODE ]->setText( UIStyle::fitKey( row.ai ? "GUI:OnlineHubMatchAI" : "GUI:OnlineQuickMatchLabel", body,
 			s_cellWidth[ CELL_MODE ] - pad ) );
-		cell[ CELL_RATING ]->setText( UIStyle::ratingText( row.opponentRating ) );
+		cell[ CELL_RATING ]->setText( row.ai ? UIStyle::eloText( row.opponentRating ) : UIStyle::ratingText( row.opponentRating ) );
 		Int ratingWidth, h;
 		cell[ CELL_RATING ]->getSize( &ratingWidth, &h );
 		UnicodeString opponent;

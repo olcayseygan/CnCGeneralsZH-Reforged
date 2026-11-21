@@ -1525,9 +1525,10 @@ TEST(online_adapter_skins_owned_saved_and_refused)
 	CHECK( TankSkin_localLoadout() == 0 );
 }
 
-/* Play vs AI's lines: auth.ok's AI rating on the card, ai.start carrying the build, ai.ready handed out
-	 once, the first ai.tick waiting its half minute, ai.result once and a loss's replay never sent, a win's
-	 sent under its match, the verdicts, the refusals and a logout ending a live match with nothing sent. */
+/* Play vs AI's lines: auth.ok's Bot ELO on the card, ai.start carrying the build, ai.ready handed out
+	 once with the bot's Elo, the first ai.tick waiting its half minute, ai.result once and a loss's replay
+	 never sent, a win's sent under its match, the verdicts in Elo, an older server's engine-scale figures
+	 mapped onto Elo, the refusals and a logout ending a live match with nothing sent. */
 TEST(online_adapter_play_vs_ai)
 {
 	AdapterRig rig;
@@ -1538,10 +1539,10 @@ TEST(online_adapter_play_vs_ai)
 	CHECK_EQ( (int)OnlineGetAIMatch( ai ), (int)ONLINE_AI_REFUSED );
 	CHECK_STR( ai.reason.str(), "signedout" );
 
-	rig.feed( "{\"t\":\"auth.ok\",\"id\":7,\"nick\":\"Tank\",\"token\":\"t\",\"ticket\":\"00112233445566778899aabbccddeeff\",\"aiRating\":12.4,\"aiGames\":3,\"aiWins\":2}" );
+	rig.feed( "{\"t\":\"auth.ok\",\"id\":7,\"nick\":\"Tank\",\"token\":\"t\",\"ticket\":\"00112233445566778899aabbccddeeff\",\"aiRating\":12.4,\"aiElo\":1240,\"aiGames\":3,\"aiWins\":2}" );
 	OnlinePlayerInfo card;
 	CHECK( OnlineGetPlayerInfo( "Tank", card ) && card.hasAIRating );
-	CHECK_NEAR( card.aiRating, 12.4f, 0.001f );
+	CHECK_NEAR( card.aiRating, 1240.0f, 0.001f );		// aiElo, not the engine-scale aiRating beside it
 	CHECK_EQ( card.aiGames, 3 );
 	CHECK_EQ( card.aiWins, 2 );
 
@@ -1550,12 +1551,12 @@ TEST(online_adapter_play_vs_ai)
 	CHECK_STR( rig.sentType( 0 ).c_str(), "ai.start" );
 	CHECK( rig.sent.size() == 1 && rig.sent[0].getString( "army" ) == "FactionAmerica" && rig.sent[0].has( "exe" ) && rig.sent[0].has( "ini" ) );
 	CHECK_EQ( (int)OnlineGetAIMatch( ai ), (int)ONLINE_AI_WAITING );
-	rig.feed( "{\"t\":\"ai.ready\",\"matchId\":\"m1\",\"aiRating\":12.4,\"map\":\"maps\\\\alpine assault\\\\alpine assault.map\",\"seed\":2147483000}" );
+	rig.feed( "{\"t\":\"ai.ready\",\"matchId\":\"m1\",\"aiRating\":12.4,\"aiElo\":1240,\"botElo\":1262,\"map\":\"maps\\\\alpine assault\\\\alpine assault.map\",\"seed\":2147483000}" );
 	CHECK( !OnlineIsAIMatchLive() );		// live once the hub takes it
 	CHECK_EQ( (int)OnlineGetAIMatch( ai ), (int)ONLINE_AI_READY );
 	CHECK_STR( ai.match.str(), "m1" );
 	CHECK_STR( ai.map.str(), "maps\\alpine assault\\alpine assault.map" );
-	CHECK_NEAR( ai.aiRating, 12.4f, 0.001f );
+	CHECK_NEAR( ai.aiRating, 1262.0f, 0.001f );		// the bot plays at botElo
 	CHECK_EQ( ai.seed, 2147483000 );
 	CHECK_EQ( (int)OnlineGetAIMatch( ai ), (int)ONLINE_AI_IDLE );		// handed out once
 	CHECK( OnlineIsAIMatchLive() );
@@ -1603,19 +1604,21 @@ TEST(online_adapter_play_vs_ai)
 	CHECK_EQ( rig.sent.size(), (size_t)1 );
 
 	// ai.rated moves the card at once
-	rig.feed( "{\"t\":\"ai.rated\",\"matchId\":\"m1\",\"before\":12.4,\"after\":11.9,\"games\":4}" );
+	rig.feed( "{\"t\":\"ai.rated\",\"matchId\":\"m1\",\"before\":12.4,\"after\":11.9,\"eloBefore\":1240,\"eloAfter\":1228,\"games\":4}" );
 	OnlineAIVerdict verdict;
 	CHECK( OnlineGetAIVerdict( verdict ) && verdict.rated );
-	CHECK_NEAR( verdict.before, 12.4f, 0.001f );
-	CHECK_NEAR( verdict.after, 11.9f, 0.001f );
+	CHECK_NEAR( verdict.before, 1240.0f, 0.001f );
+	CHECK_NEAR( verdict.after, 1228.0f, 0.001f );
 	CHECK( OnlineGetPlayerInfo( "Tank", card ) && card.aiGames == 4 && card.aiWins == 2 );
-	CHECK_NEAR( card.aiRating, 11.9f, 0.001f );
+	CHECK_NEAR( card.aiRating, 1228.0f, 0.001f );
 
-	// a win: its recording goes up under the match; a new ai.start drops the last verdict
+	// a win: its recording goes up under the match; a new ai.start drops the last verdict.  This server is
+	// an older one, its bot only an aiRating on the engine's 0 to 30 scale: 11.9 is Elo 800 + 11900 / 30
 	OnlineRequestAIMatch( "Random" );
 	CHECK( !OnlineGetAIVerdict( verdict ) );
 	rig.feed( "{\"t\":\"ai.ready\",\"matchId\":\"m2\",\"aiRating\":11.9,\"map\":\"maps\\\\winter wolf\\\\winter wolf.map\",\"seed\":5}" );
 	OnlineGetAIMatch( ai );
+	CHECK_NEAR( ai.aiRating, 1196.667f, 0.01f );
 	result.endFrame = 5000;
 	OnlineSendAIResult( result );
 	rig.sent.clear();
@@ -1648,6 +1651,7 @@ TEST(online_adapter_play_vs_ai)
 	OnlineRequestAIMatch( "Random" );
 	rig.feed( "{\"t\":\"ai.ready\",\"matchId\":\"m3\",\"aiRating\":0,\"map\":\"maps\\\\winter wolf\\\\winter wolf.map\",\"seed\":1}" );
 	OnlineGetAIMatch( ai );
+	CHECK_EQ( ai.aiRating, 800.0f );		// the old scale's 0 is Easy's 800 to the bit
 	CHECK( OnlineIsAIMatchLive() );
 	s.disconnect();
 	CHECK( !OnlineIsAIMatchLive() );
@@ -2258,7 +2262,7 @@ TEST(online_ratings_keep_two_decimals)
 	CHECK_NEAR( me.exactRating, 21.37, 0.001 );
 	CHECK_EQ( me.rating, 21 );
 	CHECK( me.hasAIRating );
-	CHECK_NEAR( me.aiRating, 14.1, 0.001 );
+	CHECK_NEAR( me.aiRating, 1270.0, 0.01 );		// a server without aiElo: 14.1 on the old scale, as Elo
 	CHECK_EQ( me.aiGames, 3 );
 	CHECK_EQ( me.aiWins, 2 );
 
@@ -2272,7 +2276,7 @@ TEST(online_ratings_keep_two_decimals)
 	CHECK_NEAR( kim.exactRating, 31.5, 0.001 );
 	CHECK_EQ( kim.rating, 32 );
 	CHECK( kim.hasAIRating );
-	CHECK_NEAR( kim.aiRating, 9.87, 0.001 );
+	CHECK_NEAR( kim.aiRating, 1129.0, 0.01 );
 	CHECK_EQ( kim.aiGames, 11 );
 	CHECK_EQ( kim.aiWins, 6 );
 
@@ -2326,10 +2330,10 @@ TEST(online_ratings_keep_two_decimals)
 	rig.feed( "{\"t\":\"ai.rated\",\"matchId\":\"a1\",\"before\":14.1,\"after\":15.37,\"games\":4,\"wins\":3}" );
 	OnlineAIVerdict verdict;
 	CHECK( OnlineGetAIVerdict( verdict ) );
-	CHECK_NEAR( verdict.before, 14.1, 0.001 );
-	CHECK_NEAR( verdict.after, 15.37, 0.001 );
+	CHECK_NEAR( verdict.before, 1270.0, 0.01 );
+	CHECK_NEAR( verdict.after, 1312.333, 0.01 );
 	CHECK( OnlineGetPlayerInfo( "Tank", me ) );
-	CHECK_NEAR( me.aiRating, 15.37, 0.001 );
+	CHECK_NEAR( me.aiRating, 1312.333, 0.01 );
 	CHECK_EQ( me.aiWins, 3 );
 }
 
@@ -2381,7 +2385,7 @@ TEST(online_history_rows_and_army_tables)
 		CHECK_EQ( q.age, 3600 );
 		CHECK( a.ai && !a.won );
 		CHECK( a.opponent.isEmpty() );
-		CHECK_NEAR( a.opponentRating, 14.1, 0.001 );		// the rating the computer played at
+		CHECK_NEAR( a.opponentRating, 1270.0, 0.01 );		// the computer's 14.1 on the old scale, as the Elo it played at
 		CHECK_STR( a.opponentArmy.str(), "FactionAmericaAirForceGeneral" );
 		CHECK_NEAR( a.change, -0.42, 0.001 );
 		CHECK_EQ( a.age, 86400 );

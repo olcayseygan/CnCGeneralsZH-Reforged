@@ -116,7 +116,7 @@ struct OnlineCard
 	Bool hasRating, notOnline, hasStats;
 	std::string tier;
 	Bool hasAIRating;			///< aiRating and aiGames arrived (auth.ok, ai.rated)
-	double aiRating;				///< the rating against the AI, a scale of its own; two decimals
+	double aiRating;				///< the Bot ELO, aiElo or an older server's aiRating mapped onto Elo
 	long long aiGames, aiWins;
 	UnsignedInt serial;		///< the session's cardSerial when this card last changed
 

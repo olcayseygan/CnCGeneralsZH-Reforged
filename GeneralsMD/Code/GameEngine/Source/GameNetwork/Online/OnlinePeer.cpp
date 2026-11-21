@@ -37,6 +37,7 @@
 #include "Common/MessageStream.h"
 #include "Common/RandomValue.h"
 #include "Common/Recorder.h"
+#include "GameLogic/AI.h"
 #include "GameLogic/GameLogic.h"
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GameSpy/StagingRoomGameInfo.h"
@@ -669,6 +670,27 @@ std::string OnlineNickKey( const std::string &nick )
 	return key;
 }
 
+/** An AI figure as an Elo, the AI's own scale: the Elo field when the server sent one, else the field
+	* on the engine's old 0 to 30 scale (a server or site from before Bot ELO) mapped onto it.  FALSE, and
+	* 0, when neither is a number. */
+static Bool onlineAIElo( const OnlineMessage &m, const char *elo, const char *legacy, Real &out )
+{
+	const OnlineValue *v = m.find( elo );
+	if (v != NULL && v->kind == OnlineValue::NUMBER)
+	{
+		out = (Real)m.getNumber( elo );
+		return TRUE;
+	}
+	v = m.find( legacy );
+	if (v != NULL && v->kind == OnlineValue::NUMBER)
+	{
+		out = aiRatingOfLegacy( (Real)m.getNumber( legacy ) );
+		return TRUE;
+	}
+	out = 0.0f;
+	return FALSE;
+}
+
 void OnlineSession::noteCard( const OnlineMessage &m )
 {
 	const std::string who = m.getString( "nick" );
@@ -698,10 +720,11 @@ void OnlineSession::noteCard( const OnlineMessage &m )
 		c.losses = v->kind == OnlineValue::NUMBER ? m.getInt( "losses" ) : -1;
 	if ((v = m.find( "rank" )) != NULL)
 		c.rank = v->kind == OnlineValue::NUMBER ? m.getInt( "rank" ) : 0;
-	if ((v = m.find( "aiRating" )) != NULL)
+	if (m.find( "aiElo" ) != NULL || m.find( "aiRating" ) != NULL)
 	{
-		c.hasAIRating = v->kind == OnlineValue::NUMBER;
-		c.aiRating = c.hasAIRating ? m.getNumber( "aiRating" ) : 0;
+		Real elo = 0.0f;
+		c.hasAIRating = onlineAIElo( m, "aiElo", "aiRating", elo );
+		c.aiRating = elo;
 	}
 	if ((v = m.find( "aiGames" )) != NULL)
 		c.aiGames = v->kind == OnlineValue::NUMBER ? m.getInt( "aiGames" ) : 0;
@@ -1301,9 +1324,9 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 			aiState = ONLINE_AI_READY;
 			aiReadyMs = aiTickMs = OnlineNowMs();
 		}
-		const OnlineValue *rating = m.find( "aiRating" );
-		DEBUG_LOG(("ONLINE AI READY match=%s aiRating=%s map=%s seed=%lld\n", m.getString( "matchId" ).c_str(),
-			rating ? rating->text.c_str() : "", m.getString( "map" ).c_str(), m.getInt( "seed" )));
+		const OnlineValue *rating = m.find( "aiRating" ), *botElo = m.find( "botElo" );
+		DEBUG_LOG(("ONLINE AI READY match=%s botElo=%s aiRating=%s map=%s seed=%lld\n", m.getString( "matchId" ).c_str(),
+			botElo ? botElo->text.c_str() : "", rating ? rating->text.c_str() : "", m.getString( "map" ).c_str(), m.getInt( "seed" )));
 	}
 	else if (t == "ai.refused" && !m.has( "matchId" ) && aiState == ONLINE_AI_WAITING)
 	{
@@ -1406,8 +1429,9 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		{
 			// the hub's own card shows the new rating at once, without asking for stats
 			OnlineCard &c = cards[OnlineNickKey( nick )];
-			c.hasAIRating = TRUE;
-			c.aiRating = m.getNumber( "after" );
+			Real elo = 0.0f;
+			c.hasAIRating = onlineAIElo( m, "eloAfter", "after", elo );
+			c.aiRating = elo;
 			c.aiGames = m.getInt( "games" );
 			if (m.has( "wins" ))
 				c.aiWins = m.getInt( "wins" );
@@ -1416,9 +1440,11 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 			c.serial = ++cardSerial;
 		}
 		const OnlineValue *before = m.find( "before" ), *after = m.find( "after" );
+		const OnlineValue *eloBefore = m.find( "eloBefore" ), *eloAfter = m.find( "eloAfter" );
 		if (t == "ai.rated")
-			DEBUG_LOG(("ONLINE AI RATED match=%s before=%s after=%s games=%lld\n", m.getString( "matchId" ).c_str(),
-				before ? before->text.c_str() : "", after ? after->text.c_str() : "", m.getInt( "games" )));
+			DEBUG_LOG(("ONLINE AI RATED match=%s before=%s after=%s eloBefore=%s eloAfter=%s games=%lld\n", m.getString( "matchId" ).c_str(),
+				before ? before->text.c_str() : "", after ? after->text.c_str() : "", eloBefore ? eloBefore->text.c_str() : "",
+				eloAfter ? eloAfter->text.c_str() : "", m.getInt( "games" )));
 		else
 			DEBUG_LOG(("ONLINE AI UNRATED match=%s reason=%s\n", m.getString( "matchId" ).c_str(), m.getString( "reason" ).c_str()));
 	}
@@ -2325,7 +2351,9 @@ OnlineAIMatchState OnlineGetAIMatch( OnlineAIMatch &out )
 		s.aiMatch = s.aiReady.getString( "matchId" );
 		s.aiWonMatch.clear();
 		out.match = s.aiMatch.c_str();
-		out.aiRating = (Real)s.aiReady.getNumber( "aiRating" );
+		// the bot's Elo; a server from before sends only its strength on the old scale, which says the same
+		if (!onlineAIElo( s.aiReady, "botElo", "aiRating", out.aiRating ))
+			out.aiRating = AI_RATING_EASY;
 		out.map = s.aiReady.getString( "map" ).c_str();
 		out.seed = (Int)(UnsignedInt)s.aiReady.getInt( "seed" );
 		// the server's clamp of what ai.start asked; a server from before echoes none and plays retail's pace
@@ -2399,8 +2427,8 @@ Bool OnlineGetAIVerdict( OnlineAIVerdict &out )
 		return FALSE;
 	out.match = m.getString( "matchId" ).c_str();
 	out.rated = m.type() == "ai.rated";
-	out.before = (Real)m.getNumber( "before" );
-	out.after = (Real)m.getNumber( "after" );
+	onlineAIElo( m, "eloBefore", "before", out.before );
+	onlineAIElo( m, "eloAfter", "after", out.after );
 	out.games = (Int)m.getInt( "games" );
 	out.reason = m.getString( "reason" ).c_str();
 	out.serial = s.aiVerdictSerial;

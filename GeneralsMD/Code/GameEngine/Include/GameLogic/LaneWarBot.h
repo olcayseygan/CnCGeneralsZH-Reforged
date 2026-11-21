@@ -26,9 +26,9 @@
 // AI rating and the logic random stream, so a save, a replay and a second machine all see the same
 // purchases.
 //
-// How well it plays is the seat's AI rating, the ladder's scale (AI.h): every number of its plan is
-// one curve of the rating through the lobby's four levels, Easy at 0, Medium at 15, Hard at 30 and
-// Brutal at 45, and on past them, so any rating plays its own strength and a higher one plays better.
+// How well it plays is the seat's AI rating, an Elo (AI.h): every number of its plan is one curve of
+// the rating through the lobby's four levels, Easy at 800, Medium at 1300, Hard at 1800 and Brutal at
+// 2200, and on past them, so any rating plays its own strength and a higher one plays better.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

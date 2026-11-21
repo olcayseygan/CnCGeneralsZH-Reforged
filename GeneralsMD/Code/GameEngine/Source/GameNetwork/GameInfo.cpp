@@ -479,7 +479,11 @@ UnicodeString SlotStateName( SlotState state )
 	}
 }
 
-const Int AILevelAboveHardRating[ AI_LEVELS_ABOVE_HARD ] = { 4500, 6000, 9000, 12000 };
+// Elo in hundredths: Brutal 2200, Vicious 2600, Savage 3400, Insane 4200
+const Int AILevelAboveHardRating[ AI_LEVELS_ABOVE_HARD ] =
+{
+	(Int)( AI_RATING_BRUTAL * 100 ), (Int)( AI_RATING_VICIOUS * 100 ), (Int)( AI_RATING_SAVAGE * 100 ), (Int)( AI_RATING_INSANE * 100 )
+};
 
 UnicodeString SlotStateName( SlotState state, Int aiRating )
 {
@@ -1640,6 +1644,13 @@ Int HandicapFromSlotField( const char *field )
 	return IsValidHandicap(handicap) ? handicap : HANDICAP_FULL;
 }
 
+Int AIRatingFromLegacySlot( Int hundredths )
+{
+	if (hundredths == AI_RATING_NONE)
+		return AI_RATING_NONE;
+	return aiRatingToHundredths( aiRatingOfLegacySave( aiRatingFromHundredths( hundredths ) ) );
+}
+
 Int AIRatingFromSlotField( const char *field )
 {
 	if (field == NULL || *field == 0)
@@ -2242,7 +2253,7 @@ void SkirmishGameInfo::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void SkirmishGameInfo::xfer( Xfer *xfer )
 {
-	const XferVersion currentVersion = 15;	// 5 adds m_peaceTime, 6 m_unitLimit, 7 m_proRules, 8 m_incomeSharing, 9 m_techRespawn, 10 m_supplyPileLimit, 11 each slot's AI personality, 12 each slot's handicap, 13 a 64-bit preorder mask, 14 each slot's AI rating, 15 that rating's "none" as AI_RATING_NONE instead of -1
+	const XferVersion currentVersion = 16;	// 5 adds m_peaceTime, 6 m_unitLimit, 7 m_proRules, 8 m_incomeSharing, 9 m_techRespawn, 10 m_supplyPileLimit, 11 each slot's AI personality, 12 each slot's handicap, 13 a 64-bit preorder mask, 14 each slot's AI rating, 15 that rating's "none" as AI_RATING_NONE instead of -1, 16 that rating on Elo
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -2340,6 +2351,9 @@ void SkirmishGameInfo::xfer( Xfer *xfer )
 		// version 14 wrote -1 for "no rating", which reads as a rating of -0.01 now that negatives are legal
 		if (version < 15 && rating < 0)
 			rating = AI_RATING_NONE;
+		// before 16 it was on the 0 to 30 scale
+		if (version < 16 && xfer->getXferMode() == XFER_LOAD)
+			rating = AIRatingFromLegacySlot( rating );
 
 		if( xfer->getXferMode() == XFER_LOAD ) {
 			m_slot[slot]->setState((SlotState)state, name);

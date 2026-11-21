@@ -207,8 +207,13 @@ namespace UIStyle
 	};
 	/// the tier a rating falls in: general from 30, colonel 25, major 20, captain 15, lieutenant 10,
 	/// sergeant 5, private under that; unranked under RANKED_GAMES games or with the count unknown
-	/// (-1).  For the AI rating, which the site gives no tier; a ladder rating goes through playerTier.
+	/// (-1).  A ladder rating goes through playerTier.
 	RatingTier ratingTier( Real rating, Int games );
+	/// the same tiers for an AI rating, which is an Elo and has no tier from the site: Easy's 800 is
+	/// private, Medium's 1300 captain, Hard's 1800 general, each step between at its share of the ladder's
+	RatingTier aiRatingTier( Real elo, Int games );
+	/// the Elo an AI tier starts at, for the next tier's track (tierStart on the AI's scale)
+	Real aiTierStart( RatingTier tier );
 	/// a player's ladder tier: the site's (info.tier), which knows its own minimum of games and who is
 	/// banned and rates the exact value, as the ladder shows it; ratingTier only when the site sent
 	/// none or a key this build does not know
@@ -239,6 +244,8 @@ namespace UIStyle
 	/// Russian and Ukrainian; sign puts a + before a rise, for a change.  Never "-0.00".
 	UnicodeString ratingTextIn( Real rating, Bool sign, Int language );
 	UnicodeString ratingText( Real rating, Bool sign = FALSE );
+	/// an Elo, the AI rating, as a whole number rounded half up: 1213, +12 for a change.  Never "-0".
+	UnicodeString eloText( Real elo, Bool sign = FALSE );
 	/// part of whole in whole percent, rounded half up; 0 with no whole
 	Int percent( Int part, Int whole );
 	/// a percentage the language's way: 55%, %55 in Turkish (as the load screen's YÜKLENİYOR %81),

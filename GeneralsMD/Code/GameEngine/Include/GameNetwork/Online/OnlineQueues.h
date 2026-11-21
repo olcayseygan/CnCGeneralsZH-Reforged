@@ -235,7 +235,7 @@ struct OnlinePlayerInfo
 	Bool notOnline;						///< the last stats asked for this nick came back noplayer
 	Bool hasStats;						///< a stats answer for this nick arrived (wins and losses are then known)
 	Bool hasAIRating;					///< aiRating and aiGames arrived (auth.ok, stats, ai.rated)
-	Real aiRating;						///< the rating against the AI, a scale of its own (0 for a new player)
+	Real aiRating;						///< the Bot ELO, the rating against the AI (aiElo, or an older server's aiRating mapped onto Elo)
 	Int aiGames;
 	Int aiWins;
 	UnsignedInt serial;				///< moves on whenever this player's numbers change: redraw on it, not on everyone's
@@ -345,7 +345,7 @@ struct OnlineHistoryRow
 	Bool won;
 	AsciiString map;
 	AsciiString opponent;			///< empty against the computer
-	Real opponentRating;			///< against the computer, the rating it played at
+	Real opponentRating;			///< against the computer, the Elo it played at (the site's engine-scale figure mapped onto Elo)
 	AsciiString playerArmy;
 	AsciiString opponentArmy;
 	Int seconds;							///< the match's length
@@ -471,7 +471,9 @@ void OnlineStartRejoin( const RejoinInfo &info );
 	 before and after, which give the same two) or unrated (reason).  FALSE until it arrives. */
 Bool OnlineGetMatchResult( Bool &rated, Real &delta, Real &rating, AsciiString &reason );
 
-/* Play vs AI, a 1v1 skirmish the server rates on a scale of its own (the card's aiRating).
+/* Play vs AI, a 1v1 skirmish the server rates on Elo (the card's aiRating, its aiElo).  Every AI figure
+	 here is an Elo: the bot's is ai.ready's botElo, the verdict's eloBefore and eloAfter; from a server
+	 that sends only the old 0 to 30 aiRating, before and after, they are mapped onto Elo (aiRatingOfLegacy).
 	 OnlineRequestAIMatch sends ai.start{army, exe, ini, speed}; OnlineGetAIMatch reads the answer and hands it out
 	 once: READY with ai.ready's match, the AI seat's rating and the map and seed the server picked, then
 	 the match is live; or REFUSED with ai.refused's reason ("build": this exe or its data is not the
@@ -495,7 +497,7 @@ enum { ONLINE_AI_TICK_SECONDS = 30 };
 struct OnlineAIMatch
 {
 	AsciiString match;
-	Real aiRating;
+	Real aiRating;				///< the AI seat's Elo, the strength it plays at
 	AsciiString map;
 	Int seed;
 	Int speed;						///< the speed ai.ready echoed, 100 from an older server

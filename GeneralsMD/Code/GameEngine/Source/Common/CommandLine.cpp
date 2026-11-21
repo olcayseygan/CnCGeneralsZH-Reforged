@@ -1355,9 +1355,10 @@ Int parseAIDifficulty2(char *args[], int num)
 }
 
 /** -airating <r> and -airating2 <r>: an -autoskirmish AI seat's rating, every seat's and the odd seats',
-	* over -aidiff and -aidiff2, on the online ladder's scale.  Clamped to AI_RATING_EASY..AI_RATING_HARD
-	* and kept to the hundredth; the seat's rung is the nearest, so its map scripts run at that rung, and
-	* the anchors (0, 15, 30) are exactly Easy, Medium and Hard.  It goes into the slot, so the replay
+	* over -aidiff and -aidiff2, as an Elo.  Held to AI_RATING_LIMIT either way and kept to the hundredth;
+	* the seat's rung is the nearest, so its map scripts run at that rung, the anchors (800, 1300, 1800) are
+	* exactly Easy, Medium and Hard, and 2200, 2600, 3400 and 4200 are the lobby's Brutal, Vicious, Savage
+	* and Insane.  It goes into the slot, so the replay
 	* header carries it and playback takes no switch. */
 static Int parseRatingValue( const char *arg )
 {

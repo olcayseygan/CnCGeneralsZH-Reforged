@@ -166,19 +166,19 @@ enum AISkillLevel
 };
 
 //-------------------------------------------------------------------------------------------------
-/** A skirmish AI's strength as one number per seat, its rating, on the scale of a player's online
-	* rating as zerohour.gg's ladder shows it (the OpenSkill ordinal mu - 3 sigma: a new player 0,
-	* sergeant 5, captain 15, general 30 and up), so a ranked match can pick the AI's rating from the
-	* player's.  The three rungs are the anchors, Easy 0, Medium 15 and Hard 30, set here and nowhere
-	* else, and every knob that differs by rung (the ladder's profile, each table of three in
+/** A skirmish AI's strength as one number per seat, its rating, on an Elo scale, the one Play vs AI's
+	* Bot ELO is kept on.  The three rungs are the anchors, Easy 800, Medium 1300 and Hard 1800, set here
+	* and nowhere else, and every knob that differs by rung (the ladder's profile, each table of three in
 	* AIPlayer.cpp) is read at the rating.  A seat at Easy or Hard plays exactly that rung.  The rung
-	* stays, derived as the nearest (aiSkillOfRating, Easy under 7.5, Hard from 22.5), for what is
+	* stays, derived as the nearest (aiSkillOfRating, Easy under 1050, Hard from 1550), for what is
 	* discrete by nature: the map scripts' easy, normal and hard flags, the gatherer counts, the menus
-	* and the logs.
+	* and the logs.  Until 2026-11-21 the scale was 0, 15 and 30 (the online ladder's), and the step is
+	* straight: Elo = 800 + r * 1000 / 30 (aiRatingOfLegacy), what an old save and an old server's
+	* aiRating are read through.
 	*
 	* The rating is one multiplier with no edge of its own: every knob is one smooth curve of it through
-	* Easy's value E at 0 and Hard's value H at 30 (aiKnobAt), and Medium's row is where the curve passes
-	* at 15, no longer a point it has to hit.  With t = r / 30:
+	* Easy's value E at 800 and Hard's value H at 1800 (aiKnobAt), and Medium's row is where the curve
+	* passes at 1300, no longer a point it has to hit.  With t = (r - 800) / 1000:
 	*   a knob that falls (H < E, a period, a delay, a threshold): E / (1 + c t) for t >= 0 and
 	*     E (1 - c t) below, c = E/H - 1, the same value and slope at 0; H = 0 is E (1 - t), and 0 past it;
 	*   a knob that rises (H > E, a power, a count, a reach): E (1 - t) + H t for t >= 0, and
@@ -187,23 +187,38 @@ enum AISkillLevel
 	*     of what is left to 1, so it nears 1 and never passes it, and the same decay as above below 0; one
 	*     that falls: the falling curve for t >= 0, and below 0 what is left to 1 decays towards 0;
 	*   AIKNOB_GATED, a knob whose Easy 0 means "off" (CashHoardThreshold, BeamSteerSeconds): off below
-	*     7.5 like a Bool, from there the curve through Medium at 15 and Hard at 30;
+	*     1050 like a Bool, from there the curve through Medium at 1300 and Hard at 1800;
 	*   E = H: flat.
-	* A Bool reads its nearest rung (on from 7.5 or 22.5, as before), an Int rounds its curve.  Only + - * /.
+	* A Bool reads its nearest rung (on from 1050 or 1550, as before), an Int rounds its curve.  Only + - * /.
 	* The rating itself is held to AI_RATING_LIMIT either way, far past any ladder, so its hundredths stay
 	* an Int; nothing else is clamped. */
 //-------------------------------------------------------------------------------------------------
-#define AI_RATING_EASY		0.0f
-#define AI_RATING_MEDIUM	15.0f
-#define AI_RATING_HARD		30.0f
+#define AI_RATING_EASY		800.0f
+#define AI_RATING_MEDIUM	1300.0f
+#define AI_RATING_HARD		1800.0f
+/** The lobby's four levels above Hard (AILevelAboveHardRating); Brutal is also the Lane War bot's fourth anchor. */
+#define AI_RATING_BRUTAL	2200.0f
+#define AI_RATING_VICIOUS	2600.0f
+#define AI_RATING_SAVAGE	3400.0f
+#define AI_RATING_INSANE	4200.0f
 /** Not a cap on the scale: the furthest a rating is carried either way, so its hundredths and every
-	* knob extrapolated from it stay well inside an Int. */
-#define AI_RATING_LIMIT		1000.0f
-/** The game setup carries a rating as whole hundredths, the ladder's two decimals, so a slot string,
-	* a replay header and a dict hold an Int and every machine reads the same Real back from it. */
+	* knob extrapolated from it stay well inside an Int.  32000 keeps t inside the -33 to 33 the old
+	* scale's 1000 allowed. */
+#define AI_RATING_LIMIT		32000.0f
+/** The game setup carries a rating as whole hundredths, so a slot string, a replay header and a dict
+	* hold an Int and every machine reads the same Real back from it. */
 #define AI_RATING_NONE		(-0x7FFFFFFF - 1)		///< no rating in the setup: the seat plays its rung's anchor
 Int aiRatingToHundredths( Real rating );		///< rounded to the nearest hundredth, held to AI_RATING_LIMIT first
 Real aiRatingFromHundredths( Int hundredths );
+/** A rating on the scale before Elo (Easy 0, Medium 15, Hard 30) on this one: 800 + r * 1000 / 30, each
+	* anchor exactly onto its own.  For a save from before, and a server that sends only aiRating. */
+Real aiRatingOfLegacy( Real legacy );
+/** A rating a save wrote on the scale before Elo: one of the old levels above Hard (45, 60, 90, 120)
+	* comes back as that level (Brutal 2200 ... Insane 4200), so the seat keeps its name and a Direct Strike
+	* bot its plan; any other value as aiRatingOfLegacy. */
+Real aiRatingOfLegacySave( Real legacy );
+/** The way back, (r - 800) * 30 / 1000: where an Elo falls on the online ladder's 0 to 30 tiers. */
+Real aiRatingToLegacy( Real rating );
 
 Real aiRatingClamp( Real rating );								///< held to [-AI_RATING_LIMIT, AI_RATING_LIMIT]
 Real aiRatingOfSkill( AISkillLevel level );				///< the rung's anchor; Hard for anything out of range

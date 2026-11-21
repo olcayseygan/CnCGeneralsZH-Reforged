@@ -405,6 +405,17 @@ static UnicodeString newCardWords( const AsciiString &key )
 	return UnicodeString( u"Sending the result" );
 }
 
+/// the card's figures on its own scale: the ladder's two decimals, or the AI rating's whole Elo
+static UnicodeString cardRatingText( Real value, Bool sign = FALSE )
+{
+	return s_card == SCORE_CARD_AI ? UIStyle::eloText( value, sign ) : UIStyle::ratingText( value, sign );
+}
+
+static Real cardTierStart( UIStyle::RatingTier tier )
+{
+	return s_card == SCORE_CARD_AI ? UIStyle::aiTierStart( tier ) : UIStyle::tierStart( tier );
+}
+
 static void buildRatingCard( const RatingFacts &facts )
 {
 	freeCardText( CARD_HEADING, CARD_TEXT_COUNT );
@@ -417,18 +428,19 @@ static void buildRatingCard( const RatingFacts &facts )
 	s_cardPortrait = NULL;
 	if( facts.shown )
 	{
-		const UIStyle::RatingTier tier = UIStyle::ratingTier( facts.after, facts.games );
+		const UIStyle::RatingTier tier = s_card == SCORE_CARD_AI ? UIStyle::aiRatingTier( facts.after, facts.games ) :
+			UIStyle::ratingTier( facts.after, facts.games );
 		s_cardPortrait = UIStyle::tierImage( tier, s_cardSide );
 		if( facts.moved )
 		{
-			setCardText( CARD_OLD, UIStyle::ratingText( facts.before ), UIStyle::titleFont( UIStyle::TEXT_TITLE ) );
+			setCardText( CARD_OLD, cardRatingText( facts.before ), UIStyle::titleFont( UIStyle::TEXT_TITLE ) );
 			static const WideChar ARROW[] = { 0x2192, 0 };		// as a code unit: the sources build without /utf-8
 			setCardText( CARD_ARROW, UnicodeString( ARROW ), UIStyle::font( UIStyle::TEXT_HEADING ) );
-			setCardText( CARD_CHANGE, UIStyle::ratingText( facts.after - facts.before, TRUE ), UIStyle::font( UIStyle::TEXT_STRONG, TRUE ) );
+			setCardText( CARD_CHANGE, cardRatingText( facts.after - facts.before, TRUE ), UIStyle::font( UIStyle::TEXT_STRONG, TRUE ) );
 			// a defeat's change is MUTED, as its verdict is
 			s_cardChangeColor = s_cardWon ? UIStyle::changeColor( facts.after - facts.before ) : UIStyle::MUTED;
 		}
-		setCardText( CARD_NEW, UIStyle::ratingText( facts.after ), UIStyle::titleFont( UIStyle::TEXT_DISPLAY ) );
+		setCardText( CARD_NEW, cardRatingText( facts.after ), UIStyle::titleFont( UIStyle::TEXT_DISPLAY ) );
 		setCardText( CARD_TIER, OnlineTierName( AsciiString( UIStyle::tierKey( tier ) ) ), body );
 
 		// the next tier at the card's right, as far left as the numbers leave room; none past the last
@@ -445,11 +457,11 @@ static void buildRatingCard( const RatingFacts &facts )
 		if( tier != UIStyle::TIER_UNRANKED && tier + 1 < UIStyle::TIER_COUNT && nextRoom > 0 )
 		{
 			const UIStyle::RatingTier next = (UIStyle::RatingTier)( tier + 1 );
-			const Real start = UIStyle::tierStart( tier );
-			const Real goal = UIStyle::tierStart( next );
+			const Real start = cardTierStart( tier );
+			const Real goal = cardTierStart( next );
 			UnicodeString words;
 			words.format( TheGameText->fetch( "GUI:OnlineNextTier" ), OnlineTierName( AsciiString( UIStyle::tierKey( next ) ) ).str(),
-				UIStyle::ratingText( goal ).str(), UIStyle::ratingText( goal - facts.after ).str() );
+				cardRatingText( goal ).str(), cardRatingText( goal - facts.after ).str() );
 			setCardText( CARD_NEXT, UIStyle::fitText( words, body, nextRoom ), body );
 			s_cardProgress = goal > start ? ( facts.after - start ) / ( goal - start ) : 1.0f;
 			s_cardTrackWidth = min( UIStyle::px( 436.0f ), nextRoom );
@@ -459,7 +471,7 @@ static void buildRatingCard( const RatingFacts &facts )
 	UnicodeString line;
 	s_cardSending = facts.sending;
 	if( facts.line == "GUI:OnlineScoreAISaved" )
-		line.format( TheGameText->fetch( facts.line ), UIStyle::ratingText( facts.after ).str() );
+		line.format( TheGameText->fetch( facts.line ), cardRatingText( facts.after ).str() );
 	else if( facts.line == "GUI:OnlineScoreNoAnswer" || facts.line == "GUI:OnlineScoreSendingResult" )
 		line = newCardWords( facts.line );
 	else

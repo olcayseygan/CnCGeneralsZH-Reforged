@@ -136,7 +136,13 @@ public:
 	void onKill( const Object *killer, const Object *victim );
 	void onDamage( const Object *damager, const Object *victim, Real amount );
 
-	/// VictoryConditions under VICTORY_LANEWAR: the player's team lost its fortress and the collapse has had its time
+	/** MSG_SELF_DESTRUCT in a Lane War match (GameLogicDispatch): the player left, by Exit, Surrender or a
+		* dropped connection, on the frame the command list carries it for every machine.  The team's fortress
+		* and towers he held go to a teammate still playing; when nobody of the team plays on, the team is
+		* out on this frame, with no collapse to wait for.  A computer seat never leaves. */
+	void onPlayerLeft( const Player *player );
+
+	/// VictoryConditions under VICTORY_LANEWAR: the player's team lost its fortress and the collapse has had its time, or left
 	Bool hasLost( const Player *player ) const;
 
 	// Read only, for the client at the render's sync point (LaneWarEndScreen.cpp)
@@ -145,8 +151,12 @@ public:
 	UnsignedInt getFortressDownFrame( Int team ) const { return m_downFrame[ team ]; }
 	/// the frame the team's tower (0 or 1) was found dead, 0 while it stands or where the map has none
 	UnsignedInt getTowerDownFrame( Int team, Int k ) const { return m_towerDownFrame[ team ][ k ]; }
-	/// the frame the match is decided on, 0 while no fortress is down
+	/// the frame the last of the team's seated players left, 0 while one plays on
+	UnsignedInt getTeamLeftFrame( Int team ) const { return m_teamLeftFrame[ team ]; }
+	/// the frame the match is decided on, 0 while no fortress is down and no team has left
 	UnsignedInt getEndFrame( void ) const;
+	/// the team is out of the match decided on end: its fortress fell before it, or the team left by it
+	Bool isOut( Int team, UnsignedInt end ) const;
 	/// the team left standing once the match is over; -1 before, or when both fortresses fell
 	Int getWinner( void ) const;
 	const LaneWarSeatStats &getSeat( Int team, Int seat ) const { return m_seats[ team ][ seat ]; }
@@ -174,6 +184,8 @@ private:
 	std::vector<LaneWarSample> m_samples;
 	UnsignedInt m_towerDownFrame[ LANEWAR_TEAMS ][ 2 ];
 	UnsignedInt m_downFrame[ LANEWAR_TEAMS ];
+	UnsignedInt m_seatLeftFrame[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];	///< 0 while the seat plays
+	UnsignedInt m_teamLeftFrame[ LANEWAR_TEAMS ];
 	Bool m_logged;												///< the record went to the log when the match was decided
 };
 

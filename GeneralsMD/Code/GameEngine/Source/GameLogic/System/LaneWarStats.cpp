@@ -121,6 +121,9 @@ void LaneWarStats::reset( void )
 		m_teamMiddleFrames[ t ] = 0;
 		m_downFrame[ t ] = 0;
 		m_towerDownFrame[ t ][ 0 ] = m_towerDownFrame[ t ][ 1 ] = 0;
+		for( Int s = 0; s < LANEWAR_SEATS; ++s )
+			m_seatLeftFrame[ t ][ s ] = 0;
+		m_teamLeftFrame[ t ] = 0;
 	}
 	m_samples.clear();
 	m_logged = FALSE;
@@ -139,25 +142,29 @@ UnsignedInt LaneWarStats::getEndFrame( void ) const
 {
 	UnsignedInt end = 0;
 	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+	{
 		if( m_downFrame[ t ] != 0 && ( end == 0 || m_downFrame[ t ] + LANEWAR_COLLAPSE_FRAMES < end ) )
 			end = m_downFrame[ t ] + LANEWAR_COLLAPSE_FRAMES;
+		if( m_teamLeftFrame[ t ] != 0 && ( end == 0 || m_teamLeftFrame[ t ] < end ) )
+			end = m_teamLeftFrame[ t ];
+	}
 	return end;
 }
 
-/** Out on the end frame: every team whose fortress fell before it.  The end frame is the first fall's
-	  collapse run out, so a fortress that falls while the other one is still coming down takes its team
-	  out too, and the match is a draw. */
-static Bool outBy( UnsignedInt downFrame, UnsignedInt end )
+/** Out on the end frame: every team whose fortress fell before it, or that left by it.  The end frame is
+	  the first fall's collapse run out, so a fortress that falls while the other one is still coming down
+	  takes its team out too, and the match is a draw; a team that leaves ends the match on that frame. */
+Bool LaneWarStats::isOut( Int team, UnsignedInt end ) const
 {
-	return downFrame != 0 && downFrame < end;
+	return ( m_downFrame[ team ] != 0 && m_downFrame[ team ] < end ) || ( m_teamLeftFrame[ team ] != 0 && m_teamLeftFrame[ team ] <= end );
 }
 
 Int LaneWarStats::getWinner( void ) const
 {
 	const UnsignedInt end = getEndFrame();
-	if( getEndPhase() != LANEWAR_END_OVER || ( outBy( m_downFrame[ 0 ], end ) && outBy( m_downFrame[ 1 ], end ) ) )
+	if( getEndPhase() != LANEWAR_END_OVER || ( isOut( 0, end ) && isOut( 1, end ) ) )
 		return -1;
-	return outBy( m_downFrame[ 0 ], end ) ? 1 : 0;
+	return isOut( 0, end ) ? 1 : 0;
 }
 
 Bool LaneWarStats::hasLost( const Player *player ) const
@@ -165,7 +172,39 @@ Bool LaneWarStats::hasLost( const Player *player ) const
 	Int team, seat;
 	if( !TheLaneWarDirector->isActive() || !TheLaneWarDirector->seatOf( player, &team, &seat ) )
 		return FALSE;
-	return getEndPhase() == LANEWAR_END_OVER && outBy( m_downFrame[ team ], getEndFrame() );
+	return getEndPhase() == LANEWAR_END_OVER && isOut( team, getEndFrame() );
+}
+
+//-------------------------------------------------------------------------------------------------
+void LaneWarStats::onPlayerLeft( const Player *player )
+{
+	Int team, seat;
+	if( !counting() || player == NULL || !TheLaneWarDirector->seatOf( player, &team, &seat ) || m_seatLeftFrame[ team ][ seat ] != 0 )
+		return;
+	const UnsignedInt now = TheGameLogic->getFrame();
+	m_seatLeftFrame[ team ][ seat ] = now > 0 ? now : 1;
+
+	// the first seated teammate still playing takes what the leaver held of the team's buildings
+	Player *heir = NULL;
+	for( Int s = 0; s < LANEWAR_SEATS && heir == NULL; ++s )
+		if( TheLaneWarDirector->getSeatPlayer( team, s ) >= 0 && m_seatLeftFrame[ team ][ s ] == 0 )
+			heir = ThePlayerList->getNthPlayer( TheLaneWarDirector->getSeatPlayer( team, s ) );
+	DEBUG_LOG(( "HEADLESS LANEWAR END: frame %u player %d of team %c left the game, %s\n", now, (Int)player->getPlayerIndex(),
+							TEAM_LETTER[ team ], heir ? "the team plays on" : "nobody of the team plays on" ));
+	if( heir == NULL )
+	{
+		m_teamLeftFrame[ team ] = m_seatLeftFrame[ team ][ seat ];
+		DEBUG_LOG(( "HEADLESS LANEWAR END: frame %u team %c left the game, team %c wins\n", now, TEAM_LETTER[ team ], TEAM_LETTER[ 1 - team ] ));
+		return;
+	}
+	const ObjectID buildings[] = { TheLaneWarDirector->getFortress( team ), TheLaneWarDirector->getTower( team, 0 ),
+																 TheLaneWarDirector->getTower( team, 1 ) };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( buildings ); ++i )
+	{
+		Object *obj = TheGameLogic->findObjectByID( buildings[ i ] );
+		if( obj != NULL && !obj->isEffectivelyDead() && obj->getControllingPlayer() == player )
+			obj->setTeam( heir->getDefaultTeam() );
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -357,9 +396,10 @@ void LaneWarStats::onDamage( const Object *damager, const Object *victim, Real a
 void LaneWarStats::log( void ) const
 {
 	const Int winner = getWinner();
-	DEBUG_LOG(( "HEADLESS LANEWAR STATS: frame %u, decided on %u, winner %s, fortress A down at %u, B at %u, middle held A %u B %u frames, %d samples\n",
+	DEBUG_LOG(( "HEADLESS LANEWAR STATS: frame %u, decided on %u, winner %s, fortress A down at %u, B at %u, team A left at %u, B at %u, "
+							"middle held A %u B %u frames, %d samples\n",
 							TheGameLogic->getFrame(), getEndFrame(), winner < 0 ? "none" : winner == 0 ? "A" : "B", m_downFrame[ 0 ], m_downFrame[ 1 ],
-							m_teamMiddleFrames[ 0 ], m_teamMiddleFrames[ 1 ], (Int)m_samples.size() ));
+							m_teamLeftFrame[ 0 ], m_teamLeftFrame[ 1 ], m_teamMiddleFrames[ 0 ], m_teamMiddleFrames[ 1 ], (Int)m_samples.size() ));
 	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
 		for( Int s = 0; s < LANEWAR_SEATS; ++s )
 		{
@@ -420,10 +460,11 @@ void LaneWarStats::crc( Xfer *xfer )
 }
 
 /** Version 1: every seat's record, the team middle counts, the frames the fortresses and towers fell,
-	  the timeline and whether the record was logged. */
+	  the timeline and whether the record was logged.
+	  Version 2: the frames each seat and each team left the game. */
 void LaneWarStats::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -470,4 +511,12 @@ void LaneWarStats::xfer( Xfer *xfer )
 		}
 	}
 	xfer->xferBool( &m_logged );
+
+	if( version >= 2 )
+		for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+		{
+			for( Int s = 0; s < LANEWAR_SEATS; ++s )
+				xfer->xferUnsignedInt( &m_seatLeftFrame[ t ][ s ] );
+			xfer->xferUnsignedInt( &m_teamLeftFrame[ t ] );
+		}
 }

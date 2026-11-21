@@ -200,7 +200,7 @@ void VictoryConditions::update( void )
 		{
 			m_isDefeated[i] = true;
 			if ( ISSET(LANEWAR) )
-				DEBUG_LOG(("HEADLESS LANEWAR: frame %u player %d is out, his team's fortress is down\n",
+				DEBUG_LOG(("HEADLESS LANEWAR: frame %u player %d is out, his team lost its fortress or left\n",
 									 TheGameLogic->getFrame(), (Int)p->getPlayerIndex()));
 			// the score screen's chips and graph ends; written only, nothing in the logic reads it back
 			TheMatchHistory.noteDefeated( p );

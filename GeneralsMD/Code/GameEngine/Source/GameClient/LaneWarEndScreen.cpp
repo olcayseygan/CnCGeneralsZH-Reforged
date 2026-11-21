@@ -122,6 +122,7 @@ const FontSpec NO_MVP_FONT = { FALSE, UIStyle::TEXT_HEADING, TRUE };
 const FontSpec TICK_FONT = { FALSE, UIStyle::TEXT_SMALL, FALSE };
 const FontSpec KEY_FONT = { FALSE, UIStyle::TEXT_SMALL, TRUE };
 const FontSpec TOOLTIP_FONT = { FALSE, UIStyle::TEXT_BODY, FALSE };
+const FontSpec REASON_FONTS[ 2 ] = { { FALSE, UIStyle::TEXT_SMALL, TRUE }, { FALSE, UIStyle::TEXT_SMALL, FALSE } };
 
 // the result card, dealt over two backs
 const Real RESULT_CENTRE_X = 960.0f, RESULT_CENTRE_Y = 540.0f, RESULT_W = 340.0f, RESULT_H = 452.0f;
@@ -130,6 +131,7 @@ const Box RESULT_PORTRAIT = { 10.0f, 10.0f, 330.0f, 300.0f };
 const Box RESULT_RULE = { 10.0f, 303.0f, 330.0f, 305.0f };		///< gold under a won portrait, flat card only
 const Real RESULT_WORD_X = 170.0f, RESULT_WORD_Y = 362.0f, RESULT_WORD_MAX = 300.0f;	///< alone on its line, centred
 const Real RESULT_CLOCK_Y = 413.0f;		///< the match's length on its own line under the word, centred
+const Real RESULT_REASON_Y = 437.0f, RESULT_REASON_MAX = 300.0f;	///< a team that left, under the length
 const Real CLOCK_GLYPH_SIZE = 16.0f, CLOCK_GLYPH_GAP = 6.0f;
 
 // a player's card on the results screen
@@ -150,7 +152,9 @@ const Real STAT_GLYPH_X = 22.0f, STAT_GLYPH_SIZE = 18.0f, STAT_NUMBER_X = 228.0f
 const Box HEADER = { 750.0f, 26.0f, 1170.0f, 102.0f };
 const Real HEADER_WORD_X = 960.0f, HEADER_WORD_Y = 64.0f, HEADER_WORD_MAX = 380.0f;	///< alone in the chip, centred
 const Real HEADER_CLOCK_Y = 120.0f;		///< under the chip, centred in the gap between the teams' cards
+const Real HEADER_REASON_Y = 142.0f, HEADER_REASON_MAX = 136.0f;	///< a team that left, under the clock in the same gap
 const Real MIDDLE_LINE_X = 960.0f, MIDDLE_LINE_TOP = 140.0f, MIDDLE_LINE_BOTTOM = 712.0f, MIDDLE_DASH = 6.0f;
+const Real MIDDLE_LINE_TOP_UNDER_REASON = 158.0f;
 const Box TIMELINE = { 110.0f, 744.0f, 1810.0f, 912.0f };
 const Real TIMELINE_SLICE_END = 24.0f, TIMELINE_PLOT_INSET = 8.0f;
 const Real PLOT_LEFT = 152.0f, PLOT_RIGHT = 1792.0f;
@@ -214,6 +218,7 @@ struct Seat
 Int s_phase = LANEWAR_END_PLAYING;
 Real s_seconds = 0.0f;							///< into the finale while it plays, then since the result card
 Int s_winner = -1;
+Int s_leftTeam = -1;								///< the team that left the game and so lost it, -1 for a match played out
 Int s_localTeam = -1;								///< -1 for a watcher and a replay
 Int s_ourTeam = 0;									///< the team drawn on the left and in blue
 Int s_matchSeconds = 0;
@@ -484,6 +489,15 @@ UnicodeString resultWord( Color *color )
 
 Bool won( void ) { return s_winner >= 0 && ( s_localTeam < 0 || s_localTeam == s_winner ); }
 
+/// why the match ended when it was not a fortress: empty for one played out
+UnicodeString reasonText( void )
+{
+	UnicodeString text;
+	if( s_leftTeam >= 0 )
+		text.format( TheGameText->fetch( "GUI:LaneEndLeft" ), s_leftTeam + 1 );
+	return text;
+}
+
 //-------------------------------------------------------------------------------------------------
 // The result card: two card backs, then the card dealt on them
 //-------------------------------------------------------------------------------------------------
@@ -515,6 +529,8 @@ void drawResult( Real t )
 	const UnicodeString word = resultWord( &wordColor );
 	drawFitted( word, WORD_FONTS, bx( x0 + RESULT_WORD_X ), by( y0 + RESULT_WORD_Y ), withAlpha( wordColor, deal ), 0, px( RESULT_WORD_MAX ) );
 	drawMatchTime( x0 + RESULT_W * 0.5f, y0 + RESULT_CLOCK_Y, withAlpha( TIME_GREY, deal ) );
+	drawFitted( reasonText(), REASON_FONTS, bx( x0 + RESULT_WORD_X ), by( y0 + RESULT_REASON_Y ), withAlpha( TIME_GREY, deal ), 0,
+							px( RESULT_REASON_MAX ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -778,6 +794,8 @@ void drawResults( void )
 	const UnicodeString word = resultWord( &wordColor );
 	drawFitted( word, WORD_FONTS, bx( HEADER_WORD_X ), by( HEADER_WORD_Y ), wordColor, 0, px( HEADER_WORD_MAX ) );
 	drawMatchTime( HEADER_WORD_X, HEADER_CLOCK_Y, TIME_GREY );
+	const UnicodeString reason = reasonText();
+	drawFitted( reason, REASON_FONTS, bx( HEADER_WORD_X ), by( HEADER_REASON_Y ), TIME_GREY, 0, px( HEADER_REASON_MAX ) );
 
 	// the cards, ours on the left, the local player's raised; a team short of three seats keeps its
 	// cards next to the middle line
@@ -793,7 +811,7 @@ void drawResults( void )
 	}
 
 	// the lane's middle line between the teams, gold dashes
-	for( Real y = MIDDLE_LINE_TOP; y < MIDDLE_LINE_BOTTOM; y += 2.0f * MIDDLE_DASH )
+	for( Real y = reason.isEmpty() ? MIDDLE_LINE_TOP : MIDDLE_LINE_TOP_UNDER_REASON; y < MIDDLE_LINE_BOTTOM; y += 2.0f * MIDDLE_DASH )
 		fill( MIDDLE_LINE_X - 1.0f, y, MIDDLE_LINE_X + 1.0f, min( y + MIDDLE_DASH, MIDDLE_LINE_BOTTOM ), GOLD );
 
 	drawTimeline();
@@ -833,7 +851,8 @@ void LaneWarEndScreen_preDraw( void )
 			down = TheLaneWarStats->getFortressDownFrame( t );
 			fallen = t;
 		}
-	const UnsignedInt cardFrame = down + (UnsignedInt)( FALL_GAME_SECONDS * LOGICFRAMES_PER_GAME_SECOND );
+	// a match a team left has no fall to watch: the card at once
+	const UnsignedInt cardFrame = down != 0 ? down + (UnsignedInt)( FALL_GAME_SECONDS * LOGICFRAMES_PER_GAME_SECOND ) : 0;
 
 	s_phase = TheLaneWarStats->getEndPhase();
 	if( s_phase == LANEWAR_END_OVER && now < cardFrame )
@@ -880,6 +899,10 @@ void LaneWarEndScreen_preDraw( void )
 	s_endFrame = TheLaneWarStats->getEndFrame();
 	s_seconds = (Real)( now - max( s_endFrame, cardFrame ) ) / LOGICFRAMES_PER_SECOND;
 	s_winner = TheLaneWarStats->getWinner();
+	s_leftTeam = -1;
+	for( Int t = LANEWAR_TEAMS - 1; t >= 0; --t )
+		if( TheLaneWarStats->getTeamLeftFrame( t ) != 0 && TheLaneWarStats->isOut( t, s_endFrame ) )
+			s_leftTeam = t;
 	s_matchSeconds = (Int)( s_endFrame / LOGICFRAMES_PER_SECOND );
 	if( s_seconds >= RESULTS_AT )
 		s_resultsOpen = TRUE;

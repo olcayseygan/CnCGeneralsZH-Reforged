@@ -20910,6 +20910,10 @@ GUI:LaneEndDraw
 "Berabere"
 END
 
+GUI:LaneEndLeft
+"%d. takım oyundan ayrıldı"
+END
+
 GUI:LaneMatchClock
 "Maç süresi"
 END

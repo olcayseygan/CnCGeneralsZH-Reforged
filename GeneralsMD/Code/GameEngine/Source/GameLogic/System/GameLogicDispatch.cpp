@@ -61,6 +61,7 @@
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/LaneWarStats.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/ObjectCreationList.h"
@@ -3058,7 +3059,11 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 		// --------------------------------------------------------------------------------------------
 		case GameMessage::MSG_SELF_DESTRUCT:
 		{
-			thisPlayer->surrender(msg->getArgument(0)->boolean);
+			// Direct Strike: his units die with him, his team's buildings go to a teammate (LaneWarStats.h)
+			const Bool laneWar = TheLaneWarDirector->isActive();
+			if (laneWar)
+				TheLaneWarStats->onPlayerLeft(thisPlayer);
+			thisPlayer->surrender(msg->getArgument(0)->boolean && !laneWar);
 			// There is no reason to do any notification here, it now takes place in the victory conditions.
 			// bonehead.
 			break;

@@ -148,6 +148,7 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - A transport, garrison or Angry Mob nexus whose starting passengers name a unit the game's data doesn't have now comes out empty instead of stopping the game. Mods ran into this.
 - Taking down a beacon while something neutral was selected crashed a long network match, both seats at once.
 - The save and load window crashed when Delete or Overwrite was pressed with nothing selected.
+- Starting a second match in the same session could crash on its first frame, a model reading a unit that no longer existed. It doesn't now.
 - A control bar layout that fails to load says so and closes cleanly, where it used to crash at startup. A missing score screen layout no longer crashes the end of a match either.
 
 ## Long matches keep a short log

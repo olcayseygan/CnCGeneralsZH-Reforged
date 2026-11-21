@@ -461,17 +461,27 @@ enum QMFace { QM_FACE_BODY, QM_FACE_BOLD, QM_FACE_SECTION, QM_FACE_HEADING, QM_F
 	QM_FACE_CLOCK, QM_FACE_BUTTON, QM_FACE_COUNT };
 static GameFont *s_face[QM_FACE_COUNT];
 
+/** A layout size for this page's boxes.  The page lays out in qpx, the smaller axis, which is 0.75 at
+	* 1440x1080, while adjustFontSize measures off 800x600 and keeps the type at 1080's size there, so the
+	* tiles' words came out a third too big for them.  Scaled by px over the height's scale they shrink with
+	* the boxes; 1 on any screen 16:9 or wider, where nothing changes. */
+static Int qmPoints( Int points )
+{
+	const Real fit = (Real)qpx( 1080 ) / (Real)max( 1, UIStyle::tallPx( 1080 ) );
+	return max( 1, REAL_TO_INT( points * fit + 0.5f ) );
+}
+
 static void findFaces( void )
 {
-	s_face[QM_FACE_BODY] = UIStyle::font( UIStyle::TEXT_BODY );
-	s_face[QM_FACE_BOLD] = UIStyle::font( UIStyle::TEXT_BODY, TRUE );
+	s_face[QM_FACE_BODY] = UIStyle::font( qmPoints( UIStyle::TEXT_BODY ) );
+	s_face[QM_FACE_BOLD] = UIStyle::font( qmPoints( UIStyle::TEXT_BODY ), TRUE );
 	s_face[QM_FACE_SECTION] = UIStyle::sectionFont();
-	s_face[QM_FACE_HEADING] = UIStyle::font( UIStyle::TEXT_HEADING );
-	s_face[QM_FACE_NICK] = UIStyle::font( UIStyle::TEXT_HEADING, TRUE );
-	s_face[QM_FACE_CHANCE] = UIStyle::font( UIStyle::TEXT_STRONG, TRUE );
-	s_face[QM_FACE_DISPLAY] = UIStyle::titleFont( UIStyle::TEXT_DISPLAY );
-	s_face[QM_FACE_CLOCK] = UIStyle::titleFont( QM_CLOCK_POINTS );
-	s_face[QM_FACE_BUTTON] = UIStyle::titleFont( QM_BUTTON_POINTS );
+	s_face[QM_FACE_HEADING] = UIStyle::font( qmPoints( UIStyle::TEXT_HEADING ) );
+	s_face[QM_FACE_NICK] = UIStyle::font( qmPoints( UIStyle::TEXT_HEADING ), TRUE );
+	s_face[QM_FACE_CHANCE] = UIStyle::font( qmPoints( UIStyle::TEXT_STRONG ), TRUE );
+	s_face[QM_FACE_DISPLAY] = UIStyle::titleFont( qmPoints( UIStyle::TEXT_DISPLAY ) );
+	s_face[QM_FACE_CLOCK] = UIStyle::titleFont( qmPoints( QM_CLOCK_POINTS ) );
+	s_face[QM_FACE_BUTTON] = UIStyle::titleFont( qmPoints( QM_BUTTON_POINTS ) );
 }
 
 static GameFont *bodyFont( Bool bold = FALSE )
@@ -2210,6 +2220,15 @@ static Bool qmMapCheckTick( void )
 		return FALSE;
 	const UnsignedInt ours = TheGameSpyGame->getMapCRC();
 	const Int localSlot = TheGameSpyGame->getLocalSlotNum();
+	/* Our map did not build (no CRC, see QM_MATCHED).  Left to the exchange, two seats that both failed
+		 would agree on 0 and launch into launchGame's "could not transfer map" box with the server never told,
+		 and the other seat waited the whole check.  Our 0 already went out in qmBeginMapCheck. */
+	if (ours == 0)
+	{
+		DEBUG_LOG(("ONLINE MAP CHECK our map did not build, match called off\n"));
+		qmAbortMatch( "GUI:QMMapNotBuilt", localSlot, "nomap" );
+		return FALSE;
+	}
 	Int silent = -1;
 	for (Int i = 0; i < MAX_SLOTS; ++i)
 	{
@@ -2657,10 +2676,10 @@ void WOLQuickMatchMenuUpdate( WindowLayout * layout, void *userData)
 								stageRandomMap(RandomMapGenerator::quickMatchSettings(resp.qmStatus.seed, numPlayers), generated);
 								generated.toLower();
 								TheMapCache->updateCache();
-								/* No fallback map: QM peers never compare MC=, so a machine that played another map
-									 would split the match with nothing to refuse it.  A map that did not build stays
-									 set by name, and launchGame finds no such map and leaves the match with its
-									 "could not transfer map" box. */
+								/* No fallback map: a machine that played another map would split the match.  A map
+									 that did not build stays set by name with no CRC; the map check sends that 0 to the
+									 other seats, whose check then calls the match off, and calls it off here at once
+									 (qmMapCheckTick), so the server hears qm.abort from both. */
 								TheGameSpyGame->setMap(generated);
 								if (TheMapCache->findMap(generated) == NULL)
 									DEBUG_LOG(("ONLINE MATCHED no generated map: seed=%d players=%d map=%s, leaving the match\n",

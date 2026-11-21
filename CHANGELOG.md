@@ -250,6 +250,7 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - The online screens stopped explaining themselves. Sign-in lost its four help lines, the hub's cards their paragraphs, Quick Match its hints, the score screen after Play vs AI its "how the AI rating moves" box, the lobby its chat prompt, and the long hover texts are one line each. What is left is titles, numbers, buttons and the lines that tell you something went wrong; the cards and panels closed up over the space, and the hub's recent matches show six rows instead of five.
 - Fixed on the way: a label that looked for an optional shorter form, and the load screen's count of its tips, each logged a missing-text line for text that was meant to be absent.
 - A winner who left a finished online match through the quit menu's Exit used to land on a score screen that said Defeat. The match now stays won.
+- On 4:3 screens the Quick Match army cards no longer have lettering a third too big for them.
 - Needs the updated game server and site: the player counts, the server name, the ping lights and the match histories come from them.
 
 ## Every computer plays to one rating
@@ -268,6 +269,7 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - The host of a LAN or custom online room picks the speed: Game Speed sits at the top of the match rules with the skirmish room's four choices, 1.0x, 1.25x, 1.5x and 2.0x. A LAN room still opens at 1.0x and an online room at 1.5x, everyone else sees the box greyed and following the host, a change unticks Ready like any other rule, and each lobby remembers the host's last pick. A recorded stats room stays at 1.5x. The replay plays back at the speed the match had. The map preview in both rooms gave up a row to make room for the box.
 - A custom game played after a Quick Match, without signing out in between, counted as ranked: its score screen showed the ladder card and your stats filed it under Quick Match. It now counts as the custom game it was.
 - Any match on a random map keeps its question mark on the load screen as well, in skirmish, on LAN and in online rooms: the board used to draw the generated map with your start spot and your allies' on it, so a spot the game picked for you at random was out before the first frame. The lobby still shows the spots players picked themselves, and a replay or an observer still sees the real map.
+- When your game cannot build a ranked match's map, the match is now called off at once for both players with no penalty.
 
 ## Explosions after ZH Enhanced
 

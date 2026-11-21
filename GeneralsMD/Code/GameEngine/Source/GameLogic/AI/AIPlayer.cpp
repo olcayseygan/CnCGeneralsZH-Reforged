@@ -10183,6 +10183,12 @@ Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real
 	TheAI->pathfinder()->worldToCell( center, &origin );
 	flood.addSource( origin.x, origin.y );
 
+	// what turned each spot away, for the superweapon's refusal line: a walled-in GLA at Elo 2800 had no room
+	// at 726 or at 1270 of its base and nothing said which test refused it
+	const Bool tellRefusals = tmpl->isKindOf( KINDOF_FS_SUPERWEAPON );
+	Int refusedCell = 0, refusedReach = 0, refusedFront = 0, refusedFootprint = 0, refusedUnsafe = 0;
+	Int refusedCode[ LBC_TOO_MANY_DERRICK_DEFENSES + 1 ] = { 0 };
+
 	Int tries = rings * PLACEMENT_ANGLES;
 	Int x, y, distance;
 	while( flood.next( &x, &y, &distance ) )
@@ -10192,7 +10198,10 @@ Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real
 		if( distance < startDistance || dx % stride != 0 || dy % stride != 0 )
 			continue;
 		if( TheAI->pathfinder()->getCell( LAYER_GROUND, x, y )->getType() != PathfindCell::CELL_CLEAR )
+		{
+			++refusedCell;
 			continue;
+		}
 		Coord3D pos = *center;
 		pos.x += dx * PATHFIND_CELL_SIZE_F;
 		pos.y += dy * PATHFIND_CELL_SIZE_F;
@@ -10200,28 +10209,46 @@ Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real
 		if( sqr( pos.x - center->x ) + sqr( pos.y - center->y ) < innerSqr )
 			continue;
 		if( home && sqr( pos.x - m_baseCenter.x ) + sqr( pos.y - m_baseCenter.y ) > homeReachSqr )
+		{
+			++refusedReach;
 			continue;
+		}
 		if( behindOnly && ( pos.x - m_baseCenter.x ) * enemyWay.x + ( pos.y - m_baseCenter.y ) * enemyWay.y > m_baseRadius )
+		{
+			++refusedFront;
 			continue;
+		}
 		// the square inside the footprint's circle; the corners of the circle's own square stick out
 		// past a building's corners and turned away spots that fit
 		if( !footprintOnClearGround( &pos, structureRadius * 0.7f ) )
+		{
+			++refusedFootprint;
 			continue;
+		}
 		if( tries == 0 )
 		{
 			// out of checks: the next call starts here, or one cell further when this call never
 			// got past the distance it started at, so a crowded ring cannot hold the walk forever
 			if( walkOutward )
 				m_placementRing = distance > startDistance ? distance : distance + 1;
+			if( tellRefusals )
+				DEBUG_LOG(("AI ECONOMY frame %d player %d '%s' ran out of its %d legality checks\n", TheGameLogic->getFrame(),
+					m_player->getPlayerIndex(), tmpl->getName().str(), rings * PLACEMENT_ANGLES));
 			return FALSE;
 		}
 		--tries;
 
-		const Bool legal = TheBuildAssistant->isLocationLegalToBuild( &pos, tmpl, placeAngle,
+		const LegalBuildCode code = TheBuildAssistant->isLocationLegalToBuild( &pos, tmpl, placeAngle,
 											BuildAssistant::CLEAR_PATH | BuildAssistant::TERRAIN_RESTRICTIONS | BuildAssistant::NO_OBJECT_OVERLAP,
-											NULL, m_player ) == LBC_OK;
+											NULL, m_player );
+		const Bool legal = code == LBC_OK;
 		TheTerrainVisual->removeAllBibs();	// isLocationLegalToBuild adds bib feedback
-		if( legal && isLocationSafe( &pos, tmpl ) )
+		if( !legal && (Int)code >= 0 && (Int)code <= (Int)LBC_TOO_MANY_DERRICK_DEFENSES )
+			++refusedCode[ code ];
+		const Bool safe = legal && isLocationSafe( &pos, tmpl );
+		if( legal && !safe )
+			++refusedUnsafe;
+		if( safe )
 		{
 			if( walkOutward )
 				m_placementRing = distance;
@@ -10243,6 +10270,13 @@ Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real
 	if( home )
 		DEBUG_LOG(("AI ECONOMY frame %d player %d has no room for '%s' within %.0f of its base, %d in the bank\n", TheGameLogic->getFrame(),
 			m_player->getPlayerIndex(), tmpl->getName().str(), BASE_EDGE_REACH * ( stretched ? homeReachScale : 1.0f ) * m_baseRadius, m_player->getMoney()->countMoney()));
+	if( tellRefusals )
+		DEBUG_LOG(("AI ECONOMY frame %d player %d '%s' refused: %d not clear, %d past the reach, %d towards the enemy, %d footprint, "
+			"illegal for %d terrain %d flat %d objects %d path %d shroud %d supplies %d other %d enemy building, %d unsafe, %d checks left\n",
+			TheGameLogic->getFrame(), m_player->getPlayerIndex(), tmpl->getName().str(), refusedCell, refusedReach, refusedFront,
+			refusedFootprint, refusedCode[ LBC_RESTRICTED_TERRAIN ], refusedCode[ LBC_NOT_FLAT_ENOUGH ], refusedCode[ LBC_OBJECTS_IN_THE_WAY ],
+			refusedCode[ LBC_NO_CLEAR_PATH ], refusedCode[ LBC_SHROUD ], refusedCode[ LBC_TOO_CLOSE_TO_SUPPLIES ],
+			refusedCode[ LBC_GENERIC_FAILURE ], refusedCode[ LBC_TOO_CLOSE_TO_ENEMY ], refusedUnsafe, tries));
 	return FALSE;
 }
 

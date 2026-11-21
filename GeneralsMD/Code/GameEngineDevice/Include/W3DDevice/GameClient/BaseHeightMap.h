@@ -487,6 +487,22 @@ protected:
 	Int m_shoreLineSortInfosXMajor;
 	Int m_shoreLineTileSortMaxCoordinate;	///<keep track of coordinate range along axis used for m_shoreLineSortInfos
 	Int m_shoreLineTileSortMinCoordinate;
+	/** The ground past the heightmap's last sample (TerrainSkirt.h), in pieces the camera culls.  Made
+		on the first draw after the map or its light changed, thrown away with the map's resources. */
+	struct SkirtChunk
+	{
+		DX8VertexBufferClass *vertices;
+		Int quads;
+		Vector3 low, high;
+	};
+	std::vector<SkirtChunk> m_skirtChunks;
+	DX8IndexBufferClass *m_skirtIndices;	///< quad after quad, shared by every chunk
+	Bool m_skirtStale;
+	void buildSkirt(void);
+	void freeSkirt(void);
+	Real skirtHeight(Int x, Int y, const std::vector<Real> &blurred, Real mean, Bool sink);	///< world z at sample (x, y) of the whole map, which may lie past its edge
+	/// Draws the skirt with the ground's base program and then its shroud; both terrain details call it.
+	void drawSkirt(RenderInfoClass &rinfo);
 	void initDestAlphaLUT(void);	///<initialize water depth LUT stored in m_destAlphaTexture
 	void renderShoreLines(CameraClass *pCamera);	///<re-render parts of terrain that need custom blending into water edge
 	void renderShoreLinesSorted(CameraClass *pCamera);	///<optimized version for game usage.

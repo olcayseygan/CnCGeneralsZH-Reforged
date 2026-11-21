@@ -2401,6 +2401,10 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 		if (pass)	//shader was applied at least once?
  			W3DShaderManager::resetShader(st);
 
+		// the ground past the map's last sample, and its shroud
+		if (drawGround)
+			drawSkirt(rinfo);
+
 		// Classic water leaves the ground out: its mirror darkens the water wherever anything
 		// stands in it, so the banks would lay a dark band along every shore. Modern needs the
 		// coloured ground, including its third blend layer, but not the feather painted over water.

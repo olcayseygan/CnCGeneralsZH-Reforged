@@ -604,6 +604,9 @@ void FlatHeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 
 	if (pass)	//shader was applied at least once?
  		W3DShaderManager::resetShader(st);
+
+	// the ground past the map's last sample, drawn as the detailed terrain draws it, and its shroud
+	drawSkirt(rinfo);
 #if 1
 
 	//Draw feathered shorelines

@@ -1,18 +1,24 @@
 # The command bar's unit tabs: a click there sends MSG_QUEUE_UNIT_FOR_GROUP with squad -1 and no
 # factory, and the logic queues the unit at the factory with the shortest queue.  groupqueue sends
 # that message onto the message stream, as the click does, so the replay records it.  Two barracks
-# are spawned (outside the stream) beside the start, four Rangers asked for in one go, and the tally
-# expects four alive; each barracks' queue should take two, so all four are out by about two Ranger
-# build times.
+# and a power plant are spawned (outside the stream) beside the start, four Rangers asked for in one
+# go.  A Ranger is 5 game seconds (150 frames here) with power, so with the queue split two and two
+# all four are out by frame 390, and the tally at 500 expects four; one barracks taking all four
+# would have two out by then.  Without the power plant every build takes twice as long (the
+# low-power floor, MinLowEnergyProductionSpeed 0.5), which is how the first version of this file,
+# on a random map whose second barracks was refused as restricted terrain, read 2 of 4 at 900.
 #
 # Slot 0 is the local seat, so no -observer.  The spawns are outside the replay, so a replay of this
 # run does not play back without the scenario.
 #
 #   generals.exe -headless -quickstart -noshellmap -multiInstance -noFPSLimit
-#     -randommap 1 2 small -autoskirmish 2 -takeover
-#     -side 0 FactionAmerica -side 1 FactionGLA -seed 1 -maxframes 1200
+#     -map "Maps\Golden Oasis\Golden Oasis.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionGLA -seed 1 -maxframes 700
 #     -scenario groupqueue -logPrefix groupqueue_
 
-30    spawn       0  AmericaBarracks  2  start0:300:0  250
+30    spawn       0  AmericaPowerPlant  1  start0:0:300
+30    spawn       0  AmericaBarracks    1  start0:300:0
+30    spawn       0  AmericaBarracks    1  start0:300:250
 90    groupqueue  0  AmericaInfantryRanger  4
-900   tally       0  AmericaInfantryRanger  4
+500   tally       0  AmericaInfantryRanger  4
+500   tally       0  AmericaBarracks  2

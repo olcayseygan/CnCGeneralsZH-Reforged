@@ -55,6 +55,8 @@
 #include "WW3D2/light.h"
 #include "WW3D2/hlod.h"
 #include "WW3D2/hanim.h"
+#include "WW3D2/mesh.h"
+#include "WW3D2/meshmdl.h"
 #include "WW3D2/render2d.h"
 #include "WW3D2/dx11runtime.h"
 
@@ -93,6 +95,7 @@ const Int PREVIEW_LIGHT_COUNT = sizeof(PREVIEW_LIGHTS) / sizeof(PREVIEW_LIGHTS[0
 struct PreviewModel
 {
 	AsciiString templateName;
+	AsciiString state;								// the model condition it is shown in; empty for its default
 	Int skin;
 	Color house;
 	std::vector<RenderObjClass *> parts;	// one a draw module; empty when the template has no model
@@ -200,10 +203,11 @@ RenderObjClass *makePart(const ThingTemplate *tmpl, const ModelConditionInfo *st
 	return robj;
 }
 
-PreviewModel makeModel(const AsciiString &templateName, Int skin, Color house)
+PreviewModel makeModel(const AsciiString &templateName, const AsciiString &stateName, Int skin, Color house)
 {
 	PreviewModel m;
 	m.templateName = templateName;
+	m.state = stateName;
 	m.skin = skin;
 	m.house = house;
 	m.center.Set(0, 0, 0);
@@ -238,8 +242,10 @@ PreviewModel makeModel(const AsciiString &templateName, Int skin, Color house)
 		const W3DModelDrawModuleData *md = mdd->getAsW3DModelDrawModuleData();
 		if (md == NULL)
 			continue;
-		ModelConditionFlags empty;
-		const ModelConditionInfo *state = md->findBestInfo(empty);
+		ModelConditionFlags flags;
+		if (stateName.isNotEmpty() && !flags.setBitByName(stateName.str()))
+			DEBUG_LOG(("MODELPREVIEW: no model condition '%s'\n", stateName.str()));
+		const ModelConditionInfo *state = md->findBestInfo(flags);
 		if (state == NULL || isNoModel(state->m_modelName))
 			continue;
 		RenderObjClass *robj = makePart(tmpl, state, skin, house);
@@ -256,21 +262,76 @@ PreviewModel makeModel(const AsciiString &templateName, Int skin, Color house)
 		Bool any = FALSE;
 		robj->Set_Transform(Matrix3D(true));
 		robj->Update_Sub_Object_Transforms();
-		for (Int s = 0; s < robj->Get_Num_Sub_Objects(); ++s)
+		Bool skinned = FALSE;
+		for (Int s = 0; s <= robj->Get_Num_Sub_Objects(); ++s)
 		{
-			RenderObjClass *sub = robj->Get_Sub_Object(s);
-			const AABoxClass &box = sub->Get_Bounding_Box();
+			RenderObjClass *sub = NULL;
+			AABoxClass box;
+			if (s < robj->Get_Num_Sub_Objects())
+			{
+				sub = robj->Get_Sub_Object(s);
+				// a collision box (the worker's PICKBOX, 17 units across) is never drawn
+				if (sub->Class_ID() == RenderObjClass::CLASSID_AABOX || sub->Class_ID() == RenderObjClass::CLASSID_OBBOX)
+				{
+					sub->Release_Ref();
+					continue;
+				}
+				// A skin's box is its rest pose, wider than the stance it is drawn in (the worker's took 18
+				// units across a man 4 wide), so a skin is framed by the bones below instead.
+				if (sub->Class_ID() == RenderObjClass::CLASSID_MESH)
+				{
+					MeshModelClass *model = ((MeshClass *)sub)->Get_Model();
+					const Bool skin = model && model->Get_Flag(MeshGeometryClass::SKIN);
+					REF_PTR_RELEASE(model);
+					if (skin)
+					{
+						skinned |= !sub->Is_Hidden();
+						sub->Release_Ref();
+						continue;
+					}
+				}
+				box = sub->Get_Bounding_Box();
+			}
+			else if (skinned)
+			{
+				// the posed skeleton: every bone above the ground at the state's first frame, padded by a
+				// limb's and a head's thickness, standing on the ground
+				Vector3 bLo(0, 0, 0), bHi(0, 0, 0);
+				Bool bones = FALSE;
+				for (Int b = 1; b < robj->Get_Num_Bones(); ++b)
+				{
+					const Vector3 p = robj->Get_Bone_Transform(b).Get_Translation();
+					if (p.Z < -200.0f)
+						continue;		// a parked bone, as below
+					if (!bones)
+						bLo = bHi = p;
+					bLo.Update_Min(p);
+					bHi.Update_Max(p);
+					bones = TRUE;
+				}
+				if (!bones)
+					continue;
+				bLo -= Vector3(1.2f, 1.2f, 0.0f);
+				bHi += Vector3(1.2f, 1.2f, 1.5f);
+				bLo.Z = WWMath::Min(bLo.Z, 0.0f);
+				box.Init_Min_Max(bLo, bHi);
+			}
+			else
+				continue;
 			// a part whose animation buries it, as an infantryman's stance puts the crate he carries and
 			// his mine detector 1392 units under the ground: drawn out of sight there, and framing it
-			// shrank the worker to a speck
-			const Bool buried = box.Center.Z + box.Extent.Z < -1.0f;
-			if (buried && !sub->Is_Hidden())
+			// shrank the worker to a speck.  Only a part parked that far down: one that hangs a little under
+			// the origin is real and stays in the frame.
+			// ponytail: a fixed depth, ten times a tall unit's height; a model with real parts that deep needs a relative test
+			const Bool buried = box.Center.Z + box.Extent.Z < -200.0f;
+			if (buried && sub && !sub->Is_Hidden())
 				DEBUG_LOG(("MODELPREVIEW: '%s' part '%s' buried at %.1f, left out of the frame\n", templateName.str(),
 					sub->Get_Name(), box.Center.Z + box.Extent.Z));
-			if (!sub->Is_Hidden() && !buried)
+			if (!(sub && sub->Is_Hidden()) && !buried)
 			{
 				shown.push_back(box);
-				sub->Add_Ref();
+				if (sub)
+					sub->Add_Ref();
 				shownParts.push_back(sub);
 				if (!any)
 				{
@@ -284,7 +345,8 @@ PreviewModel makeModel(const AsciiString &templateName, Int skin, Color house)
 					partHi.Update_Max(box.Center + box.Extent);
 				}
 			}
-			sub->Release_Ref();
+			if (sub)
+				sub->Release_Ref();
 		}
 		if (!any)
 		{
@@ -407,11 +469,12 @@ void releaseModel(PreviewModel &m)
 	m.parts.clear();
 }
 
-PreviewModel *findModel(const AsciiString &templateName, Int skin, Color house)
+PreviewModel *findModel(const AsciiString &templateName, const AsciiString &state, Int skin, Color house)
 {
 	for (size_t i = 0; i < s_models.size(); ++i)
 	{
-		if (s_models[i].skin == skin && s_models[i].house == house && s_models[i].templateName == templateName)
+		if (s_models[i].skin == skin && s_models[i].house == house && s_models[i].templateName == templateName
+			&& s_models[i].state == state)
 		{
 			if (i + 1 < s_models.size())
 			{
@@ -429,7 +492,7 @@ PreviewModel *findModel(const AsciiString &templateName, Int skin, Color house)
 		releaseModel(s_models.front());
 		s_models.erase(s_models.begin());
 	}
-	s_models.push_back(makeModel(templateName, skin, house));
+	s_models.push_back(makeModel(templateName, state, skin, house));
 	return &s_models.back();
 }
 
@@ -492,14 +555,14 @@ unsigned long long drawsWaited()
 
 // W3DDisplay::drawModelPreview ===============================================
 //=============================================================================
-void W3DDisplay::drawModelPreview( const AsciiString &templateName, Int skin, Color house, Int x, Int y, Int w, Int h, Real turns, Bool dim, Bool still )
+void W3DDisplay::drawModelPreview( const AsciiString &templateName, Int skin, Color house, Int x, Int y, Int w, Int h, Real turns, Bool dim, Bool still, const char *state )
 {
-	if( isRecording() ) { record( [=]() { drawModelPreview( templateName, skin, house, x, y, w, h, turns, dim, still ); } ); return; }
+	if( isRecording() ) { record( [=]() { drawModelPreview( templateName, skin, house, x, y, w, h, turns, dim, still, state ); } ); return; }
 	if( w <= 0 || h <= 0 || m_assetManager == NULL || templateName.isEmpty() )
 		return;
 
 	makeScene();
-	PreviewModel *model = findModel( templateName, skin, house );
+	PreviewModel *model = findModel( templateName, AsciiString( state ? state : "" ), skin, house );
 
 	// what the 2D layer is holding goes down first, under the model
 	flush2D();

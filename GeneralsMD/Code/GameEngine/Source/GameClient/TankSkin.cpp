@@ -125,8 +125,13 @@ const char *TankSkin_houseColorPart( const char *sheet )
 		return NULL;
 	if( strncasecmp( sheet, "ZHC", 3 ) == 0 )
 		return sheet;
-	const char *rest = strncasecmp( sheet, "Skin", 4 ) == 0 ? strchr( sheet, '_' ) : NULL;
-	return ( rest && strncasecmp( rest + 1, "ZHC", 3 ) == 0 ) ? rest + 1 : NULL;
+	if( strncasecmp( sheet, "Skin", 4 ) != 0 )
+		return NULL;
+	// the first "_ZHC" past the prefix, which may hold underscores of its own (Skin_Thx_ZHCA_x)
+	for( const char *rest = strchr( sheet, '_' ); rest; rest = strchr( rest + 1, '_' ) )
+		if( strncasecmp( rest + 1, "ZHC", 3 ) == 0 )
+			return rest + 1;
+	return NULL;
 }
 
 Int TankSkin_forModel( SkinLoadout loadout, const char *modelName )

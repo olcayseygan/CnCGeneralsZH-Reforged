@@ -27773,6 +27773,7 @@ TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 	CHECK_STR( TankSkin_houseColorPart( "ZHCA_UIWorker.tga" ), "ZHCA_UIWorker.tga" );
 	CHECK_STR( TankSkin_houseColorPart( "SkinThx_ZHCA_UIWorker_R.tga" ), "ZHCA_UIWorker_R.tga" );
 	CHECK_STR( TankSkin_houseColorPart( "skinthx_zhcd_x.tga" ), "zhcd_x.tga" );
+	CHECK_STR( TankSkin_houseColorPart( "Skin_Thx_ZHCA_UIWorker.tga" ), "ZHCA_UIWorker.tga" );		// a prefix with its own underscore
 	static const char *const uncoloured[] = { "SkinThx_CTCrateBoxes.tga", "Skin1K_AVCrusader_R.tga", "SkinSup1C_avchinook.tga",
 		"AVCrusader_R.tga", "Skin_", "XZHCA_UIWorker.tga", "" };
 	for( Int i = 0; i < (Int)ARRAY_SIZE( uncoloured ); ++i )

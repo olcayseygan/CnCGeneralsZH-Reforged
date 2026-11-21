@@ -232,9 +232,10 @@ public:
 		* dim (the model, nothing round it).  Turning, the model is framed by what its body sweeps so it
 		* never leaves the rectangle; still, a card's picture at one fixed turn, it has no plate, is seen
 		* from a little higher and is framed tight round its body at that turn.  Rotors are left out
-		* either way, so the body sets the size.  The models stay cached between calls;
-		* freeModelPreviews releases them and the scene, for a screen that closes. */
-	virtual void drawModelPreview( const AsciiString &templateName, Int skin, Color house, Int x, Int y, Int w, Int h, Real turns, Bool dim, Bool still = FALSE ) {}
+		* either way, so the body sets the size.  state names one model condition (CARRYING) the model
+		* is shown in, with that state's parts and animation; NULL for its default.  The models stay
+		* cached between calls; freeModelPreviews releases them and the scene, for a screen that closes. */
+	virtual void drawModelPreview( const AsciiString &templateName, Int skin, Color house, Int x, Int y, Int w, Int h, Real turns, Bool dim, Bool still = FALSE, const char *state = NULL ) {}
 	virtual void freeModelPreviews( void ) {}
 
 	virtual void setCinematicText( AsciiString string ) { m_cinematicText = string; }

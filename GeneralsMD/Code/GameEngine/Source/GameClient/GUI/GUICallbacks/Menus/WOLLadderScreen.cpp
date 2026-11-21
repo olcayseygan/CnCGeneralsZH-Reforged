@@ -708,17 +708,18 @@ static Bool s_heroOwned = TRUE;
 enum { SKIN_SIDE_USA, SKIN_SIDE_CHINA, SKIN_SIDE_GLA, SKIN_SIDE_COUNT };
 static const char *const SKIN_SIDE_KEY[ SKIN_SIDE_COUNT ] = { "GUI:OnlineSkinsSideUsa", "GUI:OnlineSkinsSideChina", "GUI:OnlineSkinsSideGla" };
 /// each unit SkinsReforged.ini dresses, in the list's order: the object template whose model is drawn,
-/// its cameo and side; a unit missing here goes last with its name alone and no model
-static const struct { const char *unit; const char *templateName; const char *cameo; Int side; } SKIN_UNITS[] =
+/// its cameo and side, and the model condition it is shown in (NULL its default; the Worker hauls his
+/// crate, which his stance hides); a unit missing here goes last with its name alone and no model
+static const struct { const char *unit; const char *templateName; const char *cameo; Int side; const char *state; } SKIN_UNITS[] =
 {
-	{ "Crusader", "AmericaTankCrusader", "SACLeopard", SKIN_SIDE_USA },
-	{ "Chinook", "AmericaVehicleChinook", "SAChinook", SKIN_SIDE_USA },
-	{ "USADozer", "AmericaVehicleDozer", "SACDozer", SKIN_SIDE_USA },
-	{ "Battlemaster", "ChinaTankBattleMaster", "SNBattlemaster", SKIN_SIDE_CHINA },
-	{ "SupplyTruck", "ChinaVehicleSupplyTruck", "SNSupplyTruck", SKIN_SIDE_CHINA },
-	{ "ChinaDozer", "ChinaVehicleDozer", "SNDozer", SKIN_SIDE_CHINA },
-	{ "Scorpion", "GLATankScorpion", "SUScorpion", SKIN_SIDE_GLA },
-	{ "Worker", "GLAInfantryWorker", "SUWorker", SKIN_SIDE_GLA },
+	{ "Crusader", "AmericaTankCrusader", "SACLeopard", SKIN_SIDE_USA, NULL },
+	{ "Chinook", "AmericaVehicleChinook", "SAChinook", SKIN_SIDE_USA, NULL },
+	{ "USADozer", "AmericaVehicleDozer", "SACDozer", SKIN_SIDE_USA, NULL },
+	{ "Battlemaster", "ChinaTankBattleMaster", "SNBattlemaster", SKIN_SIDE_CHINA, NULL },
+	{ "SupplyTruck", "ChinaVehicleSupplyTruck", "SNSupplyTruck", SKIN_SIDE_CHINA, NULL },
+	{ "ChinaDozer", "ChinaVehicleDozer", "SNDozer", SKIN_SIDE_CHINA, NULL },
+	{ "Scorpion", "GLATankScorpion", "SUScorpion", SKIN_SIDE_GLA, NULL },
+	{ "Worker", "GLAInfantryWorker", "SUWorker", SKIN_SIDE_GLA, "CARRYING" },
 };
 static const Int SKIN_UNKNOWN = (Int)ARRAY_SIZE( SKIN_UNITS );
 
@@ -871,7 +872,8 @@ static void drawSkinsHero( void )
 	const double seconds = std::chrono::duration<double>( std::chrono::steady_clock::now().time_since_epoch() ).count();
 	const Real turns = (Real)fmod( seconds / 12.0, 1.0 );
 	TheDisplay->drawModelPreview( AsciiString( SKIN_UNITS[ row.known ].templateName ), s_skinFocus, SKIN_HOUSE,
-		s_hero.lo.x, s_hero.lo.y, s_hero.hi.x - s_hero.lo.x, s_hero.hi.y - s_hero.lo.y, turns, !s_heroOwned );
+		s_hero.lo.x, s_hero.lo.y, s_hero.hi.x - s_hero.lo.x, s_hero.hi.y - s_hero.lo.y, turns, !s_heroOwned, FALSE,
+		SKIN_UNITS[ row.known ].state );
 	if (TankSkin_isRare( s_skinFocus ))
 	{
 		rareEdge( s_hero.lo.x, s_hero.lo.y, s_hero.hi.x - s_hero.lo.x, s_hero.hi.y - s_hero.lo.y );
@@ -997,7 +999,7 @@ static void drawSkinChoice( GameWindow *window, WinInstanceData *instData )
 		TheDisplay->drawFillRect( x + 1, y + 1, width - 2, picture - 1, SKIN_CARD_GROUND );
 	if (picture > down( 24.0f ) && row->known < SKIN_UNKNOWN)
 		TheDisplay->drawModelPreview( AsciiString( SKIN_UNITS[ row->known ].templateName ), choice->id, SKIN_HOUSE,
-			x + 2, y + 2, width - 4, picture - 3, SKIN_CARD_TURN, !choice->owned, TRUE );
+			x + 2, y + 2, width - 4, picture - 3, SKIN_CARD_TURN, !choice->owned, TRUE, SKIN_UNITS[ row->known ].state );
 	// a rare look in gold, the focus's blue edge inside it
 	const Bool rare = TankSkin_isRare( choice->id );
 	if (rare)

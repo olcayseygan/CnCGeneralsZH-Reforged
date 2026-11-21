@@ -438,8 +438,11 @@ void GameLogic::clearGameData( Bool showScoreScreen )
 
 	TheScriptActions->closeWindows(FALSE); // Close victory or defeat windows.
 
+	// a Lane War match showed its own end over the world (LaneWarEndScreen) and goes straight back to
+	// the screen it was started from, without the stock score screen
+	const Bool laneWarEnd = showScoreScreen && !isInShellGame() && TheLaneWarDirector->isActive();
 	Bool shellGame = FALSE;
-	if ((!isInShellGame() || !isInGame()) && showScoreScreen)
+	if ((!isInShellGame() || !isInGame()) && showScoreScreen && !laneWarEnd)
 	{
 		shellGame = TRUE;
 		TheTransitionHandler->setGroup("FadeWholeScreen");
@@ -465,6 +468,8 @@ void GameLogic::clearGameData( Bool showScoreScreen )
 
 	TheGameEngine->reset();
 	setGameMode(GAME_NONE);
+	if (laneWarEnd)
+		TheShell->showShell();	// what the score screen's OK does as it pops: the screen under it runs its init
 //	m_background->bringForward();
 //	if(shellGame)
 

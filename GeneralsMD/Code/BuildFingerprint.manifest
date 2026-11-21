@@ -1413,6 +1413,7 @@ Data/Scenarios/lanewar.txt
 Data/Scenarios/lanewar_air.txt
 Data/Scenarios/lanewar_buy.txt
 Data/Scenarios/lanewar_cargo.txt
+Data/Scenarios/lanewar_end.txt
 Data/Scenarios/lanewar_hack.txt
 Data/Scenarios/lanewar_tricks.txt
 Data/Scenarios/laserdefense.txt
@@ -1933,6 +1934,7 @@ GameEngine/Include/GameLogic/GhostObject.h
 GameEngine/Include/GameLogic/LaneWarBot.h
 GameEngine/Include/GameLogic/LaneWarDirector.h
 GameEngine/Include/GameLogic/Locomotor.h
+GameEngine/Include/GameLogic/LaneWarStats.h
 GameEngine/Include/GameLogic/LocomotorSet.h
 GameEngine/Include/GameLogic/LogicRandomValue.h
 GameEngine/Include/GameLogic/Module/AIUpdate.h
@@ -2867,6 +2869,7 @@ GameEngine/Source/GameLogic/System/LaneWarBot.cpp
 GameEngine/Source/GameLogic/System/LaneWarDirector.cpp
 GameEngine/Source/GameLogic/System/RankInfo.cpp
 GameEngine/Source/GameLogic/System/ScenarioDrill.cpp
+GameEngine/Source/GameLogic/System/LaneWarStats.cpp
 GameEngine/Source/GameNetwork/Connection.cpp
 GameEngine/Source/GameNetwork/ConnectionManager.cpp
 GameEngine/Source/GameNetwork/CushionMetrics.cpp

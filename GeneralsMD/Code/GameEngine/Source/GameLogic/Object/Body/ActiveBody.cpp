@@ -52,6 +52,7 @@
 #include "GameLogic/Armor.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LaneWarStats.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Damage.h"
 #include "GameLogic/PartitionManager.h"
@@ -625,6 +626,9 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 		if( !alreadyHandled && damageInfo->out.m_actualDamageClipped > 0.0f && damager && damager != obj
 				&& damager->getRelationship( obj ) == ENEMIES )
 			obj->getExperienceTracker()->recordDamage( damager->getID(), REAL_TO_INT_CEIL( damageInfo->out.m_actualDamageClipped ) );
+		// and a Lane War wave unit's damage to an enemy tower or fortress, for the match's record
+		if( !alreadyHandled && damager )
+			TheLaneWarStats->onDamage( damager, obj, damageInfo->out.m_actualDamageClipped );
 
 		// then copy the whole DamageInfo struct for easy lookup 
 		// (object pointer loses scope as soon as atteptdamage's caller ends)

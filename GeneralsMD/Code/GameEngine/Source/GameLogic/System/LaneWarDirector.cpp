@@ -45,6 +45,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/LaneWarBot.h"
 #include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/LaneWarStats.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/Module/ContainModule.h"
@@ -960,6 +961,7 @@ void LaneWarDirector::onOrder( Player *player, Int kind, const Int *args, Int ar
 		return;
 
 	const UnsignedInt now = TheGameLogic->getFrame();
+	const UnsignedInt moneyBefore = player->getMoney()->countMoney();
 	Bool done = FALSE;
 	switch( kind )
 	{
@@ -1001,6 +1003,7 @@ void LaneWarDirector::onOrder( Player *player, Int kind, const Int *args, Int ar
 			break;
 	}
 	(void)done;
+	TheLaneWarStats->onOrder( player, kind, moneyBefore, player->getMoney()->countMoney() );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1150,6 +1153,7 @@ Bool LaneWarDirector::placeUnit( Player *player, const ThingTemplate *tmpl, Int 
 	m_plotUnits.push_back( entry );
 	if( LaneWar_isHero( player, tmpl ) )
 		m_heroBought[ team ][ seat ] = TRUE;
+	TheLaneWarStats->onPlace( player, tmpl, cost );
 
 	DEBUG_LOG(( "LANEWAR PLACE: frame %u player %d '%s' at column %d row %d size %d on plot %s%d %s at (%.0f,%.0f) for %d, %u left\n", now,
 							(Int)player->getPlayerIndex(), tmpl->getName().str(), col, row, size, TEAM_NAME[ team ], seat + 1,
@@ -2347,6 +2351,7 @@ void LaneWarDirector::tick( UnsignedInt now )
 			const UnsignedInt pay = LaneWar_incomeAt( m_incomeLevel[ t ][ s ], holder == t );
 			paid[ t ] = max( paid[ t ], pay );
 			ThePlayerList->getNthPlayer( m_seatPlayer[ t ][ s ] )->getMoney()->deposit( pay, FALSE );
+			TheLaneWarStats->onIncome( m_seatPlayer[ t ][ s ], pay, pay - LaneWar_incomeAt( m_incomeLevel[ t ][ s ], FALSE ) );
 		}
 	m_middleHolder = holder;
 
@@ -2545,6 +2550,7 @@ void LaneWarDirector::spawnWave( Int team, Int seat, UnsignedInt now )
 	DEBUG_LOG(( "HEADLESS LANEWAR: frame %u tick %u team %s seat %d (player %d) sends %d%s\n",
 							now, m_tickCount, TEAM_NAME[ team ], seat + 1, (Int)player->getPlayerIndex(), (Int)ids.size(),
 							heroHeld ? ", the hero held back: his last copy is still out" : "" ));
+	TheLaneWarStats->onWave( (Int)player->getPlayerIndex(), (Int)ids.size() );
 
 	if( group->isEmpty() )
 	{

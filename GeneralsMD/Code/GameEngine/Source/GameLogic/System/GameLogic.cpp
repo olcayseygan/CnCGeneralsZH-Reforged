@@ -94,6 +94,7 @@
 #include "GameLogic/FPUControl.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/LaneWarStats.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/AIUpdate.h"
@@ -479,6 +480,7 @@ void GameLogic::reset( void )
 	m_thingTemplateBuildableOverrides.clear();
 	m_controlBarOverrides.clear();
 	TheLaneWarDirector->reset();
+	TheLaneWarStats->reset();
 
 	// a load that failed part way must not hand its stream or heap order to the next one
 	m_loadedRandomPending = FALSE;
@@ -5485,6 +5487,7 @@ void GameLogic::update( void )
 
 	// Lane War, after both so a unit put on a plot this frame is held this frame
 	TheLaneWarDirector->update();
+	TheLaneWarStats->update();
 
 	// Note - TerrainLogic update needs to happen after ScriptEngine update, but before object updates.  jba.
 	// This way changes in bridges are noted in the script engine before being cleared in TerrainLogic->update
@@ -6177,6 +6180,9 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 		marker = "MARKER:TheLaneWarDirector";
 		xferCRC->xferAsciiString(&marker);
 		xferCRC->xferSnapshot( TheLaneWarDirector );
+		marker = "MARKER:TheLaneWarStats";
+		xferCRC->xferAsciiString(&marker);
+		xferCRC->xferSnapshot( TheLaneWarStats );
 	}
 	if (recordSnapshot)
 		m_crcSnapshots.setSectionCRC( CRC_SECTION_SCRIPTS, xferCRC->getCRC() );
@@ -6799,13 +6805,14 @@ void GameLogic::prepareLogicForObjectLoad( void )
 	* 18: xfer the logic random stream and the pathfinder's request queue and flow maps
 	* 19: xfer the AI groups and the AI's group and formation counters (AI::xferGroups)
 	* 20: xfer TheLaneWarDirector
+	* 21: xfer TheLaneWarStats
 	*/
 // ------------------------------------------------------------------------------------------------
 void GameLogic::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 20;
+	const XferVersion currentVersion = 21;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -7290,6 +7297,11 @@ void GameLogic::xfer( Xfer *xfer )
     xfer->xferSnapshot( TheLaneWarDirector );
   else if ( xfer->getXferMode() == XFER_LOAD )
     TheLaneWarDirector->reset();	// a save from before the director plays as it was made, with no director
+
+  if ( version >= 21 )
+    xfer->xferSnapshot( TheLaneWarStats );
+  else if ( xfer->getXferMode() == XFER_LOAD )
+    TheLaneWarStats->reset();	// a lane save from before the record starts counting from the load
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------

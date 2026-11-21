@@ -52,6 +52,7 @@
 #include "GameClient/GameClient.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/LaneWarStats.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameLogic/ScriptActions.h"
 #include "GameLogic/VictoryConditions.h"
@@ -294,8 +295,9 @@ Bool VictoryConditions::hasSinglePlayerBeenDefeated(Player *player)
 	if (!player)
 		return false;
 
+	// out once the fortress has had its collapse, not on the frame it died (LaneWarStats.h)
 	if ( ISSET(LANEWAR) )
-		return TheLaneWarDirector->hasLostFortress(player);
+		return TheLaneWarStats->hasLost(player);
 
 	KindOfMaskType mask;
 	mask.set(KINDOF_MP_COUNT_FOR_VICTORY);

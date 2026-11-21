@@ -105,6 +105,8 @@ namespace
 	enum { TEXT_POOL = 256 };
 	enum { ABILITY_ART_ROWS = 6 };		///< rows the AbilitiesPanel piece's glass holds
 	enum { NO_CARD = -1, HERO_CARD = -2 };
+	enum { LANEHUD_STRIP_JETS = 64 };		///< jets in the air the strip map marks, six seats' squadrons with room
+	Int s_jetsShown = 0;										///< the last draw's airborne jets, for LaneHud_describe
 
 	LaneHudLayout s_layout;
 	Bool s_showing = FALSE;
@@ -115,6 +117,7 @@ namespace
 	Bool s_upgradesOpen = FALSE;
 	Bool s_abilitiesOpen = FALSE;
 	Bool s_scoreboard = FALSE;							///< Tab held
+	Bool s_homed = FALSE;										///< the camera went to the plot when the match opened
 
 	// what the last draw showed, for the press that comes after it
 	const ThingTemplate *s_cardThing[ LANEHUD_CARDS ];
@@ -861,6 +864,28 @@ static void drawStripMap( void )
 		TheDisplay->drawFillRect( p.x - dot / 2, p.y - dot / 2, dot, dot, owner ? UIStyle::readable( owner->getPlayerColor() ) : UIStyle::INK );
 	}
 
+	// the jets in the air, out on a strike or flying home, as small jet marks in their owner's colour;
+	// a parked jet is off the map and nowhere on the strip
+	Coord3D jetAt[ LANEHUD_STRIP_JETS ];
+	Int jetOwner[ LANEHUD_STRIP_JETS ];
+	const Int jets = TheLaneWarDirector->getAirborneJets( jetAt, jetOwner, LANEHUD_STRIP_JETS );
+	const Int mark = pxs( 11 );
+	for( Int j = 0; j < jets; ++j )
+	{
+		const ICoord2D p = toStrip( f, jetAt[ j ].x, jetAt[ j ].y );
+		if( !inside( lane, &p ) )
+			continue;
+		const Player *owner = jetOwner[ j ] >= 0 ? ThePlayerList->getNthPlayer( jetOwner[ j ] ) : NULL;
+		const Color tint = owner ? UIStyle::readable( owner->getPlayerColor() ) : UIStyle::INK;
+		const LaneHudBox b = LaneHud_box( p.x - mark / 2, p.y - mark / 2, mark, mark );
+		const Image *image = art( "LaneAirMark" );
+		if( image != NULL )
+			drawArt( image, b, tint );
+		else
+			TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, tint );
+	}
+	s_jetsShown = jets;
+
 	// where the camera looks; View names its third and fourth corners wrongly, they come round the screen in order
 	Coord3D corner[ 4 ];
 	TheTacticalView->getScreenCornerWorldPointsAtZ( &corner[ 0 ], &corner[ 1 ], &corner[ 2 ], &corner[ 3 ], middle->z );
@@ -904,9 +929,8 @@ static void chip( const LaneHudBox &b, const char *piece )
 	TheDisplay->drawFillRect( b.x + in, b.y + in, b.w - 2 * in, b.h - 2 * in, WELL );
 }
 
-/** A ring cut by angle: the arc of mean radius r and the width given, from `from` degrees clockwise
-	* from 12 o'clock through `sweep` (negative goes anticlockwise), drawn in short thick strokes.
-	* ponytail: strokes, not the YourRing piece through a wedge clip; a triangle fan with its UVs if the strokes show. */
+/** A ring cut by angle where the YourRing piece is missing: the arc of mean radius r and the width
+	* given, from `from` degrees clockwise from 12 o'clock through `sweep`, drawn in short thick strokes. */
 static void arc( Int cx, Int cy, Real r, Real width, Real from, Real sweep, Color color )
 {
 	const Int steps = max( 1, REAL_TO_INT( fabs( sweep ) / 4.0f + 0.5f ) );
@@ -982,13 +1006,21 @@ static void drawYourWave( void )
 	const Color own = playerColor( s_team, s_seat );
 	const Real r = 9.5f * s_layout.scale, width = max( 2.0f, 3.0f * s_layout.scale );
 	const Color track = GameMakeColor( 34, 40, 48, 255 );
+	// README-v6: the whole piece as the track, then the piece tinted and cut to the wedge still to wait
 	const Image *ring = art( "LaneYourRing" );
+	const LaneHudBox rb = LaneHud_box( cx - pxs( 12 ), cy - pxs( 12 ), pxs( 24 ), pxs( 24 ) );
 	if( ring != NULL )
-		drawArt( ring, LaneHud_box( cx - pxs( 12 ), cy - pxs( 12 ), pxs( 24 ), pxs( 24 ) ), track );
+	{
+		drawArt( ring, rb, track );
+		if( share > 0.0f )
+			TheDisplay->drawImageWedge( ring, rb.x, rb.y, rb.x + rb.w, rb.y + rb.h, 0.0f, 360.0f * share, own );
+	}
 	else
+	{
 		arc( cx, cy, r, width, 0.0f, 360.0f, track );
-	if( share > 0.0f )
-		arc( cx, cy, r, width, 0.0f, 360.0f * share, own );
+		if( share > 0.0f )
+			arc( cx, cy, r, width, 0.0f, 360.0f * share, own );
+	}
 	disc( cx, cy, pxs( 4 ), own );
 	drawText( clockText( left ), priceFont(), b.x + pxs( 40 ), cy - pxs( 10 ), pxs( 20 ), GameMakeColor( 242, 194, 48, 255 ) );
 }
@@ -1215,12 +1247,12 @@ static void drawCard( const LaneHudBox &c, const Image *picture, Int price, Bool
 		TheDisplay->drawOpenRect( c.x - 1, c.y - 1, c.w + 2, c.h + 2, 2.0f, UIStyle::ACTIVE );
 }
 
-/// the card standing under the pointer rises; nothing rises while a card or a unit is held
+/// the card standing under the pointer rises; nothing rises while a card, a unit or a passenger is held
 static LaneHudBox risen( const LaneHudBox &c )
 {
 	const ICoord2D *mouse = mousePos();
 	const Int rise = pxs( LANEHUD_CARD_RISE );
-	if( s_dragging || s_moving != INVALID_ID || !inside( LaneHud_box( c.x, c.y - rise, c.w, c.h + rise ), mouse ) )
+	if( s_dragging || s_moving != INVALID_ID || s_passengerOf != INVALID_ID || !inside( LaneHud_box( c.x, c.y - rise, c.w, c.h + rise ), mouse ) )
 		return c;
 	return LaneHud_box( c.x, c.y - rise, c.w, c.h );
 }
@@ -1369,9 +1401,13 @@ static void drawUpgrades( void )
 			incomeGlyph( cardPart( c, 18, 14, 82, 68 ) );
 			UnicodeString pays;
 			pays.format( u"+%d", (Int)LANEWAR_INCOME_TIER_PAYS );
-			const LaneHudBox well = cardPart( c, 5, 62, 95, 77 );
+			// the pay sits on the picture well's floor: the readable face does not shrink with the screen,
+			// so at 720 the body face is taller than the well's last 15 rows and ran into the price band
+			const LaneHudBox well = cardPart( c, 5, 5, 95, 77 );
+			GameFont *font = bodyFont()->height <= pxs( 18 ) ? bodyFont() : smallFont();
+			const Int th = font->height;
 			if( !maxed )
-				drawText( pays, bodyFont(), well.x + well.w - pxs( 2 ), well.y, well.h, INCOME, 1 );
+				drawText( pays, font, well.x + well.w - pxs( 3 ), well.y + well.h - th - pxs( 1 ), th, INCOME, 1 );
 			UnicodeString name;
 			name.format( label( "GUI:LaneIncome" ).str(), level, (Int)LANEWAR_INCOME_TIERS );
 			tip( c, name );
@@ -1403,19 +1439,68 @@ static void drawAbilitiesKey( void )
 static void gatherAbilities( void )
 {
 	s_rowCount = 0;
+	Int wanted = 0;
 	LaneWarRosterItem roster[ LANEWAR_ROSTER_MAX ];
 	const Int count = LaneWar_roster( s_player, roster, LANEWAR_ROSTER_MAX );
 	for( Int i = 0; i < count; ++i )
 	{
 		LaneWarAbility list[ LANEWAR_ABILITIES_MAX ];
 		const Int listed = LaneWar_abilitiesOf( roster[ i ].thing, list, LANEWAR_ABILITIES_MAX );
-		for( Int k = 0; k < listed && s_rowCount < LANEHUD_ABILITY_ROWS; ++k )
+		for( Int k = 0; k < listed; ++k, ++wanted )
 		{
+			if( s_rowCount >= LANEHUD_ABILITY_ROWS )
+				continue;
 			s_rows[ s_rowCount ].thing = roster[ i ].thing;
 			s_rows[ s_rowCount ].ability = list[ k ];
 			++s_rowCount;
 		}
 	}
+	// the panel grows to LANEHUD_ABILITY_ROWS, all a 16:9 screen holds under the top chips; say so once if a roster outgrows it
+	static AsciiString s_warned;
+	if( wanted > s_rowCount && s_warned != s_player->getSide() )
+	{
+		s_warned = s_player->getSide();
+		DEBUG_LOG(( "LANEHUD: %s has %d ability rows, the panel shows %d\n", s_warned.str(), wanted, s_rowCount ));
+	}
+}
+
+/** The AbilitiesPanel piece cut across in three, the vertical 3-slice README-v4 asks for past six rows:
+	* 0 its head (the plate's top edge and the glass's first row), 1 one row from the glass's middle, 2
+	* its foot (the last row and the bottom edge).  The glass's scanlines repeat every two pixels, so a
+	* 48 pixel row laid end to end carries them on unbroken where a stretch would smear them.  Each is a
+	* mapped image of its own on the piece's sheet, <Prefix>LaneAbilitiesPanel{Head,Row,Foot}, handed to
+	* the image collection the first time a side asks.  NULL while the piece is missing. */
+static const Image *panelSlice( Int part )
+{
+	static const char *const NAMES[ 3 ] = { "LaneAbilitiesPanelHead", "LaneAbilitiesPanelRow", "LaneAbilitiesPanelFoot" };
+	// rows of the piece at 1080: an 8 pixel edge, six glass rows of 48, an 8 pixel edge
+	static const Int FROM[ 3 ] = { 0, 104, 248 }, TO[ 3 ] = { 56, 152, 304 }, HEIGHT = 304;
+	const Image *made = art( NAMES[ part ] );
+	if( made != NULL )
+		return made;
+	const Image *whole = art( "LaneAbilitiesPanel" );
+	if( whole == NULL || BitTest( whole->getStatus(), IMAGE_STATUS_ROTATED_90_CLOCKWISE ) )
+		return NULL;
+	Image *slice = newInstance( Image );
+	AsciiString name;
+	name.format( "%s%s", sidePrefix().str(), NAMES[ part ] );
+	slice->setName( name );
+	slice->setFilename( whole->getFilename() );
+	slice->setTextureWidth( whole->getTextureSize()->x );
+	slice->setTextureHeight( whole->getTextureSize()->y );
+	slice->setStatus( whole->getStatus() );
+	const Region2D *uv = whole->getUV();
+	Region2D cut = *uv;
+	cut.lo.y = uv->lo.y + ( uv->hi.y - uv->lo.y ) * FROM[ part ] / HEIGHT;
+	cut.hi.y = uv->lo.y + ( uv->hi.y - uv->lo.y ) * TO[ part ] / HEIGHT;
+	slice->setUV( &cut );
+	ICoord2D size;
+	size.x = whole->getImageWidth();
+	size.y = whole->getImageHeight() * ( TO[ part ] - FROM[ part ] ) / HEIGHT;
+	slice->setImageSize( &size );
+	TheMappedImageCollection->addImage( slice );
+	s_pieces.clear();		// findPiece kept the name as missing
+	return slice;
 }
 
 static void drawToggle( const LaneHudBox &b, Bool on )
@@ -1441,9 +1526,19 @@ static void drawAbilities( void )
 	const LaneHudLayout &l = s_layout;
 	const Int rows = max( (Int)ABILITY_ART_ROWS, s_rowCount );
 	const LaneHudBox panel = LaneHud_abilitiesPanel( l, rows );
-	const Image *panelArt = rows == ABILITY_ART_ROWS ? art( "LaneAbilitiesPanel" ) : NULL;
-	if( panelArt != NULL )
+	const Image *panelArt = art( "LaneAbilitiesPanel" );
+	const Image *head = panelSlice( 0 ), *middle = panelSlice( 1 ), *foot = panelSlice( 2 );
+	if( panelArt != NULL && rows == ABILITY_ART_ROWS )
 		drawArt( panelArt, panel );
+	else if( head != NULL && middle != NULL && foot != NULL )
+	{
+		// more rows than the art's six: its head, one glass row repeated, its foot
+		const Int end = l.abilityPad + l.abilityRowH;
+		drawArt( head, LaneHud_box( panel.x, panel.y, panel.w, end ) );
+		for( Int r = 1; r < rows - 1; ++r )
+			drawArt( middle, LaneHud_box( panel.x, panel.y + l.abilityPad + r * l.abilityRowH, panel.w, l.abilityRowH ) );
+		drawArt( foot, LaneHud_box( panel.x, panel.y + panel.h - end, panel.w, end ) );
+	}
 	else
 	{
 		plate( panel );
@@ -1762,7 +1857,7 @@ static Bool pressCluster( const ICoord2D *mouse )
 
 static void drawTip( void )
 {
-	if( s_tip.isEmpty() || s_dragging || s_moving != INVALID_ID )
+	if( s_tip.isEmpty() || s_dragging || s_moving != INVALID_ID || s_passengerOf != INVALID_ID )
 		return;
 	GameFont *font = bodyFont();
 	DisplayString *s = pooled( s_tip, font );
@@ -1790,6 +1885,8 @@ Bool LaneHud_isShowing( void )
 /** The target under the pointer and the ghost riding it: the armed unit, or the plot unit picked up,
 	* on the block of slots the pointer centres, red where whyNotPlace says no. */
 //-------------------------------------------------------------------------------------------------
+static void lookAtPlot( void );
+
 static void destroyGhost( void )
 {
 	Drawable *ghost = s_ghost != INVALID_DRAWABLE_ID ? TheGameClient->findDrawableByID( s_ghost ) : NULL;
@@ -1809,6 +1906,7 @@ void LaneHud_preDraw( void )
 		s_abilitiesOpen = s_upgradesOpen = s_scoreboard = FALSE;
 		s_clusterUnit = INVALID_ID;
 		s_tab = 0;
+		s_homed = FALSE;
 		destroyGhost();
 		return;
 	}
@@ -1819,6 +1917,12 @@ void LaneHud_preDraw( void )
 		return;
 	}
 	keepClassicBarDown();
+	if( !s_homed )
+	{
+		// the match opens on the player's plot, turned as Home turns it
+		s_homed = TRUE;
+		lookAtPlot();
+	}
 	if( s_tab + 1 > techLevel() )
 		s_tab = techLevel() - 1;
 
@@ -1924,16 +2028,34 @@ void LaneHud_draw( void )
 // Presses
 //-------------------------------------------------------------------------------------------------
 
-/// the camera to the middle of the player's own ground grid
+/** The owner's rule of 2026-11-21 for both teams: the camera looks at the lane from the side, never from
+	* behind the units, so the lane runs across the screen with the player's own end on the left and the
+	* enemy on the right, as the strip map draws it.  The view's angle 0 looks along +y with +x to the
+	* right (a world heading h is angle h - 90 degrees, W3DView's rotateCameraTowardPosition), so the team
+	* whose enemy lies towards -x is turned half round.  Pitch and zoom stay as they are. */
+static void turnToLane( void )
+{
+	TheTacticalView->setAngle( TheLaneWarDirector->towardEnemy( s_team ) > 0.0f ? 0.0f : PI );
+}
+
+/// the camera to the middle of the player's own plot, its ground grid and the air rows behind it, turned to the lane
 static void lookAtPlot( void )
 {
-	Coord2D lo, hi;
+	Coord2D lo, hi, airLo, airHi;
 	if( !TheLaneWarDirector->getPlotBounds( s_team, s_seat, &lo, &hi ) )
 		return;
+	if( TheLaneWarDirector->getAirBounds( s_team, s_seat, &airLo, &airHi ) )
+	{
+		lo.x = min( lo.x, airLo.x );
+		lo.y = min( lo.y, airLo.y );
+		hi.x = max( hi.x, airHi.x );
+		hi.y = max( hi.y, airHi.y );
+	}
 	Coord3D at;
 	at.x = 0.5f * ( lo.x + hi.x );
 	at.y = 0.5f * ( lo.y + hi.y );
 	at.z = TheTerrainLogic->getGroundHeight( at.x, at.y );
+	turnToLane();
 	TheTacticalView->lookAt( &at );
 }
 
@@ -2062,6 +2184,7 @@ Bool LaneHud_press( const ICoord2D *mouse, Bool right )
 		if( inside( l.lane, mouse ) && stripFrame( &f ) )
 		{
 			const Coord3D at = fromStrip( f, mouse );
+			turnToLane();
 			TheTacticalView->lookAt( &at );
 		}
 		return TRUE;
@@ -2222,6 +2345,27 @@ Bool LaneHud_viewHome( void )
 		return FALSE;
 	lookAtPlot();
 	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+void LaneHud_describe( Int grid, Int col, Int row, char *out, Int size )
+{
+	Int x = -1, y = -1;
+	ICoord2D corner[ 4 ];
+	if( s_showing && s_seated && blockOnScreen( grid, col, row, 1, corner ) )
+	{
+		x = ( corner[ 0 ].x + corner[ 1 ].x + corner[ 2 ].x + corner[ 3 ].x ) / 4;
+		y = ( corner[ 0 ].y + corner[ 1 ].y + corner[ 2 ].y + corner[ 3 ].y ) / 4;
+	}
+	Int used = snprintf( out, size, "\"team\":%d,\"seat\":%d,\"jets\":%d,\"slot\":[%d,%d],\"chips\":[", s_seated ? s_team : -1, s_seated ? s_seat : -1,
+		s_jetsShown, x, y );
+	for( Int c = 0; c < s_chipCount && used > 0 && used < size; ++c )
+	{
+		const LaneHudBox &b = s_chips[ c ].box;
+		used += snprintf( out + used, size - used, "%s[%d,%d,%d,%d,%d]", c > 0 ? "," : "", s_chips[ c ].kind, b.x, b.y, b.w, b.h );
+	}
+	if( used > 0 && used < size )
+		snprintf( out + used, size - used, "]" );
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -54,8 +54,14 @@ TEST(lanehud_at_1080_the_boxes_stand_where_the_art_drew_them)
 	CHECK_EQ( l.upgradeRow.x + l.upgradeRow.w, 1513 );
 	CHECK_EQ( LaneHud_upgradeCell( l, 3, 2 ).x + LaneHud_upgradeCell( l, 3, 2 ).w, 1513 );
 	CHECK_EQ( LaneHud_upgradeCell( l, 3, 0 ).x, 1513 - 3 * 106 + 6 );
-	CHECK_EQ( l.menu.x, 1770 );
-	CHECK_EQ( l.diplomacy.x + l.diplomacy.w, 1914 );
+	CHECK_EQ( l.menu.x, 1552 );
+	CHECK_EQ( l.diplomacy.x + l.diplomacy.w, 1696 );
+	// Tab's frames where README-v4 put them, from the top down the right edge
+	CHECK_EQ( l.plotFrame[ 0 ].x, 1700 );
+	CHECK_EQ( l.plotFrame[ 0 ].y, 8 );
+	CHECK_EQ( l.plotFrame[ 0 ].w, 212 );
+	CHECK_EQ( l.plotFrame[ 0 ].h, 80 );
+	CHECK_EQ( l.plotFrame[ 2 ].y, 184 );
 
 	// six rows fill the art's panel exactly: 1408,646 to 1600,950, a row's parts where the art put them
 	const LaneHudBox abilities = LaneHud_abilitiesPanel( l, 6 );
@@ -157,11 +163,12 @@ TEST(lanehud_no_box_leaves_the_screen_or_meets_another)
 			CHECK( inside( row, abilities ) );
 		}
 
-		// Tab's frames down the right edge, under the menu keys
+		// Tab's frames down the right edge, beside the menu keys, clear of a full abilities panel
 		for( int i = 0; i < LANEHUD_PLOT_FRAMES; ++i )
 		{
 			CHECK( onScreen( l.plotFrame[ i ], w, h ) );
 			CHECK( !overlap( l.plotFrame[ i ], l.menu ) && !overlap( l.plotFrame[ i ], l.diplomacy ) && !overlap( l.plotFrame[ i ], l.yourWave ) );
+			CHECK( !overlap( l.plotFrame[ i ], abilities ) );
 			if( i > 0 )
 				CHECK( !overlap( l.plotFrame[ i ], l.plotFrame[ i - 1 ] ) );
 		}
@@ -178,5 +185,6 @@ TEST(lanehud_a_wider_screen_keeps_the_sizes_and_keeps_the_hud_centred)
 	CHECK_EQ( wide.countdown.x, full.countdown.x + 320 );
 	CHECK_EQ( wide.cards[ 0 ].x, full.cards[ 0 ].x + 320 );
 	CHECK_EQ( wide.map.w, full.map.w );
-	CHECK_EQ( wide.diplomacy.x + wide.diplomacy.w, 2560 - 6 );
+	CHECK_EQ( wide.diplomacy.x + wide.diplomacy.w, 2560 - 224 );
+	CHECK_EQ( wide.plotFrame[ 0 ].x + wide.plotFrame[ 0 ].w, 2560 - 8 );
 }

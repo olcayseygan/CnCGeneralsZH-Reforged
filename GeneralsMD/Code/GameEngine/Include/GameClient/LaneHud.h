@@ -66,4 +66,11 @@ void LaneHud_holdScoreboard( Bool held );
 Bool LaneHud_abilitiesPanelIsOpen( void );
 void LaneHud_abilitiesPanelSetOpen( Bool open );
 
+/** For a script driving the HUD with the mouse (the control socket's `lanehud`): JSON members naming
+	* the local player's team and seat, the jets the strip map last showed in the air, the screen point
+	* at the middle of his slot (grid, column, row), where the camera
+	* stands now, and the chips of the row the last draw raised over a plot unit, each as
+	* [kind, x, y, w, h] with kind 0 rank, 1 upgrade, 2 passenger, 3 room.  Client only. */
+void LaneHud_describe( Int grid, Int col, Int row, char *out, Int size );
+
 #endif // __LANEHUD_H_

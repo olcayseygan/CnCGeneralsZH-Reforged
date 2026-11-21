@@ -60,7 +60,7 @@ struct LaneHudLayout
 	LaneHudBox yourWave;								///< the your-wave chip: the player's own turn
 	LaneHudBox waveBar;									///< the bar chip under the lane: each team's next wave filling to the middle
 	LaneHudBox countdown;								///< the countdown chip under the bar
-	LaneHudBox menu, diplomacy;					///< top right
+	LaneHudBox menu, diplomacy;					///< top right, left of the Tab frames
 	LaneHudBox tiers[ LANEHUD_TIERS ];	///< the tier keys, I over II over III
 	LaneHudBox hero;										///< the hero's gold card, bought once a match
 	LaneHudBox cards[ LANEHUD_CARDS ];
@@ -71,7 +71,7 @@ struct LaneHudLayout
 	int abilitiesRight, abilitiesBottom, abilitiesWidth;	///< the abilities panel grows up from here by its rows
 	int abilityRowH, abilityPad;
 	LaneHudBox abilityCameo, abilityIcon, abilityToggle;	///< inside a row, from its corner
-	LaneHudBox plotFrame[ LANEHUD_PLOT_FRAMES ];	///< Tab held: every other seated player, down the right edge
+	LaneHudBox plotFrame[ LANEHUD_PLOT_FRAMES ];	///< Tab held: every other seated player, down the right edge from the top
 };
 
 inline LaneHudBox LaneHud_box( int x, int y, int w, int h )
@@ -126,8 +126,9 @@ inline void LaneHud_layout( int width, int height, LaneHudLayout *out )
 	out->yourWave = LaneHud_place( 1215, 8, 1311, 74, 0, width, height );
 	out->waveBar = LaneHud_place( 715, 82, 1205, 96, 0, width, height );
 	out->countdown = LaneHud_place( 918, 104, 1002, 140, 0, width, height );
-	out->menu = LaneHud_place( 1770, 8, 1840, 40, 1, width, height );
-	out->diplomacy = LaneHud_place( 1844, 8, 1914, 40, 1, width, height );
+	// the menu keys stand left of the Tab frames' column (README-v4 put them over its first frame)
+	out->menu = LaneHud_place( 1552, 8, 1622, 40, 1, width, height );
+	out->diplomacy = LaneHud_place( 1626, 8, 1696, 40, 1, width, height );
 
 	// the bottom row, centred: tier keys, hero, eight cards, the deck, the abilities key
 	const float left = 353.0f, handY = 958.0f;
@@ -158,9 +159,9 @@ inline void LaneHud_layout( int width, int height, LaneHudLayout *out )
 	out->abilityIcon = LaneHud_box( LaneHud_px( 62, s ), LaneHud_px( 4, s ), LaneHud_px( 50, s ), LaneHud_px( 40, s ) );
 	out->abilityToggle = LaneHud_box( LaneHud_px( 124, s ), LaneHud_px( 13, s ), LaneHud_px( 44, s ), LaneHud_px( 22, s ) );
 
-	// Tab held: a frame a seat down the right edge, under the menu keys
+	// Tab held: a frame a seat down the right edge from the top, README-v4's 1700,8 / 96 / 184 and on
 	for( int i = 0; i < LANEHUD_PLOT_FRAMES; ++i )
-		out->plotFrame[ i ] = LaneHud_place( 1700, 48.0f + 88.0f * i, 1912, 128.0f + 88.0f * i, 1, width, height );
+		out->plotFrame[ i ] = LaneHud_place( 1700, 8.0f + 88.0f * i, 1912, 88.0f + 88.0f * i, 1, width, height );
 }
 
 /// the open deck's card i of count, the row's right end on the deck's

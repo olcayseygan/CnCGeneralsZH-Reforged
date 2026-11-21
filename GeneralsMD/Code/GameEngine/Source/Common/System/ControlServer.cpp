@@ -45,6 +45,7 @@
 #include "GameClient/GUICallbacks.h"		// ToggleQuitMenu, for quitmenu
 #include "GameClient/InGameUI.h"
 #include "GameClient/KeyDefs.h"
+#include "GameClient/LaneHud.h"
 #include "GameClient/Shell.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/MetaEvent.h"
@@ -815,6 +816,24 @@ static void handleCommand( const AsciiString &command )
 		char members[ 3072 ];
 		AirliftPanel_describe( members, sizeof( members ) );
 		char reply[ 3200 ];
+		snprintf( reply, sizeof( reply ), "{\"ok\":true,%s}", members );
+		sendText( reply );
+		return;
+	}
+
+	/* lanehud <grid> <col> <row>: where the Lane War HUD has the local player's slot on screen and the
+		 chips it last raised over a plot unit, for a script that drags with the mouse (LaneHud_describe) */
+	if (strncmp( command.str(), "lanehud ", 8 ) == 0)
+	{
+		Int grid = 0, col = 0, row = 0;
+		if (sscanf( command.str() + 8, "%d %d %d", &grid, &col, &row ) != 3)
+		{
+			replyError( "lanehud <grid> <col> <row>" );
+			return;
+		}
+		char members[ 2048 ];
+		LaneHud_describe( grid, col, row, members, sizeof( members ) );
+		char reply[ 2100 ];
 		snprintf( reply, sizeof( reply ), "{\"ok\":true,%s}", members );
 		sendText( reply );
 		return;

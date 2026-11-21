@@ -47,8 +47,8 @@ STATS = {"Waves": "waves", "Placed": "placed", "Earned": "earned", "Spent": "spe
 MASTER, WELL_AT = 160, (24, 24, 136, 136)       # the 9-slices are cut from a panel this size; the well's own from this rect
 BUTTON = (432, 72)                              # the wide text key the 3-slice is cut from
 LAMP, COIN = 32, 28
-# a plain side's portrait: its command centre shot in the game, cropped square into art/headquarters/<Side>.png
-# (experiments/proofs/2026-11-21/ds-lobby-build/hq/ in the wrapper has the shot list and the crop); packed at the
+# a plain side's portrait: its command centre shot in the game (Golden Oasis, -freecam <x> 3330 260 90 -40 over a
+# command centre spawned at <x> 3550, 1920x1080), cropped square into art/headquarters/<Side>.png; packed at the
 # portrait well's 172 so it is never stretched at 1080
 HEADQUARTERS, WELL_PICTURE = os.path.join(HERE, "art", "headquarters"), 172
 PICK_TILE = (136, 112)

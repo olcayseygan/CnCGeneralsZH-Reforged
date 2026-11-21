@@ -20906,6 +20906,10 @@ GUI:LaneEndDraw
 "Berabere"
 END
 
+GUI:LaneMatchClock
+"Maç süresi"
+END
+
 GUI:LaneEndWaves
 "Dalga"
 END

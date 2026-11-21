@@ -6715,6 +6715,10 @@ GUI:LaneEndDraw
 "Draw"
 END
 
+GUI:LaneMatchClock
+"Match time"
+END
+
 GUI:LaneEndWaves
 "Waves"
 END

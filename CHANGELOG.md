@@ -8,9 +8,11 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
-## Direct Strike fortresses and towers last three times as long
+## Direct Strike matches end around the 25 minute mark
 
-- The fortress has 12000 health instead of 4000 and the watch tower 4000 instead of 1200. Their armour is the same, so every weapon needs three times the hits to bring them down. In a test a six-Paladin army that used to raze the fortress 55 seconds after the tower fell now takes two minutes over it.
+- The fortress has 6000 health instead of 4000 and the watch tower 2000 instead of 1200, behind the same armour. At the old numbers the waves took a fortress in a few ticks. We tried 12000 and 4000 and matches dragged past half an hour with both fortresses standing. At 6000 eighteen computer 3v3s on Hard and Brutal, over six islands, ended on a fortress kill at a median of 26 minutes: three before 20, seven between 20 and 30, seven between 30 and 38, and one still undecided at 40. There is no clock that ends a match. A long one runs long.
+- Computers save up for tanks again. A computer seat that wanted something dearer than it could pay waited only while the gap was under 300, a figure from the days of 30 second waves. With 45 second waves it spent down every tick, never held enough for a 900 tank again, and filled its plot with infantry the watch tower's gun mows down forever: in one Hard match the seats bought up to 48 infantry each after their opening tank and nobody touched a fortress in 90 minutes. Now it waits whenever the next tick's pay would cover the gap, and that match ends on a fortress kill at 25 minutes.
+- The time since the match began sits under your wave's chip at the top of the screen.
 - Direct Strike replays recorded before this change will not play back.
 
 ## Direct Strike waves every 45 seconds

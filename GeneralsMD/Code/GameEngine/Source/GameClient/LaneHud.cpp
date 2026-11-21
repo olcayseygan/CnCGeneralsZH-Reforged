@@ -436,7 +436,8 @@ static LaneHudBox abilitiesPanel( void )
 static Bool overHud( const ICoord2D *mouse )
 {
 	const LaneHudLayout &l = s_layout;
-	if( inside( l.map, mouse ) || inside( l.waveBar, mouse ) || inside( l.countdown, mouse ) || inside( l.menu, mouse ) || inside( l.diplomacy, mouse ) )
+	if( inside( l.map, mouse ) || inside( l.waveBar, mouse ) || inside( l.countdown, mouse ) || inside( l.matchClock, mouse ) || inside( l.menu, mouse )
+			|| inside( l.diplomacy, mouse ) )
 		return TRUE;
 	if( s_seated && ( inside( l.money, mouse ) || inside( l.yourWave, mouse ) ) )
 		return TRUE;
@@ -924,6 +925,15 @@ static void drawCountdown( void )
 	drawText( clockText( secondsToTick() ), font, c.x + c.w / 2, c.y, c.h, WHITE, 0 );
 }
 
+/// the match clock under the your-wave chip: wall time since the start, in the secondary ink
+static void drawMatchClock( void )
+{
+	const LaneHudBox &b = s_layout.matchClock;
+	chip( b, LANE_COUNT_CHIP );
+	drawText( clockText( (Int)( TheGameLogic->getFrame() / LOGICFRAMES_PER_SECOND ) ), priceFont(), b.x + b.w / 2, b.y, b.h, TEXT_GREY, 0 );
+	tip( b, label( "GUI:LaneMatchClock" ) );
+}
+
 /// the floating top: each chip stands on its own rect
 static void drawTop( void )
 {
@@ -936,6 +946,7 @@ static void drawTop( void )
 		drawYourWave();
 	drawWaveBar();
 	drawCountdown();
+	drawMatchClock();
 
 	// the menu keys
 	const struct { const LaneHudBox *box; Piece piece; const char *tipKey; } KEYS[ 2 ] =

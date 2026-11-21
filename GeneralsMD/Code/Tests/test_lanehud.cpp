@@ -42,6 +42,11 @@ TEST(lanehud_at_1080_the_boxes_stand_where_the_art_drew_them)
 	CHECK_EQ( l.waveBar.h, 14 );
 	CHECK_EQ( l.countdown.x + l.countdown.w / 2, 960 );
 	CHECK_EQ( l.countdown.y, 104 );
+	// the match clock: the countdown chip's size, centred under the your-wave chip
+	CHECK_EQ( l.matchClock.w, l.countdown.w );
+	CHECK_EQ( l.matchClock.h, l.countdown.h );
+	CHECK_EQ( l.matchClock.x + l.matchClock.w / 2, l.yourWave.x + l.yourWave.w / 2 );
+	CHECK_EQ( l.matchClock.y, 82 );
 	CHECK_EQ( l.tiers[ 0 ].x, 353 );
 	CHECK_EQ( l.tiers[ 2 ].y, 1034 );
 	CHECK_EQ( l.hero.x, 433 );
@@ -98,13 +103,14 @@ TEST(lanehud_no_box_leaves_the_screen_or_meets_another)
 		LaneHud_layout( w, h, &l );
 
 		// the boxes that stand at once: the top chips, the menu keys and the bottom row
-		LaneHudBox boxes[ 7 + LANEHUD_TIERS + 1 + LANEHUD_CARDS + 2 ];
+		LaneHudBox boxes[ 8 + LANEHUD_TIERS + 1 + LANEHUD_CARDS + 2 ];
 		int count = 0;
 		boxes[ count++ ] = l.money;
 		boxes[ count++ ] = l.map;
 		boxes[ count++ ] = l.yourWave;
 		boxes[ count++ ] = l.waveBar;
 		boxes[ count++ ] = l.countdown;
+		boxes[ count++ ] = l.matchClock;
 		boxes[ count++ ] = l.menu;
 		boxes[ count++ ] = l.diplomacy;
 		for( int t = 0; t < LANEHUD_TIERS; ++t )
@@ -138,7 +144,7 @@ TEST(lanehud_no_box_leaves_the_screen_or_meets_another)
 		{
 			const LaneHudBox &panel = p == 0 ? l.upgradeRow : abilities;
 			CHECK( onScreen( panel, w, h ) );
-			CHECK( !overlap( panel, l.map ) && !overlap( panel, l.countdown ) && !overlap( panel, l.yourWave ) );
+			CHECK( !overlap( panel, l.map ) && !overlap( panel, l.countdown ) && !overlap( panel, l.yourWave ) && !overlap( panel, l.matchClock ) );
 			const int rise = LaneHud_px( LANEHUD_CARD_RISE, l.scale );
 			for( int c = 0; c < LANEHUD_CARDS; ++c )
 				CHECK( !overlap( panel, LaneHud_box( l.cards[ c ].x, l.cards[ c ].y - rise, l.cards[ c ].w, l.cards[ c ].h + rise ) ) );

@@ -60,6 +60,7 @@ struct LaneHudLayout
 	LaneHudBox yourWave;								///< the your-wave chip: the player's own turn
 	LaneHudBox waveBar;									///< the bar chip under the lane: each team's next wave filling to the middle
 	LaneHudBox countdown;								///< the countdown chip under the bar
+	LaneHudBox matchClock;							///< under the your-wave chip: the time since the match began
 	LaneHudBox menu, diplomacy;					///< top right, left of the Tab frames
 	LaneHudBox tiers[ LANEHUD_TIERS ];	///< the tier keys, I over II over III
 	LaneHudBox hero;										///< the hero's gold card, bought once a match
@@ -126,6 +127,7 @@ inline void LaneHud_layout( int width, int height, LaneHudLayout *out )
 	out->yourWave = LaneHud_place( 1215, 8, 1311, 74, 0, width, height );
 	out->waveBar = LaneHud_place( 715, 82, 1205, 96, 0, width, height );
 	out->countdown = LaneHud_place( 918, 104, 1002, 140, 0, width, height );
+	out->matchClock = LaneHud_place( 1221, 82, 1305, 118, 0, width, height );	// the countdown chip's size, centred under the your-wave chip
 	// the menu keys stand left of the Tab frames' column (README-v4 put them over its first frame)
 	out->menu = LaneHud_place( 1552, 8, 1622, 40, 1, width, height );
 	out->diplomacy = LaneHud_place( 1626, 8, 1696, 40, 1, width, height );

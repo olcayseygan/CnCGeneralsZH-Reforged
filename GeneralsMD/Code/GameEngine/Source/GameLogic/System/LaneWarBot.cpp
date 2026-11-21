@@ -103,7 +103,6 @@ namespace
 	const Real FRONT_SHARE = 0.5f;			///< of the plot's value the plan wants in front units
 	const Real BACK_RANGE = 220.0f;			///< a weapon reaching this far puts a unit in the back rows
 	const Real PLOT_BEFORE_TIER = 2.0f;	///< a tier or the hero waits until the plot is worth this many times its price
-	const Int WAIT_REACH = 300;					///< a dearer pick is waited for only when this much more would buy it, under a tick's pay
 	const Real SELL_BELOW = 0.35f;			///< a unit trading worse than this against the enemy plots is dead weight
 	const Real SELL_MARGIN = 0.2f;			///< ... sold only for a roster unit trading this much better
 	const Int SLOTS_MAX = 64;
@@ -303,8 +302,13 @@ namespace
 			}
 		}
 
-		// a plan that saves waits for a pick within a tick's pay, until its own wave is about to go
-		const Bool waits = plan.saves && !v.waveSoon && v.units >= FEW_UNITS && best >= 0 && picks[ best ].cost <= v.spend + WAIT_REACH;
+		/* A plan that saves waits for a pick within the next tick's pay, until its own wave is about to go.
+			 A fixed 300 was a tick's pay at 30 second ticks; at 45 a seat that spent down every tick held
+			 under 700 and never again reached a 900 tank, so plots turned to infantry for good: seed 5's
+			 Hard 3v3 bought 40 to 48 Rangers a seat after the opening's Crusader and touched no fortress
+			 in 90 minutes. */
+		const Int reach = (Int)v.director->getIncome( v.team, v.seat );
+		const Bool waits = plan.saves && !v.waveSoon && v.units >= FEW_UNITS && best >= 0 && picks[ best ].cost <= v.spend + reach;
 		const Int chosen = waits ? best : bestAffordable;
 		if( chosen < 0 )
 			return FALSE;

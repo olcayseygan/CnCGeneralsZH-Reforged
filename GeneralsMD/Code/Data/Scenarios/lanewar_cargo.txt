@@ -38,6 +38,11 @@
 90    lanegarrison  0  AmericaInfantryRanger          0 4 0
 90    lanegarrison  0  AmericaInfantryRanger          0 4 0
 90    lanegarrison  0  AmericaInfantryMissileDefender 0 4 0
+# a Helix with its bunker and two Red Guards: the game's own check says whether they may fire out
+30    laneplace  1  ChinaVehicleHelix           0 4
+60    laneunitupgrade  1  Upgrade_ChinaHelixBattleBunker 0 0 4
+90    lanegarrison  1  ChinaInfantryRedguard     0 0 4
+90    lanegarrison  1  ChinaInfantryRedguard     0 0 4
 # the Tank Hunter made Veteran, one Red Guard sold back in full before the first wave
 120   lanevet    1  0 0 0 3
 120   lanesell   1  0 0 0 1

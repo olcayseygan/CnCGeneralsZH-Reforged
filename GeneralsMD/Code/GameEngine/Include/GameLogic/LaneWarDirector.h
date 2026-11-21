@@ -375,6 +375,8 @@ public:
 		  (an Overlord with no bunker takes only its add-on, a Troop Crawler's men cannot fire out) shows
 		  room here: the order's log says why. */
 	void getPassengerRoom( Int plotIndex, Int *used, Int *most ) const;
+	/// the jets flying now, out on a strike or on the way home, for the strip map: where each is and whose; at most `most`
+	Int getAirborneJets( Coord3D *where, Int *playerIndex, Int most ) const;
 
 protected:
 	virtual void crc( Xfer *xfer );
@@ -404,6 +406,7 @@ private:
 		Real health;										///< what it had when it last parked, 0 for full
 		Int veterancy;
 		Int strikes;										///< strikes it has flown
+		std::vector<const UpgradeTemplate *> upgrades;	///< its plot unit's object upgrades when it joined, given again at every take-off
 	};
 	void expireCopies( UnsignedInt now );
 	void useAbilities( UnsignedInt now );

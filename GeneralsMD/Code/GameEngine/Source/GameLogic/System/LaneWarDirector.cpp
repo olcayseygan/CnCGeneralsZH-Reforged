@@ -1498,8 +1498,35 @@ void LaneWarDirector::getPassengerRoom( Int plotIndex, Int *used, Int *most ) co
 {
 	Object *obj = TheGameLogic->findObjectByID( m_plotUnits[ plotIndex ].id );
 	ContainModuleInterface *contain = obj != NULL ? obj->getContain() : NULL;
-	*used = contain != NULL ? (Int)contain->getContainCount() : 0;
-	*most = contain != NULL ? max( 0, contain->getContainMax() ) : 0;
+	*used = 0;
+	*most = 0;
+	// no room where the garrison order takes nobody: an Overlord without its bunker, a Troop Crawler
+	if( contain == NULL || !contain->isPassengerAllowedToFire() )
+		return;
+	// the places the game's own pips count: slots, not men (a big passenger takes more than one), and
+	// an Overlord's bunker in place of the carrier; the same sum for a container that hides its pips
+	if( !contain->getContainerPipsToShow( *most, *used ) )
+	{
+		*most = contain->getContainMax();
+		*used = (Int)contain->getContainCount() + contain->getExtraSlotsInUse();
+	}
+	*most = max( 0, *most );
+}
+
+Int LaneWarDirector::getAirborneJets( Coord3D *where, Int *playerIndex, Int most ) const
+{
+	Int found = 0;
+	for( size_t i = 0; i < m_jets.size() && found < most; ++i )
+	{
+		const Jet &jet = m_jets[ i ];
+		const Object *obj = jet.state != JET_PARKED ? TheGameLogic->findObjectByID( jet.id ) : NULL;
+		if( obj == NULL || obj->isEffectivelyDead() )
+			continue;
+		where[ found ] = *obj->getPosition();
+		playerIndex[ found ] = m_seatPlayer[ jet.team ][ jet.seat ];
+		++found;
+	}
+	return found;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1913,6 +1940,7 @@ void LaneWarDirector::joinSquadron( const PlotUnit &u, UnsignedInt now )
 	jet.health = 0.0f;
 	jet.veterancy = u.veterancy;
 	jet.strikes = 0;
+	jet.upgrades = u.upgrades;
 	m_jets.push_back( jet );
 	DEBUG_LOG(( "HEADLESS LANEWAR JET: frame %u '%s' of %s%d joins its squadron off the map, %d jets in all squadrons\n", now,
 							jet.thing->getName().str(), TEAM_NAME[ u.team ], u.seat + 1, (Int)m_jets.size() ));
@@ -2018,6 +2046,8 @@ void LaneWarDirector::launchJets( Int team, Int seat, UnsignedInt now )
 		}
 		obj->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_UNSELECTABLE ) );
 		owner->setActive();
+		for( size_t k = 0; k < jet.upgrades.size(); ++k )
+			obj->giveUpgrade( jet.upgrades[ k ] );
 
 		// born flying at its own height and at full speed, as a payload plane comes in
 		AIUpdateInterface *ai = obj->getAI();
@@ -2438,10 +2468,11 @@ void LaneWarDirector::crc( Xfer *xfer )
 	  Version 3: each copy's owner, and the players' ability switches.
 	  Version 4: the squadrons' jets.
 	  Version 5: each plot unit's rank and what it cost.
-	  Version 6: each plot unit's object upgrades and passengers. */
+	  Version 6: each plot unit's object upgrades and passengers.
+	  Version 7: each jet's object upgrades. */
 void LaneWarDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 6;
+	XferVersion currentVersion = 7;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -2610,6 +2641,21 @@ void LaneWarDirector::xfer( Xfer *xfer )
 			xfer->xferReal( &jet.health );
 			xfer->xferInt( &jet.veterancy );
 			xfer->xferInt( &jet.strikes );
+			UnsignedInt upgrades = (UnsignedInt)jet.upgrades.size();
+			if( version >= 7 )
+				xfer->xferUnsignedInt( &upgrades );
+			else
+				upgrades = 0;
+			if( xfer->getXferMode() == XFER_LOAD )
+				jet.upgrades.clear();
+			for( UnsignedInt k = 0; k < upgrades; ++k )
+			{
+				AsciiString upgradeName = xfer->getXferMode() == XFER_LOAD ? AsciiString::TheEmptyString : jet.upgrades[ k ]->getUpgradeName();
+				xfer->xferAsciiString( &upgradeName );
+				const UpgradeTemplate *upgrade = xfer->getXferMode() == XFER_LOAD ? TheUpgradeCenter->findUpgrade( upgradeName ) : NULL;
+				if( upgrade != NULL )
+					jet.upgrades.push_back( upgrade );
+			}
 		}
 		if( xfer->getXferMode() == XFER_LOAD )
 		{

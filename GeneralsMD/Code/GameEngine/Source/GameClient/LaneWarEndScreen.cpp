@@ -788,9 +788,9 @@ void LaneWarEndScreen_preDraw( void )
 	s_matchSeconds = (Int)( s_endFrame / LOGICFRAMES_PER_SECOND );
 	if( s_seconds >= RESULTS_AT )
 		s_resultsOpen = TRUE;
-	if( s_resultsOpen && !s_barHidden )
+	if( !s_barHidden )
 	{
-		// a watcher's bar (minimap, standings, portrait) would stand over the cards
+		// a watcher's bar (minimap, standings, portrait) would stand over the result and the cards
 		s_barHidden = TRUE;
 		HideControlBar();
 	}

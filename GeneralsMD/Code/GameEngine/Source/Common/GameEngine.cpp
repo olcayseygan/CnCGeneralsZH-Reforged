@@ -1518,6 +1518,9 @@ void GameEngine::init( int argc, char *argv[] )
 		checksumFileContents( xferCRC, "Data\\INI\\CommandButton.ini" );
 		checksumFileContents( xferCRC, "Data\\INI\\CommandSet.ini" );
 		checksumFileContents( xferCRC, "Data\\INI\\CommandSetReforged.ini" );
+		// TheChallengeGenerals loads it without the checksum, and its StartsEnabled decides the Random
+		// pool's candidates and whether a seat gets its starting buildings (GameLogic::startNewGame)
+		checksumFileContents( xferCRC, "Data\\INI\\ChallengeMode.ini" );
 		checksumModels( xferCRC );
 
 		xferCRC.close();

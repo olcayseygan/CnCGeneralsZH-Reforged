@@ -7136,6 +7136,9 @@ static void logExpansionStop( Player *player, const char *gate )
 	* (that branch of it is written for exactly this and had no caller either).
 	*/
 //----------------------------------------------------------------------------------------------------------
+static void findAnyDozer( Object *obj, void *userData );
+static const ThingTemplate *buildableOfKind( Object *builder, GUICommandType commandType, KindOfType kind, Bool moneyLater );
+
 void AIPlayer::doExpansion( void )
 {
 	const AIDifficultyProfile *profile = getSkillProfile();
@@ -7160,8 +7163,9 @@ void AIPlayer::doExpansion( void )
 
 	//
 	// What this faction calls a supply centre: whatever is already flagged as one on the build
-	// list.  Faction-correct without a table, and if the AI has never had one it
-	// has nothing to expand with anyway.
+	// list, else what a dozer of its own can put up.  The build list alone was not enough: on the
+	// turtle bench a China seat's supply entries went blank (frame 930 on) and it stopped expanding
+	// for the whole match on "no supply center template", 0 income, never a War Factory.
 	//
 	AsciiString supplyCenterName;
 	for( BuildListInfo *info = m_player->getBuildList(); info; info = info->getNext() )
@@ -7171,6 +7175,14 @@ void AIPlayer::doExpansion( void )
 			supplyCenterName = info->getTemplateName();
 			break;
 		}
+	}
+	if( supplyCenterName.isEmpty() )
+	{
+		Object *dozer = NULL;
+		m_player->iterateObjects( findAnyDozer, &dozer );
+		const ThingTemplate *center = dozer ? buildableOfKind( dozer, GUI_COMMAND_DOZER_CONSTRUCT, KINDOF_FS_SUPPLY_CENTER, TRUE ) : NULL;
+		if( center != NULL )
+			supplyCenterName = center->getName();
 	}
 	if( supplyCenterName.isEmpty() )
 	{

@@ -12,6 +12,7 @@ found and fixed, EA's own, not port damage.**
 
 - Your plot holds twice what it did: 12 slots across by 16 deep instead of 8 deep, 192 slots in all. It grew back from the lane, so your wave still walks out as wide as before and the side camera shows the plot across the screen.
 - The two air rows behind the plot are gone. A jet goes on the plot like any other unit, in any slot it fits. It still never marches: its copy waits off the map with your squadron and strikes when the fronts are about to meet. Jets you place in the same row fly in line, and one placed further back takes off further back. Computer seats put their jets at the back of the plot.
+- The fortress drops to 4000 health and the watch tower to 1500 to go with it. A full plot sends a wave of up to 80 units, and at 6000 two such waves ground each other down in the middle for good: five of twelve computer 3v3s on Hard and Brutal had no fortress down after 40 minutes. At 4000 nine of the same twelve end on a fortress kill, eight of them between the 22nd and the 27th minute, at a median of 25.6.
 - Direct Strike replays and saves recorded before this change will not play back.
 
 ## Direct Strike waves leave from behind the fortress

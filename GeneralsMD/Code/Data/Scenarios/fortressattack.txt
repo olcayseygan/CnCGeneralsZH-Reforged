@@ -5,9 +5,9 @@
 # lanemarches east into the fortress; a second wave (four Battlemasters and an Inferno Cannon) follows at
 # file frame 1200 and a pair of MiGs strikes at 1740. The fortress is drawn in fragments from its first
 # hit (W3DFractureDraw) and comes down to its ruin at zero health; its death decides the match, so a drawn
-# run needs -control to stay up past it. Seed 1 at 12000 health: tower down at logic frame 333, the
-# fortress at 8268 when the tallies stop and down at logic 6062 (headless, 2026-11-21). At 4000 it fell
-# near logic 1270.
+# run needs -control to stay up past it. Seed 1 at 4000 health and a 1500 tower: the tower is down by
+# file frame 300, the fortress at 32 by file frame 1800 with the MiGs on it and down at logic frame 1308
+# (headless, 2026-11-21). At 12000 it took to logic 6062.
 #
 #   generals.exe -quickstart -noshellmap -observer -multiInstance -noFPSLimit
 #     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
@@ -47,15 +47,6 @@
 1650  tally   1  LaneWarFortress
 1800  tally   1  LaneWarFortress
 1950  tally   1  LaneWarFortress
-2100  tally   1  LaneWarFortress
-2250  tally   1  LaneWarFortress
-2400  tally   1  LaneWarFortress
-2550  tally   1  LaneWarFortress
-2700  tally   1  LaneWarFortress
-2850  tally   1  LaneWarFortress
-3000  tally   1  LaneWarFortress
 1200  tally   0  *
 1800  tally   0  *
-2400  tally   0  *
 1830  tally   0  ChinaJetMIG
-2100  tally   0  ChinaJetMIG

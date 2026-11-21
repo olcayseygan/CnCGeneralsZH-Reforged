@@ -3,9 +3,9 @@
 # of the tower facing the tanks at its middle height, spread over that face by the client. A drawn run
 # only (no -headless): read the FRACTURE HIT lines, the smallest hole (3) a hit, chipping the face
 # facing the tanks. The tower fires until it dies, so the tanks' health falls at every tally until
-# FRACTURE COLLAPSE, and the replay of this run agrees with the one before the fragments. Ten tanks
-# took the 1200-health tower; at 4000 the tower kills ten and keeps 1816, while twenty bring it down
-# at logic frame 1062 with thirteen left (seed 1, headless, 2026-11-21).
+# FRACTURE COLLAPSE, and the replay of this run agrees with the one before the fragments. At 1500
+# health twenty tanks bring it down between file frames 600 and 750 with seventeen left (seed 1,
+# headless, 2026-11-21); at 4000 it took to logic 1062 with thirteen left.
 #
 #   generals.exe -quickstart -noshellmap -observer -multiInstance -noFPSLimit
 #     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina

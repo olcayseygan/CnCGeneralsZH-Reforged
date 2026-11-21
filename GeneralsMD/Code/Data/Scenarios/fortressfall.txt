@@ -9,8 +9,8 @@
 #     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
 #     -seed 1 -maxframes 6000 -scenario fortressfall -logPrefix fortressfall_
 #
-# At 12000 health the Overlords are gone by file frame 1800 with the fortress at 4610, and the guns
-# out of its reach finish it at logic frame 5603 (seed 1, headless, 2026-11-21).
+# At 4000 health it falls at logic frame 436, the Overlords still on it (seed 1, headless,
+# 2026-11-21); at 12000 the Overlords were gone by file frame 1800 and the guns took to logic 5603.
 #
 # On this map (rmg_v20_3_6p_642c_lane, 6420 by 3610) the lane runs along y 1805 from x 1410 to 5010,
 # 1580 to 2030 across: fortress B stands at 4470,1805 (300 reach), B's watch tower at 3876,1805 (225
@@ -28,10 +28,4 @@
 300   tally   1  LaneWarFortress
 450   tally   1  LaneWarFortress
 600   tally   1  LaneWarFortress
-750   tally   1  LaneWarFortress
-900   tally   1  LaneWarFortress
-1050  tally   1  LaneWarFortress
-1200  tally   1  LaneWarFortress
-1500  tally   1  LaneWarFortress
-1800  tally   1  LaneWarFortress
-1800  tally   0  ChinaTankOverlord
+600   tally   0  ChinaTankOverlord

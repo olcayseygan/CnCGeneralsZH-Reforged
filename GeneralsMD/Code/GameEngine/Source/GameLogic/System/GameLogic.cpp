@@ -6041,7 +6041,7 @@ void GameLogic::destroyObject( Object *obj )
 Bool inCRCGen = FALSE;
 UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 {
-	if (mode != CRC_RECALC)
+	if (mode == CRC_CACHED)
 		return m_CRC;
 
 	setFPMode();
@@ -6115,7 +6115,7 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 	{
 		CRCGEN_LOG(("RandomSeed: %d\n", seed));
 	}
-	if (xferCRC->getXferMode() == XFER_CRC)
+	if (xferCRC->getXferMode() == XFER_CRC && mode == CRC_RECALC)
 	{
 		xferCRC->xferUnsignedInt( &seed );
 	}

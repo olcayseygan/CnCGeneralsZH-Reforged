@@ -182,8 +182,11 @@ void DeepCRCSanityCheck::reset(void)
 	// EA wrote the whole deep CRC out to CRCAfter<n>Maps.dat in the user data folder here, on every
 	// player's machine, for a comparison only this function makes and only against the number.  A
 	// folder that refused the write threw out of the shell map's first frame as "Uncaught exception
-	// in WinMain"; the number alone is all the check needs.
-	UnsignedInt thisCRC = TheGameLogic->getCRC( CRC_RECALC );
+	// in WinMain"; the number alone is all the check needs.  Not the light CRC a frame sends, though:
+	// that one folds in the logic random seed, which every match moves and the next match seeds again,
+	// so it differed after every game and Debug asserted on the first reset after one.  EA's deep CRC
+	// was taken in save mode and never had the seed in it.
+	UnsignedInt thisCRC = TheGameLogic->getCRC( CRC_RECALC_WITHOUT_SEED );
 
 	DEBUG_LOG(("DeepCRCSanityCheck: CRC is %X\n", thisCRC));
 	DEBUG_ASSERTCRASH(timesThrough == 0 || thisCRC == lastCRC,

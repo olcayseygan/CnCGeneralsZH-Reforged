@@ -102,7 +102,8 @@ inline Bool isRecordableGameMode( Int gameMode )
 enum
 {
 	CRC_CACHED,
-	CRC_RECALC
+	CRC_RECALC,
+	CRC_RECALC_WITHOUT_SEED		///< the world alone: what a reset has to clear, with the logic random seed a match moved left out
 };
 
 

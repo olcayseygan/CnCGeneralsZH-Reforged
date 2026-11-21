@@ -962,19 +962,21 @@ void ControlBar::populateBuildTooltipLayout( const CommandButton *commandButton,
 				//Special case: When building upgrades
 				else if( upgradeTemplate && !player->hasUpgradeInProduction( upgradeTemplate ) )
 				{
-					if( commandButton->getCommandType() == GUI_COMMAND_PLAYER_UPGRADE ||
+					// canAffordUpgrade also refuses a Pro Rules ban, and the card read that as money: Neutron
+					// Shells sat greyed on the silo saying "Not enough money" with ten thousand in the bank.
+					// The Nuke Cannon's own Neutron Shells button (NEED_UPGRADE) stays grey for the same
+					// reason and its card said nothing at all, so it says the ban too.
+					if( TheGameLogic->isProRules() && ProRulesBanUpgrade( upgradeTemplate->getUpgradeName() ) )
+					{
+						cardWarning = TheGameText->fetch( "TOOLTIP:TooltipProRulesBanUpgrade" );
+					}
+					else if( commandButton->getCommandType() == GUI_COMMAND_PLAYER_UPGRADE ||
 						  commandButton->getCommandType() == GUI_COMMAND_OBJECT_UPGRADE )
 					{
 						ProductionUpdateInterface *pui = selectedObject->getProductionUpdateInterface();
 						if( pui && pui->getProductionCount() >= getQueueCap( pui ) )
 						{
 							cardWarning = TheGameText->fetch( "TOOLTIP:TooltipCannotPurchaseBecauseQueueFull" );
-						}
-						// canAffordUpgrade also refuses a Pro Rules ban, and the card read that as money: Neutron
-						// Shells sat greyed on the silo saying "Not enough money" with ten thousand in the bank
-						else if( TheGameLogic->isProRules() && ProRulesBanUpgrade( upgradeTemplate->getUpgradeName() ) )
-						{
-							cardWarning = TheGameText->fetch( "TOOLTIP:TooltipProRulesBanUpgrade" );
 						}
 						else if( !TheUpgradeCenter->canAffordUpgrade( ThePlayerList->getLocalPlayer(), upgradeTemplate, FALSE ) )
 						{

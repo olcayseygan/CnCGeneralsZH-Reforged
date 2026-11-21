@@ -1,6 +1,8 @@
 # Do Neutron Shells work? The silo buys Upgrade_ChinaNeutronShells, the plain, Nuke General's and
 # Infantry General's Nuke Cannon each press the Neutron Shells button (MSG_SWITCH_WEAPONS, slot
-# secondary) once before the upgrade and once after, then all three fire at three Crusaders.
+# secondary) once before the upgrade and once after, then all three fire at three Crusaders on a
+# player's force-attack, not a script's attack: a script order may pick the neutron shell by itself
+# (AutoChooseSources SECONDARY FROM_SCRIPT FROM_AI), a player's only through the button.
 #
 #   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
 #     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover
@@ -14,6 +16,11 @@
 #
 # Measured 2026-11-08: 0, 0, 0 before, 1, 2, 1 after, slot 1 "units 1 built 0 lost". The same file
 # with the silo refused (no upgrade) says 0 after as well and the Crusaders die to normal shells.
+# Measured again 2026-11-21 with the force-attack: the same 0, 0, 0 and 1, 2, 1, "0 lost"; the file
+# with the 2000 switchweapon lines taken out says "3 lost", the Crusaders blown up by normal shells.
+# The real button, pressed over -control on a drawn match (ControlBar.wnd:ButtonCommand03 with the
+# cannon selected) on both the Classic bar and the sidebar layout, leaves its Crusader crewless and
+# neutral as well (neutral units 11 to 12; 11 to 11 and a kill to the radiation without the press).
 
 30    spawn         0  ChinaNuclearMissileLauncher     1   990 3560
 30    spawn         0  ChinaPowerPlant                 1   1100 2900
@@ -34,7 +41,7 @@
 2000  switchweapon  0  Nuke_ChinaVehicleNukeLauncher   secondary
 2000  switchweapon  0  Infa_ChinaVehicleNukeLauncher   secondary
 2010  tally         1  AmericaTankCrusader
-2010  attack        0  ChinaVehicleNukeLauncher        1  AmericaTankCrusader
-2010  attack        0  Nuke_ChinaVehicleNukeLauncher   1  AmericaTankCrusader
-2010  attack        0  Infa_ChinaVehicleNukeLauncher   1  AmericaTankCrusader
+2010  forceattack   0  ChinaVehicleNukeLauncher        1  AmericaTankCrusader
+2010  forceattack   0  Nuke_ChinaVehicleNukeLauncher   1  AmericaTankCrusader
+2010  forceattack   0  Infa_ChinaVehicleNukeLauncher   1  AmericaTankCrusader
 2300  tally         1  AmericaTankCrusader

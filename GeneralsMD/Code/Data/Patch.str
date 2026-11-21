@@ -5154,6 +5154,34 @@ SKIN:Splinter
 "SPLINTER CAMO"
 END
 
+SKIN:Iron
+"IRON"
+END
+
+SKIN:Bronze
+"BRONZE"
+END
+
+SKIN:Silver
+"SILVER"
+END
+
+SKIN:Gold
+"GOLD"
+END
+
+SKIN:Emerald
+"EMERALD"
+END
+
+SKIN:Reforged
+"REFORGED"
+END
+
+SKIN:BugHunter
+"BUG HUNTER"
+END
+
 GUI:OnlineLadderRank
 "#"
 END
@@ -6633,6 +6661,18 @@ END
 
 GUI:OnlineSkinsGlaTank
 "GLA tank"
+END
+
+GUI:OnlineSkinsUsaHelicopter
+"USA helicopter"
+END
+
+GUI:OnlineSkinsUsaVehicle
+"USA vehicle"
+END
+
+GUI:OnlineSkinsChinaVehicle
+"China vehicle"
 END
 
 GUI:OnlineSkinsWorn

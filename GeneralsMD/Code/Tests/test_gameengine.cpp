@@ -27651,7 +27651,8 @@ TEST(skin_loadout_rides_the_slot_entry_and_an_old_string_reads_as_none)
 /* SkinsReforged.ini as it ships: ids 1, 2 and 3 are the 1K gold Crusader, Battlemaster and Scorpion
 	 (the ids zerohour.gg uses), each on its generals' models (the Laser General's Crusader left out),
 	 the damaged states and the wrecks that are its alone, case ignored, and on nothing else.  Each pairs the rebuilt sheets and retail's with their gold copies, never a house
-	 colour sheet.  A loadout keeps one skin a unit and drops ids past 63. */
+	 colour sheet.  Ids 4 to 15 are the supporter grades of the Chinook and the China Supply Truck, 16
+	 and 17 the Bug Hunter dozers.  A loadout keeps one skin a unit and drops ids past 63. */
 TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 {
 	CHECK( bootOnce() );
@@ -27675,7 +27676,7 @@ TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 	for( Int i = 0; i < (Int)ARRAY_SIZE( plain ); ++i )
 		CHECK_EQ( TankSkin_forModel( all, plain[i] ), 0 );
 	CHECK_EQ( TankSkin_forModel( (SkinLoadout)1 << 2, "AVLeopard" ), 0 );	// owns the Battlemaster's only
-	CHECK_EQ( TankSkin_forModel( (SkinLoadout)1 << 9, "AVLeopard" ), 0 );	// a newer build's skin
+	CHECK_EQ( TankSkin_forModel( (SkinLoadout)1 << 40, "AVLeopard" ), 0 );	// a newer build's skin
 	CHECK_EQ( TankSkin_forModel( all, NULL ), 0 );
 
 	CHECK_STR( TankSkin_replacementSheet( 1, "AVCrusader_R.tga" ), "Skin1K_AVCrusader_R.tga" );
@@ -27689,7 +27690,41 @@ TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 	CHECK( TankSkin_replacementSheet( 1, "ZHCA_AVCrusPlate.tga" ) == NULL );
 	CHECK( TankSkin_replacementSheet( 1, "NVTreads.tga" ) == NULL );
 	CHECK( TankSkin_replacementSheet( 2, "AVCrusader_R.tga" ) == NULL );
-	CHECK( TankSkin_replacementSheet( 9, "AVCrusader_R.tga" ) == NULL );
+	CHECK( TankSkin_replacementSheet( 40, "AVCrusader_R.tga" ) == NULL );
+
+	// the supporter grades (4 to 9 the Chinook, 10 to 15 the China Supply Truck) and the Bug Hunter
+	// dozers (16 USA, 17 China), wrecks and flying pieces included; nothing another unit draws
+	for( Int g = 0; g < 6; ++g )
+	{
+		const SkinLoadout chinook = (SkinLoadout)1 << ( 4 + g );
+		const SkinLoadout truck = (SkinLoadout)1 << ( 10 + g );
+		static const char *const chinookModels[] = { "AVChinook", "AVChinook_d", "AVChinookAG", "avchinookag_d", "AVChinook_D1" };
+		static const char *const truckModels[] = { "NVSSupplyTk", "NVSSUPPLYTK_D", "NVSSupplyTK_D1", "NVSSupplyTk_d2", "NVSSupplyTk_D5" };
+		for( Int i = 0; i < (Int)ARRAY_SIZE( chinookModels ); ++i )
+			CHECK_EQ( TankSkin_forModel( chinook, chinookModels[i] ), 4 + g );
+		for( Int i = 0; i < (Int)ARRAY_SIZE( truckModels ); ++i )
+			CHECK_EQ( TankSkin_forModel( truck, truckModels[i] ), 10 + g );
+		static const char *const notOurs[] = { "CINE_Chinook", "AVChinook_A", "AVChinook_A1MSH", "NVSupplyTk", "NVSupplyTk_d1",
+			"CVToxSpplyTk_D1", "CVToxSpplyTk_D4" };
+		for( Int i = 0; i < (Int)ARRAY_SIZE( notOurs ); ++i )
+			CHECK_EQ( TankSkin_forModel( chinook | truck, notOurs[i] ), 0 );
+		AsciiString sheet;
+		sheet.format( "SkinSup%d_AVChinook_d1_R.tga", g + 1 );
+		CHECK_STR( TankSkin_replacementSheet( 4 + g, "avchinook_d1_r.dds" ), sheet.str() );
+		sheet.format( "SkinSup%dC_nvsupplytr_d.tga", g + 1 );
+		CHECK_STR( TankSkin_replacementSheet( 10 + g, "NVSupplyTr_d.tga" ), sheet.str() );
+		CHECK( TankSkin_replacementSheet( 4 + g, "AVComanche_p_R.tga" ) == NULL );		// the rotor blades
+		CHECK( TankSkin_replacementSheet( 4 + g, "ZHCA_AVSupLine.tga" ) == NULL );
+	}
+	const SkinLoadout dozers = ( (SkinLoadout)1 << 16 ) | ( (SkinLoadout)1 << 17 );
+	CHECK_EQ( TankSkin_forModel( dozers, "AVCONSTDOZ_A" ), 16 );
+	CHECK_EQ( TankSkin_forModel( dozers, "avconstdoz_d5" ), 16 );
+	CHECK_EQ( TankSkin_forModel( dozers, "nvconstdoz_AD" ), 17 );
+	CHECK_EQ( TankSkin_forModel( dozers, "NVCONSTDOZ_D4" ), 17 );
+	CHECK_EQ( TankSkin_forModel( dozers, "AVCONSTDOZ" ), 0 );		// the GLA dozer nobody builds
+	CHECK_STR( TankSkin_replacementSheet( 16, "avconstdoz_d_R.tga" ), "SkinBug_avconstdoz_D_R.tga" );	// the wreck's second sheet
+	CHECK_STR( TankSkin_replacementSheet( 17, "nvconstdoz_D1.tga" ), "SkinBugC_nvconstdoz_D1.tga" );
+	CHECK( TankSkin_replacementSheet( 17, "NVTreads.tga" ) == NULL );
 
 	// the Skins screen's rows: each unit by its own name, the skin by the string table's
 	AsciiString unit, unitLabel, label;
@@ -27699,12 +27734,20 @@ TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 	CHECK_STR( label.str(), "SKIN:Splinter" );
 	CHECK( TankSkin_describe( 3, unit, unitLabel, label ) && unitLabel == "OBJECT:Scorpion" );
 	CHECK( TankSkin_describe( 1, unit, unitLabel, label ) && unitLabel == "OBJECT:Crusader" );
-	CHECK( !TankSkin_describe( 9, unit, unitLabel, label ) );
+	CHECK( TankSkin_describe( 9, unit, unitLabel, label ) && unit == "Chinook" && label == "SKIN:Reforged" );
+	CHECK( TankSkin_describe( 10, unit, unitLabel, label ) && unitLabel == "OBJECT:SupplyTruck" && label == "SKIN:Iron" );
+	CHECK( TankSkin_describe( 16, unit, unitLabel, label ) && unit == "USADozer" && label == "SKIN:BugHunter" );
+	CHECK( TankSkin_describe( 17, unit, unitLabel, label ) && unit == "ChinaDozer" && unitLabel == "OBJECT:Dozer" );
+	CHECK( !TankSkin_describe( 18, unit, unitLabel, label ) );
+	CHECK( !TankSkin_describe( 40, unit, unitLabel, label ) );
 
 	CHECK( TankSkin_setLocalLoadout( "1 2 3" ) == all );
 	CHECK( TankSkin_localLoadout() == all );
 	CHECK( TankSkin_setLocalLoadout( "3,99.1" ) == ( ( (SkinLoadout)1 << 1 ) | ( (SkinLoadout)1 << 3 ) ) );
-	CHECK( TankSkin_setLocalLoadout( "9 1" ) == ( ( (SkinLoadout)1 << 9 ) | ( (SkinLoadout)1 << 1 ) ) );	// a newer build's skin rides along
+	CHECK( TankSkin_setLocalLoadout( "40 1" ) == ( ( (SkinLoadout)1 << 40 ) | ( (SkinLoadout)1 << 1 ) ) );	// a newer build's skin rides along
+	// one supporter grade a unit, whichever comes first; both dozers at once
+	CHECK( TankSkin_setLocalLoadout( "7 4 15 10 16 17" ) == ( ( (SkinLoadout)1 << 7 ) | ( (SkinLoadout)1 << 15 )
+		| ( (SkinLoadout)1 << 16 ) | ( (SkinLoadout)1 << 17 ) ) );
 	CHECK( TankSkin_setLocalLoadout( "" ) == 0 );
 	CHECK( TankSkin_setLocalLoadout( NULL ) == 0 );
 

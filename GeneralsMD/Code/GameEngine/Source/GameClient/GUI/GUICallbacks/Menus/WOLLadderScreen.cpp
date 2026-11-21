@@ -655,10 +655,10 @@ static void requestLadderPage( Int offset )
 }
 
 //-------------------------------------------------------------------------------------------------
-// The skins page, the Skins tab: a card per unit SkinsReforged.ini dresses, its cameo, name and side,
-// and a choice card for Default and each skin for it.  A skin the account lacks stays on its card,
-// disabled.  Save sends the whole loadout; once the site took it the next room and Quick Match seat
-// it (OnlineSaveSkins).  The same layout as the ladder, no layout of its own to ship.
+// The skins page, the Skins tab: a strip of unit tiles, one per unit SkinsReforged.ini dresses with
+// its cameo, name and side, and under it the picked tile's choice cards, Default and each skin for
+// it.  A skin the account lacks stays on its card, disabled.  Save sends the whole loadout; once the
+// site took it the next room and Quick Match seat it (OnlineSaveSkins).  The same layout as the ladder, no layout of its own to ship.
 //-------------------------------------------------------------------------------------------------
 struct SkinChoice
 {
@@ -676,9 +676,13 @@ struct SkinRow
 	std::vector<SkinChoice> choices;
 	Int pick;								///< picked on this page
 	Int worn;								///< what the account wears, TankSkin_localLoadout
+	GameWindow *tile;				///< the unit's tile in the strip, a push button
+	const char *cameo;			///< from SKIN_UNITS; NULL for a unit missing there
+	DisplayString *side;		///< the side line under the name; NULL without one
 };
 static Bool s_skinsPage = FALSE;
 static std::vector<SkinRow> s_skinRows;
+static size_t s_skinUnit = 0;					///< the row whose choices show
 static GameWindow *buttonSave = NULL;
 static GameWindow *buttonSite = NULL;
 static Int s_skinsState = -1;					///< OnlineSkinsState last laid out
@@ -692,6 +696,10 @@ static const struct { const char *unit; const char *cameo; const char *side; } S
 	{ "Crusader", "SACLeopard", "GUI:OnlineSkinsUsaTank" },
 	{ "Battlemaster", "SNBattlemaster", "GUI:OnlineSkinsChinaTank" },
 	{ "Scorpion", "SUScorpion", "GUI:OnlineSkinsGlaTank" },
+	{ "Chinook", "SAChinook", "GUI:OnlineSkinsUsaHelicopter" },
+	{ "SupplyTruck", "SNSupplyTruck", "GUI:OnlineSkinsChinaVehicle" },
+	{ "USADozer", "SACDozer", "GUI:OnlineSkinsUsaVehicle" },
+	{ "ChinaDozer", "SNDozer", "GUI:OnlineSkinsChinaVehicle" },
 };
 
 void WOLSkinsScreenOpen( void )
@@ -700,29 +708,85 @@ void WOLSkinsScreenOpen( void )
 	TheShell->push( AsciiString( "Menus/WOLLadderScreen.wnd" ) );
 }
 
-/// unit r's card in the units box; ponytail: three fit the box, a fourth wants a scrolling list
-static void unitCard( Int r, Int &x, Int &y, Int &width, Int &height )
+/// unit r of count's tile in the strip across the units box: 200 by 180, narrower when they crowd
+/// (seven are 142 wide at 16:9)
+static void unitTile( Int r, Int count, Int &x, Int &y, Int &width, Int &height )
 {
 	IRegion2D units, side;
 	UIStyle::onlineColumns( units, side );
-	x = units.lo.x + across( 20.0f );
-	width = units.hi.x - units.lo.x - across( 40.0f );
-	y = units.lo.y + down( 56.0f + 212.0f * r );		// three cards end at 692 of the band's 710
-	height = down( 200.0f );
+	const Int gap = across( 12.0f );
+	const Int room = units.hi.x - units.lo.x - across( 40.0f );
+	width = min( across( 200.0f ), ( room - ( count - 1 ) * gap ) / max( 1, count ) );
+	x = units.lo.x + across( 20.0f ) + r * ( width + gap );
+	y = units.lo.y + down( 56.0f );
+	height = down( 180.0f );
 }
 
-/// choice c of count on unit r's card: 370 by 152 beside the cameo, narrower where the card is
-static void choiceCard( Int r, Int c, Int count, Int &x, Int &y, Int &width, Int &height )
+/// choice c of count under the strip, four a line: 370 by 152, narrower where four share it.
+/// ponytail: two lines end at 588 of the band's 710, a ninth choice wants a third line or a scroll
+static void choiceCard( Int c, Int count, Int &x, Int &y, Int &width, Int &height )
 {
-	Int cardX, cardY, cardWidth, cardHeight;
-	unitCard( r, cardX, cardY, cardWidth, cardHeight );
-	const Int first = cardX + across( 290.0f );
+	IRegion2D units, side;
+	UIStyle::onlineColumns( units, side );
+	const Int columns = max( 1, min( count, 4 ) );
 	const Int gap = across( 20.0f );
-	const Int room = cardX + cardWidth - across( 18.0f ) - first;
-	width = min( across( 370.0f ), ( room - ( count - 1 ) * gap ) / max( 1, count ) );
-	x = first + c * ( width + gap );
-	y = cardY + down( 24.0f );
+	const Int room = units.hi.x - units.lo.x - across( 40.0f );
+	width = min( across( 370.0f ), ( room - ( columns - 1 ) * gap ) / columns );
+	x = units.lo.x + across( 20.0f ) + ( c % columns ) * ( width + gap );
+	y = units.lo.y + down( 264.0f + 172.0f * ( c / columns ) );
 	height = down( 152.0f );
+}
+
+/** A unit's tile, drawn over its push button: the panel's black under a FRAME edge, the three-line
+	* edge on the unit whose choices show; its cameo, its name (ACTIVE under the mouse) and its side. */
+static void drawSkinUnit( GameWindow *window, WinInstanceData *instData )
+{
+	const SkinRow *row = NULL;
+	size_t r = 0;
+	for (; r < s_skinRows.size(); ++r)
+		if (s_skinRows[r].tile == window)
+		{
+			row = &s_skinRows[r];
+			break;
+		}
+	if (!row)
+		return;
+
+	Int x, y, width, height;
+	window->winGetScreenPosition( &x, &y );
+	window->winGetSize( &width, &height );
+	TheDisplay->drawFillRect( x, y, width, height, UIStyle::PANEL );
+	if (r == s_skinUnit)
+		UIStyle::edge( x, y, width, height );
+	else
+		TheDisplay->drawOpenRect( x, y, width, height, 1.0f, UIStyle::FRAME );
+
+	// the cameo at the retail 5:4, 120 by 96 where the tile has room
+	const Int pictureWidth = min( width - across( 24.0f ), down( 120.0f ) );
+	const Int pictureHeight = pictureWidth * 4 / 5;
+	const Int pictureX = x + ( width - pictureWidth ) / 2;
+	const Int pictureY = y + down( 14.0f );
+	const Image *cameo = row->cameo ? TheMappedImageCollection->findImageByName( row->cameo ) : NULL;
+	if (cameo)
+	{
+		TheDisplay->drawImage( cameo, pictureX, pictureY, pictureX + pictureWidth, pictureY + pictureHeight );
+		TheDisplay->drawOpenRect( pictureX - 1, pictureY - 1, pictureWidth + 2, pictureHeight + 2, 1.0f, UIStyle::FRAME );
+	}
+
+	const Bool hovered = BitTest( window->winGetStatus(), WIN_STATUS_ENABLED ) && BitTest( instData->getState(), WIN_STATE_HILITED );
+	DisplayString *name = instData->getTextDisplayString();
+	if (name->getFont() != window->winGetFont())
+		name->setFont( window->winGetFont() );
+	Int wordsWidth, wordsHeight;
+	name->getSize( &wordsWidth, &wordsHeight );
+	const Int nameY = pictureY + pictureHeight + down( 10.0f );
+	name->draw( x + ( width - wordsWidth ) / 2, nameY, hovered ? UIStyle::ACTIVE : UIStyle::INK, UIStyle::SHADOW );
+	if (row->side)
+	{
+		Int sideWidth, sideHeight;
+		row->side->getSize( &sideWidth, &sideHeight );
+		row->side->draw( x + ( width - sideWidth ) / 2, nameY + wordsHeight + down( 2.0f ), UIStyle::MUTED, UIStyle::SHADOW );
+	}
 }
 
 static void freeChoiceWords( SkinChoice &choice )
@@ -831,6 +895,9 @@ static void createSkinsGadgets( void )
 			else
 				row.name = TheGameText->fetch( unitLabel );
 			row.pick = row.worn = 0;
+			row.tile = NULL;
+			row.cameo = NULL;
+			row.side = NULL;
 			SkinChoice none = { NULL, 0, TRUE, NULL, UIStyle::MUTED, NULL };
 			row.choices.push_back( none );
 			s_skinRows.push_back( row );
@@ -838,18 +905,42 @@ static void createSkinsGadgets( void )
 		s_skinRows[r].choices.push_back( choice );
 	}
 
-	// the choices, push buttons drawn as the cards
+	// the unit tiles and the choices, push buttons drawn as the tiles and cards; only the shown
+	// unit's choices are up
+	s_skinUnit = 0;
 	GameFont *face = UIStyle::titleFont( 15 );
+	GameFont *strong = UIStyle::font( UIStyle::TEXT_STRONG, TRUE );
+	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
 	for (size_t r = 0; r < s_skinRows.size(); ++r)
 	{
-		const Int count = (Int)s_skinRows[r].choices.size();
+		SkinRow &row = s_skinRows[r];
+		const char *sideKey = NULL;
+		for (size_t u = 0; u < ARRAY_SIZE( SKIN_UNITS ); ++u)
+			if (row.unit.compareNoCase( SKIN_UNITS[u].unit ) == 0)
+			{
+				row.cameo = SKIN_UNITS[u].cameo;
+				sideKey = SKIN_UNITS[u].side;
+			}
+		Int x, y, width, height;
+		unitTile( (Int)r, (Int)s_skinRows.size(), x, y, width, height );
+		const Int room = width - 2 * across( 10.0f );
+		row.tile = WOLMakeButtonLike( parentWindow, buttonBack, x, y, width, height, "GUI:OnlineSkinsDefault" );
+		if (row.tile)
+		{
+			row.tile->winSetFont( strong );
+			GadgetButtonSetText( row.tile, UIStyle::fitText( row.name, strong, room ) );
+			row.tile->winSetDrawFunc( drawSkinUnit );
+		}
+		if (sideKey)
+			row.side = newWords( UIStyle::fitText( TheGameText->fetch( sideKey ), body, room ), body );
+
+		const Int count = (Int)row.choices.size();
 		for (Int c = 0; c < count; ++c)
 		{
 			AsciiString unit, unitLabel, label = "GUI:OnlineSkinsDefault";
-			if (s_skinRows[r].choices[c].id)
-				TankSkin_describe( s_skinRows[r].choices[c].id, unit, unitLabel, label );
-			Int x, y, width, height;
-			choiceCard( (Int)r, c, count, x, y, width, height );
+			if (row.choices[c].id)
+				TankSkin_describe( row.choices[c].id, unit, unitLabel, label );
+			choiceCard( c, count, x, y, width, height );
 			GameWindow *button = WOLMakeButtonLike( parentWindow, buttonBack, x, y, width, height,
 				label.isEmpty() ? "GUI:OnlineSkinsDefault" : label.str() );
 			if (button)
@@ -857,8 +948,9 @@ static void createSkinsGadgets( void )
 				button->winSetFont( face );
 				GadgetButtonSetText( button, UIStyle::fitText( button->winGetText(), face, width - 2 * across( 24.0f ) ) );
 				button->winSetDrawFunc( drawSkinChoice );
+				button->winHide( r != s_skinUnit );
 			}
-			s_skinRows[r].choices[c].button = button;
+			row.choices[c].button = button;
 		}
 	}
 
@@ -879,12 +971,18 @@ static void createSkinsGadgets( void )
 static void destroySkinsGadgets( void )
 {
 	for (size_t r = 0; r < s_skinRows.size(); ++r)
+	{
+		if (s_skinRows[r].tile)
+			TheWindowManager->winDestroy( s_skinRows[r].tile );
+		if (s_skinRows[r].side)
+			TheDisplayStringManager->freeDisplayString( s_skinRows[r].side );
 		for (size_t c = 0; c < s_skinRows[r].choices.size(); ++c)
 		{
 			if (s_skinRows[r].choices[c].button)
 				TheWindowManager->winDestroy( s_skinRows[r].choices[c].button );
 			freeChoiceWords( s_skinRows[r].choices[c] );
 		}
+	}
 	s_skinRows.clear();
 	GameWindow *made[] = { buttonSave, buttonSite };
 	for (size_t i = 0; i < ARRAY_SIZE( made ); ++i)
@@ -900,34 +998,13 @@ static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const Asci
 	UIStyle::onlineColumns( units, side );
 	const Int inset = across( 24.0f );
 	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
-	GameFont *strong = UIStyle::font( UIStyle::TEXT_STRONG, TRUE );
 
-	// the units box, a card per unit: its cameo, its name and side, and each choice's chip
+	// the units box: the tiles draw themselves; each choice's chip, the shown unit's choices up
 	addBox( units.lo.x, units.lo.y, units.hi.x - units.lo.x, units.hi.y - units.lo.y );
 	addWords( TheGameText->fetch( "GUI:OnlineSkinsSub" ), UIStyle::sectionFont(), units.lo.x + inset, units.lo.y + down( 20.0f ), UIStyle::ACTIVE );
 	for (size_t r = 0; r < s_skinRows.size(); ++r)
 	{
 		SkinRow &row = s_skinRows[r];
-		Int x, y, width, height;
-		unitCard( (Int)r, x, y, width, height );
-		addBox( x, y, width, height );
-		const char *cameo = NULL;
-		const char *sideKey = NULL;
-		for (size_t u = 0; u < ARRAY_SIZE( SKIN_UNITS ); ++u)
-			if (row.unit.compareNoCase( SKIN_UNITS[u].unit ) == 0)
-			{
-				cameo = SKIN_UNITS[u].cameo;
-				sideKey = SKIN_UNITS[u].side;
-			}
-		addPicture( cameo ? TheMappedImageCollection->findImageByName( cameo ) : NULL, x + across( 22.0f ), y + down( 26.0f ), down( 150.0f ), down( 120.0f ) );
-		const Int nameRoom = across( 260.0f );
-		const Int nameBand = down( 30.0f );
-		const Int nameWidth = addWords( UIStyle::fitText( row.name, strong, nameRoom ), strong, x + across( 22.0f ), y + down( 156.0f ), UIStyle::INK, ALIGN_LEFT, nameBand );
-		const Int sideRoom = nameRoom - nameWidth - across( 10.0f );
-		if (sideKey && sideRoom > 0)
-			addWords( UIStyle::fitText( TheGameText->fetch( sideKey ), body, sideRoom ), body, x + across( 32.0f ) + nameWidth, y + down( 156.0f ),
-				UIStyle::MUTED, ALIGN_LEFT, nameBand );
-
 		for (size_t c = 0; c < row.choices.size(); ++c)
 		{
 			SkinChoice &choice = row.choices[c];
@@ -936,7 +1013,7 @@ static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const Asci
 			const char *chip = picked ? ( choice.id == row.worn ? "GUI:OnlineSkinsWorn" : "GUI:OnlineSkinsUnsaved" )
 				: choice.owned ? "GUI:OnlineSkinsOwned" : "GUI:OnlineSkinsLocked";
 			Int cx, cy, cw, ch;
-			choiceCard( (Int)r, (Int)c, (Int)row.choices.size(), cx, cy, cw, ch );
+			choiceCard( (Int)c, (Int)row.choices.size(), cx, cy, cw, ch );
 			const Int room = cw - 2 * inset;
 			freeChoiceWords( choice );
 			choice.chip = newWords( UIStyle::fitText( TheGameText->fetch( chip ), UIStyle::chipFont(), room - 2 * across( 8.0f ) ), UIStyle::chipFont() );
@@ -945,7 +1022,10 @@ static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const Asci
 				choice.hint = newWords( UIStyle::fitText( TheGameText->fetch( "GUI:OnlineSkinsLockedHint" ), body, room ), body );
 			// nothing to pick while an ask is out: its answer resets the picks to what the site holds
 			if (choice.button)
+			{
 				choice.button->winEnable( choice.owned && state != ONLINE_SKINS_WAITING );
+				choice.button->winHide( r != s_skinUnit );
+			}
 		}
 	}
 
@@ -1017,10 +1097,19 @@ static void drawSkins( void )
 	layoutSkins( state, owned, error );
 }
 
-/* A choice clicked: that row's pick.  FALSE when the control is none of them. */
+/* A unit's tile clicked: its choices show.  A choice clicked: that row's pick.  FALSE when the
+	 control is none of them. */
 static Bool pickSkin( GameWindow *control )
 {
 	for (size_t r = 0; r < s_skinRows.size(); ++r)
+	{
+		if (s_skinRows[r].tile == control)
+		{
+			s_skinUnit = r;
+			s_skinsDirty = TRUE;
+			drawSkins();
+			return TRUE;
+		}
 		for (size_t c = 0; c < s_skinRows[r].choices.size(); ++c)
 			if (s_skinRows[r].choices[c].button == control)
 			{
@@ -1030,6 +1119,7 @@ static Bool pickSkin( GameWindow *control )
 				drawSkins();
 				return TRUE;
 			}
+	}
 	return FALSE;
 }
 

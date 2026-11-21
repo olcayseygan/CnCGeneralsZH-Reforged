@@ -19400,6 +19400,34 @@ SKIN:Splinter
 "PARÇALI KAMUFLAJ"
 END
 
+SKIN:Iron
+"DEMİR"
+END
+
+SKIN:Bronze
+"BRONZ"
+END
+
+SKIN:Silver
+"GÜMÜŞ"
+END
+
+SKIN:Gold
+"ALTIN"
+END
+
+SKIN:Emerald
+"ZÜMRÜT"
+END
+
+SKIN:Reforged
+"REFORGED"
+END
+
+SKIN:BugHunter
+"HATA AVCISI"
+END
+
 GUI:OnlineLadderRank
 "#"
 END
@@ -20824,6 +20852,18 @@ END
 
 GUI:OnlineSkinsGlaTank
 "GLA tankı"
+END
+
+GUI:OnlineSkinsUsaHelicopter
+"ABD helikopteri"
+END
+
+GUI:OnlineSkinsUsaVehicle
+"ABD aracı"
+END
+
+GUI:OnlineSkinsChinaVehicle
+"Çin aracı"
 END
 
 GUI:OnlineSkinsWorn

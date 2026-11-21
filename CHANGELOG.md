@@ -8,6 +8,12 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Supporter and Bug Hunter skins
+
+- Backing the project now shows on your supply line. A supporter's Chinook and China Supply Truck wear a gunmetal hull with metal lines that climb with what you gave in total: Iron, Bronze, Silver, Gold, Emerald with green inlay, and at the top Reforged, gold on platinum with navy pinstripes. Every general's Chinook takes it, the Air Force General's Combat Chinook included, and so does the truck, its burnt hull and the pieces it throws when it dies. Your team colour stays on the trim, the crates keep their own paint, and a unit wears one grade at a time.
+- Players whose bug reports got something fixed get the Bug Hunter dozer: worn work steel, a safety yellow blade in black hazard bands, and on the China dozer's cab roof a struck-through bug. It comes for the USA and the China dozer alike, and you can wear both at once.
+- Both are picked where Splinter Camo is, on the Skins tab once you are signed in online, and both have a set painted for Classic Graphics. The tab now runs its seven units across the top as tiles, each with its own cameo and side, so the USA and the China dozer read apart at a glance, and shows the skins of the tile you click below them. In a match everyone sees them, the replay too; they change nothing about how the units work.
+
 ## Buildings stay whole at full zoom-out, bridges lie flat
 
 - The rebuilt units and buildings swap to lighter copies as they shrink on the screen, and the lightest copy of some of them had lost its walls. China's Propaganda Center turned into its red roof floating over bare ground at full zoom-out, and the damaged Propaganda Center, the damaged Black Market and a few hundred neutral buildings lost their bodies the same way. A lighter copy that has lost more than half of the model is never drawn now: the building stays on the next one up. 1,271 of the 6,135 rebuilt models skip such a copy.

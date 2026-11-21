@@ -23987,8 +23987,11 @@ void AIPlayer::doPersonaRaids( void )
 
 	// the raiders are its own, two sorties' worth, so the waves and the home guard do not take them: the
 	// first version picked from whatever stood idle at home, which the next wave had already taken, and
-	// raided four times a match.  The fastest ground vehicles idle or on guard at home fill the empty places
-	const Int keep = 2 * aiRatingLerp( m_rating, RAID_PARTY );
+	// raided four times a match.  The fastest ground vehicles idle or on guard at home fill the empty places.
+	// The party knob rises past Hard (5 at Brutal), and two of them ran off the end of m_raider into
+	// m_chatFrame: the frame of the last chat line read back as a raider's ID found a tree or a building,
+	// and its missing AI crashed the sortie (v4.2.0, 20 reports)
+	const Int keep = min( 2 * aiRatingLerp( m_rating, RAID_PARTY ), (Int)MAX_PERSONA_RAIDERS );
 	Int free = 0;
 	for( Int r = 0; r < keep; ++r )
 	{

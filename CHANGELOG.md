@@ -143,6 +143,7 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - A custom map whose train or ferry had no track laid out for it crashed the game the moment that transport was sent on its way, a bug as old as EA's release. It now stays where it is and opens its doors.
 - Some Intel and AMD graphics drivers handed the EA logo a picture far smaller than the movie, and copying the frame into it overwrote the game's memory with black pixels: a crash at startup, or a strange one at the first map. The game now refuses such a picture and skips the movie.
 - When the game runs out of memory or meets a bad value deep inside, its crash report now says where.
+- Skirmish, LAN and online matches against a computer above Hard (Brutal and up) crashed a minute or two in, on every machine in the match at the same moment: about 35 reports from some 25 installs. The raiding party grew past the room kept for eight raiders and wrote over the computer's own notes. Such a computer now keeps at most eight raiders.
 
 ## Long matches keep a short log
 

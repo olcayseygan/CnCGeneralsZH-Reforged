@@ -206,12 +206,37 @@ GameEngine *TheGameEngine = NULL;
 SubsystemInterfaceList* TheSubsystemList = NULL;
 
 //-------------------------------------------------------------------------------------------------
+/* Two machines died of 0xC0000374 at every stage from the EA logo to a map load, four times with the
+	 log ending just before the Direct3D device was made: something writes past a heap block while the
+	 game starts, and the heap only notices later, somewhere else.  The process heap is walked before and
+	 after every subsystem's init, and the first walk that finds it broken says between which two, which
+	 is the line a crash report's log tail carries.  Startup only; once broken, no more walks. */
+static Int s_startupHeapChecks = 0;
+static Bool s_startupHeapBroken = FALSE;
+
+static void startupHeapCheck( const char *when, const AsciiString &name )
+{
+#if defined(_WIN32)
+	if ( s_startupHeapBroken )
+		return;
+	++s_startupHeapChecks;
+	if ( !HeapValidate( GetProcessHeap(), 0, NULL ) )
+	{
+		s_startupHeapBroken = TRUE;
+		DEBUG_LOG(( "HEAPCHECK: the process heap is corrupt %s %s (check %d)\n", when, name.str(), s_startupHeapChecks ));
+	}
+#endif
+}
+
+//-------------------------------------------------------------------------------------------------
 template<class SUBSYSTEM>
-void initSubsystem(SUBSYSTEM*& sysref, AsciiString name, SUBSYSTEM* sys, Xfer *pXfer,  const char* path1 = NULL, 
+void initSubsystem(SUBSYSTEM*& sysref, AsciiString name, SUBSYSTEM* sys, Xfer *pXfer,  const char* path1 = NULL,
 									 const char* path2 = NULL, const char* dirpath = NULL)
 {
+	startupHeapCheck( "before", name );
 	sysref = sys;
 	TheSubsystemList->initSubsystem(sys, path1, path2, dirpath, pXfer, name);
+	startupHeapCheck( "after", name );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1714,6 +1739,12 @@ void GameEngine::init( int argc, char *argv[] )
 
 	TheSubsystemList->resetAll();
 	HideControlBar();
+
+	startupHeapCheck( "after", AsciiString( "resetAll" ) );
+#if defined(_WIN32)
+	if ( !s_startupHeapBroken )
+		DEBUG_LOG(( "HEAPCHECK: the process heap was whole at all %d checks of startup\n", s_startupHeapChecks ));
+#endif
 
 	/* Now that every subsystem has been reset, the recorder can be handed the replay and keep
 		 it: the file stays open, the mode stays PLAYBACK, and the MSG_NEW_GAME appended here is

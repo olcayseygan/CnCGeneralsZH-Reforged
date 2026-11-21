@@ -32,6 +32,7 @@
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 #include "Lib/Clock.h"
+#include "Common/EarlyCommandLine.h"
 
 #include "Common/RandomValue.h"
 #include "GameClient/Shell.h"
@@ -49,6 +50,7 @@
 #include "GameNetwork/Online/OnlineQueues.h"
 
 static Bool s_onlineOpened = FALSE;		///< -onlineuser opened the online screens once, at the first showShell
+static Bool s_skinsDemoOpened = FALSE;	///< -skinsdemo opened the Skins page once
 
 #include <rts/profile.h>
 
@@ -559,6 +561,13 @@ void Shell::showShell( Bool runInit )
 	{
 		s_onlineOpened = TRUE;
 		StartPatchCheck();
+	}
+
+	// -skinsdemo: the online Skins page with no service behind it (WOLLadderScreen.cpp), spent the same way
+	if( !s_skinsDemoOpened && findEarlyCommandLineOption( L"-skinsdemo" ) )
+	{
+		s_skinsDemoOpened = TRUE;
+		WOLSkinsScreenOpen();
 	}
 
 	// -skirmishlobby: the same trick for the single-player staging room, spent the same way.

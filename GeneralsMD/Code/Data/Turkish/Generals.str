@@ -19312,10 +19312,6 @@ GUI:OnlineSkinsWaiting
 "zerohour.gg'ye soruluyor..."
 END
 
-GUI:OnlineSkinsHint
-"Her birim için bir görünüm seç, Kaydet'e bas. Gri bir skinin kartı onu nasıl alacağını söyler."
-END
-
 GUI:OnlineSkinsNone
 "Hesabında henüz skin yok. Her kart, skinini nasıl alacağını söyler; birini aldıktan sonra bu ekranı yeniden aç."
 END
@@ -20878,10 +20874,6 @@ GUI:OnlineScoreHow1
 END
 
 // skinler
-GUI:OnlineSkinsSub
-"Birim başına bir görünüm"
-END
-
 GUI:OnlineSkinsUsaTank
 "ABD tankı"
 END
@@ -20919,17 +20911,9 @@ GUI:OnlineSkinsLocked
 END
 
 GUI:OnlineSkinsUnsaved
-"Seçildi, kaydedilmedi"
+"Kaydedilmedi"
 END
 
-
-GUI:OnlineSkinsGet
-"Skin edinmek"
-END
-
-GUI:OnlineSkinsGet1
-"Skinler zerohour.gg hesabına aittir. Kamuflajı bir kod açar, destekçi kademeleri projeye destekle, dozerlerinki Hata Avcısı rozetiyle gelir. Sonra bu sayfayı yeniden aç."
-END
 
 GUI:OnlineSkinsOpenSite
 "ZEROHOUR.GG'Yİ AÇ"
@@ -20949,6 +20933,66 @@ END
 
 GUI:OnlineSkinsPending1
 "1 değişiklik henüz kaydedilmedi"
+END
+
+GUI:OnlineSkinsSideUsa
+"ABD"
+END
+
+GUI:OnlineSkinsSideChina
+"Çin"
+END
+
+GUI:OnlineSkinsSideGla
+"GLA"
+END
+
+GUI:OnlineSkinsCollected
+"Toplanan"
+END
+
+GUI:OnlineSkinsAll
+"Tümü"
+END
+
+GUI:OnlineSkinsFilterLocked
+"Kilitli"
+END
+
+GUI:OnlineSkinsHowEarned
+"Nasıl kazanılır"
+END
+
+GUI:OnlineSkinsEarnedDefault
+"Oyunla gelir"
+END
+
+GUI:OnlineSkinsOwnDefault
+"Her oyuncuda var."
+END
+
+GUI:OnlineSkinsOwnYes
+"Hesabında var."
+END
+
+GUI:OnlineSkinsOwnNo
+"Henüz hesabında yok."
+END
+
+GUI:OnlineSkinsOwnPicked
+"Seçildi. Sonraki maçında giymek için kaydet."
+END
+
+GUI:OnlineSkinsWear
+"GİY"
+END
+
+GUI:OnlineSkinsWornButton
+"GİYİLİ"
+END
+
+GUI:OnlineSkinsPickedButton
+"SEÇİLDİ"
 END
 
 // yükleme ekranının sıradaki ipucu

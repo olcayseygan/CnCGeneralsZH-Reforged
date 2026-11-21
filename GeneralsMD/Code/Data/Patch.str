@@ -5065,10 +5065,6 @@ GUI:OnlineSkinsWaiting
 "Asking zerohour.gg..."
 END
 
-GUI:OnlineSkinsHint
-"Pick one look per unit and press Save. A greyed-out skin's card says how to get it."
-END
-
 GUI:OnlineSkinsNone
 "Your account owns no skins yet. Each card says how to get its skin; open this screen again once you have one."
 END
@@ -6687,10 +6683,6 @@ GUI:OnlineScoreHow1
 END
 
 // skins
-GUI:OnlineSkinsSub
-"One look per unit"
-END
-
 GUI:OnlineSkinsUsaTank
 "USA tank"
 END
@@ -6728,15 +6720,7 @@ GUI:OnlineSkinsLocked
 END
 
 GUI:OnlineSkinsUnsaved
-"Picked, not saved"
-END
-
-GUI:OnlineSkinsGet
-"Getting skins"
-END
-
-GUI:OnlineSkinsGet1
-"Skins belong to your zerohour.gg account. A code unlocks the camo, backing the project brings the supporter grades, and the Bug Hunter badge the dozers. Then open this page again."
+"Not saved"
 END
 
 GUI:OnlineSkinsOpenSite
@@ -6757,6 +6741,67 @@ END
 
 GUI:OnlineSkinsPending1
 "1 change not saved yet"
+END
+
+// the Skins page: list sides, the collected count, the filter, the platform's words and button
+GUI:OnlineSkinsSideUsa
+"USA"
+END
+
+GUI:OnlineSkinsSideChina
+"China"
+END
+
+GUI:OnlineSkinsSideGla
+"GLA"
+END
+
+GUI:OnlineSkinsCollected
+"Collected"
+END
+
+GUI:OnlineSkinsAll
+"All"
+END
+
+GUI:OnlineSkinsFilterLocked
+"Locked"
+END
+
+GUI:OnlineSkinsHowEarned
+"How it is earned"
+END
+
+GUI:OnlineSkinsEarnedDefault
+"Comes with the game"
+END
+
+GUI:OnlineSkinsOwnDefault
+"Every player has it."
+END
+
+GUI:OnlineSkinsOwnYes
+"It is on your account."
+END
+
+GUI:OnlineSkinsOwnNo
+"Not on your account yet."
+END
+
+GUI:OnlineSkinsOwnPicked
+"Picked. Save to wear it in your next match."
+END
+
+GUI:OnlineSkinsWear
+"WEAR"
+END
+
+GUI:OnlineSkinsWornButton
+"WORN"
+END
+
+GUI:OnlineSkinsPickedButton
+"PICKED"
 END
 
 // the load screen's next tip (it counts GUI:LoadTip<n> until one is missing)

@@ -59,6 +59,7 @@
 #include "GameClient/GadgetPushButton.h"
 #include "GameClient/GadgetSlider.h"
 #include "GameClient/GadgetStaticText.h"
+#include "GameClient/UIStyle.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/GameWindowTransitions.h"
@@ -164,14 +165,307 @@ static WindowMsgHandledType recordPopoverInput( GameWindow *window, UnsignedInt 
 	return msg == GWM_CHAR ? MSG_IGNORED : MSG_HANDLED;
 }
 
-// a click on the dimmed room beside the record closes it, and goes no further
+// The presets, opened by the Presets button over the foot of the seats, under the record's veil.
+static GameWindow *presetPopover = NULL;
+static GameWindow *presetList = NULL;
+static NameKeyType buttonPresetsID = NAMEKEY_INVALID;
+static NameKeyType buttonPresetsCloseID = NAMEKEY_INVALID;
+static Int selectedCustomPreset = -1;	///< the custom slot Load, Save and Clear act on
+static void showCustomButtons( void );
+
+static void showPresets( Bool show )
+{
+	if ( show )
+	{
+		recordVeil->winBringToTop();
+		presetPopover->winBringToTop();
+		GadgetListBoxSetSelected( presetList, -1 );	// so the row picked last time picks again
+		selectedCustomPreset = -1;
+		showCustomButtons();
+	}
+	recordVeil->winHide( !show );
+	presetPopover->winHide( !show );
+}
+
+// a click on the dimmed room beside the record or the presets closes them, and goes no further
 static WindowMsgHandledType recordVeilInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )
 {
 	if ( msg == GWM_CHAR )
 		return MSG_IGNORED;
 	if ( msg == GWM_LEFT_UP )
+	{
 		showRecord( FALSE );
+		if ( presetPopover )
+			showPresets( FALSE );
+	}
 	return MSG_HANDLED;
+}
+
+/** A big game in one pick. The local player keeps the first seat, his name, army and colour, and
+	sits on the first team; every other seat of the preset is a computer on a random army and colour,
+	the rest are closed. More than eight seats take the room to a generated map for them
+	(GenerateMapForCrowdedRoom, then FitRandomMapToRoom as the seat count changes); eight keep a
+	shipped map with eight start spots, and a smaller one gives way to a generated map. */
+enum { PRESET_MIXED = -1, PRESET_MAX_TEAMS = 8 };
+static const Int PRESET_HARD = SLOT_BRUTAL_AI;							// the rung the menu calls Hard
+static const Int PRESET_BRUTAL = AILevelAboveHardRating[ 0 ];	// the first above it
+static const Int PRESET_MIX[] = { SLOT_EASY_AI, SLOT_MED_AI, PRESET_HARD, PRESET_BRUTAL };
+struct SkirmishPreset
+{
+	const char *label;
+	Int teams[ PRESET_MAX_TEAMS ];	///< seats a team, the local player's first; a free-for-all is one entry
+	Bool freeForAll;
+	Int allies;										///< the local player's team mates' pick (SlotApplyPick), or PRESET_MIXED
+	Int enemies;
+};
+// In groups by seats, smallest first; the list heads each group with its count.
+static const SkirmishPreset theSkirmishPresets[] =
+{
+	{ "GUI:SkirmishPreset7v1",         { 1, 7 },                    FALSE, PRESET_HARD,   PRESET_HARD },
+	{ "GUI:SkirmishPreset4v4",         { 4, 4 },                    FALSE, SLOT_MED_AI,   SLOT_MED_AI },
+	{ "GUI:SkirmishPresetFFA8",        { 8 },                       TRUE,  PRESET_MIXED,  PRESET_MIXED },
+	{ "GUI:SkirmishPreset2x4",         { 2, 2, 2, 2 },              FALSE, SLOT_MED_AI,   SLOT_MED_AI },
+
+	{ "GUI:SkirmishPreset11v1",        { 1, 11 },                   FALSE, PRESET_HARD,   PRESET_HARD },
+	{ "GUI:SkirmishPreset6v6",         { 6, 6 },                    FALSE, PRESET_HARD,   PRESET_HARD },
+	{ "GUI:SkirmishPresetFFA12",       { 12 },                      TRUE,  PRESET_MIXED,  PRESET_MIXED },
+	{ "GUI:SkirmishPreset3x4",         { 4, 4, 4 },                 FALSE, SLOT_MED_AI,   SLOT_MED_AI },
+
+	{ "GUI:SkirmishPreset15v1",        { 1, 15 },                   FALSE, PRESET_HARD,   PRESET_HARD },
+	{ "GUI:SkirmishPreset8v8",         { 8, 8 },                    FALSE, PRESET_HARD,   PRESET_HARD },
+	{ "GUI:SkirmishPresetFFA16",       { 16 },                      TRUE,  PRESET_MIXED,  PRESET_MIXED },
+	{ "GUI:SkirmishPreset4x4",         { 4, 4, 4, 4 },              FALSE, SLOT_MED_AI,   SLOT_MED_AI },
+
+	{ "GUI:SkirmishPreset23v1",        { 1, 23 },                   FALSE, PRESET_HARD,   PRESET_HARD },
+	{ "GUI:SkirmishPreset12v12",       { 12, 12 },                  FALSE, PRESET_HARD,   PRESET_HARD },
+	{ "GUI:SkirmishPresetFFA24",       { 24 },                      TRUE,  PRESET_MIXED,  PRESET_MIXED },
+	{ "GUI:SkirmishPreset3x8",         { 8, 8, 8 },                 FALSE, SLOT_MED_AI,   SLOT_MED_AI },
+
+	{ "GUI:SkirmishPreset31v1",        { 1, 31 },                   FALSE, PRESET_HARD,   PRESET_HARD },
+	{ "GUI:SkirmishPreset16v16",       { 16, 16 },                  FALSE, PRESET_HARD,   PRESET_HARD },
+	{ "GUI:SkirmishPreset16v16Brutal", { 16, 16 },                  FALSE, PRESET_BRUTAL, PRESET_BRUTAL },
+	{ "GUI:SkirmishPresetFFA32",       { 32 },                      TRUE,  PRESET_MIXED,  PRESET_MIXED },
+	{ "GUI:SkirmishPreset4Teams",      { 8, 8, 8, 8 },              FALSE, SLOT_MED_AI,   SLOT_MED_AI },
+	{ "GUI:SkirmishPreset8Teams",      { 4, 4, 4, 4, 4, 4, 4, 4 },  FALSE, PRESET_MIXED,  PRESET_MIXED },
+	{ "GUI:SkirmishPresetLastStand",   { 2, 30 },                   FALSE, PRESET_HARD,   PRESET_HARD },
+	{ "GUI:SkirmishPreset4v28",        { 4, 28 },                   FALSE, SLOT_MED_AI,   SLOT_EASY_AI },
+	{ "GUI:SkirmishPreset3Way",        { 11, 11, 10 },              FALSE, SLOT_MED_AI,   SLOT_MED_AI },
+};
+
+static Int presetSeats( const SkirmishPreset &preset )
+{
+	Int seats = 0;
+	for ( Int team = 0; team < PRESET_MAX_TEAMS; ++team )
+		seats += preset.teams[ team ];
+	return seats;
+}
+
+/* Four custom slots, the player's own: the room as it stands (seats, map, the rules the room keeps)
+	saved under Custom<n> keys in SkirmishPresets.ini in the user's data folder, beside Skirmish.ini,
+	in the keys and forms Skirmish.ini uses for the same things. A click on an empty slot saves the
+	room into it; a click on a saved one picks it for Load, Save (over it) and Clear, and a double
+	click loads it. */
+enum { CUSTOM_PRESETS = 4, CUSTOM_PRESET_ROW = 1000 };
+static const char *const theCustomPresetFile = "SkirmishPresets.ini";
+static GameWindow *presetLoadButton = NULL;
+static GameWindow *presetSaveButton = NULL;
+static GameWindow *presetClearButton = NULL;
+static NameKeyType presetLoadID = NAMEKEY_INVALID;
+static NameKeyType presetSaveID = NAMEKEY_INVALID;
+static NameKeyType presetClearID = NAMEKEY_INVALID;
+static Int chosenGameSpeedPercent( void );
+static void populateGameSpeedComboBox( Int percent );
+void updateSkirmishGameOptions( void );
+
+static AsciiString customKey( Int slot, const char *field )
+{
+	AsciiString key;
+	key.format( "Custom%d%s", slot + 1, field );
+	return key;
+}
+
+static const char *const theCustomFields[] = { "SlotList", "Map", "Players", "StartingCash", "Superweapons",
+	"UnitLimit", "StartShrouded", "IncomeSharing", "TechRespawn", "SupplyPileLimit", "GameSpeed" };
+
+/// seats in the slot, 0 when it is empty
+static Int customPresetPlayers( const UserPreferences &pref, Int slot )
+{
+	if ( pref.getAsciiString( customKey( slot, "SlotList" ), AsciiString::TheEmptyString ).isEmpty() )
+		return 0;
+	return max( 1, pref.getInt( customKey( slot, "Players" ), 1 ) );
+}
+
+static void saveCustomPreset( Int slot )
+{
+	UserPreferences pref;
+	pref.load( theCustomPresetFile );
+	// the replay's form of the slot list has no length to fit, so a full room of 32 always goes in
+	pref.setAsciiString( customKey( slot, "SlotList" ), GameInfoToReplayString( TheSkirmishGameInfo ) );
+	pref.setAsciiString( customKey( slot, "Map" ), AsciiStringToQuotedPrintable( TheSkirmishGameInfo->getMap() ) );
+	pref.setInt( customKey( slot, "Players" ), TheSkirmishGameInfo->getNumNonObserverPlayers() );
+	pref.setInt( customKey( slot, "StartingCash" ), TheSkirmishGameInfo->getStartingCash().countMoney() );
+	pref.setInt( customKey( slot, "Superweapons" ), TheSkirmishGameInfo->getSuperweaponRestriction() );
+	pref.setInt( customKey( slot, "UnitLimit" ), TheSkirmishGameInfo->getUnitLimit() ? 1 : 0 );
+	pref.setInt( customKey( slot, "StartShrouded" ), TheSkirmishGameInfo->getStartShrouded() ? 1 : 0 );
+	pref.setInt( customKey( slot, "IncomeSharing" ), TheSkirmishGameInfo->getIncomeSharing() );
+	pref.setInt( customKey( slot, "TechRespawn" ), TheSkirmishGameInfo->getTechRespawn() );
+	pref.setInt( customKey( slot, "SupplyPileLimit" ), TheSkirmishGameInfo->getSupplyPileLimit() );
+	pref.setInt( customKey( slot, "GameSpeed" ), chosenGameSpeedPercent() );
+	pref.write();
+}
+
+static void clearCustomPreset( Int slot )
+{
+	UserPreferences pref;
+	pref.load( theCustomPresetFile );
+	for ( Int f = 0; f < (Int)ARRAY_SIZE( theCustomFields ); ++f )
+		pref.erase( customKey( slot, theCustomFields[ f ] ) );
+	pref.write();
+}
+
+/// TRUE when the slot held a room; the local player keeps his name, the rest is the slot's
+static Bool loadCustomPreset( Int slot )
+{
+	UserPreferences pref;
+	pref.load( theCustomPresetFile );
+	const AsciiString slots = pref.getAsciiString( customKey( slot, "SlotList" ), AsciiString::TheEmptyString );
+	if ( slots.isEmpty() )
+		return FALSE;
+	const UnicodeString name = TheSkirmishGameInfo->getConstSlot( 0 )->getName();
+	const AsciiString mapBefore = TheSkirmishGameInfo->getMap();
+	ParseAsciiStringToGameInfo( TheSkirmishGameInfo, slots );
+	TheSkirmishGameInfo->getSlot( 0 )->setName( name );
+	// a new match from the same seats, as the room's own init draws one
+	TheSkirmishGameInfo->setSeed( ( TheGlobalData->m_fixedSeed >= 0 ) ? TheGlobalData->m_fixedSeed : Clock_Milliseconds_Coarse() );
+
+	Money cash;
+	cash.deposit( (UnsignedInt)pref.getInt( customKey( slot, "StartingCash" ), TheMultiplayerSettings->getDefaultStartingMoney().countMoney() ), FALSE );
+	TheSkirmishGameInfo->setStartingCash( TheMultiplayerSettings->getListedStartingMoney( cash.countMoney() ) );
+	TheSkirmishGameInfo->setSuperweaponRestriction( (UnsignedShort)pref.getInt( customKey( slot, "Superweapons" ), SUPERWEAPONS_ALLOW ) );
+	TheSkirmishGameInfo->setUnitLimit( pref.getInt( customKey( slot, "UnitLimit" ), 0 ) != 0 );
+	TheSkirmishGameInfo->setStartShrouded( pref.getInt( customKey( slot, "StartShrouded" ), 0 ) != 0 );
+	TheSkirmishGameInfo->setIncomeSharing( pref.getInt( customKey( slot, "IncomeSharing" ), INCOME_SHARING_OFF ) );
+	TheSkirmishGameInfo->setTechRespawn( pref.getInt( customKey( slot, "TechRespawn" ), 0 ) );
+	TheSkirmishGameInfo->setSupplyPileLimit( pref.getInt( customKey( slot, "SupplyPileLimit" ), 0 ) );
+	populateGameSpeedComboBox( pref.getInt( customKey( slot, "GameSpeed" ), PLAYER_GAME_SPEED_PERCENT_DEFAULT ) );
+
+	// the saved map; a generated one is built again from its name for the seats now in the room
+	AsciiString map = QuotedPrintableToAsciiString( pref.getAsciiString( customKey( slot, "Map" ), AsciiString::TheEmptyString ) );
+	map.trim();
+	if ( isGeneratedMapPath( map ) )
+	{
+		AsciiString staged;
+		if ( restageRandomMap( map, max( 2, TheSkirmishGameInfo->getNumNonObserverPlayers() ), staged ) )
+			map = staged;
+		map.toLower();
+		TheMapCache->updateCache();
+	}
+	const MapMetaData *md = map.isEmpty() ? NULL : TheMapCache->findMap( map );
+	if ( md == NULL )
+	{
+		map = mapBefore;	// a map no longer installed leaves the room on the one it had
+		md = TheMapCache->findMap( map );
+	}
+	TheSkirmishGameInfo->setMap( map );
+	TheSkirmishGameInfo->setMapCRC( md ? md->m_CRC : 0 );
+	TheSkirmishGameInfo->setMapSize( md ? md->m_filesize : 0 );
+	TheSkirmishGameInfo->getSlot( 0 )->setMapAvailability( TRUE );
+	return TRUE;
+}
+
+static void showCustomButtons( void )
+{
+	UserPreferences pref;
+	pref.load( theCustomPresetFile );
+	const Bool saved = selectedCustomPreset >= 0 && customPresetPlayers( pref, selectedCustomPreset ) > 0;
+	if ( presetLoadButton )
+		presetLoadButton->winEnable( saved );
+	if ( presetSaveButton )
+		presetSaveButton->winEnable( selectedCustomPreset >= 0 );
+	if ( presetClearButton )
+		presetClearButton->winEnable( saved );
+}
+
+/// a group's heading in the layouts' green, item data -1, then its presets indented under it
+static void fillPresetList( void )
+{
+	GadgetListBoxReset( presetList );
+	// a list box drops the rows past its length; every preset and a heading a group, and the custom slots
+	GadgetListBoxSetListLength( presetList, 2 * (Int)ARRAY_SIZE( theSkirmishPresets ) + 2 * CUSTOM_PRESETS );
+	const Color color = presetList->winGetEnabledTextColor();
+
+	// the player's own first
+	{
+		UserPreferences pref;
+		pref.load( theCustomPresetFile );
+		Int row = GadgetListBoxAddEntryText( presetList, TheGameText->fetch( "GUI:SkirmishPresetCustomGroup" ), UIStyle::ACTIVE, -1, 0 );
+		GadgetListBoxSetItemData( presetList, (void *)(intptr_t)-1, row );
+		for ( Int slot = 0; slot < CUSTOM_PRESETS; ++slot )
+		{
+			const Int players = customPresetPlayers( pref, slot );
+			UnicodeString line( u"    " ), text;
+			if ( players > 0 )
+			{
+				text.format( TheGameText->fetch( "GUI:SkirmishPresetCustom" ), slot + 1, players );
+				AsciiString map = QuotedPrintableToAsciiString( pref.getAsciiString( customKey( slot, "Map" ), AsciiString::TheEmptyString ) );
+				map.trim();
+				const MapMetaData *md = isGeneratedMapPath( map ) ? NULL : TheMapCache->findMap( map );
+				text.concat( u", " );
+				text.concat( md ? md->m_displayName : TheGameText->fetch( "GUI:SkirmishPresetCustomGenerated" ) );
+			}
+			else
+				text.format( TheGameText->fetch( "GUI:SkirmishPresetCustomEmpty" ), slot + 1 );
+			line.concat( text );
+			row = GadgetListBoxAddEntryText( presetList, line, players > 0 ? color : UIStyle::MUTED, -1, 0 );
+			GadgetListBoxSetItemData( presetList, (void *)(intptr_t)( CUSTOM_PRESET_ROW + slot ), row );
+		}
+	}
+
+	Int group = 0;
+	for ( Int i = 0; i < (Int)ARRAY_SIZE( theSkirmishPresets ); ++i )
+	{
+		const Int seats = presetSeats( theSkirmishPresets[ i ] );
+		if ( seats != group )
+		{
+			group = seats;
+			UnicodeString heading;
+			heading.format( TheGameText->fetch( "GUI:SkirmishPresetGroup" ), seats );
+			const Int row = GadgetListBoxAddEntryText( presetList, heading, UIStyle::ACTIVE, -1, 0 );
+			GadgetListBoxSetItemData( presetList, (void *)(intptr_t)-1, row );
+		}
+		UnicodeString line( u"    " );
+		line.concat( TheGameText->fetch( theSkirmishPresets[ i ].label ) );
+		const Int row = GadgetListBoxAddEntryText( presetList, line, color, -1, 0 );
+		GadgetListBoxSetItemData( presetList, (void *)(intptr_t)i, row );
+	}
+}
+
+static void applySkirmishPreset( const SkirmishPreset &preset )
+{
+	Int seat = 0;
+	for ( Int team = 0; team < PRESET_MAX_TEAMS && preset.teams[ team ] > 0; ++team )
+	{
+		for ( Int n = 0; n < preset.teams[ team ] && seat < MAX_SLOTS; ++n, ++seat )
+		{
+			GameSlot *slot = TheSkirmishGameInfo->getSlot( seat );
+			if ( seat > 0 )	// the local player keeps his seat as it is
+			{
+				Int pick = team == 0 && !preset.freeForAll ? preset.allies : preset.enemies;
+				if ( pick == PRESET_MIXED )
+					pick = PRESET_MIX[ seat % ARRAY_SIZE( PRESET_MIX ) ];
+				SlotApplyPick( slot, pick );	// a new state takes the seat's team away, so the team goes in after
+			}
+			slot->setTeamNumber( preset.freeForAll ? -1 : team );
+			if ( seat == 0 )
+				continue;
+			slot->setPlayerTemplate( PLAYERTEMPLATE_RANDOM );
+			slot->setColor( -1 );
+			slot->setStartPos( -1 );
+			slot->setHandicap( HANDICAP_FULL );
+		}
+	}
+	for ( ; seat < MAX_SLOTS; ++seat )
+		TheSkirmishGameInfo->getSlot( seat )->setState( SLOT_CLOSED );
 }
 static GameWindow *buttonStart = NULL;
 static GameWindow *buttonSelectMap = NULL;
@@ -1383,10 +1677,11 @@ static void captureSeatRows( void )
 	}
 }
 
-static void scrollSeats( Int scroll )
+/// force repaints the rows where they are, after their seats changed under them
+static void scrollSeats( Int scroll, Bool force = FALSE )
 {
 	scroll = max( 0, min( seatScrollMax(), scroll ) );
-	if ( scroll == seatScroll )
+	if ( scroll == seatScroll && !force )
 		return;
 	for ( Int row = 0; row < seatRowCount; ++row )
 	{
@@ -1455,6 +1750,26 @@ void InitSkirmishGameGadgets( void )
 		recordVeil->winSetInputFunc( recordVeilInput );
 		showRecord( FALSE );
 	}
+	// the presets, a layout from before them has none and no button to open them
+	buttonPresetsID = NAMEKEY( "SkirmishGameOptionsMenu.wnd:ButtonPresets" );
+	buttonPresetsCloseID = NAMEKEY( "SkirmishGameOptionsMenu.wnd:ButtonPresetsClose" );
+	presetPopover = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, NAMEKEY( "SkirmishGameOptionsMenu.wnd:PresetPopover" ) );
+	presetList = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, NAMEKEY( "SkirmishGameOptionsMenu.wnd:ListboxPresets" ) );
+	presetLoadID = NAMEKEY( "SkirmishGameOptionsMenu.wnd:ButtonPresetLoad" );
+	presetSaveID = NAMEKEY( "SkirmishGameOptionsMenu.wnd:ButtonPresetSave" );
+	presetClearID = NAMEKEY( "SkirmishGameOptionsMenu.wnd:ButtonPresetClear" );
+	presetLoadButton = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, presetLoadID );
+	presetSaveButton = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, presetSaveID );
+	presetClearButton = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, presetClearID );
+	if ( presetPopover && presetList && recordVeil )
+	{
+		presetPopover->winSetInputFunc( recordPopoverInput );
+		presetPopover->winSetSystemFunc( PassMessagesToParentSystem );	// the list's pick and Close go up to the room
+		fillPresetList();
+		showPresets( FALSE );
+	}
+	else
+		presetPopover = NULL;
 	textEntryMapDisplay =TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, textEntryMapDisplayID );
 	DEBUG_ASSERTCRASH(textEntryMapDisplay, ("Could not find the textEntryMapDisplay"));
 	buttonReset = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, buttonResetID );
@@ -1973,6 +2288,8 @@ WindowMsgHandledType SkirmishGameOptionsMenuInput( GameWindow *window, UnsignedI
 					// an open record closes first
 					if( BitTest( state, KEY_STATE_UP ) && recordPopover && !recordPopover->winIsHidden() )
 						showRecord( FALSE );
+					else if( BitTest( state, KEY_STATE_UP ) && presetPopover && !presetPopover->winIsHidden() )
+						showPresets( FALSE );
 					else if( BitTest( state, KEY_STATE_UP ) )
 					{
 						TheWindowManager->winSendSystemMsg( window, GBM_SELECTED,
@@ -1989,7 +2306,8 @@ WindowMsgHandledType SkirmishGameOptionsMenuInput( GameWindow *window, UnsignedI
 		case GWM_WHEEL_UP:
 		case GWM_WHEEL_DOWN:
 		{
-			if ( !seatScrollSlider || seatScrollMax() == 0 || ( recordPopover && !recordPopover->winIsHidden() ) )
+			if ( !seatScrollSlider || seatScrollMax() == 0 || ( recordPopover && !recordPopover->winIsHidden() )
+				|| ( presetPopover && !presetPopover->winIsHidden() ) )
 				break;
 			Int x, y, width, height, firstX, top, lastX, bottom;
 			seatScrollSlider->winGetScreenPosition( &x, &y );
@@ -2127,6 +2445,35 @@ WindowMsgHandledType SkirmishGameOptionsMenuSystem( GameWindow *window, Unsigned
 					showRecord( controlID == buttonRecordID );
 					break;
 				}
+				if ( presetPopover && ( controlID == buttonPresetsID || controlID == buttonPresetsCloseID ) )
+				{
+					showPresets( controlID == buttonPresetsID && presetPopover->winIsHidden() );
+					break;
+				}
+				if ( presetPopover && selectedCustomPreset >= 0 && ( controlID == presetSaveID || controlID == presetClearID ) )
+				{
+					if ( controlID == presetSaveID )
+						saveCustomPreset( selectedCustomPreset );
+					else
+						clearCustomPreset( selectedCustomPreset );
+					fillPresetList();
+					selectedCustomPreset = -1;
+					showCustomButtons();
+					break;
+				}
+				if ( presetPopover && selectedCustomPreset >= 0 && controlID == presetLoadID )
+				{
+					// as a double click on the slot's row does
+					for ( Int row = 0; row < GadgetListBoxGetNumEntries( presetList ); ++row )
+					{
+						if ( (Int)(intptr_t)GadgetListBoxGetItemData( presetList, row ) == CUSTOM_PRESET_ROW + selectedCustomPreset )
+						{
+							TheWindowManager->winSendSystemMsg( window, GLM_DOUBLE_CLICKED, (WindowMsgData)presetList, row );
+							break;
+						}
+					}
+					break;
+				}
 				if ( controlID == buttonExitID )
 				{
 					buttonPushed = TRUE;
@@ -2252,6 +2599,50 @@ WindowMsgHandledType SkirmishGameOptionsMenuSystem( GameWindow *window, Unsigned
 					}
 				}
 			}					
+			break;
+		}
+		//-------------------------------------------------------------------------------------------------
+		case GLM_SELECTED:
+		case GLM_DOUBLE_CLICKED:
+		{
+			if ( !presetPopover || (GameWindow *)mData1 != presetList || (Int)mData2 < 0 )
+				break;
+			const Int preset = (Int)(intptr_t)GadgetListBoxGetItemData( presetList, (Int)mData2 );
+			Bool loaded = FALSE;
+			if ( preset >= CUSTOM_PRESET_ROW && preset < CUSTOM_PRESET_ROW + CUSTOM_PRESETS )
+			{
+				// an empty slot takes the room at once; a saved one is picked, and a double click loads it
+				const Int slot = preset - CUSTOM_PRESET_ROW;
+				UserPreferences pref;
+				pref.load( theCustomPresetFile );
+				selectedCustomPreset = slot;
+				if ( customPresetPlayers( pref, slot ) == 0 )
+				{
+					saveCustomPreset( slot );
+					fillPresetList();
+					selectedCustomPreset = -1;
+				}
+				else if ( msg == GLM_DOUBLE_CLICKED )
+					loaded = loadCustomPreset( slot );
+				showCustomButtons();
+				if ( !loaded )
+					break;
+			}
+			else if ( preset >= 0 && preset < (Int)ARRAY_SIZE( theSkirmishPresets ) && msg == GLM_SELECTED )
+			{
+				applySkirmishPreset( theSkirmishPresets[ preset ] );
+				loaded = TRUE;
+			}
+			if ( !loaded )
+				break;
+			// the room repaints and fits its map to the new seats: eight keep a shipped map that holds
+			// them, more or a smaller map take a generated one
+			showPresets( FALSE );
+			sandboxOk = FALSE;
+			if ( !GenerateMapForCrowdedRoom( TheSkirmishGameInfo, TRUE ) )
+				FitRandomMapToRoom( TheSkirmishGameInfo );
+			skirmishPositionStartSpots();
+			scrollSeats( 0, TRUE );
 			break;
 		}
 		//-------------------------------------------------------------------------------------------------

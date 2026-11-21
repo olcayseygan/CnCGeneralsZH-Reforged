@@ -4279,6 +4279,150 @@ TOOLTIP:RandomMapsOnlyCrowded
 "No shipped map has room for more than eight players, so a game this big plays on a generated map"
 END
 
+GUI:LobbyPresetsButton
+"PRESETS"
+END
+
+GUI:LobbyPresets
+"Presets"
+END
+
+TOOLTIP:LobbyPresets
+"Fill the seats for a big game in one click: you keep your seat, the computers and teams are set for you"
+END
+
+GUI:SkirmishPresetGroup
+"%d players"
+END
+
+GUI:SkirmishPresetCustomGroup
+"Your own"
+END
+
+GUI:SkirmishPresetCustom
+"Custom %d: %d players"
+END
+
+GUI:SkirmishPresetCustomGenerated
+"generated map"
+END
+
+GUI:SkirmishPresetCustomEmpty
+"Custom %d: empty, click to save this room"
+END
+
+GUI:SkirmishPresetLoad
+"LOAD"
+END
+
+GUI:SkirmishPresetSave
+"SAVE"
+END
+
+GUI:SkirmishPresetClear
+"CLEAR"
+END
+
+GUI:SkirmishPreset7v1
+"7 v 1: you against 7 Hard AIs"
+END
+
+GUI:SkirmishPreset4v4
+"4 v 4, Medium AIs"
+END
+
+GUI:SkirmishPresetFFA8
+"8-player free-for-all, mixed AIs"
+END
+
+GUI:SkirmishPreset2x4
+"2 v 2 v 2 v 2, Medium AIs"
+END
+
+GUI:SkirmishPreset11v1
+"11 v 1: you against 11 Hard AIs"
+END
+
+GUI:SkirmishPreset3x4
+"3 teams of 4, Medium AIs"
+END
+
+GUI:SkirmishPreset15v1
+"15 v 1: you against 15 Hard AIs"
+END
+
+GUI:SkirmishPreset8v8
+"8 v 8, Hard AIs"
+END
+
+GUI:SkirmishPresetFFA16
+"16-player free-for-all, mixed AIs"
+END
+
+GUI:SkirmishPreset4x4
+"4 teams of 4, Medium AIs"
+END
+
+GUI:SkirmishPreset23v1
+"23 v 1: you against 23 Hard AIs"
+END
+
+GUI:SkirmishPreset12v12
+"12 v 12, Hard AIs"
+END
+
+GUI:SkirmishPresetFFA24
+"24-player free-for-all, mixed AIs"
+END
+
+GUI:SkirmishPreset3x8
+"3 teams of 8, Medium AIs"
+END
+
+GUI:SkirmishPreset31v1
+"31 v 1: you against 31 Hard AIs"
+END
+
+GUI:SkirmishPreset16v16
+"16 v 16: you and 15 Hard allies against 16 Hard AIs"
+END
+
+GUI:SkirmishPresetFFA32
+"32-player free-for-all, mixed AIs"
+END
+
+GUI:SkirmishPreset4Teams
+"4 teams of 8, Medium AIs"
+END
+
+GUI:SkirmishPreset8Teams
+"8 teams of 4, mixed AIs"
+END
+
+GUI:SkirmishPreset16v16Brutal
+"16 v 16, all Brutal"
+END
+
+GUI:SkirmishPreset4v28
+"4 v 28: you and 3 Medium allies against 28 Easy AIs"
+END
+
+GUI:SkirmishPresetLastStand
+"Last stand: you and 1 ally against 30 Hard AIs"
+END
+
+GUI:SkirmishPreset3Way
+"Three-way war: 11 v 11 v 10, Medium AIs"
+END
+
+GUI:SkirmishPresetFFA12
+"12-player free-for-all, mixed AIs"
+END
+
+GUI:SkirmishPreset6v6
+"6 v 6, Hard AIs"
+END
+
 GUI:RandomMapSize
 "Map size"
 END

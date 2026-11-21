@@ -207,8 +207,9 @@ enum { SHIPPED_MAP_MAX_PLAYERS = 8 };
 // A room seating more players than any shipped map holds plays a generated map. When it seats more
 // and its map is not one, the Random tab's remembered choice (RandomMap.ini) is staged for them and
 // becomes the room's map, as FitRandomMapToRoom does; TRUE when the map changed. Only the skirmish
-// room seats that many.
-Bool GenerateMapForCrowdedRoom(GameInfo *game);
+// room seats that many. whenTooSmall does the same for a shipped map with fewer start spots than
+// the room seats (a preset's eight on a four-player map); a shipped map that holds them is kept.
+Bool GenerateMapForCrowdedRoom(GameInfo *game, Bool whenTooSmall = FALSE);
 
 void EnableSlotListUpdates( Bool val );
 Bool AreSlotListUpdatesEnabled( void );

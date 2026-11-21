@@ -130,6 +130,20 @@ RECORD_VEIL = (0, 0, 0, 160)
 # the button's label is in capitals like every layout button's; GUI:LobbyRecord titles the popover
 RECORD_TEXT, RECORD_BUTTON_TEXT, CLOSE_TEXT = "GUI:LobbyRecord", "GUI:LobbyRecordButton", "GUI:LobbyRecordClose"
 
+# The skirmish room's presets: a Presets button after Record opens a popover over the seats' foot, a
+# title, the list of big games (filled by the menu code) and Close, under the record's veil. The list
+# wears a seat dropdown's open-list art; the record's own list is a table of medals.
+PRESET_SLOT_BUTTONS = (("ButtonPresetLoad", "GUI:SkirmishPresetLoad"), ("ButtonPresetSave", "GUI:SkirmishPresetSave"),
+                       ("ButtonPresetClear", "GUI:SkirmishPresetClear"))
+PRESET_SLOT_BUTTON_WIDTH = 150
+PRESET_WINDOWS = ("ButtonPresets", "PresetPopover", "StaticTextPresetTitle", "ListboxPresets",
+                  "ButtonPresetsClose") + tuple(name for name, _text in PRESET_SLOT_BUTTONS)
+PRESET_TEXT, PRESET_BUTTON_TEXT, PRESET_TOOLTIP = "GUI:LobbyPresets", "GUI:LobbyPresetsButton", "TOOLTIP:LobbyPresets"
+# as tall as the seat table, its presets grouped under a heading a seat count
+PRESET_POPOVER_WIDTH, PRESET_POPOVER_HEIGHT = 760, UNDER_SEATS_BOTTOM - HEADER_TOP
+PRESET_LIST_DATA = ("LENGTH: 64, AUTOSCROLL: 0, SCROLLIFATEND: 0, AUTOPURGE: 0, SCROLLBAR: 1, MULTISELECT: 0, "
+                    "COLUMNS: 1, FORCESELECT: 0")
+
 # UIStyle's tokens (UIStyle.cpp, UI-STYLE.md in the wrapper's docs/reference)
 PANEL = (0, 0, 0, 200)
 CARD = (10, 12, 22, 255)
@@ -237,7 +251,7 @@ NAMED = ["MapWindow", "ButtonSelectMap", "TextEntryMapDisplay", "StaticTextMapPr
          "ButtonStart", "PageLobbySettings"]
 NAMED_PER_SEAT = ["ComboBoxColor", "ComboBoxPlayerTemplate", "ComboBoxTeam", PERSONA_PREFIX,
                   "ButtonMapStartPosition"] + list(SEAT_WINDOWS)
-NAMED_SKIRMISH = ["ButtonRecord", "ListboxInfo"] + list(RECORD_WINDOWS) + list(SEAT_SCROLL)
+NAMED_SKIRMISH = ["ButtonRecord", "ListboxInfo"] + list(RECORD_WINDOWS) + list(SEAT_SCROLL) + list(PRESET_WINDOWS)
 NAMED_NETWORK_PER_SEAT = ["ButtonAccept"]
 
 
@@ -658,6 +672,74 @@ def place_record(layout, menu, container):
     record.set_prop("TEXT", '"%s"' % RECORD_BUTTON_TEXT)
 
 
+def drop_prop(window, key):
+    at = window.prop_index(key)
+    if at >= 0:
+        end = at
+        while ";" not in window.props[end]:
+            end += 1
+        del window.props[at:end + 1]
+
+
+def place_presets(layout, menu, container):
+    """The Presets button after Record and its popover, standing on the seats' foot over the Presets
+    button's corner, last in the container so it draws over the seats; once there, a second run finds
+    them and only places them and sets their art."""
+    named = lambda name: "%s.wnd:%s" % (menu, name)
+    record = need(layout, "ButtonRecord")
+    if layout.find("ButtonPresets") is None:
+        container.children.insert(container.children.index(record) + 1, clone(record, named("ButtonPresets")))
+    popover = layout.find("PresetPopover")
+    if popover is None:
+        popover = plain_window(container, named("PresetPopover"), False, POPOVER_COLOR, POPOVER_BORDER)
+        popover.set_prop("STATUS", "ENABLED+HIDDEN+NOFOCUS")
+        popover.children = [clone(need(layout, "StaticTextRecordTitle"), named("StaticTextPresetTitle")),
+                            clone(need(layout, "ListboxInfo"), named("ListboxPresets")),
+                            clone(need(layout, "ButtonRecordClose"), named("ButtonPresetsClose"))]
+        container.children.append(popover)
+
+    button = need(layout, "ButtonPresets")
+    button.place(INNER_LEFT + BACK_WIDTH + 16 + BUDDIES_WIDTH + 16, BUTTON_TOP, BUDDIES_WIDTH, BUTTON_HEIGHT)
+    button.set_prop("TEXT", '"%s"' % PRESET_BUTTON_TEXT)
+    button.put_prop("TOOLTIPTEXT", '"%s"' % PRESET_TOOLTIP)
+
+    left, top = INNER_LEFT, UNDER_SEATS_BOTTOM - PRESET_POPOVER_HEIGHT
+    width, height = PRESET_POPOVER_WIDTH, PRESET_POPOVER_HEIGHT
+    popover.place(left, top, width, height)
+    popover.set_prop("ENABLEDDRAWDATA", draw_data(POPOVER_COLOR, POPOVER_BORDER))
+    right, bottom = left + width - POPOVER_PADDING, top + height - POPOVER_PADDING
+    title = need(layout, "StaticTextPresetTitle")
+    title.place(left + POPOVER_PADDING - TEXT_NUDGE, top + POPOVER_PADDING, width // 2, POPOVER_TITLE_HEIGHT)
+    title.set_prop("TEXT", '"%s"' % PRESET_TEXT)
+    close_top = bottom - BUTTON_HEIGHT
+    need(layout, "ButtonPresetsClose").place(right - CLOSE_WIDTH, close_top, CLOSE_WIDTH, BUTTON_HEIGHT)
+    # the custom slots' Load, Save and Clear, Close's twins, left to right ahead of it
+    for index, (name, text) in enumerate(PRESET_SLOT_BUTTONS):
+        button = layout.find(name)
+        if button is None:
+            button = clone(need(layout, "ButtonPresetsClose"), named(name))
+            popover.children.append(button)
+        button.set_prop("TEXT", '"%s"' % text)
+        button.place(left + POPOVER_PADDING + index * (PRESET_SLOT_BUTTON_WIDTH + GAP), close_top,
+                     PRESET_SLOT_BUTTON_WIDTH, BUTTON_HEIGHT)
+
+    # the list in a seat dropdown's open-list art, lettering and scroll bar, one column of text
+    art = need(layout, SEAT_SCROLL_ART)
+    listbox = need(layout, "ListboxPresets")
+    body_top = top + POPOVER_PADDING + POPOVER_TITLE_HEIGHT + GAP
+    listbox.place(left + POPOVER_PADDING, body_top, width - 2 * POPOVER_PADDING, close_top - GAP - body_top)
+    drop_prop(listbox, "TOOLTIPTEXT")
+    for key in ("FONT", "HEADERTEMPLATE", "TEXTCOLOR"):
+        listbox.set_prop(key, statement(art, key))
+    for state in ("ENABLED", "DISABLED", "HILITE"):
+        listbox.set_prop(state + "DRAWDATA", statement(art, "COMBOBOXLISTBOX%sDRAWDATA" % state))
+        for part in ("UPBUTTON", "DOWNBUTTON", "SLIDER"):
+            key = "LISTBOX%s%sDRAWDATA" % (state, part)
+            listbox.put_prop(key, statement(art, key))
+        listbox.put_prop("SLIDERTHUMB%sDRAWDATA" % state, statement(art, "SLIDERTHUMB%sDRAWDATA" % state))
+    listbox.set_prop("LISTBOXDATA", PRESET_LIST_DATA)
+
+
 def build(layout, menu):
     spec = ROOMS[menu]
     widen(layout)
@@ -680,6 +762,7 @@ def build(layout, menu):
         place_chat(layout, spec["chat"], seats_bottom + 16)
     else:
         place_record(layout, menu, container)
+        place_presets(layout, menu, container)
     if menu == "GameSpyGameOptionsMenu":
         need(layout, "ButtonCommunicator").place(INNER_LEFT + BACK_WIDTH + 16, BUTTON_TOP, BUDDIES_WIDTH,
                                                  BUTTON_HEIGHT)

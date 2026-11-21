@@ -18884,6 +18884,150 @@ TOOLTIP:RandomMapsOnlyCrowded
 "Hazır haritaların hiçbiri sekizden fazla oyuncu almıyor, bu kadar büyük bir oyun üretilen bir haritada oynanır"
 END
 
+GUI:LobbyPresetsButton
+"HAZIR MAÇLAR"
+END
+
+GUI:LobbyPresets
+"Hazır maçlar"
+END
+
+TOOLTIP:LobbyPresets
+"Büyük bir oyunun koltuklarını tek tıkla doldur: senin koltuğun aynı kalır, bilgisayarlar ve takımlar kurulur"
+END
+
+GUI:SkirmishPresetGroup
+"%d oyuncu"
+END
+
+GUI:SkirmishPresetCustomGroup
+"Senin kurulumların"
+END
+
+GUI:SkirmishPresetCustom
+"Özel %d: %d oyuncu"
+END
+
+GUI:SkirmishPresetCustomGenerated
+"üretilen harita"
+END
+
+GUI:SkirmishPresetCustomEmpty
+"Özel %d: boş, bu odayı kaydetmek için tıkla"
+END
+
+GUI:SkirmishPresetLoad
+"YÜKLE"
+END
+
+GUI:SkirmishPresetSave
+"KAYDET"
+END
+
+GUI:SkirmishPresetClear
+"SİL"
+END
+
+GUI:SkirmishPreset7v1
+"7'ye 1: sen, 7 Zor YZ'ye karşı"
+END
+
+GUI:SkirmishPreset4v4
+"4'e 4, Orta YZ"
+END
+
+GUI:SkirmishPresetFFA8
+"8 kişilik herkes herkese karşı, karışık YZ"
+END
+
+GUI:SkirmishPreset2x4
+"2'ye 2'ye 2'ye 2, Orta YZ"
+END
+
+GUI:SkirmishPreset11v1
+"11'e 1: sen, 11 Zor YZ'ye karşı"
+END
+
+GUI:SkirmishPreset3x4
+"4'er kişilik 3 takım, Orta YZ"
+END
+
+GUI:SkirmishPreset15v1
+"15'e 1: sen, 15 Zor YZ'ye karşı"
+END
+
+GUI:SkirmishPreset8v8
+"8'e 8, Zor YZ"
+END
+
+GUI:SkirmishPresetFFA16
+"16 kişilik herkes herkese karşı, karışık YZ"
+END
+
+GUI:SkirmishPreset4x4
+"4'er kişilik 4 takım, Orta YZ"
+END
+
+GUI:SkirmishPreset23v1
+"23'e 1: sen, 23 Zor YZ'ye karşı"
+END
+
+GUI:SkirmishPreset12v12
+"12'ye 12, Zor YZ"
+END
+
+GUI:SkirmishPresetFFA24
+"24 kişilik herkes herkese karşı, karışık YZ"
+END
+
+GUI:SkirmishPreset3x8
+"8'er kişilik 3 takım, Orta YZ"
+END
+
+GUI:SkirmishPreset31v1
+"31'e 1: sen, 31 Zor YZ'ye karşı"
+END
+
+GUI:SkirmishPreset16v16
+"16'ya 16: sen ve 15 Zor müttefik, 16 Zor YZ'ye karşı"
+END
+
+GUI:SkirmishPresetFFA32
+"32 kişilik herkes herkese karşı, karışık YZ"
+END
+
+GUI:SkirmishPreset4Teams
+"8'er kişilik 4 takım, Orta YZ"
+END
+
+GUI:SkirmishPreset8Teams
+"4'er kişilik 8 takım, karışık YZ"
+END
+
+GUI:SkirmishPreset16v16Brutal
+"16'ya 16, hepsi Acımasız"
+END
+
+GUI:SkirmishPreset4v28
+"4'e 28: sen ve 3 Orta müttefik, 28 Kolay YZ'ye karşı"
+END
+
+GUI:SkirmishPresetLastStand
+"Son direniş: sen ve 1 müttefik, 30 Zor YZ'ye karşı"
+END
+
+GUI:SkirmishPreset3Way
+"Üç cephe: 11'e 11'e 10, Orta YZ"
+END
+
+GUI:SkirmishPresetFFA12
+"12 kişilik herkes herkese karşı, karışık YZ"
+END
+
+GUI:SkirmishPreset6v6
+"6'ya 6, Zor YZ"
+END
+
 GUI:RandomMapSize
 "Harita boyutu"
 END

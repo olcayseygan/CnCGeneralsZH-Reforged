@@ -1526,10 +1526,17 @@ AsciiString RandomMapTabMap(void)
 	return stageRoomRandomMap(theRandomRoom, theRandomSize, theRandomTemplate);
 }
 
-Bool GenerateMapForCrowdedRoom(GameInfo *game)
+Bool GenerateMapForCrowdedRoom(GameInfo *game, Bool whenTooSmall)
 {
-	if (game->getNumNonObserverPlayers() <= SHIPPED_MAP_MAX_PLAYERS || isGeneratedMapPath(game->getMap()))
+	if (isGeneratedMapPath(game->getMap()))
 		return FALSE;
+	const Int players = game->getNumNonObserverPlayers();
+	if (players <= SHIPPED_MAP_MAX_PLAYERS)
+	{
+		const MapMetaData *md = whenTooSmall ? TheMapCache->findMap(game->getMap()) : NULL;
+		if (md == NULL || md->m_numPlayers >= players)
+			return FALSE;
+	}
 	// a room whose map could not be made is not asked again every frame until its map changes
 	static AsciiString theFailedMap;
 	if (game->getMap().compareNoCase(theFailedMap) == 0)

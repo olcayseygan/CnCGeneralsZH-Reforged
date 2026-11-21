@@ -27737,8 +27737,23 @@ TEST(skins_table_dresses_each_unit_once_with_rebuilt_and_retail_sheets)
 	CHECK( TankSkin_describe( 9, unit, unitLabel, label ) && unit == "Chinook" && label == "SKIN:Reforged" );
 	CHECK( TankSkin_describe( 10, unit, unitLabel, label ) && unitLabel == "OBJECT:SupplyTruck" && label == "SKIN:Iron" );
 	CHECK( TankSkin_describe( 16, unit, unitLabel, label ) && unit == "USADozer" && label == "SKIN:BugHunter" );
-	CHECK( TankSkin_describe( 17, unit, unitLabel, label ) && unit == "ChinaDozer" && unitLabel == "OBJECT:Dozer" );
+	CHECK( TankSkin_describe( 17, unit, unitLabel, label ) && unit == "ChinaDozer" && unitLabel == "SKIN:UnitChinaDozer" );
+	CHECK( TankSkin_describe( 16, unit, unitLabel, label ) && unitLabel == "SKIN:UnitUsaDozer" );	// two dozers, two names
 	CHECK( !TankSkin_describe( 18, unit, unitLabel, label ) );
+	// how each is earned, the line under a locked card: a code, the supporter grade or a higher one, the badge
+	static const char *const grades[] = { "Iron", "Bronze", "Silver", "Gold", "Emerald", "Reforged" };
+	for( Int id = 1; id <= 3; ++id )
+		CHECK_STR( TankSkin_earnedBy( id ).str(), "SKIN:EarnedCode" );
+	for( Int g = 0; g < 6; ++g )
+	{
+		AsciiString earned;
+		earned.format( "SKIN:Earned%s", grades[g] );
+		CHECK_STR( TankSkin_earnedBy( 4 + g ).str(), earned.str() );
+		CHECK_STR( TankSkin_earnedBy( 10 + g ).str(), earned.str() );
+	}
+	CHECK_STR( TankSkin_earnedBy( 16 ).str(), "SKIN:EarnedBugHunter" );
+	CHECK_STR( TankSkin_earnedBy( 17 ).str(), "SKIN:EarnedBugHunter" );
+	CHECK( TankSkin_earnedBy( 18 ).isEmpty() );
 	CHECK( !TankSkin_describe( 40, unit, unitLabel, label ) );
 
 	CHECK( TankSkin_setLocalLoadout( "1 2 3" ) == all );

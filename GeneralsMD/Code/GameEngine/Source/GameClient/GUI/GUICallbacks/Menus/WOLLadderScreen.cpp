@@ -722,8 +722,9 @@ static void unitTile( Int r, Int count, Int &x, Int &y, Int &width, Int &height 
 	height = down( 180.0f );
 }
 
-/// choice c of count under the strip, four a line: 370 by 152, narrower where four share it.
-/// ponytail: two lines end at 588 of the band's 710, a ninth choice wants a third line or a scroll
+/// choice c of count under the strip, four a line: 370 by 168 (two lines of how a skin is earned
+/// under the chip), narrower where four share it.
+/// ponytail: two lines end at 620 of the band's 710, a ninth choice wants a third line or a scroll
 static void choiceCard( Int c, Int count, Int &x, Int &y, Int &width, Int &height )
 {
 	IRegion2D units, side;
@@ -733,8 +734,8 @@ static void choiceCard( Int c, Int count, Int &x, Int &y, Int &width, Int &heigh
 	const Int room = units.hi.x - units.lo.x - across( 40.0f );
 	width = min( across( 370.0f ), ( room - ( columns - 1 ) * gap ) / columns );
 	x = units.lo.x + across( 20.0f ) + ( c % columns ) * ( width + gap );
-	y = units.lo.y + down( 264.0f + 172.0f * ( c / columns ) );
-	height = down( 152.0f );
+	y = units.lo.y + down( 264.0f + 188.0f * ( c / columns ) );
+	height = down( 168.0f );
 }
 
 /** A unit's tile, drawn over its push button: the panel's black under a FRAME edge, the three-line
@@ -833,7 +834,8 @@ static void drawSkinChoice( GameWindow *window, WinInstanceData *instData )
 	name->draw( x + inset, y + down( 26.0f ), !choice->owned ? UIStyle::MUTED : hovered ? UIStyle::ACTIVE : UIStyle::INK, UIStyle::SHADOW );
 	if (choice->chip)
 	{
-		UIStyle::chip( choice->chip, x + inset, y + down( 80.0f ), choice->chipColor, UIStyle::FRAME );
+		const Int chipY = y + down( 72.0f );
+		UIStyle::chip( choice->chip, x + inset, chipY, choice->chipColor, UIStyle::FRAME );
 		Int chipWidth, chipHeight;
 		choice->chip->getSize( &chipWidth, &chipHeight );
 		if (choice->hint)
@@ -841,7 +843,7 @@ static void drawSkinChoice( GameWindow *window, WinInstanceData *instData )
 			// under the chip (its label and its own 5 over and 4 under), kept inside a squeezed card
 			Int hintWidth, hintHeight;
 			choice->hint->getSize( &hintWidth, &hintHeight );
-			const Int under = y + down( 80.0f ) + chipHeight + UIStyle::tallPx( 9.0f ) + down( 12.0f );
+			const Int under = chipY + chipHeight + UIStyle::tallPx( 9.0f ) + down( 10.0f );
 			choice->hint->draw( x + inset, min( under, y + height - down( 8.0f ) - hintHeight ), UIStyle::MUTED, UIStyle::SHADOW );
 		}
 	}
@@ -909,7 +911,9 @@ static void createSkinsGadgets( void )
 	// unit's choices are up
 	s_skinUnit = 0;
 	GameFont *face = UIStyle::titleFont( 15 );
-	GameFont *strong = UIStyle::font( UIStyle::TEXT_STRONG, TRUE );
+	// a unit's name in the body's bold: TEXT_STRONG cut "Battlemaster" and "Supply Truck" to
+	// "Bttlmstr" and "S. Truck" in the 142 a tile has when seven share the strip
+	GameFont *strong = UIStyle::readableFont( UIStyle::TEXT_BODY, TRUE );
 	GameFont *body = UIStyle::readableFont( UIStyle::TEXT_BODY );
 	for (size_t r = 0; r < s_skinRows.size(); ++r)
 	{
@@ -928,7 +932,7 @@ static void createSkinsGadgets( void )
 		if (row.tile)
 		{
 			row.tile->winSetFont( strong );
-			GadgetButtonSetText( row.tile, UIStyle::fitText( row.name, strong, room ) );
+			GadgetButtonSetText( row.tile, UIStyle::fitName( row.name, strong, width - 2 * across( 4.0f ) ) );		// a name: an ellipsis, never a cut word
 			row.tile->winSetDrawFunc( drawSkinUnit );
 		}
 		if (sideKey)
@@ -1018,8 +1022,10 @@ static void layoutSkins( OnlineSkinsState state, UnsignedInt64 owned, const Asci
 			freeChoiceWords( choice );
 			choice.chip = newWords( UIStyle::fitText( TheGameText->fetch( chip ), UIStyle::chipFont(), room - 2 * across( 8.0f ) ), UIStyle::chipFont() );
 			choice.chipColor = picked ? UIStyle::ACTIVE : UIStyle::MUTED;
-			if (!choice.owned)
-				choice.hint = newWords( UIStyle::fitText( TheGameText->fetch( "GUI:OnlineSkinsLockedHint" ), body, room ), body );
+			// how this skin is earned, the table's Earned line, wrapped to two lines in full words
+			const AsciiString earned = TankSkin_earnedBy( choice.id );
+			if (!choice.owned && earned.isNotEmpty())
+				choice.hint = newWords( TheGameText->fetch( earned ), body, room );
 			// nothing to pick while an ask is out: its answer resets the picks to what the site holds
 			if (choice.button)
 			{

@@ -5066,11 +5066,11 @@ GUI:OnlineSkinsWaiting
 END
 
 GUI:OnlineSkinsHint
-"Pick one look per unit and press Save. Greyed-out skins unlock with a code redeemed at zerohour.gg."
+"Pick one look per unit and press Save. A greyed-out skin's card says how to get it."
 END
 
 GUI:OnlineSkinsNone
-"Your account owns no skins yet. Redeem a code at zerohour.gg, then open this screen again."
+"Your account owns no skins yet. Each card says how to get its skin; open this screen again once you have one."
 END
 
 GUI:OnlineSkinsSaved
@@ -5180,6 +5180,46 @@ END
 
 SKIN:BugHunter
 "BUG HUNTER"
+END
+
+SKIN:EarnedCode
+"Redeem a code at zerohour.gg"
+END
+
+SKIN:EarnedIron
+"For Iron supporters or higher"
+END
+
+SKIN:EarnedBronze
+"For Bronze supporters or higher"
+END
+
+SKIN:EarnedSilver
+"For Silver supporters or higher"
+END
+
+SKIN:EarnedGold
+"For Gold supporters or higher"
+END
+
+SKIN:EarnedEmerald
+"For Emerald supporters or higher"
+END
+
+SKIN:EarnedReforged
+"For Reforged supporters"
+END
+
+SKIN:EarnedBugHunter
+"Comes with the Bug Hunter badge"
+END
+
+SKIN:UnitUsaDozer
+"USA Dozer"
+END
+
+SKIN:UnitChinaDozer
+"China Dozer"
 END
 
 GUI:OnlineLadderRank
@@ -6664,7 +6704,7 @@ GUI:OnlineSkinsGlaTank
 END
 
 GUI:OnlineSkinsUsaHelicopter
-"USA helicopter"
+"USA aircraft"
 END
 
 GUI:OnlineSkinsUsaVehicle
@@ -6691,16 +6731,12 @@ GUI:OnlineSkinsUnsaved
 "Picked, not saved"
 END
 
-GUI:OnlineSkinsLockedHint
-"Redeem a code at zerohour.gg"
-END
-
 GUI:OnlineSkinsGet
 "Getting skins"
 END
 
 GUI:OnlineSkinsGet1
-"A skin belongs to your zerohour.gg account. Redeem a code on the account page, then open this page again."
+"Skins belong to your zerohour.gg account. A code unlocks the camo, backing the project brings the supporter grades, and the Bug Hunter badge the dozers. Then open this page again."
 END
 
 GUI:OnlineSkinsOpenSite

@@ -57,4 +57,8 @@ void TankSkin_clearTable( void );
 	* none).  FALSE for an id the table lacks. */
 Bool TankSkin_describe( Int id, AsciiString &unit, AsciiString &unitLabel, AsciiString &label );
 
+/** The string table label saying how an account comes to own skin `id` (Earned: a code, a supporter
+	* grade, a badge); empty for an id the table lacks or one that names none. */
+AsciiString TankSkin_earnedBy( Int id );
+
 #endif

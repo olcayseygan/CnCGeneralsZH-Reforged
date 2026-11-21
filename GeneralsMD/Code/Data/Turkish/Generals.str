@@ -19313,11 +19313,11 @@ GUI:OnlineSkinsWaiting
 END
 
 GUI:OnlineSkinsHint
-"Her birim için bir görünüm seç, Kaydet'e bas. Gri skinler zerohour.gg'de kullanılan bir kodla açılır."
+"Her birim için bir görünüm seç, Kaydet'e bas. Gri bir skinin kartı onu nasıl alacağını söyler."
 END
 
 GUI:OnlineSkinsNone
-"Hesabında henüz skin yok. zerohour.gg'de bir kod kullan, sonra bu ekranı yeniden aç."
+"Hesabında henüz skin yok. Her kart, skinini nasıl alacağını söyler; birini aldıktan sonra bu ekranı yeniden aç."
 END
 
 GUI:OnlineSkinsSaved
@@ -19426,6 +19426,46 @@ END
 
 SKIN:BugHunter
 "HATA AVCISI"
+END
+
+SKIN:EarnedCode
+"zerohour.gg'de bir kod kullan"
+END
+
+SKIN:EarnedIron
+"Demir ve üstü destekçiler için"
+END
+
+SKIN:EarnedBronze
+"Bronz ve üstü destekçiler için"
+END
+
+SKIN:EarnedSilver
+"Gümüş ve üstü destekçiler için"
+END
+
+SKIN:EarnedGold
+"Altın ve üstü destekçiler için"
+END
+
+SKIN:EarnedEmerald
+"Zümrüt ve üstü destekçiler için"
+END
+
+SKIN:EarnedReforged
+"Reforged destekçiler için"
+END
+
+SKIN:EarnedBugHunter
+"Hata Avcısı rozetiyle gelir"
+END
+
+SKIN:UnitUsaDozer
+"ABD Dozeri"
+END
+
+SKIN:UnitChinaDozer
+"Çin Dozeri"
 END
 
 GUI:OnlineLadderRank
@@ -20855,7 +20895,7 @@ GUI:OnlineSkinsGlaTank
 END
 
 GUI:OnlineSkinsUsaHelicopter
-"ABD helikopteri"
+"ABD hava aracı"
 END
 
 GUI:OnlineSkinsUsaVehicle
@@ -20882,16 +20922,13 @@ GUI:OnlineSkinsUnsaved
 "Seçildi, kaydedilmedi"
 END
 
-GUI:OnlineSkinsLockedHint
-"Kodu zerohour.gg'de kullan"
-END
 
 GUI:OnlineSkinsGet
 "Skin edinmek"
 END
 
 GUI:OnlineSkinsGet1
-"Skin, zerohour.gg hesabına aittir. Kodu hesap sayfasında kullan, sonra bu sayfayı yeniden aç."
+"Skinler zerohour.gg hesabına aittir. Kamuflajı bir kod açar, destekçi kademeleri projeye destekle, dozerlerinki Hata Avcısı rozetiyle gelir. Sonra bu sayfayı yeniden aç."
 END
 
 GUI:OnlineSkinsOpenSite

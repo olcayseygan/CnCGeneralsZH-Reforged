@@ -2757,24 +2757,6 @@ Int parseTestNotice(char *args[], int num)
 	return 2;
 }
 
-/* -modelpreview <template> [skin]: draw that object template's model through Display::drawModelPreview
-   over the shell, turning, in three squares along the foot: the default paint, the skin, and the skin
-   dimmed, for proof shots of the skins screen's model.  The skin is a TankSkin id, 0 or left out for
-   the default paint. */
-Int parseModelPreview(char *args[], int num)
-{
-	if (TheWritableGlobalData && num > 1)
-	{
-		TheWritableGlobalData->m_modelPreview = args[1];
-		if (num > 2 && args[2][0] >= '0' && args[2][0] <= '9')
-		{
-			TheWritableGlobalData->m_modelPreviewSkin = atoi(args[2]);
-			return 3;
-		}
-	}
-	return 2;
-}
-
 Int parseQuickMatch(char *args[], int num)
 {
 	if (TheWritableGlobalData)
@@ -3175,7 +3157,6 @@ static CommandLineParam params[] =
 	{ "-onlinestart", parseOnlineStart },
 	{ "-onlinelogin", parseOnlineLogin },
 	{ "-testNotice", parseTestNotice },
-	{ "-modelpreview", parseModelPreview },
 	{ "-quickmatch", parseQuickMatch },
 	{ "-lanlobby", parseLanLobby },
 	{ "-skirmishlobby", parseSkirmishLobby },

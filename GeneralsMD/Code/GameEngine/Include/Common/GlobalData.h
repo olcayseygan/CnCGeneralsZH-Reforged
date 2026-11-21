@@ -595,8 +595,6 @@ public:
 	Bool m_quickMatchOnStart;					///< -quickmatch: go into the Quick Match queue once logged in
 	Bool m_onlineLoginOnStart;				///< -onlinelogin: open the online login screen at startup, nothing filled in
 	AsciiString m_testNotice;					///< -testNotice maintenance|info: the online notice banner with no server, for proof shots
-	AsciiString m_modelPreview;				///< -modelpreview <template> [skin]: Display::drawModelPreview over the shell, default paint, skin and skin dimmed, for proof shots
-	Int m_modelPreviewSkin;						///< the skin id -modelpreview draws, 0 the default paint
 	Bool m_lanLobbyOnStart;						///< -lanlobby: open the LAN lobby instead of stopping at the main menu
 	Bool m_skirmishLobbyOnStart;			///< -skirmishlobby: open the skirmish staging room instead of stopping at the main menu
 	Bool m_optionsMenuOnStart;				///< -optionsmenu: open the options screen over the main menu at startup

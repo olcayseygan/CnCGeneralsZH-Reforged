@@ -30,7 +30,6 @@
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "PreRTS.h"	// This must go first in EVERY cpp file int the GameEngine
 
-#include "Common/EarlyCommandLine.h"
 #include "Common/GameEngine.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/Shell.h"
@@ -722,41 +721,12 @@ static const struct { const char *unit; const char *templateName; const char *ca
 };
 static const Int SKIN_UNKNOWN = (Int)ARRAY_SIZE( SKIN_UNITS );
 
-/// the house colour the models wear, -modelpreview's blue
+/// the house colour the models wear, a player's blue
 static const Color SKIN_HOUSE = GameMakeColor( 0x2a, 0x6e, 0xd8, 0xff );
 /// a card's model at a fixed turn: the front quarter toward the eye, so the side and the roof show
 static const Real SKIN_CARD_TURN = 0.06f;
 /// a card's ground, near black, so the model carries it
 static const Color SKIN_CARD_GROUND = GameMakeColor( 0x09, 0x0b, 0x13, 0xff );
-
-/** -skinsdemo [id]: this page with no service behind it and a fixed account: the Crusader's camo, the
-	* Chinook's Iron to Gold and the Supply Truck's Iron owned, the Chinook's Gold worn, every other look
-	* locked; id puts that look in focus.  Save keeps the loadout on this machine and sends nothing. */
-static Bool skinsDemo( void )
-{
-	return findEarlyCommandLineOption( L"-skinsdemo" ) != NULL;
-}
-static const SkinLoadout SKINS_DEMO_OWNED = ( (SkinLoadout)1 << 1 ) | ( (SkinLoadout)1 << 4 ) | ( (SkinLoadout)1 << 5 )
-	| ( (SkinLoadout)1 << 6 ) | ( (SkinLoadout)1 << 7 ) | ( (SkinLoadout)1 << 10 );
-static Bool s_skinsDemoDressed = FALSE;	///< the demo's Gold Chinook put on once, so a Save survives the page
-
-/// the online pages draw: with the service, or for the Skins demo without it
-static Bool onlinePage( void )
-{
-	return OnlineIsEnabled() || skinsDemo();
-}
-
-/// OnlineGetSkins, or the demo's account
-static OnlineSkinsState skinsNow( UnsignedInt64 &owned, AsciiString &error )
-{
-	if (skinsDemo())
-	{
-		owned = SKINS_DEMO_OWNED;
-		error.clear();
-		return ONLINE_SKINS_READY;
-	}
-	return OnlineGetSkins( owned, error );
-}
 
 void WOLSkinsScreenOpen( void )
 {
@@ -1165,27 +1135,12 @@ static void createSkinsGadgets( void )
 	s_skinsDirty = TRUE;
 	s_skinsSaved = FALSE;
 	s_skinFilter = FILTER_ALL;
-	if (skinsDemo() && !s_skinsDemoDressed)
-	{
-		TankSkin_setLocalLoadout( "7" );
-		s_skinsDemoDressed = TRUE;
-	}
 	picksFromLoadout();
 
-	// the first unit and what it wears, or the look -skinsdemo names
+	// the first unit and what it wears
 	s_skinUnit = 0;
 	s_skinFocus = s_skinRows.empty() ? 0 : s_skinRows[0].pick;
-	char asked[ 16 ];
-	if (skinsDemo() && findEarlyCommandLineValue( L"-skinsdemo", asked, sizeof( asked ) ))
-		for (size_t r = 0; r < s_skinRows.size(); ++r)
-			for (size_t c = 0; c < s_skinRows[r].choices.size(); ++c)
-				if (s_skinRows[r].choices[c].id == atoi( asked ))
-				{
-					s_skinUnit = r;
-					s_skinFocus = s_skinRows[r].choices[c].id;
-				}
-	if (!skinsDemo())
-		OnlineRequestSkins();		// a code redeemed on the site since the sign-in
+	OnlineRequestSkins();		// a code redeemed on the site since the sign-in
 }
 
 static void freeWords( DisplayString *&words )
@@ -1421,7 +1376,7 @@ static void drawSkins( void )
 {
 	UnsignedInt64 owned = 0;
 	AsciiString error;
-	const OnlineSkinsState state = skinsNow( owned, error );
+	const OnlineSkinsState state = OnlineGetSkins( owned, error );
 	if (!s_skinsDirty && (Int)state == s_skinsState && owned == s_skinsOwnedShown)
 		return;
 	if (state == ONLINE_SKINS_READY && s_skinsState == (Int)ONLINE_SKINS_WAITING)
@@ -1497,24 +1452,8 @@ static void saveSkins( void )
 		if (s_skinRows[r].pick)
 			wear |= (SkinLoadout)1 << s_skinRows[r].pick;
 	s_skinsSaved = TRUE;
-	if (skinsDemo())
-	{
-		// the demo's account takes it on the spot, on this machine only
-		AsciiString ids;
-		for (Int id = 1; id <= TANK_SKIN_MAX_ID; ++id)
-			if (wear & ((SkinLoadout)1 << id))
-			{
-				AsciiString one;
-				one.format( "%d ", id );
-				ids.concat( one );
-			}
-		TankSkin_setLocalLoadout( ids.str() );
-		picksFromLoadout();
-		s_skinsDirty = TRUE;
-	}
-	else
-		OnlineSaveSkins( wear );
-	DEBUG_LOG(( "SKINS PAGE save wear=%s demo=%d\n", TankSkin_slotField( wear ).str(), (Int)skinsDemo() ));
+	OnlineSaveSkins( wear );
+	DEBUG_LOG(( "SKINS PAGE save wear=%s\n", TankSkin_slotField( wear ).str() ));
 	drawSkins();
 }
 
@@ -1544,7 +1483,7 @@ void WOLLadderScreenInit( WindowLayout *layout, void *userData )
 	buttonBack = TheWindowManager->winGetWindowFromId( parentWindow, buttonBackID );
 	windowLadder = TheWindowManager->winGetWindowFromId( parentWindow, windowLadderID );
 
-	if (onlinePage())
+	if (OnlineIsEnabled())
 	{
 		// one layout serves both tabs: Skins when the hub's tab or WOLSkinsScreenOpen asked for it
 		s_skinsPage = s_skinsPage || UIStyle::onlineTabAsked() == UIStyle::ONLINE_TAB_SKINS;
@@ -1590,7 +1529,7 @@ void WOLLadderScreenShutdown( WindowLayout *layout, void *userData )
 	clearPieces();
 	UIStyle::onlinePageShutdown( parentWindow );
 	s_skinsPage = FALSE;		// the Ladder tab opens the ladder again
-	if (TheWebBrowser != NULL && !onlinePage())
+	if (TheWebBrowser != NULL && !OnlineIsEnabled())
 	{
 		TheWebBrowser->closeBrowserWindow(windowLadder);
 	}
@@ -1611,10 +1550,9 @@ void WOLLadderScreenShutdown( WindowLayout *layout, void *userData )
 //-------------------------------------------------------------------------------------------------
 void WOLLadderScreenUpdate( WindowLayout *layout, void *userData )
 {
-	if (onlinePage())
+	if (OnlineIsEnabled())
 	{
-		if (OnlineIsEnabled())
-			OnlineUpdate();		// the lines this screen waits on, whatever lies under it on the shell stack
+		OnlineUpdate();		// the lines this screen waits on, whatever lies under it on the shell stack
 		if (s_skinsPage)
 			drawSkins();
 		else

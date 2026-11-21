@@ -275,9 +275,18 @@ void Connection::sendNetCommandMsg(NetCommandMsg *msg, SlotMask relay) {
 				NetCommandList *list = tempPacket->getCommandList();
 				NetCommandRef *ref1 = list->getFirstMessage();
 				while (ref1 != NULL) {
-					// NULL when the queue already holds a command with this author and id: a relayed
-					// command is wrapped under our own id counter (NetPacket.cpp), which can match one.
-					NetCommandRef *ref2 = m_netCommandList->addMessage(ref1->getCommand());
+					/* A frame resend answer wraps another seat's big command under our own id counter with
+						 that seat's player id (NetPacket.cpp), so a piece could share author and id with one of
+						 that seat's commands already in this queue: the add would drop the piece, and the ack
+						 for one would clear the other.  A piece is new on every call, never a real repeat, and
+						 nothing but the queue and its ack reads a piece's own id, so it takes another. */
+					NetCommandMsg *piece = ref1->getCommand();
+					for (Int tries = 0; (tries < 16) && (m_netCommandList->findMessage(piece->getID(), piece->getPlayerID()) != NULL); ++tries) {
+						DEBUG_LOG(("Connection::sendNetCommandMsg - wrapper piece %d of player %d shares its id with a queued command, renumbered\n",
+							piece->getID(), piece->getPlayerID()));
+						piece->setID(GenerateNextCommandID());
+					}
+					NetCommandRef *ref2 = m_netCommandList->addMessage(piece);
 					if (ref2 != NULL) {
 						ref2->setRelay(relay);
 					}

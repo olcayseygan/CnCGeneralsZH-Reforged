@@ -167,6 +167,14 @@ Bool UnitCapRefuses( Int unitsTowardCap, Int unitsItAdds, UnsignedInt unitCap );
 // refused, given the finished defences and the superweapons he already has, foundations included.
 // It sits on top of the lobby's rule and never loosens it.
 enum { DEFENSES_PER_SUPERWEAPON = 12 };
+// ... and what each rung's ration now asks, flat on every rung so the levels above Hard never ask more
+// (a rising Int extrapolates: Easy 3 to Hard 12 asked 21 guns a superweapon at Elo 2800, 34 at 4200).
+// The owner, 2026-11-21: turtles win on many superweapons while the AI put up one or two.  Twelve made
+// Hard's first wait for the twelfth gun, six minutes on the defence clock, and the clock's 24 held it to
+// two; four puts the first up at the fourth and lets the clock alone pay for six.  Easy and Medium build
+// theirs from the scripts' once-only lines, so the ration does not make them build more.
+// DEFENSES_PER_SUPERWEAPON stays the defence clock's measure (aiDefenseAllowance).
+enum { AI_HARD_DEFENSES_PER_SUPERWEAPON = 4 };
 Bool SuperweaponDefenseCapRefuses( Int finishedDefenses, Int superweapons, Int defensesPerSuperweapon );
 // Only a defence somebody paid for counts.  The Sneak Attack tunnel, its Start and every general's
 // copy are the only FS_BASE_DEFENSE templates with no BuildCost: a power drops them for free.

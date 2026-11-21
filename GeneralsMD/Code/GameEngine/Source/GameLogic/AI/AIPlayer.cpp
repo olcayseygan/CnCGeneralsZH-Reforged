@@ -9611,9 +9611,17 @@ void AIPlayer::doSuperweapons( void )
 		return;
 	}
 
-	// buildableOfKind already asked canMakeUnit, which holds the defence ration
-	if( superweapon && !priorityBuildPending( m_player, superweapon ) )
+	// buildableOfKind already asked canMakeUnit, which holds the defence ration.  The first is saved for;
+	// every one after it waits until the bank holds its price, so the extra copies come out of what the
+	// income leaves over and not out of the army's money (AI_HARD_DEFENSES_PER_SUPERWEAPON lets many through)
+	if( superweapon && !priorityBuildPending( m_player, superweapon ) &&
+			( tally.superweapons < 1 || ( getSkillProfile()->m_economyBuildings &&		// Easy and Medium: the one, as their scripts do
+				(Int)m_player->getMoney()->countMoney() >= superweapon->calcCostToBuild( m_player ) ) ) )
+	{
+		DEBUG_LOG(( "AI SWBUY frame %d player %d '%s', %d standing, %d in the bank\n", TheGameLogic->getFrame(),
+			m_player->getPlayerIndex(), superweapon->getName().str(), tally.superweapons, (Int)m_player->getMoney()->countMoney() ));
 		buildAsap( superweapon );
+	}
 }
 
 static void findParticleCannons( Object *obj, void *userData )

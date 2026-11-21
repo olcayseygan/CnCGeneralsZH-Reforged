@@ -21459,7 +21459,7 @@ TEST(the_bank_target_and_the_upgrade_the_army_pays_for)
 		CHECK( upper.m_superweaponDefenses >= lower.m_superweaponDefenses );
 	}
 	CHECK_EQ( 0.0f, data.m_skill[ AISKILL_BRUTAL ].m_strikeThreatWeight );
-	CHECK_EQ( (Int)DEFENSES_PER_SUPERWEAPON, data.m_skill[ AISKILL_BRUTAL ].m_superweaponDefenses );
+	CHECK_EQ( (Int)AI_HARD_DEFENSES_PER_SUPERWEAPON, data.m_skill[ AISKILL_BRUTAL ].m_superweaponDefenses );
 }
 
 
@@ -26278,8 +26278,9 @@ TEST(an_open_dropdown_owns_the_rows_that_hang_past_its_panel)
 	CHECK( !OpenWindowOwnsPoint( TRUE, boxX, boxY, boxWidth, boxHeightOpen, 900, 660 ) );
 }
 
-/* On Hard twelve finished base defences buy one superweapon, twenty-four buy two, whatever mix of
-	 silo, uplink and storm they go to; the lower rungs ask for fewer, from their skill profile.
+/* At a ration of twelve, twelve finished base defences buy one superweapon and twenty-four buy two,
+	 whatever mix of silo, uplink and storm they go to.  Twelve is the defence clock's measure; every
+	 rung's skill profile now asks AI_HARD_DEFENSES_PER_SUPERWEAPON (4), and this pins the arithmetic.
 	 Player::canBuildMoreOfType counts and asks this; the lobby's cap is checked beside it and still
 	 refuses on its own. */
 TEST(twelve_finished_defenses_pay_for_each_superweapon)

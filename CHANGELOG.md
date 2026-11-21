@@ -8,6 +8,11 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## The computer builds superweapons like a turtle does
+
+- A Hard computer waited for its twelfth finished defence before its first superweapon and then stopped at two, while a player behind his walls put up five and wiped it in one push; the levels above Hard asked for even more guns per superweapon, so they built fewer still. Every level now pays four defences for each one, and once the first stands the computer adds another whenever the bank holds its price. In twelve four-player Hard matches on Twilight Flame all 48 computers put one up, the first at a median of 3.8 minutes, and held a median of three by the end, ten at most. Easy and Medium still build the one their scripts ask for.
+- Replays with a computer player recorded before this change will not play back.
+
 ## Computer allies give up as a team
 
 - A computer weighed only itself before typing GG, so allied Easy seats facing one strong player each saw a lost match and gave up unfought; seven Easy seats against one player given 180 tanks were all gone before a shot was fired. A computer now sets its whole team's worth against the strongest enemy team. In ten matches of two allied Easy seats against one computer at a rating of 4200, three seats gave up, each with its team under a fifth of the enemy's worth.

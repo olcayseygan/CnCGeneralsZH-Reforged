@@ -18880,8 +18880,8 @@ GUI:RandomMapAnyTemplate
 "Sürpriz yap"
 END
 
-TOOLTIP:RandomMapsOnlyCrowded
-"Hazır haritaların hiçbiri sekizden fazla oyuncu almıyor, bu kadar büyük bir oyun üretilen bir haritada oynanır"
+TOOLTIP:MapListCrowded
+"Sekizden fazla oyuncuda yalnız her oyuncuya bir başlangıç noktası olan haritalar listelenir; Rastgele sekmesi her sayıya bir harita üretir"
 END
 
 GUI:LobbyPresetsButton

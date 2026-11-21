@@ -203,9 +203,9 @@ static WindowMsgHandledType recordVeilInput( GameWindow *window, UnsignedInt msg
 
 /** A big game in one pick. The local player keeps the first seat, his name, army and colour, and
 	sits on the first team; every other seat of the preset is a computer on a random army and colour,
-	the rest are closed. More than eight seats take the room to a generated map for them
-	(GenerateMapForCrowdedRoom, then FitRandomMapToRoom as the seat count changes); eight keep a
-	shipped map with eight start spots, and a smaller one gives way to a generated map. */
+	the rest are closed. A map with a start spot for every seat stays; one with too few gives way to
+	a generated map for them (GenerateMapForCrowdedRoom, then FitRandomMapToRoom as the seat count
+	changes). */
 enum { PRESET_MIXED = -1, PRESET_MAX_TEAMS = 8 };
 static const Int PRESET_HARD = SLOT_BRUTAL_AI;							// the rung the menu calls Hard
 static const Int PRESET_BRUTAL = AILevelAboveHardRating[ 0 ];	// the first above it
@@ -2250,7 +2250,8 @@ void SkirmishGameOptionsMenuUpdate( WindowLayout * layout, void *userData)
 	}
 
 	// Back deletes the room's game at once, and the screen goes on updating while it animates out.
-	// A ninth player on a shipped map takes the room to a generated one, which then follows the seats.
+	// A ninth player on a map with too few start spots takes the room to a generated one, which then
+	// follows the seats.
 	if (TheSkirmishGameInfo && (GenerateMapForCrowdedRoom(TheSkirmishGameInfo) || FitRandomMapToRoom(TheSkirmishGameInfo)))
 	{
 		skirmishPositionStartSpots();
@@ -2635,8 +2636,8 @@ WindowMsgHandledType SkirmishGameOptionsMenuSystem( GameWindow *window, Unsigned
 			}
 			if ( !loaded )
 				break;
-			// the room repaints and fits its map to the new seats: eight keep a shipped map that holds
-			// them, more or a smaller map take a generated one
+			// the room repaints and fits its map to the new seats: a map that holds them stays, one with
+			// too few start spots takes a generated one
 			showPresets( FALSE );
 			sandboxOk = FALSE;
 			if ( !GenerateMapForCrowdedRoom( TheSkirmishGameInfo, TRUE ) )

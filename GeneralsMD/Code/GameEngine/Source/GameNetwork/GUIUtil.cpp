@@ -1436,14 +1436,16 @@ void RandomMapTabInit(const char *layoutFilename, GameWindow *parent, GameWindow
 	fillTemplateList();
 	GadgetRadioSetSelection(theSizeButtons[theRandomSize], FALSE);
 
-	// more players than a shipped map holds: the generated map is the only one there is
+	// more players than a shipped map holds: the lists keep the maps with a start spot for each of
+	// them (the picker fills them so), and a room already on a generated map opens on this tab
 	const Bool crowded = allowed && game->getNumNonObserverPlayers() > SHIPPED_MAP_MAX_PLAYERS;
-	theListTabs[0]->winEnable(!crowded);
-	theListTabs[1]->winEnable(!crowded);
 	if (crowded)
-		theRandomTab->winSetTooltip(TheGameText->fetch("TOOLTIP:RandomMapsOnlyCrowded"));
+	{
+		theListTabs[0]->winSetTooltip(TheGameText->fetch("TOOLTIP:MapListCrowded"));
+		theListTabs[1]->winSetTooltip(TheGameText->fetch("TOOLTIP:MapListCrowded"));
+	}
 
-	const Bool open = allowed && (crowded || pref.getBool("Open", FALSE));
+	const Bool open = allowed && ((crowded && isGeneratedMapPath(game->getMap())) || pref.getBool("Open", FALSE));
 	if (open)
 		GadgetRadioSetSelection(theRandomTab, FALSE);
 	showRandomTab(open);
@@ -1531,12 +1533,14 @@ Bool GenerateMapForCrowdedRoom(GameInfo *game, Bool whenTooSmall)
 	if (isGeneratedMapPath(game->getMap()))
 		return FALSE;
 	const Int players = game->getNumNonObserverPlayers();
-	if (players <= SHIPPED_MAP_MAX_PLAYERS)
-	{
-		const MapMetaData *md = whenTooSmall ? TheMapCache->findMap(game->getMap()) : NULL;
-		if (md == NULL || md->m_numPlayers >= players)
-			return FALSE;
-	}
+	if (players <= SHIPPED_MAP_MAX_PLAYERS && !whenTooSmall)
+		return FALSE;
+	// a map with a start spot for every seat stays, a custom one past eight included
+	const MapMetaData *current = TheMapCache->findMap(game->getMap());
+	if (current != NULL && (Int)current->m_numPlayers >= players)
+		return FALSE;
+	if (current == NULL && players <= SHIPPED_MAP_MAX_PLAYERS)
+		return FALSE;
 	// a room whose map could not be made is not asked again every frame until its map changes
 	static AsciiString theFailedMap;
 	if (game->getMap().compareNoCase(theFailedMap) == 0)
@@ -1560,7 +1564,7 @@ Bool GenerateMapForCrowdedRoom(GameInfo *game, Bool whenTooSmall)
 		theFailedMap = game->getMap();
 		return FALSE;
 	}
-	DEBUG_LOG(("random map: the room seats %d, more than a shipped map holds; map now '%s'\n",
+	DEBUG_LOG(("random map: the room seats %d, more than its map holds; map now '%s'\n",
 		game->getNumNonObserverPlayers(), map.str()));
 	game->setMap(map);
 	game->setMapCRC(md->m_CRC);

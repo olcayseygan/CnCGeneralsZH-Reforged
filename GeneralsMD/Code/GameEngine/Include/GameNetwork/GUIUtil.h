@@ -189,8 +189,9 @@ void DrawMapListTab(GameWindow *window, class WinInstanceData *instData);
 // players seated then.  The picker's init calls RandomMapTabInit after filling its list (filling it
 // moves the preview), its system callback offers every message to RandomMapTabHandle first, and
 // Accept takes RandomMapTabMap(), which stages that map, whenever that is not empty.  allowed FALSE greys the tab out (a ranked
-// online room plays official maps only).  A room seating more than SHIPPED_MAP_MAX_PLAYERS opens
-// on the tab with the Official and Unofficial ones greyed out.  RandomMapTabShutdown forgets the windows.
+// online room plays official maps only).  A room seating more than SHIPPED_MAP_MAX_PLAYERS on a
+// generated map opens on the tab; its picker lists only the maps with a start spot for every seat.
+// RandomMapTabShutdown forgets the windows.
 void RandomMapTabInit(const char *layoutFilename, GameWindow *parent, GameWindow *preview,
 										GameWindow *startSpots[], const GameInfo *game, Bool allowed);
 Bool RandomMapTabHandle(UnsignedInt msg, UnsignedIntPtr mData1, UnsignedIntPtr mData2);
@@ -204,11 +205,11 @@ void RandomMapTabShutdown(void);
 Bool FitRandomMapToRoom(GameInfo *game);
 /// The most start positions a shipped or user map has: WorldBuilder places eight.
 enum { SHIPPED_MAP_MAX_PLAYERS = 8 };
-// A room seating more players than any shipped map holds plays a generated map. When it seats more
-// and its map is not one, the Random tab's remembered choice (RandomMap.ini) is staged for them and
-// becomes the room's map, as FitRandomMapToRoom does; TRUE when the map changed. Only the skirmish
-// room seats that many. whenTooSmall does the same for a shipped map with fewer start spots than
-// the room seats (a preset's eight on a four-player map); a shipped map that holds them is kept.
+// A room seating more than eight plays a map with a start spot for every seat: a custom map with
+// that many, or a generated one. When its map has too few, the Random tab's remembered choice
+// (RandomMap.ini) is staged for them and becomes the room's map, as FitRandomMapToRoom does; TRUE
+// when the map changed. Only the skirmish room seats that many. whenTooSmall does the same at eight
+// or fewer (a preset's eight on a four-player map); a map that holds them is kept.
 Bool GenerateMapForCrowdedRoom(GameInfo *game, Bool whenTooSmall = FALSE);
 
 void EnableSlotListUpdates( Bool val );

@@ -145,8 +145,19 @@ static const char *gadgetsToHide[] =
 	"ButtonSelectMap",
 	"ButtonStart",
 	"ButtonRecord",
+	"ButtonPresets",
+	"ButtonSeatScrollUp",
+	"ButtonSeatScrollDown",
+	"SliderSeatScroll",
 	NULL // keep this last
 };
+
+// Past eight seats the lists hold only the maps with a start spot for every seat
+static Int crowdMinPlayers( void )
+{
+	const Int seats = TheSkirmishGameInfo->getNumNonObserverPlayers();
+	return seats > SHIPPED_MAP_MAX_PLAYERS ? seats : 0;
+}
 static const char *perPlayerGadgetsToHide[] =
 {
 	"SeatCard",
@@ -237,12 +248,12 @@ void SkirmishMapSelectMenuInit( WindowLayout *layout, void *userData )
 			TheMapCache->updateCache();
 		if (usesSystemMapDir)
 		{
-			populateMapListbox( mapList, TRUE, TRUE, TheSkirmishGameInfo->getMap() );
+			populateMapListbox( mapList, TRUE, TRUE, TheSkirmishGameInfo->getMap(), crowdMinPlayers() );
 		}
 		else
 		{
-			populateMapListbox( mapList, FALSE, FALSE, TheSkirmishGameInfo->getMap() );
-			populateMapListboxNoReset( mapList, FALSE, TRUE, TheSkirmishGameInfo->getMap() );
+			populateMapListbox( mapList, FALSE, FALSE, TheSkirmishGameInfo->getMap(), crowdMinPlayers() );
+			populateMapListboxNoReset( mapList, FALSE, TRUE, TheSkirmishGameInfo->getMap(), crowdMinPlayers() );
 		}
 		mapList->winSetTooltipFunc(mapListTooltipFunc);
 	}
@@ -442,7 +453,7 @@ WindowMsgHandledType SkirmishMapSelectMenuSystem( GameWindow *window, UnsignedIn
 			{
 				if (TheMapCache)
 					TheMapCache->updateCache();
-				populateMapListbox( mapList, TRUE, TRUE, TheSkirmishGameInfo->getMap() );
+				populateMapListbox( mapList, TRUE, TRUE, TheSkirmishGameInfo->getMap(), crowdMinPlayers() );
 				//LANPreferences pref;
 				//pref["UseSystemMapDir"] = "yes";
 				//pref.write();
@@ -451,8 +462,8 @@ WindowMsgHandledType SkirmishMapSelectMenuSystem( GameWindow *window, UnsignedIn
 			{
 				if (TheMapCache)
 					TheMapCache->updateCache();
-				populateMapListbox( mapList, FALSE, FALSE, TheSkirmishGameInfo->getMap() );
-				populateMapListboxNoReset( mapList, FALSE, TRUE, TheSkirmishGameInfo->getMap() );
+				populateMapListbox( mapList, FALSE, FALSE, TheSkirmishGameInfo->getMap(), crowdMinPlayers() );
+				populateMapListboxNoReset( mapList, FALSE, TRUE, TheSkirmishGameInfo->getMap(), crowdMinPlayers() );
 				//LANPreferences pref;
 				//pref["UseSystemMapDir"] = "no";
 				//pref.write();

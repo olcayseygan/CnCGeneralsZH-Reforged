@@ -18868,6 +18868,10 @@ GUI:RandomMapAnyTemplate
 "Sürpriz yap"
 END
 
+TOOLTIP:RandomMapsOnlyCrowded
+"Hazır haritaların hiçbiri sekizden fazla oyuncu almıyor, bu kadar büyük bir oyun üretilen bir haritada oynanır"
+END
+
 GUI:RandomMapSize
 "Harita boyutu"
 END

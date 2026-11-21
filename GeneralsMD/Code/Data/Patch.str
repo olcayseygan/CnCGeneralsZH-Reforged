@@ -4263,6 +4263,10 @@ GUI:RandomMapAnyTemplate
 "Surprise me"
 END
 
+TOOLTIP:RandomMapsOnlyCrowded
+"No shipped map has room for more than eight players, so a game this big plays on a generated map"
+END
+
 GUI:RandomMapSize
 "Map size"
 END

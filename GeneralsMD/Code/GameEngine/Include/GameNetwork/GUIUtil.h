@@ -163,6 +163,11 @@ void InitLobbySeatVisuals(GameWindow *parent, const char *layoutFilename);
 void SnapLobbyRulesLists(GameWindow *parent, const char *layoutFilename);
 void UpdateLobbySeatVisuals(GameInfo *myGame);
 void ShutdownLobbySeatVisuals(void);
+// Which of the layout's seat rows shows each seat, -1 for a seat on no row. Every room's rows are its
+// seats in order (the init calls above set that); the skirmish room scrolls more seats than it has
+// rows over them and says here which row now shows which seat, for the card, bar and swatch windows
+// and the personality column's widths. seatRow has MAX_SLOTS entries.
+void SetLobbySeatRows(const Int seatRow[]);
 // Team 0 to 3 (shown as 1 to 4) each have a colour none of the players can pick; no team is the
 // empty seat's slate.  The map's start spots wear
 // them too.
@@ -184,7 +189,8 @@ void DrawMapListTab(GameWindow *window, class WinInstanceData *instData);
 // players seated then.  The picker's init calls RandomMapTabInit after filling its list (filling it
 // moves the preview), its system callback offers every message to RandomMapTabHandle first, and
 // Accept takes RandomMapTabMap(), which stages that map, whenever that is not empty.  allowed FALSE greys the tab out (a ranked
-// online room plays official maps only).  RandomMapTabShutdown forgets the windows.
+// online room plays official maps only).  A room seating more than SHIPPED_MAP_MAX_PLAYERS opens
+// on the tab with the Official and Unofficial ones greyed out.  RandomMapTabShutdown forgets the windows.
 void RandomMapTabInit(const char *layoutFilename, GameWindow *parent, GameWindow *preview,
 										GameWindow *startSpots[], const GameInfo *game, Bool allowed);
 Bool RandomMapTabHandle(UnsignedInt msg, UnsignedIntPtr mData1, UnsignedIntPtr mData2);
@@ -196,6 +202,13 @@ void RandomMapTabShutdown(void);
 // size and start spots, so joiners rebuild it from the name.  TRUE when the map changed; the room
 // then repaints and sends its options.
 Bool FitRandomMapToRoom(GameInfo *game);
+/// The most start positions a shipped or user map has: WorldBuilder places eight.
+enum { SHIPPED_MAP_MAX_PLAYERS = 8 };
+// A room seating more players than any shipped map holds plays a generated map. When it seats more
+// and its map is not one, the Random tab's remembered choice (RandomMap.ini) is staged for them and
+// becomes the room's map, as FitRandomMapToRoom does; TRUE when the map changed. Only the skirmish
+// room seats that many.
+Bool GenerateMapForCrowdedRoom(GameInfo *game);
 
 void EnableSlotListUpdates( Bool val );
 Bool AreSlotListUpdatesEnabled( void );

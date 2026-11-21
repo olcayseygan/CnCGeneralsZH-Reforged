@@ -903,6 +903,21 @@ static GameWindow *thePersonaSeatName[MAX_SLOTS];
 static GameWindow *thePersonaSeatArmy[MAX_SLOTS];
 static Int thePersonaSeatNarrow[MAX_SLOTS];
 static Int thePersonaSeatWide[MAX_SLOTS];
+// the arrays above and the seat windows below are kept by the layout's row; this says which row a
+// seat is on (SetLobbySeatRows)
+static Int theSeatRow[MAX_SLOTS];
+
+static void resetSeatRows(void)
+{
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+		theSeatRow[i] = i;
+}
+
+void SetLobbySeatRows(const Int seatRow[])
+{
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+		theSeatRow[i] = seatRow[i];
+}
 
 static GameWindow *findSeatWindow(GameWindow *parent, const char *layoutFilename, const char *name, Int seat)
 {
@@ -975,6 +990,7 @@ static void personaListTooltip(GameWindow *listBox, WinInstanceData *, UnsignedI
 void InitAIPersonaComboBoxes(GameWindow *parent, const char *layoutFilename,
 														 GameWindow *comboPersona[], NameKeyType comboPersonaID[])
 {
+	resetSeatRows();
 	for (Int i = 0; i < MAX_SLOTS; ++i)
 	{
 		AsciiString name;
@@ -1016,17 +1032,18 @@ void UpdateAIPersonaComboBoxes(GameInfo *myGame, GameWindow *comboPersona[])
 		return;
 	for (Int i = 0; i < MAX_SLOTS; ++i)
 	{
-		if (!comboPersona[i])
+		const Int row = theSeatRow[i];
+		if (!comboPersona[i] || row < 0)
 			continue;
 		const GameSlot *slot = myGame->getConstSlot(i);
 		// a takeover seat has no AI behind it, so nothing for a personality to steer
 		const Bool computer = slot->isAI() && !slot->isTakeover();
 		// the personality goes with the seat's army box, which ShowUnderlyingGUIElements hides while a
 		// map list lies over the seats, so a network update then cannot bring it back through the list
-		comboPersona[i]->winHide(!computer || thePersonaSeatArmy[i]->winIsHidden());
-		const Int width = computer ? thePersonaSeatNarrow[i] : thePersonaSeatWide[i];
-		setSeatPlayerWidth(thePersonaSeatPlayer[i], width);
-		setSeatPlayerWidth(thePersonaSeatName[i], width);
+		comboPersona[i]->winHide(!computer || thePersonaSeatArmy[row]->winIsHidden());
+		const Int width = computer ? thePersonaSeatNarrow[row] : thePersonaSeatWide[row];
+		setSeatPlayerWidth(thePersonaSeatPlayer[row], width);
+		setSeatPlayerWidth(thePersonaSeatName[row], width);
 		if (!computer)
 			continue;
 		comboPersona[i]->winEnable(myGame->amIHost());
@@ -1419,7 +1436,14 @@ void RandomMapTabInit(const char *layoutFilename, GameWindow *parent, GameWindow
 	fillTemplateList();
 	GadgetRadioSetSelection(theSizeButtons[theRandomSize], FALSE);
 
-	const Bool open = allowed && pref.getBool("Open", FALSE);
+	// more players than a shipped map holds: the generated map is the only one there is
+	const Bool crowded = allowed && game->getNumNonObserverPlayers() > SHIPPED_MAP_MAX_PLAYERS;
+	theListTabs[0]->winEnable(!crowded);
+	theListTabs[1]->winEnable(!crowded);
+	if (crowded)
+		theRandomTab->winSetTooltip(TheGameText->fetch("TOOLTIP:RandomMapsOnlyCrowded"));
+
+	const Bool open = allowed && (crowded || pref.getBool("Open", FALSE));
 	if (open)
 		GadgetRadioSetSelection(theRandomTab, FALSE);
 	showRandomTab(open);
@@ -1480,21 +1504,63 @@ Bool RandomMapTabHandle(UnsignedInt msg, UnsignedIntPtr mData1, UnsignedIntPtr m
 /** A new map from the choice, for everybody seated now.  The seed comes off the clock: this is the
 	client choosing a map, not the simulation, and the joining machines rebuild it from the name the
 	host sends. */
-AsciiString RandomMapTabMap(void)
+static AsciiString stageRoomRandomMap(const GameInfo *game, Int size, const AsciiString &templatePath)
 {
-	if (!theRandomTabOpen)
-		return AsciiString::TheEmptyString;
-	const Int players = roomRandomMapPlayers(theRandomRoom);
+	const Int players = roomRandomMapPlayers(game);
 	RandomMapSettings settings;
 	settings.m_seed = (Int)((Clock_Milliseconds() + 7919u * ++theRolls) & 0x7fffffff);
 	settings.m_numPlayers = players;
-	settings.m_playableCells = RandomMapGenerator::cellsFor((RandomMapSize)theRandomSize, players, theRandomTemplate);
-	settings.m_template = theRandomTemplate;
+	settings.m_playableCells = RandomMapGenerator::cellsFor((RandomMapSize)size, players, templatePath);
+	settings.m_template = templatePath;
 	AsciiString map;
 	stageRandomMap(settings, map);
 	map.toLower();
 	TheMapCache->updateCache();
 	return map;
+}
+
+AsciiString RandomMapTabMap(void)
+{
+	if (!theRandomTabOpen)
+		return AsciiString::TheEmptyString;
+	return stageRoomRandomMap(theRandomRoom, theRandomSize, theRandomTemplate);
+}
+
+Bool GenerateMapForCrowdedRoom(GameInfo *game)
+{
+	if (game->getNumNonObserverPlayers() <= SHIPPED_MAP_MAX_PLAYERS || isGeneratedMapPath(game->getMap()))
+		return FALSE;
+	// a room whose map could not be made is not asked again every frame until its map changes
+	static AsciiString theFailedMap;
+	if (game->getMap().compareNoCase(theFailedMap) == 0)
+		return FALSE;
+
+	UserPreferences pref;
+	pref.load(theRandomMapPrefsFile);
+	Int size = pref.getInt("Size", RANDOM_MAP_SIZE_NORMAL);
+	if (size < 0 || size >= RANDOM_MAP_SIZE_COUNT)
+		size = RANDOM_MAP_SIZE_NORMAL;
+	AsciiString map = stageRoomRandomMap(game, size, pref.getAsciiString("Template", AsciiString::TheEmptyString));
+	const MapMetaData *md = TheMapCache->findMap(map);
+	// a template that builds nothing for this many leaves the plain generator, which always builds
+	if (md == NULL)
+	{
+		map = stageRoomRandomMap(game, size, AsciiString::TheEmptyString);
+		md = TheMapCache->findMap(map);
+	}
+	if (md == NULL)
+	{
+		theFailedMap = game->getMap();
+		return FALSE;
+	}
+	DEBUG_LOG(("random map: the room seats %d, more than a shipped map holds; map now '%s'\n",
+		game->getNumNonObserverPlayers(), map.str()));
+	game->setMap(map);
+	game->setMapCRC(md->m_CRC);
+	game->setMapSize(md->m_filesize);
+	game->getSlot(0)->setMapAvailability(TRUE);
+	game->resetStartSpots();
+	return TRUE;
 }
 
 void RandomMapTabShutdown(void)
@@ -1614,6 +1680,7 @@ static void detachSeatRatings(void)
 
 void InitLobbySeatVisuals(GameWindow *parent, const char *layoutFilename)
 {
+	resetSeatRows();
 	attachSeatRatings(parent, layoutFilename);
 	GameWindow **const windows[] = { theSeatCard, theSeatBar, theSeatSwatch, theSeatTeam };
 	const char *const names[] = { "SeatCard", "SeatBar", "SeatSwatch", "SeatTeam" };
@@ -1688,6 +1755,7 @@ void ShutdownLobbySeatVisuals(void)
 	FactionPickerDetach();
 	for (Int i = 0; i < MAX_SLOTS; ++i)
 		theSeatCard[i] = theSeatBar[i] = theSeatSwatch[i] = theSeatTeam[i] = NULL;
+	resetSeatRows();
 }
 
 static void showColor(GameWindow *window, Color color)
@@ -1710,17 +1778,20 @@ void UpdateLobbySeatVisuals(GameInfo *myGame)
 			else
 				theSeatNick[i].clear();
 		}
-		showColor(theSeatBar[i], color);
-		showColor(theSeatSwatch[i], color);
-		showColor(theSeatTeam[i], occupied ? LobbyTeamColor(slot->getTeamNumber()) : theSeatEmptyColor);
+		const Int row = theSeatRow[i];
+		if (row < 0)
+			continue;
+		showColor(theSeatBar[row], color);
+		showColor(theSeatSwatch[row], color);
+		showColor(theSeatTeam[row], occupied ? LobbyTeamColor(slot->getTeamNumber()) : theSeatEmptyColor);
 
-		if (theSeatCard[i] == NULL || !theSeatsShowReady)
+		if (theSeatCard[row] == NULL || !theSeatsShowReady)
 			continue;
 		// the host always sits in the first seat of a network room and is never asked to ready up
 		const Bool host = i == 0 && slot->isHuman();
 		const Bool ready = slot->isHuman() && !host && slot->isAccepted();
-		theSeatCard[i]->winSetEnabledColor(0, ready ? theCardReadyColor : UIStyle::PANEL);
-		theSeatCard[i]->winSetEnabledBorderColor(0, host ? UIStyle::GOLD : UIStyle::FRAME);
+		theSeatCard[row]->winSetEnabledColor(0, ready ? theCardReadyColor : UIStyle::PANEL);
+		theSeatCard[row]->winSetEnabledBorderColor(0, host ? UIStyle::GOLD : UIStyle::FRAME);
 	}
 }
 

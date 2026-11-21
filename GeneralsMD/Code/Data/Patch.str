@@ -6636,11 +6636,11 @@ GUI:GameModeBody
 END
 
 GUI:GameModeClassic
-"Classic"
+"CLASSIC"
 END
 
 GUI:GameModeDirectStrike
-"Direct Strike"
+"DIRECT STRIKE"
 END
 
 GUI:DirectStrikeIslandNote

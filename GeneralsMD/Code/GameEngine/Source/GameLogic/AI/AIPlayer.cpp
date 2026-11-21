@@ -13911,12 +13911,18 @@ Object *aiFindFreeGarrison( Object *unit, const Coord3D *center, Real radius, co
 		if( contain == NULL || std::find( tried.begin(), tried.end(), building->getID() ) != tried.end() )
 			continue;
 		const Bool isBuilding = building->isKindOf( KINDOF_STRUCTURE );
-		if( isBuilding ? !contain->isGarrisonable() :
-				( transport != NULL || unit->getRelationship( building ) != ALLIES || building->isAirborneTarget() || contain->isRiderChangeContain() ) )
+		// A Chinook landed at a supply dock is working, not waiting for riders, and one hovering idle comes
+		// down for whoever walks up to board (ChinookAIUpdate lands for a rider wanting in), so that one is
+		// offered; every other aircraft in the air still is not.  An idle Chinook used to be passed over for
+		// a Humvee 210 away while it hovered 80 from the man.
+		AIUpdateInterface *carrierAI = isBuilding ? NULL : building->getAI();
+		SupplyTruckAIInterface *hauler = carrierAI ? carrierAI->getSupplyTruckAIInterface() : NULL;
+		if( hauler != NULL && hauler->isCurrentlyFerryingSupplies() )
 			continue;
-		// a Chinook landed at a supply dock is working, not waiting for riders: only an idle one is offered
-		if( !isBuilding && building->getAI() && building->getAI()->getSupplyTruckAIInterface() &&
-				building->getAI()->getSupplyTruckAIInterface()->isCurrentlyFerryingSupplies() )
+		const Bool landsForRiders = hauler != NULL && carrierAI->isIdle() && building->isKindOf( KINDOF_AIRCRAFT );
+		if( isBuilding ? !contain->isGarrisonable() :
+				( transport != NULL || unit->getRelationship( building ) != ALLIES || ( building->isAirborneTarget() && !landsForRiders ) ||
+					contain->isRiderChangeContain() ) )
 			continue;
 		if( !TheActionManager->canEnterObject( unit, building, CMD_FROM_PLAYER, CHECK_CAPACITY ) )
 			continue;

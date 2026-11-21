@@ -13906,6 +13906,10 @@ Object *aiFindFreeGarrison( Object *unit, const Coord3D *center, Real radius, co
 		if( isBuilding ? !contain->isGarrisonable() :
 				( transport != NULL || unit->getRelationship( building ) != ALLIES || building->isAirborneTarget() || contain->isRiderChangeContain() ) )
 			continue;
+		// a Chinook landed at a supply dock is working, not waiting for riders: only an idle one is offered
+		if( !isBuilding && building->getAI() && building->getAI()->getSupplyTruckAIInterface() &&
+				building->getAI()->getSupplyTruckAIInterface()->isCurrentlyFerryingSupplies() )
+			continue;
 		if( !TheActionManager->canEnterObject( unit, building, CMD_FROM_PLAYER, CHECK_CAPACITY ) )
 			continue;
 		// a house never in sight has no memory to read, so what really stands there would decide it, and

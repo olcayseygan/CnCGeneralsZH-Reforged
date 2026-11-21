@@ -540,6 +540,7 @@ public:
 	Bool isUnused(void); // True if it doesn't contain a bridge.
 	Bool isDestroyed(void) {return m_destroyed;} // True if it has been destroyed.
 	PathfindCell *getCell(Int x, Int y);
+	Bool hasCells(void) const {return m_layerCells != NULL;}
 	Int getZone(void) {return m_zone;}
 	void setZone(Int zone) {m_zone = zone;}
 	void applyZone(void); // Propagates m_zone to all cells.
@@ -1093,6 +1094,7 @@ public:
 	void xfer( Xfer *xfer );
 	void loadPostProcess( void );
 	void xferFlowState( Xfer *xfer );							///< the request queue and the flow maps, which GameLogic saves after the objects
+	Bool isUnitMapFromSave( void ) const { return m_unitMapFromSave; }	///< a load is putting the units back on the map from the save, not from where they stand
 
 	Bool clientSafeQuickDoesPathExist( const LocomotorSet& locomotorSet, const Coord3D *from, const Coord3D *to );  ///< Can we build any path at all between the locations	(terrain & buildings check - fast)
 	Bool clientSafeQuickDoesPathExistForUI( const LocomotorSet& locomotorSet, const Coord3D *from, const Coord3D *to );  ///< Can we build any path at all between the locations	(terrain onlyk - fast)
@@ -1515,6 +1517,17 @@ private:
 	};
 	ResumableSearch m_search;
 	ObjectID			m_queueOwnerID;		///< the unit whose turn in the queue is running, INVALID_ID outside it
+
+	/// one cell's units as the save holds them (xfer); a load keeps them until every object has loaded
+	struct UnitCell
+	{
+		Int layer;
+		ICoord2D cell;
+		ObjectID goalUnit, posUnit, goalAircraft;
+	};
+	PathfindCell *getUnitCell( Int layer, Int x, Int y );		///< the cell itself on that layer, no falling back to the ground
+	std::vector<UnitCell> m_unitCells;
+	Bool					m_unitMapFromSave;
 
 	/* diagnostics only - never read by the simulation, so it stays out of xfer().  Records
 		 whether the cell search now running was fenced into a hierarchical corridor or was let

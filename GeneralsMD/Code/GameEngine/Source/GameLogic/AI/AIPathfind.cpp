@@ -4540,7 +4540,7 @@ Pathfinder::Pathfinder( void ) :m_map(NULL),
 	m_traffic(NULL), m_trafficCells(NULL), m_numTrafficCells(0), m_trafficDecayFrame(0),
 	m_claims(NULL), m_claimTouch(NULL),
 	m_flowCosts(false), m_flowSpeed(0), m_flowNow(0), m_flowNowBucket(0),
-	m_queueOwnerID(INVALID_ID)
+	m_queueOwnerID(INVALID_ID), m_unitMapFromSave(FALSE)
 {
 	debugPath = NULL;
 	m_search.owner = INVALID_ID;
@@ -5335,6 +5335,8 @@ void Pathfinder::reset( void )
 {
 	dropSuspendedSearch();		// while its cells still exist
 	m_queueOwnerID = INVALID_ID;
+	m_unitCells.clear();
+	m_unitMapFromSave = FALSE;
 	m_probeBestDistSqr = 0x7FFFFFFF;
 	frameToShowObstacles = 0;
 	DEBUG_LOG(("Pathfind cell is %d bytes, PathfindCellInfo is %d bytes\n", sizeof(PathfindCell), sizeof(PathfindCellInfo)));
@@ -13935,19 +13937,135 @@ void Pathfinder::crc( Xfer *xfer )
 }  // end crc
 
 //-----------------------------------------------------------------------------
+PathfindCell *Pathfinder::getUnitCell( Int layer, Int x, Int y )
+{
+	if (layer == LAYER_GROUND)
+		return &m_map[x][y];
+	return m_layers[layer].hasCells() ? m_layers[layer].getCell(x, y) : NULL;
+}
+
+//-----------------------------------------------------------------------------
+/** The save's CHUNK_Pathfinder, after GameLogic's, so a save without it loads as it always did.
+	* Version Info:
+	* 1: Initial version, nothing
+	* 2: Who stands in each cell and who is headed for it (fork).  A load used to have every unit put
+	*		 itself back in the cells under it, and that is not the map the game had: a unit held on a plot
+	*		 keeps the cells it stood in when it was taken, a unit that drove through another's cells leaves
+	*		 the last one in, a sniped hull keeps the goal its AI last set.  The loaded game pathed round
+	*		 another crowd from its first frame and played a different match. */
 void Pathfinder::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
+	if (version < 2)
+		return;
+
+	if (xfer->getXferMode() == XFER_SAVE)
+	{
+		m_unitCells.clear();
+		for (Int layer = LAYER_GROUND; layer <= LAYER_LAST; ++layer)
+		{
+			if (layer != LAYER_GROUND && !m_layers[layer].hasCells())
+				continue;
+			for (Int y = m_extent.lo.y; y <= m_extent.hi.y; ++y)
+				for (Int x = m_extent.lo.x; x <= m_extent.hi.x; ++x)
+				{
+					PathfindCell *cell = getUnitCell(layer, x, y);
+					if (cell == NULL || !cell->hasInfo())
+						continue;
+					UnitCell unit;
+					unit.layer = layer;
+					unit.cell.x = x;
+					unit.cell.y = y;
+					unit.goalUnit = cell->getGoalUnit();
+					unit.posUnit = cell->getPosUnit();
+					unit.goalAircraft = cell->getGoalAircraft();
+					if (unit.goalUnit != INVALID_ID || unit.posUnit != INVALID_ID || unit.goalAircraft != INVALID_ID)
+						m_unitCells.push_back(unit);
+				}
+		}
+	}
+
+	UnsignedInt count = (UnsignedInt)m_unitCells.size();
+	xfer->xferUnsignedInt( &count );
+	if (xfer->getXferMode() == XFER_LOAD)
+	{
+		const UnsignedInt mapCells = (UnsignedInt)((m_extent.hi.x - m_extent.lo.x + 1) * (m_extent.hi.y - m_extent.lo.y + 1));
+		if (count > mapCells * LAYER_LAST)
+			throw SC_INVALID_DATA;
+		m_unitCells.resize( count );
+	}
+	for (UnsignedInt i = 0; i < count; ++i)
+	{
+		UnitCell &unit = m_unitCells[ i ];
+		xfer->xferInt( &unit.layer );
+		xfer->xferICoord2D( &unit.cell );
+		xfer->xferObjectID( &unit.goalUnit );
+		xfer->xferObjectID( &unit.posUnit );
+		xfer->xferObjectID( &unit.goalAircraft );
+		if (xfer->getXferMode() == XFER_LOAD &&
+				(unit.layer < LAYER_GROUND || unit.layer > LAYER_LAST ||
+				 unit.cell.x < m_extent.lo.x || unit.cell.x > m_extent.hi.x ||
+				 unit.cell.y < m_extent.lo.y || unit.cell.y > m_extent.hi.y ||
+				 getUnitCell(unit.layer, unit.cell.x, unit.cell.y) == NULL))
+			throw SC_INVALID_DATA;
+	}
+
+	if (xfer->getXferMode() == XFER_LOAD)
+		m_unitMapFromSave = TRUE;
+	else
+		m_unitCells.clear();
 
 }  // end xfer
 
 //-----------------------------------------------------------------------------
+/** After every object's own post-processing, which puts each unit where it stands (AIUpdate): off
+	* with all of that, and the save's cells back in. */
 void Pathfinder::loadPostProcess( void )
 {
+	if (!m_unitMapFromSave)
+		return;
+	m_unitMapFromSave = FALSE;
+
+	for (Int layer = LAYER_GROUND; layer <= LAYER_LAST; ++layer)
+	{
+		if (layer != LAYER_GROUND && !m_layers[layer].hasCells())
+			continue;
+		for (Int y = m_extent.lo.y; y <= m_extent.hi.y; ++y)
+			for (Int x = m_extent.lo.x; x <= m_extent.hi.x; ++x)
+			{
+				PathfindCell *cell = getUnitCell(layer, x, y);
+				if (cell == NULL || !cell->hasInfo())
+					continue;
+				ICoord2D index;
+				index.x = x;
+				index.y = y;
+				if (cell->getGoalAircraft() != INVALID_ID)
+					cell->setGoalAircraft(INVALID_ID, index);
+				if (cell->getGoalUnit() != INVALID_ID)
+					cell->setGoalUnit(INVALID_ID, index);
+				if (cell->getPosUnit() != INVALID_ID)
+					cell->setPosUnit(INVALID_ID, index);
+			}
+	}
+
+	for (std::vector<UnitCell>::const_iterator it = m_unitCells.begin(); it != m_unitCells.end(); ++it)
+	{
+		// a wall piece's own post-process can have made its cell impassable since the save was read
+		PathfindCell *cell = getUnitCell(it->layer, it->cell.x, it->cell.y);
+		if (cell == NULL)
+			continue;
+		if (it->goalUnit != INVALID_ID)
+			cell->setGoalUnit(it->goalUnit, it->cell);
+		if (it->posUnit != INVALID_ID)
+			cell->setPosUnit(it->posUnit, it->cell);
+		if (it->goalAircraft != INVALID_ID)
+			cell->setGoalAircraft(it->goalAircraft, it->cell);
+	}
+	m_unitCells.clear();
 
 }  // end loadPostProcess
 

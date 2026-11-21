@@ -8406,26 +8406,29 @@ void AIUpdateInterface::loadPostProcess( void )
 		chooseLocomotorSet(lst);
 	}
 
+	// A save with the pathfinder's map in it puts every cell back as it was once every object has
+	// loaded (Pathfinder::loadPostProcess), and this unit keeps the cells it saved.  From an older one
+	// each unit puts itself back.
+	const Bool mapFromSave = TheAI->pathfinder()->isUnitMapFromSave();
+
 	// A unit waiting for its path is on its way as much as one driving: it keeps the goal it holds,
 	// or another unit takes the spot it was ordered to.
-	if (!isMoving() && !m_waitingForPath) {
+	if (!mapFromSave && !isMoving() && !m_waitingForPath) {
 		m_pathfindGoalCell.x = -1;
 		m_pathfindGoalCell.y = -1;
 		TheAI->pathfinder()->updateGoal(getObject(), getObject()->getPosition(), getObject()->getLayer());
 		m_pathfindCurCell.x = -1;
 		m_pathfindCurCell.y = -1;
 		TheAI->pathfinder()->updatePos(getObject(), getObject()->getPosition());
-	}	else {
-		if (m_pathfindGoalCell.x >= 0 && m_pathfindGoalCell.y >= 0) {
-			// a quarter cell in: updateGoal floors the position for a unit that centres in a cell and
-			// rounds it for one that does not, and from the middle of the cell rounding went one over
-			Coord3D goalPos;
-			goalPos.x = m_pathfindGoalCell.x * PATHFIND_CELL_SIZE_F + PATHFIND_CELL_SIZE_F*0.25f;
-			goalPos.y = m_pathfindGoalCell.y * PATHFIND_CELL_SIZE_F + PATHFIND_CELL_SIZE_F*0.25f;
-			m_pathfindGoalCell.x = -1;
-			m_pathfindGoalCell.y = -1;
-			TheAI->pathfinder()->updateGoal(getObject(), &goalPos, getObject()->getLayer());
-		}
+	}	else if (!mapFromSave && m_pathfindGoalCell.x >= 0 && m_pathfindGoalCell.y >= 0) {
+		// a quarter cell in: updateGoal floors the position for a unit that centres in a cell and
+		// rounds it for one that does not, and from the middle of the cell rounding went one over
+		Coord3D goalPos;
+		goalPos.x = m_pathfindGoalCell.x * PATHFIND_CELL_SIZE_F + PATHFIND_CELL_SIZE_F*0.25f;
+		goalPos.y = m_pathfindGoalCell.y * PATHFIND_CELL_SIZE_F + PATHFIND_CELL_SIZE_F*0.25f;
+		m_pathfindGoalCell.x = -1;
+		m_pathfindGoalCell.y = -1;
+		TheAI->pathfinder()->updateGoal(getObject(), &goalPos, getObject()->getLayer());
 	}
 
 	// A save before GameLogic 18 has no pathfinder queue, so a unit that was in it when the game was

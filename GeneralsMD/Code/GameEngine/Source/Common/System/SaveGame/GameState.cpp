@@ -57,6 +57,8 @@
 #include "GameClient/InGameUI.h"
 #include "GameClient/ParticleSys.h"
 #include "GameClient/TerrainVisual.h"
+#include "GameLogic/AI.h"
+#include "GameLogic/AIPathfind.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/GhostObject.h"
 #include "GameLogic/PartitionManager.h"
@@ -422,6 +424,7 @@ void GameState::init( void )
 	addSnapshotBlock( "CHUNK_TeamFactory",						TheTeamFactory,						SNAPSHOT_SAVELOAD );
 	addSnapshotBlock( "CHUNK_Players",								ThePlayerList,						SNAPSHOT_SAVELOAD );
 	addSnapshotBlock( "CHUNK_GameLogic",							TheGameLogic,							SNAPSHOT_SAVELOAD );
+	addSnapshotBlock( "CHUNK_Pathfinder",							TheAI->pathfinder(),			SNAPSHOT_SAVELOAD );	// after the objects, which it puts back on the map; absent from older saves
 	addSnapshotBlock( "CHUNK_WeaponStore",						TheWeaponStore,						SNAPSHOT_SAVELOAD );	// absent from older saves, which load without it
 	addSnapshotBlock( "CHUNK_Radar",								TheRadar,									SNAPSHOT_SAVELOAD );
 	addSnapshotBlock( "CHUNK_ScriptEngine",						TheScriptEngine,					SNAPSHOT_SAVELOAD );

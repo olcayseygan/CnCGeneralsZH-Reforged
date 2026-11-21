@@ -258,4 +258,11 @@ void HijackerUpdate::loadPostProcess( void )
 	Object *obj = TheGameLogic->findObjectByID( m_targetID );
 	setTargetObject( obj );
 
+	// A hijacker driving is out of the partition manager (ConvertToHijackedVehicleCrateCollide), and
+	// the load put every object back in it.  Left in, he was in reach of every search while he drove,
+	// and when the car died he was already registered, so the look he takes on getting out never came
+	// and his old one stood where he had jumped in.
+	if( m_isInVehicle )
+		ThePartitionManager->unRegisterObject( getObject() );
+
 }  // end loadPostProcess

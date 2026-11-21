@@ -5291,13 +5291,14 @@ void Player::crc( Xfer *xfer )
 	* 10: The vision spies (fork).
 	* 11: m_attackedFrame, which the skirmish AI's base-under-attack test reads (fork).
 	* 12: m_radarJammedUntilFrame, an enemy's electronic blinding (fork).
+	* 13: m_logicalRetaliationModeEnabled (fork).
 	*/
 // ------------------------------------------------------------------------------------------------
 void Player::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 12;
+	const XferVersion currentVersion = 13;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -5875,6 +5876,12 @@ void Player::xfer( Xfer *xfer )
 		xfer->xferUnsignedInt( &m_radarJammedUntilFrame );
 	else
 		m_radarJammedUntilFrame = 0;
+
+	// Whether a hit on this player's unit calls its neighbours in.  The player's own machine turns it on
+	// with a message once a second, so a game loaded without it ran the first second with nobody coming
+	// to help, and went another way from the game that was saved.  An older save waits for that message.
+	if( version >= 13 )
+		xfer->xferBool( &m_logicalRetaliationModeEnabled );
 
 }  // end xfer
 

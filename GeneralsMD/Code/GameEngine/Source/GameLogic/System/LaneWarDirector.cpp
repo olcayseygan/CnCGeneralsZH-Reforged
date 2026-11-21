@@ -547,10 +547,13 @@ static Int abilitiesOfSet( const ThingTemplate *tmpl, const CommandSet *set, Lan
 				break;
 			case GUICOMMANDMODE_HIJACK_VEHICLE:
 			case GUICOMMANDMODE_SABOTAGE_BUILDING:
-			case GUICOMMANDMODE_CONVERT_TO_CARBOMB:
-			case GUI_COMMAND_HACK_INTERNET:
 				kind = LANEWAR_ABILITY_COMMAND;
 				break;
+			// left off the list, since nothing in a lane game gives them a use: the car bomb turns one of
+			// the player's own wave vehicles into a bomb (the suicide units already blow themselves up on
+			// the enemy), and the internet hack makes money the director pays out by its own rule
+			case GUICOMMANDMODE_CONVERT_TO_CARBOMB:
+			case GUI_COMMAND_HACK_INTERNET:
 			default:
 				break;
 		}
@@ -1701,6 +1704,53 @@ Bool LaneWarDirector::walkUp( Object *obj, const CommandButton *button, Int enem
 }
 
 //-------------------------------------------------------------------------------------------------
+/** A button weapon that reaches less than half as far as the unit's own gun, the Dragon tank's wall of
+	  fire or Colonel Burton's knife: the skirmish rule waits for an enemy inside that short reach, which a
+	  lane fight, won or lost at the gun's reach, almost never brings. So the lane aims it at the nearest
+	  enemy on the ground inside the gun's reach that the button takes (the knife only a man), ties to the
+	  lower ObjectID, and the unit closes to use it as a player's click would. */
+static Bool laneShortVolley( Object *obj, const AIAbilityButton &entry )
+{
+	const Bool atObject = ( entry.button->getOptions() & NEED_TARGET_ENEMY_OBJECT ) != 0;
+	const Weapon *volley = obj->getWeaponInWeaponSlot( entry.slot );
+	const Weapon *gun = obj->getWeaponInWeaponSlot( PRIMARY_WEAPON );
+	if( volley == NULL || gun == NULL || volley == gun || volley->getStatus() != READY_TO_FIRE )
+		return FALSE;
+	const Real reach = gun->getAttackRange( obj );
+	if( 2.0f * volley->getAttackRange( obj ) >= reach )
+		return FALSE;
+	std::vector<Object *> enemies;
+	AIAbility_enemiesNear( obj->getControllingPlayer(), obj->getPosition(), reach, &enemies );
+	Object *nearest = NULL;
+	Real nearestSq = 0.0f;
+	for( size_t i = 0; i < enemies.size(); ++i )
+	{
+		Object *enemy = enemies[ i ];
+		if( enemy->isEffectivelyDead() || enemy->isKindOf( KINDOF_STRUCTURE ) || enemy->isAirborneTarget() )
+			continue;
+		if( atObject && ( !entry.button->isValidObjectTarget( obj, enemy )
+				|| obj->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, enemy, CMD_FROM_AI, entry.slot ) == ATTACKRESULT_NOT_POSSIBLE ) )
+			continue;
+		const Real dx = enemy->getPosition()->x - obj->getPosition()->x, dy = enemy->getPosition()->y - obj->getPosition()->y;
+		const Real distSq = dx * dx + dy * dy;
+		if( distSq > reach * reach )
+			continue;
+		if( nearest == NULL || distSq < nearestSq || ( distSq == nearestSq && enemy->getID() < nearest->getID() ) )
+		{
+			nearest = enemy;
+			nearestSq = distSq;
+		}
+	}
+	if( nearest == NULL )
+		return FALSE;
+	if( atObject )
+		obj->doCommandButtonAtObject( entry.button, nearest, CMD_FROM_AI );
+	else
+		obj->doCommandButtonAtPosition( entry.button, nearest->getPosition(), CMD_FROM_AI );
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
 /** The wave units' own buttons, each copy looked at every half game second on its own frame of the
 	  stride (ObjectID and frame, no state).  The skirmish AI's on-the-spot rules go first, at the rung that
 	  weighs every target in reach, then the walk-ups, the remote charges before the rest; only what the
@@ -1752,8 +1802,8 @@ void LaneWarDirector::useAbilities( UnsignedInt now )
 			switch( entry.kind )
 			{
 				case AIABILITY_LASER:			used = AIAbility_laser( player, NULL, obj, entry, victim ); break;
-				case AIABILITY_SHOT:			used = AIAbility_shot( player, NULL, obj, entry, victim, 2 ); break;
-				case AIABILITY_AREA:			used = AIAbility_area( player, NULL, obj, entry, victim, 2 ); break;
+				case AIABILITY_SHOT:			used = AIAbility_shot( player, NULL, obj, entry, victim, 2 ) || laneShortVolley( obj, entry ); break;
+				case AIABILITY_AREA:			used = AIAbility_area( player, NULL, obj, entry, victim, 2 ) || laneShortVolley( obj, entry ); break;
 				case AIABILITY_TOGGLE:		used = AIAbility_toggle( player, NULL, obj, entry, victim ); break;
 				case AIABILITY_SUICIDE:		used = AIAbility_suicide( player, NULL, obj, entry, victim ); break;
 				case AIABILITY_DETONATE:	used = AIAbility_detonate( player, NULL, obj, entry, victim ); break;
@@ -2335,6 +2385,19 @@ void LaneWarDirector::logCargo( UnsignedInt now ) const
 	if( riding > 0 || drones > 0 )
 		DEBUG_LOG(( "HEADLESS LANEWAR: frame %u: %d passengers out riding, %d of them have fired; %d drones out with their masters, %d of them have fired\n",
 								now, riding, fired, drones, dronesFired ));
+
+	// and a tower or fortress a Hacker has switched off
+	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+	{
+		const ObjectID ids[ 3 ] = { m_tower[ t ][ 0 ], m_tower[ t ][ 1 ], m_fortress[ t ] };
+		for( Int k = 0; k < 3; ++k )
+		{
+			const Object *obj = TheGameLogic->findObjectByID( ids[ k ] );
+			if( obj != NULL && obj->isDisabledByType( DISABLED_HACKED ) )
+				DEBUG_LOG(( "HEADLESS LANEWAR: frame %u '%s' %d of team %s hacked off until frame %u\n", now, obj->getTemplate()->getName().str(),
+										(Int)obj->getID(), TEAM_NAME[ t ], obj->getDisabledUntil( DISABLED_HACKED ) ));
+		}
+	}
 }
 
 //-------------------------------------------------------------------------------------------------

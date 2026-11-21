@@ -1,0 +1,35 @@
+# Lane War proof that a Hacker's building disable reaches a lane structure. The tower and the fortress
+# carry CAPTURABLE beside IMMUNE_TO_CAPTURE, which is what the hack asks of a target and what keeps
+# every capture off them. A Hacker sent at the watch tower dies unpacking (its Gattling gun picks him
+# first and kills him in under 10 game seconds, so a hack on the tower lands only when the tower is
+# busy), so China's Battlemasters take the American tower down first and three Hackers made Heroic
+# follow from tick 3 and go for the fortress, whose cannon is slow against men. Read the LANEWAR ABILITY
+# USE walk-up lines and "HEADLESS LANEWAR: ... 'LaneWarFortress' ... hacked off until frame".
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 6000 -scenario lanewar_hack -logPrefix lanewar_hack_
+#
+# The frames below are this file's 30 Hz frames, which the drill scales by the game speed: 1350 here
+# is logic frame 900 at 1.5x.
+
+30    lanecash   1  20000
+30    lanetier   1  1 2
+30    laneplace  1  ChinaTankBattleMaster         0 0
+30    laneplace  1  ChinaTankBattleMaster         2 0
+30    laneplace  1  ChinaTankBattleMaster         4 0
+30    laneplace  1  ChinaTankBattleMaster         6 0
+30    laneplace  1  ChinaTankBattleMaster         8 0
+30    laneplace  1  ChinaTankBattleMaster         10 0
+3500  laneplace  1  ChinaInfantryHacker           3 3
+3500  laneplace  1  ChinaInfantryHacker           7 3
+3500  laneplace  1  ChinaInfantryHacker           11 3
+3530  lanevet    1  0 3 3
+3530  lanevet    1  0 3 3
+3530  lanevet    1  0 3 3
+3530  lanevet    1  0 7 3
+3530  lanevet    1  0 7 3
+3530  lanevet    1  0 7 3
+3530  lanevet    1  0 11 3
+3530  lanevet    1  0 11 3
+3530  lanevet    1  0 11 3

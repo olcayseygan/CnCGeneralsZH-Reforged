@@ -8,6 +8,15 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Direct Strike jets hunt aircraft, Hackers reach the fortress
+
+- A jet bought onto the air rows used to fly its strike to the point where the fronts meet and turn back there. Each strike now flies down the whole lane to the enemy's end as an attack-move, so a jet bombs what it meets on the way, infantry included. A jet that can hit aircraft goes for the enemy's aircraft first: their jets on a pass, and helicopters marching with a wave. In a test a MiG chased an Aurora six times over one strike and later shot down a Comanche on the lane, while an Aurora, which cannot hit air, bombed a Red Guard wave. Jets still park off the map, rearm and fly again.
+- Upgrades bought for a jet on the plot now go up with every copy it flies, as they do for ground units.
+- Colonel Burton's knife and the Dragon tank's wall of fire were never used in a lane fight. Both reach less than half as far as the unit's gun, and an enemy rarely gets that close before the guns decide it. Now the unit picks the nearest enemy on the ground inside its gun's reach and closes on him to use them.
+- A Hacker can switch off a watch tower or a fortress, which used to refuse him outright. Capturing them is still impossible. In a test three Heroic Chinese Hackers walked up to the American fortress and kept it switched off for the last 26 seconds of the run.
+- The car bomb and the internet hack are off the list of abilities your waves use. A car bomb turns one of your own wave vehicles into a bomb, and the lane pays its own income.
+- Older Direct Strike replays and saves no longer play back.
+
 ## Direct Strike computers build their own plots
 
 - A computer seat in Direct Strike now plays its plot the way you do. Between its own waves it buys units and sets them down, tanks in the front rows and artillery and anti-air at the back. Its general's hero goes down once. When money is left over it sends jets into the air rows, and later it ranks up and upgrades its best units. A harder computer reads what the other team has on its plots and buys against it, more anti-air against jets and more anti-armour against tanks.

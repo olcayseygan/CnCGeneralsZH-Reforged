@@ -848,6 +848,7 @@ GlobalData::GlobalData()
 	m_groundMarks = FALSE;
 	m_firelight = FALSE;
 	m_heatHaze = FALSE;
+	m_fullDetailAtDistance = FALSE;
 	m_hemiAmbient = FALSE;
 	m_ambientOcclusion = FALSE;
 	m_weatherEffects = FALSE;

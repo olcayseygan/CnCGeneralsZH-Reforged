@@ -187,6 +187,7 @@ OPTION_BOOL_ACCESSORS( m_structureCollapse )
 OPTION_BOOL_ACCESSORS( m_smoothMotion )
 OPTION_BOOL_ACCESSORS( m_internalHdr )
 OPTION_BOOL_ACCESSORS( m_heatHaze )
+OPTION_BOOL_ACCESSORS( m_fullDetailAtDistance )
 OPTION_INT_ACCESSORS( m_shadowQuality )
 OPTION_INT_ACCESSORS( m_graphicsQuality )
 
@@ -865,6 +866,15 @@ const OptionDef TheOptionCatalog[] =
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_heatHaze, set_m_heatHaze },
 
+	// The rebuilt models switch to lighter levels of detail as they grow small on the screen
+	// (chooseLODByScreenSize in W3DScene.cpp, every frame); on, every model draws its full level at any
+	// distance.  Retail models have one level and Classic graphics mounts no other, so neither changes.
+	// No sim reads it.  On Options > Display, in the Models group beside Detailed Models: every column of
+	// Graphics and Effects is full.
+	{ "FullDetailAtDistance",			OPT_WND( "CheckFullDetailAtDistance" ), "GUI:FullDetailAtDistance",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_fullDetailAtDistance, set_m_fullDetailAtDistance },
+
 	// The size of the sun's depth map.  The shadow pass asks for it every frame and the backend makes
 	// the map again when the size changes, so a new level shows on the next frame.  On Options >
 	// Effects.  Classic graphics and -d3d9 draw no map at all.
@@ -965,6 +975,10 @@ const GraphicsQualityRow TheGraphicsQualityTable[] =
 	{ "ComboBoxBloom",					0.1f,  {    0,    1,    2,    2,    2,    2,    2,    2,    2,    2,    2 } },
 	{ "SliderAnisotropy",				0.1f,  {    2,    4,    8,   16,   16,   16,   16,   16,   16,   16,   16 } },
 	{ "CheckParticleShadows",		0.15f, {    0,    0,    0,    0,    0,    0,    0,    1,    1,    1,    1 } },
+	// 1.81 against 1.98 ms GPU in two pairs on the sweep's fight from a far camera (2026-11-21,
+	// experiments/proofs/2026-11-21/lod-bridges/cost.ps1); the lighter levels are what a slow card's far
+	// camera is saved by, so it waits for Ultra
+	{ "CheckFullDetailAtDistance", 0.15f, {   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    1 } },
 	{ "LowResSlider",						0.2f,  {    1,    2,    2,    2,    2,    2,    2,    2,    2,    2,    2 } },
 	{ "CheckPropShadows",				0.2f,  {    0,    0,    0,    0,    0,    0,    1,    1,    1,    1,    1 } },
 	{ "CheckWaterSplashes",			0.2f,  {    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    1 } },

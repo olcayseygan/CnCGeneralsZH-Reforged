@@ -583,6 +583,18 @@ TOOLTIP:DetailedModels
 "The rebuilt units and buildings, for the Reforged picture, when you downloaded them. They change only what you see: you play with anyone, whether they have them or not. Untick it for a higher frame rate in big battles. Takes effect the next time the game starts."
 END
 
+GUI:FullDetailAtDistance
+"Full Detail at Distance"
+END
+
+TOOLTIP:FullDetailAtDistance
+"The rebuilt units and buildings swap to lighter versions as they get small on the screen. Tick it to draw every one at full detail however far the camera is, at some cost to the frame rate in big battles. Applies when you press Accept."
+END
+
+GUI:OptionsGroupModels
+"Models"
+END
+
 GUI:HDTextures
 "HD Textures"
 END

@@ -48,6 +48,7 @@
 //         Includes                                                      
 //-----------------------------------------------------------------------------
 #include "W3DDevice/GameClient/W3DBridgeBuffer.h"
+#include "W3DDevice/GameClient/BridgeTilt.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -178,6 +179,34 @@ Bool W3DBridge::cullBridge(CameraClass * camera)
 
 #define BRIDGE_FLOAT_AMT (0.25f)
 
+/** Where a bridge piece's mesh reaches along the bridge (X) and across it (Y), through its bone's
+	transform, kept in locals and handed back once.  EA wrote this as three loops comparing every
+	vertex against members of the bridge, and the Release build (MSVC 14.44) got them wrong for the
+	rebuilt Tampico bridge, whose span and right end carry 428 and 436 vertices: the span's and the
+	right end's range stayed at the FLT_MAX they started from, or the length went on as 1 while the
+	ranges read right, depending on unrelated code around them.  The bridge then took a length of 1
+	and its model was stretched over the whole gap as a wall of streaks (Killing Fields, 2026-11-21).
+	The vertices, the bone transforms and the meshes were all checked sound; this form gives the
+	right range in every build tried. */
+static void bridgePieceRange(const Matrix3D &mtx, MeshClass *mesh, Real *minX, Real *maxX, Real *minY, Real *maxY)
+{
+	Real loX = FLT_MAX, hiX = -FLT_MAX, loY = FLT_MAX, hiY = -FLT_MAX;
+	const Int count = mesh->Peek_Model()->Get_Vertex_Count();
+	const Vector3 *verts = mesh->Peek_Model()->Get_Vertex_Array();
+	for (Int i = 0; i < count; i++) {
+		Vector3 vert;
+		Matrix3D::Transform_Vector(mtx, verts[i], &vert);
+		if (vert.X < loX) loX = vert.X;
+		if (vert.X > hiX) hiX = vert.X;
+		if (vert.Y < loY) loY = vert.Y;
+		if (vert.Y > hiY) hiY = vert.Y;
+	}
+	*minX = loX;
+	*maxX = hiX;
+	if (minY) *minY = loY;
+	if (maxY) *maxY = hiY;
+}
+
 //=============================================================================
 // W3DBridge::init
 //=============================================================================
@@ -297,42 +326,11 @@ Bool W3DBridge::load(enum BodyDamageType curDamageState)
 		m_bridgeType = FIXED_BRIDGE;
 	}
 
-	Int numVertex = m_leftMesh->Peek_Model()->Get_Vertex_Count();
-	Vector3 *pVert = m_leftMesh->Peek_Model()->Get_Vertex_Array();
-	m_leftMinX = FLT_MAX;
-	m_leftMaxX = -FLT_MAX;
-	m_minY = FLT_MAX;
-	m_maxY = -FLT_MAX;
-	for (i=0; i<numVertex; i++) {
-		Vector3 vert;
-		Matrix3D::Transform_Vector(m_leftMtx, pVert[i], &vert);
-		if (m_leftMinX > vert.X) m_leftMinX = vert.X;
-		if (m_minY > vert.Y) m_minY = vert.Y;
-		if (vert.X > m_leftMaxX) m_leftMaxX = vert.X;
-		if (vert.Y > m_maxY) m_maxY = vert.Y;	 // Note - we assume all sections are the same width, so we only do maxY for first section.
-	}
+	// Note - we assume all sections are the same width, so we only do maxY for first section.
+	bridgePieceRange(m_leftMtx, m_leftMesh, &m_leftMinX, &m_leftMaxX, &m_minY, &m_maxY);
 	if (m_bridgeType == SECTIONAL_BRIDGE) {
-		numVertex = m_sectionMesh->Peek_Model()->Get_Vertex_Count();
-		pVert = m_sectionMesh->Peek_Model()->Get_Vertex_Array();
-		m_sectionMinX = FLT_MAX;
-		m_sectionMaxX = -FLT_MAX;
-		for (i=0; i<numVertex; i++) {
-			Vector3 vert;
-			Matrix3D::Transform_Vector(m_sectionMtx, pVert[i], &vert);
-			if (m_sectionMinX > vert.X) m_sectionMinX = vert.X;
-			if (vert.X > m_sectionMaxX) m_sectionMaxX = vert.X;
-		}
-
-		numVertex = m_rightMesh->Peek_Model()->Get_Vertex_Count();
-		pVert = m_rightMesh->Peek_Model()->Get_Vertex_Array();
-		m_rightMinX = FLT_MAX;
-		m_rightMaxX = -FLT_MAX;
-		for (i=0; i<numVertex; i++) {
-			Vector3 vert;
-			Matrix3D::Transform_Vector(m_rightMtx, pVert[i], &vert);
-			if (m_rightMinX > vert.X) m_rightMinX = vert.X;
-			if (vert.X > m_rightMaxX) m_rightMaxX = vert.X;
-		}
+		bridgePieceRange(m_sectionMtx, m_sectionMesh, &m_sectionMinX, &m_sectionMaxX, NULL, NULL);
+		bridgePieceRange(m_rightMtx, m_rightMesh, &m_rightMinX, &m_rightMaxX, NULL, NULL);
 	} else {
 		m_sectionMinX = m_leftMaxX;
 		m_sectionMaxX = m_leftMaxX;
@@ -501,10 +499,7 @@ Int W3DBridge::getModelVerticesFixed(VertexFormatXYZNDUV1 *destination_vb, Int c
 	}
 	Vector3 vecNormal(-vec.Y, vec.X, 0);
 	vecNormal.Normalize();
-	Real deltaZ = m_end.Z - m_start.Z;
-	deltaZ /= vec.Length();
-	Real deltaX = sqrt(1.0 - deltaZ*deltaZ);
-	Vector3 vecZ(-deltaZ, 0, deltaX);
+	Vector3 vecZ = BridgeUpAxis(vec);
 	vec /= m_length;
 	vecNormal *= m_scale;
 	vecZ *= m_scale;
@@ -555,12 +550,9 @@ void W3DBridge::getIndicesNVertices(UnsignedShort *destination_ib, VertexFormatX
 	vecNormal.Normalize();
 	vecNormal *= m_scale;
 
-	// Rotate along the y axis to get the appropriate Z height adjustment.
-	Real deltaZ = m_end.Z - m_start.Z;
+	// Tilt the model's up axis with the slope, about the bridge's own crosswise axis.
 	Real desiredLength = vec.Length();
-	deltaZ /= desiredLength;
-	Real deltaX = sqrt(1.0 - deltaZ*deltaZ);
-	Vector3 vecZ(-deltaZ, 0, deltaX);
+	Vector3 vecZ = BridgeUpAxis(vec);
 	vecZ *= m_scale;
 
 	Real spanLength = m_rightMinX - m_leftMaxX; 

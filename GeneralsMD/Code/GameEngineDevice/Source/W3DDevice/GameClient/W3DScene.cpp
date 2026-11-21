@@ -72,6 +72,8 @@
 #include "WW3D2/camera.h"
 #include "WW3D2/dx8renderer.h"
 #include "WW3D2/hlod.h"
+#include "WW3D2/mesh.h"
+#include "WW3D2/meshmdl.h"
 #include "WW3D2/sortingrenderer.h"
 #include "WW3D2/dx8wrapper.h"
 #include "WW3D2/light.h"
@@ -87,6 +89,8 @@
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
 
 #include <algorithm>
+#include <map>
+#include <string>
 #include <vector>
 
 /* A hint that a cache line is about to be read, as in PartitionManager.cpp: it reads nothing the
@@ -527,7 +531,12 @@ static Bool posedPartsInView(RenderObjClass *robj, CameraClass *camera)
   * A model standing on a limit flipped as the camera only turned, so a level is left only past a
   * margin: a coarser one is taken once the area is LOD_SCREEN_SIZE_MARGIN under its limit, and the
   * level drawn is kept until the area is that much over the level's own, so a coarse level can
-  * draw 20% of area past the limit its art gives.  20% of the area is about 10% of the distance.  The level drawn, HLodClass::CurLod, is the only state. */
+  * draw 20% of area past the limit its art gives.  20% of the area is about 10% of the distance.  The level drawn, HLodClass::CurLod, is the only state
+  * per model.
+  *
+  * No level is drawn coarser than the coarsest that keeps the model whole (wholeLODFloor): a level the
+  * art kit built without the model's body would show a roof floating over the ground.  The Full Detail
+  * at Distance option draws the full model at every distance. */
 //=============================================================================
 static const Real LOD_SCREEN_SIZE_MARGIN = 0.2f;
 
@@ -539,6 +548,76 @@ static Int coarsestLODHolding(HLodClass *hlod, Int count, Real area)
 	return lod;
 }
 
+/** The triangle surface of one level's rigid meshes, in their own space, which a bone's turn does not
+  * change.  A skin's vertices sit in its bones' spaces, so skins are left out of every level alike. */
+static Real lodSurface(HLodClass *hlod, Int lod)
+{
+	Real surface = 0.0f;
+	for (Int i = 0; i < hlod->Get_Lod_Model_Count(lod); ++i) {
+		RenderObjClass *part = hlod->Peek_Lod_Model(lod, i);
+		if (part == NULL || part->Class_ID() != RenderObjClass::CLASSID_MESH)
+			continue;
+		MeshModelClass *model = ((MeshClass *)part)->Peek_Model();
+		if (model == NULL || model->Get_Flag(MeshGeometryClass::SKIN) || model->Get_Vertex_Count() <= 0)
+			continue;
+		const TriIndex *tris = model->Get_Polygon_Array();
+		const Vector3 *verts = model->Get_Vertex_Array();
+		const Int vertCount = model->Get_Vertex_Count();
+		if (tris == NULL || verts == NULL)
+			continue;
+		for (Int t = 0; t < model->Get_Polygon_Count(); ++t) {
+			if (tris[t].I >= vertCount || tris[t].J >= vertCount || tris[t].K >= vertCount)
+				continue;
+			Vector3 cross;
+			Vector3::Cross_Product(verts[tris[t].J] - verts[tris[t].I], verts[tris[t].K] - verts[tris[t].I], &cross);
+			surface += 0.5f * cross.Length();
+		}
+	}
+	return surface;
+}
+
+/** HLodClass::Whole_LOD_Floor for a model, measured once per model name: every copy of a name is made
+  * from the one prototype, and the archives a run mounts do not change under it.  Hidden parts count
+  * as the art has them, so the floor is the same for every copy.  A model with no name is one put
+  * together at run time, not the art kits', and keeps every level. */
+static Int wholeLODFloor(HLodClass *hlod, Int count)
+{
+	// ponytail: keyed by name, so a prototype reloaded under its name with other art keeps the old
+	// floor; no path does that within a run today
+	static std::map<std::string, Int, std::less<> > floors;
+	const char *name = hlod->Get_Name();
+	if (name == NULL || name[0] == 0)
+		return 0;
+	std::map<std::string, Int, std::less<> >::const_iterator found = floors.find(name);
+	if (found != floors.end())
+		return found->second;
+	std::vector<float> surfaces(count);
+	for (Int lod = 0; lod < count; ++lod)
+		surfaces[lod] = lodSurface(hlod, lod);
+	const Int lowest = HLodClass::Whole_LOD_Floor(&surfaces[0], count);
+	if (lowest > 0)
+		DEBUG_LOG(("LOD FLOOR %s draws level %d and finer: level %d keeps %.2f of the full surface\n", name,
+			lowest, lowest - 1, surfaces[lowest - 1] / surfaces[count - 1]));
+	floors[name] = lowest;
+	return lowest;
+}
+
+/** Every pass, on every model in the scene, seen or not: no level under the floor, and the full level
+  * under Full Detail at Distance.  The sun's map and the water's mirror draw models the main camera
+  * does not see, at the level they hold, and a new HLodClass holds its coarsest. */
+static void keepLODWhole(RenderObjClass *robj)
+{
+	if (robj->Class_ID() != RenderObjClass::CLASSID_HLOD)
+		return;
+	HLodClass *hlod = (HLodClass *)robj;
+	const Int count = hlod->Get_LOD_Count();
+	if (count < 2)
+		return;
+	const Int lowest = TheGlobalData->m_fullDetailAtDistance ? count - 1 : wholeLODFloor(hlod, count);
+	if (hlod->Get_LOD_Level() < lowest)
+		hlod->Set_LOD_Level(lowest);
+}
+
 static void chooseLODByScreenSize(RenderObjClass *robj, CameraClass &camera)
 {
 	if (robj->Class_ID() != RenderObjClass::CLASSID_HLOD)
@@ -547,12 +626,19 @@ static void chooseLODByScreenSize(RenderObjClass *robj, CameraClass &camera)
 	const Int count = hlod->Get_LOD_Count();
 	if (count < 2)
 		return;
+	// Options > Graphics, Full Detail at Distance: the full model at every distance
+	if (TheGlobalData->m_fullDetailAtDistance) {
+		hlod->Set_LOD_Level(count - 1);
+		return;
+	}
+	const Int lowest = wholeLODFloor(hlod, count);
 	const Real area = hlod->Get_Screen_Size(camera);
 	const Int drawn = hlod->Get_LOD_Level();
 	// the coarsest level with the margin to spare, and the coarsest one still holding the area
-	// stretched by the margin; the second is never finer than the first
-	const Int withRoom = coarsestLODHolding(hlod, count, area / (1.0f - LOD_SCREEN_SIZE_MARGIN));
-	const Int stretched = coarsestLODHolding(hlod, count, area / (1.0f + LOD_SCREEN_SIZE_MARGIN));
+	// stretched by the margin; the second is never finer than the first, and neither coarser than a
+	// level that keeps the model whole
+	const Int withRoom = std::max(lowest, coarsestLODHolding(hlod, count, area / (1.0f - LOD_SCREEN_SIZE_MARGIN)));
+	const Int stretched = std::max(lowest, coarsestLODHolding(hlod, count, area / (1.0f + LOD_SCREEN_SIZE_MARGIN)));
 	if (withRoom < drawn)
 		hlod->Set_LOD_Level(withRoom);
 	else if (stretched > drawn)
@@ -616,6 +702,7 @@ void RTS3DScene::Visibility_Check(CameraClass * camera)
 
 			robj = it.Peek_Obj();
 			prefetchAhead(it);
+			keepLODWhole(robj);
 
 			draw=NULL;
 			drawInfo = (DrawableInfo *)robj->Get_User_Data();
@@ -668,6 +755,7 @@ void RTS3DScene::Visibility_Check(CameraClass * camera)
 
 			robj = it.Peek_Obj();
 			prefetchAhead(it);
+			keepLODWhole(robj);
 
 			if (robj->Is_Force_Visible()) {
 				robj->Set_Visible(true);

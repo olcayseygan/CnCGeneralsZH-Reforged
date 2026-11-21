@@ -8,6 +8,13 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Buildings stay whole at full zoom-out, bridges lie flat
+
+- The rebuilt units and buildings swap to lighter copies as they shrink on the screen, and the lightest copy of some of them had lost its walls. China's Propaganda Center turned into its red roof floating over bare ground at full zoom-out, and the damaged Propaganda Center, the damaged Black Market and a few hundred neutral buildings lost their bodies the same way. A lighter copy that has lost more than half of the model is never drawn now: the building stays on the next one up. 1,271 of the 6,135 rebuilt models skip such a copy.
+- Options > Display > Models has Full Detail at Distance, for anyone who would rather see every unit and building at full detail however far out the camera is. It applies the moment you press Accept.
+- The big road bridges over the canyons of Killing Fields, and every other Tampico bridge, drew as a wall of grey streaks hanging into the gorge. The game measured the rebuilt bridge's pieces wrong, took the whole bridge to be one unit long and stretched it over the gap. The pieces are measured right now and the bridge lies flat across the canyon in its sections again, deck, railings and piers.
+- A bridge whose two ends stand at different heights, which random maps built from an official map can give, leaned its piers and side walls sideways unless it ran from west to east: EA's code tilted every bridge as if it did. Each bridge now tilts along its own length; a level bridge draws exactly as before.
+
 ## The computer stops paying for guns it has already seen
 
 - The Air Force General's supply Chinooks flew to the middle docks on Tournament Desert under China's Gattling Cannons, trip after trip, and in 16 Hard matches against China 564 of them were shot down by buildings, 465 by Gattlings. A Medium or Hard computer's Chinook now passes over a pile whose flight crosses an anti-air gun it knows about and gathers from another. Over the same 16 matches it lost 190, and the Air Force won 7 where it had won 5.

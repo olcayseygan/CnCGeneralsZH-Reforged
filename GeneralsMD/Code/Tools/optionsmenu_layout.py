@@ -172,6 +172,7 @@ NEW_CONTROLS = [
     (CHECK,  "CheckClassicGraphics",   "GUI:ClassicGraphics"),
     (CHECK,  "CheckDetailedModels",    "GUI:DetailedModels"),
     (CHECK,  "CheckHDTextures",        "GUI:HDTextures"),
+    (CHECK,  "CheckFullDetailAtDistance", "GUI:FullDetailAtDistance"),
     (LABEL,  "LabelWaterStyle",       "GUI:WaterStyle"),
     (COMBO,  "ComboBoxWaterStyle",      None),
     (LABEL,  "LabelCloudStyle",        "GUI:CloudStyle"),
@@ -387,14 +388,17 @@ GROUP_LAYOUT = [
             ("check", "CheckSmoothMotion"),
             ("check", "CheckHeatHaze"),
             ("check", "CheckGroundFoliage"),
-            # beside Classic Graphics on the Graphics page if there were room
-            ("check", "CheckDetailedModels"),
-            ("check", "CheckHDTextures"),
             # the Screen column is full with the monitor and the resolution note
             setting("LabelFrameRateLimit", "ComboBoxFrameRateLimit")]),
         # from Interface, whose first column ran past the page once HUD took Layout and HUD Width
         ("GUI:OptionsGroupMenus", [
-            setting("LabelMenuTransitionSpeed", "SliderMenuTransitionSpeed", "ValueMenuTransitionSpeed")])]),
+            setting("LabelMenuTransitionSpeed", "SliderMenuTransitionSpeed", "ValueMenuTransitionSpeed")]),
+        # the art the Reforged picture draws its models and textures with; beside Classic Graphics on the
+        # Graphics page if there were room
+        ("GUI:OptionsGroupModels", [
+            ("check", "CheckDetailedModels"),
+            ("check", "CheckHDTextures"),
+            ("check", "CheckFullDetailAtDistance")])]),
 
     ("PageGraphics", [
         # the particle limit went to Effects' Particles group to make room for the quality slider

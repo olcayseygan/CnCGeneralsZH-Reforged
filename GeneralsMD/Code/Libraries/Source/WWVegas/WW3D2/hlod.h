@@ -210,6 +210,21 @@ public:
 		return (s[0] == '_' || s[0] == '-') && (s[1] == 'L' || s[1] == 'l') && s[2] >= '0' && s[2] <= '9' && s[3] == 0;
 	}
 
+	// The coarsest level a model may draw, given each level's triangle surface in the file's order (coarsest
+	// first, the full model last): the level above the finest one left with under half the full model's
+	// surface.  The art kits' level builder once dropped a whole body from a coarse level, so the Propaganda
+	// Center kept only its team-colour roof; a decimated level keeps most of its surface (0.7 to 0.95 of the
+	// full one on the China buildings), a lost body takes most of it.  0, every level usable, when the full
+	// model has no surface to measure (skins only).
+	static int Whole_LOD_Floor(const float * areas, int count)
+	{
+		if (areas == NULL || count < 2 || !(areas[count - 1] > 0.0f)) return 0;
+		for (int lod = count - 2; lod >= 0; --lod) {
+			if (areas[lod] < 0.5f * areas[count - 1]) return lod + 1;
+		}
+		return 0;
+	}
+
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Render Object Interface - Bounding Volumes
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////

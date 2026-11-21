@@ -15361,6 +15361,18 @@ TOOLTIP:DetailedModels
 "Yeniden yapılan birlikler ve binalar, Reforged görüntüsü için, indirdiyseniz. Yalnızca gördüğünüzü değiştirirler: onlara sahip olsun olmasın herkesle oynarsınız. Büyük savaşlarda daha yüksek kare hızı için işareti kaldırın. Oyun bir sonraki açılışında geçerli olur."
 END
 
+GUI:FullDetailAtDistance
+"Uzakta da Tam Ayrıntı"
+END
+
+TOOLTIP:FullDetailAtDistance
+"Yeniden yapılan birlikler ve binalar ekranda küçüldükçe daha hafif hallerine geçer. İşaretlerseniz kamera ne kadar uzakta olursa olsun hepsi tam ayrıntıyla çizilir; büyük savaşlarda kare hızından biraz götürür. Kabul Et'e basınca uygulanır."
+END
+
+GUI:OptionsGroupModels
+"Modeller"
+END
+
 GUI:HDTextures
 "HD Dokular"
 END

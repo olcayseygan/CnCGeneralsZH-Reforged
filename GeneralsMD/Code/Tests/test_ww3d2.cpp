@@ -33,6 +33,7 @@
 #include "hlod.h"
 #include "../GameEngineDevice/Include/W3DDevice/GameClient/SunShadowCasterCull.h"
 #include "../GameEngineDevice/Include/W3DDevice/GameClient/TankWheelSpin.h"
+#include "../GameEngineDevice/Include/W3DDevice/GameClient/BridgeTilt.h"
 
 /*
  * W3DMPO_GLUE gives every pooled class an operator new that routes through
@@ -200,6 +201,54 @@ TEST(lod_copy_name_refuses_other_parts)
 	/* two digits are a side's numbering: the Crusader's left wheels are not copies of a WHEEL */
 	CHECK(!HLodClass::Is_Part_Or_LOD_Copy("AVLEOPARD.WHEEL_L01", "WHEEL"));
 	CHECK(!HLodClass::Is_Part_Or_LOD_Copy(NULL, "WHEEL"));
+}
+
+/*=========================================================================
+   BridgeUpAxis - a sloped bridge tilts along its own length, on any heading
+  =========================================================================*/
+
+TEST(bridge_up_axis_is_square_to_a_sloped_span_on_any_heading)
+{
+	/* a level span keeps EA's (0, 0, 1) bit for bit */
+	const Vector3 level = BridgeUpAxis(Vector3(0.0f, 300.0f, 0.0f));
+	CHECK(level.X == 0.0f && level.Y == 0.0f && level.Z == 1.0f);
+	/* along +X it is EA's (-slope, 0, cos) */
+	const Vector3 alongX = BridgeUpAxis(Vector3(300.0f, 0.0f, 120.0f));
+	const float sinSlope = 120.0f / Vector3(300.0f, 0.0f, 120.0f).Length();
+	CHECK_NEAR(alongX.X, -sinSlope, 1e-6f);
+	CHECK_NEAR(alongX.Y, 0.0f, 1e-6f);
+	/* along +Y the tilt stays along Y: EA's leaned the bridge's height sideways, into X */
+	const Vector3 spanY(0.0f, 300.0f, 120.0f);
+	const Vector3 alongY = BridgeUpAxis(spanY);
+	CHECK_NEAR(alongY.X, 0.0f, 1e-6f);
+	CHECK_NEAR(alongY.Y, -sinSlope, 1e-6f);
+	/* square to the span and one long, on a diagonal heading too */
+	const Vector3 diagonal(-210.0f, 170.0f, -95.0f);
+	const Vector3 up = BridgeUpAxis(diagonal);
+	CHECK_NEAR(Vector3::Dot_Product(up, diagonal), 0.0f, 1e-3f);
+	CHECK_NEAR(up.Length(), 1.0f, 1e-5f);
+	CHECK(up.Z > 0.0f);
+}
+
+/*=========================================================================
+   HLodClass::Whole_LOD_Floor - a coarse level that lost its body is skipped
+  =========================================================================*/
+
+TEST(whole_lod_floor_skips_a_level_that_lost_its_body)
+{
+	/* ReforgedChina.big's NBPCenter.W3D: the coarsest level kept the roof alone, 0.11 of the full surface */
+	const float propaganda[] = { 0.11f, 0.88f, 0.90f, 1.0f };
+	CHECK_EQ(HLodClass::Whole_LOD_Floor(propaganda, 4), 1);
+	/* NBIntCnt.W3D, decimated whole: every level stays usable */
+	const float internet[] = { 0.85f, 0.93f, 0.98f, 1.0f };
+	CHECK_EQ(HLodClass::Whole_LOD_Floor(internet, 4), 0);
+	/* UBStingers_A4: the middle level lost half, the coarsest did not; neither is drawn */
+	const float stingers[] = { 0.61f, 0.43f, 1.0f, 1.0f };
+	CHECK_EQ(HLodClass::Whole_LOD_Floor(stingers, 4), 2);
+	/* one level, or a full model with nothing measured (a skin), leaves the choice alone */
+	const float skins[] = { 0.0f, 0.0f, 0.0f };
+	CHECK_EQ(HLodClass::Whole_LOD_Floor(skins, 3), 0);
+	CHECK_EQ(HLodClass::Whole_LOD_Floor(propaganda, 1), 0);
 }
 
 /*=========================================================================

@@ -2672,7 +2672,11 @@ AGAIN:
 	// stands still on a pane's second draw of one
 	static UnsignedInt lastFrame = ~0;
 	const UnsignedInt picture = TheGameClient->getFrame() * GameEngine_videoPictures() + GameEngine_videoPicture();
-	freezeTime = freezeTime || (lastFrame == picture);
+	// Snapshot before opening the logic/render overlap. A normal repeated picture can
+	// advance its animation clock with the moving camera; real freezes and diagnostic
+	// recording/replay sessions retain their existing duplicate rule.
+	const CinematicAnimationClockMode animationClockMode = CinematicCameraModeForClientUpdate();
+	freezeTime = CinematicAnimationClockFrozen(freezeTime, lastFrame == picture, animationClockMode);
 	lastFrame = picture;
 
 	/// @todo: I'm assuming the first view is our main 3D view.

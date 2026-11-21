@@ -520,6 +520,7 @@ protected:
 		std::vector<Real> blurred;
 		std::vector<Real> water;
 		std::vector<Real> seaShare;
+		std::vector<Real> shore;	///< the water at the playable point nearest each sample, where no sea is drawn past the edge
 		Real landMean;
 		Real seaZ;
 	};

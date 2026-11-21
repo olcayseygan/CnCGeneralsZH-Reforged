@@ -314,6 +314,10 @@ void MobNexusContain::onObjectCreated()
 	const ThingTemplate* payloadTemplate = TheThingFactory->findTemplate( self->m_initialPayload.name );
 	Object* object = getObject();
 
+	// a payload the data names but does not define is skipped; newObject throws on it
+	if( payloadTemplate == NULL )
+		return;
+
 	for( int i = 0; i < count; i++ )
 	{
 		//We are creating a MobNexus that comes with a initial payload, so add it now!

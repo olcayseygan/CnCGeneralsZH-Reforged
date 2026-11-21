@@ -1780,6 +1780,10 @@ void GarrisonContain::onObjectCreated()
 	const ThingTemplate* rosterTemplate = TheThingFactory->findTemplate( self->m_initialRoster.templateName );
 	Object* object = getObject();
 
+	// a roster the data names but does not define is skipped; newObject throws on it
+	if( rosterTemplate == NULL )
+		return;
+
 	for( int i = 0; i < count; i++ )
 	{
 		//We are creating a garrison that comes with an initial roster, so add it now!

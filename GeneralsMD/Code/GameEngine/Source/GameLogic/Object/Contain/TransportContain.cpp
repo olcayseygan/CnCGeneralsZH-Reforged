@@ -451,8 +451,10 @@ void TransportContain::createPayload()
 	const ThingTemplate* payloadTemplate = TheThingFactory->findTemplate( self->m_initialPayload.name );
 	Object* object = getObject();
 	ContainModuleInterface *contain = object->getContain();
-	
-	if( contain )
+
+	// A payload the data names but does not define (a mod missing the template) is skipped, the way
+	// Overlord and Helix skip theirs; newObject throws on it and the throw took the whole game down.
+	if( contain && payloadTemplate )
 	{
 		contain->enableLoadSounds( FALSE );
 		for( int i = 0; i < count; i++ )

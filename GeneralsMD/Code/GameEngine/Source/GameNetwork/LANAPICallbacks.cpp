@@ -43,6 +43,7 @@
 #include "Common/RandomValue.h"
 #include "Common/UserPreferences.h"
 #include "GameClient/GameText.h"
+#include "GameNetwork/GUIUtil.h"
 #include "GameClient/LanguageFilter.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/MessageBox.h"
@@ -303,6 +304,10 @@ Bool LANAPI::StartAutomatedGame( AsciiString mapName, Int seed, const UnsignedIn
 		game->setMapSize( md->m_filesize );
 	}
 
+	// a Direct Strike island is seated the way its lobby seats it: seat parity is the team, the seat the start
+	if (IsDirectStrikeMap( mapName ))
+		FitDirectStrikeRoom( game );
+
 	m_currentGame = game;
 	addGame( game );
 
@@ -363,7 +368,8 @@ void LANAPI::OnGameStart( void )
 		pref["PlayerTemplate"] = PlayerTemplatePreference(m_currentGame->getLANSlot( m_currentGame->getLocalSlotNum() )->getPlayerTemplate());
 		option.format("%d", m_currentGame->getLANSlot( m_currentGame->getLocalSlotNum() )->getColor());
 		pref["Color"] = option;
-		if (m_currentGame->amIHost())
+		// a Direct Strike room's island and its switched-off rules are not the host's next classic room
+		if (m_currentGame->amIHost() && !IsDirectStrikeMap(m_currentGame->getMap()))
     {
     	pref["Map"] = AsciiStringToQuotedPrintable(m_currentGame->getMap());
       pref.setSuperweaponRestriction( m_currentGame->getSuperweaponRestriction() );
@@ -769,7 +775,7 @@ void LANAPI::OnPlayerLeave( UnicodeString player )
 			pref["PlayerTemplate"] = PlayerTemplatePreference(m_currentGame->getLANSlot( m_currentGame->getLocalSlotNum() )->getPlayerTemplate());
 			option.format("%d", m_currentGame->getLANSlot( m_currentGame->getLocalSlotNum() )->getColor());
 			pref["Color"] = option;
-			if (m_currentGame->amIHost())
+			if (m_currentGame->amIHost() && !IsDirectStrikeMap(m_currentGame->getMap()))
 				pref["Map"] = AsciiStringToQuotedPrintable(m_currentGame->getMap());
 			pref.write();
 		}

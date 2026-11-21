@@ -66,6 +66,7 @@
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/FiringTracker.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LaneWarStats.h"
 #include "GameLogic/Locomotor.h"
 
 #include "GameLogic/Module/AIUpdate.h"
@@ -3404,6 +3405,9 @@ void Object::scoreTheKill( const Object *victim )
 		return;
 	}
 
+	// a Lane War wave unit's kill, for the match's record
+	TheLaneWarStats->onKill( this, victim );
+
 	if (controller)
 	{
 		controller->getScoreKeeper()->addObjectDestroyed(victim);
@@ -4611,7 +4615,7 @@ void Object::crc( Xfer *xfer )
 			xfer->xferSnapshot( thisWeapon );
 		}
 	}
-	
+
 }  // end crc
 
 //-------------------------------------------------------------------------------------------------

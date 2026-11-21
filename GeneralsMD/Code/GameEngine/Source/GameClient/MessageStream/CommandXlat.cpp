@@ -96,6 +96,7 @@
 #include "GameLogic/Module/ContainModule.h"
 
 #include "GameNetwork/NetworkInterface.h"
+#include "GameClient/LaneHud.h"
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/GameSpy/BuddyThread.h"
@@ -981,7 +982,11 @@ void findCommandCenterOrMostExpensiveBuilding(Object* obj, void* vccl)
 static void viewCommandCenter( void )
 {
 	Player* localPlayer = ThePlayerList->getLocalPlayer();
-	if (!localPlayer) 
+	if (!localPlayer)
+		return;
+
+	// Lane War has no base: home is the player's plot
+	if (LaneHud_viewHome())
 		return;
 
 	CommandCenterLocator ccl;
@@ -3785,6 +3790,10 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 
 			// the sidebar's sell or repair cursor
 			if( Sidebar_cancelCursorMode() )
+				cancelledSomething = TRUE;
+
+			// a Lane War unit armed, picked up or for sale, or the abilities panel
+			if( LaneHud_escape() )
 				cancelledSomething = TRUE;
 
 			// a watcher looking through one player's eyes gets the whole map back, menu shut first

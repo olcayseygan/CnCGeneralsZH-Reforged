@@ -67,6 +67,7 @@
 #include "GameNetwork/GameSpy/PersistentStorageDefs.h"
 #include "GameNetwork/GameSpy/GSConfig.h"
 #include "GameNetwork/Online/OnlineQueues.h"
+#include "GameNetwork/GUIUtil.h"
 
 #include "Common/STLTypedefs.h"
 
@@ -213,6 +214,27 @@ static GameWindow *parentGameListLarge = NULL;
        GameWindow *listboxLobbyGamesLarge = NULL;
        //GameWindow *listboxLobbyGameInfo = NULL;
 
+/// A listed room's map as the list names it: the mode for a Direct Strike lane map, which nobody picked
+/// and nobody has before he builds it from its name at load, the cache's name for a map this machine
+/// has, else the file's.
+static UnicodeString roomMapName( const AsciiString &map )
+{
+	UnicodeString mapName;
+	const MapMetaData *md = TheMapCache->findMap(map);
+	// the list's path is GameSpy's portable one, '/' for '\' (GameSpyInfo::setGameOptions): its leaf names the map
+	const char *leaf = strrchr(map.str(), '/');
+	if (IsDirectStrikeMap(leaf ? AsciiString(leaf + 1) : map))
+		mapName = TheGameText->fetch("GUI:DirectStrikeLower");
+	else if (md)
+		mapName = md->m_displayName;
+	else
+	{
+		const char *start = map.reverseFind('\\');
+		mapName.translate( start ? start + 1 : map.str() );
+	}
+	return mapName;
+}
+
 static void gameTooltip(GameWindow *window,
 													WinInstanceData *instData,
 													UnsignedInt mouse)
@@ -272,25 +294,7 @@ static void gameTooltip(GameWindow *window,
 
 	UnicodeString tooltip;
 
-	UnicodeString mapName;
-	const MapMetaData *md = TheMapCache->findMap(room->getMap());
-	if (md)
-	{
-		mapName = md->m_displayName;
-	}
-	else
-	{
-		const char *start = room->getMap().reverseFind('\\');
-		if (start)
-		{
-			++start;
-		}
-		else
-		{
-			start = room->getMap().str();
-		}
-		mapName.translate( start );
-	}
+	const UnicodeString mapName = roomMapName(room->getMap());
 	UnicodeString tmp;
 	tooltip.format(TheGameText->fetch("TOOLTIP:GameInfoGameName"), room->getGameName().str());
 	if (room->getLadderPort() != 0)
@@ -964,25 +968,7 @@ static Int insertGame( GameWindow *win, GameSpyStagingRoom *game )
 	GadgetListBoxSetItemData(win, (void *)(intptr_t)game->getID(), index);
 
 	UnicodeString s;
-	UnicodeString mapName;
-	const MapMetaData *md = TheMapCache->findMap(game->getMap());
-	if (md)
-	{
-		mapName = md->m_displayName;
-	}
-	else
-	{
-		const char *start = game->getMap().reverseFind('\\');
-		if (start)
-		{
-			++start;
-		}
-		else
-		{
-			start = game->getMap().str();
-		}
-		mapName.translate( start );
-	}
+	const UnicodeString mapName = roomMapName(game->getMap());
 	GadgetListBoxAddEntryText(win, UIStyle::fitName(mapName, font, GadgetListBoxGetColumnWidth(win, COLUMN_MAP) - pad),
 		UIStyle::MUTED, index, COLUMN_MAP);
 

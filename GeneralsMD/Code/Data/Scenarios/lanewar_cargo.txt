@@ -1,0 +1,52 @@
+# Lane War cargo proof: object upgrades, drones and passengers on plot units. China puts a bunker on an
+# Overlord and loads four men into it, ranks one and sells another; the USA puts a Battle Drone on a
+# Crusader and three men into a Humvee. Every wave copy goes out with the same upgrade, its own drone
+# or bunker and copies of the men, who fire out. Selling the Overlord afterwards pays back half of
+# everything on it. Read the LANEWAR UNIT UPGRADE, LANEWAR GARRISON, LANEWAR VETERANCY, LANEWAR SELL,
+# LANEWAR MOVE and HEADLESS LANEWAR lines ("goes out with", "passengers out riding").
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 4000 -scenario lanewar_cargo -logPrefix lanewar_cargo_
+#
+# Two players, each seat sending on every tick (logic frames 900, 1800, 2700). The frames below are
+# this file's 30 Hz frames, which the drill scales by the game speed: 1350 here is logic frame 900.
+
+30    lanecash   0  20000
+30    lanecash   1  20000
+30    lanetier   1  1 2
+30    lanetier   1  1 3
+30    laneplace  1  ChinaTankOverlord           0 0
+30    laneplace  1  ChinaTankBattleMaster       6 0
+30    laneplace  0  AmericaTankCrusader         0 0
+30    laneplace  0  AmericaVehicleHumvee        4 0
+# refused: an Overlord with no bunker takes only its add-on
+45    lanegarrison  1  ChinaInfantryRedguard     0 0 0
+# the bunker; then the Gattling, which the bunker rules out; the drone, then a second drone refused
+60    laneunitupgrade  1  Upgrade_ChinaOverlordBattleBunker   0 0 0
+60    laneunitupgrade  1  Upgrade_ChinaOverlordGattlingCannon 0 0 0
+60    laneunitupgrade  0  Upgrade_AmericaBattleDrone          0 0 0
+60    laneunitupgrade  0  Upgrade_AmericaScoutDrone           0 0 0
+# four men into the bunker; refused: the hero, a tank that carries nobody
+90    lanegarrison  1  ChinaInfantryRedguard     0 0 0
+90    lanegarrison  1  ChinaInfantryRedguard     0 0 0
+90    lanegarrison  1  ChinaInfantryRedguard     0 0 0
+90    lanegarrison  1  ChinaInfantryTankHunter   0 0 0
+90    lanegarrison  1  ChinaInfantryBlackLotus   0 0 0
+90    lanegarrison  1  ChinaInfantryRedguard     0 6 0
+# three into the Humvee
+90    lanegarrison  0  AmericaInfantryRanger          0 4 0
+90    lanegarrison  0  AmericaInfantryRanger          0 4 0
+90    lanegarrison  0  AmericaInfantryMissileDefender 0 4 0
+# a Helix with its bunker and two Red Guards: the game's own check says whether they may fire out
+30    laneplace  1  ChinaVehicleHelix           0 4
+60    laneunitupgrade  1  Upgrade_ChinaHelixBattleBunker 0 0 4
+90    lanegarrison  1  ChinaInfantryRedguard     0 0 4
+90    lanegarrison  1  ChinaInfantryRedguard     0 0 4
+# the Tank Hunter made Veteran, one Red Guard sold back in full before the first wave
+120   lanevet    1  0 0 0 3
+120   lanesell   1  0 0 0 1
+# the Crusader moved two rows back, its drone with it
+120   lanemove   0  0 0 0 0 3
+# after two waves the Overlord sells for half of all of it: the tank, the bunker, three men and a rank
+3200  lanesell   1  0 0 0

@@ -151,6 +151,13 @@ public:
 	virtual void drawImage( const Image *image, Int startX, Int startY, 
 													Int endX, Int endY, Color color = 0xFFFFFFFF, DrawImageMode mode=DRAW_IMAGE_ALPHA) = 0;
 
+	/** draw the part of an image fit within the screen coordinates that a wedge from the box's centre
+		* covers: from `fromDegrees` clockwise from 12 o'clock through `sweepDegrees` (negative runs
+		* anticlockwise), a ring's piece cut by angle.  It ignores the clip region, so do not call it under
+		* one.  A display without it draws nothing. */
+	virtual void drawImageWedge( const Image *image, Int startX, Int startY, Int endX, Int endY,
+															 Real fromDegrees, Real sweepDegrees, Color color = 0xFFFFFFFF ) { }
+
 	/// draw a video buffer fit within the screen coordinates
 	virtual void drawVideoBuffer( VideoBuffer *buffer, Int startX, Int startY,
 													Int endX, Int endY ) = 0;

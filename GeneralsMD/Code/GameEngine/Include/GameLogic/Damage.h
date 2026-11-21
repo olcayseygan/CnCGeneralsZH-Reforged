@@ -284,6 +284,10 @@ public:
     m_shockWaveAmount   = 0.0f;	
     m_shockWaveRadius   = 0.0f;	
     m_shockWaveTaperOff = 0.0f;
+
+		m_impactPos.zero();
+		m_impactRadius = 0.0f;
+		m_hasImpact = FALSE;
 	}
 
 	ObjectID		   m_sourceID;							///< source of the damage
@@ -301,6 +305,14 @@ public:
 	Real					 m_shockWaveAmount;				///< This represents the amount of shockwave created by the damage. 0 = no shockwave, 1.0 = shockwave equal to damage.
 	Real					 m_shockWaveRadius;			  ///< This represents the effect radius of the shockwave. 
 	Real					 m_shockWaveTaperOff;			///< This represents the taper off effect of the shockwave at the tip of the radius. 0.0 means shockwave is 0% at the radius edge.
+
+	// Where a weapon's damage landed, for a drawable that breaks the part of the victim it hit
+	// (ActiveBody hands it to Drawable::reactToImpact; W3DFractureDraw).  Only WeaponTemplate::dealDamageInternal fills it in: the blast's own
+	// point for a shell or missile that went off, or for a shot straight at an object the side of it
+	// facing the shooter at its middle height.  Other damage (poison, fire, a crush) has none.
+	Coord3D				 m_impactPos;							///< world point the damage came from
+	Real					 m_impactRadius;					///< the weapon's damage radius, 0 for a direct hit
+	Bool					 m_hasImpact;							///< m_impactPos and m_impactRadius mean something
 
 
 protected:

@@ -93,6 +93,8 @@
 #include "GameLogic/CrateSystem.h"
 #include "GameLogic/FPUControl.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/LaneWarStats.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/Module/AIUpdate.h"
@@ -477,6 +479,8 @@ void GameLogic::reset( void )
 {
 	m_thingTemplateBuildableOverrides.clear();
 	m_controlBarOverrides.clear();
+	TheLaneWarDirector->reset();
+	TheLaneWarStats->reset();
 
 	// a load that failed part way must not hand its stream or heap order to the next one
 	m_loadedRandomPending = FALSE;
@@ -1202,6 +1206,39 @@ void GameLogic::refuseCorruptMap( void )
 	MessageBoxOk( TheGameText->fetch( "GUI:Error" ), msg, NULL );
 
 }  // end refuseCorruptMap
+
+// ------------------------------------------------------------------------------------------------
+/** A map object whose originalOwner reads "StartOwner:1,3,5" belongs to the playable player standing
+	on the first of those start positions (1-based, Player_N_Start) that anybody holds, or to the
+	neutral player when none is. A map cannot name a lobby slot for an object, since which slot takes
+	which start is chosen in the lobby; the random map generator's Lane War map owns each team's
+	fortress and towers this way. The start positions are in the game setup every machine and the
+	replay agree on, and the player list is walked in its own order, so every machine picks the same
+	player. A load with no game setup (a map opened on its own) has no seats, and the map's own sides
+	would answer for start 1, so every such object goes neutral then. NULL for any other owner string. */
+// ------------------------------------------------------------------------------------------------
+static Team *teamForStartOwner( const AsciiString& owner, Bool seated )
+{
+	static const char prefix[] = "StartOwner:";
+	if( !owner.startsWith( prefix ) )
+		return NULL;
+
+	for( const char *at = owner.str() + sizeof(prefix) - 1; seated && *at; )
+	{
+		const Int start = atoi( at ) - 1;
+		for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
+		{
+			Player *player = ThePlayerList->getNthPlayer( i );
+			if( player && player->isPlayableSide() && player->getMpStartIndex() == start )
+				return player->getDefaultTeam();
+		}
+		while( *at && *at != ',' )
+			++at;
+		if( *at == ',' )
+			++at;
+	}
+	return ThePlayerList->getNeutralPlayer()->getDefaultTeam();
+}
 
 // ------------------------------------------------------------------------------------------------
 /** Entry point for starting a new game, the engine is already in clean state at this
@@ -2157,7 +2194,9 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 			// Get the team information
 			DEBUG_ASSERTCRASH(pMapObj->getProperties()->getType(TheKey_originalOwner) == Dict::DICT_ASCIISTRING, ("unit %s has no original owner specified (obsolete map file)\n",pMapObj->getName().str()));
 			AsciiString originalOwner = pMapObj->getProperties()->getAsciiString(TheKey_originalOwner);
-			Team *team = ThePlayerList->validateTeam(originalOwner);
+			Team *team = teamForStartOwner(originalOwner, game != NULL);
+			if (team == NULL)
+				team = ThePlayerList->validateTeam(originalOwner);
 
 			// create new object in the world
 			Object *obj = TheThingFactory->newObject( thingTemplate, team ); //, OBJECT_STATUS_LOADING_FROM_MAP );
@@ -2212,6 +2251,12 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	sprintf(Buf,"After loading objects=%f\n",((double)(endTime64-startTime64)/(double)(freq64)*1000.0));
 	DEBUG_LOG(("%s", Buf));
 	#endif
+
+	// a Lane War map turns the mode on (LaneWarDirector.h): no starting base, and only the fortresses
+	// decide the match
+	TheLaneWarDirector->newMap( loadingSaveGame );
+	if (TheLaneWarDirector->isActive())
+		TheVictoryConditions->setVictoryConditions(VICTORY_LANEWAR);
 
 	progressCount = LOAD_PROGRESS_LOOP_INITIAL_NETWORK_BUILDINGS;
 	// place initial network buildings/units
@@ -2274,7 +2319,8 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 
 
 
-				placeNetworkBuildingsForPlayer(i, slot, player, pt);
+				if (!TheLaneWarDirector->isActive())
+					placeNetworkBuildingsForPlayer(i, slot, player, pt);
 			}
 
 			updateLoadProgress(progressCount++);
@@ -3210,7 +3256,7 @@ void GameLogic::writeMismatchDump( Int numPlayers, UnsignedInt crcFrame )
 		"partition (logic random seed, shroud)",
 		"players (battle plans, skill points, science points, money)",
 		"AI (pathfinder, AI data, AI groups)",
-		"scripts",
+		"scripts (and the Lane War director on a lane map)",
 	};
 	fprintf( fp, "World CRC at the end of each part:\n" );
 	for( Int s = 0; s < CRC_SECTION_COUNT; ++s )
@@ -4721,6 +4767,14 @@ static Bool kickVoteAgreed( Int votes, Int voters )
 	return voters >= MIN_KICK_VOTERS && votes >= voters;
 }
 
+/// a kicked player has left the game: in Direct Strike his team's buildings go to a teammate first (LaneWarStats.h)
+static void kickPlayer( Player *player )
+{
+	if( TheLaneWarDirector->isActive() )
+		TheLaneWarStats->onPlayerLeft( player );
+	player->killPlayer();
+}
+
 void GameLogic::processKickVote( Player *voter, Int targetIndex, Bool yes )
 {
 	if( !mayVoteToKick( voter, targetIndex ) )
@@ -4761,7 +4815,7 @@ void GameLogic::processKickVote( Player *voter, Int targetIndex, Bool yes )
 	m_kickVoteYesMask |= voter->getPlayerMask();
 	if( kickVoteAgreed( countKickVotes(), countKickVoters() ) )
 	{
-		ThePlayerList->getNthPlayer( m_kickVoteTarget )->killPlayer();
+		kickPlayer( ThePlayerList->getNthPlayer( m_kickVoteTarget ) );
 		endKickVote( "GUI:KickVoteKicked" );
 	}
 }
@@ -4778,7 +4832,7 @@ void GameLogic::expireKickVote( void )
 		endKickVote( "GUI:KickVoteFailed" );
 	else if( kickVoteAgreed( countKickVotes(), countKickVoters() ) )
 	{
-		ThePlayerList->getNthPlayer( m_kickVoteTarget )->killPlayer();
+		kickPlayer( ThePlayerList->getNthPlayer( m_kickVoteTarget ) );
 		endKickVote( "GUI:KickVoteKicked" );
 	}
 }
@@ -5467,6 +5521,10 @@ void GameLogic::update( void )
 		 happens on a render pass and making an object has to happen in here, so the two are split. */
 	ControlServer_runCommands();
 
+	// Lane War, after both so a unit put on a plot this frame is held this frame
+	TheLaneWarDirector->update();
+	TheLaneWarStats->update();
+
 	// Note - TerrainLogic update needs to happen after ScriptEngine update, but before object updates.  jba.
 	// This way changes in bridges are noted in the script engine before being cleared in TerrainLogic->update
 	{
@@ -6019,7 +6077,7 @@ void GameLogic::destroyObject( Object *obj )
 Bool inCRCGen = FALSE;
 UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 {
-	if (mode != CRC_RECALC)
+	if (mode == CRC_CACHED)
 		return m_CRC;
 
 	setFPMode();
@@ -6093,7 +6151,7 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 	{
 		CRCGEN_LOG(("RandomSeed: %d\n", seed));
 	}
-	if (xferCRC->getXferMode() == XFER_CRC)
+	if (xferCRC->getXferMode() == XFER_CRC && mode == CRC_RECALC)
 	{
 		xferCRC->xferUnsignedInt( &seed );
 	}
@@ -6152,6 +6210,16 @@ UnsignedInt GameLogic::getCRC( Int mode, AsciiString deepCRCFileName )
 	marker = "MARKER:TheScriptEngine";
 	xferCRC->xferAsciiString(&marker);
 	xferCRC->xferSnapshot( TheScriptEngine );
+	// only on a Lane War map, so every other game's CRC is what it was
+	if (TheLaneWarDirector->isActive())
+	{
+		marker = "MARKER:TheLaneWarDirector";
+		xferCRC->xferAsciiString(&marker);
+		xferCRC->xferSnapshot( TheLaneWarDirector );
+		marker = "MARKER:TheLaneWarStats";
+		xferCRC->xferAsciiString(&marker);
+		xferCRC->xferSnapshot( TheLaneWarStats );
+	}
 	if (recordSnapshot)
 		m_crcSnapshots.setSectionCRC( CRC_SECTION_SCRIPTS, xferCRC->getCRC() );
 	if (isInGameLogicUpdate())
@@ -6772,13 +6840,15 @@ void GameLogic::prepareLogicForObjectLoad( void )
 	* 17: xfer m_supplyPileLimit
 	* 18: xfer the logic random stream and the pathfinder's request queue and flow maps
 	* 19: xfer the AI groups and the AI's group and formation counters (AI::xferGroups)
+	* 20: xfer TheLaneWarDirector
+	* 21: xfer TheLaneWarStats
 	*/
 // ------------------------------------------------------------------------------------------------
 void GameLogic::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 19;
+	const XferVersion currentVersion = 21;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -7258,6 +7328,16 @@ void GameLogic::xfer( Xfer *xfer )
 
   if ( version >= 19 )
     TheAI->xferGroups( xfer );
+
+  if ( version >= 20 )
+    xfer->xferSnapshot( TheLaneWarDirector );
+  else if ( xfer->getXferMode() == XFER_LOAD )
+    TheLaneWarDirector->reset();	// a save from before the director plays as it was made, with no director
+
+  if ( version >= 21 )
+    xfer->xferSnapshot( TheLaneWarStats );
+  else if ( xfer->getXferMode() == XFER_LOAD )
+    TheLaneWarStats->reset();	// a lane save from before the record starts counting from the load
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------

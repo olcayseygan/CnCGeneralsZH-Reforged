@@ -1,4 +1,23 @@
 CMakeLists.txt
+Data/Art/Textures/LWFort_Concrete.tga
+Data/Art/Textures/LWFort_ConcreteD.tga
+Data/Art/Textures/LWFort_Decal.tga
+Data/Art/Textures/LWFort_DecalD.tga
+Data/Art/Textures/LWFort_Deck.tga
+Data/Art/Textures/LWFort_DeckD.tga
+Data/Art/Textures/LWFort_Detail.tga
+Data/Art/Textures/LWFort_DetailD.tga
+Data/Art/Textures/LWFort_Lead.tga
+Data/Art/Textures/LWFort_LeadD.tga
+Data/Art/Textures/LWFort_Rubble.tga
+Data/Art/Textures/LWFort_Stone.tga
+Data/Art/Textures/LWFort_StoneD.tga
+Data/Art/Textures/LWFrag_InnerConcrete.tga
+Data/Art/Textures/LWFrag_InnerPlate.tga
+Data/Art/Textures/LWFrag_InnerSand.tga
+Data/Art/Textures/LWFrag_InnerSteel.tga
+Data/Art/Textures/LWFrag_InnerStone.tga
+Data/Art/Textures/LWFrag_InnerWood.tga
 Data/Art/Textures/ReforgedBarAmericaCenter.tga
 Data/Art/Textures/ReforgedBarAmericaLeft.tga
 Data/Art/Textures/ReforgedBarAmericaRight.tga
@@ -19,6 +38,7 @@ Data/Art/Textures/ReforgedGuardRing.tga
 Data/Art/Textures/ReforgedGuardShield.tga
 Data/Art/Textures/ReforgedHudAmericaCommandBar.dds
 Data/Art/Textures/ReforgedHudAmericaCommandBarNoTabs.dds
+Data/Art/Textures/ReforgedHudAmericaDirectStrike.dds
 Data/Art/Textures/ReforgedHudAmericaPowers.dds
 Data/Art/Textures/ReforgedHudAmericaSidebar.dds
 Data/Art/Textures/ReforgedHudAmericaSidebarStrip.dds
@@ -29,6 +49,7 @@ Data/Art/Textures/ReforgedHudAmericaTalents.dds
 Data/Art/Textures/ReforgedHudBlankTexture.tga
 Data/Art/Textures/ReforgedHudChinaCommandBar.dds
 Data/Art/Textures/ReforgedHudChinaCommandBarNoTabs.dds
+Data/Art/Textures/ReforgedHudChinaDirectStrike.dds
 Data/Art/Textures/ReforgedHudChinaPowers.dds
 Data/Art/Textures/ReforgedHudChinaSidebar.dds
 Data/Art/Textures/ReforgedHudChinaSidebarStrip.dds
@@ -40,6 +61,7 @@ Data/Art/Textures/ReforgedHudControlButtons.dds
 Data/Art/Textures/ReforgedHudDisconnectWindow.dds
 Data/Art/Textures/ReforgedHudGlaCommandBar.dds
 Data/Art/Textures/ReforgedHudGlaCommandBarNoTabs.dds
+Data/Art/Textures/ReforgedHudGlaDirectStrike.dds
 Data/Art/Textures/ReforgedHudGlaPowers.dds
 Data/Art/Textures/ReforgedHudGlaSidebar.dds
 Data/Art/Textures/ReforgedHudGlaSidebarStrip.dds
@@ -325,6 +347,18 @@ Data/Art/Textures/ZHCA_TRSupply.tga
 Data/Art/Textures/ZHCA_TRSupplyD.tga
 Data/Art/Textures/ZHCA_TRTayfun.tga
 Data/Art/Textures/ZHCA_TRWarFac.tga
+Data/Art/W3D/LWFORT.W3D
+Data/Art/W3D/LWFORT.lwcollapse
+Data/Art/W3D/LWFORT.lwfrag
+Data/Art/W3D/LWFORT_D.W3D
+Data/Art/W3D/LWFORT_E.W3D
+Data/Art/W3D/LWFORT_R.W3D
+Data/Art/W3D/LWTOWER.W3D
+Data/Art/W3D/LWTOWER.lwcollapse
+Data/Art/W3D/LWTOWER.lwfrag
+Data/Art/W3D/LWTOWER_D.W3D
+Data/Art/W3D/LWTOWER_E.W3D
+Data/Art/W3D/LWTOWER_R.W3D
 Data/Art/W3D/TRA400M.W3D
 Data/Art/W3D/TRA400M_A2.W3D
 Data/Art/W3D/TRA400M_D.W3D
@@ -1185,12 +1219,14 @@ Data/INI/MappedImages/HandCreated/ReforgedBarChinaBeacon.ini
 Data/INI/MappedImages/HandCreated/ReforgedForceAttack.ini
 Data/INI/MappedImages/HandCreated/ReforgedGuardShield.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaCommandBar.ini
+Data/INI/MappedImages/HandCreated/ReforgedHudAmericaDirectStrike.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaPowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaSidebar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaTabPanel.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaTalents.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudBlankTexture.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudChinaCommandBar.ini
+Data/INI/MappedImages/HandCreated/ReforgedHudChinaDirectStrike.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudChinaPowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudChinaSidebar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudChinaTabPanel.ini
@@ -1198,6 +1234,7 @@ Data/INI/MappedImages/HandCreated/ReforgedHudChinaTalents.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudControlButtons.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudDisconnectWindow.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudGlaCommandBar.ini
+Data/INI/MappedImages/HandCreated/ReforgedHudGlaDirectStrike.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudGlaPowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudGlaSidebar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudGlaTabPanel.ini
@@ -1312,6 +1349,8 @@ Data/Scenarios/foreign_dozerkill.txt
 Data/Scenarios/foreign_hijack.txt
 Data/Scenarios/foreign_lotus.txt
 Data/Scenarios/foreign_snipe.txt
+Data/Scenarios/fortressattack.txt
+Data/Scenarios/fortressfall.txt
 Data/Scenarios/gate60hz.txt
 Data/Scenarios/geproto_alpine.txt
 Data/Scenarios/geproto_fogedge.txt
@@ -1367,6 +1406,15 @@ Data/Scenarios/jetrunway.txt
 Data/Scenarios/jetsturn.txt
 Data/Scenarios/jetturn.txt
 Data/Scenarios/kargu.txt
+Data/Scenarios/laneabilities.txt
+Data/Scenarios/laneabilities_off.txt
+Data/Scenarios/lanewar.txt
+Data/Scenarios/lanewar_air.txt
+Data/Scenarios/lanewar_buy.txt
+Data/Scenarios/lanewar_cargo.txt
+Data/Scenarios/lanewar_end.txt
+Data/Scenarios/lanewar_hack.txt
+Data/Scenarios/lanewar_tricks.txt
 Data/Scenarios/laserdefense.txt
 Data/Scenarios/laserflow.txt
 Data/Scenarios/laserglow.txt
@@ -1430,6 +1478,9 @@ Data/Scenarios/particles1m_mixed.txt
 Data/Scenarios/particles1m_smoke.txt
 Data/Scenarios/patriotscud.txt
 Data/Scenarios/patriottomahawk.txt
+Data/Scenarios/piecetower.txt
+Data/Scenarios/piecetowerdirect.txt
+Data/Scenarios/piecetowerfilm.txt
 Data/Scenarios/powerpropcapture.txt
 Data/Scenarios/reachhills.txt
 Data/Scenarios/reachproof.txt
@@ -1480,6 +1531,7 @@ Data/Scenarios/shiftbuild.txt
 Data/Scenarios/shiftbuildmove.txt
 Data/Scenarios/shiftorders.txt
 Data/Scenarios/shiftqueue.txt
+Data/Scenarios/snipesave.txt
 Data/Scenarios/spectre_reaim.txt
 Data/Scenarios/spectre_reshoot.txt
 Data/Scenarios/squad30.txt
@@ -1758,6 +1810,9 @@ GameEngine/Include/GameClient/Credits.h
 GameEngine/Include/GameClient/DIKeyCodes.h
 GameEngine/Include/GameClient/DebugDisplay.h
 GameEngine/Include/GameClient/Diplomacy.h
+GameEngine/Include/GameClient/DirectStrikeLayout.h
+GameEngine/Include/GameClient/DirectStrikeLobby.h
+GameEngine/Include/GameClient/DirectStrikeTheme.h
 GameEngine/Include/GameClient/DisconnectMenu.h
 GameEngine/Include/GameClient/Display.h
 GameEngine/Include/GameClient/DisplayString.h
@@ -1809,6 +1864,9 @@ GameEngine/Include/GameClient/InGameUI.h
 GameEngine/Include/GameClient/KeyDefs.h
 GameEngine/Include/GameClient/KeyDownInfo.h
 GameEngine/Include/GameClient/Keyboard.h
+GameEngine/Include/GameClient/LaneHud.h
+GameEngine/Include/GameClient/LaneHudLayout.h
+GameEngine/Include/GameClient/LaneWarEndScreen.h
 GameEngine/Include/GameClient/LanguageFilter.h
 GameEngine/Include/GameClient/Line2D.h
 GameEngine/Include/GameClient/LoadScreen.h
@@ -1877,6 +1935,9 @@ GameEngine/Include/GameLogic/FPUControl.h
 GameEngine/Include/GameLogic/FiringTracker.h
 GameEngine/Include/GameLogic/GameLogic.h
 GameEngine/Include/GameLogic/GhostObject.h
+GameEngine/Include/GameLogic/LaneWarBot.h
+GameEngine/Include/GameLogic/LaneWarDirector.h
+GameEngine/Include/GameLogic/LaneWarStats.h
 GameEngine/Include/GameLogic/Locomotor.h
 GameEngine/Include/GameLogic/LocomotorSet.h
 GameEngine/Include/GameLogic/LogicRandomValue.h
@@ -2377,6 +2438,8 @@ GameEngine/Source/GameClient/ChromaKeyboard.cpp
 GameEngine/Source/GameClient/CinemaDirector.cpp
 GameEngine/Source/GameClient/Color.cpp
 GameEngine/Source/GameClient/Credits.cpp
+GameEngine/Source/GameClient/DirectStrikeLobby.cpp
+GameEngine/Source/GameClient/DirectStrikeTheme.cpp
 GameEngine/Source/GameClient/Display.cpp
 GameEngine/Source/GameClient/DisplayString.cpp
 GameEngine/Source/GameClient/DisplayStringManager.cpp
@@ -2497,6 +2560,8 @@ GameEngine/Source/GameClient/GroupPanel.cpp
 GameEngine/Source/GameClient/InGameUI.cpp
 GameEngine/Source/GameClient/Input/Keyboard.cpp
 GameEngine/Source/GameClient/Input/Mouse.cpp
+GameEngine/Source/GameClient/LaneHud.cpp
+GameEngine/Source/GameClient/LaneWarEndScreen.cpp
 GameEngine/Source/GameClient/LanguageFilter.cpp
 GameEngine/Source/GameClient/Line2D.cpp
 GameEngine/Source/GameClient/MapUtil.cpp
@@ -2807,6 +2872,9 @@ GameEngine/Source/GameLogic/System/Damage.cpp
 GameEngine/Source/GameLogic/System/FPUControl.cpp
 GameEngine/Source/GameLogic/System/GameLogic.cpp
 GameEngine/Source/GameLogic/System/GameLogicDispatch.cpp
+GameEngine/Source/GameLogic/System/LaneWarBot.cpp
+GameEngine/Source/GameLogic/System/LaneWarDirector.cpp
+GameEngine/Source/GameLogic/System/LaneWarStats.cpp
 GameEngine/Source/GameLogic/System/RankInfo.cpp
 GameEngine/Source/GameLogic/System/ScenarioDrill.cpp
 GameEngine/Source/GameNetwork/Connection.cpp
@@ -2910,6 +2978,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/BridgeTilt.h
 GameEngineDevice/Include/W3DDevice/GameClient/FireLights.h
 GameEngineDevice/Include/W3DDevice/GameClient/FlatHeightMap.h
 GameEngineDevice/Include/W3DDevice/GameClient/FoliagePlacement.h
+GameEngineDevice/Include/W3DDevice/GameClient/FractureCore.h
 GameEngineDevice/Include/W3DDevice/GameClient/GpuParticles.h
 GameEngineDevice/Include/W3DDevice/GameClient/GroundMarks.h
 GameEngineDevice/Include/W3DDevice/GameClient/HeightMap.h
@@ -2917,6 +2986,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/ModelPreviewFrame.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DDebrisDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DDefaultDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DDependencyModelDraw.h
+GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DFractureDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DLaserDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DModelDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DOverlordAircraftDraw.h
@@ -3107,6 +3177,7 @@ GameEngineDevice/Source/W3DDevice/GameClient/DX11ReachOverlay.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DDebrisDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DDefaultDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DDependencyModelDraw.cpp
+GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DFractureDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DLaserDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DModelDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DOverlordAircraftDraw.cpp
@@ -4383,6 +4454,7 @@ Tests/replay_wide_oracle.cpp
 Tests/run_data_gone_check.sh
 Tests/run_generals_smoke.sh
 Tests/run_ini_crlf_check.sh
+Tests/run_lane_roster_check.ps1
 Tests/run_locomotor_check.sh
 Tests/run_net_check.sh
 Tests/run_replay_check.sh
@@ -4436,6 +4508,7 @@ Tests/test_first_launch_chooser.sh
 Tests/test_foliage_placement.cpp
 Tests/test_fontchars.cpp
 Tests/test_fpucontrol.cpp
+Tests/test_fracture.cpp
 Tests/test_game_results.inc
 Tests/test_gameengine.cpp
 Tests/test_gameengine_stubs.cpp
@@ -4454,6 +4527,7 @@ Tests/test_install_guard.sh
 Tests/test_install_root.cpp
 Tests/test_install_textures.cpp
 Tests/test_lan_broadcast.cpp
+Tests/test_lanehud.cpp
 Tests/test_linux_portable.sh
 Tests/test_load_screen.inc
 Tests/test_macos_app.sh
@@ -5361,6 +5435,8 @@ Tools/generals-icon.py
 Tools/gentrigtables.py
 Tools/guard_marker.py
 Tools/hud_command_bar.py
+Tools/hud_direct_strike.py
+Tools/hud_direct_strike_theme.py
 Tools/hud_sidebar.py
 Tools/include_case_check.py
 Tools/install-guard.sh

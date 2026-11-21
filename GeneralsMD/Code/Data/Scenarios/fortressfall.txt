@@ -1,0 +1,31 @@
+# Footage of a Lane War fortress shelled to rubble: two Nuke Cannons and two Tomahawks from out of
+# its reach and four Overlords inside it, all team A's (slot 0), against team B's fortress (slot 1).
+# The fortress is the W3D until its first hit, then its fragments (LWFORT.lwfrag, W3DFractureDraw):
+# each round knocks out the fragments where it lands, the gun bastions keep their guns, and at zero
+# health it comes down by LWFORT.lwcollapse to a ruin. A drawn run: the FRACTURE HIT and FRACTURE
+# COLLAPSE lines are the text of it.
+#
+#   generals.exe -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 6000 -scenario fortressfall -logPrefix fortressfall_
+#
+# At 4000 health it falls at logic frame 436, the Overlords still on it (seed 1, headless,
+# 2026-11-21); at 12000 the Overlords were gone by file frame 1800 and the guns took to logic 5603.
+#
+# On this map (rmg_v20_3_6p_642c_lane, 6420 by 3610) the lane runs along y 1805 from x 1410 to 5010,
+# 1580 to 2030 across: fortress B stands at 4470,1805 (300 reach), B's watch tower at 3876,1805 (225
+# reach). Everything is put down on the lane between the two, outside the tower's reach, and the
+# Overlords close in on the fortress's west face so its gun has something to answer.
+# Frames here are this file's 30 a game second; the log's logic frames are two thirds of them at 1.5x.
+
+30    spawn   0  ChinaVehicleNukeLauncher   2  4110  1640  50
+30    spawn   0  AmericaVehicleTomahawk     2  4110  1970  50
+30    spawn   0  ChinaTankOverlord          4  4180  1805  60
+60    attack  0  ChinaVehicleNukeLauncher   1  LaneWarFortress
+60    attack  0  AmericaVehicleTomahawk     1  LaneWarFortress
+60    attack  0  ChinaTankOverlord          1  LaneWarFortress
+150   tally   1  LaneWarFortress
+300   tally   1  LaneWarFortress
+450   tally   1  LaneWarFortress
+600   tally   1  LaneWarFortress
+600   tally   0  ChinaTankOverlord

@@ -107,6 +107,7 @@
 #include "GameLogic/Module/RebuildHoleBehavior.h"
 #include "GameLogic/Module/TransportContain.h"
 #include "GameLogic/VictoryConditions.h"
+#include "GameLogic/LaneWarDirector.h"
 
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GUIUtil.h"		// the SUPERWEAPONS_ modes the lobby sends
@@ -2980,6 +2981,10 @@ void Player::addSciencePurchasePoints(Int delta)
 //=============================================================================
 Bool Player::attemptToPurchaseScience(ScienceType science)
 {
+	// Lane War has no general's powers: every science purchase is refused, quietly, the AI's included
+	if (TheLaneWarDirector->isActive())
+		return false;
+
 	if (!isCapableOfPurchasingScience(science))
 	{
 		DEBUG_CRASH(("isCapableOfPurchasingScience: need other prereqs/points to purchase, request is ignored!\n"));
@@ -3044,7 +3049,7 @@ void Player::logAIPersonaSummary(void)
 
 Bool Player::isCapableOfPurchasingScience(ScienceType science) const
 {
-	if (science == SCIENCE_INVALID)
+	if (science == SCIENCE_INVALID || TheLaneWarDirector->isActive())
 	{
 		return false;
 	}
@@ -5872,9 +5877,12 @@ void Player::xfer( Xfer *xfer )
 	else
 		m_radarJammedUntilFrame = 0;
 
-	// the retaliation switch as logic last set it; while a mission's script holds input (saved by the
-	// ScriptEngine) update() does not sync it from the options, so a save inside a cinematic keeps it
-	// off.  An older save has none and keeps the init value, which update() syncs within a second.
+	// the retaliation switch as logic last set it: whether a hit on this player's unit calls its
+	// neighbours in.  The player's own machine turns it on with a message once a second, so a game
+	// loaded without it ran the first second with nobody coming to help and went another way from the
+	// game that was saved.  While a mission's script holds input (saved by the ScriptEngine) update()
+	// does not sync it from the options, so a save inside a cinematic keeps it off.  An older save has
+	// none and keeps the init value until that message.
 	if( version >= 13 )
 		xfer->xferBool( &m_logicalRetaliationModeEnabled );
 

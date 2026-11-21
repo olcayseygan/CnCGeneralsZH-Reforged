@@ -1,0 +1,52 @@
+# Footage of a lane attack on team B's fortress (4470,1805): team A's waves walk up the lane and take it
+# down while the fortress fires back. Four Nuke Cannons first clear B's watch tower (3876,1805), off the
+# camera, so the wave is not held up by it. Then a China wave (two Battlemasters, an Overlord, twelve Red
+# Guard, four Tank Hunters and a Nuke Cannon of its own) spawns behind where the tower stood and
+# lanemarches east into the fortress; a second wave (four Battlemasters and an Inferno Cannon) follows at
+# file frame 1200 and a pair of MiGs strikes at 1740. The fortress is drawn in fragments from its first
+# hit (W3DFractureDraw) and comes down to its ruin at zero health; its death decides the match, so a drawn
+# run needs -control to stay up past it. Seed 1 at 4000 health and a 1500 tower: the tower is down by
+# file frame 300, the fortress at 32 by file frame 1800 with the MiGs on it and down at logic frame 1308
+# (headless, 2026-11-21). At 12000 it took to logic 6062.
+#
+#   generals.exe -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 6500 -scenario fortressattack -logPrefix fortressattack_
+#
+# On this map (rmg_v20_3_6p_642c_lane) the lane runs along y 1805 from x 1410 to 5010, 1580 to 2030 across.
+# Frames here are this file's 30 a game second; the log's logic frames are two thirds of them at 1.5x.
+
+30    spawn      0  ChinaVehicleNukeLauncher   4  3560  1805  60
+# a lanemarch of no distance takes the tower's cannons off the seat's fresh spawns, so the wave's
+# "lanemarch *" below does not walk them into the fortress too
+40    lanemarch  0  ChinaVehicleNukeLauncher   0
+45    attack     0  ChinaVehicleNukeLauncher   1  LaneWarWatchTower
+
+300   spawn      0  ChinaTankBattleMaster      2  3860  1720  50
+300   spawn      0  ChinaTankOverlord          1  3820  1880  60
+300   spawn      0  ChinaInfantryRedguard      12 3760  1740  18
+300   spawn      0  ChinaInfantryTankHunter    4  3760  1880  18
+300   spawn      0  ChinaVehicleNukeLauncher   1  3680  1805  50
+315   lanemarch  0  *                          600
+
+1200  spawn      0  ChinaTankBattleMaster      2  3800  1720  50
+1200  spawn      0  ChinaTankBattleMaster      2  3800  1890  50
+1200  spawn      0  ChinaVehicleInfernoCannon  1  3700  1805  50
+1215  lanemarch  0  *                          600
+
+1725  spawn      0  ChinaJetMIG                2  3300  1700  60
+1740  attack     0  ChinaJetMIG                1  LaneWarFortress
+
+150   tally   1  LaneWarWatchTower
+300   tally   1  LaneWarWatchTower
+900   tally   1  LaneWarFortress
+1050  tally   1  LaneWarFortress
+1200  tally   1  LaneWarFortress
+1350  tally   1  LaneWarFortress
+1500  tally   1  LaneWarFortress
+1650  tally   1  LaneWarFortress
+1800  tally   1  LaneWarFortress
+1950  tally   1  LaneWarFortress
+1200  tally   0  *
+1800  tally   0  *
+1830  tally   0  ChinaJetMIG

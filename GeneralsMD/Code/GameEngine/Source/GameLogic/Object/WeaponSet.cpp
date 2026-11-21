@@ -546,6 +546,10 @@ CanAttackResult WeaponSet::getAbleToAttackSpecificObject( AbleToAttackType attac
 	if (victim->testStatus(OBJECT_STATUS_MASKED))
 		return ATTACKRESULT_NOT_POSSIBLE;
 
+	// a Lane War build plot's unit: its owner still selects and moves it, and nobody shoots it
+	if (victim->testStatus(OBJECT_STATUS_UNATTACKABLE))
+		return ATTACKRESULT_NOT_POSSIBLE;
+
 	// And this is the KINDOF version, for things that aren't really game objects, but need to have "life"
 	// so they can have lifetimeupdates and vision
 	if (victim->isKindOf(KINDOF_UNATTACKABLE))

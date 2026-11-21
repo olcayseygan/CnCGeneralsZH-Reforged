@@ -87,7 +87,7 @@ enum ScenarioActionType
 	SCENARIO_ACTION_CONSTRUCT,				///< construct <slot> <template> <position>; the local player's placement click, whatever is selected, as a message that is recorded and crosses the network
 	SCENARIO_ACTION_SHIFTCONSTRUCT,		///< shiftconstruct <slot> <template> <position>; the same click with shift, onto the builder's order queue
 	SCENARIO_ACTION_STANCE,						///< stance <slot> <selector> aggressive|defensive; the stance key, as MSG_SET_STANCE
-	SCENARIO_ACTION_FORCEATTACK,			///< forceattack <slot> <selector> <targetSlot> <targetSelector>; the attack key's click on one unit, as MSG_DO_FORCE_ATTACK_OBJECT
+	SCENARIO_ACTION_FORCEATTACK,			///< forceattack <slot> <selector> <targetSlot> <targetSelector> [primary|secondary|tertiary]; the attack key's click on one unit, as MSG_DO_FORCE_ATTACK_OBJECT, or with a slot a FIRE_WEAPON button's click on it (Kell's snipe), as MSG_DO_WEAPON_AT_OBJECT
 	SCENARIO_ACTION_CLICKENTER,				///< clickenter <slot> <selector> <targetSlot> <targetSelector>; a player's click into a building or transport, as MSG_ENTER
 	SCENARIO_ACTION_WEAPONAT,					///< weaponat <slot> <selector> <position> [primary|secondary|tertiary]; a FIRE_WEAPON button's click on the ground, as MSG_DO_WEAPON_AT_LOCATION; tertiary when left out
 	SCENARIO_ACTION_SWITCHWEAPON,			///< switchweapon <slot> <selector> primary|secondary|tertiary; a SWITCH_WEAPON button (the Nuke Cannon's Neutron Shells), as MSG_SWITCH_WEAPONS
@@ -104,7 +104,18 @@ enum ScenarioActionType
 	SCENARIO_ACTION_HANDOVER,					///< handover <slot> <selector> <position> <targetSlot>; the match nearest the position goes to that seat through setTeam, as a capture does, and each upgrade module's state before and after is logged
 	SCENARIO_ACTION_TOPUP,						///< topup <slot> <template> <objects>; from now on, while the world holds fewer objects than that, this line's turn makes one on the road from the seat's start to the map's centre and attack-moves it there
 	SCENARIO_ACTION_AIRLIFT,					///< airlift <slot> <building> <position> <template>:<count>[,<template>:<count>...]; the airlift panel's OK, as MSG_DO_AIRLIFT_ORDER handed to the dispatcher for that seat
-	SCENARIO_ACTION_HEALTH						///< health <slot> <selector> <percent> [rank]; every match set to that share of its health, and first to that veterancy rank (0-3, in targetSlot) when one is given; outside the command stream, as handover is
+	SCENARIO_ACTION_HEALTH,						///< health <slot> <selector> <percent> [rank]; every match set to that share of its health, and first to that veterancy rank (0-3, in targetSlot) when one is given; outside the command stream, as handover is
+	SCENARIO_ACTION_LANEMARCH,				///< lanemarch <slot> <selector> <dx>; the seat's units spawned since its last lanemarch that match, each attack-moving dx (in at.x) along x on its own y, as one formation at its slowest member's speed
+	SCENARIO_ACTION_LANEPLACE,				///< laneplace <slot> <template> <column> <row>; a Lane War purchase onto the seat's own plot at that grid slot (in at; column across the plot's front from the left, row back from it), through LaneWarDirector::placeUnit as MSG_LANEWAR_ORDER is
+	SCENARIO_ACTION_LANETIER,					///< lanetier <slot> <track> <level>; a Lane War tier, track 0 income and 1 tech, as LANEWAR_ORDER_TIER (the numbers in name)
+	SCENARIO_ACTION_LANESELL,					///< lanesell <slot> <grid> <column> <row> [passenger]; sell the seat's plot unit on that slot, grid 0 ground and 1 air, as LANEWAR_ORDER_SELL
+	SCENARIO_ACTION_LANEMOVE,					///< lanemove <slot> <grid> <column> <row> <to column> <to row>; move the seat's plot unit, as LANEWAR_ORDER_MOVE
+	SCENARIO_ACTION_LANEUPGRADE,			///< laneupgrade <slot> <upgrade>; buy that player upgrade off the seat's Lane War list, as LANEWAR_ORDER_UPGRADE
+	SCENARIO_ACTION_LANEVET,					///< lanevet <slot> <grid> <column> <row> [passenger]; raise the seat's plot unit on that slot one rank, as LANEWAR_ORDER_VETERANCY
+	SCENARIO_ACTION_LANEGARRISON,			///< lanegarrison <slot> <template> <grid> <column> <row>; buy that infantryman into the seat's plot unit on that slot, as LANEWAR_ORDER_GARRISON
+	SCENARIO_ACTION_LANEUNITUPGRADE,	///< laneunitupgrade <slot> <upgrade> <grid> <column> <row>; buy that object upgrade on the seat's plot unit on that slot, its button found in the unit's command set, as LANEWAR_ORDER_UNIT_UPGRADE
+	SCENARIO_ACTION_LANECASH,					///< lanecash <slot> <amount>; the seat is paid that much, a test's shortcut past the ticks
+	SCENARIO_ACTION_LANEABILITY				///< laneability <slot> <template> <buttonSlot> <0|1>; switch the seat's wave units of that template off or on for the button in that command set slot (from 0, the INI's number less one), as LANEWAR_ORDER_ABILITY (slot and switch in at)
 };
 
 /// ScenarioAction::atStart when the position is plain numbers
@@ -135,7 +146,7 @@ struct ScenarioAction
 	ScenarioActionType action;
 	Int slot;											///< the seat, the same number -side takes; not an index into ThePlayerList
 	AsciiString selector;					///< a template name, or "*" for the seat's army (the starting dozer or worker is skipped)
-	Coord2D at;										///< spawn, move, attackmove and arrive target, or the offset from atStart
+	Coord2D at;										///< spawn, move, attackmove and arrive target, or the offset from atStart; lanemarch's dx in x
 	Int atStart;									///< the start position at is measured from, SCENARIO_NO_START for none
 	Int count;										///< how many to spawn; for tally, how many should be standing, -1 for no opinion
 	Real spacing;									///< how far apart to spawn them, in world units
@@ -167,5 +178,11 @@ extern const char *ScenarioDrill_report( void );
 	  radius, and how many frames after the line fired the first and the last of them did.  The last
 	  one's time is the choke probe's number (ROADMAP M0.3). */
 extern void ScenarioDrill_logArrivals( void );
+
+class AIGroup;
+/** Log a wave just sent with AIGroup::groupLaneMarch (the lanemarch verb, the LaneWarDirector) on a
+	  LANEMARCH line, and every 5 game seconds after on HEADLESS LANEMARCH: how many stand, its x span
+	  and the worst drift off the y each member set out on.  Read-only; nothing in the logic reads it. */
+extern void ScenarioDrill_watchLaneMarch( Int slot, const AsciiString &label, AIGroup *group, Real dx );
 
 #endif // __SCENARIODRILL_H_

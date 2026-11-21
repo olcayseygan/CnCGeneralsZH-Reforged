@@ -1,0 +1,38 @@
+# Lane War end proof: a match played to a fortress kill, its record and its end. The USA buys a tank
+# army on tier 3 with every kind of spending (units, tiers, an upgrade, a rank, a passenger) and sells
+# one Ranger back; China buys a few men and a tank to fight it. The American waves break China's tower
+# and fortress, the collapse has its five game seconds, and only then is the match decided. Read the
+# HEADLESS LANEWAR END line (the fortress down), "player N is out" LANEWAR_COLLAPSE_FRAMES later, and
+# the HEADLESS LANEWAR STATS and SAMPLE lines logged on the decision.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 18000 -scenario lanewar_end -logPrefix lanewar_end_
+#
+# Every line sits in the first two seconds, so a save taken later loads into the same match with no
+# scenario line still to come.
+
+30    lanecash   0  40000
+30    lanecash   1  6000
+30    lanetier   0  1 2
+30    lanetier   0  1 3
+30    lanetier   0  0 1
+30    laneupgrade 0 Upgrade_AmericaTOWMissile
+30    laneplace  0  AmericaTankPaladin         0 0
+30    laneplace  0  AmericaTankPaladin         2 0
+30    laneplace  0  AmericaTankPaladin         4 0
+30    laneplace  0  AmericaTankPaladin         6 0
+30    laneplace  0  AmericaTankPaladin         8 0
+30    laneplace  0  AmericaTankPaladin        10 0
+30    laneplace  0  AmericaVehicleTomahawk     0 3
+30    laneplace  0  AmericaVehicleTomahawk     3 3
+30    laneplace  0  AmericaVehicleHumvee       6 3
+30    laneplace  0  AmericaInfantryRanger     10 6
+30    laneplace  1  ChinaInfantryRedguard      0 0
+30    laneplace  1  ChinaInfantryRedguard      1 0
+30    laneplace  1  ChinaInfantryTankHunter    2 0
+30    laneplace  1  ChinaTankGattling          4 0
+30    lanetier   1  0 1
+45    lanegarrison  0  AmericaInfantryMissileDefender 0 6 3
+45    lanevet    0  0 0 0
+45    lanesell   0  0 10 6

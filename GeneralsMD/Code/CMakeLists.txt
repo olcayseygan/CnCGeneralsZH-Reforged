@@ -221,6 +221,11 @@ if(MSVC)
   # sources in a single project and was the long pole.  /FS above is what makes this
   # safe - the PDB writes are serialized in the compilers.
   add_compile_options(/MP)
+  # /bigobj: an unoptimised x64 object keeps every inline function and template it instantiates as a
+  # COMDAT section of its own, and Debug's Tests/test_water_grid.cpp went past the 65,279 sections a
+  # plain COFF object can hold (C1128).  It only widens the section index in the object format, so
+  # the code and the Release objects are the same with it.
+  add_compile_options(/bigobj)
   # There is no /arch:SSE2 here and none is needed: x64 has no x87 code generation at all, so
   # every float is computed at its declared width and every machine gets the same bits.  That is
   # what the 32-bit build had to ask for explicitly, and why it pinned the x87 precision control.
@@ -2485,9 +2490,15 @@ target_include_directories(test_audio_mix_policy PRIVATE ${CMAKE_CURRENT_SOURCE_
 add_lib_test(test_ground_marks)
 target_include_directories(test_ground_marks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include
   ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/Include)
+# GameClient/LaneHudLayout.h: where the Lane War HUD's boxes stand on a screen.
+add_lib_test(test_lanehud)
+target_include_directories(test_lanehud PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngine/Include)
 # W3DDevice/GameClient/TerrainSubdivide.h: the subdivided ground through the samples, near the plane.
 add_lib_test(test_terrain_subdivide)
 target_include_directories(test_terrain_subdivide PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
+# W3DDevice/GameClient/FractureCore.h: the pre-fractured structures' files and the holes a hit knocks in.
+add_lib_test(test_fracture)
+target_include_directories(test_fracture PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
 # W3DDevice/GameClient/FoliagePlacement.h: where the GroundFoliage option's grass tufts stand.
 add_lib_test(test_foliage_placement)
 target_include_directories(test_foliage_placement PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
@@ -2833,6 +2844,12 @@ set_source_files_properties(${TESTS}/test_miles_effects.cpp PROPERTIES COMPILE_D
 target_include_directories(test_miles_effects PRIVATE ${WW}/Miles6/include ${WW}/WWLib ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
 target_link_libraries(test_miles_effects PRIVATE test_harness miniaudio)
 add_test(NAME test_miles_effects COMMAND test_miles_effects)
+
+# What each of the twelve armies can buy in Direct Strike, pinned: two headless 3v3 lane matches from
+# Run/, every seat's roster line against the script's lists.  Skipped (77) without the game's data.
+add_test(NAME lane_roster_check
+         COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File ${TESTS}/run_lane_roster_check.ps1 -Exe $<TARGET_FILE:generals>)
+set_tests_properties(lane_roster_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
 endif()  # ZH_PLATFORM_WINDOWS - device and codec smoke tests
 
 if(ZH_PLATFORM_POSIX)

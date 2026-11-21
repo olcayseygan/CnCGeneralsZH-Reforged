@@ -113,6 +113,7 @@ public:
 	virtual Bool isOutOfSpecialReloadAmmo() const;
 	Bool isReturningForLanding() const;	///< flying back to its airfield on its own, empty or idle too long
 	Bool isFlyingHome() const;					///< that, or flying back to where its dead airfield was
+	Bool isGoingHomeOnItsOwn() const;		///< that, or flying to or circling the spot its airfield stood on
 
 	const Coord3D* friend_getProducerLocation() const { return &m_producerLocation; }
 	Real friend_getOutOfAmmoDamagePerSecond() const { return getJetAIUpdateModuleData()->m_outOfAmmoDamagePerSecond; }

@@ -119,13 +119,15 @@ void DamageInfo::xfer( Xfer *xfer )
 	* Version Info:
 	* 1: Initial version 
 	* 2: Damage FX override
+	* 3: Source template
+	* 4: Impact point and radius
 */
 // ------------------------------------------------------------------------------------------------
 void DamageInfoInput::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 3;
+	XferVersion currentVersion = 4;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -169,6 +171,13 @@ void DamageInfoInput::xfer( Xfer *xfer )
 		{
 			m_sourceTemplate = TheThingFactory->findTemplate( thingString );
 		}
+	}
+
+	if( version >= 4 )
+	{
+		xfer->xferCoord3D( &m_impactPos );
+		xfer->xferReal( &m_impactRadius );
+		xfer->xferBool( &m_hasImpact );
 	}
 
 }  // end xfer

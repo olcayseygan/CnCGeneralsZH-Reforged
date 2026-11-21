@@ -83,6 +83,7 @@ LANAPI::LANAPI( void ) : m_transport(NULL)
 		m_lanMaxOptionsLength, sizeof(LANMessage), MAX_LANAPI_PACKET_SIZE));
 
 	m_lastResendTime = 0;
+	m_lastPingTime = 0;
 	//
 	m_lobbyPlayers = NULL;
 	m_games = NULL;
@@ -351,6 +352,36 @@ AsciiString GetMessageTypeString(UnsignedInt type)
 	return returnString;
 }
 
+static const UnsignedInt PEER_PING_PERIOD_MS = 1000;
+static const UnsignedInt PEER_PING_STALE_MS = 5000;
+
+void LANAPI::pingRoom( UnsignedInt now )
+{
+	if (now < m_lastPingTime + PEER_PING_PERIOD_MS)
+		return;
+	m_lastPingTime = now;
+
+	LANMessage msg;
+	fillInLANMessage( &msg );
+	msg.LANMessageType = LANMessage::MSG_PING;
+	msg.Ping.stamp = now;
+	const Int localSlot = m_currentGame->getLocalSlotNum();
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		const GameSlot *slot = m_currentGame->getSlot( i );
+		if (i != localSlot && slot->isHuman() && slot->getIP() != 0)
+			sendMessage( &msg, slot->getIP() );
+	}
+}
+
+Int LANAPI::getPeerPing( UnsignedInt ip ) const
+{
+	const std::map<UnsignedInt, PeerPing>::const_iterator found = m_peerPing.find( ip );
+	if (found == m_peerPing.end() || Clock_Milliseconds() > found->second.heard + PEER_PING_STALE_MS)
+		return -1;
+	return found->second.ms;
+}
+
 
 void LANAPI::checkMOTD( void )
 {
@@ -463,7 +494,9 @@ void LANAPI::update( void )
 {
 	if(LANbuttonPushed)
 		return;
-	static const UnsignedInt LANAPIUpdateDelay = 200;
+	// EA read the socket every 200 ms, which made a room's PING/PONG round trip a multiple of it;
+	// at 20 ms a LAN round trip reads as the 20-40 ms it is
+	static const UnsignedInt LANAPIUpdateDelay = 20;
 	UnsignedInt now = Clock_Milliseconds();
 	
 	if( now > m_lastUpdate + LANAPIUpdateDelay)
@@ -572,6 +605,20 @@ void LANAPI::update( void )
 			case LANMessage::MSG_INACTIVE:		// someone is telling us that we're inactive.
 				handleInActive( msg, senderIP );
 				break;
+			case LANMessage::MSG_PING:
+			{
+				LANMessage reply;
+				fillInLANMessage( &reply );
+				reply.LANMessageType = LANMessage::MSG_PONG;
+				reply.Ping.stamp = msg->Ping.stamp;
+				sendMessage( &reply, senderIP );
+				break;
+			}
+			case LANMessage::MSG_PONG:
+				if (m_peerPing.find( senderIP ) == m_peerPing.end())
+					DEBUG_LOG(("LANAPI::update - first round trip to 0x%08x: %d ms\n", senderIP, (Int)(now - msg->Ping.stamp)));
+				m_peerPing[senderIP] = { (Int)(now - msg->Ping.stamp), now };
+				break;
 
 			default:
 				DEBUG_LOG(("Unknown LAN message type %d\n", msg->LANMessageType));
@@ -583,6 +630,10 @@ void LANAPI::update( void )
 	} // End message handling
 	if(LANbuttonPushed)
 		return;
+	if (m_currentGame && !m_currentGame->isGameInProgress())
+	{
+		pingRoom( now );
+	}
 	// Send out periodic I'm Here messages
 	if (now > s_resendDelta + m_lastResendTime)
 	{
@@ -946,15 +997,31 @@ void LANAPI::RequestHasMap( void )
 
 void LANAPI::RequestChat( UnicodeString message, ChatType format )
 {
-	LANMessage msg;
-	fillInLANMessage( &msg );
-	WideCharNCpy(msg.Chat.gameName, (m_currentGame)?m_currentGame->getName().str():u"", g_lanGameNameLength);
-	msg.Chat.gameName[g_lanGameNameLength] = 0;
-	msg.LANMessageType = LANMessage::MSG_CHAT;
-	msg.Chat.chatType = format;
-	WideCharNCpy(msg.Chat.message, message.str(), g_lanMaxChatLength);
-	msg.Chat.message[g_lanMaxChatLength] = 0;
-	sendMessage(&msg);
+	// a chat packet holds g_lanMaxChatLength characters and the entry takes 128, so a long line goes out as
+	// several packets, each cut at a space; every build, older ones too, reads each as an ordinary line
+	const WideChar *rest = message.str();
+	Int left = message.getLength();
+	do
+	{
+		const Int take = LANChatPiece(rest, left);
+		LANMessage msg;
+		fillInLANMessage( &msg );
+		WideCharNCpy(msg.Chat.gameName, (m_currentGame)?m_currentGame->getName().str():u"", g_lanGameNameLength);
+		msg.Chat.gameName[g_lanGameNameLength] = 0;
+		msg.LANMessageType = LANMessage::MSG_CHAT;
+		msg.Chat.chatType = format;
+		WideCharNCpy(msg.Chat.message, rest, take);
+		msg.Chat.message[take] = 0;
+		sendMessage(&msg);
+
+		rest += take;
+		left -= take;
+		while (left > 0 && *rest == u' ')
+		{
+			++rest;
+			--left;
+		}
+	} while (left > 0);
 
 	OnChat(m_name, m_localIP, message, format);
 }

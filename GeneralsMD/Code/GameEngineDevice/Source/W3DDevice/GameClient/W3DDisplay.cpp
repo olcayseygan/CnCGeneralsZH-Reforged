@@ -81,6 +81,7 @@ static void drawFramerateBar(void);
 
 #include "GameClient/Drawable.h"
 #include "W3DDevice/GameClient/W3DSmoothMotion.h"
+#include "W3DDevice/GameClient/Module/W3DFractureDraw.h"
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
 #include "GameLogic/Object.h"
 #include "GameClient/Keyboard.h"		// TheKeyboard; on Windows WinMain.h brought it too
@@ -2932,6 +2933,9 @@ AGAIN:
 			if (primaryW3DView && primaryW3DView->get3DCamera())
 				W3DModelDraw::lightHeadlights(primaryW3DView->get3DCamera()->Get_Position());
 
+			// A fractured structure's fall and dust, seen or not, before any view draws it.
+			W3DFractureDraw::updateAll();
+
 			// Once a frame and before any view draws, so a script's blur or black and white filter
 			// does not cost the haze its levels and shroud the way pushing it from the default filter did.
 			W3DShaderManager::pushProtoHaze();
@@ -4152,6 +4156,82 @@ void W3DDisplay::drawImage( const Image *image, Int startX, Int startY,
 	}
 
 }  // end drawImage
+
+// W3DDisplay::drawImageWedge =================================================
+/** The part of an image fit in the box that a wedge from the box's centre covers: a fan of
+	* triangles from the centre to the box's edge, a point where the wedge starts, one at every box
+	* corner it passes and one where it ends, so each triangle's far side lies on one edge and the
+	* fan covers the wedge inside the box exactly.  The UVs are the image's at each point.  Plain
+	* alpha only, no clip region, and a rotated image is drawn whole. */
+//=============================================================================
+void W3DDisplay::drawImageWedge( const Image *image, Int startX, Int startY, Int endX, Int endY,
+																 Real fromDegrees, Real sweepDegrees, Color color )
+{
+	if( image == NULL || sweepDegrees == 0.0f || endX <= startX || endY <= startY )
+		return;
+	if( fabs( sweepDegrees ) >= 360.0f || BitTest( image->getStatus(), IMAGE_STATUS_ROTATED_90_CLOCKWISE ) )
+	{
+		drawImage( image, startX, startY, endX, endY, color );
+		return;
+	}
+	if( isRecording() ) { record( [=]() { drawImageWedge( image, startX, startY, endX, endY, fromDegrees, sweepDegrees, color ); } ); return; }
+
+	if( sweepDegrees < 0.0f )
+	{
+		fromDegrees += sweepDegrees;
+		sweepDegrees = -sweepDegrees;
+	}
+	const Real cx = 0.5f * ( startX + endX ), cy = 0.5f * ( startY + endY );
+	const Real hw = 0.5f * ( endX - startX ), hh = 0.5f * ( endY - startY );
+
+	// the angles to stop at: the wedge's ends and every corner between them, in order
+	const Real corner = atan2f( hw, hh ) * 180.0f / PI;
+	const Real CORNERS[ 4 ] = { corner, 180.0f - corner, 180.0f + corner, 360.0f - corner };
+	Real stops[ 2 + 12 ];
+	Int count = 0;
+	stops[ count++ ] = fromDegrees;
+	const Real base = 360.0f * floorf( fromDegrees / 360.0f );
+	for( Int turn = 0; turn < 3; ++turn )
+		for( Int k = 0; k < 4; ++k )
+		{
+			const Real at = base + 360.0f * turn + CORNERS[ k ];
+			if( at > fromDegrees && at < fromDegrees + sweepDegrees )
+				stops[ count++ ] = at;
+		}
+	stops[ count++ ] = fromDegrees + sweepDegrees;
+
+	if( setup2D( image, TRUE ) )
+	{
+		m_2DRender->Enable_Texturing( TRUE );
+		if( BitTest( image->getStatus(), IMAGE_STATUS_RAW_TEXTURE ) )
+			m_2DRender->Set_Texture( (TextureClass *)(image->getRawTextureData()) );
+		else
+			m_2DRender->Set_Texture( image->getFilename().str() );
+	}
+
+	const Region2D *uv = image->getUV();
+	const Vector2 centre( cx, cy );
+	const Vector2 centreUV( 0.5f * ( uv->lo.x + uv->hi.x ), 0.5f * ( uv->lo.y + uv->hi.y ) );
+	Vector2 last, lastUV;
+	for( Int i = 0; i < count; ++i )
+	{
+		// the box's edge along the angle, clockwise from 12 o'clock with y down the screen
+		const Real a = stops[ i ] * PI / 180.0f;
+		const Real dx = sinf( a ), dy = -cosf( a );
+		const Real reach = min( fabs( dx ) > 1.0e-6f ? hw / fabs( dx ) : 1.0e9f, fabs( dy ) > 1.0e-6f ? hh / fabs( dy ) : 1.0e9f );
+		const Vector2 point( cx + dx * reach, cy + dy * reach );
+		const Vector2 pointUV( uv->lo.x + ( uv->hi.x - uv->lo.x ) * ( point.X - startX ) / ( endX - startX ),
+			uv->lo.y + ( uv->hi.y - uv->lo.y ) * ( point.Y - startY ) / ( endY - startY ) );
+		// wound as drawImage's and drawRectClock's triangles are
+		if( i > 0 )
+			m_2DRender->Add_Tri( centre, point, last, centreUV, pointUV, lastUV, color );
+		last = point;
+		lastUV = pointUV;
+	}
+
+	finish2D();
+
+}  // end drawImageWedge
 
 //============================================================================
 // W3DDisplay::createVideoBuffer

@@ -260,6 +260,13 @@ Bool JetAIUpdate::isFlyingHome() const
 }
 
 //-------------------------------------------------------------------------------------------------
+Bool JetAIUpdate::isGoingHomeOnItsOwn() const
+{
+	const StateID id = getStateMachine()->getCurrentStateID();
+	return id == RETURNING_FOR_LANDING || id == RETURN_TO_DEAD_AIRFIELD || id == CIRCLING_DEAD_AIRFIELD;
+}
+
+//-------------------------------------------------------------------------------------------------
 static ParkingPlaceBehaviorInterface* getPP(ObjectID id, Object** airfieldPP = NULL)
 {
 	if (airfieldPP)

@@ -537,4 +537,10 @@ Bool OnlineGetAIVerdict( OnlineAIVerdict &out );		///< FALSE before the first th
 	 its match equals this. */
 AsciiString OnlineGetLastAIMatchId( void );
 
+/* The mode the custom lobby's Host button was answered with (AskGameMode): TRUE for Direct Strike.  It
+	 goes out in game.host, the host popup leaves Limit Armies out under it, and the staging room the host
+	 opens stands on a lane map from the start.  A joiner reads the mode off the host's map instead
+	 (IsDirectStrikeMap), and every game.opts the host sends names the mode and seed that map carries. */
+extern Bool OnlineHostDirectStrike;
+
 #endif // _ONLINE_QUEUES_H_

@@ -1,0 +1,36 @@
+# Lane War air proof: a helicopter bought onto the plot marches with its wave, and jets bought onto
+# the same plot's back rows strike from off the map. Read the LANEWAR PLACE lines (the jets marked
+# "a jet"), HEADLESS LANEMARCH for team A's waves (the Comanche keeps the Ranger's pace, so
+# the wave's depth stays a few slots), and HEADLESS LANEWAR JET for the squadrons: each copy joining
+# parked, taking off as the fronts close, heading home, parking past the map's border and taking off
+# again on a later strike.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 9000 -scenario lanewar_air -logPrefix lanewar_air_
+#
+# Two players, so each team has one seat and it sends on every tick (logic frames 900, 1800, 2700
+# ...). The frames below are this file's 30 Hz frames, which the drill scales by the game speed:
+# 1350 here is logic frame 900 at 1.5x.
+#
+# The two targeting rules: the USA's Aurora has no weapon against air, so it flies a plain
+# attack-move down the lane and bombs China's waves, which are infantry only (SCENARIO SHOT and
+# KILLXP lines naming the Aurora). China's MiG can hit air, so on each strike it goes for the USA's
+# aircraft first, the Auroras on their pass and the Comanche on the lane ("goes for ... in the air").
+
+# both buy tech tier 2 (1500) and one infantryman, and each is paid for a jet on top: the USA its
+# Aurora on tier 3, China its MiG. Every tick sends a copy of each to its squadron
+30    lanecash   0  8000
+30    lanecash   1  1500
+30    lanetier   0  1 2
+30    lanetier   1  1 2
+30    lanetier   0  1 3
+30    laneplace  0  AmericaInfantryRanger   4 0
+30    laneplace  1  ChinaInfantryRedguard   4 0
+30    laneplace  0  AmericaJetAurora        4 12
+30    laneplace  1  ChinaJetMIG             4 12
+# the Aurora sold once tick 0 has sent its one copy, or two copies of it level China's end by
+# frame 4135, before the Comanche is bought
+4200  lanesell   0  0 4 12
+# the USA's Comanche once five ticks have paid for it, beside the Ranger
+6800  laneplace  0  AmericaVehicleComanche  7 0

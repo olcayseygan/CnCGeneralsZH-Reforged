@@ -45,6 +45,7 @@
 #include "GameClient/GUICallbacks.h"		// ToggleQuitMenu, for quitmenu
 #include "GameClient/InGameUI.h"
 #include "GameClient/KeyDefs.h"
+#include "GameClient/LaneHud.h"
 #include "GameClient/Shell.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/MetaEvent.h"
@@ -820,6 +821,24 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
+	/* lanehud <grid> <col> <row>: where the Lane War HUD has the local player's slot on screen and the
+		 chips it last raised over a plot unit, for a script that drags with the mouse (LaneHud_describe) */
+	if (strncmp( command.str(), "lanehud ", 8 ) == 0)
+	{
+		Int grid = 0, col = 0, row = 0;
+		if (sscanf( command.str() + 8, "%d %d %d", &grid, &col, &row ) != 3)
+		{
+			replyError( "lanehud <grid> <col> <row>" );
+			return;
+		}
+		char members[ 2048 ];
+		LaneHud_describe( grid, col, row, members, sizeof( members ) );
+		char reply[ 2100 ];
+		snprintf( reply, sizeof( reply ), "{\"ok\":true,%s}", members );
+		sendText( reply );
+		return;
+	}
+
 	if (command == "select all")
 	{
 		for (Int press = 0; press < 2; ++press)
@@ -997,6 +1016,24 @@ static void handleCommand( const AsciiString &command )
 		}
 		TheMessageStream->appendMessage( GameMessage::MSG_CLEAR_GAME_DATA );
 		replyOk( "\"leaving\":true" );
+		return;
+	}
+
+	/* kickvote <player index> yes|no: the vote InGameChat's "/kick name", "/yes" and "/no" post, by the
+		 target's player index; GameLogic::processKickVote decides on every machine whether it counts. */
+	if (strncmp( command.str(), "kickvote ", 9 ) == 0)
+	{
+		Int target = -1;
+		char answer[ 8 ] = { 0 };
+		if (sscanf( command.str() + 9, "%d %7s", &target, answer ) != 2 || ( strcmp( answer, "yes" ) != 0 && strcmp( answer, "no" ) != 0 ))
+		{
+			replyError( "kickvote wants <player index> yes|no" );
+			return;
+		}
+		GameMessage *vote = TheMessageStream->appendMessage( GameMessage::MSG_VOTE_KICK );
+		vote->appendIntegerArgument( target );
+		vote->appendBooleanArgument( strcmp( answer, "yes" ) == 0 );
+		replyOk( "\"voted\":true" );
 		return;
 	}
 

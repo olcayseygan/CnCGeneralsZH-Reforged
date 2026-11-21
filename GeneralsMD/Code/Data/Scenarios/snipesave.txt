@@ -1,0 +1,27 @@
+# Save and load after Jarmen Kell empties a moving tank, on a plain skirmish map with nobody thinking.
+# Kell snipes the first of three Crusaders driving past him; the hull's AI stops while its physics
+# rolls it on, and the Humvees ordered past it afterwards path round it. A save taken after the snipe
+# has to put the hull back on the pathfinder's map in the cells the game had it in, or the loaded game
+# plays a different match from there. The tally counts the Crusaders slot 1 still owns (a sniped one
+# goes to the neutral player).
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 1 2 -autoskirmish 2 -takeover -side 0 FactionGLA -side 1 FactionAmerica
+#     -seed 1 -maxframes 3000 -scenario snipesave -logPrefix snipesave_
+#
+# A save does not carry the scenario, so nothing is ordered after file frame 1020 (logic frame 680 at
+# the native 1.5x). Save at logic frame 700 over -control (saveat 700 <name>), open the save with
+# -observer -loadsave and the same -maxframes, and compare the two HEADLESS CRC lines with this run's.
+# The -observer matters: without it the load seats the watcher in slot 0, whose machine then turns on
+# that player's retaliation, and the GLA cars answer fire the uninterrupted game left them to take.
+
+30    spawn       0  GLAInfantryJarmenKell  1  start0:400:-120
+30    spawn       1  AmericaTankCrusader    3  start0:1300:120  45
+60    move        1  AmericaTankCrusader    start0:100:120
+75    forceattack 0  GLAInfantryJarmenKell  1  AmericaTankCrusader  secondary
+# the cars that have to find their way past the empty hull, still on their way at the save
+900   spawn       1  AmericaVehicleHumvee   6  start0:1300:100  35
+915   move        1  AmericaVehicleHumvee   start0:100:120
+1000  spawn       0  GLAVehicleTechnical    6  start0:150:140  35
+1015  move        0  GLAVehicleTechnical    start0:1300:120
+1020  tally       1  AmericaTankCrusader

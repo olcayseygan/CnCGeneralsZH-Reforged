@@ -136,6 +136,7 @@ public:
 
 	/// the undamaged top speed, dist/frame, before the owner's SpeedScale (the build tooltip's figure)
 	Real getMaxSpeed() const { return m_maxSpeed; }
+	LocomotorAppearance getAppearance() const { return m_appearance; }
 
 	void validate();
 

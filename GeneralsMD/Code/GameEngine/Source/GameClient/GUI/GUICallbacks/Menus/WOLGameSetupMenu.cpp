@@ -391,7 +391,8 @@ static void savePlayerInfo( void )
 				CustomMatchPreferences pref;
 				pref.setPreferredColor(slot->getColor());
 				pref.setPreferredFaction(slot->getPlayerTemplate());
-				if (TheGameSpyGame->amIHost())
+				// a Direct Strike room's island and its switched-off rules are not the host's next Classic room
+				if (TheGameSpyGame->amIHost() && !IsDirectStrikeMap(TheGameSpyGame->getMap()))
 				{
 					pref.setPreferredMap(TheGameSpyGame->getMap());
           pref.setSuperweaponRestriction( TheGameSpyGame->getSuperweaponRestriction() );
@@ -1079,10 +1080,36 @@ static void handleSuperweaponSelection()
 }
 
 
+/* This room is a Direct Strike one: the host's Host button said so (OnlineHostDirectStrike), a joiner
+	 reads it off the host's lane map, which can arrive after his room opened (WOLDisplaySlotList). */
+static Bool s_directStrike = FALSE;
+
+/// The room's name over it, and the mode after it in a Direct Strike room, where nothing else names it.
+static void setRoomTitle( void )
+{
+	GameWindow *title = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, NAMEKEY("GameSpyGameOptionsMenu.wnd:StaticTextGameName") );
+	if (title == NULL || TheGameSpyGame == NULL)
+		return;
+	UnicodeString text = TheGameSpyGame->getGameName();
+	if (s_directStrike)
+	{
+		text.concat(u" - ");
+		text.concat(TheGameText->fetch("GUI:DirectStrikeLower"));
+	}
+	GadgetStaticTextSetText(title, text);
+}
+
+/// The army box as the room's mode offers it: Direct Strike leaves Turkiye and the observer out.
+static void populateArmyBox( Int i, GameInfo *game, Bool allowObservers )
+{
+	PopulatePlayerTemplateComboBox(i, comboBoxPlayerTemplate, game, allowObservers && !s_directStrike, s_directStrike);
+}
+
 /// The host's generated map made again for the seats taken, sent the way the map picker's Accept sends one.
+/// A Direct Strike room keeps its island and puts the seats under the mode's rules instead.
 static Bool fitRandomMapToRoom(GameSpyStagingRoom *game)
 {
-	if (!game->amIHost() || !FitRandomMapToRoom(game))
+	if (!game->amIHost() || !(s_directStrike ? FitDirectStrikeRoom(game) : FitRandomMapToRoom(game)))
 		return FALSE;
 	game->resetAccepted();
 	TheGameSpyInfo->setGameOptions();
@@ -1282,7 +1309,12 @@ void WOLDisplayGameOptions( void )
 		localSlot = theGame->getConstSlot(theGame->getLocalSlotNum());
 
 	const MapMetaData *md = TheMapCache->findMap(TheGameSpyInfo->getCurrentStagingRoom()->getMap());
-	if (md && localSlot && localSlot->hasMap())
+	if (IsDirectStrikeMap(theGame->getMap()))
+	{
+		// a joiner has no cache entry for an island he builds from its name at load
+		GadgetStaticTextSetText(textEntryMapDisplay, TheGameText->fetch("GUI:DirectStrikeMap"));
+	}
+	else if (md && localSlot && localSlot->hasMap())
 	{
 		GadgetStaticTextSetText(textEntryMapDisplay, md->m_displayName);
 	}
@@ -1315,7 +1347,7 @@ void WOLDisplayGameOptions( void )
     // Repopulate the lists of available armies, since the old list is now wrong
     for (Int i = 0; i < MAX_SLOTS; i++)
     {
-      PopulatePlayerTemplateComboBox(i, comboBoxPlayerTemplate, theGame, theGame->getAllowObservers() );      
+      PopulatePlayerTemplateComboBox(i, comboBoxPlayerTemplate, theGame, theGame->getAllowObservers() && !s_directStrike, s_directStrike );
 
       // Make sure selections are up to date on all machines
       handlePlayerTemplateSelection(i) ;
@@ -1384,11 +1416,25 @@ void WOLDisplaySlotList( void )
 
 	DEBUG_ASSERTCRASH(!game->getConstSlot(0)->isOpen(), ("Open host!"));
 
+	// a joiner learns the mode with the host's options, which can come after his room opened
+	if (!s_directStrike && !game->amIHost() && IsDirectStrikeMap(game->getMap()))
+	{
+		s_directStrike = TRUE;
+		for (Int i = 0; i < MAX_SLOTS; ++i)
+			populateArmyBox(i, game, game->getAllowObservers());
+		setRoomTitle();
+		DEBUG_LOG(("ONLINE DIRECTSTRIKE joiner room map=%s\n", game->getMap().str()));
+	}
+
 	UpdateSlotList( game, comboBoxPlayer, comboBoxColor,
 		comboBoxPlayerTemplate, comboBoxTeam, buttonAccept, buttonStart, buttonMapStartPosition );
 	UpdateAIPersonaComboBoxes( game, comboBoxAIPersona );
 	UpdateHandicapComboBoxes( game, comboBoxHandicap, comboBoxTeam );
 	UpdateLobbySeatVisuals( game );
+	// the two teams facing each other, as in the skirmish and LAN rooms; chat, accept and kick stay the
+	// room's, driven from the lobby's seat cards
+	if (s_directStrike)
+		LayoutDirectStrikeRoom(parentWOLGameSetup, "GameSpyGameOptionsMenu.wnd", game);
 
 	WOLDisplayGameOptions();
 
@@ -1479,8 +1525,6 @@ void InitWOLGameGadgets( void )
   comboBoxGameSpeedID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:ComboBoxGameSpeed"));
 	windowMapSelectMapID = TheNameKeyGenerator->nameToKey(AsciiString("WOLMapSelectMenu.wnd:WinMapPreview"));
 
-	NameKeyType staticTextTitleID = NAMEKEY("GameSpyGameOptionsMenu.wnd:StaticTextGameName");
-
 	// Initialize the pointers to our gadgets
 	parentWOLGameSetup = TheWindowManager->winGetWindowFromId( NULL, parentWOLGameSetupID );
 	buttonEmote = TheWindowManager->winGetWindowFromId( parentWOLGameSetup,buttonEmoteID  );
@@ -1568,11 +1612,7 @@ void InitWOLGameGadgets( void )
 	windowMap->winSetTooltipFunc(MapSelectorTooltip);
 	//
 	
-	GameWindow *staticTextTitle = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, staticTextTitleID );
-	if (staticTextTitle)
-	{
-		GadgetStaticTextSetText(staticTextTitle, TheGameSpyGame->getGameName());
-	}
+	setRoomTitle();
 
 	if (!theGameInfo)
 	{
@@ -1625,7 +1665,7 @@ void InitWOLGameGadgets( void )
 		comboBoxPlayerTemplateID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		comboBoxPlayerTemplate[i] = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, comboBoxPlayerTemplateID[i] );
 		DEBUG_ASSERTCRASH(comboBoxPlayerTemplate[i] || !hasRow, ("Could not find the comboBoxPlayerTemplate[%d]",i ));
-		PopulatePlayerTemplateComboBox(i, comboBoxPlayerTemplate, theGameInfo, theGameInfo->getAllowObservers() );
+		PopulatePlayerTemplateComboBox(i, comboBoxPlayerTemplate, theGameInfo, theGameInfo->getAllowObservers() && !s_directStrike, s_directStrike );
 
 		// add tooltips to the player template combobox and listbox
 		if (comboBoxPlayerTemplate[i])
@@ -1638,7 +1678,7 @@ void InitWOLGameGadgets( void )
 		comboBoxTeamID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		comboBoxTeam[i] = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, comboBoxTeamID[i] );
 		DEBUG_ASSERTCRASH(comboBoxTeam[i] || !hasRow, ("Could not find the comboBoxTeam[%d]",i ));
-		PopulateTeamComboBox(i, comboBoxTeam, theGameInfo);
+		PopulateTeamComboBox(i, comboBoxTeam, theGameInfo);	// a Direct Strike seat is its team; the layout hides the box
 
 		tmpString.format("GameSpyGameOptionsMenu.wnd:ButtonAccept%d", i);
 		buttonAcceptID[i] = TheNameKeyGenerator->nameToKey( tmpString );
@@ -1932,6 +1972,12 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 	isShuttingDown = false;
 	launchGameNext = FALSE;
 
+	// before the gadgets, which fill the army and team boxes by the mode
+	s_directStrike = TheGameSpyInfo->amIHost() ? OnlineHostDirectStrike
+		: IsDirectStrikeMap( TheGameSpyInfo->getCurrentStagingRoom()->getMap() );
+	if (s_directStrike && !TheGameSpyInfo->amIHost())
+		DEBUG_LOG(("ONLINE DIRECTSTRIKE joiner room map=%s\n", TheGameSpyInfo->getCurrentStagingRoom()->getMap().str()));
+
 	//initialize the gadgets
 	EnableSlotListUpdates(FALSE);
 	InitWOLGameGadgets();
@@ -1952,7 +1998,14 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 		hostSlot->setSkins( TankSkin_localLoadout() );
 		hostSlot->setNATBehavior((FirewallHelperClass::FirewallBehaviorType)natPref.getFirewallBehavior());
 		hostSlot->setPingString(TheGameSpyInfo->getPingString());
-		const AsciiString hostMap = onlineScriptMap( customPref.getPreferredMap() );
+		// a Direct Strike host picks the island's seed now, before any options go out, and the seed goes to
+		// the seats in the map's name; a Classic one opens on its last map
+		AsciiString hostMap = onlineScriptMap( customPref.getPreferredMap() );
+		if (s_directStrike && SetDirectStrikeMap(game))
+		{
+			hostMap = game->getMap();
+			DEBUG_LOG(("ONLINE DIRECTSTRIKE host room map=%s\n", hostMap.str()));
+		}
 		game->setMap(hostMap);
 
 		// Recorded stats games can never limit superweapons, limit armies, or have inflated starting cash.
@@ -2003,6 +2056,8 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 			game->adjustSlotsForMap(); // BGC- adjust the slots for the new map.
 		}
 
+		if (s_directStrike)
+			FitDirectStrikeRoom(game);
 
 		WOLDisplaySlotList();
 		WOLDisplayGameOptions();
@@ -3368,7 +3423,7 @@ WindowMsgHandledType WOLGameSetupMenuSystem( GameWindow *window, UnsignedInt msg
 								  Bool isAI = (myGame->getSlot(i)->isAI());
 								  myGame->resetAccepted();
 								  if (wasAI ^ isAI)
-									  PopulatePlayerTemplateComboBox(i, comboBoxPlayerTemplate, myGame, wasAI && myGame->getAllowObservers());
+									  PopulatePlayerTemplateComboBox(i, comboBoxPlayerTemplate, myGame, wasAI && myGame->getAllowObservers() && !s_directStrike, s_directStrike);
 								  TheGameSpyInfo->setGameOptions();
 								  WOLDisplaySlotList();
 							  }

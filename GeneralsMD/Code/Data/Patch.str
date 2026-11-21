@@ -7219,3 +7219,158 @@ END
 GUI:RejoinWaitingForLog
 "Waiting for the match log"
 END
+GUI:DirectStrike
+"DIRECT STRIKE"
+END
+
+GUI:DirectStrikeLower
+"Direct Strike"
+END
+
+TOOLTIP:DirectStrike
+"Buy units onto your plot. Every 30 seconds one player of each team sends a copy of his plot down the lane, and the first team to break the other's fortress wins. Up to 3 against 3, on a new island every match."
+END
+
+GUI:DirectStrikeMap
+"Random island"
+END
+
+GUI:DirectStrikeTeam
+"TEAM %d"
+END
+
+GUI:GameModeTitle
+"Create Game"
+END
+
+GUI:GameModeBody
+"Which mode is this game for?"
+END
+
+GUI:GameModeClassic
+"CLASSIC"
+END
+
+GUI:GameModeDirectStrike
+"DIRECT STRIKE"
+END
+
+GUI:DirectStrikeIslandNote
+"A new island every match"
+END
+
+GUI:DirectStrikeTeamSize
+"%d v %d"
+END
+
+GUI:DirectStrikeStart
+"START"
+END
+
+GUI:DirectStrikeReady
+"READY"
+END
+
+GUI:DirectStrikeEasy
+"Easy"
+END
+
+GUI:DirectStrikeMedium
+"Medium"
+END
+
+GUI:DirectStrikeHard
+"Hard"
+END
+
+GUI:DirectStrikeBrutal
+"Brutal"
+END
+
+GUI:Munkee
+""
+END
+
+OBJECT:LaneWarFortress
+"Fortress"
+END
+
+OBJECT:LaneWarWatchTower
+"Watch Tower"
+END
+
+GUI:LaneTier
+"Tier %d"
+END
+
+GUI:LaneUpgrades
+"Upgrades"
+END
+
+GUI:LaneIncome
+"Income %d/%d"
+END
+
+GUI:LaneAbilities
+"Abilities"
+END
+
+GUI:LaneMenu
+"Menu"
+END
+
+GUI:LaneDiplomacy
+"Diplomacy"
+END
+
+GUI:LaneEndTeamWins
+"Team %d wins"
+END
+
+GUI:LaneEndDraw
+"Draw"
+END
+
+GUI:LaneEndLeft
+"Team %d left the game"
+END
+
+GUI:LaneMatchClock
+"Match time"
+END
+
+GUI:LaneEndWaves
+"Waves"
+END
+
+GUI:LaneEndUnits
+"Units"
+END
+
+GUI:LaneEndEarned
+"Earned"
+END
+
+GUI:LaneEndSpent
+"Spent"
+END
+
+GUI:LaneEndKills
+"Kills"
+END
+
+GUI:LaneEndDamage
+"Damage"
+END
+
+GUI:LaneEndMiddle
+"Middle held"
+END
+
+GUI:LaneEndRematch
+"Rematch"
+END
+
+GUI:LaneEndReplay
+"Watch replay"
+END

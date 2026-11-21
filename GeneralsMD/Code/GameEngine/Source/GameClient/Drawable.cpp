@@ -750,7 +750,9 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 	m_drawableFullyObscuredByShroud = false;
 
   m_receivesDynamicLights = TRUE; // a good default... overridden by one of my draw modules if at all
-	
+	m_takesImpacts = FALSE;	// before the modules: one that draws hits sets it
+	m_iconUIHidden = FALSE;
+
 	// allocate any modules we need to, we should keep
 	// this at or near the end of the drawable construction so that we have
 	// all the valid data about the thing when we create the module
@@ -1502,6 +1504,19 @@ void Drawable::startCollapse()
 	// the template's: by now the body has put the object's own geometry at rubble height
 	const Real height = obj->getTemplate()->getTemplateGeometryInfo().getMaxHeightAbovePosition();
 	doClientWork( [this, height]() { TheGameClient->structureCollapsing( this, height ); }, WORK_AFTER_FLUSH );
+}
+
+//-------------------------------------------------------------------------------------------------
+void Drawable::reactToImpact( const Coord3D &pos, Real radius, const Coord3D *source )
+{
+	if( !m_takesImpacts )
+		return;
+	const Bool hasSource = source != NULL;
+	const Coord3D from = hasSource ? *source : pos;
+	doClientWork( [this, pos, radius, hasSource, from]() {
+		for( DrawModule **dm = getDrawModulesNonDirty(); *dm; ++dm )
+			(*dm)->reactToImpact( pos, radius, hasSource ? &from : NULL );
+	}, WORK_AFTER_FLUSH );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -4053,6 +4068,10 @@ void Drawable::drawIconUI( void )
 		 -directorrecord keeps the health bar alone: a cup film has to show who is losing a fight. */
 	const Bool barOnly = CinemaDirector_hidesHud();
 	if( barOnly && !TheGlobalData->m_directorRecord )
+		return;
+
+	// a Lane War plot unit is a piece on a board: the board shows nothing over it
+	if( m_iconUIHidden )
 		return;
 
 	if( TheGameLogic->getDrawIconUI() && (TheScriptEngine->getFade()==ScriptEngine::FADE_NONE) )

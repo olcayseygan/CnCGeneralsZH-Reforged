@@ -55,8 +55,10 @@
 #include "GameLogic/AI.h" // AIPersonality, for the personality column
 #include "GameNetwork/GameInfo.h"
 #include "Common/PlayerTemplate.h"
+#include "GameClient/MessageBox.h"
 #include "GameNetwork/LANAPICallbacks.h" // for acceptTrueColor, etc
 #include "GameClient/ChallengeGenerals.h"
+#include "GameClient/DirectStrikeLobby.h"
 #include "GameClient/FactionPicker.h"
 #include "Lib/Clock.h"
 #include "Common/RandomMapGenerator.h"
@@ -319,7 +321,13 @@ void PopulateColorComboBox(Int comboBox, GameWindow *comboArray[], GameInfo *myG
 
 // -----------------------------------------------------------------------------
 
-void PopulatePlayerTemplateComboBox(Int comboBox, GameWindow *comboArray[], GameInfo *myGame, Bool allowObservers)
+/// a side Direct Strike leaves out: Turkiye is not in the mode (LANE-MODE.md, "Sides")
+static Bool notInDirectStrike(const PlayerTemplate *fac)
+{
+	return fac->getSide().compareNoCase("Turkiye") == 0;
+}
+
+void PopulatePlayerTemplateComboBox(Int comboBox, GameWindow *comboArray[], GameInfo *myGame, Bool allowObservers, Bool directStrike)
 {
 	Int numPlayerTemplates = ThePlayerTemplateStore->getPlayerTemplateCount();
 	UnicodeString playerTemplateName;
@@ -343,6 +351,9 @@ void PopulatePlayerTemplateComboBox(Int comboBox, GameWindow *comboArray[], Game
 
 		if ( myGame->oldFactionsOnly() && !fac->isOldFaction() )
 		  continue;
+
+		if ( directStrike && notInDirectStrike( fac ) )
+			continue;
 
 		// Prevent players from selecting the disabled Generals for use.
 		// This is also enforced at game loading (GameLogic.cpp and UserPreferences.cpp).
@@ -1643,6 +1654,169 @@ Bool FitRandomMapToRoom(GameInfo *game)
 	return TRUE;
 }
 
+// Direct Strike ------------------------------------------------------------------------------
+
+enum { DIRECT_STRIKE_SEATS = 6, DIRECT_STRIKE_TEAM_SEATS = 3 };
+
+static Int directStrikeTeamOfSeat(Int seat) { return seat % 2; }
+
+Bool IsDirectStrikeMap(const AsciiString &map)
+{
+	UnsignedInt line, edge;
+	return LaneGridColours(map, &line, &edge);	// TRUE for a generated lane map and nothing else
+}
+
+Bool SetDirectStrikeMap(GameInfo *game)
+{
+	static UnsignedInt theDirectStrikeRolls = 0;
+	RandomMapSettings settings;
+	// the client choosing a map, not the simulation: every other machine rebuilds it from the name
+	settings.m_seed = (Int)((Clock_Milliseconds() + 7919u * ++theDirectStrikeRolls) & 0x7fffffff);
+	settings.m_style = RandomMapGenerator::styleNamed("lane");
+	settings.m_numPlayers = DIRECT_STRIKE_SEATS;
+	AsciiString map;
+	if (!stageRandomMap(settings, map))
+		return FALSE;
+	map.toLower();
+	TheMapCache->updateCache();
+	const MapMetaData *md = TheMapCache->findMap(map);
+	if (md == NULL)
+		return FALSE;
+	game->setMap(map);
+	game->setMapCRC(md->m_CRC);
+	game->setMapSize(md->m_filesize);
+	game->getSlot(0)->setMapAvailability(TRUE);
+	DEBUG_LOG(("Direct Strike: seed %d, map '%s'\n", settings.m_seed, map.str()));
+	return TRUE;
+}
+
+/// a seat's army as the mode allows it: Turkiye and the observer become Random, a pool loses Turkiye
+static Int directStrikeArmy(Int pick)
+{
+	if (pick == PLAYERTEMPLATE_OBSERVER)
+		return PLAYERTEMPLATE_RANDOM;
+	if (pick >= 0)
+	{
+		const PlayerTemplate *fac = ThePlayerTemplateStore->getNthPlayerTemplate(pick);
+		return fac && notInDirectStrike(fac) ? (Int)PLAYERTEMPLATE_RANDOM : pick;
+	}
+	if (pick >= PLAYERTEMPLATE_RANDOM_POOL)
+		return pick;	// plain Random keeps Turkiye out already (RandomExcluded)
+	std::vector<Int> candidates;
+	GetRandomPoolCandidates(candidates);
+	UnsignedInt mask = DecodeRandomPool(pick);
+	for (size_t n = 0; n < candidates.size() && n < RANDOM_POOL_BITS; ++n)
+		if (notInDirectStrike(ThePlayerTemplateStore->getNthPlayerTemplate(candidates[n])))
+			mask &= ~(1u << n);
+	return EncodeRandomPool(mask);
+}
+
+Bool FitDirectStrikeRoom(GameInfo *game)
+{
+	Bool changed = FALSE;
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		GameSlot *slot = game->getSlot(i);
+		if (slot == NULL)
+			continue;
+		if (i >= DIRECT_STRIKE_SEATS)
+		{
+			// a human is never thrown out; seven players cannot start (the map has six starts)
+			if (!slot->isHuman() && slot->getState() != SLOT_CLOSED)
+			{
+				slot->setState(SLOT_CLOSED);
+				changed = TRUE;
+			}
+			continue;
+		}
+		if (!slot->isOccupied())
+		{
+			if (slot->getStartPos() != -1)
+			{
+				slot->setStartPos(-1);
+				changed = TRUE;
+			}
+			continue;
+		}
+
+		const Int army = directStrikeArmy(slot->getPlayerTemplate());
+		if (army != slot->getPlayerTemplate())
+		{
+			slot->setPlayerTemplate(army);
+			changed = TRUE;
+		}
+
+		// The seat is the place: seats 1, 3, 5 are team 1's, on the left, and 2, 4, 6 team 2's, on the
+		// right, and seat n stands on start n, which is how the director reads the teams
+		// (LaneWar_teamOfStart: start 1 is team A's first, start 2 team B's first, start 3 A's second).
+		const Int team = directStrikeTeamOfSeat(i);
+		if (team != slot->getTeamNumber())
+		{
+			slot->setTeamNumber(team);
+			changed = TRUE;
+		}
+		if (i != slot->getStartPos())
+		{
+			slot->setStartPos(i);
+			changed = TRUE;
+		}
+	}
+
+	if (game->getUnitLimit()) { game->setUnitLimit(FALSE); changed = TRUE; }
+	if (game->getPeaceTime() != 0) { game->setPeaceTime(0); changed = TRUE; }
+	if (game->getIncomeSharing() != INCOME_SHARING_OFF) { game->setIncomeSharing(INCOME_SHARING_OFF); changed = TRUE; }
+	if (game->getTechRespawn() != 0) { game->setTechRespawn(0); changed = TRUE; }
+	if (game->getSupplyPileLimit() != 0) { game->setSupplyPileLimit(0); changed = TRUE; }
+	if (game->getProRules()) { game->setProRules(FALSE); changed = TRUE; }
+	return changed;
+}
+
+void LayoutDirectStrikeRoom(GameWindow *parent, const char *layoutFilename, const GameInfo *game)
+{
+	DirectStrikeLobby_attach(parent, layoutFilename, game);
+}
+
+// Yes is Classic, No is Direct Strike; MessageBox.wnd's buttons take the mode names
+void AskGameMode(void (*classic)(void), void (*directStrike)(void))
+{
+	GameWindow *box = MessageBoxYesNoCancel(TheGameText->fetch("GUI:GameModeTitle"), TheGameText->fetch("GUI:GameModeBody"),
+		classic, directStrike, NULL);
+	if (box == NULL)
+		return;
+	if (GameWindow *yes = TheWindowManager->winGetWindowFromId(box, NAMEKEY("MessageBox.wnd:ButtonYes")))
+		GadgetButtonSetText(yes, TheGameText->fetch("GUI:GameModeClassic"));
+	if (GameWindow *no = TheWindowManager->winGetWindowFromId(box, NAMEKEY("MessageBox.wnd:ButtonNo")))
+		GadgetButtonSetText(no, TheGameText->fetch("GUI:GameModeDirectStrike"));
+
+	// EA's layout puts Yes's right edge a pixel past No's left; the three spread over the box with
+	// equal gaps, Yes's margin from the box kept on both sides
+	static const char *const keys[] = { "MessageBox.wnd:ButtonYes", "MessageBox.wnd:ButtonNo", "MessageBox.wnd:ButtonCancel" };
+	GameWindow *buttons[ARRAY_SIZE(keys)];
+	Int widths = 0;
+	for (Int i = 0; i < (Int)ARRAY_SIZE(keys); ++i)
+	{
+		buttons[i] = TheWindowManager->winGetWindowFromId(box, NAMEKEY(keys[i]));
+		if (buttons[i] == NULL || buttons[i]->winGetParent() == NULL)
+			return;
+		Int w, h;
+		buttons[i]->winGetSize(&w, &h);
+		widths += w;
+	}
+	Int boxW, boxH, margin, y;
+	buttons[0]->winGetParent()->winGetSize(&boxW, &boxH);
+	buttons[0]->winGetPosition(&margin, &y);
+	const Int gap = (boxW - 2 * margin - widths) / ((Int)ARRAY_SIZE(keys) - 1);
+	Int x = margin;
+	for (Int i = 0; i < (Int)ARRAY_SIZE(keys); ++i)
+	{
+		Int w, h, oldX, oldY;
+		buttons[i]->winGetSize(&w, &h);
+		buttons[i]->winGetPosition(&oldX, &oldY);
+		buttons[i]->winSetPosition(x, oldY);
+		x += w + gap;
+	}
+}
+
 /* The online room's seats name each human with his ladder rating after the nick, MUTED, read from the
 	 card the server sent the lobby for that nick (ONLINE-UI-REDESIGN.md, "Game setup room").  The player
 	 box keeps EA's art and its text; the rating is drawn after it, so the room's combo code is untouched. */
@@ -1794,6 +1968,7 @@ void ShutdownLobbySeatVisuals(void)
 {
 	detachSeatRatings();
 	FactionPickerDetach();
+	DirectStrikeLobby_detach();
 	for (Int i = 0; i < MAX_SLOTS; ++i)
 		theSeatCard[i] = theSeatBar[i] = theSeatSwatch[i] = theSeatTeam[i] = NULL;
 	resetSeatRows();

@@ -36,6 +36,7 @@
 #include "GameClient/GadgetListBox.h"
 #include "GameNetwork/LANGameInfo.h"
 #include "GameNetwork/LANAPICallbacks.h"
+#include "GameNetwork/GUIUtil.h"
 #include "Common/MultiplayerSettings.h"
 #include "strtok_r.h"
 /*
@@ -238,6 +239,12 @@ void LANDisplayGameList( GameWindow *gameListbox, LANGameInfo *gameList )
 			if( gameList->isGameInProgress() )
 			{
 				txtGName.concat(u"]");
+			}
+			// the mode is the map, which the announcement carries
+			if( IsDirectStrikeMap( gameList->getMap() ) )
+			{
+				txtGName.concat(u" - ");
+				txtGName.concat(TheGameText->fetch("GUI:DirectStrikeLower"));
 			}
 			Int addedIndex = GadgetListBoxAddEntryText(gameListbox, txtGName, (gameList->isGameInProgress())?gameInProgressColor:gameColor, -1, -1);
 			GadgetListBoxSetItemData(gameListbox, (void *)gameList, addedIndex, 0 );

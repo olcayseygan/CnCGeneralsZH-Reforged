@@ -1,0 +1,27 @@
+# Lane War ability proof for two button weapons that never fired in a lane game, Colonel Burton's
+# knife and the Dragon tank's wall of fire. Both reach less than half as far as the unit's own gun, so
+# the lane aims them at the nearest enemy on the ground in the gun's reach and the unit closes to use
+# them. Read the LANEWAR ABILITY USE lines ("on the spot ... KnifeAttack", "... FireWall"), KILLXP for
+# what the knife killed and SCENARIO SHOT for DragonTankFireWallWeapon.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 6000 -scenario lanewar_tricks -logPrefix lanewar_tricks_
+#
+# Two players, so each team has one seat and it sends on every tick (logic frames 900, 1800, 2700
+# ...). The frames below are this file's 30 Hz frames, which the drill scales by the game speed:
+# 1350 here is logic frame 900 at 1.5x.
+
+30    lanecash   0  5000
+30    lanecash   1  5000
+# the USA: Burton alone against four Red Guards on the first waves, for his knife
+30    laneplace  0  AmericaInfantryColonelBurton  6 0
+30    laneplace  1  ChinaInfantryRedguard         3 0
+30    laneplace  1  ChinaInfantryRedguard         5 0
+30    laneplace  1  ChinaInfantryRedguard         7 0
+30    laneplace  1  ChinaInfantryRedguard         9 0
+# then three Rangers and a Dragon tank from tick 3 on, for the wall of fire on the Rangers
+3500  laneplace  0  AmericaInfantryRanger         0 0
+3500  laneplace  0  AmericaInfantryRanger         2 0
+3500  laneplace  0  AmericaInfantryRanger         4 0
+3500  laneplace  1  ChinaTankDragon               0 0

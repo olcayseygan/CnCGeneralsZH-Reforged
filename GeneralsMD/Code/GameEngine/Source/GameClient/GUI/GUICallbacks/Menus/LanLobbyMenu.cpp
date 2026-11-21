@@ -299,6 +299,19 @@ static GameWindow *textEntryPlayerName = NULL;
 static GameWindow *textEntryChat = NULL;
 static GameWindow *staticTextGameInfo = NULL;
 
+// Create Game's two answers (AskGameMode): the room LanGameOptionsMenu.cpp opens is a classic one or
+// stands on a Direct Strike island from the start
+extern Bool lanHostDirectStrike;
+static void hostRoom( Bool directStrike )
+{
+	if (TheLAN == NULL)
+		return;	// the lobby went while the question was up
+	lanHostDirectStrike = directStrike;
+	TheLAN->RequestGameCreate( UnicodeString(u""), FALSE );
+}
+static void hostClassic( void ) { hostRoom( FALSE ); }
+static void hostDirectStrike( void ) { hostRoom( TRUE ); }
+
 //external declarations of the Gadgets the callbacks can use
 NameKeyType listboxChatWindowID = NAMEKEY_INVALID;
 GameWindow *listboxChatWindow = NULL;
@@ -790,8 +803,9 @@ WindowMsgHandledType LanLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 				} //if ( controlID == buttonBack )
 				else if ( controlID == buttonHostID )
 				{
-					TheLAN->RequestGameCreate( UnicodeString(u""), FALSE);
-					
+					// which mode the room is for; the answer creates it (hostClassic, hostDirectStrike)
+					AskGameMode( hostClassic, hostDirectStrike );
+
 				}//else if ( controlID == buttonHostID )
 				else if ( controlID == buttonClearID )
 				{

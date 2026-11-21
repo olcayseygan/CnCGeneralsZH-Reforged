@@ -379,6 +379,7 @@ static PoolSizeRec sizes[] =
 	{ "W3DTankDraw", 256, 32 },
 	{ "W3DTreeDraw", 16, 16 },
 	{ "W3DPropDraw", 16, 16 },
+	{ "W3DFractureDraw", 8, 8 },
 	{ "W3DTracerDraw", 64, 32 },
 	{ "W3DTruckDraw", 128, 32 },
 	{ "W3DTankTruckDraw", 32, 16 },

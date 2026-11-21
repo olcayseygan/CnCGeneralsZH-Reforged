@@ -606,10 +606,11 @@ def tile_lit(side):
 
 # ---------------------------------------------------------------------------------------------- small pieces
 
-def key(side, w, h, state, layers=(), k=1.0, corner=1.0, dx=0.0, dy=0.0):
+def key(side, w, h, state, layers=(), k=1.0, corner=1.0, dx=0.0, dy=0.0, look=None, lit=None):
     """hud_command_bar.key_piece with any number of glyph layers ((polys, fill), in a 22 box round 11, 11) or none,
-    for the code's text.  '' up, 'H' hover, 'P' lit (the face in the side's open colour), 'I' disabled."""
-    look = look_of(side)
+    for the code's text.  '' up, 'H' hover, 'P' lit (the face in the side's open colour), 'I' disabled.  look and lit
+    stand in for the side's look and open colour (hud_direct_strike_theme passes its own palette)."""
+    look = look or look_of(side)
     build = look["build"]
     edge = MOUNT_GLYPH_BUILD.get(build, build)
     o = 32
@@ -648,7 +649,7 @@ def key(side, w, h, state, layers=(), k=1.0, corner=1.0, dx=0.0, dy=0.0):
         return m.resize((w, h), Image.BOX)
 
     if down:
-        lit = np.asarray(COMMAND_TAB_OPEN[side], np.float32)
+        lit = np.asarray(lit or COMMAND_TAB_OPEN[side], np.float32)
         yy = np.arange(h, dtype=np.float32)[:, None, None]
         ramp = 0.62 + 0.5 * (yy - i) / (h - 2 * i)
         rgb = np.broadcast_to(lit * ramp * np.where(yy % 2 == 0, 0.9, 1.0), (h, w, 3)).copy()

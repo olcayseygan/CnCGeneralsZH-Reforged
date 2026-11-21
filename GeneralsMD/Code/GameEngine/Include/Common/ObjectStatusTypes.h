@@ -90,6 +90,7 @@ enum ObjectStatusTypes
 	OBJECT_STATUS_IMMOBILE,							///< Do not move!
 	OBJECT_STATUS_DISGUISED,						///< Object is disguised (a type of stealth)
 	OBJECT_STATUS_DEPLOYED,							///< Object is deployed.
+	OBJECT_STATUS_UNATTACKABLE,					///< no weapon may pick it, forced or not, though it stays selectable (a Lane War build plot's unit, LaneWarDirector) (fork)
 	// add more status types here and don't forget to add to the string table ObjectStatusMaskType::s_bitNameList[]
 
 	OBJECT_STATUS_COUNT

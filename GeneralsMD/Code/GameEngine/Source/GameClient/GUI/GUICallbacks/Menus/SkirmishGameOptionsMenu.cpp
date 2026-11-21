@@ -86,6 +86,10 @@
 
 SkirmishGameInfo *TheSkirmishGameInfo = NULL;
 
+// The main menu's Direct Strike button opens this room in that mode, its Skirmish button in the
+// classic one (MainMenu.cpp).  The match is GAME_SKIRMISH either way; the lane map makes the mode.
+Bool skirmishDirectStrike = FALSE;
+
 // window ids ------------------------------------------------------------------------------
 static NameKeyType parentSkirmishGameOptionsID = NAMEKEY_INVALID;
 static NameKeyType textEntryPlayerNameID = NAMEKEY_INVALID;
@@ -754,12 +758,18 @@ Bool SkirmishPreferences::write(void)
 	(*this)["Color"] = tmp;
 
 	(*this)["PlayerTemplate"] = PlayerTemplatePreference(TheSkirmishGameInfo->getConstSlot(0)->getPlayerTemplate());
+	(*this)["UserName"] = UnicodeStringToQuotedPrintable(TheSkirmishGameInfo->getConstSlot(0)->getName());
+
+	// a Direct Strike room keeps its seats apart and leaves the classic room's map and rules alone
+	if (skirmishDirectStrike)
+	{
+		setAsciiString("DirectStrikeSlotList", GameInfoToAsciiString(TheSkirmishGameInfo));
+		return UserPreferences::write();
+	}
 
 	// read back through QuotedPrintableToAsciiString, whose escape is '_': a generated map's
 	// "rmg_v17_..." written as it is came back as garbage and the room fell back to another map
 	(*this)["Map"] = AsciiStringToQuotedPrintable(TheSkirmishGameInfo->getMap());
-
-	(*this)["UserName"] = UnicodeStringToQuotedPrintable(TheSkirmishGameInfo->getConstSlot(0)->getName());
 
   setStartingCash( TheSkirmishGameInfo->getStartingCash() );
   setSuperweaponRestriction( TheSkirmishGameInfo->getSuperweaponRestriction() );
@@ -898,6 +908,13 @@ void CheckForCDAtGameStart( gameStartCallback callback )
 Bool sandboxOk = FALSE;
 static void startPressed(void)
 {
+	// a fresh island for every match, its seed in the map's name for the replay
+	if (skirmishDirectStrike)
+	{
+		SetDirectStrikeMap(TheSkirmishGameInfo);
+		FitDirectStrikeRoom(TheSkirmishGameInfo);
+	}
+
 	if (FitRandomMapToRoom(TheSkirmishGameInfo))
 	{
 		skirmishPositionStartSpots();
@@ -1876,7 +1893,7 @@ void InitSkirmishGameGadgets( void )
 	{
 		PopulateColorComboBox(i, comboBoxColor, TheSkirmishGameInfo );
 		GadgetComboBoxSetSelectedPos(comboBoxColor[i], 0);
-		PopulatePlayerTemplateComboBox(i, comboBoxPlayerTemplate, TheSkirmishGameInfo, FALSE );
+		PopulatePlayerTemplateComboBox(i, comboBoxPlayerTemplate, TheSkirmishGameInfo, FALSE, skirmishDirectStrike );
 		PopulateTeamComboBox(i, comboBoxTeam, TheSkirmishGameInfo );
 
 //		if (buttonStartPosition[i])
@@ -1910,6 +1927,8 @@ void skirmishUpdateSlotList( void )
       GadgetStaticTextSetText(textEntryMapDisplay, it->second.m_displayName);
     }
     GadgetTextEntrySetText( textEntryPlayerName, TheSkirmishGameInfo->getSlot(0)->getName() );
+		if (skirmishDirectStrike)
+			FitDirectStrikeRoom(TheSkirmishGameInfo);
     UpdateSlotList( TheSkirmishGameInfo, comboBoxPlayer,
 										comboBoxColor, comboBoxPlayerTemplate,
 									  comboBoxTeam, NULL, buttonStart, buttonMapStartPosition );
@@ -1917,6 +1936,8 @@ void skirmishUpdateSlotList( void )
 		UpdateHandicapComboBoxes( TheSkirmishGameInfo, comboBoxHandicap, comboBoxTeam );
 		UpdateLobbySeatVisuals( TheSkirmishGameInfo );
 		updateMapStartSpots(TheSkirmishGameInfo, buttonMapStartPosition, FALSE);
+		if (skirmishDirectStrike)
+			LayoutDirectStrikeRoom(parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd", TheSkirmishGameInfo);
     doUpdateSlotList = TRUE;
   }
 }
@@ -1991,6 +2012,8 @@ void updateSkirmishGameOptions( void )
 			GadgetComboBoxSetSelectedPos(comboBoxPlayer[i], 0);
 		}
 	}
+	if (skirmishDirectStrike)
+		LayoutDirectStrikeRoom(parentSkirmishGameOptions, layoutFilename, TheSkirmishGameInfo);
 
   if ( comboBoxSuperweapons )
     UpdateSuperweaponComboBox( comboBoxSuperweapons, TheSkirmishGameInfo, TRUE );
@@ -2078,7 +2101,8 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 		gSlot.setState(SLOT_EASY_AI);
 	TheSkirmishGameInfo->setSlot(1, gSlot);
 
-	ParseAsciiStringToGameInfo(TheSkirmishGameInfo, prefs.getSlotList());
+	ParseAsciiStringToGameInfo(TheSkirmishGameInfo,
+		skirmishDirectStrike ? prefs.getAsciiString("DirectStrikeSlotList", AsciiString::TheEmptyString) : prefs.getSlotList());
 	// -seed repeats a match set up here too, as it does -autoskirmish's (GameEngine.cpp): the same match from the
 	// same choices
 	TheSkirmishGameInfo->setSeed((TheGlobalData->m_fixedSeed >= 0) ? TheGlobalData->m_fixedSeed : Clock_Milliseconds_Coarse());
@@ -2101,6 +2125,13 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
   TheSkirmishGameInfo->setProRules( FALSE );
  
   TheSkirmishGameInfo->setMap(prefs.getPreferredMap());
+	// Direct Strike stands on a lane map from the start, a stand-in for the seats and start spots;
+	// Start makes the match's own
+	if (skirmishDirectStrike)
+	{
+		SetDirectStrikeMap(TheSkirmishGameInfo);
+		FitDirectStrikeRoom(TheSkirmishGameInfo);
+	}
 	const MapMetaData *md = TheMapCache->findMap(TheSkirmishGameInfo->getMap());
 	if (!md)
 	{
@@ -2126,7 +2157,8 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 	//initSkirmishGameOptions();
 
 	// the game speed combo, which a stock layout does not have (chosenGameSpeedPercent)
-	populateGameSpeedComboBox( prefs.getInt( "GameSpeed", PLAYER_GAME_SPEED_PERCENT_DEFAULT ) );
+	// Direct Strike's waves are timed for the native speed every network game plays; its box is hidden
+	populateGameSpeedComboBox( skirmishDirectStrike ? (Int)NATIVE_GAME_SPEED_PERCENT : prefs.getInt( "GameSpeed", PLAYER_GAME_SPEED_PERCENT_DEFAULT ) );
 	buttonStart->winSetText(TheGameText->fetch("GUI:Start"));
 	/* hey, for now we're also going to disable the map select button until it doesn't crash */
 	//buttonSelectMap->winEnable( FALSE );

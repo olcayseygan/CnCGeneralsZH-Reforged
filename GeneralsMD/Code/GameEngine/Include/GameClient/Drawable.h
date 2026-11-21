@@ -509,6 +509,11 @@ public:
 		rest an on-demand flush leaves for after the tick. */
 	void doClientWork( const std::function<void()>& work, ClientWorkOrder order, Bool movesBones = FALSE );
 	void startCollapse();		///< the Collapse option, on the way to rubble
+	/** Logic tells the client where a hit that took health landed (DamageInfoInput's impact): the draw
+		modules hear it after the tick (DrawModule::reactToImpact), and only on a drawable one of them
+		asked for it, so every other hit costs a flag test. */
+	void reactToImpact( const Coord3D &pos, Real radius, const Coord3D *source );
+	void setTakesImpacts( void ) { m_takesImpacts = TRUE; }	///< a draw module's constructor: it draws the hits
 
 	//---------------------------------------------------------------------------
 	void setDrawableStatus( DrawableStatus bit )  { BitSet( m_status, bit ); }
@@ -779,7 +784,10 @@ public:
   
   Bool getReceivesDynamicLights( void ) { return LogicThread::isInsideWindow() ? m_lookForDraw.receivesDynamicLights : m_receivesDynamicLights; };
   void setReceivesDynamicLights( Bool set ) { m_receivesDynamicLights = set; };
-  
+
+	/// no health bar, pips, rank or status icons over it: a Lane War plot unit (LaneHud_preDraw sets it at the sync point)
+	void setIconUIHidden( Bool hidden ) { m_iconUIHidden = hidden; }
+
   //---------------------------------------------------------------------------------
   // Stuff for overriding ambient sound
   const AudioEventInfo * getBaseSoundAmbientInfo() const; //< Possible starting point if only some parameters are customized
@@ -957,6 +965,8 @@ private:
   Bool m_ambientSoundEnabledFromScript;
 
   Bool m_receivesDynamicLights;
+	Bool m_takesImpacts;					///< reactToImpact reaches the draw modules; client only, never saved
+	Bool m_iconUIHidden;					///< drawIconUI draws nothing for it; client only, never saved
 
 #ifdef DIRTY_CONDITION_FLAGS
 	mutable Bool m_isModelDirty;				///< if true, must call replaceModelConditionState() before drawing or accessing drawmodule info

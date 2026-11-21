@@ -182,8 +182,11 @@ void DeepCRCSanityCheck::reset(void)
 	// EA wrote the whole deep CRC out to CRCAfter<n>Maps.dat in the user data folder here, on every
 	// player's machine, for a comparison only this function makes and only against the number.  A
 	// folder that refused the write threw out of the shell map's first frame as "Uncaught exception
-	// in WinMain"; the number alone is all the check needs.
-	UnsignedInt thisCRC = TheGameLogic->getCRC( CRC_RECALC );
+	// in WinMain"; the number alone is all the check needs.  Not the light CRC a frame sends, though:
+	// that one folds in the logic random seed, which every match moves and the next match seeds again,
+	// so it differed after every game and Debug asserted on the first reset after one.  EA's deep CRC
+	// was taken in save mode and never had the seed in it.
+	UnsignedInt thisCRC = TheGameLogic->getCRC( CRC_RECALC_WITHOUT_SEED );
 
 	DEBUG_LOG(("DeepCRCSanityCheck: CRC is %X\n", thisCRC));
 	DEBUG_ASSERTCRASH(timesThrough == 0 || thisCRC == lastCRC,
@@ -465,7 +468,7 @@ static void checksumModels( XferCRC &xferCRC )
 		++modelsCounted;
 
 		ModelChecksum entry;
-		const Bool sourceKnown = TheLocalFileSystem->getFileInfo( source, &entry.source );
+		Bool sourceKnown = TheLocalFileSystem->getFileInfo( source, &entry.source );
 
 		std::string key( modelChecksumSourceKey( source ).str() );
 		key.append( "|" );
@@ -480,13 +483,25 @@ static void checksumModels( XferCRC &xferCRC )
 		{
 			// the loose master, never the Reforged batch copy TheFileSystem may hand the renderer instead
 			File *file = loose ? TheLocalFileSystem->openFile( model.str(), File::READ ) : TheArchiveFileSystem->openRetailFile( model );
-			Int fileSize = file->size();
-			char *contents = file->readEntireAndClose();
-			CRC modelCRC;
-			modelCRC.computeCRC( contents, fileSize );
-			delete [] contents;
-			entry.crc = modelCRC.get();
-			++modelsRead;
+			if (file != NULL)
+			{
+				Int fileSize = file->size();
+				char *contents = file->readEntireAndClose();
+				CRC modelCRC;
+				modelCRC.computeCRC( contents, fileSize );
+				delete [] contents;
+				entry.crc = modelCRC.get();
+				++modelsRead;
+			}
+			else
+			{
+				// There but not readable: a build's copy into Run\Art\W3D holding it, a lock, no rights.
+				// Its name goes in with no bytes, so this start's CRC refuses every join rather than
+				// vouching for a file nobody read, and it stays out of the cache to be read next start.
+				DEBUG_LOG(( "INI CRC: %s would not open; counted as unread, so this start's CRC matches no one's\n", model.str() ));
+				entry.crc = 0;
+				sourceKnown = FALSE;
+			}
 		}
 		if (sourceKnown)
 			current[key] = entry;
@@ -849,6 +864,10 @@ static void startAutoSkirmish( Int numPlayersWanted )
 		else if (takeover && (TheGlobalData->m_autoSkirmishTakeoverSlot < 0 || TheGlobalData->m_autoSkirmishTakeoverSlot == i))
 		{
 			slot.setState( SLOT_TAKEOVER );
+			// the one at the keyboard drives it, so it carries his name with its seat, not "Human"
+			UnicodeString seatName;
+			seatName.format( u"%ls %d", localName.str(), i + 1 );
+			slot.setName( seatName );
 		}
 		else
 		{

@@ -652,6 +652,8 @@ public:
 	AsciiString getName( void ) { return m_name; }
 	void setName( AsciiString name){ m_name = name;	}
 	void addWindow( TransitionWindow *transWin );
+	/// every entry this group has for window "from" again for window "to", on the same frame in the same style
+	void copyWindow( const AsciiString &from, const AsciiString &to );
 	void forgetWindow( const GameWindow *win );
 	Bool isReversed( void );
 	Bool isFireOnce( void ) { return m_fireOnce; }

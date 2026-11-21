@@ -1,0 +1,66 @@
+# laneabilities.txt with every button switched off: the same buys, then each of team A's seats turns
+# off every ability its units have. Expect no LANEWAR ABILITY USE line at all, and the switches'
+# LANEWAR ABILITY lines (a capture or a money button that starts off logs "off, the default").
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 6 -takeover -side 0 FactionAmerica -side 1 FactionAmerica
+#     -side 2 FactionChina -side 3 FactionAmerica -side 4 FactionGLA -side 5 FactionAmerica
+#     -seed 1 -maxframes 21000 -scenario laneabilities_off -logPrefix laneabilities_off_
+#
+# The slot is the button's place in the unit's command set counted from 0 (the INI's number less one).
+
+# Burton: knife, timed charge, remote charge (its detonator goes with it)
+30    laneability 0 AmericaInfantryColonelBurton    0 0
+30    laneability 0 AmericaInfantryColonelBurton    1 0
+30    laneability 0 AmericaInfantryColonelBurton    3 0
+30    laneability 0 AmericaInfantryMissileDefender  0 0
+# Black Lotus: building capture, vehicle hack, cash hack
+30    laneability 2 ChinaInfantryBlackLotus         0 0
+30    laneability 2 ChinaInfantryBlackLotus         2 0
+30    laneability 2 ChinaInfantryBlackLotus         4 0
+30    laneability 2 ChinaInfantryTankHunter         0 0
+# the Hacker: building hack, Internet hack; the Dragon's fire wall
+30    laneability 2 ChinaInfantryHacker             0 0
+30    laneability 2 ChinaInfantryHacker             2 0
+30    laneability 2 ChinaTankDragon                 0 0
+30    laneability 4 GLAInfantryJarmenKell           0 0
+30    laneability 4 GLAInfantryHijacker             0 0
+
+30    laneplace  0  AmericaInfantryColonelBurton    6 0
+30    laneplace  0  AmericaInfantryMissileDefender  0 0
+30    laneplace  0  AmericaInfantryMissileDefender  1 0
+30    laneplace  0  AmericaInfantryMissileDefender  2 0
+30    laneplace  2  ChinaInfantryBlackLotus         6 0
+30    laneplace  2  ChinaInfantryTankHunter         0 0
+30    laneplace  2  ChinaInfantryTankHunter         1 0
+30    laneplace  4  GLAInfantryJarmenKell           6 0
+30    laneplace  1  AmericaTankCrusader             0 0
+30    laneplace  1  AmericaTankCrusader             3 0
+30    laneplace  3  AmericaTankCrusader             0 0
+30    laneplace  3  AmericaTankCrusader             3 0
+30    laneplace  5  AmericaTankCrusader             0 0
+30    laneplace  5  AmericaTankCrusader             3 0
+6000  lanetier   2  1 2
+6000  lanetier   4  1 2
+6000  laneplace  1  AmericaTankCrusader             6 0
+6000  laneplace  3  AmericaTankCrusader             6 0
+6000  laneplace  5  AmericaTankCrusader             6 0
+9000  lanetier   2  1 2
+9000  lanetier   4  1 2
+9000  laneplace  2  ChinaInfantryHacker             3 0
+9000  laneplace  4  GLAInfantryHijacker             0 0
+9000  laneplace  4  GLAInfantryHijacker             1 0
+9000  laneplace  1  AmericaTankCrusader             9 0
+9000  laneplace  3  AmericaTankCrusader             9 0
+9000  laneplace  5  AmericaTankCrusader             9 0
+12000 lanetier   2  1 2
+12000 lanetier   4  1 2
+12000 laneplace  2  ChinaInfantryHacker             3 0
+12000 laneplace  2  ChinaTankDragon                 8 0
+12000 laneplace  4  GLAInfantryHijacker             0 0
+12000 laneplace  4  GLAInfantryHijacker             1 0
+15000 laneplace  2  ChinaInfantryHacker             3 0
+15000 laneplace  2  ChinaTankDragon                 8 0
+15000 laneplace  4  GLAInfantryHijacker             0 0
+15000 laneplace  4  GLAInfantryHijacker             1 0
+15000 laneplace  4  GLAInfantryHijacker             2 0

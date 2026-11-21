@@ -21426,3 +21426,158 @@ END
 GUI:RejoinWaitingForLog
 "Maç kaydı bekleniyor"
 END
+GUI:DirectStrike
+"DIRECT STRIKE"
+END
+
+GUI:DirectStrikeLower
+"Direct Strike"
+END
+
+TOOLTIP:DirectStrike
+"Arsana birlik al. Her 30 saniyede her takımdan bir oyuncunun arsasının bir kopyası koridordan yürür; karşı kaleyi ilk yıkan takım kazanır. En çok 3'e 3, her maçta yeni bir ada."
+END
+
+GUI:DirectStrikeMap
+"Rastgele ada"
+END
+
+GUI:DirectStrikeTeam
+"TAKIM %d"
+END
+
+GUI:GameModeTitle
+"Oyun Kur"
+END
+
+GUI:GameModeBody
+"Bu oyun hangi modda oynanacak?"
+END
+
+GUI:GameModeClassic
+"KLASİK"
+END
+
+GUI:GameModeDirectStrike
+"DIRECT STRIKE"
+END
+
+GUI:DirectStrikeIslandNote
+"Her maçta yeni bir ada"
+END
+
+GUI:DirectStrikeTeamSize
+"%d - %d"
+END
+
+GUI:DirectStrikeStart
+"BAŞLAT"
+END
+
+GUI:DirectStrikeReady
+"HAZIR"
+END
+
+GUI:DirectStrikeEasy
+"Kolay"
+END
+
+GUI:DirectStrikeMedium
+"Orta"
+END
+
+GUI:DirectStrikeHard
+"Zor"
+END
+
+GUI:DirectStrikeBrutal
+"Acımasız"
+END
+
+GUI:Munkee
+""
+END
+
+OBJECT:LaneWarFortress
+"Kale"
+END
+
+OBJECT:LaneWarWatchTower
+"Gözetleme Kulesi"
+END
+
+GUI:LaneTier
+"Kademe %d"
+END
+
+GUI:LaneUpgrades
+"Geliştirmeler"
+END
+
+GUI:LaneIncome
+"Gelir %d/%d"
+END
+
+GUI:LaneAbilities
+"Yetenekler"
+END
+
+GUI:LaneMenu
+"Menü"
+END
+
+GUI:LaneDiplomacy
+"Diplomasi"
+END
+
+GUI:LaneEndTeamWins
+"%d. takım kazandı"
+END
+
+GUI:LaneEndDraw
+"Berabere"
+END
+
+GUI:LaneEndLeft
+"%d. takım oyundan ayrıldı"
+END
+
+GUI:LaneMatchClock
+"Maç süresi"
+END
+
+GUI:LaneEndWaves
+"Dalga"
+END
+
+GUI:LaneEndUnits
+"Birlik"
+END
+
+GUI:LaneEndEarned
+"Kazanılan"
+END
+
+GUI:LaneEndSpent
+"Harcanan"
+END
+
+GUI:LaneEndKills
+"Öldürülen"
+END
+
+GUI:LaneEndDamage
+"Hasar"
+END
+
+GUI:LaneEndMiddle
+"Ortayı tuttu"
+END
+
+GUI:LaneEndRematch
+"Rövanş"
+END
+
+GUI:LaneEndReplay
+"Tekrarı izle"
+END

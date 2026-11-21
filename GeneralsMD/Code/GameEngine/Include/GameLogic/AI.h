@@ -2005,6 +2005,7 @@ public:
 	void groupAttackTeam( const Team *team, Int maxShotsToFire, CommandSourceType cmdSource );							///< attack the given team
 	void groupAttackPosition( const Coord3D *pos, Int maxShotsToFire, CommandSourceType cmdSource );						///< attack given spot
 	void groupAttackMoveToPosition( const Coord3D *pos, Int maxShotsToFire, CommandSourceType cmdSource );	///< Attack move to the location
+	void groupLaneMarch( Real dx, Int maxShotsToFire, CommandSourceType cmdSource );	///< Lane War wave: one formation, each member attack-moving dx along x on its own y
 	void groupHunt( CommandSourceType cmdSource );														///< begin "seek and destroy"
 	void groupRepair( Object *obj, CommandSourceType cmdSource );						///< repair the given object
 	void groupResumeConstruction( Object *obj, CommandSourceType cmdSource );	///< resume construction on the object

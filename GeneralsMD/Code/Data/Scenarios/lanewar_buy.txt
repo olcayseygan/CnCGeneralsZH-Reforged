@@ -1,0 +1,52 @@
+# Lane War buy proof: every refusal LaneWarDirector makes, the refunds, a tier, an upgrade, a move,
+# and the hero rule (a seat's hero goes out only while no copy of him is alive). Read the
+# LANEWAR PLACE, LANEWAR SELL, LANEWAR MOVE, LANEWAR TIER, LANEWAR UPGRADE and HEADLESS LANEWAR lines.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 6600 -scenario lanewar_buy -logPrefix lanewar_buy_
+#
+# Two players, so each team has one seat and slot 0 (USA, 2000 to start) sends on every tick (logic
+# frames 900, 1800, 2700 ...). The frames below are this file's 30 Hz frames, which the drill scales
+# by the game speed: 1500 here is logic frame 1000 at 1.5x.
+
+# bought: a Ranger for 225, then Burton for the seat's one hero
+30    laneplace  0  AmericaInfantryRanger         0 0
+30    laneplace  0  AmericaInfantryColonelBurton  6 0
+# refused: slot taken, tier locked, another side's unit, and a jet and a helicopter on a locked
+# tier (both stand on the plot like any unit)
+30    laneplace  0  AmericaInfantryRanger         0 0
+30    laneplace  0  AmericaTankPaladin            2 0
+30    laneplace  0  ChinaTankOverlord             4 0
+30    laneplace  0  AmericaJetRaptor              0 12
+30    laneplace  0  AmericaVehicleComanche        2 0
+# refused: the hero once a match, the hero not for sale, too dear, not the next level, an upgrade too dear
+30    laneplace  0  AmericaInfantryColonelBurton  8 0
+30    lanesell   0  0 6 0
+30    lanetier   0  1 2
+30    lanetier   0  0 2
+30    laneupgrade 0 Upgrade_AmericaRangerFlashBangGrenade
+# sold before its first wave: all 225 back
+30    lanesell   0  0 0 0
+# bought again and moved; a move onto the hero and a move on grid 1, the air rows that are gone, are refused
+60    laneplace  0  AmericaInfantryRanger         0 0
+60    lanemove   0  0 0 0 3 0
+60    lanemove   0  0 3 0 6 0
+60    lanemove   0  1 3 0 0 0
+30    laneplace  1  ChinaInfantryRedguard         0 0
+# ranks on the moved Ranger: Veteran for half its 225, Elite for three quarters, Heroic for all of it,
+# then refused, already Heroic; a rank on an empty slot is refused too. The 275 left after the
+# Ranger and Burton pays for the first rank only, so 600 more goes in first
+90    lanecash   0  600
+90    lanevet    0  0 3 0
+90    lanevet    0  0 3 0
+90    lanevet    0  0 3 0
+90    lanevet    0  0 3 0
+90    lanevet    0  0 9 7
+# tick 0 sends the Ranger, its copy at Heroic, and Burton; the Ranger and its ranks sell for half now
+1500  lanesell   0  0 3 0
+# an income level, then the Flashbang upgrade from what the ticks paid
+4200  lanetier   0  0 1
+6900  laneupgrade 0 Upgrade_AmericaRangerFlashBangGrenade
+# tick 1 holds Burton back while his first copy still walks the lane; once the watch tower has
+# killed him, the next tick sends him again

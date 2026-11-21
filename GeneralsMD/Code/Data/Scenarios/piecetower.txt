@@ -1,0 +1,40 @@
+# Fracture proof on the Lane War watch towers (W3DFractureDraw): each team shells the other's tower
+# with guns whose rounds go off at a point of their own. Team A (slot 0) brings two Nuke Cannons (400
+# damage, 50 and 60 radius) against B's tower, team B (slot 1) two Tomahawk launchers (150 damage
+# within 10, 50 within 25) against A's. The fragments are the client's, so a drawn run only (no
+# -headless): read the FRACTURE HIT lines, a hole of 0.4 of the blast's radius (3 to 12) where each
+# round lands, never more of the tower than the share of health it has lost, and FRACTURE COLLAPSE
+# when a tower's health runs out. The towers fire until they die.
+#
+#   generals.exe -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 9000 -scenario piecetower -logPrefix piecetower_
+#
+# Slot 0 is team A's seat 1 (west, Player_1_Start 1190,1800), slot 1 B's seat 1 (east, 5230,1800).
+# On this map (rmg_v20_3_6p_642c_lane) the towers stand on the middle line, y 1805: A's at x 2544,
+# B's at x 3876. The guns are put down on the lane inside their own reach of the enemy tower and
+# outside its 225.
+# Frames here are this file's 30 a game second; the log's logic frames are two thirds of them at 1.5x.
+
+30    spawn   0  ChinaVehicleNukeLauncher   2  3576  1905  40
+30    spawn   1  AmericaVehicleTomahawk     2  2844  1705  40
+60    attack  0  ChinaVehicleNukeLauncher   1  LaneWarWatchTower
+60    attack  1  AmericaVehicleTomahawk     0  LaneWarWatchTower
+150   tally   0  LaneWarWatchTower
+150   tally   1  LaneWarWatchTower
+300   tally   0  LaneWarWatchTower
+300   tally   1  LaneWarWatchTower
+450   tally   0  LaneWarWatchTower
+450   tally   1  LaneWarWatchTower
+600   tally   0  LaneWarWatchTower
+600   tally   1  LaneWarWatchTower
+750   tally   0  LaneWarWatchTower
+750   tally   1  LaneWarWatchTower
+900   tally   0  LaneWarWatchTower
+900   tally   1  LaneWarWatchTower
+1200  tally   0  LaneWarWatchTower
+1200  tally   1  LaneWarWatchTower
+1500  tally   0  LaneWarWatchTower
+1500  tally   1  LaneWarWatchTower
+5900  tally   0  LaneWarWatchTower
+5900  tally   1  LaneWarWatchTower

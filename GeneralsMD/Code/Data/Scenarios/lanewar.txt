@@ -1,0 +1,45 @@
+# Lane War director proof: four players on the lane map, two a team, buying units onto their plot
+# grids with laneplace (LaneWarDirector::placeUnit, the entry point MSG_LANEWAR_ORDER reaches). The
+# director does the rest: a spawn tick every 30 wall seconds (900 frames at 30 Hz), each team
+# sending one seat's copy in turn (A1 and B1, then A2 and B2), income on every tick with the middle
+# bonus for the team holding past the centre line, the copies dying 130 wall seconds after they
+# spawn, and the match ending when a fortress falls. Team A buys more as its money comes in and B
+# does not, so A takes the middle and in the end B's fortress. Read the LANEWAR PLACE,
+# HEADLESS LANEWAR, LANEMARCH and HEADLESS LANEMARCH lines.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 4 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -side 2 FactionAmerica -side 3 FactionChina -seed 1 -maxframes 36000 -scenario lanewar
+#     -logPrefix lanewar_
+#
+# A plot is a grid of 20-unit slots in its own frame: it stands upright behind its end of the lane,
+# 240 across its front (the edge towards the lane) and 160 deep, so 12 columns by 8 rows. laneplace's
+# two numbers are the column, counted across the front from the left as the team faces the enemy,
+# and the row, counted back from the front, of the unit's block's front left slot; row 0 leads the
+# wave. Slot 0 is team A's seat 1 (start 1), slot 1 B's seat 1, slot 2 A's seat 2, slot 3 B's seat
+# 2. The frames below are this file's 30 Hz frames, which the drill scales by the game speed (6000
+# here runs on logic frame 4000 at the native 1.5x).
+
+30    laneplace  0  AmericaInfantryRanger   0 3
+30    laneplace  0  AmericaInfantryRanger   0 5
+30    laneplace  2  AmericaInfantryRanger   0 4
+30    laneplace  1  ChinaInfantryRedguard   2 3
+30    laneplace  1  ChinaInfantryRedguard   2 5
+# refused: taken, off the plot, not a unit, too dear; B2's plot stays empty, so its turns send nothing
+30    laneplace  0  AmericaInfantryRanger   0 3
+30    laneplace  0  AmericaInfantryRanger   12 0
+30    laneplace  0  AmericaPowerPlant       6 3
+30    laneplace  1  ChinaTankOverlord       8 3
+# A spends what the ticks paid, B keeps its money
+6000  laneplace  0  AmericaTankCrusader     6 3
+6000  laneplace  2  AmericaTankCrusader     6 3
+9000  laneplace  0  AmericaTankCrusader     9 3
+9000  laneplace  2  AmericaTankCrusader     9 3
+12000 laneplace  0  AmericaTankCrusader     6 0
+12000 laneplace  2  AmericaTankCrusader     6 0
+15000 laneplace  0  AmericaTankCrusader     9 0
+15000 laneplace  2  AmericaTankCrusader     9 0
+18000 laneplace  0  AmericaTankCrusader     6 5
+18000 laneplace  2  AmericaTankCrusader     6 5
+26000 tally   0  AmericaInfantryRanger
+26000 tally   1  ChinaInfantryRedguard

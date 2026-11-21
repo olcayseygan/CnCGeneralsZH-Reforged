@@ -1,0 +1,33 @@
+# Fracture proof for a shot with no blast point of its own: twenty Gattling Tanks (15 damage a round, no
+# projectile, no radius) shoot team B's Lane War watch tower straight on, so each hit lands on the side
+# of the tower facing the tanks at its middle height, spread over that face by the client. A drawn run
+# only (no -headless): read the FRACTURE HIT lines, the smallest hole (3) a hit, chipping the face
+# facing the tanks. The tower fires until it dies, so the tanks' health falls at every tally until
+# FRACTURE COLLAPSE, and the replay of this run agrees with the one before the fragments. At 1500
+# health twenty tanks bring it down between file frames 600 and 750 with seventeen left (seed 1,
+# headless, 2026-11-21); at 4000 it took to logic 1062 with thirteen left.
+#
+#   generals.exe -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 9000 -scenario piecetowerdirect -logPrefix piecetowerdirect_
+#
+# Team B's tower stands at 3876,1805 on this map (rmg_v20_3_6p_642c_lane); the tanks start west of
+# it, out of its reach (225).
+# Tally frames are this file's 30 Hz frames; the log's are logic frames (two thirds of them at 1.5x).
+
+30    spawn   0  ChinaTankGattling   20  3576  1805  40
+60    attack  0  ChinaTankGattling   1  LaneWarWatchTower
+300   tally   0  ChinaTankGattling
+300   tally   1  LaneWarWatchTower
+450   tally   0  ChinaTankGattling
+450   tally   1  LaneWarWatchTower
+600   tally   0  ChinaTankGattling
+600   tally   1  LaneWarWatchTower
+750   tally   0  ChinaTankGattling
+750   tally   1  LaneWarWatchTower
+900   tally   0  ChinaTankGattling
+900   tally   1  LaneWarWatchTower
+1200  tally   0  ChinaTankGattling
+1200  tally   1  LaneWarWatchTower
+5900  tally   0  ChinaTankGattling
+5900  tally   1  LaneWarWatchTower

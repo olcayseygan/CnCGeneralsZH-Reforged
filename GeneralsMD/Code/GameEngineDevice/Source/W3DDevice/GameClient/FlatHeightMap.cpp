@@ -666,6 +666,10 @@ void FlatHeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	// before its shroud pass instead)
 	if (TheInGameUI && !modernFullMirror)
 		TheInGameUI->drawOrderRings(m_shroud && rinfo.Additional_Pass_Count() && !m_disableTextures);
+
+	// and the Lane War plots' slot grid, as the detailed ground draws it, never into a water mirror
+	if (TheInGameUI && !ShaderClass::Is_Backface_Culling_Inverted())
+		TheInGameUI->drawLanePlotGrids(m_shroud && rinfo.Additional_Pass_Count() && !m_disableTextures);
 #endif
 	// We do some custom blending, so tell the shader class to reset everything.
 	DX8Wrapper::Set_Texture(0,NULL);

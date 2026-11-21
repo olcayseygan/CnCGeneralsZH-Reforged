@@ -82,6 +82,7 @@ protected:
 	virtual void drawAttackHints( View *view );		///< draw attack hint visual feedback
 	virtual void drawPlaceAngle( View *view ); 		///< draw place building angle if needed
 	virtual void drawBuildGrid( Bool shadeByShroud );						///< the pathfinder's build grid under a pending structure
+	virtual void drawLanePlotGrids( Bool shadeByShroud );				///< the slot grid of every Lane War build plot
 	virtual void drawAttackCircleFill( Bool shadeByShroud );		///< the wash on the ground inside an attack circle
 	virtual void drawOrderRings( Bool shadeByShroud );	///< the dot on each unit's destination and the click markers, in the terrain pass
 	void takeOrderRings( void );									///< their ground and fade, read at the sync point (recordDraw)

@@ -37,6 +37,7 @@
 #include "Common/GlobalData.h"
 #include "Common/PerfTimer.h"
 #include "Common/Player.h"
+#include "GameLogic/LaneWarDirector.h"
 #include "Common/PlayerTemplate.h"
 #include "Common/SpecialPower.h"
 #include "Common/Team.h" 
@@ -404,30 +405,8 @@ static std::unordered_map<AITemplatePair, Real, AITemplatePairHash> theAutoFrame
 static std::map<const ThingTemplate *, Real> theMaxHealthCache;
 static std::map<const ThingTemplate *, Bool> theDetectsStealthCache;
 
-/** The buttons of a unit's own the skirmish AI presses (AIPlayer::doAbilities), sorted by what rule weighs
-	* them.  Read off the command set and the weapon sets, so a unit the data gives such a button needs no
-	* line here; the special powers go by their enum, the few whose rule is known. */
-enum AIAbilityKind
-{
-	AIABILITY_LASER,		///< a special that puts the unit on its laser-guided missiles at one vehicle (Missile Defender, Sungur)
-	AIABILITY_SHOT,			///< a weapon only a button fires, at an object (Jarmen Kell's snipe)
-	AIABILITY_AREA,			///< ... at a spot on the ground (rocket pods, Kargu, the fire wall, contaminate)
-	AIABILITY_WALKUP,		///< a special the unit walks up to a target to do (charges, TNT, hacks, Designate), or sabotage
-	AIABILITY_TOGGLE,		///< a weapon switch (the flashbang, neutron shells, the Scud's warheads)
-	AIABILITY_SUICIDE,	///< a weapon fired at nothing that ends the unit (the bomb truck, the Demo general's suicide)
-	AIABILITY_DETONATE,	///< the remote charges' trigger, a special at nothing (Burton, the Demo general's Kell)
-	AIABILITY_HACK,			///< a special at a vehicle in reach, no walk (Black Lotus's vehicle hack)
-	AIABILITY_KIND_COUNT
-};
+/// AIAbilityKind (AIPlayer.h) by name, for the log
 static const char *const theAIAbilityKindName[ AIABILITY_KIND_COUNT ] = { "laser", "shot", "area", "walk-up", "toggle", "suicide", "detonate", "hack" };
-
-struct AIAbilityButton
-{
-	const CommandButton *button;
-	Int kind;										///< AIAbilityKind
-	WeaponSlotType slot;				///< the button's weapon slot, for a weapon
-	SpecialPowerType power;			///< the button's special power, for a special
-};
 
 /** One template's buttons under one command set.  Kept by template ID, one entry for each set its units
 	* have been seen with: two Helixes on different upgrade sets used to take turns throwing the other's
@@ -6846,7 +6825,8 @@ void AIPlayer::update( void )
 	// its base, its attacks and its superweapon by the map script, which is the whole of its difficulty:
 	// run on top of that, Kwai's $30000 stood three nuclear silos a minute into the match.  So is a
 	// skirmish seat on a map that scripts it: an Art of Defense GLA left its wave paths for a base.
-	if( runsOwnAI() )
+	// A Lane War seat has no base and its units are the director's wave copies, which it alone drives.
+	if( runsOwnAI() && !TheLaneWarDirector->isActive() )
 	{
 		AI_PHASE( AIP_SCOUT,   doScouting() );					// Keep one unit looking at the map.
 		AI_PHASE( AIP_RETREAT, doRetreats() );					// Break off the fights we are losing.
@@ -19666,7 +19646,7 @@ static Bool slotIsSuicide( const ThingTemplate *tmpl, WeaponSlotType slot )
 }
 
 /** The unit's buttons the AI has a rule for. */
-static std::vector<AIAbilityButton> abilitiesOf( const Object *obj )
+std::vector<AIAbilityButton> AIAbility_buttonsOf( const Object *obj )
 {
 	const ThingTemplate *tmpl = obj->getTemplate();
 	if( tmpl == NULL || tmpl->isKindOf( KINDOF_STRUCTURE ) )
@@ -19692,6 +19672,7 @@ static std::vector<AIAbilityButton> abilitiesOf( const Object *obj )
 		AIAbilityButton ability;
 		ability.button = button;
 		ability.kind = -1;
+		ability.index = i;
 		ability.slot = button->getWeaponSlot();
 		ability.power = SPECIAL_INVALID;
 		switch( button->getCommandType() )
@@ -19920,10 +19901,21 @@ static void logAbility( const AIPlayer *ai, const Player *player, const Object *
 		target ? target->getTemplate()->getName().str() : "ground", target ? target->getID() : INVALID_ID, at->x, at->y, why ));
 }
 
+// the statics above, for a caller with no AIPlayer (LaneWarDirector's wave units)
+Bool AIAbility_unitBusy( const Object *obj ) { return obj->testStatus( OBJECT_STATUS_IS_USING_ABILITY ) || aiAbilityWeaponHeld( obj ); }
+void AIAbility_enemiesNear( const Player *player, const Coord3D *at, Real radius, std::vector<Object *> *out ) { abilityEnemiesNear( player, at, radius, out ); }
+Bool AIAbility_specialReady( Object *obj, const CommandButton *button ) { return abilitySpecialReady( obj, button ); }
+Bool AIAbility_slotIsManual( const ThingTemplate *tmpl, WeaponSlotType slot ) { return slotIsManualAnywhere( tmpl, slot ); }
+Bool AIAbility_slotIsSuicide( const ThingTemplate *tmpl, WeaponSlotType slot ) { return slotIsSuicide( tmpl, slot ); }
+Real AIMatchup_templates( const ThingTemplate *mine, const ThingTemplate *theirs, Real myCost, Real theirCost )
+{
+	return aiMatchupScore( templateFramesToKill( mine, theirs ), templateFramesToKill( theirs, mine ), myCost, theirCost );
+}
+
 //----------------------------------------------------------------------------------------------------------
 Bool AIPlayer::abilityUnitBusy( const Object *obj ) const
 {
-	if( obj->testStatus( OBJECT_STATUS_IS_USING_ABILITY ) || aiAbilityWeaponHeld( obj ) )
+	if( AIAbility_unitBusy( obj ) )
 		return TRUE;
 	const ObjectID id = obj->getID();
 	if( id == m_capturerID || id == m_hijackerID || isDutyHelix( obj ) || isDutyAmbulance( obj ) ||
@@ -19950,7 +19942,7 @@ Int AIPlayer::walkUpsInFlight( std::vector<ObjectID> *taken ) const
 		const Object *obj = owned[ o ];
 		if( obj->isEffectivelyDead() || obj->isKindOf( KINDOF_STRUCTURE ) )
 			continue;
-		const std::vector<AIAbilityButton> buttons = abilitiesOf( obj );
+		const std::vector<AIAbilityButton> buttons = AIAbility_buttonsOf( obj );
 		for( size_t b = 0; b < buttons.size(); ++b )
 		{
 			if( buttons[ b ].kind != AIABILITY_WALKUP )
@@ -20005,7 +19997,9 @@ Bool AIPlayer::walkIsCovered( const Object *obj, const Coord3D *to ) const
 //----------------------------------------------------------------------------------------------------------
 /** (a) The laser lock: the unit's own target is a vehicle, the special is charged, and lasing it and the
 	* laser missiles (always the second slot, SpecialAbilityUpdate's trigger) kill it sooner than its guns do. */
-Bool AIPlayer::abilityLaser( Object *obj, const AIAbilityButton &entry, Object *victim )
+Bool AIPlayer::abilityLaser( Object *obj, const AIAbilityButton &entry, Object *victim ) { return AIAbility_laser( m_player, this, obj, entry, victim ); }
+
+Bool AIAbility_laser( const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim )
 {
 	if( victim == NULL || victim->isKindOf( KINDOF_STRUCTURE ) || !abilitySpecialReady( obj, entry.button ) ||
 			!TheActionManager->canDoSpecialPowerAtObject( obj, victim, CMD_FROM_AI, entry.button->getSpecialPowerTemplate(), entry.button->getOptions() ) )
@@ -20020,7 +20014,7 @@ Bool AIPlayer::abilityLaser( Object *obj, const AIAbilityButton &entry, Object *
 		return FALSE;
 	char why[ 128 ];
 	sprintf( why, "laser %.0f + lasing %.0f frames against guns %.0f", laser, lasing, guns );
-	logAbility( this, m_player, obj, entry, victim, victim->getPosition(), why );
+	logAbility( aiOrNull, player, obj, entry, victim, victim->getPosition(), why );
 	obj->doCommandButtonAtObject( entry.button, victim, CMD_FROM_AI );
 	return TRUE;
 }
@@ -20028,7 +20022,9 @@ Bool AIPlayer::abilityLaser( Object *obj, const AIAbilityButton &entry, Object *
 //----------------------------------------------------------------------------------------------------------
 /** (b) A manual shot at an object: the unit's own target when the shot pays on it, else the most worth in
 	* reach that it pays on (Medium too: the owner left only the area weapons to the unit's own target). */
-Bool AIPlayer::abilityShot( Object *obj, const AIAbilityButton &entry, Object *victim, Int /*rung*/ )
+Bool AIPlayer::abilityShot( Object *obj, const AIAbilityButton &entry, Object *victim, Int rung ) { return AIAbility_shot( m_player, this, obj, entry, victim, rung ); }
+
+Bool AIAbility_shot( const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim, Int /*rung*/ )
 {
 	const Weapon *weapon = obj->getWeaponInWeaponSlot( entry.slot );
 	if( !abilityWeaponReady( weapon ) || !abilityUpgradeReady( obj, entry.button ) )
@@ -20041,7 +20037,7 @@ Bool AIPlayer::abilityShot( Object *obj, const AIAbilityButton &entry, Object *v
 	const Real reach = knife ? weapon->getAttackRange( obj ) + ABILITY_KNIFE_STEP : weapon->getAttackRange( obj );
 	const Real floor = knife ? 0.0f : ABILITY_WORTH_FLOOR_SHARE * abilityWorth( obj );
 	std::vector<Object *> candidates;
-	abilityEnemiesNear( m_player, obj->getPosition(), reach, &candidates );
+	abilityEnemiesNear( player, obj->getPosition(), reach, &candidates );
 	if( victim && !knife )
 		candidates.insert( candidates.begin(), victim );
 	Object *best = NULL;
@@ -20053,9 +20049,9 @@ Bool AIPlayer::abilityShot( Object *obj, const AIAbilityButton &entry, Object *v
 			continue;
 		Real worth = abilityWorth( target );
 		// a shot that empties a foreign dozer's cab is that side's Command Center for one crewman (doForeignTech)
-		if( weapon->getDamageType() == DAMAGE_KILLPILOT && target->isKindOf( KINDOF_DOZER ) &&
-				isForeignTemplate( target->getTemplate() ) && wantsForeignDozer() )
-			worth = max( worth, foreignDozerPrize( target, m_player ) );
+		if( aiOrNull && weapon->getDamageType() == DAMAGE_KILLPILOT && target->isKindOf( KINDOF_DOZER ) &&
+				aiOrNull->isForeignTemplate( target->getTemplate() ) && aiOrNull->wantsForeignDozer() )
+			worth = max( worth, foreignDozerPrize( target, player ) );
 		const Real shot = abilityFramesToKill( obj, target, entry.slot );
 		const Real guns = abilityFramesToKill( obj, target, -1 );
 		// the knife skips the race: its 833 ms stab loses to Burton's three-round burst on a Red Guard, so the
@@ -20078,7 +20074,7 @@ Bool AIPlayer::abilityShot( Object *obj, const AIAbilityButton &entry, Object *v
 		return FALSE;
 	char why[ 128 ];
 	sprintf( why, "shot %.0f frames against guns %.0f, worth %.0f", bestShot, bestGuns, bestWorth );
-	logAbility( this, m_player, obj, entry, best, best->getPosition(), why );
+	logAbility( aiOrNull, player, obj, entry, best, best->getPosition(), why );
 	obj->doCommandButtonAtObject( entry.button, best, CMD_FROM_AI );
 	return TRUE;
 }
@@ -20087,7 +20083,9 @@ Bool AIPlayer::abilityShot( Object *obj, const AIAbilityButton &entry, Object *v
 /** (c) A volley at the ground: aimed at the enemy it takes the most from with the others round it, each
 	* counted for the share of its worth the volley's damage is of its health.  Medium aims only at the unit's own
 	* target. */
-Bool AIPlayer::abilityArea( Object *obj, const AIAbilityButton &entry, Object *victim, Int rung )
+Bool AIPlayer::abilityArea( Object *obj, const AIAbilityButton &entry, Object *victim, Int rung ) { return AIAbility_area( m_player, this, obj, entry, victim, rung ); }
+
+Bool AIAbility_area( const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim, Int rung )
 {
 	const Weapon *weapon = obj->getWeaponInWeaponSlot( entry.slot );
 	if( !abilityWeaponReady( weapon ) || !abilityUpgradeReady( obj, entry.button ) || (rung < 2 && victim == NULL) )
@@ -20103,7 +20101,7 @@ Bool AIPlayer::abilityArea( Object *obj, const AIAbilityButton &entry, Object *v
 	const Int shots = wt->getClipSize() > 0 ? wt->getClipSize() : ABILITY_STREAM_SHOTS;
 
 	std::vector<Object *> enemies;
-	abilityEnemiesNear( m_player, obj->getPosition(), range + radius, &enemies );
+	abilityEnemiesNear( player, obj->getPosition(), range + radius, &enemies );
 	const Int n = (Int)enemies.size();
 	if( n == 0 )
 		return FALSE;
@@ -20153,24 +20151,24 @@ Bool AIPlayer::abilityArea( Object *obj, const AIAbilityButton &entry, Object *v
 	if( aim < 0 || score < floor )
 		return FALSE;
 	Coord3D at = *enemies[ aim ]->getPosition();
-	const Real friends = abilityFriendsNear( m_player, obj, &at, radius );
+	const Real friends = abilityFriendsNear( player, obj, &at, radius );
 	if( friends > ABILITY_AREA_FRIEND_SHARE * score )
 		return FALSE;
 	// an aircraft flies to its firing spot, range short of the aim on its way in: not into anti-air
 	Real threat = 0.0f;
-	if( obj->isKindOf( KINDOF_AIRCRAFT ) && hasTacticalMap() )
+	if( aiOrNull && obj->isKindOf( KINDOF_AIRCRAFT ) && aiOrNull->hasTacticalMap() )
 	{
 		const Real dx = obj->getPosition()->x - at.x;
 		const Real dy = obj->getPosition()->y - at.y;
 		const Real dist = (Real)sqrt( dx * dx + dy * dy );
 		const Real back = dist > range ? range / dist : 1.0f;
-		threat = m_influence.enemyAt( at.x + dx * back, at.y + dy * back, unitMix( obj ) );
+		threat = aiOrNull->m_influence.enemyAt( at.x + dx * back, at.y + dy * back, aiOrNull->unitMix( obj ) );
 		if( threat > ABILITY_AREA_AIR_THREAT * abilityWorth( obj ) )
 			return FALSE;
 	}
 	char why[ 160 ];
 	sprintf( why, "volley takes %.0f of %d in reach, floor %.0f, ours %.0f, air threat %.0f", score, n, floor, friends, threat );
-	logAbility( this, m_player, obj, entry, enemies[ aim ], &at, why );
+	logAbility( aiOrNull, player, obj, entry, enemies[ aim ], &at, why );
 	obj->doCommandButtonAtPosition( entry.button, &at, CMD_FROM_AI );
 	return TRUE;
 }
@@ -20215,6 +20213,8 @@ static Bool besideOwnCharge( const Object *obj )
 	}
 	return FALSE;
 }
+
+Bool AIAbility_besideOwnCharge( const Object *obj ) { return besideOwnCharge( obj ); }
 
 /** An enemy vehicle the hero's guns can hurt has the hero as its target.  Black Lotus, who has no gun, is never
 	* better off standing. */
@@ -20668,7 +20668,9 @@ static Real toggleKillRate( const Object *obj, Int slot, const Object *victim, c
 //----------------------------------------------------------------------------------------------------------
 /** (e) A weapon switch, onto this button's slot when it takes worth off the unit's target and its neighbours
 	* ABILITY_TOGGLE_MARGIN faster than the slot it is on.  Nothing is kept: the margin is what holds a choice. */
-Bool AIPlayer::abilityToggle( Object *obj, const AIAbilityButton &entry, Object *victim )
+Bool AIPlayer::abilityToggle( Object *obj, const AIAbilityButton &entry, Object *victim ) { return AIAbility_toggle( m_player, this, obj, entry, victim ); }
+
+Bool AIAbility_toggle( const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim )
 {
 	if( victim == NULL || !abilityUpgradeReady( obj, entry.button ) || obj->getWeaponInWeaponSlot( entry.slot ) == NULL )
 		return FALSE;
@@ -20676,14 +20678,14 @@ Bool AIPlayer::abilityToggle( Object *obj, const AIAbilityButton &entry, Object 
 	if( current == (Int)entry.slot )
 		return FALSE;
 	std::vector<Object *> round;
-	abilityEnemiesNear( m_player, victim->getPosition(), ABILITY_TOGGLE_ROUND, &round );
+	abilityEnemiesNear( player, victim->getPosition(), ABILITY_TOGGLE_ROUND, &round );
 	const Real mine = toggleKillRate( obj, entry.slot, victim, round );
 	const Real now = toggleKillRate( obj, current, victim, round );
 	if( mine <= 0.0f || mine < ABILITY_TOGGLE_MARGIN * now )
 		return FALSE;
 	char why[ 128 ];
 	sprintf( why, "slot %d takes %.2f a frame against slot %d's %.2f", (Int)entry.slot, mine, current, now );
-	logAbility( this, m_player, obj, entry, victim, victim->getPosition(), why );
+	logAbility( aiOrNull, player, obj, entry, victim, victim->getPosition(), why );
 	obj->doCommandButton( entry.button, CMD_FROM_AI );
 	return TRUE;
 }
@@ -20691,25 +20693,27 @@ Bool AIPlayer::abilityToggle( Object *obj, const AIAbilityButton &entry, Object 
 //----------------------------------------------------------------------------------------------------------
 /** (f) Go off where it stands: nearly dead with enemies in the blast, or with ABILITY_SUICIDE_TRADE times its
 	* own worth of them there, and never with more than half that of ours. */
-Bool AIPlayer::abilitySuicide( Object *obj, const AIAbilityButton &entry )
+Bool AIPlayer::abilitySuicide( Object *obj, const AIAbilityButton &entry ) { return AIAbility_suicide( m_player, this, obj, entry, NULL ); }
+
+Bool AIAbility_suicide( const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object * /*victim*/ )
 {
 	if( obj->getWeaponInWeaponSlot( entry.slot ) == NULL || !abilityUpgradeReady( obj, entry.button ) || obj->getBodyModule() == NULL )
 		return FALSE;
 	std::vector<Object *> enemies;
-	abilityEnemiesNear( m_player, obj->getPosition(), ABILITY_SUICIDE_RADIUS, &enemies );
+	abilityEnemiesNear( player, obj->getPosition(), ABILITY_SUICIDE_RADIUS, &enemies );
 	Real theirs = 0.0f;
 	for( size_t e = 0; e < enemies.size(); ++e )
 		theirs += abilityWorth( enemies[ e ] );
 	if( theirs <= 0.0f )
 		return FALSE;
-	const Real ours = abilityFriendsNear( m_player, obj, obj->getPosition(), ABILITY_SUICIDE_RADIUS );
+	const Real ours = abilityFriendsNear( player, obj, obj->getPosition(), ABILITY_SUICIDE_RADIUS );
 	const Real own = abilityWorth( obj );
 	const Real health = obj->getBodyModule()->getHealth() / max( 1.0f, obj->getBodyModule()->getMaxHealth() );
 	if( ours > 0.5f * theirs || (health >= ABILITY_SUICIDE_HURT && theirs < ABILITY_SUICIDE_TRADE * own) )
 		return FALSE;
 	char why[ 128 ];
 	sprintf( why, "%.0f of theirs in the blast against own %.0f and ours %.0f, health %.2f", theirs, own, ours, health );
-	logAbility( this, m_player, obj, entry, enemies.front(), obj->getPosition(), why );
+	logAbility( aiOrNull, player, obj, entry, enemies.front(), obj->getPosition(), why );
 	obj->doCommandButton( entry.button, CMD_FROM_AI );
 	return TRUE;
 }
@@ -20735,7 +20739,9 @@ Bool AIPlayer::useAbility( Object *obj, const AIAbilityButton &entry, Int rung, 
 /** (g) Set the remote charges off, every one planted, once the planter stands ABILITY_DETONATE_CLEAR from all
 	* of them.  Nothing tells the AI more than that: a charge waits for nothing but its trigger, and the building
 	* under it is what the planter chose. */
-Bool AIPlayer::abilityDetonate( Object *obj, const AIAbilityButton &entry )
+Bool AIPlayer::abilityDetonate( Object *obj, const AIAbilityButton &entry ) { return AIAbility_detonate( m_player, this, obj, entry, NULL ); }
+
+Bool AIAbility_detonate( const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object * /*victim*/ )
 {
 	const SpecialAbilityUpdate *update = obj->findSpecialAbilityUpdate( entry.power );
 	if( update == NULL || update->isActive() || update->getSpecialObjectCount() == 0 )
@@ -20747,7 +20753,7 @@ Bool AIPlayer::abilityDetonate( Object *obj, const AIAbilityButton &entry )
 		return FALSE;
 	char why[ 96 ];
 	sprintf( why, "%d planted, the nearest %.0f off", planted, (Real)sqrt( nearestSqr ) );
-	logAbility( this, m_player, obj, entry, NULL, nearest->getPosition(), why );
+	logAbility( aiOrNull, player, obj, entry, NULL, nearest->getPosition(), why );
 	obj->doCommandButton( entry.button, CMD_FROM_AI );
 	return TRUE;
 }
@@ -20756,14 +20762,16 @@ Bool AIPlayer::abilityDetonate( Object *obj, const AIAbilityButton &entry )
 /** (h) A hack at a vehicle in reach, in a fight as much as standing about: the unit's own target when it is a
 	* vehicle the hack takes, else the most worth in reach.  Black Lotus shuts it down, and an Overlord switched off
 	* is a fight won for its price. */
-Bool AIPlayer::abilityHack( Object *obj, const AIAbilityButton &entry, Object *victim )
+Bool AIPlayer::abilityHack( Object *obj, const AIAbilityButton &entry, Object *victim ) { return AIAbility_hack( m_player, this, obj, entry, victim ); }
+
+Bool AIAbility_hack( const Player *player, AIPlayer *aiOrNull, Object *obj, const AIAbilityButton &entry, Object *victim )
 {
 	const SpecialAbilityUpdate *update = obj->findSpecialAbilityUpdate( entry.power );
 	if( update == NULL || update->isActive() || !abilitySpecialReady( obj, entry.button ) )
 		return FALSE;
 	const Real reach = max( min( update->getStartAbilityRange(), ABILITY_WALKUP_FAR ), obj->getVisionRange() );
 	std::vector<Object *> candidates;
-	abilityEnemiesNear( m_player, obj->getPosition(), reach, &candidates );
+	abilityEnemiesNear( player, obj->getPosition(), reach, &candidates );
 	if( victim )
 		candidates.insert( candidates.begin(), victim );
 	Object *best = NULL;
@@ -20791,7 +20799,7 @@ Bool AIPlayer::abilityHack( Object *obj, const AIAbilityButton &entry, Object *v
 		return FALSE;
 	char why[ 96 ];
 	sprintf( why, "worth %.0f, reach %.0f", bestWorth, reach );
-	logAbility( this, m_player, obj, entry, best, best->getPosition(), why );
+	logAbility( aiOrNull, player, obj, entry, best, best->getPosition(), why );
 	obj->doCommandButtonAtObject( entry.button, best, CMD_FROM_AI );
 	return TRUE;
 }
@@ -20827,7 +20835,7 @@ void AIPlayer::doAbilities( void )
 		if( obj->isEffectivelyDead() || obj->getControllingPlayer() != m_player || obj->isContained() || obj->isDisabled() ||
 				obj->testStatus( OBJECT_STATUS_UNDER_CONSTRUCTION ) || obj->getAI() == NULL )
 			continue;
-		const std::vector<AIAbilityButton> buttons = abilitiesOf( obj );
+		const std::vector<AIAbilityButton> buttons = AIAbility_buttonsOf( obj );
 		if( buttons.empty() || abilityUnitBusy( obj ) )
 			continue;
 		++scans;

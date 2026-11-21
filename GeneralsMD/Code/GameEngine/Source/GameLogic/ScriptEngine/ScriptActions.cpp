@@ -74,6 +74,7 @@
 
 #include "GameLogic/AI.h"
 #include "GameLogic/AISkirmishPlayer.h"
+#include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/CaveContain.h"
@@ -243,6 +244,10 @@ void ScriptActions::doSetInfantryLightingOverride(Real setting)
 //-------------------------------------------------------------------------------------------------
 void ScriptActions::doVictory( void )
 {
+	// Lane War ends on its own screen (LaneWarStats, LaneWarEndScreen): no stock window, no input
+	// taken away, no timer to the score screen
+	if (TheLaneWarDirector->isActive())
+		return;
 	closeWindows(FALSE);
 	TheGameLogic->closeWindows();
 	doDisableInput();
@@ -264,6 +269,9 @@ void ScriptActions::doVictory( void )
 //-------------------------------------------------------------------------------------------------
 void ScriptActions::doDefeat( void )
 {
+	// as doVictory
+	if (TheLaneWarDirector->isActive())
+		return;
 	closeWindows(FALSE);
 	TheGameLogic->closeWindows();
 	doDisableInput();

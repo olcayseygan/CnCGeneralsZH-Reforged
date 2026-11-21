@@ -121,6 +121,10 @@ void DoCompressTest( void );
 // window ids -------------------------------------------------------------------------------------
 static NameKeyType mainMenuID = NAMEKEY_INVALID;
 static NameKeyType skirmishID = NAMEKEY_INVALID;
+// Direct Strike, under Skirmish in the single player menu (Tools/mainmenu_layout.py): the skirmish
+// room in that mode (SkirmishGameOptionsMenu.cpp)
+static NameKeyType directStrikeID = NAMEKEY_INVALID;
+extern Bool skirmishDirectStrike;
 static NameKeyType onlineID = NAMEKEY_INVALID;
 static NameKeyType networkID = NAMEKEY_INVALID;
 static NameKeyType optionsID = NAMEKEY_INVALID;
@@ -638,6 +642,7 @@ void MainMenuInit( WindowLayout *layout, void *userData )
 	mainMenuID = TheNameKeyGenerator->nameToKey( AsciiString( "MainMenu.wnd:MainMenuParent" ) );
 //	campaignID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonCampaign") );
 	skirmishID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonSkirmish") );
+	directStrikeID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonDirectStrike") );
 	onlineID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonOnline") );
 	networkID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonNetwork") );
 	optionsID = TheNameKeyGenerator->nameToKey( AsciiString("MainMenu.wnd:ButtonOptions") );
@@ -1335,7 +1340,7 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 
 				//showSelectiveButtons(SHOW_NONE);
 			}
-*/			else if(controlID == skirmishID)
+*/			else if(controlID == skirmishID || controlID == directStrikeID)
 			{
 				if(dontAllowTransitions && !campaignSelected)
 				{
@@ -1453,7 +1458,7 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				
 				//showSelectiveButtons(SHOW_NONE);
 			}
-*/			else if(controlID == skirmishID)
+*/			else if(controlID == skirmishID || controlID == directStrikeID)
 			{
 				if(dontAllowTransitions && !campaignSelected && showLogo)
 				{
@@ -1651,10 +1656,11 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 				TheTransitionHandler->reverse("MainMenuLoadReplayMenuBackTransition");
 				TheShell->push(AsciiString("Menus/ReplayMenu.wnd"));
 			}
-			else if( controlID == skirmishID )
+			else if( controlID == skirmishID || controlID == directStrikeID )
 			{
 				if(campaignSelected || dontAllowTransitions)
 					break;
+				skirmishDirectStrike = controlID == directStrikeID;
 				buttonPushed = TRUE;
 				campaignSelected = TRUE;
 				dropDownWindows[DROPDOWN_SINGLE]->winHide(FALSE);

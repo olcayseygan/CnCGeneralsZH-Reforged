@@ -53,6 +53,7 @@
 #include "GameClient/HotKey.h"
 #include "GameClient/HotkeyScheme.h"
 #include "GameClient/MetaEvent.h"
+#include "GameClient/LaneHud.h"
 
 #include "GameLogic/GameLogic.h" // for TheGameLogic->getFrame()
 
@@ -601,7 +602,17 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
 			disp = DESTROY_MESSAGE;
 		}
 
-    for (const MetaMapRec *map = TheMetaMap->getFirstMetaMapRec(); map && !replayPause; map = map->m_next)
+		// Lane War: Tab held lays the other seats' incomes and plots out, and is Tab's only job there (the
+		// HUD has its own diplomacy key, and the window would cover it)
+		const Bool laneTab = !isModifierKey && key == MK_TAB && newModState == NONE && LaneHud_isShowing();
+		if( laneTab )
+		{
+			if( !( keyState & KEY_STATE_AUTOREPEAT ) )
+				LaneHud_holdScoreboard( ( keyState & KEY_STATE_DOWN ) != 0 );
+			disp = DESTROY_MESSAGE;
+		}
+
+    for (const MetaMapRec *map = TheMetaMap->getFirstMetaMapRec(); map && !replayPause && !laneTab; map = map->m_next)
 		{
 			DEBUG_ASSERTCRASH(map->m_meta > GameMessage::MSG_BEGIN_META_MESSAGES &&
 				map->m_meta < GameMessage::MSG_END_META_MESSAGES, ("hmm, expected only meta-msgs here"));
@@ -713,7 +724,9 @@ GameMessageDisposition MetaEventTranslator::translateGameMessage(const GameMessa
 				( keyState & KEY_STATE_DOWN ) && !( keyState & KEY_STATE_AUTOREPEAT ) &&
 				TheGameClient->getFrame() >= 1 && !( TheShell && TheShell->isShellActive() ) )
 		{
-			TheMessageStream->appendMessage( GameMessage::MSG_META_CAMERA_RESET );
+			// on a Lane War map Home is the way back to the player's own plot
+			TheMessageStream->appendMessage( LaneHud_isShowing() ? GameMessage::MSG_META_VIEW_COMMAND_CENTER
+																													: GameMessage::MSG_META_CAMERA_RESET );
 			disp = DESTROY_MESSAGE;
 		}
 

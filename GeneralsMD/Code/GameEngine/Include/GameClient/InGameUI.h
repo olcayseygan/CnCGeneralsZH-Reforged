@@ -1435,6 +1435,10 @@ public:
 		* with the terrain so that everything drawn after the terrain covers it. */
 	virtual void drawBuildGrid( Bool shadeByShroud ) { }
 
+	/** The slot grid of every Lane War build plot, on the ground for the same reason: a unit standing
+		* in a slot stands on top of its lines. */
+	virtual void drawLanePlotGrids( Bool shadeByShroud ) { }
+
 	/** The wash inside the attack circle, on the ground for the same reason: the units being swept
 		* up stand on top of it instead of being painted over. */
 	virtual void drawAttackCircleFill( Bool shadeByShroud ) { }

@@ -1460,6 +1460,37 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 
 	// if there's a specific victim, use it's pos (overriding the value passed in)
 	Object *primaryVictim = victimID ? TheGameLogic->findObjectByID(victimID) : NULL;	// might be null...
+
+	/* Where the damage landed, for a victim drawn breaking where it was hit (W3DFractureDraw).
+		 A blast with no victim (a shell or missile going off, a shot at the ground) has its own point.
+		 A shot at an object only has the object, so it lands on the side facing the shooter, at the
+		 object's middle height, where the drawn tracer goes. */
+	Coord3D impactPos;
+	impactPos.zero();
+	Bool hasImpact = FALSE;
+	if (primaryVictim)
+	{
+		primaryVictim->getGeometryInfo().getCenterPosition( *primaryVictim->getPosition(), impactPos );
+		if (source)
+		{
+			const Real dx = source->getPosition()->x - impactPos.x;
+			const Real dy = source->getPosition()->y - impactPos.y;
+			const Real dist = sqrtf( dx * dx + dy * dy );
+			if (dist > WWMATH_EPSILON)
+			{
+				const Real out = min( primaryVictim->getGeometryInfo().getMajorRadius(), dist ) / dist;
+				impactPos.x += dx * out;
+				impactPos.y += dy * out;
+			}
+		}
+		hasImpact = TRUE;
+	}
+	else if (pos)
+	{
+		impactPos = *pos;
+		hasImpact = TRUE;
+	}
+
 	if (primaryVictim)
 	{
 		pos = primaryVictim->getPosition();
@@ -1587,7 +1618,11 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 			damageInfo.in.m_sourceID = sourceID;
 			damageInfo.in.m_sourcePlayerMask = 0;
 			damageInfo.in.m_damageStatusType = damageStatusType;
-			
+			// splash round a shot at an object came from that object, not from the side the shot struck
+			damageInfo.in.m_impactPos = ( primaryVictim && curVictim != primaryVictim ) ? *pos : impactPos;
+			damageInfo.in.m_impactRadius = radius;
+			damageInfo.in.m_hasImpact = hasImpact;
+
 			Coord3D damageDirection;
 			damageDirection.zero();
 			if( curVictim && source )

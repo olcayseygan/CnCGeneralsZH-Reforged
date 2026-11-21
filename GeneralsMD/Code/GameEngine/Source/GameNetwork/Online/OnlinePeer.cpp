@@ -40,6 +40,7 @@
 #include "GameLogic/GameLogic.h"
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GameSpy/StagingRoomGameInfo.h"
+#include "GameNetwork/GUIUtil.h"
 #include "GameNetwork/GameSpy/ThreadUtils.h"
 #include "GameNetwork/NetworkInterface.h"
 #include "GameNetwork/Online/OnlineSession.h"
@@ -553,6 +554,24 @@ static Bool hexTicket( const std::string &hex, UnsignedByte out[16] )
 	return TRUE;
 }
 
+Bool OnlineHostDirectStrike = FALSE;
+
+/* Is this map a Direct Strike lane map, and its seed: the generated name is
+	 "...\rmg_v<version>_<seed>_6p_..._lane", the seed the second number (stageRandomMap).  The game list's
+	 copy is GameSpy's portable path with '/' for '\' (GameSpyInfo::setGameOptions), which the name reader
+	 does not split, so it reads the leaf alone. */
+static Bool directStrikeSeed( const std::string &map, Int *seed )
+{
+	const size_t slash = map.find_last_of( "\\/" );
+	const char *leaf = map.c_str() + (slash == std::string::npos ? 0 : slash + 1);
+	if (!IsDirectStrikeMap( AsciiString( leaf ) ))
+		return FALSE;
+	Int version = 0, s = -1;
+	if (sscanf( leaf, "%*[rRmMgG]_v%d_%d_", &version, &s ) == 2 && s >= 0)
+		*seed = s;
+	return TRUE;
+}
+
 /* A game{action:add|update}: the server's fields plus what the host put in game.opts (OnlinePeerQueue's
 	 SETGAMEOPTIONS writes it as a line of its own), as the lobby's game list wants it. */
 void OnlineSession::gameListEntry( const OnlineMessage &m )
@@ -569,6 +588,17 @@ void OnlineSession::gameListEntry( const OnlineMessage &m )
 	r.stagingRoom.maxPlayers = (Int)m.getInt( "maxp", MAX_SLOTS );
 	r.stagingRoom.useStats = TRUE;
 	r.stagingRoomPlayerNames[0] = m.getString( "host" );
+	// a host sits in its staging room, out of the chat room, so the list's ping column reads its card from here
+	if (m.has( "hostPing" ) && !m.getString( "host" ).empty())
+	{
+		OnlineCard &card = cards[OnlineNickKey( m.getString( "host" ) )];
+		const long long ping = m.getInt( "hostPing" );
+		if (card.ping != ping || !card.serial)
+		{
+			card.ping = ping;
+			card.serial = ++cardSerial;
+		}
+	}
 
 	OnlineMessage o;
 	const std::string opts = m.getString( "opts" );
@@ -1545,6 +1575,7 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 		// the map is chosen in the staging room, after this; game.opts carries it to the list
 		m.setString( "t", "game.host" ).setString( "name", WideCharStringToMultiByte( req.text.c_str() ) );
 		m.setString( "map", "-" ).setInt( "maxp", MAX_SLOTS );
+		m.setString( "mode", OnlineHostDirectStrike ? "directstrike" : "classic" );
 		s.send( m );
 		return;
 
@@ -1578,7 +1609,16 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 			{
 				line.resize( line.size() - 1 );		// the newline
 				m.setString( "t", "game.opts" ).setString( "opts", line );
-				s.send( m );
+				// the room's mode is its map: a lane map is Direct Strike, its seed in its name.  A Direct Strike
+				// host's options from before its room staged the island (the room object's default map) never
+				// reach the list, which would show the room as Classic on that map for a moment.
+				Int seed = -1;
+				const Bool directStrike = directStrikeSeed( req.gameOptsMapName, &seed );
+				m.setString( "mode", directStrike ? "directstrike" : "classic" );
+				if (seed >= 0)
+					m.setInt( "seed", seed );
+				if (directStrike || !OnlineHostDirectStrike)
+					s.send( m );
 			}
 			// and the slot list to the room, as GameSpy's SL/ UTM
 			OnlineMessage sl;

@@ -52,6 +52,7 @@
 #include "GameClient/CampaignManager.h"
 
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/ObjectTypes.h"
 #include "GameLogic/PartitionManager.h"
@@ -5810,6 +5811,13 @@ void ScriptEngine::update( void )
 		m_currentPlayer = ThePlayerList->getNthPlayer(i);
 		ScriptList *pSL = TheSidesList->getSideInfo(i)->getScriptList();
 		if (!pSL) continue;
+		// A Lane War seat runs none of the skirmish AI's scripts: the director and its bot play the seat.
+		// EA's "Give AI money to cover bug" alone handed a computer seat 2200 (America), 1600 (China) or
+		// 200 (GLA) on frame 0, over the director's start money.
+		if (TheLaneWarDirector->isActive() && m_currentPlayer != NULL && m_currentPlayer->isPlayableSide()) {
+			m_currentPlayer = NULL;
+			continue;
+		}
 		executeScripts(pSL->getScript());
 		ScriptGroup *pGroup;
 		for (pGroup = pSL->getScriptGroup(); pGroup; pGroup=pGroup->getNext()) {

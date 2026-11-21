@@ -60,6 +60,8 @@
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LaneWarDirector.h"
+#include "GameLogic/LaneWarStats.h"
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/ObjectCreationList.h"
@@ -438,8 +440,11 @@ void GameLogic::clearGameData( Bool showScoreScreen )
 
 	TheScriptActions->closeWindows(FALSE); // Close victory or defeat windows.
 
+	// a Lane War match showed its own end over the world (LaneWarEndScreen) and goes straight back to
+	// the screen it was started from, without the stock score screen
+	const Bool laneWarEnd = showScoreScreen && !isInShellGame() && TheLaneWarDirector->isActive();
 	Bool shellGame = FALSE;
-	if ((!isInShellGame() || !isInGame()) && showScoreScreen)
+	if ((!isInShellGame() || !isInGame()) && showScoreScreen && !laneWarEnd)
 	{
 		shellGame = TRUE;
 		TheTransitionHandler->setGroup("FadeWholeScreen");
@@ -465,6 +470,8 @@ void GameLogic::clearGameData( Bool showScoreScreen )
 
 	TheGameEngine->reset();
 	setGameMode(GAME_NONE);
+	if (laneWarEnd)
+		TheShell->showShell();	// what the score screen's OK does as it pops: the screen under it runs its init
 //	m_background->bringForward();
 //	if(shellGame)
 
@@ -1035,6 +1042,25 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 			DEBUG_LOG(( "TEAM REQUEST: frame %d player %d asks %d, enemy %d at (%.0f,%.0f)\n", getFrame(),
 									thisPlayer->getPlayerIndex(), kind, enemy, pos.x, pos.y ));
 			aiPostTeamRequest( thisPlayer, (AITeamRequestKind)kind, enemy, &pos );
+			break;
+		}
+
+		//---------------------------------------------------------------------------------------------
+		// A Lane War purchase (fork): (Int LaneWarOrderKind, then that kind's integers).  Only integers
+		// count, at most six after the kind (a move takes five); the director checks what they mean
+		case GameMessage::MSG_LANEWAR_ORDER:
+		{
+			if( msg->getArgumentCount() < 1 || msg->getArgumentDataType( 0 ) != ARGUMENTDATATYPE_INTEGER )
+				break;
+			Int args[ 6 ];
+			Int argCount = 0;
+			for( Int i = 1; i < msg->getArgumentCount() && argCount < 6; ++i )
+			{
+				if( msg->getArgumentDataType( i ) != ARGUMENTDATATYPE_INTEGER )
+					break;
+				args[ argCount++ ] = msg->getArgument( i )->integer;
+			}
+			TheLaneWarDirector->onOrder( thisPlayer, msg->getArgument( 0 )->integer, args, argCount );
 			break;
 		}
 
@@ -3051,7 +3077,11 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 		// --------------------------------------------------------------------------------------------
 		case GameMessage::MSG_SELF_DESTRUCT:
 		{
-			thisPlayer->surrender(msg->getArgument(0)->boolean);
+			// Direct Strike: his units die with him, his team's buildings go to a teammate (LaneWarStats.h)
+			const Bool laneWar = TheLaneWarDirector->isActive();
+			if (laneWar)
+				TheLaneWarStats->onPlayerLeft(thisPlayer);
+			thisPlayer->surrender(msg->getArgument(0)->boolean && !laneWar);
 			// There is no reason to do any notification here, it now takes place in the victory conditions.
 			// bonehead.
 			break;

@@ -82,6 +82,9 @@ const Real COLLAPSE_DELAY = 0.5f;		// game seconds the structure stands after th
 const Real DROP_GAP = 1.5f;					// a piece of the ruin with more air than this under its box falls the rest of the way
 const Real SUPPORT_INSET = 0.5f;			// how far two boxes have to overlap across before one holds the other up
 const Real NO_REST_Z = -1e30f;
+const Real TRACK_HANDOFF_SPEED = 3.0f;	// units a game second: a piece faster than this at its bake's last key carries on falling
+const Real SLIDE_STOP = 1.5f;					// a piece on the ground slower than this sideways stops
+const Real SLIDE_FRICTION = 4.0f;			// of its sideways speed lost a game second on the ground
 const Real LONG_AGO = 1000.0f;				// game seconds: a death this far back has long finished falling
 const Real GROUND_FOLLOW_HEIGHT = 20.0f;	// a baked fragment this far down to the model's foot lies on the ground under it
 const Real BOUNDS_MARGIN = 150.0f;		// how far past the model debris and the fall may reach, for the culling box (the tower's diagonal falls throw 146)
@@ -918,6 +921,23 @@ void FractureRenderObjClass::stepTrack( Moving &m, Real now )
 	const Fracture::Track &t = m_collapse->tracks[m.fragment];
 	if( m.restedAt < 0.0f && frame >= (Real)( t.start + t.count - 1 ) )
 	{
+		const Real bake = (Real)m_collapse->frames / (Real)m_collapse->fps;
+		if( t.count >= 2 && now - m_deathTime < bake + FALL_SECONDS )
+		{
+			// the bake ran out with this piece still going: it carries on at its last speed under
+			// gravity and slides to a stop on the ground, rather than freezing in the air or mid-slide
+			const Fracture::Key &last = m_collapse->keys[t.firstKey + t.count - 1], &before = m_collapse->keys[t.firstKey + t.count - 2];
+			const Vector3 speed( ( last.pos[0] - before.pos[0] ) * m_collapse->fps, ( last.pos[1] - before.pos[1] ) * m_collapse->fps,
+				( last.pos[2] - before.pos[2] ) * m_collapse->fps );
+			if( speed.Length() > TRACK_HANDOFF_SPEED )
+			{
+				Matrix3D::Rotate_Vector( m_root, speed, &m.velocity );
+				m.spin.Set( 0, 0, 0 );
+				m.track = FALSE;
+				m.start = now;
+				return;
+			}
+		}
 		m.restedAt = now;
 		if( ( ( t.flags & Fracture::COLLAPSE_KICKED ) || f.volume >= DUST_VOLUME ) && m_dustLeft > 0 )
 		{
@@ -983,6 +1003,15 @@ void FractureRenderObjClass::stepFall( Moving &m, Real dt, Real now )
 		m.velocity.X *= 0.5f;
 		m.velocity.Y *= 0.5f;
 		m.spin *= 0.5f;
+		return;
+	}
+	const Real slide = sqrtf( m.velocity.X * m.velocity.X + m.velocity.Y * m.velocity.Y );
+	if( slide > SLIDE_STOP )
+	{
+		// on the ground and still going sideways: friction brings it to a stop
+		const Real keep = WWMath::Max( 0.0f, 1.0f - SLIDE_FRICTION * dt );
+		m.velocity.Set( m.velocity.X * keep, m.velocity.Y * keep, 0.0f );
+		m.spin *= keep;
 		return;
 	}
 	m.velocity.Set( 0, 0, 0 );
@@ -1116,7 +1145,7 @@ void FractureRenderObjClass::step( Real now )
 		const Real track = m_collapse ? (Real)m_collapse->frames / (Real)m_collapse->fps : 0.0f;
 		if( m_collapse && !m_dropped )
 		{
-			settled = settled || now - m_deathTime >= track;
+			// every track rests at its last key or hands off to a fall that lands: all at rest is the end
 			if( settled )
 			{
 				m_dropped = TRUE;

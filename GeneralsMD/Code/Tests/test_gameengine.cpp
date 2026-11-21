@@ -13135,6 +13135,31 @@ TEST(lane_war_ranks_cost_a_half_three_quarters_and_all_of_the_unit)
 	CHECK_STR( action.name.str(), "0 3 1 2" );
 }
 
+TEST(lane_war_cargo_orders_name_the_plot_unit_and_what_goes_on_it)
+{
+	CHECK_EQ( (Int)LANEWAR_ORDER_GARRISON, 7 );
+	CHECK_EQ( (Int)LANEWAR_ORDER_UNIT_UPGRADE, 8 );
+
+	ScenarioAction action;
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "90 lanegarrison 1 ChinaInfantryRedguard 0 0 0", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_LANEGARRISON );
+	CHECK_STR( action.selector.str(), "ChinaInfantryRedguard" );
+	CHECK_STR( action.name.str(), "0 0 0" );
+	CHECK( ScenarioDrill_parseLine( "90 lanegarrison 1 ChinaInfantryRedguard 0 0", &action ) != SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "60 laneunitupgrade 0 Upgrade_AmericaBattleDrone 0 4 1", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( (Int)action.action, (Int)SCENARIO_ACTION_LANEUNITUPGRADE );
+	CHECK_STR( action.name.str(), "0 4 1" );
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "30 lanecash 0 20000", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_EQ( action.count, 20000 );
+	// a passenger sold comes after the slot, as a rank's does
+	CHECK_EQ( (Int)ScenarioDrill_parseLine( "120 lanesell 1 0 0 0 1", &action ), (Int)SCENARIO_PARSE_OK );
+	CHECK_STR( action.name.str(), "0 0 0 1" );
+
+	// every part of a sale comes back under the unit's rule: a 2000 tank, a 500 bunker, a 300 man
+	// ranked for 150, after its first wave
+	CHECK_EQ( LaneWar_refund( 2000, TRUE ) + LaneWar_refund( 500, TRUE ) + LaneWar_refund( 300, TRUE ) + LaneWar_refund( 150, TRUE ), 1475 );
+}
+
 //-------------------------------------------------------------------------------------------------
 /** A ranked Quick Match has no lobby to send a map name: every peer derives the map from the match
 	seed and the seat count alone, so the derivation is pinned here.  A change to it splits two builds

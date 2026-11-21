@@ -45,6 +45,7 @@
 #include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Module/AIUpdate.h"
 #include "GameLogic/Module/BodyModule.h"
+#include "GameLogic/Module/ContainModule.h"
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Module/JetAIUpdate.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
@@ -900,7 +901,7 @@ void LaneWarDirector::onOrder( Player *player, Int kind, const Int *args, Int ar
 			break;
 		case LANEWAR_ORDER_SELL:
 			if( argCount >= 3 )
-				done = sellUnit( player, args[ 0 ], args[ 1 ], args[ 2 ] );
+				done = sellUnit( player, args[ 0 ], args[ 1 ], args[ 2 ], argCount >= 4 ? args[ 3 ] : -1 );
 			break;
 		case LANEWAR_ORDER_MOVE:
 			if( argCount >= 5 )
@@ -915,6 +916,12 @@ void LaneWarDirector::onOrder( Player *player, Int kind, const Int *args, Int ar
 			break;
 		case LANEWAR_ORDER_VETERANCY:
 			done = buyVeterancy( player, args, argCount );
+			break;
+		case LANEWAR_ORDER_GARRISON:
+			done = garrison( player, args, argCount );
+			break;
+		case LANEWAR_ORDER_UNIT_UPGRADE:
+			done = buyUnitUpgrade( player, args, argCount );
 			break;
 		default:
 			DEBUG_LOG(( "LANEWAR ORDER: frame %u player %d kind %d with %d arguments is no order\n",
@@ -970,6 +977,53 @@ const char *LaneWarDirector::whyNotPlace( const Player *player, const ThingTempl
 }
 
 //-------------------------------------------------------------------------------------------------
+/// a unit on a plot, or riding with one: held where it was put, unable to fire, unhurt and unpicked
+static void holdOnPlot( Object *obj )
+{
+	obj->setDisabled( DISABLED_HELD );
+	obj->setStatus( MAKE_OBJECT_STATUS_MASK2( OBJECT_STATUS_NO_ATTACK, OBJECT_STATUS_UNATTACKABLE ) );
+	if( obj->getBodyModule() )
+		obj->getBodyModule()->setIndestructible( TRUE );
+}
+
+/** What rides with a unit, in object list order: everything inside it, and inside that (an Overlord's
+	  bunker and the men in the bunker), and what it made for itself, its drone. */
+static void cargoOf( const Object *host, std::vector<Object *> *out )
+{
+	out->clear();
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		if( obj == host )
+			continue;
+		Bool rides = obj->getProducerID() == host->getID();
+		for( const Object *in = obj->getContainedBy(); in != NULL && !rides; in = in->getContainedBy() )
+			rides = in == host;
+		if( rides )
+			out->push_back( obj );
+	}
+}
+
+/// the object upgrade on that command set slot of the unit's live command set, NULL for any other button
+static const UpgradeTemplate *unitUpgradeAt( const Object *obj, Int slot )
+{
+	const CommandSet *set = obj != NULL && slot >= 0 && slot < MAX_COMMANDS_PER_SET ? TheCommandStore->findCommandSet( obj->getCommandSetString() ) : NULL;
+	const CommandButton *button = set != NULL ? set->getCommandButton( slot ) : NULL;
+	const UpgradeTemplate *upgrade = button != NULL ? button->getUpgradeTemplate() : NULL;
+	if( upgrade == NULL || button->getCommandType() != GUI_COMMAND_OBJECT_UPGRADE || upgrade->getUpgradeType() != UPGRADE_TYPE_OBJECT )
+		return NULL;
+	return upgrade;
+}
+
+/// every part of what was paid for the plot unit, back under the unit's rule
+static Int sellValueOf( const LaneWarDirector::PlotUnit &u )
+{
+	Int value = LaneWar_refund( u.cost, u.sent ) + LaneWar_refund( u.veterancyPaid, u.sent ) + LaneWar_refund( u.upgradesPaid, u.sent );
+	for( size_t i = 0; i < u.passengers.size(); ++i )
+		value += LaneWar_refund( u.passengers[ i ].cost, u.sent ) + LaneWar_refund( u.passengers[ i ].veterancyPaid, u.sent );
+	return value;
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool LaneWarDirector::placeUnit( Player *player, const ThingTemplate *tmpl, Int col, Int row )
 {
 	const UnsignedInt now = TheGameLogic->getFrame();
@@ -1006,10 +1060,7 @@ Bool LaneWarDirector::placeUnit( Player *player, const ThingTemplate *tmpl, Int 
 	TheAI->pathfinder()->addObjectToPathfindMap( obj );
 
 	// held where it was put, unable to fire, unhurt and unpicked, whatever the ground round it is
-	obj->setDisabled( DISABLED_HELD );
-	obj->setStatus( MAKE_OBJECT_STATUS_MASK2( OBJECT_STATUS_NO_ATTACK, OBJECT_STATUS_UNATTACKABLE ) );
-	if( obj->getBodyModule() )
-		obj->getBodyModule()->setIndestructible( TRUE );
+	holdOnPlot( obj );
 
 	PlotUnit entry;
 	entry.id = obj->getID();
@@ -1023,6 +1074,7 @@ Bool LaneWarDirector::placeUnit( Player *player, const ThingTemplate *tmpl, Int 
 	entry.sent = FALSE;
 	entry.veterancy = LEVEL_REGULAR;
 	entry.veterancyPaid = 0;
+	entry.upgradesPaid = 0;
 	m_plotUnits.push_back( entry );
 	if( LaneWar_isHero( player, tmpl ) )
 		m_heroBought[ team ][ seat ] = TRUE;
@@ -1065,14 +1117,37 @@ Bool LaneWarDirector::buyTier( Player *player, Int track, Int level )
 
 //-------------------------------------------------------------------------------------------------
 /// the plot unit covering that slot goes, and its price comes back: all of it before its first wave
-Bool LaneWarDirector::sellUnit( Player *player, Int grid, Int col, Int row )
+Bool LaneWarDirector::sellUnit( Player *player, Int grid, Int col, Int row, Int passenger )
 {
 	const Int index = grid >= 0 && grid < LANEWAR_GRIDS ? plotUnitAt( player, grid, col, row ) : -1;
-	if( index < 0 )
+	const char *refused = index < 0 ? "none of his units there"
+											: passenger >= (Int)m_plotUnits[ index ].passengers.size() ? "no such passenger" : NULL;
+	if( refused != NULL )
 	{
-		DEBUG_LOG(( "LANEWAR SELL: frame %u player %d column %d row %d refused: none of his units there\n",
-								TheGameLogic->getFrame(), player ? (Int)player->getPlayerIndex() : -1, col, row ));
+		DEBUG_LOG(( "LANEWAR SELL: frame %u player %d column %d row %d passenger %d refused: %s\n",
+								TheGameLogic->getFrame(), player ? (Int)player->getPlayerIndex() : -1, col, row, passenger, refused ));
 		return FALSE;
+	}
+
+	// one passenger: his price and ranks back under the unit's rule, the unit stays
+	if( passenger >= 0 )
+	{
+		PlotUnit &host = m_plotUnits[ index ];
+		const PlotUnit::Passenger p = host.passengers[ passenger ];
+		const Int refund = LaneWar_refund( p.cost, host.sent ) + LaneWar_refund( p.veterancyPaid, host.sent );
+		host.passengers.erase( host.passengers.begin() + passenger );
+		Object *man = TheGameLogic->findObjectByID( p.id );
+		if( man != NULL )
+		{
+			if( man->getContainedBy() != NULL && man->getContainedBy()->getContain() != NULL )
+				man->getContainedBy()->getContain()->removeFromContain( man );
+			TheGameLogic->destroyObject( man );
+		}
+		player->getMoney()->deposit( (UnsignedInt)refund, FALSE );
+		DEBUG_LOG(( "LANEWAR SELL: frame %u player %d passenger %d '%s' of the unit at column %d row %d, bought for %d and ranked for %d, %s, back %d, %u now\n",
+								TheGameLogic->getFrame(), (Int)player->getPlayerIndex(), passenger, p.thing->getName().str(), host.col, host.row,
+								p.cost, p.veterancyPaid, host.sent ? "has gone out" : "never out", refund, player->getMoney()->countMoney() ));
+		return TRUE;
 	}
 
 	const PlotUnit u = m_plotUnits[ index ];
@@ -1083,14 +1158,19 @@ Bool LaneWarDirector::sellUnit( Player *player, Int grid, Int col, Int row )
 								TheGameLogic->getFrame(), (Int)player->getPlayerIndex(), col, row ));
 		return FALSE;
 	}
-	// every part of what was paid comes back under the unit's rule
-	const Int refund = LaneWar_refund( u.cost, u.sent ) + LaneWar_refund( u.veterancyPaid, u.sent );
+	// the unit, everything paid on it and everything riding with it
+	const Int refund = sellValueOf( u );
+	std::vector<Object *> cargo;
+	cargoOf( obj, &cargo );
+	for( size_t i = 0; i < cargo.size(); ++i )
+		TheGameLogic->destroyObject( cargo[ i ] );
 	m_plotUnits.erase( m_plotUnits.begin() + index );
 	TheGameLogic->destroyObject( obj );
 	player->getMoney()->deposit( (UnsignedInt)refund, FALSE );
-	DEBUG_LOG(( "LANEWAR SELL: frame %u player %d '%s' at column %d row %d, bought for %d and ranked for %d, %s, back %d, %u now\n",
+	DEBUG_LOG(( "LANEWAR SELL: frame %u player %d '%s' at column %d row %d, bought for %d, ranked for %d, upgraded for %d, %d passengers, %d riding along, %s, back %d, %u now\n",
 							TheGameLogic->getFrame(), (Int)player->getPlayerIndex(), obj->getTemplate()->getName().str(), u.col, u.row,
-							u.cost, u.veterancyPaid, u.sent ? "has gone out" : "never out", refund, player->getMoney()->countMoney() ));
+							u.cost, u.veterancyPaid, u.upgradesPaid, (Int)u.passengers.size(), (Int)cargo.size(), u.sent ? "has gone out" : "never out",
+							refund, player->getMoney()->countMoney() ));
 	return TRUE;
 }
 
@@ -1110,9 +1190,22 @@ Bool LaneWarDirector::moveUnit( Player *player, Int grid, Int fromCol, Int fromR
 
 	PlotUnit &u = m_plotUnits[ index ];
 	const Coord3D pos = slotCentre( u.team, u.seat, u.grid, toCol, toRow, u.size );
+	const Coord3D from = *obj->getPosition();
 	TheAI->pathfinder()->removeObjectFromPathfindMap( obj );
 	obj->setPosition( &pos );
 	TheAI->pathfinder()->addObjectToPathfindMap( obj );
+	// what rides inside goes with it; a held drone beside it is put down as far over
+	std::vector<Object *> cargo;
+	cargoOf( obj, &cargo );
+	for( size_t i = 0; i < cargo.size(); ++i )
+	{
+		if( cargo[ i ]->getContainedBy() != NULL )
+			continue;
+		Coord3D at = *cargo[ i ]->getPosition();
+		at.x += pos.x - from.x;
+		at.y += pos.y - from.y;
+		cargo[ i ]->setPosition( &at );
+	}
 	DEBUG_LOG(( "LANEWAR MOVE: frame %u player %d '%s' from column %d row %d to %d %d\n", TheGameLogic->getFrame(),
 							(Int)player->getPlayerIndex(), obj->getTemplate()->getName().str(), u.col, u.row, toCol, toRow ));
 	u.col = toCol;
@@ -1159,29 +1252,220 @@ Bool LaneWarDirector::buyVeterancy( Player *player, const Int *args, Int argCoun
 	const Int grid = argCount >= 3 ? args[ 0 ] : -1;
 	const Int index = grid >= 0 && grid < LANEWAR_GRIDS ? plotUnitAt( player, grid, args[ 1 ], args[ 2 ] ) : -1;
 	const Int passenger = argCount >= 4 ? args[ 3 ] : -1;
-	PlotUnit *u = index >= 0 ? &m_plotUnits[ index ] : NULL;
-	const Int price = u != NULL ? LaneWar_veterancyPrice( u->cost, u->veterancy + 1 ) : 0;
+	PlotUnit *host = index >= 0 ? &m_plotUnits[ index ] : NULL;
+	PlotUnit::Passenger *man = host != NULL && passenger >= 0 && passenger < (Int)host->passengers.size() ? &host->passengers[ passenger ] : NULL;
+	// a passenger's rank goes on his own price, as the unit's on its own
+	Int *veterancy = man != NULL ? &man->veterancy : host != NULL ? &host->veterancy : NULL;
+	Int *paid = man != NULL ? &man->veterancyPaid : host != NULL ? &host->veterancyPaid : NULL;
+	const Int cost = man != NULL ? man->cost : host != NULL ? host->cost : 0;
+	const Int price = veterancy != NULL ? LaneWar_veterancyPrice( cost, *veterancy + 1 ) : 0;
 	const char *refused = NULL;
-	if( u == NULL )
+	if( host == NULL )
 		refused = "none of his units there";
-	else if( passenger >= 0 )
+	else if( passenger >= 0 && man == NULL )
 		refused = "no such passenger";
-	else if( u->veterancy >= LEVEL_HEROIC )
+	else if( *veterancy >= LEVEL_HEROIC )
 		refused = "already Heroic";
 	else if( (Int)player->getMoney()->countMoney() < price )
 		refused = "too dear";
 
-	const Object *obj = u != NULL ? TheGameLogic->findObjectByID( u->id ) : NULL;
-	DEBUG_LOG(( "LANEWAR VETERANCY: frame %u player %d '%s' at column %d row %d to rank %d for %d %s%s\n", TheGameLogic->getFrame(),
-							player ? (Int)player->getPlayerIndex() : -1, obj ? obj->getTemplate()->getName().str() : "?", argCount >= 2 ? args[ 1 ] : -1,
-							argCount >= 3 ? args[ 2 ] : -1, u ? u->veterancy + 1 : -1, price, refused ? "refused: " : "bought", refused ? refused : "" ));
+	const Object *obj = host != NULL ? TheGameLogic->findObjectByID( host->id ) : NULL;
+	DEBUG_LOG(( "LANEWAR VETERANCY: frame %u player %d '%s'%s%s at column %d row %d to rank %d for %d %s%s\n", TheGameLogic->getFrame(),
+							player ? (Int)player->getPlayerIndex() : -1, obj ? obj->getTemplate()->getName().str() : "?", man ? "'s passenger " : "",
+							man ? man->thing->getName().str() : "", argCount >= 2 ? args[ 1 ] : -1, argCount >= 3 ? args[ 2 ] : -1,
+							veterancy ? *veterancy + 1 : -1, price, refused ? "refused: " : "bought", refused ? refused : "" ));
 	if( refused != NULL )
 		return FALSE;
 
 	player->getMoney()->withdraw( (UnsignedInt)price, FALSE );
-	++u->veterancy;
-	u->veterancyPaid += price;
+	++*veterancy;
+	*paid += price;
 	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** (grid, column, row, template id): an infantryman of the sender's roster, under the same tier and
+	  money rules as a purchase, bought into his plot unit covering that slot.  The unit must take him,
+	  with room left as its container counts it, and he must be able to fire out of where he lands (a
+	  Battle Bus, a Humvee, an Overlord's or a Helix's bunker; not a Troop Crawler, whose men cannot).
+	  He takes no slot and is held inside, as the unit is; a wave copy of the unit goes out with a copy
+	  of him in it.  The hero keeps his own slot and is never a passenger. */
+Bool LaneWarDirector::garrison( Player *player, const Int *args, Int argCount )
+{
+	Int team = 0, seat = 0;
+	const Int index = argCount >= 4 && args[ 0 ] >= 0 && args[ 0 ] < LANEWAR_GRIDS ? plotUnitAt( player, args[ 0 ], args[ 1 ], args[ 2 ] ) : -1;
+	Object *host = index >= 0 ? TheGameLogic->findObjectByID( m_plotUnits[ index ].id ) : NULL;
+	const ThingTemplate *tmpl = argCount >= 4 && args[ 3 ] >= 0 && args[ 3 ] <= 0xFFFF ? TheThingFactory->findByTemplateID( (UnsignedShort)args[ 3 ] ) : NULL;
+	const LaneWarRosterItem *item = NULL;
+	LaneWarRosterItem roster[ LANEWAR_ROSTER_MAX ];
+	const Int listed = host != NULL ? LaneWar_roster( player, roster, LANEWAR_ROSTER_MAX ) : 0;
+	for( Int i = 0; i < listed && item == NULL; ++i )
+		if( roster[ i ].thing == tmpl )
+			item = &roster[ i ];
+	ContainModuleInterface *contain = host != NULL ? host->getContain() : NULL;
+	const Int cost = tmpl != NULL && player != NULL ? tmpl->calcCostToBuild( player ) : 0;
+
+	const char *refused = NULL;
+	if( host == NULL || !seatOf( player, &team, &seat ) )
+		refused = "none of his units there";
+	else if( tmpl == NULL )
+		refused = "no such unit";
+	else if( item == NULL )
+		refused = "not on the side's roster";
+	else if( item->tier > m_techLevel[ team ][ seat ] )
+		refused = "tier locked";
+	else if( item->hero )
+		refused = "the hero keeps his own slot";
+	else if( !tmpl->isKindOf( KINDOF_INFANTRY ) )
+		refused = "only infantry rides";
+	else if( contain == NULL )
+		refused = "it carries nobody";
+	else if( (Int)player->getMoney()->countMoney() < cost )
+		refused = "too dear";
+
+	Object *man = NULL;
+	if( refused == NULL )
+	{
+		man = TheThingFactory->newObject( tmpl, player->getDefaultTeam() );
+		if( man == NULL )
+			refused = "not made";
+	}
+	if( man != NULL )
+	{
+		man->setPosition( host->getPosition() );
+		for( BehaviorModule **m = man->getBehaviorModules(); *m; ++m )
+		{
+			CreateModuleInterface *create = (*m)->getCreate();
+			if( create )
+				create->onBuildComplete();
+		}
+		if( !contain->isValidContainerFor( man, TRUE ) )
+			refused = "no room for him in it";
+		else
+		{
+			contain->addToContain( man );
+			Object *in = man->getContainedBy();
+			if( in == NULL || in->getContain() == NULL || !in->getContain()->isPassengerAllowedToFire( man->getID() ) )
+			{
+				refused = "its passengers cannot fire out";
+				if( in != NULL && in->getContain() != NULL )
+					in->getContain()->removeFromContain( man );
+			}
+		}
+		if( refused != NULL )
+		{
+			TheGameLogic->destroyObject( man );
+			man = NULL;
+		}
+	}
+
+	DEBUG_LOG(( "LANEWAR GARRISON: frame %u player %d '%s' into '%s' at column %d row %d for %d %s%s\n", TheGameLogic->getFrame(),
+							player ? (Int)player->getPlayerIndex() : -1, tmpl ? tmpl->getName().str() : "?", host ? host->getTemplate()->getName().str() : "?",
+							argCount >= 2 ? args[ 1 ] : -1, argCount >= 3 ? args[ 2 ] : -1, cost, refused ? "refused: " : "bought", refused ? refused : "" ));
+	if( refused != NULL )
+		return FALSE;
+
+	player->getMoney()->withdraw( (UnsignedInt)cost, FALSE );
+	holdOnPlot( man );
+	PlotUnit::Passenger p;
+	p.id = man->getID();
+	p.thing = tmpl;
+	p.cost = cost;
+	p.veterancy = LEVEL_REGULAR;
+	p.veterancyPaid = 0;
+	m_plotUnits[ index ].passengers.push_back( p );
+	DEBUG_LOG(( "LANEWAR GARRISON: frame %u '%s' carries %d passengers, %d of %d places taken\n", TheGameLogic->getFrame(),
+							host->getTemplate()->getName().str(), (Int)m_plotUnits[ index ].passengers.size(), (Int)contain->getContainCount(),
+							contain->getContainMax() ));
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** (grid, column, row, button slot): the object upgrade on that slot of the sender's plot unit's
+	  command set, an Overlord's or a Helix's add-on or an American drone, at the game's own price.
+	  Refused when the unit has it, or when an upgrade it has rules it out the way the game's own button
+	  greys (UpgradeMux's ConflictsWith: one drone a vehicle, one add-on an Overlord); no science or
+	  building is asked for, Lane War having neither.  The plot unit takes it, so a bunker can be
+	  garrisoned there, and whatever it makes (the add-on, the drone) is held with it; every wave copy is
+	  given the same upgrades in the same order. */
+Bool LaneWarDirector::buyUnitUpgrade( Player *player, const Int *args, Int argCount )
+{
+	const Int index = argCount >= 4 && args[ 0 ] >= 0 && args[ 0 ] < LANEWAR_GRIDS ? plotUnitAt( player, args[ 0 ], args[ 1 ], args[ 2 ] ) : -1;
+	Object *obj = index >= 0 ? TheGameLogic->findObjectByID( m_plotUnits[ index ].id ) : NULL;
+	const UpgradeTemplate *upgrade = unitUpgradeAt( obj, argCount >= 4 ? args[ 3 ] : -1 );
+	const Int price = upgrade != NULL ? upgrade->calcCostToBuild( player ) : 0;
+	const char *refused = NULL;
+	if( obj == NULL )
+		refused = "none of his units there";
+	else if( upgrade == NULL )
+		refused = "no object upgrade on that button";
+	else if( obj->hasUpgrade( upgrade ) )
+		refused = "it has it already";
+	else if( !obj->affectedByUpgrade( upgrade ) )
+		refused = "an upgrade it has rules it out";
+	else if( (Int)player->getMoney()->countMoney() < price )
+		refused = "too dear";
+
+	DEBUG_LOG(( "LANEWAR UNIT UPGRADE: frame %u player %d '%s' at column %d row %d button %d '%s' for %d %s%s\n", TheGameLogic->getFrame(),
+							player ? (Int)player->getPlayerIndex() : -1, obj ? obj->getTemplate()->getName().str() : "?", argCount >= 2 ? args[ 1 ] : -1,
+							argCount >= 3 ? args[ 2 ] : -1, argCount >= 4 ? args[ 3 ] : -1, upgrade ? upgrade->getUpgradeName().str() : "?", price,
+							refused ? "refused: " : "bought", refused ? refused : "" ));
+	if( refused != NULL )
+		return FALSE;
+
+	player->getMoney()->withdraw( (UnsignedInt)price, FALSE );
+	obj->giveUpgrade( upgrade );
+	PlotUnit &u = m_plotUnits[ index ];
+	u.upgrades.push_back( upgrade );
+	u.upgradesPaid += price;
+	std::vector<Object *> cargo;
+	cargoOf( obj, &cargo );
+	for( size_t i = 0; i < cargo.size(); ++i )
+		holdOnPlot( cargo[ i ] );
+	DEBUG_LOG(( "LANEWAR UNIT UPGRADE: frame %u '%s' has %d upgrades, %d riding along held\n", TheGameLogic->getFrame(),
+							obj->getTemplate()->getName().str(), (Int)u.upgrades.size(), (Int)cargo.size() ));
+	return TRUE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Int LaneWarDirector::getNextPassengerVeterancyPrice( Int plotIndex, Int passenger ) const
+{
+	const PlotUnit::Passenger &p = m_plotUnits[ plotIndex ].passengers[ passenger ];
+	return LaneWar_veterancyPrice( p.cost, p.veterancy + 1 );
+}
+
+Int LaneWarDirector::getUnitUpgrades( Int plotIndex, UnitUpgrade *out, Int maxItems ) const
+{
+	const PlotUnit &u = m_plotUnits[ plotIndex ];
+	const Object *obj = TheGameLogic->findObjectByID( u.id );
+	Player *player = obj != NULL ? obj->getControllingPlayer() : NULL;
+	Int count = 0;
+	for( Int slot = 0; player != NULL && slot < MAX_COMMANDS_PER_SET && count < maxItems; ++slot )
+	{
+		const UpgradeTemplate *upgrade = unitUpgradeAt( obj, slot );
+		if( upgrade == NULL )
+			continue;
+		out[ count ].slot = slot;
+		out[ count ].upgrade = upgrade;
+		out[ count ].price = upgrade->calcCostToBuild( player );
+		out[ count ].owned = obj->hasUpgrade( upgrade );
+		out[ count ].available = !out[ count ].owned && obj->affectedByUpgrade( upgrade );
+		++count;
+	}
+	return count;
+}
+
+Int LaneWarDirector::getSellValue( Int plotIndex ) const
+{
+	return sellValueOf( m_plotUnits[ plotIndex ] );
+}
+
+void LaneWarDirector::getPassengerRoom( Int plotIndex, Int *used, Int *most ) const
+{
+	Object *obj = TheGameLogic->findObjectByID( m_plotUnits[ plotIndex ].id );
+	ContainModuleInterface *contain = obj != NULL ? obj->getContain() : NULL;
+	*used = contain != NULL ? (Int)contain->getContainCount() : 0;
+	*most = contain != NULL ? max( 0, contain->getContainMax() ) : 0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1462,6 +1746,8 @@ void LaneWarDirector::update( void )
 
 	useAbilities( now );
 	updateJets( now );
+	if( now % ( LANEWAR_CARGO_LOG_SECONDS * LOGICFRAMES_PER_SECOND ) == 0 )
+		logCargo( now );
 
 	if( now >= m_nextTickFrame )
 	{
@@ -1517,6 +1803,60 @@ void LaneWarDirector::refillJets( void )
 			}
 		}
 	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** What a wave copy takes from its plot unit beyond the template: its object upgrades in the order they
+	  were bought, which make its add-on or drone as they did on the plot (owned by the copy's player, not
+	  selectable, and no wave copy: a drone counts for nothing at the middle and goes down with its
+	  master), then a copy of every passenger at his own rank, loaded in the order he was.  A passenger
+	  copy is a wave copy with the same lifespan, firing out of the unit, and marches on his own once
+	  he is let out. */
+void LaneWarDirector::spawnCargo( Object *copy, const PlotUnit &u, Team *owner, UnsignedInt now )
+{
+	if( u.upgrades.empty() && u.passengers.empty() )
+		return;
+	for( size_t i = 0; i < u.upgrades.size(); ++i )
+		copy->giveUpgrade( u.upgrades[ i ] );
+	std::vector<Object *> cargo;
+	cargoOf( copy, &cargo );
+	for( size_t i = 0; i < cargo.size(); ++i )
+		cargo[ i ]->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_UNSELECTABLE ) );
+
+	ContainModuleInterface *contain = copy->getContain();
+	Int loaded = 0;
+	for( size_t i = 0; i < u.passengers.size(); ++i )
+	{
+		const PlotUnit::Passenger &p = u.passengers[ i ];
+		Object *man = TheThingFactory->newObject( p.thing, owner );
+		if( man == NULL )
+			continue;
+		man->setPosition( copy->getPosition() );
+		for( BehaviorModule **m = man->getBehaviorModules(); *m; ++m )
+		{
+			CreateModuleInterface *create = (*m)->getCreate();
+			if( create )
+				create->onBuildComplete();
+		}
+		man->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_UNSELECTABLE ) );
+		if( p.veterancy > LEVEL_REGULAR && man->getExperienceTracker() != NULL )
+			man->getExperienceTracker()->setVeterancyLevel( (VeterancyLevel)p.veterancy, FALSE );
+		if( contain == NULL || !contain->isValidContainerFor( man, TRUE ) )
+		{
+			TheGameLogic->destroyObject( man );
+			continue;
+		}
+		contain->addToContain( man );
+		++loaded;
+		Copy entry;
+		entry.id = man->getID();
+		entry.dieFrame = now + LANEWAR_LIFESPAN_FRAMES;
+		entry.owner = copy->getControllingPlayer()->getPlayerIndex();
+		m_copies.push_back( entry );
+	}
+	DEBUG_LOG(( "HEADLESS LANEWAR: frame %u '%s' %d goes out with %d upgrades, %d riding along, %d of %d passengers in it\n", now,
+							copy->getTemplate()->getName().str(), (Int)copy->getID(), (Int)u.upgrades.size(), (Int)cargo.size(), loaded,
+							(Int)u.passengers.size() ));
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1852,6 +2192,55 @@ void LaneWarDirector::tick( UnsignedInt now )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** For the log only: the passengers out riding in their wave units and the drones out with their
+	  masters, and how many of each have fired.  Counted mid-fight, since a wave rarely lives to the next tick. */
+void LaneWarDirector::logCargo( UnsignedInt now ) const
+{
+	Int riding = 0, fired = 0;
+	for( size_t i = 0; i < m_copies.size(); ++i )
+	{
+		Object *obj = TheGameLogic->findObjectByID( m_copies[ i ].id );
+		if( obj == NULL || obj->isEffectivelyDead() || !obj->isContained() )
+			continue;
+		++riding;
+		for( Int slot = 0; slot < WEAPONSLOT_COUNT; ++slot )
+		{
+			const Weapon *weapon = obj->getWeaponInWeaponSlot( (WeaponSlotType)slot );
+			if( weapon != NULL && weapon->getLastShotFrame() > 0 )
+			{
+				++fired;
+				break;
+			}
+		}
+	}
+	// and the drones out with their masters: a live object a live wave copy made that rides in nothing
+	Int drones = 0, dronesFired = 0;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		if( obj->getProducerID() == INVALID_ID || !obj->isKindOf( KINDOF_DRONE ) || obj->isEffectivelyDead() || obj->isContained() )
+			continue;
+		Bool ofCopy = FALSE;
+		for( size_t i = 0; i < m_copies.size() && !ofCopy; ++i )
+			ofCopy = m_copies[ i ].id == obj->getProducerID();
+		if( !ofCopy )
+			continue;
+		++drones;
+		for( Int slot = 0; slot < WEAPONSLOT_COUNT; ++slot )
+		{
+			const Weapon *weapon = obj->getWeaponInWeaponSlot( (WeaponSlotType)slot );
+			if( weapon != NULL && weapon->getLastShotFrame() > 0 )
+			{
+				++dronesFired;
+				break;
+			}
+		}
+	}
+	if( riding > 0 || drones > 0 )
+		DEBUG_LOG(( "HEADLESS LANEWAR: frame %u: %d passengers out riding, %d of them have fired; %d drones out with their masters, %d of them have fired\n",
+								now, riding, fired, drones, dronesFired ));
+}
+
+//-------------------------------------------------------------------------------------------------
 /** The seat's plot, copied onto the team's pad: each plot unit's template at its slot's place
 	  relative to the grid's centre, put down relative to the spawn waypoint.  A plot's front, the edge
 	  towards the lane, faces the enemy end as the wave does, so the offset carries over unturned: the
@@ -1934,6 +2323,7 @@ void LaneWarDirector::spawnWave( Int team, Int seat, UnsignedInt now )
 				pos.z += ai->getCurLocomotor()->getPreferredHeight();
 			copy->setPosition( &pos );
 		}
+		spawnCargo( copy, u, owner, now );
 
 		group->add( copy );
 		Copy entry;
@@ -1980,10 +2370,11 @@ void LaneWarDirector::crc( Xfer *xfer )
 	  level and whether its hero is bought; the team holding the middle.
 	  Version 3: each copy's owner, and the players' ability switches.
 	  Version 4: the squadrons' jets.
-	  Version 5: each plot unit's rank and what it cost. */
+	  Version 5: each plot unit's rank and what it cost.
+	  Version 6: each plot unit's object upgrades and passengers. */
 void LaneWarDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 5;
+	XferVersion currentVersion = 6;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -2047,6 +2438,56 @@ void LaneWarDirector::xfer( Xfer *xfer )
 		{
 			u.veterancy = LEVEL_REGULAR;
 			u.veterancyPaid = 0;
+		}
+		if( version >= 6 )
+		{
+			UnsignedInt upgrades = (UnsignedInt)u.upgrades.size();
+			xfer->xferUnsignedInt( &upgrades );
+			if( xfer->getXferMode() == XFER_LOAD )
+				u.upgrades.clear();
+			for( UnsignedInt k = 0; k < upgrades; ++k )
+			{
+				AsciiString name = xfer->getXferMode() == XFER_LOAD ? AsciiString::TheEmptyString : u.upgrades[ k ]->getUpgradeName();
+				xfer->xferAsciiString( &name );
+				if( xfer->getXferMode() == XFER_LOAD )
+				{
+					const UpgradeTemplate *upgrade = TheUpgradeCenter->findUpgrade( name );
+					if( upgrade != NULL )
+						u.upgrades.push_back( upgrade );
+				}
+			}
+			xfer->xferInt( &u.upgradesPaid );
+
+			UnsignedInt passengers = (UnsignedInt)u.passengers.size();
+			xfer->xferUnsignedInt( &passengers );
+			if( xfer->getXferMode() == XFER_LOAD )
+				u.passengers.resize( passengers );
+			for( UnsignedInt k = 0; k < passengers; ++k )
+			{
+				PlotUnit::Passenger &p = u.passengers[ k ];
+				xfer->xferObjectID( &p.id );
+				AsciiString name = xfer->getXferMode() == XFER_LOAD ? AsciiString::TheEmptyString : p.thing->getName();
+				xfer->xferAsciiString( &name );
+				if( xfer->getXferMode() == XFER_LOAD )
+					p.thing = TheThingFactory->findTemplate( name, FALSE );
+				xfer->xferInt( &p.cost );
+				xfer->xferInt( &p.veterancy );
+				xfer->xferInt( &p.veterancyPaid );
+			}
+			if( xfer->getXferMode() == XFER_LOAD )
+			{
+				size_t kept = 0;
+				for( size_t k = 0; k < u.passengers.size(); ++k )
+					if( u.passengers[ k ].thing != NULL )
+						u.passengers[ kept++ ] = u.passengers[ k ];
+				u.passengers.resize( kept );
+			}
+		}
+		else
+		{
+			u.upgrades.clear();
+			u.upgradesPaid = 0;
+			u.passengers.clear();
 		}
 	}
 

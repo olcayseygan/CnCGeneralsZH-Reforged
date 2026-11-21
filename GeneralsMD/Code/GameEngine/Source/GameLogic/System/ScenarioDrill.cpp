@@ -292,6 +292,12 @@ static Bool parseActionType( const AsciiString &token, ScenarioActionType *actio
 		*action = SCENARIO_ACTION_LANEABILITY;
 	else if (token == "lanevet")
 		*action = SCENARIO_ACTION_LANEVET;
+	else if (token == "lanegarrison")
+		*action = SCENARIO_ACTION_LANEGARRISON;
+	else if (token == "laneunitupgrade")
+		*action = SCENARIO_ACTION_LANEUNITUPGRADE;
+	else if (token == "lanecash")
+		*action = SCENARIO_ACTION_LANECASH;
 	else
 		return FALSE;
 
@@ -414,6 +420,9 @@ static Int tokensNeededFor( ScenarioActionType action )
 		case SCENARIO_ACTION_LANEUPGRADE:	return SCENARIO_TOKENS_STOP;
 		case SCENARIO_ACTION_LANEABILITY:	return SCENARIO_TOKENS_ATTACK;
 		case SCENARIO_ACTION_LANEVET:			return SCENARIO_TOKENS_ATTACK;
+		case SCENARIO_ACTION_LANEGARRISON:	return SCENARIO_TOKENS_ATTACK + 1;
+		case SCENARIO_ACTION_LANEUNITUPGRADE:	return SCENARIO_TOKENS_ATTACK + 1;
+		case SCENARIO_ACTION_LANECASH:		return SCENARIO_TOKENS_STOP;
 	}
 	return SCENARIO_TOKENS_STOP;
 }
@@ -640,6 +649,27 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 			}
 			break;
 		}
+
+		case SCENARIO_ACTION_LANEGARRISON:
+		case SCENARIO_ACTION_LANEUNITUPGRADE:
+		{
+			// the name in selector, then the plot unit's grid, column and row
+			for (Int t = 4; t < SCENARIO_TOKENS_ATTACK + 1; ++t)
+			{
+				Int value;
+				if (!parseWholeNumber( tokens[ t ], &value ))
+					return SCENARIO_PARSE_BAD_POSITION;
+				if (t > 4)
+					action->name.concat( ' ' );
+				action->name.concat( tokens[ t ] );
+			}
+			break;
+		}
+
+		case SCENARIO_ACTION_LANECASH:
+			if (!parseWholeNumber( tokens[ 3 ], &action->count ) || action->count < 1)
+				return SCENARIO_PARSE_BAD_COUNT;
+			break;
 
 		case SCENARIO_ACTION_LANEPLACE:
 		{
@@ -2372,6 +2402,9 @@ static Bool executeOrder( const ScenarioAction &action, Player *player, const Co
 		case SCENARIO_ACTION_LANEUPGRADE:
 		case SCENARIO_ACTION_LANEABILITY:
 		case SCENARIO_ACTION_LANEVET:
+		case SCENARIO_ACTION_LANEGARRISON:
+		case SCENARIO_ACTION_LANEUNITUPGRADE:
+		case SCENARIO_ACTION_LANECASH:
 			ordered = FALSE;		// handled before the group is built
 			break;
 	}
@@ -2636,6 +2669,38 @@ Bool ScenarioDrill_execute( const ScenarioAction &action )
 		const ThingTemplate *tmpl = TheThingFactory->findTemplate( action.selector, FALSE );
 		const Int args[ 3 ] = { tmpl ? (Int)tmpl->getTemplateID() : -1, (Int)action.at.x, (Int)action.at.y };
 		TheLaneWarDirector->onOrder( player, LANEWAR_ORDER_ABILITY, args, 3 );
+		return TRUE;
+	}
+
+	if (action.action == SCENARIO_ACTION_LANECASH)
+	{
+		player->getMoney()->deposit( (UnsignedInt)action.count, FALSE );
+		DEBUG_LOG(("SCENARIO: frame %d lanecash slot %d %d, %u now\n", action.frame, action.slot, action.count, player->getMoney()->countMoney()));
+		return TRUE;
+	}
+
+	// a garrison names its man and an object upgrade its upgrade, found on the plot unit's command set
+	if (action.action == SCENARIO_ACTION_LANEGARRISON || action.action == SCENARIO_ACTION_LANEUNITUPGRADE)
+	{
+		Int args[ 4 ] = { -1, -1, -1, -1 };
+		sscanf( action.name.str(), "%d %d %d", &args[ 0 ], &args[ 1 ], &args[ 2 ] );
+		if (action.action == SCENARIO_ACTION_LANEGARRISON)
+		{
+			const ThingTemplate *tmpl = TheThingFactory->findTemplate( action.selector, FALSE );
+			args[ 3 ] = tmpl ? (Int)tmpl->getTemplateID() : -1;
+			TheLaneWarDirector->onOrder( player, LANEWAR_ORDER_GARRISON, args, 4 );
+			return TRUE;
+		}
+		const Int index = TheLaneWarDirector->plotUnitAt( player, args[ 0 ], args[ 1 ], args[ 2 ] );
+		LaneWarDirector::UnitUpgrade list[ MAX_COMMANDS_PER_SET ];
+		const Int listed = index >= 0 ? TheLaneWarDirector->getUnitUpgrades( index, list, MAX_COMMANDS_PER_SET ) : 0;
+		for (Int i = 0; i < listed; ++i)
+			if (list[ i ].upgrade->getUpgradeName() == action.selector)
+				args[ 3 ] = list[ i ].slot;
+		if (args[ 3 ] < 0)
+			DEBUG_LOG(("SCENARIO: frame %d laneunitupgrade: no '%s' on the command set of slot %d's plot unit there\n", action.frame,
+								 action.selector.str(), action.slot));
+		TheLaneWarDirector->onOrder( player, LANEWAR_ORDER_UNIT_UPGRADE, args, 4 );
 		return TRUE;
 	}
 

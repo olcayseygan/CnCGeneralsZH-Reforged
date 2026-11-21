@@ -82,6 +82,7 @@ enum
 	LANEWAR_STRIKE_CONTACT_GAP = 250,			///< two fronts this close along the lane are fighting already: a strike goes now
 	LANEWAR_STRIKE_SECONDS = 30,					///< game seconds a strike may last before its jets are called home
 	LANEWAR_JET_REARM_SECONDS = 15,				///< game seconds a parked jet takes to reload before it can strike again
+	LANEWAR_CARGO_LOG_SECONDS = 5,				///< wall seconds between the log's counts of passengers and drones out in the waves
 };
 
 #define LANEWAR_TICK_FRAMES ((UnsignedInt)(LANEWAR_TICK_SECONDS * LOGICFRAMES_PER_SECOND))
@@ -108,8 +109,11 @@ enum LaneWarOrderKind
 	LANEWAR_ORDER_MOVE = 3,								///< (grid, from column, from row, to column, to row): put the sender's plot unit covering the first slot down with its front left slot at the second
 	LANEWAR_ORDER_UPGRADE = 4,						///< (index): buy that entry of LaneWar_upgrades for the sender
 	LANEWAR_ORDER_ABILITY = 5,						///< (template id, button slot, on): the sender's wave units of that template use that button (1) or leave it (0); the slot is an entry of LaneWar_abilitiesOf
-	LANEWAR_ORDER_VETERANCY = 6,					///< (grid, column, row[, passenger]): raise the sender's plot unit covering that slot one rank; its wave copies go out at it
+	LANEWAR_ORDER_VETERANCY = 6,					///< (grid, column, row[, passenger]): raise the sender's plot unit covering that slot, or that passenger of it, one rank; its wave copies go out at it
+	LANEWAR_ORDER_GARRISON = 7,						///< (grid, column, row, template id): buy an infantryman into the sender's plot unit covering that slot, one whose passengers fire out
+	LANEWAR_ORDER_UNIT_UPGRADE = 8,				///< (grid, column, row, button slot): buy the object upgrade on that command set slot of the sender's plot unit covering that slot
 };
+// LANEWAR_ORDER_SELL takes a fourth integer too, a passenger's index (-1 or none for the unit and all it carries)
 
 /// what each rank costs on top of a unit bought for `cost`, as a share of it: Veteran, Elite, Heroic
 enum
@@ -302,6 +306,26 @@ public:
 		Bool sent;											///< it has gone out in a wave at least once
 		Int veterancy;									///< the rank bought for its wave copies, 0 Regular to 3 Heroic; the plot unit itself shows none
 		Int veterancyPaid;							///< what those ranks cost
+		std::vector<const UpgradeTemplate *> upgrades;	///< its object upgrades in the order bought; the plot unit has them and every copy is given them
+		Int upgradesPaid;
+		struct Passenger
+		{
+			ObjectID id;									///< the plot copy, held inside the plot unit
+			const ThingTemplate *thing;
+			Int cost;
+			Int veterancy;
+			Int veterancyPaid;
+		};
+		std::vector<Passenger> passengers;	///< in the order loaded, which is the order a copy loads them
+	};
+	/// one object upgrade on a plot unit's command set, for the HUD
+	struct UnitUpgrade
+	{
+		Int slot;												///< the button's command set slot, LANEWAR_ORDER_UNIT_UPGRADE's last integer
+		const UpgradeTemplate *upgrade;
+		Int price;
+		Bool owned;
+		Bool available;									///< not owned and nothing it conflicts with owned
 	};
 
 	// Read only, for the HUD (LaneHud.cpp), which asks at the render's sync point
@@ -340,6 +364,17 @@ public:
 	/// the plot unit's (an index into getPlotUnits) rank and what the next one costs, 0 at Heroic
 	Int getVeterancy( Int plotIndex ) const { return m_plotUnits[ plotIndex ].veterancy; }
 	Int getNextVeterancyPrice( Int plotIndex ) const { return LaneWar_veterancyPrice( m_plotUnits[ plotIndex ].cost, m_plotUnits[ plotIndex ].veterancy + 1 ); }
+	/// the same for one of its passengers (an index into its passengers)
+	Int getNextPassengerVeterancyPrice( Int plotIndex, Int passenger ) const;
+	/// the object upgrades on the plot unit's command set, owned or not, in slot order
+	Int getUnitUpgrades( Int plotIndex, UnitUpgrade *out, Int maxItems ) const;
+	/// what selling the plot unit gives back now: the unit, its ranks, its upgrades and every passenger with his ranks
+	Int getSellValue( Int plotIndex ) const;
+	/** How many the plot unit carries and holds at most, its passengers' slots counted as its container
+		  counts them; 0 and 0 for a unit that carries nobody.  A container the logic will still refuse
+		  (an Overlord with no bunker takes only its add-on, a Troop Crawler's men cannot fire out) shows
+		  room here: the order's log says why. */
+	void getPassengerRoom( Int plotIndex, Int *used, Int *most ) const;
 
 protected:
 	virtual void crc( Xfer *xfer );
@@ -386,9 +421,13 @@ private:
 	Real parkX( Int team ) const;
 	Bool heroCopyAlive( const Player *player ) const;
 	void tick( UnsignedInt now );
+	void logCargo( UnsignedInt now ) const;
 	void spawnWave( Int team, Int seat, UnsignedInt now );
 	Bool buyTier( Player *player, Int track, Int level );
-	Bool sellUnit( Player *player, Int grid, Int col, Int row );
+	Bool sellUnit( Player *player, Int grid, Int col, Int row, Int passenger );
+	Bool garrison( Player *player, const Int *args, Int argCount );
+	Bool buyUnitUpgrade( Player *player, const Int *args, Int argCount );
+	void spawnCargo( Object *copy, const PlotUnit &u, Team *owner, UnsignedInt now );
 	Bool moveUnit( Player *player, Int grid, Int fromCol, Int fromRow, Int toCol, Int toRow );
 	Bool buyUpgrade( Player *player, Int index );
 	Bool buyVeterancy( Player *player, const Int *args, Int argCount );

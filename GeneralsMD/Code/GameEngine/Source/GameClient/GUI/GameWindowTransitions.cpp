@@ -415,6 +415,22 @@ void TransitionGroup::addWindow( TransitionWindow *transWin )
 	m_transitionWindowList.push_back(transWin);
 }
 
+void TransitionGroup::copyWindow( const AsciiString &from, const AsciiString &to )
+{
+	TransitionWindowList copies;
+	for( TransitionWindowList::iterator it = m_transitionWindowList.begin(); it != m_transitionWindowList.end(); ++it )
+	{
+		if( (*it)->m_winName.compareNoCase( from ) != 0 )
+			continue;
+		TransitionWindow *copy = NEW TransitionWindow;
+		copy->m_winName = to;
+		copy->m_frameDelay = (*it)->m_frameDelay;
+		copy->m_style = (*it)->m_style;
+		copies.push_back( copy );
+	}
+	m_transitionWindowList.splice( m_transitionWindowList.end(), copies );
+}
+
 //-----------------------------------------------------------------------------
 
 GameWindowTransitionsHandler::GameWindowTransitionsHandler(void)
@@ -458,6 +474,11 @@ void GameWindowTransitionsHandler::load(void )
 	// the fork's own groups, new names only (the main menu's campaign mission panel)
 	ini.load( AsciiString( "Data\\INI\\WindowTransitionsReforged.ini" ), INI_LOAD_OVERWRITE, NULL );
 
+	// The single player menu's Direct Strike button (Tools/mainmenu_layout.py) sits under Skirmish and
+	// flashes in and out with it in each of EA's eleven groups that name Skirmish; a group cannot be
+	// named twice, so this is the one way in short of copying all eleven into the fork's file.
+	for( TransitionGroupList::iterator it = m_transitionGroupList.begin(); it != m_transitionGroupList.end(); ++it )
+		(*it)->copyWindow( AsciiString( "MainMenu.wnd:ButtonSkirmish" ), AsciiString( "MainMenu.wnd:ButtonDirectStrike" ) );
 }
 
 void GameWindowTransitionsHandler::reset( void )

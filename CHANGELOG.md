@@ -8,6 +8,12 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Direct Strike gets its own door
+
+- Solo Play has a Direct Strike button under Skirmish. It opens a room of its own: team 1's three seats down the left and team 2's down the right, facing each other the way the loading screen shows a match, each card with its player or computer, its difficulty, its army, colour and handicap, and the army's crest or the general's face on the outside edge. Up to three against three, America, China and GLA with their generals.
+- There is no map to pick. Every match is played on a new island built from a fresh seed the moment you press Start, and the seed rides in the map's name, so the replay builds the same island again. The rules a lane game has no use for (starting cash, superweapons, unit cap, income sharing, the tech and supply rules, game speed) are gone from the room, and the island never turns up in the Skirmish, LAN or online map lists.
+- Create Game on the LAN screen asks Classic or Direct Strike first. A Direct Strike room plays by the same rules, the host's machine picks the seed when the room opens and every machine builds the island from it, and the game list marks the room "Direct Strike" for anyone deciding where to join.
+
 ## Direct Strike towers and fortresses break where they are hit
 
 - The Watch Tower and the fortress come apart piece by piece. Each shell knocks out the chunks where it lands, as wide as its blast, and never a chunk whose loss would leave the rest hanging in the air. At zero health a tower stands half a second while the death blast clears, then falls away from whoever killed it, and the ruin stays where it landed, a piece left over a hole dropping onto the ground under it. A fall nobody was watching still lands and throws its dust on time, the mouse picks the structure by what is left of it, and a save keeps every hole and every ruin lying the way it fell.

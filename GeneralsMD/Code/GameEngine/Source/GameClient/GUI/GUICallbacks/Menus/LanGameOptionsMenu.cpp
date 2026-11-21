@@ -77,6 +77,11 @@ extern void MapSelectorTooltip(GameWindow *window, WinInstanceData *instData,	Un
 extern void gameAcceptTooltip(GameWindow *window, WinInstanceData *instData, UnsignedInt mouse);
 Color white = GameMakeColor( 255, 255, 255, 255 );
 static bool s_isIniting = FALSE;
+
+// Create Game's answer (LanLobbyMenu.cpp), spent by the room it opens.  A joiner's room is a Direct
+// Strike one when the host's map is a lane map (IsDirectStrikeMap); s_directStrike is what this room is.
+Bool lanHostDirectStrike = FALSE;
+static Bool s_directStrike = FALSE;
 // window ids ------------------------------------------------------------------------------
 static NameKeyType parentLanGameOptionsID = NAMEKEY_INVALID;
 
@@ -891,6 +896,11 @@ void lanUpdateSlotList( void )
 	UpdateLobbySeatVisuals( TheLAN->GetMyGame() );
 
 	updateMapStartSpots(TheLAN->GetMyGame(), buttonMapStartPosition);
+	// a joiner learns the mode with the host's options, which can come after his room opened
+	if (!TheLAN->AmIHost() && IsDirectStrikeMap(TheLAN->GetMyGame()->getMap()))
+		s_directStrike = TRUE;
+	if (s_directStrike)
+		LayoutDirectStrikeRoom(parentLanGameOptions, "LanGameOptionsMenu.wnd", TheLAN->GetMyGame());
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1019,7 +1029,7 @@ void InitLanGameGadgets( void )
 		comboBoxPlayerTemplateID[i] = TheNameKeyGenerator->nameToKey( tmpString );
 		comboBoxPlayerTemplate[i] = TheWindowManager->winGetWindowFromId( parentLanGameOptions, comboBoxPlayerTemplateID[i] );
 		DEBUG_ASSERTCRASH(comboBoxPlayerTemplate[i] || !comboBoxPlayer[i], ("Could not find the comboBoxPlayerTemplate[%d]",i ));
-		PopulatePlayerTemplateComboBox(i, comboBoxPlayerTemplate, TheLAN->GetMyGame(), TRUE);
+		PopulatePlayerTemplateComboBox(i, comboBoxPlayerTemplate, TheLAN->GetMyGame(), !s_directStrike, s_directStrike);
 
 		// add tooltips to the player template combobox and listbox
 		if (comboBoxPlayerTemplate[i])
@@ -1117,6 +1127,10 @@ void LanGameOptionsMenuInit( WindowLayout *layout, void *userData )
 	}
 	s_isIniting = TRUE;
 
+	s_directStrike = TheLAN->AmIHost() ? lanHostDirectStrike
+		: ( TheLAN->GetMyGame() != NULL && IsDirectStrikeMap( TheLAN->GetMyGame()->getMap() ) );
+	lanHostDirectStrike = FALSE;	// Direct Connect's room and the next Create Game ask again
+
 	LANbuttonPushed = false;
 	LANisShuttingDown = false;
 
@@ -1160,6 +1174,10 @@ void LanGameOptionsMenuInit( WindowLayout *layout, void *userData )
 
 			TheLAN->GetMyGame()->adjustSlotsForMap(); // BGC- adjust the slots for the selected map.
 		}
+
+		// the host picks the island's seed now, and it goes out with the options in the map's name
+		if (s_directStrike && SetDirectStrikeMap(game))
+			FitDirectStrikeRoom(game);
 
 		//GadgetTextEntrySetText(comboBoxPlayer[0], TheLAN->GetMyName());
 		lanUpdateSlotList();
@@ -1235,7 +1253,12 @@ void updateGameOptions( void )
 	{
 		const GameSlot *localSlot = theGame->getConstSlot(theGame->getLocalSlotNum());
 		const MapMetaData *mapData = TheMapCache->findMap( TheLAN->GetMyGame()->getMap() );
-		if (mapData && localSlot && localSlot->hasMap())
+		if (IsDirectStrikeMap(TheLAN->GetMyGame()->getMap()))
+		{
+			// a joiner has no cache entry for an island he builds from its name at load
+			mapDisplayName = TheGameText->fetch("GUI:DirectStrikeMap");
+		}
+		else if (mapData && localSlot && localSlot->hasMap())
 		{
 			mapDisplayName.format(u"%ls", mapData->m_displayName.str());
 		}
@@ -1360,6 +1383,9 @@ void LanGameOptionsMenuUpdate( WindowLayout * layout, void *userData)
 	// hideShell leaves this layout on the stack with its gadgets gone, and the shell goes on updating it
 	// under the match it launched until showShell runs its init again.  There is no room to fit a map to.
 	else if (parentLanGameOptions && !LANisShuttingDown && TheLAN->AmIHost() && FitRandomMapToRoom(TheLAN->GetMyGame()))
+		PostToLanGameOptions(SEND_GAME_OPTS);
+	// a seat that joined, left or changed team: the Direct Strike rules again, and out to everyone
+	else if (parentLanGameOptions && !LANisShuttingDown && s_directStrike && TheLAN->AmIHost() && FitDirectStrikeRoom(TheLAN->GetMyGame()))
 		PostToLanGameOptions(SEND_GAME_OPTS);
 	//TheLAN->update(); // this is handled in the lobby
 }// void LanGameOptionsMenuUpdate( WindowLayout * layout, void *userData)
@@ -1521,7 +1547,7 @@ WindowMsgHandledType LanGameOptionsMenuSystem( GameWindow *window, UnsignedInt m
 								  if (wasAI || isAI)
 									  myGame->resetAccepted();
 								  if (wasAI ^ isAI)
-									  PopulatePlayerTemplateComboBox(i, comboBoxPlayerTemplate, myGame, wasAI);
+									  PopulatePlayerTemplateComboBox(i, comboBoxPlayerTemplate, myGame, wasAI && !s_directStrike, s_directStrike);
 								  if (!s_isIniting)
 								  {
 									  TheLAN->RequestGameOptions(GenerateGameOptionsString(), true);

@@ -29,6 +29,10 @@ Both sit where the single player menu does, which is hidden while either shows. 
 are set from GUI:CampaignMission, GUI:CampaignZeroHour and GUI:CampaignGenerals; the transitions
 that flash them in and out are in Data/INI/WindowTransitionsReforged.ini.
 
+Last, the single player menu itself gains ButtonDirectStrike under Skirmish, a copy of Skirmish one
+step down with Back and the frame pushed down after it; GameWindowTransitions.cpp copies Skirmish's
+flash into every transition group for it.
+
     python bigfile.py extract ../../Run/WindowZH.big "Window\\Menus\\MainMenu.wnd" -o wnd
     python mainmenu_layout.py wnd/Window/Menus ../Data/Window/Menus
 
@@ -84,7 +88,13 @@ PICK_RENAME = [
 # 800x600 pixels the pick panel and its buttons grow by, leftwards
 PICK_WIDEN = 32
 
-STRINGS = ["GUI:CampaignMission", "GUI:CampaignZeroHour", "GUI:CampaignGenerals"]
+# the single player menu's Direct Strike button, a copy of Skirmish one step under it
+DIRECT_STRIKE = "ButtonDirectStrike"
+DIRECT_STRIKE_LABEL = "GUI:DirectStrike"
+DIRECT_STRIKE_TOOLTIP = "TOOLTIP:DirectStrike"
+
+STRINGS = ["GUI:CampaignMission", "GUI:CampaignZeroHour", "GUI:CampaignGenerals",
+           DIRECT_STRIKE_LABEL, DIRECT_STRIKE_TOOLTIP]
 
 
 def drop_prop(window, key):
@@ -143,6 +153,23 @@ def mission_names():
         "ButtonMission%d" % n for n in range(6, MISSION_BUTTONS + 1)]
 
 
+def add_direct_strike(layout):
+    """Clone Skirmish one step below itself as Direct Strike, and push Back and the frame down a
+    step.  Run after the mission panel is cloned, which must not carry the extra button."""
+    earth = layout.find("EarthMap")
+    skirmish = layout.find("ButtonSkirmish")
+    step = skirmish.rect[1] - layout.find("ButtonChallenge").rect[1]
+    button = clone(skirmish, full(DIRECT_STRIKE))
+    button.move_by(0, step)
+    button.set_prop("TEXT", '"%s"' % DIRECT_STRIKE_LABEL)
+    button.set_prop("TOOLTIPTEXT", '"%s"' % DIRECT_STRIKE_TOOLTIP)
+    earth.children.append(button)
+    layout.find("ButtonSingleBack").move_by(0, step)
+    for frame in (layout.find("MapBorder"), earth):
+        l, t, r, b, cw, ch = frame.rect
+        frame.rect = (l, t, r, b + step, cw, ch)
+
+
 def build(layout):
     label = "GUI:CampaignMission"
     missions = clone_panel(layout, [
@@ -155,6 +182,7 @@ def build(layout):
         l, t, r, b, cw, ch = window.rect
         window.rect = (l - PICK_WIDEN, t, r, b, cw, ch)
     layout.root.children.append(pick)
+    add_direct_strike(layout)
     return layout
 
 
@@ -189,7 +217,7 @@ def selfcheck():
         layout = wndlayout.load(path)
         names = set((w.name or "").split(":")[-1] for w in layout.root.walk())
 
-    wanted = set(mission_names()) | set(new for _, new, _ in PICK_RENAME) | transition_windows()
+    wanted = set(mission_names()) | set(new for _, new, _ in PICK_RENAME) | transition_windows() | {DIRECT_STRIKE}
     for name in sorted(wanted - names):
         problems.append("%s.wnd has no %s" % (MENU, name))
 

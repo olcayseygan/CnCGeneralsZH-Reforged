@@ -778,6 +778,14 @@ static Bool generatedMapDisplayName( const MapCache& cache, const AsciiString& f
 	if (!isGeneratedMapPath( fname ))
 		return FALSE;
 
+	// a Direct Strike map is never picked, so its name says only what it is
+	UnsignedInt laneLine, laneEdge;
+	if (LaneGridColours( fname, &laneLine, &laneEdge ))
+	{
+		displayName = TheGameText->fetch( "GUI:DirectStrikeMap" );
+		return TRUE;
+	}
+
 	UnicodeString random = TheGameText->fetch( "GUI:Random" );
 	AsciiString templatePath;
 	if (generatedMapTemplate( fname, templatePath ))
@@ -1087,6 +1095,15 @@ typedef MapDisplayToFileNameList::iterator MapDisplayToFileNameListIter;
 			//Patch 1.03 -- Purposely filter out these broken maps that exist in Generals.
 			if( !asciiMapName.compare( "maps\\armored fury\\armored fury.map" ) || 
 				!asciiMapName.compare( "maps\\scorched earth\\scorched earth.map" ) )
+			{
+				++tempit;
+				continue;
+			}
+
+			// a lane map is a Direct Strike room's own, made fresh for each match by that room
+			// (SetDirectStrikeMap); no map list offers one
+			UnsignedInt laneLine, laneEdge;
+			if( LaneGridColours( asciiMapName, &laneLine, &laneEdge ) )
 			{
 				++tempit;
 				continue;

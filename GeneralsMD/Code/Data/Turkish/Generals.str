@@ -20798,6 +20798,42 @@ GUI:GroupTrayTraining
 "+%d üretimde"
 END
 
+GUI:DirectStrike
+"DIRECT STRIKE"
+END
+
+GUI:DirectStrikeLower
+"Direct Strike"
+END
+
+TOOLTIP:DirectStrike
+"Arsana birlik al. Her 30 saniyede her takımdan bir oyuncunun arsasının bir kopyası koridordan yürür; karşı kaleyi ilk yıkan takım kazanır. En çok 3'e 3, her maçta yeni bir ada."
+END
+
+GUI:DirectStrikeMap
+"Rastgele ada"
+END
+
+GUI:DirectStrikeTeam
+"TAKIM %d"
+END
+
+GUI:GameModeTitle
+"Oyun Kur"
+END
+
+GUI:GameModeBody
+"Bu oyun hangi modda oynanacak?"
+END
+
+GUI:GameModeClassic
+"Klasik"
+END
+
+GUI:GameModeDirectStrike
+"Direct Strike"
+END
+
 OBJECT:LaneWarFortress
 "Kale"
 END

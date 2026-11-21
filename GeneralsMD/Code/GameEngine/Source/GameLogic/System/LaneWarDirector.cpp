@@ -1306,7 +1306,13 @@ Bool LaneWarDirector::buyVeterancy( Player *player, const Int *args, Int argCoun
 	else if( (Int)player->getMoney()->countMoney() < price )
 		refused = "too dear";
 
-	const Object *obj = host != NULL ? TheGameLogic->findObjectByID( host->id ) : NULL;
+	if( host == NULL )
+	{
+		DEBUG_LOG(( "LANEWAR VETERANCY: frame %u player %d at column %d row %d refused: %s\n", TheGameLogic->getFrame(),
+								player ? (Int)player->getPlayerIndex() : -1, argCount >= 2 ? args[ 1 ] : -1, argCount >= 3 ? args[ 2 ] : -1, refused ));
+		return FALSE;
+	}
+	const Object *obj = TheGameLogic->findObjectByID( host->id );
 	DEBUG_LOG(( "LANEWAR VETERANCY: frame %u player %d '%s'%s%s at column %d row %d to rank %d for %d %s%s\n", TheGameLogic->getFrame(),
 							player ? (Int)player->getPlayerIndex() : -1, obj ? obj->getTemplate()->getName().str() : "?", man ? "'s passenger " : "",
 							man ? man->thing->getName().str() : "", argCount >= 2 ? args[ 1 ] : -1, argCount >= 3 ? args[ 2 ] : -1,

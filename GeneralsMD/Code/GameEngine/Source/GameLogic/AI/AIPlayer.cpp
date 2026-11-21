@@ -854,6 +854,7 @@ static Bool hasSuppliesNear( Player *player, const Object *supplyCenter, Real re
 static const TransportContainModuleData *transportContainOf( const ThingTemplate *tmpl );
 static Bool isAmbulanceTemplate( const ThingTemplate *tmpl );
 static Bool passengersFireFrom( const ThingTemplate *tmpl );
+static const ThingTemplate *ownTemplate( const Player *player, const ThingTemplate *thing );
 static Bool isHelicopter( const Object *obj );
 
 struct IdleTruckSearch
@@ -1092,11 +1093,14 @@ void AIPlayer::queueSupplyTruck( void )
 				// bought its 1,200 Combat Chinook as a gatherer here at frame 8,636 of a Medium match
 				Bool isSupplyTruck = tTemplate->isKindOf(KINDOF_HARVESTER) && !passengersFireFrom(tTemplate);
 				if (isSupplyTruck) {
-					Object *factory = findFactory(tTemplate, false);
+					// a China seat reaches TurkiyeVehicleSupplyTruck through reskin equivalence; the order
+					// carries the side's own truck, whose price and prerequisites the factory really uses
+					const ThingTemplate *own = ownTemplate(m_player, tTemplate);
+					Object *factory = findFactory(own, false);
 					if (factory) {
 						// we can build one.
 						WorkOrder *order = newInstance(WorkOrder);
-						order->m_thing = tTemplate;
+						order->m_thing = own;
 						order->m_factoryID = INVALID_ID;
 						order->m_numRequired = 1;
 						order->m_required = true;
@@ -1115,7 +1119,7 @@ void AIPlayer::queueSupplyTruck( void )
 						teamName.concat(factory->getTemplate()->getName());
 						TheScriptEngine->AppendDebugMessage(teamName, false);
 						DEBUG_LOG(("AI GATHERER frame %d player %d buys '%s' for center %d, %d of %d there, %d harvesters in all, %d in the bank\n",
-							TheGameLogic->getFrame(), m_player->getPlayerIndex(), tTemplate->getName().str(), info->getObjectID(),
+							TheGameLogic->getFrame(), m_player->getPlayerIndex(), own->getName().str(), info->getObjectID(),
 							info->getCurrentGatherers(), desiredGatherers, totalHarvesters, m_player->getMoney()->countMoney()));
 						m_teamDelay = 0;
 						if (info->getCurrentGatherers()==-1) {
@@ -15093,8 +15097,8 @@ void AIPlayer::lendDutyChinook( void )
 	m_player->setCanBuildUnits( true );
 	Bool canGet = FALSE;
 	for( const ThingTemplate *tmpl = TheThingFactory->firstTemplate(); tmpl && !canGet; tmpl = tmpl->friend_getNextTemplate() )
-		canGet = tmpl->isKindOf( KINDOF_HARVESTER ) && !passengersFireFrom( tmpl ) && findFactory( tmpl, true ) != NULL &&
-			(Int)m_player->getMoney()->countMoney() >= tmpl->calcCostToBuild( m_player );
+		canGet = tmpl->isKindOf( KINDOF_HARVESTER ) && !passengersFireFrom( tmpl ) && findFactory( ownTemplate( m_player, tmpl ), true ) != NULL &&
+			(Int)m_player->getMoney()->countMoney() >= ownTemplate( m_player, tmpl )->calcCostToBuild( m_player );
 	m_player->setCanBuildUnits( canBuildUnits );
 	if( canGet )
 		return;

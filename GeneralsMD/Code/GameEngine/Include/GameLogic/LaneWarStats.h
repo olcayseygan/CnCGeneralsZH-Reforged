@@ -136,8 +136,9 @@ public:
 	void onKill( const Object *killer, const Object *victim );
 	void onDamage( const Object *damager, const Object *victim, Real amount );
 
-	/** MSG_SELF_DESTRUCT in a Lane War match (GameLogicDispatch): the player left, by Exit, Surrender or a
-		* dropped connection, on the frame the command list carries it for every machine.  The team's fortress
+	/** MSG_SELF_DESTRUCT in a Lane War match (GameLogicDispatch), or a kick vote carried (GameLogic's
+		* kickPlayer): the player left, by Exit, Surrender, a dropped connection or a kick, on a frame the
+		* command list fixes for every machine.  The team's fortress
 		* and towers he held go to a teammate still playing; when nobody of the team plays on, the team is
 		* out on this frame, with no collapse to wait for.  A computer seat never leaves. */
 	void onPlayerLeft( const Player *player );

@@ -1019,6 +1019,24 @@ static void handleCommand( const AsciiString &command )
 		return;
 	}
 
+	/* kickvote <player index> yes|no: the vote InGameChat's "/kick name", "/yes" and "/no" post, by the
+		 target's player index; GameLogic::processKickVote decides on every machine whether it counts. */
+	if (strncmp( command.str(), "kickvote ", 9 ) == 0)
+	{
+		Int target = -1;
+		char answer[ 8 ] = { 0 };
+		if (sscanf( command.str() + 9, "%d %7s", &target, answer ) != 2 || ( strcmp( answer, "yes" ) != 0 && strcmp( answer, "no" ) != 0 ))
+		{
+			replyError( "kickvote wants <player index> yes|no" );
+			return;
+		}
+		GameMessage *vote = TheMessageStream->appendMessage( GameMessage::MSG_VOTE_KICK );
+		vote->appendIntegerArgument( target );
+		vote->appendBooleanArgument( strcmp( answer, "yes" ) == 0 );
+		replyOk( "\"voted\":true" );
+		return;
+	}
+
 	/* key <KEY_name> [ALT] [CTRL] [SHIFT] [HOLD | RELEASE]
 		 One press and release, carried the way Keyboard.cpp carries a real one, so the command map, the
 		 translators and whatever network message sits behind them all see a key.  The keyboard itself

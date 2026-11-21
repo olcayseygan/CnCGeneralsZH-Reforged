@@ -4739,6 +4739,14 @@ static Bool kickVoteAgreed( Int votes, Int voters )
 	return voters >= MIN_KICK_VOTERS && votes >= voters;
 }
 
+/// a kicked player has left the game: in Direct Strike his team's buildings go to a teammate first (LaneWarStats.h)
+static void kickPlayer( Player *player )
+{
+	if( TheLaneWarDirector->isActive() )
+		TheLaneWarStats->onPlayerLeft( player );
+	player->killPlayer();
+}
+
 void GameLogic::processKickVote( Player *voter, Int targetIndex, Bool yes )
 {
 	if( !mayVoteToKick( voter, targetIndex ) )
@@ -4779,7 +4787,7 @@ void GameLogic::processKickVote( Player *voter, Int targetIndex, Bool yes )
 	m_kickVoteYesMask |= voter->getPlayerMask();
 	if( kickVoteAgreed( countKickVotes(), countKickVoters() ) )
 	{
-		ThePlayerList->getNthPlayer( m_kickVoteTarget )->killPlayer();
+		kickPlayer( ThePlayerList->getNthPlayer( m_kickVoteTarget ) );
 		endKickVote( "GUI:KickVoteKicked" );
 	}
 }
@@ -4796,7 +4804,7 @@ void GameLogic::expireKickVote( void )
 		endKickVote( "GUI:KickVoteFailed" );
 	else if( kickVoteAgreed( countKickVotes(), countKickVoters() ) )
 	{
-		ThePlayerList->getNthPlayer( m_kickVoteTarget )->killPlayer();
+		kickPlayer( ThePlayerList->getNthPlayer( m_kickVoteTarget ) );
 		endKickVote( "GUI:KickVoteKicked" );
 	}
 }

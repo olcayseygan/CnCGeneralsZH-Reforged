@@ -1028,6 +1028,7 @@ void HeightMapRenderObjClass::setSunPerPixel(Bool on)
 	}
 	m_sunPerPixel = on;
 	m_terrainContentVersion++;
+	invalidateSkirt();	// it bakes the map's shade under the sun per pixel
 #ifdef DO_ROADS
 	if (m_roadBuffer) {
 		m_roadBuffer->updateLighting();

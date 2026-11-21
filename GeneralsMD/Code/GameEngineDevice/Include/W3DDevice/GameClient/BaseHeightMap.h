@@ -241,8 +241,9 @@ public:
 	void removeTerrainBibHighlighting(void);
 
 	W3DShroud *getShroud()	{return m_shroud;}
-	Vector3 getSkirtRimColour(void);	///< what the land past the map ends in, the frame's clear colour
+	Vector3 getSkirtRimColour(void);	///< what the land past the map ends in, and the void past it in the tactical view
 	void drawSkirtFade(void);	///< the land past the map into the rim's colour, after the water; once a drawSkirt
+	void invalidateSkirt(void) { m_skirtStale = TRUE; }	///< built again at its next draw: the sea over it moved
 	W3DBridgeBuffer *getBridgeBuffer()	{return m_bridgeBuffer;}
 	void updateShorelineTiles(Int minX, Int minY, Int maxX, Int maxY, WorldHeightMap *pMap);	///<figure out which tiles on this map cross water plane
 	void updateShorelineTile(Int X, Int Y, Int Border, WorldHeightMap *pMap);	///<figure out which tiles on this map cross water plane
@@ -507,10 +508,12 @@ protected:
 	Bool m_skirtFadePending;	///< drawSkirt drew and drawSkirtFade has not yet
 	Bool m_skirtFadeMirrored;	///< that drawSkirt was into Modern's mirror, both sides
 	Bool m_skirtShrouded;	///< that drawSkirt laid the border's shroud over it
-	/// The edge as buildSkirt reads it: the ring blurred, its share of sea, the land's mean and the sea's level.
+	/// The edge as buildSkirt reads it: the ring blurred, the level of the sea drawn past each sample
+	/// (INVALID_WATER_HEIGHT for none), that blurred into a share, the land's mean and the highest sea.
 	struct SkirtEdge
 	{
 		std::vector<Real> blurred;
+		std::vector<Real> water;
 		std::vector<Real> seaShare;
 		Real landMean;
 		Real seaZ;

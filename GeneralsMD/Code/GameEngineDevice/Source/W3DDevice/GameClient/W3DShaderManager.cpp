@@ -160,6 +160,7 @@ TextureClass *W3DShaderManager::m_Textures[8];
 W3DShaderManager::ShaderTypes W3DShaderManager::m_currentShader;
 FilterTypes W3DShaderManager::m_currentFilter=FT_NULL_FILTER; ///< Last filter that was set.
 Int W3DShaderManager::m_currentShaderPass;
+Bool W3DShaderManager::m_atmosphereDrawn = FALSE;
 ChipsetType W3DShaderManager::m_currentChipset;
 GraphicsVenderID W3DShaderManager::m_currentVendor;
 Int64 W3DShaderManager::m_driverVersion;
@@ -436,7 +437,7 @@ static const Real ATMOSPHERE_SCALE = 2200.0f;		// how far past it the fade takes
 static const Real ATMOSPHERE_STRENGTH = 0.85f;		// the most of the horizon's colour the far ground takes
 static const Real ATMOSPHERE_SKY_FLOOR = 0.7f;		// a night's sky keeps this much, or the stars go
 
-static void pushAtmosphere(Bool weatherHaze)
+static Bool pushAtmosphere(Bool weatherHaze)
 {
 	static Bool s_on = FALSE;
 	const Bool on = TheGlobalData->m_atmosphere && !TheGlobalData->m_classicGraphics && Direct3D11_Present_Is_Enabled()
@@ -477,6 +478,7 @@ static void pushAtmosphere(Bool weatherHaze)
 		DX11Post_Set_Atmosphere(none, none, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, NULL);
 	}
 	s_on = on;
+	return on;
 }
 #endif
 
@@ -515,7 +517,7 @@ void W3DShaderManager::pushProtoHaze(void)
 		DX11Post_Set_Haze(none, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, none, 0.0f);
 	}
 	s_hazed = weatherHaze || TheGlobalData->m_mapLight;
-	pushAtmosphere(weatherHaze);
+	m_atmosphereDrawn = pushAtmosphere(weatherHaze);
 	if ((TheGlobalData->m_mapLight || TheGlobalData->m_ambientOcclusion || TheGlobalData->m_atmosphere || weatherHaze) && Direct3D11_Is_Active())
 		pushShroudFrame();
 #endif
@@ -3361,7 +3363,7 @@ static void rttComplain( const char *why )
 }
 
 /*Draws 2 triangles covering the viewport given the current render states*/
-void W3DShaderManager::drawViewport(Int color)
+void W3DShaderManager::drawViewport(Int color, Real depth)
 {
 
 	struct _TRANS_LIT_TEX_VERTEX {
@@ -3378,16 +3380,16 @@ void W3DShaderManager::drawViewport(Int color)
 	height=TheTacticalView->getHeight();
 
 	//bottom right
-	v[0].p = D3DXVECTOR4( xpos+width-0.5f, ypos+height-0.5f, 0.0f, 1.0f );
+	v[0].p = D3DXVECTOR4( xpos+width-0.5f, ypos+height-0.5f, depth, 1.0f );
 	v[0].u = (Real)(xpos+width)/(Real)TheDisplay->getWidth();	v[0].v = (Real)(ypos+height)/(Real)TheDisplay->getHeight();
 	//top right
-	v[1].p = D3DXVECTOR4( xpos+width-0.5f, ypos-0.5f, 0.0f, 1.0f );
+	v[1].p = D3DXVECTOR4( xpos+width-0.5f, ypos-0.5f, depth, 1.0f );
 	v[1].u = (Real)(xpos+width)/(Real)TheDisplay->getWidth();	v[1].v = (Real)(ypos)/(Real)TheDisplay->getHeight();
 	//bottom left
-	v[2].p = D3DXVECTOR4(  xpos-0.5f, ypos+height-0.5f, 0.0f, 1.0f );
+	v[2].p = D3DXVECTOR4(  xpos-0.5f, ypos+height-0.5f, depth, 1.0f );
 	v[2].u = (Real)(xpos)/(Real)TheDisplay->getWidth();	v[2].v = (Real)(ypos+height)/(Real)TheDisplay->getHeight();
 	//top left
-	v[3].p = D3DXVECTOR4(  xpos-0.5f,  ypos-0.5f, 0.0f, 1.0f );
+	v[3].p = D3DXVECTOR4(  xpos-0.5f,  ypos-0.5f, depth, 1.0f );
 	v[3].u = (Real)(xpos)/(Real)TheDisplay->getWidth();	v[3].v = (Real)(ypos)/(Real)TheDisplay->getHeight();
 	v[0].color = color;
 	v[1].color = color;

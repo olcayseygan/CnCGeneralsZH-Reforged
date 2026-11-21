@@ -141,6 +141,8 @@ public:
 	void ReleaseResources(void);	///< Release all dx8 resources so the device can be reset.
 	void ReAcquireResources(void);  ///< Reacquire all resources after device reset.
 	Real getWaterHeight(Real x, Real y);	///<return water height at given point - for use by WB.
+	/// The level of the sea drawn past the heightmap's edge (addSkirtSeas) at a point, INVALID_WATER_HEIGHT where none is.
+	Real getSkirtSeaLevel(Real x, Real y) const;
 
 	void replaceSkyboxTexture(const AsciiString& oldTexName, const AsciiString& newTextName);
 	TextureClass *getSkyTexture(void) const { return m_settings[m_tod].skyTexture; }	///< the time of day's sky, as WaterSet names it
@@ -296,6 +298,8 @@ protected:
 	std::vector<WaterPolygonForDraw> m_waterPolygonsForDraw;
 	void takeWaterPolygonsForDraw(void);
 	void addSkirtSeas(void);	///< the sea on past the heightmap's edge, over the land drawn there
+	size_t m_skirtSeasFirst=0;	///< where addSkirtSeas's strips start in m_waterPolygonsForDraw
+	double m_skirtSeasSum=0.0;	///< what they were last, so the skirt is built again under a sea that moved
 	void takeMotionReadsForRender(void);
 	void synchronizeWaterReflection(void);
 #endif

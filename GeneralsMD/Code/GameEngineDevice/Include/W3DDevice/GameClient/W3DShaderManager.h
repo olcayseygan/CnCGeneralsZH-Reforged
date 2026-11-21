@@ -120,6 +120,8 @@ public:
 	/// The horizon's colour at this time of day under the map's own light: the Atmosphere's fade,
 	/// and what the land past the map fades into on any device.
 	static void getHorizonColour(float rgb[3]);
+	/// The Atmosphere option fades this frame's far ground and paints its sky (pushProtoHaze decides).
+	static Bool isAtmosphereDrawn(void) { return m_atmosphereDrawn; }
 
 	// Support routines for filter methods.
 	static Bool canRenderToTexture(void) { return (m_oldRenderSurface && m_newRenderSurface);}
@@ -131,7 +133,7 @@ public:
 	static IDirect3DTexture9 * endRenderToTexture(void); ///< Ends render to texture, & returns texture.
 	static IDirect3DTexture9 * getRenderTexture(void);	///< returns last used render target texture
 	static Bool isRenderingToTexture(void) {return m_renderingToTexture; }
-	static void drawViewport(Int color);	///<draws 2 triangles covering the current tactical viewport
+	static void drawViewport(Int color, Real depth = 0.0f);	///<draws 2 triangles covering the current tactical viewport, at this depth
 
 
 protected:
@@ -149,7 +151,7 @@ protected:
 	static IDirect3DTexture9 *m_renderTexture;		///<texture into which rendering will be redirected.
 	static IDirect3DSurface9 *m_newRenderSurface;	///<new render target inside m_renderTexture
 	static IDirect3DSurface9 *m_oldDepthSurface;	///<previous depth buffer surface
-
+	static Bool m_atmosphereDrawn;	///<pushProtoHaze handed the Atmosphere a frame to draw
 
 };
 

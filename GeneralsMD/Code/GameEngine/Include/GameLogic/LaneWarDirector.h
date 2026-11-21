@@ -31,7 +31,7 @@
 // and no weapon may pick them.  None of that leans on the terrain around the plot.  Every 30 wall
 // seconds a spawn tick pays every player and sends one seat's wave from each team, the seats taking
 // turns: the plot's units are copied, template and slot place relative to the grid's centre, onto
-// the team's spawn pad with the plot's front row in front, facing the enemy, and march down the lane
+// the team's spawn pad behind its fortress with the plot's front row in front, facing the enemy, and march past it down the lane
 // as AIGroup::groupLaneMarch sends them.  The copies
 // belong to the player and cannot be selected; each dies 130 wall seconds after it spawned.  A copy
 // presses its own buttons on the skirmish AI's rules, as far as its player's switches let it

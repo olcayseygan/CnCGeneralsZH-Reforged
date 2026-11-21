@@ -8,6 +8,11 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Direct Strike waves leave from behind the fortress
+
+- A wave now appears behind its own fortress, with the fortress between it and the lane, and marches out past the fortress and the watch tower. It used to appear in front of the tower. An enemy that wants to sit on your spawn has to get past both first. The walk to the enemy fortress is 90 cells longer.
+- Direct Strike replays and saves recorded before this change will not play back.
+
 ## Direct Strike matches end around the 25 minute mark
 
 - The fortress has 6000 health instead of 4000 and the watch tower 2000 instead of 1200, behind the same armour. At the old numbers the waves took a fortress in a few ticks. We tried 12000 and 4000 and matches dragged past half an hour with both fortresses standing. At 6000 eighteen computer 3v3s on Hard and Brutal, over six islands, ended on a fortress kill at a median of 26 minutes: three before 20, seven between 20 and 30, seven between 30 and 38, and one still undecided at 40. There is no clock that ends a match. A long one runs long.

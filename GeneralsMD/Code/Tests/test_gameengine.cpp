@@ -12714,8 +12714,8 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 	CHECK_EQ( spawns, 2 );
 	if( spawns != 2 )
 		return;
-	CHECK_NEAR( spawnAt[0].x, middleX - 536.0f, 0.5f );
-	CHECK_NEAR( spawnAt[1].x, middleX + 536.0f, 0.5f );
+	CHECK_NEAR( spawnAt[0].x, middleX - 1440.0f, 0.5f );
+	CHECK_NEAR( spawnAt[1].x, middleX + 1440.0f, 0.5f );
 	CHECK_NEAR( spawnAt[0].y, middleY, 0.5f );
 	CHECK_NEAR( spawnAt[1].y, middleY, 0.5f );
 	CHECK_EQ( laneA, 17 );
@@ -12749,17 +12749,18 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 	CHECK_NEAR( theRMGParse.m_objectPositions[tower[1]].x, middleX + 666.0f, 0.5f );
 
 	/* A wave copy is a plot turned onto the lane, 160 along and 240 across, round its spawn anchor. It
-		lies on the lane, and wholly in front of its own tower, two cells clear of the tower's 32 by 32,
-		so a wave walks round neither its tower nor the fortress behind it; and short of the middle. */
+		lies on the lane, wholly behind its own fortress, two cells clear of the fortress's 140 by 140, so
+		the fortress stands between the pad and the lane; and the fortress leaves the wave room to pass
+		it, more than ten cells of open lane either side. */
 	for( Int team = 0; team < 2; team++ )
 	{
-		const Coord3D& own = theRMGParse.m_objectPositions[tower[team]];
+		const Coord3D& own = theRMGParse.m_objectPositions[fortress[team]];
 		const Real ahead = team == 0 ? 1.0f : -1.0f;
 		CHECK( spawnAt[team].x - 80.0f >= laneX0 * MAP_XY_FACTOR && spawnAt[team].x + 80.0f <= laneX1 * MAP_XY_FACTOR );
 		CHECK( spawnAt[team].y - 120.0f >= laneY0 * MAP_XY_FACTOR && spawnAt[team].y + 120.0f <= laneY1 * MAP_XY_FACTOR );
-		CHECK( ( ( spawnAt[team].x - ahead * 80.0f ) - ( own.x + ahead * 16.0f ) ) * ahead >= 2.0f * MAP_XY_FACTOR );
-		CHECK( ( middleX - ( spawnAt[team].x + ahead * 80.0f ) ) * ahead > 0.0f );
-		CHECK( ( own.x - theRMGParse.m_objectPositions[fortress[team]].x ) * ahead > 0.0f );
+		CHECK( ( ( own.x - ahead * 70.0f ) - ( spawnAt[team].x + ahead * 80.0f ) ) * ahead >= 2.0f * MAP_XY_FACTOR );
+		CHECK( own.y - 70.0f - laneY0 * MAP_XY_FACTOR > 100.0f && laneY1 * MAP_XY_FACTOR - ( own.y + 70.0f ) > 100.0f );
+		CHECK( ( theRMGParse.m_objectPositions[tower[team]].x - own.x ) * ahead > 0.0f );
 	}
 
 	// the lane and the plots flat at one height, and every one of them in one walk

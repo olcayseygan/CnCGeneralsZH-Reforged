@@ -9758,11 +9758,11 @@ void RMGLayout::clearLockedGround( void )
 	holds the west end and team B the east. Each team's fortress stands RMG_LANE_FORTRESS_AT of the
 	half-length from the middle and its tower RMG_LANE_TOWER_AT, both on the middle line
 	(RMG_LANE_TOWERS 2 puts two towers at the lane's edges instead). A wave copy is a plot's
-	RMG_LANE_PLOT_ACROSS cells wide, centred on the line, so anything on the line in front of it is
-	something it would have to walk round: its spawn anchor therefore stands in front of its own tower,
-	the copy's back RMG_LANE_PAD_GAP cells clear of the tower's front, and a wave meets neither its
-	fortress nor its tower on the way out. The tower covers the pad, as the old pad behind the fortress
-	was covered. Past each lane end, RMG_LANE_PLOT_GAP cells of green away, stands a column
+	RMG_LANE_PLOT_ACROSS cells wide, centred on the line, and its spawn anchor stands behind its own
+	fortress (the owner's rule of 2026-11-21), the copy's front RMG_LANE_PAD_GAP cells clear of the
+	fortress's back, so the fortress is between the pad and the lane and the wave walks past it and
+	its tower on the way out: the fortress is 14 cells wide on a 45-cell lane, which leaves 15 a side.
+	Anything that reaches the pad has got past both. Past each lane end, RMG_LANE_PLOT_GAP cells of green away, stands a column
 	of three build plots, one a seat, each RMG_LANE_PLOT_ALONG along the lane by RMG_LANE_PLOT_ACROSS
 	across it, upright like the plots at the ends of the Direct Strike map: seat 1's on the lane's axis,
 	seat 2's below it and seat 3's above, RMG_LANE_PLOT_PITCH cells apart. A plot's edge towards the
@@ -9817,7 +9817,7 @@ void RMGLayout::clearLockedGround( void )
 #define RMG_LANE_FORTRESS_HALF	7.0f	///< cells from its middle to its front, LaneWarFortress's 140 by 140 footprint
 #define RMG_LANE_TOWER_AT		0.37f	///< a tower's distance from the middle, the same way
 #define RMG_LANE_TOWER_HALF		2.0f	///< cells from its middle to its front, LaneWarWatchTower's 32 by 32 and a little
-#define RMG_LANE_PAD_GAP		3.0f	///< cells between the front of a team's tower and the back of its wave copy
+#define RMG_LANE_PAD_GAP		3.0f	///< cells between the back of a team's fortress and the front of its wave copy
 #define RMG_LANE_TOWERS			1		///< a team's towers: 1 on the middle line, 2 at the lane's edges
 #define RMG_LANE_TOWER_INSET	3.0f	///< cells a tower at an edge stands in from it
 static const char *const RMG_LANE_MIDDLE_TEMPLATE = NULL;	///< a structure in the middle (TechOilRefinery, say), or none
@@ -9871,7 +9871,7 @@ struct RMGLaneShape
 	Real m_half;						///< half its length
 	Real m_fortressX[2];				///< team A's fortress and team B's, on the middle line
 	Real m_towerX[2];					///< and their towers
-	Real m_spawnX[2];					///< each team's spawn anchor, on the middle line
+	Real m_spawnX[2];					///< each team's spawn anchor, on the middle line behind its fortress
 };
 
 static RMGLaneShape rmgLaneShape( void )
@@ -9898,7 +9898,7 @@ static RMGLaneShape rmgLaneShape( void )
 		const Real ahead = team == 0 ? 1.0f : -1.0f;		// towards the other end
 		s.m_fortressX[team] = s.m_middleX - ahead * RMG_LANE_FORTRESS_AT * s.m_half;
 		s.m_towerX[team] = s.m_middleX - ahead * RMG_LANE_TOWER_AT * s.m_half;
-		s.m_spawnX[team] = s.m_towerX[team] + ahead * ( RMG_LANE_TOWER_HALF + RMG_LANE_PAD_GAP + 0.5f * (Real)RMG_LANE_PLOT_ALONG );
+		s.m_spawnX[team] = s.m_fortressX[team] - ahead * ( RMG_LANE_FORTRESS_HALF + RMG_LANE_PAD_GAP + 0.5f * (Real)RMG_LANE_PLOT_ALONG );
 	}
 	return s;
 }

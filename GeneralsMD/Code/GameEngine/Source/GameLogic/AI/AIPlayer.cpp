@@ -18806,7 +18806,7 @@ static Int influenceRound( const AIDifficultyProfile *profile )
 
 /** prepareInfluence's shapes in runs of the turn's IDs, a run to a job, each run writing its shapes and cells
 	* of its own.  As many runs whatever the pool, so the cells' order never depends on the threads. */
-enum { SHAPE_RUNS = 16, SHAPE_RUN_IDS = 32 };
+enum { SHAPE_RUNS = 16, SHAPE_RUN_IDS = 32, SHAPE_CELLS_PER_OBJECT = 256 };
 static std::vector<Int> theShapeRunCells[ SHAPE_RUNS ];
 static std::vector<Int> theShapeRunEdge[ SHAPE_RUNS ];
 struct ShapeRuns
@@ -18877,6 +18877,14 @@ void AIPlayer::prepareInfluence( void )
 	const Int count = (Int)turn.ids.size();
 	const Int runCount = min<Int>( SHAPE_RUNS, ( count + SHAPE_RUN_IDS - 1 ) / SHAPE_RUN_IDS );
 	runs.perRun = runCount > 0 ? ( count + runCount - 1 ) / runCount : 0;
+	// the runs' cells grow here on the logic thread, not in the job: room for SHAPE_CELLS_PER_OBJECT cells
+	// for each of its share of the turn, a no-op once a vector has it (THREADING-ROADMAP 1.1).
+	// ponytail: a floor, not a measure; a run of long-reach guns past it still grows once on a worker
+	for( Int run = 0; run < runCount; ++run )
+	{
+		theShapeRunCells[ run ].reserve( SHAPE_CELLS_PER_OBJECT * runs.perRun );
+		theShapeRunEdge[ run ].reserve( SHAPE_CELLS_PER_OBJECT );
+	}
 	JobSystem::parallel_for( runCount, 1, shapeRun, &runs );
 	for( Int run = 0; run < runCount; ++run )
 	{
@@ -20945,6 +20953,9 @@ void AIPlayer::prepareLook( void )
 	// ponytail: fixed floors, a 32-seat late game may still grow past them once or twice a match
 	m_seenScan.reserve( 512 );
 	m_lookDefences.reserve( 128 );
+	m_lookTurn.reserve( 512 );
+	m_stampCells.reserve( SHAPE_CELLS_PER_OBJECT );
+	m_stampEdge.reserve( SHAPE_CELLS_PER_OBJECT );
 	if( !measuringWithoutTactics() )
 		prepareInfluence();
 }

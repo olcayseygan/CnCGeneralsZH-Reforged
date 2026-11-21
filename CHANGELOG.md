@@ -147,6 +147,7 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - A unit still riding in a transport, tunnel or garrison that had already been deleted could crash the game later: when loading a save in the middle of a match, when leaving for the menu after the score screen, when a map script changed the playable area, and in a tunnel network fight. Gone.
 - A transport, garrison or Angry Mob nexus whose starting passengers name a unit the game's data doesn't have now comes out empty instead of stopping the game. Mods ran into this.
 - Taking down a beacon while something neutral was selected crashed a long network match, both seats at once.
+- Tank tracks in very large battles could run past the room set aside for them and crash Direct3D 11. Track drawing stays inside it now. A tank killed before it ever moved also no longer holds a track slot for the rest of the map, which is how later tanks ended up with no tracks once the slots ran out.
 - The save and load window crashed when Delete or Overwrite was pressed with nothing selected.
 - Starting a second match in the same session could crash on its first frame, a model reading a unit that no longer existed. It doesn't now.
 - A control bar layout that fails to load says so and closes cleanly, where it used to crash at startup. A missing score screen layout no longer crashes the end of a match either.

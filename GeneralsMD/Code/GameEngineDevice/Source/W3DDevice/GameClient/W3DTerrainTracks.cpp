@@ -69,6 +69,20 @@
 #endif
 
 #define BRIDGE_OFFSET_FACTOR	0.25f	//amount to raise tracks above bridges.
+
+// A track's edges live in a fixed m_edges[MAX_TRACK_EDGE_COUNT], so a MaxTankTrackEdges past it from
+// a GameLOD.ini wrote beyond the array; under two the index buffer has no triangle to hold.
+static Int clampTrackEdges(Int edges)
+{
+	if (edges > MAX_TRACK_EDGE_COUNT)
+		return MAX_TRACK_EDGE_COUNT;
+	if (edges < 2)
+		return 2;
+	return edges;
+}
+
+// The vertex buffer counts its vertices in an unsigned short: every track at full length has to fit.
+#define MAX_TRACK_MODULES	(65535/(MAX_TRACK_EDGE_COUNT*2))
 //=============================================================================
 // TerrainTracksRenderObjClass::~TerrainTracksRenderObjClass
 //=============================================================================
@@ -563,11 +577,12 @@ TerrainTracksRenderObjClassSystem::TerrainTracksRenderObjClassSystem()
 	m_freeModules = NULL;
 	m_TerrainTracksScene = NULL;
 	m_edgesToFlush = 0;
+	m_numModules = 0;
 	m_indexBuffer = NULL;
 	m_vertexMaterialClass = NULL;
 	m_vertexBuffer = NULL;
 
-	m_maxTankTrackEdges=TheGlobalData->m_maxTankTrackEdges;
+	m_maxTankTrackEdges=clampTrackEdges(TheGlobalData->m_maxTankTrackEdges);
 	m_maxTankTrackOpaqueEdges=TheGlobalData->m_maxTankTrackOpaqueEdges;
 	m_maxTankTrackFadeDelay=TheGlobalData->m_maxTankTrackFadeDelay;
 }
@@ -596,7 +611,9 @@ TerrainTracksRenderObjClassSystem::~TerrainTracksRenderObjClassSystem( void )
 void TerrainTracksRenderObjClassSystem::ReAcquireResources(void)
 {
 	Int i;
-	const Int numModules=TheGlobalData->m_maxTerrainTracks;
+	// The modules init made, not MaxTerrainTracks as it reads now: a map.ini GameData block can move
+	// that after init, and a buffer sized by it then held fewer tracks than flush() wrote.
+	const Int numModules=m_numModules;
 
 	// just for paranoia's sake.
 	REF_PTR_RELEASE(m_indexBuffer);
@@ -626,7 +643,8 @@ void TerrainTracksRenderObjClassSystem::ReAcquireResources(void)
 
 	DEBUG_ASSERTCRASH(numModules*m_maxTankTrackEdges*2 < 65535, ("Too many terrain track edges"));
 
-	m_vertexBuffer=NEW_REF(DX8VertexBufferClass,(DX8_FVF_XYZDUV1,numModules*m_maxTankTrackEdges*2,DX8VertexBufferClass::USAGE_DYNAMIC));
+	if (numModules > 0)
+		m_vertexBuffer=NEW_REF(DX8VertexBufferClass,(DX8_FVF_XYZDUV1,numModules*m_maxTankTrackEdges*2,DX8VertexBufferClass::USAGE_DYNAMIC));
 }
 
 //=============================================================================
@@ -649,13 +667,20 @@ void TerrainTracksRenderObjClassSystem::ReleaseResources(void)
 //=============================================================================
 void TerrainTracksRenderObjClassSystem::init( SceneClass *TerrainTracksScene )
 {
-	const Int numModules=TheGlobalData->m_maxTerrainTracks;
+	Int numModules=TheGlobalData->m_maxTerrainTracks;
+	if (numModules > MAX_TRACK_MODULES)
+		numModules = MAX_TRACK_MODULES;
+	if (numModules < 0)
+		numModules = 0;
 
 	Int i;
 	TerrainTracksRenderObjClass *mod;
 
 	m_TerrainTracksScene=TerrainTracksScene;
 
+	// we cannot initialize a system that is already initialized (checked again below, as EA did)
+	if (!m_freeModules && !m_usedModules)
+		m_numModules=numModules;
 	ReAcquireResources();
 	//go with a preset material for now.
 	m_vertexMaterialClass=VertexMaterialClass::Get_Preset(VertexMaterialClass::PRELIT_DIFFUSE);
@@ -787,9 +812,11 @@ void TerrainTracksRenderObjClassSystem::update()
 				if (mod->m_bottomIndex >= m_maxTankTrackEdges)
 					mod->m_bottomIndex=0;	//roll buffer back to start
 			}
-			if (mod->m_activeEdgeCount == 0 && !mod->m_bound)
-				releaseTrack(mod);
 		}
+		// after the loop, not in it: a track unbound with no edge left (a tank killed before it
+		// moved) never entered the loop and held its slot until the map ended
+		if (mod->m_activeEdgeCount == 0 && !mod->m_bound)
+			releaseTrack(mod);
 		mod = nextMod;
 	}  // end while
 }
@@ -811,6 +838,11 @@ Try improving the fit to vertical surfaces like cliffs.
 	TerrainTracksRenderObjClass *mod=m_usedModules;
 	if (!mod)
 		return;	//nothing to render
+	if (m_vertexBuffer == NULL || m_indexBuffer == NULL)
+	{	// released for a device reset and not taken back yet
+		m_edgesToFlush = 0;
+		return;
+	}
 
 	Int	trackStartIndex;
 	Real distanceFade;
@@ -843,10 +875,23 @@ Try improving the fit to vertical surfaces like cliffs.
 
 	// Lock only the vertices this pass writes.  A whole-buffer lock is every track the detail level
 	// allows times every edge, and with Direct3D 11 its unlock copied all of it twice on every pass.
+	//
+	// What goes in is held to the buffer and to the index buffer's one track: a track longer than
+	// m_maxTankTrackEdges (left so by a detail change it missed) is skipped, and once the next track
+	// would not fit the rest wait for the next pass.  Two v4.2.0 reports from one big battle locked
+	// 34818 vertices and the unlock's memcpy ran off the end; the other one read 0x3F8002E8 as a
+	// module in the draw loop, a pointer whose low half is a UV of 1.0, which is what a fill past the
+	// end writes.  The fill and the draw below make the same choice in the same order.
+	const Int vertexCapacity = m_vertexBuffer->Get_Vertex_Count();
 	Int vertsToWrite = 0;
 	for (mod=m_usedModules; mod; mod=mod->m_nextSystem)
-		if (mod->m_activeEdgeCount >= 2 && mod->Is_Really_Visible())
-			vertsToWrite += mod->m_activeEdgeCount*2;
+	{
+		if (mod->m_activeEdgeCount < 2 || mod->m_activeEdgeCount > m_maxTankTrackEdges || !mod->Is_Really_Visible())
+			continue;
+		if (vertsToWrite + mod->m_activeEdgeCount*2 > vertexCapacity)
+			break;
+		vertsToWrite += mod->m_activeEdgeCount*2;
+	}
 
 	//check if there is anything to draw and fill vertex buffer (a zero-length lock means the whole buffer)
 	if (m_edgesToFlush >= 2 && vertsToWrite > 0)
@@ -876,8 +921,12 @@ Try improving the fit to vertical surfaces like cliffs.
 			Vector3 *endPoint;
 			Vector2 *endPointUV;
 
-			if (mod->m_activeEdgeCount >= 2 && mod->Is_Really_Visible())
+			if (mod->m_activeEdgeCount >= 2 && mod->m_activeEdgeCount <= m_maxTankTrackEdges && mod->Is_Really_Visible())
 			{
+				if (trackStartIndex + mod->m_activeEdgeCount*2 > vertsToWrite)
+					break;	// past what was locked: the count above stopped here too
+				trackStartIndex += mod->m_activeEdgeCount*2;
+
 				for (i=0,index=mod->m_bottomIndex; i<mod->m_activeEdgeCount; i++,index++)
 				{
 					if (index >= m_maxTankTrackEdges)
@@ -940,8 +989,10 @@ Try improving the fit to vertical surfaces like cliffs.
 		DX8Wrapper::Set_Transform(D3DTS_WORLD,tm);
 		while (mod)
 		{
-			if (mod->m_activeEdgeCount >= 2 && mod->Is_Really_Visible())
+			if (mod->m_activeEdgeCount >= 2 && mod->m_activeEdgeCount <= m_maxTankTrackEdges && mod->Is_Really_Visible())
 			{
+				if (trackStartIndex + mod->m_activeEdgeCount*2 > vertsToWrite)
+					break;	// not written this pass, see the count above
 				DX8Wrapper::Set_Texture(0,mod->m_stageZeroTexture);
 				DX8Wrapper::Set_Index_Buffer_Index_Offset(trackStartIndex);
 				DX8Wrapper::Draw_Triangles(	0,(mod->m_activeEdgeCount-1)*2, 0, mod->m_activeEdgeCount*2);
@@ -1004,7 +1055,7 @@ void TerrainTracksRenderObjClassSystem::setDetail(void)
 	clearTracks();
 	ReleaseResources();
 
-	m_maxTankTrackEdges=TheGlobalData->m_maxTankTrackEdges;
+	m_maxTankTrackEdges=clampTrackEdges(TheGlobalData->m_maxTankTrackEdges);
 	m_maxTankTrackOpaqueEdges=TheGlobalData->m_maxTankTrackOpaqueEdges;
 	m_maxTankTrackFadeDelay=TheGlobalData->m_maxTankTrackFadeDelay;
 

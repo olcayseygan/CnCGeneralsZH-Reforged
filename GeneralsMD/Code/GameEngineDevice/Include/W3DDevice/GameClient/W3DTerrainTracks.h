@@ -145,6 +145,7 @@ protected:
 	SceneClass	*m_TerrainTracksScene;		///<scene that will contain all the TerrainTracks
 
 	Int	m_edgesToFlush;			///< number of edges to flush on next render.
+	Int	m_numModules;			///< track objects init allocated; the vertex buffer holds this many full tracks.
 
 	void releaseTrack( TerrainTracksRenderObjClass *mod );	///<returns track object to free store.
 	void clearTracks(void);	///<reset the amount of visible track marks of each object.

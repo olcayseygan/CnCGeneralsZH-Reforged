@@ -465,7 +465,7 @@ static void checksumModels( XferCRC &xferCRC )
 		++modelsCounted;
 
 		ModelChecksum entry;
-		const Bool sourceKnown = TheLocalFileSystem->getFileInfo( source, &entry.source );
+		Bool sourceKnown = TheLocalFileSystem->getFileInfo( source, &entry.source );
 
 		std::string key( modelChecksumSourceKey( source ).str() );
 		key.append( "|" );
@@ -480,13 +480,25 @@ static void checksumModels( XferCRC &xferCRC )
 		{
 			// the loose master, never the Reforged batch copy TheFileSystem may hand the renderer instead
 			File *file = loose ? TheLocalFileSystem->openFile( model.str(), File::READ ) : TheArchiveFileSystem->openRetailFile( model );
-			Int fileSize = file->size();
-			char *contents = file->readEntireAndClose();
-			CRC modelCRC;
-			modelCRC.computeCRC( contents, fileSize );
-			delete [] contents;
-			entry.crc = modelCRC.get();
-			++modelsRead;
+			if (file != NULL)
+			{
+				Int fileSize = file->size();
+				char *contents = file->readEntireAndClose();
+				CRC modelCRC;
+				modelCRC.computeCRC( contents, fileSize );
+				delete [] contents;
+				entry.crc = modelCRC.get();
+				++modelsRead;
+			}
+			else
+			{
+				// There but not readable: a build's copy into Run\Art\W3D holding it, a lock, no rights.
+				// Its name goes in with no bytes, so this start's CRC refuses every join rather than
+				// vouching for a file nobody read, and it stays out of the cache to be read next start.
+				DEBUG_LOG(( "INI CRC: %s would not open; counted as unread, so this start's CRC matches no one's\n", model.str() ));
+				entry.crc = 0;
+				sourceKnown = FALSE;
+			}
 		}
 		if (sourceKnown)
 			current[key] = entry;

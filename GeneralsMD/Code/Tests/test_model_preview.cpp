@@ -25,6 +25,7 @@
 #include "test_harness.h"
 
 #include "W3DDevice/GameClient/ModelPreviewFrame.h"
+#include "W3DDevice/GameClient/SubObjectBoneWalk.h"
 #include "matrix4.h"
 
 #include <math.h>
@@ -138,4 +139,113 @@ TEST(model_preview_framed_sphere_stays_in_the_panel)
 	CHECK_NEAR(px, X, 0.05f);
 	toPixel(m, Vector3(0, tx, tz), W, H, &px, &py);
 	CHECK(py > Y);							// the long side has room
+}
+
+// ---- W3DDevice/GameClient/SubObjectBoneWalk.h: what a ShowSubObject or HideSubObject line carries
+// along.  The bones are the rebuilt GLA Worker's (UIWRKR_SKL): the crate BOX is a skin on the root,
+// the suicide vest SUICIDE01 rides PARA_MAN and the shoes SHOES01 a foot, both written hidden.
+
+namespace {
+
+struct WorkerBones
+{
+	int operator()(int bone) const
+	{
+		switch (bone)
+		{
+			case 1: return 0;		// UIWRKR_MAINRT
+			case 2: return 1;		// UIWRKR
+			case 3: return 2;		// PELVIS
+			case 4: return 3;		// SPINE
+			case 5: return 4;		// SPINE1
+			case 16: return 5;		// PARA_MAN
+			case 17: return 4;		// L THIGH
+			case 18: return 17;		// L CALF
+			case 19: return 18;		// L FOOT
+			default: return 0;
+		}
+	}
+};
+
+struct Part { int bone; bool hiddenInFile; bool hidden; };
+
+enum { BOX, WORKER, PICKBOX, SUICIDE, SHOES, PART_COUNT };
+
+void loadWorker(Part *p)
+{
+	const Part parts[PART_COUNT] = {
+		{ 0, false, false },		// BOX, a skin
+		{ 0, false, false },		// WORKER, the body skin
+		{ 2, false, false },		// a rigid retail piece on a bone
+		{ 16, true, true },			// SUICIDE01
+		{ 19, true, true },			// SHOES01
+	};
+	for (int i = 0; i < PART_COUNT; ++i)
+		p[i] = parts[i];
+}
+
+// hideShowSubObject on part `which`: the part itself, then the walk, as W3DModelDraw does it
+void hideShow(Part *p, int which, bool hide)
+{
+	p[which].hidden = hide;
+	for (int i = 0; i < PART_COUNT; ++i)
+		if (SubObjectBoneWalk::isBelow(WorkerBones(), p[which].bone, p[i].bone)
+				&& !SubObjectBoneWalk::keepsFileHidden(p[which].bone, hide, p[i].hiddenInFile))
+			p[i].hidden = hide;
+}
+
+}	// namespace
+
+TEST(bone_walk_root_show_leaves_upgrade_parts_hidden)
+{
+	Part p[PART_COUNT];
+	loadWorker(p);
+	hideShow(p, BOX, false);				// ShowSubObject = BOX, a worker carrying a crate
+	CHECK(!p[BOX].hidden);
+	CHECK(!p[PICKBOX].hidden);				// a part the file shows is still carried along
+	CHECK(p[SUICIDE].hidden);				// the vest and shoes stay as the file wrote them
+	CHECK(p[SHOES].hidden);
+}
+
+TEST(bone_walk_root_hide_still_reaches_every_part)
+{
+	Part p[PART_COUNT];
+	loadWorker(p);
+	p[SUICIDE].hidden = false;				// the upgrade showed it
+	hideShow(p, BOX, true);
+	CHECK(p[PICKBOX].hidden);
+	CHECK(p[SUICIDE].hidden);				// as EA's walk did; the upgrade's list puts it back after
+	hideShow(p, BOX, false);
+	CHECK(!p[PICKBOX].hidden);				// a show from the root undoes the hide for the file's parts
+	CHECK(p[SUICIDE].hidden);
+}
+
+TEST(bone_walk_root_show_keeps_an_upgraded_part_shown)
+{
+	Part p[PART_COUNT];
+	loadWorker(p);
+	p[SUICIDE].hidden = false;				// Demo_Upgrade_SuicideBomb shows SUICIDE01 by name
+	hideShow(p, BOX, false);
+	CHECK(!p[SUICIDE].hidden);
+	CHECK(p[SHOES].hidden);
+}
+
+TEST(bone_walk_show_below_the_root_reaches_hidden_parts_as_before)
+{
+	// a retail turret: TURRET01 on bone 5 brings its muzzle flash mesh, written hidden, on bone 16
+	Part p[PART_COUNT];
+	loadWorker(p);
+	p[PICKBOX].bone = 5;
+	hideShow(p, PICKBOX, false);
+	CHECK(!p[SUICIDE].hidden);
+	CHECK(p[SHOES].hidden);					// not below bone 5
+}
+
+TEST(bone_walk_matches_eas_parent_test)
+{
+	CHECK(SubObjectBoneWalk::isBelow(WorkerBones(), 0, 19));
+	CHECK(SubObjectBoneWalk::isBelow(WorkerBones(), 4, 19));
+	CHECK(!SubObjectBoneWalk::isBelow(WorkerBones(), 5, 19));
+	CHECK(!SubObjectBoneWalk::isBelow(WorkerBones(), 0, 0));	// a root part is no one's child
+	CHECK(!SubObjectBoneWalk::isBelow(WorkerBones(), 19, 19));
 }

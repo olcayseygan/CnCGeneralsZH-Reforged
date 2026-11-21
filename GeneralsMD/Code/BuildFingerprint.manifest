@@ -2937,6 +2937,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/ParticleGpuShader.h
 GameEngineDevice/Include/W3DDevice/GameClient/ParticleGpuShaderSources.h
 GameEngineDevice/Include/W3DDevice/GameClient/ReachOverlayShaderSources.h
 GameEngineDevice/Include/W3DDevice/GameClient/StructureCollapse.h
+GameEngineDevice/Include/W3DDevice/GameClient/SubObjectBoneWalk.h
 GameEngineDevice/Include/W3DDevice/GameClient/SunShadowCasterCull.h
 GameEngineDevice/Include/W3DDevice/GameClient/TankWheelSpin.h
 GameEngineDevice/Include/W3DDevice/GameClient/TerrainSubdivide.h

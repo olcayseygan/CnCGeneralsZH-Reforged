@@ -373,6 +373,12 @@ void PopupHostGameInit( WindowLayout *layout, void *userData )
   checkBoxLimitArmies = TheWindowManager->winGetWindowFromId(parentPopup, checkBoxLimitArmiesID);
 	checkBoxLimitArmies->winEnable(! usingStats );
   GadgetCheckBoxSetChecked( checkBoxLimitArmies, usingStats? FALSE : customPref.getFactionsLimited() );
+	// a Direct Strike room offers its own three sides; the retail-only army limit means nothing there
+	if (OnlineIsEnabled() && OnlineHostDirectStrike)
+	{
+		GadgetCheckBoxSetChecked( checkBoxLimitArmies, FALSE );
+		checkBoxLimitArmies->winHide( TRUE );
+	}
 
 	TheWindowManager->winSetFocus( parentPopup );
 	TheWindowManager->winSetModal( parentPopup );
@@ -593,6 +599,7 @@ void createGame( void )
   Bool limitArmies = GadgetCheckBoxIsChecked( checkBoxLimitArmies );
   Bool useStats = !OnlineIsEnabled() && GadgetCheckBoxIsChecked( checkBoxUseStats );
 	customPref.setAllowsObserver(aO);
+	if (!checkBoxLimitArmies->winIsHidden())	// a Direct Strike room's leaves the Classic choice alone
   customPref.setFactionsLimited( limitArmies );
   customPref.setUseStats( useStats );
 	customPref.write();

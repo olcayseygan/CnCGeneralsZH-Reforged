@@ -62,6 +62,7 @@
 #include "GameClient/UIStyle.h"
 #include "GameNetwork/GameSpyOverlay.h"
 #include "GameNetwork/Online/OnlineQueues.h"
+#include "GameNetwork/GUIUtil.h"
 #include "Lib/WideCharFns.h"
 #include "GameClient/GameWindowTransitions.h"
 
@@ -261,6 +262,21 @@ void SetLobbyAttemptHostJoin(Bool start)
 		LobbySetJoiningGame( 0 );		// the join came back, or the password box was cancelled
 }
 
+/* The Host button's two answers (AskGameMode): the host popup for a Classic room or a Direct Strike one,
+	 whose staging room stands on a lane map from the start (OnlineHostDirectStrike). */
+static void hostRoom( Bool directStrike )
+{
+	if (!TheGameSpyInfo || s_tryingToHostOrJoin)
+		return;	// the lobby went, or a join started, while the question was up
+	OnlineHostDirectStrike = directStrike;
+	SetLobbyAttemptHostJoin( TRUE );
+	TheLobbyQueuedUTMs.clear();
+	groupRoomToJoin = TheGameSpyInfo->getCurrentGroupRoom();
+	GameSpyOpenOverlay(GSOVERLAY_GAMEOPTIONS);
+}
+static void hostClassic( void ) { hostRoom( FALSE ); }
+static void hostDirectStrike( void ) { hostRoom( TRUE ); }
+
 /* -online scripting in the lobby, once per process each: -onlinesay says its line once somebody else is in
 	 the room to read it, -onlinehost asks for a staging room the way the host popup's createGame does (no
 	 password, no observers, unrated, no ladder) three seconds after that line so the answer still reaches
@@ -295,10 +311,21 @@ static void onlineLobbyScript( void )
 			 is made under the popup's own rules.  Building the request here once hid that the popup made
 			 every online room a stats room, with every option locked for its host. */
 		GameWindow *popupName = NULL, *popupCreate = NULL, *popup = NULL;
-		if (buttonHost)
+		// "ask" presses Host and leaves its mode question up, for a picture of it
+		if (buttonHost && TheGlobalData->m_onlineMap.compareNoCase( "ask" ) == 0)
 		{
 			TheWindowManager->winSendSystemMsg( parent, GBM_SELECTED, (WindowMsgData)buttonHost, buttonHostID );
-			popup = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "PopupHostGame.wnd:ParentHostPopUp" ) );
+			DEBUG_LOG(("ONLINE HOST asked\n"));
+			return;
+		}
+		if (buttonHost)
+		{
+			// the Host button's mode question, answered as -onlinemap asks: "directstrike" is that mode
+			if (TheGlobalData->m_onlineMap.compareNoCase( "directstrike" ) == 0)
+				hostDirectStrike();
+			else
+				hostClassic();
+			popup =TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "PopupHostGame.wnd:ParentHostPopUp" ) );
 			popupName = TheWindowManager->winGetWindowFromId( popup, NAMEKEY( "PopupHostGame.wnd:TextEntryGameName" ) );
 			popupCreate = TheWindowManager->winGetWindowFromId( popup, NAMEKEY( "PopupHostGame.wnd:ButtonCreateGame" ) );
 		}
@@ -2020,10 +2047,8 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 					if (s_tryingToHostOrJoin)
 						break;
 
-					SetLobbyAttemptHostJoin( TRUE );
-					TheLobbyQueuedUTMs.clear();
-					groupRoomToJoin = TheGameSpyInfo->getCurrentGroupRoom();
-					GameSpyOpenOverlay(GSOVERLAY_GAMEOPTIONS);
+					// which mode the room is for; the answer opens the host popup (hostClassic, hostDirectStrike)
+					AskGameMode( hostClassic, hostDirectStrike );
 				}
 				else if ( controlID == buttonJoinID )
 				{

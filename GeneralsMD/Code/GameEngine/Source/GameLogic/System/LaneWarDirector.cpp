@@ -30,6 +30,7 @@
 #include "Common/ActionManager.h"
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
+#include "Common/PlayerTemplate.h"
 #include "Common/SpecialPower.h"
 #include "Common/Team.h"
 #include "Common/ThingFactory.h"
@@ -169,12 +170,13 @@ Bool LaneWar_strikeDue( Real gap, Real mySpeed, Real enemySpeed, Real parkBehind
 	 tech building, tier 2 what a Strategy Center, Propaganda Center or Palace (or a general's power)
 	 opens and the aircraft, tier 3 the side's heaviest.  Units only: no defence, mine or structure.
 	 The hero is tier 0, outside the tiers: bought once a match from his own slot, never sold (the
-	 owner's call of 2026-11-20).  A name is the base side's; a
-	 general fields "<tag>_<name>" where that template exists, the base one otherwise.  `only` names
-	 the generals that have it (Base for the plain side), `except` those that do not, as the generals'
-	 own factories offer them; an entry whose name is already a general's own template carries the
-	 one general it belongs to in `only`.  The jets are in: they strike from off the map and reload
-	 there (LaneWarDirector::updateJets). */
+	 owner's call of 2026-11-20).  A name is the base side's; a general fields "<tag>_<name>" where
+	 that template exists, the base one otherwise (the Slth army's suicide bike is the base GLA's
+	 template), and an entry only when its own factories build it (generalFactories), so the general's
+	 variant comes with its look and its upgrades and what the general lacks is never offered.  An
+	 entry whose name is already a general's own template (the Emperor, the Mini-Gunner) is found
+	 under that name and offered to that general alone.  The jets are in: they strike from off the
+	 map and reload there (LaneWarDirector::updateJets). */
 namespace
 {
 	struct RosterEntry
@@ -182,69 +184,76 @@ namespace
 		const char *name;
 		Int tier;
 		Bool hero;
-		const char *only;
-		const char *except;
 	};
 
 	const RosterEntry USA_ROSTER[] =
 	{
-		{ "AmericaInfantryRanger",							1, FALSE, NULL, NULL },
-		{ "AmericaInfantryMissileDefender",			1, FALSE, NULL, NULL },
-		{ "AmericaInfantryPathfinder",					1, FALSE, NULL, NULL },
-		{ "AmericaVehicleHumvee",								1, FALSE, NULL, NULL },
-		{ "AmericaTankCrusader",								1, FALSE, NULL, "AirF SupW" },
-		{ "AmericaVehicleSentryDrone",					1, FALSE, NULL, NULL },
-		{ "AmericaTankMicrowave",								2, FALSE, NULL, NULL },
-		{ "AmericaVehicleTomahawk",							2, FALSE, NULL, "Lazr" },
-		{ "AmericaTankPaladin",									2, FALSE, NULL, "AirF" },
-		{ "AmericaVehicleComanche",							2, FALSE, NULL, NULL },
-		{ "AmericaJetRaptor",										2, FALSE, NULL, NULL },
-		{ "AmericaJetStealthFighter",						3, FALSE, NULL, NULL },
-		{ "AmericaJetAurora",										3, FALSE, NULL, NULL },
-		{ "AmericaTankAvenger",									3, FALSE, NULL, NULL },
-		{ "AmericaInfantryColonelBurton",				0, TRUE,	NULL, NULL },
+		{ "AmericaInfantryRanger",							1, FALSE },
+		{ "AmericaInfantryMissileDefender",			1, FALSE },
+		{ "AmericaInfantryPathfinder",					1, FALSE },
+		{ "AmericaVehicleHumvee",								1, FALSE },
+		{ "AmericaTankCrusader",								1, FALSE },	// the Lazr army's is the Laser Tank
+		{ "AmericaVehicleSentryDrone",					1, FALSE },
+		{ "AmericaTankMicrowave",								2, FALSE },
+		{ "AmericaVehicleTomahawk",							2, FALSE },
+		{ "AmericaTankPaladin",									2, FALSE },
+		{ "AmericaVehicleComanche",							2, FALSE },
+		{ "AmericaJetRaptor",										2, FALSE },
+		{ "AmericaJetStealthFighter",						3, FALSE },
+		{ "AmericaJetAurora",										3, FALSE },
+		{ "AmericaTankAvenger",									3, FALSE },
+		{ "AmericaInfantryColonelBurton",				0, TRUE },
 	};
 
 	const RosterEntry CHINA_ROSTER[] =
 	{
-		{ "ChinaInfantryRedguard",							1, FALSE, NULL, "Infa" },
-		{ "Infa_ChinaInfantryMiniGunner",				1, FALSE, "Infa", NULL },
-		{ "ChinaInfantryTankHunter",						1, FALSE, NULL, NULL },
-		{ "ChinaTankBattleMaster",							1, FALSE, NULL, "Infa" },
-		{ "ChinaTankGattling",									1, FALSE, NULL, "Infa" },
-		{ "ChinaTankDragon",										1, FALSE, NULL, NULL },
-		{ "ChinaVehicleTroopCrawler",						1, FALSE, NULL, NULL },
-		{ "ChinaTankECM",												2, FALSE, NULL, NULL },
-		{ "ChinaVehicleInfernoCannon",					2, FALSE, NULL, "Tank" },
-		{ "ChinaVehicleListeningOutpost",				2, FALSE, NULL, NULL },
-		{ "ChinaVehicleHelix",									2, FALSE, NULL, NULL },
-		{ "ChinaInfantryHacker",								2, FALSE, NULL, NULL },
-		{ "ChinaJetMIG",												2, FALSE, NULL, NULL },
-		{ "ChinaTankOverlord",									3, FALSE, NULL, "Tank Infa" },
-		{ "Tank_ChinaTankEmperor",							3, FALSE, "Tank", NULL },
-		{ "ChinaVehicleNukeLauncher",						3, FALSE, NULL, "Tank" },
-		{ "ChinaInfantryBlackLotus",						0, TRUE,	NULL, NULL },
+		{ "ChinaInfantryRedguard",							1, FALSE },
+		{ "Infa_ChinaInfantryMiniGunner",				1, FALSE },
+		{ "ChinaInfantryTankHunter",						1, FALSE },
+		{ "ChinaTankBattleMaster",							1, FALSE },
+		{ "ChinaTankGattling",									1, FALSE },
+		{ "ChinaTankDragon",										1, FALSE },
+		{ "ChinaVehicleTroopCrawler",						1, FALSE },
+		{ "ChinaTankECM",												2, FALSE },
+		{ "ChinaVehicleInfernoCannon",					2, FALSE },
+		{ "ChinaVehicleListeningOutpost",				2, FALSE },
+		{ "ChinaVehicleHelix",									2, FALSE },
+		{ "ChinaInfantryHacker",								2, FALSE },
+		{ "ChinaJetMIG",												2, FALSE },
+		{ "ChinaTankOverlord",									3, FALSE },
+		{ "Tank_ChinaTankEmperor",							3, FALSE },
+		{ "ChinaVehicleNukeLauncher",						3, FALSE },
+		{ "ChinaInfantryBlackLotus",						0, TRUE },
 	};
 
 	const RosterEntry GLA_ROSTER[] =
 	{
-		{ "GLAInfantryRebel",										1, FALSE, NULL, NULL },
-		{ "GLAInfantryTerrorist",								1, FALSE, NULL, NULL },
-		{ "GLAInfantryTunnelDefender",					1, FALSE, NULL, NULL },
-		{ "GLAVehicleTechnical",								1, FALSE, NULL, NULL },
-		{ "GLAVehicleCombatBike",								1, FALSE, NULL, NULL },
-		{ "GLAVehicleCombatBikeTerrorist",			1, FALSE, "Slth", NULL },
-		{ "GLATankScorpion",										1, FALSE, NULL, "Slth" },
-		{ "GLAVehicleQuadCannon",								1, FALSE, NULL, NULL },
-		{ "GLAVehicleToxinTruck",								1, FALSE, NULL, NULL },
-		{ "GLAInfantryAngryMobNexus",						2, FALSE, NULL, NULL },
-		{ "GLAInfantryHijacker",								2, FALSE, NULL, NULL },
-		{ "GLATankMarauder",										2, FALSE, NULL, "Slth" },
-		{ "GLAVehicleRocketBuggy",							2, FALSE, NULL, NULL },
-		{ "GLAVehicleBombTruck",								2, FALSE, NULL, NULL },
-		{ "GLAVehicleBattleBus",								2, FALSE, NULL, NULL },
-		{ "GLAVehicleScudLauncher",							3, FALSE, NULL, "Slth" },
-		{ "GLAInfantryJarmenKell",							0, TRUE,	NULL, NULL },
+		{ "GLAInfantryRebel",										1, FALSE },
+		{ "GLAInfantryTerrorist",								1, FALSE },
+		{ "GLAInfantryTunnelDefender",					1, FALSE },
+		{ "GLAVehicleTechnical",								1, FALSE },
+		{ "GLAVehicleCombatBike",								1, FALSE },
+		{ "GLAVehicleCombatBikeTerrorist",			1, FALSE },
+		{ "GLATankScorpion",										1, FALSE },
+		{ "GLAVehicleQuadCannon",								1, FALSE },
+		{ "GLAVehicleToxinTruck",								1, FALSE },
+		{ "GLAInfantryAngryMobNexus",						2, FALSE },
+		{ "GLAInfantryHijacker",								2, FALSE },
+		{ "GLATankMarauder",										2, FALSE },
+		{ "GLAVehicleRocketBuggy",							2, FALSE },
+		{ "GLAVehicleBombTruck",								2, FALSE },
+		{ "GLAVehicleBattleBus",								2, FALSE },
+		{ "GLAVehicleScudLauncher",							3, FALSE },
+		{ "GLAInfantryJarmenKell",							0, TRUE },
+	};
+
+	/// the factories whose build buttons are a side's units, named as the base side's; a general's
+	/// own are "<tag>_<name>"
+	const char *const FACTORIES[ 3 ][ 3 ] =
+	{
+		{ "AmericaBarracks", "AmericaWarFactory", "AmericaAirfield" },
+		{ "ChinaBarracks", "ChinaWarFactory", "ChinaAirfield" },
+		{ "GLABarracks", "GLAArmsDealer", NULL },
 	};
 
 	/// the player upgrades a side sells in Lane War, those that change what a wave unit does
@@ -299,44 +308,59 @@ namespace
 		{ "Upgrade_GLACamouflage", "Base" },
 		{ "Demo_Upgrade_SuicideBomb", "Demo" },
 	};
-
-	struct GeneralTag
-	{
-		const char *side;
-		const char *tag;
-	};
-
-	const GeneralTag GENERAL_TAGS[] =
-	{
-		{ "AmericaAirForceGeneral", "AirF" },
-		{ "AmericaLaserGeneral", "Lazr" },
-		{ "AmericaSuperWeaponGeneral", "SupW" },
-		{ "ChinaTankGeneral", "Tank" },
-		{ "ChinaInfantryGeneral", "Infa" },
-		{ "ChinaNukeGeneral", "Nuke" },
-		{ "GLAToxinGeneral", "Chem" },
-		{ "GLADemolitionGeneral", "Demo" },
-		{ "GLAStealthGeneral", "Slth" },
-	};
 }
 
-/// 0 USA, 1 China, 2 GLA, -1 a side outside the mode; *tag the general's prefix or "Base"
-static Int laneSide( const Player *player, const char **tag )
+/** 0 USA, 1 China, 2 GLA, -1 a side outside the mode, from the player's PlayerTemplate: its base
+	side, and in *tag the general's prefix that names every one of its objects, read off its starting
+	building (SupW_AmericaCommandCenter is SupW), or "Base" for the plain side. */
+static Int laneSide( const Player *player, AsciiString *tag )
 {
 	*tag = "Base";
-	if( player == NULL )
+	const PlayerTemplate *army = player != NULL ? player->getPlayerTemplate() : NULL;
+	if( army == NULL )
 		return -1;
-	const AsciiString side = player->getSide();
-	for( size_t g = 0; g < sizeof( GENERAL_TAGS ) / sizeof( GENERAL_TAGS[ 0 ] ); ++g )
-		if( side == GENERAL_TAGS[ g ].side )
-			*tag = GENERAL_TAGS[ g ].tag;
-	if( side == "America" || side.startsWith( "AmericaAirForce" ) || side.startsWith( "AmericaLaser" ) || side.startsWith( "AmericaSuperWeapon" ) )
+	const AsciiString start = army->getStartingBuilding();
+	const char *cut = strchr( start.str(), '_' );
+	if( cut != NULL )
+		tag->format( "%.*s", (Int)( cut - start.str() ), start.str() );
+	const AsciiString base = army->getBaseSide();
+	if( base == "USA" )
 		return 0;
-	if( side.startsWith( "China" ) )
+	if( base == "China" )
 		return 1;
-	if( side.startsWith( "GLA" ) )
+	if( base == "GLA" )
 		return 2;
 	return -1;
+}
+
+/// the command sets of the general's own factories, the ones a skirmish base of that army builds
+static Int generalFactories( Int side, const AsciiString &tag, const CommandSet **out )
+{
+	Int count = 0;
+	for( Int f = 0; f < 3 && FACTORIES[ side ][ f ] != NULL; ++f )
+	{
+		AsciiString name( FACTORIES[ side ][ f ] );
+		if( tag != "Base" )
+			name.format( "%s_%s", tag.str(), FACTORIES[ side ][ f ] );
+		const ThingTemplate *factory = TheThingFactory->findTemplate( name, FALSE );
+		const CommandSet *set = factory != NULL ? TheCommandStore->findCommandSet( factory->friend_getCommandSetString() ) : NULL;
+		if( set != NULL )
+			out[ count++ ] = set;
+	}
+	return count;
+}
+
+static Bool factoriesBuild( const CommandSet *const *sets, Int count, const ThingTemplate *thing )
+{
+	for( Int s = 0; s < count; ++s )
+		for( Int i = 0; i < MAX_COMMANDS_PER_SET; ++i )
+		{
+			const CommandButton *button = sets[ s ]->getCommandButton( i );
+			if( button != NULL && button->getCommandType() == GUI_COMMAND_UNIT_BUILD && button->getThingTemplate() != NULL
+					&& thing->isEquivalentTo( button->getThingTemplate() ) )
+				return TRUE;
+		}
+	return FALSE;
 }
 
 /// the tag is one of the words of a space separated list
@@ -354,16 +378,9 @@ static Bool tagListed( const char *list, const char *tag )
 	return FALSE;
 }
 
-static Bool offeredTo( const char *only, const char *except, const char *tag )
-{
-	if( only != NULL && !tagListed( only, tag ) )
-		return FALSE;
-	return except == NULL || !tagListed( except, tag );
-}
-
 Int LaneWar_roster( const Player *player, LaneWarRosterItem *out, Int maxItems )
 {
-	const char *tag;
+	AsciiString tag;
 	const Int side = laneSide( player, &tag );
 	const RosterEntry *table = side == 0 ? USA_ROSTER : side == 1 ? CHINA_ROSTER : GLA_ROSTER;
 	const Int size = side == 0 ? (Int)( sizeof( USA_ROSTER ) / sizeof( USA_ROSTER[ 0 ] ) )
@@ -371,23 +388,23 @@ Int LaneWar_roster( const Player *player, LaneWarRosterItem *out, Int maxItems )
 								 : (Int)( sizeof( GLA_ROSTER ) / sizeof( GLA_ROSTER[ 0 ] ) );
 	if( side < 0 )
 		return 0;
+	const CommandSet *factories[ 3 ];
+	const Int factoryCount = generalFactories( side, tag, factories );
 
 	Int count = 0;
 	for( Int i = 0; i < size && count < maxItems; ++i )
 	{
 		const RosterEntry &e = table[ i ];
-		if( !offeredTo( e.only, e.except, tag ) )
-			continue;
 		const ThingTemplate *thing = NULL;
-		if( strcmp( tag, "Base" ) != 0 )
+		if( tag != "Base" )
 		{
 			AsciiString name;
-			name.format( "%s_%s", tag, e.name );
+			name.format( "%s_%s", tag.str(), e.name );
 			thing = TheThingFactory->findTemplate( name, FALSE );
 		}
 		if( thing == NULL )
 			thing = TheThingFactory->findTemplate( e.name, FALSE );
-		if( thing == NULL )
+		if( thing == NULL || !factoriesBuild( factories, factoryCount, thing ) )
 			continue;
 		out[ count ].thing = thing;
 		out[ count ].tier = e.tier;
@@ -409,7 +426,7 @@ Bool LaneWar_isHero( const Player *player, const ThingTemplate *tmpl )
 
 Int LaneWar_upgrades( const Player *player, const UpgradeTemplate **out, Int maxItems )
 {
-	const char *tag;
+	AsciiString tag;
 	const Int side = laneSide( player, &tag );
 	const UpgradeEntry *table = side == 0 ? USA_UPGRADES : side == 1 ? CHINA_UPGRADES : GLA_UPGRADES;
 	const Int size = side == 0 ? (Int)( sizeof( USA_UPGRADES ) / sizeof( USA_UPGRADES[ 0 ] ) )
@@ -421,7 +438,7 @@ Int LaneWar_upgrades( const Player *player, const UpgradeTemplate **out, Int max
 	Int count = 0;
 	for( Int i = 0; i < size && count < maxItems; ++i )
 	{
-		if( !offeredTo( table[ i ].only, NULL, tag ) )
+		if( table[ i ].only != NULL && !tagListed( table[ i ].only, tag.str() ) )
 			continue;
 		const UpgradeTemplate *upgrade = TheUpgradeCenter->findUpgrade( table[ i ].name );
 		if( upgrade != NULL && upgrade->getUpgradeType() == UPGRADE_TYPE_PLAYER )
@@ -753,6 +770,24 @@ void LaneWarDirector::newMap( Bool loadingSaveGame )
 							(Int)m_fortress[0], (Int)m_fortress[1], m_spawn[0].x, m_spawn[0].y, m_spawn[1].x, m_spawn[1].y, m_middle.x,
 							m_gridCols[0][0][LANEWAR_GRID_GROUND], m_gridRows[0][0][LANEWAR_GRID_GROUND], plotLo.x, plotLo.y, plotHi.x, plotHi.y,
 							m_gridCols[0][0][LANEWAR_GRID_AIR], m_gridRows[0][0][LANEWAR_GRID_AIR], m_nextTickFrame ));
+
+	// what each seat's army can buy, so a log says which general fielded what
+	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
+		for( Int s = 0; s < LANEWAR_SEATS; ++s )
+		{
+			const Player *player = m_seatPlayer[ t ][ s ] >= 0 ? ThePlayerList->getNthPlayer( m_seatPlayer[ t ][ s ] ) : NULL;
+			if( player == NULL )
+				continue;
+			LaneWarRosterItem roster[ LANEWAR_ROSTER_MAX ];
+			const Int count = LaneWar_roster( player, roster, LANEWAR_ROSTER_MAX );
+			AsciiString names;
+			for( Int i = 0; i < count; ++i )
+			{
+				names.concat( ' ' );
+				names.concat( roster[ i ].thing->getName() );
+			}
+			DEBUG_LOG(( "LANEWAR: player %d %s roster of %d:%s\n", player->getPlayerIndex(), player->getSide().str(), count, names.str() ));
+		}
 }
 
 //-------------------------------------------------------------------------------------------------

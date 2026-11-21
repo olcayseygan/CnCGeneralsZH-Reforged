@@ -8,6 +8,11 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Direct Strike with every general
+
+- All twelve armies play Direct Strike, the nine Zero Hour generals beside USA, China and GLA, and Random draws from all of them. Each general's buy panel is what his own factories build in a skirmish, in his own versions with his own look and upgrades: the Laser General's Laser Tank, the Tank General's Emperor, the Infantry General's Mini-Gunners, the Nuke General's Overlord and Helix, Toxin, Stealth and Demolition units with their general's weapons. What a general lacks is gone from his panel. The Laser and Superweapon generals were sold a Paladin and the Toxin and Demolition generals a Hijacker, none of which their armies have; now they are not.
+- Older Direct Strike replays and saves no longer play back.
+
 ## Direct Strike jets hunt aircraft, Hackers reach the fortress
 
 - A jet bought onto the air rows used to fly its strike to the point where the fronts meet and turn back there. Each strike now flies down the whole lane to the enemy's end as an attack-move, so a jet bombs what it meets on the way, infantry included. A jet that can hit aircraft goes for the enemy's aircraft first: their jets on a pass, and helicopters marching with a wave. In a test a MiG chased an Aurora six times over one strike and later shot down a Comanche on the lane, while an Aurora, which cannot hit air, bombed a Red Guard wave. Jets still park off the map, rearm and fly again.

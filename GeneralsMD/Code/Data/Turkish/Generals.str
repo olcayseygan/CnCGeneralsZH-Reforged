@@ -20838,6 +20838,22 @@ GUI:DirectStrikeIslandNote
 "Her maçta yeni bir ada"
 END
 
+GUI:DirectStrikeRuleTeams
+"%d - %d"
+END
+
+GUI:DirectStrikeRuleMoney
+"Para $%d"
+END
+
+GUI:DirectStrikeRuleWave
+"Dalga %d sn"
+END
+
+GUI:DirectStrikeRuleFirst
+"İlk %d:%02d"
+END
+
 GUI:DirectStrikeStart
 "BAŞLAT"
 END

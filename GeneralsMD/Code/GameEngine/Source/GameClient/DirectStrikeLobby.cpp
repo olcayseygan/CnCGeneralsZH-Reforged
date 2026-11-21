@@ -42,6 +42,7 @@
 #include "GameClient/GameWindow.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/Mouse.h"
+#include "GameLogic/LaneWarDirector.h"
 #include "GameNetwork/GameInfo.h"
 #include "GameNetwork/GUIUtil.h"
 #include "GameNetwork/LANAPICallbacks.h"
@@ -100,6 +101,9 @@ namespace
 	const Real SWATCH_W = 36, SWATCH_H = 24, CHECK = 20, CHECK_INSET = 36;
 	const Real LOCAL_FRAME_OUT = 3;
 	const Real ISLAND_EM = TYPE_NAME, ISLAND_NOTE_EM = TYPE_BODY, ISLAND_CHIP_EM = TYPE_LABEL, ISLAND_CHIP_NOTE_EM = TYPE_PRICE;
+	const Real ISLAND_NAME_BELOW = 20, ISLAND_NOTE_BELOW = 46;		///< the caption's middles under the island picture
+	const Real ISLAND_CHIP_TEXT_X = 822, ISLAND_CHIP_NAME_Y = 30, ISLAND_CHIP_NOTE_Y = 56;
+	const Real RULE_EM = TYPE_BODY, SLIM_MARK_IN = 6;
 	const Real LIST_TEXT = 20, LIST_AI_TEXT = 58;
 	const Real TILE_PICTURE_X = 32, TILE_PICTURE_Y = 6, TILE_PICTURE = 72;	///< the 64 picture with the well's 4 round it
 	const Real TILE_NAME_X = 68, TILE_NAME_Y = 92;
@@ -144,6 +148,19 @@ namespace
 	}
 
 	const GameSlot *seat( Int slot ) { return s_game->getConstSlot( slot ); }
+
+	/// bit n for each open or closed seat n: the layout's slim rows
+	unsigned slimSeats( void )
+	{
+		unsigned slim = 0;
+		for( Int slot = 0; slot < DSLOBBY_SEATS; ++slot )
+			if( seat( slot ) != NULL && !seat( slot )->isOccupied() )
+				slim |= 1u << slot;
+		return slim;
+	}
+
+	DirectStrikeRect seatCard( Int slot ) { return DirectStrikeLobby_card( slot, slimSeats() ); }
+	DirectStrikeRect seatPart( Int slot, DirectStrikeSeatPart part ) { return DirectStrikeLobby_part( slot, part, slimSeats(), isNetwork() ); }
 
 	//-----------------------------------------------------------------------------------------------
 	Int screenX( Real x ) { return s_frame.ox + REAL_TO_INT( x * s_frame.k + 0.5f ); }
@@ -375,15 +392,18 @@ namespace
 	void drawPortrait( Int slot )
 	{
 		const GameSlot *s = seat( slot );
-		const LaneHudBox well = boxOf( DirectStrikeLobby_part( slot, DSSEAT_PORTRAIT ) );
+		const DirectStrikeRect wellAt = seatPart( slot, DSSEAT_PORTRAIT );
+		const LaneHudBox well = boxOf( wellAt );
+		// a slim row's mark fills its small well, 6 in
+		const LaneHudBox mark = boxOf( DirectStrike_rect( wellAt.x0 + SLIM_MARK_IN, wellAt.y0 + SLIM_MARK_IN, wellAt.x1 - SLIM_MARK_IN, wellAt.y1 - SLIM_MARK_IN ) );
 		if( s->getState() == SLOT_OPEN )
 		{
-			drawCentred( art( LOBBY_OPEN ), well );
+			drawImage( art( LOBBY_OPEN ), mark );
 			return;
 		}
 		if( s->getState() == SLOT_CLOSED )
 		{
-			drawCentred( art( LOBBY_CLOSED ), well, CLOSED_TINT );
+			drawImage( art( LOBBY_CLOSED ), mark, CLOSED_TINT );
 			return;
 		}
 		const Int pick = s->getPlayerTemplate();
@@ -396,23 +416,10 @@ namespace
 		portraitWell( well, general != NULL ? general : headquartersPicture( armySide( pick ) ), LobbySeatColor( s ), TRUE );
 	}
 
-	/// the seat line; offline no seat has a lamp, so it runs as wide as the army chip under it
-	DirectStrikeRect seatLine( Int slot )
-	{
-		DirectStrikeRect line = DirectStrikeLobby_part( slot, DSSEAT_LINE );
-		if( !isNetwork() )
-		{
-			const DirectStrikeRect army = DirectStrikeLobby_part( slot, DSSEAT_ARMY );
-			line.x0 = army.x0;
-			line.x1 = army.x1;
-		}
-		return line;
-	}
-
 	void drawSeatLine( Int slot )
 	{
 		const GameSlot *s = seat( slot );
-		const DirectStrikeRect line = seatLine( slot );
+		const DirectStrikeRect line = seatPart( slot, DSSEAT_LINE );
 		const Bool drop = editsSeat( slot );
 		const char *state = drop ? chipState( line, LIST_SEAT, slot ) : "";
 		dropdown( boxOf( line ), state, !drop );
@@ -436,13 +443,13 @@ namespace
 		const Bool drop = editsArmy( slot );
 		const Int pick = s->getPlayerTemplate();
 
-		const DirectStrikeRect army = DirectStrikeLobby_part( slot, DSSEAT_ARMY );
+		const DirectStrikeRect army = seatPart( slot, DSSEAT_ARMY );
 		const char *armyState = drop ? chipState( army, LIST_ARMY, slot ) : "";
 		dropdown( boxOf( army ), armyState, !drop );
 		// the name alone: the portrait well beside the chip already shows the army
 		text( armyName( pick ), CHIP_EM, army.x0 + CONTENT_INSET, middleOf( army ), faceText( armyState ), -1, faceShadow( armyState ) );
 
-		const DirectStrikeRect color = DirectStrikeLobby_part( slot, DSSEAT_COLOR );
+		const DirectStrikeRect color = seatPart( slot, DSSEAT_COLOR );
 		dropdown( boxOf( color ), drop ? chipState( color, LIST_COLOR, slot ) : "", !drop );
 		swatch( iconAt( color.x0 + CONTENT_INSET, color, SWATCH_W, SWATCH_H ), LobbySeatColor( s ) );
 	}
@@ -453,20 +460,20 @@ namespace
 		Piece lamp = LAMP_READY;
 		if( s->isHuman() )
 			lamp = slot == 0 ? LAMP_HOST : s->isAccepted() ? LAMP_READY : LAMP_WAITING;
-		drawImage( art( lamp ), boxOf( DirectStrikeLobby_part( slot, DSSEAT_LAMP ) ) );
+		drawImage( art( lamp ), boxOf( seatPart( slot, DSSEAT_LAMP ) ) );
 		const Int ping = s->isHuman() && slot != localSlot() ? seatPing( slot ) : -1;
 		if( ping >= 0 )
-			drawImage( art( pingPiece( ping ) ), boxOf( DirectStrikeLobby_part( slot, DSSEAT_PING ) ) );
+			drawImage( art( pingPiece( ping ) ), boxOf( seatPart( slot, DSSEAT_PING ) ) );
 	}
 
 	void drawSeat( Int slot )
 	{
 		const GameSlot *s = seat( slot );
-		const LaneHudBox card = boxOf( DirectStrikeLobby_card( slot ) );
-		// the bare plate with the glass well sunk at the portrait, README-lobby.md; a closed seat's faded
+		const LaneHudBox card = boxOf( seatCard( slot ) );
+		// the panel's dark glass with the well sunk at the portrait; a closed seat's faded
 		const Color tint = s->getState() == SLOT_CLOSED ? CLOSED_TINT : 0xFFFFFFFF;
-		nineSlice( card, PLATE_TL, tint );
-		nineSlice( boxOf( DirectStrikeLobby_part( slot, DSSEAT_PORTRAIT ) ), WELL_TL, tint );
+		nineSlice( card, PANEL_TL, tint );
+		nineSlice( boxOf( seatPart( slot, DSSEAT_PORTRAIT ) ), WELL_TL, tint );
 		if( slot == localSlot() )
 		{
 			const Int out = px( LOCAL_FRAME_OUT );
@@ -482,23 +489,45 @@ namespace
 	}
 
 	//-----------------------------------------------------------------------------------------------
+	/// the match rules strip: how many a side, the starting cash, the wave tick and the first wave
+	void drawRules( void )
+	{
+		Int sides[ DSLOBBY_TEAMS ] = { 0, 0 };
+		for( Int slot = 0; slot < DSLOBBY_SEATS; ++slot )
+			if( seat( slot ) != NULL && seat( slot )->isOccupied() )
+				++sides[ DirectStrikeLobby_team( slot ) ];
+		UnicodeString rules[ DSLOBBY_RULES ];
+		rules[ 0 ].format( TheGameText->fetch( "GUI:DirectStrikeRuleTeams" ), sides[ 0 ], sides[ 1 ] );
+		rules[ 1 ].format( TheGameText->fetch( "GUI:DirectStrikeRuleMoney" ), (Int)LANEWAR_START_MONEY );
+		rules[ 2 ].format( TheGameText->fetch( "GUI:DirectStrikeRuleWave" ), (Int)LANEWAR_TICK_SECONDS );
+		rules[ 3 ].format( TheGameText->fetch( "GUI:DirectStrikeRuleFirst" ), (Int)LANEWAR_FIRST_TICK_SECONDS / 60, (Int)LANEWAR_FIRST_TICK_SECONDS % 60 );
+		for( Int i = 0; i < DSLOBBY_RULES; ++i )
+		{
+			const DirectStrikeRect r = DirectStrikeLobby_rule( isNetwork(), i );
+			dropdown( boxOf( r ), "", TRUE );
+			text( rules[ i ], RULE_EM, ( r.x0 + r.x1 ) * 0.5f, middleOf( r ), TEXT_WHITE, 0 );
+		}
+	}
+
 	void drawIsland( void )
 	{
 		const UnicodeString name = TheGameText->fetch( "GUI:DirectStrikeMap" );
 		const UnicodeString note = TheGameText->fetch( "GUI:DirectStrikeIslandNote" );
+		drawRules();
 		if( !isNetwork() )
 		{
 			panel( boxOf( DirectStrikeLobby_islandPanel() ) );
-			drawImage( art( LOBBY_ISLAND ), boxOf( DirectStrikeLobby_island() ) );
-			// the pair centred in the glass between the picture's foot (682) and the panel's (858)
-			text( name, ISLAND_EM, 960, 753, TEXT_WHITE, 0 );
-			text( note, ISLAND_NOTE_EM, 960, 787, TEXT_GREY, 0 );
+			const DirectStrikeRect island = DirectStrikeLobby_island();
+			drawImage( art( LOBBY_ISLAND ), boxOf( island ) );
+			text( name, ISLAND_EM, 960, island.y1 + ISLAND_NAME_BELOW, TEXT_WHITE, 0 );
+			text( note, ISLAND_NOTE_EM, 960, island.y1 + ISLAND_NOTE_BELOW, TEXT_GREY, 0 );
 			return;
 		}
-		panel( boxOf( DirectStrikeLobby_islandChip() ) );
+		const DirectStrikeRect chip = DirectStrikeLobby_islandChip();
+		panel( boxOf( chip ) );
 		drawImage( art( LOBBY_ISLAND_SMALL ), boxOf( DirectStrikeLobby_islandSmall() ) );
-		text( name, ISLAND_CHIP_EM, 822, 212, TEXT_WHITE );
-		text( note, ISLAND_CHIP_NOTE_EM, 822, 238, TEXT_GREY );
+		text( name, ISLAND_CHIP_EM, ISLAND_CHIP_TEXT_X, chip.y0 + ISLAND_CHIP_NAME_Y, TEXT_WHITE );
+		text( note, ISLAND_CHIP_NOTE_EM, ISLAND_CHIP_TEXT_X, chip.y0 + ISLAND_CHIP_NOTE_Y, TEXT_GREY );
 	}
 
 	/// a chat string of the line `line`, wrapped at `wrap` pixels and clipped to the panel's glass
@@ -634,12 +663,12 @@ namespace
 
 	void drawSeatList( Int slot )
 	{
-		const DirectStrikeRect list = DirectStrikeLobby_seatList( slot );
+		const DirectStrikeRect list = DirectStrikeLobby_seatList( slot, slimSeats(), isNetwork() );
 		panel( boxOf( list ) );
 		const Int current = SlotPickOf( seat( slot ) );
 		for( Int row = 0; row < DSLOBBY_SEAT_ROWS; ++row )
 		{
-			const DirectStrikeRect r = DirectStrikeLobby_seatRow( slot, row );
+			const DirectStrikeRect r = DirectStrikeLobby_seatRow( slot, row, slimSeats(), isNetwork() );
 			const Bool hot = pointerIn( r );
 			if( hot )
 				drawHover( boxOf( r ) );
@@ -657,10 +686,10 @@ namespace
 
 	void drawPicker( Int slot )
 	{
-		panel( boxOf( DirectStrikeLobby_picker( slot ) ) );
+		panel( boxOf( DirectStrikeLobby_picker( slot, slimSeats(), isNetwork() ) ) );
 		const Int pick = seat( slot )->getPlayerTemplate();
 
-		const DirectStrikeRect random = DirectStrikeLobby_pickerRandom( slot );
+		const DirectStrikeRect random = DirectStrikeLobby_pickerRandom( slot, slimSeats(), isNetwork() );
 		const char *randomState = isRandom( pick ) ? "P" : pointerIn( random ) ? "H" : "";
 		threeSlice( boxOf( random ), DROP_L, DROP_C, FIELD_R, randomState );
 		const Real x = random.x0 + CONTENT_INSET;
@@ -672,7 +701,7 @@ namespace
 		for( Int column = 0; column < DSLOBBY_ARMY_COLUMNS; ++column )
 			for( Int tile = 0; tile < DSLOBBY_ARMY_TILES; ++tile )
 			{
-				const DirectStrikeRect r = DirectStrikeLobby_pickerTile( slot, column, tile );
+				const DirectStrikeRect r = DirectStrikeLobby_pickerTile( slot, column, tile, slimSeats(), isNetwork() );
 				const Bool current = column == pickColumn && tile == pickTile;
 				const Bool hot = !current && pointerIn( r );
 				const char *state = current ? "P" : hot ? "H" : "";
@@ -692,10 +721,10 @@ namespace
 	{
 		Int colors[ COLOR_LIMIT ];
 		const Int count = freeColors( slot, colors );
-		panel( boxOf( DirectStrikeLobby_colorList( slot, count ) ) );
+		panel( boxOf( DirectStrikeLobby_colorList( slot, count, slimSeats(), isNetwork() ) ) );
 		for( Int i = 0; i < count; ++i )
 		{
-			const DirectStrikeRect cell = DirectStrikeLobby_colorCell( slot, count, i );
+			const DirectStrikeRect cell = DirectStrikeLobby_colorCell( slot, count, i, slimSeats(), isNetwork() );
 			const Real x = ( cell.x0 + cell.x1 - SWATCH_W ) * 0.5f;
 			const LaneHudBox box = iconAt( x, cell, SWATCH_W, SWATCH_H );
 			swatch( box, TheMultiplayerSettings->getColor( colors[ i ] )->getColor() );
@@ -770,7 +799,7 @@ namespace
 		if( list == LIST_SEAT )
 		{
 			for( Int row = 0; row < DSLOBBY_SEAT_ROWS; ++row )
-				if( DirectStrikeLobby_seatRow( slot, row ).contains( x, y ) )
+				if( DirectStrikeLobby_seatRow( slot, row, slimSeats(), isNetwork() ).contains( x, y ) )
 					if( GameWindow *combo = named( "ComboBoxPlayer", slot ) )
 						choose( combo, seatPick( row ) );
 			return;
@@ -780,11 +809,11 @@ namespace
 			GameWindow *combo = named( "ComboBoxPlayerTemplate", slot );
 			if( combo == NULL )
 				return;
-			if( DirectStrikeLobby_pickerRandom( slot ).contains( x, y ) )
+			if( DirectStrikeLobby_pickerRandom( slot, slimSeats(), isNetwork() ).contains( x, y ) )
 				choose( combo, PLAYERTEMPLATE_RANDOM );
 			for( Int column = 0; column < DSLOBBY_ARMY_COLUMNS; ++column )
 				for( Int tile = 0; tile < DSLOBBY_ARMY_TILES; ++tile )
-					if( DirectStrikeLobby_pickerTile( slot, column, tile ).contains( x, y ) )
+					if( DirectStrikeLobby_pickerTile( slot, column, tile, slimSeats(), isNetwork() ).contains( x, y ) )
 						choose( combo, ThePlayerTemplateStore->getTemplateNumByName( ARMIES[ column ][ tile ] ) );
 			return;
 		}
@@ -792,7 +821,7 @@ namespace
 		const Int count = freeColors( slot, colors );
 		GameWindow *combo = named( "ComboBoxColor", slot );
 		for( Int i = 0; i < count && combo != NULL; ++i )
-			if( DirectStrikeLobby_colorCell( slot, count, i ).contains( x, y ) )
+			if( DirectStrikeLobby_colorCell( slot, count, i, slimSeats(), isNetwork() ).contains( x, y ) )
 				choose( combo, colors[ i ] );
 	}
 
@@ -822,11 +851,11 @@ namespace
 			if( seat( slot ) == NULL )
 				continue;
 			List list = LIST_NONE;
-			if( editsSeat( slot ) && seatLine( slot ).contains( x, y ) )
+			if( editsSeat( slot ) && seatPart( slot, DSSEAT_LINE ).contains( x, y ) )
 				list = LIST_SEAT;
-			else if( editsArmy( slot ) && DirectStrikeLobby_part( slot, DSSEAT_ARMY ).contains( x, y ) )
+			else if( editsArmy( slot ) && seatPart( slot, DSSEAT_ARMY ).contains( x, y ) )
 				list = LIST_ARMY;
-			else if( editsArmy( slot ) && DirectStrikeLobby_part( slot, DSSEAT_COLOR ).contains( x, y ) )
+			else if( editsArmy( slot ) && seatPart( slot, DSSEAT_COLOR ).contains( x, y ) )
 				list = LIST_COLOR;
 			if( list != LIST_NONE )
 			{

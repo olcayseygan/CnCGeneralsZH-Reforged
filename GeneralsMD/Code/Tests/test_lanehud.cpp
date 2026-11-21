@@ -236,16 +236,19 @@ TEST(dslobby_team_two_is_team_ones_mirror_and_its_lamps_face_the_middle)
 		CHECK_EQ( DirectStrikeLobby_team( right ), 1 );
 		CHECK_EQ( DirectStrikeLobby_row( right ), row );
 		const DirectStrikeRect a = DirectStrikeLobby_card( left ), b = DirectStrikeLobby_card( right );
-		for( int part = 0; part < DSSEAT_PARTS; ++part )
-		{
-			const DirectStrikeRect p = DirectStrikeLobby_part( left, (DirectStrikeSeatPart)part );
-			const DirectStrikeRect q = DirectStrikeLobby_part( right, (DirectStrikeSeatPart)part );
-			CHECK( within( p, a ) && within( q, b ) );
-			CHECK_EQ( p.x0 - a.x0, b.x1 - q.x1 );
-			CHECK_EQ( p.y0, q.y0 );
-			for( int other = 0; other < part; ++other )
-				CHECK( !meet( p, DirectStrikeLobby_part( left, (DirectStrikeSeatPart)other ) ) );
-		}
+		for( int lights = 0; lights < 2; ++lights )
+			for( int part = 0; part < DSSEAT_PARTS; ++part )
+			{
+				const bool drawn = lights || ( part != DSSEAT_LAMP && part != DSSEAT_PING );
+				const DirectStrikeRect p = DirectStrikeLobby_part( left, (DirectStrikeSeatPart)part, 0, lights != 0 );
+				const DirectStrikeRect q = DirectStrikeLobby_part( right, (DirectStrikeSeatPart)part, 0, lights != 0 );
+				CHECK( within( p, a ) && within( q, b ) );
+				CHECK_EQ( p.x0 - a.x0, b.x1 - q.x1 );
+				CHECK_EQ( p.y0, q.y0 );
+				for( int other = 0; other < part && drawn; ++other )
+					if( lights || ( other != DSSEAT_LAMP && other != DSSEAT_PING ) )
+						CHECK( !meet( p, DirectStrikeLobby_part( left, (DirectStrikeSeatPart)other, 0, lights != 0 ) ) );
+			}
 		CHECK( DirectStrikeLobby_part( left, DSSEAT_LAMP ).x0 > DirectStrikeLobby_part( left, DSSEAT_PORTRAIT ).x1 );
 		CHECK( DirectStrikeLobby_part( right, DSSEAT_LAMP ).x1 < DirectStrikeLobby_part( right, DSSEAT_PORTRAIT ).x0 );
 		CHECK( !meet( a, DirectStrikeLobby_islandPanel() ) && !meet( b, DirectStrikeLobby_islandPanel() ) );
@@ -253,16 +256,54 @@ TEST(dslobby_team_two_is_team_ones_mirror_and_its_lamps_face_the_middle)
 	}
 }
 
+TEST(dslobby_open_seats_are_slim_rows_and_the_cards_below_move_up)
+{
+	const unsigned slim = ( 1u << 2 ) | ( 1u << 5 );
+	CHECK_EQ( DirectStrikeLobby_card( 2, slim ).y1 - DirectStrikeLobby_card( 2, slim ).y0, DSLOBBY_SLIM_H );
+	CHECK_EQ( DirectStrikeLobby_card( 4, slim ).y0, DirectStrikeLobby_card( 2, slim ).y1 + DSLOBBY_CARD_GAP );
+	CHECK_EQ( DirectStrikeLobby_card( 4, slim ).y0, DirectStrikeLobby_card( 4 ).y0 - ( DSLOBBY_CARD_H - DSLOBBY_SLIM_H ) );
+	CHECK_EQ( DirectStrikeLobby_card( 5, slim ).y0, DirectStrikeLobby_card( 5 ).y0 );
+	for( int part = 0; part < DSSEAT_PARTS; ++part )
+		CHECK( within( DirectStrikeLobby_part( 2, (DirectStrikeSeatPart)part, slim ), DirectStrikeLobby_card( 2, slim ) ) );
+	CHECK( !meet( DirectStrikeLobby_part( 2, DSSEAT_PORTRAIT, slim ), DirectStrikeLobby_part( 2, DSSEAT_LINE, slim ) ) );
+	CHECK( !meet( DirectStrikeLobby_part( 5, DSSEAT_PORTRAIT, slim ), DirectStrikeLobby_part( 5, DSSEAT_LINE, slim ) ) );
+}
+
+TEST(dslobby_the_block_is_centred_and_its_columns_share_top_and_foot)
+{
+	CHECK_EQ( DirectStrikeLobby_title().y0, 1080 - DSLOBBY_BOTTOM );
+	CHECK_EQ( DirectStrikeLobby_teamHead( 0 ).y0, DirectStrikeLobby_islandPanel().y0 );
+	CHECK_EQ( DirectStrikeLobby_teamHead( 1 ).y0, DirectStrikeLobby_islandChip().y0 );
+	CHECK_EQ( DirectStrikeLobby_card( DirectStrikeLobby_slot( 0, DSLOBBY_ROWS - 1 ) ).y1, DirectStrikeLobby_start().y1 );
+	CHECK_EQ( DirectStrikeLobby_card( DirectStrikeLobby_slot( 1, DSLOBBY_ROWS - 1 ) ).y1, DirectStrikeLobby_back().y1 );
+	CHECK_EQ( DirectStrikeLobby_island().y1 + 70.0f, DirectStrikeLobby_islandPanel().y1 );
+	for( int network = 0; network < 2; ++network )
+		for( int rule = 0; rule < DSLOBBY_RULES; ++rule )
+		{
+			CHECK( within( DirectStrikeLobby_rule( network != 0, rule ), DirectStrikeLobby_rules( network != 0 ) ) );
+			if( rule > 0 )
+				CHECK( !meet( DirectStrikeLobby_rule( network != 0, rule ), DirectStrikeLobby_rule( network != 0, rule - 1 ) ) );
+		}
+}
+
 TEST(dslobby_every_open_list_stays_on_the_screen_and_holds_its_rows)
 {
-	const DirectStrikeRect middle[] =
+	const DirectStrikeRect offline[] =
 	{
-		DirectStrikeLobby_title(), DirectStrikeLobby_islandChip(), DirectStrikeLobby_chat(),
+		DirectStrikeLobby_title(), DirectStrikeLobby_islandPanel(), DirectStrikeLobby_rules( false ),
+		DirectStrikeLobby_back(), DirectStrikeLobby_start(),
+	};
+	const DirectStrikeRect network[] =
+	{
+		DirectStrikeLobby_title(), DirectStrikeLobby_islandChip(), DirectStrikeLobby_rules( true ), DirectStrikeLobby_chat(),
 		DirectStrikeLobby_chatInput(), DirectStrikeLobby_send(), DirectStrikeLobby_back(), DirectStrikeLobby_start(),
 	};
-	for( int i = 0; i < (int)( sizeof( middle ) / sizeof( middle[ 0 ] ) ); ++i )
+	for( int i = 0; i < (int)( sizeof( offline ) / sizeof( offline[ 0 ] ) ); ++i )
 		for( int j = 0; j < i; ++j )
-			CHECK( !meet( middle[ i ], middle[ j ] ) );
+			CHECK( !meet( offline[ i ], offline[ j ] ) );
+	for( int i = 0; i < (int)( sizeof( network ) / sizeof( network[ 0 ] ) ); ++i )
+		for( int j = 0; j < i; ++j )
+			CHECK( !meet( network[ i ], network[ j ] ) );
 	for( int slot = 0; slot < DSLOBBY_SEATS; ++slot )
 	{
 		const DirectStrikeRect seats = DirectStrikeLobby_seatList( slot );
@@ -274,7 +315,7 @@ TEST(dslobby_every_open_list_stays_on_the_screen_and_holds_its_rows)
 		const DirectStrikeRect chip = DirectStrikeLobby_part( slot, DSSEAT_ARMY );
 		CHECK( within( picker, DESIGN ) );
 		CHECK( !meet( picker, chip ) );
-		if( DirectStrikeLobby_row( slot ) != 1 )
+		if( picker.x0 != DirectStrikeLobby_islandPanel().x0 )
 			CHECK_EQ( DirectStrikeLobby_team( slot ) == 0 ? picker.x1 : picker.x0, DirectStrikeLobby_team( slot ) == 0 ? chip.x1 : chip.x0 );
 		CHECK( within( DirectStrikeLobby_pickerRandom( slot ), picker ) );
 		for( int column = 0; column < DSLOBBY_ARMY_COLUMNS; ++column )

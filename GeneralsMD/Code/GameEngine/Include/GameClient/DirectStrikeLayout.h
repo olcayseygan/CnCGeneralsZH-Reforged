@@ -20,9 +20,9 @@
 //
 // Where the Direct Strike screens stand, in plain integers so test_lanehud checks them alone.  A screen
 // is authored at 1920x1080 and put on any screen by the frame: k = min(W / 1920, H / 1080), the 1920k
-// by 1080k box centred.  The lobby's rects follow hud-artist's README-lobby.md of 2026-11-21 in the
-// wrapper (experiments/proofs/2026-11-21/ds-lobby); the in-match HUD keeps its own anchoring in
-// LaneHudLayout.h.  DirectStrikeTheme.h is what draws in them.
+// by 1080k box centred.  The lobby's rects began as hud-artist's README-lobby.md of 2026-11-21 and were
+// made denser the same day (shorter cards, slim open seats, one block centred down the screen); the
+// in-match HUD keeps its own anchoring in LaneHudLayout.h.  DirectStrikeTheme.h is what draws in them.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -102,6 +102,25 @@ enum
 	DSLOBBY_ARMY_COLUMNS = 3,
 	DSLOBBY_ARMY_TILES = 4,			///< down a column: the side, then its three generals
 	DSLOBBY_COLOR_COLUMNS = 4,
+
+	// the block, 2026-11-21 second round: title, then team heads and three cards a team beside the centre
+	// column, the whole centred down the screen; an open or closed seat is a slim row
+	DSLOBBY_CARD_W = 600,
+	DSLOBBY_CARD_H = 148,				///< a seat with a player: the 128 well and two rows of chips
+	DSLOBBY_SLIM_H = 72,				///< an open or closed seat: its line and a small mark
+	DSLOBBY_CARD_GAP = 12,
+	DSLOBBY_HEAD_H = 44,
+	DSLOBBY_HEAD_GAP = 16,
+	DSLOBBY_TITLE_H = 72,
+	DSLOBBY_TITLE_GAP = 24,
+	DSLOBBY_COLUMN_H = DSLOBBY_HEAD_H + DSLOBBY_HEAD_GAP + DSLOBBY_ROWS * DSLOBBY_CARD_H + ( DSLOBBY_ROWS - 1 ) * DSLOBBY_CARD_GAP,
+	DSLOBBY_TITLE_TOP = ( 1080 - DSLOBBY_TITLE_H - DSLOBBY_TITLE_GAP - DSLOBBY_COLUMN_H ) / 2,
+	DSLOBBY_TOP = DSLOBBY_TITLE_TOP + DSLOBBY_TITLE_H + DSLOBBY_TITLE_GAP,		///< the team heads' and the centre column's top
+	DSLOBBY_BOTTOM = DSLOBBY_TOP + DSLOBBY_COLUMN_H,	///< a full column's foot and the start key's
+	DSLOBBY_KEY_H = 72,
+	DSLOBBY_RULES = 4,					///< the match rules strip's chips: teams, starting cash, wave tick, first wave
+	DSLOBBY_RULE_GAP = 8,
+	DSLOBBY_ROW_GAP = 12,				///< between the centre column's parts
 };
 
 /// the part of a seat card, README-lobby.md "The seat card"
@@ -121,52 +140,115 @@ inline int DirectStrikeLobby_slot( int team, int row ) { return row * DSLOBBY_TE
 inline int DirectStrikeLobby_team( int slot ) { return slot % DSLOBBY_TEAMS; }
 inline int DirectStrikeLobby_row( int slot ) { return slot / DSLOBBY_TEAMS; }
 
-inline DirectStrikeRect DirectStrikeLobby_title( void ) { return DirectStrike_rect( 700, 86, 1220, 158 ); }
+inline DirectStrikeRect DirectStrikeLobby_title( void )
+{
+	return DirectStrike_rect( 700, DSLOBBY_TITLE_TOP, 1220, DSLOBBY_TITLE_TOP + DSLOBBY_TITLE_H );
+}
 
 inline DirectStrikeRect DirectStrikeLobby_teamHead( int team )
 {
-	return team == 0 ? DirectStrike_rect( 80, 182, 680, 226 ) : DirectStrike_rect( 1240, 182, 1840, 226 );
+	const float x = team == 0 ? 80.0f : 1240.0f;
+	return DirectStrike_rect( x, DSLOBBY_TOP, x + DSLOBBY_CARD_W, DSLOBBY_TOP + DSLOBBY_HEAD_H );
 }
 
-inline DirectStrikeRect DirectStrikeLobby_card( int slot )
+/// whether seat `slot` is a slim row; `slim` has bit n set for each open or closed seat n
+inline bool DirectStrikeLobby_isSlim( int slot, unsigned slim ) { return ( slim >> slot & 1u ) != 0; }
+
+/// a seat's card: the team's cards stack under its head, each a full card or a slim row
+inline DirectStrikeRect DirectStrikeLobby_card( int slot, unsigned slim = 0 )
 {
-	const float x = DirectStrikeLobby_team( slot ) == 0 ? 80.0f : 1240.0f;
-	const float y = 242.0f + 216.0f * (float)DirectStrikeLobby_row( slot );
-	return DirectStrike_rect( x, y, x + 600.0f, y + 200.0f );
+	const int team = DirectStrikeLobby_team( slot );
+	float y = (float)( DSLOBBY_TOP + DSLOBBY_HEAD_H + DSLOBBY_HEAD_GAP );
+	for( int row = 0; row < DirectStrikeLobby_row( slot ); ++row )
+		y += ( DirectStrikeLobby_isSlim( DirectStrikeLobby_slot( team, row ), slim ) ? DSLOBBY_SLIM_H : DSLOBBY_CARD_H ) + DSLOBBY_CARD_GAP;
+	const float x = team == 0 ? 80.0f : 1240.0f;
+	return DirectStrike_rect( x, y, x + DSLOBBY_CARD_W, y + ( DirectStrikeLobby_isSlim( slot, slim ) ? DSLOBBY_SLIM_H : DSLOBBY_CARD_H ) );
 }
 
-/// a part of a seat's card in the design's space; team 2's card is team 1's mirrored, x becoming 600 - x
-inline DirectStrikeRect DirectStrikeLobby_part( int slot, DirectStrikeSeatPart part )
+/// a part of a seat's card in the design's space; team 2's card is team 1's mirrored, x becoming 600 - x.
+/// `lights` is a network room, with a ready lamp and a ping at the inner edge; offline the line and the chips
+/// run to that edge instead.  A slim row has its mark and its line; its other parts are empty rects.
+inline DirectStrikeRect DirectStrikeLobby_part( int slot, DirectStrikeSeatPart part, unsigned slim = 0, bool lights = true )
 {
-	static const float PARTS[ DSSEAT_PARTS ][ 4 ] =
+	static const float FULL[ 2 ][ DSSEAT_PARTS ][ 4 ] =
 	{
-		{ 10, 10, 190, 190 },			// portrait well
-		{ 204, 12, 532, 60 },			// seat line
-		{ 548, 20, 580, 52 },			// ready lamp
-		{ 204, 76, 588, 124 },		// army chip
-		{ 204, 140, 300, 188 },		// colour chip
-		{ 548, 152, 576, 176 },		// ping
+		{	// offline
+			{ 10, 10, 138, 138 },			// portrait well
+			{ 152, 18, 588, 66 },			// seat line
+			{ 548, 26, 580, 58 },			// ready lamp, not drawn
+			{ 152, 82, 480, 130 },		// army chip
+			{ 492, 82, 588, 130 },		// colour chip
+			{ 552, 94, 580, 118 },		// ping, not drawn
+		},
+		{	// a network room
+			{ 10, 10, 138, 138 },
+			{ 152, 18, 532, 66 },
+			{ 548, 26, 580, 58 },
+			{ 152, 82, 428, 130 },
+			{ 440, 82, 536, 130 },
+			{ 552, 94, 580, 118 },
+		},
 	};
-	const DirectStrikeRect card = DirectStrikeLobby_card( slot );
-	const float *p = PARTS[ part ];
+	static const float SLIM[ DSSEAT_PARTS ][ 4 ] =
+	{
+		{ 10, 10, 62, 62 },
+		{ 76, 12, 588, 60 },
+		{ 0, 0, 0, 0 },
+		{ 0, 0, 0, 0 },
+		{ 0, 0, 0, 0 },
+		{ 0, 0, 0, 0 },
+	};
+	const DirectStrikeRect card = DirectStrikeLobby_card( slot, slim );
+	const float *p = DirectStrikeLobby_isSlim( slot, slim ) ? SLIM[ part ] : FULL[ lights ? 1 : 0 ][ part ];
 	if( DirectStrikeLobby_team( slot ) == 0 )
 		return DirectStrike_rect( card.x0 + p[ 0 ], card.y0 + p[ 1 ], card.x0 + p[ 2 ], card.y0 + p[ 3 ] );
-	return DirectStrike_rect( card.x0 + 600.0f - p[ 2 ], card.y0 + p[ 1 ], card.x0 + 600.0f - p[ 0 ], card.y0 + p[ 3 ] );
+	return DirectStrike_rect( card.x0 + DSLOBBY_CARD_W - p[ 2 ], card.y0 + p[ 1 ], card.x0 + DSLOBBY_CARD_W - p[ 0 ], card.y0 + p[ 3 ] );
 }
 
-inline DirectStrikeRect DirectStrikeLobby_back( void ) { return DirectStrike_rect( 700, 922, 772, 994 ); }
-inline DirectStrikeRect DirectStrikeLobby_start( void ) { return DirectStrike_rect( 788, 922, 1220, 994 ); }
+/// the back and start keys at the centre column's foot, level with a full team column's
+inline DirectStrikeRect DirectStrikeLobby_back( void ) { return DirectStrike_rect( 700, DSLOBBY_BOTTOM - DSLOBBY_KEY_H, 772, DSLOBBY_BOTTOM ); }
+inline DirectStrikeRect DirectStrikeLobby_start( void ) { return DirectStrike_rect( 788, DSLOBBY_BOTTOM - DSLOBBY_KEY_H, 1220, DSLOBBY_BOTTOM ); }
 
-// offline: the island panel under the title
-inline DirectStrikeRect DirectStrikeLobby_islandPanel( void ) { return DirectStrike_rect( 700, 182, 1220, 874 ); }
-inline DirectStrikeRect DirectStrikeLobby_island( void ) { return DirectStrike_rect( 720, 202, 1200, 682 ); }
+/// the match rules strip: four chips across the centre column, under the island offline and under the island
+/// chip in a network room
+inline DirectStrikeRect DirectStrikeLobby_rules( bool network )
+{
+	const float y = network ? DSLOBBY_TOP + 80.0f + DSLOBBY_ROW_GAP : DSLOBBY_BOTTOM - DSLOBBY_KEY_H - DSLOBBY_ROW_GAP - 48.0f;
+	return DirectStrike_rect( 700, y, 1220, y + 48 );
+}
 
-// a network room: the island chip, the chat, its input and the send key
-inline DirectStrikeRect DirectStrikeLobby_islandChip( void ) { return DirectStrike_rect( 700, 182, 1220, 262 ); }
-inline DirectStrikeRect DirectStrikeLobby_islandSmall( void ) { return DirectStrike_rect( 710, 192, 806, 252 ); }
-inline DirectStrikeRect DirectStrikeLobby_chat( void ) { return DirectStrike_rect( 700, 278, 1220, 810 ); }
-inline DirectStrikeRect DirectStrikeLobby_chatInput( void ) { return DirectStrike_rect( 700, 826, 1160, 874 ); }
-inline DirectStrikeRect DirectStrikeLobby_send( void ) { return DirectStrike_rect( 1172, 826, 1220, 874 ); }
+inline DirectStrikeRect DirectStrikeLobby_rule( bool network, int index )
+{
+	const DirectStrikeRect strip = DirectStrikeLobby_rules( network );
+	const float w = ( strip.x1 - strip.x0 - ( DSLOBBY_RULES - 1 ) * DSLOBBY_RULE_GAP ) / DSLOBBY_RULES;
+	const float x = strip.x0 + (float)index * ( w + DSLOBBY_RULE_GAP );
+	return DirectStrike_rect( x, strip.y0, x + w, strip.y1 );
+}
+
+// offline: the island panel, the picture and its caption, down to the rules strip
+inline DirectStrikeRect DirectStrikeLobby_islandPanel( void )
+{
+	return DirectStrike_rect( 700, DSLOBBY_TOP, 1220, DirectStrikeLobby_rules( false ).y0 - DSLOBBY_ROW_GAP );
+}
+inline DirectStrikeRect DirectStrikeLobby_island( void ) { return DirectStrike_rect( 810, DSLOBBY_TOP + 14, 1110, DSLOBBY_TOP + 314 ); }
+
+// a network room: the island chip, the rules, the chat, its input and the send key
+inline DirectStrikeRect DirectStrikeLobby_islandChip( void ) { return DirectStrike_rect( 700, DSLOBBY_TOP, 1220, DSLOBBY_TOP + 80 ); }
+inline DirectStrikeRect DirectStrikeLobby_islandSmall( void ) { return DirectStrike_rect( 710, DSLOBBY_TOP + 10, 806, DSLOBBY_TOP + 70 ); }
+inline DirectStrikeRect DirectStrikeLobby_chatInput( void )
+{
+	const float y1 = DSLOBBY_BOTTOM - DSLOBBY_KEY_H - DSLOBBY_ROW_GAP;
+	return DirectStrike_rect( 700, y1 - 48, 1160, y1 );
+}
+inline DirectStrikeRect DirectStrikeLobby_send( void )
+{
+	const DirectStrikeRect input = DirectStrikeLobby_chatInput();
+	return DirectStrike_rect( 1172, input.y0, 1220, input.y1 );
+}
+inline DirectStrikeRect DirectStrikeLobby_chat( void )
+{
+	return DirectStrike_rect( 700, DirectStrikeLobby_rules( true ).y1 + DSLOBBY_ROW_GAP, 1220, DirectStrikeLobby_chatInput().y0 - DSLOBBY_ROW_GAP );
+}
 
 enum
 {
@@ -179,6 +261,7 @@ enum
 	DSLOBBY_TILE_W = 136,
 	DSLOBBY_TILE_H = 112,
 	DSLOBBY_TILE_GAP = 8,
+	DSLOBBY_PICKER_INNER = DSLOBBY_ARMY_COLUMNS * DSLOBBY_TILE_W + ( DSLOBBY_ARMY_COLUMNS - 1 ) * DSLOBBY_TILE_GAP,
 	DSLOBBY_COLOR_CELL_W = 48,
 	DSLOBBY_COLOR_CELL_H = 40,
 	DSLOBBY_COLOR_PAD = 16,
@@ -194,25 +277,25 @@ inline DirectStrikeRect DirectStrikeLobby_dropBelow( const DirectStrikeRect &chi
 }
 
 /// the host's seat control under a seat line
-inline DirectStrikeRect DirectStrikeLobby_seatList( int slot )
+inline DirectStrikeRect DirectStrikeLobby_seatList( int slot, unsigned slim = 0, bool lights = true )
 {
-	const DirectStrikeRect line = DirectStrikeLobby_part( slot, DSSEAT_LINE );
+	const DirectStrikeRect line = DirectStrikeLobby_part( slot, DSSEAT_LINE, slim, lights );
 	return DirectStrikeLobby_dropBelow( line, line.x1 - line.x0, 2.0f * DSLOBBY_LIST_PAD + DSLOBBY_SEAT_ROWS * DSLOBBY_LIST_ROW, false );
 }
 
-inline DirectStrikeRect DirectStrikeLobby_seatRow( int slot, int row )
+inline DirectStrikeRect DirectStrikeLobby_seatRow( int slot, int row, unsigned slim = 0, bool lights = true )
 {
-	const DirectStrikeRect list = DirectStrikeLobby_seatList( slot );
+	const DirectStrikeRect list = DirectStrikeLobby_seatList( slot, slim, lights );
 	const float y = list.y0 + DSLOBBY_LIST_PAD + DSLOBBY_LIST_ROW * (float)row;
 	return DirectStrike_rect( list.x0 + DSLOBBY_LIST_PAD, y, list.x1 - DSLOBBY_LIST_PAD, y + DSLOBBY_LIST_ROW );
 }
 
-/// the army picker: team 1's right edge under its chip's right edge, team 2's left under the left; seat 3
-/// opens up.  The middle row's fits neither under nor over its chip, so it stands in the centre column
-/// level with the chip, over the island and the chat.
-inline DirectStrikeRect DirectStrikeLobby_picker( int slot )
+/// the army picker: team 1's right edge under its chip's right edge, team 2's left under the left; the last
+/// row opens up.  One that fits neither under nor over its chip covers the centre column's width level with
+/// the chip, over the island and the chat, its tiles centred in it.
+inline DirectStrikeRect DirectStrikeLobby_picker( int slot, unsigned slim = 0, bool lights = true )
 {
-	const DirectStrikeRect chip = DirectStrikeLobby_part( slot, DSSEAT_ARMY );
+	const DirectStrikeRect chip = DirectStrikeLobby_part( slot, DSSEAT_ARMY, slim, lights );
 	const bool left = DirectStrikeLobby_team( slot ) == 0;
 	const float x0 = left ? chip.x1 - DSLOBBY_PICKER_W : chip.x0;
 	const float above = chip.y0 - DSLOBBY_LIST_GAP - DSLOBBY_PICKER_H;
@@ -221,39 +304,46 @@ inline DirectStrikeRect DirectStrikeLobby_picker( int slot )
 	if( chip.y1 + DSLOBBY_LIST_GAP + DSLOBBY_PICKER_H > 1080.0f && above < 0.0f )
 	{
 		const float y0 = ( chip.y0 + chip.y1 - DSLOBBY_PICKER_H ) * 0.5f;
-		return DirectStrike_rect( 960.0f - DSLOBBY_PICKER_W * 0.5f, y0, 960.0f + DSLOBBY_PICKER_W * 0.5f, y0 + DSLOBBY_PICKER_H );
+		return DirectStrike_rect( 700, y0, 1220, y0 + DSLOBBY_PICKER_H );
 	}
 	return DirectStrikeLobby_dropBelow( chip, DSLOBBY_PICKER_W, DSLOBBY_PICKER_H, left );
 }
 
-inline DirectStrikeRect DirectStrikeLobby_pickerRandom( int slot )
+/// where the picker's random key and tiles start across: centred in whatever width the picker has
+inline float DirectStrikeLobby_pickerInset( const DirectStrikeRect &picker )
 {
-	const DirectStrikeRect p = DirectStrikeLobby_picker( slot );
-	return DirectStrike_rect( p.x0 + 16, p.y0 + 16, p.x0 + 16 + 424, p.y0 + 16 + 48 );
+	return ( picker.x1 - picker.x0 - DSLOBBY_PICKER_INNER ) * 0.5f;
+}
+
+inline DirectStrikeRect DirectStrikeLobby_pickerRandom( int slot, unsigned slim = 0, bool lights = true )
+{
+	const DirectStrikeRect p = DirectStrikeLobby_picker( slot, slim, lights );
+	const float x = p.x0 + DirectStrikeLobby_pickerInset( p );
+	return DirectStrike_rect( x, p.y0 + 16, x + DSLOBBY_PICKER_INNER, p.y0 + 16 + 48 );
 }
 
 /// tile `tile` (0 the side, 1 to 3 its generals) of column `column` (USA, China, GLA)
-inline DirectStrikeRect DirectStrikeLobby_pickerTile( int slot, int column, int tile )
+inline DirectStrikeRect DirectStrikeLobby_pickerTile( int slot, int column, int tile, unsigned slim = 0, bool lights = true )
 {
-	const DirectStrikeRect p = DirectStrikeLobby_picker( slot );
-	const float x = p.x0 + 16 + (float)column * ( DSLOBBY_TILE_W + DSLOBBY_TILE_GAP );
+	const DirectStrikeRect p = DirectStrikeLobby_picker( slot, slim, lights );
+	const float x = p.x0 + DirectStrikeLobby_pickerInset( p ) + (float)column * ( DSLOBBY_TILE_W + DSLOBBY_TILE_GAP );
 	const float y = p.y0 + 76 + (float)tile * ( DSLOBBY_TILE_H + DSLOBBY_TILE_GAP );
 	return DirectStrike_rect( x, y, x + DSLOBBY_TILE_W, y + DSLOBBY_TILE_H );
 }
 
 /// the colour list under the colour chip: cells of 48x40 in rows of four, 16 padding round them
-inline DirectStrikeRect DirectStrikeLobby_colorList( int slot, int colors )
+inline DirectStrikeRect DirectStrikeLobby_colorList( int slot, int colors, unsigned slim = 0, bool lights = true )
 {
-	const DirectStrikeRect chip = DirectStrikeLobby_part( slot, DSSEAT_COLOR );
+	const DirectStrikeRect chip = DirectStrikeLobby_part( slot, DSSEAT_COLOR, slim, lights );
 	const int rows = ( colors + DSLOBBY_COLOR_COLUMNS - 1 ) / DSLOBBY_COLOR_COLUMNS;
 	const float w = 2.0f * DSLOBBY_COLOR_PAD + DSLOBBY_COLOR_COLUMNS * DSLOBBY_COLOR_CELL_W;
 	const float h = 2.0f * DSLOBBY_COLOR_PAD + (float)rows * DSLOBBY_COLOR_CELL_H;
 	return DirectStrikeLobby_dropBelow( chip, w, h, DirectStrikeLobby_team( slot ) != 0 );
 }
 
-inline DirectStrikeRect DirectStrikeLobby_colorCell( int slot, int colors, int index )
+inline DirectStrikeRect DirectStrikeLobby_colorCell( int slot, int colors, int index, unsigned slim = 0, bool lights = true )
 {
-	const DirectStrikeRect list = DirectStrikeLobby_colorList( slot, colors );
+	const DirectStrikeRect list = DirectStrikeLobby_colorList( slot, colors, slim, lights );
 	const float x = list.x0 + DSLOBBY_COLOR_PAD + (float)( index % DSLOBBY_COLOR_COLUMNS ) * DSLOBBY_COLOR_CELL_W;
 	const float y = list.y0 + DSLOBBY_COLOR_PAD + (float)( index / DSLOBBY_COLOR_COLUMNS ) * DSLOBBY_COLOR_CELL_H;
 	return DirectStrike_rect( x, y, x + DSLOBBY_COLOR_CELL_W, y + DSLOBBY_COLOR_CELL_H );

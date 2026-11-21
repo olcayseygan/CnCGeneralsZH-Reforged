@@ -63,6 +63,7 @@
 #include "W3DDevice/GameClient/W3DShadow.h"
 #include "W3DDevice/GameClient/GroundMarks.h"
 #include "W3DDevice/GameClient/StructureCollapse.h"
+#include "W3DDevice/GameClient/Module/W3DFractureDraw.h"
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
 #include "W3DDevice/GameClient/HeightMap.h"
 #include "WW3D2/hlod.h"
@@ -269,6 +270,9 @@ void W3DGameClient::structureCollapsing(Drawable *draw, Real height)
 	// a slab of foundation or a mine's stub has nothing to go down
 	const Real MIN_HEIGHT = 8.0f;
 	if (height < MIN_HEIGHT || draw->isDrawableEffectivelyHidden())
+		return;
+	// a structure drawn in fragments comes down by its own collapse
+	if (W3DFractureDraw::stagesCollapse(draw))
 		return;
 	for (DrawModule **dm = draw->getDrawModules(); *dm; ++dm)
 	{

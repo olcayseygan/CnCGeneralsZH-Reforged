@@ -165,7 +165,6 @@ static int GetSystemMetrics( int which )
 #include "GameClient/UiAnimClock.h"
 #include "Common/QuotedPrintable.h"
 #include "GameLogic/Module/PhysicsUpdate.h"
-#include "GameLogic/Module/PieceDamageBehavior.h"
 #include "GameClient/GameClient.h"
 #include "Common/GameEngine.h"
 #include "GameClient/ParticleSys.h"
@@ -19008,107 +19007,6 @@ TEST(influence_map_gun_shape_leaves_its_minimum_range_and_halves_its_edge)
 	map.cellsBanded( 480.0f, 510.0f, 30.0f, 150.0f, 0.0f, 1.0f, banded, scratch, &edge );
 	CHECK_EQ( 0, edge );
 	CHECK( plain == banded );
-}
-
-/** Four pieces stacked on the z axis: a leg at 0, the leg above it at 20 resting on it, a cab at 40, a gun at 50
-	 resting on the cab.  The PieceDamageBehavior tests share them. */
-static std::vector<PieceDamagePiece> pieceDamageStack()
-{
-	std::vector<PieceDamagePiece> pieces( 4 );
-	const Real health[ 4 ] = { 100.0f, 100.0f, 100.0f, 50.0f };
-	const UnsignedInt restsOn[ 4 ] = { 0, 1u << 0, 0, 1u << 2 };
-	for( Int i = 0; i < 4; ++i )
-	{
-		pieces[ i ].m_health = health[ i ];
-		pieces[ i ].m_restsOn = restsOn[ i ];
-	}
-	return pieces;
-}
-
-static const Coord3D s_pieceDamageAt[ 4 ] = { { 0, 0, 0 }, { 0, 0, 20 }, { 0, 0, 40 }, { 0, 0, 50 } };
-
-/** The piece nearest a hit takes all of it, the others less the further they stand past it, none at the reach. */
-TEST(piece_damage_share_falls_off_past_the_nearest_piece)
-{
-	CHECK_EQ( 1.0f, PieceDamageState::share( 5.0f, 5.0f, 12.0f ) );
-	CHECK_EQ( 0.5f, PieceDamageState::share( 11.0f, 5.0f, 12.0f ) );
-	CHECK_EQ( 0.0f, PieceDamageState::share( 17.0f, 5.0f, 12.0f ) );
-	CHECK_EQ( 0.0f, PieceDamageState::share( 40.0f, 5.0f, 12.0f ) );
-}
-
-/** A direct hit wears the leg it lands on down and breaks it on the second; the leg above it goes with it, the rest
-	 stand untouched. */
-TEST(piece_damage_breaks_what_is_hit_and_what_rests_on_it)
-{
-	const std::vector<PieceDamagePiece> pieces = pieceDamageStack();
-	PieceDamageState state;
-	state.reset( pieces );
-	const Coord3D impact = { 0, 0, -1 };
-	CHECK_EQ( 0u, state.hit( pieces, s_pieceDamageAt, impact, 10.0f, 60.0f ) );
-	CHECK_EQ( 40.0f, state.getHealth( 0 ) );
-	CHECK_EQ( 100.0f, state.getHealth( 1 ) );
-	CHECK_EQ( 3u, state.hit( pieces, s_pieceDamageAt, impact, 10.0f, 60.0f ) );
-	CHECK_EQ( 0.0f, state.getHealth( 1 ) );
-	CHECK_EQ( 100.0f, state.getHealth( 2 ) );
-
-	// the next hit's nearest standing piece is the cab, 41 away, and it takes all of it; the gun goes with it
-	CHECK_EQ( 12u, state.hit( pieces, s_pieceDamageAt, impact, 10.0f, 100.0f ) );
-	CHECK_EQ( 15u, state.getBrokenMask() );
-	CHECK_EQ( 0u, state.hit( pieces, s_pieceDamageAt, impact, 10.0f, 100.0f ) );
-}
-
-/** A gun named in DisablesWeapons takes the weapons when it breaks itself, and when the cab it rests on breaks
-	 and it falls with it; a leg breaking does not. */
-TEST(piece_damage_the_gun_falling_with_the_cab_disables_the_weapons)
-{
-	const std::vector<PieceDamagePiece> pieces = pieceDamageStack();
-	const UnsignedInt disablesWeapons = 1u << 3;		// the gun
-	PieceDamageState state;
-	state.reset( pieces );
-	const Coord3D low = { 0, 0, -1 };
-	const UnsignedInt legs = state.hit( pieces, s_pieceDamageAt, low, 10.0f, 200.0f );
-	CHECK_EQ( 3u, legs );
-	CHECK_EQ( 0u, legs & disablesWeapons );
-	const Coord3D cab = { 0, 0, 38 };		// 2 from the cab, 12 from the gun: the gun takes none of it
-	const UnsignedInt top = state.hit( pieces, s_pieceDamageAt, cab, 10.0f, 100.0f );
-	CHECK_EQ( 12u, top );
-	CHECK( ( top & disablesWeapons ) != 0 );
-}
-
-/** The same damage at the same point breaks one piece with a small reach and two with a big one. */
-TEST(piece_damage_a_bigger_blast_breaks_more)
-{
-	const std::vector<PieceDamagePiece> pieces = pieceDamageStack();
-	const Coord3D impact = { 0, 0, 28 };		// 8 from the upper leg, 12 from the cab, 22 from the gun
-	PieceDamageState narrow, wide;		// not "small": <rpcndr.h> defines it as char
-	narrow.reset( pieces );
-	wide.reset( pieces );
-	CHECK_EQ( 2u, narrow.hit( pieces, s_pieceDamageAt, impact, 5.0f, 100.0f ) );
-	CHECK_NEAR( 80.0f, narrow.getHealth( 2 ), 0.001f );
-	CHECK_EQ( 50.0f, narrow.getHealth( 3 ) );
-	CHECK_EQ( 10u, wide.hit( pieces, s_pieceDamageAt, impact, 30.0f, 100.0f ) );
-	CHECK_NEAR( 100.0f - 100.0f * ( 1.0f - 4.0f / 30.0f ), wide.getHealth( 2 ), 0.001f );
-	CHECK_NEAR( 100.0f - 100.0f * ( 1.0f - 20.0f / 30.0f ), wide.getHealth( 0 ), 0.001f );
-}
-
-/** A save mid-breakage comes back with the same health on every piece and the same ones broken. */
-TEST(piece_damage_state_xfer_round_trip)
-{
-	const std::vector<PieceDamagePiece> pieces = pieceDamageStack();
-	PieceDamageState state;
-	state.reset( pieces );
-	const Coord3D impact = { 0, 0, 28 };
-	state.hit( pieces, s_pieceDamageAt, impact, 30.0f, 100.0f );
-
-	MemoryXfer save;
-	state.xfer( &save );
-	save.rewind();
-	PieceDamageState back;
-	back.xfer( &save );
-	CHECK_EQ( 4, back.getCount() );
-	CHECK_EQ( 10u, back.getBrokenMask() );
-	for( Int i = 0; i < 4; ++i )
-		CHECK_EQ( state.getHealth( i ), back.getHealth( i ) );
 }
 
 /** A route fears a still gun twice and a hazard by the share of the reader that walks; with those layers empty it

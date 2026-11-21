@@ -79,6 +79,7 @@
 #include "Lib/Clock.h"		// Clock_Ticks: QueryPerformanceCounter on Windows, a monotonic clock elsewhere
 #include "GameClient/ParticleSys.h"
 #include "W3DDevice/GameClient/W3DParticleSys.h"
+#include "W3DDevice/GameClient/Module/W3DFractureDraw.h"
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
 #include "Common/JobSystem.h"
 #include "Common/LogicThread.h"
@@ -4632,6 +4633,11 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 		 onto the screen rather than into the map.  The backend writes depth for a blended caster
 		 while the pass runs and cuts it at its alpha, which keeps the blades. */
 	SortingRendererClass::Flush();
+
+	/* A fractured structure's fragments are not casters in the list either: the model they stand in
+		 for is hidden from the moment of the first hit, and its own entry draws nothing. */
+	if (geometryShadows)
+		W3DFractureDraw::renderShadowCasters( sunInfo );
 
 	/* The bridge decks are not casters in the list above and have to be in the map all the same:
 		 without them the sun reached through a deck, and a tank crossing it laid one shadow on the

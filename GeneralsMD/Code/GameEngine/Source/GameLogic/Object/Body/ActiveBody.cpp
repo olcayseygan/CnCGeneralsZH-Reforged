@@ -684,6 +684,14 @@ void ActiveBody::attemptDamage( DamageInfo *damageInfo )
 
 				d->onDamage( damageInfo );
 			}
+
+			// the client draws where it landed (a structure in fragments); logic tells, never asks back
+			Drawable *draw = obj->getDrawable();
+			if( draw && damageInfo->in.m_hasImpact )
+			{
+				const Object *source = TheGameLogic->findObjectByID( damageInfo->in.m_sourceID );
+				draw->reactToImpact( damageInfo->in.m_impactPos, damageInfo->in.m_impactRadius, source ? source->getPosition() : NULL );
+			}
 		}
 
 		if (m_curDamageState != oldState)

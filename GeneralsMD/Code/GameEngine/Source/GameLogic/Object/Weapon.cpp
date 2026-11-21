@@ -1461,7 +1461,7 @@ void WeaponTemplate::dealDamageInternal(ObjectID sourceID, ObjectID victimID, co
 	// if there's a specific victim, use it's pos (overriding the value passed in)
 	Object *primaryVictim = victimID ? TheGameLogic->findObjectByID(victimID) : NULL;	// might be null...
 
-	/* Where the damage landed, for a victim that breaks the part it was hit in (PieceDamageBehavior).
+	/* Where the damage landed, for a victim drawn breaking where it was hit (W3DFractureDraw).
 		 A blast with no victim (a shell or missile going off, a shot at the ground) has its own point.
 		 A shot at an object only has the object, so it lands on the side facing the shooter, at the
 		 object's middle height, where the drawn tracer goes. */

@@ -32,6 +32,7 @@
 #include "W3DDevice/GameClient/Module/W3DDebrisDraw.h"
 #include "W3DDevice/GameClient/Module/W3DDefaultDraw.h"
 #include "W3DDevice/GameClient/Module/W3DDependencyModelDraw.h"
+#include "W3DDevice/GameClient/Module/W3DFractureDraw.h"
 #include "W3DDevice/GameClient/Module/W3DModelDraw.h"
 #include "W3DDevice/GameClient/Module/W3DLaserDraw.h"
 #include "W3DDevice/GameClient/Module/W3DOverlordTankDraw.h"
@@ -78,5 +79,6 @@ void W3DModuleFactory::init( void )
 	addModule( W3DTankTruckDraw );
 	addModule( W3DTreeDraw );
 	addModule( W3DPropDraw );
+	addModule( W3DFractureDraw );
 
 }  // end init

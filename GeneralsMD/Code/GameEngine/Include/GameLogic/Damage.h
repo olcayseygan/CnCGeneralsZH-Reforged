@@ -306,8 +306,8 @@ public:
 	Real					 m_shockWaveRadius;			  ///< This represents the effect radius of the shockwave. 
 	Real					 m_shockWaveTaperOff;			///< This represents the taper off effect of the shockwave at the tip of the radius. 0.0 means shockwave is 0% at the radius edge.
 
-	// Where a weapon's damage landed, for a module that breaks the part of the victim it hit
-	// (PieceDamageBehavior).  Only WeaponTemplate::dealDamageInternal fills it in: the blast's own
+	// Where a weapon's damage landed, for a drawable that breaks the part of the victim it hit
+	// (ActiveBody hands it to Drawable::reactToImpact; W3DFractureDraw).  Only WeaponTemplate::dealDamageInternal fills it in: the blast's own
 	// point for a shell or missile that went off, or for a shot straight at an object the side of it
 	// facing the shooter at its middle height.  Other damage (poison, fire, a crush) has none.
 	Coord3D				 m_impactPos;							///< world point the damage came from

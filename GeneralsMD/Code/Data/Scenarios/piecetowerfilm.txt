@@ -1,0 +1,23 @@
+# Footage version of piecetower.txt: the same two Nuke Cannons on B's tower and two Tomahawks on A's,
+# on the same frames, plus team B supply trucks driving past A's tower inside its reach. The towers are
+# drawn in fragments from their first hit (W3DFractureDraw): holes where the rounds land, and the
+# tower shoots at the trucks until its health runs out, then falls away from whoever fired last by
+# LWTOWER.lwcollapse. A second column later drives by under the ruin.
+#
+#   generals.exe ... -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica
+#     -side 1 FactionChina -seed 1 -scenario piecetowerfilm
+#
+# On this map (rmg_v20_3_6p_642c_lane) the lane runs along y 1805: A's tower at 2544,1805, B's at
+# 3876,1805, both 225 reach. The trucks cross the lane 106 east of A's tower.
+# Frames here are this file's 30 a game second; the log's logic frames are two thirds of them at 1.5x.
+
+30    spawn   0  ChinaVehicleNukeLauncher   2  3576  1905  40
+30    spawn   1  AmericaVehicleTomahawk     2  2844  1705  40
+40    spawn   1  ChinaVehicleSupplyTruck    3  2650  1985  35
+50    move    1  ChinaVehicleSupplyTruck    2650  1625
+60    attack  0  ChinaVehicleNukeLauncher   1  LaneWarWatchTower
+60    attack  1  AmericaVehicleTomahawk     0  LaneWarWatchTower
+400   spawn   1  ChinaTankOverlord          2  2650  1625  45
+420   move    1  ChinaTankOverlord          2650  1985
+900   tally   0  LaneWarWatchTower
+900   tally   1  LaneWarWatchTower

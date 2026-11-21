@@ -87,7 +87,6 @@
 #include "GameLogic/Module/RebuildHoleBehavior.h"
 #include "GameLogic/Module/RadarCoverageBehavior.h"
 #include "GameLogic/Module/MarkAndRainBehavior.h"
-#include "GameLogic/Module/PieceDamageBehavior.h"
 #include "GameLogic/Module/SupplyWarehouseCripplingBehavior.h"
 #include "GameLogic/Module/TechBuildingBehavior.h"
 #include "GameLogic/Module/MinefieldBehavior.h"
@@ -377,7 +376,6 @@ void ModuleFactory::init( void )
 	addModule( RebuildHoleBehavior );
 	addModule( RadarCoverageBehavior );
 	addModule( MarkAndRainBehavior );
-	addModule( PieceDamageBehavior );
 	addModule( SupplyWarehouseCripplingBehavior );
 	addModule( TechBuildingBehavior );
 	addModule( MinefieldBehavior );

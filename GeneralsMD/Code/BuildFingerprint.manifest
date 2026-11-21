@@ -12,6 +12,11 @@ Data/Art/Textures/LWFort_LeadD.tga
 Data/Art/Textures/LWFort_Rubble.tga
 Data/Art/Textures/LWFort_Stone.tga
 Data/Art/Textures/LWFort_StoneD.tga
+Data/Art/Textures/LWFrag_InnerConcrete.tga
+Data/Art/Textures/LWFrag_InnerSand.tga
+Data/Art/Textures/LWFrag_InnerSteel.tga
+Data/Art/Textures/LWFrag_InnerStone.tga
+Data/Art/Textures/LWFrag_InnerWood.tga
 Data/Art/Textures/ReforgedBarAmericaCenter.tga
 Data/Art/Textures/ReforgedBarAmericaLeft.tga
 Data/Art/Textures/ReforgedBarAmericaRight.tga
@@ -333,10 +338,14 @@ Data/Art/Textures/ZHCA_TRSupplyD.tga
 Data/Art/Textures/ZHCA_TRTayfun.tga
 Data/Art/Textures/ZHCA_TRWarFac.tga
 Data/Art/W3D/LWFORT.W3D
+Data/Art/W3D/LWFORT.lwcollapse
+Data/Art/W3D/LWFORT.lwfrag
 Data/Art/W3D/LWFORT_D.W3D
 Data/Art/W3D/LWFORT_E.W3D
 Data/Art/W3D/LWFORT_R.W3D
 Data/Art/W3D/LWTOWER.W3D
+Data/Art/W3D/LWTOWER.lwcollapse
+Data/Art/W3D/LWTOWER.lwfrag
 Data/Art/W3D/LWTOWER_D.W3D
 Data/Art/W3D/LWTOWER_E.W3D
 Data/Art/W3D/LWTOWER_R.W3D
@@ -1329,6 +1338,8 @@ Data/Scenarios/foreign_dozerkill.txt
 Data/Scenarios/foreign_hijack.txt
 Data/Scenarios/foreign_lotus.txt
 Data/Scenarios/foreign_snipe.txt
+Data/Scenarios/fortressattack.txt
+Data/Scenarios/fortressfall.txt
 Data/Scenarios/gate60hz.txt
 Data/Scenarios/geproto_alpine.txt
 Data/Scenarios/geproto_fogedge.txt
@@ -1454,6 +1465,7 @@ Data/Scenarios/patriotscud.txt
 Data/Scenarios/patriottomahawk.txt
 Data/Scenarios/piecetower.txt
 Data/Scenarios/piecetowerdirect.txt
+Data/Scenarios/piecetowerfilm.txt
 Data/Scenarios/powerpropcapture.txt
 Data/Scenarios/reachhills.txt
 Data/Scenarios/reachproof.txt
@@ -2040,7 +2052,6 @@ GameEngine/Include/GameLogic/Module/ParkingPlaceBehavior.h
 GameEngine/Include/GameLogic/Module/ParticleUplinkCannonUpdate.h
 GameEngine/Include/GameLogic/Module/PassengersFireUpgrade.h
 GameEngine/Include/GameLogic/Module/PhysicsUpdate.h
-GameEngine/Include/GameLogic/Module/PieceDamageBehavior.h
 GameEngine/Include/GameLogic/Module/PilotFindVehicleUpdate.h
 GameEngine/Include/GameLogic/Module/PointDefenseLaserUpdate.h
 GameEngine/Include/GameLogic/Module/PoisonedBehavior.h
@@ -2668,7 +2679,6 @@ GameEngine/Source/GameLogic/Object/Create/SupplyWarehouseCreate.cpp
 GameEngine/Source/GameLogic/Object/Create/VeterancyGainCreate.cpp
 GameEngine/Source/GameLogic/Object/Damage/BoneFXDamage.cpp
 GameEngine/Source/GameLogic/Object/Damage/DamageModule.cpp
-GameEngine/Source/GameLogic/Object/Damage/PieceDamageBehavior.cpp
 GameEngine/Source/GameLogic/Object/Damage/TransitionDamageFX.cpp
 GameEngine/Source/GameLogic/Object/Destroy/DestroyModule.cpp
 GameEngine/Source/GameLogic/Object/Die/CreateCrateDie.cpp
@@ -2940,12 +2950,14 @@ GameEngineDevice/Include/W3DDevice/GameClient/BaseHeightMap.h
 GameEngineDevice/Include/W3DDevice/GameClient/FireLights.h
 GameEngineDevice/Include/W3DDevice/GameClient/FlatHeightMap.h
 GameEngineDevice/Include/W3DDevice/GameClient/FoliagePlacement.h
+GameEngineDevice/Include/W3DDevice/GameClient/FractureCore.h
 GameEngineDevice/Include/W3DDevice/GameClient/GpuParticles.h
 GameEngineDevice/Include/W3DDevice/GameClient/GroundMarks.h
 GameEngineDevice/Include/W3DDevice/GameClient/HeightMap.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DDebrisDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DDefaultDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DDependencyModelDraw.h
+GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DFractureDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DLaserDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DModelDraw.h
 GameEngineDevice/Include/W3DDevice/GameClient/Module/W3DOverlordAircraftDraw.h
@@ -3105,6 +3117,7 @@ GameEngineDevice/Source/W3DDevice/GameClient/DX11ReachOverlay.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DDebrisDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DDefaultDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DDependencyModelDraw.cpp
+GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DFractureDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DLaserDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DModelDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DOverlordAircraftDraw.cpp
@@ -4413,6 +4426,7 @@ Tests/test_first_launch_chooser.sh
 Tests/test_foliage_placement.cpp
 Tests/test_fontchars.cpp
 Tests/test_fpucontrol.cpp
+Tests/test_fracture.cpp
 Tests/test_game_results.inc
 Tests/test_gameengine.cpp
 Tests/test_gameengine_stubs.cpp

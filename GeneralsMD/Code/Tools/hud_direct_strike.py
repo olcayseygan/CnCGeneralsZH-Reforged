@@ -314,10 +314,23 @@ def drop_part(side, state):
     full = T.key(side, 200, T.DROP_H, state)
     right = full.crop((200 - T.DROP_R, 0, 200, T.DROP_H))
     colour = T.INK["on_lit"] if state == "P" else T.INK["gold"] if state == "H" else T.INK["white"]
+    # a divider off the field, a dark groove with a lit lip, then the caret centred in the cap past it: a chevron
+    # 14 across with a 2.75 stroke (1.8 at 720, still a solid line), pointing down, up while its list is open
+    divider, cx, cy, half, rise, stroke = 8, 25.5, T.DROP_H / 2, 7.0, 4.0, 2.75
+    groove = ImageDraw.Draw(right)
+    groove.line([(divider, 11), (divider, T.DROP_H - 12)], fill=T.INK["keyline"] + (230 if state != "P" else 110,), width=1)
+    groove.line([(divider + 1, 11), (divider + 1, T.DROP_H - 12)], fill=(255, 255, 255, 34 if state != "P" else 70), width=1)
+    tip = -1 if state == "P" else 1
 
-    def caret(d, k, x=T.DROP_R - 20, y=T.DROP_H / 2 + 1, s=5):
-        d.polygon([((x - s) * k, (y - s * 0.5) * k), ((x + s) * k, (y - s * 0.5) * k), (x * k, (y + s * 0.7) * k)], fill=255)
-    right.alpha_composite(T.mask((T.DROP_R, T.DROP_H), caret, colour))
+    def chevron(dx, dy):
+        def draw(d, k):
+            arm = [(cx - half + dx, cy - tip * rise / 2 + dy), (cx + dx, cy + tip * rise / 2 + dy), (cx + half + dx, cy - tip * rise / 2 + dy)]
+            d.line([(x * k, y * k) for x, y in arm], fill=255, width=int(stroke * k), joint="curve")
+        return draw
+
+    if state != "P":
+        right.alpha_composite(T.mask((T.DROP_R, T.DROP_H), chevron(0.8, 0.8), T.INK["keyline"]))
+    right.alpha_composite(T.mask((T.DROP_R, T.DROP_H), chevron(0, 0), colour))
     return {"L": full.crop((0, 0, T.DROP_L, T.DROP_H)), "C": T.uniform(full.crop((96, 0, 96 + T.DROP_C, T.DROP_H)), 1), "R": right}
 
 

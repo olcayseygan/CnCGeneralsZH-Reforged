@@ -21585,3 +21585,15 @@ END
 GUI:QMMapNotBuilt
 "Oyunun bu maçın haritasını kuramadı, o yüzden maç iptal edildi."
 END
+
+OBJECT:ApocalypseZombie
+"Zombi"
+END
+
+OBJECT:ApocalypseZombieRunner
+"Koşucu Zombi"
+END
+
+OBJECT:ApocalypseZombieBrute
+"Dev Zombi"
+END

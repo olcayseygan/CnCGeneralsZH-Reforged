@@ -7378,3 +7378,15 @@ END
 GUI:QMMapNotBuilt
 "Your game could not build this match's map, so the match was called off."
 END
+
+OBJECT:ApocalypseZombie
+"Zombie"
+END
+
+OBJECT:ApocalypseZombieRunner
+"Runner Zombie"
+END
+
+OBJECT:ApocalypseZombieBrute
+"Brute Zombie"
+END

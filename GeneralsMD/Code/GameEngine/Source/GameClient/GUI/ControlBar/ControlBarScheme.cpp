@@ -176,6 +176,8 @@ const FieldParse ControlBarSchemeManager::m_controlBarSchemeFieldParseTable[] =
 	{ "BlockRadarLR",			INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockLR[ ControlBarScheme::BLOCK_RADAR ] ) },
 	{ "BlockProductionUL",	INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockUL[ ControlBarScheme::BLOCK_PRODUCTION ] ) },
 	{ "BlockProductionLR",	INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockLR[ ControlBarScheme::BLOCK_PRODUCTION ] ) },
+	{ "BlockProductionNoTabsUL",	INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockProductionNoTabsUL ) },
+	{ "BlockProductionNoTabsLR",	INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockProductionNoTabsLR ) },
 	{ "BlockMoneyUL",			INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockUL[ ControlBarScheme::BLOCK_MONEY ] ) },
 	{ "BlockMoneyLR",			INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockLR[ ControlBarScheme::BLOCK_MONEY ] ) },
 	{ "BlockUpgradesUL",		INI::parseICoord2D,	NULL, offsetof( ControlBarScheme, m_blockUL[ ControlBarScheme::BLOCK_UPGRADES ] ) },
@@ -522,6 +524,8 @@ ControlBarScheme::ControlBarScheme(void)
 		m_blockUL[ i ].x = m_blockUL[ i ].y = 0;
 		m_blockLR[ i ].x = m_blockLR[ i ].y = 0;
 	}
+	m_blockProductionNoTabsUL.x = m_blockProductionNoTabsUL.y = 0;
+	m_blockProductionNoTabsLR.x = m_blockProductionNoTabsLR.y = 0;
 	for( Int i = 0; i < IDLE_COUNT; i++ )
 	{
 		m_idleUL[ i ].x = m_idleUL[ i ].y = 0;
@@ -861,14 +865,20 @@ void ControlBarScheme::init(void)
 		"ControlBar.wnd:ControlBarProBlockInputGenPowerButton",
 		"ControlBar.wnd:ControlBarProBlockInputObserverPlayerInfoH",
 	};
+	// the Classic layout draws the NoTabs painting, whose centre box stops at the grid (no idle column)
+	const Bool narrowProduction = !hudLayoutHasCommandTabs( TheGlobalData->m_hudLayout )
+		&& m_blockProductionNoTabsLR.x > m_blockProductionNoTabsUL.x;
 	for( Int i = 0; i < BLOCK_COUNT; i++ )
 	{
-		if( m_blockLR[ i ].x <= m_blockUL[ i ].x )
+		const Bool narrow = narrowProduction && i == BLOCK_PRODUCTION;
+		const ICoord2D &ul = narrow ? m_blockProductionNoTabsUL : m_blockUL[ i ];
+		const ICoord2D &lr = narrow ? m_blockProductionNoTabsLR : m_blockLR[ i ];
+		if( lr.x <= ul.x )
 			continue;
 		win = TheWindowManager->winGetWindowFromId( NULL, TheNameKeyGenerator->nameToKey( blockNames[ i ] ) );
 		if( win == NULL )
 			continue;
-		placeSchemeWindow( win, m_blockUL[ i ], m_blockLR[ i ], resMultiplier );
+		placeSchemeWindow( win, ul, lr, resMultiplier );
 	}
 
 	//

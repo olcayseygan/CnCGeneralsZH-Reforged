@@ -261,6 +261,10 @@ public:
 	enum { BLOCK_RADAR, BLOCK_PRODUCTION, BLOCK_MONEY, BLOCK_UPGRADES, BLOCK_GEN_POWER, BLOCK_OBSERVER_INFO, BLOCK_COUNT };
 	ICoord2D m_blockUL[ BLOCK_COUNT ];
 	ICoord2D m_blockLR[ BLOCK_COUNT ];
+	/// the Production blocker under the layouts without command tabs (BlockProductionNoTabsUL/LR): their
+	/// painting (<ImageName>NoTabs) has no idle column, so its centre box ends sooner; a zero LR keeps BlockProduction
+	ICoord2D m_blockProductionNoTabsUL;
+	ICoord2D m_blockProductionNoTabsLR;
 
 	/// the idle infantry, vehicle and aircraft buttons beside the command grid, and the select army
 	/// button: Idle<Kind>ButtonImage (SelectArmyButtonImage) names the sheet piece, and its H, P and I

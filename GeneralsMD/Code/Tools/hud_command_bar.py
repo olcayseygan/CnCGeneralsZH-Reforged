@@ -1052,16 +1052,37 @@ def well(p, poly, depth=6, lip=2.5):
     p.sink([T(poly)], depth, lip)
 
 
-def openings(p, kind, c):
-    """Every opening, the same on every side; kind and c are the side's corner (corner_points)."""
+# The Classic layout's bar (socket False) has no idle column either (ControlBar::showIdleButtons hides it), so its
+# centre box ends 22 past the grid's last cell, as the grid's well starts 22 before the first: X1_NO_TABS.  The
+# rail's right end keeps its shape squeezed in from NARROW_FROM, the power bar's well's end, so the power bar
+# stays inside the rail; what each side fixes to that end is placed again by hand in bar_<side>.
+X1_NO_TABS = 1340
+NARROW_FROM = 1306
+
+
+def right_end(socket):
+    return X1 if socket else X1_NO_TABS
+
+
+def narrow(poly, socket):
+    """The outline as drawn, or for the Classic bar with every point right of NARROW_FROM squeezed toward it."""
+    if socket:
+        return poly
+    k = (X1_NO_TABS - NARROW_FROM) / (X1 - NARROW_FROM)
+    return [(NARROW_FROM + (x - NARROW_FROM) * k if x > NARROW_FROM else x, y) for x, y in poly]
+
+
+def openings(p, kind, c, x1=X1):
+    """Every opening, the same on every side; kind and c are the side's corner (corner_points), x1 the centre
+    box's right end."""
     L = layout()
     S = lambda r: (r[0], r[1] + TOP, r[2], r[3] + TOP)  # noqa: E731
     g = RADAR_GLASS_AT
     floor(p, plate(0, g[1] - 5, g[2] + 5, 1080, tr=(kind, c)))
     well(p, plate(*grow(g, 2)), 5, 2)
-    floor(p, plate(X0 + 9, 912, X1 - 9, 1080, tl=(kind, c), tr=(kind, c)))
+    floor(p, plate(X0 + 9, 912, x1 - 9, 1080, tl=(kind, c), tr=(kind, c)))
     floor(p, plate(576, 916, 638, 1080, tl=(kind, c * 0.5), tr=(kind, c * 0.5)))     # the toolbar's own recess
-    well(p, plate(646, 916, 1374, 1077, tl=(kind, c * 0.6), tr=(kind, c * 0.6)), 6, 2.5)
+    well(p, plate(646, 916, x1 - 10, 1077, tl=(kind, c * 0.6), tr=(kind, c * 0.6)), 6, 2.5)
     well(p, plate(*grow(S(L["power"]), 2)), 5, 1.6)
     well(p, plate(*grow(MONEY_WELL, 1), tl=(kind, c), tr=(kind, c), br=(kind, c), bl=(kind, c)), 6, 2)
     floor(p, plate(RIGHT_BOX[0] + 12, RIGHT_BOX[1] + 12, 1916, 1080, tl=(kind, c * 1.5)))
@@ -1072,18 +1093,20 @@ def openings(p, kind, c):
 def bar_america(p, socket=True):
     """Aerospace plate: 45 degree cuts, a rail whose shoulders sweep down like a wing's leading edge, blue
     chevrons swept toward the money, a ledge ending in an arrow point, panel seams, octagon studs.  socket
-    False draws the rail straight past where the command tabs' plate stands (tab_cover)."""
+    False draws the rail straight past where the command tabs' plate stands (tab_cover) and the centre box
+    narrow (X1_NO_TABS)."""
+    x1 = right_end(socket)
     stack(p, [(0, 812), (317, 812), (345, 840), (345, 1080), (0, 1080)])
     stack(p, [(0, 795), (226, 795), (262, 809), (226, 823), (0, 823)], 9, 12, 4, 2.0)
-    stack(p, plate(X0, 898, X1, 1080, tl=("cut", 22), tr=("cut", 22)))
+    stack(p, plate(X0, 898, x1, 1080, tl=("cut", 22), tr=("cut", 22)))
     left = [(X0, 922), (X0 + 70, 878), (TAB0 - 28, 878), (TAB0 - 4, 840), (TAB0 + 8, 830)]
     t, d = TAB_PLATE_TOP, TAB_PLATE_DX
     tabs = [(X0 + 70, 878), (642, 878), (650, 870), (650, 852), (664, t),      # 45 degree cuts, as the money tab's
             (762 + d, t), (776 + d, 852), (776 + d, 870), (784 + d, 878)] if socket else left[1:2]
-    stack(p, left[:1] + tabs + left[2:] + mirror(left), 9, 13, 4, 2.2)
+    stack(p, left[:1] + tabs + left[2:] + narrow(mirror(left), socket), 9, 13, 4, 2.2)
     stack(p, plate(*RIGHT_BOX, tl=("cut", 36)))
     stack(p, plate(*MOUNT, tl=("cut", 20)), 9, 12, 4, 2.2)
-    openings(p, "cut", 6)
+    openings(p, "cut", 6, x1)
     if socket:
         tab_seats(p, "cut", 3)
         for x in (657, 769 + d):
@@ -1093,8 +1116,11 @@ def bar_america(p, socket=True):
     def swept(x, y0, y1, w, t, s):
         ym = (y0 + y1) / 2
         return [(x, y0), (x + s * t, y0), (x + s * (t + w), ym), (x + s * t, y1), (x, y1), (x + s * w, ym)]
+    # the narrow end has room for two, closer, between the power bar's well and the squeezed slope
+    rx = [X1 - 34 - 13 * i for i in range(3)] if socket else [x1 - 21, x1 - 30, None]
     for i in range(3):
-        p.inlay([T(swept(X0 + 34 + 13 * i, 898, 914, 7, 3.2, 1)), T(swept(X1 - 34 - 13 * i, 898, 914, 7, 3.2, -1))], ACCENT, 0.7)
+        p.inlay([T(swept(X0 + 34 + 13 * i, 898, 914, 7, 3.2, 1))] + ([T(swept(rx[i], 898, 914, 7, 3.2, -1))] if rx[i] else []),
+                ACCENT, 0.7)
     seams = [plate(x, 902, x + 1, 914) for x in (TAB0 - 90, TAB0 - 180, TAB2 + 90, TAB2 + 180)]
     seams += [plate(333, y, 345, y + 1) for y in (900, 1000)] + [plate(x, 866, x + 1, 875) for x in (1700, 1780)]
     seams += [plate(30, 798, 31, 820), plate(120, 798, 121, 820)]
@@ -1111,7 +1137,8 @@ def bar_china(p, socket=True):
     ledge = [(0, 795), (214, 795)]
     ledge += (curve((214, 795), (238, 795), (262, 781), 8) + curve((256, 787), (244, 815), (226, 815), 8))[1:] + [(0, 815)]
     stack(p, ledge, 9, 12, 4, 2.0)
-    stack(p, plate(X0, 898, X1, 1080, tl=("notch", 12), tr=("notch", 12)))
+    x1 = right_end(socket)
+    stack(p, plate(X0, 898, x1, 1080, tl=("notch", 12), tr=("notch", 12)))
     left = [(X0 + 6, 922), (X0 + 12, 894)] + curve((X0 + 2, 882), (X0 - 4, 872), (X0 - 10, 862), 5)
     left += curve((X0 + 2, 870), (X0 + 30, 878), (X0 + 74, 880), 6)
     tail = [(TAB0 - 40, 880)] + curve((TAB0 - 52, 866), (TAB0 - 58, 858), (TAB0 - 68, 850), 4)
@@ -1124,10 +1151,10 @@ def bar_china(p, socket=True):
     tabs += curve((652, 840), (662, t), (676, t), 4)
     tabs += curve((754 + d, t), (768 + d, t), (778 + d, 840), 4) + curve((790 + d, 834), (784 + d, 842), (780 + d, 848), 4)[1:]
     tabs += [(780 + d, 868), (788 + d, 868), (788 + d, 880)]
-    stack(p, left + (tabs if socket else []) + tail + mirror(left + tail), 9, 13, 4, 2.2)
+    stack(p, left + (tabs if socket else []) + tail + narrow(mirror(left + tail), socket), 9, 13, 4, 2.2)
     stack(p, [(1626, 1080), (1626, 879), (1634, 879), (1634, 871), (1642, 871), (1642, 863), (1920, 863), (1920, 1080)])
     stack(p, [(1816, 878), (1816, 808), (1824, 808), (1824, 794), (1920, 794), (1920, 878)], 9, 12, 4, 2.2)
-    openings(p, "notch", 4)
+    openings(p, "notch", 4, x1)
     if socket:
         tab_seats(p, "notch", 2.5)
         p.inlay([T(plate(662, t + 3, 768 + d, t + 6))], ACCENT, 0.3)            # a red lacquer band under the eave
@@ -1137,11 +1164,11 @@ def bar_china(p, socket=True):
         p.bump([regular(x, 853 - TOP, 2.3, 12) for x in (657, 773 + d)], 2.2, 1.4, GOLDM)
     L = layout()
     px0, px1 = L["power"][0], L["power"][2]
-    bands = [plate(X0 + 16, 906, px0 - 6, 911), plate(px1 + 6, 906, X1 - 16, 911), plate(X0 + 30, 903, X1 - 30, 905),
-             plate(TAB0 - 36, 874, TAB2 + 36, 878), plate(10, 802, 200, 807), plate(1665, 867, 1900, 871),
-             plate(1840, 798, 1910, 800)]
+    bands = [plate(X0 + 16, 906, px0 - 6, 911), plate(px1 + 6, 906, x1 - 16 if socket else x1 - 12, 911),
+             plate(X0 + 30, 903, x1 - 30, 905), plate(TAB0 - 36, 874, TAB2 + 36, 878), plate(10, 802, 200, 807),
+             plate(1665, 867, 1900, 871), plate(1840, 798, 1910, 800)]
     p.inlay([T(b) for b in bands], ACCENT, 0.3)
-    for x in range(X0 + 26, X1 - 20, 34):
+    for x in range(X0 + 26, x1 - 20, 34):
         if not px0 - 10 < x < px1 + 10:
             p.rivet(x, 894 - TOP, 2.2)
     for x in list(range(TAB0 - 30, TAB0 + 1, 15)) + list(range(TAB2, TAB2 + 31, 15)):
@@ -1150,7 +1177,7 @@ def bar_china(p, socket=True):
         p.rivet(x, 1076 - TOP, 2.0)
     for y in range(842, 1070, 26):
         p.rivet(339, y - TOP, 2.2)
-    gold = [regular(x, 907 - TOP, 2.6, 12) for x in (X0 + 30, X1 - 30)]
+    gold = [regular(x, 907 - TOP, 2.6, 12) for x in (X0 + 30, x1 - 30 if socket else x1 - 20)]
     gold += [regular(x, 836 - TOP, 2.4, 12) for x in (TAB0 + 6, TAB2 - 6)]
     gold += [regular(x, 869 - TOP, 2.4, 12) for x in range(1670, 1900, 44)]
     p.bump(gold, 2.2, 1.4, GOLDM)
@@ -1161,7 +1188,8 @@ def bar_gla(p, socket=True):
     laid on out of square and welded, odd bolts.  No pipes or hoses."""
     stack(p, jag([(0, 816), (180, 812), (296, 806), (340, 820), (349, 852), (347, 1080), (0, 1080)], 5))
     stack(p, jag([(0, 799), (130, 795), (200, 787), (238, 791), (244, 809), (0, 817)], 7, 1.5), 9, 12, 4, 2.0)
-    stack(p, jag([(X0, 1080), (X0, 910), (X0 + 10, 898), (X1 - 4, 902), (X1, 1080)], 9))
+    x1 = right_end(socket)
+    stack(p, narrow(jag([(X0, 1080), (X0, 910), (X0 + 10, 898), (X1 - 4, 902), (X1, 1080)], 9), socket))
     rail = [(X0 + 2, 920), (X0 + 16, 888), (TAB0 - 46, 884), (TAB0 - 12, 836), (TAB2 + 4, 832), (TAB2 + 50, 876),
             (X1 - 100, 878), (X1 - 34, 874), (X1, 914)]
     # the tabs' plate: a scrap sheet bent up off the rail, out of square, its top crooked, ragged on its own seed
@@ -1175,23 +1203,24 @@ def bar_gla(p, socket=True):
     run = edge[i0 + 1:i1]
     if socket:
         edge = edge[:i0 + 1] + [q for q in run if q[0] < 638] + tabs + [q for q in run if q[0] > 788 + d] + edge[i1:]
-    stack(p, edge, 9, 13, 4, 2.2)
+    stack(p, narrow(edge, socket), 9, 13, 4, 2.2)
     stack(p, jag([(1626, 1080), (1628, 885), (1648, 866), (1780, 863), (1920, 867), (1920, 1080)], 13))
     stack(p, jag([(1814, 878), (1818, 808), (1842, 794), (1920, 798), (1920, 878)], 17, 1.5), 9, 12, 4, 2.2)
-    openings(p, "rough", 4)
+    openings(p, "rough", 4, x1)
     if socket:
         tab_seats(p, "rough", 3)
         for i, (x, y, r) in enumerate([(656, 858, 2.4), (657, 871, 1.9), (774 + d, 864, 2.2)]):
             p.bolt(x, y - TOP, r, seed=40 + i)
-    patches = [(574, 894, 616, 914, -7), (1316, 884, 1374, 904, 4), (333, 897, 349, 957, 3), (1660, 866, 1740, 876, -2),
+    end_patch = (1316, 884, 1374, 904, 4) if socket else (1310, 884, 1334, 904, 4)
+    patches = [(574, 894, 616, 914, -7), end_patch, (333, 897, 349, 957, 3), (1660, 866, 1740, 876, -2),
                (60, 795, 120, 813, -3), (1830, 1062, 1912, 1078, 2)]
     for i, (a, b, c, e, deg) in enumerate(patches):
         sh = sheet(a, b, c, e, deg)
         p.bump([T(sh)], 1.4, 0.8, STEEL)
         for e0, e1 in zip(sh, sh[1:] + sh[:1]):
             p.weld((e0[0], e0[1] - TOP), (e1[0], e1[1] - TOP), seed=31 + i * 7 + int(e0[0]), r=1.2)
-    for i, (x, y) in enumerate(((340, 1066), (10, 1068), (X0 + 5, 1040), (X1 - 5, 1040), (1632, 1068), (1912, 1064),
-                                (1822, 866), (588, 904), (1350, 894), (90, 805))):
+    for i, (x, y) in enumerate(((340, 1066), (10, 1068), (X0 + 5, 1040), (x1 - 5, 1040), (1632, 1068), (1912, 1064),
+                                (1822, 866), (588, 904), (1350 if socket else 1324, 894), (90, 805))):
         p.bolt(x, y - TOP, 2.6 + (i % 3) * 0.4, seed=i)
 
 
@@ -1215,16 +1244,19 @@ def bar_turkiye(p, socket=True):
     along the rail.  Its LED lines and lamps are bar_lights."""
     stack(p, [(0, 812), (321, 812), (345, 836), (345, 1080), (0, 1080)])
     stack(p, [(0, 795), (224, 795), (248, 819), (0, 821)], 9, 12, 4, 2.0)
-    stack(p, plate(X0, 898, X1, 1080, tl=("cut", 18), tr=("cut", 18)))
+    x1 = right_end(socket)
+    stack(p, plate(X0, 898, x1, 1080, tl=("cut", 18), tr=("cut", 18)))
     left = [(X0, 920), (X0 + 44, 880), (TAB0 - 42, 880), (TAB0 - 12, 850), (TAB0 + 8, 832)]
     t, d = TAB_PLATE_TOP, TAB_PLATE_DX
     tabs = [(636, 880), (650, 866), (650, 856), (668, t),                      # wide chamfers, as the money tab's
             (758 + d, t), (776 + d, 856), (776 + d, 866), (790 + d, 880)] if socket else []
-    stack(p, left[:2] + tabs + left[2:] + mirror(left), 9, 13, 4, 2.2)
+    stack(p, left[:2] + tabs + left[2:] + narrow(mirror(left), socket), 9, 13, 4, 2.2)
     stack(p, plate(*RIGHT_BOX, tl=("cut", 30)))
     stack(p, plate(*MOUNT, tl=("cut", 16)), 9, 12, 4, 2.2)
+    end_panel = [(X1 - 12, 914), (X1 - 44, 884), (X1 - 76, 884), (X1 - 76, 914)] if socket else \
+        [(x1 - 7, 914), (x1 - 24, 884), (1310, 884), (1310, 914)]
     panels = [[(X0 + 12, 914), (X0 + 44, 884), (X0 + 76, 884), (X0 + 76, 914)],
-              [(X1 - 12, 914), (X1 - 44, 884), (X1 - 76, 884), (X1 - 76, 914)],
+              end_panel,
               [(TAB0 - 30, 878), (TAB0 - 8, 856), (TAB0 + 2, 856), (TAB0 + 2, 878)],
               [(TAB2 + 30, 878), (TAB2 + 8, 856), (TAB2 - 2, 856), (TAB2 - 2, 878)],
               [(1640, 877), (1660, 871), (1740, 871), (1740, 877)]]
@@ -1232,15 +1264,15 @@ def bar_turkiye(p, socket=True):
     shell(p, plate(186, 785, 218, 805, tl=("cut", 4), tr=("cut", 6)), 9.0)
     p.bump([T(plate(189, 787, 215, 803, tl=("cut", 3), tr=("cut", 5)))], 4.0, 1.4, STEEL)
     well(p, regular(205, 795, 4.2, 16), 3, 1.2)
-    openings(p, "cut", 5)
+    openings(p, "cut", 5, x1)
     if socket:
         tab_seats(p, "cut", 3)
     for x, y in ((657, 862), (657, 873), (769 + d, 862), (769 + d, 873)) if socket else ():
         p.inlay([T(regular(x, y, 2.6, 12))], DARK, 1.0)              # a recessed fastener
         p.bump([T(regular(x, y, 1.4, 6))], 0.6, 0.6, STEEL)
-    for x in (X0 + 22, X1 - 40):                                     # sensor windows
-        well(p, plate(x, 902, x + 18, 907), 3, 1.0)
-    gaps = [plate(x, 882, x + 1, 914) for x in (X0 + 78, X1 - 79, TAB0 - 70, TAB2 + 69)]
+    for x, w in ((X0 + 22, 18), (X1 - 40, 18)) if socket else ((X0 + 22, 18), (x1 - 28, 12)):     # sensor windows
+        well(p, plate(x, 902, x + w, 907), 3, 1.0)
+    gaps = [plate(x, 882, x + 1, 914) for x in (X0 + 78, X1 - 79 if socket else 1307, TAB0 - 70, TAB2 + 69)]
     gaps += [plate(333, y, 345, y + 1) for y in (900, 980)] + [plate(x, 866, x + 1, 875) for x in (1760, 1840)]
     gaps += [plate(120, 796, 121, 820)]
     p.inlay([T(q) for q in gaps], INKM, 0.9)
@@ -1252,7 +1284,7 @@ def bar_turkiye(p, socket=True):
     etch += [T(q) for x in range(20, 116, 16) for q in ring(x, 808, 7.2, 0.6, 20)]
     etch += [T(star8(x, 907.5, 3.6)) for x in np.arange(L["power"][0] + 8, L["power"][2] - 4, 14)]
     p.inlay(etch, DARK, 0.25)
-    for x, y in ((X0 + 5, 1000), (X1 - 5, 1000), (339, 1068), (1632, 1068), (X0 + 60, 910), (X1 - 60, 910),
+    for x, y in ((X0 + 5, 1000), (x1 - 5, 1000), (339, 1068), (1632, 1068), (X0 + 60, 910), (X1 - 60, 910) if socket else (1315, 893),
                  (1906, 874), (14, 816), (236, 817), (1822, 866)):
         p.inlay([T(regular(x, y, 2.8, 12))], DARK, 1.0)              # a recessed fastener
         p.bump([T(regular(x, y, 1.5, 6))], 0.6, 0.6, STEEL)
@@ -1273,11 +1305,13 @@ def bar_lights(img, p, socket=True):
     lay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(lay)
     plate_line = (((668, TAB_PLATE_TOP + 3), (756 + TAB_PLATE_DX, TAB_PLATE_TOP + 3)),) if socket else ()
-    for (a, b) in (((X0 + 46, 883), (X0 + 74, 883)), ((X1 - 46, 883), (X1 - 74, 883)), ((TAB0 - 38, 877), (TAB0 - 10, 850)),
+    x1 = right_end(socket)          # the narrow end's panel top is 1310..x1 - 24, its sensor x1 - 28..x1 - 16
+    end_line = ((X1 - 46, 883), (X1 - 74, 883)) if socket else ((x1 - 23, 883), (1311, 883))
+    for (a, b) in (((X0 + 46, 883), (X0 + 74, 883)), end_line, ((TAB0 - 38, 877), (TAB0 - 10, 850)),
                    ((TAB2 + 38, 877), (TAB2 + 10, 850)), ((1660, 869), (1740, 869)), ((6, 818), (110, 818)),
                    ((1834, 875), (1908, 875))) + plate_line:
         d.line([(a[0], a[1] - TOP), (b[0], b[1] - TOP)], fill=TURQ + (245,), width=1)
-    for x, y, c in ((X0 + 31, 904.5, TURQ), (X1 - 31, 904.5, TURQ), (1640, 1066, AMBER), (1650, 1066, TURQ),
+    for x, y, c in ((X0 + 31, 904.5, TURQ), (X1 - 31 if socket else x1 - 22, 904.5, TURQ), (1640, 1066, AMBER), (1650, 1066, TURQ),
                     (1822, 806, TURQ), (1822, 840, AMBER), (205, 795, TURQ)):
         d.ellipse((x - 1.8, y - TOP - 1.8, x + 1.8, y - TOP + 1.8), fill=c + (255,))
     glow = np.asarray(lay.filter(ImageFilter.GaussianBlur(3)), np.float32)
@@ -1360,16 +1394,34 @@ def paint_bar(side_name="America", socket=True):
 # ControlBarScheme drawPainting draws <S>ProCommandBarNoTabs in its place, the same bar drawn with the rail running
 # straight past (socket False), so rim, bevel and light run on unbroken.  The two drawings part only round the plate
 # (check_no_tabs), and with the same encoder every other DXT block of the two textures is the same bytes.
-NO_TABS_SPAN = (600, 800, 850, 920)             # screen x0, y0, x1, y1 the two drawings may differ in
+# That layout has no idle column either, so the centre box ends at X1_NO_TABS, and its schemes name the
+# Production blocker of that narrower box as BlockProductionNoTabsUL/LR.
+NO_TABS_SPANS = ((600, 800, 850, 920), (NARROW_FROM - 16, 820, X1 + 24, 1080))     # screen x0, y0, x1, y1 they may differ in
 
 
-def check_no_tabs(bar, plain):
+def check_no_tabs(bar, plain, side_name):
     a, b = np.asarray(bar).astype(np.int32), np.asarray(plain).astype(np.int32)
     ys, xs = np.nonzero(np.abs(a - b).max(-1) > 0)
-    x0, y0, x1, y1 = NO_TABS_SPAN
-    assert len(xs) and xs.min() >= x0 and xs.max() < x1 and ys.min() + TOP >= y0 and ys.max() + TOP < y1, \
-        "the bar without its tabs' plate differs outside %s: x %d..%d, y %d..%d" % (
-            NO_TABS_SPAN, xs.min(), xs.max(), ys.min() + TOP, ys.max() + TOP)
+    ys = ys + TOP
+    inside = np.zeros(len(xs), bool)
+    for x0, y0, x1, y1 in NO_TABS_SPANS:
+        inside |= (xs >= x0) & (xs < x1) & (ys >= y0) & (ys < y1)
+    assert len(xs) and inside.all(), "the Classic bar differs outside %s: x %d..%d, y %d..%d" % (
+        NO_TABS_SPANS, xs[~inside].min(), xs[~inside].max(), ys[~inside].min(), ys[~inside].max())
+    al = b[..., 3]
+    for x in SEAMS:
+        assert not al[:, x - 2:x + 3].any(), "Classic bar: art across the cut at texel %d" % x
+    L = layout()
+    for r in [L[n] for n in ("radar", "money", "power", "portrait", "exp", "minmax", "general")] + L["cells"] + L["tools"]:
+        assert (al[r[1]:r[3], r[0]:r[2]] == 255).all(), "Classic bar: window %s is not on the plate" % (r,)
+    assert not al[:, X1_NO_TABS + 16:RIGHT_BOX[0] - 8].any(), "Classic bar: steel where the idle column was"
+    have, want = bar_blocks(np.asarray(bar)[..., 3] >= 250), bar_blocks(al >= 250)
+    assert {k: v for k, v in want.items() if k != "Production"} == {k: v for k, v in have.items() if k != "Production"}, \
+        "the Classic bar moves a blocker other than Production: %s against %s" % (want, have)
+    for scheme in side_schemes(side_name):
+        got = scheme_rects(scheme, ["BlockProductionNoTabs"])["BlockProductionNoTabs"]
+        assert got == want["Production"], "%s's BlockProductionNoTabs %s, the Classic art asks for %s" % (
+            scheme, got, want["Production"])
 
 
 def wing_chevrons(p, cx, y0, y1, w, material, gap=9):
@@ -4578,7 +4630,7 @@ def main():
             made["ReforgedHud%sCommandBar" % side] = img = paint_bar(side)
             check(img, side)
             made["ReforgedHud%sCommandBarNoTabs" % side] = plain = paint_bar(side, socket=False)
-            check_no_tabs(img, plain)
+            check_no_tabs(img, plain, side)
             made["ReforgedHud%sPowers" % side] = sheet_img = paint_powers(side, args.emblem, frame, args.ready_glow)
             check_sheet(sheet_img, side, args.ready_glow)
             made["ReforgedHud%sTabPanel" % side] = tab = tab_panel(side)

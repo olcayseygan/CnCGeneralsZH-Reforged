@@ -419,6 +419,7 @@ private:
 	void launchJets( Int team, Int seat, UnsignedInt now );
 	Bool frontOf( Int team, Real *x, Real *speed ) const;
 	Real parkX( Int team ) const;
+	Real enemyEndX( Int team ) const;
 	Bool heroCopyAlive( const Player *player ) const;
 	void tick( UnsignedInt now );
 	void logCargo( UnsignedInt now ) const;

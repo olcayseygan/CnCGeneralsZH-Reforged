@@ -844,6 +844,39 @@ static Real jetSpeedOf( const ThingTemplate *tmpl )
 	return fastest * tmpl->getSpeedScale();
 }
 
+/** The enemy aircraft a jet on its strike goes for first: the nearest one in the air over the map that
+	  it can hit, ties to the lower ObjectID.  NULL for a jet with no weapon against air, or nothing up. */
+static Object *airTargetFor( const Object *jet, const Region3D &map )
+{
+	Bool hitsAir = FALSE;
+	for( Int slot = 0; slot < WEAPONSLOT_COUNT && !hitsAir; ++slot )
+	{
+		const Weapon *weapon = jet->getWeaponInWeaponSlot( (WeaponSlotType)slot );
+		hitsAir = weapon != NULL && ( weapon->getAntiMask() & WEAPON_ANTI_AIRBORNE_VEHICLE ) != 0;
+	}
+	if( !hitsAir )
+		return NULL;
+
+	Object *best = NULL;
+	Real bestDistSq = 0.0f;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		if( !obj->isKindOf( KINDOF_AIRCRAFT ) || !obj->isAirborneTarget() || obj->isEffectivelyDead()
+				|| obj->testStatus( OBJECT_STATUS_UNATTACKABLE ) || !map.isInRegionNoZ( obj->getPosition() )
+				|| jet->getRelationship( obj ) != ENEMIES
+				|| jet->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, obj, CMD_FROM_SCRIPT ) == ATTACKRESULT_NOT_POSSIBLE )
+			continue;
+		const Real dx = obj->getPosition()->x - jet->getPosition()->x, dy = obj->getPosition()->y - jet->getPosition()->y;
+		const Real distSq = dx * dx + dy * dy;
+		if( best == NULL || distSq < bestDistSq || ( distSq == bestDistSq && obj->getID() < best->getID() ) )
+		{
+			best = obj;
+			bestDistSq = distSq;
+		}
+	}
+	return best;
+}
+
 Int LaneWarDirector::gridFor( const ThingTemplate *tmpl )
 {
 	return isJet( tmpl ) ? LANEWAR_GRID_AIR : LANEWAR_GRID_GROUND;
@@ -2034,7 +2067,17 @@ void LaneWarDirector::launchJets( Int team, Int seat, UnsignedInt now )
 		TheAI->destroyGroup( group );
 		return;
 	}
-	group->groupLaneMarch( strikeX - park, NO_MAX_SHOTS_LIMIT, CMD_FROM_SCRIPT );
+	// timed for the meeting, but flown as any unit's attack-move down the lane to the enemy's end;
+	// updateJets turns a jet that can hit air onto the enemy's aircraft first
+	group->groupLaneMarch( enemyEndX( team ) - park, NO_MAX_SHOTS_LIMIT, CMD_FROM_SCRIPT );
+}
+
+//-------------------------------------------------------------------------------------------------
+/// the x a team's units march to: the enemy fortress, or the enemy spawn once it has fallen
+Real LaneWarDirector::enemyEndX( Int team ) const
+{
+	const Object *fortress = TheGameLogic->findObjectByID( m_fortress[ 1 - team ] );
+	return fortress != NULL ? fortress->getPosition()->x : m_spawn[ 1 - team ].x;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2050,6 +2093,7 @@ void LaneWarDirector::updateJets( UnsignedInt now )
 
 	Region3D ext;
 	TheTerrainLogic->getExtentIncludingBorder( &ext );
+	const UnsignedInt stride = (UnsignedInt)max( 1, (Int)( LOGICFRAMES_PER_GAME_SECOND / 2 ) );
 	size_t kept = 0;
 	for( size_t i = 0; i < m_jets.size(); ++i )
 	{
@@ -2074,10 +2118,32 @@ void LaneWarDirector::updateJets( UnsignedInt now )
 		JetAIUpdate *jetAI = ai != NULL ? ai->getJetAIUpdate() : NULL;
 		if( jet.state == JET_OUT && ai != NULL )
 		{
+			const Real endX = enemyEndX( jet.team );
+			const Bool passFlown = ( endX - obj->getPosition()->x ) * towardEnemy( jet.team ) <= (Real)LANEWAR_SLOT_SIZE;
 			const char *why = jetAI != NULL && jetAI->isOutOfSpecialReloadAmmo() ? "its clip spent"
 											: jetAI != NULL && jetAI->isGoingHomeOnItsOwn() ? "its own AI turned it home"
-											: ai->isIdle() ? "its pass flown"
+											: ai->isIdle() && passFlown ? "its pass flown"
 											: now >= jet.stateFrame + LANEWAR_STRIKE_FRAMES ? "the strike's time up" : NULL;
+			if( why == NULL && ( ai->isIdle() || now % stride == 0 ) )
+			{
+				// enemy aircraft first for a jet that can hit them, looked for every half game second;
+				// otherwise, or once none is up, the lane
+				Object *air = airTargetFor( obj, ext );
+				if( air != NULL && ai->getGoalObject() != air && now % stride == 0 )
+				{
+					ai->aiAttackObject( air, NO_MAX_SHOTS_LIMIT, CMD_FROM_SCRIPT );
+					DEBUG_LOG(( "HEADLESS LANEWAR JET: frame %u '%s' %d of %s%d goes for '%s' %d in the air at (%.0f,%.0f)\n", now,
+											jet.thing->getName().str(), (Int)jet.id, TEAM_NAME[ jet.team ], jet.seat + 1, air->getTemplate()->getName().str(),
+											(Int)air->getID(), air->getPosition()->x, air->getPosition()->y ));
+				}
+				else if( air == NULL && ai->isIdle() )
+				{
+					Coord3D goal = *obj->getPosition();
+					goal.x = endX;
+					goal.z = TheTerrainLogic->getGroundHeight( goal.x, goal.y );
+					ai->aiAttackMoveToPosition( &goal, NO_MAX_SHOTS_LIMIT, CMD_FROM_SCRIPT );
+				}
+			}
 			if( why != NULL )
 			{
 				Coord3D home = *obj->getPosition();
@@ -2113,7 +2179,6 @@ void LaneWarDirector::updateJets( UnsignedInt now )
 	}
 	m_jets.resize( kept );
 
-	const UnsignedInt stride = (UnsignedInt)max( 1, (Int)( LOGICFRAMES_PER_GAME_SECOND / 2 ) );
 	if( now % stride != 0 )
 		return;
 	for( Int t = 0; t < LANEWAR_TEAMS; ++t )

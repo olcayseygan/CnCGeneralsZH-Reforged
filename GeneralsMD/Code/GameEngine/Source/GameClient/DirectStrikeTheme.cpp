@@ -364,15 +364,6 @@ void drawCentred( const Image *image, const LaneHudBox &b, Color tint )
 	drawImage( image, LaneHud_box( b.x + ( b.w - w ) / 2, b.y + ( b.h - h ) / 2, w, h ), tint );
 }
 
-void drawFitted( const Image *image, const LaneHudBox &b )
-{
-	if( image == NULL || image->getImageWidth() <= 0 || image->getImageHeight() <= 0 )
-		return;
-	const Real fit = min( (Real)b.w / image->getImageWidth(), (Real)b.h / image->getImageHeight() );
-	const Int w = REAL_TO_INT( image->getImageWidth() * fit + 0.5f ), h = REAL_TO_INT( image->getImageHeight() * fit + 0.5f );
-	drawImage( image, LaneHud_box( b.x + ( b.w - w ) / 2, b.y + ( b.h - h ) / 2, w, h ) );
-}
-
 void plate( const LaneHudBox &b )
 {
 	TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, PLATE );
@@ -457,16 +448,10 @@ void dropdown( const LaneHudBox &b, const char *state, Bool field )
 	threeSlice( b, DROP_L, DROP_C, field ? FIELD_R : DROP_R, field ? "" : state );
 }
 
-LaneHudBox wellPicture( const LaneHudBox &well )
-{
-	const Int in = px( 4 );
-	return LaneHud_box( well.x + in, well.y + in, well.w - 2 * in, well.h - 2 * in );
-}
-
 void portraitWell( const LaneHudBox &well, const Image *picture, Color band, Bool fill )
 {
 	const Int in = px( 4 );
-	const LaneHudBox inner = wellPicture( well );
+	const LaneHudBox inner = LaneHud_box( well.x + in, well.y + in, well.w - 2 * in, well.h - 2 * in );
 	if( fill )
 		drawImage( squareOf( picture ), inner );
 	else

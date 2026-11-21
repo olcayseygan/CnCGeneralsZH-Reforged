@@ -50,7 +50,7 @@ MASTER, WELL_AT = 160, (24, 24, 136, 136)       # the 9-slices are cut from a pa
 BUTTON = (432, 72)                              # the wide text key the 3-slice is cut from
 LAMP, COIN = 32, 28
 # a plain side's portrait: its command centre's build button picture (SAComCentr_L, SNComCentr_L, SUHeadquarters_L,
-# 120x96 or less), cut from the installed EnglishZH.big and enlarged here to the portrait well's 172 wide, so the
+# 120x96 or less), cut from the installed EnglishZH.big and enlarged here to the portrait well's 172 square, so the
 # game never stretches it at 1080
 CAMEO_ARCHIVE = os.path.join(RUN, "EnglishZH.big")
 CAMEOS = {"America": ("SAUserInterface512_002.tga", (367, 1, 487, 97)),
@@ -414,8 +414,9 @@ def lobby(side):
 
 
 def headquarters(side):
-    """The side's command centre button picture at the well's width, its own proportions kept: Lanczos and a light
-    unsharp mask, which held the cameo's edges at 1.4 times where a plain resize went soft."""
+    """The side's command centre button picture as a square the well's size, like a general's portrait: the cameo's
+    centre square (its sides cut), enlarged with Lanczos and a light unsharp mask, which held its edges where a plain
+    resize went soft."""
     texture, crop = CAMEOS[side]
     member = "data\\english\\art\\textures\\" + texture.lower()
     with open(CAMEO_ARCHIVE, "rb") as archive:
@@ -423,8 +424,11 @@ def headquarters(side):
         assert found, "%s has no %s" % (CAMEO_ARCHIVE, member)
         archive.seek(found[0][0])
         cameo = Image.open(io.BytesIO(archive.read(found[0][1]))).convert("RGBA").crop(crop)
-    height = round(cameo.height * WELL_PICTURE / cameo.width)
-    return cameo.resize((WELL_PICTURE, height), Image.LANCZOS).filter(ImageFilter.UnsharpMask(radius=1.2, percent=70, threshold=2))
+    side_length = min(cameo.size)
+    left, top = (cameo.width - side_length) // 2, (cameo.height - side_length) // 2
+    square = cameo.crop((left, top, left + side_length, top + side_length))
+    return square.resize((WELL_PICTURE, WELL_PICTURE), Image.LANCZOS).filter(
+        ImageFilter.UnsharpMask(radius=1.2, percent=70, threshold=2))
 
 
 def pieces(side):

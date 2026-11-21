@@ -95,6 +95,9 @@ namespace
 		"DSCoinChina",
 		"DSCoinGla",
 		"DSCoinRandom",
+		"DSRowL",
+		"DSRowC",
+		"DSRowR",
 
 		"LobbyBack",
 		"LobbySend",
@@ -446,6 +449,26 @@ void threeSlice( const LaneHudBox &b, Piece left, Piece centre, Piece right, con
 void dropdown( const LaneHudBox &b, const char *state, Bool field )
 {
 	threeSlice( b, DROP_L, DROP_C, field ? FIELD_R : DROP_R, field ? "" : state );
+}
+
+void listRow( const LaneHudBox &b, Bool current, Bool hot )
+{
+	if( current || hot )
+		threeSlice( b, ROW_L, ROW_C, ROW_R, current ? "P" : "H" );
+}
+
+Color listText( Bool current, Bool hot )
+{
+	return current ? TEXT_WHITE : hot ? TEXT_GOLD : TEXT_GREY;
+}
+
+void currentFrame( const LaneHudBox &b )
+{
+	const Int t = px( 2 );
+	TheDisplay->drawFillRect( b.x - t, b.y - t, b.w + 2 * t, t, TEXT_GOLD );
+	TheDisplay->drawFillRect( b.x - t, b.y + b.h, b.w + 2 * t, t, TEXT_GOLD );
+	TheDisplay->drawFillRect( b.x - t, b.y, t, b.h, TEXT_GOLD );
+	TheDisplay->drawFillRect( b.x + b.w, b.y, t, b.h, TEXT_GOLD );
 }
 
 void portraitWell( const LaneHudBox &well, const Image *picture, Color band, Bool fill )

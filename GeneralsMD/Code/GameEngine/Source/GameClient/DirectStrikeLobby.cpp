@@ -662,11 +662,21 @@ namespace
 	}
 
 	//-----------------------------------------------------------------------------------------------
-	/// a list row under the pointer: the white fill and a gold rim
-	void drawHover( const LaneHudBox &b )
+	/// a list's row in the theme's one rule, its text from LIST_TEXT in, after an icon when it has one, and the
+	/// check at the right on the current choice
+	void drawListRow( const DirectStrikeRect &list, const DirectStrikeRect &r, const UnicodeString &label, Bool current, Piece icon )
 	{
-		TheDisplay->drawFillRect( b.x, b.y, b.w, b.h, HOVER_FILL );
-		TheDisplay->drawOpenRect( b.x, b.y, b.w, b.h, 1.0f, TEXT_GOLD );
+		const Bool hot = !current && pointerIn( r );
+		listRow( boxOf( r ), current, hot );
+		Real x = list.x0 + LIST_TEXT;
+		if( icon != PIECE_COUNT )
+		{
+			drawImage( art( icon ), iconAt( x, r, ICON, ICON ) );
+			x = list.x0 + LIST_AI_TEXT;
+		}
+		text( label, CHIP_EM, x, middleOf( r ), listText( current, hot ) );
+		if( current )
+			drawImage( art( LOBBY_CHECK ), iconAt( list.x1 - CHECK_INSET, r, CHECK, CHECK ) );
 	}
 
 	void drawSeatList( Int slot )
@@ -675,21 +685,8 @@ namespace
 		panel( boxOf( list ) );
 		const Int current = SlotPickOf( seat( slot ) );
 		for( Int row = 0; row < DSLOBBY_SEAT_ROWS; ++row )
-		{
-			const DirectStrikeRect r = DirectStrikeLobby_seatRow( slot, row, slimSeats(), isNetwork() );
-			const Bool hot = pointerIn( r );
-			if( hot )
-				drawHover( boxOf( r ) );
-			Real x = list.x0 + LIST_TEXT;
-			if( row >= SEAT_ROW_FIRST_AI )
-			{
-				drawImage( art( LOBBY_AI ), iconAt( x, r, ICON, ICON ) );
-				x = list.x0 + LIST_AI_TEXT;
-			}
-			text( TheGameText->fetch( SEAT_LABELS[ row ] ), CHIP_EM, x, middleOf( r ), hot ? TEXT_GOLD : TEXT_WHITE );
-			if( seatPick( row ) == current )
-				drawImage( art( LOBBY_CHECK ), iconAt( list.x1 - CHECK_INSET, r, CHECK, CHECK ) );
-		}
+			drawListRow( list, DirectStrikeLobby_seatRow( slot, row, slimSeats(), isNetwork() ), TheGameText->fetch( SEAT_LABELS[ row ] ),
+				seatPick( row ) == current, row >= SEAT_ROW_FIRST_AI ? LOBBY_AI : PIECE_COUNT );
 	}
 
 	void drawSizeList( void )
@@ -697,15 +694,8 @@ namespace
 		const DirectStrikeRect list = DirectStrikeLobby_sizeList();
 		panel( boxOf( list ) );
 		for( Int row = 0; row < DSLOBBY_SIZES; ++row )
-		{
-			const DirectStrikeRect r = DirectStrikeLobby_sizeRow( row );
-			const Bool hot = pointerIn( r );
-			if( hot )
-				drawHover( boxOf( r ) );
-			text( sizeLabel( row + 1, row + 1 ), CHIP_EM, list.x0 + LIST_TEXT, middleOf( r ), hot ? TEXT_GOLD : TEXT_WHITE );
-			if( teamSize( 0 ) == row + 1 && teamSize( 1 ) == row + 1 )
-				drawImage( art( LOBBY_CHECK ), iconAt( list.x1 - CHECK_INSET, r, CHECK, CHECK ) );
-		}
+			drawListRow( list, DirectStrikeLobby_sizeRow( row ), sizeLabel( row + 1, row + 1 ),
+				teamSize( 0 ) == row + 1 && teamSize( 1 ) == row + 1, PIECE_COUNT );
 	}
 
 	void drawPicker( Int slot )
@@ -730,6 +720,8 @@ namespace
 				const Bool hot = !current && pointerIn( r );
 				const char *state = current ? "P" : hot ? "H" : "";
 				drawImage( art( LOBBY_PICK_TILE, state ), boxOf( r ) );
+				if( current )
+					currentFrame( boxOf( r ) );
 				const Int num = ThePlayerTemplateStore->getTemplateNumByName( ARMIES[ column ][ tile ] );
 				const PlayerTemplate *army = num >= 0 ? ThePlayerTemplateStore->getNthPlayerTemplate( num ) : NULL;
 				const Image *general = generalPortrait( army );
@@ -751,11 +743,14 @@ namespace
 			const DirectStrikeRect cell = DirectStrikeLobby_colorCell( slot, count, i, slimSeats(), isNetwork() );
 			const Real x = ( cell.x0 + cell.x1 - SWATCH_W ) * 0.5f;
 			const LaneHudBox box = iconAt( x, cell, SWATCH_W, SWATCH_H );
+			const Bool current = colors[ i ] == seat( slot )->getColor();
+			listRow( boxOf( cell ), FALSE, !current && pointerIn( cell ) );
 			swatch( box, TheMultiplayerSettings->getColor( colors[ i ] )->getColor() );
-			if( pointerIn( cell ) )
-				TheDisplay->drawOpenRect( box.x - 1, box.y - 1, box.w + 2, box.h + 2, 1.0f, TEXT_GOLD );
-			if( colors[ i ] == seat( slot )->getColor() )
+			if( current )
+			{
+				currentFrame( box );
 				drawCentred( art( LOBBY_CHECK ), box );
+			}
 		}
 	}
 

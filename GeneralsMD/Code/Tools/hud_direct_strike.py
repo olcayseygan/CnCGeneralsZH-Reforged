@@ -46,6 +46,7 @@ END_KEY, STAT = (72, 56), 18
 END_KEYS = {"Rematch": "rematch", "Replay": "replay", "Menu": "menu"}
 STATS = {"Waves": "waves", "Placed": "placed", "Earned": "earned", "Spent": "spent", "Kills": "kills", "Damage": "damage",
          "Middle": "middle", "Time": "time", "Fortress": "fortress"}
+ROW_H, ROW_CAP, ROW_BAR = 36, 12, 4               # a list row: the lobby's 36, its 3-slice ends, the gold bar's width
 MASTER, WELL_AT = 160, (24, 24, 136, 136)       # the 9-slices are cut from a panel this size; the well's own from this rect
 BUTTON = (432, 72)                              # the wide text key the 3-slice is cut from
 LAMP, COIN = 32, 28
@@ -334,6 +335,26 @@ def drop_part(side, state):
     return {"L": full.crop((0, 0, T.DROP_L, T.DROP_H)), "C": T.uniform(full.crop((96, 0, 96 + T.DROP_C, T.DROP_H)), 1), "R": right}
 
 
+def list_row(side, state):
+    """A row of an open list, as a 3-slice: P the current choice, the side's lit colour as a glass band with a gold
+    bar on its leading edge; H the row under the pointer, a plain light band without the bar."""
+    w, h = 200, ROW_H
+    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(out)
+    if state == "P":
+        lit = tuple(T.look(side)["lit"])
+        for y in range(h):
+            d.line([(0, y), (w, y)], fill=lit + (int(176 - 40 * y / (h - 1)),))
+        d.line([(0, 0), (w, 0)], fill=tuple(min(255, c + 70) for c in lit) + (220,))
+        d.line([(0, h - 1), (w, h - 1)], fill=T.INK["keyline"] + (150,))
+        d.rectangle([(0, 0), (ROW_BAR - 1, h - 1)], fill=T.INK["gold"] + (255,))
+        d.line([(ROW_BAR, 0), (ROW_BAR, h - 1)], fill=T.INK["keyline"] + (170,))
+    else:
+        d.rectangle([(0, 0), (w - 1, h - 1)], fill=(255, 255, 255, 30))
+        d.line([(0, 0), (w, 0)], fill=(255, 255, 255, 70))
+    return T.three_cut(out, ROW_CAP, 8)
+
+
 def shared(side):
     """The pieces every screen draws: the panel, the lit panel, the bare plate and the glass well as 9-slices, the
     wide text key and the dropdown as 3-slices, the coins and the lamps."""
@@ -347,6 +368,7 @@ def shared(side):
     out.update(slices("DSButton", lambda st: T.three_cut(T.key(side, *BUTTON, st)), STATES))
     out.update(slices("DSDrop", lambda st: drop_part(side, st), KEY_STATES))
     out["DSFieldR"] = T.key(side, 200, T.DROP_H, "").crop((200 - T.FIELD_R, 0, 200, T.DROP_H))
+    out.update(slices("DSRow", lambda st: list_row(side, st), ("H", "P")))
     for s_ in T.SIDES + ("Random",):
         out["DSCoin" + s_] = T.coin(s_, COIN)
     for kind in T.LAMPS:

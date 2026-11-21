@@ -98,7 +98,6 @@ namespace DirectStrikeTheme
 	static const Color LEGAL					= GameMakeColor( 80, 230, 110, 255 );
 	static const Color PRICE					= GameMakeColor( 255, 214, 90, 255 );
 	static const Color VEIL						= GameMakeColor( 4, 6, 10, 170 );		///< the shell map dimmed under a screen
-	static const Color HOVER_FILL			= GameMakeColor( 255, 255, 255, 28 );	///< a list row under the pointer
 
 	/// every piece any Direct Strike screen draws; PIECE_NAMES holds their names in this order
 	enum Piece
@@ -153,6 +152,9 @@ namespace DirectStrikeTheme
 		COIN_CHINA,
 		COIN_GLA,
 		COIN_RANDOM,
+		ROW_L,						///< an open list's row as a 3-slice, only in its H (under the pointer) and P (current) states
+		ROW_C,
+		ROW_R,
 
 		// the lobby's own, README-lobby.md
 		LOBBY_BACK,
@@ -232,6 +234,14 @@ namespace DirectStrikeTheme
 	void portraitWell( const LaneHudBox &well, const Image *picture, Color band, Bool fill );
 	/// a swatch: the colour in a 2 pixel black frame
 	void swatch( const LaneHudBox &b, Color color );
+
+	/// an open list's row, one rule for every list: the current choice a lit band with a gold bar on its leading
+	/// edge, the row under the pointer a plain light band, any other row nothing
+	void listRow( const LaneHudBox &b, Bool current, Bool hot );
+	/// the text on such a row: white on the current one, gold under the pointer, grey otherwise
+	Color listText( Bool current, Bool hot );
+	/// the current choice where a list is a grid of cells (the army picker, the colours): a gold frame round it
+	void currentFrame( const LaneHudBox &b );
 
 	/// the general's face from the challenge menu, NULL for a plain side
 	const Image *generalPortrait( const PlayerTemplate *army );

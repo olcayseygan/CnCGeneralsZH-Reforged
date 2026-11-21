@@ -5381,7 +5381,25 @@ void GameLogic::update( void )
 	unitTimings();
 #endif
 
+#if defined(_WIN32)
+	/* FP_MODE_FIELDS pins rounding only, so whether a DLL or driver left FTZ or DAZ set on one thread
+		 and not the other is read here, once per thread: the map's load tick runs on the main thread and
+		 every tick after it on the logic thread.  "left" is the word as the tick found it, "set" after
+		 setFPMode's _fpreset. */
+	static thread_local Bool s_loggedDenormalMode = FALSE;
+	const UnsignedInt denormalLeft = _controlfp( 0, 0 ) & _MCW_DN;
+#endif
+
 	setFPMode();
+
+#if defined(_WIN32)
+	if( !s_loggedDenormalMode )
+	{
+		s_loggedDenormalMode = TRUE;
+		DEBUG_LOG(( "FPMODE frame %u on the %s thread: _MCW_DN left 0x%X, set 0x%X (0 keeps denormals)\n", m_frame,
+			LogicThread::t_isLogicThread ? "logic" : "main", denormalLeft, _controlfp( 0, 0 ) & _MCW_DN ));
+	}
+#endif
 
 	/* The water grid's mesh motion, which isUnderwater reads, steps here, once per logic frame (T1c,
 		 defect 17).  EA stepped it on the client pass, gated on the logic frame having changed; with one

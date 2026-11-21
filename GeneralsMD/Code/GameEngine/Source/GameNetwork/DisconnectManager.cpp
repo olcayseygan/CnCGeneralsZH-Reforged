@@ -255,8 +255,9 @@ void DisconnectManager::updateDisconnectStatus(ConnectionManager *conMgr) {
 					/* time_t is eight bytes here and %d eats four, so these three used to print the low
 						 half of curTime, the high half of curTime, and then curTime again - the screen-on
 						 stamp read as a permanent 0 and the difference never moved.  A log that lies costs
-						 more than no log at all. */
-					DEBUG_LOG(("DisconnectManager::updateDisconnectStatus - curTime = %d, m_timeOfDisconnectScreenOn = %d, curTime - m_timeOfDisconnectScreenOn = %d\n",
+						 more than no log at all.  It runs every pass for every seat while the frame waits, 87,000
+						 lines in one rejoin test, so it is a developer's line. */
+					DEBUG_LOG_DEV(("DisconnectManager::updateDisconnectStatus - curTime = %d, m_timeOfDisconnectScreenOn = %d, curTime - m_timeOfDisconnectScreenOn = %d\n",
 						(Int)curTime, (Int)m_timeOfDisconnectScreenOn, (Int)(curTime - m_timeOfDisconnectScreenOn)));
 
 					if (m_timeOfDisconnectScreenOn != 0) {

@@ -429,16 +429,17 @@ struct AIAbilityButton
 	SpecialPowerType power;			///< the button's special power, for a special
 };
 
-/** One template's buttons, kept by template ID with the command set they were read from: an upgrade that
-	* swaps the set has them read again.  Filled on the logic thread only, and only ever indexed. */
+/** One template's buttons under one command set.  Kept by template ID, one entry for each set its units
+	* have been seen with: two Helixes on different upgrade sets used to take turns throwing the other's
+	* answer away, and one match read them again 291,000 times.  Filled on the logic thread only, and only
+	* ever indexed or compared. */
 struct AIAbilityClass
 {
 	const CommandSet *set;
-	Bool known;
 	std::vector<AIAbilityButton> buttons;
-	AIAbilityClass() : set( NULL ), known( FALSE ) {}
+	AIAbilityClass() : set( NULL ) {}
 };
-static std::vector<AIAbilityClass> theAbilityClasses;
+static std::vector< std::vector<AIAbilityClass> > theAbilityClasses;
 
 /** A unit in the middle of one of its buttons: a special walking up or under way, or a weapon locked for a
 	* shot that is not its first slot (the lock the button and the laser lock take, which lasts the clip). */
@@ -19674,12 +19675,13 @@ static std::vector<AIAbilityButton> abilitiesOf( const Object *obj )
 	const UnsignedInt id = tmpl->getTemplateID();
 	if( id >= theAbilityClasses.size() )
 		theAbilityClasses.resize( id + 1 );
-	AIAbilityClass &entry = theAbilityClasses[ id ];
-	if( entry.known && entry.set == set )
-		return entry.buttons;
-	entry.known = TRUE;
+	std::vector<AIAbilityClass> &seen = theAbilityClasses[ id ];
+	for( size_t s = 0; s < seen.size(); ++s )
+		if( seen[ s ].set == set )
+			return seen[ s ].buttons;
+	seen.push_back( AIAbilityClass() );
+	AIAbilityClass &entry = seen.back();
 	entry.set = set;
-	entry.buttons.clear();
 	Int toggles = 0;
 	for( Int i = 0; set && i < MAX_COMMANDS_PER_SET; ++i )
 	{

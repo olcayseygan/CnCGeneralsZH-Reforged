@@ -692,6 +692,12 @@ void OpenContain::removeFromContainViaIterator( ContainedItemsList::iterator it,
 */
 	Object *rider = *it;
 
+	// Asked while the rider is still on the list.  An Overlord's answer for its own turret or bunker
+	// depends on it being the front of the list, so asked after the erase it said "enclosed" and put
+	// a rider that never left the world back into it: "AmericaTankAvengerLaserTurret already
+	// registered with partition manager" on every Avenger death, the rider moved to the hull's centre.
+	const Bool enclosed = isEnclosingContainerFor( rider );
+
 	// remove item from list
 	m_containList.erase(it);
 	m_containListSize--;
@@ -717,7 +723,7 @@ void OpenContain::removeFromContainViaIterator( ContainedItemsList::iterator it,
 	}
 
 
-	if (isEnclosingContainerFor( rider ))
+	if (enclosed)
 	{
 		addOrRemoveObjFromWorld(rider, true);
   	rider->setPosition( getObject()->getPosition() );

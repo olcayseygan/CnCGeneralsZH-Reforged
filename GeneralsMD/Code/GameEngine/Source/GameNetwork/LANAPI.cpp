@@ -1479,7 +1479,8 @@ Bool LANAPI::AmIHost( void )
 }
 
 void LANAPI::setIsActive(Bool isActive) {
-	DEBUG_LOG(("LANAPI::setIsActive - entering\n"));
+	// No line on entry: a minimized window calls this every engine pass, and one player's log
+	// carried 613,000 of them.  The change below is what is worth a line.
 	if (isActive != m_isActive) {
 		DEBUG_LOG(("LANAPI::setIsActive - m_isActive changed to %s\n", isActive ? "TRUE" : "FALSE"));
 		if (isActive == FALSE) {

@@ -864,6 +864,10 @@ static void startAutoSkirmish( Int numPlayersWanted )
 		else if (takeover && (TheGlobalData->m_autoSkirmishTakeoverSlot < 0 || TheGlobalData->m_autoSkirmishTakeoverSlot == i))
 		{
 			slot.setState( SLOT_TAKEOVER );
+			// the one at the keyboard drives it, so it carries his name with its seat, not "Human"
+			UnicodeString seatName;
+			seatName.format( u"%ls %d", localName.str(), i + 1 );
+			slot.setName( seatName );
 		}
 		else
 		{

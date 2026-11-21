@@ -105,7 +105,7 @@ const Color KEY_FLAT = GameMakeColor( 24, 30, 38, 240 );
 const Color SHADE_RESULT = GameMakeColor( 0, 0, 0, 115 );			///< the world under the result, at 0.55
 const Color SHADE_RESULTS = GameMakeColor( 0, 0, 0, 150 );
 const Real VIGNETTE_FINALE = 0.7f, VIGNETTE_RESULT = 0.7f, VIGNETTE_RESULTS = 0.6f;
-const Int VIGNETTE_BANDS = 8;
+const Int VIGNETTE_BANDS = 32;				///< layers of the gradient
 const Int VIGNETTE_DEPTH_SHARE = 4;		///< a quarter of the screen's height in from each edge
 const Real BACKS_ALPHA = 0.75f;
 const Real KEY_DIM_ALPHA = 0.4f;				///< a key not wired yet
@@ -128,9 +128,9 @@ const Real RESULT_CENTRE_X = 960.0f, RESULT_CENTRE_Y = 540.0f, RESULT_W = 340.0f
 const Real BACK_OFFSET_X = 70.0f, BACK_OFFSET_Y = 12.0f, DEAL_DROP = 80.0f;
 const Box RESULT_PORTRAIT = { 10.0f, 10.0f, 330.0f, 300.0f };
 const Box RESULT_RULE = { 10.0f, 303.0f, 330.0f, 305.0f };		///< gold under a won portrait, flat card only
-const Real RESULT_WORD_X = 170.0f, RESULT_WORD_Y = 362.0f, RESULT_WORD_MAX = 300.0f;
-const Box RESULT_CLOCK_GLYPH = { 128.0f, 405.0f, 144.0f, 421.0f };
-const Real RESULT_CLOCK_X = 150.0f, RESULT_CLOCK_Y = 413.0f;
+const Real RESULT_WORD_X = 170.0f, RESULT_WORD_Y = 362.0f, RESULT_WORD_MAX = 300.0f;	///< alone on its line, centred
+const Real RESULT_CLOCK_Y = 413.0f;		///< the match's length on its own line under the word, centred
+const Real CLOCK_GLYPH_SIZE = 16.0f, CLOCK_GLYPH_GAP = 6.0f;
 
 // a player's card on the results screen
 const Real CARD_W = 250.0f, CARD_H = 590.0f, LOCAL_FRAME_GAP = 3.0f;
@@ -148,9 +148,8 @@ const Real STAT_GLYPH_X = 22.0f, STAT_GLYPH_SIZE = 18.0f, STAT_NUMBER_X = 228.0f
 
 // the header chip, the middle line and the timeline
 const Box HEADER = { 750.0f, 26.0f, 1170.0f, 102.0f };
-const Real HEADER_WORD_X = 903.0f, HEADER_WORD_Y = 64.0f, HEADER_WORD_MAX = 270.0f;
-const Box HEADER_CLOCK_GLYPH = { 1056.0f, 56.0f, 1072.0f, 72.0f };
-const Real HEADER_CLOCK_X = 1078.0f;
+const Real HEADER_WORD_X = 960.0f, HEADER_WORD_Y = 64.0f, HEADER_WORD_MAX = 380.0f;	///< alone in the chip, centred
+const Real HEADER_CLOCK_Y = 120.0f;		///< under the chip, centred in the gap between the teams' cards
 const Real MIDDLE_LINE_X = 960.0f, MIDDLE_LINE_TOP = 140.0f, MIDDLE_LINE_BOTTOM = 712.0f, MIDDLE_DASH = 6.0f;
 const Box TIMELINE = { 110.0f, 744.0f, 1810.0f, 912.0f };
 const Real TIMELINE_SLICE_END = 24.0f, TIMELINE_PLOT_INSET = 8.0f;
@@ -366,6 +365,27 @@ UnicodeString clockText( Int seconds )
 	return text;
 }
 
+/// the match's length with the clock glyph before it, the pair centred on the board's cx
+void drawMatchTime( Real cx, Real cy, Color tint )
+{
+	static DisplayString *measure = NULL;
+	if( measure == NULL )
+		measure = TheDisplayStringManager->newDisplayString();
+	const UnicodeString text = clockText( s_matchSeconds );
+	GameFont *font = fontOf( Look::CLOCK_FONT );
+	if( measure->getFont() != font )
+		measure->setFont( font );
+	measure->setText( text );
+	Int textWidth = 0, textHeight = 0;
+	measure->getSize( &textWidth, &textHeight );
+	const Image *clock = piece( s_localPrefix, Look::PIECE_TIME );
+	const Int glyph = px( Look::CLOCK_GLYPH_SIZE ), gap = clock != NULL ? glyph + px( Look::CLOCK_GLYPH_GAP ) : 0;
+	const Int left = bx( cx ) - ( gap + textWidth ) / 2, middle = by( cy );
+	if( clock != NULL )
+		TheDisplay->drawImage( clock, left, middle - glyph / 2, left + glyph, middle + glyph / 2, tint );
+	drawText( text, Look::CLOCK_FONT, left + gap, middle, tint );
+}
+
 /// a board rect, x0 y0 to x1 y1 at 1080
 void fill( Real x0, Real y0, Real x1, Real y1, Color c )
 {
@@ -418,19 +438,25 @@ void fitTop( const Image *image, const Look::Box &b, Real cardX, Real cardY, Col
 	TheDisplay->drawImage( image, bx( lx ), by( y0 ), bx( lx + dw ), by( y0 + dh ), tint );
 }
 
-/// the edges darkened towards strength, in bands
+/** The edges darkened to strength at the rim, fading inwards.  Every layer is a frame from the screen's
+	* edge in, each one reaching a step deeper, so the layers stack into the gradient with no seam between
+	* them: bands laid edge to edge left a pixel of world between each pair, a bright line round the screen. */
 void vignette( Real strength )
 {
+	if( strength <= 0.0f )
+		return;
 	const Int w = (Int)TheDisplay->getWidth(), h = (Int)TheDisplay->getHeight();
 	const Int depth = h / Look::VIGNETTE_DEPTH_SHARE;
-	for( Int i = 0; i < Look::VIGNETTE_BANDS; ++i )
+	// what one layer lays down so that all of them stacked at the rim come to strength
+	const Real layerAlpha = 1.0f - (Real)pow( 1.0 - clamp01( strength ), 1.0 / Look::VIGNETTE_BANDS );
+	const Color c = withAlpha( 0xFF000000, layerAlpha );
+	for( Int i = 1; i <= Look::VIGNETTE_BANDS; ++i )
 	{
-		const Int inset = depth * i / Look::VIGNETTE_BANDS, band = depth / Look::VIGNETTE_BANDS;
-		const Color c = withAlpha( 0xFF000000, strength * ( Look::VIGNETTE_BANDS - i ) / (Real)Look::VIGNETTE_BANDS );
-		TheDisplay->drawFillRect( inset, inset, w - 2 * inset, band, c );
-		TheDisplay->drawFillRect( inset, h - inset - band, w - 2 * inset, band, c );
-		TheDisplay->drawFillRect( inset, inset + band, band, h - 2 * inset - 2 * band, c );
-		TheDisplay->drawFillRect( w - inset - band, inset + band, band, h - 2 * inset - 2 * band, c );
+		const Int t = depth * i / Look::VIGNETTE_BANDS;
+		TheDisplay->drawFillRect( 0, 0, w, t, c );
+		TheDisplay->drawFillRect( 0, h - t, w, t, c );
+		TheDisplay->drawFillRect( 0, t, t, h - 2 * t, c );
+		TheDisplay->drawFillRect( w - t, t, t, h - 2 * t, c );
 	}
 }
 
@@ -488,10 +514,7 @@ void drawResult( Real t )
 	Color wordColor;
 	const UnicodeString word = resultWord( &wordColor );
 	drawFitted( word, WORD_FONTS, bx( x0 + RESULT_WORD_X ), by( y0 + RESULT_WORD_Y ), withAlpha( wordColor, deal ), 0, px( RESULT_WORD_MAX ) );
-	const Image *clock = piece( s_localPrefix, PIECE_TIME );
-	if( clock != NULL )
-		imageAt( clock, RESULT_CLOCK_GLYPH, x0, y0, withAlpha( TIME_GREY, deal ) );
-	drawText( clockText( s_matchSeconds ), CLOCK_FONT, bx( x0 + RESULT_CLOCK_X ), by( y0 + RESULT_CLOCK_Y ), withAlpha( TIME_GREY, deal ) );
+	drawMatchTime( x0 + RESULT_W * 0.5f, y0 + RESULT_CLOCK_Y, withAlpha( TIME_GREY, deal ) );
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -579,7 +602,7 @@ void drawTimeline( void )
 	// ten minutes, five under half an hour and ten after that
 	const UnsignedInt tickFrames = LANEWAR_TICK_FRAMES, minute = 60 * LOGICFRAMES_PER_SECOND;
 	const UnsignedInt markFrames = s_endFrame < 10 * minute ? minute : s_endFrame < 30 * minute ? 5 * minute : 10 * minute;
-	for( UnsignedInt f = tickFrames; f < s_endFrame; f += tickFrames )
+	for( UnsignedInt f = LANEWAR_FIRST_TICK_FRAMES; f < s_endFrame; f += tickFrames )
 		fill( timelineX( f ), TICK_TOP, timelineX( f ) + 1.0f, TICK_BOTTOM, withAlpha( TIME_GREY, TICK_ALPHA ) );
 	for( UnsignedInt f = markFrames; f < s_endFrame; f += markFrames )
 	{
@@ -754,10 +777,7 @@ void drawResults( void )
 	Color wordColor;
 	const UnicodeString word = resultWord( &wordColor );
 	drawFitted( word, WORD_FONTS, bx( HEADER_WORD_X ), by( HEADER_WORD_Y ), wordColor, 0, px( HEADER_WORD_MAX ) );
-	const Image *clock = piece( s_localPrefix, PIECE_TIME );
-	if( clock != NULL )
-		imageAt( clock, HEADER_CLOCK_GLYPH, 0.0f, 0.0f, TIME_GREY );
-	drawText( clockText( s_matchSeconds ), CLOCK_FONT, bx( HEADER_CLOCK_X ), by( HEADER_WORD_Y ), TIME_GREY );
+	drawMatchTime( HEADER_WORD_X, HEADER_CLOCK_Y, TIME_GREY );
 
 	// the cards, ours on the left, the local player's raised; a team short of three seats keeps its
 	// cards next to the middle line

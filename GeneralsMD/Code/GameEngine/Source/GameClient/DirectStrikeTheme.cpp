@@ -101,9 +101,9 @@ namespace
 		"LobbyPickTile",
 		"LobbyIsland",
 		"LobbyIslandSmall",
-		"LobbyBadgeAmerica",
-		"LobbyBadgeChina",
-		"LobbyBadgeGla",
+		"LobbyHeadquartersAmerica",
+		"LobbyHeadquartersChina",
+		"LobbyHeadquartersGla",
 		"LobbyRandom",
 		"LobbyOpen",
 		"LobbyClosed",
@@ -475,6 +475,12 @@ const Image *generalPortrait( const PlayerTemplate *army )
 	if( general == NULL )
 		return NULL;
 	return general->getBioPortraitLarge() != NULL ? general->getBioPortraitLarge() : general->getBioPortraitSmall();
+}
+
+const Image *headquartersPicture( Side side )
+{
+	static const Piece HEADQUARTERS[ SIDE_COUNT ] = { LOBBY_HEADQUARTERS_AMERICA, LOBBY_HEADQUARTERS_CHINA, LOBBY_HEADQUARTERS_GLA };
+	return art( HEADQUARTERS[ side ] );
 }
 
 }	// namespace DirectStrikeTheme

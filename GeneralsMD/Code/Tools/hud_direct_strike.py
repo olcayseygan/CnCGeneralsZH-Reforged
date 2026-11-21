@@ -46,7 +46,11 @@ STATS = {"Waves": "waves", "Placed": "placed", "Earned": "earned", "Spent": "spe
          "Middle": "middle", "Time": "time", "Fortress": "fortress"}
 MASTER, WELL_AT = 160, (24, 24, 136, 136)       # the 9-slices are cut from a panel this size; the well's own from this rect
 BUTTON = (432, 72)                              # the wide text key the 3-slice is cut from
-LAMP, COIN, BADGE = 32, 28, 120
+LAMP, COIN = 32, 28
+# a plain side's portrait: its command centre shot in the game, cropped square into art/headquarters/<Side>.png
+# (experiments/proofs/2026-11-21/ds-lobby-build/hq/ in the wrapper has the shot list and the crop); packed at the
+# portrait well's 172 so it is never stretched at 1080
+HEADQUARTERS, WELL_PICTURE = os.path.join(HERE, "art", "headquarters"), 172
 PICK_TILE = (136, 112)
 ISLAND, ISLAND_SMALL = (480, 480), (96, 60)
 
@@ -399,7 +403,10 @@ def lobby(side):
         out["LobbySend" + s] = T.key(side, 48, 48, s, arrow_layers("send"), 0.62)
     out.update(lobby_glyphs())
     for s in T.SIDES:
-        out["LobbyBadge" + s] = T.coin(s, BADGE)
+        shot = Image.open(os.path.join(HEADQUARTERS, s + ".png")).convert("RGBA")
+        assert shot.width == shot.height >= WELL_PICTURE, "%s headquarters is %dx%d, wanted a square of %d or more" % (
+            s, shot.width, shot.height, WELL_PICTURE)
+        out["LobbyHeadquarters" + s] = shot.resize((WELL_PICTURE, WELL_PICTURE), Image.LANCZOS)
     return out
 
 

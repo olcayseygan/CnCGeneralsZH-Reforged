@@ -160,9 +160,9 @@ namespace DirectStrikeTheme
 		LOBBY_PICK_TILE,
 		LOBBY_ISLAND,
 		LOBBY_ISLAND_SMALL,
-		LOBBY_BADGE_AMERICA,
-		LOBBY_BADGE_CHINA,
-		LOBBY_BADGE_GLA,
+		LOBBY_HEADQUARTERS_AMERICA,	///< a plain side's portrait: its command centre, shot in the game
+		LOBBY_HEADQUARTERS_CHINA,
+		LOBBY_HEADQUARTERS_GLA,
 		LOBBY_RANDOM,
 		LOBBY_OPEN,
 		LOBBY_CLOSED,
@@ -235,6 +235,8 @@ namespace DirectStrikeTheme
 
 	/// the general's face from the challenge menu, NULL for a plain side
 	const Image *generalPortrait( const PlayerTemplate *army );
+	/// a plain side's command centre, a portrait well's size (172) on the local side's sheet
+	const Image *headquartersPicture( Side side );
 }
 
 #endif // __DIRECTSTRIKETHEME_H_

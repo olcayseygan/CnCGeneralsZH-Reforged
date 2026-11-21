@@ -83,8 +83,6 @@ namespace
 		{ "SIDE:China", "GUI:OnlineGeneralTank", "GUI:OnlineGeneralInf", "GUI:OnlineGeneralNuke" },
 		{ "SIDE:GLA", "GUI:OnlineGeneralToxin", "GUI:OnlineGeneralStealth", "GUI:OnlineGeneralDemo" },
 	};
-	const Piece BADGES[ SIDE_COUNT ] = { LOBBY_BADGE_AMERICA, LOBBY_BADGE_CHINA, LOBBY_BADGE_GLA };
-	const Piece COINS[ SIDE_COUNT ] = { COIN_AMERICA, COIN_CHINA, COIN_GLA };
 
 	/// the seat control's rows, in README-lobby.md's order
 	const char *const SEAT_LABELS[ DSLOBBY_SEAT_ROWS ] =
@@ -389,17 +387,32 @@ namespace
 			return;
 		}
 		const Int pick = s->getPlayerTemplate();
-		const Image *general = isRandom( pick ) ? NULL : generalPortrait( ThePlayerTemplateStore->getNthPlayerTemplate( pick ) );
-		if( general != NULL )
-			portraitWell( well, general, LobbySeatColor( s ), TRUE );
-		else
-			portraitWell( well, art( isRandom( pick ) ? LOBBY_RANDOM : BADGES[ armySide( pick ) ] ), LobbySeatColor( s ), FALSE );
+		if( isRandom( pick ) )
+		{
+			portraitWell( well, art( LOBBY_RANDOM ), LobbySeatColor( s ), FALSE );
+			return;
+		}
+		const Image *general = generalPortrait( ThePlayerTemplateStore->getNthPlayerTemplate( pick ) );
+		portraitWell( well, general != NULL ? general : headquartersPicture( armySide( pick ) ), LobbySeatColor( s ), TRUE );
+	}
+
+	/// the seat line; offline no seat has a lamp, so it runs as wide as the army chip under it
+	DirectStrikeRect seatLine( Int slot )
+	{
+		DirectStrikeRect line = DirectStrikeLobby_part( slot, DSSEAT_LINE );
+		if( !isNetwork() )
+		{
+			const DirectStrikeRect army = DirectStrikeLobby_part( slot, DSSEAT_ARMY );
+			line.x0 = army.x0;
+			line.x1 = army.x1;
+		}
+		return line;
 	}
 
 	void drawSeatLine( Int slot )
 	{
 		const GameSlot *s = seat( slot );
-		const DirectStrikeRect line = DirectStrikeLobby_part( slot, DSSEAT_LINE );
+		const DirectStrikeRect line = seatLine( slot );
 		const Bool drop = editsSeat( slot );
 		const char *state = drop ? chipState( line, LIST_SEAT, slot ) : "";
 		dropdown( boxOf( line ), state, !drop );
@@ -426,9 +439,8 @@ namespace
 		const DirectStrikeRect army = DirectStrikeLobby_part( slot, DSSEAT_ARMY );
 		const char *armyState = drop ? chipState( army, LIST_ARMY, slot ) : "";
 		dropdown( boxOf( army ), armyState, !drop );
-		const Real x = army.x0 + CONTENT_INSET;
-		drawImage( art( isRandom( pick ) ? COIN_RANDOM : COINS[ armySide( pick ) ] ), iconAt( x, army, ICON, ICON ) );
-		text( armyName( pick ), CHIP_EM, x + ICON + ICON_GAP, middleOf( army ), faceText( armyState ), -1, faceShadow( armyState ) );
+		// the name alone: the portrait well beside the chip already shows the army
+		text( armyName( pick ), CHIP_EM, army.x0 + CONTENT_INSET, middleOf( army ), faceText( armyState ), -1, faceShadow( armyState ) );
 
 		const DirectStrikeRect color = DirectStrikeLobby_part( slot, DSSEAT_COLOR );
 		dropdown( boxOf( color ), drop ? chipState( color, LIST_COLOR, slot ) : "", !drop );
@@ -478,8 +490,9 @@ namespace
 		{
 			panel( boxOf( DirectStrikeLobby_islandPanel() ) );
 			drawImage( art( LOBBY_ISLAND ), boxOf( DirectStrikeLobby_island() ) );
-			text( name, ISLAND_EM, 960, 730, TEXT_WHITE, 0 );
-			text( note, ISLAND_NOTE_EM, 960, 764, TEXT_GREY, 0 );
+			// the pair centred in the glass between the picture's foot (682) and the panel's (858)
+			text( name, ISLAND_EM, 960, 753, TEXT_WHITE, 0 );
+			text( note, ISLAND_NOTE_EM, 960, 787, TEXT_GREY, 0 );
 			return;
 		}
 		panel( boxOf( DirectStrikeLobby_islandChip() ) );
@@ -669,10 +682,7 @@ namespace
 				const Image *general = generalPortrait( army );
 				const DirectStrikeRect picture = DirectStrike_rect( r.x0 + TILE_PICTURE_X, r.y0 + TILE_PICTURE_Y,
 					r.x0 + TILE_PICTURE_X + TILE_PICTURE, r.y0 + TILE_PICTURE_Y + TILE_PICTURE );
-				if( general != NULL )
-					portraitWell( boxOf( picture ), general, 0, TRUE );
-				else
-					drawImage( art( BADGES[ column ] ), boxOf( DirectStrike_rect( picture.x0 + 4, picture.y0 + 4, picture.x1 - 4, picture.y1 - 4 ) ) );
+				portraitWell( boxOf( picture ), general != NULL ? general : headquartersPicture( (Side)column ), 0, TRUE );
 				const Color color = current ? TEXT_DARK : hot ? TEXT_GOLD : TEXT_WHITE;
 				text( TheGameText->fetch( ARMY_LABELS[ column ][ tile ] ), TILE_EM, r.x0 + TILE_NAME_X, r.y0 + TILE_NAME_Y, color, 0, !current );
 			}
@@ -812,7 +822,7 @@ namespace
 			if( seat( slot ) == NULL )
 				continue;
 			List list = LIST_NONE;
-			if( editsSeat( slot ) && DirectStrikeLobby_part( slot, DSSEAT_LINE ).contains( x, y ) )
+			if( editsSeat( slot ) && seatLine( slot ).contains( x, y ) )
 				list = LIST_SEAT;
 			else if( editsArmy( slot ) && DirectStrikeLobby_part( slot, DSSEAT_ARMY ).contains( x, y ) )
 				list = LIST_ARMY;

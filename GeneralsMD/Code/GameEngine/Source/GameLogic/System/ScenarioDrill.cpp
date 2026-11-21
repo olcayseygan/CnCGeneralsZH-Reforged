@@ -540,6 +540,13 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 			action->targetSelector = tokens[ 5 ];
 			if (actionType == SCENARIO_ACTION_SHIFTPOWER)
 				action->name = tokens[ SCENARIO_SHIFTPOWER_NAME_TOKEN ];
+			if (actionType == SCENARIO_ACTION_FORCEATTACK && count > 6)
+			{
+				// a FIRE_WEAPON button clicked on that unit instead (Jarmen Kell's snipe is his secondary)
+				action->name = tokens[ 6 ];
+				if (action->name != "primary" && action->name != "secondary" && action->name != "tertiary")
+					return SCENARIO_PARSE_BAD_ACTION;
+			}
 			break;
 		}
 
@@ -1938,6 +1945,34 @@ static Bool executeForceAttack( const ScenarioAction &action, Player *player, AI
 {
 	Player *targetPlayer = findPlayerForSlot( action.targetSlot );
 	Object *target = (targetPlayer != NULL) ? findFirstMatching( targetPlayer, action.targetSelector ) : NULL;
+
+	/* With a weapon slot, a FIRE_WEAPON button with NEED_TARGET_ENEMY_OBJECT clicked on the target, as
+		 GUICommandTranslator sends it: MSG_DO_WEAPON_AT_OBJECT, which locks that slot until the attack is
+		 done.  Jarmen Kell's vehicle snipe is one; the attack key alone fires his rifle. */
+	if (action.name.isNotEmpty())
+	{
+		if (target == NULL)
+		{
+			DEBUG_LOG(("SCENARIO: frame %d forceattack %s: slot %d has no '%s'\n",
+								 action.frame, action.name.str(), action.targetSlot, action.targetSelector.str()));
+			TheAI->destroyGroup( group );
+			return FALSE;
+		}
+		const WeaponSlotType weaponSlot = (action.name == "primary") ? PRIMARY_WEAPON
+																		: (action.name == "secondary") ? SECONDARY_WEAPON : TERTIARY_WEAPON;
+		GameMessage *msg = newInstance( GameMessage )( GameMessage::MSG_DO_WEAPON_AT_OBJECT );
+		msg->friend_setPlayerIndex( player->getPlayerIndex() );
+		msg->appendIntegerArgument( weaponSlot );
+		msg->appendObjectIDArgument( target->getID() );
+		msg->appendIntegerArgument( 0x7fffffff );		// CommandButton's MaxShotsToFire when the INI says none
+		TheGameLogic->logicMessageDispatcher( msg, group );
+		msg->deleteInstance();
+		DEBUG_LOG(("SCENARIO: frame %d forceattack slot %d '%s' x%d %s -> slot %d '%s' %d\n",
+							 action.frame, action.slot, action.selector.str(), taken, action.name.str(), action.targetSlot,
+							 action.targetSelector.str(), target->getID()));
+		return TRUE;
+	}
+
 	Bool canShoot = FALSE;
 	const VecObjectID ids = group->getAllIDs();
 	for( VecObjectID::const_iterator it = ids.begin(); target != NULL && it != ids.end(); ++it )

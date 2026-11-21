@@ -87,7 +87,7 @@ enum ScenarioActionType
 	SCENARIO_ACTION_CONSTRUCT,				///< construct <slot> <template> <position>; the local player's placement click, whatever is selected, as a message that is recorded and crosses the network
 	SCENARIO_ACTION_SHIFTCONSTRUCT,		///< shiftconstruct <slot> <template> <position>; the same click with shift, onto the builder's order queue
 	SCENARIO_ACTION_STANCE,						///< stance <slot> <selector> aggressive|defensive; the stance key, as MSG_SET_STANCE
-	SCENARIO_ACTION_FORCEATTACK,			///< forceattack <slot> <selector> <targetSlot> <targetSelector>; the attack key's click on one unit, as MSG_DO_FORCE_ATTACK_OBJECT
+	SCENARIO_ACTION_FORCEATTACK,			///< forceattack <slot> <selector> <targetSlot> <targetSelector> [primary|secondary|tertiary]; the attack key's click on one unit, as MSG_DO_FORCE_ATTACK_OBJECT, or with a slot a FIRE_WEAPON button's click on it (Kell's snipe), as MSG_DO_WEAPON_AT_OBJECT
 	SCENARIO_ACTION_CLICKENTER,				///< clickenter <slot> <selector> <targetSlot> <targetSelector>; a player's click into a building or transport, as MSG_ENTER
 	SCENARIO_ACTION_WEAPONAT,					///< weaponat <slot> <selector> <position> [primary|secondary|tertiary]; a FIRE_WEAPON button's click on the ground, as MSG_DO_WEAPON_AT_LOCATION; tertiary when left out
 	SCENARIO_ACTION_SWITCHWEAPON,			///< switchweapon <slot> <selector> primary|secondary|tertiary; a SWITCH_WEAPON button (the Nuke Cannon's Neutron Shells), as MSG_SWITCH_WEAPONS

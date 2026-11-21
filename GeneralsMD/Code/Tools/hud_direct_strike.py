@@ -11,12 +11,14 @@ the contract the code reads.
 """
 import argparse
 import filecmp
+import io
 import os
 import shutil
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
+import bigfile
 import hud_command_bar as H
 import hud_direct_strike_theme as T
 from hud_command_bar import plate, rotated
@@ -47,10 +49,14 @@ STATS = {"Waves": "waves", "Placed": "placed", "Earned": "earned", "Spent": "spe
 MASTER, WELL_AT = 160, (24, 24, 136, 136)       # the 9-slices are cut from a panel this size; the well's own from this rect
 BUTTON = (432, 72)                              # the wide text key the 3-slice is cut from
 LAMP, COIN = 32, 28
-# a plain side's portrait: its command centre shot in the game (Golden Oasis, -freecam <x> 3330 260 90 -40 over a
-# command centre spawned at <x> 3550, 1920x1080), cropped square into art/headquarters/<Side>.png; packed at the
-# portrait well's 172 so it is never stretched at 1080
-HEADQUARTERS, WELL_PICTURE = os.path.join(HERE, "art", "headquarters"), 172
+# a plain side's portrait: its command centre's build button picture (SAComCentr_L, SNComCentr_L, SUHeadquarters_L,
+# 120x96 or less), cut from the installed EnglishZH.big and enlarged here to the portrait well's 172 wide, so the
+# game never stretches it at 1080
+CAMEO_ARCHIVE = os.path.join(RUN, "EnglishZH.big")
+CAMEOS = {"America": ("SAUserInterface512_002.tga", (367, 1, 487, 97)),
+          "China": ("SNUserInterface512_003.tga", (1, 197, 109, 286)),
+          "Gla": ("SUUserInterface512_003.tga", (245, 197, 365, 293))}
+WELL_PICTURE = 172
 PICK_TILE = (136, 112)
 ISLAND, ISLAND_SMALL = (480, 480), (96, 60)
 
@@ -403,11 +409,22 @@ def lobby(side):
         out["LobbySend" + s] = T.key(side, 48, 48, s, arrow_layers("send"), 0.62)
     out.update(lobby_glyphs())
     for s in T.SIDES:
-        shot = Image.open(os.path.join(HEADQUARTERS, s + ".png")).convert("RGBA")
-        assert shot.width == shot.height >= WELL_PICTURE, "%s headquarters is %dx%d, wanted a square of %d or more" % (
-            s, shot.width, shot.height, WELL_PICTURE)
-        out["LobbyHeadquarters" + s] = shot.resize((WELL_PICTURE, WELL_PICTURE), Image.LANCZOS)
+        out["LobbyHeadquarters" + s] = headquarters(s)
     return out
+
+
+def headquarters(side):
+    """The side's command centre button picture at the well's width, its own proportions kept: Lanczos and a light
+    unsharp mask, which held the cameo's edges at 1.4 times where a plain resize went soft."""
+    texture, crop = CAMEOS[side]
+    member = "data\\english\\art\\textures\\" + texture.lower()
+    with open(CAMEO_ARCHIVE, "rb") as archive:
+        found = [(offset, size) for path, offset, size in list(bigfile._read_index(archive)) if path.lower() == member]
+        assert found, "%s has no %s" % (CAMEO_ARCHIVE, member)
+        archive.seek(found[0][0])
+        cameo = Image.open(io.BytesIO(archive.read(found[0][1]))).convert("RGBA").crop(crop)
+    height = round(cameo.height * WELL_PICTURE / cameo.width)
+    return cameo.resize((WELL_PICTURE, height), Image.LANCZOS).filter(ImageFilter.UnsharpMask(radius=1.2, percent=70, threshold=2))
 
 
 def pieces(side):

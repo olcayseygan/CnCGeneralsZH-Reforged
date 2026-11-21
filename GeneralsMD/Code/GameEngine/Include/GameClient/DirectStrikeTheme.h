@@ -160,7 +160,7 @@ namespace DirectStrikeTheme
 		LOBBY_PICK_TILE,
 		LOBBY_ISLAND,
 		LOBBY_ISLAND_SMALL,
-		LOBBY_HEADQUARTERS_AMERICA,	///< a plain side's portrait: its command centre, shot in the game
+		LOBBY_HEADQUARTERS_AMERICA,	///< a plain side's portrait: its command centre's build button picture
 		LOBBY_HEADQUARTERS_CHINA,
 		LOBBY_HEADQUARTERS_GLA,
 		LOBBY_RANDOM,
@@ -213,6 +213,8 @@ namespace DirectStrikeTheme
 	void drawImage( const Image *image, const LaneHudBox &b, Color tint = 0xFFFFFFFF );
 	/// an image at its own size times the scale, centred in b
 	void drawCentred( const Image *image, const LaneHudBox &b, Color tint = 0xFFFFFFFF );
+	/// the image as large as fits the box with its own proportions, centred
+	void drawFitted( const Image *image, const LaneHudBox &b );
 	/// a flat plate with a lit top line
 	void plate( const LaneHudBox &b );
 	/// a key in its piece or flat: lit when its mode is on, brighter under the pointer
@@ -230,12 +232,14 @@ namespace DirectStrikeTheme
 	void dropdown( const LaneHudBox &b, const char *state, Bool field );
 	/// a picture filling a square well from its centre top, the colour band 6 high at its foot
 	void portraitWell( const LaneHudBox &well, const Image *picture, Color band, Bool fill );
+	/// the picture's box inside a portrait well, 4 in from each side
+	LaneHudBox wellPicture( const LaneHudBox &well );
 	/// a swatch: the colour in a 2 pixel black frame
 	void swatch( const LaneHudBox &b, Color color );
 
 	/// the general's face from the challenge menu, NULL for a plain side
 	const Image *generalPortrait( const PlayerTemplate *army );
-	/// a plain side's command centre, a portrait well's size (172) on the local side's sheet
+	/// a plain side's command centre, its build button picture at a portrait well's width (172) on the local side's sheet
 	const Image *headquartersPicture( Side side );
 }
 

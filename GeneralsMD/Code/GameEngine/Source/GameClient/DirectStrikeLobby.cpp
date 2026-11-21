@@ -393,7 +393,9 @@ namespace
 			return;
 		}
 		const Image *general = generalPortrait( ThePlayerTemplateStore->getNthPlayerTemplate( pick ) );
-		portraitWell( well, general != NULL ? general : headquartersPicture( armySide( pick ) ), LobbySeatColor( s ), TRUE );
+		portraitWell( well, general, LobbySeatColor( s ), TRUE );
+		if( general == NULL )
+			drawFitted( headquartersPicture( armySide( pick ) ), wellPicture( well ) );
 	}
 
 	/// the seat line; offline no seat has a lamp, so it runs as wide as the army chip under it
@@ -682,7 +684,9 @@ namespace
 				const Image *general = generalPortrait( army );
 				const DirectStrikeRect picture = DirectStrike_rect( r.x0 + TILE_PICTURE_X, r.y0 + TILE_PICTURE_Y,
 					r.x0 + TILE_PICTURE_X + TILE_PICTURE, r.y0 + TILE_PICTURE_Y + TILE_PICTURE );
-				portraitWell( boxOf( picture ), general != NULL ? general : headquartersPicture( (Side)column ), 0, TRUE );
+				portraitWell( boxOf( picture ), general, 0, TRUE );
+				if( general == NULL )
+					drawFitted( headquartersPicture( (Side)column ), wellPicture( boxOf( picture ) ) );
 				const Color color = current ? TEXT_DARK : hot ? TEXT_GOLD : TEXT_WHITE;
 				text( TheGameText->fetch( ARMY_LABELS[ column ][ tile ] ), TILE_EM, r.x0 + TILE_NAME_X, r.y0 + TILE_NAME_Y, color, 0, !current );
 			}

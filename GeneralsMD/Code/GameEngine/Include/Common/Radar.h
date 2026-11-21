@@ -230,6 +230,7 @@ public:
 
 	// is the game window parameter the radar window
 	Bool isRadarWindow( GameWindow *window ) { return (m_radarWindow == window) && (m_radarWindow != NULL); }
+	void bindRadarWindow( void );	///< take the command bar's radar window again, after a rebuild made a new one
 
 	Bool radarToWorld( const ICoord2D *radar, Coord3D *world );		///< radar point to world point on terrain
 	Bool radarToWorld2D( const ICoord2D *radar, Coord3D *world );		///< radar point to world point (x,y only!)

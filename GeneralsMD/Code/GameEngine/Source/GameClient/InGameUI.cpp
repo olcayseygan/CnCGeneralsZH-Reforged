@@ -14180,6 +14180,10 @@ void InGameUI::recreateControlBar( void )
 
 	createControlBar();
 
+	// the radar kept a pointer to the old bar's radar window, and every minimap click went through it
+	if( TheRadar )
+		TheRadar->bindRadarWindow();
+
 	//
 	// The bar is rebuilt from its windows rather than replaced.  Replacing it re-parsed
 	// CommandButton.ini and CommandSet.ini and handed out new CommandButton addresses, while every

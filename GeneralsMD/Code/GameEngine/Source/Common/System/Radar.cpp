@@ -366,14 +366,23 @@ void Radar::update( void )
 }  // end update
 
 //-------------------------------------------------------------------------------------------------
+/** The radar window the command bar has now.  Every rebuild of the bar (a Layout, HUD Width or
+	* resolution change in a match, InGameUI::recreateControlBar) destroys the old one, and a radar
+	* still holding it drew its camera box and read its clicks through a freed window: the minimap
+	* stopped moving the camera until the next match. */
+//-------------------------------------------------------------------------------------------------
+void Radar::bindRadarWindow( void )
+{
+	m_radarWindow = TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "ControlBar.wnd:LeftHUD" ) );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** Reset the radar for the new map data being given to it */
 //-------------------------------------------------------------------------------------------------
 void Radar::newMap( TerrainLogic *terrain )
 {
 
-	// keep a pointer for our radar window
-	Int id = NAMEKEY( "ControlBar.wnd:LeftHUD" );
-	m_radarWindow = TheWindowManager->winGetWindowFromId( NULL, id );
+	bindRadarWindow();
 	DEBUG_ASSERTCRASH( m_radarWindow, ("Radar::newMap - Unable to find radar game window\n") );
 
 	// reset all the data in the radar

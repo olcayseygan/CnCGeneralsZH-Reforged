@@ -664,11 +664,12 @@ static void requestLadderPage( Int offset )
 //-------------------------------------------------------------------------------------------------
 // The skins page, the Skins tab (ONLINE-UI-REDESIGN.md "Skins", experiments/online-redesign/
 // skinpick.html), three panels.  Left, the units SkinsReforged.ini dresses by side, each with its
-// cameo and how many of its looks the account owns.  Middle, the picked unit's looks as cards, four a
-// line (three where the column is narrow), Default first, each its model drawn live at one fixed
-// angle with its state under it, over the collected count and an All, Owned, Locked filter.  Right,
-// the look in focus turning on its plate, how it is earned, who sees it, and one button: Wear, Worn
-// (Picked until saved), or zerohour.gg for a look the account lacks.  Save sends the whole loadout;
+// cameo and how many of its looks the account owns.  Middle, the picked unit's looks as cards, three a
+// line, Default first, each its model drawn live at one fixed angle and its name, a tick on the worn
+// one and a padlock on a locked one, under the owned count's bar and an All, Owned, Locked filter.
+// Right, the look in focus turning on its plate over the whole panel, its name and one button: Wear,
+// Worn (Picked until saved), or for a look the account lacks what earns it, which opens zerohour.gg.
+// Save sends the whole loadout;
 // once the site took it the next room and Quick Match seat it (OnlineSaveSkins).  The ladder's
 // layout, no layout of its own to ship, and no card pictures: the models are the cards.
 //-------------------------------------------------------------------------------------------------
@@ -788,11 +789,12 @@ static SkinsFrame skinsFrame( void )
 	return f;
 }
 
-/// the cards a line: four, or three where four would be narrower than 150
+/// the cards a line: three, so a card is wide enough for a long hull (227 at 16:9, 159 at 4:3), or two
+/// where three would be narrower than 120
 static Int cardColumns( const SkinsFrame &f )
 {
 	const Int inner = f.midWidth - 2 * across( 20.0f );
-	return inner >= 4 * across( 150.0f ) + 3 * across( 12.0f ) ? 4 : 3;
+	return inner >= 3 * across( 120.0f ) + 2 * across( 12.0f ) ? 3 : 2;
 }
 
 static Int cardWidth( const SkinsFrame &f )

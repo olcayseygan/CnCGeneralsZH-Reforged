@@ -231,8 +231,8 @@ public:
 		* up axis (the caller drives it from the wall clock), x, y, w, h in screen pixels, darkened when
 		* dim (the model, nothing round it).  Turning, the model is framed by what its body sweeps so it
 		* never leaves the rectangle; still, a card's picture at one fixed turn, it has no plate, is seen
-		* from a little higher, leaves its rotors out and is framed tight round its body at that turn.
-		* A turning model's rotor discs may poke a little past the rectangle.  The models stay cached between calls;
+		* from a little higher and is framed tight round its body at that turn.  Rotors are left out
+		* either way, so the body sets the size.  The models stay cached between calls;
 		* freeModelPreviews releases them and the scene, for a screen that closes. */
 	virtual void drawModelPreview( const AsciiString &templateName, Int skin, Color house, Int x, Int y, Int w, Int h, Real turns, Bool dim, Bool still = FALSE ) {}
 	virtual void freeModelPreviews( void ) {}

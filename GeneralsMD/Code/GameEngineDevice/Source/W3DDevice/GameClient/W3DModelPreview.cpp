@@ -24,9 +24,9 @@
 // rendered after the interface with the depth cleared, which the interface does not use.  The
 // rectangle is an off-centre view plane over the whole screen (ModelPreviewFrame.h), since the
 // camera's viewport never reaches Direct3D 11.  There is no scissor, so a turning model is framed by
-// the cylinder its body sweeps about its own up axis, which it cannot leave at any turn, its rotor
-// discs allowed to poke a little past (ModelPreviewFrame::fitPoints); a still (a card) is framed by
-// its body's box corners at its one turn, its rotors hidden, so the hull's paint fills the card.
+// the cylinder its body sweeps about its own up axis, which it cannot leave at any turn, and a still
+// (a card) by its body's box corners at its one turn (ModelPreviewFrame::fitPoints).  Rotors are
+// hidden either way: nothing could clip their tips, and framing them shrank a Chinook to two thirds.
 //
 // The model is what a Drawable of the template draws in its default state: every W3DModelDraw kind
 // of draw module the Drawable would make (the same MinLODRequired filter), each made by the asset
@@ -68,8 +68,9 @@ const float PREVIEW_TAN_HALF = 0.36f;			// about 40 degrees across the rectangle
 const float PREVIEW_ELEVATION = 0.38f;		// the eye about 22 degrees above the plate
 const float PREVIEW_STILL_ELEVATION = 0.50f;	// a still from about 29 degrees, so the roof shows with the side
 const float PREVIEW_HELD_SHARE = 0.94f;		// the body inside this share of the rectangle's half spans
-const float PREVIEW_LOOSE_SHARE = 1.06f;	// a turning rotor's disc may poke this far past them
-const float PREVIEW_DIM = 0.32f;					// the light a look the account lacks is drawn under
+const float PREVIEW_DIM = 0.6f;					// the light a look the account lacks is drawn under: dark enough to
+																					// read as locked beside an owned one, light enough that Bronze, Gold
+																					// and Emerald still tell apart (0.32 made the truck's five one grey)
 const float PREVIEW_YAW = -0.70f;					// from the front right of a model facing +X at turn 0
 const size_t PREVIEW_MOST_MODELS = 16;		// models kept for a screen that draws several at once
 
@@ -101,7 +102,6 @@ struct PreviewModel
 	float body;												// the plate's size: its body round the axis, long guns left out
 	Bool drawn;												// one draw went through whole (Direct3D 11 compiles a new program off the frame)
 	std::vector<Vector3> corners;			// the visible parts' box corners at the origin pose, rotor discs left out
-	std::vector<Vector4> discs;				// a rotor's disc: its middle (X, Y, Z) and reach (W)
 	std::vector<RenderObjClass *> rotors;	// the rotors' own parts, held, hidden in a still
 	float sweep;											// how far the corners reach from the up axis
 	float lowZ, highZ;								// and how low and high they go
@@ -319,7 +319,7 @@ PreviewModel makeModel(const AsciiString &templateName, Int skin, Color house)
 	m.center.Set(0.0f, 0.0f, 0.5f * (hi.Z + lo.Z));
 	m.radius = sqrtf(m.footprint * m.footprint + halfHeight * halfHeight);
 
-	// The frame holds the body and lets a rotor's disc poke out: a part over twelve times wider than
+	// The frame holds the body; a rotor is hidden in the preview: a part over twelve times wider than
 	// it is tall and at least a quarter of the model's width is a disc (the Chinook's blades reach 20
 	// units sideways of a narrow hull; a tank's track is about seven times wider than tall).
 	// ponytail: a shape rule, not a name list; a flat wide part of a new model counts as a disc
@@ -364,7 +364,6 @@ PreviewModel makeModel(const AsciiString &templateName, Int skin, Color house)
 			box.Center.X, box.Center.Y, box.Center.Z, box.Extent.X, box.Extent.Y, rotor ? "a rotor" : "left out"));
 		if (!rotor)
 			continue;
-		m.discs.push_back(Vector4(box.Center.X, box.Center.Y, box.Center.Z, WWMath::Max(box.Extent.X, box.Extent.Y)));
 		if (shownParts[thin[t]])
 		{
 			shownParts[thin[t]]->Add_Ref();
@@ -387,7 +386,7 @@ PreviewModel makeModel(const AsciiString &templateName, Int skin, Color house)
 
 	DEBUG_LOG(("MODELPREVIEW: '%s' skin %d, %d parts, swept radius %.1f, body %.1f, body sweep %.1f, body box (%.1f,%.1f,%.1f) to (%.1f,%.1f,%.1f), %d discs\n",
 		templateName.str(), skin, (Int)m.parts.size(), m.footprint, m.body, m.sweep,
-		bodyLo.X, bodyLo.Y, bodyLo.Z, bodyHi.X, bodyHi.Y, bodyHi.Z, (Int)m.discs.size()));
+		bodyLo.X, bodyLo.Y, bodyLo.Z, bodyHi.X, bodyHi.Y, bodyHi.Z, (Int)m.rotors.size()));
 	return m;
 }
 
@@ -514,8 +513,8 @@ void W3DDisplay::drawModelPreview( const AsciiString &templateName, Int skin, Co
 
 		// What the frame holds.  A still: the body's box corners at this turn, tight.  Turning: the
 		// cylinder the body sweeps and the plate under it, the same at every turn so the model never
-		// leaves the rectangle and the frame never breathes.  Either way the rotor discs come last and
-		// may poke out a little (fitPoints' loose share) rather than shrink the body.
+		// leaves the rectangle and the frame never breathes.  Rotors are hidden (below), so the body
+		// alone sets the size.
 		std::vector<Vector3> points;
 		const float c = cosf( angle ), s = sinf( angle );
 		if( still )
@@ -535,24 +534,6 @@ void W3DDisplay::drawModelPreview( const AsciiString &templateName, Int skin, Co
 				points.push_back( Vector3( model->sweep * cosf( a ), model->sweep * sinf( a ), WWMath::Min( model->lowZ, -plateThick ) ) );
 			}
 		}
-		const Int held = (Int)points.size();
-		for( size_t i = 0; i < model->discs.size() && !still; ++i )
-		{
-			const Vector4 &disc = model->discs[ i ];
-			for( Int k = 0; k < 8; ++k )
-			{
-				const float a = (float)k * WWMATH_PI / 4.0f;
-				Vector3 p( disc.X + disc.W * cosf( a ), disc.Y + disc.W * sinf( a ), disc.Z );
-				if( still )
-					p.Set( c * p.X - s * p.Y, s * p.X + c * p.Y, p.Z );
-				else
-				{
-					const float reach = sqrtf( disc.X * disc.X + disc.Y * disc.Y ) + disc.W;
-					p.Set( reach * cosf( a ), reach * sinf( a ), disc.Z );
-				}
-				points.push_back( p );
-			}
-		}
 
 		// across the view (right, up) and toward the eye, then the tightest eye for this rectangle
 		Vector3 right( -toEye.Y, toEye.X, 0.0f );
@@ -569,8 +550,8 @@ void W3DDisplay::drawModelPreview( const AsciiString &templateName, Int skin, Co
 			farthest = i == 0 ? depth[ i ] : WWMath::Min( farthest, depth[ i ] );
 		}
 		const float narrow = (float)WWMath::Min( w, h );
-		const ModelPreviewFrame::Fit fit = ModelPreviewFrame::fitPoints( &across[0], &upward[0], &depth[0], (int)points.size(), held,
-			PREVIEW_TAN_HALF * (float)w / narrow, PREVIEW_TAN_HALF * (float)h / narrow, PREVIEW_HELD_SHARE, PREVIEW_LOOSE_SHARE );
+		const ModelPreviewFrame::Fit fit = ModelPreviewFrame::fitPoints( &across[0], &upward[0], &depth[0], (int)points.size(), (int)points.size(),
+			PREVIEW_TAN_HALF * (float)w / narrow, PREVIEW_TAN_HALF * (float)h / narrow, PREVIEW_HELD_SHARE, PREVIEW_HELD_SHARE );
 		const Vector3 target = fit.centerX * right + fit.centerY * up;
 		const float distance = WWMath::Max( fit.distance, nearest + 1.0f );
 		const Vector3 eye = target + distance * toEye;
@@ -643,10 +624,11 @@ void W3DDisplay::drawModelPreview( const AsciiString &templateName, Int skin, Co
 		// a look the account lacks: the same model under a fraction of the light, so the model goes
 		// dark and nothing round it does
 		setPreviewLight( shade );
-		// a still leaves its rotors out: their discs reach half again past a Chinook's hull, and on a
-		// card it is the paint that has to show
+		// the rotors stay out: their discs reach half again past a Chinook's hull, framing them shrank
+		// the body to two thirds, and there is no scissor to clip their tips at the rectangle
+		// ponytail: hidden rather than clipped; a viewport or scissor seam in both backends would let them turn
 		for( size_t i = 0; i < model->rotors.size(); ++i )
-			model->rotors[ i ]->Set_Hidden( still ? true : false );
+			model->rotors[ i ]->Set_Hidden( true );
 		const unsigned long long waitedBefore = drawsWaited();
 		for( size_t i = 0; i < model->parts.size(); ++i )
 			s_scene->Add_Render_Object( model->parts[ i ] );

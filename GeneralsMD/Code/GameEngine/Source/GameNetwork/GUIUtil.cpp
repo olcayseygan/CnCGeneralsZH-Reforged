@@ -1826,7 +1826,6 @@ Bool SetApocalypseMap(GameInfo *game)
 	game->setMapCRC(md->m_CRC);
 	game->setMapSize(md->m_filesize);
 	game->getSlot(0)->setMapAvailability(TRUE);
-	game->resetStartSpots();
 	DEBUG_LOG(("Apocalypse: seed %d, map '%s'\n", settings.m_seed, map.str()));
 	return TRUE;
 }
@@ -1834,13 +1833,26 @@ Bool SetApocalypseMap(GameInfo *game)
 Bool FitApocalypseRoom(GameInfo *game)
 {
 	Bool changed = FALSE;
-	for (Int i = APOCALYPSE_SEATS; i < MAX_SLOTS; ++i)
+	Int nextStart = 0;
+	for (Int i = 0; i < MAX_SLOTS; ++i)
 	{
-		// the map has four starts; a human is never thrown out (the skirmish room has one, in seat 0)
 		GameSlot *slot = game->getSlot(i);
-		if (slot != NULL && !slot->isHuman() && slot->getState() != SLOT_CLOSED)
+		if (slot == NULL)
+			continue;
+		// the map has four starts; a human is never thrown out
+		if (i >= APOCALYPSE_SEATS && !slot->isHuman() && slot->getState() != SLOT_CLOSED)
 		{
 			slot->setState(SLOT_CLOSED);
+			changed = TRUE;
+		}
+		/* The seats stand on starts 1, 2, 3 in seat order.  The day waves rotate over as many fronts as
+			 there are seats and the first front faces start 1, so a player alone on start 2 watched them
+			 walk into an empty lobe. */
+		const Bool seated = slot->isOccupied() && slot->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER;
+		const Int start = seated ? nextStart++ : -1;
+		if (slot->getStartPos() != start)
+		{
+			slot->setStartPos(start);
 			changed = TRUE;
 		}
 	}

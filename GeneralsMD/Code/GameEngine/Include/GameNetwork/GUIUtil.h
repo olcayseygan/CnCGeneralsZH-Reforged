@@ -242,8 +242,9 @@ void LayoutDirectStrikeRoom(GameWindow *parent, const char *layoutFilename, cons
 // (ApocalypseDirector wakes on its waypoints), so nothing travels in the options string.  A fresh
 // Apocalypse map for the room's seats, staged, in the cache and the game's, CRC and size with it
 Bool SetApocalypseMap(GameInfo *game);
-// Seats past four closed (the map's starts, clampSettings), and the rules that mean nothing in a co-op
-// survival off; TRUE when it changed anything
+// Seats past four closed (the map's starts, clampSettings), the seated players on starts 1..n in seat
+// order (the day waves' first front faces start 1), and the rules that mean nothing in a co-op survival
+// off; TRUE when it changed anything
 Bool FitApocalypseRoom(GameInfo *game);
 // Create Game's question, which mode the room is for: Classic or Direct Strike, and Cancel
 void AskGameMode(void (*classic)(void), void (*directStrike)(void));

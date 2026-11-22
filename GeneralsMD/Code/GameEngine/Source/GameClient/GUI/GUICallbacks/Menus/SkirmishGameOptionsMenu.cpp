@@ -937,6 +937,8 @@ static void startPressed(void)
 
 	if (FitRandomMapToRoom(TheSkirmishGameInfo))
 	{
+		if (skirmishApocalypse)
+			FitApocalypseRoom(TheSkirmishGameInfo);	// a restaged map clears the start spots; the seats keep 1..n
 		skirmishPositionStartSpots();
 		skirmishUpdateSlotList();
 	}

@@ -611,6 +611,7 @@ public:
 	Bool m_fullDetailAtDistance;		///< "FullDetailAtDistance": a model with levels of detail draws its full one at every distance (client only)
 	Bool m_hemiAmbient;							///< "HemiAmbient": models take the ambient from the sky above and the ground below (Direct3D 11, client only)
 	Bool m_ambientOcclusion;				///< "AmbientOcclusion": corners and the ground under what stands on it darken, half size in world units (Direct3D 11, client only)
+	Int m_sunShafts;								///< "SunShafts": 0 off, 1 Low, 2 High; light shafts in a low dust layer and a glare toward the sun (Direct3D 11, client only)
 	Bool m_weatherEffects;					///< "Weather": rain, blowing sand or snow by the map's ground, and a wind on trees and smoke (Direct3D 11, client only)
 	Bool m_waterSplashes;						///< "WaterSplashes": a splash and rings where a blast or a falling body meets water (Direct3D 11, client only)
 	Bool m_atmosphere;							///< "Atmosphere": the far ground fades toward the horizon and an empty frame takes a sky (Direct3D 11, client only)

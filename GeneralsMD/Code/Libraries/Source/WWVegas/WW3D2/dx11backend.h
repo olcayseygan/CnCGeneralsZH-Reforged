@@ -128,6 +128,15 @@ public:
 	void Set_Terrain_Light(const float * block);
 	bool Set_Terrain_Heights(const unsigned char * heights, unsigned width, unsigned height);
 	bool Holds_Terrain_Heights() const { return TerrainHeightsView != NULL; }
+	// The heights for a post pass that wants the ground (the sun shafts tell casters from terrain by it),
+	// and how a world point finds its texel: cells a world unit, the border in cells, world units a byte.
+	ID3D11ShaderResourceView * Terrain_Heights_View() const { return TerrainHeightsView; }
+	void Terrain_Heights_Mapping(float mapping[3]) const
+	{
+		mapping[0] = TerrainLight[33];
+		mapping[1] = TerrainLight[34];
+		mapping[2] = TerrainLight[35];
+	}
 
 	// The draws that follow are sorted particle billboards, which fade where they meet the scene's
 	// depth (SOFT_PARTICLE_SAMPLING).  Only the sorting pool sets it, around the billboards' runs.
@@ -249,6 +258,12 @@ public:
 	void Clear_Shadow_Parameters();
 	bool Shadow_Map_Bound() const { return ShadowMapBound; }
 	ID3D11ShaderResourceView * Shadow_Map() const { return ShadowMapTexture; }
+	// What the map was last filled through, world to the sun's clip space in row vectors (the layout
+	// mul(float4(p, 1), m) reads), and the depth bias the receivers compare against.  The sun shafts
+	// read both after the scene's own shadows took them.
+	const float * Sun_View_Projection() const { return SunViewProjection; }
+	float Shadow_Bias() const { return ShadowBias; }
+	float Shadow_Strength() const { return ShadowStrength; }
 
 	// The smoke's own map over the same sun, filled once a frame after End_Shadow_Map from the sun
 	// it held.  A caster is five floats: its centre in world units, its radius and the optical

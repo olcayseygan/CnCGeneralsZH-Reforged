@@ -16734,6 +16734,26 @@ TOOLTIP:HeatHaze
 "Yangınların üstünde, lazer ışınları boyunca ve füze egzozunun arkasında hava dalgalanır. Yalnızca Direct3D 11 ile, Klasik Grafikler açıkken kapalıdır. Kabul Et'e basınca uygulanır."
 END
 
+GUI:SunShafts
+"Güneş Huzmeleri"
+END
+
+GUI:SunShafts0
+"Kapalı"
+END
+
+GUI:SunShafts1
+"Düşük"
+END
+
+GUI:SunShafts2
+"Yüksek"
+END
+
+TOOLTIP:SunShafts
+"Alçak güneşin ışığı binaların ve ağaçların arasındaki tozdan şerit şerit süzülür, güneşe doğru hava hafifçe parlar. En çok sabah ve akşam görünür. Yalnızca Direct3D 11 ile, Klasik Grafikler açıkken kapalıdır. Kabul Et'e basınca uygulanır."
+END
+
 GUI:GroundFoliage
 "Bitki Örtüsü"
 END

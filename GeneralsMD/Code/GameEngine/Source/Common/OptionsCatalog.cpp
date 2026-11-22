@@ -180,6 +180,7 @@ OPTION_BOOL_ACCESSORS( m_groundMarks )
 OPTION_BOOL_ACCESSORS( m_firelight )
 OPTION_BOOL_ACCESSORS( m_hemiAmbient )
 OPTION_BOOL_ACCESSORS( m_ambientOcclusion )
+OPTION_INT_ACCESSORS( m_sunShafts )
 OPTION_BOOL_ACCESSORS( m_weatherEffects )
 OPTION_BOOL_ACCESSORS( m_waterSplashes )
 OPTION_BOOL_ACCESSORS( m_atmosphere )
@@ -815,6 +816,14 @@ const OptionDef TheOptionCatalog[] =
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_ambientOcclusion, set_m_ambientOcclusion },
 
+	// Sunlight caught in a low dust layer between buildings and trees, and a glare toward the sun's
+	// bearing, marched against the sun's shadow map.  W3DShaderManager pushes it every frame, and no sim
+	// reads it.  Off under Classic graphics and -d3d9, which draw no sun map.  On Options > Display, under
+	// Picture: every column of Graphics and Effects is full.
+	{ "SunShafts",								OPT_WND( "ComboBoxSunShafts" ), "GUI:SunShafts",
+		OPTION_ENUM, APPLY_LIVE, 0, SUN_SHAFTS_LEVEL_COUNT - 1,
+		get_m_sunShafts, set_m_sunShafts },
+
 	// Rain, blowing sand or snow by the map's ground, and a wind on trees and smoke.  Read every frame, and
 	// no sim reads it, so two players may differ.  Off under Classic graphics and -d3d9.  On Options > Effects.
 	{ "Weather",							OPT_WND( "CheckWeather" ), "GUI:Weather",
@@ -971,6 +980,9 @@ const GraphicsQualityRow TheGraphicsQualityTable[] =
 	// not measured yet: Direct3D 11 does not present on the machine that would sweep it.  Ultra only,
 	// for the faults docs/plans/TODO.md still lists (shader cache, structures a script makes)
 	{ "CheckGroundFoliage",			0.0f,  {    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    1 } },
+	// not measured yet (0.3 to 0.5 ms guessed from the occlusion's, whose passes it shares at half size);
+	// Low above High, High at Ultra, and nothing without the sun's map from step 5
+	{ "ComboBoxSunShafts",			0.0f,  {    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    2 } },
 	{ "ComboBoxTextureFilter",	0.1f,  {    0,    1,    2,    2,    2,    2,    2,    2,    2,    2,    2 } },
 	{ "ComboBoxBloom",					0.1f,  {    0,    1,    2,    2,    2,    2,    2,    2,    2,    2,    2 } },
 	{ "SliderAnisotropy",				0.1f,  {    2,    4,    8,   16,   16,   16,   16,   16,   16,   16,   16 } },

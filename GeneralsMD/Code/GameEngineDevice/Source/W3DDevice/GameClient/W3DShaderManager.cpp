@@ -77,7 +77,12 @@
 #include "GameClient/UiAnimClock.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/PolygonTrigger.h"
+#include "GameLogic/DayNightCycle.h"
 #include "Common/GlobalData.h"
+#include "Common/OptionsCatalog.h"
+#if defined(_WIN32)
+#include "Common/EarlyOptions.h"	// findEarlyOptionValue: the sun shafts' hidden tuning keys
+#endif
 #include "Common/GameLOD.h"
 #include "d3dx9runtime.h"
 #include "WW3D2/dx11runtime.h"
@@ -369,6 +374,87 @@ static Int s_hazeLevelsHeight = 0;
 static Real s_hazeLevelTop = 0.0f;
 static Real s_hazeLevelRise = PROTO_HAZE_MIN_RISE;
 static Real s_hazeLevelWater = -1.0e6f;
+static Real s_hazeLevelMiddle = 0.0f;
+// Every water area under the sun shafts' layer top, its box and surface, for the shafts, which reach
+// higher than the haze's top: the first DX11_POST_SUN_SHAFT_WATER_AREAS of them the trigger list holds.
+// An area above the top has no layer air over it and takes no slot.
+// ponytail: a map with more water areas than that under the top loses the rest (a DEBUG_LOG line says
+// so), so their beds glow; rank by size if one shows.
+#if defined(_WIN32)
+static const Real SUN_SHAFT_TOP = 150.0f;					// world units the dust reaches above the median ground
+static Int s_shaftWaterCount = 0;
+// The look the shafts draw with this map: the SUN_SHAFT_* constants below, or the hidden Options.ini
+// keys a filmed sweep sets over them (readSunShaftTuning, once a map).
+struct SunShaftTuning
+{
+	Real band, radius, side, streakWidth, streakLength, dark, darkCap, top, falloff, glare, duskGain, mostStrength;
+};
+static SunShaftTuning s_shaftTuning;
+static void readSunShaftTuning(void);
+static float s_shaftWaterBoxes[DX11_POST_SUN_SHAFT_WATER_AREAS][4];
+static float s_shaftWaterHeights[DX11_POST_SUN_SHAFT_WATER_AREAS];
+#endif
+
+/** The haze's levels for this map, worked out the first time a frame asks for them on it: the haze's top
+	and rise, the median ground and the highest water surface under the top.  The sun shafts read the
+	median and the water too, with or without the haze. */
+static void updateHazeLevels(WorldHeightMap *map)
+{
+	if (map == s_hazeLevelsMap && map->getDataPtr() == s_hazeLevelsData
+		&& map->getXExtent() == s_hazeLevelsWidth && map->getYExtent() == s_hazeLevelsHeight)
+		return;
+	s_hazeLevelsMap = map;
+	s_hazeLevelsData = map->getDataPtr();
+	s_hazeLevelsWidth = map->getXExtent();
+	s_hazeLevelsHeight = map->getYExtent();
+	const Real low = TheTerrainRenderObject->getMinHeight();
+	s_hazeLevelMiddle = protoHazeMiddle(map);
+	s_hazeLevelRise = max(s_hazeLevelMiddle + PROTO_HAZE_ABOVE_MIDDLE - low, PROTO_HAZE_MIN_RISE);
+	s_hazeLevelTop = low + s_hazeLevelRise;
+	s_hazeLevelWater = -1.0e6f;
+#if defined(_WIN32)
+	s_shaftWaterCount = 0;
+	readSunShaftTuning();
+#endif
+	// An accepted logic read inside the render window, left out of the LOGICTHREAD WINDOW census on
+	// purpose (LOGIC-THREAD.md phase 3).  The list is linked by the map load and unlinked by
+	// TerrainLogic::reset, neither of which runs beside the render, so the walk never meets a link
+	// changing.  The one write a tick makes is TerrainLogic::setWaterHeight's setPoint, an aligned
+	// Int z put in place: this read takes the old height or the new, and the haze keeps it for the
+	// map either way, since a script's water change never re-keyed it.  It runs once a map.
+	for (const PolygonTrigger *area = PolygonTrigger::getFirstPolygonTrigger(); area; area = area->getNext())
+	{
+		if (!area->isWaterArea() || area->getNumPoints() < 3)
+			continue;
+		const Real surface = (Real)area->getPoint(0)->z;
+		if (surface < s_hazeLevelTop && surface > s_hazeLevelWater)
+			s_hazeLevelWater = surface;
+#if defined(_WIN32)
+		if (surface >= s_hazeLevelMiddle + s_shaftTuning.top)
+			continue;
+		if (s_shaftWaterCount >= DX11_POST_SUN_SHAFT_WATER_AREAS)
+		{
+			DEBUG_LOG(("SUNSHAFTS: water area at %.1f left out, the shafts hold %d\n", surface, (Int)DX11_POST_SUN_SHAFT_WATER_AREAS));
+		}
+		else
+		{
+			float *box = s_shaftWaterBoxes[s_shaftWaterCount];
+			box[0] = box[2] = (float)area->getPoint(0)->x;
+			box[1] = box[3] = (float)area->getPoint(0)->y;
+			for (Int i = 1; i < area->getNumPoints(); ++i)
+			{
+				const ICoord3D *point = area->getPoint(i);
+				box[0] = min(box[0], (float)point->x);
+				box[1] = min(box[1], (float)point->y);
+				box[2] = max(box[2], (float)point->x);
+				box[3] = max(box[3], (float)point->y);
+			}
+			s_shaftWaterHeights[s_shaftWaterCount] = surface;
+			++s_shaftWaterCount;
+		}
+#endif
+	}
+}
 
 static void pushProtoHazeFrame(void)
 {
@@ -381,33 +467,7 @@ static void pushProtoHazeFrame(void)
 	Real warmth = 0.0f;
 	if (TheTerrainRenderObject != NULL && TheTerrainRenderObject->getMap() != NULL)
 	{
-		WorldHeightMap *map = TheTerrainRenderObject->getMap();
-		if (map != s_hazeLevelsMap || map->getDataPtr() != s_hazeLevelsData
-			|| map->getXExtent() != s_hazeLevelsWidth || map->getYExtent() != s_hazeLevelsHeight)
-		{
-			s_hazeLevelsMap = map;
-			s_hazeLevelsData = map->getDataPtr();
-			s_hazeLevelsWidth = map->getXExtent();
-			s_hazeLevelsHeight = map->getYExtent();
-			const Real low = TheTerrainRenderObject->getMinHeight();
-			s_hazeLevelRise = max(protoHazeMiddle(map) + PROTO_HAZE_ABOVE_MIDDLE - low, PROTO_HAZE_MIN_RISE);
-			s_hazeLevelTop = low + s_hazeLevelRise;
-			s_hazeLevelWater = -1.0e6f;
-			// An accepted logic read inside the render window, left out of the LOGICTHREAD WINDOW census on
-			// purpose (LOGIC-THREAD.md phase 3).  The list is linked by the map load and unlinked by
-			// TerrainLogic::reset, neither of which runs beside the render, so the walk never meets a link
-			// changing.  The one write a tick makes is TerrainLogic::setWaterHeight's setPoint, an aligned
-			// Int z put in place: this read takes the old height or the new, and the haze keeps it for the
-			// map either way, since a script's water change never re-keyed it.  It runs once a map.
-			for (const PolygonTrigger *area = PolygonTrigger::getFirstPolygonTrigger(); area; area = area->getNext())
-			{
-				if (!area->isWaterArea() || area->getNumPoints() < 3)
-					continue;
-				const Real surface = (Real)area->getPoint(0)->z;
-				if (surface < s_hazeLevelTop && surface > s_hazeLevelWater)
-					s_hazeLevelWater = surface;
-			}
-		}
+		updateHazeLevels(TheTerrainRenderObject->getMap());
 		rise = s_hazeLevelRise;
 		top = s_hazeLevelTop;
 		water = s_hazeLevelWater;
@@ -545,6 +605,142 @@ static void pushAtmosphere(Bool weatherHaze)
 }
 #endif
 
+#if defined(_WIN32)
+/* The SunShafts option (DX11Post_Set_Sun_Shafts): the sunlight that comes through between objects.  A
+	sunlit surface with cast shadows close on both sides across the sun's bearing (a lane between houses,
+	grass between two tree shadows) takes a warm band in soft streaks along the bearing, the sunlit border
+	of one shadow a share of it, open ground and every shaded surface nothing.  Apart from that, shaded dust
+	in a layer over the median ground takes a little light off a sunlit surface seen through it, water
+	takes nothing, and a shallow ray toward the sun takes a faint glare.  Every knob a filmed check tunes is
+	here.  The strength goes with how low the sun stands (every retail daytime sun is under 27 degrees; the
+	night's stands at 55 and takes none), how bright its light is, the level (Low a share of High), and the
+	day and night cycle: none at night, more at the middle of the dusk and the dawn, and the colour pulled
+	warm there.  The cycle's light is read from the logic frame and DayNight_amount, a read only; nothing
+	here reaches the logic.  Off under Classic graphics and with no Direct3D 11 frame. */
+// SUN_SHAFT_TOP is with the water areas above, and each of these has a hidden Options.ini key over it
+// (readSunShaftTuning), clamped so a key can make it weaker or reshape it and never brighter than these
+// defaults, which are the owner's most (round 4's step 1: a clear gap about +25 levels at High, the
+// dimming about -8 to -15, the glare about +7 at the top facing the sun).  The program holds its own
+// bounds on top: the light added at 0.14 of the sun's colour (about 36 levels), the band at 0.12, the
+// one-sided share at 0.3, the radius at 60, the glare at 0.08, the dimming at 0.25 a ray and DARK_CAP of
+// the shadow, the strength at 1.3.  A wider radius or a larger share only spreads more light over more
+// ground, so their keys stop at the defaults too, and the streaks' width at 4 (nought would turn them off).
+static const Real SUN_SHAFT_STRENGTH = 1.0f;				// the whole effect, before the sun's own factors
+static const Real SUN_SHAFT_MOST_STRENGTH = 1.3f;		// the most it reaches, dusk gain and all
+static const Real SUN_SHAFT_DARK = 0.2f;					// of the scene a fully shaded ray of dust takes off
+static const Real SUN_SHAFT_DARK_CAP = 0.35f;				// the most it takes, as a share of what the sun's shadow takes
+static const Real SUN_SHAFT_SHADED_MOST = 1.0f;			// the most shaded dust a ray counts, in full rays
+static const Real SUN_SHAFT_BAND = 0.12f;					// of the sun's colour a sunlit gap between two shadows takes, at most
+static const Real SUN_SHAFT_RADIUS = 60.0f;				// world units across the bearing a shadow still lights a surface by it
+static const Real SUN_SHAFT_SIDE = 0.3f;					// the share a sunlit border of one shadow only takes
+static const Real SUN_SHAFT_STREAK_WIDTH = 10.0f;		// world units across the bearing a streak's noise cell spans
+static const Real SUN_SHAFT_STREAK_LENGTH = 100.0f;		// and along it
+static const Real SUN_SHAFT_SLACK = 8.0f;					// world units nearer the sun a neighbour must be shaded from to count
+static const Real SUN_SHAFT_FALLOFF = 60.0f;				// height over which its density falls to a third
+static const Real SUN_SHAFT_FULL_STRETCH = 50.0f;		// world units of dust at full density a fully lit ray holds, about
+static const Real SUN_SHAFT_HAZE_GAIN = 1.4f;				// denser dust under the Warm Light or the weather's haze
+static const Real SUN_SHAFT_NORMAL_OFFSET = 2.0f;		// world units off a surface its own sun is read at
+static const Real SUN_SHAFT_GLARE = 0.05f;					// of the sun's colour toward its bearing at the shallowest rays
+static const Real SUN_SHAFT_GLARE_STEEPEST = 0.6f;		// a ray steeper than this share of straight down takes no glare,
+static const Real SUN_SHAFT_GLARE_SPAN = 0.3f;			// and one this much shallower takes all of it (the top of the screen)
+static const Real SUN_SHAFT_LOW_SUN_DEGREES = 45.0f;	// a sun this high casts none,
+static const Real SUN_SHAFT_LOW_SUN_SPAN = 27.0f;		// and one this much lower (18 degrees, the shipped mornings) the whole strength
+static const Real SUN_SHAFT_DUSK_GAIN = 3.0f;				// extra strength at the middle of the dusk and the dawn
+static const float SUN_SHAFT_DUSK_COLOUR[3] = { 1.0f, 0.66f, 0.42f };
+static const Real SUN_SHAFT_SAMPLES[3] = { 0.0f, 6.0f, 12.0f };	// steps and taps a side by level: Off, Low, High
+static const Real SUN_SHAFT_LEVEL_GAIN[3] = { 0.0f, 0.6f, 1.0f };	// strength by level
+
+/** One hidden tuning key of Options.ini, clamped; the constant when the line is not there.  For a filmed
+	sweep that picks the look without a build: no menu row, no string, client only. */
+static Real sunShaftTuning(const char *key, Real fallback, Real lo, Real hi)
+{
+	char value[64];
+	if (!findEarlyOptionValue(key, value, sizeof(value)))
+		return fallback;
+	const Real wanted = (Real)atof(value);
+	const Real kept = max(min(wanted, hi), lo);
+	DEBUG_LOG(("SUNSHAFTS: %s = %g\n", key, kept));
+	return kept;
+}
+
+// Every key's clamp is on its own line here, beside the constant it stands over.  The program and
+// DX11Post_Set_Sun_Shafts hold their own hard bounds as well.
+static void readSunShaftTuning(void)
+{
+	s_shaftTuning.band = sunShaftTuning("SunShaftsBand", SUN_SHAFT_BAND, 0.0f, SUN_SHAFT_BAND);
+	s_shaftTuning.radius = sunShaftTuning("SunShaftsRadius", SUN_SHAFT_RADIUS, 10.0f, SUN_SHAFT_RADIUS);
+	s_shaftTuning.side = sunShaftTuning("SunShaftsSide", SUN_SHAFT_SIDE, 0.0f, SUN_SHAFT_SIDE);
+	s_shaftTuning.streakWidth = sunShaftTuning("SunShaftsStreakWidth", SUN_SHAFT_STREAK_WIDTH, 4.0f, 60.0f);
+	s_shaftTuning.streakLength = sunShaftTuning("SunShaftsStreakLength", SUN_SHAFT_STREAK_LENGTH, 20.0f, 400.0f);
+	s_shaftTuning.dark = sunShaftTuning("SunShaftsDark", SUN_SHAFT_DARK, 0.0f, 0.25f);
+	s_shaftTuning.darkCap = sunShaftTuning("SunShaftsDarkCap", SUN_SHAFT_DARK_CAP, 0.0f, SUN_SHAFT_DARK_CAP);
+	s_shaftTuning.top = sunShaftTuning("SunShaftsTop", SUN_SHAFT_TOP, 20.0f, 400.0f);
+	s_shaftTuning.falloff = sunShaftTuning("SunShaftsFalloff", SUN_SHAFT_FALLOFF, 10.0f, 300.0f);
+	s_shaftTuning.glare = sunShaftTuning("SunShaftsGlare", SUN_SHAFT_GLARE, 0.0f, SUN_SHAFT_GLARE);
+	s_shaftTuning.duskGain = sunShaftTuning("SunShaftsDuskGain", SUN_SHAFT_DUSK_GAIN, 0.0f, SUN_SHAFT_DUSK_GAIN);
+	s_shaftTuning.mostStrength = sunShaftTuning("SunShaftsMostStrength", SUN_SHAFT_MOST_STRENGTH, 0.0f, SUN_SHAFT_MOST_STRENGTH);
+}
+
+static void pushSunShafts(Bool denserDust)
+{
+	DX11PostSunShafts shafts;
+	memset(&shafts, 0, sizeof(shafts));
+	const Int level = TheGlobalData->m_sunShafts;
+	if (level > 0 && level < SUN_SHAFTS_LEVEL_COUNT && !TheGlobalData->m_classicGraphics && Direct3D11_Present_Is_Enabled()
+		&& TheTerrainRenderObject != NULL && TheTerrainRenderObject->getMap() != NULL)
+	{
+		updateHazeLevels(TheTerrainRenderObject->getMap());
+		const GlobalData::TerrainLighting &sun = TheGlobalData->m_terrainObjectsLighting[TheGlobalData->m_timeOfDay][0];
+		const Real length = (Real)sqrt(sun.lightPos.x * sun.lightPos.x + sun.lightPos.y * sun.lightPos.y
+			+ sun.lightPos.z * sun.lightPos.z);
+		const Real across = (Real)sqrt(sun.lightPos.x * sun.lightPos.x + sun.lightPos.y * sun.lightPos.y);
+		const Real sine = (length > 0.0001f) ? max(min(-sun.lightPos.z / length, 1.0f), -1.0f) : 1.0f;
+		const Real elevation = (Real)asin(sine) * (180.0f / 3.14159265f);
+		const Real low = max(min((SUN_SHAFT_LOW_SUN_DEGREES - elevation) / SUN_SHAFT_LOW_SUN_SPAN, 1.0f), 0.0f);
+		const Real day = max(min((0.299f * sun.diffuse.red + 0.587f * sun.diffuse.green + 0.114f * sun.diffuse.blue - 0.25f) / 0.5f,
+			1.0f), 0.0f);
+		// the night the picture is lit by, in the light's own steps, so the shafts go with the light on screen
+		const Real night = max(min(DayNight_lightAmount(), 1.0f), 0.0f);
+		const Real dusk = 4.0f * night * (1.0f - night);
+		const SunShaftTuning &tuning = s_shaftTuning;
+		shafts.Strength = min(SUN_SHAFT_STRENGTH * low * day * (1.0f - night) * (1.0f + tuning.duskGain * dusk),
+			tuning.mostStrength) * SUN_SHAFT_LEVEL_GAIN[level];
+		const float diffuse[3] = { sun.diffuse.red, sun.diffuse.green, sun.diffuse.blue };
+		for (Int i = 0; i < 3; ++i)
+			shafts.Colour[i] = diffuse[i] + (SUN_SHAFT_DUSK_COLOUR[i] - diffuse[i]) * low * dusk;
+		shafts.Ground = s_hazeLevelMiddle;
+		shafts.Top = tuning.top;
+		shafts.Falloff = tuning.falloff;
+		shafts.Samples = SUN_SHAFT_SAMPLES[level];
+		shafts.Scale = (denserDust ? SUN_SHAFT_HAZE_GAIN : 1.0f) / SUN_SHAFT_FULL_STRETCH;
+		shafts.Band = tuning.band;
+		shafts.Radius = tuning.radius;
+		shafts.StreakWidth = tuning.streakWidth;
+		shafts.StreakLength = tuning.streakLength;
+		shafts.Slack = SUN_SHAFT_SLACK;
+		shafts.Dark = tuning.dark;
+		shafts.Side = tuning.side;
+		shafts.DarkCap = tuning.darkCap;
+		shafts.ShadedMost = SUN_SHAFT_SHADED_MOST;
+		// the dust reaches down to the map's lowest ground at full density, so valleys keep their air
+		shafts.Floor = TheTerrainRenderObject->getMinHeight();
+		shafts.NormalOffset = SUN_SHAFT_NORMAL_OFFSET;
+		memcpy(shafts.WaterBoxes, s_shaftWaterBoxes, sizeof(shafts.WaterBoxes));
+		memcpy(shafts.WaterHeights, s_shaftWaterHeights, sizeof(shafts.WaterHeights));
+		shafts.WaterCount = (float)s_shaftWaterCount;
+		if (across > 0.0001f)
+		{
+			shafts.TowardSun[0] = -sun.lightPos.x / across;
+			shafts.TowardSun[1] = -sun.lightPos.y / across;
+		}
+		shafts.Glare = tuning.glare;
+		shafts.ShallowTop = SUN_SHAFT_GLARE_STEEPEST;
+		shafts.ShallowSpan = SUN_SHAFT_GLARE_SPAN;
+	}
+	DX11Post_Set_Sun_Shafts(shafts);
+}
+#endif
+
 #if defined(__linux__)
 void W3DShaderManager::invalidateNativePostEnvironment(void)
 {
@@ -574,6 +770,7 @@ void W3DShaderManager::pushProtoHaze(void)
 	}
 	s_hazed = weatherHaze || TheGlobalData->m_mapLight;
 	pushAtmosphere(weatherHaze);
+	pushSunShafts(weatherHaze || TheGlobalData->m_mapLight);
 	// Outside Classic the fog's memory look reads it too (W3DShroud::pushDirect3D11).
 	if ((TheGlobalData->m_mapLight || TheGlobalData->m_ambientOcclusion || TheGlobalData->m_atmosphere || weatherHaze
 			|| !TheGlobalData->m_classicGraphics) && Direct3D11_Is_Active())

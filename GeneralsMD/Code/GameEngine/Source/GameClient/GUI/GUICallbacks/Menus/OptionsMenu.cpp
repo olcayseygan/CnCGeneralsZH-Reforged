@@ -2376,6 +2376,15 @@ static GameWindow *classicGraphicsCheckBox( void )
 	return findOptionWidget( *findOptionDef( "ClassicGraphics" ) );
 }
 
+/** The sun shafts read the sun's map, which Classic Graphics and Direct3D 9 never draw, so their box is
+	* greyed while the Classic box is ticked as well as under -d3d9, and follows the box when it is clicked. */
+static void showSunShaftsAvailable( void )
+{
+	GameWindow *control = findOptionWidget( *findOptionDef( "SunShafts" ) );
+	if( control != NULL )
+		control->winEnable( TheGlobalData->m_direct3D11 && !GadgetCheckBoxIsChecked( classicGraphicsCheckBox() ) );
+}
+
 /** The row's control when the quality slider sets it, otherwise NULL.  It leaves a control the player
 	* cannot change - greyed in a match or under Direct3D 9, hidden where the device lacks it - and,
 	* while Classic Graphics is ticked, every row the fork added: under it a preset is EA's detail
@@ -2572,6 +2581,7 @@ static void showClassicGraphicsChoice( void )
 
 	if( !GadgetCheckBoxIsChecked( classicGraphicsCheckBox() ) )
 	{
+		showSunShaftsAvailable();
 		showDetailPreset( HIGHDETAIL );
 		return;
 	}
@@ -2584,6 +2594,7 @@ static void showClassicGraphicsChoice( void )
 			setGraphicsQualityControl( control, TheGraphicsQualityTable[ row ].values[ 0 ] );
 	}
 	ignoreSelected = FALSE;
+	showSunShaftsAvailable();
 	updateSliderReadouts();
 }
 
@@ -2620,6 +2631,7 @@ static void showClassicDefaults( void )
 	}
 	GadgetCheckBoxSetChecked( checkCloudShadows, optionDefaultValue( *findOptionDef( "UseCloudMap" ) ) != 0 );
 	ignoreSelected = FALSE;
+	showSunShaftsAvailable();
 
 	defaultsPressed = TRUE;
 	updateSliderReadouts();
@@ -3154,10 +3166,11 @@ void OptionsMenuInit( WindowLayout *layout, void *userData )
 	// three looks only the Direct3D 11 picture draws; under -d3d9 their boxes keep the saved value, greyed
 	if( !TheGlobalData->m_direct3D11 )
 	{
-		static const char *const direct3D11Only[] = { "MapLight", "TeamGlow", "WaterFoam", "GroundMarks", "Firelight", "HemiAmbient", "AmbientOcclusion", "InternalHdr", "Weather", "WaterSplashes", "Atmosphere", "StructureCollapse", "HeatHaze", "GroundFoliage" };
+		static const char *const direct3D11Only[] = { "MapLight", "TeamGlow", "WaterFoam", "GroundMarks", "Firelight", "HemiAmbient", "AmbientOcclusion", "InternalHdr", "Weather", "WaterSplashes", "Atmosphere", "StructureCollapse", "HeatHaze", "GroundFoliage", "SunShafts" };
 		for( Int i = 0; i < (Int)( sizeof( direct3D11Only ) / sizeof( direct3D11Only[ 0 ] ) ); ++i )
 			findOptionWidget( *findOptionDef( direct3D11Only[ i ] ) )->winEnable( FALSE );
 	}
+	showSunShaftsAvailable();
 
 #if !defined(_WIN32)
 	// This existing next-map option has an actual native HDR provider as well.

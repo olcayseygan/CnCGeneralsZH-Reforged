@@ -2105,6 +2105,26 @@ TOOLTIP:HeatHaze
 "The air shimmers over fires, along laser beams and behind missile exhaust. Direct3D 11 only, and off under Classic Graphics. Applies when you press Accept."
 END
 
+GUI:SunShafts
+"Sun Shafts"
+END
+
+GUI:SunShafts0
+"Off"
+END
+
+GUI:SunShafts1
+"Low"
+END
+
+GUI:SunShafts2
+"High"
+END
+
+TOOLTIP:SunShafts
+"Low sunlight falls in bands through the dust between buildings and trees, and the air glows a little toward the sun. Strongest at morning and evening. Direct3D 11 only, and off under Classic Graphics. Applies when you press Accept."
+END
+
 GUI:GroundFoliage
 "Ground Foliage"
 END

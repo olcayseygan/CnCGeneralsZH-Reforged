@@ -852,6 +852,7 @@ GlobalData::GlobalData()
 	m_fullDetailAtDistance = FALSE;
 	m_hemiAmbient = FALSE;
 	m_ambientOcclusion = FALSE;
+	m_sunShafts = 0;
 	m_weatherEffects = FALSE;
 	m_waterSplashes = FALSE;
 	m_atmosphere = FALSE;

@@ -897,6 +897,54 @@ unsigned Direct3D11_Requested_Draw_Effect(float parameters[4])
 	return 0;
 }
 
+// The Ambient Occlusion option's three programs out of the backend's cache, or compiled into it, the
+// first time the option or the sun shafts (which finish on its blur and upsample) ask.
+static void load_world_ao_programs()
+{
+	if (!Post.Wants_World_Ao_Programs()) {
+		return;
+	}
+	for (unsigned index = 0; index < DX11PostProcessClass::WORLD_AO_PROGRAMS; ++index) {
+		std::vector<unsigned char> code;
+		if (Backend.Compile_Pixel_Program(Post.World_Ao_Program_Source(index), "dx11worldao", code) && !code.empty()) {
+			Post.Load_World_Ao_Program(index, &code[0], code.size());
+		} else {
+			Post.Load_World_Ao_Program(index, NULL, 0);
+		}
+	}
+}
+
+// The SunShafts option over the scene, between the haze and the atmosphere, only on a frame whose sun
+// map the shadow pass filled (SunShadow::ReceivesView: renderShadowMap clears it first and sets it last),
+// so a frame the pass bailed on never marches last frame's map.  Strength zero wants no program and
+// draws nothing, which is the frame as it was.
+static bool sun_shafts_scene(const float world_from_clip[16])
+{
+	if (!DrawEffectsAllowed || !SunShadow::ReceivesView(NULL) || Backend.Shadow_Map() == NULL) {
+		return false;
+	}
+	if (Post.Wants_Sun_Shaft_Programs()) {
+		for (unsigned index = 0; index < DX11PostProcessClass::SUN_SHAFT_PROGRAMS; ++index) {
+			std::vector<unsigned char> code;
+			if (Backend.Compile_Pixel_Program(Post.Sun_Shaft_Program_Source(index), "dx11sunshafts", code) && !code.empty()) {
+				Post.Load_Sun_Shaft_Program(index, &code[0], code.size());
+			} else {
+				Post.Load_Sun_Shaft_Program(index, NULL, 0);
+			}
+		}
+	}
+	float projection_x = 0.0f;
+	float projection_y = 0.0f;
+	Backend.Scene_Projection_Scale(projection_x, projection_y);
+	// The terrain's heights, held while the ground's sun is per pixel, tell casters from rising ground
+	// and keep the lift on the ground; without them the shafts go by the surface's tilt alone.
+	float heights_mapping[3] = { 0.0f, 0.0f, 0.0f };
+	Backend.Terrain_Heights_Mapping(heights_mapping);
+	return Post.Sun_Shafts_Scene(Device.Get_Depth_Texture(), world_from_clip, Backend.Shadow_Map(),
+		Backend.Sun_View_Projection(), Backend.Shadow_Bias(), Backend.Shadow_Strength(), projection_x, projection_y,
+		Backend.Holds_Terrain_Heights() ? Backend.Terrain_Heights_View() : NULL, heights_mapping);
+}
+
 void Direct3D11_Occlude_Scene()
 {
 	if (!Active || !Backend.Draws_Into_Scene()) {
@@ -918,6 +966,7 @@ void Direct3D11_Occlude_Scene()
 		// The fog's memory look first, so the haze lies over ground already drained of its colour.
 		drew = Post.Shroud_Memory_Scene(Device.Get_Depth_Texture(), world_from_clip) || drew;
 		drew = Post.Haze_Scene(Device.Get_Depth_Texture(), world_from_clip) || drew;
+		drew = sun_shafts_scene(world_from_clip) || drew;
 		drew = Post.Atmosphere_Scene(Device.Get_Depth_Texture(), world_from_clip) || drew;
 	}
 	if (drew) {
@@ -951,16 +1000,7 @@ void Direct3D11_Ambient_Occlusion()
 	if (!Active || !DrawEffectsAllowed || !Backend.Draws_Into_Scene()) {
 		return;
 	}
-	if (Post.Wants_World_Ao_Programs()) {
-		for (unsigned index = 0; index < DX11PostProcessClass::WORLD_AO_PROGRAMS; ++index) {
-			std::vector<unsigned char> code;
-			if (Backend.Compile_Pixel_Program(Post.World_Ao_Program_Source(index), "dx11worldao", code) && !code.empty()) {
-				Post.Load_World_Ao_Program(index, &code[0], code.size());
-			} else {
-				Post.Load_World_Ao_Program(index, NULL, 0);
-			}
-		}
-	}
+	load_world_ao_programs();
 	float world_from_clip[16];
 	if (!Backend.Scene_World_From_Clip(world_from_clip)) {
 		return;

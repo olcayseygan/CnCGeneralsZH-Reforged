@@ -1250,3 +1250,474 @@ TEST(dx11post_world_occlusion_darkens_the_foot_of_a_step_and_nothing_else)
 	view->Release();
 	texture->Release();
 }
+
+// A texture the passes read, every texel given.  The caller releases both.
+static bool make_view(DX11DeviceClass & device, DXGI_FORMAT format, unsigned width, unsigned height,
+	const void * texels, unsigned pitch, ID3D11Texture2D ** texture, ID3D11ShaderResourceView ** view)
+{
+	D3D11_TEXTURE2D_DESC description;
+	ZeroMemory(&description, sizeof(description));
+	description.Width = width;
+	description.Height = height;
+	description.MipLevels = 1;
+	description.ArraySize = 1;
+	description.Format = format;
+	description.SampleDesc.Count = 1;
+	description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	D3D11_SUBRESOURCE_DATA initial;
+	ZeroMemory(&initial, sizeof(initial));
+	initial.pSysMem = texels;
+	initial.SysMemPitch = pitch;
+	*texture = NULL;
+	*view = NULL;
+	return SUCCEEDED(device.Get_Device()->CreateTexture2D(&description, &initial, texture))
+		&& SUCCEEDED(device.Get_Device()->CreateShaderResourceView(*texture, NULL, view));
+}
+
+// One frame of the SunShafts pass over a grey scene: whether it drew, the middle row and the middle
+// column of what reached the screen, and how many pixels differ from the scene.  Heights, when given, is
+// a 64 square byte map laid over world x and y from -40 to 40 (0.8 cells a unit, the border 32 cells), a
+// quarter unit a byte.
+static unsigned char ShaftColumn[SURFACE_SIZE];
+static const float SHAFT_HEIGHTS_MAPPING[3] = { 0.8f, 32.0f, 0.25f };
+static bool shaft_frame(DeviceFixture & fixture, const unsigned char * picture, ID3D11ShaderResourceView * depth,
+	const float world_from_clip[16], ID3D11ShaderResourceView * sun, const float sun_from_world[16],
+	const DX11PostSunShafts & shafts, ID3D11ShaderResourceView * shroud, const float shroud_rect[4],
+	unsigned char row[SURFACE_SIZE], unsigned & changed, float shadow_strength = 1.0f,
+	ID3D11ShaderResourceView * heights = NULL)
+{
+	memset(ShaftColumn, 0, sizeof(ShaftColumn));
+	DX11DeviceClass & device = fixture.Get_Device();
+	DX11PostProcessClass & post = fixture.Get_Post();
+	const float PROJECTION_SCALE = 1.0f / 40.0f;
+	DX11Post_Set_Sun_Shafts(shafts);
+	DX11Post_Set_Haze_Shroud(shroud, shroud_rect);
+	post.Open_Frame();
+	post.Begin_Frame();
+	device.Set_Scene_View(post.Scene_View());
+	const bool written = write_scene(device, post, picture);
+	const bool drew = written && post.Sun_Shafts_Scene(depth, world_from_clip, sun, sun_from_world, 0.001f,
+		shadow_strength, PROJECTION_SCALE, PROJECTION_SCALE, heights, SHAFT_HEIGHTS_MAPPING);
+	CHECK(written && post.Run_Chain());
+	device.Set_Scene_View(NULL);
+	memset(row, 0, SURFACE_SIZE);
+	changed = SURFACE_SIZE * SURFACE_SIZE;
+	unsigned pitch = 0;
+	unsigned char * result = written ? read_back_buffer(device, pitch) : NULL;
+	CHECK(result != NULL);
+	if (result != NULL) {
+		for (unsigned x = 0; x < SURFACE_SIZE; ++x) {
+			row[x] = pixel_level(result, pitch, x, SURFACE_SIZE / 2);
+			ShaftColumn[x] = pixel_level(result, pitch, SURFACE_SIZE / 2, x);
+		}
+		changed = differing_pixels(picture, result, pitch);
+		delete [] result;
+	}
+	return drew;
+}
+
+// The SunShafts option drawn for real over a mid grey scene.  The level camera looks straight down from
+// 100 units onto ground at 0 (the clip space times forty across, its depth of a half the ground) through a
+// layer of dust 50 units deep; the tilted one looks the same way along -x, its rays half as steep again.
+// The test sun stands slanted over +x: a point at height z lands on the map where the ground x + z (x + 2z
+// for the tilted camera) does, at a sun depth of a half less z over 200, so a map texel of 0.25 is a
+// caster 50 units up that shades everything under it along its slant.  Its ground bearing runs along x, so
+// the lift looks across it along y, where a world unit is 0.8 of a map texel (row 31.5 - 0.8 y).
+//
+// The lift, on the gap map (shade for 10 <= |y| <= 30, a lane 20 units wide down the middle): the
+// lane's middle row takes the band; a shaded surface never takes any, however strong, the row next to
+// each shadow's edge included; the side map (shade for y <= -10 only) gives a one-sided border, a share
+// of the gap's; with a radius of 20 the lit ground more than 20 units (and the blur's reach) from the
+// shade is exactly as it was; a trench along the bearing with no caster takes none once the terrain's
+// heights are there; a block's sunlit top in the lane takes none; the lift goes with the strength in
+// proportion, no key past its bound draws more than the owner's most, and the sum stops at the hard
+// ceiling whatever the sun's colour.  Its numbers are worked by hand through the band's smoothstep, the
+// blur's weights with the shaded taps left out and the composite's bilinear, so each range is an
+// estimate a few levels wide.  Streaks are off (width nought, a flat half) so the numbers hold.
+//
+// The dimming, on the dark map: lit ground seen through shaded air dims, ground in the caster's own shadow
+// does not dim again; the dimming stops at a share of the shadow's strength; on a map with both the lane
+// and the caster the dimming and the lift add up apart, neither cancels the other.  Strength zero and an
+// all lit map change nothing; a water area at 40 takes everything under its surface out; a black shroud
+// changes nothing, and neither does a pixel over the black shroud whose ray crossed visible shaded air; a
+// shallow ray toward the sun's bearing takes the glare, and away from it none.
+// The trench's ground height at a world y.
+static float trench_height(float y)
+{
+	const float across = (y < 0.0f) ? -y : y;
+	return (across <= 10.0f) ? 0.0f : (across >= 12.0f) ? 30.0f : (across - 10.0f) * 15.0f;
+}
+
+TEST(dx11post_sun_shafts_light_the_gap_between_shadows_dim_shaded_air_and_leave_open_sun_shade_and_shroud_alone)
+{
+	DeviceFixture fixture;
+	if (!fixture.Create()) {
+		printf("skip: no Direct3D 11 device on this machine\n");
+		return;
+	}
+
+	const unsigned char GREY = 128;
+	const unsigned char MOVED_BY_AT_LEAST = 12;
+	const unsigned LEFT = 8;
+	const unsigned RIGHT = SURFACE_SIZE - 8;
+	DX11DeviceClass & device = fixture.Get_Device();
+	DX11PostProcessClass & post = fixture.Get_Post();
+
+	// the caster stripes, by where on the ground they shade: x' = x + z for the level camera's sun, whose
+	// clip x is x' / 100, and x + 2z for the tilted one's, x' / 300
+	const float CASTER = 0.25f;
+	const float TALL_CASTER = 0.1f;
+	float depth[SURFACE_SIZE * SURFACE_SIZE];
+	float dark_map[SURFACE_SIZE * SURFACE_SIZE];
+	float gap_map[SURFACE_SIZE * SURFACE_SIZE];
+	float side_map[SURFACE_SIZE * SURFACE_SIZE];
+	float both_map[SURFACE_SIZE * SURFACE_SIZE];
+	float tilted_map[SURFACE_SIZE * SURFACE_SIZE];
+	float all_lit[SURFACE_SIZE * SURFACE_SIZE];
+	// A trench running along the sun's bearing with no caster in it: ground at 0 for |y| < 10, rising 15 a
+	// unit to 30 at |y| = 12 and flat beyond, seen by the camera (trench_depth), in the sun's map (the
+	// terrain itself is the first thing each sun ray meets) and in the heights.  And a block 6 units tall
+	// standing in the gap map's lane, cells 28 to 35 across and rows 29 to 35 down (world x -4.4 to 4.4, y
+	// -4.4 to 3.1), its top at sun map cells 32 to 35, rows 29 to 35.
+	float trench_depth[SURFACE_SIZE * SURFACE_SIZE];
+	float trench_map[SURFACE_SIZE * SURFACE_SIZE];
+	float box_depth[SURFACE_SIZE * SURFACE_SIZE];
+	float box_map[SURFACE_SIZE * SURFACE_SIZE];
+	unsigned char trench_heights[SURFACE_SIZE * SURFACE_SIZE];
+	unsigned char flat_heights[SURFACE_SIZE * SURFACE_SIZE];
+	for (unsigned y = 0; y < SURFACE_SIZE; ++y) {
+		// the world y the sun's map row, the screen row and the heights row stand for
+		const float row_y = (31.5f - (float)y) / 0.8f;
+		const float screen_y = 40.0f * (1.0f - ((float)y + 0.5f) / 32.0f);
+		const float heights_y = ((float)y - 32.0f) / 0.8f;
+		const float across = (row_y < 0.0f) ? -row_y : row_y;
+		const bool gap_shade = across >= 10.0f && across <= 30.0f;
+		for (unsigned x = 0; x < SURFACE_SIZE; ++x) {
+			const float clip = ((float)x + 0.5f) / (float)SURFACE_SIZE * 2.0f - 1.0f;
+			const float level_x = clip * 100.0f;
+			const float tilted_x = clip * 300.0f;
+			const bool caster = level_x >= 0.0f && level_x <= 60.0f;
+			const unsigned at = y * SURFACE_SIZE + x;
+			depth[at] = 0.5f;
+			dark_map[at] = caster ? CASTER : 1.0f;
+			gap_map[at] = gap_shade ? TALL_CASTER : 1.0f;
+			side_map[at] = (row_y <= -10.0f) ? TALL_CASTER : 1.0f;
+			both_map[at] = gap_shade ? TALL_CASTER : caster ? CASTER : 1.0f;
+			tilted_map[at] = (tilted_x >= 60.0f) ? CASTER : 1.0f;
+			all_lit[at] = 1.0f;
+			trench_depth[at] = 0.5f - trench_height(screen_y) / 200.0f;
+			trench_map[at] = 0.5f - trench_height(row_y) / 200.0f;
+			trench_heights[at] = (unsigned char)(trench_height(heights_y) / 0.25f + 0.5f);
+			flat_heights[at] = 0;
+			const bool block_seen = x >= 28 && x <= 35 && y >= 29 && y <= 35;
+			const bool block_in_sun = x >= 32 && x <= 35 && y >= 29 && y <= 35;
+			box_depth[at] = block_seen ? 0.5f - 6.0f / 200.0f : 0.5f;
+			box_map[at] = block_in_sun ? 0.5f - 6.0f / 200.0f : gap_map[at];
+		}
+	}
+	// the shroud black over world x under -5 and clear over x past 5
+	unsigned char shroud_edge[8 * 4];
+	for (unsigned x = 0; x < 8; ++x) {
+		const unsigned char level = (x < 4) ? 0 : 255;
+		shroud_edge[x * 4] = shroud_edge[x * 4 + 1] = shroud_edge[x * 4 + 2] = level;
+		shroud_edge[x * 4 + 3] = 255;
+	}
+	const unsigned char black[4] = { 0, 0, 0, 255 };
+	const unsigned VIEWS = 15;
+	ID3D11Texture2D * textures[VIEWS];
+	ID3D11ShaderResourceView * views[VIEWS];
+	memset(textures, 0, sizeof(textures));
+	memset(views, 0, sizeof(views));
+	const unsigned MAP_PITCH = SURFACE_SIZE * sizeof(float);
+	CHECK(make_view(device, DXGI_FORMAT_R32_FLOAT, SURFACE_SIZE, SURFACE_SIZE, depth, MAP_PITCH, &textures[0], &views[0]));
+	CHECK(make_view(device, DXGI_FORMAT_R32_FLOAT, SURFACE_SIZE, SURFACE_SIZE, dark_map, MAP_PITCH, &textures[1], &views[1]));
+	CHECK(make_view(device, DXGI_FORMAT_R32_FLOAT, SURFACE_SIZE, SURFACE_SIZE, tilted_map, MAP_PITCH, &textures[2], &views[2]));
+	CHECK(make_view(device, DXGI_FORMAT_R32_FLOAT, SURFACE_SIZE, SURFACE_SIZE, all_lit, MAP_PITCH, &textures[3], &views[3]));
+	CHECK(make_view(device, DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, black, 4, &textures[4], &views[4]));
+	CHECK(make_view(device, DXGI_FORMAT_R8G8B8A8_UNORM, 8, 1, shroud_edge, 8 * 4, &textures[5], &views[5]));
+	CHECK(make_view(device, DXGI_FORMAT_R32_FLOAT, SURFACE_SIZE, SURFACE_SIZE, gap_map, MAP_PITCH, &textures[6], &views[6]));
+	CHECK(make_view(device, DXGI_FORMAT_R32_FLOAT, SURFACE_SIZE, SURFACE_SIZE, side_map, MAP_PITCH, &textures[7], &views[7]));
+	CHECK(make_view(device, DXGI_FORMAT_R32_FLOAT, SURFACE_SIZE, SURFACE_SIZE, both_map, MAP_PITCH, &textures[8], &views[8]));
+	ID3D11ShaderResourceView * const depth_view = views[0];
+	ID3D11ShaderResourceView * const gap_view = views[6];
+	ID3D11ShaderResourceView * const side_view = views[7];
+	ID3D11ShaderResourceView * const both_view = views[8];
+	CHECK(make_view(device, DXGI_FORMAT_R32_FLOAT, SURFACE_SIZE, SURFACE_SIZE, trench_depth, MAP_PITCH, &textures[9], &views[9]));
+	CHECK(make_view(device, DXGI_FORMAT_R32_FLOAT, SURFACE_SIZE, SURFACE_SIZE, trench_map, MAP_PITCH, &textures[10], &views[10]));
+	CHECK(make_view(device, DXGI_FORMAT_R8_UNORM, SURFACE_SIZE, SURFACE_SIZE, trench_heights, SURFACE_SIZE, &textures[11], &views[11]));
+	CHECK(make_view(device, DXGI_FORMAT_R8_UNORM, SURFACE_SIZE, SURFACE_SIZE, flat_heights, SURFACE_SIZE, &textures[12], &views[12]));
+	CHECK(make_view(device, DXGI_FORMAT_R32_FLOAT, SURFACE_SIZE, SURFACE_SIZE, box_depth, MAP_PITCH, &textures[13], &views[13]));
+	CHECK(make_view(device, DXGI_FORMAT_R32_FLOAT, SURFACE_SIZE, SURFACE_SIZE, box_map, MAP_PITCH, &textures[14], &views[14]));
+	ID3D11ShaderResourceView * const trench_depth_view = views[9];
+	ID3D11ShaderResourceView * const trench_view = views[10];
+	ID3D11ShaderResourceView * const trench_heights_view = views[11];
+	ID3D11ShaderResourceView * const flat = views[12];
+	ID3D11ShaderResourceView * const box_depth_view = views[13];
+	ID3D11ShaderResourceView * const box_view = views[14];
+
+	// level: world = (40 x, 40 y, 100 - 200 depth); tilted: world = (200 + 40 x - 400 depth, 40 y, 100 - 200 depth)
+	const float level[16] = {
+		40.0f, 0.0f, 0.0f, 0.0f, 0.0f, 40.0f, 0.0f, 0.0f, 0.0f, 0.0f, -200.0f, 0.0f, 0.0f, 0.0f, 100.0f, 1.0f };
+	const float tilted[16] = {
+		40.0f, 0.0f, 0.0f, 0.0f, 0.0f, 40.0f, 0.0f, 0.0f, -400.0f, 0.0f, -200.0f, 0.0f, 200.0f, 0.0f, 100.0f, 1.0f };
+	// the sun's clip: ((x + z) / 100 or (x + 2z) / 300, y / 40, a half less height over 200)
+	const float sun_level[16] = {
+		1.0f / 100.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f / 40.0f, 0.0f, 0.0f, 1.0f / 100.0f, 0.0f, -1.0f / 200.0f, 0.0f, 0.0f, 0.0f, 0.5f, 1.0f };
+	const float sun_tilted[16] = {
+		1.0f / 300.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f / 40.0f, 0.0f, 0.0f, 2.0f / 300.0f, 0.0f, -1.0f / 200.0f, 0.0f, 0.0f, 0.0f, 0.5f, 1.0f };
+	const float shroud_rect[4] = { -40.0f, -40.0f, 1.0f / 80.0f, 1.0f / 80.0f };
+
+	DX11PostSunShafts shafts;
+	memset(&shafts, 0, sizeof(shafts));
+	shafts.Colour[0] = shafts.Colour[1] = shafts.Colour[2] = 1.0f;
+	shafts.Strength = 1.0f;
+	shafts.Ground = 0.0f;
+	shafts.Top = 50.0f;
+	shafts.Falloff = 60.0f;
+	shafts.Samples = 12.0f;
+	shafts.Scale = 1.0f / 25.0f;
+	shafts.Dark = 0.25f;
+	shafts.Band = 0.0f;
+	shafts.Radius = 60.0f;
+	shafts.Side = 0.3f;
+	shafts.StreakWidth = 0.0f;
+	shafts.StreakLength = 100.0f;
+	shafts.Slack = 8.0f;
+	shafts.DarkCap = 0.35f;
+	shafts.ShadedMost = 1.0f;
+	shafts.Floor = 0.0f;
+	shafts.NormalOffset = 2.0f;
+	shafts.TowardSun[0] = 1.0f;
+	shafts.ShallowTop = 0.6f;
+	shafts.ShallowSpan = 0.3f;
+
+	unsigned char picture[SURFACE_SIZE * SURFACE_SIZE * BYTES_A_PIXEL];
+	fill_flat(picture, GREY);
+	const DX11PostEffect copy_only[] = { DX11_POST_COPY };
+	post.Set_Chain(copy_only, 1);
+	post.Compile_Sun_Shaft_Programs();
+	post.Compile_World_Ao_Programs();
+
+	unsigned char row[SURFACE_SIZE];
+	unsigned changed = 0;
+
+	// the left half's lit ground seen through the caster's slanted shade dims; the right half's ground lies in
+	// the caster's own shadow and is not dimmed again
+	CHECK(shaft_frame(fixture, picture, depth_view, level, views[1], sun_level, shafts, NULL, shroud_rect, row, changed));
+	const unsigned char shaded_left = row[LEFT];
+	CHECK(shaded_left <= GREY - MOVED_BY_AT_LEAST);
+	CHECK_EQ((unsigned)GREY, (unsigned)row[RIGHT]);
+
+	// With the receivers' shadow at a tenth, the dimming stops at 0.35 of that: 4.5 levels off the grey.
+	CHECK(shaft_frame(fixture, picture, depth_view, level, views[1], sun_level, shafts, NULL, shroud_rect, row, changed, 0.1f));
+	CHECK(row[LEFT] >= 120);
+	CHECK(row[LEFT] > shaded_left);
+	CHECK(row[LEFT] < GREY);
+
+	// The gap, with the terrain's heights flat at nought, so each caster stands 80 units over the ground:
+	// the lane's middle (y about -0.6, 10 units from the shade on each side) takes the nearer side's
+	// 1 - smoothstep(10 / 60) = 0.92 of the band, about 0.87 once the blur has mixed in the rows nearer one
+	// wall, times 0.12 and the plain streak's 0.5: about +13 levels.
+	DX11PostSunShafts gap = shafts;
+	gap.Dark = 0.0f;
+	gap.Band = 0.12f;
+	CHECK(shaft_frame(fixture, picture, depth_view, level, gap_view, sun_level, gap, NULL, shroud_rect, row, changed, 1.0f, flat));
+	const int gap_lift = (int)row[SURFACE_SIZE / 2] - (int)GREY;
+	CHECK(gap_lift >= 9);
+	CHECK(gap_lift <= 18);
+
+	// Linear in the strength: at a half, half the lift.
+	DX11PostSunShafts half_gap = gap;
+	half_gap.Strength = 0.5f;
+	CHECK(shaft_frame(fixture, picture, depth_view, level, gap_view, sun_level, half_gap, NULL, shroud_rect, row, changed, 1.0f, flat));
+	const int half_lift = (int)row[SURFACE_SIZE / 2] - (int)GREY;
+	CHECK(half_lift * 2 - gap_lift <= 2);
+	CHECK(gap_lift - half_lift * 2 <= 2);
+
+	// A shaded surface takes nothing, however strong the band: the column's rows 12 to 23 and 40 to 51 lie
+	// in the two strips of shade (y 24 down to 10.6 and -10.6 down to -25), rows 23 and 40 the first ones
+	// past each edge, which the full size gate holds at exactly the grey whatever their lit neighbours hold.
+	DX11PostSunShafts strong = gap;
+	strong.Side = 1.0f;
+	strong.Strength = 1.3f;
+	CHECK(shaft_frame(fixture, picture, depth_view, level, gap_view, sun_level, strong, NULL, shroud_rect, row, changed, 1.0f, flat));
+	CHECK(changed > 0u);
+	for (unsigned y = 12; y <= 51; ++y) {
+		if (y <= 23 || y >= 40) {
+			CHECK_EQ((unsigned)GREY, (unsigned)ShaftColumn[y]);
+		}
+	}
+
+	// The side map: the same row, 10 units from shade on one side only, takes Side (0.3) of the square of
+	// its nearness, about 0.82 after the blur, times 0.12 and 0.5: about +4, under the gap's.
+	CHECK(shaft_frame(fixture, picture, depth_view, level, side_view, sun_level, gap, NULL, shroud_rect, row, changed, 1.0f, flat));
+	const int side_lift = (int)row[SURFACE_SIZE / 2] - (int)GREY;
+	CHECK(side_lift >= 2);
+	CHECK(side_lift <= gap_lift - 6);
+
+	// The band fades to exactly nought at the radius.  At 20, on the side map, the column's rows 0 to 14 (y
+	// 22 and up) read no half size pixel whose blur reaches ground within 20 units of the shade; on the gap
+	// map the lane's middle, 10 units from each wall, keeps about +4.
+	DX11PostSunShafts near_only = gap;
+	near_only.Radius = 20.0f;
+	CHECK(shaft_frame(fixture, picture, depth_view, level, side_view, sun_level, near_only, NULL, shroud_rect, row, changed, 1.0f, flat));
+	for (unsigned y = 0; y <= 14; ++y) {
+		CHECK_EQ((unsigned)GREY, (unsigned)ShaftColumn[y]);
+	}
+	CHECK(shaft_frame(fixture, picture, depth_view, level, gap_view, sun_level, near_only, NULL, shroud_rect, row, changed, 1.0f, flat));
+	CHECK((int)row[SURFACE_SIZE / 2] - (int)GREY >= 2);
+	CHECK((int)row[SURFACE_SIZE / 2] - (int)GREY < gap_lift);
+
+	// Rising ground is no caster.  The trench's walls stand nearer the sun than its floor by far more than
+	// the slack, so without the heights its floor takes a gap's band, the fault; with them each wall is
+	// taken back to the world, found standing on the ground it is, and the whole frame is as it was.
+	CHECK(shaft_frame(fixture, picture, trench_depth_view, level, trench_view, sun_level, gap, NULL, shroud_rect, row, changed));
+	CHECK((int)row[SURFACE_SIZE / 2] - (int)GREY >= 5);
+	CHECK(shaft_frame(fixture, picture, trench_depth_view, level, trench_view, sun_level, strong, NULL, shroud_rect, row, changed,
+		1.0f, trench_heights_view));
+	CHECK_EQ(0u, changed);
+
+	// Only the ground takes the lift.  A block 6 units tall in the lane, its top in full sun: with the
+	// heights its top stands 6 over the ground and takes nothing; without them its flat top passes for
+	// ground and takes the lane's band.
+	CHECK(shaft_frame(fixture, picture, box_depth_view, level, box_view, sun_level, strong, NULL, shroud_rect, row, changed, 1.0f, flat));
+	CHECK_EQ((unsigned)GREY, (unsigned)row[SURFACE_SIZE / 2]);
+	CHECK(shaft_frame(fixture, picture, box_depth_view, level, box_view, sun_level, strong, NULL, shroud_rect, row, changed));
+	CHECK((int)row[SURFACE_SIZE / 2] - (int)GREY >= 4);
+
+	// The dimming survives beside a lift: on the map with both the lane and the caster, the left half's lane
+	// takes the band and the shaded air in front of it, and the two add up apart, the dimmed grey plus the lift.
+	DX11PostSunShafts lift_only = gap;
+	CHECK(shaft_frame(fixture, picture, depth_view, level, both_view, sun_level, lift_only, NULL, shroud_rect, row, changed, 1.0f, flat));
+	const int lifted = (int)row[LEFT];
+	DX11PostSunShafts dim_only = shafts;
+	CHECK(shaft_frame(fixture, picture, depth_view, level, both_view, sun_level, dim_only, NULL, shroud_rect, row, changed, 1.0f, flat));
+	const int dimmed = (int)row[LEFT];
+	DX11PostSunShafts lift_and_dim = gap;
+	lift_and_dim.Dark = shafts.Dark;
+	CHECK(shaft_frame(fixture, picture, depth_view, level, both_view, sun_level, lift_and_dim, NULL, shroud_rect, row, changed, 1.0f, flat));
+	const int together = (int)row[LEFT];
+	CHECK(dimmed <= (int)GREY - MOVED_BY_AT_LEAST);
+	CHECK(lifted >= (int)GREY + 8);
+	CHECK(together <= lifted - 8);
+	CHECK(together >= dimmed + 8);
+	CHECK(together - (lifted + dimmed - (int)GREY) <= 2);
+	CHECK((lifted + dimmed - (int)GREY) - together <= 2);
+
+	// Open ground in full sun stays exactly as it was under a tall layer down to a low floor, with every
+	// term on.
+	DX11PostSunShafts open_sun = strong;
+	open_sun.Dark = 0.25f;
+	open_sun.Top = 150.0f;
+	open_sun.Floor = -100.0f;
+	open_sun.Samples = 32.0f;
+	CHECK(shaft_frame(fixture, picture, depth_view, level, views[3], sun_level, open_sun, NULL, shroud_rect, row, changed, 1.0f, flat));
+	CHECK_EQ(0u, changed);
+
+	// Nonsense from a tuning key is held by the hard bounds.  The band, the strength, the one-sided share and
+	// the radius at any height draw exactly the owner's most (band 0.12, strength 1.3, share 0.3, radius 60):
+	// the gap at about 1.3 times 0.052, +17.  With the glare at its top as well, on the tilted camera looking
+	// along the sun's bearing at full shallowness, the sum passes the ceiling and stops at 0.14 of the sun's
+	// colour: 164, and a sun colour of three times white stays there too.  And the dimming stops at 0.35 of
+	// the shadow, 0.3 here: 114 or 115.
+	DX11PostSunShafts most = gap;
+	most.Strength = 1.3f;
+	CHECK(shaft_frame(fixture, picture, depth_view, level, gap_view, sun_level, most, NULL, shroud_rect, row, changed, 1.0f, flat));
+	const int most_lift = (int)row[SURFACE_SIZE / 2] - (int)GREY;
+	CHECK(most_lift >= 13);
+	CHECK(most_lift <= 22);
+	DX11PostSunShafts wild = gap;
+	wild.Band = 50.0f;
+	wild.Strength = 50.0f;
+	wild.Side = 50.0f;
+	wild.Radius = 500.0f;
+	CHECK(shaft_frame(fixture, picture, depth_view, level, gap_view, sun_level, wild, NULL, shroud_rect, row, changed, 1.0f, flat));
+	CHECK_EQ(most_lift, (int)row[SURFACE_SIZE / 2] - (int)GREY);
+	wild.Glare = 10.0f;
+	wild.TowardSun[0] = -1.0f;
+	wild.ShallowTop = 1.0f;
+	wild.ShallowSpan = 0.1f;
+	CHECK(shaft_frame(fixture, picture, depth_view, tilted, gap_view, sun_tilted, wild, NULL, shroud_rect, row, changed, 1.0f, flat));
+	CHECK(row[SURFACE_SIZE / 2] >= 161);
+	CHECK(row[SURFACE_SIZE / 2] <= 165);
+	wild.Colour[0] = wild.Colour[1] = wild.Colour[2] = 3.0f;
+	CHECK(shaft_frame(fixture, picture, depth_view, tilted, gap_view, sun_tilted, wild, NULL, shroud_rect, row, changed, 1.0f, flat));
+	CHECK(row[SURFACE_SIZE / 2] >= 161);
+	CHECK(row[SURFACE_SIZE / 2] <= 165);
+	wild = shafts;
+	wild.Dark = 50.0f;
+	wild.DarkCap = 50.0f;
+	wild.ShadedMost = 50.0f;
+	wild.Strength = 50.0f;
+	CHECK(shaft_frame(fixture, picture, depth_view, level, views[1], sun_level, wild, NULL, shroud_rect, row, changed, 0.3f));
+	CHECK(row[LEFT] >= 112);
+	CHECK(row[LEFT] <= 117);
+
+	// open ground in full sun, at strength one and at strength nought
+	CHECK(shaft_frame(fixture, picture, depth_view, level, views[3], sun_level, shafts, NULL, shroud_rect, row, changed));
+	CHECK_EQ(0u, changed);
+	DX11PostSunShafts off = shafts;
+	off.Strength = 0.0f;
+	CHECK(!shaft_frame(fixture, picture, depth_view, level, views[1], sun_level, off, NULL, shroud_rect, row, changed));
+	CHECK_EQ(0u, changed);
+
+	// a water surface at 40 over the left half: water takes nothing
+	DX11PostSunShafts water = shafts;
+	water.WaterCount = 1.0f;
+	water.WaterBoxes[0][0] = -1000.0f;
+	water.WaterBoxes[0][1] = -1000.0f;
+	water.WaterBoxes[0][2] = 0.0f;
+	water.WaterBoxes[0][3] = 1000.0f;
+	water.WaterHeights[0] = 40.0f;
+	CHECK(shaft_frame(fixture, picture, depth_view, level, views[1], sun_level, water, NULL, shroud_rect, row, changed));
+	CHECK_EQ((unsigned)GREY, (unsigned)row[LEFT]);
+	CHECK_EQ((unsigned)GREY, (unsigned)row[RIGHT]);
+	// and no band over the water either
+	water.WaterBoxes[0][2] = 1000.0f;
+	water.Band = 0.12f;
+	water.Side = 1.0f;
+	CHECK(shaft_frame(fixture, picture, depth_view, level, gap_view, sun_level, water, NULL, shroud_rect, row, changed));
+	CHECK_EQ(0u, changed);
+
+	// all of it under a black shroud, band and dimming both
+	CHECK(shaft_frame(fixture, picture, depth_view, level, both_view, sun_level, lift_and_dim, views[4], shroud_rect, row, changed));
+	CHECK_EQ(0u, changed);
+
+	// the tilted camera over the shroud's edge, its lit ground behind shaded air: pixel 14 ends on black
+	// shroud at world x -21 after crossing clear air out to x 79, pixel 50 ends on clear ground at x 24
+	CHECK(shaft_frame(fixture, picture, depth_view, tilted, views[2], sun_tilted, shafts, views[5], shroud_rect, row, changed));
+	CHECK_EQ((unsigned)GREY, (unsigned)row[14]);
+	CHECK(row[50] <= GREY - MOVED_BY_AT_LEAST);
+
+	// The tilted camera looking along the sun's bearing takes the glare, looking away from it none.  0.25
+	// stops at 0.08, and the ray (0.45 of straight down) is about half shallow enough: about +10.
+	DX11PostSunShafts glare = shafts;
+	glare.Glare = 0.25f;
+	glare.TowardSun[0] = -1.0f;
+	CHECK(shaft_frame(fixture, picture, depth_view, tilted, views[3], sun_tilted, glare, NULL, shroud_rect, row, changed));
+	CHECK(row[SURFACE_SIZE / 2] >= GREY + 8);
+	CHECK(row[SURFACE_SIZE / 2] <= GREY + 13);
+	glare.TowardSun[0] = 1.0f;
+	CHECK(shaft_frame(fixture, picture, depth_view, tilted, views[3], sun_tilted, glare, NULL, shroud_rect, row, changed));
+	CHECK_EQ(0u, changed);
+
+	// at full shallowness the glare is Glare of the sun's colour and no more: 0.05 is 13 levels
+	glare.Glare = 0.05f;
+	glare.TowardSun[0] = -1.0f;
+	glare.ShallowTop = 1.0f;
+	glare.ShallowSpan = 0.1f;
+	CHECK(shaft_frame(fixture, picture, depth_view, tilted, views[3], sun_tilted, glare, NULL, shroud_rect, row, changed));
+	CHECK(row[SURFACE_SIZE / 2] >= GREY + 11);
+	CHECK(row[SURFACE_SIZE / 2] <= GREY + 14);
+
+	DX11Post_Set_Sun_Shafts(off);
+	DX11Post_Set_Haze_Shroud(NULL, shroud_rect);
+	for (unsigned index = 0; index < VIEWS; ++index) {
+		if (views[index] != NULL) {
+			views[index]->Release();
+		}
+		if (textures[index] != NULL) {
+			textures[index]->Release();
+		}
+	}
+}

@@ -24788,6 +24788,15 @@ TEST(graphics_quality_slider_only_ever_turns_settings_up)
 		CHECK_EQ( look->values[ TheGraphicsQualityAnchors[ STATIC_GAME_LOD_ULTRA ] ], 1 );
 		CHECK( graphicsQualityRowIsReforged( *look ) );
 	}
+	// the sun shafts the same, with High (2) at Ultra
+	const GraphicsQualityRow *shafts = findGraphicsQualityRow( "ComboBoxSunShafts" );
+	CHECK( shafts != NULL );
+	if( shafts != NULL )
+	{
+		CHECK_EQ( shafts->values[ TheGraphicsQualityAnchors[ STATIC_GAME_LOD_HIGH ] ], 0 );
+		CHECK_EQ( shafts->values[ TheGraphicsQualityAnchors[ STATIC_GAME_LOD_ULTRA ] ], SUN_SHAFTS_LEVEL_COUNT - 1 );
+		CHECK( graphicsQualityRowIsReforged( *shafts ) );
+	}
 
 	// the slider's own position is a catalog row with exactly the table's steps
 	const OptionDef *slider = findOptionDef( "GraphicsQuality" );
@@ -24845,7 +24854,7 @@ TEST(no_options_file_is_the_classic_game_with_every_added_row_off)
 		"ShadowsForProjectiles", "ShadowsForProps", "ShadowsForParticles", "VolumetricSmokeShadows", "SmokeFireLighting",
 		"DebrisTrails", "MapLight", "TeamGlow", "WaterFoam", "GroundMarks", "Firelight", "HemiAmbient", "AmbientOcclusion",
 		"Weather", "WaterSplashes", "Atmosphere", "StructureCollapse", "InternalHdr", "Smoke", "ParticleBounce",
-		"HeatHaze", "GroundFoliage", "MapAwareWaveHeading", "UnderwaterClarity", "FullDetailAtDistance", NULL
+		"HeatHaze", "GroundFoliage", "MapAwareWaveHeading", "UnderwaterClarity", "FullDetailAtDistance", "SunShafts", NULL
 	};
 	for( Int i = 0; off[ i ] != NULL; ++i )
 		CHECK_EQ( findOptionDef( off[ i ] )->get(), 0 );

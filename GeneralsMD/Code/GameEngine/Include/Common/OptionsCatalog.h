@@ -164,6 +164,10 @@ enum { CLOUD_STYLE_COUNT = 2 };
 // texels a side (W3DVolumetricShadow.cpp, renderShadowMap).  Medium is the size the map always had.
 enum { SHADOW_QUALITY_COUNT = 3 };
 
+// The sun shafts: off, Low (6 steps a ray) or High (12), half size either way (W3DShaderManager.cpp,
+// pushSunShafts).  Strings: GUI:SunShafts, GUI:SunShafts0..2, TOOLTIP:SunShafts.
+enum { SUN_SHAFTS_LEVEL_COUNT = 3 };
+
 // What colours a health bar: 0 the health, green through red, 1 the owner's player colour.
 enum { HEALTH_BAR_COLORS_COUNT = 2 };
 

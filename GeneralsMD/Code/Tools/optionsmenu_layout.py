@@ -278,6 +278,8 @@ NEW_CONTROLS = [
     (CHECK,  "CheckSmoothMotion",      "GUI:SmoothMotion"),
     (CHECK,  "CheckHeatHaze",          "GUI:HeatHaze"),
     (CHECK,  "CheckGroundFoliage",     "GUI:GroundFoliage"),
+    (LABEL,  "LabelSunShafts",         "GUI:SunShafts"),
+    (COMBO,  "ComboBoxSunShafts",      None),
     (LABEL,  "LabelGraphicsQuality",   "GUI:GraphicsQuality"),
     (SLIDER, "SliderGraphicsQuality",  None),
 ]
@@ -389,7 +391,9 @@ GROUP_LAYOUT = [
             ("check", "CheckHeatHaze"),
             ("check", "CheckGroundFoliage"),
             # the Screen column is full with the monitor and the resolution note
-            setting("LabelFrameRateLimit", "ComboBoxFrameRateLimit")]),
+            setting("LabelFrameRateLimit", "ComboBoxFrameRateLimit"),
+            # the column's last row, down to the page's foot
+            setting("LabelSunShafts", "ComboBoxSunShafts")]),
         # from Interface, whose first column ran past the page once HUD took Layout and HUD Width
         ("GUI:OptionsGroupMenus", [
             setting("LabelMenuTransitionSpeed", "SliderMenuTransitionSpeed", "ValueMenuTransitionSpeed")]),

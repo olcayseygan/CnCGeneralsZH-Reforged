@@ -1019,6 +1019,8 @@ Data/Cinema/apoc_discord_night2.txt
 Data/Cinema/apoc_first.txt
 Data/Cinema/apoc_fog.txt
 Data/Cinema/apoc_gate3.txt
+Data/Cinema/apoc_look.txt
+Data/Cinema/apoc_lookmap.txt
 Data/Cinema/aurorablast.txt
 Data/Cinema/aurorafog.txt
 Data/Cinema/blastcheck.txt
@@ -1324,6 +1326,7 @@ Data/Scenarios/amovefield.txt
 Data/Scenarios/amovejet.txt
 Data/Scenarios/apoc_discord2.txt
 Data/Scenarios/apoc_discord4.txt
+Data/Scenarios/apoc_look.txt
 Data/Scenarios/artillery.txt
 Data/Scenarios/aurorablast.txt
 Data/Scenarios/aurorafog.txt

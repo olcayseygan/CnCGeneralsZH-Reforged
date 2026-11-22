@@ -49,6 +49,7 @@
 #include "GameNetwork/NetworkInterface.h"
 
 #include "GameClient/AnimateWindowManager.h"
+#include "GameClient/TankSkin.h"
 #include "GameClient/Display.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/Gadget.h"
@@ -332,6 +333,9 @@ static Bool startAIMatch( const OnlineAIMatch &ai )
 	player.setPlayerTemplate( s_aiArmy );
 	player.setColor( -1 );
 	player.setStartPos( -1 );
+	// what the account wears, as the server last said: drawing only, the logic and its CRC never read it,
+	// and the server strips it from the replay it keeps of the match
+	player.setSkins( TankSkin_localLoadout() );
 
 	static const SlotState RUNG_STATES[ AISKILL_COUNT ] = { SLOT_EASY_AI, SLOT_MED_AI, SLOT_BRUTAL_AI };
 	const AISkillLevel rung = aiSkillOfRating( ai.aiRating );

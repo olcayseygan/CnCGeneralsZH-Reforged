@@ -10461,12 +10461,17 @@ void RMGLayout::buildLane( void )
 	                                the playable edge is shrouded for good and deadly to anything but
 	                                the dead */
 #define RMG_APOC_GROUND			60		///< height bytes of the clearing
+/* The basin's size, set so a seat's lobe holds a whole late-game base with room over: America's,
+	the largest, is about 1900 cells of footprint (Command Center, six power plants, two each of
+	barracks, war factory and airfield, two supply centers, the strategy center, the uplink, a
+	supply drop zone and a few defences, Geometry boxes in FactionBuilding.ini), 2900 with half again
+	for lanes, against about 4000 flat cells a seat at four seats here (the log's "flat ground" line). */
 #define RMG_APOC_START_PER_SEAT	7.0f	///< cells of start ring radius a seat, so a lobe stays as wide as a base
-#define RMG_APOC_START_LEAST	50.0f	///< and never nearer the middle than this: the heart lies between the starts
-#define RMG_APOC_DOCK_OUT		14.0f	///< cells from a start to its dock, straight out along its lobe
-#define RMG_APOC_WALL_OUT		30.0f	///< cells from a start to the rim at its lobe's tip
-#define RMG_APOC_HEART			26.0f	///< cells of shared heart round the middle, which every lobe opens onto
-#define RMG_APOC_SEAM_PAD		12.0f	///< cells the rim keeps off the heart where two lobes meet
+#define RMG_APOC_START_LEAST	80.0f	///< and never nearer the middle than this: the heart lies between the starts
+#define RMG_APOC_DOCK_OUT		20.0f	///< cells from a start to its dock, straight out along its lobe
+#define RMG_APOC_WALL_OUT		48.0f	///< cells from a start to the rim at its lobe's tip
+#define RMG_APOC_HEART			40.0f	///< cells of shared heart round the middle, which every lobe opens onto
+#define RMG_APOC_SEAM_PAD		16.0f	///< cells the rim keeps off the heart where two lobes meet
 #define RMG_APOC_WALL_FACE		2.0f	///< cells each face of the wall takes
 #define RMG_APOC_WALL_TOP		3.0f	///< cells across its top
 #define RMG_APOC_FACE_MOST		6.0f	///< cells the face spreads over where it runs broad; the thickness above still holds it
@@ -10483,11 +10488,12 @@ void RMGLayout::buildLane( void )
 #define RMG_APOC_CLEAR_SPREAD	2		///< bearings either side whose rim a bearing keeps the wilderness from as well
 #define RMG_APOC_CLEAR_EXTRA	110.0f	///< cells the outline runs out past the wilderness at the most, over high ground
 #define RMG_APOC_SPAWN_PAST		14.0f	///< cells into the fog a pass's spawn stands
-#define RMG_APOC_HILLS			34.0f	///< bytes the belt's hills rise at most
+#define RMG_APOC_HILLS			26.0f	///< bytes the belt's hills rise at most
 #define RMG_APOC_SWELL_FREQ		0.011f	///< the broad swells' field, cells: a hill or a hollow every forty cells or so
 #define RMG_APOC_HILL_REACH		24.0f	///< cells over which they come up off the wall
 #define RMG_APOC_RIVERBED		12.0f	///< bytes the dry riverbed lies under the land round it
 #define RMG_APOC_RIVER_WIDTH	0.025f	///< how near nought its noise line runs inside the bed
+#define RMG_APOC_FLAT_SPAN		1.0f	///< world units a cell's corners span at most to count as flat ground to build on in the log
 #define RMG_APOC_FOG_FRINGE		16.0f	///< cells the woods run on into the fog at the most
 #define RMG_APOC_ROCKY_SPAN		7.0f	///< world units a cell's corners span from which a slope shows rock
 #define RMG_APOC_BARE_TOPS		120.0f	///< bytes over the basin from which the high ground's tops lie bare
@@ -10609,7 +10615,7 @@ void RMGLayout::buildApocalypse( void )
 					const Real a = axis + 0.2f * spacing * (Real)k / 4.0f;
 					const Real probeX = half + ( lobeReach[g] + 20.0f ) * Cos( a ) + RMG_BORDER_CELLS;
 					const Real probeY = half + ( lobeReach[g] + 20.0f ) * Sin( a ) + RMG_BORDER_CELLS;
-					const Real land = fractalNoise( m_perm, probeX * RMG_APOC_SWELL_FREQ + 31.7f, probeY * RMG_APOC_SWELL_FREQ + 17.3f, 3 );
+					const Real land = fractalNoise( m_perm, probeX * RMG_APOC_SWELL_FREQ + 31.7f, probeY * RMG_APOC_SWELL_FREQ + 17.3f, 2 );
 					if( land < lowest )
 					{
 						lowest = land;
@@ -10746,10 +10752,10 @@ void RMGLayout::buildApocalypse( void )
 			/* Past the rim the high ground rolls on: broad swells on the same field the fronts' passes were
 				taken from the low ground of, a few long ridges on a slower one, every pass's line sunk into a
 				valley that the trail runs down, and a dry riverbed winding across the wilderness. */
-			const Real swell = 0.5f + 0.5f * fractalNoise( m_perm, (Real)x * RMG_APOC_SWELL_FREQ + 31.7f, (Real)y * RMG_APOC_SWELL_FREQ + 17.3f, 3 );
-			const Real ridges = 1.0f - fabsf( fractalNoise( m_perm, (Real)x * 0.016f + 66.1f, (Real)y * 0.016f + 12.7f, 2 ) );
+			const Real swell = 0.5f + 0.5f * fractalNoise( m_perm, (Real)x * RMG_APOC_SWELL_FREQ + 31.7f, (Real)y * RMG_APOC_SWELL_FREQ + 17.3f, 2 );
+			const Real ridges = 1.0f - fabsf( fractalNoise( m_perm, (Real)x * 0.016f + 66.1f, (Real)y * 0.016f + 12.7f, 1 ) );
 			const Real valley = gate >= 0 ? 0.2f + 0.8f * fadeCurve( rmgUnit( across / ( passHalf[gate] * RMG_APOC_VALLEY ) ) ) : 1.0f;
-			const Real hill = ( 0.8f * swell + 0.2f * ridges ) * valley;
+			const Real hill = ( 0.85f * swell + 0.15f * ridges ) * valley;
 			const Real past = fadeCurve( rmgUnit( ( d - thick ) / RMG_APOC_HILL_REACH ) );
 			height += RMG_APOC_HILLS * hill * past;
 			height -= RMG_APOC_RIVERBED * riverbedAt( x, y ) * past;
@@ -10940,6 +10946,33 @@ void RMGLayout::buildApocalypse( void )
 			m_terrain[i] = terrainClass;
 			m_passable[i] = insidePlayable( x, y ) && !cliff ? 1 : 0;
 		}
+	}
+
+	// how much flat ground each seat's lobe and the heart give to build on, for the log
+	{
+		Int heartFlat = 0, seatFlat[RMG_APOC_SEATS_MOST] = { 0 };
+		for( Int y = 0; y + 1 < m_height; y++ )
+		{
+			for( Int x = 0; x + 1 < m_width; x++ )
+			{
+				const Int i = cellIndex( x, y );
+				if( rimDistance[i] > -2.0f || !m_passable[i] || cellSpanWorld( x, y ) > RMG_APOC_FLAT_SPAN )
+					continue;
+				const Real dx = (Real)( x - RMG_BORDER_CELLS ) - half, dy = (Real)( y - RMG_BORDER_CELLS ) - half;
+				if( dx * dx + dy * dy < RMG_APOC_HEART * RMG_APOC_HEART )
+				{
+					++heartFlat;
+					continue;
+				}
+				Int seat = 0;
+				for( Int s = 1; s < players; s++ )
+					if( dx * lobeX[s] + dy * lobeY[s] > dx * lobeX[seat] + dy * lobeY[seat] )
+						seat = s;
+				++seatFlat[seat];
+			}
+		}
+		DEBUG_LOG(( "random map: apocalypse flat ground in cells, heart %d, seats %d %d %d %d\n",
+			heartFlat, seatFlat[0], seatFlat[1], seatFlat[2], seatFlat[3] ));
 	}
 
 	// trees and stones in the belt only, never on a trail, a cliff or a pile's pad

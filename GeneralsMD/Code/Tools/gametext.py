@@ -28,6 +28,15 @@ whose printf directives differ from the English one's.  That last one is not cos
 that reaches UnicodeString::format with a directive missing, added or moved reads the wrong
 argument, and Turkish writes a percentage as "%10", which is a directive.
 
+    python gametext.py labels [--language Turkish ...] [--english] [--inventory <folder>]
+
+measures every label, a string drawn on a control that does not grow (layout buttons, check boxes,
+radio buttons, combo boxes and one-line statics, the options catalog's rows and entries, the keys
+code hands to such a control, LABEL_TABLES), against LABEL_LIMIT characters in each language the
+fork ships, and fails on any translation over it.  English over the limit is listed with --english
+and never fails.  --inventory writes, per language, the labels over the limit and every fork string
+the language still shows in English, settings first, with the ones kept English on purpose marked.
+
     python gametext.py selfcheck
 
 round-trips synthetic strings through the writer and the parser, proves check catches a changed
@@ -272,6 +281,387 @@ def check_translation(translated, english):
     return problems
 
 
+# -- labels: strings drawn in a box that does not grow ------------------------------------------
+#
+# A label is a string the game draws on a control of fixed size: the TEXT of a push button, check
+# box, radio button or combo box in a layout, of a static text whose box holds one line of its font,
+# a row name or combo entry of the options catalog, and a key code hands straight to a button,
+# check box, radio button or combo entry.  Tooltips, message bodies, chat and list rows grow or wrap
+# and are not labels.  The class is derived from the layouts and the sources every run, so a new
+# button is covered the day it is added; LABEL_TABLES lists the keys code keeps in tables, which no
+# pattern can follow.
+
+LABEL_LIMIT = 15
+# selfcheck only reports labels over the limit while the translations are being cut; True makes
+# every one of them fail gametext_selfcheck.  English never fails, see --english.
+LABEL_FAILS = False
+
+RUN = os.path.join(_CODE, "..", "Run")
+SOURCES = os.path.join(_CODE, "GameEngine", "Source")
+CATALOG = os.path.join(SOURCES, "Common", "OptionsCatalog.cpp")
+# lowest priority first: retail archives, the build's loose copies (generated layouts among them),
+# then the tracked masters
+LAYOUT_ARCHIVES = [os.path.join(RUN, name) for name in ("WindowZH.big", "PatchWindow.big")]
+LAYOUT_DIRS = [os.path.join(RUN, "Window"), os.path.join(_CODE, "Data", "Window")]
+LABEL_CONTROLS = ("PUSHBUTTON", "CHECKBOX", "RADIOBUTTON", "COMBOBOX")
+SETTINGS_LAYOUTS = ("menus/optionsmenu.wnd", "menus/optionsmenuclassic.wnd")
+SETTINGS_SOURCES = ("OptionsMenu.cpp", "OptionsMenuHotkeys.cpp", "OptionsCatalog.cpp")
+
+LABEL_SETTER = re.compile(
+    r"\b(?:GadgetButtonSetText|GadgetCheckBoxSetText|GadgetRadioSetText|GadgetComboBoxAddEntry|winSetText"
+    r"|WOLMakeButtonLike)\b[^;]*")
+FETCH_LITERAL = re.compile(r'fetch\(\s*"([^"]+)"')
+KEY_LITERAL = re.compile(r'"([A-Za-z]+:[A-Za-z0-9_]+)"')
+COMPOSED = re.compile(r'ModeNameWithVersion\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)')
+CATALOG_ROW = re.compile(r'\{\s*"\w+",\s*OPT_WND\(\s*"(\w+)"\s*\),\s*"([^"]+)"')
+
+# keys code keeps in tables and draws on a fixed control
+LABEL_TABLES = [
+    ("GameClient/DirectStrikeLobby.cpp ARMY_LABELS",
+     ["SIDE:America", "SIDE:China", "SIDE:GLA", "GUI:OnlineGeneralAir", "GUI:OnlineGeneralLaser",
+      "GUI:OnlineGeneralSuper", "GUI:OnlineGeneralTank", "GUI:OnlineGeneralInf", "GUI:OnlineGeneralNuke",
+      "GUI:OnlineGeneralToxin", "GUI:OnlineGeneralStealth", "GUI:OnlineGeneralDemo"]),
+    ("GameClient/DirectStrikeLobby.cpp SEAT_LABELS",
+     ["GUI:Open", "GUI:Closed", "GUI:DirectStrikeEasy", "GUI:DirectStrikeMedium", "GUI:DirectStrikeHard",
+      "GUI:DirectStrikeBrutal", "GUI:DirectStrikeReady", "GUI:DirectStrikeStart"]),
+    ("GUICallbacks/Menus/WOLLadderScreen.cpp HEAD",
+     ["GUI:OnlineLadderRank", "GUI:OnlineLadderPlayer", "GUI:OnlineLadderTier", "GUI:OnlineLadderRating",
+      "GUI:OnlineLadderWins", "GUI:OnlineLadderLosses", "GUI:OnlineLadderWinPct"]),
+    ("GUICallbacks/Menus/WOLLadderScreen.cpp SKIN_SIDE_KEY, FILTER_KEY",
+     ["GUI:OnlineSkinsSideUsa", "GUI:OnlineSkinsSideChina", "GUI:OnlineSkinsSideGla", "GUI:OnlineSkinsAll",
+      "GUI:OnlineSkinsOwned", "GUI:OnlineSkinsFilterLocked"]),
+]
+
+# strings that stay as they are in every language; report() does not count them as still English
+KEEP_ENGLISH = {
+    "GUI:DirectStrike": "mode name the owner keeps in English",
+    "GUI:DirectStrikeLower": "mode name the owner keeps in English",
+    "GUI:Apocalypse": "mode name the owner keeps in English",
+    "GUI:ApocalypseLower": "mode name the owner keeps in English",
+}
+KEEP_ENGLISH.update(("GUI:Language%d" % n, "a language's own name, the same in every menu") for n in range(6))
+NUMBER_TAG = re.compile(r"^v?\d+(\.\d+)*x?$", re.IGNORECASE)
+
+
+def keep_reason(label, text):
+    """Why this string is left English everywhere, or None."""
+    reason = KEEP_ENGLISH.get(label)
+    if reason:
+        return reason
+    if NUMBER_TAG.match(text.strip()):
+        return "a version, speed or sample count tag (v1.0, 1.5x, 4x)"
+    if not ANY_LETTER.search(DIRECTIVE.sub("", text)):
+        return "only directives, numbers and punctuation"
+    return None
+
+
+def _sources(root):
+    for folder, _dirs, files in os.walk(root):
+        for name in files:
+            if name.endswith(".cpp"):
+                yield os.path.join(folder, name)
+
+
+def _source_lines(path):
+    with open(path, "rb") as source:
+        for number, line in enumerate(decode(source.read()).splitlines(), 1):
+            if not line.lstrip().startswith("//"):
+                yield number, line
+
+
+def load_layouts():
+    """{relative path under Window/, lowercase: (where it came from, wndlayout.Layout)}"""
+    import wndlayout
+    layouts = {}
+    for archive in LAYOUT_ARCHIVES:
+        if not os.path.exists(archive):
+            continue
+        with open(archive, "rb") as source:
+            for member, offset, size in list(bigfile._read_index(source)):
+                path = member.replace("\\", "/").lower()
+                if path.endswith(".wnd") and path.startswith("window/"):
+                    source.seek(offset)
+                    layouts[path[len("window/"):]] = (os.path.basename(archive),
+                                                     wndlayout.parse(source.read(size).decode("latin-1")))
+    for root in LAYOUT_DIRS:
+        for folder, _dirs, files in os.walk(root):
+            for name in files:
+                if name.lower().endswith(".wnd"):
+                    path = os.path.relpath(os.path.join(folder, name), root).replace("\\", "/").lower()
+                    layouts[path] = (os.path.basename(os.path.dirname(root)) + "/" + os.path.basename(root),
+                                     wndlayout.load(os.path.join(folder, name)))
+    return layouts
+
+
+def _statement(window, key):
+    value = window.prop(key)
+    return None if value is None else value.split("=", 1)[1].strip().rstrip(";").strip()
+
+
+def layout_strings(layouts):
+    """(key, 'label' | 'text' | 'tooltip', where, layout path) for every key a layout names."""
+    for path, (_origin, layout) in sorted(layouts.items()):
+        for window in layout.root.walk():
+            kind = (_statement(window, "WINDOWTYPE") or "").upper()
+            where = "%s %s" % (path, (window.name or "").split(":")[-1])
+            tip = re.match(r'"([A-Za-z]+:[^"\s]+)"', _statement(window, "TOOLTIPTEXT") or "")
+            if tip:
+                yield tip.group(1), "tooltip", where, path
+            text = re.match(r'"([A-Za-z]+:[^"\s]+)"', _statement(window, "TEXT") or "")
+            if not text:
+                continue
+            label = kind in LABEL_CONTROLS
+            if kind == "STATICTEXT":
+                size = re.search(r"SIZE:\s*(\d+)", _statement(window, "FONT") or "")
+                left, top, right, bottom = window.rect[:4]
+                label = bool(size) and bottom - top < 2 * int(size.group(1))
+            yield text.group(1), "label" if label else "text", "%s %s" % (where, kind.lower()), path
+
+
+def label_class(layouts):
+    """{key: [where it is drawn]} for every label, and [(name, version, where)] for composed ones."""
+    found = {}
+
+    def add(key, where):
+        found.setdefault(key, [])
+        if where not in found[key]:
+            found[key].append(where)
+
+    for key, kind, where, _path in layout_strings(layouts):
+        if kind == "label":
+            add(key, where)
+    composed = []
+    for path in _sources(SOURCES):
+        short = os.path.relpath(path, SOURCES).replace("\\", "/")
+        for number, line in _source_lines(path):
+            setter = LABEL_SETTER.search(line)
+            if setter:
+                for key in FETCH_LITERAL.findall(setter.group(0)) + (
+                        KEY_LITERAL.findall(setter.group(0)) if "WOLMakeButtonLike" in setter.group(0) else []):
+                    add(key, "%s:%d" % (short, number))
+            for name, version in COMPOSED.findall(line):
+                composed.append((name, version, "%s:%d" % (short, number)))
+    with open(CATALOG, "rb") as source:
+        for control, key in CATALOG_ROW.findall(decode(source.read())):
+            add(key, "OptionsCatalog %s" % control)
+            add(key + "#", "OptionsCatalog %s entries" % control)
+    for where, keys in LABEL_TABLES:
+        for key in keys:
+            add(key, where)
+    return found, composed
+
+
+def settings_keys(layouts, english):
+    """{key: (label | text | tooltip, where)} for every string the settings screens show."""
+    found = {}
+    for key, kind, where, path in layout_strings(layouts):
+        if path in SETTINGS_LAYOUTS:
+            found.setdefault(key, (kind, where))
+    for name in SETTINGS_SOURCES:
+        for folder, _dirs, files in os.walk(SOURCES):
+            if name in files:
+                path = os.path.join(folder, name)
+                for number, line in _source_lines(path):
+                    for key in KEY_LITERAL.findall(line):
+                        if key.lower() in english:
+                            kind = "tooltip" if key.upper().startswith("TOOLTIP:") else "label"
+                            found.setdefault(key, (kind, "%s:%d" % (name, number)))
+    with open(CATALOG, "rb") as source:
+        for control, key in CATALOG_ROW.findall(decode(source.read())):
+            found[key] = ("label", "OptionsCatalog %s" % control)
+            for label in english:
+                if re.match(re.escape(key.lower()) + r"\d+$", label):
+                    found.setdefault(english[label][0], ("label", "OptionsCatalog %s entry" % control))
+    return found
+
+
+def expand_class(found, english):
+    """The catalog's "KEY#" stands for its combo entries, KEY0 to KEYn."""
+    out = {}
+    for key, where in found.items():
+        if key.endswith("#"):
+            stem = key[:-1].lower()
+            for label in english:
+                if re.match(re.escape(stem) + r"\d+$", label):
+                    out.setdefault(english[label][0], []).extend(where)
+        else:
+            out.setdefault(key, []).extend(where)
+    return out
+
+
+class TextSet(object):
+    """Everything label work needs: the English (CSF and Patch.str), and each master."""
+
+    def __init__(self):
+        self.csf = {}
+        if os.path.exists(ENGLISH_ARCHIVE):
+            self.csf = dict((label.lower(), (label, text)) for label, text in read_english(ENGLISH_ARCHIVE))
+        self.patch = dict((label.lower(), (label, text)) for label, text in parse_str(PATCH_STRINGS))
+        self.english = dict(self.csf)
+        self.english.update(self.patch)
+        self.languages = [("English", self.patch)] + [
+            (language, dict((label.lower(), (label, text)) for label, text in parse_str(master)))
+            for language, master in MASTERS if os.path.exists(master)]
+        self.layouts = load_layouts()
+        found, self.composed = label_class(self.layouts)
+        self.labels = expand_class(found, self.english)
+        # the first place each key is named, for the inventory's "where drawn"
+        self.sites = {}
+        for key, kind, where, _path in layout_strings(self.layouts):
+            self.sites.setdefault(key.lower(), "%s (%s)" % (where, kind))
+        for path in _sources(SOURCES):
+            short = os.path.relpath(path, SOURCES).replace("\\", "/")
+            for number, line in _source_lines(path):
+                for key in KEY_LITERAL.findall(line):
+                    self.sites.setdefault(key.lower(), "%s:%d" % (short, number))
+        ini_key = re.compile(r"=\s*([A-Za-z]+:[A-Za-z0-9_]+)")
+        for folder, _dirs, files in os.walk(os.path.join(_CODE, "Data", "INI")):
+            for name in files:
+                if name.lower().endswith(".ini"):
+                    for number, line in _source_lines(os.path.join(folder, name)):
+                        for key in ini_key.findall(line.split(";")[0]):
+                            self.sites.setdefault(key.lower(), "INI %s:%d" % (name, number))
+
+    def english_text(self, key):
+        return self.english.get(key.lower(), (key, ""))[1]
+
+
+def over_limit(texts, language, strings):
+    """[(key, text, length, where, english)] for every label this language supplies over the limit."""
+    over = []
+    for key, where in sorted(texts.labels.items(), key=lambda item: item[0].lower()):
+        entry = strings.get(key.lower())
+        if entry is None or len(entry[1]) <= LABEL_LIMIT:
+            continue
+        over.append((entry[0], entry[1], len(entry[1]), "; ".join(where), texts.english_text(key)))
+    composed = {}
+    for name, version, where in texts.composed:
+        composed.setdefault((name, version), []).append(where)
+    for (name, version), wheres in sorted(composed.items()):
+        where = "; ".join(wheres)
+        if name.lower() not in strings and version.lower() not in strings:
+            continue
+        # a mode name kept English with its version tag is the English list's to cut, not a writer's
+        if language != "English" and all(keep_reason(key, texts.english_text(key)) for key in (name, version)):
+            continue
+
+        def pick(key):
+            return strings.get(key.lower(), texts.english.get(key.lower(), (key, "")))[1]
+
+        text = pick(name) + (" " + pick(version) if pick(version) else "")
+        if len(text) > LABEL_LIMIT:
+            english = texts.english_text(name) + " " + texts.english_text(version)
+            over.append(("%s+%s" % (name, version), text, len(text), "%s (ModeNameWithVersion)" % where,
+                         english.strip()))
+    return over
+
+
+def missing_strings(texts, strings, settings):
+    """[(key, english, class, where, keep reason)] for every fork string this language leaves English,
+    settings first, then by key prefix."""
+    rows = []
+    candidates = dict(texts.patch)
+    for key in settings:
+        if key.lower() in texts.english:
+            candidates.setdefault(key.lower(), texts.english[key.lower()])
+    for lower, (key, english) in candidates.items():
+        if lower in strings or not worth_translating(key, english):
+            continue
+        kind, where = settings.get(key, (None, ""))
+        if key in texts.labels:
+            kind, where = "label", where or "; ".join(texts.labels[key])
+        where = where or texts.sites.get(lower, "not found in layouts, sources or INI")
+        rows.append((0 if key in settings else 1, key.split(":")[0].upper(), key, english,
+                     "label" if kind == "label" else "free text", where, keep_reason(key, english)))
+    rows.sort(key=lambda row: (row[0], row[1], row[2].lower()))
+    return rows
+
+
+def label_problems(texts, languages=None, english=False):
+    problems = []
+    for language, strings in texts.languages:
+        if language == "English" and not english:
+            continue
+        if languages and language.lower() not in languages and language != "English":
+            continue
+        for key, text, length, where, _english in over_limit(texts, language, strings):
+            problems.append("%s: %s is %d characters, the limit is %d: \"%s\" (%s)"
+                            % (language, key, length, LABEL_LIMIT, text, where))
+    return problems
+
+
+def write_inventory(texts, folder):
+    os.makedirs(folder, exist_ok=True)
+    settings = settings_keys(texts.layouts, texts.english)
+    lines = ["Labels over %d characters, and fork strings still English, per language." % LABEL_LIMIT,
+             "Written by: python Tools/gametext.py labels --inventory <this folder>",
+             "Label class: %d keys (layouts, options catalog, code setters and LABEL_TABLES), %d composed sites."
+             % (len(texts.labels), len(texts.composed)),
+             "Settings screens show %d keys." % len(settings), ""]
+    lines.append("%-10s %8s %16s %15s %8s %12s" % ("language", "over15", "missing settings", "missing others",
+                                                   "keeps", "still English (all CSF+Patch, keeps skipped)"))
+    for language, strings in texts.languages:
+        over = over_limit(texts, language, strings)
+        write_rows(os.path.join(folder, "over15_%s.txt" % language.lower()),
+                   "%s labels over %d characters: %d" % (language, LABEL_LIMIT, len(over)),
+                   "key | text | length | where drawn | English",
+                   sorted(over, key=lambda row: -row[2]))
+        if language == "English":
+            lines.append("%-10s %8d %16s %15s %8s %12s" % (language, len(over), "-", "-", "-", "-"))
+            continue
+        missing = missing_strings(texts, strings, settings)
+        keeps = [row for row in missing if row[6]]
+        work = [row for row in missing if not row[6]]
+        still = [label for label, (key, text) in texts.english.items()
+                 if worth_translating(key, text) and label not in strings and not keep_reason(key, text)]
+        write_rows(os.path.join(folder, "missing_%s.txt" % language.lower()),
+                   "%s: %d fork strings to translate (%d on the settings screens), %d kept English on purpose."
+                   " Labels must fit %d characters; free text has no limit.  Edit Code/Data/%s/Generals.str only."
+                   % (language, len(work), sum(1 for row in work if row[0] == 0), len(keeps), LABEL_LIMIT, language),
+                   "area | key | English | class | where drawn\n"
+                   "area is 'settings' for the Options screens, else the key's prefix; 'KEEP: <why>' rows stay"
+                   " English on purpose (gametext.py KEEP_ENGLISH and keep_reason) and need no line.\n"
+                   "A new line goes into the language file as: KEY, the string in double quotes, END."
+                   "  \\n here is a line break; keep every %d, %s, %ls and %% of the English, in order.",
+                   [("settings" if row[0] == 0 else row[1], row[2], row[3], row[4], row[5]) for row in work]
+                   + [("KEEP: " + row[6], row[2], row[3], row[4], row[5]) for row in keeps])
+        write_rows(os.path.join(folder, "missing_settings_%s.txt" % language.lower()),
+                   "%s: %d settings strings still English" % (language, sum(1 for row in work if row[0] == 0)),
+                   "key | English | class | where drawn",
+                   [(row[2], row[3], row[4], row[5]) for row in work if row[0] == 0])
+        lines.append("%-10s %8d %16d %15d %8d %12d" % (
+            language, len(over), sum(1 for row in work if row[0] == 0),
+            sum(1 for row in work if row[0] == 1), len(keeps), len(still)))
+    lines += ["", "English over %d is reported, never failed: the owner decides whether English names are cut."
+              % LABEL_LIMIT, "", "Composed labels (name plus version tag, measured joined):"]
+    lines += ["  %s + %s  %s" % composed for composed in texts.composed]
+    with open(os.path.join(folder, "INVENTORY.txt"), "w", encoding="utf-8", newline="\r\n") as out:
+        out.write("\n".join(lines) + "\n")
+
+
+def write_rows(path, title, columns, rows):
+    with open(path, "w", encoding="utf-8", newline="\r\n") as out:
+        out.write("%s\n%s\n\n" % (title, columns))
+        for row in rows:
+            out.write(" | ".join(escape(str(cell)) for cell in row) + "\n")
+
+
+def labels(arguments):
+    texts = TextSet()
+    if arguments.inventory:
+        write_inventory(texts, arguments.inventory)
+        print("inventory in %s" % arguments.inventory)
+    chosen = [language.lower() for language in arguments.language]
+    problems = label_problems(texts, chosen, arguments.english)
+    for problem in problems:
+        print(problem)
+    english = len(over_limit(texts, "English", texts.patch))
+    print("labels: %d keys in the class, %d over %d characters%s; English has %d over (reported, never failed)"
+          % (len(texts.labels), len([p for p in problems if not p.startswith("English")]), LABEL_LIMIT,
+             " in " + ", ".join(arguments.language) if chosen else "", english))
+    return 1 if any(not p.startswith("English") for p in problems) else 0
+
+
 def dump(arguments):
     entries = [entry for entry in english_entries(arguments.english, arguments.str)
                if worth_translating(*entry)]
@@ -312,7 +702,8 @@ def report(name, translated, english):
     for problem in problems:
         print("%s: %s" % (name, problem))
     if english is not None and not problems:
-        wanted = [label for label, text in english if worth_translating(label, text)]
+        wanted = [label for label, text in english
+                  if worth_translating(label, text) and not keep_reason(label, text)]
         carried = set(label.lower() for label, _text in translated)
         missing = [label for label in wanted if label.lower() not in carried]
         print("%s: %d strings, %d of %d worth translating are still English%s"
@@ -365,6 +756,15 @@ def selfcheck(_arguments):
         else:
             problems.extend(report(language, parse_str(master), reference))
 
+    texts = TextSet()
+    if "GUI:Accept" not in texts.labels and texts.layouts:
+        problems.append("the label class lost the buttons of the layouts")
+    over = label_problems(texts)
+    print("gametext: %d labels over %d characters across the translations%s"
+          % (len(over), LABEL_LIMIT, "" if LABEL_FAILS else " (reported; LABEL_FAILS makes them fail)"))
+    if LABEL_FAILS:
+        problems.extend(over)
+
     for problem in problems:
         print("gametext: %s" % problem)
     return 1 if problems else 0
@@ -392,8 +792,15 @@ def main(argv):
     check_command.add_argument("--str", action="append", default=[])
     check_command.set_defaults(run=check)
 
+    labels_command = commands.add_parser("labels")
+    labels_command.add_argument("--language", action="append", default=[])
+    labels_command.add_argument("--english", action="store_true")
+    labels_command.add_argument("--inventory")
+    labels_command.set_defaults(run=labels)
+
     commands.add_parser("selfcheck").set_defaults(run=selfcheck)
 
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     arguments = parser.parse_args(argv[1:])
     return arguments.run(arguments)
 

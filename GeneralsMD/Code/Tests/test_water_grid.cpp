@@ -5696,7 +5696,8 @@ TEST(water_shore_raster_lookup_reuses_only_static_work_and_invalidates_dependenc
 		auto expected = seed, actual = seed;
 		Material a, b;
 		CHECK(RasterizeAlpha(topology, states, mapping, level, time, a, expected, support));
-		const auto before = support.lookups, allowBefore = support.allows, builds = lookup.BuildCount();
+		const auto before = support.lookups, allowBefore = support.allows;
+		const auto builds = lookup.BuildCount();
 		CHECK(RasterizeAlphaCached(topology, states, mapping, level, time, b, actual, support, lookup, revision));
 		CHECK(expected == actual);
 		CHECK(a.coordinates == b.coordinates);

@@ -29,7 +29,7 @@
 // reaches both the Direct3D 11 frame and -d3d9.
 
 #include "Common/FileSystem.h"
-#include "Common/File.h"
+#include "Common/file.h"
 #include "Common/GameCommon.h"
 #include "Common/GameEngine.h"
 #include "Common/GlobalData.h"

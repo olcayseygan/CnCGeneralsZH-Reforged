@@ -1,0 +1,27 @@
+# Apocalypse Discord showcase, night reshoot (2026-11-22), aimed by a -directorscout pass of the same
+# match: -randommap 7 4 normal apocalypse -autoskirmish 2 -aidiff easy -seed 7 -observer -turbo,
+# -video 6300 8100 -recordfps 120 -wav 6300 8100. Times are logic frames / 30.
+# Scouted night fights (frames, start place -> last place, peak heat):
+#   6375-6915 1751,869 -> 2124,966 5.75   outside gate 3, sliding east
+#   6780-6945 1688,765 -> 2117,599 5.00   outside gate 3, north
+#   6900-7215 1706,792 -> 1434,693 5.00   outside gate 3, west
+#   7200-8400 1215,1397 -> 987,1331 5.25  inside gate 2, by the GLA base
+
+# N1 gate 3 from inside looking out, the first big night fight at the gate, drifting east with it (210-226)
+210.0 cut 1800 1020 1.1 150 -6
+210.5 move 1930 940 15
+
+# N2 outside gate 3 looking back in at the wall, zombies' backs, the AI firing out of the gate (226-241)
+226.0 cut 1720 800 0.8 20 0
+226.2 orbit -40 15
+
+# N3 inside gate 2, low, the horde at the GLA base, pushing in (241-256)
+241.0 cut 1080 1360 0.85 75 6
+241.2 zoom 0.7 15
+
+# N4 drone low through the gate 2 fight and out of the gate (256-262)
+256.0 drone 6  1450 1500 75  1300 1420 55  1150 1370 45  1000 1320 60  tilt -24 bank 0.6
+
+# N5 hero: wide and low on the gate 2 fight, turning (262-270)
+262.0 cut 1150 1380 1.2 70 8
+262.2 orbit 25 8

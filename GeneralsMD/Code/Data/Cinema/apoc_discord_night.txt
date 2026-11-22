@@ -1,0 +1,32 @@
+# Apocalypse Discord showcase, night (2026-11-22). Footage, Reforged look, 1920x1080.
+# Same match as apoc_discord_day: -randommap 7 4 normal apocalypse -autoskirmish 2 -aidiff easy
+# -seed 7 -observer -turbo, -video 5700 8100 -recordfps 120 -wav 5700 8100. Times are logic frames / 30.
+# Night 5700 to 8100 (190-270 s), waves every 300 frames from 5760, 180 walking from about 6600.
+
+# B1 the middle at night, lit windows, slow turn (190-204)
+189.0 cut 1500 1500 1.0 45 0
+189.5 orbit 40 14
+
+# B2 wide and steep over the gate 1 trail, zombies coming out of the dark ring (204-216)
+204.0 cut 1180 2330 1.4 340 -22
+204.2 zoom 1.25 12
+
+# B3 gate 2 from inside, the horde streaming into the GLA base (216-230)
+216.0 cut 1100 1290 1.1 90 -2
+216.2 zoom 0.8 14
+
+# B4 drone low through the horde across the middle (230-238)
+230.0 drone 6  1180 1700 60  1350 1600 45  1520 1520 40  1700 1440 45  1880 1330 65  tilt -22 bank 0.6
+
+# B5 chase a zombie in from gate 4 (238-250)
+238.0 cut 2000 1730 0.55 270 10
+238.2 follow ApocalypseZombie
+
+# B6 the China base holding, low, turning (250-260)
+250.0 cut 1720 1900 0.8 202 4
+250.2 orbit 25 10
+
+# B7 hero: low on the horde in the middle, pushing in and turning (260-270)
+260.0 cut 1520 1520 0.9 135 10
+260.2 zoom 0.7 10
+260.2 orbit 30 10

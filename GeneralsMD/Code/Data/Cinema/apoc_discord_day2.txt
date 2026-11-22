@@ -1,0 +1,17 @@
+# Apocalypse Discord showcase, day reshoot (2026-11-22), aimed by a -directorscout pass of the same
+# match: -randommap 7 4 normal apocalypse -autoskirmish 2 -aidiff easy -seed 7 -observer -turbo,
+# -video 3090 4800 -recordfps 60 -wav 3090 4800. Times are logic frames / 30.
+# The scout's day fight: 3795-5130 from 1673,1551 (east of the derrick) out to 1895,868 (gate 3),
+# peak heat 3. Zombies of waves 3 and 4 come in through gate 3 from about 110 s.
+
+# D1 gate 3 from inside looking out along the trail, the day wave walking in (103-126)
+103.0 cut 1830 800 1.3 180 -6
+103.2 zoom 1.05 22
+
+# D2 the fight east of the derrick, low, tracking it out toward gate 3 slower than it moves (126-150)
+126.0 cut 1690 1520 0.85 162 4
+126.5 move 1780 1220 23
+
+# D3 the fight reaching gate 3, held from inside (150-160)
+150.0 cut 1860 1000 0.9 162 2
+150.2 orbit -15 10

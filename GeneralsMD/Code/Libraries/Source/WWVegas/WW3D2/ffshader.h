@@ -334,11 +334,13 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 	"        // A particle inside its own plume, measured from the plume's front: the particle\n" \
 	"        // nearest the sun in this texel (the map's alpha) has none of it ahead, and the share\n" \
 	"        // reaches all of it as far behind the centre as the front is ahead of it.  Raised to a\n" \
-	"        // power the sun side stays at nothing and the back darkens.  The bell curve's tails, and\n" \
-	"        // a ramp from a width in front of the centre, both darkened the sun side as well.  A\n" \
-	"        // front that bilinear filtering pulled back past the centre, at the plume's edge in the\n" \
-	"        // map, falls back to a width in front of it.\n" \
-	"        float front = (sums.w < centre) ? sums.w : centre - width;\n" \
+	"        // power the sun side stays at nothing and the back darkens.  The bell curve's tails\n" \
+	"        // darkened the sun side as well.  The front sits at least a width in front of the\n" \
+	"        // centre: a ray through one heavy puff has its front almost on the centre, and the\n" \
+	"        // ramp then shrank to nothing and cut the plume into a lit and a dark half along a\n" \
+	"        // hard line (a power plant's chimney, 2026-11-22).  The same width is where a front\n" \
+	"        // that bilinear filtering pulled back past the centre falls back to.\n" \
+	"        float front = min(sums.w, centre - width);\n" \
 	"        float span = max(2.0 * (centre - front), 1e-6);\n" \
 	"        ahead = pow(saturate((sun.z - front) / span), VolumeParameters.w);\n" \
 	"    }\n" \

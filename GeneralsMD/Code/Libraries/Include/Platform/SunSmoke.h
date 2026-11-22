@@ -5,7 +5,7 @@
 #include <vector>
 namespace SunSmoke {
 static const unsigned Texels = 512, MaxCasters = 16384, SplatFloats = 6;
-static const float SelfGain = 0.8f, SelfCurve = 16.0f;
+static const float SelfGain = 0.55f, SelfCurve = 4.0f;	// SMOKE_SELF_SHADOW_* in dx11backend.cpp, which says why
 // Each caster is a disc facing the sun, drawn as a four corner strip whose corners come from the
 // vertex number, so the only buffer is the one holding the casters.
 static const char SMOKE_SPLAT_VERTEX_PROGRAM[] =

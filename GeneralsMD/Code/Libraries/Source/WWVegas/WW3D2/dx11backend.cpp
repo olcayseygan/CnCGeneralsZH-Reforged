@@ -780,11 +780,15 @@ static const unsigned SMOKE_SPLAT_FLOATS = 6;		///< per caster: sun clip x, y, z
 static const unsigned SMOKE_MOST_CASTERS = 16384;
 // How a smoke particle shades itself (VOLUMETRIC_SAMPLING, smoke_reaching): how dark one on its
 // plume's far side goes, and the power on the share of the plume ahead of it that keeps the sun
-// side lit.  The 2026-10-04 sweep: at 16 white smoke's sun side came out 6.2% under the unshaded
-// plume and its far side 0.85 of the sun side, soot 2.4% and 0.87; at 8 white lost 10.8% on its sun
-// side, and at 32 soot went flat.
-static const float SMOKE_SELF_SHADOW_GAIN = 0.8f;
-static const float SMOKE_SELF_SHADOW_CURVE = 16.0f;
+// side lit.  The 2026-10-04 sweep settled on 0.8 and 16, which kept the sun side within a few
+// percent of the unshaded plume but put the whole shade into the back tenth of the plume: a dense
+// column (a power plant's chimney) came out lit on one side and near black on the other along a
+// hard line, which the owner turned down on 2026-11-22.  At 4 the shade spreads over the back half
+// and the sun side still loses under 3% (optical depth 6, a quarter in); at 0.55 the far side keeps
+// 45% of its light where it kept 20%, the sky's light that a thick plume still scatters round.
+// Libraries/Include/Platform/SunSmoke.h holds the same two for SDL3.
+static const float SMOKE_SELF_SHADOW_GAIN = 0.55f;
+static const float SMOKE_SELF_SHADOW_CURVE = 4.0f;
 // How far in front of what is behind it a particle sprite has fully faded in, in world units.  A
 // tank is about thirty long; a smoke puff is ten to forty across.  At two, a sprite still met the
 // ground over a pixel or two at the default zoom: a nuke's haze and the Scud's grey smoke came out as

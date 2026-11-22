@@ -1825,7 +1825,7 @@ void AskGameMode(void (*classic)(void), void (*directStrike)(void))
 	if (GameWindow *yes = TheWindowManager->winGetWindowFromId(box, NAMEKEY("MessageBox.wnd:ButtonYes")))
 		GadgetButtonSetText(yes, TheGameText->fetch("GUI:GameModeClassic"));
 	if (GameWindow *no = TheWindowManager->winGetWindowFromId(box, NAMEKEY("MessageBox.wnd:ButtonNo")))
-		GadgetButtonSetText(no, ModeNameWithVersion("GUI:GameModeDirectStrike", "GUI:DirectStrikeVersion"));
+		GadgetButtonSetText(no, TheGameText->fetch("GUI:GameModeDirectStrike"));	// with its version it wrapped to two lines
 
 	// EA's layout puts Yes's right edge a pixel past No's left, and "DIRECT STRIKE" is wider than its
 	// 90-point button, so the labels ran into each other even once the buttons were apart.  Every

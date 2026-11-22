@@ -374,13 +374,18 @@ namespace
 	{
 		const LaneHudBox title = boxOf( DirectStrikeLobby_title() );
 		nineSlice( title, PANEL_LIT_TL );
-		const Int titleWidth = drawSpaced( TheGameText->fetch( "GUI:DirectStrike" ), font( TITLE_EM ), title.x + title.w / 2, title.y, title.h, TITLE_SPACING, TEXT_WHITE, 0 );
-		/* the version as a small grey tag after the name: in the title's own spaced capitals the two
-			 measured 508 of the plate's 520 pixels; this way the row ends about 22 short of the edge */
+		/* the version as a small grey tag after the name, the pair centred in the plate: in the title's own
+			 spaced capitals the two measured 508 of the plate's 520 pixels, and the name centred alone
+			 pushed the tag 19 pixels past the plate's edge at 1080 */
 		Bool tagged = FALSE;
 		const UnicodeString version = TheGameText->fetch( "GUI:DirectStrikeVersion", &tagged );
-		if( tagged && !version.isEmpty() )
-			drawSpaced( version, font( TEAM_EM ), title.x + title.w / 2 + titleWidth / 2 + title.h / 6, title.y, title.h, 0.0f, TEXT_GREY, -1 );
+		const Bool hasTag = tagged && !version.isEmpty();
+		const Int tagGap = title.h / 6;
+		const Int tagWidth = hasTag ? textWidth( version, font( TEAM_EM ) ) : 0;
+		const Int titleCentre = title.x + title.w / 2 - ( hasTag ? ( tagGap + tagWidth ) / 2 : 0 );
+		const Int titleWidth = drawSpaced( TheGameText->fetch( "GUI:DirectStrike" ), font( TITLE_EM ), titleCentre, title.y, title.h, TITLE_SPACING, TEXT_WHITE, 0 );
+		if( hasTag )
+			drawSpaced( version, font( TEAM_EM ), titleCentre + titleWidth / 2 + tagGap, title.y, title.h, 0.0f, TEXT_GREY, -1 );
 
 		for( Int team = 0; team < DSLOBBY_TEAMS; ++team )
 		{

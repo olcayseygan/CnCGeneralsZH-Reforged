@@ -12952,8 +12952,9 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 
 	/* The layout of the night of 2026-11-20, in playable cells on a 16:9 field of 642 by 361: a lane
 		360 by 45 from x 141 to 501 and y 158 to 203, its middle (321, 180.5) the map's, the fortresses
-		0.7 and the towers 0.37 of the half-length off the middle, all on the middle line, plots 32 along
-		by 24 across in a column 14 cells past each end, 95 cells of green, beach and sea behind them. */
+		0.7 and the towers 0.37 of the half-length off the middle, all on the middle line, plots 24 along
+		by 32 across (upright since 2026-11-22) in a column 14 cells past each end, 103 cells of green,
+		beach and sea behind them. */
 	const Int laneX0 = 141, laneX1 = 501, laneY0 = 158, laneY1 = 203;
 	const Real middleX = 3210.0f, middleY = 1805.0f;
 
@@ -13005,8 +13006,8 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 		const std::vector<Coord3D>& polygon = theRMGParse.m_areaPolygons[area];
 		CHECK_EQ( (Int)polygon.size(), 4 );
 		CHECK( at.x > polygon[0].x && at.x < polygon[2].x && at.y > polygon[0].y && at.y < polygon[2].y );
-		CHECK_EQ( (Int)( polygon[2].x - polygon[0].x ), 320 );		// turned: 32 cells along the lane, 24 across, 16 rows by 12 columns
-		CHECK_EQ( (Int)( polygon[2].y - polygon[0].y ), 240 );
+		CHECK_EQ( (Int)( polygon[2].x - polygon[0].x ), 240 );		// upright: 24 cells along the lane, 32 across, 12 rows by 16 columns
+		CHECK_EQ( (Int)( polygon[2].y - polygon[0].y ), 320 );
 		CHECK( ( at.x < middleX ) == ( start % 2 == 0 ) );
 		CHECK( at.x < laneX0 * MAP_XY_FACTOR || at.x > laneX1 * MAP_XY_FACTOR );
 		if( start < 2 )
@@ -13041,8 +13042,8 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 	CHECK_EQ( spawns, 2 );
 	if( spawns != 2 )
 		return;
-	CHECK_NEAR( spawnAt[0].x, middleX - 1520.0f, 0.5f );
-	CHECK_NEAR( spawnAt[1].x, middleX + 1520.0f, 0.5f );
+	CHECK_NEAR( spawnAt[0].x, middleX - 1480.0f, 0.5f );
+	CHECK_NEAR( spawnAt[1].x, middleX + 1480.0f, 0.5f );
 	CHECK_NEAR( spawnAt[0].y, middleY, 0.5f );
 	CHECK_NEAR( spawnAt[1].y, middleY, 0.5f );
 	CHECK_EQ( laneA, 17 );
@@ -13075,7 +13076,7 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 	CHECK_NEAR( theRMGParse.m_objectPositions[tower[0]].x, middleX - 666.0f, 0.5f );
 	CHECK_NEAR( theRMGParse.m_objectPositions[tower[1]].x, middleX + 666.0f, 0.5f );
 
-	/* A wave copy is a plot turned onto the lane, 320 along and 240 across, round its spawn anchor. It
+	/* A wave copy is a plot moved onto the lane, 240 along and 320 across, round its spawn anchor. It
 		lies on the lane, wholly behind its own fortress, two cells clear of the fortress's 140 by 140, so
 		the fortress stands between the pad and the lane; and the fortress leaves the wave room to pass
 		it, more than ten cells of open lane either side. */
@@ -13083,9 +13084,9 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 	{
 		const Coord3D& own = theRMGParse.m_objectPositions[fortress[team]];
 		const Real ahead = team == 0 ? 1.0f : -1.0f;
-		CHECK( spawnAt[team].x - 160.0f >= laneX0 * MAP_XY_FACTOR && spawnAt[team].x + 160.0f <= laneX1 * MAP_XY_FACTOR );
-		CHECK( spawnAt[team].y - 120.0f >= laneY0 * MAP_XY_FACTOR && spawnAt[team].y + 120.0f <= laneY1 * MAP_XY_FACTOR );
-		CHECK( ( ( own.x - ahead * 70.0f ) - ( spawnAt[team].x + ahead * 160.0f ) ) * ahead >= 2.0f * MAP_XY_FACTOR );
+		CHECK( spawnAt[team].x - 120.0f >= laneX0 * MAP_XY_FACTOR && spawnAt[team].x + 120.0f <= laneX1 * MAP_XY_FACTOR );
+		CHECK( spawnAt[team].y - 160.0f >= laneY0 * MAP_XY_FACTOR && spawnAt[team].y + 160.0f <= laneY1 * MAP_XY_FACTOR );
+		CHECK( ( ( own.x - ahead * 70.0f ) - ( spawnAt[team].x + ahead * 120.0f ) ) * ahead >= 2.0f * MAP_XY_FACTOR );
 		CHECK( own.y - 70.0f - laneY0 * MAP_XY_FACTOR > 100.0f && laneY1 * MAP_XY_FACTOR - ( own.y + 70.0f ) > 100.0f );
 		CHECK( ( theRMGParse.m_objectPositions[tower[team]].x - own.x ) * ahead > 0.0f );
 	}
@@ -13139,7 +13140,7 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 	const std::vector<UnsignedByte> heights = theRMGParse.m_heights;
 	std::vector<AsciiString> themes;
 	/* The ends are round: the island reaches further out to sea on the lane's axis than level with
-		the plot columns' outer edges (y 134 and 226), by RMG_LANE_END_ROUND's ellipse, 11.8 cells on
+		the plot columns' outer edges (y 122 and 238; 134 and 226 before the plot stood upright), by RMG_LANE_END_ROUND's ellipse, 11.8 cells on
 		average over seeds 1 to 12. The core with corners rounded over 30 cells that came before
 		it ran the coast straight down the column, 4.2 cells. */
 	Real roundness = 0.0f;
@@ -13155,7 +13156,7 @@ TEST(the_lane_map_names_what_the_director_needs_on_open_soft_ground)
 		};
 		Real bulge = 0.0f;
 		for( Int from = 0; from < 2; from++ )
-			bulge += 0.5f * (Real)( firstDry( 134, from ) + firstDry( 226, from ) ) - (Real)firstDry( 180, from );
+			bulge += 0.5f * (Real)( firstDry( 122, from ) + firstDry( 238, from ) ) - (Real)firstDry( 180, from );
 		return 0.5f * bulge;
 	};
 	roundness += endBulge();
@@ -16017,15 +16018,15 @@ TEST(the_generator_still_turns_a_seed_into_the_bytes_it_used_to)
 {
 	CHECK( bootOnce() );
 
-	CHECK_EQ( RANDOM_MAP_GENERATOR_VERSION, 20 );
+	CHECK_EQ( RANDOM_MAP_GENERATOR_VERSION, 21 );
 
 	struct RMGFingerprint { Int m_seed, m_players, m_cells, m_style; UnsignedInt m_crc; };
 	static const RMGFingerprint theFingerprints[] =
 	{
-		{ 0, 2, 64, 0, 0xE9E74BA7 },
-		{ 12345, 4, 96, 0, 0xCEE6ECA4 },
-		{ 7, 8, 128, 0, 0x9345A3BC },
-		{ 7, 4, 200, 1, 0xBFE61244 },
+		{ 0, 2, 64, 0, 0xE9E74C27 },
+		{ 12345, 4, 96, 0, 0xCEEEECA4 },
+		{ 7, 8, 128, 0, 0x9365A3BC },
+		{ 7, 4, 200, 1, 0xBFE61264 },
 	};
 	const Int numFingerprints = sizeof(theFingerprints) / sizeof(theFingerprints[0]);
 
@@ -16329,7 +16330,7 @@ TEST(a_template_map_comes_out_the_same_twice_and_every_start_walks_to_every_othe
 	RandomMapGenerator::generate( exemplarSettings, exemplar );
 
 	// the bytes themselves, pinned like the generator's: a change here is a change to every template map's name
-	static const UnsignedInt theTemplateFingerprints[2] = { 0xCB55DF22u, 0x64B83240u };
+	static const UnsignedInt theTemplateFingerprints[2] = { 0xCB55DF23u, 0x64B83248u };
 	for( Int players = 2; players <= 8; players += 6 )
 	{
 		RandomMapSettings settings;

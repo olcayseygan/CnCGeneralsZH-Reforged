@@ -9775,9 +9775,12 @@ void RMGLayout::clearLockedGround( void )
 	seat 2's below it and seat 3's above, RMG_LANE_PLOT_PITCH cells apart. A plot's edge towards the
 	lane is its front, and the director lays the wave copy out with that edge forward. Every unit
 	stands on it, jets included; the air zones that once lay behind each plot are gone (the owner's
-	rule of 2026-11-21), and the plot is twice as deep for it, 12 slots across by 16 back. It grew
-	along the lane rather than across so the wave copy keeps its 24 cells on the 45-cell lane and
-	goes round the fortress as before, and a deep plot fills the side camera's wide frame.
+	rule of 2026-11-21), and the plot is 192 slots for it. On 2026-11-21 it grew along the lane, 12
+	slots across by 16 back; the owner turned it upright on 2026-11-22, 16 across by 12 back, 24 cells
+	along the lane by 32 across. The wave copy is 32 cells wide now on the 45-cell lane, so its middle
+	seven or eight columns meet the 14-cell fortress head on and go round it through the 15.5 cells
+	either side, where the outer columns already walk. Behind each column a strip RMG_LANE_DERRICK_CLEAR
+	cells deep stays clear of props: the client stands a player's income derricks there (LaneHud).
 
 	The lane and the plots are flat at RMG_LANE_GROUND, and nothing walls them in: the director holds
 	a plot's units where they were bought and sends a wave straight down its lines, so the terrain
@@ -9834,13 +9837,14 @@ static const char *const RMG_LANE_MIDDLE_TEMPLATE = NULL;	///< a structure in th
 #define RMG_LANE_MIDDLE_SIDES	16
 #define RMG_LANE_PATH_STEP		15.0f	///< cells between two waypoints of a lane path
 #define RMG_LANE_PLOT_GAP		14		///< cells of green between a lane's end and the front of its team's plots
-#define RMG_LANE_PLOT_ALONG		32		///< a plot's cells along the lane, front to back: 16 slots of LANEWAR_SLOT_SIZE
-#define RMG_LANE_PLOT_ACROSS	24		///< and across it, the width of its front: 12 slots
-#define RMG_LANE_PLOT_PITCH		34		///< cells between the middles of two neighbouring plots of a column
+#define RMG_LANE_PLOT_ALONG		24		///< a plot's cells along the lane, front to back: 12 slots of LANEWAR_SLOT_SIZE (32, 16 slots, on 2026-11-21)
+#define RMG_LANE_PLOT_ACROSS	32		///< and across it, the width of its front: 16 slots (24, 12 slots, on 2026-11-21)
+#define RMG_LANE_PLOT_PITCH		42		///< cells between the middles of two neighbouring plots of a column: 10 of green between them, as at 24 across and 34
+#define RMG_LANE_DERRICK_CLEAR	7		///< cells behind a plot column's back edge no prop stands in, room for the client's income derricks (a 46 by 42 TechOilDerrick 1 cell off the edge reaches 5.6)
 #define RMG_LANE_WEAR_FORTRESS	8.0f	///< cells past a fortress's footprint the ground round it is worn, at most
 #define RMG_LANE_WEAR_TOWER		5.0f	///< and past a tower's
 #define RMG_LANE_WEAR_FRINGE	0.35f	///< the share of that past which the worn ground only freckles the bank
-#define RMG_LANE_SEA_END		95		///< cells from the back of a plot column to the playable edge: green, beach and sea (an odd height keeps the lane's 45 in the middle); 111 before the plot grew 16 cells deeper, so the map stays 642 by 361
+#define RMG_LANE_SEA_END		103		///< cells from the back of a plot column to the playable edge: green, beach and sea (an odd height keeps the lane's 45 in the middle); 111 before the plot grew 16 cells deeper, 95 until it turned upright 8 cells shallower, so the map stays 642 by 361
 #define RMG_LANE_GROUND			64		///< height bytes of the lane, the plots and the level ring round them
 #define RMG_LANE_FLAT_RING		3		///< cells of level ground round all of those
 #define RMG_LANE_RING_WANDER	4.0f	///< and up to this many more on a slow noise field, so the hills' foot is no ruled line
@@ -9852,7 +9856,7 @@ static const char *const RMG_LANE_MIDDLE_TEMPLATE = NULL;	///< a structure in th
 #define RMG_LANE_CORE_SIDE		9.0f	///< cells the island's core stands off the plots' outer edges, across the lane
 #define RMG_LANE_CORE_ROUND		50.0f	///< cells, the core's rounded ends across the island
 #define RMG_LANE_END_ROUND		55.0f	///< and along it, so an end is a half ellipse round its plot column
-#define RMG_LANE_TIP_REACH		20.0f	///< the reach straight off an end at most, which keeps 50 cells of sea past the tip (26 while the plot column stood 10 cells further in)
+#define RMG_LANE_TIP_REACH		20.0f	///< the reach straight off an end at most, which keeps 50 cells of sea past the tip (26 while the plot column stood 10 cells further in; the upright plot's column ends 8 cells further in again, about 59 of sea)
 #define RMG_LANE_REACH_MEAN		14.0f	///< cells from the core to the coast on the seed's thinnest island, on average
 #define RMG_LANE_REACH_SEED		14.0f	///< and how much more a seed may add to that
 #define RMG_LANE_REACH_SWING	34.0f	///< cells the coast wanders either side on the slow field, the island's shape
@@ -10324,6 +10328,12 @@ void RMGLayout::buildLane( void )
 			const UnsignedInt hash = hashCell( seed + 51003U, x, y );
 			const Real roll = (Real)( hash % 1024U ) / 1024.0f;
 			const Real cellX = (Real)( x - RMG_BORDER_CELLS ) + 0.5f, cellY = (Real)( y - RMG_BORDER_CELLS ) + 0.5f;
+			// the strip behind each plot column where the client stands the income derricks
+			const Real columnBackA = (Real)shape.m_plotX0[0], columnBackB = (Real)( shape.m_plotX0[1] + RMG_LANE_PLOT_ALONG );
+			if( cellY > (Real)shape.m_plotY0[1] && cellY < (Real)( shape.m_plotY0[2] + RMG_LANE_PLOT_ACROSS )
+					&& ( ( cellX < columnBackA && cellX > columnBackA - RMG_LANE_DERRICK_CLEAR )
+						|| ( cellX > columnBackB && cellX < columnBackB + RMG_LANE_DERRICK_CLEAR ) ) )
+				continue;
 			const Bool longSide = cellX > (Real)shape.m_laneX0 && cellX < (Real)shape.m_laneX1;
 			const Real patch = fractalNoise( m_perm, (Real)x * 0.05f + 7.1f, (Real)y * 0.05f + 3.9f, 3 ) + ( longSide ? 0.1f : -0.15f );
 			const char *templateName = NULL;

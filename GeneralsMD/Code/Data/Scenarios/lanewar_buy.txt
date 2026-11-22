@@ -18,7 +18,7 @@
 30    laneplace  0  AmericaInfantryRanger         0 0
 30    laneplace  0  AmericaTankPaladin            2 0
 30    laneplace  0  ChinaTankOverlord             4 0
-30    laneplace  0  AmericaJetRaptor              0 12
+30    laneplace  0  AmericaJetRaptor              0 8
 30    laneplace  0  AmericaVehicleComanche        2 0
 # refused: the hero once a match, the hero not for sale, too dear, not the next level, an upgrade too dear
 30    laneplace  0  AmericaInfantryColonelBurton  8 0

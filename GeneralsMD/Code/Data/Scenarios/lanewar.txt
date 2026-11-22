@@ -13,7 +13,7 @@
 #     -logPrefix lanewar_
 #
 # A plot is a grid of 20-unit slots in its own frame: it stands upright behind its end of the lane,
-# 240 across its front (the edge towards the lane) and 160 deep, so 12 columns by 8 rows. laneplace's
+# 320 across its front (the edge towards the lane) and 240 deep, so 16 columns by 12 rows. laneplace's
 # two numbers are the column, counted across the front from the left as the team faces the enemy,
 # and the row, counted back from the front, of the unit's block's front left slot; row 0 leads the
 # wave. Slot 0 is team A's seat 1 (start 1), slot 1 B's seat 1, slot 2 A's seat 2, slot 3 B's seat
@@ -27,7 +27,7 @@
 30    laneplace  1  ChinaInfantryRedguard   2 5
 # refused: taken, off the plot, not a unit, too dear; B2's plot stays empty, so its turns send nothing
 30    laneplace  0  AmericaInfantryRanger   0 3
-30    laneplace  0  AmericaInfantryRanger   12 0
+30    laneplace  0  AmericaInfantryRanger   16 0
 30    laneplace  0  AmericaPowerPlant       6 3
 30    laneplace  1  ChinaTankOverlord       8 3
 # A spends what the ticks paid, B keeps its money

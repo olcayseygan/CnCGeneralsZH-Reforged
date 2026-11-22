@@ -73,7 +73,7 @@ enum
 	LANEWAR_TICK_SECONDS = 45,						///< wall seconds between two spawn ticks
 	LANEWAR_FIRST_TICK_SECONDS = 90,			///< wall seconds from the start to the first spawn tick, time to fill the plots
 	LANEWAR_LIFESPAN_SECONDS = 130,				///< wall seconds a wave copy lives
-	LANEWAR_SLOT_SIZE = 20,								///< world units a side of one plot slot, two cells; a plot 240 across its front and 320 deep is 12 columns by 16 rows
+	LANEWAR_SLOT_SIZE = 20,								///< world units a side of one plot slot, two cells; a plot 320 across its front and 240 deep is 16 columns by 12 rows (upright since 2026-11-22)
 	LANEWAR_INCOME_TIERS = 4,							///< income levels a player can buy past the first
 	LANEWAR_INCOME_TIER_PRICE = 1000,			///< each of them
 	LANEWAR_INCOME_TIER_PAYS = 100,				///< more on every tick for each level bought, back in ten ticks

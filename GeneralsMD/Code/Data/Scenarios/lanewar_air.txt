@@ -27,10 +27,10 @@
 30    lanetier   0  1 3
 30    laneplace  0  AmericaInfantryRanger   4 0
 30    laneplace  1  ChinaInfantryRedguard   4 0
-30    laneplace  0  AmericaJetAurora        4 12
-30    laneplace  1  ChinaJetMIG             4 12
+30    laneplace  0  AmericaJetAurora        4 8
+30    laneplace  1  ChinaJetMIG             4 8
 # the Aurora sold once tick 0 has sent its one copy, or two copies of it level China's end by
 # frame 4135, before the Comanche is bought
-4200  lanesell   0  0 4 12
+4200  lanesell   0  0 4 8
 # the USA's Comanche once five ticks have paid for it, beside the Ranger
 6800  laneplace  0  AmericaVehicleComanche  7 0

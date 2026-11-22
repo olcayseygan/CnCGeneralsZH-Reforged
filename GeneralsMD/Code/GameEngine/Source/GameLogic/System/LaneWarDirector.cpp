@@ -2525,7 +2525,10 @@ void LaneWarDirector::spawnWave( Int team, Int seat, UnsignedInt now )
 	/* As far as the enemy fortress: the wave's middle walks onto its line, so the rows in front of the
 		 fortress stop at it and fight it and the flanks come up level with it.  The pads stand behind
 		 the fortresses, so the distance between them would walk a wave past the enemy's fortress; the pad
-		 behind its own is passed on the way out, the pathfinder taking the middle rows round it. */
+		 behind its own is passed on the way out, the pathfinder taking the middle rows round it.  The
+		 upright plot of 2026-11-22 makes the copy 32 cells wide, so about half its columns stand
+		 behind the 14-cell fortress and squeeze past it into the 15.5 cells a side the outer columns
+		 already walk. */
 	Real dx = m_spawn[ 1 - team ].x - m_spawn[ team ].x;
 	const Object *enemyFortress = TheGameLogic->findObjectByID( m_fortress[ 1 - team ] );
 	if( enemyFortress != NULL )

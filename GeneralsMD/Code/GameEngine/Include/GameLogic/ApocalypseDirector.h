@@ -82,6 +82,7 @@ enum
 	APOCALYPSE_SPAWN_SPREAD = 60,					///< world units a zombie lands either way off its spawn
 	APOCALYPSE_BASE_REACH = 200,					///< world units past the farthest start from the middle that count as having reached the bases
 	APOCALYPSE_LIGHT_STEPS = 32,					///< the night amount the client is handed, in steps
+	APOCALYPSE_LIGHT_TINT_EVERY = 4,			///< steps between two retints of the light tables, each a full relight of the ground
 };
 
 /// how one phase plays: its length, how often a wave comes and how big, how fast it comes out, the cap

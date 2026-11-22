@@ -100,6 +100,8 @@ public:
 	void removeBibDrawable(DrawableID id);
 	/// Empties the bib buffer.
 	void clearAllBibs(void);
+	/// The light changed: the next fill bakes the bibs' colour again (it bakes only on an add or a remove).
+	void lightingChanged(void) {m_anythingChanged = true;}
 	/// Removes highlighting.
 	void removeHighlighting(void);
 	/// Draws the bibs, multiplied by the shroud when no shroud pass follows them (the lower terrain detail).

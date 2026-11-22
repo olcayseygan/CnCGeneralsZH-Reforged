@@ -2655,6 +2655,12 @@ void BaseHeightMapRenderObjClass::staticLightingChanged( void )
 	m_curNumScorchIndices=0;
 	m_roadBuffer->updateLighting();
 
+	// the batched trees and the bibs bake the light into their vertices, and only refill on a change
+	if (m_treeBuffer)
+		m_treeBuffer->lightingChanged();
+	if (m_bibBuffer)
+		m_bibBuffer->lightingChanged();
+
 }
 
 //=============================================================================

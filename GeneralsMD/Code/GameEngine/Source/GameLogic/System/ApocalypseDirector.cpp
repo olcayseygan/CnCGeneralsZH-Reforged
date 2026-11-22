@@ -114,15 +114,17 @@ static Bool isSeat( const Player *player )
 
 //-------------------------------------------------------------------------------------------------
 // The light, client side.  Only ever called through LogicThread::callAfterTick, so it runs on the
-// main thread between two ticks; it writes the client's light and the drawables' NIGHT state and the
-// logic reads neither.
+// main thread between two ticks.  It writes the client's light, which the logic never reads, and the
+// drawables' NIGHT state, which it does read through launch bones: that one is set on every tick as a
+// pure function of the frame (handLight).
 //-------------------------------------------------------------------------------------------------
 
 static GlobalData::TerrainLighting theBaseTerrainLight[ MAX_GLOBAL_LIGHTS ];
 static GlobalData::TerrainLighting theBaseObjectLight[ MAX_GLOBAL_LIGHTS ];
+static Real theBaseShadowStrength = 0.0f;
 static Bool theBaseLightKept = FALSE;
 
-/// the map's own light for its hour, as it loaded, before any tint
+/// the map's own light for its hour, as it loaded, before any tint, and the sun shadows' own darkness
 static void apocalypseKeepBaseLight( void )
 {
 	const Int tod = TheGlobalData->m_timeOfDay;
@@ -131,7 +133,18 @@ static void apocalypseKeepBaseLight( void )
 		theBaseTerrainLight[ k ] = TheGlobalData->m_terrainLighting[ tod ][ k ];
 		theBaseObjectLight[ k ] = TheGlobalData->m_terrainObjectsLighting[ tod ][ k ];
 	}
+	theBaseShadowStrength = TheGlobalData->m_shadowMapStrength;
 	theBaseLightKept = TRUE;
+}
+
+/** The shadow darkness is a setting of the whole game, not the map's, so it goes back when the match
+	  ends; the light tables come back with the next map's own. */
+static void apocalypseRestoreShadow( void )
+{
+	if( !theBaseLightKept )
+		return;
+	TheWritableGlobalData->m_shadowMapStrength = theBaseShadowStrength;
+	theBaseLightKept = FALSE;
 }
 
 static void tint( RGBColor &out, const RGBColor &base, const Real *day, const Real *night, Real amount )
@@ -142,15 +155,34 @@ static void tint( RGBColor &out, const RGBColor &base, const Real *day, const Re
 }
 
 /** Tint the map's light `level` steps of APOCALYPSE_LIGHT_STEPS toward the red night (a faint warm haze
-	  at 0), and put every drawable in its NIGHT state or out of it.  The night keeps four fifths of the
-	  red and a third of the rest, so a unit still reads against the ground. */
+	  at 0), and put every drawable in its NIGHT state or out of it.
+
+	  The night takes the sun down to seven tenths of its red and under a third of the rest, and lifts
+	  the ambient a tenth in red while keeping three fifths of the rest.  An ambient cut as hard as the
+	  sun left every face turned away from it black, so a red zombie read as a silhouette; a sun at full
+	  red over a cut ambient summed past white in red alone, and the darker bands of palm trunks and
+	  fronds went black while the light ones went orange, tiger stripes out of the texture itself.
+
+	  The Direct3D 11 sun shadow darkens a blocked pixel by a fixed strength, whatever the light, so
+	  under a dimmed sun it stayed as hard as at noon; the night halves it.  The -d3d9 stencil
+	  shadows keep the map's own colour.
+
+	  The ground's full relight costs a 40 to 56 ms frame (TERRAIN FULL UPDATE), so the tables move
+	  every APOCALYPSE_LIGHT_TINT_EVERY steps of the amount, eight times a dusk; the NIGHT state goes
+	  with every step.
+
+	  The ground reads m_terrainAmbient and m_terrainDiffuse, GlobalData::setTimeOfDay's copies of the
+	  hour's terrain light, and never the table itself: the Direct3D 11 ground's sun every frame
+	  (HeightMap.cpp) and the vertex light the -d3d9 ground bakes in staticLightingChanged.  Tinting the
+	  table alone left the ground at noon under red units, so the copies are written here too, the
+	  hour itself untouched (the logic reads m_timeOfDay). */
 static void apocalypseApplyLight( Int level, Bool relight, Bool lightsOn )
 {
 	if( relight && theBaseLightKept )
 	{
 		static const Real HAZE[ 3 ] = { 1.03f, 0.99f, 0.93f };
-		static const Real NIGHT_AMBIENT[ 3 ] = { 0.80f, 0.30f, 0.28f };
-		static const Real NIGHT_DIFFUSE[ 3 ] = { 0.95f, 0.42f, 0.34f };
+		static const Real NIGHT_AMBIENT[ 3 ] = { 1.10f, 0.62f, 0.60f };
+		static const Real NIGHT_DIFFUSE[ 3 ] = { 0.70f, 0.32f, 0.28f };
 		const Real amount = (Real)level / (Real)APOCALYPSE_LIGHT_STEPS;
 		const Int tod = TheGlobalData->m_timeOfDay;
 		for( Int k = 0; k < MAX_GLOBAL_LIGHTS; ++k )
@@ -161,7 +193,14 @@ static void apocalypseApplyLight( Int level, Bool relight, Bool lightsOn )
 			tint( terrain.diffuse, theBaseTerrainLight[ k ].diffuse, HAZE, NIGHT_DIFFUSE, amount );
 			tint( objects.ambient, theBaseObjectLight[ k ].ambient, HAZE, NIGHT_AMBIENT, amount );
 			tint( objects.diffuse, theBaseObjectLight[ k ].diffuse, HAZE, NIGHT_DIFFUSE, amount );
+			TheWritableGlobalData->m_terrainAmbient[ k ] = terrain.ambient;
+			TheWritableGlobalData->m_terrainDiffuse[ k ] = terrain.diffuse;
 		}
+		// ponytail: 0.45 and 0.52 mirror SHADOW_MAP_STRENGTH and SHADOW_MAP_REFORGED_STRENGTH
+		// (W3DVolumetricShadow.cpp), the strengths a 0 here stands for; move them to GlobalData if they change
+		const Real dayStrength = theBaseShadowStrength > 0.0f ? theBaseShadowStrength
+			: TheGlobalData->m_lightingStyle == LIGHTING_STYLE_REFORGED ? 0.52f : 0.45f;
+		TheWritableGlobalData->m_shadowMapStrength = level > 0 ? dayStrength * ( 1.0f - 0.5f * amount ) : theBaseShadowStrength;
 		if( !TheGlobalData->m_headless && TheDisplay != NULL )
 			TheDisplay->setTimeOfDay( (TimeOfDay)tod );
 	}
@@ -181,12 +220,15 @@ static void apocalypseApplyLight( Int level, Bool relight, Bool lightsOn )
 //-------------------------------------------------------------------------------------------------
 ApocalypseDirector::ApocalypseDirector( void )
 {
+	m_active = FALSE;
 	reset();
 }
 
 //-------------------------------------------------------------------------------------------------
 void ApocalypseDirector::reset( void )
 {
+	if( m_active )
+		LogicThread::callAfterTick( []() { apocalypseRestoreShadow(); } );
 	m_active = FALSE;
 	m_centre.zero();
 	m_reachRadius = 0.0f;
@@ -414,7 +456,8 @@ void ApocalypseDirector::handLight( UnsignedInt now )
 	const Real amount = Apocalypse_nightAmount( m_phase, now - m_phaseStartFrame, length );
 	const Int level = (Int)( amount * (Real)APOCALYPSE_LIGHT_STEPS + 0.5f );
 	const Bool lightsOn = level * 2 >= APOCALYPSE_LIGHT_STEPS;
-	const Bool relight = level != m_lightLevel;
+	// the tables move a quarter as often as the amount: the ground's relight is a long frame
+	const Bool relight = m_lightLevel < 0 || level / APOCALYPSE_LIGHT_TINT_EVERY != m_lightLevel / APOCALYPSE_LIGHT_TINT_EVERY;
 	if( lightsOn != m_lightsOn )
 		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u lights %s\n", now, lightsOn ? "on" : "off" ));
 	m_lightLevel = level;

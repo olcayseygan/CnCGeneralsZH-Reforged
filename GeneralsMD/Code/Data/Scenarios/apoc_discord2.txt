@@ -1,0 +1,52 @@
+# Apocalypse Discord video, second shoot (2026-11-22): staging for close, readable takes.
+#
+#   generals.exe -randommap 7 4 normal apocalypse -autoskirmish 2 -takeover -observer
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -scenario apoc_discord2 -cinema apoc_discord2
+#
+# The zombies belong to the civilian player and no scenario line can make one, so the crowd is the
+# director's own. -takeover leaves nothing roaming: China Gattling cannons inside gates 1, 2 and 4
+# kill what comes through so the walking cap keeps refilling, and gate 3 (1770,920) is the held gate
+# the north ring's dead walk down the trail to. The clear square is 460 to 2580; the shroud is per
+# 40-unit cell by its middle, so y 440 to 460 is in the deadly ring and still drawn.
+
+# China: power, the nuke, the kill zones
+10    spawn      1  ChinaPowerPlant              2   start1:0:-170     90
+10    spawn      1  ChinaPowerPlant              2   start1:-170:-40   90
+10    spawn      1  ChinaPowerPlant              3   start1:-60:-260   90
+10    spawn      1  ChinaPowerPlant              2   start1:150:-60    90
+10    spawn      1  ChinaNuclearMissileLauncher  1   start1:220:-150
+10    spawn      1  ChinaGattlingCannon          3   1300 1980         90
+10    spawn      1  ChinaGattlingCannon          3   1060 1290         90
+10    spawn      1  ChinaGattlingCannon          3   1990 1730         90
+
+# China: the held position inside gate 3
+10    spawn      1  ChinaGattlingCannon          2   1760 1080         130
+10    spawn      1  ChinaBunker                  1   1840 1140
+20    spawn      1  ChinaTankOverlord            2   1800 1020         90
+20    spawn      1  ChinaTankDragon              2   1700 1010         80
+20    spawn      1  ChinaInfantryRedguard        12  1760 1110         22
+30    stance     1  *                            defensive
+
+# Scenario frames are game frames, 1.5 a logic frame at game speed 150: 300 runs on logic 200.
+# The patrol below dies on logic 470 (Humvee 2005,456), 570 (Crusader 1935,455), 770 (Rangers).
+# The nuke, mid-night (logic 6900), on the crowd at the mouth of gate 2 and the Gattlings there
+10350 power      1  ChinaNuclearMissileLauncher  900 1280
+
+# America: a held base on its own start (Player_1_Start 1261,1626), where the night crowd lands
+10    spawn      0  AmericaPowerPlant            2   start0:-170:170   110
+10    spawn      0  AmericaBarracks              1   start0:190:140
+10    spawn      0  AmericaWarFactory            1   start0:-210:-130
+# (the army after frame 800: the patrol's move lines name these templates and would take them too)
+900   spawn      0  AmericaTankCrusader          4   start0:30:-190    70
+900   spawn      0  AmericaTankPaladin           2   start0:-160:-40   80
+900   spawn      0  AmericaVehicleHumvee         2   start0:150:-70    70
+900   spawn      0  AmericaInfantryRanger        12  start0:40:-90     20
+910   stance     0  *                            defensive
+
+# America: a patrol sent out into the ring at gate 3, dead after 4 game seconds in it
+300   spawn      0  AmericaTankCrusader          1   1850 800
+300   spawn      0  AmericaVehicleHumvee         1   1900 830
+300   spawn      0  AmericaInfantryRanger        5   1870 870          22
+390   move       0  AmericaTankCrusader          1930 452
+390   move       0  AmericaVehicleHumvee         2000 452
+400   move       0  AmericaInfantryRanger        1965 452

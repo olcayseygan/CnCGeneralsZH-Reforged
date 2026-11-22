@@ -1,0 +1,35 @@
+# Apocalypse Discord video, second shoot (2026-11-22): close, low, one idea a take, read on a phone.
+#   -randommap 7 4 normal apocalypse -autoskirmish 2 -takeover -side 0 FactionAmerica
+#   -side 1 FactionChina -seed 7 -observer -scenario apoc_discord2 -cinema apoc_discord3 -turbo
+# Times are logic frames / 30. Four passes film four ranges of the same match:
+#   E1 240-840 (60 fps), E2 3780-4560 (60), N 6380-7620 (120), D2 9060-9540 (60).
+# Night is 5700-8100, mid-night 6900. Day 2 starts at 8700.
+
+# --- E1: the patrol driven into the ring at gate 3 (deaths at logic 470, 570, 770) ---
+7.5   cut   1950 620 0.6 180 4
+8.0   zoom  0.5 20
+
+# --- E2: day, the dead walking out of the red fog on the north trail ---
+125.5 cut   1985 540 0.5 180 8
+126.0 orbit -10 16
+# the whole idea from high: walled centre, bases, the red ring at the top edge
+142.0 drone 10  1520 2300 1400  1520 2200 1300  look 1520 1050 sway 0 bank 0
+
+# --- N: deep night ---
+# the same trail at night
+212.5 cut   1985 540 0.5 180 8
+213.0 orbit -10 8
+# gate 3 from behind its defenders: Overlords, Dragons, Gattlings, Red Guard, the crowd in the gap
+220.7 cut   1815 980 0.6 170 6
+221.0 zoom  0.52 8
+# the nuke on the gate 2 mouth, called at 230.0
+228.7 cut   930 1275 1.1 270 -6
+# gate 4 from behind its Gattlings, looking out east
+241.3 cut   2120 1760 0.65 90 6
+241.5 orbit 12 12
+
+# --- D2: day 2, the backlog of the night arriving in daylight ---
+302.0 cut   1815 980 0.6 170 6
+302.5 zoom  0.52 8
+310.0 cut   1270 2120 0.65 355 6
+310.5 orbit -10 8

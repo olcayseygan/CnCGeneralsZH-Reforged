@@ -1,0 +1,19 @@
+# Apocalypse Discord video, reshoot (2026-11-22): tighter, one idea a take, read at 720p.
+#   -randommap 7 4 normal apocalypse -autoskirmish 2 -takeover -side 0 FactionAmerica
+#   -side 1 FactionChina -seed 7 -observer -scenario apoc_discord4 -cinema apoc_discord4 -turbo
+# Times are logic frames / 30. Passes: R1 220-840 (60 fps), R2 6280-6860 (120), R3 9060-9400 (60).
+
+# R1: the patrol into the ring at gate 3, the deadly band (y 440-460) above the middle of the frame
+7.0   cut   1965 520 0.55 180 2
+
+# R2, mid-night: the staged pack walking out of the ring on the gate 4 trail, toward the camera
+209.0 cut   2500 1940 0.5 90 8
+# gate 3's kill line close: Dragons and Overlords at the gap
+218.7 cut   1800 900 0.4 170 10
+219.0 orbit -8 9
+
+# R3, day 2: the same kill line in daylight, then gate 1's Gattlings
+301.5 cut   1800 900 0.4 170 10
+302.0 orbit -8 5.5
+307.7 cut   1285 2080 0.45 355 10
+308.0 orbit 8 5.5

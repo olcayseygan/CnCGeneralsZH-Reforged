@@ -1,0 +1,64 @@
+# Apocalypse Discord video, reshoot (2026-11-22): apoc_discord2 plus one staged pack of the dead.
+#
+#   generals.exe -randommap 7 4 normal apocalypse -autoskirmish 2 -takeover -observer
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -scenario apoc_discord4 -cinema apoc_discord4
+#
+# Scenario frames are game frames, 1.5 a logic frame at game speed 150: 300 runs on logic 200.
+# Shutting gates 1, 2 and 4 with bunker lines to send the horde to gate 3 was tried and dropped: the
+# dead chew through the bunkers and break into the middle, and gate 3 got no busier.
+
+# China: power, the nuke, Gattling kill zones inside gates 1, 2 and 4 (they keep the walking cap refilling)
+10    spawn      1  ChinaPowerPlant              2   start1:0:-170     90
+10    spawn      1  ChinaPowerPlant              2   start1:-170:-40   90
+10    spawn      1  ChinaPowerPlant              3   start1:-60:-260   90
+10    spawn      1  ChinaPowerPlant              2   start1:150:-60    90
+10    spawn      1  ChinaNuclearMissileLauncher  1   start1:220:-150
+10    spawn      1  ChinaGattlingCannon          3   1300 1980         90
+10    spawn      1  ChinaGattlingCannon          3   1060 1290         90
+10    spawn      1  ChinaGattlingCannon          3   1990 1730         90
+
+# China: the held position inside gate 3 (1770,920)
+10    spawn      1  ChinaGattlingCannon          2   1760 1080         130
+10    spawn      1  ChinaBunker                  1   1840 1140
+20    spawn      1  ChinaTankOverlord            2   1800 1020         90
+20    spawn      1  ChinaTankDragon              2   1700 1010         80
+20    spawn      1  ChinaInfantryRedguard        12  1760 1110         22
+30    stance     1  *                            defensive
+
+# America: its base on its own start (Player_1_Start 1261,1626); the army comes after the patrol,
+# whose move lines name these templates and would take them too
+10    spawn      0  AmericaPowerPlant            2   start0:-170:170   110
+10    spawn      0  AmericaBarracks              1   start0:190:140
+10    spawn      0  AmericaWarFactory            1   start0:-210:-130
+900   spawn      0  AmericaTankCrusader          4   start0:30:-190    70
+900   spawn      0  AmericaTankPaladin           2   start0:-160:-40   80
+900   spawn      0  AmericaVehicleHumvee         2   start0:150:-70    70
+900   spawn      0  AmericaInfantryRanger        12  start0:40:-90     20
+910   stance     0  *                            defensive
+
+# America: a patrol driven into the ring north of gate 3. The kill test is the exact clear square
+# (460 to 2580), the shroud is per 40-unit cell by its middle, so y 440 to 460 kills and still draws:
+# Humvee dies on logic 470 at 2005,456, Crusader 570 at 1935,455, Rangers 770 at 1981,450.
+300   spawn      0  AmericaTankCrusader          1   1850 800
+300   spawn      0  AmericaVehicleHumvee         1   1900 830
+300   spawn      0  AmericaInfantryRanger        5   1870 870          22
+390   move       0  AmericaTankCrusader          1930 452
+390   move       0  AmericaVehicleHumvee         2000 452
+400   move       0  AmericaInfantryRanger        1965 452
+
+# Staged, mid-night (logic 6290): a pack of the dead stood inside the shroud on the gate 4 trail
+# (hidden from x 2600 out) and walked out of it toward the camera. It is America's, since no scenario
+# line can make the civilian player's dead, so the Gattlings leave it alone; the ring kills what is
+# still past x 2580 after 4 game seconds. They walk 9 (Brute 6, Runner 18) a game second, so the
+# back rows stand only to x 2616: a pack stood 2610 to 2675 died where it stood on logic 6370, and
+# walkers stood to 2608 only made 2589 (about 5 a game second from a standing start). Runners step
+# out of the hidden band; walkers and Brutes stand in the drawn one.
+9435  spawn      0  ApocalypseZombieBrute        4   2565 1950         24
+9435  spawn      0  ApocalypseZombieRunner       9   2600 1910         16
+9435  spawn      0  ApocalypseZombie             25  2558 1985         14
+9450  move       0  ApocalypseZombieBrute        2330 1880
+9450  move       0  ApocalypseZombieRunner       2330 1880
+9450  move       0  ApocalypseZombie             2330 1880
+
+# the nuke, mid-night (logic 6900), on the crowd at the mouth of gate 2 and the Gattlings there
+10350 power      1  ChinaNuclearMissileLauncher  900 1280

@@ -129,6 +129,7 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - Online works the same way. Host a custom game and it asks Classic or Direct Strike; the room is the same screen as the LAN one, chat between the teams, a ready lamp and ping bars on every card, kick through the seat's own list, and the island is built from the seed the host's room carries. Direct Strike games online are never rated, so a lane match can't move your place on the ladder.
 - Hosting a game now opens a mode picker in the Direct Strike lobby's steel: three cards side by side, Classic, Direct Strike and Apocalypse, each with a small picture of the mode, its name and version and one line on who plays it, and Cancel under them. Escape closes it.
 - Direct Strike now says which version of the mode you are playing: "Direct Strike v1.0" on the main menu button, in the room's title and in the LAN and online game lists.
+- In 4.3.0 pressing Back in any Direct Strike room, skirmish or online, crashed the game to the desktop. It was more than half of that version's crash reports. Back now takes you out of the room. The same fault waited behind Start, Send and every pick in the room's lists, and it is gone there too.
 
 ## Direct Strike towers and fortresses break where they are hit
 

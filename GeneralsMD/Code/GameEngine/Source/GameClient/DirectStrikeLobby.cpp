@@ -828,6 +828,9 @@ namespace
 				choose( combo, SLOT_CLOSED );
 			else if( within && s->getState() == SLOT_CLOSED )
 				choose( combo, SLOT_OPEN );
+			// the room heard that change at once and may have left the lobby
+			if( s_game == NULL )
+				return;
 		}
 	}
 
@@ -845,21 +848,29 @@ namespace
 			TheWindowManager->winSendSystemMsg( s_parent, GEM_EDIT_DONE, (WindowMsgData)entry, 0 );
 	}
 
+	/// every choose(), press() and sendChat() below is a synchronous message to the room, whose handler can leave
+	/// the lobby and detach it (s_game NULL); each is therefore the last thing its click does
 	void pickFromList( List list, Int slot, Real x, Real y )
 	{
 		if( list == LIST_SIZE )
 		{
 			for( Int row = 0; row < DSLOBBY_SIZES; ++row )
 				if( DirectStrikeLobby_sizeRow( row ).contains( x, y ) )
+				{
 					chooseSize( row + 1 );
+					return;
+				}
 			return;
 		}
 		if( list == LIST_SEAT )
 		{
 			for( Int row = 0; row < DSLOBBY_SEAT_ROWS; ++row )
 				if( DirectStrikeLobby_seatRow( slot, row, slimSeats(), isNetwork() ).contains( x, y ) )
+				{
 					if( GameWindow *combo = named( "ComboBoxPlayer", slot ) )
 						choose( combo, seatPick( row ) );
+					return;
+				}
 			return;
 		}
 		if( list == LIST_ARMY )
@@ -868,11 +879,17 @@ namespace
 			if( combo == NULL )
 				return;
 			if( DirectStrikeLobby_pickerRandom( slot, slimSeats(), isNetwork() ).contains( x, y ) )
+			{
 				choose( combo, PLAYERTEMPLATE_RANDOM );
+				return;
+			}
 			for( Int column = 0; column < DSLOBBY_ARMY_COLUMNS; ++column )
 				for( Int tile = 0; tile < DSLOBBY_ARMY_TILES; ++tile )
 					if( DirectStrikeLobby_pickerTile( slot, column, tile, slimSeats(), isNetwork() ).contains( x, y ) )
+					{
 						choose( combo, ThePlayerTemplateStore->getTemplateNumByName( ARMIES[ column ][ tile ] ) );
+						return;
+					}
 			return;
 		}
 		Int colors[ COLOR_LIMIT ];
@@ -880,7 +897,10 @@ namespace
 		GameWindow *combo = named( "ComboBoxColor", slot );
 		for( Int i = 0; i < count && combo != NULL; ++i )
 			if( DirectStrikeLobby_colorCell( slot, count, i, slimSeats(), isNetwork() ).contains( x, y ) )
+			{
 				choose( combo, colors[ i ] );
+				return;
+			}
 	}
 
 	/// a press at a screen pixel, the message's own (a scripted click does not move the cursor)
@@ -898,13 +918,23 @@ namespace
 			pickFromList( open, openSlot, x, y );
 			return;
 		}
+		// Back pops the shell and detaches this lobby before press() returns: a key press is never also a seat pick
 		if( DirectStrikeLobby_back().contains( x, y ) )
+		{
 			press( "ButtonBack" );
-		else if( DirectStrikeLobby_start().contains( x, y ) && *startState() != 'I' )
+			return;
+		}
+		if( DirectStrikeLobby_start().contains( x, y ) && *startState() != 'I' )
+		{
 			press( "ButtonStart" );
-		else if( isNetwork() && DirectStrikeLobby_send().contains( x, y ) )
+			return;
+		}
+		if( isNetwork() && DirectStrikeLobby_send().contains( x, y ) )
+		{
 			sendChat();
-		else if( amHost() && DirectStrikeLobby_size().contains( x, y ) )
+			return;
+		}
+		if( amHost() && DirectStrikeLobby_size().contains( x, y ) )
 		{
 			s_list = LIST_SIZE;
 			return;
@@ -929,12 +959,31 @@ namespace
 		}
 	}
 
+	/// every seat's pick and the open list, one line, so a report's log tail says what the room held
+	void logSeats( const char *why )
+	{
+		AsciiString line;
+		for( Int slot = 0; slot < DSLOBBY_SEATS; ++slot )
+		{
+			const GameSlot *s = seat( slot );
+			AsciiString one;
+			if( s != NULL )
+				one.format( " %d=%d/%d/%d", slot, SlotPickOf( s ), s->getPlayerTemplate(), s->getColor() );
+			else
+				one.format( " %d=none", slot );
+			line.concat( one );
+		}
+		DEBUG_LOG(( "DIRECTSTRIKE LOBBY %s seats%s list=%d/%d\n", why, line.str(), (Int)s_list, s_listSlot ));
+	}
+
 	WindowMsgHandledType lobbyInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )
 	{
 		if( msg == GWM_LEFT_DOWN && s_game != NULL )
 		{
 			// SHORTTOLONG's halves
 			click( (Short)( mData1 & 0xFFFF ), (Short)( ( mData1 >> 16 ) & 0xFFFF ) );
+			if( s_game != NULL )
+				logSeats( "click" );
 			return MSG_HANDLED;
 		}
 		if( msg == GWM_LEFT_UP )
@@ -975,6 +1024,7 @@ void DirectStrikeLobby_attach( GameWindow *parent, const char *layoutFilename, c
 	parent->winSetInputFunc( lobbyInput );
 	parent->winClearStatus( WIN_STATUS_NO_INPUT );
 	DEBUG_LOG(( "DIRECTSTRIKE LOBBY attach %s local=%d host=%d\n", layoutFilename, localSlot(), (Int)amHost() ));
+	logSeats( "attach" );
 }
 
 void DirectStrikeLobby_detach( void )

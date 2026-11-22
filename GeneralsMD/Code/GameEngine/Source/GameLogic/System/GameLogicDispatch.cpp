@@ -58,6 +58,7 @@
 #include "Common/Radar.h"
 
 #include "GameLogic/AIPathfind.h"
+#include "GameLogic/ApocalypseDirector.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/LaneWarDirector.h"
@@ -995,6 +996,14 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 			const Int amount = msg->getArgument( 1 )->integer;
 			if( amount <= 0 || targetIndex < 0 || targetIndex >= ThePlayerList->getPlayerCount() )
 				break;
+			// No gifts in Direct Strike or Apocalypse: each director decides from the map, the same on every
+			// machine.  The bots' own bank-to-bank sharing never sends this message and is left alone.
+			if( ( TheLaneWarDirector != NULL && TheLaneWarDirector->isActive() )
+					|| ( TheApocalypseDirector != NULL && TheApocalypseDirector->isActive() ) )
+			{
+				DEBUG_LOG(( "MONEY TRANSFER: frame %d player %d refused, mode match\n", getFrame(), thisPlayer->getPlayerIndex() ));
+				break;
+			}
 			Player *target = ThePlayerList->getNthPlayer( targetIndex );
 			if( target == thisPlayer || !thisPlayer->isPlayableSide() || !thisPlayer->isPlayerActive()
 					|| !target->isPlayableSide() || !target->isPlayerActive() )

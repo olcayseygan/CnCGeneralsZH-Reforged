@@ -26,6 +26,7 @@ found and fixed, EA's own, not port damage.**
 - The fog glows red where the dead gather in it, brighter the thicker they stand, so you see a horde massing before a pass long before it comes through. It shows how many, never who.
 - In Apocalypse a small steel tray at the top of the screen keeps the match's time, and a bar along its foot shows the day and night with the sun or the moon riding it, the time left until the light turns and how many nights you have lived through.
 - You can no longer click or drag-select the dead, so a box over your own army around a horde picks up only your army. Attacking them, force-fire and attack-move work as before.
+- Allies no longer send each other money in an Apocalypse match; the Tab screen's money column is gone there, as in Direct Strike.
 
 ## The computer builds superweapons like a turtle does
 
@@ -68,6 +69,16 @@ found and fixed, EA's own, not port damage.**
 - Direct Strike replays and saves recorded before this change will not play back.
 
 ## Direct Strike waves leave from behind the fortress
+
+## Direct Strike keeps to its own rules
+
+- Nobody sends money to anyone in Direct Strike or the Apocalypse any more. The money column on the Tab screen is gone in those matches, and a gift sent from an older copy of the game is turned away.
+- The hero portrait in the bottom left corner is gone from Direct Strike. Your hero keeps his own card on the Direct Strike bar.
+- Dragging a box over the field selects nothing in Direct Strike. Clicks and the plot work as before.
+- Marching waves no longer wear the "F" formation letter. They still march together at their slowest unit's pace.
+- The watch tower and the fortress see stealthed units now, the tower out to 250 and the fortress out to 325, a little past their own guns.
+- Units no longer earn rank in the field. The only rank a unit has is the one you bought for it, and your general's points still come from kills as before.
+- Every Direct Strike replay recorded before this change no longer plays back, with stealthed units in it or not, and neither does an Apocalypse replay with a money gift in it.
 
 - A wave now appears behind its own fortress, with the fortress between it and the lane, and marches out past the fortress and the watch tower. It used to appear in front of the tower. An enemy that wants to sit on your spawn has to get past both first. The walk to the enemy fortress is 90 cells longer.
 - Direct Strike replays and saves recorded before this change will not play back.

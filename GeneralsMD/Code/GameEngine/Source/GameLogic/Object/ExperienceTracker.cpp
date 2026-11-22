@@ -34,6 +34,7 @@
 #include "Common/ThingTemplate.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Object.h"
 
 
@@ -231,6 +232,13 @@ Bool ExperienceTracker::canGainExpForLevel(Int levelsToGain) const
 //-------------------------------------------------------------------------------------------------
 void ExperienceTracker::addExperiencePoints( Int experienceGain, Bool canScaleForBonus)
 {
+	// Direct Strike sells rank and nothing earns it: every gain (kills, heals, crates, abilities, a
+	// sink's share) comes through here and stops.  The bought rank goes in by setVeterancyLevel and
+	// stays; the general's skill points are their own path (Player::addSkillPointsForKill).  The
+	// director's switch comes from the map, the same on every machine
+	if( TheLaneWarDirector != NULL && TheLaneWarDirector->isActive() )
+		return;
+
 	if( m_experienceSink != INVALID_ID )
 	{
 		// I have been set up to give my experience to someone else

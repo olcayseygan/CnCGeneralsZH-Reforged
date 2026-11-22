@@ -13128,7 +13128,10 @@ void InGameUI::drawProductionList( void )
 	// standing just clear of the radar's frame; the hero's cell stands over it, queue or none
 	const HudCellStyle style = hudCellStyle();
 	const Int foot = radarFrameTop() - stripPixels( PRODUCTION_LIST_LIFT ) - style.production.footH;
-	m_heroCell = drawHeroCell( style, foot - style.cellH, m_hero );
+	// the Direct Strike HUD sells and shows its own hero card, so the cell would be a second hero at the
+	// screen's edge; Apocalypse has no such HUD and keeps it
+	if( !LaneHud_isShowing() )
+		m_heroCell = drawHeroCell( style, foot - style.cellH, m_hero );
 	// the Red Alert style sidebar's cameos wear their own queue's clocks and counts; the hero's cell
 	// stays, over the selection card (radarFrameTop)
 	if( m_productionListCount == 0 || sidebarLayoutOn() )

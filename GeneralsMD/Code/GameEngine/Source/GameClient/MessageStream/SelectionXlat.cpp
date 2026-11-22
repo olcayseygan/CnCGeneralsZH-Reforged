@@ -56,6 +56,7 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GroupPanel.h"
 #include "GameClient/Keyboard.h"
+#include "GameClient/LaneHud.h"
 #include "GameClient/LookAtXlat.h"
 #include "GameClient/SelectionInfo.h"
 #include "GameClient/SelectionPriority.h"
@@ -467,8 +468,9 @@ GameMessageDisposition SelectionTranslator::translateGameMessage(const GameMessa
 				delta.x = abs(pixel.x - m_selectFeedbackAnchor.x);
 				delta.y = abs(pixel.y - m_selectFeedbackAnchor.y);
 
-				// if mouse has moved while left button is down, begin drag selection
-				if (delta.x > TheMouse->m_dragTolerance || delta.y > TheMouse->m_dragTolerance)
+				// if mouse has moved while left button is down, begin drag selection.  Never in Direct Strike:
+				// the board is played by clicks and the HUD's own drags, so the release stays a plain click
+				if ((delta.x > TheMouse->m_dragTolerance || delta.y > TheMouse->m_dragTolerance) && !LaneHud_isShowing())
 				{
 					if (m_dragSelecting == false)
 					{

@@ -59,6 +59,7 @@
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GadgetStaticText.h"
 #include "GameClient/GadgetPushButton.h"
+#include "GameNetwork/GUIUtil.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/WindowVideoManager.h"
 #include "GameClient/CampaignManager.h"
@@ -728,6 +729,9 @@ void MainMenuInit( WindowLayout *layout, void *userData )
 	getUpdate = TheWindowManager->winGetWindowFromId( parentMainMenu, getUpdateID );
 //	buttonTRAINING = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonTRAININGID );
 	buttonChallenge = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonChallengeID );
+	// the mode's version beside its name, from the one key the lobbies read too
+	if( GameWindow *directStrike = TheWindowManager->winGetWindowFromId( parentMainMenu, directStrikeID ) )
+		GadgetButtonSetText( directStrike, ModeNameWithVersion( "GUI:DirectStrike", "GUI:DirectStrikeVersion" ) );
 	buttonUSA = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonUSAID );
 	buttonGLA = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonGLAID );
 	buttonChina = TheWindowManager->winGetWindowFromId( parentMainMenu, buttonChinaID );

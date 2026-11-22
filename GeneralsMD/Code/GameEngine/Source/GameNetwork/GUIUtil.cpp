@@ -1802,6 +1802,19 @@ void LayoutDirectStrikeRoom(GameWindow *parent, const char *layoutFilename, cons
 	DirectStrikeLobby_attach(parent, layoutFilename, game);
 }
 
+UnicodeString ModeNameWithVersion(const char *nameKey, const char *versionKey)
+{
+	UnicodeString name = TheGameText->fetch(nameKey);
+	Bool exists = FALSE;
+	const UnicodeString version = TheGameText->fetch(versionKey, &exists);
+	if (exists && !version.isEmpty())
+	{
+		name.concat(u" ");
+		name.concat(version);
+	}
+	return name;
+}
+
 // Yes is Classic, No is Direct Strike; MessageBox.wnd's buttons take the mode names
 void AskGameMode(void (*classic)(void), void (*directStrike)(void))
 {
@@ -1812,7 +1825,7 @@ void AskGameMode(void (*classic)(void), void (*directStrike)(void))
 	if (GameWindow *yes = TheWindowManager->winGetWindowFromId(box, NAMEKEY("MessageBox.wnd:ButtonYes")))
 		GadgetButtonSetText(yes, TheGameText->fetch("GUI:GameModeClassic"));
 	if (GameWindow *no = TheWindowManager->winGetWindowFromId(box, NAMEKEY("MessageBox.wnd:ButtonNo")))
-		GadgetButtonSetText(no, TheGameText->fetch("GUI:GameModeDirectStrike"));
+		GadgetButtonSetText(no, ModeNameWithVersion("GUI:GameModeDirectStrike", "GUI:DirectStrikeVersion"));
 
 	// EA's layout puts Yes's right edge a pixel past No's left, and "DIRECT STRIKE" is wider than its
 	// 90-point button, so the labels ran into each other even once the buttons were apart.  Every

@@ -224,7 +224,7 @@ static UnicodeString roomMapName( const AsciiString &map )
 	// the list's path is GameSpy's portable one, '/' for '\' (GameSpyInfo::setGameOptions): its leaf names the map
 	const char *leaf = strrchr(map.str(), '/');
 	if (IsDirectStrikeMap(leaf ? AsciiString(leaf + 1) : map))
-		mapName = TheGameText->fetch("GUI:DirectStrikeLower");
+		mapName = ModeNameWithVersion("GUI:DirectStrikeLower", "GUI:DirectStrikeVersion");
 	else if (md)
 		mapName = md->m_displayName;
 	else

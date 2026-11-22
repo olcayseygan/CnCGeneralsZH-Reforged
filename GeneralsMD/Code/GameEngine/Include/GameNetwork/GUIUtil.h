@@ -240,6 +240,9 @@ Bool FitDirectStrikeRoom(GameInfo *game);
 void LayoutDirectStrikeRoom(GameWindow *parent, const char *layoutFilename, const GameInfo *game);
 // Create Game's question, which mode the room is for: Classic or Direct Strike, and Cancel
 void AskGameMode(void (*classic)(void), void (*directStrike)(void));
+/// a mode's name with its version tag after it ("Direct Strike v1.0"): the name's key, then the one key
+/// that holds the version for every place the mode is named; the bare name when that key is missing or empty
+UnicodeString ModeNameWithVersion(const char *nameKey, const char *versionKey);
 
 void EnableSlotListUpdates( Bool val );
 Bool AreSlotListUpdatesEnabled( void );

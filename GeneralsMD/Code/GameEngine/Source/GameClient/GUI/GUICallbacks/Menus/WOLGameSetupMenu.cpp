@@ -1114,7 +1114,7 @@ static void setRoomTitle( void )
 	if (s_directStrike)
 	{
 		text.concat(u" - ");
-		text.concat(TheGameText->fetch("GUI:DirectStrikeLower"));
+		text.concat(ModeNameWithVersion("GUI:DirectStrikeLower", "GUI:DirectStrikeVersion"));
 	}
 	GadgetStaticTextSetText(title, text);
 }

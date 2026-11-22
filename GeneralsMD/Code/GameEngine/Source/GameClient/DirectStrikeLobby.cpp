@@ -374,7 +374,13 @@ namespace
 	{
 		const LaneHudBox title = boxOf( DirectStrikeLobby_title() );
 		nineSlice( title, PANEL_LIT_TL );
-		drawSpaced( TheGameText->fetch( "GUI:DirectStrike" ), font( TITLE_EM ), title.x + title.w / 2, title.y, title.h, TITLE_SPACING, TEXT_WHITE, 0 );
+		const Int titleWidth = drawSpaced( TheGameText->fetch( "GUI:DirectStrike" ), font( TITLE_EM ), title.x + title.w / 2, title.y, title.h, TITLE_SPACING, TEXT_WHITE, 0 );
+		/* the version as a small grey tag after the name: in the title's own spaced capitals the two
+			 measured 508 of the plate's 520 pixels; this way the row ends about 22 short of the edge */
+		Bool tagged = FALSE;
+		const UnicodeString version = TheGameText->fetch( "GUI:DirectStrikeVersion", &tagged );
+		if( tagged && !version.isEmpty() )
+			drawSpaced( version, font( TEAM_EM ), title.x + title.w / 2 + titleWidth / 2 + title.h / 6, title.y, title.h, 0.0f, TEXT_GREY, -1 );
 
 		for( Int team = 0; team < DSLOBBY_TEAMS; ++team )
 		{

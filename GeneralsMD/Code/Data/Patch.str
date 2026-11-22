@@ -7255,6 +7255,10 @@ GUI:DirectStrikeLower
 "Direct Strike"
 END
 
+GUI:DirectStrikeVersion
+"v1.0"
+END
+
 TOOLTIP:DirectStrike
 "Buy units onto your plot. Every 30 seconds one player of each team sends a copy of his plot down the lane, and the first team to break the other's fortress wins. Up to 3 against 3, on a new island every match."
 END

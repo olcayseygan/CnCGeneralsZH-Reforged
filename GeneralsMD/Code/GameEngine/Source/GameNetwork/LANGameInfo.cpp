@@ -244,7 +244,7 @@ void LANDisplayGameList( GameWindow *gameListbox, LANGameInfo *gameList )
 			if( IsDirectStrikeMap( gameList->getMap() ) )
 			{
 				txtGName.concat(u" - ");
-				txtGName.concat(TheGameText->fetch("GUI:DirectStrikeLower"));
+				txtGName.concat(ModeNameWithVersion("GUI:DirectStrikeLower", "GUI:DirectStrikeVersion"));
 			}
 			Int addedIndex = GadgetListBoxAddEntryText(gameListbox, txtGName, (gameList->isGameInProgress())?gameInProgressColor:gameColor, -1, -1);
 			GadgetListBoxSetItemData(gameListbox, (void *)gameList, addedIndex, 0 );

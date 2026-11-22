@@ -7303,6 +7303,18 @@ GUI:GameModeApocalypse
 "APOCALYPSE"
 END
 
+GUI:GameModeClassicFact
+"Any map"
+END
+
+GUI:GameModeDirectStrikeFact
+"Up to 6 players"
+END
+
+GUI:GameModeApocalypseFact
+"Up to 4, co-op"
+END
+
 GUI:ApocalypseLower
 "Apocalypse"
 END

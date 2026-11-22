@@ -59,6 +59,8 @@
 #include "GameNetwork/LANAPICallbacks.h" // for acceptTrueColor, etc
 #include "GameClient/ChallengeGenerals.h"
 #include "GameClient/DirectStrikeLobby.h"
+#include "GameClient/DirectStrikeTheme.h"
+#include "GameClient/KeyDefs.h"
 #include "GameClient/FactionPicker.h"
 #include "Lib/Clock.h"
 #include "Common/RandomMapGenerator.h"
@@ -1959,10 +1961,178 @@ WindowMsgHandledType GameModeBoxSystem(GameWindow *window, UnsignedInt msg, Wind
 	return MSG_HANDLED;
 }
 
-/* GameModeBox.wnd (Tools/gamemode_layout.py), EA's message box with four buttons in two rows: Classic
-	 and Direct Strike, then Apocalypse and Cancel.  Every button takes the widest label plus a button
-	 height for its end caps, and the box widens about its centre to hold two of them with the layout's
-	 margin round and between them; at 800x600 the widest, "DIRECT STRIKE", asks about 340 of the 800. */
+/* The mode picker's face.  GameModeBox.wnd (Tools/gamemode_layout.py) brings the windows: the modal
+	 root, its panel, and four buttons whose clicks GameModeBoxSystem answers.  Nothing of EA's message
+	 box is drawn: the panel is a steel plate in the Direct Strike lobby's material (DirectStrikeTheme),
+	 the three mode buttons are cards side by side, each with a drawn emblem, its name and version tag
+	 and one fact line, and Cancel is a small key under them.  Sizes are 1080 pixels times the screen's
+	 height over 1080: the panel is 1012 by 478 at 1080 and 562 by 266 at 800x600. */
+namespace
+{
+	enum
+	{
+		PICKER_CARD_W = 300, PICKER_CARD_H = 290, PICKER_GAP = 24, PICKER_PAD = 32, PICKER_TITLE_H = 56,
+		PICKER_CANCEL_W = 220, PICKER_CANCEL_H = 44, PICKER_CANCEL_GAP = 24, PICKER_INSET = 14, PICKER_EMBLEM_H = 170,
+		PICKER_PANEL_W = 2 * PICKER_PAD + 3 * PICKER_CARD_W + 2 * PICKER_GAP,
+		PICKER_PANEL_H = 2 * PICKER_PAD + PICKER_TITLE_H + PICKER_CARD_H + PICKER_CANCEL_GAP + PICKER_CANCEL_H,
+	};
+	struct PickerCard { const char *button, *nameKey, *versionKey, *factKey; Int mode; };
+	const PickerCard thePickerCards[] =
+	{
+		{ "GameModeBox.wnd:ButtonClassic", "GUI:GameModeClassic", NULL, "GUI:GameModeClassicFact", HOST_MODE_CLASSIC },
+		{ "GameModeBox.wnd:ButtonDirectStrike", "GUI:GameModeDirectStrike", "GUI:DirectStrikeVersion", "GUI:GameModeDirectStrikeFact", HOST_MODE_DIRECT_STRIKE },
+		{ "GameModeBox.wnd:ButtonApocalypse", "GUI:GameModeApocalypse", "GUI:ApocalypseVersion", "GUI:GameModeApocalypseFact", HOST_MODE_APOCALYPSE },
+	};
+
+	Real pickerScale(void)
+	{
+		return TheDisplay && TheDisplay->getHeight() > 0 ? (Real)TheDisplay->getHeight() / 1080.0f : 1.0f;
+	}
+	Int px(Int v1080)
+	{
+		return REAL_TO_INT(v1080 * pickerScale() + 0.5f);
+	}
+	LaneHudBox screenBox(GameWindow *window)
+	{
+		LaneHudBox b;
+		window->winGetScreenPosition(&b.x, &b.y);
+		window->winGetSize(&b.w, &b.h);
+		return b;
+	}
+	LaneHudBox inset(const LaneHudBox &b, Int by)
+	{
+		LaneHudBox r = { b.x + by, b.y + by, b.w - 2 * by, b.h - 2 * by };
+		return r;
+	}
+	void fill(Int x, Int y, Int w, Int h, Color color)
+	{
+		TheDisplay->drawFillRect(x, y, w, h, color);
+	}
+
+	/// a picture of the mode from flat shapes: four bases round a field, a lane between two forts, a walled basin in red fog
+	void drawModeEmblem(Int mode, const LaneHudBox &b)
+	{
+		const Color blue = GameMakeColor(70, 120, 220, 255), red = GameMakeColor(210, 60, 50, 255);
+		const Color green = GameMakeColor(80, 170, 80, 255), gold = GameMakeColor(230, 190, 60, 255);
+		const Int u = max(1, min(b.w, b.h) / 12);
+		const Int cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+		if (mode == HOST_MODE_DIRECT_STRIKE)
+		{
+			fill(b.x, b.y, b.w, b.h, GameMakeColor(18, 38, 64, 255));					// sea
+			fill(b.x + u, cy - 2 * u, b.w - 2 * u, 4 * u, GameMakeColor(92, 104, 70, 255));	// the island's lane
+			fill(b.x + 2 * u, cy - 2 * u, 3 * u, 4 * u, blue);							// the two fortresses
+			fill(b.x + b.w - 5 * u, cy - 2 * u, 3 * u, 4 * u, red);
+			for (Int i = 0; i < 3; ++i)																	// a wave down each side
+			{
+				fill(cx - (4 - i) * u * 3 / 2, cy - u / 2, u, u, blue);
+				fill(cx + (2 + i) * u * 3 / 2 - u, cy - u / 2, u, u, red);
+			}
+		}
+		else if (mode == HOST_MODE_APOCALYPSE)
+		{
+			fill(b.x, b.y, b.w, b.h, GameMakeColor(96, 20, 18, 255));					// the red fog
+			const Int r = min(b.w, b.h) / 3;
+			fill(cx - r, cy - r, 2 * r, 2 * r, GameMakeColor(58, 54, 48, 255));		// the walled basin
+			TheDisplay->drawOpenRect(cx - r, cy - r, 2 * r, 2 * r, (Real)max(2, u / 2), GameMakeColor(28, 24, 22, 255));
+			const Int s = max(2, u);
+			fill(cx - u - s / 2, cy - u - s / 2, s, s, blue);							// four seats together
+			fill(cx + u - s / 2, cy - u - s / 2, s, s, gold);
+			fill(cx - u - s / 2, cy + u - s / 2, s, s, green);
+			fill(cx + u - s / 2, cy + u - s / 2, s, s, GameMakeColor(200, 200, 200, 255));
+			for (Int i = 0; i < 6; ++i)																	// the dead at the edge
+			{
+				const Int ex = b.x + u + (i % 3) * (b.w - 3 * u) / 2, ey = i < 3 ? b.y + u : b.y + b.h - 2 * u;
+				fill(ex, ey, s, s, GameMakeColor(30, 6, 6, 255));
+			}
+		}
+		else
+		{
+			fill(b.x, b.y, b.w, b.h, GameMakeColor(52, 60, 44, 255));					// open ground
+			TheDisplay->drawLine(b.x + 3 * u, b.y + 3 * u, b.x + b.w - 3 * u, b.y + b.h - 3 * u, (Real)max(1, u / 3), GameMakeColor(120, 112, 90, 255));
+			TheDisplay->drawLine(b.x + b.w - 3 * u, b.y + 3 * u, b.x + 3 * u, b.y + b.h - 3 * u, (Real)max(1, u / 3), GameMakeColor(120, 112, 90, 255));
+			const Int s = 3 * u;
+			fill(b.x + u, b.y + u, s, s, blue);												// four bases, a corner each
+			fill(b.x + b.w - u - s, b.y + u, s, s, red);
+			fill(b.x + u, b.y + b.h - u - s, s, s, green);
+			fill(b.x + b.w - u - s, b.y + b.h - u - s, s, s, gold);
+		}
+	}
+
+	void drawPickerRoot(GameWindow *, WinInstanceData *)
+	{
+		DirectStrikeTheme::begin(DirectStrikeTheme::SIDE_AMERICA, pickerScale());
+		TheDisplay->drawFillRect(0, 0, (Int)TheDisplay->getWidth(), (Int)TheDisplay->getHeight(), DirectStrikeTheme::VEIL);
+	}
+
+	void drawPickerPanel(GameWindow *window, WinInstanceData *)
+	{
+		const LaneHudBox b = screenBox(window);
+		DirectStrikeTheme::nineSlice(b, DirectStrikeTheme::PANEL_LIT_TL);
+		DirectStrikeTheme::drawSpaced(TheGameText->fetch("GUI:GameModeTitle"), DirectStrikeTheme::font(DirectStrikeTheme::TYPE_NAME),
+			b.x + b.w / 2, b.y + px(PICKER_PAD) / 2, px(PICKER_TITLE_H), DirectStrikeTheme::TYPE_NAME * DirectStrikeTheme::TRACK_TEAM,
+			DirectStrikeTheme::TEXT_WHITE, 0);
+	}
+
+	void drawPickerCard(GameWindow *window, WinInstanceData *instData)
+	{
+		const PickerCard *card = NULL;
+		for (Int i = 0; i < (Int)ARRAY_SIZE(thePickerCards); ++i)
+			if (window->winGetWindowId() == NAMEKEY(thePickerCards[i].button))
+				card = &thePickerCards[i];
+		if (card == NULL)
+			return;
+		const Bool hot = BitTest(instData->getState(), WIN_STATE_HILITED);
+		const Bool pressed = BitTest(instData->getState(), WIN_STATE_SELECTED);
+		const LaneHudBox b = screenBox(window);
+		DirectStrikeTheme::nineSlice(b, hot ? DirectStrikeTheme::PANEL_LIT_TL : DirectStrikeTheme::PANEL_TL);
+		const LaneHudBox picture = { b.x + px(PICKER_INSET), b.y + px(PICKER_INSET), b.w - 2 * px(PICKER_INSET), px(PICKER_EMBLEM_H) };
+		drawModeEmblem(card->mode, picture);
+		if (pressed)
+			fill(picture.x, picture.y, picture.w, picture.h, GameMakeColor(0, 0, 0, 90));
+
+		// the name, and the version tag small and grey after it, the two centred together
+		GameFont *nameFont = DirectStrikeTheme::font(DirectStrikeTheme::TYPE_NAME);
+		GameFont *tagFont = DirectStrikeTheme::font(DirectStrikeTheme::TYPE_BODY);
+		const UnicodeString name = TheGameText->fetch(card->nameKey);
+		Bool tagged = FALSE;
+		const UnicodeString tag = card->versionKey ? TheGameText->fetch(card->versionKey, &tagged) : UnicodeString::TheEmptyString;
+		const Int tagGap = px(8);
+		const Int nameW = DirectStrikeTheme::textWidth(name, nameFont);
+		const Int tagW = tagged && !tag.isEmpty() ? DirectStrikeTheme::textWidth(tag, tagFont) : 0;
+		const Int pairW = nameW + (tagW > 0 ? tagGap + tagW : 0);
+		const Int nameY = picture.y + picture.h + px(10), nameH = px(40);
+		const Int left = b.x + (b.w - pairW) / 2;
+		DirectStrikeTheme::drawText(name, nameFont, left, nameY, nameH, hot ? DirectStrikeTheme::TEXT_GOLD : DirectStrikeTheme::TEXT_WHITE, -1);
+		if (tagW > 0)
+			DirectStrikeTheme::drawText(tag, tagFont, left + nameW + tagGap, nameY, nameH, DirectStrikeTheme::TEXT_GREY, -1);
+		DirectStrikeTheme::drawText(TheGameText->fetch(card->factKey), DirectStrikeTheme::font(DirectStrikeTheme::TYPE_BODY),
+			b.x + b.w / 2, nameY + nameH, px(30), DirectStrikeTheme::TEXT_GREY, 0);
+		if (hot)
+			DirectStrikeTheme::currentFrame(b);
+	}
+
+	void drawPickerCancel(GameWindow *window, WinInstanceData *instData)
+	{
+		const Bool hot = BitTest(instData->getState(), WIN_STATE_HILITED);
+		const LaneHudBox b = screenBox(window);
+		DirectStrikeTheme::nineSlice(b, hot ? DirectStrikeTheme::PANEL_LIT_TL : DirectStrikeTheme::PANEL_TL);
+		DirectStrikeTheme::drawText(TheGameText->fetch("GUI:Cancel"), DirectStrikeTheme::font(DirectStrikeTheme::TYPE_LABEL),
+			b.x + b.w / 2, b.y, b.h, hot ? DirectStrikeTheme::TEXT_GOLD : DirectStrikeTheme::TEXT_WHITE, 0);
+	}
+
+	// Escape closes the picker unanswered, as Cancel does
+	WindowMsgHandledType pickerInput(GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2)
+	{
+		if (msg == GWM_CHAR && mData1 == KEY_ESC)
+		{
+			if (BitTest(mData2, KEY_STATE_UP) && window->winGetParent())
+				TheWindowManager->winDestroy(window->winGetParent());
+			return MSG_HANDLED;
+		}
+		return MSG_IGNORED;
+	}
+}
+
 void AskGameMode(void (*answer)(Int mode))
 {
 	GameWindow *box = TheWindowManager->winCreateFromScript(AsciiString("Menus/GameModeBox.wnd"));
@@ -1988,62 +2158,31 @@ void AskGameMode(void (*answer)(Int mode))
 	TheWindowManager->winSetModal(box);
 	TheWindowManager->winSetFocus(NULL);
 	TheWindowManager->winSetFocus(panel);
-	if (GameWindow *title = TheWindowManager->winGetWindowFromId(box, NAMEKEY("GameModeBox.wnd:StaticTextTitle")))
-		GadgetStaticTextSetText(title, TheGameText->fetch("GUI:GameModeTitle"));
-	if (GameWindow *body = TheWindowManager->winGetWindowFromId(box, NAMEKEY("GameModeBox.wnd:StaticTextMessage")))
-		GadgetStaticTextSetText(body, TheGameText->fetch("GUI:GameModeBody"));
+	// the layout's own text and header band stay hidden; the plate, the cards and Cancel are drawn
+	for (GameWindow *child = panel->winGetChild(); child; child = child->winGetNext())
+		child->winHide(TRUE);
+	box->winSetDrawFunc(drawPickerRoot);
+	panel->winSetDrawFunc(drawPickerPanel);
+	panel->winSetInputFunc(pickerInput);
 
-	/* Each label is measured in the font the button draws it with, a string of its own: the button's own
-		 display string measured some 20 pixels short at 800x600 and "DIRECT STRIKE" touched its border.
-		 Every button takes the widest label, 15% of it each side and the button height for the end caps. */
-	Int widest = 0;
-	DisplayString *measure = TheDisplayStringManager ? TheDisplayStringManager->newDisplayString() : NULL;
-	for (Int i = 0; i < count; ++i)
+	// the plate centred on the screen, three cards in a row, Cancel centred under them
+	Int rootW, rootH;
+	box->winGetSize(&rootW, &rootH);
+	const Int panelW = px(PICKER_PANEL_W), panelH = px(PICKER_PANEL_H);
+	panel->winSetSize(panelW, panelH);
+	panel->winSetPosition((rootW - panelW) / 2, (rootH - panelH) / 2);
+	const Int cardsY = px(PICKER_PAD + PICKER_TITLE_H);
+	for (Int i = 0; i < 3; ++i)
 	{
-		Int w, h;
-		buttons[i]->winGetSize(&w, &h);
-		widest = max(widest, w);
-		if (measure)
-		{
-			measure->setFont(buttons[i]->winGetFont());
-			measure->setText(buttons[i]->winGetText());
-			Int textW, textH;
-			measure->getSize(&textW, &textH);
-			widest = max(widest, textW + (textW * 3) / 10 + h);
-		}
-	}
-	if (measure)
-		TheDisplayStringManager->freeDisplayString(measure);
-	Int boxW, boxH, margin, topY, bottomY, x;
-	panel->winGetSize(&boxW, &boxH);
-	buttons[0]->winGetPosition(&margin, &topY);
-	buttons[3]->winGetPosition(&x, &bottomY);
-	const Int rowW = 3 * margin + 2 * widest;
-	if (rowW > boxW)
-	{
-		const Int grow = rowW - boxW;
-		Int panelX, panelY;
-		panel->winGetPosition(&panelX, &panelY);
-		panel->winSetPosition(panelX - grow / 2, panelY);
-		panel->winSetSize(rowW, boxH);
-		// the title, the body and the header band stretch with it; the buttons are sized below
-		for (GameWindow *child = panel->winGetChild(); child; child = child->winGetNext())
-		{
-			Int w, h;
-			child->winGetSize(&w, &h);
-			child->winSetSize(w + grow, h);
-		}
-		boxW = rowW;
-	}
-	const Int gap = boxW - 2 * margin - 2 * widest;
-	for (Int i = 0; i < count; ++i)
-	{
-		Int w, h;
-		buttons[i]->winGetSize(&w, &h);
-		buttons[i]->winSetSize(widest, h);
-		buttons[i]->winSetPosition(margin + (i % 2) * (widest + gap), i < 2 ? topY : bottomY);
+		buttons[i]->winSetSize(px(PICKER_CARD_W), px(PICKER_CARD_H));
+		buttons[i]->winSetPosition(px(PICKER_PAD + i * (PICKER_CARD_W + PICKER_GAP)), cardsY);
+		buttons[i]->winSetDrawFunc(drawPickerCard);
 		buttons[i]->winHide(FALSE);
 	}
+	buttons[3]->winSetSize(px(PICKER_CANCEL_W), px(PICKER_CANCEL_H));
+	buttons[3]->winSetPosition((panelW - px(PICKER_CANCEL_W)) / 2, cardsY + px(PICKER_CARD_H + PICKER_CANCEL_GAP));
+	buttons[3]->winSetDrawFunc(drawPickerCancel);
+	buttons[3]->winHide(FALSE);
 	panel->winHide(FALSE);
 	panel->winBringToTop();
 }

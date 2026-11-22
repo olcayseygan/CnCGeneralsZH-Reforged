@@ -112,6 +112,7 @@
 #include "GameClient/GlobalLanguage.h"
 #include "GameClient/GroupPanel.h"
 #include "GameClient/LaneHud.h"
+#include "GameClient/MatchClock.h"
 #include "GameClient/LaneWarEndScreen.h"
 #include "GameClient/AirliftPanel.h"
 #include "GameClient/UIStyle.h"
@@ -12373,6 +12374,11 @@ void InGameUI::drawHudOverlay( void )
 
 	if( TheGameLogic->getFrame() == 0 )
 		return;
+
+	// the match clock at the top middle, under the readout strip while that is up
+	MatchClockState clock;
+	MatchClock_gather( TheGameLogic->getFrame(), clock );
+	MatchClock_draw( clock, hudStripBottom() );
 
 	// on top of the battlefield like this strip, but never behind the ShowNetBox switch
 	drawKickVoteBanner();

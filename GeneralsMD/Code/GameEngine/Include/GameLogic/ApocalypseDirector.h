@@ -95,6 +95,10 @@ enum
 	APOCALYPSE_RETARGET_SECONDS = 2,			///< game seconds between two looks of one zombie for something to go at
 	APOCALYPSE_LOG_SECONDS = 10,					///< game seconds between two status lines
 	APOCALYPSE_SEATS_MOST = 4,						///< co-op seats the waves size for at the most
+	APOCALYPSE_HEAT_SECONDS = 2,					///< game seconds between two counts of the dead in the fog for its heat
+	APOCALYPSE_HEAT_BLOCK = 4,						///< partition cells a side of a heat block
+	APOCALYPSE_HEAT_PER_ZOMBIE = 24,			///< a block's heat for each of the dead in it, up to 255
+	APOCALYPSE_HEAT_GLOW = 235,						///< the fog's shroud level over the hottest block: nearly clear, all the fog's red
 	APOCALYPSE_SPAWNS_MOST = 32,					///< spawn waypoints read at most: a wave's passes are a 32-bit mask
 	APOCALYPSE_SPAWN_SPREAD = 60,					///< world units a zombie lands either way off its spawn
 	APOCALYPSE_BASE_REACH = 200,					///< world units past the farthest start from the middle that count as having reached the bases
@@ -132,6 +136,14 @@ inline Int Apocalypse_cycleRank( UnsignedInt cycle ) { return cycle < 3 ? (Int)c
 
 /// how far into the night that point of a phase is: 0 by day, rising through dusk, 1 at night, falling at dawn
 extern Real Apocalypse_nightAmount( Int phase, UnsignedInt intoPhase, UnsignedInt phaseFrames );
+
+/** Where that frame falls on the director's clock, which starts with the map at frame 0 and runs its
+	  phases at fixed lengths: the phase, frames into it, its length and the cycle (from 0).  A pure
+	  function of the frame, so the client's match clock can read it without touching the director. */
+extern void Apocalypse_phaseAt( UnsignedInt frame, Int *phase, UnsignedInt *intoPhase, UnsignedInt *phaseFrames, UnsignedInt *cycle );
+
+/// client side: how thick the dead stand in the fog round that partition cell, 0 to 255, from the last count handed over
+extern Int Apocalypse_heatAt( Int cellX, Int cellY );
 
 //-------------------------------------------------------------------------------------------------
 class ApocalypseDirector : public Snapshot
@@ -191,6 +203,7 @@ private:
 	void gatherWave( UnsignedInt now );
 	void sendWave( UnsignedInt now );
 	void watchTheFallen( UnsignedInt now );
+	void handHeat( void ) const;		///< count the dead in the fog by block and hand the client the copy, nothing kept
 	Bool ringSpot( Coord3D *pos, const Object *obj, Int sector );
 	Bool inRing( const Coord3D *pos ) const;
 	void killInFog( UnsignedInt now );

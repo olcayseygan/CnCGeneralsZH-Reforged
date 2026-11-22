@@ -87,6 +87,7 @@ Data/Art/Textures/ReforgedHudTurkiyeTabSolo.dds
 Data/Art/Textures/ReforgedHudTurkiyeTalents.dds
 Data/Art/Textures/ReforgedLaserPink.tga
 Data/Art/Textures/ReforgedLobbySpot.tga
+Data/Art/Textures/ReforgedMatchClock.tga
 Data/Art/Textures/ReforgedRadarContact.tga
 Data/Art/Textures/ReforgedRadarRing.tga
 Data/Art/Textures/ReforgedReconArea.tga
@@ -1272,6 +1273,7 @@ Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyeSidebar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyeTabPanel.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyeTalents.ini
 Data/INI/MappedImages/HandCreated/ReforgedLobbySpot.ini
+Data/INI/MappedImages/HandCreated/ReforgedMatchClock.ini
 Data/INI/MappedImages/HandCreated/ReforgedReconHud.ini
 Data/INI/MappedImages/HandCreated/TRCameos.ini
 Data/INI/MappedImages/HandCreated/TRUpgrades.ini
@@ -1899,6 +1901,7 @@ GameEngine/Include/GameClient/LoadScreen.h
 GameEngine/Include/GameClient/LoadScreenLayout.h
 GameEngine/Include/GameClient/LookAtXlat.h
 GameEngine/Include/GameClient/MapUtil.h
+GameEngine/Include/GameClient/MatchClock.h
 GameEngine/Include/GameClient/MessageBox.h
 GameEngine/Include/GameClient/MetaEvent.h
 GameEngine/Include/GameClient/Module/AnimatedParticleSysBoneClientUpdate.h
@@ -2593,6 +2596,7 @@ GameEngine/Source/GameClient/LaneWarEndScreen.cpp
 GameEngine/Source/GameClient/LanguageFilter.cpp
 GameEngine/Source/GameClient/Line2D.cpp
 GameEngine/Source/GameClient/MapUtil.cpp
+GameEngine/Source/GameClient/MatchClock.cpp
 GameEngine/Source/GameClient/MessageStream/CommandXlat.cpp
 GameEngine/Source/GameClient/MessageStream/GUICommandTranslator.cpp
 GameEngine/Source/GameClient/MessageStream/HintSpy.cpp
@@ -5469,6 +5473,7 @@ Tools/guard_marker.py
 Tools/hud_command_bar.py
 Tools/hud_direct_strike.py
 Tools/hud_direct_strike_theme.py
+Tools/hud_match_clock.py
 Tools/hud_sidebar.py
 Tools/include_case_check.py
 Tools/install-guard.sh

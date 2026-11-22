@@ -121,6 +121,27 @@ static UnsignedInt gameSecond( void )
 	return frames > 0 ? frames : 1;
 }
 
+void Apocalypse_phaseAt( UnsignedInt frame, Int *phase, UnsignedInt *intoPhase, UnsignedInt *phaseFrames, UnsignedInt *cycle )
+{
+	UnsignedInt cycleFrames = 0;
+	for( Int p = 0; p < APOCALYPSE_PHASES; ++p )
+		cycleFrames += Apocalypse_phaseRules( p ).seconds * gameSecond();
+	*cycle = frame / cycleFrames;
+	UnsignedInt into = frame % cycleFrames;
+	for( Int p = 0; p < APOCALYPSE_PHASES; ++p )
+	{
+		const UnsignedInt length = Apocalypse_phaseRules( p ).seconds * gameSecond();
+		if( into < length || p == APOCALYPSE_PHASES - 1 )
+		{
+			*phase = p;
+			*intoPhase = into;
+			*phaseFrames = length;
+			return;
+		}
+		into -= length;
+	}
+}
+
 /// a seat: a playable side that is not watching
 static Bool isSeat( const Player *player )
 {
@@ -243,6 +264,42 @@ static void apocalypseApplyLight( Int level, Bool relight, Bool lightsOn )
 static RGBColor theBaseShroudColor;
 static Bool theBaseFogKept = FALSE;
 
+/* The heat in the fog, client side: how thick the dead stand in each block of APOCALYPSE_HEAT_BLOCK
+	partition cells a side, counted by the director every APOCALYPSE_HEAT_SECONDS and handed over after
+	the tick.  The ring's shroud reads it back per cell (Apocalypse_heatAt) and thins where it is hot,
+	so the red fog glows over a gathering horde.  Never saved: the next count rebuilds it. */
+static std::vector<UnsignedByte> theHeat;
+static Int theHeatBlocksX = 0, theHeatBlocksY = 0;
+
+static void apocalypseApplyHeat( const std::vector<UnsignedByte> &heat, Int blocksX, Int blocksY )
+{
+	theHeat = heat;
+	theHeatBlocksX = blocksX;
+	theHeatBlocksY = blocksY;
+	ThePartitionManager->redrawShroudForLocalPlayer();
+}
+
+static Int heatOfBlock( Int blockX, Int blockY )
+{
+	if( blockX < 0 || blockY < 0 || blockX >= theHeatBlocksX || blockY >= theHeatBlocksY )
+		return 0;
+	return theHeat[ blockY * theHeatBlocksX + blockX ];
+}
+
+Int Apocalypse_heatAt( Int cellX, Int cellY )
+{
+	if( theHeat.empty() )
+		return 0;
+	// between the four nearest blocks' middles, so a horde reads as a soft blob and not as squares
+	const Real bx = ( (Real)cellX + 0.5f ) / (Real)APOCALYPSE_HEAT_BLOCK - 0.5f;
+	const Real by = ( (Real)cellY + 0.5f ) / (Real)APOCALYPSE_HEAT_BLOCK - 0.5f;
+	const Int x0 = (Int)floorf( bx ), y0 = (Int)floorf( by );
+	const Real tx = bx - (Real)x0, ty = by - (Real)y0;
+	const Real top = heatOfBlock( x0, y0 ) + ( heatOfBlock( x0 + 1, y0 ) - heatOfBlock( x0, y0 ) ) * tx;
+	const Real bottom = heatOfBlock( x0, y0 + 1 ) + ( heatOfBlock( x0 + 1, y0 + 1 ) - heatOfBlock( x0, y0 + 1 ) ) * tx;
+	return (Int)( top + ( bottom - top ) * ty + 0.5f );
+}
+
 static void apocalypseKeepFog( void )
 {
 	theBaseShroudColor = TheGlobalData->m_shroudColor;
@@ -251,6 +308,8 @@ static void apocalypseKeepFog( void )
 
 static void apocalypseRestoreFog( void )
 {
+	theHeat.clear();
+	theHeatBlocksX = theHeatBlocksY = 0;
 	if( !theBaseFogKept )
 		return;
 	TheWritableGlobalData->m_shroudColor = theBaseShroudColor;
@@ -766,6 +825,29 @@ void ApocalypseDirector::watchTheFallen( UnsignedInt now )
 }
 
 //-------------------------------------------------------------------------------------------------
+/** The dead in the fog, counted by heat block and handed to the client after the tick: a read of the
+	  zombie list in its order, no random drawn and nothing kept, so the logic is the same with or
+	  without anyone looking. */
+void ApocalypseDirector::handHeat( void ) const
+{
+	const Int blocksX = ( ThePartitionManager->getCellCountX() + APOCALYPSE_HEAT_BLOCK - 1 ) / APOCALYPSE_HEAT_BLOCK;
+	const Int blocksY = ( ThePartitionManager->getCellCountY() + APOCALYPSE_HEAT_BLOCK - 1 ) / APOCALYPSE_HEAT_BLOCK;
+	std::vector<UnsignedByte> heat( blocksX * blocksY, 0 );
+	for( UnsignedInt i = 0; i < m_zombies.size(); ++i )
+	{
+		const Object *obj = TheGameLogic->findObjectByID( m_zombies[ i ].id );
+		if( obj == NULL || !inRing( obj->getPosition() ) )
+			continue;
+		Int cellX, cellY;
+		ThePartitionManager->worldToCell( obj->getPosition()->x, obj->getPosition()->y, &cellX, &cellY );
+		const Int block = ( cellY / APOCALYPSE_HEAT_BLOCK ) * blocksX + cellX / APOCALYPSE_HEAT_BLOCK;
+		if( block >= 0 && block < (Int)heat.size() )
+			heat[ block ] = (UnsignedByte)min( 255, (Int)heat[ block ] + APOCALYPSE_HEAT_PER_ZOMBIE );
+	}
+	LogicThread::callAfterTick( [heat, blocksX, blocksY]() { apocalypseApplyHeat( heat, blocksX, blocksY ); } );
+}
+
+//-------------------------------------------------------------------------------------------------
 Bool ApocalypseDirector::inRing( const Coord3D *pos ) const
 {
 	if( !m_hasRing )
@@ -966,6 +1048,9 @@ void ApocalypseDirector::update( void )
 	// the fallen rise, five times a game second
 	if( now % max( second / 5, 1U ) == 0 )
 		watchTheFallen( now );
+
+	if( m_hasRing && now % ( APOCALYPSE_HEAT_SECONDS * second ) == 0 )
+		handHeat();
 
 	handLight( now );
 

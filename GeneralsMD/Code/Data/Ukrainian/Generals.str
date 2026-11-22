@@ -16658,7 +16658,15 @@ GUI:SuperweaponsNone
 END
 
 GUI:StartShrouded
-"Прихована карта"
+"Темна мапа"
+END
+
+GUI:DayNight
+"День/ніч"
+END
+
+TOOLTIP:DayNight
+"Після кожних десяти хвилин дня настає ніч, і вночі кожен підрозділ бачить на п'яту частину ближче."
 END
 
 TOOLTIP:StartShrouded
@@ -16666,7 +16674,7 @@ TOOLTIP:StartShrouded
 END
 
 GUI:UnitLimit
-"Ліміт підрозділів"
+"Ліміт військ"
 END
 
 TOOLTIP:UnitLimit

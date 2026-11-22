@@ -16621,12 +16621,20 @@ GUI:StartShrouded
 "Carte cachée"
 END
 
+GUI:DayNight
+"Jour/nuit"
+END
+
+TOOLTIP:DayNight
+"La nuit tombe toutes les dix minutes de jour, et de nuit chaque unité voit un cinquième moins loin."
+END
+
 TOOLTIP:StartShrouded
 "La carte commence noire pour chaque joueur. Le terrain que votre camp n'a pas vu reste noir jusqu'à ce qu'une de vos unités y arrive, et l'écran de chargement ne montre pas les points de départ. Désactivée, chacun commence avec toute la carte visible sous le brouillard, comme le multijoueur l'a toujours fait."
 END
 
 GUI:UnitLimit
-"Limite d'unités"
+"Lim. d'unités"
 END
 
 TOOLTIP:UnitLimit

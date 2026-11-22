@@ -15847,7 +15847,7 @@ GUI:StartShrouded
 END
 
 GUI:DayNight
-"Gece ve Gündüz"
+"Gün/Gece"
 END
 
 TOOLTIP:DayNight

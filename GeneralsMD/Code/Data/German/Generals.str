@@ -14894,7 +14894,15 @@ GUI:SuperweaponsNone
 END
 
 GUI:StartShrouded
-"Verdeckte Karte"
+"Verd. Karte"
+END
+
+GUI:DayNight
+"Tag/Nacht"
+END
+
+TOOLTIP:DayNight
+"Nach jeweils zehn Minuten Tag bricht die Nacht herein, und nachts sieht jede Einheit ein Fünftel weniger weit."
 END
 
 TOOLTIP:StartShrouded

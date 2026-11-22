@@ -1415,7 +1415,7 @@ GUI:StartShrouded
 END
 
 GUI:DayNight
-"Day and Night"
+"Day/Night"
 END
 
 TOOLTIP:DayNight

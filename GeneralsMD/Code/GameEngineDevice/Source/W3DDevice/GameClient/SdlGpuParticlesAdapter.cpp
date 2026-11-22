@@ -18,6 +18,7 @@ void Write_Systems(unsigned first,const ParticleGpuSystemEntry *entries,unsigned
 void Write_Fades(const float *fades,unsigned count) {SdlGpuParticles::WriteFades(fades,count);}
 void Set_Ground(const float *heights,unsigned width,unsigned height,const float mapping[4]) {SdlGpuParticles::SetGround(heights,width,height,mapping);}
 void Set_Slice_Texture(unsigned slice,IDirect3DBaseTexture9 *texture) {SdlGpuParticles::SetSliceTexture(slice,texture);}
+void Set_Smoke_Tint(const float tint[3]) {SdlGpuParticles::SetSmokeTint(tint);}
 void Evaluate(unsigned first,unsigned count,unsigned now,float smooth) {
     SdlGpuParticlesContext context;if(PosixGpuParticles_Context(context)) SdlGpuParticles::Evaluate(context,first,count,now,smooth);
 }

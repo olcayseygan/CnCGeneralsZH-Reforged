@@ -320,10 +320,14 @@ void W3DPropBuffer::removePropsForConstruction(const Coord3D* pos, const Geometr
 //=============================================================================
 void W3DPropBuffer::notifyShroudChanged()
 {
+	// a whole-map shroud redraw calls this once a cell, and every prop was already wiped by the first
+	if (m_allShroudInvalid && ThePartitionManager)
+		return;
 	Int i;
 	for (i=0; i<m_numProps; i++) {
 		m_props[i].ss = ThePartitionManager?OBJECTSHROUD_INVALID:OBJECTSHROUD_CLEAR;
 	}
+	m_allShroudInvalid = ThePartitionManager != NULL;
 }
 
 /** LOGIC-THREAD.md phase 3: what the shroud change wiped is read again at the sync point, since a
@@ -335,6 +339,7 @@ void W3DPropBuffer::takeShroudForRender()
 		if (m_props[i].ss == OBJECTSHROUD_INVALID)
 			m_props[i].ss = ThePartitionManager->getPropShroudStatusForPlayer(localPlayerIndex, &m_props[i].location);
 	}
+	m_allShroudInvalid = FALSE;
 }
 
 
@@ -378,6 +383,7 @@ void W3DPropBuffer::drawProps(RenderInfoClass &rinfo)
 	}
 	
 	rinfo.light_environment = &lightEnv;
+	m_allShroudInvalid = FALSE;	// the props drawn below ask again
 	for	(i=0; i<m_numProps; i++) {
 		if (!m_props[i].visible) {
 			continue;

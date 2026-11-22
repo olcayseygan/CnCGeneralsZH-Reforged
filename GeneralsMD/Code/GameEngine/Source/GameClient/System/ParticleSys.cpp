@@ -3946,6 +3946,7 @@ ParticleSystemManager::ParticleSystemManager( void )
 	//Added By Sadullah Nader
 	//Initializations inserted
 	m_lastLogicFrameUpdate = 0;
+	m_smokeTint.red = m_smokeTint.green = m_smokeTint.blue = 1.0f;
 	m_particleFrame = 0;
 	m_particleCount = 0;
 	m_fieldParticleCount = 0;

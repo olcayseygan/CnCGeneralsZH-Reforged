@@ -1009,6 +1009,9 @@ Data/Audio/Speech/etunitl.wav
 Data/Audio/Speech/etupgra.wav
 Data/Audio/Speech/etvehst.wav
 Data/Cinema/altstyles.txt
+Data/Cinema/apoc_first.txt
+Data/Cinema/apoc_fog.txt
+Data/Cinema/apoc_gate3.txt
 Data/Cinema/aurorablast.txt
 Data/Cinema/aurorafog.txt
 Data/Cinema/blastcheck.txt

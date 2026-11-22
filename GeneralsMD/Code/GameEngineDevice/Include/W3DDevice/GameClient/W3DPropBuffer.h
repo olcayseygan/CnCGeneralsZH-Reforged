@@ -140,6 +140,7 @@ protected:
 
 	TProp	m_props[MAX_PROPS];			///< The prop buffer.  All props are stored here.
 	Int			m_numProps;						///< Number of props in m_props.
+	Bool		m_allShroudInvalid = FALSE;	///< notifyShroudChanged has wiped every prop's status and nothing has asked since: the next notify has nothing to do
 	Bool		m_anythingChanged;	///< Set to true if visibility or sorting changed.
 	Bool		m_initialized;		///< True if the subsystem initialized.
 	Bool		m_doCull;

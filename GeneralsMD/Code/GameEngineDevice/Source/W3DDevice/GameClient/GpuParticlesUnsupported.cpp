@@ -12,6 +12,7 @@ void Write_Systems(unsigned, const ParticleGpuSystemEntry *, unsigned) {}
 void Write_Fades(const float *, unsigned) {}
 void Set_Ground(const float *, unsigned, unsigned, const float[4]) {}
 void Set_Slice_Texture(unsigned, IDirect3DBaseTexture9 *) {}
+void Set_Smoke_Tint(const float[3]) {}
 void Evaluate(unsigned, unsigned, unsigned, float) {}
 void Draw(unsigned, const Camera &) {}
 void ReleaseDevice() {}

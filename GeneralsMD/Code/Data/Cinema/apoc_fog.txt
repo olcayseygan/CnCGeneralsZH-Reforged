@@ -1,0 +1,24 @@
+# Apocalypse fog ring (2026-11-22): from just inside gate 3 out over the trail to the ring's edge at
+# y 486 (the clear square of a 4-player normal map, 3040 a side), by day and at night, the same cuts.
+# -randommap 7 4 normal apocalypse -autoskirmish 4 -seed 7 -observer. Times are logic frames / 30.
+
+# --- day ---
+126.0 cut 1900 600 1.3 180 0
+126.5 shot
+127.0 cut 1700 520 0.8 180 6
+127.5 shot
+140.0 cut 1900 600 1.3 180 0
+140.5 shot
+141.0 cut 1700 520 0.8 180 6
+141.5 shot
+
+# --- night ---
+244.0 cut 1900 600 1.3 180 0
+244.5 shot
+245.0 cut 1700 520 0.8 180 6
+245.5 shot
+258.0 cut 1900 600 1.3 180 0
+258.5 shot
+259.0 cut 1700 520 0.8 180 6
+259.5 shot
+262.0 end

@@ -49,6 +49,9 @@
 #include "GameLogic/Module/CreateModule.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
+#include "GameLogic/PolygonTrigger.h"
+#include "GameClient/ParticleSys.h"
+#include <algorithm>
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/Weapon.h"
 
@@ -218,6 +221,61 @@ static void apocalypseApplyLight( Int level, Bool relight, Bool lightsOn )
 }
 
 //-------------------------------------------------------------------------------------------------
+// The fog ring's colour and the smoke's, client side, handed over the same way as the light and
+// kept apart from it: the shroud's colour (GlobalData::m_shroudColor, a multiply over every fogged
+// and shrouded cell) goes from a faint warm red by day to a deep one at night, and so does the tint
+// over every smoke and dust particle (ParticleSystemManager::setSmokeTint).  Both are settings of the
+// whole game, kept when the map loads and given back when the match ends.
+//-------------------------------------------------------------------------------------------------
+
+static RGBColor theBaseShroudColor;
+static Bool theBaseFogKept = FALSE;
+
+static void apocalypseKeepFog( void )
+{
+	theBaseShroudColor = TheGlobalData->m_shroudColor;
+	theBaseFogKept = TRUE;
+}
+
+static void apocalypseRestoreFog( void )
+{
+	if( !theBaseFogKept )
+		return;
+	TheWritableGlobalData->m_shroudColor = theBaseShroudColor;
+	RGBColor white;
+	white.red = white.green = white.blue = 1.0f;
+	if( TheParticleSystemManager != NULL )
+		TheParticleSystemManager->setSmokeTint( white );
+	theBaseFogKept = FALSE;
+}
+
+/// `level` of APOCALYPSE_LIGHT_STEPS into the night
+static void apocalypseApplyFog( Int level )
+{
+	if( !theBaseFogKept )
+		return;
+	const Real amount = (Real)level / (Real)APOCALYPSE_LIGHT_STEPS;
+	static const Real FOG_DAY[ 3 ] = { 1.00f, 0.62f, 0.56f };
+	// red stays whole: the Direct3D 11 fog memory reads the brightest channel as the shroud's light
+	static const Real FOG_NIGHT[ 3 ] = { 1.00f, 0.26f, 0.21f };
+	static const Real SMOKE_DAY[ 3 ] = { 1.00f, 0.88f, 0.82f };
+	static const Real SMOKE_NIGHT[ 3 ] = { 0.95f, 0.45f, 0.38f };
+	RGBColor fog, smoke;
+	fog.red = FOG_DAY[ 0 ] + ( FOG_NIGHT[ 0 ] - FOG_DAY[ 0 ] ) * amount;
+	fog.green = FOG_DAY[ 1 ] + ( FOG_NIGHT[ 1 ] - FOG_DAY[ 1 ] ) * amount;
+	fog.blue = FOG_DAY[ 2 ] + ( FOG_NIGHT[ 2 ] - FOG_DAY[ 2 ] ) * amount;
+	smoke.red = SMOKE_DAY[ 0 ] + ( SMOKE_NIGHT[ 0 ] - SMOKE_DAY[ 0 ] ) * amount;
+	smoke.green = SMOKE_DAY[ 1 ] + ( SMOKE_NIGHT[ 1 ] - SMOKE_DAY[ 1 ] ) * amount;
+	smoke.blue = SMOKE_DAY[ 2 ] + ( SMOKE_NIGHT[ 2 ] - SMOKE_DAY[ 2 ] ) * amount;
+	TheWritableGlobalData->m_shroudColor = fog;
+	if( TheParticleSystemManager != NULL )
+		TheParticleSystemManager->setSmokeTint( smoke );
+	// the shroud texture holds the colour per cell: write every cell again, the display's copy only
+	if( ThePartitionManager != NULL )
+		ThePartitionManager->redrawShroudForLocalPlayer();
+}
+
+//-------------------------------------------------------------------------------------------------
 ApocalypseDirector::ApocalypseDirector( void )
 {
 	m_active = FALSE;
@@ -228,7 +286,10 @@ ApocalypseDirector::ApocalypseDirector( void )
 void ApocalypseDirector::reset( void )
 {
 	if( m_active )
+	{
 		LogicThread::callAfterTick( []() { apocalypseRestoreShadow(); } );
+		LogicThread::callAfterTick( []() { apocalypseRestoreFog(); } );
+	}
 	m_active = FALSE;
 	m_centre.zero();
 	m_reachRadius = 0.0f;
@@ -248,6 +309,13 @@ void ApocalypseDirector::reset( void )
 	m_kills = 0;
 	m_reached = 0;
 	m_zombies.clear();
+	m_hasRing = FALSE;
+	m_clearLo.x = m_clearLo.y = m_clearHi.x = m_clearHi.y = 0.0f;
+	m_playLo = m_clearLo;
+	m_playHi = m_clearLo;
+	m_fogStays.clear();
+	m_fogKills = 0;
+	m_fogLevel = -1;
 	m_lightLevel = -1;
 	m_lightsOn = FALSE;
 	m_fallLogged = FALSE;
@@ -332,6 +400,36 @@ void ApocalypseDirector::newMap( Bool loadingSaveGame )
 		}
 	}
 
+	// the fog ring: everything between the clear square and the map's edge, shrouded for good
+	const PolygonTrigger *clear = TheTerrainLogic->getTriggerAreaByName( "Apocalypse_Clear" );
+	if( clear != NULL && clear->getNumPoints() >= 3 )
+	{
+		ICoord3D lo = *clear->getPoint( 0 ), hi = lo;
+		for( Int p = 1; p < clear->getNumPoints(); ++p )
+		{
+			const ICoord3D *pt = clear->getPoint( p );
+			lo.x = min( lo.x, pt->x );
+			lo.y = min( lo.y, pt->y );
+			hi.x = max( hi.x, pt->x );
+			hi.y = max( hi.y, pt->y );
+		}
+		Region3D extent;
+		TheTerrainLogic->getExtent( &extent );
+		m_playLo.x = extent.lo.x;
+		m_playLo.y = extent.lo.y;
+		m_playHi.x = extent.hi.x;
+		m_playHi.y = extent.hi.y;
+		m_clearLo.x = (Real)lo.x;
+		m_clearLo.y = (Real)lo.y;
+		m_clearHi.x = (Real)hi.x;
+		m_clearHi.y = (Real)hi.y;
+		m_hasRing = TRUE;
+		const Int cells = ThePartitionManager->setAlwaysShroudedOutside( m_clearLo.x, m_clearLo.y, m_clearHi.x, m_clearHi.y );
+		DEBUG_LOG(( "HEADLESS APOCALYPSE: fog ring outside (%.0f,%.0f)-(%.0f,%.0f) of the map (%.0f,%.0f)-(%.0f,%.0f), %d cells shrouded for good\n",
+								m_clearLo.x, m_clearLo.y, m_clearHi.x, m_clearHi.y, m_playLo.x, m_playLo.y, m_playHi.x, m_playHi.y, cells ));
+	}
+	LogicThread::callAfterTick( []() { apocalypseKeepFog(); } );
+
 	m_phaseStartFrame = TheGameLogic->getFrame();
 	m_nextWaveFrame = TheGameLogic->getFrame() + APOCALYPSE_FIRST_WAVE_SECONDS * gameSecond();
 	// the map has just put its own light in; a save load overwrites the clock below, not the light
@@ -378,24 +476,31 @@ void ApocalypseDirector::spawnOne( UnsignedInt now )
 		if( m_kinds[ kind ] == NULL )
 			kind = KIND_WALKER;
 	}
-	const Int which = GameLogicRandomValue( 0, (Int)m_spawns.size() - 1 );
-	const Coord3D &spawn = m_spawns[ which ];
-	Coord3D pos = spawn;
-	pos.x += GameLogicRandomValueReal( -(Real)APOCALYPSE_SPAWN_SPREAD, (Real)APOCALYPSE_SPAWN_SPREAD );
-	pos.y += GameLogicRandomValueReal( -(Real)APOCALYPSE_SPAWN_SPREAD, (Real)APOCALYPSE_SPAWN_SPREAD );
-	pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
-
 	Team *team = ThePlayerList->getNthPlayer( m_zombiePlayer )->getDefaultTeam();
 	Object *obj = TheThingFactory->newObject( m_kinds[ kind ], team );
 	if( obj == NULL )
 		return;
 	obj->setOrientation( 0.0f );
 	AIUpdateInterface *ai = obj->getAI();
-	// a tree or a rock where the spread put it: the spawn itself, which is on the clear trail
-	if( ai != NULL && !TheAI->pathfinder()->validMovementPosition( obj->getCrusherLevel() > 0, obj->getLayer(), ai->getLocomotorSet(), &pos ) )
+
+	// anywhere in the fog ring the dead can stand; on a map without one, or where no draw found such a
+	// spot, at a spawn waypoint
+	Coord3D pos;
+	Int which = -1;
+	if( !m_hasRing || !ringSpot( &pos, obj ) )
 	{
+		which = GameLogicRandomValue( 0, (Int)m_spawns.size() - 1 );
+		const Coord3D &spawn = m_spawns[ which ];
 		pos = spawn;
+		pos.x += GameLogicRandomValueReal( -(Real)APOCALYPSE_SPAWN_SPREAD, (Real)APOCALYPSE_SPAWN_SPREAD );
+		pos.y += GameLogicRandomValueReal( -(Real)APOCALYPSE_SPAWN_SPREAD, (Real)APOCALYPSE_SPAWN_SPREAD );
 		pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+		// a tree or a rock where the spread put it: the spawn itself, which is on the clear trail
+		if( ai != NULL && !TheAI->pathfinder()->validMovementPosition( obj->getCrusherLevel() > 0, obj->getLayer(), ai->getLocomotorSet(), &pos ) )
+		{
+			pos = spawn;
+			pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
+		}
 	}
 	obj->setPosition( &pos );
 	for( BehaviorModule **m = obj->getBehaviorModules(); *m; ++m )
@@ -417,9 +522,83 @@ void ApocalypseDirector::spawnOne( UnsignedInt now )
 	++m_spawned;
 	if( ai != NULL )
 		ai->aiAttackMoveToPosition( &m_centre, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
-	if( m_spawned == 1 || ( kind != KIND_WALKER && m_spawned % 20 == 0 ) )
-		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u '%s' %d out at spawn %d (%.0f,%.0f) at rank %d\n", now,
-								m_kinds[ kind ]->getName().str(), (Int)z.id, which + 1, pos.x, pos.y, rank ));
+	if( m_spawned <= 3 || ( kind != KIND_WALKER && m_spawned % 20 == 0 ) )
+	{
+		AsciiString where = "in the fog";
+		if( which >= 0 )
+			where.format( "at spawn %d", which + 1 );
+		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u '%s' %d out %s (%.0f,%.0f) at rank %d\n", now,
+								m_kinds[ kind ]->getName().str(), (Int)z.id, where.str(), pos.x, pos.y, rank ));
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ApocalypseDirector::inRing( const Coord3D *pos ) const
+{
+	return m_hasRing && ( pos->x < m_clearLo.x || pos->x > m_clearHi.x || pos->y < m_clearLo.y || pos->y > m_clearHi.y );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A spot in the fog ring, off the map's edge and off the clear square by APOCALYPSE_FOG_EDGE_IN, where
+	  the object can stand; drawn from the logic stream, FALSE after APOCALYPSE_FOG_TRIES misses. */
+Bool ApocalypseDirector::ringSpot( Coord3D *pos, const Object *obj )
+{
+	const Real in = (Real)APOCALYPSE_FOG_EDGE_IN;
+	const AIUpdateInterface *ai = obj->getAI();
+	for( Int tryNo = 0; tryNo < APOCALYPSE_FOG_TRIES; ++tryNo )
+	{
+		pos->x = GameLogicRandomValueReal( m_playLo.x + in, m_playHi.x - in );
+		pos->y = GameLogicRandomValueReal( m_playLo.y + in, m_playHi.y - in );
+		if( pos->x > m_clearLo.x - in && pos->x < m_clearHi.x + in && pos->y > m_clearLo.y - in && pos->y < m_clearHi.y + in )
+			continue;
+		pos->z = TheTerrainLogic->getGroundHeight( pos->x, pos->y );
+		if( ai == NULL || TheAI->pathfinder()->validMovementPosition( obj->getCrusherLevel() > 0, obj->getLayer(), ai->getLocomotorSet(), pos ) )
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Anything of the living (a unit of a seat or of anyone but the dead and the neutral map) that has
+	  stood in the fog ring APOCALYPSE_FOG_GRACE_SECONDS dies there.  Walked in object list order, the
+	  stays kept sorted by ObjectID, so every machine kills the same thing on the same frame. */
+void ApocalypseDirector::killInFog( UnsignedInt now )
+{
+	const UnsignedInt grace = APOCALYPSE_FOG_GRACE_SECONDS * gameSecond();
+	const Player *neutral = ThePlayerList->getNeutralPlayer();
+	std::vector<FogStay> stays;
+	std::vector<Object *> doomed;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		const Player *owner = obj->getControllingPlayer();
+		if( owner == NULL || owner == neutral || owner->getPlayerIndex() == m_zombiePlayer || obj->isEffectivelyDead()
+				|| obj->getContainedBy() != NULL
+				|| !( obj->isKindOf( KINDOF_INFANTRY ) || obj->isKindOf( KINDOF_VEHICLE ) || obj->isKindOf( KINDOF_AIRCRAFT ) )
+				|| !inRing( obj->getPosition() ) )
+			continue;
+		FogStay stay;
+		stay.id = obj->getID();
+		stay.since = now;
+		std::vector<FogStay>::const_iterator was = std::lower_bound( m_fogStays.begin(), m_fogStays.end(), stay,
+			[]( const FogStay &a, const FogStay &b ) { return a.id < b.id; } );
+		if( was != m_fogStays.end() && was->id == stay.id )
+			stay.since = was->since;
+		if( now - stay.since >= grace )
+			doomed.push_back( obj );
+		else
+			stays.push_back( stay );
+	}
+	std::sort( stays.begin(), stays.end(), []( const FogStay &a, const FogStay &b ) { return a.id < b.id; } );
+	m_fogStays.swap( stays );
+	for( UnsignedInt i = 0; i < doomed.size(); ++i )
+	{
+		Object *obj = doomed[ i ];
+		++m_fogKills;
+		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u '%s' %d of player %d at (%.0f,%.0f) died in the fog, %u so far\n", now,
+								obj->getTemplate()->getName().str(), (Int)obj->getID(), obj->getControllingPlayer()->getPlayerIndex(),
+								obj->getPosition()->x, obj->getPosition()->y, m_fogKills ));
+		obj->kill();
+	}
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -527,12 +706,28 @@ void ApocalypseDirector::update( void )
 
 	handLight( now );
 
+	// the ring takes what lingers in it, twice a game second
+	if( m_hasRing && now % max( second / 2, 1U ) == 0 )
+		killInFog( now );
+
+	// the fog ring's and the smoke's red, an eighth of the way at a time (each step redraws the shroud)
+	{
+		const UnsignedInt length = Apocalypse_phaseRules( m_phase ).seconds * second;
+		const Real amount = Apocalypse_nightAmount( m_phase, now - m_phaseStartFrame, length );
+		const Int level = (Int)( amount * (Real)APOCALYPSE_LIGHT_STEPS + 0.5f ) / APOCALYPSE_LIGHT_TINT_EVERY * APOCALYPSE_LIGHT_TINT_EVERY;
+		if( level != m_fogLevel )
+		{
+			m_fogLevel = level;
+			LogicThread::callAfterTick( [level]() { apocalypseApplyFog( level ); } );
+		}
+	}
+
 	if( now % ( APOCALYPSE_LOG_SECONDS * second ) == 0 )
 	{
 		const Int standing = seatsAlive();
-		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u %s cycle %u wave %u walking %d spawned %u kills %u reached %u to come %d seats standing %d of %d\n",
+		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u %s cycle %u wave %u walking %d spawned %u kills %u reached %u to come %d seats standing %d of %d, fog took %u\n",
 								now, Apocalypse_phaseName( m_phase ), m_cycle, m_wave, (Int)m_zombies.size(), m_spawned, m_kills, m_reached,
-								m_pending, standing, m_seats ));
+								m_pending, standing, m_seats, m_fogKills ));
 		if( standing == 0 && !m_fallLogged )
 		{
 			m_fallLogged = TRUE;
@@ -554,7 +749,7 @@ void ApocalypseDirector::crc( Xfer *xfer )
 	  is handed to the client again on the first tick after it. */
 void ApocalypseDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 1;
+	XferVersion currentVersion = 2;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -577,5 +772,19 @@ void ApocalypseDirector::xfer( Xfer *xfer )
 	{
 		xfer->xferObjectID( &m_zombies[ i ].id );
 		xfer->xferBool( &m_zombies[ i ].reached );
+	}
+
+	if( version >= 2 )
+	{
+		xfer->xferUnsignedInt( &m_fogKills );
+		count = (UnsignedInt)m_fogStays.size();
+		xfer->xferUnsignedInt( &count );
+		if( xfer->getXferMode() == XFER_LOAD )
+			m_fogStays.resize( count );
+		for( UnsignedInt i = 0; i < count; ++i )
+		{
+			xfer->xferObjectID( &m_fogStays[ i ].id );
+			xfer->xferUnsignedInt( &m_fogStays[ i ].since );
+		}
 	}
 }

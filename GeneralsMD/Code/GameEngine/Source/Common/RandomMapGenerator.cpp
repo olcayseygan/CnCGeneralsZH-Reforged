@@ -10453,7 +10453,12 @@ void RMGLayout::buildLane( void )
 	each gate beside its trail, worth a sortie. The names the director looks up:
 
 	Apocalypse_Centre               waypoint, the middle, where every new zombie walks
-	Apocalypse_Spawn_1 to _N        waypoints, one at the playable edge on each gate's bearing */
+	Apocalypse_Spawn_1 to _N        waypoints, one at the playable edge on each gate's bearing, the
+	                                director's fallback spawns
+	Apocalypse_Clear                trigger area, the square the fog ring leaves: everything between
+	                                it and the playable edge is the ring, shrouded for good, deadly to
+	                                anything but the dead and where they rise (RMG_APOC_RING_SHARE of the
+	                                map a side, never nearer the wall than RMG_APOC_RING_CLEAR) */
 #define RMG_APOC_GROUND			60		///< height bytes of the clearing
 #define RMG_APOC_START_PER_SEAT	6.75f	///< cells of start ring radius a seat, so neighbours stand about 42 apart
 #define RMG_APOC_START_LEAST	28.0f	///< and never nearer the middle than this
@@ -10464,7 +10469,9 @@ void RMGLayout::buildLane( void )
 #define RMG_APOC_WALL_HEIGHT	40.0f	///< bytes it stands over the clearing, 25 world units: a cliff on both faces
 #define RMG_APOC_WALL_WOBBLE	3.0f	///< cells its line wanders in and out
 #define RMG_APOC_GATE_HALF		7.0f	///< cells from a gate's middle to each of its posts
-#define RMG_APOC_BELT_LEAST		50.0f	///< cells of belt past the wall at the least
+#define RMG_APOC_BELT_LEAST		64.0f	///< cells of belt past the wall at the least, the fog ring's among them
+#define RMG_APOC_RING_SHARE		0.16f	///< the fog ring's width a side, a share of the playable cells
+#define RMG_APOC_RING_CLEAR		30.0f	///< cells of open belt the ring always leaves past the wall's outer foot
 #define RMG_APOC_HILLS			26.0f	///< bytes the belt's hills rise at most
 #define RMG_APOC_HILL_REACH		24.0f	///< cells over which they come up off the wall
 #define RMG_APOC_TRAIL			7.0f	///< cells either side of a gate's line kept clear of trees and stones
@@ -10619,6 +10626,18 @@ void RMGLayout::buildApocalypse( void )
 			half + ( startRing + RMG_APOC_DOCK_OUT ) * uy, angle + PI );
 	}
 	addObject( "TechOilDerrick", "Derrick 1", half, half, 0.0f );
+
+	// the square the fog ring leaves clear, axis aligned, centred on the middle
+	{
+		const Real ringClear = wallRing + RMG_APOC_WALL_WOBBLE + thick + RMG_APOC_RING_CLEAR;
+		const Real clearHalf = std::max( half - RMG_APOC_RING_SHARE * (Real)m_settings.m_playableCells, ringClear );
+		RMGArea clear;
+		clear.m_name = "Apocalypse_Clear";
+		const RMGPoint corners[4] = { { half - clearHalf, half - clearHalf }, { half + clearHalf, half - clearHalf },
+			{ half + clearHalf, half + clearHalf }, { half - clearHalf, half + clearHalf } };
+		clear.m_polygon.assign( corners, corners + 4 );
+		m_areas.push_back( clear );
+	}
 	addWaypoint( AsciiString( "Apocalypse_Centre" ), half, half );
 	for( Int g = 0; g < gates; g++ )
 	{

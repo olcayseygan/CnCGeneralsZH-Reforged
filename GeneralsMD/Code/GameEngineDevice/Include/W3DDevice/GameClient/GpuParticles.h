@@ -83,6 +83,11 @@ void Set_Ground( const float *heights, unsigned width, unsigned height, const fl
 	* starts clear. */
 void Set_Slice_Texture( unsigned slice, IDirect3DBaseTexture9 *texture );
 
+/** The multiply Evaluate puts over the colour of the systems whose entry carries flag 4 (smoke and
+	* dust, ParticleSystemManager::setSmokeTint); white leaves them as they are.  A change ages the
+	* ring again. */
+void Set_Smoke_Tint( const float tint[ 3 ] );
+
 /** Age the count records from ring index first (wrapping) to the frame now plus smooth, a fraction
 	* of an update, in closed form, once a frame before either pass draws.  Nothing is aged again when
 	* neither the range, the time nor any record changed since the last call. */

@@ -396,7 +396,9 @@ static const char * const WORLD_AO_SHADER_BODY =
 	"    }\n"
 	"    float kept = saturate(1.0 - AO_STRENGTH * closed / max(counted, 1.0));\n"
 	// The fog the terrain draws, as the haze reads it: under the shroud nothing, in the fog little.
-	"    float lit = lerp(1.0, WorldAoShroud.SampleLevel(Sampler, (here.xy - HazeShroudRect.xy) * HazeShroudRect.zw, 0.0).g, HazeSun.z);\n"
+	// the brightest channel is the shroud's light whatever colour the map gives it
+	"    float3 shroudTexel = WorldAoShroud.SampleLevel(Sampler, (here.xy - HazeShroudRect.xy) * HazeShroudRect.zw, 0.0).rgb;\n"
+	"    float lit = lerp(1.0, max(shroudTexel.r, max(shroudTexel.g, shroudTexel.b)), HazeSun.z);\n"
 	"    return float4(lerp(1.0, kept, lit * lit * lit), distance_along, 0.0, 0.0);\n"
 	"}\n";
 
@@ -534,7 +536,8 @@ static const char * const HAZE_SHADER_BODY =
 	"    eye.xyz /= eye.w;\n"
 	"    float below = saturate((Haze.x - world.z) / max(Haze.y, 0.0001));\n"
 	"    if (below <= 0.0) return float4(0.0, 0.0, 0.0, 0.0);\n"
-	"    float shroudLight = HazeShroud.SampleLevel(Sampler, (world.xy - HazeShroudRect.xy) * HazeShroudRect.zw, 0.0).g;\n"
+	"    float3 shroudTexel = HazeShroud.SampleLevel(Sampler, (world.xy - HazeShroudRect.xy) * HazeShroudRect.zw, 0.0).rgb;\n"
+	"    float shroudLight = max(shroudTexel.r, max(shroudTexel.g, shroudTexel.b));\n"
 	"    float reach = saturate(distance(world.xyz, eye.xyz) / max(Haze.w, 0.0001));\n"
 	"    float layer = min(below * below * (3.0 - 2.0 * below), HAZE_LOW_CAP);\n"
 	"    float amount = Haze.z * layer * (0.65 + 0.35 * reach);\n"
@@ -665,7 +668,8 @@ static const char * const ATMOSPHERE_SHADER_BODY =
 	"    float past = max(reach - max(focus * FOCUS_MARGIN, Fade.x), 0.0);\n"
 	"    float amount = Fade.z * (1.0 - exp(-past / Fade.y));\n"
 	"    float2 here = (eye + ray).xy;\n"
-	"    float lit = lerp(1.0, Shroud.SampleLevel(Sampler, (here - HazeShroudRect.xy) * HazeShroudRect.zw, 0.0).g, HazeSun.z);\n"
+	"    float3 shroudTexel = Shroud.SampleLevel(Sampler, (here - HazeShroudRect.xy) * HazeShroudRect.zw, 0.0).rgb;\n"
+	"    float lit = lerp(1.0, max(shroudTexel.r, max(shroudTexel.g, shroudTexel.b)), HazeSun.z);\n"
 	"    float2 outside = max(-here, here - MapSize.xy);\n"
 	"    float closing = max(smoothstep(FAR_CLOSE, 1.0, dot(ray, axis) / (axisLength * axisLength)),\n"
 	"        smoothstep(-0.5 * SHROUD_CELL, 0.5 * SHROUD_CELL, max(outside.x, outside.y)));\n"

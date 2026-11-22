@@ -19,7 +19,7 @@ static_assert(sizeof(PassBlock)==176 && offsetof(PassBlock,SoftDepth)==128 && of
 struct Pipeline {unsigned Colour,Depth,Shader;SDL_GPUGraphicsPipeline *Native;};
 struct State {
     SdlGpuFrame *Frame=nullptr;SDL_GPUDevice *Device=nullptr;uint64_t Generation=0;unsigned Capacity=0,Evaluated=0;
-    FlushHook Flush=nullptr;bool Refused=false,Changed=true;unsigned First=0,Count=0,Now=0;float Smooth=-1,GroundMap[4]={};
+    FlushHook Flush=nullptr;bool Refused=false,Changed=true;unsigned First=0,Count=0,Now=0;float Smooth=-1,GroundMap[4]={},SmokeTint[3]={1,1,1};
     std::unique_ptr<SdlGpuStorage> Storage;SdlGpuStorage::Buffer Spawns,Systems,Fades,Output;
     SDL_GPUComputePipeline *Compute=nullptr;SDL3_StorageLayout ComputeLayout;
     SDL_GPUShader *Vertex=nullptr,*Pixel=nullptr,*BlitVertex=nullptr,*BlitPixel=nullptr;
@@ -238,13 +238,14 @@ void SetGround(const float *heights,unsigned width,unsigned height,const float m
     SDL_ReleaseGPUTexture(state.Device,state.Ground);state.Ground=texture;memcpy(state.GroundMap,mapping,sizeof(state.GroundMap));state.Changed=true;
 }
 void SetSliceTexture(unsigned slice,IDirect3DBaseTexture9 *texture) {if(slice>=GpuParticles::TEXTURE_SLICES || state.Refused) return;state.Requested[slice]=texture;state.Asked[slice]=true;}
+void SetSmokeTint(const float tint[3]) {if(memcmp(state.SmokeTint,tint,sizeof(state.SmokeTint))==0) return;memcpy(state.SmokeTint,tint,sizeof(state.SmokeTint));state.Changed=true;}
 void Evaluate(const SdlGpuParticlesContext &context,unsigned first,unsigned count,unsigned now,float smooth) {
     if(state.Refused || !same_device(context) || context.Pass==SdlGpuParticlesPass::Sun) return;
     if(first>=state.Capacity || count>state.Capacity || !std::isfinite(smooth)) {fail("invalid particle evaluation range/time");return;}
     if(!draw_slices(context)) return;state.Evaluated=count;if(!count) return;
     state.Metrics.MaximumEvaluated=std::max(state.Metrics.MaximumEvaluated,count);
     if(!state.Changed && first==state.First && count==state.Count && now==state.Now && smooth==state.Smooth) {++state.Metrics.ReusedEvaluations;return;}
-    FrameBlock block={first,count,state.Capacity,now,smooth,{0,0,0},{}};memcpy(block.GroundMap,state.GroundMap,sizeof(block.GroundMap));std::string error;
+    FrameBlock block={first,count,state.Capacity,now,smooth,{state.SmokeTint[0],state.SmokeTint[1],state.SmokeTint[2]},{}};memcpy(block.GroundMap,state.GroundMap,sizeof(block.GroundMap));std::string error;
     if(!state.Storage->Dispatch(state.Compute,state.ComputeLayout,{state.Spawns,state.Systems,state.Fades},{state.Output},{{0,&block,sizeof(block)}},(count+GroupSize-1)/GroupSize,1,1,error,{{state.Ground,state.Linear}})) {fail(error);return;}
     state.First=first;state.Count=count;state.Now=now;state.Smooth=smooth;state.Changed=false;++state.Metrics.Dispatches;
 }

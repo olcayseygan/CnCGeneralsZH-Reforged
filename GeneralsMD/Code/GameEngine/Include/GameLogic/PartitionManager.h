@@ -346,6 +346,7 @@ private:
 	Short													m_cellX;						///< x-coord of this cell within the Partition Mgr coords (NOT in world coords)
 	Short													m_cellY;						///< y-coord of this cell within the Partition Mgr coords (NOT in world coords)
 	UnsignedShort									m_sightBlockerCoiCount;	///< COIs here of structures and shrubbery, the things that can hide what is behind them
+	Bool													m_alwaysShrouded;		///< shrouded for every player whoever looks (the Apocalypse fog ring); set from the map on every load, never saved
 #ifdef PM_CACHE_TERRAIN_HEIGHT
 	Real													m_loTerrainZ;			///< lowest terrain-pt in this cell
 	Real													m_hiTerrainZ;			///< highest terrain-pt in this cell
@@ -387,6 +388,8 @@ public:
 	void addShrouder( Int playerIndex );
 	void removeShrouder( Int playerIndex );
 	CellShroudStatus getShroudStatusForPlayer( Int playerIndex ) const;
+	Bool isAlwaysShrouded() const { return m_alwaysShrouded; }
+	void setAlwaysShrouded( Bool on ) { m_alwaysShrouded = on; }
 	void addAirLooker( Int playerIndex );
 	void removeAirLooker( Int playerIndex );
 	Bool isAirSeenByPlayer( Int playerIndex ) const { return m_airLookers[playerIndex] > 0; }
@@ -1828,6 +1831,15 @@ public:
 		player changes.
 		*/
 	void refreshShroudForLocalPlayer();
+
+	/** Every cell whose middle lies outside the box, lo to hi in world units, becomes shrouded for
+		every player whoever looks at it, and stays so for the rest of the map (the Apocalypse fog
+		ring).  Map data: set again on every load, never saved.  Returns the cells marked. */
+	Int setAlwaysShroudedOutside( Real loX, Real loY, Real hiX, Real hiY );
+	/// push every cell to the display again and nothing else (the shroud's colour changed): client only
+	void redrawShroudForLocalPlayer();
+	/// the cell at x, y is one of those
+	Bool isCellAlwaysShrouded( Int x, Int y ) const;
 
 	/**
 		Shrouded has no absolute meaning.  It only makes sense to say "Shrouded for him".

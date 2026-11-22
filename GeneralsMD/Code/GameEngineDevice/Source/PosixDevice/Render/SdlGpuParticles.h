@@ -19,6 +19,7 @@ void WriteSystems(unsigned first,const void *records,unsigned count);
 void WriteFades(const float *fades,unsigned count);
 void SetGround(const float *heights,unsigned width,unsigned height,const float mapping[4]);
 void SetSliceTexture(unsigned slice,IDirect3DBaseTexture9 *texture);
+void SetSmokeTint(const float tint[3]);
 void Evaluate(const SdlGpuParticlesContext &context,unsigned first,unsigned count,unsigned now,float smooth);
 void Draw(const SdlGpuParticlesContext &context,unsigned shaderType,const float view[16],const float projection[16]);
 // A false release retains the complete owner. Teardown may explicitly discard

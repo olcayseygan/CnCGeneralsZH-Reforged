@@ -65,7 +65,7 @@ static const char EVALUATE_PROGRAM[] =
 	"    uint Capacity;\n"
 	"    uint Now;\n"
 	"    float Smooth;\n"
-	"    float3 Unused;\n"
+	"    float3 SmokeTint;\n"		// GpuParticles::Set_Smoke_Tint, over the systems with flag 4 (smoke and dust)
 	"    float4 GroundMap;\n"		// world x and y to the height texture's coordinates: scale x, y, offset x, y
 	"};\n"
 	"StructuredBuffer<Spawn> Spawns : register(t0);\n"
@@ -253,11 +253,13 @@ static const char EVALUATE_PROGRAM[] =
 	"        return;\n"
 	"    }\n"
 	"\n"
-	// stealthFadeParticle, then the vertex colour's clamp (Convert_Color_Clamp)
+	// stealthFadeParticle, then the smoke's tint (smokeTintFor), then the vertex colour's clamp (Convert_Color_Clamp)
 	"    if (shader == ADDITIVE)\n"
 	"        colour *= fade;\n"
 	"    else\n"
 	"        alpha *= fade;\n"
+	"    if ((Systems[slot].Flags & 4) != 0)\n"
+	"        colour *= SmokeTint;\n"
 	"    colour = saturate(colour);\n"
 	"    alpha = saturate(alpha);\n"
 	"    particle.Position = position;\n"

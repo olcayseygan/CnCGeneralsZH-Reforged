@@ -1046,6 +1046,11 @@ public:
 	ParticleSystemManager( void );
 	virtual ~ParticleSystemManager();
 
+	/** A multiply over the colour of every smoke and dust particle drawn (ALPHA, not emissive), white
+		  for none: the Apocalypse map's red air.  Client only, read as the particles are drawn. */
+	void setSmokeTint( const RGBColor &tint ) { m_smokeTint = tint; }
+	const RGBColor &getSmokeTint( void ) const { return m_smokeTint; }
+
 	virtual void init( void );									///< initialize the manager
 	virtual void reset( void );									///< reset the manager and all particle systems
 	virtual void update( void );								///< update all particle systems
@@ -1157,6 +1162,7 @@ protected:
 	UnsignedInt m_particleSystemCount;
 	Int m_onScreenParticleCount;                ///< number of particles displayed on screen per frame
 	UnsignedInt m_lastLogicFrameUpdate;
+	RGBColor m_smokeTint;									///< setSmokeTint's; client-only, never xfered
 	UnsignedInt m_particleFrame;		///< getParticleFrame; client-only, never xfered
 	Int m_localPlayerIndex;	///<used to tell particle systems which particles can be skipped due to player shroud status
 	std::vector<ParticleSystem *> m_independentUpdates;	///< this update's systems whose particles go to the job pool; kept so it does not reallocate

@@ -1283,6 +1283,7 @@ PartitionCell::PartitionCell()
 	m_coiCount = 0;
 	m_playerCoiMask = PLAYERMASK_NONE;
 	m_sightBlockerCoiCount = 0;
+	m_alwaysShrouded = FALSE;
 #ifdef PM_CACHE_TERRAIN_HEIGHT
 	m_loTerrainZ = HUGE_DIST;		// huge positive
 	m_hiTerrainZ = -HUGE_DIST;	// huge negative
@@ -1485,7 +1486,7 @@ CellShroudStatus PartitionCell::getShroudStatusForPlayer( Int playerIndex ) cons
 {
 	// There are now three answers, but the question still requires "to whom"
 
-	if( m_shroudLevel[playerIndex].m_currentShroud == 1 )
+	if( m_alwaysShrouded || m_shroudLevel[playerIndex].m_currentShroud == 1 )
 		return CELLSHROUD_SHROUDED;
 	else if( m_shroudLevel[playerIndex].m_currentShroud == 0 )
 		return CELLSHROUD_FOGGED;// ie Nobody actively looking
@@ -3489,6 +3490,47 @@ void PartitionManager::refreshShroudForLocalPlayer()
 		TheRadar->setShroudLevel(x, y, status);
 		m_cells[i].invalidateShroudedStatusForAllCois(playerIndex);
 	}
+}
+
+//-----------------------------------------------------------------------------
+void PartitionManager::redrawShroudForLocalPlayer()
+{
+	// the display's copy only: what the shroud looks like changed, not what it hides
+	if (TheDisplay == NULL)
+		return;
+	Int playerIndex = TheObserverCamera.getShroudPlayerIndex();
+	for (int i = 0; i < m_totalCellCount; ++i)
+		TheDisplay->setShroudLevel(m_cells[i].getCellX(), m_cells[i].getCellY(), m_cells[i].getShroudStatusForPlayer(playerIndex));
+}
+
+//-----------------------------------------------------------------------------
+Int PartitionManager::setAlwaysShroudedOutside( Real loX, Real loY, Real hiX, Real hiY )
+{
+	Int marked = 0;
+	for (Int i = 0; i < m_totalCellCount; ++i)
+	{
+		PartitionCell &cell = m_cells[i];
+		const Real cx = m_worldExtents.lo.x + ((Real)cell.getCellX() + 0.5f) * m_cellSize;
+		const Real cy = m_worldExtents.lo.y + ((Real)cell.getCellY() + 0.5f) * m_cellSize;
+		const Bool outside = cx < loX || cx > hiX || cy < loY || cy > hiY;
+		if (outside == cell.isAlwaysShrouded())
+			continue;
+		cell.setAlwaysShrouded(outside);
+		if (outside)
+			++marked;
+		// what stands there is shrouded now, whatever it was a moment ago
+		for (Int p = 0; p < MAX_PLAYER_COUNT; ++p)
+			cell.invalidateShroudedStatusForAllCois(p);
+	}
+	redrawShroudForLocalPlayer();
+	return marked;
+}
+
+//-----------------------------------------------------------------------------
+Bool PartitionManager::isCellAlwaysShrouded( Int x, Int y ) const
+{
+	const PartitionCell *cell = getCellAt(x, y);
+	return cell != NULL && cell->isAlwaysShrouded();
 }
 
 //-----------------------------------------------------------------------------

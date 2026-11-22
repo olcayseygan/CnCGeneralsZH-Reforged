@@ -38,6 +38,11 @@
 // light toward a dim red and puts every drawable in its NIGHT state once it is past half; nothing in
 // the logic reads any of it back.
 //
+// A fog ring runs round the map, between the map's Apocalypse_Clear square and its edge: shrouded
+// for every player whoever looks (PartitionManager::setAlwaysShroudedOutside), drawn as a thin red
+// fog, and deadly: a unit of anyone but the dead that stands in it APOCALYPSE_FOG_GRACE_SECONDS dies.
+// The dead rise anywhere in it and walk in.  The fog's red and the smoke's follow the night.
+//
 // The HEADLESS APOCALYPSE lines carry the phase, the wave, the counts and the kills.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,6 +86,9 @@ enum
 	APOCALYPSE_LOG_SECONDS = 10,					///< game seconds between two status lines
 	APOCALYPSE_SPAWN_SPREAD = 60,					///< world units a zombie lands either way off its spawn
 	APOCALYPSE_BASE_REACH = 200,					///< world units past the farthest start from the middle that count as having reached the bases
+	APOCALYPSE_FOG_GRACE_SECONDS = 4,			///< game seconds anything but the dead may stand in the fog ring before it dies there
+	APOCALYPSE_FOG_EDGE_IN = 40,					///< world units a ring spawn keeps off the map's edge and off the clear square
+	APOCALYPSE_FOG_TRIES = 8,							///< spots drawn for a ring spawn before it falls back on a spawn waypoint
 	APOCALYPSE_LIGHT_STEPS = 32,					///< the night amount the client is handed, in steps
 	APOCALYPSE_LIGHT_TINT_EVERY = 4,			///< steps between two retints of the light tables, each a full relight of the ground
 };
@@ -143,7 +151,16 @@ private:
 	};
 	enum { KIND_WALKER, KIND_RUNNER, KIND_BRUTE, KINDS };
 
+	struct FogStay
+	{
+		ObjectID id;
+		UnsignedInt since;							///< the frame it was first found in the ring this time
+	};
+
 	void spawnOne( UnsignedInt now );
+	Bool ringSpot( Coord3D *pos, const Object *obj );
+	Bool inRing( const Coord3D *pos ) const;
+	void killInFog( UnsignedInt now );
 	void sendOn( Object *obj );
 	Int seatsAlive( void ) const;
 	void advancePhase( UnsignedInt now );
@@ -153,6 +170,9 @@ private:
 	Bool m_active;
 	Coord3D m_centre;
 	Real m_reachRadius;									///< the farthest start from the middle and APOCALYPSE_BASE_REACH
+	Bool m_hasRing;											///< the map has Apocalypse_Clear: a fog ring between it and the edge
+	Coord2D m_clearLo, m_clearHi;				///< the square the ring leaves, world units
+	Coord2D m_playLo, m_playHi;					///< the playable map
 	std::vector<Coord3D> m_spawns;
 	Int m_zombiePlayer;									///< the civilian player's index
 	Int m_seats;												///< seats at the start
@@ -170,10 +190,13 @@ private:
 	UnsignedInt m_kills;								///< zombies dead, whatever killed them
 	UnsignedInt m_reached;							///< zombies that got within reach of the middle
 	std::vector<Zombie> m_zombies;			///< the living, in the order they came out
+	std::vector<FogStay> m_fogStays;		///< what of the seats' stands in the ring now, by ObjectID
+	UnsignedInt m_fogKills;							///< what of the seats' the ring has killed
 
 	// what was last handed to the client, so the retint and the log run only on a change; nothing else reads them
 	Int m_lightLevel;
 	Bool m_lightsOn;
+	Int m_fogLevel;											///< the fog ring's and the smoke's tint, last handed to the client
 	Bool m_fallLogged;
 };
 

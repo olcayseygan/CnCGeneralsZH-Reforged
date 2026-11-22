@@ -100,6 +100,7 @@ struct State {
 	ID3D11Texture2D *ground = nullptr;
 	ID3D11ShaderResourceView *groundView = nullptr;
 	float groundMap[4] = {};
+	float smokeTint[3] = { 1.0f, 1.0f, 1.0f };	// Set_Smoke_Tint's
 	// What the last Evaluate aged and from what, so a pass drawn again before anything moved (a
 	// paused game, a frame faster than the logic) does not age the ring again.
 	bool inputsChanged = true;
@@ -469,6 +470,13 @@ void Set_Slice_Texture(unsigned slice, IDirect3DBaseTexture9 *texture)
 	}
 }
 
+void Set_Smoke_Tint(const float tint[3])
+{
+	if (std::memcmp(state.smokeTint, tint, sizeof(state.smokeTint)) == 0) return;
+	std::memcpy(state.smokeTint, tint, sizeof(state.smokeTint));
+	state.inputsChanged = true;
+}
+
 void Evaluate(unsigned first, unsigned count, unsigned now, float smooth)
 {
 	ID3D11DeviceContext *context = Direct3D11_Device()->Get_Context();
@@ -487,7 +495,7 @@ void Evaluate(unsigned first, unsigned count, unsigned now, float smooth)
 	state.lastNow = now;
 	state.lastSmooth = smooth;
 
-	FrameBlock block = { first, count, state.capacity, now, smooth, { 0.0f, 0.0f, 0.0f }, {} };
+	FrameBlock block = { first, count, state.capacity, now, smooth, { state.smokeTint[0], state.smokeTint[1], state.smokeTint[2] }, {} };
 	std::memcpy(block.groundMap, state.groundMap, sizeof(block.groundMap));
 	upload(context, state.frameConstants, &block, sizeof(block));
 	ID3D11ShaderResourceView *const views[4] = { state.spawnView, state.systemView, state.fadeView, state.groundView };

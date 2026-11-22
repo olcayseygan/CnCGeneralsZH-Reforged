@@ -370,12 +370,20 @@ static const char * const SHROUD_MEMORY_SHADER_BODY =
 	"    float2 ndc = float2(input.Texture.x * 2.0 - 1.0, 1.0 - input.Texture.y * 2.0);\n"
 	"    float4 world = mul(float4(ndc, raw, 1.0), WorldFromClip);\n"
 	"    float2 here = world.xy / world.w;\n"
-	"    float lit = Shroud.SampleLevel(Sampler, (here - HazeShroudRect.xy) * HazeShroudRect.zw, 0.0).g;\n"
+	// The shroud texel is its light times the map's shroud colour: the brightest channel is the light
+	// whatever the colour, and the colour over it is put back on the recalled grey, so a tinted fog
+	// (the Apocalypse map's red) keeps its hue.  A white shroud reads as it always did.
+	"    float3 shroud = Shroud.SampleLevel(Sampler, (here - HazeShroudRect.xy) * HazeShroudRect.zw, 0.0).rgb;\n"
+	"    float lit = max(shroud.r, max(shroud.g, shroud.b));\n"
 	"    float memory = saturate((1.0 - lit) / max(1.0 - BlurDirection.x, 0.0001));\n"
 	"    if (memory <= 0.0) return float4(0.0, 0.0, 0.0, 0.0);\n"
 	"    float3 scene = Source.Load(int3(input.Position.xy, 0)).rgb;\n"
 	"    float grey = dot(scene, float3(0.299, 0.587, 0.114));\n"
-	"    float3 recalled = lerp(scene, grey * MEMORY_TINT, MEMORY_GREY) * MEMORY_DIM;\n"
+	// the R5G6B5 shroud keeps a white fog's red and blue a step under its green: a hue that close to
+	// white is white, so an untinted shroud draws exactly as before
+	"    float3 hue = shroud / max(lit, 0.0001);\n"
+	"    if (min(hue.r, min(hue.g, hue.b)) > 0.97) hue = float3(1.0, 1.0, 1.0);\n"
+	"    float3 recalled = lerp(scene, grey * MEMORY_TINT, MEMORY_GREY) * MEMORY_DIM * hue;\n"
 	"    return float4(recalled, memory);\n"
 	"}\n";
 

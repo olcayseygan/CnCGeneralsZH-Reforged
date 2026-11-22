@@ -26,6 +26,9 @@ struct MatchClockState
 	Bool bloodMoon;															///< this night's moon is a Blood Moon
 };
 
+/// whether the clock is drawn in this match at all
+extern Bool MatchClock_wanted( void );
+
 /// fill the state for that logic frame: the day and night box's cycle, else the Apocalypse director's, else the clock alone
 extern void MatchClock_gather( UnsignedInt frame, MatchClockState &state );
 

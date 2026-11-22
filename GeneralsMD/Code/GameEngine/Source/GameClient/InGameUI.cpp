@@ -12376,9 +12376,12 @@ void InGameUI::drawHudOverlay( void )
 		return;
 
 	// the match clock at the top middle, under the readout strip while that is up
-	MatchClockState clock;
-	MatchClock_gather( TheGameLogic->getFrame(), clock );
-	MatchClock_draw( clock, hudStripBottom() );
+	if( MatchClock_wanted() )
+	{
+		MatchClockState clock;
+		MatchClock_gather( TheGameLogic->getFrame(), clock );
+		MatchClock_draw( clock, hudStripBottom() );
+	}
 
 	// on top of the battlefield like this strip, but never behind the ShowNetBox switch
 	drawKickVoteBanner();

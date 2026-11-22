@@ -105,6 +105,13 @@ static Color phaseColor( Int phase, Bool apocalypse )
 }
 
 //-------------------------------------------------------------------------------------------------
+Bool MatchClock_wanted( void )
+{
+	// ponytail: Apocalypse only in this release (the owner, 2026-11-22); return TRUE here to show it in every match
+	return TheApocalypseDirector != NULL && TheApocalypseDirector->isActive();
+}
+
+//-------------------------------------------------------------------------------------------------
 void MatchClock_gather( UnsignedInt frame, MatchClockState &state )
 {
 	state.matchFrames = frame;

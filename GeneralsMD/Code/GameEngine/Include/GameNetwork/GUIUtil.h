@@ -238,6 +238,13 @@ Bool FitDirectStrikeRoom(GameInfo *game);
 // lobby over the room's layout, DirectStrikeLobby.h, its three seat cards a team facing each other.  A
 // room calls it after every slot list repaint; ShutdownLobbySeatVisuals takes it off.
 void LayoutDirectStrikeRoom(GameWindow *parent, const char *layoutFilename, const GameInfo *game);
+// Apocalypse in the skirmish room: like Direct Strike the map's name carries the mode
+// (ApocalypseDirector wakes on its waypoints), so nothing travels in the options string.  A fresh
+// Apocalypse map for the room's seats, staged, in the cache and the game's, CRC and size with it
+Bool SetApocalypseMap(GameInfo *game);
+// Seats past four closed (the map's starts, clampSettings), and the rules that mean nothing in a co-op
+// survival off; TRUE when it changed anything
+Bool FitApocalypseRoom(GameInfo *game);
 // Create Game's question, which mode the room is for: Classic or Direct Strike, and Cancel
 void AskGameMode(void (*classic)(void), void (*directStrike)(void));
 /// a mode's name with its version tag after it ("Direct Strike v1.0"): the name's key, then the one key

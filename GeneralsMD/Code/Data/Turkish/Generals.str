@@ -21462,6 +21462,14 @@ GUI:DirectStrikeLower
 "Direct Strike"
 END
 
+GUI:Apocalypse
+"KIYAMET"
+END
+
+TOOLTIP:Apocalypse
+"Bitmeyen ölü dalgalarına karşı birlikte dayanın, en fazla dört oyuncu."
+END
+
 TOOLTIP:DirectStrike
 "Arsana birlik al. Her 30 saniyede her takımdan bir oyuncunun arsasının bir kopyası koridordan yürür; karşı kaleyi ilk yıkan takım kazanır. En çok 3'e 3, her maçta yeni bir ada."
 END

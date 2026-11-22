@@ -89,6 +89,9 @@ SkirmishGameInfo *TheSkirmishGameInfo = NULL;
 // The main menu's Direct Strike button opens this room in that mode, its Skirmish button in the
 // classic one (MainMenu.cpp).  The match is GAME_SKIRMISH either way; the lane map makes the mode.
 Bool skirmishDirectStrike = FALSE;
+// Its Apocalypse button opens the classic room on a generated Apocalypse map, which makes that mode
+// (ApocalypseDirector): no map choice, four seats at most, a fresh map for every match.
+Bool skirmishApocalypse = FALSE;
 
 // window ids ------------------------------------------------------------------------------
 static NameKeyType parentSkirmishGameOptionsID = NAMEKEY_INVALID;
@@ -770,6 +773,12 @@ Bool SkirmishPreferences::write(void)
 		setAsciiString("DirectStrikeSlotList", GameInfoToAsciiString(TheSkirmishGameInfo));
 		return UserPreferences::write();
 	}
+	// so does an Apocalypse room: its four seats and its generated map are not the classic room's
+	if (skirmishApocalypse)
+	{
+		setAsciiString("ApocalypseSlotList", GameInfoToAsciiString(TheSkirmishGameInfo));
+		return UserPreferences::write();
+	}
 
 	// read back through QuotedPrintableToAsciiString, whose escape is '_': a generated map's
 	// "rmg_v17_..." written as it is came back as garbage and the room fell back to another map
@@ -918,6 +927,12 @@ static void startPressed(void)
 	{
 		SetDirectStrikeMap(TheSkirmishGameInfo);
 		FitDirectStrikeRoom(TheSkirmishGameInfo);
+	}
+	// and a fresh Apocalypse map for the seats as they stand
+	if (skirmishApocalypse)
+	{
+		FitApocalypseRoom(TheSkirmishGameInfo);
+		SetApocalypseMap(TheSkirmishGameInfo);
 	}
 
 	if (FitRandomMapToRoom(TheSkirmishGameInfo))
@@ -1793,6 +1808,14 @@ void InitSkirmishGameGadgets( void )
 	}
 	else
 		presetPopover = NULL;
+	// an Apocalypse room has no map to pick and no preset to load one: it names its mode, its version
+	// with it, where the room says Skirmish
+	if ( GameWindow *title = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, NAMEKEY( "SkirmishGameOptionsMenu.wnd:StaticTextTitle" ) ) )
+		GadgetStaticTextSetText( title, skirmishApocalypse ? ModeNameWithVersion( "GUI:Apocalypse", "GUI:ApocalypseVersion" ) : TheGameText->fetch( "GUI:Skirmish" ) );
+	if ( buttonSelectMap )
+		buttonSelectMap->winEnable( !skirmishApocalypse );
+	if ( GameWindow *presets = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, buttonPresetsID ) )
+		presets->winEnable( !skirmishApocalypse );
 	textEntryMapDisplay =TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, textEntryMapDisplayID );
 	DEBUG_ASSERTCRASH(textEntryMapDisplay, ("Could not find the textEntryMapDisplay"));
 	buttonReset = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, buttonResetID );
@@ -1940,6 +1963,8 @@ void skirmishUpdateSlotList( void )
     GadgetTextEntrySetText( textEntryPlayerName, TheSkirmishGameInfo->getSlot(0)->getName() );
 		if (skirmishDirectStrike)
 			FitDirectStrikeRoom(TheSkirmishGameInfo);
+		if (skirmishApocalypse)
+			FitApocalypseRoom(TheSkirmishGameInfo);
     UpdateSlotList( TheSkirmishGameInfo, comboBoxPlayer,
 										comboBoxColor, comboBoxPlayerTemplate,
 									  comboBoxTeam, NULL, buttonStart, buttonMapStartPosition );
@@ -2115,7 +2140,8 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 	TheSkirmishGameInfo->setSlot(1, gSlot);
 
 	ParseAsciiStringToGameInfo(TheSkirmishGameInfo,
-		skirmishDirectStrike ? prefs.getAsciiString("DirectStrikeSlotList", AsciiString::TheEmptyString) : prefs.getSlotList());
+		skirmishDirectStrike ? prefs.getAsciiString("DirectStrikeSlotList", AsciiString::TheEmptyString)
+		: skirmishApocalypse ? prefs.getAsciiString("ApocalypseSlotList", AsciiString::TheEmptyString) : prefs.getSlotList());
 	// -seed repeats a match set up here too, as it does -autoskirmish's (GameEngine.cpp): the same match from the
 	// same choices
 	TheSkirmishGameInfo->setSeed((TheGlobalData->m_fixedSeed >= 0) ? TheGlobalData->m_fixedSeed : Clock_Milliseconds_Coarse());
@@ -2145,6 +2171,12 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 	{
 		SetDirectStrikeMap(TheSkirmishGameInfo);
 		FitDirectStrikeRoom(TheSkirmishGameInfo);
+	}
+	// Apocalypse the same way: a stand-in map for the seats, Start makes the match's own
+	if (skirmishApocalypse)
+	{
+		FitApocalypseRoom(TheSkirmishGameInfo);
+		SetApocalypseMap(TheSkirmishGameInfo);
 	}
 	const MapMetaData *md = TheMapCache->findMap(TheSkirmishGameInfo->getMap());
 	if (!md)

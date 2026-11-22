@@ -1802,6 +1802,58 @@ void LayoutDirectStrikeRoom(GameWindow *parent, const char *layoutFilename, cons
 	DirectStrikeLobby_attach(parent, layoutFilename, game);
 }
 
+// Apocalypse ---------------------------------------------------------------------------------
+
+enum { APOCALYPSE_SEATS = 4 };	///< RMG_APOC_SEATS_MOST, which clampSettings holds the map to
+
+Bool SetApocalypseMap(GameInfo *game)
+{
+	static UnsignedInt theApocalypseRolls = 0;
+	RandomMapSettings settings;
+	// the client choosing a map, as for Direct Strike: the replay rebuilds it from the name
+	settings.m_seed = (Int)((Clock_Milliseconds() + 7919u * ++theApocalypseRolls) & 0x7fffffff);
+	settings.m_style = RandomMapGenerator::styleNamed("apocalypse");
+	settings.m_numPlayers = min((Int)APOCALYPSE_SEATS, roomRandomMapPlayers(game));
+	AsciiString map;
+	if (!stageRandomMap(settings, map))
+		return FALSE;
+	map.toLower();
+	TheMapCache->updateCache();
+	const MapMetaData *md = TheMapCache->findMap(map);
+	if (md == NULL)
+		return FALSE;
+	game->setMap(map);
+	game->setMapCRC(md->m_CRC);
+	game->setMapSize(md->m_filesize);
+	game->getSlot(0)->setMapAvailability(TRUE);
+	game->resetStartSpots();
+	DEBUG_LOG(("Apocalypse: seed %d, map '%s'\n", settings.m_seed, map.str()));
+	return TRUE;
+}
+
+Bool FitApocalypseRoom(GameInfo *game)
+{
+	Bool changed = FALSE;
+	for (Int i = APOCALYPSE_SEATS; i < MAX_SLOTS; ++i)
+	{
+		// the map has four starts; a human is never thrown out (the skirmish room has one, in seat 0)
+		GameSlot *slot = game->getSlot(i);
+		if (slot != NULL && !slot->isHuman() && slot->getState() != SLOT_CLOSED)
+		{
+			slot->setState(SLOT_CLOSED);
+			changed = TRUE;
+		}
+	}
+	// every seat holds out together (the director allies them), so the rules that set players apart go
+	if (game->getUnitLimit()) { game->setUnitLimit(FALSE); changed = TRUE; }
+	if (game->getPeaceTime() != 0) { game->setPeaceTime(0); changed = TRUE; }
+	if (game->getTechRespawn() != 0) { game->setTechRespawn(0); changed = TRUE; }
+	if (game->getSupplyPileLimit() != 0) { game->setSupplyPileLimit(0); changed = TRUE; }
+	if (game->getProRules()) { game->setProRules(FALSE); changed = TRUE; }
+	if (game->getDayNight()) { game->setDayNight(FALSE); changed = TRUE; }	// the mode runs its own day and night
+	return changed;
+}
+
 UnicodeString ModeNameWithVersion(const char *nameKey, const char *versionKey)
 {
 	UnicodeString name = TheGameText->fetch(nameKey);

@@ -474,11 +474,14 @@ void GameWindowTransitionsHandler::load(void )
 	// the fork's own groups, new names only (the main menu's campaign mission panel)
 	ini.load( AsciiString( "Data\\INI\\WindowTransitionsReforged.ini" ), INI_LOAD_OVERWRITE, NULL );
 
-	// The single player menu's Direct Strike button (Tools/mainmenu_layout.py) sits under Skirmish and
-	// flashes in and out with it in each of EA's eleven groups that name Skirmish; a group cannot be
-	// named twice, so this is the one way in short of copying all eleven into the fork's file.
+	// The single player menu's Direct Strike and Apocalypse buttons (Tools/mainmenu_layout.py) sit under
+	// Skirmish and flash in and out with it in each of EA's eleven groups that name Skirmish; a group
+	// cannot be named twice, so this is the one way in short of copying all eleven into the fork's file.
 	for( TransitionGroupList::iterator it = m_transitionGroupList.begin(); it != m_transitionGroupList.end(); ++it )
+	{
 		(*it)->copyWindow( AsciiString( "MainMenu.wnd:ButtonSkirmish" ), AsciiString( "MainMenu.wnd:ButtonDirectStrike" ) );
+		(*it)->copyWindow( AsciiString( "MainMenu.wnd:ButtonSkirmish" ), AsciiString( "MainMenu.wnd:ButtonApocalypse" ) );
+	}
 }
 
 void GameWindowTransitionsHandler::reset( void )

@@ -266,7 +266,7 @@ GUI:CreateGame
 END
 
 GUI:AutoLogin
-"Bundan Sonra Otomatik Giriş Yap"
+"Otomatik Giriş"
 END
 
 GUI:AddBuddy
@@ -726,7 +726,7 @@ GUI:LadderRandomMaps
 END
 
 GUI:AllowObservers
-"Gözlemcilere İzin Ver"
+"Gözlemci İzni"
 END
 
 GUI:USA
@@ -762,7 +762,7 @@ GUI:GLAEnemies
 END
 
 GUI:EndCampaign
-"KAMPANYAYI BİTİR"
+"KAMPANYADAN ÇIK"
 END
 
 GUI:Retry
@@ -774,7 +774,7 @@ GUI:RecentSave
 END
 
 GUI:GetUpdate
-"Güncellemeyi İndir"
+"Güncellemeyi Al"
 END
 
 GUI:DirectConnect
@@ -870,7 +870,7 @@ GUI:SystemMaps
 END
 
 GUI:UserMaps
-"Resmî Olmayan Haritalar"
+"Özel Haritalar"
 END
 
 GUI:WaitingToBeginConnection
@@ -926,7 +926,7 @@ GUI:Ignore
 END
 
 GUI:Unignore
-"Yok Saymayı Kaldır"
+"Yok Saymayı Kes"
 END
 
 GUI:Stats
@@ -934,7 +934,7 @@ GUI:Stats
 END
 
 GUI:GetMapPack
-"Harita Paketini İndir"
+"Harita Paketi"
 END
 
 GUI:Defeat
@@ -1014,7 +1014,7 @@ GUI:Host
 END
 
 GUI:LocaleSelect
-"KONUMUNUZU SEÇİN"
+"BÖLGENİZİ SEÇİN"
 END
 
 GUI:GeneralsOnline
@@ -1022,7 +1022,7 @@ GUI:GeneralsOnline
 END
 
 GUI:SendDelay
-"Gönderme Gecikmesi"
+"Gönd. Gecikmesi"
 END
 
 GUI:FirewallRefresh
@@ -1058,7 +1058,7 @@ GUI:3DSound
 END
 
 GUI:ScrollSpeed
-"Kamera Kaydırma Hızı"
+"Kaydırma Hızı"
 END
 
 GUI:Resolution
@@ -1070,7 +1070,7 @@ GUI:Detail
 END
 
 GUI:GraphicsQuality
-"Performans / Kalite"
+"Hız / Kalite"
 END
 
 TOOLTIP:GraphicsQuality
@@ -1486,7 +1486,7 @@ GUI:TOS
 END
 
 GUI:RememberInfo
-"Bilgilerimi Hatırla"
+"Bilgileri Sakla"
 END
 
 GUI:HostWantsToStart
@@ -1518,7 +1518,7 @@ GUI:HostLeftTitle
 END
 
 GUI:WidenSearch
-"ARAMAYI GENİŞLET"
+"GENİŞ ARA"
 END
 
 GUI:QMAborted
@@ -1526,11 +1526,11 @@ GUI:QMAborted
 END
 
 GUI:DrawScrollAnchor
-"Kaydırma Çapasını Çiz"
+"Çapayı Göster"
 END
 
 GUI:MoveScrollAnchor
-"Kaydırma Çapasını Taşı"
+"Çapayı Taşı"
 END
 
 GUI:GroupRoom1
@@ -1610,7 +1610,7 @@ GUI:NewGame
 END
 
 GUI:RestartGame
-"OYUNU YENİDEN BAŞLAT"
+"YENİDEN BAŞLAT"
 END
 
 GUI:MatchingProgress
@@ -3502,7 +3502,7 @@ GUI:SaveCamera
 END
 
 GUI:UseCamera
-"Kayıtlı Kamerayı İzle"
+"Kayıt Kamerası"
 END
 
 Mouse:Windows
@@ -7954,7 +7954,7 @@ Network:PacketRouterTimeout
 END
 
 GUI:EstablishingConnectionPaths
-"BAĞLANTI YOLLARI KURULUYOR"
+"BAĞLANILIYOR"
 END
 
 UPGRADE:RadarVanScan
@@ -8626,7 +8626,7 @@ Buddy:MultipleOnlineNotification
 END
 
 GUI:ResetHonors
-"Nişanları Sıfırla"
+"Nişan Sıfırla"
 END
 
 Chat:Observers
@@ -8965,6 +8965,10 @@ TOOLTIP:LanIP
 "Ağ oyunlarında oyunculara bağlanmak için kullanılan IP adresi"
 END
 
+GUI:IPAddresses
+"Yerel IP:"
+END
+
 TOOLTIP:GamesBeingformed
 "Bu oyundaki oyunculara bağlantı hızınız"
 END
@@ -9115,6 +9119,10 @@ END
 
 TOOLTIP:HTTPProxy
 "C&C Generals Zero Hour Online için kullanılacak HTTP Proxy'yi ayarlayın"
+END
+
+GUI:HTTPProxy
+"Proxy Sunucusu:"
 END
 
 CONTROLBAR:BriefingHistory
@@ -9409,6 +9417,10 @@ CONTROLBAR:ObsLookingThrough
 "Haritayı %ls oyuncusunun gözünden izliyorsun. Esc tüm haritayı geri getirir."
 END
 
+GUI:ScoreboardFavourite
+"FAVORİ"
+END
+
 GUI:LowTextureDetail
 "Düşük Doku Ayrıntısı"
 END
@@ -9610,7 +9622,7 @@ TOOLTIP:Shadows
 END
 
 GUI:BehindBuilding
-"Bina Arkasındaki Birlikler"
+"Arkadaki Birlik"
 END
 
 TOOLTIP:BehindBuilding
@@ -9618,7 +9630,7 @@ TOOLTIP:BehindBuilding
 END
 
 GUI:ShowProps
-"Ağaçlar ve Çalılar"
+"Ağaç ve Çalılar"
 END
 
 TOOLTIP:ShowProps
@@ -9670,7 +9682,7 @@ GUI:ToggleOnOff
 END
 
 GUI:RestartMission
-"GÖREVİ YENİDEN BAŞLAT"
+"YENİDEN BAŞLAT"
 END
 
 GUI:ExitMission
@@ -9750,7 +9762,7 @@ TOOLTIP:UnlockMaxFPS
 END
 
 GUI:TreeSway
-"Sallanan Ağaçlar"
+"Sallanan Ağaç"
 END
 
 TOOLTIP:TreeSway
@@ -10630,7 +10642,7 @@ GUI:ClassicMouse
 END
 
 GUI:AlternateMouse
-"Alternatif Fare Düzeni"
+"Alternatif Fare"
 END
 
 TOOLTIP:AlternateMouse
@@ -10662,7 +10674,7 @@ TOOLTIP:MapMaxBrutalSuccess
 END
 
 GUI:LimitArmies
-"Sadece Ana Ordular"
+"Sadece Ana Ordu"
 END
 
 TOOLTIP:LimitArmies
@@ -10686,7 +10698,7 @@ GUI:OnlineForgotPassword
 END
 
 GUI:OnlineKeepSignedIn
-"Oturumum açık kalsın"
+"Beni hatırla"
 END
 
 TOOLTIP:OnlineKeepSignedIn
@@ -10819,7 +10831,7 @@ GUI:???
 END
 
 GUI:UseStats
-"İstatistik Kaydet"
+"İstatistik Tut"
 END
 
 TOOLTIP:UseStats
@@ -13563,7 +13575,7 @@ TOOLTIP:ChallengeButton
 END
 
 GUI:GeneralsChallenge
-"GENERALİNİZİ SEÇİN"
+"GENERAL SEÇİN"
 END
 
 GUI:Biography
@@ -14115,7 +14127,7 @@ ACADEMY:Firestorm
 END
 
 GUI:HeatEffects
-"Sıcak Hava Titremesi"
+"Isı Titremesi"
 END
 
 TOOLTIP:HeatEffects
@@ -14703,11 +14715,11 @@ OBJECT:CINE_TreeBirds
 END
 
 TOOLTIP:NoUserMaps
-"İstatistik Kaydet oyunlarında resmî olmayan haritalara izin verilmez"
+"İstatistik tutulan oyunlarda resmî olmayan haritalara izin verilmez"
 END
 
 GUI:FireWallPort
-"Özel Güvenlik Duvarı Portu:"
+"Firewall Portu:"
 END
 
 TOOLTIP:FireWallPort
@@ -15091,7 +15103,7 @@ GUI:DetailNote4
 END
 
 GUI:TextureFilter
-"Kaplama Filtreleme"
+"Filtreleme"
 END
 
 GUI:TextureFilter0
@@ -15111,7 +15123,7 @@ TOOLTIP:TextureFilter
 END
 
 GUI:Anisotropy
-"Anizotropik Örnekleme"
+"Anizotropi"
 END
 
 TOOLTIP:Anisotropy
@@ -15123,7 +15135,7 @@ GUI:AnisotropyCardMaximum
 END
 
 GUI:TextureResolution
-"Kaplama Kalitesi"
+"Kaplama Netliği"
 END
 
 GUI:ParticleLimit
@@ -15131,7 +15143,7 @@ GUI:ParticleLimit
 END
 
 GUI:NeverLowerDetail
-"Ayrıntıyı Asla Düşürme"
+"Sabit Ayrıntı"
 END
 
 GUI:OptionsGroupScreen
@@ -15163,7 +15175,7 @@ GUI:OptionsGroupCamera
 END
 
 GUI:OptionsGroupPlacement
-"Bina Yerleştirme"
+"Bina Yerleşimi"
 END
 
 GUI:OptionsGroupLighting
@@ -15199,7 +15211,7 @@ GUI:OptionsGroupExtras
 END
 
 GUI:OptionsGroupParticles
-"Duman ve Parçacıklar"
+"Duman, Parçacık"
 END
 
 GUI:WindowMode
@@ -15227,7 +15239,7 @@ GUI:ResolutionNote0
 END
 
 GUI:FullscreenScaling
-"Tam Ekran Sığdırma"
+"Ekrana Sığdırma"
 END
 
 GUI:FullscreenScaling0
@@ -15235,7 +15247,7 @@ GUI:FullscreenScaling0
 END
 
 GUI:FullscreenScaling1
-"Oranı koru, şerit ekle"
+"Oranı koru"
 END
 
 TOOLTIP:FullscreenScaling
@@ -15327,7 +15339,7 @@ TOOLTIP:FrameRateLimit
 END
 
 GUI:ClassicGraphics
-"Klasik Grafikler"
+"Klasik Grafik"
 END
 
 TOOLTIP:ClassicGraphics
@@ -15335,7 +15347,7 @@ TOOLTIP:ClassicGraphics
 END
 
 GUI:DetailedModels
-"Ayrıntılı Modeller"
+"Ayrıntılı Model"
 END
 
 TOOLTIP:DetailedModels
@@ -15343,7 +15355,7 @@ TOOLTIP:DetailedModels
 END
 
 GUI:FullDetailAtDistance
-"Uzakta da Tam Ayrıntı"
+"Uzakta Ayrıntı"
 END
 
 TOOLTIP:FullDetailAtDistance
@@ -15363,7 +15375,7 @@ TOOLTIP:HDTextures
 END
 
 GUI:InfantryShadows
-"Piyade Gölgeleri"
+"Piyade Gölgesi"
 END
 
 TOOLTIP:InfantryShadows
@@ -15415,7 +15427,7 @@ TOOLTIP:Smoke
 END
 
 GUI:ParticleBounce
-"Parçacıklar Yere Çarpar"
+"Sekan Parçacık"
 END
 
 TOOLTIP:ParticleBounce
@@ -15431,7 +15443,7 @@ TOOLTIP:MiddleMousePans
 END
 
 GUI:ZoomToCursor
-"İmlece Yakınlaştır"
+"İmlece Yakınlaş"
 END
 
 TOOLTIP:ZoomToCursor
@@ -15439,7 +15451,7 @@ TOOLTIP:ZoomToCursor
 END
 
 GUI:StartAtMaxZoom
-"Uzak Kamerayla Başla"
+"Uzaktan Başla"
 END
 
 TOOLTIP:StartAtMaxZoom
@@ -15447,7 +15459,7 @@ TOOLTIP:StartAtMaxZoom
 END
 
 GUI:ZoomSpeed
-"Yakınlaştırma Hızı"
+"Yakınlaşma Hızı"
 END
 
 TOOLTIP:ZoomSpeed
@@ -15483,7 +15495,7 @@ GUI:OptionsGroupMusic
 END
 
 GUI:DynamicMusic
-"Müzik Çatışmayı İzlesin"
+"Dinamik Müzik"
 END
 
 TOOLTIP:DynamicMusic
@@ -15531,7 +15543,7 @@ GUI:SpeakerType3
 END
 
 GUI:MuteInBackground
-"Arka Planda Sessiz"
+"Arka Planda Sus"
 END
 
 TOOLTIP:MuteInBackground
@@ -15547,7 +15559,7 @@ TOOLTIP:LegacySound
 END
 
 GUI:CameraShake
-"Kamera Sarsıntısı"
+"Sarsıntı"
 END
 
 TOOLTIP:CameraShake
@@ -15555,7 +15567,7 @@ TOOLTIP:CameraShake
 END
 
 GUI:IsometricCamera
-"İzometrik Kamera"
+"İzometrik Bakış"
 END
 
 TOOLTIP:IsometricCamera
@@ -15563,7 +15575,7 @@ TOOLTIP:IsometricCamera
 END
 
 GUI:EdgeScrollWindowed
-"Pencerede Kenardan Kaydır"
+"Kenardan Kaydır"
 END
 
 TOOLTIP:EdgeScrollWindowed
@@ -15571,7 +15583,7 @@ TOOLTIP:EdgeScrollWindowed
 END
 
 GUI:SnapCamera45
-"Adımlı Kamera Dönüşü"
+"Adımlı Kamera"
 END
 
 TOOLTIP:SnapCamera45
@@ -15579,7 +15591,7 @@ TOOLTIP:SnapCamera45
 END
 
 GUI:GridBuild
-"Izgaralı Bina Yerleşimi"
+"Izgaralı İnşa"
 END
 
 TOOLTIP:GridBuild
@@ -15587,7 +15599,7 @@ TOOLTIP:GridBuild
 END
 
 GUI:NudgeBuild
-"Engelli Yerleşimi Kaydır"
+"Engelde Kaydır"
 END
 
 TOOLTIP:NudgeBuild
@@ -15595,7 +15607,7 @@ TOOLTIP:NudgeBuild
 END
 
 GUI:SnapBuild45
-"Adımlı Bina Dönüşü"
+"Adımlı Bina"
 END
 
 TOOLTIP:SnapBuild45
@@ -15603,7 +15615,7 @@ TOOLTIP:SnapBuild45
 END
 
 GUI:SnapBuildNeighbour
-"Yakındaki Binalara Yapıştır"
+"Binaya Yapıştır"
 END
 
 TOOLTIP:SnapBuildNeighbour
@@ -15651,7 +15663,7 @@ TOOLTIP:NetBox
 END
 
 GUI:MinimapSize
-"Mini Harita Boyutu"
+"Mini Harita"
 END
 
 TOOLTIP:MinimapSize
@@ -15663,7 +15675,7 @@ GUI:OptionsGroupHud
 END
 
 GUI:EmptyBuildingPips
-"Boş Bina Yuvaları"
+"Boş Bina Yuvası"
 END
 
 TOOLTIP:EmptyBuildingPips
@@ -15715,7 +15727,7 @@ GUI:OptionsGroupInput
 END
 
 GUI:ChromaLighting
-"Razer Chroma Işıkları"
+"Razer Chroma"
 END
 
 TOOLTIP:ChromaLighting
@@ -15731,7 +15743,7 @@ TOOLTIP:OrderLines
 END
 
 GUI:AircraftAltitudeLine
-"Uçak Yükseklik Çizgileri"
+"İrtifa Çizgisi"
 END
 
 TOOLTIP:AircraftAltitudeLine
@@ -15755,7 +15767,7 @@ GUI:PlayerColors0
 END
 
 GUI:PlayerColors1
-"Siz, Müttefik, Düşman"
+"Siz/Dost/Düşman"
 END
 
 GUI:PlayerColors2
@@ -15935,7 +15947,7 @@ TOOLTIP:RoomGameSpeed
 END
 
 GUI:GameSpeedMissions
-"Görevlerde Oyun Hızı"
+"Görev Oyun Hızı"
 END
 
 TOOLTIP:GameSpeedMissions
@@ -16499,7 +16511,7 @@ GUI:CampaignMission
 END
 
 GUI:CampaignZeroHour
-"GENERALS ZERO HOUR"
+"ZERO HOUR"
 END
 
 GUI:CampaignGenerals
@@ -16583,7 +16595,7 @@ TOOLTIP:LightingStyle
 END
 
 GUI:SmokeFireLighting
-"Ateşin Aydınlattığı Duman"
+"Işıklı Duman"
 END
 
 TOOLTIP:SmokeFireLighting
@@ -16623,7 +16635,7 @@ TOOLTIP:CloudStyle
 END
 
 GUI:DebrisTrails
-"Patlama Parça İzleri"
+"Enkaz İzleri"
 END
 
 TOOLTIP:DebrisTrails
@@ -16631,7 +16643,7 @@ TOOLTIP:DebrisTrails
 END
 
 GUI:MapLight
-"Sıcak Işık ve Pus"
+"Sıcak Işık, Pus"
 END
 
 TOOLTIP:MapLight
@@ -16639,7 +16651,7 @@ TOOLTIP:MapLight
 END
 
 GUI:TeamGlow
-"Takım Rengi Parlaması"
+"Takım Parlaması"
 END
 
 TOOLTIP:TeamGlow
@@ -16671,7 +16683,7 @@ TOOLTIP:Firelight
 END
 
 GUI:HemiAmbient
-"Gökyüzü ve Zemin Işığı"
+"Gök/Yer Işığı"
 END
 
 TOOLTIP:HemiAmbient
@@ -16687,7 +16699,7 @@ TOOLTIP:AmbientOcclusion
 END
 
 GUI:InternalHdr
-"Dahili HDR Ton Eşleme"
+"HDR Ton Eşleme"
 END
 
 TOOLTIP:InternalHdr
@@ -16727,7 +16739,7 @@ TOOLTIP:SmoothMotion
 END
 
 GUI:HeatHaze
-"Isı Dalgalanması"
+"Hava Dalgalanır"
 END
 
 TOOLTIP:HeatHaze
@@ -16771,7 +16783,7 @@ TOOLTIP:StructureCollapse
 END
 
 GUI:FormationDrag
-"Sürükleyerek Düzen Kur"
+"Sürükleyip Diz"
 END
 
 TOOLTIP:FormationDrag
@@ -16779,7 +16791,7 @@ TOOLTIP:FormationDrag
 END
 
 GUI:BuildWithoutWorker
-"İşçi Seçmeden İnşa"
+"İşçisiz İnşa"
 END
 
 GUI:CommandTabBuildings
@@ -16819,11 +16831,11 @@ TOOLTIP:BuildWithoutWorker
 END
 
 GUI:HealthBarColors
-"Can Çubuğu Rengi"
+"Can Barı Rengi"
 END
 
 GUI:HealthBarColors0
-"Yeşilden Kırmızıya"
+"Yeşil-Kırmızı"
 END
 
 GUI:HealthBarColors1
@@ -16851,7 +16863,7 @@ TOOLTIP:HudLayout
 END
 
 GUI:HudWidth
-"Arayüz Genişliği"
+"HUD Genişliği"
 END
 
 GUI:HudWidth0
@@ -19166,7 +19178,7 @@ TOOLTIP:WaterRefractionQuality
 END
 
 GUI:MapAwareWaveHeading
-"Haritaya Göre Dalga"
+"Akıllı Dalgalar"
 END
 
 TOOLTIP:MapAwareWaveHeading
@@ -19174,7 +19186,7 @@ TOOLTIP:MapAwareWaveHeading
 END
 
 GUI:UnderwaterClarity
-"Berrak Sığlıklar"
+"Berrak Sığlık"
 END
 
 TOOLTIP:UnderwaterClarity
@@ -19182,7 +19194,7 @@ TOOLTIP:UnderwaterClarity
 END
 
 GUI:WaterReflectionDetail
-"Yansıma Ayrıntısı"
+"Su Yansıması"
 END
 
 GUI:WaterReflectionDetail0
@@ -20540,7 +20552,7 @@ GUI:OnlineCardInRoom
 END
 
 GUI:OnlineCardTabAI
-"BİLGİSAYARA KARŞI"
+"YAPAY ZEKÂ"
 END
 
 GUI:OnlineCardByOwn
@@ -20568,7 +20580,7 @@ GUI:OnlineCardColAI
 END
 
 GUI:OnlineCardProfile
-"ZEROHOUR.GG PROFİLİ"
+"SİTEDEKİ PROFİL"
 END
 
 GUI:OnlineCardArmyChinaTank
@@ -21500,6 +21512,18 @@ END
 
 GUI:GameModeApocalypse
 "KIYAMET"
+END
+
+GUI:GameModeClassicFact
+"Her harita"
+END
+
+GUI:GameModeDirectStrikeFact
+"En çok 6 oyuncu"
+END
+
+GUI:GameModeApocalypseFact
+"En çok 4, co-op"
 END
 
 GUI:ApocalypseLower

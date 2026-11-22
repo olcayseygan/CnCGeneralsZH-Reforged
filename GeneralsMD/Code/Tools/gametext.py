@@ -292,9 +292,8 @@ def check_translation(translated, english):
 # pattern can follow.
 
 LABEL_LIMIT = 15
-# selfcheck only reports labels over the limit while the translations are being cut; True makes
-# every one of them fail gametext_selfcheck.  English never fails, see --english.
-LABEL_FAILS = False
+# True: a translated label over the limit fails gametext_selfcheck.  English never fails, see --english.
+LABEL_FAILS = True
 
 RUN = os.path.join(_CODE, "..", "Run")
 SOURCES = os.path.join(_CODE, "GameEngine", "Source")

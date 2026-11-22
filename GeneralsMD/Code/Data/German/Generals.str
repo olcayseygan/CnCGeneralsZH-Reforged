@@ -170,11 +170,11 @@ GUI:Add
 END
 
 GUI:MusicVolume
-"Musiklautstärke"
+"Musik"
 END
 
 GUI:VoiceVolume
-"Sprachlautstärke"
+"Sprache"
 END
 
 GUI:Play
@@ -214,7 +214,7 @@ GUI:Password
 END
 
 GUI:Disconnect
-"VERBINDUNG TRENNEN"
+"TRENNEN"
 END
 
 GUI:No
@@ -262,7 +262,7 @@ GUI:CreateGame
 END
 
 GUI:AutoLogin
-"Künftig automatisch anmelden"
+"Auto-Anmeldung"
 END
 
 GUI:AddBuddy
@@ -502,7 +502,7 @@ GUI:EACopyright
 END
 
 GUI:DeleteBeacon
-"Signalfeuer \n entfernen"
+"Signal\nlöschen"
 END
 
 GUI:BeaconPlaced
@@ -614,7 +614,7 @@ GUI:LadderRandomMaps
 END
 
 GUI:AllowObservers
-"Beobachter erlauben"
+"Mit Beobachtern"
 END
 
 GUI:AmericaAllies
@@ -642,15 +642,15 @@ GUI:GLAEnemies
 END
 
 GUI:EndCampaign
-"KAMPAGNE BEENDEN"
+"BEENDEN"
 END
 
 GUI:Retry
-"NOCHMAL SPIELEN?"
+"NEUE RUNDE?"
 END
 
 GUI:RecentSave
-"Letzter Spielstand"
+"Letzter Stand"
 END
 
 GUI:GetUpdate
@@ -658,7 +658,7 @@ GUI:GetUpdate
 END
 
 GUI:DirectConnect
-"DIREKTVERBINDUNG"
+"IP VERBINDEN"
 END
 
 GUI:WorldBuilderLoadFailed
@@ -746,11 +746,11 @@ GUI:LadderDetails
 END
 
 GUI:SystemMaps
-"Offizielle Karten"
+"Standardkarten"
 END
 
 GUI:UserMaps
-"Inoffizielle Karten"
+"Eigene Karten"
 END
 
 GUI:WaitingToBeginConnection
@@ -806,7 +806,7 @@ GUI:Ignore
 END
 
 GUI:Unignore
-"Nicht ignorieren"
+"Ignorieren aus"
 END
 
 GUI:Stats
@@ -814,7 +814,7 @@ GUI:Stats
 END
 
 GUI:GetMapPack
-"Kartenpaket herunterladen"
+"Kartenpaket"
 END
 
 GUI:Defeat
@@ -894,15 +894,15 @@ GUI:Host
 END
 
 GUI:LocaleSelect
-"WÄHLE DEINE REGION"
+"REGION WÄHLEN"
 END
 
 GUI:SendDelay
-"Sendeverzögerung"
+"Sendeverzug"
 END
 
 GUI:FirewallRefresh
-"NAT AKTUALISIEREN"
+"NAT NEU LADEN"
 END
 
 GUI:Exit
@@ -926,7 +926,7 @@ GUI:OptionsDescription
 END
 
 GUI:SFXVolume
-"Effektlautstärke"
+"Effekte"
 END
 
 GUI:3DSound
@@ -1102,7 +1102,7 @@ GUI:AudioDeviceDefault
 END
 
 GUI:SpeakerType
-"Lautsprecher-Setup"
+"Lautsprecher"
 END
 
 GUI:SpeakerType0
@@ -1122,7 +1122,7 @@ GUI:SpeakerType3
 END
 
 GUI:MuteInBackground
-"Im Hintergrund stumm"
+"Hintergr. stumm"
 END
 
 TOOLTIP:MuteInBackground
@@ -1326,11 +1326,11 @@ GUI:AreYouSureDeleteAccount
 END
 
 GUI:NonAsianText
-"Nicht-asiatischer Text"
+"Nicht-asiatisch"
 END
 
 GUI:AsianText
-"Asiatischer Text"
+"Asiatisch"
 END
 
 GUI:DeleteAccount
@@ -1338,7 +1338,7 @@ GUI:DeleteAccount
 END
 
 GUI:SetLocale
-"REGION FESTLEGEN"
+"REGION SETZEN"
 END
 
 GUI:WinLoss
@@ -1406,11 +1406,11 @@ GUI:GamesPlayed
 END
 
 GUI:TOS
-"SERVICEBEDINGUNGEN"
+"AGB"
 END
 
 GUI:RememberInfo
-"Meine Daten merken"
+"Daten merken"
 END
 
 GUI:HostWantsToStart
@@ -1450,11 +1450,11 @@ GUI:QMAborted
 END
 
 GUI:DrawScrollAnchor
-"Scroll-Anker zeichnen"
+"Anker zeigen"
 END
 
 GUI:MoveScrollAnchor
-"Scroll-Anker verschieben"
+"Anker bewegen"
 END
 
 GUI:GroupRoom1
@@ -1478,7 +1478,7 @@ GUI:NoLadder
 END
 
 GUI:ChooseLadder
-"RANGLISTE WÄHLEN"
+"RANGLISTE"
 END
 
 GUI:UnknownLadder
@@ -1506,7 +1506,7 @@ GUI:CreateAccount
 END
 
 GUI:TryAgain
-"Nochmal versuchen"
+"Neuer Versuch"
 END
 
 GUI:NetworkOptions
@@ -1522,7 +1522,7 @@ GUI:HelpDescription
 END
 
 GUI:ReturnToGame
-"ZURÜCK ZUM SPIEL"
+"WEITERSPIELEN"
 END
 
 GUI:NewGame
@@ -1530,7 +1530,7 @@ GUI:NewGame
 END
 
 GUI:RestartGame
-"SPIEL NEU STARTEN"
+"NEU STARTEN"
 END
 
 GUI:MatchingProgress
@@ -3346,11 +3346,11 @@ GUI:RemoteIPDesc
 END
 
 GUI:SaveCamera
-"Kamera in Replays speichern"
+"Kamera sichern"
 END
 
 GUI:UseCamera
-"Gespeicherte Kamera in Replays verwenden"
+"Replay-Kamera"
 END
 
 Mouse:Windows
@@ -7586,7 +7586,7 @@ Network:PacketRouterTimeout
 END
 
 GUI:EstablishingConnectionPaths
-"VERBINDUNGSWEGE WERDEN AUFGEBAUT"
+"WIRD VERBUNDEN"
 END
 
 UPGRADE:RadarVanScan
@@ -7810,7 +7810,7 @@ GUI:MissionSave
 END
 
 GUI:SaveReplay
-"REPLAY SPEICHERN"
+"REPLAY SICHERN"
 END
 
 GUI:OverwriteReplayTitle
@@ -8242,7 +8242,7 @@ Buddy:MultipleOnlineNotification
 END
 
 GUI:ResetHonors
-"Auszeichnungen zurücksetzen"
+"Ausz. löschen"
 END
 
 Chat:Observers
@@ -9170,7 +9170,7 @@ TOOLTIP:Shadows
 END
 
 GUI:BehindBuilding
-"Einheiten hinter Gebäuden"
+"Silhouetten"
 END
 
 TOOLTIP:BehindBuilding
@@ -9178,7 +9178,7 @@ TOOLTIP:BehindBuilding
 END
 
 GUI:ShowProps
-"Bäume und Büsche"
+"Bäume, Büsche"
 END
 
 TOOLTIP:ShowProps
@@ -9230,7 +9230,7 @@ GUI:ToggleOnOff
 END
 
 GUI:RestartMission
-"MISSION NEUSTARTEN"
+"NEU STARTEN"
 END
 
 GUI:ExitMission
@@ -10158,7 +10158,7 @@ GUI:ClassicMouse
 END
 
 GUI:AlternateMouse
-"Alternative Mausbelegung"
+"Maus alternativ"
 END
 
 TOOLTIP:AlternateMouse
@@ -10182,7 +10182,7 @@ TOOLTIP:MapMaxBrutalSuccess
 END
 
 GUI:LimitArmies
-"Armeen begrenzen"
+"Nur Grundarmeen"
 END
 
 TOOLTIP:LimitArmies
@@ -10190,7 +10190,7 @@ TOOLTIP:LimitArmies
 END
 
 GUI:UseStats
-"Statistik speichern"
+"Stats speichern"
 END
 
 TOOLTIP:UseStats
@@ -12858,7 +12858,7 @@ TOOLTIP:ChallengeButton
 END
 
 GUI:GeneralsChallenge
-"WÄHLE DEINEN GENERAL"
+"GENERAL WÄHLEN"
 END
 
 GUI:Biography
@@ -12882,7 +12882,7 @@ GUI:BioRank
 END
 
 GUI:BioBranch
-"Teilstreitkraft:"
+"Waffengattung:"
 END
 
 GUI:BioStrategyEntry_Pos0
@@ -13754,7 +13754,7 @@ CONTROLBAR:Lazr_ToolTipUSABuildPowerPlant
 END
 
 GUI:DoubleClickAttackMove
-"Doppelklick: Bewachen"
+"Doppelkl. Wache"
 END
 
 TOOLTIP:DoubleClickAttackMove
@@ -13942,7 +13942,7 @@ TOOLTIP:NoUserMaps
 END
 
 GUI:FireWallPort
-"Firewall-Port überschreiben:"
+"Firewall-Port:"
 END
 
 TOOLTIP:FireWallPort
@@ -14278,7 +14278,7 @@ GUI:OptionsTabEffects
 END
 
 GUI:GraphicsQuality
-"Leistung / Qualität"
+"Grafikqualität"
 END
 
 TOOLTIP:GraphicsQuality
@@ -14318,7 +14318,7 @@ TOOLTIP:TextureFilter
 END
 
 GUI:Anisotropy
-"Anisotrope Samples"
+"Anisotropie"
 END
 
 TOOLTIP:Anisotropy
@@ -14334,7 +14334,7 @@ GUI:ParticleLimit
 END
 
 GUI:NeverLowerDetail
-"Details nie senken"
+"Details halten"
 END
 
 GUI:OptionsGroupScreen
@@ -14366,15 +14366,15 @@ GUI:OptionsGroupCamera
 END
 
 GUI:OptionsGroupPlacement
-"Gebäude platzieren"
+"Platzierung"
 END
 
 GUI:OptionsGroupLighting
-"Licht und Glühen"
+"Licht, Glühen"
 END
 
 GUI:OptionsGroupOrders
-"Maus und Befehle"
+"Maus, Befehle"
 END
 
 GUI:OptionsGroupBattlefield
@@ -14390,7 +14390,7 @@ GUI:OptionsGroupShadows
 END
 
 GUI:OptionsGroupParticles
-"Rauch und Partikel"
+"Rauch, Partikel"
 END
 
 GUI:WindowMode
@@ -14458,7 +14458,7 @@ TOOLTIP:Bloom
 END
 
 GUI:VSync
-"Vertikale Synchronisation"
+"V-Sync"
 END
 
 TOOLTIP:VSync
@@ -14466,7 +14466,7 @@ TOOLTIP:VSync
 END
 
 GUI:FrameRateLimit
-"Bildratenbegrenzung"
+"FPS-Limit"
 END
 
 GUI:FrameRateLimit0
@@ -14494,7 +14494,7 @@ TOOLTIP:FrameRateLimit
 END
 
 GUI:ClassicGraphics
-"Klassische Grafik"
+"Klassik-Grafik"
 END
 
 TOOLTIP:ClassicGraphics
@@ -14502,7 +14502,7 @@ TOOLTIP:ClassicGraphics
 END
 
 GUI:InfantryShadows
-"Infanterieschatten"
+"Inf.-Schatten"
 END
 
 TOOLTIP:InfantryShadows
@@ -14518,7 +14518,7 @@ TOOLTIP:ProjectileShadows
 END
 
 GUI:PropShadows
-"Kulissenschatten"
+"Deko-Schatten"
 END
 
 TOOLTIP:PropShadows
@@ -14550,7 +14550,7 @@ TOOLTIP:Smoke
 END
 
 GUI:ParticleBounce
-"Partikel treffen den Boden"
+"Partikel landen"
 END
 
 TOOLTIP:ParticleBounce
@@ -14574,7 +14574,7 @@ TOOLTIP:ZoomToCursor
 END
 
 GUI:StartAtMaxZoom
-"Weit herausgezoomt starten"
+"Start in Totale"
 END
 
 TOOLTIP:StartAtMaxZoom
@@ -14590,7 +14590,7 @@ TOOLTIP:DragTolerance
 END
 
 GUI:IsometricCamera
-"Isometrische Kamera"
+"Iso-Kamera"
 END
 
 TOOLTIP:IsometricCamera
@@ -14598,7 +14598,7 @@ TOOLTIP:IsometricCamera
 END
 
 GUI:EdgeScrollWindowed
-"Randscrollen im Fenster"
+"Fensterscrollen"
 END
 
 TOOLTIP:EdgeScrollWindowed
@@ -14606,7 +14606,7 @@ TOOLTIP:EdgeScrollWindowed
 END
 
 GUI:SnapCamera45
-"Kameradrehung rastet ein"
+"Kam. einrasten"
 END
 
 TOOLTIP:SnapCamera45
@@ -14614,7 +14614,7 @@ TOOLTIP:SnapCamera45
 END
 
 GUI:GridBuild
-"Raster beim Bauen"
+"Bauraster"
 END
 
 TOOLTIP:GridBuild
@@ -14622,7 +14622,7 @@ TOOLTIP:GridBuild
 END
 
 GUI:NudgeBuild
-"Blockierte Platzierung verschieben"
+"Bau verschieben"
 END
 
 TOOLTIP:NudgeBuild
@@ -14630,7 +14630,7 @@ TOOLTIP:NudgeBuild
 END
 
 GUI:SnapBuild45
-"Gebäudedrehung rastet ein"
+"Bau einrasten"
 END
 
 TOOLTIP:SnapBuild45
@@ -14638,7 +14638,7 @@ TOOLTIP:SnapBuild45
 END
 
 GUI:SnapBuildNeighbour
-"An Nachbargebäude anlegen"
+"Bündig bauen"
 END
 
 TOOLTIP:SnapBuildNeighbour
@@ -14686,7 +14686,7 @@ TOOLTIP:NetBox
 END
 
 GUI:EmptyBuildingPips
-"Leere Gebäudeplätze"
+"Leere Plätze"
 END
 
 TOOLTIP:EmptyBuildingPips
@@ -14738,7 +14738,7 @@ GUI:OptionsGroupInput
 END
 
 GUI:ChromaLighting
-"Razer-Chroma-Beleuchtung"
+"Razer Chroma"
 END
 
 TOOLTIP:ChromaLighting
@@ -14758,7 +14758,7 @@ GUI:PlayerColors
 END
 
 GUI:PlayerColors1
-"Du, Verbündete, Feinde"
+"Du, Team, Feind"
 END
 
 GUI:PlayerColors2
@@ -14986,7 +14986,7 @@ TOOLTIP:RoomGameSpeed
 END
 
 GUI:GameSpeedMissions
-"Spieltempo in Missionen"
+"Missionstempo"
 END
 
 TOOLTIP:GameSpeedMissions
@@ -15114,7 +15114,7 @@ CONTROLBAR:Demo_ToolTipGLAScienceRebelAmbush
 END
 
 GUI:ShadowQuality
-"Schattenqualität"
+"Schattengüte"
 END
 
 GUI:ShadowQuality0
@@ -15134,7 +15134,7 @@ TOOLTIP:ShadowQuality
 END
 
 GUI:VolumetricSmoke
-"Volumetrischer Rauch"
+"Volumenrauch"
 END
 
 TOOLTIP:VolumetricSmoke
@@ -15158,7 +15158,7 @@ TOOLTIP:LightingStyle
 END
 
 GUI:SmokeFireLighting
-"Feuer erhellt Rauch"
+"Glühender Rauch"
 END
 
 TOOLTIP:SmokeFireLighting
@@ -15166,7 +15166,7 @@ TOOLTIP:SmokeFireLighting
 END
 
 GUI:WaterStyle
-"Wasserdarstellung"
+"Wasserstil"
 END
 
 GUI:WaterStyle0
@@ -15182,7 +15182,7 @@ TOOLTIP:WaterStyle
 END
 
 GUI:CloudStyle
-"Wolkendarstellung"
+"Wolkenstil"
 END
 
 GUI:CloudStyle0
@@ -15198,7 +15198,7 @@ TOOLTIP:CloudStyle
 END
 
 GUI:DebrisTrails
-"Rauchende Trümmer"
+"Trümmerrauch"
 END
 
 TOOLTIP:DebrisTrails
@@ -15206,7 +15206,7 @@ TOOLTIP:DebrisTrails
 END
 
 GUI:MapLight
-"Warmes Licht und Dunst"
+"Licht und Dunst"
 END
 
 TOOLTIP:MapLight
@@ -15214,7 +15214,7 @@ TOOLTIP:MapLight
 END
 
 GUI:TeamGlow
-"Leuchtende Teamfarbe"
+"Teamleuchten"
 END
 
 TOOLTIP:TeamGlow
@@ -15230,7 +15230,7 @@ TOOLTIP:WaterFoam
 END
 
 GUI:FormationDrag
-"Formation aufziehen"
+"Linie ziehen"
 END
 
 TOOLTIP:FormationDrag
@@ -15238,7 +15238,7 @@ TOOLTIP:FormationDrag
 END
 
 GUI:BuildWithoutWorker
-"Bauen ohne Arbeiter"
+"Direktbau"
 END
 
 TOOLTIP:BuildWithoutWorker
@@ -15246,7 +15246,7 @@ TOOLTIP:BuildWithoutWorker
 END
 
 GUI:HealthBarColors
-"Farbe der Lebensbalken"
+"Lebensbalken"
 END
 
 GUI:HealthBarColors0
@@ -15278,11 +15278,11 @@ TOOLTIP:HudLayout
 END
 
 GUI:HudWidth
-"Breite der Oberfläche"
+"HUD-Breite"
 END
 
 GUI:HudWidth0
-"Ganzer Bildschirm"
+"Vollbild"
 END
 
 GUI:HudWidth1
@@ -15766,7 +15766,7 @@ GUI:OptionsGroupModernWater
 END
 
 GUI:WaterReflectionEnabled
-"Szenenreflexionen"
+"Spiegelungen"
 END
 
 TOOLTIP:WaterReflectionEnabled
@@ -15810,7 +15810,7 @@ TOOLTIP:WaterRefractionQuality
 END
 
 GUI:WaterReflectionDetail
-"Reflexionsdetails"
+"Spiegeldetails"
 END
 
 GUI:WaterReflectionDetail0
@@ -16066,7 +16066,7 @@ GUI:OnlineRejoinAway
 END
 
 GUI:OnlineRejoin
-"Zurück ins Spiel"
+"Weiterspielen"
 END
 
 GUI:OnlineRejoinWaiting
@@ -16098,11 +16098,11 @@ GUI:RejoinWaitingForLog
 END
 
 GUI:AmbientVolume
-"Umgebungslautstärke"
+"Umgebung"
 END
 
 GUI:MasterVolume
-"Gesamtlautstärke"
+"Gesamt"
 END
 
 GUI:OptionsGroupMusic
@@ -16110,11 +16110,11 @@ GUI:OptionsGroupMusic
 END
 
 GUI:DynamicMusic
-"Musik folgt dem Kampf"
+"Kampfmusik"
 END
 
 GUI:LegacySound
-"Klassischer Sound"
+"Klassik-Sound"
 END
 
 TOOLTIP:ArmorStructure
@@ -17579,4 +17579,3596 @@ END
 
 GUI:QMMapNotBuilt
 "Dein Spiel konnte die Karte dieser Partie nicht aufbauen, deshalb wurde die Partie abgebrochen."
+END
+
+GUI:AircraftAltitudeLine
+"Flughöhenlinien"
+END
+
+GUI:AmbientOcclusion
+"Ambient Occl."
+END
+
+GUI:AnisotropyCardMaximum
+"Auto"
+END
+
+GUI:Atmosphere
+"Atmosphäre"
+END
+
+GUI:CameraShake
+"Kamerawackeln"
+END
+
+GUI:DetailedModels
+"Detailmodelle"
+END
+
+GUI:Firelight
+"Feuerschein"
+END
+
+GUI:FullDetailAtDistance
+"Ferndetails"
+END
+
+GUI:FullscreenScaling
+"Vollbild-Format"
+END
+
+GUI:FullscreenScaling0
+"Strecken"
+END
+
+GUI:FullscreenScaling1
+"Mit Balken"
+END
+
+GUI:GroundFoliage
+"Bodenbewuchs"
+END
+
+GUI:GroundMarks
+"Kampfspuren"
+END
+
+GUI:HDTextures
+"HD-Texturen"
+END
+
+GUI:HeatHaze
+"Hitzeflimmern"
+END
+
+GUI:HemiAmbient
+"Himmelslicht"
+END
+
+GUI:InternalHdr
+"HDR-Tonemapping"
+END
+
+GUI:MapAwareWaveHeading
+"Küstenwellen"
+END
+
+GUI:MinimapSize
+"Radargröße"
+END
+
+GUI:Monitor
+"Monitor"
+END
+
+GUI:OptionsGroupExtras
+"Extras"
+END
+
+GUI:OptionsGroupFirewall
+"Firewall"
+END
+
+GUI:OptionsGroupHud
+"HUD"
+END
+
+GUI:OptionsGroupModels
+"Modelle"
+END
+
+GUI:OptionsGroupProxy
+"Proxy"
+END
+
+GUI:OptionsTabAudio
+"Audio"
+END
+
+GUI:PlayerColors0
+"Original"
+END
+
+GUI:ResolutionNote0
+"Unterstützt"
+END
+
+GUI:SelectionOutlines
+"Auswahlringe"
+END
+
+GUI:Smoke0
+"Original"
+END
+
+GUI:SmoothMotion
+"Glatte Bewegung"
+END
+
+GUI:StructureCollapse
+"Gebäudeeinsturz"
+END
+
+GUI:SunShafts
+"Sonnenstrahlen"
+END
+
+GUI:SunShafts0
+"Aus"
+END
+
+GUI:SunShafts1
+"Niedrig"
+END
+
+GUI:SunShafts2
+"Hoch"
+END
+
+GUI:TextureFilter0
+"Bilinear"
+END
+
+GUI:TextureFilter1
+"Trilinear"
+END
+
+GUI:Ultra
+"Ultra"
+END
+
+GUI:UnderwaterClarity
+"Klares Wasser"
+END
+
+GUI:WaterSplashes
+"Wasserspritzer"
+END
+
+GUI:Weather
+"Wetter"
+END
+
+GUI:ZoomSpeed
+"Zoomtempo"
+END
+
+TOOLTIP:AircraftAltitudeLine
+"Eine dünne Linie führt von jedem Flugzeug in der Luft senkrecht auf den Boden darunter. Wo sie aufsetzt, ist das Flugzeug wirklich, und ihre Länge zeigt, wie hoch es fliegt. Geparkte Flugzeuge haben keine."
+END
+
+TOOLTIP:AmbientOcclusion
+"Ambient Occlusion: Ecken und der Boden unter allem, was darauf steht, werden dunkler, sodass ein Panzer auf dem Sand steht, statt darüber zu schweben. Wasser und Kriegsnebel bleiben davon unberührt. Nur mit Direct3D 11, aus unter Klassik-Grafik. Gilt, sobald du Annehmen drückst."
+END
+
+TOOLTIP:AmbientVolume
+"Vögel, Wind, Wasser und das Summen einer Stadt. Die Effektlautstärke regelt sie nicht mehr, so kann die Schlacht laut bleiben, während die Welt um sie herum leise ist."
+END
+
+TOOLTIP:Atmosphere
+"Der Boden fern der Kamera verblasst zur Farbe des Himmels, und wo die Karte endet oder die Kamera flach liegt, siehst du statt Schwarz einen Himmel zur Tageszeit der Karte. Der Boden nah an der Kamera bleibt klar, und der Kriegsnebel behält sein Dunkel. Nur dein Bild ändert sich: Das Spiel liest nichts davon, und andere Spieler sehen ihre eigene Einstellung. Nur mit Direct3D 11, aus unter Klassik-Grafik."
+END
+
+TOOLTIP:CameraShake
+"Explosionen erschüttern die Kamera. Eine Atombombe oder ein großes Gebäude, das in der Nähe einstürzt, rüttelt sie kurz kräftig durch. Ausschalten hält das Bild ruhig. Gilt, sobald du Annehmen drückst."
+END
+
+TOOLTIP:DetailedModels
+"Die neu gebauten Einheiten und Gebäude für das Reforged-Bild, sofern du sie heruntergeladen hast. Sie ändern nur, was du siehst: Du spielst mit jedem, ob er sie hat oder nicht. Ausschalten bringt mehr Bilder pro Sekunde in großen Schlachten. Gilt ab dem nächsten Spielstart."
+END
+
+TOOLTIP:DynamicMusic
+"Musik folgt dem Kampf: In einem Gefecht oder Online-Spiel antwortet die Musik auf die Schlacht, mit einem ruhigeren Stück deiner Seite, solange nichts passiert, einem härteren, sobald nahe der Kamera oder auf deine Truppen geschossen wird, und wieder ruhig ein paar Sekunden nach dem Kampf. Aus spielt die Musik wie im Originalspiel."
+END
+
+TOOLTIP:Firelight
+"Brennende Gebäude, Wracks und Explosionen werfen flackerndes orangefarbenes Licht auf den Boden, die Mauern und die Einheiten um sie herum. Am deutlichsten auf Nachtkarten. Nur mit Direct3D 11, aus unter Klassik-Grafik. Gilt, sobald du Annehmen drückst."
+END
+
+TOOLTIP:FullDetailAtDistance
+"Volle Details auf Distanz: Die neu gebauten Einheiten und Gebäude wechseln zu leichteren Versionen, wenn sie auf dem Bildschirm klein werden. Eingeschaltet zeichnet das Spiel jedes in voller Detailstufe, egal wie weit die Kamera weg ist, auf Kosten der Bildrate in großen Schlachten. Gilt, sobald du Annehmen drückst."
+END
+
+TOOLTIP:FullscreenScaling
+"Wie der Vollbildmodus einen Monitor füllt, dessen Seitenverhältnis deine Auflösung nicht hat, etwa 1920x1080 auf einem 1920x1200-Bildschirm oder 1024x768 auf einem Breitbild. Strecken füllt jeden Pixel; Mit Balken behält die Proportionen des Bildes mit schwarzen Balken."
+END
+
+TOOLTIP:GroundFoliage
+"Gras, Büsche, Farne und Steine wachsen auf dem Boden und wiegen sich mit den Bäumen im Wind. Nur Optik: Einheiten laufen hindurch. Nur mit Direct3D 11, aus unter Klassik-Grafik. Gilt, sobald du Annehmen drückst."
+END
+
+TOOLTIP:GroundMarks
+"Granaten und Raketen hinterlassen Brandspuren am Boden, ein gefallenes Gebäude einen dunklen Fleck mit Rissen, eine Atombombe einen verbrannten Ring, und Kettenspuren bleiben länger dunkel. Sie verblassen in etwa vier Minuten. Nur mit Direct3D 11, aus unter Klassik-Grafik. Gilt, sobald du Annehmen drückst."
+END
+
+TOOLTIP:HDTextures
+"Jede Textur und jede Bodenkachel in doppelter Auflösung für das Reforged-Bild, sofern du sie heruntergeladen hast. Sie ändern nur, was du siehst: Du spielst mit jedem, ob er sie hat oder nicht. Ausschalten hilft einer Grafikkarte mit wenig Videospeicher. Gilt ab dem nächsten Spielstart."
+END
+
+TOOLTIP:HeatHaze
+"Die Luft flimmert über Feuern, entlang von Laserstrahlen und hinter Raketenabgasen. Nur mit Direct3D 11, aus unter Klassik-Grafik. Gilt, sobald du Annehmen drückst."
+END
+
+TOOLTIP:HemiAmbient
+"Licht von Himmel und Boden: Modelle nehmen das Umgebungslicht der Karte vom Himmel darüber und vom Boden darunter statt gleichmäßig, sodass das Deck eines Panzers heller ist als sein Bauch. Mauern behalten ihr Licht, und eine Nachtkarte bleibt dunkel. Nur mit Direct3D 11, aus unter Klassik-Grafik. Gilt, sobald du Annehmen drückst."
+END
+
+TOOLTIP:InternalHdr
+"Internes HDR-Tonemapping: Feuer, Explosionen und Laser heller als Weiß behalten auf dem Weg zum Bildschirm ihre Farbe, statt in flachem Weiß zu enden, und Teamfarben behalten etwas mehr von ihrer. Boden und Mauern abseits eines Feuers bleiben, wie sie waren. Das geschieht im Bild des Spiels: Dein Monitor bekommt weiter ein normales Bild, und ein HDR-Monitor bekommt kein HDR-Signal. Nur mit Direct3D 11, aus unter Klassik-Grafik. Gilt, sobald du Annehmen drückst."
+END
+
+TOOLTIP:LegacySound
+"Der Sound des Originalspiels: kein Tonhöhenversatz bei vorbeiziehenden Geräuschen, kein Überschallknall der Aurora, keine Obergrenze für Kampfgeräusche oder Einheitenantworten, kein Limiter, keine Kartenatmosphäre und keine Musik, die dem Kampf folgt. Gesamtlautstärke, Gerät und Lautsprecher gelten weiter. Wirkt sofort."
+END
+
+TOOLTIP:MapAwareWaveHeading
+"Kartenbewusste Wellen, für modernes Wasser. Die Dünung biegt sich zur Küste, läuft Kanäle entlang und bricht hinter Inseln ab, jedes Meer von seiner eigenen Seite. Aus behält die Wellen, wie sie waren. Gilt, sobald du Annehmen drückst."
+END
+
+TOOLTIP:MasterVolume
+"Gesamtlautstärke: Regelt das ganze Spiel lauter oder leiser, Musik, Effekte, Sprache, Umgebung und Filme. Die anderen Regler bestimmen die Mischung, dieser, wie laut die Mischung ist."
+END
+
+TOOLTIP:MinimapSize
+"Wie groß das Radar gezeichnet wird. Über 100 wächst es von der linken unteren Ecke aus über das Schlachtfeld; der Rest der Befehlsleiste bleibt, wie er ist."
+END
+
+TOOLTIP:SelectionOutlines
+"Ein leuchtender Ring in der Farbe des Besitzers unter jeder ausgewählten Einheit und dieselbe Linie um ein ausgewähltes Gebäude. Aus wird keins von beiden gezeichnet; Befehlslinien und die Markierungen, wo du klickst, bleiben."
+END
+
+TOOLTIP:SmoothMotion
+"Einheiten werden zwischen ihren letzten beiden Positionen gezeichnet, statt jede bis zum nächsten Spielschritt festzuhalten, sodass Bewegung so flüssig ist, wie dein Bildschirm es erlaubt, auch bei 60 Hz. Nur dein Bild ändert sich: Das Spiel liest nichts davon, und andere Spieler sehen ihre eigene Einstellung. Gilt, sobald du Annehmen drückst."
+END
+
+TOOLTIP:StructureCollapse
+"Einstürzende Gebäude: Ein zerstörtes Gebäude sinkt unter der Explosion in den Boden, statt in einem Bild zu verschwinden oder in einem Bild zu Trümmern zu werden. Nur dein Bild ändert sich: Es blockiert nichts, das Spiel liest nichts davon, und andere Spieler sehen ihre eigene Einstellung. Nur mit Direct3D 11, aus unter Klassik-Grafik."
+END
+
+TOOLTIP:SunShafts
+"Tiefes Sonnenlicht fällt in Bahnen durch den Staub zwischen Gebäuden und Bäumen, und die Luft leuchtet zur Sonne hin ein wenig. Am stärksten morgens und abends. Nur mit Direct3D 11, aus unter Klassik-Grafik. Gilt, sobald du Annehmen drückst."
+END
+
+TOOLTIP:UnderwaterClarity
+"Für modernes Wasser. Flache Schelfe, Riffe und versunkene Ruinen scheinen durch das Meer. Breite flache Meeresböden und tiefes Wasser bleiben so trüb, wie die Karte sie gemacht hat. Gilt, sobald du Annehmen drückst."
+END
+
+TOOLTIP:WaterSplashes
+"Eine Granate, eine Bombe oder ein fallender Körper, der im Wasser landet, wirft eine Fontäne auf und schickt Ringe über die Oberfläche. Nur dein Bild ändert sich: Das Spiel liest nichts davon, und andere Spieler sehen ihre eigene Einstellung. Nur mit Direct3D 11 und klassischem Wasser, aus unter Klassik-Grafik. Gilt, sobald du Annehmen drückst."
+END
+
+TOOLTIP:Weather
+"Regen fällt, oder Sand weht auf einer Wüstenkarte und Schnee auf einer verschneiten, und Wind biegt die Bäume und neigt den Rauch. Eine Karte mit eigenem Regen oder Schnee behält ihn und übernimmt nur den Wind. Nur dein Bild ändert sich: Was Einheiten sehen und treffen, bleibt gleich, und andere Spieler sehen ihre eigene Einstellung. Nur mit Direct3D 11, aus unter Klassik-Grafik. Gilt, sobald du Annehmen drückst."
+END
+
+TOOLTIP:ZoomSpeed
+"Wie weit eine Drehung des Mausrads die Kamera hinein- oder herausfährt. Bei 100 fährt sie so weit wie im Originalspiel. Gilt, sobald du Annehmen drückst."
+END
+
+GUI:GameModeClassicFact
+"Jede Karte"
+END
+
+GUI:GameModeDirectStrikeFact
+"Bis 6 Spieler"
+END
+
+GUI:GameModeApocalypseFact
+"Bis 4, Koop"
+END
+
+Color:Charcoal
+"Anthrazit"
+END
+
+Color:Chocolate
+"Schokolade"
+END
+
+Color:Forest
+"Waldgrün"
+END
+
+Color:Indigo
+"Indigo"
+END
+
+Color:Lemon
+"Zitrone"
+END
+
+Color:Maroon
+"Weinrot"
+END
+
+Color:Mint
+"Minze"
+END
+
+Color:Orchid
+"Orchidee"
+END
+
+Color:Peach
+"Pfirsich"
+END
+
+Color:Plum
+"Pflaume"
+END
+
+Color:Rose
+"Rosé"
+END
+
+Color:Rust
+"Rost"
+END
+
+Color:SeaGreen
+"Meergrün"
+END
+
+Color:Silver
+"Silber"
+END
+
+Color:Steel
+"Stahl"
+END
+
+Color:White
+"Weiß"
+END
+
+CONTROLBAR:ObsLookingThrough
+"Du siehst durch die Augen von %ls. Esc zeigt wieder die ganze Karte."
+END
+
+CONTROLBAR:ToolTipAirForceTalent10A
+"King Raptors verlassen das Flugfeld als Veteranen."
+END
+
+CONTROLBAR:ToolTipAirForceTalent10B
+"Jedes Flugzeug und jeder Hubschrauber repariert etwa 1 Prozent seiner Lebenspunkte pro Sekunde, auch unter Beschuss."
+END
+
+CONTROLBAR:ToolTipAirForceTalent7A
+"Comanches halten ein Viertel mehr Schaden aus, bevor sie abstürzen, 220 auf 275."
+END
+
+CONTROLBAR:ToolTipAirForceTalent7B
+"King Raptors halten ein Fünftel mehr Schaden aus, bevor sie abstürzen, 240 auf 288."
+END
+
+CONTROLBAR:ToolTipAirForceTalent8A
+"Flugfelder halten 3250 statt 2500 aus, Patriots 1300 statt 1000."
+END
+
+CONTROLBAR:ToolTipAirForceTalent8B
+"Kampf-Chinooks fliegen 15 Prozent schneller und halten ein Viertel mehr Schaden aus, 350 auf 437."
+END
+
+CONTROLBAR:ToolTipAmericaTalent6A
+"Fahrzeuge und Flugzeuge kosten 15 Prozent weniger, solange du noch eine Kommandozentrale, eine Kaserne, eine Kriegsfabrik oder einen Dozer hast."
+END
+
+CONTROLBAR:ToolTipAmericaTalent6B
+"Infanterie, Fahrzeuge und Flugzeuge sammeln 50 Prozent schneller Erfahrung. Mit Fortgeschrittenem Training dazu sammeln sie zweieinhalbmal so schnell statt doppelt so schnell."
+END
+
+CONTROLBAR:ToolTipAmericaTalent9A
+"Der A-10-Angriff schickt ein Flugzeug mehr, je nach Stufe 2, 3 oder 4 statt 1, 2 oder 3."
+END
+
+CONTROLBAR:ToolTipAmericaTalent9B
+"Der Fallschirmabwurf bringt vier Ranger mehr, je nach Stufe 9, 14 oder 24 statt 5, 10 oder 20."
+END
+
+CONTROLBAR:ToolTipChinaTalent10A
+"Overlord-Panzer verlassen die Kriegsfabrik als Veteranen."
+END
+
+CONTROLBAR:ToolTipChinaTalent10B
+"Fahrzeuge und Gebäude, die der EMP-Impuls trifft, bleiben 45 statt 30 Sekunden lahmgelegt."
+END
+
+CONTROLBAR:ToolTipChinaTalent6A
+"Hacker kosten 40 Prozent weniger, solange du noch eine Kommandozentrale, eine Kaserne, eine Kriegsfabrik oder einen Dozer hast."
+END
+
+CONTROLBAR:ToolTipChinaTalent6B
+"Jeder Soldat kostet 20 Prozent weniger, Hacker eingeschlossen, solange du noch eine Kommandozentrale, eine Kaserne, eine Kriegsfabrik oder einen Dozer hast."
+END
+
+CONTROLBAR:ToolTipChinaTalent7A
+"Battlemaster-Panzer halten ein Fünftel mehr Schaden aus, bevor sie sterben, 400 auf 480."
+END
+
+CONTROLBAR:ToolTipChinaTalent7B
+"Gatling-Panzer halten ein Viertel mehr Schaden aus, bevor sie sterben, 300 auf 375."
+END
+
+CONTROLBAR:ToolTipChinaTalent8A
+"Bunker und Gatling-Kanonen halten ein Viertel länger stand: ein Bunker 1500 auf 1875, eine Gatling-Kanone 1000 auf 1250."
+END
+
+CONTROLBAR:ToolTipChinaTalent8B
+"Infernokanonen halten ein Viertel mehr Schaden aus, 120 auf 150, und fahren 15 Prozent schneller."
+END
+
+CONTROLBAR:ToolTipChinaTalent9A
+"Das Artillerie-Sperrfeuer feuert eine Welle von 12 Granaten mehr: 24, 36 und 48 auf seinen drei Stufen."
+END
+
+CONTROLBAR:ToolTipChinaTalent9B
+"Streuminen bedecken 30 Prozent mehr Fläche."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent10A
+"Jede Rakete des Scud-Sturms schlägt 10 Prozent härter ein, 660 im Zentrum statt 600."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent10B
+"Scud-Werfer verlassen den Waffenhändler als Veteranen."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent7A
+"Kampfmotorräder halten ein Viertel mehr Schaden aus, bevor sie zerstört werden, 100 auf 125."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent7B
+"Bombenlaster fahren 15 Prozent schneller und halten ein Viertel mehr Schaden aus, 220 auf 275."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent8A
+"Sprengfallen kosten die Hälfte, 100 statt 200, oder 80 mit Schrottbau, solange du noch eine Kommandozentrale, eine Kaserne, einen Waffenhändler oder einen Arbeiter hast."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent8B
+"Raketen-Buggys halten 30 Prozent mehr Schaden aus, bevor sie sterben, 120 auf 156."
+END
+
+CONTROLBAR:ToolTipEvacuateAt
+"Zur gewählten Stelle fahren und alle Einheiten aussteigen lassen\nAlt: hier ausladen"
+END
+
+CONTROLBAR:ToolTipGLATalent10A
+"Die Raketen des Scud-Sturms schlagen ein Viertel weiter auseinander ein, und jede Explosion und jede Giftlache reicht ein Viertel weiter. Der Zielkreis wächst mit."
+END
+
+CONTROLBAR:ToolTipGLATalent10B
+"Marauder verlassen den Waffenhändler als Veteranen."
+END
+
+CONTROLBAR:ToolTipGLATalent6A
+"Gebäude kosten 20 Prozent weniger, eine Kaserne 400 statt 500, solange du noch eine Kommandozentrale, eine Kaserne, einen Waffenhändler oder einen Arbeiter hast."
+END
+
+CONTROLBAR:ToolTipGLATalent6B
+"Infanterie läuft 15 Prozent schneller, der Wütende Mob auch. Arbeiter nicht, die haben ihre eigenen Schuhe."
+END
+
+CONTROLBAR:ToolTipGLATalent7A
+"Technicals und Raketen-Buggys fahren 15 Prozent schneller."
+END
+
+CONTROLBAR:ToolTipGLATalent7B
+"RPG-Soldaten halten ein Viertel mehr Schaden aus, bevor sie sterben, 100 auf 125."
+END
+
+CONTROLBAR:ToolTipGLATalent8A
+"Stinger-Stellungen halten 1300 statt 1000 aus."
+END
+
+CONTROLBAR:ToolTipGLATalent8B
+"Scorpions halten ein Fünftel mehr Schaden aus, bevor sie sterben, 370 auf 444, Marauder 500 auf 600."
+END
+
+CONTROLBAR:ToolTipGLATalent9A
+"Der Rebellen-Hinterhalt bringt vier Rebellen mehr, je nach Stufe 8, 12 oder 20 statt 4, 8 oder 16. Der des Sprengstoff-Generals bringt 8, 10 oder 14 statt 4, 6 oder 10."
+END
+
+CONTROLBAR:ToolTipGLATalent9B
+"Explosion und Giftwolke der Anthrax-Bombe reichen ein Viertel weiter, und der Zielkreis wächst mit."
+END
+
+CONTROLBAR:ToolTipInfantryTalent10A
+"Ein Soldat, der 10 Sekunden lang keinen Schaden nimmt, heilt 2 Lebenspunkte pro Sekunde. Minigunner, Panzerjäger, Hacker und Black Lotus."
+END
+
+CONTROLBAR:ToolTipInfantryTalent10B
+"Der Infanterie-Fallschirmabwurf bringt fünf Minigunner mehr: 10, 15 und 20 auf seinen drei Stufen."
+END
+
+CONTROLBAR:ToolTipInfantryTalent7A
+"Minigunner laufen ein Fünftel schneller, 25 auf 30."
+END
+
+CONTROLBAR:ToolTipInfantryTalent7B
+"Panzerjäger halten ein Viertel mehr Schaden aus, bevor sie sterben, 100 auf 125 vor Beförderung."
+END
+
+CONTROLBAR:ToolTipInfantryTalent8A
+"Befestigte Bunker halten 30 Prozent länger stand, 1500 auf 1950."
+END
+
+CONTROLBAR:ToolTipInfantryTalent8B
+"Sturmtruppentransporter halten ein Viertel mehr Schaden aus, 240 auf 300, und fahren 15 Prozent schneller."
+END
+
+CONTROLBAR:ToolTipLaserTalent10A
+"Laserpanzer verlassen die Kriegsfabrik als Veteranen."
+END
+
+CONTROLBAR:ToolTipLaserTalent10B
+"Laser-Abwehrtürme und Feuerbasen kosten 30 Prozent weniger, 700 statt 1000, solange du noch eine Kommandozentrale, eine Kaserne, eine Kriegsfabrik oder einen Dozer hast."
+END
+
+CONTROLBAR:ToolTipLaserTalent7A
+"Laserpanzer halten ein Fünftel mehr Schaden aus, bevor sie sterben, 480 auf 576."
+END
+
+CONTROLBAR:ToolTipLaserTalent7B
+"Avengers halten ein Viertel mehr Schaden aus, bevor sie sterben, 300 auf 375."
+END
+
+CONTROLBAR:ToolTipLaserTalent8A
+"Laser-Abwehrtürme halten 1300 statt 1000 aus."
+END
+
+CONTROLBAR:ToolTipLaserTalent8B
+"Laserpanzer fahren 15 Prozent schneller."
+END
+
+CONTROLBAR:ToolTipNukeTalent10A
+"Atomkanonen verlassen die Kriegsfabrik als Elite."
+END
+
+CONTROLBAR:ToolTipNukeTalent10B
+"Ein Overlord, der 10 Sekunden lang keinen Schaden nimmt, repariert 11 Lebenspunkte, 1 Prozent, pro Sekunde."
+END
+
+CONTROLBAR:ToolTipNukeTalent7A
+"Overlord-Panzer halten ein Fünftel mehr Schaden aus, bevor sie sterben, 1100 auf 1320."
+END
+
+CONTROLBAR:ToolTipNukeTalent7B
+"Atomkanonen halten 30 Prozent mehr Schaden aus, bevor sie sterben, 240 auf 312."
+END
+
+CONTROLBAR:ToolTipNukeTalent8A
+"Kernreaktoren und Bunker halten 30 Prozent länger stand, 1500 auf 1950."
+END
+
+CONTROLBAR:ToolTipNukeTalent8B
+"MiGs halten ein Viertel mehr Schaden aus, bevor sie abstürzen, 160 auf 200. Addiert sich mit der Flugzeugpanzerung."
+END
+
+CONTROLBAR:ToolTipStealthTalent10A
+"Technicals und Raketen-Buggys tarnen sich, wenn sie das Feuer zurückhalten, wie getarnte Rebellen, und bleiben auch in Bewegung verborgen."
+END
+
+CONTROLBAR:ToolTipStealthTalent10B
+"Der GPS-Störsender verbirgt Einheiten anderthalbmal so weit, bis 150 statt 100, und der Zielkreis wächst mit."
+END
+
+CONTROLBAR:ToolTipStealthTalent7A
+"Jarmen Kell hält 30 Prozent mehr Schaden aus, bevor er stirbt, 200 auf 260."
+END
+
+CONTROLBAR:ToolTipStealthTalent7B
+"Technicals halten ein Fünftel mehr Schaden aus, bevor sie sterben, 180 auf 216, Raketen-Buggys 120 auf 144."
+END
+
+CONTROLBAR:ToolTipStealthTalent8A
+"Tunnelnetzwerke halten 1875 statt 1500 aus, Stinger-Stellungen 1250 statt 1000."
+END
+
+CONTROLBAR:ToolTipStealthTalent8B
+"Bombenlaster fahren 15 Prozent schneller und halten ein Viertel mehr Schaden aus, 220 auf 275."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent10A
+"Superwaffen kosten 25 Prozent weniger, eine Partikelkanone 1875 statt 2500, solange du noch eine Kommandozentrale, eine Kaserne, eine Kriegsfabrik oder einen Dozer hast."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent10B
+"Verteidigungsgebäude reparieren zusätzlich zu ihrer eigenen Reparatur 6 Lebenspunkte pro Sekunde, sobald sie 3 Sekunden lang nichts getroffen hat, fast doppelt so schnell."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent7A
+"Aurora-Alpha-Bomber halten ein Viertel mehr Schaden aus, bevor sie abstürzen, 80 auf 100."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent7B
+"Humvees halten ein Viertel mehr Schaden aus, bevor sie sterben, 240 auf 300, Avengers 300 auf 375."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent8A
+"EMP-Patriot-Systeme halten 1300 statt 1000 aus."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent8B
+"Tomahawks fahren 15 Prozent schneller und halten ein Viertel mehr Schaden aus, 180 auf 225."
+END
+
+CONTROLBAR:ToolTipTankTalent10A
+"Emperor-Overlords verlassen die Kriegsfabrik als Elite statt als Veteranen."
+END
+
+CONTROLBAR:ToolTipTankTalent10B
+"Der Panzer-Fallschirmabwurf bringt zwei Battlemaster mehr: 3, 4 und 6 auf seinen drei Stufen."
+END
+
+CONTROLBAR:ToolTipTankTalent7A
+"Emperor-Overlords halten ein Fünftel mehr Schaden aus, bevor sie sterben, 1100 auf 1320 vor Beförderung."
+END
+
+CONTROLBAR:ToolTipTankTalent7B
+"Drachen- und Gatling-Panzer halten ein Viertel mehr Schaden aus, bevor sie sterben: ein Drache 400 auf 500, ein Gatling 300 auf 375, vor Beförderung."
+END
+
+CONTROLBAR:ToolTipTankTalent8A
+"Ein Panzer, der 10 Sekunden lang keinen Schaden nimmt, repariert 1 Prozent seiner Lebenspunkte pro Sekunde. Battlemaster-, Emperor-, Gatling-, Drachen- und ECM-Panzer."
+END
+
+CONTROLBAR:ToolTipTankTalent8B
+"Battlemaster-Panzer halten ein Fünftel mehr Schaden aus, bevor sie sterben, 400 auf 480 vor Beförderung."
+END
+
+CONTROLBAR:ToolTipToxinTalent10A
+"Die Giftlachen des Scud-Sturms halten anderthalbmal so lange, 67 statt 45 Sekunden."
+END
+
+CONTROLBAR:ToolTipToxinTalent10B
+"Toxintraktoren verlassen den Waffenhändler als Veteranen."
+END
+
+CONTROLBAR:ToolTipToxinTalent7A
+"Toxintraktoren fahren 15 Prozent schneller und halten ein Viertel mehr Schaden aus, 240 auf 300."
+END
+
+CONTROLBAR:ToolTipToxinTalent7B
+"Marauder halten ein Viertel mehr Schaden aus, bevor sie sterben, 500 auf 625."
+END
+
+CONTROLBAR:ToolTipToxinTalent8A
+"Tunnelnetzwerke halten 1950 statt 1500 aus."
+END
+
+CONTROLBAR:ToolTipToxinTalent8B
+"Scud-Werfer fahren 15 Prozent schneller und halten ein Viertel mehr Schaden aus, 180 auf 225."
+END
+
+CONTROLBAR:ToolTipUSATalent10A
+"Aerosolbombe und MOAB töten ein Viertel weiter draußen, und der Zielkreis wächst mit."
+END
+
+CONTROLBAR:ToolTipUSATalent10B
+"Ein Fahrzeug, das 5 Sekunden lang keinen Schaden nimmt, repariert etwa 1 Prozent seiner Lebenspunkte pro Sekunde."
+END
+
+CONTROLBAR:ToolTipUSATalent7A
+"Crusader halten ein Fünftel mehr Schaden aus, bevor sie sterben, 480 auf 576, Paladine 500 auf 600."
+END
+
+CONTROLBAR:ToolTipUSATalent7B
+"Ranger halten ein Viertel mehr Schaden aus, bevor sie sterben, 180 auf 225, Raketenabwehrsoldaten 100 auf 125."
+END
+
+CONTROLBAR:ToolTipUSATalent8A
+"Patriots und Feuerbasen halten ein Viertel länger stand, 1250 statt 1000."
+END
+
+CONTROLBAR:ToolTipUSATalent8B
+"Comanches halten ein Fünftel mehr Schaden aus, bevor sie abstürzen, 220 auf 264, Raptors 160 auf 192."
+END
+
+GUI:???
+"Zufall"
+END
+
+GUI:AIChatAirHit1
+"Bodentruppen. Wie putzig."
+END
+
+GUI:AIChatAirWave1
+"Schau nach oben."
+END
+
+GUI:AIChatAirWave2
+"Fahrwerk ein, Waffen scharf."
+END
+
+GUI:AIChatAirWin1
+"Luftüberlegenheit bestätigt."
+END
+
+GUI:AIChatArmorHit1
+"Du hast den Lack zerkratzt."
+END
+
+GUI:AIChatArmorWave1
+"Der Stahl rollt."
+END
+
+GUI:AIChatArmorWave2
+"Hörst du die Ketten? Das sind wir."
+END
+
+GUI:AIChatArmorWin1
+"Plattgewalzt."
+END
+
+GUI:AIChatAttackerHit1
+"Du schlägst zurück? Süß."
+END
+
+GUI:AIChatAttackerWave1
+"Da sind wir. Schon wieder."
+END
+
+GUI:AIChatAttackerWave2
+"Heute gibt's keine Pause für dich."
+END
+
+GUI:AIChatAttackerWin1
+"Der Nächste!"
+END
+
+GUI:AIChatCounterHit1
+"Vorhersehbar."
+END
+
+GUI:AIChatCounterWave1
+"Ich habe deine Armee gelesen. Das ist die Antwort."
+END
+
+GUI:AIChatCounterWave2
+"Extra für dich gebaut."
+END
+
+GUI:AIChatCounterWin1
+"Gekontert."
+END
+
+GUI:AIChatEconomistHit1
+"Weißt du, was das Gebäude gekostet hat?"
+END
+
+GUI:AIChatEconomistWave1
+"Betrachte das als Investition."
+END
+
+GUI:AIChatEconomistWave2
+"Voll bezahlt. Wird jetzt geliefert."
+END
+
+GUI:AIChatEconomistWin1
+"Pleite. Konto wird geschlossen."
+END
+
+GUI:AIChatInfantryHit1
+"Rein in die Häuser, haltet die Linie!"
+END
+
+GUI:AIChatInfantryWave1
+"Stiefel auf den Boden!"
+END
+
+GUI:AIChatInfantryWave2
+"Jede Straße, jedes Fenster."
+END
+
+GUI:AIChatInfantryWin1
+"Die Stadt gehört uns."
+END
+
+GUI:AIChatOpportunistHit1
+"Du legst dich mit mir an? Schlechte Wahl."
+END
+
+GUI:AIChatOpportunistWave1
+"Du siehst beschäftigt aus. Gut."
+END
+
+GUI:AIChatOpportunistWave2
+"Schwachstelle gefunden."
+END
+
+GUI:AIChatOpportunistWin1
+"Danke fürs Weichklopfen."
+END
+
+GUI:AIChatRaiderHit1
+"Du hast also auch den Weg zu meiner Basis gefunden."
+END
+
+GUI:AIChatRaiderWave1
+"Deine Laster sehen einsam aus."
+END
+
+GUI:AIChatRaiderWave2
+"Zuschlagen und weg."
+END
+
+GUI:AIChatRaiderWin1
+"Kein Nachschub, keine Armee."
+END
+
+GUI:AIChatRusherHit1
+"Du solltest längst tot sein."
+END
+
+GUI:AIChatRusherWave1
+"Alles, was ich habe, jetzt sofort!"
+END
+
+GUI:AIChatRusherWave2
+"Schneller, schneller!"
+END
+
+GUI:AIChatRusherWin1
+"Zu langsam."
+END
+
+GUI:AIChatSneakyHit1
+"Gefunden? Glückstreffer."
+END
+
+GUI:AIChatSneakyWave1
+"Das hast du nicht kommen sehen."
+END
+
+GUI:AIChatSneakyWave2
+"Schau mal hinter dich."
+END
+
+GUI:AIChatSneakyWin1
+"Spurlos verschwunden."
+END
+
+GUI:AIChatSupporterHit1
+"Gib mir Deckung, ich werde beschossen!"
+END
+
+GUI:AIChatSupporterWave1
+"Direkt hinter dir, Partner."
+END
+
+GUI:AIChatSupporterWave2
+"Dein Ziel ist mein Ziel."
+END
+
+GUI:AIChatSupporterWin1
+"Gute Teamarbeit."
+END
+
+GUI:AIChatTechHit1
+"Vorsicht mit dem Labor, die Geräte sind teuer."
+END
+
+GUI:AIChatTechWave1
+"Feldtest mit echten Zielen."
+END
+
+GUI:AIChatTechWave2
+"Die Prototypen sind bereit."
+END
+
+GUI:AIChatTechWin1
+"Experiment abgeschlossen."
+END
+
+GUI:AIChatTurtleHit1
+"Klopf, so viel du willst. Für dich ist niemand zu Hause."
+END
+
+GUI:AIChatTurtleWave1
+"Die Mauern stehen. Jetzt marschieren wir."
+END
+
+GUI:AIChatTurtleWave2
+"Langsam, aber sicher, wir kommen."
+END
+
+GUI:AIChatTurtleWin1
+"Geduld siegt."
+END
+
+GUI:AICoopHelp
+"Halt durch, ich komme."
+END
+
+GUI:AICoopJoin
+"Ich bin bei dem Angriff dabei."
+END
+
+GUI:AICoopMoney
+"Hier, nimm etwas Geld."
+END
+
+GUI:AIPersona
+"Charakter"
+END
+
+GUI:AIPersonaAir
+"Luftwaffe"
+END
+
+GUI:AIPersonaArmor
+"Panzer"
+END
+
+GUI:AIPersonaAttacker
+"Angreifer"
+END
+
+GUI:AIPersonaCounter
+"Konterer"
+END
+
+GUI:AIPersonaEconomist
+"Ökonom"
+END
+
+GUI:AIPersonaInfantry
+"Infanterie"
+END
+
+GUI:AIPersonaNormal
+"Normal"
+END
+
+GUI:AIPersonaOpportunist
+"Opportunist"
+END
+
+GUI:AIPersonaRaider
+"Plünderer"
+END
+
+GUI:AIPersonaRandom
+"Zufall"
+END
+
+GUI:AIPersonaRusher
+"Rusher"
+END
+
+GUI:AIPersonaSneaky
+"Schleicher"
+END
+
+GUI:AIPersonaSupporter
+"Helfer"
+END
+
+GUI:AIPersonaTech
+"Techniker"
+END
+
+GUI:AIPersonaTooltip
+"Wie dieser Computerspieler spielt, unabhängig vom Schwierigkeitsgrad"
+END
+
+GUI:AIPersonaTooltipAir
+"Baut Flugfelder und schickt seine Flugzeuge auf Einsätze, dreht aber ab, wenn deine Luftabwehr stark ist."
+END
+
+GUI:AIPersonaTooltipArmor
+"Eine panzerlastige Armee, die länger sammelt und in weniger, dafür größeren Wellen angreift."
+END
+
+GUI:AIPersonaTooltipAttacker
+"Greift früh und oft mit kleineren Wellen an, gibt sein Geld so schnell aus, wie es hereinkommt, und baut wenig Verteidigung."
+END
+
+GUI:AIPersonaTooltipCounter
+"Liest deine Armee genauer und baut, was sie schlägt, sogar auf Leicht."
+END
+
+GUI:AIPersonaTooltipEconomist
+"Erst Einkommen und Upgrades, ein späterer erster Angriff, und überschüssiges Geld geht an den ärmsten Verbündeten."
+END
+
+GUI:AIPersonaTooltipInfantry
+"Eine Infanteriearmee, zuerst aus der Kaserne ausgebildet, deren Wellen in Transportern anrücken."
+END
+
+GUI:AIPersonaTooltipNormal
+"Spielt genau so, wie der Computer immer gespielt hat."
+END
+
+GUI:AIPersonaTooltipOpportunist
+"Geht auf den schwächsten Feind in Sicht los und auf jeden, der schon mit jemand anderem kämpft."
+END
+
+GUI:AIPersonaTooltipRaider
+"Schickt kleine Gruppen seiner schnellsten Fahrzeuge um deine Armee herum zu deinen Sammlern und Arbeitern, auf Schwer ab der dritten Minute, auf Leicht ab der fünften."
+END
+
+GUI:AIPersonaTooltipRandom
+"Einer der Charaktere oben, ausgelost beim Start der Partie. Nie Normal."
+END
+
+GUI:AIPersonaTooltipRusher
+"Wirft alles in einen einzigen Angriff, auf Schwer nach drei Minuten, auf Leicht nach viereinhalb, fast ohne Verteidigung. Danach spielt er als Angreifer."
+END
+
+GUI:AIPersonaTooltipSneaky
+"Bevorzugt Einheiten, die sich tarnen, gibt seine Generalspunkte zuerst für Tarnung aus und kommt über die Flanken und die Hintertür."
+END
+
+GUI:AIPersonaTooltipSupporter
+"Schließt sich den Angriffen seiner Verbündeten an und schickt seine untätige Armee, um Feinde aus der Basis eines Verbündeten zu räumen."
+END
+
+GUI:AIPersonaTooltipTech
+"Sitzt hinter seiner Verteidigung und rast zur Superwaffe, danach spielt er wie der normale Computer, sobald sie steht. Richtet seine Fähigkeiten gegen jeden, der einen Verbündeten angreift."
+END
+
+GUI:AIPersonaTooltipTurtle
+"Baut früh eine Verteidigungslinie und Geschütze an den Engpässen, greift spät mit großen Wellen an und zieht sich eher zurück, wenn er verliert."
+END
+
+GUI:AIPersonaTurtle
+"Igel"
+END
+
+GUI:AirliftAtLimit
+"Du hast schon so viele, wie du haben kannst"
+END
+
+GUI:AirliftCancel
+"Abbrechen"
+END
+
+GUI:AirliftFee
+"Gebühr: %ls"
+END
+
+GUI:AirliftFor
+"für %ls"
+END
+
+GUI:AirliftHint
+"Klicken oder Rad hoch fügt eins hinzu, Rechtsklick oder Rad runter nimmt eins weg. Umschalt: fünf."
+END
+
+GUI:AirliftNoFactory
+"Braucht eine Fabrik, die es baut"
+END
+
+GUI:AirliftOK
+"OK"
+END
+
+GUI:AirliftPlanes
+"Flugzeuge: %d von %d"
+END
+
+GUI:AirliftPlanesFull
+"Kein Platz mehr in den Flugzeugen"
+END
+
+GUI:AirliftTitle
+"Luftbrücke"
+END
+
+GUI:AirliftTotal
+"Gesamt: %ls"
+END
+
+GUI:BuildOrderEvery
+"Jeden Bau zeigen"
+END
+
+GUI:BuildOrderFirsts
+"Nur den ersten jeder Art"
+END
+
+GUI:CampaignGenerals
+"GENERALS"
+END
+
+GUI:CampaignMission
+"MISSION %d"
+END
+
+GUI:CampaignZeroHour
+"ZERO HOUR"
+END
+
+GUI:CheatBuildAnywhere
+"Überall bauen"
+END
+
+GUI:CheatPanelClose
+"Schließen"
+END
+
+GUI:CheatPanelTitle
+"Cheats"
+END
+
+GUI:CheatRankMax
+"MAX"
+END
+
+GUI:CheatSectionMap
+"KARTE"
+END
+
+GUI:CheatSectionPlayer
+"SPIELER"
+END
+
+GUI:CheatSectionUnits
+"EINHEITEN"
+END
+
+GUI:CheatUnlimitedPoints
+"Unbegrenzte Generalspunkte"
+END
+
+GUI:CommandTabAircraft
+"Flugzeuge%s: alles, was deine Flugfelder jetzt bauen können. Das Mausrad scrollt die Liste"
+END
+
+GUI:CommandTabBuildings
+"Gebäude%s: alles, was deine Bauarbeiter errichten können, ohne vorher etwas auszuwählen"
+END
+
+GUI:CommandTabGround
+"Bodeneinheiten%s: alles, was deine Fabriken jetzt ausbilden können. Das Mausrad scrollt die Liste"
+END
+
+GUI:CommandTabPageNext
+"Nach rechts scrollen"
+END
+
+GUI:CommandTabPagePrev
+"Nach links scrollen"
+END
+
+GUI:DiplomacyFps
+"FPS"
+END
+
+GUI:DiplomacyPing
+"Ping"
+END
+
+GUI:DirectStrikeBrutal
+"Brutal"
+END
+
+GUI:DirectStrikeEasy
+"Leicht"
+END
+
+GUI:DirectStrikeHard
+"Schwer"
+END
+
+GUI:DirectStrikeIslandNote
+"Jede Partie eine neue Insel"
+END
+
+GUI:DirectStrikeMap
+"Zufällige Insel"
+END
+
+GUI:DirectStrikeMedium
+"Mittel"
+END
+
+GUI:DirectStrikeReady
+"BEREIT"
+END
+
+GUI:DirectStrikeStart
+"START"
+END
+
+GUI:DirectStrikeTeam
+"TEAM %d"
+END
+
+GUI:DirectStrikeTeamSize
+"%d gegen %d"
+END
+
+GUI:FactionPickConfirm
+"%s bestätigen"
+END
+
+GUI:FactionPickCustom
+"Eigene Auswahl"
+END
+
+GUI:FactionPickLeftOut
+"Zufall lost nie aus: %s. Hake es unter Eigene Auswahl an, um es hinzuzufügen."
+END
+
+GUI:FactionPickPool
+"Zufall wählt eine der %d links angehakten Armeen, von %d. Klicke eine Armee an, um sie an- oder abzuhaken."
+END
+
+GUI:FactionPickRandom
+"Zufall wählt beim Start der Partie eine dieser Armeen für dich."
+END
+
+GUI:FactionPickRandomAll
+"Alles zufällig"
+END
+
+GUI:FactionPickRandomSide
+"%s zufällig"
+END
+
+GUI:FactionPickSideHint
+"Das Kästchen einer Seite hakt die ganze Seite an oder ab; ihr Name lässt diese Seite in der Auslosung unberührt."
+END
+
+GUI:FactionPickSideNameHint
+"Klicke auf den Namen einer Seite, um eine zufällige Armee dieser Seite zu spielen."
+END
+
+GUI:FactionPickTitle
+"Armee wählen"
+END
+
+GUI:GameModeApocalypse
+"APOCALYPSE"
+END
+
+GUI:GameModeBody
+"Für welchen Modus ist dieses Spiel?"
+END
+
+GUI:GameModeClassic
+"KLASSISCH"
+END
+
+GUI:GameModeDirectStrike
+"DIRECT STRIKE"
+END
+
+GUI:GameModeTitle
+"Spiel erstellen"
+END
+
+GUI:GameSpeed_Short
+"Tempo"
+END
+
+GUI:GraphArmy
+"Armee"
+END
+
+GUI:GraphBuildings
+"Gebäude"
+END
+
+GUI:GraphBuildings_Short
+"Geb."
+END
+
+GUI:GraphBuildOrder
+"Bauordnung"
+END
+
+GUI:GraphEarned
+"Verdientes Geld"
+END
+
+GUI:GraphGeneralPower
+"Generalsfähigkeit"
+END
+
+GUI:GraphGraphs
+"Diagramme"
+END
+
+GUI:GraphLines
+"Linien"
+END
+
+GUI:GraphNoData
+"In dieser Partie wurde nichts aufgezeichnet."
+END
+
+GUI:GraphPeak
+"Spitze %ls"
+END
+
+GUI:GraphPromotion
+"Beförderung"
+END
+
+GUI:GraphRank
+"Rang %d"
+END
+
+GUI:GraphShare
+"Anteil"
+END
+
+GUI:GraphSummary
+"Übersicht"
+END
+
+GUI:GraphSuperweaponBuilt
+"Superwaffe gebaut"
+END
+
+GUI:GraphSuperweaponFired
+"Superwaffe abgefeuert"
+END
+
+GUI:GraphUnitsLost
+"Verlorene Einheiten"
+END
+
+GUI:GraphValueDestroyed
+"Zerstörter Wert"
+END
+
+GUI:GroupTrayTraining
+"+%d in Produktion"
+END
+
+GUI:Handicap
+"Handicap"
+END
+
+GUI:HotkeysCommandREQUEST_MONEY
+"Verbündete um Geld bitten"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_AIRCRAFT
+"Reiter Flugzeuge"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_BUILDINGS
+"Reiter Gebäude"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_GROUND
+"Reiter Bodeneinheiten"
+END
+
+GUI:HudArmies
+"Armeen"
+END
+
+GUI:HudCameraDirector
+"Regie"
+END
+
+GUI:HudCameraDirector_Short
+"Regie"
+END
+
+GUI:HudCameraFree
+"Frei"
+END
+
+GUI:HudCameraFree_Short
+"Frei"
+END
+
+GUI:HudCameraPlayer
+"Spieler"
+END
+
+GUI:HudCameraPlayer_Short
+"Spl."
+END
+
+GUI:HudCamHintArmies
+"Öffnet die Einheiten jedes Spielers neben der Liste"
+END
+
+GUI:HudCamHintFog
+"Zeigt nur, was der beobachtete Spieler sieht"
+END
+
+GUI:HudCamHintFree
+"Du bewegst die Kamera selbst"
+END
+
+GUI:HudCamHintPlayer
+"Du siehst den Bildschirm des gewählten Spielers"
+END
+
+GUI:HudCamHintRow
+"Klicken, um den Bildschirm dieses Spielers zu sehen"
+END
+
+GUI:HudCamHintRowLive
+"Klicken zum Loslassen"
+END
+
+GUI:HudCamNextComputer
+"Computer haben keinen Bildschirm. Regie folgt"
+END
+
+GUI:HudCamNextDirector
+"Die Kamera geht von selbst zum größten Kampf"
+END
+
+GUI:HudCamNextDirectorFollowed
+"Folgt den Kämpfen von %ls"
+END
+
+GUI:HudCamNextFree
+"Klicke auf einen Spielernamen, um seinen Bildschirm zu sehen"
+END
+
+GUI:HudCamNextFree_Short
+"Name anklicken für seinen Bildschirm"
+END
+
+GUI:HudCamNextFreeFollowed
+"Klicken zum Zurückkehren: %ls"
+END
+
+GUI:HudCamNextPlayer
+"Esc oder erneuter Klick auf den Namen lässt los"
+END
+
+GUI:HudCamNextPlayer_Short
+"Esc oder Name lässt los"
+END
+
+GUI:HudCamNextWaiting
+"Warte auf die Kamera dieses Spielers"
+END
+
+GUI:HudCamStateDirector
+"Regie"
+END
+
+GUI:HudCamStateFree
+"Freie Kamera"
+END
+
+GUI:HudCamStatePlayer
+"Bildschirm von %ls"
+END
+
+GUI:HudFog
+"Kriegsnebel"
+END
+
+GUI:HudNetWorth
+"Gesamtwert"
+END
+
+GUI:HudPlayerCamera
+"SPIELERKAMERA"
+END
+
+GUI:HudReconSiha
+"SIHA-AUFKLÄRUNG"
+END
+
+GUI:HudStandings
+"Stand"
+END
+
+GUI:HudStatCash
+"Geld"
+END
+
+GUI:HudStatIncome
+"Einkommen pro Minute"
+END
+
+GUI:HudStatIncomeValue
+"%ls/Min."
+END
+
+GUI:HudStatKills
+"Abschüsse / Verluste"
+END
+
+GUI:HudStatPower
+"Energie"
+END
+
+GUI:HudStatRank
+"Generalsrang"
+END
+
+GUI:HudStatRankValue
+"Rang %d"
+END
+
+GUI:HudWatch
+"Kamera"
+END
+
+GUI:IncomeSharing_Short
+"Teilen"
+END
+
+GUI:KickVoteBanner
+"%ls rauswerfen?   Ja %d von %d   /yes oder /no   %d s"
+END
+
+GUI:KickVoteFailed
+"Die Abstimmung, %ls rauszuwerfen, ist gescheitert."
+END
+
+GUI:KickVoteKicked
+"%ls wurde aus der Partie gewählt."
+END
+
+GUI:KickVoteNone
+"Es läuft keine Abstimmung. Tippe /kick und den Namen eines Spielers, um eine zu starten."
+END
+
+GUI:KickVoteNoPlayer
+"Kein Spieler namens %ls ist in der Partie."
+END
+
+GUI:KickVoteStarted
+"%ls will %ls aus der Partie werfen. Tippe /yes oder /no in den Chat: Alle anderen Spieler haben 30 Sekunden, um zuzustimmen."
+END
+
+GUI:KickVoteTooFew
+"Ein Rauswurf braucht mindestens zwei weitere Spieler außer dem, der raus soll."
+END
+
+GUI:LaneAbilities
+"Fähigkeiten"
+END
+
+GUI:LaneDiplomacy
+"Diplomatie"
+END
+
+GUI:LaneEndDamage
+"Schaden"
+END
+
+GUI:LaneEndDraw
+"Unentschieden"
+END
+
+GUI:LaneEndEarned
+"Verdient"
+END
+
+GUI:LaneEndKills
+"Abschüsse"
+END
+
+GUI:LaneEndLeft
+"Team %d hat das Spiel verlassen"
+END
+
+GUI:LaneEndMiddle
+"Mitte gehalten"
+END
+
+GUI:LaneEndRematch
+"Revanche"
+END
+
+GUI:LaneEndReplay
+"Replay ansehen"
+END
+
+GUI:LaneEndSpent
+"Ausgegeben"
+END
+
+GUI:LaneEndTeamWins
+"Team %d gewinnt"
+END
+
+GUI:LaneEndUnits
+"Einheiten"
+END
+
+GUI:LaneEndWaves
+"Wellen"
+END
+
+GUI:LaneIncome
+"Einkommen %d/%d"
+END
+
+GUI:LaneMatchClock
+"Spielzeit"
+END
+
+GUI:LaneMenu
+"Menü"
+END
+
+GUI:LaneTier
+"Stufe %d"
+END
+
+GUI:LaneUpgrades
+"Upgrades"
+END
+
+GUI:ListMore
+"+%d weitere"
+END
+
+GUI:LoadBriefing
+"EINSATZBESPRECHUNG"
+END
+
+GUI:LoadFreeForAll
+"Jeder gegen jeden"
+END
+
+GUI:LoadMission
+"Mission %d"
+END
+
+GUI:LoadModeLAN
+"LAN-Spiel"
+END
+
+GUI:LoadModeOnline
+"Online-Spiel"
+END
+
+GUI:LoadModeReplay
+"Replay"
+END
+
+GUI:LoadModeSkirmish
+"Gefecht"
+END
+
+GUI:LoadObservers
+"Beobachter:"
+END
+
+GUI:LoadProgress
+"Lädt %d%%"
+END
+
+GUI:LoadRuleOff
+"Aus"
+END
+
+GUI:LoadRuleOn
+"An"
+END
+
+GUI:LoadTeam
+"Team %d"
+END
+
+GUI:LoadTip
+"TIPP"
+END
+
+GUI:LoadTip1
+"Halte Umschalt gedrückt, während du Befehle gibst, und die Gruppe arbeitet die Liste von selbst ab: bewegen, angreifen, einnehmen, bewachen."
+END
+
+GUI:LoadTip10
+"Doppelklicke auf ein Gebäude, um alle Gebäude seiner Art auf dem Bildschirm auszuwählen."
+END
+
+GUI:LoadTip11
+"Gegen KI online hat eine eigene KI-Wertung und berührt deine Ranglistenwertung nie."
+END
+
+GUI:LoadTip2
+"Umschalt und eine Zahl fügen deine Auswahl dieser Gruppe hinzu und behalten alle, die schon darin sind."
+END
+
+GUI:LoadTip3
+"Strg+D wählt jede Einheit der ausgewählten Arten auf dem Bildschirm aus. Zweimal drücken für die ganze Karte."
+END
+
+GUI:LoadTip4
+"Halte Umschalt und ziehe, um eine Linie zu zeichnen. Die Auswahl verteilt sich darauf als Feuerlinie."
+END
+
+GUI:LoadTip5
+"Auf einem Bauknopf reiht Umschalt fünf ein und Strg zwanzig."
+END
+
+GUI:LoadTip6
+"Halte Strg und Alt auf dem Knopf einer Einheit, und die Fabrik baut sie in Dauerschleife."
+END
+
+GUI:LoadTip7
+"Ein Signal, das du setzt, bittet deine Computer-Verbündeten, dort anzugreifen."
+END
+
+GUI:LoadTip8
+"Tippe help, attack oder money in den Chat, und deine Computer-Verbündeten helfen, greifen dort an oder schicken Geld."
+END
+
+GUI:LoadTip9
+"Halte beim Platzieren eines Gebäudes Strg, um das Bauraster umzuschalten, solange die Taste gedrückt ist."
+END
+
+GUI:LoadWaiting
+"Warte auf die anderen Spieler"
+END
+
+GUI:Lobby
+"Lobby"
+END
+
+GUI:LobbyPresets
+"Vorlagen"
+END
+
+GUI:LobbyPresetsButton
+"VORLAGEN"
+END
+
+GUI:LobbyTabChat
+"Chat"
+END
+
+GUI:LobbyTabInfo
+"Info"
+END
+
+GUI:LocalPlayerMapDiffers
+"Dein Spiel hat %ls anders aufgebaut als das des Hosts. Die Partie kann erst starten, wenn ihr beide dieselbe Version spielt."
+END
+
+GUI:MapCorrupt
+"Die Karte %ls ist beschädigt und kann nicht gespielt werden."
+END
+
+GUI:OnlineAIGame
+"1 Spiel · %d%% gewonnen"
+END
+
+GUI:OnlineAIGames
+"%d Spiele · %d%% gewonnen"
+END
+
+GUI:OnlineAIMapMissing
+"Der Server hat eine Karte gewählt, die dieses Spiel nicht hat (%ls), deshalb startete die Partie nicht."
+END
+
+GUI:OnlineAIRatingLabel
+"KI-Wertung"
+END
+
+GUI:OnlineAIRefused
+"Der Server hat die Partie nicht gestartet (%ls)."
+END
+
+GUI:OnlineAIRefused_banned
+"Dieses Konto darf keine gewerteten Partien gegen die KI spielen."
+END
+
+GUI:OnlineAIRefused_build
+"Deine Spieldateien weichen vom Release ab. Aktualisiere das Spiel im Launcher und versuch es dann noch einmal."
+END
+
+GUI:OnlineAIRefused_pending
+"Deine letzte Partie gegen die KI wird noch gewertet. Versuch es gleich noch einmal."
+END
+
+GUI:OnlineAIRefused_signedout
+"Du bist nicht angemeldet."
+END
+
+GUI:OnlineAIRefused_unavailable
+"zerohour.gg hat nicht geantwortet. Versuch es gleich noch einmal."
+END
+
+GUI:OnlineAIShort
+"KI"
+END
+
+GUI:OnlineBrowserFailed
+"Dein Browser konnte nicht geöffnet werden."
+END
+
+GUI:OnlineBrowserTestServer
+"Testserver: Es wird kein Browser geöffnet."
+END
+
+GUI:OnlineCannotReachServer
+"Der Server ist nicht erreichbar. Prüfe deine Verbindung und drücke dann Anmelden, um es erneut zu versuchen."
+END
+
+GUI:OnlineCardArmyChinaInf
+"China Infanterie"
+END
+
+GUI:OnlineCardArmyChinaNuke
+"China Atom"
+END
+
+GUI:OnlineCardArmyChinaTank
+"China Panzer"
+END
+
+GUI:OnlineCardArmyGlaDemo
+"GLA Sprengstoff"
+END
+
+GUI:OnlineCardArmyGlaStealth
+"GLA Tarnung"
+END
+
+GUI:OnlineCardArmyGlaToxin
+"GLA Toxin"
+END
+
+GUI:OnlineCardArmyUsaAir
+"USA Luftwaffe"
+END
+
+GUI:OnlineCardArmyUsaLaser
+"USA Laser"
+END
+
+GUI:OnlineCardArmyUsaSuper
+"USA Superwaffe"
+END
+
+GUI:OnlineCardByAI
+"Nach KI-Armee"
+END
+
+GUI:OnlineCardByOpp
+"Nach gegnerischer Armee"
+END
+
+GUI:OnlineCardByOwn
+"Nach eigener Armee"
+END
+
+GUI:OnlineCardColAI
+"KI gespielt auf"
+END
+
+GUI:OnlineCardInRoom
+"Im Raum %ls · %ls"
+END
+
+GUI:OnlineCardLastAI
+"Letzte KI-Partien"
+END
+
+GUI:OnlineCardLastQM
+"Letzte Schnellspiele"
+END
+
+GUI:OnlineCardProfile
+"PROFIL ONLINE"
+END
+
+GUI:OnlineCardTabAI
+"GEGEN KI"
+END
+
+GUI:OnlineCardUnavailable
+"Der Spielverlauf ist gerade nicht verfügbar."
+END
+
+GUI:OnlineCheckingFiles
+"Prüfe Spieldateien..."
+END
+
+GUI:OnlineComputerLabel
+"Computer"
+END
+
+GUI:OnlineConnecting
+"Verbinde mit dem Server..."
+END
+
+GUI:OnlineForgotPassword
+"PW VERGESSEN?"
+END
+
+GUI:OnlineGamesLabel
+"Spiele"
+END
+
+GUI:OnlineGeneralAir
+"Luftwaffe"
+END
+
+GUI:OnlineGeneralDemo
+"Sprengstoff"
+END
+
+GUI:OnlineGeneralInf
+"Infanterie"
+END
+
+GUI:OnlineGeneralLaser
+"Laser"
+END
+
+GUI:OnlineGeneralNuke
+"Atom"
+END
+
+GUI:OnlineGeneralStealth
+"Tarnung"
+END
+
+GUI:OnlineGeneralSuper
+"Superwaffe"
+END
+
+GUI:OnlineGeneralTank
+"Panzer"
+END
+
+GUI:OnlineGeneralToxin
+"Toxin"
+END
+
+GUI:OnlineHubAgoDays
+"vor %d Tagen"
+END
+
+GUI:OnlineHubAgoHours
+"vor %d Std."
+END
+
+GUI:OnlineHubAgoMinutes
+"vor %d Min."
+END
+
+GUI:OnlineHubBrowse
+"SPIELE ANSEHEN"
+END
+
+GUI:OnlineHubCustomLead
+"Ungewertet · 2-8"
+END
+
+GUI:OnlineHubCustomTitle
+"Eigene Spiele"
+END
+
+GUI:OnlineHubFindMatch
+"GEGNER SUCHEN"
+END
+
+GUI:OnlineHubFrom
+"Aus %ls"
+END
+
+GUI:OnlineHubInQueue
+"In der Warteschlange"
+END
+
+GUI:OnlineHubMatchAI
+"gegen KI"
+END
+
+GUI:OnlineHubMyCard
+"MEINE KARTE"
+END
+
+GUI:OnlineHubPlay
+"SPIELEN"
+END
+
+GUI:OnlineHubQuickMatchLead
+"Gewertet · 1v1"
+END
+
+GUI:OnlineHubQuickMatchLocked
+"Schnellspiel ist gesperrt für %d:%02d"
+END
+
+GUI:OnlineHubRankedGames
+"%d von %d Spielen"
+END
+
+GUI:OnlineHubRecent
+"Letzte Partien"
+END
+
+GUI:OnlineHubRecentNoAnswer
+"Der Server hat keinen Spielverlauf geschickt."
+END
+
+GUI:OnlineHubRecentNone
+"Noch keine Schnellspiele oder KI-Partien."
+END
+
+GUI:OnlineHubRecord
+"S–N"
+END
+
+GUI:OnlineHubSignOut
+"ABMELDEN"
+END
+
+GUI:OnlineHubVsAILead
+"Ungewertet"
+END
+
+GUI:OnlineHubVsAITitle
+"Gegen KI spielen"
+END
+
+GUI:OnlineHubYday
+"Gestern"
+END
+
+GUI:OnlineKeepSignedIn
+"Login merken"
+END
+
+GUI:OnlineLabel
+"ONLINE"
+END
+
+GUI:OnlineLadderButton
+"RANGLISTE"
+END
+
+GUI:OnlineLadderEmpty
+"Keine gewerteten Spieler auf dieser Seite."
+END
+
+GUI:OnlineLadderGamesOf
+"%d von %d Spielen"
+END
+
+GUI:OnlineLadderJump
+"ZU MEINER SEITE"
+END
+
+GUI:OnlineLadderLoading
+"Lade die Rangliste..."
+END
+
+GUI:OnlineLadderLosses
+"Niederlagen"
+END
+
+GUI:OnlineLadderNext
+"WEITER"
+END
+
+GUI:OnlineLadderPage
+"Plätze %d–%d"
+END
+
+GUI:OnlineLadderPlace
+"Platz %d der Rangliste"
+END
+
+GUI:OnlineLadderPlayer
+"Spieler"
+END
+
+GUI:OnlineLadderPrev
+"ZURÜCK"
+END
+
+GUI:OnlineLadderRating
+"Wertung"
+END
+
+GUI:OnlineLadderRatingLabel
+"Ranglistenwertung"
+END
+
+GUI:OnlineLadderRecord
+"%d Siege · %d Niederlagen"
+END
+
+GUI:OnlineLadderShort
+"Rangliste"
+END
+
+GUI:OnlineLadderTier
+"Rang"
+END
+
+GUI:OnlineLadderTierRange
+"%ls bis %ls"
+END
+
+GUI:OnlineLadderTiers
+"Ränge"
+END
+
+GUI:OnlineLadderTierUnder
+"unter %ls"
+END
+
+GUI:OnlineLadderTierUnranked
+"unter 5 Spielen"
+END
+
+GUI:OnlineLadderTierUp
+"%ls und höher"
+END
+
+GUI:OnlineLadderUnavailable
+"Die Rangliste ist gerade nicht verfügbar. Versuch es in einer Minute noch einmal."
+END
+
+GUI:OnlineLadderWinPct
+"Sieg %%"
+END
+
+GUI:OnlineLadderWins
+"Siege"
+END
+
+GUI:OnlineLadderYourPlace
+"Dein Platz"
+END
+
+GUI:OnlineLobbyColGame
+"Spiel"
+END
+
+GUI:OnlineLobbyColPlayers
+"Spieler"
+END
+
+GUI:OnlineLobbyCount
+"%d offen · %d laufen"
+END
+
+GUI:OnlineLobbyCountOpen
+"%d offen"
+END
+
+GUI:OnlineLobbyEmpty
+"Keine offenen Spiele"
+END
+
+GUI:OnlineLobbyFull
+"Voll"
+END
+
+GUI:OnlineLobbyHost
+"SPIEL ERÖFFNEN"
+END
+
+GUI:OnlineLobbyInRoom
+"In %ls"
+END
+
+GUI:OnlineLobbyJoin
+"BEITRETEN"
+END
+
+GUI:OnlineLobbyJoining
+"Trete bei"
+END
+
+GUI:OnlineLobbyPlaying
+"Läuft"
+END
+
+GUI:OnlineLobbyRoomGeneral
+"Allgemein"
+END
+
+GUI:OnlineLoginBadBody
+"Falsche E-Mail, falscher Nickname oder falsches Passwort. Prüfe die Angaben und versuch es noch einmal."
+END
+
+GUI:OnlineLoginBadLogin
+"Falsche E-Mail, falscher Nickname oder falsches Passwort."
+END
+
+GUI:OnlineLoginBanned
+"Dieses Konto ist gesperrt."
+END
+
+GUI:OnlineLoginElsewhere
+"Dieses Konto hat sich an einem anderen Computer angemeldet."
+END
+
+GUI:OnlineLoginEmpty
+"Gib deine E-Mail oder deinen Nickname und dein Passwort ein."
+END
+
+GUI:OnlineLoginExpired
+"Dein Passwort wurde geändert. Gib es erneut ein."
+END
+
+GUI:OnlineLoginFailed
+"Anmeldung fehlgeschlagen"
+END
+
+GUI:OnlineLoginFiles
+"Diese Datei ist nicht die, mit der das Spiel ausgeliefert wurde:\n\n%ls\n\nInstalliere das Spiel über den Launcher neu oder lösche diese Datei, starte dann das Spiel neu und melde dich wieder an."
+END
+
+GUI:OnlineLoginFilesNone
+"Der Server konnte deine Spieldateien nicht prüfen. Starte das Spiel neu und melde dich wieder an; passiert es erneut, installiere das Spiel über den Launcher neu."
+END
+
+GUI:OnlineLoginHeading
+"Anmelden"
+END
+
+GUI:OnlineLoginInQuickMatch
+"Im Schnellspiel"
+END
+
+GUI:OnlineLoginName
+"E-Mail oder Nickname"
+END
+
+GUI:OnlineLoginOnlineNow
+"Gerade online"
+END
+
+GUI:OnlineLoginSavedToken
+"Gespeicherte Anmeldung"
+END
+
+GUI:OnlineLoginThrottled
+"Zu viele Versuche. Warte %d Sekunden und versuch es noch einmal."
+END
+
+GUI:OnlineLoginThrottledNoRetry
+"Zu viele Versuche. Warte eine Minute und versuch es noch einmal."
+END
+
+GUI:OnlineLoginUnavailable
+"Der Kontodienst ist nicht erreichbar. Versuch es gleich noch einmal."
+END
+
+GUI:OnlineLossLabel
+"Niederlage"
+END
+
+GUI:OnlineMaintenance
+"Das Online-Spiel wird gerade gewartet. Versuch es später noch einmal."
+END
+
+GUI:OnlineMaintenanceTitle
+"Wartungsarbeiten"
+END
+
+GUI:OnlineMaintenanceUntil
+"Das Online-Spiel wird gerade gewartet. Es sollte um %s wieder da sein."
+END
+
+GUI:OnlineMapLabel
+"Karte"
+END
+
+GUI:OnlineNextTier
+"%ls bei %ls · noch %ls"
+END
+
+GUI:OnlineNoticeBack
+"Zurück um %s"
+END
+
+GUI:OnlineNoticeInfo
+"HINWEIS"
+END
+
+GUI:OnlineNoticeMaintenance
+"WARTUNG"
+END
+
+GUI:OnlineNoticeMaintenanceWords
+"Das Online-Spiel wird gerade gewartet."
+END
+
+GUI:OnlineNoticeUntil
+"Bis %s"
+END
+
+GUI:OnlineOpenedInBrowser
+"Im Browser geöffnet."
+END
+
+GUI:OnlineOpenGamesLabel
+"Offene Spiele"
+END
+
+GUI:OnlineOpponentLabel
+"Gegner"
+END
+
+GUI:OnlinePingMs
+"%d ms"
+END
+
+GUI:OnlinePlaceLabel
+"Platz"
+END
+
+GUI:OnlinePlayerNotOnline
+"Gerade nicht online"
+END
+
+GUI:OnlineQuickMatchLabel
+"Schnellspiel"
+END
+
+GUI:OnlineRatedResult
+"Wertung %+.1f -> %d"
+END
+
+GUI:OnlineRating
+"Wertung %d"
+END
+
+GUI:OnlineRatingTier
+"%ls, Wertung %d"
+END
+
+GUI:OnlineScoreAgain
+"NOCHMAL SCHNELLSPIEL"
+END
+
+GUI:OnlineScoreAIHeld
+"Der Sieg wurde nicht gewertet. Ein Admin sieht ihn sich an."
+END
+
+GUI:OnlineScoreAISaved
+"Nächste KI: %ls"
+END
+
+GUI:OnlineScoreConfirmed
+"Ergebnis bestätigt"
+END
+
+GUI:OnlineScoreNoAnswer
+"Der Server hat noch nicht geantwortet. Das Ergebnis erscheint auf zerohour.gg."
+END
+
+GUI:OnlineScorePlayAgain
+"NOCHMAL SPIELEN"
+END
+
+GUI:OnlineScoreSending
+"Sende Ergebnis und Replay"
+END
+
+GUI:OnlineScoreSendingResult
+"Sende das Ergebnis"
+END
+
+GUI:OnlineScoreSubAI
+"Gegen KI · %ls · %ls"
+END
+
+GUI:OnlineScoreSubRanked
+"Gewertet %ls · %ls"
+END
+
+GUI:OnlineSignIn
+"ANMELDEN"
+END
+
+GUI:OnlineSigningIn
+"Melde an..."
+END
+
+GUI:OnlineSkinsAll
+"Alle"
+END
+
+GUI:OnlineSkinsButton
+"SKINS"
+END
+
+GUI:OnlineSkinsDefault
+"STANDARD"
+END
+
+GUI:OnlineSkinsFilterLocked
+"Gesperrt"
+END
+
+GUI:OnlineSkinsNone
+"Dein Konto besitzt noch keine Skins. Jede Karte sagt, wie du ihren Skin bekommst; öffne diesen Bildschirm wieder, sobald du einen hast."
+END
+
+GUI:OnlineSkinsOpenSite
+"ZEROHOUR.GG ÖFFNEN"
+END
+
+GUI:OnlineSkinsOwned
+"Im Besitz"
+END
+
+GUI:OnlineSkinsPending
+"%d Änderungen noch nicht gespeichert"
+END
+
+GUI:OnlineSkinsPending1
+"1 Änderung noch nicht gespeichert"
+END
+
+GUI:OnlineSkinsPickedButton
+"GEWÄHLT"
+END
+
+GUI:OnlineSkinsRefused
+"zerohour.gg hat diese Wahl abgelehnt, deine Skins bleiben, wie sie waren. Öffne diesen Bildschirm wieder, um zu sehen, was dein Konto besitzt."
+END
+
+GUI:OnlineSkinsSave
+"SPEICHERN"
+END
+
+GUI:OnlineSkinsSaved
+"Gespeichert. Dein nächstes Spiel, eigenes oder Schnellspiel, zeigt diese Skins."
+END
+
+GUI:OnlineSkinsSideChina
+"China"
+END
+
+GUI:OnlineSkinsSideGla
+"GLA"
+END
+
+GUI:OnlineSkinsSideUsa
+"USA"
+END
+
+GUI:OnlineSkinsSignedOut
+"Du bist nicht angemeldet. Melde dich online an, um deine Skins zu wählen."
+END
+
+GUI:OnlineSkinsThrottled
+"Zu oft in einer Minute gespeichert. Warte kurz und drücke dann erneut Speichern."
+END
+
+GUI:OnlineSkinsUnavailable
+"zerohour.gg hat nicht geantwortet. Deine Skins bleiben, wie sie waren; versuch es gleich noch einmal."
+END
+
+GUI:OnlineSkinsWaiting
+"Frage zerohour.gg..."
+END
+
+GUI:OnlineSkinsWear
+"TRAGEN"
+END
+
+GUI:OnlineSkinsWornButton
+"GETRAGEN"
+END
+
+GUI:OnlineSpeedLabel
+"Tempo"
+END
+
+GUI:OnlineStartRefused
+"Der Server wollte das Spiel nicht starten (%s)."
+END
+
+GUI:OnlineTabCustom
+"EIGENE SPIELE"
+END
+
+GUI:OnlineTabHome
+"START"
+END
+
+GUI:OnlineTabQuickMatch
+"SCHNELLSPIEL"
+END
+
+GUI:OnlineTier_captain
+"Hauptmann"
+END
+
+GUI:OnlineTier_colonel
+"Oberst"
+END
+
+GUI:OnlineTier_general
+"General"
+END
+
+GUI:OnlineTier_lieutenant
+"Leutnant"
+END
+
+GUI:OnlineTier_major
+"Major"
+END
+
+GUI:OnlineTier_private
+"Gefreiter"
+END
+
+GUI:OnlineTier_sergeant
+"Feldwebel"
+END
+
+GUI:OnlineTier_unranked
+"Ohne Rang"
+END
+
+GUI:OnlineUnrated
+"Diese Partie wurde nicht gewertet."
+END
+
+GUI:OnlineUnrated_cancelled
+"Nicht gewertet: Die Partie wurde abgesagt."
+END
+
+GUI:OnlineUnrated_custom
+"Eigene Spiele werden nicht gewertet."
+END
+
+GUI:OnlineUnrated_desync
+"Nicht gewertet: Das Spiel ist aus dem Takt geraten."
+END
+
+GUI:OnlineUnrated_endframe
+"Nicht gewertet: Die beiden Seiten haben unterschiedliche Ergebnisse gemeldet."
+END
+
+GUI:OnlineUnrated_grace
+"Nicht gewertet: Ein Spieler ist direkt am Anfang gegangen."
+END
+
+GUI:OnlineUnrated_nowinner
+"Nicht gewertet: Niemand hat gewonnen."
+END
+
+GUI:OnlineUnrated_seed
+"Nicht gewertet: Die beiden Seiten haben unterschiedliche Ergebnisse gemeldet."
+END
+
+GUI:OnlineUnrated_stalled
+"Nicht gewertet: Das Ergebnis konnte nicht bestätigt werden."
+END
+
+GUI:OnlineUnrated_unconfirmed
+"Nicht gewertet: Das Ergebnis konnte nicht bestätigt werden."
+END
+
+GUI:OnlineUnrated_winners
+"Nicht gewertet: Die beiden Seiten haben unterschiedliche Ergebnisse gemeldet."
+END
+
+GUI:OnlineVsAIButton
+"GEGEN KI SPIELEN"
+END
+
+GUI:OnlineWinLabel
+"Sieg"
+END
+
+GUI:OnlineWinRateLabel
+"Siegquote"
+END
+
+GUI:PicksWaiting
+"OFFENE WAHLEN: %d"
+END
+
+GUI:PlayerMapDiffers
+"Das Spiel von %ls hat %ls anders aufgebaut als deins. Die Partie kann erst starten, wenn ihr beide dieselbe Version spielt."
+END
+
+GUI:QMAll
+"ALLE"
+END
+
+GUI:QMAnOpponent
+"unbekannter Spieler"
+END
+
+GUI:QMChance
+"Siegchance"
+END
+
+GUI:QMCheckingMap
+"Prüfe die Karte mit deinem Gegner"
+END
+
+GUI:QMFound
+"Gegner gefunden"
+END
+
+GUI:QMLocked
+"Schnellspiel ist gesperrt für %d:%02d"
+END
+
+GUI:QMMapDiffers
+"Das Spiel von %ls hat die Karte dieser Partie anders aufgebaut als deins, deshalb wurde die Partie abgesagt. Prüft, ob ihr beide dieselbe Version spielt."
+END
+
+GUI:QMMapNoAnswer
+"Das Spiel von %ls hat die Karte dieser Partie nie bestätigt, deshalb wurde die Partie abgesagt. Vielleicht ist es eine ältere Version."
+END
+
+GUI:QMNewMap
+"Neue Karte"
+END
+
+GUI:QMNoGeneral
+"Kein General"
+END
+
+GUI:QMNone
+"KEINE"
+END
+
+GUI:QMOpponentLeft
+"Dein Gegner ist vor dem Start der Partie gegangen. Du bist wieder in der Warteschlange."
+END
+
+GUI:QMQueueHere
+"%d andere suchen auf %ls"
+END
+
+GUI:QMRandomArmy
+"Zufällige Armee"
+END
+
+GUI:QMRefused
+"Der Server wollte dich nicht in die Warteschlange setzen. Versuch es gleich noch einmal."
+END
+
+GUI:QMSearch
+"SUCHEN"
+END
+
+GUI:QMSearching
+"Suche einen Gegner"
+END
+
+GUI:QMSpeedAccepted
+"Angenommen, gespielt wird auf %s"
+END
+
+GUI:QMSpeedAsk
+"%s will auf %s spielen. Annehmen?\n\nAblehnung in %d s"
+END
+
+GUI:QMSpeedBanner
+"AUF %s SPIELEN?"
+END
+
+GUI:QMSpeedDeclined
+"Abgelehnt, gespielt wird auf %s"
+END
+
+GUI:QMSpeedWaiting
+"Warte, bis %s %s annimmt"
+END
+
+GUI:QMStartsBanner
+"PARTIE STARTET IN %d"
+END
+
+GUI:QMStop
+"STOPP"
+END
+
+GUI:QMVs
+"GEGEN"
+END
+
+GUI:QMWidens
+"Erweitert in %d:%02d"
+END
+
+GUI:QMWindowValue
+"Siegchance %d-%d%%"
+END
+
+GUI:QMYou
+"Du"
+END
+
+GUI:QMYourPicks
+"Deine Wahl"
+END
+
+GUI:RandomMapAnyTemplate
+"Überrasch mich"
+END
+
+GUI:RandomMapSize
+"Kartengröße"
+END
+
+GUI:RandomMapSizeHuge
+"Riesig"
+END
+
+GUI:RandomMapSizeLarge
+"Groß"
+END
+
+GUI:RandomMapSizeMedium
+"Mittel"
+END
+
+GUI:RandomMapSizeSmall
+"Klein"
+END
+
+GUI:RandomMapSizeTiny
+"Winzig"
+END
+
+GUI:RandomMapTemplate
+"Kartentyp"
+END
+
+GUI:ReplayResume
+"Fortsetzen"
+END
+
+GUI:RequestMoneyChat
+"Ich brauche Geld!"
+END
+
+GUI:SaveFromOlderGame
+"Dieser Spielstand stammt aus dem Originalspiel oder einer älteren Version von Reforged und kann nicht geladen werden. Seine \"Missionsstart\"-Spielstände laden weiterhin und führen die Kampagne ab dem Anfang dieser Mission fort, und jede Kampagnenmission lässt sich im Kampagnenmenü wählen."
+END
+
+GUI:SaveFromOtherLogicRate
+"Dieser Spielstand stammt aus einer Version von Reforged, deren Spiellogik %d-mal pro Sekunde lief. Diese Version lässt sie %d-mal pro Sekunde laufen, deshalb kann der Spielstand nicht geladen werden. Die \"Missionsstart\"-Spielstände jener Version laden weiterhin und führen die Kampagne ab dem Anfang dieser Mission fort."
+END
+
+GUI:ScoreHighlightArmy
+"Größte Armee"
+END
+
+GUI:ScoreHighlightDestroyed
+"Meiste Zerstörung"
+END
+
+GUI:ScoreHighlightEarned
+"Bester Verdiener"
+END
+
+GUI:ScoreHighlights
+"Höhepunkte"
+END
+
+GUI:ScoreHighlightSuperweapon
+"Erste Superwaffe"
+END
+
+GUI:ScoreLength
+"Dauer"
+END
+
+GUI:ScoreNoWinner
+"Kein Sieger"
+END
+
+GUI:ScorePlayerWins
+"%ls gewinnt"
+END
+
+GUI:ScoreTeamWins
+"Team %d gewinnt"
+END
+
+GUI:SignalKeyAttack
+"Angriffssignal: Rauch für deine Verbündeten, wo du als Nächstes klickst. Rechtsklick bricht ab"
+END
+
+GUI:SignalKeyAttention
+"Hierher schauen: Rauch für deine Verbündeten, wo du als Nächstes klickst. Rechtsklick bricht ab"
+END
+
+GUI:SignalKeyDefend
+"Verteidigungssignal: Rauch für deine Verbündeten, wo du als Nächstes klickst. Rechtsklick bricht ab"
+END
+
+GUI:SkirmishPreset11v1
+"11 gegen 1: du gegen 11 schwere KIs"
+END
+
+GUI:SkirmishPreset12v12
+"12 gegen 12, schwere KIs"
+END
+
+GUI:SkirmishPreset15v1
+"15 gegen 1: du gegen 15 schwere KIs"
+END
+
+GUI:SkirmishPreset16v16
+"16 gegen 16: du und 15 schwere Verbündete gegen 16 schwere KIs"
+END
+
+GUI:SkirmishPreset16v16Brutal
+"16 gegen 16, alle brutal"
+END
+
+GUI:SkirmishPreset23v1
+"23 gegen 1: du gegen 23 schwere KIs"
+END
+
+GUI:SkirmishPreset2x4
+"2 gegen 2 gegen 2 gegen 2, mittlere KIs"
+END
+
+GUI:SkirmishPreset31v1
+"31 gegen 1: du gegen 31 schwere KIs"
+END
+
+GUI:SkirmishPreset3Way
+"Dreifrontenkrieg: 11 gegen 11 gegen 10, mittlere KIs"
+END
+
+GUI:SkirmishPreset3x4
+"3 Teams zu 4, mittlere KIs"
+END
+
+GUI:SkirmishPreset3x8
+"3 Teams zu 8, mittlere KIs"
+END
+
+GUI:SkirmishPreset4Teams
+"4 Teams zu 8, mittlere KIs"
+END
+
+GUI:SkirmishPreset4v28
+"4 gegen 28: du und 3 mittlere Verbündete gegen 28 leichte KIs"
+END
+
+GUI:SkirmishPreset4v4
+"4 gegen 4, mittlere KIs"
+END
+
+GUI:SkirmishPreset4x4
+"4 Teams zu 4, mittlere KIs"
+END
+
+GUI:SkirmishPreset6v6
+"6 gegen 6, schwere KIs"
+END
+
+GUI:SkirmishPreset7v1
+"7 gegen 1: du gegen 7 schwere KIs"
+END
+
+GUI:SkirmishPreset8Teams
+"8 Teams zu 4, gemischte KIs"
+END
+
+GUI:SkirmishPreset8v8
+"8 gegen 8, schwere KIs"
+END
+
+GUI:SkirmishPresetClear
+"LEEREN"
+END
+
+GUI:SkirmishPresetCustom
+"Eigene %d: %d Spieler"
+END
+
+GUI:SkirmishPresetCustomEmpty
+"Eigene %d: leer, klicken, um diesen Raum zu speichern"
+END
+
+GUI:SkirmishPresetCustomGenerated
+"erzeugte Karte"
+END
+
+GUI:SkirmishPresetCustomGroup
+"Deine eigenen"
+END
+
+GUI:SkirmishPresetFFA12
+"Jeder gegen jeden mit 12 Spielern, gemischte KIs"
+END
+
+GUI:SkirmishPresetFFA16
+"Jeder gegen jeden mit 16 Spielern, gemischte KIs"
+END
+
+GUI:SkirmishPresetFFA24
+"Jeder gegen jeden mit 24 Spielern, gemischte KIs"
+END
+
+GUI:SkirmishPresetFFA32
+"Jeder gegen jeden mit 32 Spielern, gemischte KIs"
+END
+
+GUI:SkirmishPresetFFA8
+"Jeder gegen jeden mit 8 Spielern, gemischte KIs"
+END
+
+GUI:SkirmishPresetGroup
+"%d Spieler"
+END
+
+GUI:SkirmishPresetLastStand
+"Letztes Gefecht: du und 1 Verbündeter gegen 30 schwere KIs"
+END
+
+GUI:SkirmishPresetLoad
+"LADEN"
+END
+
+GUI:SkirmishPresetSave
+"SPEICHERN"
+END
+
+GUI:SocketRedirected
+"Die LAN-IP ist %ls, aber das System hat die Verbindung des Spiels auf %ls gelegt. Ein VPN-Split-Tunnel oder eine Firewall hat sie umgeleitet, deshalb hört dich niemand in deinem Netzwerk. Schalte Split-Tunneling für das Spiel aus und versuch es noch einmal."
+END
+
+GUI:StartingMoney_Short
+"Geld"
+END
+
+GUI:StartingMoneyUnlimited
+"Unbegrenzt"
+END
+
+GUI:SummaryBuildingsBuilt
+"Gebaut"
+END
+
+GUI:SummaryDefeated
+"Besiegt"
+END
+
+GUI:SummaryDestroyed
+"Zerstört"
+END
+
+GUI:SummaryDestroyed_Short
+"Zerst."
+END
+
+GUI:SummaryDisconnected
+"Getrennt"
+END
+
+GUI:SummaryEarned
+"Verdient"
+END
+
+GUI:SummaryEarned_Short
+"Verd."
+END
+
+GUI:SummaryLost
+"Verloren"
+END
+
+GUI:SummaryMoney
+"Geld"
+END
+
+GUI:SummaryScore
+"Punkte"
+END
+
+GUI:SummarySpent
+"Ausgegeben"
+END
+
+GUI:SummarySpent_Short
+"Ausg."
+END
+
+GUI:SummaryUnits
+"Einheiten"
+END
+
+GUI:SummaryUnits_Short
+"Einh."
+END
+
+GUI:SummaryUnitsBuilt
+"Gebaut"
+END
+
+GUI:SummaryUnitsBuilt_Short
+"Gebaut"
+END
+
+GUI:SummaryWinner
+"Sieger"
+END
+
+GUI:Superweapons_Short
+"Superw."
+END
+
+GUI:SupplyPileLimit_Short
+"Haufen"
+END
+
+GUI:Talents
+"TALENTE"
+END
+
+GUI:TalentsHint
+"Ab Rang 6 wählst du auf jedem Rang eins von zwei Talenten."
+END
+
+GUI:TechRespawn_Short
+"Neuaufbau"
+END
+
+GUI:UnitLimit_Short
+"Einheiten"
+END
+
+INI:RankLevel10
+"10-Sterne-General"
+END
+
+INI:RankLevel9
+"9-Sterne-General"
+END
+
+OBJECT:ApocalypseZombie
+"Zombie"
+END
+
+OBJECT:ApocalypseZombieBrute
+"Zombie-Koloss"
+END
+
+OBJECT:ApocalypseZombieRunner
+"Zombie-Läufer"
+END
+
+OBJECT:LaneWarFortress
+"Festung"
+END
+
+OBJECT:LaneWarWatchTower
+"Wachturm"
+END
+
+SCIENCE:Rank10
+"10-Sterne-General"
+END
+
+SCIENCE:Rank8
+"8-Sterne-General"
+END
+
+SCIENCE:Rank9
+"9-Sterne-General"
+END
+
+SKIN:Bronze
+"BRONZE"
+END
+
+SKIN:BugHunter
+"BUGJÄGER"
+END
+
+SKIN:EarnedBronze
+"BRONZE-UNTERSTÜTZER"
+END
+
+SKIN:EarnedBugHunter
+"BUGJÄGER-ABZEICHEN"
+END
+
+SKIN:EarnedCode
+"CODE EINLÖSEN"
+END
+
+SKIN:EarnedEmerald
+"SMARAGD-UNTERSTÜTZER"
+END
+
+SKIN:EarnedGold
+"GOLD-UNTERSTÜTZER"
+END
+
+SKIN:EarnedIron
+"EISEN-UNTERSTÜTZER"
+END
+
+SKIN:EarnedReforged
+"REFORGED-UNTERSTÜTZER"
+END
+
+SKIN:EarnedSilver
+"SILBER-UNTERSTÜTZER"
+END
+
+SKIN:EarnedSpecialThanks
+"BESONDERER DANK"
+END
+
+SKIN:Emerald
+"SMARAGD"
+END
+
+SKIN:Gold
+"GOLD"
+END
+
+SKIN:Iron
+"EISEN"
+END
+
+SKIN:Reforged
+"REFORGED"
+END
+
+SKIN:Silver
+"SILBER"
+END
+
+SKIN:SpecialThanks
+"BESONDERER DANK"
+END
+
+SKIN:Splinter
+"SPLITTERTARN"
+END
+
+SKIN:UnitChinaDozer
+"China-Dozer"
+END
+
+SKIN:UnitUsaDozer
+"USA-Dozer"
+END
+
+TOOLTIP:Apocalypse
+"Haltet gemeinsam gegen endlose Wellen von Untoten durch, mit bis zu vier Spielern."
+END
+
+TOOLTIP:ArmorAFG_Comanche
+"Hubschrauber"
+END
+
+TOOLTIP:ArmorAFG_CountermeasuresComanche
+"Hubschrauber"
+END
+
+TOOLTIP:ArmorAirplane
+"Flugzeug"
+END
+
+TOOLTIP:ArmorAntiAirVehicle
+"Fahrzeug"
+END
+
+TOOLTIP:ArmorAssaultCrawler
+"Panzer"
+END
+
+TOOLTIP:ArmorAvalanche
+"Panzer"
+END
+
+TOOLTIP:ArmorAvenger
+"Fahrzeug"
+END
+
+TOOLTIP:ArmorBaseDefense
+"Verteidigung"
+END
+
+TOOLTIP:ArmorBattleBusStructureTough
+"Befestigt"
+END
+
+TOOLTIP:ArmorBattleBusStructureToughPlusOne
+"Befestigt"
+END
+
+TOOLTIP:ArmorBattleBusStructureToughPlusTwo
+"Befestigt"
+END
+
+TOOLTIP:ArmorBattleBusTruck
+"Fahrzeug"
+END
+
+TOOLTIP:ArmorBattleBusTruckPlusOne
+"Fahrzeug"
+END
+
+TOOLTIP:ArmorBattleBusTruckPlusTwo
+"Fahrzeug"
+END
+
+TOOLTIP:ArmorChemReb_Human
+"Infanterie"
+END
+
+TOOLTIP:ArmorChemSuitHuman
+"Infanterie"
+END
+
+TOOLTIP:ArmorChinook
+"Hubschrauber"
+END
+
+TOOLTIP:ArmorComanche
+"Hubschrauber"
+END
+
+TOOLTIP:ArmorCountermeasuresAirplane
+"Flugzeug"
+END
+
+TOOLTIP:ArmorCountermeasuresComanche
+"Hubschrauber"
+END
+
+TOOLTIP:ArmorCountermeasuresSpectreGunship
+"Flugzeug"
+END
+
+TOOLTIP:ArmorDemoGenTerrorist
+"Infanterie"
+END
+
+TOOLTIP:ArmorDozer
+"Fahrzeug"
+END
+
+TOOLTIP:ArmorDragonTank
+"Panzer"
+END
+
+TOOLTIP:ArmorFireBase
+"Verteidigung"
+END
+
+TOOLTIP:ArmorGLAUpgradedStructure
+"Befestigt"
+END
+
+TOOLTIP:ArmorGLAUpgradedStructureTough
+"Befestigt"
+END
+
+TOOLTIP:ArmorHazMatHuman
+"Infanterie"
+END
+
+TOOLTIP:ArmorHuman
+"Infanterie"
+END
+
+TOOLTIP:ArmorHumvee
+"Fahrzeug"
+END
+
+TOOLTIP:ArmorInfGen_Human
+"Infanterie"
+END
+
+TOOLTIP:ArmorInvulnerable
+"Unverwundbar"
+END
+
+TOOLTIP:ArmorInvulnerableAll
+"Unverwundbar"
+END
+
+TOOLTIP:ArmorMine
+"Mine"
+END
+
+TOOLTIP:ArmorNo
+"Keine"
+END
+
+TOOLTIP:ArmorQuadCannon
+"Fahrzeug"
+END
+
+TOOLTIP:ArmorSentryDrone
+"Drohne"
+END
+
+TOOLTIP:ArmorSpectreGunship
+"Flugzeug"
+END
+
+TOOLTIP:ArmorStingerSite
+"Verteidigung"
+END
+
+TOOLTIP:ArmorStingerSoldier
+"Infanterie"
+END
+
+TOOLTIP:ArmorStructureInternetCenter
+"Gebäude"
+END
+
+TOOLTIP:ArmorStructureTough
+"Befestigt"
+END
+
+TOOLTIP:ArmorTank
+"Panzer"
+END
+
+TOOLTIP:ArmorToxinTruck
+"Fahrzeug"
+END
+
+TOOLTIP:ArmorTruck
+"Fahrzeug"
+END
+
+TOOLTIP:ArmorUpgradedTank
+"Panzer"
+END
+
+TOOLTIP:ArmorVulnerableAll
+"Keine"
+END
+
+TOOLTIP:ArmorWall
+"Mauer"
+END
+
+TOOLTIP:DiplomacyNet
+"Ping ist die Rundreise des Spielers zum Host in Millisekunden (der Host hat keinen), FPS, mit wie vielen Spielbildern pro Sekunde sein Rechner mithält. Gelbe Zahlen markieren den langsamsten Spieler, und die ganze Partie läuft in seinem Tempo."
+END
+
+TOOLTIP:DirectStrike
+"Kauf Einheiten auf dein Baufeld. Alle 30 Sekunden schickt ein Spieler jedes Teams eine Kopie seines Baufelds die Bahn hinunter, und das Team, das zuerst die Festung des anderen bricht, gewinnt. Bis zu 3 gegen 3, auf einer neuen Insel in jeder Partie."
+END
+
+TOOLTIP:Handicap
+"Schwächt diesen Spieler im Verhältnis. Bei 50 Prozent: halbe Lebenspunkte und halber Schaden für Einheiten und Gebäude, halbe Heilung, doppelte Bau-, Forschungs- und Spezialfähigkeitszeiten."
+END
+
+TOOLTIP:LobbyPresets
+"Fülle jeden Platz mit Computern und Teams"
+END
+
+TOOLTIP:MapListCrowded
+"Mit mehr als acht Spielern werden nur Karten mit einer Startposition für jeden Spieler gelistet; der Reiter Zufall baut eine für jede Spielerzahl"
+END
+
+TOOLTIP:OnlineKeepSignedIn
+"Angemeldet bleiben. Dein Passwort wird nie gespeichert"
+END
+
+TOOLTIP:OnlineNeedsLauncher
+"Starte das Online-Spiel über den Launcher"
+END
+
+TOOLTIP:StatPerSecond
+"/s"
+END
+
+TOOLTIP:StatSeconds
+"%ds"
+END
+
+TOOLTIP:UpgradeChangesHint
+"(einfache Einheit → mit diesem)"
+END
+
+GUI:Ok
+"OK"
+END
+
+LAN:OK
+"OK"
+END
+
+GUI:Team
+"Team"
+END
+
+GUI:Pause
+"Pause"
+END
+
+GUI:Status
+"Status"
+END
+
+GUI:Server
+"Server"
+END
+
+GUI:SortAlpha
+"Name"
+END
+
+GUI:INFORMATION
+"Information"
+END
+
+GUI:TRAINING
+"TRAINING"
+END
+
+CAMPAIGN:TRAINING
+"Training"
+END
+
+GUI:Audio
+"AUDIO"
+END
+
+GUI:Buddies
+"KOMMUNIKATOR"
+END
+
+Buddy:Offline
+"Offline"
+END
+
+Buddy:Online
+"Online"
+END
+
+Team:AI
+"KI"
+END
+
+Color:Gold
+"Gold"
+END
+
+Color:Orange
+"Orange"
+END
+
+Audio:Speakers4
+"5.1-Surround"
+END
+
+Audio:Speakers5
+"7.1-Surround"
+END
+
+CONTROLBAR:ExecuteRailedTransport
+"Transport"
+END
+
+GUI:SupW_SuperweaponNeutronMissile
+"Atomrakete"
+END
+
+GUI:BioName
+"Name:"
+END
+
+GUI:BioBranchEntry_Pos2
+"VBA"
+END
+
+GUI:BioBranchEntry_Pos4
+"VBA"
+END
+
+GUI:BioBranchEntry_Pos7
+"VBA"
+END
+
+OBJECT:Hanger
+"Hangar"
+END
+
+OBJECT:RaptorPilot
+"Pilot"
+END
+
+OBJECT:Pilot
+"Pilot"
+END
+
+OBJECT:StructureMine
+"Mine"
+END
+
+OBJECT:ClusterMine
+"Mine"
+END
+
+OBJECT:Bank
+"Bank"
+END
+
+OBJECT:Hotel
+"Hotel"
+END
+
+OBJECT:Restaurant
+"Restaurant"
+END
+
+OBJECT:Garage
+"Garage"
+END
+
+OBJECT:Chalet
+"Chalet"
+END
+
+OBJECT:Dock
+"Dock"
+END
+
+OBJECT:StatueLenin
+"Statue"
+END
+
+OBJECT:Agent
+"Agent"
+END
+
+OBJECT:Bunker
+"Bunker"
+END
+
+OBJECT:Terrorist
+"Terrorist"
+END
+
+OBJECT:Saboteur
+"Saboteur"
+END
+
+MAP:USAX02MissionStart
+"Berbera, Somalia   'Operation: Helfende Hand'"
+END
+
+MAP:Intro_Title2
+"Halib, Sudan   'Die große Flucht'"
+END
+
+MAP:USA03xMapName
+"Letzte Runde"
 END

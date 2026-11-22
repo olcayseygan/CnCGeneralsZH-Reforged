@@ -174,11 +174,11 @@ GUI:Add
 END
 
 GUI:MusicVolume
-"Громкость музыки"
+"Громк. музыки"
 END
 
 GUI:VoiceVolume
-"Громкость голоса"
+"Громк. голоса"
 END
 
 GUI:Play
@@ -266,7 +266,7 @@ GUI:CreateGame
 END
 
 GUI:AutoLogin
-"Входить автоматически"
+"Автовход"
 END
 
 GUI:AddBuddy
@@ -521,6 +521,70 @@ Color:Olive
 "Оливковый"
 END
 
+Color:Maroon
+"Бордовый"
+END
+
+Color:Mint
+"Мятный"
+END
+
+Color:White
+"Белый"
+END
+
+Color:Charcoal
+"Угольный"
+END
+
+Color:Silver
+"Серебряный"
+END
+
+Color:Steel
+"Стальной"
+END
+
+Color:Indigo
+"Индиго"
+END
+
+Color:Peach
+"Персиковый"
+END
+
+Color:Forest
+"Лесной"
+END
+
+Color:Rose
+"Тёмно-розовый"
+END
+
+Color:Plum
+"Сливовый"
+END
+
+Color:Rust
+"Ржавый"
+END
+
+Color:SeaGreen
+"Морская волна"
+END
+
+Color:Lemon
+"Лимонный"
+END
+
+Color:Orchid
+"Орхидея"
+END
+
+Color:Chocolate
+"Шоколадный"
+END
+
 MSG:Testing
 "Mary had a little lamb, it's fleece as white as snow"
 END
@@ -618,7 +682,7 @@ GUI:ErrorCopyingFile
 END
 
 GUI:LoadReplay
-"ЗАГРУЗИТЬ ПОВТОР"
+"ОТКРЫТЬ ПОВТОР"
 END
 
 GUI:DeleteReplay
@@ -626,7 +690,7 @@ GUI:DeleteReplay
 END
 
 GUI:CopyReplay
-"КОПИРОВАТЬ ПОВТОР"
+"КОПИР. ПОВТОР"
 END
 
 GUI:ErrorDeletingFile
@@ -678,7 +742,7 @@ GUI:LadderRandomMaps
 END
 
 GUI:AllowObservers
-"Разрешить наблюдателей"
+"Наблюдатели"
 END
 
 GUI:USA
@@ -718,7 +782,7 @@ GUI:GLAEnemies
 END
 
 GUI:EndCampaign
-"ЗАВЕРШИТЬ КАМПАНИЮ"
+"КОНЕЦ КАМПАНИИ"
 END
 
 GUI:Retry
@@ -726,15 +790,15 @@ GUI:Retry
 END
 
 GUI:RecentSave
-"Последнее сохранение"
+"Последнее сохр."
 END
 
 GUI:GetUpdate
-"Получить обновление"
+"Обновить игру"
 END
 
 GUI:DirectConnect
-"ПРЯМОЕ ПОДКЛЮЧЕНИЕ"
+"ПРЯМОЕ ПОДКЛ."
 END
 
 GUI:WorldBuilder
@@ -750,7 +814,7 @@ GUI:DontUseAccount
 END
 
 GUI:UseAccount
-"Использовать учётную запись"
+"Выбрать аккаунт"
 END
 
 GUI:ScoreScreen
@@ -822,15 +886,15 @@ GUI:DesyncText
 END
 
 GUI:LadderDetails
-"Сведения о рейтинге"
+"О рейтинге"
 END
 
 GUI:SystemMaps
-"Официальные карты"
+"Офиц. карты"
 END
 
 GUI:UserMaps
-"Неофициальные карты"
+"Неофиц. карты"
 END
 
 GUI:WaitingToBeginConnection
@@ -894,7 +958,7 @@ GUI:Stats
 END
 
 GUI:GetMapPack
-"Скачать набор карт"
+"Скачать карты"
 END
 
 GUI:Defeat
@@ -994,7 +1058,7 @@ GUI:GeneralsOnline
 END
 
 GUI:SendDelay
-"Задержка отправки"
+"Задержка отпр."
 END
 
 GUI:FirewallRefresh
@@ -1022,7 +1086,7 @@ GUI:ClickToDisplayGameInfo
 END
 
 GUI:GameInfo
-"Сведения об игре"
+"Об игре"
 END
 
 GUI:OptionsDescription
@@ -1030,7 +1094,7 @@ GUI:OptionsDescription
 END
 
 GUI:SFXVolume
-"Громкость эффектов"
+"Громк. эффектов"
 END
 
 GUI:3DSound
@@ -1038,7 +1102,7 @@ GUI:3DSound
 END
 
 GUI:ScrollSpeed
-"Скорость прокрутки камеры"
+"Скорость камеры"
 END
 
 GUI:Resolution
@@ -1058,7 +1122,7 @@ GUI:Resolution2
 END
 
 GUI:Detail
-"Шаблон детализации"
+"Детализация"
 END
 
 GUI:Faction
@@ -1078,7 +1142,7 @@ GUI:AntiAliasing2
 END
 
 GUI:IPAddresses
-"IP в локальной сети:"
+"IP в сети:"
 END
 
 GUI:MinPointPercent
@@ -1218,7 +1282,7 @@ GUI:OptionsGroupOutput
 END
 
 GUI:AudioDevice
-"Устройство вывода"
+"Вывод звука"
 END
 
 TOOLTIP:AudioDevice
@@ -1250,7 +1314,7 @@ GUI:SpeakerType3
 END
 
 GUI:MuteInBackground
-"Без звука в фоне"
+"Тихо в фоне"
 END
 
 TOOLTIP:MuteInBackground
@@ -1458,7 +1522,7 @@ GUI:AreYouSureDeleteAccount
 END
 
 GUI:NonAsianText
-"Неазиатский текст"
+"Неазиат. текст"
 END
 
 GUI:AsianText
@@ -1466,7 +1530,7 @@ GUI:AsianText
 END
 
 GUI:DeleteAccount
-"УДАЛИТЬ УЧЁТНУЮ ЗАПИСЬ"
+"УДАЛИТЬ АККАУНТ"
 END
 
 GUI:SetLocale
@@ -1538,11 +1602,11 @@ GUI:GamesPlayed
 END
 
 GUI:TOS
-"УСЛОВИЯ ОБСЛУЖИВАНИЯ"
+"УСЛОВИЯ СЕРВИСА"
 END
 
 GUI:RememberInfo
-"Запомнить мои данные"
+"Запомнить меня"
 END
 
 GUI:HostWantsToStart
@@ -1582,11 +1646,11 @@ GUI:QMAborted
 END
 
 GUI:DrawScrollAnchor
-"Показывать якорь прокрутки"
+"Показать якорь"
 END
 
 GUI:MoveScrollAnchor
-"Переместить якорь прокрутки"
+"Двигать якорь"
 END
 
 GUI:GroupRoom1
@@ -1610,7 +1674,7 @@ GUI:NoLadder
 END
 
 GUI:ChooseLadder
-"ВЫБЕРИТЕ РЕЙТИНГ"
+"ВЫБОР РЕЙТИНГА"
 END
 
 GUI:UnknownLadder
@@ -1634,11 +1698,11 @@ GUI:Server
 END
 
 GUI:RememberPassword
-"Запомнить пароль"
+"Помнить пароль"
 END
 
 GUI:CreateAccount
-"СОЗДАТЬ УЧЁТНУЮ ЗАПИСЬ"
+"СОЗДАТЬ АККАУНТ"
 END
 
 GUI:TryAgain
@@ -1658,7 +1722,7 @@ GUI:HelpDescription
 END
 
 GUI:ReturnToGame
-"ВЕРНУТЬСЯ В ИГРУ"
+"НАЗАД В ИГРУ"
 END
 
 GUI:NewGame
@@ -3570,11 +3634,11 @@ GUI:RemoteIPDesc
 END
 
 GUI:SaveCamera
-"Записать мою камеру"
+"Записать камеру"
 END
 
 GUI:UseCamera
-"Следовать записанной камере"
+"Камера записи"
 END
 
 Mouse:Windows
@@ -7814,7 +7878,7 @@ TOOLTIP:ExperienceToLevel
 END
 
 GUI:SaveAndLoad
-"СОХРАНИТЬ/ЗАГРУЗИТЬ"
+"СОХР./ЗАГРУЗКА"
 END
 
 GUI:SaveTime
@@ -8014,7 +8078,7 @@ TOOLTIP:Brightness
 END
 
 TOOLTIP:ScrollSpeed
-"Как быстро движется камера: у края экрана, на клавишах со стрелками и при перетаскивании правой кнопкой мыши. У колёсика мыши своя Скорость масштабирования. Применяется после нажатия «Принять»."
+"Как быстро движется камера: у края экрана, на клавишах со стрелками и при перетаскивании правой кнопкой мыши. У колёсика мыши своя «Скорость зума». Применяется после нажатия «Принять»."
 END
 
 TOOLTIP:SendDelay
@@ -8146,7 +8210,7 @@ Network:PacketRouterTimeout
 END
 
 GUI:EstablishingConnectionPaths
-"УСТАНОВКА ПУТЕЙ СОЕДИНЕНИЯ"
+"УСТАНОВКА СВЯЗИ"
 END
 
 UPGRADE:RadarVanScan
@@ -8382,7 +8446,7 @@ GUI:MissionSave
 END
 
 GUI:SaveReplay
-"СОХРАНИТЬ ПОВТОР"
+"ЗАПИСАТЬ ПОВТОР"
 END
 
 GUI:OverwriteReplayTitle
@@ -8826,7 +8890,7 @@ Buddy:MultipleOnlineNotification
 END
 
 GUI:ResetHonors
-"Сбросить награды"
+"Сброс наград"
 END
 
 Chat:Observers
@@ -10026,7 +10090,7 @@ TOOLTIP:Shadows
 END
 
 GUI:BehindBuilding
-"Отряды за зданиями"
+"Отряды за зд."
 END
 
 TOOLTIP:BehindBuilding
@@ -10086,7 +10150,7 @@ GUI:ToggleOnOff
 END
 
 GUI:RestartMission
-"НАЧАТЬ МИССИЮ ЗАНОВО"
+"НАЧАТЬ ЗАНОВО"
 END
 
 GUI:ExitMission
@@ -10110,7 +10174,7 @@ TOOLTIP:Shadows2D
 END
 
 GUI:Shadows3D
-"Отбрасываемые тени"
+"Тени объектов"
 END
 
 TOOLTIP:Shadows3D
@@ -10142,7 +10206,7 @@ TOOLTIP:SmoothWater
 END
 
 GUI:ExtraAnimations
-"Строительные леса"
+"Леса на стройке"
 END
 
 TOOLTIP:ExtraAnimations
@@ -10166,7 +10230,7 @@ TOOLTIP:UnlockMaxFPS
 END
 
 GUI:TreeSway
-"Качающиеся деревья"
+"Качание крон"
 END
 
 TOOLTIP:TreeSway
@@ -10758,7 +10822,7 @@ GUI:MainMenuLoadGame
 END
 
 GUI:MainMenuLoadReplay
-"ЗАГРУЗИТЬ ПОВТОР"
+"ОТКРЫТЬ ПОВТОР"
 END
 
 GUI:LastReplay
@@ -11126,7 +11190,7 @@ GUI:ClassicMouse
 END
 
 GUI:AlternateMouse
-"Альтернативное управление мышью"
+"Альт. мышь"
 END
 
 TOOLTIP:AlternateMouse
@@ -11166,7 +11230,7 @@ TOOLTIP:MapMaxBrutalSuccess
 END
 
 GUI:LimitArmies
-"Ограничить армии"
+"Базовые армии"
 END
 
 TOOLTIP:LimitArmies
@@ -11174,7 +11238,7 @@ TOOLTIP:LimitArmies
 END
 
 GUI:UseStats
-"Записывать статистику"
+"Статистика"
 END
 
 TOOLTIP:UseStats
@@ -14022,7 +14086,7 @@ TOOLTIP:ChallengeButton
 END
 
 GUI:GeneralsChallenge
-"ВЫБЕРИТЕ ГЕНЕРАЛА"
+"ВЫБОР ГЕНЕРАЛА"
 END
 
 GUI:Biography
@@ -15094,7 +15158,7 @@ CONTROLBAR:Lazr_ToolTipUSABuildPowerPlant
 END
 
 GUI:DoubleClickAttackMove
-"Охрана по двойному щелчку"
+"Охрана: 2 клика"
 END
 
 TOOLTIP:DoubleClickAttackMove
@@ -15290,7 +15354,7 @@ TOOLTIP:NoUserMaps
 END
 
 GUI:FireWallPort
-"Порт брандмауэра:"
+"Порт брандм.:"
 END
 
 TOOLTIP:FireWallPort
@@ -15914,7 +15978,7 @@ GUI:Ultra
 END
 
 GUI:GraphicsQuality
-"Производительность / Качество"
+"Скорость/кач-во"
 END
 
 TOOLTIP:GraphicsQuality
@@ -15942,7 +16006,7 @@ GUI:DetailNote4
 END
 
 GUI:TextureFilter
-"Фильтрация текстур"
+"Фильтр текстур"
 END
 
 GUI:TextureFilter0
@@ -15962,7 +16026,7 @@ TOOLTIP:TextureFilter
 END
 
 GUI:Anisotropy
-"Анизотропные выборки"
+"Анизотропия"
 END
 
 TOOLTIP:Anisotropy
@@ -15974,7 +16038,7 @@ GUI:AnisotropyCardMaximum
 END
 
 GUI:TextureResolution
-"Разрешение текстур"
+"Разреш. текстур"
 END
 
 GUI:ParticleLimit
@@ -15982,7 +16046,7 @@ GUI:ParticleLimit
 END
 
 GUI:NeverLowerDetail
-"Не снижать детализацию"
+"Не снижать дет."
 END
 
 GUI:OptionsGroupScreen
@@ -16014,7 +16078,7 @@ GUI:OptionsGroupCamera
 END
 
 GUI:OptionsGroupPlacement
-"Размещение зданий"
+"Размещение"
 END
 
 GUI:OptionsGroupLighting
@@ -16078,15 +16142,15 @@ GUI:ResolutionNote0
 END
 
 GUI:FullscreenScaling
-"Вписывание в экран"
+"Вписать в экран"
 END
 
 GUI:FullscreenScaling0
-"Растянуть на весь экран"
+"Растянуть"
 END
 
 GUI:FullscreenScaling1
-"Сохранить пропорции, добавить полосы"
+"С полосами"
 END
 
 TOOLTIP:FullscreenScaling
@@ -16158,7 +16222,7 @@ TOOLTIP:Bloom
 END
 
 GUI:VSync
-"Вертикальная синхронизация"
+"Верт. синхр."
 END
 
 TOOLTIP:VSync
@@ -16194,7 +16258,7 @@ TOOLTIP:FrameRateLimit
 END
 
 GUI:ClassicGraphics
-"Классическая графика"
+"Класс. графика"
 END
 
 TOOLTIP:ClassicGraphics
@@ -16254,7 +16318,7 @@ TOOLTIP:Smoke
 END
 
 GUI:ParticleBounce
-"Частицы бьются о землю"
+"Отскок частиц"
 END
 
 TOOLTIP:ParticleBounce
@@ -16270,7 +16334,7 @@ TOOLTIP:MiddleMousePans
 END
 
 GUI:ZoomToCursor
-"Масштаб к курсору"
+"Зум к курсору"
 END
 
 TOOLTIP:ZoomToCursor
@@ -16278,7 +16342,7 @@ TOOLTIP:ZoomToCursor
 END
 
 GUI:StartAtMaxZoom
-"Начинать издалека"
+"Старт издалека"
 END
 
 TOOLTIP:StartAtMaxZoom
@@ -16286,7 +16350,7 @@ TOOLTIP:StartAtMaxZoom
 END
 
 GUI:ZoomSpeed
-"Скорость масштаба"
+"Скорость зума"
 END
 
 TOOLTIP:ZoomSpeed
@@ -16294,7 +16358,7 @@ TOOLTIP:ZoomSpeed
 END
 
 GUI:DragTolerance
-"Порог перетаскивания"
+"Порог перетаск."
 END
 
 TOOLTIP:DragTolerance
@@ -16302,7 +16366,7 @@ TOOLTIP:DragTolerance
 END
 
 GUI:AmbientVolume
-"Громкость окружения"
+"Громк. фона"
 END
 
 TOOLTIP:AmbientVolume
@@ -16310,7 +16374,7 @@ TOOLTIP:AmbientVolume
 END
 
 GUI:IsometricCamera
-"Изометрическая камера"
+"Изометрия"
 END
 
 TOOLTIP:IsometricCamera
@@ -16318,7 +16382,7 @@ TOOLTIP:IsometricCamera
 END
 
 GUI:EdgeScrollWindowed
-"Прокрутка у края в окне"
+"Прокр. в окне"
 END
 
 TOOLTIP:EdgeScrollWindowed
@@ -16326,7 +16390,7 @@ TOOLTIP:EdgeScrollWindowed
 END
 
 GUI:SnapCamera45
-"Фиксация поворота камеры"
+"Шаг 45° камеры"
 END
 
 TOOLTIP:SnapCamera45
@@ -16334,7 +16398,7 @@ TOOLTIP:SnapCamera45
 END
 
 GUI:GridBuild
-"Строительство по сетке"
+"Сетка постройки"
 END
 
 TOOLTIP:GridBuild
@@ -16342,7 +16406,7 @@ TOOLTIP:GridBuild
 END
 
 GUI:NudgeBuild
-"Сдвиг заблокированного размещения"
+"Сдвиг постройки"
 END
 
 TOOLTIP:NudgeBuild
@@ -16350,7 +16414,7 @@ TOOLTIP:NudgeBuild
 END
 
 GUI:SnapBuild45
-"Фиксация поворота зданий"
+"Шаг 45° зданий"
 END
 
 TOOLTIP:SnapBuild45
@@ -16358,7 +16422,7 @@ TOOLTIP:SnapBuild45
 END
 
 GUI:SnapBuildNeighbour
-"Прилипание к соседним зданиям"
+"Стыковка зданий"
 END
 
 TOOLTIP:SnapBuildNeighbour
@@ -16398,7 +16462,7 @@ TOOLTIP:HudOverlay
 END
 
 GUI:NetBox
-"Информационная панель"
+"Инфопанель"
 END
 
 TOOLTIP:NetBox
@@ -16410,7 +16474,7 @@ GUI:OptionsGroupHud
 END
 
 GUI:EmptyBuildingPips
-"Пустые слоты зданий"
+"Пустые слоты"
 END
 
 TOOLTIP:EmptyBuildingPips
@@ -16418,7 +16482,7 @@ TOOLTIP:EmptyBuildingPips
 END
 
 GUI:HitFlash
-"Вспышка попадания"
+"Вспышка удара"
 END
 
 TOOLTIP:HitFlash
@@ -16446,7 +16510,7 @@ GUI:HealthBars1
 END
 
 GUI:HealthBars2
-"Только у выбранных"
+"У выбранных"
 END
 
 GUI:HealthBars3
@@ -16462,7 +16526,7 @@ GUI:OptionsGroupInput
 END
 
 GUI:ChromaLighting
-"Подсветка Razer Chroma"
+"Razer Chroma"
 END
 
 TOOLTIP:ChromaLighting
@@ -16486,7 +16550,7 @@ GUI:PlayerColors0
 END
 
 GUI:PlayerColors1
-"Вы, союзники, враги"
+"Вы/союзн./враги"
 END
 
 GUI:PlayerColors2
@@ -16750,7 +16814,7 @@ TOOLTIP:RoomGameSpeed
 END
 
 GUI:GameSpeedMissions
-"Скорость игры в миссиях"
+"Скорость миссий"
 END
 
 TOOLTIP:GameSpeedMissions
@@ -17010,7 +17074,7 @@ TOOLTIP:LightingStyle
 END
 
 GUI:SmokeFireLighting
-"Дым в свете огня"
+"Подсветка дыма"
 END
 
 TOOLTIP:SmokeFireLighting
@@ -17018,7 +17082,7 @@ TOOLTIP:SmokeFireLighting
 END
 
 GUI:DebrisTrails
-"Шлейфы обломков взрывов"
+"Шлейфы обломков"
 END
 
 TOOLTIP:DebrisTrails
@@ -17026,7 +17090,7 @@ TOOLTIP:DebrisTrails
 END
 
 GUI:MapLight
-"Тёплый свет и дымка"
+"Свет и дымка"
 END
 
 TOOLTIP:MapLight
@@ -17034,7 +17098,7 @@ TOOLTIP:MapLight
 END
 
 GUI:TeamGlow
-"Свечение цвета команды"
+"Свечение команд"
 END
 
 TOOLTIP:TeamGlow
@@ -17050,7 +17114,7 @@ TOOLTIP:WaterFoam
 END
 
 GUI:FormationDrag
-"Построение перетаскиванием"
+"Строй мышью"
 END
 
 TOOLTIP:FormationDrag
@@ -17058,7 +17122,7 @@ TOOLTIP:FormationDrag
 END
 
 GUI:BuildWithoutWorker
-"Строить без рабочего"
+"Без строителя"
 END
 
 TOOLTIP:BuildWithoutWorker
@@ -17066,11 +17130,11 @@ TOOLTIP:BuildWithoutWorker
 END
 
 GUI:HealthBarColors
-"Цвет полосы здоровья"
+"Цвет здоровья"
 END
 
 GUI:HealthBarColors0
-"От зелёного к красному"
+"Зелёный→красный"
 END
 
 GUI:HealthBarColors1
@@ -17090,7 +17154,7 @@ GUI:HudLayout0
 END
 
 GUI:HudLayout1
-"В стиле Red Alert"
+"Как в Red Alert"
 END
 
 TOOLTIP:HudLayout
@@ -17098,7 +17162,7 @@ TOOLTIP:HudLayout
 END
 
 GUI:HudWidth
-"Ширина интерфейса"
+"Ширина HUD"
 END
 
 GUI:HudWidth0
@@ -17150,7 +17214,7 @@ GUI:SidebarSuperweaponReady
 END
 
 GUI:MenuTransitionSpeed
-"Скорость переходов меню"
+"Скор. переходов"
 END
 
 TOOLTIP:MenuTransitionSpeed
@@ -18890,7 +18954,7 @@ GUI:OptionsGroupReflections
 END
 
 GUI:OptionsGroupModernWater
-"Современная вода"
+"Совр. вода"
 END
 
 GUI:WaterReflectionEnabled
@@ -18902,7 +18966,7 @@ TOOLTIP:WaterReflectionEnabled
 END
 
 GUI:WaterFftResolution
-"Детализация волн"
+"Детали волн"
 END
 
 GUI:WaterFftResolution0
@@ -18938,7 +19002,7 @@ TOOLTIP:WaterRefractionQuality
 END
 
 GUI:WaterReflectionDetail
-"Детали отражений"
+"Детали отраж."
 END
 
 GUI:WaterReflectionDetail0
@@ -19082,11 +19146,215 @@ GUI:OptionsGroupMusic
 END
 
 GUI:DynamicMusic
-"Музыка следует за боем"
+"Музыка боя"
 END
 
 GUI:LegacySound
-"Классический звук"
+"Класс. звук"
+END
+
+GUI:AircraftAltitudeLine
+"Высота авиации"
+END
+
+GUI:AmbientOcclusion
+"Затенение AO"
+END
+
+GUI:Atmosphere
+"Атмосфера"
+END
+
+GUI:CameraShake
+"Тряска камеры"
+END
+
+GUI:DetailedModels
+"Детал. модели"
+END
+
+GUI:Firelight
+"Свет огня"
+END
+
+GUI:FullDetailAtDistance
+"Детали вдали"
+END
+
+GUI:GroundFoliage
+"Трава и кусты"
+END
+
+GUI:GroundMarks
+"Следы боя"
+END
+
+GUI:HDTextures
+"HD-текстуры"
+END
+
+GUI:HeatHaze
+"Марево"
+END
+
+GUI:HemiAmbient
+"Свет неба/земли"
+END
+
+GUI:InternalHdr
+"Внутренний HDR"
+END
+
+GUI:MapAwareWaveHeading
+"Волны по карте"
+END
+
+GUI:MinimapSize
+"Миникарта"
+END
+
+GUI:OptionsGroupModels
+"Модели"
+END
+
+GUI:SelectionOutlines
+"Контур выбора"
+END
+
+GUI:SmoothMotion
+"Плавность"
+END
+
+GUI:StructureCollapse
+"Обрушение"
+END
+
+GUI:SunShafts
+"Солнечные лучи"
+END
+
+GUI:SunShafts0
+"Выкл."
+END
+
+GUI:SunShafts1
+"Низкие"
+END
+
+GUI:SunShafts2
+"Высокие"
+END
+
+GUI:UnderwaterClarity
+"Прозрачн. воды"
+END
+
+GUI:WaterSplashes
+"Всплески"
+END
+
+GUI:Weather
+"Погода"
+END
+
+TOOLTIP:AircraftAltitudeLine
+"Тонкая линия от каждого самолёта в воздухе прямо вниз к земле. Где она касается земли, там самолёт на самом деле и находится, а её длина показывает высоту полёта. У приземлившейся авиации линии нет."
+END
+
+TOOLTIP:AmbientOcclusion
+"Углы и земля под стоящими на ней объектами темнеют, и танк стоит на песке, а не висит над ним. Вода и туман войны не затрагиваются. Только Direct3D 11 и не в классической графике. Применяется после нажатия «Принять»."
+END
+
+TOOLTIP:Atmosphere
+"Земля вдали от камеры уходит в цвет неба, а там, где кончается карта или камера смотрит вдоль земли, вместо черноты видно небо по времени суток карты. Земля у камеры остаётся чёткой, а туман войны своей темноты не теряет. Меняется только ваша картинка: игра это не читает, и другие игроки видят по своей настройке. Только Direct3D 11 и не в классической графике."
+END
+
+TOOLTIP:CameraShake
+"Взрывы трясут камеру. Ядерный удар или рухнувшее рядом большое здание резко встряхивают её на мгновение. Снимите галочку, чтобы вид оставался неподвижным. Применяется после нажатия «Принять»."
+END
+
+TOOLTIP:DetailedModels
+"Пересобранные юниты и здания для картинки Reforged, если вы их скачали. Они меняют только то, что видите вы: играть можно с кем угодно, есть они у него или нет. Снимите галочку ради частоты кадров в больших боях. Вступает в силу при следующем запуске игры."
+END
+
+TOOLTIP:DynamicMusic
+"В схватке и в сетевом матче музыка следует за боем: пока ничего не происходит, играет один из спокойных треков вашей стороны, когда стрельба начинается рядом с камерой или по вашим войскам, вступает более жёсткий, а через несколько секунд после боя снова спокойный. Если выключить, музыка играет как в оригинальной игре."
+END
+
+TOOLTIP:Firelight
+"Горящие здания, обломки и взрывы бросают мерцающий оранжевый свет на землю, стены и юниты вокруг. Сильнее всего это видно на ночных картах. Только Direct3D 11 и не в классической графике. Применяется после нажатия «Принять»."
+END
+
+TOOLTIP:FullDetailAtDistance
+"Пересобранные юниты и здания заменяются облегчёнными версиями, когда становятся мелкими на экране. Поставьте галочку, чтобы все рисовались с полной детализацией на любом удалении камеры, ценой части кадров в больших боях. Применяется после нажатия «Принять»."
+END
+
+TOOLTIP:GroundFoliage
+"На земле растут трава, кусты, папоротники и лежат камни, и всё это колышется на ветру вместе с деревьями. Только для вида: юниты проходят сквозь них. Только Direct3D 11 и не в классической графике. Применяется после нажатия «Принять»."
+END
+
+TOOLTIP:GroundMarks
+"Снаряды и ракеты оставляют на земле подпалины, рухнувшее здание оставляет тёмное пятно с трещинами, ядерный удар выжигает кольцо, а следы гусениц держатся дольше. Всё это выцветает примерно за четыре минуты. Только Direct3D 11 и не в классической графике. Применяется после нажатия «Принять»."
+END
+
+TOOLTIP:HDTextures
+"Все текстуры и плитки земли с удвоенной детализацией для картинки Reforged, если вы их скачали. Они меняют только то, что видите вы: играть можно с кем угодно, есть они у него или нет. Снимите галочку, если у видеокарты мало памяти. Вступает в силу при следующем запуске игры."
+END
+
+TOOLTIP:HeatHaze
+"Воздух дрожит над огнём, вдоль лазерных лучей и за выхлопом ракет. Только Direct3D 11 и не в классической графике. Применяется после нажатия «Принять»."
+END
+
+TOOLTIP:HemiAmbient
+"Модели берут рассеянный свет карты от неба сверху и от земли снизу, а не поровну со всех сторон, поэтому верх танка светлее его днища. Стены сохраняют свой свет, а ночная карта остаётся тёмной. Только Direct3D 11 и не в классической графике. Применяется после нажатия «Принять»."
+END
+
+TOOLTIP:InternalHdr
+"Огонь, взрывы и лазеры ярче белого сохраняют свой цвет по пути на экран, а не превращаются в сплошной белый, и цвета команд держатся чуть лучше. Земля и стены вдали от огня не меняются. Это внутри картинки игры: монитор по-прежнему получает обычное изображение, а HDR-монитор не получает HDR-сигнала. Только Direct3D 11 и не в классической графике. Применяется после нажатия «Принять»."
+END
+
+TOOLTIP:LegacySound
+"Звук оригинальной игры: без смены высоты у проносящихся звуков, без звукового удара Aurora, без ограничения звуков боя и ответов юнитов, без лимитера, без фоновых звуков карты и без музыки, следующей за боем. Общая громкость, устройство и колонки по-прежнему действуют. Вступает в силу сразу."
+END
+
+TOOLTIP:MapAwareWaveHeading
+"Для современной воды. Волны поворачивают к берегу, бегут вдоль проливов и стихают за островами, каждое море со своей стороны. Если выключить, волны остаются прежними. Применяется после нажатия «Принять»."
+END
+
+TOOLTIP:MasterVolume
+"Делает всю игру громче или тише: музыку, эффекты, голоса, фон и ролики. Остальные ползунки задают баланс, а этот задаёт громкость всего баланса."
+END
+
+TOOLTIP:MinimapSize
+"Насколько крупно рисуется миникарта. Выше 100 она растёт вверх из левого нижнего угла поверх поля боя; остальная панель управления не меняется."
+END
+
+TOOLTIP:SelectionOutlines
+"Светящееся кольцо цвета владельца под каждым выбранным юнитом и такая же линия вокруг выбранного здания. Если выключить, не рисуется ни то, ни другое; линии приказов и отметки щелчков остаются."
+END
+
+TOOLTIP:SmoothMotion
+"Юниты рисуются между двумя последними положениями, а не замирают в каждом до следующего шага игры, поэтому движение плавное настолько, насколько позволяет экран, в том числе на 60 Гц. Меняется только ваша картинка: игра это не читает, и другие игроки видят по своей настройке. Применяется после нажатия «Принять»."
+END
+
+TOOLTIP:StructureCollapse
+"Разрушенное здание оседает в землю под взрывом, а не исчезает за один кадр и не превращается в руины за один кадр. Меняется только ваша картинка: ничего не загораживает, игра это не читает, и другие игроки видят по своей настройке. Только Direct3D 11 и не в классической графике."
+END
+
+TOOLTIP:SunShafts
+"Низкое солнце падает полосами сквозь пыль между зданиями и деревьями, а воздух в сторону солнца слегка светится. Сильнее всего утром и вечером. Только Direct3D 11 и не в классической графике. Применяется после нажатия «Принять»."
+END
+
+TOOLTIP:UnderwaterClarity
+"Для современной воды. Сквозь море видны мели, рифы и затонувшие руины. Широкое ровное дно и глубина остаются такими же мутными, какими их сделала карта. Применяется после нажатия «Принять»."
+END
+
+TOOLTIP:WaterSplashes
+"Снаряд, бомба или падающее тело, упавшие в воду, поднимают всплеск и пускают по поверхности круги. Меняется только ваша картинка: игра это не читает, и другие игроки видят по своей настройке. Только Direct3D 11 и классическая вода, и не в классической графике. Применяется после нажатия «Принять»."
+END
+
+TOOLTIP:Weather
+"Идёт дождь, а на пустынной карте метёт песок и на снежной снег, ветер гнёт деревья и клонит дым. Карта со своим дождём или снегом оставляет его и берёт только ветер. Меняется только ваша картинка: что юниты видят и куда попадают, не меняется, и другие игроки видят по своей настройке. Только Direct3D 11 и не в классической графике. Применяется после нажатия «Принять»."
 END
 
 TOOLTIP:ArmorStructure
@@ -19095,6 +19363,202 @@ END
 
 TOOLTIP:UpgradesHint
 "(без него → с ним)"
+END
+
+TOOLTIP:UpgradeChangesHint
+"(обычный юнит → с этим)"
+END
+
+TOOLTIP:ArmorAFG_Comanche
+"Вертолёт"
+END
+
+TOOLTIP:ArmorAFG_CountermeasuresComanche
+"Вертолёт"
+END
+
+TOOLTIP:ArmorAirplane
+"Авиация"
+END
+
+TOOLTIP:ArmorAntiAirVehicle
+"Техника"
+END
+
+TOOLTIP:ArmorAssaultCrawler
+"Танк"
+END
+
+TOOLTIP:ArmorAvalanche
+"Танк"
+END
+
+TOOLTIP:ArmorAvenger
+"Техника"
+END
+
+TOOLTIP:ArmorBaseDefense
+"Оборона"
+END
+
+TOOLTIP:ArmorBattleBusStructureTough
+"Укреплённый"
+END
+
+TOOLTIP:ArmorBattleBusStructureToughPlusOne
+"Укреплённый"
+END
+
+TOOLTIP:ArmorBattleBusStructureToughPlusTwo
+"Укреплённый"
+END
+
+TOOLTIP:ArmorBattleBusTruck
+"Техника"
+END
+
+TOOLTIP:ArmorBattleBusTruckPlusOne
+"Техника"
+END
+
+TOOLTIP:ArmorBattleBusTruckPlusTwo
+"Техника"
+END
+
+TOOLTIP:ArmorChemReb_Human
+"Пехота"
+END
+
+TOOLTIP:ArmorChemSuitHuman
+"Пехота"
+END
+
+TOOLTIP:ArmorChinook
+"Вертолёт"
+END
+
+TOOLTIP:ArmorComanche
+"Вертолёт"
+END
+
+TOOLTIP:ArmorCountermeasuresAirplane
+"Авиация"
+END
+
+TOOLTIP:ArmorCountermeasuresComanche
+"Вертолёт"
+END
+
+TOOLTIP:ArmorCountermeasuresSpectreGunship
+"Авиация"
+END
+
+TOOLTIP:ArmorDemoGenTerrorist
+"Пехота"
+END
+
+TOOLTIP:ArmorDozer
+"Техника"
+END
+
+TOOLTIP:ArmorDragonTank
+"Танк"
+END
+
+TOOLTIP:ArmorFireBase
+"Оборона"
+END
+
+TOOLTIP:ArmorGLAUpgradedStructure
+"Укреплённый"
+END
+
+TOOLTIP:ArmorGLAUpgradedStructureTough
+"Укреплённый"
+END
+
+TOOLTIP:ArmorHazMatHuman
+"Пехота"
+END
+
+TOOLTIP:ArmorHuman
+"Пехота"
+END
+
+TOOLTIP:ArmorHumvee
+"Техника"
+END
+
+TOOLTIP:ArmorInfGen_Human
+"Пехота"
+END
+
+TOOLTIP:ArmorInvulnerable
+"Неуязвимый"
+END
+
+TOOLTIP:ArmorInvulnerableAll
+"Неуязвимый"
+END
+
+TOOLTIP:ArmorMine
+"Мина"
+END
+
+TOOLTIP:ArmorNo
+"Нет"
+END
+
+TOOLTIP:ArmorQuadCannon
+"Техника"
+END
+
+TOOLTIP:ArmorSentryDrone
+"Дрон"
+END
+
+TOOLTIP:ArmorSpectreGunship
+"Авиация"
+END
+
+TOOLTIP:ArmorStingerSite
+"Оборона"
+END
+
+TOOLTIP:ArmorStingerSoldier
+"Пехота"
+END
+
+TOOLTIP:ArmorStructureInternetCenter
+"Здание"
+END
+
+TOOLTIP:ArmorStructureTough
+"Укреплённый"
+END
+
+TOOLTIP:ArmorTank
+"Танк"
+END
+
+TOOLTIP:ArmorToxinTruck
+"Техника"
+END
+
+TOOLTIP:ArmorTruck
+"Техника"
+END
+
+TOOLTIP:ArmorUpgradedTank
+"Танк"
+END
+
+TOOLTIP:ArmorVulnerableAll
+"Нет"
+END
+
+TOOLTIP:ArmorWall
+"Стена"
 END
 
 OBJECT:TurkiyeInfantryAlpagu
@@ -19215,6 +19679,342 @@ END
 
 CONTROLBAR:ToolTipTurkiyeTalent10B
 "Maroon Beret выходят из Казарм ветеранами."
+END
+
+CONTROLBAR:ToolTipAmericaTalent6A
+"Техника и авиация стоят на 15 процентов дешевле, пока у вас остаётся Командный центр, Казармы, Военный завод или Бульдозер."
+END
+
+CONTROLBAR:ToolTipAmericaTalent6B
+"Пехота, техника и авиация набирают опыт на 50 процентов быстрее. Вместе с Улучшенной подготовкой они набирают его в два с половиной раза быстрее, а не вдвое."
+END
+
+CONTROLBAR:ToolTipAmericaTalent9A
+"Удар A-10 присылает на один самолёт больше: 2, 3 или 4 по уровню вместо 1, 2 или 3."
+END
+
+CONTROLBAR:ToolTipAmericaTalent9B
+"Десант приносит на четыре Ranger больше: 9, 14 или 24 по уровню вместо 5, 10 или 20."
+END
+
+CONTROLBAR:ToolTipUSATalent7A
+"Crusader выдерживают на пятую часть больше урона, с 480 до 576, а Paladin с 500 до 600."
+END
+
+CONTROLBAR:ToolTipUSATalent7B
+"Ranger выдерживают на четверть больше урона, с 180 до 225, а Missile Defender с 100 до 125."
+END
+
+CONTROLBAR:ToolTipUSATalent8A
+"Patriot и опорные базы стоят на четверть дольше, 1250 вместо 1000."
+END
+
+CONTROLBAR:ToolTipUSATalent8B
+"Comanche выдерживают на пятую часть больше урона, с 220 до 264, а Raptor с 160 до 192."
+END
+
+CONTROLBAR:ToolTipUSATalent10A
+"Вакуумная бомба и MOAB убивают на четверть дальше, и круг прицеливания растёт вместе с ними."
+END
+
+CONTROLBAR:ToolTipUSATalent10B
+"Техника, не получавшая урона 5 секунд, восстанавливает около 1 процента здоровья в секунду."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent7A
+"Бомбардировщики Aurora Alpha выдерживают на четверть больше урона, с 80 до 100."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent7B
+"Humvee выдерживают на четверть больше урона, с 240 до 300, а Avenger с 300 до 375."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent8A
+"ЭМИ-Patriot выдерживают 1300 вместо 1000."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent8B
+"Tomahawk ездят на 15 процентов быстрее и выдерживают на четверть больше урона, с 180 до 225."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent10A
+"Супероружие стоит на 25 процентов дешевле, Частичная пушка 1875 вместо 2500, пока у вас остаётся Командный центр, Казармы, Военный завод или Бульдозер."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent10B
+"Оборонительные здания сверх собственного ремонта восстанавливают ещё 6 здоровья в секунду, если по ним ничего не попадало 3 секунды, почти вдвое быстрее."
+END
+
+CONTROLBAR:ToolTipLaserTalent7A
+"Лазерные танки выдерживают на пятую часть больше урона, с 480 до 576."
+END
+
+CONTROLBAR:ToolTipLaserTalent7B
+"Avenger выдерживают на четверть больше урона, с 300 до 375."
+END
+
+CONTROLBAR:ToolTipLaserTalent8A
+"Лазерные башни выдерживают 1300 вместо 1000."
+END
+
+CONTROLBAR:ToolTipLaserTalent8B
+"Лазерные танки ездят на 15 процентов быстрее."
+END
+
+CONTROLBAR:ToolTipLaserTalent10A
+"Лазерные танки выходят с Военного завода ветеранами."
+END
+
+CONTROLBAR:ToolTipLaserTalent10B
+"Лазерные башни и опорные базы стоят на 30 процентов дешевле, 700 вместо 1000, пока у вас остаётся Командный центр, Казармы, Военный завод или Бульдозер."
+END
+
+CONTROLBAR:ToolTipAirForceTalent7A
+"Comanche выдерживают на четверть больше урона, с 220 до 275."
+END
+
+CONTROLBAR:ToolTipAirForceTalent7B
+"King Raptor выдерживают на пятую часть больше урона, с 240 до 288."
+END
+
+CONTROLBAR:ToolTipAirForceTalent8A
+"Аэродромы выдерживают 3250 вместо 2500, а Patriot 1300 вместо 1000."
+END
+
+CONTROLBAR:ToolTipAirForceTalent8B
+"Боевые Chinook летают на 15 процентов быстрее и выдерживают на четверть больше урона, с 350 до 437."
+END
+
+CONTROLBAR:ToolTipAirForceTalent10A
+"King Raptor вылетают с Аэродрома ветеранами."
+END
+
+CONTROLBAR:ToolTipAirForceTalent10B
+"Каждый самолёт и вертолёт восстанавливает около 1 процента здоровья в секунду, даже под огнём."
+END
+
+CONTROLBAR:ToolTipChinaTalent6A
+"Хакеры стоят на 40 процентов дешевле, пока у вас остаётся Командный центр, Казармы, Военный завод или Бульдозер."
+END
+
+CONTROLBAR:ToolTipChinaTalent6B
+"Каждый солдат стоит на 20 процентов дешевле, включая Хакеров, пока у вас остаётся Командный центр, Казармы, Военный завод или Бульдозер."
+END
+
+CONTROLBAR:ToolTipChinaTalent7A
+"Танки Battlemaster выдерживают на пятую часть больше урона, с 400 до 480."
+END
+
+CONTROLBAR:ToolTipChinaTalent7B
+"Танки Gattling выдерживают на четверть больше урона, с 300 до 375."
+END
+
+CONTROLBAR:ToolTipChinaTalent8A
+"Бункеры и пушки Gattling стоят на четверть дольше: Бункер с 1500 до 1875, пушка Gattling с 1000 до 1250."
+END
+
+CONTROLBAR:ToolTipChinaTalent8B
+"Inferno Cannon выдерживают на четверть больше урона, с 120 до 150, и ездят на 15 процентов быстрее."
+END
+
+CONTROLBAR:ToolTipChinaTalent9A
+"Артобстрел даёт ещё одну волну из 12 снарядов: 24, 36 и 48 на трёх уровнях."
+END
+
+CONTROLBAR:ToolTipChinaTalent9B
+"Кассетные мины покрывают на 30 процентов больше земли."
+END
+
+CONTROLBAR:ToolTipChinaTalent10A
+"Танки Overlord выходят с Военного завода ветеранами."
+END
+
+CONTROLBAR:ToolTipChinaTalent10B
+"Техника и здания, попавшие под ЭМИ-импульс, остаются обесточенными 45 секунд, а не 30."
+END
+
+CONTROLBAR:ToolTipTankTalent7A
+"Emperor Overlord выдерживают на пятую часть больше урона, с 1100 до 1320 без учёта ветеранства."
+END
+
+CONTROLBAR:ToolTipTankTalent7B
+"Танки Dragon и Gattling выдерживают на четверть больше урона: Dragon с 400 до 500, Gattling с 300 до 375, без учёта ветеранства."
+END
+
+CONTROLBAR:ToolTipTankTalent8A
+"Танк, не получавший урона 10 секунд, восстанавливает 1 процент здоровья в секунду. Battlemaster, Emperor, Gattling, Dragon и танки РЭБ."
+END
+
+CONTROLBAR:ToolTipTankTalent8B
+"Танки Battlemaster выдерживают на пятую часть больше урона, с 400 до 480 без учёта ветеранства."
+END
+
+CONTROLBAR:ToolTipTankTalent10A
+"Emperor Overlord выходят с Военного завода элитными, а не ветеранами."
+END
+
+CONTROLBAR:ToolTipTankTalent10B
+"Десант танков сбрасывает на два Battlemaster больше: 3, 4 и 6 на трёх уровнях."
+END
+
+CONTROLBAR:ToolTipInfantryTalent7A
+"Mini-Gunner бегают на пятую часть быстрее, с 25 до 30."
+END
+
+CONTROLBAR:ToolTipInfantryTalent7B
+"Истребители танков выдерживают на четверть больше урона, с 100 до 125 без учёта ветеранства."
+END
+
+CONTROLBAR:ToolTipInfantryTalent8A
+"Укреплённые бункеры стоят на 30 процентов дольше, с 1500 до 1950."
+END
+
+CONTROLBAR:ToolTipInfantryTalent8B
+"Штурмовые Troop Crawler выдерживают на четверть больше урона, с 240 до 300, и ездят на 15 процентов быстрее."
+END
+
+CONTROLBAR:ToolTipInfantryTalent10A
+"Солдат, не получавший урона 10 секунд, лечит 2 здоровья в секунду. Mini-Gunner, Истребители танков, Хакеры и Black Lotus."
+END
+
+CONTROLBAR:ToolTipInfantryTalent10B
+"Десант пехоты сбрасывает на пять Mini-Gunner больше: 10, 15 и 20 на трёх уровнях."
+END
+
+CONTROLBAR:ToolTipNukeTalent7A
+"Танки Overlord выдерживают на пятую часть больше урона, с 1100 до 1320."
+END
+
+CONTROLBAR:ToolTipNukeTalent7B
+"Nuke Cannon выдерживают на 30 процентов больше урона, с 240 до 312."
+END
+
+CONTROLBAR:ToolTipNukeTalent8A
+"Ядерные реакторы и бункеры стоят на 30 процентов дольше, с 1500 до 1950."
+END
+
+CONTROLBAR:ToolTipNukeTalent8B
+"MiG выдерживают на четверть больше урона, с 160 до 200. Складывается с Бронёй MiG."
+END
+
+CONTROLBAR:ToolTipNukeTalent10A
+"Nuke Cannon выходят с Военного завода элитными."
+END
+
+CONTROLBAR:ToolTipNukeTalent10B
+"Overlord, не получавший урона 10 секунд, восстанавливает 11 здоровья, 1 процент, в секунду."
+END
+
+CONTROLBAR:ToolTipGLATalent6A
+"Здания стоят на 20 процентов дешевле, Казармы 400 вместо 500, пока у вас остаётся Командный центр, Казармы, Торговец оружием или Рабочий."
+END
+
+CONTROLBAR:ToolTipGLATalent6B
+"Пехота бегает на 15 процентов быстрее, Разъярённая толпа тоже. Кроме Рабочих, у них своя обувь."
+END
+
+CONTROLBAR:ToolTipGLATalent7A
+"Technical и Ракетные багги ездят на 15 процентов быстрее."
+END
+
+CONTROLBAR:ToolTipGLATalent7B
+"РПГ-стрелки выдерживают на четверть больше урона, с 100 до 125."
+END
+
+CONTROLBAR:ToolTipGLATalent8A
+"Stinger Site выдерживают 1300 вместо 1000."
+END
+
+CONTROLBAR:ToolTipGLATalent8B
+"Scorpion выдерживают на пятую часть больше урона, с 370 до 444, а Marauder с 500 до 600."
+END
+
+CONTROLBAR:ToolTipGLATalent9A
+"Засада повстанцев приводит на четыре Повстанца больше: 8, 12 или 20 по уровню вместо 4, 8 или 16. У генерала-подрывника 8, 10 или 14 вместо 4, 6 или 10."
+END
+
+CONTROLBAR:ToolTipGLATalent9B
+"Взрыв Бомбы с антраксом и её ядовитое облако достают на четверть дальше, и круг прицеливания растёт вместе с ними."
+END
+
+CONTROLBAR:ToolTipGLATalent10A
+"Ракеты SCUD Storm ложатся на четверть шире, а каждый взрыв и ядовитая лужа достают на четверть дальше. Круг прицеливания растёт вместе с ними."
+END
+
+CONTROLBAR:ToolTipGLATalent10B
+"Танки Marauder выходят от Торговца оружием ветеранами."
+END
+
+CONTROLBAR:ToolTipToxinTalent7A
+"Токсичные тракторы ездят на 15 процентов быстрее и выдерживают на четверть больше урона, с 240 до 300."
+END
+
+CONTROLBAR:ToolTipToxinTalent7B
+"Танки Marauder выдерживают на четверть больше урона, с 500 до 625."
+END
+
+CONTROLBAR:ToolTipToxinTalent8A
+"Сети туннелей выдерживают 1950 вместо 1500."
+END
+
+CONTROLBAR:ToolTipToxinTalent8B
+"Пусковые установки SCUD ездят на 15 процентов быстрее и выдерживают на четверть больше урона, с 180 до 225."
+END
+
+CONTROLBAR:ToolTipToxinTalent10A
+"Ядовитые лужи после SCUD Storm держатся в полтора раза дольше, 67 секунд вместо 45."
+END
+
+CONTROLBAR:ToolTipToxinTalent10B
+"Токсичные тракторы выходят от Торговца оружием ветеранами."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent7A
+"Боевые мотоциклы выдерживают на четверть больше урона, с 100 до 125."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent7B
+"Бомбовозы ездят на 15 процентов быстрее и выдерживают на четверть больше урона, с 220 до 275."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent8A
+"Мины-ловушки стоят вдвое дешевле, 100 вместо 200, или 80 со Стройкой из хлама, пока у вас остаётся Командный центр, Казармы, Торговец оружием или Рабочий."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent8B
+"Ракетные багги выдерживают на 30 процентов больше урона, с 120 до 156."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent10A
+"Каждая ракета SCUD Storm бьёт на 10 процентов сильнее, 660 в центре вместо 600."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent10B
+"Пусковые установки SCUD выходят от Торговца оружием ветеранами."
+END
+
+CONTROLBAR:ToolTipStealthTalent7A
+"Jarmen Kell выдерживает на 30 процентов больше урона, с 200 до 260."
+END
+
+CONTROLBAR:ToolTipStealthTalent7B
+"Technical выдерживают на пятую часть больше урона, с 180 до 216, а Ракетные багги с 120 до 144."
+END
+
+CONTROLBAR:ToolTipStealthTalent8A
+"Сети туннелей выдерживают 1875 вместо 1500, а Stinger Site 1250 вместо 1000."
+END
+
+CONTROLBAR:ToolTipStealthTalent8B
+"Бомбовозы ездят на 15 процентов быстрее и выдерживают на четверть больше урона, с 220 до 275."
+END
+
+CONTROLBAR:ToolTipStealthTalent10A
+"Technical и Ракетные багги прячутся, когда не стреляют, как замаскированные Повстанцы, и остаются скрытыми на ходу."
+END
+
+CONTROLBAR:ToolTipStealthTalent10B
+"GPS-заглушка скрывает юниты в полтора раза дальше, до 150 вместо 100, и круг прицеливания растёт вместе с ней."
 END
 
 SCIENCE:ChinaTalent6A
@@ -19931,4 +20731,1940 @@ END
 
 GUI:QMMapNotBuilt
 "Ваша игра не смогла построить карту этого матча, поэтому матч был отменён."
+END
+
+GUI:???
+"Случайно"
+END
+
+GUI:AirliftAtLimit
+"У вас уже столько, сколько можно"
+END
+
+GUI:AirliftCancel
+"Отмена"
+END
+
+GUI:AirliftFee
+"Сбор: %ls"
+END
+
+GUI:AirliftFor
+"для %ls"
+END
+
+GUI:AirliftHint
+"Щелчок или колёсико вверх добавляют одного, правый щелчок или колёсико вниз убирают одного. С Shift по пять."
+END
+
+GUI:AirliftNoFactory
+"Нужно здание, которое это строит"
+END
+
+GUI:AirliftOK
+"ОК"
+END
+
+GUI:AirliftPlanes
+"Самолёты: %d из %d"
+END
+
+GUI:AirliftPlanesFull
+"На самолётах больше нет места"
+END
+
+GUI:AirliftTitle
+"Переброска"
+END
+
+GUI:AirliftTotal
+"Итого: %ls"
+END
+
+GUI:CampaignGenerals
+"GENERALS"
+END
+
+GUI:CampaignZeroHour
+"ZERO HOUR"
+END
+
+GUI:CheatBuildAnywhere
+"Строить где угодно"
+END
+
+GUI:CheatRankMax
+"МАКС."
+END
+
+GUI:CheatSectionMap
+"КАРТА"
+END
+
+GUI:CheatSectionPlayer
+"ИГРОК"
+END
+
+GUI:CheatSectionUnits
+"ЮНИТЫ"
+END
+
+GUI:CheatUnlimitedPoints
+"Бесконечные очки генерала"
+END
+
+GUI:CommandTabAircraft
+"Авиация%s: всё, что ваши аэродромы могут построить сейчас. Колёсико мыши прокручивает список"
+END
+
+GUI:CommandTabBuildings
+"Здания%s: всё, что могут поставить ваши строители, ничего не выбирая заранее"
+END
+
+GUI:CommandTabGround
+"Наземные войска%s: всё, что ваши заводы могут выпустить сейчас. Колёсико мыши прокручивает список"
+END
+
+GUI:CommandTabPageNext
+"Прокрутить вправо"
+END
+
+GUI:CommandTabPagePrev
+"Прокрутить влево"
+END
+
+GUI:DirectStrikeBrutal
+"Жестокий"
+END
+
+GUI:DirectStrikeEasy
+"Лёгкий"
+END
+
+GUI:DirectStrikeHard
+"Сложный"
+END
+
+GUI:DirectStrikeIslandNote
+"Новый остров в каждом матче"
+END
+
+GUI:DirectStrikeMap
+"Случайный остров"
+END
+
+GUI:DirectStrikeMedium
+"Средний"
+END
+
+GUI:DirectStrikeReady
+"ГОТОВ"
+END
+
+GUI:DirectStrikeStart
+"СТАРТ"
+END
+
+GUI:DirectStrikeTeam
+"КОМАНДА %d"
+END
+
+GUI:DirectStrikeTeamSize
+"%d на %d"
+END
+
+GUI:FactionPickConfirm
+"Выбрать: %s"
+END
+
+GUI:FactionPickCustom
+"Свой выбор"
+END
+
+GUI:FactionPickLeftOut
+"Случайный выбор никогда не берёт: %s. Отметьте в «Свой выбор», чтобы добавить."
+END
+
+GUI:FactionPickPool
+"Случайный выбор берёт одну из %d армий, отмеченных слева, из %d. Щёлкните по армии, чтобы отметить её или убрать."
+END
+
+GUI:FactionPickRandom
+"Случайный выбор назначит вам одну из этих армий в начале матча."
+END
+
+GUI:FactionPickRandomAll
+"Случайно из всех"
+END
+
+GUI:FactionPickRandomSide
+"Случайно: %s"
+END
+
+GUI:FactionPickSideHint
+"Флажок стороны отмечает или снимает всю сторону; её название оставляет эту сторону в розыгрыше как есть."
+END
+
+GUI:FactionPickSideNameHint
+"Щёлкните по названию стороны, чтобы играть случайной армией этой стороны."
+END
+
+GUI:FactionPickTitle
+"Выбор армии"
+END
+
+GUI:GameModeApocalypse
+"APOCALYPSE"
+END
+
+GUI:GameModeBody
+"Для какого режима эта игра?"
+END
+
+GUI:GameModeClassic
+"КЛАССИКА"
+END
+
+GUI:GameModeDirectStrike
+"DIRECT STRIKE"
+END
+
+GUI:GameModeTitle
+"Создать игру"
+END
+
+GUI:GameModeClassicFact
+"Любая карта"
+END
+
+GUI:GameModeDirectStrikeFact
+"До 6 игроков"
+END
+
+GUI:GameModeApocalypseFact
+"До 4, кооп."
+END
+
+GUI:GameSpeed_Short
+"Скорость"
+END
+
+GUI:GraphBuildings_Short
+"Здан."
+END
+
+GUI:GraphGraphs
+"Графики"
+END
+
+GUI:GraphLines
+"Линии"
+END
+
+GUI:GraphPeak
+"пик %ls"
+END
+
+GUI:GraphShare
+"Доля"
+END
+
+GUI:GraphUnitsLost
+"Потеряно юнитов"
+END
+
+GUI:GraphValueDestroyed
+"Уничтожено на сумму"
+END
+
+GUI:GroupTrayTraining
+"+%d в производстве"
+END
+
+GUI:Handicap
+"Гандикап"
+END
+
+GUI:HotkeysCommandREQUEST_MONEY
+"Попросить денег у союзников"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_AIRCRAFT
+"Вкладка авиации"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_BUILDINGS
+"Вкладка зданий"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_GROUND
+"Вкладка наземных войск"
+END
+
+GUI:HudArmies
+"Армии"
+END
+
+GUI:HudCameraDirector
+"Режиссёр"
+END
+
+GUI:HudCameraDirector_Short
+"Реж."
+END
+
+GUI:HudCameraFree
+"Свободная"
+END
+
+GUI:HudCameraFree_Short
+"Своб."
+END
+
+GUI:HudCameraPlayer
+"Игрок"
+END
+
+GUI:HudCameraPlayer_Short
+"Игрок"
+END
+
+GUI:HudCamHintArmies
+"Открывает юниты каждого игрока рядом со списком"
+END
+
+GUI:HudCamHintFog
+"Показывает только то, что видит наблюдаемый игрок"
+END
+
+GUI:HudCamHintFree
+"Камерой управляете вы сами"
+END
+
+GUI:HudCamHintPlayer
+"Вы видите экран выбранного игрока"
+END
+
+GUI:HudCamHintRow
+"Щёлкните, чтобы увидеть экран этого игрока"
+END
+
+GUI:HudCamHintRowLive
+"Щёлкните, чтобы отпустить"
+END
+
+GUI:HudCamNextComputer
+"У компьютера нет экрана. Ведёт режиссёр"
+END
+
+GUI:HudCamNextDirector
+"Камера сама летит к самому крупному бою"
+END
+
+GUI:HudCamNextDirectorFollowed
+"Следим за боями игрока %ls"
+END
+
+GUI:HudCamNextFree
+"Щёлкните по имени игрока, чтобы увидеть его экран"
+END
+
+GUI:HudCamNextFree_Short
+"Щёлкните по имени, чтобы увидеть экран"
+END
+
+GUI:HudCamNextFreeFollowed
+"Щёлкните, чтобы вернуться: %ls"
+END
+
+GUI:HudCamNextPlayer
+"Esc или повторный щелчок по имени отпускает"
+END
+
+GUI:HudCamNextPlayer_Short
+"Esc или имя ещё раз отпускает"
+END
+
+GUI:HudCamNextWaiting
+"Ожидание камеры этого игрока"
+END
+
+GUI:HudCamStateDirector
+"Режиссёр"
+END
+
+GUI:HudCamStateFree
+"Свободная камера"
+END
+
+GUI:HudCamStatePlayer
+"Экран: %ls"
+END
+
+GUI:HudFog
+"Туман"
+END
+
+GUI:HudNetWorth
+"Состояние"
+END
+
+GUI:HudPlayerCamera
+"КАМЕРА ИГРОКА"
+END
+
+GUI:HudStandings
+"Положение"
+END
+
+GUI:HudStatCash
+"Деньги"
+END
+
+GUI:HudStatIncome
+"Доход в минуту"
+END
+
+GUI:HudStatIncomeValue
+"%ls/мин"
+END
+
+GUI:HudStatKills
+"Убито / потеряно"
+END
+
+GUI:HudStatPower
+"Энергия"
+END
+
+GUI:HudStatRank
+"Звание генерала"
+END
+
+GUI:HudStatRankValue
+"Звание %d"
+END
+
+GUI:HudWatch
+"Камера"
+END
+
+GUI:IncomeSharing_Short
+"Общий доход"
+END
+
+GUI:JoinerLeftDropped
+"%hs вышел: ваш список мест перестал его показывать."
+END
+
+GUI:JoinerLeftNoHost
+"%hs вышел: его игра не нашла вас хозяином этой комнаты (место хозяина прочитано как \"%hs\")."
+END
+
+GUI:JoinerLeftNoSlotList
+"%hs вышел: ваш список мест до него так и не дошёл."
+END
+
+GUI:JoinFailedDifferentBuild
+"Не удалось войти: у хозяина другая сборка игры. Обновитесь до той же версии."
+END
+
+GUI:JoinFailedDifferentData
+"Не удалось войти: версия та же, но файлы данных игры отличаются. Восстановите или переустановите игру и уберите файлы, которые вы добавили в её папку Data."
+END
+
+GUI:LaneAbilities
+"Умения"
+END
+
+GUI:LaneDiplomacy
+"Дипломатия"
+END
+
+GUI:LaneEndDamage
+"Урон"
+END
+
+GUI:LaneEndDraw
+"Ничья"
+END
+
+GUI:LaneEndEarned
+"Заработано"
+END
+
+GUI:LaneEndKills
+"Убито"
+END
+
+GUI:LaneEndLeft
+"Команда %d покинула игру"
+END
+
+GUI:LaneEndMiddle
+"Центр удержан"
+END
+
+GUI:LaneEndRematch
+"Реванш"
+END
+
+GUI:LaneEndReplay
+"Смотреть повтор"
+END
+
+GUI:LaneEndSpent
+"Потрачено"
+END
+
+GUI:LaneEndTeamWins
+"Команда %d побеждает"
+END
+
+GUI:LaneEndUnits
+"Юниты"
+END
+
+GUI:LaneEndWaves
+"Волны"
+END
+
+GUI:LaneIncome
+"Доход %d/%d"
+END
+
+GUI:LaneMatchClock
+"Время матча"
+END
+
+GUI:LaneMenu
+"Меню"
+END
+
+GUI:LaneTier
+"Уровень %d"
+END
+
+GUI:LaneUpgrades
+"Улучшения"
+END
+
+GUI:LoadProgress
+"Загрузка %d%%"
+END
+
+GUI:LoadRuleOff
+"Выкл."
+END
+
+GUI:LoadRuleOn
+"Вкл."
+END
+
+GUI:LoadTip11
+"Игра против ИИ в сети ведёт свой рейтинг ИИ и никогда не трогает ваш рейтинг в таблице."
+END
+
+GUI:Lobby
+"Лобби"
+END
+
+GUI:LobbyPresets
+"Шаблоны"
+END
+
+GUI:LobbyPresetsButton
+"ШАБЛОНЫ"
+END
+
+GUI:LocalPlayerMapDiffers
+"Ваша игра построила %ls не так, как у хозяина. Матч не начнётся, пока у вас обоих не будет одна версия."
+END
+
+GUI:OnlineAIGame
+"1 игра · %d%% побед"
+END
+
+GUI:OnlineAIGames
+"Игр: %d · %d%% побед"
+END
+
+GUI:OnlineAIMapMissing
+"Сервер выбрал карту, которой нет в этой игре (%ls), поэтому матч не начался."
+END
+
+GUI:OnlineAIRatingLabel
+"Рейтинг против ИИ"
+END
+
+GUI:OnlineAIRefused
+"Сервер не запустил матч (%ls)."
+END
+
+GUI:OnlineAIRefused_banned
+"Этому аккаунту нельзя играть рейтинговые матчи против ИИ."
+END
+
+GUI:OnlineAIRefused_build
+"Ваши файлы игры отличаются от выпуска. Обновите игру через лаунчер и попробуйте снова."
+END
+
+GUI:OnlineAIRefused_pending
+"Ваш прошлый матч против ИИ ещё оценивается. Попробуйте через минуту."
+END
+
+GUI:OnlineAIRefused_signedout
+"Вы не вошли в аккаунт."
+END
+
+GUI:OnlineAIRefused_unavailable
+"zerohour.gg не ответил. Попробуйте через минуту."
+END
+
+GUI:OnlineAIShort
+"ИИ"
+END
+
+GUI:OnlineBrowserFailed
+"Не удалось открыть браузер."
+END
+
+GUI:OnlineBrowserTestServer
+"Тестовый сервер: браузер не открывается."
+END
+
+GUI:OnlineCannotReachServer
+"Сервер недоступен. Проверьте соединение и нажмите «Войти», чтобы попробовать снова."
+END
+
+GUI:OnlineCardArmyChinaInf
+"Китай: пехотный"
+END
+
+GUI:OnlineCardArmyChinaNuke
+"Китай: ядерный"
+END
+
+GUI:OnlineCardArmyChinaTank
+"Китай: танковый"
+END
+
+GUI:OnlineCardArmyGlaDemo
+"ГЛА: подрывной"
+END
+
+GUI:OnlineCardArmyGlaStealth
+"ГЛА: скрытный"
+END
+
+GUI:OnlineCardArmyGlaToxin
+"ГЛА: токсинный"
+END
+
+GUI:OnlineCardArmyUsaAir
+"США: ВВС"
+END
+
+GUI:OnlineCardArmyUsaLaser
+"США: лазерный"
+END
+
+GUI:OnlineCardArmyUsaSuper
+"США: супероружие"
+END
+
+GUI:OnlineCardByAI
+"По армии ИИ"
+END
+
+GUI:OnlineCardByOpp
+"По армии соперника"
+END
+
+GUI:OnlineCardByOwn
+"По своей армии"
+END
+
+GUI:OnlineCardColAI
+"Уровень ИИ"
+END
+
+GUI:OnlineCardInRoom
+"В комнате %ls · %ls"
+END
+
+GUI:OnlineCardLastAI
+"Последние матчи с ИИ"
+END
+
+GUI:OnlineCardLastQM
+"Последние быстрые игры"
+END
+
+GUI:OnlineCardProfile
+"ПРОФИЛЬ В СЕТИ"
+END
+
+GUI:OnlineCardTabAI
+"ПРОТИВ ИИ"
+END
+
+GUI:OnlineCardUnavailable
+"История матчей сейчас недоступна."
+END
+
+GUI:OnlineCheckingFiles
+"Проверка файлов игры..."
+END
+
+GUI:OnlineComputerLabel
+"Компьютер"
+END
+
+GUI:OnlineConnecting
+"Подключение к серверу..."
+END
+
+GUI:OnlineForgotPassword
+"ЗАБЫЛИ ПАРОЛЬ?"
+END
+
+GUI:OnlineGamesLabel
+"Игры"
+END
+
+GUI:OnlineGeneralAir
+"ВВС"
+END
+
+GUI:OnlineGeneralDemo
+"Подрывной"
+END
+
+GUI:OnlineGeneralInf
+"Пехотный"
+END
+
+GUI:OnlineGeneralLaser
+"Лазерный"
+END
+
+GUI:OnlineGeneralNuke
+"Ядерный"
+END
+
+GUI:OnlineGeneralStealth
+"Скрытный"
+END
+
+GUI:OnlineGeneralSuper
+"Супероружие"
+END
+
+GUI:OnlineGeneralTank
+"Танковый"
+END
+
+GUI:OnlineGeneralToxin
+"Токсинный"
+END
+
+GUI:OnlineHubAgoDays
+"%d дн. назад"
+END
+
+GUI:OnlineHubAgoHours
+"%d ч назад"
+END
+
+GUI:OnlineHubAgoMinutes
+"%d мин назад"
+END
+
+GUI:OnlineHubBrowse
+"СПИСОК ИГР"
+END
+
+GUI:OnlineHubCustomLead
+"Без рейтинга · 2-8"
+END
+
+GUI:OnlineHubCustomTitle
+"Свои игры"
+END
+
+GUI:OnlineHubFindMatch
+"НАЙТИ МАТЧ"
+END
+
+GUI:OnlineHubFrom
+"С %ls"
+END
+
+GUI:OnlineHubInQueue
+"В очереди"
+END
+
+GUI:OnlineHubMatchAI
+"против ИИ"
+END
+
+GUI:OnlineHubMyCard
+"МОЯ КАРТОЧКА"
+END
+
+GUI:OnlineHubPlay
+"ИГРАТЬ"
+END
+
+GUI:OnlineHubQuickMatchLead
+"Рейтинг · 1 на 1"
+END
+
+GUI:OnlineHubQuickMatchLocked
+"Быстрая игра закрыта на %d:%02d"
+END
+
+GUI:OnlineHubRankedGames
+"%d из %d игр"
+END
+
+GUI:OnlineHubRecent
+"Последние матчи"
+END
+
+GUI:OnlineHubRecentNoAnswer
+"Сервер не прислал историю матчей."
+END
+
+GUI:OnlineHubRecentNone
+"Пока нет ни быстрых игр, ни игр против ИИ."
+END
+
+GUI:OnlineHubRecord
+"П–П"
+END
+
+GUI:OnlineHubSignOut
+"ВЫЙТИ"
+END
+
+GUI:OnlineHubVsAILead
+"Без рейтинга"
+END
+
+GUI:OnlineHubVsAITitle
+"Игра против ИИ"
+END
+
+GUI:OnlineHubYday
+"Вчера"
+END
+
+GUI:OnlineKeepSignedIn
+"Не выходить"
+END
+
+GUI:OnlineLabel
+"В СЕТИ"
+END
+
+GUI:OnlineLadderButton
+"РЕЙТИНГ"
+END
+
+GUI:OnlineLadderEmpty
+"На этой странице нет игроков с рейтингом."
+END
+
+GUI:OnlineLadderGamesOf
+"%d из %d игр"
+END
+
+GUI:OnlineLadderJump
+"К МОЕЙ СТРАНИЦЕ"
+END
+
+GUI:OnlineLadderLoading
+"Загрузка рейтинга..."
+END
+
+GUI:OnlineLadderLosses
+"Поражения"
+END
+
+GUI:OnlineLadderNext
+"ДАЛЕЕ"
+END
+
+GUI:OnlineLadderPage
+"Места %d–%d"
+END
+
+GUI:OnlineLadderPlace
+"#%d в рейтинге"
+END
+
+GUI:OnlineLadderPlayer
+"Игрок"
+END
+
+GUI:OnlineLadderPrev
+"НАЗАД"
+END
+
+GUI:OnlineLadderRating
+"Рейтинг"
+END
+
+GUI:OnlineLadderRatingLabel
+"Рейтинг в таблице"
+END
+
+GUI:OnlineLadderRecord
+"Побед: %d · поражений: %d"
+END
+
+GUI:OnlineLadderShort
+"Рейтинг"
+END
+
+GUI:OnlineLadderTier
+"Ранг"
+END
+
+GUI:OnlineLadderTierRange
+"от %ls до %ls"
+END
+
+GUI:OnlineLadderTiers
+"Ранги"
+END
+
+GUI:OnlineLadderTierUnder
+"ниже %ls"
+END
+
+GUI:OnlineLadderTierUnranked
+"меньше 5 игр"
+END
+
+GUI:OnlineLadderTierUp
+"%ls и выше"
+END
+
+GUI:OnlineLadderUnavailable
+"Рейтинг сейчас недоступен. Попробуйте через минуту."
+END
+
+GUI:OnlineLadderWinPct
+"Побед %%"
+END
+
+GUI:OnlineLadderWins
+"Победы"
+END
+
+GUI:OnlineLadderYourPlace
+"Ваше место"
+END
+
+GUI:OnlineLobbyColGame
+"Игра"
+END
+
+GUI:OnlineLobbyColPlayers
+"Игроки"
+END
+
+GUI:OnlineLobbyCount
+"Открыто: %d · идёт: %d"
+END
+
+GUI:OnlineLobbyCountOpen
+"Открыто: %d"
+END
+
+GUI:OnlineLobbyEmpty
+"Нет открытых игр"
+END
+
+GUI:OnlineLobbyFull
+"Полная"
+END
+
+GUI:OnlineLobbyHost
+"СОЗДАТЬ ИГРУ"
+END
+
+GUI:OnlineLobbyInRoom
+"В %ls"
+END
+
+GUI:OnlineLobbyJoin
+"ВОЙТИ"
+END
+
+GUI:OnlineLobbyJoining
+"Вход"
+END
+
+GUI:OnlineLobbyPlaying
+"Идёт игра"
+END
+
+GUI:OnlineLobbyRoomGeneral
+"Общая"
+END
+
+GUI:OnlineLoginBadBody
+"Неверная почта, ник или пароль. Проверьте их и попробуйте снова."
+END
+
+GUI:OnlineLoginBadLogin
+"Неверная почта, ник или пароль."
+END
+
+GUI:OnlineLoginBanned
+"Этот аккаунт заблокирован."
+END
+
+GUI:OnlineLoginElsewhere
+"В этот аккаунт вошли с другого компьютера."
+END
+
+GUI:OnlineLoginEmpty
+"Введите почту или ник и пароль."
+END
+
+GUI:OnlineLoginExpired
+"Ваш пароль изменился. Введите его снова."
+END
+
+GUI:OnlineLoginFailed
+"Не удалось войти"
+END
+
+GUI:OnlineLoginFiles
+"Этот файл не тот, с которым вышла игра:\n\n%ls\n\nПереустановите игру через лаунчер или удалите этот файл, затем перезапустите игру и войдите снова."
+END
+
+GUI:OnlineLoginFilesNone
+"Сервер не смог проверить ваши файлы игры. Перезапустите игру и войдите снова; если это повторится, переустановите игру через лаунчер."
+END
+
+GUI:OnlineLoginHeading
+"Вход"
+END
+
+GUI:OnlineLoginInQuickMatch
+"В быстрой игре"
+END
+
+GUI:OnlineLoginName
+"Почта или ник"
+END
+
+GUI:OnlineLoginOnlineNow
+"Сейчас в сети"
+END
+
+GUI:OnlineLoginSavedToken
+"Сохранённый вход"
+END
+
+GUI:OnlineLoginThrottled
+"Слишком много попыток. Подождите %d с и попробуйте снова."
+END
+
+GUI:OnlineLoginThrottledNoRetry
+"Слишком много попыток. Подождите минуту и попробуйте снова."
+END
+
+GUI:OnlineLoginUnavailable
+"Сервис аккаунтов недоступен. Попробуйте чуть позже."
+END
+
+GUI:OnlineLossLabel
+"Поражение"
+END
+
+GUI:OnlineMaintenance
+"Сетевая игра закрыта на обслуживание. Попробуйте позже."
+END
+
+GUI:OnlineMaintenanceTitle
+"Обслуживание"
+END
+
+GUI:OnlineMaintenanceUntil
+"Сетевая игра закрыта на обслуживание. Она должна вернуться в %s."
+END
+
+GUI:OnlineMapLabel
+"Карта"
+END
+
+GUI:OnlineNextTier
+"%ls при %ls · осталось %ls"
+END
+
+GUI:OnlineNoticeBack
+"Вернётся в %s"
+END
+
+GUI:OnlineNoticeInfo
+"ОБЪЯВЛЕНИЕ"
+END
+
+GUI:OnlineNoticeMaintenance
+"ОБСЛУЖИВАНИЕ"
+END
+
+GUI:OnlineNoticeMaintenanceWords
+"Сетевая игра закрыта на обслуживание."
+END
+
+GUI:OnlineNoticeUntil
+"До %s"
+END
+
+GUI:OnlineOpenedInBrowser
+"Открыто в браузере."
+END
+
+GUI:OnlineOpenGamesLabel
+"Открытые игры"
+END
+
+GUI:OnlineOpponentLabel
+"Соперник"
+END
+
+GUI:OnlinePingMs
+"%d мс"
+END
+
+GUI:OnlinePlaceLabel
+"Место"
+END
+
+GUI:OnlinePlayerNotOnline
+"Сейчас не в сети"
+END
+
+GUI:OnlineQuickMatchLabel
+"Быстрая игра"
+END
+
+GUI:OnlineRatedResult
+"Рейтинг %+.1f -> %d"
+END
+
+GUI:OnlineRating
+"Рейтинг %d"
+END
+
+GUI:OnlineRatingTier
+"%ls, рейтинг %d"
+END
+
+GUI:OnlineScoreAgain
+"ЕЩЁ БЫСТРУЮ ИГРУ"
+END
+
+GUI:OnlineScoreAIHeld
+"Победа не засчитана в рейтинг. Её проверит администратор."
+END
+
+GUI:OnlineScoreAISaved
+"Следующий ИИ: %ls"
+END
+
+GUI:OnlineScoreConfirmed
+"Результат подтверждён"
+END
+
+GUI:OnlineScoreNoAnswer
+"Сервер ещё не ответил. Результат появится на zerohour.gg."
+END
+
+GUI:OnlineScorePlayAgain
+"ИГРАТЬ ЕЩЁ"
+END
+
+GUI:OnlineScoreSending
+"Отправка результата и повтора"
+END
+
+GUI:OnlineScoreSendingResult
+"Отправка результата"
+END
+
+GUI:OnlineScoreSubAI
+"Игра против ИИ · %ls · %ls"
+END
+
+GUI:OnlineScoreSubRanked
+"Рейтинговая %ls · %ls"
+END
+
+GUI:OnlineSignIn
+"ВОЙТИ"
+END
+
+GUI:OnlineSigningIn
+"Вход..."
+END
+
+GUI:OnlineSkinsAll
+"Все"
+END
+
+GUI:OnlineSkinsButton
+"СКИНЫ"
+END
+
+GUI:OnlineSkinsDefault
+"ПО УМОЛЧАНИЮ"
+END
+
+GUI:OnlineSkinsFilterLocked
+"Закрытые"
+END
+
+GUI:OnlineSkinsNone
+"У вашего аккаунта пока нет скинов. На каждой карточке написано, как получить её скин; откройте этот экран снова, когда он у вас появится."
+END
+
+GUI:OnlineSkinsOpenSite
+"ОТКРЫТЬ ZEROHOUR.GG"
+END
+
+GUI:OnlineSkinsOwned
+"Мои"
+END
+
+GUI:OnlineSkinsPending
+"Не сохранено изменений: %d"
+END
+
+GUI:OnlineSkinsPending1
+"1 изменение ещё не сохранено"
+END
+
+GUI:OnlineSkinsPickedButton
+"ВЫБРАН"
+END
+
+GUI:OnlineSkinsRefused
+"zerohour.gg отклонил этот выбор, поэтому ваши скины остались прежними. Откройте этот экран снова, чтобы увидеть, что есть у вашего аккаунта."
+END
+
+GUI:OnlineSkinsSave
+"СОХРАНИТЬ"
+END
+
+GUI:OnlineSkinsSaved
+"Сохранено. В следующей игре, своей или быстрой, будут эти скины."
+END
+
+GUI:OnlineSkinsSideChina
+"Китай"
+END
+
+GUI:OnlineSkinsSideGla
+"ГЛА"
+END
+
+GUI:OnlineSkinsSideUsa
+"США"
+END
+
+GUI:OnlineSkinsSignedOut
+"Вы не вошли в аккаунт. Войдите в сеть, чтобы выбрать скины."
+END
+
+GUI:OnlineSkinsThrottled
+"Слишком много сохранений за минуту. Подождите немного и снова нажмите «Сохранить»."
+END
+
+GUI:OnlineSkinsUnavailable
+"zerohour.gg не ответил. Ваши скины остались прежними; попробуйте через минуту."
+END
+
+GUI:OnlineSkinsWaiting
+"Запрос к zerohour.gg..."
+END
+
+GUI:OnlineSkinsWear
+"НАДЕТЬ"
+END
+
+GUI:OnlineSkinsWornButton
+"НАДЕТ"
+END
+
+GUI:OnlineSpeedLabel
+"Скорость"
+END
+
+GUI:OnlineStartRefused
+"Сервер не стал запускать игру (%s)."
+END
+
+GUI:OnlineTabCustom
+"СВОИ ИГРЫ"
+END
+
+GUI:OnlineTabHome
+"ГЛАВНАЯ"
+END
+
+GUI:OnlineTabQuickMatch
+"БЫСТРАЯ ИГРА"
+END
+
+GUI:OnlineTier_captain
+"Капитан"
+END
+
+GUI:OnlineTier_colonel
+"Полковник"
+END
+
+GUI:OnlineTier_general
+"Генерал"
+END
+
+GUI:OnlineTier_lieutenant
+"Лейтенант"
+END
+
+GUI:OnlineTier_major
+"Майор"
+END
+
+GUI:OnlineTier_private
+"Рядовой"
+END
+
+GUI:OnlineTier_sergeant
+"Сержант"
+END
+
+GUI:OnlineTier_unranked
+"Без ранга"
+END
+
+GUI:OnlineUnrated
+"Этот матч не засчитан в рейтинг."
+END
+
+GUI:OnlineUnrated_cancelled
+"Без рейтинга: матч отменён."
+END
+
+GUI:OnlineUnrated_custom
+"Свои игры не идут в рейтинг."
+END
+
+GUI:OnlineUnrated_desync
+"Без рейтинга: игра рассинхронизировалась."
+END
+
+GUI:OnlineUnrated_endframe
+"Без рейтинга: стороны сообщили разные результаты."
+END
+
+GUI:OnlineUnrated_grace
+"Без рейтинга: игрок вышел в самом начале."
+END
+
+GUI:OnlineUnrated_nowinner
+"Без рейтинга: никто не победил."
+END
+
+GUI:OnlineUnrated_seed
+"Без рейтинга: стороны сообщили разные результаты."
+END
+
+GUI:OnlineUnrated_stalled
+"Без рейтинга: результат не удалось подтвердить."
+END
+
+GUI:OnlineUnrated_unconfirmed
+"Без рейтинга: результат не удалось подтвердить."
+END
+
+GUI:OnlineUnrated_winners
+"Без рейтинга: стороны сообщили разные результаты."
+END
+
+GUI:OnlineVsAIButton
+"ИГРАТЬ ПРОТИВ ИИ"
+END
+
+GUI:OnlineWinLabel
+"Победа"
+END
+
+GUI:OnlineWinRateLabel
+"Доля побед"
+END
+
+GUI:PicksWaiting
+"ВЫБОРЫ ЖДУТ: %d"
+END
+
+GUI:PlayerMapDiffers
+"Игра %ls построила %ls не так, как ваша. Матч не начнётся, пока у вас обоих не будет одна версия."
+END
+
+GUI:QMAll
+"ВСЕ"
+END
+
+GUI:QMAnOpponent
+"неизвестный игрок"
+END
+
+GUI:QMChance
+"Шанс победы"
+END
+
+GUI:QMCheckingMap
+"Сверяем карту с соперником"
+END
+
+GUI:QMFound
+"Соперник найден"
+END
+
+GUI:QMLocked
+"Быстрая игра закрыта на %d:%02d"
+END
+
+GUI:QMMapDiffers
+"Игра %ls построила карту этого матча не так, как ваша, поэтому матч отменён. Проверьте, что у вас обоих одна версия."
+END
+
+GUI:QMMapNoAnswer
+"Игра %ls так и не подтвердила карту этого матча, поэтому матч отменён. Возможно, у соперника старая версия."
+END
+
+GUI:QMNewMap
+"Новая карта"
+END
+
+GUI:QMNoGeneral
+"Без генерала"
+END
+
+GUI:QMNone
+"НИ ОДНОЙ"
+END
+
+GUI:QMOpponentLeft
+"Соперник вышел до начала матча. Вы снова в очереди."
+END
+
+GUI:QMQueueHere
+"Ещё %d ищут матч на %ls"
+END
+
+GUI:QMRandomArmy
+"Случайная армия"
+END
+
+GUI:QMRefused
+"Сервер не поставил вас в очередь. Попробуйте через минуту."
+END
+
+GUI:QMSearch
+"ПОИСК"
+END
+
+GUI:QMSearching
+"Поиск соперника"
+END
+
+GUI:QMSpeedAccepted
+"Принято, играем на %s"
+END
+
+GUI:QMSpeedAsk
+"%s хочет играть на %s. Согласиться?\n\nОтказ через %d с"
+END
+
+GUI:QMSpeedBanner
+"ИГРАТЬ НА %s?"
+END
+
+GUI:QMSpeedDeclined
+"Отказ, играем на %s"
+END
+
+GUI:QMSpeedWaiting
+"Ждём, пока %s примет %s"
+END
+
+GUI:QMStartsBanner
+"МАТЧ ЧЕРЕЗ %d"
+END
+
+GUI:QMStop
+"СТОП"
+END
+
+GUI:QMVs
+"VS"
+END
+
+GUI:QMWidens
+"Расширится через %d:%02d"
+END
+
+GUI:QMWindowValue
+"Шанс победы %d-%d%%"
+END
+
+GUI:QMYou
+"Вы"
+END
+
+GUI:QMYourPicks
+"Ваш выбор"
+END
+
+GUI:RandomMapAnyTemplate
+"Удиви меня"
+END
+
+GUI:RandomMapSize
+"Размер карты"
+END
+
+GUI:RandomMapSizeHuge
+"Огромная"
+END
+
+GUI:RandomMapSizeLarge
+"Большая"
+END
+
+GUI:RandomMapSizeMedium
+"Средняя"
+END
+
+GUI:RandomMapSizeSmall
+"Малая"
+END
+
+GUI:RandomMapSizeTiny
+"Крошечная"
+END
+
+GUI:RandomMapTemplate
+"Тип карты"
+END
+
+GUI:RequestMoneyChat
+"Мне нужны деньги!"
+END
+
+GUI:SaveFromOtherLogicRate
+"Это сохранение сделано версией Reforged, где игровая логика работала %d раз в секунду. Эта версия работает %d раз в секунду, поэтому сохранение не загрузить. Сохранения «Начало миссии» той версии по-прежнему загружаются и продолжают кампанию с начала той миссии."
+END
+
+GUI:ScoreHighlightArmy
+"Самая большая армия"
+END
+
+GUI:ScoreHighlightDestroyed
+"Больше всех уничтожил"
+END
+
+GUI:ScoreHighlightEarned
+"Больше всех заработал"
+END
+
+GUI:ScoreHighlights
+"Главное"
+END
+
+GUI:ScoreHighlightSuperweapon
+"Первое супероружие"
+END
+
+GUI:ScoreLength
+"Длительность"
+END
+
+GUI:ScoreNoWinner
+"Нет победителя"
+END
+
+GUI:ScorePlayerWins
+"%ls побеждает"
+END
+
+GUI:ScoreTeamWins
+"Команда %d побеждает"
+END
+
+GUI:SignalKeyAttack
+"Сигнал атаки: дым для союзников там, где вы щёлкнете. Правый щелчок отменяет"
+END
+
+GUI:SignalKeyAttention
+"Смотрите сюда: дым для союзников там, где вы щёлкнете. Правый щелчок отменяет"
+END
+
+GUI:SignalKeyDefend
+"Сигнал обороны: дым для союзников там, где вы щёлкнете. Правый щелчок отменяет"
+END
+
+GUI:SkirmishPreset11v1
+"11 на 1: вы против 11 сложных ИИ"
+END
+
+GUI:SkirmishPreset12v12
+"12 на 12, сложные ИИ"
+END
+
+GUI:SkirmishPreset15v1
+"15 на 1: вы против 15 сложных ИИ"
+END
+
+GUI:SkirmishPreset16v16
+"16 на 16: вы и 15 сложных союзников против 16 сложных ИИ"
+END
+
+GUI:SkirmishPreset16v16Brutal
+"16 на 16, все жестокие"
+END
+
+GUI:SkirmishPreset23v1
+"23 на 1: вы против 23 сложных ИИ"
+END
+
+GUI:SkirmishPreset2x4
+"2 на 2 на 2 на 2, средние ИИ"
+END
+
+GUI:SkirmishPreset31v1
+"31 на 1: вы против 31 сложного ИИ"
+END
+
+GUI:SkirmishPreset3Way
+"Война троих: 11 на 11 на 10, средние ИИ"
+END
+
+GUI:SkirmishPreset3x4
+"3 команды по 4, средние ИИ"
+END
+
+GUI:SkirmishPreset3x8
+"3 команды по 8, средние ИИ"
+END
+
+GUI:SkirmishPreset4Teams
+"4 команды по 8, средние ИИ"
+END
+
+GUI:SkirmishPreset4v28
+"4 на 28: вы и 3 средних союзника против 28 лёгких ИИ"
+END
+
+GUI:SkirmishPreset4v4
+"4 на 4, средние ИИ"
+END
+
+GUI:SkirmishPreset4x4
+"4 команды по 4, средние ИИ"
+END
+
+GUI:SkirmishPreset6v6
+"6 на 6, сложные ИИ"
+END
+
+GUI:SkirmishPreset7v1
+"7 на 1: вы против 7 сложных ИИ"
+END
+
+GUI:SkirmishPreset8Teams
+"8 команд по 4, разные ИИ"
+END
+
+GUI:SkirmishPreset8v8
+"8 на 8, сложные ИИ"
+END
+
+GUI:SkirmishPresetClear
+"ОЧИСТИТЬ"
+END
+
+GUI:SkirmishPresetCustom
+"Свой %d: игроков %d"
+END
+
+GUI:SkirmishPresetCustomEmpty
+"Свой %d: пусто, щёлкните, чтобы сохранить эту комнату"
+END
+
+GUI:SkirmishPresetCustomGenerated
+"созданная карта"
+END
+
+GUI:SkirmishPresetCustomGroup
+"Свои"
+END
+
+GUI:SkirmishPresetFFA12
+"Каждый сам за себя на 12, разные ИИ"
+END
+
+GUI:SkirmishPresetFFA16
+"Каждый сам за себя на 16, разные ИИ"
+END
+
+GUI:SkirmishPresetFFA24
+"Каждый сам за себя на 24, разные ИИ"
+END
+
+GUI:SkirmishPresetFFA32
+"Каждый сам за себя на 32, разные ИИ"
+END
+
+GUI:SkirmishPresetFFA8
+"Каждый сам за себя на 8, разные ИИ"
+END
+
+GUI:SkirmishPresetGroup
+"Игроков: %d"
+END
+
+GUI:SkirmishPresetLastStand
+"Последний рубеж: вы и 1 союзник против 30 сложных ИИ"
+END
+
+GUI:SkirmishPresetLoad
+"ЗАГРУЗИТЬ"
+END
+
+GUI:SkirmishPresetSave
+"СОХРАНИТЬ"
+END
+
+GUI:SocketRedirected
+"IP в локальной сети %ls, но система направила соединение игры через %ls. Его перенаправил раздельный туннель VPN или брандмауэр, поэтому в вашей сети вас никто не слышит. Отключите раздельное туннелирование для игры и попробуйте снова."
+END
+
+GUI:StartingMoney_Short
+"Деньги"
+END
+
+GUI:SummaryDefeated
+"Разгромлен"
+END
+
+GUI:SummaryDestroyed_Short
+"Уничт."
+END
+
+GUI:SummaryDisconnected
+"Отключился"
+END
+
+GUI:SummaryEarned_Short
+"Заработ."
+END
+
+GUI:SummaryScore
+"Счёт"
+END
+
+GUI:SummarySpent
+"Потрачено"
+END
+
+GUI:SummarySpent_Short
+"Потрач."
+END
+
+GUI:SummaryUnits_Short
+"Юниты"
+END
+
+GUI:SummaryUnitsBuilt_Short
+"Постр."
+END
+
+GUI:Superweapons_Short
+"Суперор."
+END
+
+GUI:SupplyPileLimit_Short
+"Склады"
+END
+
+GUI:Talents
+"ТАЛАНТЫ"
+END
+
+GUI:TalentsHint
+"С 6-го звания на каждом звании выбирайте один из двух талантов."
+END
+
+GUI:TechRespawn_Short
+"Возрожд."
+END
+
+GUI:UnitLimit_Short
+"Юниты"
+END
+
+INI:RankLevel9
+"Генерал с 9 звёздами"
+END
+
+INI:RankLevel10
+"Генерал с 10 звёздами"
+END
+
+SCIENCE:Rank9
+"Генерал 9 звёзд"
+END
+
+SCIENCE:Rank10
+"Генерал 10 звёзд"
+END
+
+OBJECT:ApocalypseZombie
+"Зомби"
+END
+
+OBJECT:ApocalypseZombieBrute
+"Зомби-громила"
+END
+
+OBJECT:ApocalypseZombieRunner
+"Зомби-бегун"
+END
+
+OBJECT:LaneWarFortress
+"Крепость"
+END
+
+OBJECT:LaneWarWatchTower
+"Сторожевая башня"
+END
+
+SKIN:Bronze
+"БРОНЗА"
+END
+
+SKIN:BugHunter
+"ОХОТНИК ЗА БАГАМИ"
+END
+
+SKIN:EarnedBronze
+"БРОНЗОВЫЙ СПОНСОР"
+END
+
+SKIN:EarnedBugHunter
+"ЗНАК ОХОТНИКА ЗА БАГАМИ"
+END
+
+SKIN:EarnedCode
+"АКТИВИРУЙТЕ КОД"
+END
+
+SKIN:EarnedEmerald
+"ИЗУМРУДНЫЙ СПОНСОР"
+END
+
+SKIN:EarnedGold
+"ЗОЛОТОЙ СПОНСОР"
+END
+
+SKIN:EarnedIron
+"ЖЕЛЕЗНЫЙ СПОНСОР"
+END
+
+SKIN:EarnedReforged
+"СПОНСОР REFORGED"
+END
+
+SKIN:EarnedSilver
+"СЕРЕБРЯНЫЙ СПОНСОР"
+END
+
+SKIN:EarnedSpecialThanks
+"ОСОБАЯ БЛАГОДАРНОСТЬ"
+END
+
+SKIN:Emerald
+"ИЗУМРУД"
+END
+
+SKIN:Gold
+"ЗОЛОТО"
+END
+
+SKIN:Iron
+"ЖЕЛЕЗО"
+END
+
+SKIN:Reforged
+"REFORGED"
+END
+
+SKIN:Silver
+"СЕРЕБРО"
+END
+
+SKIN:SpecialThanks
+"ОСОБАЯ БЛАГОДАРНОСТЬ"
+END
+
+SKIN:Splinter
+"КАМУФЛЯЖ «ОСКОЛОК»"
+END
+
+SKIN:UnitChinaDozer
+"Бульдозер Китая"
+END
+
+SKIN:UnitUsaDozer
+"Бульдозер США"
+END
+
+TOOLTIP:Apocalypse
+"Держитесь вместе против бесконечных волн мертвецов, до четырёх игроков."
+END
+
+TOOLTIP:DirectStrike
+"Покупайте юнитов на свой участок. Каждые 30 секунд один игрок каждой команды отправляет копию своего участка вниз по линии, и первая команда, разбившая крепость противника, побеждает. До 3 на 3, на новом острове в каждом матче."
+END
+
+TOOLTIP:Handicap
+"Пропорционально ослабляет этого игрока. При 50 процентах: половина здоровья и урона у юнитов и зданий, половина лечения, вдвое дольше постройка, исследования и перезарядка умений."
+END
+
+TOOLTIP:LobbyPresets
+"Заполнить все места компьютерами и командами"
+END
+
+TOOLTIP:MapListCrowded
+"Если игроков больше восьми, показываются только карты со стартовой позицией для каждого игрока; вкладка «Случайная» построит карту для любого числа"
+END
+
+TOOLTIP:OnlineKeepSignedIn
+"Ваш пароль никогда не сохраняется"
+END
+
+TOOLTIP:OnlineNeedsLauncher
+"Запускайте сетевую игру из лаунчера"
 END

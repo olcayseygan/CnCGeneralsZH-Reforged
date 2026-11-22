@@ -258,11 +258,11 @@ GUI:Disconnects
 END
 
 GUI:CreateGame
-"Créer une partie"
+"Créer partie"
 END
 
 GUI:AutoLogin
-"Connexion automatique avec ce compte"
+"Connexion auto"
 END
 
 GUI:AddBuddy
@@ -517,6 +517,70 @@ Color:Olive
 "Olive"
 END
 
+Color:Charcoal
+"Anthracite"
+END
+
+Color:Chocolate
+"Chocolat"
+END
+
+Color:Forest
+"Vert forêt"
+END
+
+Color:Indigo
+"Indigo"
+END
+
+Color:Lemon
+"Citron"
+END
+
+Color:Maroon
+"Bordeaux"
+END
+
+Color:Mint
+"Menthe"
+END
+
+Color:Orchid
+"Orchidée"
+END
+
+Color:Peach
+"Pêche"
+END
+
+Color:Plum
+"Prune"
+END
+
+Color:Rose
+"Vieux rose"
+END
+
+Color:Rust
+"Rouille"
+END
+
+Color:SeaGreen
+"Vert marin"
+END
+
+Color:Silver
+"Argent"
+END
+
+Color:Steel
+"Acier"
+END
+
+Color:White
+"Blanc"
+END
+
 MSG:Testing
 "Mary had a little lamb, it's fleece as white as snow."
 END
@@ -674,7 +738,7 @@ GUI:LadderRandomMaps
 END
 
 GUI:AllowObservers
-"Autoriser observateurs"
+"Observateurs"
 END
 
 GUI:USA
@@ -714,7 +778,7 @@ GUI:GLAEnemies
 END
 
 GUI:EndCampaign
-"Quitter Campagne"
+"Fin campagne"
 END
 
 GUI:Retry
@@ -722,7 +786,7 @@ GUI:Retry
 END
 
 GUI:RecentSave
-"Dernière sauvegarde"
+"Dernière sauv."
 END
 
 GUI:GetUpdate
@@ -890,7 +954,7 @@ GUI:Stats
 END
 
 GUI:GetMapPack
-"Télécharger des cartes"
+"Pack de cartes"
 END
 
 GUI:Defeat
@@ -970,7 +1034,7 @@ GUI:Host
 END
 
 GUI:LocaleSelect
-"Sélectionnez votre pays"
+"Votre pays"
 END
 
 GUI:Command&ConquerGenerals
@@ -1018,7 +1082,7 @@ GUI:OptionsDescription
 END
 
 GUI:SFXVolume
-"Volume effets sonores"
+"Volume effets"
 END
 
 GUI:3DSound
@@ -1202,7 +1266,7 @@ GUI:OptionsGroupOutput
 END
 
 GUI:AudioDevice
-"Périphérique de sortie"
+"Périphérique"
 END
 
 TOOLTIP:AudioDevice
@@ -1214,7 +1278,7 @@ GUI:AudioDeviceDefault
 END
 
 GUI:SpeakerType
-"Type d'enceintes"
+"Enceintes"
 END
 
 GUI:SpeakerType0
@@ -1234,7 +1298,7 @@ GUI:SpeakerType3
 END
 
 GUI:MuteInBackground
-"Muet en arrière-plan"
+"Muet en fond"
 END
 
 TOOLTIP:MuteInBackground
@@ -1446,15 +1510,15 @@ GUI:AreYouSureDeleteAccount
 END
 
 GUI:NonAsianText
-"Caractères non asiatiques"
+"Non asiatique"
 END
 
 GUI:AsianText
-"Caractères asiatiques"
+"Asiatique"
 END
 
 GUI:DeleteAccount
-"Supprimer compte"
+"Suppr. compte"
 END
 
 GUI:SetLocale
@@ -1526,11 +1590,11 @@ GUI:GamesPlayed
 END
 
 GUI:TOS
-"Conditions d'utilisation"
+"Conditions"
 END
 
 GUI:RememberInfo
-"Mémoriser mes infos"
+"Mémoriser infos"
 END
 
 GUI:HostWantsToStart
@@ -1562,7 +1626,7 @@ GUI:HostLeftTitle
 END
 
 GUI:WidenSearch
-"Recherche élargie"
+"Élargir"
 END
 
 GUI:QMAborted
@@ -1574,11 +1638,11 @@ GUI:Email
 END
 
 GUI:NoLadder
-"Pas de classement"
+"Sans classement"
 END
 
 GUI:ChooseLadder
-"Choisir un classement"
+"Classement"
 END
 
 GUI:UnknownLadder
@@ -1602,7 +1666,7 @@ GUI:Server
 END
 
 GUI:RememberPassword
-"Mémoriser mon mot de passe"
+"Mémoriser MDP"
 END
 
 GUI:CreateAccount
@@ -2815,6 +2879,14 @@ END
 
 INI:RankLevel8
 "Assassin suprême (8e rang)"
+END
+
+INI:RankLevel9
+"Général 9 étoiles"
+END
+
+INI:RankLevel10
+"Général 10 étoiles"
 END
 
 TOOLTIP:MyInfo
@@ -7753,6 +7825,14 @@ SCIENCE:Rank8
 "Général d'armée"
 END
 
+SCIENCE:Rank9
+"Général 9 étoiles"
+END
+
+SCIENCE:Rank10
+"Général 10 étoiles"
+END
+
 CONTROLBAR:StructureExit
 "Quitter bâtiment"
 END
@@ -8038,7 +8118,7 @@ Network:PacketRouterTimeout
 END
 
 GUI:EstablishingConnectionPaths
-"Définition des chemins de connexion"
+"Mise en liaison"
 END
 
 UPGRADE:RadarVanScan
@@ -8714,7 +8794,7 @@ Buddy:MultipleOnlineNotification
 END
 
 GUI:ResetHonors
-"Réinit. distinct."
+"RAZ distinct."
 END
 
 Chat:Observers
@@ -9934,11 +10014,11 @@ GUI:ToggleOnOff
 END
 
 GUI:RestartMission
-"Recommencer Mission"
+"Recommencer"
 END
 
 GUI:ExitMission
-"Terminer Mission"
+"Quitter mission"
 END
 
 GUI:OlderReplayVersionTitle
@@ -9950,7 +10030,7 @@ GUI:OlderReplayVersion
 END
 
 GUI:CloudShadows
-"Ombres des nuages"
+"Ombres nuages"
 END
 
 GUI:NoDynamicLOD
@@ -9958,7 +10038,7 @@ GUI:NoDynamicLOD
 END
 
 GUI:UnlockMaxFPS
-"Images/Sec non restreinte"
+"Images/s libres"
 END
 
 TOOLTIP:UnlockMaxFPS
@@ -10914,7 +10994,7 @@ GUI:ClassicMouse
 END
 
 GUI:AlternateMouse
-"Configuration souris"
+"Souris altern."
 END
 
 TOOLTIP:AlternateMouse
@@ -13806,7 +13886,7 @@ TOOLTIP:ChallengeButton
 END
 
 GUI:GeneralsChallenge
-"Choisissez votre Général"
+"Choisir Général"
 END
 
 GUI:Biography
@@ -14890,7 +14970,7 @@ CONTROLBAR:Lazr_ToolTipUSABuildPowerPlant
 END
 
 GUI:DoubleClickAttackMove
-"Double clic pour Garder"
+"Dbl-clic garde"
 END
 
 TOOLTIP:DoubleClickAttackMove
@@ -15110,7 +15190,7 @@ TOOLTIP:NoUserMaps
 END
 
 GUI:FireWallPort
-"Numéro port firewall :"
+"Port pare-feu :"
 END
 
 TOOLTIP:FireWallPort
@@ -15626,11 +15706,11 @@ GUI:GroupRoom4
 END
 
 GUI:CustomMission
-"MISSION PERSONNALISÉE"
+"MISSION PERSO"
 END
 
 GUI:StartCustomMission
-"LANCER LA PARTIE"
+"LANCER PARTIE"
 END
 
 GUI:Stop
@@ -15746,7 +15826,7 @@ GUI:Ultra
 END
 
 GUI:TreeSway
-"Arbres qui ondulent"
+"Arbres ondulent"
 END
 
 TOOLTIP:TreeSway
@@ -15758,15 +15838,15 @@ TOOLTIP:ExtraAnimations
 END
 
 GUI:ExtraAnimations
-"Échafaudages de construction"
+"Échafaudages"
 END
 
 GUI:Detail
-"Préréglage des détails"
+"Préréglage"
 END
 
 GUI:GraphicsQuality
-"Performances / Qualité"
+"Perf. / Qualité"
 END
 
 TOOLTIP:GraphicsQuality
@@ -15830,7 +15910,7 @@ TOOLTIP:SmoothWater
 END
 
 GUI:ShowProps
-"Arbres et buissons"
+"Arbres/buissons"
 END
 
 TOOLTIP:ShowProps
@@ -15838,7 +15918,7 @@ TOOLTIP:ShowProps
 END
 
 GUI:HeatEffects
-"Distorsion de chaleur"
+"Effet chaleur"
 END
 
 TOOLTIP:HeatEffects
@@ -15846,7 +15926,7 @@ TOOLTIP:HeatEffects
 END
 
 GUI:BehindBuilding
-"Unités derrière les bâtiments"
+"Unités derrière"
 END
 
 TOOLTIP:BehindBuilding
@@ -15866,7 +15946,7 @@ TOOLTIP:ParticleCapSlider
 END
 
 GUI:TextureFilter
-"Filtrage des textures"
+"Filtre textures"
 END
 
 GUI:TextureFilter0
@@ -15886,7 +15966,7 @@ TOOLTIP:TextureFilter
 END
 
 GUI:Anisotropy
-"Échantillons anisotropes"
+"Anisotropie"
 END
 
 TOOLTIP:Anisotropy
@@ -15898,15 +15978,15 @@ GUI:AnisotropyCardMaximum
 END
 
 GUI:TextureResolution
-"Résolution des textures"
+"Résol. textures"
 END
 
 GUI:ParticleLimit
-"Limite de particules"
+"Max. particules"
 END
 
 GUI:NeverLowerDetail
-"Ne jamais réduire les détails"
+"Détails fixes"
 END
 
 GUI:OptionsGroupScreen
@@ -15938,7 +16018,7 @@ GUI:OptionsGroupCamera
 END
 
 GUI:OptionsGroupPlacement
-"Placement des bâtiments"
+"Placement"
 END
 
 GUI:OptionsGroupLighting
@@ -15946,11 +16026,11 @@ GUI:OptionsGroupLighting
 END
 
 GUI:OptionsGroupOrders
-"Souris et ordres"
+"Souris, ordres"
 END
 
 GUI:OptionsGroupBattlefield
-"Champ de bataille"
+"Champ bataille"
 END
 
 GUI:OptionsGroupAddresses
@@ -15974,11 +16054,11 @@ GUI:OptionsGroupExtras
 END
 
 GUI:OptionsGroupParticles
-"Fumée et particules"
+"Fumée, partic."
 END
 
 GUI:WindowMode
-"Mode d'affichage"
+"Affichage"
 END
 
 GUI:WindowMode0
@@ -16002,15 +16082,15 @@ GUI:ResolutionNote0
 END
 
 GUI:FullscreenScaling
-"Ajustement plein écran"
+"Ajust. écran"
 END
 
 GUI:FullscreenScaling0
-"Étirer pour remplir"
+"Étirer"
 END
 
 GUI:FullscreenScaling1
-"Garder les proportions, ajouter des bandes"
+"Bandes noires"
 END
 
 TOOLTIP:FullscreenScaling
@@ -16078,11 +16158,11 @@ GUI:Bloom4
 END
 
 TOOLTIP:Bloom
-"L'intensité avec laquelle brûlent le feu, les explosions, les tirs et les lasers, et jusqu'où leur lumière déborde sur ce qui les entoure. Les bâtiments, le ciel, la neige et le sable ne brillent jamais. Désactivé correspond au rendu pour lequel les graphismes ont été peints. Le moteur Direct3D 9 en reçoit une version plus douce, et avec les Graphismes classiques seuls les halos des lasers le suivent."
+"L'intensité avec laquelle brûlent le feu, les explosions, les tirs et les lasers, et jusqu'où leur lumière déborde sur ce qui les entoure. Les bâtiments, le ciel, la neige et le sable ne brillent jamais. Désactivé correspond au rendu pour lequel les graphismes ont été peints. Le moteur Direct3D 9 en reçoit une version plus douce, et avec le Rendu classique seuls les halos des lasers le suivent."
 END
 
 GUI:VSync
-"Synchronisation verticale"
+"Sync. verticale"
 END
 
 TOOLTIP:VSync
@@ -16090,7 +16170,7 @@ TOOLTIP:VSync
 END
 
 GUI:FrameRateLimit
-"Limite d'images par seconde"
+"Limite d'images"
 END
 
 GUI:FrameRateLimit0
@@ -16118,7 +16198,7 @@ TOOLTIP:FrameRateLimit
 END
 
 GUI:ClassicGraphics
-"Graphismes classiques"
+"Rendu classique"
 END
 
 TOOLTIP:ClassicGraphics
@@ -16126,7 +16206,7 @@ TOOLTIP:ClassicGraphics
 END
 
 GUI:InfantryShadows
-"Ombres de l'infanterie"
+"Ombres soldats"
 END
 
 TOOLTIP:InfantryShadows
@@ -16134,7 +16214,7 @@ TOOLTIP:InfantryShadows
 END
 
 GUI:ProjectileShadows
-"Ombres des missiles"
+"Ombres missiles"
 END
 
 TOOLTIP:ProjectileShadows
@@ -16150,7 +16230,7 @@ TOOLTIP:PropShadows
 END
 
 GUI:ParticleShadows
-"Ombres de la fumée"
+"Ombres fumée"
 END
 
 TOOLTIP:ParticleShadows
@@ -16178,7 +16258,7 @@ TOOLTIP:Smoke
 END
 
 GUI:ParticleBounce
-"Particules au sol"
+"Rebonds partic."
 END
 
 TOOLTIP:ParticleBounce
@@ -16194,7 +16274,7 @@ TOOLTIP:MiddleMousePans
 END
 
 GUI:ZoomToCursor
-"Zoom vers le curseur"
+"Zoom au curseur"
 END
 
 TOOLTIP:ZoomToCursor
@@ -16202,7 +16282,7 @@ TOOLTIP:ZoomToCursor
 END
 
 GUI:StartAtMaxZoom
-"Commencer en vue éloignée"
+"Départ dézoomé"
 END
 
 TOOLTIP:StartAtMaxZoom
@@ -16210,7 +16290,7 @@ TOOLTIP:StartAtMaxZoom
 END
 
 GUI:ScrollSpeed
-"Vitesse de défilement de la caméra"
+"Vit. défilement"
 END
 
 TOOLTIP:ScrollSpeed
@@ -16226,7 +16306,7 @@ TOOLTIP:ZoomSpeed
 END
 
 GUI:DragTolerance
-"Seuil de glissement"
+"Seuil glisser"
 END
 
 TOOLTIP:DragTolerance
@@ -16234,7 +16314,7 @@ TOOLTIP:DragTolerance
 END
 
 GUI:AmbientVolume
-"Volume de l'ambiance"
+"Volume ambiance"
 END
 
 TOOLTIP:AmbientVolume
@@ -16254,7 +16334,7 @@ GUI:OptionsGroupMusic
 END
 
 GUI:DynamicMusic
-"La musique suit le combat"
+"Musique combat"
 END
 
 TOOLTIP:DynamicMusic
@@ -16262,7 +16342,7 @@ TOOLTIP:DynamicMusic
 END
 
 GUI:IsometricCamera
-"Caméra isométrique"
+"Vue isométrique"
 END
 
 TOOLTIP:IsometricCamera
@@ -16270,7 +16350,7 @@ TOOLTIP:IsometricCamera
 END
 
 GUI:EdgeScrollWindowed
-"Défilement au bord en fenêtre"
+"Bord en fenêtre"
 END
 
 TOOLTIP:EdgeScrollWindowed
@@ -16278,7 +16358,7 @@ TOOLTIP:EdgeScrollWindowed
 END
 
 GUI:SnapCamera45
-"Rotation de caméra par crans"
+"Crans caméra"
 END
 
 TOOLTIP:SnapCamera45
@@ -16286,7 +16366,7 @@ TOOLTIP:SnapCamera45
 END
 
 GUI:GridBuild
-"Placement sur grille"
+"Pose sur grille"
 END
 
 TOOLTIP:GridBuild
@@ -16294,7 +16374,7 @@ TOOLTIP:GridBuild
 END
 
 GUI:NudgeBuild
-"Décaler un placement bloqué"
+"Décaler bloqué"
 END
 
 TOOLTIP:NudgeBuild
@@ -16302,7 +16382,7 @@ TOOLTIP:NudgeBuild
 END
 
 GUI:SnapBuild45
-"Rotation des bâtiments par crans"
+"Crans bâtiments"
 END
 
 TOOLTIP:SnapBuild45
@@ -16310,7 +16390,7 @@ TOOLTIP:SnapBuild45
 END
 
 GUI:SnapBuildNeighbour
-"Coller aux bâtiments voisins"
+"Coller voisins"
 END
 
 TOOLTIP:SnapBuildNeighbour
@@ -16358,11 +16438,11 @@ TOOLTIP:NetBox
 END
 
 GUI:OptionsGroupHud
-"Interface de jeu"
+"Interface"
 END
 
 GUI:EmptyBuildingPips
-"Places vides des bâtiments"
+"Places vides"
 END
 
 TOOLTIP:EmptyBuildingPips
@@ -16398,7 +16478,7 @@ GUI:HealthBars1
 END
 
 GUI:HealthBars2
-"Sélection seulement"
+"Sélection seule"
 END
 
 GUI:HealthBars3
@@ -16406,7 +16486,7 @@ GUI:HealthBars3
 END
 
 TOOLTIP:HealthBars
-"Intelligentes affiche une barre au-dessus de tout ce qui est blessé, plus la sélection et ce qui se trouve sous le curseur. Sélection seulement est le comportement d'origine."
+"Intelligentes affiche une barre au-dessus de tout ce qui est blessé, plus la sélection et ce qui se trouve sous le curseur. Sélection seule est le comportement d'origine."
 END
 
 GUI:OptionsGroupInput
@@ -16414,7 +16494,7 @@ GUI:OptionsGroupInput
 END
 
 GUI:ChromaLighting
-"Éclairage Razer Chroma"
+"Razer Chroma"
 END
 
 TOOLTIP:ChromaLighting
@@ -16430,7 +16510,7 @@ TOOLTIP:OrderLines
 END
 
 GUI:PlayerColors
-"Couleurs des joueurs"
+"Coul. joueurs"
 END
 
 GUI:PlayerColors0
@@ -16438,7 +16518,7 @@ GUI:PlayerColors0
 END
 
 GUI:PlayerColors1
-"Vous, alliés, ennemis"
+"Amis/ennemis"
 END
 
 GUI:PlayerColors2
@@ -16446,7 +16526,7 @@ GUI:PlayerColors2
 END
 
 TOOLTIP:PlayerColors
-"Vous, alliés, ennemis vous peint en bleu, tout votre camp en vert et tous ceux qui vous tirent dessus en rouge. Par équipe donne à chaque alliance sa propre couleur et une nuance à chacun de ses membres. Sur votre écran seulement : cela ne change rien pour les autres joueurs de la partie."
+"Amis/ennemis vous peint en bleu, tout votre camp en vert et tous ceux qui vous tirent dessus en rouge. Par équipe donne à chaque alliance sa propre couleur et une nuance à chacun de ses membres. Sur votre écran seulement : cela ne change rien pour les autres joueurs de la partie."
 END
 
 GUI:OptionsGroupLanguage
@@ -16710,7 +16790,7 @@ TOOLTIP:RoomGameSpeed
 END
 
 GUI:GameSpeedMissions
-"Vitesse du jeu en mission"
+"Vitesse mission"
 END
 
 TOOLTIP:GameSpeedMissions
@@ -16882,7 +16962,7 @@ TOOLTIP:WaterStyle
 END
 
 GUI:CloudStyle
-"Style des nuages"
+"Style nuages"
 END
 
 GUI:CloudStyle0
@@ -16906,7 +16986,7 @@ GUI:CampaignMission
 END
 
 GUI:CampaignZeroHour
-"GENERALS HEURE H"
+"HEURE H"
 END
 
 GUI:CampaignGenerals
@@ -16946,7 +17026,7 @@ GUI:KickVoteNone
 END
 
 GUI:ShadowQuality
-"Qualité des ombres"
+"Qualité ombres"
 END
 
 GUI:ShadowQuality0
@@ -16962,11 +17042,11 @@ GUI:ShadowQuality2
 END
 
 TOOLTIP:ShadowQuality
-"La netteté des ombres des unités et des bâtiments. Élevée prend environ 64 Mo de mémoire vidéo, Faible libère de la mémoire sur une carte modeste. Direct3D 11 seulement, et pas avec les Graphismes classiques. S'applique quand vous cliquez sur Accepter."
+"La netteté des ombres des unités et des bâtiments. Élevée prend environ 64 Mo de mémoire vidéo, Faible libère de la mémoire sur une carte modeste. Direct3D 11 seulement, et pas avec le Rendu classique. S'applique quand vous cliquez sur Accepter."
 END
 
 GUI:VolumetricSmoke
-"Fumée volumétrique"
+"Fumée volumét."
 END
 
 TOOLTIP:VolumetricSmoke
@@ -16986,11 +17066,11 @@ GUI:LightingStyle1
 END
 
 TOOLTIP:LightingStyle
-"Reforged donne à chaque carte un soleil plus fort et plus chaud, une pénombre plus sombre et des ombres plus profondes, en gardant son heure de la journée. Classique est la lumière plate de 2003, et les Graphismes classiques l'utilisent toujours. S'applique à partir de la carte suivante."
+"Reforged donne à chaque carte un soleil plus fort et plus chaud, une pénombre plus sombre et des ombres plus profondes, en gardant son heure de la journée. Classique est la lumière plate de 2003, et le Rendu classique l'utilise toujours. S'applique à partir de la carte suivante."
 END
 
 GUI:SmokeFireLighting
-"Fumée éclairée par le feu"
+"Fumée éclairée"
 END
 
 TOOLTIP:SmokeFireLighting
@@ -16998,7 +17078,7 @@ TOOLTIP:SmokeFireLighting
 END
 
 GUI:DebrisTrails
-"Traînées des débris d'explosion"
+"Traînées débris"
 END
 
 TOOLTIP:DebrisTrails
@@ -17006,7 +17086,7 @@ TOOLTIP:DebrisTrails
 END
 
 GUI:MapLight
-"Lumière chaude et brume"
+"Lumière, brume"
 END
 
 TOOLTIP:MapLight
@@ -17014,7 +17094,7 @@ TOOLTIP:MapLight
 END
 
 GUI:TeamGlow
-"Couleur d'équipe lumineuse"
+"Halo d'équipe"
 END
 
 TOOLTIP:TeamGlow
@@ -17026,11 +17106,11 @@ GUI:WaterFoam
 END
 
 TOOLTIP:WaterFoam
-"Les rivières et les lacs charrient des flocons d'écume et une bande d'écume le long de la rive, et les ombres du soleil tombent sur l'eau. Les vagues de la mer ne changent pas. Direct3D 11 et eau classique seulement, et désactivé avec les Graphismes classiques. S'applique quand vous cliquez sur Accepter."
+"Les rivières et les lacs charrient des flocons d'écume et une bande d'écume le long de la rive, et les ombres du soleil tombent sur l'eau. Les vagues de la mer ne changent pas. Direct3D 11 et eau classique seulement, et désactivé avec le Rendu classique. S'applique quand vous cliquez sur Accepter."
 END
 
 GUI:FormationDrag
-"Tracer une formation"
+"Tracé formation"
 END
 
 TOOLTIP:FormationDrag
@@ -17038,7 +17118,7 @@ TOOLTIP:FormationDrag
 END
 
 GUI:BuildWithoutWorker
-"Construire sans ouvrier"
+"Sans ouvrier"
 END
 
 TOOLTIP:BuildWithoutWorker
@@ -17046,15 +17126,15 @@ TOOLTIP:BuildWithoutWorker
 END
 
 GUI:HealthBarColors
-"Couleur des barres de santé"
+"Couleur santé"
 END
 
 GUI:HealthBarColors0
-"Du vert au rouge"
+"Vert à rouge"
 END
 
 GUI:HealthBarColors1
-"Couleur du joueur"
+"Couleur joueur"
 END
 
 TOOLTIP:HealthBarColors
@@ -17078,7 +17158,7 @@ TOOLTIP:HudLayout
 END
 
 GUI:HudWidth
-"Largeur de l'interface"
+"Largeur HUD"
 END
 
 GUI:HudWidth0
@@ -17130,7 +17210,7 @@ GUI:SidebarSuperweaponReady
 END
 
 GUI:MenuTransitionSpeed
-"Vitesse des transitions de menu"
+"Vit. transition"
 END
 
 TOOLTIP:MenuTransitionSpeed
@@ -17150,7 +17230,7 @@ GUI:OptionsGroupReplays
 END
 
 GUI:SaveCamera
-"Enregistrer ma caméra"
+"Enreg. caméra"
 END
 
 TOOLTIP:SaveCamera
@@ -17158,7 +17238,7 @@ TOOLTIP:SaveCamera
 END
 
 GUI:UseCamera
-"Suivre la caméra enregistrée"
+"Suivre caméra"
 END
 
 TOOLTIP:UseCamera
@@ -17166,7 +17246,7 @@ TOOLTIP:UseCamera
 END
 
 GUI:DrawScrollAnchor
-"Afficher l'ancre de défilement"
+"Voir l'ancre"
 END
 
 TOOLTIP:DrawScrollAnchor
@@ -17174,7 +17254,7 @@ TOOLTIP:DrawScrollAnchor
 END
 
 GUI:MoveScrollAnchor
-"Déplacer l'ancre de défilement"
+"Bouger l'ancre"
 END
 
 TOOLTIP:MoveScrollAnchor
@@ -17190,7 +17270,7 @@ GUI:HotkeysCommands
 END
 
 GUI:HotkeysCommandBar
-"Barre de commandes"
+"Barre commandes"
 END
 
 GUI:HotkeysChange
@@ -18966,7 +19046,7 @@ GUI:OptionsGroupModernWater
 END
 
 GUI:WaterReflectionEnabled
-"Reflets de scène"
+"Reflets scène"
 END
 
 TOOLTIP:WaterReflectionEnabled
@@ -18974,7 +19054,7 @@ TOOLTIP:WaterReflectionEnabled
 END
 
 GUI:WaterFftResolution
-"Détail des vagues"
+"Détail vagues"
 END
 
 GUI:WaterFftResolution0
@@ -19010,7 +19090,7 @@ TOOLTIP:WaterRefractionQuality
 END
 
 GUI:WaterReflectionDetail
-"Détail des reflets"
+"Détail reflets"
 END
 
 GUI:WaterReflectionDetail0
@@ -19026,7 +19106,7 @@ TOOLTIP:WaterReflectionDetail
 END
 
 GUI:WaterReflection
-"Mode de réflexion"
+"Mode reflets"
 END
 
 GUI:WaterReflection0
@@ -19149,12 +19229,404 @@ GUI:LegacySound
 "Son d'origine"
 END
 
+TOOLTIP:LegacySound
+"Le son du jeu d'origine : pas de variation de hauteur sur les sons qui passent, pas de bang supersonique de l'Aurora, pas de plafond sur les bruits de bataille ni sur les réponses des unités, pas de limiteur, pas d'ambiance de carte et pas de musique qui suit le combat. Le volume principal, le périphérique et les enceintes s'appliquent toujours. Prend effet immédiatement."
+END
+
+GUI:AircraftAltitudeLine
+"Ligne altitude"
+END
+
+TOOLTIP:AircraftAltitudeLine
+"Une fine ligne descend de chaque appareil en vol jusqu'au sol, juste sous lui. Son point de contact montre où se trouve vraiment l'avion, et sa longueur à quelle hauteur il vole. Les appareils posés n'en ont pas."
+END
+
+GUI:AmbientOcclusion
+"Occlusion amb."
+END
+
+TOOLTIP:AmbientOcclusion
+"Les recoins et le sol sous ce qui s'y tient s'assombrissent : un char repose sur le sable au lieu de flotter au-dessus. L'eau et le brouillard de guerre n'en sont pas touchés. Direct3D 11 seulement, et désactivé avec le Rendu classique. S'applique quand vous cliquez sur Accepter."
+END
+
+GUI:Atmosphere
+"Atmosphère"
+END
+
+TOOLTIP:Atmosphere
+"Le sol loin de la caméra se fond vers la couleur du ciel, et là où la carte s'arrête ou quand la caméra est rasante, vous voyez un ciel à l'heure de la carte au lieu du noir. Le sol proche reste net et le brouillard de guerre garde son obscurité. Seule votre image change : rien dans la partie n'en dépend, et les autres joueurs voient leur propre réglage. Direct3D 11 seulement, et désactivé avec le Rendu classique."
+END
+
+GUI:CameraShake
+"Secousse caméra"
+END
+
+TOOLTIP:CameraShake
+"Les explosions secouent la caméra. Une bombe atomique ou un grand bâtiment qui s'effondre tout près la font trembler fort un instant. Décochez pour garder la vue immobile. S'applique quand vous cliquez sur Accepter."
+END
+
+GUI:DetailedModels
+"Modèles HD"
+END
+
+TOOLTIP:DetailedModels
+"Les unités et bâtiments refaits pour l'image Reforged, si vous les avez téléchargés. Ils ne changent que ce que vous voyez : vous jouez avec n'importe qui, qu'il les ait ou non. Décochez pour plus d'images par seconde dans les grandes batailles. Prend effet au prochain lancement du jeu."
+END
+
+GUI:Firelight
+"Lueur du feu"
+END
+
+TOOLTIP:Firelight
+"Les bâtiments en feu, les épaves et les explosions projettent une lumière orange vacillante sur le sol, les murs et les unités alentour. Elle se voit surtout sur les cartes de nuit. Direct3D 11 seulement, et désactivé avec le Rendu classique. S'applique quand vous cliquez sur Accepter."
+END
+
+GUI:FullDetailAtDistance
+"Détail au loin"
+END
+
+TOOLTIP:FullDetailAtDistance
+"Les unités et bâtiments refaits passent à des versions plus légères quand ils deviennent petits à l'écran. Cochez pour les dessiner tous en plein détail, quelle que soit la distance de la caméra, au prix d'images par seconde dans les grandes batailles. S'applique quand vous cliquez sur Accepter."
+END
+
+GUI:GroundFoliage
+"Végétation"
+END
+
+TOOLTIP:GroundFoliage
+"Herbe, buissons, fougères et pierres poussent sur le sol et ondulent dans la brise avec les arbres. Purement visuel : les unités passent au travers. Direct3D 11 seulement, et désactivé avec le Rendu classique. S'applique quand vous cliquez sur Accepter."
+END
+
+GUI:GroundMarks
+"Traces combat"
+END
+
+TOOLTIP:GroundMarks
+"Obus et missiles laissent des brûlures au sol, un bâtiment abattu une tache sombre et fissurée, une bombe atomique un anneau calciné, et les traces de chenilles restent sombres plus longtemps. Elles s'effacent en quatre minutes environ. Direct3D 11 seulement, et désactivé avec le Rendu classique. S'applique quand vous cliquez sur Accepter."
+END
+
+GUI:HDTextures
+"Textures HD"
+END
+
+TOOLTIP:HDTextures
+"Chaque texture et chaque dalle de terrain en double détail pour l'image Reforged, si vous les avez téléchargées. Elles ne changent que ce que vous voyez : vous jouez avec n'importe qui, qu'il les ait ou non. Décochez sur une carte graphique à court de mémoire vidéo. Prend effet au prochain lancement du jeu."
+END
+
+GUI:HeatHaze
+"Effet chaleur"
+END
+
+TOOLTIP:HeatHaze
+"L'air ondoie au-dessus des incendies, le long des rayons laser et derrière les réacteurs des missiles. Direct3D 11 seulement, et désactivé avec le Rendu classique. S'applique quand vous cliquez sur Accepter."
+END
+
+GUI:HemiAmbient
+"Lum. ciel/sol"
+END
+
+TOOLTIP:HemiAmbient
+"Les modèles reçoivent la lumière ambiante de la carte du ciel au-dessus et du sol en dessous au lieu d'une lumière uniforme : le dessus d'un char est plus clair que son ventre. Les murs gardent leur lumière et une carte de nuit reste sombre. Direct3D 11 seulement, et désactivé avec le Rendu classique. S'applique quand vous cliquez sur Accepter."
+END
+
+GUI:InternalHdr
+"HDR interne"
+END
+
+TOOLTIP:InternalHdr
+"Le feu, les explosions et les lasers plus clairs que le blanc gardent leur couleur jusqu'à votre écran au lieu de finir en un blanc uniforme, et les couleurs d'équipe en gardent un peu plus. Le sol et les murs loin d'un feu restent tels quels. Tout se passe dans l'image du jeu : votre moniteur reçoit toujours une image normale, et un moniteur HDR ne reçoit pas de signal HDR. Direct3D 11 seulement, et désactivé avec le Rendu classique. S'applique quand vous cliquez sur Accepter."
+END
+
+GUI:MapAwareWaveHeading
+"Vagues côtières"
+END
+
+TOOLTIP:MapAwareWaveHeading
+"Pour l'eau moderne. La houle se courbe vers le rivage, longe les chenaux et se calme derrière les îles, chaque mer depuis son propre côté. Désactivé, les vagues restent comme avant. S'applique quand vous cliquez sur Accepter."
+END
+
+GUI:MinimapSize
+"Minicarte"
+END
+
+TOOLTIP:MinimapSize
+"La taille à laquelle la minicarte est dessinée. Au-delà de 100, elle grandit depuis le coin inférieur gauche par-dessus le champ de bataille ; le reste de la barre de commandes ne bouge pas."
+END
+
+GUI:OptionsGroupModels
+"Modèles"
+END
+
+GUI:SelectionOutlines
+"Contour sélect."
+END
+
+TOOLTIP:SelectionOutlines
+"Un anneau lumineux à la couleur de son propriétaire sous chaque unité sélectionnée, et le même trait autour d'un bâtiment sélectionné. Désactivé, ni l'un ni l'autre n'est dessiné ; les lignes d'ordre et les marques de clic restent."
+END
+
+GUI:SmoothMotion
+"Mouv. fluide"
+END
+
+TOOLTIP:SmoothMotion
+"Les unités sont dessinées entre leurs deux dernières positions au lieu de rester sur chacune jusqu'au pas suivant du jeu : le mouvement est aussi fluide que votre écran le permet, 60 Hz compris. Seule votre image change : rien dans la partie n'en dépend, et les autres joueurs voient leur propre réglage. S'applique quand vous cliquez sur Accepter."
+END
+
+GUI:StructureCollapse
+"Effondrements"
+END
+
+TOOLTIP:StructureCollapse
+"Un bâtiment détruit s'enfonce dans le sol sous l'explosion au lieu de disparaître d'une image à l'autre ou de passer d'un coup à ses décombres. Seule votre image change : il ne bloque rien, rien dans la partie n'en dépend, et les autres joueurs voient leur propre réglage. Direct3D 11 seulement, et désactivé avec le Rendu classique."
+END
+
+GUI:SunShafts
+"Rayons soleil"
+END
+
+GUI:SunShafts0
+"Désactivés"
+END
+
+GUI:SunShafts1
+"Faibles"
+END
+
+GUI:SunShafts2
+"Intenses"
+END
+
+TOOLTIP:SunShafts
+"Le soleil bas tombe en faisceaux à travers la poussière entre les bâtiments et les arbres, et l'air s'éclaire un peu vers le soleil. Plus fort le matin et le soir. Direct3D 11 seulement, et désactivé avec le Rendu classique. S'applique quand vous cliquez sur Accepter."
+END
+
+GUI:UnderwaterClarity
+"Eau limpide"
+END
+
+TOOLTIP:UnderwaterClarity
+"Pour l'eau moderne. Les hauts-fonds, les récifs et les ruines englouties se voient à travers la mer. Les grands fonds plats et l'eau profonde restent aussi troubles que la carte les a faits. S'applique quand vous cliquez sur Accepter."
+END
+
+GUI:WaterSplashes
+"Éclaboussures"
+END
+
+TOOLTIP:WaterSplashes
+"Un obus, une bombe ou un corps qui tombe dans l'eau soulève une gerbe et envoie des cercles à la surface. Seule votre image change : rien dans la partie n'en dépend, et les autres joueurs voient leur propre réglage. Direct3D 11 et eau classique seulement, et désactivé avec le Rendu classique. S'applique quand vous cliquez sur Accepter."
+END
+
+GUI:Weather
+"Météo"
+END
+
+TOOLTIP:Weather
+"La pluie tombe, ou le sable souffle sur une carte désertique et la neige sur une carte enneigée, et un vent plie les arbres et couche la fumée. Une carte qui a sa propre pluie ou neige la garde et ne prend que le vent. Seule votre image change : ce que les unités voient et touchent reste pareil, et les autres joueurs voient leur propre réglage. Direct3D 11 seulement, et désactivé avec le Rendu classique. S'applique quand vous cliquez sur Accepter."
+END
+
 TOOLTIP:ArmorStructure
 "Bâtiment"
 END
 
 TOOLTIP:UpgradesHint
 "(sans → avec)"
+END
+
+TOOLTIP:UpgradeChangesHint
+"(unité de base → avec ceci)"
+END
+
+TOOLTIP:ArmorAFG_Comanche
+"Hélicoptère"
+END
+
+TOOLTIP:ArmorAFG_CountermeasuresComanche
+"Hélicoptère"
+END
+
+TOOLTIP:ArmorAirplane
+"Avion"
+END
+
+TOOLTIP:ArmorAntiAirVehicle
+"Véhicule"
+END
+
+TOOLTIP:ArmorAssaultCrawler
+"Char"
+END
+
+TOOLTIP:ArmorAvalanche
+"Char"
+END
+
+TOOLTIP:ArmorAvenger
+"Véhicule"
+END
+
+TOOLTIP:ArmorBaseDefense
+"Défense"
+END
+
+TOOLTIP:ArmorBattleBusStructureTough
+"Fortifié"
+END
+
+TOOLTIP:ArmorBattleBusStructureToughPlusOne
+"Fortifié"
+END
+
+TOOLTIP:ArmorBattleBusStructureToughPlusTwo
+"Fortifié"
+END
+
+TOOLTIP:ArmorBattleBusTruck
+"Véhicule"
+END
+
+TOOLTIP:ArmorBattleBusTruckPlusOne
+"Véhicule"
+END
+
+TOOLTIP:ArmorBattleBusTruckPlusTwo
+"Véhicule"
+END
+
+TOOLTIP:ArmorChemReb_Human
+"Infanterie"
+END
+
+TOOLTIP:ArmorChemSuitHuman
+"Infanterie"
+END
+
+TOOLTIP:ArmorChinook
+"Hélicoptère"
+END
+
+TOOLTIP:ArmorComanche
+"Hélicoptère"
+END
+
+TOOLTIP:ArmorCountermeasuresAirplane
+"Avion"
+END
+
+TOOLTIP:ArmorCountermeasuresComanche
+"Hélicoptère"
+END
+
+TOOLTIP:ArmorCountermeasuresSpectreGunship
+"Avion"
+END
+
+TOOLTIP:ArmorDemoGenTerrorist
+"Infanterie"
+END
+
+TOOLTIP:ArmorDozer
+"Véhicule"
+END
+
+TOOLTIP:ArmorDragonTank
+"Char"
+END
+
+TOOLTIP:ArmorFireBase
+"Défense"
+END
+
+TOOLTIP:ArmorGLAUpgradedStructure
+"Fortifié"
+END
+
+TOOLTIP:ArmorGLAUpgradedStructureTough
+"Fortifié"
+END
+
+TOOLTIP:ArmorHazMatHuman
+"Infanterie"
+END
+
+TOOLTIP:ArmorHuman
+"Infanterie"
+END
+
+TOOLTIP:ArmorHumvee
+"Véhicule"
+END
+
+TOOLTIP:ArmorInfGen_Human
+"Infanterie"
+END
+
+TOOLTIP:ArmorInvulnerable
+"Invulnérable"
+END
+
+TOOLTIP:ArmorInvulnerableAll
+"Invulnérable"
+END
+
+TOOLTIP:ArmorMine
+"Mine"
+END
+
+TOOLTIP:ArmorNo
+"Aucun"
+END
+
+TOOLTIP:ArmorQuadCannon
+"Véhicule"
+END
+
+TOOLTIP:ArmorSentryDrone
+"Drone"
+END
+
+TOOLTIP:ArmorSpectreGunship
+"Avion"
+END
+
+TOOLTIP:ArmorStingerSite
+"Défense"
+END
+
+TOOLTIP:ArmorStingerSoldier
+"Infanterie"
+END
+
+TOOLTIP:ArmorStructureInternetCenter
+"Bâtiment"
+END
+
+TOOLTIP:ArmorStructureTough
+"Fortifié"
+END
+
+TOOLTIP:ArmorTank
+"Char"
+END
+
+TOOLTIP:ArmorToxinTruck
+"Véhicule"
+END
+
+TOOLTIP:ArmorTruck
+"Véhicule"
+END
+
+TOOLTIP:ArmorUpgradedTank
+"Char"
+END
+
+TOOLTIP:ArmorVulnerableAll
+"Aucun"
+END
+
+TOOLTIP:ArmorWall
+"Mur"
 END
 
 OBJECT:TurkiyeInfantryAlpagu
@@ -19991,4 +20463,2224 @@ END
 
 GUI:QMMapNotBuilt
 "Votre jeu n'a pas pu construire la carte de cette partie, la partie a donc été annulée."
+END
+
+CONTROLBAR:ToolTipAirForceTalent7A
+"Les Comanches encaissent un quart de dégâts en plus avant de tomber, de 220 à 275."
+END
+
+CONTROLBAR:ToolTipAirForceTalent7B
+"Les King Raptors encaissent un cinquième de dégâts en plus avant de tomber, de 240 à 288."
+END
+
+CONTROLBAR:ToolTipAirForceTalent8A
+"Les Aérodromes ont 3250 points de vie au lieu de 2500, et les Patriot 1300 au lieu de 1000."
+END
+
+CONTROLBAR:ToolTipAirForceTalent8B
+"Les Chinooks de combat volent 15 pour cent plus vite et encaissent un quart de dégâts en plus, de 350 à 437."
+END
+
+CONTROLBAR:ToolTipAirForceTalent10A
+"Les King Raptors sortent de l'Aérodrome vétérans."
+END
+
+CONTROLBAR:ToolTipAirForceTalent10B
+"Chaque avion et hélicoptère répare environ 1 pour cent de sa santé par seconde, même sous le feu."
+END
+
+CONTROLBAR:ToolTipAmericaTalent6A
+"Les véhicules et les avions coûtent 15 pour cent de moins, tant qu'il vous reste un Poste de commandement, une Caserne, un Complexe militaro-industriel ou un Engin de chantier."
+END
+
+CONTROLBAR:ToolTipAmericaTalent6B
+"L'infanterie, les véhicules et les avions gagnent de l'expérience 50 pour cent plus vite. Avec les Techniques d'entraînement en plus, ils la gagnent deux fois et demie plus vite au lieu de deux fois."
+END
+
+CONTROLBAR:ToolTipAmericaTalent9A
+"Le Bombardement A10 envoie un avion de plus : 2, 3 ou 4 selon son niveau au lieu de 1, 2 ou 3."
+END
+
+CONTROLBAR:ToolTipAmericaTalent9B
+"Le Parachutage de Rangers amène quatre Rangers de plus : 9, 14 ou 24 selon son niveau au lieu de 5, 10 ou 20."
+END
+
+CONTROLBAR:ToolTipChinaTalent6A
+"Les Technopirates coûtent 40 pour cent de moins, tant qu'il vous reste un Poste de commandement, une Caserne, un Complexe militaro-industriel ou un Engin de chantier."
+END
+
+CONTROLBAR:ToolTipChinaTalent6B
+"Chaque soldat coûte 20 pour cent de moins, Technopirates compris, tant qu'il vous reste un Poste de commandement, une Caserne, un Complexe militaro-industriel ou un Engin de chantier."
+END
+
+CONTROLBAR:ToolTipChinaTalent7A
+"Les Maîtres de guerre encaissent un cinquième de dégâts en plus avant d'être détruits, de 400 à 480."
+END
+
+CONTROLBAR:ToolTipChinaTalent7B
+"Les Chars Gattling encaissent un quart de dégâts en plus avant d'être détruits, de 300 à 375."
+END
+
+CONTROLBAR:ToolTipChinaTalent8A
+"Les Bunkers et les Mitrailleuses Gattling tiennent un quart plus longtemps : un Bunker de 1500 à 1875, une Mitrailleuse Gattling de 1000 à 1250."
+END
+
+CONTROLBAR:ToolTipChinaTalent8B
+"Les Napacanons encaissent un quart de dégâts en plus, de 120 à 150, et roulent 15 pour cent plus vite."
+END
+
+CONTROLBAR:ToolTipChinaTalent9A
+"Le Barrage d'artillerie tire une vague de 12 obus en plus : 24, 36 et 48 à ses trois niveaux."
+END
+
+CONTROLBAR:ToolTipChinaTalent9B
+"Les Mines à fragmentation couvrent 30 pour cent de terrain en plus."
+END
+
+CONTROLBAR:ToolTipChinaTalent10A
+"Les Empereurs sortent du Complexe militaro-industriel vétérans."
+END
+
+CONTROLBAR:ToolTipChinaTalent10B
+"Les véhicules et bâtiments touchés par la Bombe IEM restent hors service 45 secondes au lieu de 30."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent7A
+"Les Motos de combat encaissent un quart de dégâts en plus avant de tomber, de 100 à 125."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent7B
+"Les Camions piégés roulent 15 pour cent plus vite et encaissent un quart de dégâts en plus, de 220 à 275."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent8A
+"Les Pièges explosifs coûtent moitié prix, 100 au lieu de 200, ou 80 avec Construction de récupération, tant qu'il vous reste un Poste de commandement, une Caserne, un Trafiquant d'armes ou un Ouvrier."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent8B
+"Les Buggys lance-roquettes encaissent 30 pour cent de dégâts en plus avant d'être détruits, de 120 à 156."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent10A
+"Chaque missile des Scuds multiples frappe 10 pour cent plus fort, 660 au centre au lieu de 600."
+END
+
+CONTROLBAR:ToolTipDemolitionTalent10B
+"Les Lanceurs mobiles Scud sortent du Trafiquant d'armes vétérans."
+END
+
+CONTROLBAR:ToolTipGLATalent6A
+"Les bâtiments coûtent 20 pour cent de moins, une Caserne 400 au lieu de 500, tant qu'il vous reste un Poste de commandement, une Caserne, un Trafiquant d'armes ou un Ouvrier."
+END
+
+CONTROLBAR:ToolTipGLATalent6B
+"L'infanterie court 15 pour cent plus vite, les Emeutiers aussi. Pas les Ouvriers, qui ont leurs propres chaussures."
+END
+
+CONTROLBAR:ToolTipGLATalent7A
+"Les Jeeps et les Buggys lance-roquettes roulent 15 pour cent plus vite."
+END
+
+CONTROLBAR:ToolTipGLATalent7B
+"Les Lance-roquettes encaissent un quart de dégâts en plus avant de mourir, de 100 à 125."
+END
+
+CONTROLBAR:ToolTipGLATalent8A
+"Les Sites Stingers ont 1300 points de vie au lieu de 1000."
+END
+
+CONTROLBAR:ToolTipGLATalent8B
+"Les Scorpions encaissent un cinquième de dégâts en plus avant d'être détruits, de 370 à 444, et les Maraudeurs de 500 à 600."
+END
+
+CONTROLBAR:ToolTipGLATalent9A
+"La Cinquième colonne amène quatre Rebelles de plus : 8, 12 ou 20 selon son niveau au lieu de 4, 8 ou 16. Celle du général Démolition en amène 8, 10 ou 14 au lieu de 4, 6 ou 10."
+END
+
+CONTROLBAR:ToolTipGLATalent9B
+"L'explosion de la Bombe Anthrax et son nuage toxique portent un quart plus loin, et le cercle de visée grandit d'autant."
+END
+
+CONTROLBAR:ToolTipGLATalent10A
+"Les missiles des Scuds multiples tombent un quart plus écartés, et chaque explosion et flaque de poison porte un quart plus loin. Le cercle de visée grandit d'autant."
+END
+
+CONTROLBAR:ToolTipGLATalent10B
+"Les Maraudeurs sortent du Trafiquant d'armes vétérans."
+END
+
+CONTROLBAR:ToolTipInfantryTalent7A
+"Les Mitrailleurs courent un cinquième plus vite, de 25 à 30."
+END
+
+CONTROLBAR:ToolTipInfantryTalent7B
+"Les Tueurs de chars encaissent un quart de dégâts en plus avant de mourir, de 100 à 125 hors vétérance."
+END
+
+CONTROLBAR:ToolTipInfantryTalent8A
+"Les Bunkers fortifiés tiennent 30 pour cent plus longtemps, de 1500 à 1950."
+END
+
+CONTROLBAR:ToolTipInfantryTalent8B
+"Les Transporteurs d'assaut encaissent un quart de dégâts en plus, de 240 à 300, et roulent 15 pour cent plus vite."
+END
+
+CONTROLBAR:ToolTipInfantryTalent10A
+"Un soldat qui ne subit aucun dégât pendant 10 secondes regagne 2 points de vie par seconde. Mitrailleurs, Tueurs de chars, Technopirates et Lotus Noir."
+END
+
+CONTROLBAR:ToolTipInfantryTalent10B
+"Le Parachutage d'infanterie largue cinq Mitrailleurs de plus : 10, 15 et 20 à ses trois niveaux."
+END
+
+CONTROLBAR:ToolTipLaserTalent7A
+"Les Chars laser encaissent un cinquième de dégâts en plus avant d'être détruits, de 480 à 576."
+END
+
+CONTROLBAR:ToolTipLaserTalent7B
+"Les Vengeurs encaissent un quart de dégâts en plus avant d'être détruits, de 300 à 375."
+END
+
+CONTROLBAR:ToolTipLaserTalent8A
+"Les Tourelles de défense laser ont 1300 points de vie au lieu de 1000."
+END
+
+CONTROLBAR:ToolTipLaserTalent8B
+"Les Chars laser roulent 15 pour cent plus vite."
+END
+
+CONTROLBAR:ToolTipLaserTalent10A
+"Les Chars laser sortent du Complexe militaro-industriel vétérans."
+END
+
+CONTROLBAR:ToolTipLaserTalent10B
+"Les Tourelles de défense laser et les Positions de tir coûtent 30 pour cent de moins, 700 au lieu de 1000, tant qu'il vous reste un Poste de commandement, une Caserne, un Complexe militaro-industriel ou un Engin de chantier."
+END
+
+CONTROLBAR:ToolTipNukeTalent7A
+"Les Empereurs encaissent un cinquième de dégâts en plus avant d'être détruits, de 1100 à 1320."
+END
+
+CONTROLBAR:ToolTipNukeTalent7B
+"Les Nuclécanons encaissent 30 pour cent de dégâts en plus avant d'être détruits, de 240 à 312."
+END
+
+CONTROLBAR:ToolTipNukeTalent8A
+"Les Réacteurs nucléaires et les Bunkers tiennent 30 pour cent plus longtemps, de 1500 à 1950."
+END
+
+CONTROLBAR:ToolTipNukeTalent8B
+"Les Migs encaissent un quart de dégâts en plus avant d'être abattus, de 160 à 200. S'ajoute au Mig fuselage renforcé."
+END
+
+CONTROLBAR:ToolTipNukeTalent10A
+"Les Nuclécanons sortent du Complexe militaro-industriel élites."
+END
+
+CONTROLBAR:ToolTipNukeTalent10B
+"Un Empereur qui ne subit aucun dégât pendant 10 secondes répare 11 points de vie, 1 pour cent, par seconde."
+END
+
+CONTROLBAR:ToolTipStealthTalent7A
+"Jarmen Kell encaisse 30 pour cent de dégâts en plus avant de mourir, de 200 à 260."
+END
+
+CONTROLBAR:ToolTipStealthTalent7B
+"Les Jeeps encaissent un cinquième de dégâts en plus avant d'être détruites, de 180 à 216, et les Buggys lance-roquettes de 120 à 144."
+END
+
+CONTROLBAR:ToolTipStealthTalent8A
+"Les Réseaux de tunnels ont 1875 points de vie au lieu de 1500, et les Sites Stingers 1250 au lieu de 1000."
+END
+
+CONTROLBAR:ToolTipStealthTalent8B
+"Les Camions piégés roulent 15 pour cent plus vite et encaissent un quart de dégâts en plus, de 220 à 275."
+END
+
+CONTROLBAR:ToolTipStealthTalent10A
+"Les Jeeps et les Buggys lance-roquettes se camouflent quand ils retiennent leur tir, comme les Rebelles camouflés, et restent cachés en mouvement."
+END
+
+CONTROLBAR:ToolTipStealthTalent10B
+"Le Brouilleur GPS cache les unités moitié plus loin, jusqu'à 150 au lieu de 100, et le cercle de visée grandit d'autant."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent7A
+"Les Aurora Alpha encaissent un quart de dégâts en plus avant de tomber, de 80 à 100."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent7B
+"Les Hum-Vee encaissent un quart de dégâts en plus avant d'être détruits, de 240 à 300, et les Vengeurs de 300 à 375."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent8A
+"Les Systèmes IEM Patriot ont 1300 points de vie au lieu de 1000."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent8B
+"Les Tomahawks roulent 15 pour cent plus vite et encaissent un quart de dégâts en plus, de 180 à 225."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent10A
+"Les superarmes coûtent 25 pour cent de moins, un Canon à particules 1875 au lieu de 2500, tant qu'il vous reste un Poste de commandement, une Caserne, un Complexe militaro-industriel ou un Engin de chantier."
+END
+
+CONTROLBAR:ToolTipSuperweaponTalent10B
+"Les bâtiments de défense réparent 6 points de vie de plus par seconde, en plus de leur propre réparation, dès que rien ne les a touchés depuis 3 secondes, soit presque deux fois plus vite."
+END
+
+CONTROLBAR:ToolTipTankTalent7A
+"Les Despotes encaissent un cinquième de dégâts en plus avant d'être détruits, de 1100 à 1320 hors vétérance."
+END
+
+CONTROLBAR:ToolTipTankTalent7B
+"Les Chars Dragon et les Chars Gattling encaissent un quart de dégâts en plus avant d'être détruits : un Dragon de 400 à 500, un Gattling de 300 à 375, hors vétérance."
+END
+
+CONTROLBAR:ToolTipTankTalent8A
+"Un char qui ne subit aucun dégât pendant 10 secondes répare 1 pour cent de sa santé par seconde. Maîtres de guerre, Despotes, Chars Gattling, Chars Dragon et Chars CME."
+END
+
+CONTROLBAR:ToolTipTankTalent8B
+"Les Maîtres de guerre encaissent un cinquième de dégâts en plus avant d'être détruits, de 400 à 480 hors vétérance."
+END
+
+CONTROLBAR:ToolTipTankTalent10A
+"Les Despotes sortent du Complexe militaro-industriel élites au lieu de vétérans."
+END
+
+CONTROLBAR:ToolTipTankTalent10B
+"Le Parachutage de chars largue deux Maîtres de guerre de plus : 3, 4 et 6 à ses trois niveaux."
+END
+
+CONTROLBAR:ToolTipToxinTalent7A
+"Les Tracteurs bactériologiques roulent 15 pour cent plus vite et encaissent un quart de dégâts en plus, de 240 à 300."
+END
+
+CONTROLBAR:ToolTipToxinTalent7B
+"Les Maraudeurs encaissent un quart de dégâts en plus avant d'être détruits, de 500 à 625."
+END
+
+CONTROLBAR:ToolTipToxinTalent8A
+"Les Réseaux de tunnels ont 1950 points de vie au lieu de 1500."
+END
+
+CONTROLBAR:ToolTipToxinTalent8B
+"Les Lanceurs mobiles Scud roulent 15 pour cent plus vite et encaissent un quart de dégâts en plus, de 180 à 225."
+END
+
+CONTROLBAR:ToolTipToxinTalent10A
+"Les flaques de poison laissées par les Scuds multiples durent moitié plus longtemps, 67 secondes au lieu de 45."
+END
+
+CONTROLBAR:ToolTipToxinTalent10B
+"Les Tracteurs bactériologiques sortent du Trafiquant d'armes vétérans."
+END
+
+CONTROLBAR:ToolTipUSATalent7A
+"Les Crusaders encaissent un cinquième de dégâts en plus avant d'être détruits, de 480 à 576, et les Paladins de 500 à 600."
+END
+
+CONTROLBAR:ToolTipUSATalent7B
+"Les Rangers encaissent un quart de dégâts en plus avant de mourir, de 180 à 225, et l'Infanterie lance-missiles de 100 à 125."
+END
+
+CONTROLBAR:ToolTipUSATalent8A
+"Les Patriot et les Positions de tir tiennent un quart plus longtemps, 1250 au lieu de 1000."
+END
+
+CONTROLBAR:ToolTipUSATalent8B
+"Les Comanches encaissent un cinquième de dégâts en plus avant de tomber, de 220 à 264, et les Raptors de 160 à 192."
+END
+
+CONTROLBAR:ToolTipUSATalent10A
+"La Bombe aéro-incendiaire et la MOAB tuent un quart plus loin, et le cercle de visée grandit d'autant."
+END
+
+CONTROLBAR:ToolTipUSATalent10B
+"Un véhicule qui ne subit aucun dégât pendant 5 secondes répare environ 1 pour cent de sa santé par seconde."
+END
+
+CONTROLBAR:IdleAircraft
+"Avions inactifs"
+END
+
+CONTROLBAR:IdleAircraftDescription
+"Cliquez pour sélectionner le prochain avion inactif. Maj-clic les sélectionne tous. Clic droit sélectionne tous vos avions, inactifs ou non : d'abord ceux à l'écran, toute la carte au second clic droit."
+END
+
+CONTROLBAR:IdleInfantry
+"Infanterie inactive"
+END
+
+CONTROLBAR:IdleInfantryDescription
+"Cliquez pour sélectionner le prochain fantassin inactif. Maj-clic les sélectionne tous. Clic droit sélectionne toute votre infanterie, inactive ou non : d'abord celle à l'écran, toute la carte au second clic droit."
+END
+
+CONTROLBAR:IdleVehicle
+"Véhicule inactif"
+END
+
+CONTROLBAR:IdleVehicleDescription
+"Cliquez pour sélectionner le prochain véhicule terrestre inactif. Maj-clic les sélectionne tous. Clic droit sélectionne tous vos véhicules terrestres, inactifs ou non : d'abord ceux à l'écran, toute la carte au second clic droit."
+END
+
+CONTROLBAR:LastAlert
+"Dernière alerte"
+END
+
+CONTROLBAR:LastAlertDescription
+"Cliquez pour amener la caméra sur la dernière alerte radar, par exemple votre base attaquée. Cliquez de nouveau peu après pour remonter d'une alerte."
+END
+
+CONTROLBAR:SelectArmy
+"Sélectionner l'armée"
+END
+
+CONTROLBAR:SelectArmyDescription
+"Cliquez pour sélectionner chaque unité de combat à l'écran ; cliquez encore pour toute votre armée sur la carte. Les ouvriers, les camions de ravitaillement et les bâtiments sont laissés de côté."
+END
+
+GUI:AirliftAtLimit
+"Vous en avez déjà le maximum"
+END
+
+GUI:AirliftCancel
+"Annuler"
+END
+
+GUI:AirliftFee
+"Frais : %ls"
+END
+
+GUI:AirliftFor
+"pour %ls"
+END
+
+GUI:AirliftHint
+"Clic ou molette vers le haut pour en ajouter un, clic droit ou molette vers le bas pour en retirer un. Maj : cinq."
+END
+
+GUI:AirliftNoFactory
+"Il faut une usine qui le produit"
+END
+
+GUI:AirliftOK
+"OK"
+END
+
+GUI:AirliftPlanes
+"Avions : %d sur %d"
+END
+
+GUI:AirliftPlanesFull
+"Plus de place dans les avions"
+END
+
+GUI:AirliftTitle
+"Pont aérien"
+END
+
+GUI:AirliftTotal
+"Total : %ls"
+END
+
+GUI:CheatBuildAnywhere
+"Construire partout"
+END
+
+GUI:CheatRankMax
+"MAX"
+END
+
+GUI:CheatSectionMap
+"CARTE"
+END
+
+GUI:CheatSectionPlayer
+"JOUEUR"
+END
+
+GUI:CheatSectionUnits
+"UNITÉS"
+END
+
+GUI:CheatUnlimitedPoints
+"Points de général illimités"
+END
+
+GUI:CommandTabAircraft
+"Avions%s : tout ce que vos aérodromes peuvent construire maintenant. La molette fait défiler la liste"
+END
+
+GUI:CommandTabBuildings
+"Bâtiments%s : tout ce que vos constructeurs peuvent bâtir, sans rien sélectionner d'abord"
+END
+
+GUI:CommandTabGround
+"Unités terrestres%s : tout ce que vos usines peuvent produire maintenant. La molette fait défiler la liste"
+END
+
+GUI:CommandTabPageNext
+"Défiler à droite"
+END
+
+GUI:CommandTabPagePrev
+"Défiler à gauche"
+END
+
+GUI:DirectStrikeBrutal
+"Brutale"
+END
+
+GUI:DirectStrikeEasy
+"Facile"
+END
+
+GUI:DirectStrikeHard
+"Difficile"
+END
+
+GUI:DirectStrikeIslandNote
+"Une nouvelle île à chaque partie"
+END
+
+GUI:DirectStrikeMap
+"Île aléatoire"
+END
+
+GUI:DirectStrikeMedium
+"Moyenne"
+END
+
+GUI:DirectStrikeReady
+"PRÊT"
+END
+
+GUI:DirectStrikeStart
+"LANCER"
+END
+
+GUI:DirectStrikeTeam
+"ÉQUIPE %d"
+END
+
+GUI:DirectStrikeTeamSize
+"%d vs %d"
+END
+
+GUI:GameModeApocalypse
+"APOCALYPSE"
+END
+
+GUI:GameModeBody
+"Pour quel mode est cette partie ?"
+END
+
+GUI:GameModeClassic
+"CLASSIQUE"
+END
+
+GUI:GameModeDirectStrike
+"DIRECT STRIKE"
+END
+
+GUI:GameModeTitle
+"Créer partie"
+END
+
+GUI:GameModeClassicFact
+"Toute carte"
+END
+
+GUI:GameModeDirectStrikeFact
+"6 joueurs max."
+END
+
+GUI:GameModeApocalypseFact
+"Coop, 4 max."
+END
+
+GUI:GameSpeed_Short
+"Vitesse"
+END
+
+GUI:GraphBuildings_Short
+"Bât."
+END
+
+GUI:GraphGraphs
+"Graphiques"
+END
+
+GUI:GraphLines
+"Courbes"
+END
+
+GUI:GraphPeak
+"pic %ls"
+END
+
+GUI:GraphShare
+"Part"
+END
+
+GUI:GraphUnitsLost
+"Unités perdues"
+END
+
+GUI:GraphValueDestroyed
+"Valeur détruite"
+END
+
+GUI:GroupTrayTraining
+"+%d en production"
+END
+
+GUI:Handicap
+"Handicap"
+END
+
+GUI:HotkeysCommandREQUEST_MONEY
+"Demander de l'argent aux alliés"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_AIRCRAFT
+"Onglet avions"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_BUILDINGS
+"Onglet bâtiments"
+END
+
+GUI:HotkeysCommandTOGGLE_COMMAND_TAB_GROUND
+"Onglet unités terrestres"
+END
+
+GUI:HudArmies
+"Armées"
+END
+
+GUI:HudCameraDirector
+"Réalisateur"
+END
+
+GUI:HudCameraDirector_Short
+"Réal."
+END
+
+GUI:HudCameraFree
+"Libre"
+END
+
+GUI:HudCameraFree_Short
+"Libre"
+END
+
+GUI:HudCameraPlayer
+"Joueur"
+END
+
+GUI:HudCameraPlayer_Short
+"Joueur"
+END
+
+GUI:HudCamHintArmies
+"Affiche les unités de chaque joueur à côté de la liste"
+END
+
+GUI:HudCamHintFog
+"N'affiche que ce que voit le joueur suivi"
+END
+
+GUI:HudCamHintFree
+"Vous déplacez la caméra vous-même"
+END
+
+GUI:HudCamHintPlayer
+"Vous voyez l'écran du joueur choisi"
+END
+
+GUI:HudCamHintRow
+"Cliquez pour voir l'écran de ce joueur"
+END
+
+GUI:HudCamHintRowLive
+"Cliquez pour le lâcher"
+END
+
+GUI:HudCamNextComputer
+"Les ordinateurs n'ont pas d'écran. Le réalisateur prend le relais"
+END
+
+GUI:HudCamNextDirector
+"La caméra va d'elle-même au plus gros combat"
+END
+
+GUI:HudCamNextDirectorFollowed
+"Suit les combats de %ls"
+END
+
+GUI:HudCamNextFree
+"Cliquez sur le nom d'un joueur pour voir son écran"
+END
+
+GUI:HudCamNextFree_Short
+"Un nom pour voir son écran"
+END
+
+GUI:HudCamNextFreeFollowed
+"Cliquez pour revenir : %ls"
+END
+
+GUI:HudCamNextPlayer
+"Échap ou un nouveau clic sur le nom pour lâcher"
+END
+
+GUI:HudCamNextPlayer_Short
+"Échap ou le nom pour lâcher"
+END
+
+GUI:HudCamNextWaiting
+"En attente de la caméra de ce joueur"
+END
+
+GUI:HudCamStateDirector
+"Réalisateur"
+END
+
+GUI:HudCamStateFree
+"Caméra libre"
+END
+
+GUI:HudCamStatePlayer
+"Écran de %ls"
+END
+
+GUI:HudFog
+"Brouillard"
+END
+
+GUI:HudNetWorth
+"Valeur nette"
+END
+
+GUI:HudPlayerCamera
+"CAMÉRA JOUEUR"
+END
+
+GUI:HudStandings
+"Classement"
+END
+
+GUI:HudStatCash
+"Argent"
+END
+
+GUI:HudStatIncome
+"Revenu par minute"
+END
+
+GUI:HudStatIncomeValue
+"%ls/min"
+END
+
+GUI:HudStatKills
+"Victimes / pertes"
+END
+
+GUI:HudStatPower
+"Énergie"
+END
+
+GUI:HudStatRank
+"Grade du général"
+END
+
+GUI:HudStatRankValue
+"Grade %d"
+END
+
+GUI:HudWatch
+"Caméra"
+END
+
+GUI:IncomeSharing_Short
+"Partage"
+END
+
+GUI:JoinerLeftDropped
+"%hs est parti : votre liste de places ne l'affichait plus."
+END
+
+GUI:JoinerLeftNoHost
+"%hs est parti : son jeu n'a pas reconnu en vous l'hôte de ce salon (il a lu la place de l'hôte comme \"%hs\")."
+END
+
+GUI:JoinerLeftNoSlotList
+"%hs est parti : votre liste de places ne lui est jamais parvenue."
+END
+
+GUI:JoinFailedDifferentBuild
+"Impossible de rejoindre : l'hôte utilise une autre version du jeu. Passez à la même version."
+END
+
+GUI:JoinFailedDifferentData
+"Impossible de rejoindre : même version du jeu, mais fichiers de données différents. Réparez ou réinstallez le jeu, et retirez les fichiers que vous avez ajoutés à son dossier Data."
+END
+
+GUI:LaneAbilities
+"Capacités"
+END
+
+GUI:LaneDiplomacy
+"Diplomatie"
+END
+
+GUI:LaneEndDamage
+"Dégâts"
+END
+
+GUI:LaneEndDraw
+"Égalité"
+END
+
+GUI:LaneEndEarned
+"Gagné"
+END
+
+GUI:LaneEndKills
+"Victimes"
+END
+
+GUI:LaneEndLeft
+"L'équipe %d a quitté la partie"
+END
+
+GUI:LaneEndMiddle
+"Centre tenu"
+END
+
+GUI:LaneEndRematch
+"Revanche"
+END
+
+GUI:LaneEndReplay
+"Voir la rediffusion"
+END
+
+GUI:LaneEndSpent
+"Dépensé"
+END
+
+GUI:LaneEndTeamWins
+"L'équipe %d gagne"
+END
+
+GUI:LaneEndUnits
+"Unités"
+END
+
+GUI:LaneEndWaves
+"Vagues"
+END
+
+GUI:LaneIncome
+"Revenu %d/%d"
+END
+
+GUI:LaneMatchClock
+"Durée de partie"
+END
+
+GUI:LaneMenu
+"Menu"
+END
+
+GUI:LaneTier
+"Niveau %d"
+END
+
+GUI:LaneUpgrades
+"Améliorations"
+END
+
+GUI:LoadProgress
+"Chargement %d%%"
+END
+
+GUI:LoadRuleOff
+"Non"
+END
+
+GUI:LoadRuleOn
+"Oui"
+END
+
+GUI:LoadTip11
+"Jouer contre l'IA en ligne a sa propre cote IA et ne touche jamais à votre cote de classement."
+END
+
+GUI:Lobby
+"Salon"
+END
+
+GUI:LobbyPresets
+"Préréglages"
+END
+
+GUI:LobbyPresetsButton
+"PRÉRÉGLAGES"
+END
+
+GUI:LocalPlayerMapDiffers
+"Votre jeu a construit %ls autrement que celui de l'hôte. La partie ne peut pas démarrer tant que vous n'avez pas tous deux la même version."
+END
+
+GUI:OnlineAIGame
+"1 partie · %d%% gagnées"
+END
+
+GUI:OnlineAIGames
+"%d parties · %d%% gagnées"
+END
+
+GUI:OnlineAIMapMissing
+"Le serveur a choisi une carte que ce jeu n'a pas (%ls), la partie n'a donc pas démarré."
+END
+
+GUI:OnlineAIRatingLabel
+"Cote IA"
+END
+
+GUI:OnlineAIRefused
+"Le serveur n'a pas lancé la partie (%ls)."
+END
+
+GUI:OnlineAIRefused_banned
+"Ce compte ne peut pas jouer de parties classées contre l'IA."
+END
+
+GUI:OnlineAIRefused_build
+"Vos fichiers de jeu diffèrent de la version publiée. Mettez le jeu à jour depuis le lanceur, puis réessayez."
+END
+
+GUI:OnlineAIRefused_pending
+"Votre dernière partie contre l'IA est encore en cours d'évaluation. Réessayez dans un instant."
+END
+
+GUI:OnlineAIRefused_signedout
+"Vous n'êtes pas connecté."
+END
+
+GUI:OnlineAIRefused_unavailable
+"zerohour.gg n'a pas répondu. Réessayez dans un instant."
+END
+
+GUI:OnlineAIShort
+"IA"
+END
+
+GUI:OnlineBrowserFailed
+"Impossible d'ouvrir votre navigateur."
+END
+
+GUI:OnlineBrowserTestServer
+"Serveur de test : aucun navigateur n'est ouvert."
+END
+
+GUI:OnlineCannotReachServer
+"Le serveur est injoignable. Vérifiez votre connexion, puis cliquez sur Connexion pour réessayer."
+END
+
+GUI:OnlineCardArmyChinaInf
+"Chine Infanterie"
+END
+
+GUI:OnlineCardArmyChinaNuke
+"Chine Nucléaire"
+END
+
+GUI:OnlineCardArmyChinaTank
+"Chine Blindés"
+END
+
+GUI:OnlineCardArmyGlaDemo
+"GLA Démolition"
+END
+
+GUI:OnlineCardArmyGlaStealth
+"GLA Furtivité"
+END
+
+GUI:OnlineCardArmyGlaToxin
+"GLA Toxines"
+END
+
+GUI:OnlineCardArmyUsaAir
+"USA Air Force"
+END
+
+GUI:OnlineCardArmyUsaLaser
+"USA Laser"
+END
+
+GUI:OnlineCardArmyUsaSuper
+"USA Superarmes"
+END
+
+GUI:OnlineCardByAI
+"Par armée de l'IA"
+END
+
+GUI:OnlineCardByOpp
+"Par armée adverse"
+END
+
+GUI:OnlineCardByOwn
+"Par votre armée"
+END
+
+GUI:OnlineCardColAI
+"Niveau de l'IA"
+END
+
+GUI:OnlineCardInRoom
+"Dans le salon %ls · %ls"
+END
+
+GUI:OnlineCardLastAI
+"Dernières parties IA"
+END
+
+GUI:OnlineCardLastQM
+"Derniers Quickmatchs"
+END
+
+GUI:OnlineCardProfile
+"PROFIL WEB"
+END
+
+GUI:OnlineCardTabAI
+"CONTRE IA"
+END
+
+GUI:OnlineCardUnavailable
+"L'historique des parties n'est pas disponible pour le moment."
+END
+
+GUI:OnlineCheckingFiles
+"Vérification des fichiers du jeu..."
+END
+
+GUI:OnlineComputerLabel
+"Ordinateur"
+END
+
+GUI:OnlineConnecting
+"Connexion au serveur..."
+END
+
+GUI:OnlineForgotPassword
+"MDP OUBLIÉ"
+END
+
+GUI:OnlineGamesLabel
+"Parties"
+END
+
+GUI:OnlineGeneralAir
+"Air Force"
+END
+
+GUI:OnlineGeneralDemo
+"Démolition"
+END
+
+GUI:OnlineGeneralInf
+"Infanterie"
+END
+
+GUI:OnlineGeneralLaser
+"Laser"
+END
+
+GUI:OnlineGeneralNuke
+"Nucléaire"
+END
+
+GUI:OnlineGeneralStealth
+"Furtivité"
+END
+
+GUI:OnlineGeneralSuper
+"Superarmes"
+END
+
+GUI:OnlineGeneralTank
+"Blindés"
+END
+
+GUI:OnlineGeneralToxin
+"Toxines"
+END
+
+GUI:OnlineHubAgoDays
+"il y a %d jours"
+END
+
+GUI:OnlineHubAgoHours
+"il y a %d h"
+END
+
+GUI:OnlineHubAgoMinutes
+"il y a %d min"
+END
+
+GUI:OnlineHubBrowse
+"PARTIES"
+END
+
+GUI:OnlineHubCustomLead
+"Non classée · 2-8"
+END
+
+GUI:OnlineHubCustomTitle
+"Parties perso"
+END
+
+GUI:OnlineHubFindMatch
+"CHERCHER"
+END
+
+GUI:OnlineHubFrom
+"Depuis %ls"
+END
+
+GUI:OnlineHubInQueue
+"En file d'attente"
+END
+
+GUI:OnlineHubMatchAI
+"contre IA"
+END
+
+GUI:OnlineHubMyCard
+"MA FICHE"
+END
+
+GUI:OnlineHubPlay
+"JOUER"
+END
+
+GUI:OnlineHubQuickMatchLead
+"Classée · 1c1"
+END
+
+GUI:OnlineHubQuickMatchLocked
+"Quickmatch bloqué pour %d:%02d"
+END
+
+GUI:OnlineHubRankedGames
+"%d parties sur %d"
+END
+
+GUI:OnlineHubRecent
+"Parties récentes"
+END
+
+GUI:OnlineHubRecentNoAnswer
+"Le serveur n'a envoyé aucun historique de parties."
+END
+
+GUI:OnlineHubRecentNone
+"Pas encore de Quickmatch ni de partie contre l'IA."
+END
+
+GUI:OnlineHubRecord
+"V–D"
+END
+
+GUI:OnlineHubSignOut
+"DÉCONNEXION"
+END
+
+GUI:OnlineHubVsAILead
+"Non classée"
+END
+
+GUI:OnlineHubVsAITitle
+"Jouer contre l'IA"
+END
+
+GUI:OnlineHubYday
+"Hier"
+END
+
+GUI:OnlineKeepSignedIn
+"Rester connecté"
+END
+
+GUI:OnlineLabel
+"EN LIGNE"
+END
+
+GUI:OnlineLadderButton
+"CLASSEMENT"
+END
+
+GUI:OnlineLadderEmpty
+"Aucun joueur classé sur cette page."
+END
+
+GUI:OnlineLadderGamesOf
+"%d parties sur %d"
+END
+
+GUI:OnlineLadderJump
+"ALLER À MA PAGE"
+END
+
+GUI:OnlineLadderLoading
+"Chargement du classement..."
+END
+
+GUI:OnlineLadderLosses
+"Défaites"
+END
+
+GUI:OnlineLadderNext
+"SUIVANT"
+END
+
+GUI:OnlineLadderPage
+"Rangs %d–%d"
+END
+
+GUI:OnlineLadderPlace
+"%de au classement"
+END
+
+GUI:OnlineLadderPlayer
+"Joueur"
+END
+
+GUI:OnlineLadderPrev
+"PRÉCÉDENT"
+END
+
+GUI:OnlineLadderRating
+"Cote"
+END
+
+GUI:OnlineLadderRatingLabel
+"Cote de classement"
+END
+
+GUI:OnlineLadderRecord
+"%d victoires · %d défaites"
+END
+
+GUI:OnlineLadderShort
+"Classement"
+END
+
+GUI:OnlineLadderTier
+"Grade"
+END
+
+GUI:OnlineLadderTierRange
+"%ls à %ls"
+END
+
+GUI:OnlineLadderTiers
+"Grades"
+END
+
+GUI:OnlineLadderTierUnder
+"sous %ls"
+END
+
+GUI:OnlineLadderTierUnranked
+"moins de 5 parties"
+END
+
+GUI:OnlineLadderTierUp
+"%ls et plus"
+END
+
+GUI:OnlineLadderUnavailable
+"Le classement n'est pas disponible pour le moment. Réessayez dans une minute."
+END
+
+GUI:OnlineLadderWinPct
+"%% vict."
+END
+
+GUI:OnlineLadderWins
+"Victoires"
+END
+
+GUI:OnlineLadderYourPlace
+"Votre place"
+END
+
+GUI:OnlineLobbyColGame
+"Partie"
+END
+
+GUI:OnlineLobbyColPlayers
+"Joueurs"
+END
+
+GUI:OnlineLobbyCount
+"%d ouvertes · %d en cours"
+END
+
+GUI:OnlineLobbyCountOpen
+"%d ouvertes"
+END
+
+GUI:OnlineLobbyEmpty
+"Aucune partie ouverte"
+END
+
+GUI:OnlineLobbyFull
+"Complète"
+END
+
+GUI:OnlineLobbyHost
+"HÉBERGER"
+END
+
+GUI:OnlineLobbyInRoom
+"Dans %ls"
+END
+
+GUI:OnlineLobbyJoin
+"REJOINDRE"
+END
+
+GUI:OnlineLobbyJoining
+"Connexion"
+END
+
+GUI:OnlineLobbyPlaying
+"En cours"
+END
+
+GUI:OnlineLobbyRoomGeneral
+"Général"
+END
+
+GUI:OnlineLoginBadBody
+"E-mail, pseudo ou mot de passe incorrect. Vérifiez-les et réessayez."
+END
+
+GUI:OnlineLoginBadLogin
+"E-mail, pseudo ou mot de passe incorrect."
+END
+
+GUI:OnlineLoginBanned
+"Ce compte est banni."
+END
+
+GUI:OnlineLoginElsewhere
+"Ce compte s'est connecté depuis un autre ordinateur."
+END
+
+GUI:OnlineLoginEmpty
+"Saisissez votre e-mail ou votre pseudo, et votre mot de passe."
+END
+
+GUI:OnlineLoginExpired
+"Votre mot de passe a changé. Saisissez-le de nouveau."
+END
+
+GUI:OnlineLoginFailed
+"Échec de la connexion"
+END
+
+GUI:OnlineLoginFiles
+"Ce fichier n'est pas celui livré avec le jeu :\n\n%ls\n\nRéinstallez le jeu depuis le lanceur ou supprimez ce fichier, puis relancez le jeu et reconnectez-vous."
+END
+
+GUI:OnlineLoginFilesNone
+"Le serveur n'a pas pu vérifier vos fichiers de jeu. Relancez le jeu et reconnectez-vous ; si cela se reproduit, réinstallez le jeu depuis le lanceur."
+END
+
+GUI:OnlineLoginHeading
+"Connexion"
+END
+
+GUI:OnlineLoginInQuickMatch
+"En Quickmatch"
+END
+
+GUI:OnlineLoginName
+"E-mail ou pseudo"
+END
+
+GUI:OnlineLoginOnlineNow
+"En ligne"
+END
+
+GUI:OnlineLoginSavedToken
+"Connexion mémorisée"
+END
+
+GUI:OnlineLoginThrottled
+"Trop de tentatives. Attendez %d secondes et réessayez."
+END
+
+GUI:OnlineLoginThrottledNoRetry
+"Trop de tentatives. Attendez une minute et réessayez."
+END
+
+GUI:OnlineLoginUnavailable
+"Le service de comptes est injoignable. Réessayez sous peu."
+END
+
+GUI:OnlineLossLabel
+"Défaite"
+END
+
+GUI:OnlineMaintenance
+"Le jeu en ligne est en maintenance. Réessayez plus tard."
+END
+
+GUI:OnlineMaintenanceTitle
+"En maintenance"
+END
+
+GUI:OnlineMaintenanceUntil
+"Le jeu en ligne est en maintenance. Retour prévu à %s."
+END
+
+GUI:OnlineMapLabel
+"Carte"
+END
+
+GUI:OnlineNextTier
+"%ls à %ls · encore %ls"
+END
+
+GUI:OnlineNoticeBack
+"Retour à %s"
+END
+
+GUI:OnlineNoticeInfo
+"AVIS"
+END
+
+GUI:OnlineNoticeMaintenance
+"MAINTENANCE"
+END
+
+GUI:OnlineNoticeMaintenanceWords
+"Le jeu en ligne est en maintenance."
+END
+
+GUI:OnlineNoticeUntil
+"Jusqu'à %s"
+END
+
+GUI:OnlineOpenedInBrowser
+"Ouvert dans votre navigateur."
+END
+
+GUI:OnlineOpenGamesLabel
+"Parties ouvertes"
+END
+
+GUI:OnlineOpponentLabel
+"Adversaire"
+END
+
+GUI:OnlinePingMs
+"%d ms"
+END
+
+GUI:OnlinePlaceLabel
+"Place"
+END
+
+GUI:OnlinePlayerNotOnline
+"Pas en ligne actuellement"
+END
+
+GUI:OnlineQuickMatchLabel
+"Quickmatch"
+END
+
+GUI:OnlineRatedResult
+"Cote %+.1f -> %d"
+END
+
+GUI:OnlineRating
+"Cote %d"
+END
+
+GUI:OnlineRatingTier
+"%ls, cote %d"
+END
+
+GUI:OnlineScoreAgain
+"NOUVEAU QUICKMATCH"
+END
+
+GUI:OnlineScoreAIHeld
+"La victoire n'a pas été comptée. Un administrateur va l'examiner."
+END
+
+GUI:OnlineScoreAISaved
+"Prochaine IA : %ls"
+END
+
+GUI:OnlineScoreConfirmed
+"Résultat confirmé"
+END
+
+GUI:OnlineScoreNoAnswer
+"Le serveur n'a pas encore répondu. Le résultat apparaîtra sur zerohour.gg."
+END
+
+GUI:OnlineScorePlayAgain
+"REJOUER"
+END
+
+GUI:OnlineScoreSending
+"Envoi du résultat et de la rediffusion"
+END
+
+GUI:OnlineScoreSendingResult
+"Envoi du résultat"
+END
+
+GUI:OnlineScoreSubAI
+"Contre l'IA · %ls · %ls"
+END
+
+GUI:OnlineScoreSubRanked
+"Classée %ls · %ls"
+END
+
+GUI:OnlineSignIn
+"CONNEXION"
+END
+
+GUI:OnlineSigningIn
+"Connexion..."
+END
+
+GUI:OnlineSkinsAll
+"Tous"
+END
+
+GUI:OnlineSkinsButton
+"SKINS"
+END
+
+GUI:OnlineSkinsDefault
+"DÉFAUT"
+END
+
+GUI:OnlineSkinsFilterLocked
+"Verrouillés"
+END
+
+GUI:OnlineSkinsNone
+"Votre compte ne possède encore aucun skin. Chaque carte indique comment obtenir son skin ; rouvrez cet écran une fois que vous en avez un."
+END
+
+GUI:OnlineSkinsOpenSite
+"OUVRIR ZEROHOUR.GG"
+END
+
+GUI:OnlineSkinsOwned
+"Possédés"
+END
+
+GUI:OnlineSkinsPending
+"%d changements pas encore enregistrés"
+END
+
+GUI:OnlineSkinsPending1
+"1 changement pas encore enregistré"
+END
+
+GUI:OnlineSkinsPickedButton
+"CHOISI"
+END
+
+GUI:OnlineSkinsRefused
+"zerohour.gg a refusé ce choix, vos skins restent donc tels quels. Rouvrez cet écran pour voir ce que possède votre compte."
+END
+
+GUI:OnlineSkinsSave
+"ENREGISTRER"
+END
+
+GUI:OnlineSkinsSaved
+"Enregistré. Votre prochaine partie, perso ou Quickmatch, affichera ces skins."
+END
+
+GUI:OnlineSkinsSideChina
+"Chine"
+END
+
+GUI:OnlineSkinsSideGla
+"GLA"
+END
+
+GUI:OnlineSkinsSideUsa
+"USA"
+END
+
+GUI:OnlineSkinsSignedOut
+"Vous n'êtes pas connecté. Connectez-vous en ligne pour choisir vos skins."
+END
+
+GUI:OnlineSkinsThrottled
+"Trop d'enregistrements en une minute. Patientez un peu et cliquez de nouveau sur Enregistrer."
+END
+
+GUI:OnlineSkinsUnavailable
+"zerohour.gg n'a pas répondu. Vos skins restent tels quels ; réessayez dans un instant."
+END
+
+GUI:OnlineSkinsWaiting
+"Interrogation de zerohour.gg..."
+END
+
+GUI:OnlineSkinsWear
+"PORTER"
+END
+
+GUI:OnlineSkinsWornButton
+"PORTÉ"
+END
+
+GUI:OnlineSpeedLabel
+"Vitesse"
+END
+
+GUI:OnlineStartRefused
+"Le serveur n'a pas voulu lancer la partie (%s)."
+END
+
+GUI:OnlineTabCustom
+"PARTIES PERSO"
+END
+
+GUI:OnlineTabHome
+"ACCUEIL"
+END
+
+GUI:OnlineTabQuickMatch
+"QUICKMATCH"
+END
+
+GUI:OnlineTier_captain
+"Capitaine"
+END
+
+GUI:OnlineTier_colonel
+"Colonel"
+END
+
+GUI:OnlineTier_general
+"Général"
+END
+
+GUI:OnlineTier_lieutenant
+"Lieutenant"
+END
+
+GUI:OnlineTier_major
+"Commandant"
+END
+
+GUI:OnlineTier_private
+"Soldat"
+END
+
+GUI:OnlineTier_sergeant
+"Sergent"
+END
+
+GUI:OnlineTier_unranked
+"Non classé"
+END
+
+GUI:OnlineUnrated
+"Cette partie n'a pas été classée."
+END
+
+GUI:OnlineUnrated_cancelled
+"Non classée : la partie a été annulée."
+END
+
+GUI:OnlineUnrated_custom
+"Les parties perso ne sont pas classées."
+END
+
+GUI:OnlineUnrated_desync
+"Non classée : la partie s'est désynchronisée."
+END
+
+GUI:OnlineUnrated_endframe
+"Non classée : les deux camps ont annoncé des résultats différents."
+END
+
+GUI:OnlineUnrated_grace
+"Non classée : un joueur est parti dès le début."
+END
+
+GUI:OnlineUnrated_nowinner
+"Non classée : personne n'a gagné."
+END
+
+GUI:OnlineUnrated_seed
+"Non classée : les deux camps ont annoncé des résultats différents."
+END
+
+GUI:OnlineUnrated_stalled
+"Non classée : le résultat n'a pas pu être confirmé."
+END
+
+GUI:OnlineUnrated_unconfirmed
+"Non classée : le résultat n'a pas pu être confirmé."
+END
+
+GUI:OnlineUnrated_winners
+"Non classée : les deux camps ont annoncé des résultats différents."
+END
+
+GUI:OnlineVsAIButton
+"JOUER CONTRE IA"
+END
+
+GUI:OnlineWinLabel
+"Victoire"
+END
+
+GUI:OnlineWinRateLabel
+"Taux de victoire"
+END
+
+GUI:PicksWaiting
+"CHOIX EN ATTENTE : %d"
+END
+
+GUI:PlayerMapDiffers
+"Le jeu de %ls a construit %ls autrement que le vôtre. La partie ne peut pas démarrer tant que vous n'avez pas tous deux la même version."
+END
+
+GUI:QMAll
+"TOUTES"
+END
+
+GUI:QMAnOpponent
+"joueur inconnu"
+END
+
+GUI:QMChance
+"Chance de victoire"
+END
+
+GUI:QMCheckingMap
+"Vérification de la carte avec votre adversaire"
+END
+
+GUI:QMFound
+"Adversaire trouvé"
+END
+
+GUI:QMLocked
+"Quickmatch bloqué pour %d:%02d"
+END
+
+GUI:QMMapDiffers
+"Le jeu de %ls a construit la carte de cette partie autrement que le vôtre, la partie a donc été annulée. Vérifiez que vous avez tous deux la même version."
+END
+
+GUI:QMMapNoAnswer
+"Le jeu de %ls n'a jamais confirmé la carte de cette partie, la partie a donc été annulée. Son jeu est peut-être une version plus ancienne."
+END
+
+GUI:QMNewMap
+"Nouvelle carte"
+END
+
+GUI:QMNoGeneral
+"Aucun général"
+END
+
+GUI:QMNone
+"AUCUNE"
+END
+
+GUI:QMOpponentLeft
+"Votre adversaire est parti avant le début de la partie. Vous êtes de retour dans la file."
+END
+
+GUI:QMQueueHere
+"%d autres cherchent sur %ls"
+END
+
+GUI:QMRandomArmy
+"Armée aléatoire"
+END
+
+GUI:QMRefused
+"Le serveur n'a pas voulu vous mettre dans la file. Réessayez dans un instant."
+END
+
+GUI:QMSearch
+"CHERCHER"
+END
+
+GUI:QMSearching
+"Recherche d'un adversaire"
+END
+
+GUI:QMSpeedAccepted
+"Accepté, partie à %s"
+END
+
+GUI:QMSpeedAsk
+"%s veut jouer à %s. Accepter ?\n\nRefus dans %d s"
+END
+
+GUI:QMSpeedBanner
+"JOUER À %s ?"
+END
+
+GUI:QMSpeedDeclined
+"Refusé, partie à %s"
+END
+
+GUI:QMSpeedWaiting
+"En attente que %s accepte %s"
+END
+
+GUI:QMStartsBanner
+"LA PARTIE COMMENCE DANS %d"
+END
+
+GUI:QMStop
+"ARRÊTER"
+END
+
+GUI:QMVs
+"VS"
+END
+
+GUI:QMWidens
+"S'élargit dans %d:%02d"
+END
+
+GUI:QMWindowValue
+"Chance de victoire %d-%d%%"
+END
+
+GUI:QMYou
+"Vous"
+END
+
+GUI:QMYourPicks
+"Vos choix"
+END
+
+GUI:RequestMoneyChat
+"J'ai besoin d'argent !"
+END
+
+GUI:SaveFromOtherLogicRate
+"Cette sauvegarde vient d'une version de Reforged dont la logique de jeu tournait %d fois par seconde. Cette version la fait tourner %d fois par seconde, la sauvegarde ne peut donc pas être chargée. Les sauvegardes \"Début de mission\" de cette version se chargent toujours et reprennent la campagne au début de cette mission."
+END
+
+GUI:ScoreHighlightArmy
+"Plus grande armée"
+END
+
+GUI:ScoreHighlightDestroyed
+"Plus de destructions"
+END
+
+GUI:ScoreHighlightEarned
+"Plus gros revenu"
+END
+
+GUI:ScoreHighlights
+"Temps forts"
+END
+
+GUI:ScoreHighlightSuperweapon
+"Première superarme"
+END
+
+GUI:ScoreLength
+"Durée"
+END
+
+GUI:ScoreNoWinner
+"Aucun vainqueur"
+END
+
+GUI:ScorePlayerWins
+"%ls gagne"
+END
+
+GUI:ScoreTeamWins
+"L'équipe %d gagne"
+END
+
+GUI:SignalKeyAttack
+"Signal d'attaque : de la fumée pour vos alliés là où vous cliquerez ensuite. Clic droit pour annuler"
+END
+
+GUI:SignalKeyAttention
+"Regardez ici : de la fumée pour vos alliés là où vous cliquerez ensuite. Clic droit pour annuler"
+END
+
+GUI:SignalKeyDefend
+"Signal de défense : de la fumée pour vos alliés là où vous cliquerez ensuite. Clic droit pour annuler"
+END
+
+GUI:SkirmishPreset11v1
+"11 contre 1 : vous contre 11 IA difficiles"
+END
+
+GUI:SkirmishPreset12v12
+"12 contre 12, IA difficiles"
+END
+
+GUI:SkirmishPreset15v1
+"15 contre 1 : vous contre 15 IA difficiles"
+END
+
+GUI:SkirmishPreset16v16
+"16 contre 16 : vous et 15 alliés difficiles contre 16 IA difficiles"
+END
+
+GUI:SkirmishPreset16v16Brutal
+"16 contre 16, toutes brutales"
+END
+
+GUI:SkirmishPreset23v1
+"23 contre 1 : vous contre 23 IA difficiles"
+END
+
+GUI:SkirmishPreset2x4
+"2 c. 2 c. 2 c. 2, IA moyennes"
+END
+
+GUI:SkirmishPreset31v1
+"31 contre 1 : vous contre 31 IA difficiles"
+END
+
+GUI:SkirmishPreset3Way
+"Guerre à trois : 11 c. 11 c. 10, IA moyennes"
+END
+
+GUI:SkirmishPreset3x4
+"3 équipes de 4, IA moyennes"
+END
+
+GUI:SkirmishPreset3x8
+"3 équipes de 8, IA moyennes"
+END
+
+GUI:SkirmishPreset4Teams
+"4 équipes de 8, IA moyennes"
+END
+
+GUI:SkirmishPreset4v28
+"4 contre 28 : vous et 3 alliés moyens contre 28 IA faciles"
+END
+
+GUI:SkirmishPreset4v4
+"4 contre 4, IA moyennes"
+END
+
+GUI:SkirmishPreset4x4
+"4 équipes de 4, IA moyennes"
+END
+
+GUI:SkirmishPreset6v6
+"6 contre 6, IA difficiles"
+END
+
+GUI:SkirmishPreset7v1
+"7 contre 1 : vous contre 7 IA difficiles"
+END
+
+GUI:SkirmishPreset8Teams
+"8 équipes de 4, IA mixtes"
+END
+
+GUI:SkirmishPreset8v8
+"8 contre 8, IA difficiles"
+END
+
+GUI:SkirmishPresetClear
+"EFFACER"
+END
+
+GUI:SkirmishPresetCustom
+"Perso %d : %d joueurs"
+END
+
+GUI:SkirmishPresetCustomEmpty
+"Perso %d : vide, cliquez pour enregistrer ce salon"
+END
+
+GUI:SkirmishPresetCustomGenerated
+"carte générée"
+END
+
+GUI:SkirmishPresetCustomGroup
+"Les vôtres"
+END
+
+GUI:SkirmishPresetFFA12
+"Chacun pour soi à 12, IA mixtes"
+END
+
+GUI:SkirmishPresetFFA16
+"Chacun pour soi à 16, IA mixtes"
+END
+
+GUI:SkirmishPresetFFA24
+"Chacun pour soi à 24, IA mixtes"
+END
+
+GUI:SkirmishPresetFFA32
+"Chacun pour soi à 32, IA mixtes"
+END
+
+GUI:SkirmishPresetFFA8
+"Chacun pour soi à 8, IA mixtes"
+END
+
+GUI:SkirmishPresetGroup
+"%d joueurs"
+END
+
+GUI:SkirmishPresetLastStand
+"Dernier carré : vous et 1 allié contre 30 IA difficiles"
+END
+
+GUI:SkirmishPresetLoad
+"CHARGER"
+END
+
+GUI:SkirmishPresetSave
+"ENREGISTRER"
+END
+
+GUI:SocketRedirected
+"L'IP réseau local est %ls, mais le système a placé la connexion du jeu sur %ls. Un split tunneling de VPN ou un pare-feu l'a redirigée, et personne sur votre réseau ne peut vous entendre. Désactivez le split tunneling pour le jeu et réessayez."
+END
+
+GUI:StartingMoney_Short
+"Argent"
+END
+
+GUI:SummaryDefeated
+"Vaincu"
+END
+
+GUI:SummaryDestroyed_Short
+"Détr."
+END
+
+GUI:SummaryDisconnected
+"Déconnecté"
+END
+
+GUI:SummaryEarned_Short
+"Gagné"
+END
+
+GUI:SummaryScore
+"Score"
+END
+
+GUI:SummarySpent
+"Dépensé"
+END
+
+GUI:SummarySpent_Short
+"Dépensé"
+END
+
+GUI:SummaryUnits_Short
+"Unités"
+END
+
+GUI:SummaryUnitsBuilt_Short
+"Constr."
+END
+
+GUI:Superweapons_Short
+"Superarmes"
+END
+
+GUI:SupplyPileLimit_Short
+"Réserves"
+END
+
+GUI:Talents
+"TALENTS"
+END
+
+GUI:TalentsHint
+"À partir du grade 6, choisissez un talent sur deux à chaque grade."
+END
+
+GUI:TechRespawn_Short
+"Réapparition"
+END
+
+GUI:UnitLimit_Short
+"Unités"
+END
+
+OBJECT:ApocalypseZombie
+"Zombie"
+END
+
+OBJECT:ApocalypseZombieBrute
+"Zombie brute"
+END
+
+OBJECT:ApocalypseZombieRunner
+"Zombie coureur"
+END
+
+OBJECT:LaneWarFortress
+"Forteresse"
+END
+
+OBJECT:LaneWarWatchTower
+"Tour de guet"
+END
+
+SKIN:Bronze
+"BRONZE"
+END
+
+SKIN:BugHunter
+"CHASSEUR DE BUGS"
+END
+
+SKIN:EarnedBronze
+"SOUTIEN BRONZE"
+END
+
+SKIN:EarnedBugHunter
+"BADGE CHASSEUR DE BUGS"
+END
+
+SKIN:EarnedCode
+"UTILISER UN CODE"
+END
+
+SKIN:EarnedEmerald
+"SOUTIEN ÉMERAUDE"
+END
+
+SKIN:EarnedGold
+"SOUTIEN OR"
+END
+
+SKIN:EarnedIron
+"SOUTIEN FER"
+END
+
+SKIN:EarnedReforged
+"SOUTIEN REFORGED"
+END
+
+SKIN:EarnedSilver
+"SOUTIEN ARGENT"
+END
+
+SKIN:EarnedSpecialThanks
+"REMERCIEMENTS"
+END
+
+SKIN:Emerald
+"ÉMERAUDE"
+END
+
+SKIN:Gold
+"OR"
+END
+
+SKIN:Iron
+"FER"
+END
+
+SKIN:Reforged
+"REFORGED"
+END
+
+SKIN:Silver
+"ARGENT"
+END
+
+SKIN:SpecialThanks
+"REMERCIEMENTS"
+END
+
+SKIN:Splinter
+"CAMO ÉCLATS"
+END
+
+SKIN:UnitChinaDozer
+"Engin de chantier Chine"
+END
+
+SKIN:UnitUsaDozer
+"Engin de chantier USA"
+END
+
+TOOLTIP:Apocalypse
+"Tenez bon ensemble face à des vagues sans fin de morts-vivants, jusqu'à quatre joueurs."
+END
+
+TOOLTIP:DirectStrike
+"Achetez des unités sur votre parcelle. Toutes les 30 secondes, un joueur de chaque équipe envoie une copie de sa parcelle dans le couloir, et la première équipe qui brise la forteresse adverse gagne. Jusqu'à 3 contre 3, sur une nouvelle île à chaque partie."
+END
+
+TOOLTIP:Handicap
+"Affaiblit ce joueur en proportion. À 50 pour cent : moitié moins de santé et de dégâts pour ses unités et bâtiments, moitié moins de soins, et deux fois plus de temps pour construire, rechercher et recharger les pouvoirs spéciaux."
+END
+
+TOOLTIP:LobbyPresets
+"Remplit chaque place avec des ordinateurs et des équipes"
+END
+
+TOOLTIP:MapListCrowded
+"Au-delà de huit joueurs, seules les cartes avec une position de départ pour chaque joueur sont listées ; l'onglet Aléatoire en construit une pour n'importe quel nombre"
+END
+
+TOOLTIP:OnlineKeepSignedIn
+"Votre mot de passe n'est jamais enregistré"
+END
+
+TOOLTIP:OnlineNeedsLauncher
+"Lancez le jeu en ligne depuis le lanceur"
+END
+
+TOOLTIP:OnlinePlayerInfo
+"\n %d victoires/%d défaites"
+END
+
+TOOLTIP:OnlineStagingPlayerInfo
+"\n Ping : %d ms \n %d victoires/%d défaites \n %d déconnexions \n Armée favorite : %ls"
 END

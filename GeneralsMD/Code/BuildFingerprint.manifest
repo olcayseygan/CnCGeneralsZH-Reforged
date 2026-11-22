@@ -1635,6 +1635,7 @@ Data/Window/GeneralsExpPoints.wnd
 Data/Window/InGameChat.wnd
 Data/Window/Menus/Defeat.wnd
 Data/Window/Menus/DisconnectScreen.wnd
+Data/Window/Menus/GameModeBox.wnd
 Data/Window/Menus/GameSpyGameOptionsMenu.wnd
 Data/Window/Menus/GameSpyLoginProfile.wnd
 Data/Window/Menus/LanGameOptionsMenu.wnd
@@ -5467,6 +5468,7 @@ Tools/fingerprint-check.sh
 Tools/fingerprint-manifest.sh
 Tools/fingerprint/build_fingerprint.cpp
 Tools/foliage_atlas.py
+Tools/gamemode_layout.py
 Tools/gametext.py
 Tools/gdi-font-metrics-header.py
 Tools/gdi-font-metrics.ps1

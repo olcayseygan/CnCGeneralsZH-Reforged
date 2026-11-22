@@ -78,10 +78,11 @@ extern void gameAcceptTooltip(GameWindow *window, WinInstanceData *instData, Uns
 Color white = GameMakeColor( 255, 255, 255, 255 );
 static bool s_isIniting = FALSE;
 
-// Create Game's answer (LanLobbyMenu.cpp), spent by the room it opens.  A joiner's room is a Direct
-// Strike one when the host's map is a lane map (IsDirectStrikeMap); s_directStrike is what this room is.
-Bool lanHostDirectStrike = FALSE;
+// Create Game's answer (LanLobbyMenu.cpp, TheHostGameMode), spent by the room it opens.  A joiner's room
+// is a Direct Strike one when the host's map is a lane map (IsDirectStrikeMap), an Apocalypse one when
+// it is a generated Apocalypse map (IsApocalypseMap); s_directStrike and s_apocalypse are what this room is.
 static Bool s_directStrike = FALSE;
+static Bool s_apocalypse = FALSE;
 // window ids ------------------------------------------------------------------------------
 static NameKeyType parentLanGameOptionsID = NAMEKEY_INVALID;
 
@@ -290,7 +291,7 @@ void StartPressed(void)
 		return;
 	}
 	// a seat changed since the last frame: the new map goes out and everyone accepts it again
-	if (TheLAN->AmIHost() && FitRandomMapToRoom(myGame))
+	if (TheLAN->AmIHost() && ((s_apocalypse && FitApocalypseRoom(myGame)) || FitRandomMapToRoom(myGame)))
 	{
 		PostToLanGameOptions(SEND_GAME_OPTS);
 		return;
@@ -464,7 +465,7 @@ void StartPressed(void)
 void LANEnableStartButton(Bool enabled)
 {
 	buttonStart->winEnable(enabled);
-	buttonSelectMap->winEnable(enabled);
+	buttonSelectMap->winEnable(enabled && !s_apocalypse);	// an Apocalypse room's map is the mode's
 }
 
 // The countdown's last second: shutting the menu down clears every gadget pointer below, and a
@@ -945,6 +946,15 @@ static void handleSuperweaponSelection()
   }
 }
 
+/// the room's title names the mode in an Apocalypse room, the classic room's own words otherwise
+static void setLanRoomTitle( void )
+{
+	GameWindow *title = TheWindowManager->winGetWindowFromId( parentLanGameOptions, NAMEKEY( "LanGameOptionsMenu.wnd:StaticTextTitle" ) );
+	if ( title )
+		GadgetStaticTextSetText( title, s_apocalypse ? ModeNameWithVersion( "GUI:Apocalypse", "GUI:ApocalypseVersion" )
+			: TheGameText->fetch( "GUI:GameOptions" ) );
+}
+
 void lanUpdateSlotList( void )
 {
 	if(!AreSlotListUpdatesEnabled() || s_isIniting)
@@ -961,6 +971,14 @@ void lanUpdateSlotList( void )
 		s_directStrike = TRUE;
 	if (s_directStrike)
 		LayoutDirectStrikeRoom(parentLanGameOptions, "LanGameOptionsMenu.wnd", TheLAN->GetMyGame());
+	if (!s_apocalypse && !TheLAN->AmIHost() && IsApocalypseMap(TheLAN->GetMyGame()->getMap()))
+	{
+		s_apocalypse = TRUE;
+		setLanRoomTitle();
+	}
+	// the four seats and no more
+	if (s_apocalypse)
+		HideLobbySeatRowsFrom(parentLanGameOptions, "LanGameOptionsMenu.wnd", APOCALYPSE_SEATS);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1205,9 +1223,11 @@ void LanGameOptionsMenuInit( WindowLayout *layout, void *userData )
 	}
 	s_isIniting = TRUE;
 
-	s_directStrike = TheLAN->AmIHost() ? lanHostDirectStrike
+	s_directStrike = TheLAN->AmIHost() ? TheHostGameMode == HOST_MODE_DIRECT_STRIKE
 		: ( TheLAN->GetMyGame() != NULL && IsDirectStrikeMap( TheLAN->GetMyGame()->getMap() ) );
-	lanHostDirectStrike = FALSE;	// Direct Connect's room and the next Create Game ask again
+	s_apocalypse = TheLAN->AmIHost() ? TheHostGameMode == HOST_MODE_APOCALYPSE
+		: ( TheLAN->GetMyGame() != NULL && IsApocalypseMap( TheLAN->GetMyGame()->getMap() ) );
+	TheHostGameMode = HOST_MODE_CLASSIC;	// Direct Connect's room and the next Create Game ask again
 
 	LANbuttonPushed = false;
 	LANisShuttingDown = false;
@@ -1216,6 +1236,7 @@ void LanGameOptionsMenuInit( WindowLayout *layout, void *userData )
 	EnableSlotListUpdates(FALSE);
 	InitLanGameGadgets();
 	EnableSlotListUpdates(TRUE);
+	setLanRoomTitle();
 	Int start = 0;
 
 	// Make sure the text fields are clear
@@ -1259,6 +1280,13 @@ void LanGameOptionsMenuInit( WindowLayout *layout, void *userData )
 		// the host picks the island's seed now, and it goes out with the options in the map's name
 		if (s_directStrike && SetDirectStrikeMap(game))
 			FitDirectStrikeRoom(game);
+		// an Apocalypse map with four starts, so the room opens four seats; Start makes it for the seats taken
+		if (s_apocalypse && SetApocalypseMap(game, TRUE))
+		{
+			game->adjustSlotsForMap();
+			FitApocalypseRoom(game);
+			buttonSelectMap->winEnable( FALSE );
+		}
 
 		//GadgetTextEntrySetText(comboBoxPlayer[0], TheLAN->GetMyName());
 		lanUpdateSlotList();
@@ -1338,6 +1366,11 @@ void updateGameOptions( void )
 		{
 			// a joiner has no cache entry for an island he builds from its name at load
 			mapDisplayName = TheGameText->fetch("GUI:DirectStrikeMap");
+		}
+		else if (IsApocalypseMap(TheLAN->GetMyGame()->getMap()))
+		{
+			// nor for an Apocalypse map; the mode is its name
+			mapDisplayName = ModeNameWithVersion("GUI:ApocalypseLower", "GUI:ApocalypseVersion");
 		}
 		else if (mapData && localSlot && localSlot->hasMap())
 		{
@@ -1469,6 +1502,9 @@ void LanGameOptionsMenuUpdate( WindowLayout * layout, void *userData)
 		shutdownComplete(layout);
 	// hideShell leaves this layout on the stack with its gadgets gone, and the shell goes on updating it
 	// under the match it launched until showShell runs its init again.  There is no room to fit a map to.
+	// an Apocalypse room: seats past four closed before the map is made for the seats, and on starts 1..n after
+	else if (parentLanGameOptions && !LANisShuttingDown && s_apocalypse && TheLAN->AmIHost() && FitApocalypseRoom(TheLAN->GetMyGame()))
+		PostToLanGameOptions(SEND_GAME_OPTS);
 	else if (parentLanGameOptions && !LANisShuttingDown && TheLAN->AmIHost() && FitRandomMapToRoom(TheLAN->GetMyGame()))
 		PostToLanGameOptions(SEND_GAME_OPTS);
 	// a seat that joined, left or changed team: the Direct Strike rules again, and out to everyone
@@ -1881,6 +1917,10 @@ void PostToLanGameOptions( PostToLanGameType post )
 			{
 				game->getSlot(i)->setStartPos(-1);
 			}
+			// an Apocalypse room's seats stand on starts 1..n; without this the host's room put them back
+			// every frame and sent the options again each time
+			if (s_apocalypse)
+				FitApocalypseRoom(game);
 
 			TheLAN->RequestGameOptions(GenerateGameOptionsString(), true);
 			break;

@@ -555,8 +555,6 @@ static Bool hexTicket( const std::string &hex, UnsignedByte out[16] )
 	return TRUE;
 }
 
-Bool OnlineHostDirectStrike = FALSE;
-
 /* Is this map a Direct Strike lane map, and its seed: the generated name is
 	 "...\rmg_v<version>_<seed>_6p_..._lane", the seed the second number (stageRandomMap).  The game list's
 	 copy is GameSpy's portable path with '/' for '\' (GameSpyInfo::setGameOptions), which the name reader
@@ -1600,8 +1598,12 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 		s.hostInfo.setString( "ping", req.hostPingStr );
 		// the map is chosen in the staging room, after this; game.opts carries it to the list
 		m.setString( "t", "game.host" ).setString( "name", WideCharStringToMultiByte( req.text.c_str() ) );
-		m.setString( "map", "-" ).setInt( "maxp", MAX_SLOTS );
-		m.setString( "mode", OnlineHostDirectStrike ? "directstrike" : "classic" );
+		// an Apocalypse room seats four, its map's starts at most; the list and a joiner see that size
+		m.setString( "map", "-" ).setInt( "maxp", TheHostGameMode == HOST_MODE_APOCALYPSE ? (Int)APOCALYPSE_SEATS : (Int)MAX_SLOTS );
+		// for the server's records and room list only; every client reads the mode off the map's name.  A
+		// server that does not know "apocalypse" refuses the room (badgame), which the host sees as a failed create
+		m.setString( "mode", TheHostGameMode == HOST_MODE_DIRECT_STRIKE ? "directstrike"
+			: TheHostGameMode == HOST_MODE_APOCALYPSE ? "apocalypse" : "classic" );
 		s.send( m );
 		return;
 
@@ -1636,14 +1638,17 @@ void OnlinePeerQueue::addRequest( const PeerRequest& req )
 				line.resize( line.size() - 1 );		// the newline
 				m.setString( "t", "game.opts" ).setString( "opts", line );
 				// the room's mode is its map: a lane map is Direct Strike, its seed in its name.  A Direct Strike
-				// host's options from before its room staged the island (the room object's default map) never
-				// reach the list, which would show the room as Classic on that map for a moment.
+				// or Apocalypse host's options from before its room staged its map (the room object's default
+				// map) never reach the list, which would show the room as Classic on that map for a moment.
 				Int seed = -1;
 				const Bool directStrike = directStrikeSeed( req.gameOptsMapName, &seed );
-				m.setString( "mode", directStrike ? "directstrike" : "classic" );
+				const Bool apocalypse = IsApocalypseMap( AsciiString( req.gameOptsMapName.c_str() ) );
+				m.setString( "mode", directStrike ? "directstrike" : apocalypse ? "apocalypse" : "classic" );
 				if (seed >= 0)
 					m.setInt( "seed", seed );
-				if (directStrike || !OnlineHostDirectStrike)
+				const Bool modeMapStaged = TheHostGameMode == HOST_MODE_DIRECT_STRIKE ? directStrike
+					: TheHostGameMode == HOST_MODE_APOCALYPSE ? apocalypse : TRUE;
+				if (modeMapStaged)
 					s.send( m );
 			}
 			// and the slot list to the room, as GameSpy's SL/ UTM

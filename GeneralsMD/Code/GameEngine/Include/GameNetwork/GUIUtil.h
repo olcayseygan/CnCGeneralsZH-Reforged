@@ -238,16 +238,30 @@ Bool FitDirectStrikeRoom(GameInfo *game);
 // lobby over the room's layout, DirectStrikeLobby.h, its three seat cards a team facing each other.  A
 // room calls it after every slot list repaint; ShutdownLobbySeatVisuals takes it off.
 void LayoutDirectStrikeRoom(GameWindow *parent, const char *layoutFilename, const GameInfo *game);
+enum { APOCALYPSE_SEATS = 4 };	///< RMG_APOC_SEATS_MOST, which clampSettings holds the map to
 // Apocalypse in the skirmish room: like Direct Strike the map's name carries the mode
 // (ApocalypseDirector wakes on its waypoints), so nothing travels in the options string.  A fresh
 // Apocalypse map for the room's seats, staged, in the cache and the game's, CRC and size with it
-Bool SetApocalypseMap(GameInfo *game);
+Bool SetApocalypseMap(GameInfo *game, Bool allSeats = FALSE);	// allSeats: four starts, so a network room opens four seats
 // Seats past four closed (the map's starts, clampSettings), the seated players on starts 1..n in seat
 // order (the day waves' first front faces start 1), and the rules that mean nothing in a co-op survival
 // off; TRUE when it changed anything
 Bool FitApocalypseRoom(GameInfo *game);
-// Create Game's question, which mode the room is for: Classic or Direct Strike, and Cancel
-void AskGameMode(void (*classic)(void), void (*directStrike)(void));
+// a generated Apocalypse map ("rmg_v<n>_<seed>_<n>p_<cells>c_apocalypse"), by its name or its folder's,
+// '\' or '/' paths alike: how a joiner, a game list and a network room know the mode
+Bool IsApocalypseMap(const AsciiString &map);
+// An Apocalypse room shows its four seats only: every window of the layout's seat rows from this row on
+// hidden.  A room calls it after each slot list repaint, which would show them again
+void HideLobbySeatRowsFrom(GameWindow *parent, const char *layoutFilename, Int firstHiddenRow);
+
+// The mode a host's room is for, the Create Game and Host buttons' question.  Set by the lobby that
+// asked, read by the room it opens: LAN spends it at room init, online keeps it while hosting
+// (OnlinePeer's game.host and the options it holds back until the mode's map is staged).
+enum HostGameMode { HOST_MODE_CLASSIC = 0, HOST_MODE_DIRECT_STRIKE, HOST_MODE_APOCALYPSE };
+extern Int TheHostGameMode;
+// Create Game's question, which mode the room is for: GameModeBox.wnd's Classic, Direct Strike and
+// Apocalypse, and Cancel, which answers nothing.  The answer gets the HostGameMode picked
+void AskGameMode(void (*answer)(Int mode));
 /// a mode's name with its version tag after it ("Direct Strike v1.0"): the name's key, then the one key
 /// that holds the version for every place the mode is named; the bare name when that key is missing or empty
 UnicodeString ModeNameWithVersion(const char *nameKey, const char *versionKey);

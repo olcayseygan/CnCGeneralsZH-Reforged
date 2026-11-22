@@ -71,6 +71,7 @@
 
 #include "GameNetwork/GameSpy/LadderDefs.h"
 #include "GameNetwork/Online/OnlineQueues.h"
+#include "GameNetwork/GUIUtil.h"
 #include "Common/CustomMatchPreferences.h"
 #include "Common/LadderPreferences.h"
 
@@ -374,7 +375,7 @@ void PopupHostGameInit( WindowLayout *layout, void *userData )
 	checkBoxLimitArmies->winEnable(! usingStats );
   GadgetCheckBoxSetChecked( checkBoxLimitArmies, usingStats? FALSE : customPref.getFactionsLimited() );
 	// a Direct Strike room offers its own three sides; the retail-only army limit means nothing there
-	if (OnlineIsEnabled() && OnlineHostDirectStrike)
+	if (OnlineIsEnabled() && TheHostGameMode == HOST_MODE_DIRECT_STRIKE)
 	{
 		GadgetCheckBoxSetChecked( checkBoxLimitArmies, FALSE );
 		checkBoxLimitArmies->winHide( TRUE );

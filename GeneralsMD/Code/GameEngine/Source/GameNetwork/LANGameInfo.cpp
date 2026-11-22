@@ -246,6 +246,11 @@ void LANDisplayGameList( GameWindow *gameListbox, LANGameInfo *gameList )
 				txtGName.concat(u" - ");
 				txtGName.concat(ModeNameWithVersion("GUI:DirectStrikeLower", "GUI:DirectStrikeVersion"));
 			}
+			else if( IsApocalypseMap( gameList->getMap() ) )
+			{
+				txtGName.concat(u" - ");
+				txtGName.concat(ModeNameWithVersion("GUI:ApocalypseLower", "GUI:ApocalypseVersion"));
+			}
 			Int addedIndex = GadgetListBoxAddEntryText(gameListbox, txtGName, (gameList->isGameInProgress())?gameInProgressColor:gameColor, -1, -1);
 			GadgetListBoxSetItemData(gameListbox, (void *)gameList, addedIndex, 0 );
 

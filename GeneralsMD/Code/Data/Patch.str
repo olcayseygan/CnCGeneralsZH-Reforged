@@ -7299,6 +7299,14 @@ GUI:GameModeDirectStrike
 "DIRECT STRIKE"
 END
 
+GUI:GameModeApocalypse
+"APOCALYPSE"
+END
+
+GUI:ApocalypseLower
+"Apocalypse"
+END
+
 GUI:DirectStrikeIslandNote
 "A new island every match"
 END

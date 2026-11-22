@@ -62,6 +62,9 @@ extern WindowMsgHandledType PopupReplayInput( GameWindow *window, UnsignedInt ms
 // Extended MessageBox ----------------------------------------------------------------------------------
 extern WindowMsgHandledType ExtendedMessageBoxSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
 
+// the Create Game and Host buttons' mode question (GUIUtil.cpp AskGameMode) ----------------------------
+extern WindowMsgHandledType GameModeBoxSystem( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 );
+
 // game window draw table -----------------------------------------------------------------------
 static FunctionLexicon::TableEntry gameWinDrawTable[] = 
 {
@@ -94,6 +97,7 @@ static FunctionLexicon::TableEntry gameWinSystemTable[] =
 	{ NAMEKEY_INVALID, "QuitMessageBoxSystem",							(void *)QuitMessageBoxSystem },
 
 	{ NAMEKEY_INVALID, "ExtendedMessageBoxSystem",					(void *)ExtendedMessageBoxSystem },
+	{ NAMEKEY_INVALID, "GameModeBoxSystem",									(void *)GameModeBoxSystem },
 
 	{ NAMEKEY_INVALID, "MOTDSystem",										(void *)MOTDSystem },
 	{ NAMEKEY_INVALID, "MainMenuSystem",								(void *)MainMenuSystem },

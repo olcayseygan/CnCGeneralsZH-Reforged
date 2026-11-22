@@ -51,6 +51,7 @@
 #include "GameNetwork/IPEnumeration.h"
 #include "GameNetwork/LANAPI.h"
 #include "GameNetwork/LANAPICallbacks.h"
+#include "GameNetwork/GUIUtil.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -209,6 +210,7 @@ void HostDirectConnectGame()
 	while (name.getLength() > g_lanPlayerNameLength)
 		name.removeLastChar();
 	TheLAN->RequestSetName(name);
+	TheHostGameMode = HOST_MODE_CLASSIC;	// Direct Connect asks no mode; nothing an earlier host picked carries over
 	TheLAN->RequestGameCreate(localIPString, TRUE);
 }
 

@@ -1626,7 +1626,8 @@ static NameKeyType seatScrollDownID = NAMEKEY_INVALID;
 
 static Int seatScrollMax( void )
 {
-	return seatScrollSlider && seatRowCount > 1 ? MAX_SLOTS - seatRowCount : 0;
+	// an Apocalypse room's four seats all fit the first page
+	return seatScrollSlider && seatRowCount > 1 && !skirmishApocalypse ? MAX_SLOTS - seatRowCount : 0;
 }
 
 /// the seat a row shows; row 0 is the local player's whatever the scroll
@@ -1714,6 +1715,12 @@ static void captureSeatRows( void )
 		TheWindowManager->winSendSystemMsg( seatScrollSlider, GSM_SET_MIN_MAX, 0, max( 1, seatScrollMax() ) );
 		GadgetSliderSetPosition( seatScrollSlider, seatScrollMax() );	// the top of the track is the first seat
 	}
+	// an Apocalypse room has one page of seats and no scroll; the classic room keeps its own
+	const char *const scrollParts[] = { "SkirmishGameOptionsMenu.wnd:SliderSeatScroll",
+		"SkirmishGameOptionsMenu.wnd:ButtonSeatScrollUp", "SkirmishGameOptionsMenu.wnd:ButtonSeatScrollDown" };
+	for ( Int i = 0; i < (Int)ARRAY_SIZE( scrollParts ); ++i )
+		if ( GameWindow *part = TheWindowManager->winGetWindowFromId( parentSkirmishGameOptions, NAMEKEY( scrollParts[ i ] ) ) )
+			part->winHide( skirmishApocalypse );
 }
 
 /// force repaints the rows where they are, after their seats changed under them
@@ -1976,6 +1983,9 @@ void skirmishUpdateSlotList( void )
 		updateMapStartSpots(TheSkirmishGameInfo, buttonMapStartPosition, FALSE);
 		if (skirmishDirectStrike)
 			LayoutDirectStrikeRoom(parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd", TheSkirmishGameInfo);
+		// the four seats and no more; the scroll stays on the first page (seatScrollMax)
+		if (skirmishApocalypse)
+			HideLobbySeatRowsFrom(parentSkirmishGameOptions, "SkirmishGameOptionsMenu.wnd", APOCALYPSE_SEATS);
     doUpdateSlotList = TRUE;
   }
 }

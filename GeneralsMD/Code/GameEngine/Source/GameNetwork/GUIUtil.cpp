@@ -1804,16 +1804,16 @@ void LayoutDirectStrikeRoom(GameWindow *parent, const char *layoutFilename, cons
 
 // Apocalypse ---------------------------------------------------------------------------------
 
-enum { APOCALYPSE_SEATS = 4 };	///< RMG_APOC_SEATS_MOST, which clampSettings holds the map to
-
-Bool SetApocalypseMap(GameInfo *game)
+Bool SetApocalypseMap(GameInfo *game, Bool allSeats)
 {
 	static UnsignedInt theApocalypseRolls = 0;
 	RandomMapSettings settings;
 	// the client choosing a map, as for Direct Strike: the replay rebuilds it from the name
 	settings.m_seed = (Int)((Clock_Milliseconds() + 7919u * ++theApocalypseRolls) & 0x7fffffff);
 	settings.m_style = RandomMapGenerator::styleNamed("apocalypse");
-	settings.m_numPlayers = min((Int)APOCALYPSE_SEATS, roomRandomMapPlayers(game));
+	// a network room opens on four starts so adjustSlotsForMap leaves four seats open; Start makes it again
+	// for the seats taken (FitRandomMapToRoom)
+	settings.m_numPlayers = allSeats ? (Int)APOCALYPSE_SEATS : min((Int)APOCALYPSE_SEATS, roomRandomMapPlayers(game));
 	AsciiString map;
 	if (!stageRandomMap(settings, map))
 		return FALSE;
@@ -1879,31 +1879,123 @@ UnicodeString ModeNameWithVersion(const char *nameKey, const char *versionKey)
 	return name;
 }
 
-// Yes is Classic, No is Direct Strike; MessageBox.wnd's buttons take the mode names
-void AskGameMode(void (*classic)(void), void (*directStrike)(void))
+Int TheHostGameMode = HOST_MODE_CLASSIC;
+
+void HideLobbySeatRowsFrom(GameWindow *parent, const char *layoutFilename, Int firstHiddenRow)
 {
-	GameWindow *box = MessageBoxYesNoCancel(TheGameText->fetch("GUI:GameModeTitle"), TheGameText->fetch("GUI:GameModeBody"),
-		classic, directStrike, NULL);
+	// every window lobbyroom_layout.py gives a seat row, by the row's number
+	static const char *const names[] = { "ComboBoxPlayer", "StaticTextPlayer", "ComboBoxAIPersona", "ComboBoxPlayerTemplate",
+		"ComboBoxColor", "ComboBoxTeam", "ComboBoxHandicap", "SeatCard", "SeatBar", "SeatSwatch", "SeatTeam",
+		"GenericPing", "ButtonAccept" };
+	for (Int row = max(0, firstHiddenRow); row < MAX_SLOTS; ++row)
+	{
+		if (findSeatWindow(parent, layoutFilename, "ComboBoxColor", row) == NULL)
+			break;	// past the layout's rows
+		for (Int n = 0; n < (Int)ARRAY_SIZE(names); ++n)
+			if (GameWindow *window = findSeatWindow(parent, layoutFilename, names[n], row))
+				if (!window->winIsHidden())
+					window->winHide(TRUE);
+	}
+}
+
+Bool IsApocalypseMap(const AsciiString &map)
+{
+	const char *path = map.str();
+	const char *leaf = path;
+	for (const char *c = path; *c; ++c)
+		if (*c == '\\' || *c == '/')
+			leaf = c + 1;
+	// the generator's own name only: a template map's tail is its shipped map's folder, which could say anything
+	if (!AsciiString(leaf).startsWithNoCase("rmg_v"))
+		return FALSE;
+	Int version = 0, seed = 0, players = 0, cells = 0, rest = -1;
+	if (sscanf(leaf + 5, "%d_%d_%dp_%dc_%n", &version, &seed, &players, &cells, &rest) != 4 || rest < 0)
+		return FALSE;
+	const AsciiString tail(leaf + 5 + rest);
+	return tail.compareNoCase("apocalypse") == 0 || tail.compareNoCase("apocalypse.map") == 0;
+}
+
+/// what AskGameMode's box answers with; GameModeBoxSystem deletes it with the box
+struct GameModeBoxData
+{
+	void (*answer)(Int mode);
+};
+
+// GameModeBox.wnd's system callback (FunctionLexicon): a mode button answers and closes the box, Cancel closes it
+WindowMsgHandledType GameModeBoxSystem(GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2)
+{
+	switch (msg)
+	{
+		case GWM_DESTROY:
+			delete (GameModeBoxData *)window->winGetUserData();
+			window->winSetUserData(NULL);
+			break;
+		case GWM_INPUT_FOCUS:
+			if (mData1 == TRUE)
+				*(Bool *)mData2 = TRUE;
+			break;
+		case GBM_SELECTED:
+		{
+			const Int controlID = ((GameWindow *)mData1)->winGetWindowId();
+			static const NameKeyType classicID = NAMEKEY("GameModeBox.wnd:ButtonClassic");
+			static const NameKeyType directStrikeID = NAMEKEY("GameModeBox.wnd:ButtonDirectStrike");
+			static const NameKeyType apocalypseID = NAMEKEY("GameModeBox.wnd:ButtonApocalypse");
+			static const NameKeyType cancelID = NAMEKEY("GameModeBox.wnd:ButtonCancel");
+			const Int mode = controlID == classicID ? HOST_MODE_CLASSIC : controlID == directStrikeID ? HOST_MODE_DIRECT_STRIKE
+				: controlID == apocalypseID ? HOST_MODE_APOCALYPSE : -1;
+			if (mode < 0 && controlID != cancelID)
+				return MSG_IGNORED;
+			GameModeBoxData *data = (GameModeBoxData *)window->winGetUserData();
+			void (*answer)(Int) = data ? data->answer : NULL;
+			// the box goes first: an answer opens the next screen or a popup over where it stood
+			TheWindowManager->winDestroy(window);
+			if (answer && mode >= 0)
+				answer(mode);
+			break;
+		}
+		default:
+			return MSG_IGNORED;
+	}
+	return MSG_HANDLED;
+}
+
+/* GameModeBox.wnd (Tools/gamemode_layout.py), EA's message box with four buttons in two rows: Classic
+	 and Direct Strike, then Apocalypse and Cancel.  Every button takes the widest label plus a button
+	 height for its end caps, and the box widens about its centre to hold two of them with the layout's
+	 margin round and between them; at 800x600 the widest, "DIRECT STRIKE", asks about 340 of the 800. */
+void AskGameMode(void (*answer)(Int mode))
+{
+	GameWindow *box = TheWindowManager->winCreateFromScript(AsciiString("Menus/GameModeBox.wnd"));
 	if (box == NULL)
 		return;
-	if (GameWindow *yes = TheWindowManager->winGetWindowFromId(box, NAMEKEY("MessageBox.wnd:ButtonYes")))
-		GadgetButtonSetText(yes, TheGameText->fetch("GUI:GameModeClassic"));
-	if (GameWindow *no = TheWindowManager->winGetWindowFromId(box, NAMEKEY("MessageBox.wnd:ButtonNo")))
-		GadgetButtonSetText(no, TheGameText->fetch("GUI:GameModeDirectStrike"));	// with its version it wrapped to two lines
-
-	// EA's layout puts Yes's right edge a pixel past No's left, and "DIRECT STRIKE" is wider than its
-	// 90-point button, so the labels ran into each other even once the buttons were apart.  Every
-	// button takes the widest label plus a button height for its end caps, the box widens about its
-	// centre to hold that row with Yes's margin as the gap, and the three spread over it
-	static const char *const keys[] = { "MessageBox.wnd:ButtonYes", "MessageBox.wnd:ButtonNo", "MessageBox.wnd:ButtonCancel" };
+	GameWindow *panel = TheWindowManager->winGetWindowFromId(box, NAMEKEY("GameModeBox.wnd:MessageBoxParent"));
+	static const char *const keys[] = { "GameModeBox.wnd:ButtonClassic", "GameModeBox.wnd:ButtonDirectStrike",
+		"GameModeBox.wnd:ButtonApocalypse", "GameModeBox.wnd:ButtonCancel" };
 	const Int count = (Int)ARRAY_SIZE(keys);
 	GameWindow *buttons[ARRAY_SIZE(keys)];
-	Int widest = 0;
 	for (Int i = 0; i < count; ++i)
 	{
 		buttons[i] = TheWindowManager->winGetWindowFromId(box, NAMEKEY(keys[i]));
-		if (buttons[i] == NULL || buttons[i]->winGetParent() == NULL)
+		if (buttons[i] == NULL || panel == NULL)
+		{
+			TheWindowManager->winDestroy(box);
 			return;
+		}
+	}
+	GameModeBoxData *data = NEW GameModeBoxData;
+	data->answer = answer;
+	box->winSetUserData(data);
+	TheWindowManager->winSetModal(box);
+	TheWindowManager->winSetFocus(NULL);
+	TheWindowManager->winSetFocus(panel);
+	if (GameWindow *title = TheWindowManager->winGetWindowFromId(box, NAMEKEY("GameModeBox.wnd:StaticTextTitle")))
+		GadgetStaticTextSetText(title, TheGameText->fetch("GUI:GameModeTitle"));
+	if (GameWindow *body = TheWindowManager->winGetWindowFromId(box, NAMEKEY("GameModeBox.wnd:StaticTextMessage")))
+		GadgetStaticTextSetText(body, TheGameText->fetch("GUI:GameModeBody"));
+
+	Int widest = 0;
+	for (Int i = 0; i < count; ++i)
+	{
 		Int w, h;
 		buttons[i]->winGetSize(&w, &h);
 		widest = max(widest, w);
@@ -1914,11 +2006,11 @@ void AskGameMode(void (*classic)(void), void (*directStrike)(void))
 			widest = max(widest, textW + h);
 		}
 	}
-	GameWindow *panel = buttons[0]->winGetParent();
-	Int boxW, boxH, margin, y;
+	Int boxW, boxH, margin, topY, bottomY, x;
 	panel->winGetSize(&boxW, &boxH);
-	buttons[0]->winGetPosition(&margin, &y);
-	const Int rowW = 2 * margin + count * widest + (count - 1) * margin;
+	buttons[0]->winGetPosition(&margin, &topY);
+	buttons[3]->winGetPosition(&x, &bottomY);
+	const Int rowW = 3 * margin + 2 * widest;
 	if (rowW > boxW)
 	{
 		const Int grow = rowW - boxW;
@@ -1935,17 +2027,17 @@ void AskGameMode(void (*classic)(void), void (*directStrike)(void))
 		}
 		boxW = rowW;
 	}
-	const Int gap = (boxW - 2 * margin - count * widest) / (count - 1);
-	Int x = margin;
+	const Int gap = boxW - 2 * margin - 2 * widest;
 	for (Int i = 0; i < count; ++i)
 	{
-		Int w, h, oldX, oldY;
+		Int w, h;
 		buttons[i]->winGetSize(&w, &h);
-		buttons[i]->winGetPosition(&oldX, &oldY);
 		buttons[i]->winSetSize(widest, h);
-		buttons[i]->winSetPosition(x, oldY);
-		x += widest + gap;
+		buttons[i]->winSetPosition(margin + (i % 2) * (widest + gap), i < 2 ? topY : bottomY);
+		buttons[i]->winHide(FALSE);
 	}
+	panel->winHide(FALSE);
+	panel->winBringToTop();
 }
 
 /* The online room's seats name each human with his ladder rating after the nick, MUTED, read from the

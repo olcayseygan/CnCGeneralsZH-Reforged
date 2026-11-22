@@ -21498,6 +21498,14 @@ GUI:GameModeDirectStrike
 "DIRECT STRIKE"
 END
 
+GUI:GameModeApocalypse
+"KIYAMET"
+END
+
+GUI:ApocalypseLower
+"Kıyamet"
+END
+
 GUI:DirectStrikeIslandNote
 "Her maçta yeni bir ada"
 END

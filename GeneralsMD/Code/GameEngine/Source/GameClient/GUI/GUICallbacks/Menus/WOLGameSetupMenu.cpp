@@ -394,7 +394,7 @@ static void savePlayerInfo( void )
 				pref.setPreferredColor(slot->getColor());
 				pref.setPreferredFaction(slot->getPlayerTemplate());
 				// a Direct Strike room's island and its switched-off rules are not the host's next Classic room
-				if (TheGameSpyGame->amIHost() && !IsDirectStrikeMap(TheGameSpyGame->getMap()))
+				if (TheGameSpyGame->amIHost() && !IsDirectStrikeMap(TheGameSpyGame->getMap()) && !IsApocalypseMap(TheGameSpyGame->getMap()))
 				{
 					pref.setPreferredMap(TheGameSpyGame->getMap());
           pref.setSuperweaponRestriction( TheGameSpyGame->getSuperweaponRestriction() );
@@ -1100,21 +1100,25 @@ static void handleSuperweaponSelection()
 }
 
 
-/* This room is a Direct Strike one: the host's Host button said so (OnlineHostDirectStrike), a joiner
+/* This room is a Direct Strike one: the host's Host button said so (TheHostGameMode), a joiner
 	 reads it off the host's lane map, which can arrive after his room opened (WOLDisplaySlotList). */
 static Bool s_directStrike = FALSE;
+/* And an Apocalypse one, the same way (TheHostGameMode, IsApocalypseMap): the classic room on a generated
+	 Apocalypse map, no map choice, four seats on starts 1..n (FitApocalypseRoom). */
+static Bool s_apocalypse = FALSE;
 
-/// The room's name over it, and the mode after it in a Direct Strike room, where nothing else names it.
+/// The room's name over it, and the mode after it in a Direct Strike or Apocalypse room.
 static void setRoomTitle( void )
 {
 	GameWindow *title = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, NAMEKEY("GameSpyGameOptionsMenu.wnd:StaticTextGameName") );
 	if (title == NULL || TheGameSpyGame == NULL)
 		return;
 	UnicodeString text = TheGameSpyGame->getGameName();
-	if (s_directStrike)
+	if (s_directStrike || s_apocalypse)
 	{
 		text.concat(u" - ");
-		text.concat(ModeNameWithVersion("GUI:DirectStrikeLower", "GUI:DirectStrikeVersion"));
+		text.concat(s_directStrike ? ModeNameWithVersion("GUI:DirectStrikeLower", "GUI:DirectStrikeVersion")
+			: ModeNameWithVersion("GUI:ApocalypseLower", "GUI:ApocalypseVersion"));
 	}
 	GadgetStaticTextSetText(title, text);
 }
@@ -1129,7 +1133,22 @@ static void populateArmyBox( Int i, GameInfo *game, Bool allowObservers )
 /// A Direct Strike room keeps its island and puts the seats under the mode's rules instead.
 static Bool fitRandomMapToRoom(GameSpyStagingRoom *game)
 {
-	if (!game->amIHost() || !(s_directStrike ? FitDirectStrikeRoom(game) : FitRandomMapToRoom(game)))
+	if (!game->amIHost())
+		return FALSE;
+	Bool changed = FALSE;
+	if (s_directStrike)
+		changed = FitDirectStrikeRoom(game);
+	else if (s_apocalypse)
+	{
+		// seats closed past four, the map made again for the seats left, and those seats on starts 1..n,
+		// which a new map cleared
+		changed = FitApocalypseRoom(game);
+		changed = FitRandomMapToRoom(game) || changed;
+		changed = FitApocalypseRoom(game) || changed;
+	}
+	else
+		changed = FitRandomMapToRoom(game);
+	if (!changed)
 		return FALSE;
 	game->resetAccepted();
 	TheGameSpyInfo->setGameOptions();
@@ -1334,6 +1353,11 @@ void WOLDisplayGameOptions( void )
 		// a joiner has no cache entry for an island he builds from its name at load
 		GadgetStaticTextSetText(textEntryMapDisplay, TheGameText->fetch("GUI:DirectStrikeMap"));
 	}
+	else if (IsApocalypseMap(theGame->getMap()))
+	{
+		// nor for an Apocalypse map; the mode is its name
+		GadgetStaticTextSetText(textEntryMapDisplay, ModeNameWithVersion("GUI:ApocalypseLower", "GUI:ApocalypseVersion"));
+	}
 	else if (md && localSlot && localSlot->hasMap())
 	{
 		GadgetStaticTextSetText(textEntryMapDisplay, md->m_displayName);
@@ -1447,6 +1471,12 @@ void WOLDisplaySlotList( void )
 		setRoomTitle();
 		DEBUG_LOG(("ONLINE DIRECTSTRIKE joiner room map=%s\n", game->getMap().str()));
 	}
+	if (!s_apocalypse && !game->amIHost() && IsApocalypseMap(game->getMap()))
+	{
+		s_apocalypse = TRUE;
+		setRoomTitle();
+		DEBUG_LOG(("ONLINE APOCALYPSE joiner room map=%s\n", game->getMap().str()));
+	}
 
 	UpdateSlotList( game, comboBoxPlayer, comboBoxColor,
 		comboBoxPlayerTemplate, comboBoxTeam, buttonAccept, buttonStart, buttonMapStartPosition );
@@ -1457,6 +1487,9 @@ void WOLDisplaySlotList( void )
 	// room's, driven from the lobby's seat cards
 	if (s_directStrike)
 		LayoutDirectStrikeRoom(parentWOLGameSetup, "GameSpyGameOptionsMenu.wnd", game);
+	// the four seats and no more
+	if (s_apocalypse)
+		HideLobbySeatRowsFrom(parentWOLGameSetup, "GameSpyGameOptionsMenu.wnd", APOCALYPSE_SEATS);
 
 	WOLDisplayGameOptions();
 
@@ -2002,10 +2035,14 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 	launchGameNext = FALSE;
 
 	// before the gadgets, which fill the army and team boxes by the mode
-	s_directStrike = TheGameSpyInfo->amIHost() ? OnlineHostDirectStrike
+	s_directStrike = TheGameSpyInfo->amIHost() ? TheHostGameMode == HOST_MODE_DIRECT_STRIKE
 		: IsDirectStrikeMap( TheGameSpyInfo->getCurrentStagingRoom()->getMap() );
+	s_apocalypse = TheGameSpyInfo->amIHost() ? TheHostGameMode == HOST_MODE_APOCALYPSE
+		: IsApocalypseMap( TheGameSpyInfo->getCurrentStagingRoom()->getMap() );
 	if (s_directStrike && !TheGameSpyInfo->amIHost())
 		DEBUG_LOG(("ONLINE DIRECTSTRIKE joiner room map=%s\n", TheGameSpyInfo->getCurrentStagingRoom()->getMap().str()));
+	if (s_apocalypse && !TheGameSpyInfo->amIHost())
+		DEBUG_LOG(("ONLINE APOCALYPSE joiner room map=%s\n", TheGameSpyInfo->getCurrentStagingRoom()->getMap().str()));
 
 	//initialize the gadgets
 	EnableSlotListUpdates(FALSE);
@@ -2034,6 +2071,11 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 		{
 			hostMap = game->getMap();
 			DEBUG_LOG(("ONLINE DIRECTSTRIKE host room map=%s\n", hostMap.str()));
+		}
+		if (s_apocalypse && SetApocalypseMap(game, TRUE))
+		{
+			hostMap = game->getMap();
+			DEBUG_LOG(("ONLINE APOCALYPSE host room map=%s\n", hostMap.str()));
 		}
 		game->setMap(hostMap);
 
@@ -2088,6 +2130,12 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 
 		if (s_directStrike)
 			FitDirectStrikeRoom(game);
+		if (s_apocalypse)
+		{
+			FitApocalypseRoom(game);
+			if (buttonSelectMap)
+				buttonSelectMap->winEnable( FALSE );	// the map is the mode's, made again for the seats on Start
+		}
 
 		WOLDisplaySlotList();
 		WOLDisplayGameOptions();
@@ -2216,6 +2264,8 @@ static void shutdownComplete( WindowLayout *layout )
 void WOLGameSetupMenuShutdown( WindowLayout *layout, void *userData )
 {
 	TheGameSpyInfo->unregisterTextWindow(listboxGameSetupChat);
+	// the room's mode ends with the room, by leaving it, a disconnect or a match; the next host is asked again
+	TheHostGameMode = HOST_MODE_CLASSIC;
 
 	if( WOLMapSelectLayout )
 	{

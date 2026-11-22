@@ -225,6 +225,8 @@ static UnicodeString roomMapName( const AsciiString &map )
 	const char *leaf = strrchr(map.str(), '/');
 	if (IsDirectStrikeMap(leaf ? AsciiString(leaf + 1) : map))
 		mapName = ModeNameWithVersion("GUI:DirectStrikeLower", "GUI:DirectStrikeVersion");
+	else if (IsApocalypseMap(map))
+		mapName = ModeNameWithVersion("GUI:ApocalypseLower", "GUI:ApocalypseVersion");
 	else if (md)
 		mapName = md->m_displayName;
 	else

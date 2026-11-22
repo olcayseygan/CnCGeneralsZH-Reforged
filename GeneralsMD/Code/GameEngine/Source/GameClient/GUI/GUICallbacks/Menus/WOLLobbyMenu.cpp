@@ -262,20 +262,18 @@ void SetLobbyAttemptHostJoin(Bool start)
 		LobbySetJoiningGame( 0 );		// the join came back, or the password box was cancelled
 }
 
-/* The Host button's two answers (AskGameMode): the host popup for a Classic room or a Direct Strike one,
-	 whose staging room stands on a lane map from the start (OnlineHostDirectStrike). */
-static void hostRoom( Bool directStrike )
+/* The Host button's answer (AskGameMode): the host popup for a Classic room, or a Direct Strike or
+	 Apocalypse one, whose staging room stands on that mode's generated map from the start (TheHostGameMode). */
+static void hostRoom( Int mode )
 {
 	if (!TheGameSpyInfo || s_tryingToHostOrJoin)
 		return;	// the lobby went, or a join started, while the question was up
-	OnlineHostDirectStrike = directStrike;
+	TheHostGameMode = mode;
 	SetLobbyAttemptHostJoin( TRUE );
 	TheLobbyQueuedUTMs.clear();
 	groupRoomToJoin = TheGameSpyInfo->getCurrentGroupRoom();
 	GameSpyOpenOverlay(GSOVERLAY_GAMEOPTIONS);
 }
-static void hostClassic( void ) { hostRoom( FALSE ); }
-static void hostDirectStrike( void ) { hostRoom( TRUE ); }
 
 /* -online scripting in the lobby, once per process each: -onlinesay says its line once somebody else is in
 	 the room to read it, -onlinehost asks for a staging room the way the host popup's createGame does (no
@@ -320,11 +318,13 @@ static void onlineLobbyScript( void )
 		}
 		if (buttonHost)
 		{
-			// the Host button's mode question, answered as -onlinemap asks: "directstrike" is that mode
+			// the Host button's mode question, answered as -onlinemap asks: "directstrike" and "apocalypse" are those modes
 			if (TheGlobalData->m_onlineMap.compareNoCase( "directstrike" ) == 0)
-				hostDirectStrike();
+				hostRoom( HOST_MODE_DIRECT_STRIKE );
+			else if (TheGlobalData->m_onlineMap.compareNoCase( "apocalypse" ) == 0)
+				hostRoom( HOST_MODE_APOCALYPSE );
 			else
-				hostClassic();
+				hostRoom( HOST_MODE_CLASSIC );
 			popup =TheWindowManager->winGetWindowFromId( NULL, NAMEKEY( "PopupHostGame.wnd:ParentHostPopUp" ) );
 			popupName = TheWindowManager->winGetWindowFromId( popup, NAMEKEY( "PopupHostGame.wnd:TextEntryGameName" ) );
 			popupCreate = TheWindowManager->winGetWindowFromId( popup, NAMEKEY( "PopupHostGame.wnd:ButtonCreateGame" ) );
@@ -2021,8 +2021,8 @@ WindowMsgHandledType WOLLobbyMenuSystem( GameWindow *window, UnsignedInt msg,
 					if (s_tryingToHostOrJoin)
 						break;
 
-					// which mode the room is for; the answer opens the host popup (hostClassic, hostDirectStrike)
-					AskGameMode( hostClassic, hostDirectStrike );
+					// which mode the room is for; the answer opens the host popup (hostRoom)
+					AskGameMode( hostRoom );
 				}
 				else if ( controlID == buttonJoinID )
 				{

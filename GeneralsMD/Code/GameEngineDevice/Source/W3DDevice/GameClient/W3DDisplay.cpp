@@ -149,6 +149,7 @@ static void drawFramerateBar(void);
 #include "GameLogic/ScriptEngine.h"		// For TheScriptEngine - jkmcd
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/PartitionManager.h"	// isCellAlwaysShrouded, the Apocalypse fog ring's thin shroud
+#include "GameLogic/ApocalypseDirector.h"	// isWarnedCell, the gates the next wave gathers at
 
 #if defined(_WIN32)
 #include "WinMain.h"
@@ -4353,8 +4354,10 @@ void W3DDisplay::setShroudLevel( Int x, Int y, CellShroudStatus setting )
 		#endif
 		// the Apocalypse fog ring hides what is in it like shroud but draws as a thin fog, the ground
 		// showing through it: it is shroud nobody can lift, not ground nobody has seen
+		// and where the next wave gathers it thickens, the red with it: the gates' warning
 		if( setting == CELLSHROUD_SHROUDED && ThePartitionManager && ThePartitionManager->isCellAlwaysShrouded(x, y) )
-			TheTerrainRenderObject->getShroud()->setShroudLevel(x, y, (W3DShroudLevel)((Int)TheGlobalData->m_fogAlpha + (255 - (Int)TheGlobalData->m_fogAlpha) / 4) );
+			TheTerrainRenderObject->getShroud()->setShroudLevel(x, y, (W3DShroudLevel)( TheApocalypseDirector->isWarnedCell(x, y)
+				? (Int)TheGlobalData->m_fogAlpha / 2 : (Int)TheGlobalData->m_fogAlpha + (255 - (Int)TheGlobalData->m_fogAlpha) / 4 ) );
 		else if( setting == CELLSHROUD_SHROUDED )
 			TheTerrainRenderObject->getShroud()->setShroudLevel(x, y, (W3DShroudLevel)TheGlobalData->m_shroudAlpha );
 		else if( setting == CELLSHROUD_FOGGED )

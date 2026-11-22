@@ -42,6 +42,8 @@
 #include "GameLogic/AI.h"
 #include "GameLogic/AIPathfind.h"
 #include "GameLogic/ApocalypseDirector.h"
+#include "GameLogic/Damage.h"
+#include "GameLogic/Module/BodyModule.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/LogicRandomValue.h"
@@ -60,16 +62,15 @@ ApocalypseDirector *TheApocalypseDirector = &theApocalypseDirector;
 
 /// the walker, then the two that come out at night
 static const char *const ZOMBIE_TEMPLATES[] = { "ApocalypseZombie", "ApocalypseZombieRunner", "ApocalypseZombieBrute" };
-/// a night zombie's kind out of 100: walkers under the first, runners under the second, brutes the rest
-enum { NIGHT_WALKERS_PERCENT = 45, NIGHT_RUNNERS_PERCENT = 75 };
+static const Int ZOMBIE_POINTS[] = { APOCALYPSE_POINTS_WALKER, APOCALYPSE_POINTS_RUNNER, APOCALYPSE_POINTS_BRUTE };
 
 static const ApocalypsePhaseRules thePhaseRules[ APOCALYPSE_PHASES ] =
 {
-	//	seconds							wave every	size %	out a second	walking at most
-	{ APOCALYPSE_DAY_SECONDS,		40,			100,		4,						120 },
-	{ APOCALYPSE_DUSK_SECONDS,	30,			125,		5,						140 },
-	{ APOCALYPSE_NIGHT_SECONDS,	15,			220,		8,						180 },
-	{ APOCALYPSE_DAWN_SECONDS,	30,			125,		5,						140 },
+	//	seconds							wave every	points %	out a frame	walking at most	gates		runners	brutes
+	{ APOCALYPSE_DAY_SECONDS,		40,			100,			5,					450,						1, 2,		0,			0 },
+	{ APOCALYPSE_DUSK_SECONDS,	30,			160,			6,					550,						2, 2,		20,			5 },
+	{ APOCALYPSE_NIGHT_SECONDS,	25,			320,			10,					700,						2, 99,	30,			20 },
+	{ APOCALYPSE_DAWN_SECONDS,	30,			160,			6,					550,						1, 2,		10,			5 },
 };
 
 const ApocalypsePhaseRules &Apocalypse_phaseRules( Int phase )
@@ -83,11 +84,22 @@ const char *Apocalypse_phaseName( Int phase )
 	return names[ phase >= 0 && phase < APOCALYPSE_PHASES ? phase : APOCALYPSE_DAY ];
 }
 
-Int Apocalypse_waveSize( UnsignedInt wave, Int seats, Int phase, UnsignedInt cycle )
+Int Apocalypse_wavePoints( UnsignedInt wave, Int seats, Int phase, UnsignedInt cycle, Int adaptPercent )
 {
 	const Int plain = APOCALYPSE_WAVE_BASE + APOCALYPSE_WAVE_PER_SEAT * seats + APOCALYPSE_WAVE_GROWTH * (Int)( wave > 0 ? wave - 1 : 0 );
-	const Int size = plain * Apocalypse_phaseRules( phase ).sizePercent / 100 * ( 100 + APOCALYPSE_CYCLE_GROWTH_PERCENT * (Int)cycle ) / 100;
-	return size < APOCALYPSE_WAVE_MOST ? size : APOCALYPSE_WAVE_MOST;
+	const Int points = plain * Apocalypse_phaseRules( phase ).sizePercent / 100 * ( 100 + APOCALYPSE_CYCLE_GROWTH_PERCENT * (Int)cycle ) / 100
+		* adaptPercent / 100;
+	return points < APOCALYPSE_WAVE_MOST ? points : APOCALYPSE_WAVE_MOST;
+}
+
+Int Apocalypse_adapt( Int adaptPercent, Bool reachedBases, Bool cleared )
+{
+	Int next = adaptPercent;
+	if( reachedBases )
+		next -= APOCALYPSE_ADAPT_DOWN;
+	else
+		next += cleared ? APOCALYPSE_ADAPT_UP : APOCALYPSE_ADAPT_SLOW;
+	return next < APOCALYPSE_ADAPT_LEAST ? APOCALYPSE_ADAPT_LEAST : next > APOCALYPSE_ADAPT_MOST ? APOCALYPSE_ADAPT_MOST : next;
 }
 
 Real Apocalypse_nightAmount( Int phase, UnsignedInt intoPhase, UnsignedInt phaseFrames )
@@ -315,6 +327,13 @@ void ApocalypseDirector::reset( void )
 	m_playHi = m_clearLo;
 	m_fogStays.clear();
 	m_fogKills = 0;
+	m_waveSectors = 0;
+	m_warnSectors = 0;
+	m_adapt = APOCALYPSE_ADAPT_START;
+	m_frontTurn = 0;
+	m_reachedAtWave = 0;
+	m_rises.clear();
+	m_infected = 0;
 	m_fogLevel = -1;
 	m_lightLevel = -1;
 	m_lightsOn = FALSE;
@@ -468,14 +487,37 @@ void ApocalypseDirector::sendOn( Object *obj )
 //-------------------------------------------------------------------------------------------------
 void ApocalypseDirector::spawnOne( UnsignedInt now )
 {
+	// the kind out of the phase's mix, a walker whenever the points left cannot pay for it
+	const ApocalypsePhaseRules &rules = Apocalypse_phaseRules( m_phase );
 	Int kind = KIND_WALKER;
-	if( m_phase == APOCALYPSE_NIGHT )
+	const Int roll = GameLogicRandomValue( 0, 99 );
+	if( roll < rules.brutePercent )
+		kind = KIND_BRUTE;
+	else if( roll < rules.brutePercent + rules.runnerPercent )
+		kind = KIND_RUNNER;
+	if( m_kinds[ kind ] == NULL || ZOMBIE_POINTS[ kind ] > m_pending )
+		kind = KIND_WALKER;
+	m_pending -= ZOMBIE_POINTS[ kind ];
+
+	// one of the gates the wave gathered at
+	Int sector = -1;
 	{
-		const Int roll = GameLogicRandomValue( 0, 99 );
-		kind = roll < NIGHT_WALKERS_PERCENT ? KIND_WALKER : roll < NIGHT_RUNNERS_PERCENT ? KIND_RUNNER : KIND_BRUTE;
-		if( m_kinds[ kind ] == NULL )
-			kind = KIND_WALKER;
+		Int bits = 0;
+		for( Int g = 0; g < (Int)m_spawns.size(); ++g )
+			if( m_waveSectors & ( 1u << g ) )
+				++bits;
+		if( bits > 0 )
+		{
+			Int pick = GameLogicRandomValue( 0, bits - 1 );
+			for( Int g = 0; g < (Int)m_spawns.size(); ++g )
+				if( ( m_waveSectors & ( 1u << g ) ) && pick-- == 0 )
+				{
+					sector = g;
+					break;
+				}
+		}
 	}
+
 	Team *team = ThePlayerList->getNthPlayer( m_zombiePlayer )->getDefaultTeam();
 	Object *obj = TheThingFactory->newObject( m_kinds[ kind ], team );
 	if( obj == NULL )
@@ -483,13 +525,13 @@ void ApocalypseDirector::spawnOne( UnsignedInt now )
 	obj->setOrientation( 0.0f );
 	AIUpdateInterface *ai = obj->getAI();
 
-	// anywhere in the fog ring the dead can stand; on a map without one, or where no draw found such a
-	// spot, at a spawn waypoint
+	// in the fog ring before that gate; on a map without one, or where no draw found such a spot, at the
+	// gate's spawn waypoint
 	Coord3D pos;
 	Int which = -1;
-	if( !m_hasRing || !ringSpot( &pos, obj ) )
+	if( !m_hasRing || !ringSpot( &pos, obj, sector ) )
 	{
-		which = GameLogicRandomValue( 0, (Int)m_spawns.size() - 1 );
+		which = sector >= 0 ? sector : GameLogicRandomValue( 0, (Int)m_spawns.size() - 1 );
 		const Coord3D &spawn = m_spawns[ which ];
 		pos = spawn;
 		pos.x += GameLogicRandomValueReal( -(Real)APOCALYPSE_SPAWN_SPREAD, (Real)APOCALYPSE_SPAWN_SPREAD );
@@ -502,6 +544,32 @@ void ApocalypseDirector::spawnOne( UnsignedInt now )
 			pos.z = TheTerrainLogic->getGroundHeight( pos.x, pos.y );
 		}
 	}
+	obj = makeZombie( kind, pos, now, obj );
+	if( obj != NULL && ( m_spawned <= 3 || ( kind != KIND_WALKER && m_spawned % 25 == 0 ) ) )
+	{
+		AsciiString where;
+		if( which >= 0 )
+			where.format( "at spawn %d", which + 1 );
+		else
+			where.format( "in the fog before gate %d", sector + 1 );
+		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u '%s' %d out %s (%.0f,%.0f)\n", now,
+								m_kinds[ kind ]->getName().str(), (Int)obj->getID(), where.str(), pos.x, pos.y ));
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** One of the dead of that kind standing at pos, built, ranked for the cycle, on the list and walking at
+	  the middle; NULL when the data has no such template.  `made` is one already made of that kind
+	  (spawnOne makes it first to ask where it may stand), NULL to make one here. */
+Object *ApocalypseDirector::makeZombie( Int kind, const Coord3D &pos, UnsignedInt now, Object *made )
+{
+	if( m_kinds[ kind ] == NULL )
+		return NULL;
+	Team *team = ThePlayerList->getNthPlayer( m_zombiePlayer )->getDefaultTeam();
+	Object *obj = made != NULL ? made : TheThingFactory->newObject( m_kinds[ kind ], team );
+	if( obj == NULL )
+		return NULL;
+	obj->setOrientation( 0.0f );
 	obj->setPosition( &pos );
 	for( BehaviorModule **m = obj->getBehaviorModules(); *m; ++m )
 	{
@@ -520,15 +588,171 @@ void ApocalypseDirector::spawnOne( UnsignedInt now )
 	z.reached = FALSE;
 	m_zombies.push_back( z );
 	++m_spawned;
-	if( ai != NULL )
-		ai->aiAttackMoveToPosition( &m_centre, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
-	if( m_spawned <= 3 || ( kind != KIND_WALKER && m_spawned % 20 == 0 ) )
+	if( m_spawned == 1 )
+		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u first of the dead '%s' %d selectable %d\n", now,
+								obj->getTemplate()->getName().str(), (Int)z.id, obj->isSelectable() ? 1 : 0 ));
+	if( obj->getAI() != NULL )
+		obj->getAI()->aiAttackMoveToPosition( &m_centre, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+	return obj;
+}
+
+//-------------------------------------------------------------------------------------------------
+/// the gate whose bearing from the middle lies nearest that point's
+Int ApocalypseDirector::sectorOf( Real x, Real y ) const
+{
+	const Real dx = x - m_centre.x, dy = y - m_centre.y;
+	Int best = 0;
+	Real bestDot = -1.0e30f;
+	for( Int g = 0; g < (Int)m_spawns.size(); ++g )
 	{
-		AsciiString where = "in the fog";
-		if( which >= 0 )
-			where.format( "at spawn %d", which + 1 );
-		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u '%s' %d out %s (%.0f,%.0f) at rank %d\n", now,
-								m_kinds[ kind ]->getName().str(), (Int)z.id, where.str(), pos.x, pos.y, rank ));
+		const Real gx = m_spawns[ g ].x - m_centre.x, gy = m_spawns[ g ].y - m_centre.y;
+		const Real length = sqrtf( gx * gx + gy * gy );
+		const Real dot = length > 0.0f ? ( dx * gx + dy * gy ) / length : 0.0f;
+		if( dot > bestDot )
+		{
+			bestDot = dot;
+			best = g;
+		}
+	}
+	return best;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ApocalypseDirector::isWarnedCell( Int cellX, Int cellY ) const
+{
+	if( m_warnSectors == 0 || ThePartitionManager == NULL )
+		return FALSE;
+	Real x, y;
+	ThePartitionManager->getCellCenterPos( cellX, cellY, x, y );
+	return ( m_warnSectors & ( 1u << sectorOf( x, y ) ) ) != 0;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The next wave picks its gates, the phase's count of them from the logic stream, and they glow for
+	  APOCALYPSE_TELEGRAPH_SECONDS before it comes. */
+void ApocalypseDirector::gatherWave( UnsignedInt now )
+{
+	const ApocalypsePhaseRules &rules = Apocalypse_phaseRules( m_phase );
+	const Int gates = (Int)m_spawns.size();
+	Int want = GameLogicRandomValue( rules.sectorsLeast, rules.sectorsMost < gates ? rules.sectorsMost : gates );
+	if( want > gates )
+		want = gates;
+	if( want < 1 )
+		want = 1;
+	UnsignedInt mask = 0;
+	AsciiString names;
+	/* Co-op: the map's first passes are the seats' fronts in seat order (Player_N_Start's lobe), the rest
+		seams between two seats.  The first gate is the next front in turn, so every seat is hit; every
+		third wave it is a seam instead, which two neighbours must hold together. */
+	{
+		const Int fronts = m_seats < gates ? m_seats : gates;
+		Int first = fronts > 0 ? (Int)( m_frontTurn % (UnsignedInt)fronts ) : 0;
+		if( gates > fronts && m_wave % 3 == 2 )
+			first = fronts + GameLogicRandomValue( 0, gates - fronts - 1 );
+		else
+			++m_frontTurn;
+		mask |= 1u << first;
+		names.format( " %d", first + 1 );
+	}
+	for( Int taken = 1; taken < want; ++taken )
+	{
+		Int pick = GameLogicRandomValue( 0, gates - 1 - taken );
+		for( Int g = 0; g < gates; ++g )
+			if( !( mask & ( 1u << g ) ) && pick-- == 0 )
+			{
+				mask |= 1u << g;
+				AsciiString one;
+				one.format( " %d", g + 1 );
+				names.concat( one );
+				break;
+			}
+	}
+	m_warnSectors = mask;
+	DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u %s wave %u gathers at gate%s%s, due at frame %u\n", now,
+							Apocalypse_phaseName( m_phase ), m_wave + 1, want > 1 ? "s" : "", names.str(), m_nextWaveFrame ));
+	LogicThread::callAfterTick( []() { if( ThePartitionManager ) ThePartitionManager->redrawShroudForLocalPlayer(); } );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The gathered wave comes: judged against the last one first (the adaptive share), then paid for in
+	  threat points that come out as one mass at its gates. */
+void ApocalypseDirector::sendWave( UnsignedInt now )
+{
+	if( m_warnSectors == 0 )
+		gatherWave( now );
+	if( m_wave > 0 )
+	{
+		const Bool reached = m_reached > m_reachedAtWave;
+		const Bool cleared = m_pending <= 0 && (Int)m_zombies.size() <= m_seats * 2;
+		m_adapt = Apocalypse_adapt( m_adapt, reached, cleared );
+	}
+	++m_wave;
+	const Int points = Apocalypse_wavePoints( m_wave, m_seats, m_phase, m_cycle, m_adapt );
+	m_pending += points;
+	m_waveSectors = m_warnSectors;
+	m_warnSectors = 0;
+	m_reachedAtWave = m_reached;
+	m_nextWaveFrame = now + Apocalypse_phaseRules( m_phase ).waveSeconds * gameSecond();
+	DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u %s wave %u of cycle %u brings %d points at %d%% share, rank %d; %d walking, %d points to come, next at frame %u\n",
+							now, Apocalypse_phaseName( m_phase ), m_wave, m_cycle, points, m_adapt, Apocalypse_cycleRank( m_cycle ),
+							(Int)m_zombies.size(), m_pending, m_nextWaveFrame ));
+	LogicThread::callAfterTick( []() { if( ThePartitionManager ) ThePartitionManager->redrawShroudForLocalPlayer(); } );
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Soldiers the dead killed rise as the dead: a body of a seat's infantry whose last hurt came from
+	  the dead player is noted while it lies, and APOCALYPSE_INFECT_SECONDS later an ApocalypseZombie
+	  stands where it fell, if the cap has room (it waits for room otherwise).  Walked in object list
+	  order; m_rises kept sorted by the victim's ObjectID. */
+void ApocalypseDirector::watchTheFallen( UnsignedInt now )
+{
+	const Player *zombies = ThePlayerList->getNthPlayer( m_zombiePlayer );
+	const Player *neutral = ThePlayerList->getNeutralPlayer();
+	const PlayerMaskType zombieMask = zombies->getPlayerMask();
+	const Int cap = Apocalypse_phaseRules( m_phase ).aliveCap;
+
+	// those due rise; a risen one is kept while his body lies, so it is not noted twice
+	std::vector<Rise> kept;
+	for( UnsignedInt i = 0; i < m_rises.size(); ++i )
+	{
+		Rise r = m_rises[ i ];
+		if( r.frame != 0 && now >= r.frame && (Int)m_zombies.size() < cap )
+		{
+			const Object *made = makeZombie( KIND_WALKER, r.where, now );
+			if( made != NULL )
+			{
+				++m_infected;
+				DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u fallen %d rises as zombie %d at (%.0f,%.0f), %u risen\n", now,
+										(Int)r.victim, (Int)made->getID(), r.where.x, r.where.y, m_infected ));
+			}
+			r.frame = 0;
+		}
+		if( r.frame == 0 && TheGameLogic->findObjectByID( r.victim ) == NULL )
+			continue;		// risen, and the body is gone: nothing left to tell apart
+		kept.push_back( r );
+	}
+	m_rises.swap( kept );
+
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		if( !obj->isEffectivelyDead() || !obj->isKindOf( KINDOF_INFANTRY ) )
+			continue;
+		const Player *owner = obj->getControllingPlayer();
+		if( owner == NULL || owner == zombies || owner == neutral )
+			continue;
+		const BodyModuleInterface *body = obj->getBodyModule();
+		const DamageInfo *last = body != NULL ? body->getLastDamageInfo() : NULL;
+		if( last == NULL || ( last->in.m_sourcePlayerMask & zombieMask ) == 0 )
+			continue;
+		Rise r;
+		r.victim = obj->getID();
+		std::vector<Rise>::iterator at = std::lower_bound( m_rises.begin(), m_rises.end(), r,
+			[]( const Rise &a, const Rise &b ) { return a.victim < b.victim; } );
+		if( at != m_rises.end() && at->victim == r.victim )
+			continue;
+		r.where = *obj->getPosition();
+		r.frame = now + APOCALYPSE_INFECT_SECONDS * gameSecond();
+		m_rises.insert( at, r );
 	}
 }
 
@@ -539,16 +763,33 @@ Bool ApocalypseDirector::inRing( const Coord3D *pos ) const
 }
 
 //-------------------------------------------------------------------------------------------------
-/** A spot in the fog ring, off the map's edge and off the clear square by APOCALYPSE_FOG_EDGE_IN, where
-	  the object can stand; drawn from the logic stream, FALSE after APOCALYPSE_FOG_TRIES misses. */
-Bool ApocalypseDirector::ringSpot( Coord3D *pos, const Object *obj )
+/** A spot in the fog ring before that gate (anywhere in the ring for -1), off the map's edge and off the
+	  clear square by APOCALYPSE_FOG_EDGE_IN, where the object can stand: from the gate's spawn waypoint
+	  in towards the middle and out to either side by a third of its distance from the middle.  Drawn from
+	  the logic stream, FALSE after APOCALYPSE_FOG_TRIES misses. */
+Bool ApocalypseDirector::ringSpot( Coord3D *pos, const Object *obj, Int sector )
 {
 	const Real in = (Real)APOCALYPSE_FOG_EDGE_IN;
 	const AIUpdateInterface *ai = obj->getAI();
 	for( Int tryNo = 0; tryNo < APOCALYPSE_FOG_TRIES; ++tryNo )
 	{
-		pos->x = GameLogicRandomValueReal( m_playLo.x + in, m_playHi.x - in );
-		pos->y = GameLogicRandomValueReal( m_playLo.y + in, m_playHi.y - in );
+		if( sector >= 0 && sector < (Int)m_spawns.size() )
+		{
+			const Real gx = m_spawns[ sector ].x - m_centre.x, gy = m_spawns[ sector ].y - m_centre.y;
+			const Real reach = sqrtf( gx * gx + gy * gy );
+			const Real ux = reach > 0.0f ? gx / reach : 1.0f, uy = reach > 0.0f ? gy / reach : 0.0f;
+			const Real inward = GameLogicRandomValueReal( 0.0f, 0.45f * reach );
+			const Real aside = GameLogicRandomValueReal( -0.33f * reach, 0.33f * reach );
+			pos->x = m_spawns[ sector ].x - ux * inward - uy * aside;
+			pos->y = m_spawns[ sector ].y - uy * inward + ux * aside;
+			if( pos->x < m_playLo.x + in || pos->x > m_playHi.x - in || pos->y < m_playLo.y + in || pos->y > m_playHi.y - in )
+				continue;
+		}
+		else
+		{
+			pos->x = GameLogicRandomValueReal( m_playLo.x + in, m_playHi.x - in );
+			pos->y = GameLogicRandomValueReal( m_playLo.y + in, m_playHi.y - in );
+		}
 		if( pos->x > m_clearLo.x - in && pos->x < m_clearHi.x + in && pos->y > m_clearLo.y - in && pos->y < m_clearHi.y + in )
 			continue;
 		pos->z = TheTerrainLogic->getGroundHeight( pos->x, pos->y );
@@ -611,12 +852,15 @@ void ApocalypseDirector::advancePhase( UnsignedInt now )
 	m_phaseStartFrame = now;
 	if( m_phase == APOCALYPSE_DAY )
 		++m_cycle;
-	// the night does not wait out the day's wave clock
+	// the night does not wait out the day's wave clock: its first wave is told now and comes a telegraph on
 	if( m_phase == APOCALYPSE_NIGHT )
 	{
-		const UnsignedInt falls = now + APOCALYPSE_NIGHT_FALLS_SECONDS * gameSecond();
+		const UnsignedInt falls = now + APOCALYPSE_TELEGRAPH_SECONDS * gameSecond();
 		if( m_nextWaveFrame > falls )
+		{
 			m_nextWaveFrame = falls;
+			m_warnSectors = 0;		// what the day had gathered gives way to the night's own
+		}
 	}
 	DEBUG_LOG(( "HEADLESS APOCALYPSE: phase %s, cycle %u, frame %u, next wave at frame %u, %d walking\n",
 							Apocalypse_phaseName( m_phase ), m_cycle, now, m_nextWaveFrame, (Int)m_zombies.size() ));
@@ -685,24 +929,20 @@ void ApocalypseDirector::update( void )
 	}
 	m_zombies.resize( kept );
 
-	if( m_kinds[ KIND_WALKER ] != NULL && now >= m_nextWaveFrame )
+	// the next wave gathers at its gates a telegraph ahead, then comes as one mass
+	if( m_kinds[ KIND_WALKER ] != NULL )
 	{
-		++m_wave;
-		const Int size = Apocalypse_waveSize( m_wave, m_seats, m_phase, m_cycle );
-		m_pending += size;
-		m_nextWaveFrame = now + rules.waveSeconds * second;
-		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u %s wave %u of cycle %u sends %d at rank %d; %d walking, %d to come, next wave at frame %u\n",
-								now, Apocalypse_phaseName( m_phase ), m_wave, m_cycle, size, Apocalypse_cycleRank( m_cycle ),
-								(Int)m_zombies.size(), m_pending, m_nextWaveFrame ));
+		if( m_warnSectors == 0 && now + APOCALYPSE_TELEGRAPH_SECONDS * second >= m_nextWaveFrame )
+			gatherWave( now );
+		if( now >= m_nextWaveFrame )
+			sendWave( now );
 	}
-
-	if( m_pending > 0 && now >= m_nextSpawnFrame && (Int)m_zombies.size() < rules.aliveCap )
-	{
+	for( Int out = 0; out < rules.spawnsPerFrame && m_pending > 0 && (Int)m_zombies.size() < rules.aliveCap; ++out )
 		spawnOne( now );
-		--m_pending;
-		const UnsignedInt step = second / (UnsignedInt)rules.spawnsPerSecond;
-		m_nextSpawnFrame = now + ( step > 0 ? step : 1 );
-	}
+
+	// the fallen rise, five times a game second
+	if( now % max( second / 5, 1U ) == 0 )
+		watchTheFallen( now );
 
 	handLight( now );
 
@@ -725,9 +965,9 @@ void ApocalypseDirector::update( void )
 	if( now % ( APOCALYPSE_LOG_SECONDS * second ) == 0 )
 	{
 		const Int standing = seatsAlive();
-		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u %s cycle %u wave %u walking %d spawned %u kills %u reached %u to come %d seats standing %d of %d, fog took %u\n",
+		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u %s cycle %u wave %u walking %d spawned %u kills %u reached %u to come %d seats standing %d of %d, fog took %u, risen %u, share %d%%\n",
 								now, Apocalypse_phaseName( m_phase ), m_cycle, m_wave, (Int)m_zombies.size(), m_spawned, m_kills, m_reached,
-								m_pending, standing, m_seats, m_fogKills ));
+								m_pending, standing, m_seats, m_fogKills, m_infected, m_adapt ));
 		if( standing == 0 && !m_fallLogged )
 		{
 			m_fallLogged = TRUE;
@@ -749,7 +989,7 @@ void ApocalypseDirector::crc( Xfer *xfer )
 	  is handed to the client again on the first tick after it. */
 void ApocalypseDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 2;
+	XferVersion currentVersion = 4;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -787,4 +1027,26 @@ void ApocalypseDirector::xfer( Xfer *xfer )
 			xfer->xferUnsignedInt( &m_fogStays[ i ].since );
 		}
 	}
+
+	if( version >= 3 )
+	{
+		xfer->xferUnsignedInt( &m_waveSectors );
+		xfer->xferUnsignedInt( &m_warnSectors );
+		xfer->xferInt( &m_adapt );
+		xfer->xferUnsignedInt( &m_reachedAtWave );
+		xfer->xferUnsignedInt( &m_infected );
+		count = (UnsignedInt)m_rises.size();
+		xfer->xferUnsignedInt( &count );
+		if( xfer->getXferMode() == XFER_LOAD )
+			m_rises.resize( count );
+		for( UnsignedInt i = 0; i < count; ++i )
+		{
+			xfer->xferObjectID( &m_rises[ i ].victim );
+			xfer->xferCoord3D( &m_rises[ i ].where );
+			xfer->xferUnsignedInt( &m_rises[ i ].frame );
+		}
+	}
+
+	if( version >= 4 )
+		xfer->xferUnsignedInt( &m_frontTurn );
 }

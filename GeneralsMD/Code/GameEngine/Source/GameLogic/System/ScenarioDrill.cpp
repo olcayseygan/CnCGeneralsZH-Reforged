@@ -449,8 +449,11 @@ ScenarioParseResult ScenarioDrill_parseLine( const char *line, ScenarioAction *a
 	if (!parseActionType( tokens[ 1 ], &actionType ))
 		return SCENARIO_PARSE_BAD_ACTION;
 
+	// "civilian" acts for PlyrCivilian, the Apocalypse map's dead among them
 	Int slot = 0;
-	if (!parseWholeNumber( tokens[ 2 ], &slot ))
+	if (tokens[ 2 ] == SCENARIO_CIVILIAN_TOKEN)
+		slot = SCENARIO_CIVILIAN_SLOT;
+	else if (!parseWholeNumber( tokens[ 2 ], &slot ))
 		return SCENARIO_PARSE_BAD_SLOT;
 
 	if (count < tokensNeededFor( actionType ))

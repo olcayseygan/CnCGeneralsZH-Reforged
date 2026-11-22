@@ -76,19 +76,29 @@ enum
 	APOCALYPSE_NIGHT_SECONDS = 120,
 	APOCALYPSE_DAWN_SECONDS = 30,
 	APOCALYPSE_FIRST_WAVE_SECONDS = 60,		///< game seconds from the start to the first wave, time to build
-	APOCALYPSE_NIGHT_FALLS_SECONDS = 3,		///< game seconds from nightfall to its first wave
-	APOCALYPSE_WAVE_BASE = 4,							///< a wave's zombies before its phase and cycle: this,
-	APOCALYPSE_WAVE_PER_SEAT = 2,					///< and this many a seat,
-	APOCALYPSE_WAVE_GROWTH = 3,						///< and this many more every wave
-	APOCALYPSE_WAVE_MOST = 160,						///< a wave's zombies at most
-	APOCALYPSE_CYCLE_GROWTH_PERCENT = 25,	///< more in every wave for each cycle gone by
+	APOCALYPSE_TELEGRAPH_SECONDS = 20,		///< game seconds a wave's gates glow before it comes; nightfall brings its first that soon
+	APOCALYPSE_WAVE_BASE = 10,						///< a wave's threat points before its phase, cycle and the adaptive share: this,
+	APOCALYPSE_WAVE_PER_SEAT = 8,					///< and this many a seat,
+	APOCALYPSE_WAVE_GROWTH = 5,						///< and this many more every wave
+	APOCALYPSE_WAVE_MOST = 1500,					///< a wave's points at most
+	APOCALYPSE_CYCLE_GROWTH_PERCENT = 40,	///< more in every wave for each cycle gone by
+	APOCALYPSE_POINTS_WALKER = 1,					///< what each kind costs of a wave's points
+	APOCALYPSE_POINTS_RUNNER = 2,
+	APOCALYPSE_POINTS_BRUTE = 6,
+	APOCALYPSE_ADAPT_START = 100,					///< the adaptive share, percent: where it starts,
+	APOCALYPSE_ADAPT_LEAST = 70,					///< how low it falls when waves reach the bases,
+	APOCALYPSE_ADAPT_MOST = 600,					///< and how high it climbs when they die far out
+	APOCALYPSE_ADAPT_UP = 30,							///< added when a wave was cleared before the next and reached nothing
+	APOCALYPSE_ADAPT_SLOW = 10,						///< added when it was not cleared but reached nothing either
+	APOCALYPSE_ADAPT_DOWN = 15,						///< taken off when it reached the bases
+	APOCALYPSE_INFECT_SECONDS = 3,				///< game seconds a soldier the dead killed lies before he rises as one of them
 	APOCALYPSE_RETARGET_SECONDS = 2,			///< game seconds between two looks of one zombie for something to go at
 	APOCALYPSE_LOG_SECONDS = 10,					///< game seconds between two status lines
 	APOCALYPSE_SPAWN_SPREAD = 60,					///< world units a zombie lands either way off its spawn
 	APOCALYPSE_BASE_REACH = 200,					///< world units past the farthest start from the middle that count as having reached the bases
 	APOCALYPSE_FOG_GRACE_SECONDS = 4,			///< game seconds anything but the dead may stand in the fog ring before it dies there
 	APOCALYPSE_FOG_EDGE_IN = 40,					///< world units a ring spawn keeps off the map's edge and off the clear square
-	APOCALYPSE_FOG_TRIES = 8,							///< spots drawn for a ring spawn before it falls back on a spawn waypoint
+	APOCALYPSE_FOG_TRIES = 16,						///< spots drawn for a ring spawn before it falls back on a spawn waypoint
 	APOCALYPSE_LIGHT_STEPS = 32,					///< the night amount the client is handed, in steps
 	APOCALYPSE_LIGHT_TINT_EVERY = 4,			///< steps between two retints of the light tables, each a full relight of the ground
 };
@@ -99,15 +109,21 @@ struct ApocalypsePhaseRules
 	Int seconds;
 	Int waveSeconds;
 	Int sizePercent;
-	Int spawnsPerSecond;
+	Int spawnsPerFrame;					///< zombies a wave lets out a logic frame at most, so it comes as one mass
 	Int aliveCap;
+	Int sectorsLeast, sectorsMost;	///< gates a wave gathers at; MOST over the gate count means all of them
+	Int runnerPercent, brutePercent;	///< of what it rolls, the rest walkers
 };
 
 extern const ApocalypsePhaseRules &Apocalypse_phaseRules( Int phase );
 extern const char *Apocalypse_phaseName( Int phase );
 
-/// what a wave of that number (from 1) sends for that many seats, in that phase of that cycle (from 0)
-extern Int Apocalypse_waveSize( UnsignedInt wave, Int seats, Int phase, UnsignedInt cycle );
+/// the threat points a wave of that number (from 1) brings for that many seats, in that phase of that cycle (from 0), at that adaptive share
+extern Int Apocalypse_wavePoints( UnsignedInt wave, Int seats, Int phase, UnsignedInt cycle, Int adaptPercent );
+
+/** The adaptive share after a wave: down when it reached the bases, up fast when it was cleared before
+	  the next one came, a little when it was held but not cleared. */
+extern Int Apocalypse_adapt( Int adaptPercent, Bool reachedBases, Bool cleared );
 
 /// the rank a zombie of that cycle walks in, 0 Regular to 3 Heroic
 inline Int Apocalypse_cycleRank( UnsignedInt cycle ) { return cycle < 3 ? (Int)cycle : 3; }
@@ -137,6 +153,9 @@ public:
 	Int getAlive( void ) const { return (Int)m_zombies.size(); }
 	Int getPhase( void ) const { return m_phase; }
 	UnsignedInt getCycle( void ) const { return m_cycle; }
+	/** The next wave gathers in the gate sector this ring cell (partition cell coordinates) lies in:
+		  the client draws it deeper red.  Read only. */
+	Bool isWarnedCell( Int cellX, Int cellY ) const;
 
 protected:
 	virtual void crc( Xfer *xfer );
@@ -157,8 +176,20 @@ private:
 		UnsignedInt since;							///< the frame it was first found in the ring this time
 	};
 
+	struct Rise
+	{
+		ObjectID victim;								///< the soldier that fell, while his body lies
+		Coord3D where;
+		UnsignedInt frame;							///< when he rises; 0 once he has
+	};
+
 	void spawnOne( UnsignedInt now );
-	Bool ringSpot( Coord3D *pos, const Object *obj );
+	Object *makeZombie( Int kind, const Coord3D &pos, UnsignedInt now, Object *made = NULL );
+	Int sectorOf( Real x, Real y ) const;
+	void gatherWave( UnsignedInt now );
+	void sendWave( UnsignedInt now );
+	void watchTheFallen( UnsignedInt now );
+	Bool ringSpot( Coord3D *pos, const Object *obj, Int sector );
 	Bool inRing( const Coord3D *pos ) const;
 	void killInFog( UnsignedInt now );
 	void sendOn( Object *obj );
@@ -185,7 +216,14 @@ private:
 	UnsignedInt m_wave;									///< waves sent so far
 	UnsignedInt m_nextWaveFrame;
 	UnsignedInt m_nextSpawnFrame;
-	Int m_pending;											///< zombies of the waves sent still to come out
+	Int m_pending;											///< threat points of the waves sent still to come out
+	UnsignedInt m_waveSectors;					///< the gates the waves out now come from, one bit a gate
+	UnsignedInt m_warnSectors;					///< the gates the next wave gathers at, glowing; 0 until it is told
+	Int m_adapt;												///< the adaptive share, percent (Apocalypse_adapt)
+	UnsignedInt m_frontTurn;						///< whose front the next wave gathers before, in seat order
+	UnsignedInt m_reachedAtWave;				///< m_reached when the last wave came, to judge it by
+	std::vector<Rise> m_rises;					///< the fallen soldiers waiting to rise, and those that have, while their bodies lie
+	UnsignedInt m_infected;							///< soldiers risen as the dead
 	UnsignedInt m_spawned;
 	UnsignedInt m_kills;								///< zombies dead, whatever killed them
 	UnsignedInt m_reached;							///< zombies that got within reach of the middle

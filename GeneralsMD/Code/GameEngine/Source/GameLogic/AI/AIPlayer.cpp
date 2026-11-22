@@ -9627,6 +9627,19 @@ static Bool planNamesSuperweapon( Player *player )
 static const AIRungInt SCRIPTLESS_SUPERWEAPON_SECONDS = { { 1800, 1000, 0 }, AIKNOB_OPEN };
 #define SCRIPTLESS_SUPERWEAPON_FRAMES( rating ) ((UnsignedInt)( aiRatingLerp( rating, SCRIPTLESS_SUPERWEAPON_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ))
 
+/** The share of a spare superweapon's price the bank has to hold before it is asked for, on the Hard row
+	* only (Easy and Medium put up the one).  Hard asks the whole price, as before; past Hard it falls, 0.83 at
+	* Brutal, 0.71 at Vicious, 0.56 at Savage and 0.45 at Insane, and the purchase queue saves for the rest.
+	* The curve stands above 1 under Hard (1.14 at 1550), and the rest of the Hard row keeps the whole price
+	* (aiSuperweaponSpareShare). */
+static const AIRungReal SUPERWEAPON_SPARE_BANK = { { 2.0f, 1.33f, 1.0f }, AIKNOB_OPEN };
+
+Real aiSuperweaponSpareShare( Real rating )
+{
+	const Real share = aiRatingLerp( rating, SUPERWEAPON_SPARE_BANK );
+	return share < 1.0f ? share : 1.0f;
+}
+
 void AIPlayer::doSuperweapons( void )
 {
 	const Int phase = computeUpdatePhase( m_player->getPlayerIndex(), SUPERWEAPON_CHECK_RATE );
@@ -9672,14 +9685,16 @@ void AIPlayer::doSuperweapons( void )
 	}
 
 	// buildableOfKind already asked canMakeUnit, which holds the defence ration.  The first is saved for;
-	// every one after it waits until the bank holds its price, so the extra copies come out of what the
-	// income leaves over and not out of the army's money (AI_HARD_DEFENSES_PER_SUPERWEAPON lets many through)
+	// every one after it waits until the bank holds its rating's share of the price (SUPERWEAPON_SPARE_BANK,
+	// all of it on Hard), so the extra copies come out of what the income leaves over and not out of the
+	// army's money (AI_HARD_DEFENSES_PER_SUPERWEAPON lets many through)
+	const Real spareShare = aiSuperweaponSpareShare( m_rating );
 	if( superweapon && !priorityBuildPending( m_player, superweapon ) &&
 			( tally.superweapons < 1 || ( getSkillProfile()->m_economyBuildings &&		// Easy and Medium: the one, as their scripts do
-				(Int)m_player->getMoney()->countMoney() >= superweapon->calcCostToBuild( m_player ) ) ) )
+				INT_TO_REAL( (Int)m_player->getMoney()->countMoney() ) >= spareShare * INT_TO_REAL( superweapon->calcCostToBuild( m_player ) ) ) ) )
 	{
-		DEBUG_LOG(( "AI SWBUY frame %d player %d '%s', %d standing, %d in the bank\n", TheGameLogic->getFrame(),
-			m_player->getPlayerIndex(), superweapon->getName().str(), tally.superweapons, (Int)m_player->getMoney()->countMoney() ));
+		DEBUG_LOG(( "AI SWBUY frame %d player %d '%s', %d standing, %d in the bank, share %.2f\n", TheGameLogic->getFrame(),
+			m_player->getPlayerIndex(), superweapon->getName().str(), tally.superweapons, (Int)m_player->getMoney()->countMoney(), spareShare ));
 		buildAsap( superweapon );
 	}
 }
@@ -25958,7 +25973,7 @@ void AIPlayer::getPlayerStructureBounds( Region2D *bounds, Int playerNdx, Bool c
 
 //----------------------------------------------------------------------------------------------------------
 // every table of three the game reads at a rating, by its constant's name (aiRatingTables)
-extern const AIRungInt TECH_FIRST_DEFENSES;
+extern const AIRungInt SUPERWEAPON_MOST_DEFENSES;
 extern const AIRungInt SURRENDER_EARLIEST_MINUTE;
 extern const AIRungInt SURRENDER_WORTH_PERCENT;
 extern const AIRungInt SURRENDER_HOLD_SECONDS;
@@ -26023,7 +26038,8 @@ static const AIRatingTable s_ratingTables[] =
 	AI_TABLE_INT( RUSH_SECONDS ),
 	AI_TABLE_INT( RAID_EVERY_SECONDS ),
 	AI_TABLE_INT( SHARE_CAP ),
-	AI_TABLE_INT( TECH_FIRST_DEFENSES ),
+	AI_TABLE_INT( SUPERWEAPON_MOST_DEFENSES ),
+	AI_TABLE_REAL( SUPERWEAPON_SPARE_BANK ),
 	AI_TABLE_INT( SURRENDER_EARLIEST_MINUTE ),
 	AI_TABLE_INT( SURRENDER_WORTH_PERCENT ),
 	AI_TABLE_INT( SURRENDER_HOLD_SECONDS ),

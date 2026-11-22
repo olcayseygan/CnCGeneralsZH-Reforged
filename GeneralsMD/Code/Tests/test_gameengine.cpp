@@ -26329,6 +26329,43 @@ TEST(twelve_finished_defenses_pay_for_each_superweapon)
 	CHECK( SuperweaponNeedsDefenses( AsciiString( "GLAScudStorm" ), TRUE, SUPERWEAPONS_ALLOW, TRUE ) );
 }
 
+/* A higher rating builds its superweapons on fewer guns and with less of the price in the bank.  Up to
+	 Hard both stay what they were, four guns and the whole price; the levels above Hard step down, and
+	 never back up as the rating climbs. */
+TEST(a_higher_rating_wants_superweapons_sooner_and_more)
+{
+	const Int R = AI_HARD_DEFENSES_PER_SUPERWEAPON;
+	CHECK_EQ( R, SuperweaponDefensesAtRating( R, AI_RATING_EASY ) );
+	CHECK_EQ( R, SuperweaponDefensesAtRating( R, AI_RATING_MEDIUM ) );
+	CHECK_EQ( R, SuperweaponDefensesAtRating( R, 1550.0f ) );
+	CHECK_EQ( R, SuperweaponDefensesAtRating( R, AI_RATING_HARD ) );
+	CHECK_EQ( 3, SuperweaponDefensesAtRating( R, AI_RATING_BRUTAL ) );
+	CHECK_EQ( 3, SuperweaponDefensesAtRating( R, AI_RATING_VICIOUS ) );
+	CHECK_EQ( 2, SuperweaponDefensesAtRating( R, AI_RATING_SAVAGE ) );
+	CHECK_EQ( 2, SuperweaponDefensesAtRating( R, AI_RATING_INSANE ) );
+	// far past any ladder the curve rounds to nothing, and one gun a superweapon is still asked
+	CHECK_EQ( 1, SuperweaponDefensesAtRating( R, AI_RATING_LIMIT ) );
+	// none asked stays none, and a smaller ration is never raised
+	CHECK_EQ( 0, SuperweaponDefensesAtRating( 0, AI_RATING_INSANE ) );
+	CHECK_EQ( 1, SuperweaponDefensesAtRating( 1, AI_RATING_HARD ) );
+
+	// the whole price at Hard and every rating under it, the Hard row's lower end included, where the
+	// table's curve stands above 1
+	static const Real UNDER[] = { -AI_RATING_LIMIT, AI_RATING_EASY, AI_RATING_MEDIUM, 1550.0f, 1700.0f, 1799.0f, AI_RATING_HARD };
+	for( Int i = 0; i < (Int)( sizeof( UNDER ) / sizeof( UNDER[ 0 ] ) ); ++i )
+		CHECK_EQ( 1.0f, aiSuperweaponSpareShare( UNDER[ i ] ) );
+	static const Real LADDER[] = { AI_RATING_HARD, 1801.0f, AI_RATING_BRUTAL, AI_RATING_VICIOUS, AI_RATING_SAVAGE, AI_RATING_INSANE, AI_RATING_LIMIT };
+	for( Int i = 1; i < (Int)( sizeof( LADDER ) / sizeof( LADDER[ 0 ] ) ); ++i )
+	{
+		CHECK( aiSuperweaponSpareShare( LADDER[ i ] ) < 1.0f );
+		CHECK( aiSuperweaponSpareShare( LADDER[ i ] ) < aiSuperweaponSpareShare( LADDER[ i - 1 ] ) );
+		CHECK( SuperweaponDefensesAtRating( R, LADDER[ i ] ) <= SuperweaponDefensesAtRating( R, LADDER[ i - 1 ] ) );
+	}
+	CHECK_NEAR( 0.83f, aiSuperweaponSpareShare( AI_RATING_BRUTAL ), 0.01f );
+	CHECK_NEAR( 0.45f, aiSuperweaponSpareShare( AI_RATING_INSANE ), 0.01f );
+	CHECK( aiSuperweaponSpareShare( AI_RATING_LIMIT ) > 0.0f );
+}
+
 /* The defence allowance is the computer's rule only.  A human builds a superweapon against the
 	 lobby's limit and Pro Rules alone, so no superweapon of his is ever asked for towers, whatever
 	 mode the lobby picked. */

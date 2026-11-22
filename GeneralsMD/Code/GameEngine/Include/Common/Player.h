@@ -176,6 +176,9 @@ enum { DEFENSES_PER_SUPERWEAPON = 12 };
 // DEFENSES_PER_SUPERWEAPON stays the defence clock's measure (aiDefenseAllowance).
 enum { AI_HARD_DEFENSES_PER_SUPERWEAPON = 4 };
 Bool SuperweaponDefenseCapRefuses( Int finishedDefenses, Int superweapons, Int defensesPerSuperweapon );
+// The ration a computer at this rating is held to: the rung's, lowered past Hard (4 up to Hard, 3 at Brutal
+// and Vicious, 2 at Savage and Insane), never under one; 0 still asks none.
+Int SuperweaponDefensesAtRating( Int ration, Real rating );
 // Only a defence somebody paid for counts.  The Sneak Attack tunnel, its Start and every general's
 // copy are the only FS_BASE_DEFENSE templates with no BuildCost: a power drops them for free.
 Bool DefenseCountsForSuperweapons( Int buildCost );

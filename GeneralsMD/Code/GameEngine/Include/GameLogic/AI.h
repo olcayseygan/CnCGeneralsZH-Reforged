@@ -760,6 +760,10 @@ static const Int AI_ARMY_PER_DEFENSE = 3;
 static const Int AI_DEFENSE_PACE_SECONDS = 30;
 Int aiDefenseAllowance( Int army, UnsignedInt frame );
 
+/** The share of a spare superweapon's price a Hard-row computer's bank has to hold before it asks for one:
+	* the whole price at Hard and every rating under it, less past Hard (AIPlayer.cpp, SUPERWEAPON_SPARE_BANK). */
+Real aiSuperweaponSpareShare( Real rating );
+
 /** Which of the base defences a dozer can build goes up next, as an index into the candidates: the
 	* one with the fewest standing, so a side's guns come as a mix rather than a row of whatever button
 	* sits first.  A defence with no gun or spawn of its own (an empty bunker, a speaker tower) counts

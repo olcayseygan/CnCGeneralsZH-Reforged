@@ -1,0 +1,67 @@
+# Stealth transitions, enemy view. Tournament Desert, seat 0 FactionChina played (Command Center at
+# 1005,584, sight 300, plus a Power Plant at 805,584, sight 200), seat 1 FactionGLAStealthGeneral,
+# -takeover, -gamespeed 100: a file frame is one logic frame, 1/30 wall second. The camera comes from
+# Cinema/stealthenemy.txt. Run to about 2580 frames. Tools/record-dx11-shaders.ps1 plays it so the
+# shipped Direct3D 11 cache holds every stealth program a player draws for the other side.
+#
+# Every Pathfinder order goes by template, so each Pathfinder here is a different one of the five
+# templates with the same StealthUpdate (StealthDelay 0, forbidden MOVING, innate).
+#
+#  E3a  300  enemy Pathfinder P1, walking north in plain sight since 31, is stopped -> cloaks (ease out)
+#  E3b  420  enemy Stealth Barracks buys Camo Netting (5 s) + 2.5 s delay  -> cloaks about 645
+#  E4a  840  own (China) Radar Van, waiting since 30 at 1330,840, drives to 1300,730 (71 frames
+#            headless): within 250 of the cloaked, standing Pathfinder P2 (AirF_, 1100,700; 269 from
+#            the waiting spot, 202 from the stop) and of the cloaked barracks (285, then 174) at about
+#            the same moment -> both revealed (heat rising foot to top), nothing else moving but the van.
+#  E4b 1320  P2, still revealed, walks to 1180,780                       -> heat, then paint
+#  E5  1680  enemy Stealth Rebel (cloaked since 105 at 1005,830) shoots a China supply truck parked
+#            beside it at 1% health -> decloak wind; truck dies; Rebel re-cloaks 2.5 s later (about 1760)
+#  E6  1890  three Lazr_ Pathfinders spawn standing at 960,740 in plain sight -> already cloaked,
+#            nothing must flash
+#  LA  2101  SupW_ Pathfinder walking (since 1951) stopped at about 1112,860; the camera cuts away on
+#            2104 (0.1 s), back on 2160: still before at 2095, after at 2175
+#  LB  2386  Boss_ Pathfinder walking (since 2221) stopped at about 866,816; camera away on 2395
+#            (0.3 s), back on 2450: still before at 2380, after at 2465
+#
+# The van's stop (1300,730) is 250+ from P1, the Rebel, the E6 spot and both leak spots, so it only
+# ever finds P2 and the barracks. No China unit is armed; the Pathfinders' rifles take infantry only.
+
+# setup
+30    spawn       0  ChinaPowerPlant                 1  805 584
+30    spawn       1  Slth_GLABarracks                1  1205 584
+30    spawn       0  GLAVehicleRadarVan              1  1330 840
+30    spawn       1  AmericaInfantryPathfinder       1  880 980
+31    move        1  AmericaInfantryPathfinder       845 560
+30    spawn       1  Slth_GLAInfantryRebel           1  1005 830
+140   spawn       1  AirF_AmericaInfantryPathfinder  1  1100 700
+
+# E3a
+300   stop        1  AmericaInfantryPathfinder
+
+# E3b
+420   shiftupgrade 1 Slth_GLABarracks                Upgrade_GLACamoNetting
+
+# E4a, E4b
+840   move        0  GLAVehicleRadarVan              1300 730
+840   arrive      0  GLAVehicleRadarVan              1300 730 40
+1320  move        1  AirF_AmericaInfantryPathfinder  1180 780
+
+# E5
+1500  spawn       0  ChinaVehicleSupplyTruck         1  1120 1010
+1501  health      0  ChinaVehicleSupplyTruck         1
+1501  move        0  ChinaVehicleSupplyTruck         1040 870
+1680  attack      1  Slth_GLAInfantryRebel           0  ChinaVehicleSupplyTruck
+1790  tally       0  ChinaVehicleSupplyTruck
+
+# E6
+1890  spawn       1  Lazr_AmericaInfantryPathfinder  3  960 740 25
+
+# leak pair A
+1950  spawn       1  SupW_AmericaInfantryPathfinder  1  1120 1010
+1951  move        1  SupW_AmericaInfantryPathfinder  1100 600
+2101  stop        1  SupW_AmericaInfantryPathfinder
+
+# leak pair B
+2220  spawn       1  Boss_InfantryPathfinder         1  880 980
+2221  move        1  Boss_InfantryPathfinder         845 560
+2386  stop        1  Boss_InfantryPathfinder

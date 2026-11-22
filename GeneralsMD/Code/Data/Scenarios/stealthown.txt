@@ -1,0 +1,61 @@
+# Stealth transitions, own view. Tournament Desert, seat 0 FactionGLAStealthGeneral played (base at
+# start 1005,584), seat 1 FactionChina, -takeover, -gamespeed 100: a file frame is one logic frame,
+# 1/30 wall second, and the frame an action fires on is the logic frame (no control socket, nothing
+# can land late). The camera comes from Cinema/stealthown.txt; it matters, because only drawn objects
+# compile a program. Run to about 2700 frames. Tools/record-dx11-shaders.ps1 plays it so the shipped
+# Direct3D 11 cache holds every stealth program an own seat draws.
+#
+#  E1a  300  own Pathfinder, walking north since 31, is stopped        -> cloaks (StealthDelay 0)
+#  E1b  480  the same Pathfinder walks south                           -> decloaks by moving
+#  E1c  810  own Stealth Rebel (cloaked since 105) shoots a parked
+#            enemy supply truck at 1% health                           -> decloaks by firing,
+#            truck dies on the first burst, Rebel re-cloaks 2.5 s later (about 890)
+#  E2a  960  own Stealth Barracks buys Camo Netting (5 s) + 2.5 s delay -> cloaks about 1185
+#  E2b 1350  enemy Radar Van (plain detector, range 250, unarmed), waiting since 30 at 1330,840
+#            (285 from the barracks), drives in to 1300,730 (174; 71 frames headless)
+#                                                                       -> amber eases in about 1375
+#  E2c 1800  the van drives back out to 1330,840                        -> amber eases out about 1830
+#  E2d 2010  the van, now at 1% health, comes back (amber in about 2035); 2200 an own Crusader
+#            appears at 1150,950, 2340 it is sent at the van -> van dies, amber eases out
+#  (1350,700) was the first stop: the van cannot reach it and detoured west past the Rebel;
+#  1330,840 and 1300,730 measured reachable headless.
+#
+# Kept apart on purpose: the Pathfinder's lane (880,980 to 858,712) is 150+ from the Rebel at
+# 1005,830 and 450+ from the barracks; the van never comes within 250 of a unit; the Crusader is
+# spawned after the truck is dead and 320 from the van's stop, beyond its own sight. Rebels of the
+# Stealth General auto-acquire only when not stealthed and nobody here attacks a structure when idle
+# (no ATTACK_BUILDINGS), so nothing fires that the file does not order.
+
+# setup
+30    spawn       0  Slth_GLABarracks            1  1205 584
+30    spawn       0  AmericaInfantryPathfinder   1  880 980
+31    move        0  AmericaInfantryPathfinder   845 560
+30    spawn       0  Slth_GLAInfantryRebel       1  1005 830
+30    spawn       1  GLAVehicleRadarVan          1  1330 840
+
+# E1a, E1b
+300   stop        0  AmericaInfantryPathfinder
+480   move        0  AmericaInfantryPathfinder   880 1100
+620   stop        0  AmericaInfantryPathfinder
+
+# E1c
+630   spawn       1  ChinaVehicleSupplyTruck     1  1120 1010
+631   health      1  ChinaVehicleSupplyTruck     1
+631   move        1  ChinaVehicleSupplyTruck     1040 870
+810   attack      0  Slth_GLAInfantryRebel       1  ChinaVehicleSupplyTruck
+900   tally       1  ChinaVehicleSupplyTruck
+
+# E2a
+960   shiftupgrade 0 Slth_GLABarracks            Upgrade_GLACamoNetting
+
+# E2b, E2c
+1350  move        1  GLAVehicleRadarVan          1300 730
+1350  arrive      1  GLAVehicleRadarVan          1300 730 40
+1800  move        1  GLAVehicleRadarVan          1330 840
+
+# E2d
+2010  move        1  GLAVehicleRadarVan          1300 730
+2010  health      1  GLAVehicleRadarVan          1
+2200  spawn       0  AmericaTankCrusader         1  1150 950
+2340  attack      0  AmericaTankCrusader         1  GLAVehicleRadarVan
+2620  tally       1  GLAVehicleRadarVan

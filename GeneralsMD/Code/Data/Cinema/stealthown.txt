@@ -1,0 +1,13 @@
+# Camera for Scenarios/stealthown.txt. The clock is the logic frame over 30, so a second here is
+# frame/30. HUD on (HealthBars always, as reforged-look.ini has it). Heading 0 (+y is up the screen,
+# so a smaller y sits lower), pitch 0; zoom 1 is the opening height, 0.6 the closer unit shots. Each
+# cut is on its subject: the command bar covers the bottom 30% of the middle of the picture.
+
+0.0   hud    on
+# E1a, E1b: the Pathfinder stops at about 858,712 on 300, walks back south (up the screen) on 480
+5.0   cut    860 730 0.6 0 0
+# E1c: the Rebel at 1005,830, the truck parking beside it
+21.5  cut    1025 860 0.6 0 0
+# E2a to E2d: the barracks at 1205,584 left of and below centre, the van's stop at 1350,700 up and
+# right, the Crusader coming in from the top
+33.0  cut    1250 620 1.0 0 0

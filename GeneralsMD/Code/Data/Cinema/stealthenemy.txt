@@ -1,0 +1,28 @@
+# Camera for Scenarios/stealthenemy.txt. The clock is the logic frame over 30. HUD on, heading 0 (+y
+# up the screen), pitch 0; zoom 1 the opening height, 0.6 the unit shots. Each cut is on its subject,
+# clear of the command bar.
+
+0.0   hud    on
+# E3a: P1 walking north (down the screen), stopped on 300 at about 858,712
+5.0   cut    860 730 0.6 0 0
+# E3b, E4a: the barracks (1205,584) below centre, P2 (1100,700) left, the van waiting at 1330,840
+# top right and stopping at 1300,730 right
+14.5  cut    1220 660 1.0 0 0
+# E4b: P2 walking from 1100,700 to 1180,780, closer
+43.3  cut    1140 740 0.6 0 0
+# E5: the Rebel at 1005,830 and the truck
+49.0  cut    1025 860 0.6 0 0
+# E6: the spawn spot
+62.0  cut    960 740 0.6 0 0
+# leak pair A: stop on frame 2101 at about 1113,860, away on 2104 (0.1 s), back on 2160
+68.0  cut    1113 860 0.6 0 0
+69.83 shot
+70.12 cut    1300 1500 0.6 0 0
+72.0  cut    1113 860 0.6 0 0
+72.5  shot
+# leak pair B: stop on frame 2386 at about 866,816, away on 2395 (0.3 s), back on 2450
+77.67 cut    866 816 0.6 0 0
+79.33 shot
+79.82 cut    1300 1500 0.6 0 0
+81.67 cut    866 816 0.6 0 0
+82.17 shot

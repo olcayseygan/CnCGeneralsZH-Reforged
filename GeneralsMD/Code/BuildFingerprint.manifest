@@ -1145,6 +1145,8 @@ Data/Cinema/scudlaunch_film.txt
 Data/Cinema/shadowfar.txt
 Data/Cinema/shadowpan.txt
 Data/Cinema/spectre_reshoot.txt
+Data/Cinema/stealthenemy.txt
+Data/Cinema/stealthown.txt
 Data/Cinema/summary_close.txt
 Data/Cinema/summary_fire.txt
 Data/Cinema/swpair_nuke.txt
@@ -1562,7 +1564,9 @@ Data/Scenarios/standinbuild.txt
 Data/Scenarios/standinfake.txt
 Data/Scenarios/stashbeside.txt
 Data/Scenarios/statues.txt
+Data/Scenarios/stealthenemy.txt
 Data/Scenarios/stealthintruder.txt
+Data/Scenarios/stealthown.txt
 Data/Scenarios/stealthreveal.txt
 Data/Scenarios/strikeair_nuke.txt
 Data/Scenarios/strikeair_nukehelix.txt

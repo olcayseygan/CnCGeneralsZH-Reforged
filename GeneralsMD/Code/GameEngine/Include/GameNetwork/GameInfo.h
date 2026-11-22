@@ -351,6 +351,12 @@ public:
   Bool getStartShrouded( void ) const { return m_startShrouded; }
   void setStartShrouded( Bool shrouded ) { m_startShrouded = shrouded; }
 
+  // The day and night cycle (GameLogic/DayNightCycle.h): the host's box in a skirmish, LAN or custom
+  // online room, off in a Quick Match and Play vs AI.  DN=1 in the options string, written only when
+  // on, so an old replay and every string with it off stay as they were.
+  Bool getDayNight( void ) const { return m_dayNight; }
+  void setDayNight( Bool on ) { m_dayNight = on; }
+
   // Game speed in percent of retail's pace, one of PLAYER_GAME_SPEED_PERCENTS: the game time each tick
   // advances.  The skirmish lobby and the LAN and custom online rooms' hosts pick it, a matched Quick
   // Match sets RETAIL_GAME_SPEED_PERCENT.  The options string carries it as SP=<percent> only when it is
@@ -392,6 +398,7 @@ protected:
   Int m_techRespawn; // minutes before a destroyed tech building comes back, 0 = never
   Int m_supplyPileLimit; // players who may gather from one supply pile at once, 0 = any number
   Bool m_startShrouded; // the map starts black for every player, a ranked Quick Match
+  Bool m_dayNight; // the day and night cycle runs, DN in the options string
   Int m_gameSpeedPercent; // the lobby's game speed, getDefaultGameSpeedPercent until someone picks another
 };
 

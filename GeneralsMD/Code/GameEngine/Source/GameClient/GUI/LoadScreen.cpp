@@ -737,6 +737,8 @@ GameWindow *LoadScreenBoard::create( GameInfo *game, const char *modeLabel, Bool
 			words = TheGameText->fetch( "GUI:TechRespawnOff" );
 		addFact( "GUI:TechRespawn", words, middleWidth );
 		addFact( "GUI:UnitLimit", TheGameText->fetch( game->getUnitLimit() ? "GUI:LoadRuleOn" : "GUI:LoadRuleOff" ), middleWidth );
+		if( game->getDayNight() )	// only when on, so every other match's list is as long as it was
+			addFact( "GUI:DayNight", TheGameText->fetch( "GUI:LoadRuleOn" ), middleWidth );
 	}
 	const Int factPad = scaled( 10 );
 	const Int factLeast = m_factPitch;

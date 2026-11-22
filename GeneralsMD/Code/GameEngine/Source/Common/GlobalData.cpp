@@ -763,6 +763,7 @@ GlobalData::GlobalData()
 	m_techRespawn = 0;							// a destroyed tech building stays destroyed unless -techrespawn asks
 	m_supplyPileLimit = 0;					// a supply pile takes any number of players unless -supplypilelimit asks
 	m_startShrouded = FALSE;				// the retail revealed, fogged start unless -startshrouded asks
+	m_dayNight = FALSE;							// daylight all match unless -daynight asks
 	m_autoSkirmishGameSpeedPercent = PLAYER_GAME_SPEED_PERCENT_DEFAULT;	// the native tick unless -gamespeed asks
 	m_superweapons = 0;							// SUPERWEAPONS_ALLOW unless -superweapons asks
 	m_startingCash = 0;							// the INI's DefaultStartingCash unless -startingcash asks

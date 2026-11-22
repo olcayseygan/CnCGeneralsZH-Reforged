@@ -661,6 +661,7 @@ void GameInfo::reset( void )
   m_techRespawn = 0;
   m_supplyPileLimit = 0;
   m_startShrouded = FALSE;
+  m_dayNight = FALSE;
   m_gameSpeedPercent = getDefaultGameSpeedPercent();	// the base's from the constructor, the room kind's after
 
 	//
@@ -1534,6 +1535,7 @@ static AsciiString buildGameInfoAsciiString( const GameInfo *game, const AsciiSt
 	concatOptionUnlessZero(optionsString, "TR", game->getTechRespawn());
 	concatOptionUnlessZero(optionsString, "PL", game->getSupplyPileLimit());
 	concatOptionUnlessZero(optionsString, "SH", game->getStartShrouded() ? 1 : 0);
+	concatOptionUnlessZero(optionsString, "DN", game->getDayNight() ? 1 : 0);
 	// the game speed only when the host moved it off his room kind's own (LAN 1.0x, a custom room 1.5x),
 	// so a room left alone sends the string it always sent.  Not "GS": a replay's header appends that
 	// key after the slot list and takes the last one off again.  Turbo's "TB" key is no longer written
@@ -1726,6 +1728,7 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
   Int techRespawn = 0; // the same
   Int supplyPileLimit = 0; // the same
   Bool startShrouded = FALSE; // the same
+  Bool dayNight = FALSE; // the same, and an old replay plays with the cycle off
   Int gameSpeedPercent = 0; // absent = the room kind's own speed
 
 	Bool sawMap, sawMapCRC, sawMapSize, sawSeed, sawSlotlist, sawUseStats, sawSuperweaponRestriction, sawStartingCash, sawOldFactions;
@@ -1841,6 +1844,10 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
     else if (key.compare("SH") == 0 )
     {
       startShrouded = atoi(val.str()) != 0;
+    }
+    else if (key.compare("DN") == 0 )
+    {
+      dayNight = atoi(val.str()) != 0;
     }
     else if (key.compare("SP") == 0 )
     {
@@ -2226,6 +2233,7 @@ Bool ParseAsciiStringToGameInfo(GameInfo *game, AsciiString options)
     game->setTechRespawn( techRespawn );
     game->setSupplyPileLimit( supplyPileLimit );
     game->setStartShrouded( startShrouded );
+    game->setDayNight( dayNight );
     game->setGameSpeedPercent( gameSpeedPercent != 0 ? gameSpeedPercent : game->getDefaultGameSpeedPercent() );
 
 		return true;
@@ -2253,7 +2261,7 @@ void SkirmishGameInfo::crc( Xfer *xfer )
 // ------------------------------------------------------------------------------------------------
 void SkirmishGameInfo::xfer( Xfer *xfer )
 {
-	const XferVersion currentVersion = 16;	// 5 adds m_peaceTime, 6 m_unitLimit, 7 m_proRules, 8 m_incomeSharing, 9 m_techRespawn, 10 m_supplyPileLimit, 11 each slot's AI personality, 12 each slot's handicap, 13 a 64-bit preorder mask, 14 each slot's AI rating, 15 that rating's "none" as AI_RATING_NONE instead of -1, 16 that rating on Elo
+	const XferVersion currentVersion = 17;	// 5 adds m_peaceTime, 6 m_unitLimit, 7 m_proRules, 8 m_incomeSharing, 9 m_techRespawn, 10 m_supplyPileLimit, 11 each slot's AI personality, 12 each slot's handicap, 13 a 64-bit preorder mask, 14 each slot's AI rating, 15 that rating's "none" as AI_RATING_NONE instead of -1, 16 that rating on Elo, 17 m_dayNight
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -2453,6 +2461,15 @@ void SkirmishGameInfo::xfer( Xfer *xfer )
   else if ( xfer->getXferMode() == XFER_LOAD )
   {
     m_supplyPileLimit = 0;
+  }
+
+  if ( version >= 17 )
+  {
+    xfer->xferBool( &m_dayNight );
+  }
+  else if ( xfer->getXferMode() == XFER_LOAD )
+  {
+    m_dayNight = FALSE;
   }
 
 }  // end xfer

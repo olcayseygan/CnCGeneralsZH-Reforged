@@ -505,6 +505,7 @@ public:
 	void addSightJammer();		///< an enemy jammer's field took it in: its sight shrinks until the last one lets go
 	void removeSightJammer();	///< a jammer's field let go of it
 	Bool isSightJammed() const { return m_sightJammerCount > 0; }
+	void refreshLook() { unlook(); look(); }	///< look again with what the range is now, for the day and night cycle's sight steps
 
 	// Both of these calls are intended to only be used by TerrainLogic, specifically setActiveBoundary()
 	void friend_prepareForMapBoundaryAdjust(void);

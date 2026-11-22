@@ -1414,6 +1414,14 @@ GUI:StartShrouded
 "Hidden Map"
 END
 
+GUI:DayNight
+"Day and Night"
+END
+
+TOOLTIP:DayNight
+"Night falls after every ten minutes of day, and at night every unit sees a fifth less far."
+END
+
 TOOLTIP:StartShrouded
 "The map starts black for every player. Ground your side has not seen stays black until one of your units gets there, and the load screen does not give the start spots away. Off, everyone starts with the whole map in view under the fog, the way multiplayer has always played."
 END

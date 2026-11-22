@@ -1009,6 +1009,8 @@ Data/Audio/Speech/etunitl.wav
 Data/Audio/Speech/etupgra.wav
 Data/Audio/Speech/etvehst.wav
 Data/Cinema/altstyles.txt
+Data/Cinema/apoc_discord3.txt
+Data/Cinema/apoc_discord4.txt
 Data/Cinema/apoc_discord_day.txt
 Data/Cinema/apoc_discord_day2.txt
 Data/Cinema/apoc_discord_night.txt
@@ -1316,6 +1318,8 @@ Data/Scenarios/ambulancegiveup.txt
 Data/Scenarios/ambulanceguard.txt
 Data/Scenarios/amovefield.txt
 Data/Scenarios/amovejet.txt
+Data/Scenarios/apoc_discord2.txt
+Data/Scenarios/apoc_discord4.txt
 Data/Scenarios/artillery.txt
 Data/Scenarios/aurorablast.txt
 Data/Scenarios/aurorafog.txt
@@ -1949,6 +1953,7 @@ GameEngine/Include/GameLogic/CaveSystem.h
 GameEngine/Include/GameLogic/CrateSystem.h
 GameEngine/Include/GameLogic/CrowdModel.h
 GameEngine/Include/GameLogic/Damage.h
+GameEngine/Include/GameLogic/DayNightCycle.h
 GameEngine/Include/GameLogic/ExperienceTracker.h
 GameEngine/Include/GameLogic/FPUControl.h
 GameEngine/Include/GameLogic/FiringTracker.h
@@ -2889,6 +2894,7 @@ GameEngine/Source/GameLogic/System/CRCSnapshotRing.cpp
 GameEngine/Source/GameLogic/System/CaveSystem.cpp
 GameEngine/Source/GameLogic/System/CrateSystem.cpp
 GameEngine/Source/GameLogic/System/Damage.cpp
+GameEngine/Source/GameLogic/System/DayNightCycle.cpp
 GameEngine/Source/GameLogic/System/FPUControl.cpp
 GameEngine/Source/GameLogic/System/GameLogic.cpp
 GameEngine/Source/GameLogic/System/GameLogicDispatch.cpp

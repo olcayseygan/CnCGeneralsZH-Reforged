@@ -8,6 +8,12 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Night falls on the battlefield
+
+- A new box under the match rules, Day and Night, for the host of a skirmish, a LAN game or a custom online room. Ten game minutes of day, a minute and a half of dusk, four minutes of night, a minute of dawn, and round again. At night every unit and building clears the fog of war a fifth less far: the dusk takes it down in two steps and the dawn gives it back the same way, so a scout that sees a base at noon has to walk closer to see it at midnight. Guns still reach as far as they always did, so a tank can fire at a spot its own eyes no longer show, as long as someone else is looking. Pausing stops the clock with the game.
+- It is off unless the host ticks it, and it stays off in Quick Match, Play vs AI, the Apocalypse and Direct Strike. Replays and saves from before this change play exactly as they did; a replay of a match with the box ticked brings its nights with it.
+- Not there yet: the sky does not darken and no lights come on. This release only changes how far everyone sees.
+
 ## Apocalypse, a survival map (prototype)
 
 - A new random map kind for any number of players: everyone starts together in a clearing in the middle, walled in by cliffs with four gates (six past four players), supply right behind every base and a pile outside each gate for whoever dares a sortie. The dead walk in from the edges of the map without end and go for whatever of yours is nearest. You lose together when the last of your buildings and units falls; they never run out. They come as red-skinned Zombies, fast Runners that come at night, and hulking Brutes. Day gives you room to build, dusk thickens the waves, and night brings runners and brutes in waves twice the size, under a red sky with every building's night lights on. Each dawn hands the next day back, and each new day the dead come one rank tougher. In a two-player test the first six and a half minutes sent 1,085 of them and the bases killed 1,060.

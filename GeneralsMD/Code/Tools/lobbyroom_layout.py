@@ -228,13 +228,16 @@ NETWORK_RULES = [GAME_SPEED_DROPDOWN] + MATCH_RULES[:1] + [("LabelPeaceTime", "C
 # the menu code ticks it from the game's start shroud (SH in the options string). It shares the unit
 # limit's row in the skirmish room and opens a row of its own in the network rooms.
 START_SHROUDED = ("CheckBoxStartShrouded", "GUI:StartShrouded", "TOOLTIP:StartShrouded")
-SKIRMISH_CHECKS = ["CheckBoxUnitLimit", START_SHROUDED[0]]
-LAN_CHECKS = ["CheckBoxProRules", "CheckBoxUnitLimit", START_SHROUDED[0]]
+# The day and night cycle's box (DN in the options string), cloned the same way, after Hidden Map.
+DAY_NIGHT = ("CheckBoxDayNight", "GUI:DayNight", "TOOLTIP:DayNight")
+SKIRMISH_CHECKS = ["CheckBoxUnitLimit", START_SHROUDED[0], DAY_NIGHT[0]]
+LAN_CHECKS = ["CheckBoxProRules", "CheckBoxUnitLimit", START_SHROUDED[0], DAY_NIGHT[0]]
 GAMESPY_CHECKS = ["CheckBoxUseStats", "CheckBoxLimitArmies"] + LAN_CHECKS
 
 ROOMS = {
     "SkirmishGameOptionsMenu": dict(container="SubParent", rule="Line", title="StaticTextTitle",
                                     columns=SEAT_COLUMNS, rules=SKIRMISH_RULES, checks=SKIRMISH_CHECKS,
+                                    checks_per_row=3,  # three boxes in one row, so the map keeps its size
                                     row_pitch=ROW_PITCH, row_height=ROW_HEIGHT, seat_right=SCROLL_SEAT_RIGHT,
                                     seat_rows=SKIRMISH_SEAT_ROWS),
     "LanGameOptionsMenu": dict(container="GadgetParent", rule="LINE", title="StaticTextTitle",
@@ -296,12 +299,13 @@ def add_game_speed_row(layout, menu):
         control.put_prop("TOOLTIPTEXT", '"%s"' % tooltip)
 
 
-def add_start_shrouded_box(layout, menu):
-    """Clone the unit limit box into the Hidden Map box, once; a second run finds it there."""
-    name, text, tooltip = START_SHROUDED
+def add_start_shrouded_box(layout, menu, spec=START_SHROUDED, after="CheckBoxUnitLimit"):
+    """Clone the unit limit box into the Hidden Map box (or another box of that kind, put after
+    `after`), once; a second run finds it there."""
+    name, text, tooltip = spec
     if layout.find(name) is not None:
         return
-    source = need(layout, "CheckBoxUnitLimit")
+    source = need(layout, after)
     box = clone(source, "%s.wnd:%s" % (menu, name))
     box.put_prop("TEXT", '"%s"' % text)
     box.put_prop("TOOLTIPTEXT", '"%s"' % tooltip)
@@ -545,9 +549,11 @@ def place_map(layout, caption_top):
     left_align(name)
 
 
-def place_rules(layout, rules, checks):
-    """The rules page stands on the column's foot, as tall as its rows; returns its top."""
-    rows = len(rules) + (len(checks) + 1) // 2
+def place_rules(layout, rules, checks, per_row=2):
+    """The rules page stands on the column's foot, as tall as its rows; returns its top. The check
+    boxes go per_row to a row across the two-box width."""
+    rows = len(rules) + (len(checks) + per_row - 1) // per_row
+    check_width = (2 * CHECK_WIDTH + GAP - (per_row - 1) * GAP) // per_row
     page_top = PAGE_BOTTOM - 2 * PAGE_PADDING - rows * SETTING_PITCH + 4
     page = need(layout, "PageLobbySettings")
     page.place(COLUMN_LEFT, page_top, INNER_RIGHT - COLUMN_LEFT, PAGE_BOTTOM - page_top)
@@ -562,8 +568,8 @@ def place_rules(layout, rules, checks):
                                        INNER_RIGHT - PAGE_PADDING - left - SETTING_LABEL_WIDTH, SETTING_HEIGHT)
         top += SETTING_PITCH
     for index, name in enumerate(checks):
-        need(layout, name).place(left + (index % 2) * (CHECK_WIDTH + GAP), top + (index // 2) * SETTING_PITCH,
-                                 CHECK_WIDTH, SETTING_HEIGHT)
+        need(layout, name).place(left + (index % per_row) * (check_width + GAP), top + (index // per_row) * SETTING_PITCH,
+                                 check_width, SETTING_HEIGHT)
     return page_top
 
 
@@ -749,6 +755,7 @@ def build(layout, menu):
     remove(layout, TABS + (RETIRED_PERSONA_HEADING, RETIRED_TURBO_BOX))
     add_game_speed_row(layout, menu)
     add_start_shrouded_box(layout, menu)
+    add_start_shrouded_box(layout, menu, DAY_NIGHT, START_SHROUDED[0])
     container = need(layout, spec["container"])
     add_ruler(layout, menu, container)
     add_seat_windows(layout, menu, container, spec)
@@ -756,7 +763,7 @@ def build(layout, menu):
     seats_bottom = place_seats(layout, spec, "TextEntryPlayerName" if menu == "SkirmishGameOptionsMenu" else None)
     if "seat_right" in spec:
         place_seat_scroll(layout, menu, container, spec)
-    page_top = place_rules(layout, spec["rules"], spec["checks"])
+    page_top = place_rules(layout, spec["rules"], spec["checks"], spec.get("checks_per_row", 2))
     place_map(layout, page_top - 14 - CONTROL_HEIGHT)
     if "chat" in spec:
         place_chat(layout, spec["chat"], seats_bottom + 16)

@@ -332,6 +332,11 @@ public:
 			and carried by a save. */
 	Int getSupplyPileLimit( void ) const { return m_supplyPileLimit; }
 
+	/** The day and night cycle runs: the lobby's box (DN in the options string), stood down under the
+			Apocalypse and Lane War once their directors have read the map.  Fixed when the match starts and
+			saved ahead of the objects.  DayNight_isOn in DayNightCycle.h is the question to ask. */
+	Bool isDayNight( void ) const { return m_dayNight; }
+
 	/** A save carries the logic random stream as it stood, but the load itself draws from the stream
 			and the engine reset before it reseeded from the clock.  GameState calls this after every
 			block's post-process, the last thing a load does, so play goes on from the saved stream. */
@@ -513,6 +518,7 @@ private:
 	Int m_incomeSharing;							///< which earnings allies split, an IncomeSharing
 	UnsignedInt m_techRespawnDelay;		///< frames a destroyed tech building stays down, 0 = for good
 	Int m_supplyPileLimit;						///< players who may gather from one supply pile at once, 0 = any number
+	Bool m_dayNight;									///< the lobby's day and night cycle box
 
 	/// a destroyed tech building waiting to stand again
 	struct PendingTechBuilding

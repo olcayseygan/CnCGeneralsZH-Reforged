@@ -94,6 +94,7 @@
 #include "GameLogic/FPUControl.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/ApocalypseDirector.h"
+#include "GameLogic/DayNightCycle.h"
 #include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/LaneWarStats.h"
 #include "GameLogic/Locomotor.h"
@@ -285,6 +286,7 @@ GameLogic::GameLogic( void )
 	m_incomeSharing = INCOME_SHARING_OFF;
 	m_techRespawnDelay = 0;
 	m_supplyPileLimit = 0;
+	m_dayNight = FALSE;
 	m_loadedRandomPending = FALSE;
 	m_loadedSleepyPending = FALSE;
 	m_gamePaused = FALSE;
@@ -484,6 +486,7 @@ void GameLogic::reset( void )
 	TheLaneWarDirector->reset();
 	TheLaneWarStats->reset();
 	TheApocalypseDirector->reset();
+	m_dayNight = FALSE;	// a load sets it from the save before its objects, a new game from its options
 
 	// a load that failed part way must not hand its stream or heap order to the next one
 	m_loadedRandomPending = FALSE;
@@ -1429,6 +1432,10 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
       m_incomeSharing = TheGameInfo->getIncomeSharing();
       m_techRespawnDelay = TheGameInfo->getTechRespawn() * 60 * LOGICFRAMES_PER_GAME_SECOND;
       m_supplyPileLimit = TheGameInfo->getSupplyPileLimit();
+      /* Only the game's own options decide it: the lobby box, or a network game's and a replay's DN
+         from the host's string.  -daynight reaches it as TheSkirmishGameInfo's box for an
+         -autoskirmish run and nowhere else, so it is dead in a network game. */
+      m_dayNight = TheGameInfo->getDayNight();
     }
     else
     {
@@ -1439,6 +1446,7 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
       m_incomeSharing = INCOME_SHARING_OFF;
       m_techRespawnDelay = 0;
       m_supplyPileLimit = 0;
+      m_dayNight = FALSE;
     }
 
     /* Pro Rules hold in the modes people play each other in, when the lobby's check box is ticked,
@@ -2265,6 +2273,12 @@ void GameLogic::startNewGame( Bool loadingSaveGame )
 	TheApocalypseDirector->newMap( loadingSaveGame );
 	if (TheApocalypseDirector->isActive())
 		TheVictoryConditions->setVictoryConditions(VICTORY_NOUNITS | VICTORY_NOBUILDINGS | VICTORY_APOCALYPSE);
+
+	/* The day and night cycle stands down under both modes, which run their own light through the same
+		 tables.  Settled once here, so DayNight_isOn reads one saved Bool and nothing a load fills in
+		 later; the objects placed so far looked on frame 0, which is day either way. */
+	if (!loadingSaveGame)
+		m_dayNight = m_dayNight && !TheLaneWarDirector->isActive() && !TheApocalypseDirector->isActive();
 
 	progressCount = LOAD_PROGRESS_LOOP_INITIAL_NETWORK_BUILDINGS;
 	// place initial network buildings/units
@@ -5565,6 +5579,8 @@ void GameLogic::update( void )
 	TheLaneWarDirector->update();
 	TheLaneWarStats->update();
 	TheApocalypseDirector->update();
+	// the day and night cycle's re-looks after a sight step (DayNightCycle.h)
+	DayNight_update();
 
 	// Note - TerrainLogic update needs to happen after ScriptEngine update, but before object updates.  jba.
 	// This way changes in bridges are noted in the script engine before being cleared in TerrainLogic->update
@@ -6898,18 +6914,26 @@ void GameLogic::prepareLogicForObjectLoad( void )
 	* 20: xfer TheLaneWarDirector
 	* 21: xfer TheLaneWarStats
 	* 22: xfer TheApocalypseDirector
+	* 23: xfer m_dayNight
 	*/
 // ------------------------------------------------------------------------------------------------
 void GameLogic::xfer( Xfer *xfer )
 {
 
 	// version
-	const XferVersion currentVersion = 22;
+	const XferVersion currentVersion = 23;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
 	// logic frame number
 	xfer->xferUnsignedInt( &m_frame );
+
+	// the day and night cycle, before the objects: an object that looks again while it loads takes the
+	// scale of the saved frame, as it did in the game that was saved
+	if ( version >= 23 )
+		xfer->xferBool( &m_dayNight );
+	else if ( xfer->getXferMode() == XFER_LOAD )
+		m_dayNight = FALSE;	// a save from before the cycle plays on in daylight
 
 	//
 	// note that we do not do the id counter here, we did it in the game state block because
@@ -7399,6 +7423,7 @@ void GameLogic::xfer( Xfer *xfer )
     xfer->xferSnapshot( TheApocalypseDirector );
   else if ( xfer->getXferMode() == XFER_LOAD )
     TheApocalypseDirector->reset();	// a save from before the mode plays as it was made
+
 }  // end xfer
 
 // ------------------------------------------------------------------------------------------------

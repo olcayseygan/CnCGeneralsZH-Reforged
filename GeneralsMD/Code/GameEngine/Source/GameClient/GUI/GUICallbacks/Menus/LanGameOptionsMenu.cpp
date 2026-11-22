@@ -132,6 +132,7 @@ static NameKeyType comboBoxPeaceTimeID = NAMEKEY_INVALID;
 static NameKeyType checkBoxUnitLimitID = NAMEKEY_INVALID;
 static NameKeyType checkBoxProRulesID = NAMEKEY_INVALID;
 static NameKeyType checkBoxStartShroudedID = NAMEKEY_INVALID;
+static NameKeyType checkBoxDayNightID = NAMEKEY_INVALID;
 static NameKeyType comboBoxIncomeSharingID = NAMEKEY_INVALID;
 static NameKeyType comboBoxTechRespawnID = NAMEKEY_INVALID;
 static NameKeyType comboBoxSupplyPileLimitID = NAMEKEY_INVALID;
@@ -151,6 +152,7 @@ static GameWindow *comboBoxPeaceTime = NULL;
 static GameWindow *checkBoxUnitLimit = NULL;
 static GameWindow *checkBoxProRules = NULL;
 static GameWindow *checkBoxStartShrouded = NULL;
+static GameWindow *checkBoxDayNight = NULL;
 static GameWindow *comboBoxIncomeSharing = NULL;
 static GameWindow *comboBoxTechRespawn = NULL;
 static GameWindow *comboBoxSupplyPileLimit = NULL;
@@ -475,7 +477,7 @@ void LANDisableButtons()
 	comboBoxStartingCash->winEnable(false);
 
 	GameWindow *optionalGadgets[] = { comboBoxSuperweapons, comboBoxPeaceTime, checkBoxUnitLimit,
-		checkBoxProRules, checkBoxStartShrouded, comboBoxIncomeSharing, comboBoxTechRespawn, comboBoxSupplyPileLimit,
+		checkBoxProRules, checkBoxStartShrouded, checkBoxDayNight, comboBoxIncomeSharing, comboBoxTechRespawn, comboBoxSupplyPileLimit,
 		comboBoxGameSpeed };
 	for (Int i = 0; i < (Int)ARRAY_SIZE(optionalGadgets); ++i)
 	{
@@ -887,6 +889,23 @@ static void handleStartShroudedSelection()
   }
 }
 
+static void handleDayNightSelection()
+{
+  LANGameInfo *myGame = TheLAN->GetMyGame();
+
+  if (myGame == NULL || checkBoxDayNight == NULL || myGame->getDayNight() == GadgetCheckBoxIsChecked( checkBoxDayNight ))
+    return;
+
+  myGame->setDayNight( GadgetCheckBoxIsChecked( checkBoxDayNight ) );
+  myGame->resetAccepted();
+
+  if (myGame->amIHost() && !s_isIniting)
+  {
+    TheLAN->RequestGameOptions(GenerateGameOptionsString(), true);
+    lanUpdateSlotList(); // Update the accepted button UI
+  }
+}
+
 static void handleUnitLimitSelection()
 {
   LANGameInfo *myGame = TheLAN->GetMyGame();
@@ -964,6 +983,7 @@ void InitLanGameGadgets( void )
   checkBoxUnitLimitID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:CheckBoxUnitLimit" ) );
   checkBoxProRulesID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:CheckBoxProRules" ) );
   checkBoxStartShroudedID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:CheckBoxStartShrouded" ) );
+  checkBoxDayNightID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:CheckBoxDayNight" ) );
   comboBoxIncomeSharingID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:ComboBoxIncomeSharing" ) );
   comboBoxTechRespawnID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:ComboBoxTechRespawn" ) );
   comboBoxSupplyPileLimitID = TheNameKeyGenerator->nameToKey( AsciiString( "LanGameOptionsMenu.wnd:ComboBoxSupplyPileLimit" ) );
@@ -1014,6 +1034,10 @@ void InitLanGameGadgets( void )
   DEBUG_ASSERTCRASH(checkBoxStartShrouded, ("Could not find the checkBoxStartShrouded"));
 	if (checkBoxStartShrouded)
 		UpdateStartShroudedCheckBox(checkBoxStartShrouded, TheLAN->GetMyGame(), TheLAN->AmIHost());
+  checkBoxDayNight = TheWindowManager->winGetWindowFromId( parentLanGameOptions, checkBoxDayNightID );
+  DEBUG_ASSERTCRASH(checkBoxDayNight, ("Could not find the checkBoxDayNight"));
+	if (checkBoxDayNight)
+		UpdateDayNightCheckBox(checkBoxDayNight, TheLAN->GetMyGame(), TheLAN->AmIHost());
   comboBoxIncomeSharing =TheWindowManager->winGetWindowFromId( parentLanGameOptions, comboBoxIncomeSharingID );
   DEBUG_ASSERTCRASH(comboBoxIncomeSharing, ("Could not find the comboBoxIncomeSharing"));
 	if (comboBoxIncomeSharing)
@@ -1147,6 +1171,7 @@ void DeinitLanGameGadgets( void )
   checkBoxUnitLimit = NULL;
   checkBoxProRules = NULL;
   checkBoxStartShrouded = NULL;
+  checkBoxDayNight = NULL;
   comboBoxIncomeSharing = NULL;
   comboBoxTechRespawn = NULL;
   comboBoxSupplyPileLimit = NULL;
@@ -1214,6 +1239,7 @@ void LanGameOptionsMenuInit( WindowLayout *layout, void *userData )
     game->setUnitLimit( pref.getInt( "UnitLimit", 0 ) != 0 );
     game->setProRules( pref.getInt( "ProRules", 1 ) != 0 );
     game->setStartShrouded( pref.getInt( "StartShrouded", 0 ) != 0 );
+    game->setDayNight( pref.getInt( "DayNight", 0 ) != 0 );
     game->setIncomeSharing( pref.getInt( "IncomeSharing", INCOME_SHARING_OFF ) );
     game->setTechRespawn( pref.getInt( "TechRespawn", 0 ) );
     game->setSupplyPileLimit( pref.getInt( "SupplyPileLimit", 0 ) );
@@ -1358,6 +1384,8 @@ void updateGameOptions( void )
 			UpdateProRulesCheckBox( checkBoxProRules, theGame, TheLAN->AmIHost() );
 		if (checkBoxStartShrouded)
 			UpdateStartShroudedCheckBox( checkBoxStartShrouded, theGame, TheLAN->AmIHost() );
+		if (checkBoxDayNight)
+			UpdateDayNightCheckBox( checkBoxDayNight, theGame, TheLAN->AmIHost() );
 		if (comboBoxIncomeSharing)
 			UpdateIncomeSharingComboBox( comboBoxIncomeSharing, theGame, TheLAN->AmIHost() );
 		if (comboBoxTechRespawn)
@@ -1647,6 +1675,12 @@ WindowMsgHandledType LanGameOptionsMenuSystem( GameWindow *window, UnsignedInt m
 				if ( controlID == checkBoxStartShroudedID )
 				{
 					handleStartShroudedSelection();
+					break;
+				}
+
+				if ( controlID == checkBoxDayNightID )
+				{
+					handleDayNightSelection();
 					break;
 				}
 

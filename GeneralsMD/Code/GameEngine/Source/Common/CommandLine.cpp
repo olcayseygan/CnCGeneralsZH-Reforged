@@ -2536,6 +2536,18 @@ Int parseStartShrouded(char *args[], int num)
 	return 1;
 }
 
+/* -daynight: the skirmish lobby's day and night cycle for an -autoskirmish run, written onto
+	 TheSkirmishGameInfo so the replay's header carries DN=1.  A network game, -netgame included, takes
+	 only the host's options string, so the switch never reaches its logic. */
+Int parseDayNight(char *args[], int num)
+{
+	if (TheWritableGlobalData)
+	{
+		TheWritableGlobalData->m_dayNight = TRUE;
+	}
+	return 1;
+}
+
 /* -gamespeed <percent>: the skirmish lobby's game speed for an -autoskirmish run, in percent of retail's
 	 pace and taken to the nearest of PLAYER_GAME_SPEED_PERCENTS (100, 125, 150, 200).  The game time
 	 each tick advances: the match still ticks LOGICFRAMES_PER_SECOND times a second, its CRC differs per
@@ -3116,6 +3128,7 @@ static CommandLineParam params[] =
 	{ "-superweapons", parseSuperweapons },
 	{ "-supplypilelimit", parseSupplyPileLimit },
 	{ "-startshrouded", parseStartShrouded },
+	{ "-daynight", parseDayNight },
 	{ "-gamespeed", parseGameSpeed },
 	{ "-startingcash", parseStartingCash },
 	{ "-showlanes", parseShowLanes },

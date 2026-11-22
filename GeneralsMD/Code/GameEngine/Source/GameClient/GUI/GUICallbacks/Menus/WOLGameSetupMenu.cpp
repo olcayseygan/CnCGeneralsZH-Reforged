@@ -239,6 +239,7 @@ static NameKeyType checkBoxLimitArmiesID = NAMEKEY_INVALID;
 static NameKeyType checkBoxUnitLimitID = NAMEKEY_INVALID;
 static NameKeyType checkBoxProRulesID = NAMEKEY_INVALID;
 static NameKeyType checkBoxStartShroudedID = NAMEKEY_INVALID;
+static NameKeyType checkBoxDayNightID = NAMEKEY_INVALID;
 static NameKeyType comboBoxIncomeSharingID = NAMEKEY_INVALID;
 static NameKeyType comboBoxTechRespawnID = NAMEKEY_INVALID;
 static NameKeyType comboBoxSupplyPileLimitID = NAMEKEY_INVALID;
@@ -262,6 +263,7 @@ static GameWindow *checkBoxLimitArmies = NULL;
 static GameWindow *checkBoxUnitLimit = NULL;
 static GameWindow *checkBoxProRules = NULL;
 static GameWindow *checkBoxStartShrouded = NULL;
+static GameWindow *checkBoxDayNight = NULL;
 static GameWindow *comboBoxIncomeSharing = NULL;
 static GameWindow *comboBoxTechRespawn = NULL;
 static GameWindow *comboBoxSupplyPileLimit = NULL;
@@ -401,6 +403,7 @@ static void savePlayerInfo( void )
           pref.setInt( "UnitLimit", TheGameSpyGame->getUnitLimit() ? 1 : 0 );
           pref.setInt( "ProRules", TheGameSpyGame->getProRules() ? 1 : 0 );
           pref.setInt( "StartShrouded", TheGameSpyGame->getStartShrouded() ? 1 : 0 );
+          pref.setInt( "DayNight", TheGameSpyGame->getDayNight() ? 1 : 0 );
           pref.setInt( "IncomeSharing", TheGameSpyGame->getIncomeSharing() );
           pref.setInt( "TechRespawn", TheGameSpyGame->getTechRespawn() );
           pref.setInt( "SupplyPileLimit", TheGameSpyGame->getSupplyPileLimit() );
@@ -1026,6 +1029,23 @@ static void handleStartShroudedSelection()
   }
 }
 
+static void handleDayNightSelection()
+{
+  GameInfo *myGame = TheGameSpyInfo->getCurrentStagingRoom();
+
+  if (myGame == NULL || checkBoxDayNight == NULL || myGame->getDayNight() == GadgetCheckBoxIsChecked( checkBoxDayNight ))
+    return;
+
+  myGame->setDayNight( GadgetCheckBoxIsChecked( checkBoxDayNight ) );
+  myGame->resetAccepted();
+
+  if (myGame->amIHost())
+  {
+    TheGameSpyInfo->setGameOptions();
+    WOLDisplaySlotList();// Update the accepted button UI
+  }
+}
+
 static void handleUnitLimitSelection()
 {
   GameInfo *myGame = TheGameSpyInfo->getCurrentStagingRoom();
@@ -1391,6 +1411,8 @@ void WOLDisplayGameOptions( void )
     UpdateProRulesCheckBox( checkBoxProRules, theGame, superweaponIsTheHostsToPick() );
   if ( checkBoxStartShrouded )
     UpdateStartShroudedCheckBox( checkBoxStartShrouded, theGame, superweaponIsTheHostsToPick() );
+  if ( checkBoxDayNight )
+    UpdateDayNightCheckBox( checkBoxDayNight, theGame, superweaponIsTheHostsToPick() );
   if ( comboBoxIncomeSharing )
     UpdateIncomeSharingComboBox( comboBoxIncomeSharing, theGame, superweaponIsTheHostsToPick() );
   if ( comboBoxTechRespawn )
@@ -1519,6 +1541,7 @@ void InitWOLGameGadgets( void )
   checkBoxUnitLimitID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:CheckBoxUnitLimit"));
   checkBoxProRulesID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:CheckBoxProRules"));
   checkBoxStartShroudedID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:CheckBoxStartShrouded"));
+  checkBoxDayNightID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:CheckBoxDayNight"));
   comboBoxIncomeSharingID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:ComboBoxIncomeSharing"));
   comboBoxTechRespawnID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:ComboBoxTechRespawn"));
   comboBoxSupplyPileLimitID = TheNameKeyGenerator->nameToKey(AsciiString("GameSpyGameOptionsMenu.wnd:ComboBoxSupplyPileLimit"));
@@ -1563,6 +1586,10 @@ void InitWOLGameGadgets( void )
   DEBUG_ASSERTCRASH(checkBoxStartShrouded, ("Could not find the GameSpyGameOptionsMenu.wnd:CheckBoxStartShrouded" ));
   if ( checkBoxStartShrouded )
     UpdateStartShroudedCheckBox( checkBoxStartShrouded, TheGameSpyGame, superweaponIsTheHostsToPick() );
+  checkBoxDayNight = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, checkBoxDayNightID );
+  DEBUG_ASSERTCRASH(checkBoxDayNight, ("Could not find the GameSpyGameOptionsMenu.wnd:CheckBoxDayNight" ));
+  if ( checkBoxDayNight )
+    UpdateDayNightCheckBox( checkBoxDayNight, TheGameSpyGame, superweaponIsTheHostsToPick() );
   comboBoxIncomeSharing = TheWindowManager->winGetWindowFromId( parentWOLGameSetup, comboBoxIncomeSharingID );
   DEBUG_ASSERTCRASH(comboBoxIncomeSharing, ("Could not find the GameSpyGameOptionsMenu.wnd:ComboBoxIncomeSharing" ));
   if ( comboBoxIncomeSharing )
@@ -1749,6 +1776,7 @@ void DeinitWOLGameGadgets( void )
   checkBoxUnitLimit = NULL;
   checkBoxProRules = NULL;
   checkBoxStartShrouded = NULL;
+  checkBoxDayNight = NULL;
   comboBoxIncomeSharing = NULL;
   comboBoxTechRespawn = NULL;
   comboBoxSupplyPileLimit = NULL;
@@ -1846,7 +1874,8 @@ static void onlineStagingScript( void )
 		if (s_optionStep == 0)
 		{
 			const struct { const char *name; GameWindow *box; } boxes[] = {
-				{ "prorules", checkBoxProRules }, { "unitlimit", checkBoxUnitLimit }, { "hiddenmap", checkBoxStartShrouded } };
+				{ "prorules", checkBoxProRules }, { "unitlimit", checkBoxUnitLimit }, { "hiddenmap", checkBoxStartShrouded },
+				{ "daynight", checkBoxDayNight } };
 			for (Int i = 0; i < (Int)ARRAY_SIZE(boxes); ++i)
 			{
 				GameWindow *box = boxes[i].box;
@@ -2019,6 +2048,7 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 		game->setProRules( isUsingStats || customPref.getInt( "ProRules", 1 ) != 0 );
 		// the Hidden Map box; a ranked Quick Match never comes through here and sets its own black start
 		game->setStartShrouded( !isUsingStats && customPref.getInt( "StartShrouded", 0 ) != 0 );
+		game->setDayNight( !isUsingStats && customPref.getInt( "DayNight", 0 ) != 0 );
 		game->setIncomeSharing( isUsingStats ? INCOME_SHARING_OFF : customPref.getInt( "IncomeSharing", INCOME_SHARING_OFF ) );
 		game->setTechRespawn( isUsingStats ? 0 : customPref.getInt( "TechRespawn", 0 ) );
 		game->setSupplyPileLimit( isUsingStats ? 0 : customPref.getInt( "SupplyPileLimit", 0 ) );
@@ -3459,6 +3489,12 @@ WindowMsgHandledType WOLGameSetupMenuSystem( GameWindow *window, UnsignedInt msg
 				if ( controlID == checkBoxStartShroudedID )
 				{
 					handleStartShroudedSelection();
+					break;
+				}
+
+				if ( controlID == checkBoxDayNightID )
+				{
+					handleDayNightSelection();
 					break;
 				}
 

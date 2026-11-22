@@ -618,6 +618,15 @@ void UpdateStartShroudedCheckBox(GameWindow *checkBox, GameInfo *myGame, Bool ho
     GadgetCheckBoxSetChecked( checkBox, shrouded );
 }
 
+void UpdateDayNightCheckBox(GameWindow *checkBox, GameInfo *myGame, Bool hostMayEdit)
+{
+  checkBox->winEnable( hostMayEdit );
+
+  const Bool dayNight = myGame->getDayNight();
+  if ( GadgetCheckBoxIsChecked( checkBox ) != dayNight )
+    GadgetCheckBoxSetChecked( checkBox, dayNight );
+}
+
 // -----------------------------------------------------------------------------
 // Income sharing.  The entries are the IncomeSharing values in order, so an entry's position is
 // its value.
@@ -1784,6 +1793,7 @@ Bool FitDirectStrikeRoom(GameInfo *game)
 	if (game->getTechRespawn() != 0) { game->setTechRespawn(0); changed = TRUE; }
 	if (game->getSupplyPileLimit() != 0) { game->setSupplyPileLimit(0); changed = TRUE; }
 	if (game->getProRules()) { game->setProRules(FALSE); changed = TRUE; }
+	if (game->getDayNight()) { game->setDayNight(FALSE); changed = TRUE; }	// the lane runs its own light
 	return changed;
 }
 

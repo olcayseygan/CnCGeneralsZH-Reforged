@@ -63,6 +63,7 @@
 #include "GameLogic/AI.h"
 #include "GameLogic/AIPlayer.h"
 #include "GameLogic/AIPathfind.h"
+#include "GameLogic/DayNightCycle.h"
 #include "GameLogic/ExperienceTracker.h"
 #include "GameLogic/FiringTracker.h"
 #include "GameLogic/GameLogic.h"
@@ -5783,6 +5784,9 @@ void Object::look()
 			Real shroudClearingRange = getShroudClearingRange();
 			if( !isKindOf( KINDOF_STRUCTURE ) && !isKindOf( KINDOF_DOZER ) && !isSpotter() )
 				shroudClearingRange = Object_armedShroudClearingRange( shroudClearingRange, getLargestWeaponRange() );
+			// night clears the fog less far (DayNightCycle.h); a reveal ability (INERT) opens its whole circle
+			if( !isKindOf( KINDOF_INERT ) )
+				shroudClearingRange *= DayNight_sightScaleFor( getID(), TheGameLogic->getFrame() );
 			if( isSightJammed() )
 				shroudClearingRange = min( shroudClearingRange, JAMMED_SHROUD_CLEARING_RANGE );
 

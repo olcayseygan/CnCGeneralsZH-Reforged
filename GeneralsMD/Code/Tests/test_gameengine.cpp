@@ -28485,6 +28485,66 @@ TEST(handicap_rides_the_slot_entry_and_full_health_leaves_the_string_unchanged)
 	CHECK( guest.getStartShrouded() );
 	CHECK( ParseAsciiStringToGameInfo( &guest, picked ) );
 	CHECK( !guest.getStartShrouded() );
+
+	/* The day and night cycle rides as DN=1 the same way: off writes nothing, and a string without it
+		 (every old replay) parses off.  -daynight in this process is no part of the parse, so a network
+		 game and a replay take the host's word alone. */
+	CHECK( strstr( picked.str(), "DN=" ) == NULL );
+	host.setDayNight( TRUE );
+	const AsciiString nights = GameInfoOptionsString( &host, mapPath, 0 );
+	host.setDayNight( FALSE );
+	CHECK( strstr( nights.str(), "DN=1;" ) != NULL );
+	CHECK( ParseAsciiStringToGameInfo( &guest, nights ) );
+	CHECK( guest.getDayNight() );
+	const Bool savedSwitch = TheGlobalData->m_dayNight;
+	TheWritableGlobalData->m_dayNight = TRUE;
+	CHECK( ParseAsciiStringToGameInfo( &guest, picked ) );
+	CHECK( !guest.getDayNight() );
+	TheWritableGlobalData->m_dayNight = savedSwitch;
+
+	/* The longest string a room can send with the cycle on: eight people at the longest name the LAN
+		 lobby takes, every other seat a computer with a personality and a handicap, every rule set.  It
+		 has to fit the LAN lobby's parts (m_lanMaxOptionsLength) and the online server's 4096 (MAX_OPTS
+		 in online/server.js); DN=1 adds five bytes to whatever it was. */
+	{
+		UnicodeString longName;
+		longName.translate( AsciiString( "WWWWWWWWWWWW" ) );	// g_lanPlayerNameLength letters
+		SkirmishGameInfo full;
+		full.init();
+		full.setMap( mapInSaves );
+		full.setSeed( 0x7fffffff );
+		for( Int i = 0; i < MAX_SLOTS; ++i )
+		{
+			GameSlot *seat = full.getSlot( i );
+			if( i < 8 )
+			{
+				seat->setState( SLOT_PLAYER, longName, 0xC0A80101u + i );
+				seat->setPort( 8088 );
+				seat->setAccept();
+				seat->setMapAvailability( TRUE );
+			}
+			else
+			{
+				seat->setState( SLOT_BRUTAL_AI );
+				seat->setAIPersonality( AIPERSONA_TURTLE );
+			}
+			seat->setPlayerTemplate( PLAYERTEMPLATE_RANDOM );
+			seat->setHandicap( 10 );
+		}
+		full.setSuperweaponRestriction( 2 );
+		full.setUnitLimit( TRUE );
+		full.setProRules( TRUE );
+		full.setIncomeSharing( INCOME_SHARING_COUNT - 1 );
+		full.setTechRespawn( 10 );
+		full.setSupplyPileLimit( 3 );
+		full.setStartShrouded( TRUE );
+		full.setDayNight( TRUE );
+		full.setGameSpeedPercent( PLAYER_GAME_SPEED_PERCENTS[ PLAYER_GAME_SPEED_COUNT - 1 ] );
+		const AsciiString longest = GameInfoOptionsString( &full, mapPath, 0 );
+		CHECK( strstr( longest.str(), "DN=1;" ) != NULL );
+		CHECK( longest.getLength() < m_lanMaxOptionsLength );
+		CHECK( longest.getLength() < 4096 );
+	}
 	CHECK_STR( GameInfoOptionsString( &host, mapPath, 0 ).str(), picked.str() );
 
 	/* A replay's slot list as startRecording writes it, the logic rate last: readReplayHeader takes the
@@ -30439,4 +30499,247 @@ TEST(original_generals_briefing_voice_respects_empty_muted_and_cancelled_loads)
 	CHECK_EQ(audio.plays, 0);
 	playback.reset(); playback.update(audio, voice, 0, TRUE);
 	CHECK_EQ(audio.plays, 1);
+}
+
+#include "GameLogic/DayNightCycle.h"
+
+TEST(day_night_cycle_runs_on_game_seconds_at_every_speed)
+{
+	/* Day 600, dusk 90, night 240, dawn 60 game seconds, the same game seconds at every match speed;
+		 the sight steps to 0.9 at 30 s and 0.8 at 60 s into the dusk, back to 0.9 at 20 s and 1.0 at
+		 40 s into the dawn. */
+	DayNight_setOverrideForTests( 1 );
+	const Int speeds[] = { 100, 125, 150 };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( speeds ); ++i )
+	{
+		GameSpeed_set( speeds[ i ] );
+		const UnsignedInt s = (UnsignedInt)LOGICFRAMES_PER_GAME_SECOND;
+		CHECK_EQ( DayNight_cycleFrames(), 990u * s );
+		for( UnsignedInt cycle = 0; cycle < 2; ++cycle )
+		{
+			const UnsignedInt c = cycle * 990u * s;
+			CHECK_EQ( DayNight_phase( c ), (Int)DAYNIGHT_DAY );
+			CHECK_EQ( DayNight_phase( c + 600 * s - 1 ), (Int)DAYNIGHT_DAY );
+			CHECK_EQ( DayNight_phase( c + 600 * s ), (Int)DAYNIGHT_DUSK );
+			CHECK_EQ( DayNight_phase( c + 690 * s ), (Int)DAYNIGHT_NIGHT );
+			CHECK_EQ( DayNight_phase( c + 930 * s ), (Int)DAYNIGHT_DAWN );
+			CHECK_EQ( DayNight_phase( c + 990 * s - 1 ), (Int)DAYNIGHT_DAWN );
+
+			CHECK_EQ( DayNight_amount( c + 600 * s ), 0.0f );
+			CHECK_NEAR( DayNight_amount( c + 645 * s ), 0.5f, 0.0001f );
+			CHECK_EQ( DayNight_amount( c + 690 * s ), 1.0f );
+			CHECK_EQ( DayNight_amount( c + 929 * s ), 1.0f );
+			CHECK_NEAR( DayNight_amount( c + 960 * s ), 0.5f, 0.0001f );
+			CHECK( DayNight_amount( c + 640 * s ) < DayNight_amount( c + 650 * s ) );
+			CHECK( DayNight_amount( c + 950 * s ) > DayNight_amount( c + 970 * s ) );
+
+			CHECK_EQ( DayNight_sightScale( c + 630 * s - 1 ), 1.0f );
+			CHECK_EQ( DayNight_sightScale( c + 630 * s ), 0.9f );
+			CHECK_EQ( DayNight_sightScale( c + 660 * s - 1 ), 0.9f );
+			CHECK_EQ( DayNight_sightScale( c + 660 * s ), 0.8f );
+			CHECK_EQ( DayNight_sightScale( c + 950 * s - 1 ), 0.8f );
+			CHECK_EQ( DayNight_sightScale( c + 950 * s ), 0.9f );
+			CHECK_EQ( DayNight_sightScale( c + 970 * s - 1 ), 0.9f );
+			CHECK_EQ( DayNight_sightScale( c + 970 * s ), 1.0f );
+		}
+
+		/* An object takes each step on its own frame of the one second spread, the frame
+			 DayNight_update has it look again. */
+		const UnsignedInt step = 630 * s;
+		const UnsignedInt spread = (UnsignedInt)LOGICFRAMES_PER_SECOND;
+		CHECK_EQ( DayNight_sightScaleFor( (ObjectID)spread, step ), 0.9f );
+		CHECK_EQ( DayNight_sightScaleFor( (ObjectID)7, step + 6 ), 1.0f );
+		CHECK_EQ( DayNight_sightScaleFor( (ObjectID)7, step + 7 ), 0.9f );
+		CHECK_EQ( DayNight_sightScaleFor( (ObjectID)( spread - 1 ), step + spread - 1 ), 0.9f );
+		CHECK_EQ( DayNight_sightScaleFor( (ObjectID)( spread - 1 ), 0 ), 1.0f );
+	}
+
+	// the frames the plan names at the native speed
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
+	CHECK_EQ( DayNight_sightStep( 12599 ), 0 );
+	CHECK_EQ( DayNight_sightStep( 12600 ), 1 );
+	CHECK_EQ( DayNight_sightStep( 13200 ), 2 );
+	CHECK_EQ( DayNight_sightStep( 19000 ), 1 );
+	CHECK_EQ( DayNight_sightStep( 19400 ), 0 );
+	CHECK_EQ( DayNight_cycleFrames(), (UnsignedInt)19800 );
+	DayNight_setOverrideForTests( -1 );
+}
+
+TEST(day_night_light_delays_are_a_hash_of_the_object_within_their_kind)
+{
+	DayNight_setOverrideForTests( 1 );
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
+	const UnsignedInt s = (UnsignedInt)LOGICFRAMES_PER_GAME_SECOND;
+	const UnsignedInt longest[ DAYNIGHT_LIGHT_KINDS ] = { 20, 6, 4 };
+	for( Int kind = 0; kind < DAYNIGHT_LIGHT_KINDS; ++kind )
+	{
+		UnsignedInt least = 0xffffffffu, most = 0;
+		Int differ = 0;
+		for( Int id = 1; id <= 2000; ++id )
+		{
+			const UnsignedInt dusk = DayNight_lightDelayFrames( (ObjectID)id, kind, FALSE );
+			const UnsignedInt dawn = DayNight_lightDelayFrames( (ObjectID)id, kind, TRUE );
+			CHECK( dusk <= longest[ kind ] * s );
+			CHECK( dawn <= longest[ kind ] * s );
+			CHECK_EQ( DayNight_lightDelayFrames( (ObjectID)id, kind, FALSE ), dusk );	// the same answer every time
+			least = dusk < least ? dusk : least;
+			most = dusk > most ? dusk : most;
+			differ += dusk != dawn ? 1 : 0;
+		}
+		CHECK( least <= s );												// spread over the whole range
+		CHECK( most >= ( longest[ kind ] - 1 ) * s );
+		CHECK( differ > 1000 );											// dawn has a salt of its own
+	}
+
+	// every light is on through the night, an object made then included, and off by day
+	for( Int id = 1; id <= 500; ++id )
+		for( Int kind = 0; kind < DAYNIGHT_LIGHT_KINDS; ++kind )
+		{
+			CHECK( DayNight_lightsOn( (ObjectID)id, kind, 690 * s ) );
+			CHECK( DayNight_lightsOn( (ObjectID)id, kind, 929 * s ) );
+			CHECK( !DayNight_lightsOn( (ObjectID)id, kind, 645 * s - 1 ) );
+			CHECK( !DayNight_lightsOn( (ObjectID)id, kind, 981 * s ) );
+			CHECK( !DayNight_lightsOn( (ObjectID)id, kind, 0 ) );
+		}
+	DayNight_setOverrideForTests( -1 );
+}
+
+TEST(day_night_off_answers_daylight_everywhere)
+{
+	DayNight_setOverrideForTests( 0 );
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
+	const UnsignedInt s = (UnsignedInt)LOGICFRAMES_PER_GAME_SECOND;
+	const UnsignedInt frames[] = { 0, 660 * s, 800 * s, 960 * s };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( frames ); ++i )
+	{
+		CHECK_EQ( DayNight_phase( frames[ i ] ), (Int)DAYNIGHT_DAY );
+		CHECK_EQ( DayNight_amount( frames[ i ] ), 0.0f );
+		CHECK_EQ( DayNight_sightStep( frames[ i ] ), 0 );
+		CHECK_EQ( DayNight_sightScale( frames[ i ] ), 1.0f );
+		CHECK_EQ( DayNight_sightScaleFor( (ObjectID)13, frames[ i ] ), 1.0f );
+		CHECK( !DayNight_lightsOn( (ObjectID)13, DAYNIGHT_LIGHT_BUILDING, frames[ i ] ) );
+	}
+
+	/* Object::look multiplies its reveal by this scale.  Off, it is 1.0f to the bit on every frame and
+		 for every id, so the multiply hands back the range it was given and the match is the old one. */
+	const Real one = 1.0f;
+	Int notOne = 0;
+	for( UnsignedInt f = 0; f < 2 * DayNight_cycleFrames(); f += 7 )
+		for( Int id = 1; id <= 64; ++id )
+		{
+			const Real scale = DayNight_sightScaleFor( (ObjectID)id, f );
+			notOne += memcmp( &scale, &one, sizeof( Real ) ) != 0 ? 1 : 0;
+		}
+	CHECK_EQ( notOne, 0 );
+	const Real ranges[] = { 0.1f, 30.0f, 337.5f, 412.123f, 1.0e30f };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( ranges ); ++i )
+	{
+		Real range = ranges[ i ];
+		range *= DayNight_sightScaleFor( (ObjectID)5, 13200 );
+		CHECK_MEM( &range, &ranges[ i ], sizeof( Real ) );
+	}
+	CHECK_EQ( DayNight_relookSlot( 12600 ), -1 );
+	DayNight_setOverrideForTests( -1 );
+}
+
+TEST(day_night_relook_frame_is_the_frame_the_scale_changes)
+{
+	/* The invariant the staggered re-look stands on: for every ObjectID residue, every step and every
+		 speed, the frame DayNight_update has an object look again is the frame its scale changes, and no
+		 other.  A look on any frame between gives the same answer on every machine. */
+	DayNight_setOverrideForTests( 1 );
+	const Int speeds[] = { 100, 125, 150 };
+	const UnsignedInt spread = (UnsignedInt)LOGICFRAMES_PER_SECOND;
+	for( Int i = 0; i < (Int)ARRAY_SIZE( speeds ); ++i )
+	{
+		GameSpeed_set( speeds[ i ] );
+		const UnsignedInt end = 2 * DayNight_cycleFrames() + 2 * spread;
+		Int mismatches = 0;
+		Int relooks[ 64 ] = { 0 };
+		for( UnsignedInt f = 1; f < end; ++f )
+		{
+			const Int slot = DayNight_relookSlot( f );
+			for( UnsignedInt r = 0; r < spread; ++r )
+			{
+				const ObjectID id = (ObjectID)( r + 3 * spread );
+				const Bool changed = DayNight_sightScaleFor( id, f ) != DayNight_sightScaleFor( id, f - 1 );
+				const Bool relooked = slot == (Int)r;
+				mismatches += changed != relooked ? 1 : 0;
+				relooks[ r ] += relooked ? 1 : 0;
+			}
+		}
+		CHECK_EQ( mismatches, 0 );
+		for( UnsignedInt r = 0; r < spread; ++r )
+			CHECK_EQ( relooks[ r ], 8 );		// four steps a cycle, two cycles
+	}
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
+	DayNight_setOverrideForTests( -1 );
+}
+
+namespace
+{
+/// a world whose save holds only the frame and the cycle's box: the two lead GameLogic::xfer
+class DayNightTestWorld : public GameLogic
+{
+public:
+	struct Stop { Bool value; Bool saw; };
+
+	/// load the head of a save of that version, the box as given where the version has it
+	void loadHead( XferVersion version, Bool box )
+	{
+		class HeadLoad : public XferLoad
+		{
+		public:
+			HeadLoad( XferVersion v, Bool b ) : version( v ), box( b ), versions( 0 ), ints( 0 ) {}
+			void xferVersion( XferVersion *v, XferVersion ) override { if( versions++ ) throw Stop(); *v = version; }
+			void xferUnsignedInt( UnsignedInt *value ) override { if( ints++ ) throw Stop(); *value = 12345; }
+			void xferBool( Bool *value ) override { *value = box; throw Stop(); }
+			void xferImplementation( void *, Int ) override { throw Stop(); }
+			XferVersion version;
+			Bool box;
+			Int versions, ints;
+		} load( version, box );
+		try { GameLogic::xfer( &load ); }
+		catch( const Stop & ) {}
+	}
+
+	/// what a save writes for the box, as the first Bool after the frame
+	Bool saveHead( void )
+	{
+		class HeadSave : public XferSave
+		{
+		public:
+			void xferVersion( XferVersion *, XferVersion ) override {}
+			void xferUnsignedInt( UnsignedInt * ) override {}
+			void xferBool( Bool *value ) override { Stop s; s.value = *value; s.saw = TRUE; throw s; }
+			void xferImplementation( void *, Int ) override { throw Stop(); }
+		} save;
+		try { GameLogic::xfer( &save ); }
+		catch( const Stop &s ) { return s.saw && s.value; }
+		return FALSE;
+	}
+};
+}
+
+TEST(day_night_box_is_saved_ahead_of_the_objects)
+{
+	static DayNightTestWorld *world = NEW DayNightTestWorld;	// kept, like the other empty worlds
+	GameLogic *savedLogic = TheGameLogic;
+	TheGameLogic = world;
+	DayNight_setOverrideForTests( -1 );
+
+	world->loadHead( 23, TRUE );
+	CHECK( world->isDayNight() );
+	CHECK( DayNight_isOn() );
+	CHECK( world->saveHead() );					// written back right after the frame
+	world->loadHead( 23, FALSE );
+	CHECK( !world->isDayNight() );
+	CHECK( !world->saveHead() );
+
+	world->loadHead( 23, TRUE );
+	world->loadHead( 22, TRUE );					// an older save has no box and plays in daylight
+	CHECK( !world->isDayNight() );
+	CHECK( !DayNight_isOn() );
+
+	TheGameLogic = savedLogic;
 }

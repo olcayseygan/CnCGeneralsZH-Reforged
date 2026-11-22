@@ -1,0 +1,13 @@
+# The Apocalypse co-op map (seed 7, 2 seats, 8320 square, clear outline about 1583-6786 by 1756-6934)
+# straight down from 10500 over the middle, for placing a look-check camera. 'shot map' logs where a
+# ground grid lands on the picture. At 38 s wave 1 has gathered at gates 1 and 3 (warned since frame
+# 800); at 120 s the bases stand and wave 4 has gathered at gate 1.
+#
+#   generals_apoclook.exe -randommap 7 2 normal apocalypse -autoskirmish 2 -aidiff easy -seed 7
+#     -observer -quickstart -noshellmap -win -xres 1920 -yres 1080 -msaa 0 -multiInstance -turbo
+#     -cinema apoc_lookmap -logPrefix apoclookmap
+
+0.05  drone 1  4160 4159 10500  4160 4160 10500  look 4160 4160  sway 0  bank 0
+38.0  shot map
+120.0 shot map
+122.0 end

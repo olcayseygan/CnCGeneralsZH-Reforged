@@ -1,0 +1,27 @@
+# Apocalypse look check (2026-11-22): the co-op map with the interface on, the game's own camera
+# height (zoom 1 is the height the match opened at), one pass, logic 2680 to 7000. Times are logic
+# frames / 30.
+#   generals.exe -randommap 7 2 normal apocalypse -autoskirmish 2 -aidiff easy -seed 7 -observer
+#     -scenario apoc_look -cinema apoc_look -video 2680 7000 -recordfps 60 -wav 2680 7000
+# Places from a top-down 'shot map' (Cinema/apoc_lookmap.txt): basin a two-lobed peanut, China on
+# Player_2_Start 4593,3487, GLA on Player_1_Start 3604,4735; gate 2's canyon runs south from the rim
+# (about y 2800) to the fog edge (about y 1930) near x 4350-4400. Held on 4370,2100 the edge stays
+# just past the top of the frame, so the edge shots aim at 4370,1950.
+
+0.0   hud on
+
+# (1) day: across the China lobe and down the gate 2 canyon to the fog edge
+89.3  cut   4590 3350 1.0 180 0
+90.0  move  4370 1950 9
+
+# (4) dusk over the China base, lights on at logic 5236
+160.0 cut   4600 3520 1.0 200 -4
+
+# (3) the heart: the Red Guard squad going down and rising (5348, 5500, 5556, 5608 ...)
+177.0 cut   4640 4500 0.85 160 4
+
+# (2) night, gate 2's fog edge: wave 8 gathers there from 5900 (the sector glows) and comes at 6300
+196.7 cut   4370 1950 1.0 180 -4
+
+# (5) wave 8 onto the China base's north edge
+220.0 cut   4420 3050 1.0 180 0

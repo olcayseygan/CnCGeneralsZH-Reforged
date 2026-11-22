@@ -1,0 +1,13 @@
+# Apocalypse look check (2026-11-22): the co-op map as the AI plays it, plus one China Red Guard squad
+# stood in the heart where the day waves meet the bases, so infantry die to the dead and rise (two Easy
+# seats never lost infantry to them in 9000 frames: risen stayed 0). Scenario frames are game frames,
+# 1.5 a logic frame at game speed 150: 5925 runs on logic 3950.
+#
+#   generals.exe -randommap 7 2 normal apocalypse -autoskirmish 2 -aidiff easy -seed 7 -observer
+#     -scenario apoc_look -cinema apoc_look
+#
+# With -scenario slot 0 (GLA, Toxin) starts on Player_1_Start 3604,4735 and slot 1 (China, Tank) on
+# Player_2_Start 4593,3487.
+
+5925  spawn      1  Tank_ChinaInfantryRedguard   15  4491 4372         18
+5940  stance     1  Tank_ChinaInfantryRedguard   defensive

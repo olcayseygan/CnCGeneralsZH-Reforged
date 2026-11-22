@@ -10488,15 +10488,15 @@ void RMGLayout::buildLane( void )
 #define RMG_APOC_CLEAR_SPREAD	2		///< bearings either side whose rim a bearing keeps the wilderness from as well
 #define RMG_APOC_CLEAR_EXTRA	110.0f	///< cells the outline runs out past the wilderness at the most, over high ground
 #define RMG_APOC_SPAWN_PAST		14.0f	///< cells into the fog a pass's spawn stands
-#define RMG_APOC_HILLS			26.0f	///< bytes the belt's hills rise at most
-#define RMG_APOC_SWELL_FREQ		0.011f	///< the broad swells' field, cells: a hill or a hollow every forty cells or so
+#define RMG_APOC_HILLS			22.0f	///< bytes the belt's hills rise at most
+#define RMG_APOC_SWELL_FREQ		0.008f	///< the broad swells' field, cells: a hill or a hollow every sixty cells or so
 #define RMG_APOC_HILL_REACH		24.0f	///< cells over which they come up off the wall
 #define RMG_APOC_RIVERBED		12.0f	///< bytes the dry riverbed lies under the land round it
 #define RMG_APOC_RIVER_WIDTH	0.025f	///< how near nought its noise line runs inside the bed
 #define RMG_APOC_FLAT_SPAN		1.0f	///< world units a cell's corners span at most to count as flat ground to build on in the log
 #define RMG_APOC_FOG_FRINGE		16.0f	///< cells the woods run on into the fog at the most
 #define RMG_APOC_ROCKY_SPAN		7.0f	///< world units a cell's corners span from which a slope shows rock
-#define RMG_APOC_BARE_TOPS		120.0f	///< bytes over the basin from which the high ground's tops lie bare
+#define RMG_APOC_BARE_TOPS		150.0f	///< bytes over the basin from which the high ground's tops lie bare
 #define RMG_APOC_PILE_OUT		14.0f	///< cells from the wall's outer foot to a gate's pile
 #define RMG_APOC_PILE_ASIDE		10.0f	///< and off its trail
 #define RMG_APOC_SEATS_MOST		4		///< co-op seats at most (clampSettings): a lobe each
@@ -10755,7 +10755,7 @@ void RMGLayout::buildApocalypse( void )
 			const Real swell = 0.5f + 0.5f * fractalNoise( m_perm, (Real)x * RMG_APOC_SWELL_FREQ + 31.7f, (Real)y * RMG_APOC_SWELL_FREQ + 17.3f, 2 );
 			const Real ridges = 1.0f - fabsf( fractalNoise( m_perm, (Real)x * 0.016f + 66.1f, (Real)y * 0.016f + 12.7f, 1 ) );
 			const Real valley = gate >= 0 ? 0.2f + 0.8f * fadeCurve( rmgUnit( across / ( passHalf[gate] * RMG_APOC_VALLEY ) ) ) : 1.0f;
-			const Real hill = ( 0.85f * swell + 0.15f * ridges ) * valley;
+			const Real hill = ( 0.9f * swell + 0.1f * ridges ) * valley;
 			const Real past = fadeCurve( rmgUnit( ( d - thick ) / RMG_APOC_HILL_REACH ) );
 			height += RMG_APOC_HILLS * hill * past;
 			height -= RMG_APOC_RIVERBED * riverbedAt( x, y ) * past;

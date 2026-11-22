@@ -38,6 +38,7 @@
 #include "Common/Player.h"
 #include "Common/PlayerList.h"
 
+#include "GameLogic/ApocalypseDirector.h"
 #include "GameLogic/TerrainLogic.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/Object.h"
@@ -2331,6 +2332,32 @@ void W3DRadar::draw( Int pixelX, Int pixelY, Int width, Int height )
 
 		if( m_shroudTexture )
 			TheDisplay->drawImage( m_shroudImage, ul.x, ul.y, lr.x, lr.y );
+	}
+
+	// the dead massing in the Apocalypse fog: each heat block a red patch over the shroud, as strong as
+	// it is hot, from the count the director last handed over (Apocalypse_heatGrid; none outside the mode)
+	{
+		Int blocksX = 0, blocksY = 0;
+		Apocalypse_heatGrid( &blocksX, &blocksY );
+		const Real block = (Real)APOCALYPSE_HEAT_BLOCK * TheGlobalData->m_partitionCellSize;
+		IRegion2D clip;
+		clip.lo = ul;
+		clip.hi = lr;
+		for( Int by = 0; by < blocksY; ++by )
+		{
+			for( Int bx = 0; bx < blocksX; ++bx )
+			{
+				const Int heat = Apocalypse_heatOfBlock( bx, by );
+				if( heat == 0 )
+					continue;
+				Real cx[ 4 ], cy[ 4 ];
+				m_drawTransform.toPixel( bx * block, by * block, &cx[ 0 ], &cy[ 0 ] );
+				m_drawTransform.toPixel( ( bx + 1 ) * block, by * block, &cx[ 1 ], &cy[ 1 ] );
+				m_drawTransform.toPixel( ( bx + 1 ) * block, ( by + 1 ) * block, &cx[ 2 ], &cy[ 2 ] );
+				m_drawTransform.toPixel( bx * block, ( by + 1 ) * block, &cx[ 3 ], &cy[ 3 ] );
+				fillQuadClipped( clip, cx, cy, GameMakeColor( 255, 48, 24, 60 + heat * 160 / 255 ) );
+			}
+		}
 	}
 
 	// over the shroud: the destination is the player's own order, and it may lie in the dark

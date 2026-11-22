@@ -4354,12 +4354,12 @@ void W3DDisplay::setShroudLevel( Int x, Int y, CellShroudStatus setting )
 		#endif
 		// the Apocalypse fog ring hides what is in it like shroud but draws as a thin fog, the ground
 		// showing through it: it is shroud nobody can lift, not ground nobody has seen
-		// and where the next wave gathers it thickens, the red with it: the gates' warning
+		// and where the next wave gathers it heats up, brighter red: the gates' warning
 		// and over a gathering horde it glows: the thicker the dead stand, the brighter its red
 		if( setting == CELLSHROUD_SHROUDED && ThePartitionManager && ThePartitionManager->isCellAlwaysShrouded(x, y) )
 		{
 			const Int thin = TheApocalypseDirector->isWarnedCell(x, y)
-				? (Int)TheGlobalData->m_fogAlpha / 2 : (Int)TheGlobalData->m_fogAlpha + (255 - (Int)TheGlobalData->m_fogAlpha) / 4;
+				? (Int)APOCALYPSE_WARN_GLOW : (Int)TheGlobalData->m_fogAlpha + (255 - (Int)TheGlobalData->m_fogAlpha) / 4;
 			const Int heat = Apocalypse_heatAt( x, y );
 			TheTerrainRenderObject->getShroud()->setShroudLevel(x, y, (W3DShroudLevel)( thin + ( APOCALYPSE_HEAT_GLOW - thin ) * heat / 255 ));
 		}

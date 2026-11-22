@@ -279,7 +279,13 @@ static void apocalypseApplyHeat( const std::vector<UnsignedByte> &heat, Int bloc
 	ThePartitionManager->redrawShroudForLocalPlayer();
 }
 
-static Int heatOfBlock( Int blockX, Int blockY )
+void Apocalypse_heatGrid( Int *blocksX, Int *blocksY )
+{
+	*blocksX = theHeatBlocksX;
+	*blocksY = theHeatBlocksY;
+}
+
+Int Apocalypse_heatOfBlock( Int blockX, Int blockY )
 {
 	if( blockX < 0 || blockY < 0 || blockX >= theHeatBlocksX || blockY >= theHeatBlocksY )
 		return 0;
@@ -295,8 +301,8 @@ Int Apocalypse_heatAt( Int cellX, Int cellY )
 	const Real by = ( (Real)cellY + 0.5f ) / (Real)APOCALYPSE_HEAT_BLOCK - 0.5f;
 	const Int x0 = (Int)floorf( bx ), y0 = (Int)floorf( by );
 	const Real tx = bx - (Real)x0, ty = by - (Real)y0;
-	const Real top = heatOfBlock( x0, y0 ) + ( heatOfBlock( x0 + 1, y0 ) - heatOfBlock( x0, y0 ) ) * tx;
-	const Real bottom = heatOfBlock( x0, y0 + 1 ) + ( heatOfBlock( x0 + 1, y0 + 1 ) - heatOfBlock( x0, y0 + 1 ) ) * tx;
+	const Real top = Apocalypse_heatOfBlock( x0, y0 ) + ( Apocalypse_heatOfBlock( x0 + 1, y0 ) - Apocalypse_heatOfBlock( x0, y0 ) ) * tx;
+	const Real bottom = Apocalypse_heatOfBlock( x0, y0 + 1 ) + ( Apocalypse_heatOfBlock( x0 + 1, y0 + 1 ) - Apocalypse_heatOfBlock( x0, y0 + 1 ) ) * tx;
 	return (Int)( top + ( bottom - top ) * ty + 0.5f );
 }
 

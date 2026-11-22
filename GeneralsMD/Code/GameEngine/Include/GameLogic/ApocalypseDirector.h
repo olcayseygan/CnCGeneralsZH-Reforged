@@ -97,8 +97,9 @@ enum
 	APOCALYPSE_SEATS_MOST = 4,						///< co-op seats the waves size for at the most
 	APOCALYPSE_HEAT_SECONDS = 2,					///< game seconds between two counts of the dead in the fog for its heat
 	APOCALYPSE_HEAT_BLOCK = 4,						///< partition cells a side of a heat block
-	APOCALYPSE_HEAT_PER_ZOMBIE = 24,			///< a block's heat for each of the dead in it, up to 255
-	APOCALYPSE_HEAT_GLOW = 235,						///< the fog's shroud level over the hottest block: nearly clear, all the fog's red
+	APOCALYPSE_HEAT_PER_ZOMBIE = 64,			///< a block's heat for each of the dead in it, up to 255: four fill it
+	APOCALYPSE_HEAT_GLOW = 255,						///< the fog's shroud level over the hottest block: clear, all the fog's red
+	APOCALYPSE_WARN_GLOW = 215,						///< and over a sector whose wave is gathering, before any of it has risen
 	APOCALYPSE_SPAWNS_MOST = 32,					///< spawn waypoints read at most: a wave's passes are a 32-bit mask
 	APOCALYPSE_SPAWN_SPREAD = 60,					///< world units a zombie lands either way off its spawn
 	APOCALYPSE_BASE_REACH = 200,					///< world units past the farthest start from the middle that count as having reached the bases
@@ -144,6 +145,9 @@ extern void Apocalypse_phaseAt( UnsignedInt frame, Int *phase, UnsignedInt *into
 
 /// client side: how thick the dead stand in the fog round that partition cell, 0 to 255, from the last count handed over
 extern Int Apocalypse_heatAt( Int cellX, Int cellY );
+/// client side: the heat count's blocks a side (0 with no count yet) and one block's heat, 0 to 255; a block is APOCALYPSE_HEAT_BLOCK partition cells a side
+extern void Apocalypse_heatGrid( Int *blocksX, Int *blocksY );
+extern Int Apocalypse_heatOfBlock( Int blockX, Int blockY );
 
 //-------------------------------------------------------------------------------------------------
 class ApocalypseDirector : public Snapshot

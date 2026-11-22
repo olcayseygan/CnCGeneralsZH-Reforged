@@ -1832,10 +1832,10 @@ public:
 		*/
 	void refreshShroudForLocalPlayer();
 
-	/** Every cell whose middle lies outside the box, lo to hi in world units, becomes shrouded for
+	/** Every cell whose middle lies outside the clear area's polygon becomes shrouded for
 		every player whoever looks at it, and stays so for the rest of the map (the Apocalypse fog
 		ring).  Map data: set again on every load, never saved.  Returns the cells marked. */
-	Int setAlwaysShroudedOutside( Real loX, Real loY, Real hiX, Real hiY );
+	Int setAlwaysShroudedOutside( const PolygonTrigger *clear );
 	/// push every cell to the display again and nothing else (the shroud's colour changed): client only
 	void redrawShroudForLocalPlayer();
 	/// the cell at x, y is one of those

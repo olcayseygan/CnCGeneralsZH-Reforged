@@ -3504,15 +3504,18 @@ void PartitionManager::redrawShroudForLocalPlayer()
 }
 
 //-----------------------------------------------------------------------------
-Int PartitionManager::setAlwaysShroudedOutside( Real loX, Real loY, Real hiX, Real hiY )
+Int PartitionManager::setAlwaysShroudedOutside( const PolygonTrigger *clear )
 {
 	Int marked = 0;
 	for (Int i = 0; i < m_totalCellCount; ++i)
 	{
 		PartitionCell &cell = m_cells[i];
-		const Real cx = m_worldExtents.lo.x + ((Real)cell.getCellX() + 0.5f) * m_cellSize;
-		const Real cy = m_worldExtents.lo.y + ((Real)cell.getCellY() + 0.5f) * m_cellSize;
-		const Bool outside = cx < loX || cx > hiX || cy < loY || cy > hiY;
+		// the cell's centre in whole world units, so the integer polygon test answers alike on every machine
+		ICoord3D centre;
+		centre.x = (Int)floorf( m_worldExtents.lo.x + ((Real)cell.getCellX() + 0.5f) * m_cellSize );
+		centre.y = (Int)floorf( m_worldExtents.lo.y + ((Real)cell.getCellY() + 0.5f) * m_cellSize );
+		centre.z = 0;
+		const Bool outside = !clear->pointInTrigger( centre );
 		if (outside == cell.isAlwaysShrouded())
 			continue;
 		cell.setAlwaysShrouded(outside);

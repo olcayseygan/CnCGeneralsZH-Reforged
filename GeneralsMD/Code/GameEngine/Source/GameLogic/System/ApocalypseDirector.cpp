@@ -67,10 +67,10 @@ static const Int ZOMBIE_POINTS[] = { APOCALYPSE_POINTS_WALKER, APOCALYPSE_POINTS
 static const ApocalypsePhaseRules thePhaseRules[ APOCALYPSE_PHASES ] =
 {
 	//	seconds							wave every	points %	out a frame	walking at most	gates		runners	brutes
-	{ APOCALYPSE_DAY_SECONDS,		40,			100,			5,					450,						1, 2,		0,			0 },
-	{ APOCALYPSE_DUSK_SECONDS,	30,			160,			6,					550,						2, 2,		20,			5 },
-	{ APOCALYPSE_NIGHT_SECONDS,	25,			320,			10,					700,						2, 99,	30,			20 },
-	{ APOCALYPSE_DAWN_SECONDS,	30,			160,			6,					550,						1, 2,		10,			5 },
+	{ APOCALYPSE_DAY_SECONDS,		40,			100,			5,					450,						1, 2,		0,			5 },
+	{ APOCALYPSE_DUSK_SECONDS,	30,			220,			6,					550,						2, 2,		20,			15 },
+	{ APOCALYPSE_NIGHT_SECONDS,	25,			450,			10,					700,						2, 99,	30,			30 },
+	{ APOCALYPSE_DAWN_SECONDS,	30,			200,			6,					550,						1, 2,		10,			5 },
 };
 
 const ApocalypsePhaseRules &Apocalypse_phaseRules( Int phase )
@@ -355,6 +355,11 @@ void ApocalypseDirector::newMap( Bool loadingSaveGame )
 		const Waypoint *spawn = TheTerrainLogic->getWaypointByName( name );
 		if( spawn == NULL )
 			break;
+		if( k > APOCALYPSE_SPAWNS_MOST )
+		{
+			DEBUG_LOG(( "HEADLESS APOCALYPSE: the map has more than %d spawns, the rest stay empty\n", APOCALYPSE_SPAWNS_MOST ));
+			break;
+		}
 		m_spawns.push_back( *spawn->getLocation() );
 	}
 	if( m_spawns.empty() )
@@ -399,6 +404,9 @@ void ApocalypseDirector::newMap( Bool loadingSaveGame )
 	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
 		if( isSeat( ThePlayerList->getNthPlayer( i ) ) )
 			++m_seats;
+	// a co-op mode for four at the most: the waves never size for more, whatever the map was played with
+	if( m_seats > APOCALYPSE_SEATS_MOST )
+		m_seats = APOCALYPSE_SEATS_MOST;
 
 	if( !loadingSaveGame )
 	{
@@ -419,7 +427,7 @@ void ApocalypseDirector::newMap( Bool loadingSaveGame )
 		}
 	}
 
-	// the fog ring: everything between the clear square and the map's edge, shrouded for good
+	// the fog ring: everything between the clear area's outline and the map's edge, shrouded for good
 	const PolygonTrigger *clear = TheTerrainLogic->getTriggerAreaByName( "Apocalypse_Clear" );
 	if( clear != NULL && clear->getNumPoints() >= 3 )
 	{
@@ -443,7 +451,8 @@ void ApocalypseDirector::newMap( Bool loadingSaveGame )
 		m_clearHi.x = (Real)hi.x;
 		m_clearHi.y = (Real)hi.y;
 		m_hasRing = TRUE;
-		const Int cells = ThePartitionManager->setAlwaysShroudedOutside( m_clearLo.x, m_clearLo.y, m_clearHi.x, m_clearHi.y );
+		// the cells outside the area's own outline, which is what inRing reads back: shroud, kill test and spawns agree
+		const Int cells = ThePartitionManager->setAlwaysShroudedOutside( clear );
 		DEBUG_LOG(( "HEADLESS APOCALYPSE: fog ring outside (%.0f,%.0f)-(%.0f,%.0f) of the map (%.0f,%.0f)-(%.0f,%.0f), %d cells shrouded for good\n",
 								m_clearLo.x, m_clearLo.y, m_clearHi.x, m_clearHi.y, m_playLo.x, m_playLo.y, m_playHi.x, m_playHi.y, cells ));
 	}
@@ -759,13 +768,17 @@ void ApocalypseDirector::watchTheFallen( UnsignedInt now )
 //-------------------------------------------------------------------------------------------------
 Bool ApocalypseDirector::inRing( const Coord3D *pos ) const
 {
-	return m_hasRing && ( pos->x < m_clearLo.x || pos->x > m_clearHi.x || pos->y < m_clearLo.y || pos->y > m_clearHi.y );
+	if( !m_hasRing )
+		return FALSE;
+	Int cellX, cellY;
+	ThePartitionManager->worldToCell( pos->x, pos->y, &cellX, &cellY );
+	return ThePartitionManager->isCellAlwaysShrouded( cellX, cellY );
 }
 
 //-------------------------------------------------------------------------------------------------
 /** A spot in the fog ring before that gate (anywhere in the ring for -1), off the map's edge and off the
-	  clear square by APOCALYPSE_FOG_EDGE_IN, where the object can stand: from the gate's spawn waypoint
-	  in towards the middle and out to either side by a third of its distance from the middle.  Drawn from
+	  clear area by APOCALYPSE_FOG_EDGE_IN, where the object can stand: round the gate's spawn waypoint,
+	  a little in towards the middle, more out, and a quarter of its distance from the middle either side.  Drawn from
 	  the logic stream, FALSE after APOCALYPSE_FOG_TRIES misses. */
 Bool ApocalypseDirector::ringSpot( Coord3D *pos, const Object *obj, Int sector )
 {
@@ -778,8 +791,9 @@ Bool ApocalypseDirector::ringSpot( Coord3D *pos, const Object *obj, Int sector )
 			const Real gx = m_spawns[ sector ].x - m_centre.x, gy = m_spawns[ sector ].y - m_centre.y;
 			const Real reach = sqrtf( gx * gx + gy * gy );
 			const Real ux = reach > 0.0f ? gx / reach : 1.0f, uy = reach > 0.0f ? gy / reach : 0.0f;
-			const Real inward = GameLogicRandomValueReal( 0.0f, 0.45f * reach );
-			const Real aside = GameLogicRandomValueReal( -0.33f * reach, 0.33f * reach );
+			// the fog's inner edge round the pass's spawn: a little in towards the clear ground, more out, wide either side
+			const Real inward = GameLogicRandomValueReal( -0.12f * reach, 0.06f * reach );
+			const Real aside = GameLogicRandomValueReal( -0.25f * reach, 0.25f * reach );
 			pos->x = m_spawns[ sector ].x - ux * inward - uy * aside;
 			pos->y = m_spawns[ sector ].y - uy * inward + ux * aside;
 			if( pos->x < m_playLo.x + in || pos->x > m_playHi.x - in || pos->y < m_playLo.y + in || pos->y > m_playHi.y - in )
@@ -790,7 +804,16 @@ Bool ApocalypseDirector::ringSpot( Coord3D *pos, const Object *obj, Int sector )
 			pos->x = GameLogicRandomValueReal( m_playLo.x + in, m_playHi.x - in );
 			pos->y = GameLogicRandomValueReal( m_playLo.y + in, m_playHi.y - in );
 		}
-		if( pos->x > m_clearLo.x - in && pos->x < m_clearHi.x + in && pos->y > m_clearLo.y - in && pos->y < m_clearHi.y + in )
+		// in the fog, and as far from its edge as APOCALYPSE_FOG_EDGE_IN every way
+		Coord3D probe = *pos;
+		Bool inFog = inRing( pos );
+		for( Int side = 0; side < 4 && inFog; ++side )
+		{
+			probe.x = pos->x + ( side == 0 ? in : side == 1 ? -in : 0.0f );
+			probe.y = pos->y + ( side == 2 ? in : side == 3 ? -in : 0.0f );
+			inFog = inRing( &probe );
+		}
+		if( !inFog )
 			continue;
 		pos->z = TheTerrainLogic->getGroundHeight( pos->x, pos->y );
 		if( ai == NULL || TheAI->pathfinder()->validMovementPosition( obj->getCrusherLevel() > 0, obj->getLayer(), ai->getLocomotorSet(), pos ) )
@@ -968,6 +991,32 @@ void ApocalypseDirector::update( void )
 		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u %s cycle %u wave %u walking %d spawned %u kills %u reached %u to come %d seats standing %d of %d, fog took %u, risen %u, share %d%%\n",
 								now, Apocalypse_phaseName( m_phase ), m_cycle, m_wave, (Int)m_zombies.size(), m_spawned, m_kills, m_reached,
 								m_pending, standing, m_seats, m_fogKills, m_infected, m_adapt ));
+		Int inFog = 0, idle = 0;
+		for( UnsignedInt i = 0; i < m_zombies.size(); ++i )
+		{
+			Object *obj = TheGameLogic->findObjectByID( m_zombies[ i ].id );
+			if( obj == NULL )
+				continue;
+			if( inRing( obj->getPosition() ) )
+				++inFog;
+			if( obj->getAI() != NULL && obj->getAI()->isIdle() )
+				++idle;
+		}
+		Int buildings = 0, units = 0, nearMiddle = 0;
+		for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+		{
+			if( obj->isEffectivelyDead() || !isSeat( obj->getControllingPlayer() ) )
+				continue;
+			if( obj->isKindOf( KINDOF_STRUCTURE ) )
+				++buildings;
+			else
+				++units;
+		}
+		for( UnsignedInt i = 0; i < m_zombies.size(); ++i )
+			if( m_zombies[ i ].reached )
+				++nearMiddle;
+		DEBUG_LOG(( "HEADLESS APOCALYPSE: frame %u the dead: %d still in the fog, %d idle, %d among the bases; the seats hold %d buildings, %d units\n",
+								now, inFog, idle, nearMiddle, buildings, units ));
 		if( standing == 0 && !m_fallLogged )
 		{
 			m_fallLogged = TRUE;

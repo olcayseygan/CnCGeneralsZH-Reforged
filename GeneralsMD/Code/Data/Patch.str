@@ -6018,7 +6018,7 @@ SCIENCE:DemolitionTalent10A
 END
 
 CONTROLBAR:ToolTipDemolitionTalent10A
-"Each Scud Storm missile hits 20 percent harder, 720 at the centre instead of 600."
+"Each Scud Storm missile hits 10 percent harder, 660 at the centre instead of 600."
 END
 
 SCIENCE:DemolitionTalent10B

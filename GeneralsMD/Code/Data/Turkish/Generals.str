@@ -20212,7 +20212,7 @@ SCIENCE:DemolitionTalent10A
 END
 
 CONTROLBAR:ToolTipDemolitionTalent10A
-"SCUD Fırtınasının her füzesi yüzde 20 daha sert vurur, merkezde 600 yerine 720."
+"SCUD Fırtınasının her füzesi yüzde 10 daha sert vurur, merkezde 600 yerine 660."
 END
 
 SCIENCE:DemolitionTalent10B

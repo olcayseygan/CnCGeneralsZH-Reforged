@@ -139,12 +139,22 @@ protected:
 
 
 public:
-		// Create texture from a height map.
+		// Built from TSCloudMed (CloudShadowBake.h): REPEAT retail tiles wide, scattered so the
+		// tile does not show from the highest camera; under Classic one retail tile, as EA had it.
 		CloudMapTerrainTextureClass( MipCountType mipLevelCount = MIP_LEVELS_ALL );
 
 		// just use default destructor. ~TerrainTextureClass(void);
 
 		void restore(void);
+
+		// How many retail tiles the texture spans, which the cloud's texture matrix divides its
+		// scale and its drift by (TerrainShader2Stage::updateNoise1): 1 until a texture is built.
+		static Int tilesPerRepeat(void) { return s_tilesPerRepeat; }
+
+private:
+		static Int textureSide(void);
+		void bake(void);
+		static Int s_tilesPerRepeat;
 };
 
 

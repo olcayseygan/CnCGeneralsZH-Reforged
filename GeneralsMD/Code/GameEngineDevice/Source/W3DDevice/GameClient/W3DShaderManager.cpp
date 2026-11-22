@@ -68,6 +68,7 @@
 #include "W3DDevice/GameClient/W3DCustomScene.h"
 #include "W3DDevice/GameClient/W3DSmudge.h"
 #include "W3DDevice/GameClient/W3DWater.h"
+#include "W3DDevice/GameClient/TerrainTex.h"
 #include "GameClient/View.h"
 #include "GameClient/Snow.h"
 #include "GameClient/CommandXlat.h"
@@ -2262,7 +2263,11 @@ void TerrainShader2Stage::updateNoise1(D3DXMATRIX *destMatrix,D3DXMATRIX *curVie
 
 	D3DXMATRIX scale;
 
-	D3DXMatrixScaling(&scale, STRETCH_FACTOR, STRETCH_FACTOR,1);
+	/* The cloud texture spans several of EA's tiles (CloudMapTerrainTextureClass, CloudShadowBake.h),
+		 so it is spread that many times wider and slides that many times slower in its own coordinates:
+		 a texel covers the ground it did and the clouds cross it at the speed they did. */
+	const float repeat = (float)CloudMapTerrainTextureClass::tilesPerRepeat();
+	D3DXMatrixScaling(&scale, STRETCH_FACTOR / repeat, STRETCH_FACTOR / repeat, 1);
 	*destMatrix = *curViewInverse * scale;
 
 	D3DXMATRIX offset;
@@ -2270,8 +2275,8 @@ void TerrainShader2Stage::updateNoise1(D3DXMATRIX *destMatrix,D3DXMATRIX *curVie
 	Int delta = m_curTick;
 	m_curTick = WW3D::Get_Sync_Time();//Clock_Milliseconds_Coarse();
 	delta = m_curTick-delta;
-	m_xOffset += m_xSlidePerSecond*delta/1000;
-	m_yOffset += m_ySlidePerSecond*delta/1000;
+	m_xOffset += m_xSlidePerSecond / repeat * delta / 1000;
+	m_yOffset += m_ySlidePerSecond / repeat * delta / 1000;
 	/* -turbo: W3D's clock follows the wall, and a turbo run draws a varying number of pictures at a
 		 varying pace before its shot, so the clouds' shadow stood somewhere else at the same logic frame on
 		 every run (tree-check, 2026-10-30).  Place them by the logic frame instead, the game time it holds,
@@ -2280,8 +2285,8 @@ void TerrainShader2Stage::updateNoise1(D3DXMATRIX *destMatrix,D3DXMATRIX *curVie
 	{
 		const Real gameSeconds = (Real)TheGameLogic->getFrame() * MSEC_PER_LOGICFRAME_REAL
 			* ( (Real)GAME_SPEED_PERCENT / 100.0f ) / 1000.0f;
-		m_xOffset = fmodf( m_xSlidePerSecond * gameSeconds, 1.0f );
-		m_yOffset = fmodf( m_ySlidePerSecond * gameSeconds, 1.0f );
+		m_xOffset = fmodf( m_xSlidePerSecond / repeat * gameSeconds, 1.0f );
+		m_yOffset = fmodf( m_ySlidePerSecond / repeat * gameSeconds, 1.0f );
 	}
 
 

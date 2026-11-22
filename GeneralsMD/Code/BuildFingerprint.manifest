@@ -1009,6 +1009,10 @@ Data/Audio/Speech/etunitl.wav
 Data/Audio/Speech/etupgra.wav
 Data/Audio/Speech/etvehst.wav
 Data/Cinema/altstyles.txt
+Data/Cinema/apoc_discord_day.txt
+Data/Cinema/apoc_discord_day2.txt
+Data/Cinema/apoc_discord_night.txt
+Data/Cinema/apoc_discord_night2.txt
 Data/Cinema/apoc_first.txt
 Data/Cinema/apoc_fog.txt
 Data/Cinema/apoc_gate3.txt
@@ -2991,6 +2995,7 @@ GameEngineDevice/Include/W3DDevice/Common/W3DRadar.h
 GameEngineDevice/Include/W3DDevice/Common/W3DThingFactory.h
 GameEngineDevice/Include/W3DDevice/GameClient/BaseHeightMap.h
 GameEngineDevice/Include/W3DDevice/GameClient/BridgeTilt.h
+GameEngineDevice/Include/W3DDevice/GameClient/CloudShadowBake.h
 GameEngineDevice/Include/W3DDevice/GameClient/FireLights.h
 GameEngineDevice/Include/W3DDevice/GameClient/FlatHeightMap.h
 GameEngineDevice/Include/W3DDevice/GameClient/FoliagePlacement.h
@@ -4489,6 +4494,7 @@ Tests/test_camera_behavior.inc
 Tests/test_cinema.inc
 Tests/test_cinematic_camera.cpp
 Tests/test_clock.cpp
+Tests/test_cloud_shadow_bake.cpp
 Tests/test_compression.cpp
 Tests/test_crash_reporting.cpp
 Tests/test_d3d9device.h

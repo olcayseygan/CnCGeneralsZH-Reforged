@@ -48,7 +48,12 @@
 //         Includes                                                      
 //-----------------------------------------------------------------------------
 #include <stdlib.h>
+#include <string.h>
+#include <vector>
 #include "Lib/Clock.h"
+#include "ffactory.h"
+#include "Common/Debug.h"
+#include "W3DDevice/GameClient/CloudShadowBake.h"
 
 #include "W3DDevice/GameClient/TerrainTex.h"
 #include "W3DDevice/GameClient/WorldHeightMap.h"
@@ -948,16 +953,89 @@ void AlphaEdgeTextureClass::Apply(unsigned int stage)
 up the "sliding" parameters for the clouds to slide over the terrain. */
 //=============================================================================
 //@todo - Allow adjustment of the cloud slide rate, and lose the hard coded "cloudmap.tga"
+/* The texture is no longer EA's file but one made out of it.  TSCloudMed is 128 texels over 315
+	 world units, and from the highest camera the ground showed it as a grid; CloudShadowBake::scatter
+	 lays its texels out REPEAT tiles wide with no grid in them, and the texture matrix spreads the
+	 texture that many times wider (TerrainShader2Stage::updateNoise1), so a texel still covers the
+	 ground it did.  Classic keeps one retail tile, decoded as it was. */
+Int CloudMapTerrainTextureClass::s_tilesPerRepeat = 1;
+
+Int CloudMapTerrainTextureClass::textureSide(void)
+{
+	const Bool classic = TheGlobalData && TheGlobalData->m_classicGraphics;
+	return classic ? 128 : 128 * CloudShadowBake::REPEAT;
+}
+
 CloudMapTerrainTextureClass::CloudMapTerrainTextureClass(MipCountType mipLevelCount) :
-	TextureClass("TSCloudMed.tga","TSCloudMed.tga", mipLevelCount )
-{ 
+	TextureClass( textureSide(), textureSide(), WW3D_FORMAT_A8R8G8B8, mipLevelCount,
+		POOL_MANAGED, false, false )
+{
 	Get_Filter().Set_Mip_Mapping( TextureFilterClass::FILTER_TYPE_FAST );
-	m_xSlidePerSecond = -0.02f;	 
+	m_xSlidePerSecond = -0.02f;
 	m_ySlidePerSecond =  1.50f * m_xSlidePerSecond;
 	m_curTick = 0;
 	m_xOffset = 0;
 	m_yOffset = 0;
 
+	bake();
+}
+
+//=============================================================================
+// CloudMapTerrainTextureClass::bake
+//=============================================================================
+/** Fills the texture from TSCloudMed's DXT1 file, decoded here rather than by D3DX so every machine
+gets the same texels.  Without a file to read the texture is white: no cloud shadow, nothing
+darker than it should be. */
+//=============================================================================
+void CloudMapTerrainTextureClass::bake(void)
+{
+	// -headless and -nodevice have no texture to fill, and nothing draws the clouds.
+	if (Peek_D3D_Texture() == NULL) {
+		return;
+	}
+	const Int start = (Int)Clock_Milliseconds_Coarse();
+
+	std::vector<unsigned char> source;
+	int sourceWidth = 0, sourceHeight = 0;
+	{
+		file_auto_ptr file(_TheFileFactory, "TSCloudMed.dds");
+		if (file->Is_Available() && file->Open()) {
+			std::vector<unsigned char> bytes(file->Size() > 0 ? file->Size() : 0);
+			const int read = bytes.empty() ? 0 : file->Read(&bytes[0], (int)bytes.size());
+			file->Close();
+			if (read > 0) {
+				CloudShadowBake::decodeDXT1(&bytes[0], (size_t)read, sourceWidth, sourceHeight, source);
+			}
+		}
+	}
+
+	IDirect3DSurface9 *surface_level;
+	D3DSURFACE_DESC surface_desc;
+	D3DLOCKED_RECT locked_rect;
+	DX8_ErrorCode(Peek_D3D_Texture()->GetSurfaceLevel(0, &surface_level));
+	DX8_ErrorCode(surface_level->GetDesc(&surface_desc));
+	DX8_ErrorCode(surface_level->LockRect(&locked_rect, NULL, 0));
+
+	const Int side = (Int)surface_desc.Width;
+	unsigned char *dest = (unsigned char *)locked_rect.pBits;
+	if (source.empty()) {
+		for (Int y = 0; y < side; ++y) {
+			memset(dest + (size_t)y * locked_rect.Pitch, 0xff, (size_t)side * 4);
+		}
+		s_tilesPerRepeat = 1;
+	} else {
+		// ponytail: the scale follows the retail tile's 128 texels; a mod's cloud texture of another
+		// size is laid over a tile's worth of ground per 128 of its texels, larger or smaller than EA's.
+		CloudShadowBake::scatter(&source[0], sourceWidth, sourceHeight, dest, side, locked_rect.Pitch);
+		s_tilesPerRepeat = side / 128 > 0 ? side / 128 : 1;
+	}
+
+	surface_level->UnlockRect();
+	surface_level->Release();
+	DX8_ErrorCode(D3DXFilterTexture(Peek_D3D_Texture(), NULL, 0, D3DX_FILTER_BOX));
+
+	DEBUG_LOG(("CLOUDMAP: %dx%d texture, %d retail tiles wide, from a %dx%d source, %d ms\n",
+		side, side, s_tilesPerRepeat, sourceWidth, sourceHeight, (Int)Clock_Milliseconds_Coarse() - start));
 }
 
 //=============================================================================

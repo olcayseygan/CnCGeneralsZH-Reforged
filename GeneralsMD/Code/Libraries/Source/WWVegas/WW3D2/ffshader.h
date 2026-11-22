@@ -863,7 +863,9 @@ inline float CombinerShader_Pack_Stealth(int height, int front, bool paint, floa
 	"   two sizes of noise stretched along a fixed wind and blown down it, so the paint comes back in\n" \
 	"   streaks that drift.  Sweep, the heat: the height up the unit, foot to top, with a little noise\n" \
 	"   so the line is not ruled.  Ripple, a unit going into its cloak: broad slow blobs leaning\n" \
-	"   bottom up.  All in world units and slow, so nothing fizzes. */\n" \
+	"   bottom up, stretched about its middle: the noise sits close to a half, and unstretched every\n" \
+	"   pixel turned in the middle fifth of the fade, which stood still and then snapped.  All in world\n" \
+	"   units and slow, so nothing fizzes. */\n" \
 	"float stealth_front(float3 world, float t, float look, float height)\n" \
 	"{\n" \
 	"    float rise = saturate((world.z - DrawEffectParameters.z) / max(height, 1.0));\n" \
@@ -877,6 +879,7 @@ inline float CombinerShader_Pack_Stealth(int height, int front, bool paint, floa
 	"        front = rise * 0.88 + 0.12 * effect_noise(world * 0.21 + float3(0.0, 0.0, -t * 0.8));\n" \
 	"    } else {\n" \
 	"        front = 0.7 * effect_noise(world * 0.07 + float3(t * 0.15, 0.0, t * 0.1)) + 0.3 * rise;\n" \
+	"        front = (front - 0.5) * 1.8 + 0.5;\n" \
 	"    }\n" \
 	"    return saturate(front);\n" \
 	"}\n" \
@@ -915,16 +918,21 @@ inline float CombinerShader_Pack_Stealth(int height, int front, bool paint, floa
 	"   yard emblem) is asked with two more in y and keeps that alpha, so it is glass in its own\n" \
 	"   shape.  Any other is the bent scene with alpha 1: dropping alpha\n" \
 	"   showed the unbent ground through a ghost, and meshes this program does not dress (additive\n" \
-	"   glows, a refused scene copy) keep the stealth opacity.  Detected (the strength is never below\n" \
-	"   0.6 then), the whole body beats amber as well as its edge: a big flat building has almost no\n" \
-	"   edge facing away from the eye, and with the beat on the rim alone it only turned tan. */\n" \
+	"   glows, a refused scene copy) keep the stealth opacity.  Detected (the strength, 0 to 1 as the\n" \
+	"   amber eases in and out), the whole body beats amber as well as its edge: a big flat building\n" \
+	"   has almost no edge facing away from the eye, and with the beat on the rim alone it only turned tan.\n" \
+	"   An enemy's cloak (four more in y) has no glass: the paint leaves along the front, a shimmer runs\n" \
+	"   on its band, and behind it the pixel is clipped, so fade 1 is nothing at all; coming out of\n" \
+	"   hiding it grows back in from nothing the same way. */\n" \
 	"float4 effect_cloak(float4 current, float4 position)\n" \
 	"{\n" \
 	"    float3 world; float3 surface; float facing;\n" \
 	"    effect_surface(position, world, surface, facing);\n" \
 	"    float t = DrawEffectParameters.x;\n" \
-	"    float own_alpha = step(1.5, DrawEffectParameters.y);\n" \
-	"    float detected = DrawEffectParameters.y - 2.0 * own_alpha;\n" \
+	"    float enemy = step(3.5, DrawEffectParameters.y);\n" \
+	"    float strength = DrawEffectParameters.y - 4.0 * enemy;\n" \
+	"    float own_alpha = step(1.5, strength);\n" \
+	"    float detected = strength - 2.0 * own_alpha;\n" \
 	"    float fade; float paint; float look; float height;\n" \
 	"    stealth_unpack(fade, paint, look, height);\n" \
 	"    float going = step(1.5, look);\n" \
@@ -948,6 +956,12 @@ inline float CombinerShader_Pack_Stealth(int height, int front, bool paint, floa
 	"    bend *= min(1.0, 0.025 * screen.y / max(length(bend), 1e-4));\n" \
 	"    int2 at = int2(clamp(position.xy + bend, float2(0.0, 0.0), screen - 1.0));\n" \
 	"    float3 straight = SceneColour.Load(int3(int2(position.xy), 0)).rgb;\n" \
+	"    if (enemy > 0.5) {\n" \
+	"        float shimmer_edge = edge * (0.55 + 0.45 * sin(ahead * 45.0 - t * 7.0));\n" \
+	"        current.rgb = lerp(current.rgb, straight, saturate(glass_on)) + shimmer_edge * float3(0.66, 0.74, 0.70);\n" \
+	"        clip(max(0.5 - glass_on, edge - 0.2));\n" \
+	"        return current;\n" \
+	"    }\n" \
 	"    float3 behind = SceneColour.Load(int3(at, 0)).rgb;\n" \
 	"    behind = lerp(behind, straight, 0.2 + 0.6 * saturate(length(behind - straight) * 1.5));\n" \
 	"    float3 glass = lerp(behind, float3(0.62, 0.66, 0.72), 0.03 + 0.3 * rim);\n" \
@@ -960,7 +974,7 @@ inline float CombinerShader_Pack_Stealth(int height, int front, bool paint, floa
 	"    float3 ghost_rgb = lerp(grey.xxx, current.rgb, 0.45) * float3(0.86, 0.95, 1.08);\n" \
 	"    glass = lerp(glass, ghost_rgb, ghost * (0.34 + 0.08 * shimmer));\n" \
 	"    glass += ghost * (rim * 0.55 + 0.05 * shimmer) * float3(0.70, 0.84, 0.95);\n" \
-	"    float found = step(0.01, detected);\n" \
+	"    float found = saturate(detected);\n" \
 	"    float beat = 0.55 + 0.45 * sin(t * 6.0);\n" \
 	"    float3 amber = float3(1.0, 0.55, 0.15);\n" \
 	"    float lum = dot(glass, float3(0.299, 0.587, 0.114));\n" \
@@ -980,7 +994,9 @@ inline float CombinerShader_Pack_Stealth(int height, int front, bool paint, floa
 	"   white.  Its far end is the unit's own paint when it is leaving or entering plain sight, and\n" \
 	"   otherwise nothing: those pixels are clipped, so the heat builds out of thin air.  A structure\n" \
 	"   (two more in y) keeps two thirds of its own paint under the ramp and a softer outline: a\n" \
-	"   whole base in the ramp was a solid orange block that outshouted every unit on the screen. */\n" \
+	"   whole base in the ramp was a solid orange block that outshouted every unit on the screen.  Its\n" \
+	"   sweep is more than half broad noise over the footprint: a low roof seen from above has no height\n" \
+	"   for the foot-to-top line to climb, and the whole of it turned in a picture or two. */\n" \
 	"float4 effect_revealed(float4 current, float4 position)\n" \
 	"{\n" \
 	"    float3 world; float3 surface; float facing;\n" \
@@ -999,7 +1015,9 @@ inline float CombinerShader_Pack_Stealth(int height, int front, bool paint, floa
 	"    float3 glow = float3(1.0, 0.40, 0.12) * (rim * 0.9 + sweep * 0.35) * gain;\n" \
 	"    float3 heatRgb = lerp(ramp * gain + glow, lerp(current.rgb, ramp * gain, 0.35) + glow * 0.6, structure);\n" \
 	"    float shown; float edge; float ahead;\n" \
-	"    stealth_edge(stealth_front(world, t, look, height), fade, 0.09, 0.0225, shown, edge, ahead);\n" \
+	"    float front = stealth_front(world, t, look, height);\n" \
+	"    front = lerp(front, saturate((effect_noise(world * 0.045) - 0.5) * 1.8 + 0.5), 0.6 * structure);\n" \
+	"    stealth_edge(front, fade, 0.09, 0.0225, shown, edge, ahead);\n" \
 	"    current.rgb = lerp(current.rgb * paint, heatRgb, shown) + edge * float3(1.1, 0.52, 0.2);\n" \
 	"    if (paint < 0.5)\n" \
 	"        clip(max(shown - 0.5, edge - 0.3));\n" \

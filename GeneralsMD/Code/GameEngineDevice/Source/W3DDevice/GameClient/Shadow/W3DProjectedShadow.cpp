@@ -939,7 +939,8 @@ static Bool isShownOffScreen(RenderObjClass *robj)
 	if (!robj->Is_Not_Hidden_At_All() || robj->Get_User_Data() == NULL)
 		return FALSE;
 	Drawable *draw = ((DrawableInfo *)robj->Get_User_Data())->m_drawable;
-	return !draw->isDrawableEffectivelyHidden() && !draw->getFullyObscuredByShroud();
+	return !draw->isDrawableEffectivelyHidden() && !draw->getFullyObscuredByShroud()
+		&& draw->getStealthLook() != STEALTHLOOK_INVISIBLE;
 }
 
 #define BRIDGE_OFFSET_FACTOR 1.5f

@@ -131,6 +131,10 @@ public:
 
 	// ??? ugh
 	Bool isDisguised() const { return m_disguiseAsTemplate != NULL; }
+	// read by the client only (Drawable::takeLookForDraw), to keep a unit spawned cloaked off the screen
+	// until this module's first update has told the drawable how it looks
+	Bool isStealthEnabled() const { return m_enabled; }
+	UnsignedInt getStealthAllowedFrame() const { return m_stealthAllowedFrame; }
 	Int getDisguisedPlayerIndex() const { return m_disguiseAsPlayerIndex; }
 	const ThingTemplate *getDisguisedTemplate() { return m_disguiseAsTemplate; }
 	void markAsDetected( UnsignedInt numFrames = 0 );

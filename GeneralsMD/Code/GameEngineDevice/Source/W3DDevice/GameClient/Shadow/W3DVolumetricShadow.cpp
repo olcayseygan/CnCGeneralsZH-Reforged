@@ -4612,6 +4612,12 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 		sunInfo.drawEffect = DRAW_EFFECT_NONE;
 		const DrawableInfo *casterInfo = (const DrawableInfo *)robj->Get_User_Data();
 		const Drawable *caster = casterInfo ? casterInfo->m_drawable : NULL;
+		// a unit the logic hid from this player casts nothing once half its body has gone (the cloak
+		// test below), and nothing at all in any other look on the way to hiding
+		if (caster && caster->getStealthLook() == STEALTHLOOK_INVISIBLE
+			&& caster->getStealthDrawnLook() != STEALTHLOOK_VISIBLE_FRIENDLY
+			&& caster->getStealthDrawnLook() != STEALTHLOOK_VISIBLE_FRIENDLY_DETECTED)
+			continue;
 		if (caster && cloakBodiesDrawn && SunShadow::CasterEffects(DX8Wrapper::_Get_D3D_Device())
 			&& (caster->getStealthDrawnLook() == STEALTHLOOK_VISIBLE_FRIENDLY
 				|| caster->getStealthDrawnLook() == STEALTHLOOK_VISIBLE_FRIENDLY_DETECTED)

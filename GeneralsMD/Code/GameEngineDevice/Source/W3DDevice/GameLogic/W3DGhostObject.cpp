@@ -370,6 +370,10 @@ void W3DGhostObject::snapShot(int playerIndex)
 	Drawable *draw=m_parentObject->getDrawable();
 	if (draw->isDrawableEffectivelyHidden())
 		return;	//don't bother to snapshot things which nobody can see.
+	// nor a building the logic has just hidden that is still fading into its cloak's glass: the look,
+	// never the client's fade, decides, so the ghost is the one the old snap gave
+	if (draw->getStealthLook() == STEALTHLOOK_INVISIBLE)
+		return;
 	
 	W3DRenderObjectSnapshot *snap=m_parentSnapshots[playerIndex],*prevSnap=NULL;
 

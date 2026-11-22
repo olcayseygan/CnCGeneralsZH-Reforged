@@ -2505,6 +2505,7 @@ static void takeReadsForRender( Bool renders )
 	// bar's painters ask
 	TheGameClient->takeFrameForDraw();
 	Drawable_flashOrderTargets();		// before the looks are taken, so a flash shows in this picture
+	Drawable::takeStealthClock();		// the stealth fades' clock, once for every look below
 	for( Drawable *draw = TheGameClient->firstDrawable(); draw; draw = draw->getNextDrawable() )
 	{
 		// flushes the conditions the client set; inside the window the scene's dirty walk is a no-op

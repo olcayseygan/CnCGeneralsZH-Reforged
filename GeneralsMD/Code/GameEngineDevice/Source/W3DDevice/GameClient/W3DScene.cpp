@@ -730,7 +730,9 @@ void RTS3DScene::Visibility_Check(CameraClass * camera)
 				} else {
 					// The same test the main pass hides a drawable by, or a unit under the fog of war,
 					// or a building standing in for its own ghost, shows up in the water and nowhere else.
-					Bool hidden = robj->Is_Hidden() || draw->isDrawableEffectivelyHidden() || draw->getFullyObscuredByShroud();
+					// An enemy going into its cloak is out of the water at once: the mirror draws no glass.
+					Bool hidden = robj->Is_Hidden() || draw->isDrawableEffectivelyHidden() || draw->getFullyObscuredByShroud()
+						|| draw->getStealthLook() == STEALTHLOOK_INVISIBLE;
 					robj->Set_Visible(!hidden && (modernFullMirror || draw->getDrawsInMirror()) && (!camera->Cull_Sphere(robj->Get_Bounding_Sphere()) || posedPartsInView(robj, camera)));
 				}
 			}
@@ -748,6 +750,9 @@ void RTS3DScene::Visibility_Check(CameraClass * camera)
 	}
 	else
 	{
+		// whether this frame can draw an own unit's glass, which an enemy fading into its cloak needs too
+		Drawable::noteStealthCloakDrawn( RenderEffects::DrawEffectsAvailable()
+			&& RenderEffects::TakesDrawEffect( DRAW_EFFECT_CLOAK ) );
 
 		// Loop over all top-level RenderObjects in this scene. If the bounding sphere is not in front
 		// of all the frustum planes, it is invisible.
@@ -916,10 +921,11 @@ static unsigned chooseDrawEffect( const Drawable *draw, Bool translucentPass, fl
 	else if ( translucentPass && wearsCloak( draw )
 		&& look != STEALTHLOOK_VISIBLE_DETECTED )
 	{
-		// Detected, the amber stays on and the detector's sweep brightens it; on the pulse alone it
-		// showed for a few frames a sweep and was never seen.
+		// Detected, the amber stays on for as long as it lasts; on the pulse alone it showed for a few
+		// frames a sweep and was never seen.  It eases in and out (Drawable::getStealthAmber).  Four
+		// more for an enemy's cloak (effect_cloak): its fades go between paint and nothing, no glass.
 		effect = DRAW_EFFECT_CLOAK;
-		strength = ( look == STEALTHLOOK_VISIBLE_FRIENDLY_DETECTED ) ? MAX( 0.6f, pulse ) : 0.0f;
+		strength = draw->getStealthAmber() + ( draw->getStealthEnemy() ? 4.0f : 0.0f );
 	}
 	else if ( draw->getObjectForDraw().hasObject && !draw->isObjectDeadForDraw() )
 	{
@@ -951,14 +957,16 @@ static unsigned chooseDrawEffect( const Drawable *draw, Bool translucentPass, fl
 		const StealthLookType target = draw->getStealthLook();
 		Int front = STEALTH_FRONT_SWEEP;
 		if ( effect == DRAW_EFFECT_CLOAK )
-			front = ( target == STEALTHLOOK_VISIBLE_FRIENDLY || target == STEALTHLOOK_VISIBLE_FRIENDLY_DETECTED )
+			front = ( target == STEALTHLOOK_VISIBLE_FRIENDLY || target == STEALTHLOOK_VISIBLE_FRIENDLY_DETECTED
+					|| target == STEALTHLOOK_INVISIBLE )
 				? STEALTH_FRONT_RIPPLE : STEALTH_FRONT_WIND;
 		const Real geometry = draw->getTemplate()->getTemplateGeometryInfo().getMaxHeightAbovePosition();
 		const Int height = clamp( 1, REAL_TO_INT_CEIL( geometry * 1.3f ), 4000 );
 		// The paint bit: for the heat, its far end is paint; for the cloak, a unit that keeps a ghost
 		// of its paint over the glass (effect_cloak), since its bend alone is a few pixels at play zoom.
+		// Not an enemy's, which has no glass to keep it over.
 		const Bool overPaint = effect == DRAW_EFFECT_REVEALED ? draw->getStealthOverPaint()
-			: !draw->isKindOf( KINDOF_STRUCTURE );
+			: ( !draw->isKindOf( KINDOF_STRUCTURE ) && !draw->getStealthEnemy() );
 		parameters[2] = draw->getPositionForDraw()->z;
 		parameters[3] = CombinerShader_Pack_Stealth( height, front, overPaint != FALSE, (float)fade );
 	}
@@ -2217,9 +2225,9 @@ void RTS3DScene::flushTranslucentObjects(RenderInfoClass & rinfo)
 			// The cloak writes alpha 1 over an opaque mesh, so the opacity only reaches the meshes it
 			// leaves out (additive glows) and an unsorted blended one, which keeps its own alpha
 			// (dx8renderer.cpp); at the stealth opacity they stood as a patch on the glass body, so
-			// they thin to a sixth with the fade.  A sorted mesh takes no opacity at all.
+			// they thin to a sixth with the fade, an enemy's to nothing.  A sorted mesh takes no opacity at all.
 			if ( wearsCloak( draw ) && draw->getStealthDrawnLook() != STEALTHLOOK_VISIBLE_DETECTED )
-				rinfo.alphaOverride *= 1.0f - 0.85f * draw->getStealthFade();
+				rinfo.alphaOverride *= 1.0f - ( draw->getStealthEnemy() ? 1.0f : 0.85f ) * draw->getStealthFade();
 
 			theTranslucentPass = TRUE;
 			renderOneObject(rinfo, robj, localPlayerIndex);//WW3D::Render(*robj,rinfo);

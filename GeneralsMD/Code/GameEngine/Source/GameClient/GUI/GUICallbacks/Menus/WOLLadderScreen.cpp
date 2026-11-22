@@ -329,6 +329,8 @@ static UIStyle::RatingTier rowTier( const OnlineLadderRow &r )
 	info.tier = r.tier;
 	info.hasRating = r.hasRating;
 	info.exactRating = r.exactRating;
+	info.hasElo = r.hasElo;
+	info.elo = r.elo;
 	info.games = ladderGames( r );
 	return UIStyle::playerTier( info );
 }
@@ -388,26 +390,34 @@ static void addLadderRow( const OnlineLadderRow &r, Int y, Int band, Bool mine )
 	nick.translate( r.nick );
 	addCell( COLUMN_PLAYER, nick, mine ? rowFont( band, TRUE ) : body, y, band, UIStyle::INK );
 	addCell( COLUMN_TIER, tierName( rowTier( r ) ), body, y, band, UIStyle::MUTED );
-	addCell( COLUMN_RATING, r.hasRating ? UIStyle::ratingText( r.exactRating ) : none, body, y, band, UIStyle::INK );
+	addCell( COLUMN_RATING, r.hasRating ? UIStyle::ladderText( r.shown(), r.hasElo ) : none, body, y, band, UIStyle::INK );
 	addCell( COLUMN_WINS, number( r.wins ), body, y, band, UIStyle::INK );
 	addCell( COLUMN_LOSSES, number( r.losses ), body, y, band, UIStyle::INK );
 	const Int games = r.wins + r.losses;
 	addCell( COLUMN_WIN_PCT, games > 0 ? UIStyle::percentText( UIStyle::percent( r.wins, games ) ) : none, body, y, band, UIStyle::MUTED );
 }
 
-/// a tier's range as the Ranks box lists it: "25.00 to 29.99"
+/// the side column's scale: the Elo once the server sent the player's, else the old two decimals
+static Bool ladderOnElo( void )
+{
+	return s_hasMe && s_me.hasElo;
+}
+
+/// a tier's range as the Ranks box lists it: "1350 to 1499", or the old scale's "25.00 to 29.99"
 static UnicodeString tierRange( UIStyle::RatingTier tier )
 {
+	const Bool elo = ladderOnElo();
 	UnicodeString range;
 	if (tier == UIStyle::TIER_UNRANKED)
 		range = TheGameText->fetch( "GUI:OnlineLadderTierUnranked" );
 	else if (tier == UIStyle::TIER_GENERAL)
-		range.format( TheGameText->fetch( "GUI:OnlineLadderTierUp" ), UIStyle::ratingText( UIStyle::tierStart( tier ) ).str() );
+		range.format( TheGameText->fetch( "GUI:OnlineLadderTierUp" ), UIStyle::ladderText( UIStyle::tierStart( tier, elo ), elo ).str() );
 	else if (tier == UIStyle::TIER_PRIVATE)
-		range.format( TheGameText->fetch( "GUI:OnlineLadderTierUnder" ), UIStyle::ratingText( UIStyle::tierStart( UIStyle::TIER_SERGEANT ) ).str() );
+		range.format( TheGameText->fetch( "GUI:OnlineLadderTierUnder" ),
+			UIStyle::ladderText( UIStyle::tierStart( UIStyle::TIER_SERGEANT, elo ), elo ).str() );
 	else
-		range.format( TheGameText->fetch( "GUI:OnlineLadderTierRange" ), UIStyle::ratingText( UIStyle::tierStart( tier ) ).str(),
-			UIStyle::ratingText( UIStyle::tierStart( (UIStyle::RatingTier)( tier + 1 ) ) - 0.01f ).str() );
+		range.format( TheGameText->fetch( "GUI:OnlineLadderTierRange" ), UIStyle::ladderText( UIStyle::tierStart( tier, elo ), elo ).str(),
+			UIStyle::ladderText( UIStyle::tierStart( (UIStyle::RatingTier)( tier + 1 ), elo ) - ( elo ? 1.0f : 0.01f ), elo ).str() );
 	return range;
 }
 
@@ -532,7 +542,8 @@ static void layoutLadderSide( void )
 	if (measure( figure, display ) > figureRoom || display->height > down( 130.0f ) - down( 60.0f ))
 		display = UIStyle::titleFont( UIStyle::TEXT_TITLE );
 	addWords( UIStyle::fitText( figure, display, figureRoom ), display, figureX, place.lo.y + down( 60.0f ), UIStyle::INK );
-	UnicodeString standing = s_hasMe && s_me.hasRating ? UIStyle::ratingText( s_me.exactRating ) : none;
+	const Bool elo = ladderOnElo();
+	UnicodeString standing = s_hasMe && s_me.hasRating ? UIStyle::ladderText( s_me.shown(), elo ) : none;
 	standing.concat( UIStyle::HEADER_JOINER );
 	standing.concat( tierName( tier ) );
 	addWords( UIStyle::fitText( standing, body, figureRoom ), body, figureX, place.lo.y + down( 130.0f ), UIStyle::INK );
@@ -546,11 +557,12 @@ static void layoutLadderSide( void )
 	else if (tier < UIStyle::TIER_GENERAL)
 	{
 		const UIStyle::RatingTier up = (UIStyle::RatingTier)( tier + 1 );
-		const Real from = UIStyle::tierStart( tier );
-		const Real to = UIStyle::tierStart( up );
-		next.format( TheGameText->fetch( "GUI:OnlineNextTier" ), tierName( up ).str(), UIStyle::ratingText( to ).str(),
-			UIStyle::ratingText( to - s_me.exactRating ).str() );
-		progress = ( s_me.exactRating - from ) / ( to - from );
+		const Real from = UIStyle::tierStart( tier, elo );
+		const Real to = UIStyle::tierStart( up, elo );
+		next.format( TheGameText->fetch( "GUI:OnlineNextTier" ), tierName( up ).str(), UIStyle::ladderText( to, elo ).str(),
+			UIStyle::ladderText( max( 0.0f, to - s_me.shown() ), elo ).str() );
+		// private's Elo track starts where sergeant does (the site's meter): empty, never a divide by nothing
+		progress = to > from ? ( s_me.shown() - from ) / ( to - from ) : 0.0f;
 	}
 	addWords( UIStyle::fitText( next, body, inner ), body, x, place.lo.y + down( 186.0f ), UIStyle::MUTED );
 	addTrack( x, place.lo.y + down( 220.0f ), inner, down( 10.0f ), progress );
@@ -617,6 +629,8 @@ static void createLadderGadgets( void )
 		s_me.rank = max( 0, info.rank );
 		s_me.hasRating = info.hasRating;
 		s_me.exactRating = info.exactRating;
+		s_me.hasElo = info.hasElo;
+		s_me.elo = info.elo;
 		s_me.rating = info.rating;
 		s_me.tier = info.tier;
 		s_me.wins = max( 0, info.wins );

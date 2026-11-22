@@ -21066,7 +21066,7 @@ GUI:LoadRuleOn
 END
 
 GUI:LoadTip11
-"Гра проти ШІ онлайн має власний рейтинг ШІ й ніколи не зачіпає ваше місце в рейтинговій таблиці."
+"Гра проти ШІ онлайн має власне ELO бота й ніколи не зачіпає ваше ELO в рейтинговій таблиці."
 END
 
 GUI:Lobby
@@ -21098,7 +21098,7 @@ GUI:OnlineAIMapMissing
 END
 
 GUI:OnlineAIRatingLabel
-"Рейтинг ШІ"
+"ELO бота"
 END
 
 GUI:OnlineAIRefused
@@ -21126,7 +21126,7 @@ GUI:OnlineAIRefused_unavailable
 END
 
 GUI:OnlineAIShort
-"ШІ"
+"ELO бота"
 END
 
 GUI:OnlineBrowserFailed
@@ -21418,11 +21418,11 @@ GUI:OnlineLadderPrev
 END
 
 GUI:OnlineLadderRating
-"Рейтинг"
+"ELO"
 END
 
 GUI:OnlineLadderRatingLabel
-"Рейтинг у таблиці"
+"ELO"
 END
 
 GUI:OnlineLadderRecord
@@ -21430,7 +21430,7 @@ GUI:OnlineLadderRecord
 END
 
 GUI:OnlineLadderShort
-"Рейтинг"
+"ELO"
 END
 
 GUI:OnlineLadderTier
@@ -21665,12 +21665,24 @@ GUI:OnlineRatedResult
 "Рейтинг %+.1f -> %d"
 END
 
+GUI:OnlineEloResult
+"ELO %+d -> %d"
+END
+
 GUI:OnlineRating
 "Рейтинг %d"
 END
 
 GUI:OnlineRatingTier
 "%ls, рейтинг %d"
+END
+
+GUI:OnlineElo
+"ELO %d"
+END
+
+GUI:OnlineEloTier
+"%ls, ELO %d"
 END
 
 GUI:OnlineScoreAgain

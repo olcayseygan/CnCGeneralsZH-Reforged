@@ -656,7 +656,7 @@ static void portrait( const Image *image, Int x, Int y, Int size )
 
 static UnicodeString ratingOf( const OnlinePlayerInfo &info )
 {
-	return info.hasRating ? UIStyle::ratingText( info.exactRating ) : UnicodeString( QM_NONE );
+	return info.hasRating ? UIStyle::ladderText( info.shown(), info.hasElo ) : UnicodeString( QM_NONE );
 }
 
 /** A player as the page shows him, worked out again only when the server's numbers move
@@ -706,6 +706,8 @@ static const QMPlayer &playerAt( Int seat, const AsciiString &nick, Int army, co
 		p.info.hasRating = TRUE;
 		p.info.rating = row->rating;
 		p.info.exactRating = row->exactRating;
+		p.info.hasElo = row->hasElo;
+		p.info.elo = row->elo;
 	}
 	if (row && p.info.tier.isEmpty())
 		p.info.tier = row->tier;

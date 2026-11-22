@@ -114,6 +114,8 @@ struct OnlineCard
 	long long ping, games, wins, losses, rank;
 	double rating;					///< two decimals, as the site keeps it
 	Bool hasRating, notOnline, hasStats;
+	Bool hasElo;					///< elo arrived beside rating (a server with Elo sends both)
+	double elo;						///< the ladder's Elo, whole
 	std::string tier;
 	Bool hasAIRating;			///< aiRating and aiGames arrived (auth.ok, ai.rated)
 	double aiRating;				///< the Bot ELO, aiElo or an older server's aiRating mapped onto Elo
@@ -121,7 +123,7 @@ struct OnlineCard
 	UnsignedInt serial;		///< the session's cardSerial when this card last changed
 
 	OnlineCard() : ping( -1 ), games( -1 ), wins( -1 ), losses( -1 ), rank( 0 ), rating( 0 ),
-		hasRating( FALSE ), notOnline( FALSE ), hasStats( FALSE ), hasAIRating( FALSE ), aiRating( 0 ), aiGames( 0 ), aiWins( 0 ),
+		hasRating( FALSE ), notOnline( FALSE ), hasStats( FALSE ), hasElo( FALSE ), elo( 0 ), hasAIRating( FALSE ), aiRating( 0 ), aiGames( 0 ), aiWins( 0 ),
 		serial( 0 ) {}
 };
 

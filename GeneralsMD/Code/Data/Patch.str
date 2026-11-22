@@ -4988,6 +4988,15 @@ GUI:OnlineRatingTier
 "%ls, rating %d"
 END
 
+// the same from a server that sends the ladder's Elo (the old two lines stay for one that does not)
+GUI:OnlineElo
+"ELO %d"
+END
+
+GUI:OnlineEloTier
+"%ls, ELO %d"
+END
+
 GUI:OnlineLadderPlace
 "#%d on the ladder"
 END
@@ -5211,7 +5220,7 @@ GUI:OnlineLadderPlayer
 END
 
 GUI:OnlineLadderRating
-"Rating"
+"ELO"
 END
 
 GUI:OnlineLadderTier
@@ -5240,6 +5249,10 @@ END
 
 GUI:OnlineRatedResult
 "Rating %+.1f -> %d"
+END
+
+GUI:OnlineEloResult
+"ELO %+d -> %d"
 END
 
 GUI:OnlineUnrated
@@ -6140,15 +6153,15 @@ GUI:OnlineTabCustom
 END
 
 GUI:OnlineAIShort
-"AI"
+"Bot ELO"
 END
 
 GUI:OnlineLadderRatingLabel
-"Ladder rating"
+"ELO"
 END
 
 GUI:OnlineAIRatingLabel
-"AI rating"
+"Bot ELO"
 END
 
 GUI:OnlineGamesLabel
@@ -6671,12 +6684,12 @@ END
 
 // the load screen's next tip (it counts GUI:LoadTip<n> until one is missing)
 GUI:LoadTip11
-"Play vs AI online keeps its own AI rating and never touches your ladder rating."
+"Play vs AI online keeps its own Bot ELO and never touches your ladder ELO."
 END
 
 // online screens, second pass: the Quick Match page on generated maps, the lobby and hub states
 GUI:OnlineLadderShort
-"Ladder"
+"ELO"
 END
 
 GUI:QMQueueHere

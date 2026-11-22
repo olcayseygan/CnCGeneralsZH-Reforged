@@ -683,17 +683,21 @@ Int chip( DisplayString *label, Int x, Int y, Color color, Color edge )
 // website/app/Models/Player.php TIERS, the rating each tier starts at; private's 0 is only the
 // floor of its track, as a rating can fall under it
 static const Real TIER_START[ TIER_COUNT ] = { 0.0f, 0.0f, 5.0f, 10.0f, 15.0f, 20.0f, 25.0f, 30.0f };
+// the same on the ladder's Elo (TIERS); private has no floor there, its track runs from the site's
+// starting Elo (app/Online/Elo.php START), so it shows empty as the site's meter does
+static const Real ELO_TIER_START[ TIER_COUNT ] = { 1000.0f, 1000.0f, 1000.0f, 1075.0f, 1150.0f, 1250.0f, 1350.0f, 1500.0f };
 static const char *const TIER_KEY[ TIER_COUNT ] = { "unranked", "private", "sergeant", "lieutenant", "captain", "major", "colonel", "general" };
 // EA's rank table below, by name: RANK_NAME[ 7 ] is the portrait called General
 static const Int TIER_RANK[ TIER_COUNT ] = { -1, 0, 2, 3, 4, 5, 6, 7 };
 
-RatingTier ratingTier( Real rating, Int games )
+RatingTier ratingTier( Real rating, Int games, Bool elo )
 {
 	if( games < RANKED_GAMES )
 		return TIER_UNRANKED;
+	const Real *start = elo ? ELO_TIER_START : TIER_START;
 	for( Int tier = TIER_GENERAL; tier > TIER_PRIVATE; tier-- )
 	{
-		if( rating >= TIER_START[ tier ] )
+		if( rating >= start[ tier ] )
 			return (RatingTier)tier;
 	}
 	return TIER_PRIVATE;
@@ -716,12 +720,14 @@ RatingTier playerTier( const OnlinePlayerInfo &info )
 		if( info.tier.compareNoCase( TIER_KEY[ tier ] ) == 0 )
 			return (RatingTier)tier;
 	}
-	return ratingTier( info.exactRating, info.hasRating ? info.games : -1 );
+	return ratingTier( info.shown(), info.hasRating ? info.games : -1, info.hasElo );
 }
 
-Real tierStart( RatingTier tier )
+Real tierStart( RatingTier tier, Bool elo )
 {
-	return tier >= 0 && tier < TIER_COUNT ? TIER_START[ tier ] : 0.0f;
+	if( tier < 0 || tier >= TIER_COUNT )
+		return elo ? ELO_TIER_START[ TIER_UNRANKED ] : 0.0f;
+	return elo ? ELO_TIER_START[ tier ] : TIER_START[ tier ];
 }
 
 const char *tierKey( RatingTier tier )
@@ -857,6 +863,16 @@ UnicodeString eloText( Real elo, Bool sign )
 	UnicodeString wide;
 	wide.translate( text );
 	return wide;
+}
+
+UnicodeString ladderTextIn( Real value, Bool elo, Bool sign, Int language )
+{
+	return elo ? eloText( value, sign ) : ratingTextIn( value, sign, language );
+}
+
+UnicodeString ladderText( Real value, Bool elo, Bool sign )
+{
+	return elo ? eloText( value, sign ) : ratingText( value, sign );
 }
 
 Int percent( Int part, Int whole )
@@ -1099,8 +1115,8 @@ void onlinePageInit( GameWindow *parent, const char *layout, OnlineTab open )
 	}
 	s_header[ HEADER_MARK ]->setText( UnicodeString( u"Zero Hour" ) );
 	s_header[ HEADER_MARK_BLUE ]->setText( UnicodeString( u" Reforged" ) );
-	s_header[ HEADER_LADDER ]->setText( wordOr( "GUI:OnlineLadderShort", u"Ladder" ) );
-	s_header[ HEADER_AI ]->setText( wordOr( "GUI:OnlineAIShort", u"AI" ) );
+	s_header[ HEADER_LADDER ]->setText( wordOr( "GUI:OnlineLadderShort", u"ELO" ) );
+	s_header[ HEADER_AI ]->setText( wordOr( "GUI:OnlineAIShort", u"Bot ELO" ) );
 }
 
 void onlinePageShutdown( GameWindow *parent )
@@ -1147,7 +1163,7 @@ static void drawPlayerLine( Int right )
 		s_lineSerial = info.serial;
 		const UnicodeString none( u"\x2013" );		// an en dash for a number nobody sent
 		t[ HEADER_TIER ]->setText( OnlineTierName( tierKey( playerTier( info ) ) ) );
-		t[ HEADER_LADDER_VALUE ]->setText( info.hasRating ? ratingText( info.exactRating ) : none );
+		t[ HEADER_LADDER_VALUE ]->setText( info.hasRating ? ladderText( info.shown(), info.hasElo ) : none );
 		t[ HEADER_AI_VALUE ]->setText( info.hasAIRating ? eloText( info.aiRating ) : none );
 		Int rest = 3 * gap + 2 * space;
 		for( Int each = HEADER_TIER; each <= HEADER_AI_VALUE; each++ )

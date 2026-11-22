@@ -21318,7 +21318,7 @@ GUI:LoadRuleOn
 END
 
 GUI:LoadTip11
-"Jouer contre l'IA en ligne a sa propre cote IA et ne touche jamais à votre cote de classement."
+"Jouer contre l'IA en ligne a son propre ELO bot et ne touche jamais à votre ELO de classement."
 END
 
 GUI:Lobby
@@ -21350,7 +21350,7 @@ GUI:OnlineAIMapMissing
 END
 
 GUI:OnlineAIRatingLabel
-"Cote IA"
+"ELO bot"
 END
 
 GUI:OnlineAIRefused
@@ -21378,7 +21378,7 @@ GUI:OnlineAIRefused_unavailable
 END
 
 GUI:OnlineAIShort
-"IA"
+"ELO bot"
 END
 
 GUI:OnlineBrowserFailed
@@ -21670,11 +21670,11 @@ GUI:OnlineLadderPrev
 END
 
 GUI:OnlineLadderRating
-"Cote"
+"ELO"
 END
 
 GUI:OnlineLadderRatingLabel
-"Cote de classement"
+"ELO"
 END
 
 GUI:OnlineLadderRecord
@@ -21682,7 +21682,7 @@ GUI:OnlineLadderRecord
 END
 
 GUI:OnlineLadderShort
-"Classement"
+"ELO"
 END
 
 GUI:OnlineLadderTier
@@ -21917,12 +21917,24 @@ GUI:OnlineRatedResult
 "Cote %+.1f -> %d"
 END
 
+GUI:OnlineEloResult
+"ELO %+d -> %d"
+END
+
 GUI:OnlineRating
 "Cote %d"
 END
 
 GUI:OnlineRatingTier
 "%ls, cote %d"
+END
+
+GUI:OnlineElo
+"ELO %d"
+END
+
+GUI:OnlineEloTier
+"%ls, ELO %d"
 END
 
 GUI:OnlineScoreAgain

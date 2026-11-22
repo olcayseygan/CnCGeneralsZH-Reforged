@@ -708,6 +708,12 @@ void OnlineSession::noteCard( const OnlineMessage &m )
 		c.hasRating = v->kind == OnlineValue::NUMBER;
 		c.rating = c.hasRating ? m.getNumber( "rating" ) : 0;
 	}
+	// the plain Elo beside it, from a server with Elo; the screens show it when it came
+	if ((v = m.find( "elo" )) != NULL)
+	{
+		c.hasElo = v->kind == OnlineValue::NUMBER;
+		c.elo = c.hasElo ? m.getNumber( "elo" ) : 0;
+	}
 	if ((v = m.find( "tier" )) != NULL)
 		c.tier = m.getString( "tier" );
 	if ((v = m.find( "games" )) != NULL)
@@ -736,6 +742,7 @@ void OnlineSession::noteCard( const OnlineMessage &m )
 	// the serial moves only on a real change: a screen redraws on it, and the same ping again is no news
 	if (c.ping != before.ping || c.rating != before.rating || c.games != before.games || c.wins != before.wins
 		|| c.losses != before.losses || c.rank != before.rank || c.hasRating != before.hasRating
+		|| c.hasElo != before.hasElo || c.elo != before.elo
 		|| c.notOnline != before.notOnline || c.hasStats != before.hasStats || c.tier != before.tier
 		|| c.hasAIRating != before.hasAIRating || c.aiRating != before.aiRating || c.aiGames != before.aiGames
 		|| c.aiWins != before.aiWins || !before.serial)
@@ -1295,9 +1302,13 @@ void OnlineSession::dispatch( const OnlineMessage &m )
 		}
 		result = m;
 		// what the end-to-end check greps; the numbers as the server spelled them
-		const OnlineValue *delta = m.find( "delta" ), *rating = m.find( "rating" );
+		const OnlineValue *delta = m.find( "delta" ), *rating = m.find( "rating" ), *elo = m.find( "elo" ), *eloAfter = m.find( "eloAfter" );
 		if (t == "rated")
+		{
 			resultLine = "ONLINE RATED delta=" + (delta ? delta->text : std::string()) + " rating=" + (rating ? rating->text : std::string());
+			if (elo || eloAfter)
+				resultLine += " elo=" + (elo ? elo->text : std::string()) + " eloAfter=" + (eloAfter ? eloAfter->text : std::string());
+		}
 		else
 			resultLine = "ONLINE UNRATED reason=" + m.getString( "reason" );
 		DEBUG_LOG(("%s match=%s\n", resultLine.c_str(), m.getString( "match" ).c_str()));

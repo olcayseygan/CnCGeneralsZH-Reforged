@@ -19249,6 +19249,14 @@ GUI:OnlineRatingTier
 "%ls, puan %d"
 END
 
+GUI:OnlineElo
+"ELO %d"
+END
+
+GUI:OnlineEloTier
+"%ls, ELO %d"
+END
+
 GUI:OnlineLadderPlace
 "ligde %d."
 END
@@ -19471,7 +19479,7 @@ GUI:OnlineLadderPlayer
 END
 
 GUI:OnlineLadderRating
-"Puan"
+"ELO"
 END
 
 GUI:OnlineLadderTier
@@ -19500,6 +19508,10 @@ END
 
 GUI:OnlineRatedResult
 "Puan %+.1f -> %d"
+END
+
+GUI:OnlineEloResult
+"ELO %+d -> %d"
 END
 
 GUI:OnlineUnrated
@@ -20346,15 +20358,15 @@ GUI:OnlineTabCustom
 END
 
 GUI:OnlineAIShort
-"Bilgisayar"
+"Bot ELO"
 END
 
 GUI:OnlineLadderRatingLabel
-"Lig puanı"
+"ELO"
 END
 
 GUI:OnlineAIRatingLabel
-"Bilgisayar puanı"
+"Bot ELO"
 END
 
 GUI:OnlineGamesLabel
@@ -20886,12 +20898,12 @@ END
 
 // yükleme ekranının sıradaki ipucu
 GUI:LoadTip11
-"Çevrimiçi bilgisayara karşı oyun kendi bilgisayar puanını tutar, lig puanına dokunmaz."
+"Çevrimiçi bilgisayara karşı oyunun kendi Bot ELO'su var, sıralama ELO'na dokunmaz."
 END
 
 // çevrimiçi ekranlar, ikinci tur: üretilen haritalarla Hızlı maç sayfası, lobi ve merkez durumları
 GUI:OnlineLadderShort
-"Lig"
+"ELO"
 END
 
 GUI:QMQueueHere

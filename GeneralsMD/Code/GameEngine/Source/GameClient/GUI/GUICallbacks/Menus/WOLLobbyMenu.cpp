@@ -603,7 +603,7 @@ static Int insertPlayerInListbox(const PlayerInfo& info, Color color)
 	const AsciiString tier( UIStyle::tierKey( known ? UIStyle::playerTier( card ) : UIStyle::TIER_UNRANKED ) );
 	GadgetListBoxAddEntryText(list, UIStyle::fitText(OnlineTierName(tier), list->winGetFont(), GadgetListBoxGetColumnWidth(list, PLAYER_TIER) - pad),
 		UIStyle::MUTED, index, PLAYER_TIER);
-	GadgetListBoxAddEntryText(list, rated ? UIStyle::ratingText(card.exactRating) : UnicodeString(u"\x2013"), color, index, PLAYER_RATING);
+	GadgetListBoxAddEntryText(list, rated ? UIStyle::ladderText(card.shown(), card.hasElo) : UnicodeString(u"\x2013"), color, index, PLAYER_RATING);
 
 	// the light's cell is a row high, which is what sets the row's height
 	const Image *light = known ? UIStyle::pingImage(card.ping) : NULL;
@@ -642,7 +642,10 @@ struct PlayerByRating
 		const Bool secondRated = OnlineGetPlayerInfo( b.first.m_name, second ) && second.hasRating;
 		if (firstRated != secondRated)
 			return firstRated;
-		return firstRated && first.exactRating > second.exactRating;
+		// Elo cards over old-scale ones: two scales are never compared
+		if (firstRated && first.hasElo != second.hasElo)
+			return first.hasElo != FALSE;
+		return firstRated && first.shown() > second.shown();
 	}
 };
 

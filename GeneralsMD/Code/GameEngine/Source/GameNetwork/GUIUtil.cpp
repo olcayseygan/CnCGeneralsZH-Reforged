@@ -2214,7 +2214,7 @@ static void drawSeatPlayer(GameWindow *window, WinInstanceData *instData)
 	DisplayString *rating = theSeatRating[seat];
 	if (rating->getFont() != window->winGetFont())
 		rating->setFont(window->winGetFont());
-	rating->setText(UIStyle::ratingText(card.exactRating));
+	rating->setText(UIStyle::ladderText(card.shown(), card.hasElo));
 
 	// where W3DTextEntry ends the nick: its text starts seven pixels in (ten from the start), centred on
 	// the box by the font's height

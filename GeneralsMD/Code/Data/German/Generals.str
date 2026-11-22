@@ -19286,7 +19286,7 @@ GUI:LoadTip10
 END
 
 GUI:LoadTip11
-"Gegen KI online hat eine eigene KI-Wertung und berührt deine Ranglistenwertung nie."
+"Gegen KI online hat ein eigenes Bot-ELO und berührt dein Ranglisten-ELO nie."
 END
 
 GUI:LoadTip2
@@ -19366,7 +19366,7 @@ GUI:OnlineAIMapMissing
 END
 
 GUI:OnlineAIRatingLabel
-"KI-Wertung"
+"Bot-ELO"
 END
 
 GUI:OnlineAIRefused
@@ -19394,7 +19394,7 @@ GUI:OnlineAIRefused_unavailable
 END
 
 GUI:OnlineAIShort
-"KI"
+"Bot-ELO"
 END
 
 GUI:OnlineBrowserFailed
@@ -19686,11 +19686,11 @@ GUI:OnlineLadderPrev
 END
 
 GUI:OnlineLadderRating
-"Wertung"
+"ELO"
 END
 
 GUI:OnlineLadderRatingLabel
-"Ranglistenwertung"
+"ELO"
 END
 
 GUI:OnlineLadderRecord
@@ -19698,7 +19698,7 @@ GUI:OnlineLadderRecord
 END
 
 GUI:OnlineLadderShort
-"Rangliste"
+"ELO"
 END
 
 GUI:OnlineLadderTier
@@ -19933,12 +19933,24 @@ GUI:OnlineRatedResult
 "Wertung %+.1f -> %d"
 END
 
+GUI:OnlineEloResult
+"ELO %+d -> %d"
+END
+
 GUI:OnlineRating
 "Wertung %d"
 END
 
 GUI:OnlineRatingTier
 "%ls, Wertung %d"
+END
+
+GUI:OnlineElo
+"ELO %d"
+END
+
+GUI:OnlineEloTier
+"%ls, ELO %d"
 END
 
 GUI:OnlineScoreAgain

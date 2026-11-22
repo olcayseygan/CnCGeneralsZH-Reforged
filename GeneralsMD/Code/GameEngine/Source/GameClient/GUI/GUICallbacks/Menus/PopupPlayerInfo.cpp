@@ -1633,7 +1633,7 @@ static void layOutCard( Int width )
 	ratingSummary( aiTier, side, "GUI:OnlineAIRatingLabel", card.hasAIRating ? UIStyle::eloText( card.aiRating ) : none,
 		CARD_WIDTH - 24.0f );
 	const Int ratingsLeft = ratingSummary( ladderTier, side, "GUI:OnlineLadderRatingLabel",
-		card.hasRating ? UIStyle::ratingText( card.exactRating ) : none, CARD_WIDTH - 330.0f );
+		card.hasRating ? UIStyle::ladderText( card.shown(), card.hasElo ) : none, CARD_WIDTH - 330.0f );
 	UnicodeString shown;
 	shown.translate( nick );
 	cardWords( UIStyle::fitName( shown, strong, ratingsLeft - at( 24 ) - at( 144 ) ), strong, at( 144 ), at( 34 ), at( 32 ), UIStyle::INK );
@@ -1674,7 +1674,7 @@ static void layOutCard( Int width )
 	const Int gamesAt = ai ? 1 : 2;
 	label[ 0 ] = TheGameText->fetch( ai ? "GUI:OnlineAIRatingLabel" : "GUI:OnlineLadderRatingLabel" );
 	if( ai ? card.hasAIRating : card.hasRating )
-		value[ 0 ] = ai ? UIStyle::eloText( card.aiRating ) : UIStyle::ratingText( card.exactRating );
+		value[ 0 ] = ai ? UIStyle::eloText( card.aiRating ) : UIStyle::ladderText( card.shown(), card.hasElo );
 	else
 		value[ 0 ] = none;
 	under[ 0 ] = OnlineTierName( AsciiString( UIStyle::tierKey( ai ? aiTier : ladderTier ) ) );
@@ -1795,7 +1795,7 @@ static void layOutCard( Int width )
 		{
 			// the opponent's nick, then his rating MUTED after it
 			const size_t ratingIndex = s_cardWords.size();
-			const Int ratingWidth = cardWords( UIStyle::ratingText( match.opponentRating ), body, 0, top, height, UIStyle::MUTED );
+			const Int ratingWidth = cardWords( UIStyle::ladderText( match.opponentRating, match.hasElo ), body, 0, top, height, UIStyle::MUTED );
 			UnicodeString opponent;
 			opponent.translate( match.opponent );
 			const Int nickWidth = cardWords( UIStyle::fitName( opponent, body, at( 240 ) - ratingWidth - at( 8 ) ), body, at( 624 ), top,
@@ -1809,7 +1809,7 @@ static void layOutCard( Int width )
 		else
 			length = none;
 		cardWords( length, body, at( 994 ), top, height, match.seconds > 0 ? UIStyle::INK : UIStyle::MUTED, TRUE );
-		cardWords( UIStyle::ratingText( match.change, TRUE ), body, at( 1134 ), top, height, UIStyle::changeColor( match.change ), TRUE );
+		cardWords( UIStyle::ladderText( match.change, match.hasElo, TRUE ), body, at( 1134 ), top, height, UIStyle::changeColor( match.change ), TRUE );
 		cardBox( at( 24 ), top + height - 1, at( 1152 ), 1, UIStyle::GRID );
 	}
 }

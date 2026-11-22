@@ -26,6 +26,7 @@
 #include "GameClient/TankSkin.h"
 #include "Common/MultiplayerSettings.h"
 #include "Common/GlobalData.h"		// TEXT_LANGUAGE_*
+#include "GameClient/UIStyle.h"		// ladderTextIn, the ranked screens' figure
 
 #include <chrono>
 #include <stdio.h>
@@ -1938,6 +1939,9 @@ TEST(online_adapter_logs_the_rating_result)
 	rig.feed( "{\"t\":\"rated\",\"match\":\"q1\",\"delta\":1.25,\"rating\":-3.5}" );
 	CHECK_STR( OnlineSession::get().resultLine.c_str(), "ONLINE RATED delta=1.25 rating=-3.5" );
 	CHECK_STR( rig.sentType( 0 ).c_str(), "stats.get" );		// our own numbers again
+	// a server with Elo: the plain figures ride on the same line for a loopback check to grep
+	rig.feed( "{\"t\":\"rated\",\"match\":\"q2\",\"delta\":0.4,\"rating\":14.1,\"elo\":1213,\"eloDelta\":12,\"eloBefore\":1201,\"eloAfter\":1213}" );
+	CHECK_STR( OnlineSession::get().resultLine.c_str(), "ONLINE RATED delta=0.4 rating=14.1 elo=1213 eloAfter=1213" );
 	rig.feed( "{\"t\":\"unrated\",\"match\":\"m2\",\"reason\":\"custom\"}" );
 	CHECK_STR( OnlineSession::get().resultLine.c_str(), "ONLINE UNRATED reason=custom" );
 }
@@ -2335,6 +2339,100 @@ TEST(online_ratings_keep_two_decimals)
 	CHECK( OnlineGetPlayerInfo( "Tank", me ) );
 	CHECK_NEAR( me.aiRating, 1312.333, 0.01 );
 	CHECK_EQ( me.aiWins, 3 );
+}
+
+/* A server with Elo sends elo beside the old-scale rating, and the ranked screens show the Elo whole; a
+	 message without elo shows the rating as before. */
+TEST(online_ranked_screens_show_elo_and_fall_back_to_rating)
+{
+	AdapterRig rig;
+	rig.login();
+	rig.feed( "{\"t\":\"player\",\"room\":\"lobby1\",\"id\":11,\"nick\":\"Lee\",\"rating\":14.1,\"elo\":1213,\"tier\":\"captain\",\"games\":9}" );
+	OnlinePlayerInfo lee;
+	CHECK( OnlineGetPlayerInfo( "Lee", lee ) );
+	CHECK( lee.hasRating && lee.hasElo );
+	CHECK_NEAR( lee.exactRating, 14.1, 0.001 );
+	CHECK_NEAR( lee.shown(), 1213.0, 0.001 );
+	CHECK_EQ( lee.rating, 1213 );
+	CHECK( UIStyle::ladderTextIn( lee.shown(), lee.hasElo, FALSE, TEXT_LANGUAGE_TURKISH ) == UnicodeString( u"1213" ) );
+	CHECK_EQ( (int)UIStyle::playerTier( lee ), (int)UIStyle::TIER_CAPTAIN );
+
+	// no elo: the old two decimals, in the language's way
+	rig.feed( "{\"t\":\"player\",\"room\":\"lobby1\",\"id\":12,\"nick\":\"Kim\",\"rating\":22.7,\"games\":9}" );
+	OnlinePlayerInfo kim;
+	CHECK( OnlineGetPlayerInfo( "Kim", kim ) );
+	CHECK( kim.hasRating && !kim.hasElo );
+	CHECK_NEAR( kim.shown(), 22.7, 0.001 );
+	CHECK_EQ( kim.rating, 23 );
+	CHECK( UIStyle::ladderTextIn( kim.shown(), kim.hasElo, FALSE, TEXT_LANGUAGE_TURKISH ) == UnicodeString( u"22,70" ) );
+	CHECK_EQ( (int)UIStyle::playerTier( kim ), (int)UIStyle::TIER_MAJOR );		// no tier sent: by the old scale
+
+	// the site's Elo tiers, for a card without a tier and the ladder's track
+	CHECK_EQ( (int)UIStyle::ratingTier( 999.0f, 9, TRUE ), (int)UIStyle::TIER_PRIVATE );
+	CHECK_EQ( (int)UIStyle::ratingTier( 1000.0f, 9, TRUE ), (int)UIStyle::TIER_SERGEANT );
+	CHECK_EQ( (int)UIStyle::ratingTier( 1250.0f, 9, TRUE ), (int)UIStyle::TIER_MAJOR );
+	CHECK_EQ( (int)UIStyle::ratingTier( 1500.0f, 9, TRUE ), (int)UIStyle::TIER_GENERAL );
+	CHECK_EQ( (int)UIStyle::ratingTier( 1500.0f, 4, TRUE ), (int)UIStyle::TIER_UNRANKED );
+	CHECK_NEAR( UIStyle::tierStart( UIStyle::TIER_LIEUTENANT, TRUE ), 1075.0, 0.001 );
+	CHECK_NEAR( UIStyle::tierStart( UIStyle::TIER_COLONEL, TRUE ), 1350.0, 0.001 );
+	CHECK_NEAR( UIStyle::tierStart( UIStyle::TIER_COLONEL ), 25.0, 0.001 );
+
+	// ladder rows, one with elo and one without
+	OnlineRequestLadder( 0 );
+	rig.feed( "{\"t\":\"ladder\",\"offset\":0,\"rows\":[{\"rank\":1,\"nick\":\"Lee\",\"rating\":14.1,\"elo\":1213,\"tier\":\"captain\",\"wins\":5,\"losses\":4},"
+		"{\"rank\":2,\"nick\":\"Kim\",\"rating\":22.7,\"tier\":\"major\",\"wins\":5,\"losses\":4}]}" );
+	Int offset = -1;
+	std::vector<OnlineLadderRow> rows;
+	OnlineLadderRow mine;
+	Bool hasMe = FALSE;
+	CHECK_EQ( (int)OnlineGetLadder( offset, rows, mine, hasMe ), (int)ONLINE_LADDER_READY );
+	CHECK_EQ( rows.size(), (size_t)2 );
+	if (rows.size() == 2)
+	{
+		CHECK( rows[0].hasRating && rows[0].hasElo );
+		CHECK_NEAR( rows[0].shown(), 1213.0, 0.001 );
+		CHECK_EQ( rows[0].rating, 1213 );
+		CHECK( rows[1].hasRating && !rows[1].hasElo );
+		CHECK_NEAR( rows[1].shown(), 22.7, 0.001 );
+	}
+
+	// the verdict: eloDelta and eloAfter when asked for and sent, the old scale otherwise
+	Bool rated = FALSE, elo = FALSE;
+	Real delta = 0, rating = 0;
+	AsciiString reason;
+	OnlineSession::get().matchId = "q9";
+	rig.feed( "{\"t\":\"rated\",\"match\":\"q9\",\"delta\":0.4,\"rating\":14.1,\"elo\":1213,\"eloDelta\":12,\"eloBefore\":1201,\"eloAfter\":1213}" );
+	CHECK( OnlineGetMatchResult( rated, delta, rating, reason, &elo ) );
+	CHECK( rated && elo );
+	CHECK_NEAR( delta, 12.0, 0.001 );
+	CHECK_NEAR( rating, 1213.0, 0.001 );
+	CHECK( OnlineGetMatchResult( rated, delta, rating, reason ) );		// not asked: the old scale
+	CHECK_NEAR( delta, 0.4, 0.001 );
+	CHECK_NEAR( rating, 14.1, 0.001 );
+	rig.feed( "{\"t\":\"rated\",\"match\":\"q9\",\"delta\":1.23,\"rating\":22.6}" );
+	CHECK( OnlineGetMatchResult( rated, delta, rating, reason, &elo ) );
+	CHECK( rated && !elo );
+	CHECK_NEAR( delta, 1.23, 0.001 );
+	CHECK_NEAR( rating, 22.6, 0.001 );
+
+	// a Quick Match history row with opponentElo carries the Elo; an AI row keeps the bot's
+	OnlineRequestHistory( 0, ONLINE_HISTORY_ALL );
+	rig.feed( "{\"t\":\"history\",\"id\":7,\"mode\":\"all\",\"games\":2,\"wins\":1,\"rows\":["
+		"{\"mode\":\"qm\",\"result\":\"win\",\"map\":\"m\",\"opponent\":\"Lee\",\"opponentRating\":14.1,\"opponentElo\":1213,"
+		"\"change\":0.4,\"eloChange\":12,\"seconds\":600,\"age\":60},"
+		"{\"mode\":\"qm\",\"result\":\"loss\",\"map\":\"m\",\"opponent\":\"Kim\",\"opponentRating\":22.7,\"change\":-0.5,\"seconds\":600,\"age\":90}]}" );
+	OnlineHistory h;
+	CHECK_EQ( (int)OnlineGetHistory( 0, ONLINE_HISTORY_ALL, h ), (int)ONLINE_LADDER_READY );
+	CHECK_EQ( h.rows.size(), (size_t)2 );
+	if (h.rows.size() == 2)
+	{
+		CHECK( h.rows[0].hasElo );
+		CHECK_NEAR( h.rows[0].opponentRating, 1213.0, 0.001 );
+		CHECK_NEAR( h.rows[0].change, 12.0, 0.001 );
+		CHECK( !h.rows[1].hasElo );
+		CHECK_NEAR( h.rows[1].opponentRating, 22.7, 0.001 );
+		CHECK_NEAR( h.rows[1].change, -0.5, 0.001 );
+	}
 }
 
 /* history{id, mode, limit}: asked, waited on, answered with rows and both army tables, refused, asked

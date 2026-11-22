@@ -21262,7 +21262,7 @@ GUI:LoadRuleOn
 END
 
 GUI:LoadTip11
-"Игра против ИИ в сети ведёт свой рейтинг ИИ и никогда не трогает ваш рейтинг в таблице."
+"Игра против ИИ в сети ведёт своё ELO бота и никогда не трогает ваше ELO в таблице."
 END
 
 GUI:Lobby
@@ -21294,7 +21294,7 @@ GUI:OnlineAIMapMissing
 END
 
 GUI:OnlineAIRatingLabel
-"Рейтинг против ИИ"
+"ELO бота"
 END
 
 GUI:OnlineAIRefused
@@ -21322,7 +21322,7 @@ GUI:OnlineAIRefused_unavailable
 END
 
 GUI:OnlineAIShort
-"ИИ"
+"ELO бота"
 END
 
 GUI:OnlineBrowserFailed
@@ -21614,11 +21614,11 @@ GUI:OnlineLadderPrev
 END
 
 GUI:OnlineLadderRating
-"Рейтинг"
+"ELO"
 END
 
 GUI:OnlineLadderRatingLabel
-"Рейтинг в таблице"
+"ELO"
 END
 
 GUI:OnlineLadderRecord
@@ -21626,7 +21626,7 @@ GUI:OnlineLadderRecord
 END
 
 GUI:OnlineLadderShort
-"Рейтинг"
+"ELO"
 END
 
 GUI:OnlineLadderTier
@@ -21861,12 +21861,24 @@ GUI:OnlineRatedResult
 "Рейтинг %+.1f -> %d"
 END
 
+GUI:OnlineEloResult
+"ELO %+d -> %d"
+END
+
 GUI:OnlineRating
 "Рейтинг %d"
 END
 
 GUI:OnlineRatingTier
 "%ls, рейтинг %d"
+END
+
+GUI:OnlineElo
+"ELO %d"
+END
+
+GUI:OnlineEloTier
+"%ls, ELO %d"
 END
 
 GUI:OnlineScoreAgain

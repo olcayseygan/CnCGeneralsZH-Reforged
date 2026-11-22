@@ -267,12 +267,13 @@ struct RatingFacts
 	Int games;					///< for the tier, -1 unknown
 	AsciiString line;		///< the last line's key
 	Bool sending;				///< the line says the result is on its way, over a sliding track
+	Bool elo;						///< the figures are a whole Elo: the AI card's always, the ladder's from a server with Elo
 
-	RatingFacts() : shown( FALSE ), moved( FALSE ), before( 0.0f ), after( 0.0f ), games( -1 ), sending( FALSE ) {}
+	RatingFacts() : shown( FALSE ), moved( FALSE ), before( 0.0f ), after( 0.0f ), games( -1 ), sending( FALSE ), elo( FALSE ) {}
 	Bool operator==( const RatingFacts &other ) const
 	{
 		return shown == other.shown && moved == other.moved && before == other.before && after == other.after
-			&& games == other.games && line == other.line && sending == other.sending;
+			&& games == other.games && line == other.line && sending == other.sending && elo == other.elo;
 	}
 };
 static RatingFacts s_cardFacts;
@@ -343,16 +344,18 @@ static RatingFacts readRatingFacts( void )
 	if( s_card == SCORE_CARD_LADDER )
 	{
 		facts.shown = known && me.hasRating;
-		facts.after = me.exactRating;
+		facts.after = me.shown();
+		facts.elo = me.hasElo;
 		facts.games = known ? me.games : -1;
-		Bool rated = FALSE;
+		Bool rated = FALSE, ratedElo = FALSE;
 		Real delta = 0.0f, rating = 0.0f;
 		AsciiString reason;
-		if( OnlineGetMatchResult( rated, delta, rating, reason ) )
+		if( OnlineGetMatchResult( rated, delta, rating, reason, &ratedElo ) )
 		{
 			if( rated )
 			{
 				facts.shown = facts.moved = TRUE;
+				facts.elo = ratedElo;
 				facts.before = rating - delta;
 				facts.after = rating;
 				verdictLine = "GUI:OnlineScoreConfirmed";
@@ -365,6 +368,7 @@ static RatingFacts readRatingFacts( void )
 	}
 	else
 	{
+		facts.elo = TRUE;
 		facts.shown = known && me.hasAIRating;
 		facts.after = me.aiRating;
 		facts.games = known ? me.aiGames : -1;
@@ -405,15 +409,15 @@ static UnicodeString newCardWords( const AsciiString &key )
 	return UnicodeString( u"Sending the result" );
 }
 
-/// the card's figures on its own scale: the ladder's two decimals, or the AI rating's whole Elo
-static UnicodeString cardRatingText( Real value, Bool sign = FALSE )
+/// the card's figures on its own scale: a whole Elo, or an older server's ladder two decimals
+static UnicodeString cardRatingText( const RatingFacts &facts, Real value, Bool sign = FALSE )
 {
-	return s_card == SCORE_CARD_AI ? UIStyle::eloText( value, sign ) : UIStyle::ratingText( value, sign );
+	return UIStyle::ladderText( value, facts.elo, sign );
 }
 
-static Real cardTierStart( UIStyle::RatingTier tier )
+static Real cardTierStart( const RatingFacts &facts, UIStyle::RatingTier tier )
 {
-	return s_card == SCORE_CARD_AI ? UIStyle::aiTierStart( tier ) : UIStyle::tierStart( tier );
+	return s_card == SCORE_CARD_AI ? UIStyle::aiTierStart( tier ) : UIStyle::tierStart( tier, facts.elo );
 }
 
 static void buildRatingCard( const RatingFacts &facts )
@@ -429,18 +433,18 @@ static void buildRatingCard( const RatingFacts &facts )
 	if( facts.shown )
 	{
 		const UIStyle::RatingTier tier = s_card == SCORE_CARD_AI ? UIStyle::aiRatingTier( facts.after, facts.games ) :
-			UIStyle::ratingTier( facts.after, facts.games );
+			UIStyle::ratingTier( facts.after, facts.games, facts.elo );
 		s_cardPortrait = UIStyle::tierImage( tier, s_cardSide );
 		if( facts.moved )
 		{
-			setCardText( CARD_OLD, cardRatingText( facts.before ), UIStyle::titleFont( UIStyle::TEXT_TITLE ) );
+			setCardText( CARD_OLD, cardRatingText( facts, facts.before ), UIStyle::titleFont( UIStyle::TEXT_TITLE ) );
 			static const WideChar ARROW[] = { 0x2192, 0 };		// as a code unit: the sources build without /utf-8
 			setCardText( CARD_ARROW, UnicodeString( ARROW ), UIStyle::font( UIStyle::TEXT_HEADING ) );
-			setCardText( CARD_CHANGE, cardRatingText( facts.after - facts.before, TRUE ), UIStyle::font( UIStyle::TEXT_STRONG, TRUE ) );
+			setCardText( CARD_CHANGE, cardRatingText( facts, facts.after - facts.before, TRUE ), UIStyle::font( UIStyle::TEXT_STRONG, TRUE ) );
 			// a defeat's change is MUTED, as its verdict is
 			s_cardChangeColor = s_cardWon ? UIStyle::changeColor( facts.after - facts.before ) : UIStyle::MUTED;
 		}
-		setCardText( CARD_NEW, cardRatingText( facts.after ), UIStyle::titleFont( UIStyle::TEXT_DISPLAY ) );
+		setCardText( CARD_NEW, cardRatingText( facts, facts.after ), UIStyle::titleFont( UIStyle::TEXT_DISPLAY ) );
 		setCardText( CARD_TIER, OnlineTierName( AsciiString( UIStyle::tierKey( tier ) ) ), body );
 
 		// the next tier at the card's right, as far left as the numbers leave room; none past the last
@@ -457,13 +461,14 @@ static void buildRatingCard( const RatingFacts &facts )
 		if( tier != UIStyle::TIER_UNRANKED && tier + 1 < UIStyle::TIER_COUNT && nextRoom > 0 )
 		{
 			const UIStyle::RatingTier next = (UIStyle::RatingTier)( tier + 1 );
-			const Real start = cardTierStart( tier );
-			const Real goal = cardTierStart( next );
+			const Real start = cardTierStart( facts, tier );
+			const Real goal = cardTierStart( facts, next );
 			UnicodeString words;
 			words.format( TheGameText->fetch( "GUI:OnlineNextTier" ), OnlineTierName( AsciiString( UIStyle::tierKey( next ) ) ).str(),
-				cardRatingText( goal ).str(), cardRatingText( goal - facts.after ).str() );
+				cardRatingText( facts, goal ).str(), cardRatingText( facts, goal - facts.after ).str() );
 			setCardText( CARD_NEXT, UIStyle::fitText( words, body, nextRoom ), body );
-			s_cardProgress = goal > start ? ( facts.after - start ) / ( goal - start ) : 1.0f;
+			// private's Elo track starts where sergeant's does, as the site's meter: empty
+			s_cardProgress = goal > start ? ( facts.after - start ) / ( goal - start ) : 0.0f;
 			s_cardTrackWidth = min( UIStyle::px( 436.0f ), nextRoom );
 		}
 	}
@@ -471,7 +476,7 @@ static void buildRatingCard( const RatingFacts &facts )
 	UnicodeString line;
 	s_cardSending = facts.sending;
 	if( facts.line == "GUI:OnlineScoreAISaved" )
-		line.format( TheGameText->fetch( facts.line ), cardRatingText( facts.after ).str() );
+		line.format( TheGameText->fetch( facts.line ), cardRatingText( facts, facts.after ).str() );
 	else if( facts.line == "GUI:OnlineScoreNoAnswer" || facts.line == "GUI:OnlineScoreSendingResult" )
 		line = newCardWords( facts.line );
 	else
@@ -730,7 +735,7 @@ static void ratingCardLeave( Int controlID )
 }
 
 /* -online, after any other network game (a custom one): the server's verdict as one line in the chat box,
-	 "Rating +1.3 -> 22" or why the match was unrated.  It comes a moment after both reports are in, while
+	 "ELO +12 -> 1213" (an older server's "Rating +1.3 -> 22") or why the match was unrated.  It comes a moment after both reports are in, while
 	 this screen is up. */
 static void showOnlineVerdict( void )
 {
@@ -738,14 +743,16 @@ static void showOnlineVerdict( void )
 		|| !listboxChatWindowScoreScreen)
 		return;
 	OnlineUpdate();
-	Bool rated = FALSE;
+	Bool rated = FALSE, elo = FALSE;
 	Real delta = 0.0f, rating = 0.0f;
 	AsciiString reason;
-	if (!OnlineGetMatchResult( rated, delta, rating, reason ))
+	if (!OnlineGetMatchResult( rated, delta, rating, reason, &elo ))
 		return;
 	s_onlineVerdictShown = TRUE;
 	UnicodeString line;
-	if (rated)
+	if (rated && elo)
+		line.format( TheGameText->fetch( "GUI:OnlineEloResult" ), REAL_TO_INT( floorf( delta + 0.5f ) ), REAL_TO_INT( floorf( rating + 0.5f ) ) );
+	else if (rated)
 		line.format( TheGameText->fetch( "GUI:OnlineRatedResult" ), delta, REAL_TO_INT( floorf( rating + 0.5f ) ) );
 	else
 		line = TheGameText->fetch( unratedKey( reason ) );

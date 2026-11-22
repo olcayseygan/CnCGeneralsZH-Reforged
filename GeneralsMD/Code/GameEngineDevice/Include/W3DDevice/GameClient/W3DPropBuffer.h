@@ -67,6 +67,7 @@ class LightClass;
 class W3DPropDrawModuleData;
 class W3DShroudMaterialPassClass;
 class GeometryInfo;
+struct SunShadowCasterCull;
 
 //-----------------------------------------------------------------------------
 //           Type Defines
@@ -118,6 +119,14 @@ public:
 		const GeometryInfo& geom,
 		Real angle
 	);
+
+	/// A prop of the terrain skirt's scenery, past the map's edge: drawn under the border's shroud as
+	/// the ground there is, never asked of the partition.  FALSE when full or the model would not load.
+	Bool addSceneryProp(Coord3D location, Real angle, Real scale, const AsciiString &modelName);
+	/// The props into the sun's map, those whose shadow can reach the view; how many.
+	Int drawPropCasters(RenderInfoClass &sunInfo, const SunShadowCasterCull &cull);
+	/// The radius of a model's bounding sphere at scale one, loading its type; 0 when it will not load.
+	Real getPropRadius(const AsciiString &modelName);
 
 	/// Add a type of prop.  Name is the w3d model name.
 	Int addPropType(const AsciiString &modelName);

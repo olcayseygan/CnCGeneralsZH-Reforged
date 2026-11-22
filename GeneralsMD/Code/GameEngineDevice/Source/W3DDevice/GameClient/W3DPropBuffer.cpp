@@ -65,6 +65,7 @@
 #include "W3DDevice/GameClient/Module/W3DPropDraw.h"
 #include "W3DDevice/GameClient/W3DShroud.h"
 #include "W3DDevice/GameClient/BaseHeightMap.h"
+#include "W3DDevice/GameClient/SunShadowCasterCull.h"
 #include "GameLogic/PartitionManager.h"
 
 #ifdef _INTERNAL
@@ -233,6 +234,59 @@ void W3DPropBuffer::addProp(Int id, Coord3D location, Real angle,Real scale, con
 	m_props[m_numProps].visible = false;
 
 	m_numProps++;
+}
+
+Real W3DPropBuffer::getPropRadius(const AsciiString &modelName)
+{
+	for (Int i=0; i<m_numPropTypes; i++) {
+		if (m_propTypes[i].m_robjName.compareNoCase(modelName)==0) {
+			return m_propTypes[i].m_bounds.Radius;
+		}
+	}
+	if (m_numPropTypes >= MAX_TYPES) {
+		return 0.0f;	// addPropType would hand back type 0, some other model
+	}
+	const Int type = addPropType(modelName);
+	return type < 0 ? 0.0f : m_propTypes[type].m_bounds.Radius;
+}
+
+Bool W3DPropBuffer::addSceneryProp(Coord3D location, Real angle, Real scale, const AsciiString &modelName)
+{
+	const Int before = m_numProps;
+	if (getPropRadius(modelName) <= 0.0f) {
+		return FALSE;	// a model that will not load, or no room for its type
+	}
+	addProp(0, location, angle, scale, modelName);
+	if (m_numProps == before) {
+		return FALSE;
+	}
+	// FOGGED, so drawProps lays the shroud's pass over it: off the map its texture clamps to the
+	// border's texel, which is what darkens the skirt's ground under it
+	m_props[before].ss = OBJECTSHROUD_FOGGED;
+	m_props[before].bounds.Center = m_propTypes[m_props[before].propType].m_bounds.Center*scale + Vector3(location.x, location.y, location.z);
+	m_props[before].bounds.Radius = m_propTypes[m_props[before].propType].m_bounds.Radius*scale;
+	m_doCull = true;
+	return TRUE;
+}
+
+/** Into the sun's map: each prop's own triangles, as drawModelShadowCasters draws the object palms',
+for every one whose shadow the cull says can reach the view.  Never asked of the partition, so for the
+scenery props only; the map's own cast through their objects. */
+Int W3DPropBuffer::drawPropCasters(RenderInfoClass &sunInfo, const SunShadowCasterCull &cull)
+{
+	Int drawn = 0;
+	for (Int i=0; i<m_numProps; i++) {
+		TProp &prop = m_props[i];
+		if (prop.m_robj == NULL || prop.ss >= OBJECTSHROUD_SHROUDED || prop.ss <= OBJECTSHROUD_INVALID) {
+			continue;
+		}
+		if (sunInfo.Camera.Cull_Sphere(prop.bounds) || !cull.Visible(prop.bounds)) {
+			continue;
+		}
+		prop.m_robj->Render(sunInfo);
+		++drawn;
+	}
+	return drawn;
 }
 
 //=============================================================================

@@ -2419,6 +2419,7 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	if (m_propBuffer) {
 		m_propBuffer->drawProps(rinfo);
 	}
+	drawSkirtProps(rinfo);
 	#ifdef DO_SCORCH
 		DX8Wrapper::Set_Texture(0,NULL);
 		DX8Wrapper::Set_Texture(1,NULL);

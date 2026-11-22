@@ -52,6 +52,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <algorithm>
+#include <chrono>
 #include <assetmgr.h>
 #include <texture.h>
 #include <tri.h>
@@ -105,6 +106,13 @@
 #include "W3DDevice/GameClient/W3DSnow.h"
 #include "W3DDevice/GameClient/TerrainSubdivide.h"
 #include "W3DDevice/GameClient/TerrainSkirt.h"
+#include "W3DDevice/GameClient/FoliagePlacement.h"
+#include "W3DDevice/GameClient/Module/W3DModelDraw.h"
+#include "W3DDevice/GameClient/Module/W3DTreeDraw.h"
+#include "Common/MapObject.h"
+#include "Common/TerrainTypes.h"
+#include "Common/ThingFactory.h"
+#include "Common/ThingTemplate.h"
 
 #ifdef _INTERNAL
 // for occasional debugging...
@@ -235,6 +243,10 @@ BaseHeightMapRenderObjClass::~BaseHeightMapRenderObjClass(void)
 		delete m_propBuffer;
  		m_propBuffer = NULL;
 	}
+	delete m_skirtTrees;
+	m_skirtTrees = NULL;
+	delete m_skirtProps;
+	m_skirtProps = NULL;
 	if (m_bibBuffer) {
 		delete m_bibBuffer;
  		m_bibBuffer = NULL;
@@ -337,6 +349,13 @@ BaseHeightMapRenderObjClass::BaseHeightMapRenderObjClass(void)
 
 	m_propBuffer = NEW W3DPropBuffer;
 
+	m_skirtTrees = NEW W3DTreeBuffer;
+	m_skirtTrees->setAlwaysVisible(TRUE);
+	m_skirtProps = NEW W3DPropBuffer;
+	m_skirtEdgeValid = FALSE;
+	m_skirtSceneryStale = TRUE;
+	m_skirtSceneryFrame = 0;
+
 
 	m_bibBuffer = NULL;
 	m_bibBuffer = NEW W3DBibBuffer;
@@ -378,6 +397,8 @@ void BaseHeightMapRenderObjClass::setTextureLOD(Int lod)
 
 	if (m_treeBuffer)
 		m_treeBuffer->setTextureLOD(lod);
+	if (m_skirtTrees)
+		m_skirtTrees->setTextureLOD(lod);
 	if (m_map)
 		m_map->setTextureLOD(lod);
 #ifdef DO_SCORCH
@@ -476,6 +497,9 @@ void BaseHeightMapRenderObjClass::ReleaseResources(void)
 	if (m_treeBuffer) {
 		m_treeBuffer->freeTreeBuffers();
 	}
+	if (m_skirtTrees) {
+		m_skirtTrees->freeTreeBuffers();
+	}
 	if (m_grassBuffer) {
 		m_grassBuffer->freeGrassBuffers();	// made again by the next draw
 	}
@@ -551,6 +575,9 @@ void BaseHeightMapRenderObjClass::ReAcquireResources(void)
 
 	if (m_treeBuffer) {
 		m_treeBuffer->allocateTreeBuffers();
+	}
+	if (m_skirtTrees) {
+		m_skirtTrees->allocateTreeBuffers();	// filled again by the scenery initHeightData marked stale
 	}
 	if (m_bibBuffer) {
 		m_bibBuffer->allocateBibBuffers();
@@ -729,6 +756,14 @@ void BaseHeightMapRenderObjClass::reset(void)
 	if (m_propBuffer) {
 		m_propBuffer->clearAllProps();
 	}
+	if (m_skirtTrees) {
+		m_skirtTrees->clearAllTrees();
+	}
+	if (m_skirtProps) {
+		m_skirtProps->clearAllProps();
+	}
+	m_skirtSceneryStale = TRUE;
+	m_skirtSceneryFrame = 0;
 	if (m_grassBuffer) {
 		m_grassBuffer->clear();
 	}
@@ -1752,6 +1787,7 @@ Int BaseHeightMapRenderObjClass::initHeightData(Int x, Int y, WorldHeightMap *pM
 	m_staticDiffuseStale = true;
 	m_terrainContentVersion++;
 	m_skirtStale = TRUE;
+	m_skirtSceneryStale = TRUE;
 
 	if (m_shroud)
 		m_shroud->init(m_map,TheGlobalData->m_partitionCellSize,TheGlobalData->m_partitionCellSize);
@@ -2465,6 +2501,18 @@ void BaseHeightMapRenderObjClass::removeAllTrees()
 void BaseHeightMapRenderObjClass::stepTrees(void)
 {
 	m_treeBuffer->stepTrees();
+	if (m_skirtTrees)
+		m_skirtTrees->stepTrees();	// the breeze and the pause; nothing of it topples
+	// The skirt's scenery, once the skirt is built: here at the sync point, outside the logic window,
+	// since the time of day and the weather it picks models by are a script's to change.  Never while the
+	// load screen draws (the map's trees and objects, which say what grows there, may be half in).
+	const UnsignedInt SKIRT_SCENERY_REBUILD_FRAMES = 150;
+	if (m_skirtTrees && m_skirtSceneryStale && m_skirtEdgeValid && !m_skirtStale && !TheGlobalData->m_loadScreenRender
+		&& !LogicThread::isInsideWindow()
+		&& (m_skirtSceneryFrame == 0 || WW3D::Get_Frame_Count() - m_skirtSceneryFrame >= SKIRT_SCENERY_REBUILD_FRAMES)) {
+		m_skirtSceneryFrame = max(1u, WW3D::Get_Frame_Count());
+		buildSkirtScenery();
+	}
 	if (m_grassBuffer) {
 		m_grassBuffer->takeBreezeForDraw();
 		// the foliage's grid, once a map and only with the option on: it reads the water off
@@ -2644,6 +2692,7 @@ void BaseHeightMapRenderObjClass::staticLightingChanged( void )
 	m_staticDiffuseStale = true;	// before the roads below ask for theirs
 	m_terrainContentVersion++;
 	m_skirtStale = TRUE;	// its light is baked in
+	m_skirtSceneryStale = TRUE;	// its trees' light is baked at their one fill, and night or snow picks the models
 
 	// Cause the scorches to get updated with new lighting.
 	m_scorchesInBuffer = 0; // If we just allocated the buffers, we got no scorches in the buffer.
@@ -2777,6 +2826,12 @@ void BaseHeightMapRenderObjClass::updateCenter(CameraClass *camera , RefRenderOb
 	}
 	if (m_propBuffer) {
 		m_propBuffer->doFullUpdate();	// Tell the trees to update for view change.
+	}
+	if (m_skirtTrees) {
+		m_skirtTrees->doFullUpdate();
+	}
+	if (m_skirtProps) {
+		m_skirtProps->doFullUpdate();
 	}
 	m_updating = true;
 #ifdef DO_ROADS
@@ -3184,6 +3239,14 @@ Int BaseHeightMapRenderObjClass::renderTreeShadowCasters(RenderInfoClass &sunInf
 	RefRenderObjListIterator lights(scene->getDynamicLights());
 	m_treeBuffer->drawTrees(sceneCamera, &lights, &sunInfo.Camera);
 	Int casters = m_treeBuffer->getSunCasterTrees() + m_treeBuffer->drawModelShadowCasters(sunInfo,cull);
+	// the skirt's scenery: its trees whole, as the screen draws them, and its props the cull lets in
+	if (m_skirtTrees && m_skirtTrees->getNumTrees() > 0) {
+		DX8Wrapper::Set_Transform(D3DTS_WORLD, Transform);
+		m_skirtTrees->drawTrees(sceneCamera, &lights, &sunInfo.Camera);
+		casters += m_skirtTrees->getSunCasterTrees();
+	}
+	if (m_skirtProps)
+		casters += m_skirtProps->drawPropCasters(sunInfo, cull);
 	// the GroundFoliage option's upright pieces, as the screen drew them last; nothing with it off
 	if (m_grassBuffer)
 		casters += m_grassBuffer->drawGrassCasters(&sunInfo.Camera, Transform);
@@ -3208,6 +3271,14 @@ void BaseHeightMapRenderObjClass::renderTrees(CameraClass * camera)
 		RTS3DScene *pMyScene = (RTS3DScene *)Scene;
 		RefRenderObjListIterator pDynamicLightsIterator(pMyScene->getDynamicLights());
 		m_treeBuffer->drawTrees(camera, &pDynamicLightsIterator);
+		if (m_skirtTrees && terrainPass) {
+			if (m_skirtTrees->getNumTrees() > 0) {
+				DX8Wrapper::Set_Transform(D3DTS_WORLD, tm);
+				DX8Wrapper::Set_Material(m_vertexMaterialClass);
+				m_skirtTrees->setIsTerrain();
+				m_skirtTrees->drawTrees(camera, &pDynamicLightsIterator);
+			}
+		}
 		if (m_grassBuffer && terrainPass) {
 			m_grassBuffer->drawGrass(camera, m_terrainContentVersion, tm);
 		}
@@ -3343,6 +3414,7 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 	// texture that could not be made was made again every frame.
 	freeSkirt();
 	m_skirtStale = FALSE;
+	m_skirtEdgeValid = FALSE;
 	if (m_map == NULL || m_map->getDataPtr() == NULL || m_map->getXExtent() < 4 || m_map->getYExtent() < 4)
 		return;
 	const Bool atlas = hasTerrainAtlas();
@@ -3399,6 +3471,8 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 	edge.landMean = landCount > 0 ? landSum/(Real)landCount : edge.seaZ - TerrainSkirt::SEA_MARGIN;
 	edge.blurred = TerrainSkirt::blurRing(ring);
 	edge.seaShare = TerrainSkirt::blurRing(sea);
+	m_skirtEdge = edge;
+	m_skirtEdgeValid = TRUE;
 
 	// Without the atlas: the keys (texture classes) the skirt's tiles come from, laid into a small
 	// texture at 32 pixels a tile, 16 a cell, twice what the lower detail gives a cell of the map.
@@ -3571,6 +3645,380 @@ void BaseHeightMapRenderObjClass::buildSkirt(void)
 	}
 	DEBUG_LOG(("TERRAIN SKIRT: %d quads in %d chunks, %d blended where patches meet, %d cells past the edge\n",
 		totalQuads, (Int)m_skirtChunks.size(), totalBlendQuads, reach));
+}
+
+//=============================================================================
+// The skirt's scenery: woods, brush, rocks and crags past the map's edge (TerrainSkirt.h says where)
+//=============================================================================
+
+/// The skirt's ground as it is drawn: the even-grid quad round (x, y), cut as the index buffer cuts it.
+Real BaseHeightMapRenderObjClass::skirtGroundAt(Real x, Real y)
+{
+	const Int border = m_map->getBorderSizeInline();
+	const Real sx = x/MAP_XY_FACTOR + border, sy = y/MAP_XY_FACTOR + border;
+	const Int qx = 2*(Int)floorf(sx*0.5f), qy = 2*(Int)floorf(sy*0.5f);
+	const Real u = (sx - qx)*0.5f, v = (sy - qy)*0.5f;
+	const Real z0 = skirtHeight(qx, qy, m_skirtEdge, TRUE);
+	const Real z2 = skirtHeight(qx+2, qy+2, m_skirtEdge, TRUE);
+	if (v > u) {
+		const Real z3 = skirtHeight(qx, qy+2, m_skirtEdge, TRUE);
+		return z0 + u*(z2 - z3) + v*(z3 - z0);
+	}
+	const Real z1 = skirtHeight(qx+2, qy, m_skirtEdge, TRUE);
+	return z0 + u*(z1 - z0) + v*(z2 - z1);
+}
+
+namespace
+{
+	enum SceneryRole { SCENERY_TREE, SCENERY_BUSH, SCENERY_ROCK, SCENERY_ROLES };
+
+	/// One thing the skirt can stand: a batched tree type, or a model drawn as a prop (a palm, a rock).
+	struct SceneryKind
+	{
+		const W3DTreeDrawModuleData *tree;	///< NULL for a prop
+		AsciiString model;
+		Real scale;		///< the template's own
+		Real weight;	///< how much of it the map places, more near its edge
+		Real radius;	///< a prop's at scale one
+	};
+
+	/// What a batched tree is out there: brush, a tree, or -1 for what never stands alone (stumps, burnt, vines).
+	Int treeRole(const AsciiString &model)
+	{
+		const char *name = model.str();
+		if (FoliagePlacement::nameHas(name, "stump") || FoliagePlacement::nameHas(name, "burn") || FoliagePlacement::nameHas(name, "vine"))
+			return -1;
+		if (FoliagePlacement::nameHas(name, "bush") || FoliagePlacement::nameHas(name, "dsrt") || FoliagePlacement::nameHas(name, "tmbweed")
+			|| FoliagePlacement::nameHas(name, "prkly") || FoliagePlacement::nameHas(name, "hedge"))
+			return SCENERY_BUSH;
+		return SCENERY_TREE;
+	}
+
+	void addKind(std::vector<SceneryKind> &kinds, const W3DTreeDrawModuleData *tree, const AsciiString &model, Real scale, Real weight)
+	{
+		for (size_t k = 0; k < kinds.size(); k++)
+			if (kinds[k].tree == tree && (tree != NULL || kinds[k].model.compareNoCase(model) == 0)) {
+				kinds[k].weight += weight;
+				return;
+			}
+		SceneryKind kind;
+		kind.tree = tree;
+		kind.model = model;
+		kind.scale = scale > 0.0f ? scale : 1.0f;
+		kind.weight = weight;
+		kind.radius = 0.0f;
+		kinds.push_back(kind);
+	}
+
+	/// What a template draws: its batched tree, or the model its default state draws (snow and night as the map's props take them).
+	Bool templateScenery(const ThingTemplate *tmpl, const W3DTreeDrawModuleData **tree, AsciiString *model)
+	{
+		const ModuleInfo &info = tmpl->getDrawModuleInfo();
+		for (Int i = 0; i < info.getCount(); i++) {
+			const ModuleData *data = info.getNthData(i);
+			if (data == NULL)
+				continue;
+			if (const W3DTreeDrawModuleData *treeData = data->getAsW3DTreeDrawModuleData()) {
+				*tree = treeData;
+				*model = treeData->m_modelName;
+				return TRUE;
+			}
+			if (const W3DModelDrawModuleData *modelData = data->getAsW3DModelDrawModuleData()) {
+				ModelConditionFlags state;
+				state.clear();
+				if (TheGlobalData->m_weather == WEATHER_SNOWY)
+					state.set(MODELCONDITION_SNOW);
+				if (TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT)
+					state.set(MODELCONDITION_NIGHT);
+				*tree = NULL;
+				*model = modelData->getBestModelNameForWB(state);
+				return model->isNotEmpty();
+			}
+		}
+		return FALSE;
+	}
+
+	/// A rock a map places: an immobile thing, not a structure or a plant, its name a rock's.
+	Bool rockTemplate(const ThingTemplate *tmpl)
+	{
+		if (!tmpl->isKindOf(KINDOF_IMMOBILE) || tmpl->isKindOf(KINDOF_STRUCTURE) || tmpl->isKindOf(KINDOF_SHRUBBERY))
+			return FALSE;
+		const char *name = tmpl->getName().str();
+		return FoliagePlacement::nameHas(name, "rock") || FoliagePlacement::nameHas(name, "boulder");
+	}
+
+	enum SceneryTheme { THEME_TEMPERATE, THEME_SNOW, THEME_DESERT };
+
+	/** What the skirt grows when the map places none of it itself, by the edge's ground.  Template names
+		out of NatureProp.ini; one that is missing is passed over. */
+	const char *const *themeTemplates(SceneryTheme theme, Int role)
+	{
+		static const char *const snowTrees[] = { "TreeFir06Snow", "TreeFir07Snow", "TreeFir08Snow", "TreeSpruce03Snow", "TreePineSnow", NULL };
+		static const char *const snowBushes[] = { "Bush12Snow", "Bush13Snow", NULL };
+		static const char *const snowRocks[] = { "RockClusterSmallSnow01", "RockClusterMediumSnow01", "RockClusterLargeSnow01", NULL };
+		static const char *const desertTrees[] = { "TreePalm1", "TreePalm2", "DesertShrub08", "DesertShrub10", NULL };
+		static const char *const desertBushes[] = { "DesertShrub01", "DesertShrub04", "DesertShrub05", NULL };
+		static const char *const desertRocks[] = { "Rocks1Brown", "Rocks2Brown", "Rocks3Brown", "RockClusterMedium01", NULL };
+		static const char *const temperateTrees[] = { "TreeSpruce03", "TreeFir01", "TreeOak01", "TreeMaple03", "TreeBirch01", NULL };
+		static const char *const temperateBushes[] = { "Bush02", "Bush05", NULL };
+		static const char *const temperateRocks[] = { "RockClusterSmall01", "RockClusterMedium01", "RockClusterLarge01", "RocksG01", NULL };
+		if (theme == THEME_SNOW)
+			return role == SCENERY_TREE ? snowTrees : (role == SCENERY_BUSH ? snowBushes : snowRocks);
+		if (theme == THEME_DESERT)
+			return role == SCENERY_TREE ? desertTrees : (role == SCENERY_BUSH ? desertBushes : desertRocks);
+		return role == SCENERY_TREE ? temperateTrees : (role == SCENERY_BUSH ? temperateBushes : temperateRocks);
+	}
+
+	/// One thing placed, before the caps take the nearest first.
+	struct ScenerySpot
+	{
+		Real rank;
+		Int role, kind;
+		Bool crag;
+		Real x, y, z, yaw, scale;
+		Int sway;
+	};
+}
+
+/** The scenery on the skirt.  What stands there is what the map itself grows: its batched trees and the
+palms and rocks it places, each counted four times near the heightmap's edge, and only where it places
+none of a kind the set its edge's ground calls for (snow, desert, temperate).  Where it stands is
+TerrainSkirt's: woods and their brush by a slow noise, rocks where another is high, big crags further
+out, none on the sea and less with the fade.  The trees and brush go to m_skirtTrees, drawn whole; the
+props (the palms, the rocks and crags) to m_skirtProps.  Nearest the edge first until the caps. */
+void BaseHeightMapRenderObjClass::buildSkirtScenery(void)
+{
+	m_skirtSceneryStale = FALSE;
+	m_skirtTrees->clearAllTrees();
+	m_skirtProps->clearAllProps();
+	if (m_map == NULL || !m_skirtEdgeValid || m_treeBuffer == NULL)
+		return;
+	// ponytail: ZH_SKIRT_SCENERY=0 in the environment leaves it out, for a frame time A/B on one exe;
+	// an option in the menu if players ask to turn it off
+	const char *wanted = getenv("ZH_SKIRT_SCENERY");
+	if (wanted != NULL && wanted[0] == '0')
+		return;
+	const std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
+
+	const Int w = m_map->getXExtent();
+	const Int h = m_map->getYExtent();
+	const Int border = m_map->getBorderSizeInline();
+	const Real lowX = -border*MAP_XY_FACTOR, highX = (w - 1 - border)*MAP_XY_FACTOR;
+	const Real lowY = -border*MAP_XY_FACTOR, highY = (h - 1 - border)*MAP_XY_FACTOR;
+	const Real EDGE_NEAR = border*MAP_XY_FACTOR + 400.0f;	// the border strip and the playable map's rim
+	const Real EDGE_WEIGHT = 4.0f;
+	auto nearWeight = [&](Real x, Real y) -> Real {
+		const Real d = min(min(x - lowX, highX - x), min(y - lowY, highY - y));
+		return d < EDGE_NEAR ? EDGE_WEIGHT : 1.0f;
+	};
+
+	std::vector<SceneryKind> kinds[SCENERY_ROLES];
+	for (Int i = 0; i < m_treeBuffer->getNumTrees(); i++) {
+		Vector3 at;
+		const W3DTreeDrawModuleData *data = m_treeBuffer->getTreeData(i, &at);
+		if (data == NULL)
+			continue;
+		const Int role = treeRole(data->m_modelName);
+		if (role >= 0)
+			addKind(kinds[role], data, data->m_modelName, 1.0f, nearWeight(at.X, at.Y));
+	}
+	for (MapObject *obj = MapObject::getFirstMapObject(); obj; obj = obj->getNext()) {
+		const ThingTemplate *tmpl = obj->getThingTemplate();
+		if (tmpl == NULL || tmpl->isKindOf(KINDOF_OPTIMIZED_TREE))
+			continue;	// a batched tree is the tree buffer's, counted above
+		const W3DTreeDrawModuleData *tree = NULL;
+		AsciiString model;
+		if (!templateScenery(tmpl, &tree, &model) || tree != NULL)
+			continue;	// a tree drawn by W3DTreeDraw went into the tree buffer as well
+		const Real weight = nearWeight(obj->getLocation()->x, obj->getLocation()->y);
+		if (tmpl->isKindOf(KINDOF_SHRUBBERY) && !tmpl->isKindOf(KINDOF_STRUCTURE))
+			addKind(kinds[SCENERY_TREE], NULL, model, tmpl->getAssetScale(), weight);
+		else if (rockTemplate(tmpl))
+			addKind(kinds[SCENERY_ROCK], NULL, model, tmpl->getAssetScale(), weight);
+	}
+
+	// the edge's ground, for what the map places none of
+	Int snow = 0, desert = 0, other = 0;
+	for (Int y = 0; y < h; y += 3)
+		for (Int x = 0; x < w; x += (y == 0 || y + 3 >= h) ? 3 : max(1, w - 1)) {
+			const AsciiString name = m_map->getTerrainNameAt((x - border)*MAP_XY_FACTOR, (y - border)*MAP_XY_FACTOR);
+			TerrainType *terrain = TheTerrainTypes ? TheTerrainTypes->findTerrain(name) : NULL;
+			const TerrainClass cls = terrain ? terrain->getClass() : TERRAIN_NONE;
+			if (cls == TERRAIN_SNOW_1 || cls == TERRAIN_SNOW_2 || cls == TERRAIN_SNOW_3 || cls == TERRAIN_RUGGED_SNOW
+				|| cls == TERRAIN_FLAT_SNOW || FoliagePlacement::nameHas(name.str(), "snow"))
+				snow++;
+			else if (cls == TERRAIN_DESERT_1 || cls == TERRAIN_DESERT_2 || cls == TERRAIN_DESERT_3 || cls == TERRAIN_SAND
+				|| cls == TERRAIN_LIVE_DESERT || cls == TERRAIN_DRY_DESERT || cls == TERRAIN_ACCENT_SAND
+				|| cls == TERRAIN_TROPICAL_BEACH || FoliagePlacement::nameHas(name.str(), "desert") || FoliagePlacement::nameHas(name.str(), "sand"))
+				desert++;
+			else
+				other++;
+		}
+	const SceneryTheme theme = (snow >= desert && snow >= other) ? THEME_SNOW : (desert >= other ? THEME_DESERT : THEME_TEMPERATE);
+	const Bool ownTrees = !kinds[SCENERY_TREE].empty() || !kinds[SCENERY_BUSH].empty();
+	const Bool ownRocks = !kinds[SCENERY_ROCK].empty();
+	for (Int role = 0; role < SCENERY_ROLES; role++) {
+		if (role == SCENERY_ROCK ? ownRocks : ownTrees)
+			continue;
+		for (const char *const *name = themeTemplates(theme, role); *name; name++) {
+			const ThingTemplate *tmpl = TheThingFactory ? TheThingFactory->findTemplate(AsciiString(*name), FALSE) : NULL;
+			const W3DTreeDrawModuleData *tree = NULL;
+			AsciiString model;
+			if (tmpl && templateScenery(tmpl, &tree, &model))
+				addKind(kinds[role], tree, model, tree ? 1.0f : tmpl->getAssetScale(), 1.0f);
+		}
+	}
+	// the props' sizes, loading their types; a model that will not load goes
+	Real largest = 0.0f;
+	for (Int role = 0; role < SCENERY_ROLES; role++)
+		for (size_t k = 0; k < kinds[role].size(); ) {
+			SceneryKind &kind = kinds[role][k];
+			if (kind.tree == NULL) {
+				kind.radius = m_skirtProps->getPropRadius(kind.model);
+				if (kind.radius <= 0.0f) {
+					kinds[role].erase(kinds[role].begin() + k);
+					continue;
+				}
+				if (role == SCENERY_ROCK)
+					largest = max(largest, kind.radius*kind.scale);
+			}
+			k++;
+		}
+	// the crags are the biggest of the rocks, blown up
+	std::vector<SceneryKind> crags;
+	for (size_t k = 0; k < kinds[SCENERY_ROCK].size(); k++)
+		if (kinds[SCENERY_ROCK][k].radius*kinds[SCENERY_ROCK][k].scale >= 0.6f*largest)
+			crags.push_back(kinds[SCENERY_ROCK][k]);
+
+	std::vector<Real> weights[SCENERY_ROLES], cragWeights;
+	for (Int role = 0; role < SCENERY_ROLES; role++)
+		for (size_t k = 0; k < kinds[role].size(); k++)
+			weights[role].push_back(kinds[role][k].weight);
+	for (size_t k = 0; k < crags.size(); k++)
+		cragWeights.push_back(crags[k].weight);
+
+	auto outsideOf = [&](Real x, Real y) -> Real {
+		const Real dx = x < lowX ? lowX - x : (x > highX ? x - highX : 0.0f);
+		const Real dy = y < lowY ? lowY - y : (y > highY ? y - highY : 0.0f);
+		return sqrtf(dx*dx + dy*dy);
+	};
+	// dry, level enough ground: no sea strip within reach of it, and no steeper than a tree takes
+	const Real SEA_CLEAR = 14.0f, SLOPE_PROBE = 8.0f, MOST_SLOPE = 0.6f;
+	auto standOn = [&](Real x, Real y, Real *z) -> Bool {
+		*z = skirtGroundAt(x, y);
+		if (TheWaterRenderObj) {
+			const Real probe[5][2] = { {0, 0}, {SEA_CLEAR, 0}, {-SEA_CLEAR, 0}, {0, SEA_CLEAR}, {0, -SEA_CLEAR} };
+			for (Int p = 0; p < 5; p++) {
+				const Real level = TheWaterRenderObj->getSkirtSeaLevel(x + probe[p][0], y + probe[p][1]);
+				if (level > INVALID_WATER_HEIGHT && level > *z - 4.0f)
+					return FALSE;
+			}
+		}
+		const Real dzx = skirtGroundAt(x + SLOPE_PROBE, y) - skirtGroundAt(x - SLOPE_PROBE, y);
+		const Real dzy = skirtGroundAt(x, y + SLOPE_PROBE) - skirtGroundAt(x, y - SLOPE_PROBE);
+		return dzx*dzx + dzy*dzy <= (MOST_SLOPE*2*SLOPE_PROBE)*(MOST_SLOPE*2*SLOPE_PROBE);
+	};
+
+	std::vector<ScenerySpot> spots;
+	const Real steps[3] = { TerrainSkirt::TREE_STEP, TerrainSkirt::ROCK_STEP, TerrainSkirt::CRAG_STEP };
+	for (Int pass = 0; pass < 3; pass++) {
+		const Real step = steps[pass];
+		const Int i0 = (Int)floorf((lowX - TerrainSkirt::SCENERY_FAR)/step), i1 = (Int)ceilf((highX + TerrainSkirt::SCENERY_FAR)/step);
+		const Int j0 = (Int)floorf((lowY - TerrainSkirt::SCENERY_FAR)/step), j1 = (Int)ceilf((highY + TerrainSkirt::SCENERY_FAR)/step);
+		for (Int j = j0; j <= j1; j++)
+			for (Int i = i0; i <= i1; i++) {
+				const TerrainSkirt::ScenerySite site = TerrainSkirt::scenerySite(i, j, step, pass + 1);
+				const Real outside = outsideOf(site.x, site.y);
+				if (outside <= TerrainSkirt::SCENERY_NEAR || outside >= TerrainSkirt::SCENERY_FAR)
+					continue;
+				ScenerySpot spot;
+				spot.crag = FALSE;
+				if (pass == 0) {
+					const TerrainSkirt::Growth growth = TerrainSkirt::growth(site.x, site.y, outside, site.u);
+					if (growth == TerrainSkirt::GROWTH_NONE)
+						continue;
+					spot.role = growth == TerrainSkirt::GROWTH_TREE ? SCENERY_TREE : SCENERY_BUSH;
+				} else if (pass == 1) {
+					if (!TerrainSkirt::rockAt(site.x, site.y, outside, site.u))
+						continue;
+					spot.role = SCENERY_ROCK;
+				} else {
+					if (!TerrainSkirt::cragAt(site.x, site.y, outside, site.u))
+						continue;
+					spot.role = SCENERY_ROCK;
+					spot.crag = TRUE;
+				}
+				const std::vector<Real> &pick = spot.crag ? cragWeights : weights[spot.role];
+				spot.kind = pick.empty() ? -1 : TerrainSkirt::pickKind(&pick[0], (Int)pick.size(), site.x, site.y, site.u);
+				if (spot.kind < 0 || !standOn(site.x, site.y, &spot.z))
+					continue;
+				const SceneryKind &kind = spot.crag ? crags[spot.kind] : kinds[spot.role][spot.kind];
+				spot.x = site.x;
+				spot.y = site.y;
+				spot.yaw = site.yaw;
+				spot.sway = (Int)(site.rank*1000.0f);
+				spot.rank = outside + 400.0f*site.rank;
+				if (spot.crag) {
+					// 45 to 110 units across the middle, whatever the model's own size
+					spot.scale = min(8.0f, (45.0f + 65.0f*site.size)/max(1.0f, kind.radius));
+					spot.z -= 0.25f*kind.radius*spot.scale;
+				} else if (spot.role == SCENERY_ROCK) {
+					spot.scale = kind.scale*(0.8f + 0.9f*site.size);
+					spot.z -= 0.15f*kind.radius*spot.scale;
+				} else if (spot.role == SCENERY_TREE) {
+					// a little taller further out, so a stand still reads from the map
+					spot.scale = kind.scale*(0.8f + 0.45f*site.size)*(1.0f + 0.25f*TerrainSkirt::smooth(outside/900.0f));
+					spot.z -= 0.5f;
+				} else {
+					spot.scale = kind.scale*(0.7f + 0.6f*site.size);
+					spot.z -= 0.3f;
+				}
+				spots.push_back(spot);
+			}
+	}
+	std::sort(spots.begin(), spots.end(), [](const ScenerySpot &a, const ScenerySpot &b) {
+		if (a.rank != b.rank) return a.rank < b.rank;
+		if (a.y != b.y) return a.y < b.y;
+		return a.x < b.x;
+	});
+
+	// ponytail: the props are a render object each; raise the caps once a frame measures room for more
+	const Int MOST_MODEL_TREES = 350, MOST_ROCKS = 600, MOST_CRAGS = 160;
+	Int trees = 0, bushes = 0, modelTrees = 0, rocks = 0, cragCount = 0, dropped = 0;
+	for (size_t n = 0; n < spots.size(); n++) {
+		const ScenerySpot &spot = spots[n];
+		const SceneryKind &kind = spot.crag ? crags[spot.kind] : kinds[spot.role][spot.kind];
+		Coord3D at;
+		at.set(spot.x, spot.y, spot.z);
+		if (kind.tree != NULL) {
+			if (m_skirtTrees->addSceneryTree(at, spot.scale, spot.yaw, spot.sway, kind.tree))
+				(spot.role == SCENERY_TREE ? trees : bushes)++;
+			else
+				dropped++;
+			continue;
+		}
+		Int &count = spot.crag ? cragCount : (spot.role == SCENERY_ROCK ? rocks : modelTrees);
+		const Int most = spot.crag ? MOST_CRAGS : (spot.role == SCENERY_ROCK ? MOST_ROCKS : MOST_MODEL_TREES);
+		if (count < most && m_skirtProps->addSceneryProp(at, spot.yaw, spot.scale, kind.model))
+			count++;
+		else
+			dropped++;
+	}
+	static const char *const themeNames[] = { "temperate", "snow", "desert" };
+	const Int ms = (Int)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
+	DEBUG_LOG(("SKIRT SCENERY: %d trees, %d bushes, %d model trees, %d rocks, %d crags, %d past the caps; kinds %d/%d/%d (%s, %s), %s edge, %d ms\n",
+		trees, bushes, modelTrees, rocks, cragCount, dropped, (Int)kinds[SCENERY_TREE].size(), (Int)kinds[SCENERY_BUSH].size(),
+		(Int)kinds[SCENERY_ROCK].size(), ownTrees ? "own plants" : "edge's plants", ownRocks ? "own rocks" : "edge's rocks", themeNames[theme], ms));
+	for (Int role = 0; role < SCENERY_ROLES; role++)
+		for (size_t k = 0; k < kinds[role].size(); k++)
+			DEBUG_LOG(("SKIRT SCENERY kind %d %s weight %.0f%s\n", role, kinds[role][k].model.str(), kinds[role][k].weight,
+				kinds[role][k].tree ? "" : " (prop)"));
+}
+
+void BaseHeightMapRenderObjClass::drawSkirtProps(RenderInfoClass &rinfo)
+{
+	if (m_skirtProps)
+		m_skirtProps->drawProps(rinfo);
 }
 
 /** The horizon's colour the skirt's rim fades into, under the border's shroud as drawSkirt's shroud

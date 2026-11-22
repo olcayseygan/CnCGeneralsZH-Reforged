@@ -526,6 +526,149 @@ namespace TerrainSkirt
 		}
 		return out;
 	}
+
+	// The scenery on the skirt (BaseHeightMapRenderObjClass::buildSkirtScenery): woods, brush and rocks
+	// standing on it, and big crags further out.  Where each goes is a hash of its grid cell and a slow
+	// noise of the world position, so it is the same on every run and every machine, and nothing logic
+	// reads.  What it is (which tree, which rock) is the map's to say; this only says where and how big.
+
+	/** None within SCENERY_NEAR of the heightmap's edge, where the skirt still carries the edge on; the
+		density grows to full over SCENERY_RAMP past that, falls with the fade into the horizon, and stops
+		at SCENERY_FAR, where the fade has taken most of the ground's light. */
+	const float SCENERY_NEAR = 40.0f;
+	const float SCENERY_RAMP = 300.0f;
+	const float SCENERY_FAR = 1250.0f;
+	/// The grids trees, rocks and crags are tried on, world units.  A stand's trees are about TREE_STEP apart.
+	const float TREE_STEP = 24.0f;
+	const float ROCK_STEP = 85.0f;
+	const float CRAG_STEP = 210.0f;
+	/// Crags only this far out, growing in over CRAG_RAMP.
+	const float CRAG_NEAR = 350.0f;
+	const float CRAG_RAMP = 350.0f;
+	/// The share of the skirt's land the woods hold, and how many trees stand alone in the open.
+	const float WOODS_COVER = 0.42f;
+	const float LONE_TREES = 0.035f;
+	/// The woods' and the rocks' fields, world units a lattice cell.
+	const float WOODS_WAVELENGTH = 640.0f;
+	const float ROCK_WAVELENGTH = 560.0f;
+	/// How wide a stand of one kind of tree is.
+	const float STAND_WAVELENGTH = 280.0f;
+
+	enum Growth
+	{
+		GROWTH_NONE,
+		GROWTH_TREE,
+		GROWTH_BUSH
+	};
+
+	/// What share of its density a point `outside` units past the edge keeps.
+	inline float sceneryKeep(float outside)
+	{
+		if (outside <= SCENERY_NEAR || outside >= SCENERY_FAR)
+			return 0.0f;
+		const float ramp = smooth((outside - SCENERY_NEAR) / SCENERY_RAMP);
+		const float tail = 1.0f - smooth((outside - (SCENERY_FAR - 250.0f)) / 250.0f);
+		return ramp * (0.3f + 0.7f * fade(outside)) * tail;
+	}
+
+	/// The woods' field, 0 to 1: two octaves on turned lattices, through a warp, so the woods have ragged edges.
+	inline float woods(float x, float y)
+	{
+		const float warpX = (turnedNoise(x + 811.0f, y - 2207.0f, 0.866f, 0.5f, 0.9f * WOODS_WAVELENGTH) - 0.5f) * 0.5f * WOODS_WAVELENGTH;
+		const float warpY = (turnedNoise(x - 3121.0f, y + 1409.0f, 0.5f, -0.866f, 0.9f * WOODS_WAVELENGTH) - 0.5f) * 0.5f * WOODS_WAVELENGTH;
+		const float n1 = turnedNoise(x + warpX, y + warpY, 0.906f, 0.423f, WOODS_WAVELENGTH);
+		const float n2 = turnedNoise(x + warpX + 517.0f, y + warpY - 131.0f, -0.259f, 0.966f, 0.31f * WOODS_WAVELENGTH);
+		return (n1 + 0.45f * n2) / 1.45f;
+	}
+
+	/// The rocks' field, 0 to 1.
+	inline float rockiness(float x, float y)
+	{
+		const float n1 = turnedNoise(x - 1777.0f, y + 2903.0f, 0.616f, 0.788f, ROCK_WAVELENGTH);
+		const float n2 = turnedNoise(x + 4049.0f, y + 613.0f, 0.951f, -0.309f, 0.37f * ROCK_WAVELENGTH);
+		return (n1 + 0.5f * n2) / 1.5f;
+	}
+
+	/// The value of the woods' field above which the woods stand: the WOODS_COVER share of a noise
+	/// that sits mostly round its middle.  0.5 holds about half.
+	inline float woodsLine(void)
+	{
+		return 0.5f + (0.5f - WOODS_COVER) * 0.55f;
+	}
+
+	/** What grows at a tree site `outside` units past the edge, for a hash u in [0, 1): a tree inside the
+		woods (the odd one in the open), brush along the woods' margin. */
+	inline Growth growth(float x, float y, float outside, float u)
+	{
+		const float keep = sceneryKeep(outside);
+		if (keep <= 0.0f)
+			return GROWTH_NONE;
+		const float w = woods(x, y), line = woodsLine();
+		const float inside = smooth((w - line) / 0.05f);
+		const float tree = keep * (LONE_TREES + (0.8f - LONE_TREES) * inside);
+		if (u < tree)
+			return GROWTH_TREE;
+		const float margin = 1.0f - smooth(fabsf(w - (line - 0.03f)) / 0.06f);
+		const float bush = keep * (0.02f + 0.2f * margin);
+		return u < tree + bush ? GROWTH_BUSH : GROWTH_NONE;
+	}
+
+	/// Whether a rock site holds a rock: where the rocks' field is high, fewer deep in the woods.
+	inline bool rockAt(float x, float y, float outside, float u)
+	{
+		const float keep = sceneryKeep(outside);
+		const float inWoods = smooth((woods(x, y) - woodsLine()) / 0.08f);
+		return u < keep * (0.04f + 0.6f * smooth((rockiness(x, y) - 0.55f) / 0.1f)) * (1.0f - 0.7f * inWoods);
+	}
+
+	/// Whether a crag site holds a crag: far out, where the rocks' field is high, out of the woods.
+	inline bool cragAt(float x, float y, float outside, float u)
+	{
+		const float outer = smooth((outside - CRAG_NEAR) / CRAG_RAMP) * sceneryKeep(outside);	// not "far": windef.h defines it
+		const float inWoods = smooth((woods(x, y) - woodsLine()) / 0.08f);
+		return u < outer * (0.1f + 0.85f * smooth((rockiness(x, y) - 0.5f) / 0.12f)) * (1.0f - 0.8f * inWoods);
+	}
+
+	/// A grid site: its point, jittered most of a step, and four hashes in [0, 1) for what stands there.
+	struct ScenerySite
+	{
+		float x, y;
+		float u, yaw, size, rank;
+	};
+
+	inline ScenerySite scenerySite(int i, int j, float step, int salt)
+	{
+		ScenerySite site;
+		site.x = (i + 0.1f + 0.8f * lattice(i + salt, j - 3 * salt)) * step;
+		site.y = (j + 0.1f + 0.8f * lattice(i - 7 * salt, j + salt + 101)) * step;
+		site.u = lattice(i + 13 * salt, j + 29);
+		site.yaw = lattice(i - 41, j + 17 * salt) * 6.2831853f;
+		site.size = lattice(i + 97 + salt, j - 59);
+		site.rank = lattice(i - 211, j + 307 - salt);
+		return site;
+	}
+
+	/** One of `count` kinds by their weights, mostly one kind over a stand: the stand's slow noise picks,
+		and the site's own hash moves it a little, so the odd tree of another kind stands among them. */
+	inline int pickKind(const float *weights, int count, float x, float y, float u)
+	{
+		float total = 0.0f;
+		for (int k = 0; k < count; ++k)
+			total += weights[k];
+		if (count <= 0 || total <= 0.0f)
+			return -1;
+		const float stand = valueNoise(x / STAND_WAVELENGTH + 41.3f, y / STAND_WAVELENGTH - 17.9f);
+		float p = stand * 2.3f + 0.25f * u;
+		p -= floorf(p);
+		p *= total;
+		for (int k = 0; k < count; ++k)
+		{
+			if (p < weights[k])
+				return k;
+			p -= weights[k];
+		}
+		return count - 1;
+	}
 }
 
 #endif

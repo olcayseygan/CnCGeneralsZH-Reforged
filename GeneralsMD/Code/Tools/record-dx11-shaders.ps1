@@ -69,7 +69,9 @@ param(
 	# only the runs whose names match one of these wildcards (seed0-classic, seed0, seed0-ultra): the short check
 	[string[]] $Only = @(),
 	# given to every run, after its own switches (for example -noDynamicLOD)
-	[string[]] $ExtraArgs = @()
+	[string[]] $ExtraArgs = @(),
+	# Options.ini rows laid over the Ultra rows, for finding out what one row costs in programs (-UltraOverride @{ SunShafts = 0 })
+	[hashtable] $UltraOverride = @{}
 )
 
 $ErrorActionPreference = "Stop"
@@ -154,7 +156,8 @@ $runs += , @{ Name = "seed0-classic"; Args = @("-quickstart", "-noshellmap", "-m
 # rung is whole.
 $ultraRows = [ordered]@{ StaticGameLOD = "Ultra"; GraphicsQuality = 10; MSAA = 3; ShadowQuality = 2; Smoke = 1; MapLight = "yes";
 	Firelight = "yes"; HemiAmbient = "yes"; AmbientOcclusion = "yes"; InternalHdr = "yes"; Weather = "yes"; WaterSplashes = "yes";
-	Atmosphere = "yes"; StructureCollapse = "yes"; GroundMarks = "yes"; GroundFoliage = "yes"; HeatHaze = "yes" }
+	Atmosphere = "yes"; StructureCollapse = "yes"; GroundMarks = "yes"; GroundFoliage = "yes"; HeatHaze = "yes"; SunShafts = 2 }
+foreach ($row in $UltraOverride.Keys) { $ultraRows[$row] = $UltraOverride[$row] }
 $ultraIni = @(Get-Content (Join-Path $repoRoot "reforged-look.ini") | Where-Object { $_ -notmatch "^\s*($($ultraRows.Keys -join '|'))\s*=" }) +
 	@($ultraRows.GetEnumerator() | ForEach-Object { "$($_.Key) = $($_.Value)" })
 

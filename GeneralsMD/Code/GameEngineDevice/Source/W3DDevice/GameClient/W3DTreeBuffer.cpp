@@ -398,6 +398,29 @@ void W3DTreeBuffer::cull(const CameraClass * camera, const CameraClass *sunCamer
 	float z = zmod * camera_matrix[2][2] ;
 	m_cameraLookAtVector.Set(x,y,z);
 
+	/* Drawn whole (the skirt's scenery): every tree is in the buffers once, filled again only when a
+		 tree comes or goes, and the device clips what the view leaves out.  Culled, the thousands past the
+		 map's edge refilled the buffers on every frame the camera moved. */
+	if (m_alwaysVisible) {
+		if (m_alwaysVisibleTrees != m_numTrees) {
+			m_alwaysVisibleTrees = m_numTrees;
+			m_alwaysCasters = 0;
+			for (curTree=0; curTree<m_numTrees; curTree++) {
+				const Int type = m_trees[curTree].treeType;
+				if (!m_trees[curTree].visible) {
+					m_trees[curTree].visible = true;
+					m_anythingChanged = true;
+				}
+				if (type >= 0 && m_treeTypes[type].m_doShadow)
+					++m_alwaysCasters;
+			}
+		}
+		if (sunCamera)
+			m_sunCasterTrees = TheGlobalData->m_shadowsForProps ? m_numTrees : m_alwaysCasters;
+		m_updateAllKeys = false;
+		return;
+	}
+
 	/* A tree's silhouette shadow is drawn out of the same batch as the tree, so a tree culled by its
 		 own outline took its shadow with it: the shadow of a tree just past the edge of the screen lay
 		 on the ground in view and went out all at once.  Where that shadow is drawn, a tree whose
@@ -1623,6 +1646,9 @@ void W3DTreeBuffer::clearAllTrees(void)
 	m_numShadowTextures = 0;
 
 	m_numTrees=0;
+	m_alwaysVisibleTrees = -1;
+	m_alwaysVertices = 0;
+	m_alwaysIndices = 0;
 	m_movedTrees.clear();
 	m_bounds.lo.x = m_bounds.lo.y = 0;
 	m_bounds.hi.x = m_bounds.hi.y = 1;
@@ -1777,11 +1803,75 @@ void W3DTreeBuffer::addTree(DrawableID id, Coord3D location, Real scale, Real an
 								Real randomScaleAmount, const W3DTreeDrawModuleData *data)
 {
 	if (m_numTrees >= MAX_TREES) {
-		return;  
+		return;
 	}
 	if (!m_initialized) {
-		return;  
+		return;
 	}
+	Real randomScale = GameClientRandomValueReal( 1.0f - randomScaleAmount, 1.0f+ randomScaleAmount );
+	if (randomScaleAmount>0.0f) {
+		// Randomizes the scale and orientation of trees.
+		scale *= randomScale;
+	}
+	//
+	// swayType is a vertex shader constant index counted from c8, and c8 itself is the all-zero
+	// "no sway" slot - the ten real ones are c9 to c18.  So the range is 1..MAX_SWAY_TYPES, which
+	// is what updateSway rolls when the breeze changes; this one rolled 0..MAX_SWAY_TYPES-1, and a
+	// tree that drew a zero stood perfectly still.  One tree in ten, until the next breeze change.
+	//
+	const Int swayType = 1+GameClientRandomValue(0, MAX_SWAY_TYPES-1);
+	insertTree(id, location, scale, angle, swayType, data, TRUE);
+}
+
+//=============================================================================
+// W3DTreeBuffer::addSceneryTree
+//=============================================================================
+/** A tree the terrain skirt stands past the map's edge: no drawable, never pushed, toppled or saved,
+its sway given rather than rolled.  FALSE once the buffer or, drawn whole, its vertex budget is full,
+or the type would not load. */
+//=============================================================================
+Bool W3DTreeBuffer::addSceneryTree(Coord3D location, Real scale, Real angle, Int swayType,
+	const W3DTreeDrawModuleData *data)
+{
+	if (m_numTrees >= MAX_TREES || !m_initialized || data == NULL) {
+		return FALSE;
+	}
+	const Int tree = insertTree(INVALID_DRAWABLE_ID, location, scale, angle,
+		1 + (swayType % MAX_SWAY_TYPES + MAX_SWAY_TYPES) % MAX_SWAY_TYPES, data, FALSE);
+	if (tree < 0) {
+		return FALSE;
+	}
+	if (m_alwaysVisible) {
+		// every tree goes in the buffers at once, so they have to hold them all, a buffer kept spare
+		// for what each buffer's last break wastes
+		const MeshModelClass *model = m_treeTypes[m_trees[tree].treeType].m_mesh->Peek_Model();
+		const Int vertices = model->Get_Vertex_Count(), indices = 3*model->Get_Polygon_Count();
+		if (m_alwaysVertices + vertices > (MAX_BUFFERS-1)*MAX_TREE_VERTEX
+			|| m_alwaysIndices + indices > (MAX_BUFFERS-1)*MAX_TREE_INDEX) {
+			m_numTrees--;
+			return FALSE;
+		}
+		m_alwaysVertices += vertices;
+		m_alwaysIndices += indices;
+		// in now: the cull that would set it runs only on a sun pass or a camera move
+		m_trees[tree].visible = true;
+		m_anythingChanged = true;
+	}
+	return TRUE;
+}
+
+const W3DTreeDrawModuleData *W3DTreeBuffer::getTreeData(Int i, Vector3 *location) const
+{
+	if (i < 0 || i >= m_numTrees || m_trees[i].treeType < 0 || m_trees[i].m_toppleState != TOPPLE_UPRIGHT) {
+		return NULL;
+	}
+	*location = m_trees[i].location;
+	return m_treeTypes[m_trees[i].treeType].m_data;
+}
+
+Int W3DTreeBuffer::insertTree(DrawableID id, Coord3D location, Real scale, Real angle, Int swayType,
+	const W3DTreeDrawModuleData *data, Bool partition)
+{
 	Int treeType = DELETED_TREE_TYPE;
 	Int i;
 	for (i=0; i<m_numTreeTypes; i++) {
@@ -1794,11 +1884,11 @@ void W3DTreeBuffer::addTree(DrawableID id, Coord3D location, Real scale, Real an
 	if (treeType<0) {
 		treeType = addTreeType(data);
 		if (treeType<0) {
-			return;
+			return -1;
 		}
 		m_needToUpdateTexture = true;
 	}
-	if (data->m_framesToMoveOutward > 2 || data->m_doTopple) {
+	if (partition && (data->m_framesToMoveOutward > 2 || data->m_doTopple)) {
 		// Trees/grass that topples or gets pushed aside (outward) gets put in the area partition. jba [7/7/2003]
 		Short bucket = getPartitionBucket(location);
 		m_trees[m_numTrees].nextInPartition = m_areaPartition[bucket];
@@ -1807,16 +1897,9 @@ void W3DTreeBuffer::addTree(DrawableID id, Coord3D location, Real scale, Real an
 		m_trees[m_numTrees].nextInPartition = END_OF_PARTITION;
 	}
 
-	Real randomScale = GameClientRandomValueReal( 1.0f - randomScaleAmount, 1.0f+ randomScaleAmount );
 	m_trees[m_numTrees].sin = WWMath::Sin(angle);
 	m_trees[m_numTrees].cos = WWMath::Cos(angle);
-	if (randomScaleAmount>0.0f) {
-		// Randomizes the scale and orientation of trees.
-		m_trees[m_numTrees].scale = scale*randomScale;
-	} else {
-		// Don't randomly scale & orient
-		m_trees[m_numTrees].scale = scale;
-	}
+	m_trees[m_numTrees].scale = scale;
 	m_trees[m_numTrees].location = Vector3(location.x, location.y, location.z);
 	m_trees[m_numTrees].treeType = treeType;
 	// Translate the bounding sphere of the model.
@@ -1831,14 +1914,7 @@ void W3DTreeBuffer::addTree(DrawableID id, Coord3D location, Real scale, Real an
 	m_trees[m_numTrees].firstIndex = 0;
 	m_trees[m_numTrees].bufferNdx = -1;
 	m_trees[m_numTrees].moved = false;
-
-	//
-	// swayType is a vertex shader constant index counted from c8, and c8 itself is the all-zero
-	// "no sway" slot - the ten real ones are c9 to c18.  So the range is 1..MAX_SWAY_TYPES, which
-	// is what updateSway rolls when the breeze changes; this one rolled 0..MAX_SWAY_TYPES-1, and a
-	// tree that drew a zero stood perfectly still.  One tree in ten, until the next breeze change.
-	//
-	m_trees[m_numTrees].swayType = 1+GameClientRandomValue(0, MAX_SWAY_TYPES-1);
+	m_trees[m_numTrees].swayType = swayType;
 	m_trees[m_numTrees].pushAside = 0;
 	m_trees[m_numTrees].lastFrameUpdated = 0;
 	m_trees[m_numTrees].pushAsideSource = INVALID_ID;
@@ -1847,7 +1923,7 @@ void W3DTreeBuffer::addTree(DrawableID id, Coord3D location, Real scale, Real an
 	m_trees[m_numTrees].pushAsideSin = 1;
 	m_trees[m_numTrees].m_toppleState = TOPPLE_UPRIGHT;
 	m_trees[m_numTrees].snowState = -1;
-	m_numTrees++;
+	return m_numTrees++;
 }
 
 //=============================================================================

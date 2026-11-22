@@ -244,7 +244,8 @@ public:
 	Vector3 getSkirtRimColour(void);	///< what the land past the map ends in, and the void past it in the tactical view
 	void drawSkirtFade(void);	///< the land past the map into the rim's colour, after the water; once a drawSkirt
 	void drawSkirtBackdrop(void);	///< the rim's colour over the void in the tactical view, before the translucent lists; once a drawSkirt
-	void invalidateSkirt(void) { m_skirtStale = TRUE; }	///< built again at its next draw: the sea over it moved
+	void invalidateSkirt(void) { m_skirtStale = TRUE; m_skirtSceneryStale = TRUE; }	///< built again at its next draw: the sea over it moved
+	void drawSkirtProps(RenderInfoClass &rinfo);	///< the skirt scenery's rocks and palms, beside the map's own props
 	W3DBridgeBuffer *getBridgeBuffer()	{return m_bridgeBuffer;}
 	void updateShorelineTiles(Int minX, Int minY, Int maxX, Int maxY, WorldHeightMap *pMap);	///<figure out which tiles on this map cross water plane
 	void updateShorelineTile(Int X, Int Y, Int Border, WorldHeightMap *pMap);	///<figure out which tiles on this map cross water plane
@@ -457,6 +458,11 @@ protected:
 	W3DTreeBuffer *m_treeBuffer; ///< Class for drawing trees and other alpha objects.
 	W3DGrassBuffer *m_grassBuffer; ///< The GroundFoliage option's grass, drawn after the trees.
 	W3DPropBuffer *m_propBuffer; ///< Class for drawing trees and other alpha objects.
+	/** The scenery on the skirt past the map's edge (buildSkirtScenery): its trees and brush batched and
+		drawn whole, its rocks, crags and model trees (the palms) as props.  Neither is saved or told of
+		anything logic does. */
+	W3DTreeBuffer *m_skirtTrees;
+	W3DPropBuffer *m_skirtProps;
 	W3DBibBuffer *m_bibBuffer; ///< Class for drawing trees and other alpha objects.
 	W3DWaypointBuffer *m_waypointBuffer; ///< Draws waypoints.
 #ifdef DO_ROADS
@@ -527,6 +533,15 @@ protected:
 	void buildSkirt(void);
 	void freeSkirt(void);
 	Real skirtHeight(Int x, Int y, const SkirtEdge &edge, Bool sink);	///< world z at sample (x, y) of the whole map, which may lie past its edge
+	SkirtEdge m_skirtEdge;	///< the edge the last buildSkirt read, for the scenery
+	Bool m_skirtEdgeValid;
+	/// The scenery is placed again, at stepTrees, once the skirt has been built after a new map or heights,
+	/// a moved sea or a change of light (its trees bake the light at their one fill).  At most once every
+	/// SKIRT_SCENERY_REBUILD_FRAMES render frames, so a script raising the sea does not place it every frame.
+	Bool m_skirtSceneryStale;
+	UnsignedInt m_skirtSceneryFrame;	///< WW3D's frame count at the last placing
+	void buildSkirtScenery(void);
+	Real skirtGroundAt(Real x, Real y);	///< world z of the skirt as drawn at world point (x, y) past the edge
 	/// Whether the ground draws from the terrain atlas, which the skirt then shares (the full detail).
 	virtual Bool hasTerrainAtlas(void) const { return FALSE; }
 	/// Draws the skirt with the ground's base program and then its shroud, its fade left for drawSkirtFade; both terrain details call it.

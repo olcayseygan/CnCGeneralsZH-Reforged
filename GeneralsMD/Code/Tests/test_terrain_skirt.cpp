@@ -323,3 +323,80 @@ TEST(the_blur_keeps_a_flat_edge_flat_and_wraps)
 	CHECK_NEAR(out[PROFILE_RADIUS], 31.0f, 1e-4f);
 	CHECK_NEAR(out[PROFILE_RADIUS + 1], 30.0f, 1e-4f);
 }
+
+TEST(scenery_stands_off_the_edge_and_stops_before_the_rim)
+{
+	CHECK_EQ(sceneryKeep(0.0f), 0.0f);
+	CHECK_EQ(sceneryKeep(SCENERY_NEAR), 0.0f);
+	CHECK_EQ(sceneryKeep(SCENERY_FAR), 0.0f);
+	CHECK_EQ(sceneryKeep(REACH), 0.0f);
+	// denser a little way out than beside the edge
+	CHECK(sceneryKeep(SCENERY_NEAR + 30.0f) < sceneryKeep(SCENERY_NEAR + SCENERY_RAMP));
+	CHECK(sceneryKeep(SCENERY_NEAR + SCENERY_RAMP) > 0.8f);
+	for (int i = 0; i < 1000; ++i)
+	{
+		const float x = -3000.0f + 7.3f * i, y = 500.0f - 3.1f * i;
+		CHECK_EQ(growth(x, y, 10.0f, 0.0f), GROWTH_NONE);
+		CHECK_EQ(growth(x, y, SCENERY_FAR + 1.0f, 0.0f), GROWTH_NONE);
+		CHECK(!rockAt(x, y, SCENERY_FAR, 0.0f));
+		CHECK(!cragAt(x, y, CRAG_NEAR - 1.0f, 0.0f));
+	}
+}
+
+TEST(scenery_clumps_into_woods_and_open_ground_the_same_every_run)
+{
+	// a field of sites at full density: some woods, much open ground, and the same answer twice
+	int trees = 0, open = 0, sites = 0;
+	int woodsRows = 0;
+	for (int j = 0; j < 120; ++j)
+	{
+		int rowTrees = 0;
+		for (int i = 0; i < 120; ++i)
+		{
+			const ScenerySite site = scenerySite(i, j, TREE_STEP, 1);
+			const ScenerySite again = scenerySite(i, j, TREE_STEP, 1);
+			CHECK_EQ(site.x, again.x);
+			CHECK_EQ(site.u, again.u);
+			CHECK(site.x >= i * TREE_STEP && site.x <= (i + 1) * TREE_STEP);
+			const Growth g = growth(site.x, site.y, SCENERY_NEAR + SCENERY_RAMP, site.u);
+			CHECK_EQ(g, growth(site.x, site.y, SCENERY_NEAR + SCENERY_RAMP, site.u));
+			++sites;
+			if (g == GROWTH_TREE)
+			{
+				++trees;
+				++rowTrees;
+			}
+			else if (g == GROWTH_NONE)
+				++open;
+		}
+		if (rowTrees > 40)
+			++woodsRows;
+	}
+	CHECK(trees > sites / 8);
+	CHECK(trees < sites * 3 / 5);
+	CHECK(open > sites / 4);
+	CHECK(woodsRows > 0);
+}
+
+TEST(a_stand_is_mostly_one_kind_and_every_kind_comes_up)
+{
+	const float weights[3] = { 1.0f, 4.0f, 2.0f };
+	int seen[3] = { 0, 0, 0 };
+	int same = 0, pairs = 0;
+	for (int i = 0; i < 4000; ++i)
+	{
+		const float x = 37.0f * i, y = -11.0f * i;
+		const int k = pickKind(weights, 3, x, y, lattice(i, 7));
+		CHECK(k >= 0 && k < 3);
+		seen[k]++;
+		// a neighbour a tree away
+		const int n = pickKind(weights, 3, x + TREE_STEP, y, lattice(i, 9));
+		++pairs;
+		if (n == k)
+			++same;
+	}
+	CHECK(seen[0] > 0 && seen[1] > 0 && seen[2] > 0);
+	CHECK(seen[1] > seen[0]);
+	CHECK(same * 10 > pairs * 6);
+	CHECK_EQ(pickKind(weights, 0, 0.0f, 0.0f, 0.5f), -1);
+}

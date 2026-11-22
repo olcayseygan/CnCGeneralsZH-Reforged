@@ -1262,10 +1262,14 @@ AsciiString getDefaultMap( Bool isMultiplayer )
 		return AsciiString::TheEmptyString;
 	TheMapCache->updateCache();
 
+	/* A staged generated map is in the cache under the user data folder's full path, which sorts ahead of
+		 every "maps\..." one; the first multiplayer entry was then the Apocalypse or Direct Strike map a mode
+		 room had just made, and a classic room with no remembered map opened on it.  The default is a map on
+		 disk, never a generated one. */
 	MapCache::iterator it = TheMapCache->begin();
 	while (it != TheMapCache->end())
 	{
-		if (isMultiplayer == it->second.m_isMultiplayer)
+		if (isMultiplayer == it->second.m_isMultiplayer && !isGeneratedMapPath(it->first))
 		{
 			return it->first;
 		}

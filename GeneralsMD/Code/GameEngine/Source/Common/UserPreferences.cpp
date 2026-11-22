@@ -677,7 +677,8 @@ AsciiString CustomMatchPreferences::getPreferredMap(void)
 
 	ret = QuotedPrintableToAsciiString(it->second);
 	ret.trim();
-	if (ret.isEmpty() || !isValidMap(ret, TRUE))
+	// a mode's generated map is that mode room's, never a classic room's starting map
+	if (ret.isEmpty() || !isValidMap(ret, TRUE) || IsDirectStrikeMap(ret) || IsApocalypseMap(ret))
 	{	//map is invalid, use default instead
 		ret = getDefaultOfficialMap();
 		return ret;

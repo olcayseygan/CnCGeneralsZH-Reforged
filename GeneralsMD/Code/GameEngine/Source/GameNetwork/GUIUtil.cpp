@@ -1993,19 +1993,27 @@ void AskGameMode(void (*answer)(Int mode))
 	if (GameWindow *body = TheWindowManager->winGetWindowFromId(box, NAMEKEY("GameModeBox.wnd:StaticTextMessage")))
 		GadgetStaticTextSetText(body, TheGameText->fetch("GUI:GameModeBody"));
 
+	/* Each label is measured in the font the button draws it with, a string of its own: the button's own
+		 display string measured some 20 pixels short at 800x600 and "DIRECT STRIKE" touched its border.
+		 Every button takes the widest label, 15% of it each side and the button height for the end caps. */
 	Int widest = 0;
+	DisplayString *measure = TheDisplayStringManager ? TheDisplayStringManager->newDisplayString() : NULL;
 	for (Int i = 0; i < count; ++i)
 	{
 		Int w, h;
 		buttons[i]->winGetSize(&w, &h);
 		widest = max(widest, w);
-		if (DisplayString *label = buttons[i]->winGetInstanceData()->getTextDisplayString())
+		if (measure)
 		{
+			measure->setFont(buttons[i]->winGetFont());
+			measure->setText(buttons[i]->winGetText());
 			Int textW, textH;
-			label->getSize(&textW, &textH);
-			widest = max(widest, textW + h);
+			measure->getSize(&textW, &textH);
+			widest = max(widest, textW + (textW * 3) / 10 + h);
 		}
 	}
+	if (measure)
+		TheDisplayStringManager->freeDisplayString(measure);
 	Int boxW, boxH, margin, topY, bottomY, x;
 	panel->winGetSize(&boxW, &boxH);
 	buttons[0]->winGetPosition(&margin, &topY);

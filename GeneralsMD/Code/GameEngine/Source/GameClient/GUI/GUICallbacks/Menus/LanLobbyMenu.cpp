@@ -172,7 +172,8 @@ AsciiString LANPreferences::getPreferredMap(void)
 
 	ret = QuotedPrintableToAsciiString(it->second);
 	ret.trim();
-	if (ret.isEmpty() || !isValidMap(ret, TRUE))
+	// a mode's generated map is that mode room's, never a classic room's starting map
+	if (ret.isEmpty() || !isValidMap(ret, TRUE) || IsDirectStrikeMap(ret) || IsApocalypseMap(ret))
 	{
 		ret = getDefaultMap(TRUE);
 		return ret;

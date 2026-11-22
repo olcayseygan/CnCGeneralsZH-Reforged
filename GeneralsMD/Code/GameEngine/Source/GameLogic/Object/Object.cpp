@@ -3503,7 +3503,9 @@ void Object::friend_bindToDrawable( Drawable *draw )
 		{
 			if (TheGlobalData->m_forceModelsToFollowTimeOfDay)
 			{
-				set.set(MODELCONDITION_NIGHT, (TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT) ? 1 : 0);
+				// the map's hour, or off under the day and night cycle, whose lights do not follow it yet;
+				// a function of the match's settings, since the logic reads bones from this state
+				set.set(MODELCONDITION_NIGHT, DayNight_mapNightCondition() ? 1 : 0);
 			}
 
 			if (TheGlobalData->m_forceModelsToFollowWeather)
@@ -4207,7 +4209,9 @@ void Object::updateObjValuesFromMapProperties(Dict* properties)
         drawable->clearModelConditionState(MODELCONDITION_NIGHT);
         break;
       case 2:
-        drawable->setModelConditionState(MODELCONDITION_NIGHT);
+        // a map maker's lit-at-night object stays dark under the day and night cycle, which opens at noon
+        if (!DayNight_isOn())
+          drawable->setModelConditionState(MODELCONDITION_NIGHT);
         break;
       default:
         break;

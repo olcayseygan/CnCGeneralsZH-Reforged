@@ -166,6 +166,10 @@ public:
 	/// Called when the view changes, and sort key needs to be recalculated.
 	/// Normally sortKey gets calculated when a bridge becomes visible.
 	void doFullUpdate(void) {m_updateVis = true;};
+	/// the bridges bake the light into their vertices: refill them on the next update (the day and night cycle's steps)
+	/// cull() starts each update from m_updateVis, so the flag goes there: m_anythingChanged alone was
+	/// overwritten before the reload and the bridges kept the noon light all night
+	void lightingChanged(void) {m_updateVis = true; m_anythingChanged = true;}
 	void loadBridges(W3DTerrainLogic *pTerrainLogic, Bool saveGame); ///< Loads the bridges from the map objects list.
 	void worldBuilderUpdateBridgeTowers( W3DAssetManager *assetManager, SimpleSceneClass *scene );			///< for the editor and showing visual bridge towers
 	void updateCenter(CameraClass *camera, RefRenderObjListIterator *pLightsIterator);

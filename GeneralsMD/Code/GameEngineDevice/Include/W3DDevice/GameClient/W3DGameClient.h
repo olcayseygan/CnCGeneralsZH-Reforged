@@ -100,6 +100,10 @@ public:
 	//virtual Bool getBonePos(Drawable *draw, AsciiString boneName, Coord3D* pos, Matrix3D* transform) const;
 
 	virtual void setTimeOfDay( TimeOfDay tod );							///< Tell all the drawables what time of day it is now
+	virtual void setNightLook( Real night );								///< the water and the cloud shadow, 0 the day's to 1 the night's
+	virtual Bool isGroundLitEveryFrame( void );
+	virtual void refreshMapLight( void );
+	virtual void setShadowFade( Real fade );
 
 	//---------------------------------------------------------------------------
 	virtual void setTeamColor( Int red, Int green, Int blue );  ///< @todo superhack for demo, remove!!!

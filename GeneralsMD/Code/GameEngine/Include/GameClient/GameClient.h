@@ -157,6 +157,10 @@ public:
 	void linkDrawablesOfTick( void );				///< after the tick: what it destroyed leaves the list and the lookup, what it made joins them
 
 	virtual void setTimeOfDay( TimeOfDay tod );													///< Tell all the drawables what time of day it is now
+	virtual Bool isGroundLitEveryFrame( void ) { return FALSE; }				///< the ground takes the sun and the ambient every frame, no rebuild (the day and night cycle's steps)
+	virtual void refreshMapLight( void ) {}															///< the day and night cycle wrote the hour's light tables: objects, shadows and ground take them
+	virtual void setShadowFade( Real /*fade*/ ) {}											///< the stencil shadows' darkness, 1 the map's own, for the cycle's handovers
+	virtual void setNightLook( Real /*night*/ ) {}									///< the day and night cycle's sky and water: night's, or the map's own hour's
 
 	virtual void selectDrawablesInGroup( Int group );									///< select all drawables belong to the specifies group
 	virtual void assignSelectedDrawablesToGroup( Int group );						///< assign all selected drawables to the specified group

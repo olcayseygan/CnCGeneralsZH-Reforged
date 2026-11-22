@@ -89,6 +89,7 @@ public:
 
 
 	virtual void staticLightingChanged(void);
+	virtual void spreadLightingChanged(void);
 	virtual	void adjustTerrainLOD(Int adj);
 	virtual void reset(void);
 	virtual void doPartialUpdate(const IRegion2D &partialRange, WorldHeightMap *htMap, RefRenderObjListIterator *pLightsIterator);
@@ -169,6 +170,8 @@ protected:
 		disagree for more than the frame that notices; off under -d3d9, -headless and Classic, which keep
 		EA's per-vertex light. */
 	Bool m_sunPerPixel;
+	Int m_spreadRelightRow;	///< the next row of tiles a spread relight redoes (spreadLightingChanged); -1 none
+	Int m_spreadRowsLeft;		///< rows the spread still owes since the last step, wrapping past the last
 	WorldHeightMap *m_sunHeightsMap;	///< map, and its content version, the heights texture last took
 	Int m_sunHeightsVersion;
 	static Bool sunPerPixelWanted(void);

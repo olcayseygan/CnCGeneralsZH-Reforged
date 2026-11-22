@@ -30544,17 +30544,21 @@ TEST(day_night_cycle_runs_on_game_seconds_at_every_speed)
 {
 	/* Day 600, dusk 90, night 240, dawn 60 game seconds, the same game seconds at every match speed;
 		 the sight steps to 0.9 at 30 s and 0.8 at 60 s into the dusk, back to 0.9 at 20 s and 1.0 at
-		 40 s into the dawn. */
+		 40 s into the dawn.  Frame 0 is noon, 300 s into the day, so `c` is the frame a cycle starts on. */
 	DayNight_setOverrideForTests( 1 );
-	const Int speeds[] = { 100, 125, 150 };
+	const Int speeds[] = { 100, 125, 150, 200 };
 	for( Int i = 0; i < (Int)ARRAY_SIZE( speeds ); ++i )
 	{
 		GameSpeed_set( speeds[ i ] );
 		const UnsignedInt s = (UnsignedInt)LOGICFRAMES_PER_GAME_SECOND;
 		CHECK_EQ( DayNight_cycleFrames(), 990u * s );
+		CHECK_EQ( (Int)DAYNIGHT_START_SECONDS, 300 );
+		CHECK_EQ( DayNight_phase( 0 ), (Int)DAYNIGHT_DAY );
+		CHECK_EQ( DayNight_phase( 300 * s - 1 ), (Int)DAYNIGHT_DAY );
+		CHECK_EQ( DayNight_phase( 300 * s ), (Int)DAYNIGHT_DUSK );		// the first dusk, 300 game seconds in
 		for( UnsignedInt cycle = 0; cycle < 2; ++cycle )
 		{
-			const UnsignedInt c = cycle * 990u * s;
+			const UnsignedInt c = cycle * 990u * s + ( 990u - 300u ) * s;
 			CHECK_EQ( DayNight_phase( c ), (Int)DAYNIGHT_DAY );
 			CHECK_EQ( DayNight_phase( c + 600 * s - 1 ), (Int)DAYNIGHT_DAY );
 			CHECK_EQ( DayNight_phase( c + 600 * s ), (Int)DAYNIGHT_DUSK );
@@ -30581,8 +30585,8 @@ TEST(day_night_cycle_runs_on_game_seconds_at_every_speed)
 		}
 
 		/* An object takes each step on its own frame of the one second spread, the frame
-			 DayNight_update has it look again. */
-		const UnsignedInt step = 630 * s;
+			 DayNight_update has it look again.  The first dusk's first step, 630 s into the cycle. */
+		const UnsignedInt step = 330 * s;
 		const UnsignedInt spread = (UnsignedInt)LOGICFRAMES_PER_SECOND;
 		CHECK_EQ( DayNight_sightScaleFor( (ObjectID)spread, step ), 0.9f );
 		CHECK_EQ( DayNight_sightScaleFor( (ObjectID)7, step + 6 ), 1.0f );
@@ -30593,11 +30597,12 @@ TEST(day_night_cycle_runs_on_game_seconds_at_every_speed)
 
 	// the frames the plan names at the native speed
 	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
-	CHECK_EQ( DayNight_sightStep( 12599 ), 0 );
-	CHECK_EQ( DayNight_sightStep( 12600 ), 1 );
-	CHECK_EQ( DayNight_sightStep( 13200 ), 2 );
-	CHECK_EQ( DayNight_sightStep( 19000 ), 1 );
-	CHECK_EQ( DayNight_sightStep( 19400 ), 0 );
+	CHECK_EQ( DayNight_sightStep( 6599 ), 0 );
+	CHECK_EQ( DayNight_sightStep( 6600 ), 1 );
+	CHECK_EQ( DayNight_sightStep( 7200 ), 2 );
+	CHECK_EQ( DayNight_sightStep( 13000 ), 1 );
+	CHECK_EQ( DayNight_sightStep( 13400 ), 0 );
+	CHECK_EQ( DayNight_sightStep( 6600 + 19800 ), 1 );
 	CHECK_EQ( DayNight_cycleFrames(), (UnsignedInt)19800 );
 	DayNight_setOverrideForTests( -1 );
 }
@@ -30628,14 +30633,15 @@ TEST(day_night_light_delays_are_a_hash_of_the_object_within_their_kind)
 		CHECK( differ > 1000 );											// dawn has a salt of its own
 	}
 
-	// every light is on through the night, an object made then included, and off by day
+	// every light is on through the night, an object made then included, and off by day; frame 0 is
+	// 300 s into the cycle, so cycle time t is frame ( t - 300 ) s
 	for( Int id = 1; id <= 500; ++id )
 		for( Int kind = 0; kind < DAYNIGHT_LIGHT_KINDS; ++kind )
 		{
-			CHECK( DayNight_lightsOn( (ObjectID)id, kind, 690 * s ) );
-			CHECK( DayNight_lightsOn( (ObjectID)id, kind, 929 * s ) );
-			CHECK( !DayNight_lightsOn( (ObjectID)id, kind, 645 * s - 1 ) );
-			CHECK( !DayNight_lightsOn( (ObjectID)id, kind, 981 * s ) );
+			CHECK( DayNight_lightsOn( (ObjectID)id, kind, 390 * s ) );
+			CHECK( DayNight_lightsOn( (ObjectID)id, kind, 629 * s ) );
+			CHECK( !DayNight_lightsOn( (ObjectID)id, kind, 345 * s - 1 ) );
+			CHECK( !DayNight_lightsOn( (ObjectID)id, kind, 681 * s ) );
 			CHECK( !DayNight_lightsOn( (ObjectID)id, kind, 0 ) );
 		}
 	DayNight_setOverrideForTests( -1 );
@@ -30685,7 +30691,7 @@ TEST(day_night_relook_frame_is_the_frame_the_scale_changes)
 		 speed, the frame DayNight_update has an object look again is the frame its scale changes, and no
 		 other.  A look on any frame between gives the same answer on every machine. */
 	DayNight_setOverrideForTests( 1 );
-	const Int speeds[] = { 100, 125, 150 };
+	const Int speeds[] = { 100, 125, 150, 200 };
 	const UnsignedInt spread = (UnsignedInt)LOGICFRAMES_PER_SECOND;
 	for( Int i = 0; i < (Int)ARRAY_SIZE( speeds ); ++i )
 	{
@@ -30711,6 +30717,431 @@ TEST(day_night_relook_frame_is_the_frame_the_scale_changes)
 	}
 	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
 	DayNight_setOverrideForTests( -1 );
+}
+
+static RGBColor dayNightColour( Real r, Real g, Real b )
+{
+	RGBColor c;
+	c.red = r;
+	c.green = g;
+	c.blue = b;
+	return c;
+}
+
+TEST(day_night_light_lands_on_day_and_night_at_the_end_of_every_dawn_and_dusk)
+{
+	/* 32 levels of the night amount.  A ground lit every frame carries every level; one that bakes the
+		 light carries every fourth, at or below the level, so the dusk ends on 32 and the dawn on 0 in
+		 both directions.  Before this the dawn's last retint was level 3 and the day never came back.
+		 The night look comes at level 16, the middle of each. */
+	CHECK_EQ( DayNight_lightLevel( 0.0f ), 0 );
+	CHECK_EQ( (Int)DAYNIGHT_LIGHT_LEVELS, 128 );
+	CHECK_EQ( DayNight_lightLevel( 0.5f ), 64 );
+	CHECK_EQ( DayNight_lightLevel( 1.0f ), (Int)DAYNIGHT_LIGHT_LEVELS );
+	CHECK_EQ( DayNight_lightLevel( -0.25f ), 0 );
+	CHECK_EQ( DayNight_lightLevel( 1.5f ), (Int)DAYNIGHT_LIGHT_LEVELS );
+	CHECK_EQ( DayNight_tintLevel( 15, FALSE ), 0 );
+	CHECK_EQ( DayNight_tintLevel( 127, FALSE ), 112 );
+	CHECK_EQ( DayNight_tintLevel( 128, FALSE ), 128 );
+	CHECK_EQ( DayNight_tintLevel( 3, TRUE ), 3 );
+	CHECK( !DayNight_nightLookAt( 63 ) );
+	CHECK( DayNight_nightLookAt( 64 ) );
+	CHECK( DayNight_nightLookAt( (Int)DAYNIGHT_LIGHT_LEVELS ) );
+
+	DayNight_setOverrideForTests( 1 );
+	const Int speeds[] = { 100, 125, 150, 200 };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( speeds ); ++i )
+	{
+		GameSpeed_set( speeds[ i ] );
+		const UnsignedInt s = (UnsignedInt)LOGICFRAMES_PER_GAME_SECOND;
+		for( Int fine = 0; fine < 2; ++fine )
+		{
+			Int tinted = -1, changes = 0, lookChanges = 0, wrongDay = 0, wrongNight = 0;
+			Bool look = FALSE;
+			// two whole cycles from the opening noon, past the first dawn and into the second day
+			for( UnsignedInt f = 0; f < 2 * DayNight_cycleFrames(); ++f )
+			{
+				const Int level = DayNight_tintLevel( DayNight_lightLevel( DayNight_amount( f ) ), fine != 0 );
+				if( level != tinted )
+				{
+					changes += tinted >= 0 ? 1 : 0;
+					const Bool nowLook = DayNight_nightLookAt( level );
+					lookChanges += nowLook != look ? 1 : 0;
+					look = nowLook;
+					tinted = level;
+				}
+				const Int phase = DayNight_phase( f );
+				wrongDay += phase == DAYNIGHT_DAY && tinted != 0 ? 1 : 0;
+				wrongNight += phase == DAYNIGHT_NIGHT && tinted != (Int)DAYNIGHT_LIGHT_LEVELS ? 1 : 0;
+			}
+			CHECK_EQ( wrongDay, 0 );
+			CHECK_EQ( wrongNight, 0 );
+			CHECK_EQ( changes, fine ? 2 * ( 128 + 128 ) : 2 * ( 8 + 8 ) );
+			CHECK_EQ( lookChanges, 4 );		// on once in each dusk, off once in each dawn
+			CHECK( !look );
+		}
+		// cycle time t is frame ( t - 300 ) s in the first cycle
+		CHECK( DayNight_nightLookAt( DayNight_lightLevel( DayNight_amount( 345 * s ) ) ) );
+		CHECK( DayNight_nightLookAt( DayNight_lightLevel( DayNight_amount( 629 * s ) ) ) );
+		CHECK( !DayNight_nightLookAt( DayNight_lightLevel( DayNight_amount( 675 * s ) ) ) );
+	}
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
+	DayNight_setOverrideForTests( -1 );
+}
+
+TEST(day_night_tint_at_day_is_the_base_to_the_bit)
+{
+	/* The tint is the Apocalypse's formula in its order, so its red night can move onto it later and
+		 draw the same.  At level 0 under the cycle's day factors of one, every channel comes back to the
+		 bit: a day frame on a map authored for afternoon relights nothing. */
+	const DayNightPalette &p = DayNight_palette();
+	const RGBColor bases[] = { dayNightColour( 0.35f, 0.33f, 0.31f ), dayNightColour( 0.961f, 0.9137f, 0.8431f ),
+		dayNightColour( 0.0f, 1.0f, 0.123456f ), dayNightColour( 1.7f, 0.0001f, 0.5f ) };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( bases ); ++i )
+	{
+		RGBColor out;
+		DayNight_tint( out, bases[ i ], p.dayAmbient, p.nightAmbient, 0.0f );
+		CHECK_MEM( &out, &bases[ i ], sizeof( RGBColor ) );
+		DayNight_tint( out, bases[ i ], p.dayDiffuse, p.nightDiffuse, 0.0f );
+		CHECK_MEM( &out, &bases[ i ], sizeof( RGBColor ) );
+
+		// the formula, written out the way ApocalypseDirector's tint() writes it
+		static const Real HAZE[ 3 ] = { 1.03f, 0.99f, 0.93f };
+		static const Real NIGHT[ 3 ] = { 0.70f, 0.32f, 0.28f };
+		const Real amount = 13.0f / 32.0f;
+		RGBColor theirs;
+		theirs.red = bases[ i ].red * ( HAZE[ 0 ] + ( NIGHT[ 0 ] - HAZE[ 0 ] ) * amount );
+		theirs.green = bases[ i ].green * ( HAZE[ 1 ] + ( NIGHT[ 1 ] - HAZE[ 1 ] ) * amount );
+		theirs.blue = bases[ i ].blue * ( HAZE[ 2 ] + ( NIGHT[ 2 ] - HAZE[ 2 ] ) * amount );
+		DayNight_tint( out, bases[ i ], HAZE, NIGHT, amount );
+		CHECK_MEM( &out, &theirs, sizeof( RGBColor ) );
+
+		// a full night is the base under the night factors
+		DayNight_tint( out, bases[ i ], p.dayDiffuse, p.nightDiffuse, 1.0f );
+		CHECK_NEAR( out.red, bases[ i ].red * p.nightDiffuse[ 0 ], 0.00001f );
+		CHECK_NEAR( out.green, bases[ i ].green * p.nightDiffuse[ 1 ], 0.00001f );
+		CHECK_NEAR( out.blue, bases[ i ].blue * p.nightDiffuse[ 2 ], 0.00001f );
+	}
+}
+
+TEST(day_night_palette_is_a_dim_blue_moon_over_noon)
+{
+	const DayNightPalette &p = DayNight_palette();
+	CHECK( p.noonBase );
+	CHECK( p.depthByMapSun );
+	CHECK_EQ( p.shadowCut, 0.5f );
+	for( Int i = 0; i < 3; ++i )
+	{
+		CHECK_EQ( p.dayAmbient[ i ], 1.0f );
+		CHECK_EQ( p.dayDiffuse[ i ], 1.0f );
+		CHECK( p.nightAmbient[ i ] > 0.0f && p.nightAmbient[ i ] <= 1.0f );		// nothing summed past white
+		CHECK( p.nightDiffuse[ i ] > 0.0f && p.nightDiffuse[ i ] <= 1.0f );
+	}
+	CHECK( p.nightAmbient[ 2 ] > p.nightAmbient[ 0 ] && p.nightDiffuse[ 2 ] > p.nightDiffuse[ 0 ] );	// blue
+	// the moon's luminance against the noon sun's, 0.272: a bright map's sun shafts all but gone
+	const Real moon = 0.299f * p.nightDiffuse[ 0 ] + 0.587f * p.nightDiffuse[ 1 ] + 0.114f * p.nightDiffuse[ 2 ];
+	CHECK_NEAR( moon, 0.272f, 0.001f );
+	// a face turned from the moon keeps over half its noon ambient: no black silhouettes
+	const Real shade = 0.299f * p.nightAmbient[ 0 ] + 0.587f * p.nightAmbient[ 1 ] + 0.114f * p.nightAmbient[ 2 ];
+	CHECK( shade > 0.55f && shade < 0.7f );
+}
+
+TEST(day_night_depth_and_noon_check_follow_the_maps_own_light)
+{
+	// a full night under a bright sun, none under a dim one, half between
+	CHECK_EQ( DayNight_depthFor( dayNightColour( 1.0f, 1.0f, 1.0f ) ), 1.0f );
+	CHECK_NEAR( DayNight_depthFor( dayNightColour( 0.9f, 0.9f, 0.9f ) ), 1.0f, 0.0001f );
+	CHECK_NEAR( DayNight_depthFor( dayNightColour( 0.6f, 0.6f, 0.6f ) ), 0.5f, 0.0001f );
+	CHECK_NEAR( DayNight_depthFor( dayNightColour( 0.3f, 0.3f, 0.3f ) ), 0.0f, 0.0001f );
+	CHECK_EQ( DayNight_depthFor( dayNightColour( 0.2f, 0.2f, 0.2f ) ), 0.0f );
+	CHECK_EQ( DayNight_depthFor( dayNightColour( 0.0f, 0.0f, 0.0f ) ), 0.0f );
+
+	// a retail-like afternoon is a noon; a black table, a blinding one and a sun with no light are not
+	CHECK( DayNight_saneNoon( dayNightColour( 0.35f, 0.33f, 0.31f ), dayNightColour( 0.96f, 0.91f, 0.84f ) ) );
+	CHECK( !DayNight_saneNoon( dayNightColour( 0.0f, 0.0f, 0.0f ), dayNightColour( 0.0f, 0.0f, 0.0f ) ) );
+	CHECK( !DayNight_saneNoon( dayNightColour( 5.0f, 5.0f, 5.0f ), dayNightColour( 5.0f, 5.0f, 5.0f ) ) );
+	CHECK( !DayNight_saneNoon( dayNightColour( 0.35f, 0.33f, 0.31f ), dayNightColour( 0.1f, 0.1f, 0.1f ) ) );
+	CHECK( !DayNight_saneNoon( dayNightColour( -1.0f, 0.3f, 0.3f ), dayNightColour( 0.96f, 0.91f, 0.84f ) ) );
+}
+
+TEST(day_night_night_look_without_a_kept_light_is_the_map_off_and_noon_on)
+{
+	/* Nothing in the test process has applied a light, so the answer is the opening one: the cycle off
+		 hands back the map's own test, the cycle on opens at noon on every map. */
+	DayNight_setOverrideForTests( 0 );
+	CHECK( DayNight_nightLookFor( TRUE ) );
+	CHECK( !DayNight_nightLookFor( FALSE ) );
+	DayNight_setOverrideForTests( 1 );
+	CHECK( !DayNight_nightLookFor( TRUE ) );
+	CHECK( !DayNight_nightLookFor( FALSE ) );
+	CHECK_EQ( DayNight_lightAmount(), 0.0f );
+	DayNight_setOverrideForTests( -1 );
+}
+
+TEST(day_night_sky_turns_only_while_no_shadow_shows_it)
+{
+	/* The sun rises at 15 degrees after the dawn, stands at 35 at noon (frame 0), sinks to 15 before
+		 the dusk, over 150 degrees of bearing round the base light's own.  The moon has its own arc.
+		 The light turns from one to the other only while the shadows are faded to nothing, and it never
+		 stands under the floor. */
+	const Real noon = 30.0f;
+	DayNightSky sky;
+	DayNight_setOverrideForTests( 0 );
+	DayNight_sky( 5000, noon, sky );
+	CHECK_EQ( sky.bearing, noon );		// off: a sky that does not move
+	CHECK_EQ( sky.shadow, 1.0f );
+	CHECK( !sky.moon );
+
+	DayNight_setOverrideForTests( 1 );
+	const Int speeds[] = { 100, 125, 150, 200 };
+	for( Int i = 0; i < (Int)ARRAY_SIZE( speeds ); ++i )
+	{
+		GameSpeed_set( speeds[ i ] );
+		const UnsignedInt s = (UnsignedInt)LOGICFRAMES_PER_GAME_SECOND;
+		DayNight_sky( 0, noon, sky );
+		CHECK_NEAR( sky.elevation, 35.0f, 0.01f );
+		CHECK_NEAR( sky.bearing, noon, 0.01f );
+		CHECK_EQ( sky.shadow, 1.0f );
+		CHECK( !sky.moon );
+		DayNight_sky( ( 990 - 300 ) * s, noon, sky );		// the start of the next day, right after the dawn
+		CHECK_NEAR( sky.elevation, 15.0f, 0.01f );
+		CHECK_NEAR( sky.bearing, noon + 75.0f, 0.01f );
+		CHECK_EQ( sky.look, 0.0f );
+
+		/* The night look (cloud shadow and water) eases over four game seconds centred on the turn of the
+			 light: 45 s into the dusk and 30 s into the dawn, frames ( t - 300 ) s of the first cycle. */
+		DayNight_sky( 343 * s, noon, sky );
+		CHECK_EQ( sky.look, 0.0f );
+		DayNight_sky( 345 * s, noon, sky );
+		CHECK_NEAR( sky.look, 0.5f, 0.001f );
+		CHECK( sky.moon );
+		CHECK_EQ( sky.shadow, 0.0f );			// no direct light, so the turn shows nothing
+		DayNight_sky( 347 * s, noon, sky );
+		CHECK_EQ( sky.look, 1.0f );
+		DayNight_sky( 500 * s, noon, sky );
+		CHECK_EQ( sky.look, 1.0f );
+		DayNight_sky( 658 * s, noon, sky );
+		CHECK_EQ( sky.look, 1.0f );
+		DayNight_sky( 660 * s, noon, sky );
+		CHECK_NEAR( sky.look, 0.5f, 0.001f );
+		CHECK( !sky.moon );
+		CHECK_EQ( sky.shadow, 0.0f );
+		DayNight_sky( 662 * s, noon, sky );
+		CHECK_EQ( sky.look, 0.0f );
+
+		Int badTurns = 0, underFloor = 0, overPeak = 0, jumps = 0, moonTurns = 0;
+		DayNightSky last;
+		DayNight_sky( 0, noon, last );
+		for( UnsignedInt f = 1; f < 2 * DayNight_cycleFrames(); ++f )
+		{
+			DayNight_sky( f, noon, sky );
+			underFloor += sky.elevation < 14.999f ? 1 : 0;
+			overPeak += sky.elevation > 35.001f ? 1 : 0;
+			if( ( sky.moon != 0 ) != ( last.moon != 0 ) )
+			{
+				++moonTurns;
+				badTurns += sky.shadow != 0.0f || last.shadow != 0.0f ? 1 : 0;
+			}
+			else if( sky.shadow > 0.0f )
+			{
+				const Real db = sky.bearing - last.bearing, de = sky.elevation - last.elevation;
+				jumps += db > 0.5f || db < -0.5f || de > 0.5f || de < -0.5f ? 1 : 0;
+			}
+			last = sky;
+		}
+		CHECK_EQ( moonTurns, 4 );		// moonrise and sunrise, two cycles
+		CHECK_EQ( badTurns, 0 );
+		CHECK_EQ( underFloor, 0 );
+		CHECK_EQ( overPeak, 0 );
+		CHECK_EQ( jumps, 0 );
+	}
+
+	// warm and dim low, plain at the peak, none for the moon
+	sky.moon = FALSE;
+	sky.elevation = 15.0f;
+	CHECK_EQ( DayNight_lowSun( sky ), 1.0f );
+	sky.elevation = 35.0f;
+	CHECK_EQ( DayNight_lowSun( sky ), 0.0f );
+	// the moon takes the warmth by its elevation too, so the turn at the floor keeps it
+	sky.moon = TRUE;
+	sky.elevation = 15.0f;
+	CHECK_EQ( DayNight_lowSun( sky ), 1.0f );
+	sky.elevation = 30.0f;
+	CHECK_NEAR( DayNight_lowSun( sky ), 0.25f, 0.0001f );
+
+	// the steps: half degrees and every level on a ground lit every frame, five degrees and every
+	// fourth level on one that bakes the light
+	DayNightStep step;
+	sky.moon = FALSE;
+	sky.bearing = 47.3f;
+	sky.elevation = 35.2f;
+	sky.shadow = 0.5f;
+	DayNight_step( 53, sky, TRUE, step );
+	CHECK_EQ( step.level, 53 );
+	CHECK_EQ( step.bearing, 95 );
+	CHECK_EQ( step.elevation, 70 );
+	CHECK_EQ( step.shadow, 64 );		// 128ths, with the direct light
+	DayNight_step( 53, sky, FALSE, step );
+	CHECK_EQ( step.level, 48 );
+	CHECK_EQ( step.bearing, 9 );
+	CHECK_EQ( step.elevation, 7 );
+	CHECK_EQ( step.shadow, 16 );		// 32 steps (COARSE_FADE_STEPS): round( 0.5 * 32 )
+
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
+	DayNight_setOverrideForTests( -1 );
+}
+
+TEST(day_night_light_is_continuous_across_both_turns)
+{
+	/* The film saw the frame turn flat and blue in one picture at the sun-to-moon turn.  On a ground lit
+		 every frame, the light a sunlit face takes (ambient plus the direct light times the sine of its
+		 elevation) must move by no more than two levels' worth from one frame to the next across the
+		 whole dusk and dawn, and by under half a level on the turn itself. */
+	DayNight_setOverrideForTests( 1 );
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
+	const UnsignedInt s = (UnsignedInt)LOGICFRAMES_PER_GAME_SECOND;
+	const DayNightPalette &p = DayNight_palette();
+	const RGBColor baseAmbient = dayNightColour( 0.35f, 0.33f, 0.31f );
+	const RGBColor baseDiffuse = dayNightColour( 0.96f, 0.91f, 0.84f );
+	Coord3D basePos;
+	basePos.x = -0.8f; basePos.y = 0.3f; basePos.z = -0.5f;
+	const Real depth = DayNight_depthFor( baseDiffuse );
+	const Real noon = (Real)atan2( -basePos.y, -basePos.x ) * ( 180.0f / 3.14159265f );
+
+	struct Total
+	{
+		static Real at( UnsignedInt f, const DayNightPalette &p, Real noon, Real depth, const RGBColor &a, const RGBColor &d, const Coord3D &pos, Bool &moon )
+		{
+			DayNightSky sky;
+			DayNight_sky( f, noon, sky );
+			DayNightStep step;
+			DayNight_step( DayNight_lightLevel( DayNight_amount( f ) ), sky, TRUE, step );
+			RGBColor ambient, diffuse;
+			Coord3D aim;
+			DayNight_stepLight( p, step, TRUE, depth, TRUE, a, d, pos, ambient, diffuse, aim );
+			const Real length = (Real)sqrt( aim.x * aim.x + aim.y * aim.y + aim.z * aim.z );
+			const Real up = length > 0.0f ? -aim.z / length : 0.0f;
+			moon = sky.moon;
+			const Real la = 0.299f * ambient.red + 0.587f * ambient.green + 0.114f * ambient.blue;
+			const Real ld = 0.299f * diffuse.red + 0.587f * diffuse.green + 0.114f * diffuse.blue;
+			return la + ld * up;
+		}
+	};
+	Bool moon;
+	const Real day = Total::at( 0, p, noon, depth, baseAmbient, baseDiffuse, basePos, moon );
+	const Real night = Total::at( 500 * s, p, noon, depth, baseAmbient, baseDiffuse, basePos, moon );
+	const Real level = ( day - night ) / (Real)DAYNIGHT_LIGHT_LEVELS;
+	CHECK( level > 0.0f );
+
+	// the first dusk and dawn: cycle seconds 600 to 690 and 930 to 990, frames ( t - 300 ) s
+	const UnsignedInt windows[ 2 ][ 2 ] = { { 300 * s, 390 * s }, { 630 * s, 690 * s } };
+	for( Int w = 0; w < 2; ++w )
+	{
+		Bool lastMoon;
+		Real last = Total::at( windows[ w ][ 0 ] - 1, p, noon, depth, baseAmbient, baseDiffuse, basePos, lastMoon );
+		Real worst = 0.0f, atTurn = -1.0f;
+		for( UnsignedInt f = windows[ w ][ 0 ]; f <= windows[ w ][ 1 ]; ++f )
+		{
+			Bool nowMoon;
+			const Real total = Total::at( f, p, noon, depth, baseAmbient, baseDiffuse, basePos, nowMoon );
+			const Real change = total > last ? total - last : last - total;
+			worst = change > worst ? change : worst;
+			if( ( nowMoon != 0 ) != ( lastMoon != 0 ) )
+				atTurn = change;
+			last = total;
+			lastMoon = nowMoon;
+		}
+		CHECK( worst <= 2.0f * level );
+		CHECK( atTurn >= 0.0f );					// the turn is in the window
+		CHECK( atTurn <= 0.5f * level );
+	}
+	DayNight_setOverrideForTests( -1 );
+}
+
+TEST(day_night_light_leaves_the_hour_and_the_other_tables_alone)
+{
+	/* The logic reads m_timeOfDay, so the picture never writes it; and it writes only the map's own
+		 hour's slot, keeping every other hour's table as the map left it.  On a morning map the opening
+		 noon is the Afternoon table's colours in the morning slot, to the bit.  The light is handed over
+		 only with the cycle on and something to draw. */
+	CHECK( bootOnce() );
+	GlobalData *savedGlobals = TheWritableGlobalData;
+	if (!savedGlobals) TheWritableGlobalData = NEW GlobalData;
+	GlobalData &g = *TheWritableGlobalData;
+	const TimeOfDay savedHour = g.m_timeOfDay;
+	const Real savedStrength = g.m_shadowMapStrength;
+	const Bool savedHeadless = g.m_headless;
+	GlobalData::TerrainLighting savedTerrain[ TIME_OF_DAY_COUNT ][ MAX_GLOBAL_LIGHTS ];
+	GlobalData::TerrainLighting savedObjects[ TIME_OF_DAY_COUNT ][ MAX_GLOBAL_LIGHTS ];
+	memcpy( savedTerrain, g.m_terrainLighting, sizeof( savedTerrain ) );
+	memcpy( savedObjects, g.m_terrainObjectsLighting, sizeof( savedObjects ) );
+
+	DayNight_resetPicture();
+	DayNight_setOverrideForTests( 1 );
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
+	g.m_headless = FALSE;
+	g.m_timeOfDay = TIME_OF_DAY_MORNING;
+	g.m_shadowMapStrength = 0.4f;
+	for( Int k = 0; k < MAX_GLOBAL_LIGHTS; ++k )
+	{
+		GlobalData::TerrainLighting noon, morning;
+		noon.ambient = dayNightColour( 0.35f, 0.33f, 0.31f );
+		noon.diffuse = dayNightColour( 0.96f, 0.91f, 0.84f );
+		noon.lightPos.x = -0.8f; noon.lightPos.y = 0.3f; noon.lightPos.z = -0.5f;
+		morning.ambient = dayNightColour( 0.30f, 0.25f, 0.20f );
+		morning.diffuse = dayNightColour( 0.70f, 0.50f, 0.40f );
+		morning.lightPos.x = -0.9f; morning.lightPos.y = -0.2f; morning.lightPos.z = -0.3f;
+		g.m_terrainLighting[ TIME_OF_DAY_AFTERNOON ][ k ] = g.m_terrainObjectsLighting[ TIME_OF_DAY_AFTERNOON ][ k ] = noon;
+		g.m_terrainLighting[ TIME_OF_DAY_MORNING ][ k ] = g.m_terrainObjectsLighting[ TIME_OF_DAY_MORNING ][ k ] = morning;
+	}
+	GlobalData::TerrainLighting afternoon[ MAX_GLOBAL_LIGHTS ], evening[ MAX_GLOBAL_LIGHTS ];
+	memcpy( afternoon, g.m_terrainLighting[ TIME_OF_DAY_AFTERNOON ], sizeof( afternoon ) );
+	memcpy( evening, g.m_terrainLighting[ TIME_OF_DAY_EVENING ], sizeof( evening ) );
+
+	CHECK( DayNight_handsLightOver() );
+	const UnsignedInt s = (UnsignedInt)LOGICFRAMES_PER_GAME_SECOND;
+	DayNight_applyMapLight( DayNight_palette(), 0 );		// the opening noon
+	CHECK_EQ( (Int)g.m_timeOfDay, (Int)TIME_OF_DAY_MORNING );
+	CHECK_MEM( g.m_terrainLighting[ TIME_OF_DAY_AFTERNOON ], afternoon, sizeof( afternoon ) );
+	CHECK_MEM( g.m_terrainLighting[ TIME_OF_DAY_EVENING ], evening, sizeof( evening ) );
+	CHECK_MEM( &g.m_terrainLighting[ TIME_OF_DAY_MORNING ][ 0 ].ambient, &afternoon[ 0 ].ambient, sizeof( RGBColor ) );
+	CHECK_MEM( &g.m_terrainLighting[ TIME_OF_DAY_MORNING ][ 0 ].diffuse, &afternoon[ 0 ].diffuse, sizeof( RGBColor ) );
+	CHECK_MEM( &g.m_terrainAmbient[ 0 ], &afternoon[ 0 ].ambient, sizeof( RGBColor ) );
+	CHECK( g.m_terrainLighting[ TIME_OF_DAY_MORNING ][ 0 ].lightPos.z < 0.0f );		// a sun over the ground
+
+	DayNight_applyMapLight( DayNight_palette(), 360 * s );		// deep in the first dusk
+	CHECK_EQ( (Int)g.m_timeOfDay, (Int)TIME_OF_DAY_MORNING );
+	CHECK_MEM( g.m_terrainLighting[ TIME_OF_DAY_AFTERNOON ], afternoon, sizeof( afternoon ) );
+	CHECK( g.m_terrainLighting[ TIME_OF_DAY_MORNING ][ 0 ].diffuse.red < afternoon[ 0 ].diffuse.red );
+	CHECK( DayNight_lightAmount() > 0.5f );
+
+	// the second noon is the first to the bit: every step's light is a function of the step alone
+	GlobalData::TerrainLighting firstNoon[ MAX_GLOBAL_LIGHTS ], firstNoonObjects[ MAX_GLOBAL_LIGHTS ];
+	DayNight_applyMapLight( DayNight_palette(), 0 );
+	memcpy( firstNoon, g.m_terrainLighting[ TIME_OF_DAY_MORNING ], sizeof( firstNoon ) );
+	memcpy( firstNoonObjects, g.m_terrainObjectsLighting[ TIME_OF_DAY_MORNING ], sizeof( firstNoonObjects ) );
+	for( UnsignedInt f = 20; f <= DayNight_cycleFrames(); f += 20 )
+		DayNight_applyMapLight( DayNight_palette(), f );
+	CHECK_MEM( g.m_terrainLighting[ TIME_OF_DAY_MORNING ], firstNoon, sizeof( firstNoon ) );
+	CHECK_MEM( g.m_terrainObjectsLighting[ TIME_OF_DAY_MORNING ], firstNoonObjects, sizeof( firstNoonObjects ) );
+	CHECK_EQ( (Int)g.m_timeOfDay, (Int)TIME_OF_DAY_MORNING );
+
+	g.m_headless = TRUE;
+	CHECK( !DayNight_handsLightOver() );
+	g.m_headless = FALSE;
+	DayNight_setOverrideForTests( 0 );
+	CHECK( !DayNight_handsLightOver() );
+
+	DayNight_resetPicture();
+	CHECK_EQ( g.m_shadowMapStrength, 0.4f );		// the whole game's setting comes back
+	CHECK_EQ( DayNight_lightAmount(), 0.0f );
+	DayNight_setOverrideForTests( -1 );
+	memcpy( g.m_terrainLighting, savedTerrain, sizeof( savedTerrain ) );
+	memcpy( g.m_terrainObjectsLighting, savedObjects, sizeof( savedObjects ) );
+	g.m_timeOfDay = savedHour;
+	g.m_shadowMapStrength = savedStrength;
+	g.m_headless = savedHeadless;
+	if (!savedGlobals) { delete TheWritableGlobalData; TheWritableGlobalData = NULL; }
 }
 
 namespace

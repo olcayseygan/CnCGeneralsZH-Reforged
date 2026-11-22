@@ -487,6 +487,7 @@ void GameLogic::reset( void )
 	TheLaneWarStats->reset();
 	TheApocalypseDirector->reset();
 	m_dayNight = FALSE;	// a load sets it from the save before its objects, a new game from its options
+	DayNight_resetPicture();	// the shadow's darkness back; the next map keeps its own light
 
 	// a load that failed part way must not hand its stream or heap order to the next one
 	m_loadedRandomPending = FALSE;

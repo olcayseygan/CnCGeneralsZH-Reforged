@@ -97,6 +97,7 @@
 #include "GameClient/Mouse.h"
 #include "GameClient/Shadow.h"
 #include "GameClient/GameText.h"
+#include "GameLogic/DayNightCycle.h"
 
 //#define KRIS_BRUTAL_HACK_FOR_AIRCRAFT_CARRIER_DEBUGGING 
 #ifdef KRIS_BRUTAL_HACK_FOR_AIRCRAFT_CARRIER_DEBUGGING
@@ -6984,7 +6985,8 @@ void	Drawable::setTimeOfDay(TimeOfDay tod)
 	startAmbientSound(dt, tod);
 
 	ModelConditionFlags c = m_conditionState;
-	c.set(MODELCONDITION_NIGHT, (tod == TIME_OF_DAY_NIGHT) ? 1 : 0);
+	// under the day and night cycle the lights stay off: they do not follow it yet (DayNightCycle.h)
+	c.set(MODELCONDITION_NIGHT, (tod == TIME_OF_DAY_NIGHT && !DayNight_isOn()) ? 1 : 0);
 	replaceModelConditionFlags(c);
 }
 

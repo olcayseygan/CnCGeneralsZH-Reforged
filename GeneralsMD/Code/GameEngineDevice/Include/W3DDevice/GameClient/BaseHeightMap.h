@@ -159,6 +159,9 @@ public:
  	virtual void adjustTerrainLOD(Int adj);
 	virtual void doPartialUpdate(const IRegion2D &partialRange, WorldHeightMap *htMap, RefRenderObjListIterator *pLightsIterator) = 0;
 	virtual void staticLightingChanged(void);
+	/// staticLightingChanged with the ground's relight spread over frames where the terrain can; a whole
+	/// rebuild where it cannot (the day and night cycle's steps on a ground that bakes the light)
+	virtual void spreadLightingChanged(void) { staticLightingChanged(); }
 
 	/** One terrain cell moved - a building foundation flattening the ground under it, say.
 		*
@@ -242,6 +245,7 @@ public:
 
 	W3DShroud *getShroud()	{return m_shroud;}
 	W3DBridgeBuffer *getBridgeBuffer()	{return m_bridgeBuffer;}
+	void setCloudStrength(Real strength);	///< the cloud shadow's darkness, 1 as baked (CloudMapTerrainTextureClass::setStrength)
 	void updateShorelineTiles(Int minX, Int minY, Int maxX, Int maxY, WorldHeightMap *pMap);	///<figure out which tiles on this map cross water plane
 	void updateShorelineTile(Int X, Int Y, Int Border, WorldHeightMap *pMap);	///<figure out which tiles on this map cross water plane
 	void recordShoreLineSortInfos(void);

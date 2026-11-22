@@ -101,6 +101,7 @@
 #include "WW3D2/scene.h"
 #include "W3DDevice/GameClient/W3DPoly.h"
 #include "W3DDevice/GameClient/W3DCustomScene.h"
+#include "GameLogic/DayNightCycle.h"
 
 #include "Common/PerfTimer.h"
 #include "Common/UnitTimings.h" //Contains the DO_UNIT_TIMINGS define jba.		 
@@ -990,6 +991,8 @@ m_numBlockColumnsInLastVB(0),
 m_numBlockRowsInLastVB(0),
 m_lastRelightValid(false),
 m_sunPerPixel(FALSE),
+m_spreadRelightRow(-1),
+m_spreadRowsLeft(0),
 m_sunHeightsMap(NULL),
 m_sunHeightsVersion(0)
 {
@@ -1332,6 +1335,10 @@ Bool HeightMapRenderObjClass::prepareSunPerPixel(void)
 		light[16 + i*4 + 1] = diffuse.green;
 		light[16 + i*4 + 2] = diffuse.blue;
 	}
+	// NormalLightDiffuse[3]: the day and night cycle's ambient against the ambient the tiles baked,
+	// added to the tiles' colour in TERRAIN_RELIGHT_SAMPLING; nought, and the sum exact, whenever the
+	// cycle's light is not kept (the cycle off, the Apocalypse, a script's hour)
+	DayNight_terrainAmbientDelta(&light[28]);
 	light[12] = m_useDepthFade ? 1.0f : 0.0f;
 	light[32] = (Real)count;
 	light[33] = 1.0f / MAP_XY_FACTOR;
@@ -1812,6 +1819,28 @@ void HeightMapRenderObjClass::staticLightingChanged( void )
 	BaseHeightMapRenderObjClass::staticLightingChanged();
 }
 
+//=============================================================================
+// HeightMapRenderObjClass::spreadLightingChanged
+//=============================================================================
+/** The day and night cycle's step on a ground that bakes the light (Classic, -d3d9): everything a
+whole relight marks stale is marked, but the tiles are redone an eighth of the rows a frame
+(updateCenter), so a 70 to 200 ms rebuild is eight short ones.  A whole rebuild asked for meanwhile,
+or already waiting, takes over. */
+//=============================================================================
+void HeightMapRenderObjClass::spreadLightingChanged( void )
+{
+	const Bool wholeWanted = m_needFullUpdate;
+	BaseHeightMapRenderObjClass::staticLightingChanged();
+	m_needFullUpdate = wholeWanted;
+	if (wholeWanted)
+		return;
+	// a spread already under way goes on from its row and wraps, so steps closer than eight frames
+	// still reach every row; every row is owed again from here, in this step's light
+	if (m_spreadRelightRow < 0 || m_spreadRelightRow >= m_y)
+		m_spreadRelightRow = 0;
+	m_spreadRowsLeft = m_y;
+}
+
 #define CENTER_LIMIT 2
 #define BIG_JUMP 16
 #define WIDE_STEP 32
@@ -1927,6 +1956,8 @@ void HeightMapRenderObjClass::updateCenter(CameraClass *camera , RefRenderObjLis
 			 by a building foundation asks for it (W3DTerrainVisual::setRawMapHeight).  Logged with
 			 its cost so a stutter report can be tied to it instead of guessed at. */
 		const UnsignedInt fullUpdateStart = Clock_Milliseconds();
+		m_spreadRelightRow = -1;	// the whole rebuild relights what a spread one had left
+		m_spreadRowsLeft = 0;
 		// A whole rebuild is where the tiles may change which light they hold, and their shape.
 		setSunPerPixel(sunPerPixelWanted());
 		if (setSubdivided(subdivideWanted())) {
@@ -1940,7 +1971,24 @@ void HeightMapRenderObjClass::updateCenter(CameraClass *camera , RefRenderObjLis
 		return;
 	}
 
-	if (m_x >= m_map->getXExtent() && m_y >= m_map->getYExtent()) 
+	// a spread relight (spreadLightingChanged): an eighth of the rows this frame, from where the last
+	// slice stopped and round past the last row, until every row has been redone since the last step
+	if (m_spreadRowsLeft > 0 && m_y > 0)
+	{
+		const UnsignedInt sliceStart = Clock_Milliseconds();
+		if (m_spreadRelightRow < 0 || m_spreadRelightRow >= m_y)
+			m_spreadRelightRow = 0;
+		const Int rows = min((m_y + 7) / 8, m_spreadRowsLeft);
+		const Int y0 = m_spreadRelightRow;
+		const Int y1 = min(y0 + rows - 1, m_y - 1);
+		updateBlock(0, y0, m_x-1, y1, m_map, pLightsIterator);
+		m_spreadRowsLeft -= y1 - y0 + 1;
+		m_spreadRelightRow = y1 + 1 < m_y ? y1 + 1 : 0;
+		DEBUG_LOG(("TERRAIN SPREAD UPDATE: rows %d to %d of %d in %d ms at frame %d, %d rows left\n", y0, y1, m_y,
+							 (Int)(Clock_Milliseconds() - sliceStart), TheGameLogic ? TheGameLogic->getFrame() : 0, m_spreadRowsLeft));
+	}
+
+	if (m_x >= m_map->getXExtent() && m_y >= m_map->getYExtent())
   {
 		m_updating = false;
 		return; // no need to center. 
@@ -2290,7 +2338,8 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 			terrainShader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
 		DX8Wrapper::Set_Shader(terrainShader);
 
-		if (TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT) {
+		// the day and night cycle's phase, when it runs, else the map's hour
+		if (DayNight_nightLookFor(TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT)) {
 			doCloud = false;
 		}
 
@@ -2865,7 +2914,7 @@ void HeightMapRenderObjClass::renderExtraBlendTiles(void)
 			W3DShaderManager::ShaderTypes st = W3DShaderManager::ST_ROAD_BASE;
 
 			Bool doCloud = TheGlobalData->m_useCloudMap;
-			if (TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT) {
+			if (DayNight_nightLookFor(TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT)) {
 				doCloud = false;
 			}
 

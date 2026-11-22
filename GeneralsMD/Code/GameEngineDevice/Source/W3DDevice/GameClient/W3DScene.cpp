@@ -92,6 +92,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include "GameLogic/DayNightCycle.h"
 
 /* A hint that a cache line is about to be read, as in PartitionManager.cpp: it reads nothing the
 	 program sees, so no result depends on it. */
@@ -1365,7 +1366,8 @@ void RTS3DScene::updateFixedLightEnvironments(RenderInfoClass & rinfo)
 	if( TheGlobalData->m_scriptOverrideInfantryLightScale != -1.0f )
 		infantryLightScale = TheGlobalData->m_scriptOverrideInfantryLightScale;
 	else
-		infantryLightScale = TheGlobalData->m_infantryLightScale[TheGlobalData->m_timeOfDay];
+		// the map's own hour's, or under the day and night cycle the day's toward the night's by the light
+		infantryLightScale = DayNight_infantryLightScale(TheGlobalData->m_infantryLightScale);
 	
 	//Generate the default light environment
 	m_defaultLightEnv.Reset(Vector3(0,0,0), Get_Ambient_Light());

@@ -91,6 +91,7 @@
 #include "WW3D2/scene.h"
 #include "W3DDevice/GameClient/W3DPoly.h"
 #include "W3DDevice/GameClient/W3DCustomScene.h"
+#include "GameLogic/DayNightCycle.h"
 
 #include "Common/PerfTimer.h"
 #include "Common/UnitTimings.h" //Contains the DO_UNIT_TIMINGS define jba.		 
@@ -508,7 +509,7 @@ void FlatHeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 		terrainShader.Set_Cull_Mode(ShaderClass::CULL_MODE_DISABLE);
 	DX8Wrapper::Set_Shader(terrainShader);
 
-	if (TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT) {
+	if (DayNight_nightLookFor(TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT)) {
 		doCloud = false;
 	}
 

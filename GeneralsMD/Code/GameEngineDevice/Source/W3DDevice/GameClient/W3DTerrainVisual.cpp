@@ -50,6 +50,7 @@
 #include "GameClient/Drawable.h"
 #include "GameClient/ClientRandomValue.h"
 
+#include "GameLogic/DayNightCycle.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/GameLogic.h"
 #include "GameLogic/TerrainLogic.h"
@@ -1026,7 +1027,8 @@ void W3DTerrainVisual::addProp(const ThingTemplate *tTemplate, const Coord3D *po
 	{
 		state.set(MODELCONDITION_SNOW);
 	}
-	if (TheGlobalData->m_timeOfDay == TIME_OF_DAY_NIGHT)
+	// a prop is made once, at the map's load: the map's hour, or the day under the day and night cycle
+	if (DayNight_mapNightCondition())
 	{
 		state.set(MODELCONDITION_NIGHT);
 	}

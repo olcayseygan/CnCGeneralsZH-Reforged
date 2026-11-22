@@ -481,7 +481,9 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 // order.  The pixel comes back to the world through WorldFromClip as the headlights' does.  The
 // unread normal mapped fields carry the numbers (DX11BackendClass::Set_Terrain_Light):
 // NormalLightDirection[i] the ray of global light i and NormalLightDiffuse[i] its terrain diffuse,
-// NormalLightDirection[3].x one when the light fades under water, NormalMapParameters the light
+// NormalLightDirection[3].x one when the light fades under water, NormalLightDiffuse[3].rgb the day
+// and night cycle's ambient against the one the tiles baked (nought with the cycle's light not
+// kept, so the sum is exact and the picture the old one), NormalMapParameters the light
 // count, one over the cell size, the map's border in samples and the height of one byte step,
 // TerrainSunDirection the fade per channel and the water's height.
 #define TERRAIN_LIGHT_FLOATS 40
@@ -580,7 +582,7 @@ const unsigned NORMAL_MAPPED_LIGHTS = 4;
 	"    }\n" \
 	"    float rise = NormalMapParameters.w * NormalMapParameters.y;\n" \
 	"    float3 normal = normalize(float3(-slope_x * rise, -slope_y * rise, 1.0));\n" \
-	"    float3 light = base;\n" \
+	"    float3 light = base + NormalLightDiffuse[3].rgb;\n" \
 	"    int count = (int)NormalMapParameters.x;\n" \
 	"    [unroll] for (int i = 0; i < 3; ++i) {\n" \
 	"        if (i < count) {\n" \

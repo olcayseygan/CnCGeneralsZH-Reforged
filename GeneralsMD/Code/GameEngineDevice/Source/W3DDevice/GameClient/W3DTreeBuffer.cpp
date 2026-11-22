@@ -78,6 +78,7 @@ enum
 #include "GameLogic/ScriptEngine.h"
 #include "GameClient/Snow.h"
 #include "GameLogic/GameLogic.h"
+#include "Lib/Clock.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/PartitionManager.h"
 #include "GameClient/ClientRandomValue.h"
@@ -1429,6 +1430,7 @@ W3DTreeBuffer::W3DTreeBuffer(void)
 {
 	memset(this, sizeof(W3DTreeBuffer), 0);
 	m_initialized = false;
+	m_lightRefill = false;
 	Int i;
 	for	(i=0; i<MAX_BUFFERS; i++) {
 		m_vertexTree[i] = NULL;
@@ -2524,8 +2526,15 @@ void W3DTreeBuffer::drawTrees(CameraClass * camera, RefRenderObjListIterator *pD
 		m_anythingChanged = true;
 	}
 	if (m_anythingChanged) {
+		const UnsignedInt fillStart = Clock_Milliseconds();
 		loadTreesInVertexAndIndexBuffers(pDynamicLightsIterator);
 		m_anythingChanged = false;
+		if (m_lightRefill) {
+			// the day and night cycle steps the trees on its coarse steps only; this is what one costs
+			m_lightRefill = false;
+			DEBUG_LOG(("TREE LIGHT REFILL: %d trees in %d ms at frame %d\n", m_numTrees,
+								 (Int)(Clock_Milliseconds() - fillStart), TheGameLogic ? TheGameLogic->getFrame() : 0));
+		}
 	} else if (m_anyPushChanged) {
 		m_anyPushChanged = false;
 		updateVertexBuffer();

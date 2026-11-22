@@ -2822,6 +2822,56 @@ void WaterRenderObjClass::setTimeOfDay(TimeOfDay tod)
 		generateVertexBuffer(PATCH_SIZE,PATCH_SIZE,sizeof(SEA_PATCH_VERTEX),true);	//update the water mesh with new lighting/alpha
 }
 
+static UnsignedInt blendColor(UnsignedInt a, UnsignedInt b, Real t)
+{
+	UnsignedInt out = 0;
+	for (Int shift = 0; shift < 32; shift += 8)
+	{
+		const Real ca = (Real)((a >> shift) & 0xff), cb = (Real)((b >> shift) & 0xff);
+		out |= ((UnsignedInt)(ca + (cb - ca) * t + 0.5f) & 0xff) << shift;
+	}
+	return out;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The day and night cycle's water: at the turn of the dusk and the dawn it moves from the day's
+	setting to the night's over a few seconds instead of in one picture.  The blend is built in the
+	setting slot no hour uses (TIME_OF_DAY_INVALID) and drawn from there, the colours mixed and the
+	textures and their scroll the day's; at either end it is the plain hour again. */
+//-------------------------------------------------------------------------------------------------
+void WaterRenderObjClass::setTimeOfDayBlend(TimeOfDay day, Real night)
+{
+	if (night <= 0.0f || day == TIME_OF_DAY_NIGHT)
+	{
+		setTimeOfDay(night >= 1.0f ? TIME_OF_DAY_NIGHT : day);
+		return;
+	}
+	if (night >= 1.0f)
+	{
+		setTimeOfDay(TIME_OF_DAY_NIGHT);
+		return;
+	}
+	const Setting &a = m_settings[day];
+	const Setting &b = m_settings[TIME_OF_DAY_NIGHT];
+	// the textures cannot blend: the day's until the colours are fully the night's, so they change
+	// where the water is darkest, at the end of the dusk's ease and the start of the dawn's
+	const Setting &nearer = a;
+	Setting &mix = m_settings[TIME_OF_DAY_INVALID];
+	REF_PTR_SET(mix.skyTexture, nearer.skyTexture);
+	REF_PTR_SET(mix.waterTexture, nearer.waterTexture);
+	mix.waterRepeatCount = nearer.waterRepeatCount;
+	mix.skyTexelsPerUnit = nearer.skyTexelsPerUnit;
+	mix.uScrollPerMs = nearer.uScrollPerMs;
+	mix.vScrollPerMs = nearer.vScrollPerMs;
+	mix.vertex00Diffuse = blendColor(a.vertex00Diffuse, b.vertex00Diffuse, night);
+	mix.vertex10Diffuse = blendColor(a.vertex10Diffuse, b.vertex10Diffuse, night);
+	mix.vertex11Diffuse = blendColor(a.vertex11Diffuse, b.vertex11Diffuse, night);
+	mix.vertex01Diffuse = blendColor(a.vertex01Diffuse, b.vertex01Diffuse, night);
+	mix.waterDiffuse = blendColor(a.waterDiffuse, b.waterDiffuse, night);
+	mix.transparentWaterDiffuse = blendColor(a.transparentWaterDiffuse, b.transparentWaterDiffuse, night);
+	setTimeOfDay(TIME_OF_DAY_INVALID);
+}
+
 //-------------------------------------------------------------------------------------------------
 /**Copies GDF settings dealing with a particular time of day into our own
 	* structures.  Also allocates any required W3D assets (textures). */

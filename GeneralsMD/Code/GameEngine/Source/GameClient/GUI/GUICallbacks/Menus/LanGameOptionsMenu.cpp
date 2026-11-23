@@ -1919,13 +1919,18 @@ void PostToLanGameOptions( PostToLanGameType post )
 			
 			//buttonBack->winEnable( true );
 			
-			for(Int i = 0; i < MAX_SLOTS; ++i)
+			// a Direct Strike seat is its start, so the starts stay: clearing them here put every player who
+			// had changed seats back on his own slot's seat the moment the room sent the move out
+			if (!s_directStrike)
 			{
-				game->getSlot(i)->setStartPos(-1);
+				for(Int i = 0; i < MAX_SLOTS; ++i)
+				{
+					game->getSlot(i)->setStartPos(-1);
+				}
 			}
 			// an Apocalypse room's seats stand on starts 1..n; without this the host's room put them back
-			// every frame and sent the options again each time; a Direct Strike room's seat n stands on start n
-			// the same way (FitDirectStrikeRoom), so it is put back before the string goes out too
+			// every frame and sent the options again each time; a Direct Strike room's seats go under the
+			// mode's rules (FitDirectStrikeRoom) before the string goes out too
 			if (s_apocalypse)
 				FitApocalypseRoom(game);
 			else if (s_directStrike)

@@ -25,12 +25,14 @@
 // never by a string: PIECE_NAMES in DirectStrikeTheme.cpp is the only place a mapped image's name is
 // written, so when hud-artist renames the art it is that one table.
 //
-// A piece is <Prefix><Name><State>: the prefix is the side's (AmericaPro, ChinaPro, GLAPro), the state
-// "" up, H under the pointer, P lit or pressed, I unavailable.  A piece the data lacks is NULL and the
-// caller draws its flat stand-in, so missing art never stops a screen.
+// A piece is <Prefix><Name><State>: the prefix is the side's (AmericaPro, ChinaPro, GLAPro) or the
+// common frame's (CommonPro), the state "" up, H under the pointer, P lit or pressed, I unavailable.  A
+// piece the data lacks is NULL and the caller draws its flat stand-in, so missing art never stops a screen.
 //
-// Every draw first calls begin() with the local side and the screen's scale: that picks the prefix and
-// starts the strings over, so a screen owns the theme for its draw.
+// Every draw first calls begin() with the set it wears and the screen's scale: that picks the prefix and
+// starts the strings over, so a screen owns the theme for its draw.  The match HUD wears the local side's
+// set; the screens every player of a match shares (the lobby, the end screen) wear the common frame,
+// SIDE_COMMON, the owner's Forged Alloy of 2026-11-23.
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -157,11 +159,9 @@ namespace DirectStrikeTheme
 		ROW_R,
 
 		// the lobby's own, README-lobby.md
-		LOBBY_BACK,
-		LOBBY_SEND,
 		LOBBY_PICK_TILE,
 		LOBBY_ISLAND,
-		LOBBY_ISLAND_SMALL,
+		LOBBY_ISLAND_BAND,			///< the island on the map band
 		LOBBY_HEADQUARTERS_AMERICA,	///< a plain side's portrait: its command centre's build button picture
 		LOBBY_HEADQUARTERS_CHINA,
 		LOBBY_HEADQUARTERS_GLA,
@@ -175,11 +175,47 @@ namespace DirectStrikeTheme
 		LOBBY_AI,
 		LOBBY_CHECK,
 
+		// the Spearhead lobby on the common sheet: a pointed piece is drawn in its own light, so a team's piece and
+		// its mirror are two (Right points right, team 1's; Left points left, team 2's)
+		CONSOLE_TL, CONSOLE_T, CONSOLE_TR, CONSOLE_L, CONSOLE_C, CONSOLE_R, CONSOLE_BL, CONSOLE_B, CONSOLE_BR,
+		SPEAR_RIGHT_L, SPEAR_RIGHT_C, SPEAR_RIGHT_R,				///< a seat with a player, 148 high
+		SPEAR_LEFT_L, SPEAR_LEFT_C, SPEAR_LEFT_R,
+		SPEAR_YOU_RIGHT_L, SPEAR_YOU_RIGHT_C, SPEAR_YOU_RIGHT_R,	///< the local player's seat, its lip bright
+		SPEAR_YOU_LEFT_L, SPEAR_YOU_LEFT_C, SPEAR_YOU_LEFT_R,
+		BAY_RIGHT_L, BAY_RIGHT_C, BAY_RIGHT_R,							///< an open or closed seat
+		BAY_LEFT_L, BAY_LEFT_C, BAY_LEFT_R,
+		SPEAR_HEAD_RIGHT_L, SPEAR_HEAD_RIGHT_C, SPEAR_HEAD_RIGHT_R,	///< a team head, 44 high
+		SPEAR_HEAD_LEFT_L, SPEAR_HEAD_LEFT_C, SPEAR_HEAD_LEFT_R,
+		HEX_TITLE_L, HEX_TITLE_C, HEX_TITLE_R,
+		TUG_L, TUG_C, TUG_R,
+		SEG,						///< a seat lip's segment, unlit
+		SEG_LIT,				///< lit: white, drawn tinted at its core grown by GLOW
+		TUG_SEG,
+		TUG_SEG_LIT,
+		LED,						///< a team head's readiness light
+		LED_LIT,
+		CHEVRON_R,			///< white, tinted, pointing right
+		CHEVRON_L,
+
+		// the Riveted Clamp controls of the shared screens
+		CLAMP_START_L, CLAMP_START_C, CLAMP_START_R,
+		CLAMP_BACK,
+		CLAMP_PLUS,			///< an open seat's key: sit here
+		CLAMP_SEND,
+		CLAMP_CHIP_L, CLAMP_CHIP_C, CLAMP_CHIP_R,
+		CLAMP_CHIP_FIELD_R,	///< a chip's right end without its caret block
+		CLAMP_BOX_TL, CLAMP_BOX_T, CLAMP_BOX_TR, CLAMP_BOX_L, CLAMP_BOX_C, CLAMP_BOX_R, CLAMP_BOX_BL, CLAMP_BOX_B, CLAMP_BOX_BR,
+		CLAMP_BAND_L, CLAMP_BAND_C, CLAMP_BAND_R,
+
 		PIECE_COUNT
 	};
 
-	/// the base side a piece set belongs to: 0 America (Turkiye and a watcher too), 1 China, 2 GLA
-	enum Side { SIDE_AMERICA, SIDE_CHINA, SIDE_GLA, SIDE_COUNT };
+	/// a lit piece's halo past its core on every side, at 1080: it is drawn at its core grown by this
+	static const Real GLOW = 4.0f;
+
+	/// the set a screen wears: a base side's (0 America, Turkiye and a watcher too, 1 China, 2 GLA), or the common
+	/// frame every player of a match shares, which is no side and so stands after the count
+	enum Side { SIDE_AMERICA, SIDE_CHINA, SIDE_GLA, SIDE_COUNT, SIDE_COMMON = SIDE_COUNT };
 	Side sideOf( const AsciiString &side );
 	const char *prefixOf( Side side );
 
@@ -221,15 +257,23 @@ namespace DirectStrikeTheme
 	void key( const LaneHudBox &b, Piece piece, Bool lit, Bool disabled = FALSE );
 	/// a chip of the HUD's floating top: its piece, or a card's flat face with its glass 5 in
 	void chip( const LaneHudBox &b, Piece piece );
-	/// a 9-slice from its top left piece (PANEL_TL, PANEL_LIT_TL, PLATE_TL, WELL_TL), corners at their own
-	/// size times the scale; a flat well where the pieces are missing
+	/// a 9-slice from its top left piece (PANEL_TL, PANEL_LIT_TL, PLATE_TL, WELL_TL, CONSOLE_TL, CLAMP_BOX_TL),
+	/// corners at their own size times the scale; a flat well where the pieces are missing.  The middles stretch,
+	/// unless the centre is a textured tile (wider than TILE_MIN): then the edges and the centre repeat from the
+	/// top left at their own size, the last copy cut, so the scratches are never smeared
 	void nineSlice( const LaneHudBox &b, Piece topLeft, Color tint = 0xFFFFFFFF );
 	/// the plain panel, nineSlice from PANEL_TL
 	void panel( const LaneHudBox &b );
-	/// a 3-slice bar: left and right at their own widths times the scale, the centre stretched between
-	void threeSlice( const LaneHudBox &b, Piece left, Piece centre, Piece right, const char *state = "" );
+	/// a 3-slice bar: left and right at their own widths times the scale, the centre stretched between, or repeated
+	/// from the left when it is a textured tile as above
+	void threeSlice( const LaneHudBox &b, Piece left, Piece centre, Piece right, const char *state = "", Color tint = 0xFFFFFFFF );
 	/// a dropdown ("" up, H hot, P open), or a field without its caret
 	void dropdown( const LaneHudBox &b, const char *state, Bool field );
+	/// the keys row's chip (team size, game speed), the Riveted Clamp's dropdown at 72: "" up, H hot, P open, or a
+	/// field without its caret block
+	void clampChip( const LaneHudBox &b, const char *state, Bool field );
+	/// a lit piece (white, its halo in the alpha) at its core grown by GLOW on every side, in the colour
+	void glow( Piece piece, const LaneHudBox &core, Color tint );
 	/// a picture filling a square well from its centre top, the colour band 6 high at its foot
 	void portraitWell( const LaneHudBox &well, const Image *picture, Color band, Bool fill );
 	/// a swatch: the colour in a 2 pixel black frame

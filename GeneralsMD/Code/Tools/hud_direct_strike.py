@@ -427,9 +427,9 @@ def end(side):
     out = {"LaneEndCard": end_card(side, False), "LaneEndCardWon": end_card(side, True),
            "LaneEndResult": end_result(side, False), "LaneEndResultWon": end_result(side, True), "LaneEndHeader": end_header(side)}
     out.update({"LaneEndTimeline" + part: img for part, img in end_timeline(side).items()})
-    for name, kind in END_KEYS.items():
-        for s in KEY_STATES:
-            out["LaneEnd%s%s" % (name, s)] = T.key(side, *END_KEY, s, button_layers(kind, build), 0.62)
+    for name, kind in END_KEYS.items():                # the Riveted Clamp key, with a disabled state for an unwired key
+        for s in STATES:
+            out["LaneEnd%s%s" % (name, s)] = clamp_key(side, *END_KEY, s, button_layers(kind, build))
     for name, kind in STATS.items():
         out["LaneStat" + name] = stat_glyph(kind, STAT)
     return out
@@ -437,14 +437,272 @@ def end(side):
 
 def lobby(side):
     """The lobby's own pieces; its plates, keys, dropdowns, coins and lamps are the shared ones."""
-    out = {"LobbyIsland": island_art(*ISLAND), "LobbyIslandSmall": island_art(*ISLAND_SMALL)}
-    for s in KEY_STATES:
-        out["LobbyPickTile" + s] = T.key(side, *PICK_TILE, s)
-        out["LobbyBack" + s] = T.key(side, 72, 72, s, arrow_layers("back"), 0.62)
-        out["LobbySend" + s] = T.key(side, 48, 48, s, arrow_layers("send"), 0.62)
+    out = {"LobbyIsland": island_art(*ISLAND)}
     out.update(lobby_glyphs())
     for s in T.SIDES:
         out["LobbyHeadquarters" + s] = headquarters(s)
+    out.update(spearhead(side))
+    out.update(clamp_controls(side))
+    return out
+
+# ---------------------------------------------------------------------------------------------- the Riveted Clamp controls
+# The owner's pick of 2026-11-23 (buttons study B, stage/buttons/buttons.py): every key, dropdown, list and box of the
+# shared screens is a notched steel frame round dark glass with a riveted clamp hugging each corner.  Hover turns the
+# clamps brass and brightens the lip, pressed lights the face in the frame's lit colour, disabled darkens it all; START
+# doubles the frame and fills the face with brass; a dropdown's caret sits on a raised riveted block, brass while its
+# list is open.  The clamps sit in the 9-slice corners and the 3-slice ends, so every middle is plain and stretches.
+
+CLAMP_KEY_C, CLAMP_HERO_C = 7, 10               # a key's notched corner, START's
+CLAMP_BLOCK = 30                                # a dropdown's caret block
+CLAMP_END = 44                                  # a dropdown's or chip's right end: the block and the frame past it
+CLAMP_CAP = 36                                  # START's ends: the notch, the doubled frame and the clamp's arm
+CLAMP_NINE = 34                                 # a box's 9-slice corner: its notch and its clamp
+CHIP_H = 72                                     # the keys row's chips (team size, game speed)
+BAND_H = 44                                     # the map band: the head row's height
+ISLAND_BAND = (72, 30)                          # the island in the map band
+# a box's clamps, one size up from a key's and in bright steel, so they read on a full screen (the owner, 2026-11-23)
+BOX_ARM, BOX_TH, BOX_RIVET, BOX_RISE = 24, 10.0, 1.9, 2.8      # the bars reach past the lip onto the glass, so they read
+
+
+def clamp_bars(o, w, h, c, arm, th, mat, arm_v=None, rivet=1.25, rise=1.8):
+    """An L clamp hugging each notched corner: two bars over the lip and a rivet at each bar's end; arm_v the down
+    bar's length when it differs (a thin band)."""
+    arm_v = arm if arm_v is None else arm_v
+    for sx, sy in ((1, 1), (-1, 1), (1, -1), (-1, -1)):
+        X, Y = (0 if sx > 0 else w), (0 if sy > 0 else h)
+
+        def r(a0, b0, a1, b1):
+            xs, ys = sorted((X + sx * a0, X + sx * a1)), sorted((Y + sy * b0, Y + sy * b1))
+            return plate(xs[0], ys[0], xs[1], ys[1])
+        o.bump([r(c + 1.5, 1.2, c + 1.5 + arm, 1.2 + th), r(1.2, c + 1.5, 1.2 + th, c + 1.5 + arm_v)], rise, 0.8, mat)
+        o.rivet(X + sx * (c + arm - 1.2), Y + sy * (1.2 + th / 2), rivet)
+        o.rivet(X + sx * (1.2 + th / 2), Y + sy * (c + arm_v - 1.2), rivet)
+
+
+def notched(x0, y0, x1, y1, c):
+    return plate(x0, y0, x1, y1, ("notch", c), ("notch", c), ("notch", c), ("notch", c))
+
+
+def face_fill(img, poly, colour):
+    """A lit face as the theme's keys paint it: the colour ramped down the face, every other row a shade darker."""
+    w, h = img.size
+    yy = np.arange(h, dtype=np.float32)[:, None, None]
+    rgb = np.broadcast_to(np.asarray(colour, np.float32) * (0.66 + 0.46 * yy / h) * np.where(yy % 2 == 0, 0.92, 1.0), (h, w, 3))
+    layer = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
+    m = Image.new("L", (w * 4, h * 4), 0)
+    ImageDraw.Draw(m).polygon([(x * 4, y * 4) for x, y in poly], fill=255)
+    layer.putalpha(m.resize((w, h), Image.BOX))
+    img.alpha_composite(layer)
+
+
+def darker(img, k=0.55):
+    a = np.asarray(img, np.float32)
+    a[..., :3] *= k
+    return Image.fromarray(a.astype(np.uint8), "RGBA")
+
+
+def clamp_key(side, w, h, state, layers=None, hero=False):
+    """The Riveted Clamp key, glyph baked in (white, gold on H, dark on P, dim on I) or none for the code's text."""
+    c, fi = (CLAMP_HERO_C, 10) if hero else (CLAMP_KEY_C, 6)
+    down = state == "P"
+    mat = H.ACCENT if state == "H" else H.DARK if state == "I" else H.STEEL
+
+    def draw(o, b):
+        o.tiers([notched(0, 0, w, h, c)], T.CLOSED, 3, 4.8 if down else 6, 3.0, T.LIP_BEVEL["machined"], 2.4,
+                lip_mat=H.BRIGHT if state == "H" else None)
+        if hero:
+            o.raise_plate([notched(5, 5, w - 5, h - 5, c - 3)], 7.6, 1.0, None, "chessboard", H.terraces((0, 0.5), (2.0, 0.5)))
+        o.sink([notched(fi, fi, w - fi, h - fi, max(c - 4, 2))], 2.6 if down else 1.8, 1.0)
+        clamp_bars(o, w, h, c, min(min(w, h) * (0.26 if hero else 0.22), 18), 4.0, mat)
+    img = T.small(side, w, h, draw)
+    face = notched(fi, fi, w - fi, h - fi, max(c - 4, 2))
+    if hero and state in ("", "H"):
+        start = T.look(side).get("start", T.look(side)["accent"])
+        face_fill(img, face, tuple(min(255, int(v * (1.2 if state == "H" else 1.0))) for v in start))
+    if down:
+        face_fill(img, face, T.look(side)["lit"])
+    if state == "I":
+        img = darker(img)
+    if layers:
+        colour = {"": T.INK["paper"], "H": T.INK["gold"], "P": T.INK["on_lit"], "I": T.INK["dim"]}[state]
+        img.alpha_composite(T.flat_glyph(w, h, layers, (h - 2 * fi) / 14.5 * 0.62, w / 2, h / 2, colour))
+    return img
+
+
+def clamp_drop(side, w, h, state):
+    """A dropdown: glass for the code's text and, at the right, a raised caret block on two rivets, steel up, bright on
+    hover, brass with the caret up while the list is open; F (a field, the value only) has no block."""
+    blk = CLAMP_BLOCK
+
+    def draw(o, b):
+        o.tiers([notched(0, 0, w, h, 5)], T.CLOSED, 3, 6, 3.0, T.LIP_BEVEL["machined"], 2.4, lip_mat=H.BRIGHT if state == "H" else None)
+        o.sink([notched(6, 6, w - (blk + 8 if state != "F" else 6), h - 6, 3)], 4, 1.3)
+        if state != "F":
+            o.bump([notched(w - blk - 4, 5, w - 5, h - 5, 3)], 2.4, 1.0, {"": H.STEEL, "H": H.BRIGHT, "P": H.ACCENT}[state])
+            for y in (9.5, h - 9.5):
+                o.rivet(w - blk / 2 - 4.5, y, 1.3)
+    img = T.small(side, w, h, draw)
+    if state != "F":
+        cx, cy, half, rise = w - blk / 2 - 4.5, h / 2, 6.5, 4.0
+        tip = -1 if state == "P" else 1
+        colour = {"": T.INK["paper"], "H": T.INK["gold"], "P": T.INK["on_lit"]}[state]
+
+        def chevron(dx, dy):
+            def draw_(d, k):
+                arm = [(cx - half + dx, cy - tip * rise / 2 + dy), (cx + dx, cy + tip * rise / 2 + dy), (cx + half + dx, cy - tip * rise / 2 + dy)]
+                d.line([(x * k, y * k) for x, y in arm], fill=255, width=int(2.6 * k), joint="curve")
+            return draw_
+        if state != "P":
+            img.alpha_composite(T.mask((w, h), chevron(0.8, 0.8), T.INK["keyline"]))
+        img.alpha_composite(T.mask((w, h), chevron(0, 0), colour))
+    return img
+
+
+def clamp_box(side, w=96, h=96):
+    """A box (the chat, an open list's panel, the offline island panel; at BAND_H the map band): the notched frame, a
+    bright riveted clamp on each corner, glass 6 in.  Drawn square for the 9-slice, wide for the band's 3-slice;
+    everything but the corners is plain, so it stretches."""
+    def draw(o, b):
+        o.tiers([notched(0, 0, w, h, 6)], T.CLOSED, 3, 6, 3.0, T.LIP_BEVEL["machined"], 2.4)
+        o.sink([notched(6, 6, w - 6, h - 6, 3)], 4, 1.3)
+        clamp_bars(o, w, h, 6, BOX_ARM, BOX_TH, H.BRIGHT, min(BOX_ARM, h / 2 - 10), BOX_RIVET, BOX_RISE)
+    return T.small(side, w, h, draw)
+
+
+def clamp_row(side, state):
+    """An open list's row as a 3-slice (ends 12): H a faint light band, P the lit colour with brass clamp ticks on its
+    four corners."""
+    w, h = 200, ROW_H
+    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(out)
+    if state == "H":
+        d.rectangle((0, 0, w - 1, h - 1), fill=(255, 255, 255, 22))
+    else:
+        d.rectangle((0, 0, w - 1, h - 1), fill=tuple(T.look(side)["lit"]) + (150,))
+        gold = T.INK["gold"] + (255,)
+        for x, s in ((0, 1), (w - 1, -1)):
+            d.line([(x + s * 9, 1), (x + s * 1, 1), (x + s * 1, 9)], fill=gold, width=2)
+            d.line([(x + s * 9, h - 2), (x + s * 1, h - 2), (x + s * 1, h - 10)], fill=gold, width=2)
+    return T.three_cut(out, ROW_CAP, 8)
+
+
+def clamp_controls(side):
+    """The Riveted Clamp set on a common sheet.  DSDrop, DSFieldR, DSRow and LobbyPickTile keep their names and sizes
+    (the code draws them already); the rest are new."""
+    out = {}
+    for name, kind, size in (("DSClampBack", "back", (72, 72)), ("DSClampSend", "send", (48, 48)), ("DSClampPlus", "plus", (72, 72))):
+        for s in STATES:
+            out[name + s] = clamp_key(side, *size, s, CLAMP_GLYPHS[kind])
+    for s in STATES:                            # START: ends CLAMP_CAP, the middle the code stretches
+        out.update({"DSClampStart" + part + s: img for part, img in
+                    T.three_cut_ends(clamp_key(side, 2 * CLAMP_CAP + 64, CHIP_H, s, hero=True), CLAMP_CAP, CLAMP_CAP).items()})
+    for s in ("", "H", "P"):
+        chip = T.three_cut_ends(clamp_drop(side, 160, CHIP_H, s), 16, CLAMP_END)
+        out.update({"DSClampChip" + part + s: img for part, img in chip.items()})
+        drop = T.three_cut_ends(clamp_drop(side, 160, T.DROP_H, s), T.DROP_L, CLAMP_END)
+        out.update({"DSDrop" + part + s: img for part, img in drop.items()})
+        out["LobbyPickTile" + s] = clamp_key(side, *PICK_TILE, s)
+    out["DSClampChipFieldR"] = clamp_drop(side, 160, CHIP_H, "F").crop((160 - CLAMP_END, 0, 160, CHIP_H))
+    out["DSFieldR"] = clamp_drop(side, 160, T.DROP_H, "F").crop((160 - T.FIELD_R, 0, 160, T.DROP_H))
+    out.update(slices("DSClampBox", lambda st: T.nine_cut(clamp_box(side), CLAMP_NINE)))
+    out.update(slices("DSClampBand", lambda st: T.three_cut_ends(clamp_box(side, 160, BAND_H), CLAMP_NINE, CLAMP_NINE)))
+    out.update(slices("DSRow", lambda st: clamp_row(side, st), ("H", "P")))
+    out["LobbyIslandBand"] = island_art(*ISLAND_BAND)
+    return out
+
+
+CLAMP_GLYPHS = {"back": arrow_layers("back"), "send": arrow_layers("send"), "plus":[([[(9.2, 3), (12.8, 3), (12.8, 9.2), (19, 9.2), (19, 12.8), (12.8, 12.8),
+                                                         (12.8, 19), (9.2, 19), (9.2, 12.8), (3, 12.8), (3, 9.2), (9.2, 9.2)]], 255)]}
+
+# ---------------------------------------------------------------------------------------------- the Spearhead Front lobby
+# Heights are the lobby's own at 1080 (DirectStrikeLayout.h): every 3-slice is drawn at its piece's height, so each
+# plate the lobby shows at a new height is a piece of its own.  (height, left point, right point) a bar; a pointed end
+# is drawn in its own light, never flipped, so a team's piece and its mirror are two pieces.
+
+SPEAR_SEAT, SPEAR_HEAD = (148, 22), (44, 18)    # the seat card and the team head: height, the point toward the lane
+HEX = {"DSHexTitle": (72, 30, 30), "DSHexChip": (104, 22, 22), "DSHexChat": (268, 16, 16), "DSHexTall": (444, 22, 22),
+       "DSHexField": (48, 14, 0), "DSTug": (30, 14, 14)}
+HEX_WELL = {"DSHexTitle": 8, "DSHexChat": 9, "DSHexField": 5, "DSTug": 4}         # a bar with its own glass, this far in
+HEX_LIT = ("DSHexTitle",)
+HEX_BUILT = ("DSHexTitle", "DSTug")
+HEX_DROP, HEX_START = (72, 12, 12), (72, 24, 24)
+SPEAR_BACK, SPEAR_SEND = (72, 72, 18, 0), (48, 48, 0, 12)                         # whole keys: w, h, left, right point
+SEG, TUG_SEG, LED, CHEVRON = (12, 6), (14, 18), (16, 10), (14, 18)
+ISLAND_WIDE = (152, 72)
+CHEVRON_CORE = [(0, 0), (5, 0), (14, 9), (5, 18), (0, 18), (9, 9)]
+
+
+def bar_slices(full, dl, dr, side=None):
+    """The 3-slice of a Spearhead bar; a textured (tiled) frame's plates keep a whole tile for C, which the code repeats."""
+    if side is not None and T.look(side).get("tile"):
+        return T.three_tile(full, T.spear_cap(dl), T.spear_cap(dr))
+    return T.three_cut_ends(full, T.spear_cap(dl), T.spear_cap(dr))
+
+
+def ref_width(dl, dr, side=None):
+    tiled = side is not None and T.look(side).get("tile")
+    return T.spear_cap(dl) + T.spear_cap(dr) + (T.TILE + T.TILE_BLEND + 32 if tiled else 64)
+
+
+def hex_drop(side, state, field=False):
+    """The keys row's dropdown (team size, game speed): a hex key the code writes on, the caret in its right end
+    (gold on H, up and dark on P); field drops the caret, for a guest who reads the value and cannot change it."""
+    h, dl, dr = HEX_DROP
+    w = ref_width(dl, dr) + 24
+    full = T.spear_key(side, w, h, dl, dr, state)
+    cut = bar_slices(full, dl, dr)
+    cut["R"] = full.crop((w - T.spear_cap(dr) - 18, 0, w, h))   # room for the caret
+    if field:
+        return cut
+    right = cut["R"]
+    rw = right.width
+    cx, cy, half, rise, stroke = rw - dr - 16, h / 2, 7.0, 4.0, 2.75
+    colour = T.INK["on_lit"] if state == "P" else T.INK["gold"] if state == "H" else T.INK["white"]
+    tip = -1 if state == "P" else 1
+    d = ImageDraw.Draw(right)
+    d.line([(cx - 15, 22), (cx - 15, h - 22)], fill=T.INK["keyline"] + (230 if state != "P" else 110,), width=1)
+    d.line([(cx - 14, 22), (cx - 14, h - 22)], fill=(255, 255, 255, 34 if state != "P" else 70), width=1)
+
+    def chevron(dx, dy):
+        def draw(dd, k):
+            arm = [(cx - half + dx, cy - tip * rise / 2 + dy), (cx + dx, cy + tip * rise / 2 + dy), (cx + half + dx, cy - tip * rise / 2 + dy)]
+            dd.line([(x * k, y * k) for x, y in arm], fill=255, width=int(stroke * k), joint="curve")
+        return draw
+    if state != "P":
+        right.alpha_composite(T.mask((rw, h), chevron(0.8, 0.8), T.INK["keyline"]))
+    right.alpha_composite(T.mask((rw, h), chevron(0, 0), colour))
+    return cut
+
+
+def spearhead(side):
+    """The Spearhead Front lobby's pieces, all names the lobby draws by besides the shared DSWell, DSDrop, DSFieldR,
+    DSLamp, DSRow, DSCoin and the Lobby glyphs."""
+    out = {}
+    tiled = T.look(side).get("tile")
+    master = T.console(side)
+    out.update(slices("DSConsole", lambda st: T.nine_tile(master, T.CONSOLE_NINE) if tiled else T.nine_cut(master, T.CONSOLE_NINE)))
+    h, d = SPEAR_SEAT
+    for toward, dl, dr in (("Right", 0, d), ("Left", d, 0)):   # Right points right (team 1), Left left (team 2)
+        w = ref_width(dl, dr, side)
+        out.update(slices("DSSpear" + toward, lambda st: bar_slices(T.spear_plate(side, w, h, dl, dr), dl, dr, side)))
+        out.update(slices("DSSpearYou" + toward, lambda st: bar_slices(T.spear_plate(side, w, h, dl, dr, lit=True), dl, dr, side)))
+        out.update(slices("DSBay" + toward, lambda st: bar_slices(T.spear_plate(side, w, h, dl, dr, bay=True), dl, dr, side)))
+    h, d = SPEAR_HEAD
+    for toward, dl, dr in (("Right", 0, d), ("Left", d, 0)):
+        w = ref_width(dl, dr, side)
+        out.update(slices("DSSpearHead" + toward, lambda st: bar_slices(T.spear_plate(side, w, h, dl, dr, well=T.INSET), dl, dr, side)))
+    # the centre column went square on 2026-11-23 (the owner: "chat kısmı da kare olsun"): the chip, chat, offline panel
+    # and input are Riveted Clamp boxes and drops now, the keys are the clamp keys; only the title and the tug stay
+    # pointed.  hex_drop and the spear keys stay as code, not built.
+    for name in HEX_BUILT:
+        h, dl, dr = HEX[name]
+        w = ref_width(dl, dr, side)
+        out.update(slices(name, lambda st: bar_slices(T.spear_plate(side, w, h, dl, dr, name in HEX_LIT, HEX_WELL.get(name)), dl, dr, side)))
+    out["DSSeg"], out["DSSegLit"] = T.slot_piece(*SEG), T.lit_piece(*SEG)
+    out["DSTugSeg"], out["DSTugSegLit"] = T.slot_piece(*TUG_SEG), T.lit_piece(*TUG_SEG)
+    out["DSLed"], out["DSLedLit"] = T.slot_piece(*LED, (26, 30, 36)), T.lit_piece(*LED)
+    out["DSChevronR"] = T.lit_piece(*CHEVRON, [CHEVRON_CORE])
+    out["DSChevronL"] = T.lit_piece(*CHEVRON, [[(CHEVRON[0] - x, y) for x, y in CHEVRON_CORE]])
     return out
 
 
@@ -469,8 +727,13 @@ def headquarters(side):
 def pieces(side):
     """Every piece of the side's sheet by its name after the side's prefix."""
     out = shared(side)
-    for part in (hud(side), end(side), lobby(side)):
-        assert not set(part) & set(out), "a name is drawn twice: %s" % sorted(set(part) & set(out))
+    # the common sheet holds the screens every player shares (the lobby, the end screen); a side's sheet keeps the
+    # shared plates, keys and lamps (the match HUD and the shell's mode picker draw them) and its match HUD
+    # the common sheet's clamp dropdown and list rows replace the shared ones under the same names
+    restyled = {n for n in out if n.startswith(("DSDrop", "DSFieldR", "DSRow"))} if side in T.COMMONS else set()
+    for part in ((end(side), lobby(side)) if side in T.COMMONS else (hud(side),)):
+        twice = set(part) & set(out) - restyled
+        assert not twice, "a name is drawn twice: %s" % sorted(twice)
         out.update(part)
     return out
 
@@ -478,7 +741,7 @@ def pieces(side):
 
 
 def texture_name(side):
-    return "ReforgedHud%sDirectStrike" % side
+    return "ReforgedHud%sDirectStrike" % T.SHEET_NAME.get(side, side)
 
 
 def packing(sizes, width=SHEET_W):
@@ -544,11 +807,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--png", help="write the sheets and every piece as PNG here")
     ap.add_argument("--ship", action="store_true", help="write the textures and mapped INIs into Code/Data and Run")
-    ap.add_argument("--side", choices=T.SIDES, help="one side only (all three by default)")
+    ap.add_argument("--side", choices=T.SIDES + T.COMMONS, help="one side or common frame only (all by default)")
     args = ap.parse_args()
     assert args.png or args.ship, "nothing to write: give --png DIR, --ship or both"
     assert not (args.ship and os.environ.get(T.PALETTE_ENV)), "%s is set: a trial palette does not ship" % T.PALETTE_ENV
-    for side in [args.side] if args.side else T.SIDES:
+    for side in [args.side] if args.side else T.SIDES + T.COMMONS:
         named = pieces(side)
         rects, of, size = layout(named)
         print("%s: sheet %dx%d, %d names on %d pictures; %s" % ((side,) + size + (len(rects), len(set(of.values())),

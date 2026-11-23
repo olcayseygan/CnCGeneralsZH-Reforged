@@ -20,8 +20,10 @@
 //
 // The end of a Lane War match, the owner's concept B, "the hand" (experiments/proofs/2026-11-21/
 // direct-strike-end/README-end.md in the wrapper).  Drawn on the 1920x1080 board with no window of
-// its own.  Its pieces come from the side's ReforgedHud<Side>LaneEnd sheet by the README's names
-// (<Prefix>LaneEndCard and the rest); a piece the sheet does not have yet is a flat fill.
+// its own.  Its pieces come from the common frame's sheet, ReforgedHudCommonDirectStrike, by the
+// README's names (CommonProLaneEndCard and the rest): every player of the match sees the same frame,
+// a card's side shown by its portrait, colour band and stats, not its plate (the owner, 2026-11-23).
+// A piece the sheet does not have is a flat fill.
 //
 // Times run on logic frames, which keep coming at LOGICFRAMES_PER_SECOND a wall second after the
 // decision, since the match keeps running under the end: no stock timer drops it to the shell.
@@ -108,7 +110,7 @@ const Real VIGNETTE_FINALE = 0.7f, VIGNETTE_RESULT = 0.7f, VIGNETTE_RESULTS = 0.
 const Int VIGNETTE_BANDS = 32;				///< layers of the gradient
 const Int VIGNETTE_DEPTH_SHARE = 4;		///< a quarter of the screen's height in from each edge
 const Real BACKS_ALPHA = 0.75f;
-const Real KEY_DIM_ALPHA = 0.4f;				///< a key not wired yet
+const Real KEY_DIM_ALPHA = 0.4f;				///< a key not wired yet, where the sheet has no I piece for it
 const Real TICK_ALPHA = 0.6f, MARK_LINE_ALPHA = 0.35f;
 const Real PLATE_LIP = 2.0f, LOCAL_FRAME_LINE = 1.0f, HEALTH_LINE = 2.0f;
 
@@ -170,8 +172,8 @@ const Real TOWER_MARK_RISE = 10.0f, TOWER_MARK_HALF = 8.0f, TOWER_MARK_FLAT_HALF
 const Real KEY_X[ KEYS ] = { 852.0f, 940.0f, 1028.0f };
 const Real KEY_W = 72.0f, KEY_TOP = 940.0f, KEY_BOTTOM = 996.0f, KEY_LABEL_Y = 968.0f, TOOLTIP_Y = 1014.0f;
 
-// sheet pieces, each looked up as <side prefix><name> first
-const char *const PREFIX_AMERICA = "AmericaPro", *const PREFIX_CHINA = "ChinaPro", *const PREFIX_GLA = "GLAPro";
+// sheet pieces, each looked up as <common prefix><name> first, the common frame's (DirectStrikeTheme's SIDE_COMMON)
+const char *const PREFIX = "CommonPro";
 const char *const PIECE_RESULT = "LaneEndResult";			///< also the backs, its wells left empty
 const char *const PIECE_RESULT_WON = "LaneEndResultWon";
 const char *const PIECE_CARD = "LaneEndCard", *const PIECE_CARD_WON = "LaneEndCardWon";
@@ -182,7 +184,7 @@ const char *const PIECE_MIDDLE = "LaneStatMiddle", *const PIECE_TOWER_DOWN = "La
 const char *const STAT_GLYPHS[ STATS ] = { "LaneStatWaves", "LaneStatPlaced", "LaneStatEarned", "LaneStatSpent",
 	"LaneStatKills", "LaneStatDamage", "LaneStatMiddle" };
 const char *const KEY_PIECES[ KEYS ] = { "LaneEndRematch", "LaneEndReplay", "LaneEndMenu" };
-const char *const KEY_HOT_SUFFIX = "H";
+const char *const KEY_HOT_SUFFIX = "H", *const KEY_HELD_SUFFIX = "P", *const KEY_DEAD_SUFFIX = "I";
 const char *const CREST_AMERICA = "SAFactionLogo144_US", *const CREST_CHINA = "SNFactionLogo144_China", *const CREST_GLA = "SUFactionLogo144_GLA";
 
 }	// namespace Look
@@ -208,7 +210,6 @@ struct Seat
 	Color color;
 	Int team;
 	Bool local;
-	AsciiString prefix;								///< the side's sheet prefix: AmericaPro, ChinaPro, GLAPro
 	const Image *portrait;
 	const Image *mvp;
 	Int stat[ STATS ];
@@ -226,7 +227,6 @@ UnsignedInt s_endFrame = 0;
 std::vector<Seat> s_seats;
 std::vector<LaneWarSample> s_samples;
 UnsignedInt s_towerDown[ LANEWAR_TEAMS ][ 2 ];
-AsciiString s_localPrefix;
 const Image *s_resultPortrait = NULL;
 
 // the client's own
@@ -278,20 +278,11 @@ GameFont *fontOf( const Look::FontSpec &spec )
 	return spec.title ? UIStyle::titleFont( spec.points ) : UIStyle::readableFont( spec.points, spec.bold );
 }
 
-AsciiString prefixOf( const Player *player )
-{
-	const AsciiString side = player != NULL ? player->getSide() : AsciiString( "America" );
-	if( side.startsWith( "China" ) )
-		return AsciiString( Look::PREFIX_CHINA );
-	if( side.startsWith( "GLA" ) )
-		return AsciiString( Look::PREFIX_GLA );
-	return AsciiString( Look::PREFIX_AMERICA );
-}
-
-const Image *piece( const AsciiString &prefix, const char *name )
+/// a piece of the common frame by its name, else a loose image of that bare name; NULL while missing
+const Image *piece( const char *name )
 {
 	AsciiString full;
-	full.format( "%s%s", prefix.str(), name );
+	full.format( "%s%s", Look::PREFIX, name );
 	const Image *image = TheMappedImageCollection->findImageByName( full );
 	return image != NULL ? image : TheMappedImageCollection->findImageByName( AsciiString( name ) );
 }
@@ -383,7 +374,7 @@ void drawMatchTime( Real cx, Real cy, Color tint )
 	measure->setText( text );
 	Int textWidth = 0, textHeight = 0;
 	measure->getSize( &textWidth, &textHeight );
-	const Image *clock = piece( s_localPrefix, Look::PIECE_TIME );
+	const Image *clock = piece( Look::PIECE_TIME );
 	const Int glyph = px( Look::CLOCK_GLYPH_SIZE ), gap = clock != NULL ? glyph + px( Look::CLOCK_GLYPH_GAP ) : 0;
 	const Int left = bx( cx ) - ( gap + textWidth ) / 2, middle = by( cy );
 	if( clock != NULL )
@@ -505,7 +496,7 @@ void drawResult( Real t )
 {
 	using namespace Look;
 	const Real backs = clamp01( ( t - BACKS_AT ) / DEAL_SECONDS );
-	const Image *back = piece( s_localPrefix, PIECE_RESULT );
+	const Image *back = piece( PIECE_RESULT );
 	for( Int k = -1; k <= 1; k += 2 )
 	{
 		const Real ox = RESULT_CENTRE_X + BACK_OFFSET_X * k, oy = RESULT_CENTRE_Y + BACK_OFFSET_Y;
@@ -518,7 +509,7 @@ void drawResult( Real t )
 		return;
 	const Real x0 = RESULT_CENTRE_X - RESULT_W * 0.5f, y0 = RESULT_CENTRE_Y - RESULT_H * 0.5f + ( 1.0f - deal ) * DEAL_DROP;
 	const Bool victory = won();
-	const Image *art = piece( s_localPrefix, victory ? PIECE_RESULT_WON : PIECE_RESULT );
+	const Image *art = piece( victory ? PIECE_RESULT_WON : PIECE_RESULT );
 	plate( art, x0, y0, x0 + RESULT_W, y0 + RESULT_H, RESULT_FLAT, victory ? GOLD : STEEL_LIP, deal );
 	if( art == NULL )
 		fillAt( RESULT_PORTRAIT, x0, y0, withAlpha( RESULT_WELL, deal ) );
@@ -543,7 +534,7 @@ void drawCard( const Seat &s, Real x0, Real y0 )
 	const Real x1 = x0 + CARD_W, y1 = y0 + CARD_H;
 	if( s.local )
 		frame( x0 - LOCAL_FRAME_GAP, y0 - LOCAL_FRAME_GAP, x1 + LOCAL_FRAME_GAP, y1 + LOCAL_FRAME_GAP, LOCAL_FRAME_LINE, GOLD );
-	const Image *art = piece( s.prefix, winners ? PIECE_CARD_WON : PIECE_CARD );
+	const Image *art = piece( winners ? PIECE_CARD_WON : PIECE_CARD );
 	plate( art, x0, y0, x1, y1, CARD_FLAT, winners ? GOLD : STEEL_LIP );
 
 	// the sheet's card has its wells; the flat stand-in gets dark ones
@@ -566,7 +557,7 @@ void drawCard( const Seat &s, Real x0, Real y0 )
 	for( Int i = 0; i < STATS; ++i )
 	{
 		const Real ry = y0 + STAT_ROW_Y + STAT_ROW_STEP * i, mid = ry + STAT_ROW_H * 0.5f;
-		const Image *glyph = piece( s.prefix, STAT_GLYPHS[ i ] );
+		const Image *glyph = piece( STAT_GLYPHS[ i ] );
 		if( glyph != NULL )
 			TheDisplay->drawImage( glyph, bx( x0 + STAT_GLYPH_X ), by( ry ), bx( x0 + STAT_GLYPH_X + STAT_GLYPH_SIZE ), by( ry + STAT_GLYPH_SIZE ),
 														 TIME_GREY );
@@ -594,8 +585,8 @@ void drawTimeline( void )
 {
 	using namespace Look;
 	// a 3-slice: the ends at their size, the middle stretched between them
-	const Image *sliceL = piece( s_localPrefix, PIECE_TIMELINE_L ), *sliceC = piece( s_localPrefix, PIECE_TIMELINE_C );
-	const Image *sliceR = piece( s_localPrefix, PIECE_TIMELINE_R );
+	const Image *sliceL = piece( PIECE_TIMELINE_L ), *sliceC = piece( PIECE_TIMELINE_C );
+	const Image *sliceR = piece( PIECE_TIMELINE_R );
 	if( sliceL != NULL && sliceC != NULL && sliceR != NULL )
 	{
 		const Real innerL = TIMELINE.x0 + TIMELINE_SLICE_END, innerR = TIMELINE.x1 - TIMELINE_SLICE_END;
@@ -611,8 +602,8 @@ void drawTimeline( void )
 	}
 
 	// the glyphs at the left: the middle by the top band, the fortress by the bottom one
-	drawGlyph( piece( s_localPrefix, PIECE_MIDDLE ), TIMELINE_GLYPH_X, MIDDLE_GLYPH_Y, TIMELINE_GLYPH_SIZE, TIME_GREY );
-	drawGlyph( piece( s_localPrefix, PIECE_FORTRESS ), TIMELINE_GLYPH_X, FORTRESS_GLYPH_Y, TIMELINE_GLYPH_SIZE, TIME_GREY );
+	drawGlyph( piece( PIECE_MIDDLE ), TIMELINE_GLYPH_X, MIDDLE_GLYPH_Y, TIMELINE_GLYPH_SIZE, TIME_GREY );
+	drawGlyph( piece( PIECE_FORTRESS ), TIMELINE_GLYPH_X, FORTRESS_GLYPH_Y, TIMELINE_GLYPH_SIZE, TIME_GREY );
 
 	// the foot: a tick every spawn tick, then a faint line and the time every mark, a minute apart under
 	// ten minutes, five under half an hour and ten after that
@@ -655,7 +646,7 @@ void drawTimeline( void )
 	for( size_t k = 0; k < s_samples.size(); ++k )
 		for( Int t = 0; t < LANEWAR_TEAMS; ++t )
 			most = max( most, s_samples[ k ].fortress[ t ] );
-	const Image *mark = piece( s_localPrefix, PIECE_TOWER_DOWN );
+	const Image *mark = piece( PIECE_TOWER_DOWN );
 	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
 	{
 		const Color c = t == s_ourTeam ? OUR_BLUE : THEIR_RED;
@@ -767,14 +758,21 @@ void drawKeys( void )
 {
 	using namespace Look;
 	const ICoord2D *mouse = &TheMouse->getMouseStatus()->pos;
+	const Bool down = TheMouse->getMouseStatus()->leftState != MBS_Up;
 	for( Int k = 0; k < KEYS; ++k )
 	{
-		const Bool hot = keyLive( k ) && overKey( k, mouse );
+		// the Riveted Clamp key's states: I when it does nothing here, P while the button is held on it, H under the pointer
+		const Bool live = keyLive( k ), hot = live && overKey( k, mouse );
+		const char *state = !live ? KEY_DEAD_SUFFIX : hot && down ? KEY_HELD_SUFFIX : hot ? KEY_HOT_SUFFIX : "";
 		AsciiString name( KEY_PIECES[ k ] );
-		if( hot )
-			name.concat( KEY_HOT_SUFFIX );
-		const Image *art = piece( s_localPrefix, name.str() );
-		const Real alpha = keyLive( k ) ? 1.0f : KEY_DIM_ALPHA;
+		name.concat( state );
+		const Image *art = piece( name.str() );
+		Bool dim = !live;
+		if( art != NULL )
+			dim = FALSE;		// the I piece is drawn dark already
+		else if( *state != 0 )
+			art = piece( KEY_PIECES[ k ] );	// a sheet without the state's piece: the plain key, an unwired one faded
+		const Real alpha = dim ? KEY_DIM_ALPHA : 1.0f;
 		const Real centre = KEY_X[ k ] + KEY_W * 0.5f;
 		plate( art, KEY_X[ k ], KEY_TOP, KEY_X[ k ] + KEY_W, KEY_BOTTOM, KEY_FLAT, hot ? GOLD : PANEL_LIP, alpha );
 		// in a network game the first key only leaves for the lobby (rematch), so it says so
@@ -793,7 +791,7 @@ void drawResults( void )
 	vignette( VIGNETTE_RESULTS );
 
 	// the header chip: the word between the chip's left lip and the clock, then the match's length
-	plate( piece( s_localPrefix, PIECE_HEADER ), HEADER.x0, HEADER.y0, HEADER.x1, HEADER.y1, HEADER_FLAT, HEADER_LIP );
+	plate( piece( PIECE_HEADER ), HEADER.x0, HEADER.y0, HEADER.x1, HEADER.y1, HEADER_FLAT, HEADER_LIP );
 	Color wordColor;
 	const UnicodeString word = resultWord( &wordColor );
 	drawFitted( word, WORD_FONTS, bx( HEADER_WORD_X ), by( HEADER_WORD_Y ), wordColor, 0, px( HEADER_WORD_MAX ) );
@@ -874,7 +872,6 @@ void LaneWarEndScreen_preDraw( void )
 	const Player *local = ThePlayerList->getLocalPlayer();
 	s_localTeam = local != NULL && !TheGameLogic->isInReplayGame() && TheLaneWarDirector->seatOf( local, &team, &seat ) ? team : -1;
 	s_ourTeam = s_localTeam >= 0 ? s_localTeam : 0;
-	s_localPrefix = prefixOf( local );
 
 	if( s_phase == LANEWAR_END_COLLAPSE )
 	{
@@ -941,7 +938,6 @@ void LaneWarEndScreen_preDraw( void )
 			c.color = player->getPlayerColor();
 			c.team = t;
 			c.local = player == local && s_localTeam >= 0;
-			c.prefix = prefixOf( player );
 			c.portrait = portraitOf( player );
 			const ThingTemplate *mvp = st.mvp( NULL );
 			c.mvp = mvp != NULL ? mvp->getButtonImage() : NULL;

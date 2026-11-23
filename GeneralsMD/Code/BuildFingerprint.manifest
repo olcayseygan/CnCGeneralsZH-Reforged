@@ -56,6 +56,7 @@ Data/Art/Textures/ReforgedHudChinaTabComm.dds
 Data/Art/Textures/ReforgedHudChinaTabPanel.dds
 Data/Art/Textures/ReforgedHudChinaTabSolo.dds
 Data/Art/Textures/ReforgedHudChinaTalents.dds
+Data/Art/Textures/ReforgedHudCommonDirectStrike.dds
 Data/Art/Textures/ReforgedHudControlButtons.dds
 Data/Art/Textures/ReforgedHudDisconnectWindow.dds
 Data/Art/Textures/ReforgedHudGlaCommandBar.dds
@@ -1254,6 +1255,7 @@ Data/INI/MappedImages/HandCreated/ReforgedHudChinaPowers.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudChinaSidebar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudChinaTabPanel.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudChinaTalents.ini
+Data/INI/MappedImages/HandCreated/ReforgedHudCommonDirectStrike.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudControlButtons.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudDisconnectWindow.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudGlaCommandBar.ini

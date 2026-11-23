@@ -58,6 +58,7 @@
 #include "GameClient/MessageBox.h"
 #include "GameNetwork/LANAPICallbacks.h" // for acceptTrueColor, etc
 #include "GameClient/ChallengeGenerals.h"
+#include "GameClient/DirectStrikeLayout.h"
 #include "GameClient/DirectStrikeLobby.h"
 #include "GameClient/DirectStrikeTheme.h"
 #include "GameClient/KeyDefs.h"
@@ -1683,9 +1684,30 @@ Bool FitRandomMapToRoom(GameInfo *game)
 
 // Direct Strike ------------------------------------------------------------------------------
 
-enum { DIRECT_STRIKE_SEATS = 6, DIRECT_STRIKE_TEAM_SEATS = 3 };
+enum { DIRECT_STRIKE_SEATS = DSLOBBY_SEATS, DIRECT_STRIKE_TEAM_SEATS = DSLOBBY_ROWS };
 
-static Int directStrikeTeamOfSeat(Int seat) { return seat % 2; }
+static Int directStrikeTeamOfSeat(Int seat) { return DirectStrikeLobby_team(seat); }
+
+void DirectStrikeSeats(const GameInfo *game, Int seatOf[], Int slotAt[])
+{
+	Int start[DSLOBBY_SEATS];
+	for (Int i = 0; i < DSLOBBY_SEATS; ++i)
+	{
+		const GameSlot *slot = game->getConstSlot(i);
+		start[i] = slot != NULL && slot->isOccupied() ? slot->getStartPos() : -1;
+	}
+	DirectStrikeLobby_seats(start, seatOf, slotAt);
+}
+
+Bool DirectStrikeSeatIsOpen(const GameInfo *game, Int seat)
+{
+	if (seat < 0 || seat >= DSLOBBY_SEATS)
+		return FALSE;
+	Int seatOf[DSLOBBY_SEATS], slotAt[DSLOBBY_SEATS];
+	DirectStrikeSeats(game, seatOf, slotAt);
+	const GameSlot *slot = game->getConstSlot(slotAt[seat]);
+	return slot != NULL && slot->getState() == SLOT_OPEN;
+}
 
 Bool IsDirectStrikeMap(const AsciiString &map)
 {
@@ -1741,6 +1763,9 @@ static Int directStrikeArmy(Int pick)
 Bool FitDirectStrikeRoom(GameInfo *game)
 {
 	Bool changed = FALSE;
+	// where every slot shows, read once before anything below moves a start
+	Int seatOf[DSLOBBY_SEATS], slotAt[DSLOBBY_SEATS];
+	DirectStrikeSeats(game, seatOf, slotAt);
 	for (Int i = 0; i < MAX_SLOTS; ++i)
 	{
 		GameSlot *slot = game->getSlot(i);
@@ -1774,17 +1799,19 @@ Bool FitDirectStrikeRoom(GameInfo *game)
 		}
 
 		// The seat is the place: seats 1, 3, 5 are team 1's, on the left, and 2, 4, 6 team 2's, on the
-		// right, and seat n stands on start n, which is how the director reads the teams
-		// (LaneWar_teamOfStart: start 1 is team A's first, start 2 team B's first, start 3 A's second).
-		const Int team = directStrikeTeamOfSeat(i);
+		// right, and seat n is start n, which is how the director reads the teams (LaneWar_teamOfStart:
+		// start 1 is team A's first, start 2 team B's first, start 3 A's second).  A player who moved
+		// keeps the start he took; one with none yet (a joiner, a new AI) takes the seat he was shown at.
+		const Int seat = seatOf[i];
+		const Int team = directStrikeTeamOfSeat(seat);
 		if (team != slot->getTeamNumber())
 		{
 			slot->setTeamNumber(team);
 			changed = TRUE;
 		}
-		if (i != slot->getStartPos())
+		if (seat != slot->getStartPos())
 		{
-			slot->setStartPos(i);
+			slot->setStartPos(seat);
 			changed = TRUE;
 		}
 	}

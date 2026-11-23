@@ -101,6 +101,13 @@ found and fixed, EA's own, not port damage.**
 - Direct Strike replays and saves recorded before this change will not play back.
 - Every Direct Strike replay recorded before this change no longer plays back, with stealthed units in it or not, and neither does an Apocalypse replay with a money gift in it.
 
+## The Direct Strike lobby, one console for everyone
+
+- The Direct Strike lobby and the end screen now wear one steel frame for every player in the room, whatever army they picked, so the host and his guests look at the same screen. The seats point at the lane, team against team, a strip of lights on every seat turns your team's colour when the player is ready, and a bar along the foot fills from each end as the teams get ready.
+- Change seats in the lobby. Click an open seat to sit there, or click the other team's name to move to its first open seat; you keep your army and colour, and everyone's Ready is cleared, as when anything else in the room changes. In a LAN or online room the host makes the move for you.
+- The chat fills the middle of the lobby, eleven lines, and the map sits on one line above it.
+- Replays and saves from before this change play as they did: nothing in the match changed. Everyone in a room needs this version, as always.
+
 ## Direct Strike waves leave from behind the fortress
 
 - A wave now appears behind its own fortress, with the fortress between it and the lane, and marches out past the fortress and the watch tower. It used to appear in front of the tower. An enemy that wants to sit on your spawn has to get past both first. The walk to the enemy fortress is 90 cells longer.

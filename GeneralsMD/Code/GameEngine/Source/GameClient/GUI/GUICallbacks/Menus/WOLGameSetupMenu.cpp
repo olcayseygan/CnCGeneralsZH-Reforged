@@ -3125,7 +3125,9 @@ void WOLGameSetupMenuUpdate( WindowLayout * layout, void *userData)
 								}
 								else if (key == "StartPos")
 								{
-									if (val >= -1 && val < MAX_SLOTS && val != slot->getStartPos() && slot->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER)
+									// a Direct Strike seat is its start: a player moves only to an open seat (DirectStrikeSeatIsOpen)
+									if (val >= -1 && val < MAX_SLOTS && val != slot->getStartPos() && slot->getPlayerTemplate() != PLAYERTEMPLATE_OBSERVER
+										&& (!IsDirectStrikeMap(game->getMap()) || DirectStrikeSeatIsOpen(game, val)))
 									{
 										Bool startPosAvailable = TRUE;
 										if(val != -1)

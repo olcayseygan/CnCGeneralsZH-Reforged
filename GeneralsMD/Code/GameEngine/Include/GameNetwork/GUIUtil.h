@@ -228,12 +228,20 @@ Bool IsDirectStrikeMap(const AsciiString &map);
 // a lane map from a seed off the clock, staged, in the map cache and the game's, CRC and size with it
 Bool SetDirectStrikeMap(GameInfo *game);
 // The seats under the mode's rules, for a host to call before it shows or sends the slot list.  The
-// seat is the place: seats 1, 3 and 5 are team 1, 2, 4 and 6 team 2, and seat n stands on start n,
-// which is how the director pairs starts with teams.  Seats past six are closed, Turkiye and the
-// observer become Random (a Random pool loses Turkiye), and the rules that mean nothing here (unit
-// limit, peace time, income sharing, the tech and supply rules, Pro Rules) go off.  TRUE when it
-// changed anything, so a network host sends the options again.
+// seat is the place: seats 1, 3 and 5 are team 1, 2, 4 and 6 team 2, and seat n is start n, which is
+// how the director pairs starts with teams.  A player sits where his start says (he moves by asking
+// for another start, the rooms' own start spot path), every other seated slot takes the seat it was
+// shown at (DirectStrikeSeats) as its start, and the team follows the seat.  Seats past six are
+// closed, Turkiye and the observer become Random (a Random pool loses Turkiye), and the rules that
+// mean nothing here (unit limit, peace time, income sharing, the tech and supply rules, Pro Rules) go
+// off.  TRUE when it changed anything, so a network host sends the options again.
 Bool FitDirectStrikeRoom(GameInfo *game);
+// which of the first six slots shows at which seat, DirectStrikeLobby_seats over the slot list: the
+// same answer on every machine of the room
+void DirectStrikeSeats(const GameInfo *game, Int seatOf[], Int slotAt[]);
+// TRUE when a player may move to `seat`: a seat of the six whose slot is open.  A host checks a
+// joiner's request with it, so a seat closed or taken meanwhile is refused
+Bool DirectStrikeSeatIsOpen(const GameInfo *game, Int seat);
 // The room's look (SkirmishGameOptionsMenu, LanGameOptionsMenu, WOLGameSetupMenu): the Direct Strike
 // lobby over the room's layout, DirectStrikeLobby.h, its three seat cards a team facing each other.  A
 // room calls it after every slot list repaint; ShutdownLobbySeatVisuals takes it off.

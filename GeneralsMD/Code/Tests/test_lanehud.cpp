@@ -220,7 +220,7 @@ TEST(dslobby_the_frame_scales_by_the_short_side_and_centres)
 	CHECK_EQ( wide.ox, 320 );
 	CHECK_EQ( wide.oy, 0 );
 	const LaneHudBox card = DirectStrike_box( wide, DirectStrikeLobby_card( 0 ) );
-	CHECK_EQ( card.x, 320 + 80 );
+	CHECK_EQ( card.x, 320 + DSLOBBY_TEAM_X0 );
 	CHECK_EQ( card.w, 600 );
 	float x, y;
 	DirectStrike_toDesign( small, 640, 360, &x, &y );
@@ -231,7 +231,7 @@ TEST(dslobby_team_two_is_team_ones_mirror_and_its_lamps_face_the_middle)
 {
 	for( int row = 0; row < DSLOBBY_ROWS; ++row )
 	{
-		const int left = DirectStrikeLobby_slot( 0, row ), right = DirectStrikeLobby_slot( 1, row );
+		const int left = DirectStrikeLobby_seat( 0, row ), right = DirectStrikeLobby_seat( 1, row );
 		CHECK_EQ( DirectStrikeLobby_team( left ), 0 );
 		CHECK_EQ( DirectStrikeLobby_team( right ), 1 );
 		CHECK_EQ( DirectStrikeLobby_row( right ), row );
@@ -240,45 +240,113 @@ TEST(dslobby_team_two_is_team_ones_mirror_and_its_lamps_face_the_middle)
 			for( int part = 0; part < DSSEAT_PARTS; ++part )
 			{
 				const bool drawn = lights || ( part != DSSEAT_LAMP && part != DSSEAT_PING );
-				const DirectStrikeRect p = DirectStrikeLobby_part( left, (DirectStrikeSeatPart)part, 0, lights != 0 );
-				const DirectStrikeRect q = DirectStrikeLobby_part( right, (DirectStrikeSeatPart)part, 0, lights != 0 );
+				const DirectStrikeRect p = DirectStrikeLobby_part( left, (DirectStrikeSeatPart)part, lights != 0 );
+				const DirectStrikeRect q = DirectStrikeLobby_part( right, (DirectStrikeSeatPart)part, lights != 0 );
 				CHECK( within( p, a ) && within( q, b ) );
 				CHECK_EQ( p.x0 - a.x0, b.x1 - q.x1 );
 				CHECK_EQ( p.y0, q.y0 );
 				for( int other = 0; other < part && drawn; ++other )
 					if( lights || ( other != DSSEAT_LAMP && other != DSSEAT_PING ) )
-						CHECK( !meet( p, DirectStrikeLobby_part( left, (DirectStrikeSeatPart)other, 0, lights != 0 ) ) );
+						CHECK( !meet( p, DirectStrikeLobby_part( left, (DirectStrikeSeatPart)other, lights != 0 ) ) );
 			}
 		CHECK( DirectStrikeLobby_part( left, DSSEAT_LAMP ).x0 > DirectStrikeLobby_part( left, DSSEAT_PORTRAIT ).x1 );
 		CHECK( DirectStrikeLobby_part( right, DSSEAT_LAMP ).x1 < DirectStrikeLobby_part( right, DSSEAT_PORTRAIT ).x0 );
-		CHECK( !meet( a, DirectStrikeLobby_islandPanel() ) && !meet( b, DirectStrikeLobby_islandPanel() ) );
-		CHECK( !meet( a, DirectStrikeLobby_chat() ) && !meet( b, DirectStrikeLobby_chat() ) );
+		// the lights strip holds the lamp and the ping and stays clear of the line and the chips
+		CHECK( within( DirectStrikeLobby_part( left, DSSEAT_LAMP ), DirectStrikeLobby_strip( left ) ) );
+		CHECK( within( DirectStrikeLobby_part( right, DSSEAT_PING ), DirectStrikeLobby_strip( right ) ) );
+		CHECK( !meet( DirectStrikeLobby_part( left, DSSEAT_LINE ), DirectStrikeLobby_strip( left ) ) );
+		CHECK( !meet( DirectStrikeLobby_part( right, DSSEAT_COLOR ), DirectStrikeLobby_strip( right ) ) );
+		for( int k = 0; k < DSLOBBY_LIP_SEGS; ++k )
+		{
+			CHECK( within( DirectStrikeLobby_lipSeg( left, k ), a ) && within( DirectStrikeLobby_lipSeg( right, k ), b ) );
+			CHECK( !meet( DirectStrikeLobby_lipSeg( left, k ), DirectStrikeLobby_part( left, DSSEAT_LINE ) ) );
+		}
+		// the pointed plates reach toward the centre column and stop short of it
+		const DirectStrikeRect pa = DirectStrikeLobby_pointed( a, 0, DSLOBBY_SPEAR ), pb = DirectStrikeLobby_pointed( b, 1, DSLOBBY_SPEAR );
+		CHECK_EQ( pa.x1, a.x1 + DSLOBBY_SPEAR );
+		CHECK_EQ( pb.x0, b.x0 - DSLOBBY_SPEAR );
+		CHECK( !meet( pa, DirectStrikeLobby_islandPanel() ) && !meet( pb, DirectStrikeLobby_islandPanel() ) );
+		CHECK( !meet( pa, DirectStrikeLobby_chat() ) && !meet( pb, DirectStrikeLobby_chat() ) );
+		CHECK( !meet( pa, DirectStrikeLobby_back() ) && !meet( pb, DirectStrikeLobby_start() ) );
+	}
+	for( int team = 0; team < DSLOBBY_TEAMS; ++team )
+	{
+		const DirectStrikeRect head = DirectStrikeLobby_teamHead( team );
+		CHECK( !meet( DirectStrikeLobby_pointed( head, team, DSLOBBY_HEAD_SPEAR ), DirectStrikeLobby_islandChip() ) );
+		for( int i = 0; i < DSLOBBY_HEAD_LEDS; ++i )
+			CHECK( within( DirectStrikeLobby_headLed( team, i ), head ) );
+		for( int i = 0; i < DSLOBBY_HEAD_CHEVRONS; ++i )
+			CHECK( within( DirectStrikeLobby_headChevron( team, i ), head ) );
+		CHECK( within( DirectStrikeLobby_titleChevron( team, 0 ), DirectStrikeLobby_title() ) );
+		CHECK( within( DirectStrikeLobby_titleChevron( team, 1 ), DirectStrikeLobby_title() ) );
 	}
 }
 
-TEST(dslobby_open_seats_are_slim_rows_and_the_cards_below_move_up)
+TEST(dslobby_every_seat_is_a_full_card_and_the_tug_bar_meets_in_the_middle)
 {
-	const unsigned slim = ( 1u << 2 ) | ( 1u << 5 );
-	CHECK_EQ( DirectStrikeLobby_card( 2, slim ).y1 - DirectStrikeLobby_card( 2, slim ).y0, DSLOBBY_SLIM_H );
-	CHECK_EQ( DirectStrikeLobby_card( 4, slim ).y0, DirectStrikeLobby_card( 2, slim ).y1 + DSLOBBY_CARD_GAP );
-	CHECK_EQ( DirectStrikeLobby_card( 4, slim ).y0, DirectStrikeLobby_card( 4 ).y0 - ( DSLOBBY_CARD_H - DSLOBBY_SLIM_H ) );
-	CHECK_EQ( DirectStrikeLobby_card( 5, slim ).y0, DirectStrikeLobby_card( 5 ).y0 );
-	for( int part = 0; part < DSSEAT_PARTS; ++part )
-		CHECK( within( DirectStrikeLobby_part( 2, (DirectStrikeSeatPart)part, slim ), DirectStrikeLobby_card( 2, slim ) ) );
-	CHECK( !meet( DirectStrikeLobby_part( 2, DSSEAT_PORTRAIT, slim ), DirectStrikeLobby_part( 2, DSSEAT_LINE, slim ) ) );
-	CHECK( !meet( DirectStrikeLobby_part( 5, DSSEAT_PORTRAIT, slim ), DirectStrikeLobby_part( 5, DSSEAT_LINE, slim ) ) );
+	for( int seat = 0; seat < DSLOBBY_SEATS; ++seat )
+		CHECK_EQ( DirectStrikeLobby_card( seat ).y1 - DirectStrikeLobby_card( seat ).y0, DSLOBBY_CARD_H );
+	CHECK_EQ( DirectStrikeLobby_card( 4 ).y0, DirectStrikeLobby_card( 2 ).y1 + DSLOBBY_CARD_GAP );
+	const DirectStrikeRect console = DirectStrikeLobby_console(), tug = DirectStrikeLobby_tug();
+	CHECK( within( tug, console ) && within( console, DESIGN ) );
+	CHECK_EQ( console.y1, tug.y1 + DSLOBBY_CONSOLE_FOOT );
+	CHECK_EQ( tug.y0, DirectStrikeLobby_start().y1 + DSLOBBY_TUG_GAP );
+	for( int i = 0; i < DSLOBBY_TUG_SEGS; ++i )
+	{
+		const DirectStrikeRect a = DirectStrikeLobby_tugSeg( 0, i ), b = DirectStrikeLobby_tugSeg( 1, i );
+		CHECK( within( a, tug ) && within( b, tug ) );
+		CHECK( a.x1 < 958.0f && b.x0 > 962.0f );	// clear of the gold line in the middle
+		CHECK_EQ( a.x0 - tug.x0, tug.x1 - b.x1 );
+	}
+}
+
+TEST(dslobby_a_seat_is_its_start_and_empty_slots_fill_the_rest)
+{
+	int seatOf[ DSLOBBY_SEATS ], slotAt[ DSLOBBY_SEATS ];
+	// a fresh room: nobody has a start, every slot on its own seat
+	const int fresh[ DSLOBBY_SEATS ] = { -1, -1, -1, -1, -1, -1 };
+	DirectStrikeLobby_seats( fresh, seatOf, slotAt );
+	for( int i = 0; i < DSLOBBY_SEATS; ++i )
+		CHECK( seatOf[ i ] == i && slotAt[ i ] == i );
+	// the host (slot 0) moved to seat 3: slot 3, empty, shows on the seat he left
+	const int moved[ DSLOBBY_SEATS ] = { 3, 1, -1, -1, -1, -1 };
+	DirectStrikeLobby_seats( moved, seatOf, slotAt );
+	CHECK_EQ( seatOf[ 0 ], 3 );
+	CHECK_EQ( seatOf[ 3 ], 0 );
+	CHECK( seatOf[ 1 ] == 1 && seatOf[ 2 ] == 2 && seatOf[ 4 ] == 4 && seatOf[ 5 ] == 5 );
+	// slot 3 fills there (a joiner, its start not given yet: -1 like an empty slot) and stays where it was shown;
+	// once FitDirectStrikeRoom gives it that seat as its start, nothing moves
+	const int seated[ DSLOBBY_SEATS ] = { 3, 1, -1, 0, -1, -1 };
+	DirectStrikeLobby_seats( seated, seatOf, slotAt );
+	CHECK( seatOf[ 0 ] == 3 && seatOf[ 3 ] == 0 && seatOf[ 2 ] == 2 && seatOf[ 4 ] == 4 );
+	// two claim one start: the first slot keeps it, the second takes a free seat; every seat shows one slot
+	const int clash[ DSLOBBY_SEATS ] = { 2, -1, 2, -1, 9, -1 };
+	DirectStrikeLobby_seats( clash, seatOf, slotAt );
+	CHECK_EQ( seatOf[ 0 ], 2 );
+	CHECK_NE( seatOf[ 2 ], 2 );
+	for( int seat = 0; seat < DSLOBBY_SEATS; ++seat )
+		CHECK( slotAt[ seat ] >= 0 && seatOf[ slotAt[ seat ] ] == seat );
 }
 
 TEST(dslobby_the_block_is_centred_and_its_columns_share_top_and_foot)
 {
-	CHECK_EQ( DirectStrikeLobby_title().y0, 1080 - DSLOBBY_BOTTOM );
+	CHECK_EQ( DirectStrikeLobby_console().y0, DirectStrikeLobby_title().y0 + DSLOBBY_TITLE_H / 2 );
+	CHECK_EQ( DirectStrikeLobby_title().y0, 1080 - DirectStrikeLobby_console().y1 );	// the title's top to the console's foot, centred
 	CHECK_EQ( DirectStrikeLobby_teamHead( 0 ).y0, DirectStrikeLobby_islandPanel().y0 );
 	CHECK_EQ( DirectStrikeLobby_teamHead( 1 ).y0, DirectStrikeLobby_islandChip().y0 );
-	CHECK_EQ( DirectStrikeLobby_card( DirectStrikeLobby_slot( 0, DSLOBBY_ROWS - 1 ) ).y1, DirectStrikeLobby_start().y1 );
-	CHECK_EQ( DirectStrikeLobby_card( DirectStrikeLobby_slot( 1, DSLOBBY_ROWS - 1 ) ).y1, DirectStrikeLobby_back().y1 );
-	CHECK_EQ( DirectStrikeLobby_island().y1 + 70.0f, DirectStrikeLobby_islandPanel().y1 );
-	CHECK_EQ( DirectStrikeLobby_islandPanel().y1 + DSLOBBY_ROW_GAP, DirectStrikeLobby_start().y0 );
-	CHECK_EQ( DirectStrikeLobby_chatInput().y1 + DSLOBBY_ROW_GAP, DirectStrikeLobby_start().y0 );
+	CHECK_EQ( DirectStrikeLobby_teamHead( 1 ).y1, DirectStrikeLobby_islandChip().y1 );
+	CHECK_EQ( DirectStrikeLobby_card( DirectStrikeLobby_seat( 0, DSLOBBY_ROWS - 1 ) ).y1, DirectStrikeLobby_start().y1 );
+	CHECK_EQ( DirectStrikeLobby_card( DirectStrikeLobby_seat( 1, DSLOBBY_ROWS - 1 ) ).y1, DirectStrikeLobby_back().y1 );
+	// the chat over the first two seat rows, the input on the third's top, the offline panel down to the input's foot
+	CHECK_EQ( DirectStrikeLobby_chat().y0, DirectStrikeLobby_card( 0 ).y0 );
+	CHECK_EQ( DirectStrikeLobby_chat().y1, DirectStrikeLobby_card( 2 ).y1 );
+	CHECK_EQ( DirectStrikeLobby_chatInput().y0, DirectStrikeLobby_card( 4 ).y0 );
+	CHECK_EQ( DirectStrikeLobby_islandPanel().y1, DirectStrikeLobby_chatInput().y1 );
+	CHECK( within( DirectStrikeLobby_island(), DirectStrikeLobby_islandPanel() ) );
+	CHECK( within( DirectStrikeLobby_chatGlass(), DirectStrikeLobby_chat() ) );
+	CHECK( within( DirectStrikeLobby_islandSmall(), DirectStrikeLobby_islandWell() ) );
+	CHECK( within( DirectStrikeLobby_islandWell(), DirectStrikeLobby_islandChip() ) );
+	CHECK( DirectStrikeLobby_chatInput().y1 < DirectStrikeLobby_start().y0 );
 	CHECK_EQ( DirectStrikeLobby_size().y1, DirectStrikeLobby_start().y1 );
 	CHECK_EQ( DirectStrikeLobby_speed().y1, DirectStrikeLobby_start().y1 );
 	CHECK_EQ( DirectStrikeLobby_speed().x0, DirectStrikeLobby_size().x1 + DSLOBBY_ROW_GAP );

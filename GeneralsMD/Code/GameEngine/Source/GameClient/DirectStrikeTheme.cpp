@@ -45,7 +45,7 @@ namespace DirectStrikeTheme
 namespace
 {
 	/// the mapped image names, in Piece's order, without the side's prefix; a rename of the art is an edit here
-	const char *const PIECE_NAMES[ PIECE_COUNT ] =
+	const char *const PIECE_NAMES[] =
 	{
 		"LaneCard",
 		"LaneCardHero",
@@ -99,11 +99,9 @@ namespace
 		"DSRowC",
 		"DSRowR",
 
-		"LobbyBack",
-		"LobbySend",
 		"LobbyPickTile",
 		"LobbyIsland",
-		"LobbyIslandSmall",
+		"LobbyIslandBand",
 		"LobbyHeadquartersAmerica",
 		"LobbyHeadquartersChina",
 		"LobbyHeadquartersGla",
@@ -116,10 +114,45 @@ namespace
 		"LobbyPing4",
 		"LobbyAI",
 		"LobbyCheck",
-	};
 
-	/// the sets' prefixes, the sidebar's: Turkiye and a watcher wear America's
-	const char *const PREFIXES[ SIDE_COUNT ] = { "AmericaPro", "ChinaPro", "GLAPro" };
+		"DSConsoleTL", "DSConsoleT", "DSConsoleTR", "DSConsoleL", "DSConsoleC", "DSConsoleR", "DSConsoleBL", "DSConsoleB", "DSConsoleBR",
+		"DSSpearRightL", "DSSpearRightC", "DSSpearRightR",
+		"DSSpearLeftL", "DSSpearLeftC", "DSSpearLeftR",
+		"DSSpearYouRightL", "DSSpearYouRightC", "DSSpearYouRightR",
+		"DSSpearYouLeftL", "DSSpearYouLeftC", "DSSpearYouLeftR",
+		"DSBayRightL", "DSBayRightC", "DSBayRightR",
+		"DSBayLeftL", "DSBayLeftC", "DSBayLeftR",
+		"DSSpearHeadRightL", "DSSpearHeadRightC", "DSSpearHeadRightR",
+		"DSSpearHeadLeftL", "DSSpearHeadLeftC", "DSSpearHeadLeftR",
+		"DSHexTitleL", "DSHexTitleC", "DSHexTitleR",
+		"DSTugL", "DSTugC", "DSTugR",
+		"DSSeg",
+		"DSSegLit",
+		"DSTugSeg",
+		"DSTugSegLit",
+		"DSLed",
+		"DSLedLit",
+		"DSChevronR",
+		"DSChevronL",
+
+		"DSClampStartL", "DSClampStartC", "DSClampStartR",
+		"DSClampBack",
+		"DSClampPlus",
+		"DSClampSend",
+		"DSClampChipL", "DSClampChipC", "DSClampChipR",
+		"DSClampChipFieldR",
+		"DSClampBoxTL", "DSClampBoxT", "DSClampBoxTR", "DSClampBoxL", "DSClampBoxC", "DSClampBoxR", "DSClampBoxBL", "DSClampBoxB", "DSClampBoxBR",
+		"DSClampBandL", "DSClampBandC", "DSClampBandR",
+
+		NULL,	// past the last: a name added without its Piece, or a Piece without its name, fails the assert below
+	};
+	static_assert( sizeof( PIECE_NAMES ) / sizeof( PIECE_NAMES[ 0 ] ) == PIECE_COUNT + 1, "PIECE_NAMES has one name a Piece" );
+
+	/// the sets' prefixes, the sidebar's, then the common frame's: Turkiye and a watcher wear America's
+	const char *const PREFIXES[ SIDE_COUNT + 1 ] = { "AmericaPro", "ChinaPro", "GLAPro", "CommonPro" };
+
+	/// a centre slice wider than this is a textured tile that repeats; the plain ones are 8 wide and stretch
+	const Int TILE_MIN = 8;
 
 	/// type sizes: an em of Arial at 96 dots an inch is four thirds of its points
 	const Real POINTS_PER_PIXEL = 0.75f;
@@ -162,6 +195,33 @@ namespace
 	Int scaled( const Image *image, Bool wide )
 	{
 		return REAL_TO_INT( ( wide ? image->getImageWidth() : image->getImageHeight() ) * s_scale + 0.5f );
+	}
+
+	Bool isTile( const Image *image ) { return image != NULL && image->getImageWidth() > TILE_MIN; }
+
+	/** A textured slice repeated over b from its top left, at its own width when acrossX and its own height when
+		* acrossY (else the box's), the last copy cut by the clip.  Under a clip someone else set it stretches
+		* instead, since the display cannot hand that clip back. */
+	void tile( const Image *image, const LaneHudBox &b, Bool acrossX, Bool acrossY, Color tint )
+	{
+		if( image == NULL || b.w <= 0 || b.h <= 0 )
+			return;
+		if( TheDisplay->isClippingEnabled() )
+		{
+			TheDisplay->drawImage( image, b.x, b.y, b.x + b.w, b.y + b.h, tint );
+			return;
+		}
+		const Int w = acrossX ? max( 1, scaled( image, TRUE ) ) : b.w, h = acrossY ? max( 1, scaled( image, FALSE ) ) : b.h;
+		IRegion2D clip;
+		clip.lo.x = b.x;
+		clip.lo.y = b.y;
+		clip.hi.x = b.x + b.w;
+		clip.hi.y = b.y + b.h;
+		TheDisplay->setClipRegion( &clip );
+		for( Int y = b.y; y < b.y + b.h; y += h )
+			for( Int x = b.x; x < b.x + b.w; x += w )
+				TheDisplay->drawImage( image, x, y, x + w, y + h, tint );
+		TheDisplay->enableClipping( FALSE );
 	}
 
 	/// the square from the top centre of a portrait, as an image of its own on the same texture
@@ -416,14 +476,25 @@ void nineSlice( const LaneHudBox &b, Piece topLeft, Color tint )
 	const Int c = min( scaled( tl, TRUE ), min( b.w, b.h ) / 2 );
 	const Int x1 = b.x + c, x2 = b.x + b.w - c, y1 = b.y + c, y2 = b.y + b.h - c;
 	drawImage( tl, LaneHud_box( b.x, b.y, c, c ), tint );
-	drawImage( art( (Piece)( topLeft + T ) ), LaneHud_box( x1, b.y, x2 - x1, c ), tint );
 	drawImage( art( (Piece)( topLeft + TR ) ), LaneHud_box( x2, b.y, c, c ), tint );
-	drawImage( art( (Piece)( topLeft + L ) ), LaneHud_box( b.x, y1, c, y2 - y1 ), tint );
-	drawImage( art( (Piece)( topLeft + C ) ), LaneHud_box( x1, y1, x2 - x1, y2 - y1 ), tint );
-	drawImage( art( (Piece)( topLeft + R ) ), LaneHud_box( x2, y1, c, y2 - y1 ), tint );
 	drawImage( art( (Piece)( topLeft + BL ) ), LaneHud_box( b.x, y2, c, c ), tint );
-	drawImage( art( (Piece)( topLeft + B ) ), LaneHud_box( x1, y2, x2 - x1, c ), tint );
 	drawImage( art( (Piece)( topLeft + BR ) ), LaneHud_box( x2, y2, c, c ), tint );
+	const Image *centre = art( (Piece)( topLeft + C ) );
+	if( isTile( centre ) )
+	{
+		// the edges repeat along their run and the centre both ways, the 192 tile rule
+		tile( art( (Piece)( topLeft + T ) ), LaneHud_box( x1, b.y, x2 - x1, c ), TRUE, FALSE, tint );
+		tile( art( (Piece)( topLeft + B ) ), LaneHud_box( x1, y2, x2 - x1, c ), TRUE, FALSE, tint );
+		tile( art( (Piece)( topLeft + L ) ), LaneHud_box( b.x, y1, c, y2 - y1 ), FALSE, TRUE, tint );
+		tile( art( (Piece)( topLeft + R ) ), LaneHud_box( x2, y1, c, y2 - y1 ), FALSE, TRUE, tint );
+		tile( centre, LaneHud_box( x1, y1, x2 - x1, y2 - y1 ), TRUE, TRUE, tint );
+		return;
+	}
+	drawImage( art( (Piece)( topLeft + T ) ), LaneHud_box( x1, b.y, x2 - x1, c ), tint );
+	drawImage( art( (Piece)( topLeft + L ) ), LaneHud_box( b.x, y1, c, y2 - y1 ), tint );
+	drawImage( centre, LaneHud_box( x1, y1, x2 - x1, y2 - y1 ), tint );
+	drawImage( art( (Piece)( topLeft + R ) ), LaneHud_box( x2, y1, c, y2 - y1 ), tint );
+	drawImage( art( (Piece)( topLeft + B ) ), LaneHud_box( x1, y2, x2 - x1, c ), tint );
 }
 
 void panel( const LaneHudBox &b )
@@ -431,7 +502,7 @@ void panel( const LaneHudBox &b )
 	nineSlice( b, PANEL_TL );
 }
 
-void threeSlice( const LaneHudBox &b, Piece left, Piece centre, Piece right, const char *state )
+void threeSlice( const LaneHudBox &b, Piece left, Piece centre, Piece right, const char *state, Color tint )
 {
 	const Image *l = art( left, state ), *m = art( centre, state ), *r = art( right, state );
 	if( l == NULL || m == NULL || r == NULL )
@@ -441,14 +512,29 @@ void threeSlice( const LaneHudBox &b, Piece left, Piece centre, Piece right, con
 		return;
 	}
 	const Int lw = min( scaled( l, TRUE ), b.w / 2 ), rw = min( scaled( r, TRUE ), b.w - lw );
-	drawImage( l, LaneHud_box( b.x, b.y, lw, b.h ) );
-	drawImage( m, LaneHud_box( b.x + lw, b.y, b.w - lw - rw, b.h ) );
-	drawImage( r, LaneHud_box( b.x + b.w - rw, b.y, rw, b.h ) );
+	drawImage( l, LaneHud_box( b.x, b.y, lw, b.h ), tint );
+	const LaneHudBox middle = LaneHud_box( b.x + lw, b.y, b.w - lw - rw, b.h );
+	if( isTile( m ) )
+		tile( m, middle, TRUE, FALSE, tint );
+	else
+		drawImage( m, middle, tint );
+	drawImage( r, LaneHud_box( b.x + b.w - rw, b.y, rw, b.h ), tint );
 }
 
 void dropdown( const LaneHudBox &b, const char *state, Bool field )
 {
 	threeSlice( b, DROP_L, DROP_C, field ? FIELD_R : DROP_R, field ? "" : state );
+}
+
+void clampChip( const LaneHudBox &b, const char *state, Bool field )
+{
+	threeSlice( b, CLAMP_CHIP_L, CLAMP_CHIP_C, field ? CLAMP_CHIP_FIELD_R : CLAMP_CHIP_R, field ? "" : state );
+}
+
+void glow( Piece piece, const LaneHudBox &core, Color tint )
+{
+	const Int g = px( GLOW );
+	drawImage( art( piece ), LaneHud_box( core.x - g, core.y - g, core.w + 2 * g, core.h + 2 * g ), tint );
 }
 
 void listRow( const LaneHudBox &b, Bool current, Bool hot )

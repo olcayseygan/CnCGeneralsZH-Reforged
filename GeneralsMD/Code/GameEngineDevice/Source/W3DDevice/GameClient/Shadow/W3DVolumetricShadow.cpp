@@ -132,10 +132,13 @@ const Real cosAngleToCare = cos ((0.2 * PI) / 180.0);	//1.5 degree difference
 // The box goes round the ground the tactical camera sees and is never narrower than that; it opens
 // once a zoom or a tilt shows more (shadowMapHalfWidth), because at full zoom-out the top of the
 // screen is about 1100 units past the look point and the ground there had no shadow at all.  The
-// widest it goes is the cap below, 2.3 units a texel.
+// widest it goes is the cap below, 2.6 units a texel.  Twilight Flame at the wheel limit and the
+// flattest tilt asks for 2611 (source 331686a2, `SHADOWMAP` line); 2400 left 422 units of the far
+// corner unshadowed.  2624 is the step that holds it; the cap is one step more, slack for a larger
+// or higher map than that one (about 5% more area at the cap, texels only).
 #define SHADOW_MAP_TEXELS 2048
 #define SHADOW_MAP_HALF_WIDTH 900.0f
-#define SHADOW_MAP_WIDEST_HALF_WIDTH 2400.0f
+#define SHADOW_MAP_WIDEST_HALF_WIDTH 2688.0f
 // The box grows in these steps, so the texel grid holds still while the zoom does.
 #define SHADOW_MAP_HALF_WIDTH_STEP 64.0f
 // How far the box stays past the frame's ground: the filter at its widest reads about 16 units beside

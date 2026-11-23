@@ -1581,6 +1581,11 @@ void W3DTreeBuffer::allocateTreeBuffers(void)
 		m_curNumTreeVertices[i]=0;
 		m_curNumTreeIndices[i]=0;
 	}
+	// The buffers are new and empty.  After a device reset (BaseHeightMapRenderObjClass's
+	// ReAcquireResources) nothing else asks for a refill: with the camera still, no tree changes
+	// visibility, so the map stood without its trees and bushes until the view moved.
+	m_anythingChanged = true;
+	m_sunCullValid = FALSE;
 
 		//shader decleration
 	// DX8_FVF_XYZNDUV1

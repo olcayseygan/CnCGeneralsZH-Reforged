@@ -1,0 +1,46 @@
+# Direct Strike proof that what comes out of a wave unit belongs to the wave: a Troop Crawler's men,
+# made by the Crawler's own transport module a frame after the wave is listed, and the pilot a ranked
+# American vehicle throws out when it dies. America (slot 0, team A) sends one Veteran Crusader,
+# China (slot 1, team B) one Troop Crawler. Both are sold once the first wave is out, so that wave is
+# the only one in the field; it meets in the middle and walks on into the towers.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 7000 -scenario lanewar_strays -logPrefix lanewar_strays_
+#
+# Passes when:
+#  - every Red Guard of the Crawler copy has a "HEADLESS LANEWAR: ... 'ChinaInfantryRedguard' ... of B1
+#    out of wave unit <the Crawler's id> joins its wave, selectable 0, riding inside it, dies at frame
+#    6600" line a frame after logic frame 2700;
+#  - the Crusader copy ("goes out at rank 1") dies before frame 6600 and an 'AmericaInfantryPilot' of A1
+#    "out of wave unit <the Crusader's id> joins its wave, selectable 0, on foot, dies at frame 6600"
+#    follows within a frame (if the Crusader lives to 6600 the pilot still shows, the frame after its
+#    lifespan kills it, and dies on the next);
+#  - the HEADLESS TALLY lines at file 7000 show the Red Guards and the pilot alive with 0 inside once
+#    the Crawler is down (outside, so marching), and the lines at file 10000 (logic 6667) show 0 alive
+#    for both: whatever the towers left died with the wave's lifespan ("lifespan ended" at 6600);
+#  - no LANEWAR ABILITY line says either is "player N's now" (adopted with their own player, they
+#    march for him from the first idle look, not as a hijack).
+# Before the fix the men and the pilot have no "joins its wave" line, stay alive past 6600 and can be
+# clicked and ordered in a windowed run.
+#
+# The frames below are this file's 30 Hz frames, which the drill scales by the game speed: at 1.5x a
+# file frame is two thirds of a logic frame. The first tick is logic frame 2700 (file 4050), the
+# lifespan 3900 logic frames.
+
+30    lanecash   0  5000
+30    lanecash   1  5000
+30    laneplace  0  AmericaTankCrusader        0 0
+30    laneplace  1  ChinaVehicleTroopCrawler   0 0
+60    lanevet    0  0 0 0
+# sold once tick 0 has sent them, so no second wave joins the first
+4200  lanesell   0  0 0 0
+4200  lanesell   1  0 0 0
+7000  tally      0  AmericaInfantryPilot
+7000  tally      1  ChinaInfantryRedguard
+7000  tally      0  *
+7000  tally      1  *
+10000 tally      0  AmericaInfantryPilot
+10000 tally      1  ChinaInfantryRedguard
+10000 tally      0  *
+10000 tally      1  *

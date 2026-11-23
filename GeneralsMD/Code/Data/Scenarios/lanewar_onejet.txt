@@ -1,0 +1,30 @@
+# Direct Strike proof that one plot jet has one copy alive at most. America (slot 0, team A) has an
+# Aurora on its plot, China (slot 1, team B) a MiG, and a Ranger and a Red Guard each so both teams
+# have a front for the strikes to meet. Two players, so each seat sends on every tick: logic frames
+# 2700, 4050, 5400, 6750. A jet copy lives 3900 logic frames, so the copy of tick 0 is the only one
+# through ticks 1 and 2.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 7200 -scenario lanewar_onejet -logPrefix lanewar_onejet_
+#
+# Passes when, in the HEADLESS LANEWAR JET lines:
+#  - 'AmericaJetAurora' of A1 and 'ChinaJetMIG' of B1 each "joins its squadron" at frame 2700;
+#  - at frames 4050 and 5400 each jet still alive reads "has its copy in the squadron still ... no second
+#    one", and a jet shot down before a tick "joins its squadron" afresh on that tick instead;
+#  - "jets in all squadrons" never reads more than 2;
+#  - a jet that lived reads "lifespan ended" at frame 6600 and joins again at 6750.
+# Before the fix ticks 1 and 2 each add another copy and the count climbs to 6.
+#
+# The frames below are this file's 30 Hz frames, scaled by the drill to the game speed (file 4050 is
+# logic 2700 at 1.5x).
+
+30    lanecash   0  8000
+30    lanecash   1  3000
+30    lanetier   0  1 2
+30    lanetier   1  1 2
+30    lanetier   0  1 3
+30    laneplace  0  AmericaInfantryRanger   4 0
+30    laneplace  1  ChinaInfantryRedguard   4 0
+30    laneplace  0  AmericaJetAurora        4 8
+30    laneplace  1  ChinaJetMIG             4 8

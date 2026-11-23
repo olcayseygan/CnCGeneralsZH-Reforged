@@ -394,6 +394,7 @@ private:
 	struct Jet
 	{
 		ObjectID id;										///< INVALID_ID while parked
+		ObjectID plotID;								///< the plot unit it is a copy of; INVALID_ID from a save before version 8
 		const ThingTemplate *thing;
 		Int team, seat;
 		Int col, row;										///< its plot slot, its place in the line abreast
@@ -406,6 +407,9 @@ private:
 		std::vector<const UpgradeTemplate *> upgrades;	///< its plot unit's object upgrades when it joined, given again at every take-off
 	};
 	void expireCopies( UnsignedInt now );
+	void adoptStrays( UnsignedInt now );
+	void pruneCopies( void );
+	Bool waveDieFrame( ObjectID parent, UnsignedInt *dieFrame ) const;
 	void useAbilities( UnsignedInt now );
 	Bool buttonOn( Int player, const ThingTemplate *tmpl, const CommandButton *button ) const;
 	Bool walkUp( Object *obj, const CommandButton *button, Int team );
@@ -445,13 +449,14 @@ private:
 	Coord3D m_middle;
 
 	// saved and CRC'd
+	ObjectID m_strayWatch;																///< adoptStrays has looked at every ObjectID below this one
 	Int m_seatPlayer[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];		///< player index, -1 for an empty seat
 	ObjectID m_fortress[ LANEWAR_TEAMS ];
 	ObjectID m_tower[ LANEWAR_TEAMS ][ 2 ];								///< LaneWar_TowerA1, A2, B1, B2; INVALID_ID where the map has none
 	Bool m_fortressDown[ LANEWAR_TEAMS ];
 	UnsignedInt m_nextTickFrame;
 	UnsignedInt m_tickCount;
-	std::vector<Copy> m_copies;														///< in spawn order, so dieFrame never falls
+	std::vector<Copy> m_copies;														///< in spawn order; an adopted stray takes its parent's dieFrame, so the list is not sorted by it
 	std::vector<PlotUnit> m_plotUnits;										///< in purchase order, which is ObjectID order
 	Int m_incomeLevel[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];		///< 0 to LANEWAR_INCOME_TIERS, bought
 	Int m_techLevel[ LANEWAR_TEAMS ][ LANEWAR_SEATS ];			///< 1 to LANEWAR_TECH_TIERS

@@ -81,6 +81,9 @@ found and fixed, EA's own, not port damage.**
 - Marching waves no longer wear the "F" formation letter. They still march together at their slowest unit's pace.
 - The watch tower and the fortress see stealthed units now, the tower out to 250 and the fortress out to 325, a little past their own guns.
 - Units no longer earn rank in the field. The only rank a unit has is the one you bought for it, and your general's points still come from kills as before.
+- A Troop Crawler's Red Guards and the pilot a ranked American vehicle throws out when it dies were never part of the wave. You could click them and give them orders, and they never died of old age. They join their wave now: nobody can select them, they march with it, and they die when the unit they came out of would have.
+- A jet on your plot sent a fresh copy with every wave while the last one was still flying, so one Aurora in a 1v1 became three by the third wave. A plot jet now has one copy alive at a time. When a wave finds it still up, that copy takes the upgrades and the rank you bought since, and the next copy goes out once its 130 seconds are over.
+- Direct Strike replays and saves recorded before this change will not play back.
 - Every Direct Strike replay recorded before this change no longer plays back, with stealthed units in it or not, and neither does an Apocalypse replay with a money gift in it.
 
 ## Direct Strike waves leave from behind the fortress

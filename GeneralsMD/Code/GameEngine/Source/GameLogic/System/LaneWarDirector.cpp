@@ -625,6 +625,7 @@ void LaneWarDirector::reset( void )
 		m_fortressDown[ t ] = FALSE;
 	}
 	m_middle.zero();
+	m_strayWatch = INVALID_ID;
 	m_nextTickFrame = 0;
 	m_tickCount = 0;
 	m_copies.clear();
@@ -1868,7 +1869,11 @@ void LaneWarDirector::update( void )
 
 	const UnsignedInt now = TheGameLogic->getFrame();
 
+	// the lifespans first, then what came out of wave units (their dead still listed, so a pilot finds
+	// the vehicle he left), then the dead off the list
 	expireCopies( now );
+	adoptStrays( now );
+	pruneCopies();
 	refillJets();
 
 	for( Int t = 0; t < LANEWAR_TEAMS; ++t )
@@ -1897,11 +1902,11 @@ void LaneWarDirector::update( void )
 }
 
 //-------------------------------------------------------------------------------------------------
-/// a copy dies LANEWAR_LIFESPAN_FRAMES after it spawned; the list drops the dead as it goes
+/** A copy dies LANEWAR_LIFESPAN_FRAMES after it spawned.  It stays listed until pruneCopies, after
+	  adoptStrays has seen what its death threw out. */
 void LaneWarDirector::expireCopies( UnsignedInt now )
 {
-	Int expired = 0;
-	size_t kept = 0;
+	Int expired = 0, out = 0;
 	for( size_t i = 0; i < m_copies.size(); ++i )
 	{
 		Object *obj = TheGameLogic->findObjectByID( m_copies[ i ].id );
@@ -1913,12 +1918,93 @@ void LaneWarDirector::expireCopies( UnsignedInt now )
 			++expired;
 			continue;
 		}
-		m_copies[ kept++ ] = m_copies[ i ];
+		++out;
 	}
-	m_copies.resize( kept );
 
 	if( expired > 0 )
-		DEBUG_LOG(( "HEADLESS LANEWAR: frame %u lifespan ended %d copies, %d still out\n", now, expired, (Int)kept ));
+		DEBUG_LOG(( "HEADLESS LANEWAR: frame %u lifespan ended %d copies, %d still out\n", now, expired, out ));
+}
+
+/// the list drops its dead, in order
+void LaneWarDirector::pruneCopies( void )
+{
+	size_t kept = 0;
+	for( size_t i = 0; i < m_copies.size(); ++i )
+	{
+		const Object *obj = TheGameLogic->findObjectByID( m_copies[ i ].id );
+		if( obj != NULL && !obj->isEffectivelyDead() )
+			m_copies[ kept++ ] = m_copies[ i ];
+	}
+	m_copies.resize( kept );
+}
+
+/// the object is a wave copy or a jet out of its squadron, listed still if dead this frame; *dieFrame its lifespan's end
+Bool LaneWarDirector::waveDieFrame( ObjectID parent, UnsignedInt *dieFrame ) const
+{
+	if( parent == INVALID_ID )
+		return FALSE;
+	for( size_t i = 0; i < m_copies.size(); ++i )
+		if( m_copies[ i ].id == parent )
+		{
+			*dieFrame = m_copies[ i ].dieFrame;
+			return TRUE;
+		}
+	for( size_t i = 0; i < m_jets.size(); ++i )
+		if( m_jets[ i ].state != JET_PARKED && m_jets[ i ].id == parent )
+		{
+			*dieFrame = m_jets[ i ].dieFrame;
+			return TRUE;
+		}
+	return FALSE;
+}
+
+/** What comes out of a wave unit belongs to its wave: a Troop Crawler's men, which its TransportContain
+	  makes on its first update, a frame after spawnWave has listed it, and the pilot EjectPilotDie's
+	  creation list throws out of a ranked American vehicle or jet (its producer is the wreck), or anything
+	  else a wave unit makes that a player could order about.  Each becomes a copy: not selectable, dying
+	  when its parent's lifespan ends, marching from useAbilities once it stands idle outside.  Only the
+	  ObjectIDs made since the last pass are looked at, in ID order, so a parent is always listed before
+	  its child is.  A slaved unit (an Angry Mob's men, a drone) follows its master and is left to it; an
+	  add-on rides along as spawnCargo leaves it. */
+void LaneWarDirector::adoptStrays( UnsignedInt now )
+{
+	const Int next = (Int)TheGameLogic->getObjectIDCounter();
+	for( Int id = max( (Int)m_strayWatch, 1 ); id < next; ++id )
+	{
+		Object *obj = TheGameLogic->findObjectByID( (ObjectID)id );
+		if( obj == NULL || obj->isEffectivelyDead() || obj->getSlavedUpdateInterface() != NULL
+				|| !( obj->isKindOf( KINDOF_INFANTRY ) || obj->isKindOf( KINDOF_VEHICLE ) )
+				|| obj->isKindOf( KINDOF_DRONE ) || obj->isKindOf( KINDOF_PORTABLE_STRUCTURE ) )
+			continue;
+		Int team, seat;
+		if( !seatOf( obj->getControllingPlayer(), &team, &seat ) )
+			continue;
+		UnsignedInt dieFrame = 0;
+		ObjectID parent = obj->getProducerID();
+		Bool ofWave = waveDieFrame( parent, &dieFrame );
+		for( const Object *in = obj->getContainedBy(); in != NULL && !ofWave; in = in->getContainedBy() )
+		{
+			parent = in->getID();
+			ofWave = waveDieFrame( parent, &dieFrame );
+		}
+		if( !ofWave )
+			continue;
+		Bool listed = FALSE;
+		for( size_t i = 0; i < m_copies.size() && !listed; ++i )
+			listed = m_copies[ i ].id == obj->getID();
+		if( listed )
+			continue;		// a passenger copy spawnCargo loaded
+
+		obj->setStatus( MAKE_OBJECT_STATUS_MASK( OBJECT_STATUS_UNSELECTABLE ) );
+		Copy entry;
+		entry.id = obj->getID();
+		entry.dieFrame = dieFrame;
+		entry.owner = obj->getControllingPlayer()->getPlayerIndex();
+		m_copies.push_back( entry );
+		DEBUG_LOG(( "HEADLESS LANEWAR: frame %u '%s' %d of %s%d out of wave unit %d joins its wave, selectable %d, %s, dies at frame %u\n", now,
+								obj->getTemplate()->getName().str(), id, TEAM_NAME[ team ], seat + 1, (Int)parent, obj->isSelectable() ? 1 : 0, obj->getContainedBy() != NULL ? "riding inside it" : "on foot", dieFrame ));
+	}
+	m_strayWatch = (ObjectID)next;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -2001,12 +2087,36 @@ void LaneWarDirector::spawnCargo( Object *copy, const PlotUnit &u, Team *owner, 
 
 //-------------------------------------------------------------------------------------------------
 /** A wave's jet copy joins its seat's squadron parked and rearmed, whatever the rest of it is doing,
-	  and goes with the next strike the seat flies.  Its lifespan runs from this tick, as a copy's does. */
+	  and goes with the next strike the seat flies.  Its lifespan runs from this tick, as a copy's does.
+	  One plot jet has one copy alive at most: while the last is in the squadron, parked or flying, the
+	  wave makes none, and the one there takes the object upgrades the plot jet has now at its next
+	  take-off and a rank bought since at once. */
 void LaneWarDirector::joinSquadron( const PlotUnit &u, UnsignedInt now )
 {
 	const Object *original = TheGameLogic->findObjectByID( u.id );
+	for( size_t i = 0; i < m_jets.size(); ++i )
+	{
+		Jet &have = m_jets[ i ];
+		// its plot unit's, wherever that has been moved to; a jet from a save before version 8 by its slot
+		const Bool same = have.plotID != INVALID_ID ? have.plotID == u.id
+										: have.team == u.team && have.seat == u.seat && have.col == u.col && have.row == u.row && have.thing == original->getTemplate();
+		if( !same )
+			continue;
+		have.upgrades = u.upgrades;
+		if( u.veterancy > have.veterancy )
+		{
+			have.veterancy = u.veterancy;
+			Object *flying = have.state != JET_PARKED ? TheGameLogic->findObjectByID( have.id ) : NULL;
+			if( flying != NULL && flying->getExperienceTracker() != NULL && (Int)flying->getVeterancyLevel() < u.veterancy )
+				flying->getExperienceTracker()->setVeterancyLevel( (VeterancyLevel)u.veterancy, FALSE );
+		}
+		DEBUG_LOG(( "HEADLESS LANEWAR JET: frame %u '%s' of %s%d has its copy in the squadron still, %d strikes flown, lifespan to frame %u: no second one, %d jets in all squadrons\n",
+								now, have.thing->getName().str(), TEAM_NAME[ u.team ], u.seat + 1, have.strikes, have.dieFrame, (Int)m_jets.size() ));
+		return;
+	}
 	Jet jet;
 	jet.id = INVALID_ID;
+	jet.plotID = u.id;
 	jet.thing = original->getTemplate();
 	jet.team = u.team;
 	jet.seat = u.seat;
@@ -2216,7 +2326,15 @@ void LaneWarDirector::updateJets( UnsignedInt now )
 		if( now >= jet.dieFrame )
 		{
 			if( obj != NULL )
+			{
+				// listed dead until the next pass, so the pilot its death throws out finds his wave
+				Copy entry;
+				entry.id = obj->getID();
+				entry.dieFrame = jet.dieFrame;
+				entry.owner = m_seatPlayer[ jet.team ][ jet.seat ];
+				m_copies.push_back( entry );
 				obj->kill();
+			}
 			DEBUG_LOG(( "HEADLESS LANEWAR JET: frame %u '%s' of %s%d lifespan ended %s after %d strikes\n", now, jet.thing->getName().str(),
 									TEAM_NAME[ jet.team ], jet.seat + 1, obj != NULL ? "in the air" : "parked", jet.strikes ));
 			continue;
@@ -2566,10 +2684,11 @@ void LaneWarDirector::crc( Xfer *xfer )
 	  Version 4: the squadrons' jets.
 	  Version 5: each plot unit's rank and what it cost.
 	  Version 6: each plot unit's object upgrades and passengers.
-	  Version 7: each jet's object upgrades. */
+	  Version 7: each jet's object upgrades.
+	  Version 8: each jet's plot unit, and how far adoptStrays has looked. */
 void LaneWarDirector::xfer( Xfer *xfer )
 {
-	XferVersion currentVersion = 7;
+	XferVersion currentVersion = 8;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 
@@ -2756,6 +2875,10 @@ void LaneWarDirector::xfer( Xfer *xfer )
 				if( upgrade != NULL )
 					jet.upgrades.push_back( upgrade );
 			}
+			if( version >= 8 )
+				xfer->xferObjectID( &jet.plotID );
+			else
+				jet.plotID = INVALID_ID;		// matched by its slot instead (joinSquadron)
 		}
 		if( xfer->getXferMode() == XFER_LOAD )
 		{
@@ -2768,4 +2891,9 @@ void LaneWarDirector::xfer( Xfer *xfer )
 	}
 	else
 		m_jets.clear();
+
+	if( version >= 8 )
+		xfer->xferObjectID( &m_strayWatch );
+	else
+		m_strayWatch = INVALID_ID;
 }

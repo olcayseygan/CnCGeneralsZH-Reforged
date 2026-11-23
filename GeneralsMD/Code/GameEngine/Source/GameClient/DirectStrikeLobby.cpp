@@ -57,7 +57,8 @@ using namespace DirectStrikeTheme;
 namespace
 {
 	enum Room { ROOM_SKIRMISH, ROOM_LAN, ROOM_ONLINE, ROOM_COUNT };
-	enum List { LIST_NONE, LIST_SEAT, LIST_ARMY, LIST_COLOR, LIST_SIZE };
+	enum List { LIST_NONE, LIST_SEAT, LIST_ARMY, LIST_COLOR, LIST_SIZE, LIST_SPEED };
+	static_assert( DSLOBBY_SPEEDS == PLAYER_GAME_SPEED_COUNT, "the speed list has a row for every player speed" );
 
 	/// each room's layout and its chat log; the skirmish room has none
 	struct RoomNames
@@ -560,6 +561,30 @@ namespace
 		text( sizeLabel( teamSize( 0 ), teamSize( 1 ) ), NAME_EM, r.x0 + CONTENT_INSET, middleOf( r ), faceText( state ), -1, faceShadow( state ) );
 	}
 
+	/// the room's own hidden speed box: every room's layout has one, its item data the percent
+	GameWindow *speedBox( void ) { return named( "ComboBoxGameSpeed" ); }
+
+	/// the speed the room will play: the box's pick, which the network rooms keep on the host's
+	Int roomSpeed( void )
+	{
+		GameWindow *box = speedBox();
+		Int selected = -1;
+		if( box != NULL )
+			GadgetComboBoxGetSelectedPos( box, &selected );
+		if( selected < 0 )
+			return s_game->getGameSpeedPercent();
+		return ClampPlayerGameSpeedPercent( (Int)(intptr_t)GadgetComboBoxGetItemData( box, selected ) );
+	}
+
+	/// the game speed chip: the host's dropdown, a field for everyone else
+	void drawSpeed( void )
+	{
+		const DirectStrikeRect r = DirectStrikeLobby_speed();
+		const char *state = amHost() ? chipState( r, LIST_SPEED, -1 ) : "";
+		dropdown( boxOf( r ), state, !amHost() );
+		text( GameSpeedText( roomSpeed() ), NAME_EM, r.x0 + CONTENT_INSET, middleOf( r ), faceText( state ), -1, faceShadow( state ) );
+	}
+
 	void drawIsland( void )
 	{
 		const UnicodeString name = TheGameText->fetch( "GUI:DirectStrikeMap" );
@@ -696,6 +721,7 @@ namespace
 	{
 		key( boxOf( DirectStrikeLobby_back() ), LOBBY_BACK, FALSE );
 		drawSize();
+		drawSpeed();
 		const char *state = startState();
 		threeSlice( boxOf( DirectStrikeLobby_start() ), BUTTON_L, BUTTON_C, BUTTON_R, state );
 		const UnicodeString label = TheGameText->fetch( isNetwork() && !amHost() ? "GUI:DirectStrikeReady" : "GUI:DirectStrikeStart" );
@@ -739,6 +765,15 @@ namespace
 		for( Int row = 0; row < DSLOBBY_SIZES; ++row )
 			drawListRow( list, DirectStrikeLobby_sizeRow( row ), sizeLabel( row + 1, row + 1 ),
 				teamSize( 0 ) == row + 1 && teamSize( 1 ) == row + 1, PIECE_COUNT );
+	}
+
+	void drawSpeedList( void )
+	{
+		const DirectStrikeRect list = DirectStrikeLobby_speedList();
+		panel( boxOf( list ) );
+		for( Int row = 0; row < DSLOBBY_SPEEDS; ++row )
+			drawListRow( list, DirectStrikeLobby_speedRow( row ), GameSpeedText( PLAYER_GAME_SPEED_PERCENTS[ row ] ),
+				roomSpeed() == PLAYER_GAME_SPEED_PERCENTS[ row ], PIECE_COUNT );
 	}
 
 	void drawPicker( Int slot )
@@ -829,6 +864,8 @@ namespace
 			drawColorList( s_listSlot );
 		else if( s_list == LIST_SIZE )
 			drawSizeList();
+		else if( s_list == LIST_SPEED )
+			drawSpeedList();
 	}
 
 	//-----------------------------------------------------------------------------------------------
@@ -884,6 +921,18 @@ namespace
 	/// the lobby and detach it (s_game NULL); each is therefore the last thing its click does
 	void pickFromList( List list, Int slot, Real x, Real y )
 	{
+		if( list == LIST_SPEED )
+		{
+			// the hidden box's own pick, so the room's handler sets the game and sends the options
+			GameWindow *box = speedBox();
+			for( Int row = 0; row < DSLOBBY_SPEEDS && box != NULL; ++row )
+				if( DirectStrikeLobby_speedRow( row ).contains( x, y ) )
+				{
+					choose( box, PLAYER_GAME_SPEED_PERCENTS[ row ] );
+					return;
+				}
+			return;
+		}
 		if( list == LIST_SIZE )
 		{
 			for( Int row = 0; row < DSLOBBY_SIZES; ++row )
@@ -971,6 +1020,11 @@ namespace
 			s_list = LIST_SIZE;
 			return;
 		}
+		if( amHost() && DirectStrikeLobby_speed().contains( x, y ) )
+		{
+			s_list = LIST_SPEED;
+			return;
+		}
 		for( Int slot = 0; slot < DSLOBBY_SEATS; ++slot )
 		{
 			if( seat( slot ) == NULL )
@@ -1005,7 +1059,7 @@ namespace
 				one.format( " %d=none", slot );
 			line.concat( one );
 		}
-		DEBUG_LOG(( "DIRECTSTRIKE LOBBY %s seats%s list=%d/%d\n", why, line.str(), (Int)s_list, s_listSlot ));
+		DEBUG_LOG(( "DIRECTSTRIKE LOBBY %s seats%s list=%d/%d speed=%d\n", why, line.str(), (Int)s_list, s_listSlot, roomSpeed() ));
 	}
 
 	WindowMsgHandledType lobbyInput( GameWindow *window, UnsignedInt msg, WindowMsgData mData1, WindowMsgData mData2 )

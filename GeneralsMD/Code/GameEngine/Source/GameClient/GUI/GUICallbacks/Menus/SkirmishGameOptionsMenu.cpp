@@ -831,7 +831,7 @@ void reallyDoStart( void )
 		TheGameLogic->clearGameData(FALSE);
 
 	// on the game, so the replay's header carries it as a network lobby's does
-	TheSkirmishGameInfo->setGameSpeedPercent( skirmishDirectStrike ? NATIVE_GAME_SPEED_PERCENT : chosenGameSpeedPercent() );	// Direct Strike plays its own speed (FitDirectStrikeRoom)
+	TheSkirmishGameInfo->setGameSpeedPercent( chosenGameSpeedPercent() );	// Direct Strike's from its lobby's speed chip
 	const Int gameSpeedPercent = TheSkirmishGameInfo->getGameSpeedPercent();
 	DEBUG_LOG(("Game speed %d%%: %d logic frames a second\n", gameSpeedPercent, GameEngine_matchFramesPerSecond()));
 
@@ -2226,8 +2226,8 @@ void SkirmishGameOptionsMenuInit( WindowLayout *layout, void *userData )
 	//initSkirmishGameOptions();
 
 	// the game speed combo, which a stock layout does not have (chosenGameSpeedPercent)
-	// Direct Strike's waves are timed for the native speed every network game plays; its box is hidden
-	populateGameSpeedComboBox( skirmishDirectStrike ? (Int)NATIVE_GAME_SPEED_PERCENT : prefs.getInt( "GameSpeed", PLAYER_GAME_SPEED_PERCENT_DEFAULT ) );
+	// a Direct Strike room opens at 1.0x and its lobby's speed chip picks on this hidden box
+	populateGameSpeedComboBox( skirmishDirectStrike ? (Int)RETAIL_GAME_SPEED_PERCENT : prefs.getInt( "GameSpeed", PLAYER_GAME_SPEED_PERCENT_DEFAULT ) );
 	buttonStart->winSetText(TheGameText->fetch("GUI:Start"));
 	/* hey, for now we're also going to disable the map select button until it doesn't crash */
 	//buttonSelectMap->winEnable( FALSE );

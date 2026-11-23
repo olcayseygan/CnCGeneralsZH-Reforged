@@ -1283,6 +1283,9 @@ void LanGameOptionsMenuInit( WindowLayout *layout, void *userData )
 		// the host picks the island's seed now, and it goes out with the options in the map's name
 		if (s_directStrike && SetDirectStrikeMap(game))
 			FitDirectStrikeRoom(game);
+		// a Direct Strike room opens at 1.0x whatever the classic room last played; the lobby's chip changes it
+		if (s_directStrike)
+			game->setGameSpeedPercent(RETAIL_GAME_SPEED_PERCENT);
 		// an Apocalypse map with four starts, so the room opens four seats; Start makes it for the seats taken
 		if (s_apocalypse && SetApocalypseMap(game, TRUE))
 		{

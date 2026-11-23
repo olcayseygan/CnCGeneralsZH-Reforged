@@ -1796,10 +1796,8 @@ Bool FitDirectStrikeRoom(GameInfo *game)
 	if (game->getSupplyPileLimit() != 0) { game->setSupplyPileLimit(0); changed = TRUE; }
 	if (game->getProRules()) { game->setProRules(FALSE); changed = TRUE; }
 	if (game->getDayNight()) { game->setDayNight(FALSE); changed = TRUE; }	// the lane runs its own light
-	/* The lobby hides the speed box, so the room played whatever the host last saved, 1.0x in a fresh LAN
-		 room, where the back row's wave needs about 140 wall seconds to reach the front and dies at 130.  The
-		 mode is tuned at the native speed; in LAN it travels as SP=150, LAN's own default being 100. */
-	if (game->getGameSpeedPercent() != NATIVE_GAME_SPEED_PERCENT) { game->setGameSpeedPercent(NATIVE_GAME_SPEED_PERCENT); changed = TRUE; }
+	// the speed is the host's pick on the lobby's own chip, 1.0x when the room opens (the owner, 2026-11-23);
+	// the director's clock is game time, so every speed plays the same match
 	return changed;
 }
 

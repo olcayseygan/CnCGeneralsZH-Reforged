@@ -745,6 +745,7 @@ void rematch( void )
 		TheMessageStream->appendMessage( GameMessage::MSG_CLEAR_GAME_DATA );
 		return;
 	}
+	const Int gameSpeedPercent = TheSkirmishGameInfo->getGameSpeedPercent();	// the match's, the lobby chip's pick, kept
 	endMatchHere();
 	if( !SetDirectStrikeMap( TheSkirmishGameInfo ) )
 	{
@@ -752,7 +753,6 @@ void rematch( void )
 		return;
 	}
 	FitDirectStrikeRoom( TheSkirmishGameInfo );
-	const Int gameSpeedPercent = TheSkirmishGameInfo->getGameSpeedPercent();	// after the fit, which pins the mode's speed
 	TheSkirmishGameInfo->setSeed( TheGlobalData->m_fixedSeed >= 0 ? TheGlobalData->m_fixedSeed : (Int)Clock_Milliseconds() );
 	TheWritableGlobalData->m_mapName = TheSkirmishGameInfo->getMap();
 	InitRandom( TheSkirmishGameInfo->getSeed() );

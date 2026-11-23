@@ -2129,7 +2129,11 @@ void WOLGameSetupMenuInit( WindowLayout *layout, void *userData )
 		}
 
 		if (s_directStrike)
+		{
 			FitDirectStrikeRoom(game);
+			// a Direct Strike room opens at 1.0x, off the online default, so it goes out as SP=100; the lobby's chip changes it
+			game->setGameSpeedPercent(RETAIL_GAME_SPEED_PERCENT);
+		}
 		if (s_apocalypse)
 		{
 			FitApocalypseRoom(game);

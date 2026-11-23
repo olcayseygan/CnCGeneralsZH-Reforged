@@ -1,0 +1,15 @@
+# Direct Strike proof that a match is the same at every game speed, only paced (2026-11-23): one
+# Crusader in the back rows of team A's plot, nothing else. Run it at 1.0x and at 1.5x.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -gamespeed 100 -seed 1 -maxframes 12000 -scenario lanewar_speed -logPrefix lanewar_speed100_
+#   and the same with -gamespeed 150 -maxframes 8000 -logPrefix lanewar_speed150_
+#
+# Passes on: "LANEWAR: on ... first tick at frame" 4050 at 1.0x and 2700 at 1.5x; the first wave's
+# HEADLESS LANEMARCH 'LaneWar A1' lines reading the same x at the same game second after the spawn at
+# both speeds (within 2 percent); and at 1.0x the Crusader reaching team B's Watch Tower (3876 on this
+# map, reach 225) inside its lifespan, 5850 logic frames (195 game seconds) after its spawn. Before the
+# change its lifespan at 1.0x was 3900 frames, 130 game seconds. File frames are 30 Hz game frames.
+
+30    laneplace  0  AmericaTankCrusader   7 10

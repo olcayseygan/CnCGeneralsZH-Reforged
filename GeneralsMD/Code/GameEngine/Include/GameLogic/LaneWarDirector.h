@@ -28,12 +28,12 @@
 // player's left as he faces the enemy, and its row counts back from the front.  A unit is bought onto
 // it at a slot through MSG_LANEWAR_ORDER (LANEWAR_ORDER_PLACE), covering as many slots a side as its
 // footprint needs.  The plot's units stand at their slots: held, unable to fire, taking no damage,
-// and no weapon may pick them.  None of that leans on the terrain around the plot.  Every 30 wall
-// seconds a spawn tick pays every player and sends one seat's wave from each team, the seats taking
+// and no weapon may pick them.  None of that leans on the terrain around the plot.  Every 45 wall
+// seconds at 1.5x (game time, LaneWar_gameFrames) a spawn tick pays every player and sends one seat's wave from each team, the seats taking
 // turns: the plot's units are copied, template and slot place relative to the grid's centre, onto
 // the team's spawn pad behind its fortress with the plot's front row in front, facing the enemy, and march past it down the lane
 // as AIGroup::groupLaneMarch sends them.  The copies
-// belong to the player and cannot be selected; each dies 130 wall seconds after it spawned.  A copy
+// belong to the player and cannot be selected; each dies 130 wall seconds at 1.5x after it spawned.  A copy
 // presses its own buttons on the skirmish AI's rules, as far as its player's switches let it
 // (LANEWAR_ORDER_ABILITY), and one left standing short of the enemy fortress marches on.  A team
 // loses when its fortress dies, through VictoryConditions, and nothing else counts.
@@ -70,9 +70,9 @@ enum
 	LANEWAR_START_MONEY = 2000,						///< every player's cash when the match starts
 	LANEWAR_INCOME = 400,									///< paid to every player on every spawn tick: 533 a minute, as 267 every 30 seconds was
 	LANEWAR_MIDDLE_BONUS_PERCENT = 25,		///< on top of the income, for the team holding past the centre line
-	LANEWAR_TICK_SECONDS = 45,						///< wall seconds between two spawn ticks
-	LANEWAR_FIRST_TICK_SECONDS = 90,			///< wall seconds from the start to the first spawn tick, time to fill the plots
-	LANEWAR_LIFESPAN_SECONDS = 130,				///< wall seconds a wave copy lives
+	LANEWAR_TICK_SECONDS = 45,						///< between two spawn ticks, in wall seconds at the native 1.5x (LaneWar_gameFrames)
+	LANEWAR_FIRST_TICK_SECONDS = 90,			///< from the start to the first spawn tick, time to fill the plots, the same way
+	LANEWAR_LIFESPAN_SECONDS = 130,				///< what a wave copy lives, the same way
 	LANEWAR_SLOT_SIZE = 20,								///< world units a side of one plot slot, two cells; a plot 320 across its front and 240 deep is 16 columns by 12 rows (upright since 2026-11-22)
 	LANEWAR_INCOME_TIERS = 4,							///< income levels a player can buy past the first
 	LANEWAR_INCOME_TIER_PRICE = 1000,			///< each of them
@@ -86,9 +86,18 @@ enum
 	LANEWAR_CARGO_LOG_SECONDS = 5,				///< wall seconds between the log's counts of passengers and drones out in the waves
 };
 
-#define LANEWAR_TICK_FRAMES ((UnsignedInt)(LANEWAR_TICK_SECONDS * LOGICFRAMES_PER_SECOND))
-#define LANEWAR_FIRST_TICK_FRAMES ((UnsignedInt)(LANEWAR_FIRST_TICK_SECONDS * LOGICFRAMES_PER_SECOND))
-#define LANEWAR_LIFESPAN_FRAMES ((UnsignedInt)(LANEWAR_LIFESPAN_SECONDS * LOGICFRAMES_PER_SECOND))
+/** A span the mode was tuned for in wall seconds at the native 1.5x, as game time: the same share of the
+	  match at every game speed (45 is 1350 frames at 1.5x, 2025 at 1.0x), so a slower room plays the same
+	  match, paced slower.  Exact at the native speed.  Read every time: the speed is the match's. */
+inline UnsignedInt LaneWar_gameFrames( UnsignedInt nativeSeconds )
+{
+	const UnsignedInt percent = (UnsignedInt)GAME_SPEED_PERCENT;
+	return ( nativeSeconds * (UnsignedInt)LOGICFRAMES_PER_SECOND * (UnsignedInt)NATIVE_GAME_SPEED_PERCENT + percent / 2 ) / percent;
+}
+
+#define LANEWAR_TICK_FRAMES LaneWar_gameFrames( LANEWAR_TICK_SECONDS )
+#define LANEWAR_FIRST_TICK_FRAMES LaneWar_gameFrames( LANEWAR_FIRST_TICK_SECONDS )
+#define LANEWAR_LIFESPAN_FRAMES LaneWar_gameFrames( LANEWAR_LIFESPAN_SECONDS )
 #define LANEWAR_STRIKE_FRAMES ((UnsignedInt)(LANEWAR_STRIKE_SECONDS * LOGICFRAMES_PER_GAME_SECOND))
 #define LANEWAR_JET_REARM_FRAMES ((UnsignedInt)(LANEWAR_JET_REARM_SECONDS * LOGICFRAMES_PER_GAME_SECOND))
 

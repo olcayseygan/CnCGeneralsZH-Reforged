@@ -566,6 +566,12 @@ static Int secondsToTick( void )
 	return next > frame ? (Int)( ( next - frame + LOGICFRAMES_PER_SECOND - 1 ) / LOGICFRAMES_PER_SECOND ) : 0;
 }
 
+/// wall seconds one spawn tick lasts at the match's speed (45 at 1.5x, 67.5 at 1.0x, rounded up)
+static Int tickSeconds( void )
+{
+	return (Int)( ( LANEWAR_TICK_FRAMES + LOGICFRAMES_PER_SECOND - 1 ) / LOGICFRAMES_PER_SECOND );
+}
+
 struct StripFrame
 {
 	Real x0, x1, y0, y1;	///< the world it shows
@@ -871,8 +877,8 @@ static void drawYourWave( void )
 	}
 	if( ahead < 0 || seats == 0 )
 		return;
-	const Int left = secondsToTick() + ahead * LANEWAR_TICK_SECONDS;
-	const Real share = min( 1.0f, (Real)left / (Real)( seats * LANEWAR_TICK_SECONDS ) );
+	const Int left = secondsToTick() + ahead * tickSeconds();
+	const Real share = min( 1.0f, (Real)left / (Real)( seats * tickSeconds() ) );
 	const Int cx = b.x + pxs( 22 ), cy = b.y + pxs( 33 );
 	const Color own = playerColor( s_team, s_seat );
 	const Real r = 9.5f * s_layout.scale, width = max( 2.0f, 3.0f * s_layout.scale );
@@ -909,7 +915,7 @@ static void drawWaveBar( void )
 	if( art( LANE_BAR_CHIP ) == NULL )
 		TheDisplay->drawFillRect( groove.x, groove.y, groove.w, groove.h, GameMakeColor( 34, 40, 48, 255 ) );
 	const LaneHudBox fills = LaneHud_box( groove.x + 1, groove.y + 1, groove.w - 2, groove.h - 2 );
-	const Real f = min( 1.0f, (Real)secondsToTick() / (Real)LANEWAR_TICK_SECONDS );
+	const Real f = min( 1.0f, (Real)secondsToTick() / (Real)tickSeconds() );
 	const Int tick = (Int)TheLaneWarDirector->getTickCount();
 	const Int half = fills.w / 2;
 	for( Int side = 0; side < 2; ++side )

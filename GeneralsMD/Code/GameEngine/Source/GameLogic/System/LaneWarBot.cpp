@@ -575,7 +575,7 @@ namespace
 		for( Int s = 0; s < LANEWAR_SEATS; ++s )
 			occupied[ s ] = director->getSeatPlayer( team, s ) >= 0;
 		v.waveSoon = LaneWar_seatForTick( occupied, v.tick ) == seat
-								 && director->getNextTickFrame() <= now + (UnsignedInt)( WAVE_SOON_SECONDS * LOGICFRAMES_PER_SECOND );
+								 && director->getNextTickFrame() <= now + LaneWar_gameFrames( WAVE_SOON_SECONDS );
 		// the reserve is money a weaker seat leaves idle, its own wave or not
 		v.spend = v.money - plan.reserve;
 
@@ -668,7 +668,10 @@ void LaneWarBot_planAt( Real rating, LaneWarBotPlan *plan )
 {
 	plan->rating = rating;
 	const Real seconds = planNumber( STEP_SECONDS, rating );
-	plan->stepFrames = (UnsignedInt)floor( seconds * LOGICFRAMES_PER_SECOND + 0.5f );
+	// wall seconds at the native 1.5x as game time, as the director's clock runs (LaneWar_gameFrames); the
+	// ratio is exactly 1 at the native speed, so the product there is what it always was
+	const Real native = (Real)NATIVE_GAME_SPEED_PERCENT / (Real)GAME_SPEED_PERCENT;
+	plan->stepFrames = (UnsignedInt)floor( seconds * LOGICFRAMES_PER_SECOND * native + 0.5f );
 	plan->reserve = (Int)floor( planNumber( RESERVE, rating ) + 0.5f );
 	for( Int k = 0; k < LANEWAR_INCOME_TIERS; ++k )
 		plan->incomeTick[ k ] = planNumber( INCOME_TICK[ k ], rating );

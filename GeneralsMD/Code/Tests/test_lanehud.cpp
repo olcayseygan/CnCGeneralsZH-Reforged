@@ -280,7 +280,12 @@ TEST(dslobby_the_block_is_centred_and_its_columns_share_top_and_foot)
 	CHECK_EQ( DirectStrikeLobby_islandPanel().y1 + DSLOBBY_ROW_GAP, DirectStrikeLobby_start().y0 );
 	CHECK_EQ( DirectStrikeLobby_chatInput().y1 + DSLOBBY_ROW_GAP, DirectStrikeLobby_start().y0 );
 	CHECK_EQ( DirectStrikeLobby_size().y1, DirectStrikeLobby_start().y1 );
+	CHECK_EQ( DirectStrikeLobby_speed().y1, DirectStrikeLobby_start().y1 );
+	CHECK_EQ( DirectStrikeLobby_speed().x0, DirectStrikeLobby_size().x1 + DSLOBBY_ROW_GAP );
+	CHECK_EQ( DirectStrikeLobby_start().x0, DirectStrikeLobby_speed().x1 + DSLOBBY_ROW_GAP );
 	CHECK_EQ( DirectStrikeLobby_start().x1, DirectStrikeLobby_islandPanel().x1 );
+	// START in the figure type, about 130 wide, and the longest translation, about 160, still fit
+	CHECK( DirectStrikeLobby_start().x1 - DirectStrikeLobby_start().x0 >= 180.0f );
 }
 
 TEST(dslobby_every_open_list_stays_on_the_screen_and_holds_its_rows)
@@ -288,13 +293,17 @@ TEST(dslobby_every_open_list_stays_on_the_screen_and_holds_its_rows)
 	const DirectStrikeRect offline[] =
 	{
 		DirectStrikeLobby_title(), DirectStrikeLobby_islandPanel(), DirectStrikeLobby_back(), DirectStrikeLobby_size(),
-		DirectStrikeLobby_start(),
+		DirectStrikeLobby_speed(), DirectStrikeLobby_start(),
 	};
 	const DirectStrikeRect network[] =
 	{
 		DirectStrikeLobby_title(), DirectStrikeLobby_islandChip(), DirectStrikeLobby_chat(), DirectStrikeLobby_chatInput(),
-		DirectStrikeLobby_send(), DirectStrikeLobby_back(), DirectStrikeLobby_size(), DirectStrikeLobby_start(),
+		DirectStrikeLobby_send(), DirectStrikeLobby_back(), DirectStrikeLobby_size(), DirectStrikeLobby_speed(), DirectStrikeLobby_start(),
 	};
+	CHECK( within( DirectStrikeLobby_speedList(), DESIGN ) );
+	CHECK( !meet( DirectStrikeLobby_speedList(), DirectStrikeLobby_speed() ) );
+	for( int row = 0; row < DSLOBBY_SPEEDS; ++row )
+		CHECK( within( DirectStrikeLobby_speedRow( row ), DirectStrikeLobby_speedList() ) );
 	CHECK( within( DirectStrikeLobby_sizeList(), DESIGN ) );
 	CHECK( !meet( DirectStrikeLobby_sizeList(), DirectStrikeLobby_size() ) );
 	for( int row = 0; row < DSLOBBY_SIZES; ++row )

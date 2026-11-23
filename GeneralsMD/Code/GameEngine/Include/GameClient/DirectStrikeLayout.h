@@ -119,8 +119,10 @@ enum
 	DSLOBBY_BOTTOM = DSLOBBY_TOP + DSLOBBY_COLUMN_H,	///< a full column's foot and the start key's
 	DSLOBBY_KEY_H = 72,
 	DSLOBBY_ROW_GAP = 12,				///< between the centre column's parts
-	DSLOBBY_SIZE_W = 136,				///< the team size chip between the back and start keys
+	DSLOBBY_SIZE_W = 112,				///< the team size chip between the back key and the speed chip
 	DSLOBBY_SIZES = 3,					///< its list: 1 v 1, 2 v 2, 3 v 3
+	DSLOBBY_SPEED_W = 112,			///< the game speed chip between the team size and start (2026-11-23)
+	DSLOBBY_SPEEDS = 4,					///< its list: PLAYER_GAME_SPEED_PERCENTS, 1.0x to 2.0x
 };
 
 /// the part of a seat card, README-lobby.md "The seat card"
@@ -205,15 +207,21 @@ inline DirectStrikeRect DirectStrikeLobby_part( int slot, DirectStrikeSeatPart p
 	return DirectStrike_rect( card.x0 + DSLOBBY_CARD_W - p[ 2 ], card.y0 + p[ 1 ], card.x0 + DSLOBBY_CARD_W - p[ 0 ], card.y0 + p[ 3 ] );
 }
 
-/// the keys row at the centre column's foot, level with a full team column's: back, the team size chip, start
+/// the keys row at the centre column's foot, level with a full team column's: back, the team size chip, the
+/// game speed chip, start
 inline DirectStrikeRect DirectStrikeLobby_back( void ) { return DirectStrike_rect( 700, DSLOBBY_BOTTOM - DSLOBBY_KEY_H, 772, DSLOBBY_BOTTOM ); }
 inline DirectStrikeRect DirectStrikeLobby_size( void )
 {
 	return DirectStrike_rect( 784, DSLOBBY_BOTTOM - DSLOBBY_KEY_H, 784 + DSLOBBY_SIZE_W, DSLOBBY_BOTTOM );
 }
+inline DirectStrikeRect DirectStrikeLobby_speed( void )
+{
+	const float x = 784 + DSLOBBY_SIZE_W + DSLOBBY_ROW_GAP;
+	return DirectStrike_rect( x, DSLOBBY_BOTTOM - DSLOBBY_KEY_H, x + DSLOBBY_SPEED_W, DSLOBBY_BOTTOM );
+}
 inline DirectStrikeRect DirectStrikeLobby_start( void )
 {
-	return DirectStrike_rect( 784 + DSLOBBY_SIZE_W + DSLOBBY_ROW_GAP, DSLOBBY_BOTTOM - DSLOBBY_KEY_H, 1220, DSLOBBY_BOTTOM );
+	return DirectStrike_rect( DirectStrikeLobby_speed().x1 + DSLOBBY_ROW_GAP, DSLOBBY_BOTTOM - DSLOBBY_KEY_H, 1220, DSLOBBY_BOTTOM );
 }
 
 // offline: the island panel, the picture and its caption, down to the keys row
@@ -291,6 +299,20 @@ inline DirectStrikeRect DirectStrikeLobby_sizeList( void )
 inline DirectStrikeRect DirectStrikeLobby_sizeRow( int row )
 {
 	const DirectStrikeRect list = DirectStrikeLobby_sizeList();
+	const float y = list.y0 + DSLOBBY_LIST_PAD + DSLOBBY_LIST_ROW * (float)row;
+	return DirectStrike_rect( list.x0 + DSLOBBY_LIST_PAD, y, list.x1 - DSLOBBY_LIST_PAD, y + DSLOBBY_LIST_ROW );
+}
+
+/// the host's game speed list under its chip, and its row for PLAYER_GAME_SPEED_PERCENTS[ row ]
+inline DirectStrikeRect DirectStrikeLobby_speedList( void )
+{
+	const DirectStrikeRect chip = DirectStrikeLobby_speed();
+	return DirectStrikeLobby_dropBelow( chip, chip.x1 - chip.x0, 2.0f * DSLOBBY_LIST_PAD + DSLOBBY_SPEEDS * DSLOBBY_LIST_ROW, false );
+}
+
+inline DirectStrikeRect DirectStrikeLobby_speedRow( int row )
+{
+	const DirectStrikeRect list = DirectStrikeLobby_speedList();
 	const float y = list.y0 + DSLOBBY_LIST_PAD + DSLOBBY_LIST_ROW * (float)row;
 	return DirectStrike_rect( list.x0 + DSLOBBY_LIST_PAD, y, list.x1 - DSLOBBY_LIST_PAD, y + DSLOBBY_LIST_ROW );
 }

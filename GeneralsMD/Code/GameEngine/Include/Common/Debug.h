@@ -230,6 +230,11 @@ DEBUG_EXTERN_C long DebugCutLogFile(FILE *file, const char *path, long headEnd, 
 DEBUG_EXTERN_C void ReleaseCrash(const char* reason);
 DEBUG_EXTERN_C void ReleaseCrashLocalized(const AsciiString& p, const AsciiString& m);
 
+/** The decorated name of the window whose draw function is running, NULL between draws; set by
+	* GameWindowManager::drawWindow and printed by ReleaseCrash.  A fault inside a gadget's draw names
+	* only the gadget's code, never which of a screen's lists it was (v4.3.x reports 4591 4627 4630). */
+extern const char * volatile TheReleaseCrashDrawingWindow;
+
 /** The game's data has gone away under it: the drive the install is on was disconnected, ejected or put
 	* to sleep while the game had its archives open.  The archive layer calls this when a read of an open
 	* archive fails that way (File::deviceGone).  Not a crash, and nothing is saved: on the main thread it logs,

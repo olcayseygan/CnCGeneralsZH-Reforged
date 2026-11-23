@@ -909,6 +909,19 @@ double SimpleProfiler::getAverageTime()
 
 	static FILE *theReleaseCrashLogFile = NULL;
 
+	const char * volatile TheReleaseCrashDrawingWindow = NULL;
+
+	/// "" when no window was drawing, else the line naming it; no heap, the crash may be the heap's
+	static const char *releaseCrashDrawingLine(void)
+	{
+		static char line[300];
+		line[0] = 0;
+		const char *drawing = TheReleaseCrashDrawingWindow;
+		if (drawing != NULL)
+			snprintf(line, sizeof(line), "Drawing window: %s\n", drawing[0] ? drawing : "(unnamed)");
+		return line;
+	}
+
 	/* Everything the crash file gets goes into DebugLogFile.txt as well.  The crash file lives under
 		 Documents and is opened through an ANSI path in a MAX_PATH buffer, so a redirected or non-ASCII
 		 Documents folder loses it, and two players on v2.0.0 sent reports with the "Technical
@@ -948,8 +961,8 @@ double SimpleProfiler::getAverageTime()
 #ifdef DEBUG_LOGGING
 		if (theLogFile)
 		{
-			fprintf(theLogFile, "\nRelease Crash at %s; Reason %s\n\nLast error:\n%s\n\nCurrent stack:\n",
-				getCurrentTimeString(), reason, g_LastErrorDump.str());
+			fprintf(theLogFile, "\nRelease Crash at %s; Reason %s\n%s\nLast error:\n%s\n\nCurrent stack:\n",
+				getCurrentTimeString(), reason, releaseCrashDrawingLine(), g_LastErrorDump.str());
 			fflush(theLogFile);
 		}
 #endif
@@ -1013,7 +1026,7 @@ void ReleaseCrash(const char *reason)
 		// moved aside it is gone, and the file next to this one is not the crash before it.
 		if (hadPreviousCrashLog && rotated != 0)
 			fprintf(theReleaseCrashLogFile, "(the previous crash report could not be rotated aside; %s is older than it looks)\n", prevbuf);
-		fprintf(theReleaseCrashLogFile, "\nLast error:\n%s\n\nCurrent stack:\n", g_LastErrorDump.str());
+		fprintf(theReleaseCrashLogFile, "%s\nLast error:\n%s\n\nCurrent stack:\n", releaseCrashDrawingLine(), g_LastErrorDump.str());
 		// The stack walk below can fault, and the reason and the registers above it must survive that.
 		fflush(theReleaseCrashLogFile);
 	}

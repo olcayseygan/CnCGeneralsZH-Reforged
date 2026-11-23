@@ -71,6 +71,9 @@ void ReleaseCrash( const char * )
 {
 }
 
+// Debug.cpp's, which this binary does not link; no window draws here
+const char * volatile TheReleaseCrashDrawingWindow = NULL;
+
 //-------------------------------------------------------------------------------------------------
 // The child: ways to crash.  Global and never inlined, so the named pass can name them.
 //-------------------------------------------------------------------------------------------------

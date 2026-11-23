@@ -571,6 +571,13 @@ void handleCrash( int signal, siginfo_t *info, void *context )
 		heading.add( signalName( signal ) );
 		heading.add( mainThread ? " on the main thread" : " on a worker thread" );
 	}
+	// a static copy GameWindowManager::drawWindow keeps, so safe to read from a signal
+	const char *drawing = TheReleaseCrashDrawingWindow;
+	if( drawing != NULL )
+	{
+		heading.add( "\nDrawing window: " );
+		heading.add( drawing[0] ? drawing : "(unnamed)" );
+	}
 	heading.add( "\n\nLast error:\n" );
 	writeAll( s_logFd.load(), "\n", 1 );		// the log has lines before this one; the file starts with the heading
 	emit( heading );

@@ -1340,7 +1340,15 @@ Int GameWindowManager::drawWindow( GameWindow *window )
 	{
 
 		if( !BitTest( window->m_status, WIN_STATUS_SEE_THRU ) && window->m_draw )
+		{
+			/* A copy, so the crash report never reads a freed window's name.  Not cleared when the
+				 draw faults: the exception leaves through here, and ReleaseCrash prints it */
+			static char drawingName[ 256 ];
+			strlcpy( drawingName, window->m_instData.m_decoratedNameString.str(), sizeof( drawingName ) );
+			TheReleaseCrashDrawingWindow = drawingName;
 			window->m_draw( window, &window->m_instData );
+			TheReleaseCrashDrawingWindow = NULL;
+		}
 
 		/// @todo visit list boxes and borders, this is stupid!
 		// for list boxes only draw the borders BEFORE the children

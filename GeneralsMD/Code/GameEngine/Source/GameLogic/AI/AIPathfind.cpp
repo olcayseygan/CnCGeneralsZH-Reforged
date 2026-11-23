@@ -2381,6 +2381,53 @@ PathfindCell *PathfindCell::removeFromClosedList( PathfindCell *list )
 	return list;
 }
 
+void PathfindCell::setLoadedSearchCosts( UnsignedShort costSoFar, UnsignedShort totalCost, UnsignedShort travelSoFar, UnsignedShort openBucket )
+{
+	DEBUG_ASSERTCRASH(m_info, ("Has to have info."));
+	m_info->m_costSoFar = costSoFar;
+	m_info->m_totalCost = totalCost;
+	m_info->m_travelSoFar = travelSoFar;
+	m_info->m_openBucket = openBucket;
+}
+
+void PathfindCell::releaseInfoNotInSave( void )
+{
+	if (m_info == NULL || m_info->m_prevOpen || m_info->m_nextOpen || m_info->m_open || m_info->m_closed)
+		return;
+	if (m_flags != NO_UNITS || m_aircraftGoal)
+		return;
+	PathfindCellInfo::releaseACellInfo(m_info);
+	m_info = NULL;
+}
+
+/* The cells come in the order the saved list had them, each holding its info already.  The open list
+	 is kept in bucket order (putOnSortedOpenList), so walking it front to back and taking each cell as
+	 its bucket's tail rebuilds the index exactly as the game that was saved held it. */
+PathfindCell *PathfindCell::linkLoadedList( PathfindCell *const *cells, Int count, Bool open )
+{
+	if (open) {
+		openBucketReset();
+		theOpenListTail = NULL;
+	}
+	PathfindCellInfo *prev = NULL;
+	for (Int i = 0; i < count; ++i) {
+		PathfindCellInfo *info = cells[i]->m_info;
+		info->m_prevOpen = prev;
+		info->m_nextOpen = NULL;
+		if (prev)
+			prev->m_nextOpen = info;
+		info->m_open = open ? TRUE : FALSE;
+		info->m_closed = open ? FALSE : TRUE;
+		if (open) {
+			theOpenBucketTail[info->m_openBucket] = info;
+			openBucketMark( info->m_openBucket );
+			theOpenListTail = info;
+		}
+		prev = info;
+	}
+	return count > 0 ? cells[0] : NULL;
+}
+
 const Int COST_ORTHOGONAL = 10;
 const Int COST_DIAGONAL = 14;
 
@@ -4812,13 +4859,15 @@ Pathfinder::Pathfinder( void ) :m_map(NULL),
 	m_traffic(NULL), m_trafficCells(NULL), m_numTrafficCells(0), m_trafficDecayFrame(0),
 	m_claims(NULL), m_claimTouch(NULL),
 	m_flowCosts(false), m_flowSpeed(0), m_flowNow(0), m_flowNowBucket(0),
-	m_queueOwnerID(INVALID_ID), m_unitMapFromSave(FALSE)
+	m_queueOwnerID(INVALID_ID), m_infoCellsFromSave(FALSE), m_unitMapFromSave(FALSE)
 {
 	debugPath = NULL;
 	m_search.owner = INVALID_ID;
 	m_search.done = FALSE;
 	m_search.claimed = FALSE;
 	m_search.result = NULL;
+	m_loadedSearch.pending = FALSE;
+	m_loadedSearch.s.result = NULL;
 	PathfindCellInfo::allocateCellInfos();
 	reset();
 }
@@ -5606,6 +5655,10 @@ const char *Pathfinder::getProfileReport( void )
 void Pathfinder::reset( void )
 {
 	dropSuspendedSearch();		// while its cells still exist
+	clearLoadedSearch();
+	m_loadedQueueLine.clear();
+	m_loadedInfoCells.clear();
+	m_infoCellsFromSave = FALSE;
 	m_queueOwnerID = INVALID_ID;
 	m_unitCells.clear();
 	m_unitMapFromSave = FALSE;
@@ -14217,6 +14270,13 @@ PathfindCell *Pathfinder::getUnitCell( Int layer, Int x, Int y )
 }
 
 //-----------------------------------------------------------------------------
+/// one cell as a sortable key: layer, then row, then column, the order the map walks below go in
+static Int64 loadedSearchKey( Int layer, const ICoord2D &cell )
+{
+	return ( (Int64)layer << 40 ) | ( (Int64)(UnsignedInt)cell.y << 20 ) | (Int64)(UnsignedInt)cell.x;
+}
+
+//-----------------------------------------------------------------------------
 /** The save's CHUNK_Pathfinder, after GameLogic's, so a save without it loads as it always did.
 	* Version Info:
 	* 1: Initial version, nothing
@@ -14227,12 +14287,20 @@ PathfindCell *Pathfinder::getUnitCell( Int layer, Int x, Int y )
 	*		 another crowd from its first frame and played a different match.
 	* 3: The zones, a zone pass in progress and the frame the next one is due (PathfindZoneManager::xfer).
 	*		 A load zoned the bare map and patched each structure in, and answered every "is there a path"
-	*		 from those for up to ten seconds, where the game that was saved still had its own. */
+	*		 from those for up to ten seconds, where the game that was saved still had its own.
+	* 4: Which of the two request lines each queued unit waits in, and the main search the queue's cell
+	*		 budget stopped mid-way (or the answer another search finished for its unit).  The load used to
+	*		 put a queued unit in the line of the player that owns it now, so one whose owner changed or that
+	*		 died since it asked was answered in the other line's turn, and it threw the stopped search away,
+	*		 so its unit searched again from the first cell and spent the frame's cells elsewhere.  Then
+	*		 every cell that holds an info: a search pays its budget only for a cell it has to give one to,
+	*		 and a structure's cell keeps the one it was once given, so the loaded game's searches stopped a
+	*		 cell or two from where the saved game's did. */
 void Pathfinder::xfer( Xfer *xfer )
 {
 
 	// version
-	XferVersion currentVersion = 3;
+	XferVersion currentVersion = 4;
 	XferVersion version = currentVersion;
 	xfer->xferVersion( &version, currentVersion );
 	if (version < 2)
@@ -14303,6 +14371,85 @@ void Pathfinder::xfer( Xfer *xfer )
 	if (version >= 3)
 		m_zoneManager.xfer( xfer, m_map, m_layers, m_extent );
 
+	if (version >= 4)
+	{
+		/* xferFlowState wrote one line, the human players' line first; this is where it splits.  The
+			 load there split it by who owns each unit now, which is right for a save older than this. */
+		Int humanCount = 0;
+		if (xfer->getXferMode() == XFER_SAVE)
+			humanCount = m_humanQueue.depth() < PATHFIND_QUEUE_LEN - 1 ? m_humanQueue.depth() : PATHFIND_QUEUE_LEN - 1;
+		xfer->xferInt( &humanCount );
+		if (xfer->getXferMode() == XFER_LOAD)
+		{
+			if (humanCount < 0 || humanCount > (Int)m_loadedQueueLine.size())
+				throw SC_INVALID_DATA;
+			m_humanQueue.clear();
+			m_computerQueue.clear();
+			const UnsignedInt now = TheGameLogic->getFrame();
+			for (Int i = 0; i < (Int)m_loadedQueueLine.size(); ++i)
+				( i < humanCount ? m_humanQueue : m_computerQueue ).push( m_loadedQueueLine[ i ], now );
+		}
+		xferHeldSearch( xfer );
+
+		// every cell holding an info, in the walk's order
+		std::vector<Int64> &keys = m_loadedInfoCells;
+		keys.clear();
+		if (xfer->getXferMode() == XFER_SAVE)
+		{
+			for (Int layer = LAYER_GROUND; layer <= LAYER_LAST; ++layer)
+			{
+				if (layer != LAYER_GROUND && !m_layers[layer].hasCells())
+					continue;
+				for (Int y = m_extent.lo.y; y <= m_extent.hi.y; ++y)
+					for (Int x = m_extent.lo.x; x <= m_extent.hi.x; ++x)
+					{
+						PathfindCell *cell = getUnitCell(layer, x, y);
+						if (cell != NULL && cell->hasInfo())
+						{
+							ICoord2D c;
+							c.x = x;
+							c.y = y;
+							keys.push_back( loadedSearchKey( layer, c ) );
+						}
+					}
+			}
+		}
+		UnsignedInt infoCount = (UnsignedInt)keys.size();
+		xfer->xferUnsignedInt( &infoCount );
+		if (xfer->getXferMode() == XFER_LOAD && infoCount > (UnsignedInt)CELL_INFOS_TO_ALLOCATE)
+			throw SC_INVALID_DATA;
+		for (UnsignedInt i = 0; i < infoCount; ++i)
+		{
+			Int layer = 0;
+			ICoord2D c;
+			c.x = c.y = 0;
+			if (xfer->getXferMode() == XFER_SAVE)
+			{
+				layer = (Int)( keys[ i ] >> 40 );
+				c.y = (Int)( ( keys[ i ] >> 20 ) & 0xFFFFF );
+				c.x = (Int)( keys[ i ] & 0xFFFFF );
+			}
+			xfer->xferInt( &layer );
+			xfer->xferICoord2D( &c );
+			if (xfer->getXferMode() == XFER_LOAD)
+			{
+				if (layer < LAYER_GROUND || layer > LAYER_LAST ||
+						c.x < m_extent.lo.x || c.x > m_extent.hi.x || c.y < m_extent.lo.y || c.y > m_extent.hi.y)
+					throw SC_INVALID_DATA;
+				const Int64 key = loadedSearchKey( layer, c );
+				if (!keys.empty() && key <= keys.back())
+					throw SC_INVALID_DATA;
+				keys.push_back( key );
+			}
+		}
+		if (xfer->getXferMode() == XFER_LOAD)
+			m_infoCellsFromSave = TRUE;
+		else
+			keys.clear();
+	}
+	if (xfer->getXferMode() == XFER_LOAD)
+		m_loadedQueueLine.clear();
+
 	if (xfer->getXferMode() == XFER_LOAD)
 		m_unitMapFromSave = TRUE;
 	else
@@ -14316,9 +14463,14 @@ void Pathfinder::xfer( Xfer *xfer )
 void Pathfinder::loadPostProcess( void )
 {
 	m_zoneManager.loadPostProcess();
+	m_loadedQueueLine.clear();
 
 	if (!m_unitMapFromSave)
+	{
+		restoreLoadedSearch();
+		restoreInfoCells();
 		return;
+	}
 	m_unitMapFromSave = FALSE;
 
 	for (Int layer = LAYER_GROUND; layer <= LAYER_LAST; ++layer)
@@ -14358,7 +14510,336 @@ void Pathfinder::loadPostProcess( void )
 	}
 	m_unitCells.clear();
 
+	// on the map as it now stands, units and all, as the search found it between the two frames
+	restoreLoadedSearch();
+	restoreInfoCells();
+
 }  // end loadPostProcess
+
+//-----------------------------------------------------------------------------
+/** Last of the load: the cells holding an info are the save's, no more and no fewer.  Units and the
+	* stopped search have theirs by now; the rest are structure cells a search or a unit once gave one,
+	* and cells the load's own post-processing gave one the saved game did not have. */
+void Pathfinder::restoreInfoCells( void )
+{
+	if (!m_infoCellsFromSave)
+		return;
+	m_infoCellsFromSave = FALSE;
+	const std::vector<Int64> &keys = m_loadedInfoCells;
+	size_t next = 0;
+	for (Int layer = LAYER_GROUND; layer <= LAYER_LAST; ++layer)
+	{
+		if (layer != LAYER_GROUND && !m_layers[layer].hasCells())
+			continue;
+		for (Int y = m_extent.lo.y; y <= m_extent.hi.y; ++y)
+			for (Int x = m_extent.lo.x; x <= m_extent.hi.x; ++x)
+			{
+				PathfindCell *cell = getUnitCell(layer, x, y);
+				if (cell == NULL)
+					continue;
+				ICoord2D c;
+				c.x = x;
+				c.y = y;
+				const Int64 key = loadedSearchKey( layer, c );
+				while (next < keys.size() && keys[ next ] < key)
+					++next;		// a cell the load took away
+				if (next < keys.size() && keys[ next ] == key)
+				{
+					cell->allocateInfo( c );
+					++next;
+				}
+				else
+					cell->releaseInfoNotInSave();
+			}
+	}
+	m_loadedInfoCells.clear();
+}
+
+//-----------------------------------------------------------------------------
+void Pathfinder::clearLoadedSearch( void )
+{
+	if (m_loadedSearch.s.result)
+		m_loadedSearch.s.result->deleteInstance();
+	// zeroed whole: a finished search's load reads only a few fields and copies the rest into m_search
+	m_loadedSearch.s = ResumableSearch();
+	m_loadedSearch.s.owner = INVALID_ID;
+	m_loadedSearch.pending = FALSE;
+	m_loadedSearch.open.clear();
+	m_loadedSearch.closed.clear();
+}
+
+
+//-----------------------------------------------------------------------------
+/** The main search the queue's budget stopped, or the answer another search finished for its unit
+	* (ResumableSearch).  Its cells go by layer and index, each with its numbers and its parent, in list
+	* order, since the order is what the next frame's expansion follows. */
+void Pathfinder::xferHeldSearch( Xfer *xfer )
+{
+	const Bool load = xfer->getXferMode() == XFER_LOAD;
+	LoadedSearch saving;
+	LoadedSearch &l = load ? m_loadedSearch : saving;
+	if (load)
+		clearLoadedSearch();
+	else
+	{
+		l.s = m_search;
+		l.goalLayer = l.parentLayer = l.closestLayer = LAYER_INVALID;
+		l.parentNdx.x = l.parentNdx.y = l.closestNdx.x = l.closestNdx.y = 0;
+		l.goalHadInfo = FALSE;
+		l.probeBestDistSqr = m_probeBestDistSqr;
+		if (m_search.owner != INVALID_ID && !m_search.done)
+		{
+			l.goalLayer = m_search.goalCell->getLayer();
+			l.goalHadInfo = m_search.goalCell->hasInfo();
+			l.parentLayer = m_search.parentCell->getLayer();
+			l.parentNdx.x = m_search.parentCell->getXIndex();
+			l.parentNdx.y = m_search.parentCell->getYIndex();
+			if (m_search.closestCell)
+			{
+				l.closestLayer = m_search.closestCell->getLayer();
+				l.closestNdx.x = m_search.closestCell->getXIndex();
+				l.closestNdx.y = m_search.closestCell->getYIndex();
+			}
+			for (Int list = 0; list < 2; ++list)
+			{
+				std::vector<LoadedSearchCell> &cells = list == 0 ? l.open : l.closed;
+				for (PathfindCell *cell = list == 0 ? m_openList : m_closedList; cell; cell = cell->getNextOpen())
+				{
+					LoadedSearchCell c;
+					c.layer = cell->getLayer();
+					c.cell.x = cell->getXIndex();
+					c.cell.y = cell->getYIndex();
+					const PathfindCell *parent = cell->getParentCell();
+					c.parentLayer = parent ? parent->getLayer() : LAYER_INVALID;
+					c.parent.x = parent ? parent->getXIndex() : 0;
+					c.parent.y = parent ? parent->getYIndex() : 0;
+					c.costSoFar = (UnsignedShort)cell->getCostSoFar();
+					c.totalCost = (UnsignedShort)cell->getTotalCost();
+					c.travelSoFar = (UnsignedShort)cell->getTravelSoFar();
+					c.openBucket = list == 0 ? cell->getOpenBucket() : 0;
+					c.blockedByAlly = cell->isBlockedByAlly();
+					cells.push_back( c );
+				}
+			}
+		}
+	}
+
+	Bool held = l.s.owner != INVALID_ID;
+	xfer->xferBool( &held );
+	if (!held)
+		return;
+
+	ResumableSearch &s = l.s;
+	xfer->xferObjectID( &s.owner );
+	xfer->xferBool( &s.done );
+	xfer->xferBool( &s.claimed );
+	xfer->xferCoord3D( &s.rawTo );
+	if (s.done)
+	{
+		Bool hasResult = s.result != NULL;
+		xfer->xferBool( &hasResult );
+		if (load)
+			s.result = hasResult ? newInstance(Path) : NULL;
+		if (hasResult)
+			xfer->xferSnapshot( s.result );
+	}
+	else
+	{
+		if (load)
+			s.result = NULL;
+		xfer->xferCoord3D( &s.from );
+		xfer->xferCoord3D( &s.to );
+		xfer->xferInt( &l.goalLayer );
+		xfer->xferICoord2D( &s.goalCellNdx );
+		xfer->xferBool( &l.goalHadInfo );
+		xfer->xferInt( &l.parentLayer );
+		xfer->xferICoord2D( &l.parentNdx );
+		xfer->xferInt( &l.closestLayer );
+		xfer->xferICoord2D( &l.closestNdx );
+		xfer->xferReal( &s.closestDistanceSqr );
+		xfer->xferICoord2D( &s.startCellNdx );
+		xfer->xferInt( &s.radius );
+		xfer->xferBool( &s.centerInCell );
+		xfer->xferBool( &s.isHuman );
+		xfer->xferInt( &s.cellCount );
+		xfer->xferInt( &s.credited );
+		xfer->xferBool( &s.isTunneling );
+		xfer->xferBool( &s.ignoreUnderConstruction );
+		xfer->xferBool( &s.restricted );
+		xfer->xferObjectID( &s.ignoreObstacleID );
+		xfer->xferUnsignedInt( &s.flowNow );
+		xfer->xferUnsignedInt( &s.flowNowBucket );
+		xfer->xferReal( &s.startDirX );
+		xfer->xferReal( &s.startDirY );
+		xfer->xferBool( &s.startDirValid );
+		xfer->xferInt( &l.probeBestDistSqr );
+		for (Int list = 0; list < 2; ++list)
+		{
+			std::vector<LoadedSearchCell> &cells = list == 0 ? l.open : l.closed;
+			UnsignedInt count = (UnsignedInt)cells.size();
+			xfer->xferUnsignedInt( &count );
+			if (load)
+			{
+				if (count > (UnsignedInt)CELL_INFOS_TO_ALLOCATE)
+					throw SC_INVALID_DATA;
+				cells.resize( count );
+			}
+			for (UnsignedInt i = 0; i < count; ++i)
+			{
+				LoadedSearchCell &c = cells[ i ];
+				xfer->xferInt( &c.layer );
+				xfer->xferICoord2D( &c.cell );
+				xfer->xferInt( &c.parentLayer );
+				xfer->xferICoord2D( &c.parent );
+				xfer->xferUnsignedShort( &c.costSoFar );
+				xfer->xferUnsignedShort( &c.totalCost );
+				xfer->xferUnsignedShort( &c.travelSoFar );
+				xfer->xferUnsignedShort( &c.openBucket );
+				xfer->xferBool( &c.blockedByAlly );
+			}
+		}
+	}
+	if (!load)
+		return;
+
+	// everything the restore will look up has to be on the map, once, with every parent among them
+	if (s.owner == INVALID_ID)
+		throw SC_INVALID_DATA;
+	if (!s.done)
+	{
+		if (l.open.size() + l.closed.size() > (size_t)CELL_INFOS_TO_ALLOCATE)
+			throw SC_INVALID_DATA;
+		std::vector<Int64> keys;
+		keys.reserve( l.open.size() + l.closed.size() );
+		for (Int list = 0; list < 2; ++list)
+		{
+			const std::vector<LoadedSearchCell> &cells = list == 0 ? l.open : l.closed;
+			for (size_t i = 0; i < cells.size(); ++i)
+				keys.push_back( loadedSearchKey( cells[ i ].layer, cells[ i ].cell ) );
+		}
+		std::sort( keys.begin(), keys.end() );
+		if (std::adjacent_find( keys.begin(), keys.end() ) != keys.end())
+			throw SC_INVALID_DATA;
+		struct Check
+		{
+			static Bool onMap( const IRegion2D &extent, Int layer, const ICoord2D &c )
+			{
+				return layer >= LAYER_GROUND && layer <= LAYER_LAST &&
+					c.x >= extent.lo.x && c.x <= extent.hi.x && c.y >= extent.lo.y && c.y <= extent.hi.y;
+			}
+			static Bool listed( const std::vector<Int64> &keys, Int layer, const ICoord2D &c )
+			{
+				return std::binary_search( keys.begin(), keys.end(), loadedSearchKey( layer, c ) );
+			}
+		};
+		for (Int list = 0; list < 2; ++list)
+		{
+			const std::vector<LoadedSearchCell> &cells = list == 0 ? l.open : l.closed;
+			for (size_t i = 0; i < cells.size(); ++i)
+			{
+				const LoadedSearchCell &c = cells[ i ];
+				if (!Check::onMap( m_extent, c.layer, c.cell ))
+					throw SC_INVALID_DATA;
+				if (c.parentLayer != LAYER_INVALID && !Check::listed( keys, c.parentLayer, c.parent ))
+					throw SC_INVALID_DATA;
+			}
+		}
+		if (l.open.empty() || !Check::onMap( m_extent, l.goalLayer, s.goalCellNdx ) ||
+				!Check::listed( keys, l.parentLayer, l.parentNdx ) ||
+				(l.closestLayer != LAYER_INVALID && !Check::listed( keys, l.closestLayer, l.closestNdx )))
+			throw SC_INVALID_DATA;
+	}
+	l.pending = TRUE;
+}
+
+//-----------------------------------------------------------------------------
+/** Lay the saved stopped search back on the lists, as the game that was saved held it between its
+	* two frames.  A cell that is no longer there (a wall piece's post-process can take a layer cell
+	* away) or a pool that has run dry loses the search, and its unit starts over at its turn, which is
+	* what every load did before version 4. */
+void Pathfinder::restoreLoadedSearch( void )
+{
+	LoadedSearch &l = m_loadedSearch;
+	if (!l.pending)
+		return;
+	l.pending = FALSE;
+	dropSuspendedSearch();
+	if (l.s.done)
+	{
+		m_search = l.s;
+		l.s.result = NULL;
+		return;
+	}
+
+	std::vector<PathfindCell *> open( l.open.size() ), closed( l.closed.size() );
+	PathfindCell *goalCell = getUnitCell( l.goalLayer, l.s.goalCellNdx.x, l.s.goalCellNdx.y );
+	PathfindCell *parentCell = getUnitCell( l.parentLayer, l.parentNdx.x, l.parentNdx.y );
+	PathfindCell *closestCell = l.closestLayer == LAYER_INVALID ? NULL : getUnitCell( l.closestLayer, l.closestNdx.x, l.closestNdx.y );
+	Bool ok = goalCell != NULL && parentCell != NULL && (closestCell != NULL || l.closestLayer == LAYER_INVALID);
+	for (Int list = 0; list < 2 && ok; ++list)
+	{
+		const std::vector<LoadedSearchCell> &cells = list == 0 ? l.open : l.closed;
+		std::vector<PathfindCell *> &out = list == 0 ? open : closed;
+		for (size_t i = 0; i < cells.size() && ok; ++i)
+		{
+			out[ i ] = getUnitCell( cells[ i ].layer, cells[ i ].cell.x, cells[ i ].cell.y );
+			ok = out[ i ] != NULL;
+		}
+	}
+	// every cell first gets its info (a unit's cell keeps the one it has), then its numbers and parent
+	size_t allocated[ 2 ] = { 0, 0 };
+	for (Int list = 0; list < 2 && ok; ++list)
+	{
+		const std::vector<LoadedSearchCell> &cells = list == 0 ? l.open : l.closed;
+		std::vector<PathfindCell *> &out = list == 0 ? open : closed;
+		for (size_t i = 0; i < cells.size() && ok; ++i)
+		{
+			ok = out[ i ]->allocateInfo( cells[ i ].cell );
+			if (ok)
+				allocated[ list ] = i + 1;
+		}
+	}
+	if (ok && l.goalHadInfo)
+		ok = goalCell->allocateInfo( l.s.goalCellNdx );
+	if (!ok)
+	{
+		for (Int list = 0; list < 2; ++list)
+		{
+			std::vector<PathfindCell *> &out = list == 0 ? open : closed;
+			for (size_t i = 0; i < allocated[ list ]; ++i)
+				out[ i ]->releaseInfo();
+		}
+		clearLoadedSearch();
+		return;
+	}
+	for (Int list = 0; list < 2; ++list)
+	{
+		const std::vector<LoadedSearchCell> &cells = list == 0 ? l.open : l.closed;
+		std::vector<PathfindCell *> &out = list == 0 ? open : closed;
+		for (size_t i = 0; i < cells.size(); ++i)
+		{
+			const LoadedSearchCell &c = cells[ i ];
+			out[ i ]->setLoadedSearchCosts( c.costSoFar, c.totalCost, c.travelSoFar, c.openBucket );
+			out[ i ]->setBlockedByAlly( c.blockedByAlly );
+			if (c.parentLayer == LAYER_INVALID)
+				out[ i ]->clearParentCell();
+			else
+				out[ i ]->setParentCellHierarchical( getUnitCell( c.parentLayer, c.parent.x, c.parent.y ) );
+		}
+	}
+	m_openList = PathfindCell::linkLoadedList( open.empty() ? NULL : &open[ 0 ], (Int)open.size(), TRUE );
+	m_closedList = PathfindCell::linkLoadedList( closed.empty() ? NULL : &closed[ 0 ], (Int)closed.size(), FALSE );
+	m_probeBestDistSqr = l.probeBestDistSqr;
+
+	m_search = l.s;
+	m_search.goalCell = goalCell;
+	m_search.parentCell = parentCell;
+	m_search.closestCell = closestCell;
+	m_search.result = NULL;
+	DEBUG_LOG(("Pathfinder load: the stopped search of unit %d carries on, %d open and %d closed cells\n", m_search.owner, (Int)open.size(), (Int)closed.size()));
+	l.open.clear();
+	l.closed.clear();
+}
 
 //-----------------------------------------------------------------------------
 /** What the pathfinder carries from one frame to the next beyond the map itself: the queue of
@@ -14370,7 +14851,8 @@ void Pathfinder::xferFlowState( Xfer *xfer )
 {
 	/* One line on disk, the layout saves have always had: human players' requests first, then the
 		 computer players'.  A load splits it by player type again, which reads a save from before there
-		 were two lines the same way.  Past one line's length the rest are left out; a unit still waiting
+		 were two lines the same way; from Pathfinder xfer 4 on, xfer splits it again where the human
+		 line ended, since a unit's owner can change while it waits.  Past one line's length the rest are left out; a unit still waiting
 		 for its path asks again when it loads (AIUpdateInterface::loadPostProcess). */
 	static ObjectID line[ PATHFIND_QUEUE_LEN ];
 	Int head = 0, tail = 0;
@@ -14396,9 +14878,11 @@ void Pathfinder::xferFlowState( Xfer *xfer )
 		// queueForPath turns away a unit already waiting by this, so it has to say who is
 		m_isQueuedForPath.assign( m_isQueuedForPath.size(), false );
 		const UnsignedInt now = TheGameLogic->getFrame();
+		m_loadedQueueLine.clear();		// kept for xfer, which from version 4 knows where the human line ends
 		for( Int slot = head; slot != tail; slot = ( slot + 1 ) % PATHFIND_QUEUE_LEN )
 		{
 			const ObjectID id = line[ slot ];
+			m_loadedQueueLine.push_back( id );
 			PathRequestRing &ring = pathRequestIsHuman( TheGameLogic->findObjectByID( id ) ) ? m_humanQueue : m_computerQueue;
 			ring.push( id, now );
 			const size_t index = (size_t)id;

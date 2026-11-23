@@ -453,6 +453,14 @@ public:
 		 hold, but a search that wanders can still get there - and a wrapped distance turns into an
 		 arrival time in the wrong half-minute, which prices a crossing that is not there. */
 	inline void setTravelSoFar(UnsignedInt travel) { if( m_info ) m_info->m_travelSoFar = (UnsignedShort)(travel > 0xFFFF ? 0xFFFF : travel);}
+	/// the bucket the open list filed this cell under (putOnSortedOpenList), which a save of a stopped search keeps
+	inline UnsignedShort getOpenBucket(void) const {return (UnsignedShort)m_info->m_openBucket;}
+	/// a loaded stopped search's numbers for this cell, before linkLoadedList puts it on its list
+	void setLoadedSearchCosts(UnsignedShort costSoFar, UnsignedShort totalCost, UnsignedShort travelSoFar, UnsignedShort openBucket);
+	/// lay a loaded stopped search's list back in the saved order, the open list's bucket index with it; returns the head
+	static PathfindCell *linkLoadedList(PathfindCell *const *cells, Int count, Bool open);
+	/// a load hands back an info the saved game did not have here, structure cell or not; nothing on a list or with a unit
+	void releaseInfoNotInSave(void);
 
 	void setParentCell(PathfindCell* parent);
 	void clearParentCell(void);
@@ -1515,8 +1523,8 @@ private:
 		 one is ever stopped: it belongs to the unit at the head of the queue, which keeps that place
 		 until the search ends, so requests are still answered in the order they came.  Its cells stay
 		 on m_openList and m_closedList, so any other search first finishes it (settleSuspendedSearch)
-		 and keeps the answer for the unit's next turn.  Never saved: a loaded game starts that unit's
-		 search over. */
+		 and keeps the answer for the unit's next turn.  The save holds it, lists and all (xferHeldSearch),
+		 so a loaded game carries on from the same cell. */
 	struct ResumableSearch
 	{
 		ObjectID owner;							///< the unit a stopped search belongs to, INVALID_ID when none
@@ -1539,6 +1547,41 @@ private:
 	};
 	ResumableSearch m_search;
 	ObjectID			m_queueOwnerID;		///< the unit whose turn in the queue is running, INVALID_ID outside it
+
+	/* A stopped search as the save holds it (xfer, version 4).  The load keeps it here until
+		 loadPostProcess, once every object and the unit map are back, and lays it on the lists there:
+		 nothing may carry it on before then. */
+	struct LoadedSearchCell
+	{
+		Int layer;
+		ICoord2D cell;
+		Int parentLayer;					///< LAYER_INVALID when the cell has no parent (the start)
+		ICoord2D parent;
+		UnsignedShort costSoFar, totalCost, travelSoFar, openBucket;
+		Bool blockedByAlly;
+	};
+	struct LoadedSearch
+	{
+		Bool pending;
+		ResumableSearch s;				///< the cell pointers in it are not used; the layers and indices below are
+		Int goalLayer, parentLayer, closestLayer;	///< closestLayer LAYER_INVALID when none
+		ICoord2D parentNdx, closestNdx;
+		Bool goalHadInfo;
+		Int probeBestDistSqr;
+		std::vector<LoadedSearchCell> open, closed;
+	};
+	LoadedSearch	m_loadedSearch;
+	void xferHeldSearch( Xfer *xfer );
+	void restoreLoadedSearch( void );
+	void clearLoadedSearch( void );
+	std::vector<ObjectID> m_loadedQueueLine;	///< xferFlowState's line as read, until xfer splits it into the two rings
+	/* Every cell that held a PathfindCellInfo when the game was saved (xfer, version 4), as sorted keys
+		 (layer, y, x).  A search charges its budget only for cells it has to give an info to, and a
+		 structure's cell keeps the one a search or a unit once gave it (releaseInfo), so which cells hold
+		 one decides where a later search stops.  Put back exactly by loadPostProcess. */
+	std::vector<Int64> m_loadedInfoCells;
+	Bool					m_infoCellsFromSave;
+	void restoreInfoCells( void );
 
 	/// one cell's units as the save holds them (xfer); a load keeps them until every object has loaded
 	struct UnitCell

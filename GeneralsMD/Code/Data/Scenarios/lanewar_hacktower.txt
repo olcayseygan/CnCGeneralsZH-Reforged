@@ -1,0 +1,106 @@
+# Direct Strike proof that a wave Hacker's building hack lands on a Watch Tower (the walk-up rule,
+# LaneWarDirector::walkUp, buildings first, a 300 leash). In a played match the tower's Gattling gun
+# kills him during his unpack, so this one is staged: three Hackers bought to Heroic on China's plot
+# (slot 1, team B), and while the first wave walks up to team A's tower the drill puts every China Hacker
+# back to full health every half wall second. Nothing else is bought on either side, so nothing but a
+# Hacker can switch the tower off. lanewar_hack.txt is the fortress case.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 5300 -scenario lanewar_hacktower -logPrefix lanewar_hacktower_
+#
+# Passes on "LANEWAR ABILITY USE: ... 'ChinaInfantryHacker' ... walk-up
+# 'Command_ChinaInfantryHackerDisableBuilding' at 'LaneWarWatchTower'" followed by "HEADLESS LANEWAR:
+# frame ... 'LaneWarWatchTower' ... of team A hacked off until frame ...". The SCENARIO health lines are
+# the staging. Unstaged (2026-11-23, 9000 frames) the walk-up fires from logic frame 4488 and the tower
+# kills each Hacker about 40 frames after its first shot, before the hack lands.
+#
+# The frames below are this file's 30 Hz frames, which the drill scales by the game speed: at 1.5x a
+# file frame is two thirds of a logic frame. The first tick is logic frame 2700 (file 4050), the walk-up
+# about 4490 (file 6735), so the heals run from file 6600 to 7650 (logic 4400 to 5100).
+
+30    lanecash   1  20000
+30    lanetier   1  1 2
+30    laneplace  1  ChinaInfantryHacker           3 3
+30    laneplace  1  ChinaInfantryHacker           7 3
+30    laneplace  1  ChinaInfantryHacker           11 3
+60    lanevet    1  0 3 3
+60    lanevet    1  0 3 3
+60    lanevet    1  0 3 3
+60    lanevet    1  0 7 3
+60    lanevet    1  0 7 3
+60    lanevet    1  0 7 3
+60    lanevet    1  0 11 3
+60    lanevet    1  0 11 3
+60    lanevet    1  0 11 3
+6600  health     1  ChinaInfantryHacker           100
+6615  health     1  ChinaInfantryHacker           100
+6630  health     1  ChinaInfantryHacker           100
+6645  health     1  ChinaInfantryHacker           100
+6660  health     1  ChinaInfantryHacker           100
+6675  health     1  ChinaInfantryHacker           100
+6690  health     1  ChinaInfantryHacker           100
+6705  health     1  ChinaInfantryHacker           100
+6720  health     1  ChinaInfantryHacker           100
+6735  health     1  ChinaInfantryHacker           100
+6750  health     1  ChinaInfantryHacker           100
+6765  health     1  ChinaInfantryHacker           100
+6780  health     1  ChinaInfantryHacker           100
+6795  health     1  ChinaInfantryHacker           100
+6810  health     1  ChinaInfantryHacker           100
+6825  health     1  ChinaInfantryHacker           100
+6840  health     1  ChinaInfantryHacker           100
+6855  health     1  ChinaInfantryHacker           100
+6870  health     1  ChinaInfantryHacker           100
+6885  health     1  ChinaInfantryHacker           100
+6900  health     1  ChinaInfantryHacker           100
+6915  health     1  ChinaInfantryHacker           100
+6930  health     1  ChinaInfantryHacker           100
+6945  health     1  ChinaInfantryHacker           100
+6960  health     1  ChinaInfantryHacker           100
+6975  health     1  ChinaInfantryHacker           100
+6990  health     1  ChinaInfantryHacker           100
+7005  health     1  ChinaInfantryHacker           100
+7020  health     1  ChinaInfantryHacker           100
+7035  health     1  ChinaInfantryHacker           100
+7050  health     1  ChinaInfantryHacker           100
+7065  health     1  ChinaInfantryHacker           100
+7080  health     1  ChinaInfantryHacker           100
+7095  health     1  ChinaInfantryHacker           100
+7110  health     1  ChinaInfantryHacker           100
+7125  health     1  ChinaInfantryHacker           100
+7140  health     1  ChinaInfantryHacker           100
+7155  health     1  ChinaInfantryHacker           100
+7170  health     1  ChinaInfantryHacker           100
+7185  health     1  ChinaInfantryHacker           100
+7200  health     1  ChinaInfantryHacker           100
+7215  health     1  ChinaInfantryHacker           100
+7230  health     1  ChinaInfantryHacker           100
+7245  health     1  ChinaInfantryHacker           100
+7260  health     1  ChinaInfantryHacker           100
+7275  health     1  ChinaInfantryHacker           100
+7290  health     1  ChinaInfantryHacker           100
+7305  health     1  ChinaInfantryHacker           100
+7320  health     1  ChinaInfantryHacker           100
+7335  health     1  ChinaInfantryHacker           100
+7350  health     1  ChinaInfantryHacker           100
+7365  health     1  ChinaInfantryHacker           100
+7380  health     1  ChinaInfantryHacker           100
+7395  health     1  ChinaInfantryHacker           100
+7410  health     1  ChinaInfantryHacker           100
+7425  health     1  ChinaInfantryHacker           100
+7440  health     1  ChinaInfantryHacker           100
+7455  health     1  ChinaInfantryHacker           100
+7470  health     1  ChinaInfantryHacker           100
+7485  health     1  ChinaInfantryHacker           100
+7500  health     1  ChinaInfantryHacker           100
+7515  health     1  ChinaInfantryHacker           100
+7530  health     1  ChinaInfantryHacker           100
+7545  health     1  ChinaInfantryHacker           100
+7560  health     1  ChinaInfantryHacker           100
+7575  health     1  ChinaInfantryHacker           100
+7590  health     1  ChinaInfantryHacker           100
+7605  health     1  ChinaInfantryHacker           100
+7620  health     1  ChinaInfantryHacker           100
+7635  health     1  ChinaInfantryHacker           100
+7650  health     1  ChinaInfantryHacker           100

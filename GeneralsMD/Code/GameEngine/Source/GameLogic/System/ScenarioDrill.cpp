@@ -1740,10 +1740,18 @@ static Bool executeTally( const ScenarioAction &action, Player *player )
 	// and how fast the slowest and the fastest of them are moving: an Angry Mob's men keep one pace
 	Real slowest = 1.0e9f;
 	Real fastest = 0.0f;
+	// and their ranks and the experience behind them: the engine logs no promotion, so a rule that
+	// stops veterancy (Direct Strike's) is read here
+	Int ranks[ LEVEL_COUNT ] = { 0 };
+	Int experience = 0;
 	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
 	{
 		if (obj->getControllingPlayer() != player || obj->isEffectivelyDead() || !selectorMatches( action.selector, obj ))
 			continue;
+
+		++ranks[ obj->getVeterancyLevel() ];
+		if (obj->getExperienceTracker())
+			experience += obj->getExperienceTracker()->getCurrentExperience();
 
 		if (alive < SPREAD_MAX)
 			spot[ alive ] = *obj->getPosition();
@@ -1762,6 +1770,9 @@ static Bool executeTally( const ScenarioAction &action, Player *player )
 	DEBUG_LOG(("HEADLESS TALLY: frame %d slot %d '%s': %d alive, health %.0f of %.0f, worth %d, %d inside, money %d\n",
 						 action.frame, action.slot, action.selector.str(), alive, health, maxHealth, worth, inside,
 						 player->getMoney()->countMoney()));
+	DEBUG_LOG(("HEADLESS RANKS: frame %d slot %d '%s': regular %d veteran %d elite %d heroic %d, experience %d\n",
+						 action.frame, action.slot, action.selector.str(), ranks[ LEVEL_REGULAR ], ranks[ LEVEL_VETERAN ],
+						 ranks[ LEVEL_ELITE ], ranks[ LEVEL_HEROIC ], experience));
 	if (alive >= 2 && alive <= SPREAD_MAX)
 	{
 		// each unit's distance to its nearest neighbour on the ground: the closest pair and the mean

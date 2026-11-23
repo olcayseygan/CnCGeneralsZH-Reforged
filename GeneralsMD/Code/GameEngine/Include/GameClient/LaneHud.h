@@ -69,6 +69,9 @@ void LaneHud_abilitiesPanelSetOpen( Bool open );
 /// the camera turned side-on to the lane, the team's own end on the left (the owner's rule of 2026-11-21)
 void LaneHud_turnToLane( Int team );
 
+/// the block the armed card or carried unit would take on the ground, for the terrain pass's wash; FALSE while nothing is held over the plot
+Bool LaneHud_heldFootprint( Coord2D *centre, Real *half, Bool *legal );
+
 /** For a script driving the HUD with the mouse (the control socket's `lanehud`): JSON members naming
 	* the local player's team and seat, the jets the strip map last showed in the air, the screen point
 	* at the middle of his slot (grid, column, row), where the camera

@@ -458,15 +458,24 @@ static Bool overHud( const ICoord2D *mouse )
 	return s_clusterUnit != INVALID_ID && s_chipCount > 0 && inside( s_clusterRow, mouse );
 }
 
-/// the four corners of a block of slots on screen, FALSE when one is off it
-static Bool blockOnScreen( Int grid, Int col, Int row, Int size, ICoord2D corner[ 4 ] )
+/// a block's middle on the ground of the local seat's grid, and half its side
+static Bool blockPlace( Int grid, Int col, Int row, Int size, Coord2D *centre, Real *half )
 {
 	Coord2D lo, hi;
 	if( !TheLaneWarDirector->getGridBounds( s_team, s_seat, grid, &lo, &hi ) )
 		return FALSE;
-	const Real front = TheLaneWarDirector->towardEnemy( s_team );
-	const Coord2D centre = LaneWar_slotPlace( lo.x, lo.y, hi.x, hi.y, front, col, row, size );
-	const Real half = 0.5f * size * LANEWAR_SLOT_SIZE;
+	*centre = LaneWar_slotPlace( lo.x, lo.y, hi.x, hi.y, TheLaneWarDirector->towardEnemy( s_team ), col, row, size );
+	*half = 0.5f * size * LANEWAR_SLOT_SIZE;
+	return TRUE;
+}
+
+/// the four corners of a block of slots on screen, FALSE when one is off it
+static Bool blockOnScreen( Int grid, Int col, Int row, Int size, ICoord2D corner[ 4 ] )
+{
+	Coord2D centre;
+	Real half;
+	if( !blockPlace( grid, col, row, size, &centre, &half ) )
+		return FALSE;
 	const Real dx[ 4 ] = { -half, half, half, -half }, dy[ 4 ] = { -half, -half, half, half };
 	for( Int i = 0; i < 4; ++i )
 	{
@@ -1431,6 +1440,20 @@ void LaneHud_abilitiesPanelSetOpen( Bool open )
 	s_abilitiesOpen = open;
 	if( open )
 		s_upgradesOpen = FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The block the armed card or the picked up unit would take, for the ground wash under it
+	* (W3DInGameUI::drawLanePlotGrids): its middle, half its side, and whether it may go there.  FALSE
+	* while nothing is held over the plot.  Read in the terrain pass from what preDraw worked out. */
+//-------------------------------------------------------------------------------------------------
+Bool LaneHud_heldFootprint( Coord2D *centre, Real *half, Bool *legal )
+{
+	if( !s_showing || !s_target.on || !s_target.onPlot
+			|| !blockPlace( s_target.grid, s_target.col, s_target.row, s_target.size, centre, half ) )
+		return FALSE;
+	*legal = s_target.legal;
+	return TRUE;
 }
 
 //-------------------------------------------------------------------------------------------------

@@ -65,6 +65,7 @@
 #include "GameClient/Image.h"
 #include "GameClient/Mouse.h"
 #include "GameClient/ObserverCamera.h"
+#include "GameClient/LaneHud.h"
 #include "W3DDevice/GameClient/W3DAssetManager.h"
 #include "W3DDevice/GameClient/W3DGUICallbacks.h"
 #include "W3DDevice/GameClient/W3DInGameUI.h"
@@ -1138,6 +1139,28 @@ void W3DInGameUI::drawLanePlotGrids( Bool shadeByShroud )
 				}
 			}
 		}
+	}
+
+	// the block the armed card or the carried unit would take, washed green where it may go and red
+	// where it may not, in quads of half a slot so the wash follows the ground as the lines do
+	Coord2D at;
+	Real half;
+	Bool legal;
+	if( LaneHud_heldFootprint( &at, &half, &legal ) )
+	{
+		const Real WASH_ALPHA = 0x50;
+		const UnsignedInt c = overlayColor( legal ? 0x003CBA48 : 0x00F03C2D, WASH_ALPHA );	// DirectStrikeTheme's green, LaneHud's red
+		const Real step = 0.5f * SLOT;
+		const Int n = max( 1, REAL_TO_INT_FLOOR( 2.0f * half / step + 0.5f ) );
+		for( Int j = 0; j < n; ++j )
+			for( Int i = 0; i < n; ++i )
+			{
+				const Real x0 = at.x - half + i * step, x1 = x0 + step;
+				const Real y0 = at.y - half + j * step, y1 = y0 + step;
+				quads.add( Vector3( x0, y0, overlayGround( x0, y0 ) + LIFT ), Vector3( x1, y0, overlayGround( x1, y0 ) + LIFT ),
+									 Vector3( x1, y1, overlayGround( x1, y1 ) + LIFT ), Vector3( x0, y1, overlayGround( x0, y1 ) + LIFT ),
+									 c, c, c, c );
+			}
 	}
 	quads.flush();
 

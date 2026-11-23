@@ -1,0 +1,37 @@
+# Direct Strike proof that wave units earn no veterancy in the field (ExperienceTracker::addExperiencePoints
+# stops every gain while the director is on; a bought rank goes in by setVeterancyLevel and stays). China
+# (slot 1, team B) sends six Battlemasters every tick, America (slot 0, team A) four blocks of Rangers, so the
+# tanks kill infantry waves and then go for team A's Watch Tower, as in lanewar_hack. Nothing here buys a
+# rank. The tallies come after the tower fight and before the first wave's 130 second lifespan runs out.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 5000 -scenario lanewar_ranks -logPrefix lanewar_ranks_
+#
+# Passes when every HEADLESS RANKS line reads "veteran 0 elite 0 heroic 0, experience 0" after the
+# KILLXP lines show Battlemasters credited with Ranger kills (each worth 20, shared among them) and the
+# HEADLESS TALLY line beside it has the Battlemasters under their full health. The counts include each
+# seat's held plot units, which never fight and read Regular either way. The tower itself is worth 0
+# experience, so the Ranger kills are what makes the zeros mean something.
+#
+# The frames below are this file's 30 Hz frames, which the drill scales by the game speed: at 1.5x a
+# file frame is two thirds of a logic frame. The first tick is logic frame 2700 (file 4050); the waves
+# meet from about logic 3990, so the tallies sit at file 6600 and 7400 (logic 4400 and 4933).
+
+30    lanecash   1  20000
+30    lanetier   1  1 2
+30    laneplace  1  ChinaTankBattleMaster         0 0
+30    laneplace  1  ChinaTankBattleMaster         2 0
+30    laneplace  1  ChinaTankBattleMaster         4 0
+30    laneplace  1  ChinaTankBattleMaster         6 0
+30    laneplace  1  ChinaTankBattleMaster         8 0
+30    laneplace  1  ChinaTankBattleMaster         10 0
+30    laneplace  0  AmericaInfantryRanger         0 3
+30    laneplace  0  AmericaInfantryRanger         0 5
+30    laneplace  0  AmericaInfantryRanger         4 3
+30    laneplace  0  AmericaInfantryRanger         4 5
+6600  tally      1  ChinaTankBattleMaster
+6600  tally      0  AmericaInfantryRanger
+7400  tally      1  ChinaTankBattleMaster
+7400  tally      0  AmericaInfantryRanger
+7400  tally      1  *

@@ -60,6 +60,11 @@ found and fixed, EA's own, not port damage.**
 - A computer weighed only itself before typing GG, so allied Easy seats facing one strong player each saw a lost match and gave up unfought; seven Easy seats against one player given 180 tanks were all gone before a shot was fired. A computer now sets its whole team's worth against the strongest enemy team. In ten matches of two allied Easy seats against one computer at a rating of 4200, three seats gave up, each with its team under a fifth of the enemy's worth.
 - Replays with a computer player recorded before this change will not play back.
 
+## Wrecks slide off walls, shells clear the hill
+
+- The slope the game reads off the ground, which tanks and cars tilt to as they drive and wrecks bounce off, was worked out wrong on every hillside. EA's formula took one corner's slope from the wrong pair of heights, leaving the right one unused, and then blended the four corners of each patch crosswise, so each corner's slope pulled hardest at the opposite corner. The slope now comes from each patch's own four corners, blended the way the heights already were. The heights themselves have not moved.
+- Replays recorded on an earlier version will not play back on this one. A game saved on an earlier version still loads and plays on by these rules from there; a save made on this version does not load in an earlier one.
+
 ## Ray traced sun shadows
 
 - Shadow Quality under Options, Effects has a fourth choice above High: Ray Traced. High's shadow is a picture of the battlefield seen from the sun, and every shadow is read off it, so its edge can never be finer than that picture's dots. Ray Traced follows a line from each pixel on your screen to the sun and checks it against the real triangles of every tank and building in the way, so their shadows are as sharp as your screen at any zoom. Leaves, fences and rotors still take their shadow from High's picture, which keeps their gaps.

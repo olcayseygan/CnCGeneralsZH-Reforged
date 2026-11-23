@@ -5,65 +5,68 @@
 # Blend-tile chunk versions: 8 (Zero Hour maps), 7 (Bridge Busters, Dark Mountain, CHI03), 6 (Cliff,
 # CHI08, whose cliff bits are computed from heights).  Each block: "file <archive>|<entry>", then the
 # oracle's output.  Hashes and counts only: no map data is in this file.
+# Since 2026-11-23 the golden is "original EA plus the terrain-normal fix": the extract applies FIXES to
+# getHeightMapHeight's normal (corner 3's X slope d2-d10, the bilinear blend pairing corners 0-1 and
+# 3-2), so only the "height" lines, which hash the normal, differ from the untouched original.
 file zerohour/MapsZH.big|Maps\Tournament Desert\Tournament Desert.map
 map 270 x 340 border 35 boundaries 1 maxheight 431f6000
-height 15d42cc2 455908
+height 485c0ffc 455908
 bare b08b5533 113977
 cliff d4e88a34 113977
 maxcell b1d32be1 113977
 sight a24c5bf5 9204
 file zerohour/MapsZH.big|Maps\Dust Devil\Dust Devil.map
 map 290 x 290 border 20 boundaries 1 maxheight 431f6000
-height baf90b4a 524176
+height 42d2fa31 524176
 bare 3607ac5d 131044
 cliff b3500215 131044
 maxcell 5a0207c1 131044
 sight 400ce445 10658
 file zerohour/MapsZH.big|Maps\Twilight Flame\Twilight Flame.map
 map 630 x 630 border 70 boundaries 1 maxheight 431a6000
-height 4eb136f5 1920996
+height 640c892a 1920996
 bare 09766471 480249
 cliff ce1591f4 480249
 maxcell 71bcaeb8 480249
 sight 4ca61685 38642
 file zerohour/MapsZH.big|Maps\MD_GLA05_END\MD_GLA05_END.map
 map 710 x 710 border 120 boundaries 4 maxheight 431f6000
-height e061e5c9 1768900
+height cfa0a932 1768900
 bare d7efa8a8 442225
 cliff 57d1c664 442225
 maxcell c1c90b07 442225
 sight 080c89a5 35378
 file generals/maps.big|maps\Bridge Busters\Bridge Busters.map
 map 330 x 330 border 70 boundaries 1 maxheight 431f6000
-height cff2cdd5 311364
+height 44a5f82f 311364
 bare a1bd6a4e 77841
 cliff d71cf5e5 77841
 maxcell 81be6d19 77841
 sight 6de3af74 6272
 file generals/maps.big|maps\Dark Mountain\Dark Mountain.map
 map 520 x 520 border 60 boundaries 1 maxheight 42fa0000
-height 437a07aa 1295044
+height fb12bba5 1295044
 bare e1f5525a 323761
 cliff 2a654034 323761
 maxcell c91a1d10 323761
 sight eccf22a4 25992
 file generals/maps.big|maps\CHI03\CHI03.map
 map 385 x 430 border 70 boundaries 1 maxheight 431f6000
-height c339fecb 592140
+height 3df96728 592140
 bare 06472414 148035
 cliff dae638a4 148035
 maxcell 0f454107 148035
 sight c9a2c505 11928
 file generals/maps.big|maps\Cliff\Cliff.map
 map 260 x 260 border 30 boundaries 1 maxheight 431f6000
-height 06d310bd 343396
+height ee90b8b2 343396
 bare 48def363 85849
 cliff 026b0615 85849
 maxcell ad4cc619 85849
 sight 5c37ade5 6962
 file generals/maps.big|maps\CHI08\CHI08.map
 map 350 x 450 border 50 boundaries 1 maxheight 431f6000
-height a602daf6 724000
+height fcba3a57 724000
 bare 856db7e9 181000
 cliff b421a315 181000
 maxcell 3f526fa0 181000

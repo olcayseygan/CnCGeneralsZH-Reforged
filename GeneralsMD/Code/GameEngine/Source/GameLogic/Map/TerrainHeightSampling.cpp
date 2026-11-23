@@ -155,21 +155,24 @@ Real TerrainHeightSampling::getHeightMapHeight(WorldHeightMapData *clipMap, Worl
 		Real deltaZ_X0 = d1-d11;
 		Real deltaZ_X1 = d6-d0;
 		Real deltaZ_X2 = d7-d3;
-		Real deltaZ_X3 = d6-d0;
+		// Corner 3's X slope is 10 to 2; EA's text repeated corner 1's d6-d0 and left d10 unused.
+		Real deltaZ_X3 = d2-d10;
 
 		Real deltaZ_Y0 = d3-d4;
 		Real deltaZ_Y1 = d2-d5;
 		Real deltaZ_Y2 = d8-d1;
 		Real deltaZ_Y3 = d9-d0;
 
-		// Interpolate to get the smoothed valued.
-		Real deltaZ_X_Left = deltaZ_X0*(1.0f-fx) + fx*deltaZ_X3;
-		Real deltaZ_X_Right = deltaZ_X1*(1.0f-fx) + fx*deltaZ_X2;
-		Real deltaZ_X = deltaZ_X_Left*(1.0-fy) + fy*deltaZ_X_Right;
+		// Interpolate to get the smoothed valued.  Bilinear: blend along x on the bottom edge (0 to 1)
+		// and the top edge (3 to 2), then along y.  EA's text blended 0 with 3 by fx, which handed
+		// corner 1's slopes the weight of corner 3 and the other way round.
+		Real deltaZ_X_Bottom = deltaZ_X0*(1.0f-fx) + fx*deltaZ_X1;
+		Real deltaZ_X_Top = deltaZ_X3*(1.0f-fx) + fx*deltaZ_X2;
+		Real deltaZ_X = deltaZ_X_Bottom*(1.0-fy) + fy*deltaZ_X_Top;
 
-		Real deltaZ_Y_Left = deltaZ_Y0*(1.0f-fx) + fx*deltaZ_Y3;
-		Real deltaZ_Y_Right = deltaZ_Y1*(1.0f-fx) + fx*deltaZ_Y2;
-		Real deltaZ_Y = deltaZ_Y_Left*(1.0-fy) + fy*deltaZ_Y_Right;
+		Real deltaZ_Y_Bottom = deltaZ_Y0*(1.0f-fx) + fx*deltaZ_Y1;
+		Real deltaZ_Y_Top = deltaZ_Y3*(1.0f-fx) + fx*deltaZ_Y2;
+		Real deltaZ_Y = deltaZ_Y_Bottom*(1.0-fy) + fy*deltaZ_Y_Top;
 
 
 

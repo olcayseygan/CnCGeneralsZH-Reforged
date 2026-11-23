@@ -79,6 +79,13 @@ SpectreGunshipDeploymentUpdateModuleData::SpectreGunshipDeploymentUpdateModuleDa
 	m_specialPowerTemplate			   = NULL;
 	m_extraRequiredScience				 = SCIENCE_INVALID;
 /******BOTH*******//*BOTH*//******BOTH*******//******BOTH*******/  m_attackAreaRadius             = 200.0f;
+	// Copied over from SpectreGunshipUpdate with the BOTH fields but never given a parse entry, so no INI
+	// sets it; initiateIntentToDoSpecialPower still pushes the gunship's spawn point off the map's edge by
+	// it.  It was zero all
+	// along only because the global allocator clears every block (DynamicMemoryAllocator::
+	// allocateBytesImplementation); zero here keeps every match and replay as it was, the gunship
+	// spawning on the edge point itself.  The client's lane (W3DGroundMarkers planSpectre) reads it too.
+	m_gunshipOrbitRadius = 0.0f;
 	m_createLoc = CREATE_GUNSHIP_AT_EDGE_FARTHEST_FROM_TARGET;
 
 }

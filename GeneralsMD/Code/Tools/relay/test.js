@@ -458,6 +458,17 @@ async function main() {
 	await threaded.stop();
 	}
 
+	// systemd's stop signals the whole cgroup: the child outlives a SIGTERM and waits for the host's
+	// stop. Windows has no SIGTERM to catch (kill terminates, exit code 1), so the check is POSIX only.
+	if (process.platform !== 'win32') {
+	const child = createRelay({ process: true, log: () => {} });
+	await child.start(0, '127.0.0.1');
+	process.kill(child.pid, 'SIGTERM');
+	await new Promise((r) => setTimeout(r, 300));
+	await child.report();  // still answering after the SIGTERM
+	await child.stop();
+	}
+
 	for (const s of sockets) s.close();
 	console.log('relay test: all checks passed');
 }

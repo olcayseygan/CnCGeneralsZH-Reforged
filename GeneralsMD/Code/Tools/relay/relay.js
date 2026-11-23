@@ -494,8 +494,9 @@ function createRelayThread(opts) {
 				if (!waits.size) throw e;
 				for (const id of [...waits.keys()]) settle(id, (w) => w.reject(e));
 			});
-			worker.on('exit', (code) => {
-				if (!stopping) throw new Error(`relay ${opts.process ? 'process' : 'thread'} exited with code ${code}`);
+			// a SIGTERM death is a shutdown (systemd signals the whole cgroup), not a crash
+			worker.on('exit', (code, signal) => {
+				if (!stopping && signal !== 'SIGTERM') throw new Error(`relay ${opts.process ? 'process' : 'thread'} exited with code ${code}`);
 			});
 			return ask({ t: 'start', port, host });
 		},
@@ -514,7 +515,11 @@ function createRelayThread(opts) {
 function runThread(o, child) {
 	const post = child ? (m) => process.send(m) : (m) => parentPort.postMessage(m);
 	const port = child ? process : parentPort;
-	if (child) process.on('disconnect', () => process.exit(0));
+	if (child) {
+		process.on('disconnect', () => process.exit(0));
+		// the cgroup's SIGTERM reaches the child too; outlive it until the host's stop or disconnect
+		process.on('SIGTERM', () => {});
+	}
 	const asked = new Map();  // request id -> resolve of an authorize promise
 	let nextAsk = 0;
 	const relay = createRelay({

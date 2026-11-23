@@ -1547,6 +1547,7 @@ Data/Scenarios/piecetowerdirect.txt
 Data/Scenarios/piecetowerfilm.txt
 Data/Scenarios/powerpropcapture.txt
 Data/Scenarios/radarbatch.txt
+Data/Scenarios/ragdoll_slope.txt
 Data/Scenarios/reachhills.txt
 Data/Scenarios/reachproof.txt
 Data/Scenarios/reachshot.txt
@@ -3125,6 +3126,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/W3DParticleSys.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DPoly.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DProjectedShadow.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DPropBuffer.h
+GameEngineDevice/Include/W3DDevice/GameClient/W3DRagdoll.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DReachOverlay.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DRoadBuffer.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DScene.h
@@ -3267,6 +3269,7 @@ GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DOverlordTruckDraw.
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DPoliceCarDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DProjectileStreamDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DPropDraw.cpp
+GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DRagdoll.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DRopeDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DScienceModelDraw.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/Drawable/Draw/W3DSupplyDraw.cpp

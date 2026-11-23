@@ -66,6 +66,8 @@ static const char RG_COMMON[] =
 	"Buffer<float4> RgShape : register(t20);\n";
 
 static const char RG_TRACE[] =
+	// A caller may define RG_LIST_CAP before this text to test at most that many triangles a cell.
+	"#ifndef RG_LIST_CAP\n#define RG_LIST_CAP 0x7fffffff\n#endif\n"
 	"Buffer<float4> RgCorners : register(t16);\n"
 	"Buffer<uint> RgStarts : register(t17);\n"
 	"Buffer<uint> RgBlocks : register(t18);\n"
@@ -124,7 +126,7 @@ static const char RG_TRACE[] =
 	"    [loop] for (int k = 0; k < walk; ++k) {\n"
 	"        uint index = uint((cell.z * dims.y + cell.y) * dims.x + cell.x);\n"
 	"        uint first = rg_cell_start(index);\n"
-	"        uint last = min(rg_cell_start(index + 1), (uint)RgTuning.w);\n"
+	"        uint last = min(min(rg_cell_start(index + 1), (uint)RgTuning.w), first + RG_LIST_CAP);\n"
 	"        [loop] for (uint i = first; i < last; ++i)\n"
 	"            if (rg_triangle_hit(RgItems[i], o, d, reach)) return true;\n"
 	"        if (next.x <= next.y && next.x <= next.z) {\n"

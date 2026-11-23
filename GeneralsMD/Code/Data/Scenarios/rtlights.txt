@@ -1,0 +1,29 @@
+# Fire and blasts beside buildings at night, for the shadowed point lights of the Ray Traced shadow
+# level (dx11raylights.cpp). Dark Night's village square: a big fire between the tall stone tower
+# and the short lit one (1920,1810, vs_fire_soot's spot), four Crusaders and three Humvees south-west
+# of the towers and four Battlemasters north-east of them, shelling each other across the square,
+# so tank shells and tank deaths burst among the towers. The square takes a tank on a 40 unit grid
+# everywhere in 1720..2080 by 1600..1960 but the towers' cells round 1920,1680..1840, 1840,1760 and
+# 1880,1920, and the ground west and south of it is cliff (1700,1480 and 1600,1640 refuse).
+#
+#   generals.exe -win -xres 1280 -yres 720 -msaa 0 -quickstart -noshellmap -multiInstance -noFPSLimit
+#     -rtShadows -map "Maps\Dark Night\Dark Night.map" -autoskirmish 2 -takeover -observer
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 7 -scenario rtlights -camera 1880 1720
+#     -maxframes 900
+#
+# with ShadowQuality = 3 and Firelight = yes in the Options.ini of a ZH_USER_DATA_DIR of its own,
+# and ZHR_RT_LIGHTS_PROBE=1 for an RTLIGHTS line every logic frame something is lit.
+
+30    particles  0  AutoFireLarge01          1   1920 1810
+30    particles  0  FireFactionLarge         4   1920 1810  30
+
+30    spawn      0  AmericaTankCrusader      4   1800 1880  40
+30    spawn      0  AmericaVehicleHumvee     3   1960 1960  40
+30    spawn      1  ChinaTankBattleMaster    4   2040 1680  40
+60    attack     1  ChinaTankBattleMaster        0 AmericaTankCrusader
+60    attack     0  AmericaTankCrusader          1 ChinaTankBattleMaster
+
+200   tally      0  AmericaTankCrusader
+400   tally      0  AmericaTankCrusader
+600   tally      0  AmericaTankCrusader
+800   tally      0  AmericaTankCrusader

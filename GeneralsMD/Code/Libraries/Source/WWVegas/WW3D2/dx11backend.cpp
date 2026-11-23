@@ -676,6 +676,7 @@ void DX11BackendClass::Shutdown()
 	Release_Smoke_Map();
 	Release_Ray_Shadows();
 	RayShadowsRefused = false;		// a new device may make them
+	RayLights.Refused = false;
 	Release_Terrain_Heights();
 	Release_Shadow_Casters();
 	Release_Scene_Depth();
@@ -3965,8 +3966,9 @@ void DX11BackendClass::Upload_Pixel_Constants()
 		}
 		// None for a particle: the smoke takes these lights on the CPU (BLAST_LIGHT_SAMPLING).  None
 		// for a pass that multiplies what is under it (ZERO, SRCCOLOR): the base pass took the light
-		// already, and gained again the surface came out lit twice.
-		const unsigned blasts = (camera_space || Multiplies_Below()) ? 0 : BlastLightCount;
+		// already, and gained again the surface came out lit twice.  None while the Ray Traced level's
+		// pass will light the opaque scene with them, shadowed (dx11raylights.cpp).
+		const unsigned blasts = (camera_space || Multiplies_Below() || Ray_Lights_Pending()) ? 0 : BlastLightCount;
 		pixel_block.BlastLightParameters[0] = static_cast<float>(blasts);
 		for (unsigned slot = 0; slot < blasts; ++slot) {
 			memcpy(pixel_block.BlastLightPosition[slot], &BlastLights[slot][0], sizeof(float) * 4);
@@ -5594,6 +5596,7 @@ void DX11BackendClass::Release_Ray_Shadows()
 	RayCaptured = false;
 	RayGrid.Release();
 	RayOcclusion.Release();
+	RayLights.Release();
 }
 
 void DX11BackendClass::Begin_Ray_Capture()
@@ -6043,5 +6046,6 @@ std::string DX11BackendClass::Ray_Shadow_Report()
 	}
 	report += RayGrid.Report(context);
 	report += RayOcclusion.Report(context);
+	report += RayLights.Report(context);
 	return report;
 }

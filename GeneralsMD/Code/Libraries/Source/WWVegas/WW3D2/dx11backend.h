@@ -53,6 +53,7 @@
 #include "ffvertex.h"
 #include "dx11raygrid.h"
 #include "dx11rayao.h"
+#include "dx11raylights.h"
 
 #include <d3d11_1.h>
 #include <d3d9.h>
@@ -454,6 +455,13 @@ public:
 	ID3D11ShaderResourceView * Trace_Ray_Occlusion(const float world_from_clip[16],
 		ID3D11ShaderResourceView * shroud, const float shroud_rect[4]);
 	void Time_Ray_Occlusion(bool begin, bool traced);
+	// The scene's point lights with a shadow ray each through the ray grid, at the Ray Traced level
+	// (dx11raylights.cpp): while pending the opaque scene's receivers take none, and Trace_Ray_Lights,
+	// before Trace_Ray_Shadows, lights the opaque scene with them.  True when it bound targets of its own.
+	bool Ray_Lights_Pending() const;
+	bool Trace_Ray_Lights();
+	std::string Ray_Light_Probe_Report() { return (Device != NULL) ? RayLights.Probe_Report(Device->Get_Context()) : std::string(); }
+	bool Ray_Lights_Probing() const { return RayShadowsWanted && RayLights.Probing(); }
 
 	// The two draws.  Both resolve the shadow state into a pipeline first, and both return false
 	// when some part of that state has no D3D11 answer, which leaves the draw undone rather than
@@ -844,6 +852,7 @@ private:
 	// of every caster pass that captured, its probe run beside the trace under ZHR_RT_GRID.
 	DX11RayGridClass RayGrid;
 	DX11RayOcclusionClass RayOcclusion;	///< Trace_Ray_Occlusion's programs and textures
+	DX11RayLightClass RayLights;		///< Trace_Ray_Lights' programs and textures
 
 	// Set_Scene_View's matrix, and whether it has been set; and the projection held when it was,
 	// which is the scene camera's own (Set_Scene_View follows the camera's Apply).

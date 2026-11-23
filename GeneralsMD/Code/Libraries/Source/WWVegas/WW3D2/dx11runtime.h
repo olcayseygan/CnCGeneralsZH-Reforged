@@ -327,6 +327,10 @@ void Direct3D11_Ambient_Occlusion();
 void Direct3D11_Set_Ray_Traced_Shadows(bool wanted);
 void Direct3D11_Ray_Traced_Shadows();
 std::string Direct3D11_Ray_Shadow_Report();
+// ZHR_RT_LIGHTS_PROBE: the shadowed point lights' counts of the last frame read back, for a line
+// each logic frame; empty when nothing was lit.
+bool Direct3D11_Ray_Lights_Probing();
+std::string Direct3D11_Ray_Light_Probe_Report();
 
 // The fog's memory look (DX11PostProcessClass::Shroud_Memory_Scene), called after the water and before
 // the translucent meshes: it greys every pixel by the ground under it, and a translucent mesh drawn

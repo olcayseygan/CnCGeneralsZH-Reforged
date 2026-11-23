@@ -1578,6 +1578,7 @@ Data/Scenarios/rf_thumb_fa.txt
 Data/Scenarios/rf_thumb_fe.txt
 Data/Scenarios/rocketfx.txt
 Data/Scenarios/rocketglow.txt
+Data/Scenarios/rtlights.txt
 Data/Scenarios/s240_beach.txt
 Data/Scenarios/s240_bridge.txt
 Data/Scenarios/s240_heli.txt
@@ -3620,6 +3621,8 @@ Libraries/Source/WWVegas/WW3D2/dx11rayao.cpp
 Libraries/Source/WWVegas/WW3D2/dx11rayao.h
 Libraries/Source/WWVegas/WW3D2/dx11raygrid.cpp
 Libraries/Source/WWVegas/WW3D2/dx11raygrid.h
+Libraries/Source/WWVegas/WW3D2/dx11raylights.cpp
+Libraries/Source/WWVegas/WW3D2/dx11raylights.h
 Libraries/Source/WWVegas/WW3D2/dx11resource.cpp
 Libraries/Source/WWVegas/WW3D2/dx11resource.h
 Libraries/Source/WWVegas/WW3D2/dx11runtime.cpp

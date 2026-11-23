@@ -4937,6 +4937,15 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 			DEBUG_LOG(("RTSHADOWS frame %u: %d casters, %s\n", frame, castersCounted,
 				Direct3D11_Ray_Shadow_Report().c_str()));
 		}
+		// The shadowed point lights' probe, every logic frame something was lit, so a flash is caught.
+		static UnsignedInt lastLightFrame = 0xffffffffu;
+		if (frame != lastLightFrame && Direct3D11_Ray_Lights_Probing())
+		{
+			lastLightFrame = frame;
+			const std::string lit = Direct3D11_Ray_Light_Probe_Report();
+			if (!lit.empty())
+				DEBUG_LOG(("RTLIGHTS frame %u: %s\n", frame, lit.c_str()));
+		}
 	}
 #endif
 

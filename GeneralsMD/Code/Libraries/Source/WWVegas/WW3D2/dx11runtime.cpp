@@ -1032,6 +1032,10 @@ void Direct3D11_Set_Ray_Traced_Shadows(bool wanted)
 
 void Direct3D11_Ray_Traced_Shadows()
 {
+	// The point lights first, so the sun's dark pixel guard reads the lit scene as before.
+	if (Active && Backend.Trace_Ray_Lights()) {
+		Backend.Resume_Scene();
+	}
 	if (Active && Backend.Trace_Ray_Shadows()) {
 		Backend.Resume_Scene();
 	}
@@ -1040,6 +1044,16 @@ void Direct3D11_Ray_Traced_Shadows()
 std::string Direct3D11_Ray_Shadow_Report()
 {
 	return Active ? Backend.Ray_Shadow_Report() : std::string("no Direct3D 11 backend");
+}
+
+bool Direct3D11_Ray_Lights_Probing()
+{
+	return Active && Backend.Ray_Lights_Probing();
+}
+
+std::string Direct3D11_Ray_Light_Probe_Report()
+{
+	return Active ? Backend.Ray_Light_Probe_Report() : std::string();
 }
 
 void Direct3D11_Shroud_Memory()

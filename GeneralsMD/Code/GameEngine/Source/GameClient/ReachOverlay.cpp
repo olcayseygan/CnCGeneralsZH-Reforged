@@ -31,6 +31,7 @@
 #include <chrono>
 #include <map>
 #include <random>
+#include <utility>
 
 //-------------------------------------------------------------------------------------------------
 // What is shown, and why it can be trusted.
@@ -71,7 +72,7 @@ static const Real GHOST_STEP = PATHFIND_CELL_SIZE_F * 0.5f;		///< the placement 
 static const Real DISTANCE_LIMIT = 16.0f;											///< the field is clamped to this either side
 static const UnsignedInt FOG_REFRESH_FRAMES = LOGICFRAMES_PER_SECOND / 4;	///< client frames between two looks at the fog, a quarter second
 static const UnsignedInt FORGET_FRAMES = 5 * LOGICFRAMES_PER_SECOND;			///< a field not wanted for five seconds is dropped
-static const Real BUILD_BUDGET_MS = 4.0f;											///< grids worked out in one frame, past the first
+static const Real BUILD_BUDGET_MS = 4.0f;											///< grid rows and fog passes worked out in one frame, past the first row
 
 //-------------------------------------------------------------------------------------------------
 /** The worst ground target the game can field: the lowest top and the widest body of every unit a
@@ -409,7 +410,9 @@ struct ReachEntry
 	UnsignedInt fogFrame;
 	UnsignedInt lastWanted;
 	Int playerIndex;
+	Int traceRow;			///< rows of the uncropped grid worked out so far, while tracing
 	Bool built;
+	Bool tracing;			///< geometry holds a grid being worked out a slice a frame, not yet cropped
 	Bool regridded;		///< the grid moved or changed size since the last field, so the version must change
 };
 
@@ -427,19 +430,47 @@ static void layGrid( ReachOverlayField &field, const ReachShooter &s, Real step 
 	field.opacity = 1.0f;
 }
 
-static void traceGeometry( ReachEntry &entry, const ReachShooter &s, Real step )
+static Real millisecondsSince( const std::chrono::steady_clock::time_point &start )
+{
+	return std::chrono::duration< Real, std::milli >( std::chrono::steady_clock::now() - start ).count();
+}
+
+/// lays the grid out empty; traceRows then works it out, the entry not drawn until finishTrace
+static void beginTrace( ReachEntry &entry, const ReachShooter &s, Real step )
 {
 	layGrid( entry.field, s, step );
+	entry.geometry.assign( entry.field.width * entry.field.height, 0 );
+	entry.traceRow = 0;
+	entry.tracing = TRUE;
+	entry.built = FALSE;
+}
+
+/// works out rows of the grid, at least one a call, until it is done or start is budgetMS behind
+/// (no clock when start is NULL); TRUE once every row is done
+static Bool traceRows( ReachEntry &entry, const ReachShooter &s, const std::chrono::steady_clock::time_point *start, Real budgetMS )
+{
 	const GroundProbe &probe = groundProbe();
 	const Int w = entry.field.width;
 	const Int h = entry.field.height;
-	entry.geometry.assign( w * h, 0 );
-	for( Int j = 0; j < h; ++j )
+	const Real step = entry.field.step;
+	while( entry.traceRow < h )
 	{
+		const Int j = entry.traceRow++;
 		const Real y = entry.field.originY + j * step;
 		for( Int i = 0; i < w; ++i )
 			entry.geometry[ j * w + i ] = hitsGroundAt( s, probe, entry.field.originX + i * step, y );
+		if( start && millisecondsSince( *start ) > budgetMS )
+			break;
 	}
+	return entry.traceRow >= h;
+}
+
+/// crops a finished grid down to what passed and marks the entry built
+static void finishTrace( ReachEntry &entry, const ReachShooter &s )
+{
+	const Int w = entry.field.width;
+	const Int h = entry.field.height;
+	const Real step = entry.field.step;
 
 	// the bound allows for all the high ground a range can gain; cut the grid down to what passed,
 	// two points of nothing round it, so the fog pass, the field and the texture stay small
@@ -478,8 +509,17 @@ static void traceGeometry( ReachEntry &entry, const ReachShooter &s, Real step )
 
 	entry.playerIndex = s.playerIndex;
 	entry.built = TRUE;
+	entry.tracing = FALSE;
 	entry.regridded = TRUE;
 	entry.fogFrame = 0;
+}
+
+/// the whole grid in one go: the cursor's, and the proof's
+static void traceGeometry( ReachEntry &entry, const ReachShooter &s, Real step )
+{
+	beginTrace( entry, s, step );
+	traceRows( entry, s, NULL, 0.0f );
+	finishTrace( entry, s );
 }
 
 /// a separable Gaussian over the grid, sigma in grid steps; past the border the edge sample holds,
@@ -709,6 +749,7 @@ struct StructureMark
 
 static std::vector< StructureMark > theStructures;
 static std::map< ObjectID, ReachEntry > theEntries;
+static std::map< ObjectID, ReachEntry > theTraces;		///< grids being worked out a slice a frame, never drawn
 static ReachEntry theGhost;
 static const ThingTemplate *theGhostTemplate = NULL;
 static Coord3D theGhostAt;
@@ -773,15 +814,11 @@ static Bool revealedToLocal( const Object *obj )
 static void clearAll( void )
 {
 	theEntries.clear();
+	theTraces.clear();
 	theShown.clear();
 	theGhostShown = FALSE;
 	theGhostTemplate = NULL;
 	theGhost.built = FALSE;
-}
-
-static Real millisecondsSince( const std::chrono::steady_clock::time_point &start )
-{
-	return std::chrono::duration< Real, std::milli >( std::chrono::steady_clock::now() - start ).count();
 }
 
 void ReachOverlay_update( void )
@@ -863,24 +900,40 @@ void ReachOverlay_update( void )
 		ReachEntry &entry = theEntries[ s.obj->getID() ];
 		entry.lastWanted = now;
 		const UnsignedInt signature = shooterSignature( s );
+		const Bool overBudget = builtOne && millisecondsSince( start ) > BUILD_BUDGET_MS;
 		if( !entry.built || entry.signature != signature )
 		{
-			// a grid that no longer matches what stands round it is not drawn until it is worked out again
-			if( builtOne && millisecondsSince( start ) > BUILD_BUDGET_MS )
+			// the new grid is worked out beside the shown one, a slice of rows a frame inside the
+			// budget, so a box of N defences is N grids spread over frames instead of N long frames; a
+			// field already on screen stays drawn until its successor is whole, then they swap
+			if( !overBudget )
 			{
-				entry.built = FALSE;
-				continue;
+				ReachEntry &trace = theTraces[ s.obj->getID() ];
+				if( !trace.tracing || trace.signature != signature )
+				{
+					beginTrace( trace, s, LIVE_STEP );
+					trace.signature = signature;
+				}
+				builtOne = TRUE;
+				if( traceRows( trace, s, &start, BUILD_BUDGET_MS ) )
+				{
+					finishTrace( trace, s );
+					shadeField( trace );
+					trace.fogFrame = now;
+					std::swap( entry, trace );
+					entry.lastWanted = now;
+					theTraces.erase( s.obj->getID() );
+				}
 			}
-			traceGeometry( entry, s, LIVE_STEP );
-			entry.signature = signature;
+			if( !entry.built )
+				continue;
+		}
+		else if( now - entry.fogFrame >= FOG_REFRESH_FRAMES && !overBudget )
+		{
+			// a refresh past the budget waits a frame, which also keeps the shown fields off one tick
 			shadeField( entry );
 			entry.fogFrame = now;
 			builtOne = TRUE;
-		}
-		else if( now - entry.fogFrame >= FOG_REFRESH_FRAMES )
-		{
-			shadeField( entry );
-			entry.fogFrame = now;
 		}
 		entry.field.color = clientPlayerColor( s.owner );
 		theShown.push_back( &entry.field );
@@ -889,7 +942,10 @@ void ReachOverlay_update( void )
 	for( std::map< ObjectID, ReachEntry >::iterator it = theEntries.begin(); it != theEntries.end(); )
 	{
 		if( now - it->second.lastWanted > FORGET_FRAMES )
+		{
+			theTraces.erase( it->first );
 			theEntries.erase( it++ );
+		}
 		else
 			++it;
 	}

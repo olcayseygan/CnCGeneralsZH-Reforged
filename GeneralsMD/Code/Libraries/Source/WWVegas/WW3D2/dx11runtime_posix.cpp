@@ -108,6 +108,7 @@ void Direct3D11_Occlude_Scene() {}
 void Direct3D11_Ambient_Occlusion() {}
 void Direct3D11_Set_Ray_Traced_Shadows(bool) {}
 void Direct3D11_Ray_Traced_Shadows() {}
+void Direct3D11_Ray_Traced_Lights() {}
 std::string Direct3D11_Ray_Shadow_Report() { return std::string("no Direct3D 11 backend"); }
 bool Direct3D11_Ray_Lights_Probing() { return false; }
 std::string Direct3D11_Ray_Light_Probe_Report() { return std::string(); }

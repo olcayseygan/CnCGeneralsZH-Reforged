@@ -1309,6 +1309,10 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 	// (gth) CNC3 Flush the shader meshes	
 	SHD_FLUSH;
 
+	// The Ray Traced level's shadowed point lights, before the trees: no level ever lit those.
+	if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
+		Direct3D11_Ray_Traced_Lights();
+
 	// Draw the trees last so they alpha blend onto everything correctly.
 	DoTrees(rinfo);
 

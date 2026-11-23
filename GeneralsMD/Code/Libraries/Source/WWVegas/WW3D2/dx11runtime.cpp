@@ -1030,12 +1030,15 @@ void Direct3D11_Set_Ray_Traced_Shadows(bool wanted)
 	Backend.Set_Ray_Traced_Shadows(wanted);
 }
 
-void Direct3D11_Ray_Traced_Shadows()
+void Direct3D11_Ray_Traced_Lights()
 {
-	// The point lights first, so the sun's dark pixel guard reads the lit scene as before.
 	if (Active && Backend.Trace_Ray_Lights()) {
 		Backend.Resume_Scene();
 	}
+}
+
+void Direct3D11_Ray_Traced_Shadows()
+{
 	if (Active && Backend.Trace_Ray_Shadows()) {
 		Backend.Resume_Scene();
 	}

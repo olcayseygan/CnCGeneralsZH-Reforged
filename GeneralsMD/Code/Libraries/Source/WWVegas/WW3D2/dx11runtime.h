@@ -326,6 +326,10 @@ void Direct3D11_Ambient_Occlusion();
 // water, and does nothing on a frame whose caster pass did not stream.  The report is one line.
 void Direct3D11_Set_Ray_Traced_Shadows(bool wanted);
 void Direct3D11_Ray_Traced_Shadows();
+// The scene's point lights with shadows (DX11BackendClass::Trace_Ray_Lights), called once the
+// opaque world is down and before the batched trees, which took no point light at any level, and
+// so before the sun's trace, whose dark pixel guard reads the lit scene as it read the programs'.
+void Direct3D11_Ray_Traced_Lights();
 std::string Direct3D11_Ray_Shadow_Report();
 // ZHR_RT_LIGHTS_PROBE: the shadowed point lights' counts of the last frame read back, for a line
 // each logic frame; empty when nothing was lit.

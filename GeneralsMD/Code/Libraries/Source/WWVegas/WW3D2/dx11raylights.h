@@ -3,8 +3,8 @@
 ** option's fires) with shadows, at the Ray Traced shadow level.  Everywhere else they are
 ** BLAST_LIGHT_SAMPLING in the receiving programs (ffshader.h), unshadowed, so a blast behind a
 ** building lights the ground in front of it.  Here the opaque scene's receivers stand down for them
-** (Upload_Pixel_Constants sends no lights while Ray_Lights_Pending) and, once the opaque world is
-** down, one compute pass works the same lights out per pixel from the scene's depth with a shadow
+** (Upload_Pixel_Constants sends no lights while Ray_Lights_Pending) and, once the opaque world but
+** the batched trees is down, one compute pass works the same lights out per pixel from the scene's depth with a shadow
 ** ray to each through the ray grid (dx11raygrid.h), then multiplies the gain onto the scene and
 ** clamps it as the programs' saturate did.  The pass is DX11BackendClass::Trace_Ray_Lights, whose
 ** half of the class is in dx11raylights.cpp; this holds its programs, textures and queries.

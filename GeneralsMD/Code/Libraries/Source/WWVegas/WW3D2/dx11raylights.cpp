@@ -13,9 +13,12 @@
 ** for each of a quarter of them (the slot number modulo four, by the pixel's place in its two by two
 ** quad).  The second runs the jobs, one a thread, from one unit off the surface toward the light and
 ** LIGHT_CLEARANCE short of it, so the hull a burning wreck's light sits in does not stop every ray,
-** and marks a stopped light on the quad.  The third sums the lights each pixel keeps.  The trace is
-** a dispatch of its own because the grid walk takes so many registers that, inlined into the
-** per-pixel program, it slowed every pixel on the screen: one program for all three ran at about
+** and marks a stopped light on the quad.  The ray aims at least LIGHT_LIFT (a tenth) of the light's
+** reach above the ground under it: an FX pulse sits on the ground it burst on, and a China nuke's on
+** Dark Night's square, aimed at that point, lost the light behind every kerb and rise (576 005 lit
+** pixels darkened at the flash's peak, 89 315 aimed 45 units up, the stone tower's shadow kept).
+** The third sums the lights each pixel keeps.  The trace is a dispatch of its own because the
+** grid walk takes so many registers that, inlined into the per-pixel program, it slowed every pixel on the screen: one program for all three ran at about
 ** 2 ms on a 25 light fight whether it cast 60 000 rays or 15 000.
 **
 ** A light any pixel of a quad found blocked is taken off all four, so a shadow's edge is two pixels
@@ -29,10 +32,10 @@
 ** The gain goes onto the scene as the scene plus the scene times the gain, then a MIN blend against
 ** white clamps where a light reached, which is what saturate(colour * (1 + gain)) did in the
 ** programs.  Some things differ from the programs.  A vehicle's headlight and a blast over the same
-** pixel multiply here, (1 + h)(1 + b), where they were added.  What is opaque but no receiver (the
-** batched trees) now takes the light as well, as it takes the ray traced sun's shadow.  The light
-** lands after the fog, where the programs lit before it, so fogged ground near a blast brightens a
-** little more.  And on a half float scene (bloom on) an opaque additive draw over one in a lit pixel
+** pixel multiply here, (1 + h)(1 + b), where they were added.  The pass runs before the batched
+** trees are drawn (Direct3D11_Ray_Traced_Lights from RTS3DScene::Flush), since no level ever lit
+** them: lit here, the night maps' blue foliage went grey under a nuke.  The light lands after the
+** fog, where the programs lit before it, so fogged ground near a blast brightens a little more.  And on a half float scene (bloom on) an opaque additive draw over one in a lit pixel
 ** is clamped to one with the rest.
 **
 ** Distributed under the repository's GPL-3.0 terms; see LICENSE.md.
@@ -60,6 +63,7 @@ static const std::string RAY_LIGHT_LIST_CAP = "#define RG_LIST_CAP 64\n";
 static const char RAY_LIGHT_COMMON[] =
 	"#define LIGHT_OFFSET 1.0\n"			// world units a ray starts off its surface, as the occlusion's do
 	"#define LIGHT_CLEARANCE 6.0\n"		// world units short of the light a ray stops
+	"#define LIGHT_LIFT 0.1\n"				// share of a light's reach its rays aim above the ground under it
 	"#define MAX_JOBS " MAX_JOBS_TEXT "\n"
 	"#define TILE_COUNTS 4\n"
 	"cbuffer Lights : register(b0)\n"
@@ -166,7 +170,16 @@ static const char RAY_LIGHT_TRACE_PROGRAM[] =
 	"    uint i = job >> 24;\n"
 	"    float3 here = lt_world(texel, LtDepth.Load(int3(texel, 0)));\n"
 	"    float3 from = here + lt_facing(texel, here) * LIGHT_OFFSET;\n"
-	"    float3 way = LtPosition[i].xyz - from;\n"
+	// An FX pulse sits on the ground it burst on, and a ray to a point on the ground grazes every rise
+	// and kerb on the way. The flash it stands for is a fireball, so the ray aims at least
+	// LIGHT_LIFT of its reach above the ground under it.
+	"    float3 target = LtPosition[i].xyz;\n"
+	"    if (RgTuning.x > 0.5) {\n"
+	"        float twist;\n"
+	"        int2 cell;\n"
+	"        target.z = max(target.z, rg_ground_at(target.xy, twist, cell) + LtPosition[i].w * LIGHT_LIFT);\n"
+	"    }\n"
+	"    float3 way = target - from;\n"
 	"    float span = length(way);\n"
 	"    bool stopped = ray_occluded(from, way / span, span - LIGHT_CLEARANCE);\n"
 	"    if (stopped) InterlockedOr(LtBlocked[uint2(texel) >> 1], 1u << i);\n"
@@ -538,8 +551,8 @@ bool DX11BackendClass::Ray_Lights_Pending() const
 		&& Device != NULL && Device->Get_Width() <= MAX_SIDE && Device->Get_Height() <= MAX_SIDE;
 }
 
-/* Once the opaque world is down and before the sun's rays shade it, so the sun's dark pixel guard
-	 reads the lit scene as it read the programs' output.  True when it bound targets of its own; the
+/* Once the opaque world but the batched trees is down and before the sun's rays shade it, so the
+	 sun's dark pixel guard reads the lit scene as it read the programs' output.  True when it bound targets of its own; the
 	 caller binds the scene again. */
 bool DX11BackendClass::Trace_Ray_Lights()
 {

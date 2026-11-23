@@ -1038,6 +1038,7 @@ void HeightMapRenderObjClass::setSunPerPixel(Bool on)
 	}
 	m_sunPerPixel = on;
 	m_terrainContentVersion++;
+	invalidateSkirt();	// it bakes the map's shade under the sun per pixel
 #ifdef DO_ROADS
 	if (m_roadBuffer) {
 		m_roadBuffer->updateLighting();
@@ -2450,6 +2451,10 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 		if (pass)	//shader was applied at least once?
  			W3DShaderManager::resetShader(st);
 
+		// the ground past the map's last sample, and its shroud
+		if (drawGround)
+			drawSkirt(rinfo);
+
 		// Classic water leaves the ground out: its mirror darkens the water wherever anything
 		// stands in it, so the banks would lay a dark band along every shore. Modern needs the
 		// coloured ground, including its third blend layer, but not the feather painted over water.
@@ -2517,6 +2522,7 @@ void HeightMapRenderObjClass::Render(RenderInfoClass & rinfo)
 	if (m_propBuffer) {
 		m_propBuffer->drawProps(rinfo);
 	}
+	drawSkirtProps(rinfo);
 	#ifdef DO_SCORCH
 		DX8Wrapper::Set_Texture(0,NULL);
 		DX8Wrapper::Set_Texture(1,NULL);

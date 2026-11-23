@@ -26,6 +26,8 @@
 // WORLD_AO takes main's edge normalisation (ffb8a5fa1), read from main 3989c3e60 dx11post.cpp.
 // WORLD_AO, HAZE and ATMOSPHERE read the shroud's light as its brightest channel, not green, so a
 // tinted shroud (the Apocalypse map's red) is not taken for a dark one (2026-11-22, reviewed).
+// ATMOSPHERE takes the terrain skirt's closing over the land past the map (MapSize.zw), reviewed 2026-11-22;
+// its baseline is the merge of both (2026-11-23).
 #include "test_harness.h"
 #include "postshader.h"
 
@@ -58,7 +60,7 @@ TEST(postshader_sources_match_reviewed_program_baselines)
 		{ POST_SHADER_WORLD_AO_UPSAMPLE, 2478, UINT64_C(803955814330322769) },
 		{ POST_SHADER_HAZE, 4144, UINT64_C(15924358227496691835) },
 		{ POST_SHADER_SKY, 2547, UINT64_C(15455093490457882870) },
-		{ POST_SHADER_ATMOSPHERE, 3434, UINT64_C(12849271774447207626) },
+		{ POST_SHADER_ATMOSPHERE, 3557, UINT64_C(18055152453470310377) },
 		{ POST_SHADER_BLOOM_EXTRACT, 2172, UINT64_C(8169773055433301573) },
 		{ POST_SHADER_BLOOM_BLUR, 1840, UINT64_C(15383801789143368049) },
 		{ POST_SHADER_BLOOM_COMPOSITE, 1982, UINT64_C(17820278394050563199) },

@@ -1107,7 +1107,8 @@ TEST(dx11post_the_ground_haze_lies_over_a_scene_under_its_top)
 // depth at the far plane and the eye looking up the fade leaves the frame alone: it is sky by then.
 // Looking down, the same empty depth takes the horizon, over the sea that draws past the terrain.  The sky
 // itself reads no depth and covers everything, a null texture here, so it goes black.  Half a shroud cell
-// past the map's edge the shroud's border is black, so the ground there is the horizon however near it is.
+// past the map's edge the shroud's border is black, so the ground there is the horizon however near it is,
+// unless the terrain says it draws land out there, which then fades over that land's reach.
 TEST(dx11post_the_atmosphere_fades_the_far_ground_and_the_sky_fills_the_frame)
 {
 	DeviceFixture fixture;
@@ -1134,12 +1135,16 @@ TEST(dx11post_the_atmosphere_fades_the_far_ground_and_the_sky_fills_the_frame)
 	post.Set_Chain(copy_only, 1);
 	post.Compile_Atmosphere_Programs();
 
-	const float DEPTHS[5] = { 0.5f, 1.0f, 0.5f, 1.0f, 0.5f };
-	unsigned char levels[5] = { 0, 0, 0, 0, 0 };
-	for (unsigned run = 0; run < 5; ++run) {
+	const float DEPTHS[6] = { 0.5f, 1.0f, 0.5f, 1.0f, 0.5f, 0.5f };
+	unsigned char levels[6] = { 0, 0, 0, 0, 0, 0 };
+	for (unsigned run = 0; run < 6; ++run) {
 		if (run == 4) {
 			// A fade too long to count, and a map whose edge lies 25 units short of the eye.
 			DX11Post_Set_Atmosphere(white, white, 0.0f, 1.0e6f, 1.0f, 0.0f, 475.0f, 475.0f, NULL);
+		}
+		if (run == 5) {
+			// The same edge with land drawn a thousand units past it: 25 units out is still ground.
+			DX11Post_Set_Atmosphere_Edge(0.0f, 1000.0f);
 		}
 		post.Open_Frame();
 		post.Begin_Frame();
@@ -1161,6 +1166,7 @@ TEST(dx11post_the_atmosphere_fades_the_far_ground_and_the_sky_fills_the_frame)
 		}
 	}
 	DX11Post_Set_Atmosphere(white, white, 0.0f, 1.0f, 0.0f, 0.0f, 1.0e6f, 1.0e6f, NULL);
+	DX11Post_Set_Atmosphere_Edge(0.0f, 0.0f);
 
 	CHECK(levels[0] >= DARK_LEVEL + LIFTED_BY_AT_LEAST);
 	CHECK(levels[0] < 70);
@@ -1169,6 +1175,7 @@ TEST(dx11post_the_atmosphere_fades_the_far_ground_and_the_sky_fills_the_frame)
 	CHECK(levels[3] >= DARK_LEVEL + LIFTED_BY_AT_LEAST);
 	// All of the horizon's colour, dimmed below the horizon by BELOW_DIM, 0.55 of white.
 	CHECK(levels[4] >= 130);
+	CHECK(levels[5] < DARK_LEVEL + LIFTED_BY_AT_LEAST);
 
 	// Strength zero is no pass at all.
 	post.Open_Frame();

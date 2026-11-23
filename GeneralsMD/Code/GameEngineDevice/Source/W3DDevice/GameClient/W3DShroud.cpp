@@ -87,7 +87,7 @@ W3DShroud::W3DShroud(void)
 	m_srcTexturePitch=NULL;
 	m_dstTextureWidth=m_numMaxVisibleCellsX=0;
 	m_dstTextureHeight=m_numMaxVisibleCellsY=0;
-	m_boderShroudLevel = (W3DShroudLevel)TheGlobalData->m_shroudAlpha;	//assume border is black
+	m_boderShroudLevel = defaultBorderShroudLevel();
 	m_clearDstTexture = TRUE;	//force clearing of destination texture;
 
 	m_cellWidth=DEFAULT_SHROUD_CELL_SIZE;
@@ -565,6 +565,18 @@ void W3DShroud::fillBorderShroudData(W3DShroudLevel level, SurfaceClass* pDestSu
 		}
 	}
 	
+}
+
+/** The border's level at a map's start.  It was the shroud's black.  It is lit a little now, darker
+than ground in the fog (FogAlpha 127), so it still reads as out of bounds; the clamp carries the same
+texel over the ground drawn past the map (TerrainSkirt.h), and the two meet without a line.  Only
+the start: a script that asks for the border shrouded (setBorderShroudLevel with ShroudAlpha) still
+gets black, and one that clears it gets it clear. */
+W3DShroudLevel W3DShroud::defaultBorderShroudLevel(void)
+{
+	const W3DShroudLevel BORDER_SHROUD_DEFAULT = 96;
+	const W3DShroudLevel shroud = (W3DShroudLevel)TheGlobalData->m_shroudAlpha;
+	return shroud > BORDER_SHROUD_DEFAULT ? shroud : BORDER_SHROUD_DEFAULT;
 }
 
 /**Set the shroud color within the border area of the map*/

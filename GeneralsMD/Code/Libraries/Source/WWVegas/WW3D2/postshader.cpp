@@ -638,7 +638,11 @@ static const char * const SKY_SHADER_BODY =
 // horizon's colour across the one shroud cell (SHROUD_CELL, the game's PartitionCellSize) over which the
 // shroud's filter itself falls to the border's black, half inside the map's edge and half out.  A fade
 // starting at the edge and running on past that left the black showing first, and at a flat tilt 100 units
-// of a cliff past the edge is a black smear a tenth of the frame high.  Only depth still at the clear is sky, and
+// of a cliff past the edge is a black smear a tenth of the frame high.  When the terrain draws land past
+// its edge (MapSize.zw, DX11Post_Set_Atmosphere_Edge) there is ground out there to see, and the closing
+// waits for the heightmap's own edge and then grows over the land's reach, so the land shows by the map
+// and is all horizon where it ends; a closing at the playable edge drew a ruler line along it with flat
+// haze past.  Only depth still at the clear is sky, and
 // takes none; ground in the far plane's last sliver read as sky at 0.99999 and stayed unfaded, a hairline
 // tracing a ridge whose body had gone.  Below the horizon the same empty depth gets the sky's colour again,
 // because the sea runs on past the terrain, writes no depth and draws black out there: Bombardment Beach
@@ -671,8 +675,10 @@ static const char * const ATMOSPHERE_SHADER_BODY =
 	"    float3 shroudTexel = Shroud.SampleLevel(Sampler, (here - HazeShroudRect.xy) * HazeShroudRect.zw, 0.0).rgb;\n"
 	"    float lit = lerp(1.0, max(shroudTexel.r, max(shroudTexel.g, shroudTexel.b)), HazeSun.z);\n"
 	"    float2 outside = max(-here, here - MapSize.xy);\n"
-	"    float closing = max(smoothstep(FAR_CLOSE, 1.0, dot(ray, axis) / (axisLength * axisLength)),\n"
-	"        smoothstep(-0.5 * SHROUD_CELL, 0.5 * SHROUD_CELL, max(outside.x, outside.y)));\n"
+	"    float off = (MapSize.w > 0.0)\n"
+	"        ? smoothstep(MapSize.z, MapSize.z + MapSize.w, length(max(outside, 0.0)))\n"
+	"        : smoothstep(-0.5 * SHROUD_CELL, 0.5 * SHROUD_CELL, max(outside.x, outside.y));\n"
+	"    float closing = max(smoothstep(FAR_CLOSE, 1.0, dot(ray, axis) / (axisLength * axisLength)), off);\n"
 	"    return float4(haze_along(ray.z / max(reach, 0.0001)) * lerp(lit, 1.0, closing), max(amount, closing));\n"
 	"}\n";
 

@@ -69,6 +69,7 @@
 #include "W3DDevice/GameClient/W3DSmudge.h"
 #include "W3DDevice/GameClient/W3DWater.h"
 #include "W3DDevice/GameClient/TerrainTex.h"
+#include "W3DDevice/GameClient/TerrainSkirt.h"
 #include "GameClient/View.h"
 #include "GameClient/Snow.h"
 #include "GameClient/CommandXlat.h"
@@ -166,6 +167,7 @@ TextureClass *W3DShaderManager::m_Textures[8];
 W3DShaderManager::ShaderTypes W3DShaderManager::m_currentShader;
 FilterTypes W3DShaderManager::m_currentFilter=FT_NULL_FILTER; ///< Last filter that was set.
 Int W3DShaderManager::m_currentShaderPass;
+Bool W3DShaderManager::m_atmosphereDrawn = FALSE;
 ChipsetType W3DShaderManager::m_currentChipset;
 GraphicsVenderID W3DShaderManager::m_currentVendor;
 Int64 W3DShaderManager::m_driverVersion;
@@ -541,14 +543,8 @@ static const Real ATMOSPHERE_START = 500.0f;		// the least eye distance the fade
 static const Real ATMOSPHERE_SCALE = 2200.0f;		// how far past it the fade takes to reach about two thirds
 static const Real ATMOSPHERE_STRENGTH = 0.85f;		// the most of the horizon's colour the far ground takes
 static const Real ATMOSPHERE_SKY_FLOOR = 0.7f;		// a night's sky keeps this much, or the stars go
-static const float ATMOSPHERE_HORIZON[TIME_OF_DAY_COUNT][3] = {
-	{ 0.72f, 0.80f, 0.90f },	// invalid, as afternoon
-	{ 0.80f, 0.80f, 0.84f },	// morning
-	{ 0.72f, 0.80f, 0.90f },	// afternoon
-	{ 0.80f, 0.58f, 0.44f },	// evening
-	{ 0.07f, 0.10f, 0.18f } };	// night
 
-static void pushAtmosphere(Bool weatherHaze)
+static Bool pushAtmosphere(Bool weatherHaze)
 {
 	static Bool s_on = FALSE;
 #if defined(_WIN32)
@@ -570,11 +566,9 @@ static void pushAtmosphere(Bool weatherHaze)
 			min(sun.ambient.blue + sun.diffuse.blue, 1.0f) };
 		float horizon[3];
 		float tint[3];
+		W3DShaderManager::getHorizonColour(horizon);
 		for (Int i = 0; i < 3; ++i)
-		{
-			horizon[i] = ATMOSPHERE_HORIZON[TheGlobalData->m_timeOfDay][i] * light[i];
 			tint[i] = max(light[i], ATMOSPHERE_SKY_FLOOR);
-		}
 		if (weatherHaze)
 		{
 			Real strength;
@@ -591,6 +585,9 @@ static void pushAtmosphere(Bool weatherHaze)
 			TheTerrainRenderObject->getMinHeight(),
 			(map->getXExtent() - 1 - map->getBorderSizeInline() * 2) * MAP_XY_FACTOR,
 			(map->getYExtent() - 1 - map->getBorderSizeInline() * 2) * MAP_XY_FACTOR, sky->Peek_D3D_Base_Texture());
+#if defined(_WIN32)
+		DX11Post_Set_Atmosphere_Edge(map->getBorderSizeInline() * MAP_XY_FACTOR, TerrainSkirt::REACH);
+#endif
 	}
 	else if (s_on)
 	{
@@ -602,6 +599,7 @@ static void pushAtmosphere(Bool weatherHaze)
 #endif
 	}
 	s_on = on;
+	return on;
 }
 #endif
 
@@ -750,6 +748,22 @@ void W3DShaderManager::invalidateNativePostEnvironment(void)
 }
 #endif
 
+static const float HORIZON_BY_TIME_OF_DAY[TIME_OF_DAY_COUNT][3] = {
+	{ 0.72f, 0.80f, 0.90f },	// invalid, as afternoon
+	{ 0.80f, 0.80f, 0.84f },	// morning
+	{ 0.72f, 0.80f, 0.90f },	// afternoon
+	{ 0.80f, 0.58f, 0.44f },	// evening
+	{ 0.07f, 0.10f, 0.18f } };	// night
+
+void W3DShaderManager::getHorizonColour(float rgb[3])
+{
+	const GlobalData::TerrainLighting &sun = TheGlobalData->m_terrainLighting[TheGlobalData->m_timeOfDay][0];
+	const float light[3] = { min(sun.ambient.red + sun.diffuse.red, 1.0f), min(sun.ambient.green + sun.diffuse.green, 1.0f),
+		min(sun.ambient.blue + sun.diffuse.blue, 1.0f) };
+	for (Int i = 0; i < 3; ++i)
+		rgb[i] = HORIZON_BY_TIME_OF_DAY[TheGlobalData->m_timeOfDay][i] * light[i];
+}
+
 void W3DShaderManager::pushProtoHaze(void)
 {
 #if defined(_WIN32)
@@ -769,7 +783,7 @@ void W3DShaderManager::pushProtoHaze(void)
 		DX11Post_Set_Haze(none, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, none, 0.0f);
 	}
 	s_hazed = weatherHaze || TheGlobalData->m_mapLight;
-	pushAtmosphere(weatherHaze);
+	m_atmosphereDrawn = pushAtmosphere(weatherHaze);
 	pushSunShafts(weatherHaze || TheGlobalData->m_mapLight);
 	// Outside Classic the fog's memory look reads it too (W3DShroud::pushDirect3D11).
 	if ((TheGlobalData->m_mapLight || TheGlobalData->m_ambientOcclusion || TheGlobalData->m_atmosphere || weatherHaze
@@ -3684,7 +3698,7 @@ static void rttComplain( const char *why )
 }
 
 /*Draws 2 triangles covering the viewport given the current render states*/
-void W3DShaderManager::drawViewport(Int color)
+void W3DShaderManager::drawViewport(Int color, Real depth)
 {
 
 	struct _TRANS_LIT_TEX_VERTEX {
@@ -3701,16 +3715,16 @@ void W3DShaderManager::drawViewport(Int color)
 	height=TheTacticalView->getHeight();
 
 	//bottom right
-	v[0].p = D3DXVECTOR4( xpos+width-0.5f, ypos+height-0.5f, 0.0f, 1.0f );
+	v[0].p = D3DXVECTOR4( xpos+width-0.5f, ypos+height-0.5f, depth, 1.0f );
 	v[0].u = (Real)(xpos+width)/(Real)TheDisplay->getWidth();	v[0].v = (Real)(ypos+height)/(Real)TheDisplay->getHeight();
 	//top right
-	v[1].p = D3DXVECTOR4( xpos+width-0.5f, ypos-0.5f, 0.0f, 1.0f );
+	v[1].p = D3DXVECTOR4( xpos+width-0.5f, ypos-0.5f, depth, 1.0f );
 	v[1].u = (Real)(xpos+width)/(Real)TheDisplay->getWidth();	v[1].v = (Real)(ypos)/(Real)TheDisplay->getHeight();
 	//bottom left
-	v[2].p = D3DXVECTOR4(  xpos-0.5f, ypos+height-0.5f, 0.0f, 1.0f );
+	v[2].p = D3DXVECTOR4(  xpos-0.5f, ypos+height-0.5f, depth, 1.0f );
 	v[2].u = (Real)(xpos)/(Real)TheDisplay->getWidth();	v[2].v = (Real)(ypos+height)/(Real)TheDisplay->getHeight();
 	//top left
-	v[3].p = D3DXVECTOR4(  xpos-0.5f,  ypos-0.5f, 0.0f, 1.0f );
+	v[3].p = D3DXVECTOR4(  xpos-0.5f,  ypos-0.5f, depth, 1.0f );
 	v[3].u = (Real)(xpos)/(Real)TheDisplay->getWidth();	v[3].v = (Real)(ypos)/(Real)TheDisplay->getHeight();
 	v[0].color = color;
 	v[1].color = color;

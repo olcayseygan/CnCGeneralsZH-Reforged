@@ -2499,6 +2499,9 @@ target_include_directories(test_terrain_subdivide PRIVATE ${CMAKE_CURRENT_SOURCE
 # W3DDevice/GameClient/CloudShadowBake.h: the cloud shadow's texture, scattered so its tile does not repeat.
 add_lib_test(test_cloud_shadow_bake)
 target_include_directories(test_cloud_shadow_bake PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
+# W3DDevice/GameClient/TerrainSkirt.h: the ground past the heightmap's edge, its hills and its fade.
+add_lib_test(test_terrain_skirt)
+target_include_directories(test_terrain_skirt PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)
 # W3DDevice/GameClient/FractureCore.h: the pre-fractured structures' files and the holes a hit knocks in.
 add_lib_test(test_fracture)
 target_include_directories(test_fracture PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/GameEngineDevice/Include)

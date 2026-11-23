@@ -86,8 +86,15 @@ const Real DEBRIS_SINKS = 1.5f;
 const Real FALL_SECONDS = 8.0f;			// a plain collapse is over by then, settled or not; a baked one that long past its track
 const Real COLLAPSE_DELAY = 0.5f;		// game seconds the structure stands after the death, so the death flash's glare has passed
 const Real PLAIN_FALL_DELAY = 0.1f;	// a plain fall's: at 0.5 the GLA Command Center read late, the object already gone
-const Real PLAIN_FALL_INWARD = 5.0f;	// units a game second at most a plain fall's piece goes in toward the middle: walls onto their stumps
-const Real PLAIN_FALL_SCATTER = 1.5f;	// and at most sideways at random
+const Real PLAIN_FALL_SCATTER = 1.5f;	// units a game second at most a plain fall's piece goes sideways at random
+const Real LEVEL_REACH = 12.0f;				// units from under where it stood a plain fall's piece may land at least
+const Real LEVEL_REACH_PER_HEIGHT = 1.0f;	// and further by this of its height: a tower's top lands across the yard
+const Real LEVEL_REACH_MAX = 60.0f;
+const Real LEVEL_DISTANCE_COST = 0.04f;	// units of rubble height a unit further is worth when a piece picks where it lands
+// of a landed piece's volume the rubble under the next one rises by: the cut fills the building solid
+// where it had rooms. At a half the Command Center's pieces lie 95% under 19.5 (its main walls stand 29)
+const Real PILE_SHARE = 0.5f;
+const Real FOOTPRINT_INSET = 4.0f;		// a plain fall's pieces land this far inside the model's box
 const Real PLAIN_FALL_DROP = 4.0f;		// and at most downward, so it is moving at the first frame
 const Real SINKER_LIES = 0.3f;				// game seconds a FRAGMENT_SINKS piece lies once down before it goes into the ground
 const Real REPAIR_MARGIN = 0.05f;			// of health over its level when a fragment went before it comes back
@@ -541,7 +548,7 @@ private:
 		Bool landed;
 		Vector3 offset;					///< a gun's turn at the death, folded into the bake
 		Matrix3x3 turn;
-		Real restZ;							///< a ruin piece dropped onto what is under it: its centroid's height there; NO_REST_Z otherwise
+		Real restZ;							///< an aimed plain fall's piece or a ruin piece dropped onto what is under it: its centroid's height there; NO_REST_Z otherwise
 	};
 
 	struct Group
@@ -556,12 +563,13 @@ private:
 	Bool castRayAt( RayCollisionTestClass &raytest, unsigned fragment, const Matrix3D &world ) const;
 	Moving still( unsigned fragment, const Matrix3D &world ) const;		///< a fragment as it is, not moving yet
 	void launch( unsigned fragment, const Vector3 &from );
-	Bool dropUnsupported( Real now );
+	Int dropUnsupported( Real now, Bool drop );
 	void step( Real now );
 	void stepTrack( Moving &m, Real now );
 	void stepFall( Moving &m, Real dt, Real now );
 	Real floorAt( const Vector3 &p ) const;
-	void pileOn( unsigned fragment, const Vector3 &p );
+	void pileOn( std::vector<Real> &pile, unsigned fragment, const Vector3 &p, const Matrix3x3 &rot, Bool stands ) const;
+	void aimPlainFall( size_t first );
 	void rebuild( void );
 	void bakeRuin( void );
 	void drawGeometry( Bool materials );
@@ -978,6 +986,7 @@ void FractureRenderObjClass::collapse( Bool over )
 	Matrix3D rootInverse;
 	m_root.Get_Orthogonal_Inverse( rootInverse );
 	const Real top = a.boxMax[2] > 1.0f ? a.boxMax[2] : 1.0f;
+	const size_t first = m_moving.size();
 	for( size_t i = 0; i < a.fragments.size(); ++i )
 	{
 		if( !m_standing[i] )
@@ -1001,19 +1010,12 @@ void FractureRenderObjClass::collapse( Bool over )
 			if( f.grounded )
 			{
 				// a stump: what falls lands on it
-				pileOn( (unsigned)i, m.pos );
+				pileOn( m_pile, (unsigned)i, m.pos, m.rot, TRUE );
 				continue;
 			}
-			// down onto the stumps and a little in, not out: thrown out at 0.6 of its distance from the
-			// middle the Command Center's walls landed one and a half widths away, an explosion's spread
+			// down onto the stumps; aimPlainFall says where, once every piece is known
 			m.track = FALSE;
-			Vector3 in = m_root.Get_Translation() - m.pos;
-			in.Z = 0.0f;
-			if( in.Length2() > 1e-4f )
-				in.Normalize();
-			m.velocity = in * GameClientRandomValueReal( 0.0f, PLAIN_FALL_INWARD )
-				+ Vector3( GameClientRandomValueReal( -PLAIN_FALL_SCATTER, PLAIN_FALL_SCATTER ),
-					GameClientRandomValueReal( -PLAIN_FALL_SCATTER, PLAIN_FALL_SCATTER ), -GameClientRandomValueReal( 0.0f, PLAIN_FALL_DROP ) );
+			m.velocity.Set( 0.0f, 0.0f, -GameClientRandomValueReal( 0.0f, PLAIN_FALL_DROP ) );
 			m.spin = randomAxis() * GameClientRandomValueReal( 0.2f, 1.0f );
 			m.start = m_deathTime + GameClientRandomValueReal( 0.0f, 0.1f ) + 0.1f * ( f.centroid[2] / top );
 			if( f.flags & Fracture::FRAGMENT_SINKS )
@@ -1028,6 +1030,8 @@ void FractureRenderObjClass::collapse( Bool over )
 		m_standing[i] = 0;
 		m_moving.push_back( m );
 	}
+	if( m_collapse == NULL )
+		aimPlainFall( first );
 	m_dirty = TRUE;
 	DEBUG_LOG( ( "FRACTURE COLLAPSE %s frame %d: %d fall (%s %.0f, killer %s), %d stay\n", m_shared->name.str(), (Int)TheGameLogic->getFrame(),
 		(Int)m_moving.size(), m_collapse ? "baked" : "plain fall", m_collapse ? m_collapse->angle : 0.0f, m_hasSource ? "known" : "unknown",
@@ -1048,20 +1052,123 @@ Real FractureRenderObjClass::floorAt( const Vector3 &p ) const
 }
 
 //-------------------------------------------------------------------------------------------------
-/// What came to rest raises the rubble under its footprint by its own volume spread over it.
-void FractureRenderObjClass::pileOn( unsigned fragment, const Vector3 &p )
+/// How far a fragment turned by rot reaches below its centroid.
+static Real lowestBelow( const Fracture::Fragment &f, const Matrix3x3 &rot )
 {
-	if( m_pile.empty() )
+	Real lowest = 1e30f;
+	for( Int corner = 0; corner < 8; ++corner )
+	{
+		const Vector3 c( ( corner & 1 ? f.boxMax[0] : f.boxMin[0] ) - f.centroid[0], ( corner & 2 ? f.boxMax[1] : f.boxMin[1] ) - f.centroid[1],
+			( corner & 4 ? f.boxMax[2] : f.boxMin[2] ) - f.centroid[2] );
+		lowest = std::min( lowest, ( rot * c ).Z );
+	}
+	return -lowest;
+}
+
+/** What came to rest raises the rubble under its footprint, turned by rot: a stump that stands to its
+	top, a piece that landed by PILE_SHARE of its volume spread over the cells it covers. */
+void FractureRenderObjClass::pileOn( std::vector<Real> &pile, unsigned fragment, const Vector3 &p, const Matrix3x3 &rot, Bool stands ) const
+{
+	if( pile.empty() )
 		return;
 	const Fracture::Fragment &f = m_shared->asset.fragments[fragment];
-	const Real halfX = 0.5f * ( f.boxMax[0] - f.boxMin[0] ), halfY = 0.5f * ( f.boxMax[1] - f.boxMin[1] );
-	const Real area = std::max( 4.0f * halfX * halfY, PILE_CELL * PILE_CELL );
-	const Real rise = std::min( f.volume / area, f.boxMax[2] - f.boxMin[2] );
-	const Int x0 = (Int)floorf( ( p.X - halfX - m_pileOrigin.X ) / PILE_CELL ), x1 = (Int)floorf( ( p.X + halfX - m_pileOrigin.X ) / PILE_CELL );
-	const Int y0 = (Int)floorf( ( p.Y - halfY - m_pileOrigin.Y ) / PILE_CELL ), y1 = (Int)floorf( ( p.Y + halfY - m_pileOrigin.Y ) / PILE_CELL );
+	const Real half[3] = { 0.5f * ( f.boxMax[0] - f.boxMin[0] ), 0.5f * ( f.boxMax[1] - f.boxMin[1] ), 0.5f * ( f.boxMax[2] - f.boxMin[2] ) };
+	Real reach[3];
+	for( Int axis = 0; axis < 3; ++axis )
+		reach[axis] = fabsf( rot[axis][0] ) * half[0] + fabsf( rot[axis][1] ) * half[1] + fabsf( rot[axis][2] ) * half[2];
+	const Int x0 = (Int)floorf( ( p.X - reach[0] - m_pileOrigin.X ) / PILE_CELL ), x1 = (Int)floorf( ( p.X + reach[0] - m_pileOrigin.X ) / PILE_CELL );
+	const Int y0 = (Int)floorf( ( p.Y - reach[1] - m_pileOrigin.Y ) / PILE_CELL ), y1 = (Int)floorf( ( p.Y + reach[1] - m_pileOrigin.Y ) / PILE_CELL );
+	const Real cells = (Real)( ( x1 - x0 + 1 ) * ( y1 - y0 + 1 ) );
+	const Real rise = std::min( PILE_SHARE * f.volume / ( cells * PILE_CELL * PILE_CELL ), 2.0f * reach[2] );
 	for( Int y = std::max( y0, 0 ); y <= y1 && y < PILE_CELLS; ++y )
 		for( Int x = std::max( x0, 0 ); x <= x1 && x < PILE_CELLS; ++x )
-			m_pile[y * PILE_CELLS + x] += rise;
+		{
+			Real &cell = pile[y * PILE_CELLS + x];
+			cell = stands ? std::max( cell, f.boxMax[2] ) : cell + rise;		// a stump has not moved: its top over the model's foot
+		}
+}
+
+//-------------------------------------------------------------------------------------------------
+/** Where the pieces of a plain fall from first on land: lowest first, each on the lowest rubble
+	within its reach inside the model's box, so the heap comes out level and low, and turning on the
+	way down to lie on its broad side.  Let fall straight down, a tower's pieces landed on the pile of
+	the ones under them and stood it up again as a gutted shell. */
+//-------------------------------------------------------------------------------------------------
+void FractureRenderObjClass::aimPlainFall( size_t first )
+{
+	const Fracture::Asset &a = m_shared->asset;
+	std::vector<Real> planned( m_pile );		// the stumps are on it already
+	Matrix3D rootInverse;
+	m_root.Get_Orthogonal_Inverse( rootInverse );
+	const Real foot = m_root.Get_Translation().Z;
+	// the cells inside the model's box, once: per cell per piece it cost four falls 70 ms in one frame
+	std::vector<unsigned char> inside( PILE_CELLS * PILE_CELLS, 0 );
+	for( Int y = 0; y < PILE_CELLS; ++y )
+		for( Int x = 0; x < PILE_CELLS; ++x )
+		{
+			const Vector3 model = rootInverse * Vector3( m_pileOrigin.X + ( x + 0.5f ) * PILE_CELL, m_pileOrigin.Y + ( y + 0.5f ) * PILE_CELL, foot );
+			inside[y * PILE_CELLS + x] = model.X >= a.boxMin[0] + FOOTPRINT_INSET && model.X <= a.boxMax[0] - FOOTPRINT_INSET
+				&& model.Y >= a.boxMin[1] + FOOTPRINT_INSET && model.Y <= a.boxMax[1] - FOOTPRINT_INSET;
+		}
+	std::vector<std::pair<Real, size_t> > order;
+	for( size_t k = first; k < m_moving.size(); ++k )
+		if( !m_moving[k].sinks )
+			order.push_back( std::make_pair( m_moving[k].pos.Z, k ) );
+	std::sort( order.begin(), order.end() );
+	for( size_t o = 0; o < order.size(); ++o )
+	{
+		Moving &m = m_moving[order[o].second];
+		const Fracture::Fragment &f = a.fragments[m.fragment];
+		// its thinnest side up: a wall's shard stood on edge heaped as high as it was wide
+		Int thin = 0;
+		for( Int axis = 1; axis < 3; ++axis )
+			if( f.boxMax[axis] - f.boxMin[axis] < f.boxMax[thin] - f.boxMin[thin] )
+				thin = axis;
+		Vector3 up( m.rot[0][thin], m.rot[1][thin], m.rot[2][thin] );
+		if( up.Z < 0.0f )
+			up = -up;
+		Vector3 axis;
+		Vector3::Cross_Product( up, Vector3( 0.0f, 0.0f, 1.0f ), &axis );
+		const Real sine = axis.Length();
+		const Real angle = sine > 1e-4f ? atan2f( sine, up.Z ) : 0.0f;
+		const Matrix3x3 lying = sine > 1e-4f ? Matrix3x3( axis / sine, angle ) * m.rot : m.rot;
+		const Real below = lowestBelow( f, lying );
+		const Real reach = std::min( LEVEL_REACH + LEVEL_REACH_PER_HEIGHT * ( m.pos.Z - foot ), LEVEL_REACH_MAX );
+		const Int span = (Int)ceilf( reach / PILE_CELL );
+		const Int cx = (Int)floorf( ( m.pos.X - m_pileOrigin.X ) / PILE_CELL ), cy = (Int)floorf( ( m.pos.Y - m_pileOrigin.Y ) / PILE_CELL );
+		Int best = -1;
+		Real bestCost = 1e30f;
+		Vector3 target( m.pos );
+		for( Int y = std::max( cy - span, 0 ); y <= cy + span && y < PILE_CELLS; ++y )
+			for( Int x = std::max( cx - span, 0 ); x <= cx + span && x < PILE_CELLS; ++x )
+			{
+				if( !inside[y * PILE_CELLS + x] || foot + planned[y * PILE_CELLS + x] + below > m.pos.Z )
+					continue;		// outside, or it would have to go up: the wall just over a stump goes off it, not onto it
+				const Vector3 centre( m_pileOrigin.X + ( x + 0.5f ) * PILE_CELL, m_pileOrigin.Y + ( y + 0.5f ) * PILE_CELL, m.pos.Z );
+				const Real distance = sqrtf( ( centre.X - m.pos.X ) * ( centre.X - m.pos.X ) + ( centre.Y - m.pos.Y ) * ( centre.Y - m.pos.Y ) );
+				if( distance > reach )
+					continue;
+				const Real cost = planned[y * PILE_CELLS + x] + LEVEL_DISTANCE_COST * distance;
+				if( cost < bestCost )
+				{
+					bestCost = cost;
+					best = y * PILE_CELLS + x;
+					target = centre;
+				}
+			}
+		if( best < 0 )
+			continue;		// nowhere inside the box within reach and under it: down onto what is there
+		const Real ground = TheTerrainRenderObject ? TheTerrainRenderObject->getDrawHeight( target.X, target.Y ) : foot;
+		const Real land = std::min( ground + planned[best] + below, m.pos.Z );
+		const Real drop = m.pos.Z - land, down = -m.velocity.Z;
+		const Real seconds = std::max( ( sqrtf( down * down + 2.0f * GRAVITY * drop ) - down ) / GRAVITY, 0.2f );
+		m.velocity.X = ( target.X - m.pos.X ) / seconds + GameClientRandomValueReal( -PLAIN_FALL_SCATTER, PLAIN_FALL_SCATTER );
+		m.velocity.Y = ( target.Y - m.pos.Y ) / seconds + GameClientRandomValueReal( -PLAIN_FALL_SCATTER, PLAIN_FALL_SCATTER );
+		m.spin = sine > 1e-4f ? axis * ( angle / ( sine * seconds ) ) : Vector3( 0.0f, 0.0f, 0.0f );
+		m.restZ = land;		// it comes to rest on the planned heap: the rubble under it at the time may differ
+		pileOn( planned, m.fragment, target, lying, FALSE );
+	}
+	m_pile = planned;		// what falls unaimed lands on the heap as it will be
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1128,7 +1235,7 @@ void FractureRenderObjClass::stepFall( Moving &m, Real dt, Real now )
 	}
 	if( m.restZ != NO_REST_Z )
 	{
-		// a ruin piece dropping onto what lies under it: straight down, no bounce
+		// a piece whose rest height is known (aimed, or a ruin piece dropping): it stops there, no bounce
 		if( m.pos.Z > m.restZ )
 			return;
 		m.pos.Z = m.restZ;
@@ -1142,20 +1249,20 @@ void FractureRenderObjClass::stepFall( Moving &m, Real dt, Real now )
 		return;
 	}
 	// its lowest box corner against the ground and the rubble under it
-	Real lowest = 1e30f;
-	for( Int corner = 0; corner < 8; ++corner )
-	{
-		const Vector3 c( ( corner & 1 ? f.boxMax[0] : f.boxMin[0] ) - f.centroid[0], ( corner & 2 ? f.boxMax[1] : f.boxMin[1] ) - f.centroid[1],
-			( corner & 4 ? f.boxMax[2] : f.boxMin[2] ) - f.centroid[2] );
-		lowest = std::min( lowest, ( m.rot * c ).Z );
-	}
+	const Real below = lowestBelow( f, m.rot );
 	const Real floor = floorAt( m.pos );
-	if( m.pos.Z + lowest > floor )
+	if( m.pos.Z - below > floor )
 		return;
-	m.pos.Z = floor - lowest;
+	m.pos.Z = floor + below;
 	if( !m.landed )
 	{
 		m.landed = TRUE;
+		if( !m.fromHit && m_collapsing && m_collapse == NULL )
+		{
+			// a plain fall's piece was aimed at where it lands and turned to lie on its broad side: it stays
+			m.velocity.X = m.velocity.Y = 0.0f;
+			m.spin.Set( 0, 0, 0 );
+		}
 		if( f.volume >= DUST_VOLUME && m_dustLeft > 0 )
 		{
 			--m_dustLeft;
@@ -1183,19 +1290,20 @@ void FractureRenderObjClass::stepFall( Moving &m, Real dt, Real now )
 	m.spin.Set( 0, 0, 0 );
 	m.restedAt = now;
 	if( !m.fromHit )
-		pileOn( m.fragment, m.pos );
+		pileOn( m_pile, m.fragment, m.pos, m.rot, FALSE );
 }
 
 //-------------------------------------------------------------------------------------------------
-/** The baked fall is over.  It was baked from the whole structure, so a piece of it that came to rest
-	on a fragment a hit had knocked out before the death, or a stump that stood on one, hangs in the
-	air: such a piece falls the rest of the way, onto the ground or onto what came down under it
-	(Fracture::dropGaps).  TRUE when something drops. */
+/** The fall is over.  A baked one was baked from the whole structure, so a piece of it that came to
+	rest on a fragment a hit had knocked out before the death, or a stump that stood on one, hangs in
+	the air; a plain fall's piece can come to rest on rubble heights that a box under it does not reach.
+	Such a piece falls the rest of the way, onto the ground or onto what came down under it
+	(Fracture::dropGaps).  Returns how many have nothing under them; drop: and lets them fall. */
 //-------------------------------------------------------------------------------------------------
-Bool FractureRenderObjClass::dropUnsupported( Real now )
+Int FractureRenderObjClass::dropUnsupported( Real now, Bool drop )
 {
 	if( TheTerrainRenderObject == NULL )
-		return FALSE;
+		return 0;
 	const Fracture::Asset &a = m_shared->asset;
 	std::vector<Int> movingOf;					// per piece: in m_moving, or -1 for a stump
 	std::vector<unsigned> fragmentOf;
@@ -1242,6 +1350,8 @@ Bool FractureRenderObjClass::dropUnsupported( Real now )
 		if( gaps[p] <= 0.0f )
 			continue;
 		++count;
+		if( !drop )
+			continue;
 		if( movingOf[p] < 0 )
 		{
 			m_standing[fragmentOf[p]] = 0;
@@ -1256,9 +1366,10 @@ Bool FractureRenderObjClass::dropUnsupported( Real now )
 		m.restedAt = -1.0f;
 		m.restZ = m.pos.Z - gaps[p];
 	}
-	DEBUG_LOG( ( "FRACTURE DROP %s frame %d: %d of %d pieces had nothing under them\n", m_shared->name.str(),
-		(Int)TheGameLogic->getFrame(), count, (Int)boxes.size() ) );
-	return count > 0;
+	if( drop )
+		DEBUG_LOG( ( "FRACTURE DROP %s frame %d: %d of %d pieces had nothing under them\n", m_shared->name.str(),
+			(Int)TheGameLogic->getFrame(), count, (Int)boxes.size() ) );
+	return count;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1309,16 +1420,16 @@ void FractureRenderObjClass::step( Real now )
 		for( size_t i = 0; i < m_moving.size() && settled; ++i )
 			settled = m_moving[i].fromHit || m_moving[i].restedAt >= 0.0f;
 		const Real track = m_collapse ? (Real)m_collapse->frames / (Real)m_collapse->fps : 0.0f;
-		if( m_collapse && !m_dropped )
+		const Bool late = now - m_deathTime > track + FALL_SECONDS;
+		if( !m_dropped && ( settled || late ) )
 		{
-			// every track rests at its last key or hands off to a fall that lands: all at rest is the end
-			if( settled )
-			{
-				m_dropped = TRUE;
-				settled = !dropUnsupported( now );
-			}
+			// every piece at rest (a track at its last key or handed off to a fall that landed), or the
+			// time is up: what has nothing under it drops, and the ruin waits for it unless time is up
+			m_dropped = TRUE;
+			if( dropUnsupported( now, TRUE ) > 0 )
+				settled = FALSE;
 		}
-		m_settled = settled || now - m_deathTime > track + FALL_SECONDS;
+		m_settled = settled || late;
 	}
 }
 
@@ -1382,6 +1493,10 @@ void FractureRenderObjClass::bakeRuin( void )
 	for( size_t i = 0; i < a.fragments.size(); ++i )
 		if( m_standing[i] )
 			local[i] = rootInverse * fragmentWorld( (unsigned)i );
+	for( size_t k = 0; k < m_moving.size(); ++k )
+		if( !m_moving[k].fromHit && m_moving[k].restZ != NO_REST_Z )
+			m_moving[k].pos.Z = m_moving[k].restZ;		// the time ran out on its way down: where it was going
+	const Int unsupported = dropUnsupported( m_now, FALSE );
 	size_t kept = 0;
 	for( size_t k = 0; k < m_moving.size(); ++k )
 	{
@@ -1391,14 +1506,13 @@ void FractureRenderObjClass::bakeRuin( void )
 			m_moving[kept++] = m;
 			continue;
 		}
-		if( m.restZ != NO_REST_Z )
-			m.pos.Z = m.restZ;		// the time ran out on a drop: where it was going
 		local[m.fragment] = rootInverse * movingWorld( m );
 	}
 	m_moving.resize( kept );
 	m_ruinPose = local;
 	// how far the ruin spread, centroids out from the middle, against the standing structure's
-	std::vector<Real> lies;
+	// and how high it lies: the top of each piece's box over the model's foot
+	std::vector<Real> lies, tops;
 	Real stood = 0.0f;
 	for( size_t i = 0; i < a.fragments.size(); ++i )
 	{
@@ -1408,11 +1522,19 @@ void FractureRenderObjClass::bakeRuin( void )
 		const Vector3 c = local[i] * Vector3( f.centroid[0], f.centroid[1], f.centroid[2] );
 		lies.push_back( sqrtf( c.X * c.X + c.Y * c.Y ) );
 		stood = std::max( stood, sqrtf( f.centroid[0] * f.centroid[0] + f.centroid[1] * f.centroid[1] ) );
+		Real top = -1e30f;
+		for( Int corner = 0; corner < 8; ++corner )
+			top = std::max( top, ( local[i] * Vector3( corner & 1 ? f.boxMax[0] : f.boxMin[0], corner & 2 ? f.boxMax[1] : f.boxMin[1],
+				corner & 4 ? f.boxMax[2] : f.boxMin[2] ) ).Z );
+		tops.push_back( top );
 	}
 	std::sort( lies.begin(), lies.end() );
+	std::sort( tops.begin(), tops.end() );
 	if( !lies.empty() )
-		DEBUG_LOG( ( "FRACTURE RUIN %s frame %d: %d pieces lie within %.1f of the middle, 95%% within %.1f; standing, within %.1f\n",
-			m_shared->name.str(), (Int)TheGameLogic->getFrame(), (Int)lies.size(), lies.back(), lies[( lies.size() * 95 ) / 100], stood ) );
+		DEBUG_LOG( ( "FRACTURE RUIN %s frame %d: %d pieces lie within %.1f of the middle, 95%% within %.1f; standing, within %.1f; "
+			"heap top %.1f, half under %.1f, 95%% under %.1f, the structure %.1f tall; %d with nothing under them\n",
+			m_shared->name.str(), (Int)TheGameLogic->getFrame(), (Int)lies.size(), lies.back(), lies[( lies.size() * 95 ) / 100], stood,
+			tops.back(), tops[tops.size() / 2], tops[( tops.size() * 95 ) / 100], a.boxMax[2], unsupported ) );
 	for( size_t c = 0; c < m_shared->chunks.size(); ++c )
 	{
 		DX8VertexBufferClass *vb = NEW_REF( DX8VertexBufferClass, ( DX8_FVF_XYZNUV1, (unsigned short)m_shared->chunks[c].vertexCount ) );

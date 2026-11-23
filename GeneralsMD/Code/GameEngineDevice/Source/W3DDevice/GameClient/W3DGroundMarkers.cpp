@@ -182,6 +182,13 @@ enum Piece
 	P_GLYPH_SWARM, P_GLYPH_DRONES, P_GLYPH_BOLT, P_GLYPH_JAM, P_GLYPH_MINE, P_GLYPH_FRENZY,
 	P_GLYPH_WRENCH, P_GLYPH_SATELLITE, P_GLYPH_UAV, P_GLYPH_EYE, P_GLYPH_RADAR, P_GLYPH_SCRAMBLE,
 	P_GLYPH_AMBUSH, P_GLYPH_TOXIN, P_GLYPH_CLEAN, P_GLYPH_DEMINE,
+	// the sides' bands, four layers each in Finish order after America's (Shell, SteelA, SteelB, Inlay)
+	P_SIDE_BANDS,
+	P_HAIR = P_SIDE_BANDS + 12, P_SOLID,
+	P_STUD_CHINA, P_STUD_GLA, P_STUD_TUR,
+	// the parts every power's frame is built of (Tools/ground_markers.py shapes)
+	P_SHAPE_TILE, P_SHAPE_DISC, P_SHAPE_TRI, P_SHAPE_PARA, P_SHAPE_PLUS, P_SHAPE_CROSS, P_SHAPE_DIAMOND,
+	P_SHAPE_RING, P_SHAPE_TONGUE, P_SHAPE_TANK, P_SHAPE_BLOCK, P_SHAPE_LID,
 	P_COUNT
 };
 
@@ -209,6 +216,13 @@ static const char *const PIECE_NAMES[ P_COUNT ] =
 	"MarkerGlyphSwarm", "MarkerGlyphDrones", "MarkerGlyphBolt", "MarkerGlyphJam", "MarkerGlyphMine", "MarkerGlyphFrenzy",
 	"MarkerGlyphWrench", "MarkerGlyphSatellite", "MarkerGlyphUav", "MarkerGlyphEye", "MarkerGlyphRadar", "MarkerGlyphScramble",
 	"MarkerGlyphAmbush", "MarkerGlyphToxin", "MarkerGlyphClean", "MarkerGlyphDemine",
+	"MarkerBandShellChina", "MarkerBandSteelAChina", "MarkerBandSteelBChina", "MarkerBandInlayChina",
+	"MarkerBandShellGla", "MarkerBandSteelAGla", "MarkerBandSteelBGla", "MarkerBandInlayGla",
+	"MarkerBandShellTur", "MarkerBandSteelATur", "MarkerBandSteelBTur", "MarkerBandInlayTur",
+	"MarkerHair", "MarkerSolid",
+	"MarkerStudChina", "MarkerStudGla", "MarkerStudTur",
+	"MarkerShapeTile", "MarkerShapeDisc", "MarkerShapeTri", "MarkerShapePara", "MarkerShapePlus", "MarkerShapeCross", "MarkerShapeDiamond",
+	"MarkerShapeRing", "MarkerShapeTongue", "MarkerShapeTank", "MarkerShapeBlock", "MarkerShapeLid",
 };
 
 static const Real CHEVRON_ANCHOR_U = 0.7777778f;	///< its tip (pieces.json); every other piece is anchored on its middle
@@ -1894,7 +1908,7 @@ static void radialStrip( Int piece, Real cx, Real cy, const RadiusAt &radiusAt, 
 	* polygon), its corners mitred so a hexagon or a stepped box stays one band; lit pairs take the
 	* light from each edge's right normal.  Each edge is cut into quads no longer than GROUND_STEP. */
 static void polyStrip( Int piece, const Real *px, const Real *py, Int n, Bool closed, Real across,
-											 const Tint &tint, Real alpha, Bool lit )
+											 const Tint &tint, Real alpha, Bool lit, Real shift = 0.0f )
 {
 	if( alpha <= 0.002f || n < 2 )
 		return;
@@ -1958,13 +1972,14 @@ static void polyStrip( Int piece, const Real *px, const Real *py, Int n, Bool cl
 		const UnsignedInt c = argb( tint, alpha * w );
 		const UnsignedInt col[ 4 ] = { c, c, c, c };
 		const Int m = MAX( 1, MIN( 200, (Int)ceilf( len / GROUND_STEP ) ) );
+		const Real s = half > 1.0e-4f ? shift / half : 0.0f;		// the centre line moved outward by `shift`
 		for( Int j = 0; j < m; ++j )
 		{
 			const Real f0 = (Real)j / (Real)m, f1 = (Real)( j + 1 ) / (Real)m;
-			const Real cx0 = px[ a ] + dx * f0, cy0 = py[ a ] + dy * f0;
-			const Real cx1 = px[ a ] + dx * f1, cy1 = py[ a ] + dy * f1;
 			const Real o0x = ox[ a ] + ( ox[ b ] - ox[ a ] ) * f0, o0y = oy[ a ] + ( oy[ b ] - oy[ a ] ) * f0;
 			const Real o1x = ox[ a ] + ( ox[ b ] - ox[ a ] ) * f1, o1y = oy[ a ] + ( oy[ b ] - oy[ a ] ) * f1;
+			const Real cx0 = px[ a ] + dx * f0 + o0x * s, cy0 = py[ a ] + dy * f0 + o0y * s;
+			const Real cx1 = px[ a ] + dx * f1 + o1x * s, cy1 = py[ a ] + dy * f1 + o1y * s;
 			const Real x[ 4 ] = { cx0 + o0x, cx1 + o1x, cx1 - o1x, cx0 - o0x };
 			const Real y[ 4 ] = { cy0 + o0y, cy1 + o1y, cy1 - o1y, cy0 - o0y };
 			emit( piece, x, y, pu, pv, col );
@@ -1972,10 +1987,10 @@ static void polyStrip( Int piece, const Real *px, const Real *py, Int n, Bool cl
 	}
 }
 
-/// the piece a flat fill samples: one opaque white texel's worth, its middle
+/// the piece a flat fill samples: opaque white
 static Int solidPiece( void )
 {
-	return P_BAND_INLAY;
+	return P_SOLID;
 }
 
 /** A flat fill: a fan from (cx, cy) out to the outline, its alpha going from alphaCentre at the middle
@@ -2052,6 +2067,86 @@ static void pingRing( Real cx, Real cy, Real r, Real k, Real age, const Tint &ti
 	s_ctx.additive = TRUE;
 	ring( P_PING, cx, cy, r * ( 1.0f + grow * e ), width * k, pingTintOf( tint ), 0.9f * ( 1.0f - e ), FALSE );
 	s_ctx.additive = was;
+}
+
+/** The side whose finish a power's frame wears: America's satin steel, China's crisp terraced
+	* chamfer, the GLA's rusty uneven bevel, Turkiye's one flat facet with its turquoise LED line. */
+enum Finish { FINISH_USA, FINISH_CHINA, FINISH_GLA, FINISH_TUR };
+static const Tint TINT_LED = { 0.22f, 0.88f, 0.80f };
+
+/// a side's band layer: 0 shell, 1 steel lit from outside, 2 steel lit from inside, 3 inlay
+static Int bandPiece( Int finish, Int layer )
+{
+	if( finish == FINISH_USA )
+	{
+		static const Int usa[ 4 ] = { P_BAND_SHELL, P_BAND_STEEL_A, P_BAND_STEEL_B, P_BAND_INLAY };
+		return usa[ layer ];
+	}
+	return P_SIDE_BANDS + ( finish - 1 ) * 4 + layer;
+}
+
+static Int studPiece( Int finish )
+{
+	switch( finish )
+	{
+		case FINISH_CHINA:	return P_STUD_CHINA;
+		case FINISH_GLA:		return P_STUD_GLA;
+		case FINISH_TUR:		return P_STUD_TUR;
+		default:						return P_STUD;
+	}
+}
+
+/// the three tiers round a circle from a0 to a1, in a side's finish; the inlay glows by `glow`
+static void bandArc( Int finish, Real cx, Real cy, Real r, Real across, Real a0, Real a1, const Tint &tint, Real alpha,
+										 Real glow = 1.0f, Bool inlay = TRUE )
+{
+	arcStrip( bandPiece( finish, 0 ), cx, cy, r, across, a0, a1, FALSE, TINT_WHITE, alpha, FALSE );
+	arcStrip( bandPiece( finish, 2 ), cx, cy, r, across, a0, a1, FALSE, TINT_WHITE, alpha, FALSE );
+	arcStrip( bandPiece( finish, 1 ), cx, cy, r, across, a0, a1, FALSE, TINT_WHITE, alpha, TRUE );
+	if( inlay )
+		arcStrip( bandPiece( finish, 3 ), cx, cy, r, across, a0, a1, FALSE, scaled( tint, glow ), alpha, FALSE );
+	if( finish == FINISH_TUR )
+		arcStrip( P_HAIR, cx, cy, r - 0.34f * across, 0.12f * across, a0, a1, FALSE, TINT_LED, alpha, FALSE );
+}
+
+static void bandCircle( Int finish, Real cx, Real cy, Real r, Real across, const Tint &tint, Real alpha, Real glow = 1.0f )
+{
+	bandArc( finish, cx, cy, r, across, 0.0f, 2.0f * MARKER_PI, tint, alpha, glow );
+}
+
+template< class RadiusAt >
+struct ShiftedRadius
+{
+	const RadiusAt &f;
+	Real d;
+	ShiftedRadius( const RadiusAt &fn, Real by ) : f( fn ), d( by ) { }
+	Real operator()( Real a ) const { return f( a ) + d; }
+};
+
+/// the three tiers round a radius profile (radialStrip), in a side's finish
+template< class RadiusAt >
+static void bandRadial( Int finish, Real cx, Real cy, const RadiusAt &radiusAt, Real across, const Tint &tint, Real alpha,
+												Real glow = 1.0f, Real stepDeg = 2.0f, Real a0 = 0.0f, Real a1 = 2.0f * MARKER_PI )
+{
+	radialStrip( bandPiece( finish, 0 ), cx, cy, radiusAt, across, a0, a1, TINT_WHITE, alpha, FALSE, stepDeg );
+	radialStrip( bandPiece( finish, 2 ), cx, cy, radiusAt, across, a0, a1, TINT_WHITE, alpha, FALSE, stepDeg );
+	radialStrip( bandPiece( finish, 1 ), cx, cy, radiusAt, across, a0, a1, TINT_WHITE, alpha, TRUE, stepDeg );
+	radialStrip( bandPiece( finish, 3 ), cx, cy, radiusAt, across, a0, a1, scaled( tint, glow ), alpha, FALSE, stepDeg );
+	if( finish == FINISH_TUR )
+		radialStrip( P_HAIR, cx, cy, ShiftedRadius<RadiusAt>( radiusAt, -0.34f * across ), 0.12f * across, a0, a1, TINT_LED, alpha, FALSE, stepDeg );
+}
+
+/// the three tiers along a polygon or a polyline (polyStrip), in a side's finish
+static void bandPoly( Int finish, const Real *px, const Real *py, Int n, Bool closed, Real across, const Tint &tint, Real alpha,
+											Real glow = 1.0f, Bool inlay = TRUE )
+{
+	polyStrip( bandPiece( finish, 0 ), px, py, n, closed, across, TINT_WHITE, alpha, FALSE );
+	polyStrip( bandPiece( finish, 2 ), px, py, n, closed, across, TINT_WHITE, alpha, FALSE );
+	polyStrip( bandPiece( finish, 1 ), px, py, n, closed, across, TINT_WHITE, alpha, TRUE );
+	if( inlay )
+		polyStrip( bandPiece( finish, 3 ), px, py, n, closed, across, scaled( tint, glow ), alpha, FALSE );
+	if( finish == FINISH_TUR )
+		polyStrip( P_HAIR, px, py, n, closed, 0.12f * across, TINT_LED, alpha, FALSE, -0.34f * across );
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

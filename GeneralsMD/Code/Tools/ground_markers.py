@@ -602,6 +602,142 @@ def turn_pieces():
     flat_keyed("MarkerDropEstimate", np.abs(dd - 3.4) - 0.8, 1.4, 0.7, 1.0, [24, 24], [0.5, 0.5], ds)
 
 
+# ---------------------------------------------------------------- the sides' finishes and the shapes every power is built of
+# Each power's marker is its own frame (2026-11-24, the decals' unique/DESIGNS.md): bands run round
+# circles, polygons and radius profiles in the finish of the side that owns the power, and the parts
+# are a handful of shapes laid by the code. America keeps the band above.
+
+SIDE_STEEL = {"China": (0.62, 0.58, 0.53), "Gla": (0.52, 0.50, 0.46), "Tur": (0.50, 0.53, 0.48)}
+RUST = np.array((0.46, 0.25, 0.12))
+
+
+def side_bands():
+    h = int(20 * T)
+    d = band_d(h)
+    px = 1 / T
+    for side, steel in SIDE_STEEL.items():
+        steel = np.array(steel)
+        if side == "China":                 # a narrow steep chamfer and a second terrace: crisp
+            dl = np.abs(d) - 5.5
+            Hf = 2.6 * T * np.clip(-dl / 1.2, 0, 1) + 1.2 * T * np.clip((-dl - 2.6) / 0.4, 0, 1)
+            shell, inlay = 9.5, 1.6
+            colour = steel[None, None] * np.ones((h, 8, 1))
+        elif side == "Gla":                 # a soft uneven bevel, rust toward the edges, a scratch
+            dl = np.abs(d) - 5.0
+            Hf = 2.4 * T * np.clip(-dl / 2.2, 0, 1) ** 0.8
+            shell, inlay = 9.0, 1.0
+            m = np.clip((np.abs(d) - 2.6) / 2.0, 0, 1)[..., None]
+            colour = steel[None, None] * (1 - 0.75 * m) + RUST[None, None] * (0.75 * m)
+            colour = colour * (1 - 0.35 * cov(np.abs(d - 3.1) - 0.25, px))[..., None]
+        else:                               # Turkiye: one wide flat facet, matte
+            dl = np.abs(d) - 5.5
+            Hf = 1.5 * T * np.clip(-dl / 3.6, 0, 1)
+            shell, inlay = 9.0, 1.1
+            colour = steel[None, None] * np.ones((h, 8, 1))
+        L = Layer(8, h)
+        L.over(DARK, cov(np.abs(d) - shell, px) * 0.76)
+        piece("MarkerBandShell" + side, L, kind="strip", across_k=20, blend="alpha", tint=False)
+        for tag, ly in (("A", -1), ("B", 1)):
+            lt = np.array([0, ly * LP, LIGHT[2]])
+            L = Layer(8, h)
+            L.over(colour * bevel(Hf, lt)[..., None], cov(dl, px))
+            piece("MarkerBandSteel" + tag + side, L, kind="strip", across_k=20, blend="alpha", tint=False)
+        L = Layer(8, h)
+        L.over((1, 1, 1), cov(np.abs(d) - inlay, px))
+        piece("MarkerBandInlay" + side, L, kind="strip", across_k=20, blend="alpha", tint=True)
+    # a tinted hairline with its keyline, 4k across: tracks, fire lines, the Turkiye LED line
+    h = int(4 * T)
+    d = (h / 2 - (np.arange(h) + 0.5))[:, None] / T * np.ones((1, 8))
+    L = Layer(8, h)
+    L.over(DARK, cov(np.abs(d) - 1.6, px) * 0.75)
+    L.over((1, 1, 1), cov(np.abs(d) - 0.65, px))
+    piece("MarkerHair", L, kind="strip", across_k=4, blend="alpha", tint=True)
+    L = Layer(8, 8)
+    L.over((1, 1, 1), np.ones((8, 8)))
+    piece("MarkerSolid", L, kind="quad", size_k=[1, 1], anchor=[0.5, 0.5], blend="alpha", tint=True)
+
+
+def side_studs():
+    s = int(18 * T)
+    X, Y = grid(s, s, s / 2, s / 2, T)
+    px = 1 / T
+    r = np.hypot(X, Y)
+    # China: a round gold rivet
+    L = Layer(s, s)
+    L.over(DARK, cov(r - 6.6, px) * 0.9)
+    dome = r - 4.8
+    L.over(np.array((0.86, 0.66, 0.26))[None, None] * bevel(3.0 * T * np.sqrt(np.clip(-dome / 4.8, 0, 1)))[..., None],
+           cov(dome, px))
+    piece("MarkerStudChina", L, kind="quad", size_k=[18, 18], anchor=[0.5, 0.5], blend="alpha", tint=False)
+    # GLA: a hex bolt turned off square, rusty
+    c, sn = math.cos(0.35), math.sin(0.35)
+    hx, hy = c * X + sn * Y, -sn * X + c * Y
+    kx, ky, kz = -0.866025404, 0.5, 0.577350269
+    qx, qy = np.abs(hx), np.abs(hy)
+    dd = np.minimum(kx * qx + ky * qy, 0)
+    qx, qy = qx - 2 * dd * kx, qy - 2 * dd * ky
+    qx = qx - np.clip(qx, -kz * 5.0, kz * 5.0)
+    hexd = np.hypot(qx, qy - 5.0) * np.sign(qy - 5.0)
+    L = Layer(s, s)
+    L.over(DARK, cov(hexd - 1.8, px) * 0.9)
+    colour = np.array(SIDE_STEEL["Gla"]) * 0.7 + RUST * 0.3
+    L.over(colour[None, None] * bevel(2.2 * T * np.clip(-hexd / 1.8, 0, 1))[..., None], cov(hexd, px))
+    piece("MarkerStudGla", L, kind="quad", size_k=[18, 18], anchor=[0.5, 0.5], blend="alpha", tint=False)
+    # Turkiye: flush, a dark ring round a recessed hex
+    L = Layer(s, s)
+    L.over(np.array(SIDE_STEEL["Tur"]), cov(r - 5.6, px))
+    L.over(DARK, cov(np.abs(r - 5.0) - 0.8, px) * 0.85)
+    qx, qy = np.abs(X), np.abs(Y)
+    dd = np.minimum(kx * qx + ky * qy, 0)
+    qx, qy = qx - 2 * dd * kx, qy - 2 * dd * ky
+    qx = qx - np.clip(qx, -kz * 2.6, kz * 2.6)
+    hexd = np.hypot(qx, qy - 2.6) * np.sign(qy - 2.6)
+    L.over(np.array(SIDE_STEEL["Tur"])[None, None] * 0.8 * bevel(-1.2 * T * np.clip(-hexd / 1.2, 0, 1))[..., None],
+           cov(hexd, px))
+    piece("MarkerStudTur", L, kind="quad", size_k=[18, 18], anchor=[0.5, 0.5], blend="alpha", tint=False)
+
+
+def shapes():
+    """Small parts, 24k a side, +u to the right: tinted ones with a keyline and a bevelled white face,
+    and two of plain steel."""
+    s = int(24 * T)
+    X, Y = grid(s, s, s / 2, s / 2, T)
+    px = 1 / T
+    r = np.hypot(X, Y)
+    xr, yr = (X + Y) * 0.70710678, (Y - X) * 0.70710678
+    box = lambda x, y, hx, hy: np.hypot(np.maximum(np.abs(x) - hx, 0), np.maximum(np.abs(y) - hy, 0)) + \
+        np.minimum(np.maximum(np.abs(x) - hx, np.abs(y) - hy), 0)
+    tinted = {
+        "Tile": np.maximum(box(X, Y, 9, 9), (np.abs(X) + np.abs(Y) - 14) * 0.70710678),
+        "Disc": r - 9,
+        "Tri": sd_poly(X, Y, [(10, 0), (-8, 9), (-8, -9)]),
+        "Para": sd_poly(X, Y, [(-8 - 3.5, -6), (8 - 3.5, -6), (8 + 3.5, 6), (-8 + 3.5, 6)]),
+        "Plus": np.minimum(box(X, Y, 9, 2.6), box(X, Y, 2.6, 9)),
+        "Cross": np.minimum(sd_seg(X, Y, -7, -7, 7, 7), sd_seg(X, Y, -7, 7, 7, -7)) - 2.2,
+        "Diamond": np.minimum(box(xr, yr, 7.5, 5.0), box(xr, yr, 5.0, 7.5)),
+        "Ring": np.abs(r - 8) - 1.6,
+        "Tongue": np.minimum(np.hypot(X + 4, Y) - 5.2, sd_poly(X, Y, [(10, 0), (-4, 5.2), (-4, -5.2)])),
+        "Tank": U(box(X + 1, Y, 8, 5.5), r - 3.6, sd_seg(X, Y, 0, 0, 10.5, 0) - 1.2),
+    }
+    for name, d in tinted.items():
+        L = Layer(s, s)
+        L.over(DARK, cov(d - 1.6, px) * 0.85)
+        Hf = 1.6 * T * np.clip(-d / 1.8, 0, 1)
+        L.over(np.ones(3)[None, None] * (0.55 + 0.45 * bevel(Hf))[..., None], cov(d, px))
+        piece("MarkerShape" + name, L, kind="quad", size_k=[24, 24], anchor=[0.5, 0.5], blend="alpha", tint=True)
+    steel = {"Block": box(X, Y, 9, 6), "Lid": r - 9}
+    for name, d in steel.items():
+        L = Layer(s, s)
+        L.over(DARK, cov(d - 2.0, px) * 0.85)
+        Hf = 2.2 * T * np.clip(-d / 2.4, 0, 1)
+        face = STEEL[None, None] * bevel(Hf)[..., None]
+        if name == "Lid":
+            weld = cov(np.minimum(np.abs(X), np.abs(Y)) - 0.5, px) * (r < 6.5)
+            face = face * (1 - 0.45 * weld[..., None])
+        L.over(face, cov(d, px))
+        piece("MarkerShape" + name, L, kind="quad", size_k=[24, 24], anchor=[0.5, 0.5], blend="alpha", tint=False)
+
+
 # ---------------------------------------------------------------- darts and glyphs, light baked per heading
 
 DART = [(16, 0), (-12, 11), (-6, 0), (-12, -11)]
@@ -794,6 +930,9 @@ def main():
     chevrons_ticks()
     segments_dash()
     turn_pieces()
+    side_bands()
+    side_studs()
+    shapes()
     darts()
     glyphs()
     sheet = pack()

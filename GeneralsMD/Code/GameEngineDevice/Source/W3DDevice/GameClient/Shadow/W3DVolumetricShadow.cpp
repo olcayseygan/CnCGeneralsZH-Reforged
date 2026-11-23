@@ -135,10 +135,13 @@ const Real cosAngleToCare = cos ((0.2 * PI) / 180.0);	//1.5 degree difference
 // widest it goes is the cap below, 2.6 units a texel.  Twilight Flame at the wheel limit and the
 // flattest tilt asks for 2611 (source 331686a2, `SHADOWMAP` line); 2400 left 422 units of the far
 // corner unshadowed.  2624 is the step that holds it; the cap is one step more, slack for a larger
-// or higher map than that one (about 5% more area at the cap, texels only).
+// or higher map than that one (about 5% more area at the cap, texels only).  A view over a map's edge
+// at the same zoom asked for 3651 until the footprint was cut to the drawn ground, and still asks for
+// 3191 cut (`fin_tf307`, cut 2000 900 3.13 0 17.5): 3200 is the step that holds it and the cap is one
+// step more, 3.2 units a texel at its widest.
 #define SHADOW_MAP_TEXELS 2048
 #define SHADOW_MAP_HALF_WIDTH 900.0f
-#define SHADOW_MAP_WIDEST_HALF_WIDTH 2688.0f
+#define SHADOW_MAP_WIDEST_HALF_WIDTH 3264.0f
 // The box grows in these steps, so the texel grid holds still while the zoom does.
 #define SHADOW_MAP_HALF_WIDTH_STEP 64.0f
 // How far the box stays past the frame's ground: the filter at its widest reads about 16 units beside
@@ -4242,31 +4245,163 @@ static Vector3 viewEdgeAtHeight( const Vector3 &nearPoint, const Vector3 &farPoi
 	return nearPoint + (farPoint - nearPoint) * ((nearPoint.Z - z) / (nearPoint.Z - farPoint.Z));
 }
 
-/** What the frame wants of the sun's box, for -shadowmapreport: half the width the box goes round, and
-		what the same ground would ask of a box centred on the look point. */
+/** What the frame wants of the sun's box, for -shadowmapreport: half the width the box goes round,
+		what the same ground would ask of a box centred on the look point, and what the view would ask
+		before it is cut to the ground the terrain draws. */
 static Real s_sunBoxWanted = 0.0f;
 static Real s_sunBoxWantedCentred = 0.0f;
+static Real s_sunBoxWantedUncut = 0.0f;
+
+/** The ring of points `in` cut to one side of an axis line (axis 0 is x, 1 is y): the part at or
+		below `bound` when `keepBelow`, at or above it otherwise.  One step of Sutherland-Hodgman, so a
+		ring comes back with at most twice its points; `out` has room for that. */
+static Int clipRingSide( const Vector3 *in, Int count, Int axis, Real bound, Bool keepBelow, Vector3 *out )
+{
+	Int kept = 0;
+	for (Int i = 0; i < count; ++i)
+	{
+		const Vector3 &a = in[ i ];
+		const Vector3 &b = in[ (i + 1) % count ];
+		const Real insideA = keepBelow ? bound - a[ axis ] : a[ axis ] - bound;
+		const Real insideB = keepBelow ? bound - b[ axis ] : b[ axis ] - bound;
+		if (insideA >= 0.0f)
+			out[ kept++ ] = a;
+		if ((insideA >= 0.0f) != (insideB >= 0.0f))
+			out[ kept++ ] = a + (b - a) * (insideA / (insideA - insideB));
+	}
+	return kept;
+}
+
+/** The part of the segment a to b over the drawn ground in world XY (Liang-Barsky), as the fractions
+		t0 to t1 along it; FALSE when none of it is. */
+static Bool clipSegmentToExtent( const Vector3 &a, const Vector3 &b, const Region3D &extent, Real *t0, Real *t1 )
+{
+	Real lo = 0.0f, hi = 1.0f;
+	const Real from[ 2 ] = { a.X, a.Y };
+	const Real along[ 2 ] = { b.X - a.X, b.Y - a.Y };
+	const Real low[ 2 ] = { extent.lo.x, extent.lo.y };
+	const Real high[ 2 ] = { extent.hi.x, extent.hi.y };
+	for (Int axis = 0; axis < 2; ++axis)
+	{
+		if (along[ axis ] == 0.0f)
+		{
+			if (from[ axis ] < low[ axis ] || from[ axis ] > high[ axis ])
+				return FALSE;
+			continue;
+		}
+		Real enter = (low[ axis ] - from[ axis ]) / along[ axis ];
+		Real leave = (high[ axis ] - from[ axis ]) / along[ axis ];
+		if (enter > leave)
+		{
+			const Real swap = enter;
+			enter = leave;
+			leave = swap;
+		}
+		lo = WWMath::Max( lo, enter );
+		hi = WWMath::Min( hi, leave );
+		if (lo > hi)
+			return FALSE;
+	}
+	*t0 = lo;
+	*t1 = hi;
+	return TRUE;
+}
+
+/** Whether the four point ring (taken round in order, either way) holds x, y in world XY. */
+static Bool ringHoldsXY( const Vector3 *ring, Real x, Real y )
+{
+	Bool left = FALSE, right = FALSE;
+	for (Int i = 0; i < 4; ++i)
+	{
+		const Vector3 &a = ring[ i ];
+		const Vector3 &b = ring[ (i + 1) & 3 ];
+		const Real side = (b.X - a.X) * (y - a.Y) - (b.Y - a.Y) * (x - a.X);
+		if (side > 0.0f)
+			left = TRUE;
+		else if (side < 0.0f)
+			right = TRUE;
+	}
+	return !(left && right);
+}
 
 /** How wide the sun's box has to be to hold the ground the tactical camera sees, and where its middle
 		goes.  Every ground point in view lies on an edge-bounded stretch of the view between the highest
-		and the lowest ground on the map, so each edge is cut at both heights and the eight points are
-		taken into the sun's frame around the look point.  The lowest level alone would miss a hill at
-		the bottom of the screen, whose point sits much nearer the camera and can land outside all four
-		low ones in the sun's frame.  The look point is nowhere near the middle of that shape, the far
-		side of the frame reaching further than the near one, so a box centred on it spends texels on
-		ground no pixel reads.  The box goes round the shape instead. */
+		and the lowest ground on the map, so each edge is cut at both heights and the two rings of four
+		points are taken into the sun's frame around the look point.  The lowest level alone would miss
+		a hill at the bottom of the screen, whose point sits much nearer the camera and can land outside
+		all four low ones in the sun's frame.  The look point is nowhere near the middle of that shape,
+		the far side of the frame reaching further than the near one, so a box centred on it spends
+		texels on ground no pixel reads.  The box goes round the shape instead.  Each ring is first cut
+		to the ground the terrain draws, border ring included: at the wheel limit looking at a map's edge
+		the top of the screen is the black past it, and the box opened to shadow that. */
 static Real shadowMapHalfWidth( const CameraClass &sceneCamera, const Matrix3D &sunAtFocus, Real lowestGround,
 	Real highestGround, Vector3 *middle )
 {
 	const Vector3 *corners = sceneCamera.Get_Frustum().Corners;
+	// the frustum numbers its corners across and then down; this goes round them
+	static const Int ROUND[ 4 ] = { 0, 1, 3, 2 };
+	Region3D extent;
+	TheTerrainRenderObject->getDrawnExtent( &extent );
 	Real loX = 0.0f, hiX = 0.0f, loY = 0.0f, hiY = 0.0f;
+	Real uncutLoX = 0.0f, uncutHiX = 0.0f, uncutLoY = 0.0f, uncutHiY = 0.0f;
 	Real centred = 0.0f;
-	for (Int i = 0; i < 8; ++i)
+	const Real levelZ[ 2 ] = { lowestGround, highestGround + SHADOW_MAP_RECEIVER_HEADROOM };
+	Vector3 uncut[ 2 ][ 4 ];
+	// what the box goes round: both cut rings, the view's corner edges cut to the ground between the
+	// two levels (two ends each) and the map's corner columns inside the view (two heights each)
+	Vector3 taken[ 2 * 64 + 8 + 8 ];
+	Int takenCount = 0;
+	for (Int level = 0; level < 2; ++level)
 	{
-		const Vector3 ground = viewEdgeAtHeight( corners[ i & 3 ], corners[ (i & 3) + 4 ],
-			(i < 4) ? lowestGround : highestGround + SHADOW_MAP_RECEIVER_HEADROOM );
+		const Real z = levelZ[ level ];
+		// four sides, each at most doubling the ring: 4, 8, 16, 32, 64
+		Vector3 ring[ 64 ];
+		Vector3 cut[ 64 ];
+		for (Int i = 0; i < 4; ++i)
+		{
+			ring[ i ] = viewEdgeAtHeight( corners[ ROUND[ i ] ], corners[ ROUND[ i ] + 4 ], z );
+			uncut[ level ][ i ] = ring[ i ];
+			Vector3 inSun;
+			Matrix3D::Inverse_Transform_Vector( sunAtFocus, ring[ i ], &inSun );
+			uncutLoX = WWMath::Min( uncutLoX, inSun.X );
+			uncutHiX = WWMath::Max( uncutHiX, inSun.X );
+			uncutLoY = WWMath::Min( uncutLoY, inSun.Y );
+			uncutHiY = WWMath::Max( uncutHiY, inSun.Y );
+		}
+		Int count = clipRingSide( ring, 4, 0, extent.lo.x, FALSE, cut );
+		count = clipRingSide( cut, count, 0, extent.hi.x, TRUE, ring );
+		count = clipRingSide( ring, count, 1, extent.lo.y, FALSE, cut );
+		count = clipRingSide( cut, count, 1, extent.hi.y, TRUE, ring );
+		for (Int i = 0; i < count; ++i)
+			taken[ takenCount++ ] = ring[ i ];
+	}
+	/* Cutting each ring flat misses corners of the volume between the two levels: where a corner edge
+		 of the view crosses the map's side, and where a corner column of the map stands inside the view.
+		 Without them the far row at a map's edge, with the sun behind the camera, fell past the box. */
+	for (Int i = 0; i < 4; ++i)
+	{
+		Real t0, t1;
+		if (clipSegmentToExtent( uncut[ 0 ][ i ], uncut[ 1 ][ i ], extent, &t0, &t1 ))
+		{
+			const Vector3 along = uncut[ 1 ][ i ] - uncut[ 0 ][ i ];
+			taken[ takenCount++ ] = uncut[ 0 ][ i ] + along * t0;
+			taken[ takenCount++ ] = uncut[ 0 ][ i ] + along * t1;
+		}
+	}
+	for (Int c = 0; c < 4; ++c)
+	{
+		const Real x = (c & 1) ? extent.hi.x : extent.lo.x;
+		const Real y = (c & 2) ? extent.hi.y : extent.lo.y;
+		if (ringHoldsXY( uncut[ 0 ], x, y ) || ringHoldsXY( uncut[ 1 ], x, y ))
+		{
+			taken[ takenCount++ ] = Vector3( x, y, levelZ[ 0 ] );
+			taken[ takenCount++ ] = Vector3( x, y, levelZ[ 1 ] );
+		}
+	}
+	for (Int i = 0; i < takenCount; ++i)
+	{
 		Vector3 inSun;
-		Matrix3D::Inverse_Transform_Vector( sunAtFocus, ground, &inSun );
+		Matrix3D::Inverse_Transform_Vector( sunAtFocus, taken[ i ], &inSun );
 		loX = WWMath::Min( loX, inSun.X );
 		hiX = WWMath::Max( hiX, inSun.X );
 		loY = WWMath::Min( loY, inSun.Y );
@@ -4280,6 +4415,7 @@ static Real shadowMapHalfWidth( const CameraClass &sceneCamera, const Matrix3D &
 	const Real needed = WWMath::Max( hiX - loX, hiY - loY ) * 0.5f;
 	s_sunBoxWanted = needed;
 	s_sunBoxWantedCentred = centred;
+	s_sunBoxWantedUncut = WWMath::Max( uncutHiX - uncutLoX, uncutHiY - uncutLoY ) * 0.5f + SHADOW_MAP_FIT_MARGIN;
 	/* It grows at once and shrinks only a whole step late.  The look point's own ground height moves
 		 the footprint in the sun's frame as the camera scrolls over hills, and a box that followed it
 		 both ways would hop across a step and back, and every shadow edge on the screen with it. */
@@ -4419,7 +4555,7 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 		wholeMapSunBox( toSun, &focus, &halfWidth, &sunDistance, &farClip );
 		transform.Look_At( focus + toSun * sunDistance, focus, 0.0f );
 		boxMiddle = focus;
-		s_sunBoxWanted = s_sunBoxWantedCentred = halfWidth;
+		s_sunBoxWanted = s_sunBoxWantedCentred = s_sunBoxWantedUncut = halfWidth;
 	}
 	else
 	{
@@ -4824,8 +4960,8 @@ void W3DVolumetricShadowManager::renderShadowMap( CameraClass &sceneCamera )
 					oldMeshes.concat(entry);
 				}
 			}
-			DEBUG_LOG(("SHADOWMAP: box half width %.0f, frame wants %.0f (%.0f centred on the look point), %.2f units a texel, %d casters, %d left out as reaching nothing in view, %d light meshes left out, lean %d draws %d instances (%d alpha tested, %d skinned), old %u draws, old meshes:%s, %s\n",
-				halfWidth, s_sunBoxWanted, s_sunBoxWantedCentred, texelWidth,
+			DEBUG_LOG(("SHADOWMAP: box half width %.0f, frame wants %.0f (%.0f centred on the look point, %.0f before the cut to the drawn ground), %.2f units a texel, %d casters, %d left out as reaching nothing in view, %d light meshes left out, lean %d draws %d instances (%d alpha tested, %d skinned), old %u draws, old meshes:%s, %s\n",
+				halfWidth, s_sunBoxWanted, s_sunBoxWantedCentred, s_sunBoxWantedUncut, texelWidth,
 				castersCounted, castersOutOfView, MeshClass::Shadow_Pass_Light_Meshes,
 				DX8MeshRendererClass::Shadow_Lean_Draws, DX8MeshRendererClass::Shadow_Lean_Instances,
 				DX8MeshRendererClass::Shadow_Lean_Alpha_Tested, DX8MeshRendererClass::Shadow_Lean_Skinned,

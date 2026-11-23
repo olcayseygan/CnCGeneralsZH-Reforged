@@ -303,6 +303,7 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 ## Screen and controls
 
 - The command bar and menus no longer go dark now and then, as if a shadow fell over them. The sun's shadows and smoke land only on the battlefield.
+- Zoomed all the way out and looking toward the edge of a map, the sun's shadows stopped short of the top of the screen, because the area they cover was stretched over the black past the map. It now covers only ground that is drawn, and reaches a little further at its widest, so the far rows of trees and buildings keep their shadows.
 - A new match no longer opens on a black screen with only a corner of the map showing. The camera starts over your base every time.
 - Camo Netting no longer hides your base from you: your own camouflaged buildings show as a see-through copy of themselves, the way your camouflaged units do, where a desert base used to vanish into the sand.
 - Zoomed all the way in, the camera now stops 150 above the ground, where it stopped at 90, so the closest look keeps more of the fight around a unit in the picture. From there the wheel takes about twelve notches to the whole map. Mission cutscenes and replays still fly their camera as low as they were made to.

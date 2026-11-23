@@ -30,6 +30,9 @@
 
 #include "d3dx9math.h"
 
+// halvings before getApproximateLength takes the estimate it has: 2^16 pieces at most
+static const Int MAX_LENGTH_SPLITS = 16;
+
 //-------------------------------------------------------------------------------------------------
 BezierSegment::BezierSegment()
 { 
@@ -143,6 +146,17 @@ void BezierSegment::getSegmentPoints(Int numSegments, VecCoord3D *outResult) con
 // There is no known close-form solution to this problem.
 Real BezierSegment::getApproximateLength(Real withinTolerance) const
 {
+	return approximateLength(withinTolerance, MAX_LENGTH_SPLITS);
+}
+
+//-------------------------------------------------------------------------------------------------
+// A curve whose points sit far out (a projectile asked to fly millions of frames) never gets its
+// error under the tolerance in float: every split leaves the same rounding noise, and the
+// recursion ran until the stack overflowed. A sane curve settles in a few splits, so the cap only
+// ever stops the runaway one, and its last level answers with the same average as a settled one.
+//-------------------------------------------------------------------------------------------------
+Real BezierSegment::approximateLength(Real withinTolerance, Int splitsLeft) const
+{
 	/*
 		How this works:
 		We can determine the approximate length of a bezier segment by 
@@ -178,10 +192,10 @@ Real BezierSegment::getApproximateLength(Real withinTolerance) const
 	Real length0 = p0p3.length();
 	Real length1 = p0p1.length() + p1p2.length() + p2p3.length();
 
-	if ((length1 - length0) > withinTolerance) {
+	if ((length1 - length0) > withinTolerance && splitsLeft > 0) {
 		BezierSegment seg1, seg2;
 		splitSegmentAtT(0.5f, seg1, seg2);
-		return (seg1.getApproximateLength(withinTolerance) + seg2.getApproximateLength(withinTolerance));
+		return (seg1.approximateLength(withinTolerance, splitsLeft - 1) + seg2.approximateLength(withinTolerance, splitsLeft - 1));
 	}
 
 	return (INT_TO_REAL(length0 + length1) / 2.0f);

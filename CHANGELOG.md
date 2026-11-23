@@ -259,6 +259,7 @@ A save taken after Jarmen Kell sniped a crew out of a vehicle loaded into a diff
 - Researching an upgrade in an online or LAN game could desync a few seconds later. The buyer's game took the money and the other game never saw the purchase: 11 of the 17 mismatch reports, and in three of those matches the buyer's money differed by exactly the upgrade's price between the two machines. A general's promotion or talent bought in the same way had the same fault. Orders now carry a number that every machine derives the same way.
 - The picture wrote its own copy of a unit's speed, facing, armour and weapon readiness into the game while the simulation ran beside it, so selecting a reloading unit changed its weapon state on your machine only. The picture now only reads.
 - A crash report now names the window that was being drawn.
+- A match no longer crashes when a tank shell is handed an impossible flight path. It hit about frame 200 and was seen on a GeForce GT 730 thirteen times on v4.3.2.
 
 ## Long matches keep a short log
 

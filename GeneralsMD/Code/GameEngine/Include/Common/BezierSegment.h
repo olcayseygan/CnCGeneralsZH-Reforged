@@ -68,6 +68,9 @@ class BezierSegment
 
 		void splitSegmentAtT(Real tValue, BezierSegment &outSeg1, BezierSegment &outSeg2) const;
 
+	private:
+		Real approximateLength(Real withinTolerance, Int splitsLeft) const;
+
 	public:	// He get's friendly access.
 		friend class BezFwdIterator;
 };

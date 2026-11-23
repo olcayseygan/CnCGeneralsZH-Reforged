@@ -60,6 +60,12 @@ found and fixed, EA's own, not port damage.**
 - A computer weighed only itself before typing GG, so allied Easy seats facing one strong player each saw a lost match and gave up unfought; seven Easy seats against one player given 180 tanks were all gone before a shot was fired. A computer now sets its whole team's worth against the strongest enemy team. In ten matches of two allied Easy seats against one computer at a rating of 4200, three seats gave up, each with its team under a fifth of the enemy's worth.
 - Replays with a computer player recorded before this change will not play back.
 
+## Ray traced sun shadows
+
+- Shadow Quality under Options, Effects has a fourth choice above High: Ray Traced. High's shadow is a picture of the battlefield seen from the sun, and every shadow is read off it, so its edge can never be finer than that picture's dots. Ray Traced follows a line from each pixel on your screen to the sun and checks it against the real triangles of every tank and building in the way, so their shadows are as sharp as your screen at any zoom. Leaves, fences and rotors still take their shadow from High's picture, which keeps their gaps.
+- It is new and still experimental, and it costs: on Twilight Flame at 1280x720 the graphics card's frame went from 1.18 ms to 2.35 ms, on Heartland Shield from 1.36 ms to 2.94 ms. Water, smoke and anything see-through keep High's shadows.
+- It needs Direct3D 11 on Windows. Under Direct3D 9 and in the Mac and Linux builds the choice is not in the list, and a saved Ray Traced draws High there. The Performance / Quality slider never picks it. Looks only: replays and network games play the same with it on or off.
+
 ## Supporter and Bug Hunter skins
 
 - Backing the project now shows on your supply line. A supporter's Chinook and China Supply Truck wear a gunmetal hull with metal lines that climb with what you gave in total: Iron, Bronze, Silver, Gold, Emerald with green inlay, and at the top Reforged, gold on platinum with navy pinstripes. Every general's Chinook takes it, the Air Force General's Combat Chinook included, and so does the truck, its burnt hull and the pieces it throws when it dies. Your team colour stays on the trim, the crates keep their own paint, and a unit wears one grade at a time.

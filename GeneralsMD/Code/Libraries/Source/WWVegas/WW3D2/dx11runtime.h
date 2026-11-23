@@ -320,6 +320,14 @@ void Direct3D11_Occlude_Scene();
 // graphics, -headless and the SDL3 port draw nothing here.
 void Direct3D11_Ambient_Occlusion();
 
+// -rtShadows (DX11BackendClass::Set_Ray_Traced_Shadows): the sun's casters streamed out of their
+// pass and traced against, one ray a pixel, in place of the map.  Set says whether it is wanted
+// (said every caster pass); the trace goes on the opaque world before the ambient occlusion and the
+// water, and does nothing on a frame whose caster pass did not stream.  The report is one line.
+void Direct3D11_Set_Ray_Traced_Shadows(bool wanted);
+void Direct3D11_Ray_Traced_Shadows();
+std::string Direct3D11_Ray_Shadow_Report();
+
 // The fog's memory look (DX11PostProcessClass::Shroud_Memory_Scene), called after the water and before
 // the translucent meshes: it greys every pixel by the ground under it, and a translucent mesh drawn
 // first, the placement ghost above all, lost its red over black shroud with the ground.

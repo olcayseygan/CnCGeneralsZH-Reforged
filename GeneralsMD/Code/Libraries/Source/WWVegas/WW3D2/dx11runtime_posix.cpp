@@ -106,6 +106,9 @@ unsigned Direct3D11_Requested_Draw_Effect(float parameters[4])
 }
 void Direct3D11_Occlude_Scene() {}
 void Direct3D11_Ambient_Occlusion() {}
+void Direct3D11_Set_Ray_Traced_Shadows(bool) {}
+void Direct3D11_Ray_Traced_Shadows() {}
+std::string Direct3D11_Ray_Shadow_Report() { return std::string("no Direct3D 11 backend"); }
 void Direct3D11_Shroud_Memory() {}
 void Direct3D11_Set_Glow_Draw(bool) {}
 void Direct3D11_Set_Scene_Stand_In(struct IDirect3DBaseTexture9 *, struct IDirect3DSurface9 *) {}

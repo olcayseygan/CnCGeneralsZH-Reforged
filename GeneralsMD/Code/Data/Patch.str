@@ -1973,8 +1973,12 @@ GUI:ShadowQuality2
 "High"
 END
 
+GUI:ShadowQuality3
+"Ray Traced"
+END
+
 TOOLTIP:ShadowQuality
-"How sharp unit and building shadows are. High takes about 64 MB of video memory, Low frees memory on a weak card. Direct3D 11 only, and not with Classic Graphics. Applies when you press Accept."
+"How sharp unit and building shadows are. High takes about 64 MB of video memory, Low frees memory on a weak card. Ray Traced follows every pixel's line to the sun past the real shape of each tank and building, so their shadows stay sharp at any zoom; it costs up to 1.6 ms a frame and is still experimental. Direct3D 11 only, and not with Classic Graphics. Applies when you press Accept."
 END
 
 GUI:VolumetricSmoke

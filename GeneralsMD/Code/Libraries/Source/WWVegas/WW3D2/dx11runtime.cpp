@@ -1014,6 +1014,23 @@ void Direct3D11_Ambient_Occlusion()
 	}
 }
 
+void Direct3D11_Set_Ray_Traced_Shadows(bool wanted)
+{
+	Backend.Set_Ray_Traced_Shadows(wanted);
+}
+
+void Direct3D11_Ray_Traced_Shadows()
+{
+	if (Active && Backend.Trace_Ray_Shadows()) {
+		Backend.Resume_Scene();
+	}
+}
+
+std::string Direct3D11_Ray_Shadow_Report()
+{
+	return Active ? Backend.Ray_Shadow_Report() : std::string("no Direct3D 11 backend");
+}
+
 void Direct3D11_Shroud_Memory()
 {
 	if (!Active || !Backend.Draws_Into_Scene()) {

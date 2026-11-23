@@ -435,6 +435,18 @@ public:
 	// value, and no draw count tells that apart from a pass that drew the world.
 	std::string Shadow_Map_Report();
 
+	// Ray traced sun shadows, -rtShadows, a prototype.  While asked for, the sun's map is drawn as
+	// ever and a geometry program on the pass streams each solid caster's triangles out in the sun's
+	// clip space; a caster cut at its alpha (foliage, fences, rotors, the cloak's thinned shadow)
+	// marks the map's stencil instead.  A compute pass bins the triangles into a grid across the
+	// sun's view, and once the opaque world is down (Trace_Ray_Shadows) one ray a pixel goes from the
+	// scene's depth toward the sun through that grid, the map's marked texels and over the ground.  Only the opaque scene's receivers
+	// stand down for it; water, the mirror, anything translucent and a filter's frame keep the map.
+	// Off, none of it is made or bound.
+	void Set_Ray_Traced_Shadows(bool wanted) { RayShadowsWanted = wanted; }
+	bool Trace_Ray_Shadows();
+	std::string Ray_Shadow_Report();
+
 	// The two draws.  Both resolve the shadow state into a pipeline first, and both return false
 	// when some part of that state has no D3D11 answer, which leaves the draw undone rather than
 	// drawn wrongly.
@@ -739,6 +751,88 @@ private:
 	float ShadowFromClipProjection[16];
 	bool ShadowFromClipValid;
 
+	// Ray traced shadows (Set_Ray_Traced_Shadows).  The triangles go out of the caster pass as three
+	// float4 corners each, the fourth float a stamp of the pass that wrote them, so the slots an
+	// earlier and fuller pass left behind are told apart without clearing 24 MB a frame.
+	bool Make_Ray_Shadows();
+	void Release_Ray_Shadows();
+	void Begin_Ray_Capture();
+	void End_Ray_Capture();
+	// Around the second draw a solid caster drawn one by one makes for the rays.
+	void Begin_Ray_Copy();
+	void End_Ray_Copy();
+	bool Ray_Draw_Is_Cut() const;
+	float Sun_Depth_Scale() const;
+	bool Make_Ray_Mask();
+	bool Ray_Shade_Pending() const;
+	enum { RAY_CUT_STENCIL = 1 };	///< the map's stencil where the caster nearest the sun was cut at its alpha
+	bool RayShadowsWanted;
+	bool RayShadowsRefused;
+	bool RayCapturing;
+	bool RayCaptured;				///< this frame's triangles are binned and the opaque scene's receivers stand down
+	unsigned RayStamp;
+	float RayStrength;
+	ID3D11ShaderResourceView * RayStencilRead;	///< the map's stencil, let go with the map's surface
+	float RayProbe[4];							///< ZHR_RT_PROBE's screen rectangle, left, top, right, bottom
+	unsigned RayProbeCounts[8];					///< the trace's counts inside it (RAY_HIT_COUNTS)
+	unsigned RaySolidCopies;		///< the last caster pass's second draws of solid casters drawn one by one
+	unsigned RayPassesLeftToMap;	///< caster passes under a filter's target, whose frame kept the map
+	ID3D11GeometryShader * RayCaptureShader;		///< streams and rasterises nothing: a generic draw's second go
+	ID3D11GeometryShader * RayCaptureRasterShader;	///< streams and rasterises: the instanced solid runs, whose pixel program is none
+	ID3D11Buffer * RayCaptureConstants;
+	ID3D11Buffer * RayCorners;
+	ID3D11ShaderResourceView * RayCornersView;
+	ID3D11Buffer * RayCells[6];		///< counts, starts within a block of 1024 cells, cursors, items, block starts, rays stopped
+	ID3D11UnorderedAccessView * RayCellWrites[6];
+	ID3D11ShaderResourceView * RayCellReads[6];
+	ID3D11ComputeShader * RayCountShader;
+	ID3D11ComputeShader * RayScanShader;
+	ID3D11ComputeShader * RayBlockShader;
+	ID3D11ComputeShader * RayFillShader;
+	ID3D11ComputeShader * RayTraceShader;
+	ID3D11PixelShader * RayApplyShader;
+	ID3D11Buffer * RayConstants;
+	ID3D11BlendState * RayApplyBlend;
+	ID3D11DepthStencilState * RayApplyDepth;
+	ID3D11RasterizerState * RayApplyRasterizer;
+	ID3D11Texture2D * RayMask;
+	ID3D11UnorderedAccessView * RayMaskWrite;
+	ID3D11ShaderResourceView * RayMaskRead;
+	unsigned RayMaskWidth;
+	unsigned RayMaskHeight;
+	// Read back a few frames late, so nothing waits: the triangles written and wanted, the grid's
+	// references, and the GPU's time from the caster pass to the bins and from the trace to the end.
+	struct RayFrameQueries
+	{
+		ID3D11Query * Disjoint;
+		ID3D11Query * Start;
+		ID3D11Query * Captured;
+		ID3D11Query * Binned;
+		ID3D11Query * TraceStart;
+		ID3D11Query * Traced;
+		ID3D11Query * Streamed;
+		ID3D11Buffer * References;
+		bool Open;
+		bool Issued;
+		bool WasTraced;
+	};
+	enum { RAY_QUERY_FRAMES = 4 };
+	RayFrameQueries RayQueries[RAY_QUERY_FRAMES];
+	unsigned RayQueryFrame;
+	unsigned long long RayTrianglesWritten;
+	unsigned long long RayTrianglesWanted;
+	unsigned RayReferences;
+	unsigned RayStoppedByCasters;
+	unsigned RayStoppedByGround;
+	unsigned RayStoppedByCut;
+	unsigned RayStoppedByMap;		///< rays the sun's map would have stopped at the same point, one texel
+	unsigned RayRaysOnly;			///< rays a caster stopped where the map would not have
+	unsigned RayMapOnly;			///< the other way round
+	float RayCaptureMS;
+	float RayBinMS;
+	float RayTraceMS;
+	unsigned RayTracedPixels;
+
 	// Set_Scene_View's matrix, and whether it has been set; and the projection held when it was,
 	// which is the scene camera's own (Set_Scene_View follows the camera's Apply).
 	float SceneView[16];
@@ -837,6 +931,7 @@ private:
 	ID3D11ShaderResourceView * TerrainHeightsView;
 	unsigned TerrainHeightsWidth;
 	unsigned TerrainHeightsHeight;
+	unsigned TerrainHeightsHighest;	///< the highest byte, where a ray toward the sun stops looking for ground
 	bool Terrain_Relight() const;
 	void Release_Terrain_Heights();
 	// Set_Soft_Particles, and which fade the current draw takes (a SOFT_PARTICLE_* value).

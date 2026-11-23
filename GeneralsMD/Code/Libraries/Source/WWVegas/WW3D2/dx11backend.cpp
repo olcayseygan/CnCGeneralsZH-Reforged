@@ -366,6 +366,56 @@ DX11BackendClass::DX11BackendClass()
 	TerrainHeightsView = NULL;
 	TerrainHeightsWidth = 0;
 	TerrainHeightsHeight = 0;
+	TerrainHeightsHighest = 255;
+	RayShadowsWanted = false;
+	RayShadowsRefused = false;
+	RayCapturing = false;
+	RayCaptured = false;
+	RayStamp = 0;
+	RayStrength = 0.0f;
+	RayStencilRead = NULL;
+	memset(RayProbe, 0, sizeof(RayProbe));
+	memset(RayProbeCounts, 0, sizeof(RayProbeCounts));
+	RaySolidCopies = 0;
+	RayPassesLeftToMap = 0;
+	RayStoppedByCut = 0;
+	RayStoppedByMap = 0;
+	RayRaysOnly = 0;
+	RayMapOnly = 0;
+	RayCaptureShader = NULL;
+	RayCaptureRasterShader = NULL;
+	RayCaptureConstants = NULL;
+	RayCorners = NULL;
+	RayCornersView = NULL;
+	memset(RayCells, 0, sizeof(RayCells));
+	memset(RayCellWrites, 0, sizeof(RayCellWrites));
+	memset(RayCellReads, 0, sizeof(RayCellReads));
+	RayCountShader = NULL;
+	RayScanShader = NULL;
+	RayBlockShader = NULL;
+	RayFillShader = NULL;
+	RayTraceShader = NULL;
+	RayApplyShader = NULL;
+	RayConstants = NULL;
+	RayApplyBlend = NULL;
+	RayApplyDepth = NULL;
+	RayApplyRasterizer = NULL;
+	RayMask = NULL;
+	RayMaskWrite = NULL;
+	RayMaskRead = NULL;
+	RayMaskWidth = 0;
+	RayMaskHeight = 0;
+	memset(RayQueries, 0, sizeof(RayQueries));
+	RayQueryFrame = 0;
+	RayTrianglesWritten = 0;
+	RayTrianglesWanted = 0;
+	RayReferences = 0;
+	RayStoppedByCasters = 0;
+	RayStoppedByGround = 0;
+	RayCaptureMS = 0.0f;
+	RayBinMS = 0.0f;
+	RayTraceMS = 0.0f;
+	RayTracedPixels = 0;
 	SoftParticles = false;
 	SoftParticlesAllowed = true;
 	SceneDepthCopy = NULL;
@@ -624,6 +674,8 @@ void DX11BackendClass::Shutdown()
 	ShadowMapSize = 0;
 	ShadowMapBound = false;
 	Release_Smoke_Map();
+	Release_Ray_Shadows();
+	RayShadowsRefused = false;		// a new device may make them
 	Release_Terrain_Heights();
 	Release_Shadow_Casters();
 	Release_Scene_Depth();
@@ -654,6 +706,10 @@ bool DX11BackendClass::Begin_Shadow_Map(unsigned size)
 		ShadowMapSurface->Release();
 		ShadowMapSurface = NULL;
 		ShadowMapSize = 0;
+		if (RayStencilRead != NULL) {	// the rays' view of the surface just let go
+			RayStencilRead->Release();
+			RayStencilRead = NULL;
+		}
 	}
 
 	if (ShadowMapSurface == NULL) {
@@ -719,6 +775,15 @@ bool DX11BackendClass::Begin_Shadow_Map(unsigned size)
 	Note_Shadow_State_Changed();
 	Set_Viewport(0, 0, ShadowMapSize, ShadowMapSize);
 	Forget_Bindings();
+	// Decided here and not when the rays would run: a filter's frame (black and white, the blur
+	// zoom, the cross fade) draws into a target of its own, the rays could not shade it, and its
+	// receivers have to keep the map.
+	RayCaptured = false;
+	if (RayShadowsWanted && ShadowMapSavedTarget == NULL) {
+		Begin_Ray_Capture();
+	} else if (RayShadowsWanted) {
+		++RayPassesLeftToMap;
+	}
 	return true;
 }
 
@@ -734,6 +799,9 @@ void DX11BackendClass::End_Shadow_Map()
 	// What the sun was looking through, kept for the draws that will read the map.
 	multiply(View, Projection, SunViewProjection);
 	ShadowFromClipValid = false;
+	if (RayCapturing) {
+		End_Ray_Capture();
+	}
 	// Back to whatever the frame was drawing into, which is a texture the post chain shows and not
 	// the back buffer.
 	Set_Render_Target(ShadowMapSavedTarget);
@@ -754,6 +822,7 @@ void DX11BackendClass::Set_Shadow_Parameters(float bias, float strength,
 	}
 	ShadowBias = bias;
 	ShadowStrength = strength;
+	RayStrength = strength;
 	ShadowRadius = widest_radius_in_texels;
 	ShadowNarrowestRadius = narrowest_radius_in_texels;
 	ShadowTexelsPerGap = texels_per_unit_of_gap;
@@ -1513,17 +1582,25 @@ bool DX11BackendClass::Draw_Shadow_Casters(const ShadowCasterRun * runs, unsigne
 	for (unsigned index = 0; index < run_count; ++index) {
 		const ShadowCasterRun & run = runs[index];
 		if (!states_known || run.CullMode != RenderStates.Get_Stored_Render_State(D3DRS_CULLMODE)
-				|| run.DepthFunction != RenderStates.Get_Stored_Render_State(D3DRS_ZFUNC)) {
+				|| run.DepthFunction != RenderStates.Get_Stored_Render_State(D3DRS_ZFUNC)
+				|| (RayCapturing && run.Kind != bound_kind)) {
 			Set_Render_State(D3DRS_CULLMODE, run.CullMode);
 			Set_Render_State(D3DRS_ZFUNC, run.DepthFunction);
 			context->RSSetState(Rasterizer_State());
-			context->OMSetDepthStencilState(Depth_Stencil_State(), RenderStates.Get_Stencil_Reference());
+			const UINT reference = !RayCapturing ? RenderStates.Get_Stencil_Reference()
+				: (run.Kind == SHADOW_CASTER_ALPHA_TESTED) ? RAY_CUT_STENCIL : 0;
+			context->OMSetDepthStencilState(Depth_Stencil_State(), reference);
 			states_known = true;
 		}
 		if (index == 0 || run.Kind != bound_kind) {
 			context->IASetInputLayout(ShadowCasterLayouts[run.Kind]);
 			context->VSSetShader(ShadowCasterVertexShaders[run.Kind], NULL, 0);
 			context->PSSetShader((run.Kind == SHADOW_CASTER_ALPHA_TESTED) ? ShadowCasterAlphaTest : NULL, NULL, 0);
+			// For the rays a solid run draws through the capture program that also rasterises, so the
+			// map and the stream come out of one draw; its pixel program is none, which reads nothing.
+			if (RayCapturing) {
+				context->GSSetShader((run.Kind == SHADOW_CASTER_ALPHA_TESTED) ? NULL : RayCaptureRasterShader, NULL, 0);
+			}
 			bound_kind = run.Kind;
 			bound_vertices = NULL;
 		}
@@ -1550,6 +1627,9 @@ bool DX11BackendClass::Draw_Shadow_Casters(const ShadowCasterRun * runs, unsigne
 		context->DrawIndexedInstanced(run.IndexCount, run.InstanceCount, run.StartIndex,
 			static_cast<INT>(run.BaseVertex), run.FirstInstance);
 		++DrawsMade;
+	}
+	if (RayCapturing) {
+		context->GSSetShader(NULL, NULL, 0);
 	}
 	Set_Render_State(D3DRS_CULLMODE, held_cull);
 	Set_Render_State(D3DRS_ZFUNC, held_depth);
@@ -1910,6 +1990,13 @@ bool DX11BackendClass::Set_Terrain_Heights(const unsigned char * heights, unsign
 {
 	if (Device == NULL || heights == NULL || width == 0 || height == 0) {
 		return false;
+	}
+	if (RayShadowsWanted) {
+		unsigned highest = 0;
+		for (unsigned index = 0; index < width * height; ++index) {
+			highest = (heights[index] > highest) ? heights[index] : highest;
+		}
+		TerrainHeightsHighest = highest;
 	}
 	if (TerrainHeights != NULL && width == TerrainHeightsWidth && height == TerrainHeightsHeight) {
 		Device->Get_Context()->UpdateSubresource(TerrainHeights, 0, NULL, heights, width, 0);
@@ -3859,7 +3946,7 @@ void DX11BackendClass::Upload_Pixel_Constants()
 		pixel_block.ShadowParameters[0] = (ShadowMapSize > 0)
 			? 1.0f / static_cast<float>(ShadowMapSize) : 0.0f;
 		pixel_block.ShadowParameters[1] = ShadowBias;
-		pixel_block.ShadowParameters[2] = ShadowStrength;
+		pixel_block.ShadowParameters[2] = Ray_Shade_Pending() ? 0.0f : ShadowStrength;
 		pixel_block.ShadowParameters[3] = ShadowRadius;
 		pixel_block.ShadowViewport[0] = (ViewportWidth > 0)
 			? 1.0f / static_cast<float>(ViewportWidth) : 0.0f;
@@ -4003,6 +4090,21 @@ ID3D11DepthStencilState * DX11BackendClass::Depth_Stencil_State()
 {
 	D3D11_DEPTH_STENCIL_DESC description;
 	RenderStates.Build_Depth_Stencil_Description(description);
+	// For the rays every caster writes its stencil where it lands nearest the sun: RAY_CUT_STENCIL
+	// for one cut at its alpha, nought for a solid one (the reference, Bind_State_Objects).  One
+	// drawn without the depth test lands anywhere, nearest or not, and marks nothing.
+	if (RayCapturing && description.DepthEnable) {
+		description.StencilEnable = TRUE;
+		description.StencilReadMask = 0xff;
+		description.StencilWriteMask = 0xff;
+		D3D11_DEPTH_STENCILOP_DESC mark;
+		mark.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+		mark.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+		mark.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+		mark.StencilFunc = D3D11_COMPARISON_ALWAYS;
+		description.FrontFace = mark;
+		description.BackFace = mark;
+	}
 	if (LastDepthStencilState != NULL
 		&& memcmp(&LastDepthStencilDescription, &description, sizeof(description)) == 0) {
 		return LastDepthStencilState;
@@ -4132,7 +4234,8 @@ void DX11BackendClass::Bind_State_Objects()
 		context->OMSetBlendState(blend, glow ? gain : NULL, 0xffffffff);
 		Bound.Blend = blend;
 	}
-	const UINT stencil_reference = RenderStates.Get_Stencil_Reference();
+	const UINT stencil_reference = !RayCapturing ? RenderStates.Get_Stencil_Reference()
+		: Ray_Draw_Is_Cut() ? RAY_CUT_STENCIL : 0;
 	if (!known || depth_stencil != Bound.DepthStencil || stencil_reference != Bound.StencilReference) {
 		context->OMSetDepthStencilState(depth_stencil, stencil_reference);
 		Bound.DepthStencil = depth_stencil;
@@ -4417,6 +4520,11 @@ bool DX11BackendClass::Draw_Indexed(unsigned index_count, unsigned start_index,
 	if (water) {
 		Unbind_Water();
 	}
+	if (RayCapturing && !Ray_Draw_Is_Cut()) {
+		Begin_Ray_Copy();
+		context->DrawIndexed(index_count, start_index, base_vertex);
+		End_Ray_Copy();
+	}
 
 	++DrawsMade;
 	// The soft particles' copy of the depth is behind whatever this wrote into the scene's depth
@@ -4474,6 +4582,11 @@ bool DX11BackendClass::Draw_Triangles(unsigned vertex_count, unsigned start_vert
 	context->Draw(vertex_count, start_vertex);
 	if (water) {
 		Unbind_Water();
+	}
+	if (RayCapturing && !Ray_Draw_Is_Cut()) {
+		Begin_Ray_Copy();
+		context->Draw(vertex_count, start_vertex);
+		End_Ray_Copy();
 	}
 
 	++DrawsMade;
@@ -4644,6 +4757,11 @@ bool DX11BackendClass::Draw_User_Strip(const void * vertices, unsigned primitive
 	Bind_Pipeline(pipeline, UserBuffer, stride, 0, NULL, DXGI_FORMAT_UNKNOWN,
 		D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context->Draw(list_vertex_count, 0);
+	if (RayCapturing && !Ray_Draw_Is_Cut()) {
+		Begin_Ray_Copy();
+		context->Draw(list_vertex_count, 0);
+		End_Ray_Copy();
+	}
 
 	++DrawsMade;
 	// The soft particles' copy of the depth is behind whatever this wrote into the scene's depth
@@ -4770,4 +4888,1066 @@ void DX11BackendClass::Take_Frame_Constant_Writes(unsigned & writes, unsigned & 
 	renames = FrameConstantRenames;
 	FrameConstantWrites = 0;
 	FrameConstantRenames = 0;
+}
+
+/*
+** Ray traced sun shadows (-rtShadows), a prototype.
+**
+** Direct3D 11 has no ray tracing of its own, so the rays are compute threads and the scene they
+** are traced against is the sun's caster pass itself.  The map is drawn as ever, and a geometry
+** program streams each solid caster's triangles (rigid, skinned, instanced, bridges, fragments)
+** out in the sun's clip space: on the map's own draw for the instanced runs, on a second draw that
+** rasterises nothing for the few drawn one by one.  The sun is a direction, so in its clip space
+** every ray to it runs straight along z, and a grid laid across the sun's x and y is an
+** acceleration structure a ray crosses in exactly one cell: no traversal, no tree to build, one
+** list of triangles to test.  The grid is built by counting, a prefix sum and a fill, three
+** dispatches.
+**
+** A caster cut at its alpha (leaves, fences, rotor blades, the cloak's thinned shadow) cannot be
+** streamed, since a triangle carries no texel to cut by, so its draw into the map writes the map's
+** stencil, RAY_CUT_STENCIL where it lands nearest the sun and nought where a solid caster does,
+** and a ray takes the map's depth where it crosses a marked texel.  That is exact: a solid caster
+** behind a cut one is still found among the triangles, and one in front unmarks the texel and is
+** found there too.  Streamed as solid, a pine was a stack of cards that shadowed itself.  (A
+** depth map of the cut casters' own, drawn a second time, cost 0.35 ms in its clear alone and as
+** much again in switching depth targets.)
+**
+** The ray starts at the scene's depth.  A hit is a triangle the pixel falls inside, in x and y,
+** whose depth at that point is nearer the sun than the pixel by more than a bias, or a cut texel
+** nearer by the same, or the ground, a heightfield that is marched.  What comes out is a mask, one
+** ray a pixel, which a full screen pass softens by how far the blocker was and multiplies onto the
+** opaque scene before the water and anything translucent goes down, the same place and the same
+** multiply the map's receivers make (SHADOW_APPLY), its dark pixel guard read off a copy of the
+** scene.  A pine's far side is in its own shadow under the map and the rays alike (Heartland's
+** probe: 2066 rays stopped, 2070 for the map alone), and at a grey near 0.08 the guard keeps half
+** of that shadow off it; without the guard the pine read as darkened whole.  Only the opaque scene
+** takes the rays: everything drawn after them, into a mirror or a
+** filter's target, keeps the map, which is why the map is still drawn.  A pass whose triangles or
+** references overflowed their buffers reads its solid casters from the map too.
+**
+** ponytail: the mask is one ray a pixel over the resolved depth (sample 0), so under -msaa an edge
+** sample takes its pixel's shade, a one pixel fringe where a unit's edge crosses a shadow's.  A
+** per-sample trace and apply is the upgrade.
+*/
+
+static const unsigned RAY_GRID = 512;							///< cells a side; RAY_PROGRAM_COMMON's GRID
+static const unsigned RAY_BLOCKS = RAY_GRID * RAY_GRID / 1024;	///< the prefix sum's blocks of 1024 cells
+static const unsigned RAY_TRIANGLE_SLOTS = 1u << 19;			///< triangles one caster pass can stream out
+static const unsigned RAY_REFERENCE_SLOTS = 1u << 23;			///< triangle entries over every cell
+static const float RAY_DEPTH_BIAS = 1.5f;						///< world units nearer the sun a blocker has to be
+static const float RAY_NORMAL_OFFSET = 1.0f;					///< world units the ray starts off its surface
+// Rays stopped by a solid caster, the ground, a cut caster; rays the map alone would have stopped,
+// rays a caster stopped and the map would not have, and the other way round.  Then the probe's:
+// pixels, rays stopped by a solid caster, a cut caster, the ground, the map alone; the scene's grey
+// before the shade, after it and after it without the dark pixel guard, each in 256ths.
+static const unsigned RAY_HIT_COUNTS = 14;
+static const float RAY_PROBE_STEPS = 256.0f;
+
+struct RayConstantBlock
+{
+	float WorldFromClip[16];
+	float SunFromWorld[16];
+	float Screen[4];		///< width, height and their reciprocals
+	float Sun[4];			///< the way to the sun in the world, and world units per unit of sun depth
+	float Tuning[4];		///< depth bias, normal offset, reference slots, ground marched
+	float Ground[4];		///< height cells per world unit, border cells, world units per height byte, highest ground
+	float Bin[4];			///< stamp, triangle slots, unused, strength
+	float Cut[4];			///< one over the map's size, world units a texel of it, the cut casters' stencil
+	float Probe[4];			///< the screen rectangle the report counts on its own (ZHR_RT_PROBE), left, top, right, bottom
+};
+
+static const char RAY_CAPTURE_PROGRAM[] =
+	"cbuffer Capture : register(b0) { float4 Stamp; };\n"
+	"struct Corner { float4 Position : SV_Position; };\n"
+	"struct Written { float4 Position : SV_Position; float4 Sun : TEXCOORD0; };\n"
+	"[maxvertexcount(3)]\n"
+	"void main(triangle Corner corner[3], inout TriangleStream<Written> stream)\n"
+	"{\n"
+	"    [unroll] for (int i = 0; i < 3; ++i) {\n"
+	"        Written written;\n"
+	"        written.Position = corner[i].Position;\n"
+	"        written.Sun = float4(corner[i].Position.xyz / corner[i].Position.w, Stamp.x);\n"
+	"        stream.Append(written);\n"
+	"    }\n"
+	"}\n";
+
+static const char RAY_PROGRAM_COMMON[] =
+	"#define GRID 512\n"
+	"#define PROBE_STEPS 256.0\n"		// RAY_PROBE_STEPS
+	"#define DARK_GUARD 6.0\n"		// SHADOW_LIT's: full shadow from a sixth of white up
+	"cbuffer Ray : register(b0)\n"
+	"{\n"
+	"    row_major float4x4 WorldFromClip;\n"
+	"    row_major float4x4 SunFromWorld;\n"
+	"    float4 Screen;\n"
+	"    float4 Sun;\n"
+	"    float4 Tuning;\n"
+	"    float4 Ground;\n"
+	"    float4 Bin;\n"
+	"    float4 Cut;\n"
+	"    float4 Probe;\n"
+	"};\n";
+
+// The cells under a triangle's box, for a triangle this pass wrote and that has an area in the sun's
+// view: one edge on to the sun covers nothing.
+static const char RAY_PROGRAM_CELLS[] =
+	"Buffer<float4> Corners : register(t0);\n"
+	"bool triangle_cells(uint index, out int4 cells)\n"
+	"{\n"
+	"    cells = int4(0, 0, -1, -1);\n"
+	"    float4 a = Corners[index * 3];\n"
+	"    float4 b = Corners[index * 3 + 1];\n"
+	"    float4 c = Corners[index * 3 + 2];\n"
+	"    if (a.w != Bin.x || b.w != Bin.x || c.w != Bin.x) return false;\n"
+	"    float2 ab = b.xy - a.xy;\n"
+	"    float2 ac = c.xy - a.xy;\n"
+	"    if (abs(ab.x * ac.y - ab.y * ac.x) < 1e-12) return false;\n"
+	"    float2 lo = min(a.xy, min(b.xy, c.xy));\n"
+	"    float2 hi = max(a.xy, max(b.xy, c.xy));\n"
+	"    if (any(hi < -1.0) || any(lo > 1.0)) return false;\n"
+	"    cells.xy = clamp(int2(floor((lo * 0.5 + 0.5) * GRID)), 0, GRID - 1);\n"
+	"    cells.zw = clamp(int2(floor((hi * 0.5 + 0.5) * GRID)), 0, GRID - 1);\n"
+	"    return true;\n"
+	"}\n";
+
+static const char RAY_COUNT_PROGRAM[] =
+	"RWBuffer<uint> Counts : register(u0);\n"
+	"[numthreads(64, 1, 1)]\n"
+	"void main(uint3 id : SV_DispatchThreadID)\n"
+	"{\n"
+	"    int4 cells;\n"
+	"    if (id.x >= (uint)Bin.y || !triangle_cells(id.x, cells)) return;\n"
+	"    for (int y = cells.y; y <= cells.w; ++y)\n"
+	"        for (int x = cells.x; x <= cells.z; ++x)\n"
+	"            InterlockedAdd(Counts[y * GRID + x], 1);\n"
+	"}\n";
+
+// The prefix sum in two steps: a group a block of 1024 cells writes each cell's start within its
+// block and the block's total, then one group turns the 256 totals into the blocks' starts, the
+// whole count after the last.  A cell's start is the two added.  (One group doing all 262144 cells
+// in runs was 1.4 ms of the 1.7 the bins took.)
+static const char RAY_SCAN_PROGRAM[] =
+	"RWBuffer<uint> Counts : register(u0);\n"
+	"RWBuffer<uint> Starts : register(u1);\n"
+	"RWBuffer<uint> Blocks : register(u2);\n"
+	"groupshared uint Sums[1024];\n"
+	"[numthreads(1024, 1, 1)]\n"
+	"void main(uint3 group : SV_GroupID, uint3 id : SV_GroupThreadID)\n"
+	"{\n"
+	"    uint cell = group.x * 1024 + id.x;\n"
+	"    uint count = Counts[cell];\n"
+	"    Sums[id.x] = count;\n"
+	"    GroupMemoryBarrierWithGroupSync();\n"
+	"    for (uint step = 1; step < 1024; step <<= 1) {\n"
+	"        uint before = (id.x >= step) ? Sums[id.x - step] : 0;\n"
+	"        GroupMemoryBarrierWithGroupSync();\n"
+	"        Sums[id.x] += before;\n"
+	"        GroupMemoryBarrierWithGroupSync();\n"
+	"    }\n"
+	"    Starts[cell] = Sums[id.x] - count;\n"
+	"    if (id.x == 1023) Blocks[group.x] = Sums[1023];\n"
+	"}\n";
+
+static const char RAY_BLOCK_PROGRAM[] =
+	"RWBuffer<uint> Blocks : register(u0);\n"
+	"groupshared uint Sums[GRID * GRID / 1024];\n"
+	"[numthreads(GRID * GRID / 1024, 1, 1)]\n"
+	"void main(uint3 id : SV_GroupThreadID)\n"
+	"{\n"
+	"    const uint last = GRID * GRID / 1024 - 1;\n"
+	"    uint total = Blocks[id.x];\n"
+	"    Sums[id.x] = total;\n"
+	"    GroupMemoryBarrierWithGroupSync();\n"
+	"    for (uint step = 1; step <= last; step <<= 1) {\n"
+	"        uint before = (id.x >= step) ? Sums[id.x - step] : 0;\n"
+	"        GroupMemoryBarrierWithGroupSync();\n"
+	"        Sums[id.x] += before;\n"
+	"        GroupMemoryBarrierWithGroupSync();\n"
+	"    }\n"
+	"    Blocks[id.x] = Sums[id.x] - total;\n"
+	"    if (id.x == last) Blocks[last + 1] = Sums[last];\n"
+	"}\n";
+
+static const char RAY_FILL_PROGRAM[] =
+	"Buffer<uint> Starts : register(t1);\n"
+	"Buffer<uint> Blocks : register(t2);\n"
+	"RWBuffer<uint> Cursors : register(u0);\n"
+	"RWBuffer<uint> Items : register(u1);\n"
+	"[numthreads(64, 1, 1)]\n"
+	"void main(uint3 id : SV_DispatchThreadID)\n"
+	"{\n"
+	"    int4 cells;\n"
+	"    if (id.x >= (uint)Bin.y || !triangle_cells(id.x, cells)) return;\n"
+	"    for (int y = cells.y; y <= cells.w; ++y) {\n"
+	"        for (int x = cells.x; x <= cells.z; ++x) {\n"
+	"            uint cell = y * GRID + x;\n"
+	"            uint slot;\n"
+	"            InterlockedAdd(Cursors[cell], 1, slot);\n"
+	"            slot += Starts[cell] + Blocks[cell >> 10];\n"
+	"            if (slot < (uint)Tuning.z) Items[slot] = id.x;\n"
+	"        }\n"
+	"    }\n"
+	"}\n";
+
+// One ray a pixel.  The pixel comes back to the world through the frame's camera (the viewport's
+// half pixel puts column x at ndc x / width), starts a unit off its own surface toward the sun, and
+// is tested against its cell's triangles, then marched over the ground's heights.  The surface's
+// normal is the shorter of the two differences each way, so an edge does not take its background's.
+static const char RAY_TRACE_PROGRAM[] =
+	"Texture2D<float> Depth : register(t0);\n"
+	"Buffer<float4> Corners : register(t1);\n"
+	"Buffer<uint> Starts : register(t2);\n"
+	"Buffer<uint> Counts : register(t3);\n"
+	"Buffer<uint> Items : register(t4);\n"
+	"Texture2D<float> Heights : register(t5);\n"
+	"Buffer<uint> Blocks : register(t6);\n"
+	"Texture2D<uint2> SunStencil : register(t7);\n"
+	"Texture2D<float> SunDepth : register(t8);\n"
+	"RWTexture2D<float2> Mask : register(u0);\n"
+	"\n"
+	"float3 world_at(int2 pixel)\n"
+	"{\n"
+	"    pixel = clamp(pixel, int2(0, 0), int2(Screen.xy) - 1);\n"
+	"    float depth = Depth.Load(int3(pixel, 0));\n"
+	"    float2 ndc = float2(pixel.x * Screen.z * 2.0 - 1.0, 1.0 - pixel.y * Screen.w * 2.0);\n"
+	"    float4 world = mul(float4(ndc, depth, 1.0), WorldFromClip);\n"
+	"    return world.xyz / world.w;\n"
+	"}\n"
+	"\n"
+	"float3 shorter(float3 here, float3 ahead, float3 behind)\n"
+	"{\n"
+	"    float3 forward = ahead - here;\n"
+	"    float3 backward = here - behind;\n"
+	"    return dot(forward, forward) < dot(backward, backward) ? forward : backward;\n"
+	"}\n"
+	"\n"
+	"// The ground as a bilinear patch over the cell's four corners.  It is drawn as two triangles cut\n"
+	"// on a diagonal, which part from the patch by up to a quarter of the cell's twist (the two\n"
+	"// diagonals' sums apart), so that much is given back before a step counts as under the ground.\n"
+	"float ground_at(float2 xy, out float twist, out int2 at)\n"
+	"{\n"
+	"    uint width, height;\n"
+	"    Heights.GetDimensions(width, height);\n"
+	"    int2 last = int2(width, height) - 1;\n"
+	"    float2 grid = xy * Ground.x + Ground.y;\n"
+	"    float2 cell = floor(grid);\n"
+	"    float2 t = grid - cell;\n"
+	"    at = int2(cell);\n"
+	"    float h00 = Heights.Load(int3(clamp(at, int2(0, 0), last), 0));\n"
+	"    float h10 = Heights.Load(int3(clamp(at + int2(1, 0), int2(0, 0), last), 0));\n"
+	"    float h01 = Heights.Load(int3(clamp(at + int2(0, 1), int2(0, 0), last), 0));\n"
+	"    float h11 = Heights.Load(int3(clamp(at + int2(1, 1), int2(0, 0), last), 0));\n"
+	"    float scale = 255.0 * Ground.z;\n"
+	"    twist = abs(h00 + h11 - h10 - h01) * 0.25 * scale;\n"
+	"    return lerp(lerp(h00, h10, t.x), lerp(h01, h11, t.x), t.y) * scale;\n"
+	"}\n"
+	"\n"
+	"// Where the ray's point falls in the sun's map, in texels.  The map was drawn through the\n"
+	"// viewport's half pixel (Set_Viewport), so texel i holds what the sun's clip space puts at i over\n"
+	"// the size, half a texel up and left of where a texture read would look for it; the triangles\n"
+	"// are exact, and a shadow half from each meets only if the map is read where it was drawn.\n"
+	"float2 map_texel(float3 sun)\n"
+	"{\n"
+	"    return float2(0.5 * sun.x + 0.5, 0.5 - 0.5 * sun.y) / Cut.x;\n"
+	"}\n"
+	"\n"
+	"// The lit share of the four texels of the sun's map about the ray's point, each weighted by how\n"
+	"// near the point is (a thin trunk's one texel line keeps its darkness), and the widest gap to one\n"
+	"// that stands nearer the sun than the point by the bias.  With cut_only a texel counts only where\n"
+	"// the caster nearest the sun there was cut at its alpha: the triangles have the rest.\n"
+	"float map_lit(float3 sun, float bias, bool cut_only, inout float gap)\n"
+	"{\n"
+	"    float2 at = map_texel(sun);\n"
+	"    int2 base = int2(floor(at));\n"
+	"    float2 t = at - base;\n"
+	"    int last = int(1.0 / Cut.x + 0.5) - 1;\n"
+	"    float lit = 0.0;\n"
+	"    [unroll] for (int y = 0; y <= 1; ++y) {\n"
+	"        [unroll] for (int x = 0; x <= 1; ++x) {\n"
+	"            int3 texel = int3(clamp(base + int2(x, y), 0, last), 0);\n"
+	"            float weight = (x == 1 ? t.x : 1.0 - t.x) * (y == 1 ? t.y : 1.0 - t.y);\n"
+	"            float depth = SunDepth.Load(texel);\n"
+	"            bool counts = !cut_only || SunStencil.Load(texel).g == (uint)Cut.z;\n"
+	"            if (counts && depth < sun.z - bias) gap = max(gap, (sun.z - depth) * Sun.w);\n"
+	"            else lit += weight;\n"
+	"        }\n"
+	"    }\n"
+	"    return lit;\n"
+	"}\n"
+	"\n"
+	"float2 trace_pixel(int2 pixel, out uint blocker, out uint mapped)\n"
+	"{\n"
+	"    blocker = 0;\n"
+	"    mapped = 0;\n"
+	"    if (Depth.Load(int3(pixel, 0)) >= 1.0) return float2(1.0, 0.0);\n"
+	"    float3 here = world_at(pixel);\n"
+	"    float3 across = shorter(here, world_at(pixel + int2(1, 0)), world_at(pixel - int2(1, 0)));\n"
+	"    float3 down = shorter(here, world_at(pixel + int2(0, 1)), world_at(pixel - int2(0, 1)));\n"
+	"    float3 normal = cross(across, down);\n"
+	"    float size = length(normal);\n"
+	"    normal = (size > 1e-6) ? normal / size : Sun.xyz;\n"
+	"    if (dot(normal, Sun.xyz) < 0.0) normal = -normal;\n"
+	"    float3 from = here + normal * Tuning.y;\n"
+	"    float lit = 1.0;\n"
+	"    float gap = 0.0;\n"
+	"\n"
+	"    float3 sun = mul(float4(from, 1.0), SunFromWorld).xyz;\n"
+	"    bool inside = all(abs(sun.xy) <= 1.0) && sun.z >= 0.0 && sun.z <= 1.0;\n"
+	"    // A map's texel is a patch of surface, and a surface turned from the sun crosses more depth\n"
+	"    // in one: the bias grows with the slope, as the map's own receivers' does.\n"
+	"    float facing = dot(normal, Sun.xyz);\n"
+	"    float bias = (Tuning.x + sqrt(saturate(1.0 - facing * facing)) / max(facing, 0.1) * Cut.y * 1.5) / Sun.w;\n"
+	"    // Triangles or references past their buffers: this frame's solid casters come from the map.\n"
+	"    bool overflowed = Blocks[GRID * GRID / 1024] > (uint)Tuning.z\n"
+	"        || Corners[((uint)Bin.y - 1) * 3].w == Bin.x;\n"
+	"    // What the map would have said at the same point, one texel, for the report's comparison.\n"
+	"    if (inside) {\n"
+	"        int2 texel = int2(floor(map_texel(sun) + 0.5));\n"
+	"        mapped = (SunDepth.Load(int3(texel, 0)) < sun.z - bias) ? 1 : 0;\n"
+	"    }\n"
+	"    if (inside && overflowed) {\n"
+	"        lit = map_lit(sun, bias, false, gap);\n"
+	"        if (lit < 0.5) blocker = 1;\n"
+	"    } else if (inside) {\n"
+	"        int2 cell = clamp(int2(floor((sun.xy * 0.5 + 0.5) * GRID)), 0, GRID - 1);\n"
+	"        uint index = cell.y * GRID + cell.x;\n"
+	"        uint first = Starts[index] + Blocks[index >> 10];\n"
+	"        uint last = min(first + Counts[index], (uint)Tuning.z);\n"
+	"        float reach = sun.z - Tuning.x / Sun.w;\n"
+	"        [loop] for (uint i = first; i < last; ++i) {\n"
+	"            uint t = Items[i] * 3;\n"
+	"            float3 a = Corners[t].xyz;\n"
+	"            float3 b = Corners[t + 1].xyz;\n"
+	"            float3 c = Corners[t + 2].xyz;\n"
+	"            float2 ab = b.xy - a.xy;\n"
+	"            float2 ac = c.xy - a.xy;\n"
+	"            float2 ap = sun.xy - a.xy;\n"
+	"            float area = ab.x * ac.y - ab.y * ac.x;\n"
+	"            float u = (ap.x * ac.y - ap.y * ac.x) / area;\n"
+	"            float v = (ab.x * ap.y - ab.y * ap.x) / area;\n"
+	"            if (u < 0.0 || v < 0.0 || u + v > 1.0) continue;\n"
+	"            float z = a.z + u * (b.z - a.z) + v * (c.z - a.z);\n"
+	"            if (z < reach) { lit = 0.0; gap = (sun.z - z) * Sun.w; blocker = 1; break; }\n"
+	"        }\n"
+	"        if (blocker == 0) {\n"
+	"            lit = map_lit(sun, bias, true, gap);\n"
+	"            if (lit < 0.5) blocker = 3;\n"
+	"        }\n"
+	"    }\n"
+	"\n"
+	"    // The pixel's own cell is the surface the ray leaves, whatever the patch says of it.\n"
+	"    if (lit > 0.5 && Tuning.w > 0.5) {\n"
+	"        float twist;\n"
+	"        int2 own;\n"
+	"        ground_at(from.xy, twist, own);\n"
+	"        [loop] for (int k = 1; k <= 64; ++k) {\n"
+	"            float3 at = from + Sun.xyz * (8.0 * k);\n"
+	"            if (at.z > Ground.w) break;\n"
+	"            int2 cell;\n"
+	"            float height = ground_at(at.xy, twist, cell);\n"
+	"            if (all(cell == own)) continue;\n"
+	"            if (height > at.z + 1.0 + twist) { lit = 0.0; gap = 8.0 * k; blocker = 2; break; }\n"
+	"        }\n"
+	"    }\n"
+	"    return float2(lit, gap);\n"
+	"}\n"
+	"\n"
+	"// How many rays a solid caster, the ground and a cut caster stopped, and how many the map would\n"
+	"// have, for the report: one count a group.  Then the same inside the probe's rectangle, with the\n"
+	"// scene's grey there before the shade and after it, with and without the dark pixel guard.\n"
+	"Texture2D<float4> Colour : register(t9);\n"
+	"RWBuffer<uint> Hits : register(u1);\n"
+	"groupshared uint GroupHits[14];\n"
+	"[numthreads(8, 8, 1)]\n"
+	"void main(uint3 id : SV_DispatchThreadID, uint index : SV_GroupIndex)\n"
+	"{\n"
+	"    if (index < 14) GroupHits[index] = 0;\n"
+	"    GroupMemoryBarrierWithGroupSync();\n"
+	"    if (id.x < (uint)Screen.x && id.y < (uint)Screen.y) {\n"
+	"        uint blocker, mapped;\n"
+	"        float2 traced = trace_pixel(int2(id.xy), blocker, mapped);\n"
+	"        Mask[int2(id.xy)] = traced;\n"
+	"        bool cast = blocker == 1 || blocker == 3;\n"
+	"        if (blocker != 0) InterlockedAdd(GroupHits[blocker - 1], 1);\n"
+	"        if (mapped != 0) InterlockedAdd(GroupHits[3], 1);\n"
+	"        if (cast && mapped == 0) InterlockedAdd(GroupHits[4], 1);\n"
+	"        if (!cast && mapped != 0) InterlockedAdd(GroupHits[5], 1);\n"
+	"        if (all(float2(id.xy) >= Probe.xy) && all(float2(id.xy) < Probe.zw)) {\n"
+	"            float grey = dot(Colour.Load(int3(id.xy, 0)).rgb, float3(0.3333, 0.3333, 0.3333));\n"
+	"            float shade = 1.0 - Bin.w * (1.0 - traced.x);\n"
+	"            InterlockedAdd(GroupHits[6], 1);\n"
+	"            if (blocker != 0) InterlockedAdd(GroupHits[blocker == 1 ? 7 : (blocker == 3 ? 8 : 9)], 1);\n"
+	"            if (mapped != 0) InterlockedAdd(GroupHits[10], 1);\n"
+	"            InterlockedAdd(GroupHits[11], (uint)(grey * PROBE_STEPS));\n"
+	"            InterlockedAdd(GroupHits[12], (uint)(grey * lerp(1.0, shade, saturate(grey * DARK_GUARD)) * PROBE_STEPS));\n"
+	"            InterlockedAdd(GroupHits[13], (uint)(grey * shade * PROBE_STEPS));\n"
+	"        }\n"
+	"    }\n"
+	"    GroupMemoryBarrierWithGroupSync();\n"
+	"    if (index < 14) InterlockedAdd(Hits[index], GroupHits[index]);\n"
+	"}\n";
+
+// The shade on the scene.  The widest blocker gap close by opens the filter, as the map's blocker
+// search does, and a tap counts only on a surface at the pixel's own distance, so a unit in front
+// of a shadowed wall keeps its edge.  ponytail: the opening is in pixels per world unit of gap at
+// the usual zoom; a world sized penumbra wants the pixel's footprint from WorldFromClip.
+static const char RAY_APPLY_PROGRAM[] =
+	"Texture2D<float2> Mask : register(t0);\n"
+	"Texture2D<float> Depth : register(t1);\n"
+	"Texture2D<float4> Colour : register(t2);\n"
+	"static const int2 SEARCH[4] = { int2(-3, 0), int2(3, 0), int2(0, -3), int2(0, 3) };\n"
+	"static const float2 DISK[12] = {\n"
+	"    float2(-0.326, -0.406), float2(-0.840, -0.074), float2(-0.696, 0.457), float2(-0.203, 0.621),\n"
+	"    float2(0.962, -0.195), float2(0.473, -0.480), float2(0.519, 0.767), float2(0.185, -0.893),\n"
+	"    float2(0.507, 0.064), float2(0.896, 0.412), float2(-0.322, -0.933), float2(-0.792, -0.598) };\n"
+	"float4 main(float4 position : SV_Position) : SV_Target\n"
+	"{\n"
+	"    int2 pixel = int2(position.xy);\n"
+	"    int2 last = int2(Screen.xy) - 1;\n"
+	"    float centre = Depth.Load(int3(pixel, 0));\n"
+	"    if (centre >= 1.0) return float4(1.0, 1.0, 1.0, 1.0);\n"
+	"    float2 own = Mask.Load(int3(pixel, 0));\n"
+	"    float gap = own.y;\n"
+	"    [unroll] for (int s = 0; s < 4; ++s)\n"
+	"        gap = max(gap, Mask.Load(int3(clamp(pixel + SEARCH[s], int2(0, 0), last), 0)).y);\n"
+	"    float radius = clamp(0.75 + gap * 0.08, 0.75, 6.0);\n"
+	"    float tolerance = 0.02 * (1.0 - centre);\n"
+	"    float lit = own.x;\n"
+	"    float weight = 1.0;\n"
+	"    [unroll] for (int i = 0; i < 12; ++i) {\n"
+	"        int2 at = clamp(pixel + int2(round(DISK[i] * radius)), int2(0, 0), last);\n"
+	"        if (abs(Depth.Load(int3(at, 0)) - centre) <= tolerance) {\n"
+	"            lit += Mask.Load(int3(at, 0)).x;\n"
+	"            weight += 1.0;\n"
+	"        }\n"
+	"    }\n"
+	"    float shade = 1.0 - Bin.w * (1.0 - lit / weight);\n"
+	"    // SHADOW_APPLY's guard: a pixel already dark (a pine's needles, the shroud, a fogged\n"
+	"    // building) takes the shadow only as far as it is lit.\n"
+	"    float grey = dot(Colour.Load(int3(pixel, 0)).rgb, float3(0.3333, 0.3333, 0.3333));\n"
+	"    shade = lerp(1.0, shade, saturate(grey * DARK_GUARD));\n"
+	"    return float4(shade, shade, shade, 1.0);\n"
+	"}\n";
+
+static bool make_ray_buffer(ID3D11Device * device, unsigned elements, ID3D11Buffer ** buffer,
+	ID3D11UnorderedAccessView ** write, ID3D11ShaderResourceView ** read)
+{
+	D3D11_BUFFER_DESC description;
+	memset(&description, 0, sizeof(description));
+	description.ByteWidth = elements * sizeof(unsigned);
+	description.Usage = D3D11_USAGE_DEFAULT;
+	description.BindFlags = D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE;
+	D3D11_UNORDERED_ACCESS_VIEW_DESC write_description;
+	memset(&write_description, 0, sizeof(write_description));
+	write_description.Format = DXGI_FORMAT_R32_UINT;
+	write_description.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+	write_description.Buffer.NumElements = elements;
+	D3D11_SHADER_RESOURCE_VIEW_DESC read_description;
+	memset(&read_description, 0, sizeof(read_description));
+	read_description.Format = DXGI_FORMAT_R32_UINT;
+	read_description.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+	read_description.Buffer.NumElements = elements;
+	return SUCCEEDED(device->CreateBuffer(&description, NULL, buffer))
+		&& SUCCEEDED(device->CreateUnorderedAccessView(*buffer, &write_description, write))
+		&& SUCCEEDED(device->CreateShaderResourceView(*buffer, &read_description, read));
+}
+
+bool DX11BackendClass::Make_Ray_Shadows()
+{
+	if (RayApplyShader != NULL) {
+		return true;
+	}
+	if (RayShadowsRefused || Device == NULL) {
+		return false;
+	}
+	ID3D11Device * device = Device->Get_Device();
+	const std::string common = RAY_PROGRAM_COMMON;
+	std::vector<unsigned char> capture, count, scan, block, fill, trace, apply;
+	bool made = Make_Depth_Resolve()		// its full screen triangle carries the shade
+		&& Compile_Program(RAY_CAPTURE_PROGRAM, "raycapture", "gs_5_0", capture)
+		&& Compile_Program(common + RAY_PROGRAM_CELLS + RAY_COUNT_PROGRAM, "raycount", "cs_5_0", count)
+		&& Compile_Program(common + RAY_SCAN_PROGRAM, "rayscan", "cs_5_0", scan)
+		&& Compile_Program(common + RAY_BLOCK_PROGRAM, "rayblock", "cs_5_0", block)
+		&& Compile_Program(common + RAY_PROGRAM_CELLS + RAY_FILL_PROGRAM, "rayfill", "cs_5_0", fill)
+		&& Compile_Program(common + RAY_TRACE_PROGRAM, "raytrace", "cs_5_0", trace)
+		&& Compile_Program(common + RAY_APPLY_PROGRAM, "rayapply", "ps_5_0", apply);
+
+	if (made) {
+		D3D11_SO_DECLARATION_ENTRY entry;
+		memset(&entry, 0, sizeof(entry));
+		entry.SemanticName = "TEXCOORD";
+		entry.ComponentCount = 4;
+		const UINT stride = 4 * sizeof(float);
+		made = SUCCEEDED(device->CreateGeometryShaderWithStreamOutput(&capture[0], capture.size(), &entry, 1,
+				&stride, 1, D3D11_SO_NO_RASTERIZED_STREAM, NULL, &RayCaptureShader))
+			&& SUCCEEDED(device->CreateGeometryShaderWithStreamOutput(&capture[0], capture.size(), &entry, 1,
+				&stride, 1, 0, NULL, &RayCaptureRasterShader))
+			&& SUCCEEDED(device->CreateComputeShader(&count[0], count.size(), NULL, &RayCountShader))
+			&& SUCCEEDED(device->CreateComputeShader(&scan[0], scan.size(), NULL, &RayScanShader))
+			&& SUCCEEDED(device->CreateComputeShader(&block[0], block.size(), NULL, &RayBlockShader))
+			&& SUCCEEDED(device->CreateComputeShader(&fill[0], fill.size(), NULL, &RayFillShader))
+			&& SUCCEEDED(device->CreateComputeShader(&trace[0], trace.size(), NULL, &RayTraceShader))
+			&& SUCCEEDED(device->CreatePixelShader(&apply[0], apply.size(), NULL, &RayApplyShader));
+	}
+
+	if (made) {
+		D3D11_BUFFER_DESC corners;
+		memset(&corners, 0, sizeof(corners));
+		corners.ByteWidth = RAY_TRIANGLE_SLOTS * 3 * 4 * sizeof(float);
+		corners.Usage = D3D11_USAGE_DEFAULT;
+		corners.BindFlags = D3D11_BIND_STREAM_OUTPUT | D3D11_BIND_SHADER_RESOURCE;
+		D3D11_SHADER_RESOURCE_VIEW_DESC corners_read;
+		memset(&corners_read, 0, sizeof(corners_read));
+		corners_read.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+		corners_read.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+		corners_read.Buffer.NumElements = RAY_TRIANGLE_SLOTS * 3;
+		D3D11_BUFFER_DESC constants;
+		memset(&constants, 0, sizeof(constants));
+		constants.ByteWidth = 4 * sizeof(float);
+		constants.Usage = D3D11_USAGE_DEFAULT;
+		constants.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		made = SUCCEEDED(device->CreateBuffer(&corners, NULL, &RayCorners))
+			&& SUCCEEDED(device->CreateShaderResourceView(RayCorners, &corners_read, &RayCornersView))
+			&& SUCCEEDED(device->CreateBuffer(&constants, NULL, &RayCaptureConstants));
+		constants.ByteWidth = sizeof(RayConstantBlock);
+		made = made && SUCCEEDED(device->CreateBuffer(&constants, NULL, &RayConstants));
+		const unsigned sizes[6] = { RAY_GRID * RAY_GRID, RAY_GRID * RAY_GRID, RAY_GRID * RAY_GRID,
+			RAY_REFERENCE_SLOTS, RAY_BLOCKS + 1, RAY_HIT_COUNTS };
+		for (unsigned index = 0; index < 6 && made; ++index) {
+			made = make_ray_buffer(device, sizes[index], &RayCells[index], &RayCellWrites[index], &RayCellReads[index]);
+		}
+	}
+
+	if (made) {
+		D3D11_BLEND_DESC blend;
+		memset(&blend, 0, sizeof(blend));
+		blend.RenderTarget[0].BlendEnable = TRUE;
+		blend.RenderTarget[0].SrcBlend = D3D11_BLEND_ZERO;
+		blend.RenderTarget[0].DestBlend = D3D11_BLEND_SRC_COLOR;
+		blend.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+		blend.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ZERO;
+		blend.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
+		blend.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+		blend.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+		D3D11_DEPTH_STENCIL_DESC depth;
+		memset(&depth, 0, sizeof(depth));
+		D3D11_RASTERIZER_DESC rasterizer;
+		memset(&rasterizer, 0, sizeof(rasterizer));
+		rasterizer.FillMode = D3D11_FILL_SOLID;
+		rasterizer.CullMode = D3D11_CULL_NONE;
+		rasterizer.DepthClipEnable = TRUE;
+		made = SUCCEEDED(device->CreateBlendState(&blend, &RayApplyBlend))
+			&& SUCCEEDED(device->CreateDepthStencilState(&depth, &RayApplyDepth))
+			&& SUCCEEDED(device->CreateRasterizerState(&rasterizer, &RayApplyRasterizer));
+	}
+
+	for (unsigned index = 0; index < RAY_QUERY_FRAMES && made; ++index) {
+		RayFrameQueries & frame = RayQueries[index];
+		D3D11_QUERY_DESC query;
+		memset(&query, 0, sizeof(query));
+		query.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
+		made = SUCCEEDED(device->CreateQuery(&query, &frame.Disjoint));
+		query.Query = D3D11_QUERY_TIMESTAMP;
+		made = made && SUCCEEDED(device->CreateQuery(&query, &frame.Start))
+			&& SUCCEEDED(device->CreateQuery(&query, &frame.Captured))
+			&& SUCCEEDED(device->CreateQuery(&query, &frame.Binned))
+			&& SUCCEEDED(device->CreateQuery(&query, &frame.TraceStart))
+			&& SUCCEEDED(device->CreateQuery(&query, &frame.Traced));
+		query.Query = D3D11_QUERY_SO_STATISTICS;
+		made = made && SUCCEEDED(device->CreateQuery(&query, &frame.Streamed));
+		D3D11_BUFFER_DESC staging;
+		memset(&staging, 0, sizeof(staging));
+		staging.ByteWidth = (1 + RAY_HIT_COUNTS) * sizeof(unsigned);	// the references, then the trace's counts
+		staging.Usage = D3D11_USAGE_STAGING;
+		staging.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+		made = made && SUCCEEDED(device->CreateBuffer(&staging, NULL, &frame.References));
+	}
+
+	if (!made) {
+		Note_Refusal("the device would not make the ray traced shadows' programs or buffers");
+		Release_Ray_Shadows();
+		RayShadowsRefused = true;
+		return false;
+	}
+	// A screen rectangle the report counts on its own, "left,top,right,bottom" in pixels, for asking
+	// what one patch of a still is shadowed by without taking another picture.
+	const char * probe = getenv("ZHR_RT_PROBE");
+	if (probe == NULL || sscanf(probe, "%f,%f,%f,%f", &RayProbe[0], &RayProbe[1], &RayProbe[2], &RayProbe[3]) != 4) {
+		memset(RayProbe, 0, sizeof(RayProbe));
+	}
+	return true;
+}
+
+void DX11BackendClass::Release_Ray_Shadows()
+{
+	IUnknown ** const held[] = {
+		(IUnknown **)&RayCaptureShader, (IUnknown **)&RayCaptureRasterShader, (IUnknown **)&RayCaptureConstants, (IUnknown **)&RayCornersView,
+		(IUnknown **)&RayCorners, (IUnknown **)&RayCountShader, (IUnknown **)&RayScanShader,
+		(IUnknown **)&RayBlockShader, (IUnknown **)&RayCellWrites[4], (IUnknown **)&RayCellReads[4],
+		(IUnknown **)&RayCells[4], (IUnknown **)&RayCellWrites[5], (IUnknown **)&RayCellReads[5],
+		(IUnknown **)&RayCells[5],
+		(IUnknown **)&RayFillShader, (IUnknown **)&RayTraceShader, (IUnknown **)&RayApplyShader,
+		(IUnknown **)&RayConstants, (IUnknown **)&RayApplyBlend, (IUnknown **)&RayApplyDepth,
+		(IUnknown **)&RayApplyRasterizer, (IUnknown **)&RayMaskWrite, (IUnknown **)&RayMaskRead,
+		(IUnknown **)&RayMask,
+		(IUnknown **)&RayCellWrites[0], (IUnknown **)&RayCellWrites[1], (IUnknown **)&RayCellWrites[2],
+		(IUnknown **)&RayCellWrites[3], (IUnknown **)&RayCellReads[0], (IUnknown **)&RayCellReads[1],
+		(IUnknown **)&RayCellReads[2], (IUnknown **)&RayCellReads[3], (IUnknown **)&RayCells[0],
+		(IUnknown **)&RayCells[1], (IUnknown **)&RayCells[2], (IUnknown **)&RayCells[3],
+		(IUnknown **)&RayStencilRead,
+	};
+	for (unsigned index = 0; index < sizeof(held) / sizeof(held[0]); ++index) {
+		if (*held[index] != NULL) {
+			(*held[index])->Release();
+			*held[index] = NULL;
+		}
+	}
+	for (unsigned index = 0; index < RAY_QUERY_FRAMES; ++index) {
+		RayFrameQueries & frame = RayQueries[index];
+		IUnknown ** const queries[] = {
+			(IUnknown **)&frame.Disjoint, (IUnknown **)&frame.Start, (IUnknown **)&frame.Captured,
+			(IUnknown **)&frame.Binned,
+			(IUnknown **)&frame.TraceStart, (IUnknown **)&frame.Traced, (IUnknown **)&frame.Streamed,
+			(IUnknown **)&frame.References,
+		};
+		for (unsigned query = 0; query < sizeof(queries) / sizeof(queries[0]); ++query) {
+			if (*queries[query] != NULL) {
+				(*queries[query])->Release();
+				*queries[query] = NULL;
+			}
+		}
+		frame.Open = frame.Issued = frame.WasTraced = false;
+	}
+	RayMaskWidth = 0;
+	RayMaskHeight = 0;
+	RayCapturing = false;
+	RayCaptured = false;
+}
+
+void DX11BackendClass::Begin_Ray_Capture()
+{
+	if (!Make_Ray_Shadows() || !Make_Ray_Mask() || !Make_Scene_Colour()) {
+		return;
+	}
+	ID3D11DeviceContext * context = Device->Get_Context();
+
+	// Begin_Shadow_Map lets the view go with the map whenever it makes the map again.
+	if (RayStencilRead == NULL) {
+		D3D11_SHADER_RESOURCE_VIEW_DESC read;
+		memset(&read, 0, sizeof(read));
+		read.Format = DXGI_FORMAT_X24_TYPELESS_G8_UINT;
+		read.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+		read.Texture2D.MipLevels = 1;
+		if (FAILED(Device->Get_Device()->CreateShaderResourceView(ShadowMapSurface, &read, &RayStencilRead))) {
+			Note_Refusal("the device refused a stencil view of the sun's depth buffer");
+			Release_Ray_Shadows();
+			RayShadowsRefused = true;
+			return;
+		}
+	}
+
+	// Whatever has come back since, then this pass's own queries; a frame whose rays never ran (a
+	// second caster pass, a frame with no opaque scene) is closed as it stands.
+	Ray_Shadow_Report();
+	RayFrameQueries & previous = RayQueries[RayQueryFrame];
+	if (previous.Open) {
+		context->End(previous.Disjoint);
+		previous.Open = false;
+		previous.Issued = true;
+	}
+	RayQueryFrame = (RayQueryFrame + 1) % RAY_QUERY_FRAMES;
+	RayFrameQueries & frame = RayQueries[RayQueryFrame];
+	frame.Issued = false;
+	frame.WasTraced = false;
+	context->Begin(frame.Disjoint);
+	context->End(frame.Start);
+	context->Begin(frame.Streamed);
+	frame.Open = true;
+
+	// 2^23 stamps before one repeats, all of them exact in a float.
+	RayStamp = (RayStamp % 0x7fffffu) + 1;
+	const float stamp[4] = { static_cast<float>(RayStamp), 0.0f, 0.0f, 0.0f };
+	context->UpdateSubresource(RayCaptureConstants, 0, NULL, stamp, 0, 0);
+	context->GSSetConstantBuffers(0, 1, &RayCaptureConstants);
+	const UINT offset = 0;
+	context->SOSetTargets(1, &RayCorners, &offset);
+	RaySolidCopies = 0;
+	RayCapturing = true;
+	// The stencil marks and the reference change the state objects every draw builds.
+	Note_Shadow_State_Changed();
+}
+
+/* The sun's clip space is its view and an orthographic projection, so its third column is the way
+	 away from the sun scaled by one over the box's depth.  Its length is sun depth units a world
+	 unit; nought is a degenerate box, and End_Ray_Capture leaves such a pass to the map. */
+float DX11BackendClass::Sun_Depth_Scale() const
+{
+	return sqrtf(SunViewProjection[2] * SunViewProjection[2] + SunViewProjection[6] * SunViewProjection[6]
+		+ SunViewProjection[10] * SunViewProjection[10]);
+}
+
+/* The mask at the scene's size, made before the frame decides on the rays, so a refusal leaves the
+	 frame to the map instead of an opaque scene drawn at strength nought with nothing to shade it. */
+bool DX11BackendClass::Make_Ray_Mask()
+{
+	const unsigned width = Device->Get_Width();
+	const unsigned height = Device->Get_Height();
+	if (width == 0 || height == 0) {
+		return false;
+	}
+	if (RayMask != NULL && RayMaskWidth == width && RayMaskHeight == height) {
+		return true;
+	}
+	IUnknown ** const mask[] = { (IUnknown **)&RayMaskWrite, (IUnknown **)&RayMaskRead, (IUnknown **)&RayMask };
+	for (unsigned index = 0; index < 3; ++index) {
+		if (*mask[index] != NULL) {
+			(*mask[index])->Release();
+			*mask[index] = NULL;
+		}
+	}
+	D3D11_TEXTURE2D_DESC description;
+	memset(&description, 0, sizeof(description));
+	description.Width = width;
+	description.Height = height;
+	description.MipLevels = 1;
+	description.ArraySize = 1;
+	description.Format = DXGI_FORMAT_R16G16_FLOAT;
+	description.SampleDesc.Count = 1;
+	description.Usage = D3D11_USAGE_DEFAULT;
+	description.BindFlags = D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE;
+	ID3D11Device * device = Device->Get_Device();
+	if (FAILED(device->CreateTexture2D(&description, NULL, &RayMask))
+			|| FAILED(device->CreateUnorderedAccessView(RayMask, NULL, &RayMaskWrite))
+			|| FAILED(device->CreateShaderResourceView(RayMask, NULL, &RayMaskRead))) {
+		Note_Refusal("the device refused the ray traced shadows' mask");
+		Release_Ray_Shadows();
+		RayShadowsRefused = true;
+		return false;
+	}
+	RayMaskWidth = width;
+	RayMaskHeight = height;
+	return true;
+}
+
+/* The opaque scene waiting on this frame's rays takes no shadow from the map.  The scene's camera
+	 has to have been handed over, or the trace could not take the pixels back to the world and the
+	 frame would have no sun shadow at all; anything drawn after the rays, or into another target,
+	 takes the map. */
+bool DX11BackendClass::Ray_Shade_Pending() const
+{
+	return RayCaptured && CurrentTarget == NULL && SceneViewThisFrame && SceneProjection[11] != 0.0f;
+}
+
+bool DX11BackendClass::Ray_Draw_Is_Cut() const
+{
+	return RenderStates.Get_Render_State(D3DRS_ALPHATESTENABLE) != FALSE || DrawEffect == DRAW_EFFECT_CLOAK_SHADOW;
+}
+
+/* A solid caster drawn one by one has gone into the map; now it goes again through the capture
+	 program, which streams its triangles and rasterises nothing.  Its pixel program reads what its
+	 vertex program wrote, so the capture program cannot stand between them on the map's own draw.
+	 A cut caster needs no second draw: its draw marked the map's stencil.  ponytail: these few
+	 (bridges, fragments, the sort lists' meshes) run their vertices twice; a pass-through geometry
+	 program made from each vertex program would stream them on the map's draw. */
+void DX11BackendClass::Begin_Ray_Copy()
+{
+	// No pixel program: one reading what the vertex program wrote does not link behind the capture
+	// program's output, and nothing is rasterised for it to run on.
+	ID3D11DeviceContext * context = Device->Get_Context();
+	context->GSSetShader(RayCaptureShader, NULL, 0);
+	context->PSSetShader(NULL, NULL, 0);
+	++RaySolidCopies;
+}
+
+void DX11BackendClass::End_Ray_Copy()
+{
+	ID3D11DeviceContext * context = Device->Get_Context();
+	context->GSSetShader(NULL, NULL, 0);
+	context->PSSetShader(Bound.PixelShader, NULL, 0);
+}
+
+void DX11BackendClass::End_Ray_Capture()
+{
+	ID3D11DeviceContext * context = Device->Get_Context();
+	RayFrameQueries & frame = RayQueries[RayQueryFrame];
+	context->End(frame.Streamed);
+	context->End(frame.Captured);
+	ID3D11Buffer * no_buffer = NULL;
+	const UINT offset = 0;
+	context->SOSetTargets(1, &no_buffer, &offset);
+	context->GSSetShader(NULL, NULL, 0);
+	context->GSSetConstantBuffers(0, 1, &no_buffer);
+	RayCapturing = false;
+
+	RayConstantBlock block;
+	memset(&block, 0, sizeof(block));
+	block.Tuning[2] = static_cast<float>(RAY_REFERENCE_SLOTS);
+	block.Bin[0] = static_cast<float>(RayStamp);
+	block.Bin[1] = static_cast<float>(RAY_TRIANGLE_SLOTS);
+	context->UpdateSubresource(RayConstants, 0, NULL, &block, 0, 0);
+
+	const UINT zero[4] = { 0, 0, 0, 0 };
+	context->ClearUnorderedAccessViewUint(RayCellWrites[0], zero);
+	context->ClearUnorderedAccessViewUint(RayCellWrites[2], zero);
+	ID3D11UnorderedAccessView * no_writes[3] = { NULL, NULL, NULL };
+	ID3D11ShaderResourceView * no_reads[3] = { NULL, NULL, NULL };
+	context->CSSetConstantBuffers(0, 1, &RayConstants);
+	context->CSSetShaderResources(0, 1, &RayCornersView);
+
+	const UINT triangle_groups = RAY_TRIANGLE_SLOTS / 64;
+	context->CSSetUnorderedAccessViews(0, 1, &RayCellWrites[0], NULL);
+	context->CSSetShader(RayCountShader, NULL, 0);
+	context->Dispatch(triangle_groups, 1, 1);
+
+	ID3D11UnorderedAccessView * scan_writes[3] = { RayCellWrites[0], RayCellWrites[1], RayCellWrites[4] };
+	context->CSSetUnorderedAccessViews(0, 3, scan_writes, NULL);
+	context->CSSetShader(RayScanShader, NULL, 0);
+	context->Dispatch(RAY_BLOCKS, 1, 1);
+	context->CSSetUnorderedAccessViews(0, 3, no_writes, NULL);
+	context->CSSetUnorderedAccessViews(0, 1, &RayCellWrites[4], NULL);
+	context->CSSetShader(RayBlockShader, NULL, 0);
+	context->Dispatch(1, 1, 1);
+
+	context->CSSetUnorderedAccessViews(0, 3, no_writes, NULL);
+	ID3D11ShaderResourceView * fill_reads[3] = { RayCornersView, RayCellReads[1], RayCellReads[4] };
+	context->CSSetShaderResources(0, 3, fill_reads);
+	ID3D11UnorderedAccessView * fill_writes[2] = { RayCellWrites[2], RayCellWrites[3] };
+	context->CSSetUnorderedAccessViews(0, 2, fill_writes, NULL);
+	context->CSSetShader(RayFillShader, NULL, 0);
+	context->Dispatch(triangle_groups, 1, 1);
+
+	context->CSSetUnorderedAccessViews(0, 3, no_writes, NULL);
+	context->CSSetShaderResources(0, 3, no_reads);
+	context->CSSetShader(NULL, NULL, 0);
+
+	// The grid's whole count, the start one past the last block.
+	D3D11_BOX last;
+	last.left = RAY_BLOCKS * sizeof(unsigned);
+	last.right = last.left + sizeof(unsigned);
+	last.top = 0;
+	last.bottom = 1;
+	last.front = 0;
+	last.back = 1;
+	context->CopySubresourceRegion(frame.References, 0, 0, 0, 0, RayCells[4], 0, &last);
+	context->End(frame.Binned);
+	RayCaptured = Sun_Depth_Scale() > 0.0f;
+}
+
+bool DX11BackendClass::Trace_Ray_Shadows()
+{
+	if (!RayCaptured) {
+		return false;
+	}
+	// The question the opaque scene's draws asked, so a frame the rays do not shade drew with the map.
+	const bool pending = Ray_Shade_Pending() && !ShadowMapBound;
+	// Whatever happens to the rays, what is drawn from here takes the map.
+	RayCaptured = false;
+	Note_Shadow_State_Changed();
+	if (!pending) {
+		return false;
+	}
+	float world_from_clip[16];
+	if (!Scene_World_From_Clip(world_from_clip)) {
+		return false;
+	}
+	Resolve_Scene_Depth();
+	ID3D11ShaderResourceView * depth = Device->Get_Depth_Texture();
+	const unsigned width = Device->Get_Width();
+	const unsigned height = Device->Get_Height();
+	// The scene's colour as the opaque world left it, for the dark pixel guard; the cloak takes a
+	// copy of its own afterwards, since this one has no shadow in it.
+	if (depth == NULL || width != RayMaskWidth || height != RayMaskHeight || !Make_Scene_Colour()) {
+		return false;
+	}
+	ID3D11DeviceContext * context = Device->Get_Context();
+	ID3D11Resource * scene_colour = NULL;
+	Device->Get_Scene_View()->GetResource(&scene_colour);
+	DX11Resource_Copy_Readable(context, SceneColourCopy, scene_colour);
+	++FrameDepthCopies;		// counted with the depth copies, so DX11 FRAME COST sees it
+	scene_colour->Release();
+	SceneColourStale = true;
+
+	RayFrameQueries & frame = RayQueries[RayQueryFrame];
+	if (frame.Open) {
+		context->End(frame.TraceStart);
+	}
+
+	/* The sun's clip space is its view and an orthographic projection, so its third column is the
+		 way away from the sun scaled by one over the box's depth: the ray's direction and the size of a
+		 unit of depth both come out of the matrix the map was drawn with. */
+	RayConstantBlock block;
+	memset(&block, 0, sizeof(block));
+	memcpy(block.WorldFromClip, world_from_clip, sizeof(block.WorldFromClip));
+	memcpy(block.SunFromWorld, SunViewProjection, sizeof(block.SunFromWorld));
+	block.Screen[0] = static_cast<float>(width);
+	block.Screen[1] = static_cast<float>(height);
+	block.Screen[2] = 1.0f / static_cast<float>(width);
+	block.Screen[3] = 1.0f / static_cast<float>(height);
+	const float away[3] = { SunViewProjection[2], SunViewProjection[6], SunViewProjection[10] };
+	const float away_length = Sun_Depth_Scale();	// above nought, or End_Ray_Capture left nothing captured
+	block.Sun[0] = -away[0] / away_length;
+	block.Sun[1] = -away[1] / away_length;
+	block.Sun[2] = -away[2] / away_length;
+	block.Sun[3] = 1.0f / away_length;
+	const bool ground = TerrainHeightsView != NULL && TerrainLight[33] > 0.0f;
+	block.Tuning[0] = RAY_DEPTH_BIAS;
+	block.Tuning[1] = RAY_NORMAL_OFFSET;
+	block.Tuning[2] = static_cast<float>(RAY_REFERENCE_SLOTS);
+	block.Tuning[3] = ground ? 1.0f : 0.0f;
+	// HeightMapRenderObjClass's numbers in the terrain light: cells per unit, border, height scale.
+	block.Ground[0] = TerrainLight[33];
+	block.Ground[1] = TerrainLight[34];
+	block.Ground[2] = TerrainLight[35];
+	block.Ground[3] = static_cast<float>(TerrainHeightsHighest) * TerrainLight[35];
+	block.Bin[0] = static_cast<float>(RayStamp);
+	block.Bin[1] = static_cast<float>(RAY_TRIANGLE_SLOTS);
+	block.Bin[3] = RayStrength;
+	// The sun's first column is its x per world unit, and the map is two of those across.
+	const float across = sqrtf(SunViewProjection[0] * SunViewProjection[0] + SunViewProjection[4] * SunViewProjection[4]
+		+ SunViewProjection[8] * SunViewProjection[8]);
+	block.Cut[0] = 1.0f / static_cast<float>(ShadowMapSize);
+	block.Cut[1] = (across > 0.0f) ? 2.0f / (across * static_cast<float>(ShadowMapSize)) : 0.0f;
+	block.Cut[2] = static_cast<float>(RAY_CUT_STENCIL);
+	memcpy(block.Probe, RayProbe, sizeof(block.Probe));
+	context->UpdateSubresource(RayConstants, 0, NULL, &block, 0, 0);
+
+	// The depth is read, so it cannot stay bound as the depth the frame tests against.
+	context->OMSetRenderTargets(0, NULL, NULL);
+	ID3D11ShaderResourceView * trace_reads[10] = { depth, RayCornersView, RayCellReads[1], RayCellReads[0],
+		RayCellReads[3], ground ? TerrainHeightsView : NULL, RayCellReads[4], RayStencilRead, ShadowMapTexture,
+		SceneColourCopyView };
+	context->CSSetConstantBuffers(0, 1, &RayConstants);
+	context->CSSetShaderResources(0, 10, trace_reads);
+	const UINT zero[4] = { 0, 0, 0, 0 };
+	context->ClearUnorderedAccessViewUint(RayCellWrites[5], zero);
+	ID3D11UnorderedAccessView * trace_writes[2] = { RayMaskWrite, RayCellWrites[5] };
+	context->CSSetUnorderedAccessViews(0, 2, trace_writes, NULL);
+	context->CSSetShader(RayTraceShader, NULL, 0);
+	context->Dispatch((width + 7) / 8, (height + 7) / 8, 1);
+	ID3D11UnorderedAccessView * no_writes[2] = { NULL, NULL };
+	ID3D11ShaderResourceView * no_reads[10] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
+	context->CSSetUnorderedAccessViews(0, 2, no_writes, NULL);
+	context->CSSetShaderResources(0, 10, no_reads);
+	context->CSSetShader(NULL, NULL, 0);
+
+	ID3D11RenderTargetView * scene = Device->Get_Scene_View();
+	context->OMSetRenderTargets(1, &scene, NULL);
+	D3D11_VIEWPORT viewport;
+	viewport.TopLeftX = 0.0f;
+	viewport.TopLeftY = 0.0f;
+	viewport.Width = static_cast<float>(width);
+	viewport.Height = static_cast<float>(height);
+	viewport.MinDepth = 0.0f;
+	viewport.MaxDepth = 1.0f;
+	context->RSSetViewports(1, &viewport);
+	context->OMSetBlendState(RayApplyBlend, NULL, 0xffffffff);
+	context->OMSetDepthStencilState(RayApplyDepth, 0);
+	context->RSSetState(RayApplyRasterizer);
+	context->IASetInputLayout(NULL);
+	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context->VSSetShader(DepthResolveVertexShader, NULL, 0);
+	context->PSSetShader(RayApplyShader, NULL, 0);
+	context->PSSetConstantBuffers(0, 1, &RayConstants);
+	ID3D11ShaderResourceView * apply_reads[3] = { RayMaskRead, depth, SceneColourCopyView };
+	context->PSSetShaderResources(0, 3, apply_reads);
+	context->Draw(3, 0);
+	context->PSSetShaderResources(0, 3, no_reads);
+
+	if (frame.Open) {
+		context->CopySubresourceRegion(frame.References, 0, sizeof(unsigned), 0, 0, RayCells[5], 0, NULL);
+		context->End(frame.Traced);
+		context->End(frame.Disjoint);
+		frame.Open = false;
+		frame.Issued = true;
+		frame.WasTraced = true;
+	}
+	RayTracedPixels = width * height;
+	Forget_Bindings();
+	return true;
+}
+
+std::string DX11BackendClass::Ray_Shadow_Report()
+{
+	if (Device == NULL || RayApplyShader == NULL) {
+		char line[128];
+		snprintf(line, sizeof(line), "%s, %u passes left to the map under a filter",
+			RayShadowsRefused ? "refused by the device" : "not made", RayPassesLeftToMap);
+		return line;
+	}
+	ID3D11DeviceContext * context = Device->Get_Context();
+	const UINT later = D3D11_ASYNC_GETDATA_DONOTFLUSH;
+	for (unsigned index = 0; index < RAY_QUERY_FRAMES; ++index) {
+		RayFrameQueries & frame = RayQueries[index];
+		if (!frame.Issued) {
+			continue;
+		}
+		D3D11_QUERY_DATA_TIMESTAMP_DISJOINT disjoint;
+		D3D11_QUERY_DATA_SO_STATISTICS streamed;
+		UINT64 start = 0, captured = 0, binned = 0, trace_start = 0, traced = 0;
+		if (context->GetData(frame.Disjoint, &disjoint, sizeof(disjoint), later) != S_OK
+				|| context->GetData(frame.Streamed, &streamed, sizeof(streamed), later) != S_OK
+				|| context->GetData(frame.Start, &start, sizeof(start), later) != S_OK
+				|| context->GetData(frame.Captured, &captured, sizeof(captured), later) != S_OK
+				|| context->GetData(frame.Binned, &binned, sizeof(binned), later) != S_OK) {
+			continue;
+		}
+		if (frame.WasTraced && (context->GetData(frame.TraceStart, &trace_start, sizeof(trace_start), later) != S_OK
+				|| context->GetData(frame.Traced, &traced, sizeof(traced), later) != S_OK)) {
+			continue;
+		}
+		D3D11_MAPPED_SUBRESOURCE mapped;
+		if (FAILED(context->Map(frame.References, 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, &mapped))) {
+			continue;
+		}
+		const unsigned * read = static_cast<const unsigned *>(mapped.pData);
+		RayReferences = read[0];
+		if (frame.WasTraced) {
+			RayStoppedByCasters = read[1];
+			RayStoppedByGround = read[2];
+			RayStoppedByCut = read[3];
+			RayStoppedByMap = read[4];
+			RayRaysOnly = read[5];
+			RayMapOnly = read[6];
+			memcpy(RayProbeCounts, &read[7], sizeof(RayProbeCounts));
+		}
+		context->Unmap(frame.References, 0);
+		frame.Issued = false;
+		RayTrianglesWritten = streamed.NumPrimitivesWritten;
+		RayTrianglesWanted = streamed.PrimitivesStorageNeeded;
+		if (!disjoint.Disjoint && disjoint.Frequency > 0) {
+			const double to_ms = 1000.0 / static_cast<double>(disjoint.Frequency);
+			RayCaptureMS = static_cast<float>(static_cast<double>(captured - start) * to_ms);
+			RayBinMS = static_cast<float>(static_cast<double>(binned - captured) * to_ms);
+			if (frame.WasTraced) {
+				RayTraceMS = static_cast<float>(static_cast<double>(traced - trace_start) * to_ms);
+			}
+		}
+	}
+	const bool overflowed = RayTrianglesWanted > RayTrianglesWritten || RayReferences > RAY_REFERENCE_SLOTS;
+	char line[640];
+	snprintf(line, sizeof(line),
+		"%llu solid triangles streamed (%llu wanted, %u slots), %u grid references (%u slots, %ux%u cells), %u rays, "
+		"%u stopped by solid casters, %u by cut casters, %u by the ground; the map alone %u, %u shaded by casters "
+		"and not by the map, %u the other way; solid casters from %s; %u solid draws made twice, %u passes left to the map under a filter, "
+		"GPU caster pass %.3f ms, bins %.3f ms, rays and shade %.3f ms, strength %.2f, ground %s",
+		RayTrianglesWritten, RayTrianglesWanted, RAY_TRIANGLE_SLOTS, RayReferences, RAY_REFERENCE_SLOTS,
+		RAY_GRID, RAY_GRID, RayTracedPixels, RayStoppedByCasters, RayStoppedByCut, RayStoppedByGround,
+		RayStoppedByMap, RayRaysOnly, RayMapOnly, overflowed ? "the map (overflowed)" : "the rays",
+		RaySolidCopies, RayPassesLeftToMap,
+		RayCaptureMS, RayBinMS, RayTraceMS, RayStrength,
+		(TerrainHeightsView != NULL && TerrainLight[33] > 0.0f) ? "marched" : "not held");
+	std::string report = line;
+	const unsigned probed = RayProbeCounts[0];
+	if (RayProbe[2] > RayProbe[0] && probed > 0) {
+		// Greys as a still's 0 to 255, before the tone curve and the grade.
+		const float to_still = 255.0f / (RAY_PROBE_STEPS * static_cast<float>(probed));
+		snprintf(line, sizeof(line),
+			"; probe %.0f,%.0f-%.0f,%.0f: %u pixels, %u stopped by solid casters, %u by cut casters, %u by the ground, "
+			"the map alone %u, grey %.1f unshaded, %.1f shaded, %.1f shaded without the dark pixel guard",
+			RayProbe[0], RayProbe[1], RayProbe[2], RayProbe[3], probed, RayProbeCounts[1], RayProbeCounts[2],
+			RayProbeCounts[3], RayProbeCounts[4], RayProbeCounts[5] * to_still, RayProbeCounts[6] * to_still,
+			RayProbeCounts[7] * to_still);
+		report += line;
+	}
+	return report;
 }

@@ -16594,8 +16594,12 @@ GUI:ShadowQuality2
 "Yüksek"
 END
 
+GUI:ShadowQuality3
+"Işın İzlemeli"
+END
+
 TOOLTIP:ShadowQuality
-"Birim ve bina gölgelerinin keskinliği. Yüksek yaklaşık 64 MB video belleği kullanır, Düşük zayıf kartta bellek açar. Yalnızca Direct3D 11'de ve Klasik Grafikler kapalıyken. Kabul Et'e basınca uygulanır."
+"Birim ve bina gölgelerinin keskinliği. Yüksek yaklaşık 64 MB video belleği kullanır, Düşük zayıf kartta bellek açar. Işın İzlemeli her pikselden güneşe giden çizgiyi her tankın ve binanın gerçek biçiminden geçirir, gölgeleri her yakınlıkta net kalır; karede 1,6 ms'ye kadar tutar ve hâlâ deneyseldir. Yalnızca Direct3D 11'de ve Klasik Grafikler kapalıyken. Kabul Et'e basınca uygulanır."
 END
 
 GUI:VolumetricSmoke

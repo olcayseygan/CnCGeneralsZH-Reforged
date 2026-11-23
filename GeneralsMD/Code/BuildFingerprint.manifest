@@ -1326,6 +1326,7 @@ Data/Scenarios/amovejet.txt
 Data/Scenarios/apoc_discord2.txt
 Data/Scenarios/apoc_discord4.txt
 Data/Scenarios/apoc_look.txt
+Data/Scenarios/apoc_ranksdrop.txt
 Data/Scenarios/artillery.txt
 Data/Scenarios/aurorablast.txt
 Data/Scenarios/aurorafog.txt
@@ -1345,7 +1346,9 @@ Data/Scenarios/bridgelong.txt
 Data/Scenarios/broadcastend.txt
 Data/Scenarios/c6ademo.txt
 Data/Scenarios/c6aslth.txt
+Data/Scenarios/c6aslth2.txt
 Data/Scenarios/c6atox.txt
+Data/Scenarios/c6atox2.txt
 Data/Scenarios/cambushdemo.txt
 Data/Scenarios/cambushtox.txt
 Data/Scenarios/capturedbuild.txt
@@ -1355,6 +1358,8 @@ Data/Scenarios/cgla6b.txt
 Data/Scenarios/cgla6b0.txt
 Data/Scenarios/cgps10a.txt
 Data/Scenarios/cheatwitness.txt
+Data/Scenarios/chinookcombat.txt
+Data/Scenarios/chinookplain.txt
 Data/Scenarios/chokeprobe.txt
 Data/Scenarios/comanchehill.txt
 Data/Scenarios/comanchepods.txt
@@ -1386,6 +1391,7 @@ Data/Scenarios/foreign_dozerkill.txt
 Data/Scenarios/foreign_hijack.txt
 Data/Scenarios/foreign_lotus.txt
 Data/Scenarios/foreign_snipe.txt
+Data/Scenarios/fortressair.txt
 Data/Scenarios/fortressattack.txt
 Data/Scenarios/fortressfall.txt
 Data/Scenarios/gate60hz.txt
@@ -1453,7 +1459,9 @@ Data/Scenarios/lanewar_cargo.txt
 Data/Scenarios/lanewar_end.txt
 Data/Scenarios/lanewar_hack.txt
 Data/Scenarios/lanewar_hacktower.txt
+Data/Scenarios/lanewar_onejet.txt
 Data/Scenarios/lanewar_ranks.txt
+Data/Scenarios/lanewar_strays.txt
 Data/Scenarios/lanewar_tricks.txt
 Data/Scenarios/laserdefense.txt
 Data/Scenarios/laserflow.txt
@@ -1490,11 +1498,13 @@ Data/Scenarios/missiledefence.txt
 Data/Scenarios/missileflyon.txt
 Data/Scenarios/missileflyon_drone.txt
 Data/Scenarios/missilesmoke.txt
+Data/Scenarios/missilesmoke2.txt
 Data/Scenarios/missilespam.txt
 Data/Scenarios/mob100.txt
 Data/Scenarios/mob250.txt
 Data/Scenarios/mob400.txt
 Data/Scenarios/mobattack.txt
+Data/Scenarios/mobchase.txt
 Data/Scenarios/mobclose.txt
 Data/Scenarios/mobopen.txt
 Data/Scenarios/mobstress.txt
@@ -1611,6 +1621,7 @@ Data/Scenarios/trailer_corridor.txt
 Data/Scenarios/trailer_fourway.txt
 Data/Scenarios/trailer_intro.txt
 Data/Scenarios/trainerloss.txt
+Data/Scenarios/trainerloss2.txt
 Data/Scenarios/truckredirect.txt
 Data/Scenarios/tunnelattack.txt
 Data/Scenarios/tunnelfull.txt

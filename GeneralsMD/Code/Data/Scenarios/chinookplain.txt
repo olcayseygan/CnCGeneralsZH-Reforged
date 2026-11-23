@@ -1,0 +1,19 @@
+# The control for chinookcombat.txt: the plain Supply Center's Chinook, built by a human seat on the same
+# map, has to go and gather (its money climbs past the price within the same minutes).
+#
+#   generals.exe -headless -quickstart -noshellmap -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionAmerica -side 1 FactionChina -seed 1 -maxframes 4200
+#     -scenario chinookplain -logPrefix chinookplain_
+
+30    spawn      0  AmericaSupplyCenter          1  start0:350:0
+60    tally      0  AmericaSupplyCenter
+90    produce    0  AmericaSupplyCenter          AmericaVehicleChinook  1
+120   tally      0  AmericaVehicleChinook
+900   tally      0  AmericaVehicleChinook
+900   arrive     0  AmericaVehicleChinook        start0:350:0  400
+1500  tally      0  AmericaVehicleChinook
+2100  tally      0  AmericaVehicleChinook
+2700  tally      0  AmericaVehicleChinook
+3300  tally      0  AmericaVehicleChinook
+3900  tally      0  AmericaVehicleChinook

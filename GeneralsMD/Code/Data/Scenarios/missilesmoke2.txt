@@ -1,0 +1,24 @@
+# missilesmoke.txt with spots this build accepts (its Airfield at 1200,3300 and Missile Defenders at
+# 1500,3500 are refused on Twilight Flame today: LBC_RESTRICTED_TERRAIN, CLIFF), so the pods are bought
+# and the volley flies. Four Airfield candidates, the first that lands takes the upgrade.
+# Headless, particle cap as a switch:
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Twilight Flame\Twilight Flame.map" -autoskirmish 2 -takeover -side 0 FactionChina
+#     -side 1 FactionAmerica -seed 7 -maxframes 1700 -particlecap 500 -scenario missilesmoke2
+#     -logPrefix msmoke2_
+
+30    spawn         1  AmericaAirfield                 1   1100 3600
+30    spawn         1  AmericaAirfield                 1   1300 3600
+30    spawn         1  AmericaAirfield                 1   1400 3200
+30    spawn         1  AmericaAirfield                 1   1000 3300
+30    spawn         1  AmericaPowerPlant               2   1500 3300 60
+30    spawn         1  AmericaVehicleComanche          4   1200 3700 40
+40    shiftupgrade  1  AmericaAirfield                 Upgrade_ComancheRocketPods
+60    move          1  AmericaVehicleComanche              1250 3700
+1380  spawn         0  ChinaInfantryTankHunter         6   1500 3800 20
+1380  spawn         0  ChinaTankBattleMaster           2   1750 3550 40
+1380  spawn         1  AmericaInfantryMissileDefender  6   1500 3650 20
+1400  weaponat      1  AmericaVehicleComanche              2050 3700
+1500  attack        0  ChinaInfantryTankHunter         1   AmericaVehicleComanche
+1500  attack        1  AmericaInfantryMissileDefender  0   ChinaTankBattleMaster

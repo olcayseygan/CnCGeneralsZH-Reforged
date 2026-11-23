@@ -1,0 +1,13 @@
+# trainerloss.txt with the Crusaders at frame 1700, while the match is still undecided (trainerloss
+# ends on frame 3223 with its Barracks standing). Run as trainerloss.txt's header, plus -observer so
+# seat 0 is the computer, and -scenario trainerloss2 -logPrefix trainerloss2_.
+30    spawn      0  TurkiyeVehicleFirtina 6 start0:0:-200 60
+1500  tally      0  TurkiyeBarracks
+1700  spawn      1  AmericaTankCrusader 4 start0:300:300 40
+1700  spawn      1  AmericaTankCrusader 4 start0:-300:300 40
+1700  spawn      1  AmericaTankCrusader 4 start0:0:-350 40
+1720  attack     1  AmericaTankCrusader 0 TurkiyeBarracks
+1900  tally      0  TurkiyeBarracks
+2200  tally      0  TurkiyeBarracks
+2600  tally      0  TurkiyeBarracks
+3000  tally      0  TurkiyeBarracks

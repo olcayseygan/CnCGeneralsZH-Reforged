@@ -1,0 +1,24 @@
+# TODO "Angry Mob" 2 (source c244f2f34): a Crusader ordered to attack one member of an Angry Mob
+# while the mob is ordered away on the same frame must stop after the kill, not chase the mob across
+# the map. The Crusader stands 140 east of the mob, the mob walks west to 760,2000 (about 1080 from
+# the Crusader's start, one Crusader only: three kill the whole mob); the arrive lines are rings round
+# that destination (radius 250, 500, 800), so the smallest ring that reports the Crusader says how
+# close it got (a chase that never ends reaches the 250 ring). The tally lines show the mob losing members and the Crusader surviving.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -map "Maps\Alpine Assault\Alpine Assault.map" -autoskirmish 2 -takeover
+#     -side 0 FactionGLA -side 1 FactionAmerica -seed 1 -maxframes 1800
+#     -scenario mobchase -logPrefix mobchase_
+
+30    spawn      0  GLAInfantryAngryMobNexus  1  760 920
+30    spawn      1  AmericaTankCrusader       1  900 920
+60    tally      0  GLAInfantryAngryMob*
+100   attack     1  AmericaTankCrusader       0  GLAInfantryAngryMob*
+100   move       0  GLAInfantryAngryMobNexus  760 2000
+101   arrive     1  AmericaTankCrusader       760 2000 250
+101   arrive     1  AmericaTankCrusader       760 2000 500
+101   arrive     1  AmericaTankCrusader       760 2000 800
+400   tally      0  GLAInfantryAngryMob*
+400   tally      1  AmericaTankCrusader
+1000  tally      0  GLAInfantryAngryMob*
+1700  tally      1  AmericaTankCrusader

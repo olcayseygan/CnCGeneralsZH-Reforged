@@ -16702,7 +16702,7 @@ GUI:IncomeSharingAll
 END
 
 GUI:TechRespawn
-"Відродження техно-будівель"
+"Відродж. техбуд."
 END
 
 TOOLTIP:TechRespawn

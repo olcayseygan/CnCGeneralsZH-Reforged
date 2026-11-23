@@ -16766,7 +16766,7 @@ GUI:IncomeSharingAll
 END
 
 GUI:TechRespawn
-"Возрождение техзданий"
+"Возрожд. техзд."
 END
 
 TOOLTIP:TechRespawn

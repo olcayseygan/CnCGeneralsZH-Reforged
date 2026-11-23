@@ -15702,6 +15702,14 @@ TOOLTIP:HitFlash
 "Hasar alan birim ya da bina bir anlığına kırmızı parlar, neyin vurulduğunu görürsün."
 END
 
+GUI:DamageNumbers
+"Hasar Sayıları"
+END
+
+TOOLTIP:DamageNumbers
+"Vuruşun hasarı birimin üstünde kırmızı çıkar."
+END
+
 GUI:ArchiveReplays
 "Tekrarları Arşivle"
 END

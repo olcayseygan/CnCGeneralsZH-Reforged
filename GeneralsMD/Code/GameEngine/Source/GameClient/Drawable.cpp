@@ -63,6 +63,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <map>
 #include "Common/SpecialPower.h"
 		// countdown text over a building
 #include "GameLogic/Locomotor.h"
@@ -1069,10 +1070,68 @@ Drawable::Drawable( const ThingTemplate *thingTemplate, DrawableStatus statusBit
 }  // end Drawable
 
 //-------------------------------------------------------------------------------------------------
+/** Damage Numbers, per drawable with a body: the health it had at the last look, the drop gathered
+	* since the last figure and the frame that figure rose.  The drop, not the body's last damage info:
+	* the body merges hits inside its own window and keeps one record, so ten tanks firing in one tick
+	* showed one tank's damage and a catch-up pass of several ticks lost the rest.  A rise (healing) only
+	* moves the mark.  Kept here and not on Drawable, an entry for each drawable seen while the option is
+	* on, taken away by the destructor.  updateDrawable also runs from the tick (StealthUpdate's disguise
+	* calls it), so a call on the logic thread or one of its workers returns at once: the map and the
+	* floating text list are the main thread's alone, and its next walk counts the drop.  The frames are
+	* logic frames read on the client side; nothing here is written back. */
+//-------------------------------------------------------------------------------------------------
+struct DamageNumberState
+{
+	Real lastHealth;
+	Real pending;
+	UnsignedInt shownFrame;
+};
+static std::map<DrawableID, DamageNumberState> theDamageNumbers;
+
+static void showDamageNumber( Drawable *draw, const Object *obj, UnsignedInt now )
+{
+	if( LogicThread::t_isLogicThread || LogicThread::t_isLogicWorker )
+		return;
+	const BodyModuleInterface *body = obj->getBodyModule();
+	if( body == NULL || TheInGameUI == NULL || TheGlobalData->m_headless )
+		return;
+	const UnsignedInt gather = LOGICFRAMES_PER_SECOND * 2 / 5;		// at most a figure every 0.4 wall seconds
+	const Real health = body->getHealth();
+	std::map<DrawableID, DamageNumberState>::iterator it = theDamageNumbers.find( draw->getID() );
+	if( it == theDamageNumbers.end() )
+	{
+		// first sight sets the mark and shows nothing; shownFrame a whole gather back (unsigned, so it
+		// wraps alike early on) lets the first hit rise at once
+		DamageNumberState fresh = { health, 0.0f, now - gather };
+		theDamageNumbers.insert( std::make_pair( draw->getID(), fresh ) );
+		return;
+	}
+	DamageNumberState &state = it->second;
+	state.pending += max( 0.0f, state.lastHealth - health );
+	state.lastHealth = health;
+	if( state.pending > 0.0f && now - state.shownFrame >= gather )
+	{
+		// what the player cannot see takes no figure: a stealthed unit, or one under fog or shroud
+		if( !draw->isDrawableEffectivelyHidden() && !draw->getFullyObscuredByShroud() )
+		{
+			UnicodeString text;
+			text.format( u"-%d", max( 1, REAL_TO_INT( state.pending + 0.5f ) ) );
+			Coord3D at = *draw->getPosition();
+			at.z += obj->getGeometryInfo().getMaxHeightAbovePosition();
+			TheInGameUI->addFloatingText( text, &at, GameMakeColor( 255, 48, 48, 255 ) );	// the money text's loss red
+		}
+		state.pending = 0.0f;
+		state.shownFrame = now;
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 Drawable::~Drawable()
 {
 	Int i;
+
+	theDamageNumbers.erase( getID() );
 
 	if( m_constructDisplayString )
 		TheDisplayStringManager->freeDisplayString( m_constructDisplayString );
@@ -1980,6 +2039,10 @@ void Drawable::updateDrawable( void )
 			m_hitFlashFrame = hitFrame;
 		}
 	}
+
+	// Damage Numbers: the body's health drop, read in the same place, and the figure on the floating text line
+	if( TheGlobalData->m_damageNumbers && obj )
+		showDamageNumber( this, obj, now );
 
 	if (m_selectionFlashEnvelope)
 		m_selectionFlashEnvelope->update(); // selection flashing

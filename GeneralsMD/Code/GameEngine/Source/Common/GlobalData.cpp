@@ -1281,6 +1281,7 @@ GlobalData::GlobalData()
 	m_minimapSize = 100;
 	m_showEmptyBuildingPips = TRUE;
 	m_hitFlash = FALSE;
+	m_damageNumbers = FALSE;
 	m_workersReturnToSupply = TRUE;
 	m_archiveReplays = TRUE;
 

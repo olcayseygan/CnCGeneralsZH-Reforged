@@ -927,6 +927,14 @@ TOOLTIP:HitFlash
 "A unit or building that takes damage lights up red for a moment, so you see what is being shot at."
 END
 
+GUI:DamageNumbers
+"Damage Numbers"
+END
+
+TOOLTIP:DamageNumbers
+"The damage a hit does rises over the unit in red."
+END
+
 GUI:ArchiveReplays
 "Archive Replays"
 END

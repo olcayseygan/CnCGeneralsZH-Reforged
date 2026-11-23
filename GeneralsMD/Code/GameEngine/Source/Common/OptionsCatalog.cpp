@@ -161,6 +161,7 @@ OPTION_BOOL_ACCESSORS( m_showNetBox )
 OPTION_INT_ACCESSORS( m_minimapSize )
 OPTION_BOOL_ACCESSORS( m_showEmptyBuildingPips )
 OPTION_BOOL_ACCESSORS( m_hitFlash )
+OPTION_BOOL_ACCESSORS( m_damageNumbers )
 OPTION_BOOL_ACCESSORS( m_useShadowVolumesForSkins )
 OPTION_BOOL_ACCESSORS( m_shadowsForProjectiles )
 OPTION_BOOL_ACCESSORS( m_shadowsForProps )
@@ -700,6 +701,13 @@ const OptionDef TheOptionCatalog[] =
 		OPTION_BOOL, APPLY_LIVE, 0, 1,
 		get_m_hitFlash, set_m_hitFlash },
 
+	// The damage a hit did rises over the struck unit or building as a red figure, on the money text's
+	// floating line (Drawable::updateDrawable gathers the body's health drop).  Off by default.  Client
+	// only, like Hit Flash, and drawn only on ground the screen's player sees clear.
+	{ "DamageNumbers",						OPT_WND( "CheckDamageNumbers" ), "GUI:DamageNumbers",
+		OPTION_BOOL, APPLY_LIVE, 0, 1,
+		get_m_damageNumbers, set_m_damageNumbers },
+
 	// Which language the words are in.  English is the string table the game shipped with, and every
 	// other entry is a translation laid over it, so a line the translation lacks stays English.  The
 	// table is built once while the game starts: a new language is on screen from the next launch.
@@ -980,9 +988,6 @@ const GraphicsQualityRow TheGraphicsQualityTable[] =
 	// not measured yet: Direct3D 11 does not present on the machine that would sweep it.  Ultra only,
 	// for the faults docs/plans/TODO.md still lists (shader cache, structures a script makes)
 	{ "CheckGroundFoliage",			0.0f,  {    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    1 } },
-	// not measured yet (0.3 to 0.5 ms guessed from the occlusion's, whose passes it shares at half size);
-	// Low above High, High at Ultra, and nothing without the sun's map from step 5
-	{ "ComboBoxSunShafts",			0.0f,  {    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    2 } },
 	{ "ComboBoxTextureFilter",	0.1f,  {    0,    1,    2,    2,    2,    2,    2,    2,    2,    2,    2 } },
 	{ "ComboBoxBloom",					0.1f,  {    0,    1,    2,    2,    2,    2,    2,    2,    2,    2,    2 } },
 	{ "SliderAnisotropy",				0.1f,  {    2,    4,    8,   16,   16,   16,   16,   16,   16,   16,   16 } },
@@ -1001,6 +1006,9 @@ const GraphicsQualityRow TheGraphicsQualityTable[] =
 	{ "CheckHeatHaze",					0.25f, {    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    1 } },
 	{ "CheckAmbientOcclusion",	0.3f,  {    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    1 } },
 	{ "CheckMapLight",					0.35f, {    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    1 } },
+	// about 0.4 ms GPU at 1920x1080 in the filmed rounds of 2026-11-22, from the DX11 GPU frame
+	// lines on against off; Low above High, High at Ultra, and nothing without the sun's map from step 5
+	{ "ComboBoxSunShafts",			0.4f,  {    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    2 } },
 	{ "CheckFirelight",					0.4f,  {    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    1 } },
 	// 0.79 and 0.33 ms in the two pairs on 2026-11-01, the widest spread in the table
 	{ "CheckGroundMarks",				0.55f, {    0,    0,    0,    0,    0,    0,    0,    0,    0,    1,    1 } },

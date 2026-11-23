@@ -16742,7 +16742,7 @@ GUI:IncomeSharingAll
 END
 
 GUI:TechRespawn
-"Réapparition des bâtiments tech."
+"Réappar. tech"
 END
 
 TOOLTIP:TechRespawn

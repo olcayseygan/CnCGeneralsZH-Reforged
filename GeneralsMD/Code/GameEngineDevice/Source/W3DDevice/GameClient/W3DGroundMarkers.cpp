@@ -726,8 +726,9 @@ static void planSpectre( Marker &m, const Object *caster )
 	if( data == NULL )
 		return;
 	// The orbit is the gunship's own GunshipOrbitRadius (SpectreGunshipUpdate, 250 on every retail
-	// gunship).  The deployment module's field of that name is never parsed nor set in its constructor,
-	// so it is read only for the push out of the corner below, as the logic reads it, and only when sane
+	// gunship).  The deployment module's field of that name has no INI key and is zero; it is only the
+	// push out of the corner below, read as SpectreGunshipDeploymentUpdate::initiateIntentToDoSpecialPower
+	// reads it
 	const SpectreGunshipUpdateModuleData *ship = (const SpectreGunshipUpdateModuleData *)findTemplateModule(
 		TheThingFactory->findTemplate( data->m_gunshipTemplateName ), "SpectreGunshipUpdate" );
 	if( ship == NULL || ship->m_gunshipOrbitRadius <= 0.0f )
@@ -735,7 +736,7 @@ static void planSpectre( Marker &m, const Object *caster )
 	m.orbit = TRUE;
 	m.Ro = ship->m_gunshipOrbitRadius;
 	m.k = bandUnit( m.Ro );
-	const Real push = ( data->m_gunshipOrbitRadius > 0.0f && data->m_gunshipOrbitRadius < 4000.0f ) ? data->m_gunshipOrbitRadius : 0.0f;
+	const Real push = data->m_gunshipOrbitRadius;
 
 	Coord3D target;
 	target.x = m.x;  target.y = m.y;  target.z = m.z;
@@ -1446,7 +1447,10 @@ void W3DGroundMarkers_take( InGameUI *ui )
 		return;
 	std::vector<InGameUI::GroundMarkerShot> clicks;
 	ui->takeGroundMarkerShots( clicks );
-	loadAtlas();		// once, in the shell already, so InGameUI knows before the first aim or delivery
+	// once, on the first take under the Reforged look (the shell already, so InGameUI knows before the
+	// first aim or delivery); a Classic player never pays the sheet's 11 MB, nor its managed copy
+	if( TheGlobalData != NULL && !TheGlobalData->m_classicGraphics )
+		loadAtlas();
 	if( !markersShown() )
 	{
 		W3DGroundMarkers_reset();

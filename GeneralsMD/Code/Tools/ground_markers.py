@@ -688,7 +688,8 @@ def glyphs():
 # ---------------------------------------------------------------- pack, write
 
 G = 8           # gutter of each piece's own edge: 4 texels at the second mip, 2 at the third
-SLOT = 4        # slots start on a multiple of the third mip's texel, so no box of the mip chain spans two
+SLOT = 16       # slots start and end on a multiple of the third mip's DXT block (4 texels there), so no
+                # 4x4 block of any level holds two pieces and no box of the mip chain spans two
 MIPS = 3
 
 

@@ -245,6 +245,14 @@ void W3DShroud::reset()
 	if (m_pSrcTexture)
 		m_pSrcTexture->Release();
 	m_pSrcTexture=NULL;
+	// the pixels went with the surface: a reader between here and the next init (the snow's cards
+	// on the shell map after a match) bounds-checked against the old map's counts and read freed
+	// memory (v4.3.2 report 4646)
+	m_srcTextureData=NULL;
+	m_srcTexturePitch=0;
+	m_numCellsX=0;
+	m_numCellsY=0;
+	m_fogCellCount=0;
 	if (m_finalFogData)
 		delete [] m_finalFogData;
 	m_finalFogData=NULL;
@@ -304,7 +312,7 @@ W3DShroudLevel W3DShroud::getShroudLevel(Int x, Int y)
 
 	// the upper bound was checked and the lower was not, so a negative cell - which is what a
 	// position just off the edge of the map gives - read backwards out of the shroud texture
-	if (x >= 0 && y >= 0 && x < m_numCellsX && y < m_numCellsY)
+	if (m_srcTextureData != NULL && x >= 0 && y >= 0 && x < m_numCellsX && y < m_numCellsY)
 	{
 		UnsignedShort pixel=*(UnsignedShort *)((Byte *)m_srcTextureData + x*2 + y*m_srcTexturePitch);
 		
@@ -328,7 +336,7 @@ void W3DShroud::setShroudLevel(Int x, Int y, W3DShroudLevel level, Bool textureO
 
 	DEBUG_ASSERTCRASH( m_pSrcTexture != NULL, ("Writing empty shroud.  Usually means that map failed to load."));
 
-	if (!m_pSrcTexture)
+	if (!m_pSrcTexture || m_srcTextureData == NULL)
 		return;
 
 	if (x >= 0 && y >= 0 && x < m_numCellsX && y < m_numCellsY)
@@ -400,6 +408,10 @@ void W3DShroud::setShroudLevel(Int x, Int y, W3DShroudLevel level, Bool textureO
 void W3DShroud::fillShroudData(W3DShroudLevel level)
 {
 	if (shroudHasNoDevice())
+		return;
+
+	// between a reset and the next init there is nothing to fill
+	if (m_srcTextureData == NULL)
 		return;
 
 	Int x,y;

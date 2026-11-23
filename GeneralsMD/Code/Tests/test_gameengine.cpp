@@ -427,6 +427,100 @@ TEST(namekey_lowercase_then_exact_lookup_makes_a_second_key_DEFECT_3082)
 	CHECK_STR( TheNameKeyGenerator->keyToName( lower ).str(), "DefectMixedCase" );
 }
 
+/* MSG_QUEUE_UPGRADE carried the upgrade's NameKey, a first-use number local to the process. Two
+   machines that keyed other names before the upgrades (another language, other files asked for)
+   read the same number as another upgrade or none: the sender paid, the rest refused, and v4.2.0
+   desynced one CRC window after an upgrade click.  The key is now the mask bit, from INI order
+   alone.  Each pass is one machine with its own generator; the second keyed seven names first. */
+TEST(upgrade_message_key_is_the_same_whatever_the_process_keyed_first)
+{
+	CHECK( bootOnce() );
+
+	NameKeyGenerator *shared = TheNameKeyGenerator;
+	NameKeyType radar[ 2 ], mines[ 2 ];
+	for( Int machine = 0; machine < 2; ++machine )
+	{
+		TheNameKeyGenerator = NEW NameKeyGenerator;
+		TheNameKeyGenerator->init();
+		for( Int i = 0; i < machine * 7; ++i )
+		{
+			AsciiString noise;
+			noise.format( "ZhrTestNoise%d", i );
+			TheNameKeyGenerator->nameToKey( noise );
+		}
+
+		UpgradeCenter *center = NEW UpgradeCenter;
+		radar[ machine ] = center->newUpgrade( "ZhrTestUpgradeRadar" )->getUpgradeNameKey();
+		mines[ machine ] = center->newUpgrade( "ZhrTestUpgradeMines" )->getUpgradeNameKey();
+
+		// what the first machine sent means the same upgrade here
+		const UpgradeTemplate *sent = center->findUpgradeByKey( radar[ 0 ] );
+		CHECK( sent != NULL );
+		if( sent )
+			CHECK_STR( sent->getUpgradeName().str(), "ZhrTestUpgradeRadar" );
+		CHECK( center->findUpgrade( "ZhrTestUpgradeMines" ) != NULL );
+		CHECK( center->findUpgrade( "zhrtestupgrademines" ) == NULL );	// case-sensitive, as nameToKey was
+		CHECK( center->findUpgradeByKey( NAMEKEY_INVALID ) == NULL );
+
+		delete center;
+		delete TheNameKeyGenerator;
+	}
+	TheNameKeyGenerator = shared;
+
+	CHECK_EQ( (Int)radar[ 0 ], (Int)radar[ 1 ] );
+	CHECK_EQ( (Int)mines[ 0 ], (Int)mines[ 1 ] );
+	CHECK_NE( (Int)radar[ 0 ], (Int)mines[ 0 ] );
+}
+
+/* MSG_PURCHASE_SCIENCE carried the ScienceType, which is a NameKey too.  It now carries the
+   science's place in the store, from INI order alone; same two machines as above. */
+TEST(science_message_id_is_the_same_whatever_the_process_keyed_first)
+{
+	CHECK( bootOnce() );
+
+	NameKeyGenerator *shared = TheNameKeyGenerator;
+	ScienceStore *savedSciences = TheScienceStore;
+	Int sent[ 2 ];
+	ScienceType raw[ 2 ];
+	for( Int machine = 0; machine < 2; ++machine )
+	{
+		TheNameKeyGenerator = NEW NameKeyGenerator;
+		TheNameKeyGenerator->init();
+		for( Int i = 0; i < machine * 7; ++i )
+		{
+			AsciiString noise;
+			noise.format( "ZhrTestNoise%d", i );
+			TheNameKeyGenerator->nameToKey( noise );
+		}
+		TheScienceStore = NEW ScienceStore;
+		TheScienceStore->init();
+
+		writeFile( TEST_INI, "Science SCIENCE_ZhrTestA\n  SciencePurchasePointCost = 1\nEnd\n"
+												 "Science SCIENCE_ZhrTestB\n  SciencePurchasePointCost = 2\nEnd\n" );
+		CHECK( loadIni( TEST_INI ) );
+
+		raw[ machine ] = TheScienceStore->getScienceFromInternalName( "SCIENCE_ZhrTestB" );
+		sent[ machine ] = TheScienceStore->getScienceMessageID( raw[ machine ] );
+
+		// what the first machine sent buys the same science here
+		const ScienceType bought = TheScienceStore->getScienceFromMessageID( sent[ 0 ] );
+		CHECK_STR( TheScienceStore->getInternalNameForScience( bought ).str(), "SCIENCE_ZhrTestB" );
+		CHECK_EQ( (Int)TheScienceStore->getScienceFromMessageID( 0 ), (Int)SCIENCE_INVALID );
+		CHECK_EQ( (Int)TheScienceStore->getScienceFromMessageID( 3 ), (Int)SCIENCE_INVALID );
+		CHECK_EQ( TheScienceStore->getScienceMessageID( SCIENCE_INVALID ), 0 );
+
+		delete TheScienceStore;
+		delete TheNameKeyGenerator;
+	}
+	TheScienceStore = savedSciences;
+	TheNameKeyGenerator = shared;
+	remove( TEST_INI );
+
+	CHECK_NE( (Int)raw[ 0 ], (Int)raw[ 1 ] );		// the old wire value: differs between the two
+	CHECK_EQ( sent[ 0 ], sent[ 1 ] );
+	CHECK_EQ( sent[ 0 ], 2 );
+}
+
 /* AsciiString::toLower used to strcpy into a fixed 2048-byte stack buffer, so a
    longer string - a path, or a map name arriving over the network - wrote past the
    end of it.  2048 is MAX_FORMAT_BUF_LEN, private to the header, so this walks
@@ -22159,6 +22253,58 @@ TEST(the_logic_thread_forks_on_its_own_pool_and_reads_live_state)
 	JobSystem::parallel_for( 1, 1, jobLaneMain, NULL );
 	CHECK_EQ( 1, s_laneMainSeen[ 0 ] );
 	CHECK( !JobSystem::isInsideJob() );
+
+	JobSystem::shutdown();
+}
+
+/* A jet 0.14 off on one seat: the draw stored a speed in the jet's physics while the tick ran beside it.
+	 Every lazy logic cache the client reaches (speed, facing, heights, armour, a weapon's status) stores
+	 only where Thing::isCachePeek says no; this pins who that is. */
+static std::atomic<Int> s_peekJobStores( 0 );
+static void cachePeekJob( Int, void * )
+{
+	if( !Thing::isCachePeek() )
+		s_peekJobStores.fetch_add( 1 );
+}
+
+TEST(client_reads_beside_the_tick_leave_logic_caches_unstored)
+{
+	// the tick, or anything outside a client scope, stores
+	CHECK( !Thing::isCachePeek() );
+	{
+		Thing::CachePeek peek;
+		CHECK( Thing::isCachePeek() );
+		{
+			Thing::CacheStore load;		// a save loaded from the menu stores as -loadsave does
+			CHECK( !Thing::isCachePeek() );
+		}
+		CHECK( Thing::isCachePeek() );
+	}
+	CHECK( !Thing::isCachePeek() );
+
+	// inside the render's window: the main thread and the main pool's workers never store, though a
+	// CachePeek on the main thread does not reach the workers
+	JobSystem::shutdown();
+	JobSystem::init( 4 );
+	LogicThread::g_windowOpen.store( 1 );
+	CHECK( Thing::isCachePeek() );
+	s_peekJobStores.store( 0 );
+	JobSystem::parallel_for( 256, 1, cachePeekJob, NULL );
+	CHECK_EQ( 0, s_peekJobStores.load() );
+
+	// the logic thread and its own workers store while the window is open
+	Int logicStores = 0;
+	std::thread logic( [&logicStores]
+	{
+		LogicThread::t_isLogicThread = TRUE;
+		logicStores = Thing::isCachePeek() ? 0 : 1;
+		s_peekJobStores.store( 0 );
+		JobSystem::parallel_for( 256, 1, cachePeekJob, NULL );
+	} );
+	logic.join();
+	LogicThread::g_windowOpen.store( 0 );
+	CHECK_EQ( 1, logicStores );
+	CHECK_EQ( 256, s_peekJobStores.load() );
 
 	JobSystem::shutdown();
 }

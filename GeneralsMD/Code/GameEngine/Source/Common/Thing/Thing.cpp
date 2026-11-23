@@ -105,6 +105,19 @@ const Coord3D* Thing::getUnitDirectionVector2D() const
 	if (!(m_cacheFlags & VALID_DIRVECTOR))
 	{
 		Real angle = getOrientation();
+		if (isCachePeek())
+		{
+			/* the render asks beside the tick: a store here could set VALID_DIRVECTOR over a setOrientation
+				 the tick just made, or lose a flag the tick set, so the answer goes to a per-thread slot.
+				 ponytail: a ring of 8, so a caller holding up to 8 of these pointers at once stays right */
+			static thread_local Coord3D s_peekDir[8];
+			static thread_local UnsignedInt s_peekNext = 0;
+			Coord3D &dir = s_peekDir[(s_peekNext++) & 7];
+			dir.x = Cos( angle );
+			dir.y = Sin( angle );
+			dir.z = 0;
+			return &dir;
+		}
 		m_cachedDirVector.x = Cos( angle );
 		m_cachedDirVector.y = Sin( angle );
 		m_cachedDirVector.z = 0;
@@ -300,7 +313,7 @@ Real Thing::getHeightAboveTerrain() const
 {
 	if (!(m_cacheFlags & VALID_ALTITUDE_TERRAIN))
 	{
-		if (s_cachePeekDepth > 0)
+		if (isCachePeek())
 			return calculateHeightAboveTerrain();
 		m_cachedAltitudeAboveTerrain = calculateHeightAboveTerrain();
 		m_cacheFlags |= VALID_ALTITUDE_TERRAIN;
@@ -325,7 +338,7 @@ Real Thing::getHeightAboveTerrainOrWater() const
 		{
 			altitude = getHeightAboveTerrain();
 		}
-		if (s_cachePeekDepth > 0)
+		if (isCachePeek())
 			return altitude;
 		m_cachedAltitudeAboveTerrainOrWater = altitude;
 		m_cacheFlags |= VALID_ALTITUDE_SEALEVEL;

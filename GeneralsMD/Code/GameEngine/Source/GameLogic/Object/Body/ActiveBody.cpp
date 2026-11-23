@@ -292,7 +292,21 @@ void ActiveBody::validateArmorAndDamageFX() const
 //-------------------------------------------------------------------------------------------------
 Real ActiveBody::estimateDamage( DamageInfoInput& damageInfo ) const
 {
-	validateArmorAndDamageFX();
+	/* the cursor's can-attack hint asks this from the client, and the draw beside the tick could store an
+		 armour from flags the tick has since changed, over the tick's own; asked there, the armour is
+		 worked out and not stored */
+	Armor armor = m_curArmor;
+	if( Thing::isCachePeek() )
+	{
+		const ArmorTemplateSet* set = getObject()->getTemplate()->findArmorTemplateSet(m_curArmorSetFlags);
+		if( set && set != m_curArmorSet )
+			armor = set->getArmorTemplate() ? TheArmorStore->makeArmor(set->getArmorTemplate()) : Armor();
+	}
+	else
+	{
+		validateArmorAndDamageFX();
+		armor = m_curArmor;
+	}
 
 	//Subdual damage can't affect you if you can't be subdued
 	if( IsSubdualDamage(damageInfo.m_damageType)  &&  !canBeSubdued() )
@@ -316,7 +330,7 @@ Real ActiveBody::estimateDamage( DamageInfoInput& damageInfo ) const
 		}
 	}
 
-	Real amount = m_curArmor.adjustDamage(damageInfo.m_damageType, damageInfo.m_amount);
+	Real amount = armor.adjustDamage(damageInfo.m_damageType, damageInfo.m_amount);
 
 	return amount;
 }

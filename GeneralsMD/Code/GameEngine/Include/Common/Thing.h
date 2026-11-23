@@ -154,6 +154,12 @@ public:
 		Int m_depth;
 	};
 
+	/** TRUE where a lazily filled logic cache is to be worked out and not stored: under a CachePeek, and
+		anywhere inside the render's overlap window (the main thread and the main pool's workers it forks
+		there, which a CachePeek on the main thread does not reach). The logic thread and its own workers
+		are never inside the window, so the tick stores as it always did. */
+	static Bool isCachePeek() { return s_cachePeekDepth > 0 || LogicThread::isInsideWindow(); }
+
 	Bool isAboveTerrain() const { return getHeightAboveTerrain() > 0.0f; }
 	Bool isAboveTerrainOrWater() const { return getHeightAboveTerrainOrWater() > 0.0f; }
 

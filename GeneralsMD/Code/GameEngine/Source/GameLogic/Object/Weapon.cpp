@@ -45,6 +45,7 @@
 #include "Common/GameAudio.h"
 #include "Common/GameState.h"
 #include "Common/INI.h"
+#include "Common/JobSystem.h"
 #include "Common/PerfTimer.h"
 #include "Common/Player.h"
 #include "Common/ThingFactory.h"
@@ -3290,7 +3291,11 @@ WeaponStatus Weapon::getStatus() const
 	if( now >= m_whenWeCanFireAgain )
 	{
 		const WeaponStatus status = m_ammoInClip > 0 ? READY_TO_FIRE : OUT_OF_AMMO;
-		if( s_statusPeekDepth == 0 )
+		/* the control bar asks a selected unit's weapons from the client, on the seat that selected it
+			 alone, and inside the draw it asks with the draw's frame, not the tick's: neither may refresh
+			 m_status. A logic job under a CachePeek keeps writing as it did. */
+		const Bool clientAsks = LogicThread::isInsideWindow() || ( Thing::isCachePeek() && !JobSystem::isInsideJob() );
+		if( s_statusPeekDepth == 0 && !clientAsks )
 			m_status = status;
 		//CRCDEBUG_LOG(("Weapon::getStatus() just set m_status to %d (ammo in clip is %d)\n", m_status, m_ammoInClip));
 		return status;

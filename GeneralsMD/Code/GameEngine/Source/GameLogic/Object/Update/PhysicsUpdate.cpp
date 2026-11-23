@@ -1050,7 +1050,13 @@ Real PhysicsBehavior::getVelocityMagnitude() const
 {
 	if (m_velMag == INVALID_VEL_MAG)
 	{
-		m_velMag = (Real)sqrtf( sqr(m_vel.x) + sqr(m_vel.y) + sqr(m_vel.z) );
+		const Real mag = (Real)sqrtf( sqr(m_vel.x) + sqr(m_vel.y) + sqr(m_vel.z) );
+		/* the draw (a model's walk speed, wheel bounce, truck sounds) asks beside the tick: it may read
+			 the velocity before the tick's change and store after the tick marked the magnitude stale,
+			 and logic would go on with a speed from the old velocity on this seat alone */
+		if (Thing::isCachePeek())
+			return mag;
+		m_velMag = mag;
 	}
 	return m_velMag;
 }

@@ -55,6 +55,7 @@
 #include "GameClient/Shadow.h"
 #include "GameClient/TankSkin.h"
 #include "GameNetwork/GameInfo.h"
+#include "GameLogic/DayNightCycle.h"
 #include "GameLogic/GameLogic.h"		// for real-time frame
 #include "GameLogic/GhostObject.h"
 #include "GameLogic/PartitionManager.h"
@@ -1910,6 +1911,11 @@ void W3DModelDraw::buildRenderObjects( Bool madeInTick )
 		// ponytail: loads every map object's night and snow models once; validate per object override if memory bites
 		if (loadingMap)
 			getW3DModelDrawModuleData()->validateStuffForTimeAndWeather(getDrawable(), TRUE, TRUE);
+		// under the day and night cycle every object's lights turn at dusk (DayNight_update), so its night
+		// states load here, with the day's, and not on the first bone query of the night inside a tick
+		else if (DayNight_isOn())
+			getW3DModelDrawModuleData()->validateStuffForTimeAndWeather(getDrawable(), TRUE,
+												TheGlobalData->m_weather == WEATHER_SNOWY);
 	}
 
 	ModelConditionFlags emptyFlags;

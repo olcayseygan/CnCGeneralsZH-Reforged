@@ -30866,6 +30866,37 @@ TEST(day_night_light_delays_are_a_hash_of_the_object_within_their_kind)
 	DayNight_setOverrideForTests( -1 );
 }
 
+TEST(day_night_lights_turn_only_inside_the_window_the_logic_walks)
+{
+	/* DayNight_update sets every object's NIGHT condition only on the frames DayNight_lightsMayTurn
+		 answers yes, so a light that turned on any other frame would stay as its bind left it. */
+	DayNight_setOverrideForTests( 1 );
+	GameSpeed_set( NATIVE_GAME_SPEED_PERCENT );
+	Int turns = 0, outside = 0, walked = 0;
+	for( UnsignedInt f = 1; f <= DayNight_cycleFrames(); ++f )
+	{
+		const Bool walks = DayNight_lightsMayTurn( f );
+		walked += walks ? 1 : 0;
+		for( Int id = 1; id <= 200; ++id )
+			for( Int kind = 0; kind < DAYNIGHT_LIGHT_KINDS; ++kind )
+				if( DayNight_lightsOn( (ObjectID)id, kind, f ) != DayNight_lightsOn( (ObjectID)id, kind, f - 1 ) )
+				{
+					++turns;
+					outside += walks ? 0 : 1;
+				}
+	}
+	CHECK_EQ( outside, 0 );
+	CHECK_EQ( turns, 2 * 200 * DAYNIGHT_LIGHT_KINDS );		// each light on once and off once a cycle
+	const Int windowTicks = ( (Int)DAYNIGHT_BUILDING_DELAY_SECONDS * (Int)LOGICFRAMES_PER_GAME_SECOND + 1 ) * 2;
+	CHECK_EQ( walked, windowTicks );
+	const UnsignedInt firstLights = 345 * (UnsignedInt)LOGICFRAMES_PER_GAME_SECOND;	// cycle time 645, 45 s into the dusk
+	CHECK( DayNight_lightsMayTurn( firstLights ) );
+	CHECK( !DayNight_lightsMayTurn( firstLights - 1 ) );
+	DayNight_setOverrideForTests( 0 );
+	CHECK( !DayNight_lightsMayTurn( firstLights ) );
+	DayNight_setOverrideForTests( -1 );
+}
+
 TEST(day_night_off_answers_daylight_everywhere)
 {
 	DayNight_setOverrideForTests( 0 );

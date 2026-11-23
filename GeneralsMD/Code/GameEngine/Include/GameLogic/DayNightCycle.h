@@ -34,7 +34,9 @@
 //
 // The rest is for the picture: how far into the night the frame is, and when each object's lights
 // come on and go off.  An object's light delay is a hash of its ObjectID and nothing else, never a
-// random draw: the NIGHT model condition moves launch bones the logic reads.
+// random draw: the NIGHT model condition moves launch bones the logic reads.  The logic sets that
+// condition itself, at the bind and in DayNight_update across the seconds the lights turn, so windows,
+// lamps and headlights come on after dusk and go off after dawn on the same frame on every machine.
 //
 // The cycle stands down under the Apocalypse and Lane War, which write the same light tables.
 //
@@ -125,12 +127,26 @@ extern UnsignedInt DayNight_lightDelayFrames( ObjectID id, Int kind, Bool dawn =
 /// (ApocalypseDirector::handLight is the pattern).
 extern Bool DayNight_lightsOn( ObjectID id, Int kind, UnsignedInt frame );
 
+class Object;
+
+/// the DayNightLightKind of an object, from its template alone: a structure's is a building's, a
+/// vehicle's or an aircraft's a vehicle's, anything else (a lamp post or a sign made as an object) a lamp's
+extern Int DayNight_lightKindOf( const Object *obj );
+
+/// that object's lights at that frame: DayNight_lightsOn with its ObjectID and its kind
+extern Bool DayNight_objectLightsOn( const Object *obj, UnsignedInt frame );
+
+/// some object's lights may turn at that frame: from the first lights of the dusk, and of the dawn,
+/// through the longest delay of any kind; FALSE while the cycle is off
+extern Bool DayNight_lightsMayTurn( UnsignedInt frame );
+
 /// the ObjectID residue (id % LOGICFRAMES_PER_SECOND) that looks again on that frame, -1 for none:
 /// the frame a step reaches an object is the frame DayNight_sightScaleFor changes for it
 extern Int DayNight_relookSlot( UnsignedInt frame );
 
 /// once a logic frame, from GameLogic::update: in the second after each sight step, every object
-/// whose ObjectID falls on this frame of the spread looks again
+/// whose ObjectID falls on this frame of the spread looks again; while the lights may turn, every
+/// object's NIGHT model condition is set to DayNight_objectLightsOn, in list order
 extern void DayNight_update( void );
 
 //-------------------------------------------------------------------------------------------------
@@ -250,11 +266,11 @@ extern Bool DayNight_handsLightOver( void );
 /// map's own hour's
 extern Real DayNight_infantryLightScale( const Real scales[ TIME_OF_DAY_COUNT ] );
 
-/// the NIGHT model condition an object or a map prop takes when it is made or the map sets its hour:
-/// the map's own hour's with the cycle off, as it always was; with the cycle on, the day's, because the
-/// lights do not follow the cycle yet and every match opens at noon (a map authored for night would
-/// otherwise show its windows lit at midday).  Logic reads it through launch and exit bones, so it is
-/// a function of the match's settings only.
+/// the NIGHT model condition the map's own hour gives an object when it is made: the map's hour's with
+/// the cycle off, as it always was; with the cycle on, the day's, since every match opens at noon (a map
+/// authored for night would otherwise show its windows lit at midday).  Under the cycle an object takes
+/// DayNight_objectLightsOn instead.  Logic reads it through launch and exit bones, so it is a function
+/// of the match's settings only.
 extern Bool DayNight_mapNightCondition( void );
 
 /// how the light goes from day to night

@@ -29,6 +29,7 @@
 #include "Common/GlobalData.h"
 #include "Common/LogicThread.h"
 #include "GameClient/Display.h"
+#include "GameClient/Drawable.h"
 #include "GameClient/GameClient.h"
 #include "GameClient/ParticleSys.h"
 #include "GameLogic/DayNightCycle.h"
@@ -203,6 +204,38 @@ Bool DayNight_lightsOn( ObjectID id, Int kind, UnsignedInt frame )
 }
 
 //-------------------------------------------------------------------------------------------------
+Int DayNight_lightKindOf( const Object *obj )
+{
+	if( obj->isKindOf( KINDOF_STRUCTURE ) )
+		return DAYNIGHT_LIGHT_BUILDING;
+	if( obj->isKindOf( KINDOF_VEHICLE ) || obj->isKindOf( KINDOF_AIRCRAFT ) )
+		return DAYNIGHT_LIGHT_VEHICLE;
+	return DAYNIGHT_LIGHT_LAMP;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool DayNight_objectLightsOn( const Object *obj, UnsignedInt frame )
+{
+	return DayNight_lightsOn( obj->getID(), DayNight_lightKindOf( obj ), frame );
+}
+
+//-------------------------------------------------------------------------------------------------
+static_assert( DAYNIGHT_BUILDING_DELAY_SECONDS >= DAYNIGHT_LAMP_DELAY_SECONDS
+	&& DAYNIGHT_BUILDING_DELAY_SECONDS >= DAYNIGHT_VEHICLE_DELAY_SECONDS, "the lights' window takes the building's delay as the longest" );
+
+Bool DayNight_lightsMayTurn( UnsignedInt frame )
+{
+	if( !DayNight_isOn() )
+		return FALSE;
+	const UnsignedInt t = intoCycle( frame );
+	const UnsignedInt s = gameSecond();
+	const UnsignedInt longest = (UnsignedInt)DAYNIGHT_BUILDING_DELAY_SECONDS * s;	// a delay runs 0 to this, both ends in
+	const UnsignedInt on = ( DUSK_START + DAYNIGHT_LIGHTS_ON_SECONDS ) * s;
+	const UnsignedInt off = ( DAWN_START + DAYNIGHT_LIGHTS_OFF_SECONDS ) * s;
+	return ( t >= on && t - on <= longest ) || ( t >= off && t - off <= longest );
+}
+
+//-------------------------------------------------------------------------------------------------
 /** In the wall second after each sight step, the objects whose ObjectID falls on this frame of the
 		spread look again with their new scale.  The list is walked in its own order, which is logic state;
 		nothing else is read.  ponytail: an O(objects) walk on 30 frames of each step, 120 frames a cycle;
@@ -224,11 +257,39 @@ Int DayNight_relookSlot( UnsignedInt frame )
 	return -1;
 }
 
+/** The lights: across the two windows a light may turn in, every object with a drawable takes its
+		NIGHT condition from DayNight_objectLightsOn, a function of its ObjectID, its template and the frame,
+		in list order inside the tick, so a launch bone asked later in this tick or the next answers the
+		same on every machine.  The write is a no-op when the flag already stands (clearAndSetModelConditionFlags);
+		nothing of the drawable is read.  An object made outside the windows took the right answer at its
+		bind (Object::friend_bindToDrawable), and a save brings the flags with the drawable.  ponytail: an
+		O(objects) walk on every tick of the two 20 game second windows, about 800 ticks a cycle at 150;
+		a list per delay frame if a full map shows it in the frame time. */
+static void turnLights( UnsignedInt frame )
+{
+	if( !DayNight_lightsMayTurn( frame ) || TheGlobalData == NULL || !TheGlobalData->m_forceModelsToFollowTimeOfDay )
+		return;
+	ModelConditionFlags night;
+	night.set( MODELCONDITION_NIGHT );
+	ModelConditionFlags none;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		Drawable *draw = obj->getDrawable();
+		if( draw == NULL )
+			continue;
+		if( DayNight_objectLightsOn( obj, frame ) )
+			draw->clearAndSetModelConditionFlags( none, night );
+		else
+			draw->clearAndSetModelConditionFlags( night, none );
+	}
+}
+
 void DayNight_update( void )
 {
 	if( TheGameLogic == NULL )
 		return;
 	handLight( TheGameLogic->getFrame() );
+	turnLights( TheGameLogic->getFrame() );
 	const Int slot = DayNight_relookSlot( TheGameLogic->getFrame() );
 	if( slot < 0 )
 		return;

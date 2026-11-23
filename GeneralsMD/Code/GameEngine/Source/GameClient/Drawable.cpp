@@ -7051,8 +7051,12 @@ void	Drawable::setTimeOfDay(TimeOfDay tod)
 	startAmbientSound(dt, tod);
 
 	ModelConditionFlags c = m_conditionState;
-	// under the day and night cycle the lights stay off: they do not follow it yet (DayNightCycle.h)
-	c.set(MODELCONDITION_NIGHT, (tod == TIME_OF_DAY_NIGHT && !DayNight_isOn()) ? 1 : 0);
+	// under the day and night cycle the object's own lights at this frame, never the hour (DayNightCycle.h)
+	const Object *obj = getObject();
+	const Bool night = DayNight_isOn()
+		? (obj != NULL && TheGameLogic != NULL && DayNight_objectLightsOn(obj, TheGameLogic->getFrame()))
+		: tod == TIME_OF_DAY_NIGHT;
+	c.set(MODELCONDITION_NIGHT, night ? 1 : 0);
 	replaceModelConditionFlags(c);
 }
 

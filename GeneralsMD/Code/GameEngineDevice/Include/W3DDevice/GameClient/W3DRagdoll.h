@@ -88,9 +88,16 @@ private:
 		Role role;
 		Int parent;
 		Int anchor;							///< ROLE_FOLLOW: the bone it rides on
+		Int carrier;						///< a bone of a long carried thing (the gun and what hangs off it): that thing's first bone, else -1
 		Matrix3D baseLocalInv;	///< the inverse of the HTree's base transform relative to the parent
 		Matrix3D followLocal;		///< ROLE_FOLLOW: its transform in the anchor's frame at the start
 		Matrix3x3 rot0;					///< world rotation at the start
+		Vector3 levelAxis;			///< a long carried thing's first bone: what rot0 turns about to lay its length level
+		Real levelAngle;				///< and how far
+		Vector3 axisLocal;			///< and its length, in its own frame
+		Vector3 grip;						///< and where its anchor held it, in its own frame at the start
+		Real yaw0;							///< and the heading of its length at the start
+		Real yaw;								///< and the heading it was last given
 		Vector3 x;							///< ROLE_PARTICLE: position now
 		Vector3 xPrev;					///< and one step ago
 		Quaternion q;						///< rotation since the start, warm start for the next solve
@@ -103,16 +110,23 @@ private:
 	{
 		Int a, b;
 		Real minD, maxD;
+		Vector3 rest;		///< b minus a at the start, world space
 	};
 
 	W3DRagdoll();
 	const char *build( RenderObjClass *robj, const RagdollImpact &impact, const char *templateName );	///< NULL, or why the skeleton cannot be used
 	void addConstraint( Int a, Int b, Real minD, Real maxD );
 	void step( Real dt, Bool gravity, Real sinkOffset );
-	void pose( RenderObjClass *robj );
+	Real worstStretch( Int *which ) const;	///< how far the constraint furthest out is, and which one
+	void pose( RenderObjClass *robj, Real sinkOffset );
 	void logPose( RenderObjClass *robj, const char *when, Real sinkOffset );	///< the RAGDOLL line: where the bones landed against where they were sent
 
 	RenderObjClass *m_robj;		///< identity only, never dereferenced once it may be gone
+	const char *m_name;				///< the template's, for the log
+	Int m_gun;								///< the first long carried thing's first bone, -1 when none; the log follows it
+	Real m_gunHandTilt;				///< degrees off level its length would be riding the hand, at the last pose
+	Real m_gunTilt;						///< degrees off level as drawn
+	Real m_gunLow;						///< its lowest bone over the ground
 	Int m_numBones;
 	Bone m_bone[ MAX_BONES ];
 	Int m_numConstraints;
@@ -123,6 +137,7 @@ private:
 	Real m_accumMs;
 	Real m_height0;						///< the drawable's height over the drawn ground at death, when below it; the sink is measured from there
 	Int m_stillSteps;
+	Int m_heldAwake;					///< times it came to rest with its constraints still out
 	Bool m_asleep;
 };
 

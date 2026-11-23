@@ -23,8 +23,12 @@
 // The root and any bone under it shorter than MIN_BONE_LENGTH (the mover dummy, "DUM - MVR" on the
 // Ranger) stay kinematic: not captured, posed by the base pose from the drawable's transform.  The
 // child of those with the most descendants is the body; every bone in it is a particle, except a
-// near zero length one, which rides on its parent.  Whatever else hangs off the mover (the Ranger's
-// BONE-GUN and its MUZZLE01) rides on the right hand, so the rifle stays in it.
+// near zero length one, which rides on its parent.  Whatever else hangs off the mover is carried:
+// each bone off it, with everything under it, rides on the particle nearest any of its bones at death,
+// so the Ranger's BONE-GUN and MUZZLE01 stay in his hand and the Missile Defender's BONE_PACK on his
+// back.  A carried thing LONG_CARRIED or longer is drawn level and turned only about the vertical,
+// held where the hand held it and kept off the ground: following the hand's whole turn, a launcher
+// on the shoulder of a man who fell on his back stood upright out of him.
 //
 // The constraints, all lengths taken from the pose at the moment of death:
 //  - every particle to its parent particle, fixed;
@@ -76,6 +80,11 @@ static const Real DAMPING = 0.02f;								///< share of the velocity lost a step
 static const Real GROUND_FRICTION = 0.5f;					///< share of the sideways step a particle on the ground loses
 static const Real PARTICLE_RADIUS = 0.7f;					///< how far a bone's pivot stays above the ground
 static const Real MIN_BONE_LENGTH = 0.3f;					///< shorter than this to its parent, a bone rides on it
+static const Real LONG_CARRIED = 2.5f;						///< a carried thing this long or longer (a rifle, a launcher) is drawn level
+static const Real CARRIED_CLEARANCE = 0.5f;				///< how far its bones stay above the ground
+static const Real CARRIED_DROP_REACH = 2.0f;			///< its hand this far over where it lies or closer, it is let down onto the ground
+static const Real LEVEL_HEADING_MIN = 0.25f;			///< the level of its length in the hand under which the hand no longer turns it
+static const Real LEVEL_MS = 600.0f;							///< how long it takes to come level from its tilt at death, in sync milliseconds
 static const Real STIFF_MIN = 0.92f;
 static const Real STIFF_MAX = 1.04f;
 static const Real JOINT_MIN_ANGLE_DEG = 35.0f;
@@ -90,6 +99,8 @@ static const Real JITTER_SPEED = 3.0f;
 static const UnsignedInt IMPACT_MAX_AGE_MS = 1500;
 static const Real SLEEP_SPEED = 0.5f;							///< units/s; slower than this everywhere for SLEEP_STEPS and it stops
 static const Int SLEEP_STEPS = 30;
+static const Real SLEEP_MAX_STRETCH = 0.05f;				///< and no constraint further out than this
+static const Int MAX_HELD_AWAKE = 4;							///< times a still body is opened up before it sleeps as it is
 
 static Int s_activeRagdolls = 0;
 
@@ -106,14 +117,6 @@ static Bool ragdollSwitch( void )
 {
 	static const Bool on = findEarlyCommandLineOption( L"-ragdoll" ) != NULL;
 	return on;
-}
-
-//-------------------------------------------------------------------------------------------------
-static Bool endsWithNoCase( const char *name, const char *suffix )
-{
-	const size_t n = strlen( name );
-	const size_t m = strlen( suffix );
-	return n >= m && strcasecmp( name + n - m, suffix ) == 0;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -194,6 +197,11 @@ static Real groundUnder( Real x, Real y, Real fallback )
 //-------------------------------------------------------------------------------------------------
 W3DRagdoll::W3DRagdoll() :
 	m_robj( NULL ),
+	m_name( "?" ),
+	m_gun( -1 ),
+	m_gunHandTilt( 0.0f ),
+	m_gunTilt( 0.0f ),
+	m_gunLow( 0.0f ),
 	m_numBones( 0 ),
 	m_numConstraints( 0 ),
 	m_lastRoot( 0.0f, 0.0f, 0.0f ),
@@ -202,6 +210,7 @@ W3DRagdoll::W3DRagdoll() :
 	m_accumMs( 0.0f ),
 	m_height0( 0.0f ),
 	m_stillSteps( 0 ),
+	m_heldAwake( 0 ),
 	m_asleep( FALSE )
 {
 }
@@ -241,6 +250,7 @@ void W3DRagdoll::addConstraint( Int a, Int b, Real minD, Real maxD )
 	c.b = b;
 	c.minD = minD;
 	c.maxD = maxD;
+	c.rest = m_bone[ b ].x - m_bone[ a ].x;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -295,18 +305,18 @@ const char *W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact
 		return "no body under the root";
 
 	Bool inBody[ MAX_BONES ];
-	Int hand = bodyRoot;
 	for( Int i = 0; i < n; ++i )
-	{
 		inBody[ i ] = ( i == bodyRoot ) || ( i > 0 && inBody[ m_bone[ i ].parent ] );
-		if( inBody[ i ] && hand == bodyRoot && endsWithNoCase( tree->Get_Bone_Name( i ), " R HAND" ) )
-			hand = i;
-	}
 
+	// what hangs off the mover outside the body is carried: each thing (a bone off the mover and all
+	// under it) by the particle nearest any of its bones at death, the gun by a hand, a pack by the back
+	Int carried[ MAX_BONES ];
 	Int numParticles = 0;
 	for( Int i = 1; i < n; ++i )
 	{
 		Bone &b = m_bone[ i ];
+		carried[ i ] = -1;
+		b.carrier = -1;
 		if( b.role == ROLE_KINEMATIC )
 			continue;
 		if( inBody[ i ] && ( i == bodyRoot || length[ i ] >= MIN_BONE_LENGTH ) )
@@ -317,13 +327,80 @@ const char *W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact
 		else
 		{
 			b.role = ROLE_FOLLOW;
-			b.anchor = ( m_bone[ b.parent ].role == ROLE_KINEMATIC ) ? hand : b.parent;
-			if( m_bone[ b.anchor ].role == ROLE_FOLLOW && b.anchor > i )
-				b.anchor = bodyRoot;
+			b.anchor = b.parent;
+			if( !inBody[ i ] )
+				carried[ i ] = ( m_bone[ b.parent ].role == ROLE_KINEMATIC ) ? i : carried[ b.parent ];
 		}
 	}
 	if( numParticles < 3 )
 		return "fewer than three bones to swing";
+
+	char carriedLog[ 256 ] = "";
+	m_gun = -1;
+	for( Int r = 1; r < n; ++r )
+	{
+		if( carried[ r ] != r )
+			continue;
+		Bone &br = m_bone[ r ];
+		const Vector3 at = w0[ r ].Get_Translation();
+		Real nearest = 1.0e9f;
+		Real extent = 0.0f;
+		Int farthest = r;
+		for( Int k = r; k < n; ++k )
+		{
+			if( carried[ k ] != r )
+				continue;
+			const Vector3 xk = w0[ k ].Get_Translation();
+			if( ( xk - at ).Length() > extent )
+			{
+				extent = ( xk - at ).Length();
+				farthest = k;
+			}
+			for( Int p = 1; p < n; ++p )
+				if( m_bone[ p ].role == ROLE_PARTICLE && ( xk - w0[ p ].Get_Translation() ).Length() < nearest )
+				{
+					nearest = ( xk - w0[ p ].Get_Translation() ).Length();
+					br.anchor = p;
+				}
+		}
+		// a long thing (a rifle, a launcher) is drawn level, held where the hand held it: riding the hand's
+		// turn, a launcher shouldered by a soldier lying on his back points at the sky
+		const Bool level = extent >= LONG_CARRIED;
+		if( level )
+		{
+			const Matrix3x3 rot0( w0[ r ] );
+			const Vector3 axis = ( w0[ farthest ].Get_Translation() - at ) / extent;
+			br.axisLocal = rot0.Transpose() * axis;
+			br.grip = rot0.Transpose() * ( w0[ br.anchor ].Get_Translation() - at );
+			Vector3 flat( axis.X, axis.Y, 0.0f );
+			br.levelAxis.Set( 0.0f, 0.0f, 1.0f );
+			br.levelAngle = 0.0f;
+			if( flat.Length() > 1.0e-3f )
+			{
+				flat.Normalize();
+				Vector3 turn;
+				Vector3::Cross_Product( axis, flat, &turn );
+				const Real s = turn.Length();
+				if( s > 1.0e-6f )
+				{
+					br.levelAxis = turn / s;
+					br.levelAngle = atan2f( s, Vector3::Dot_Product( axis, flat ) );
+				}
+			}
+			else
+				flat.Set( 1.0f, 0.0f, 0.0f );
+			br.yaw0 = atan2f( flat.Y, flat.X );
+			br.yaw = br.yaw0;
+			for( Int k = r; k < n; ++k )
+				if( carried[ k ] == r )
+					m_bone[ k ].carrier = r;
+			if( m_gun < 0 )
+				m_gun = r;
+		}
+		const size_t used = strlen( carriedLog );
+		snprintf( carriedLog + used, sizeof( carriedLog ) - used, "%s%s %.1f long on %s%s", used ? ", " : "",
+			tree->Get_Bone_Name( r ), extent, tree->Get_Bone_Name( br.anchor ), level ? " level" : "" );
+	}
 
 	for( Int i = 0; i < n; ++i )
 	{
@@ -394,8 +471,9 @@ const char *W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact
 			{
 				const Real a = length[ j ];
 				const Real b = length[ c ];
+				// a joint already folded tighter at death (a launcher's arm) starts there, not snapped open
 				const Real dMin = (Real)sqrt( WWMath::Max( 0.0f, a * a + b * b - 2.0f * a * b * cosMin ) );
-				addConstraint( c, p, dMin, a + b );
+				addConstraint( c, p, WWMath::Min( dMin, ( m_bone[ c ].x - m_bone[ p ].x ).Length() ), a + b );
 			}
 		}
 	}
@@ -471,10 +549,25 @@ const char *W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact
 		b.xPrev = b.x - v * dt;
 	}
 
+	// a foot planted on a bulge of the drawn ground starts under it; the whole body is lifted so no
+	// particle starts below the ground, its shape kept
+	Real lowest = 0.0f;
+	for( Int i = 1; i < n; ++i )
+		if( m_bone[ i ].role == ROLE_PARTICLE )
+			lowest = WWMath::Min( lowest, m_bone[ i ].x.Z - groundUnder( m_bone[ i ].x.X, m_bone[ i ].x.Y, m_bone[ i ].x.Z ) );
+	if( lowest < 0.0f )
+		for( Int i = 1; i < n; ++i )
+			if( m_bone[ i ].role == ROLE_PARTICLE )
+			{
+				m_bone[ i ].x.Z -= lowest;
+				m_bone[ i ].xPrev.Z -= lowest;
+			}
+
 	const Vector3 rootPos = rootTm.Get_Translation();
 	m_lastRoot = rootPos;
 	m_height0 = WWMath::Min( 0.0f, rootPos.Z - groundUnder( rootPos.X, rootPos.Y, rootPos.Z ) );
 	m_lastSync = WW3D::Get_Sync_Time();
+	m_startSync = m_lastSync;
 
 	// the animation stops here: base pose, every bone the ragdoll moves captured
 	if( robj->Peek_Animation() != NULL )
@@ -482,12 +575,12 @@ const char *W3DRagdoll::build( RenderObjClass *robj, const RagdollImpact &impact
 	for( Int i = 1; i < n; ++i )
 		if( m_bone[ i ].role != ROLE_KINEMATIC )
 			robj->Capture_Bone( i );
-	pose( robj );
-	DEBUG_LOG(( "RAGDOLL: start %s, skeleton %s, %d bones, %d particles, %d constraints, body %s, gun on %s, push %s\n",
-		templateName, tree->Get_Name(), n, numParticles, m_numConstraints, tree->Get_Bone_Name( bodyRoot ), tree->Get_Bone_Name( hand ),
-		!fresh ? "none" : impact.radius > 0.0f ? "blast" : "shot" ));
+	m_name = templateName;
+	pose( robj, 0.0f );
+	DEBUG_LOG(( "RAGDOLL: start %s, skeleton %s, %d bones, %d particles, %d constraints, body %s, push %s, lifted %.2f, carried: %s\n",
+		templateName, tree->Get_Name(), n, numParticles, m_numConstraints, tree->Get_Bone_Name( bodyRoot ),
+		!fresh ? "none" : impact.radius > 0.0f ? "blast" : "shot", -lowest, carriedLog[ 0 ] ? carriedLog : "nothing" ));
 	logPose( robj, "start", 0.0f );
-	m_startSync = m_lastSync;
 	return NULL;
 }
 
@@ -546,8 +639,64 @@ void W3DRagdoll::step( Real dt, Bool gravity, Real sinkOffset )
 		maxMove = WWMath::Max( maxMove, ( b.x - b.xPrev ).Length() );
 	}
 	m_stillSteps = ( gravity && maxMove < SLEEP_SPEED * dt ) ? m_stillSteps + 1 : 0;
-	if( m_stillSteps >= SLEEP_STEPS )
+	if( m_stillSteps < SLEEP_STEPS )
+		return;
+	Int worst;
+	const Real stretch = worstStretch( &worst );
+	if( stretch <= SLEEP_MAX_STRETCH || m_heldAwake >= MAX_HELD_AWAKE )
+	{
 		m_asleep = TRUE;
+		return;
+	}
+	// Still but wrong: a body that landed flat is pressed into a plane its own shape does not fit in,
+	// and every correction then runs along the ground, where it cannot help.  Each pair pressed too
+	// close is opened upward, the end its shape at death puts higher lifted off the ground, and the
+	// body settles again from there.
+	const Constraint &w = m_constraint[ worst ];
+	DEBUG_LOG(( "RAGDOLL: %s held awake, constraints %.3f out at worst, %.2f and %.2f over the floor\n", m_name, stretch,
+		m_bone[ w.a ].x.Z - floorZ[ w.a ], m_bone[ w.b ].x.Z - floorZ[ w.b ] ));
+	++m_heldAwake;
+	m_stillSteps = 0;
+	for( Int k = 0; k < m_numConstraints; ++k )
+	{
+		const Constraint &c = m_constraint[ k ];
+		Bone &ba = m_bone[ c.a ];
+		Bone &bb = m_bone[ c.b ];
+		const Real dx = bb.x.X - ba.x.X;
+		const Real dy = bb.x.Y - ba.x.Y;
+		const Real across2 = dx * dx + dy * dy;
+		if( ( bb.x - ba.x ).Length() >= c.minD - SLEEP_MAX_STRETCH )
+			continue;
+		const Vector3 shape = Matrix3x3( ba.q ) * c.rest;
+		Bone &upper = shape.Z > 0.0f ? bb : ba;
+		const Bone &lower = shape.Z > 0.0f ? ba : bb;
+		const Real rise = WWMath::Min( (Real)fabs( shape.Z ), (Real)sqrt( WWMath::Max( 0.0f, c.minD * c.minD - across2 ) ) );
+		const Real lift = lower.x.Z + rise - upper.x.Z;
+		if( lift > 0.0f )
+		{
+			upper.x.Z += lift;
+			upper.xPrev.Z += lift;
+		}
+	}
+}
+
+//-------------------------------------------------------------------------------------------------
+Real W3DRagdoll::worstStretch( Int *which ) const
+{
+	Real stretch = 0.0f;
+	*which = 0;
+	for( Int k = 0; k < m_numConstraints; ++k )
+	{
+		const Constraint &c = m_constraint[ k ];
+		const Real d = ( m_bone[ c.a ].x - m_bone[ c.b ].x ).Length();
+		const Real out = WWMath::Max( c.minD - d, d - c.maxD );
+		if( out > stretch )
+		{
+			stretch = out;
+			*which = k;
+		}
+	}
+	return stretch;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -566,19 +715,20 @@ void W3DRagdoll::logPose( RenderObjClass *robj, const char *when, Real sinkOffse
 		top = WWMath::Max( top, over );
 		low = WWMath::Min( low, over );
 	}
-	Real stretch = 0.0f;
-	for( Int k = 0; k < m_numConstraints; ++k )
-	{
-		const Constraint &c = m_constraint[ k ];
-		const Real d = ( m_bone[ c.a ].x - m_bone[ c.b ].x ).Length();
-		stretch = WWMath::Max( stretch, WWMath::Max( c.minD - d, d - c.maxD ) );
-	}
-	DEBUG_LOG(( "RAGDOLL: %s: bones %.3f off their particles at worst, particles %.2f to %.2f over the ground, constraints %.3f out at worst\n",
-		when, worst, low, top, stretch ));
+	Int worstConstraint;
+	const Real stretch = worstStretch( &worstConstraint );
+	const HTreeClass *tree = robj->Get_HTree();
+	char gun[ 128 ] = "";
+	if( m_gun >= 0 )
+		snprintf( gun, sizeof( gun ), ", %s %.0f deg off level in the hand, drawn %.0f, %.2f over the ground",
+			tree->Get_Bone_Name( m_gun ), m_gunHandTilt, m_gunTilt, m_gunLow );
+	DEBUG_LOG(( "RAGDOLL: %s %s: bones %.3f off their particles at worst, particles %.2f to %.2f over the ground, constraints %.3f out at worst (%s to %s)%s\n",
+		m_name, when, worst, low, top, stretch, tree->Get_Bone_Name( m_constraint[ worstConstraint ].a ),
+		tree->Get_Bone_Name( m_constraint[ worstConstraint ].b ), gun ));
 }
 
 //-------------------------------------------------------------------------------------------------
-void W3DRagdoll::pose( RenderObjClass *robj )
+void W3DRagdoll::pose( RenderObjClass *robj, Real sinkOffset )
 {
 	Matrix3D world[ MAX_BONES ];
 	world[ 0 ] = robj->Get_Transform();
@@ -606,8 +756,51 @@ void W3DRagdoll::pose( RenderObjClass *robj )
 		}
 	}
 	for( Int i = 1; i < m_numBones; ++i )
-		if( m_bone[ i ].role == ROLE_FOLLOW )
-			world[ i ] = mul( world[ m_bone[ i ].anchor ], m_bone[ i ].followLocal );
+	{
+		Bone &b = m_bone[ i ];
+		if( b.role != ROLE_FOLLOW )
+			continue;
+		world[ i ] = mul( world[ b.anchor ], b.followLocal );
+		if( b.carrier != i )
+			continue;
+		// a long carried thing: level, turned to the heading the hand gives it (kept while the hand holds
+		// it near upright), held at its grip
+		const Vector3 carriedAxis = Matrix3x3( world[ i ] ) * b.axisLocal;
+		if( carriedAxis.X * carriedAxis.X + carriedAxis.Y * carriedAxis.Y > LEVEL_HEADING_MIN * LEVEL_HEADING_MIN )
+			b.yaw = atan2f( carriedAxis.Y, carriedAxis.X );
+		const Real laid = b.levelAngle * WWMath::Min( 1.0f, (Real)( m_lastSync - m_startSync ) / LEVEL_MS );
+		const Matrix3x3 rot = Matrix3x3( Vector3( 0.0f, 0.0f, 1.0f ), sinf( b.yaw - b.yaw0 ), cosf( b.yaw - b.yaw0 ) )
+			* Matrix3x3( b.levelAxis, sinf( laid ), cosf( laid ) ) * b.rot0;
+		world[ i ] = Matrix3D( rot, world[ b.anchor ].Get_Translation() - rot * b.grip );
+		if( i == m_gun )
+		{
+			m_gunHandTilt = (Real)asin( WWMath::Clamp( (Real)fabs( carriedAxis.Z ), 0.0f, 1.0f ) ) * 57.29578f;
+			m_gunTilt = (Real)asin( WWMath::Clamp( (Real)fabs( ( rot * b.axisLocal ).Z ), 0.0f, 1.0f ) ) * 57.29578f;
+		}
+	}
+	// and lifted whole off the ground where it would go into it, or let down onto it as the hand that
+	// holds it comes down to lie there
+	for( Int r = 1; r < m_numBones; ++r )
+	{
+		if( m_bone[ r ].carrier != r )
+			continue;
+		Real low = 1.0e9f;
+		for( Int k = r; k < m_numBones; ++k )
+			if( m_bone[ k ].carrier == r )
+			{
+				const Vector3 xk = world[ k ].Get_Translation();
+				low = WWMath::Min( low, xk.Z - ( groundUnder( xk.X, xk.Y, xk.Z ) + sinkOffset ) );
+			}
+		const Vector3 &held = m_bone[ m_bone[ r ].anchor ].x;
+		const Real handUp = held.Z - ( groundUnder( held.X, held.Y, held.Z ) + sinkOffset + PARTICLE_RADIUS );
+		const Real down = WWMath::Clamp( 1.0f - handUp / CARRIED_DROP_REACH, 0.0f, 1.0f );
+		const Real shift = low < CARRIED_CLEARANCE ? CARRIED_CLEARANCE - low : ( CARRIED_CLEARANCE - low ) * down;
+		for( Int k = r; k < m_numBones; ++k )
+			if( m_bone[ k ].carrier == r )
+				world[ k ][ 2 ][ 3 ] += shift;
+		if( r == m_gun )
+			m_gunLow = low + shift;
+	}
 
 	// HTree: T_i = T_parent Base_i Cap_i, so Cap_i = Base_i^-1 T_parent^-1 W_i
 	for( Int i = 1; i < m_numBones; ++i )
@@ -668,7 +861,7 @@ Bool W3DRagdoll::update( RenderObjClass *robj )
 		m_accumMs -= STEP_MS;
 	}
 
-	pose( robj );
+	pose( robj, sinkOffset );
 	if( m_asleep && !wasAsleep )
 	{
 		char when[ 48 ];

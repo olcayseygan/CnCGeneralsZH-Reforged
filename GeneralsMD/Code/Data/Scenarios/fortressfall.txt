@@ -12,7 +12,7 @@
 # At 4000 health it falls at logic frame 436, the Overlords still on it (seed 1, headless,
 # 2026-11-21); at 12000 the Overlords were gone by file frame 1800 and the guns took to logic 5603.
 #
-# On this map (rmg_v21_3_6p_642c_lane, 6420 by 3610) the lane runs along y 1805 from x 1410 to 5010,
+# On this map (rmg_v22_3_6p_642c_lane, 6420 by 3610) the lane runs along y 1805 from x 1410 to 5010,
 # 1580 to 2030 across: fortress B stands at 4470,1805 (300 reach), B's watch tower at 3876,1805 (225
 # reach). Everything is put down on the lane between the two, outside the tower's reach, and the
 # Overlords close in on the fortress's west face so its gun has something to answer.

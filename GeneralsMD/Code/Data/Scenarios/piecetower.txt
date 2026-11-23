@@ -11,7 +11,7 @@
 #     -seed 1 -maxframes 9000 -scenario piecetower -logPrefix piecetower_
 #
 # Slot 0 is team A's seat 1 (west, Player_1_Start 1150,1800), slot 1 B's seat 1 (east, 5270,1800).
-# On this map (rmg_v21_3_6p_642c_lane) the towers stand on the middle line, y 1805: A's at x 2544,
+# On this map (rmg_v22_3_6p_642c_lane) the towers stand on the middle line, y 1805: A's at x 2544,
 # B's at x 3876. The guns are put down on the lane inside their own reach of the enemy tower and
 # outside its 225.
 # Frames here are this file's 30 a game second; the log's logic frames are two thirds of them at 1.5x.

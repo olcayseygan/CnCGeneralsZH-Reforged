@@ -3522,12 +3522,21 @@ struct Composer
 		}
 		if( anchored ) s0 = std::max( s0, JUNCTION_CLEAR );
 
-		// evenly along it, each moved to the nearest place clear of every site and of the water already there
+		/* Evenly along it outside the crossing's calm stretch, which takes no bridge, each moved to the
+			nearest place clear of every site and of the water already there. Spread over the whole line, a
+			spot that fell in the calm stretch had to be nudged out of it, and the nudge was not always enough
+			(Heartland 3,4,250 and 6,6,360 lost a bridge). */
+		const Real calmHalf = calm ? line.calmReach - CALM_EASE + COPY_FADE + BRIDGE_DECK : 0.0f;
+		const Real calmLo = std::min( std::max( line.calmAt - calmHalf, s0 ), s1 );
+		const Real calmHi = std::min( std::max( line.calmAt + calmHalf, s0 ), s1 );
+		const Real openLength = ( s1 - s0 ) - ( calmHi - calmLo );
 		std::vector<Real> sites;
 		std::vector<const InvBridge *> ours;
 		for( size_t i = 0; i < bridges.size(); i++ )
 		{
-			Real even = s0 + ( i + 1 ) * ( s1 - s0 ) / ( bridges.size() + 1 );
+			Real even = s0 + ( i + 1 ) * openLength / ( bridges.size() + 1 );
+			if( even >= calmLo )
+				even += calmHi - calmLo;
 			Bool placed = FALSE;
 			for( Int n = 0; n <= 24 && !placed; n++ )
 			{
@@ -7281,6 +7290,15 @@ Bool rmgSynthesise( const RandomMapSettings& clamped, const std::vector<char>& e
 		Chunk *light = out.chunk( "GlobalLighting" );
 		light->version = src.m.raw.chunks[c].version;
 		light->body = src.m.raw.chunks[c].body;
+		// a night exemplar (Tournament City) hides the copied relief: its own afternoon light instead
+		Int hour = 0;
+		if( light->body.size() >= sizeof(hour) )
+			memcpy( &hour, &light->body[0], sizeof(hour) );
+		if( hour == TIME_OF_DAY_NIGHT )
+		{
+			hour = TIME_OF_DAY_AFTERNOON;
+			memcpy( &light->body[0], &hour, sizeof(hour) );
+		}
 	}
 	Chunk *world = out.chunk( "WorldInfo" );
 	{

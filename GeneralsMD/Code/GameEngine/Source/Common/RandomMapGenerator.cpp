@@ -11127,6 +11127,9 @@ void RMGLayout::build( const RandomMapSettings& settings, Bool skeleton )
 	m_skeleton = skeleton;
 	if( m_skeleton && !m_style )
 		m_type = &theMapTypes[RMG_MAP_PLAINS];
+	// night hides a massif's relief and a template's copied ground; both play by afternoon instead
+	if( m_timeOfDay == TIME_OF_DAY_NIGHT && ( m_skeleton || m_type == &theMapTypes[RMG_MAP_MASSIF] ) )
+		m_timeOfDay = TIME_OF_DAY_AFTERNOON;
 
 	m_width = m_settings.m_playableCells + 2 * RMG_BORDER_CELLS;
 	m_height = m_width;

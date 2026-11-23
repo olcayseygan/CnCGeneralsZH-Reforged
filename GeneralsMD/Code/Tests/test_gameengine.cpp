@@ -16112,15 +16112,15 @@ TEST(the_generator_still_turns_a_seed_into_the_bytes_it_used_to)
 {
 	CHECK( bootOnce() );
 
-	CHECK_EQ( RANDOM_MAP_GENERATOR_VERSION, 21 );
+	CHECK_EQ( RANDOM_MAP_GENERATOR_VERSION, 22 );
 
 	struct RMGFingerprint { Int m_seed, m_players, m_cells, m_style; UnsignedInt m_crc; };
 	static const RMGFingerprint theFingerprints[] =
 	{
-		{ 0, 2, 64, 0, 0xE9E74C27 },
-		{ 12345, 4, 96, 0, 0xCEEEECA4 },
-		{ 7, 8, 128, 0, 0x9365A3BC },
-		{ 7, 4, 200, 1, 0xBFE61264 },
+		{ 0, 2, 64, 0, 0xE9E74CA7 },
+		{ 12345, 4, 96, 0, 0xCEF6ECA4 },
+		{ 7, 8, 128, 0, 0x9385A3BC },
+		{ 7, 4, 200, 1, 0xBFE61284 },
 	};
 	const Int numFingerprints = sizeof(theFingerprints) / sizeof(theFingerprints[0]);
 
@@ -16424,7 +16424,7 @@ TEST(a_template_map_comes_out_the_same_twice_and_every_start_walks_to_every_othe
 	RandomMapGenerator::generate( exemplarSettings, exemplar );
 
 	// the bytes themselves, pinned like the generator's: a change here is a change to every template map's name
-	static const UnsignedInt theTemplateFingerprints[2] = { 0xCB55DF23u, 0x64B83248u };
+	static const UnsignedInt theTemplateFingerprints[2] = { 0xCB55DF24u, 0x64B83250u };
 	for( Int players = 2; players <= 8; players += 6 )
 	{
 		RandomMapSettings settings;
@@ -18459,6 +18459,7 @@ TEST(a_seed_picks_its_map_type_and_its_ground)
 		if( middle > ring + 40.0f )
 		{
 			massifMaps++;
+			CHECK_NE( theRMGParse.m_timeOfDay, (Int)TIME_OF_DAY_NIGHT );		// night hid the relief
 			std::vector<char> seen;
 			RMGFloodFillFromFirstStart( seen );
 			CHECK( seen[( topY + border ) * width + topX + border] );

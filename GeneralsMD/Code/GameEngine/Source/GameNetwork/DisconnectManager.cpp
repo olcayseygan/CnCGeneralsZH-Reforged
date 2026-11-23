@@ -31,6 +31,7 @@
 #include "Common/Recorder.h"
 #include "GameClient/DisconnectMenu.h"
 #include "GameClient/InGameUI.h"
+#include "GameClient/LaneWarEndScreen.h"
 #include "GameLogic/GameLogic.h"
 #include "GameNetwork/DisconnectManager.h"
 #include "GameNetwork/StallJudgement.h"
@@ -845,6 +846,20 @@ time_t DisconnectManager::reconnectHoldLeft(Int slot, ConnectionManager *conMgr)
 }
 
 time_t DisconnectManager::timeBeforeDrop(Int slot, ConnectionManager *conMgr, time_t *hold) {
+	/* A decided Direct Strike match holds nobody: its end screen is up (read at the render's sync point),
+		 and a seat rejoining or gone silent, a leaver whose last packets never came, would only keep the
+		 others on this screen in front of their results.  No reconnect hold, and a seat silent as long as
+		 the stall judgement's silence drops at once; one still talking keeps its countdown (2026-11-23). */
+	if (LaneWarEndScreen_isShowing()) {
+		if (hold) {
+			*hold = 0;
+		}
+		const time_t silent = Clock_Milliseconds() - m_playerTimeouts[slot];
+		if (silent >= (time_t)TheGlobalData->m_networkPlayerSilenceTime) {
+			return -1;		// below 0 is the drop (updateDisconnectStatus)
+		}
+		return TheGlobalData->m_networkSilentPlayerDropTime - silent;
+	}
 	time_t left = TheGlobalData->m_networkSilentPlayerDropTime - (Clock_Milliseconds() - m_playerTimeouts[slot]);
 	time_t held = reconnectHoldLeft(slot, conMgr);
 	if (hold) {

@@ -650,7 +650,8 @@ protected:
 	Int walkUpsInFlight(std::vector<ObjectID> *taken) const;	///< our units walking to, or busy with, a walk-up special right now; taken gets their targets
 	Bool walkIsCovered(const Object *obj, const Coord3D *to) const;	///< no step of the straight walk to 'to' where its map has the enemy over us
 	void steerAircraft(void);	///< aircraft off strikes whose flight crosses known anti-air, onto clear ones or home
-	void huntSuperweapon(void);	///< the rung's share of the air force at a known enemy superweapon	void buyDutyHelix(void);	///< Medium and up buy the healers and raiders their Helixes' buttons allow
+	void huntSuperweapon(void);	///< the rung's share of the air force at a known enemy superweapon
+	void buyDutyHelix(void);	///< Medium and up buy the healers and raiders their Helixes' buttons allow
 	Int helixRoleWanted(const ThingTemplate *tmpl) const;	///< the job a Helix of this kind would take now, -1 for none
 	void takeDutyHelix(Object *helix);	///< a Helix buyDutyHelix ordered comes out and takes its job
 	void doAmbulances(void);	///< the USA's Ambulances: bought once there is an army, kept behind it, taking in the hurt and cleaning our side

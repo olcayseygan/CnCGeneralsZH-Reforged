@@ -17041,8 +17041,12 @@ GUI:ShadowQuality2
 "Élevée"
 END
 
+GUI:ShadowQuality3
+"Tracé de rayons"
+END
+
 TOOLTIP:ShadowQuality
-"La netteté des ombres des unités et des bâtiments. Élevée prend environ 64 Mo de mémoire vidéo, Faible libère de la mémoire sur une carte modeste. Direct3D 11 seulement, et pas avec le Rendu classique. S'applique quand vous cliquez sur Accepter."
+"La netteté des ombres des unités et des bâtiments. Élevée prend environ 64 Mo de mémoire vidéo, Faible libère de la mémoire sur une carte modeste. Tracé de rayons suit, pour chaque pixel, la ligne vers le soleil sur la forme réelle de chaque char et de chaque bâtiment, si bien que leurs ombres restent nettes à tout niveau de zoom ; il coûte jusqu'à 1,6 ms par image et reste expérimental. Direct3D 11 seulement, et pas avec le Rendu classique. S'applique quand vous cliquez sur Accepter."
 END
 
 GUI:VolumetricSmoke

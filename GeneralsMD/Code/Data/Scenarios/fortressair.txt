@@ -1,0 +1,24 @@
+# Direct Strike proof that the fortress shoots aircraft: two USA Comanches hover over team B's fortress
+# (4470,1805), 590 from B's Watch Tower (3876,1805), outside that tower's 400 air reach, so the only
+# thing that can hit them is the fortress's air gun (5 every 0.25 s, 400 reach, spinning up to triple
+# rate). Before the air gun the fortress had no weapon against air and both Comanches stayed at full
+# health for the whole run.
+#
+#   generals.exe -headless -quickstart -noshellmap -observer -multiInstance -noFPSLimit
+#     -randommap 3 lane -autoskirmish 2 -takeover -side 0 FactionAmerica -side 1 FactionChina
+#     -seed 1 -maxframes 2400 -scenario fortressair -logPrefix fortressair_
+#
+# Pass: the HEADLESS TALLY lines for slot 0 'AmericaVehicleComanche' fall from full health after
+# frame 30 (fewer alive or less health at 300, 600, 900), and a KILLXP line names killer
+# LaneWarFortress with a Comanche as the victim. Fail: full health on every tally, as before.
+# The map is rmg_v22_3_6p_642c_lane, as in fortressattack. Frames are this file's 30 a game second.
+
+30    spawn      0  AmericaVehicleComanche     2  4620  1805  30
+45    move       0  AmericaVehicleComanche        4470  1805
+
+60    tally   0  AmericaVehicleComanche
+300   tally   0  AmericaVehicleComanche
+600   tally   0  AmericaVehicleComanche
+900   tally   0  AmericaVehicleComanche
+1200  tally   0  AmericaVehicleComanche
+1200  tally   1  LaneWarFortress

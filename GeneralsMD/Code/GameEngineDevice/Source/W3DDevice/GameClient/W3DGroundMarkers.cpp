@@ -102,6 +102,20 @@ static const Tint TINT_GOLD = { 0.97f, 0.79f, 0.24f };	///< paradrops and drops
 static const Tint TINT_AMBER = { 0.99f, 0.62f, 0.17f };	///< offensive area powers
 static const Tint TINT_ORANGE = { 0.98f, 0.43f, 0.12f };	///< air strikes, Spectre
 static const Tint TINT_RED = { 0.93f, 0.19f, 0.12f };		///< superweapons, attack
+static const Tint TINT_BLUE = { 0.46f, 0.62f, 1.00f };	///< the EMP: Generals blue lifted to read on sand
+static const Tint TINT_TOXIN = { 0.50f, 0.93f, 0.30f };	///< anthrax, the retail cursor's green
+static const Tint TINT_GAMMA = { 0.36f, 0.96f, 0.78f };	///< Anthrax Gamma
+static const Tint TINT_LED = { 0.22f, 0.88f, 0.80f };		///< Turkiye's LED line, as on its command bar
+static const Tint TINT_LACQ = { 0.80f, 0.14f, 0.11f };	///< China's red lacquer
+static const Tint TINT_STEEL = { 0.60f, 0.61f, 0.64f };	///< a hairline in plain steel
+static const Tint TINT_DARK = { 0.05f, 0.05f, 0.06f };
+static const Tint TINT_SCORCH = { 0.10f, 0.08f, 0.06f };
+static const Tint TINT_HEAL = { 0.62f, 0.95f, 0.55f };	///< the repair's crosses and teeth
+static const Tint TINT_RADAR = { 0.75f, 0.95f, 0.75f };
+
+/** The side whose finish a power's frame wears: America's satin steel, China's crisp terraced
+	* chamfer, the GLA's rusty uneven bevel, Turkiye's one flat facet with its turquoise LED line. */
+enum Finish { FINISH_USA, FINISH_CHINA, FINISH_GLA, FINISH_TUR };
 
 static Real clamp01( Real x )
 {
@@ -433,6 +447,22 @@ enum Glyph
 };
 enum SuperKind { SUPER_NONE, SUPER_MISSILES, SUPER_CANNON };
 
+/** Every ground-aimed power's own marker (the 2026-11-23 decals' unique/DESIGNS.md): its frame, its
+	* aim, click and after-click motion.  DESIGN_NONE keeps the zone and glyph (the guard). */
+enum Design
+{
+	DESIGN_NONE,
+	DESIGN_PARADROP, DESIGN_CRATE, DESIGN_LEAFLET, DESIGN_A10, DESIGN_FUELAIR, DESIGN_SPYSAT, DESIGN_SPYDRONE,
+	DESIGN_REPAIR, DESIGN_SPECTRE, DESIGN_B3, DESIGN_PARTICLE, DESIGN_LASER, DESIGN_CRUISE, DESIGN_AMBULANCE,
+	DESIGN_COMANCHE, DESIGN_DEMINE,
+	DESIGN_ARTILLERY, DESIGN_MINES, DESIGN_EMP, DESIGN_CCARPET, DESIGN_NAPALM, DESIGN_FRENZY, DESIGN_NEUTRON,
+	DESIGN_HNAPALM, DESIGN_HNUKE, DESIGN_TANKDROP,
+	DESIGN_SCUD, DESIGN_ANTHRAX, DESIGN_AMBUSH, DESIGN_GPS, DESIGN_RADAR,
+	DESIGN_KARGU, DESIGN_UAV, DESIGN_TAYFUN, DESIGN_SWARM, DESIGN_BLIND, DESIGN_RAPID, DESIGN_ALLYAID, DESIGN_COMMANDO
+};
+/// a general's or a caster's variant of a design
+enum Variant { VARIANT_NONE, VARIANT_MOAB, VARIANT_NUKE, VARIANT_CHEM, VARIANT_DEMO, VARIANT_BERET };
+
 struct Dart
 {
 	Real x, y, heading, scale;
@@ -515,6 +545,15 @@ struct Marker
 	Bool orbit;
 	Real Ro;
 	ObjectID gunship;
+	// the power's own frame (drawDesign): which, in whose finish, a general's variant, a heading where
+	// the frame has one and no lane gives it, the caster, and what stands for a drop and a fallen item
+	Int design, finish, variant;
+	Real hx, hy;
+	Real cx0, cy0;
+	Int dropPiece, fallenPiece;
+	Int swarmCount;
+	Bool beamSeen;						///< a cannon's beam is on the ground at (beamX, beamY)
+	Real beamX, beamY;
 	// the ground, and the water over it: the parts on water are drawn after the water
 	HeightGrid grid, water;
 	UnsignedInt gridMs;
@@ -535,7 +574,9 @@ struct Marker
 		turn( FALSE ), rmin( 0.0f ), rmax( 0.0f ), rnom( 0.0f ), side( 1.0f ), lastPast( 0.0f ),
 		lead( INVALID_ID ), planesSeen( FALSE ), initialCarried( 0 ), carried( 0 ), pastT( FALSE ), pastTMs( 0 ),
 		hook( FALSE ), inTurn( FALSE ), circleX( 0.0f ), circleY( 0.0f ), circleR( 0.0f ), planeAngle( 0.0f ), dropSpacing( 0.0f ),
-		orbit( FALSE ), Ro( 0.0f ), gunship( INVALID_ID ), gridMs( 0 ), laneMs( 0 ), zoneWet( FALSE ), laneWet( FALSE ), wet( FALSE )
+		orbit( FALSE ), Ro( 0.0f ), gunship( INVALID_ID ), design( 0 ), finish( 0 ), variant( 0 ), hx( 0.0f ), hy( 0.0f ),
+		cx0( 0.0f ), cy0( 0.0f ), dropPiece( P_DROP ), fallenPiece( P_DROP ), swarmCount( 3 ), beamSeen( FALSE ), beamX( 0.0f ), beamY( 0.0f ),
+		gridMs( 0 ), laneMs( 0 ), zoneWet( FALSE ), laneWet( FALSE ), wet( FALSE )
 	{
 		tint = TINT_WARM;
 		pingTint = TINT_WARM;
@@ -658,6 +699,99 @@ static Glyph powerGlyph( const SpecialPowerTemplate *power )
 		if( strstr( name.str(), POWER_GLYPHS[ i ].name ) != NULL )
 			return POWER_GLYPHS[ i ].glyph;
 	return GLYPH_NONE;
+}
+
+struct PowerDesign
+{
+	const char *name;		///< a part of the power template's name
+	Design design;
+	Int finish;					///< the side that owns it, when the caster says nothing
+};
+
+// first match wins: the longer names before the ones they contain
+static const PowerDesign POWER_DESIGNS[] =
+{
+	{ "SpectreGunship", DESIGN_SPECTRE, FINISH_USA },					{ "ParticleUplinkCannon", DESIGN_PARTICLE, FINISH_USA },
+	{ "LaserCannon", DESIGN_LASER, FINISH_USA },							{ "CruiseMissile", DESIGN_CRUISE, FINISH_USA },
+	{ "TurkiyeTayfun", DESIGN_TAYFUN, FINISH_TUR },						{ "HelixNukeBomb", DESIGN_HNUKE, FINISH_CHINA },
+	{ "NapalmBomb", DESIGN_HNAPALM, FINISH_CHINA },						{ "NeutronMissile", DESIGN_NEUTRON, FINISH_CHINA },
+	{ "NukeDrop", DESIGN_NEUTRON, FINISH_GLA },								{ "ScudStorm", DESIGN_SCUD, FINISH_GLA },
+	{ "TurkiyeKarguSwarm", DESIGN_KARGU, FINISH_TUR },				{ "TurkiyeSwarmMunition", DESIGN_SWARM, FINISH_TUR },
+	{ "TurkiyeElectronicBlinding", DESIGN_BLIND, FINISH_TUR },	{ "TurkiyeUavRecon", DESIGN_UAV, FINISH_TUR },
+	{ "TurkiyeAllyAid", DESIGN_ALLYAID, FINISH_TUR },					{ "TurkiyeRapidDeployment", DESIGN_RAPID, FINISH_TUR },
+	{ "TurkiyeCommandoRaid", DESIGN_COMMANDO, FINISH_TUR },		{ "TankParadrop", DESIGN_TANKDROP, FINISH_CHINA },
+	{ "Paradrop", DESIGN_PARADROP, FINISH_USA },							{ "CrateDrop", DESIGN_CRATE, FINISH_USA },
+	{ "LeafletDrop", DESIGN_LEAFLET, FINISH_USA },						{ "A10Thunderbolt", DESIGN_A10, FINISH_USA },
+	{ "ChinaCarpetBomb", DESIGN_CCARPET, FINISH_CHINA },			{ "CarpetBomb", DESIGN_B3, FINISH_USA },
+	{ "DaisyCutter", DESIGN_FUELAIR, FINISH_USA },						{ "NapalmStrike", DESIGN_NAPALM, FINISH_CHINA },
+	{ "AnthraxBomb", DESIGN_ANTHRAX, FINISH_GLA },						{ "EMPPulse", DESIGN_EMP, FINISH_CHINA },
+	{ "ClusterMines", DESIGN_MINES, FINISH_CHINA },						{ "ArtilleryBarrage", DESIGN_ARTILLERY, FINISH_CHINA },
+	{ "BattleshipBombardment", DESIGN_ARTILLERY, FINISH_USA },	{ "Frenzy", DESIGN_FRENZY, FINISH_CHINA },
+	{ "EmergencyRepair", DESIGN_REPAIR, FINISH_USA },					{ "SpySatellite", DESIGN_SPYSAT, FINISH_USA },
+	{ "SpyDrone", DESIGN_SPYDRONE, FINISH_USA },							{ "RadarVanScan", DESIGN_RADAR, FINISH_GLA },
+	{ "GPSScrambler", DESIGN_GPS, FINISH_GLA },								{ "RebelAmbush", DESIGN_AMBUSH, FINISH_GLA },
+	{ "TerrorCell", DESIGN_AMBUSH, FINISH_GLA },							{ "AmbulanceCleanupArea", DESIGN_AMBULANCE, FINISH_USA },
+};
+
+static Bool startsWith( const char *s, const char *prefix )
+{
+	return s != NULL && strncmp( s, prefix, strlen( prefix ) ) == 0;
+}
+
+/** The power's own design and the finish it wears.  The finish is the caster's side (a China
+	* general's paradrop wears China's), the table's when no caster is known.  The weapon cursors with no
+	* power name their design by the cursor: clear mines, and the scatter area of the Comanche's rocket
+	* pods or the Maroon Beret's Kargu drones. */
+static void pickDesign( Marker &m, const SpecialPowerTemplate *power, const Object *caster )
+{
+	m.design = DESIGN_NONE;
+	m.finish = FINISH_USA;
+	m.variant = VARIANT_NONE;
+	const char *casterName = caster ? caster->getTemplate()->getName().str() : NULL;
+	if( power != NULL )
+	{
+		const AsciiString name = power->getName();
+		for( Int i = 0; i < (Int)ARRAY_SIZE( POWER_DESIGNS ); ++i )
+			if( strstr( name.str(), POWER_DESIGNS[ i ].name ) != NULL )
+			{
+				m.design = POWER_DESIGNS[ i ].design;
+				m.finish = POWER_DESIGNS[ i ].finish;
+				break;
+			}
+		if( startsWith( name.str(), "AirF_" ) || startsWith( casterName, "AirF_" ) )
+			m.variant = VARIANT_MOAB;
+		if( startsWith( name.str(), "Nuke_" ) || startsWith( casterName, "Nuke_" ) )
+			m.variant = VARIANT_NUKE;
+	}
+	else if( m.type == RADIUSCURSOR_CLEARMINES )
+		m.design = DESIGN_DEMINE;
+	else if( m.type == RADIUSCURSOR_ATTACK_SCATTER_AREA )
+	{
+		const Bool beret = casterName != NULL && strstr( casterName, "MaroonBeret" ) != NULL;
+		m.design = beret ? DESIGN_KARGU : DESIGN_COMANCHE;
+		m.finish = beret ? FINISH_TUR : FINISH_USA;
+		m.variant = beret ? VARIANT_BERET : VARIANT_NONE;
+	}
+	if( m.design == DESIGN_NONE && m.type == RADIUSCURSOR_AMBULANCE )
+		m.design = DESIGN_AMBULANCE;
+	if( startsWith( casterName, "Chem_" ) )
+		m.variant = VARIANT_CHEM;
+	else if( startsWith( casterName, "Demo_" ) )
+		m.variant = VARIANT_DEMO;
+
+	const Player *owner = caster ? caster->getControllingPlayer() : NULL;
+	if( owner != NULL )
+	{
+		const AsciiString base = owner->getBaseSide().isEmpty() ? owner->getSide() : owner->getBaseSide();
+		if( startsWith( base.str(), "China" ) )
+			m.finish = FINISH_CHINA;
+		else if( startsWith( base.str(), "GLA" ) )
+			m.finish = FINISH_GLA;
+		else if( startsWith( base.str(), "Turk" ) )
+			m.finish = FINISH_TUR;
+		else if( startsWith( base.str(), "USA" ) || startsWith( base.str(), "America" ) )
+			m.finish = FINISH_USA;
+	}
 }
 
 /// the family, tint and glyph a cursor type draws; describe() then gives the power its own glyph
@@ -896,6 +1030,92 @@ static void planLane( Marker &m, const Object *caster, const SpecialPowerTemplat
 	}
 }
 
+/// a unit heading from (fx, fy) to (tx, ty) into the marker's own, nought when they meet
+static void setHeading( Marker &m, Real fx, Real fy, Real tx, Real ty )
+{
+	const Real dx = tx - fx, dy = ty - fy;
+	const Real l = (Real)sqrt( dx * dx + dy * dy );
+	m.hx = l > 1.0f ? dx / l : 0.0f;
+	m.hy = l > 1.0f ? dy / l : 0.0f;
+}
+
+/** What a design changes in the marker: its tint where it is not its family's, what stands for a drop
+	* and an item that fell, the arrow at the rim (a frame that is no circle has none), and a heading:
+	* the shells' flight from the far corner, the airlift's from the nearest edge, a line from the caster. */
+static void describeDesign( Marker &m, const Object *caster )
+{
+	m.hx = 0.0f;
+	m.hy = 0.0f;
+	m.dropPiece = P_DROP;
+	m.fallenPiece = P_DROP;
+	if( caster )
+	{
+		m.cx0 = caster->getPosition()->x;
+		m.cy0 = caster->getPosition()->y;
+	}
+	else
+	{
+		m.cx0 = m.x - 300.0f;
+		m.cy0 = m.y - 300.0f;
+	}
+	Coord3D target;
+	target.x = m.x;  target.y = m.y;  target.z = m.z;
+	switch( m.design )
+	{
+		case DESIGN_PARADROP:	m.fallenPiece = P_SHAPE_RING;	break;
+		case DESIGN_CRATE:		m.dropPiece = P_SHAPE_TILE;	m.fallenPiece = P_SHAPE_PLUS;	m.arrow = FALSE;	break;
+		case DESIGN_LEAFLET:	m.fallenPiece = P_SHAPE_TILE;	break;
+		case DESIGN_A10:			m.arrow = FALSE;	break;
+		case DESIGN_B3:				m.dropPiece = -1;	m.fallenPiece = P_SHAPE_CROSS;	m.arrow = FALSE;	m.tint = TINT_ORANGE;	break;
+		case DESIGN_CCARPET:
+			m.dropPiece = P_SHAPE_DIAMOND;
+			m.fallenPiece = P_SHAPE_CROSS;
+			m.arrow = FALSE;
+			m.tint = m.variant == VARIANT_NUKE ? TINT_RED : TINT_ORANGE;
+			break;
+		case DESIGN_NAPALM:		m.arrow = FALSE;	break;
+		case DESIGN_TANKDROP:	m.dropPiece = P_SHAPE_TILE;	m.fallenPiece = P_SHAPE_TANK;	m.arrow = FALSE;	break;
+		case DESIGN_RAPID:		m.dropPiece = P_SHAPE_PARA;	m.fallenPiece = P_SHAPE_PARA;	m.arrow = FALSE;	m.tint = TINT_GOLD;	break;
+		case DESIGN_COMMANDO:	m.dropPiece = P_SHAPE_PARA;	m.fallenPiece = P_SHAPE_TILE;	m.arrow = FALSE;	m.tint = TINT_GOLD;	break;
+		case DESIGN_ALLYAID:
+			m.tint = TINT_GOLD;
+			if( caster )
+			{
+				const Coord3D edge = TheTerrainLogic->findClosestEdgePoint( caster->getPosition() );
+				setHeading( m, edge.x, edge.y, m.x, m.y );
+			}
+			break;
+		case DESIGN_ARTILLERY:
+		{
+			const Coord3D corner = TheTerrainLogic->findFarthestEdgePoint( &target );
+			setHeading( m, corner.x, corner.y, m.x, m.y );
+			break;
+		}
+		case DESIGN_COMANCHE:
+		case DESIGN_CRUISE:
+			setHeading( m, m.cx0, m.cy0, m.x, m.y );
+			m.tint = m.design == DESIGN_CRUISE ? TINT_RED : TINT_AMBER;
+			break;
+		case DESIGN_EMP:			m.tint = TINT_BLUE;	break;
+		case DESIGN_ANTHRAX:	m.tint = m.variant == VARIANT_CHEM ? TINT_GAMMA : TINT_TOXIN;	break;
+		case DESIGN_KARGU:
+		case DESIGN_SWARM:		m.tint = TINT_ORANGE;	break;
+		case DESIGN_LASER:
+		case DESIGN_TAYFUN:
+		case DESIGN_PARTICLE:	m.tint = TINT_RED;	break;
+		case DESIGN_BLIND:		m.tint = TINT_AMBER;	break;
+		case DESIGN_UAV:
+		case DESIGN_SPYSAT:
+		case DESIGN_SPYDRONE:
+		case DESIGN_RADAR:
+		case DESIGN_GPS:
+		case DESIGN_AMBULANCE:
+		case DESIGN_DEMINE:
+		case DESIGN_REPAIR:		m.tint = TINT_WARM;	break;
+		default:	break;
+	}
+}
+
 /// everything a cursor's marker is, from what InGameUI kept; the grids are left as they were
 static void describe( Marker &m, const InGameUI::GroundMarkerAim &aim )
 {
@@ -935,6 +1155,9 @@ static void describe( Marker &m, const InGameUI::GroundMarkerAim &aim )
 		m.tint = TINT_GOLD;
 		m.glyphS = 0.27f * aim.radius;
 	}
+
+	pickDesign( m, aim.power, caster );
+	describeDesign( m, caster );
 
 	m.cannonFrames = 0;
 	if( m.super == SUPER_CANNON && caster )
@@ -1273,7 +1496,32 @@ static Real zoneReach( const Marker &m )
 		reach = MAX( reach, m.Ro + 12.0f * m.k );
 	if( m.turn )
 		reach = MAX( reach, 2.0f * m.rmax + 40.0f );
+	if( m.design != DESIGN_NONE )		// a capsule, a wide box, a racetrack: the frames reach past the radius
+		reach = MAX( reach, 1.8f * R + 40.0f * m.k );
 	return reach + 4.0f;
+}
+
+/// seconds an area power's own marker holds after the click before its fade: as long as its after-click runs
+static Real designHold( const Marker &m )
+{
+	switch( m.design )
+	{
+		case DESIGN_NONE:			return AREA_HOLD;
+		case DESIGN_EMP:
+		case DESIGN_SPYDRONE:
+		case DESIGN_COMANCHE:
+		case DESIGN_AMBUSH:
+		case DESIGN_KARGU:
+		case DESIGN_HNAPALM:
+		case DESIGN_HNUKE:		return 2.0f;
+		case DESIGN_ARTILLERY:
+		case DESIGN_MINES:
+		case DESIGN_REPAIR:
+		case DESIGN_AMBULANCE:
+		case DESIGN_UAV:
+		case DESIGN_SWARM:		return 3.0f;
+		default:							return 2.5f;
+	}
 }
 
 /** The zone's square of heights and water, taken again when the zone left the square GRID_PAD gave it
@@ -1324,7 +1572,7 @@ static void updateShot( Marker &m, UnsignedInt now, InGameUI *ui )
 	else if( m.family == FAMILY_GUARD )
 		followGuard( m, now, ui, tl );
 	else
-		startFade( m, m.clickMs + (UnsignedInt)( AREA_HOLD * 1000.0f ), AREA_FADE );
+		startFade( m, m.clickMs + (UnsignedInt)( designHold( m ) * 1000.0f ), AREA_FADE );
 
 	if( fadedOut( m, now ) && m.darts.empty() )
 		m.dead = TRUE;
@@ -2069,11 +2317,6 @@ static void pingRing( Real cx, Real cy, Real r, Real k, Real age, const Tint &ti
 	s_ctx.additive = was;
 }
 
-/** The side whose finish a power's frame wears: America's satin steel, China's crisp terraced
-	* chamfer, the GLA's rusty uneven bevel, Turkiye's one flat facet with its turquoise LED line. */
-enum Finish { FINISH_USA, FINISH_CHINA, FINISH_GLA, FINISH_TUR };
-static const Tint TINT_LED = { 0.22f, 0.88f, 0.80f };
-
 /// a side's band layer: 0 shell, 1 steel lit from outside, 2 steel lit from inside, 3 inlay
 static Int bandPiece( Int finish, Int layer )
 {
@@ -2502,17 +2745,20 @@ static void drawDrops( const Marker &m, Real R, Real t, Real app, Real fade )
 			quadPiece( P_DROP_ESTIMATE, m.x - m.ux * d, m.y - m.uy * d, yaw, 24.0f * k, 24.0f * k, m.tint, app );
 		}
 	}
-	else
+	else if( m.dropPiece >= 0 )
 	{
+		// what stands for a drop is the power's own: a crate tile, a trooper, a stepped plate
+		const Real ang = m.dropPiece == P_DROP ? yaw : (Real)atan2( m.uy, m.ux );
 		for( size_t i = 0; i < m.drops.size(); ++i )
 		{
 			const Real d = m.drops[ i ];
 			if( d < 0.0f || (Int)i < released || L - d > grow * ( L + R ) )
 				continue;
-			quadPiece( P_DROP, m.x - m.ux * d, m.y - m.uy * d, yaw, 24.0f * k, 24.0f * k, m.tint, app );
+			quadPiece( m.dropPiece, m.x - m.ux * d, m.y - m.uy * d, ang, 24.0f * k, 24.0f * k, m.tint, app );
 		}
 	}
 
+	const Int circlePiece = m.dropPiece >= 0 ? m.dropPiece : P_DROP;
 	if( m.inTurn && !m.hook && m.circleR > 0.0f && m.carried > 0 )
 	{
 		const Real length = ( (Real)m.carried - 0.5f ) * m.dropSpacing;
@@ -2523,14 +2769,2232 @@ static void drawDrops( const Marker &m, Real R, Real t, Real app, Real fade )
 		for( Int j = 0; j < m.carried; ++j )
 		{
 			const Real a = m.planeAngle + m.side * ( (Real)j + 0.5f ) * m.dropSpacing / m.circleR;
-			quadPiece( P_DROP, m.circleX + m.circleR * (Real)cos( a ), m.circleY + m.circleR * (Real)sin( a ), yaw,
+			quadPiece( circlePiece, m.circleX + m.circleR * (Real)cos( a ), m.circleY + m.circleR * (Real)sin( a ), yaw,
 								 24.0f * k, 24.0f * k, m.tint, app );
 		}
 	}
 
+	// where each item really fell, as the power's own piece: a canopy, a plus on a crate, a tank
 	const Tint fallenTint = scaled( m.tint, 0.6f );
+	const Bool ownFallen = m.fallenPiece != P_DROP;
 	for( size_t i = 0; i < m.fallen.size(); ++i )
-		quadPiece( P_DROP, m.fallen[ i ].x, m.fallen[ i ].y, yaw, 18.0f * k, 18.0f * k, fallenTint, 0.5f * fade );
+		quadPiece( m.fallenPiece, m.fallen[ i ].x, m.fallen[ i ].y, yaw, ( ownFallen ? 22.0f : 18.0f ) * k, ( ownFallen ? 22.0f : 18.0f ) * k,
+							 ownFallen ? m.tint : fallenTint, ( ownFallen ? 0.8f : 0.5f ) * fade );
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// EVERY POWER'S OWN MARKER
+// One frame per power, built of band strips round circles, radius profiles and polygons in the
+// side's finish and of the atlas's parts; t from the press, tl from the click, every motion a
+// transform, colour or alpha of a piece.  The designs are the 2026-11-23 decals' unique/DESIGNS.md.
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+static Real hashOf( Int i, Real s = 0.0f )
+{
+	const Real v = (Real)sin( (Real)i * 127.1f + s * 311.7f + 0.5f ) * 43758.5453f;
+	return v - (Real)floor( v );
+}
+
+static Real easeBack( Real x, Real o = 1.7f )
+{
+	const Real u = clamp01( x ) - 1.0f;
+	return 1.0f + ( o + 1.0f ) * u * u * u + o * u * u;
+}
+
+/// a value in [0, period)
+static Real wrap( Real v, Real period )
+{
+	const Real f = (Real)fmod( v, period );
+	return f < 0.0f ? f + period : f;
+}
+
+static const Real BLOCK_U = 24.0f / 18.0f;		///< MarkerShapeBlock's box fills 18 by 12 of its 24k canvas
+static const Real BLOCK_V = 2.0f;
+
+/// one marker's draw: where, how big, when, in what finish, and which way its frame faces
+struct DesignDraw
+{
+	const Marker *m;
+	Real x, y, R, k, t, tl, tc, app, snap, yaw, fade;
+	Real hx, hy;					///< the frame's heading: the run's, the shells', the caster's, or the screen's right
+	Real frac;						///< a countdown's share still to come
+	Real impact;					///< seconds since a superweapon landed, below nought before
+	Bool aim;
+	Int fin;
+	Tint tint;
+
+	/// a point `r` from the middle at `a` counter-clockwise from the screen's right
+	void at( Real a, Real r, Real &px, Real &py ) const
+	{
+		px = x + r * (Real)cos( yaw + a );
+		py = y + r * (Real)sin( yaw + a );
+	}
+	/// a point `u` to the screen's right of the middle and `v` up it
+	void screen( Real u, Real v, Real &px, Real &py ) const
+	{
+		const Real c = (Real)cos( yaw ), s = (Real)sin( yaw );
+		px = x + c * u - s * v;
+		py = y + s * u + c * v;
+	}
+	/// a point `s` along the heading from the middle and `q` to its left
+	void along( Real s, Real q, Real &px, Real &py ) const
+	{
+		px = x + hx * s - hy * q;
+		py = y + hy * s + hx * q;
+	}
+	Real heading( void ) const { return (Real)atan2( hy, hx ); }
+};
+
+enum { MAX_POLY = 96 };
+struct Poly
+{
+	Real x[ MAX_POLY ], y[ MAX_POLY ];
+	Int n;
+	Poly() : n( 0 ) { }
+	void add( Real px, Real py )
+	{
+		if( n < MAX_POLY )
+		{
+			x[ n ] = px;
+			y[ n ] = py;
+			++n;
+		}
+	}
+	/// (u, v) in a frame turned to `ang` round (cx, cy)
+	void addLocal( Real cx, Real cy, Real ang, Real u, Real v )
+	{
+		const Real c = (Real)cos( ang ), s = (Real)sin( ang );
+		add( cx + c * u - s * v, cy + s * u + c * v );
+	}
+};
+
+/// a regular polygon, counter-clockwise, its first corner at `ang`
+static Poly regularPoly( Real cx, Real cy, Real corner, Int n, Real ang )
+{
+	Poly p;
+	for( Int i = 0; i < n; ++i )
+	{
+		const Real a = ang + 2.0f * MARKER_PI * (Real)i / (Real)n;
+		p.add( cx + corner * (Real)cos( a ), cy + corner * (Real)sin( a ) );
+	}
+	return p;
+}
+
+/// a box with 45 degree corner cuts `ch` long, turned to `ang`, counter-clockwise
+static Poly chamferBox( Real cx, Real cy, Real ang, Real hx, Real hy, Real ch )
+{
+	Poly p;
+	p.addLocal( cx, cy, ang, hx - ch, -hy );		p.addLocal( cx, cy, ang, hx, -hy + ch );
+	p.addLocal( cx, cy, ang, hx, hy - ch );			p.addLocal( cx, cy, ang, hx - ch, hy );
+	p.addLocal( cx, cy, ang, -hx + ch, hy );		p.addLocal( cx, cy, ang, -hx, hy - ch );
+	p.addLocal( cx, cy, ang, -hx, -hy + ch );		p.addLocal( cx, cy, ang, -hx + ch, -hy );
+	return p;
+}
+
+/// a box with stepped (notched) corners `st` deep, China's, turned to `ang`, counter-clockwise
+static Poly steppedBox( Real cx, Real cy, Real ang, Real hx, Real hy, Real st )
+{
+	Poly p;
+	p.addLocal( cx, cy, ang, hx - st, -hy );				p.addLocal( cx, cy, ang, hx - st, -hy + st );
+	p.addLocal( cx, cy, ang, hx, -hy + st );				p.addLocal( cx, cy, ang, hx, hy - st );
+	p.addLocal( cx, cy, ang, hx - st, hy - st );		p.addLocal( cx, cy, ang, hx - st, hy );
+	p.addLocal( cx, cy, ang, -hx + st, hy );				p.addLocal( cx, cy, ang, -hx + st, hy - st );
+	p.addLocal( cx, cy, ang, -hx, hy - st );				p.addLocal( cx, cy, ang, -hx, -hy + st );
+	p.addLocal( cx, cy, ang, -hx + st, -hy + st );	p.addLocal( cx, cy, ang, -hx + st, -hy );
+	return p;
+}
+
+static void bandSegment( const DesignDraw &d, Real ax, Real ay, Real bx, Real by, Real across, const Tint &tint, Real alpha,
+												 Real glow = 1.0f, Bool inlay = TRUE )
+{
+	const Real px[ 2 ] = { ax, bx }, py[ 2 ] = { ay, by };
+	bandPoly( d.fin, px, py, 2, FALSE, across, tint, alpha * d.app, glow, inlay );
+}
+
+static void hairLine( Real ax, Real ay, Real bx, Real by, Real width, const Tint &tint, Real alpha )
+{
+	const Real dx = bx - ax, dy = by - ay;
+	const Real l = (Real)sqrt( dx * dx + dy * dy );
+	if( l < 1.0e-3f || alpha <= 0.002f )
+		return;
+	lineStrip( P_HAIR, ax, ay, dx / l, dy / l, 0.0f, l, 0.5f * width, width, FALSE, tint, FlatAlpha( alpha ), GROUND_STEP );
+}
+
+/// a line in dashes `period` apart, `duty` of each drawn, moved along by `phase`
+static void dashLine( Real ax, Real ay, Real bx, Real by, Real width, Real period, Real duty, Real phase, const Tint &tint, Real alpha )
+{
+	const Real dx = bx - ax, dy = by - ay;
+	const Real l = (Real)sqrt( dx * dx + dy * dy );
+	if( l < 1.0e-3f || alpha <= 0.002f || period <= 0.0f )
+		return;
+	const Real ux = dx / l, uy = dy / l;
+	for( Real s = wrap( phase, period ) - period; s < l; s += period )
+	{
+		const Real s0 = MAX( 0.0f, s ), s1 = MIN( l, s + duty * period );
+		if( s1 > s0 )
+			lineStrip( P_HAIR, ax, ay, ux, uy, s0, s1, 0.5f * width, width, FALSE, tint, FlatAlpha( alpha ), GROUND_STEP );
+	}
+}
+
+static void softRing( Real cx, Real cy, Real r, Real width, const Tint &tint, Real alpha )
+{
+	if( alpha <= 0.002f || r <= 0.0f )
+		return;
+	const Bool was = s_ctx.additive;
+	s_ctx.additive = TRUE;
+	ring( P_PING, cx, cy, r, width, tint, alpha, FALSE );
+	s_ctx.additive = was;
+}
+
+static void studAt( const DesignDraw &d, Real x, Real y, Real scale = 1.0f, Real alpha = 1.0f )
+{
+	const Real s = 18.0f * d.k * scale;
+	quadPiece( studPiece( d.fin ), x, y, d.yaw, s, s, TINT_WHITE, alpha * d.app );
+	if( d.fin == FINISH_USA )
+		quadPiece( P_STUD_DOT, x, y, d.yaw, 6.0f * d.k * scale, 6.0f * d.k * scale, d.tint, alpha * d.app );
+}
+
+static void part( Int piece, Real x, Real y, Real ang, Real sx, Real sy, const Tint &tint, Real alpha )
+{
+	quadPiece( piece, x, y, ang, sx, sy, tint, alpha );
+}
+
+/// the run's position of a delivery plane (its first dart) along the heading from the target, or a big negative
+static Real planeAlong( const DesignDraw &d )
+{
+	if( d.m->darts.empty() )
+		return -1.0e9f;
+	const Dart &dart = d.m->darts.front();
+	return ( dart.x - d.x ) * d.hx + ( dart.y - d.y ) * d.hy;
+}
+
+// ---------------------------------------------------------------- America
+
+/// a canopy from above: scalloped gores breathing while aiming, snapping open on the click
+static void drawParadrop( const DesignDraw &d )
+{
+	const Int n = d.fin == FINISH_CHINA ? 6 : 8;
+	const Real k = d.k, R = d.R, step = 2.0f * MARKER_PI / (Real)n;
+	const Real rotc = d.yaw + 0.15f * d.tc;
+	Real sc, bulge;
+	if( d.aim )
+	{
+		const Real b = (Real)sin( 2.0f * MARKER_PI * 0.55f * d.t );
+		sc = 0.93f + 0.02f * b;
+		bulge = 0.05f + 0.025f * b;
+	}
+	else
+	{
+		sc = 0.93f + 0.07f * easeBack( d.tl / 0.3f, 2.6f );
+		bulge = 0.065f;
+	}
+	const Real Rs = R * sc;
+	auto canopy = [=]( Real a ) -> Real
+	{
+		const Real loc = wrap( a - rotc + 0.5f * step, step ) - 0.5f * step;
+		const Real f = loc / ( 0.5f * step );
+		return Rs * ( 1.0f + bulge * ( 1.0f - f * f ) );
+	};
+	for( Int j = 0; j < n; ++j )
+	{
+		const Real a = rotc + ( (Real)j + 0.5f ) * step;
+		hairLine( d.x + 0.17f * Rs * (Real)cos( a ), d.y + 0.17f * Rs * (Real)sin( a ), d.x + Rs * (Real)cos( a ), d.y + Rs * (Real)sin( a ),
+							2.4f * k, TINT_STEEL, 0.85f * d.app );
+	}
+	bandRadial( d.fin, d.x, d.y, canopy, 18.0f * k, d.tint, d.app );
+	bandCircle( d.fin, d.x, d.y, 0.15f * Rs, 12.0f * k, d.tint, d.app );
+	for( Int j = 0; j < n; ++j )
+	{
+		const Real a = rotc + ( (Real)j + 0.5f ) * step;
+		studAt( d, d.x + Rs * (Real)cos( a ), d.y + Rs * (Real)sin( a ), 0.8f );
+	}
+}
+
+/// a bay at the target; the crates are the drops (crate tiles), lighting one by one like a manifest
+static void drawCrate( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	const Poly bay = chamferBox( d.x, d.y, d.heading(), 0.32f * R, 0.32f * R, 0.12f * R );
+	bandPoly( d.fin, bay.x, bay.y, bay.n, TRUE, 14.0f * k, d.tint, d.app );
+	const Real mids[ 4 ][ 2 ] = { { 1.0f, 0.0f }, { -1.0f, 0.0f }, { 0.0f, 1.0f }, { 0.0f, -1.0f } };
+	for( Int i = 0; i < 4; ++i )
+	{
+		Real px, py;
+		d.along( mids[ i ][ 0 ] * 0.32f * R, mids[ i ][ 1 ] * 0.32f * R, px, py );
+		studAt( d, px, py, 0.8f );
+	}
+	const Marker &m = *d.m;
+	if( !d.aim || m.drops.empty() )
+		return;
+	const Int lit = (Int)wrap( d.t * 4.0f, (Real)( m.drops.size() + 3 ) );
+	for( Int i = 0; i < (Int)m.drops.size() && i < lit; ++i )
+	{
+		const Real dd = m.drops[ i ];
+		if( dd < 0.0f )
+			continue;
+		part( P_SHAPE_TILE, d.x - d.hx * dd, d.y - d.hy * dd, d.heading(), 26.0f * k, 26.0f * k, scaled( d.tint, 1.3f ), 0.8f * d.app );
+	}
+}
+
+/// sheets fluttering round the zone; on the click they burst out and settle inside, then fade
+static void drawLeaflet( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	const Tint paper = { 0.97f, 0.88f, 0.62f };
+	const Real step = 2.0f * MARKER_PI / 36.0f;
+	for( Int j = 0; j < 36; ++j )
+	{
+		const Real a = d.yaw - 0.1f * d.t + (Real)j * step;
+		arcStrip( P_HAIR, d.x, d.y, 0.86f * R, 3.0f * k, a, a + 0.3f * step, TRUE, d.tint, 0.7f * d.app, FALSE );
+	}
+	for( Int i = 0; i < 24; ++i )
+	{
+		const Real a0 = 2.0f * MARKER_PI * (Real)i / 24.0f + 0.22f * d.tc;
+		const Real fl = 0.55f * (Real)sin( 3.1f * d.t + 1.7f * (Real)i );
+		const Real rad = R * ( 0.97f + 0.03f * (Real)sin( 2.3f * d.t + (Real)i ) );
+		Real px, py;
+		d.at( a0, rad, px, py );
+		Real ang = d.yaw + a0 + 0.5f * MARKER_PI + fl, sc = 1.0f, alpha = 1.0f;
+		if( !d.aim )
+		{
+			const Real out = easeOut( d.tl / 0.3f );
+			const Real fall = smoothstep( 0.3f + 0.03f * i, 1.6f + 0.03f * i, d.tl );
+			Real bx, by, lx, ly;
+			d.at( a0, 1.18f * R, bx, by );
+			d.at( 2.0f * MARKER_PI * hashOf( i + 11 ), 0.75f * R * (Real)sqrt( hashOf( i + 3 ) ), lx, ly );
+			const Real ox = px + ( bx - px ) * out, oy = py + ( by - py ) * out;
+			px = ox + ( lx - ox ) * fall;
+			py = oy + ( ly - oy ) * fall;
+			ang += 2.5f * fall * ( hashOf( i ) - 0.5f ) - fl * fall;
+			sc = 1.0f - 0.25f * fall;
+			alpha = 1.0f - smoothstep( 2.0f + 0.02f * i, 2.4f + 0.02f * i, d.tl );
+		}
+		part( P_SHAPE_TILE, px, py, ang, 16.0f * k * sc, 11.0f * k * sc, paper, alpha * d.app );
+	}
+}
+
+/// a gun run: a long cut capsule along the approach, strafe ticks streaming, six missiles converging
+static void drawA10( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R, h = d.heading();
+	const Real hl = 1.55f * R - 0.3f * R * d.snap, hw = 0.42f * R;
+	const Poly cap = chamferBox( d.x, d.y, h, hl, hw, 0.36f * R );
+	const Real ph = d.aim ? 110.0f * d.t : 110.0f * d.tc + 520.0f * MAX( 0.0f, MIN( d.tl, 1.9f ) - 0.5f );
+	const Bool burst = !d.aim && d.tl > 0.5f && d.tl < 1.9f;
+	const Real pitch = 16.0f * k;
+	for( Int row = -1; row <= 1; row += 2 )
+		for( Real s = -hl + 0.2f * R + wrap( ph, pitch ); s < hl - 0.2f * R; s += pitch )
+		{
+			Real px, py;
+			d.along( s, (Real)row * 0.19f * R, px, py );
+			part( P_SHAPE_TILE, px, py, h, 9.0f * k, 4.0f * k, scaled( d.tint, burst ? 1.3f : 0.8f ), d.app );
+		}
+	bandPoly( d.fin, cap.x, cap.y, cap.n, TRUE, 16.0f * k, d.tint, d.app );
+	for( Int sx = -1; sx <= 1; sx += 2 )
+		for( Int sq = -1; sq <= 1; sq += 2 )
+		{
+			Real px, py;
+			d.along( (Real)sx * ( hl - 0.2f * R ), (Real)sq * hw, px, py );
+			studAt( d, px, py, 0.9f );
+		}
+	const Real rc = 0.34f * R - 0.2f * R * d.snap;
+	for( Int j = 0; j < 6; ++j )
+	{
+		const Real a = h + MARKER_PI / 6.0f + (Real)j * MARKER_PI / 3.0f;
+		quadPiece( P_CHEVRON, d.x + rc * (Real)cos( a ), d.y + rc * (Real)sin( a ), a + MARKER_PI, 13.0f * k, 20.0f * k, d.tint, d.app,
+							 CHEVRON_ANCHOR_U, 0.5f );
+	}
+	if( d.aim )
+		return;
+	for( Int p = 0; p < 3; ++p )
+	{
+		const Real t0 = 0.5f + 0.5f * (Real)p;
+		const Real fr = ( d.tl - t0 ) / 0.5f;
+		if( fr >= 0.0f && fr < 1.0f )
+			for( Int side = -1; side <= 1; side += 2 )
+			{
+				Real px, py;
+				d.along( -520.0f * ( 1.0f - fr ), (Real)side * ( 26.0f + 8.0f * p ) * ( 1.0f - fr ), px, py );
+				drawDart( px, py, h - (Real)side * 0.05f, 0.55f, k, d.tint, d.app );
+			}
+		pingRing( d.x, d.y, 0.2f * R, k, d.tl - t0 - 0.5f, d.tint, 0.4f, 1.2f, 4.0f );
+	}
+}
+
+/// overpressure: rings ripple out of the detonator while aiming, collapse on the click, one shock
+static void drawFuelAir( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	const Bool moab = d.m->variant == VARIANT_MOAB;
+	const Int n = moab ? 4 : 3;
+	bandCircle( d.fin, d.x, d.y, R, 24.0f * k, d.tint, d.app );
+	if( moab )
+		bandCircle( d.fin, d.x, d.y, R - 15.0f * k, 12.0f * k, TINT_RED, d.app );
+	for( Int j = 0; j < 4; ++j )
+	{
+		Real px, py;
+		d.at( 0.25f * MARKER_PI + (Real)j * 0.5f * MARKER_PI, R, px, py );
+		studAt( d, px, py, 1.4f );
+	}
+	if( d.aim || d.tl < 0.25f )
+		for( Int i = 0; i < n; ++i )
+		{
+			const Real fr = wrap( 0.42f * d.tc + (Real)i / (Real)n, 1.0f );
+			Real rad = R * ( 0.12f + 0.78f * fr );
+			if( !d.aim )
+				rad *= 1.0f - 0.92f * d.snap;
+			ring( P_HAIR, d.x, d.y, rad, 3.5f * k, d.tint, (Real)sin( MARKER_PI * fr ) * 0.95f * d.app, FALSE );
+		}
+	const Real det = d.aim ? 22.0f * k * ( 1.0f + 0.1f * (Real)sin( 6.0f * d.t ) ) : 24.0f * k;
+	quadPiece( P_STUD, d.x, d.y, d.yaw, det, det, TINT_WHITE, d.app );
+	quadPiece( P_SHAPE_DISC, d.x, d.y, d.yaw, 0.45f * det, 0.45f * det, TINT_RED, d.app );
+	if( d.aim )
+		return;
+	for( Int j = 0; j < ( moab ? 2 : 1 ); ++j )
+	{
+		const Real e = easeOut( ( d.tl - 0.3f - 0.3f * j ) / 0.75f );
+		if( d.tl > 0.3f + 0.3f * j && e < 1.0f )
+			softRing( d.x, d.y, 1.15f * R * e, ( 14.0f - 6.0f * e ) * k, pingTintOf( d.tint ), (Real)pow( 1.0f - e, 0.7f ) * d.app );
+	}
+	const Real hold = smoothstep( 1.0f, 1.4f, d.tl );
+	for( Int i = 0; i < n; ++i )
+		ring( P_HAIR, d.x, d.y, R * ( 0.3f + 0.54f * (Real)( i + 1 ) / (Real)n ), 3.0f * k, d.tint, 0.6f * hold * d.app, FALSE );
+	glowDisc( d.x, d.y, 0.9f * R, d.tint, 0.12f * ( 1.0f - smoothstep( 0.4f, 1.6f, d.tl ) ) * d.app );
+}
+
+/// an imaging footprint: a square frame with its panels and a scan bar that resolves the ground
+static void drawSpySat( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R, hs = 0.8f * R;
+	const Real sc = d.aim ? 1.0f : 1.0f + 0.08f * ( 1.0f - d.snap );
+	const Real u = d.aim ? 0.45f : 0.45f + 0.55f * easeBack( d.tl / 0.35f );
+	for( Int sx = -1; sx <= 1; sx += 2 )
+	{
+		Real cx, cy, ax, ay, bx, by;
+		d.screen( (Real)sx * ( hs * sc + 0.06f * R + 0.17f * R * u ), 0.0f, cx, cy );
+		d.screen( (Real)sx * hs * sc, 0.0f, ax, ay );
+		d.screen( (Real)sx * ( hs * sc + 0.06f * R ), 0.0f, bx, by );
+		hairLine( ax, ay, bx, by, 4.0f * k, TINT_STEEL, d.app );
+		part( P_SHAPE_BLOCK, cx, cy, d.yaw, 0.34f * R * u * BLOCK_U, 0.22f * R * BLOCK_V, TINT_WHITE, d.app );
+		for( Int c = -1; c <= 1; ++c )
+		{
+			Real p0x, p0y, p1x, p1y;
+			d.screen( (Real)sx * ( hs * sc + 0.06f * R + 0.17f * R * u ) + (Real)c * 0.09f * R * u, -0.1f * R, p0x, p0y );
+			d.screen( (Real)sx * ( hs * sc + 0.06f * R + 0.17f * R * u ) + (Real)c * 0.09f * R * u, 0.1f * R, p1x, p1y );
+			hairLine( p0x, p0y, p1x, p1y, 1.6f * k, TINT_DARK, 0.7f * d.app );
+		}
+	}
+	const Real yb = d.aim ? hs * (Real)sin( 2.0f * MARKER_PI * d.t / 1.8f ) : hs - 2.0f * hs * clamp01( d.tl / 0.8f );
+	const Real in = hs - 6.0f * k;
+	for( Int i = 1; i < 8; ++i )
+	{
+		const Real v = -hs + 2.0f * hs * (Real)i / 8.0f;
+		Real a = 0.0f;
+		if( d.aim )
+			a = 0.45f * (Real)exp( -fabs( v - yb ) / ( 0.25f * R ) );
+		else if( v > yb )
+			a = 0.65f * ( 1.0f - 0.6f * smoothstep( 1.0f + 0.15f * i, 1.4f + 0.15f * i, d.tl ) );
+		Real p0x, p0y, p1x, p1y;
+		d.screen( -in, v, p0x, p0y );
+		d.screen( in, v, p1x, p1y );
+		hairLine( p0x, p0y, p1x, p1y, 2.0f * k, d.tint, a * d.app );
+		if( !d.aim && hs > yb )
+		{
+			const Real lo = MAX( -in, yb );
+			d.screen( v, lo, p0x, p0y );
+			d.screen( v, in, p1x, p1y );
+			hairLine( p0x, p0y, p1x, p1y, 2.0f * k, d.tint, 0.65f * ( 1.0f - 0.6f * smoothstep( 1.2f + 0.15f * i, 1.6f + 0.15f * i, d.tl ) ) * d.app );
+		}
+	}
+	if( d.aim || d.tl < 0.9f )
+	{
+		Real p0x, p0y, p1x, p1y;
+		d.screen( -in, yb, p0x, p0y );
+		d.screen( in, yb, p1x, p1y );
+		hairLine( p0x, p0y, p1x, p1y, 4.0f * k, d.tint, d.app );
+		const Bool was = s_ctx.additive;
+		s_ctx.additive = TRUE;
+		hairLine( p0x, p0y, p1x, p1y, 9.0f * k, d.tint, 0.5f * d.app );
+		s_ctx.additive = was;
+	}
+	const Poly frame = chamferBox( d.x, d.y, d.yaw, hs * sc, hs * sc, 0.16f * R * sc );
+	bandPoly( d.fin, frame.x, frame.y, frame.n, TRUE, 18.0f * k, d.tint, d.app );
+	for( Int sx = -1; sx <= 1; sx += 2 )
+		for( Int sy = -1; sy <= 1; sy += 2 )
+		{
+			Real px, py;
+			d.screen( (Real)sx * hs * sc, (Real)sy * 0.55f * hs * sc, px, py );
+			studAt( d, px, py, 0.9f );
+		}
+}
+
+/// a camera iris: six blades round a hexagonal opening that breathes, focus brackets hunting
+static void drawSpyDrone( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	Real ap;
+	if( d.aim )
+		ap = ( 0.36f + 0.1f * (Real)sin( 2.1f * d.t ) ) * R;
+	else
+	{
+		const Real a0 = ( 0.36f + 0.1f * (Real)sin( 2.1f * d.tc ) ) * R;
+		ap = a0 + ( 0.8f * R - a0 ) * easeOut( d.tl / 0.4f );
+	}
+	const Real br = 0.7f * ( 1.0f - ap / R );
+	const Real vr = ap / (Real)cos( MARKER_PI / 6.0f );
+	const Real rim = R - 3.0f * k;
+	Poly hex;
+	for( Int j = 0; j < 6; ++j )
+		hex.add( d.x + vr * (Real)cos( d.yaw + br + MARKER_PI / 6.0f + (Real)j * MARKER_PI / 3.0f ),
+						 d.y + vr * (Real)sin( d.yaw + br + MARKER_PI / 6.0f + (Real)j * MARKER_PI / 3.0f ) );
+	const Tint blade = { 0.52f, 0.53f, 0.56f };
+	for( Int j = 0; j < 6; ++j )
+	{
+		const Int jn = ( j + 1 ) % 6;
+		const Real aj = (Real)atan2( hex.y[ j ] - d.y, hex.x[ j ] - d.x ) + 1.0f;
+		const Real an = (Real)atan2( hex.y[ jn ] - d.y, hex.x[ jn ] - d.x ) + 1.0f;
+		Poly b;
+		b.add( hex.x[ j ], hex.y[ j ] );
+		b.add( hex.x[ jn ], hex.y[ jn ] );
+		b.add( d.x + rim * (Real)cos( an ), d.y + rim * (Real)sin( an ) );
+		b.add( d.x + rim * (Real)cos( 0.5f * ( aj + an ) + ( fabs( an - aj ) > MARKER_PI ? MARKER_PI : 0.0f ) ),
+					 d.y + rim * (Real)sin( 0.5f * ( aj + an ) + ( fabs( an - aj ) > MARKER_PI ? MARKER_PI : 0.0f ) ) );
+		b.add( d.x + rim * (Real)cos( aj ), d.y + rim * (Real)sin( aj ) );
+		Real cx = 0.0f, cy = 0.0f;
+		for( Int i = 0; i < b.n; ++i )
+		{
+			cx += b.x[ i ] / (Real)b.n;
+			cy += b.y[ i ] / (Real)b.n;
+		}
+		fillFan( cx, cy, b.x, b.y, b.n, TRUE, blade, 0.5f * d.app, 0.5f * d.app );
+		hairLine( hex.x[ j ], hex.y[ j ], d.x + rim * (Real)cos( aj ), d.y + rim * (Real)sin( aj ), 2.4f * k, TINT_DARK, 0.85f * d.app );
+	}
+	polyStrip( P_HAIR, hex.x, hex.y, hex.n, TRUE, 3.0f * k, d.tint, 0.9f * d.app, FALSE );
+	bandCircle( d.fin, d.x, d.y, R, 16.0f * k, d.tint, d.app );
+	Real db;
+	if( d.aim )
+		db = R + 16.0f * k + 9.0f * k * (Real)sin( 6.3f * d.t ) * (Real)sin( 1.7f * d.t );
+	else
+	{
+		const Real d0 = R + 16.0f * k + 9.0f * k * (Real)sin( 6.3f * d.tc ) * (Real)sin( 1.7f * d.tc );
+		db = d0 + ( R + 6.0f * k - d0 ) * d.snap;
+	}
+	for( Int j = 0; j < 4; ++j )
+	{
+		const Real a = d.yaw + 0.25f * MARKER_PI + (Real)j * 0.5f * MARKER_PI;
+		const Real ca = (Real)cos( a ), sa = (Real)sin( a );
+		const Real cx = d.x + db * ca, cy = d.y + db * sa;
+		const Real tx = -sa, ty = ca;
+		Poly b;
+		b.add( cx + tx * 14.0f * k - ca * 6.0f * k, cy + ty * 14.0f * k - sa * 6.0f * k );
+		b.add( cx + tx * 14.0f * k, cy + ty * 14.0f * k );
+		b.add( cx - tx * 14.0f * k, cy - ty * 14.0f * k );
+		b.add( cx - tx * 14.0f * k - ca * 6.0f * k, cy - ty * 14.0f * k - sa * 6.0f * k );
+		bandPoly( d.fin, b.x, b.y, b.n, FALSE, 7.0f * k, d.tint, d.app );
+	}
+	if( !d.aim )
+	{
+		const Real e = easeOut( d.tl / 0.5f );
+		Real bx, by;
+		d.screen( 3.0f * k * (Real)sin( 2.0f * d.tl ), 3.0f * k * (Real)cos( 2.6f * d.tl ), bx, by );
+		ring( P_HAIR, bx, by, 7.0f * k * e, 3.0f * k, d.tint, d.app, FALSE );
+		part( P_SHAPE_DISC, bx, by, d.yaw, 6.0f * k * e, 6.0f * k * e, d.tint, d.app );
+	}
+}
+
+/// a gear that ratchets while aiming; on the click one tooth round, then the teeth light green
+static void drawRepair( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	const Int n = 16;
+	const Real pitch = 2.0f * MARKER_PI / (Real)n, half = 0.5f * pitch;
+	struct Ratchet
+	{
+		static Real at( Real t, Real step )
+		{
+			const Real f = t / 0.5f;
+			return step * ( (Real)floor( f ) + easeOut( MIN( 1.0f, ( f - (Real)floor( f ) ) / 0.25f ) ) );
+		}
+	};
+	const Real ang = d.aim ? Ratchet::at( d.t, half ) : Ratchet::at( d.tc, half ) + pitch * easeOut( d.tl / 0.35f );
+	const Real prog = d.aim ? -1.0f : (Real)n * smoothstep( 0.3f, 3.0f, d.tl );
+	for( Int j = 0; j < n; ++j )
+	{
+		const Real a = d.yaw + ang + (Real)j * pitch;
+		const Real hv = hashOf( j + 4 );
+		const Bool lit = (Real)j < prog;
+		const Tint tooth = lit ? TINT_HEAL : TINT_WHITE;
+		Real px, py;
+		if( d.fin == FINISH_CHINA )
+		{
+			d.at( ang + (Real)j * pitch, R + 9.0f * k, px, py );
+			part( P_SHAPE_BLOCK, px, py, a, 7.0f * k * BLOCK_U, 0.55f * pitch * R * BLOCK_V, tooth, d.app );
+			d.at( ang + (Real)j * pitch, R + 14.0f * k, px, py );
+			part( P_SHAPE_BLOCK, px, py, a, 6.0f * k * BLOCK_U, 0.3f * pitch * R * BLOCK_V, tooth, d.app );
+		}
+		else if( d.fin == FINISH_GLA )
+		{
+			const Real len = ( 6.0f + 7.0f * hv ) * k;
+			d.at( ang + (Real)j * pitch + 0.08f * ( hv - 0.5f ), R + 6.0f * k + 0.5f * len, px, py );
+			part( P_SHAPE_BLOCK, px, py, a + 0.3f * ( hv - 0.5f ), len * BLOCK_U, ( 0.3f + 0.2f * hv ) * pitch * R * BLOCK_V, tooth, d.app );
+		}
+		else
+		{
+			d.at( ang + (Real)j * pitch, R + 10.0f * k, px, py );
+			part( P_SHAPE_BLOCK, px, py, a, 11.0f * k * BLOCK_U, 0.42f * pitch * R * BLOCK_V, tooth, d.app );
+		}
+	}
+	bandCircle( d.fin, d.x, d.y, R, 18.0f * k, d.tint, d.app );
+	ring( P_HAIR, d.x, d.y, R - 18.0f * k, 2.4f * k, d.tint, 0.6f * d.app, FALSE );
+	for( Int j = 0; j < 4; ++j )
+	{
+		Real px, py;
+		d.at( 0.25f * MARKER_PI + ang + (Real)j * 0.5f * MARKER_PI, R - 28.0f * k, px, py );
+		studAt( d, px, py );
+	}
+	if( d.aim )
+		return;
+	for( Int i = 0; i < 8; ++i )
+	{
+		const Real age = d.tl - 0.25f - 0.3f * (Real)i;
+		if( age < 0.0f || age >= 1.0f )
+			continue;
+		const Real s = easeBack( age / 0.25f ) * ( 1.0f - smoothstep( 0.6f, 1.0f, age ) );
+		Real px, py;
+		d.at( 2.0f * MARKER_PI * hashOf( i + 9 ), 0.62f * R * (Real)sqrt( hashOf( i + 5 ) ), px, py );
+		px += -s_ctx.ry * 18.0f * age;
+		py += s_ctx.rx * 18.0f * age;
+		part( P_SHAPE_PLUS, px, py, d.yaw, 20.0f * k * s, 20.0f * k * s, TINT_HEAL, d.app );
+	}
+}
+
+/// the gunship's circle: the orbit (drawOrbit) it rides, an octagon reticle and the fire line between
+static void drawSpectre( const DesignDraw &d )
+{
+	const Marker &m = *d.m;
+	const Real k = d.k, R = d.R;
+	const Real Ro = m.orbit ? m.Ro : 250.0f;
+	Real gx, gy, gh;
+	const Bool real = !m.darts.empty();
+	if( real )
+	{
+		gx = m.darts.front().x;
+		gy = m.darts.front().y;
+		gh = m.darts.front().heading;
+	}
+	else
+	{
+		const Real phi = d.yaw + 0.9f * d.t + 1.2f;
+		gx = d.x + Ro * (Real)cos( phi );
+		gy = d.y + Ro * (Real)sin( phi );
+		gh = phi + 0.5f * MARKER_PI;
+		drawDart( gx, gy, gh, 1.0f, k, d.tint, 0.6f * d.app );
+	}
+	if( d.aim )
+		dashLine( gx, gy, d.x, d.y, 2.5f * k, 24.0f * k, 0.35f, 0.0f, d.tint, 0.45f * d.app );
+	else
+	{
+		const Bool was = s_ctx.additive;
+		s_ctx.additive = TRUE;
+		dashLine( gx, gy, d.x, d.y, 3.0f * k, 34.0f * k, 0.4f, 900.0f * d.tl, pingTintOf( d.tint ), 0.9f * d.app );
+		s_ctx.additive = was;
+		for( Int i = 0; i < 14; ++i )
+		{
+			Real px, py;
+			d.at( 2.0f * MARKER_PI * hashOf( i + 13 ), 0.8f * R * (Real)sqrt( hashOf( i + 2 ) ), px, py );
+			pingRing( px, py, 6.0f * k, k, d.tl - 0.3f - 0.2f * (Real)i, d.tint, 0.35f, 1.5f, 3.0f );
+		}
+	}
+	const Poly oct = regularPoly( d.x, d.y, R / (Real)cos( MARKER_PI / 8.0f ), 8, d.yaw + MARKER_PI / 8.0f );
+	bandPoly( d.fin, oct.x, oct.y, oct.n, TRUE, 14.0f * k, d.tint, d.app );
+	const Real spin = 0.5f * d.tc + MARKER_PI / 8.0f * d.snap;
+	const Real rt = 0.62f * R - 0.15f * R * d.snap;
+	for( Int j = 0; j < 4; ++j )
+	{
+		const Real a = spin + (Real)j * 0.5f * MARKER_PI;
+		Real px, py;
+		d.at( a, rt, px, py );
+		part( P_TICK_MAJOR, px, py, d.yaw + a - 0.5f * MARKER_PI, 8.0f * k, 22.0f * k, d.tint, d.app );
+	}
+	part( P_SHAPE_DISC, d.x, d.y, d.yaw, 8.0f * k, 8.0f * k, d.tint, d.app );
+}
+
+/// a bomb ladder: rails as wide as the drop variance, a rung for every drop, each burning as the plane passes
+static void drawB3( const DesignDraw &d )
+{
+	const Marker &m = *d.m;
+	const Real k = d.k, h = d.heading(), hw = 52.0f;
+	if( m.drops.empty() )
+		return;
+	const Real first = m.drops.front(), last = m.drops.back();
+	const Real grow = smoothstep( 0.05f, 0.7f, d.t );
+	for( Int side = -1; side <= 1; side += 2 )
+	{
+		Real ax, ay, bx, by;
+		d.along( -( first + 30.0f ), (Real)side * hw, ax, ay );
+		d.along( -( last - 30.0f ), (Real)side * hw, bx, by );
+		bandSegment( d, ax, ay, ax + ( bx - ax ) * grow, ay + ( by - ay ) * grow, 9.0f * k, d.tint, 1.0f );
+	}
+	const Real plane = planeAlong( d );
+	const Real wave = wrap( d.t * 7.0f, (Real)m.drops.size() + 4.0f );
+	for( Int i = 0; i < (Int)m.drops.size(); ++i )
+	{
+		const Real dd = m.drops[ i ];
+		Real px, py;
+		d.along( -dd, 0.0f, px, py );
+		const Bool passed = plane > -dd;
+		Tint rung = scaled( d.tint, 0.5f );
+		if( passed )
+			rung = TINT_SCORCH;
+		else if( !d.aim || fabs( (Real)i - wave ) < 1.5f )
+			rung = scaled( d.tint, 1.2f );
+		part( P_SHAPE_TILE, px, py, h, 7.0f * k, 2.0f * hw - 8.0f * k, rung, d.app );
+		if( passed )
+			pingRing( px, py, 30.0f, k, ( plane + dd ) / 320.0f, d.tint, 0.5f, 0.8f, 5.0f );
+		else
+			part( P_SHAPE_DISC, px, py, h, 9.0f * k, 9.0f * k, scaled( d.tint, 0.9f ), d.app );
+	}
+	quadPiece( P_CHEVRON, d.x, d.y, h, 22.0f * k, 40.0f * k, d.tint, d.app, CHEVRON_ANCHOR_U, 0.5f );
+}
+
+/// a gyroscope charging: rings of arcs spinning both ways round a core; the beam's head wanders after
+static void drawParticle( const DesignDraw &d )
+{
+	const Marker &m = *d.m;
+	const Real k = d.k, R = d.R;
+	bandCircle( d.fin, d.x, d.y, R, 10.0f * k, d.tint, d.app );
+	ring( P_HAIR, d.x, d.y, R - 9.0f * k, 3.0f * k, TINT_STEEL, d.app, FALSE );
+	const Real rads[ 2 ] = { 0.68f * R, 0.44f * R }, spds[ 2 ] = { -0.8f, 1.25f }, wide[ 2 ] = { 0.55f, 0.75f };
+	for( Int r = 0; r < 2; ++r )
+	{
+		const Real rad = d.aim ? rads[ r ] : rads[ r ] * ( 1.0f - d.snap );
+		if( rad < 3.0f * k )
+			continue;
+		const Real phase = d.yaw + spds[ r ] * d.tc + ( d.aim ? 0.0f : spds[ r ] * 4.0f * d.tl );
+		for( Int j = 0; j < 3; ++j )
+		{
+			const Real c = phase + (Real)j * 2.0f * MARKER_PI / 3.0f;
+			bandArc( d.fin, d.x, d.y, rad, 9.0f * k, c - wide[ r ], c + wide[ r ], d.tint, d.app );
+		}
+	}
+	const Real inner = d.aim ? 0.76f * R : 0.76f * R - 0.5f * R * d.snap;
+	for( Int j = 0; j < 3; ++j )
+	{
+		Real ax, ay, bx, by;
+		d.at( 0.5f * MARKER_PI + (Real)j * 2.0f * MARKER_PI / 3.0f, inner, ax, ay );
+		d.at( 0.5f * MARKER_PI + (Real)j * 2.0f * MARKER_PI / 3.0f, R - 9.0f * k, bx, by );
+		bandSegment( d, ax, ay, bx, by, 7.0f * k, d.tint, 1.0f );
+	}
+	quadPiece( P_STUD, d.x, d.y, d.yaw, 22.0f * k, 22.0f * k, TINT_WHITE, d.app );
+	part( P_SHAPE_DISC, d.x, d.y, d.yaw, 9.0f * k, 9.0f * k, scaled( d.tint, 0.85f + 0.3f * (Real)sin( 9.0f * d.t ) ), d.app );
+	if( d.aim || d.tl < 0.25f )
+		return;
+	const Real tb = d.tl - 0.25f;
+	// the head: the real beam where the click's cannon is seen firing (followSuperweapon), else a
+	// wander that never leaves the zone
+	Real bx = 0.0f, by = 0.0f;
+	for( Int i = 0; i <= 30; ++i )
+	{
+		const Real s = tb * (Real)i / 30.0f;
+		Real u = 0.28f * R * (Real)sin( 1.1f * s ) + 0.08f * R * (Real)sin( 5.0f * s );
+		Real v = 0.34f * R * (Real)sin( 0.8f * s + 0.3f ) - 0.34f * R * (Real)sin( 0.3f );
+		d.screen( u, v, bx, by );
+		if( i < 30 )
+			part( P_SHAPE_DISC, bx, by, d.yaw, 12.0f * k, 12.0f * k, TINT_SCORCH, 0.6f * d.app );
+	}
+	if( m.beamSeen )
+	{
+		bx = m.beamX;
+		by = m.beamY;
+	}
+	const Real flick = 0.8f + 0.2f * (Real)sin( 40.0f * d.t );
+	const Tint hot = { 1.0f, 0.95f, 0.9f };
+	glowDisc( bx, by, 16.0f * k, pingTintOf( d.tint ), 0.9f * flick * d.app );
+	glowDisc( bx, by, 7.0f * k, hot, d.app );
+	for( Int j = 0; j < 4; ++j )
+		pingRing( bx, by, 8.0f * k, k, wrap( tb - 0.35f * (Real)j, 1.4f ), d.tint, 0.7f, 3.0f, 3.0f );
+}
+
+/// a crosshair with no ring: long hairlines with calibration ticks, a diamond collapsing to a point
+static void drawLaser( const DesignDraw &d )
+{
+	const Marker &m = *d.m;
+	const Real k = d.k, R = d.R;
+	const Real g = d.aim ? ( 0.3f + 0.1f * (Real)sin( 3.0f * d.t ) ) * R : ( 0.3f + 0.1f * (Real)sin( 3.0f * d.tc ) ) * R * ( 1.0f - 0.8f * d.snap );
+	for( Int j = 0; j < 4; ++j )
+	{
+		const Real a = 0.25f * MARKER_PI + (Real)j * 0.5f * MARKER_PI;
+		Real ax, ay, bx, by;
+		d.at( a, g, ax, ay );
+		d.at( a, 1.7f * R, bx, by );
+		bandSegment( d, ax, ay, bx, by, 5.0f * k, d.tint, 1.0f );
+		const Real span = 1.6f * R - g - 6.0f * k;
+		for( Int i = 0; i < 9 && span > 0.0f; ++i )
+		{
+			const Real rr = g + 6.0f * k + wrap( (Real)i * 0.17f * R - 0.25f * R * d.t, MAX( 1.0f, span ) );
+			Real px, py;
+			d.at( a, rr, px, py );
+			part( P_TICK, px, py, d.yaw + a, 6.0f * k, 12.0f * k, d.tint, 0.9f * d.app );
+		}
+		d.at( a, 1.75f * R, bx, by );
+		quadPiece( P_CHEVRON, bx, by, d.yaw + a, 13.0f * k, 20.0f * k, d.tint, d.app, CHEVRON_ANCHOR_U, 0.5f );
+		Real sx, sy;
+		d.at( (Real)j * 0.5f * MARKER_PI, 1.2f * R, sx, sy );
+		studAt( d, sx, sy, 0.8f );
+	}
+	const Real hd = d.aim ? ( 0.2f + 0.02f * (Real)sin( 6.0f * d.t ) ) * R : 0.2f * R * ( 1.0f - 0.8f * d.snap );
+	const Poly dia = regularPoly( d.x, d.y, 1.41f * hd, 4, d.yaw );
+	bandPoly( d.fin, dia.x, dia.y, dia.n, TRUE, 6.0f * k, d.tint, d.app );
+	if( d.aim || d.tl < 0.25f )
+		return;
+	const Real tb = clamp01( ( d.tl - 0.25f ) / 2.2f );
+	Real ax, ay, ex, ey;
+	d.at( 0.35f + MARKER_PI, 0.7f * R, ax, ay );
+	d.at( 0.35f, 0.7f * R, ex, ey );
+	Real bx = ax + ( ex - ax ) * tb, by = ay + ( ey - ay ) * tb;
+	if( m.beamSeen )
+	{
+		bx = m.beamX;
+		by = m.beamY;
+	}
+	hairLine( ax, ay, bx, by, 9.0f * k, TINT_SCORCH, 0.75f * d.app );
+	const Bool was = s_ctx.additive;
+	s_ctx.additive = TRUE;
+	hairLine( ax, ay, bx, by, 3.0f * k, d.tint, 0.5f * d.app );
+	s_ctx.additive = was;
+	const Tint hot = { 1.0f, 0.96f, 0.92f };
+	glowDisc( bx, by, 12.0f * k, pingTintOf( d.tint ), 0.9f * d.app );
+	glowDisc( bx, by, 5.0f * k, hot, d.app );
+}
+
+/// a routed missile: dashes from the launcher through two waypoints to a diamond whose edges count down
+static void drawCruise( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	const Marker &m = *d.m;
+	Real vx = m.cx0 - d.x, vy = m.cy0 - d.y;
+	const Real vl = MAX( 1.0f, (Real)sqrt( vx * vx + vy * vy ) );
+	const Real lx = -vy / vl, ly = vx / vl;
+	Poly route;
+	route.add( m.cx0, m.cy0 );
+	route.add( d.x + vx * 0.62f + lx * 110.0f, d.y + vy * 0.62f + ly * 110.0f );
+	route.add( d.x + vx * 0.28f - lx * 70.0f, d.y + vy * 0.28f - ly * 70.0f );
+	route.add( d.x, d.y );
+	Real lens[ 3 ], tot = 0.0f;
+	for( Int i = 0; i < 3; ++i )
+	{
+		lens[ i ] = (Real)sqrt( ( route.x[ i + 1 ] - route.x[ i ] ) * ( route.x[ i + 1 ] - route.x[ i ] ) + ( route.y[ i + 1 ] - route.y[ i ] ) * ( route.y[ i + 1 ] - route.y[ i ] ) );
+		tot += lens[ i ];
+	}
+	const Real progress = d.aim ? 0.0f : clamp01( 1.0f - d.frac ) * tot;
+	const Real stop = MIN( tot - 0.85f * R, smoothstep( 0.05f, 0.7f, d.t ) * tot );
+	const Real phase = 60.0f * k * ( d.aim ? d.t : d.tc );
+	Real acc = 0.0f;
+	for( Int i = 0; i < 3; ++i )
+	{
+		const Real s0 = MAX( acc, progress ), s1 = MIN( acc + lens[ i ], stop );
+		if( s1 > s0 && lens[ i ] > 1.0f )
+		{
+			const Real ux = ( route.x[ i + 1 ] - route.x[ i ] ) / lens[ i ], uy = ( route.y[ i + 1 ] - route.y[ i ] ) / lens[ i ];
+			dashLine( route.x[ i ] + ux * ( s0 - acc ), route.y[ i ] + uy * ( s0 - acc ), route.x[ i ] + ux * ( s1 - acc ), route.y[ i ] + uy * ( s1 - acc ),
+								3.0f * k, 22.0f * k, 0.5f, phase - ( s0 - acc ) - acc, d.tint, 0.85f * d.app );
+		}
+		if( i > 0 )
+			part( P_SHAPE_TILE, route.x[ i ], route.y[ i ], d.yaw + 0.25f * MARKER_PI, 13.0f * k, 13.0f * k, d.tint, d.app );
+		acc += lens[ i ];
+	}
+	// the diamond: four edges, clockwise from the top, the lit ones the flight still to come
+	const Real hd = 0.62f * R * 1.41f;
+	const Poly dia = regularPoly( d.x, d.y, hd, 4, d.yaw );		// corners right, top, left, bottom
+	bandPoly( d.fin, dia.x, dia.y, dia.n, TRUE, 12.0f * k, d.tint, d.app, 1.0f, FALSE );
+	const Int lit = d.aim ? 4 : (Int)ceilf( 4.0f * d.frac );
+	const Bool blinkOff = !d.aim && sin( 18.0f * d.t ) < 0.0f;
+	static const Int edgeFrom[ 4 ] = { 1, 0, 3, 2 };		// top-right, bottom-right, bottom-left, top-left
+	for( Int e = 0; e < 4; ++e )
+	{
+		const Int a = edgeFrom[ e ], b = ( a + 3 ) % 4;
+		const Bool on = e < lit && !( e == lit - 1 && blinkOff );
+		const Real px[ 2 ] = { dia.x[ a ], dia.x[ b ] }, py[ 2 ] = { dia.y[ a ], dia.y[ b ] };
+		polyStrip( bandPiece( d.fin, 3 ), px, py, 2, FALSE, 12.0f * k, on ? d.tint : scaled( d.tint, 0.25f ), d.app, FALSE );
+	}
+	Real ca;
+	if( d.aim )
+	{
+		const Real f = d.t / 0.5f;
+		ca = 0.25f * MARKER_PI * ( (Real)floor( f ) + easeOut( MIN( 1.0f, ( f - (Real)floor( f ) ) / 0.3f ) ) );
+	}
+	else
+		ca = 0.25f * MARKER_PI * (Real)floor( d.tc / 0.5f + 1.0f );
+	for( Int j = 0; j < 4; ++j )
+	{
+		Real px, py;
+		d.at( ca + (Real)j * 0.5f * MARKER_PI, 0.26f * R, px, py );
+		part( P_TICK_MAJOR, px, py, d.yaw + ca + (Real)j * 0.5f * MARKER_PI - 0.5f * MARKER_PI, 8.0f * k, 0.28f * R, d.tint, d.app );
+	}
+	if( d.aim )
+		return;
+	const Poly inner = regularPoly( d.x, d.y, 0.22f * R * 1.41f * d.snap + 0.1f, 4, d.yaw );
+	bandPoly( d.fin, inner.x, inner.y, inner.n, TRUE, 5.0f * k, d.tint, d.app );
+	if( progress > 0.0f && progress < tot && m.darts.empty() )
+	{
+		acc = 0.0f;
+		for( Int i = 0; i < 3; ++i )
+		{
+			if( progress <= acc + lens[ i ] )
+			{
+				const Real f = ( progress - acc ) / MAX( 1.0f, lens[ i ] );
+				drawDart( route.x[ i ] + ( route.x[ i + 1 ] - route.x[ i ] ) * f, route.y[ i ] + ( route.y[ i + 1 ] - route.y[ i ] ) * f,
+									(Real)atan2( route.y[ i + 1 ] - route.y[ i ], route.x[ i + 1 ] - route.x[ i ] ), 1.0f, k, d.tint, d.app );
+				break;
+			}
+			acc += lens[ i ];
+		}
+	}
+}
+
+/// a decontamination spray: nozzles round the rim, a spiral drawn in, wash rings going out after
+static void drawAmbulance( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	const Real sc = d.aim ? 1.0f : 1.0f - 0.05f * d.snap;
+	bandCircle( d.fin, d.x, d.y, R * sc, 10.0f * k, d.tint, d.app );
+	const Int pulse = (Int)( d.t * 10.0f ) % 12;
+	for( Int j = 0; j < 12; ++j )
+	{
+		const Real a = (Real)j * MARKER_PI / 6.0f;
+		Real px, py;
+		d.at( a, R * sc - 11.0f * k, px, py );
+		part( P_SHAPE_TONGUE, px, py, d.yaw + a + MARKER_PI, 17.0f * k, 17.0f * k, scaled( d.tint, j == pulse ? 1.35f : 0.8f ), d.app );
+	}
+	const Real spd = d.aim ? 1.0f : 1.8f;
+	for( Int a = 0; a < 3; ++a )
+		for( Int j = 0; j < 8; ++j )
+		{
+			const Real fr = wrap( (Real)j / 8.0f + 0.35f * d.t * spd, 1.0f );
+			const Real rad = 0.8f * R * ( 1.0f - fr );
+			const Real ang = 2.0f * MARKER_PI * (Real)a / 3.0f + 2.6f * rad / R + spd * d.t * 0.4f;
+			Real px, py;
+			d.at( ang, rad, px, py );
+			const Real s = ( 2.4f + 6.4f * ( 1.0f - fr ) ) * k;
+			part( P_SHAPE_DISC, px, py, d.yaw, s, s, d.tint, ( d.aim ? 0.85f : 0.5f ) * d.app );
+		}
+	if( d.aim )
+		return;
+	const Tint water = { 0.7f, 0.92f, 1.0f };
+	for( Int j = 0; j < 6; ++j )
+	{
+		const Real age = d.tl - 0.2f - 0.45f * (Real)j;
+		if( age >= 0.0f && age < 1.1f )
+			softRing( d.x, d.y, 0.95f * R * age / 1.1f, 5.0f * k, water, 0.7f * ( 1.0f - age / 1.1f ) * d.app );
+	}
+	const Real s = easeBack( d.tl / 0.3f );
+	const Tint medic = { 0.95f, 0.3f, 0.25f };
+	part( P_SHAPE_PLUS, d.x, d.y, d.yaw, 30.0f * k * s, 30.0f * k * s, medic, d.app );
+}
+
+/// a rocket salvo's spread: an ellipse along the line of fire from the unit, pips landing near to far
+static void drawComanche( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R, h = d.heading();
+	const Real sc = d.aim ? 1.0f : 1.0f + 0.1f * ( 1.0f - d.snap );
+	const Real a = 1.45f * R * sc, b = 0.8f * R * sc;
+	auto ellipse = [=]( Real ang ) -> Real
+	{
+		const Real phi = ang - h;
+		const Real c = b * (Real)cos( phi ), s = a * (Real)sin( phi );
+		return a * b / MAX( 1.0e-3f, (Real)sqrt( c * c + s * s ) );
+	};
+	const Marker &m = *d.m;
+	Real gx, gy;
+	d.along( -a - 8.0f * k, 0.0f, gx, gy );
+	dashLine( m.cx0, m.cy0, gx, gy, 3.0f * k, 18.0f * k, 0.5f, 60.0f * k * d.t, d.tint, 0.8f * d.app );
+	bandRadial( d.fin, d.x, d.y, ellipse, 10.0f * k, d.tint, d.app );
+	Real px, py;
+	d.along( a, 0.0f, px, py );
+	studAt( d, px, py, 0.9f );
+	d.along( -a, 0.0f, px, py );
+	studAt( d, px, py, 0.9f );
+	Real ps[ 24 ], qs[ 24 ];
+	for( Int i = 0; i < 24; ++i )
+	{
+		const Real rr = (Real)sqrt( hashOf( i + 1 ) ), aa = 2.0f * MARKER_PI * hashOf( i + 31 );
+		ps[ i ] = rr * (Real)cos( aa ) * a * 0.92f;
+		qs[ i ] = rr * (Real)sin( aa ) * b * 0.92f;
+	}
+	for( Int i = 0; i < 24; ++i )
+	{
+		Int rank = 0;
+		for( Int j = 0; j < 24; ++j )
+			if( ps[ j ] < ps[ i ] || ( ps[ j ] == ps[ i ] && j < i ) )
+				++rank;
+		d.along( ps[ i ], qs[ i ], px, py );
+		if( d.aim )
+		{
+			const Bool lit = sin( 7.0f * d.t + 5.1f * (Real)i ) > 0.4f;
+			part( P_SHAPE_TILE, px, py, h, 7.0f * k, 7.0f * k, scaled( d.tint, lit ? 1.2f : 0.45f ), d.app );
+			continue;
+		}
+		const Real t0 = 0.35f + 0.05f * (Real)rank;
+		if( d.tl > t0 )
+		{
+			pingRing( px, py, 5.0f * k, k, d.tl - t0, d.tint, 0.35f, 2.2f, 2.6f );
+			part( P_SHAPE_DISC, px, py, h, 8.0f * k, 8.0f * k, TINT_SCORCH, 0.8f * d.app );
+		}
+		else
+			part( P_SHAPE_TILE, px, py, h, 7.0f * k, 7.0f * k, scaled( d.tint, 1.2f ), d.app );
+	}
+}
+
+/// minesweeping: a hazard-tape ring, a detector arm swinging like a pendulum, the finds struck out
+static void drawDemine( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	const Int n = 24;
+	const Real step = 2.0f * MARKER_PI / (Real)n;
+	bandArc( d.fin, d.x, d.y, R, 18.0f * k, 0.0f, 2.0f * MARKER_PI, d.tint, d.app, 1.0f, FALSE );
+	for( Int j = 0; j < n; ++j )
+		arcStrip( bandPiece( d.fin, 3 ), d.x, d.y, R, 18.0f * k, d.yaw + (Real)j * step, d.yaw + (Real)( j + 1 ) * step, FALSE,
+							( j & 1 ) ? TINT_AMBER : TINT_DARK, d.app, FALSE );
+	Real phi, dphi;
+	if( d.aim )
+	{
+		phi = 0.5f * MARKER_PI + 1.2f * (Real)sin( 2.2f * d.t );
+		dphi = (Real)cos( 2.2f * d.t );
+	}
+	else
+	{
+		phi = 0.5f * MARKER_PI + 1.2f * (Real)sin( 2.2f * d.tc ) + 3.2f * d.tl;
+		dphi = 1.0f;
+	}
+	const Real trail = dphi > 0.0f ? -1.0f : 1.0f;
+	for( Int i = 0; i < 10; ++i )
+	{
+		const Real a0 = phi + trail * 0.09f * (Real)i, a1 = phi + trail * 0.09f * (Real)( i + 1 );
+		const Real alpha = 0.22f * ( 1.0f - ( (Real)i + 0.5f ) / 10.0f ) * ( 1.0f - ( (Real)i + 0.5f ) / 10.0f );
+		Poly w;
+		for( Int s = 0; s <= 2; ++s )
+		{
+			Real px, py;
+			d.at( a0 + ( a1 - a0 ) * (Real)s / 2.0f, R - 8.0f * k, px, py );
+			w.add( px, py );
+		}
+		fillFan( d.x, d.y, w.x, w.y, w.n, FALSE, d.tint, alpha * d.app, alpha * d.app );
+	}
+	Real hx, hy;
+	d.at( phi, 0.68f * R, hx, hy );
+	bandSegment( d, d.x, d.y, hx, hy, 6.0f * k, d.tint, 1.0f, 1.0f, FALSE );
+	d.at( phi, 0.78f * R, hx, hy );
+	bandCircle( d.fin, hx, hy, 0.13f * R, 8.0f * k, d.tint, d.app );
+	studAt( d, d.x, d.y, 1.1f );
+	if( d.aim )
+		return;
+	for( Int i = 0; i < 5; ++i )
+	{
+		const Real age = d.tl - 0.3f - 0.32f * (Real)i;
+		if( age < 0.0f )
+			continue;
+		Real px, py;
+		d.at( 2.0f * MARKER_PI * hashOf( i + 23 ), 0.65f * R * (Real)sqrt( hashOf( i + 17 ) ), px, py );
+		if( age < 0.7f )
+			part( P_SHAPE_DISC, px, py, d.yaw, 10.0f * k, 10.0f * k, scaled( TINT_AMBER, sin( 30.0f * age ) > 0.0f ? 1.3f : 0.6f ), d.app );
+		else
+			part( P_SHAPE_CROSS, px, py, d.yaw, 15.0f * k, 15.0f * k, d.tint, ( 1.0f - smoothstep( 1.4f, 1.9f, age ) ) * d.app );
+	}
+}
+
+// ---------------------------------------------------------------- China
+
+/// bracketing fire: a terraced box squared to the shells' flight, over and short bars walking in
+static void drawArtillery( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R, h = d.heading();
+	const Poly box = steppedBox( d.x, d.y, h, 0.8f * R, 0.8f * R, 0.15f * R );
+	bandPoly( d.fin, box.x, box.y, box.n, TRUE, 18.0f * k, d.tint, d.app );
+	const Poly lac = steppedBox( d.x, d.y, h, 0.8f * R - 10.0f * k, 0.8f * R - 10.0f * k, 0.15f * R );
+	polyStrip( P_HAIR, lac.x, lac.y, lac.n, TRUE, 3.0f * k, TINT_LACQ, d.app, FALSE );
+	for( Int sx = -1; sx <= 1; sx += 2 )
+		for( Int sy = -1; sy <= 1; ++sy )
+		{
+			Real px, py;
+			d.along( (Real)sx * 0.8f * R, (Real)sy * 0.4f * R, px, py );
+			studAt( d, px, py, 0.9f );
+		}
+	const Real b = d.aim ? 0.68f * R * ( 1.0f - (Real)pow( wrap( 0.8f * d.t, 1.0f ), 0.7f ) )
+											 : 0.68f * R * ( 1.0f - (Real)pow( wrap( 0.8f * d.tc, 1.0f ), 0.7f ) ) * ( 1.0f - d.snap );
+	for( Int side = -1; side <= 1; side += 2 )
+	{
+		const Real s = (Real)side * b;
+		Real ax, ay, bx, by;
+		d.along( s, -0.42f * R, ax, ay );
+		d.along( s, 0.42f * R, bx, by );
+		bandSegment( d, ax, ay, bx, by, 10.0f * k, d.tint, 1.0f );
+		for( Int e = -1; e <= 1; e += 2 )
+		{
+			d.along( s - 7.0f * k, (Real)e * 0.42f * R, ax, ay );
+			d.along( s + 7.0f * k, (Real)e * 0.42f * R, bx, by );
+			bandSegment( d, ax, ay, bx, by, 8.0f * k, d.tint, 1.0f );
+		}
+	}
+	for( Int j = 0; j < 3; ++j )
+	{
+		const Real s = -0.8f * R - 22.0f * k - wrap( (Real)j * 22.0f * k + ( d.aim ? 50.0f * k * d.t : 0.0f ), 66.0f * k );
+		Real px, py;
+		d.along( s, 0.0f, px, py );
+		quadPiece( P_CHEVRON, px, py, h, 18.0f * k, 28.0f * k, d.tint, d.app, CHEVRON_ANCHOR_U, 0.5f );
+	}
+	if( d.aim )
+		return;
+	for( Int i = 0; i < 15; ++i )
+	{
+		const Real t0 = 0.4f + 0.75f * (Real)( i / 5 ) + 0.09f * (Real)( i % 5 );
+		if( d.tl <= t0 )
+			continue;
+		Real px, py;
+		d.at( 2.0f * MARKER_PI * hashOf( i + 43 ), 0.7f * R * (Real)sqrt( hashOf( i + 41 ) ), px, py );
+		part( P_SHAPE_DISC, px, py, d.yaw, 13.0f * k, 13.0f * k, TINT_SCORCH, 0.6f * d.app );
+		pingRing( px, py, 8.0f * k, k, d.tl - t0, d.tint, 0.4f, 1.6f, 3.6f );
+	}
+}
+
+/// a minefield: a terraced hexagon with a cell per mine; the mines blink armed after the click
+static void drawMines( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	const Real corner = R / (Real)cos( MARKER_PI / 6.0f );
+	const Poly hex = regularPoly( d.x, d.y, corner, 6, d.yaw );
+	bandPoly( d.fin, hex.x, hex.y, hex.n, TRUE, 18.0f * k, d.tint, d.app );
+	for( Int i = 0; i < hex.n; ++i )
+		studAt( d, hex.x[ i ], hex.y[ i ], 1.1f );
+	const Real sp = 0.33f * R;
+	Int index = 0;
+	for( Int a = -2; a <= 2; ++a )
+		for( Int b = -2; b <= 2; ++b )
+		{
+			if( a + b > 2 || a + b < -2 )
+				continue;
+			const Real u = sp * ( (Real)a + 0.5f * (Real)b ), v = sp * 0.866f * (Real)b;
+			const Real dist = (Real)sqrt( u * u + v * v ) / sp;
+			const Int i = index++;
+			Real px, py;
+			d.screen( u, v, px, py );
+			Bool lit;
+			if( d.aim )
+				lit = hashOf( i, (Real)floor( d.t * 5.0f ) ) > 0.62f;
+			else
+				lit = d.tl > 0.08f * dist + 0.01f * (Real)i;
+			part( P_SHAPE_RING, px, py, d.yaw, 0.3f * R, 0.3f * R, scaled( d.tint, lit ? 1.15f : 0.4f ), ( lit ? 1.0f : 0.8f ) * d.app );
+			if( !d.aim && d.tl > 0.08f * dist + 0.2f )
+			{
+				const Bool blink = sin( 4.0f * d.t + 1.3f * (Real)i ) > 0.55f;
+				part( P_SHAPE_DISC, px, py, d.yaw, 10.0f * k, 10.0f * k, scaled( TINT_LACQ, blink ? 1.25f : 0.7f ), d.app );
+			}
+		}
+}
+
+/// a lightning ring: a zigzag strobing between four capacitors; on the click a knot, then one pulse
+static void drawEmp( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R, yaw = d.yaw;
+	const Real n = 24.0f;
+	const Real ph = d.aim ? 0.5f * (Real)( (Int)floor( d.t * 8.0f ) % 2 ) : 0.0f;
+	Real sc = 1.0f;
+	if( !d.aim )
+		sc = d.tl < 0.8f ? 1.0f - 0.85f * d.snap : smoothstep( 0.8f, 1.2f, d.tl );
+	auto zig = [=]( Real a ) -> Real
+	{
+		const Real g = wrap( ( a - yaw ) * n / ( 2.0f * MARKER_PI ) + ph, 1.0f );
+		const Real tri = (Real)fabs( 2.0f * g - 1.0f );
+		return R * sc + 6.0f * k * ( 2.0f * tri - 1.0f ) * MAX( sc, 0.2f );
+	};
+	const Real za = ( d.aim || d.tl < 0.25f || d.tl > 0.8f ) ? 1.0f : 0.4f;
+	if( R * sc > 4.0f * k )
+		bandRadial( d.fin, d.x, d.y, zig, 8.0f * k, d.tint, za * d.app, 1.0f, 1.5f );
+	for( Int j = 0; j < 4; ++j )
+	{
+		const Real a = 0.25f * MARKER_PI + (Real)j * 0.5f * MARKER_PI;
+		Real px, py;
+		d.at( a, R + 18.0f * k, px, py );
+		part( P_SHAPE_BLOCK, px, py, yaw + a, 12.0f * k * BLOCK_U, 22.0f * k * BLOCK_V, TINT_WHITE, d.app );
+		part( P_SHAPE_DISC, px, py, yaw, 8.0f * k, 8.0f * k, d.tint, d.app );
+	}
+	const Bool was = s_ctx.additive;
+	s_ctx.additive = TRUE;
+	if( d.aim )
+	{
+		const Real t = d.t;
+		for( Int j = 0; j < 4; ++j )
+		{
+			if( hashOf( j, (Real)floor( d.t * 7.0f ) ) <= 0.45f )
+				continue;
+			const Real a0 = yaw + 0.25f * MARKER_PI + (Real)j * 0.5f * MARKER_PI + 0.15f;
+			auto jag = [=]( Real a ) -> Real
+			{
+				return R + 18.0f * k + 5.0f * k * (Real)sin( a * 41.0f + t * 50.0f ) * (Real)sin( a * 17.0f - t * 31.0f );
+			};
+			radialStrip( P_HAIR, d.x, d.y, jag, 3.0f * k, a0, a0 + 0.5f * MARKER_PI - 0.3f, pingTintOf( d.tint ), 0.9f * d.app, FALSE, 1.5f );
+		}
+	}
+	else
+	{
+		const Real e = easeOut( ( d.tl - 0.25f ) / 0.5f );
+		if( d.tl > 0.25f && e < 1.0f )
+		{
+			auto shock = [=]( Real a ) -> Real
+			{
+				const Real g = wrap( ( a - yaw ) * n / ( 2.0f * MARKER_PI ), 1.0f );
+				return 1.15f * R * e + 7.0f * k * ( 2.0f * (Real)fabs( 2.0f * g - 1.0f ) - 1.0f );
+			};
+			radialStrip( P_PING, d.x, d.y, shock, 8.0f * k, 0.0f, 2.0f * MARKER_PI, pingTintOf( d.tint ), (Real)pow( 1.0f - e, 0.6f ) * d.app, FALSE, 1.5f );
+		}
+		if( d.tl > 0.6f )
+		{
+			const Real tick = (Real)floor( d.t * 20.0f );
+			for( Int i = 0; i < 20; ++i )
+			{
+				Real px, py;
+				d.at( 2.0f * MARKER_PI * hashOf( i, tick ), 0.92f * R * (Real)sqrt( hashOf( i + 40, tick ) ), px, py );
+				part( P_SHAPE_TILE, px, py, yaw, ( 4.0f + 6.0f * hashOf( i + 7, tick ) ) * k, 2.5f * k, d.tint, 0.35f * d.app );
+			}
+		}
+	}
+	s_ctx.additive = was;
+}
+
+/// a chain of terraced plates (the drops) between red lacquer bands; the Nuke General's carry a trefoil
+static void drawChinaCarpet( const DesignDraw &d )
+{
+	const Marker &m = *d.m;
+	const Real k = d.k, h = d.heading();
+	const Bool nuke = m.variant == VARIANT_NUKE;
+	if( !m.drops.empty() )
+	{
+		const Real grow = smoothstep( 0.05f, 0.7f, d.t );
+		for( Int side = -1; side <= 1; side += 2 )
+		{
+			Real ax, ay, bx, by;
+			d.along( -( m.drops.front() + 40.0f ), (Real)side * 46.0f, ax, ay );
+			d.along( 10.0f, (Real)side * 46.0f, bx, by );
+			bandSegment( d, ax, ay, ax + ( bx - ax ) * grow, ay + ( by - ay ) * grow, 8.0f * k, TINT_LACQ, 1.0f );
+		}
+	}
+	const Real plane = planeAlong( d );
+	const Real wave = wrap( 6.0f * d.t, (Real)m.drops.size() + 3.0f );
+	for( Int i = 0; i < (Int)m.drops.size(); ++i )
+	{
+		const Real dd = m.drops[ i ];
+		if( dd < 0.0f )
+			continue;
+		Real px, py;
+		d.along( -dd, 0.0f, px, py );
+		if( plane > -dd )
+		{
+			pingRing( px, py, nuke ? 34.0f : 22.0f, k, ( plane + dd ) / 300.0f, d.tint, 0.5f, 0.9f, 5.0f );
+			if( nuke )
+				pingRing( px, py, 12.0f, k, ( plane + dd ) / 300.0f - 0.15f, d.tint, 0.5f, 2.5f, 4.0f );
+			part( P_SHAPE_DIAMOND, px, py, h, 24.0f * k, 24.0f * k, TINT_SCORCH, d.app );
+			continue;
+		}
+		if( d.aim && fabs( (Real)i - wave ) < 1.2f )
+			part( P_SHAPE_DIAMOND, px, py, h, 28.0f * k, 28.0f * k, scaled( d.tint, 1.3f ), d.app );
+		if( nuke )
+			part( P_GLYPH_NUKE00, px, py, d.yaw, 16.0f * k, 16.0f * k, TINT_DARK, 0.85f * d.app );
+	}
+	part( P_SHAPE_PLUS, d.x, d.y, h + 0.25f * MARKER_PI, 30.0f * k, 30.0f * k, d.tint, d.app );
+}
+
+/// a fire carpet: a wide terraced box across the run, a wavy flame front that sweeps through it
+static void drawNapalm( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R, h = d.heading();
+	const Real hd = 0.55f * R, hw = 1.15f * R;
+	Real pos = -0.45f * R;
+	if( !d.aim )
+	{
+		pos = -0.45f * R + 0.9f * R * smoothstep( 0.2f, 1.3f, d.tl );
+		const Real cell = 0.17f * R;
+		for( Int gi = -4; gi <= 4; ++gi )
+			for( Int gj = -7; gj <= 7; ++gj )
+			{
+				const Real cs = ( (Real)gi + 0.5f ) * cell, cq = ( (Real)gj + 0.5f ) * cell;
+				if( cs > pos || fabs( cs ) > hd - 8.0f * k || fabs( cq ) > hw - 8.0f * k )
+					continue;
+				const Real hv = hashOf( gi * 31 + gj );
+				const Real fl = 0.7f + 0.3f * (Real)sin( 13.0f * d.t + 6.28f * hv );
+				Real px, py;
+				d.along( cs, cq, px, py );
+				part( P_SHAPE_TONGUE, px, py, h, 15.0f * k * fl, 12.0f * k * fl, scaled( d.tint, 1.1f ), d.app );
+			}
+	}
+	Poly front;
+	for( Int i = 0; i <= 40; ++i )
+	{
+		const Real q = -hw + 6.0f * k + ( 2.0f * hw - 12.0f * k ) * (Real)i / 40.0f;
+		Real s;
+		if( d.aim )
+			s = pos + 6.0f * k * (Real)sin( q / ( 0.11f * R ) - 6.0f * d.t );
+		else
+			s = pos + 6.0f * k * (Real)sin( q / ( 0.11f * R ) - 6.0f * d.t ) * ( 1.0f - d.snap ) + 3.0f * k * (Real)sin( q / ( 0.07f * R ) - 14.0f * d.t ) * d.snap;
+		Real px, py;
+		d.along( s, q, px, py );
+		front.add( px, py );
+	}
+	bandPoly( d.fin, front.x, front.y, front.n, FALSE, 7.0f * k, d.tint, d.app, 1.2f );
+	const Bool was = s_ctx.additive;
+	s_ctx.additive = TRUE;
+	polyStrip( P_HAIR, front.x, front.y, front.n, FALSE, 10.0f * k, pingTintOf( d.tint ), 0.5f * d.app, FALSE );
+	s_ctx.additive = was;
+	const Poly box = steppedBox( d.x, d.y, h, hd, hw, 0.14f * R );
+	bandPoly( d.fin, box.x, box.y, box.n, TRUE, 18.0f * k, d.tint, d.app );
+	const Poly lac = steppedBox( d.x, d.y, h, hd - 10.0f * k, hw - 10.0f * k, 0.14f * R );
+	polyStrip( P_HAIR, lac.x, lac.y, lac.n, TRUE, 3.0f * k, TINT_LACQ, d.app, FALSE );
+	for( Int sx = -1; sx <= 1; sx += 2 )
+		for( Int sy = -1; sy <= 1; sy += 2 )
+		{
+			Real px, py;
+			d.along( (Real)sx * hd, (Real)sy * 0.5f * hw, px, py );
+			studAt( d, px, py, 0.9f );
+		}
+}
+
+/// a war drum: a sunburst beating twice like a heart, red lacquer and gold drum studs inside
+static void drawFrenzy( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	const Real per = d.aim ? 0.9f : 0.55f;
+	const Real tt = wrap( d.t, per );
+	const Real p = (Real)exp( -( tt / 0.06f ) * ( tt / 0.06f ) ) + 0.6f * (Real)exp( -( ( tt - 0.2f ) / 0.06f ) * ( ( tt - 0.2f ) / 0.06f ) );
+	const Real fade = d.aim ? 1.0f : 1.0f - 0.5f * smoothstep( 1.5f, 3.4f, d.tl );
+	const Real Rs = R * ( 1.0f + 0.035f * p + ( d.aim ? 0.0f : 0.15f * ( 1.0f - d.snap ) ) );
+	bandCircle( d.fin, d.x, d.y, Rs, 18.0f * k, d.tint, fade * d.app, 0.75f + 0.35f * p );
+	for( Int j = 0; j < 20; ++j )
+	{
+		const Real a = (Real)j * 2.0f * MARKER_PI / 20.0f;
+		Real px, py;
+		d.at( a, Rs + ( 12.0f + 2.5f * p ) * k, px, py );
+		const Real s = ( 16.0f + 5.0f * p ) * k;
+		part( P_SHAPE_TRI, px, py, d.yaw + a, s, s, scaled( d.tint, 0.8f + 0.5f * p ), fade * d.app );
+	}
+	ring( P_HAIR, d.x, d.y, 0.72f * Rs, 5.0f * k, TINT_LACQ, fade * d.app, FALSE );
+	for( Int j = 0; j < 8; ++j )
+	{
+		Real px, py;
+		d.at( MARKER_PI / 8.0f + (Real)j * 0.25f * MARKER_PI, 0.84f * Rs, px, py );
+		studAt( d, px, py, 1.2f, fade );
+	}
+	glowDisc( d.x, d.y, Rs, d.tint, 0.12f * p * fade * d.app );
+}
+
+/// nuclear: the trefoil turns, slams upright on the click; twelve square blocks count the flight down
+static void drawNeutron( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	Real rot = -0.4f * d.tc;
+	if( !d.aim )
+	{
+		const Real target = (Real)floor( rot / ( 2.0f * MARKER_PI / 3.0f ) + 0.5f ) * 2.0f * MARKER_PI / 3.0f;
+		rot += ( target - rot ) * d.snap;
+	}
+	const Real sc = d.aim ? 1.0f : 1.0f + 0.2f * ( 1.0f - d.snap );
+	const Real step = 15.0f * MARKER_DEG;
+	const Int r = (Int)floorf( rot / step + 0.5f );
+	const Int piece = P_GLYPH_NUKE00 + ( ( r % 8 ) + 8 ) % 8;
+	quadPiece( piece, d.x, d.y, d.yaw + ( rot - (Real)r * step ), 1.7f * R * sc, 1.7f * R * sc, d.tint, d.app );
+	bandCircle( d.fin, d.x, d.y, R, 24.0f * k, d.tint, d.app );
+	ring( P_HAIR, d.x, d.y, R, 3.0f * k, TINT_LACQ, d.app, FALSE );
+	const Int lit = (Int)ceilf( 12.0f * d.frac );
+	const Bool blinkOff = !d.aim && sin( 18.0f * d.t ) < 0.0f;
+	const Real rc = R + 26.0f * k;
+	for( Int j = 0; j < 12; ++j )
+	{
+		const Real a = 0.5f * MARKER_PI - (Real)j * MARKER_PI / 6.0f;
+		Real px, py;
+		d.at( a, rc, px, py );
+		const Real wide = 0.6f * ( 2.0f * MARKER_PI / 12.0f ) * rc;
+		part( P_SHAPE_BLOCK, px, py, d.yaw + a, 14.0f * k * BLOCK_U, wide * BLOCK_V, TINT_WHITE, d.app );
+		Bool on;
+		if( d.aim )
+			on = j == (Int)floor( d.t * 8.0f ) % 12;
+		else
+			on = j < lit && !( j == lit - 1 && blinkOff );
+		part( P_SHAPE_TILE, px, py, d.yaw + a, 10.0f * k, 0.8f * wide, on ? d.tint : scaled( d.tint, 0.25f ), d.app );
+	}
+}
+
+/// the hover offset of a marker under a Helix, still once the bomb is away
+static void helixSway( const DesignDraw &d, Real phase, Real &cx, Real &cy )
+{
+	const Real t = d.aim ? d.t : d.tc;
+	const Real hold = d.aim ? 1.0f : 1.0f - d.snap;
+	d.screen( 9.0f * d.k * (Real)sin( 1.3f * t + phase ) * hold, 6.0f * d.k * (Real)sin( 1.9f * t ) * hold, cx, cy );
+}
+
+/// a hovering drop: the ring sways with the Helix, a ring falls on a loop, flame tongues burst out
+static void drawHelixNapalm( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	Real cx, cy;
+	helixSway( d, 0.0f, cx, cy );
+	if( !d.aim && d.tl >= 0.5f )
+	{
+		const Real e = easeOut( ( d.tl - 0.5f ) / 0.4f );
+		fillDisc( cx, cy, 0.3f * R, TINT_SCORCH, 0.5f * d.app, 0.0f );
+		glowDisc( cx, cy, R, d.tint, 0.4f * d.app );
+		for( Int j = 0; j < 8; ++j )
+		{
+			const Real a = (Real)j * 0.25f * MARKER_PI + 0.2f;
+			const Real len = ( 0.3f + 0.75f * e ) * R * ( 0.85f + 0.15f * (Real)sin( 11.0f * d.t + (Real)j ) );
+			const Real px = cx + ( 0.1f * R + 0.5f * len ) * (Real)cos( d.yaw + a ), py = cy + ( 0.1f * R + 0.5f * len ) * (Real)sin( d.yaw + a );
+			part( P_SHAPE_TONGUE, px, py, d.yaw + a, len * 1.6f, len * 0.55f, scaled( d.tint, 1.15f ), d.app );
+		}
+	}
+	bandCircle( d.fin, cx, cy, R, 10.0f * k, d.tint, d.app );
+	for( Int j = 0; j < 6; ++j )
+	{
+		const Real a = d.yaw + MARKER_PI / 6.0f + (Real)j * MARKER_PI / 3.0f;
+		part( P_SHAPE_TONGUE, cx + ( R + 10.0f * k ) * (Real)cos( a ), cy + ( R + 10.0f * k ) * (Real)sin( a ), a, 16.0f * k, 16.0f * k, d.tint, d.app );
+	}
+	if( d.aim )
+	{
+		const Real fr = wrap( 0.7f * d.t, 1.0f );
+		ring( P_HAIR, cx, cy, R * ( 1.0f - fr ), 3.0f * k, TINT_WARM, 0.6f * (Real)sin( MARKER_PI * fr ) * d.app, FALSE );
+	}
+	else if( d.tl < 0.5f )
+		ring( P_HAIR, cx, cy, 0.8f * R * ( 1.0f - d.tl / 0.5f ), 3.5f * k, TINT_WARM, 0.9f * d.app, FALSE );
+	part( P_SHAPE_DISC, cx, cy, d.yaw, 11.0f * k, 11.0f * k, d.tint, d.app );
+}
+
+/// a small pointed hex warning plate under the hovering Helix; it drops and three shocks go out
+static void drawHelixNuke( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	Real cx, cy;
+	helixSway( d, 1.0f, cx, cy );
+	const Real corner = R / (Real)cos( MARKER_PI / 6.0f );
+	const Poly hex = regularPoly( cx, cy, corner, 6, d.yaw + 0.5f * MARKER_PI );
+	bandPoly( d.fin, hex.x, hex.y, hex.n, TRUE, 16.0f * k, d.tint, d.app );
+	const Poly lac = regularPoly( cx, cy, corner - 10.0f * k, 6, d.yaw + 0.5f * MARKER_PI );
+	polyStrip( P_HAIR, lac.x, lac.y, lac.n, TRUE, 3.0f * k, TINT_LACQ, d.app, FALSE );
+	for( Int i = 0; i < hex.n; ++i )
+		studAt( d, hex.x[ i ], hex.y[ i ], 0.9f );
+	const Real flash = d.aim ? 0.0f : MAX( 0.0f, 1.0f - (Real)fabs( d.tl - 0.55f ) / 0.3f );
+	const Tint hot = { 1.0f, 0.95f, 0.85f };
+	const Tint tre = { d.tint.r + ( hot.r - d.tint.r ) * flash, d.tint.g + ( hot.g - d.tint.g ) * flash, d.tint.b + ( hot.b - d.tint.b ) * flash };
+	quadPiece( P_GLYPH_NUKE00, cx, cy, d.yaw, 0.8f * R, 0.8f * R, tre, d.app );
+	if( d.aim || d.tl < 0.5f )
+	{
+		const Real fr = d.aim ? wrap( 0.6f * d.t, 1.0f ) : d.tl / 0.5f;
+		const Real s = d.aim ? 1.9f - 1.6f * fr : 1.6f - 1.4f * fr;
+		const Poly fall = regularPoly( cx, cy, corner * s, 6, d.yaw + 0.5f * MARKER_PI );
+		polyStrip( P_HAIR, fall.x, fall.y, fall.n, TRUE, 3.0f * k, d.tint, ( d.aim ? 0.7f * (Real)sin( MARKER_PI * fr ) : 0.9f ) * d.app, FALSE );
+	}
+	if( d.aim )
+		return;
+	for( Int j = 0; j < 3; ++j )
+	{
+		const Real t0 = 0.5f + 0.17f * (Real)j;
+		const Real e = easeOut( ( d.tl - t0 ) / 0.8f );
+		if( d.tl > t0 && e < 1.0f )
+			softRing( cx, cy, 1.5f * R * e, ( 10.0f - 4.0f * j ) * k, pingTintOf( d.tint ), (Real)pow( 1.0f - e, 0.7f ) * d.app );
+	}
+}
+
+/// a heavy pallet on a four-point harness: it swings while aiming and slams down on the click
+static void drawTankDrop( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	const Real sway = d.aim ? 0.14f * (Real)sin( 1.7f * d.t ) : 0.14f * (Real)sin( 1.7f * d.tc ) * ( 1.0f - d.snap );
+	const Real sc = d.aim ? 1.0f : 1.0f + 0.25f * ( 1.0f - d.snap ) - 0.05f * (Real)sin( MARKER_PI * clamp01( ( d.tl - 0.22f ) / 0.2f ) );
+	const Real h = d.heading() + sway, hs = 0.72f * R * sc;
+	const Poly box = steppedBox( d.x, d.y, h, hs, hs, 0.13f * R * sc );
+	const Real cu[ 4 ] = { 1.0f, -1.0f, -1.0f, 1.0f }, cv[ 4 ] = { 1.0f, 1.0f, -1.0f, -1.0f };
+	const Real c = (Real)cos( h ), s = (Real)sin( h );
+	for( Int i = 0; i < 4; ++i )
+	{
+		const Real u = cu[ i ] * hs, v = cv[ i ] * hs;
+		hairLine( d.x + 0.85f * ( c * u - s * v ), d.y + 0.85f * ( s * u + c * v ), d.x + 0.16f * ( c * u - s * v ), d.y + 0.16f * ( s * u + c * v ),
+							2.4f * k, TINT_STEEL, 0.9f * d.app );
+	}
+	bandPoly( d.fin, box.x, box.y, box.n, TRUE, 16.0f * k, d.tint, d.app );
+	bandCircle( d.fin, d.x, d.y, 0.14f * R * sc, 10.0f * k, d.tint, d.app );
+	for( Int i = 0; i < 4; ++i )
+	{
+		const Real u = cu[ i ] * hs * 0.9f, v = cv[ i ] * hs * 0.9f;
+		studAt( d, d.x + c * u - s * v, d.y + s * u + c * v, 0.8f );
+	}
+	if( d.aim )
+		return;
+	const Real e = easeOut( ( d.tl - 0.2f ) / 0.5f );
+	if( d.tl > 0.2f && e < 1.0f )
+	{
+		const Poly dust = regularPoly( d.x, d.y, hs * ( 1.0f + 0.35f * e ) * 1.41f, 4, h + 0.25f * MARKER_PI );
+		const Bool was = s_ctx.additive;
+		s_ctx.additive = TRUE;
+		polyStrip( P_PING, dust.x, dust.y, dust.n, TRUE, 6.0f * k, pingTintOf( d.tint ), 0.9f * ( 1.0f - e ) * d.app, FALSE );
+		s_ctx.additive = was;
+	}
+}
+
+// ---------------------------------------------------------------- GLA
+
+/// nine missiles: crooked impact plates inside a welded ragged ring, a notch per missile counting down
+static void drawScud( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R, yaw = d.yaw;
+	auto ragged = [=]( Real a ) -> Real
+	{
+		const Real p = a - yaw;
+		return R * ( 1.0f + 0.022f * (Real)sin( 7.0f * p + 1.0f ) + 0.014f * (Real)sin( 13.0f * p + 2.0f ) );
+	};
+	bandRadial( d.fin, d.x, d.y, ragged, 20.0f * k, d.tint, d.app, 1.0f, 3.0f );
+	for( Int i = 0; i < 5; ++i )
+	{
+		const Real a = 2.0f * MARKER_PI * hashOf( i + 61 );
+		Real px, py;
+		d.at( a, ragged( yaw + a ), px, py );
+		part( P_SHAPE_BLOCK, px, py, yaw + a + 0.5f * MARKER_PI + 0.3f * ( hashOf( i + 62 ) - 0.5f ),
+					( 20.0f + 16.0f * hashOf( i + 63 ) ) * k * BLOCK_U, ( 14.0f + 6.0f * hashOf( i + 64 ) ) * k * BLOCK_V, TINT_WHITE, d.app );
+		d.at( a + 0.04f, ragged( yaw + a ), px, py );
+		studAt( d, px, py, 0.8f );
+	}
+	for( Int i = 0; i < 10; ++i )		// hazard slashes on the top edge only
+	{
+		const Real a = 1.15f + 0.085f * (Real)i;
+		Real px, py;
+		d.at( a, ragged( yaw + a ) + 13.0f * k, px, py );
+		part( P_SHAPE_PARA, px, py, yaw + a + 0.5f * MARKER_PI, 9.0f * k, 7.0f * k, ( i & 1 ) ? TINT_DARK : TINT_AMBER, d.app );
+	}
+	const Int nl = d.aim ? 9 : (Int)ceilf( 9.0f * d.frac );
+	const Bool blinkOff = !d.aim && sin( 18.0f * d.t ) < 0.0f;
+	for( Int i = 0; i < 9; ++i )
+	{
+		const Real a = 0.3f + 2.0f * MARKER_PI * ( (Real)i + 0.35f * hashOf( i + 71 ) ) / 9.0f;
+		Real px, py;
+		d.at( a, R + 26.0f * k, px, py );
+		part( P_SHAPE_BLOCK, px, py, yaw + a, 12.0f * k * BLOCK_U, 8.4f * k * BLOCK_V, TINT_WHITE, d.app );
+		const Bool on = i < nl && !( i == nl - 1 && blinkOff );
+		part( P_SHAPE_TILE, px, py, yaw + a, 9.0f * k, 7.0f * k, on ? d.tint : scaled( d.tint, 0.22f ), d.app );
+	}
+	for( Int i = 0; i < 9; ++i )
+	{
+		Real px, py;
+		d.at( 2.0f * MARKER_PI * hashOf( i + 83 ), 0.72f * R * (Real)sqrt( hashOf( i + 81 ) ), px, py );
+		const Real rot = 2.0f * MARKER_PI * hashOf( i + 85 ) + ( d.aim ? 0.0f : 0.5f * ( 1.0f - d.snap ) );
+		const Bool lit = !d.aim || hashOf( i, (Real)floor( d.t * 7.0f ) ) > 0.5f;
+		part( P_SHAPE_TILE, px, py, yaw + rot, 22.0f * k, 22.0f * k, scaled( d.tint, lit ? 1.1f : 0.4f ), d.app );
+		if( d.impact >= 0.0f )
+			pingRing( px, py, 16.0f * k, k, d.impact - 0.08f * (Real)( ( i * 5 ) % 9 ), d.tint, 0.5f, 1.4f, 5.0f );
+	}
+}
+
+/// a gas cloud: a lumpy edge that churns, a haze inside, bubbles drifting up and popping
+static void drawAnthrax( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R, yaw = d.yaw, t = d.t;
+	const Bool gamma = d.m->variant == VARIANT_CHEM;
+	const Real sc = d.aim ? 1.0f : 0.62f + 0.38f * easeBack( d.tl / 0.35f, 2.2f );
+	auto churn = [=]( Real a ) -> Real
+	{
+		const Real p = a - yaw;
+		return R * sc * ( 1.0f + 0.06f * (Real)sin( 5.0f * p + 0.7f * t ) + 0.04f * (Real)sin( 8.0f * p - 1.1f * t + 1.0f )
+											+ 0.03f * (Real)sin( 13.0f * p + 1.7f * t ) );
+	};
+	Poly edge;
+	for( Int i = 0; i < 48; ++i )
+	{
+		const Real a = yaw + 2.0f * MARKER_PI * (Real)i / 48.0f;
+		const Real r = churn( a );
+		edge.add( d.x + r * (Real)cos( a ), d.y + r * (Real)sin( a ) );
+	}
+	const Real haze = ( 0.1f + 0.04f * (Real)sin( 2.0f * t ) ) * d.app;
+	fillFan( d.x, d.y, edge.x, edge.y, edge.n, TRUE, d.tint, haze, haze );
+	bandRadial( d.fin, d.x, d.y, churn, 10.0f * k, d.tint, d.app, 1.0f, 3.0f );
+	const Int nb = gamma ? 20 : 12;
+	const Real spd = d.aim ? 1.0f : 2.0f;
+	for( Int i = 0; i < nb; ++i )
+	{
+		const Real bu = 0.75f * R * ( 2.0f * hashOf( i + 91 ) - 1.0f );
+		const Real life = 1.6f + hashOf( i + 92 );
+		const Real age = wrap( t * spd + hashOf( i + 93 ) * life, life );
+		const Real bv = 0.75f * R * ( 2.0f * hashOf( i + 94 ) - 1.0f ) + 30.0f * age;
+		if( bu * bu + bv * bv > 0.64f * R * R )
+			continue;
+		Real px, py;
+		d.screen( bu, bv, px, py );
+		const Real rad = ( 3.0f + 4.0f * age / life ) * k;
+		if( age > life - 0.25f )
+			pingRing( px, py, rad, k, age - ( life - 0.25f ), d.tint, 0.25f, 1.0f, 2.0f );
+		else
+			part( P_SHAPE_RING, px, py, yaw, rad * 3.0f, rad * 3.0f, d.tint, 0.9f * d.app );
+	}
+	const Real studA[ 4 ] = { 0.4f, 2.2f, 3.9f, 5.3f };
+	for( Int i = 0; i < 4; ++i )
+	{
+		Real px, py;
+		d.at( studA[ i ], churn( yaw + studA[ i ] ), px, py );
+		studAt( d, px, py, 0.9f );
+	}
+}
+
+/// tunnel hatches: lids jiggle while aiming, pop off one after another, rebels run out of the holes
+static void drawAmbush( const DesignDraw &d )
+{
+	const Marker &m = *d.m;
+	const Real k = d.k, R = d.R;
+	for( Int i = 0; i < 14; ++i )
+	{
+		const Real hv = hashOf( i + 1 ), hv2 = hashOf( i + 57 );
+		const Real c = d.yaw + 2.0f * MARKER_PI * ( (Real)i + 0.5f ) / 14.0f;
+		const Real half = ( 0.2f + 0.18f * hv ) * 2.0f * MARKER_PI / 14.0f;
+		bandArc( d.fin, d.x, d.y, R + 4.0f * k * ( hv2 - 0.5f ), ( 12.0f + 8.0f * hv ) * k, c - half, c + half, d.tint, d.app );
+	}
+	static const Real holeA[ 6 ] = { 0.3f, 1.5f, 2.6f, 3.7f, 4.6f, 5.6f };
+	static const Int perm[ 6 ] = { 3, 0, 5, 1, 4, 2 };
+	for( Int i = 0; i < 6; ++i )
+	{
+		Real hx, hy;
+		d.at( holeA[ i ], 0.55f * R * ( 0.7f + 0.5f * hashOf( i + 101 ) ), hx, hy );
+		fillDisc( hx, hy, 9.5f * k, TINT_DARK, 0.85f * d.app, 0.85f * d.app, 12 );
+		bandCircle( d.fin, hx, hy, 10.0f * k, 6.0f * k, m.variant == VARIANT_CHEM ? TINT_TOXIN : TINT_STEEL, d.app );
+		Real ox = 0.0f, oy = 0.0f, la = 1.0f;
+		if( d.aim )
+		{
+			ox = 1.4f * k * (Real)sin( 9.0f * d.t + 2.1f * (Real)i );
+			oy = 1.4f * k * (Real)cos( 7.0f * d.t + (Real)i );
+		}
+		else
+		{
+			const Real t0 = 0.1f + 0.12f * (Real)perm[ i ];
+			const Real e = easeOut( ( d.tl - t0 ) / 0.3f );
+			const Real a = 2.0f * MARKER_PI * hashOf( i + 111 );
+			ox = 16.0f * k * e * (Real)cos( a );
+			oy = 16.0f * k * e * (Real)sin( a );
+			la = 1.0f - smoothstep( 0.25f, 0.6f, d.tl - t0 );
+			const Real toward = (Real)atan2( d.y - hy, d.x - hx );
+			for( Int r = 0; r < 3; ++r )
+			{
+				const Real age = d.tl - t0 - 0.15f - 0.12f * (Real)r;
+				if( age <= 0.0f || age >= 1.0f )
+					continue;
+				const Real e2 = easeOut( age ) * 0.7f;
+				const Real side = 10.0f * k * (Real)( r - 1 ) * e2;
+				const Real px = hx + ( d.x - hx ) * e2 - (Real)sin( toward ) * side;
+				const Real py = hy + ( d.y - hy ) * e2 + (Real)cos( toward ) * side;
+				quadPiece( P_CHEVRON, px, py, toward, 11.0f * k, 17.0f * k, d.tint, ( 1.0f - smoothstep( 0.6f, 1.0f, age ) ) * d.app,
+									 CHEVRON_ANCHOR_U, 0.5f );
+			}
+		}
+		if( la > 0.02f )
+		{
+			part( P_SHAPE_LID, hx + ox, hy + oy, d.yaw + 0.6f + (Real)i, 23.0f * k, 23.0f * k, TINT_WHITE, la * d.app );
+			if( m.variant == VARIANT_DEMO && sin( 8.0f * d.t + (Real)i ) > 0.3f )
+				part( P_SHAPE_DISC, hx + ox, hy + oy, d.yaw, 6.0f * k, 6.0f * k, TINT_RED, la * d.app );
+		}
+	}
+}
+
+/// a glitching ring: segments jitter off their radius, static blocks pop; after the click it hides
+static void drawGps( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	Real amp, a;
+	Int tick;
+	if( d.aim )
+	{
+		amp = 1.0f;  a = 1.0f;  tick = (Int)floor( d.t * 10.0f );
+	}
+	else if( d.tl < 0.35f )
+	{
+		amp = 3.0f;  a = 1.0f;  tick = (Int)floor( d.t * 20.0f );
+	}
+	else
+	{
+		tick = (Int)floor( d.tl * 12.0f );
+		const Bool glitch = hashOf( tick, 7.0f ) > 0.82f;
+		amp = glitch ? 2.0f : 0.4f;
+		a = glitch ? 0.8f : 0.25f;
+	}
+	const Real step = 2.0f * MARKER_PI / 20.0f;
+	for( Int i = 0; i < 20; ++i )
+	{
+		const Real off = 6.0f * k * amp * ( hashOf( i, (Real)tick * 4.7f ) - 0.5f );
+		const Real ang = d.yaw + ( (Real)i + 0.5f ) * step + 0.05f * amp * ( hashOf( i + 30, (Real)tick * 9.3f ) - 0.5f );
+		bandArc( d.fin, d.x, d.y, R + off, 12.0f * k, ang - 0.4f * step, ang + 0.4f * step, d.tint, a * d.app );
+	}
+	for( Int i = 0; i < 10; ++i )
+	{
+		const Real bu = 1.3f * R * ( 2.0f * hashOf( i, (Real)tick + 0.5f ) - 1.0f );
+		const Real bv = 1.3f * R * ( 2.0f * hashOf( i + 50, (Real)tick + 0.5f ) - 1.0f );
+		const Real r = (Real)sqrt( bu * bu + bv * bv );
+		if( r < 0.55f * R || r > 1.25f * R )
+			continue;
+		Real px, py;
+		d.screen( bu, bv, px, py );
+		part( P_SHAPE_TILE, px, py, d.yaw, ( 3.0f + 8.0f * hashOf( i + 9, (Real)tick ) ) * k * (Real)sqrt( amp ), 4.4f * k, d.tint, 0.65f * a * d.app );
+	}
+	const Real spin = 0.4f * d.tc;
+	for( Int j = 0; j < 3; ++j )
+	{
+		const Real c = d.yaw + spin + (Real)j * 2.0f * MARKER_PI / 3.0f;
+		bandArc( d.fin, d.x, d.y, 0.18f * R, 8.0f * k, c - 0.7f, c + 0.7f, d.tint, a * d.app );
+	}
+}
+
+/// a radar scope of welded plates: a sweep with afterglow, one fast turn on the click, blips
+static void drawRadar( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	static const Real cuts[ 7 ] = { 0.0f, 0.8f, 1.9f, 2.7f, 3.5f, 4.6f, 5.4f };
+	for( Int i = 0; i < 7; ++i )
+	{
+		const Real g0 = ( 2.0f + 3.0f * hashOf( i + 121 ) ) * k / R;
+		const Real g1 = ( 2.0f + 3.0f * hashOf( ( i + 1 ) % 7 + 121 ) ) * k / R;
+		const Real a0 = cuts[ i ] + g0, a1 = ( i < 6 ? cuts[ i + 1 ] : 2.0f * MARKER_PI ) - g1;
+		bandArc( d.fin, d.x, d.y, R + 1.5f * k * ( hashOf( i + 131 ) - 0.5f ), ( 16.0f + 5.0f * hashOf( i + 141 ) ) * k, d.yaw + a0, d.yaw + a1, d.tint, d.app );
+		if( ( i & 1 ) == 0 )
+		{
+			Real px, py;
+			d.at( cuts[ i ] + 0.25f, R, px, py );
+			studAt( d, px, py, 0.85f );
+		}
+	}
+	ring( P_HAIR, d.x, d.y, 0.34f * R, 3.0f * k, TINT_STEEL, 0.7f * d.app, FALSE );
+	ring( P_HAIR, d.x, d.y, 0.67f * R, 3.0f * k, TINT_STEEL, 0.7f * d.app, FALSE );
+	const Real phi = d.aim ? 0.9f * d.t : 0.9f * d.tc + 2.0f * MARKER_PI * easeOut( d.tl / 1.1f ) + 0.9f * MAX( 0.0f, d.tl - 1.1f );
+	for( Int i = 0; i < 10; ++i )
+	{
+		const Real a0 = phi - 0.11f * (Real)( i + 1 ), a1 = phi - 0.11f * (Real)i;
+		const Real f = 1.0f - ( (Real)i + 0.5f ) / 10.0f;
+		Poly w;
+		for( Int s = 0; s <= 2; ++s )
+		{
+			Real px, py;
+			d.at( a0 + ( a1 - a0 ) * (Real)s / 2.0f, R - 6.0f * k, px, py );
+			w.add( px, py );
+		}
+		fillFan( d.x, d.y, w.x, w.y, w.n, FALSE, TINT_RADAR, 0.32f * f * f * d.app, 0.32f * f * f * d.app );
+	}
+	Real lx, ly;
+	d.at( phi, R - 6.0f * k, lx, ly );
+	const Bool was = s_ctx.additive;
+	s_ctx.additive = TRUE;
+	hairLine( d.x, d.y, lx, ly, 3.0f * k, TINT_RADAR, 0.8f * d.app );
+	s_ctx.additive = was;
+	for( Int i = 0; i < 9; ++i )
+	{
+		const Real ba = 2.0f * MARKER_PI * hashOf( i + 133 );
+		const Real a = (Real)exp( -wrap( phi - ba, 2.0f * MARKER_PI ) * 1.4f ) * ( d.aim ? 0.35f : 1.0f );
+		if( a < 0.03f )
+			continue;
+		Real px, py;
+		d.at( ba, 0.85f * R * (Real)sqrt( hashOf( i + 131 ) ), px, py );
+		part( P_SHAPE_DISC, px, py, d.yaw, 8.0f * k, 8.0f * k, TINT_RADAR, a * d.app );
+	}
+	studAt( d, d.x, d.y, 1.0f );
+}
+
+// ---------------------------------------------------------------- Turkiye
+
+/// a swarm: small drones circling in two rings inside a broken hexagon; on the click they dive in
+static void drawKargu( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	const Int nd = d.m->variant == VARIANT_BERET ? 3 : 12;
+	const Real shrink = d.aim ? 1.0f : 1.0f - 0.06f * smoothstep( 0.2f, 1.5f, d.tl );
+	const Real corner = R * shrink / (Real)cos( MARKER_PI / 6.0f );
+	const Poly hex = regularPoly( d.x, d.y, corner, 6, d.yaw );
+	for( Int j = 0; j < 6; ++j )
+	{
+		const Int jn = ( j + 1 ) % 6;
+		const Real dx = hex.x[ jn ] - hex.x[ j ], dy = hex.y[ jn ] - hex.y[ j ];
+		const Real l = (Real)sqrt( dx * dx + dy * dy );
+		const Real cut = 0.12f * R / MAX( 1.0f, l );
+		bandSegment( d, hex.x[ j ] + dx * cut, hex.y[ j ] + dy * cut, hex.x[ jn ] - dx * cut, hex.y[ jn ] - dy * cut, 14.0f * k, d.tint, 1.0f );
+		studAt( d, d.x + ( hex.x[ j ] - d.x ) * 0.98f, d.y + ( hex.y[ j ] - d.y ) * 0.98f, 0.85f );
+	}
+	for( Int i = 0; i < nd; ++i )
+	{
+		const Int ringNo = i % 2;
+		const Real rad0 = ( ringNo == 0 ? 0.55f : 0.82f ) * R;
+		const Real w = ringNo == 0 ? 0.8f : -0.6f;
+		const Real a0 = 2.0f * MARKER_PI * (Real)( i / 2 ) / (Real)MAX( 1, nd / 2 ) + (Real)ringNo * 0.3f;
+		const Real lr = 0.35f * R * (Real)sqrt( hashOf( i + 141 ) ), la = 2.0f * MARKER_PI * hashOf( i + 143 );
+		Real px, py, h, sz = 1.0f;
+		const Real dive = d.aim ? -1.0f : ( d.tl - 0.08f * (Real)i ) / 0.6f;
+		if( dive < 0.0f )
+		{
+			const Real a = a0 + w * d.t;
+			d.at( a, rad0 + 4.0f * k * (Real)sin( 3.1f * d.t + 1.9f * (Real)i ), px, py );
+			h = d.yaw + a + ( w > 0.0f ? 0.5f : -0.5f ) * MARKER_PI;
+		}
+		else if( dive < 1.0f )
+		{
+			const Real a1 = a0 + w * ( d.tc + 0.08f * (Real)i );
+			const Real a = a1 + ( w > 0.0f ? 1.8f : -1.8f ) * dive;
+			const Real rad = rad0 + ( lr - rad0 ) * dive * dive;
+			Real lx, ly;
+			d.at( a, rad, px, py );
+			d.at( la, lr, lx, ly );
+			px += ( lx - px ) * dive * dive * dive;
+			py += ( ly - py ) * dive * dive * dive;
+			h = d.yaw + a + ( w > 0.0f ? 0.5f : -0.5f ) * MARKER_PI - ( w > 0.0f ? 0.9f : -0.9f ) * dive;
+			sz = 1.0f - 0.35f * dive;
+		}
+		else
+		{
+			d.at( la, lr, px, py );
+			pingRing( px, py, 7.0f * k, k, d.tl - 0.08f * (Real)i - 0.6f, d.tint, 0.4f, 1.6f, 3.6f );
+			continue;
+		}
+		part( P_SHAPE_TRI, px, py, h, 19.0f * k * sz, 19.0f * k * sz, d.tint, d.app );
+	}
+}
+
+/// a loiter pattern: a racetrack the UAV flies, its camera footprint panning across the zone
+static void drawUav( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	const Real cxo = 0.42f * R, rc = 0.5f * R;
+	Poly track;
+	for( Int i = 0; i <= 12; ++i )
+	{
+		const Real a = -0.5f * MARKER_PI + MARKER_PI * (Real)i / 12.0f;
+		Real px, py;
+		d.screen( cxo + rc * (Real)cos( a ), rc * (Real)sin( a ), px, py );
+		track.add( px, py );
+	}
+	for( Int i = 0; i <= 12; ++i )
+	{
+		const Real a = 0.5f * MARKER_PI + MARKER_PI * (Real)i / 12.0f;
+		Real px, py;
+		d.screen( -cxo + rc * (Real)cos( a ), rc * (Real)sin( a ), px, py );
+		track.add( px, py );
+	}
+	const Real atr = d.aim ? 0.6f : 1.0f;
+	bandPoly( d.fin, track.x, track.y, track.n, TRUE, 10.0f * k, d.tint, atr * d.app );
+	// the UAV on it, round at 170 units a second
+	const Real perim = 4.0f * cxo + 2.0f * MARKER_PI * rc;
+	Real p = wrap( d.t * 170.0f, perim ), u, v, hu;
+	if( p < 2.0f * cxo )
+	{
+		u = -cxo + p;  v = -rc;  hu = 0.0f;
+	}
+	else if( ( p -= 2.0f * cxo ) < MARKER_PI * rc )
+	{
+		const Real a = -0.5f * MARKER_PI + p / rc;
+		u = cxo + rc * (Real)cos( a );  v = rc * (Real)sin( a );  hu = a + 0.5f * MARKER_PI;
+	}
+	else if( ( p -= MARKER_PI * rc ) < 2.0f * cxo )
+	{
+		u = cxo - p;  v = rc;  hu = MARKER_PI;
+	}
+	else
+	{
+		p -= 2.0f * cxo;
+		const Real a = 0.5f * MARKER_PI + p / rc;
+		u = -cxo + rc * (Real)cos( a );  v = rc * (Real)sin( a );  hu = a + 0.5f * MARKER_PI;
+	}
+	Real ux, uy;
+	d.screen( u, v, ux, uy );
+	drawDart( ux, uy, d.yaw + hu, 0.9f, k, d.tint, atr * d.app );
+	Real tx = d.x, ty = d.y;
+	if( !d.aim )
+		d.screen( 0.25f * R * (Real)sin( 0.9f * d.tl ), 0.2f * R * (Real)cos( 0.7f * d.tl ) - 0.2f * R, tx, ty );
+	const Real dx = tx - ux, dy = ty - uy;
+	const Real dl = MAX( 1.0f, (Real)sqrt( dx * dx + dy * dy ) );
+	const Real nx = dx / dl, ny = dy / dl, qx = -ny, qy = nx;
+	const Real wid = d.aim ? 0.32f : 0.5f;
+	const Real nearD = 0.3f * dl, farD = MIN( dl + 0.25f * R, 1.25f * dl );
+	Poly fp;
+	fp.add( ux + nx * nearD - qx * 0.08f * R, uy + ny * nearD - qy * 0.08f * R );
+	fp.add( ux + nx * farD - qx * wid * R, uy + ny * farD - qy * wid * R );
+	fp.add( ux + nx * farD + qx * wid * R, uy + ny * farD + qy * wid * R );
+	fp.add( ux + nx * nearD + qx * 0.08f * R, uy + ny * nearD + qy * 0.08f * R );
+	Real cx = 0.0f, cy = 0.0f;
+	for( Int i = 0; i < 4; ++i )
+	{
+		cx += 0.25f * fp.x[ i ];
+		cy += 0.25f * fp.y[ i ];
+	}
+	const Real fa = ( d.aim ? 0.1f : 0.16f ) * d.app;
+	fillFan( cx, cy, fp.x, fp.y, fp.n, TRUE, d.tint, fa, fa );
+	polyStrip( P_HAIR, fp.x, fp.y, fp.n, TRUE, 2.5f * k, d.tint, ( d.aim ? 0.45f : 0.75f ) * d.app, FALSE );
+	const Real bd = d.aim ? 0.3f * R : 0.3f * R - 0.12f * R * d.snap;
+	for( Int sx = -1; sx <= 1; sx += 2 )
+		for( Int sy = -1; sy <= 1; sy += 2 )
+		{
+			Poly b;
+			Real px, py;
+			d.screen( (Real)sx * bd - (Real)sx * 12.0f * k, (Real)sy * bd, px, py );
+			b.add( px, py );
+			d.screen( (Real)sx * bd, (Real)sy * bd, px, py );
+			b.add( px, py );
+			d.screen( (Real)sx * bd, (Real)sy * bd - (Real)sy * 12.0f * k, px, py );
+			b.add( px, py );
+			bandPoly( d.fin, b.x, b.y, b.n, FALSE, 6.0f * k, d.tint, d.app );
+		}
+}
+
+/// a ballistic descent: hexagons falling onto a faceted target, its six facets counting down
+static void drawTayfun( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R;
+	const Real corner = R / (Real)cos( MARKER_PI / 6.0f );
+	const Poly hex = regularPoly( d.x, d.y, corner, 6, d.yaw );
+	bandPoly( d.fin, hex.x, hex.y, hex.n, TRUE, 18.0f * k, d.tint, d.app, 1.0f, FALSE );
+	const Int lit = d.aim ? 6 : (Int)ceilf( 6.0f * d.frac );
+	const Bool blinkOff = !d.aim && sin( 18.0f * d.t ) < 0.0f;
+	for( Int m = 0; m < 6; ++m )
+	{
+		const Int order = ( ( 1 - m ) % 6 + 6 ) % 6;		// clockwise from the top edge
+		const Bool on = order < lit && !( order == lit - 1 && blinkOff );
+		const Int mn = ( m + 1 ) % 6;
+		const Real px[ 2 ] = { hex.x[ m ], hex.x[ mn ] }, py[ 2 ] = { hex.y[ m ], hex.y[ mn ] };
+		polyStrip( bandPiece( d.fin, 3 ), px, py, 2, FALSE, 18.0f * k, on ? d.tint : scaled( d.tint, 0.22f ), d.app, FALSE );
+	}
+	const Real rt = d.aim ? R + 24.0f * k : R + 24.0f * k - 12.0f * k * d.snap;
+	for( Int j = 0; j < 3; ++j )
+	{
+		const Real a = 0.5f * MARKER_PI + (Real)j * 2.0f * MARKER_PI / 3.0f;
+		Real px, py;
+		d.at( a, rt, px, py );
+		part( P_SHAPE_TRI, px, py, d.yaw + a + MARKER_PI, 20.0f * k, 20.0f * k, d.tint, d.app );
+	}
+	const Bool landed = !d.aim && d.frac <= 0.0f;
+	if( !landed )
+	{
+		const Real spd = d.aim ? 0.5f : 1.1f;
+		for( Int i = 0; i < 3; ++i )
+		{
+			const Real fr = wrap( d.t * spd + (Real)i / 3.0f, 1.0f );
+			const Poly fall = regularPoly( d.x, d.y, corner * ( 2.2f - 2.0f * fr ), 6, d.yaw + MARKER_PI / 6.0f * ( 1.0f - fr ) );
+			polyStrip( P_HAIR, fall.x, fall.y, fall.n, TRUE, 3.0f * k, d.tint, 0.75f * (Real)sin( MARKER_PI * fr ) * d.app, FALSE );
+		}
+	}
+	part( P_SHAPE_DISC, d.x, d.y, d.yaw, 11.0f * k, 11.0f * k, d.tint, d.app );
+}
+
+/// loitering munitions: lock boxes roam the zone, snap onto targets on the click, then the dives
+static void drawSwarm( const DesignDraw &d )
+{
+	const Marker &m = *d.m;
+	const Real k = d.k, R = d.R;
+	const Real corner = R / (Real)cos( MARKER_PI / 8.0f );
+	const Poly oct = regularPoly( d.x, d.y, corner, 8, d.yaw + MARKER_PI / 8.0f );
+	for( Int j = 0; j < 8; ++j )
+	{
+		const Int jn = ( j + 1 ) % 8;
+		const Real mx = 0.5f * ( oct.x[ j ] + oct.x[ jn ] ) - d.x, my = 0.5f * ( oct.y[ j ] + oct.y[ jn ] ) - d.y;
+		const Real ml = MAX( 1.0f, (Real)sqrt( mx * mx + my * my ) );
+		const Real off = ( ( j & 1 ) ? 2.4f : -2.4f ) * k;
+		const Real ox = mx / ml * off, oy = my / ml * off;
+		const Real dx = oct.x[ jn ] - oct.x[ j ], dy = oct.y[ jn ] - oct.y[ j ];
+		const Real cut = 0.05f;
+		bandSegment( d, oct.x[ j ] + dx * cut + ox, oct.y[ j ] + dy * cut + oy, oct.x[ jn ] - dx * cut + ox, oct.y[ jn ] - dy * cut + oy,
+								 14.0f * k, d.tint, 1.0f );
+	}
+	static const Real targetU[ 5 ] = { 0.15f, -0.45f, 0.5f, -0.2f, 0.35f }, targetV[ 5 ] = { 0.05f, 0.3f, -0.35f, -0.55f, 0.55f };
+	const Int n = MAX( 1, MIN( 5, m.swarmCount ) );
+	for( Int i = 0; i < n; ++i )
+	{
+		const Real fi = (Real)i;
+		const Real t = d.aim ? d.t : d.tc;
+		const Real ru = 0.6f * R * (Real)sin( 0.7f * t * ( 1.0f + 0.2f * fi ) + fi ), rv = 0.55f * R * (Real)sin( 0.9f * t * ( 1.0f + 0.13f * fi ) + 2.0f * fi );
+		Real u = ru, v = rv;
+		Bool solid = FALSE;
+		if( !d.aim )
+		{
+			const Real e = easeOut( d.tl / 0.3f );
+			u = ru + ( targetU[ i ] * R - ru ) * e;
+			v = rv + ( targetV[ i ] * R - rv ) * e;
+			solid = e >= 1.0f;
+		}
+		Real cx, cy;
+		d.screen( u, v, cx, cy );
+		Poly box;
+		const Real hw = 10.0f * k, hh = 8.0f * k, sk = 0.577f * hh;
+		Real px, py;
+		d.screen( u - hw - sk, v - hh, px, py );	box.add( px, py );
+		d.screen( u + hw - sk, v - hh, px, py );	box.add( px, py );
+		d.screen( u + hw + sk, v + hh, px, py );	box.add( px, py );
+		d.screen( u - hw + sk, v + hh, px, py );	box.add( px, py );
+		polyStrip( P_HAIR, box.x, box.y, box.n, TRUE, 3.2f * k, d.tint, d.app, FALSE );
+		if( !solid )
+			continue;
+		for( Int j = 0; j < 3; ++j )
+		{
+			const Real a = 0.5f * MARKER_PI + (Real)j * 2.0f * MARKER_PI / 3.0f;
+			part( P_SHAPE_TRI, cx + 17.0f * k * (Real)cos( d.yaw + a ), cy + 17.0f * k * (Real)sin( d.yaw + a ), d.yaw + a + MARKER_PI,
+						11.0f * k, 11.0f * k, d.tint, d.app );
+		}
+		const Real t0 = 0.55f + 0.4f * fi;
+		const Real fr = ( d.tl - t0 ) / 0.45f;
+		if( fr >= 0.0f && fr < 1.0f )
+			ring( P_HAIR, cx, cy, ( 40.0f - 34.0f * fr ) * k, 3.0f * k, d.tint, 0.9f * d.app, FALSE );
+		pingRing( cx, cy, 10.0f * k, k, d.tl - t0 - 0.45f, d.tint, 0.4f, 1.4f, 4.0f );
+		if( d.tl > t0 + 0.45f )
+			part( P_SHAPE_DISC, cx, cy, d.yaw, 11.0f * k, 11.0f * k, TINT_SCORCH, 0.6f * d.app );
+	}
+}
+
+/// jamming: interference bars scrolling through a faceted frame, a wave running round inside
+static void drawBlind( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R, yaw = d.yaw;
+	const Real hy = 0.82f * R, cxx = 0.34f * R, cyy = 0.2f * R;
+	Poly frame;
+	const Real fu[ 8 ] = { -R + cxx, R - cxx, R, R, R - cxx, -R + cxx, -R, -R };
+	const Real fv[ 8 ] = { -hy, -hy, -hy + cyy, hy - cyy, hy, hy, hy - cyy, -hy + cyy };
+	for( Int i = 0; i < 8; ++i )
+	{
+		Real px, py;
+		d.screen( fu[ i ], fv[ i ], px, py );
+		frame.add( px, py );
+	}
+	const Real ys = d.aim ? 1.0f : ( d.tl < 0.25f ? 1.0f - 0.9f * d.snap : easeBack( ( d.tl - 0.25f ) / 0.4f, 2.2f ) );
+	const Int tick = (Int)floor( d.t * 12.0f );
+	const Real inset = 8.0f * k;
+	for( Int j = 0; j < 12; ++j )
+	{
+		const Real v = ( wrap( (Real)j * 0.17f * R + 35.0f * d.t, 2.0f * hy ) - hy ) * MAX( ys, 0.05f );
+		const Real av = (Real)fabs( v );
+		if( av > hy - inset )
+			continue;
+		const Real ext = ( av <= hy - cyy ? R : R - ( av - ( hy - cyy ) ) * cxx / cyy ) - inset;
+		Real ax, ay, bx, by;
+		d.screen( -ext, v, ax, ay );
+		d.screen( ext, v, bx, by );
+		const Real w = ( 2.4f + 5.2f * hashOf( j + 151 ) ) * k;
+		if( d.aim || d.tl <= 0.6f )
+			hairLine( ax, ay, bx, by, w, d.tint, ( d.aim ? 0.75f : 0.9f ) * d.app );
+		else
+			dashLine( ax, ay, bx, by, w, 0.3f * R, 0.4f + 0.5f * hashOf( j + 3, (Real)tick ), 40.0f * k * hashOf( j, (Real)tick ), d.tint, 0.9f * d.app );
+	}
+	const Real amp = d.aim ? 3.0f * k : 3.0f * k + 4.0f * k * smoothstep( 0.3f, 1.2f, d.tl );
+	const Real t = d.t;
+	auto wave = [=]( Real a ) -> Real { return 0.62f * R + amp * (Real)sin( 10.0f * ( a - yaw ) - 3.0f * t ); };
+	radialStrip( P_HAIR, d.x, d.y, wave, 3.0f * k, 0.0f, 2.0f * MARKER_PI, d.tint, 0.9f * d.app, FALSE, 2.0f );
+	const Bool was = s_ctx.additive;
+	s_ctx.additive = TRUE;
+	radialStrip( P_HAIR, d.x, d.y, wave, 7.0f * k, 0.0f, 2.0f * MARKER_PI, pingTintOf( d.tint ), 0.4f * d.app, FALSE, 2.0f );
+	s_ctx.additive = was;
+	bandPoly( d.fin, frame.x, frame.y, frame.n, TRUE, 18.0f * k, d.tint, d.app );
+	for( Int sx = -1; sx <= 1; sx += 2 )
+		for( Int sy = -1; sy <= 1; sy += 2 )
+		{
+			Real px, py;
+			d.screen( (Real)sx * ( R - 0.5f * cxx ), (Real)sy * hy, px, py );
+			studAt( d, px, py, 0.9f );
+		}
+}
+
+/// a jump wedge: an acute arrowhead along the run; the troopers (the drops) light tip to tail
+static void drawRapid( const DesignDraw &d )
+{
+	const Marker &m = *d.m;
+	const Real k = d.k, R = d.R;
+	Poly w;
+	Real px, py;
+	d.along( -0.33f * R, 0.5f * R, px, py );		w.add( px, py );
+	d.along( 0.62f * R, 0.0f, px, py );				w.add( px, py );
+	d.along( -0.33f * R, -0.5f * R, px, py );		w.add( px, py );
+	bandPoly( d.fin, w.x, w.y, w.n, FALSE, 16.0f * k, d.tint, d.app );
+	studAt( d, w.x[ 0 ], w.y[ 0 ], 0.9f );
+	studAt( d, w.x[ 2 ], w.y[ 2 ], 0.9f );
+	if( !d.aim || m.drops.empty() )
+		return;
+	const Int n = (Int)m.drops.size();
+	const Int lit = (Int)wrap( d.t * 6.0f, (Real)( n + 2 ) );
+	if( lit < n && m.drops[ lit ] >= 0.0f )
+		part( P_SHAPE_PARA, d.x - d.hx * m.drops[ lit ], d.y - d.hy * m.drops[ lit ], d.heading(), 28.0f * k, 28.0f * k, scaled( d.tint, 1.35f ), d.app );
+}
+
+/// a line abreast: four planes' tracks side by side, a pallet at the end of each, between two brackets
+static void drawAllyAid( const DesignDraw &d )
+{
+	const Real k = d.k, h = d.heading();
+	static const Real offs[ 4 ] = { -105.0f, -35.0f, 35.0f, 105.0f };
+	const Real grow = smoothstep( 0.05f, 0.7f, d.t );
+	const Real sp = d.aim ? -1.0e9f : -800.0f + 1200.0f * ( d.tl - 0.3f ) / 2.3f;
+	for( Int i = 0; i < 4; ++i )
+	{
+		const Real o = offs[ i ];
+		Real ax, ay, bx, by;
+		d.along( -600.0f * grow, o, ax, ay );
+		d.along( -26.0f * k, o, bx, by );
+		hairLine( ax, ay, bx, by, 3.0f * k, d.tint, 0.6f * d.app );
+		for( Real s = -600.0f * grow + wrap( 80.0f * k * d.t, 44.0f * k ); s < -30.0f * k; s += 44.0f * k )
+		{
+			Real px, py;
+			d.along( s, o, px, py );
+			quadPiece( P_CHEVRON, px, py, h, 12.0f * k, 18.0f * k, d.tint, 0.9f * d.app, CHEVRON_ANCHOR_U, 0.5f );
+		}
+		const Real bob = d.aim ? 1.0f + 0.07f * (Real)sin( 3.0f * d.t + 1.6f * (Real)i )
+													 : 1.0f + 0.35f * ( 1.0f - easeOut( ( d.tl - 0.06f * (Real)i ) / 0.2f ) );
+		Real px, py;
+		d.along( 0.0f, o, px, py );
+		part( P_SHAPE_PARA, px, py, h + 0.5f * MARKER_PI, 30.0f * k * bob, 30.0f * k * bob, d.tint, d.app );
+		if( sp > 0.0f )
+			part( P_SHAPE_PLUS, px, py, d.yaw, 16.0f * k, 16.0f * k, TINT_WHITE, d.app );
+		if( sp > -800.0f && sp < 400.0f )
+		{
+			d.along( sp, o, px, py );
+			drawDart( px, py, h, 1.1f, k, d.tint, d.app );
+		}
+	}
+	const Real bw = 140.0f;
+	for( Int side = -1; side <= 1; side += 2 )
+	{
+		Poly b;
+		Real px, py;
+		d.along( -34.0f * k, (Real)side * ( bw - 16.0f * k ), px, py );	b.add( px, py );
+		d.along( -34.0f * k, (Real)side * bw, px, py );								b.add( px, py );
+		d.along( 34.0f * k, (Real)side * bw, px, py );								b.add( px, py );
+		d.along( 34.0f * k, (Real)side * ( bw - 16.0f * k ), px, py );	b.add( px, py );
+		bandPoly( d.fin, b.x, b.y, b.n, FALSE, 8.0f * k, d.tint, d.app );
+	}
+}
+
+/// an insertion: a rhombus along the run, corner brackets stalking round it in quarter turns
+static void drawCommando( const DesignDraw &d )
+{
+	const Real k = d.k, R = d.R, h = d.heading();
+	const Real a = 0.95f * R, b = 0.58f * R;
+	Poly rh;
+	Real px, py;
+	d.along( a, 0.0f, px, py );		rh.add( px, py );
+	d.along( 0.0f, b, px, py );		rh.add( px, py );
+	d.along( -a, 0.0f, px, py );	rh.add( px, py );
+	d.along( 0.0f, -b, px, py );	rh.add( px, py );
+	bandPoly( d.fin, rh.x, rh.y, rh.n, TRUE, 12.0f * k, d.tint, d.app );
+	Real ang;
+	if( d.aim )
+	{
+		const Real f = d.t / 0.7f;
+		ang = ( (Real)floor( f ) + easeOut( MIN( 1.0f, ( f - (Real)floor( f ) ) / 0.25f ) ) ) * 0.5f * MARKER_PI;
+	}
+	else
+		ang = (Real)floor( d.tc / 0.7f + 1.0f ) * 0.5f * MARKER_PI;
+	const Real cs[ 4 ] = { a, 0.0f, -a, 0.0f }, cq[ 4 ] = { 0.0f, b, 0.0f, -b };
+	for( Int j = 0; j < 4; ++j )
+	{
+		const Real aa = ang + (Real)j * 0.5f * MARKER_PI;
+		Real s = 1.25f * R * (Real)cos( aa ) * 0.85f, q = 1.25f * R * (Real)sin( aa ) * 0.6f;
+		if( !d.aim )
+		{
+			s += ( cs[ j ] * 1.12f - s ) * d.snap;
+			q += ( cq[ j ] * 1.12f - q ) * d.snap;
+		}
+		const Real l = MAX( 1.0f, (Real)sqrt( s * s + q * q ) );
+		const Real os = s / l, oq = q / l;		// outward
+		Poly v;
+		d.along( s - os * 9.0f * k - oq * 11.0f * k, q - oq * 9.0f * k + os * 11.0f * k, px, py );	v.add( px, py );
+		d.along( s, q, px, py );																												v.add( px, py );
+		d.along( s - os * 9.0f * k + oq * 11.0f * k, q - oq * 9.0f * k - os * 11.0f * k, px, py );	v.add( px, py );
+		bandPoly( d.fin, v.x, v.y, v.n, FALSE, 6.0f * k, d.tint, d.app );
+	}
+	const Real ps[ 3 ] = { 0.12f * R, -0.25f * R, -0.25f * R }, pq[ 3 ] = { 0.0f, 0.25f * R, -0.25f * R };
+	for( Int i = 0; i < 3; ++i )
+	{
+		d.along( ps[ i ], pq[ i ], px, py );
+		const Bool lit = d.aim && (Int)floor( d.t * 3.0f ) % 3 == i;
+		part( P_SHAPE_TILE, px, py, h + 0.25f * MARKER_PI, ( i == 0 ? 24.0f : 16.0f ) * k, ( i == 0 ? 24.0f : 16.0f ) * k,
+					scaled( d.tint, lit ? 1.3f : 0.9f ), d.app );
+		if( i == 0 || d.aim )
+			continue;
+		const Real e = easeOut( ( d.tl - 0.8f ) / 1.2f );
+		if( d.tl > 0.8f )
+			for( Int s = 0; s < 24; ++s )
+			{
+				const Real a0 = 2.0f * MARKER_PI * (Real)s / 24.0f;
+				arcStrip( P_HAIR, px, py, 0.85f * R * e, 3.0f * k, a0, a0 + 0.6f * 2.0f * MARKER_PI / 24.0f, TRUE, d.tint, 0.75f * d.app, FALSE );
+			}
+	}
+}
+
+/// one marker's frame, by its design
+static void drawDesign( const Marker &m, Real R, Real t, Real tl, Real app, Real fade )
+{
+	DesignDraw d;
+	d.m = &m;
+	d.x = m.x;
+	d.y = m.y;
+	d.R = R;
+	d.k = m.k;
+	d.t = t;
+	d.tl = tl;
+	d.aim = tl < 0.0f;
+	d.tc = d.aim ? t : t - tl;
+	d.app = app;
+	d.fade = fade;
+	d.snap = d.aim ? 0.0f : easeOut( tl / 0.22f );
+	d.yaw = s_ctx.yaw;
+	d.fin = m.finish;
+	d.tint = m.tint;
+	if( m.lane )
+	{
+		d.hx = m.ux;
+		d.hy = m.uy;
+	}
+	else if( m.hx != 0.0f || m.hy != 0.0f )
+	{
+		d.hx = m.hx;
+		d.hy = m.hy;
+	}
+	else
+	{
+		d.hx = s_ctx.rx;
+		d.hy = s_ctx.ry;
+	}
+	// a countdown: the flight followSuperweapon reads, or the cannon's frames; else three seconds
+	if( m.missileSeen || m.super == SUPER_CANNON || m.impactMs != 0 )
+		d.frac = m.frac;
+	else
+		d.frac = d.aim ? 1.0f : MAX( 0.0f, 1.0f - tl / 3.0f );
+	d.impact = m.impactMs != 0 ? secondsSince( s_ctx.now, m.impactMs ) : -1.0f;
+
+	switch( m.design )
+	{
+		case DESIGN_PARADROP:		drawParadrop( d );		break;
+		case DESIGN_CRATE:			drawCrate( d );				break;
+		case DESIGN_LEAFLET:		drawLeaflet( d );			break;
+		case DESIGN_A10:				drawA10( d );					break;
+		case DESIGN_FUELAIR:		drawFuelAir( d );			break;
+		case DESIGN_SPYSAT:			drawSpySat( d );			break;
+		case DESIGN_SPYDRONE:		drawSpyDrone( d );		break;
+		case DESIGN_REPAIR:			drawRepair( d );			break;
+		case DESIGN_SPECTRE:		drawSpectre( d );			break;
+		case DESIGN_B3:					drawB3( d );					break;
+		case DESIGN_PARTICLE:		drawParticle( d );		break;
+		case DESIGN_LASER:			drawLaser( d );				break;
+		case DESIGN_CRUISE:			drawCruise( d );			break;
+		case DESIGN_AMBULANCE:	drawAmbulance( d );		break;
+		case DESIGN_COMANCHE:		drawComanche( d );		break;
+		case DESIGN_DEMINE:			drawDemine( d );			break;
+		case DESIGN_ARTILLERY:	drawArtillery( d );		break;
+		case DESIGN_MINES:			drawMines( d );				break;
+		case DESIGN_EMP:				drawEmp( d );					break;
+		case DESIGN_CCARPET:		drawChinaCarpet( d );	break;
+		case DESIGN_NAPALM:			drawNapalm( d );			break;
+		case DESIGN_FRENZY:			drawFrenzy( d );			break;
+		case DESIGN_NEUTRON:		drawNeutron( d );			break;
+		case DESIGN_HNAPALM:		drawHelixNapalm( d );	break;
+		case DESIGN_HNUKE:			drawHelixNuke( d );		break;
+		case DESIGN_TANKDROP:		drawTankDrop( d );		break;
+		case DESIGN_SCUD:				drawScud( d );				break;
+		case DESIGN_ANTHRAX:		drawAnthrax( d );			break;
+		case DESIGN_AMBUSH:			drawAmbush( d );			break;
+		case DESIGN_GPS:				drawGps( d );					break;
+		case DESIGN_RADAR:			drawRadar( d );				break;
+		case DESIGN_KARGU:			drawKargu( d );				break;
+		case DESIGN_UAV:				drawUav( d );					break;
+		case DESIGN_TAYFUN:			drawTayfun( d );			break;
+		case DESIGN_SWARM:			drawSwarm( d );				break;
+		case DESIGN_BLIND:			drawBlind( d );				break;
+		case DESIGN_RAPID:			drawRapid( d );				break;
+		case DESIGN_ALLYAID:		drawAllyAid( d );			break;
+		case DESIGN_COMMANDO:		drawCommando( d );		break;
+		default:								break;
+	}
 }
 
 static void drawMarker( const Marker &m )
@@ -2557,10 +5021,15 @@ static void drawMarker( const Marker &m )
 			drawLane( m, R, t, tl, app );
 		if( m.orbit )
 			drawOrbit( m, t, ( tl >= 0.0f ? 1.0f : 0.6f ) * app );
-		drawZone( m, R, t, tl, quiet, app );
-		if( m.super != SUPER_NONE && tl >= 0.0f )
-			drawCountdown( m, R, t, fade );
-		drawGlyph( m, t, tl, app );
+		if( m.design != DESIGN_NONE && !m.guarding )
+			drawDesign( m, R, t, tl, app, fade );
+		else
+		{
+			drawZone( m, R, t, tl, quiet, app );
+			if( m.super != SUPER_NONE && tl >= 0.0f )
+				drawCountdown( m, R, t, fade );
+			drawGlyph( m, t, tl, app );
+		}
 		drawDrops( m, R, t, app, fade );
 	}
 

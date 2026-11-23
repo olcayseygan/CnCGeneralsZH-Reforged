@@ -119,7 +119,8 @@
 // DEFINITIONS ////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 ///@todo: Remove these globals since we no longer need W3D to call them for us.
-extern void DoTrees(RenderInfoClass & rinfo);
+extern void DoTrees(RenderInfoClass & rinfo, Bool grass);
+extern void DoGrass(RenderInfoClass & rinfo);
 extern void DoShadows(RenderInfoClass & rinfo, Bool stencilPass);
 extern void DoParticles(RenderInfoClass & rinfo);
 
@@ -1310,11 +1311,21 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 	SHD_FLUSH;
 
 	// The Ray Traced level's shadowed point lights, before the trees: no level ever lit those.
-	if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
+	const Bool defaultPass = m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE;
+	if (defaultPass)
 		Direct3D11_Ray_Traced_Lights();
 
+	// The Ray Traced level's sun goes on before the batched trees too, which no level's sun ever
+	// shadowed (their program receives none): traced over them, a pine took its own needles' shade
+	// and came out 21 to 30% darker than at High.  The grass does receive, so it goes down first.
+	const Bool raysBeforeTrees = defaultPass && Direct3D11_Ray_Shade_Waiting();
+	if (raysBeforeTrees) {
+		DoGrass(rinfo);
+		Direct3D11_Ray_Traced_Shadows();
+	}
+
 	// Draw the trees last so they alpha blend onto everything correctly.
-	DoTrees(rinfo);
+	DoTrees(rinfo, !raysBeforeTrees);
 
 	//don't draw shadows in this mode because they interfere with destination alpha
 	if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE && !modernFullMirror)

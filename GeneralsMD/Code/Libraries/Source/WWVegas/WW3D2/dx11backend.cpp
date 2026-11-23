@@ -396,6 +396,10 @@ DX11BackendClass::DX11BackendClass()
 	RayFillShader = NULL;
 	RayTraceShader = NULL;
 	RayApplyShader = NULL;
+	RayApplySamplesShader = NULL;
+	RayShade = NULL;
+	RayShadeTarget = NULL;
+	RayShadeRead = NULL;
 	RayConstants = NULL;
 	RayApplyBlend = NULL;
 	RayApplyDepth = NULL;
@@ -4923,16 +4927,18 @@ void DX11BackendClass::Take_Frame_Constant_Writes(unsigned & writes, unsigned & 
 ** foot of its caster, spreads toward its far end and keeps that width at any zoom.  The multiply
 ** lands before the water and anything translucent goes down, the same place and the same
 ** multiply the map's receivers make (SHADOW_APPLY), its dark pixel guard read off a copy of the
-** scene.  A pine's far side is in its own shadow under the map and the rays alike (Heartland's
-** probe: 2066 rays stopped, 2070 for the map alone), and at a grey near 0.08 the guard keeps half
-** of that shadow off it; without the guard the pine read as darkened whole.  Only the opaque scene
-** takes the rays: everything drawn after them, into a mirror or a
+** scene.  The multiply goes on after the grass and before the batched trees (RTS3DScene::Flush),
+** whose program takes no sun shadow at any level: traced over, a pine's far side took its own
+** needles' shade and came out 21 to 30% darker than at High, the guard notwithstanding.  Only the
+** opaque scene takes the rays: everything drawn after them, into a mirror or a
 ** filter's target, keeps the map, which is why the map is still drawn.  A pass whose triangles or
 ** references overflowed their buffers reads its solid casters from the map too.
 **
-** ponytail: the mask is one ray a pixel over the resolved depth (sample 0), so under -msaa an edge
-** sample takes its pixel's shade, a one pixel fringe where a unit's edge crosses a shadow's.  A
-** per-sample trace and apply is the upgrade.
+** The mask is one ray a pixel over the resolved depth (sample 0).  Under -msaa the apply draws
+** its shade into a one sample target and a per-sample pass multiplies it on: a sample at sample
+** 0's depth takes its pixel's shade, any other its nearest-depth neighbour's, which took off the
+** one pixel fringe along every edge across a shadow.  ponytail: a sample with no neighbour on its
+** surface takes the closest in depth; a per-sample trace is the upgrade.
 */
 
 static const unsigned RAY_GRID = 512;							///< cells a side; RAY_PROGRAM_COMMON's GRID
@@ -5401,6 +5407,39 @@ static const char RAY_APPLY_PROGRAM[] =
 	"    return float4(shade, shade, shade, 1.0);\n"
 	"}\n";
 
+// A multisampled scene.  The apply above, drawn into a one sample shade target, gives the surface
+// of each pixel's sample 0, which the resolved depth holds; on a silhouette the pixel's other
+// samples are another surface, and given that shade they made a one pixel bright or dark line
+// along every edge across a shadow.  So the multiply runs per sample: a sample at sample 0's depth
+// takes its pixel's shade, any other the shade of the neighbour whose sample 0 lies nearest its
+// depth.
+static const char RAY_SAMPLES_PROGRAM[] =
+	"Texture2D<float> Shade : register(t0);\n"
+	"Texture2D<float> Depth : register(t1);\n"
+	"Texture2DMS<float> Samples : register(t2);\n"
+	"float4 main(float4 position : SV_Position, uint index : SV_SampleIndex) : SV_Target\n"
+	"{\n"
+	"    int2 pixel = int2(position.xy);\n"
+	"    uint width, height;\n"
+	"    Depth.GetDimensions(width, height);\n"
+	"    int2 last = int2(width, height) - 1;\n"
+	"    float own = Samples.Load(pixel, index);\n"
+	"    float centre = Depth.Load(int3(pixel, 0));\n"
+	"    int2 best = pixel;\n"
+	"    if (abs(own - centre) > 0.02 * (1.0 - min(centre, 0.999))) {\n"
+	"        float nearest = 2.0;\n"
+	"        [unroll] for (int y = -1; y <= 1; ++y) {\n"
+	"            [unroll] for (int x = -1; x <= 1; ++x) {\n"
+	"                int2 at = clamp(pixel + int2(x, y), int2(0, 0), last);\n"
+	"                float gap = abs(Depth.Load(int3(at, 0)) - own);\n"
+	"                if ((x != 0 || y != 0) && gap < nearest) { nearest = gap; best = at; }\n"
+	"            }\n"
+	"        }\n"
+	"    }\n"
+	"    float shade = Shade.Load(int3(best, 0));\n"
+	"    return float4(shade, shade, shade, 1.0);\n"
+	"}\n";
+
 static bool make_ray_buffer(ID3D11Device * device, unsigned elements, ID3D11Buffer ** buffer,
 	ID3D11UnorderedAccessView ** write, ID3D11ShaderResourceView ** read)
 {
@@ -5434,7 +5473,7 @@ bool DX11BackendClass::Make_Ray_Shadows()
 	}
 	ID3D11Device * device = Device->Get_Device();
 	const std::string common = RAY_PROGRAM_COMMON;
-	std::vector<unsigned char> capture, count, scan, block, fill, trace, apply;
+	std::vector<unsigned char> capture, count, scan, block, fill, trace, apply, samples;
 	bool made = Make_Depth_Resolve()		// its full screen triangle carries the shade
 		&& Compile_Program(RAY_CAPTURE_PROGRAM, "raycapture", "gs_5_0", capture)
 		&& Compile_Program(common + RAY_PROGRAM_CELLS + RAY_COUNT_PROGRAM, "raycount", "cs_5_0", count)
@@ -5442,7 +5481,8 @@ bool DX11BackendClass::Make_Ray_Shadows()
 		&& Compile_Program(common + RAY_BLOCK_PROGRAM, "rayblock", "cs_5_0", block)
 		&& Compile_Program(common + RAY_PROGRAM_CELLS + RAY_FILL_PROGRAM, "rayfill", "cs_5_0", fill)
 		&& Compile_Program(common + RAY_TRACE_READS + RAY_PROGRAM_SURFACE + RAY_TRACE_PROGRAM, "raytrace", "cs_5_0", trace)
-		&& Compile_Program(common + RAY_APPLY_READS + RAY_PROGRAM_SURFACE + RAY_APPLY_PROGRAM, "rayapply", "ps_5_0", apply);
+		&& Compile_Program(common + RAY_APPLY_READS + RAY_PROGRAM_SURFACE + RAY_APPLY_PROGRAM, "rayapply", "ps_5_0", apply)
+		&& Compile_Program(RAY_SAMPLES_PROGRAM, "raysamples", "ps_5_0", samples);
 
 	if (made) {
 		D3D11_SO_DECLARATION_ENTRY entry;
@@ -5459,7 +5499,8 @@ bool DX11BackendClass::Make_Ray_Shadows()
 			&& SUCCEEDED(device->CreateComputeShader(&block[0], block.size(), NULL, &RayBlockShader))
 			&& SUCCEEDED(device->CreateComputeShader(&fill[0], fill.size(), NULL, &RayFillShader))
 			&& SUCCEEDED(device->CreateComputeShader(&trace[0], trace.size(), NULL, &RayTraceShader))
-			&& SUCCEEDED(device->CreatePixelShader(&apply[0], apply.size(), NULL, &RayApplyShader));
+			&& SUCCEEDED(device->CreatePixelShader(&apply[0], apply.size(), NULL, &RayApplyShader))
+			&& SUCCEEDED(device->CreatePixelShader(&samples[0], samples.size(), NULL, &RayApplySamplesShader));
 	}
 
 	if (made) {
@@ -5559,6 +5600,8 @@ void DX11BackendClass::Release_Ray_Shadows()
 		(IUnknown **)&RayCells[4], (IUnknown **)&RayCellWrites[5], (IUnknown **)&RayCellReads[5],
 		(IUnknown **)&RayCells[5],
 		(IUnknown **)&RayFillShader, (IUnknown **)&RayTraceShader, (IUnknown **)&RayApplyShader,
+		(IUnknown **)&RayApplySamplesShader, (IUnknown **)&RayShadeTarget, (IUnknown **)&RayShadeRead,
+		(IUnknown **)&RayShade,
 		(IUnknown **)&RayConstants, (IUnknown **)&RayApplyBlend, (IUnknown **)&RayApplyDepth,
 		(IUnknown **)&RayApplyRasterizer, (IUnknown **)&RayMaskWrite, (IUnknown **)&RayMaskRead,
 		(IUnknown **)&RayMask,
@@ -5674,8 +5717,9 @@ bool DX11BackendClass::Make_Ray_Mask()
 	if (RayMask != NULL && RayMaskWidth == width && RayMaskHeight == height) {
 		return true;
 	}
-	IUnknown ** const mask[] = { (IUnknown **)&RayMaskWrite, (IUnknown **)&RayMaskRead, (IUnknown **)&RayMask };
-	for (unsigned index = 0; index < 3; ++index) {
+	IUnknown ** const mask[] = { (IUnknown **)&RayMaskWrite, (IUnknown **)&RayMaskRead, (IUnknown **)&RayMask,
+		(IUnknown **)&RayShadeTarget, (IUnknown **)&RayShadeRead, (IUnknown **)&RayShade };
+	for (unsigned index = 0; index < 6; ++index) {
 		if (*mask[index] != NULL) {
 			(*mask[index])->Release();
 			*mask[index] = NULL;
@@ -5692,9 +5736,15 @@ bool DX11BackendClass::Make_Ray_Mask()
 	description.Usage = D3D11_USAGE_DEFAULT;
 	description.BindFlags = D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE;
 	ID3D11Device * device = Device->Get_Device();
+	D3D11_TEXTURE2D_DESC shade = description;
+	shade.Format = DXGI_FORMAT_R16_FLOAT;
+	shade.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 	if (FAILED(device->CreateTexture2D(&description, NULL, &RayMask))
 			|| FAILED(device->CreateUnorderedAccessView(RayMask, NULL, &RayMaskWrite))
-			|| FAILED(device->CreateShaderResourceView(RayMask, NULL, &RayMaskRead))) {
+			|| FAILED(device->CreateShaderResourceView(RayMask, NULL, &RayMaskRead))
+			|| FAILED(device->CreateTexture2D(&shade, NULL, &RayShade))
+			|| FAILED(device->CreateRenderTargetView(RayShade, NULL, &RayShadeTarget))
+			|| FAILED(device->CreateShaderResourceView(RayShade, NULL, &RayShadeRead))) {
 		Note_Refusal("the device refused the ray traced shadows' mask");
 		Release_Ray_Shadows();
 		RayShadowsRefused = true;
@@ -5712,6 +5762,11 @@ bool DX11BackendClass::Make_Ray_Mask()
 bool DX11BackendClass::Ray_Shade_Pending() const
 {
 	return RayCaptured && CurrentTarget == NULL && SceneViewThisFrame && SceneProjection[11] != 0.0f;
+}
+
+bool DX11BackendClass::Ray_Shade_Waiting() const
+{
+	return Ray_Shade_Pending() && !ShadowMapBound;
 }
 
 bool DX11BackendClass::Ray_Draw_Is_Cut() const
@@ -5818,7 +5873,7 @@ bool DX11BackendClass::Trace_Ray_Shadows()
 		return false;
 	}
 	// The question the opaque scene's draws asked, so a frame the rays do not shade drew with the map.
-	const bool pending = Ray_Shade_Pending() && !ShadowMapBound;
+	const bool pending = Ray_Shade_Waiting();
 	// Whatever happens to the rays, what is drawn from here takes the map.
 	RayCaptured = false;
 	Note_Shadow_State_Changed();
@@ -5929,7 +5984,22 @@ bool DX11BackendClass::Trace_Ray_Shadows()
 	context->PSSetShader(RayApplyShader, NULL, 0);
 	context->PSSetConstantBuffers(0, 1, &RayConstants);
 	ID3D11ShaderResourceView * apply_reads[3] = { RayMaskRead, depth, SceneColourCopyView };
-	context->PSSetShaderResources(0, 3, apply_reads);
+	ID3D11ShaderResourceView * samples = Device->Scene_Is_Multisampled() ? Device->Get_Multisampled_Depth_Texture() : NULL;
+	if (samples != NULL) {
+		// The shade at sample 0 into its own target, then a multiply per sample (RAY_SAMPLES_PROGRAM).
+		context->OMSetRenderTargets(1, &RayShadeTarget, NULL);
+		context->OMSetBlendState(NULL, NULL, 0xffffffff);
+		context->PSSetShaderResources(0, 3, apply_reads);
+		context->Draw(3, 0);
+		context->PSSetShaderResources(0, 3, no_reads);
+		context->OMSetRenderTargets(1, &scene, NULL);
+		context->OMSetBlendState(RayApplyBlend, NULL, 0xffffffff);
+		ID3D11ShaderResourceView * sample_reads[3] = { RayShadeRead, depth, samples };
+		context->PSSetShader(RayApplySamplesShader, NULL, 0);
+		context->PSSetShaderResources(0, 3, sample_reads);
+	} else {
+		context->PSSetShaderResources(0, 3, apply_reads);
+	}
 	context->Draw(3, 0);
 	context->PSSetShaderResources(0, 3, no_reads);
 

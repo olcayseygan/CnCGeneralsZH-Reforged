@@ -1044,6 +1044,11 @@ void Direct3D11_Ray_Traced_Shadows()
 	}
 }
 
+bool Direct3D11_Ray_Shade_Waiting()
+{
+	return Active && Backend.Ray_Shade_Waiting();
+}
+
 std::string Direct3D11_Ray_Shadow_Report()
 {
 	return Active ? Backend.Ray_Shadow_Report() : std::string("no Direct3D 11 backend");

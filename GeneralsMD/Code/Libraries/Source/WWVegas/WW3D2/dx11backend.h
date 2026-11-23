@@ -448,6 +448,7 @@ public:
 	// Off, none of it is made or bound.
 	void Set_Ray_Traced_Shadows(bool wanted) { RayShadowsWanted = wanted; }
 	bool Trace_Ray_Shadows();
+	bool Ray_Shade_Waiting() const;		///< what Trace_Ray_Shadows asks before it traces
 	std::string Ray_Shadow_Report();
 	// The Ambient Occlusion option's half size term from hemisphere rays through the ray grid, at the
 	// Ray Traced level on a frame that built it (dx11rayao.cpp); NULL leaves the option's own first
@@ -807,6 +808,10 @@ private:
 	ID3D11ComputeShader * RayFillShader;
 	ID3D11ComputeShader * RayTraceShader;
 	ID3D11PixelShader * RayApplyShader;
+	ID3D11PixelShader * RayApplySamplesShader;	///< a multisampled scene's multiply, per sample, off RayShade
+	ID3D11Texture2D * RayShade;					///< the apply's one sample shade under a multisampled scene, at RayMask's size
+	ID3D11RenderTargetView * RayShadeTarget;
+	ID3D11ShaderResourceView * RayShadeRead;
 	ID3D11Buffer * RayConstants;
 	ID3D11BlendState * RayApplyBlend;
 	ID3D11DepthStencilState * RayApplyDepth;

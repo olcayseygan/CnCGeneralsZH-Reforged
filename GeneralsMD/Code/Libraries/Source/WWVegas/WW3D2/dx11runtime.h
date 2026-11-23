@@ -326,6 +326,9 @@ void Direct3D11_Ambient_Occlusion();
 // water, and does nothing on a frame whose caster pass did not stream.  The report is one line.
 void Direct3D11_Set_Ray_Traced_Shadows(bool wanted);
 void Direct3D11_Ray_Traced_Shadows();
+// True while this frame's sun rays wait for the opaque scene: RTS3DScene::Flush then traces them
+// after the grass and before the batched trees, which take no sun shadow at any level.
+bool Direct3D11_Ray_Shade_Waiting();
 // The scene's point lights with shadows (DX11BackendClass::Trace_Ray_Lights), called once the
 // opaque world is down and before the batched trees, which took no point light at any level, and
 // so before the sun's trace, whose dark pixel guard reads the lit scene as it read the programs'.

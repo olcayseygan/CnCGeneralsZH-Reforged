@@ -3808,6 +3808,15 @@ GameMessageDisposition CommandTranslator::translateGameMessage(const GameMessage
 				cancelledSomething = TRUE;
 			}
 
+			// and a watcher who has only picked a player, on the standings or the queue, lets go of him
+			if( cancelledSomething == FALSE && !TheInGameUI->isQuitMenuVisible() && !ThePlayerList->getLocalPlayer()->isPlayerActive()
+					&& ( TheControlBar->getObserverLookAtPlayer() != NULL || TheObserverCamera.getFollowedPlayerIndex() != ObserverCamera::NO_PLAYER ) )
+			{
+				TheObserverCamera.followPlayer( ObserverCamera::NO_PLAYER );
+				TheControlBar->watchPlayer( NULL );
+				cancelledSomething = TRUE;
+			}
+
 			if( cancelledSomething == FALSE )
 				ToggleQuitMenu();
 

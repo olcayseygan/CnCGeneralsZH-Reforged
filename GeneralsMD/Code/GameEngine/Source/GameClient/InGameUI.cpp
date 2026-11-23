@@ -2985,12 +2985,34 @@ static std::vector< SpectatorStats > theRackStats;		///< ranked by the picked st
 static UnsignedInt theRackStatsFrame = 0;
 static Int theRackStatsStat = -1;
 
+/// The standings' rows at 1080: RACK_ROW_H while the seats fit, closer down to RACK_ROW_MIN as more come
+/// (32 seats take 18 each), and past that a window of them the wheel moves over the ranking, first the
+/// rank at its top.  The last draw's, for the clicks and the wheel.
+enum { RACK_ROW_MIN = 18 };
+static Real theRackRowH = 30.0f;
+static Int theRackFirst = 0;
+static Int theRackRanked = 0;
+
+/// a length inside a standings row, at 1080 for a full RACK_ROW_H row, on this screen at the row's height
+static Int rackRowPx( Real at1080 );
+
 static UnicodeString broadcastNumber( const char *prefix, Int value );
 
 /// a rack length at 1080, on this screen: the HUD's own scale, the one stripPixels uses
 static Int rackPx( Real at1080 )
 {
 	return REAL_TO_INT_FLOOR( at1080 * ControlBarHudPageScale() / 1.8f + 0.5f );
+}
+
+static Int rackRowPx( Real at1080 )
+{
+	return rackPx( at1080 * theRackRowH / RACK_ROW_H );
+}
+
+/// a standings row's top, the window's first row 0
+static Int rackRowTop( Int rows, Int row )
+{
+	return rows + rackPx( theRackRowH * row );
 }
 
 static const Image *rackPiece( const char *name )
@@ -3216,16 +3238,37 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 
 	m_rackX = hudPlay().hi.x - rackPx( RACK_W );
 	m_rackY = plateTop - rackPx( RACK_SKIRT );
-	m_rackRows = min( (Int)theRackStats.size(), (Int)RACK_ROWS );
 	const RackPlace at = rackPlace( m_rackX, m_rackY, m_rackArmies );
+
+	// as many rows as the room down to the selection panel takes at RACK_ROW_H, closer as more seats come,
+	// and past RACK_ROW_MIN a window of them that the wheel moves (handleSpectatorRackWheel)
+	theRackRanked = min( (Int)theRackStats.size(), (Int)RACK_ROWS );
+	Int lowest = TheDisplay->getHeight();
+	static NameKeyType rightKey = NAMEKEY( "ControlBar.wnd:RightHUD" );
+	if( GameWindow *right = TheWindowManager->winGetWindowFromId( NULL, rightKey ) )
+	{
+		Int x = 0, y = 0;
+		right->winGetScreenPosition( &x, &y );
+		if( y > at.rows )
+			lowest = min( lowest, y );
+	}
+	// the selection panel's ledge stands about 40 over its window
+	const Real room1080 = max( (Real)( lowest - at.rows - rackPx( RACK_FOOT_SOLID + RACK_SKIRT + 48 ) ), 0.0f ) * 1.8f / ControlBarHudPageScale();
+	theRackRowH = theRackRanked > 0 ? max( (Real)RACK_ROW_MIN, min( (Real)RACK_ROW_H, room1080 / theRackRanked ) ) : (Real)RACK_ROW_H;
+	m_rackRows = min( theRackRanked, max( REAL_TO_INT_FLOOR( room1080 / theRackRowH ), 1 ) );
+	theRackFirst = max( 0, min( theRackFirst, theRackRanked - m_rackRows ) );
+	const Real squeeze = theRackRowH / RACK_ROW_H;		///< 1 for a full row
+	auto rowPx = []( Real at1080 ) { return rackRowPx( at1080 ); };
+	auto ranked = [ & ]( Int row ) -> const SpectatorStats & { return theRackStats[ theRackFirst + row ]; };
+
 	const Int X = at.x, Y = at.y, Y2 = at.standings, rows = m_rackRows;
 	const ICoord2D mouse = TheMouse->getMouseStatus()->pos;
 	const Int followed = TheObserverCamera.getFollowedPlayerIndex();
-	auto rowTop = [ &at ]( Int row ) { return at.rows + rackPx( RACK_ROW_H * row ); };
+	auto rowTop = [ &at ]( Int row ) { return rackRowTop( at.rows, row ); };
 
-	// the most a stat's number is, which the meters are a share of
+	// the most a stat's number is, which the meters are a share of: the leader's, scrolled off or not
 	Int highest = 0;
-	for( Int row = 0; row < rows; row++ )
+	for( Int row = 0; row < theRackRanked; row++ )
 		highest = max( highest, theRackStats[ row ].*SPECTATOR_STATS[ m_rackStat ].value );
 	if( highest <= 0 )
 		highest = 1;
@@ -3239,12 +3282,20 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 	for( Int row = 0; row < rows; row++ )
 	{
 		const Int top = rowTop( row );
-		const Player *player = theRackStats[ row ].player;
+		const Player *player = ranked( row ).player;
 		m_rackRowPlayer[ row ] = player->getPlayerIndex();
 		const Bool on = m_rackRowPlayer[ row ] == followed;
-		const Bool hover = !on && rackInside( mouse, at.tabs + rackTabOut( at, FALSE, TRUE ), top + rackPx( 3 ), at.right, top + rackPx( 27 ) );
+		const Bool hover = !on && rackInside( mouse, at.tabs + rackTabOut( at, FALSE, TRUE ), top + rowPx( 3 ), at.right, top + rowPx( 27 ) );
 		rowHover[ row ] = hover;
 		const Color colour = rackColour( player );
+		// a closer row takes the tab and its eye squeezed to its height
+		auto rowPiece = [ & ]( const char *name, Int x, Int y, Color tint, Bool keepShape )
+		{
+			const Image *piece = rackPiece( name );
+			const Int h = REAL_TO_INT( rackPx( piece->getImageHeight() ) * squeeze + 0.5f );
+			const Int w = keepShape ? REAL_TO_INT( rackPx( piece->getImageWidth() ) * squeeze + 0.5f ) : rackPx( piece->getImageWidth() );
+			drawRackPiece( name, x, y, max( w, 1 ), max( h, 1 ), tint );
+		};
 		if( at.steel )
 		{
 			// the red lamp is on air: RackTabOn and the open eye only while his own screen is on ours.  Followed
@@ -3252,35 +3303,37 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 			// out as far as a followed one, in its hover piece moved left by the hover body's offset, plain eye
 			const Bool onAir = on && TheObserverCamera.isShowingPlayerView();
 			const Int shift = on && !onAir ? rackTabOut( at, FALSE, TRUE ) - rackTabOut( at, TRUE, FALSE ) : 0;
-			drawRackPiece( onAir ? "RackTabOn" : ( on || hover ? "RackTabH" : "RackTab" ), at.tabs - shift, top + rackPx( 2 ) );
-			drawRackPiece( onAir ? "RackEyeOn" : "RackEye", at.tabs + rackTabOut( at, on, hover ) + rackPx( RACK_EYE_IN_TAB ),
-				top + rackPx( RACK_EYE_TOP ), 0, 0, colour );
+			rowPiece( onAir ? "RackTabOn" : ( on || hover ? "RackTabH" : "RackTab" ), at.tabs - shift, top + rowPx( 2 ), 0xFFFFFFFF, FALSE );
+			rowPiece( onAir ? "RackEyeOn" : "RackEye", at.tabs + rackTabOut( at, on, hover ) + rackPx( RACK_EYE_IN_TAB ),
+				top + rowPx( RACK_EYE_TOP ), colour, TRUE );
 		}
 		else
 		{
-			drawRackPiece( on ? "RackTabOn" : ( hover ? "RackTabH" : "RackTab" ), at.tabs, top + rackPx( 2 ) );
-			drawRackPiece( "RackLens", at.tabs + rackTabOut( at, on, hover ) + rackPx( 4 ), top + rackPx( 9 ), 0, 0, colour );
+			rowPiece( on ? "RackTabOn" : ( hover ? "RackTabH" : "RackTab" ), at.tabs, top + rowPx( 2 ), 0xFFFFFFFF, FALSE );
+			rowPiece( "RackLens", at.tabs + rackTabOut( at, on, hover ) + rackPx( 4 ), top + rowPx( 9 ), colour, TRUE );
 		}
 	}
 
 	if( m_rackArmies )
 	{
 		drawRackPiece( "DrawerTop", at.drawer, at.rows - rackPx( RACK_DRAWER_TOP_H ) );
+		const Image *drawerRow = rackPiece( "DrawerRow" );
 		for( Int row = 0; row < rows; row++ )
-			drawRackPiece( "DrawerRow", at.drawer, rowTop( row ) );
+			drawRackPiece( "DrawerRow", at.drawer, rowTop( row ), rackPx( drawerRow->getImageWidth() ), rowTop( row + 1 ) - rowTop( row ) );
 		drawRackPiece( "DrawerBottom", at.drawer, rowTop( rows ) );
 		for( Int row = 0; row < rows; row++ )
 		{
 			std::vector< UnitCount > &kinds = units[ row ];
-			kinds.assign( theRackStats[ row ].units.begin(), theRackStats[ row ].units.end() );
+			kinds.assign( ranked( row ).units.begin(), ranked( row ).units.end() );
 			std::stable_sort( kinds.begin(), kinds.end(), []( const UnitCount &a, const UnitCount &b ) { return a.second > b.second; } );
 			if( kinds.size() > RACK_ARMY_UNITS )
 				kinds.resize( RACK_ARMY_UNITS );
 			const Int top = rowTop( row );
+			// a closer row's cameos keep their shape, smaller, from the drawer's left
 			for( Int cell = 0; cell < (Int)kinds.size(); cell++ )
 				TheDisplay->drawImage( kinds[ cell ].first->getButtonImage(),
-					at.drawer + rackPx( 22 + 39 * cell ) + 1, top + rackPx( 3 ) + 1,
-					at.drawer + rackPx( 58 + 39 * cell ) - 1, top + rackPx( 27 ) - 1 );
+					at.drawer + rackPx( 22 + 39 * squeeze * cell ) + 1, top + rowPx( 3 ) + 1,
+					at.drawer + rackPx( 22 + 39 * squeeze * cell + 36 * squeeze ) - 1, top + rowPx( 27 ) - 1 );
 		}
 	}
 
@@ -3323,8 +3376,10 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 	const Int hoverKey = rackKeyAt( mouse, at );
 	drawRackPiece( "RackTop", X, Y2 );
 	drawRackPiece( "RackHead", X, Y2 + rackPx( RACK_HEAD_TOP ) );
+	// a closer row is the row piece squeezed, or ObserverProRackRowCompact once the sheet draws one
+	const char *rowName = squeeze < 1.0f && rackPiece( "RackRowCompact" ) != NULL ? "RackRowCompact" : "RackRow";
 	for( Int row = 0; row < rows; row++ )
-		drawRackPiece( "RackRow", X, rowTop( row ) );
+		drawRackPiece( rowName, X, rowTop( row ), rackPx( RACK_W ), rowTop( row + 1 ) - rowTop( row ) );
 	drawRackPiece( "RackBottom", X, rowTop( rows ) );
 	for( Int key = 0; key < SPECTATOR_STAT_COUNT; key++ )
 	{
@@ -3335,15 +3390,27 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 	for( Int row = 0; row < rows; row++ )
 	{
 		const Int top = rowTop( row );
-		const SpectatorStats &stats = theRackStats[ row ];
+		const SpectatorStats &stats = ranked( row );
 		const Color colour = rackColour( stats.player );
-		drawRackPiece( "RackMeter", X + rackPx( 22 ), top + rackPx( 4 ), rackPx( 3 ), rackPx( 22 ), colour );
+		drawRackPiece( "RackMeter", X + rackPx( 22 ), top + rowPx( 4 ), rackPx( 3 ), rowPx( 22 ), colour );
+		// the badge keeps its shape in a closer row, centred where the full one stands
+		const Int badgeW = rackPx( 30 * squeeze ), badgeX = X + rackPx( 57 ) - badgeW / 2;
 		TheDisplay->drawImage( stats.player->getPlayerTemplate()->getEnabledImage(),
-			X + rackPx( 42 ), top + rackPx( 5 ), X + rackPx( 72 ), top + rackPx( 25 ) );
+			badgeX, top + rowPx( 5 ), badgeX + badgeW, top + rowPx( 25 ) );
 		const Real share = max( stats.*SPECTATOR_STATS[ m_rackStat ].value, 0 ) / (Real)highest;
 		const Int fill = REAL_TO_INT_FLOOR( rackPx( 216 ) * share );
 		if( fill > 0 )
-			drawRackPiece( "RackMeter", X + rackPx( 76 ), top + rackPx( 23 ), fill, rackPx( 2 ), colour );
+			drawRackPiece( "RackMeter", X + rackPx( 76 ), top + rowPx( 23 ), fill, max( rowPx( 2 ), 1 ), colour );
+	}
+	// more seats than rows: a groove down the standings' right edge with the window's share of the ranking
+	if( rows < theRackRanked )
+	{
+		const Int grooveX = X + rackPx( RACK_WELL_RIGHT + 2 ), grooveW = max( rackPx( 3 ), 2 );
+		const Int grooveTop = rowTop( 0 ) + rowPx( 2 ), grooveH = rowTop( rows ) - rowPx( 2 ) - grooveTop;
+		TheDisplay->drawFillRect( grooveX, grooveTop, grooveW, grooveH, GameMakeColor( 6, 9, 15, 230 ) );
+		const Int thumbTop = grooveTop + grooveH * theRackFirst / theRackRanked;
+		const Int thumbH = max( grooveH * rows / theRackRanked, rackPx( 6 ) );
+		TheDisplay->drawFillRect( grooveX, thumbTop, grooveW, min( thumbH, grooveTop + grooveH - thumbTop ), LIT );
 	}
 	TheDisplay->endBatch2D();
 
@@ -3353,8 +3420,8 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 		const Bool on = m_rackRowPlayer[ row ] == followed;
 		if( !on && !rowHover[ row ] )
 			continue;
-		const Int left = X + rackPx( RACK_WELL_LEFT ), top = rowTop( row ) + rackPx( RACK_WELL_TOP );
-		const Int width = rackPx( RACK_WELL_RIGHT - RACK_WELL_LEFT ), height = rackPx( RACK_WELL_BOTTOM - RACK_WELL_TOP );
+		const Int left = X + rackPx( RACK_WELL_LEFT ), top = rowTop( row ) + rowPx( RACK_WELL_TOP );
+		const Int width = rackPx( RACK_WELL_RIGHT - RACK_WELL_LEFT ), height = rowPx( RACK_WELL_BOTTOM - RACK_WELL_TOP );
 		TheDisplay->drawOpenRect( left, top, width, height, 1.0f, on ? LIT : GOLD );
 		if( on )
 			TheDisplay->drawOpenRect( left + 1, top + 1, width - 2, height - 2, 1.0f, GameMakeColor( 194, 160, 86, 160 ) );
@@ -3412,7 +3479,7 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 	{
 		const Int top = rowTop( row );
 		const Bool on = m_rackRowPlayer[ row ] == followed;
-		if( rackInside( mouse, at.tabs + rackTabOut( at, on, !on ), top + rackPx( 3 ), at.right, top + rackPx( 27 ) ) )
+		if( rackInside( mouse, at.tabs + rackTabOut( at, on, !on ), top + rowPx( 3 ), at.right, top + rowPx( 27 ) ) )
 			hoverLabel = on && camera == OBSERVER_CAMERA_PLAYER ? "GUI:HudCamHintRowLive" : "GUI:HudCamHintRow";
 	}
 	drawRackStatus( X + rackPx( at.steel ? RACK_STATUS_LEFT : RACK_WELL_LEFT ), Y + rackPx( RACK_STATUS_TOP ),
@@ -3438,17 +3505,20 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 
 	// the losses beside the kills are not one of the kept strings; the common frame's pool lends one
 	DirectStrikeTheme::begin( DirectStrikeTheme::SIDE_COMMON, ControlBarHudPageScale() / 1.8f );
-	GameFont *lossFont = TheFontLibrary->getFont( m_superweaponNormalFont, max( rackPx( 12 * 0.75f ), 1 ), TRUE );
+	// a closer row writes smaller, never under RACK_MIN_PX
+	auto rowType = [ squeeze ]( Int px ) { return max( (Int)RACK_MIN_PX, REAL_TO_INT( px * squeeze + 0.5f ) ); };
+	GameFont *lossFont = TheFontLibrary->getFont( m_superweaponNormalFont, max( rackPx( rowType( 12 ) * 0.75f ), 1 ), TRUE );
 	const Color LOSS = GameMakeColor( 226, 92, 78, 255 );
 	const Color SURPLUS = GameMakeColor( 96, 214, 104, 255 );
 	for( Int row = 0; row < rows; row++ )
 	{
 		const Int top = rowTop( row );
-		const SpectatorStats &stats = theRackStats[ row ];
+		const SpectatorStats &stats = ranked( row );
+		const Int line = top + rowPx( squeeze < 1.0f ? 1 : 2 ), lineBottom = top + rowPx( 22 );
 		UnicodeString place;
-		place.format( u"%d", row + 1 );
-		drawRackText( rackText( RACK_TEXT_PLACE + row, place, 13, 0 ), X + rackPx( 26 ), top + rackPx( 2 ), X + rackPx( 40 ), top + rackPx( 28 ), 0,
-			RACK_ALIGN_CENTRE, row == 0 ? GOLD : GREY );
+		place.format( u"%d", theRackFirst + row + 1 );
+		drawRackText( rackText( RACK_TEXT_PLACE + row, place, rowType( 13 ), 0 ), X + rackPx( 26 ), top + rowPx( 2 ), X + rackPx( 40 ), top + rowPx( 28 ), 0,
+			RACK_ALIGN_CENTRE, theRackFirst + row == 0 ? GOLD : GREY );
 		// kills white with the losses after them in red; a power surplus green, a brown-out red
 		const Int SpectatorStats::*field = SPECTATOR_STATS[ m_rackStat ].value;
 		Int valueRight = X + rackPx( 294 - 4 );
@@ -3461,33 +3531,34 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 				Int lossWidth = 0, lossHeight = 0;
 				lossText->getSize( &lossWidth, &lossHeight );
 				valueRight -= lossWidth;
-				drawRackText( lossText, valueRight, top + rackPx( 3 ), valueRight + lossWidth, top + rackPx( 23 ), 0, RACK_ALIGN_LEFT, LOSS );
+				drawRackText( lossText, valueRight, line, valueRight + lossWidth, lineBottom, 0, RACK_ALIGN_LEFT, LOSS );
 			}
 		}
 		Color valueColour = WHITE;
 		if( field == &SpectatorStats::power )
 			valueColour = stats.power < 0 ? LOSS : SURPLUS;
 		// the number first, so the name gets the room it leaves
-		DisplayString *value = rackText( RACK_TEXT_VALUE + row, rackValueText( m_rackStat, stats ), 16, rackPx( 114 - 12 ) );
+		DisplayString *value = rackText( RACK_TEXT_VALUE + row, rackValueText( m_rackStat, stats ), rowType( 16 ), rackPx( 114 - 12 ) );
 		Int valueWidth = 0, valueHeight = 0;
 		value->getSize( &valueWidth, &valueHeight );
-		drawRackText( value, valueRight - valueWidth, top + rackPx( 2 ), valueRight, top + rackPx( 22 ), 0, RACK_ALIGN_RIGHT, valueColour );
-		drawRackText( rackText( RACK_TEXT_NAME + row, stats.player->getPlayerDisplayName(), 14,
+		drawRackText( value, valueRight - valueWidth, line, valueRight, lineBottom, 0, RACK_ALIGN_RIGHT, valueColour );
+		drawRackText( rackText( RACK_TEXT_NAME + row, stats.player->getPlayerDisplayName(), rowType( 14 ),
 			max( valueRight - X - rackPx( 76 + 6 ) - valueWidth, 1 ) ),
-			X + rackPx( 76 ), top + rackPx( 2 ), X + rackPx( 190 ), top + rackPx( 22 ), 0, RACK_ALIGN_LEFT, rackColour( stats.player ) );
+			X + rackPx( 76 ), line, X + rackPx( 190 ), lineBottom, 0, RACK_ALIGN_LEFT, rackColour( stats.player ) );
 
 		// each kind's count on a dark plate in its cell's bottom right
 		for( Int cell = 0; cell < (Int)units[ row ].size(); cell++ )
 		{
 			UnicodeString count;
 			count.format( u"%d", units[ row ][ cell ].second );
-			DisplayString *text = rackText( RACK_TEXT_UNITS + row * RACK_ARMY_UNITS + cell, count, 10, 0 );
+			DisplayString *text = rackText( RACK_TEXT_UNITS + row * RACK_ARMY_UNITS + cell, count, rowType( 10 ), 0 );
 			Int width = 0, height = 0;
 			text->getSize( &width, &height );
-			const Int cellRight = at.drawer + rackPx( 58 + 39 * cell ), cellBottom = top + rackPx( 27 );
-			const Int plateLeft = cellRight - width - rackPx( 5 ), plateTopY = cellBottom - rackPx( 12 );
-			TheDisplay->drawFillRect( plateLeft, plateTopY, cellRight - rackPx( 2 ) - plateLeft, rackPx( 10 ), GameMakeColor( 6, 9, 15, 230 ) );
-			drawRackText( text, plateLeft, plateTopY, cellRight - rackPx( 3 ), plateTopY + rackPx( 10 ), 0, RACK_ALIGN_RIGHT, WHITE );
+			const Int cellRight = at.drawer + rackPx( 22 + 39 * squeeze * cell + 36 * squeeze ), cellBottom = top + rowPx( 27 );
+			const Int plateH = rackPx( rowType( 10 ) );
+			const Int plateLeft = cellRight - width - rackPx( 3 ), plateTopY = cellBottom - plateH - rackPx( 1 );
+			TheDisplay->drawFillRect( plateLeft, plateTopY, cellRight - plateLeft, plateH, GameMakeColor( 6, 9, 15, 230 ) );
+			drawRackText( text, plateLeft, plateTopY, cellRight - rackPx( 1 ), plateTopY + plateH, 0, RACK_ALIGN_RIGHT, WHITE );
 		}
 	}
 	m_rackShown = TRUE;
@@ -3610,16 +3681,16 @@ Bool InGameUI::handleSpectatorRackClick( const ICoord2D *mouse, Bool act )
 
 	const RackPlace at = rackPlace( m_rackX, m_rackY, m_rackArmies );
 	const Int X = at.x, Y = at.y;
-	const Int foot = at.rows + rackPx( RACK_ROW_H * m_rackRows + RACK_FOOT_SOLID );
+	const Int foot = rackRowTop( at.rows, m_rackRows ) + rackPx( RACK_FOOT_SOLID );
 	const Int followed = TheObserverCamera.getFollowedPlayerIndex();
 
 	// a row's tab with the whole row: his screen on the camera; the same row again while it is on lets
 	// go, and while the camera has fallen off him (scrolled, or the lever moved) takes it again
 	for( Int row = 0; row < m_rackRows; row++ )
 	{
-		const Int top = at.rows + rackPx( RACK_ROW_H * row );
+		const Int top = rackRowTop( at.rows, row );
 		const Bool on = m_rackRowPlayer[ row ] == followed;
-		if( !rackInside( *mouse, at.tabs + rackTabOut( at, on, !on ), top + rackPx( 3 ), at.right, top + rackPx( 27 ) ) )
+		if( !rackInside( *mouse, at.tabs + rackTabOut( at, on, !on ), top + rackRowPx( 3 ), at.right, top + rackRowPx( 27 ) ) )
 			continue;
 		if( act && on && TheObserverCamera.getMode() == OBSERVER_CAMERA_PLAYER )
 			letGoOfPlayerCamera();
@@ -3659,8 +3730,12 @@ Bool InGameUI::handleSpectatorRackWheel( const ICoord2D *mouse, Real notches )
 	if( !handleSpectatorRackClick( mouse, FALSE ) )
 		return FALSE;
 	// down the wheel is the next key to the right, round to the first after the last
-	if( notches != 0.0f && rackOverHead( *mouse, rackPlace( m_rackX, m_rackY, m_rackArmies ) ) )
+	const RackPlace at = rackPlace( m_rackX, m_rackY, m_rackArmies );
+	if( notches != 0.0f && rackOverHead( *mouse, at ) )
 		m_rackStat = ( m_rackStat + ( notches < 0.0f ? 1 : SPECTATOR_STAT_COUNT - 1 ) ) % SPECTATOR_STAT_COUNT;
+	// over the rows, with more seats than rows, down the wheel is further down the ranking
+	else if( notches != 0.0f && m_rackRows < theRackRanked && mouse->y >= at.rows )
+		theRackFirst = max( 0, min( theRackFirst + ( notches < 0.0f ? 1 : -1 ), theRackRanked - m_rackRows ) );
 	return TRUE;
 }
 
@@ -13129,14 +13204,16 @@ static void gatherProductionList( Object *obj, void *userData )
 enum
 {
 	OBS_QUEUE_CELLS		= 6,		///< a player's row: his six soonest
-	OBS_PAD						= 8,		///< a panel's inside margin
 	OBS_GAP						= 6,		///< between a panel and what it stands beside
-	OBS_ROW_H					= 50,
-	OBS_EMBLEM_W			= 50,		///< the colour lamp and the army's badge at a row's start
+	OBS_BAND_H				= 44,		///< a player's band in the queue, CLAMP_BAND's own height
+	OBS_BAND_PITCH		= 48,		///< and the step from one band to the next
+	OBS_BAND_CELLS_X	= 60,		///< its first cameo past the lamp and the badge in the left jaw
 	OBS_CAMEO_W				= 46,
 	OBS_CAMEO_H				= 32,
 	OBS_CELL_PITCH		= 57,		///< a cameo's cell piece and a pixel between
 	OBS_MORE_W				= 36,		///< the "+N" at a full row's end
+	OBS_QUEUE_CELLS_PAIRED	= 4,	///< a band's cameos while the bands stand in two columns
+	OBS_BAND_ENDS			= OBS_BAND_CELLS_X + OBS_MORE_W + 18,	///< a band less its cameos: the jaws and the "+N"
 	OBS_HEAD_H				= 28,		///< the header strip, DSHead
 	OBS_HEAD_END_W		= 24,		///< each of its end pieces, the lug on the outer side
 	OBS_CARD_W				= 488,
@@ -13149,6 +13226,8 @@ enum
 	OBS_CELL_GLASS_W	= 71,
 	OBS_CELL_GLASS_H	= 49
 };
+/// the closest the queue's bands come, as a share of their size, before they stand in two columns
+static const Real OBS_BAND_MIN = 0.7f;
 
 /// one player's row of the queue panel
 struct ObserverQueue
@@ -13582,40 +13661,69 @@ void InGameUI::drawObserverPanels( void )
 	//
 	// the queues, over the radar against the left edge
 	//
-	const Int rows = (Int)theObserverQueues.size();
-	if( rows > 0 )
+	// One riveted band a player, the bands stacked up from the radar's frame with nothing round them: the
+	// queue is a rack of clamps, not a window.  The bands come closer as more seats come, down to
+	// OBS_BAND_MIN of their size, then stand in two columns; past what two columns hold the last seats
+	// are left to the standings.
+	// ponytail: no paging past two columns; 32 seats fit in two at 1080, a larger HUD Size can cut some
+	const Int seats = (Int)theObserverQueues.size();
+	if( seats > 0 )
 	{
-		const Int pad = px( OBS_PAD ), rowH = px( OBS_ROW_H );
-		const Int width = px( 2 * OBS_PAD + OBS_EMBLEM_W + OBS_QUEUE_CELLS * OBS_CELL_PITCH + OBS_MORE_W );
-		const Int height = 2 * pad + rows * rowH;
-		const LaneHudBox frame = LaneHud_box( hudPlay().lo.x, radarFrameTop() - px( OBS_GAP ) - height, width, height );
-		theObserverPanelBoxes[ 0 ] = regionOf( frame );
-		const Int cameoW = px( OBS_CAMEO_W ), cameoH = px( OBS_CAMEO_H );
+		const Int top = max( hudStripBottom(), TheUIRect().y ) + px( OBS_GAP );
+		const Real room = max( (Real)( radarFrameTop() - px( OBS_GAP ) - top ), 1.0f ) / max( scale(), 0.01f );
+		Int columns = 1, perColumn = seats;
+		Real q = min( 1.0f, room / ( seats * OBS_BAND_PITCH ) );
+		if( q < OBS_BAND_MIN )
+		{
+			columns = 2;
+			perColumn = ( seats + 1 ) / 2;
+			q = min( 1.0f, room / ( perColumn * OBS_BAND_PITCH ) );
+		}
+		if( q < OBS_BAND_MIN )
+		{
+			q = OBS_BAND_MIN;
+			perColumn = max( 1, REAL_TO_INT_FLOOR( room / ( OBS_BAND_PITCH * q ) ) );
+		}
+		const Int rows = min( seats, columns * perColumn );
+		// two columns of bands keep four cameos each, so the pair stays narrower than the screen's third
+		const Int cells = columns > 1 ? (Int)OBS_QUEUE_CELLS_PAIRED : (Int)OBS_QUEUE_CELLS;
+		auto qpx = [ q ]( Real at1080 ) { return px( at1080 * q ); };
+		const Int bandW = qpx( OBS_BAND_ENDS + cells * OBS_CELL_PITCH ), bandH = qpx( OBS_BAND_H ), pitch = qpx( OBS_BAND_PITCH );
+		const Int columnGap = px( OBS_GAP );
+		const Int stackH = min( rows, perColumn ) * pitch;
+		const Int stackTop = radarFrameTop() - px( OBS_GAP ) - stackH;
+		const Int left = hudPlay().lo.x;
+		theObserverPanelBoxes[ 0 ].lo.x = left;
+		theObserverPanelBoxes[ 0 ].lo.y = stackTop;
+		theObserverPanelBoxes[ 0 ].hi.x = left + ( rows > perColumn ? 2 : 1 ) * ( bandW + columnGap );
+		theObserverPanelBoxes[ 0 ].hi.y = stackTop + stackH;
+		auto bandAt = [ & ]( Int row ) { return LaneHud_box( left + row / perColumn * ( bandW + columnGap ), stackTop + row % perColumn * pitch, bandW, bandH ); };
+		const Int cameoW = qpx( OBS_CAMEO_W ), cameoH = qpx( OBS_CAMEO_H );
 		auto cameoAt = [ & ]( Int row, Int cell )
 		{
+			const LaneHudBox band = bandAt( row );
 			IRegion2D at;
-			at.lo.x = frame.x + pad + px( OBS_EMBLEM_W ) + cell * px( OBS_CELL_PITCH );
-			at.lo.y = frame.y + pad + row * rowH + ( rowH - px( 4 ) - cameoH ) / 2;
+			at.lo.x = band.x + qpx( OBS_BAND_CELLS_X + cell * OBS_CELL_PITCH );
+			at.lo.y = band.y + ( band.h - cameoH ) / 2;
 			at.hi.x = at.lo.x + cameoW;
 			at.hi.y = at.lo.y + cameoH;
 			return at;
 		};
 
 		TheDisplay->beginBatch2D();
-		panel( frame );
 		for( Int row = 0; row < rows; row++ )
 		{
 			const ObserverQueue &queue = theObserverQueues[ row ];
-			const LaneHudBox well = LaneHud_box( frame.x + pad, frame.y + pad + row * rowH, width - 2 * pad, rowH - px( 4 ) );
-			nineSlice( well, WELL_TL );
-			// his colour down the well's left, his army's badge beside it
-			TheDisplay->drawFillRect( well.x + px( 4 ), well.y + px( 4 ), px( 5 ), well.h - px( 8 ), rackColour( queue.player ) );
-			const LaneHudBox badge = LaneHud_box( well.x + px( 12 ), well.y + ( well.h - px( 26 ) ) / 2, px( 34 ), px( 26 ) );
+			const LaneHudBox band = bandAt( row );
+			threeSlice( band, CLAMP_BAND_L, CLAMP_BAND_C, CLAMP_BAND_R );
+			// his colour lamp in the clamp's left jaw, his army's badge beside it
+			TheDisplay->drawFillRect( band.x + qpx( 9 ), band.y + qpx( 10 ), max( qpx( 5 ), 2 ), band.h - qpx( 20 ), rackColour( queue.player ) );
+			const LaneHudBox badge = LaneHud_box( band.x + qpx( 18 ), band.y + ( band.h - qpx( 26 ) ) / 2, qpx( 34 ), qpx( 26 ) );
 			if( const Image *emblem = queue.player->getPlayerTemplate()->getEnabledImage() )
 				drawImage( emblem, badge );
 			const ObserverHit pick = { regionOf( badge ), INVALID_ID, queue.player->getPlayerIndex() };
 			theObserverHits.push_back( pick );
-			for( Int cell = 0; cell < queue.count; cell++ )
+			for( Int cell = 0; cell < min( queue.count, cells ); cell++ )
 			{
 				const InGameUI::ProductionListSlot &slot = queue.slot[ cell ];
 				const IRegion2D at = cameoAt( row, cell );
@@ -13634,7 +13742,7 @@ void InGameUI::drawObserverPanels( void )
 		{
 			const ObserverQueue &queue = theObserverQueues[ row ];
 			Int shown = 0;
-			for( Int cell = 0; cell < queue.count; cell++ )
+			for( Int cell = 0; cell < min( queue.count, cells ); cell++ )
 			{
 				const InGameUI::ProductionListSlot &slot = queue.slot[ cell ];
 				const IRegion2D at = cameoAt( row, cell );
@@ -13653,8 +13761,8 @@ void InGameUI::drawObserverPanels( void )
 			{
 				UnicodeString rest;
 				rest.format( u"+%d", queue.total - shown );
-				const IRegion2D last = cameoAt( row, OBS_QUEUE_CELLS - 1 );
-				drawText( rest, font( TYPE_SMALL ), last.hi.x + px( OBS_MORE_W ) / 2 + px( 3 ), last.lo.y, cameoH, TEXT_GREY, 0 );
+				const IRegion2D last = cameoAt( row, cells - 1 );
+				drawText( rest, font( TYPE_SMALL * max( q, 0.85f ) ), last.hi.x + qpx( OBS_MORE_W ) / 2 + qpx( 4 ), last.lo.y, cameoH, TEXT_GREY, 0 );
 			}
 		}
 	}
@@ -13678,8 +13786,9 @@ void InGameUI::drawObserverPanels( void )
 
 	Int anchor = hudPlay().lo.x;
 	static NameKeyType radarKey = NAMEKEY( "ControlBar.wnd:LeftHUD" );
-	static NameKeyType listKey = NAMEKEY( "ControlBar.wnd:ObserverPlayerListWindow" );
-	const NameKeyType besides[ 2 ] = { radarKey, listKey };
+	// the column beside the radar holds the options and chat keys now that its player buttons are gone
+	static NameKeyType optionsKey = NAMEKEY( "ControlBar.wnd:ButtonOptions" );
+	const NameKeyType besides[ 2 ] = { radarKey, optionsKey };
 	for( Int each = 0; each < 2; each++ )
 	{
 		GameWindow *window = TheWindowManager->winGetWindowFromId( NULL, besides[ each ] );
@@ -14148,8 +14257,13 @@ Bool InGameUI::handleHudCellClick( const ICoord2D *mouse, Bool cancel )
 			TheTacticalView->lookAt( building->getPosition() );
 		else if( hit.pick >= 0 && !cancel )
 		{
+			// the picked player's badge again lets go of him, as Esc does
+			const Player *picked = observerPickedPlayer();
 			AsciiString follow;
-			follow.format( "%s%d", FOLLOW_ACTION.c_str(), hit.pick );
+			if( picked != NULL && picked->getPlayerIndex() == hit.pick )
+				follow.format( "%s%s", FOLLOW_ACTION.c_str(), FOLLOW_NOBODY.c_str() );
+			else
+				follow.format( "%s%d", FOLLOW_ACTION.c_str(), hit.pick );
 			runSpectatorAction( follow.str() );
 		}
 		return TRUE;

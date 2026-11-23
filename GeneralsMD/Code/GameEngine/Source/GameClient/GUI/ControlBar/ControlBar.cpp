@@ -5198,11 +5198,9 @@ void ControlBar::switchToContext( ControlBarContext context, Drawable *draw )
 			m_contextParent[ CP_UNDER_CONSTRUCTION ]->winHide( TRUE );
 			m_contextParent[ CP_OCL_TIMER ]->winHide( TRUE );
 			m_contextParent[ CP_OBSERVER_INFO ]->winHide( TRUE );
-			m_contextParent[ CP_OBSERVER_LIST ]->winHide( FALSE );
-
-
-			// fill the specific UI info
-			populateObserverList();
+			// the column of player buttons is gone: a watcher picks a player on the standings, their
+			// follow tabs or the queue's badges (InGameUI), which list every seat MAX_SLOTS allows
+			m_contextParent[ CP_OBSERVER_LIST ]->winHide( TRUE );
 			break;
 
 		}  // end multi select

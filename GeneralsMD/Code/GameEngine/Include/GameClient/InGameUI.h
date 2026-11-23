@@ -1731,7 +1731,7 @@ protected:
 	// tray while the local player watches: the camera, the fog and the armies drawer, then every
 	// player ranked by the stat its keys pick.  Where the last draw put it, for the clicks.
 	//
-	enum { RACK_ROWS = 8, RACK_ARMY_UNITS = 6 };
+	enum { RACK_ROWS = 32, RACK_ARMY_UNITS = 6 };	///< a row for every seat MAX_SLOTS allows
 	enum
 	{
 		RACK_TEXT_WATCH, RACK_TEXT_STANDINGS, RACK_TEXT_STOP, RACK_TEXT_FOG = RACK_TEXT_STOP + 3, RACK_TEXT_ARMIES,

@@ -44,6 +44,7 @@
 #include "Common/NameKeyGenerator.h"
 #include "Common/ThingFactory.h"
 #include "Common/Player.h"
+#include "Common/Science.h"
 #include "Common/PlayerList.h"
 #include "Common/PlayerTemplate.h"
 #include "Common/MessageStream.h"
@@ -3257,7 +3258,8 @@ void GameLogic::logicMessageDispatcher( GameMessage *msg, AIGroup *orderedGroup 
 		//---------------------------------------------------------------------------------------------
 		case GameMessage::MSG_PURCHASE_SCIENCE:
 		{
-			ScienceType science = (ScienceType)msg->getArgument( 0 )->integer;
+			// the store's place, not the ScienceType: that is a NameKey, numbered per process
+			ScienceType science = TheScienceStore->getScienceFromMessageID( msg->getArgument( 0 )->integer );
 
 			// sanity
 			if( science == SCIENCE_INVALID )

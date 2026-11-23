@@ -2126,7 +2126,7 @@ static Bool executePurchase( const ScenarioAction &action, Player *player )
 
 	GameMessage *msg = newInstance( GameMessage )( GameMessage::MSG_PURCHASE_SCIENCE );
 	msg->friend_setPlayerIndex( player->getPlayerIndex() );
-	msg->appendIntegerArgument( science );
+	msg->appendIntegerArgument( TheScienceStore->getScienceMessageID( science ) );
 	TheGameLogic->logicMessageDispatcher( msg, NULL );
 	msg->deleteInstance();
 

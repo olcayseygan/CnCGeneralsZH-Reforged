@@ -1213,7 +1213,7 @@ CBCommandStatus ControlBar::processCommandUI( GameWindow *control,
 			
 		
 			GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_PURCHASE_SCIENCE );
-			msg->appendIntegerArgument( st );
+			msg->appendIntegerArgument( TheScienceStore->getScienceMessageID( st ) );
 			
 			markUIDirty();
 

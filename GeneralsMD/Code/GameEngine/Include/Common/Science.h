@@ -126,6 +126,13 @@ public:
 	ScienceType getScienceFromInternalName(const AsciiString& name) const;
 	AsciiString getInternalNameForScience(ScienceType science) const;
 
+	/** What MSG_PURCHASE_SCIENCE carries.  A ScienceType is a NameKey, a first-use number local to
+		the process, so two installs that keyed names in another order read it as another science or
+		none; this is the science's place in the store plus one, from the checksummed INI order (and
+		the map.ini both ends load), 0 for none.  Every sender converts, the dispatcher converts back. */
+	Int getScienceMessageID(ScienceType science) const;
+	ScienceType getScienceFromMessageID(Int id) const;
+
 	/** return a list of the sciences the given player can purchase now, and a list he might be able to purchase in the future, 
 		but currently lacks prereqs or points for. (either might be an empty list) */
 	void getPurchasableSciences(const Player* player, ScienceVec& purchasable, ScienceVec& potentiallyPurchasable) const;

@@ -177,6 +177,11 @@ public:
 	// field access
 	void setUpgradeName( const AsciiString& name ) { m_name = name; }
 	const AsciiString& getUpgradeName( void ) const { return m_name; }
+	/** Not a NameKeyGenerator key, whatever the name says: the upgrade's mask bit plus one, which every
+		* machine derives alike from the checksummed INI order (and the map.ini both ends load).  It is
+		* what MSG_QUEUE_UPGRADE and MSG_CANCEL_UPGRADE carry; a real NameKey is a first-use number
+		* local to the process, and two installs that keyed names in another order read one player's
+		* upgrade as another, or as none, so the sender paid for it and the others did not. */
 	void setUpgradeNameKey( NameKeyType key ) { m_nameKey = key; }
 	NameKeyType getUpgradeNameKey( void ) const { return m_nameKey; }
 	const AsciiString& getDisplayNameLabel( void ) const { return m_displayNameLabel; }
@@ -243,7 +248,7 @@ public:
 	void update( void ) { }										///< subsystem interface
 
 	UpgradeTemplate *firstUpgradeTemplate( void );	///< return the first upgrade template
-	const UpgradeTemplate *findUpgradeByKey( NameKeyType key ) const;		///< find upgrade by name key
+	const UpgradeTemplate *findUpgradeByKey( NameKeyType key ) const;		///< find upgrade by getUpgradeNameKey(), the mask bit plus one
 	const UpgradeTemplate *findUpgrade( const AsciiString& name ) const;				///< find and return upgrade by name
 	const UpgradeTemplate *findVeterancyUpgrade(VeterancyLevel level) const;				///< find and return upgrade by name
 
@@ -261,8 +266,6 @@ public:
 	const UpgradeTemplate *requireUpgrade( const AsciiString &name, const AsciiString &who ) const;
 
 protected:
-
-	UpgradeTemplate *findNonConstUpgradeByKey( NameKeyType key );		///< find upgrade by name key
 
 	void linkUpgrade( UpgradeTemplate *upgrade );			///< link upgrade to list
 	void unlinkUpgrade( UpgradeTemplate *upgrade );		///< remove upgrade from list

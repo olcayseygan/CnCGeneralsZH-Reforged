@@ -119,6 +119,23 @@ ScienceType ScienceStore::getScienceFromInternalName(const AsciiString& name) co
 }
 
 //-----------------------------------------------------------------------------
+Int ScienceStore::getScienceMessageID(ScienceType science) const
+{
+	for (size_t i = 0; i < m_sciences.size(); ++i)
+		if (m_sciences[i]->m_science == science)
+			return (Int)i + 1;
+	return 0;
+}
+
+//-----------------------------------------------------------------------------
+ScienceType ScienceStore::getScienceFromMessageID(Int id) const
+{
+	if (id < 1 || id > (Int)m_sciences.size())
+		return SCIENCE_INVALID;
+	return m_sciences[id - 1]->m_science;
+}
+
+//-----------------------------------------------------------------------------
 AsciiString ScienceStore::getInternalNameForScience(ScienceType science) const
 {
 	if (science == SCIENCE_INVALID)

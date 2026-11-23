@@ -1153,7 +1153,7 @@ Bool ControlBar::purchaseTalent( GameWindow *control )
 		return TRUE;
 
 	GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_PURCHASE_SCIENCE );
-	msg->appendIntegerArgument( ( *talents )[ index ] );
+	msg->appendIntegerArgument( TheScienceStore->getScienceMessageID( ( *talents )[ index ] ) );
 	m_talentPendingRow = index / 2;
 	m_talentPendingFrame = TheGameLogic->getFrame();
 	populateTalents( player );
@@ -1377,7 +1377,7 @@ void ControlBar::updateContextPurchaseScience( void )
 		if (st != SCIENCE_INVALID)
 		{
 			GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_PURCHASE_SCIENCE );
-			msg->appendIntegerArgument( st );
+			msg->appendIntegerArgument( TheScienceStore->getScienceMessageID( st ) );
 		}
 
 		switchToContext( CB_CONTEXT_NONE, NULL );

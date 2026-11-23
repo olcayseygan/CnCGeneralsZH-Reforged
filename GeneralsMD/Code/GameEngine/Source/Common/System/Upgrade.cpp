@@ -204,7 +204,7 @@ void UpgradeTemplate::friend_makeVeterancyUpgrade(VeterancyLevel v)
 {
 	m_type = UPGRADE_TYPE_OBJECT;	// veterancy "upgrades" are always per-object, not per-player
 	m_name = getVetUpgradeName(v);
-	m_nameKey = TheNameKeyGenerator->nameToKey( m_name );
+	// m_nameKey stays the mask bit newUpgrade gave it
 	m_displayNameLabel.clear();	// should never be displayed
 	m_buildTime = 0.0f;
 	m_cost = 0.0f;
@@ -344,23 +344,6 @@ const UpgradeTemplate *UpgradeCenter::findVeterancyUpgrade( VeterancyLevel level
 	return findUpgrade(tmp);
 }
 
-//-------------------------------------------------------------------------------------------------
-/** Find upgrade matching name key */
-//-------------------------------------------------------------------------------------------------
-UpgradeTemplate *UpgradeCenter::findNonConstUpgradeByKey( NameKeyType key )
-{
-	UpgradeTemplate *upgrade;
-
-	// search list
-	for( upgrade = m_upgradeList; upgrade; upgrade = upgrade->friend_getNext() )
-		if( upgrade->getUpgradeNameKey() == key )
-			return upgrade;
-
-	// item not found
-	return NULL;
-
-}
-
 // ------------------------------------------------------------------------------------------------
 /** Return the first upgrade template */
 // ------------------------------------------------------------------------------------------------
@@ -372,7 +355,8 @@ UpgradeTemplate *UpgradeCenter::firstUpgradeTemplate( void )
 }  // end firstUpgradeTemplate
 
 //-------------------------------------------------------------------------------------------------
-/** Find upgrade matching name key */
+/** Find upgrade matching getUpgradeNameKey(): its mask bit plus one, the same number on every
+	* machine, so a network or replay message can carry it */
 //-------------------------------------------------------------------------------------------------
 const UpgradeTemplate *UpgradeCenter::findUpgradeByKey( NameKeyType key ) const
 {
@@ -392,8 +376,13 @@ const UpgradeTemplate *UpgradeCenter::findUpgradeByKey( NameKeyType key ) const
 //-------------------------------------------------------------------------------------------------
 const UpgradeTemplate *UpgradeCenter::findUpgrade( const AsciiString& name ) const
 {
+	// by the name itself, case and all as nameToKey compared it, and without minting a key for a
+	// name that is no upgrade
+	for( const UpgradeTemplate *upgrade = m_upgradeList; upgrade; upgrade = upgrade->friend_getNext() )
+		if( upgrade->getUpgradeName() == name )
+			return upgrade;
 
-	return findUpgradeByKey( TheNameKeyGenerator->nameToKey( name ) );
+	return NULL;
 
 }  // end findUpgrade
 
@@ -430,7 +419,7 @@ UpgradeTemplate *UpgradeCenter::newUpgrade( const AsciiString& name )
 
 	// assign name and starting data
 	newUpgrade->setUpgradeName( name );
-	newUpgrade->setUpgradeNameKey( TheNameKeyGenerator->nameToKey( name ) );
+	newUpgrade->setUpgradeNameKey( (NameKeyType)( m_nextTemplateMaskBit + 1 ) );	// see getUpgradeNameKey
 
 	// Make a unique bitmask for this new template by keeping track of what bits have been assigned
 	// damn MSFT! proper ANSI syntax for a proper 64-bit constant is "1LL", but MSVC doesn't recognize it
@@ -543,7 +532,7 @@ void UpgradeCenter::parseUpgradeDefinition( INI *ini )
 	AsciiString name = c;	
 
 	// find existing item if present
-	UpgradeTemplate* upgrade = TheUpgradeCenter->findNonConstUpgradeByKey( NAMEKEY(name) );
+	UpgradeTemplate* upgrade = const_cast<UpgradeTemplate*>( TheUpgradeCenter->findUpgrade( name ) );
 	if( upgrade == NULL )
 	{
 

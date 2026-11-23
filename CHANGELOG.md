@@ -8,6 +8,14 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## The computer goes after your superweapon
+
+- A Scud Storm, Particle Cannon or nuclear silo the computer had seen was worth a tenth of its price to its own strikes, by a note EA left in the code ("Superweapons cannot be killed by any superweapon"), so its strikes went to your power plants and your army and never to the silo. Now a superweapon it has seen counts at half its price on Easy, its full price on Medium, twice on Hard, and more on every level above.
+- The computer's jets and helicopters fly at a superweapon of yours it has seen: a third of its armed aircraft on Easy, two thirds on Medium, all of them on Hard and above, sent again every minute on Easy, every 30 seconds on Medium, every 15 on Hard and sooner above. Such a strike is no longer called off for the anti-air guns on the way. It only goes for a superweapon it has actually seen; the game's warning that one was built says nothing about where it stands, and the computer gets no more than that.
+- Easy now uses its general's powers too, a minute after each one is ready. It fired none in 40 games; it fires about one a game now, against nearly seven for Medium.
+- On the turtle bench, a walled-in player firing a superweapon on its cooldown from minute six, nine games a level at double speed: Hard killed the superweapon in 8 games of 9 (7 before), Vicious 8 (6), Insane 9 (6), and it went off 1.9 times before dying where it went off 2.2 to 2.4 times. America's Auroras killed it in 9 of those games, at 10 to 17 minutes; before this change no aircraft ever did. Medium still gets to it in only 2 games of 9.
+- Replays with a computer player recorded before this change will not play back.
+
 ## The computer stops sitting on its army
 
 - Every level kept a large part of its army standing at home. The guard teams the base scripts fill are only called out once you are nearly beaten, and an Insane computer held a twelve-thousand attack at your defences for minutes while 56,000 more of its army stood in the base behind it. Now whatever stands idle at home past a share of the whole army goes out: Easy keeps three fifths at home and looks every minute and a half, Hard keeps under a third and looks every 40 seconds, and each level above keeps less and looks sooner. The spare units join the next attack and count towards the odds it weighs against your guns, or go out on their own. They still stay while their base is under attack, and a small group still will not walk into defences it cannot beat.

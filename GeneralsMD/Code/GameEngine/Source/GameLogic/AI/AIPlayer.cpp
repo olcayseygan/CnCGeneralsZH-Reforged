@@ -2796,7 +2796,7 @@ static void summarizeStrike( const Coord3D *at, Int playerNdx, Real radius, Int 
 Int AIPlayer::superweaponScore( Coord3D *center, Int playerNdx, Real radius, Bool targetMilitaryUnits )
 {
 	const Int value = getPlayerSuperweaponValue( center, playerNdx, radius, targetMilitaryUnits, knowledgeObserver(),
-																							 strikeEconomyWeight(), strikeThreatWeight() );
+																							 strikeEconomyWeight(), strikeThreatWeight(), strikeSuperweaponWeight() );
 	if( value <= 0 || !runsOwnAI() )
 		return value;
 
@@ -2829,6 +2829,17 @@ Real AIPlayer::strikeEconomyWeight( void )
 Real AIPlayer::strikeThreatWeight( void )
 {
 	return runsOwnAI() ? getSkillProfile()->m_strikeThreatWeight : 0.0f;
+}
+
+/** What an enemy superweapon this AI knows of adds to a strike's score, in its own prices.  EA counted it
+	* at a tenth of its price, and the fork's economy weight left it out, so against a player sitting on a
+	* Scud Storm the AI's strikes went to his power plants and his army, never to the silo.  Rising with
+	* the rating: Easy weighs it at half its price, Hard at twice, and the levels above Hard more again. */
+static const AIRungReal SUPERWEAPON_STRIKE_WEIGHT = { { 0.5f, 1.0f, 2.0f }, AIKNOB_OPEN };
+
+Real AIPlayer::strikeSuperweaponWeight( void )
+{
+	return runsOwnAI() ? aiRatingLerp( m_rating, SUPERWEAPON_STRIKE_WEIGHT ) : 0.0f;
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -3083,7 +3094,7 @@ static Bool isStrategicTarget( const Object *obj )
  * in its combat power.  Both 0 is EA's score.
  */
 Int AIPlayer::getPlayerSuperweaponValue(Coord3D *center, Int playerNdx, Real radius, Bool includeMilitaryUnits, Int observerNdx,
-																				Real economyWeight, Real threatWeight )
+																				Real economyWeight, Real threatWeight, Real superweaponWeight )
 {
 	if (radius < 4*PATHFIND_CELL_SIZE_F) 
 	{
@@ -3158,6 +3169,9 @@ Int AIPlayer::getPlayerSuperweaponValue(Coord3D *center, Int playerNdx, Real rad
 					{
 						if( !includeMilitaryUnits )
 							value = value * 5.0f; //Superweapons are prime targets for sneak attacks.
+						else if( superweaponWeight > 0.0f )
+							value = value * superweaponWeight;	// the skirmish AI's rung: one strike seldom kills it, but every
+																									// strike and every wave on it is a launch the player does not get
 						else
 							value = value / 10; // Superweapons cannot be killed by any superweapon, so we don't want to target them as highly. jba.
 					}
@@ -6925,6 +6939,7 @@ void AIPlayer::update( void )
 		AI_PHASE( AIP_TACTICS, AI_TAC( TAC_SHUTTLE, doShuttles() ) );	// Fly the wave's ground units up its road.
 		AI_PHASE( AIP_TACTICS, AI_TAC( TAC_HELIX, doHelixes() ) );		// Helix upgrades by the enemy army, healers, bomb raids.
 		AI_PHASE( AIP_TACTICS, AI_TAC( TAC_STEER, steerAircraft() ) );	// No strike flown through the enemy's anti-air.
+		AI_PHASE( AIP_TACTICS, AI_TAC( TAC_STEER, huntSuperweapon() ) );	// ... but every plane it can spare at his superweapon.
 		AI_PHASE( AIP_TACTICS, AI_TAC( TAC_OTHER, doAmbulances() ) );	// Ambulances behind the army, for the hurt and the hazards.
 		AI_PHASE( AIP_TACTICS, AI_TAC( TAC_ABIL, doAbilities() ) );		// The units' own buttons, last, on the turn the tactics looked at.
 	}
@@ -10036,12 +10051,14 @@ static void collectObjects( Object *obj, void *userData )
 //----------------------------------------------------------------------------------------------------------
 #define SPECIAL_POWER_CHECK_RATE ((Int)(2 * LOGICFRAMES_PER_GAME_SECOND))
 
+/** How long a ready power waits before this rung fires it.  Easy used to fire none of them: fired on the
+	* cooldown the strike powers made Easy the side that bombs you most, and the gate that stopped that also
+	* left it with no powers at all (40 ladder games, not one).  A minute's wait keeps Easy below Medium. */
+static const AIRungReal POWER_WAIT_SECONDS = { { 60.0f, 0.0f, 0.0f }, AIKNOB_OPEN };
+
 void AIPlayer::doReadySpecialPowers( void )
 {
-	// Easy fires only what its scripts name, as retail Easy did: the strike powers of every side carry the flag
-	// now, and fired on the cooldown they made Easy the side that bombs you most
-	if( !aiRatingReaches( m_rating, AISKILL_MEDIUM ) )
-		return;
+	const UnsignedInt wait = (UnsignedInt)( aiRatingLerp( m_rating, POWER_WAIT_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND );
 	const Int phase = computeUpdatePhase( m_player->getPlayerIndex(), SPECIAL_POWER_CHECK_RATE );
 	if( (TheGameLogic->getFrame() + phase) % SPECIAL_POWER_CHECK_RATE != 0 )
 		return;
@@ -10059,7 +10076,8 @@ void AIPlayer::doReadySpecialPowers( void )
 		for( BehaviorModule **m = obj->getBehaviorModules(); *m; ++m )
 		{
 			SpecialPowerModuleInterface *power = (*m)->getSpecialPower();
-			if( power == NULL || !power->getSpecialPowerTemplate()->isFiredByAIWhenReady() || !power->isReady() )
+			if( power == NULL || !power->getSpecialPowerTemplate()->isFiredByAIWhenReady() || !power->isReady() ||
+					TheGameLogic->getFrame() < power->getReadyFrame() + wait )
 				continue;
 			const ScienceType science = power->getRequiredScience();
 			if( science != SCIENCE_INVALID && !m_player->hasScience( science ) )
@@ -14941,7 +14959,7 @@ void AIPlayer::logHomeTally( void )
 		return;
 	// and how many stand nearer the enemy's start than its own base: two base radii are half of a small map
 	Coord3D enemyAt;
-	Player *enemy = getAiEnemy();
+	Player *enemy = peekAiEnemy();		// not getAiEnemy: that re-picks the enemy, and a tally must change nothing
 	const Bool enemyKnown = enemy != NULL && enemyStartGuess( enemy->getPlayerIndex(), &enemyAt );
 	std::vector<Object *> owned;
 	m_player->iterateObjects( collectOwned, &owned );
@@ -16110,6 +16128,9 @@ void AIPlayer::steerAircraft( void )
 		const Coord3D *at = target ? target->getPosition() : ai->getCurrentVictimPos();
 		if( at == NULL )
 			continue;
+		// a superweapon is worth the aircraft its guns cost (huntSuperweapon sent them knowing)
+		if( target && target->isKindOf( KINDOF_FS_SUPERWEAPON ) )
+			continue;
 
 		if( !gunsRead )
 		{
@@ -16144,6 +16165,88 @@ void AIPlayer::steerAircraft( void )
 			aiOrderMove( ai, &home );
 		}
 	}
+}
+
+/** How often each rung sends its aircraft at a known enemy superweapon, and the share of its armed aircraft
+	* it sends.  Before, nothing aimed a plane at one: in 36 turtle bench runs of 2026-11-23 against a player
+	* firing a superweapon on its cooldown, every silo that died fell to tanks and infantry. */
+static const AIRungReal SUPERWEAPON_AIR_SECONDS = { { 60.0f, 30.0f, 15.0f }, AIKNOB_OPEN };
+static const AIRungReal SUPERWEAPON_AIR_SHARE = { { 0.34f, 0.67f, 1.0f }, AIKNOB_SHARE };
+
+/** The enemy superweapon this player knows of nearest its base, the first in the object list of two as
+	* near; NULL for none.  Only what it has seen: the game tells every player a superweapon went up, not
+	* where. */
+static Object *nearestKnownSuperweapon( const Player *player, const Coord3D *from )
+{
+	const Int me = player->getPlayerIndex();
+	Object *best = NULL;
+	Real bestSqr = 0.0f;
+	for( Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject() )
+	{
+		if( !obj->isKindOf( KINDOF_FS_SUPERWEAPON ) || obj->isEffectivelyDead() ||
+				player->getRelationship( obj->getTeam() ) != ENEMIES || !observerKnowsAbout( obj, me ) )
+			continue;
+		const Real distSqr = sqr( obj->getPosition()->x - from->x ) + sqr( obj->getPosition()->y - from->y );
+		if( best == NULL || distSqr < bestSqr )
+		{
+			best = obj;
+			bestSqr = distSqr;
+		}
+	}
+	return best;
+}
+
+/** The rung's share of its armed aircraft, parked or flying, at the enemy superweapon it knows of: an
+	* Aurora's bomb or a MiG's rockets on the silo, again each time they are back and loaded.  steerAircraft
+	* leaves such a strike alone, guns or not.  Left out as steerAircraft leaves them: the duty helicopters, a
+	* transport with riders, one the retreat pulled out, one flying a routed strike, a jet out of ammo or on its
+	* runway. */
+void AIPlayer::huntSuperweapon( void )
+{
+	const UnsignedInt now = TheGameLogic->getFrame();
+	const UnsignedInt rate = max<UnsignedInt>( 1, (UnsignedInt)( aiRatingLerp( m_rating, SUPERWEAPON_AIR_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ) );
+	if( !m_baseCenterSet || (now + computeUpdatePhase( m_player->getPlayerIndex(), rate )) % rate != 0 )
+		return;
+	Object *silo = nearestKnownSuperweapon( m_player, &m_baseCenter );
+	if( silo == NULL )
+		return;
+
+	std::vector<Object *> owned;
+	m_player->iterateObjects( collectOwned, &owned );
+	std::vector<Object *> free;
+	Int onIt = 0;
+	for( size_t o = 0; o < owned.size(); ++o )
+	{
+		Object *aircraft = owned[ o ];
+		AIUpdateInterface *ai = aircraft->getAI();
+		if( !aircraft->isKindOf( KINDOF_AIRCRAFT ) || aircraft->isKindOf( KINDOF_HARVESTER ) || aircraft->isKindOf( KINDOF_DRONE ) ||
+				ai == NULL || aircraft->isEffectivelyDead() || !aircraft->isAbleToAttack() || isDutyHelix( aircraft ) ||
+				(aircraft->getContain() && aircraft->getContain()->getContainCount() > 0) ||
+				aircraft->getAbleToAttackSpecificObject( ATTACK_NEW_TARGET, silo, CMD_FROM_AI ) < ATTACKRESULT_POSSIBLE_AFTER_MOVING )
+			continue;
+		const JetAIUpdate *jet = ai->getJetAIUpdate();
+		if( jet && (jet->isOutOfSpecialReloadAmmo() || jet->friend_isTakeoffOrLandingInProgress()) )
+			continue;
+		Bool routed = FALSE;
+		for( size_t r = 0; r < m_strikeRoutes.size() && !routed; ++r )
+			routed = m_strikeRoutes[ r ].aircraft == aircraft->getID();
+		const TacticalStep *row = findTacticalStep( aircraft->getID() );
+		if( routed || (row && row->fallingBack) )
+			continue;
+		if( ai->getCurrentVictim() == silo || ai->getGoalObject() == silo )
+			++onIt;
+		else
+			free.push_back( aircraft );
+	}
+	const Int armed = onIt + (Int)free.size();
+	const Int send = min( (Int)free.size(), REAL_TO_INT_CEIL( aiRatingLerp( m_rating, SUPERWEAPON_AIR_SHARE ) * armed ) - onIt );
+	if( send <= 0 )
+		return;
+	for( Int s = 0; s < send; ++s )
+		free[ s ]->getAI()->aiAttackObject( silo, NO_MAX_SHOTS_LIMIT, CMD_FROM_AI );
+	DEBUG_LOG(("AI SWHUNT frame %d player %d sends %d aircraft at '%s' %d (%.0f,%.0f), %d already on it, %d armed\n", now,
+		m_player->getPlayerIndex(), send, silo->getTemplate()->getName().str(), silo->getID(), silo->getPosition()->x,
+		silo->getPosition()->y, onIt, armed));
 }
 
 /** How near its turn point a routed aircraft has to be to strike, and the longest it flies the detour before
@@ -26328,6 +26431,10 @@ static const AIRatingTable s_ratingTables[] =
 	AI_TABLE_REAL( KIND_SORTIE_POWER ),
 	AI_TABLE_INT( INFANTRY_TRANSPORTS ),
 	AI_TABLE_REAL( AIR_STEER_SECONDS ),
+	AI_TABLE_REAL( SUPERWEAPON_AIR_SECONDS ),
+	AI_TABLE_REAL( SUPERWEAPON_AIR_SHARE ),
+	AI_TABLE_REAL( SUPERWEAPON_STRIKE_WEIGHT ),
+	AI_TABLE_REAL( POWER_WAIT_SECONDS ),
 	AI_TABLE_INT( AMBULANCE_HIT_SECONDS ),
 	AI_TABLE_REAL( AMBULANCE_MARGIN_SHARE ),
 	AI_TABLE_REAL( AMBULANCE_MARGIN_MIN ),

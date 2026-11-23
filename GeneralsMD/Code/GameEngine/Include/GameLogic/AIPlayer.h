@@ -356,6 +356,7 @@ public: // AIPlayer interface, may be overridden by AISkirmishPlayer.  jba.
 		* were written for that.  Pass it as the observerNdx below. */
 	Int knowledgeObserver(void);
 	virtual Player *getAiEnemy(void) {return NULL;}	///< Solo AI attacks based on scripting.  Only skirmish auto-acquires an enemy at this point.  jba.
+	virtual Player *peekAiEnemy(void) const {return NULL;}	///< the enemy getAiEnemy last picked, without picking again: for log lines that must change nothing
 	virtual Bool checkBridges(Object *unit, Waypoint *way) {return false;}
 	/** Center, Flank or Backdoor: the approach with the least enemy firepower this AI knows about.
 		* The script's own label when the rung does not read the map, or the label is not one of the three. */
@@ -649,7 +650,7 @@ protected:
 	Int walkUpsInFlight(std::vector<ObjectID> *taken) const;	///< our units walking to, or busy with, a walk-up special right now; taken gets their targets
 	Bool walkIsCovered(const Object *obj, const Coord3D *to) const;	///< no step of the straight walk to 'to' where its map has the enemy over us
 	void steerAircraft(void);	///< aircraft off strikes whose flight crosses known anti-air, onto clear ones or home
-	void buyDutyHelix(void);	///< Medium and up buy the healers and raiders their Helixes' buttons allow
+	void huntSuperweapon(void);	///< the rung's share of the air force at a known enemy superweapon	void buyDutyHelix(void);	///< Medium and up buy the healers and raiders their Helixes' buttons allow
 	Int helixRoleWanted(const ThingTemplate *tmpl) const;	///< the job a Helix of this kind would take now, -1 for none
 	void takeDutyHelix(Object *helix);	///< a Helix buyDutyHelix ordered comes out and takes its job
 	void doAmbulances(void);	///< the USA's Ambulances: bought once there is an army, kept behind it, taking in the hurt and cleaning our side
@@ -697,7 +698,7 @@ protected:
  		* player index and only what that player can see (or, for a building, has ever seen) is
  		* counted; -1 keeps the omniscient answer for a caller that is not a player's own thinking. */
  	static Int getPlayerSuperweaponValue( Coord3D *center, Int playerNdx, Real radius, Bool includeMilitaryUnits = TRUE, Int observerNdx = -1,
-																				Real economyWeight = 0.0f, Real threatWeight = 0.0f );
+																				Real economyWeight = 0.0f, Real threatWeight = 0.0f, Real superweaponWeight = 0.0f );
 // End of aiplayer interface. 
 
 protected:
@@ -768,6 +769,7 @@ protected:
 	Int superweaponScore( Coord3D *center, Int playerNdx, Real radius, Bool targetMilitaryUnits );
 	Real strikeEconomyWeight( void );	///< the rung's m_strikeEconomyWeight for a skirmish AI, 0 for a campaign one
 	Real strikeThreatWeight( void );	///< the rung's m_strikeThreatWeight for a skirmish AI, 0 for a campaign one
+	Real strikeSuperweaponWeight( void );	///< what a known enemy superweapon is worth to a strike, in its prices; 0 for a campaign AI
 	void noteSuperweaponAim( const Coord3D *pos );	///< remember a spot, so the next shot goes elsewhere
 
 protected:

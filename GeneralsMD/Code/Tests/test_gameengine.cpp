@@ -25087,6 +25087,7 @@ TEST(no_options_file_is_the_classic_game_with_every_added_row_off)
 
 	static const char *const off[] =
 	{
+		"CleanFftWater",
 		"CameraBoundaryMargin", "EdgeScrollInWindowedMode", "CameraSnapTo45", "BuildGrid", "BuildSnapTo45",
 		"BuildSnapToNeighbour", "BuildNudge", "WheelZoomToCursor", "IsometricCamera", "OpenAtMaxZoom",
 		"DynamicMusic", "FormationDrag", "BuildWithoutWorker", "ChromaLighting", "TextureFilter", "Bloom", "MSAA",
@@ -25094,7 +25095,7 @@ TEST(no_options_file_is_the_classic_game_with_every_added_row_off)
 		"ShadowsForProjectiles", "ShadowsForProps", "ShadowsForParticles", "VolumetricSmokeShadows", "SmokeFireLighting",
 		"DebrisTrails", "MapLight", "TeamGlow", "WaterFoam", "GroundMarks", "Firelight", "HemiAmbient", "AmbientOcclusion",
 		"Weather", "WaterSplashes", "Atmosphere", "StructureCollapse", "InternalHdr", "Smoke", "ParticleBounce",
-		"HeatHaze", "GroundFoliage", "CleanFftWater", "MapAwareWaveHeading", "UnderwaterClarity", "FullDetailAtDistance", "SunShafts", NULL
+		"HeatHaze", "GroundFoliage", "MapAwareWaveHeading", "UnderwaterClarity", "FullDetailAtDistance", "SunShafts", NULL
 	};
 	for( Int i = 0; off[ i ] != NULL; ++i )
 		CHECK_EQ( findOptionDef( off[ i ] )->get(), 0 );

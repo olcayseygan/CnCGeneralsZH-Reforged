@@ -2985,10 +2985,11 @@ static std::vector< SpectatorStats > theRackStats;		///< ranked by the picked st
 static UnsignedInt theRackStatsFrame = 0;
 static Int theRackStatsStat = -1;
 
-/// The standings' rows at 1080: RACK_ROW_H while the seats fit, closer down to RACK_ROW_MIN as more come
-/// (32 seats take 18 each), and past that a window of them the wheel moves over the ranking, first the
-/// rank at its top.  The last draw's, for the clicks and the wheel.
-enum { RACK_ROW_MIN = 18 };
+/// The standings' rows at 1080: RACK_ROW_H while the seats fit, closer down to RACK_ROW_MIN as more come,
+/// and past that a window of them the wheel moves over the ranking, first the rank at its top: a name
+/// smaller than RACK_NAME_MIN_PX is not read at a glance, so the rows scroll before they shrink past it.
+/// The last draw's, for the clicks and the wheel.
+enum { RACK_ROW_MIN = 24, RACK_NAME_MIN_PX = 12 };
 static Real theRackRowH = 30.0f;
 static Int theRackFirst = 0;
 static Int theRackRanked = 0;
@@ -3505,8 +3506,9 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 
 	// the losses beside the kills are not one of the kept strings; the common frame's pool lends one
 	DirectStrikeTheme::begin( DirectStrikeTheme::SIDE_COMMON, ControlBarHudPageScale() / 1.8f );
-	// a closer row writes smaller, never under RACK_MIN_PX
-	auto rowType = [ squeeze ]( Int px ) { return max( (Int)RACK_MIN_PX, REAL_TO_INT( px * squeeze + 0.5f ) ); };
+	// a closer row writes smaller, its names and numbers never under RACK_NAME_MIN_PX, the rest never under
+	// RACK_MIN_PX
+	auto rowType = [ squeeze ]( Int px ) { return max( px >= 14 ? (Int)RACK_NAME_MIN_PX : (Int)RACK_MIN_PX, REAL_TO_INT( px * squeeze + 0.5f ) ); };
 	GameFont *lossFont = TheFontLibrary->getFont( m_superweaponNormalFont, max( rackPx( rowType( 12 ) * 0.75f ), 1 ), TRUE );
 	const Color LOSS = GameMakeColor( 226, 92, 78, 255 );
 	const Color SURPLUS = GameMakeColor( 96, 214, 104, 255 );
@@ -3542,9 +3544,14 @@ void InGameUI::drawSpectatorRack( Int plateTop )
 		Int valueWidth = 0, valueHeight = 0;
 		value->getSize( &valueWidth, &valueHeight );
 		drawRackText( value, valueRight - valueWidth, line, valueRight, lineBottom, 0, RACK_ALIGN_RIGHT, valueColour );
+		// the name in his colour a quarter of the way to white: a navy or purple stroke two pixels wide is
+		// lost on the steel at the house colour itself
+		UnsignedByte nameR, nameG, nameB, nameA;
+		GameGetColorComponents( rackColour( stats.player ), &nameR, &nameG, &nameB, &nameA );
+		const Color nameColour = GameMakeColor( nameR + ( 255 - nameR ) / 4, nameG + ( 255 - nameG ) / 4, nameB + ( 255 - nameB ) / 4, 255 );
 		drawRackText( rackText( RACK_TEXT_NAME + row, stats.player->getPlayerDisplayName(), rowType( 14 ),
 			max( valueRight - X - rackPx( 76 + 6 ) - valueWidth, 1 ) ),
-			X + rackPx( 76 ), line, X + rackPx( 190 ), lineBottom, 0, RACK_ALIGN_LEFT, rackColour( stats.player ) );
+			X + rackPx( 76 ), line, X + rackPx( 190 ), lineBottom, 0, RACK_ALIGN_LEFT, nameColour );
 
 		// each kind's count on a dark plate in its cell's bottom right
 		for( Int cell = 0; cell < (Int)units[ row ].size(); cell++ )
@@ -13205,15 +13212,25 @@ enum
 {
 	OBS_QUEUE_CELLS		= 6,		///< a player's row: his six soonest
 	OBS_GAP						= 6,		///< between a panel and what it stands beside
-	OBS_BAND_H				= 44,		///< a player's band in the queue, CLAMP_BAND's own height
-	OBS_BAND_PITCH		= 48,		///< and the step from one band to the next
-	OBS_BAND_CELLS_X	= 60,		///< its first cameo past the lamp and the badge in the left jaw
-	OBS_CAMEO_W				= 46,
-	OBS_CAMEO_H				= 32,
-	OBS_CELL_PITCH		= 57,		///< a cameo's cell piece and a pixel between
-	OBS_MORE_W				= 36,		///< the "+N" at a full row's end
-	OBS_QUEUE_CELLS_PAIRED	= 4,	///< a band's cameos while the bands stand in two columns
-	OBS_BAND_ENDS			= OBS_BAND_CELLS_X + OBS_MORE_W + 18,	///< a band less its cameos: the jaws and the "+N"
+	// a player's band in the queue, QUEUE_BAND: ends 34x32, a lamp slot at x 6..12 of the left end and
+	// one glass channel from x 14 to 15 short of the right end, which the badge and the cameos sit in
+	OBS_BAND_H				= 32,
+	OBS_BAND_PITCH		= 35,		///< the step from one band to the next
+	OBS_BAND_LAMP_X		= 6,
+	OBS_BAND_LAMP_W		= 6,
+	OBS_BAND_GLASS_X	= 14,
+	OBS_BAND_GLASS_END	= 15,	///< the channel stops this far short of the band's right end
+	OBS_BAND_GLASS_Y	= 4,		///< the channel's top and foot inside the band
+	OBS_BAND_CELLS_X	= 50,		///< the first cameo, past the badge at the channel's start
+	OBS_CAMEO_W				= 34,		///< a cameo the channel's height
+	OBS_CAMEO_H				= 24,
+	OBS_CELL_PITCH		= 37,
+	OBS_MORE_W				= 30,		///< the "+N" at a full row's end
+	OBS_BAND_ENDS			= OBS_BAND_CELLS_X + OBS_MORE_W + OBS_BAND_GLASS_END,	///< a band less its cameos
+	OBS_CHIP_W				= 44,		///< an idle seat's chip: his lamp and badge in a sunk well
+	OBS_CHIP_H				= 30,
+	OBS_CHIP_PITCH		= 48,
+	OBS_CHIP_PITCH_Y	= 34,
 	OBS_HEAD_H				= 28,		///< the header strip, DSHead
 	OBS_HEAD_END_W		= 24,		///< each of its end pieces, the lug on the outer side
 	OBS_CARD_W				= 488,
@@ -13227,7 +13244,9 @@ enum
 	OBS_CELL_GLASS_H	= 49
 };
 /// the closest the queue's bands come, as a share of their size, before they stand in two columns
-static const Real OBS_BAND_MIN = 0.7f;
+static const Real OBS_BAND_MIN = 0.8f;
+/// and the closest two columns of them come before the last busy seats are left to the standings
+static const Real OBS_BAND_FLOOR = 0.6f;
 
 /// one player's row of the queue panel
 struct ObserverQueue
@@ -13661,73 +13680,128 @@ void InGameUI::drawObserverPanels( void )
 	//
 	// the queues, over the radar against the left edge
 	//
-	// One riveted band a player, the bands stacked up from the radar's frame with nothing round them: the
-	// queue is a rack of clamps, not a window.  The bands come closer as more seats come, down to
-	// OBS_BAND_MIN of their size, then stand in two columns; past what two columns hold the last seats
-	// are left to the standings.
-	// ponytail: no paging past two columns; 32 seats fit in two at 1080, a larger HUD Size can cut some
+	// A riveted band for each seat with something coming, as long as what it holds: the jaws, his colour
+	// lamp and badge, the cameos.  A seat with nothing coming is only his badge, a chip in the strip over
+	// the bands.  It all stays in the room over the radar, at most twice the radar's width: the bands
+	// come closer and their cameos smaller, down to OBS_BAND_MIN, before they stand in two columns, and a
+	// band keeps as many cameos as its column's width holds.
+	// ponytail: past what two columns hold at OBS_BAND_FLOOR the last busy seats are left to the standings
 	const Int seats = (Int)theObserverQueues.size();
 	if( seats > 0 )
 	{
-		const Int top = max( hudStripBottom(), TheUIRect().y ) + px( OBS_GAP );
-		const Real room = max( (Real)( radarFrameTop() - px( OBS_GAP ) - top ), 1.0f ) / max( scale(), 0.01f );
-		Int columns = 1, perColumn = seats;
-		Real q = min( 1.0f, room / ( seats * OBS_BAND_PITCH ) );
+		std::vector< Int > busy, idle;
+		for( Int each = 0; each < seats; each++ )
+			( theObserverQueues[ each ].count > 0 ? busy : idle ).push_back( each );
+
+		const Int left = hudPlay().lo.x;
+		Int radarW = px( 330 );
+		static NameKeyType radarWindowKey = NAMEKEY( "ControlBar.wnd:LeftHUD" );
+		if( GameWindow *radarWindow = TheWindowManager->winGetWindowFromId( NULL, radarWindowKey ) )
+		{
+			Int w = 0, h = 0;
+			radarWindow->winGetSize( &w, &h );
+			radarW = max( w, px( 200 ) );
+		}
+		const Real k = max( scale(), 0.01f );
+		const Real width1080 = 2 * radarW / k;
+		const Int bottom = radarFrameTop() - px( OBS_GAP );
+		const Real room = max( (Real)( bottom - max( hudStripBottom(), TheUIRect().y ) - px( OBS_GAP ) ), 1.0f ) / k;
+
+		// the strip of idle seats' chips, wrapping at the panel's width
+		const Int chipsPerRow = max( 1, REAL_TO_INT_FLOOR( width1080 / OBS_CHIP_PITCH ) );
+		const Int chipRows = ( (Int)idle.size() + chipsPerRow - 1 ) / chipsPerRow;
+		const Real stripH = chipRows * OBS_CHIP_PITCH_Y;
+		const Real bandRoom = max( room - stripH, (Real)OBS_BAND_PITCH * OBS_BAND_MIN );
+
+		Int columns = 1, perColumn = max( (Int)busy.size(), 1 );
+		Real q = min( 1.0f, bandRoom / ( perColumn * OBS_BAND_PITCH ) );
 		if( q < OBS_BAND_MIN )
 		{
 			columns = 2;
-			perColumn = ( seats + 1 ) / 2;
-			q = min( 1.0f, room / ( perColumn * OBS_BAND_PITCH ) );
+			perColumn = ( (Int)busy.size() + 1 ) / 2;
+			q = min( 1.0f, bandRoom / ( perColumn * OBS_BAND_PITCH ) );
 		}
-		if( q < OBS_BAND_MIN )
+		// two columns may close up further, to OBS_BAND_FLOOR, before seats are left out
+		if( q < OBS_BAND_FLOOR )
 		{
-			q = OBS_BAND_MIN;
-			perColumn = max( 1, REAL_TO_INT_FLOOR( room / ( OBS_BAND_PITCH * q ) ) );
+			q = OBS_BAND_FLOOR;
+			perColumn = max( 1, REAL_TO_INT_FLOOR( bandRoom / ( OBS_BAND_PITCH * q ) ) );
 		}
-		const Int rows = min( seats, columns * perColumn );
-		// two columns of bands keep four cameos each, so the pair stays narrower than the screen's third
-		const Int cells = columns > 1 ? (Int)OBS_QUEUE_CELLS_PAIRED : (Int)OBS_QUEUE_CELLS;
+		const Int rows = min( (Int)busy.size(), columns * perColumn );
+		// as many cameos as a column's width takes at this size
+		const Real column1080 = width1080 / columns - OBS_GAP;
+		const Int cells = max( 1, min( (Int)OBS_QUEUE_CELLS, REAL_TO_INT_FLOOR( ( column1080 / q - OBS_BAND_ENDS ) / OBS_CELL_PITCH ) ) );
 		auto qpx = [ q ]( Real at1080 ) { return px( at1080 * q ); };
-		const Int bandW = qpx( OBS_BAND_ENDS + cells * OBS_CELL_PITCH ), bandH = qpx( OBS_BAND_H ), pitch = qpx( OBS_BAND_PITCH );
-		const Int columnGap = px( OBS_GAP );
-		const Int stackH = min( rows, perColumn ) * pitch;
-		const Int stackTop = radarFrameTop() - px( OBS_GAP ) - stackH;
-		const Int left = hudPlay().lo.x;
-		theObserverPanelBoxes[ 0 ].lo.x = left;
-		theObserverPanelBoxes[ 0 ].lo.y = stackTop;
-		theObserverPanelBoxes[ 0 ].hi.x = left + ( rows > perColumn ? 2 : 1 ) * ( bandW + columnGap );
-		theObserverPanelBoxes[ 0 ].hi.y = stackTop + stackH;
-		auto bandAt = [ & ]( Int row ) { return LaneHud_box( left + row / perColumn * ( bandW + columnGap ), stackTop + row % perColumn * pitch, bandW, bandH ); };
-		const Int cameoW = qpx( OBS_CAMEO_W ), cameoH = qpx( OBS_CAMEO_H );
+		const Int bandH = qpx( OBS_BAND_H ), pitch = qpx( OBS_BAND_PITCH );
+		const Int columnStep = px( column1080 + OBS_GAP );
+		const Int stackTop = bottom - min( rows, perColumn ) * pitch;
+		const Int stripTop = stackTop - px( stripH );
+		auto shownOf = [ & ]( const ObserverQueue &queue ) { return min( queue.count, cells ); };
+		auto moreOf = [ & ]( const ObserverQueue &queue )
+		{
+			Int shown = 0;
+			for( Int cell = 0; cell < shownOf( queue ); cell++ )
+				shown += queue.slot[ cell ].quantity;
+			return queue.total - shown;
+		};
+		// the band's ends are drawn at their own width (threeSlice), so the lamp slot and the channel's ends
+		// sit at the theme's scale; what goes in the channel takes the band's closeness
+		const Int glassInset = qpx( OBS_BAND_GLASS_Y ), glassH = bandH - 2 * glassInset;
+		const Int badgeW = glassH * 4 / 3, cellsX = px( OBS_BAND_GLASS_X + 2 ) + badgeW + qpx( 4 );
+		const Int cameoW = qpx( OBS_CAMEO_W ), cameoH = glassH, cellPitch = qpx( OBS_CELL_PITCH );
+		auto bandAt = [ & ]( Int row )
+		{
+			const ObserverQueue &queue = theObserverQueues[ busy[ row ] ];
+			const Int length = cellsX + shownOf( queue ) * cellPitch + ( moreOf( queue ) > 0 ? qpx( OBS_MORE_W ) : 0 ) + px( OBS_BAND_GLASS_END );
+			return LaneHud_box( left + row / perColumn * columnStep, stackTop + row % perColumn * pitch, length, bandH );
+		};
 		auto cameoAt = [ & ]( Int row, Int cell )
 		{
 			const LaneHudBox band = bandAt( row );
 			IRegion2D at;
-			at.lo.x = band.x + qpx( OBS_BAND_CELLS_X + cell * OBS_CELL_PITCH );
-			at.lo.y = band.y + ( band.h - cameoH ) / 2;
+			at.lo.x = band.x + cellsX + cell * cellPitch;
+			at.lo.y = band.y + glassInset;
 			at.hi.x = at.lo.x + cameoW;
 			at.hi.y = at.lo.y + cameoH;
 			return at;
 		};
+		theObserverPanelBoxes[ 0 ].lo.x = left;
+		theObserverPanelBoxes[ 0 ].lo.y = stripTop;
+		theObserverPanelBoxes[ 0 ].hi.x = left + px( width1080 );
+		theObserverPanelBoxes[ 0 ].hi.y = bottom;
 
 		TheDisplay->beginBatch2D();
+		// the idle seats' chips: a sunk well with his lamp and badge
+		for( Int each = 0; each < (Int)idle.size(); each++ )
+		{
+			const ObserverQueue &queue = theObserverQueues[ idle[ each ] ];
+			const LaneHudBox chip = LaneHud_box( left + px( each % chipsPerRow * OBS_CHIP_PITCH ), stripTop + px( each / chipsPerRow * OBS_CHIP_PITCH_Y ),
+				px( OBS_CHIP_W ), px( OBS_CHIP_H ) );
+			nineSlice( chip, WELL_TL );
+			TheDisplay->drawFillRect( chip.x + px( 4 ), chip.y + px( 5 ), px( 4 ), chip.h - px( 10 ), rackColour( queue.player ) );
+			const LaneHudBox badge = LaneHud_box( chip.x + px( 11 ), chip.y + ( chip.h - px( 20 ) ) / 2, px( 28 ), px( 20 ) );
+			if( const Image *emblem = queue.player->getPlayerTemplate()->getEnabledImage() )
+				drawImage( emblem, badge );
+			const ObserverHit pick = { regionOf( chip ), INVALID_ID, queue.player->getPlayerIndex() };
+			theObserverHits.push_back( pick );
+		}
 		for( Int row = 0; row < rows; row++ )
 		{
-			const ObserverQueue &queue = theObserverQueues[ row ];
+			const ObserverQueue &queue = theObserverQueues[ busy[ row ] ];
 			const LaneHudBox band = bandAt( row );
-			threeSlice( band, CLAMP_BAND_L, CLAMP_BAND_C, CLAMP_BAND_R );
-			// his colour lamp in the clamp's left jaw, his army's badge beside it
-			TheDisplay->drawFillRect( band.x + qpx( 9 ), band.y + qpx( 10 ), max( qpx( 5 ), 2 ), band.h - qpx( 20 ), rackColour( queue.player ) );
-			const LaneHudBox badge = LaneHud_box( band.x + qpx( 18 ), band.y + ( band.h - qpx( 26 ) ) / 2, qpx( 34 ), qpx( 26 ) );
+			threeSlice( band, QUEUE_BAND_L, QUEUE_BAND_C, QUEUE_BAND_R );
+			// his colour in the left end's lamp slot, his army's badge at the channel's start
+			TheDisplay->drawFillRect( band.x + px( OBS_BAND_LAMP_X ), band.y + glassInset, px( OBS_BAND_LAMP_W ), glassH, rackColour( queue.player ) );
+			const LaneHudBox badge = LaneHud_box( band.x + px( OBS_BAND_GLASS_X + 2 ), band.y + glassInset, badgeW, glassH );
 			if( const Image *emblem = queue.player->getPlayerTemplate()->getEnabledImage() )
 				drawImage( emblem, badge );
 			const ObserverHit pick = { regionOf( badge ), INVALID_ID, queue.player->getPlayerIndex() };
 			theObserverHits.push_back( pick );
-			for( Int cell = 0; cell < min( queue.count, cells ); cell++ )
+			// the channel is the cameos' glass: no cell piece round them
+			for( Int cell = 0; cell < shownOf( queue ); cell++ )
 			{
 				const InGameUI::ProductionListSlot &slot = queue.slot[ cell ];
 				const IRegion2D at = cameoAt( row, cell );
-				drawObserverCell( at );
 				if( slot.cameo != NULL )
 					TheDisplay->drawImage( slot.cameo, at.lo.x, at.lo.y, at.hi.x, at.hi.y );
 				TheDisplay->drawRemainingRectClock( at.lo.x, at.lo.y, cameoW, cameoH, slot.percent, GameMakeColor( 0, 0, 0, 110 ) );
@@ -13740,13 +13814,11 @@ void InGameUI::drawObserverPanels( void )
 
 		for( Int row = 0; row < rows; row++ )
 		{
-			const ObserverQueue &queue = theObserverQueues[ row ];
-			Int shown = 0;
-			for( Int cell = 0; cell < min( queue.count, cells ); cell++ )
+			const ObserverQueue &queue = theObserverQueues[ busy[ row ] ];
+			for( Int cell = 0; cell < shownOf( queue ); cell++ )
 			{
 				const InGameUI::ProductionListSlot &slot = queue.slot[ cell ];
 				const IRegion2D at = cameoAt( row, cell );
-				shown += slot.quantity;
 				UnicodeString seconds;
 				seconds.format( u"%d", max( ControlBar_secondsFromFrames( (Real)slot.remaining ), 0 ) );
 				drawObserverReadout( seconds, at, FALSE, FALSE, WHITE_INK );
@@ -13757,12 +13829,12 @@ void InGameUI::drawObserverPanels( void )
 					drawObserverReadout( count, at, TRUE, TRUE, WHITE_INK );
 				}
 			}
-			if( queue.total > shown )
+			if( moreOf( queue ) > 0 )
 			{
 				UnicodeString rest;
-				rest.format( u"+%d", queue.total - shown );
-				const IRegion2D last = cameoAt( row, cells - 1 );
-				drawText( rest, font( TYPE_SMALL * max( q, 0.85f ) ), last.hi.x + qpx( OBS_MORE_W ) / 2 + qpx( 4 ), last.lo.y, cameoH, TEXT_GREY, 0 );
+				rest.format( u"+%d", moreOf( queue ) );
+				const IRegion2D last = cameoAt( row, shownOf( queue ) - 1 );
+				drawText( rest, font( TYPE_SMALL * max( q, 0.85f ) ), last.hi.x + ( cellPitch - cameoW ) + qpx( OBS_MORE_W ) / 2, last.lo.y, cameoH, TEXT_GREY, 0 );
 			}
 		}
 	}

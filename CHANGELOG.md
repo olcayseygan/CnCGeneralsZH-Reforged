@@ -8,6 +8,14 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## The computer builds its base and stays to hold it
+
+- A building you put up near the computer's base used to freeze its own base plan for the whole match. EA's AI treats any enemy building near a spot as danger and skips the spot, every time, and never tries another. On a small map a turtle's power plants stood 350 to 400 from the computer's base: a Medium China never built its first power plant and so built nothing at all, and an Insane China got one barracks, no War Factory and 13 of the 44 guns it wanted, and met a 154-tank push at minute 15 with an army of infantry and 100,000 in the bank. A building that cannot shoot no longer counts as danger inside the computer's own base, and a planned building whose spot is really under the guns moves to the nearest safe spot in the base instead of waiting all match.
+- An Insane computer's soldiers at home walked off the edge of the map because a Gattling Cannon a thousand away had hit one of them on the way back from a fight. Told of the gun, every one near ran for "quiet ground" outside the map, and 126 of its 164 units stood in that walk when your tanks came. A unit already out of a gun's reach now stays where it is.
+- Against a walled-in player who masses his army and attacks the computer's base at minute 15 and again at 25, nine games a level at double speed: the player now wins 0 of 9 against Medium (6 before), 1 against Hard (3), 2 against Vicious (4) and 1 against Insane (4), and the computer wins 5 of 9 at every level where it won 0, 4, 2 and 2.
+- Medium fired a ready general's power half a minute late since the last change; only Easy waits now, a minute as before.
+- Replays with a computer player recorded before this change will not play back.
+
 ## The computer goes after your superweapon
 
 - A Scud Storm, Particle Cannon or nuclear silo the computer had seen was worth a tenth of its price to its own strikes, by a note EA left in the code ("Superweapons cannot be killed by any superweapon"), so its strikes went to your power plants and your army and never to the silo. Now a superweapon it has seen counts at half its price on Easy, its full price on Medium, twice on Hard, and more on every level above.

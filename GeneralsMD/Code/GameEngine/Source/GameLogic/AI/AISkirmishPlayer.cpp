@@ -46,6 +46,7 @@
 #include "GameClient/InGameUI.h"
 #include "GameLogic/VictoryConditions.h"
 #include "GameLogic/GameLogic.h"
+#include "GameLogic/ApocalypseDirector.h"
 #include "GameLogic/LaneWarDirector.h"
 #include "GameLogic/Object.h"
 #include "GameLogic/AISkirmishPlayer.h"
@@ -151,6 +152,7 @@ void AISkirmishPlayer::processBaseBuilding( void )
 		Bool isUnderPowered = !m_player->getEnergy()->hasSufficientPower();
 		const Bool powerThin = isPowerThin();
 		Bool powerUnderConstruction = false;
+		Bool relocated = false;
 		for( BuildListInfo *info = m_player->getBuildList(); info; info = info->getNext() )
 		{
 			AsciiString name = info->getTemplateName();
@@ -291,8 +293,27 @@ void AISkirmishPlayer::processBaseBuilding( void )
 			}
 			// Make sure it is safe to build here.
 			AIPlayer::profileBaseSubBegin();
-			const Bool locationSafe = isLocationSafe(info->getLocation(), curPlan);
+			Bool locationSafe = isLocationSafe(info->getLocation(), curPlan);
 			AIPlayer::profileBaseSubEnd( AIPlayer::BASE_SUB_SAFE );
+			// The plan's spot stays unsafe for as long as an enemy building stands near it, and EA's AI skipped
+			// the entry on every pass for the rest of the match. A turtle-bench human's power plant 360 from a
+			// Medium China's first plant spot kept that seat from building anything at all, and one 400 from an
+			// Elo 4200 China's War Factory spot left it with one barracks, 100,000 in the bank and an army of
+			// infantry for the tank push at minute 15. The fork's AI moves such an entry to the nearest safe spot
+			// inside its base, one entry a pass. A supply center stays by its dock; the expansion picks another.
+			// An Apocalypse seat plays as it did.
+			if (!locationSafe && !relocated && runsOwnAI() && m_baseCenterSet && (couldBePriority || couldBeBuilt || couldBePower) &&
+					!(TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) &&
+					!curPlan->isKindOf(KINDOF_FS_SUPPLY_CENTER)) {
+				relocated = true;
+				Coord3D spot;
+				if (placeNear(curPlan, &m_baseCenter, 0.0f, FALSE, &spot, TRUE)) {
+					DEBUG_LOG(("AI BUILD frame %d player %d moves '%s' from unsafe (%.0f,%.0f) to (%.0f,%.0f)\n", TheGameLogic->getFrame(),
+						m_player->getPlayerIndex(), name.str(), info->getLocation()->x, info->getLocation()->y, spot.x, spot.y));
+					info->setLocation(spot);
+					locationSafe = true;
+				}
+			}
 			if (!locationSafe) {
 				continue;
 			}

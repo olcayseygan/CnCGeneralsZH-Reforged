@@ -2545,6 +2545,17 @@ Bool AIPlayer::isLocationSafe(const Coord3D *pos, const ThingTemplate *tthing )
 	filters[numFilters++] = &filterInsignificant;
 	filters[numFilters++] = &filterHarvesters;
 	filters[numFilters++] = &filterDozer;
+	// An enemy building that cannot shoot is no danger to a dozer. A turtle's power plants round his outer
+	// ring, 350 to 400 from a China's base, made its plan spots and every ring spot facing him unsafe for the
+	// whole match: 13 of the 44 defences it wanted, no War Factory, 100,000 in the bank at the push.  Only
+	// inside its own base's edge: a dock in the enemy's base stays unsafe for a supply center.  An Apocalypse
+	// seat plays as it did.
+	KindOfMaskType armedStructure = MAKE_KINDOF_MASK(KINDOF_FS_BASE_DEFENSE);
+	armedStructure.set(KINDOF_TECH_BASE_DEFENSE);
+	PartitionFilterRejectByKindOf filterHarmless(MAKE_KINDOF_MASK(KINDOF_STRUCTURE), armedStructure);
+	if (runsOwnAI() && m_baseCenterSet && !(TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) &&
+			sqr(pos->x - m_baseCenter.x) + sqr(pos->y - m_baseCenter.y) <= sqr(BASE_EDGE_REACH * m_baseRadius))
+		filters[numFilters++] = &filterHarmless;
 	filters[numFilters] = NULL;
 
 	Object *enemy = ThePartitionManager->getClosestObject(  pos, radius, FROM_BOUNDINGSPHERE_2D, filters );
@@ -10058,7 +10069,12 @@ static const AIRungReal POWER_WAIT_SECONDS = { { 60.0f, 0.0f, 0.0f }, AIKNOB_OPE
 
 void AIPlayer::doReadySpecialPowers( void )
 {
-	const UnsignedInt wait = (UnsignedInt)( aiRatingLerp( m_rating, POWER_WAIT_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND );
+	// Only below Medium: the curve alone falls through Medium at 30 seconds. An Apocalypse seat below Medium
+	// fires none, as before the wait, since that mode plays as it did.
+	const Bool belowMedium = !aiRatingReaches( m_rating, AISKILL_MEDIUM );
+	if( belowMedium && TheApocalypseDirector != NULL && TheApocalypseDirector->isActive() )
+		return;
+	const UnsignedInt wait = belowMedium ? (UnsignedInt)( aiRatingLerp( m_rating, POWER_WAIT_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ) : 0;
 	const Int phase = computeUpdatePhase( m_player->getPlayerIndex(), SPECIAL_POWER_CHECK_RATE );
 	if( (TheGameLogic->getFrame() + phase) % SPECIAL_POWER_CHECK_RATE != 0 )
 		return;
@@ -16203,6 +16219,8 @@ static Object *nearestKnownSuperweapon( const Player *player, const Coord3D *fro
 	* runway. */
 void AIPlayer::huntSuperweapon( void )
 {
+	if( TheApocalypseDirector != NULL && TheApocalypseDirector->isActive() )
+		return;		// an Apocalypse seat plays as it did
 	const UnsignedInt now = TheGameLogic->getFrame();
 	const UnsignedInt rate = max<UnsignedInt>( 1, (UnsignedInt)( aiRatingLerp( m_rating, SUPERWEAPON_AIR_SECONDS ) * LOGICFRAMES_PER_GAME_SECOND ) );
 	if( !m_baseCenterSet || (now + computeUpdatePhase( m_player->getPlayerIndex(), rate )) % rate != 0 )
@@ -22293,6 +22311,13 @@ AIFireAnswer AIPlayer::answerHit( Object *obj, Object *shooter, Object *gun )
 	if( answer == AIFIRE_LEAVE )
 	{
 		const Real gunTriple[ 3 ] = { at->x, at->y, groundAttackRange( shooter ) };
+		// one already out of the gun's reach has nothing to leave.  Told of a gun by a unit that walked home
+		// hit, an Elo 4200 China's Red Guards at home, 1000 from a Gattling Cannon whose reach is a fifth of
+		// that, left for "quiet ground" off the map's edge: 126 of its 164 units stood in a move order at home
+		// when the tank push came, and the base fell two minutes later
+		// (not in an Apocalypse match, which plays as it did)
+		if( distance > gunTriple[ 2 ] + INFLUENCE_CELL_SIZE && !(TheApocalypseDirector != NULL && TheApocalypseDirector->isActive()) )
+			return AIFIRE_CARRY_ON;
 		Coord3D spot;
 		// with nothing quiet near, one with an order stays on it and one standing idle under the shells still goes
 		if( (!quietGround( pos, gunTriple, &spot, unitMix( obj ) ) && !ai->isIdle()) || sqr( spot.x - pos->x ) + sqr( spot.y - pos->y ) < sqr( INFLUENCE_CELL_SIZE ) )

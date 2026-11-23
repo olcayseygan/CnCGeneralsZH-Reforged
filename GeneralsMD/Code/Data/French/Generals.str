@@ -21265,6 +21265,10 @@ GUI:LaneEndRematch
 "Revanche"
 END
 
+GUI:LaneEndLobby
+"Salon"
+END
+
 GUI:LaneEndReplay
 "Voir la rediffusion"
 END

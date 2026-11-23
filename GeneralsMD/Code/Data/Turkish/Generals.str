@@ -21678,6 +21678,10 @@ GUI:LaneEndRematch
 "Rövanş"
 END
 
+GUI:LaneEndLobby
+"Lobi"
+END
+
 GUI:LaneEndReplay
 "Tekrarı izle"
 END

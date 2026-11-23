@@ -777,10 +777,12 @@ void drawKeys( void )
 		const Real alpha = keyLive( k ) ? 1.0f : KEY_DIM_ALPHA;
 		const Real centre = KEY_X[ k ] + KEY_W * 0.5f;
 		plate( art, KEY_X[ k ], KEY_TOP, KEY_X[ k ] + KEY_W, KEY_BOTTOM, KEY_FLAT, hot ? GOLD : PANEL_LIP, alpha );
+		// in a network game the first key only leaves for the lobby (rematch), so it says so
+		const char *label = k == 0 && TheGameLogic->isInMultiplayerGame() ? "GUI:LaneEndLobby" : KEY_LABELS[ k ];
 		if( art == NULL )
-			drawText( TheGameText->fetch( KEY_LABELS[ k ] ), KEY_FONT, bx( centre ), by( KEY_LABEL_Y ), withAlpha( hot ? GOLD : WORD_WHITE, alpha ), 0 );
+			drawText( TheGameText->fetch( label ), KEY_FONT, bx( centre ), by( KEY_LABEL_Y ), withAlpha( hot ? GOLD : WORD_WHITE, alpha ), 0 );
 		if( overKey( k, mouse ) )
-			drawText( TheGameText->fetch( KEY_LABELS[ k ] ), TOOLTIP_FONT, bx( centre ), by( TOOLTIP_Y ), WORD_WHITE, 0 );
+			drawText( TheGameText->fetch( label ), TOOLTIP_FONT, bx( centre ), by( TOOLTIP_Y ), WORD_WHITE, 0 );
 	}
 }
 

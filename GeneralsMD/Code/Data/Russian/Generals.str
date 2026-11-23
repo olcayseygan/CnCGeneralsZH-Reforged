@@ -21209,6 +21209,10 @@ GUI:LaneEndRematch
 "Реванш"
 END
 
+GUI:LaneEndLobby
+"Лобби"
+END
+
 GUI:LaneEndReplay
 "Смотреть повтор"
 END

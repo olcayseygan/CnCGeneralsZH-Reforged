@@ -7468,6 +7468,10 @@ GUI:LaneEndRematch
 "Rematch"
 END
 
+GUI:LaneEndLobby
+"Lobby"
+END
+
 GUI:LaneEndReplay
 "Watch replay"
 END

@@ -19181,6 +19181,10 @@ GUI:LaneEndRematch
 "Revanche"
 END
 
+GUI:LaneEndLobby
+"Lobby"
+END
+
 GUI:LaneEndReplay
 "Replay ansehen"
 END

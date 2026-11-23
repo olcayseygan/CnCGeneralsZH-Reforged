@@ -21013,6 +21013,10 @@ GUI:LaneEndRematch
 "Реванш"
 END
 
+GUI:LaneEndLobby
+"Лобі"
+END
+
 GUI:LaneEndReplay
 "Дивитися повтор"
 END

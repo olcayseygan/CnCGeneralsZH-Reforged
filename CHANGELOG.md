@@ -93,6 +93,7 @@ found and fixed, EA's own, not port damage.**
 - The Microwave Tank has a job in Direct Strike: its beam stuns enemy vehicles with the ECM Tank's numbers, while its field keeps cooking infantry. Towers and the fortress cannot be stunned.
 - Black Lotus carries a light gun in Direct Strike, 20 a shot every half second at short reach, so she does more than hack. Jarmen Kell already shot infantry. A hero uses a button at most once every 30 seconds of game time.
 - A Dragon Tank lays its wall of fire, and a Toxin Truck its slime, at most once every 20 seconds of game time per unit.
+- On the end screen of a LAN or online match the first key is called Lobby, since that is where it takes you; in skirmish it is still Rematch.
 - Leaving a Direct Strike room with the back arrow no longer flashes the ordinary skirmish room's lists and buttons through the fade.
 - Direct Strike replays and saves recorded before this change will not play back.
 - Every Direct Strike replay recorded before this change no longer plays back, with stealthed units in it or not, and neither does an Apocalypse replay with a money gift in it.

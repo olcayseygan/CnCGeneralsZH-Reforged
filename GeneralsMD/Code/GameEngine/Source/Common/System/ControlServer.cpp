@@ -42,6 +42,7 @@
 #include "GameClient/AirliftPanel.h"
 #include "GameClient/ControlBar.h"
 #include "GameClient/Display.h"
+#include "GameClient/Drawable.h"
 #include "GameClient/GadgetListBox.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/GUICallbacks.h"		// ToggleQuitMenu, for quitmenu
@@ -884,6 +885,66 @@ static void handleCommand( const AsciiString &command )
 		char reply[ 2100 ];
 		snprintf( reply, sizeof( reply ), "{\"ok\":true,%s}", members );
 		sendText( reply );
+		return;
+	}
+
+	/* pick <Template> [add]: selects every one of the local player's objects of that template, the way
+		 a double click selects a unit's kind but for buildings too; add keeps what is already selected.
+		 For a script that gives several buildings one rally point (an rclick on the ground then does). */
+	if (strncmp( command.str(), "pick ", 5 ) == 0)
+	{
+		char templateName[ 128 ] = "", add[ 8 ] = "";
+		sscanf( command.str() + 5, "%127s %7s", templateName, add );
+		Player *player = ThePlayerList ? ThePlayerList->getLocalPlayer() : NULL;
+		if (templateName[ 0 ] == 0 || player == NULL || TheGameLogic == NULL || TheInGameUI == NULL)
+		{
+			replyError( "pick <Template> [add], in a match" );
+			return;
+		}
+		if (strcmp( add, "add" ) != 0)
+			TheInGameUI->deselectAllDrawables();
+		Int picked = 0;
+		for (Object *obj = TheGameLogic->getFirstObject(); obj; obj = obj->getNextObject())
+		{
+			if (obj->getControllingPlayer() != player || obj->isEffectivelyDead() || obj->getDrawable() == NULL
+					|| obj->getTemplate()->getName().compareNoCase( templateName ) != 0)
+				continue;
+			TheInGameUI->selectDrawable( obj->getDrawable() );
+			++picked;
+		}
+		AsciiString field;
+		field.format( "\"picked\":%d", picked );
+		replyOk( field.str() );
+		return;
+	}
+
+	/* rallyat <x> <y>: what a right click on that ground does with buildings selected, every selected
+		 object's MSG_SET_RALLY_POINT there (CommandXlat), so a script sets a rally point at a world point
+		 rather than at whatever the camera puts under a screen pixel. */
+	if (strncmp( command.str(), "rallyat ", 8 ) == 0)
+	{
+		Coord3D at;
+		at.zero();
+		if (sscanf( command.str() + 8, "%f %f", &at.x, &at.y ) != 2 || TheTerrainLogic == NULL || TheInGameUI == NULL)
+		{
+			replyError( "rallyat <x> <y>, in a match" );
+			return;
+		}
+		at.z = TheTerrainLogic->getGroundHeight( at.x, at.y );
+		Int sent = 0;
+		const DrawableList *selected = TheInGameUI->getAllSelectedDrawables();
+		for (DrawableListCIt it = selected->begin(); it != selected->end(); ++it)
+		{
+			if ((*it)->getObject() == NULL)
+				continue;
+			GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_SET_RALLY_POINT );
+			msg->appendObjectIDArgument( (*it)->getObject()->getID() );
+			msg->appendLocationArgument( at );
+			++sent;
+		}
+		AsciiString field;
+		field.format( "\"rallies\":%d", sent );
+		replyOk( field.str() );
 		return;
 	}
 

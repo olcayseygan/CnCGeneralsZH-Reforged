@@ -70,6 +70,7 @@
 #include "W3DDevice/GameClient/W3DGUICallbacks.h"
 #include "W3DDevice/GameClient/W3DInGameUI.h"
 #include "W3DDevice/GameClient/W3DGroundMarkers.h"
+#include "W3DDevice/GameClient/W3DRallyMarkers.h"
 #include "W3DDevice/GameClient/W3DDisplay.h"
 #include "W3DDevice/GameClient/W3DScene.h"
 #include "W3DDevice/GameClient/W3DView.h"
@@ -436,6 +437,7 @@ void W3DInGameUI::reset( void )
 	m_guardMarkersFrame = ~0u;
 	m_guardMarkerTops.clear();
 	W3DGroundMarkers_reset();
+	W3DRallyMarkers_reset();
 
 }  // end reset
 
@@ -1536,6 +1538,7 @@ void W3DInGameUI::drawOrderRings( Bool shadeByShroud )
 	// the Machined Reticle markers first, under the order dots: both terrains call this after their
 	// shroud, so the markers are drawn from here rather than from each of them
 	W3DGroundMarkers_draw( shadeByShroud );
+	W3DRallyMarkers_draw();		// the rally point is the player's own: dimmed by the shroud at the take, never blacked out
 
 	if( m_orderRingColors.empty() && m_orderMarkers.empty() )
 		return;

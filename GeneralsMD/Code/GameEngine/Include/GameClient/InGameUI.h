@@ -1116,6 +1116,10 @@ public:  // ********************************************************************
 	static Bool groundMarkersOn( void );
 	/// W3DGroundMarkers says, once, on the main thread, whether its atlas loaded
 	static void setGroundMarkersLoaded( Bool loaded );
+	/// the Machined Reticle rally point draws a production building's rally point, not EA's flag and
+	/// laser: Reforged graphics and W3DRallyMarkers' sheet loaded, which it says here once
+	static Bool rallyMarkersOn( void );
+	static void setRallyMarkersLoaded( Bool loaded );
 
 	/// what the player is aiming, kept while the cursor is up: the press is the timeline's zero
 	struct GroundMarkerAim

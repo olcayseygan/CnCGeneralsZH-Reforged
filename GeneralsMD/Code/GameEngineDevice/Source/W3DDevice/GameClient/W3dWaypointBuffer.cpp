@@ -86,6 +86,7 @@
 
 #include "W3DDevice/GameClient/TerrainTex.h"
 #include "W3DDevice/GameClient/HeightMap.h"
+#include "W3DDevice/GameClient/W3DRallyMarkers.h"
 #include "W3DDevice/GameClient/W3DShroud.h"
 #include "W3DDevice/GameClient/W3DSmoothMotion.h"
 
@@ -608,6 +609,10 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 
 	// Rally points, drawn whenever we are not actively laying down waypoints. This used to be the
 	// else of the block above, which is why turning that block on full time hid every rally line.
+	// Under the Reforged graphics each building's path goes to the Machined Reticle rally point
+	// (W3DRallyMarkers), which draws the rail, the frame and the flag, instead of EA's laser
+	const Bool rallyMarkers = W3DRallyMarkers_on();
+	W3DRallyMarkers_beginTake();
 	if( !TheInGameUI->isInWaypointMode() )
 	{
 		Vector3 points[ MAX_DISPLAY_NODES + 1 ]; //Lines have nodes + 1 points.
@@ -746,6 +751,13 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 					const Coord3D *rallyPoint = TheInGameUI->getPredictedRallyPoint( obj->getID() );
 					if( rallyPoint == NULL )
 						rallyPoint = exitInterface->getRallyPoint();
+					const Int rallyFinish = W3DRallyMarkers_finishOf( obj->getTemplate()->getDefaultOwningSide() );
+					if( rallyMarkers && rallyPoint == NULL )
+					{
+						// no point yet: the door and the natural point still go over, for the cursor's ghost rail
+						W3DRallyMarkers_addPath( obj->getID(), points, numPoints, FALSE, rallyFinish, ringColor( obj->getControllingPlayer() ) );
+						continue;
+					}
 					if( rallyPoint )
 					{
 						if( boxWrap )
@@ -900,7 +912,10 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 					else
 						continue;
 
-					record( DRAW_LINE, FALSE, numPoints, points );
+					if( rallyMarkers )
+						W3DRallyMarkers_addPath( obj->getID(), points, numPoints, TRUE, rallyFinish, ringColor( obj->getControllingPlayer() ) );
+					else
+						record( DRAW_LINE, FALSE, numPoints, points );
 
 				}// end if exit interface
 				
@@ -932,7 +947,13 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 			transform->Transform_Vector( *transform, rallyLoc, &rallyLoc );
 
 			// a helipad puts both points in the same place; one puck, no line
-			if( !(exitLoc == rallyLoc) )
+			if( rallyMarkers )
+			{
+				if( !(exitLoc == rallyLoc) )
+					W3DRallyMarkers_addPlacement( exitLoc, rallyLoc, W3DRallyMarkers_finishOf( TheInGameUI->getPendingPlaceType()->getDefaultOwningSide() ),
+																				ringColor( ThePlayerList->getLocalPlayer() ) );
+			}
+			else if( !(exitLoc == rallyLoc) )
 			{
 				record( DRAW_PUCK, FALSE, 1, &rallyLoc );	//The little hockey puck
 
@@ -943,6 +964,8 @@ void W3DWaypointBuffer::takeReadsForRender(void)
 			}
 		}
 	}
+
+	W3DRallyMarkers_endTake();
 }
 
 //=============================================================================

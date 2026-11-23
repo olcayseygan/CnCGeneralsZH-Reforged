@@ -91,6 +91,7 @@ Data/Art/Textures/ReforgedLobbySpot.tga
 Data/Art/Textures/ReforgedMatchClock.tga
 Data/Art/Textures/ReforgedRadarContact.tga
 Data/Art/Textures/ReforgedRadarRing.tga
+Data/Art/Textures/ReforgedRallyMarkers.dds
 Data/Art/Textures/ReforgedReconArea.tga
 Data/Art/Textures/ReforgedReconHud.tga
 Data/Art/Textures/ReforgedSignalAttack.tga
@@ -1280,6 +1281,7 @@ Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyeTabPanel.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudTurkiyeTalents.ini
 Data/INI/MappedImages/HandCreated/ReforgedLobbySpot.ini
 Data/INI/MappedImages/HandCreated/ReforgedMatchClock.ini
+Data/INI/MappedImages/HandCreated/ReforgedRallyMarkers.ini
 Data/INI/MappedImages/HandCreated/ReforgedReconHud.ini
 Data/INI/MappedImages/HandCreated/TRCameos.ini
 Data/INI/MappedImages/HandCreated/TRUpgrades.ini
@@ -3126,6 +3128,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/W3DParticleSys.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DPoly.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DProjectedShadow.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DPropBuffer.h
+GameEngineDevice/Include/W3DDevice/GameClient/W3DRallyMarkers.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DReachOverlay.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DRoadBuffer.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DScene.h
@@ -3347,6 +3350,7 @@ GameEngineDevice/Source/W3DDevice/GameClient/W3DMouse.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DParticleSys.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DPoly.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DPropBuffer.cpp
+GameEngineDevice/Source/W3DDevice/GameClient/W3DRallyMarkers.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DReachOverlay.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DRoadBuffer.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DScene.cpp
@@ -5670,6 +5674,7 @@ Tools/packaging-resolution-check.sh
 Tools/peacetime_layout.py
 Tools/pink_laser.py
 Tools/radar_marks.py
+Tools/rally_markers.py
 Tools/recon_marks.py
 Tools/record-dx11-shaders.ps1
 Tools/rejoin_check.py

@@ -5615,8 +5615,9 @@ void ControlBar::setPortraitByObject( Object *obj )
 void ControlBar::showRallyPoint( const Coord3D *loc )
 {
 
-	// if loc is NULL, destroy any rally point drawble we have shown
-	if( loc == NULL )
+	// if loc is NULL, destroy any rally point drawble we have shown.  Under the Reforged graphics the
+	// Machined Reticle rally point plants its own flag (W3DRallyMarkers), so EA's goes too
+	if( loc == NULL || InGameUI::rallyMarkersOn() )
 	{
 
 		// destroy rally point drawable if present

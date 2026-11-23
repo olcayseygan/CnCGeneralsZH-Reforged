@@ -2323,6 +2323,18 @@ Bool InGameUI::groundMarkersOn( void )
 	return theGroundMarkersLoaded && TheGlobalData != NULL && !TheGlobalData->m_classicGraphics;
 }
 
+static Bool theRallyMarkersLoaded = FALSE;
+
+void InGameUI::setRallyMarkersLoaded( Bool loaded )
+{
+	theRallyMarkersLoaded = loaded;
+}
+
+Bool InGameUI::rallyMarkersOn( void )
+{
+	return theRallyMarkersLoaded && TheGlobalData != NULL && !TheGlobalData->m_classicGraphics;
+}
+
 //-------------------------------------------------------------------------------------------------
 /** A ground order or a power at a location went out on this click: the cursor that aimed it, if one
 	* is still up or went down a moment ago, becomes a marker on the clicked point. */

@@ -3219,19 +3219,29 @@ static IRegion2D zoneBlockBounds( const IRegion2D &globalBounds, Int xBlock, Int
 
 /* Raw zones for one column of zone blocks: runs of one terrain type inside each block.  A map that
 	 runs out of zone ids stops here, the same way on every machine, rather than pathing on wrapped
-	 zone numbers. */
+	 zone numbers.
+
+	 The raw pass only merges cells of one block, so once a block is done its sets never change
+	 again.  Each block's ids are taken back right there: its sets are numbered first, first+1, ...
+	 in the order of their smallest raw id, the cells rewritten to them, and the ids after them
+	 handed out again to the next block.  That is the numbering collapseRawZones gave the whole map
+	 (blocks own ascending ranges, a set's root is its smallest id), so it collapses to the same
+	 zones; the cap now counts real zones, not raw runs, and a 1999x1999 map that needed about 74000
+	 raw ids fits. */
 Int PathfindZoneManager::rawZonesForBlockColumn( Int xBlock )
 {
 	Rebuild &b = m_build;
 	const Int s = b.slot;
 	PathfindCell **map = b.map;
 	zoneStorageType *zoneEquivalency = &b.equivalency[0];
+	Int *compact = &b.collapsed[0];	// scratch: collapseRawZones writes it over before it is read
 	const UnsignedInt lastRawZone = MAX_RAW_ZONES - 1 - (LAYER_LAST + 1);
 	Int cells = 0;
 	for (Int yBlock=0; yBlock<b.yCount; yBlock++) {
 		const IRegion2D bounds = zoneBlockBounds( b.bounds, xBlock, yBlock );
 		ZoneBlock &block = b.zoneBlocks[xBlock][yBlock];
 		block.setInteractsWithBridge(false);
+		const UnsignedInt firstZone = b.maxZone;
 		for( Int j=bounds.lo.y; j<=bounds.hi.y; j++ )	{
 			for( Int i=bounds.lo.x; i<=bounds.hi.x; i++ )	{
 				PathfindCell *cell = &map[i][j];
@@ -3260,6 +3270,23 @@ Int PathfindZoneManager::rawZonesForBlockColumn( Int xBlock )
 				}
 			}
 		}
+		// take this block's merged ids back (see above); a root is below every id in its set
+		UnsignedInt nextZone = firstZone;
+		for (UnsignedInt z = firstZone; z < b.maxZone; ++z) {
+			const Int root = pathfindZoneFind(zoneEquivalency, z);
+			compact[z] = (root == (Int)z) ? (Int)nextZone++ : compact[root];
+		}
+		if (nextZone != b.maxZone) {
+			for( Int j=bounds.lo.y; j<=bounds.hi.y; j++ )	{
+				for( Int i=bounds.lo.x; i<=bounds.hi.x; i++ )	{
+					map[i][j].setZoneIn(s, (zoneStorageType)compact[map[i][j].getZoneIn(s)]);
+				}
+			}
+		}
+		for (UnsignedInt z = firstZone; z < b.maxZone; ++z) {
+			zoneEquivalency[z] = (zoneStorageType)z;
+		}
+		b.maxZone = nextZone;
 		cells += (bounds.hi.x-bounds.lo.x+1) * (bounds.hi.y-bounds.lo.y+1);
 	}
 	return cells;

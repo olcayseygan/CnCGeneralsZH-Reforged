@@ -135,6 +135,94 @@ TEST(pathfind_zones_rebuilt_in_slices_answer_as_the_one_frame_pass)
 	}
 }
 
+/* A 1100x1100 map whose every block is two interlocked combs: cliff teeth from a cliff column on
+	 the left, open teeth from an open column on the right.  Each block hands out six raw ids (one for
+	 the cliff, one per open tooth) for two real zones, so the map takes 72600 raw ids, past the
+	 65536 a zone id holds, for 24200 zones.  The pass used to stop on "Ran out of pathfind zones"
+	 here; now each block gives its merged ids back, and the zones come out numbered as the whole-map
+	 collapse numbered them: block k down the columns holds cliff 2k+1 and open ground 2k+2. */
+TEST(pathfind_zones_past_65535_raw_ids_number_as_the_collapse_did)
+{
+	enum { N = 1100, B = PathfindZoneManager::ZONE_BLOCK_SIZE, BLOCKS = N / B };
+	PathfindCell *cells = new PathfindCell[ N * N ];
+	PathfindCell **columns = new PathfindCell *[ N ];
+	PathfindLayer layers[ LAYER_LAST + 1 ];
+	for( Int i = 0; i < N; ++i )
+		columns[ i ] = &cells[ i * N ];
+	for( Int i = 0; i < N; ++i )
+		for( Int j = 0; j < N; ++j )
+		{
+			const Int x = i % B, y = j % B;
+			const Bool open = x == B - 1 || ( x != 0 && ( y & 1 ) == 0 );
+			columns[ i ][ j ].setType( open ? PathfindCell::CELL_CLEAR : PathfindCell::CELL_CLIFF );
+		}
+	IRegion2D bounds;
+	bounds.lo.x = 0;
+	bounds.lo.y = 0;
+	bounds.hi.x = N - 1;
+	bounds.hi.y = N - 1;
+	CHECK( BLOCKS * BLOCKS * 6 > 65535 );
+
+	PathfindZoneManager zm;
+	zm.allocateBlocks( bounds );
+	zm.calculateZones( columns, layers, bounds );
+
+	Int wrong = 0;
+	for( Int i = 0; i < N; ++i )
+		for( Int j = 0; j < N; ++j )
+		{
+			const UnsignedInt k = (UnsignedInt)( ( i / B ) * BLOCKS + j / B );
+			const UnsignedInt want = columns[ i ][ j ].getType() == PathfindCell::CELL_CLIFF ? 2 * k + 1 : 2 * k + 2;
+			if( columns[ i ][ j ].getZone() != want )
+				++wrong;
+		}
+	CHECK_EQ( wrong, 0 );
+	delete [] columns;
+	delete [] cells;
+}
+
+/* A save taken while the raw pass is part way across the map, its finished blocks already holding
+	 the ids they gave back, loads into a fresh manager on a fresh copy of the map and runs on to the
+	 swap with the answers of an unbroken pass.  The first pass is whole so the save has live zones
+	 to carry, as a game's always does; a second pass over the same terrain numbers it the same. */
+TEST(pathfind_zones_saved_mid_raw_pass_finish_as_an_unbroken_pass)
+{
+	static const Int cuts[] = { 1, 3, 6 };		// block columns done of the seven, all still in the raw pass
+	for( Int s = 0; s < 3; ++s )
+		for( Int c = 0; c < (Int)( sizeof( cuts ) / sizeof( cuts[ 0 ] ) ); ++c )
+		{
+			MemoryXfer save;
+			{
+				ZoneTestMap m( theZoneSeeds[ s ] );
+				PathfindZoneManager zm;
+				zm.allocateBlocks( m.bounds );
+				zm.calculateZones( m.columns, m.layers, m.bounds );
+				zm.beginRebuild( m.columns, m.layers, m.bounds );
+				Bool swapped = FALSE;
+				for( Int k = 0; k < cuts[ c ]; ++k )
+					swapped = swapped || zm.stepRebuild( 1 );		// one block column a call
+				CHECK( !swapped );
+				CHECK( zm.isRebuilding() );
+				zm.xfer( &save, m.columns, m.layers, m.bounds );
+			}
+			save.rewind();
+			ZoneTestMap m( theZoneSeeds[ s ] );
+			PathfindZoneManager zm;
+			zm.allocateBlocks( m.bounds );
+			Bool loaded = TRUE;
+			try { zm.xfer( &save, m.columns, m.layers, m.bounds ); } catch( ... ) { loaded = FALSE; }
+			CHECK( loaded );
+			if( !loaded )
+				continue;
+			CHECK( zm.isRebuilding() );
+			Int calls = 0;
+			while( !zm.stepRebuild( 1 ) && calls < 100000 )
+				++calls;
+			CHECK( !zm.isRebuilding() );
+			CHECK_EQ( zoneAnswersHash( zm, m ), theZoneHashes[ s ] );
+		}
+}
+
 static void wallOffColumn( ZoneTestMap &m, Int x )
 {
 	for( Int j = 0; j < ZoneTestMap::H; ++j )

@@ -217,10 +217,12 @@ UnsignedInt EarnedAmount( UnsignedInt amount, Int percent );
 // maxBonus (the profile's IncomeBonusMaxPercent) at a quarter of it and below.  Integers only.
 Int IncomeBonusTarget( Int ownStrength, Int strongestEnemyStrength, Int maxBonus );
 // The strengths that target is fed: of count living players in list order, worth[i] each and allies[i]
-// a bit for every player mutually allied with i, self's side (itself and its allies) a player at a
-// time, and the highest per-player average of the other sides, each a leader in list order and the
-// players still ungrouped who are its mutual allies.  Free-for-all, every enemy is a side of one.
-void IncomeSideWorths( const Int *worth, const PlayerMaskType *allies, Int count, Int self, Int *ownAverage, Int *strongestEnemyAverage );
+// a bit for every player mutually allied with i, the whole worth of self's side (itself and its allies),
+// and the highest whole worth of the other sides, each a leader in list order and the players still
+// ungrouped who are its mutual allies.  Free-for-all, every enemy is a side of one.  Whole, not a
+// player at a time: averaged, a computer beside a weak human in a two against one read itself behind
+// the lone enemy and banked the bonus while its side outnumbered him.
+void IncomeSideWorths( const Int *worth, const PlayerMaskType *allies, Int count, Int self, Int *ownWorth, Int *strongestEnemyWorth );
 // One weighing's move from the bonus it has toward that target, at most maxBonus over
 // AI_INCOME_BONUS_STEPS rounded up, so every ceiling is reached in the same number of weighings.
 Int IncomeBonusStep( Int bonus, Int target, Int maxBonus );

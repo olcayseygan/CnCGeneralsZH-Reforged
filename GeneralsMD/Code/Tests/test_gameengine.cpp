@@ -2986,7 +2986,7 @@ TEST(skirmish_ai_earnings_bonus_when_behind)
 	}
 }
 
-/* Player.cpp: the bonus weighs sides, a player at a time, not one seat against another. */
+/* Player.cpp: the bonus weighs whole sides, not one seat against another. */
 TEST(skirmish_ai_earnings_bonus_weighs_sides)
 {
 	Int own = -1, enemy = -1;
@@ -2994,10 +2994,23 @@ TEST(skirmish_ai_earnings_bonus_weighs_sides)
 	const Int worth[ 8 ] = { 1000, 0, 3000, 1000, 4000, 0, 500, 500 };
 	const PlayerMaskType allies[ 8 ] = { 1u << 1, 1u << 0, 1u << 3, 1u << 2, 1u << 5, 1u << 4, 1u << 7, 1u << 6 };
 	IncomeSideWorths( worth, allies, 8, 1, &own, &enemy );
-	CHECK_EQ( own, 500 );
-	CHECK_EQ( enemy, 2000 );
-	/* a quarter of the strongest side's average: the ceiling */
+	CHECK_EQ( own, 1000 );
+	CHECK_EQ( enemy, 4000 );
+	/* a quarter of the strongest side's worth: the ceiling */
 	CHECK_EQ( IncomeBonusTarget( own, enemy, 150 ), 150 );
+	/* TR_Nero's two against one: a rich computer (seat 1) beside a weak human (seat 0) against a lone
+	   computer (seat 2).  Averaged, seat 1 read 3500 against 5000 and banked the bonus; whole, it is
+	   ahead, and the lone one is behind */
+	const Int twoOnOne[ 3 ] = { 1000, 6000, 5000 };
+	const PlayerMaskType pair[ 3 ] = { 1u << 1, 1u << 0, 0 };
+	IncomeSideWorths( twoOnOne, pair, 3, 1, &own, &enemy );
+	CHECK_EQ( own, 7000 );
+	CHECK_EQ( enemy, 5000 );
+	CHECK_EQ( IncomeBonusTarget( own, enemy, 100 ), 0 );
+	IncomeSideWorths( twoOnOne, pair, 3, 2, &own, &enemy );
+	CHECK_EQ( own, 5000 );
+	CHECK_EQ( enemy, 7000 );
+	CHECK( IncomeBonusTarget( own, enemy, 100 ) > 0 );
 	/* free for all: every enemy is a side of one, the richest counts */
 	const Int ffa[ 3 ] = { 300, 100, 200 };
 	const PlayerMaskType none[ 3 ] = { 0, 0, 0 };
@@ -3018,7 +3031,7 @@ TEST(skirmish_ai_earnings_bonus_weighs_sides)
 	wideAllies[ 33 ] = playerIndexToMask( 39 );
 	wideAllies[ 39 ] = playerIndexToMask( 33 );
 	IncomeSideWorths( wide, wideAllies, 40, 33, &own, &enemy );
-	CHECK_EQ( own, 200 );
+	CHECK_EQ( own, 400 );
 	CHECK_EQ( enemy, 5000 );
 }
 

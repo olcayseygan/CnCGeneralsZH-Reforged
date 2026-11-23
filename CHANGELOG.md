@@ -41,6 +41,12 @@ found and fixed, EA's own, not port damage.**
 - The Supply Drop Zone pays in Apocalypse. Its cargo plane comes in over the map's edge, through the red fog, and the fog killed it four seconds in with the crates still aboard: the logs of earlier test matches hold 202 of those deaths. A plane that one of your general's powers flies in from off the map, a supply drop, a paradrop or a bomber, now crosses the fog unharmed. Aircraft you order into the fog still die there. In the same test the drop zone went from paying nothing to 1500 a drop.
 - Apocalypse replays and saves recorded before this change will not play back.
 
+## Computer allies stay in their own corner
+
+- A computer ally whose base filled up kept walking its new buildings outward and took the first open ground it met, and the flattest open ground near it was usually your start. One player found a Hard America ally's airfields, factories and Tomahawks packed into his corner, and the next game a China ally put every war factory and barracks there. A computer now treats ground nearer an ally's start than its own base as his and builds elsewhere; an ally who has lost everything gives his corner back.
+- A computer that falls behind earns more, and it judged that by its team's worth a player at a time. Beside a weak partner in a two against one it read itself as losing to the lone enemy it outnumbered and banked up to two and a half times what its trucks brought in, and in one 27 minute match a Hard ally built 1,731 units. It now sets its whole team against the whole enemy team, so in a two against one the lone computer is the one that gets the catch-up money.
+- Replays with a computer player recorded before this change will not play back.
+
 ## The computer builds superweapons like a turtle does
 
 - A Hard computer waited for its twelfth finished defence before its first superweapon and then stopped at two, while a player behind his walls put up five and wiped it in one push; the levels above Hard asked for even more guns per superweapon, so they built fewer still. Every level now pays four defences for each one, and once the first stands the computer adds another whenever the bank holds its price. In twelve four-player Hard matches on Twilight Flame all 48 computers put one up, the first at a median of 3.8 minutes, and held a median of three by the end, ten at most. Easy and Medium still build the one their scripts ask for.

@@ -3681,11 +3681,11 @@ Int IncomeBonusTarget( Int ownStrength, Int strongestEnemyStrength, Int maxBonus
   return bonus < maxBonus ? bonus : maxBonus;
 }
 
-void IncomeSideWorths( const Int *worth, const PlayerMaskType *allies, Int count, Int self, Int *ownAverage, Int *strongestEnemyAverage )
+void IncomeSideWorths( const Int *worth, const PlayerMaskType *allies, Int count, Int self, Int *ownWorth, Int *strongestEnemyWorth )
 {
   PlayerMaskType grouped = 0;
-  *ownAverage = 0;
-  *strongestEnemyAverage = 0;
+  *ownWorth = 0;
+  *strongestEnemyWorth = 0;
   for( Int lead = 0; lead < count; ++lead )
   {
     if( grouped & playerIndexToMask( lead ) )
@@ -3693,7 +3693,6 @@ void IncomeSideWorths( const Int *worth, const PlayerMaskType *allies, Int count
     // the leader's own side when it is this player or one of its allies, else the next enemy side
     const Bool ours = lead == self || ( allies[ self ] & playerIndexToMask( lead ) ) != 0;
     Int64 sum = 0;
-    Int size = 0;
     for( Int i = lead; i < count; ++i )
     {
       if( grouped & playerIndexToMask( i ) )
@@ -3704,13 +3703,14 @@ void IncomeSideWorths( const Int *worth, const PlayerMaskType *allies, Int count
         continue;
       grouped |= playerIndexToMask( i );
       sum += worth[ i ];
-      ++size;
     }
-    const Int average = (Int)( sum / size );
+    // the side's whole worth: two against one is two players' worth against one, so a computer
+    // beside a weak partner is not behind a lone enemy it outnumbers, and the lone one is
+    const Int total = sum < 0x7FFFFFFF ? (Int)sum : 0x7FFFFFFF;
     if( ours )
-      *ownAverage = average;
-    else if( average > *strongestEnemyAverage )
-      *strongestEnemyAverage = average;
+      *ownWorth = total;
+    else if( total > *strongestEnemyWorth )
+      *strongestEnemyWorth = total;
   }
 }
 

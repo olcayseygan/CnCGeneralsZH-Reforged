@@ -2088,6 +2088,8 @@ Object *AIPlayer::buildStructureWithDozer(const ThingTemplate *bldgPlan, BuildLi
 				if (home && sqr(newPos.x - m_baseCenter.x) + sqr(newPos.y - m_baseCenter.y) > sqr(BASE_EDGE_REACH*m_baseRadius)) continue;
 				// a flood from a spot that is itself cut off from the base stays on that ground
 				if (runsOwnAI() && !reachableFromBase(&newPos)) continue;
+				// and a spot pushed out of a crowded base stays off an ally's ground
+				if (runsOwnAI() && inAllyCorner(&newPos, &pos)) continue;
 				++probes;
 				valid = TheBuildAssistant->isLocationLegalToBuild( &newPos, bldgPlan, angle,
 																						 BuildAssistant::CLEAR_PATH |
@@ -8771,6 +8773,34 @@ Bool AIPlayer::onEmptyStart( const Coord3D *pos ) const
 	return FALSE;
 }
 
+/** TR_Nero, 2026-11-23: a Hard ally filled his corner with Tomahawks, airfields and factories, and the next
+	* game a China ally put every factory and barracks there.  The outward walk of placeNear goes as far as the
+	* ground does and its safety test only looks for enemies, so a grown base spilled onto the nearest flat
+	* ground, an ally's start.  A spot nearer a living ally's start position than to this base's center, and
+	* than to the point the search starts from (a far supply pile, an empty start), is his.  Starts are in
+	* the lobby for everyone to read, and the walk is in player list order, so every machine refuses alike. */
+Bool AIPlayer::inAllyCorner( const Coord3D *pos, const Coord3D *from ) const
+{
+	if( !m_baseCenterSet )
+		return FALSE;
+	Real ownSqr = sqr( pos->x - m_baseCenter.x ) + sqr( pos->y - m_baseCenter.y );
+	const Real fromSqr = sqr( pos->x - from->x ) + sqr( pos->y - from->y );
+	if( fromSqr < ownSqr )
+		ownSqr = fromSqr;
+	for( Int i = 0; i < ThePlayerList->getPlayerCount(); ++i )
+	{
+		Player *ally = ThePlayerList->getNthPlayer( i );
+		Coord3D there;
+		if( ally == m_player || !ally->isPlayableSide() || !ally->hasAnyObjects() ||
+				m_player->getRelationship( ally->getDefaultTeam() ) != ALLIES || ally->getRelationship( m_player->getDefaultTeam() ) != ALLIES ||
+				!startAt( ally->getMpStartIndex(), &there ) )
+			continue;
+		if( sqr( pos->x - there.x ) + sqr( pos->y - there.y ) < ownSqr )
+			return TRUE;
+	}
+	return FALSE;
+}
+
 struct KindNearCount
 {
 	KindOfType kind;
@@ -9812,7 +9842,7 @@ static Int incomeStrength( Player *player )
 
 //----------------------------------------------------------------------------------------------------------
 /** The owner, 2026-11-02: a computer that starts losing earns more.  Every AI_INCOME_BONUS_FRAMES it weighs
-	* its side, itself and every ally humans included, a player at a time against the strongest enemy side
+	* its side, itself and every ally humans included, whole against the strongest enemy side
 	* still in the match (IncomeSideWorths), and moves the bonus a step toward what
 	* IncomeBonusTarget says that is owed, up to the rated profile's IncomeBonusMaxPercent, so the percent
 	* climbs and falls by at most a sixth of that ceiling at a time (AI_INCOME_BONUS_STEPS).  The score
@@ -9851,7 +9881,7 @@ void AIPlayer::stepIncomeBonus( void )
 	const Int bonus = IncomeBonusStep( m_incomeBonus, IncomeBonusTarget( own, strongest, maxBonus ), maxBonus );
 	if( bonus == m_incomeBonus )
 		return;
-	DEBUG_LOG(( "AI INCOME frame %d player %d side worth %d a player against %d, income %d%% -> %d%%\n",
+	DEBUG_LOG(( "AI INCOME frame %d player %d side worth %d against %d, income %d%% -> %d%%\n",
 		TheGameLogic->getFrame(), m_player->getPlayerIndex(), own, strongest,
 		m_player->incomePercent(), m_player->incomePercent() - m_incomeBonus + bonus ));
 	m_incomeBonus = bonus;
@@ -10201,7 +10231,7 @@ Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real
 	// what turned each spot away, for the superweapon's refusal line: a walled-in GLA at Elo 2800 had no room
 	// at 726 or at 1270 of its base and nothing said which test refused it
 	const Bool tellRefusals = tmpl->isKindOf( KINDOF_FS_SUPERWEAPON );
-	Int refusedCell = 0, refusedReach = 0, refusedFront = 0, refusedFootprint = 0, refusedUnsafe = 0;
+	Int refusedCell = 0, refusedReach = 0, refusedFront = 0, refusedAlly = 0, refusedFootprint = 0, refusedUnsafe = 0;
 	Int refusedCode[ LBC_TOO_MANY_DERRICK_DEFENSES + 1 ] = { 0 };
 
 	Int tries = rings * PLACEMENT_ANGLES;
@@ -10231,6 +10261,11 @@ Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real
 		if( behindOnly && ( pos.x - m_baseCenter.x ) * enemyWay.x + ( pos.y - m_baseCenter.y ) * enemyWay.y > m_baseRadius )
 		{
 			++refusedFront;
+			continue;
+		}
+		if( inAllyCorner( &pos, center ) )
+		{
+			++refusedAlly;
 			continue;
 		}
 		// the square inside the footprint's circle; the corners of the circle's own square stick out
@@ -10286,10 +10321,10 @@ Bool AIPlayer::placeNear( const ThingTemplate *tmpl, const Coord3D *center, Real
 		DEBUG_LOG(("AI ECONOMY frame %d player %d has no room for '%s' within %.0f of its base, %d in the bank\n", TheGameLogic->getFrame(),
 			m_player->getPlayerIndex(), tmpl->getName().str(), BASE_EDGE_REACH * ( stretched ? homeReachScale : 1.0f ) * m_baseRadius, m_player->getMoney()->countMoney()));
 	if( tellRefusals )
-		DEBUG_LOG(("AI ECONOMY frame %d player %d '%s' refused: %d not clear, %d past the reach, %d towards the enemy, %d footprint, "
+		DEBUG_LOG(("AI ECONOMY frame %d player %d '%s' refused: %d not clear, %d past the reach, %d towards the enemy, %d an ally's, %d footprint, "
 			"illegal for %d terrain %d flat %d objects %d path %d shroud %d supplies %d other %d enemy building, %d unsafe, %d checks left\n",
 			TheGameLogic->getFrame(), m_player->getPlayerIndex(), tmpl->getName().str(), refusedCell, refusedReach, refusedFront,
-			refusedFootprint, refusedCode[ LBC_RESTRICTED_TERRAIN ], refusedCode[ LBC_NOT_FLAT_ENOUGH ], refusedCode[ LBC_OBJECTS_IN_THE_WAY ],
+			refusedAlly, refusedFootprint, refusedCode[ LBC_RESTRICTED_TERRAIN ], refusedCode[ LBC_NOT_FLAT_ENOUGH ], refusedCode[ LBC_OBJECTS_IN_THE_WAY ],
 			refusedCode[ LBC_NO_CLEAR_PATH ], refusedCode[ LBC_SHROUD ], refusedCode[ LBC_TOO_CLOSE_TO_SUPPLIES ],
 			refusedCode[ LBC_GENERIC_FAILURE ], refusedCode[ LBC_TOO_CLOSE_TO_ENEMY ], refusedUnsafe, tries));
 	return FALSE;

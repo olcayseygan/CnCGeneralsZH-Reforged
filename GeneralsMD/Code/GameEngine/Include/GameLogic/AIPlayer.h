@@ -464,6 +464,7 @@ protected:
 	Bool secondBaseCenters(void) const;	///< a base away from home is a Command Center founded once home is full, not a factory on a timer
 	Int findOutposts(Coord3D *at, Int max);	///< this player's factories far from home, one per site, in object order
 	Bool onEmptyStart(const Coord3D *pos) const;	///< within reach of a start position no player started on: a second base's ground
+	Bool inAllyCorner(const Coord3D *pos, const Coord3D *from) const;	///< nearer a living ally's start position than to this base or to from: his ground, not ours to build on
 	const ThingTemplate *missingPrerequisite(Object *dozer, KindOfType kind);	///< the building a dozer button of this kind waits on, that this player has none of
 	Bool queueAtOutpost(const ThingTemplate *tmpl, const Coord3D *at, Real innerRadius, Real lean, const char *why);	///< placeNear round a base away from home, leant towards the enemy by lean
 

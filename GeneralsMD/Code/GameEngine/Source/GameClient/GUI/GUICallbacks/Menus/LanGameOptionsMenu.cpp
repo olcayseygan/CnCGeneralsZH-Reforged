@@ -1921,9 +1921,12 @@ void PostToLanGameOptions( PostToLanGameType post )
 				game->getSlot(i)->setStartPos(-1);
 			}
 			// an Apocalypse room's seats stand on starts 1..n; without this the host's room put them back
-			// every frame and sent the options again each time
+			// every frame and sent the options again each time; a Direct Strike room's seat n stands on start n
+			// the same way (FitDirectStrikeRoom), so it is put back before the string goes out too
 			if (s_apocalypse)
 				FitApocalypseRoom(game);
+			else if (s_directStrike)
+				FitDirectStrikeRoom(game);
 
 			TheLAN->RequestGameOptions(GenerateGameOptionsString(), true);
 			break;

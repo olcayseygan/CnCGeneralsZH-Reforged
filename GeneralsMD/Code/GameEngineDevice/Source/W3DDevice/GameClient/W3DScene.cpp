@@ -60,6 +60,7 @@
 #include "W3DDevice/GameClient/W3DScene.h"
 #include "W3DDevice/GameClient/W3DWater.h"
 #include "W3DDevice/GameClient/W3DInGameUI.h"
+#include "W3DDevice/GameClient/W3DGroundMarkers.h"
 #include "W3DDevice/GameClient/W3DDynamicLight.h"
 #include "W3DDevice/GameClient/W3DParticleSys.h"
 #include "W3DDevice/GameClient/FireLights.h"
@@ -1320,6 +1321,11 @@ void RTS3DScene::Flush(RenderInfoClass & rinfo)
 		RenderPost::OpaqueScene(TheGlobalData->m_ambientOcclusion && !TheGlobalData->m_classicGraphics);
 
 	WW3D::Render_And_Clear_Static_Sort_Lists(rinfo);	//draws things like water
+
+	// the ground markers' quads that stand on water, at its surface: painted in the terrain pass they
+	// lay on the seabed under it (W3DGroundMarkers).  Not in a mirror, a custom pass or the wireframe
+	if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE && !modernFullMirror)
+		W3DGroundMarkers_drawOnWater();
 
 	if (m_customPassMode == SCENE_PASS_DEFAULT && Get_Extra_Pass_Polygon_Mode() == EXTRA_PASS_DISABLE)
 	{

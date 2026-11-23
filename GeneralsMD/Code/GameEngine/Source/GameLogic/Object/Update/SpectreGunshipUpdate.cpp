@@ -48,6 +48,7 @@
 #include "GameClient/ParticleSys.h"
 #include "GameClient/FXList.h"
 #include "GameClient/ParticleSys.h"
+#include "GameClient/InGameUI.h"
 
 #include "GameLogic/Locomotor.h"
 #include "GameLogic/GameLogic.h"
@@ -268,7 +269,11 @@ Bool SpectreGunshipUpdate::initiateIntentToDoSpecialPower(const SpecialPowerTemp
   }
 
 
-	data->m_attackAreaDecalTemplate.createRadiusDecal( *getObject()->getPosition(), data->m_attackAreaRadius, getObject()->getControllingPlayer(), m_attackAreaDecal);
+	// the client's target ring and orbit stand round the target instead (W3DGroundMarkers); the decal
+	// is the client's alone, no CRC and no save carries it.  The reticle stays: it follows where the
+	// player moves the guns to, which the ground marker does not draw
+	if( !InGameUI::groundMarkersOn() )
+		data->m_attackAreaDecalTemplate.createRadiusDecal( *getObject()->getPosition(), data->m_attackAreaRadius, getObject()->getControllingPlayer(), m_attackAreaDecal);
 	data->m_targetingReticleDecalTemplate.createRadiusDecal( *getObject()->getPosition(), data->m_targetingReticleRadius, getObject()->getControllingPlayer(), m_targetingReticleDecal);
 
 

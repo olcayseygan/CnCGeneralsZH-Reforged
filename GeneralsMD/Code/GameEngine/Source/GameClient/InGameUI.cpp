@@ -1871,7 +1871,9 @@ InGameUI::InGameUI()
 	m_isAttackCircling	= FALSE;
 
 	m_curRcType = RADIUSCURSOR_NONE;
-	
+	memset( &m_markerAim, 0, sizeof( m_markerAim ) );
+	m_markerAim.type = RADIUSCURSOR_NONE;
+
 	m_soloNexusSelectedDrawableID = INVALID_DRAWABLE_ID;
 
 }  // end InGameUI
@@ -2027,6 +2029,10 @@ void InGameUI::setRadiusCursor(RadiusCursorType cursorType, const SpecialPowerTe
 	m_curRadiusCursor.clear();
 	m_curRadiusCursorCentre.clear();
 	m_curRcType = RADIUSCURSOR_NONE;
+	// the ground marker's aim goes down with it, remembered a moment in case the same cursor comes
+	// straight back up (a mouse hint takes it down and puts it up again on every move)
+	if( m_markerAim.type != RADIUSCURSOR_NONE && m_markerAim.endMs == 0 )
+		m_markerAim.endMs = MAX( 1u, (UnsignedInt)Clock_Milliseconds() );
 
 	if (cursorType == RADIUSCURSOR_NONE)
 		return;
@@ -2117,6 +2123,49 @@ void InGameUI::setRadiusCursor(RadiusCursorType cursorType, const SpecialPowerTe
 	const Real unwheeled = radius;
 	if (cursorType == RADIUSCURSOR_GUARD_AREA)
 		radius *= m_guardRadiusScale;
+
+	// The Machined Reticle markers draw the cursor themselves (W3DGroundMarkers), from what is kept
+	// here, and no decal is made.  The same cursor put back up within a moment (a mouse hint, the
+	// guard wheel remaking it at its new size) keeps its press, so the timeline does not restart, and
+	// a new size is eased to from the one on the ground
+	if (groundMarkersOn())
+	{
+		const UnsignedInt MARKER_AIM_KEEP_MS = 250;
+		const UnsignedInt MARKER_WHEEL_EASE_MS = 400;		// W3DGroundMarkers eases over the same
+		const UnsignedInt now = MAX( 1u, (UnsignedInt)Clock_Milliseconds() );
+		GroundMarkerAim &aim = m_markerAim;
+		const Bool same = aim.type == cursorType && aim.power == specPowTempl && aim.caster == obj->getID()
+										&& aim.endMs != 0 && now - aim.endMs < MARKER_AIM_KEEP_MS;
+		if (!same)
+		{
+			aim.pressMs = now;
+			aim.radiusFrom = radius;
+			aim.radiusMs = 0;
+			aim.hasPos = FALSE;
+		}
+		else if (radius != aim.radius)
+		{
+			// from wherever the last step's easing has got to
+			Real shown = aim.radius;
+			if (aim.radiusMs != 0 && now - aim.radiusMs < MARKER_WHEEL_EASE_MS)
+			{
+				const Real f = 1.0f - (Real)( now - aim.radiusMs ) / (Real)MARKER_WHEEL_EASE_MS;
+				shown = aim.radius + ( aim.radiusFrom - aim.radius ) * f * f * f;
+			}
+			aim.radiusFrom = shown;
+			aim.radiusMs = now;
+		}
+		aim.type = cursorType;
+		aim.power = specPowTempl;
+		aim.caster = obj->getID();
+		aim.radius = radius;
+		aim.unwheeled = unwheeled;
+		aim.endMs = 0;
+		m_curRcType = cursorType;
+		handleRadiusCursor();
+		return;
+	}
+
 	if (cursorType == RADIUSCURSOR_GUARD_AREA && m_radiusCursors[cursorType].getTexture().compareNoCase("SCCGuard_Generic") == 0)
 	{
 		// EA's guard marker is one picture, the ring with the shield in its middle, so sizing it to
@@ -2149,6 +2198,32 @@ Bool InGameUI::isTimeFrozenWithoutTick( void ) const
 //-------------------------------------------------------------------------------------------------
 void InGameUI::handleRadiusCursor()
 {
+	// the ground markers' aim has no decal, only the point (W3DGroundMarkers reads it at the sync
+	// point, where this runs from preDraw)
+	if (m_curRcType != RADIUSCURSOR_NONE && m_markerAim.type == m_curRcType && m_markerAim.endMs == 0)
+	{
+		const MouseIO* mouseIO = TheMouse->getMouseStatus();
+		Coord3D pos;
+		const Bool radarOn = TheRadar->isRadarForced()
+									|| ( !TheRadar->isRadarHidden()
+												&& ThePlayerList->getLocalPlayer()
+												&& ThePlayerList->getLocalPlayer()->hasRadar() );
+		Bool hasPos = radarOn && TheRadar->screenPixelToWorld( &mouseIO->pos, &pos );
+		if( !hasPos )
+			hasPos = TheTacticalView->screenToTerrain( &mouseIO->pos, &pos );
+		if ( TheGlobalData->m_doubleClickAttackMove && m_duringDoubleClickAttackMoveGuardHintTimer > 0 )
+		{
+			m_markerAim.pos = m_duringDoubleClickAttackMoveGuardHintStashedPosition;
+			m_markerAim.hasPos = TRUE;
+		}
+		else if ( hasPos )
+		{
+			m_markerAim.pos = pos;
+			m_markerAim.hasPos = TRUE;
+		}
+		return;
+	}
+
 	if (!m_curRadiusCursor.isEmpty())
 	{
 		const MouseIO* mouseIO = TheMouse->getMouseStatus();
@@ -2188,6 +2263,54 @@ void InGameUI::handleRadiusCursor()
     }
 
   }
+}
+
+//-------------------------------------------------------------------------------------------------
+/** The Machined Reticle markers are drawn under the Reforged graphics once their atlas loaded: every
+	* MappedImage of ReforgedGroundMarkers.ini found, and the sheet itself on disk and not the missing
+	* texture (W3DGroundMarkers' loadAtlas, at the sync point, says so here once).  Without it everything
+	* stays on the retail decals, so a build that lacks the sheet still marks the ground.  The delivery
+	* modules ask from the logic thread, so this only reads: a lookup there could add a name key beside
+	* the main thread. */
+//-------------------------------------------------------------------------------------------------
+static Bool theGroundMarkersLoaded = FALSE;
+
+void InGameUI::setGroundMarkersLoaded( Bool loaded )
+{
+	theGroundMarkersLoaded = loaded;
+}
+
+Bool InGameUI::groundMarkersOn( void )
+{
+	return theGroundMarkersLoaded && TheGlobalData != NULL && !TheGlobalData->m_classicGraphics;
+}
+
+//-------------------------------------------------------------------------------------------------
+/** A ground order or a power at a location went out on this click: the cursor that aimed it, if one
+	* is still up or went down a moment ago, becomes a marker on the clicked point. */
+//-------------------------------------------------------------------------------------------------
+void InGameUI::noteGroundMarkerClick( const Coord3D &pos, const SpecialPowerTemplate *power )
+{
+	const UnsignedInt MARKER_AIM_KEEP_MS = 250;
+	if( !groundMarkersOn() || m_markerAim.type == RADIUSCURSOR_NONE )
+		return;
+	// only the cursor that aimed this order: the guard's for a guard, the power's own for a power
+	if( power != NULL ? m_markerAim.power != power : m_markerAim.type != RADIUSCURSOR_GUARD_AREA )
+		return;
+	const UnsignedInt now = MAX( 1u, (UnsignedInt)Clock_Milliseconds() );
+	if( m_markerAim.endMs != 0 && now - m_markerAim.endMs >= MARKER_AIM_KEEP_MS )
+		return;
+	GroundMarkerShot shot;
+	shot.aim = m_markerAim;
+	shot.aim.pos = pos;
+	shot.aim.hasPos = TRUE;
+	shot.clickMs = now;
+	shot.clickFrame = TheGameLogic->getFrame();
+	shot.firstNewID = TheGameLogic->getObjectIDCounter();
+	m_markerShots.push_back( shot );
+	// a burst of clicks with nothing taking them (a hidden interface) stays bounded
+	if( m_markerShots.size() > 16 )
+		m_markerShots.erase( m_markerShots.begin() );
 }
 
 
@@ -4360,6 +4483,9 @@ void InGameUI::reset( void )
 	m_preferSelection		= false;
 	m_isAttackCircling	= FALSE;
 	m_clientQuiet    = false;
+	m_markerShots.clear();
+	m_markerAim.type = RADIUSCURSOR_NONE;
+	m_markerAim.endMs = 0;
 
 	// TheSuperHackers @bugfix A key or button still held when the game ended left its camera
 	// interaction latched on, and the shell then scrolled or spun on its own.

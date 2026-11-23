@@ -8,6 +8,16 @@ found and fixed, EA's own, not port damage.**
 
 ---
 
+## Ground markers in machined steel
+
+- Every targeting circle on the ground is new: a bevelled steel band with your power's colour inlaid, studs round it, a turning range scale and four brackets that swing loose while you aim and snap shut on the click with a ping. Guard, paradrops, air strikes, area powers, superweapons and the Spectre each wear their own glyph in the middle, and the colour says the family at a glance: gold for drops, orange for air strikes, amber for barrages, red for superweapons.
+- Air powers now show where the planes come from. A lane slides in from the map's edge nearest your building, as wide as the formation flies, with chevrons marching towards the target and an arrow at the rim. Paradrops and bombers mark every drop on the lane before you click, and a carpet bomb whose last bombs fall past the target shows the turn they fall on as a bracket, since the plane's exact turn depends on how fast it is flying.
+- After the click the marker follows the real plane: a dart rides each aircraft, dropped crates and bombs leave a mark where they fell, and once the bomber is in its turn the bracket gives way to the circle it is actually flying, with the bombs still aboard placed on it.
+- A nuke, SCUD Storm or Particle Cannon strike gets a twelve-segment countdown ring round its target that runs down as the missiles close in or the beam comes down, and pings when it lands. The Spectre shows its orbit and the line it flies in on.
+- Markers lie on the water's surface where they cross the sea, not on the seabed under it.
+- Move and attack clicks close in on the point as a steel ring with four chevrons, the attack with a cross, and leave a dot for a second and a half.
+- Classic graphics keep the original markers. Only you see your own markers after you fire, as before; there is still no warning marker for enemies.
+
 ## Night falls on the battlefield
 
 - A new box under the match rules, Day and Night, for the host of a skirmish, a LAN game or a custom online room. Ten game minutes of day, a minute and a half of dusk, four minutes of night, a minute of dawn, and round again. At night every unit and building clears the fog of war a fifth less far: the dusk takes it down in two steps and the dawn gives it back the same way, so a scout that sees a base at noon has to walk closer to see it at midnight. Guns still reach as far as they always did, so a tank can fire at a spot its own eyes no longer show, as long as someone else is looking. Pausing stops the clock with the game.

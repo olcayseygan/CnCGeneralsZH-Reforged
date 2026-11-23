@@ -520,6 +520,27 @@ public:
 		return firstTransport;
 	}
 
+	virtual Bool getDeliveryPreview( DeliveryPreview *out ) const
+	{
+		out->transportName = m_transportName;
+		out->formationSize = (Int)m_formationSize;
+		out->formationSpacing = m_formationSpacing;
+		out->distToTarget = m_data.m_distToTarget;
+		out->preOpenDistance = m_data.m_preOpenDistance;
+		out->dropDelay = m_data.m_dropDelay;
+		out->startAtMaxSpeed = m_startAtMaxSpeed;
+		// only what rides inside leaves from the plane's own position along the track; a weapon run or
+		// a visible payload (the A-10's missiles) flies at the target instead
+		Int count = 0;
+		if( !m_data.m_fireWeapon && m_data.m_visiblePayloadTemplateName.isEmpty() )
+		{
+			for( std::vector<Payload>::const_iterator it = m_payload.begin(); it != m_payload.end(); ++it )
+				count += it->m_payloadCount;
+		}
+		out->payloadCount = count;
+		return TRUE;
+	}
+
 	static void parsePayload( INI* ini, void *instance, void *store, const void* /*userData*/ )
 	{
 		DeliverPayloadNugget* self = (DeliverPayloadNugget*)instance;
@@ -1595,6 +1616,17 @@ Bool ObjectCreationList::launchesBody() const
 	for (ObjectCreationNuggetVector::const_iterator i = m_nuggets.begin(); i != m_nuggets.end(); ++i)
 	{
 		if ((*i)->launchesBody())
+			return TRUE;
+	}
+	return FALSE;
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool ObjectCreationList::getDeliveryPreview( DeliveryPreview *out ) const
+{
+	for (ObjectCreationNuggetVector::const_iterator i = m_nuggets.begin(); i != m_nuggets.end(); ++i)
+	{
+		if ((*i)->getDeliveryPreview(out))
 			return TRUE;
 	}
 	return FALSE;

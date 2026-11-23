@@ -277,8 +277,11 @@ void DeliverPayloadAIUpdate::deliverPayload(
 	m_data			= *data;
 	
 	m_deliveryDecal.clear();
-	m_data.m_deliveryDecalTemplate.createRadiusDecal(*targetPos, 
-		m_data.m_deliveryDecalRadius, getObject()->getControllingPlayer(), m_deliveryDecal);
+	// the client's ground marker follows the plane instead (W3DGroundMarkers); the decal is the
+	// client's alone, no CRC and no save carries it, so which one is drawn decides nothing here
+	if( !InGameUI::groundMarkersOn() )
+		m_data.m_deliveryDecalTemplate.createRadiusDecal(*targetPos,
+			m_data.m_deliveryDecalRadius, getObject()->getControllingPlayer(), m_deliveryDecal);
 
 	if( m_data.m_diveStartDistance <= 0.0f )
 	{

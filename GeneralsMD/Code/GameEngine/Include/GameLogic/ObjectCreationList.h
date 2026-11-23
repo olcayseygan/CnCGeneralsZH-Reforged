@@ -38,6 +38,7 @@
 
 // INCLUDES ///////////////////////////////////////////////////////////////////////////////////////
 #include "Common/GameMemory.h"
+#include "Common/AsciiString.h"
 
 // FORWARD REFERENCES /////////////////////////////////////////////////////////////////////////////
 class ObjectCreationNugget;
@@ -45,6 +46,22 @@ class ObjectCreationList;
 class ObjectCreationListStore;
 class INI;
 class Object;
+
+//-------------------------------------------------------------------------------------------------
+/** What a DeliverPayload run will fly, as its OCL says it, for the client's ground marker to draw the
+	* lane and the drops while the player aims (W3DGroundMarkers).  Read only: nothing here reaches
+	* logic, and filling it draws no random value. */
+struct DeliveryPreview
+{
+	AsciiString	transportName;			///< the plane's template
+	Int					formationSize;			///< planes abreast
+	Real				formationSpacing;		///< between two neighbours, square to the run
+	Real				distToTarget;				///< DeliveryDistance
+	Real				preOpenDistance;		///< PreOpenDistance, added while the plane is inbound
+	UnsignedInt	dropDelay;					///< frames between two drops, at this match's speed
+	Int					payloadCount;				///< items carried inside and dropped one DropDelay apart; 0 for a weapon or visible payload run
+	Bool				startAtMaxSpeed;		///< StartAtMaxSpeed: the run is flown at cruise speed from the start
+};
 
 //-------------------------------------------------------------------------------------------------
 /**
@@ -107,6 +124,9 @@ public:
 
 	/// true if it launches a created object hard, the way a whole-vehicle debris copy is thrown (the Rocket Buggy's)
 	virtual Bool launchesBody() const { return FALSE; }
+
+	/// a DeliverPayload nugget fills what its run will fly and says TRUE (DeliveryPreview); read only
+	virtual Bool getDeliveryPreview( DeliveryPreview * /*out*/ ) const { return FALSE; }
 };
 EMPTY_DTOR(ObjectCreationNugget)
 
@@ -153,6 +173,9 @@ public:
 
 	/// true if some nugget launches a created object hard (launchesBody)
 	Bool launchesBody() const;
+
+	/// the first DeliverPayload nugget's run (DeliveryPreview), FALSE with none; read only
+	Bool getDeliveryPreview( DeliveryPreview *out ) const;
 
 	// Kris: August 23, 2003
 	// All OCLs return the first object that is created (or NULL if not applicable).

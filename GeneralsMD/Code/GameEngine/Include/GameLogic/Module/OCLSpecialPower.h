@@ -155,9 +155,10 @@ public:
 	/// pay, start the countdown and send the planes; FALSE and nothing done when refused
 	Bool doAirliftOrder( const Coord3D *loc, const AirliftOrder &order );
 
-protected:
-
+	/// the list this power runs now, upgrades counted, and where its planes come from: the client's
+	/// ground marker reads both while the player aims (read only)
 	const ObjectCreationList* findOCL() const;
+	OCLCreateLocType getCreateLoc() const { return getOCLSpecialPowerModuleData()->m_createLoc; }
 };
 
 #endif  // end __OCLSPECIALPOWER_H_

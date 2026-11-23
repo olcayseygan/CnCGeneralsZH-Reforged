@@ -69,6 +69,7 @@
 #include "W3DDevice/GameClient/W3DAssetManager.h"
 #include "W3DDevice/GameClient/W3DGUICallbacks.h"
 #include "W3DDevice/GameClient/W3DInGameUI.h"
+#include "W3DDevice/GameClient/W3DGroundMarkers.h"
 #include "W3DDevice/GameClient/W3DDisplay.h"
 #include "W3DDevice/GameClient/W3DScene.h"
 #include "W3DDevice/GameClient/W3DView.h"
@@ -434,6 +435,7 @@ void W3DInGameUI::reset( void )
 	m_hudOverlayDraw.clear();
 	m_guardMarkersFrame = ~0u;
 	m_guardMarkerTops.clear();
+	W3DGroundMarkers_reset();
 
 }  // end reset
 
@@ -455,6 +457,7 @@ void W3DInGameUI::recordDraw( void )
 	m_orderRingColors.clear();
 	m_orderRingBornMs.clear();
 	m_orderMarkers.clear();
+	W3DGroundMarkers_clearDraw();		// nothing of the last picture's, under -cinema included
 	takeMoveHintTransforms();
 	if( CinemaDirector_hidesHud() )
 		return;
@@ -470,6 +473,7 @@ void W3DInGameUI::recordDraw( void )
 	preDraw();
 	takeBuildGrid();	// after preDraw, which puts the ghost where the patch is centred
 	takeOrderRings();	// after preDraw, which places them (updateOrderHints)
+	W3DGroundMarkers_take( this );	// after preDraw, which puts the aimed cursor's point (handleRadiusCursor)
 
 	// draw the formation line if one is being dragged out
 	if( m_isFormationDragging )
@@ -1472,6 +1476,8 @@ void W3DInGameUI::takeOrderRings( void )
 		const Real x = hint.pos.x, y = hint.pos.y;
 		if( isOrderMarkOnWater( x, y, NULL ) )
 			continue;		// after the water, on the sorted list (W3DWaypointBuffer::takeWaterMarks)
+		if( W3DGroundMarkers_drawsClickMarker( hint.kind ) )
+			continue;		// a move's or an attack's is the Machined Reticle ring (W3DGroundMarkers)
 		m_orderMarkers.push_back( OrderMarker() );
 		OrderMarker &mark = m_orderMarkers.back();
 		mark.rgb = orderKindColor( hint.kind );
@@ -1527,6 +1533,10 @@ static Real markerGround( const Vector3 &at, Real reach, const Real *heights, In
 //-------------------------------------------------------------------------------------------------
 void W3DInGameUI::drawOrderRings( Bool shadeByShroud )
 {
+	// the Machined Reticle markers first, under the order dots: both terrains call this after their
+	// shroud, so the markers are drawn from here rather than from each of them
+	W3DGroundMarkers_draw( shadeByShroud );
+
 	if( m_orderRingColors.empty() && m_orderMarkers.empty() )
 		return;
 	// not in the water's mirror pass: they would lie on the reflection, as the order lines would

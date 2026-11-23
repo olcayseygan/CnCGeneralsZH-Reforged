@@ -136,6 +136,11 @@ public:
 
 	/// the undamaged top speed, dist/frame, before the owner's SpeedScale (the build tooltip's figure)
 	Real getMaxSpeed() const { return m_maxSpeed; }
+	/// the slowest it flies, dist/frame; with the turn rate the tightest circle a delivery plane holds
+	/// (the client's ground marker draws the turning drop from these three, read only)
+	Real getMinSpeed() const { return m_minSpeed; }
+	Real getMaxTurnRate() const { return m_maxTurnRate; }				///< rads/frame, undamaged
+	Real getCirclingRadius() const { return m_circlingRadius; }	///< the holding circle; 0 the tightest, below 0 the other way round
 	LocomotorAppearance getAppearance() const { return m_appearance; }
 
 	void validate();

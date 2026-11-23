@@ -1099,6 +1099,8 @@ GameMessage::Type CommandTranslator::issueMoveToLocationCommand( const Coord3D *
 				const Real radius = TheInGameUI->getArmedGuardRadius();
 				if( radius > 0.0f )
 					movemsg->appendRealArgument( radius );
+				// the guard circle on the cursor snaps down where it was posted (W3DGroundMarkers)
+				TheInGameUI->noteGroundMarkerClick( *pos, NULL );
 			}
 
 		}  // end if
@@ -1304,6 +1306,9 @@ GameMessage::Type CommandTranslator::issueSpecialPowerCommand( const CommandButt
 			msg->appendObjectIDArgument( targetID );
 			msg->appendIntegerArgument( command->getOptions() );
 			msg->appendObjectIDArgument( specificSource );
+
+			// the aimed zone snaps down on the clicked point and follows what the power sends (W3DGroundMarkers)
+			TheInGameUI->noteGroundMarkerClick( *pos, command->getSpecialPowerTemplate() );
 
 			// say   something like " I think I'll put a timed charge on the ground, here."
 			PickAndPlayInfo info;

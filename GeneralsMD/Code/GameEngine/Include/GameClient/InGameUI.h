@@ -1108,6 +1108,45 @@ public:  // ********************************************************************
 	virtual void setRadiusCursor(RadiusCursorType r, const SpecialPowerTemplate* sp, WeaponSlotType wslot);
 	virtual void setRadiusCursorNone() { setRadiusCursor(RADIUSCURSOR_NONE, NULL, PRIMARY_WEAPON); }
 
+	/** The Machined Reticle ground markers (W3DGroundMarkers) draw the radius cursors, the delivery
+		* planes' lanes, the countdowns and the click markers: under the Reforged graphics, once their
+		* atlas texture really loaded.  Otherwise the retail decals and the old marks stay.  The delivery
+		* modules ask it from the logic thread before they make their decal, which is the client's alone
+		* (no CRC and no save carries one), so it reads two flags and looks nothing up. */
+	static Bool groundMarkersOn( void );
+	/// W3DGroundMarkers says, once, on the main thread, whether its atlas loaded
+	static void setGroundMarkersLoaded( Bool loaded );
+
+	/// what the player is aiming, kept while the cursor is up: the press is the timeline's zero
+	struct GroundMarkerAim
+	{
+		RadiusCursorType type;									///< RADIUSCURSOR_NONE while nothing is aimed
+		const SpecialPowerTemplate *power;			///< NULL for the guard and weapon cursors
+		ObjectID caster;												///< who fires it, picked the way the order picks it
+		Real radius;														///< the radius now, the guard's wheel in it
+		Real unwheeled;													///< the radius before the wheel, which sizes the bands
+		Real radiusFrom;												///< what it was before the last wheel step, eased from
+		UnsignedInt radiusMs;										///< when that step came
+		UnsignedInt pressMs;										///< when the button was pressed (Clock_Milliseconds)
+		UnsignedInt endMs;											///< when the cursor last went away, 0 while it is up
+		Coord3D pos;														///< the ground under the cursor at the sync point
+		Bool hasPos;
+	};
+	/// the click that fired what was aimed, taken by the ground markers at the next sync point
+	struct GroundMarkerShot
+	{
+		GroundMarkerAim aim;										///< as it stood at the click, pos the clicked point
+		UnsignedInt clickMs;
+		UnsignedInt clickFrame;									///< the logic frame then
+		ObjectID firstNewID;										///< anything the order makes carries this id or a later one
+	};
+	const GroundMarkerAim &getGroundMarkerAim( void ) const { return m_markerAim; }
+	/// a ground order (power NULL: the guard's) or a power at a location was just sent: the cursor
+	/// that aimed it becomes a marker there
+	void noteGroundMarkerClick( const Coord3D &pos, const SpecialPowerTemplate *power );
+	/// the clicks since the last call, oldest first; the list is emptied
+	void takeGroundMarkerShots( std::vector<GroundMarkerShot> &out ) { out.swap( m_markerShots ); m_markerShots.clear(); }
+
 	virtual void setInputEnabled( Bool enable );										///< Set the input enabled or disabled
 	virtual void clearModifierModes( void );												///< forget every mode a held key puts us in (see the definition)
 	virtual Bool getInputEnabled( void ) { LOGIC_CENSUS( CENSUS_CLIENT_READ ); return m_inputEnabled; }	///< Get the current input status
@@ -1806,6 +1845,8 @@ protected:
 	RadiusDecal									m_curRadiusCursor;
 	RadiusDecal									m_curRadiusCursorCentre;	///< the guard marker's shield, apart from its ring so it never stretches
 	RadiusCursorType						m_curRcType;
+	GroundMarkerAim							m_markerAim;							///< the same cursor for the ground markers, which keep its press across a refresh
+	std::vector<GroundMarkerShot>	m_markerShots;					///< clicks not yet taken (takeGroundMarkerShots)
 
 	//Floating Text Data
 	FloatingTextList						m_floatingTextList;				///< Our list of floating text

@@ -32,6 +32,7 @@ Data/Art/Textures/ReforgedBlastV.dds
 Data/Art/Textures/ReforgedFireLoop.dds
 Data/Art/Textures/ReforgedFoliage.tga
 Data/Art/Textures/ReforgedForceAttack.tga
+Data/Art/Textures/ReforgedGroundMarkers.dds
 Data/Art/Textures/ReforgedGuardCentre.tga
 Data/Art/Textures/ReforgedGuardRing.tga
 Data/Art/Textures/ReforgedGuardShield.tga
@@ -1241,6 +1242,7 @@ Data/INI/FXListReforged.ini
 Data/INI/FixesReforged.ini
 Data/INI/MappedImages/HandCreated/ReforgedBarChinaBeacon.ini
 Data/INI/MappedImages/HandCreated/ReforgedForceAttack.ini
+Data/INI/MappedImages/HandCreated/ReforgedGroundMarkers.ini
 Data/INI/MappedImages/HandCreated/ReforgedGuardShield.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaCommandBar.ini
 Data/INI/MappedImages/HandCreated/ReforgedHudAmericaDirectStrike.ini
@@ -3113,6 +3115,7 @@ GameEngineDevice/Include/W3DDevice/GameClient/W3DGameWindow.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DGameWindowManager.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DGranny.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DGrassBuffer.h
+GameEngineDevice/Include/W3DDevice/GameClient/W3DGroundMarkers.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DInGameUI.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DMirror.h
 GameEngineDevice/Include/W3DDevice/GameClient/W3DMouse.h
@@ -3334,6 +3337,7 @@ GameEngineDevice/Source/W3DDevice/GameClient/W3DFileSystem.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DGameClient.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DGranny.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DGrassBuffer.cpp
+GameEngineDevice/Source/W3DDevice/GameClient/W3DGroundMarkers.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DInGameUI.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DModelPreview.cpp
 GameEngineDevice/Source/W3DDevice/GameClient/W3DMouse.cpp
